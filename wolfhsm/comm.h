@@ -67,8 +67,6 @@ typedef struct {
 /* static_assert(sizeof_whHeader == WOLFHSM_COMM_HEADER_LEN,
                  "Size of whHeader doesn't match WOLFHSM_COMM_HEADER_LEN") */
 
-#if defined(HAVE_WOLFHSM_CLIENT) || defined(HAVE_WOLFHSM_SERVER)
-
 static inline uint8_t wh_Translate8(uint16_t magic, uint8_t val)
 {
     (void) magic;
@@ -102,8 +100,6 @@ static inline uint64_t wh_Translate64(uint16_t magic, uint64_t val)
             ((val & 0xFF00ull) << 40) |
             ((val & 0xFFull) << 56);
 }
-
-#endif
 
 
 /** Client types */

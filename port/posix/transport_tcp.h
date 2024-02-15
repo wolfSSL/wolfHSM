@@ -62,10 +62,8 @@ typedef struct {
     uint8_t buffer[WH_TRANSPORT_TCP_BUFFER_SIZE];
 } whTransportTcpClientContext;
 
-#ifdef HAVE_WOLFHSM_CLIENT
 /* wh_TranportClient compliant callbacks */
 extern const wh_TransportClient_Cb* whTransportTcpClient_Cb;
-#endif  /* HAVE_WOLFHSM_CLIENT */
 
 typedef struct {
     struct sockaddr_in server_addr;
@@ -77,9 +75,7 @@ typedef struct {
     uint8_t buffer[WH_TRANSPORT_TCP_BUFFER_SIZE];
 } whTransportTcpServerContext;
 
-#ifdef HAVE_WOLFHSM_SERVER
 /* wh_TranportServer compliant callbacks */
 extern const wh_TransportServer_Cb* whTransportTcpServer_Cb;
-#endif /* HAVE_WOLFHSM_SERVER */
 
 #endif /* WH_TRANSPORT_TCP_H_ */

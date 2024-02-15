@@ -1,10 +1,6 @@
 #ifndef WOLFHSM_WH_SERVER_H_
 #define WOLFHSM_WH_SERVER_H_
 
-#ifdef WOLFSSL_USER_SETTINGS
-#include "user_settings.h"
-#endif
-
 #include "wolfhsm/comm.h"
 
 #if 0

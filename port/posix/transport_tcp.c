@@ -19,11 +19,10 @@
 
 #include "wolfhsm/error.h"
 #include "wolfhsm/transport.h"
-#include "wolfhsm/transport_tcp.h"
+#include "port/posix/transport_tcp.h"
 
 /* Define and declare callbacks that match wolfhsm/transport.h */
 
-#if defined(HAVE_WOLFHSM_CLIENT) || defined(HAVE_WOLFHSM_SERVER)
 /* Common buffer management functions */
 
 /** Local declarations */
@@ -191,9 +190,8 @@ static int _wh_TransportTcp_Recv(int fd, uint16_t* buffer_offset,
     return 0;
 }
 
-#endif
+/** Client functions */
 
-#if defined(HAVE_WOLFHSM_CLIENT)
 static int _wh_TransportTcp_InitConnect(void* context, const void* config);
 static int _wh_TransportTcp_SendRequest(void* context, uint16_t size,
         const void* data);
@@ -367,10 +365,7 @@ static const wh_TransportClient_Cb _whTransportTcpClient_Cb = {
 const wh_TransportClient_Cb* whTransportTcpClient_Cb =
         &_whTransportTcpClient_Cb;
 
-#endif  /* HAVE_WOLFHSM_CLIENT */
-
-
-#if defined(HAVE_WOLFHSM_SERVER)
+/** Server Functions */
 
 static int _wh_TransportTcp_MakeNoLinger(int sock);
 
@@ -575,5 +570,4 @@ static const wh_TransportServer_Cb _whTransportTcpServer_Cb = {
 };
 const wh_TransportServer_Cb* whTransportTcpServer_Cb =
         &_whTransportTcpServer_Cb;
-#endif /* HAVE_WOLFHSM_SERVER */
 

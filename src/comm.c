@@ -10,7 +10,8 @@
 #include "wolfhsm/comm.h"
 #include "wolfhsm/error.h"
 
-#ifdef HAVE_WOLFHSM_CLIENT
+/** Client functions */
+
 int wh_CommClient_Init(whCommClient* context, const whCommClientConfig* config)
 {
     int rc = 0;
@@ -139,9 +140,7 @@ int wh_CommClient_Cleanup(whCommClient* context)
     return rc;
 }
 
-#endif  /* HAVE_WOLFHSM_CLIENT */
-
-#ifdef HAVE_WOLFHSM_SERVER
+/** Server Functions */
 
 int wh_CommServer_Init(whCommServer* context, const whCommServerConfig* config)
 {
@@ -257,5 +256,3 @@ int wh_CommServer_Cleanup(whCommServer* context)
     context->initialized = 0;
     return rc;
 }
-
-#endif  /* HAVE_WOLFHSM_SERVER */

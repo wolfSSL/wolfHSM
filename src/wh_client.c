@@ -2,6 +2,7 @@
 /* System libraries */
 #include <stdint.h>
 
+#if 0
 /* wolfCrypt */
 #ifndef WOLFSSL_USER_SETTINGS
     #include "wolfssl/options.h"
@@ -14,22 +15,19 @@
 #include "wolfssl/wolfcrypt/rsa.h"
 #include "wolfssl/wolfcrypt/aes.h"
 #include "wolfssl/wolfcrypt/hmac.h"
+#endif
 
 /* Common WolfHSM types and defines shared with the server */
 #include "wolfhsm/error.h"
-#include "wolfhsm/wh_common.h"
 #include "wolfhsm/comm.h"
-#include "wolfhsm/nvm.h"
 
+#if 0
+#include "wolfhsm/nvm.h"
 #include "wolfhsm/nvm_remote.h"
+#endif
 
 #include "wolfhsm/message_comm.h"
-
 #include "wolfhsm/wh_client.h"
-
-#ifdef HAVE_WOLFHSM_CLIENT
-
-
 
 int wh_Client_Init(whClient* c, const whClientConfig* config)
 {
@@ -110,9 +108,11 @@ int wh_Client_Cleanup(whClient* c)
     if (c ==NULL) {
         return WH_ERROR_BADARGS;
     }
+#if 0
     if (c->nvm != NULL) {
         (void)wh_NvmClient_Cleanup(c->nvm);
     }
+#endif
     (void)wh_CommClient_Cleanup(c->comm);
     memset(c, 0, sizeof(*c));
     return 0;
@@ -201,6 +201,7 @@ int wh_Client_Echo(whClient* c, uint16_t snd_len, const void* snd_data,
     return rc;
 }
 
+#if 0
 /** Static singleton API */
 
 /* Singleton client context */
@@ -391,5 +392,4 @@ int whClient_CompareManifest(const uint8_t* address, int* outResult)
     /* BAD_FUNC_ARGS, WC_HW_E */
     return 0;
 }
-
-#endif  /* HAVE_WOLFHSM_CLIENT */
+#endif

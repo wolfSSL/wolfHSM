@@ -2,6 +2,7 @@
 /* System libraries */
 #include <stdint.h>
 
+#if 0
 /* wolfCrypt */
 #ifndef WOLFSSL_USER_SETTINGS
     #include "wolfssl/options.h"
@@ -12,27 +13,20 @@
 #include "wolfssl/wolfcrypt/rsa.h"
 #include "wolfssl/wolfcrypt/aes.h"
 #include "wolfssl/wolfcrypt/hmac.h"
+#endif
 
 /* Common WolfHSM types and defines shared with the server */
 #include "wolfhsm/error.h"
-#include "wolfhsm/wh_common.h"
 #include "wolfhsm/comm.h"
-#include "wolfhsm/nvm.h"
-#include "wolfhsm/nvm_remote.h"
-#include "wolfhsm/message.h"
-#include "wolfhsm/message_comm.h"
-
-#include "wolfhsm/wh_server.h"
-
-#ifdef HAVE_WOLFHSM_SERVER
 
 #if 0
-/* Singleton client context */
-static whServer _serverContext;
-
-/* Target-supplied configuration */
-extern whServerConfig whServer_Configuration;
+#include "wolfhsm/nvm.h"
+#include "wolfhsm/nvm_remote.h"
 #endif
+
+#include "wolfhsm/message.h"
+#include "wolfhsm/message_comm.h"
+#include "wolfhsm/wh_server.h"
 
 int wh_Server_Init(whServer* server, whServerConfig* config)
 {
@@ -320,4 +314,3 @@ int whClient_CompareManifest(const uint8_t* address, int* outResult)
 }
 #endif
 
-#endif

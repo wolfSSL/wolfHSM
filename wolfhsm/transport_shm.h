@@ -51,14 +51,10 @@ typedef whShmbufferConfig whTransportShmConfig;
 typedef whShmbufferContext whTransportShmClientContext;
 typedef whShmbufferContext whTransportShmServerContext;
 
-#ifdef HAVE_WOLFHSM_CLIENT
 /* wh_TranportClient compliant callbacks */
 extern const wh_TransportClient_Cb* whTransportShmClient_Cb;
-#endif  /* HAVE_WOLFHSM_CLIENT */
 
-#ifdef HAVE_WOLFHSM_SERVER
 /* wh_TranportServer compliant callbacks */
 extern const wh_TransportServer_Cb* whTransportShmServer_Cb;
-#endif /* HAVE_WOLFHSM_SERVER */
 
 #endif /* WH_TRANSPORT_SHM_H_ */

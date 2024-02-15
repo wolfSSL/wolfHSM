@@ -18,10 +18,6 @@
 #ifndef WOLFHSM_WH_CLIENT_H_
 #define WOLFHSM_WH_CLIENT_H_
 
-#ifdef WOLFSSL_USER_SETTINGS
-#include "user_settings.h"
-#endif
-
 /* System libraries */
 #include <stdint.h>
 
