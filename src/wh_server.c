@@ -1,6 +1,7 @@
 
 /* System libraries */
 #include <stdint.h>
+#include <stdlib.h>  /* For NULL */
 
 #if 0
 /* wolfCrypt */
