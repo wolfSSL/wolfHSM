@@ -2,6 +2,8 @@
 /* System libraries */
 #include <stdint.h>
 #include <stdlib.h>  /* For NULL */
+#include <string.h>  /* For memset, memcpy */
+
 
 #if 0
 /* wolfCrypt */
