@@ -137,9 +137,11 @@ int wh_Server_Cleanup(whServer* server)
     if (server ==NULL) {
          return WH_ERROR_BADARGS;
      }
+#if 0
      if (server->nvm != NULL) {
          /*(void)wh_Nvm_Cleanup(server->nvm);*/
      }
+#endif
      (void)wh_CommServer_Cleanup(server->comm);
      memset(server, 0, sizeof(*server));
      return 0;
