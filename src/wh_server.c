@@ -18,16 +18,16 @@
 #endif
 
 /* Common WolfHSM types and defines shared with the server */
-#include "wolfhsm/error.h"
-#include "wolfhsm/comm.h"
+#include <wolfhsm/wh_error.h>
+#include <wolfhsm/wh_comm.h>
 
 #if 0
 #include "wolfhsm/nvm.h"
 #include "wolfhsm/nvm_remote.h"
 #endif
 
-#include "wolfhsm/message.h"
-#include "wolfhsm/message_comm.h"
+#include <wolfhsm/wh_message.h>
+#include <wolfhsm/wh_message_comm.h>
 #include "wolfhsm/wh_server.h"
 
 int wh_Server_Init(whServer* server, whServerConfig* config)

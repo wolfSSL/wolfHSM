@@ -3,12 +3,12 @@
  *
  */
 
-#ifndef WOLFHSM_MESSAGE_COMM_H_
-#define WOLFHSM_MESSAGE_COMM_H_
+#ifndef WOLFHSM_WH_MESSAGE_COMM_H_
+#define WOLFHSM_WH_MESSAGE_COMM_H_
 
 #include <stdint.h>
 
-#include "wolfhsm/message.h"
+#include <wolfhsm/wh_message.h>
 
 enum {
     WOLFHSM_MESSAGE_TYPE_COMM_NONE      = WOLFHSM_MESSAGE_GROUP_COMM + 0x00,
@@ -65,4 +65,4 @@ typedef struct {
     uint8_t nvm_state;
 } whMessageCommInfo;
 
-#endif /* WOLFHSM_MESSAGE_COMM_H_ */
+#endif /* WOLFHSM_WH_MESSAGE_COMM_H_ */

@@ -23,12 +23,12 @@
  * necessary.
  */
 
-#ifndef WOLFHSM_COMM_H_
-#define WOLFHSM_COMM_H_
+#ifndef WOLFHSM_WH_COMM_H_
+#define WOLFHSM_WH_COMM_H_
 
 #include <stdint.h>  /* For sized ints */
 
-#include "wolfhsm/transport.h"
+#include <wolfhsm/wh_transport.h>
 
 /* Request/response packets are composed of a single fixed-length header
  * (whHeader) followed immediately by variable-length data between 0 and
@@ -201,4 +201,4 @@ int wh_CommServer_SendResponse(whCommServer* context,
 
 int wh_CommServer_Cleanup(whCommServer* context);
 
-#endif /* WOLFHSM_COMM_H_ */
+#endif /* WOLFHSM_WH_COMM_H_ */

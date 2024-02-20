@@ -3,7 +3,7 @@
  *
  * Base WolfHSM Client Library API
  *
- * The WolfHSM Client provides a single, global context and connection to a
+ * The WolfHSM Client provides a single context and connection to a
  * WolfHSM Server.  All communications and state are internally managed by
  * registering a crypto callback function to be invoked synchronously when
  * wolfCrypt functions are called.  In order to specify to use the WolfHSM
@@ -42,7 +42,7 @@
 #endif
 
 /* Component includes */
-#include "wolfhsm/comm.h"
+#include <wolfhsm/wh_comm.h>
 
 #if 0
 #include "wolfhsm/nvm_remote.h"

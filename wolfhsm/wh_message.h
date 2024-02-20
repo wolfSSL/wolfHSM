@@ -5,8 +5,8 @@
  * support of 16-bit type.
  */
 
-#ifndef WOLFHSM_MESSAGE_H_
-#define WOLFHSM_MESSAGE_H_
+#ifndef WOLFHSM_WH_MESSAGE_H_
+#define WOLFHSM_WH_MESSAGE_H_
 
 /* Message type and groups */
 enum {
@@ -41,4 +41,4 @@ int whMessage_GetErrorResponse(uint16_t magic,
         const void* data,
         int *out_return_code);
 
-#endif /* WOLFHSM_MESSAGE_H_ */
+#endif /* WOLFHSM_WH_MESSAGE_H_ */

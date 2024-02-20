@@ -1,15 +1,15 @@
 /*
- * message_comm.c
+ * src/wh_message_comm.c
  */
 
 #include <stdint.h>
 #include <stddef.h>
 #include <string.h>
+#include <wolfhsm/wh_comm.h>
+#include <wolfhsm/wh_error.h>
+#include <wolfhsm/wh_message.h>
 
-#include "wolfhsm/comm.h"
-#include "wolfhsm/error.h"
-#include "wolfhsm/message.h"
-#include "wolfhsm/message_comm.h"
+#include <wolfhsm/wh_message_comm.h>
 
 int wh_MessageComm_TranslateInitRequest(uint16_t magic,
         const whMessageCommInitRequest* src,

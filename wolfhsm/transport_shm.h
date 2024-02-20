@@ -42,9 +42,9 @@
  */
 
 #include <stdint.h>
+#include <wolfhsm/wh_transport.h>
 
 #include "wolfhsm/shmbuffer.h"
-#include "wolfhsm/transport.h"
 
 /* Naming conveniences. Reuses the same types. */
 typedef whShmbufferConfig whTransportShmConfig;

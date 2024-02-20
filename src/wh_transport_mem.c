@@ -1,7 +1,7 @@
 /*
- * shmbuffer.c
+ * src/wh_transport_mem.c
  *
- * Implementation of comms over a shared memory section
+ * Implementation of transport callbacks using 2 memory blocks
  */
 
 #include <stddef.h>
@@ -9,9 +9,10 @@
 #include <stdint.h>
 #include <wolfhsm/wh_error.h>
 
-#include "wolfhsm/shmbuffer.h"
+#include "wolfhsm/wh_transport.h"
+#include <wolfhsm/wh_transport_mem.h>
 
-union whShmbufferCsr_t {
+union whTransportMemCsr_t {
     uint64_t u64;
     struct {
         uint16_t notify;   /* Incremented to notify */
@@ -21,9 +22,10 @@ union whShmbufferCsr_t {
     } s;
 };
 
-int wh_Shmbuffer_Init(  whShmbufferContext* context,
-                        const whShmbufferConfig* config)
+int wh_TransportMem_Init(void* c, const void* cf)
 {
+    whTransportMemContext* context = c;
+    const whTransportMemConfig* config = cf;
     if (    (context == NULL) ||
             (config == NULL) ||
             (config->req == NULL) ||
@@ -46,10 +48,11 @@ int wh_Shmbuffer_Init(  whShmbufferContext* context,
     return 0;
 }
 
-int wh_Shmbuffer_InitClear(whShmbufferContext* context,
-        const whShmbufferConfig* config)
+int wh_TransportMem_InitClear(void* c, const void* cf)
 {
-    int rc = wh_Shmbuffer_Init(context, config);
+    whTransportMemContext* context = c;
+    const whTransportMemConfig* config = cf;
+    int rc = wh_TransportMem_Init(c, cf);
     if (rc == 0) {
         /* Zero the buffers */
         memset((void*)context->req, 0, context->req_size);
@@ -58,8 +61,9 @@ int wh_Shmbuffer_InitClear(whShmbufferContext* context,
     return rc;
 }
 
-int wh_Shmbuffer_Cleanup(whShmbufferContext* context)
+int wh_TransportMem_Cleanup(void* c)
 {
+    whTransportMemContext* context = c;
     if (context == NULL) {
         return WH_ERROR_BADARGS;
     }
@@ -69,9 +73,9 @@ int wh_Shmbuffer_Cleanup(whShmbufferContext* context)
     return 0;
 }
 
-int wh_Shmbuffer_SendRequest(whShmbufferContext* context, uint16_t len,
-        const uint8_t* data)
+int wh_TransportMem_SendRequest(void* c, uint16_t len, const uint8_t* data)
 {
+    whTransportMemContext* context = c;
     whShmbufferCsr resp;
     whShmbufferCsr req;
 
@@ -91,7 +95,6 @@ int wh_Shmbuffer_SendRequest(whShmbufferContext* context, uint16_t len,
 
     if ((data != NULL) && (len != 0)) {
         memcpy((void*)context->req_data, data, len);
-        /* TODO: Cache flush req_data for len bytes */
     }
     req.s.len = len;
     req.s.notify++;
@@ -102,9 +105,9 @@ int wh_Shmbuffer_SendRequest(whShmbufferContext* context, uint16_t len,
     return 0;
 }
 
-int wh_Shmbuffer_RecvRequest(   whShmbufferContext* context,
-                                uint16_t *out_len, uint8_t* data)
+int wh_TransportMem_RecvRequest(void* c, uint16_t *out_len, uint8_t* data)
 {
+    whTransportMemContext* context = c;
     whShmbufferCsr req;
     whShmbufferCsr resp;
 
@@ -123,17 +126,18 @@ int wh_Shmbuffer_RecvRequest(   whShmbufferContext* context,
     }
 
     if ((data != NULL) && (req.s.len != 0)) {
-        /* TODO: Cache invalidate req_data for req.s.len bytes */
         memcpy(data, context->req_data, req.s.len);
     }
-    if (out_len != NULL) *out_len = req.s.len;
+    if (out_len != NULL) {
+        *out_len = req.s.len;
+    }
 
     return 0;
 }
 
-int wh_Shmbuffer_SendResponse(  whShmbufferContext* context,
-                                uint16_t len, const uint8_t* data)
+int wh_TransportMem_SendResponse(void* c, uint16_t len, const uint8_t* data)
 {
+    whTransportMemContext* context = c;
     whShmbufferCsr req;
     whShmbufferCsr resp;
 
@@ -159,9 +163,9 @@ int wh_Shmbuffer_SendResponse(  whShmbufferContext* context,
     return 0;
 }
 
-int wh_Shmbuffer_RecvResponse(  whShmbufferContext* context,
-                                uint16_t *out_len, uint8_t* data)
+int wh_TransportMem_RecvResponse(void* c, uint16_t *out_len, uint8_t* data)
 {
+    whTransportMemContext* context = c;
     whShmbufferCsr req;
     whShmbufferCsr resp;
 
@@ -184,7 +188,28 @@ int wh_Shmbuffer_RecvResponse(  whShmbufferContext* context,
         memcpy(data, context->resp_data, resp.s.len);
     }
 
-    if (out_len != NULL) *out_len = resp.s.len;
+    if (out_len != NULL) {
+        *out_len = resp.s.len;
+    }
 
     return 0;
 }
+
+/** TransportClient Implementation */
+static const wh_TransportClient_Cb _whTransportMemClient_Cb = {
+        .Init =     wh_TransportMem_InitClear,
+        .Send =     wh_TransportMem_SendRequest,
+        .Recv =     wh_TransportMem_RecvResponse,
+        .Cleanup =  wh_TransportMem_Cleanup,
+};
+const wh_TransportClient_Cb* whTransportShmClient_Cb = &_whTransportMemClient_Cb;
+
+/** TransportServer Implementation */
+static const wh_TransportServer_Cb _whTransportMemServer_Cb = {
+        .Init =     wh_TransportMem_Init,
+        .Recv =     wh_TransportMem_RecvRequest,
+        .Send =     wh_TransportMem_SendResponse,
+        .Cleanup =  wh_TransportMem_Cleanup,
+};
+const wh_TransportServer_Cb* whTransportShmServer_Cb = &_whTransportMemServer_Cb;
+

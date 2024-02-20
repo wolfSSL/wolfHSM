@@ -1,14 +1,14 @@
 /*
- * src/comm.c
+ * src/wh_comm.c
  */
 
 
 #include <stdint.h>  /* For sized ints */
 #include <stddef.h>
 #include <string.h>
+#include <wolfhsm/wh_comm.h>
+#include <wolfhsm/wh_error.h>
 
-#include "wolfhsm/comm.h"
-#include "wolfhsm/error.h"
 
 /** Client functions */
 

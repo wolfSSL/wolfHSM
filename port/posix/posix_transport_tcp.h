@@ -1,22 +1,22 @@
 /*
- * wolfhsm/transport_tcp.h
+ * port/posix/posix_transport_tcp.h
  *
  * wolfHSM Transport binding using TCP sockets
  */
 
-#ifndef WH_TRANSPORT_TCP_H_
-#define WH_TRANSPORT_TCP_H_
+#ifndef PORT_POSIX_POSIX_TRANSPORT_TCP_H_
+#define PORT_POSIX_POSIX_TRANSPORT_TCP_H_
 
 /* Example usage:
  *
- * whTransportTcpConfig tcp_config[1] = {{
+ * whPosixTransportTcpConfig tcp_config[1] = {{
  *      .server_ip_string = "127.0.0.1",
  *      .server_port = 2345,
  * }};
  *
- * whTransportTcpClientContext tcc[1];
+ * whPosixTransportTcpClientContext tcc[1];
  * whCommClientConfig ccc[1] = {{
- *      .transport_cb = wh_TransportTcp_Cb,
+ *      .transport_cb = wh_PosixTransportTcpClient_Cb,
  *      .transport_context = tcc,
  *      .transport_config = tcp_config,
  *      .client_id = 1234,
@@ -24,9 +24,9 @@
  * whCommClient cc[1];
  * wh_CommClient_Init(cc, ccc);
  *
- * whTransportTcpServerContext tsc[1];
+ * whPosixTransportTcpServerContext tsc[1];
  * whCommServerConfig csc[1] = {{
- *      .transport_cb = wh_TransportTcp_Cb,
+ *      .transport_cb = wh_PosixTransportTcpServer_Cb,
  *      .transport_context = tsc,
  *      .transport_config = tcp_config,
  *      .server_id = 5678,
@@ -37,15 +37,13 @@
  */
 
 #include <stdint.h>
-
 #include <netinet/in.h>
+#include <wolfhsm/wh_comm.h>        /* For WOLFHSM_COMM_MTU */
+#include <wolfhsm/wh_transport.h>
 
-#include "wolfhsm/comm.h"
-#include "wolfhsm/transport.h"
 
-#define WH_TRANSPORT_TCP_PACKET_MAX_SIZE WOLFHSM_COMM_MTU
-#define WH_TRANSPORT_TCP_BUFFER_SIZE (sizeof(uint32_t) + \
-                                        WH_TRANSPORT_TCP_PACKET_MAX_SIZE)
+#define PTT_PACKET_MAX_SIZE WOLFHSM_COMM_MTU
+#define PTT_BUFFER_SIZE (sizeof(uint32_t) + PTT_PACKET_MAX_SIZE)
 
 /* Common configuration structure */
 typedef struct {
@@ -59,7 +57,7 @@ typedef struct {
     int connected;
     int request_sent;
     uint16_t buffer_offset;
-    uint8_t buffer[WH_TRANSPORT_TCP_BUFFER_SIZE];
+    uint8_t buffer[PTT_BUFFER_SIZE];
 } whTransportTcpClientContext;
 
 /* wh_TranportClient compliant callbacks */
@@ -72,7 +70,7 @@ typedef struct {
     int accept_fd_p1;       /* fd plus 1 so 0 is invalid */
     int request_recv;
     uint16_t buffer_offset;
-    uint8_t buffer[WH_TRANSPORT_TCP_BUFFER_SIZE];
+    uint8_t buffer[PTT_BUFFER_SIZE];
 } whTransportTcpServerContext;
 
 /* wh_TranportServer compliant callbacks */

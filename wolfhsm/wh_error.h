@@ -4,8 +4,8 @@
  * WolfHSM-specific error codes
  */
 
-#ifndef WOLFHSM_ERROR_H_
-#define WOLFHSM_ERROR_H_
+#ifndef WOLFHSM_WH_ERROR_H_
+#define WOLFHSM_WH_ERROR_H_
 
 /* Consider reusing wolfssl or wolfcrypt errors here */
 
@@ -24,4 +24,4 @@ enum {
     WH_ERROR_NOSPACE        = -415, /* No available space */
 };
 
-#endif /* WOLFHSM_ERROR_H_ */
+#endif /* WOLFHSM_WH_ERROR_H_ */

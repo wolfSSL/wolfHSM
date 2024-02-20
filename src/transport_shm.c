@@ -7,11 +7,11 @@
 #include <stddef.h>
 #include <string.h>
 #include <stdint.h>
+#include <wolfhsm/wh_error.h>
+#include <wolfhsm/wh_transport.h>
 
-#include "wolfhsm/error.h"
 #include "wolfhsm/shmbuffer.h"
 
-#include "wolfhsm/transport.h"
 #include "wolfhsm/transport_shm.h"
 
 /* Define and declare callbacks that match wolfhsm/transport.h */

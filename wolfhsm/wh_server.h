@@ -1,7 +1,7 @@
 #ifndef WOLFHSM_WH_SERVER_H_
 #define WOLFHSM_WH_SERVER_H_
 
-#include "wolfhsm/comm.h"
+#include <wolfhsm/wh_comm.h>
 
 #if 0
 #include "wolfhsm/nvm.h"

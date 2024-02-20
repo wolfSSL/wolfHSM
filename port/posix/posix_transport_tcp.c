@@ -1,5 +1,5 @@
 /*
- * transport_shm.c
+ * port/posix/transport_shm.c
  *
  * Implementation of transport callbacks using tcp
  */
@@ -16,10 +16,10 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <poll.h>
+#include <port/posix/posix_transport_tcp.h>
+#include <wolfhsm/wh_error.h>
+#include <wolfhsm/wh_transport.h>
 
-#include "wolfhsm/error.h"
-#include "wolfhsm/transport.h"
-#include "port/posix/transport_tcp.h"
 
 /* Define and declare callbacks that match wolfhsm/transport.h */
 
@@ -84,7 +84,7 @@ static int _wh_TransportTcp_Send(int fd, uint16_t* buffer_offset,
             (buffer_offset == NULL) ||
             (buffer == NULL) ||
             (size == 0) ||
-            (size > WH_TRANSPORT_TCP_PACKET_MAX_SIZE) ||
+            (size > PTT_PACKET_MAX_SIZE) ||
             (data == NULL) ) {
         return WH_ERROR_BADARGS;
     }
@@ -135,7 +135,7 @@ static int _wh_TransportTcp_Recv(int fd, uint16_t* buffer_offset,
 
     if (    (fd < 0) ||
             (buffer_offset == NULL) ||
-            (*buffer_offset > WH_TRANSPORT_TCP_BUFFER_SIZE) ||
+            (*buffer_offset > PTT_BUFFER_SIZE) ||
             (buffer == NULL) ) {
         return WH_ERROR_BADARGS;
     }
@@ -286,7 +286,7 @@ static int _wh_TransportTcp_SendRequest(void* context,
     if (    (c == NULL) ||
             (c->connect_fd_p1 == 0) ||
             (size == 0) ||
-            (size > WH_TRANSPORT_TCP_PACKET_MAX_SIZE) ||
+            (size > PTT_PACKET_MAX_SIZE) ||
             (data == NULL) ) {
         return WH_ERROR_BADARGS;
     }
@@ -546,7 +546,7 @@ static int _wh_TransportTcp_SendResponse(void* context,
             (c->listen_fd_p1 == 0) ||
             (c->accept_fd_p1 == 0) ||
             (size == 0) ||
-            (size > WH_TRANSPORT_TCP_PACKET_MAX_SIZE) ||
+            (size > PTT_PACKET_MAX_SIZE) ||
             (data == NULL) ) {
         return WH_ERROR_BADARGS;
     }

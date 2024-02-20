@@ -15,8 +15,8 @@
  * necessary.
  */
 
-#ifndef WOLFHSM_TRANSPORT_H_
-#define WOLFHSM_TRANSPORT_H_
+#ifndef WOLFHSM_WH_TRANSPORT_H_
+#define WOLFHSM_WH_TRANSPORT_H_
 
 #include <stdint.h>  /* For sized ints */
 
@@ -82,4 +82,4 @@ typedef struct {
     int (*Cleanup)(void* context);
 } wh_TransportServer_Cb;
 
-#endif /* WOLFHSM_TRANSPORT_H_ */
+#endif /* WOLFHSM_WH_TRANSPORT_H_ */
