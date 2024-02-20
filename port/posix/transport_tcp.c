@@ -30,6 +30,10 @@
 /* Common utility function to make a fd non-blocking */
 static int _wh_TransportTcp_MakeNonBlocking(int fd);
 
+/* Common utility function to make a socket not raise SIGPIPE */
+static int _wh_TransportTcp_MakeNoSigpipe(int sock);
+
+
 /* Common send/write function with a byte buffer */
 static int _wh_TransportTcp_Send(int fd, uint16_t* buffer_offset,
         uint8_t* buffer, uint16_t size, const void* data);
@@ -51,6 +55,18 @@ static int _wh_TransportTcp_MakeNonBlocking(int fd)
     rc = fcntl(fd, F_SETFL, rc | O_NONBLOCK);
     if (rc == -1) {
         /* Error setting flags */
+        return WH_ERROR_ABORTED;
+    }
+    return 0;
+}
+
+static int _wh_TransportTcp_MakeNoSigpipe(int sock)
+{
+    int enable = 1;
+    int rc = 0;
+
+    rc = setsockopt(sock, SOL_SOCKET, SO_NOSIGPIPE, &enable, sizeof(enable));
+    if (rc != 0) {
         return WH_ERROR_ABORTED;
     }
     return 0;
@@ -232,6 +248,11 @@ static int _wh_TransportTcp_InitConnect(void* context, const void* config)
         c->connect_fd_p1 = 0;
         return WH_ERROR_ABORTED;
     }
+
+    /* Suppress signals on failed writes */
+    rc = _wh_TransportTcp_MakeNoSigpipe(c->connect_fd_p1 - 1);
+    /* Ok to fail to ignore signals */
+
 
     /* Start the connect process */
     rc = connect(c->connect_fd_p1 - 1,
@@ -434,8 +455,12 @@ static int _wh_TransportTcp_InitListen(void* context, const void* config)
     }
 
     /* Ensure listen port does not linger */
-    rc = _wh_TransportTcp_MakeNoLinger(c->listen_fd_p1 -1);
+    rc = _wh_TransportTcp_MakeNoLinger(c->listen_fd_p1 - 1);
     /* Ok to fail to linger.  Annoying, but ok. */
+
+    /* Suppress signals on failed writes */
+    rc = _wh_TransportTcp_MakeNoSigpipe(c->listen_fd_p1 - 1);
+    /* Ok to fail to ignore signals */
 
     rc = bind(c->listen_fd_p1 - 1,
             (struct sockaddr*)&c->server_addr,
