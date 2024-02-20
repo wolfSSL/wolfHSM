@@ -39,10 +39,6 @@ int wh_Client_Init(whClient* c, const whClientConfig* config)
         return WH_ERROR_BADARGS;
     }
 
-    if(c->inited != 0) {
-        return WH_ERROR_ABORTED;
-    }
-
     memset(c, 0, sizeof(*c));
     if (    ((rc = wh_CommClient_Init(c->comm, config->comm))==0) &&
 /*            ((rc = wh_NvmClient_Init(c->nvm, config->nvm))==0) && */

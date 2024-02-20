@@ -36,6 +36,7 @@ int wh_Server_Init(whServer* server, whServerConfig* config)
     if (server == NULL) {
         return WH_ERROR_BADARGS;
     }
+
     memset(server, 0, sizeof(*server));
     if (
 /*            ((rc = wh_Nvm_Init(server->nvm_device, config->nvm_device)) == 0) && */
