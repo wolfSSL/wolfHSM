@@ -292,6 +292,10 @@ static int _wh_TransportTcp_SendRequest(void* context,
             /* Poll timeout, not connected yet */
             return WH_ERROR_NOTREADY;
         }
+        if ((pfd.revents & POLLOUT) == 0) {
+            /* Not connected yet */
+            return WH_ERROR_NOTREADY;
+        }
         c->connected = 1;
     }
 
