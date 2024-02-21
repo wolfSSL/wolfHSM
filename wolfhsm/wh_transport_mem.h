@@ -95,8 +95,8 @@ typedef struct {
 } whTransportMemContext;
 
 /* Naming conveniences. Reuses the same types. */
-typedef whTransportMemContext whTransportShmClientContext;
-typedef whTransportMemContext whTransportShmServerContext;
+typedef whTransportMemContext whTransportMemClientContext;
+typedef whTransportMemContext whTransportMemServerContext;
 
 /* Callback function declarations */
 int wh_TransportMem_Init(void* c, const void* cf);

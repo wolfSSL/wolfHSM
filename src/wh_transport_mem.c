@@ -36,11 +36,11 @@ int wh_TransportMem_Init(void* c, const void* cf)
     }
 
     memset(context, 0, sizeof(*context));
-    context->req        = (whShmbufferCsr*)config->req;
+    context->req        = (whTransportMemCsr*)config->req;
     context->req_size   = config->req_size;
     context->req_data   = (void*)(context->req + 1);
 
-    context->resp       = (whShmbufferCsr*)config->resp;
+    context->resp       = (whTransportMemCsr*)config->resp;
     context->resp_size  = config->resp_size;
     context->resp_data  = (void*)(context->resp + 1);
 
@@ -76,8 +76,8 @@ int wh_TransportMem_Cleanup(void* c)
 int wh_TransportMem_SendRequest(void* c, uint16_t len, const uint8_t* data)
 {
     whTransportMemContext* context = c;
-    whShmbufferCsr resp;
-    whShmbufferCsr req;
+    whTransportMemCsr resp;
+    whTransportMemCsr req;
 
     if (    (context == NULL) ||
             (context->initialized == 0)) {
@@ -108,8 +108,8 @@ int wh_TransportMem_SendRequest(void* c, uint16_t len, const uint8_t* data)
 int wh_TransportMem_RecvRequest(void* c, uint16_t *out_len, uint8_t* data)
 {
     whTransportMemContext* context = c;
-    whShmbufferCsr req;
-    whShmbufferCsr resp;
+    whTransportMemCsr req;
+    whTransportMemCsr resp;
 
     if (    (context == NULL) ||
             (context->initialized == 0)) {
@@ -138,8 +138,8 @@ int wh_TransportMem_RecvRequest(void* c, uint16_t *out_len, uint8_t* data)
 int wh_TransportMem_SendResponse(void* c, uint16_t len, const uint8_t* data)
 {
     whTransportMemContext* context = c;
-    whShmbufferCsr req;
-    whShmbufferCsr resp;
+    whTransportMemCsr req;
+    whTransportMemCsr resp;
 
     if (    (context == NULL) ||
             (context->initialized == 0)) {
@@ -166,8 +166,8 @@ int wh_TransportMem_SendResponse(void* c, uint16_t len, const uint8_t* data)
 int wh_TransportMem_RecvResponse(void* c, uint16_t *out_len, uint8_t* data)
 {
     whTransportMemContext* context = c;
-    whShmbufferCsr req;
-    whShmbufferCsr resp;
+    whTransportMemCsr req;
+    whTransportMemCsr resp;
 
     if (    (context == NULL) ||
             (context->initialized == 0)) {
@@ -202,7 +202,7 @@ static const wh_TransportClient_Cb _whTransportMemClient_Cb = {
         .Recv =     wh_TransportMem_RecvResponse,
         .Cleanup =  wh_TransportMem_Cleanup,
 };
-const wh_TransportClient_Cb* whTransportShmClient_Cb = &_whTransportMemClient_Cb;
+const wh_TransportClient_Cb* whTransportMemClient_Cb = &_whTransportMemClient_Cb;
 
 /** TransportServer Implementation */
 static const wh_TransportServer_Cb _whTransportMemServer_Cb = {
@@ -211,5 +211,5 @@ static const wh_TransportServer_Cb _whTransportMemServer_Cb = {
         .Send =     wh_TransportMem_SendResponse,
         .Cleanup =  wh_TransportMem_Cleanup,
 };
-const wh_TransportServer_Cb* whTransportShmServer_Cb = &_whTransportMemServer_Cb;
+const wh_TransportServer_Cb* whTransportMemServer_Cb = &_whTransportMemServer_Cb;
 
