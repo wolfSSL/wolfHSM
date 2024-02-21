@@ -102,11 +102,26 @@ typedef whTransportMemContext whTransportMemServerContext;
 int wh_TransportMem_Init(void* c, const void* cf);
 int wh_TransportMem_InitClear(void* c, const void* cf);
 int wh_TransportMem_Cleanup(void* c);
-int wh_TransportMem_SendRequest(void* c, uint16_t len, const uint8_t* data);
-int wh_TransportMem_RecvRequest(void* c, uint16_t *out_len, uint8_t* data);
-int wh_TransportMem_SendResponse(void* c, uint16_t len, const uint8_t* data);
-int wh_TransportMem_RecvResponse(void* c, uint16_t *out_len, uint8_t* data);
+int wh_TransportMem_SendRequest(void* c, uint16_t len, const void* data);
+int wh_TransportMem_RecvRequest(void* c, uint16_t *out_len, void* data);
+int wh_TransportMem_SendResponse(void* c, uint16_t len, const void* data);
+int wh_TransportMem_RecvResponse(void* c, uint16_t *out_len, void* data);
 
+#define WH_TRANSPORT_MEM_CLIENT_CB              \
+{                                               \
+    .Init =     wh_TransportMem_InitClear,      \
+    .Send =     wh_TransportMem_SendRequest,    \
+    .Recv =     wh_TransportMem_RecvResponse,   \
+    .Cleanup =  wh_TransportMem_Cleanup,        \
+}
+
+#define WH_TRANSPORT_MEM_SERVER_CB              \
+{                                               \
+    .Init =     wh_TransportMem_Init,           \
+    .Recv =     wh_TransportMem_RecvRequest,    \
+    .Send =     wh_TransportMem_SendResponse,   \
+    .Cleanup =  wh_TransportMem_Cleanup,        \
+}
 
 /* wh_TranportClient compliant callbacks */
 extern const wh_TransportClient_Cb* whTransportMemClient_Cb;

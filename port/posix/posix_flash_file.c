@@ -12,8 +12,6 @@
 #include <errno.h>      /* For errno */
 #include <string.h>     /* For memset, memcpy */
 
-#include <stdio.h>
-
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_flash.h"
 
@@ -240,7 +238,6 @@ int posixFlashFile_Verify( void* c,
             return ret;
         }
         if (memcmp(data + data_offset, buffer, this_size) != 0) {
-            printf("Not verified: offset:%u size:%u\n", offset, size);
             return WH_ERROR_NOTVERIFIED;
         }
         offset += this_size;

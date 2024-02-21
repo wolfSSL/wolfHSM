@@ -63,7 +63,8 @@ enum {
 static void _HexDump(const char* p, size_t data_len)
 {
     const size_t bytesPerLine = 16;
-    const int two_digits = 0x10;
+    const unsigned char two_digits = 0x10;
+    const unsigned char* u = (const unsigned char*)p;
     printf("    HD:%p for %lu bytes\n",p, data_len);
     if ( (p == NULL) || (data_len == 0))
         return;
@@ -72,10 +73,10 @@ static void _HexDump(const char* p, size_t data_len)
     {
         if ((off % bytesPerLine) == 0)
             printf("    ");
-        if(p[off] < two_digits) {
-            printf("0%X ", p[off]);
+        if(u[off] < two_digits) {
+            printf("0%X ", u[off]);
         } else {
-            printf("%X ", p[off]);
+            printf("%X ", u[off]);
         }
         if ((off % bytesPerLine) == (bytesPerLine - 1))
             printf("\n");
@@ -223,7 +224,6 @@ void wh_Nvm_UnitTest(void)
         cb->AddObject(context, &meta2, sizeof(update3),update3);
         _ShowAvailable(cb, context);
         _ShowList(cb, context);
-return;
         /* Regenerate */
         printf("--Reclaim space\n");
         cb->DestroyObjects(context, 0, NULL);
@@ -245,98 +245,39 @@ return;
     }
 }
 
-/* Shared memory configuration */
+/* Transport memory configuration */
 static uint8_t req[BUFFER_SIZE];
 static uint8_t resp[BUFFER_SIZE];
-whTransportMemConfig myConfig[1] = {{
+whTransportMemConfig tmcf[1] = {{
         .req = (whTransportMemCsr*)req,
         .req_size = sizeof(req),
         .resp = (whTransportMemCsr*)resp,
         .resp_size = sizeof(resp),
 }};
-#if 0
-void wh_Shmbuffer_UnitTest(void)
-{
-    int counter = 1;
 
-    uint8_t  tx_req[REQ_SIZE] = {0};
-    uint16_t tx_req_len = 0;
-
-    uint8_t  rx_req[REQ_SIZE] = {0};
-    uint16_t rx_req_len = 0;
-
-    uint8_t  tx_resp[REQ_SIZE] = {0};
-    uint16_t tx_resp_len = 0;
-
-    uint8_t  rx_resp[REQ_SIZE] = {0};
-    uint16_t rx_resp_len = 0;
-
-    whShmbufferContext client[1] = {};
-    whShmbufferContext server[1] = {};
-
-    wh_Shmbuffer_InitClear(client, myConfig);
-    wh_Shmbuffer_Init(server, myConfig);
-
-    int ret;
-
-    /* Check that neither side is ready to recv */
-    ret = wh_Shmbuffer_RecvRequest(server, &rx_req_len, rx_req);
-    printf("Server initial RecvRequest:%d\n", ret);
-
-    for(counter = 0; counter < REPEAT_COUNT; counter++)
-    {
-        sprintf((char*)tx_req,"Request:%u",counter);
-        tx_req_len = strlen((char*)tx_req);
-        ret = wh_Shmbuffer_SendRequest(client, tx_req_len, tx_req);
-        printf("Client SendRequest:%d, %s\n",
-                ret, tx_req);
-
-        if (counter == 0) {
-            ret = wh_Shmbuffer_RecvResponse(client, &rx_resp_len, rx_resp);
-            printf("Client initial RecvResponse:%d\n", ret);
-            ret = wh_Shmbuffer_SendRequest(client, tx_req_len, tx_req);
-            printf("Client duplicate SendRequest:%d\n",ret);
-        }
-
-        ret = wh_Shmbuffer_RecvRequest(server, &rx_req_len, rx_req);
-        printf("Server RecvRequest:%d, len:%d, %s\n",
-                ret, rx_req_len, rx_req);
-
-        sprintf((char*)tx_resp,"Response:%s",rx_req);
-        tx_resp_len = strlen((char*)tx_resp);
-        ret = wh_Shmbuffer_SendResponse(server, tx_resp_len, tx_resp);
-        printf("Server SendResponse:%d, %s\n",
-                ret, tx_resp);
-
-        ret = wh_Shmbuffer_RecvResponse(client, &rx_resp_len, rx_resp);
-        printf("Client RecvResponse:%d, len:%d, %s\n",
-                ret, rx_resp_len, rx_resp);
-    }
-    wh_Shmbuffer_Cleanup(server);
-    wh_Shmbuffer_Cleanup(client);
-}
-#endif
 void wh_CommClientServer_Test(void)
 {
     /* Client configuration/contexts */
-    whTransportMemClientContext csc[1] = {};
+    wh_TransportClient_Cb tccb[1] = {WH_TRANSPORT_MEM_CLIENT_CB};
+    whTransportMemClientContext tmcc[1] = {0};
     whCommClientConfig c_conf[1] = {{
-            .transport_cb = whTransportMemClient_Cb,
-            .transport_context = (void*)csc,
-            .transport_config = (void*)myConfig,
+            .transport_cb = tccb,
+            .transport_context = (void*)tmcc,
+            .transport_config = (void*)tmcf,
             .client_id = 1234,
     }};
-    whCommClient client[1] = {};
+    whCommClient client[1] = {0};
 
     /* Server configuration/contexts */
-    whTransportMemServerContext css[1] = {};
+    wh_TransportServer_Cb tscb[1] = {WH_TRANSPORT_MEM_SERVER_CB};
+    whTransportMemServerContext tmsc[1] = {0};
     whCommServerConfig s_conf[1] = {{
-            .transport_cb = whTransportMemServer_Cb,
-            .transport_context = (void*)css,
-            .transport_config = (void*)myConfig,
+            .transport_cb = tscb,
+            .transport_context = (void*)tmsc,
+            .transport_config = (void*)tmcf,
             .server_id = 5678,
     }};
-    whCommServer server[1] = {};
+    whCommServer server[1] = {0};
 
     int ret = 0;
     ret = wh_CommClient_Init(client, c_conf);
@@ -584,7 +525,7 @@ void wh_CommClientServer_MemThreadTest(void)
     whCommClientConfig c_conf[1] = {{
             .transport_cb = whTransportMemClient_Cb,
             .transport_context = (void*)csc,
-            .transport_config = (void*)myConfig,
+            .transport_config = (void*)tmcf,
             .client_id = 1234,
     }};
 
@@ -593,7 +534,7 @@ void wh_CommClientServer_MemThreadTest(void)
     whCommServerConfig s_conf[1] = {{
             .transport_cb = whTransportMemServer_Cb,
             .transport_context = (void*)css,
-            .transport_config = (void*)myConfig,
+            .transport_config = (void*)tmcf,
             .server_id = 5678,
     }};
 
@@ -785,11 +726,12 @@ int main(int argc, char** argv)
     (void)argc; (void)argv;
 
     wh_Nvm_UnitTest();
-/*    wh_Shmbuffer_UnitTest();*/
+    /*
     wh_CommClientServer_Test();
     wh_CommClientServer_MemThreadTest();
     wh_CommClientServer_TcpThreadTest();
     wh_ClientServer_TcpThreadTest();
+    */
     return 0;
 }
 

@@ -51,7 +51,6 @@ int wh_TransportMem_Init(void* c, const void* cf)
 int wh_TransportMem_InitClear(void* c, const void* cf)
 {
     whTransportMemContext* context = c;
-    const whTransportMemConfig* config = cf;
     int rc = wh_TransportMem_Init(c, cf);
     if (rc == 0) {
         /* Zero the buffers */
@@ -73,7 +72,7 @@ int wh_TransportMem_Cleanup(void* c)
     return 0;
 }
 
-int wh_TransportMem_SendRequest(void* c, uint16_t len, const uint8_t* data)
+int wh_TransportMem_SendRequest(void* c, uint16_t len, const void* data)
 {
     whTransportMemContext* context = c;
     whTransportMemCsr resp;
@@ -105,7 +104,7 @@ int wh_TransportMem_SendRequest(void* c, uint16_t len, const uint8_t* data)
     return 0;
 }
 
-int wh_TransportMem_RecvRequest(void* c, uint16_t *out_len, uint8_t* data)
+int wh_TransportMem_RecvRequest(void* c, uint16_t *out_len, void* data)
 {
     whTransportMemContext* context = c;
     whTransportMemCsr req;
@@ -135,7 +134,7 @@ int wh_TransportMem_RecvRequest(void* c, uint16_t *out_len, uint8_t* data)
     return 0;
 }
 
-int wh_TransportMem_SendResponse(void* c, uint16_t len, const uint8_t* data)
+int wh_TransportMem_SendResponse(void* c, uint16_t len, const void* data)
 {
     whTransportMemContext* context = c;
     whTransportMemCsr req;
@@ -163,7 +162,7 @@ int wh_TransportMem_SendResponse(void* c, uint16_t len, const uint8_t* data)
     return 0;
 }
 
-int wh_TransportMem_RecvResponse(void* c, uint16_t *out_len, uint8_t* data)
+int wh_TransportMem_RecvResponse(void* c, uint16_t *out_len, void* data)
 {
     whTransportMemContext* context = c;
     whTransportMemCsr req;
