@@ -16,34 +16,32 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <poll.h>
-#include <port/posix/posix_transport_tcp.h>
-#include <wolfhsm/wh_error.h>
-#include <wolfhsm/wh_transport.h>
 
-
-/* Define and declare callbacks that match wolfhsm/transport.h */
-
-/* Common buffer management functions */
+#include "wolfhsm/wh_error.h"
+#include "wolfhsm/wh_transport.h"
+#include "port/posix/posix_transport_tcp.h"
 
 /** Local declarations */
 
 /* Common utility function to make a fd non-blocking */
-static int _wh_TransportTcp_MakeNonBlocking(int fd);
+static int posixTransportTcp_MakeNonBlocking(int fd);
 
 /* Common utility function to make a socket not raise SIGPIPE */
-static int _wh_TransportTcp_MakeNoSigpipe(int sock);
+static int posixTransportTcp_MakeNoSigpipe(int sock);
 
+/* Server utility function to make a socket no linger and reuse addr */
+static int posixTransportTcp_MakeNoLinger(int sock);
 
 /* Common send/write function with a byte buffer */
-static int _wh_TransportTcp_Send(int fd, uint16_t* buffer_offset,
+static int posixTransportTcp_Send(int fd, uint16_t* buffer_offset,
         uint8_t* buffer, uint16_t size, const void* data);
 
 /* Common recv/read function with a byte buffer */
-static int _wh_TransportTcp_Recv(int fd, uint16_t* buffer_offset,
+static int posixTransportTcp_Recv(int fd, uint16_t* buffer_offset,
         uint8_t* buffer, uint16_t *out_size, void* data);
 
 /** Local implementations */
-static int _wh_TransportTcp_MakeNonBlocking(int fd)
+static int posixTransportTcp_MakeNonBlocking(int fd)
 {
     int rc = 0;
     rc = fcntl(fd, F_GETFL, 0);
@@ -60,7 +58,7 @@ static int _wh_TransportTcp_MakeNonBlocking(int fd)
     return 0;
 }
 
-static int _wh_TransportTcp_MakeNoSigpipe(int sock)
+static int posixTransportTcp_MakeNoSigpipe(int sock)
 {
     int enable = 1;
     int rc = 0;
@@ -72,7 +70,27 @@ static int _wh_TransportTcp_MakeNoSigpipe(int sock)
     return 0;
 }
 
-static int _wh_TransportTcp_Send(int fd, uint16_t* buffer_offset,
+static int posixTransportTcp_MakeNoLinger(int sock)
+{
+    struct linger ls = {
+            .l_onoff = 0,
+            .l_linger = 0,
+    };
+    int enable = 1;
+    int rc = 0;
+
+    rc = setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(enable));
+    if (rc != 0) {
+        return WH_ERROR_ABORTED;
+    }
+    rc = setsockopt(sock, SOL_SOCKET, SO_LINGER, &ls, sizeof(ls));
+    if (rc != 0) {
+        return WH_ERROR_ABORTED;
+    }
+    return 0;
+}
+
+static int posixTransportTcp_Send(int fd, uint16_t* buffer_offset,
         uint8_t* buffer, uint16_t size, const void* data)
 {
     int rc = 0;
@@ -124,7 +142,7 @@ static int _wh_TransportTcp_Send(int fd, uint16_t* buffer_offset,
     return 0;
 }
 
-static int _wh_TransportTcp_Recv(int fd, uint16_t* buffer_offset,
+static int posixTransportTcp_Recv(int fd, uint16_t* buffer_offset,
         uint8_t* buffer, uint16_t *out_size, void* data)
 {
     int rc = 0;
@@ -207,20 +225,11 @@ static int _wh_TransportTcp_Recv(int fd, uint16_t* buffer_offset,
 }
 
 /** Client functions */
-
-static int _wh_TransportTcp_InitConnect(void* context, const void* config);
-static int _wh_TransportTcp_SendRequest(void* context, uint16_t size,
-        const void* data);
-static int _wh_TransportTcp_RecvResponse(void* context, uint16_t *out_size,
-        void* data);
-static int _wh_TransportTcp_CleanupConnect(void* context);
-
-
-static int _wh_TransportTcp_InitConnect(void* context, const void* config)
+int posixTransportTcp_InitConnect(void* context, const void* config)
 {
     int rc = 0;
-    whTransportTcpClientContext* c = context;
-    const whTransportTcpConfig* cf = config;
+    posixTransportTcpClientContext* c = context;
+    const posixTransportTcpConfig* cf = config;
 
     if ( (c == NULL) || (cf == NULL)) {
         return WH_ERROR_BADARGS;
@@ -241,7 +250,7 @@ static int _wh_TransportTcp_InitConnect(void* context, const void* config)
     c->connect_fd_p1 = rc + 1;
 
     /* Make socket non-blocking */
-    rc = _wh_TransportTcp_MakeNonBlocking(c->connect_fd_p1 - 1);
+    rc = posixTransportTcp_MakeNonBlocking(c->connect_fd_p1 - 1);
 
     if(rc != 0) {
         close(c->connect_fd_p1 - 1);
@@ -250,7 +259,7 @@ static int _wh_TransportTcp_InitConnect(void* context, const void* config)
     }
 
     /* Suppress signals on failed writes */
-    rc = _wh_TransportTcp_MakeNoSigpipe(c->connect_fd_p1 - 1);
+    rc = posixTransportTcp_MakeNoSigpipe(c->connect_fd_p1 - 1);
     /* Ok to fail to ignore signals */
 
 
@@ -278,11 +287,11 @@ static int _wh_TransportTcp_InitConnect(void* context, const void* config)
     return 0;
 }
 
-static int _wh_TransportTcp_SendRequest(void* context,
+int posixTransportTcp_SendRequest(void* context,
         uint16_t size, const void* data)
 {
     int rc = 0;
-    whTransportTcpClientContext* c = context;
+    posixTransportTcpClientContext* c = context;
     if (    (c == NULL) ||
             (c->connect_fd_p1 == 0) ||
             (size == 0) ||
@@ -320,7 +329,7 @@ static int _wh_TransportTcp_SendRequest(void* context,
         c->connected = 1;
     }
 
-    rc = _wh_TransportTcp_Send(
+    rc = posixTransportTcp_Send(
             c->connect_fd_p1 - 1,
             &c->buffer_offset,
             c->buffer,
@@ -336,11 +345,11 @@ static int _wh_TransportTcp_SendRequest(void* context,
     return rc;
 }
 
-static int _wh_TransportTcp_RecvResponse(void* context,
+int posixTransportTcp_RecvResponse(void* context,
         uint16_t* out_size, void* data)
 {
     int rc = 0;
-    whTransportTcpClientContext* c = context;
+    posixTransportTcpClientContext* c = context;
     if (    (c == NULL) ||
             (c->connect_fd_p1 == 0) ) {
         return WH_ERROR_BADARGS;
@@ -350,7 +359,7 @@ static int _wh_TransportTcp_RecvResponse(void* context,
         return WH_ERROR_NOTREADY;
     }
 
-    rc = _wh_TransportTcp_Recv(
+    rc = posixTransportTcp_Recv(
             c->connect_fd_p1 - 1,
             &c->buffer_offset,
             c->buffer,
@@ -365,9 +374,9 @@ static int _wh_TransportTcp_RecvResponse(void* context,
     return rc;
 }
 
-static int _wh_TransportTcp_CleanupConnect(void* context)
+int posixTransportTcp_CleanupConnect(void* context)
 {
-     whTransportTcpClientContext* c = context;
+     posixTransportTcpClientContext* c = context;
     if (c == NULL) {
         return WH_ERROR_BADARGS;
     }
@@ -380,53 +389,15 @@ static int _wh_TransportTcp_CleanupConnect(void* context)
     return 0;
 }
 
-/** TransportClient Implementation */
-static const wh_TransportClient_Cb _whTransportTcpClient_Cb = {
-        .Init =     _wh_TransportTcp_InitConnect,
-        .Send =     _wh_TransportTcp_SendRequest,
-        .Recv =     _wh_TransportTcp_RecvResponse,
-        .Cleanup =  _wh_TransportTcp_CleanupConnect,
-};
-const wh_TransportClient_Cb* whTransportTcpClient_Cb =
-        &_whTransportTcpClient_Cb;
 
 /** Server Functions */
 
-static int _wh_TransportTcp_MakeNoLinger(int sock);
 
-static int _wh_TransportTcp_InitListen(void* context, const void* config);
-static int _wh_TransportTcp_RecvRequest(void* context, uint16_t *out_size,
-        void* data);
-static int _wh_TransportTcp_SendResponse(void* context, uint16_t size,
-        const void* data);
-static int _wh_TransportTcp_CleanupListen(void* context);
-
-
-static int _wh_TransportTcp_MakeNoLinger(int sock)
-{
-    struct linger ls = {
-            .l_onoff = 0,
-            .l_linger = 0,
-    };
-    int enable = 1;
-    int rc = 0;
-
-    rc = setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(enable));
-    if (rc != 0) {
-        return WH_ERROR_ABORTED;
-    }
-    rc = setsockopt(sock, SOL_SOCKET, SO_LINGER, &ls, sizeof(ls));
-    if (rc != 0) {
-        return WH_ERROR_ABORTED;
-    }
-    return 0;
-}
-
-static int _wh_TransportTcp_InitListen(void* context, const void* config)
+int posixTransportTcp_InitListen(void* context, const void* config)
 {
     int rc = 0;
-    whTransportTcpServerContext* c = context;
-    const whTransportTcpConfig* cf = config;
+    posixTransportTcpServerContext* c = context;
+    const posixTransportTcpConfig* cf = config;
 
     if ( (c == NULL) || (cf == NULL)) {
         return WH_ERROR_BADARGS;
@@ -447,7 +418,7 @@ static int _wh_TransportTcp_InitListen(void* context, const void* config)
     c->listen_fd_p1 = rc + 1;
 
     /* Make socket non-blocking */
-    rc = _wh_TransportTcp_MakeNonBlocking(c->listen_fd_p1 - 1);
+    rc = posixTransportTcp_MakeNonBlocking(c->listen_fd_p1 - 1);
     if (rc != 0) {
         close(c->listen_fd_p1 - 1);
         c->listen_fd_p1 = 0;
@@ -455,11 +426,11 @@ static int _wh_TransportTcp_InitListen(void* context, const void* config)
     }
 
     /* Ensure listen port does not linger */
-    rc = _wh_TransportTcp_MakeNoLinger(c->listen_fd_p1 - 1);
+    rc = posixTransportTcp_MakeNoLinger(c->listen_fd_p1 - 1);
     /* Ok to fail to linger.  Annoying, but ok. */
 
     /* Suppress signals on failed writes */
-    rc = _wh_TransportTcp_MakeNoSigpipe(c->listen_fd_p1 - 1);
+    rc = posixTransportTcp_MakeNoSigpipe(c->listen_fd_p1 - 1);
     /* Ok to fail to ignore signals */
 
     rc = bind(c->listen_fd_p1 - 1,
@@ -482,11 +453,11 @@ static int _wh_TransportTcp_InitListen(void* context, const void* config)
     return 0;
 }
 
-static int _wh_TransportTcp_RecvRequest(void* context,
+int posixTransportTcp_RecvRequest(void* context,
         uint16_t* out_size, void* data)
 {
     int rc = 0;
-    whTransportTcpServerContext* c = context;
+    posixTransportTcpServerContext* c = context;
     if (    (c == NULL) ||
             (c->listen_fd_p1 == 0) ) {
         return WH_ERROR_BADARGS;
@@ -520,7 +491,7 @@ static int _wh_TransportTcp_RecvRequest(void* context,
         return WH_ERROR_NOTREADY;
     }
 
-    rc = _wh_TransportTcp_Recv(
+    rc = posixTransportTcp_Recv(
             c->accept_fd_p1 - 1,
             &c->buffer_offset,
             c->buffer,
@@ -537,11 +508,11 @@ static int _wh_TransportTcp_RecvRequest(void* context,
     return rc;
 }
 
-static int _wh_TransportTcp_SendResponse(void* context,
+int posixTransportTcp_SendResponse(void* context,
         uint16_t size, const void* data)
 {
     int rc = 0;
-    whTransportTcpServerContext* c = context;
+    posixTransportTcpServerContext* c = context;
     if (    (c == NULL) ||
             (c->listen_fd_p1 == 0) ||
             (c->accept_fd_p1 == 0) ||
@@ -555,7 +526,7 @@ static int _wh_TransportTcp_SendResponse(void* context,
         return WH_ERROR_NOTREADY;
     }
 
-    rc = _wh_TransportTcp_Send(
+    rc = posixTransportTcp_Send(
             c->accept_fd_p1 - 1,
             &c->buffer_offset,
             c->buffer,
@@ -571,9 +542,9 @@ static int _wh_TransportTcp_SendResponse(void* context,
     return rc;
 }
 
-static int _wh_TransportTcp_CleanupListen(void* context)
+int posixTransportTcp_CleanupListen(void* context)
 {
-    whTransportTcpServerContext* c = context;
+    posixTransportTcpServerContext* c = context;
     if (c == NULL) {
         return WH_ERROR_BADARGS;
     }
@@ -589,14 +560,3 @@ static int _wh_TransportTcp_CleanupListen(void* context)
 
     return 0;
 }
-
-/** TransportServer Implementation */
-static const wh_TransportServer_Cb _whTransportTcpServer_Cb = {
-        .Init =     _wh_TransportTcp_InitListen,
-        .Recv =     _wh_TransportTcp_RecvRequest,
-        .Send =     _wh_TransportTcp_SendResponse,
-        .Cleanup =  _wh_TransportTcp_CleanupListen,
-};
-const wh_TransportServer_Cb* whTransportTcpServer_Cb =
-        &_whTransportTcpServer_Cb;
-

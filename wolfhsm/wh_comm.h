@@ -28,7 +28,7 @@
 
 #include <stdint.h>  /* For sized ints */
 
-#include <wolfhsm/wh_transport.h>
+#include "wolfhsm/wh_transport.h"
 
 /* Request/response packets are composed of a single fixed-length header
  * (whHeader) followed immediately by variable-length data between 0 and
@@ -105,7 +105,7 @@ static inline uint64_t wh_Translate64(uint16_t magic, uint64_t val)
 /** Client types */
 
 typedef struct {
-    const wh_TransportClient_Cb* transport_cb;
+    const whTransportClientCb* transport_cb;
     void* transport_context;
     const void* transport_config;
     uint32_t client_id;
@@ -116,7 +116,7 @@ typedef struct {
  */
 typedef struct {
     void* transport_context;
-    const wh_TransportClient_Cb* transport_cb;
+    const whTransportClientCb* transport_cb;
     uint16_t reqid;
     uint16_t seq;
     uint16_t size;
@@ -157,7 +157,7 @@ int wh_CommClient_Cleanup(whCommClient* context);
 /** Server types */
 typedef struct {
     void* transport_context;
-    const wh_TransportServer_Cb* transport_cb;
+    const whTransportServerCb* transport_cb;
     const void* transport_config;
     uint32_t server_id;
 } whCommServerConfig;
@@ -168,7 +168,7 @@ typedef struct {
 typedef struct {
 
     void* transport_context;
-    const wh_TransportServer_Cb* transport_cb;
+    const whTransportServerCb* transport_cb;
     uint16_t reqid;
     uint8_t packet[WOLFHSM_COMM_MTU];
     whHeader* hdr;

@@ -18,14 +18,14 @@
 
 /* In memory context structure associated with a flash instance */
 typedef struct posixFlashFileContext_t {
-    int fd;
+    int fd_p1;              /* fd + 1, so fd == 0 is invalid */
     int unlocked;
     uint32_t partition_size;
     uint8_t erased_byte;
 } posixFlashFileContext;
 
 /* In memory configuration structure associated with an NVM instance */
-typedef struct posixFlashConfig_t {
+typedef struct posixFlashFileConfig_t {
     const char* filename;       /* Null terminated */
     uint32_t partition_size;
     uint8_t erased_byte;

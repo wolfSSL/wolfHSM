@@ -8,7 +8,7 @@
 
 #include <stdint.h>
 
-#include <wolfhsm/wh_message.h>
+#include "wolfhsm/wh_message.h"
 
 enum {
     WOLFHSM_MESSAGE_TYPE_COMM_NONE      = WOLFHSM_MESSAGE_GROUP_COMM + 0x00,

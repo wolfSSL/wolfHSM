@@ -9,47 +9,53 @@
 
 /* Example usage:
  *
- * whPosixTransportTcpConfig tcp_config[1] = {{
+ * posixTransportTcpConfig pttcfg[1] = {{
  *      .server_ip_string = "127.0.0.1",
  *      .server_port = 2345,
  * }};
  *
- * whPosixTransportTcpClientContext tcc[1];
+ * wh_TransportClient_Cb pttccb[1] = {PTT_CLIENT_CB};
+ * posixTransportTcpClientContext pttcc[1] = {0};
  * whCommClientConfig ccc[1] = {{
- *      .transport_cb = wh_PosixTransportTcpClient_Cb,
- *      .transport_context = tcc,
- *      .transport_config = tcp_config,
+ *      .transport_cb = pttccb,
+ *      .transport_context = pttcc,
+ *      .transport_config = pttcfg,
  *      .client_id = 1234,
  * }}
- * whCommClient cc[1];
+ * whCommClient cc[1] ={0};
  * wh_CommClient_Init(cc, ccc);
  *
- * whPosixTransportTcpServerContext tsc[1];
+ * wh_TransportServer_Cb pttscb[1] = {PTT_SERVER_CB};
+ * posixTransportTcpServerContext pttsc[1] = {0};
  * whCommServerConfig csc[1] = {{
- *      .transport_cb = wh_PosixTransportTcpServer_Cb,
- *      .transport_context = tsc,
- *      .transport_config = tcp_config,
+ *      .transport_cb = pttscb,
+ *      .transport_context = pttsc,
+ *      .transport_config = pttcfg,
  *      .server_id = 5678,
  * }}
- * whCommServer cs[1];
+ * whCommServer cs[1] = {0};
  * wh_CommServer_Init(cs, csc);
  *
  */
 
 #include <stdint.h>
 #include <netinet/in.h>
-#include <wolfhsm/wh_comm.h>        /* For WOLFHSM_COMM_MTU */
-#include <wolfhsm/wh_transport.h>
+
+#include "wolfhsm/wh_comm.h"        /* For WOLFHSM_COMM_MTU */
+#include "wolfhsm/wh_transport.h"
 
 
 #define PTT_PACKET_MAX_SIZE WOLFHSM_COMM_MTU
 #define PTT_BUFFER_SIZE (sizeof(uint32_t) + PTT_PACKET_MAX_SIZE)
 
-/* Common configuration structure */
+/** Common configuration structure */
 typedef struct {
     char* server_ip_string;
     short int server_port;
-} whTransportTcpConfig;
+} posixTransportTcpConfig;
+
+
+/** Client context and functions */
 
 typedef struct {
     struct sockaddr_in server_addr;
@@ -58,10 +64,25 @@ typedef struct {
     int request_sent;
     uint16_t buffer_offset;
     uint8_t buffer[PTT_BUFFER_SIZE];
-} whTransportTcpClientContext;
+} posixTransportTcpClientContext;
 
-/* wh_TranportClient compliant callbacks */
-extern const wh_TransportClient_Cb* whTransportTcpClient_Cb;
+int posixTransportTcp_InitConnect(void* context, const void* config);
+int posixTransportTcp_SendRequest(void* context, uint16_t size,
+        const void* data);
+int posixTransportTcp_RecvResponse(void* context, uint16_t *out_size,
+        void* data);
+int posixTransportTcp_CleanupConnect(void* context);
+
+#define PTT_CLIENT_CB                               \
+{                                                   \
+    .Init =     posixTransportTcp_InitConnect,      \
+    .Send =     posixTransportTcp_SendRequest,      \
+    .Recv =     posixTransportTcp_RecvResponse,     \
+    .Cleanup =  posixTransportTcp_CleanupConnect,   \
+}
+
+
+/** Server context and functions */
 
 typedef struct {
     struct sockaddr_in server_addr;
@@ -71,9 +92,21 @@ typedef struct {
     int request_recv;
     uint16_t buffer_offset;
     uint8_t buffer[PTT_BUFFER_SIZE];
-} whTransportTcpServerContext;
+} posixTransportTcpServerContext;
 
-/* wh_TranportServer compliant callbacks */
-extern const wh_TransportServer_Cb* whTransportTcpServer_Cb;
+int posixTransportTcp_InitListen(void* context, const void* config);
+int posixTransportTcp_RecvRequest(void* context, uint16_t *out_size,
+        void* data);
+int posixTransportTcp_SendResponse(void* context, uint16_t size,
+        const void* data);
+int posixTransportTcp_CleanupListen(void* context);
+
+#define PTT_SERVER_CB                               \
+{                                                   \
+    .Init =     posixTransportTcp_InitListen,       \
+    .Recv =     posixTransportTcp_RecvRequest,      \
+    .Send =     posixTransportTcp_SendResponse,     \
+    .Cleanup =  posixTransportTcp_CleanupListen,    \
+}
 
 #endif /* WH_TRANSPORT_TCP_H_ */

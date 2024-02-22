@@ -1,5 +1,5 @@
 /*
- * examples/posix/posixsim_test_app.c
+ * test/wh_test.c
  *
  */
 
@@ -25,14 +25,14 @@
 #include "wolfhsm/wh_comm.h"
 #include "wolfhsm/wh_message.h"
 
-#include "wolfhsm/wh_server.h"
-#include "wolfhsm/wh_client.h"
 
 #include "wolfhsm/wh_transport_mem.h"
 
 #include "port/posix/posix_transport_tcp.h"
 #include "port/posix/posix_flash_file.h"
 
+#include "wolfhsm/wh_server.h"
+#include "wolfhsm/wh_client.h"
 
 
 /* HAL Flash state and configuration */
@@ -258,7 +258,7 @@ whTransportMemConfig tmcf[1] = {{
 void wh_CommClientServer_Test(void)
 {
     /* Client configuration/contexts */
-    wh_TransportClient_Cb tccb[1] = {WH_TRANSPORT_MEM_CLIENT_CB};
+    whTransportClientCb tccb[1] = {WH_TRANSPORT_MEM_CLIENT_CB};
     whTransportMemClientContext tmcc[1] = {0};
     whCommClientConfig c_conf[1] = {{
             .transport_cb = tccb,
@@ -269,7 +269,7 @@ void wh_CommClientServer_Test(void)
     whCommClient client[1] = {0};
 
     /* Server configuration/contexts */
-    wh_TransportServer_Cb tscb[1] = {WH_TRANSPORT_MEM_SERVER_CB};
+    whTransportServerCb tscb[1] = {WH_TRANSPORT_MEM_SERVER_CB};
     whTransportMemServerContext tmsc[1] = {0};
     whCommServerConfig s_conf[1] = {{
             .transport_cb = tscb,
@@ -521,18 +521,20 @@ static void _whCommClientServerThreadTest( whCommClientConfig* c_conf,
 void wh_CommClientServer_MemThreadTest(void)
 {
     /* Client configuration/contexts */
+    whTransportClientCb tmccb[1] = {WH_TRANSPORT_MEM_CLIENT_CB};
     whTransportMemClientContext csc[1] = {};
     whCommClientConfig c_conf[1] = {{
-            .transport_cb = whTransportMemClient_Cb,
+            .transport_cb = tmccb,
             .transport_context = (void*)csc,
             .transport_config = (void*)tmcf,
             .client_id = 1234,
     }};
 
     /* Server configuration/contexts */
+    whTransportServerCb tmscb[1] = {WH_TRANSPORT_MEM_SERVER_CB};
     whTransportMemServerContext css[1] = {};
     whCommServerConfig s_conf[1] = {{
-            .transport_cb = whTransportMemServer_Cb,
+            .transport_cb = tmscb,
             .transport_context = (void*)css,
             .transport_config = (void*)tmcf,
             .server_id = 5678,
@@ -541,7 +543,7 @@ void wh_CommClientServer_MemThreadTest(void)
     _whCommClientServerThreadTest(c_conf, s_conf);
 }
 
-whTransportTcpConfig mytcpconfig[1] = {{
+posixTransportTcpConfig mytcpconfig[1] = {{
         .server_ip_string = "127.0.0.1",
         .server_port = 23456,
 }};
@@ -549,18 +551,21 @@ whTransportTcpConfig mytcpconfig[1] = {{
 void wh_CommClientServer_TcpThreadTest(void)
 {
     /* Client configuration/contexts */
-    whTransportTcpClientContext tcc[1] = {};
+    whTransportClientCb pttccb[1] = {PTT_CLIENT_CB};
+    posixTransportTcpClientContext tcc[1] = {};
     whCommClientConfig c_conf[1] = {{
-            .transport_cb = whTransportTcpClient_Cb,
+            .transport_cb = pttccb,
             .transport_context = (void*)tcc,
             .transport_config = (void*)mytcpconfig,
             .client_id = 1234,
     }};
 
     /* Server configuration/contexts */
-    whTransportTcpServerContext tss[1] = {};
+    whTransportServerCb pttscb[1] = {PTT_SERVER_CB};
+
+    posixTransportTcpServerContext tss[1] = {};
     whCommServerConfig s_conf[1] = {{
-            .transport_cb = whTransportTcpServer_Cb,
+            .transport_cb = pttscb,
             .transport_context = (void*)tss,
             .transport_config = (void*)mytcpconfig,
             .server_id = 5678,
@@ -568,8 +573,6 @@ void wh_CommClientServer_TcpThreadTest(void)
 
     _whCommClientServerThreadTest(c_conf, s_conf);
 }
-
-
 
 static void* _whClientTask(void *cf)
 {
@@ -693,9 +696,10 @@ static void _whClientServerThreadTest(  whClientConfig* c_conf,
 void wh_ClientServer_TcpThreadTest(void)
 {
     /* Client configuration/contexts */
-    whTransportTcpClientContext tcc[1] = {};
+    whTransportClientCb pttccb[1] = {PTT_CLIENT_CB};
+    posixTransportTcpClientContext tcc[1] = {};
     whCommClientConfig cc_conf[1] = {{
-            .transport_cb = whTransportTcpClient_Cb,
+            .transport_cb = pttccb,
             .transport_context = (void*)tcc,
             .transport_config = (void*)mytcpconfig,
             .client_id = 1234,
@@ -706,9 +710,10 @@ void wh_ClientServer_TcpThreadTest(void)
     }};
 
     /* Server configuration/contexts */
-    whTransportTcpServerContext tsc[1] = {};
+    whTransportServerCb pttscb[1] = {PTT_SERVER_CB};
+    posixTransportTcpServerContext tsc[1] = {};
     whCommServerConfig cs_conf[1] = {{
-            .transport_cb = whTransportTcpServer_Cb,
+            .transport_cb = pttscb,
             .transport_context = (void*)tsc,
             .transport_config = (void*)mytcpconfig,
             .server_id = 5678,
@@ -726,12 +731,10 @@ int main(int argc, char** argv)
     (void)argc; (void)argv;
 
     wh_Nvm_UnitTest();
-    /*
     wh_CommClientServer_Test();
     wh_CommClientServer_MemThreadTest();
     wh_CommClientServer_TcpThreadTest();
     wh_ClientServer_TcpThreadTest();
-    */
     return 0;
 }
 

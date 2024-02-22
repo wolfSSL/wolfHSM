@@ -42,38 +42,42 @@
  * uint8_t req_buffer[4096];
  * uint8_t resp_buffer[4096];
  *
- * whTransportMemConfig mem_config[1] = {{
+ * whTransportMemConfig tmcfg[1] = {{
  *      .req = req_buffer,
  *      .req_size = sizeof(req_buffer),
  *      .resp = resp_buffer
  *      .resp_size = sizeof(resp_buffer),
  * }};
  *
- * whTransportMemClientContext memcc[1];
+ * whTransportClientCb tmccb[1] = {WH_TRANSPORT_MEM_CLIENT_CB};
+ * whTransportMemClientContext tmcc[1] = {0};
  * whCommClientConfig ccc[1] = {{
- *      .transport_cb = whTransportMemClient_Cb,
- *      .transport_context = memcc,
- *      .transport_config = mem_config,
+ *      .transport_cb = tmccb,
+ *      .transport_context = tmcc,
+ *      .transport_config = tmcfg,
  *      .client_id = 1234,
  * }};
- * whCommClient cc[1];
+ * whCommClient cc[1] = {0};
  * wh_CommClient_Init(cc, ccc);
  *
- * whTransportMemServerContext memsc[1];
+ * whTransportServerCb tmscb[1] = {WH_TRANSPORT_MEM_SERVER_CB};
+ * whTransportMemServerContext tmsc[1] = {0};
  * whCommServerConfig csc[1] = {{
- *      .transport_cb = whTransportMemServer_Cb,
- *      .transport_context = memsc,
- *      .transport_config = mem_config,
+ *      .transport_cb = tmscb,
+ *      .transport_context = tmsc,
+ *      .transport_config = tmcfg,
  *      .server_id = 5678,
  * }};
- * whCommServer cs[1];
+ * whCommServer cs[1] = {0};
  * wh_CommServer_Init(cs, csc);
  *
  */
 
 #include <stdint.h>
-#include <wolfhsm/wh_transport.h>
 
+#include "wolfhsm/wh_transport.h"
+
+/** Common configuration structure */
 typedef struct {
     void* req;
     uint16_t req_size;
@@ -81,8 +85,19 @@ typedef struct {
     uint16_t resp_size;
 } whTransportMemConfig;
 
+
+/** Common context */
+
 /* Memory buffer control/status layout.  Data buffer follows immediately */
-typedef union whTransportMemCsr_t whTransportMemCsr;
+typedef union whTransportMemCsr_t {
+    uint64_t u64;
+    struct {
+        uint16_t notify;   /* Incremented to notify */
+        uint16_t len;      /* Length of data */
+        uint16_t ack;      /* Opt: Acknowledge the reverse notify */
+        uint16_t wait;     /* Opt: Incremented while waiting*/
+    } s;
+} whTransportMemCsr;
 
 typedef struct {
     volatile whTransportMemCsr* req;
@@ -98,7 +113,7 @@ typedef struct {
 typedef whTransportMemContext whTransportMemClientContext;
 typedef whTransportMemContext whTransportMemServerContext;
 
-/* Callback function declarations */
+/** Callback function declarations */
 int wh_TransportMem_Init(void* c, const void* cf);
 int wh_TransportMem_InitClear(void* c, const void* cf);
 int wh_TransportMem_Cleanup(void* c);
@@ -123,10 +138,5 @@ int wh_TransportMem_RecvResponse(void* c, uint16_t *out_len, void* data);
     .Cleanup =  wh_TransportMem_Cleanup,        \
 }
 
-/* wh_TranportClient compliant callbacks */
-extern const wh_TransportClient_Cb* whTransportMemClient_Cb;
-
-/* wh_TranportServer compliant callbacks */
-extern const wh_TransportServer_Cb* whTransportMemServer_Cb;
 
 #endif /* WH_TRANSPORT_MEM_H_ */

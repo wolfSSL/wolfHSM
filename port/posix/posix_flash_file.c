@@ -18,34 +18,25 @@
 #include "posix_flash_file.h"
 
 enum {
-    POSIXSIM_VERIFY_BUFFER_LEN = 64,
-    POSIXSIM_BLANKCHECK_BUFFER_LEN = 64,
+    PFF_VERIFY_BUFFER_LEN = 64,
+    PFF_BLANKCHECK_BUFFER_LEN = 64,
 };
 
+/** Local declarations */
 #define MAX_OFFSET(_context) (_context->partition_size * 2)
-
-static void psClearContext(posixFlashFileContext* context)
-{
-    memset(context, 0, sizeof(*context));
-    context->fd = -1;
-}
-
-static void psCloseContext(posixFlashFileContext* context)
-{
-    if(context->fd >= 0) {
-        close(context->fd);
-    }
-    psClearContext(context);
-}
 
 /* Helper for pwrite like memset.  Write the byte in c to filedes for size
  * bytes starting at offset */
+static ssize_t pfill(int filedes, int c, size_t size, off_t offset);
+
+/** Local implementations */
 static ssize_t pfill(int filedes, int c, size_t size, off_t offset)
 {
+    int rc = 0;
     uint8_t data = (uint8_t)c;
     size_t count = 0;
     while (count < size) {
-        int rc = pwrite(filedes, &data, sizeof(data), offset + count);
+        rc = pwrite(filedes, &data, sizeof(data), offset + count);
         if (rc != sizeof(data)) return rc;
         count += sizeof(data);
     }
@@ -58,56 +49,73 @@ int posixFlashFile_Init(   void* c,
 {
     posixFlashFileContext* context = c;
     const posixFlashFileConfig* config = cf;
-    psClearContext(context);
+    struct stat st = {0};
+    off_t file_size = 0;
+
+    int ret = 0;
+    int rc = 0;
+
+    if ((context == NULL) || (config == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
 
     /* Open the storage backend */
-    context->fd = open(config->filename, O_RDWR|O_CREAT|O_SYNC, S_IRUSR | S_IWUSR);
-    if (context -> fd < 0) {
-        psCloseContext(context);
-        return WH_ERROR_ABORTED;
-    }
+    rc = open(config->filename, O_RDWR|O_CREAT|O_SYNC, S_IRUSR | S_IWUSR);
+    if (rc >= 0) {
+        /* File is open, setup context */
+        memset(context, 0, sizeof(*context));
+        context->fd_p1 = rc + 1;
+        context->partition_size = config->partition_size;
+        context->erased_byte = config->erased_byte;
 
-    /* Copy config parameters */
-    context->partition_size = config->partition_size;
-    context->erased_byte = config->erased_byte;
+        rc = fstat(context->fd_p1 - 1, &st);
+        if (rc == 0) {
+            file_size = st.st_size;
 
-    /* Get current file size.  Truncate/write to required storage size*/
-    struct stat st;
-    int rc = fstat(context->fd, &st);
-    if (rc < 0) {
-        /* Error stat'ing */
-        psCloseContext(context);
-        return WH_ERROR_ABORTED;
-    }
-    off_t file_size = st.st_size;
-
-    if (file_size < MAX_OFFSET(context)) {
-        /* Write ERASE_BYTE to fill up to the storage size */
-        rc = pfill( context->fd,
-                    context->erased_byte,
-                    MAX_OFFSET(context) - file_size,
-                    file_size);
-        if (rc < 0) {
-            /* Error while writing */
-            psCloseContext(context);
-            return WH_ERROR_ABORTED;
+            if (file_size < MAX_OFFSET(context)) {
+                /* Write ERASE_BYTE to fill up to the storage size */
+                rc = pfill( context->fd_p1 - 1,
+                            context->erased_byte,
+                            MAX_OFFSET(context) - file_size,
+                            file_size);
+                if (rc < 0) {
+                    /* Error while writing */
+                    ret = WH_ERROR_ABORTED;
+                }
+            } else if (file_size > MAX_OFFSET(context)) {
+                rc = ftruncate( context->fd_p1 - 1,
+                                MAX_OFFSET(context));
+                if (rc < 0) {
+                    /* Error while truncating */
+                    ret = WH_ERROR_ABORTED;
+                }
+            }
         }
-    } else if (file_size > MAX_OFFSET(context)) {
-        rc = ftruncate( context->fd,
-                        MAX_OFFSET(context));
-        if (rc < 0) {
-            /* Error while truncating */
-            psCloseContext(context);
-            return WH_ERROR_ABORTED;
+
+        if (ret != 0) {
+            /* Error at some point. Clean up */
+            posixFlashFile_Cleanup(context);
         }
+    } else {
+        /* Failed to open initially */
+        ret = WH_ERROR_ABORTED;
     }
-    return 0;
+    return ret;
 }
 
 int posixFlashFile_Cleanup(void* c)
 {
     posixFlashFileContext* context = c;
-    psCloseContext(context);
+
+    if (context == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    if(context->fd_p1 > 0) {
+        /* Ignore errors here */
+        (void)close(context->fd_p1 - 1);
+        context->fd_p1 = 0;
+    }
     return 0;
 }
 
@@ -162,7 +170,7 @@ int posixFlashFile_Read(   void* c,
         return 0;
     }
 
-    ssize_t rc = pread( context->fd,
+    ssize_t rc = pread( context->fd_p1 - 1,
                         (void*) data,
                         (size_t) size,
                         (off_t) offset);
@@ -193,7 +201,7 @@ int posixFlashFile_Program(void* c,
         return WH_ERROR_LOCKED;
     }
 
-    ssize_t rc = pwrite(    context->fd,
+    ssize_t rc = pwrite(    context->fd_p1 - 1,
                             (void*) data,
                             (size_t) size,
                             (off_t) offset);
@@ -210,7 +218,7 @@ int posixFlashFile_Verify( void* c,
                         const uint8_t* data)
 {
     posixFlashFileContext* context = c;
-    uint8_t buffer[POSIXSIM_VERIFY_BUFFER_LEN];
+    uint8_t buffer[PFF_VERIFY_BUFFER_LEN];
     uint32_t end_offset = offset + size;
     uint32_t data_offset = 0;
 
@@ -265,7 +273,7 @@ int posixFlashFile_Erase(void* c,
         return WH_ERROR_LOCKED;
     }
 
-    ssize_t rc = pfill( context->fd,
+    ssize_t rc = pfill( context->fd_p1 - 1,
                         context->erased_byte,
                         (size_t) size,
                         (off_t) offset);
@@ -279,10 +287,12 @@ int posixFlashFile_Erase(void* c,
 int posixFlashFile_BlankCheck(void* c,
         uint32_t offset, uint32_t size)
 {
+    int ret = 0;
     posixFlashFileContext* context = c;
-    uint8_t buffer[POSIXSIM_BLANKCHECK_BUFFER_LEN];
-    uint8_t erased[POSIXSIM_BLANKCHECK_BUFFER_LEN];
+    uint8_t buffer[PFF_BLANKCHECK_BUFFER_LEN];
+    uint8_t erased[PFF_BLANKCHECK_BUFFER_LEN];
     uint32_t end_offset = offset + size;
+    uint32_t this_size = 0;
 
     if (    (context == NULL) ||
             (offset + size > MAX_OFFSET(context))){
@@ -297,19 +307,23 @@ int posixFlashFile_BlankCheck(void* c,
     memset(erased, context->erased_byte, sizeof(erased));
 
     while (offset < end_offset) {
-        uint32_t this_size = sizeof(buffer);
-        int ret = 0;
+        this_size = sizeof(buffer);
 
         if (this_size > end_offset - offset) {
             this_size = end_offset - offset;
         }
 
         ret = posixFlashFile_Read(context, offset, this_size, buffer);
-        if (ret != 0) return ret;
+        if (ret != 0) {
+            /* Error reading. Return error */
+            break;
+        }
         if (memcmp(erased, buffer, this_size) != 0) {
-            return WH_ERROR_NOTBLANK;
+            /* Didn't match.  Early return */
+            ret = WH_ERROR_NOTBLANK;
+            break;
         }
         offset += this_size;
     }
-    return 0;
+    return ret;
 }

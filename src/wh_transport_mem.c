@@ -7,20 +7,10 @@
 #include <stddef.h>
 #include <string.h>
 #include <stdint.h>
-#include <wolfhsm/wh_error.h>
 
+#include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_transport.h"
-#include <wolfhsm/wh_transport_mem.h>
-
-union whTransportMemCsr_t {
-    uint64_t u64;
-    struct {
-        uint16_t notify;   /* Incremented to notify */
-        uint16_t len;      /* Length of data */
-        uint16_t ack;      /* Opt: Acknowledge the reverse notify */
-        uint16_t wait;     /* Opt: Incremented while waiting*/
-    } s;
-};
+#include "wolfhsm/wh_transport_mem.h"
 
 int wh_TransportMem_Init(void* c, const void* cf)
 {
@@ -193,22 +183,3 @@ int wh_TransportMem_RecvResponse(void* c, uint16_t *out_len, void* data)
 
     return 0;
 }
-
-/** TransportClient Implementation */
-static const wh_TransportClient_Cb _whTransportMemClient_Cb = {
-        .Init =     wh_TransportMem_InitClear,
-        .Send =     wh_TransportMem_SendRequest,
-        .Recv =     wh_TransportMem_RecvResponse,
-        .Cleanup =  wh_TransportMem_Cleanup,
-};
-const wh_TransportClient_Cb* whTransportMemClient_Cb = &_whTransportMemClient_Cb;
-
-/** TransportServer Implementation */
-static const wh_TransportServer_Cb _whTransportMemServer_Cb = {
-        .Init =     wh_TransportMem_Init,
-        .Recv =     wh_TransportMem_RecvRequest,
-        .Send =     wh_TransportMem_SendResponse,
-        .Cleanup =  wh_TransportMem_Cleanup,
-};
-const wh_TransportServer_Cb* whTransportMemServer_Cb = &_whTransportMemServer_Cb;
-

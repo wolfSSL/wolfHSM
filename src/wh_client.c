@@ -7,7 +7,6 @@
 #include <stdlib.h>  /* For NULL */
 #include <string.h>  /* For memset, memcpy */
 
-
 #if 0
 /* wolfCrypt */
 #ifndef WOLFSSL_USER_SETTINGS
@@ -24,15 +23,15 @@
 #endif
 
 /* Common WolfHSM types and defines shared with the server */
-#include <wolfhsm/wh_error.h>
-#include <wolfhsm/wh_comm.h>
+#include "wolfhsm/wh_error.h"
+#include "wolfhsm/wh_comm.h"
 
 #if 0
 #include "wolfhsm/nvm.h"
 #include "wolfhsm/nvm_remote.h"
 #endif
 
-#include <wolfhsm/wh_message_comm.h>
+#include "wolfhsm/wh_message_comm.h"
 #include "wolfhsm/wh_client.h"
 
 int wh_Client_Init(whClient* c, const whClientConfig* config)

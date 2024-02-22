@@ -1,5 +1,5 @@
 /*
- * wolfhsm/transport.h
+ * wolfhsm/wh_transport.h
  *
  * Abstract library to provide non-blocking client/server packet-based data
  * transfers.  The transport must support a minimum packet size of
@@ -49,7 +49,7 @@ typedef struct {
      *          WH_ERROR_BADARGS if NULL context
      */
     int (*Cleanup)(void* context);
-} wh_TransportClient_Cb;
+} whTransportClientCb;
 
 typedef struct {
     /* Reset the state of the transport and be ready for communications.
@@ -80,6 +80,6 @@ typedef struct {
      *          WH_ERROR_BADARGS if NULL context
      */
     int (*Cleanup)(void* context);
-} wh_TransportServer_Cb;
+} whTransportServerCb;
 
 #endif /* WOLFHSM_WH_TRANSPORT_H_ */

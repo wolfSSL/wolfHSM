@@ -761,63 +761,65 @@ int wh_NvmFlash_Init(void* c, const void* cf)
         return WH_ERROR_BADARGS;
     }
 
-    memset(context, 0, sizeof(*context));
-
     if (config->cb->Init != NULL) {
         ret = config->cb->Init(config->context, config->config);
     }
-    if(ret != 0) {
-        /* Error initing the backend */
-        return ret;
+    if(ret == 0) {
+        /* Initialize and setup context */
+        memset(context, 0, sizeof(*context));
+        context->cb = config->cb;
+        context->flash = config->context;
+
+        /* Get partition size from flash device */
+        if (context->cb->PartitionSize != NULL) {
+            context->partition_units =
+                    context->cb->PartitionSize(context->flash) /
+                    WHFU_BYTES_PER_UNIT;
+        }
+
+        /* Unlock the both partitions */
+        nfPartition_WriteUnlock(context, 0);
+        nfPartition_WriteUnlock(context, 1);
+
+        nfMemState part_states[2];
+
+        /* Recover the partition states to determine which should be active */
+        nfPartition_ReadMemState(context, 0 , &part_states[0]);
+        nfPartition_ReadMemState(context, 1 , &part_states[1]);
+
+        /* Decide which directory should be active */
+        if (        (part_states[0].status == NF_STATUS_USED) &&
+                    (part_states[1].status != NF_STATUS_USED)) {
+            context->active = 0;
+            context->state = part_states[context->active];
+        } else if ( (part_states[0].status != NF_STATUS_USED) &&
+                    (part_states[1].status == NF_STATUS_USED)) {
+            context->active = 1;
+            context->state = part_states[context->active];
+        } else if ( (part_states[0].status == NF_STATUS_USED) &&
+                    (part_states[1].status == NF_STATUS_USED)) {
+            /* Check which has larger epoch */
+            context->active =
+                    (part_states[1].epoch > part_states[0].epoch);
+            context->state = part_states[context->active];
+        } else if ( (part_states[0].status == NF_STATUS_FREE) &&
+                    (part_states[1].status == NF_STATUS_FREE)) {
+            /* Both are blank.  Set active to 0 and initialize */
+            context->active = 0;
+            nfPartition_ProgramInit(context,
+                    context->active);
+        }
+
+        ret = nfPartition_ReadMemDirectory(
+                context,
+                context->active,
+                &context->directory);
+        ret = nfMemDirectory_Parse(&context->directory);
+
+        context->initialized = 1;
+        return 0;
     }
-    context->cb = config->cb;
-    context->flash = config->context;
-    if (context->cb->PartitionSize != NULL) {
-        context->partition_units = context->cb->PartitionSize(context->flash) /
-            WHFU_BYTES_PER_UNIT;
-    }
-
-    /* Unlock the entire flash */
-    nfPartition_WriteUnlock(context, 0);
-    nfPartition_WriteUnlock(context, 1);
-
-    nfMemState part_states[2];
-
-    /* Recover the partition states to determine which should be active */
-    nfPartition_ReadMemState(context, 0 , &part_states[0]);
-    nfPartition_ReadMemState(context, 1 , &part_states[1]);
-
-    /* Decide which directory should be active */
-    if (        (part_states[0].status == NF_STATUS_USED) &&
-                (part_states[1].status != NF_STATUS_USED)) {
-        context->active = 0;
-        context->state = part_states[context->active];
-    } else if ( (part_states[0].status != NF_STATUS_USED) &&
-                (part_states[1].status == NF_STATUS_USED)) {
-        context->active = 1;
-        context->state = part_states[context->active];
-    } else if ( (part_states[0].status == NF_STATUS_USED) &&
-                (part_states[1].status == NF_STATUS_USED)) {
-        /* Check which has later epoch */
-        context->active =
-                (part_states[1].epoch > part_states[0].epoch);
-        context->state = part_states[context->active];
-    } else if ( (part_states[0].status == NF_STATUS_FREE) &&
-                (part_states[1].status == NF_STATUS_FREE)) {
-        /* Both are blank.  Set active to 0 and initialize */
-        context->active = 0;
-        nfPartition_ProgramInit(context,
-                context->active);
-    }
-
-    ret = nfPartition_ReadMemDirectory(
-            context,
-            context->active,
-            &context->directory);
-    ret = nfMemDirectory_Parse(&context->directory);
-
-    context->initialized = 1;
-    return 0;
+    return ret;
 }
 
 int wh_NvmFlash_Cleanup(void* c)

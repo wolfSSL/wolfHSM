@@ -16,7 +16,8 @@
 #define WOLFHSM_WH_FLASH_UNIT_H_
 
 #include <stdint.h>
-#include <wolfhsm/wh_flash.h>
+
+#include "wolfhsm/wh_flash.h"
 
 /* Smallest programmable unit/size.  Alignment as well */
 typedef uint64_t whFlashUnit;

@@ -6,9 +6,9 @@
 #include <stdint.h>  /* For sized ints */
 #include <stddef.h>
 #include <string.h>
-#include <wolfhsm/wh_comm.h>
-#include <wolfhsm/wh_error.h>
 
+#include "wolfhsm/wh_error.h"
+#include "port/posix/posix_transport_tcp.h"
 
 /** Client functions */
 

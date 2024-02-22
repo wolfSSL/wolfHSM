@@ -42,7 +42,7 @@
 #endif
 
 /* Component includes */
-#include <wolfhsm/wh_comm.h>
+#include "wolfhsm/wh_comm.h"
 
 #if 0
 #include "wolfhsm/nvm_remote.h"
