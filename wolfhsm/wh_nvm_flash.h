@@ -1,7 +1,7 @@
 /*
  * wolfhsm/nvm_flash.h
  *
- * Concrete library to implement an NVM data store using a flash-like back end.
+ * Concrete library to implement an NVM data store using a whFlash bottom end.
  *
  */
 
@@ -49,11 +49,18 @@ typedef struct {
     uint32_t reclaimable_data;
 } nfMemDirectory;
 
-/** whNvm required structure definitions */
+/** whNvm config and context structure definitions */
+/* In memory configuration structure associated with an NVM instance */
+typedef struct whNvmFlashConfig_t {
+    const whFlashCb* cb;    /* whFlash callback */
+    void* context;          /* whFlash context to be passed to cb */
+    const void* config;     /* Config to be passed to cb->Init */
+} whNvmFlashConfig;
+
 typedef struct whNvmFlashContext_t {
     int initialized;
 
-    const whFlashCb* cb;
+    const whFlashCb* cb;            /* Flash callbacks */
     void* flash;                    /* Flash context to use */
     uint32_t partition_units;       /* Size of partition in units */
 
@@ -62,15 +69,7 @@ typedef struct whNvmFlashContext_t {
     nfMemDirectory directory;       /* Cache of active objects */
 } whNvmFlashContext;
 
-/* In memory configuration structure associated with an NVM instance */
-typedef struct whNvmFlashConfig_t {
-    const whFlashCb* cb;
-    void* context;         /* NvmFlash context */
-    const void* config;     /* Config to pass to NvmFlash_Init*/
-} whNvmFlashConfig;
-
-
-/* NVM Interface */
+/** whNvm Interface */
 int wh_NvmFlash_Init(void* c, const void* cf);
 int wh_NvmFlash_Cleanup(void* c);
 int wh_NvmFlash_List(void* c, whNvmAccess access, whNvmFlags flags,
