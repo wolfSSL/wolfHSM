@@ -8,7 +8,7 @@
 #include <string.h>
 
 #include "wolfhsm/wh_error.h"
-#include "port/posix/posix_transport_tcp.h"
+#include "wolfhsm/wh_comm.h"
 
 /** Client functions */
 
