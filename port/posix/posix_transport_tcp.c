@@ -21,13 +21,21 @@
 #include "wolfhsm/wh_transport.h"
 #include "port/posix/posix_transport_tcp.h"
 
+#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__) \
+    || defined(__NetBSD__)
+#define IS_BSD
+#endif
+
+
 /** Local declarations */
 
 /* Common utility function to make a fd non-blocking */
 static int posixTransportTcp_MakeNonBlocking(int fd);
 
+#if defined(IS_BSD)
 /* Common utility function to make a socket not raise SIGPIPE */
 static int posixTransportTcp_MakeNoSigpipe(int sock);
+#endif
 
 /* Server utility function to make a socket no linger and reuse addr */
 static int posixTransportTcp_MakeNoLinger(int sock);
@@ -58,6 +66,7 @@ static int posixTransportTcp_MakeNonBlocking(int fd)
     return 0;
 }
 
+#if defined(IS_BSD)
 static int posixTransportTcp_MakeNoSigpipe(int sock)
 {
     int enable = 1;
@@ -69,6 +78,8 @@ static int posixTransportTcp_MakeNoSigpipe(int sock)
     }
     return 0;
 }
+#endif
+
 
 static int posixTransportTcp_MakeNoLinger(int sock)
 {
@@ -115,7 +126,14 @@ static int posixTransportTcp_Send(int fd, uint16_t* buffer_offset,
         send_size = sizeof(uint32_t) + size;
     }
     int remaining_size = send_size - *buffer_offset;
+
+
+#if defined(IS_BSD)
     rc = write(fd, &(buffer[*buffer_offset]), remaining_size);
+#else
+    rc = send(fd, &(buffer[*buffer_offset]), remaining_size, MSG_NOSIGNAL);
+#endif
+
 
     if (rc < 0) {
         switch (errno) {
@@ -258,9 +276,11 @@ int posixTransportTcp_InitConnect(void* context, const void* config)
         return WH_ERROR_ABORTED;
     }
 
+#if defined(IS_BSD)
     /* Suppress signals on failed writes */
     rc = posixTransportTcp_MakeNoSigpipe(c->connect_fd_p1 - 1);
     /* Ok to fail to ignore signals */
+#endif
 
 
     /* Start the connect process */
@@ -429,9 +449,11 @@ int posixTransportTcp_InitListen(void* context, const void* config)
     rc = posixTransportTcp_MakeNoLinger(c->listen_fd_p1 - 1);
     /* Ok to fail to linger.  Annoying, but ok. */
 
+#if defined(IS_BSD)
     /* Suppress signals on failed writes */
     rc = posixTransportTcp_MakeNoSigpipe(c->listen_fd_p1 - 1);
     /* Ok to fail to ignore signals */
+#endif
 
     rc = bind(c->listen_fd_p1 - 1,
             (struct sockaddr*)&c->server_addr,

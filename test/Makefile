@@ -24,8 +24,8 @@ ARCHFLAGS ?=
 
 # Compiler and linker flags
 ASFLAGS ?= $(ARCHFLAGS)
-CFLAGS_EXTRA ?= -Wno-cpp
-CFLAGS ?= $(ARCHFLAGS) -std=c99 -Wall $(CFLAGS_EXTRA)
+CFLAGS_EXTRA ?= -Wno-cpp -g
+CFLAGS ?= $(ARCHFLAGS) -Wall -Werror $(CFLAGS_EXTRA)
 LDFLAGS ?= $(ARCHFLAGS)
 
 # LD: generate map
@@ -58,7 +58,9 @@ SRC_C += \
             $(WOLFHSM_DIR)/src/wh_message_comm.c \
             $(WOLFHSM_DIR)/src/wh_nvm_flash.c \
             $(WOLFHSM_DIR)/src/wh_server.c \
-            $(WOLFHSM_DIR)/src/wh_transport_mem.c 
+            $(WOLFHSM_DIR)/src/wh_transport_mem.c \
+            $(WOLFHSM_DIR)/src/wh_nvm_flash_ramsim.c
+
             
 
 # WolfHSM port code
@@ -67,7 +69,9 @@ SRC_C += \
             $(WOLFHSM_DIR)/port/posix/posix_transport_tcp.c 
 
 # APP
-SRC_C += ./src/wh_test.c 
+SRC_C += ./src/wh_test.c \
+         ./src/wh_test_comm.c \
+         ./src/wh_test_nvm_flash.c
 
 
 FILENAMES_C = $(notdir $(SRC_C))
@@ -117,4 +121,6 @@ clean:
 	rm -f $(BUILD_DIR)/*.elf $(BUILD_DIR)/*.hex $(BUILD_DIR)/*.map
 	rm -f $(BUILD_DIR)/*.o $(BUILD_DIR)/*.a $(BUILD_DIR)/*.sym $(BUILD_DIR)/*.disasm
 
+run: build_app
+	./$(BUILD_DIR)/$(BIN).elf
 
