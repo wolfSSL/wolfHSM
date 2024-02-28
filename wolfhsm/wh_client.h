@@ -56,7 +56,7 @@ struct whClientContext_t {
     int inited;
     whCommClient comm[1];
     uint16_t last_req_id;
-    uint16_t last_type;
+    uint16_t last_req_kind;
 #if 0
     whNvmClient* nvm;
     whKeyClient* key;
@@ -96,6 +96,13 @@ typedef struct whClientConfig_t whClientConfig;
 
 int wh_Client_Init(whClient* c, const whClientConfig* config);
 int wh_Client_Cleanup(whClient* c);
+
+int wh_Client_SendRequest(whClient* c,
+        uint16_t group, uint16_t action,
+        uint16_t data_size, const void* data);
+int wh_Client_RecvResponse(whClient *c,
+        uint16_t *out_group, uint16_t *out_action,
+        uint16_t *out_size, void* data);
 
 int wh_Client_EchoRequest(whClient* c, uint16_t size, const void* data);
 int wh_Client_EchoResponse(whClient* c, uint16_t *out_size, void* data);

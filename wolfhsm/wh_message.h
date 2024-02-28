@@ -1,44 +1,40 @@
 /*
- * wolfhsm/message.h
+ * wolfhsm/wh_message.h
  *
- * Basic message structure assuming a reliable comm transport with metadata
- * support of 16-bit type.
+ * Message groups and actions for dispatch and handling based on a 16-bit kind.
  */
 
 #ifndef WOLFHSM_WH_MESSAGE_H_
 #define WOLFHSM_WH_MESSAGE_H_
 
-/* Message type and groups */
+/* Message groups and kind */
 enum {
-    WOLFHSM_MESSAGE_TYPE_MASK           = 0xFF, /* 256 total types */
-    WOLFHSM_MESSAGE_TYPE_NONE           = 0x00, /* No message type */
+    WH_MESSAGE_KIND_NONE            = 0x0000, /* No message kind. Invalid */
 
-    WOLFHSM_MESSAGE_AUX_REQ_NORMAL      = 0x00, /* Normal request */
-    WOLFHSM_MESSAGE_AUX_REQ_NORESP      = 0x01, /* Request without response*/
-    WOLFHSM_MESSAGE_AUX_REQ_SESSION     = 0x02, /* Request within session*/
+    WH_MESSAGE_GROUP_MASK           = 0xFF00, /* 255 groups */
+    WH_MESSAGE_GROUP_NONE           = 0x0000, /* No group.  Invalid. */
 
-    WOLFHSM_MESSAGE_AUX_RESP_OK         = 0x00, /* Response is valid */
-    WOLFHSM_MESSAFE_AUX_RESP_ERROR      = 0x01, /* Request failed with error */
-    WOLFHSM_MESSAGE_AUX_RESP_UNSUPP     = 0xFF, /* Request is not supported */
-    WOLFHSM_MESSAGE_AUX_RESP_FATAL      = 0xFE, /* Server condition is fatal */
+    WH_MESSAGE_GROUP_COMM           = 0x0100, /* Messages used for comms */
+    WH_MESSAGE_GROUP_NVM            = 0x0200, /* NVM functions */
+    WH_MESSAGE_GROUP_KEY            = 0x0300, /* Key/counter management */
+    WH_MESSAGE_GROUP_CRYPTO         = 0x0400, /* wolfCrypt CryptoCb */
+    WH_MESSAGE_GROUP_IMAGE          = 0x0500, /* Image/boot management */
+    WH_MESSAGE_GROUP_PKCS11         = 0x0600, /* PKCS11 protocol */
+    WH_MESSAGE_GROUP_SHE            = 0x0700, /* SHE protocol */
+    WH_MESSAGE_GROUP_CUSTOM         = 0x1000, /* User-specified features */
 
-    WOLFHSM_MESSAGE_GROUP_MASK          = 0xE0, /* 32 entries per group */
-    WOLFHSM_MESSAGE_GROUP_COMM          = 0x00, /* Messages used for comms */
-    WOLFHSM_MESSAGE_GROUP_NVM           = 0x20, /* NVM functions */
-    WOLFHSM_MESSAGE_GROUP_KEY           = 0x40, /* Key/counter management */
-    WOLFHSM_MESSAGE_GROUP_CRYPTO        = 0x60, /* wolfCrypt CryptoCb */
-    WOLFHSM_MESSAGE_GROUP_IMAGE         = 0x80, /* Image/boot management */
-    WOLFHSM_MESSAGE_GROUP_PKCS11        = 0xA0, /* PKCS11 protocol */
-    WOLFHSM_MESSAGE_GROUP_SHE           = 0xC0, /* SHE protocol */
-    WOLFHSM_MESSAGE_GROUP_CUSTOM        = 0xE0, /* User-specified features */
+    WH_MESSAGE_ACTION_MASK         = 0x00FF, /* 255 subtypes per group*/
+    WH_MESSAGE_ACTION_NONE         = 0x0000, /* No action. Invalid. */
 };
 
-typedef struct {
-    int return_code;
-} whMessage_ErrorResponse;
+/* Construct the message kind based on group and action */
+#define WH_MESSAGE_KIND(_G, _S) (   ((_G) & WH_MESSAGE_GROUP_MASK) |      \
+                                    ((_S) & WH_MESSAGE_ACTION_MASK))
 
-int whMessage_GetErrorResponse(uint16_t magic,
-        const void* data,
-        int *out_return_code);
+/* Extract the group from the message kind */
+#define WH_MESSAGE_GROUP(_K)        ((_K) & WH_MESSAGE_GROUP_MASK)
+
+/* Extract the action from the message kind */
+#define WH_MESSAGE_ACTION(_K)      ((_K) & WH_MESSAGE_ACTION_MASK)
 
 #endif /* WOLFHSM_WH_MESSAGE_H_ */

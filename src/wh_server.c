@@ -52,21 +52,26 @@ int wh_Server_Init(whServer* server, whServerConfig* config)
 }
 
 static int _wh_Server_HandleCommRequest(whServer* server,
-        uint16_t magic, uint16_t type, uint16_t seq,
+        uint16_t magic, uint16_t action, uint16_t seq,
         uint16_t req_size, const void* req_packet,
         uint16_t *out_resp_size, void* resp_packet)
 {
-    switch (type) {
-    case WOLFHSM_MESSAGE_TYPE_COMM_ECHO:
+    int rc = 0;
+    switch (action) {
+    case WH_MESSAGE_COMM_ACTION_ECHO:
     {
-        whMessageCommLenData req;
-        whMessageCommLenData resp;
+        whMessageCommLenData req = {0};
+        whMessageCommLenData resp = {0};
+
+        /* Convert request struct */
         wh_MessageComm_TranslateLenData(magic,
                 (whMessageCommLenData*)req_packet, &req);
 
+        /* Process the echo action */
         resp.len = req.len;
         memcpy(resp.data, req.data, resp.len);
 
+        /* Convert the response struct */
         wh_MessageComm_TranslateLenData(magic,
                 &resp, (whMessageCommLenData*)resp_packet);
         *out_resp_size = sizeof(resp);
@@ -76,57 +81,182 @@ static int _wh_Server_HandleCommRequest(whServer* server,
         /* Unknown request. Respond with empty packet */
         *out_resp_size = 0;
     }
-    return 0;
+    return rc;
+}
+
+static int _wh_Server_HandleNvmRequest(whServer* server,
+        uint16_t magic, uint16_t action, uint16_t seq,
+        uint16_t req_size, const void* req_packet,
+        uint16_t *out_resp_size, void* resp_packet)
+{
+    int rc = 0;
+    switch (action) {
+#if 0
+    case WH_MESSAGE_NVM_ACTION_AVAILABLE:
+    {
+        whMessageNvmAvailableRequest req = {0};
+        whMessageNvmAvailableResponse resp = {0};
+
+        /* Convert request struct */
+        wh_MessageNvm_TranslateAvailableRequest(magic,
+                (whMessageNvmAvailableRequest*)req_packet, &req);
+
+        /* Process the available action */
+        resp.rc = server->nvm->cb->GetAvailable(server->nvm,
+                &resp.available_objects, &resp.available_bytes,
+                &resp.recoverable_object, &resp.recoverable_bytes);
+
+        /* Convert the response struct */
+        wh_MessageNvm_TranslateAvailableResponse(magic,
+                &resp, (whMessageNvmAvailableResponse*)resp_packet);
+        *out_resp_size = sizeof(resp);
+    }; break;
+#endif
+    default:
+        /* Unknown request. Respond with empty packet */
+        *out_resp_size = 0;
+    }
+    return rc;
+}
+
+static int _wh_Server_HandleKeyRequest(whServer* server,
+        uint16_t magic, uint16_t action, uint16_t seq,
+        uint16_t req_size, const void* req_packet,
+        uint16_t *out_resp_size, void* resp_packet)
+{
+    int rc = 0;
+    switch (action) {
+    /* TODO: Add key/counter message handling here */
+    default:
+        /* Unknown request. Respond with empty packet */
+        *out_resp_size = 0;
+    }
+    return rc;
+}
+
+static int _wh_Server_HandleCryptoRequest(whServer* server,
+        uint16_t magic, uint16_t action, uint16_t seq,
+        uint16_t req_size, const void* req_packet,
+        uint16_t *out_resp_size, void* resp_packet)
+{
+    int rc = 0;
+    switch (action) {
+    /* TODO: Add crypto message handling here */
+    default:
+        /* Unknown request. Respond with empty packet */
+        *out_resp_size = 0;
+    }
+    return rc;
+}
+
+static int _wh_Server_HandlePkcs11Request(whServer* server,
+        uint16_t magic, uint16_t action, uint16_t seq,
+        uint16_t req_size, const void* req_packet,
+        uint16_t *out_resp_size, void* resp_packet)
+{
+    int rc = 0;
+    switch (action) {
+    /* TODO: Add PKCS11 message handling here */
+    default:
+        /* Unknown request. Respond with empty packet */
+        *out_resp_size = 0;
+    }
+    return rc;
+}
+
+static int _wh_Server_HandleSheRequest(whServer* server,
+        uint16_t magic, uint16_t action, uint16_t seq,
+        uint16_t req_size, const void* req_packet,
+        uint16_t *out_resp_size, void* resp_packet)
+{
+    int rc = 0;
+    switch (action) {
+    /* TODO: Add AUTOSAR SHE message handling here */
+    default:
+        /* Unknown request. Respond with empty packet */
+        *out_resp_size = 0;
+    }
+    return rc;
+}
+
+static int _wh_Server_HandleCustomRequest(whServer* server,
+        uint16_t magic, uint16_t action, uint16_t seq,
+        uint16_t req_size, const void* req_packet,
+        uint16_t *out_resp_size, void* resp_packet)
+{
+    int rc = 0;
+    switch (action) {
+    /* TODO: Add custom/user callback message handling here */
+    default:
+        /* Unknown request. Respond with empty packet */
+        *out_resp_size = 0;
+    }
+    return rc;
 }
 
 int wh_Server_HandleRequestMessage(whServer* server)
 {
-    uint16_t type, magic, seq, size;
-    uint8_t data[WOLFHSM_COMM_MTU];
+    uint16_t magic = 0;
+    uint16_t kind = 0;
+    uint16_t group = 0;
+    uint16_t action = 0;
+    uint16_t seq = 0;
+    uint16_t size = 0;
+    uint8_t data[WH_COMM_MTU] = {0};
 
     if (server == NULL) {
         return WH_ERROR_BADARGS;
     }
-    int rc = wh_CommServer_RecvRequest(server->comm, &magic, &type, &seq,
+    int rc = wh_CommServer_RecvRequest(server->comm, &magic, &kind, &seq,
             &size, data);
     /* Got a packet? */
     if (rc == 0) {
-        uint16_t group = type & WOLFHSM_MESSAGE_GROUP_MASK;
+        group = WH_MESSAGE_GROUP(kind);
+        action = WH_MESSAGE_ACTION(kind);
         switch (group) {
-        case WOLFHSM_MESSAGE_GROUP_COMM: {
-            rc = _wh_Server_HandleCommRequest(server, magic, type, seq,
-                    size, data,
-                    &size, data);
+        case WH_MESSAGE_GROUP_COMM: {
+            rc = _wh_Server_HandleCommRequest(server, magic, action, seq,
+                    size, data, &size, data);
         }; break;
-        case WOLFHSM_MESSAGE_GROUP_NVM: {
-/*            rc = wh_NvmServer_Handle(server->comm,
-                    &type, &flags, &seq, &size, server->comm->packet);
-                    */
+        case WH_MESSAGE_GROUP_NVM: {
+            rc = _wh_Server_HandleNvmRequest(server, magic, action, seq,
+                    size, data, &size, data);
         }; break;
-        case WOLFHSM_MESSAGE_GROUP_KEY: {
+        case WH_MESSAGE_GROUP_KEY: {
+            rc = _wh_Server_HandleKeyRequest(server, magic, action, seq,
+                    size, data, &size, data);
 
         }; break;
-        case WOLFHSM_MESSAGE_GROUP_CRYPTO: {
+        case WH_MESSAGE_GROUP_CRYPTO: {
+            rc = _wh_Server_HandleCryptoRequest(server, magic, action, seq,
+                    size, data, &size, data);
 
         }; break;
-        case WOLFHSM_MESSAGE_GROUP_PKCS11: {
+        case WH_MESSAGE_GROUP_PKCS11: {
+            rc = _wh_Server_HandlePkcs11Request(server, magic, action, seq,
+                    size, data, &size, data);
 
         }; break;
-        case WOLFHSM_MESSAGE_GROUP_SHE: {
+        case WH_MESSAGE_GROUP_SHE: {
+            rc = _wh_Server_HandleSheRequest(server, magic, action, seq,
+                    size, data, &size, data);
 
         }; break;
-        case WOLFHSM_MESSAGE_GROUP_CUSTOM: {
-
+        case WH_MESSAGE_GROUP_CUSTOM: {
+            rc = _wh_Server_HandleCustomRequest(server, magic, action, seq,
+                    size, data, &size, data);
         }; break;
         default:
-            /* Unknown type. Respond with error flag */
-            rc = WH_ERROR_NOTREADY;
+            /* Unknown group. Return empty packet*/
+            /* TODO: Respond with aux error flag */
+            size = 0;
         }
     }
     /* Send a response */
+    /* TODO: Response with ErrorResponse if handler returns an error */
     if (rc == 0) {
         do {
-            rc = wh_CommServer_SendResponse(server->comm, magic, type, seq,
+            rc = wh_CommServer_SendResponse(server->comm, magic, kind, seq,
                 size, data);
         } while (rc == WH_ERROR_NOTREADY);
     }

@@ -1,5 +1,7 @@
 /*
- * wolfhsm/message_comm.h
+ * wolfhsm/wh_message_comm.h
+ *
+ * Comm component message action enumerations and definitions.
  *
  */
 
@@ -8,16 +10,36 @@
 
 #include <stdint.h>
 
-#include "wolfhsm/wh_message.h"
-
+/* Comm component message kinds */
 enum {
-    WOLFHSM_MESSAGE_TYPE_COMM_NONE      = WOLFHSM_MESSAGE_GROUP_COMM + 0x00,
-    WOLFHSM_MESSAGE_TYPE_COMM_INIT      = WOLFHSM_MESSAGE_GROUP_COMM + 0x01,
-    WOLFHSM_MESSAGE_TYPE_COMM_KEEPALIVE = WOLFHSM_MESSAGE_GROUP_COMM + 0x02,
-    WOLFHSM_MESSAGE_TYPE_COMM_CLOSE     = WOLFHSM_MESSAGE_GROUP_COMM + 0x03,
-    WOLFHSM_MESSAGE_TYPE_COMM_INFO      = WOLFHSM_MESSAGE_GROUP_COMM + 0x04,
-    WOLFHSM_MESSAGE_TYPE_COMM_ECHO      = WOLFHSM_MESSAGE_GROUP_COMM + 0x05,
+    WH_MESSAGE_COMM_ACTION_NONE      = 0x00,
+    WH_MESSAGE_COMM_ACTION_INIT      = 0x01,
+    WH_MESSAGE_COMM_ACTION_KEEPALIVE = 0x02,
+    WH_MESSAGE_COMM_ACTION_CLOSE     = 0x03,
+    WH_MESSAGE_COMM_ACTION_INFO      = 0x04,
+    WH_MESSAGE_COMM_ACTION_ECHO      = 0x05,
 };
+
+
+/* Generic error response message. */
+typedef struct {
+    int return_code;
+} whMessageComm_ErrorResponse;
+
+int wh_MessageComm_GetErrorResponse(uint16_t magic,
+        const void* data,
+        int *out_return_code);
+
+
+/* Generic len/data message that does not require data translation */
+typedef struct {
+    uint16_t len;
+    uint8_t data[WH_COMM_DATA_LEN - sizeof(uint16_t)];
+} whMessageCommLenData;
+
+int wh_MessageComm_TranslateLenData(uint16_t magic,
+        const whMessageCommLenData* src,
+        whMessageCommLenData* dest);
 
 typedef struct {
     uint32_t client_id;
@@ -36,17 +58,6 @@ typedef struct {
 int wh_MessageComm_TranslateInitRequest(uint16_t magic,
         const whMessageCommInitRequest* src,
         whMessageCommInitRequest* dest);
-
-/* Generic len/data message that does not require data translation */
-typedef struct {
-    uint16_t len;
-    uint8_t data[WOLFHSM_COMM_DATA_LEN - sizeof(uint16_t)];
-} whMessageCommLenData;
-
-int wh_MessageComm_TranslateLenData(uint16_t magic,
-        const whMessageCommLenData* src,
-        whMessageCommLenData* dest);
-
 
 /* Info request/response data */
 enum {

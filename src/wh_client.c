@@ -31,6 +31,7 @@
 #include "wolfhsm/nvm_remote.h"
 #endif
 
+#include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_message_comm.h"
 #include "wolfhsm/wh_client.h"
 
@@ -119,66 +120,117 @@ int wh_Client_Cleanup(whClient* c)
     return 0;
 }
 
-int wh_Client_EchoRequest(whClient* c, uint16_t size, const void* data)
+int wh_Client_SendRequest(whClient* c,
+        uint16_t group, uint16_t action,
+        uint16_t data_size, const void* data)
+{
+    uint16_t req_id = 0;
+    uint16_t kind = WH_MESSAGE_KIND(group, action);
+    int rc = 0;
+
+     rc = wh_CommClient_SendRequest(c->comm,
+                WH_COMM_MAGIC_NATIVE, kind, &req_id,
+                data_size, data);
+    if (rc == 0) {
+        c->last_req_kind = kind;
+        c->last_req_id = req_id;
+    }
+    return rc;
+}
+
+int wh_Client_RecvResponse(whClient *c,
+        uint16_t *out_group, uint16_t *out_action,
+        uint16_t *out_size, void* data)
 {
     int rc = 0;
-    whMessageCommLenData msg;
-    uint16_t req_id = 0;
-    uint16_t req_type = WOLFHSM_MESSAGE_TYPE_COMM_ECHO;
+    uint16_t resp_magic = 0;
+    uint16_t resp_kind = 0;
+    uint16_t resp_id = 0;
+    uint16_t resp_size = 0;
+
+    rc = wh_CommClient_RecvResponse(c->comm,
+                &resp_magic, &resp_kind, &resp_id,
+                &resp_size, data);
+    if (rc == 0) {
+        /* Validate response */
+        if (    (resp_magic != WH_COMM_MAGIC_NATIVE) ||
+                (resp_kind != c->last_req_kind) ||
+                (resp_id != c->last_req_id) ){
+            /* Invalid or unexpected message */
+            rc = WH_ERROR_ABORTED;
+        } else {
+            /* Valid and expected message. Set outputs */
+            if (out_group != NULL) {
+                *out_group = WH_MESSAGE_GROUP(resp_kind);
+            }
+            if (out_action != NULL) {
+                *out_action = WH_MESSAGE_ACTION(resp_kind);
+            }
+            if (out_size != NULL) {
+                *out_size = resp_size;
+            }
+        }
+    }
+    return rc;
+}
+
+int wh_Client_EchoRequest(whClient* c, uint16_t size, const void* data)
+{
+    whMessageCommLenData msg = {0};
 
     if (    (c == NULL) ||
             ((size > 0) && (data == NULL)) ){
         return WH_ERROR_BADARGS;
     }
 
-    if (size > sizeof(msg.data)) size = sizeof(msg.data);
+    /* Populate the message */
+    if (size > sizeof(msg.data)) {
+        size = sizeof(msg.data);
+    }
     msg.len = size;
     memcpy(msg.data, data, size);
 
-    rc = wh_CommClient_SendRequest(c->comm,
-            WH_COMM_MAGIC_NATIVE, req_type, &req_id,
+    return wh_Client_SendRequest(c,
+            WH_MESSAGE_GROUP_COMM, WH_MESSAGE_COMM_ACTION_ECHO,
             sizeof(msg), &msg);
-    if (rc == 0) {
-        c->last_req_id = req_id;
-        c->last_type = req_type;
-    }
-    return rc;
 }
 
 int wh_Client_EchoResponse(whClient* c, uint16_t *out_size, void* data)
 {
     int rc = 0;
-    whMessageCommLenData msg;
-    uint16_t resp_magic = 0;
-    uint16_t resp_id = 0;
-    uint16_t resp_type = 0;
+    whMessageCommLenData msg = {0};
+    uint16_t resp_group = 0;
+    uint16_t resp_action = 0;
     uint16_t resp_size = 0;
 
     if (c == NULL){
         return WH_ERROR_BADARGS;
     }
 
-    rc = wh_CommClient_RecvResponse(c->comm,
-            &resp_magic, &resp_type, &resp_id,
+    rc = wh_Client_RecvResponse(c,
+            &resp_group, &resp_action,
             &resp_size, &msg);
     if (rc == 0) {
         /* Validate response */
-        if (    (resp_magic != WH_COMM_MAGIC_NATIVE) ||
-                (resp_type != WOLFHSM_MESSAGE_TYPE_COMM_ECHO) ||
-                (resp_id != c->last_req_id) ||
+        if (    (resp_group != WH_MESSAGE_GROUP_COMM) ||
+                (resp_action != WH_MESSAGE_COMM_ACTION_ECHO) ||
                 (resp_size != sizeof(msg)) ){
             /* Invalid message */
-            return WH_ERROR_ABORTED;
-        }
+            rc = WH_ERROR_ABORTED;
+        } else {
+            /* Valid message */
+            if (msg.len > sizeof(msg.data)) {
+                /* Bad incoming msg len.  Truncate */
+                msg.len = sizeof(msg.data);
+            }
 
-        if (out_size != NULL) {
-            *out_size = msg.len;
+            if (out_size != NULL) {
+                *out_size = msg.len;
+            }
+            if (data != NULL) {
+                memcpy(data, msg.data, msg.len);
+            }
         }
-        if (data != NULL) {
-            memcpy(data, msg.data, msg.len);
-        }
-        c->last_req_id = 0;
-        c->last_type = 0;
     }
     return rc;
 }
