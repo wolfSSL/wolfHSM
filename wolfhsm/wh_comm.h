@@ -30,9 +30,9 @@
  * DATA_LEN bytes.
  */
 enum {
-    WM_COMM_HEADER_LEN = 8,    /* whCommHeader */
+    WH_COMM_HEADER_LEN = 8,    /* whCommHeader */
     WH_COMM_DATA_LEN = 1280,
-    WH_COMM_MTU = (WM_COMM_HEADER_LEN + WH_COMM_DATA_LEN)
+    WH_COMM_MTU = (WH_COMM_HEADER_LEN + WH_COMM_DATA_LEN)
 };
 
 /* Support for endian and version differences */
@@ -59,8 +59,8 @@ typedef struct {
     uint16_t aux;       /* Session identifier for request or error indicator
                          * for response. */
 } whCommHeader;
-/* static_assert(sizeof_whHeader == WOLFHSM_COMM_HEADER_LEN,
-                 "Size of whCommHeader doesn't match WOLFHSM_COMM_HEADER_LEN") */
+/* static_assert(sizeof_whHeader == WH_COMM_HEADER_LEN,
+                 "Size of whCommHeader doesn't match WH_COMM_HEADER_LEN") */
 
 enum {
     WH_COMM_AUX_REQ_NORMAL      = 0x0000, /* Normal request. No session */

@@ -73,7 +73,7 @@ struct whClientContext_t {
 #endif
 
 };
-typedef struct whClientContext_t whClient;
+typedef struct whClientContext_t whClientContext;
 
 struct whClientConfig_t {
     whCommClientConfig* comm;
@@ -94,19 +94,19 @@ struct whClientConfig_t {
 };
 typedef struct whClientConfig_t whClientConfig;
 
-int wh_Client_Init(whClient* c, const whClientConfig* config);
-int wh_Client_Cleanup(whClient* c);
+int wh_Client_Init(whClientContext* c, const whClientConfig* config);
+int wh_Client_Cleanup(whClientContext* c);
 
-int wh_Client_SendRequest(whClient* c,
+int wh_Client_SendRequest(whClientContext* c,
         uint16_t group, uint16_t action,
         uint16_t data_size, const void* data);
-int wh_Client_RecvResponse(whClient *c,
+int wh_Client_RecvResponse(whClientContext *c,
         uint16_t *out_group, uint16_t *out_action,
         uint16_t *out_size, void* data);
 
-int wh_Client_EchoRequest(whClient* c, uint16_t size, const void* data);
-int wh_Client_EchoResponse(whClient* c, uint16_t *out_size, void* data);
-int wh_Client_Echo(whClient* c, uint16_t snd_len, const void* snd_data,
+int wh_Client_EchoRequest(whClientContext* c, uint16_t size, const void* data);
+int wh_Client_EchoResponse(whClientContext* c, uint16_t *out_size, void* data);
+int wh_Client_Echo(whClientContext* c, uint16_t snd_len, const void* snd_data,
         uint16_t *out_rcv_len, void* rcv_data);
 
 #endif /* WOLFHSM_WH_CLIENT_H_ */

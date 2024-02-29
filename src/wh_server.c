@@ -30,7 +30,7 @@
 #include "wolfhsm/wh_message_comm.h"
 #include "wolfhsm/wh_server.h"
 
-int wh_Server_Init(whServer* server, whServerConfig* config)
+int wh_Server_Init(whServerContext* server, whServerConfig* config)
 {
     int rc = 0;
     if (server == NULL) {
@@ -51,7 +51,7 @@ int wh_Server_Init(whServer* server, whServerConfig* config)
     return rc;
 }
 
-static int _wh_Server_HandleCommRequest(whServer* server,
+static int _wh_Server_HandleCommRequest(whServerContext* server,
         uint16_t magic, uint16_t action, uint16_t seq,
         uint16_t req_size, const void* req_packet,
         uint16_t *out_resp_size, void* resp_packet)
@@ -84,7 +84,7 @@ static int _wh_Server_HandleCommRequest(whServer* server,
     return rc;
 }
 
-static int _wh_Server_HandleNvmRequest(whServer* server,
+static int _wh_Server_HandleNvmRequest(whServerContext* server,
         uint16_t magic, uint16_t action, uint16_t seq,
         uint16_t req_size, const void* req_packet,
         uint16_t *out_resp_size, void* resp_packet)
@@ -119,7 +119,7 @@ static int _wh_Server_HandleNvmRequest(whServer* server,
     return rc;
 }
 
-static int _wh_Server_HandleKeyRequest(whServer* server,
+static int _wh_Server_HandleKeyRequest(whServerContext* server,
         uint16_t magic, uint16_t action, uint16_t seq,
         uint16_t req_size, const void* req_packet,
         uint16_t *out_resp_size, void* resp_packet)
@@ -134,7 +134,7 @@ static int _wh_Server_HandleKeyRequest(whServer* server,
     return rc;
 }
 
-static int _wh_Server_HandleCryptoRequest(whServer* server,
+static int _wh_Server_HandleCryptoRequest(whServerContext* server,
         uint16_t magic, uint16_t action, uint16_t seq,
         uint16_t req_size, const void* req_packet,
         uint16_t *out_resp_size, void* resp_packet)
@@ -149,7 +149,7 @@ static int _wh_Server_HandleCryptoRequest(whServer* server,
     return rc;
 }
 
-static int _wh_Server_HandlePkcs11Request(whServer* server,
+static int _wh_Server_HandlePkcs11Request(whServerContext* server,
         uint16_t magic, uint16_t action, uint16_t seq,
         uint16_t req_size, const void* req_packet,
         uint16_t *out_resp_size, void* resp_packet)
@@ -164,7 +164,7 @@ static int _wh_Server_HandlePkcs11Request(whServer* server,
     return rc;
 }
 
-static int _wh_Server_HandleSheRequest(whServer* server,
+static int _wh_Server_HandleSheRequest(whServerContext* server,
         uint16_t magic, uint16_t action, uint16_t seq,
         uint16_t req_size, const void* req_packet,
         uint16_t *out_resp_size, void* resp_packet)
@@ -179,7 +179,7 @@ static int _wh_Server_HandleSheRequest(whServer* server,
     return rc;
 }
 
-static int _wh_Server_HandleCustomRequest(whServer* server,
+static int _wh_Server_HandleCustomRequest(whServerContext* server,
         uint16_t magic, uint16_t action, uint16_t seq,
         uint16_t req_size, const void* req_packet,
         uint16_t *out_resp_size, void* resp_packet)
@@ -194,7 +194,7 @@ static int _wh_Server_HandleCustomRequest(whServer* server,
     return rc;
 }
 
-int wh_Server_HandleRequestMessage(whServer* server)
+int wh_Server_HandleRequestMessage(whServerContext* server)
 {
     uint16_t magic = 0;
     uint16_t kind = 0;
@@ -263,7 +263,7 @@ int wh_Server_HandleRequestMessage(whServer* server)
     return rc;
 }
 
-int wh_Server_Cleanup(whServer* server)
+int wh_Server_Cleanup(whServerContext* server)
 {
     if (server ==NULL) {
          return WH_ERROR_BADARGS;

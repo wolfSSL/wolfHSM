@@ -41,11 +41,11 @@
 #include <stdint.h>
 #include <netinet/in.h>
 
-#include "wolfhsm/wh_comm.h"        /* For WOLFHSM_COMM_MTU */
+#include "wolfhsm/wh_comm.h"        /* For WH_COMM_MTU */
 #include "wolfhsm/wh_transport.h"
 
 
-#define PTT_PACKET_MAX_SIZE WOLFHSM_COMM_MTU
+#define PTT_PACKET_MAX_SIZE WH_COMM_MTU
 #define PTT_BUFFER_SIZE (sizeof(uint32_t) + PTT_PACKET_MAX_SIZE)
 
 /** Common configuration structure */

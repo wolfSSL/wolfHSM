@@ -15,7 +15,7 @@ typedef struct whServerContext_t {
     whNvmContext* nvm_device;
     whNvmServer* nvm;
 #endif
-} whServer;
+} whServerContext;
 
 typedef struct whServerConfig_t {
     whCommServerConfig* comm;
@@ -27,14 +27,14 @@ typedef struct whServerConfig_t {
 
 /* Initialize the crypto, nvm, comms, and message handlers.
  */
-int wh_Server_Init(whServer* server, whServerConfig* config);
+int wh_Server_Init(whServerContext* server, whServerConfig* config);
 
 /* Receive and handle an incoming request message if present.
  */
-int wh_Server_HandleRequestMessage(whServer* server);
+int wh_Server_HandleRequestMessage(whServerContext* server);
 
 /* Stop all active and pending work, disconnect, and close all used resources.
  */
-int wh_Server_Cleanup(whServer* server);
+int wh_Server_Cleanup(whServerContext* server);
 
 #endif /* WOLFHSM_WH_SERVER_H_ */

@@ -35,7 +35,7 @@
 #include "wolfhsm/wh_message_comm.h"
 #include "wolfhsm/wh_client.h"
 
-int wh_Client_Init(whClient* c, const whClientConfig* config)
+int wh_Client_Init(whClientContext* c, const whClientConfig* config)
 {
     int rc = 0;
     if((c == NULL) || (config == NULL)) {
@@ -105,7 +105,7 @@ int wh_Client_Init(whClient* c, const whClientConfig* config)
     return rc;
 }
 
-int wh_Client_Cleanup(whClient* c)
+int wh_Client_Cleanup(whClientContext* c)
 {
     if (c ==NULL) {
         return WH_ERROR_BADARGS;
@@ -120,7 +120,7 @@ int wh_Client_Cleanup(whClient* c)
     return 0;
 }
 
-int wh_Client_SendRequest(whClient* c,
+int wh_Client_SendRequest(whClientContext* c,
         uint16_t group, uint16_t action,
         uint16_t data_size, const void* data)
 {
@@ -128,7 +128,11 @@ int wh_Client_SendRequest(whClient* c,
     uint16_t kind = WH_MESSAGE_KIND(group, action);
     int rc = 0;
 
-     rc = wh_CommClient_SendRequest(c->comm,
+    if (c == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    rc = wh_CommClient_SendRequest(c->comm,
                 WH_COMM_MAGIC_NATIVE, kind, &req_id,
                 data_size, data);
     if (rc == 0) {
@@ -138,7 +142,7 @@ int wh_Client_SendRequest(whClient* c,
     return rc;
 }
 
-int wh_Client_RecvResponse(whClient *c,
+int wh_Client_RecvResponse(whClientContext *c,
         uint16_t *out_group, uint16_t *out_action,
         uint16_t *out_size, void* data)
 {
@@ -147,6 +151,10 @@ int wh_Client_RecvResponse(whClient *c,
     uint16_t resp_kind = 0;
     uint16_t resp_id = 0;
     uint16_t resp_size = 0;
+
+    if (c == NULL) {
+        return WH_ERROR_BADARGS;
+    }
 
     rc = wh_CommClient_RecvResponse(c->comm,
                 &resp_magic, &resp_kind, &resp_id,
@@ -174,7 +182,7 @@ int wh_Client_RecvResponse(whClient *c,
     return rc;
 }
 
-int wh_Client_EchoRequest(whClient* c, uint16_t size, const void* data)
+int wh_Client_EchoRequest(whClientContext* c, uint16_t size, const void* data)
 {
     whMessageCommLenData msg = {0};
 
@@ -183,7 +191,7 @@ int wh_Client_EchoRequest(whClient* c, uint16_t size, const void* data)
         return WH_ERROR_BADARGS;
     }
 
-    /* Populate the message */
+    /* Populate the message.  Ok to truncate here */
     if (size > sizeof(msg.data)) {
         size = sizeof(msg.data);
     }
@@ -195,7 +203,7 @@ int wh_Client_EchoRequest(whClient* c, uint16_t size, const void* data)
             sizeof(msg), &msg);
 }
 
-int wh_Client_EchoResponse(whClient* c, uint16_t *out_size, void* data)
+int wh_Client_EchoResponse(whClientContext* c, uint16_t *out_size, void* data)
 {
     int rc = 0;
     whMessageCommLenData msg = {0};
@@ -235,7 +243,7 @@ int wh_Client_EchoResponse(whClient* c, uint16_t *out_size, void* data)
     return rc;
 }
 
-int wh_Client_Echo(whClient* c, uint16_t snd_len, const void* snd_data,
+int wh_Client_Echo(whClientContext* c, uint16_t snd_len, const void* snd_data,
         uint16_t *out_rcv_len, void* rcv_data)
 {
     int rc = 0;
@@ -258,7 +266,7 @@ int wh_Client_Echo(whClient* c, uint16_t snd_len, const void* snd_data,
 /** Static singleton API */
 
 /* Singleton client context */
-static whClient _clientContext;
+static whClientContext _clientContext;
 
 /* Target-supplied configuration */
 extern whClientConfig whClient_Configuration;

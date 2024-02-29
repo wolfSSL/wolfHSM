@@ -31,7 +31,7 @@ int wh_CommClient_Init(whCommClient* context, const whCommClientConfig* config)
     }
     if (rc == 0) {
         context->hdr = (whCommHeader*)(&context->packet[0]);
-        context->data = (void*)(&context->packet[WM_COMM_HEADER_LEN]);
+        context->data = (void*)(&context->packet[sizeof(*(context->hdr))]);
         context->initialized = 1;
     }
     return rc;
@@ -161,7 +161,7 @@ int wh_CommServer_Init(whCommServer* context, const whCommServerConfig* config)
     }
     if (rc == 0) {
         context->hdr = (whCommHeader*)(&context->packet[0]);
-        context->data = (void*)(&context->packet[WM_COMM_HEADER_LEN]);
+        context->data = (void*)(&context->packet[sizeof(*(context->hdr))]);
         context->initialized = 1;
     }
     return rc;
