@@ -3,7 +3,7 @@
  *
  * Abstract library to provide non-blocking client/server packet-based data
  * transfers.  The transport must support a minimum packet size of
- * WOLFHSM_COMM_MTU, which is about 1300 bytes.
+ * WH_COMM_MTU, which is about 1300 bytes.
  *
  * This header file provides the declarations for all necessary functions to be
  * implemented by target-specific transports.

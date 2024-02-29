@@ -578,7 +578,7 @@ static void* _whClientTask(void *cf)
 {
     whClientConfig* config = (whClientConfig*)cf;
     int ret = 0;
-    whClient client[1];
+    whClientContext client[1];
     int counter = 1;
 
     uint8_t  tx_req[REQ_SIZE] = {0};
@@ -635,7 +635,7 @@ static void* _whServerTask(void* cf)
 {
     whServerConfig* config = (whServerConfig*)cf;
     int ret = 0;
-    whServer server[1];
+    whServerContext server[1];
     int counter = 1;
 
     if (config == NULL) {

@@ -1,26 +1,21 @@
 /*
- * wolfhsm/comm.h
+ * wolfhsm/wh_comm.h
  *
  * Library to provide client to server requests and server to client responses.
  * Fundamentally, communications are reliable, bidirectional, and packet-based
  * with a fixed MTU.  Packets are delivered in-order without any intrinsic
  * queuing nor OOB support.  Transports deliver complete packets up to the MTU
- * size and provide the number of bytes received as metadata.
+ * size and provide the number of bytes received.
  *
  * Note: Multibyte data will be passed in native order, which means clients and
  * servers must be the SAME endianess or will be required to translate data
- * elements in messages.
- *
- * Provided exmaple transports are:
- *  - shared memory (transport_shm)
- *  - UNIX domain socket (transport_unix)
- *  - TCP streaming socket (transport_tcp)
+ * elements in messages.  Translate helper functions are provided here and used
+ * to interpret header fields.
  *
  * All functions return an integer value with 0 meaning success and !=0 an error
- * enumerated either within wolfssl/wolfcrypt/error-crypt.h or in the function
- * comments.  Unless otherwise noted, all functions are non-blocking and each
- * may update the context state or perform other bookkeeping actions as
- * necessary.
+ * enumerated either within wolfhsm/wh_error.h.  Unless otherwise noted, all
+ * functions are non-blocking and each may update the context state or perform
+ * other bookkeeping actions as necessary.
  */
 
 #ifndef WOLFHSM_WH_COMM_H_
@@ -35,9 +30,9 @@
  * DATA_LEN bytes.
  */
 enum {
-    WOLFHSM_COMM_HEADER_LEN = 8,
-    WOLFHSM_COMM_DATA_LEN = 1280,
-    WOLFHSM_COMM_MTU = (WOLFHSM_COMM_HEADER_LEN + WOLFHSM_COMM_DATA_LEN)
+    WH_COMM_HEADER_LEN = 8,    /* whCommHeader */
+    WH_COMM_DATA_LEN = 1280,
+    WH_COMM_MTU = (WH_COMM_HEADER_LEN + WH_COMM_DATA_LEN)
 };
 
 /* Support for endian and version differences */
@@ -58,14 +53,26 @@ enum {
 /* Header for a packet, request or response. On-the-wire format */
 typedef struct {
     uint16_t magic;     /* Endian marker with version */
-    uint16_t type;      /* Type of packet.  Enumerated in message.h */
+    uint16_t kind;      /* Kind of packet.  Enumerated in message.h */
     uint16_t seq;       /* Sequence number. Incremented on request, copied for
                          * response. */
     uint16_t aux;       /* Session identifier for request or error indicator
                          * for response. */
-} whHeader;
-/* static_assert(sizeof_whHeader == WOLFHSM_COMM_HEADER_LEN,
-                 "Size of whHeader doesn't match WOLFHSM_COMM_HEADER_LEN") */
+} whCommHeader;
+/* static_assert(sizeof_whHeader == WH_COMM_HEADER_LEN,
+                 "Size of whCommHeader doesn't match WH_COMM_HEADER_LEN") */
+
+enum {
+    WH_COMM_AUX_REQ_NORMAL      = 0x0000, /* Normal request. No session */
+    /* Request Aux values 1-0xFFFE are session ids */
+    WH_COMM_AUX_REQ_NORESP      = 0xFFFF, /* Async request without response*/
+
+    WH_COMM_AUX_RESP_OK         = 0x0000, /* Response is valid */
+    WH_COMM_AUX_RESP_ERROR      = 0x0001, /* Request failed with error */
+    WH_COMM_AUX_RESP_FATAL      = 0xFFFE, /* Server condition is fatal */
+    WH_COMM_AUX_RESP_UNSUPP     = 0xFFFF, /* Request is not supported */
+};
+
 
 static inline uint8_t wh_Translate8(uint16_t magic, uint8_t val)
 {
@@ -120,8 +127,8 @@ typedef struct {
     uint16_t reqid;
     uint16_t seq;
     uint16_t size;
-    uint8_t packet[WOLFHSM_COMM_MTU];
-    whHeader* hdr;
+    uint8_t packet[WH_COMM_MTU];
+    whCommHeader* hdr;
     uint8_t* data;
     uint32_t client_id;
     uint32_t server_id;
@@ -139,14 +146,14 @@ int wh_CommClient_Init(whCommClient* context, const whCommClientConfig* config);
  * transport will update the sequence number on success.
  */
 int wh_CommClient_SendRequest(whCommClient* context,
-        uint16_t magic, uint16_t type, uint16_t* out_seq,
+        uint16_t magic, uint16_t kind, uint16_t* out_seq,
         uint16_t data_size, const void* data);
 
 /* If a response packet has been buffered, get the header and copy the data out
  * of the buffer.
  */
 int wh_CommClient_RecvResponse(whCommClient* context,
-        uint16_t* out_magic, uint16_t* out_type, uint16_t* out_seq,
+        uint16_t* out_magic, uint16_t* out_kind, uint16_t* out_seq,
         uint16_t* out_size, void* data);
 
 /* Inform the server that no further communications are necessary and any
@@ -170,8 +177,8 @@ typedef struct {
     void* transport_context;
     const whTransportServerCb* transport_cb;
     uint16_t reqid;
-    uint8_t packet[WOLFHSM_COMM_MTU];
-    whHeader* hdr;
+    uint8_t packet[WH_COMM_MTU];
+    whCommHeader* hdr;
     uint8_t* data;
     uint32_t client_id;
     uint32_t server_id;
@@ -188,7 +195,7 @@ int wh_CommServer_Init(whCommServer* context, const whCommServerConfig* config);
  * of the buffer.
  */
 int wh_CommServer_RecvRequest(whCommServer* context,
-        uint16_t* out_magic, uint16_t* out_type, uint16_t* out_seq,
+        uint16_t* out_magic, uint16_t* out_kind, uint16_t* out_seq,
         uint16_t* out_size, void* buffer);
 
 /* Upon completion of the request, send the response packet using the same seq
@@ -196,7 +203,7 @@ int wh_CommServer_RecvRequest(whCommServer* context,
  * used for asynchronous notifications, such as keep-alive or close.
  */
 int wh_CommServer_SendResponse(whCommServer* context,
-        uint16_t magic, uint16_t type, uint16_t seq,
+        uint16_t magic, uint16_t kind, uint16_t seq,
         uint16_t data_size, const void* data);
 
 int wh_CommServer_Cleanup(whCommServer* context);

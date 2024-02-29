@@ -184,7 +184,7 @@ static int posixTransportTcp_Recv(int fd, uint16_t* buffer_offset,
     /* Have the size */
     packet_size = ntohl(*packet_len);
     size_remaining = packet_size - (*buffer_offset - sizeof(uint32_t));
-    if ( (packet_size == 0) || (packet_size > WOLFHSM_COMM_MTU)) {
+    if ( (packet_size == 0) || (packet_size > PTT_PACKET_MAX_SIZE)) {
         /* Bad recv'ed size.  Assume fatal */
         *buffer_offset = 0;
         return WH_ERROR_ABORTED;
