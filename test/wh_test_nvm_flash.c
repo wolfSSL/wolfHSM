@@ -257,7 +257,7 @@ int whTest_NvmFlashCfg(whNvmFlashConfig* cfg)
 int whTest_NvmFlash_RamSim(void)
 {
     /* HAL Flash state and configuration */
-    const whFlashCb     myCb[1]          = {WH_FLASH_RAMSIM_CB};
+    const whFlashCb  myCb[1]          = {WH_FLASH_RAMSIM_CB};
     whFlashRamsimCtx myHalFlashCtx[1] = {0};
     whFlashRamsimCfg myHalFlashCfg[1] = {{
         .size       = 1024 * 1024, /* 1MB  Flash */
