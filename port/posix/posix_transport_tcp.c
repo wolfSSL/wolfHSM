@@ -7,6 +7,7 @@
 #include <stddef.h>
 #include <string.h>
 #include <stdint.h>
+#include <stdio.h>
 
 #include <arpa/inet.h>
 #include <sys/socket.h>
@@ -266,6 +267,7 @@ int posixTransportTcp_InitConnect(void* context, const void* config)
         return WH_ERROR_ABORTED;
     }
     c->connect_fd_p1 = rc + 1;
+    c->server_addr.sin_family = AF_INET;
 
     /* Make socket non-blocking */
     rc = posixTransportTcp_MakeNonBlocking(c->connect_fd_p1 - 1);
@@ -431,6 +433,8 @@ int posixTransportTcp_InitListen(void* context, const void* config)
         return WH_ERROR_BADARGS;
     }
     c->server_addr.sin_port = htons(cf->server_port);
+    c->server_addr.sin_family = AF_INET;
+
     rc = socket(AF_INET, SOCK_STREAM, 0);
     if (rc < 0) {
         return WH_ERROR_ABORTED;
@@ -459,6 +463,7 @@ int posixTransportTcp_InitListen(void* context, const void* config)
             (struct sockaddr*)&c->server_addr,
             sizeof(c->server_addr));
     if (rc < 0) {
+        perror("bind failed\n");
         close(c->listen_fd_p1 - 1);
         c->listen_fd_p1 = 0;
         return WH_ERROR_ABORTED;
