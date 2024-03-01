@@ -19,12 +19,6 @@ typedef struct {
 
 /* Error codes */
 #define WH_NVM_FLASH_RAMSIM_OK 0
-#define WH_NVM_FLASH_RAMSIM_ERR_INVALID_PARAM -1
-#define WH_NVM_FLASH_RAMSIM_ERR_WRITE_LOCKED -2
-#define WH_NVM_FLASH_RAMSIM_ERR_NOT_BLANK -3
-
-/* Enable (1) or disable (0) debug printouts */
-#define WH_NVM_FLASH_RAMSIM_DEBUG 0
 
 /* Simulator function prototypes */
 int WhNvmFlashRamSim_Init(void* context, const void* config);

@@ -71,7 +71,8 @@ SRC_C += \
 # APP
 SRC_C += ./src/wh_test.c \
          ./src/wh_test_comm.c \
-         ./src/wh_test_nvm_flash.c
+         ./src/wh_test_nvm_flash.c \
+         ./src/wh_test_flash_ramsim.c
 
 
 FILENAMES_C = $(notdir $(SRC_C))

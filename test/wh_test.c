@@ -5,6 +5,7 @@
 
 /* Individual unit test drivers */
 #include "wh_test_comm.h"
+#include "wh_test_flash_ramsim.h"
 #include "wh_test_nvm_flash.h"
 
 
@@ -15,6 +16,7 @@ int whTest_Unit(void)
 {
     /* Comm tests */
     WH_TEST_ASSERT(0 == whTest_Comm());
+    WH_TEST_ASSERT(0 == whTest_Flash_RamSim());
     WH_TEST_ASSERT(0 == whTest_NvmFlash());
 
     return 0;
