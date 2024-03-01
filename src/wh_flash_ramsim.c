@@ -4,14 +4,14 @@
 #include <stdbool.h>
 
 #include "wolfhsm/wh_error.h"
-#include "wolfhsm/wh_nvm_flash_ramsim.h"
+#include "wolfhsm/wh_flash_ramsim.h"
 
 
-static bool isMemoryErased(WhNvmFlashRamSimCtx* context, uint32_t offset,
+static bool isMemoryErased(whFlashRamsimCtx* context, uint32_t offset,
                            uint32_t size);
 
 
-static bool isMemoryErased(WhNvmFlashRamSimCtx* context, uint32_t offset,
+static bool isMemoryErased(whFlashRamsimCtx* context, uint32_t offset,
                            uint32_t size)
 {
     for (uint32_t i = 0; i < size; ++i) {
@@ -24,10 +24,10 @@ static bool isMemoryErased(WhNvmFlashRamSimCtx* context, uint32_t offset,
 
 
 /* Simulator functions */
-int WhNvmFlashRamSim_Init(void* context, const void* config)
+int whFlashRamsim_Init(void* context, const void* config)
 {
-    WhNvmFlashRamSimCtx*       ctx = (WhNvmFlashRamSimCtx*)context;
-    const WhNvmFlashRamSimCfg* cfg = (const WhNvmFlashRamSimCfg*)config;
+    whFlashRamsimCtx*       ctx = (whFlashRamsimCtx*)context;
+    const whFlashRamsimCfg* cfg = (const whFlashRamsimCfg*)config;
 
     if (context == NULL || config == NULL) {
         return WH_ERROR_BADARGS;
@@ -46,12 +46,12 @@ int WhNvmFlashRamSim_Init(void* context, const void* config)
     /* Simulate starting from erased flash */
     memset(ctx->memory, ctx->erasedByte, ctx->size);
 
-    return WH_NVM_FLASH_RAMSIM_OK;
+    return WH_FLASH_RAMSIM_OK;
 }
 
-int WhNvmFlashRamSim_Cleanup(void* context)
+int whFlashRamsim_Cleanup(void* context)
 {
-    WhNvmFlashRamSimCtx* ctx = (WhNvmFlashRamSimCtx*)context;
+    whFlashRamsimCtx* ctx = (whFlashRamsimCtx*)context;
 
     if (context == NULL) {
         return WH_ERROR_BADARGS;
@@ -59,13 +59,13 @@ int WhNvmFlashRamSim_Cleanup(void* context)
 
     free(ctx->memory);
 
-    return WH_NVM_FLASH_RAMSIM_OK;
+    return WH_FLASH_RAMSIM_OK;
 }
 
-int WhNvmFlashRamSim_Program(void* context, uint32_t offset, uint32_t size,
+int whFlashRamsim_Program(void* context, uint32_t offset, uint32_t size,
                              const uint8_t* data)
 {
-    WhNvmFlashRamSimCtx* ctx = (WhNvmFlashRamSimCtx*)context;
+    whFlashRamsimCtx* ctx = (whFlashRamsimCtx*)context;
 
 
     if (context == NULL || data == NULL) {
@@ -86,25 +86,25 @@ int WhNvmFlashRamSim_Program(void* context, uint32_t offset, uint32_t size,
     /* Perform the programming operation */
     memcpy(ctx->memory + offset, data, size);
 
-    return WH_NVM_FLASH_RAMSIM_OK;
+    return WH_FLASH_RAMSIM_OK;
 }
 
-int WhNvmFlashRamSim_Read(void* context, uint32_t offset, uint32_t size,
+int whFlashRamsim_Read(void* context, uint32_t offset, uint32_t size,
                           uint8_t* data)
 {
-    WhNvmFlashRamSimCtx* ctx = (WhNvmFlashRamSimCtx*)context;
+    whFlashRamsimCtx* ctx = (whFlashRamsimCtx*)context;
 
     if (context == NULL || data == NULL) {
         return WH_ERROR_BADARGS;
     }
 
     memcpy(data, ctx->memory + offset, size);
-    return WH_NVM_FLASH_RAMSIM_OK;
+    return WH_FLASH_RAMSIM_OK;
 }
 
-int WhNvmFlashRamSim_Erase(void* context, uint32_t offset, uint32_t size)
+int whFlashRamsim_Erase(void* context, uint32_t offset, uint32_t size)
 {
-    WhNvmFlashRamSimCtx* ctx = (WhNvmFlashRamSimCtx*)context;
+    whFlashRamsimCtx* ctx = (whFlashRamsimCtx*)context;
 
     if (context == NULL) {
         return WH_ERROR_BADARGS;
@@ -117,13 +117,13 @@ int WhNvmFlashRamSim_Erase(void* context, uint32_t offset, uint32_t size)
     /* Perform the erase */
     memset(ctx->memory + offset, ctx->erasedByte, size);
 
-    return WH_NVM_FLASH_RAMSIM_OK;
+    return WH_FLASH_RAMSIM_OK;
 }
 
-int WhNvmFlashRamSim_Verify(void* context, uint32_t offset, uint32_t size,
+int whFlashRamsim_Verify(void* context, uint32_t offset, uint32_t size,
                             const uint8_t* data)
 {
-    WhNvmFlashRamSimCtx* ctx = (WhNvmFlashRamSimCtx*)context;
+    whFlashRamsimCtx* ctx = (whFlashRamsimCtx*)context;
 
     if (context == NULL || data == NULL) {
         return WH_ERROR_BADARGS;
@@ -136,13 +136,13 @@ int WhNvmFlashRamSim_Verify(void* context, uint32_t offset, uint32_t size,
         }
     }
 
-    return WH_NVM_FLASH_RAMSIM_OK;
+    return WH_FLASH_RAMSIM_OK;
 }
 
 
-int WhNvmFlashRamSim_BlankCheck(void* context, uint32_t offset, uint32_t size)
+int whFlashRamsim_BlankCheck(void* context, uint32_t offset, uint32_t size)
 {
-    WhNvmFlashRamSimCtx* ctx = (WhNvmFlashRamSimCtx*)context;
+    whFlashRamsimCtx* ctx = (whFlashRamsimCtx*)context;
 
     if (context == NULL) {
         return WH_ERROR_BADARGS;
@@ -152,13 +152,13 @@ int WhNvmFlashRamSim_BlankCheck(void* context, uint32_t offset, uint32_t size)
         return WH_ERROR_NOTBLANK;
     }
 
-    return WH_NVM_FLASH_RAMSIM_OK;
+    return WH_FLASH_RAMSIM_OK;
 }
 
 
-uint32_t WhNvmFlashRamSim_PartitionSize(void* context)
+uint32_t whFlashRamsim_PartitionSize(void* context)
 {
-    WhNvmFlashRamSimCtx* ctx = (WhNvmFlashRamSimCtx*)context;
+    whFlashRamsimCtx* ctx = (whFlashRamsimCtx*)context;
 
     if (context == NULL) {
         return WH_ERROR_BADARGS;
@@ -168,12 +168,12 @@ uint32_t WhNvmFlashRamSim_PartitionSize(void* context)
 }
 
 
-int WhNvmFlashRamSim_WriteLock(void* context, uint32_t offset, uint32_t size)
+int whFlashRamsim_WriteLock(void* context, uint32_t offset, uint32_t size)
 {
     (void)offset;
     (void)size;
 
-    WhNvmFlashRamSimCtx* ctx = (WhNvmFlashRamSimCtx*)context;
+    whFlashRamsimCtx* ctx = (whFlashRamsimCtx*)context;
 
     if (context == NULL) {
         return WH_ERROR_BADARGS;
@@ -181,15 +181,15 @@ int WhNvmFlashRamSim_WriteLock(void* context, uint32_t offset, uint32_t size)
 
     ctx->writeLocked = 1;
 
-    return WH_NVM_FLASH_RAMSIM_OK;
+    return WH_FLASH_RAMSIM_OK;
 }
 
 
-int WhNvmFlashRamSim_WriteUnlock(void* context, uint32_t offset, uint32_t size)
+int whFlashRamsim_WriteUnlock(void* context, uint32_t offset, uint32_t size)
 {
     (void)offset;
     (void)size;
-    WhNvmFlashRamSimCtx* ctx = (WhNvmFlashRamSimCtx*)context;
+    whFlashRamsimCtx* ctx = (whFlashRamsimCtx*)context;
 
     if (context == NULL) {
         return WH_ERROR_BADARGS;
@@ -197,7 +197,7 @@ int WhNvmFlashRamSim_WriteUnlock(void* context, uint32_t offset, uint32_t size)
 
     ctx->writeLocked = 0;
 
-    return WH_NVM_FLASH_RAMSIM_OK;
+    return WH_FLASH_RAMSIM_OK;
 }
 
 

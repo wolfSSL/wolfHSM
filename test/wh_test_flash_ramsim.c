@@ -3,7 +3,7 @@
 
 #include "wh_test_common.h"
 #include "wh_test_flash_ramsim.h"
-#include "wolfhsm/wh_nvm_flash_ramsim.h"
+#include "wolfhsm/wh_flash_ramsim.h"
 
 #define TEST_FLASH_SIZE (1024 * 1024)
 #define TEST_SECTOR_SIZE (256)
@@ -36,8 +36,8 @@ static void printMemory(uint8_t* buffer, uint32_t size, uint32_t offset)
 
 int whTest_Flash_RamSim(void)
 {
-    WhNvmFlashRamSimCtx ctx;
-    WhNvmFlashRamSimCfg cfg = {.size       = TEST_FLASH_SIZE,
+    whFlashRamsimCtx ctx;
+    whFlashRamsimCfg cfg = {.size       = TEST_FLASH_SIZE,
                                .sectorSize = TEST_SECTOR_SIZE,
                                .pageSize   = TEST_PAGE_SIZE,
                                .erasedByte = 0xFF
@@ -48,7 +48,7 @@ int whTest_Flash_RamSim(void)
 
     printf("Testing RAM-based flash simulator...\n");
 
-    if (WhNvmFlashRamSim_Init(&ctx, &cfg) != WH_NVM_FLASH_RAMSIM_OK) {
+    if (whFlashRamsim_Init(&ctx, &cfg) != WH_FLASH_RAMSIM_OK) {
         printf("Flash initialization failed.\n");
         return -1;
     }
@@ -59,9 +59,9 @@ int whTest_Flash_RamSim(void)
             uint32_t pageOffset = sectorOffset + page * cfg.pageSize;
             fillTestData(testData, cfg.pageSize, page);
 
-            if(WhNvmFlashRamSim_Read(&ctx, pageOffset, cfg.pageSize, readData) != WH_NVM_FLASH_RAMSIM_OK) {
+            if(whFlashRamsim_Read(&ctx, pageOffset, cfg.pageSize, readData) != WH_FLASH_RAMSIM_OK) {
                 printf("Unable to read unprogrammed page\n");
-                WhNvmFlashRamSim_Cleanup(&ctx);
+                whFlashRamsim_Cleanup(&ctx);
                 return -1;
             };
 
@@ -70,40 +70,40 @@ int whTest_Flash_RamSim(void)
             printMemory(readData, cfg.pageSize, pageOffset);
 #endif /* WH_TEST_FLASH_RAMSIM_DEBUG */
 
-            if (WhNvmFlashRamSim_Program(&ctx, pageOffset, cfg.pageSize,
-                                         testData) != WH_NVM_FLASH_RAMSIM_OK) {
+            if (whFlashRamsim_Program(&ctx, pageOffset, cfg.pageSize,
+                                         testData) != WH_FLASH_RAMSIM_OK) {
                 printf("Error programming page %u in sector %u\n", page,
                        sector);
-                WhNvmFlashRamSim_Cleanup(&ctx);
+                whFlashRamsim_Cleanup(&ctx);
                 return -1;
             }
 
 #if WH_TEST_FLASH_RAMSIM_DEBUG
             printf("Page %u in sector %u after programming:\n", page, sector);
-            WhNvmFlashRamSim_Read(&ctx, pageOffset, cfg.pageSize, readData);
+            whFlashRamsim_Read(&ctx, pageOffset, cfg.pageSize, readData);
             printMemory(readData, cfg.pageSize, pageOffset);
 #endif /* WH_TEST_FLASH_RAMSIM_DEBUG */
 
-            if (WhNvmFlashRamSim_Verify(&ctx, pageOffset, cfg.pageSize,
-                                        testData) != WH_NVM_FLASH_RAMSIM_OK) {
+            if (whFlashRamsim_Verify(&ctx, pageOffset, cfg.pageSize,
+                                        testData) != WH_FLASH_RAMSIM_OK) {
                 printf("Verification failed for page %u in sector %u\n", page,
                        sector);
-                WhNvmFlashRamSim_Cleanup(&ctx);
+                whFlashRamsim_Cleanup(&ctx);
                 return -1;
             }
         }
 
-        if (WhNvmFlashRamSim_Erase(&ctx, sectorOffset, cfg.sectorSize) !=
-            WH_NVM_FLASH_RAMSIM_OK) {
+        if (whFlashRamsim_Erase(&ctx, sectorOffset, cfg.sectorSize) !=
+            WH_FLASH_RAMSIM_OK) {
             printf("Error erasing sector %u\n", sector);
-            WhNvmFlashRamSim_Cleanup(&ctx);
+            whFlashRamsim_Cleanup(&ctx);
             return -1;
         }
 
 #if WH_TEST_FLASH_RAMSIM_DEBUG
         printf("Sector %u after erasing:\n", sector);
-        if (WhNvmFlashRamSim_BlankCheck(&ctx, sectorOffset, cfg.sectorSize) ==
-            WH_NVM_FLASH_RAMSIM_OK) {
+        if (whFlashRamsim_BlankCheck(&ctx, sectorOffset, cfg.sectorSize) ==
+            WH_FLASH_RAMSIM_OK) {
             printf("Sector %u is blank.\n", sector);
         }
         else {
@@ -113,7 +113,7 @@ int whTest_Flash_RamSim(void)
     }
 
     printf("All operations completed successfully.\n");
-    WhNvmFlashRamSim_Cleanup(&ctx);
+    whFlashRamsim_Cleanup(&ctx);
 
     return 0;
 }

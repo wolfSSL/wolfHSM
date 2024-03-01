@@ -11,7 +11,7 @@
 #include "wolfhsm/wh_nvm_flash.h"
 
 /* NVM simulator backends to use for testing NVM module */
-#include "wolfhsm/wh_nvm_flash_ramsim.h"
+#include "wolfhsm/wh_flash_ramsim.h"
 #if defined(WH_CFG_TEST_POSIX)
 #include "port/posix/posix_transport_tcp.h"
 #include "port/posix/posix_flash_file.h"
@@ -257,9 +257,9 @@ int whTest_NvmFlashCfg(whNvmFlashConfig* cfg)
 int whTest_NvmFlash_RamSim(void)
 {
     /* HAL Flash state and configuration */
-    const whFlashCb     myCb[1]          = {WH_NVM_FLASH_RAMSIM_CB};
-    WhNvmFlashRamSimCtx myHalFlashCtx[1] = {0};
-    WhNvmFlashRamSimCfg myHalFlashCfg[1] = {{
+    const whFlashCb     myCb[1]          = {WH_FLASH_RAMSIM_CB};
+    whFlashRamsimCtx myHalFlashCtx[1] = {0};
+    whFlashRamsimCfg myHalFlashCfg[1] = {{
         .size       = 1024 * 1024, /* 1MB  Flash */
         .sectorSize = 4096,        /* 4KB  Sector Size */
         .pageSize   = 8,           /* 8B   Page Size */

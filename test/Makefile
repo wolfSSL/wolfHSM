@@ -59,7 +59,7 @@ SRC_C += \
             $(WOLFHSM_DIR)/src/wh_nvm_flash.c \
             $(WOLFHSM_DIR)/src/wh_server.c \
             $(WOLFHSM_DIR)/src/wh_transport_mem.c \
-            $(WOLFHSM_DIR)/src/wh_nvm_flash_ramsim.c
+            $(WOLFHSM_DIR)/src/wh_flash_ramsim.c
 
             
 
