@@ -147,19 +147,22 @@ int whTest_NvmFlashCfg(whNvmFlashConfig* cfg)
      * written */
     printf("--Adding 3 new objects\n");
 
-    WH_TEST_RETURN_ON_FAIL(cb->AddObject(context, &meta1, sizeof(data1), data1));
+    WH_TEST_RETURN_ON_FAIL(
+        cb->AddObject(context, &meta1, sizeof(data1), data1));
     WH_TEST_RETURN_ON_FAIL(cb->Read(context, meta1.id, 0, sizeof(data1), buf));
     WH_TEST_RETURN_ON_FAIL(cb->GetMetadata(context, meta1.id, &metaBuf));
     WH_TEST_ASSERT_RETURN(meta1.id == metaBuf.id);
     WH_TEST_ASSERT_RETURN(0 == memcmp(data1, buf, sizeof(data1)));
 
-    WH_TEST_RETURN_ON_FAIL(cb->AddObject(context, &meta2, sizeof(data2), data2));
+    WH_TEST_RETURN_ON_FAIL(
+        cb->AddObject(context, &meta2, sizeof(data2), data2));
     WH_TEST_RETURN_ON_FAIL(cb->Read(context, meta2.id, 0, sizeof(data2), buf));
     WH_TEST_RETURN_ON_FAIL(cb->GetMetadata(context, meta2.id, &metaBuf));
     WH_TEST_ASSERT_RETURN(meta2.id == metaBuf.id);
     WH_TEST_ASSERT_RETURN(0 == memcmp(data2, buf, sizeof(data2)));
 
-    WH_TEST_RETURN_ON_FAIL(cb->AddObject(context, &meta3, sizeof(data3), data3));
+    WH_TEST_RETURN_ON_FAIL(
+        cb->AddObject(context, &meta3, sizeof(data3), data3));
     WH_TEST_RETURN_ON_FAIL(cb->Read(context, meta3.id, 0, sizeof(data3), buf));
     WH_TEST_RETURN_ON_FAIL(cb->GetMetadata(context, meta3.id, &metaBuf));
     WH_TEST_ASSERT_RETURN(meta3.id == metaBuf.id);
@@ -172,8 +175,10 @@ int whTest_NvmFlashCfg(whNvmFlashConfig* cfg)
 
     /* Overwrite an existing Object */
     printf("--Overwrite an existing object\n");
-    WH_TEST_RETURN_ON_FAIL(cb->AddObject(context, &meta1, sizeof(update1), update1));
-    WH_TEST_RETURN_ON_FAIL(cb->Read(context, meta1.id, 0, sizeof(update1), buf));
+    WH_TEST_RETURN_ON_FAIL(
+        cb->AddObject(context, &meta1, sizeof(update1), update1));
+    WH_TEST_RETURN_ON_FAIL(
+        cb->Read(context, meta1.id, 0, sizeof(update1), buf));
     WH_TEST_RETURN_ON_FAIL(cb->GetMetadata(context, meta1.id, &metaBuf));
     WH_TEST_ASSERT_RETURN(meta1.id == metaBuf.id);
     WH_TEST_ASSERT_RETURN(0 == memcmp(update1, buf, sizeof(update1)));
@@ -185,15 +190,19 @@ int whTest_NvmFlashCfg(whNvmFlashConfig* cfg)
 
     /* Overwrite an existing Object twice */
     printf("--Overwrite an existing object again \n");
-    WH_TEST_RETURN_ON_FAIL(cb->AddObject(context, &meta2, sizeof(update2), update2));
-    WH_TEST_RETURN_ON_FAIL(cb->Read(context, meta2.id, 0, sizeof(update2), buf));
+    WH_TEST_RETURN_ON_FAIL(
+        cb->AddObject(context, &meta2, sizeof(update2), update2));
+    WH_TEST_RETURN_ON_FAIL(
+        cb->Read(context, meta2.id, 0, sizeof(update2), buf));
     WH_TEST_RETURN_ON_FAIL(cb->GetMetadata(context, meta2.id, &metaBuf));
     WH_TEST_ASSERT_RETURN(meta2.id == metaBuf.id);
     WH_TEST_ASSERT_RETURN(0 == memcmp(update2, buf, sizeof(update2)));
 
     printf("--Overwrite an existing object with new data\n");
-    WH_TEST_RETURN_ON_FAIL(cb->AddObject(context, &meta2, sizeof(update3), update3));
-    WH_TEST_RETURN_ON_FAIL(cb->Read(context, meta2.id, 0, sizeof(update3), buf));
+    WH_TEST_RETURN_ON_FAIL(
+        cb->AddObject(context, &meta2, sizeof(update3), update3));
+    WH_TEST_RETURN_ON_FAIL(
+        cb->Read(context, meta2.id, 0, sizeof(update3), buf));
     WH_TEST_RETURN_ON_FAIL(cb->GetMetadata(context, meta2.id, &metaBuf));
     WH_TEST_ASSERT_RETURN(meta2.id == metaBuf.id);
     WH_TEST_ASSERT_RETURN(0 == memcmp(update3, buf, sizeof(update3)));
@@ -213,8 +222,10 @@ int whTest_NvmFlashCfg(whNvmFlashConfig* cfg)
     /* Destroy 1 object */
     printf("--Destroy 1 object\n");
     WH_TEST_RETURN_ON_FAIL(cb->DestroyObjects(context, 1, ids));
-    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND == cb->Read(context, ids[0], 0, 0, buf));
-    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND == cb->GetMetadata(context, ids[0], &metaBuf));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND ==
+                          cb->Read(context, ids[0], 0, 0, buf));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND ==
+                          cb->GetMetadata(context, ids[0], &metaBuf));
 #if defined(WH_CFG_TEST_VERBOSE)
     _ShowAvailable(cb, context);
     _ShowList(cb, context);
@@ -223,9 +234,12 @@ int whTest_NvmFlashCfg(whNvmFlashConfig* cfg)
     /* Attempt to destroy 3 objects, of which one has been already destroyed.
      * This should not cause an error */
     printf("--Destroy 3 objects\n");
-    WH_TEST_RETURN_ON_FAIL(cb->DestroyObjects(context, sizeof(ids) / sizeof(ids[0]), ids));
-    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND == cb->Read(context, meta2.id, 0, sizeof(update3), buf));
-    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND == cb->GetMetadata(context, meta2.id, &metaBuf));
+    WH_TEST_RETURN_ON_FAIL(
+        cb->DestroyObjects(context, sizeof(ids) / sizeof(ids[0]), ids));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND ==
+                          cb->Read(context, meta2.id, 0, sizeof(update3), buf));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND ==
+                          cb->GetMetadata(context, meta2.id, &metaBuf));
 #if defined(WH_CFG_TEST_VERBOSE)
     _ShowAvailable(cb, context);
     _ShowList(cb, context);
@@ -249,6 +263,7 @@ int whTest_NvmFlash_RamSim(void)
         .size       = 1024 * 1024, /* 1MB  Flash */
         .sectorSize = 4096,        /* 4KB  Sector Size */
         .pageSize   = 8,           /* 8B   Page Size */
+        .erasedByte = ~(uint8_t)0,
     }};
 
     /* NVM Configuration using PosixSim HAL Flash */

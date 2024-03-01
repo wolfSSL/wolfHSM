@@ -89,42 +89,38 @@ int whTest_CommMem(void)
     uint16_t rx_resp_seq        = 0;
 
     /* Check that neither side is ready to recv */
-    WH_TEST_ASSERT_RETURN(
-            WH_ERROR_NOTREADY == wh_CommServer_RecvRequest(
-                                            server, &rx_req_flags, &rx_req_type,
-                                            &rx_req_seq, &rx_req_len, rx_req)
-    );
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTREADY ==
+                          wh_CommServer_RecvRequest(server, &rx_req_flags,
+                                                    &rx_req_type, &rx_req_seq,
+                                                    &rx_req_len, rx_req));
 
     for (counter = 0; counter < REPEAT_COUNT; counter++) {
         sprintf((char*)tx_req, "Request:%u", counter);
         tx_req_len  = strlen((char*)tx_req);
         tx_req_type = counter * 2;
-        WH_TEST_RETURN_ON_FAIL(wh_CommClient_SendRequest(client, tx_req_flags, tx_req_type,
-                                        &tx_req_seq, tx_req_len, tx_req));
+        WH_TEST_RETURN_ON_FAIL(
+            wh_CommClient_SendRequest(client, tx_req_flags, tx_req_type,
+                                      &tx_req_seq, tx_req_len, tx_req));
 #if defined(WH_CFG_TEST_VERBOSE)
         printf("Client SendRequest:%d, flags %x, type:%x, seq:%d, len:%d, %s\n",
                ret, tx_req_flags, tx_req_type, tx_req_seq, tx_req_len, tx_req);
 #endif
 
         if (counter == 0) {
-            WH_TEST_ASSERT_RETURN(
-                    WH_ERROR_NOTREADY == wh_CommClient_RecvResponse(client,
-                                             &rx_resp_flags, &rx_resp_type,
-                                             &rx_resp_seq,
-                                             &rx_resp_len, rx_resp)
-            );
+            WH_TEST_ASSERT_RETURN(WH_ERROR_NOTREADY ==
+                                  wh_CommClient_RecvResponse(
+                                      client, &rx_resp_flags, &rx_resp_type,
+                                      &rx_resp_seq, &rx_resp_len, rx_resp));
 
             WH_TEST_ASSERT_RETURN(
-                WH_ERROR_NOTREADY == wh_CommClient_SendRequest(client,
-                                            tx_req_flags, tx_req_type,
-                                            &tx_req_seq, tx_req_len, tx_req)
-            );
+                WH_ERROR_NOTREADY ==
+                wh_CommClient_SendRequest(client, tx_req_flags, tx_req_type,
+                                          &tx_req_seq, tx_req_len, tx_req));
         }
 
-        WH_TEST_RETURN_ON_FAIL(wh_CommServer_RecvRequest(server,
-                                            &rx_req_flags, &rx_req_type,
-                                            &rx_req_seq, &rx_req_len, rx_req)
-        );
+        WH_TEST_RETURN_ON_FAIL(
+            wh_CommServer_RecvRequest(server, &rx_req_flags, &rx_req_type,
+                                      &rx_req_seq, &rx_req_len, rx_req));
 
 #if defined(WH_CFG_TEST_VERBOSE)
         printf("Server RecvRequest:%d, flags %x, type:%x, seq:%d, len:%d, %s\n",
@@ -146,8 +142,9 @@ int whTest_CommMem(void)
             ret, rx_req_flags, rx_req_type, rx_req_seq, tx_resp_len, tx_resp);
 #endif
 
-        WH_TEST_RETURN_ON_FAIL(wh_CommClient_RecvResponse(client, &rx_resp_flags, &rx_resp_type,
-                                         &rx_resp_seq, &rx_resp_len, rx_resp));
+        WH_TEST_RETURN_ON_FAIL(
+            wh_CommClient_RecvResponse(client, &rx_resp_flags, &rx_resp_type,
+                                       &rx_resp_seq, &rx_resp_len, rx_resp));
 
 #if defined(WH_CFG_TEST_VERBOSE)
         printf(

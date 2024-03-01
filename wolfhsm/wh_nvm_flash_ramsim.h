@@ -5,6 +5,7 @@ typedef struct {
     uint32_t size;
     uint32_t sectorSize;
     uint32_t pageSize;
+    uint8_t  erasedByte;
 } WhNvmFlashRamSimCfg;
 
 typedef struct {
@@ -13,6 +14,7 @@ typedef struct {
     uint32_t sectorSize;
     uint32_t pageSize;
     int      writeLocked;
+    uint8_t  erasedByte;
 } WhNvmFlashRamSimCtx;
 
 /* Error codes */
