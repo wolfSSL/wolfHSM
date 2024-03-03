@@ -36,7 +36,7 @@ static void printMemory(uint8_t* buffer, uint32_t size, uint32_t offset)
 
 int whTest_Flash_RamSim(void)
 {
-    int ret;
+    int              ret;
     whFlashRamsimCtx ctx;
     whFlashRamsimCfg cfg = {.size       = TEST_FLASH_SIZE,
                             .sectorSize = TEST_SECTOR_SIZE,
@@ -56,7 +56,8 @@ int whTest_Flash_RamSim(void)
             uint32_t pageOffset = sectorOffset + page * cfg.pageSize;
             fillTestData(testData, cfg.pageSize, page);
 
-            if ((ret = whFlashRamsim_Read(&ctx, pageOffset, cfg.pageSize, readData)) != 0) {
+            if ((ret = whFlashRamsim_Read(&ctx, pageOffset, cfg.pageSize,
+                                          readData)) != 0) {
                 WH_ERROR_PRINT("whFlashRamsim_Read failed: ret=%d\n", ret);
                 whFlashRamsim_Cleanup(&ctx);
                 return ret;
@@ -68,8 +69,10 @@ int whTest_Flash_RamSim(void)
 #endif /* WH_TEST_FLASH_RAMSIM_DEBUG */
 
             if ((ret = whFlashRamsim_Program(&ctx, pageOffset, cfg.pageSize,
-                                      testData)) != 0) {
-                WH_ERROR_PRINT("whFlashRamsim_Program failed to program page %u in sector %u: ret=%d\n", page, sector, ret);
+                                             testData)) != 0) {
+                WH_ERROR_PRINT("whFlashRamsim_Program failed to program page "
+                               "%u in sector %u: ret=%d\n",
+                               page, sector, ret);
                 whFlashRamsim_Cleanup(&ctx);
                 return ret;
             }
@@ -81,17 +84,19 @@ int whTest_Flash_RamSim(void)
 #endif /* WH_TEST_FLASH_RAMSIM_DEBUG */
 
             if ((ret = whFlashRamsim_Verify(&ctx, pageOffset, cfg.pageSize,
-                                     testData)) != 0) {
-                WH_ERROR_PRINT("whFlashRamsim_Verify failed for page %u in sector %u: ret=%d\n", page,
-                       sector, ret);
+                                            testData)) != 0) {
+                WH_ERROR_PRINT("whFlashRamsim_Verify failed for page %u in "
+                               "sector %u: ret=%d\n",
+                               page, sector, ret);
                 whFlashRamsim_Cleanup(&ctx);
                 return ret;
             }
         }
 
-        if (whFlashRamsim_Erase(&ctx, sectorOffset, cfg.sectorSize) !=
-            0) {
-            WH_ERROR_PRINT("whFlashRamsim_Erase failed to erase sector %u: ret=%d\n", sector, ret);
+        if (whFlashRamsim_Erase(&ctx, sectorOffset, cfg.sectorSize) != 0) {
+            WH_ERROR_PRINT(
+                "whFlashRamsim_Erase failed to erase sector %u: ret=%d\n",
+                sector, ret);
             whFlashRamsim_Cleanup(&ctx);
             return ret;
         }
@@ -99,7 +104,6 @@ int whTest_Flash_RamSim(void)
         if (whFlashRamsim_BlankCheck(&ctx, sectorOffset, cfg.sectorSize) != 0) {
             WH_ERROR_PRINT("Sector %u is not blank, ret=%d\n", sector, ret);
         }
-
     }
 
     printf("All operations completed successfully.\n");
