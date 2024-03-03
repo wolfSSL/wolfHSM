@@ -110,10 +110,47 @@ static void _ShowList(const whNvmCb* cb, void* context)
 #endif
 
 
+static int addObjectWithReadBackCheck(const whNvmCb*     cb,
+                                      whNvmFlashContext* context,
+                                      whNvmMetadata* meta, whNvmSize data_len,
+                                      const uint8_t* data)
+
+{
+    whNvmMetadata metaBuf = {0};
+    unsigned char dataBuf[256];
+
+    WH_TEST_RETURN_ON_FAIL(cb->AddObject(context, meta, data_len, data));
+    WH_TEST_RETURN_ON_FAIL(cb->Read(context, meta->id, 0, data_len, dataBuf));
+    WH_TEST_RETURN_ON_FAIL(cb->GetMetadata(context, meta->id, &metaBuf));
+    WH_TEST_ASSERT_RETURN(meta->id == metaBuf.id);
+    WH_TEST_ASSERT_RETURN(0 == memcmp(data, dataBuf, data_len));
+    return 0;
+}
+
+static int destroyObjectWithReadBackCheck(const whNvmCb*     cb,
+                                          whNvmFlashContext* context,
+                                          whNvmId            list_count,
+                                          const whNvmId*     id_list)
+{
+    whNvmMetadata metaBuf = {0};
+    unsigned char dataBuf[256];
+
+    WH_TEST_RETURN_ON_FAIL(cb->DestroyObjects(context, list_count, id_list));
+    /* Try to read an arbitrary ID - it should fail  */
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND == cb->Read(context, id_list[0], 0,
+                                                        sizeof(dataBuf),
+                                                        dataBuf));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND ==
+                          cb->GetMetadata(context, id_list[0], &metaBuf));
+    return 0;
+}
+
+
 int whTest_NvmFlashCfg(whNvmFlashConfig* cfg)
 {
     const whNvmCb     cb[1]      = {WH_NVM_FLASH_CB};
     whNvmFlashContext context[1] = {0};
+    int               ret        = 0;
 
     WH_TEST_RETURN_ON_FAIL(cb->Init(context, cfg));
 
@@ -124,7 +161,6 @@ int whTest_NvmFlashCfg(whNvmFlashConfig* cfg)
 #endif
 
     /* Add 3 new Objects */
-    unsigned char buf[256];
     unsigned char data1[]   = "Data1";
     unsigned char data2[]   = "Data2";
     unsigned char data3[]   = "Data3";
@@ -137,36 +173,26 @@ int whTest_NvmFlashCfg(whNvmFlashConfig* cfg)
     whNvmId id3   = 300;
     whNvmId ids[] = {id1, id2, id3};
 
-    whNvmMetadata meta1   = {.id = ids[0], .label = "Label1"};
-    whNvmMetadata meta2   = {.id = ids[1], .label = "Label2"};
-    whNvmMetadata meta3   = {.id = ids[2], .label = "Label3"};
-    whNvmMetadata metaBuf = {0};
+    whNvmMetadata meta1 = {.id = ids[0], .label = "Label1"};
+    whNvmMetadata meta2 = {.id = ids[1], .label = "Label2"};
+    whNvmMetadata meta3 = {.id = ids[2], .label = "Label3"};
 
 
     /* Add 3 objects, checking for each object that we can read back what was
      * written */
     printf("--Adding 3 new objects\n");
-
-    WH_TEST_RETURN_ON_FAIL(
-        cb->AddObject(context, &meta1, sizeof(data1), data1));
-    WH_TEST_RETURN_ON_FAIL(cb->Read(context, meta1.id, 0, sizeof(data1), buf));
-    WH_TEST_RETURN_ON_FAIL(cb->GetMetadata(context, meta1.id, &metaBuf));
-    WH_TEST_ASSERT_RETURN(meta1.id == metaBuf.id);
-    WH_TEST_ASSERT_RETURN(0 == memcmp(data1, buf, sizeof(data1)));
-
-    WH_TEST_RETURN_ON_FAIL(
-        cb->AddObject(context, &meta2, sizeof(data2), data2));
-    WH_TEST_RETURN_ON_FAIL(cb->Read(context, meta2.id, 0, sizeof(data2), buf));
-    WH_TEST_RETURN_ON_FAIL(cb->GetMetadata(context, meta2.id, &metaBuf));
-    WH_TEST_ASSERT_RETURN(meta2.id == metaBuf.id);
-    WH_TEST_ASSERT_RETURN(0 == memcmp(data2, buf, sizeof(data2)));
-
-    WH_TEST_RETURN_ON_FAIL(
-        cb->AddObject(context, &meta3, sizeof(data3), data3));
-    WH_TEST_RETURN_ON_FAIL(cb->Read(context, meta3.id, 0, sizeof(data3), buf));
-    WH_TEST_RETURN_ON_FAIL(cb->GetMetadata(context, meta3.id, &metaBuf));
-    WH_TEST_ASSERT_RETURN(meta3.id == metaBuf.id);
-    WH_TEST_ASSERT_RETURN(0 == memcmp(data3, buf, sizeof(data3)));
+    ret = addObjectWithReadBackCheck(cb, context, &meta1, sizeof(data1), data1);
+    if (ret != 0) {
+        goto cleanup;
+    }
+    ret = addObjectWithReadBackCheck(cb, context, &meta2, sizeof(data2), data2);
+    if (ret != 0) {
+        goto cleanup;
+    }
+    ret = addObjectWithReadBackCheck(cb, context, &meta3, sizeof(data3), data3);
+    if (ret != 0) {
+        goto cleanup;
+    }
 
 #if defined(WH_CFG_TEST_VERBOSE)
     _ShowAvailable(cb, context);
@@ -175,13 +201,11 @@ int whTest_NvmFlashCfg(whNvmFlashConfig* cfg)
 
     /* Overwrite an existing Object */
     printf("--Overwrite an existing object\n");
-    WH_TEST_RETURN_ON_FAIL(
-        cb->AddObject(context, &meta1, sizeof(update1), update1));
-    WH_TEST_RETURN_ON_FAIL(
-        cb->Read(context, meta1.id, 0, sizeof(update1), buf));
-    WH_TEST_RETURN_ON_FAIL(cb->GetMetadata(context, meta1.id, &metaBuf));
-    WH_TEST_ASSERT_RETURN(meta1.id == metaBuf.id);
-    WH_TEST_ASSERT_RETURN(0 == memcmp(update1, buf, sizeof(update1)));
+    ret = addObjectWithReadBackCheck(cb, context, &meta1, sizeof(update1),
+                                     update1);
+    if (ret != 0) {
+        goto cleanup;
+    }
 
 #if defined(WH_CFG_TEST_VERBOSE)
     _ShowAvailable(cb, context);
@@ -190,22 +214,20 @@ int whTest_NvmFlashCfg(whNvmFlashConfig* cfg)
 
     /* Overwrite an existing Object twice */
     printf("--Overwrite an existing object again \n");
-    WH_TEST_RETURN_ON_FAIL(
-        cb->AddObject(context, &meta2, sizeof(update2), update2));
-    WH_TEST_RETURN_ON_FAIL(
-        cb->Read(context, meta2.id, 0, sizeof(update2), buf));
-    WH_TEST_RETURN_ON_FAIL(cb->GetMetadata(context, meta2.id, &metaBuf));
-    WH_TEST_ASSERT_RETURN(meta2.id == metaBuf.id);
-    WH_TEST_ASSERT_RETURN(0 == memcmp(update2, buf, sizeof(update2)));
+    ret = addObjectWithReadBackCheck(cb, context, &meta2, sizeof(update2),
+                                     update2);
+    if (ret != 0) {
+        goto cleanup;
+    }
 
     printf("--Overwrite an existing object with new data\n");
-    WH_TEST_RETURN_ON_FAIL(
-        cb->AddObject(context, &meta2, sizeof(update3), update3));
-    WH_TEST_RETURN_ON_FAIL(
-        cb->Read(context, meta2.id, 0, sizeof(update3), buf));
-    WH_TEST_RETURN_ON_FAIL(cb->GetMetadata(context, meta2.id, &metaBuf));
-    WH_TEST_ASSERT_RETURN(meta2.id == metaBuf.id);
-    WH_TEST_ASSERT_RETURN(0 == memcmp(update3, buf, sizeof(update3)));
+    ret = addObjectWithReadBackCheck(cb, context, &meta2, sizeof(update3),
+                                     update3);
+    if (ret != 0) {
+        goto cleanup;
+    }
+
+
 #if defined(WH_CFG_TEST_VERBOSE)
     _ShowAvailable(cb, context);
     _ShowList(cb, context);
@@ -213,7 +235,10 @@ int whTest_NvmFlashCfg(whNvmFlashConfig* cfg)
 
     /* Regenerate */
     printf("--Reclaim space\n");
-    WH_TEST_RETURN_ON_FAIL(cb->DestroyObjects(context, 0, NULL));
+    if ((ret = cb->DestroyObjects(context, 0, NULL)) != 0) {
+        goto cleanup;
+    }
+
 #if defined(WH_CFG_TEST_VERBOSE)
     _ShowAvailable(cb, context);
     _ShowList(cb, context);
@@ -221,11 +246,11 @@ int whTest_NvmFlashCfg(whNvmFlashConfig* cfg)
 
     /* Destroy 1 object */
     printf("--Destroy 1 object\n");
-    WH_TEST_RETURN_ON_FAIL(cb->DestroyObjects(context, 1, ids));
-    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND ==
-                          cb->Read(context, ids[0], 0, 0, buf));
-    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND ==
-                          cb->GetMetadata(context, ids[0], &metaBuf));
+
+    if ((ret = destroyObjectWithReadBackCheck(cb, context, 1, ids)) != 0) {
+        goto cleanup;
+    }
+
 #if defined(WH_CFG_TEST_VERBOSE)
     _ShowAvailable(cb, context);
     _ShowList(cb, context);
@@ -234,12 +259,11 @@ int whTest_NvmFlashCfg(whNvmFlashConfig* cfg)
     /* Attempt to destroy 3 objects, of which one has been already destroyed.
      * This should not cause an error */
     printf("--Destroy 3 objects\n");
-    WH_TEST_RETURN_ON_FAIL(
-        cb->DestroyObjects(context, sizeof(ids) / sizeof(ids[0]), ids));
-    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND ==
-                          cb->Read(context, meta2.id, 0, sizeof(update3), buf));
-    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND ==
-                          cb->GetMetadata(context, meta2.id, &metaBuf));
+    if ((ret = destroyObjectWithReadBackCheck(
+             cb, context, sizeof(ids) / sizeof(ids[0]), ids)) != 0) {
+        goto cleanup;
+    }
+
 #if defined(WH_CFG_TEST_VERBOSE)
     _ShowAvailable(cb, context);
     _ShowList(cb, context);
@@ -247,10 +271,16 @@ int whTest_NvmFlashCfg(whNvmFlashConfig* cfg)
 
     printf("--Done\n");
 
-    /* Clean up local data */
-    WH_TEST_RETURN_ON_FAIL(cb->Cleanup(context));
+cleanup:
+    /* Don't overwrite an already failed return code? */
+    if (ret == 0) {
+        WH_TEST_RETURN_ON_FAIL(cb->Cleanup(context));
+    }
+    else {
+        (void)cb->Cleanup(context);
+    }
 
-    return 0;
+    return ret;
 }
 
 
