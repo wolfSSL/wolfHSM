@@ -1,3 +1,6 @@
+#ifndef WH_TEST_COMMON_H_
+#define WH_TEST_COMMON_H_
+
 #include <assert.h>
 #include <stdio.h>
 
@@ -59,3 +62,6 @@
             assert(condition);                                             \
         }                                                                  \
     } while (0)
+
+
+#endif /* WH_TEST_COMMON_H_ */

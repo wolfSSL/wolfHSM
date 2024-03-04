@@ -1,3 +1,6 @@
+#ifndef WH_TEST_NVM_FLASH_H_
+#define WH_TEST_NVM_FLASH_H_
+
 #include "wolfhsm/wh_nvm_flash.h"
 
 /*
@@ -13,3 +16,5 @@ int whTest_NvmFlash(void);
  * Returns 0 on success, and a non-zero error code on failure
  */
 int whTest_NvmFlashCfg(whNvmFlashConfig* cfg);
+
+#endif /* WH_TEST_NVM_FLASH_H_ */

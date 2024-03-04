@@ -1,3 +1,5 @@
+#ifndef WH_TEST_COMM_H_
+#define WH_TEST_COMM_H_
 
 /*
  * Runs the comms tests using a memory transport backend.
@@ -13,3 +15,5 @@ int whTest_CommMem(void);
  * Returns 0 on success and a non-zero error code on failure
  */
 int whTest_Comm(void);
+
+#endif /* WH_TEST_COMM_H_ */

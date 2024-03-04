@@ -1,3 +1,6 @@
+#ifndef WH_FLASH_RAMSIM_H_
+#define WH_FLASH_RAMSIM_H_
+
 #include <stdint.h>
 
 /* Configuration and context structures */
@@ -50,3 +53,5 @@ int whFlashRamsim_WriteUnlock(void* context, uint32_t offset, uint32_t size);
         .BlankCheck    = whFlashRamsim_BlankCheck,    \
     }
 /* clang-format on */
+
+#endif /* WH_FLASH_RAMSIM_H_ */
