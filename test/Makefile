@@ -1,5 +1,5 @@
 # Set to @ if you want to suppress command echo
-CMD_ECHO = 
+CMD_ECHO =
 
 # Important directories
 BUILD_DIR = ./Build
@@ -18,14 +18,14 @@ INC = -I$(WOLFHSM_DIR) \
 
 # Defines
 DEF = -DWOLFSSL_USER_SETTINGS
- 
+
 # Architecture
-ARCHFLAGS ?= 
+ARCHFLAGS ?=
 
 # Compiler and linker flags
 ASFLAGS ?= $(ARCHFLAGS)
 CFLAGS_EXTRA ?= -Wno-cpp -g
-CFLAGS ?= $(ARCHFLAGS) -Wall -Werror $(CFLAGS_EXTRA)
+CFLAGS ?= $(ARCHFLAGS) -std=c99 -D_GNU_SOURCE -Wall -Werror $(CFLAGS_EXTRA)
 LDFLAGS ?= $(ARCHFLAGS)
 
 # LD: generate map
@@ -34,13 +34,13 @@ LDFLAGS ?= $(ARCHFLAGS)
 # Libc for printf
 LIBS = -lc
 
-# Optimization level and place functions / data into separate sections to allow dead code removal 
-CFLAGS += -O0 -ffunction-sections -fdata-sections 
+# Optimization level and place functions / data into separate sections to allow dead code removal
+CFLAGS += -O0 -ffunction-sections -fdata-sections
 #-fstrict-volatile-bitfields #-fno-builtin
 
 # Remove unused sections and link time optimizations
-#LDFLAGS += -Wl,--cref -Wl,--gc-sections -static -u _printf_float -Wl,--start-group $(LIBS) -Wl,--end-group -flto 
-#-nostartfiles #-nodefaultlibs # -nostdlib 
+#LDFLAGS += -Wl,--cref -Wl,--gc-sections -static -u _printf_float -Wl,--start-group $(LIBS) -Wl,--end-group -flto
+#-nostartfiles #-nodefaultlibs # -nostdlib
 
 # Debugging
 DBGFLAGS = #-ggdb -g3
@@ -48,7 +48,7 @@ CFLAGS += $(DBGFLAGS)
 LDFLAGS += $(DBGFLAGS)
 
 # Assembly source files
-SRC_ASM += 
+SRC_ASM +=
 
 # WolfHSM source code
 SRC_C += \
@@ -61,12 +61,12 @@ SRC_C += \
             $(WOLFHSM_DIR)/src/wh_transport_mem.c \
             $(WOLFHSM_DIR)/src/wh_flash_ramsim.c
 
-            
+
 
 # WolfHSM port code
 SRC_C += \
             $(WOLFHSM_DIR)/port/posix/posix_flash_file.c \
-            $(WOLFHSM_DIR)/port/posix/posix_transport_tcp.c 
+            $(WOLFHSM_DIR)/port/posix/posix_transport_tcp.c
 
 # APP
 SRC_C += ./src/wh_test.c \
