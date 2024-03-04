@@ -4,7 +4,6 @@ CMD_ECHO =
 # Important directories
 BUILD_DIR = ./Build
 WOLFHSM_DIR = $(CURDIR)/../
-
 WOLFSSL_DIR ?= $(CURDIR)/../../wolfssl
 
 # Project name
@@ -24,28 +23,27 @@ ARCHFLAGS ?=
 
 # Compiler and linker flags
 ASFLAGS ?= $(ARCHFLAGS)
-CFLAGS_EXTRA ?= -Wno-cpp -g
-CFLAGS ?= $(ARCHFLAGS) -std=c99 -D_GNU_SOURCE -Wall -Werror $(CFLAGS_EXTRA)
+CFLAGS_EXTRA ?=
+CFLAGS ?= $(ARCHFLAGS) -std=c99 -D_GNU_SOURCE -Wall -Werror -Wno-cpp $(CFLAGS_EXTRA)
 LDFLAGS ?= $(ARCHFLAGS)
-
-# LD: generate map
-#LDFLAGS += -Wl,-Map=$(BUILD_DIR)/$(BIN).map
 
 # Libc for printf
 LIBS = -lc
 
 # Optimization level and place functions / data into separate sections to allow dead code removal
-CFLAGS += -O0 -ffunction-sections -fdata-sections
-#-fstrict-volatile-bitfields #-fno-builtin
-
-# Remove unused sections and link time optimizations
-#LDFLAGS += -Wl,--cref -Wl,--gc-sections -static -u _printf_float -Wl,--start-group $(LIBS) -Wl,--end-group -flto
-#-nostartfiles #-nodefaultlibs # -nostdlib
+CFLAGS += -ffunction-sections -fdata-sections
 
 # Debugging
-DBGFLAGS = #-ggdb -g3
+# Check if DEBUG is set to 1 and append debug flags
+ifeq ($(DEBUG),1)
+DBGFLAGS = -ggdb -g3
 CFLAGS += $(DBGFLAGS)
 LDFLAGS += $(DBGFLAGS)
+endif
+
+# wolfHSM-specific defines
+CFLAGS += -DWH_CONFIG
+
 
 # Assembly source files
 SRC_ASM +=

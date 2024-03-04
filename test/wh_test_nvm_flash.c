@@ -1,8 +1,11 @@
 #include <stdio.h>
 #include <string.h>
 
-/* core test includes */
+#if defined(WH_CONFIG)
 #include "wh_config.h"
+#endif
+
+/* core test includes */
 #include "wh_test_common.h"
 
 /* APIs to test */

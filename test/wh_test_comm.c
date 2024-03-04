@@ -2,7 +2,10 @@
 #include <stdio.h>  /* For printf */
 #include <string.h> /* For memset, memcpy */
 
+#if defined(WH_CONFIG)
 #include "wh_config.h"
+#endif
+
 #include "wh_test_common.h"
 
 #include "wolfhsm/wh_error.h"
