@@ -17,7 +17,7 @@ static void printMemory(uint8_t* buffer, uint32_t size, uint32_t offset);
 
 static void fillTestData(uint8_t* buffer, uint32_t size, uint32_t baseValue)
 {
-    for (uint32_t i = 0; i < size; ++i) {
+    for (size_t i = 0; i < size; i++) {
         buffer[i] = (uint8_t)(baseValue + i);
     }
 }
@@ -26,7 +26,7 @@ static void fillTestData(uint8_t* buffer, uint32_t size, uint32_t baseValue)
 static void printMemory(uint8_t* buffer, uint32_t size, uint32_t offset)
 {
     printf("Memory at offset %u: ", offset);
-    for (uint32_t i = 0; i < size; ++i) {
+    for (size_t i = 0; i < size; i++) {
         printf("%02X ", buffer[i]);
     }
     printf("\n");
@@ -43,17 +43,36 @@ int whTest_Flash_RamSim(void)
                             .pageSize   = TEST_PAGE_SIZE,
                             .erasedByte = 0xFF};
 
-    uint8_t testData[TEST_PAGE_SIZE];
-    uint8_t readData[TEST_PAGE_SIZE];
+    uint8_t testData[TEST_PAGE_SIZE] = {0};
+    uint8_t readData[TEST_PAGE_SIZE] = {0};
 
     printf("Testing RAM-based flash simulator...\n");
 
     WH_TEST_RETURN_ON_FAIL(whFlashRamsim_Init(&ctx, &cfg));
 
-    for (uint32_t sector = 0; sector < cfg.size / cfg.sectorSize; ++sector) {
+    for (uint32_t sector = 0; sector < cfg.size / cfg.sectorSize; sector++) {
+
         uint32_t sectorOffset = sector * cfg.sectorSize;
-        for (uint32_t page = 0; page < cfg.sectorSize / cfg.pageSize; ++page) {
+
+        if (whFlashRamsim_Erase(&ctx, sectorOffset, cfg.sectorSize) != 0) {
+            WH_ERROR_PRINT(
+                "whFlashRamsim_Erase failed to erase sector %u: ret=%d\n",
+                sector, ret);
+            whFlashRamsim_Cleanup(&ctx);
+            return ret;
+        }
+
+        if (whFlashRamsim_BlankCheck(&ctx, sectorOffset, cfg.sectorSize) != 0) {
+            WH_ERROR_PRINT("Sector %u is not blank, ret=%d\n", sector, ret);
+            whFlashRamsim_Cleanup(&ctx);
+            return ret;
+        }
+
+
+        for (uint32_t page = 0; page < cfg.sectorSize / cfg.pageSize; page++) {
+
             uint32_t pageOffset = sectorOffset + page * cfg.pageSize;
+
             fillTestData(testData, cfg.pageSize, page);
 
             if ((ret = whFlashRamsim_Read(&ctx, pageOffset, cfg.pageSize,
@@ -106,7 +125,6 @@ int whTest_Flash_RamSim(void)
         }
     }
 
-    printf("All operations completed successfully.\n");
     whFlashRamsim_Cleanup(&ctx);
 
     return 0;
