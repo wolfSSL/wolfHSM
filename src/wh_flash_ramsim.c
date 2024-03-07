@@ -29,7 +29,8 @@ int whFlashRamsim_Init(void* context, const void* config)
     whFlashRamsimCtx*       ctx = (whFlashRamsimCtx*)context;
     const whFlashRamsimCfg* cfg = (const whFlashRamsimCfg*)config;
 
-    if (context == NULL || config == NULL) {
+    if (ctx == NULL || cfg == NULL || (cfg->sectorSize == 0) ||
+        (cfg->pageSize == 0) || (cfg->sectorSize % cfg->pageSize != 0)) {
         return WH_ERROR_BADARGS;
     }
 
@@ -53,22 +54,25 @@ int whFlashRamsim_Cleanup(void* context)
 {
     whFlashRamsimCtx* ctx = (whFlashRamsimCtx*)context;
 
-    if (context == NULL) {
+    if (ctx == NULL) {
         return WH_ERROR_BADARGS;
     }
 
-    free(ctx->memory);
+    if (ctx->memory != NULL) {
+        free(ctx->memory);
+        ctx->memory = NULL;
+    }
 
     return WH_ERROR_OK;
 }
 
 int whFlashRamsim_Program(void* context, uint32_t offset, uint32_t size,
-                             const uint8_t* data)
+                          const uint8_t* data)
 {
     whFlashRamsimCtx* ctx = (whFlashRamsimCtx*)context;
 
-
-    if (context == NULL || data == NULL) {
+    if ((ctx == NULL) || (ctx->memory == NULL) || (ctx->pageSize == 0) ||
+        (data == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
@@ -83,6 +87,11 @@ int whFlashRamsim_Program(void* context, uint32_t offset, uint32_t size,
         return WH_ERROR_NOTBLANK;
     }
 
+    /* Check that partition isn't locked */
+    if (size > 0 && ctx->writeLocked) {
+        return WH_ERROR_LOCKED;
+    }
+
     /* Perform the programming operation */
     memcpy(ctx->memory + offset, data, size);
 
@@ -90,11 +99,12 @@ int whFlashRamsim_Program(void* context, uint32_t offset, uint32_t size,
 }
 
 int whFlashRamsim_Read(void* context, uint32_t offset, uint32_t size,
-                          uint8_t* data)
+                       uint8_t* data)
 {
     whFlashRamsimCtx* ctx = (whFlashRamsimCtx*)context;
 
-    if (context == NULL || data == NULL) {
+    if ((ctx == NULL) || (ctx->memory == NULL) ||
+        ((offset + size) > ctx->size) || (data == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
@@ -106,12 +116,18 @@ int whFlashRamsim_Erase(void* context, uint32_t offset, uint32_t size)
 {
     whFlashRamsimCtx* ctx = (whFlashRamsimCtx*)context;
 
-    if (context == NULL) {
+    if ((ctx == NULL) || (ctx->memory == NULL) ||
+        ((offset + size) > ctx->size)) {
         return WH_ERROR_BADARGS;
     }
 
     if (offset % ctx->sectorSize != 0 || size % ctx->sectorSize != 0) {
         return WH_ERROR_BADARGS;
+    }
+
+    /* Check that partition isn't locked */
+    if (size > 0 && ctx->writeLocked) {
+        return WH_ERROR_LOCKED;
     }
 
     /* Perform the erase */
@@ -121,11 +137,12 @@ int whFlashRamsim_Erase(void* context, uint32_t offset, uint32_t size)
 }
 
 int whFlashRamsim_Verify(void* context, uint32_t offset, uint32_t size,
-                            const uint8_t* data)
+                         const uint8_t* data)
 {
     whFlashRamsimCtx* ctx = (whFlashRamsimCtx*)context;
 
-    if (context == NULL || data == NULL) {
+    if ((ctx == NULL) || (ctx->memory == NULL) ||
+        ((offset + size) > ctx->size) || (data == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
@@ -144,7 +161,8 @@ int whFlashRamsim_BlankCheck(void* context, uint32_t offset, uint32_t size)
 {
     whFlashRamsimCtx* ctx = (whFlashRamsimCtx*)context;
 
-    if (context == NULL) {
+    if ((ctx == NULL) || (ctx->memory == NULL) ||
+        ((offset + size) > ctx->size)) {
         return WH_ERROR_BADARGS;
     }
 
@@ -160,8 +178,9 @@ uint32_t whFlashRamsim_PartitionSize(void* context)
 {
     whFlashRamsimCtx* ctx = (whFlashRamsimCtx*)context;
 
-    if (context == NULL) {
-        return WH_ERROR_BADARGS;
+    if (ctx == NULL) {
+        /* Invalid context.  Must return positive size, so 0 */
+        return 0;
     }
 
     return ctx->sectorSize;
@@ -175,7 +194,7 @@ int whFlashRamsim_WriteLock(void* context, uint32_t offset, uint32_t size)
 
     whFlashRamsimCtx* ctx = (whFlashRamsimCtx*)context;
 
-    if (context == NULL) {
+    if (ctx == NULL) {
         return WH_ERROR_BADARGS;
     }
 
@@ -191,7 +210,7 @@ int whFlashRamsim_WriteUnlock(void* context, uint32_t offset, uint32_t size)
     (void)size;
     whFlashRamsimCtx* ctx = (whFlashRamsimCtx*)context;
 
-    if (context == NULL) {
+    if (ctx == NULL) {
         return WH_ERROR_BADARGS;
     }
 
@@ -199,5 +218,3 @@ int whFlashRamsim_WriteUnlock(void* context, uint32_t offset, uint32_t size)
 
     return WH_ERROR_OK;
 }
-
-
