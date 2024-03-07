@@ -10,6 +10,8 @@
 /* Consider reusing wolfssl or wolfcrypt errors here */
 
 enum {
+    WH_ERROR_OK             = 0,    /* Success, no error. */
+
     /* General errors */
     WH_ERROR_BADARGS        = -400, /* No side effects. Fix args. */
     WH_ERROR_NOTREADY       = -401, /* Retry function. */

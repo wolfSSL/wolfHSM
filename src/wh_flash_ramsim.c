@@ -14,7 +14,7 @@ static bool isMemoryErased(whFlashRamsimCtx* context, uint32_t offset,
 static bool isMemoryErased(whFlashRamsimCtx* context, uint32_t offset,
                            uint32_t size)
 {
-    for (uint32_t i = 0; i < size; ++i) {
+    for (size_t i = 0; i < size; ++i) {
         if (context->memory[offset + i] != context->erasedByte) {
             return false;
         }
@@ -46,7 +46,7 @@ int whFlashRamsim_Init(void* context, const void* config)
     /* Simulate starting from erased flash */
     memset(ctx->memory, ctx->erasedByte, ctx->size);
 
-    return WH_FLASH_RAMSIM_OK;
+    return WH_ERROR_OK;
 }
 
 int whFlashRamsim_Cleanup(void* context)
@@ -59,7 +59,7 @@ int whFlashRamsim_Cleanup(void* context)
 
     free(ctx->memory);
 
-    return WH_FLASH_RAMSIM_OK;
+    return WH_ERROR_OK;
 }
 
 int whFlashRamsim_Program(void* context, uint32_t offset, uint32_t size,
@@ -86,7 +86,7 @@ int whFlashRamsim_Program(void* context, uint32_t offset, uint32_t size,
     /* Perform the programming operation */
     memcpy(ctx->memory + offset, data, size);
 
-    return WH_FLASH_RAMSIM_OK;
+    return WH_ERROR_OK;
 }
 
 int whFlashRamsim_Read(void* context, uint32_t offset, uint32_t size,
@@ -99,7 +99,7 @@ int whFlashRamsim_Read(void* context, uint32_t offset, uint32_t size,
     }
 
     memcpy(data, ctx->memory + offset, size);
-    return WH_FLASH_RAMSIM_OK;
+    return WH_ERROR_OK;
 }
 
 int whFlashRamsim_Erase(void* context, uint32_t offset, uint32_t size)
@@ -117,7 +117,7 @@ int whFlashRamsim_Erase(void* context, uint32_t offset, uint32_t size)
     /* Perform the erase */
     memset(ctx->memory + offset, ctx->erasedByte, size);
 
-    return WH_FLASH_RAMSIM_OK;
+    return WH_ERROR_OK;
 }
 
 int whFlashRamsim_Verify(void* context, uint32_t offset, uint32_t size,
@@ -130,13 +130,13 @@ int whFlashRamsim_Verify(void* context, uint32_t offset, uint32_t size,
     }
 
     /* Check stored data equals input data */
-    for (uint32_t i = 0; i < size; ++i) {
+    for (size_t i = 0; i < size; ++i) {
         if (ctx->memory[offset + i] != data[i]) {
             return WH_ERROR_NOTVERIFIED;
         }
     }
 
-    return WH_FLASH_RAMSIM_OK;
+    return WH_ERROR_OK;
 }
 
 
@@ -152,7 +152,7 @@ int whFlashRamsim_BlankCheck(void* context, uint32_t offset, uint32_t size)
         return WH_ERROR_NOTBLANK;
     }
 
-    return WH_FLASH_RAMSIM_OK;
+    return WH_ERROR_OK;
 }
 
 
@@ -181,7 +181,7 @@ int whFlashRamsim_WriteLock(void* context, uint32_t offset, uint32_t size)
 
     ctx->writeLocked = 1;
 
-    return WH_FLASH_RAMSIM_OK;
+    return WH_ERROR_OK;
 }
 
 
@@ -197,7 +197,7 @@ int whFlashRamsim_WriteUnlock(void* context, uint32_t offset, uint32_t size)
 
     ctx->writeLocked = 0;
 
-    return WH_FLASH_RAMSIM_OK;
+    return WH_ERROR_OK;
 }
 
 

@@ -20,8 +20,6 @@ typedef struct {
     uint8_t  erasedByte;
 } whFlashRamsimCtx;
 
-/* Error codes */
-#define WH_FLASH_RAMSIM_OK 0
 
 /* Simulator function prototypes */
 int whFlashRamsim_Init(void* context, const void* config);
