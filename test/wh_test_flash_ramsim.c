@@ -4,9 +4,10 @@
 #include "wh_test_common.h"
 #include "wh_test_flash_ramsim.h"
 #include "wolfhsm/wh_flash_ramsim.h"
+#include "wolfhsm/wh_error.h"
 
 #define TEST_FLASH_SIZE (1024 * 1024)
-#define TEST_SECTOR_SIZE (256)
+#define TEST_SECTOR_SIZE (4096)
 #define TEST_PAGE_SIZE (256)
 
 static void fillTestData(uint8_t* buffer, uint32_t size, uint32_t baseValue);
@@ -112,7 +113,15 @@ int whTest_Flash_RamSim(void)
             }
         }
 
-        if (whFlashRamsim_Erase(&ctx, sectorOffset, cfg.sectorSize) != 0) {
+        if ((ret = whFlashRamsim_BlankCheck(
+                 &ctx, sectorOffset, cfg.sectorSize)) != WH_ERROR_NOTBLANK) {
+            WH_ERROR_PRINT("Sector %u is not blank, ret=%d\n", sector, ret);
+            whFlashRamsim_Cleanup(&ctx);
+            return ret;
+        }
+
+        if ((ret = whFlashRamsim_Erase(&ctx, sectorOffset, cfg.sectorSize)) !=
+            0) {
             WH_ERROR_PRINT(
                 "whFlashRamsim_Erase failed to erase sector %u: ret=%d\n",
                 sector, ret);
@@ -120,8 +129,11 @@ int whTest_Flash_RamSim(void)
             return ret;
         }
 
-        if (whFlashRamsim_BlankCheck(&ctx, sectorOffset, cfg.sectorSize) != 0) {
+        if ((ret = whFlashRamsim_BlankCheck(&ctx, sectorOffset,
+                                            cfg.sectorSize)) != 0) {
             WH_ERROR_PRINT("Sector %u is not blank, ret=%d\n", sector, ret);
+            whFlashRamsim_Cleanup(&ctx);
+            return ret;
         }
     }
 
