@@ -7,6 +7,7 @@
 #include <stddef.h>
 #include <string.h>
 #include <stdint.h>
+#include <stdio.h>
 
 #include <arpa/inet.h>
 #include <sys/socket.h>
@@ -21,13 +22,11 @@
 #include "wolfhsm/wh_transport.h"
 #include "port/posix/posix_transport_tcp.h"
 
+
 /** Local declarations */
 
 /* Common utility function to make a fd non-blocking */
 static int posixTransportTcp_MakeNonBlocking(int fd);
-
-/* Common utility function to make a socket not raise SIGPIPE */
-static int posixTransportTcp_MakeNoSigpipe(int sock);
 
 /* Server utility function to make a socket no linger and reuse addr */
 static int posixTransportTcp_MakeNoLinger(int sock);
@@ -58,17 +57,6 @@ static int posixTransportTcp_MakeNonBlocking(int fd)
     return 0;
 }
 
-static int posixTransportTcp_MakeNoSigpipe(int sock)
-{
-    int enable = 1;
-    int rc = 0;
-
-    rc = setsockopt(sock, SOL_SOCKET, SO_NOSIGPIPE, &enable, sizeof(enable));
-    if (rc != 0) {
-        return WH_ERROR_ABORTED;
-    }
-    return 0;
-}
 
 static int posixTransportTcp_MakeNoLinger(int sock)
 {
@@ -115,7 +103,9 @@ static int posixTransportTcp_Send(int fd, uint16_t* buffer_offset,
         send_size = sizeof(uint32_t) + size;
     }
     int remaining_size = send_size - *buffer_offset;
-    rc = write(fd, &(buffer[*buffer_offset]), remaining_size);
+
+
+    rc = send(fd, &(buffer[*buffer_offset]), remaining_size, MSG_NOSIGNAL);
 
     if (rc < 0) {
         switch (errno) {
@@ -248,6 +238,7 @@ int posixTransportTcp_InitConnect(void* context, const void* config)
         return WH_ERROR_ABORTED;
     }
     c->connect_fd_p1 = rc + 1;
+    c->server_addr.sin_family = AF_INET;
 
     /* Make socket non-blocking */
     rc = posixTransportTcp_MakeNonBlocking(c->connect_fd_p1 - 1);
@@ -257,10 +248,6 @@ int posixTransportTcp_InitConnect(void* context, const void* config)
         c->connect_fd_p1 = 0;
         return WH_ERROR_ABORTED;
     }
-
-    /* Suppress signals on failed writes */
-    rc = posixTransportTcp_MakeNoSigpipe(c->connect_fd_p1 - 1);
-    /* Ok to fail to ignore signals */
 
 
     /* Start the connect process */
@@ -411,6 +398,8 @@ int posixTransportTcp_InitListen(void* context, const void* config)
         return WH_ERROR_BADARGS;
     }
     c->server_addr.sin_port = htons(cf->server_port);
+    c->server_addr.sin_family = AF_INET;
+
     rc = socket(AF_INET, SOCK_STREAM, 0);
     if (rc < 0) {
         return WH_ERROR_ABORTED;
@@ -429,14 +418,11 @@ int posixTransportTcp_InitListen(void* context, const void* config)
     rc = posixTransportTcp_MakeNoLinger(c->listen_fd_p1 - 1);
     /* Ok to fail to linger.  Annoying, but ok. */
 
-    /* Suppress signals on failed writes */
-    rc = posixTransportTcp_MakeNoSigpipe(c->listen_fd_p1 - 1);
-    /* Ok to fail to ignore signals */
-
     rc = bind(c->listen_fd_p1 - 1,
             (struct sockaddr*)&c->server_addr,
             sizeof(c->server_addr));
     if (rc < 0) {
+        perror("bind failed\n");
         close(c->listen_fd_p1 - 1);
         c->listen_fd_p1 = 0;
         return WH_ERROR_ABORTED;

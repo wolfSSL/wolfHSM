@@ -1,10 +1,9 @@
 # Set to @ if you want to suppress command echo
-CMD_ECHO = 
+CMD_ECHO =
 
 # Important directories
 BUILD_DIR = ./Build
 WOLFHSM_DIR = $(CURDIR)/../
-
 WOLFSSL_DIR ?= $(CURDIR)/../../wolfssl
 
 # Project name
@@ -18,37 +17,36 @@ INC = -I$(WOLFHSM_DIR) \
 
 # Defines
 DEF = -DWOLFSSL_USER_SETTINGS
- 
+
 # Architecture
-ARCHFLAGS ?= 
+ARCHFLAGS ?=
 
 # Compiler and linker flags
 ASFLAGS ?= $(ARCHFLAGS)
-CFLAGS_EXTRA ?= -Wno-cpp
-CFLAGS ?= $(ARCHFLAGS) -std=c99 -Wall $(CFLAGS_EXTRA)
+CFLAGS_EXTRA ?=
+CFLAGS ?= $(ARCHFLAGS) -std=c99 -D_GNU_SOURCE -Wall -Werror -Wno-cpp $(CFLAGS_EXTRA)
 LDFLAGS ?= $(ARCHFLAGS)
-
-# LD: generate map
-#LDFLAGS += -Wl,-Map=$(BUILD_DIR)/$(BIN).map
 
 # Libc for printf
 LIBS = -lc
 
-# Optimization level and place functions / data into separate sections to allow dead code removal 
-CFLAGS += -O0 -ffunction-sections -fdata-sections 
-#-fstrict-volatile-bitfields #-fno-builtin
-
-# Remove unused sections and link time optimizations
-#LDFLAGS += -Wl,--cref -Wl,--gc-sections -static -u _printf_float -Wl,--start-group $(LIBS) -Wl,--end-group -flto 
-#-nostartfiles #-nodefaultlibs # -nostdlib 
+# Optimization level and place functions / data into separate sections to allow dead code removal
+CFLAGS += -ffunction-sections -fdata-sections
 
 # Debugging
-DBGFLAGS = #-ggdb -g3
+# Check if DEBUG is set to 1 and append debug flags
+ifeq ($(DEBUG),1)
+DBGFLAGS = -ggdb -g3
 CFLAGS += $(DBGFLAGS)
 LDFLAGS += $(DBGFLAGS)
+endif
+
+# wolfHSM-specific defines
+CFLAGS += -DWH_CONFIG
+
 
 # Assembly source files
-SRC_ASM += 
+SRC_ASM +=
 
 # WolfHSM source code
 SRC_C += \
@@ -58,16 +56,21 @@ SRC_C += \
             $(WOLFHSM_DIR)/src/wh_message_comm.c \
             $(WOLFHSM_DIR)/src/wh_nvm_flash.c \
             $(WOLFHSM_DIR)/src/wh_server.c \
-            $(WOLFHSM_DIR)/src/wh_transport_mem.c 
-            
+            $(WOLFHSM_DIR)/src/wh_transport_mem.c \
+            $(WOLFHSM_DIR)/src/wh_flash_ramsim.c
+
+
 
 # WolfHSM port code
 SRC_C += \
             $(WOLFHSM_DIR)/port/posix/posix_flash_file.c \
-            $(WOLFHSM_DIR)/port/posix/posix_transport_tcp.c 
+            $(WOLFHSM_DIR)/port/posix/posix_transport_tcp.c
 
 # APP
-SRC_C += ./src/wh_test.c 
+SRC_C += ./src/wh_test.c \
+         ./src/wh_test_comm.c \
+         ./src/wh_test_nvm_flash.c \
+         ./src/wh_test_flash_ramsim.c
 
 
 FILENAMES_C = $(notdir $(SRC_C))
@@ -117,4 +120,6 @@ clean:
 	rm -f $(BUILD_DIR)/*.elf $(BUILD_DIR)/*.hex $(BUILD_DIR)/*.map
 	rm -f $(BUILD_DIR)/*.o $(BUILD_DIR)/*.a $(BUILD_DIR)/*.sym $(BUILD_DIR)/*.disasm
 
+run: build_app
+	./$(BUILD_DIR)/$(BIN).elf
 
