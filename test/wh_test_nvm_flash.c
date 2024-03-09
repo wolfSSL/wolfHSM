@@ -245,6 +245,16 @@ int whTest_NvmFlashCfg(whNvmFlashConfig* cfg)
 #if defined(WH_CFG_TEST_VERBOSE)
     _ShowAvailable(cb, context);
     _ShowList(cb, context);
+    /* Ensure reclamation doesn't destroy active objects */
+    {
+        whNvmMetadata metaBuf = {0};
+        unsigned char dataBuf[256];
+
+        for (size_t i=0; i<sizeof(ids)/sizeof(ids[0]); i++) {
+            WH_TEST_ASSERT(0 == cb->Read(context, ids[i], 0, sizeof(dataBuf), dataBuf));
+           WH_TEST_ASSERT(0 == cb->GetMetadata(context, ids[i], &metaBuf));
+        }
+    }
 #endif
 
     /* Destroy 1 object */
@@ -296,7 +306,7 @@ int whTest_NvmFlash_RamSim(void)
         .size       = 1024 * 1024, /* 1MB  Flash */
         .sectorSize = 4096,        /* 4KB  Sector Size */
         .pageSize   = 8,           /* 8B   Page Size */
-        .erasedByte = ~(uint8_t)0,
+        .erasedByte = (uint8_t)0,
     }};
 
     /* NVM Configuration using PosixSim HAL Flash */

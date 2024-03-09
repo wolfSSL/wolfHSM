@@ -19,6 +19,9 @@ enum {
     NF_COPY_OBJECT_BUFFER_LEN = 8 * WHFU_BYTES_PER_UNIT,
 };
 
+/* MSB's  of state variables */
+static const whFlashUnit BASE_STATE = 0x1234567800000000ull;
+
 /* On-flash layout of the state of an Object or Directory*/
 typedef struct {
     whFlashUnit epoch;   /* Not Erased: counter */
@@ -344,7 +347,7 @@ static int nfPartition_ReadMemDirectory(whNvmFlashContext* context, int partitio
 static int nfPartition_ProgramEpoch(whNvmFlashContext* context,
         int partition, uint32_t epoch)
 {
-    whFlashUnit unit = epoch;
+    whFlashUnit unit = BASE_STATE | epoch;
 
     if ((context == NULL) || (context->cb == NULL)) {
         return WH_ERROR_BADARGS;
@@ -362,7 +365,7 @@ static int nfPartition_ProgramEpoch(whNvmFlashContext* context,
 static int nfPartition_ProgramStart(whNvmFlashContext* context,
         int partition, uint32_t start)
 {
-    whFlashUnit unit = start;
+    whFlashUnit unit = BASE_STATE | start;
 
     if ((context == NULL) || (context->cb == NULL)) {
         return WH_ERROR_BADARGS;
@@ -380,7 +383,7 @@ static int nfPartition_ProgramStart(whNvmFlashContext* context,
 static int nfPartition_ProgramCount(whNvmFlashContext* context,
         int partition, uint32_t count)
 {
-    whFlashUnit unit = count;
+    whFlashUnit unit = BASE_STATE + count;
 
     if ((context == NULL) || (context->cb == NULL)) {
         return WH_ERROR_BADARGS;
@@ -458,8 +461,8 @@ static int nfObject_ProgramBegin(whNvmFlashContext* context, int partition,
 {
     int rc = 0;
     uint32_t object_offset = 0;
-    whFlashUnit state_epoch = epoch;
-    whFlashUnit state_start = start;
+    whFlashUnit state_epoch = BASE_STATE | epoch;
+    whFlashUnit state_start = BASE_STATE | start;
 
     if (    (context == NULL) ||
             (context->cb == NULL) ||
@@ -523,7 +526,7 @@ static int nfObject_ProgramFinish(whNvmFlashContext* context, int partition,
         int object_index, uint32_t byte_count)
 {
     uint32_t object_offset = 0;
-    whFlashUnit state_count = WHFU_BYTES2UNITS(byte_count);
+    whFlashUnit state_count = BASE_STATE | WHFU_BYTES2UNITS(byte_count);
 
     if ((context == NULL) || (context->cb == NULL)) {
         return WH_ERROR_BADARGS;
