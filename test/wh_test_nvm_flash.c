@@ -245,17 +245,25 @@ int whTest_NvmFlashCfg(whNvmFlashConfig* cfg)
 #if defined(WH_CFG_TEST_VERBOSE)
     _ShowAvailable(cb, context);
     _ShowList(cb, context);
+#endif
+
     /* Ensure reclamation doesn't destroy active objects */
     {
         whNvmMetadata metaBuf = {0};
         unsigned char dataBuf[256];
 
+        printf("--Read IDs after reclaim\n");
         for (size_t i=0; i<sizeof(ids)/sizeof(ids[0]); i++) {
-            WH_TEST_ASSERT(0 == cb->Read(context, ids[i], 0, sizeof(dataBuf), dataBuf));
-           WH_TEST_ASSERT(0 == cb->GetMetadata(context, ids[i], &metaBuf));
+            if ((ret = cb->Read(context, ids[i], 0, sizeof(dataBuf), dataBuf)) != 0) {
+                WH_ERROR_PRINT("Read after reclaim returned %d\n", ret);
+                goto cleanup;
+            }
+            if ((ret = cb->GetMetadata(context, ids[i], &metaBuf)) != 0) {
+                WH_ERROR_PRINT("GetMetadata after reclaim returned %d\n", ret);
+                goto cleanup;
+            }
         }
     }
-#endif
 
     /* Destroy 1 object */
     printf("--Destroy 1 object\n");
