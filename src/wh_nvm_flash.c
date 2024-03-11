@@ -19,7 +19,9 @@ enum {
     NF_COPY_OBJECT_BUFFER_LEN = 8 * WHFU_BYTES_PER_UNIT,
 };
 
-/* MSB's  of state variables */
+/* MSW of state variables (nfState) must be set to this pattern when written
+ * to flash to prevent hardware on certain chipsets from confusing zero values
+ * with erased flash */
 static const whFlashUnit BASE_STATE = 0x1234567800000000ull;
 
 /* On-flash layout of the state of an Object or Directory*/
