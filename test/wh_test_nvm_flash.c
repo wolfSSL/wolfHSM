@@ -254,12 +254,13 @@ int whTest_NvmFlashCfg(whNvmFlashConfig* cfg)
 
         printf("--Read IDs after reclaim\n");
         for (size_t i=0; i<sizeof(ids)/sizeof(ids[0]); i++) {
-            if ((ret = cb->Read(context, ids[i], 0, sizeof(dataBuf), dataBuf)) != 0) {
-                WH_ERROR_PRINT("Read after reclaim returned %d\n", ret);
-                goto cleanup;
-            }
             if ((ret = cb->GetMetadata(context, ids[i], &metaBuf)) != 0) {
                 WH_ERROR_PRINT("GetMetadata after reclaim returned %d\n", ret);
+                goto cleanup;
+            }
+
+            if ((ret = cb->Read(context, ids[i], 0, metaBuf.len, dataBuf)) != 0) {
+                WH_ERROR_PRINT("Read after reclaim returned %d\n", ret);
                 goto cleanup;
             }
         }
