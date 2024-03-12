@@ -91,10 +91,10 @@ static int nfPartition_ProgramStart(whNvmFlashContext* context, int partition,
 static int nfPartition_ProgramCount(whNvmFlashContext* context, int partition,
         uint32_t count);
 static int nfPartition_ProgramInit(whNvmFlashContext* context, int partition);
-static int nfPartition_CheckRangeUnits(whNvmFlashContext* context,
+static int nfPartition_CheckDataRange(whNvmFlashContext* context,
                                        int partition,
-                                       uint32_t units_offset,
-                                       uint32_t units_count);
+                                       uint32_t byte_offset,
+                                       uint32_t byte_count);
 
 static uint32_t nfObject_Offset(whNvmFlashContext* context, int partition,
         int object_index);
@@ -450,26 +450,26 @@ static int nfPartition_ProgramInit(whNvmFlashContext* context, int partition)
 }
 
 /*
- * Checks that the range of units specified by units_offset + units_count
- * is located inside the specified partition
+ * Checks that the range of bytes specified by byte_offset +  byte_count
+ * is located inside the specified partition's data area
  */
-static int nfPartition_CheckRangeUnits(whNvmFlashContext* context,
+static int nfPartition_CheckDataRange(whNvmFlashContext* context,
                                        int partition,
-                                       uint32_t units_offset,
-                                       uint32_t units_count)
+                                       uint32_t byte_offset,
+                                       uint32_t byte_count)
 {
-    size_t maxUnits;
-    size_t partDataBase;
+    uint32_t maxOffset;
+    uint32_t partDataBase;
 
-    partDataBase = nfPartition_DataOffset(context, partition);
-    maxUnits = nfPartition_Offset(context, partition)
-               + context->partition_units;
+    partDataBase = nfPartition_DataOffset(context, partition) * WHFU_BYTES_PER_UNIT;
+    maxOffset = (nfPartition_Offset(context, partition)
+               + context->partition_units) * WHFU_BYTES_PER_UNIT;
 
-    if (units_offset < partDataBase) {
+    if (byte_offset < partDataBase) {
         return WH_ERROR_BADARGS;
     }
 
-    if (units_offset + units_count > maxUnits) {
+    if (byte_offset + byte_count > maxOffset) {
         return WH_ERROR_BADARGS;
     }
 
@@ -547,9 +547,9 @@ static int nfObject_ProgramDataBytes(whNvmFlashContext* context, int partition,
     data_offset = nfPartition_DataOffset(context, partition) + offset;
 
     /* Ensure we don't program outside of the active partition */
-    if (WH_ERROR_OK != nfPartition_CheckRangeUnits(context, partition,
-                                    data_offset,
-                                    WHFU_BYTES2UNITS(byte_count))) {
+    if (WH_ERROR_OK != nfPartition_CheckDataRange(context, partition,
+                                    data_offset * WHFU_BYTES_PER_UNIT,
+                                    byte_count)) {
         return WH_ERROR_BADARGS;
     }
 
@@ -622,9 +622,9 @@ static int nfObject_ReadDataBytes(whNvmFlashContext* context, int partition,
     startOffset = nfPartition_DataOffset(context, partition) + start;
 
     /* Ensure we don't read off the end of the active partition */
-    if (WH_ERROR_OK != nfPartition_CheckRangeUnits(context, partition,
-                                    startOffset + WHFU_BYTES2UNITS(byte_offset),
-                                    WHFU_BYTES2UNITS(byte_count))) {
+    if (WH_ERROR_OK != nfPartition_CheckDataRange(context, partition,
+                                    startOffset * WHFU_BYTES_PER_UNIT + byte_offset,
+                                   byte_count)) {
         return WH_ERROR_BADARGS;
     }
 
