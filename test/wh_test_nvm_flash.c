@@ -247,6 +247,25 @@ int whTest_NvmFlashCfg(whNvmFlashConfig* cfg)
     _ShowList(cb, context);
 #endif
 
+    /* Ensure reclamation doesn't destroy active objects */
+    {
+        whNvmMetadata metaBuf = {0};
+        unsigned char dataBuf[256];
+
+        printf("--Read IDs after reclaim\n");
+        for (size_t i=0; i<sizeof(ids)/sizeof(ids[0]); i++) {
+            if ((ret = cb->GetMetadata(context, ids[i], &metaBuf)) != 0) {
+                WH_ERROR_PRINT("GetMetadata after reclaim returned %d\n", ret);
+                goto cleanup;
+            }
+
+            if ((ret = cb->Read(context, ids[i], 0, metaBuf.len, dataBuf)) != 0) {
+                WH_ERROR_PRINT("Read after reclaim returned %d\n", ret);
+                goto cleanup;
+            }
+        }
+    }
+
     /* Destroy 1 object */
     printf("--Destroy 1 object\n");
 
@@ -296,7 +315,7 @@ int whTest_NvmFlash_RamSim(void)
         .size       = 1024 * 1024, /* 1MB  Flash */
         .sectorSize = 4096,        /* 4KB  Sector Size */
         .pageSize   = 8,           /* 8B   Page Size */
-        .erasedByte = ~(uint8_t)0,
+        .erasedByte = (uint8_t)0,
     }};
 
     /* NVM Configuration using PosixSim HAL Flash */
