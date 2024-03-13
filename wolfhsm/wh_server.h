@@ -3,6 +3,11 @@
 
 #include "wolfhsm/wh_comm.h"
 
+#ifndef WOLFSSL_USER_SETTINGS
+    #include <wolfssl/options.h>
+#endif
+#include <wolfssl/wolfcrypt/settings.h>
+
 #if 0
 #include "wolfhsm/nvm.h"
 #include "wolfhsm/nvm_remote.h"
@@ -11,9 +16,9 @@
 /* Context structure to maintain the state of an HSM server */
 typedef struct whServerContext_t {
     whCommServer comm[1];
+    WC_RNG rng[1];
 #if 0
-    whNvmContext* nvm_device;
-    whNvmServer* nvm;
+    whNvmFlashContext nvm[1];
 #endif
 } whServerContext;
 
