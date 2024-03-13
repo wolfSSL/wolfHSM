@@ -1,0 +1,184 @@
+/*
+ * test/wh_test.c
+ *
+ */
+
+#include <stdint.h>
+#include <stdio.h>  /* For printf */
+#include <string.h> /* For memset, memcpy */
+#include <unistd.h> /* For sleep */
+
+#include <pthread.h> /* For pthread_create/cancel/join/_t */
+
+#ifndef WOLFSSL_USER_SETTINGS
+    #include "wolfssl/options.h"
+#endif
+#include "wolfssl/wolfcrypt/settings.h"
+#include "wolfssl/wolfcrypt/random.h"
+
+
+#include "wolfhsm/wh_error.h"
+
+#include "wolfhsm/wh_nvm.h"
+#include "wolfhsm/wh_nvm_flash.h"
+#include "wolfhsm/wh_comm.h"
+#include "wolfhsm/wh_message.h"
+#include "wh_config.h"
+
+
+#include "wolfhsm/wh_transport_mem.h"
+
+#include "port/posix/posix_transport_tcp.h"
+#include "port/posix/posix_flash_file.h"
+
+#include "wolfhsm/wh_server.h"
+#include "wolfhsm/wh_client.h"
+
+enum {
+        REPEAT_COUNT = 10,
+        REQ_SIZE = 32,
+        RESP_SIZE = 64,
+        BUFFER_SIZE = 4096,
+        ONE_MS = 1000,
+    };
+
+
+static void* _whClientTask(void *cf)
+{
+    whClientConfig* config = (whClientConfig*)cf;
+    int ret = 0;
+    whClientContext client[1];
+
+    /* wolfcrypt */
+    WC_RNG rng[1];
+    uint8_t key[16];
+
+    if (config == NULL) {
+        return NULL;
+    }
+
+    ret = wh_Client_Init(client, config);
+    if (ret != 0) {
+        printf("Failed to wh_Client_Init: %d", ret);
+        return NULL;
+    }
+    /* test rng */
+    if((ret = wc_InitRng_ex(rng, NULL, WOLFHSM_DEV_ID)) != 0) {
+        printf("Failed to wc_InitRng_ex %d\n", ret);
+        goto exit;
+    }
+    if((ret = wc_RNG_GenerateBlock(rng, key, sizeof(key))) != 0) {
+        printf("Failed to wc_RNG_GenerateBlock %d\n", ret);
+        goto exit;
+    }
+    printf("RNG SUCCESS\n");
+exit:
+    wc_FreeRng(rng);
+    ret = wh_Client_Cleanup(client);
+    printf("wh_Client_Cleanup:%d\n", ret);
+    return NULL;
+}
+
+static void* _whServerTask(void* cf)
+{
+    whServerConfig* config = (whServerConfig*)cf;
+    int ret = 0;
+    whServerContext server[1];
+
+    if (config == NULL) {
+        return NULL;
+    }
+
+    ret = wh_Server_Init(server, config);
+    if (ret != 0) {
+        printf("Failed to wh_Server_Init: %d", ret);
+        return NULL;
+    }
+    /* handle rng */
+    do {
+        ret = wh_Server_HandleRequestMessage(server);
+        sleep(1);
+    } while (ret == WH_ERROR_NOTREADY);
+    if (ret != 0) {
+        printf("Failed to wh_Server_HandleRequestMessage: %d\n", ret);
+        goto exit;
+    }
+exit:
+    ret = wh_Server_Cleanup(server);
+    printf("ServerCleanup:%d\n", ret);
+
+    return NULL;
+}
+
+static void _whClientServerThreadTest(whClientConfig* c_conf,
+                                whServerConfig* s_conf)
+{
+    pthread_t cthread;
+    pthread_t sthread;
+
+    void* retval;
+    int rc = 0;
+
+    rc = pthread_create(&sthread, NULL, _whServerTask, s_conf);
+    printf(" WH Server thread create:%d\n", rc);
+    if (rc == 0) {
+        rc = pthread_create(&cthread, NULL, _whClientTask, c_conf);
+        printf("WH Client thread create:%d\n", rc);
+        if (rc == 0) {
+            /* All good. Block on joining */
+
+            pthread_join(cthread, &retval);
+            pthread_join(sthread, &retval);
+        } else {
+            /* Cancel the server thread */
+            pthread_cancel(sthread);
+            pthread_join(sthread, &retval);
+
+        }
+    }
+}
+
+static void wh_ClientServer_TcpThreadTest(void)
+{
+    posixTransportTcpConfig mytcpconfig[1] = {{
+        .server_ip_string = "127.0.0.1",
+        .server_port      = 23456,
+    }};
+    /* Client configuration/contexts */
+    whTransportClientCb pttccb[1] = {PTT_CLIENT_CB};
+    posixTransportTcpClientContext tcc[1] = {};
+    whCommClientConfig cc_conf[1] = {{
+            .transport_cb = pttccb,
+            .transport_context = (void*)tcc,
+            .transport_config = (void*)mytcpconfig,
+            .client_id = 1234,
+    }};
+    whClientConfig c_conf[1] = {{
+            .comm = cc_conf,
+            /*.nvm = NULL, */
+    }};
+
+    /* Server configuration/contexts */
+    whTransportServerCb pttscb[1] = {PTT_SERVER_CB};
+    posixTransportTcpServerContext tsc[1] = {};
+    whCommServerConfig cs_conf[1] = {{
+            .transport_cb = pttscb,
+            .transport_context = (void*)tsc,
+            .transport_config = (void*)mytcpconfig,
+            .server_id = 5678,
+    }};
+    whServerConfig s_conf[1] = {{
+            .comm = cs_conf,
+            /*.nvm = NULL, */
+    }};
+
+    _whClientServerThreadTest(c_conf, s_conf);
+}
+int whTest_Crypto(void)
+{
+#if defined(WH_CFG_TEST_POSIX)
+    printf("Testing crypto: (pthread) mem...\n");
+    wh_ClientServer_TcpThreadTest();
+#endif
+    return 0;
+}

@@ -608,6 +608,8 @@ int wh_Server_Init(whServerContext* server, whServerConfig* config)
     if (
 /*            ((rc = wh_Nvm_Init(server->nvm_device, config->nvm_device)) == 0) && */
         ((rc = wh_CommServer_Init(server->comm, config->comm)) == 0) &&
+        ((rc = wolfCrypt_Init()) == 0) &&
+        ((rc = wc_InitRng_ex(server->crypto->rng, NULL, INVALID_DEVID)) == 0) &&
 /*        ((rc = server->nvm->cb->Init(server->nvm, config->nvm)) == 0) && */
         1) {
         /* All good */
@@ -687,10 +689,11 @@ static int _wh_Server_HandleNvmRequest(whServerContext* server,
 }
 
 static int _wh_Server_HandleCryptoRequest(whServerContext* server,
-    uint16_t action, whPacket* packet, uint16_t* size)
+    uint16_t action, uint8_t* data, uint16_t* size)
 {
     int ret = 0;
     uint8_t* out;
+    whPacket* packet = (whPacket*)data;
 #if 0
     uint8_t* in;
     uint8_t* key;
@@ -1071,7 +1074,7 @@ static int _wh_Server_HandleCryptoRequest(whServerContext* server,
         /* out is after the fixed size fields */
         out = (uint8_t*)(&packet->rngRes + 1);
         /* generate the bytes */
-        ret = wc_RNG_GenerateBlock(server->rng, out, packet->rngReq.sz);
+        ret = wc_RNG_GenerateBlock(server->crypto->rng, out, packet->rngReq.sz);
         if (ret == 0) {
             *size = sizeof(packet->rngRes) + packet->rngRes.sz;
         }
@@ -2124,6 +2127,7 @@ static int _wh_Server_HandlePkcs11Request(whServerContext* server,
     return rc;
 }
 
+#ifdef WOLFHSM_SHE_EXTENSION
 static int _wh_Server_HandleSheRequest(whServerContext* server,
         uint16_t magic, uint16_t action, uint16_t seq,
         uint16_t req_size, const void* req_packet,
@@ -2138,6 +2142,7 @@ static int _wh_Server_HandleSheRequest(whServerContext* server,
     }
     return rc;
 }
+#endif
 
 static int _wh_Server_HandleCustomRequest(whServerContext* server,
         uint16_t magic, uint16_t action, uint16_t seq,
@@ -2195,7 +2200,7 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
         }; break;
 #ifdef WOLFHSM_SHE_EXTENSION
         case WOLFHSM_MESSAGE_GROUP_SHE: {
-            rc = _wh_Server_HandleSHERequest(data, size);
+            rc = _wh_Server_HandleSheRequest(data, size);
         }; break;
 #endif
         case WH_MESSAGE_GROUP_CUSTOM: {
@@ -2229,9 +2234,10 @@ int wh_Server_Cleanup(whServerContext* server)
          /*(void)wh_Nvm_Cleanup(server->nvm);*/
      }
 #endif
-     (void)wh_CommServer_Cleanup(server->comm);
-     memset(server, 0, sizeof(*server));
-     return 0;
+    (void)wh_CommServer_Cleanup(server->comm);
+    (void)wolfCrypt_Cleanup();
+    memset(server, 0, sizeof(*server));
+    return 0;
 }
 
 #if 0

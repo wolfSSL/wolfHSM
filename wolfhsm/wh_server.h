@@ -7,16 +7,21 @@
     #include <wolfssl/options.h>
 #endif
 #include <wolfssl/wolfcrypt/settings.h>
+#include <wolfssl/wolfcrypt/random.h>
 
 #if 0
 #include "wolfhsm/nvm.h"
 #include "wolfhsm/nvm_remote.h"
 #endif
 
+typedef struct {
+   WC_RNG rng[1]; 
+} crypto_context;
+
 /* Context structure to maintain the state of an HSM server */
 typedef struct whServerContext_t {
     whCommServer comm[1];
-    WC_RNG rng[1];
+    crypto_context crypto[1];
 #if 0
     whNvmFlashContext nvm[1];
 #endif

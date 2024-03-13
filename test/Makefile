@@ -48,6 +48,22 @@ CFLAGS += -DWH_CONFIG
 # Assembly source files
 SRC_ASM +=
 
+SRC_C += \
+            $(WOLFSSL_DIR)/wolfcrypt/src/wc_port.c \
+            $(WOLFSSL_DIR)/wolfcrypt/src/memory.c \
+            $(WOLFSSL_DIR)/wolfcrypt/src/misc.c \
+            $(WOLFSSL_DIR)/wolfcrypt/src/asn.c \
+            $(WOLFSSL_DIR)/wolfcrypt/src/coding.c \
+            $(WOLFSSL_DIR)/wolfcrypt/src/wolfmath.c \
+            $(WOLFSSL_DIR)/wolfcrypt/src/tfm.c \
+            $(WOLFSSL_DIR)/wolfcrypt/src/cryptocb.c \
+            $(WOLFSSL_DIR)/wolfcrypt/src/random.c \
+            $(WOLFSSL_DIR)/wolfcrypt/src/aes.c \
+            $(WOLFSSL_DIR)/wolfcrypt/src/rsa.c \
+            $(WOLFSSL_DIR)/wolfcrypt/src/hash.c \
+            $(WOLFSSL_DIR)/wolfcrypt/src/sha256.c \
+            $(WOLFSSL_DIR)/wolfcrypt/src/cmac.c
+
 # WolfHSM source code
 SRC_C += \
             $(WOLFHSM_DIR)/src/wh_client.c \
@@ -56,6 +72,7 @@ SRC_C += \
             $(WOLFHSM_DIR)/src/wh_message_comm.c \
             $(WOLFHSM_DIR)/src/wh_nvm_flash.c \
             $(WOLFHSM_DIR)/src/wh_server.c \
+            $(WOLFHSM_DIR)/src/wh_cryptocb.c \
             $(WOLFHSM_DIR)/src/wh_transport_mem.c \
             $(WOLFHSM_DIR)/src/wh_flash_ramsim.c
 
@@ -69,6 +86,7 @@ SRC_C += \
 # APP
 SRC_C += ./src/wh_test.c \
          ./src/wh_test_comm.c \
+         ./src/wh_test_crypto.c \
          ./src/wh_test_nvm_flash.c \
          ./src/wh_test_flash_ramsim.c
 

@@ -1,0 +1,456 @@
+/* wh_packet.h
+ *
+ * Copyright (C) 2024 wolfSSL Inc.
+ *
+ * This file is part of wolfHSM.
+ *
+ * wolfHSM is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * wolfHSM is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1335, USA
+ */
+#ifndef WOLFHSM_PACKET_H
+#define WOLFHSM_PACKET_H
+#include <wolfhsm/common.h>
+
+#if (defined(__IAR_SYSTEMS_ICC__) && (__IAR_SYSTEMS_ICC__ > 8)) || \
+                                                    defined(__GNUC__)
+    #define WOLFHSM_PACK __attribute__ ((packed))
+#else
+    #define WOLFHSM_PACK
+#endif
+
+#ifdef __cplusplus
+    extern "C" {
+#endif
+
+typedef struct WOLFHSM_PACK wh_Packet_cipher_any_req
+{
+    uint32_t type;
+    uint32_t enc;
+} wh_Packet_cipher_any_req;
+
+typedef struct WOLFHSM_PACK wh_Packet_cipher_aescbc_req
+{
+    uint32_t type;
+    uint32_t enc;
+    uint32_t keyLen;
+    uint32_t sz;
+    /* key[keyLen] | iv[AES_IV_SIZE] | in[sz] */
+} wh_Packet_cipher_aescbc_req;
+
+typedef struct WOLFHSM_PACK wh_Packet_cipher_aescbc_res
+{
+    uint32_t sz;
+    /* uint8_t out[]; */
+} wh_Packet_cipher_aescbc_res;
+
+typedef struct WOLFHSM_PACK wh_Packet_cipher_aesgcm_req
+{
+    uint32_t type;
+    uint32_t enc;
+    uint32_t keyLen;
+    uint32_t sz;
+    uint32_t ivSz;
+    uint32_t authInSz;
+    uint32_t authTagSz;
+    /* key[keyLen] | iv[ivSz] | in[sz] | authIn[authInSz] | authTag[authTagSz] */
+} wh_Packet_cipher_aesgcm_req;
+
+typedef struct WOLFHSM_PACK wh_Packet_cipher_aesgcm_res
+{
+    uint32_t sz;
+    uint32_t authTagSz;
+    /* uint8_t out[sz]; */
+    /* uint8_t authTag[authTagSz] */
+} wh_Packet_cipher_aesgcm_res;
+
+typedef struct WOLFHSM_PACK wh_Packet_pk_any_req
+{
+    uint32_t type;
+} wh_Packet_pk_any_req;
+
+typedef struct WOLFHSM_PACK wh_Packet_pk_rsakg_req
+{
+    uint32_t type;
+    uint32_t size;
+    uint32_t e;
+} wh_Packet_pk_rsakg_req;
+
+typedef struct WOLFHSM_PACK wh_Packet_pk_rsakg_res
+{
+    uint32_t keyId;
+} wh_Packet_pk_rsakg_res;
+
+typedef struct WOLFHSM_PACK wh_Packet_pk_rsa_req
+{
+    uint32_t type;
+    uint32_t opType;
+    uint32_t keyId;
+    uint32_t inLen;
+    uint32_t outLen;
+    /* uint8_t in[]; */
+} wh_Packet_pk_rsa_req;
+
+typedef struct WOLFHSM_PACK wh_Packet_pk_rsa_res
+{
+    uint32_t outLen;
+    /* uint8_t out[]; */
+} wh_Packet_pk_rsa_res;
+
+typedef struct WOLFHSM_PACK wh_Packet_pk_rsa_get_size_req
+{
+    uint32_t type;
+    uint32_t keyId;
+} wh_Packet_pk_rsa_get_size_req;
+
+typedef struct WOLFHSM_PACK wh_Packet_pk_rsa_get_size_res
+{
+    uint32_t keySize;
+} wh_Packet_pk_rsa_get_size_res;
+
+typedef struct WOLFHSM_PACK wh_Packet_pk_eckg_req
+{
+    uint32_t type;
+    uint32_t sz;
+    uint32_t curveId;
+} wh_Packet_pk_eckg_req;
+
+typedef struct WOLFHSM_PACK wh_Packet_pk_eckg_res
+{
+    uint32_t keyId;
+} wh_Packet_pk_eckg_res;
+
+typedef struct WOLFHSM_PACK wh_Packet_pk_ecdh_req
+{
+    uint32_t type;
+    uint32_t privateKeyId;
+    uint32_t publicKeyId;
+    uint32_t curveId;
+} wh_Packet_pk_ecdh_req;
+
+typedef struct WOLFHSM_PACK wh_Packet_pk_ecdh_res
+{
+    uint32_t sz;
+    /* uint8_t out[] */
+} wh_Packet_pk_ecdh_res;
+
+typedef struct WOLFHSM_PACK wh_Packet_pk_ecc_sign_req
+{
+    uint32_t type;
+    uint32_t keyId;
+    uint32_t curveId;
+    uint32_t sz;
+    /* uint8_t in[] */
+} wh_Packet_pk_ecc_sign_req;
+
+typedef struct WOLFHSM_PACK wh_Packet_pk_ecc_sign_res
+{
+    uint32_t sz;
+    /* uint8_t out[] */
+} wh_Packet_pk_ecc_sign_res;
+
+typedef struct WOLFHSM_PACK wh_Packet_pk_ecc_verify_req
+{
+    uint32_t type;
+    uint32_t keyId;
+    uint32_t curveId;
+    uint32_t sigSz;
+    uint32_t hashSz;
+    /* uint8_t sig[] */
+    /* uint8_t hash[] */
+} wh_Packet_pk_ecc_verify_req;
+
+typedef struct WOLFHSM_PACK wh_Packet_pk_ecc_verify_res
+{
+    uint32_t res;
+} wh_Packet_pk_ecc_verify_res;
+
+typedef struct WOLFHSM_PACK wh_Packet_pk_ecc_check_req
+{
+    uint32_t type;
+    uint32_t keyId;
+    uint32_t curveId;
+} wh_Packet_pk_ecc_check_req;
+
+typedef struct WOLFHSM_PACK wh_Packet_pk_ecc_check_res
+{
+    uint32_t ok;
+} wh_Packet_pk_ecc_check_res;
+
+typedef struct WOLFHSM_PACK wh_Packet_rng_req
+{
+    uint32_t sz;
+} wh_Packet_rng_req;
+
+typedef struct WOLFHSM_PACK wh_Packet_rng_res
+{
+    uint32_t sz;
+    /* uint8_t out[]; */
+} wh_Packet_rng_res;
+
+typedef struct WOLFHSM_PACK wh_Packet_cmac_req
+{
+    uint8_t opType;
+    uint16_t keyId;
+    uint32_t outSz;
+    uint32_t inSz;
+    uint32_t keySz;
+    uint32_t type;
+    /* uint8_t in[inSz] */
+    /* uint8_t key[keySz] */
+} wh_Packet_cmac_req;
+
+typedef struct WOLFHSM_PACK wh_Packet_cmac_res
+{
+    uint16_t keyId;
+    uint32_t outSz;
+    /* uint8_t out[]; */
+} wh_Packet_cmac_res;
+
+typedef struct WOLFHSM_PACK wh_Packet_key_cache_req
+{
+    uint32_t flags;
+    uint32_t len;
+    uint32_t id;
+    uint8_t label[WOLFHSM_NVM_LABEL_LEN];
+    /* uint8_t in[]; */
+} wh_Packet_key_cache_req;
+
+typedef struct WOLFHSM_PACK wh_Packet_key_cache_res
+{
+    uint32_t id;
+} wh_Packet_key_cache_res;
+
+typedef struct WOLFHSM_PACK wh_Packet_key_evict_req
+{
+    uint32_t id;
+} wh_Packet_key_evict_req;
+
+typedef struct WOLFHSM_PACK wh_Packet_key_evict_res
+{
+    uint32_t ok;
+} wh_Packet_key_evict_res;
+
+typedef struct WOLFHSM_PACK wh_Packet_key_commit_req
+{
+    uint32_t id;
+} wh_Packet_key_commit_req;
+
+typedef struct WOLFHSM_PACK wh_Packet_key_commit_res
+{
+    uint32_t ok;
+} wh_Packet_key_commit_res;
+
+typedef struct WOLFHSM_PACK wh_Packet_key_export_req
+{
+    uint32_t id;
+} wh_Packet_key_export_req;
+
+typedef struct WOLFHSM_PACK wh_Packet_key_export_res
+{
+    uint32_t len;
+    uint8_t label[WOLFHSM_NVM_LABEL_LEN];
+    /* uint8_t out[len]; */
+} wh_Packet_key_export_res;
+
+typedef struct WOLFHSM_PACK wh_Packet_key_erase_req
+{
+    uint32_t id;
+} wh_Packet_key_erase_req;
+
+typedef struct WOLFHSM_PACK wh_Packet_key_erase_res
+{
+    uint32_t ok;
+} wh_Packet_key_erase_res;
+
+typedef struct WOLFHSM_PACK wh_Packet_version_exchange
+{
+    uint32_t version;
+} wh_Packet_version_exchange;
+
+#ifdef WOLFHSM_SHE_EXTENSION
+typedef struct WOLFHSM_PACK wh_Packet_she_secure_boot_init_req
+{
+    uint32_t sz;
+} wh_Packet_she_secure_boot_init_req;
+
+typedef struct WOLFHSM_PACK wh_Packet_she_secure_boot_init_res
+{
+    uint32_t status;
+} wh_Packet_she_secure_boot_init_res;
+
+typedef struct WOLFHSM_PACK wh_Packet_she_secure_boot_update_req
+{
+    uint32_t sz;
+    /* uint8_t in[sz] */
+} wh_Packet_she_secure_boot_update_req;
+
+typedef struct WOLFHSM_PACK wh_Packet_she_secure_boot_update_res
+{
+    uint32_t status;
+} wh_Packet_she_secure_boot_update_res;
+
+/* no req body for a finish request */
+typedef struct WOLFHSM_PACK wh_Packet_she_secure_boot_finish_res
+{
+    uint32_t status;
+} wh_Packet_she_secure_boot_finish_res;
+
+/* no req body for get status */
+typedef struct WOLFHSM_PACK wh_Packet_she_get_status_res
+{
+    uint8_t sreg;
+} wh_Packet_she_get_status_res;
+
+typedef struct WOLFHSM_PACK wh_Packet_she_load_key_req
+{
+    uint8_t messageOne[WOLFHSM_SHE_M1_SZ];
+    uint8_t messageTwo[WOLFHSM_SHE_M2_SZ];
+    uint8_t messageThree[WOLFHSM_SHE_M3_SZ];
+} wh_Packet_she_load_key_req;
+
+typedef struct WOLFHSM_PACK wh_Packet_she_load_key_res
+{
+    uint8_t messageFour[WOLFHSM_SHE_M4_SZ];
+    uint8_t messageFive[WOLFHSM_SHE_M5_SZ];
+} wh_Packet_she_load_key_res;
+
+typedef struct WOLFHSM_PACK wh_Packet_she_export_ram_key_res
+{
+    uint8_t messageOne[WOLFHSM_SHE_M1_SZ];
+    uint8_t messageTwo[WOLFHSM_SHE_M2_SZ];
+    uint8_t messageThree[WOLFHSM_SHE_M3_SZ];
+    uint8_t messageFour[WOLFHSM_SHE_M4_SZ];
+    uint8_t messageFive[WOLFHSM_SHE_M5_SZ];
+} wh_Packet_she_export_ram_key_res;
+
+typedef struct WOLFHSM_PACK wh_Packet_she_init_rng_res
+{
+    uint32_t status;
+} wh_Packet_she_init_rng_res;
+
+typedef struct WOLFHSM_PACK wh_Packet_she_rnd_res
+{
+    uint8_t rnd[WOLFHSM_SHE_KEY_SZ];
+} wh_Packet_she_rnd_res;
+
+typedef struct WOLFHSM_PACK wh_Packet_she_extend_seed_req
+{
+    uint8_t entropy[WOLFHSM_SHE_KEY_SZ];
+} wh_Packet_she_extend_seed_req;
+
+typedef struct WOLFHSM_PACK wh_Packet_she_extend_seed_res
+{
+    uint32_t status; 
+} wh_Packet_she_extend_seed_res;
+#endif
+
+/* use packed structs so we can read a packet in directly */
+typedef struct WOLFHSM_PACK whPacket
+{
+    /* header */
+    uint16_t flags;
+    /* body, will be either a request or a response */
+    union WOLFHSM_PACK {
+        /* error */
+        uint32_t error;
+        wh_Packet_version_exchange versionExchange;
+        /* FIXED SIZE REQUESTS */
+        /* cipher */
+        wh_Packet_cipher_any_req cipherAnyReq;
+        /* AES CBC */
+        wh_Packet_cipher_aescbc_req cipherAesCbcReq;
+        /* AES GCM */
+        wh_Packet_cipher_aesgcm_req cipherAesGcmReq;
+        /* pk */
+        wh_Packet_pk_any_req pkAnyReq;
+        /* RSA */
+        wh_Packet_pk_rsakg_req pkRsakgReq;
+        wh_Packet_pk_rsa_req pkRsaReq;
+        wh_Packet_pk_rsa_get_size_req pkRsaGetSizeReq;
+        /* ECC */
+        wh_Packet_pk_eckg_req pkEckgReq;
+        wh_Packet_pk_ecdh_req pkEcdhReq;
+        wh_Packet_pk_ecc_sign_req pkEccSignReq;
+        wh_Packet_pk_ecc_verify_req pkEccVerifyReq;
+        wh_Packet_pk_ecc_check_req pkEccCheckReq;
+        /* rng */
+        wh_Packet_rng_req rngReq;
+        /* cmac */
+        wh_Packet_cmac_req cmacReq;
+        /* key cache */
+        wh_Packet_key_cache_req keyCacheReq;
+        /* key evict */
+        wh_Packet_key_evict_req keyEvictReq;
+        /* key commit */
+        wh_Packet_key_commit_req keyCommitReq;
+        /* key export */
+        wh_Packet_key_export_req keyExportReq;
+        /* key erase */
+        wh_Packet_key_erase_req keyEraseReq;
+
+        /* FIXED SIZE RESPONSES */
+        /* cipher */
+        /* AES CBC */
+        wh_Packet_cipher_aescbc_res cipherAesCbcRes;
+        /* AES GCM */
+        wh_Packet_cipher_aesgcm_res cipherAesGcmRes;
+        /* pk */
+        /* RSA */
+        wh_Packet_pk_rsakg_res pkRsakgRes;
+        wh_Packet_pk_rsa_res pkRsaRes;
+        wh_Packet_pk_rsa_get_size_res pkRsaGetSizeRes;
+        /* ECC */
+        wh_Packet_pk_eckg_res pkEckgRes;
+        wh_Packet_pk_ecdh_res pkEcdhRes;
+        wh_Packet_pk_ecc_sign_res pkEccSignRes;
+        wh_Packet_pk_ecc_verify_res pkEccVerifyRes;
+        wh_Packet_pk_ecc_check_res pkEccCheckRes;
+        /* rng */
+        wh_Packet_rng_res rngRes;
+        /* cmac */
+        wh_Packet_cmac_res cmacRes;
+        /* key cache */
+        wh_Packet_key_cache_res keyCacheRes;
+        /* key evict */
+        wh_Packet_key_evict_res keyEvictRes;
+        /* key commit */
+        wh_Packet_key_commit_res keyCommitRes;
+        /* key export */
+        wh_Packet_key_export_res keyExportRes;
+        /* key erase */
+        wh_Packet_key_erase_res keyEraseRes;
+
+#ifdef WOLFHSM_SHE_EXTENSION
+        wh_Packet_she_secure_boot_init_req sheSecureBootInitReq;
+        wh_Packet_she_secure_boot_init_res sheSecureBootInitRes;
+        wh_Packet_she_secure_boot_update_req sheSecureBootUpdateReq;
+        wh_Packet_she_secure_boot_update_res sheSecureBootUpdateRes;
+        wh_Packet_she_secure_boot_finish_res sheSecureBootFinishRes;
+        wh_Packet_she_get_status_res sheGetStatusRes;
+        wh_Packet_she_load_key_req sheLoadKeyReq;
+        wh_Packet_she_load_key_res sheLoadKeyRes;
+        wh_Packet_she_export_ram_key_res sheExportRamKeyRes;
+        wh_Packet_she_init_rng_res sheInitRngRes;
+        wh_Packet_she_rnd_res sheRndRes;
+        wh_Packet_she_extend_seed_req sheExtendSeedReq;
+        wh_Packet_she_extend_seed_res sheExtendSeedRes;
+#endif
+    };
+} whPacket;
+
+#ifdef __cplusplus
+    } /* extern "C" */
+#endif
+
+#endif /* !WOLFHSM_PACKET_H */
