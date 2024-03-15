@@ -56,9 +56,11 @@ SRC_C += \
             $(WOLFSSL_DIR)/wolfcrypt/src/coding.c \
             $(WOLFSSL_DIR)/wolfcrypt/src/wolfmath.c \
             $(WOLFSSL_DIR)/wolfcrypt/src/tfm.c \
+            $(WOLFSSL_DIR)/wolfcrypt/src/fe_operations.c \
             $(WOLFSSL_DIR)/wolfcrypt/src/cryptocb.c \
             $(WOLFSSL_DIR)/wolfcrypt/src/random.c \
             $(WOLFSSL_DIR)/wolfcrypt/src/aes.c \
+            $(WOLFSSL_DIR)/wolfcrypt/src/curve25519.c \
             $(WOLFSSL_DIR)/wolfcrypt/src/rsa.c \
             $(WOLFSSL_DIR)/wolfcrypt/src/hash.c \
             $(WOLFSSL_DIR)/wolfcrypt/src/sha256.c \

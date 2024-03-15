@@ -59,6 +59,8 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
     if (devId == INVALID_DEVID || info == NULL)
         return BAD_FUNC_ARG;
 
+    XMEMSET(rawPacket, 0, WH_COMM_MTU);
+
     switch (info->algo_type)
     {
 #if 0
@@ -203,11 +205,13 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             break;
         }
         break;
+#endif
     case WC_ALGO_TYPE_PK:
         /* set type */
         packet->pkAnyReq.type = info->pk.type;
         switch (info->pk.type)
         {
+#if 0
         case WC_PK_TYPE_RSA_KEYGEN:
             /* set len */
             packet->len = sizeof(packet->pkRsakgReq);
@@ -380,13 +384,66 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             if (ret == 0 && packet->type == WOLFHSM_ERROR)
                 ret = packet->error;
             break;
+#endif
+        case WC_PK_TYPE_CURVE25519_KEYGEN:
+            packet->pkCurve25519kgReq.sz = info->pk.curve25519kg.size;
+            /* write request */
+            ret = wh_Client_SendRequest(ctx, group,
+                WC_PK_TYPE_CURVE25519_KEYGEN, sizeof(packet->rngReq),
+                rawPacket);
+            if (ret == 0) {
+                do {
+                    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
+                        rawPacket);
+                    sleep(1);
+                } while (ret == WH_ERROR_NOTREADY);
+            }
+            if (ret == 0) {
+                if (group != WH_MESSAGE_GROUP_CRYPTO ||
+                    action != WC_PK_TYPE_CURVE25519_KEYGEN)
+                    ret = packet->error;
+                /* read out */
+                else {
+                    info->pk.curve25519kg.key->devCtx =
+                        (void*)0 + packet->pkCurve25519kgRes.keyId;
+                }
+            }
+            break;
+        case WC_PK_TYPE_CURVE25519:
+            out = (uint8_t*)(&packet->pkCurve25519Res + 1);
+            packet->pkCurve25519Req.privateKeyId =
+                *((uint32_t*)(&info->pk.curve25519.private_key->devCtx));
+            packet->pkCurve25519Req.publicKeyId =
+                *((uint32_t*)(&info->pk.curve25519.public_key->devCtx));
+            packet->pkCurve25519Req.endian = info->pk.curve25519.endian;
+            /* write request */
+            ret = wh_Client_SendRequest(ctx, group,
+                WC_PK_TYPE_CURVE25519_KEYGEN, sizeof(packet->rngReq),
+                rawPacket);
+            if (ret == 0) {
+                do {
+                    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
+                        rawPacket);
+                    sleep(1);
+                } while (ret == WH_ERROR_NOTREADY);
+            }
+            if (ret == 0) {
+                if (group != WH_MESSAGE_GROUP_CRYPTO ||
+                    action != WC_PK_TYPE_CURVE25519_KEYGEN)
+                    ret = packet->error;
+                /* read out */
+                else {
+                    XMEMCPY(info->pk.curve25519.out, out,
+                        packet->pkCurve25519Res.sz);
+                }
+            }
+            break;
         case WC_PK_TYPE_NONE:
         default:
             ret = CRYPTOCB_UNAVAILABLE;
             break;
         }
         break;
-#endif
     case WC_ALGO_TYPE_RNG:
         /* out is after the fixed size fields */
         out = (uint8_t*)(&packet->rngRes + 1);

@@ -28,6 +28,7 @@
 #include <wolfssl/wolfcrypt/settings.h>
 #include <wolfssl/wolfcrypt/random.h>
 #include <wolfssl/wolfcrypt/sha256.h>
+#include "wolfhsm/wh_common.h"
 
 #if (defined(__IAR_SYSTEMS_ICC__) && (__IAR_SYSTEMS_ICC__ > 8)) || \
                                                     defined(__GNUC__)
@@ -41,7 +42,6 @@
 #endif
 #define WOLFHSM_MAGIC       0x574F4C46 /* WOLF */
 #define WOLFHSM_MAGIC_TRAIL 0x48534D5F /* HSM_ */
-#define WOLFHSM_NVM_LABEL_LEN 24
 #define WOLFHSM_DIGEST_STUB 8
 #ifndef WOLFHSM_SHE_EXTENSION
 /* 2 for id, 4 for flags, 2 for len, 24 for label and 8 for confDigest */
@@ -168,6 +168,7 @@ typedef struct WOLFHSM_HWIF {
 #endif
 } WOLFHSM_HWIF;
 
+#if 0
 typedef struct WOLFHSM_PACK NvmMetaData {
     uint16_t id;
     uint32_t flags;
@@ -216,6 +217,7 @@ int hal_flash_erase(uint32_t address, uint16_t size);
 void networkizePacket(wh_Packet* packet);
 void hostizePacketHeader(wh_Packet* packet);
 void hostizePacket(wh_Packet* packet);
+#endif
 
 #ifdef __cplusplus
     } /* extern "C" */

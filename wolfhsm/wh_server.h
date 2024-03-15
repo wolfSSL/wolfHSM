@@ -2,26 +2,49 @@
 #define WOLFHSM_WH_SERVER_H_
 
 #include "wolfhsm/wh_comm.h"
+#include "wolfhsm/wh_common.h"
+#include "wolfhsm/common.h"
 
 #ifndef WOLFSSL_USER_SETTINGS
     #include <wolfssl/options.h>
 #endif
 #include <wolfssl/wolfcrypt/settings.h>
 #include <wolfssl/wolfcrypt/random.h>
+#include <wolfssl/wolfcrypt/curve25519.h>
 
 #if 0
 #include "wolfhsm/nvm.h"
 #include "wolfhsm/nvm_remote.h"
 #endif
 
+typedef struct NvmMetaData {
+    uint16_t id;
+    uint32_t flags;
+    uint16_t len;
+    uint8_t label[WOLFHSM_NVM_LABEL_LEN];
+    uint8_t confDigest[WOLFHSM_DIGEST_STUB];
+#ifdef WOLFHSM_SHE_EXTENSION
+    uint32_t count;
+#endif
+} NvmMetaData;
+
+typedef struct CacheSlot {
+    uint8_t commited;
+    NvmMetaData meta[1];
+    uint8_t buffer[WOLFHSM_NVM_MAX_OBJECT_SIZE];
+} CacheSlot;
+
 typedef struct {
-   WC_RNG rng[1]; 
+    curve25519_key curve25519Private[1];
+    curve25519_key curve25519Public[1];
+    WC_RNG rng[1]; 
 } crypto_context;
 
 /* Context structure to maintain the state of an HSM server */
 typedef struct whServerContext_t {
     whCommServer comm[1];
     crypto_context crypto[1];
+    CacheSlot cache[WOLFHSM_NUM_RAMKEYS];
 #if 0
     whNvmFlashContext nvm[1];
 #endif

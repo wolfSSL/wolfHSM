@@ -187,6 +187,29 @@ typedef struct WOLFHSM_PACK wh_Packet_pk_ecc_check_res
     uint32_t ok;
 } wh_Packet_pk_ecc_check_res;
 
+typedef struct WOLFHSM_PACK wh_Packet_pk_curve25519kg_req
+{
+    uint32_t sz;
+} wh_Packet_pk_curve25519kg_req;
+
+typedef struct WOLFHSM_PACK wh_Packet_pk_curve25519kg_res
+{
+    uint32_t keyId;
+} wh_Packet_pk_curve25519kg_res;
+
+typedef struct WOLFHSM_PACK wh_Packet_pk_curve25519_req
+{
+    uint32_t privateKeyId;
+    uint32_t publicKeyId;
+    uint32_t endian;
+} wh_Packet_pk_curve25519_req;
+
+typedef struct WOLFHSM_PACK wh_Packet_pk_curve25519_res
+{
+    uint32_t sz;
+    /* uint8_t out[]; */
+} wh_Packet_pk_curve25519_res;
+
 typedef struct WOLFHSM_PACK wh_Packet_rng_req
 {
     uint32_t sz;
@@ -384,6 +407,11 @@ typedef struct WOLFHSM_PACK whPacket
         wh_Packet_pk_ecc_sign_req pkEccSignReq;
         wh_Packet_pk_ecc_verify_req pkEccVerifyReq;
         wh_Packet_pk_ecc_check_req pkEccCheckReq;
+        /* curve25519 */
+        wh_Packet_pk_curve25519kg_req pkCurve25519kgReq;
+        wh_Packet_pk_curve25519kg_res pkCurve25519kgRes;
+        wh_Packet_pk_curve25519_req pkCurve25519Req;
+        wh_Packet_pk_curve25519_res pkCurve25519Res;
         /* rng */
         wh_Packet_rng_req rngReq;
         /* cmac */

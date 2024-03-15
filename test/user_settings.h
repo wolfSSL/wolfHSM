@@ -57,6 +57,9 @@ extern "C" {
 #define ECC_SHAMIR
 #define HAVE_SUPPORTED_CURVES
 
+/* Curve25519 Options */
+#define HAVE_CURVE25519
+
 /* DH and DHE Options */
 #define HAVE_DH_DEFAULT_PARAMS
 #define HAVE_FFDHE_2048

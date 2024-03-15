@@ -51,7 +51,12 @@ static void* _whClientTask(void *cf)
 
     /* wolfcrypt */
     WC_RNG rng[1];
+    curve25519_key curve25519PrivateKey[1];
+    curve25519_key curve25519PublicKey[1];
+    uint32_t outLen;
     uint8_t key[16];
+    uint8_t sharedOne[CURVE25519_KEYSIZE];
+    uint8_t sharedTwo[CURVE25519_KEYSIZE];
 
     if (config == NULL) {
         return NULL;
@@ -72,6 +77,38 @@ static void* _whClientTask(void *cf)
         goto exit;
     }
     printf("RNG SUCCESS\n");
+    /* test curve25519 */
+    if ((ret = wc_curve25519_init_ex(curve25519PrivateKey, NULL, WOLFHSM_DEV_ID)) != 0) {
+        printf("Failed to wc_curve25519_init_ex %d\n", ret);
+        goto exit;
+    }
+    if ((ret = wc_curve25519_init_ex(curve25519PublicKey, NULL, WOLFHSM_DEV_ID)) != 0) {
+        printf("Failed to wc_curve25519_init_ex %d\n", ret);
+        goto exit;
+    }
+    if ((ret = wc_curve25519_make_key(rng, CURVE25519_KEYSIZE, curve25519PrivateKey)) != 0) {
+        printf("Failed to wc_curve25519_make_key %d\n", ret);
+        goto exit;
+    }
+    if ((ret = wc_curve25519_make_key(rng, CURVE25519_KEYSIZE, curve25519PublicKey)) != 0) {
+        printf("Failed to wc_curve25519_make_key %d\n", ret);
+        goto exit;
+    }
+    outLen = sizeof(sharedOne);
+    if ((ret = wc_curve25519_shared_secret(curve25519PrivateKey, curve25519PublicKey, sharedOne, &outLen)) != 0) {
+        printf("Failed to wc_curve25519_shared_secret %d\n", ret);
+        goto exit;
+    }
+    if ((ret = wc_curve25519_shared_secret(curve25519PublicKey, curve25519PrivateKey, sharedTwo, &outLen)) != 0) {
+        printf("Failed to wc_curve25519_shared_secret %d\n", ret);
+        goto exit;
+    }
+    if (XMEMCMP(sharedOne, sharedTwo, outLen) == 0)
+        printf("CURVE25519 SUCCESS\n");
+    else
+        printf("CURVE25519 FAILURE\n");
+    wc_curve25519_free(curve25519PrivateKey);
+    wc_curve25519_free(curve25519PublicKey);
 exit:
     wc_FreeRng(rng);
     ret = wh_Client_Cleanup(client);
@@ -83,6 +120,7 @@ static void* _whServerTask(void* cf)
 {
     whServerConfig* config = (whServerConfig*)cf;
     int ret = 0;
+    int i;
     whServerContext server[1];
 
     if (config == NULL) {
@@ -102,6 +140,17 @@ static void* _whServerTask(void* cf)
     if (ret != 0) {
         printf("Failed to wh_Server_HandleRequestMessage: %d\n", ret);
         goto exit;
+    }
+    /* handle curve */
+    for (i = 0; i < 4; i++) {
+        do {
+            ret = wh_Server_HandleRequestMessage(server);
+            sleep(1);
+        } while (ret == WH_ERROR_NOTREADY);
+        if (ret != 0) {
+            printf("Failed to wh_Server_HandleRequestMessage: %d\n", ret);
+            goto exit;
+        }
     }
 exit:
     ret = wh_Server_Cleanup(server);
