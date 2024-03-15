@@ -141,7 +141,6 @@ int wh_TransportMem_SendResponse(void* c, uint16_t len, const void* data)
 
     if ((data != NULL) && (len != 0)) {
         memcpy(context->resp_data, data, len);
-        /* TODO: Cache flush resp_data for len bytes */
     }
     resp.s.len = len;
     resp.s.notify = req.s.notify;
@@ -173,7 +172,6 @@ int wh_TransportMem_RecvResponse(void* c, uint16_t *out_len, void* data)
     }
 
     if ((data != NULL) && (resp.s.len != 0)) {
-        /* TODO: Cache invalidate resp_data for resp.s.len bytes */
         memcpy(data, context->resp_data, resp.s.len);
     }
 

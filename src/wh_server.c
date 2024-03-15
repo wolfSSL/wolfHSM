@@ -7,8 +7,12 @@
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_comm.h"
 
+
+#include "wolfhsm/wh_nvm.h"
+
 #include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_message_comm.h"
+#include "wolfhsm/wh_message_nvm.h"
 #include "wolfhsm/wh_packet.h"
 #include "wolfhsm/wh_server.h"
 #include "wolfhsm/wh_server_crypto.h"
@@ -17,19 +21,29 @@
 int wh_Server_Init(whServerContext* server, whServerConfig* config)
 {
     int rc = 0;
-    if (server == NULL) {
+    if ((server == NULL) || (config == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
     memset(server, 0, sizeof(*server));
     if (
-/*            ((rc = wh_Nvm_Init(server->nvm_device, config->nvm_device)) == 0) && */
-        ((rc = wh_CommServer_Init(server->comm, config->comm)) == 0) &&
         ((rc = wolfCrypt_Init()) == 0) &&
         ((rc = wc_InitRng_ex(server->crypto->rng, NULL, INVALID_DEVID)) == 0) &&
-/*        ((rc = server->nvm->cb->Init(server->nvm, config->nvm)) == 0) && */
         1) {
-        /* All good */
+        if (    (config->nvm_config->cb != NULL) &&
+                (config->nvm_config->cb->Init != NULL)) {
+
+            rc = config->nvm_config->cb->Init(config->nvm_config->context, config->nvm_config->config);
+        }
+        if (rc == 0) {
+            server->nvm->cb = config->nvm_config->cb;
+            server->nvm->context = config->nvm_config->context;
+
+            rc = wh_CommServer_Init(server->comm, config->comm_config);
+            if (rc == 0) {
+                /* All good */
+            }
+        }
     } else {
         wh_Server_Cleanup(server);
     }
@@ -63,41 +77,6 @@ static int _wh_Server_HandleCommRequest(whServerContext* server,
         *out_resp_size = sizeof(resp);
     }; break;
 
-    default:
-        /* Unknown request. Respond with empty packet */
-        *out_resp_size = 0;
-    }
-    return rc;
-}
-
-static int _wh_Server_HandleNvmRequest(whServerContext* server,
-        uint16_t magic, uint16_t action, uint16_t seq,
-        uint16_t req_size, const void* req_packet,
-        uint16_t *out_resp_size, void* resp_packet)
-{
-    int rc = 0;
-    switch (action) {
-#if 0
-    case WH_MESSAGE_NVM_ACTION_AVAILABLE:
-    {
-        whMessageNvmAvailableRequest req = {0};
-        whMessageNvmAvailableResponse resp = {0};
-
-        /* Convert request struct */
-        wh_MessageNvm_TranslateAvailableRequest(magic,
-                (whMessageNvmAvailableRequest*)req_packet, &req);
-
-        /* Process the available action */
-        resp.rc = server->nvm->cb->GetAvailable(server->nvm,
-                &resp.available_objects, &resp.available_bytes,
-                &resp.recoverable_object, &resp.recoverable_bytes);
-
-        /* Convert the response struct */
-        wh_MessageNvm_TranslateAvailableResponse(magic,
-                &resp, (whMessageNvmAvailableResponse*)resp_packet);
-        *out_resp_size = sizeof(resp);
-    }; break;
-#endif
     default:
         /* Unknown request. Respond with empty packet */
         *out_resp_size = 0;
@@ -193,7 +172,7 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
                     size, data, &size, data);
         }; break;
         case WH_MESSAGE_GROUP_NVM: {
-            rc = _wh_Server_HandleNvmRequest(server, magic, action, seq,
+            rc = wh_Server_HandleNvmRequest(server, magic, action, seq,
                     size, data, &size, data);
         }; break;
         case WH_MESSAGE_GROUP_KEY: {
@@ -238,13 +217,10 @@ int wh_Server_Cleanup(whServerContext* server)
     if (server ==NULL) {
          return WH_ERROR_BADARGS;
      }
-#if 0
-     if (server->nvm != NULL) {
-         /*(void)wh_Nvm_Cleanup(server->nvm);*/
-     }
-#endif
     (void)wh_CommServer_Cleanup(server->comm);
+    (void)wh_Nvm_Cleanup(server->nvm);
     (void)wolfCrypt_Cleanup();
+    
     memset(server, 0, sizeof(*server));
     return 0;
 }

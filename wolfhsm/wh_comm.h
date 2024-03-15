@@ -73,7 +73,6 @@ enum {
     WH_COMM_AUX_RESP_UNSUPP     = 0xFFFF, /* Request is not supported */
 };
 
-
 static inline uint8_t wh_Translate8(uint16_t magic, uint8_t val)
 {
     (void) magic;
@@ -108,6 +107,10 @@ static inline uint64_t wh_Translate64(uint16_t magic, uint64_t val)
             ((val & 0xFFull) << 56);
 }
 
+/* Helper functions for struct members */
+#define WH_T16(_m, _d, _s, _f) _d->_f = wh_Translate16(_m, _s->_f)
+#define WH_T32(_m, _d, _s, _f) _d->_f = wh_Translate32(_m, _s->_f)
+#define WH_T64(_m, _d, _s, _f) _d->_f = wh_Translate64(_m, _s->_f)
 
 /** Client types */
 

@@ -23,17 +23,9 @@
 
 #include "wolfhsm/wh_common.h"  /* For whNvm types */
 
-#if 0
-/* Opaque context structure associated with an NVM instance */
-typedef struct whNvmContext_t whNvmContext;
-
-/* Opaque configuration structure associated with an NVM instance */
-typedef struct whNvmConfig_t whNvmConfig;
-#endif
 
 enum {
     WH_NVM_INVALID_ID = 0,
-    WH_NVM_MAX_DESTROY_OBJECTS_COUNT = 10,
 };
 
 
@@ -47,8 +39,8 @@ typedef struct {
      *  wh_Nvm_DestroyObjects(c, 0, NULL);
      * Any out_ parameters may be NULL without error. */
     int (*GetAvailable)(void* context,
-            whNvmSize *out_size, whNvmId *out_count,
-            whNvmSize *out_reclaim_size, whNvmId *out_reclaim_count);
+            uint32_t *out_avail_size, whNvmId *out_avail_objects,
+            uint32_t *out_reclaim_size, whNvmId *out_reclaim_objects);
 
     /* Add a new object. Duplicate ids are allowed, but only the most recent
      * version will be accessible. */
@@ -58,11 +50,11 @@ typedef struct {
     /* Retrieve the next matching id starting at start_id. Sets out_count to the
      * total number of id's that match access and flags. */
     int (*List)(void* context, whNvmAccess access, whNvmFlags flags,
-        whNvmId start_id, whNvmId* out_count, whNvmId* out_id);
+        whNvmId start_id, whNvmId *out_count, whNvmId *out_id);
 
     /* Retrieve object metadata using the id */
     int (*GetMetadata)(void* context, whNvmId id,
-            whNvmMetadata* out_meta);
+            whNvmMetadata* meta);
 
     /* Destroy a list of objects by replicating the current state without the id's
      * in the provided list.  Id's in the list that are not present do not cause an
@@ -76,49 +68,47 @@ typedef struct {
 
     /* Read the data of the object starting at the byte offset */
     int (*Read)(void* context, whNvmId id, whNvmSize offset,
-            whNvmSize data_len, uint8_t* out_data);
+            whNvmSize data_len, uint8_t* data);
 } whNvmCb;
 
-#if 0
+#if 1
+
+/* Simple helper context structure associated with an NVM instance */
+typedef struct whNvmContext_t {
+    whNvmCb *cb;
+    void* context;
+} whNvmContext;
+
+/* Simple helper configuration structure associated with an NVM instance */
+typedef struct whNvmConfig_t {
+    whNvmCb *cb;
+    void* context;
+    void* config;
+} whNvmConfig;
+
+
 int wh_Nvm_Init(whNvmContext* context, const whNvmConfig *config);
 int wh_Nvm_Cleanup(whNvmContext* context);
 
-/* Retrieve the current free space, or the maximum data object length that can
- * be successfully created and the number of free entries in the directory.
- * Also get the sizes that could be reclaimed if the partition was regenerated:
- *  wh_Nvm_DestroyObjects(c, 0, NULL);
- * Any out_ parameters may be NULL without error. */
 int wh_Nvm_GetAvailable(whNvmContext* context,
-        whNvmSize *out_size, whNvmId *out_count,
-        whNvmSize *out_reclaim_size, whNvmId *out_reclaim_count);
+        uint32_t *out_avail_size, whNvmId *out_avail_objects,
+        uint32_t *out_reclaim_size, whNvmId *out_reclaim_objects);
 
-/* Add a new object. Duplicate ids are allowed, but only the most recent
- * version will be accessible. */
 int wh_Nvm_AddObject(whNvmContext* context, whNvmMetadata *meta,
         whNvmSize data_len, const uint8_t* data);
 
-/* Retrieve the next matching id starting at start_id. Sets out_count to the
- * total number of id's that match access and flags. */
-int wh_Nvm_List(whNvmContext* context, whNvmAccess access, whNvmFlags flags,
-    whNvmId start_id, whNvmId* out_count, whNvmId* out_id);
+int wh_Nvm_List(whNvmContext* context,
+        whNvmAccess access, whNvmFlags flags, whNvmId start_id,
+        whNvmId *out_count, whNvmId *out_id);
 
-/* Retrieve object metadata using the id */
 int wh_Nvm_GetMetadata(whNvmContext* context, whNvmId id,
-        whNvmMetadata* out_meta);
+        whNvmMetadata* meta);
 
-/* Destroy a list of objects by replicating the current state without the id's
- * in the provided list.  Id's in the list that are not present do not cause an
- * error.  Atomically: erase the inactive partition, add all remaining objects,
- * switch the active partition, and erase the old active (now inactive)
- * partition.  Interruption prior completing the write of the new partition will
- * recover as before the replication.  Interruption after the new partition is
- * fully populated will recover as after, including restarting erasure. */
 int wh_Nvm_DestroyObjects(whNvmContext* context, whNvmId list_count,
         const whNvmId* id_list);
 
-/* Read the data of the object starting at the byte offset */
 int wh_Nvm_Read(whNvmContext* context, whNvmId id, whNvmSize offset,
-        whNvmSize data_len, uint8_t* out_data);
+        whNvmSize data_len, uint8_t* data);
 #endif
 
 #if 0
@@ -175,7 +165,7 @@ struct whNvmApi_Read_t {
 };
 
 struct whNvmApi_DestroyObjects_t {
-    const whNvmId ids[WH_NVM_MAX_DESTROY_OBJECTS_COUNT];
+    const whNvmId ids[WH_MESSAGE_NVM_MAX_DESTROY_OBJECTS_COUNT];
 };
 
 typedef struct {

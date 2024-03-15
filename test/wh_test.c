@@ -8,6 +8,7 @@
 #include "wh_test_crypto.h"
 #include "wh_test_flash_ramsim.h"
 #include "wh_test_nvm_flash.h"
+#include "wh_test_clientserver.h"
 
 
 /* Default test args */
@@ -20,6 +21,7 @@ int whTest_Unit(void)
     WH_TEST_ASSERT(0 == whTest_Crypto());
     WH_TEST_ASSERT(0 == whTest_Flash_RamSim());
     WH_TEST_ASSERT(0 == whTest_NvmFlash());
+    WH_TEST_ASSERT(0 == whTest_ClientServer());
 
     return 0;
 }

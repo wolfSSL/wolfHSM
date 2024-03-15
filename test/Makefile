@@ -75,11 +75,15 @@ SRC_C += \
 # WolfHSM source code
 SRC_C += \
             $(WOLFHSM_DIR)/src/wh_client.c \
+            $(WOLFHSM_DIR)/src/wh_client_nvm.c \
             $(WOLFHSM_DIR)/src/wh_comm.c \
             $(WOLFHSM_DIR)/src/wh_flash_unit.c \
             $(WOLFHSM_DIR)/src/wh_message_comm.c \
+            $(WOLFHSM_DIR)/src/wh_message_nvm.c \
+            $(WOLFHSM_DIR)/src/wh_nvm.c \
             $(WOLFHSM_DIR)/src/wh_nvm_flash.c \
             $(WOLFHSM_DIR)/src/wh_server.c \
+            $(WOLFHSM_DIR)/src/wh_server_nvm.c \
             $(WOLFHSM_DIR)/src/wh_server_crypto.c \
             $(WOLFHSM_DIR)/src/wh_client_cryptocb.c \
             $(WOLFHSM_DIR)/src/wh_transport_mem.c \
@@ -97,6 +101,7 @@ SRC_C += ./src/wh_test.c \
          ./src/wh_test_comm.c \
          ./src/wh_test_crypto.c \
          ./src/wh_test_nvm_flash.c \
+         ./src/wh_test_clientserver.c \
          ./src/wh_test_flash_ramsim.c
 
 

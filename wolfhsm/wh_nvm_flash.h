@@ -72,18 +72,19 @@ typedef struct whNvmFlashContext_t {
 /** whNvm Interface */
 int wh_NvmFlash_Init(void* c, const void* cf);
 int wh_NvmFlash_Cleanup(void* c);
-int wh_NvmFlash_List(void* c, whNvmAccess access, whNvmFlags flags,
-    whNvmId start_id, whNvmId* out_count, whNvmId* out_id);
+int wh_NvmFlash_List(void* c,
+        whNvmAccess access, whNvmFlags flags, whNvmId start_id,
+        whNvmId *out_avail_objects, whNvmId *out_id);
 int wh_NvmFlash_GetAvailable(void* c,
-        whNvmSize *out_size, whNvmId *out_count,
-        whNvmSize *out_reclaim_size, whNvmId *out_reclaim_count);
-int wh_NvmFlash_GetMetadata(void* c, whNvmId id, whNvmMetadata* out_meta);
-int wh_NvmFlash_AddObject(void* c, whNvmMetadata *meta,
-        whNvmSize data_len,const uint8_t* data);
+        uint32_t *out_avail_size, whNvmId *out_avail_objects,
+        uint32_t *out_reclaim_size, whNvmId *out_reclaim_objects);
+int wh_NvmFlash_GetMetadata(void* c, whNvmId id, whNvmMetadata* meta);
+int wh_NvmFlash_AddObject(void* c, whNvmMetadata* meta,
+        whNvmSize data_len, const uint8_t* data);
 int wh_NvmFlash_DestroyObjects(void* c, whNvmId list_count,
         const whNvmId* id_list);
 int wh_NvmFlash_Read(void* c, whNvmId id, whNvmSize offset,
-        whNvmSize data_len, uint8_t* out_data);
+        whNvmSize data_len, uint8_t* data);
 
 #define WH_NVM_FLASH_CB                             \
 {                                                   \
