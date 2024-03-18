@@ -20,7 +20,7 @@
  */
 #ifndef WOLFHSM_PACKET_H
 #define WOLFHSM_PACKET_H
-#include <wolfhsm/common.h>
+#include "wolfhsm/common.h"
 
 #if (defined(__IAR_SYSTEMS_ICC__) && (__IAR_SYSTEMS_ICC__ > 8)) || \
                                                     defined(__GNUC__)

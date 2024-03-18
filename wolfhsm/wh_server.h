@@ -6,11 +6,11 @@
 #include "wolfhsm/common.h"
 
 #ifndef WOLFSSL_USER_SETTINGS
-    #include <wolfssl/options.h>
+    #include "wolfssl/options.h"
 #endif
-#include <wolfssl/wolfcrypt/settings.h>
-#include <wolfssl/wolfcrypt/random.h>
-#include <wolfssl/wolfcrypt/curve25519.h>
+#include "wolfssl/wolfcrypt/settings.h"
+#include "wolfssl/wolfcrypt/random.h"
+#include "wolfssl/wolfcrypt/curve25519.h"
 
 #if 0
 #include "wolfhsm/nvm.h"

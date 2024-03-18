@@ -23,11 +23,11 @@
 #define WOLFHSM_COMMON_H
 #include <stdint.h>
 #ifndef WOLFSSL_USER_SETTINGS
-    #include <wolfssl/options.h>
+    #include "wolfssl/options.h"
 #endif
-#include <wolfssl/wolfcrypt/settings.h>
-#include <wolfssl/wolfcrypt/random.h>
-#include <wolfssl/wolfcrypt/sha256.h>
+#include "wolfssl/wolfcrypt/settings.h"
+#include "wolfssl/wolfcrypt/random.h"
+#include "wolfssl/wolfcrypt/sha256.h"
 #include "wolfhsm/wh_common.h"
 
 #if (defined(__IAR_SYSTEMS_ICC__) && (__IAR_SYSTEMS_ICC__ > 8)) || \

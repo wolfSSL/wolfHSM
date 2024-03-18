@@ -20,7 +20,7 @@
  */
 #ifndef WOLFHSM_CRYPTOCB_H
 #define WOLFHSM_CRYPTOCB_H
-#include <wolfhsm/common.h>
+#include "wolfhsm/common.h"
 
 #ifdef __cplusplus
     extern "C" {

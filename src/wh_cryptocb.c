@@ -21,19 +21,19 @@
 #include <stdint.h>
 #include <unistd.h>
 #ifndef WOLFSSL_USER_SETTINGS
-    #include <wolfssl/options.h>
+    #include "wolfssl/options.h"
 #endif
-#include <wolfssl/wolfcrypt/settings.h>
-#include <wolfssl/wolfcrypt/types.h>
-#include <wolfssl/wolfcrypt/error-crypt.h>
-#include <wolfssl/wolfcrypt/aes.h>
-#include <wolfssl/wolfcrypt/cmac.h>
-#include <wolfssl/wolfcrypt/cryptocb.h>
-#include <wolfhsm/wh_packet.h>
-#include <wolfhsm/common.h>
-#include <wolfhsm/wh_error.h>
-#include <wolfhsm/wh_client.h>
-#include <wolfhsm/wh_message.h>
+#include "wolfssl/wolfcrypt/settings.h"
+#include "wolfssl/wolfcrypt/types.h"
+#include "wolfssl/wolfcrypt/error-crypt.h"
+#include "wolfssl/wolfcrypt/aes.h"
+#include "wolfssl/wolfcrypt/cmac.h"
+#include "wolfssl/wolfcrypt/cryptocb.h"
+#include "wolfhsm/wh_packet.h"
+#include "wolfhsm/common.h"
+#include "wolfhsm/wh_error.h"
+#include "wolfhsm/wh_client.h"
+#include "wolfhsm/wh_message.h"
 
 int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
 {
