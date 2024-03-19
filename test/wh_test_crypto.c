@@ -42,6 +42,9 @@ enum {
         ONE_MS = 1000,
     };
 
+uint8_t              req[BUFFER_SIZE];
+uint8_t              resp[BUFFER_SIZE];
+
 
 static void* _whClientTask(void *cf)
 {
@@ -86,10 +89,12 @@ static void* _whClientTask(void *cf)
         printf("Failed to wc_curve25519_init_ex %d\n", ret);
         goto exit;
     }
+    printf("pre 1 wc_curve25519_make_key %d\n", ret);
     if ((ret = wc_curve25519_make_key(rng, CURVE25519_KEYSIZE, curve25519PrivateKey)) != 0) {
         printf("Failed to wc_curve25519_make_key %d\n", ret);
         goto exit;
     }
+    printf("pre 2 wc_curve25519_make_key %d\n", ret);
     if ((ret = wc_curve25519_make_key(rng, CURVE25519_KEYSIZE, curve25519PublicKey)) != 0) {
         printf("Failed to wc_curve25519_make_key %d\n", ret);
         goto exit;
@@ -189,36 +194,35 @@ static void _whClientServerThreadTest(whClientConfig* c_conf,
 
 static void wh_ClientServer_TcpThreadTest(void)
 {
-    posixTransportTcpConfig mytcpconfig[1] = {{
-        .server_ip_string = "127.0.0.1",
-        .server_port      = 23456,
+    whTransportMemConfig tmcf[1] = {{
+        .req       = (whTransportMemCsr*)req,
+        .req_size  = sizeof(req),
+        .resp      = (whTransportMemCsr*)resp,
+        .resp_size = sizeof(resp),
     }};
     /* Client configuration/contexts */
-    whTransportClientCb pttccb[1] = {PTT_CLIENT_CB};
-    posixTransportTcpClientContext tcc[1] = {};
-    whCommClientConfig cc_conf[1] = {{
-            .transport_cb = pttccb,
-            .transport_context = (void*)tcc,
-            .transport_config = (void*)mytcpconfig,
-            .client_id = 1234,
+    whTransportClientCb         tccb[1]   = {WH_TRANSPORT_MEM_CLIENT_CB};
+    whTransportMemClientContext tmcc[1]   = {0};
+    whCommClientConfig          cc_conf[1] = {{
+                 .transport_cb      = tccb,
+                 .transport_context = (void*)tmcc,
+                 .transport_config  = (void*)tmcf,
+                 .client_id         = 1234,
     }};
     whClientConfig c_conf[1] = {{
-            .comm = cc_conf,
-            /*.nvm = NULL, */
+       .comm = cc_conf,
     }};
-
     /* Server configuration/contexts */
-    whTransportServerCb pttscb[1] = {PTT_SERVER_CB};
-    posixTransportTcpServerContext tsc[1] = {};
-    whCommServerConfig cs_conf[1] = {{
-            .transport_cb = pttscb,
-            .transport_context = (void*)tsc,
-            .transport_config = (void*)mytcpconfig,
-            .server_id = 5678,
+    whTransportServerCb         tscb[1]   = {WH_TRANSPORT_MEM_SERVER_CB};
+    whTransportMemServerContext tmsc[1]   = {0};
+    whCommServerConfig          cs_conf[1] = {{
+                 .transport_cb      = tscb,
+                 .transport_context = (void*)tmsc,
+                 .transport_config  = (void*)tmcf,
+                 .server_id         = 5678,
     }};
-    whServerConfig s_conf[1] = {{
-            .comm = cs_conf,
-            /*.nvm = NULL, */
+    whServerConfig                  s_conf[1] = {{
+       .comm = cs_conf,
     }};
 
     _whClientServerThreadTest(c_conf, s_conf);

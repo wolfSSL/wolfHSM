@@ -1127,6 +1127,7 @@ static int _wh_Server_HandleCryptoRequest(whServerContext* server,
             if (ret > 0) {
                 packet->pkCurve25519kgRes.keyId = ret;
                 *size = sizeof(packet->pkCurve25519kgRes);
+                ret = 0;
             }
             else
                 ret = BAD_FUNC_ARG;
@@ -2513,4 +2514,3 @@ int whClient_CompareManifest(const uint8_t* address, int* outResult)
     return 0;
 }
 #endif
-

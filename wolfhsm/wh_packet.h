@@ -189,6 +189,7 @@ typedef struct WOLFHSM_PACK wh_Packet_pk_ecc_check_res
 
 typedef struct WOLFHSM_PACK wh_Packet_pk_curve25519kg_req
 {
+    uint32_t type;
     uint32_t sz;
 } wh_Packet_pk_curve25519kg_req;
 
@@ -199,6 +200,7 @@ typedef struct WOLFHSM_PACK wh_Packet_pk_curve25519kg_res
 
 typedef struct WOLFHSM_PACK wh_Packet_pk_curve25519_req
 {
+    uint32_t type;
     uint32_t privateKeyId;
     uint32_t publicKeyId;
     uint32_t endian;

@@ -389,7 +389,7 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             packet->pkCurve25519kgReq.sz = info->pk.curve25519kg.size;
             /* write request */
             ret = wh_Client_SendRequest(ctx, group,
-                WC_PK_TYPE_CURVE25519_KEYGEN, sizeof(packet->rngReq),
+                WC_ALGO_TYPE_PK, sizeof(packet->pkCurve25519kgReq),
                 rawPacket);
             if (ret == 0) {
                 do {
@@ -400,12 +400,15 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             }
             if (ret == 0) {
                 if (group != WH_MESSAGE_GROUP_CRYPTO ||
-                    action != WC_PK_TYPE_CURVE25519_KEYGEN)
+                    action != WC_ALGO_TYPE_PK)
                     ret = packet->error;
                 /* read out */
                 else {
                     info->pk.curve25519kg.key->devCtx =
                         (void*)0 + packet->pkCurve25519kgRes.keyId;
+                    /* set metadata */
+                    info->pk.curve25519kg.key->pubSet = 1;
+                    info->pk.curve25519kg.key->privSet = 1;
                 }
             }
             break;
@@ -418,7 +421,7 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             packet->pkCurve25519Req.endian = info->pk.curve25519.endian;
             /* write request */
             ret = wh_Client_SendRequest(ctx, group,
-                WC_PK_TYPE_CURVE25519_KEYGEN, sizeof(packet->rngReq),
+                WC_ALGO_TYPE_PK, sizeof(packet->pkCurve25519Req),
                 rawPacket);
             if (ret == 0) {
                 do {
@@ -429,7 +432,7 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             }
             if (ret == 0) {
                 if (group != WH_MESSAGE_GROUP_CRYPTO ||
-                    action != WC_PK_TYPE_CURVE25519_KEYGEN)
+                    action != WC_ALGO_TYPE_PK)
                     ret = packet->error;
                 /* read out */
                 else {
