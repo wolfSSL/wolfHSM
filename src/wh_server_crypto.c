@@ -60,7 +60,7 @@ static int hsmGetUniqueId(whServerContext* server)
     return ret;
 }
 
-static int hsmCacheKey(whServerContext* server, NvmMetaData* meta, uint8_t* in)
+static int hsmCacheKey(whServerContext* server, whNvmMetadata* meta, uint8_t* in)
 {
     int i;
     int foundIndex = -1;
@@ -101,7 +101,7 @@ static int hsmCacheKey(whServerContext* server, NvmMetaData* meta, uint8_t* in)
     /* write key if slot found */
     XMEMCPY((uint8_t*)server->cache[foundIndex].buffer, in, meta->len);
     XMEMCPY((uint8_t*)server->cache[foundIndex].meta, (uint8_t*)meta,
-        sizeof(NvmMetaData));
+        sizeof(whNvmMetadata));
 #ifdef WOLFHSM_SHE_EXTENSION
     /* if this was RAM_KEY, set the global so we can export */
     if (meta->id == WOLFHSM_SHE_TRANSLATE_KEY_ID(WOLFHSM_SHE_RAM_KEY_ID))
@@ -110,7 +110,7 @@ static int hsmCacheKey(whServerContext* server, NvmMetaData* meta, uint8_t* in)
     return 0;
 }
 
-static int hsmReadKey(whServerContext* server, NvmMetaData* meta, uint8_t* out)
+static int hsmReadKey(whServerContext* server, whNvmMetadata* meta, uint8_t* out)
 {
     int i;
     int ret = 0;
@@ -127,7 +127,7 @@ static int hsmReadKey(whServerContext* server, NvmMetaData* meta, uint8_t* out)
             if (server->cache[i].meta->len > outLen)
                 return BUFFER_E;
             XMEMCPY((uint8_t*)meta, (uint8_t*)server->cache[i].meta,
-                sizeof(NvmMetaData));
+                sizeof(whNvmMetadata));
             XMEMCPY(out, server->cache[i].buffer, meta->len);
             return 0;
         }
@@ -191,7 +191,7 @@ static int hsmCacheKeyCurve25519(whServerContext* server, curve25519_key* key)
     int ret;
     uint32_t privSz = CURVE25519_KEYSIZE;
     uint32_t pubSz = CURVE25519_KEYSIZE;
-    NvmMetaData meta[1] = {0};
+    whNvmMetadata meta[1] = {0};
     byte keyBuf[CURVE25519_KEYSIZE * 2];
     /* store public, then private so that loading an external public only key
      * will work along with our keys */
@@ -202,7 +202,7 @@ static int hsmCacheKeyCurve25519(whServerContext* server, curve25519_key* key)
         ret = hsmGetUniqueId(server);
     }
     if (ret > 0) {
-        XMEMSET(meta, 0, sizeof(NvmMetaData));
+        XMEMSET(meta, 0, sizeof(whNvmMetadata));
         meta->len = privSz + pubSz;
         meta->id = ret;
         ret = hsmCacheKey(server, meta, keyBuf);
@@ -217,10 +217,10 @@ static int hsmLoadKeyCurve25519(whServerContext* server, curve25519_key* key, ui
     int ret;
     uint32_t privSz = CURVE25519_KEYSIZE;
     uint32_t pubSz = CURVE25519_KEYSIZE;
-    NvmMetaData meta[1] = {0};
+    whNvmMetadata meta[1] = {0};
     byte keyBuf[CURVE25519_KEYSIZE * 2];
     /* retrieve the key */
-    XMEMSET(meta, 0, sizeof(NvmMetaData));
+    XMEMSET(meta, 0, sizeof(whNvmMetadata));
     meta->id = keyId;
     meta->len = privSz + pubSz;
     ret = hsmReadKey(server, meta, keyBuf);

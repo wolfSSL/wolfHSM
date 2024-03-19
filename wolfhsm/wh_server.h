@@ -16,20 +16,9 @@
 #include "wolfhsm/nvm_remote.h"
 #endif
 
-typedef struct NvmMetaData {
-    uint16_t id;
-    uint32_t flags;
-    uint16_t len;
-    uint8_t label[WOLFHSM_NVM_LABEL_LEN];
-    uint8_t confDigest[WOLFHSM_DIGEST_STUB];
-#ifdef WOLFHSM_SHE_EXTENSION
-    uint32_t count;
-#endif
-} NvmMetaData;
-
 typedef struct CacheSlot {
     uint8_t commited;
-    NvmMetaData meta[1];
+    whNvmMetadata meta[1];
     uint8_t buffer[WOLFHSM_NVM_MAX_OBJECT_SIZE];
 } CacheSlot;
 
