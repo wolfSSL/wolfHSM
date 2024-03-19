@@ -71,8 +71,8 @@ typedef struct {
             whNvmSize data_len, uint8_t* data);
 } whNvmCb;
 
-#if 1
 
+/** NVM Context helper structs and functions */
 /* Simple helper context structure associated with an NVM instance */
 typedef struct whNvmContext_t {
     whNvmCb *cb;
@@ -109,80 +109,5 @@ int wh_Nvm_DestroyObjects(whNvmContext* context, whNvmId list_count,
 
 int wh_Nvm_Read(whNvmContext* context, whNvmId id, whNvmSize offset,
         whNvmSize data_len, uint8_t* data);
-#endif
-
-#if 0
-enum {
-    WH_NVM_API_INIT             = 1,
-    WH_NVM_API_CLEANUP          = 2,
-    WH_NVM_API_GETAVAILABLE     = 3,
-    WH_NVM_API_ADDOBJECT        = 4,
-    WH_NVM_API_LIST             = 5,
-    WH_NVM_API_GETMETADATA      = 6,
-    WH_NVM_API_READ             = 7,
-    WH_NVM_API_DESTROYOBJECTS   = 8,
-};
-
-struct whNvmApi_Init_t {
-    const whNvmConfig* config;
-};
-
-struct whNvmApi_Cleanup_t {
-    /* No args/state */
-};
-
-struct whNvmApi_GetAvailable_t {
-    whNvmSize *out_avail_size;
-    whNvmId *out_avail_count;
-    whNvmSize *out_reclaim_size;
-    whNvmId *out_reclaim_count;
-};
-
-struct whNvmApi_AddObject_t {
-    const whNvmMetadata* meta;
-    const whNvmSize data_len;
-    const uint8_t* data;
-};
-
-struct whNvmApi_List_t {
-    const whNvmAccess access;
-    const whNvmFlags flags;
-    const whNvmId start_id;
-    whNvmId *out_count;
-    whNvmId *out_id;
-};
-
-struct whNvmApi_GetMetadata_t {
-    const whNvmId id;
-    whNvmMetadata* meta;
-};
-
-struct whNvmApi_Read_t {
-    const whNvmId id;
-    const whNvmSize offset;
-    const whNvmSize data_len;
-    uint8_t* data;
-};
-
-struct whNvmApi_DestroyObjects_t {
-    const whNvmId ids[WH_MESSAGE_NVM_MAX_DESTROY_OBJECTS_COUNT];
-};
-
-typedef struct {
-    int api;
-    union {
-        struct whNvmApi_Init_t Init;
-        struct whNvmApi_Cleanup_t Cleanup;
-        struct whNvmApi_GetAvailable_t GetAvailable;
-        struct whNvmApi_AddObject_t AddObject;
-        struct whNvmApi_List_t List;
-        struct whNvmApi_GetMetadata_t GetMetadata;
-        struct whNvmApi_Read_t Read;
-        struct whNvmApi_DestroyObjects_t DestroyObjects;
-    } arg;
-} whNvmApiArg;
-
-typedef int (*whNvm_Callback)(whNvmContext* context, whNvmApiArg* apiarg);
-#endif
 
 #endif /* WOLFHSM_WH_NVM_H_ */

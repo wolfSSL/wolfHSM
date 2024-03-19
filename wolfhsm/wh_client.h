@@ -106,17 +106,30 @@ int wh_Client_Echo(whClientContext* c, uint16_t snd_len, const void* snd_data,
 
 /* NVM Functions */
 int wh_Client_NvmInitRequest(whClientContext* c);
-int wh_Client_NvmInitResponse(whClientContext* c,
+int wh_Client_NvmInitResponse(whClientContext* c, int32_t *out_rc,
         uint32_t *out_clientnvm_id, uint32_t *out_servernvm_id);
-int wh_Client_NvmInit(whClientContext* c,
+int wh_Client_NvmInit(whClientContext* c, int32_t *out_rc,
         uint32_t *out_clientnvm_id, uint32_t *out_servernvm_id);
+
+int wh_Client_NvmCleanupRequest(whClientContext* c);
+int wh_Client_NvmCleanupResponse(whClientContext* c, int32_t *out_rc);
+int wh_Client_NvmCleanup(whClientContext* c, int32_t *out_rc);
 
 int wh_Client_NvmGetAvailableRequest(whClientContext* c);
-int wh_Client_NvmGetAvailableResponse(whClientContext* c,
+int wh_Client_NvmGetAvailableResponse(whClientContext* c, int32_t *out_rc,
         uint32_t *out_avail_size, whNvmId *out_avail_objects,
         uint32_t *out_reclaim_size, whNvmId *out_reclaim_objects);
-int wh_Client_NvmGetAvailable(whClientContext* c,
+int wh_Client_NvmGetAvailable(whClientContext* c, int32_t *out_rc,
         uint32_t *out_avail_size, whNvmId *out_avail_objects,
         uint32_t *out_reclaim_size, whNvmId *out_reclaim_objects);
 
+int wh_Client_NvmAddObjectRequest(whClientContext* c,
+        whNvmId id, whNvmAccess access, whNvmFlags flags,
+        whNvmSize label_len, uint8_t* label,
+        whNvmSize len, const uint8_t* data);
+int wh_Client_NvmAddObjectResponse(whClientContext* c, int32_t *out_rc);
+int wh_Client_NvmAddObject(whClientContext* c,
+        whNvmId id, whNvmAccess access, whNvmFlags flags,
+        whNvmSize label_len, uint8_t* label,
+        whNvmSize len, const uint8_t* data, int32_t *out_rc);
 #endif /* WOLFHSM_WH_CLIENT_H_ */

@@ -112,6 +112,7 @@ int whTest_ClientServerSequential(void)
     uint16_t send_len = 0;
     uint16_t recv_len = 0;
 
+    int32_t server_rc = 0;
     uint32_t client_id = 0;
     uint32_t server_id = 0;
     uint32_t avail_size = 0;
@@ -168,11 +169,11 @@ int whTest_ClientServerSequential(void)
     WH_TEST_RETURN_ON_FAIL(
             wh_Server_HandleRequestMessage(server));
     WH_TEST_RETURN_ON_FAIL(
-            wh_Client_NvmInitResponse(client, &client_id, &server_id));
+            wh_Client_NvmInitResponse(client, &server_rc, &client_id, &server_id));
 
 #if defined(WH_CFG_TEST_VERBOSE)
-        printf("Client NvmInitResponse:%d, clientid:%d serverid:%d\n",
-            ret, client_id, server_id);
+        printf("Client NvmInitResponse:%d, server_rc:%d, clientid:%d serverid:%d\n",
+            ret, server_rc, client_id, server_id);
 #endif
 
     WH_TEST_RETURN_ON_FAIL(
@@ -180,37 +181,42 @@ int whTest_ClientServerSequential(void)
     WH_TEST_RETURN_ON_FAIL(
             wh_Server_HandleRequestMessage(server));
     WH_TEST_RETURN_ON_FAIL(
-            wh_Client_NvmGetAvailableResponse(client,
+            wh_Client_NvmGetAvailableResponse(client, &server_rc,
                     &avail_size, &avail_objects,
                     &reclaim_size, &reclaim_objects));
 #if defined(WH_CFG_TEST_VERBOSE)
-        printf("Client NvmGetAvailableResponse:%d, avail_size:%d avail_objects:%d, reclaim_size:%d reclaim_objects:%d\n",
-            ret, avail_size, avail_objects, reclaim_size, reclaim_objects);
+        printf("Client NvmGetAvailableResponse:%d, server_rc:%d avail_size:%d avail_objects:%d, reclaim_size:%d reclaim_objects:%d\n",
+            ret, server_rc, avail_size, avail_objects, reclaim_size, reclaim_objects);
 #endif
 
-#if 0
-        WIP
     for (counter = 0; counter < 5; counter ++) {
-        whNvmMetadata meta[1] = {{
-                .id = counter + 20,
-                .access = WOLFHSM_NVM_ACCESS_ANY,
-                .flags = WOLFHSM_NVM_FLAGS_ANY,
-                .len = 0,
-        }};
-        sprintf(meta->label, "Label:%d", meta->id);
-        sprintf(send_buffer, "Data:%d Counter:%d", meta->id, counter);
+        whNvmId id = counter + 20;
+        whNvmAccess access = WOLFHSM_NVM_ACCESS_ANY;
+        whNvmFlags flags = WOLFHSM_NVM_FLAGS_ANY;
+        whNvmSize label_len = 0;
+        char label[WOLFHSM_NVM_LABEL_LEN] = {0};
+        whNvmSize len = 0;
+
+        label_len = sprintf(label, "Label:%d", id);
+        len = sprintf(send_buffer, "Data:%d Counter:%d", id, counter);
+
+#if defined(WH_CFG_TEST_VERBOSE)
+        printf("Client NvmAddObjectRequest:%d, id:%u, access:0x%x, flags:0x%x, len:%u label:%s\nData:%s\n",
+            ret, id, access, flags, len, label, send_buffer);
+#endif
 
         WH_TEST_RETURN_ON_FAIL(
-                wh_Client_NvmGetAvailableRequest(client));
+                wh_Client_NvmAddObjectRequest(client,
+                        id, access, flags,
+                        label_len, (uint8_t*)label,
+                        len, (uint8_t*)send_buffer));
         WH_TEST_RETURN_ON_FAIL(
                 wh_Server_HandleRequestMessage(server));
         WH_TEST_RETURN_ON_FAIL(
-                wh_Client_NvmGetAvailableResponse(client,
-                        &avail_size, &avail_objects,
-                        &reclaim_size, &reclaim_objects));
+                wh_Client_NvmAddObjectResponse(client, &server_rc));
         #if defined(WH_CFG_TEST_VERBOSE)
-                printf("Client NvmGetAvailableResponse:%d, avail_size:%d avail_objects:%d, reclaim_size:%d reclaim_objects:%d\n",
-                    ret, avail_size, avail_objects, reclaim_size, reclaim_objects);
+                printf("Client NvmAddObjectResponse:%d, server_rc:%d\n",
+                    ret, server_rc);
         #endif
 
         WH_TEST_RETURN_ON_FAIL(
@@ -218,16 +224,27 @@ int whTest_ClientServerSequential(void)
         WH_TEST_RETURN_ON_FAIL(
                 wh_Server_HandleRequestMessage(server));
         WH_TEST_RETURN_ON_FAIL(
-                wh_Client_NvmGetAvailableResponse(client,
+                wh_Client_NvmGetAvailableResponse(client, &server_rc,
                         &avail_size, &avail_objects,
                         &reclaim_size, &reclaim_objects));
         #if defined(WH_CFG_TEST_VERBOSE)
-                printf("Client NvmGetAvailableResponse:%d, avail_size:%d avail_objects:%d, reclaim_size:%d reclaim_objects:%d\n",
-                    ret, avail_size, avail_objects, reclaim_size, reclaim_objects);
+                printf("Client NvmGetAvailableResponse:%d, server_rc:%d, avail_size:%d avail_objects:%d, reclaim_size:%d reclaim_objects:%d\n",
+                    ret, server_rc, avail_size, avail_objects, reclaim_size, reclaim_objects);
         #endif
 
     }
-#endif
+
+
+        WH_TEST_RETURN_ON_FAIL(
+                wh_Client_NvmCleanupRequest(client));
+        WH_TEST_RETURN_ON_FAIL(
+                wh_Server_HandleRequestMessage(server));
+        WH_TEST_RETURN_ON_FAIL(
+                wh_Client_NvmCleanupResponse(client, &server_rc));
+    #if defined(WH_CFG_TEST_VERBOSE)
+            printf("Client NvmCleanupResponse:%d, server_rc:%d\n",
+                ret, server_rc);
+    #endif
 
     WH_TEST_RETURN_ON_FAIL(wh_Server_Cleanup(server));
     WH_TEST_RETURN_ON_FAIL(wh_Client_Cleanup(client));

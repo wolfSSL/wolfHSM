@@ -136,6 +136,7 @@ typedef struct {
     uint16_t access;
     uint16_t flags;
     uint16_t len;
+    uint8_t label[WOLFHSM_NVM_LABEL_LEN];
     /* Data up to WH_MESSAGE_NVM_MAX_ADD_OBJECT_LEN follows */
 } whMessageNvm_AddObjectRequest;
 

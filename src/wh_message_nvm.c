@@ -129,6 +129,7 @@ int wh_MessageNvm_TranslateAddObjectRequest(uint16_t magic,
     WH_T16(magic, dest, src, access);
     WH_T16(magic, dest, src, flags);
     WH_T16(magic, dest, src, len);
+    memcpy(dest->label, src->label, sizeof(dest->label));
     return 0;
 }
 

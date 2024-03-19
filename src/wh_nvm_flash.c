@@ -1120,7 +1120,7 @@ int wh_NvmFlash_DestroyObjects(void* c, whNvmId list_count,
 
     /* Go through the current directory and mark the listed id's as bad */
     for (list_entry = 0; list_entry < list_count; list_entry++) {
-        /* Mark all matching entry as bad.  Should only be 1. */
+        /* Mark all matching entries as bad.  Should only be 1. */
         do {
             entry = -1;
             ret = nfMemDirectory_FindObjectIndexById(d, id_list[list_entry],
