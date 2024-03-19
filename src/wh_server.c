@@ -291,7 +291,7 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
                     size, data, &size, data);
         }; break;
         case WH_MESSAGE_GROUP_CRYPTO: {
-            rc = _wh_Server_HandleCryptoRequest(server, action, data, &size);
+            rc = _wh_Server_HandleCryptoRequest(server, &action, data, &size);
         }; break;
         case WH_MESSAGE_GROUP_PKCS11: {
             rc = _wh_Server_HandlePkcs11Request(server, magic, action, seq,

@@ -113,7 +113,6 @@ static int hsmCacheKey(whServerContext* server, whNvmMetadata* meta, uint8_t* in
 static int hsmReadKey(whServerContext* server, whNvmMetadata* meta, uint8_t* out)
 {
     int i;
-    int ret = 0;
     uint16_t searchId = meta->id;
     uint16_t outLen = meta->len;
     /* make sure id is valid */
@@ -235,7 +234,7 @@ static int hsmLoadKeyCurve25519(whServerContext* server, curve25519_key* key, ui
 }
 
 int _wh_Server_HandleCryptoRequest(whServerContext* server,
-    uint16_t action, uint8_t* data, uint16_t* size)
+    uint16_t* action, uint8_t* data, uint16_t* size)
 {
     int ret = 0;
     uint32_t field;
@@ -245,7 +244,7 @@ int _wh_Server_HandleCryptoRequest(whServerContext* server,
     uint8_t tmpKey[AES_MAX_KEY_SIZE + AES_IV_SIZE];
 #endif
 
-    switch (action)
+    switch (*action)
     {
     case WC_ALGO_TYPE_PK:
         switch (packet->pkAnyReq.type)
@@ -329,6 +328,10 @@ int _wh_Server_HandleCryptoRequest(whServerContext* server,
     default:
         ret = NOT_COMPILED_IN;
         break;
+    }
+    if (ret != 0) {
+        *action = WC_ALGO_TYPE_NONE;
+        packet->error = ret;
     }
     return ret;
 }
