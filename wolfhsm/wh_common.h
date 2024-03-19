@@ -12,6 +12,7 @@
 /* Device Id to be registered and passed to wolfCrypt functions */
 #define WOLFHSM_DEV_ID 0x5748534D  /* "WHSM" */
 
+#define WOLFHSM_DIGEST_STUB 8
 
 /** Resource allocations */
 enum {

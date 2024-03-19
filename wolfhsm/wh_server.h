@@ -3,7 +3,6 @@
 
 #include "wolfhsm/wh_comm.h"
 #include "wolfhsm/wh_common.h"
-#include "wolfhsm/common.h"
 
 #ifndef WOLFSSL_USER_SETTINGS
     #include "wolfssl/options.h"
