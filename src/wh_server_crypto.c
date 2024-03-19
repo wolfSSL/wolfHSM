@@ -132,6 +132,7 @@ static int hsmReadKey(whServerContext* server, whNvmMetadata* meta, uint8_t* out
             return 0;
         }
     }
+    return BAD_FUNC_ARG;
 #if 0
     /* setup address */
     if (ctx->partition == 1)
@@ -182,8 +183,8 @@ static int hsmReadKey(whServerContext* server, whNvmMetadata* meta, uint8_t* out
         ret = 0;
     }
 #endif
-#endif
     return ret;
+#endif
 }
 
 static int hsmCacheKeyCurve25519(whServerContext* server, curve25519_key* key)
