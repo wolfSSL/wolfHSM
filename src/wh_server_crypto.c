@@ -233,7 +233,7 @@ static int hsmLoadKeyCurve25519(whServerContext* server, curve25519_key* key, ui
 }
 
 int _wh_Server_HandleCryptoRequest(whServerContext* server,
-    uint16_t* action, uint8_t* data, uint16_t* size)
+    uint16_t action, uint8_t* data, uint16_t* size)
 {
     int ret = 0;
     uint32_t field;
@@ -243,10 +243,10 @@ int _wh_Server_HandleCryptoRequest(whServerContext* server,
     uint8_t tmpKey[AES_MAX_KEY_SIZE + AES_IV_SIZE];
 #endif
 
-    if (server == NULL || action == NULL || data == NULL || size == NULL)
+    if (server == NULL || data == NULL || size == NULL)
         return BAD_FUNC_ARG;
 
-    switch (*action)
+    switch (action)
     {
     case WC_ALGO_TYPE_PK:
         switch (packet->pkAnyReq.type)
@@ -269,7 +269,8 @@ int _wh_Server_HandleCryptoRequest(whServerContext* server,
             wc_curve25519_free(server->crypto->curve25519Private);
             if (ret > 0) {
                 packet->pkCurve25519kgRes.keyId = ret;
-                *size = sizeof(packet->pkCurve25519kgRes);
+                *size = WOLFHSM_PACKET_STUB_SIZE +
+                    sizeof(packet->pkCurve25519kgRes);
                 ret = 0;
             }
             else
@@ -308,7 +309,8 @@ int _wh_Server_HandleCryptoRequest(whServerContext* server,
             wc_curve25519_free(server->crypto->curve25519Private);
             wc_curve25519_free(server->crypto->curve25519Public);
             if (ret == 0) {
-                *size = sizeof(packet->pkCurve25519Res) + field;
+                *size = WOLFHSM_PACKET_STUB_SIZE +
+                    sizeof(packet->pkCurve25519Res) + field;
                 packet->pkCurve25519Res.sz = field;
             }
             break;
@@ -323,7 +325,8 @@ int _wh_Server_HandleCryptoRequest(whServerContext* server,
         /* generate the bytes */
         ret = wc_RNG_GenerateBlock(server->crypto->rng, out, packet->rngReq.sz);
         if (ret == 0) {
-            *size = sizeof(packet->rngRes) + packet->rngRes.sz;
+            *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->rngRes) +
+                packet->rngRes.sz;
         }
         break;
     case WC_ALGO_TYPE_NONE:
@@ -331,9 +334,6 @@ int _wh_Server_HandleCryptoRequest(whServerContext* server,
         ret = NOT_COMPILED_IN;
         break;
     }
-    if (ret != 0) {
-        *action = WC_ALGO_TYPE_NONE;
-        packet->error = ret;
-    }
-    return ret;
+    packet->rc = ret;
+    return 0;
 }

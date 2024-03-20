@@ -110,96 +110,6 @@ static int _wh_Server_HandleKeyRequest(whServerContext* server,
         uint16_t req_size, const void* req_packet,
         uint16_t *out_resp_size, void* resp_packet)
 {
-#if 0
-    int ret = 0;
-    uint8_t* in;
-    uint8_t* out;
-    switch (packet->subType)
-    {
-    case WOLFHSM_KEY_CACHE:
-        /* in is after fixed size fields */
-        in = (uint8_t*)(&packet->keyCacheReq + 1);
-        /* set the metadata fields */
-        meta->id = packet->keyCacheReq.id;
-        meta->flags = packet->keyCacheReq.flags;
-        meta->len = packet->keyCacheReq.len;
-        XMEMCPY(meta->label, packet->keyCacheReq.label, WOLFHSM_NVM_LABEL_LEN);
-        /* get a new id if one wasn't provided */
-        if (meta->id == WOLFHSM_ID_ERASED) {
-            ret =  hsmGetUniqueId(ctx);
-            if (ret > 0) {
-                meta->id = ret;
-                ret = 0;
-            }
-        }
-        /* write the key */
-        if (ret == 0)
-            ret = hsmCacheKey(ctx, meta, in);
-        if (ret == 0) {
-            packet->subType = WOLFHSM_KEY_CACHE;
-            packet->len = sizeof(packet->keyCacheRes);
-            packet->keyCacheRes.id = meta->id;
-        }
-        break;
-    case WOLFHSM_KEY_EVICT:
-        ret = hsmEvictKey(ctx, packet->keyEvictReq.id);
-        if (ret == 0) {
-            packet->subType = WOLFHSM_KEY_EVICT;
-            packet->len = sizeof(packet->keyEvictRes);
-            packet->keyEvictRes.ok = 0;
-        }
-        break;
-    case WOLFHSM_KEY_COMMIT:
-        /* commit the cached key */
-        ret = hsmCommitKey(ctx, packet->keyCommitReq.id);
-        if (ret > 0) {
-            packet->subType = WOLFHSM_KEY_COMMIT;
-            packet->len = sizeof(packet->keyCommitRes);
-            packet->keyCommitRes.ok = 0;
-            ret = 0;
-        }
-        break;
-    case WOLFHSM_KEY_EXPORT:
-        /* out is after fixed size fields */
-        out = (uint8_t*)(&packet->keyExportRes + 1);
-        /* set the metadata fields */
-        meta->id = packet->keyExportReq.id;
-        meta->len = WOLFHSM_KEYSIZE;
-        /* read the key */
-        ret = hsmReadKey(ctx, meta, out);
-        if (ret == 0) {
-            packet->subType = WOLFHSM_KEY_EXPORT;
-            /* set return len */
-            packet->len = sizeof(packet->keyExportRes) + meta->len;
-            /* set key len */
-            packet->keyExportRes.len = meta->len;
-            /* set label */
-            XMEMCPY(packet->keyExportRes.label, meta->label, sizeof(meta->label));
-        }
-        break;
-    case WOLFHSM_KEY_ERASE:
-        ret = hsmEraseKey(ctx, packet->keyEraseReq.id);
-        if (ret == 0) {
-            packet->subType = WOLFHSM_KEY_ERASE;
-            packet->len = sizeof(packet->keyEraseRes);
-            packet->keyEraseRes.ok = 0;
-        }
-        break;
-    case WOLFHSM_VERSION_EXCHANGE:
-        /* TODO should the server refuse a connection or should the client
-         * decide? */
-        packet->subType = WOLFHSM_VERSION_EXCHANGE;
-        packet->versionExchange.version = ctx->version;
-        packet->len = sizeof(packet->versionExchange);
-        break;
-    default:
-        ret = BAD_FUNC_ARG;
-        break;
-    }
-    /* set type here in case packet was overwritten */
-    packet->type = WOLFHSM_MANAGE;
-    return ret;
-#endif
     (void)server;
     (void)magic;
     (void)action;
@@ -291,7 +201,7 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
                     size, data, &size, data);
         }; break;
         case WH_MESSAGE_GROUP_CRYPTO: {
-            rc = _wh_Server_HandleCryptoRequest(server, &action, data, &size);
+            rc = _wh_Server_HandleCryptoRequest(server, action, data, &size);
         }; break;
         case WH_MESSAGE_GROUP_PKCS11: {
             rc = _wh_Server_HandlePkcs11Request(server, magic, action, seq,

@@ -48,7 +48,7 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
 #endif
     int ret = CRYPTOCB_UNAVAILABLE;
     whClientContext* ctx = inCtx;
-    uint8_t rawPacket[WH_COMM_MTU];
+    uint8_t rawPacket[WH_COMM_DATA_LEN];
     whPacket* packet = (whPacket*)rawPacket;
     uint16_t group = WH_MESSAGE_GROUP_CRYPTO;
     uint16_t action;
@@ -58,7 +58,7 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
     if (devId == INVALID_DEVID || info == NULL)
         return BAD_FUNC_ARG;
 
-    XMEMSET(rawPacket, 0, WH_COMM_MTU);
+    XMEMSET(rawPacket, 0, sizeof(rawPacket));
 
     switch (info->algo_type)
     {
@@ -71,7 +71,8 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             packet->pkCurve25519kgReq.sz = info->pk.curve25519kg.size;
             /* write request */
             ret = wh_Client_SendRequest(ctx, group,
-                WC_ALGO_TYPE_PK, sizeof(packet->pkCurve25519kgReq),
+                WC_ALGO_TYPE_PK,
+                WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->pkCurve25519kgReq),
                 rawPacket);
             if (ret == 0) {
                 do {
@@ -80,9 +81,8 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
                 } while (ret == WH_ERROR_NOTREADY);
             }
             if (ret == 0) {
-                if (group != WH_MESSAGE_GROUP_CRYPTO ||
-                    action != WC_ALGO_TYPE_PK)
-                    ret = packet->error;
+                if (packet->rc != 0)
+                    ret = packet->rc;
                 /* read out */
                 else {
                     info->pk.curve25519kg.key->devCtx =
@@ -102,7 +102,8 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             packet->pkCurve25519Req.endian = info->pk.curve25519.endian;
             /* write request */
             ret = wh_Client_SendRequest(ctx, group,
-                WC_ALGO_TYPE_PK, sizeof(packet->pkCurve25519Req),
+                WC_ALGO_TYPE_PK,
+                WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->pkCurve25519Req),
                 rawPacket);
             if (ret == 0) {
                 do {
@@ -111,9 +112,8 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
                 } while (ret == WH_ERROR_NOTREADY);
             }
             if (ret == 0) {
-                if (group != WH_MESSAGE_GROUP_CRYPTO ||
-                    action != WC_ALGO_TYPE_PK)
-                    ret = packet->error;
+                if (packet->rc != 0)
+                    ret = packet->rc;
                 /* read out */
                 else {
                     XMEMCPY(info->pk.curve25519.out, out,
@@ -134,7 +134,7 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
         packet->rngReq.sz = info->rng.sz;
         /* write request */
         ret = wh_Client_SendRequest(ctx, group, WC_ALGO_TYPE_RNG,
-            sizeof(packet->rngReq), rawPacket);
+            WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->rngReq), rawPacket);
         if (ret == 0) {
             do {
                 ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
@@ -142,8 +142,8 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             } while (ret == WH_ERROR_NOTREADY);
         }
         if (ret == 0) {
-            if (group != WH_MESSAGE_GROUP_CRYPTO || action != WC_ALGO_TYPE_RNG)
-                ret = packet->error;
+            if (packet->rc != 0)
+                ret = packet->rc;
             /* read out */
             else
                 XMEMCPY(info->rng.out, out, packet->rngRes.sz);
