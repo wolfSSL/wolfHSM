@@ -81,7 +81,7 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
         whMessageNvm_ListRequest req = {0};
         whMessageNvm_ListResponse resp = {0};
 
-        if (req_size == 0) {
+        if (req_size == sizeof(req)) {
             /* Convert request struct */
             wh_MessageNvm_TranslateListRequest(magic,
                     (whMessageNvm_ListRequest*)req_packet, &req);
@@ -171,6 +171,7 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
                 meta.access = req.access;
                 meta.flags = req.flags;
                 meta.len = req.len;
+                memcpy(meta.label, req.label, sizeof(meta.label));
                 resp.rc = wh_Nvm_AddObject(server->nvm, &meta, req.len, data);
             } else {
                 /* Problem in the request or transport. */

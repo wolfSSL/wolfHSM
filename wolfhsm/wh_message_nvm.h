@@ -15,16 +15,16 @@
 enum {
     WH_MESSAGE_NVM_ACTION_INIT              = 0x1,
     WH_MESSAGE_NVM_ACTION_CLEANUP           = 0x2,
-    WH_MESSAGE_NVM_ACTION_LIST              = 0x3,
-    WH_MESSAGE_NVM_ACTION_GETAVAILABLE      = 0x4,
-    WH_MESSAGE_NVM_ACTION_GETMETADATA       = 0x5,
-    WH_MESSAGE_NVM_ACTION_ADDOBJECT         = 0x6,
+    WH_MESSAGE_NVM_ACTION_GETAVAILABLE      = 0x3,
+    WH_MESSAGE_NVM_ACTION_ADDOBJECT         = 0x4,
+    WH_MESSAGE_NVM_ACTION_LIST              = 0x5,
+    WH_MESSAGE_NVM_ACTION_GETMETADATA       = 0x6,
     WH_MESSAGE_NVM_ACTION_DESTROYOBJECTS    = 0x7,
     WH_MESSAGE_NVM_ACTION_READ              = 0x8,
-    WH_MESSAGE_NVM_ACTION_ADDOBJECTDMA32    = 0x9,
-    WH_MESSAGE_NVM_ACTION_READDMA32         = 0xA,
-    WH_MESSAGE_NVM_ACTION_ADDOBJECTDMA64    = 0xB,
-    WH_MESSAGE_NVM_ACTION_READDMA64         = 0xC,
+    WH_MESSAGE_NVM_ACTION_ADDOBJECTDMA32    = 0x14,
+    WH_MESSAGE_NVM_ACTION_READDMA32         = 0x18,
+    WH_MESSAGE_NVM_ACTION_ADDOBJECTDMA64    = 0x24,
+    WH_MESSAGE_NVM_ACTION_READDMA64         = 0x28,
 };
 
 enum {
@@ -69,6 +69,39 @@ int wh_MessageNvm_TranslateInitResponse(uint16_t magic,
 /** NVM Cleanup Response */
 /* Use SimpleResponse */
 
+/** NVM GetAvailable Request */
+/* Empty message */
+
+/** NVM GetAvailable Response */
+typedef struct {
+    int32_t rc;
+    uint32_t avail_size;
+    uint32_t reclaim_size;
+    uint16_t avail_objects;
+    uint16_t reclaim_objects;
+} whMessageNvm_GetAvailableResponse;
+
+int wh_MessageNvm_TranslateGetAvailableResponse(uint16_t magic,
+        const whMessageNvm_GetAvailableResponse* src,
+        whMessageNvm_GetAvailableResponse* dest);
+
+/** NVM AddObject Request */
+typedef struct {
+    uint16_t id;
+    uint16_t access;
+    uint16_t flags;
+    uint16_t len;
+    uint8_t label[WOLFHSM_NVM_LABEL_LEN];
+    /* Data up to WH_MESSAGE_NVM_MAX_ADD_OBJECT_LEN follows */
+} whMessageNvm_AddObjectRequest;
+
+int wh_MessageNvm_TranslateAddObjectRequest(uint16_t magic,
+        const whMessageNvm_AddObjectRequest* src,
+        whMessageNvm_AddObjectRequest* dest);
+
+/** NVM AddObject Response */
+/* Use SimpleResponse */
+
 /** NVM List Request */
 typedef struct {
     uint16_t access;
@@ -90,22 +123,6 @@ typedef struct {
 int wh_MessageNvm_TranslateListResponse(uint16_t magic,
         const whMessageNvm_ListResponse* src,
         whMessageNvm_ListResponse* dest);
-
-/** NVM GetAvailable Request */
-/* Empty message */
-
-/** NVM GetAvailable Response */
-typedef struct {
-    int32_t rc;
-    uint32_t avail_size;
-    uint32_t reclaim_size;
-    uint16_t avail_objects;
-    uint16_t reclaim_objects;
-} whMessageNvm_GetAvailableResponse;
-
-int wh_MessageNvm_TranslateGetAvailableResponse(uint16_t magic,
-        const whMessageNvm_GetAvailableResponse* src,
-        whMessageNvm_GetAvailableResponse* dest);
 
 /** NVM GetMetadata Request */
 typedef struct {
@@ -129,23 +146,6 @@ typedef struct {
 int wh_MessageNvm_TranslateGetMetadataResponse(uint16_t magic,
         const whMessageNvm_GetMetadataResponse* src,
         whMessageNvm_GetMetadataResponse* dest);
-
-/** NVM AddObject Request */
-typedef struct {
-    uint16_t id;
-    uint16_t access;
-    uint16_t flags;
-    uint16_t len;
-    uint8_t label[WOLFHSM_NVM_LABEL_LEN];
-    /* Data up to WH_MESSAGE_NVM_MAX_ADD_OBJECT_LEN follows */
-} whMessageNvm_AddObjectRequest;
-
-int wh_MessageNvm_TranslateAddObjectRequest(uint16_t magic,
-        const whMessageNvm_AddObjectRequest* src,
-        whMessageNvm_AddObjectRequest* dest);
-
-/** NVM AddObject Response */
-/* Use SimpleResponse */
 
 /** NVM DestroyObjects Request */
 typedef struct {

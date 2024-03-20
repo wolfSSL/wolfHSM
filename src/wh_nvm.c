@@ -16,16 +16,25 @@
 
 int wh_Nvm_Init(whNvmContext* context, const whNvmConfig *config)
 {
+    int rc = 0;
+
     if (    (context == NULL) ||
-            (context->cb == NULL) ) {
+            (config == NULL) ) {
         return WH_ERROR_BADARGS;
     }
 
-    /* No callback? Return ABORTED */
-    if (context->cb->Init == NULL) {
-        return WH_ERROR_ABORTED;
+    context->cb = config->cb;
+    context->context = config->context;
+
+    if (context->cb->Init != NULL) {
+        rc = context->cb->Init(context->context, config->config);
+        if (rc != 0) {
+            context->cb = NULL;
+            context->context = NULL;
+        }
     }
-    return context->cb->Init(context->context, config);
+
+    return rc;
 }
 
 int wh_Nvm_Cleanup(whNvmContext* context)

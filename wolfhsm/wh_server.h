@@ -1,6 +1,11 @@
 #ifndef WOLFHSM_WH_SERVER_H_
 #define WOLFHSM_WH_SERVER_H_
 
+/*
+ * WolfHSM Public Server API
+ *
+ */
+
 #include "wolfhsm/wh_comm.h"
 #include "wolfhsm/wh_common.h"
 
@@ -11,6 +16,7 @@
 #include "wolfssl/wolfcrypt/random.h"
 #include "wolfssl/wolfcrypt/curve25519.h"
 
+#include "wolfhsm/wh_comm.h"
 #include "wolfhsm/wh_nvm.h"
 
 typedef struct CacheSlot {
@@ -38,19 +44,13 @@ typedef struct whServerConfig_t {
     whNvmConfig* nvm_config;
 } whServerConfig;
 
-/* Initialize the crypto, nvm, comms, and message handlers.
+/* Initialize the nvm, crypto, and comms, components.
  */
 int wh_Server_Init(whServerContext* server, whServerConfig* config);
 
 /* Receive and handle an incoming request message if present.
  */
 int wh_Server_HandleRequestMessage(whServerContext* server);
-
-/* Handle an NVM request and generate a response */
-int wh_Server_HandleNvmRequest(whServerContext* server,
-        uint16_t magic, uint16_t action, uint16_t seq,
-        uint16_t req_size, const void* req_packet,
-        uint16_t *out_resp_size, void* resp_packet);
 
 /* Stop all active and pending work, disconnect, and close all used resources.
  */
