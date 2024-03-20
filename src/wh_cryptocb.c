@@ -77,7 +77,6 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
                 do {
                     ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
                         rawPacket);
-                    sleep(1);
                 } while (ret == WH_ERROR_NOTREADY);
             }
             if (ret == 0) {
@@ -109,7 +108,6 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
                 do {
                     ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
                         rawPacket);
-                    sleep(1);
                 } while (ret == WH_ERROR_NOTREADY);
             }
             if (ret == 0) {
@@ -141,7 +139,6 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             do {
                 ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
                     rawPacket);
-                sleep(1);
             } while (ret == WH_ERROR_NOTREADY);
         }
         if (ret == 0) {

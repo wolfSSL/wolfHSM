@@ -3,7 +3,6 @@
 #include <stdlib.h>  /* For NULL */
 #include <string.h>  /* For memset, memcpy */
 
-#include <arpa/inet.h>
 #ifndef WOLFSSL_USER_SETTINGS
     #include "wolfssl/options.h"
 #endif
@@ -243,6 +242,9 @@ int _wh_Server_HandleCryptoRequest(whServerContext* server,
 #ifdef WOLFHSM_SYMMETRIC_INTERNAL
     uint8_t tmpKey[AES_MAX_KEY_SIZE + AES_IV_SIZE];
 #endif
+
+    if (server == NULL || action == NULL || data == NULL || size == NULL)
+        return BAD_FUNC_ARG;
 
     switch (*action)
     {

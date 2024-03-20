@@ -18,8 +18,8 @@ int whTest_Unit(void)
     /* Comm tests */
     WH_TEST_ASSERT(0 == whTest_Comm());
     WH_TEST_ASSERT(0 == whTest_Crypto());
-    //WH_TEST_ASSERT(0 == whTest_Flash_RamSim());
-    //WH_TEST_ASSERT(0 == whTest_NvmFlash());
+    WH_TEST_ASSERT(0 == whTest_Flash_RamSim());
+    WH_TEST_ASSERT(0 == whTest_NvmFlash());
 
     return 0;
 }

@@ -89,12 +89,10 @@ static void* _whClientTask(void *cf)
         printf("Failed to wc_curve25519_init_ex %d\n", ret);
         goto exit;
     }
-    printf("pre 1 wc_curve25519_make_key %d\n", ret);
     if ((ret = wc_curve25519_make_key(rng, CURVE25519_KEYSIZE, curve25519PrivateKey)) != 0) {
         printf("Failed to wc_curve25519_make_key %d\n", ret);
         goto exit;
     }
-    printf("pre 2 wc_curve25519_make_key %d\n", ret);
     if ((ret = wc_curve25519_make_key(rng, CURVE25519_KEYSIZE, curve25519PublicKey)) != 0) {
         printf("Failed to wc_curve25519_make_key %d\n", ret);
         goto exit;
@@ -192,7 +190,7 @@ static void _whClientServerThreadTest(whClientConfig* c_conf,
     }
 }
 
-static void wh_ClientServer_TcpThreadTest(void)
+static void wh_ClientServer_MemThreadTest(void)
 {
     whTransportMemConfig tmcf[1] = {{
         .req       = (whTransportMemCsr*)req,
@@ -231,7 +229,7 @@ int whTest_Crypto(void)
 {
 #if defined(WH_CFG_TEST_POSIX)
     printf("Testing crypto: (pthread) mem...\n");
-    wh_ClientServer_TcpThreadTest();
+    wh_ClientServer_MemThreadTest();
 #endif
     return 0;
 }
