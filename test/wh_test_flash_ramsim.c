@@ -51,20 +51,55 @@ int whTest_Flash_RamSim(void)
 
     WH_TEST_RETURN_ON_FAIL(whFlashRamsim_Init(&ctx, &cfg));
 
+    /* First, check write lock functionality, assuming we start unlocked */
+    if (ctx.writeLocked == 1) {
+        WH_ERROR_PRINT("RamSim locked on init\n");
+        whFlashRamsim_Cleanup(&ctx);
+        return WH_TEST_FAIL;
+    }
+    if ((ret = whFlashRamsim_WriteLock(&ctx, 0, cfg.sectorSize)) !=
+        WH_ERROR_OK) {
+        WH_ERROR_PRINT("Failed to set write lock, ret=%d\n", ret);
+        whFlashRamsim_Cleanup(&ctx);
+        return ret;
+    }
+    if ((ret = whFlashRamsim_Erase(&ctx, 0, cfg.sectorSize)) !=
+        WH_ERROR_LOCKED) {
+        WH_ERROR_PRINT("RamSim lock protection fail on erase, ret=%d\n", ret);
+        whFlashRamsim_Cleanup(&ctx);
+        return ret;
+    }
+    if ((ret = whFlashRamsim_Program(&ctx, 0, TEST_PAGE_SIZE, testData)) !=
+        WH_ERROR_LOCKED) {
+        WH_ERROR_PRINT("RamSim lock protection fail on program, ret=%d\n", ret);
+        whFlashRamsim_Cleanup(&ctx);
+        return ret;
+    }
+    if ((ret = whFlashRamsim_WriteUnlock(&ctx, 0, cfg.sectorSize)) !=
+        WH_ERROR_OK) {
+        WH_ERROR_PRINT("Failed to unlock, ret=%d\n", ret);
+        whFlashRamsim_Cleanup(&ctx);
+        return ret;
+    }
+
     for (uint32_t sector = 0; sector < cfg.size / cfg.sectorSize; sector++) {
 
         uint32_t sectorOffset = sector * cfg.sectorSize;
 
-        if (whFlashRamsim_Erase(&ctx, sectorOffset, cfg.sectorSize) != 0) {
-            WH_ERROR_PRINT(
-                "whFlashRamsim_Erase failed to erase sector %u: ret=%d\n",
-                sector, ret);
+        if ((ret = whFlashRamsim_Erase(&ctx, sectorOffset, cfg.sectorSize)) !=
+            0) {
+            WH_ERROR_PRINT("whFlashRamsim_Erase failed to erase sector %u "
+                           "(offset=%u, size=%u): ret=%d\n",
+                           sector, sectorOffset, cfg.sectorSize, ret);
             whFlashRamsim_Cleanup(&ctx);
             return ret;
         }
 
-        if (whFlashRamsim_BlankCheck(&ctx, sectorOffset, cfg.sectorSize) != 0) {
-            WH_ERROR_PRINT("Sector %u is not blank, ret=%d\n", sector, ret);
+        if ((ret = whFlashRamsim_BlankCheck(&ctx, sectorOffset,
+                                            cfg.sectorSize)) != 0) {
+            WH_ERROR_PRINT(
+                "Sector %u is not blank (offset=%u, size=%u): ret=%d\n", sector,
+                sectorOffset, cfg.sectorSize, ret);
             whFlashRamsim_Cleanup(&ctx);
             return ret;
         }

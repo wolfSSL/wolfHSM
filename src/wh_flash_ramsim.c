@@ -34,11 +34,12 @@ int whFlashRamsim_Init(void* context, const void* config)
         return WH_ERROR_BADARGS;
     }
 
-    ctx->size       = cfg->size;
-    ctx->sectorSize = cfg->sectorSize;
-    ctx->pageSize   = cfg->pageSize;
-    ctx->memory     = (uint8_t*)malloc(ctx->size);
-    ctx->erasedByte = cfg->erasedByte;
+    ctx->size        = cfg->size;
+    ctx->sectorSize  = cfg->sectorSize;
+    ctx->pageSize    = cfg->pageSize;
+    ctx->memory      = (uint8_t*)malloc(ctx->size);
+    ctx->erasedByte  = cfg->erasedByte;
+    ctx->writeLocked = 0;
 
     if (!ctx->memory) {
         return WH_ERROR_BADARGS;
