@@ -377,7 +377,6 @@ void wh_CommClientServer_MemThreadTest(void)
 
 void wh_CommClientServer_TcpThreadTest(void)
 {
-
     posixTransportTcpConfig mytcpconfig[1] = {{
         .server_ip_string = "127.0.0.1",
         .server_port      = 23456,

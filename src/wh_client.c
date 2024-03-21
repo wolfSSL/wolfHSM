@@ -7,13 +7,14 @@
 #include <stdlib.h>  /* For NULL */
 #include <string.h>  /* For memset, memcpy */
 
-#if 0
 /* wolfCrypt */
 #ifndef WOLFSSL_USER_SETTINGS
     #include "wolfssl/options.h"
 #endif
 #include "wolfssl/wolfcrypt/settings.h"
-
+#include "wolfssl/wolfcrypt/wc_port.h"
+#include "wolfssl/wolfcrypt/cryptocb.h"
+#if 0
 /* Common error return values reused by wolfHSM */
 #include "wolfssl/wolfcrypt/error-crypt.h"
 
@@ -31,9 +32,11 @@
 #include "wolfhsm/nvm_remote.h"
 #endif
 
+#include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_message_comm.h"
 #include "wolfhsm/wh_client.h"
+#include "wolfhsm/wh_cryptocb.h"
 
 int wh_Client_Init(whClientContext* c, const whClientConfig* config)
 {
@@ -43,12 +46,13 @@ int wh_Client_Init(whClientContext* c, const whClientConfig* config)
     }
 
     memset(c, 0, sizeof(*c));
-    if (    ((rc = wh_CommClient_Init(c->comm, config->comm))==0) &&
+    if (    ((rc = wh_CommClient_Init(c->comm, config->comm)) == 0) &&
+            ((rc = wolfCrypt_Init()) == 0) &&
+            ((rc = wc_CryptoCb_RegisterDevice(WOLFHSM_DEV_ID, wolfHSM_CryptoCb, c)) == 0) &&
 /*            ((rc = wh_NvmClient_Init(c->nvm, config->nvm))==0) && */
             1) {
         /* All good */
         c->inited = 1;
-
 #if 0
         /* Now sequentially send/recv init messages for each component */
         uint8_t buffer[WOLFHSM_COMM_MTU];
@@ -97,7 +101,6 @@ int wh_Client_Init(whClientContext* c, const whClientConfig* config)
             }
         }
 #endif
-
     }
     if (rc != 0) {
         wh_Client_Cleanup(c);
@@ -116,6 +119,7 @@ int wh_Client_Cleanup(whClientContext* c)
     }
 #endif
     (void)wh_CommClient_Cleanup(c->comm);
+    (void)wolfCrypt_Cleanup();
     memset(c, 0, sizeof(*c));
     return 0;
 }

@@ -1,34 +1,18 @@
-
 /* System libraries */
 #include <stdint.h>
 #include <stdlib.h>  /* For NULL */
 #include <string.h>  /* For memset, memcpy */
 
-#if 0
-/* wolfCrypt */
-#ifndef WOLFSSL_USER_SETTINGS
-    #include "wolfssl/options.h"
-#endif
-#include "wolfssl/wolfcrypt/settings.h"
-
-#include "wolfssl/wolfcrypt/error-crypt.h"
-#include "wolfssl/wolfcrypt/rsa.h"
-#include "wolfssl/wolfcrypt/aes.h"
-#include "wolfssl/wolfcrypt/hmac.h"
-#endif
-
 /* Common WolfHSM types and defines shared with the server */
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_comm.h"
 
-#if 0
-#include "wolfhsm/nvm.h"
-#include "wolfhsm/nvm_remote.h"
-#endif
-
 #include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_message_comm.h"
+#include "wolfhsm/wh_packet.h"
 #include "wolfhsm/wh_server.h"
+#include "wolfhsm/wh_server_crypto.h"
+#include "wolfhsm/wh_server_she.h"
 
 int wh_Server_Init(whServerContext* server, whServerConfig* config)
 {
@@ -41,7 +25,9 @@ int wh_Server_Init(whServerContext* server, whServerConfig* config)
     if (
 /*            ((rc = wh_Nvm_Init(server->nvm_device, config->nvm_device)) == 0) && */
         ((rc = wh_CommServer_Init(server->comm, config->comm)) == 0) &&
-/*        ((rc = wh_NvmServer_Init(server->nvm, config->nvm)) == 0)*/
+        ((rc = wolfCrypt_Init()) == 0) &&
+        ((rc = wc_InitRng_ex(server->crypto->rng, NULL, INVALID_DEVID)) == 0) &&
+/*        ((rc = server->nvm->cb->Init(server->nvm, config->nvm)) == 0) && */
         1) {
         /* All good */
     } else {
@@ -54,7 +40,7 @@ int wh_Server_Init(whServerContext* server, whServerConfig* config)
 static int _wh_Server_HandleCommRequest(whServerContext* server,
         uint16_t magic, uint16_t action, uint16_t seq,
         uint16_t req_size, const void* req_packet,
-        uint16_t *out_resp_size, void* resp_packet)
+        uint16_t* out_resp_size, void* resp_packet)
 {
     int rc = 0;
     switch (action) {
@@ -124,29 +110,15 @@ static int _wh_Server_HandleKeyRequest(whServerContext* server,
         uint16_t req_size, const void* req_packet,
         uint16_t *out_resp_size, void* resp_packet)
 {
-    int rc = 0;
-    switch (action) {
-    /* TODO: Add key/counter message handling here */
-    default:
-        /* Unknown request. Respond with empty packet */
-        *out_resp_size = 0;
-    }
-    return rc;
-}
-
-static int _wh_Server_HandleCryptoRequest(whServerContext* server,
-        uint16_t magic, uint16_t action, uint16_t seq,
-        uint16_t req_size, const void* req_packet,
-        uint16_t *out_resp_size, void* resp_packet)
-{
-    int rc = 0;
-    switch (action) {
-    /* TODO: Add crypto message handling here */
-    default:
-        /* Unknown request. Respond with empty packet */
-        *out_resp_size = 0;
-    }
-    return rc;
+    (void)server;
+    (void)magic;
+    (void)action;
+    (void)seq;
+    (void)req_size;
+    (void)req_packet;
+    (void)out_resp_size;
+    (void)resp_packet;
+    return 0;
 }
 
 static int _wh_Server_HandlePkcs11Request(whServerContext* server,
@@ -164,6 +136,7 @@ static int _wh_Server_HandlePkcs11Request(whServerContext* server,
     return rc;
 }
 
+#ifdef WOLFHSM_SHE_EXTENSION
 static int _wh_Server_HandleSheRequest(whServerContext* server,
         uint16_t magic, uint16_t action, uint16_t seq,
         uint16_t req_size, const void* req_packet,
@@ -178,6 +151,7 @@ static int _wh_Server_HandleSheRequest(whServerContext* server,
     }
     return rc;
 }
+#endif
 
 static int _wh_Server_HandleCustomRequest(whServerContext* server,
         uint16_t magic, uint16_t action, uint16_t seq,
@@ -225,23 +199,19 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
         case WH_MESSAGE_GROUP_KEY: {
             rc = _wh_Server_HandleKeyRequest(server, magic, action, seq,
                     size, data, &size, data);
-
         }; break;
         case WH_MESSAGE_GROUP_CRYPTO: {
-            rc = _wh_Server_HandleCryptoRequest(server, magic, action, seq,
-                    size, data, &size, data);
-
+            rc = _wh_Server_HandleCryptoRequest(server, action, data, &size);
         }; break;
         case WH_MESSAGE_GROUP_PKCS11: {
             rc = _wh_Server_HandlePkcs11Request(server, magic, action, seq,
                     size, data, &size, data);
-
         }; break;
-        case WH_MESSAGE_GROUP_SHE: {
-            rc = _wh_Server_HandleSheRequest(server, magic, action, seq,
-                    size, data, &size, data);
-
+#ifdef WOLFHSM_SHE_EXTENSION
+        case WOLFHSM_MESSAGE_GROUP_SHE: {
+            rc = _wh_Server_HandleSheRequest(data, size);
         }; break;
+#endif
         case WH_MESSAGE_GROUP_CUSTOM: {
             rc = _wh_Server_HandleCustomRequest(server, magic, action, seq,
                     size, data, &size, data);
@@ -273,9 +243,10 @@ int wh_Server_Cleanup(whServerContext* server)
          /*(void)wh_Nvm_Cleanup(server->nvm);*/
      }
 #endif
-     (void)wh_CommServer_Cleanup(server->comm);
-     memset(server, 0, sizeof(*server));
-     return 0;
+    (void)wh_CommServer_Cleanup(server->comm);
+    (void)wolfCrypt_Cleanup();
+    memset(server, 0, sizeof(*server));
+    return 0;
 }
 
 #if 0
@@ -448,4 +419,3 @@ int whClient_CompareManifest(const uint8_t* address, int* outResult)
     return 0;
 }
 #endif
-
