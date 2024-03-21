@@ -41,6 +41,12 @@ CFLAGS += $(DBGFLAGS)
 LDFLAGS += $(DBGFLAGS)
 endif
 
+# Add address sanitizer option
+ifeq ($(ASAN),1)
+CFLAGS += -fsanitize=address
+LDFLAGS += -fsanitize=address
+endif
+
 # wolfHSM-specific defines
 CFLAGS += -DWH_CONFIG
 
