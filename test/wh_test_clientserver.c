@@ -75,7 +75,7 @@ int whTest_ClientServerSequential(void)
     whFlashRamsimCtx fc[1] = {0};
     whFlashRamsimCfg fc_conf[1] = {{
         .size       = 1024 * 1024, /* 1MB  Flash */
-        .sectorSize = 4096,        /* 4KB  Sector Size */
+        .sectorSize = 128 * 1024,  /* 128KB  Sector Size */
         .pageSize   = 8,           /* 8B   Page Size */
         .erasedByte = ~(uint8_t)0,
     }};
@@ -298,6 +298,113 @@ int whTest_ClientServerSequential(void)
             list_id = 0;
         }
     } while (list_count > 0);
+
+    for (counter = 0; counter < 5; counter ++) {
+        whNvmMetadata meta = {
+                .id = counter + 40,
+                .access = WOLFHSM_NVM_ACCESS_ANY,
+                .flags = WOLFHSM_NVM_FLAGS_ANY,
+                .len = 0,
+                .label = {0},
+        };
+        whNvmSize len = 0;
+
+        whNvmId gid = 0;
+        whNvmAccess gaccess = 0;
+        whNvmFlags gflags = 0;
+        char glabel[WOLFHSM_NVM_LABEL_LEN] = {0};
+        whNvmSize glen = 0;
+
+        whNvmSize rlen = 0;
+
+        sprintf((char*)(meta.label), "Label:%d", meta.id);
+        len = sprintf(send_buffer, "Data:%d Counter:%d", meta.id, counter);
+
+#if defined(WH_CFG_TEST_VERBOSE)
+        printf("Client NvmAddObjectDmaRequest:%d, id:%u, access:0x%x, flags:0x%x, len:%u label:%s\nData:%s\n",
+            ret, meta.id, meta.access, meta.flags, len, meta.label, send_buffer);
+#endif
+
+        WH_TEST_RETURN_ON_FAIL(
+                wh_Client_NvmAddObjectDmaRequest(client,
+                        &meta,
+                        len, (uint8_t*)send_buffer));
+        WH_TEST_RETURN_ON_FAIL(
+                wh_Server_HandleRequestMessage(server));
+        WH_TEST_RETURN_ON_FAIL(
+                wh_Client_NvmAddObjectDmaResponse(client, &server_rc));
+        #if defined(WH_CFG_TEST_VERBOSE)
+                printf("Client NvmAddObjectDmaResponse:%d, server_rc:%d, meta.len:%u\n",
+                    ret, server_rc, meta.len);
+        #endif
+
+        WH_TEST_RETURN_ON_FAIL(
+                wh_Client_NvmGetAvailableRequest(client));
+        WH_TEST_RETURN_ON_FAIL(
+                wh_Server_HandleRequestMessage(server));
+        WH_TEST_RETURN_ON_FAIL(
+                wh_Client_NvmGetAvailableResponse(client, &server_rc,
+                        &avail_size, &avail_objects,
+                        &reclaim_size, &reclaim_objects));
+        #if defined(WH_CFG_TEST_VERBOSE)
+                printf("Client NvmGetAvailableResponse:%d, server_rc:%d, avail_size:%d avail_objects:%d, reclaim_size:%d reclaim_objects:%d\n",
+                    ret, server_rc, avail_size, avail_objects, reclaim_size, reclaim_objects);
+        #endif
+
+        WH_TEST_RETURN_ON_FAIL(
+                wh_Client_NvmGetMetadataRequest(client, meta.id));
+        WH_TEST_RETURN_ON_FAIL(
+                wh_Server_HandleRequestMessage(server));
+        WH_TEST_RETURN_ON_FAIL(
+                wh_Client_NvmGetMetadataResponse(client, &server_rc,
+                        &gid, &gaccess, &gflags,
+                        &glen,
+                        sizeof(glabel), (uint8_t*)glabel));
+        #if defined(WH_CFG_TEST_VERBOSE)
+                printf("Client NvmGetMetadataResponse:%d, id:%u, access:0x%x, flags:0x%x, len:%u label:%s\n",
+            ret, gid, gaccess, gflags, glen, glabel);
+        #endif
+
+        WH_TEST_RETURN_ON_FAIL(
+                wh_Client_NvmReadDmaRequest(client, meta.id, 0, glen, (uint8_t*)recv_buffer));
+        WH_TEST_RETURN_ON_FAIL(
+                wh_Server_HandleRequestMessage(server));
+        WH_TEST_RETURN_ON_FAIL(
+                wh_Client_NvmReadDmaResponse(client, &server_rc));
+        #if defined(WH_CFG_TEST_VERBOSE)
+                printf("Client NvmReadDmaResponse:%d, server_rc:%d id:%u, len:%u data:%s\n",
+            ret, server_rc, gid, rlen, recv_buffer);
+        #endif
+    }
+
+    do {
+    WH_TEST_RETURN_ON_FAIL(
+            wh_Client_NvmListRequest(client, list_access, list_flags, list_id));
+    WH_TEST_RETURN_ON_FAIL(
+            wh_Server_HandleRequestMessage(server));
+    WH_TEST_RETURN_ON_FAIL(
+            wh_Client_NvmListResponse(client, &server_rc,
+                    &list_count, &list_id));
+    #if defined(WH_CFG_TEST_VERBOSE)
+            printf("Client NvmListResponse:%d, server_rc:%d count:%u id:%u\n",
+        ret, server_rc, list_count, list_id);
+    #endif
+
+        if(list_count > 0) {
+            WH_TEST_RETURN_ON_FAIL(
+                    wh_Client_NvmDestroyObjectsRequest(client, 1, &list_id));
+            WH_TEST_RETURN_ON_FAIL(
+                    wh_Server_HandleRequestMessage(server));
+            WH_TEST_RETURN_ON_FAIL(
+                    wh_Client_NvmDestroyObjectsResponse(client, &server_rc));
+            #if defined(WH_CFG_TEST_VERBOSE)
+                    printf("Client NvmDestroyObjectsResponse:%d, server_rc:%d for id:%u with count:%u\n",
+                ret, server_rc, list_id, list_count);
+            #endif
+            list_id = 0;
+        }
+    } while (list_count > 0);
+
 
     WH_TEST_RETURN_ON_FAIL(
             wh_Client_NvmCleanupRequest(client));

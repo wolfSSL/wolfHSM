@@ -129,4 +129,52 @@ int wh_Client_NvmRead(whClientContext* c,
         whNvmId id, whNvmSize offset, whNvmSize data_len,
         int32_t *out_rc, whNvmSize *out_len, uint8_t* data);
 
+int wh_Client_NvmAddObjectDma32Request(whClientContext* c,
+        uint32_t metadata_hostaddr,
+        whNvmSize data_len, uint32_t data_hostaddr);
+int wh_Client_NvmAddObjectDma32Response(whClientContext* c, int32_t *out_rc);
+int wh_Client_NvmAddObjectDma32(whClientContext* c,
+        uint32_t metadata_hostaddr, whNvmSize data_len, uint32_t data_hostaddr,
+        int32_t *out_rc);
+
+int wh_Client_NvmAddObjectDma64Request(whClientContext* c,
+        uint64_t metadata_hostaddr,
+        whNvmSize data_len, uint64_t data_hostaddr);
+int wh_Client_NvmAddObjectDma64Response(whClientContext* c, int32_t *out_rc);
+int wh_Client_NvmAddObjectDma64(whClientContext* c,
+        uint64_t metadata_hostaddr, whNvmSize data_len, uint64_t data_hostaddr,
+        int32_t *out_rc);
+
+int wh_Client_NvmAddObjectDmaRequest(whClientContext* c,
+        whNvmMetadata* metadata,
+        whNvmSize data_len, const uint8_t* data);
+int wh_Client_NvmAddObjectDmaResponse(whClientContext* c, int32_t *out_rc);
+int wh_Client_NvmAddObjectDma(whClientContext* c,
+        whNvmMetadata* metadata, whNvmSize data_len, const uint8_t* data,
+        int32_t *out_rc);
+
+int wh_Client_NvmReadDma32Request(whClientContext* c,
+        whNvmId id, whNvmSize offset, whNvmSize data_len,
+        uint32_t data_hostaddr);
+int wh_Client_NvmReadDma32Response(whClientContext* c, int32_t *out_rc);
+int wh_Client_NvmReadDma32(whClientContext* c,
+        whNvmId id, whNvmSize offset, whNvmSize data_len,
+        uint32_t data_hostaddr, int32_t *out_rc);
+
+int wh_Client_NvmReadDma64Request(whClientContext* c,
+        whNvmId id, whNvmSize offset, whNvmSize data_len,
+        uint64_t data_hostaddr);
+int wh_Client_NvmReadDma64Response(whClientContext* c, int32_t *out_rc);
+int wh_Client_NvmReadDma64(whClientContext* c,
+        whNvmId id, whNvmSize offset, whNvmSize data_len,
+        uint64_t data_hostaddr, int32_t *out_rc);
+
+int wh_Client_NvmReadDmaRequest(whClientContext* c,
+        whNvmId id, whNvmSize offset, whNvmSize data_len,
+        uint8_t* data);
+int wh_Client_NvmReadDmaResponse(whClientContext* c, int32_t *out_rc);
+int wh_Client_NvmReadDma(whClientContext* c,
+        whNvmId id, whNvmSize offset, whNvmSize data_len, uint8_t* data,
+        int32_t *out_rc);
+
 #endif /* WOLFHSM_WH_CLIENT_H_ */
