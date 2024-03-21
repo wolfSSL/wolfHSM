@@ -32,10 +32,6 @@ static int _wh_Server_HandleKeyRequest(whServerContext* server,
         uint16_t magic, uint16_t action, uint16_t seq,
         uint16_t req_size, const void* req_packet,
         uint16_t *out_resp_size, void* resp_packet);
-static int _wh_Server_HandleCryptoRequest(whServerContext* server,
-        uint16_t magic, uint16_t action, uint16_t seq,
-        uint16_t req_size, const void* req_packet,
-        uint16_t *out_resp_size, void* resp_packet);
 static int _wh_Server_HandlePkcs11Request(whServerContext* server,
         uint16_t magic, uint16_t action, uint16_t seq,
         uint16_t req_size, const void* req_packet,
@@ -225,24 +221,24 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
         case WH_MESSAGE_GROUP_KEY:
             rc = _wh_Server_HandleKeyRequest(server, magic, action, seq,
                     size, data, &size, data);
-        }; break;
+        break;
         
-        case WH_MESSAGE_GROUP_CRYPTO: {
+        case WH_MESSAGE_GROUP_CRYPTO:
             rc = _wh_Server_HandleCryptoRequest(server, action, data, &size);
-        }; break;
+        break;
         
-        case WH_MESSAGE_GROUP_PKCS11: {
+        case WH_MESSAGE_GROUP_PKCS11:
             rc = _wh_Server_HandlePkcs11Request(server, magic, action, seq,
                     size, data, &size, data);
-        }; break;
+        break;
 
 #ifdef WOLFHSM_SHE_EXTENSION
-        case WOLFHSM_MESSAGE_GROUP_SHE: {
+        case WOLFHSM_MESSAGE_GROUP_SHE:
             rc = _wh_Server_HandleSheRequest(data, size);
-        }; break;
+        break;
 #endif
 
-        case WH_MESSAGE_GROUP_CUSTOM: {
+        case WH_MESSAGE_GROUP_CUSTOM:
             rc = _wh_Server_HandleCustomRequest(server, magic, action, seq,
                     size, data, &size, data);
             break;

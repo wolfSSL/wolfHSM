@@ -21,6 +21,8 @@
 
 #include "wolfhsm/wh_nvm.h"
 #include "wolfhsm/wh_nvm_flash.h"
+#include "wolfhsm/wh_flash_ramsim.h"
+
 #include "wolfhsm/wh_comm.h"
 #include "wolfhsm/wh_message.h"
 #include "wh_config.h"
@@ -219,8 +221,35 @@ static void wh_ClientServer_MemThreadTest(void)
                  .transport_config  = (void*)tmcf,
                  .server_id         = 5678,
     }};
+
+    /* RamSim Flash state and configuration */
+    whFlashRamsimCtx fc[1] = {0};
+    whFlashRamsimCfg fc_conf[1] = {{
+        .size       = 1024 * 1024, /* 1MB  Flash */
+        .sectorSize = 128 * 1024,  /* 128KB  Sector Size */
+        .pageSize   = 8,           /* 8B   Page Size */
+        .erasedByte = ~(uint8_t)0,
+    }};
+    const whFlashCb  fcb[1]          = {WH_FLASH_RAMSIM_CB};
+
+    /* NVM Flash Configuration using RamSim HAL Flash */
+    whNvmFlashConfig nf_conf[1] = {{
+        .cb      = fcb,
+        .context = fc,
+        .config  = fc_conf,
+    }};
+    whNvmFlashContext nfc[1] = {0};
+    whNvmCb nfcb[1] = {WH_NVM_FLASH_CB};
+
+    whNvmConfig n_conf[1] = {{
+            .cb = nfcb,
+            .context = nfc,
+            .config = nf_conf,
+    }};
+
     whServerConfig                  s_conf[1] = {{
-       .comm = cs_conf,
+       .comm_config = cs_conf,
+       .nvm_config = n_conf,
     }};
 
     _whClientServerThreadTest(c_conf, s_conf);
