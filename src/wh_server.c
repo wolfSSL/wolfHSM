@@ -19,8 +19,10 @@
 /* Server API's */
 #include "wolfhsm/wh_server.h"
 #include "wolfhsm/wh_server_crypto.h"
-#include "wolfhsm/wh_server_she.h"
 #include "wolfhsm/wh_server_internal.h"
+#if defined(WOLFHSM_SHE_EXTENSION)
+#include "wolfhsm/wh_server_she.h"
+#endif
 
 /** Forward declarations. */
 /* TODO: Move these out to separate C files */
@@ -58,8 +60,7 @@ int wh_Server_Init(whServerContext* server, whServerConfig* config)
     memset(server, 0, sizeof(*server));
     if (
         ((rc = wolfCrypt_Init()) == 0) &&
-        ((rc = wc_InitRng_ex(server->crypto->rng, NULL, INVALID_DEVID)) == 0) &&
-        1) {
+        ((rc = wc_InitRng_ex(server->crypto->rng, NULL, INVALID_DEVID)) == 0)) {
         rc = wh_Nvm_Init(server->nvm, config->nvm_config);
         if (rc == 0) {
             server->nvm->cb = config->nvm_config->cb;

@@ -19,13 +19,13 @@
 typedef struct CacheSlot {
     uint8_t commited;
     whNvmMetadata meta[1];
-    uint8_t buffer[WOLFHSM_NVM_MAX_OBJECT_SIZE];
+    uint8_t buffer[WOLFHSM_KEYCACHE_BUFSIZE];
 } CacheSlot;
 
 typedef struct {
     curve25519_key curve25519Private[1];
     curve25519_key curve25519Public[1];
-    WC_RNG rng[1]; 
+    WC_RNG rng[1];
 } crypto_context;
 
 /* Context structure to maintain the state of an HSM server */
