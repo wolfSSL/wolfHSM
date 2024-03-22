@@ -7,6 +7,7 @@
  */
 
 #include <stdint.h>
+#include <stdbool.h>
 
 #include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_comm.h"
@@ -30,8 +31,15 @@ typedef struct {
     WC_RNG rng[1];
 } crypto_context;
 
+typedef struct {
+    bool wcInitFlag: 1;
+    bool wcRngInitFlag: 1;
+    bool wcDevIdInitFlag: 1;
+} whServerFlags;
+
 /* Context structure to maintain the state of an HSM server */
 typedef struct whServerContext_t {
+    whServerFlags flags;
     whCommServer comm[1];
     whNvmContext nvm[1];
     crypto_context crypto[1];
