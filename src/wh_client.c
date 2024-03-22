@@ -8,34 +8,23 @@
 #include <string.h>  /* For memset, memcpy */
 
 /* wolfCrypt */
-#ifndef WOLFSSL_USER_SETTINGS
-    #include "wolfssl/options.h"
-#endif
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/wc_port.h"
 #include "wolfssl/wolfcrypt/cryptocb.h"
-#if 0
-/* Common error return values reused by wolfHSM */
-#include "wolfssl/wolfcrypt/error-crypt.h"
-
-#include "wolfssl/wolfcrypt/rsa.h"
-#include "wolfssl/wolfcrypt/aes.h"
-#include "wolfssl/wolfcrypt/hmac.h"
-#endif
 
 /* Common WolfHSM types and defines shared with the server */
+#include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_error.h"
 
 /* Components */
 #include "wolfhsm/wh_comm.h"
+#include "wolfhsm/wh_cryptocb.h"
 
 /* Message definitions */
-#include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_message_comm.h"
 
 #include "wolfhsm/wh_client.h"
-#include "wolfhsm/wh_cryptocb.h"
 
 int wh_Client_Init(whClientContext* c, const whClientConfig* config)
 {
@@ -51,7 +40,6 @@ int wh_Client_Init(whClientContext* c, const whClientConfig* config)
             ((rc = wc_CryptoCb_RegisterDevice(WOLFHSM_DEV_ID, wolfHSM_CryptoCb, c)) == 0) &&
             1) {
         /* All good */
-
     }
     if (rc != 0) {
         wh_Client_Cleanup(c);

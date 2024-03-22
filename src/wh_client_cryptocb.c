@@ -20,9 +20,7 @@
  */
 #include <stdint.h>
 #include <unistd.h>
-#ifndef WOLFSSL_USER_SETTINGS
-    #include "wolfssl/options.h"
-#endif
+
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/types.h"
 #include "wolfssl/wolfcrypt/error-crypt.h"

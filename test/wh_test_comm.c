@@ -32,8 +32,8 @@ int whTest_CommMem(void)
     int ret = 0;
 
     /* Transport memory configuration */
-    uint8_t              req[BUFFER_SIZE];
-    uint8_t              resp[BUFFER_SIZE];
+    uint8_t              req[BUFFER_SIZE] = {0};
+    uint8_t              resp[BUFFER_SIZE] = {0};
     whTransportMemConfig tmcf[1] = {{
         .req       = (whTransportMemCsr*)req,
         .req_size  = sizeof(req),
@@ -203,10 +203,12 @@ static void* _whCommClientTask(void* cf)
             WH_TEST_ASSERT_MSG((ret == WH_ERROR_NOTREADY) || (0 == ret),
                                "Client SendRequest: ret=%d", ret);
 #if defined(WH_CFG_TEST_VERBOSE)
-            printf("Client SendRequest:%d, flags %x, type:%x, seq:%d, len:%d, "
+            if(ret != WH_ERROR_NOTREADY) {
+	            printf("Client SendRequest:%d, flags %x, type:%x, seq:%d, len:%d, "
                    "%s\n",
                    ret, tx_req_flags, tx_req_type, tx_req_seq, tx_req_len,
                    tx_req);
+            }
 #endif
         } while ((ret == WH_ERROR_NOTREADY) && (usleep(ONE_MS) == 0));
 
@@ -222,10 +224,12 @@ static void* _whCommClientTask(void* cf)
             WH_TEST_ASSERT_MSG((ret == WH_ERROR_NOTREADY) || (0 == ret),
                                "Client RecvResponse: ret=%d", ret);
 #if defined(WH_CFG_TEST_VERBOSE)
-            printf("Client RecvResponse:%d, flags %x, type:%x, seq:%d, len:%d, "
+            if(ret != WH_ERROR_NOTREADY) {
+                printf("Client RecvResponse:%d, flags %x, type:%x, seq:%d, len:%d, "
                    "%s\n",
                    ret, rx_resp_flags, rx_resp_type, rx_resp_seq, rx_resp_len,
                    rx_resp);
+            }
 #endif
         } while ((ret == WH_ERROR_NOTREADY) && (usleep(ONE_MS) == 0));
 
@@ -267,10 +271,13 @@ static void* _whCommServerTask(void* cf)
             WH_TEST_ASSERT_MSG((ret == WH_ERROR_NOTREADY) || (0 == ret),
                                "Server RecvRequest: ret=%d", ret);
 #if defined(WH_CONFIG_TEST_VERBOSE)
-            printf("Server RecvRequest:%d, flags %x, type:%x, seq:%d, len:%d, "
+           if(ret != WH_ERROR_NOTREADY) {
+               printf("Server RecvRequest:%d, flags %x, type:%x, seq:%d, len:%d, "
+
                    "%s\n",
                    ret, rx_req_flags, rx_req_type, rx_req_seq, rx_req_len,
                    rx_req);
+           }
 #endif
         } while ((ret == WH_ERROR_NOTREADY) && (usleep(ONE_MS) == 0));
 
@@ -288,10 +295,12 @@ static void* _whCommServerTask(void* cf)
             WH_TEST_ASSERT_MSG((ret == WH_ERROR_NOTREADY) || (0 == ret),
                                "Server SendResponse: ret=%d", ret);
 #if defined(WH_CONFIG_TEST_VERBOSE)
-            printf("Server SendResponse:%d, flags %x, type:%x, seq:%d, len:%d, "
+            if(ret != WH_ERROR_NOTREADY) {
+                printf("Server SendResponse:%d, flags %x, type:%x, seq:%d, len:%d, "
                    "%s\n",
                    ret, rx_req_flags, rx_req_type, rx_req_seq, tx_resp_len,
                    tx_resp);
+            }
 #endif
         } while ((ret == WH_ERROR_NOTREADY) && (usleep(ONE_MS) == 0));
 
@@ -343,8 +352,8 @@ static void _whCommClientServerThreadTest(whCommClientConfig* c_conf,
 void wh_CommClientServer_MemThreadTest(void)
 {
     /* Transport memory configuration */
-    uint8_t              req[BUFFER_SIZE];
-    uint8_t              resp[BUFFER_SIZE];
+    uint8_t              req[BUFFER_SIZE] = {0};
+    uint8_t              resp[BUFFER_SIZE] = {0};
     whTransportMemConfig tmcf[1] = {{
         .req       = (whTransportMemCsr*)req,
         .req_size  = sizeof(req),

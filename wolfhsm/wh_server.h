@@ -9,9 +9,6 @@
 #include "wolfhsm/wh_comm.h"
 #include "wolfhsm/wh_common.h"
 
-#ifndef WOLFSSL_USER_SETTINGS
-    #include "wolfssl/options.h"
-#endif
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/random.h"
 #include "wolfssl/wolfcrypt/curve25519.h"

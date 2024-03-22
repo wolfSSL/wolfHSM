@@ -10,9 +10,6 @@
 
 #include <pthread.h> /* For pthread_create/cancel/join/_t */
 
-#ifndef WOLFSSL_USER_SETTINGS
-    #include "wolfssl/options.h"
-#endif
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/random.h"
 
@@ -44,15 +41,18 @@ enum {
         ONE_MS = 1000,
     };
 
-uint8_t              req[BUFFER_SIZE];
-uint8_t              resp[BUFFER_SIZE];
+uint8_t req[BUFFER_SIZE] = {0};
+uint8_t resp[BUFFER_SIZE] = {0};
+
+whClientContext _client[1] = {0};
+whServerContext _server[1] = {0};
 
 
 static void* _whClientTask(void *cf)
 {
     whClientConfig* config = (whClientConfig*)cf;
     int ret = 0;
-    whClientContext client[1];
+    whClientContext* client = _client;
 
     /* wolfcrypt */
     WC_RNG rng[1];
@@ -126,7 +126,7 @@ static void* _whServerTask(void* cf)
     whServerConfig* config = (whServerConfig*)cf;
     int ret = 0;
     int i;
-    whServerContext server[1];
+    whServerContext* server = _server;
 
     if (config == NULL) {
         return NULL;
@@ -167,8 +167,8 @@ exit:
 static void _whClientServerThreadTest(whClientConfig* c_conf,
                                 whServerConfig* s_conf)
 {
-    pthread_t cthread;
-    pthread_t sthread;
+    pthread_t cthread = {0};
+    pthread_t sthread = {0};
 
     void* retval;
     int rc = 0;
