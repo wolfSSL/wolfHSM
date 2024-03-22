@@ -228,7 +228,7 @@ static int hsmLoadKeyCurve25519(whServerContext* server, curve25519_key* key, ui
     return ret;
 }
 
-int _wh_Server_HandleCryptoRequest(whServerContext* server,
+int wh_Server_HandleCryptoRequest(whServerContext* server,
     uint16_t action, uint8_t* data, uint16_t* size)
 {
     int ret = 0;
@@ -250,7 +250,7 @@ int _wh_Server_HandleCryptoRequest(whServerContext* server,
         case WC_PK_TYPE_CURVE25519_KEYGEN:
             /* init private key */
             ret = wc_curve25519_init_ex(server->crypto->curve25519Private, NULL,
-                INVALID_DEVID);
+                server->crypto->devId);
             /* make the key */
             if (ret == 0) {
                 ret = wc_curve25519_make_key(server->crypto->rng,
@@ -277,10 +277,10 @@ int _wh_Server_HandleCryptoRequest(whServerContext* server,
             out = (uint8_t*)(&packet->pkCurve25519Res + 1);
             /* init ecc key */
             ret = wc_curve25519_init_ex(server->crypto->curve25519Private, NULL,
-                INVALID_DEVID);
+                server->crypto->devId);
             if (ret == 0) {
                 ret = wc_curve25519_init_ex(server->crypto->curve25519Public,
-                    NULL, INVALID_DEVID);
+                    NULL, server->crypto->devId);
             }
             /* load the private key */
             if (ret == 0) {

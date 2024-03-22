@@ -53,26 +53,49 @@ static int _wh_Server_HandleCustomRequest(whServerContext* server,
 int wh_Server_Init(whServerContext* server, whServerConfig* config)
 {
     int rc = 0;
+
     if ((server == NULL) || (config == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
     memset(server, 0, sizeof(*server));
-    if (
-        ((rc = wolfCrypt_Init()) == 0) &&
-        ((rc = wc_InitRng_ex(server->crypto->rng, NULL, INVALID_DEVID)) == 0)) {
-        rc = wh_Nvm_Init(server->nvm, config->nvm_config);
-        if (rc == 0) {
-            server->nvm->cb = config->nvm_config->cb;
-            server->nvm->context = config->nvm_config->context;
 
-            rc = wh_CommServer_Init(server->comm, config->comm_config);
-            if (rc == 0) {
-                /* All good */
-            }
+    rc = wolfCrypt_Init();
+    if (rc != 0) {
+        (void)wh_Server_Cleanup(server);
+        return WH_ERROR_ABORTED;
+    }
+
+#if defined(WOLF_CRYPTO_CB)
+    server->crypto->devId = config->devId;
+    if (config->cryptocb != NULL) {
+        /* register the crypto callback with wolSSL */
+        rc = wc_CryptoCb_RegisterDevice(config->devId, config->cryptocb, NULL);
+        if (rc != 0) {
+            (void)wh_Server_Cleanup(server);
+            return WH_ERROR_ABORTED;
         }
-    } else {
-        wh_Server_Cleanup(server);
+    }
+#endif /* WOLF_CRYPTO_CB */
+
+    rc = wc_InitRng_ex(server->crypto->rng, NULL, config->devId);
+    if (rc != 0) {
+        (void)wh_Server_Cleanup(server);
+        return WH_ERROR_ABORTED;
+    }
+
+    rc = wh_Nvm_Init(server->nvm, config->nvm_config);
+    if (rc != 0) {
+        (void)wh_Server_Cleanup(server);
+        return WH_ERROR_ABORTED;
+    }
+    server->nvm->cb      = config->nvm_config->cb;
+    server->nvm->context = config->nvm_config->context;
+
+    rc = wh_CommServer_Init(server->comm, config->comm_config);
+    if (rc != 0) {
+        (void)wh_Server_Cleanup(server);
+        return WH_ERROR_ABORTED;
     }
     return rc;
 }
@@ -226,7 +249,7 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
         break;
         
         case WH_MESSAGE_GROUP_CRYPTO:
-            rc = _wh_Server_HandleCryptoRequest(server, action, data, &size);
+            rc = wh_Server_HandleCryptoRequest(server, action, data, &size);
         break;
         
         case WH_MESSAGE_GROUP_PKCS11:

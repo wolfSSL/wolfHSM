@@ -15,6 +15,7 @@
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/random.h"
 #include "wolfssl/wolfcrypt/curve25519.h"
+#include "wolfssl/wolfcrypt/cryptocb.h"
 
 typedef struct CacheSlot {
     uint8_t commited;
@@ -23,6 +24,7 @@ typedef struct CacheSlot {
 } CacheSlot;
 
 typedef struct {
+    int devId;
     curve25519_key curve25519Private[1];
     curve25519_key curve25519Public[1];
     WC_RNG rng[1];
@@ -39,6 +41,10 @@ typedef struct whServerContext_t {
 typedef struct whServerConfig_t {
     whCommServerConfig* comm_config;
     whNvmConfig* nvm_config;
+#if defined WOLF_CRYPTO_CB /* TODO: should we be relying on wolfSSL defines? */
+    int devId;
+    CryptoDevCallbackFunc cryptocb;
+#endif
 } whServerConfig;
 
 /* Initialize the nvm, crypto, and comms, components.
