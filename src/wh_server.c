@@ -70,15 +70,19 @@ int wh_Server_Init(whServerContext* server, whServerConfig* config)
     server->crypto->devId = config->devId;
     if (config->cryptocb != NULL) {
         /* register the crypto callback with wolSSL */
-        rc = wc_CryptoCb_RegisterDevice(config->devId, config->cryptocb, NULL);
+        rc = wc_CryptoCb_RegisterDevice(server->crypto->devId,
+                                        config->cryptocb,
+                                        NULL);
         if (rc != 0) {
             (void)wh_Server_Cleanup(server);
             return WH_ERROR_ABORTED;
         }
     }
-#endif /* WOLF_CRYPTO_CB */
+#else
+    server->crypto->devId = INVALID_DEVID;
+#endif
 
-    rc = wc_InitRng_ex(server->crypto->rng, NULL, config->devId);
+    rc = wc_InitRng_ex(server->crypto->rng, NULL, server->crypto->devId);
     if (rc != 0) {
         (void)wh_Server_Cleanup(server);
         return WH_ERROR_ABORTED;
