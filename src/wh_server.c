@@ -85,6 +85,7 @@ int wh_Server_Cleanup(whServerContext* server)
 
     (void)wh_CommServer_Cleanup(server->comm);
     (void)wh_Nvm_Cleanup(server->nvm);
+    (void)wc_FreeRng(server->crypto->rng);
     (void)wolfCrypt_Cleanup();
 
     memset(server, 0, sizeof(*server));
