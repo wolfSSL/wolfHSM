@@ -122,8 +122,7 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             /* set type */
             packet->pkRsaReq.opType = info->pk.rsa.type;
             /* set keyId */
-            packet->pkRsaReq.keyId =
-                (intptr_t)(info->pk.rsa.key->devCtx);
+            packet->pkRsaReq.keyId = (intptr_t)(info->pk.rsa.key->devCtx);
             /* set inLen */
             packet->pkRsaReq.inLen = info->pk.rsa.inLen;
             /* set outLen */
@@ -181,7 +180,6 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             }
             break;
 #endif  /* !NO_RSA */
-
         case WC_PK_TYPE_CURVE25519_KEYGEN:
             packet->pkCurve25519kgReq.sz = info->pk.curve25519kg.size;
             /* write request */

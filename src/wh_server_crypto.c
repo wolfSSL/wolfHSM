@@ -193,7 +193,6 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
             }
             break;
 #endif  /* WOLFSSL_KEY_GEN */
-
         case WC_PK_TYPE_RSA:
             switch (packet->pkRsaReq.opType)
             {
