@@ -270,10 +270,10 @@ static void* _whCommServerTask(void* cf)
 
             WH_TEST_ASSERT_MSG((ret == WH_ERROR_NOTREADY) || (0 == ret),
                                "Server RecvRequest: ret=%d", ret);
+
 #if defined(WH_CONFIG_TEST_VERBOSE)
            if(ret != WH_ERROR_NOTREADY) {
                printf("Server RecvRequest:%d, flags %x, type:%x, seq:%d, len:%d, "
-
                    "%s\n",
                    ret, rx_req_flags, rx_req_type, rx_req_seq, rx_req_len,
                    rx_req);
@@ -294,6 +294,7 @@ static void* _whCommServerTask(void* cf)
 
             WH_TEST_ASSERT_MSG((ret == WH_ERROR_NOTREADY) || (0 == ret),
                                "Server SendResponse: ret=%d", ret);
+
 #if defined(WH_CONFIG_TEST_VERBOSE)
             if(ret != WH_ERROR_NOTREADY) {
                 printf("Server SendResponse:%d, flags %x, type:%x, seq:%d, len:%d, "
