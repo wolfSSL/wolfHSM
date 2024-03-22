@@ -49,9 +49,9 @@ static void _HexDump(const char* p, size_t data_len)
 static void _ShowAvailable(const whNvmCb* cb, void* context)
 {
     int       rc              = 0;
-    whNvmSize free_space      = 0;
+    uint32_t free_space      = 0;
     whNvmId   free_objects    = 0;
-    whNvmSize reclaim_space   = 0;
+    uint32_t reclaim_space   = 0;
     whNvmId   reclaim_objects = 0;
     rc = cb->GetAvailable(context, &free_space, &free_objects, &reclaim_space,
                           &reclaim_objects);

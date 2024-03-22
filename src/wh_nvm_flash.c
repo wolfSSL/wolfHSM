@@ -84,6 +84,8 @@ static int nfPartition_ReadMemState(whNvmFlashContext* context, int partition,
         nfMemState* state);
 static int nfPartition_ReadMemDirectory(whNvmFlashContext* context,
         int partition, nfMemDirectory* directory);
+static int nfPartition_ReadParseMemDirectory(whNvmFlashContext* context,
+        int partition, nfMemDirectory* directory);
 static int nfPartition_ProgramEpoch(whNvmFlashContext* context, int partition,
         uint32_t epoch);
 static int nfPartition_ProgramStart(whNvmFlashContext* context, int partition,
@@ -348,6 +350,16 @@ static int nfPartition_ReadMemDirectory(whNvmFlashContext* context, int partitio
                 &directory->objects[index]);
     }
     return ret;
+}
+
+static int nfPartition_ReadParseMemDirectory(whNvmFlashContext* context, int partition,
+            nfMemDirectory* directory)
+{
+    int ret = nfPartition_ReadMemDirectory(context, partition, directory);
+    if (ret != 0) {
+        return ret;
+    }
+    return nfMemDirectory_Parse(directory);
 }
 
 static int nfPartition_ProgramEpoch(whNvmFlashContext* context,
@@ -709,7 +721,9 @@ static int nfObject_Copy(whNvmFlashContext* context, int object_index,
 
 static int nfMemDirectory_Parse(nfMemDirectory* d)
 {
-    int done=0;
+    int done = 0;
+    int this_entry = 0;
+    int that_entry = 0;
 
     if (d == NULL) {
         return WH_ERROR_BADARGS;
@@ -755,7 +769,6 @@ static int nfMemDirectory_Parse(nfMemDirectory* d)
     }
 
     /* Now walk through backwards and reclaim any duplicate meta->id data counts */
-    int this_entry, that_entry;
     for (this_entry = NF_OBJECT_COUNT - 1; this_entry >= 0; this_entry --) {
         if (d->objects[this_entry].state.status == NF_STATUS_USED) {
             whNvmId this_id = d->objects[this_entry].metadata.id;
@@ -895,8 +908,9 @@ int wh_NvmFlash_Cleanup(void* c)
     return rc;
 }
 
-int wh_NvmFlash_List(void* c, whNvmAccess access, whNvmFlags flags,
-    whNvmId start_id, whNvmId* out_count, whNvmId* out_id)
+int wh_NvmFlash_List(void* c,
+        whNvmAccess access, whNvmFlags flags, whNvmId start_id,
+        whNvmId *out_count, whNvmId *out_id)
 {
     /* TODO: Implement access and flag matching */
     (void)access; (void)flags;
@@ -960,32 +974,32 @@ int wh_NvmFlash_List(void* c, whNvmAccess access, whNvmFlags flags,
 }
 
 int wh_NvmFlash_GetAvailable(void* c,
-        whNvmSize *out_size, whNvmId *out_count,
-        whNvmSize *out_reclaim_size, whNvmId *out_reclaim_count)
+        uint32_t *out_avail_size, whNvmId *out_avail_objects,
+        uint32_t *out_reclaim_size, whNvmId *out_reclaim_objects)
 {
     whNvmFlashContext* context = c;
     if (context == NULL) {
         return WH_ERROR_BADARGS;
     }
     nfMemDirectory *d = &context->directory;
-    if (out_size != NULL) {
-        *out_size = (context->partition_units -
+    if (out_avail_size != NULL) {
+        *out_avail_size = (context->partition_units -
                 NF_PARTITION_DATA_OFFSET - d->next_free_data) *
                 WHFU_BYTES_PER_UNIT;
     }
-    if (out_count != NULL) {
-        *out_count = NF_OBJECT_COUNT - d->next_free_object;
+    if (out_avail_objects != NULL) {
+        *out_avail_objects = NF_OBJECT_COUNT - d->next_free_object;
     }
     if (out_reclaim_size != NULL) {
             *out_reclaim_size = (d->reclaimable_data) * WHFU_BYTES_PER_UNIT;
         }
-        if (out_reclaim_count != NULL) {
-            *out_reclaim_count = d->reclaimable_entries;
+        if (out_reclaim_objects != NULL) {
+            *out_reclaim_objects = d->reclaimable_entries;
         }
     return 0;
 }
 
-int wh_NvmFlash_GetMetadata(void* c, whNvmId id, whNvmMetadata* out_meta)
+int wh_NvmFlash_GetMetadata(void* c, whNvmId id, whNvmMetadata* meta)
 {
     whNvmFlashContext* context = c;
     int entry = 0;
@@ -997,10 +1011,10 @@ int wh_NvmFlash_GetMetadata(void* c, whNvmId id, whNvmMetadata* out_meta)
 
     ret = nfMemDirectory_FindObjectIndexById(&context->directory, id, &entry);
     if (ret == 0) {
-        if (out_meta != NULL) {
-           memcpy(  out_meta,
+        if (meta != NULL) {
+           memcpy(  meta,
                     &context->directory.objects[entry].metadata,
-                    sizeof(*out_meta));
+                    sizeof(*meta));
         }
     }
     return ret;
@@ -1010,10 +1024,15 @@ int wh_NvmFlash_GetMetadata(void* c, whNvmId id, whNvmMetadata* out_meta)
  * version will be accessible.
  */
 int wh_NvmFlash_AddObject(void* c, whNvmMetadata *meta,
-        whNvmSize data_len,const uint8_t* data)
+        whNvmSize data_len, const uint8_t* data)
 {
     whNvmFlashContext* context = c;
     nfMemDirectory* d = NULL;
+    int oldentry = -1;
+    int ret = 0;
+    uint32_t epoch = 0;
+    uint32_t count = 0;
+
     if (    (context == NULL) ||
             (meta == NULL) ||
             ((data_len > 0) && (data == NULL)) ) {
@@ -1028,10 +1047,6 @@ int wh_NvmFlash_AddObject(void* c, whNvmMetadata *meta,
     }
 
     /* Find existing object so we can increment the epoch */
-    int oldentry = -1;
-    int ret = 0;
-    uint32_t epoch = 0;
-    uint32_t count = 0;
     ret = nfMemDirectory_FindObjectIndexById(d, meta->id, &oldentry);
     if (oldentry >= 0) {
         epoch = d->objects[oldentry].state.epoch + 1;
@@ -1076,91 +1091,115 @@ int wh_NvmFlash_AddObject(void* c, whNvmMetadata *meta,
 int wh_NvmFlash_DestroyObjects(void* c, whNvmId list_count,
         const whNvmId* id_list)
 {
+    int ret = 0;
     whNvmFlashContext* context = c;
     nfMemDirectory* d = NULL;
+    nfMemState new_state =  {0};
+    int list_entry = 0;
+    int entry = 0;
+    int src_part = 0;
+    int dest_part = 0;
+    uint32_t dest_object = 0;
+    uint32_t dest_data = 0;
+
     if (    (context == NULL) ||
             ((list_count > 0) && (id_list == NULL)) ) {
         return WH_ERROR_BADARGS;
     }
 
+    /* Context is valid.  Generate helper values */
     d = &context->directory;
+    src_part = context->active;
+    dest_part = !context->active;
+    new_state =  (nfMemState)   {
+                                    .status = NF_STATUS_FREE,
+                                    .epoch = context->state.epoch + 1,
+                                    .start = context->state.start,
+                                    .count = context->state.count,
+                                };
 
     /* Go through the current directory and mark the listed id's as bad */
-    int list_entry = 0;
-    int entry = 0;
-    int ret = 0;
     for (list_entry = 0; list_entry < list_count; list_entry++) {
-        /* Mark all matching ids as bad.  Should only be 1. */
+        /* Mark all matching entries as bad.  Should only be 1. */
         do {
             entry = -1;
-            ret = nfMemDirectory_FindObjectIndexById(d, id_list[list_entry], &entry);
-            if (entry >= 0) {
+            ret = nfMemDirectory_FindObjectIndexById(d, id_list[list_entry],
+                    &entry);
+            if ((ret == 0) && (entry >= 0)) {
                 d->objects[entry].state.status = NF_STATUS_DATA_BAD;
             }
-        } while (entry >=0);
+        } while (entry >= 0);
     }
-
-    uint32_t dest_object = 0;
-    uint32_t dest_data = 0;
-    int old_part = context->active;
-    int dest_partition = !context->active;
-
-    nfMemState new_state=
-        {
-            .status = NF_STATUS_FREE,
-            .epoch = context->state.epoch + 1,
-            .start = context->state.start,
-            .count = context->state.count,
-        };
 
     /* Blank check the inactive partition and erase if not blank */
-    ret = nfPartition_BlankCheck(context, dest_partition);
+    ret = nfPartition_BlankCheck(context, dest_part);
     if (ret == WH_ERROR_NOTBLANK) {
-        ret = nfPartition_Erase(context, dest_partition);
+        ret = nfPartition_Erase(context, dest_part);
     }
-    if (ret != 0) return ret;
-    ret = nfPartition_ProgramEpoch(context, dest_partition, new_state.epoch);
+    if (ret != 0) {
+        return ret;
+    }
 
-    if (ret != 0) return ret;
+    ret = nfPartition_ProgramEpoch(context, dest_part, new_state.epoch);
+    if (ret != 0) {
+        return ret;
+    }
 
     /* Write partition start */
-    ret = nfPartition_ProgramStart(context, dest_partition, new_state.start);
-    if (ret != 0) return ret;
+    ret = nfPartition_ProgramStart(context, dest_part, new_state.start);
+    if (ret != 0) {
+        return ret;
+    }
 
     /* Write each used object to new partition */
     for (entry = 0; entry < NF_OBJECT_COUNT; entry++) {
         if (d->objects[entry].state.status == NF_STATUS_USED) {
             /* TODO: Handle errors here better. Break out of loop? */
             ret = nfObject_Copy(context, entry,
-                    dest_partition, &dest_object, &dest_data);
+                    dest_part, &dest_object, &dest_data);
         }
     }
 
     /* Write partition count */
-    ret = nfPartition_ProgramCount(context, dest_partition, new_state.count);
+    ret = nfPartition_ProgramCount(context, dest_part, new_state.count);
+    if (ret != 0) {
+        return ret;
+    }
 
-    if (ret != 0) return ret;
+    /* Read and parse the new directory */
+    ret = nfPartition_ReadParseMemDirectory(context,
+            dest_part, &context->directory);
+    if (ret != 0) {
+        /* Failed to reread the directory.  Read the previous one instead */
+        (void)nfPartition_ReadParseMemDirectory(context,
+                src_part, &context->directory);
+        return ret;
+    }
 
-    /* Set new directory as active. Read and parse */
-    context->active = dest_partition;
+    /* Update to use new partition */
+    context->active = dest_part;
     new_state.status = NF_STATUS_USED;
     context->state = new_state;
-    nfPartition_ReadMemDirectory(context, context->active, &context->directory);
-    nfMemDirectory_Parse(&context->directory);
 
     /* Erase the old directory */
-    ret = nfPartition_Erase(context, old_part);
+    ret = nfPartition_Erase(context, src_part);
 
     return ret;
 }
 
 /* Read the data of the object starting at the byte offset */
 int wh_NvmFlash_Read(void* c, whNvmId id, whNvmSize offset,
-        whNvmSize data_len, uint8_t* out_data)
+        whNvmSize data_len, uint8_t* data)
 {
     whNvmFlashContext* context = c;
     int ret = 0;
-    int object_index;
+    int object_index = -1;
+
+    if (    (context == NULL) ||
+            ((data_len > 0) && (data == NULL)) ){
+        return WH_ERROR_BADARGS;
+    }
+
     ret = nfMemDirectory_FindObjectIndexById(
             &context->directory,
             id,
@@ -1172,7 +1211,7 @@ int wh_NvmFlash_Read(void* c, whNvmId id, whNvmSize offset,
                 object_index,
                 offset,
                 data_len,
-                out_data);
+                data);
     }
     return ret;
 }

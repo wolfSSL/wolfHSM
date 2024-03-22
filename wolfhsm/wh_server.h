@@ -1,20 +1,20 @@
 #ifndef WOLFHSM_WH_SERVER_H_
 #define WOLFHSM_WH_SERVER_H_
 
-#include "wolfhsm/wh_comm.h"
-#include "wolfhsm/wh_common.h"
+/*
+ * WolfHSM Public Server API
+ *
+ */
 
-#ifndef WOLFSSL_USER_SETTINGS
-    #include "wolfssl/options.h"
-#endif
+#include <stdint.h>
+
+#include "wolfhsm/wh_common.h"
+#include "wolfhsm/wh_comm.h"
+#include "wolfhsm/wh_nvm.h"
+
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/random.h"
 #include "wolfssl/wolfcrypt/curve25519.h"
-
-#if 0
-#include "wolfhsm/nvm.h"
-#include "wolfhsm/nvm_remote.h"
-#endif
 
 typedef struct CacheSlot {
     uint8_t commited;
@@ -31,22 +31,17 @@ typedef struct {
 /* Context structure to maintain the state of an HSM server */
 typedef struct whServerContext_t {
     whCommServer comm[1];
+    whNvmContext nvm[1];
     crypto_context crypto[1];
     CacheSlot cache[WOLFHSM_NUM_RAMKEYS];
-#if 0
-    whNvmFlashContext nvm[1];
-#endif
 } whServerContext;
 
 typedef struct whServerConfig_t {
-    whCommServerConfig* comm;
-#if 0
-    whNvmConfig* nvm_device;
-    whNvmServerConfig* nvm;
-#endif
+    whCommServerConfig* comm_config;
+    whNvmConfig* nvm_config;
 } whServerConfig;
 
-/* Initialize the crypto, nvm, comms, and message handlers.
+/* Initialize the nvm, crypto, and comms, components.
  */
 int wh_Server_Init(whServerContext* server, whServerConfig* config);
 

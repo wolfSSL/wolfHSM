@@ -4,9 +4,7 @@
 #include <string.h>  /* For memset, memcpy */
 
 #include <arpa/inet.h>
-#ifndef WOLFSSL_USER_SETTINGS
-    #include "wolfssl/options.h"
-#endif
+
 
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/types.h"

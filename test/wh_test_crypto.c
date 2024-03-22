@@ -6,33 +6,31 @@
 #include <stdint.h>
 #include <stdio.h>  /* For printf */
 #include <string.h> /* For memset, memcpy */
-#include <unistd.h> /* For sleep */
 
-#include <pthread.h> /* For pthread_create/cancel/join/_t */
-
-#ifndef WOLFSSL_USER_SETTINGS
-    #include "wolfssl/options.h"
-#endif
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/random.h"
 
-
+#include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_error.h"
+
+#include "wolfhsm/wh_comm.h"
+#include "wolfhsm/wh_transport_mem.h"
 
 #include "wolfhsm/wh_nvm.h"
 #include "wolfhsm/wh_nvm_flash.h"
-#include "wolfhsm/wh_comm.h"
-#include "wolfhsm/wh_message.h"
-#include "wh_config.h"
-
-
-#include "wolfhsm/wh_transport_mem.h"
-
-#include "port/posix/posix_transport_tcp.h"
-#include "port/posix/posix_flash_file.h"
+#include "wolfhsm/wh_flash_ramsim.h"
 
 #include "wolfhsm/wh_server.h"
 #include "wolfhsm/wh_client.h"
+
+#include "wh_config.h"
+
+#if defined(WH_CFG_TEST_POSIX)
+#include <unistd.h> /* For sleep */
+#include <pthread.h> /* For pthread_create/cancel/join/_t */
+#include "port/posix/posix_transport_tcp.h"
+#include "port/posix/posix_flash_file.h"
+#endif
 
 enum {
         REPEAT_COUNT = 10,
@@ -42,16 +40,12 @@ enum {
         ONE_MS = 1000,
     };
 
-uint8_t              req[BUFFER_SIZE];
-uint8_t              resp[BUFFER_SIZE];
-
 
 static void* _whClientTask(void *cf)
 {
+    whClientContext client[1] = {0};
     whClientConfig* config = (whClientConfig*)cf;
     int ret = 0;
-    whClientContext client[1];
-
     /* wolfcrypt */
     WC_RNG rng[1];
     curve25519_key curve25519PrivateKey[1];
@@ -121,10 +115,10 @@ exit:
 
 static void* _whServerTask(void* cf)
 {
+    whServerContext server[1] = {0};
     whServerConfig* config = (whServerConfig*)cf;
     int ret = 0;
     int i;
-    whServerContext server[1];
 
     if (config == NULL) {
         return NULL;
@@ -138,7 +132,6 @@ static void* _whServerTask(void* cf)
     /* handle rng */
     do {
         ret = wh_Server_HandleRequestMessage(server);
-        sleep(1);
     } while (ret == WH_ERROR_NOTREADY);
     if (ret != 0) {
         printf("Failed to wh_Server_HandleRequestMessage: %d\n", ret);
@@ -148,7 +141,6 @@ static void* _whServerTask(void* cf)
     for (i = 0; i < 4; i++) {
         do {
             ret = wh_Server_HandleRequestMessage(server);
-            sleep(1);
         } while (ret == WH_ERROR_NOTREADY);
         if (ret != 0) {
             printf("Failed to wh_Server_HandleRequestMessage: %d\n", ret);
@@ -165,8 +157,8 @@ exit:
 static void _whClientServerThreadTest(whClientConfig* c_conf,
                                 whServerConfig* s_conf)
 {
-    pthread_t cthread;
-    pthread_t sthread;
+    pthread_t cthread = {0};
+    pthread_t sthread = {0};
 
     void* retval;
     int rc = 0;
@@ -192,6 +184,9 @@ static void _whClientServerThreadTest(whClientConfig* c_conf,
 
 static void wh_ClientServer_MemThreadTest(void)
 {
+    uint8_t req[BUFFER_SIZE] = {0};
+    uint8_t resp[BUFFER_SIZE] = {0};
+
     whTransportMemConfig tmcf[1] = {{
         .req       = (whTransportMemCsr*)req,
         .req_size  = sizeof(req),
@@ -219,8 +214,35 @@ static void wh_ClientServer_MemThreadTest(void)
                  .transport_config  = (void*)tmcf,
                  .server_id         = 5678,
     }};
+
+    /* RamSim Flash state and configuration */
+    whFlashRamsimCtx fc[1] = {0};
+    whFlashRamsimCfg fc_conf[1] = {{
+        .size       = 1024 * 1024, /* 1MB  Flash */
+        .sectorSize = 128 * 1024,  /* 128KB  Sector Size */
+        .pageSize   = 8,           /* 8B   Page Size */
+        .erasedByte = ~(uint8_t)0,
+    }};
+    const whFlashCb  fcb[1]          = {WH_FLASH_RAMSIM_CB};
+
+    /* NVM Flash Configuration using RamSim HAL Flash */
+    whNvmFlashConfig nf_conf[1] = {{
+        .cb      = fcb,
+        .context = fc,
+        .config  = fc_conf,
+    }};
+    whNvmFlashContext nfc[1] = {0};
+    whNvmCb nfcb[1] = {WH_NVM_FLASH_CB};
+
+    whNvmConfig n_conf[1] = {{
+            .cb = nfcb,
+            .context = nfc,
+            .config = nf_conf,
+    }};
+
     whServerConfig                  s_conf[1] = {{
-       .comm = cs_conf,
+       .comm_config = cs_conf,
+       .nvm_config = n_conf,
     }};
 
     _whClientServerThreadTest(c_conf, s_conf);
