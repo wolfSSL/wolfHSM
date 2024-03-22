@@ -1,3 +1,5 @@
+#if 0
+
 /* System libraries */
 #include <stdint.h>
 #include <stdlib.h>  /* For NULL */
@@ -20,7 +22,6 @@
 #include "wolfhsm/wh_server.h"
 #include "wolfhsm/wh_packet.h"
 
-#if 0
 const uint8_t WOLFHSM_SHE_KEY_UPDATE_ENC_C[] = {0x01, 0x01, 0x53, 0x48, 0x45,
     0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xB0};
 const uint8_t WOLFHSM_SHE_KEY_UPDATE_MAC_C[] = {0x01, 0x02, 0x53, 0x48, 0x45,
