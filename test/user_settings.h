@@ -56,6 +56,7 @@ extern "C" {
 /** RSA Options */
 /* #define NO_RSA  */
 #define HAVE_RSA
+#define WOLFSSL_KEY_GEN
 #define WC_RSA_PSS
 #define WOLFSSL_PSS_LONG_SALT
 #define FP_MAX_BITS 4096

@@ -16,6 +16,7 @@
 
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/random.h"
+#include "wolfssl/wolfcrypt/rsa.h"
 #include "wolfssl/wolfcrypt/curve25519.h"
 #include "wolfssl/wolfcrypt/cryptocb.h"
 
@@ -32,6 +33,7 @@ typedef struct CacheSlot {
 
 typedef struct {
     int devId;
+    RsaKey rsa[1];
     curve25519_key curve25519Private[1];
     curve25519_key curve25519Public[1];
     WC_RNG rng[1];
