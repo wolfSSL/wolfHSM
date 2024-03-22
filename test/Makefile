@@ -15,19 +15,8 @@ INC = -I$(WOLFHSM_DIR) \
       -I$(USER_SETTINGS_DIR) \
       -I$(WOLFSSL_DIR) \
 
-# Defines
-#DEF = -DWOLFSSL_USER_SETTINGS
-
-#These are required for wolfHSM
-DEF = -DWOLFCRYPT_ONLY -DWOLF_CRYPTO_CB -DNO_INLINE 
-#-DHAVE_ANONYMOUS_INLINE_AGGREGATES
-#-DSINGLE_THREADED
-
-#These are recommended for wolfHSM
-DEF += -DHAVE_SHA256 -DHAVE_CURVE25519 -DHAVE_HASHDRBG -DUSE_FAST_MATH
-
-#These are disabled by default for wolfHSM
-DEF += -DNO_MD5 -DNO_DSA -DNO_SHA -DNO_PWDBASED
+# Defines.  Required to have user_settings to ensure consistent builds */
+DEF = -DWOLFSSL_USER_SETTINGS
 
 # Architecture
 ARCHFLAGS ?=

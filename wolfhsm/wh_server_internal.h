@@ -9,8 +9,6 @@
 #include <stdint.h>
 
 #include "wolfhsm/wh_server.h"
-#include "wolfhsm/wh_comm.h"
-#include "wolfhsm/wh_nvm.h"
 
 /* Handle an NVM request and generate a response
  * Defined in server_nvm.c */

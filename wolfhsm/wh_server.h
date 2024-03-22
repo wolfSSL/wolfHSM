@@ -6,15 +6,15 @@
  *
  */
 
-#include "wolfhsm/wh_comm.h"
+#include <stdint.h>
+
 #include "wolfhsm/wh_common.h"
+#include "wolfhsm/wh_comm.h"
+#include "wolfhsm/wh_nvm.h"
 
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/random.h"
 #include "wolfssl/wolfcrypt/curve25519.h"
-
-#include "wolfhsm/wh_comm.h"
-#include "wolfhsm/wh_nvm.h"
 
 typedef struct CacheSlot {
     uint8_t commited;
