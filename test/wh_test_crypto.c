@@ -52,10 +52,14 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     int ret = 0;
     /* wolfcrypt */
     WC_RNG rng[1];
+    RsaKey rsa[1];
     curve25519_key curve25519PrivateKey[1];
     curve25519_key curve25519PublicKey[1];
     uint32_t outLen;
     uint8_t key[16];
+    char plainText[16];
+    char cipherText[256];
+    char finalText[256];
     uint8_t sharedOne[CURVE25519_KEYSIZE];
     uint8_t sharedTwo[CURVE25519_KEYSIZE];
 
@@ -75,7 +79,41 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         WH_ERROR_PRINT("Failed to wc_RNG_GenerateBlock %d\n", ret);
         goto exit;
     }
-
+    printf("RNG SUCCESS\n");
+    /* test rsa */
+    if((ret = wc_InitRsaKey_ex(rsa, NULL, WOLFHSM_DEV_ID)) != 0) {
+        printf("Failed to wc_InitRsaKey_ex %d\n", ret);
+        goto exit;
+    }
+    if((ret = wc_MakeRsaKey(rsa, 2048, 65537, rng)) != 0) {
+        printf("Failed to wc_MakeRsaKey %d\n", ret);
+        goto exit;
+    }
+    if ((ret = wc_RsaPublicEncrypt((byte*)plainText, sizeof(plainText), (byte*)cipherText,
+        sizeof(cipherText), rsa, rng)) < 0) {
+        printf("Failed to wc_RsaPublicEncrypt %d\n", ret);
+        goto exit;
+    }
+    if ((ret = wc_RsaPrivateDecrypt((byte*)cipherText, ret, (byte*)finalText,
+        sizeof(finalText), rsa)) < 0) {
+        printf("Failed to wc_RsaPrivateDecrypt %d\n", ret);
+        goto exit;
+    }
+#if 0
+    if((ret = wolfHSM_EvictKey(ctx, (uint32_t)rsa->devCtx)) != 0) {
+        printf("Failed to wolfHSM_EraseKey %d\n", ret);
+        return 1;
+    }
+#endif
+    if((ret = wc_FreeRsaKey(rsa)) != 0) {
+        printf("Failed to wc_FreeRsaKey %d\n", ret);
+        goto exit;
+    }
+    printf("RSA KEYGEN SUCCESS\n");
+    if (memcmp(plainText, finalText, sizeof(plainText)) == 0)
+        printf("RSA SUCCESS\n");
+    else
+        printf("RSA FAILED TO MATCH\n");
     /* test curve25519 */
     if ((ret = wc_curve25519_init_ex(curve25519PrivateKey, NULL, WOLFHSM_DEV_ID)) != 0) {
         WH_ERROR_PRINT("Failed to wc_curve25519_init_ex %d\n", ret);
@@ -181,7 +219,55 @@ static void* _whClientTask(void *cf)
 
 static void* _whServerTask(void* cf)
 {
-    (void)whTest_CryptoServerConfig(cf);
+    whServerConfig* config = (whServerConfig*)cf;
+    int ret = 0;
+    int i;
+    whServerContext server[1];
+
+    if (config == NULL) {
+        return NULL;
+    }
+
+    ret = wh_Server_Init(server, config);
+    if (ret != 0) {
+        printf("Failed to wh_Server_Init: %d", ret);
+        return NULL;
+    }
+    /* handle rng */
+    do {
+        ret = wh_Server_HandleRequestMessage(server);
+        sleep(1);
+    } while (ret == WH_ERROR_NOTREADY);
+    if (ret != 0) {
+        printf("Failed to wh_Server_HandleRequestMessage: %d\n", ret);
+        goto exit;
+    }
+    /* handle rsa */
+    for (i = 0; i < 3; i++) {
+        do {
+            ret = wh_Server_HandleRequestMessage(server);
+            sleep(1);
+        } while (ret == WH_ERROR_NOTREADY);
+        if (ret != 0) {
+            printf("Failed to wh_Server_HandleRequestMessage: %d\n", ret);
+            goto exit;
+        }
+    }
+    /* handle curve25519 */
+    for (i = 0; i < 4; i++) {
+        do {
+            ret = wh_Server_HandleRequestMessage(server);
+            sleep(1);
+        } while (ret == WH_ERROR_NOTREADY);
+        if (ret != 0) {
+            printf("Failed to wh_Server_HandleRequestMessage: %d\n", ret);
+            goto exit;
+        }
+    }
+exit:
+    ret = wh_Server_Cleanup(server);
+    printf("ServerCleanup:%d\n", ret);
+
     return NULL;
 }
 
