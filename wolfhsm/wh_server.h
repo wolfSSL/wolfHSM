@@ -7,6 +7,7 @@
  */
 
 #include <stdint.h>
+#include <stdbool.h>
 
 #include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_comm.h"
@@ -15,6 +16,7 @@
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/random.h"
 #include "wolfssl/wolfcrypt/curve25519.h"
+#include "wolfssl/wolfcrypt/cryptocb.h"
 
 typedef struct CacheSlot {
     uint8_t commited;
@@ -23,13 +25,21 @@ typedef struct CacheSlot {
 } CacheSlot;
 
 typedef struct {
+    int devId;
     curve25519_key curve25519Private[1];
     curve25519_key curve25519Public[1];
     WC_RNG rng[1];
 } crypto_context;
 
+typedef struct {
+    bool wcInitFlag: 1;
+    bool wcRngInitFlag: 1;
+    bool wcDevIdInitFlag: 1;
+} whServerFlags;
+
 /* Context structure to maintain the state of an HSM server */
 typedef struct whServerContext_t {
+    whServerFlags flags;
     whCommServer comm[1];
     whNvmContext nvm[1];
     crypto_context crypto[1];
@@ -39,6 +49,10 @@ typedef struct whServerContext_t {
 typedef struct whServerConfig_t {
     whCommServerConfig* comm_config;
     whNvmConfig* nvm_config;
+#if defined WOLF_CRYPTO_CB /* TODO: should we be relying on wolfSSL defines? */
+    int devId;
+    CryptoDevCallbackFunc cryptocb;
+#endif
 } whServerConfig;
 
 /* Initialize the nvm, crypto, and comms, components.

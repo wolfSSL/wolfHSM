@@ -53,26 +53,54 @@ static int _wh_Server_HandleCustomRequest(whServerContext* server,
 int wh_Server_Init(whServerContext* server, whServerConfig* config)
 {
     int rc = 0;
+
     if ((server == NULL) || (config == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
     memset(server, 0, sizeof(*server));
-    if (
-        ((rc = wolfCrypt_Init()) == 0) &&
-        ((rc = wc_InitRng_ex(server->crypto->rng, NULL, INVALID_DEVID)) == 0)) {
-        rc = wh_Nvm_Init(server->nvm, config->nvm_config);
-        if (rc == 0) {
-            server->nvm->cb = config->nvm_config->cb;
-            server->nvm->context = config->nvm_config->context;
 
-            rc = wh_CommServer_Init(server->comm, config->comm_config);
-            if (rc == 0) {
-                /* All good */
-            }
+    rc = wolfCrypt_Init();
+    if (rc != 0) {
+        (void)wh_Server_Cleanup(server);
+        return WH_ERROR_ABORTED;
+    }
+    server->flags.wcInitFlag = true;
+
+#if defined(WOLF_CRYPTO_CB)
+    server->crypto->devId = config->devId;
+    if (config->cryptocb != NULL) {
+        /* register the crypto callback with wolSSL */
+        rc = wc_CryptoCb_RegisterDevice(server->crypto->devId,
+                                        config->cryptocb,
+                                        NULL);
+        if (rc != 0) {
+            (void)wh_Server_Cleanup(server);
+            return WH_ERROR_ABORTED;
         }
-    } else {
-        wh_Server_Cleanup(server);
+    }
+#else
+    server->crypto->devId = INVALID_DEVID;
+#endif
+    server->flags.wcDevIdInitFlag = true;
+
+    rc = wc_InitRng_ex(server->crypto->rng, NULL, server->crypto->devId);
+    if (rc != 0) {
+        (void)wh_Server_Cleanup(server);
+        return WH_ERROR_ABORTED;
+    }
+    server->flags.wcRngInitFlag = true;
+
+    rc = wh_Nvm_Init(server->nvm, config->nvm_config);
+    if (rc != 0) {
+        (void)wh_Server_Cleanup(server);
+        return WH_ERROR_ABORTED;
+    }
+
+    rc = wh_CommServer_Init(server->comm, config->comm_config);
+    if (rc != 0) {
+        (void)wh_Server_Cleanup(server);
+        return WH_ERROR_ABORTED;
     }
     return rc;
 }
@@ -85,10 +113,24 @@ int wh_Server_Cleanup(whServerContext* server)
 
     (void)wh_CommServer_Cleanup(server->comm);
     (void)wh_Nvm_Cleanup(server->nvm);
-    (void)wc_FreeRng(server->crypto->rng);
-    (void)wolfCrypt_Cleanup();
+
+#if defined(WOLF_CRYPTO_CB)
+    if (server->flags.wcDevIdInitFlag &&
+        server->crypto->devId != INVALID_DEVID) {
+        (void)wc_CryptoCb_UnRegisterDevice(server->crypto->devId);
+    }
+#endif
+
+    if (server->flags.wcRngInitFlag) {
+        (void)wc_FreeRng(server->crypto->rng);
+    }
+
+    if (server->flags.wcInitFlag) {
+        (void)wolfCrypt_Cleanup();
+    }
 
     memset(server, 0, sizeof(*server));
+
     return 0;
 }
 
@@ -226,7 +268,7 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
         break;
         
         case WH_MESSAGE_GROUP_CRYPTO:
-            rc = _wh_Server_HandleCryptoRequest(server, action, data, &size);
+            rc = wh_Server_HandleCryptoRequest(server, action, data, &size);
         break;
         
         case WH_MESSAGE_GROUP_PKCS11:
