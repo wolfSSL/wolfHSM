@@ -73,39 +73,11 @@ enum {
     WH_COMM_AUX_RESP_UNSUPP     = 0xFFFF, /* Request is not supported */
 };
 
-static inline uint8_t wh_Translate8(uint16_t magic, uint8_t val)
-{
-    (void) magic;
-    return val;
-}
+uint8_t wh_Translate8(uint16_t magic, uint8_t val);
+uint16_t wh_Translate16(uint16_t magic, uint16_t val);
+uint32_t wh_Translate32(uint16_t magic, uint32_t val);
+uint64_t wh_Translate64(uint16_t magic, uint64_t val);
 
-static inline uint16_t wh_Translate16(uint16_t magic, uint16_t val)
-{
-    return WH_COMM_FLAGS_SWAPTEST(magic) ? val :
-            (val >> 8) | (val << 8);
-}
-
-static inline uint32_t wh_Translate32(uint16_t magic, uint32_t val)
-{
-    return WH_COMM_FLAGS_SWAPTEST(magic) ? val :
-            ((val & 0xFF000000ul) >> 24) |
-            ((val & 0xFF0000ul) >> 8) |
-            ((val & 0xFF00ul) >> 8) |
-            ((val & 0xFFul) << 24);
-}
-
-static inline uint64_t wh_Translate64(uint16_t magic, uint64_t val)
-{
-    return WH_COMM_FLAGS_SWAPTEST(magic) ? val :
-            ((val & 0xFF00000000000000ull) >> 56) |
-            ((val & 0xFF000000000000ull) >> 40) |
-            ((val & 0xFF0000000000ull) >> 24) |
-            ((val & 0xFF00000000ull) >> 8)|
-            ((val & 0xFF000000ull) << 8) |
-            ((val & 0xFF0000ull) << 24 ) |
-            ((val & 0xFF00ull) << 40) |
-            ((val & 0xFFull) << 56);
-}
 
 /* Helper functions for struct members */
 #define WH_T16(_m, _d, _s, _f) _d->_f = wh_Translate16(_m, _s->_f)
