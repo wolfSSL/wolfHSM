@@ -14,6 +14,8 @@
 #include "wolfhsm/wh_message_nvm.h"
 #include "wolfhsm/wh_server.h"
 
+#include "wolfhsm/wh_server_nvm.h"
+
 int wh_Server_HandleNvmRequest(whServerContext* server,
         uint16_t magic, uint16_t action, uint16_t seq,
         uint16_t req_size, const void* req_packet,

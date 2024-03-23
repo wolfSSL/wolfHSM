@@ -1,5 +1,5 @@
-#ifndef WOLFHSM_WH_SERVER_INTERNAL_H_
-#define WOLFHSM_WH_SERVER_INTERNAL_H_
+#ifndef WOLFHSM_WH_SERVER_NVM_H_
+#define WOLFHSM_WH_SERVER_NVM_H_
 
 /*
  * WolfHSM Internal Server API
@@ -17,4 +17,4 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
         uint16_t req_size, const void* req_packet,
         uint16_t *out_resp_size, void* resp_packet);
 
-#endif /* WOLFHSM_WH_SERVER_INTERNAL_H_ */
+#endif /* WOLFHSM_WH_SERVER_NVM_H_ */

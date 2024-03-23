@@ -17,6 +17,8 @@
 #include "wolfhsm/wh_server.h"
 #include "wolfhsm/wh_packet.h"
 
+#include "wolfhsm/wh_server_crypto.h"
+
 static int hsmGetUniqueId(whServerContext* server)
 {
     int i;
@@ -232,7 +234,7 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
     uint16_t action, uint8_t* data, uint16_t* size)
 {
     int ret = 0;
-    uint32_t field;
+    word32 field;
     uint8_t* out;
     whPacket* packet = (whPacket*)data;
 #ifdef WOLFHSM_SYMMETRIC_INTERNAL

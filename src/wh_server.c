@@ -18,7 +18,7 @@
 
 /* Server API's */
 #include "wolfhsm/wh_server.h"
-#include "wolfhsm/wh_server_internal.h"
+#include "wolfhsm/wh_server_nvm.h"
 #include "wolfhsm/wh_server_crypto.h"
 #if defined(WOLFHSM_SHE_EXTENSION)
 #include "wolfhsm/wh_server_she.h"
