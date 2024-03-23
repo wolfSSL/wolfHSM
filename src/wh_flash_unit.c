@@ -135,8 +135,8 @@ int wh_FlashUnit_ReadBytes(const whFlashCb* cb, void* context,
     int data_rem;
 
     int ret = 0;
-    int offset_units = byte_offset / WHFU_BYTES_PER_UNIT;
-    int offset_rem = byte_offset % WHFU_BYTES_PER_UNIT;
+    uint32_t offset_units = byte_offset / WHFU_BYTES_PER_UNIT;
+    uint32_t offset_rem = byte_offset % WHFU_BYTES_PER_UNIT;
 
     if ((cb == NULL) || (cb->Read == NULL)) {
         return WH_ERROR_BADARGS;
@@ -146,7 +146,7 @@ int wh_FlashUnit_ReadBytes(const whFlashCb* cb, void* context,
     if (offset_rem != 0) {
         ret = wh_FlashUnit_Read(cb, context, offset_units, 1, &buffer.unit);
         if (ret == 0) {
-            int this_size = offset_rem;
+            uint32_t this_size = offset_rem;
             if (data_len < this_size) this_size = data_len;
             memcpy(data, &buffer.bytes[WHFU_BYTES_PER_UNIT - offset_rem], this_size);
             data += this_size;
