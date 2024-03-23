@@ -55,9 +55,9 @@ typedef struct {
     uint32_t server_id;
 } whMessageCommInitResponse;
 
-int wh_MessageComm_TranslateInitRequest(uint16_t magic,
-        const whMessageCommInitRequest* src,
-        whMessageCommInitRequest* dest);
+int wh_MessageComm_TranslateInitResponse(uint16_t magic,
+        const whMessageCommInitResponse* src,
+        whMessageCommInitResponse* dest);
 
 /* Info request/response data */
 enum {
