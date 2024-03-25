@@ -181,6 +181,44 @@ static int hsmReadKey(whServerContext* server, whNvmMetadata* meta, uint8_t* out
 #endif
 }
 
+static int hsmCacheKeyRsa(whServerContext* server, RsaKey* key)
+{
+    int ret = 0;
+    whNvmMetadata meta[1] = {0};
+    byte keyBuf[2048];
+    /* export key */
+    ret = wc_RsaKeyToDer(key, keyBuf, sizeof(keyBuf));
+    /* write key, no flags */
+    if (ret > 0) {
+        meta->len = ret;
+        ret = hsmGetUniqueId(server);
+    }
+    if (ret > 0 ) {
+        meta->id = ret;
+        ret = hsmCacheKey(server, meta, keyBuf);
+    }
+    if (ret == 0)
+        ret = meta->id;
+    return ret;
+}
+
+static int hsmLoadKeyRsa(whServerContext* server, RsaKey* key, uint16_t keyId)
+{
+    int ret;
+    uint32_t idx = 0;
+    whNvmMetadata meta[1] = {0};
+    byte keyBuf[2048];
+    /* retrieve the key */
+    meta->id = keyId;
+    meta->len = sizeof(keyBuf);
+    ret = hsmReadKey(server, meta, keyBuf);
+    /* decode the key */
+    if (ret == 0)
+        ret = wc_RsaPrivateKeyDecode(keyBuf, &idx, key, meta->len);
+
+    return ret;
+}
+
 static int hsmCacheKeyCurve25519(whServerContext* server, curve25519_key* key)
 {
     int ret;
@@ -233,6 +271,7 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
 {
     int ret = 0;
     uint32_t field;
+    uint8_t* in;
     uint8_t* out;
     whPacket* packet = (whPacket*)data;
 #ifdef WOLFHSM_SYMMETRIC_INTERNAL
@@ -247,6 +286,86 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
     case WC_ALGO_TYPE_PK:
         switch (packet->pkAnyReq.type)
         {
+        case WC_PK_TYPE_RSA_KEYGEN:
+            /* init the rsa key */
+            ret = wc_InitRsaKey_ex(server->crypto->rsa, NULL, INVALID_DEVID);
+            /* make the rsa key with the given params */
+            if (ret == 0) {
+                ret = wc_MakeRsaKey(server->crypto->rsa,
+                    packet->pkRsakgReq.size,
+                    packet->pkRsakgReq.e,
+                    server->crypto->rng);
+            }
+            /* cache the generated key */
+            if (ret == 0)
+                ret = hsmCacheKeyRsa(server, server->crypto->rsa);
+            wc_FreeRsaKey(server->crypto->rsa);
+            if (ret > 0) {
+                /* set the assigned id */
+                packet->pkRsakgRes.keyId = ret;
+                *size = WOLFHSM_PACKET_STUB_SIZE +
+                    sizeof(packet->pkRsakgRes);
+                ret = 0;
+            }
+            break;
+        case WC_PK_TYPE_RSA:
+            switch (packet->pkRsaReq.opType)
+            {
+                case RSA_PUBLIC_ENCRYPT:
+                case RSA_PUBLIC_DECRYPT:
+                case RSA_PRIVATE_ENCRYPT:
+                case RSA_PRIVATE_DECRYPT:
+                    /* in and out are after the fixed size fields */
+                    in = (uint8_t*)(&packet->pkRsaReq + 1);
+                    out = (uint8_t*)(&packet->pkRsaRes + 1);
+                    /* init rsa key */
+                    ret = wc_InitRsaKey_ex(server->crypto->rsa, NULL,
+                        INVALID_DEVID);
+                    /* load the key from the keystore */
+                    if (ret == 0) {
+                        ret = hsmLoadKeyRsa(server,
+                            server->crypto->rsa,
+                            packet->pkRsaReq.keyId);
+                    }
+                    /* do the rsa operation */
+                    if (ret == 0) {
+                        field = packet->pkRsaReq.outLen;
+                        ret = wc_RsaFunction( in, packet->pkRsaReq.inLen,
+                            out, &field, packet->pkRsaReq.opType,
+                            server->crypto->rsa, server->crypto->rng);
+                    }
+                    /* free the key */
+                    wc_FreeRsaKey(server->crypto->rsa);
+                    if (ret == 0) {
+                        /*set outLen */
+                        packet->pkRsaRes.outLen = field;
+                        *size = WOLFHSM_PACKET_STUB_SIZE +
+                            sizeof(packet->pkRsaRes) + field;
+                    }
+                    break;
+            }
+            break;
+        case WC_PK_TYPE_RSA_GET_SIZE:
+            /* init rsa key */
+            ret = wc_InitRsaKey_ex(server->crypto->rsa, NULL, INVALID_DEVID);
+            /* load the key from the keystore */
+            if (ret == 0) {
+                ret = hsmLoadKeyRsa(server,
+                    server->crypto->rsa,
+                    packet->pkRsaGetSizeReq.keyId);
+            }
+            /* get the size */
+            if (ret == 0)
+                ret = wc_RsaEncryptSize(server->crypto->rsa);
+            wc_FreeRsaKey(server->crypto->rsa);
+            if (ret > 0) {
+                /*set keySize */
+                packet->pkRsaGetSizeRes.keySize = ret;
+                *size = WOLFHSM_PACKET_STUB_SIZE +
+                    sizeof(packet->pkRsaGetSizeRes);
+                ret = 0;
+            }
+            break;
         case WC_PK_TYPE_CURVE25519_KEYGEN:
             /* init private key */
             ret = wc_curve25519_init_ex(server->crypto->curve25519Private, NULL,
