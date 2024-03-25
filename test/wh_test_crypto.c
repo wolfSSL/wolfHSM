@@ -243,7 +243,7 @@ static void* _whServerTask(void* cf)
         goto exit;
     }
     /* handle rsa */
-    for (i = 0; i < 3; i++) {
+    for (i = 0; i < 5; i++) {
         do {
             ret = wh_Server_HandleRequestMessage(server);
             sleep(1);
