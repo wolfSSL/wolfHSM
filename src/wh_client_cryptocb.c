@@ -112,7 +112,7 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
                 WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->pkRsaReq)
                     + info->pk.rsa.inLen,
                 rawPacket);
-            /* write request, read response on same memory */
+            /* read response */
             if (ret == 0) {
                 do {
                     ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
@@ -139,6 +139,13 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
                 WC_ALGO_TYPE_PK,
                 WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->pkRsaGetSizeReq),
                 rawPacket);
+            /* read response */
+            if (ret == 0) {
+                do {
+                    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
+                        rawPacket);
+                } while (ret == WH_ERROR_NOTREADY);
+            }
             if (ret == 0) {
                 if (packet->rc != 0)
                     ret = packet->rc;
