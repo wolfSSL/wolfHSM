@@ -26,13 +26,6 @@
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/types.h"
 #include "wolfssl/wolfcrypt/error-crypt.h"
-#include "wolfssl/wolfcrypt/wc_port.h"
-#include "wolfssl/wolfcrypt/sha256.h"
-#include "wolfssl/wolfcrypt/aes.h"
-#include "wolfssl/wolfcrypt/rsa.h"
-#include "wolfssl/wolfcrypt/cmac.h"
-#include "wolfssl/wolfcrypt/kdf.h"
-#include "wolfssl/wolfcrypt/cryptocb.h"
 
 #include "wolfhsm/wh_server.h"
 #include "wolfhsm/wh_server_keystore.h"
@@ -116,7 +109,6 @@ static int hsmCacheKeyCurve25519(whServerContext* server, curve25519_key* key,
         server->cache[slotIdx].meta->len = CURVE25519_KEYSIZE * 2;
         /* export keyId */
         *outId = keyId;
-        ret = 0;
     }
     return ret;
 }
@@ -145,14 +137,68 @@ static int hsmLoadKeyCurve25519(whServerContext* server, curve25519_key* key,
 }
 #endif /* HAVE_CURVE25519 */
 
+static int hsmCacheKeyEcc(whServerContext* server, ecc_key* key, whKeyId* outId)
+{
+    int ret;
+    int slotIdx = 0;
+    uint32_t qxLen;
+    uint32_t qyLen;
+    uint32_t qdLen;
+    whKeyId keyId = WOLFHSM_KEYTYPE_CRYPTO;
+    /* get a free slot */
+    ret = slotIdx = hsmCacheFindSlot(server);
+    if (ret >= 0) {
+        ret = hsmGetUniqueId(server, &keyId);
+    }
+    /* export key */
+    if (ret == 0) {
+        qxLen = qyLen = qdLen = key->dp->size;
+        ret = wc_ecc_export_private_raw(key, server->cache[slotIdx].buffer,
+            &qxLen, server->cache[slotIdx].buffer + qxLen,
+            &qyLen, server->cache[slotIdx].buffer + qxLen + qyLen, &qdLen);
+    }
+    if (ret == 0) {
+        /* set meta */
+        XMEMSET((uint8_t*)server->cache[slotIdx].meta, 0,
+            sizeof(server->cache[slotIdx].meta));
+        server->cache[slotIdx].meta->id = keyId;
+        server->cache[slotIdx].meta->len = qxLen + qyLen + qdLen;
+        /* export keyId */
+        *outId = keyId;
+    }
+    return ret;
+}
+
+static int hsmLoadKeyEcc(whServerContext* server, ecc_key* key, uint16_t keyId,
+    int curveId)
+{
+    int ret;
+    int slotIdx = 0;
+    uint32_t keySz;
+    keyId |= WOLFHSM_KEYTYPE_CRYPTO;
+    /* freshen the key */
+    ret = slotIdx = hsmFreshenKey(server, keyId);
+    /* decode the key */
+    if (ret >= 0) {
+        keySz = server->cache[slotIdx].meta->len / 3;
+        ret = wc_ecc_import_unsigned(key, server->cache[slotIdx].buffer,
+            server->cache[slotIdx].buffer + keySz,
+            server->cache[slotIdx].buffer + keySz * 2, curveId);
+    }
+    return ret;
+}
+
 int wh_Server_HandleCryptoRequest(whServerContext* server,
     uint16_t action, uint8_t* data, uint16_t* size)
 {
     int ret = 0;
+    int res = 0;
     uint32_t field;
     uint8_t* in;
     whKeyId keyId = WOLFHSM_KEYID_ERASED;
     uint8_t* out;
+    uint8_t* sig;
+    uint8_t* hash;
     whPacket* packet = (whPacket*)data;
 #ifdef WOLFHSM_SYMMETRIC_INTERNAL
     uint8_t tmpKey[AES_MAX_KEY_SIZE + AES_IV_SIZE];
@@ -251,6 +297,136 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
             }
             break;
 #endif /* !NO_RSA */
+        case WC_PK_TYPE_EC_KEYGEN:
+            /* init ecc key */
+            ret = wc_ecc_init_ex(server->crypto->eccPrivate, NULL,
+                server->crypto->devId);
+            /* generate the key the key */
+            if (ret == 0) {
+                ret = wc_ecc_make_key_ex(server->crypto->rng,
+                    packet->pkEckgReq.sz, server->crypto->eccPrivate,
+                    packet->pkEckgReq.curveId);
+            }
+            /* cache the generated key */
+            if (ret == 0)
+                ret = hsmCacheKeyEcc(server, server->crypto->eccPrivate,&keyId);
+            /* set the assigned id */
+            wc_ecc_free(server->crypto->eccPrivate);
+            if (ret == 0) {
+                packet->pkEckgRes.keyId = keyId;
+                *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->pkEckgRes);
+            }
+            break;
+        case WC_PK_TYPE_ECDH:
+            /* out is after the fixed size fields */
+            out = (uint8_t*)(&packet->pkEcdhRes + 1);
+            /* init ecc key */
+            ret = wc_ecc_init_ex(server->crypto->eccPrivate, NULL,
+                server->crypto->devId);
+            if (ret == 0)
+                ret = wc_ecc_init_ex(server->crypto->eccPrivate, NULL,
+                    server->crypto->devId);
+            /* load the private key */
+            if (ret == 0) {
+                ret = hsmLoadKeyEcc(server, server->crypto->eccPrivate,
+                    packet->pkEcdhReq.privateKeyId, packet->pkEcdhReq.curveId);
+            }
+            /* set rng */
+            if (ret == 0) {
+                ret = wc_ecc_set_rng(server->crypto->eccPrivate,
+                    server->crypto->rng);
+            }
+            /* load the public key */
+            if (ret == 0) {
+                ret = hsmLoadKeyEcc(server, server->crypto->eccPublic,
+                    packet->pkEcdhReq.publicKeyId, packet->pkEcdhReq.curveId);
+            }
+            /* make shared secret */
+            if (ret == 0) {
+                field = server->crypto->eccPrivate->dp->size;
+                ret = wc_ecc_shared_secret(server->crypto->eccPrivate,
+                    server->crypto->eccPublic, out, &field);
+            }
+            wc_ecc_free(server->crypto->eccPrivate);
+            wc_ecc_free(server->crypto->eccPublic);
+            if (ret == 0) {
+                packet->pkEcdhRes.sz = field;
+                *size = WOLFHSM_PACKET_STUB_SIZE +
+                    sizeof(packet->pkEcdhRes) + field;
+            }
+            break;
+        case WC_PK_TYPE_ECDSA_SIGN:
+            /* in and out are after the fixed size fields */
+            in = (uint8_t*)(&packet->pkEccSignReq + 1);
+            out = (uint8_t*)(&packet->pkEccSignRes + 1);
+            /* init pivate key */
+            ret = wc_ecc_init_ex(server->crypto->eccPrivate, NULL,
+                server->crypto->devId);
+            /* load the private key */
+            if (ret == 0) {
+                ret = hsmLoadKeyEcc(server, server->crypto->eccPrivate,
+                    packet->pkEccSignReq.keyId, packet->pkEccSignReq.curveId);
+            }
+            /* sign the input */
+            if (ret == 0) {
+                field = WH_COMM_MTU - sizeof(packet->pkEccSignRes);
+                ret = wc_ecc_sign_hash(in, packet->pkEccSignReq.sz, out,
+                    &field, server->crypto->rng, server->crypto->eccPrivate);
+            }
+            wc_ecc_free(server->crypto->eccPrivate);
+            if (ret == 0) {
+                packet->pkEccSignRes.sz = field;
+                *size = WOLFHSM_PACKET_STUB_SIZE +
+                    sizeof(packet->pkEccSignRes) + field;
+            }
+            break;
+        case WC_PK_TYPE_ECDSA_VERIFY:
+            /* sig and hash are after the fixed size fields */
+            sig = (uint8_t*)(&packet->pkEccVerifyReq + 1);
+            hash = (uint8_t*)(&packet->pkEccVerifyReq + 1) +
+                packet->pkEccVerifyReq.sigSz;
+            /* init public key */
+            ret = wc_ecc_init_ex(server->crypto->eccPublic, NULL,
+                server->crypto->devId);
+            /* load the public key */
+            if (ret == 0) {
+                ret = hsmLoadKeyEcc(server, server->crypto->eccPublic,
+                    packet->pkEccVerifyReq.keyId,
+                    packet->pkEccVerifyReq.curveId);
+            }
+            /* verify the signature */
+            if (ret == 0) {
+                ret = wc_ecc_verify_hash(sig, packet->pkEccVerifyReq.sigSz,
+                    hash, packet->pkEccVerifyReq.hashSz, &res,
+                    server->crypto->eccPublic);
+            }
+            wc_ecc_free(server->crypto->eccPublic);
+            if (ret == 0) {
+                packet->pkEccVerifyRes.res = res;
+                *size = WOLFHSM_PACKET_STUB_SIZE +
+                    sizeof(packet->pkEccVerifyRes);
+            }
+            break;
+        case WC_PK_TYPE_EC_CHECK_PRIV_KEY:
+            /* init pivate key */
+            ret = wc_ecc_init_ex(server->crypto->eccPrivate, NULL,
+                server->crypto->devId);
+            /* load the private key */
+            if (ret == 0) {
+                ret = hsmLoadKeyEcc(server, server->crypto->eccPrivate,
+                    packet->pkEccCheckReq.keyId, packet->pkEccCheckReq.curveId);
+            }
+            /* check the key */
+            if (ret == 0) {
+                ret = wc_ecc_check_key(server->crypto->eccPrivate);
+            }
+            wc_ecc_free(server->crypto->eccPrivate);
+            if (ret == 0) {
+                packet->pkEccCheckRes.ok = 1;
+                *size = WOLFHSM_PACKET_STUB_SIZE +
+                    sizeof(packet->pkEccCheckRes);
+            }
+            break;
 #ifdef HAVE_CURVE25519
         case WC_PK_TYPE_CURVE25519_KEYGEN:
             /* init private key */

@@ -69,9 +69,12 @@ int whTest_CryptoClientConfig(whClientConfig* config)
 {
     whClientContext client[1] = {0};
     int ret = 0;
+    int res = 0;
     /* wolfcrypt */
     WC_RNG rng[1];
     RsaKey rsa[1];
+    ecc_key eccPrivate[1];
+    ecc_key eccPublic[1];
     curve25519_key curve25519PrivateKey[1];
     curve25519_key curve25519PublicKey[1];
     uint32_t outLen;
@@ -358,33 +361,71 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         printf("RSA SUCCESS\n");
     else
         printf("RSA FAILED TO MATCH\n");
+    /* test ecc */
+    if((ret = wc_ecc_init_ex(eccPrivate, NULL, WOLFHSM_DEV_ID)) != 0) {
+        printf("Failed to wc_ecc_init_ex %d\n", ret);
+        goto exit;
+    }
+    if((ret = wc_ecc_init_ex(eccPublic, NULL, WOLFHSM_DEV_ID)) != 0) {
+        printf("Failed to wc_ecc_init_ex %d\n", ret);
+        goto exit;
+    }
+    if((ret = wc_ecc_make_key(rng, 32, eccPrivate)) != 0) {
+        printf("Failed to wc_ecc_make_key %d\n", ret);
+        goto exit;
+    }
+    if((ret = wc_ecc_make_key(rng, 32, eccPublic)) != 0) {
+        printf("Failed to wc_ecc_make_key %d\n", ret);
+        goto exit;
+    }
+    outLen = 32;
+    if((ret = wc_ecc_shared_secret(eccPrivate, eccPublic, (byte*)cipherText, &outLen)) != 0) {
+        printf("Failed to wc_ecc_shared_secret %d\n", ret);
+        goto exit;
+    }
+    if((ret = wc_ecc_shared_secret(eccPublic, eccPrivate, (byte*)finalText, &outLen)) != 0) {
+        printf("Failed to wc_ecc_shared_secret %d\n", ret);
+        goto exit;
+    }
+    if (memcmp(cipherText, finalText, outLen) == 0)
+        printf("ECDH SUCCESS\n");
+    else
+        printf("ECDH FAILED TO MATCH\n");
+    outLen = 32;
+    if((ret = wc_ecc_sign_hash((void*)cipherText, sizeof(cipherText), (void*)finalText, &outLen, rng, eccPrivate)) != 0) {
+        printf("Failed to wc_ecc_sign_hash %d\n", ret);
+        goto exit;
+    }
+    if((ret = wc_ecc_verify_hash((void*)finalText, outLen, (void*)cipherText, sizeof(cipherText), &res, eccPrivate)) != 0) {
+        printf("Failed to wc_ecc_verify_hash %d\n", ret);
+        goto exit;
+    }
+    if (res == 1)
+        printf("ECC SIGN/VERIFY SUCCESS\n");
+    else
+        printf("ECC SIGN/VERIFY FAIL\n");
     /* test curve25519 */
     if ((ret = wc_curve25519_init_ex(curve25519PrivateKey, NULL, WOLFHSM_DEV_ID)) != 0) {
         WH_ERROR_PRINT("Failed to wc_curve25519_init_ex %d\n", ret);
         goto exit;
     }
-
     if ((ret = wc_curve25519_init_ex(curve25519PublicKey, NULL, WOLFHSM_DEV_ID)) != 0) {
         WH_ERROR_PRINT("Failed to wc_curve25519_init_ex %d\n", ret);
         goto exit;
     }
-
     if ((ret = wc_curve25519_make_key(rng, CURVE25519_KEYSIZE, curve25519PrivateKey)) != 0) {
         WH_ERROR_PRINT("Failed to wc_curve25519_make_key %d\n", ret);
         goto exit;
     }
-
     if ((ret = wc_curve25519_make_key(rng, CURVE25519_KEYSIZE, curve25519PublicKey)) != 0) {
         WH_ERROR_PRINT("Failed to wc_curve25519_make_key %d\n", ret);
         goto exit;
     }
-
     outLen = sizeof(sharedOne);
     if ((ret = wc_curve25519_shared_secret(curve25519PrivateKey, curve25519PublicKey, sharedOne, (word32*)&outLen)) != 0) {
         WH_ERROR_PRINT("Failed to wc_curve25519_shared_secret %d\n", ret);
         goto exit;
     }
-
     if ((ret = wc_curve25519_shared_secret(curve25519PublicKey, curve25519PrivateKey, sharedTwo, (word32*)&outLen)) != 0) {
         WH_ERROR_PRINT("Failed to wc_curve25519_shared_secret %d\n", ret);
         goto exit;
@@ -454,7 +495,6 @@ int whTest_CryptoServerConfig(whServerConfig* config)
 
     return ret;
 }
-
 
 #if defined(WH_CFG_TEST_POSIX)
 static void* _whClientTask(void *cf)

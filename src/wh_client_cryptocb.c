@@ -74,6 +74,8 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
     uint16_t dataSz;
     uint8_t* in;
     uint8_t* out;
+    uint8_t* sig;
+    uint8_t* hash;
 
     if (devId == INVALID_DEVID || info == NULL)
         return BAD_FUNC_ARG;
@@ -180,6 +182,172 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             }
             break;
 #endif  /* !NO_RSA */
+        case WC_PK_TYPE_EC_KEYGEN:
+            /* set key size */
+            packet->pkEckgReq.sz = info->pk.eckg.size;
+            /* set curveId */
+            packet->pkEckgReq.curveId = info->pk.eckg.curveId;
+            /* write request */
+            ret = wh_Client_SendRequest(ctx, group,
+                WC_ALGO_TYPE_PK,
+                WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->pkEckgReq),
+                rawPacket);
+            /* read response */
+            if (ret == 0) {
+                do {
+                    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
+                        rawPacket);
+                } while (ret == WH_ERROR_NOTREADY);
+            }
+            if (ret == 0) {
+                if (packet->rc != 0)
+                    ret = packet->rc;
+                else {
+                    /* read keyId */
+                    XMEMCPY((void*)&info->pk.eckg.key->devCtx,
+                        (void*)&packet->pkEckgRes.keyId,
+                        sizeof(packet->pkEckgRes.keyId));
+                }
+            }
+            break;
+        case WC_PK_TYPE_ECDH:
+            /* out is after the fixed size fields */
+            out = (uint8_t*)(&packet->pkEcdhRes + 1);
+            /* set ids */
+            XMEMCPY((void*)&packet->pkEcdhReq.privateKeyId,
+                (void*)&info->pk.ecdh.private_key->devCtx,
+                sizeof(packet->pkEcdhReq.privateKeyId));
+            XMEMCPY((void*)&packet->pkEcdhReq.publicKeyId,
+                (void*)&info->pk.ecdh.public_key->devCtx,
+                sizeof(packet->pkEcdhReq.publicKeyId));
+            /* set curveId */
+            packet->pkEcdhReq.curveId =
+                wc_ecc_get_curve_id(info->pk.ecdh.private_key->idx);
+            /* write request */
+            ret = wh_Client_SendRequest(ctx, group,
+                WC_ALGO_TYPE_PK,
+                WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->pkEcdhReq),
+                rawPacket);
+            /* read response */
+            if (ret == 0) {
+                do {
+                    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
+                        rawPacket);
+                } while (ret == WH_ERROR_NOTREADY);
+            }
+            if (ret == 0) {
+                if (packet->rc != 0)
+                    ret = packet->rc;
+                else {
+                    /* read out */
+                    XMEMCPY(info->pk.ecdh.out, out, packet->pkEcdhRes.sz);
+                    *info->pk.ecdh.outlen = packet->pkEcdhRes.sz;
+                }
+            }
+            break;
+        case WC_PK_TYPE_ECDSA_SIGN:
+            /* in and out are after the fixed size fields */
+            in = (uint8_t*)(&packet->pkEccSignReq + 1);
+            out = (uint8_t*)(&packet->pkEccSignRes + 1);
+            /* set keyId */
+            XMEMCPY((void*)&packet->pkEccSignReq.keyId,
+                (void*)&info->pk.eccsign.key->devCtx,
+                sizeof(packet->pkEccSignReq.keyId));
+            /* set curveId */
+            packet->pkEccSignReq.curveId =
+                wc_ecc_get_curve_id(info->pk.eccsign.key->idx);
+            /* set sz */
+            packet->pkEccSignReq.sz = info->pk.eccsign.inlen;
+            /* set in */
+            XMEMCPY(in, info->pk.eccsign.in, info->pk.eccsign.inlen);
+            /* write request */
+            ret = wh_Client_SendRequest(ctx, group,
+                WC_ALGO_TYPE_PK,
+                WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->pkEccSignReq) +
+                    info->pk.eccsign.inlen,
+                rawPacket);
+            /* read response */
+            if (ret == 0) {
+                do {
+                    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
+                        rawPacket);
+                } while (ret == WH_ERROR_NOTREADY);
+            }
+            if (ret == 0) {
+                if (packet->rc != 0)
+                    ret = packet->rc;
+                else {
+                    /* read out */
+                    XMEMCPY(info->pk.eccsign.out, out, packet->pkEccSignRes.sz);
+                    *info->pk.eccsign.outlen = packet->pkEccSignRes.sz;
+                }
+            }
+            break;
+        case WC_PK_TYPE_ECDSA_VERIFY:
+            /* sig and hash are after the fixed size fields */
+            sig = (uint8_t*)(&packet->pkEccVerifyReq + 1);
+            hash = (uint8_t*)(&packet->pkEccVerifyReq + 1) +
+                info->pk.eccverify.siglen;
+            /* set keyId */
+            XMEMCPY((void*)&packet->pkEccVerifyReq.keyId,
+                (void*)&info->pk.eccverify.key->devCtx,
+                sizeof(packet->pkEccVerifyReq.keyId));
+            /* set curveId */
+            packet->pkEccVerifyReq.curveId =
+                wc_ecc_get_curve_id(info->pk.eccverify.key->idx);
+            /* set sig and hash sz */
+            packet->pkEccVerifyReq.sigSz = info->pk.eccverify.siglen;
+            packet->pkEccVerifyReq.hashSz = info->pk.eccverify.hashlen;
+            /* copy sig and hash */
+            XMEMCPY(sig, info->pk.eccverify.sig, info->pk.eccverify.siglen);
+            XMEMCPY(hash, info->pk.eccverify.hash, info->pk.eccverify.hashlen);
+            /* write request */
+            ret = wh_Client_SendRequest(ctx, group,
+                WC_ALGO_TYPE_PK,
+                WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->pkEccVerifyReq) +
+                info->pk.eccverify.siglen + info->pk.eccverify.hashlen,
+                rawPacket);
+            /* read response */
+            if (ret == 0) {
+                do {
+                    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
+                        rawPacket);
+                } while (ret == WH_ERROR_NOTREADY);
+            }
+            if (ret == 0) {
+                if (packet->rc != 0)
+                    ret = packet->rc;
+                else {
+                    /* read out */
+                    *info->pk.eccverify.res = packet->pkEccVerifyRes.res;
+                }
+            }
+            break;
+        case WC_PK_TYPE_EC_CHECK_PRIV_KEY:
+            /* set keyId */
+            XMEMCPY((void*)&packet->pkEccCheckReq.keyId,
+                (void*)&info->pk.ecc_check.key->devCtx,
+                sizeof(packet->pkEccCheckReq.keyId));
+            /* set curveId */
+            packet->pkEccCheckReq.curveId =
+                wc_ecc_get_curve_id(info->pk.eccverify.key->idx);
+            /* write request */
+            ret = wh_Client_SendRequest(ctx, group,
+                WC_ALGO_TYPE_PK,
+                WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->pkEccCheckReq),
+                rawPacket);
+            /* read response */
+            if (ret == 0) {
+                do {
+                    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
+                        rawPacket);
+                } while (ret == WH_ERROR_NOTREADY);
+            }
+            if (ret == 0) {
+                if (packet->rc != 0)
+                    ret = packet->rc;
+            }
+            break;
         case WC_PK_TYPE_CURVE25519_KEYGEN:
             packet->pkCurve25519kgReq.sz = info->pk.curve25519kg.size;
             /* write request */

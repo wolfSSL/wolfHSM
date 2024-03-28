@@ -77,6 +77,7 @@ SRC_C += \
             $(WOLFSSL_DIR)/wolfcrypt/src/hash.c \
             $(WOLFSSL_DIR)/wolfcrypt/src/sha256.c \
             $(WOLFSSL_DIR)/wolfcrypt/src/aes.c \
+            $(WOLFSSL_DIR)/wolfcrypt/src/ecc.c \
             $(WOLFSSL_DIR)/wolfcrypt/src/cmac.c \
 
 endif
