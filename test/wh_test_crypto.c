@@ -50,9 +50,12 @@ int whTest_CryptoClientConfig(whClientConfig* config)
 {
     whClientContext client[1] = {0};
     int ret = 0;
+    int res = 0;
     /* wolfcrypt */
     WC_RNG rng[1];
     RsaKey rsa[1];
+    ecc_key eccPrivate[1];
+    ecc_key eccPublic[1];
     curve25519_key curve25519PrivateKey[1];
     curve25519_key curve25519PublicKey[1];
     uint32_t outLen;
@@ -114,33 +117,71 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         printf("RSA SUCCESS\n");
     else
         printf("RSA FAILED TO MATCH\n");
+    /* test ecc */
+    if((ret = wc_ecc_init_ex(eccPrivate, NULL, WOLFHSM_DEV_ID)) != 0) {
+        printf("Failed to wc_ecc_init_ex %d\n", ret);
+        goto exit;
+    }
+    if((ret = wc_ecc_init_ex(eccPublic, NULL, WOLFHSM_DEV_ID)) != 0) {
+        printf("Failed to wc_ecc_init_ex %d\n", ret);
+        goto exit;
+    }
+    if((ret = wc_ecc_make_key(rng, 32, eccPrivate)) != 0) {
+        printf("Failed to wc_ecc_make_key %d\n", ret);
+        goto exit;
+    }
+    if((ret = wc_ecc_make_key(rng, 32, eccPublic)) != 0) {
+        printf("Failed to wc_ecc_make_key %d\n", ret);
+        goto exit;
+    }
+    outLen = 32;
+    if((ret = wc_ecc_shared_secret(eccPrivate, eccPublic, (byte*)cipherText, &outLen)) != 0) {
+        printf("Failed to wc_ecc_shared_secret %d\n", ret);
+        goto exit;
+    }
+    if((ret = wc_ecc_shared_secret(eccPublic, eccPrivate, (byte*)finalText, &outLen)) != 0) {
+        printf("Failed to wc_ecc_shared_secret %d\n", ret);
+        goto exit;
+    }
+    if (memcmp(cipherText, finalText, outLen) == 0)
+        printf("ECDH SUCCESS\n");
+    else
+        printf("ECDH FAILED TO MATCH\n");
+    outLen = 32;
+    if((ret = wc_ecc_sign_hash((void*)cipherText, sizeof(cipherText), (void*)finalText, &outLen, rng, eccPrivate)) != 0) {
+        printf("Failed to wc_ecc_sign_hash %d\n", ret);
+        goto exit;
+    }
+    if((ret = wc_ecc_verify_hash((void*)finalText, outLen, (void*)cipherText, sizeof(cipherText), &res, eccPrivate)) != 0) {
+        printf("Failed to wc_ecc_verify_hash %d\n", ret);
+        goto exit;
+    }
+    if (res == 1)
+        printf("ECC SIGN/VERIFY SUCCESS\n");
+    else
+        printf("ECC SIGN/VERIFY FAIL\n");
     /* test curve25519 */
     if ((ret = wc_curve25519_init_ex(curve25519PrivateKey, NULL, WOLFHSM_DEV_ID)) != 0) {
         WH_ERROR_PRINT("Failed to wc_curve25519_init_ex %d\n", ret);
         goto exit;
     }
-
     if ((ret = wc_curve25519_init_ex(curve25519PublicKey, NULL, WOLFHSM_DEV_ID)) != 0) {
         WH_ERROR_PRINT("Failed to wc_curve25519_init_ex %d\n", ret);
         goto exit;
     }
-
     if ((ret = wc_curve25519_make_key(rng, CURVE25519_KEYSIZE, curve25519PrivateKey)) != 0) {
         WH_ERROR_PRINT("Failed to wc_curve25519_make_key %d\n", ret);
         goto exit;
     }
-
     if ((ret = wc_curve25519_make_key(rng, CURVE25519_KEYSIZE, curve25519PublicKey)) != 0) {
         WH_ERROR_PRINT("Failed to wc_curve25519_make_key %d\n", ret);
         goto exit;
     }
-
     outLen = sizeof(sharedOne);
     if ((ret = wc_curve25519_shared_secret(curve25519PrivateKey, curve25519PublicKey, sharedOne, &outLen)) != 0) {
         WH_ERROR_PRINT("Failed to wc_curve25519_shared_secret %d\n", ret);
         goto exit;
     }
-
     if ((ret = wc_curve25519_shared_secret(curve25519PublicKey, curve25519PrivateKey, sharedTwo, &outLen)) != 0) {
         WH_ERROR_PRINT("Failed to wc_curve25519_shared_secret %d\n", ret);
         goto exit;
@@ -163,52 +204,6 @@ exit:
 
     return ret;
 }
-
-
-int whTest_CryptoServerConfig(whServerConfig* config)
-{
-    whServerContext server[1] = {0};
-    int ret = 0;
-    int i;
-
-    if (config == NULL) {
-        return WH_ERROR_BADARGS;
-    }
-
-    WH_TEST_RETURN_ON_FAIL(wh_Server_Init(server, config));
-
-    /* handle client rng */
-    do {
-        ret = wh_Server_HandleRequestMessage(server);
-    } while (ret == WH_ERROR_NOTREADY);
-    if (ret != 0) {
-        WH_ERROR_PRINT("Failed to wh_Server_HandleRequestMessage: %d\n", ret);
-        goto exit;
-    }
-
-
-    /* handle curve */
-    for (i = 0; i < 4; i++) {
-        do {
-            ret = wh_Server_HandleRequestMessage(server);
-        } while (ret == WH_ERROR_NOTREADY);
-        if (ret != 0) {
-            WH_ERROR_PRINT("Failed to wh_Server_HandleRequestMessage: %d\n", ret);
-            goto exit;
-        }
-    }
-
-exit:
-    if (ret == 0) {
-        WH_TEST_RETURN_ON_FAIL(wh_Server_Cleanup(server));
-    }
-    else {
-        ret = wh_Server_Cleanup(server);
-    }
-
-    return ret;
-}
-
 
 #if defined(WH_CFG_TEST_POSIX)
 static void* _whClientTask(void *cf)
@@ -244,6 +239,17 @@ static void* _whServerTask(void* cf)
     }
     /* handle rsa */
     for (i = 0; i < 5; i++) {
+        do {
+            ret = wh_Server_HandleRequestMessage(server);
+            sleep(1);
+        } while (ret == WH_ERROR_NOTREADY);
+        if (ret != 0) {
+            printf("Failed to wh_Server_HandleRequestMessage: %d\n", ret);
+            goto exit;
+        }
+    }
+    /* handle ecc */
+    for (i = 0; i < 6; i++) {
         do {
             ret = wh_Server_HandleRequestMessage(server);
             sleep(1);
