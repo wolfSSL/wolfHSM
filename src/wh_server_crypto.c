@@ -197,6 +197,10 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
     uint8_t* in;
     whKeyId keyId = WOLFHSM_KEYID_ERASED;
     uint8_t* out;
+    uint8_t* key;
+    uint8_t* iv;
+    uint8_t* authIn;
+    uint8_t* authTag;
     uint8_t* sig;
     uint8_t* hash;
     whPacket* packet = (whPacket*)data;
@@ -209,6 +213,126 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
 
     switch (action)
     {
+    case WC_ALGO_TYPE_CIPHER:
+        switch (packet->cipherAnyReq.type)
+        {
+        case WC_CIPHER_AES_CBC:
+            /* key, iv, in, and out are after fixed size fields */
+            key = (uint8_t*)(&packet->cipherAesCbcReq + 1);
+            iv = key + packet->cipherAesCbcReq.keyLen;
+            in = iv + AES_IV_SIZE;
+            out = (uint8_t*)(&packet->cipherAesCbcRes + 1);
+#ifdef WOLFHSM_SYMMETRIC_INTERNAL
+            /* load the key from keystore */
+            field = sizeof(tmpKey);
+            ret = hsmReadKey(server, *(uint32_t*)key | WOLFHSM_KEYTYPE_CRYPTO,
+                NULL, tmpKey, &field);
+            if (ret == 0) {
+                /* set key to use tmpKey data */
+                key = tmpKey;
+                /* overwrite keyLen with internal length */
+                packet->cipherAesCbcReq.keyLen = field;
+            }
+#endif
+            /* init key with possible hardware */
+            if (ret == 0) {
+                ret = wc_AesInit(server->crypto->aes, NULL,
+                    server->crypto->devId);
+            }
+            /* load the key */
+            if (ret == 0) {
+                ret = wc_AesSetKey(server->crypto->aes, key,
+                    packet->cipherAesCbcReq.keyLen, iv,
+                    packet->cipherAesCbcReq.enc == 1 ?
+                    AES_ENCRYPTION : AES_DECRYPTION);
+            }
+            /* do the crypto operation */
+            if (ret == 0) {
+                /* store this since it will be overwritten */
+                field = packet->cipherAesCbcReq.sz;
+                if (packet->cipherAesCbcReq.enc == 1)
+                    ret = wc_AesCbcEncrypt(server->crypto->aes, out, in, field);
+                else
+                    ret = wc_AesCbcDecrypt(server->crypto->aes, out, in, field);
+            }
+            wc_AesFree(server->crypto->aes);
+            /* encode the return sz */
+            if (ret == 0) {
+                /* set sz */
+                packet->cipherAesCbcRes.sz = field;
+                *size = WOLFHSM_PACKET_STUB_SIZE +
+                    sizeof(packet->cipherAesCbcRes) + field;
+            }
+            break;
+        case WC_CIPHER_AES_GCM:
+            /* key, iv, in, authIn, and out are after fixed size fields */
+            key = (uint8_t*)(&packet->cipherAesGcmReq + 1);
+            iv = key + packet->cipherAesGcmReq.keyLen;
+            in = iv + packet->cipherAesGcmReq.ivSz;
+            authIn = in + packet->cipherAesGcmReq.sz;
+            out = (uint8_t*)(&packet->cipherAesGcmRes + 1);
+#ifdef WOLFHSM_SYMMETRIC_INTERNAL
+            /* load the key from keystore */
+            field = sizeof(tmpKey);
+            ret = hsmReadKey(server, *(uint32_t*)key | WOLFHSM_KEYTYPE_CRYPTO,
+                NULL, tmpKey, &field);
+            if (ret == 0) {
+                /* set key to use tmpKey data */
+                key = tmpKey;
+                /* overwrite keyLen with internal length */
+                packet->cipherAesGcmReq.keyLen = field;
+            }
+#endif
+            /* init key with possible hardware */
+            if (ret == 0) {
+                ret = wc_AesInit(server->crypto->aes, NULL,
+                    server->crypto->devId);
+            }
+            /* load the key */
+            if (ret == 0) {
+                ret = wc_AesGcmSetKey(server->crypto->aes, key,
+                    packet->cipherAesGcmReq.keyLen);
+            }
+            /* do the crypto operation */
+            if (ret == 0) {
+                /* store this since it will be overwritten */
+                field = packet->cipherAesGcmReq.sz;
+                *size = 0;
+                if (packet->cipherAesGcmReq.enc == 1) {
+                    /* set authTag as a packet output */
+                    authTag = out + field;
+                    *size += packet->cipherAesGcmReq.authTagSz;
+                    /* copy authTagSz since it will be overwritten */
+                    packet->cipherAesGcmRes.authTagSz =
+                        packet->cipherAesGcmReq.authTagSz;
+                    ret = wc_AesGcmEncrypt(server->crypto->aes, out, in, field,
+                        iv, packet->cipherAesGcmReq.ivSz, authTag,
+                        packet->cipherAesGcmReq.authTagSz, authIn,
+                        packet->cipherAesGcmReq.authInSz);
+                }
+                else {
+                    /* set authTag as a packet input */
+                    authTag = authIn + packet->cipherAesGcmReq.authInSz;
+                    ret = wc_AesGcmDecrypt(server->crypto->aes, out, in, field,
+                        iv, packet->cipherAesGcmReq.ivSz, authTag,
+                        packet->cipherAesGcmReq.authTagSz, authIn,
+                        packet->cipherAesGcmReq.authInSz);
+                }
+            }
+            wc_AesFree(server->crypto->aes);
+            /* encode the return sz */
+            if (ret == 0) {
+                /* set sz */
+                packet->cipherAesGcmRes.sz = field;
+                *size += WOLFHSM_PACKET_STUB_SIZE +
+                    sizeof(packet->cipherAesGcmRes) + field;
+            }
+            break;
+        default:
+            ret = NOT_COMPILED_IN;
+            break;
+        }
+        break;
     case WC_ALGO_TYPE_PK:
         switch (packet->pkAnyReq.type)
         {

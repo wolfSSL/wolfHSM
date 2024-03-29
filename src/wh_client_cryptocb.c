@@ -74,6 +74,10 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
     uint16_t dataSz;
     uint8_t* in;
     uint8_t* out;
+    uint8_t* authIn;
+    uint8_t* authTag;
+    uint8_t* key;
+    uint8_t* iv;
     uint8_t* sig;
     uint8_t* hash;
 
@@ -84,6 +88,161 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
 
     switch (info->algo_type)
     {
+    case WC_ALGO_TYPE_CIPHER:
+        /* set type */
+        packet->cipherAnyReq.type = info->cipher.type;
+        /* set enc */
+        packet->cipherAnyReq.enc = info->cipher.enc;
+        switch (info->cipher.type)
+        {
+        case WC_CIPHER_AES_CBC:
+            /* key, iv, in, and out are after fixed size fields */
+            key = (uint8_t*)(&packet->cipherAesCbcReq + 1);
+            out = (uint8_t*)(&packet->cipherAesCbcRes + 1);
+#ifdef WOLFHSM_SYMMETRIC_INTERNAL
+            /* set iv to be after key id */
+            iv = key + sizeof(uint32_t);
+            dataSz = sizeof(packet->cipherAesCbcReq) + sizeof(uint32_t) +
+                AES_IV_SIZE + info->cipher.aescbc.sz;
+            /* set keyLen, sizeof key id */
+            packet->cipherAesCbcReq.keyLen = sizeof(uint32_t);
+#else
+            iv = key + info->cipher.aescbc.aes->keylen;
+            dataSz = sizeof(packet->cipherAesCbcReq) +
+                info->cipher.aescbc.aes->keylen + AES_IV_SIZE +
+                info->cipher.aescbc.sz;
+            /* set keyLen */
+            packet->cipherAesCbcReq.keyLen =
+                info->cipher.aescbc.aes->keylen;
+#endif
+            /* set in to be after iv */
+            in = iv + AES_IV_SIZE;
+            /* set sz */
+            packet->cipherAesCbcReq.sz = info->cipher.aescbc.sz;
+#ifdef WOLFHSM_SYMMETRIC_INTERNAL
+            /* set keyId */
+            XMEMCPY(key, (void*)&info->cipher.aescbc.aes->devCtx,
+                sizeof(uint32_t));
+#else
+            /* set key */
+            XMEMCPY(key, info->cipher.aescbc.aes->devKey,
+                info->cipher.aescbc.aes->keylen);
+#endif
+            /* set iv */
+            XMEMCPY(iv, info->cipher.aescbc.aes->reg, AES_IV_SIZE);
+            /* set in */
+            XMEMCPY(in, info->cipher.aescbc.in, info->cipher.aescbc.sz);
+            /* write request */
+            ret = wh_Client_SendRequest(ctx, group,
+                WC_ALGO_TYPE_CIPHER,
+                WOLFHSM_PACKET_STUB_SIZE + dataSz,
+                rawPacket);
+            /* read response */
+            if (ret == 0) {
+                do {
+                    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
+                        rawPacket);
+                } while (ret == WH_ERROR_NOTREADY);
+            }
+            if (ret == 0) {
+                if (packet->rc != 0)
+                    ret = packet->rc;
+                else {
+                    /* copy the response out */
+                    XMEMCPY(info->cipher.aescbc.out, out,
+                        packet->cipherAesCbcRes.sz);
+                }
+            }
+            break;
+        case WC_CIPHER_AES_GCM:
+            /* key, iv, in, authIn, and out are after fixed size fields */
+            key = (uint8_t*)(&packet->cipherAesGcmReq + 1);
+            out = (uint8_t*)(&packet->cipherAesGcmRes + 1);
+#ifdef WOLFHSM_SYMMETRIC_INTERNAL
+            /* set iv to be after key id */
+            iv = key + sizeof(uint32_t);
+            dataSz = sizeof(packet->cipherAesGcmReq) + sizeof(uint32_t) +
+                info->cipher.aesgcm_enc.ivSz + info->cipher.aesgcm_enc.sz +
+                info->cipher.aesgcm_enc.authInSz +
+                info->cipher.aesgcm_enc.authTagSz;
+            /* set keyLen, sizeof key id */
+            packet->cipherAesGcmReq.keyLen = sizeof(uint32_t);
+#else
+            iv = key + info->cipher.aesgcm_enc.aes->keylen;
+            dataSz = sizeof(packet->cipherAesGcmReq) +
+                info->cipher.aesgcm_enc.aes->keylen +
+                info->cipher.aesgcm_enc.ivSz + info->cipher.aesgcm_enc.sz +
+                info->cipher.aesgcm_enc.authInSz +
+                info->cipher.aesgcm_enc.authTagSz;
+            /* set keyLen */
+            packet->cipherAesGcmReq.keyLen =
+                info->cipher.aesgcm_enc.aes->keylen;
+#endif
+            /* set the rest of the buffers */
+            in = iv + info->cipher.aesgcm_enc.ivSz;
+            authIn = in + info->cipher.aesgcm_enc.sz;
+            if (info->cipher.enc == 0)
+                authTag = authIn + info->cipher.aesgcm_enc.authInSz;
+            else
+                authTag = out + info->cipher.aesgcm_enc.sz;
+            /* set metadata */
+            packet->cipherAesGcmReq.sz = info->cipher.aesgcm_enc.sz;
+            packet->cipherAesGcmReq.ivSz = info->cipher.aesgcm_enc.ivSz;
+            packet->cipherAesGcmReq.authInSz = info->cipher.aesgcm_enc.authInSz;
+            packet->cipherAesGcmReq.authTagSz =
+                info->cipher.aesgcm_enc.authTagSz;
+#ifdef WOLFHSM_SYMMETRIC_INTERNAL
+            /* set keyId */
+            XMEMCPY(key, (uint8_t*)&info->cipher.aesgcm_enc.aes->devCtx,
+                sizeof(uint32_t));
+#else
+            /* set key */
+            XMEMCPY(key, info->cipher.aesgcm_enc.aes->devKey,
+                info->cipher.aesgcm_enc.aes->keylen);
+#endif
+            /* write the bulk data */
+            XMEMCPY(iv, info->cipher.aesgcm_enc.iv,
+                info->cipher.aesgcm_enc.ivSz);
+            XMEMCPY(in, info->cipher.aesgcm_enc.in, info->cipher.aesgcm_enc.sz);
+            XMEMCPY(authIn, info->cipher.aesgcm_enc.authIn,
+                info->cipher.aesgcm_enc.authInSz);
+            /* set auth tag by direction */
+            if (info->cipher.enc == 0) {
+                XMEMCPY(authTag, info->cipher.aesgcm_dec.authTag,
+                    info->cipher.aesgcm_enc.authTagSz);
+            }
+            /* write request */
+            ret = wh_Client_SendRequest(ctx, group,
+                WC_ALGO_TYPE_CIPHER,
+                WOLFHSM_PACKET_STUB_SIZE + dataSz,
+                rawPacket);
+            /* read response */
+            if (ret == 0) {
+                do {
+                    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
+                        rawPacket);
+                } while (ret == WH_ERROR_NOTREADY);
+            }
+            if (ret == 0) {
+                if (packet->rc != 0)
+                    ret = packet->rc;
+                else {
+                    /* copy the response out */
+                    XMEMCPY(info->cipher.aesgcm_enc.out, out,
+                        packet->cipherAesGcmRes.sz);
+                    /* write the authTag if applicable */
+                    if (info->cipher.enc == 1) {
+                        XMEMCPY(info->cipher.aesgcm_enc.authTag, authTag,
+                            packet->cipherAesGcmRes.authTagSz);
+                    }
+                }
+            }
+            break;
+        default:
+            ret = CRYPTOCB_UNAVAILABLE;
+            break;
+        }
+        break;
     case WC_ALGO_TYPE_PK:
         /* set type */
         packet->pkAnyReq.type = info->pk.type;

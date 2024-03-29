@@ -32,6 +32,8 @@
 #include "wolfssl/wolfcrypt/wc_port.h"
 #include "wolfssl/wolfcrypt/cryptocb.h"
 #include "wolfssl/wolfcrypt/curve25519.h"
+#include "wolfssl/wolfcrypt/rsa.h"
+#include "wolfssl/wolfcrypt/ecc.h"
 #endif
 
 /* Common WolfHSM types and defines shared with the server */
@@ -528,6 +530,21 @@ int wh_Client_KeyCacheResponse(whClientContext* c, uint16_t* keyId)
     return ret;
 }
 
+int wh_Client_KeyCache(whClientContext* c, uint32_t flags,
+    uint8_t* label, uint32_t labelSz, uint8_t* in, uint32_t inSz,
+    uint16_t* keyId)
+{
+    int ret;
+    ret = wh_Client_KeyCacheRequest_ex(c, flags, label, labelSz, in, inSz,
+        *keyId);
+    if (ret == 0) {
+        do {
+            ret = wh_Client_KeyCacheResponse(c, keyId);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+    return ret;
+}
+
 int wh_Client_KeyEvictRequest(whClientContext* c, uint16_t keyId)
 {
     whPacket packet[1] = {0};
@@ -554,6 +571,18 @@ int wh_Client_KeyEvictResponse(whClientContext* c)
     if (ret == 0) {
         if (packet->rc != 0)
             ret = packet->rc;
+    }
+    return ret;
+}
+
+int wh_Client_KeyEvict(whClientContext* c, uint16_t keyId)
+{
+    int ret;
+    ret = wh_Client_KeyEvictRequest(c, keyId);
+    if (ret == 0) {
+        do {
+            ret = wh_Client_KeyEvictResponse(c);
+        } while (ret == WH_ERROR_NOTREADY);
     }
     return ret;
 }
@@ -611,6 +640,19 @@ int wh_Client_KeyExportResponse(whClientContext* c, uint8_t* label,
     return ret;
 }
 
+int wh_Client_KeyExport(whClientContext* c, uint16_t keyId,
+    uint8_t* label, uint32_t labelSz, uint8_t* out, uint32_t* outSz)
+{
+    int ret;
+    ret = wh_Client_KeyExportRequest(c, keyId);
+    if (ret == 0) {
+        do {
+            ret = wh_Client_KeyExportResponse(c, label, labelSz, out, outSz);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+    return ret;
+}
+
 int wh_Client_KeyCommitRequest(whClientContext* c, whNvmId keyId)
 {
     whPacket packet[1] = {0};
@@ -637,6 +679,18 @@ int wh_Client_KeyCommitResponse(whClientContext* c)
     if (ret == 0) {
         if (packet->rc != 0)
             ret = packet->rc;
+    }
+    return ret;
+}
+
+int wh_Client_KeyCommit(whClientContext* c, whNvmId keyId)
+{
+    int ret;
+    ret = wh_Client_KeyCommitRequest(c, keyId);
+    if (ret == 0) {
+        do {
+            ret = wh_Client_KeyCommitResponse(c);
+        } while (ret == WH_ERROR_NOTREADY);
     }
     return ret;
 }
@@ -671,13 +725,30 @@ int wh_Client_KeyEraseResponse(whClientContext* c)
     return ret;
 }
 
+int wh_Client_KeyErase(whClientContext* c, whNvmId keyId)
+{
+    int ret;
+    ret = wh_Client_KeyEraseRequest(c, keyId);
+    if (ret == 0) {
+        do {
+            ret = wh_Client_KeyEraseResponse(c);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+    return ret;
+}
+
 void wh_Client_SetKeyCurve25519(curve25519_key* key, whNvmId keyId)
 {
-    XMEMCPY(key->devCtx, (void*)&keyId, sizeof(keyId));
+    XMEMCPY(&(key->devCtx), (void*)&keyId, sizeof(keyId));
 }
 
 void wh_Client_SetKeyRsa(RsaKey* key, whNvmId keyId)
 {
-    XMEMCPY(key->devCtx, (void*)&keyId, sizeof(keyId));
+    XMEMCPY(&(key->devCtx), (void*)&keyId, sizeof(keyId));
+}
+
+void wh_Client_SetKeyAes(Aes* key, whNvmId keyId)
+{
+    XMEMCPY(&(key->devCtx), (void*)&keyId, sizeof(keyId));
 }
 #endif  /* WOLFHSM_NO_CRYPTO */

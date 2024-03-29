@@ -56,6 +56,7 @@ typedef struct CacheSlot {
 
 typedef struct {
     int devId;
+    Aes aes[1];
     RsaKey rsa[1];
     ecc_key eccPrivate[1];
     ecc_key eccPublic[1];

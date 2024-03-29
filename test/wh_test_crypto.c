@@ -65,6 +65,8 @@ enum {
     };
 
 
+#define PLAINTEXT "mytextisbigplain"
+
 int whTest_CryptoClientConfig(whClientConfig* config)
 {
     whClientContext client[1] = {0};
@@ -72,6 +74,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     int res = 0;
     /* wolfcrypt */
     WC_RNG rng[1];
+    Aes aes[1];
     RsaKey rsa[1];
     ecc_key eccPrivate[1];
     ecc_key eccPublic[1];
@@ -83,11 +86,16 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     uint8_t keyEnd[16];
     uint8_t labelStart[WOLFHSM_NVM_LABEL_LEN];
     uint8_t labelEnd[WOLFHSM_NVM_LABEL_LEN];
+    uint8_t iv[AES_IV_SIZE];
     char plainText[16];
     char cipherText[256];
     char finalText[256];
+    uint8_t authIn[16];
+    uint8_t authTag[16];
     uint8_t sharedOne[CURVE25519_KEYSIZE];
     uint8_t sharedTwo[CURVE25519_KEYSIZE];
+
+    XMEMCPY(plainText, PLAINTEXT, sizeof(plainText));
 
     if (config == NULL) {
         return WH_ERROR_BADARGS;
@@ -101,34 +109,28 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         WH_ERROR_PRINT("Failed to wc_InitRng_ex %d\n", ret);
         goto exit;
     }
-
     if ((ret = wc_RNG_GenerateBlock(rng, key, sizeof(key))) != 0) {
         WH_ERROR_PRINT("Failed to wc_RNG_GenerateBlock %d\n", ret);
         goto exit;
     }
+    if((ret = wc_RNG_GenerateBlock(rng, iv, sizeof(iv))) != 0) {
+        printf("Failed to wc_RNG_GenerateBlock %d\n", ret);
+        goto exit;
+    }
+    if((ret = wc_RNG_GenerateBlock(rng, authIn, sizeof(authIn))) != 0) {
+        printf("Failed to wc_RNG_GenerateBlock %d\n", ret);
+        goto exit;
+    }
     printf("RNG SUCCESS\n");
     /* test cache/export */
-    if ((ret = wh_Client_KeyCacheRequest(client, 0, labelStart, sizeof(labelStart), key, sizeof(key))) != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyCacheRequest %d\n", ret);
-        goto exit;
-    }
-    do {
-        ret = wh_Client_KeyCacheResponse(client, &keyId);
-    } while (ret == WH_ERROR_NOTREADY);
-    if (ret != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyCacheResponse %d\n", ret);
-        goto exit;
-    }
-    if ((ret = wh_Client_KeyExportRequest(client, keyId)) != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyExportRequest %d\n", ret);
+    keyId = 0;
+    if ((ret = wh_Client_KeyCache(client, 0, labelStart, sizeof(labelStart), key, sizeof(key), &keyId)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyCache %d\n", ret);
         goto exit;
     }
     outLen = sizeof(keyEnd);
-    do {
-        ret = wh_Client_KeyExportResponse(client, labelEnd, sizeof(labelEnd), keyEnd, &outLen);
-    } while (ret == WH_ERROR_NOTREADY);
-    if (ret != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyExportResponse %d\n", ret);
+    if ((ret = wh_Client_KeyExport(client, keyId, labelEnd, sizeof(labelEnd), keyEnd, &outLen)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyExport %d\n", ret);
         goto exit;
     }
     if (ret == 0 && XMEMCMP(key, keyEnd, outLen) == 0 && XMEMCMP(labelStart, labelEnd, sizeof(labelStart)) == 0)
@@ -142,38 +144,17 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     client->comm->client_id = 2;
     XMEMSET(cipherText, 0xff, sizeof(cipherText));
     /* first check that evicting the other clients key fails */
-    if ((ret = wh_Client_KeyEvictRequest(client, keyId)) != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyEvictRequest %d\n", ret);
+    if ((ret = wh_Client_KeyEvict(client, keyId)) != WH_ERROR_NOTFOUND) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyEvict %d\n", ret);
         goto exit;
     }
-    do {
-        ret = wh_Client_KeyEvictResponse(client);
-    } while (ret == WH_ERROR_NOTREADY);
-    if (ret != WH_ERROR_NOTFOUND) {
-        WH_ERROR_PRINT("Failed to stop cross client evict\n");
-        goto exit;
-    }
-    if ((ret = wh_Client_KeyCacheRequest_ex(client, 0, labelStart, sizeof(labelStart), (uint8_t*)cipherText, sizeof(key), keyId)) != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyCacheRequest %d\n", ret);
-        goto exit;
-    }
-    do {
-        ret = wh_Client_KeyCacheResponse(client, &keyId);
-    } while (ret == WH_ERROR_NOTREADY);
-    if (ret != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyCacheResponse %d\n", ret);
-        goto exit;
-    }
-    if ((ret = wh_Client_KeyExportRequest(client, keyId)) != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyExportRequest %d\n", ret);
+    if ((ret = wh_Client_KeyCache(client, 0, labelStart, sizeof(labelStart), (uint8_t*)cipherText, sizeof(key), &keyId)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyCache %d\n", ret);
         goto exit;
     }
     outLen = sizeof(keyEnd);
-    do {
-        ret = wh_Client_KeyExportResponse(client, labelEnd, sizeof(labelEnd), keyEnd, &outLen);
-    } while (ret == WH_ERROR_NOTREADY);
-    if (ret != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyExportResponse %d\n", ret);
+    if ((ret = wh_Client_KeyExport(client, keyId, labelEnd, sizeof(labelEnd), keyEnd, &outLen)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyExport %d\n", ret);
         goto exit;
     }
     if (ret != 0 || XMEMCMP(cipherText, keyEnd, outLen) != 0 || XMEMCMP(labelStart, labelEnd, sizeof(labelStart)) != 0) {
@@ -181,30 +162,16 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         goto exit;
     }
     /* evict for this client */
-    if ((ret = wh_Client_KeyEvictRequest(client, keyId)) != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyEvictRequest %d\n", ret);
-        goto exit;
-    }
-    do {
-        ret = wh_Client_KeyEvictResponse(client);
-    } while (ret == WH_ERROR_NOTREADY);
-    if (ret != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyEvictResponse %d\n", ret);
+    if ((ret = wh_Client_KeyEvict(client, keyId)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyEvict %d\n", ret);
         goto exit;
     }
     /* switch back and verify original key */
     WH_TEST_RETURN_ON_FAIL(wh_Client_CommClose(client));
     client->comm->client_id = 1;
-    if ((ret = wh_Client_KeyExportRequest(client, keyId)) != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyExportRequest %d\n", ret);
-        goto exit;
-    }
     outLen = sizeof(keyEnd);
-    do {
-        ret = wh_Client_KeyExportResponse(client, labelEnd, sizeof(labelEnd), keyEnd, &outLen);
-    } while (ret == WH_ERROR_NOTREADY);
-    if (ret != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyExportResponse %d\n", ret);
+    if ((ret = wh_Client_KeyExport(client, keyId, labelEnd, sizeof(labelEnd), keyEnd, &outLen)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyExport %d\n", ret);
         goto exit;
     }
     if (ret == 0 && XMEMCMP(key, keyEnd, outLen) == 0 && XMEMCMP(labelStart, labelEnd, sizeof(labelStart)) == 0)
@@ -214,77 +181,32 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         goto exit;
     }
     /* evict for original client */
-    if ((ret = wh_Client_KeyEvictRequest(client, keyId)) != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyEvictRequest %d\n", ret);
-        goto exit;
-    }
-    do {
-        ret = wh_Client_KeyEvictResponse(client);
-    } while (ret == WH_ERROR_NOTREADY);
-    if (ret != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyEvictResponse %d\n", ret);
-        goto exit;
-    }
-    if ((ret = wh_Client_KeyExportRequest(client, keyId)) != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyExportRequest %d\n", ret);
+    if ((ret = wh_Client_KeyEvict(client, keyId)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyEvict %d\n", ret);
         goto exit;
     }
     outLen = sizeof(keyEnd);
-    do {
-        ret = wh_Client_KeyExportResponse(client, labelEnd, sizeof(labelEnd), keyEnd, &outLen);
-    } while (ret == WH_ERROR_NOTREADY);
-    if (ret == WH_ERROR_NOTFOUND) {
-        printf("KEY EVICT SUCCESS\n");
-    }
-    else {
-        if (ret != 0)
-            WH_ERROR_PRINT("Failed to wh_Client_KeyExportResponse %d\n", ret);
+    if ((ret = wh_Client_KeyExport(client, keyId, labelEnd, sizeof(labelEnd), keyEnd, &outLen)) != WH_ERROR_NOTFOUND) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyExport %d\n", ret);
         goto exit;
     }
     /* test commit */
-    if ((ret = wh_Client_KeyCacheRequest(client, WOLFHSM_KEYID_ERASED, labelStart, sizeof(labelStart), key, sizeof(key))) != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyCacheRequest %d\n", ret);
+    keyId = 0;
+    if ((ret = wh_Client_KeyCache(client, 0, labelStart, sizeof(labelStart), key, sizeof(key), &keyId)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyCache %d\n", ret);
         goto exit;
     }
-    do {
-        ret = wh_Client_KeyCacheResponse(client, &keyId);
-    } while (ret == WH_ERROR_NOTREADY);
-    if (ret != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyCacheResponse %d\n", ret);
+    if ((ret = wh_Client_KeyCommit(client, keyId)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyCommit %d\n", ret);
         goto exit;
     }
-    if ((ret = wh_Client_KeyCommitRequest(client, keyId)) != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyCommitRequest %d\n", ret);
-        goto exit;
-    }
-    do {
-        ret = wh_Client_KeyCommitResponse(client);
-    } while (ret == WH_ERROR_NOTREADY);
-    if (ret != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyCommitResponse %d\n", ret);
-        goto exit;
-    }
-    if ((ret = wh_Client_KeyEvictRequest(client, keyId)) != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyEvictRequest %d\n", ret);
-        goto exit;
-    }
-    do {
-        ret = wh_Client_KeyEvictResponse(client);
-    } while (ret == WH_ERROR_NOTREADY);
-    if (ret != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyEvictResponse %d\n", ret);
-        goto exit;
-    }
-    if ((ret = wh_Client_KeyExportRequest(client, keyId)) != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyExportRequest %d\n", ret);
+    if ((ret = wh_Client_KeyEvict(client, keyId)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyEvict %d\n", ret);
         goto exit;
     }
     outLen = sizeof(keyEnd);
-    do {
-        ret = wh_Client_KeyExportResponse(client, labelEnd, sizeof(labelEnd), keyEnd, &outLen);
-    } while (ret == WH_ERROR_NOTREADY);
-    if (ret != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyExportResponse %d\n", ret);
+    if ((ret = wh_Client_KeyExport(client, keyId, labelEnd, sizeof(labelEnd), keyEnd, &outLen)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyExport %d\n", ret);
         goto exit;
     }
     if (ret == 0 && XMEMCMP(key, keyEnd, outLen) == 0 && XMEMCMP(labelStart, labelEnd, sizeof(labelStart)) == 0)
@@ -294,33 +216,108 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         goto exit;
     }
     /* test erase */
-    if ((ret = wh_Client_KeyEraseRequest(client, keyId)) != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyEraseRequest %d\n", ret);
-        goto exit;
-    }
-    do {
-        ret = wh_Client_KeyEraseResponse(client);
-    } while (ret == WH_ERROR_NOTREADY);
-    if (ret != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyEraseResponse %d\n", ret);
-        goto exit;
-    }
-    if ((ret = wh_Client_KeyExportRequest(client, keyId)) != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyExportRequest %d\n", ret);
+    if ((ret = wh_Client_KeyErase(client, keyId)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyErase %d\n", ret);
         goto exit;
     }
     outLen = sizeof(keyEnd);
-    do {
-        ret = wh_Client_KeyExportResponse(client, labelEnd, sizeof(labelEnd), keyEnd, &outLen);
-    } while (ret == WH_ERROR_NOTREADY);
-    if (ret == WH_ERROR_NOTFOUND) {
-        printf("KEY ERASE SUCCESS\n");
-    }
-    else {
-        if (ret != 0)
-            WH_ERROR_PRINT("Failed to wh_Client_KeyExportResponse %d\n", ret);
+    if ((ret = wh_Client_KeyExport(client, keyId, labelEnd, sizeof(labelEnd), keyEnd, &outLen)) != WH_ERROR_NOTFOUND) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyExport %d\n", ret);
         goto exit;
     }
+    printf("KEY ERASE SUCCESS\n");
+    /* test aes CBC */
+    if((ret = wc_AesInit(aes, NULL, WOLFHSM_DEV_ID)) != 0) {
+        printf("Failed to wc_AesInit %d\n", ret);
+        goto exit;
+    }
+#ifdef WOLFHSM_SYMMETRIC_INTERNAL
+    keyId = 0;
+    if ((ret = wh_Client_KeyCache(client, 0, labelStart, sizeof(labelStart), key, sizeof(key), &keyId)) != 0) {
+        printf("Failed to wh_Client_KeyCache %d\n", ret);
+        goto exit;
+    }
+    wh_Client_SetKeyAes(aes, keyId);
+    if ((ret = wc_AesSetIV(aes, iv)) != 0) {
+        printf("Failed to wc_AesSetIV %d\n", ret);
+        goto exit;
+    }
+#else
+    if ((ret = wc_AesSetKey(aes, key, AES_BLOCK_SIZE, iv, AES_ENCRYPTION)) != 0) {
+        printf("Failed to wc_AesSetKey %d\n", ret);
+        goto exit;
+    }
+#endif
+    if ((ret = wc_AesCbcEncrypt(aes, (byte*)cipherText, (byte*)plainText, sizeof(plainText))) != 0) {
+        printf("Failed to wc_AesCbcEncrypt %d\n", ret);
+        goto exit;
+    }
+#ifndef WOLFHSM_SYMMETRIC_INTERNAL
+    if ((ret = wc_AesSetKey(aes, key, AES_BLOCK_SIZE, iv, AES_DECRYPTION)) != 0) {
+        printf("Failed to wc_AesSetKey %d\n", ret);
+        goto exit;
+    }
+#endif
+    if ((ret = wc_AesCbcDecrypt(aes, (byte*)finalText, (byte*)cipherText, sizeof(plainText))) != 0) {
+        printf("Failed to wc_AesCbcDecrypt %d\n", ret);
+        goto exit;
+    }
+#ifdef WOLFHSM_SYMMETRIC_INTERNAL
+    if((ret = wh_Client_KeyEvict(client, keyId)) != 0) {
+        printf("Failed to wh_Client_KeyEvict %d\n", ret);
+        goto exit;
+    }
+#endif
+    if (memcmp(plainText, finalText, sizeof(plainText)) == 0)
+        printf("AES CBC SUCCESS\n");
+    else
+        printf("AES CBC FAILED TO MATCH\n");
+    /* test aes GCM */
+    if((ret = wc_AesInit(aes, NULL, WOLFHSM_DEV_ID)) != 0) {
+        printf("Failed to wc_AesInit %d\n", ret);
+        goto exit;
+    }
+#ifdef WOLFHSM_SYMMETRIC_INTERNAL
+    keyId = 0;
+    if ((ret = wh_Client_KeyCache(client, 0, labelStart, sizeof(labelStart), key, sizeof(key), &keyId)) != 0) {
+        printf("Failed to wh_Client_KeyCache %d\n", ret);
+        goto exit;
+    }
+    wh_Client_SetKeyAes(aes, keyId);
+    if ((ret = wc_AesSetIV(aes, iv)) != 0) {
+        printf("Failed to wc_AesSetIV %d\n", ret);
+        goto exit;
+    }
+#else
+    if ((ret = wc_AesSetKey(aes, key, AES_BLOCK_SIZE, iv, AES_ENCRYPTION)) != 0) {
+        printf("Failed to wc_AesSetKey %d\n", ret);
+        goto exit;
+    }
+#endif
+    if ((ret = wc_AesGcmEncrypt(aes, (byte*)cipherText, (byte*)plainText, sizeof(plainText), iv, sizeof(iv), authTag, sizeof(authTag), authIn, sizeof(authIn))) != 0) {
+        printf("Failed to wc_AesGcmEncrypt %d\n", ret);
+        goto exit;
+    }
+#ifndef WOLFHSM_SYMMETRIC_INTERNAL
+    if ((ret = wc_AesSetKey(aes, key, AES_BLOCK_SIZE, iv, AES_DECRYPTION)) != 0) {
+        printf("Failed to wc_AesSetKey %d\n", ret);
+        goto exit;
+    }
+#endif
+    if ((ret = wc_AesGcmDecrypt(aes, (byte*)finalText, (byte*)cipherText, sizeof(plainText), iv, sizeof(iv), authTag, sizeof(authTag), authIn, sizeof(authIn))) != 0) {
+        printf("Failed to wc_AesGcmDecrypt %d\n", ret);
+        goto exit;
+    }
+#ifdef WOLFHSM_SYMMETRIC_INTERNAL
+    if((ret = wh_Client_KeyEvict(client, keyId)) != 0) {
+        printf("Failed to wh_Client_KeyEvict %d\n", ret);
+        goto exit;
+    }
+#endif
+    if (memcmp(plainText, finalText, sizeof(plainText)) == 0)
+        printf("AES GCM SUCCESS\n");
+    else
+        printf("AES GCM FAILED TO MATCH\n");
     /* test rsa */
     if((ret = wc_InitRsaKey_ex(rsa, NULL, WOLFHSM_DEV_ID)) != 0) {
         printf("Failed to wc_InitRsaKey_ex %d\n", ret);
