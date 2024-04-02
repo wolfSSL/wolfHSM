@@ -74,21 +74,28 @@ static int _testCallbacks(whServerContext* server, whClientContext* client)
     char       output[sizeof(input)] = {0};
 
     for (counter = 0; counter < WH_MESSAGE_ACTION_MAX; counter++) {
+        /* First, test that an unregistered callback returns error */
+        req.id = counter;
+        WH_TEST_RETURN_ON_FAIL(wh_Client_CustomRequest(client, &req));
+        WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
+        WH_TEST_RETURN_ON_FAIL(wh_Client_CustomResponse(client, &resp));
+        WH_TEST_ASSERT_RETURN(resp.err == WH_ERROR_NO_HANDLER);
+
+        /* Register a custom callback */
         WH_TEST_RETURN_ON_FAIL(
             wh_Server_RegisterCustomCb(counter, _customServerCb));
 
-        /* prepare the request */
-        req.id = counter;
-        /* 64-bit host system */
+        /* prepare the rest of the request */
         if (sizeof(uintptr_t) == sizeof(uint64_t)) {
+            /* 64-bit host system */
             req.type                   = WH_MESSAGE_CUSTOM_TYPE_DMA64;
             req.data.dma64.server_addr = (uint64_t)((uintptr_t)input);
             req.data.dma64.server_sz   = sizeof(input);
             req.data.dma64.client_addr = (uint64_t)((uintptr_t)output);
             req.data.dma64.client_sz   = 0;
         }
-        /* 32-bit host system */
         else if (sizeof(uintptr_t) == sizeof(uint32_t)) {
+            /* 32-bit host system */
             req.type                   = WH_MESSAGE_CUSTOM_TYPE_DMA32;
             req.data.dma32.server_addr = (uint32_t)((uintptr_t)&input);
             req.data.dma32.server_sz   = sizeof(input);
@@ -107,6 +114,8 @@ static int _testCallbacks(whServerContext* server, whClientContext* client)
         memset(&req, 0, sizeof(req));
         memset(&resp, 0, sizeof(resp));
     }
+
+    /* TODO: query registered callback list and ensure it is populated correctly */
 
     return WH_ERROR_OK;
 }

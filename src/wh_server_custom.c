@@ -29,9 +29,14 @@ int wh_Server_HandleCustomRequest(whServerContext* server, uint16_t magic,
     whMessageCustom_Request  req  = {0};
     whMessageCustom_Response resp = {0};
 
+    if (NULL == server || NULL == req_packet || NULL == resp_packet ||
+        out_resp_size == NULL) {
+        return WH_ERROR_BADARGS;
+    }
 
     if (action >= WH_MESSAGE_ACTION_MAX) {
         /* Invalid callback index  */
+        /* TODO: is this the appropriate error to return? */
         return WH_ERROR_BADARGS;
     }
 
@@ -66,6 +71,7 @@ int wh_Server_HandleCustomRequest(whServerContext* server, uint16_t magic,
         WH_ERROR_OK) {
         return rc;
     }
+
     *out_resp_size = sizeof(resp);
 
     return WH_ERROR_OK;
