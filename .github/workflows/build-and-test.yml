@@ -1,0 +1,20 @@
+name: Build and Test
+
+on:
+  push:
+    branches: [ 'master', 'main', 'release/**' ]
+  pull_request:
+    branches: [ '*' ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: build-and-test-asan-debug
+      run: make DEBUG=1 ASAN=1 run
+    - name: build-and-test
+      run: make run
+
