@@ -9,9 +9,9 @@
  * to interpret whMessageCustomData */
 typedef enum {
     /* message types reserved for internal usage*/
-    WH_MESSAGE_CUSTOM_TYPE_DMA32      = 0,
-    WH_MESSAGE_CUSTOM_TYPE_DMA64      = 1,
-    WH_MESSAGE_CUSTOM_TYPE_RESERVED_2 = 2,
+    WH_MESSAGE_CUSTOM_TYPE_QUERY      = 0,
+    WH_MESSAGE_CUSTOM_TYPE_DMA32      = 1,
+    WH_MESSAGE_CUSTOM_TYPE_DMA64      = 2,
     WH_MESSAGE_CUSTOM_TYPE_RESERVED_3 = 3,
     WH_MESSAGE_CUSTOM_TYPE_RESERVED_4 = 4,
     WH_MESSAGE_CUSTOM_TYPE_RESERVED_5 = 5,

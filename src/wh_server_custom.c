@@ -52,17 +52,18 @@ int wh_Server_HandleCustomRequest(whServerContext* server, uint16_t magic,
     }
 
     if (customHandlerTable[action] != NULL) {
-        /* Invoke the registered callback, storing the return value in the
-         * reponse  */
-        resp.rc = customHandlerTable[action](server, &req, &resp);
-        /* TODO: propagate wolfHSM error codes (requires modifiying caller
-         * function)*/
+        /* If this isn't a query to check if the callback exists, invoke the
+         * registered callback, storing the return value in the reponse  */
+        if (req.type != WH_MESSAGE_CUSTOM_TYPE_QUERY) {
+            resp.rc = customHandlerTable[action](server, &req, &resp);
+        }
+        /* TODO: propagate other wolfHSM error codes (requires modifiying caller
+         * function) once generic server code supports it */
         resp.err = WH_ERROR_OK;
     }
     else {
-        /* No callback was registered, populate response errors, but we must
+        /* No callback was registered, populate response error. We must
          * return success to ensure the "error" response is sent  */
-        /* TODO: what should we set resp.rc to? */
         resp.err = WH_ERROR_NO_HANDLER;
     }
 

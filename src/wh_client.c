@@ -241,3 +241,18 @@ int wh_Client_CustomResponse(whClientContext*          c,
 
     return WH_ERROR_OK;
 }
+
+int wh_Client_CustomRequestCheckRegistered(whClientContext* c, uint32_t id)
+{
+    whMessageCustom_Request req = {0};
+
+    if (c == NULL || id >= WH_MESSAGE_ACTION_MAX) {
+        return WH_ERROR_BADARGS;
+    }
+
+    req.id = id;
+    req.type = WH_MESSAGE_CUSTOM_TYPE_QUERY;
+
+    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_CUSTOM, req.id,
+                                 sizeof(req), &req);
+}

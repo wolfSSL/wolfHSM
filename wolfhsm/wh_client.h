@@ -180,6 +180,7 @@ int wh_Client_NvmReadDma(whClientContext* c,
 
 
 /* Client custom-callback support */
+int wh_Client_CustomRequestCheckRegistered(whClientContext* c, uint32_t id);
 int wh_Client_CustomRequest(whClientContext* c, const whMessageCustom_Request* req);
 int wh_Client_CustomResponse(whClientContext* c, whMessageCustom_Response *resp);
 

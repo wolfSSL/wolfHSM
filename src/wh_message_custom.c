@@ -12,6 +12,9 @@ static void _translateCustomData(uint16_t magic, uint32_t translatedType,
 {
     if (translatedType < WH_MESSAGE_CUSTOM_TYPE_USER_DEFINED_START) {
         switch (translatedType) {
+            case WH_MESSAGE_CUSTOM_TYPE_QUERY: {
+                /* right now, no further translations required */
+            } break;
             case WH_MESSAGE_CUSTOM_TYPE_DMA32: {
                 dst->dma32.client_addr =
                     wh_Translate32(magic, src->dma32.client_addr);
@@ -51,6 +54,7 @@ int wh_MessageCustom_TranslateRequest(uint16_t                       magic,
     if ((src == NULL) || (dst == NULL)) {
         return WH_ERROR_BADARGS;
     }
+
     dst->id   = wh_Translate16(magic, src->id);
     dst->type = wh_Translate32(magic, src->type);
     _translateCustomData(magic, dst->type, &src->data, &dst->data);

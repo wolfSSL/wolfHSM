@@ -74,8 +74,15 @@ static int _testCallbacks(whServerContext* server, whClientContext* client)
     char       output[sizeof(input)] = {0};
 
     for (counter = 0; counter < WH_MESSAGE_ACTION_MAX; counter++) {
-        /* First, test that an unregistered callback returns error */
         req.id = counter;
+
+        /* Check that the callback shows as unregistered */
+        WH_TEST_RETURN_ON_FAIL(wh_Client_CustomRequestCheckRegistered(client, req.id));
+        WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
+        WH_TEST_RETURN_ON_FAIL(wh_Client_CustomResponse(client, &resp));
+        WH_TEST_ASSERT_RETURN(resp.err == WH_ERROR_NO_HANDLER);
+
+        /* Test that calling an unregistered callback returns error */
         WH_TEST_RETURN_ON_FAIL(wh_Client_CustomRequest(client, &req));
         WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
         WH_TEST_RETURN_ON_FAIL(wh_Client_CustomResponse(client, &resp));
@@ -84,6 +91,12 @@ static int _testCallbacks(whServerContext* server, whClientContext* client)
         /* Register a custom callback */
         WH_TEST_RETURN_ON_FAIL(
             wh_Server_RegisterCustomCb(counter, _customServerCb));
+
+        /* Check that the callback now shows as registered */
+        WH_TEST_RETURN_ON_FAIL(wh_Client_CustomRequestCheckRegistered(client, req.id));
+        WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
+        WH_TEST_RETURN_ON_FAIL(wh_Client_CustomResponse(client, &resp));
+        WH_TEST_ASSERT_RETURN(resp.err == WH_ERROR_OK);
 
         /* prepare the rest of the request */
         if (sizeof(uintptr_t) == sizeof(uint64_t)) {
@@ -114,8 +127,6 @@ static int _testCallbacks(whServerContext* server, whClientContext* client)
         memset(&req, 0, sizeof(req));
         memset(&resp, 0, sizeof(resp));
     }
-
-    /* TODO: query registered callback list and ensure it is populated correctly */
 
     return WH_ERROR_OK;
 }
