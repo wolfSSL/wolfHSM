@@ -14,7 +14,7 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - name: build-and-test-asan-debug
-      run: make DEBUG=1 ASAN=1 run
+      run: cd test && make DEBUG=1 ASAN=1 run
     - name: build-and-test
-      run: make run
+      run: cd test && make run
 
