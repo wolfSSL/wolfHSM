@@ -23,6 +23,7 @@
 /* Message definitions */
 #include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_message_comm.h"
+#include "wolfhsm/wh_message_custom.h"
 
 #include "wolfhsm/wh_client.h"
 
@@ -34,7 +35,7 @@ int wh_Client_Init(whClientContext* c, const whClientConfig* config)
     }
 
     memset(c, 0, sizeof(*c));
-    
+
     if (    ((rc = wh_CommClient_Init(c->comm, config->comm)) == 0) &&
             ((rc = wolfCrypt_Init()) == 0) &&
             ((rc = wc_CryptoCb_RegisterDevice(WOLFHSM_DEV_ID, wolfHSM_CryptoCb, c)) == 0) &&
@@ -201,3 +202,40 @@ int wh_Client_Echo(whClientContext* c, uint16_t snd_len, const void* snd_data,
     return rc;
 }
 
+
+int wh_Client_CustomRequest(whClientContext* c, uint16_t action)
+{
+    whMessageCustom_Request req = {0};
+
+    if (NULL == c || action >= WH_MESSAGE_ACTION_MAX) {
+        return WH_ERROR_BADARGS;
+    }
+
+    req.id = action;
+
+    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_CUSTOM, action,
+                                 sizeof(req), &req);
+}
+
+
+int wh_Client_CustomResponse(whClientContext* c, int32_t *out_rc)
+{
+    whMessageCustom_Response resp = {0};
+    uint16_t resp_group = 0;
+    uint16_t resp_action = 0;
+    uint16_t resp_size = 0;
+    int32_t rc = 0;
+
+    if (NULL == c || out_rc == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    rc = wh_Client_RecvResponse(c, &resp_group, &resp_action, &resp_size, &resp);
+    if (rc != WH_ERROR_OK) {
+        return rc;
+    }
+
+    *out_rc = resp.rc;
+
+    return WH_ERROR_OK;
+}

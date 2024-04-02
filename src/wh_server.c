@@ -18,8 +18,9 @@
 
 /* Server API's */
 #include "wolfhsm/wh_server.h"
-#include "wolfhsm/wh_server_crypto.h"
 #include "wolfhsm/wh_server_internal.h"
+#include "wolfhsm/wh_server_crypto.h"
+#include "wolfhsm/wh_server_custom.h"
 #if defined(WOLFHSM_SHE_EXTENSION)
 #include "wolfhsm/wh_server_she.h"
 #endif
@@ -44,11 +45,6 @@ static int _wh_Server_HandleSheRequest(whServerContext* server,
         uint16_t req_size, const void* req_packet,
         uint16_t *out_resp_size, void* resp_packet);
 #endif
-static int _wh_Server_HandleCustomRequest(whServerContext* server,
-        uint16_t magic, uint16_t action, uint16_t seq,
-        uint16_t req_size, const void* req_packet,
-        uint16_t *out_resp_size, void* resp_packet);
-
 
 int wh_Server_Init(whServerContext* server, whServerConfig* config)
 {
@@ -215,20 +211,7 @@ static int _wh_Server_HandleSheRequest(whServerContext* server,
 }
 #endif
 
-static int _wh_Server_HandleCustomRequest(whServerContext* server,
-        uint16_t magic, uint16_t action, uint16_t seq,
-        uint16_t req_size, const void* req_packet,
-        uint16_t *out_resp_size, void* resp_packet)
-{
-    int rc = 0;
-    switch (action) {
-    /* TODO: Add custom/user callback message handling here */
-    default:
-        /* Unknown request. Respond with empty packet */
-        *out_resp_size = 0;
-    }
-    return rc;
-}
+
 
 int wh_Server_HandleRequestMessage(whServerContext* server)
 {
@@ -266,11 +249,11 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
             rc = _wh_Server_HandleKeyRequest(server, magic, action, seq,
                     size, data, &size, data);
         break;
-        
+
         case WH_MESSAGE_GROUP_CRYPTO:
             rc = wh_Server_HandleCryptoRequest(server, action, data, &size);
         break;
-        
+
         case WH_MESSAGE_GROUP_PKCS11:
             rc = _wh_Server_HandlePkcs11Request(server, magic, action, seq,
                     size, data, &size, data);
@@ -283,7 +266,7 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
 #endif
 
         case WH_MESSAGE_GROUP_CUSTOM:
-            rc = _wh_Server_HandleCustomRequest(server, magic, action, seq,
+            rc = wh_Server_HandleCustomRequest(server, magic, action, seq,
                     size, data, &size, data);
             break;
 

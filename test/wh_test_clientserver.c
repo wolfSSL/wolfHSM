@@ -17,6 +17,8 @@
 #include "wolfhsm/wh_flash_ramsim.h"
 
 #include "wolfhsm/wh_server.h"
+#include "wolfhsm/wh_server_custom.h"
+#include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_client.h"
 
 #if defined(WH_CFG_TEST_POSIX)
@@ -30,6 +32,16 @@
 #define RESP_SIZE 64
 #define REPEAT_COUNT 10
 #define ONE_MS 1000
+
+
+/* Dummy callback that returns the registered callback ID */
+static int _customServerCb(whServerContext*               server,
+                           const whMessageCustom_Request* req,
+                           whMessageCustom_Response*      resp)
+{
+    return req->id;
+}
+
 
 int whTest_ClientServerSequential(void)
 {
@@ -429,6 +441,17 @@ int whTest_ClientServerSequential(void)
             printf("Client NvmGetAvailableResponse:%d, server_rc:%d, avail_size:%d avail_objects:%d, reclaim_size:%d reclaim_objects:%d\n",
                 ret, server_rc, avail_size, avail_objects, reclaim_size, reclaim_objects);
     #endif
+
+    /* Test custom registered callbacks */
+    for (counter = 0; counter < WH_MESSAGE_ACTION_MAX; counter++) {
+        int rc = 0;
+        WH_TEST_RETURN_ON_FAIL(wh_Server_RegisterCustomCb(counter, _customServerCb));
+        WH_TEST_RETURN_ON_FAIL(wh_Client_CustomRequest(client, counter));
+        WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
+        WH_TEST_RETURN_ON_FAIL(wh_Client_CustomResponse(client, &rc));
+        WH_TEST_ASSERT_RETURN(rc == counter);
+    }
+
 
     WH_TEST_RETURN_ON_FAIL(wh_Server_Cleanup(server));
     WH_TEST_RETURN_ON_FAIL(wh_Client_Cleanup(client));

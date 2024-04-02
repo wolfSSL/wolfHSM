@@ -177,4 +177,9 @@ int wh_Client_NvmReadDma(whClientContext* c,
         whNvmId id, whNvmSize offset, whNvmSize data_len, uint8_t* data,
         int32_t *out_rc);
 
+
+/* Client custom-callback support */
+int wh_Client_CustomRequest(whClientContext* c, uint16_t action); /* TODO: user data */
+int wh_Client_CustomResponse(whClientContext* c, int32_t *out_rc);
+
 #endif /* WOLFHSM_WH_CLIENT_H_ */

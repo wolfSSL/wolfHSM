@@ -24,6 +24,9 @@ enum {
     WH_ERROR_NOTBLANK       = -413, /* Area is no blank */
     WH_ERROR_NOTFOUND       = -414, /* Matching object not found */
     WH_ERROR_NOSPACE        = -415, /* No available space */
+
+    /* Custom-callback status returns */
+    WH_ERROR_NO_HANDLER     = -420, /* No handler registered for action */
 };
 
 #endif /* WOLFHSM_WH_ERROR_H_ */
