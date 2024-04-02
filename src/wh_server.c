@@ -20,6 +20,8 @@
 #include "wolfhsm/wh_server.h"
 #include "wolfhsm/wh_server_nvm.h"
 #include "wolfhsm/wh_server_crypto.h"
+#include "wolfhsm/wh_server_keystore.h"
+#include "wolfhsm/wh_server_internal.h"
 #if defined(WOLFHSM_SHE_EXTENSION)
 #include "wolfhsm/wh_server_she.h"
 #endif
@@ -27,10 +29,6 @@
 /** Forward declarations. */
 /* TODO: Move these out to separate C files */
 static int _wh_Server_HandleCommRequest(whServerContext* server,
-        uint16_t magic, uint16_t action, uint16_t seq,
-        uint16_t req_size, const void* req_packet,
-        uint16_t *out_resp_size, void* resp_packet);
-static int _wh_Server_HandleKeyRequest(whServerContext* server,
         uint16_t magic, uint16_t action, uint16_t seq,
         uint16_t req_size, const void* req_packet,
         uint16_t *out_resp_size, void* resp_packet);
@@ -119,22 +117,6 @@ static int _wh_Server_HandleCommRequest(whServerContext* server,
     return rc;
 }
 
-static int _wh_Server_HandleKeyRequest(whServerContext* server,
-        uint16_t magic, uint16_t action, uint16_t seq,
-        uint16_t req_size, const void* req_packet,
-        uint16_t *out_resp_size, void* resp_packet)
-{
-    (void)server;
-    (void)magic;
-    (void)action;
-    (void)seq;
-    (void)req_size;
-    (void)req_packet;
-    (void)out_resp_size;
-    (void)resp_packet;
-    return 0;
-}
-
 static int _wh_Server_HandlePkcs11Request(whServerContext* server,
         uint16_t magic, uint16_t action, uint16_t seq,
         uint16_t req_size, const void* req_packet,
@@ -203,7 +185,7 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
 
         case WH_MESSAGE_GROUP_KEY:
             rc = _wh_Server_HandleKeyRequest(server, magic, action, seq,
-                    size, data, &size, data);
+                    data, &size);
         break;
 
         case WH_MESSAGE_GROUP_CRYPTO:
@@ -243,4 +225,3 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
     }
     return rc;
 }
-

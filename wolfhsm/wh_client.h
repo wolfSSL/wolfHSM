@@ -67,6 +67,17 @@ int wh_Client_EchoResponse(whClientContext* c, uint16_t *out_size, void* data);
 int wh_Client_Echo(whClientContext* c, uint16_t snd_len, const void* snd_data,
         uint16_t *out_rcv_len, void* rcv_data);
 
+/* Key functions */
+int wh_Client_KeyCacheRequest_ex(whClientContext* c, uint32_t flags,
+    uint8_t* label, uint8_t* in, uint32_t inSz, uint16_t keyId);
+int wh_Client_KeyCacheRequest(whClientContext* c, uint32_t flags,
+    uint8_t* label, uint8_t* in, uint32_t inSz);
+int wh_Client_KeyCacheResponse(whClientContext* c, uint16_t* keyId);
+int wh_Client_KeyEvictRequest(whClientContext* c, uint16_t keyId);
+int wh_Client_KeyEvictResponse(whClientContext* c);
+int wh_Client_KeyExportRequest(whClientContext* c, uint16_t keyId);
+int wh_Client_KeyExportResponse(whClientContext* c, uint8_t* label,
+    uint8_t* out, uint32_t* outSz);
 
 /** NVM functions */
 int wh_Client_NvmInitRequest(whClientContext* c);

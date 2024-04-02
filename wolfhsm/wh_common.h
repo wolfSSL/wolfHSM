@@ -100,5 +100,6 @@ extern const whManifest_ex manifests[WOLFHSM_NUM_MANIFESTS];
 
 /* Custom request shared defs */
 #define WH_CUSTOM_CB_NUM_CALLBACKS 8
+#define WOLFHSM_ID_ERASED 0
 
 #endif /* WOLFHSM_WH_COMMON_H_ */

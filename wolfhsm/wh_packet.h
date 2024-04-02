@@ -248,14 +248,14 @@ typedef struct WOLFHSM_PACK wh_Packet_key_cache_req
 {
     uint32_t flags;
     uint32_t len;
-    uint32_t id;
+    uint16_t id;
     uint8_t label[WOLFHSM_NVM_LABEL_LEN];
     /* uint8_t in[]; */
 } wh_Packet_key_cache_req;
 
 typedef struct WOLFHSM_PACK wh_Packet_key_cache_res
 {
-    uint32_t id;
+    uint16_t id;
 } wh_Packet_key_cache_res;
 
 typedef struct WOLFHSM_PACK wh_Packet_key_evict_req

@@ -8,7 +8,6 @@
 #include <string.h> /* For memset, memcpy */
 
 #include "wolfssl/wolfcrypt/settings.h"
-#include "wolfssl/wolfcrypt/random.h"
 
 #if defined(WH_CONFIG)
 #include "wh_config.h"
@@ -55,7 +54,11 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     curve25519_key curve25519PrivateKey[1];
     curve25519_key curve25519PublicKey[1];
     uint32_t outLen;
+    uint16_t keyId;
     uint8_t key[16];
+    uint8_t keyEnd[16];
+    uint8_t labelStart[WOLFHSM_NVM_LABEL_LEN];
+    uint8_t labelEnd[WOLFHSM_NVM_LABEL_LEN];
     uint8_t sharedOne[CURVE25519_KEYSIZE];
     uint8_t sharedTwo[CURVE25519_KEYSIZE];
 
@@ -75,6 +78,42 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         WH_ERROR_PRINT("Failed to wc_RNG_GenerateBlock %d\n", ret);
         goto exit;
     }
+
+    /* test cache/export/evict */
+    if((ret = wh_Client_KeyCacheRequest(client, 0, labelStart, key, 16)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyCacheRequest %d\n", ret);
+        goto exit;
+    }
+    do {
+        ret = wh_Client_KeyCacheResponse(client, &keyId);
+    } while (ret == WH_ERROR_NOTREADY);
+    if(ret != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyCacheResponse %d\n", ret);
+        goto exit;
+    }
+    if((ret = wh_Client_KeyExportRequest(client, keyId)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyExportRequest %d\n", ret);
+        goto exit;
+    }
+    outLen = sizeof(keyEnd);
+    do {
+        ret = wh_Client_KeyExportResponse(client, labelEnd, keyEnd, &outLen);
+    } while (ret == WH_ERROR_NOTREADY);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyExportResponse %d\n", ret);
+        goto exit;
+    }
+    if((ret = wh_Client_KeyEvictRequest(client, keyId)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyEvictRequest %d\n", ret);
+        goto exit;
+    }
+    do {
+        ret = wh_Client_KeyEvictResponse(client);
+    } while (ret == WH_ERROR_NOTREADY);
+    if (ret == 0 && XMEMCMP(key, keyEnd, outLen) == 0 && XMEMCMP(labelStart, labelEnd, sizeof(labelStart)) == 0)
+        printf("KEY CACHE/EXPORT SUCCESS\n");
+    else
+        WH_ERROR_PRINT("KEY CACHE/EXPORT FAILED TO MATCH\n");
 
     /* test curve25519 */
     if ((ret = wc_curve25519_init_ex(curve25519PrivateKey, NULL, WOLFHSM_DEV_ID)) != 0) {
@@ -148,6 +187,17 @@ int whTest_CryptoServerConfig(whServerConfig* config)
         goto exit;
     }
 
+
+    /* handle cache/export/evict */
+    for (i = 0; i < 3; i++) {
+        do {
+            ret = wh_Server_HandleRequestMessage(server);
+        } while (ret == WH_ERROR_NOTREADY);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wh_Server_HandleRequestMessage: %d\n", ret);
+            goto exit;
+        }
+    }
 
     /* handle curve */
     for (i = 0; i < 4; i++) {

@@ -9,6 +9,7 @@
 
 /* wolfCrypt */
 #include "wolfssl/wolfcrypt/settings.h"
+#include "wolfssl/wolfcrypt/error-crypt.h"
 #include "wolfssl/wolfcrypt/wc_port.h"
 #include "wolfssl/wolfcrypt/cryptocb.h"
 
@@ -25,6 +26,7 @@
 #include "wolfhsm/wh_message_comm.h"
 #include "wolfhsm/wh_message_customcb.h"
 
+#include "wolfhsm/wh_packet.h"
 #include "wolfhsm/wh_client.h"
 
 int wh_Client_Init(whClientContext* c, const whClientConfig* config)
@@ -309,3 +311,138 @@ int wh_Client_CustomCbCheckRegistered(whClientContext* c, uint16_t id, int* resp
 
     return rc;
 }
+
+int wh_Client_KeyCacheRequest_ex(whClientContext* c, uint32_t flags,
+    uint8_t* label, uint8_t* in, uint32_t inSz, uint16_t keyId)
+{
+    uint8_t rawPacket[WH_COMM_MTU] = {0};
+    whPacket* packet = (whPacket*)rawPacket;
+    uint8_t* packIn = (uint8_t*)(&packet->keyCacheReq + 1);
+    if (c == NULL || label == NULL || in == NULL || inSz == 0)
+        return BAD_FUNC_ARG;
+    /* set flags */
+    packet->keyCacheReq.flags = flags;
+    /* set inSz */
+    packet->keyCacheReq.len = inSz;
+    /* set id */
+    packet->keyCacheReq.id = keyId;
+    /* set label */
+    XMEMCPY(packet->keyCacheReq.label, label, WOLFHSM_NVM_LABEL_LEN);
+    /* write in */
+    XMEMCPY(packIn, in, inSz);
+    /* write request */
+    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_KEY, WH_KEY_CACHE,
+            WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->keyCacheReq) + inSz,
+            (uint8_t*)packet);
+}
+
+int wh_Client_KeyCacheRequest(whClientContext* c, uint32_t flags,
+    uint8_t* label, uint8_t* in, uint32_t inSz)
+{
+    return wh_Client_KeyCacheRequest_ex(c, flags, label, in, inSz,
+        WOLFHSM_ID_ERASED);
+}
+
+int wh_Client_KeyCacheResponse(whClientContext* c, uint16_t* keyId)
+{
+    uint16_t group;
+    uint16_t action;
+    uint16_t size;
+    int ret;
+    whPacket packet[1] = {0};
+    if (c == NULL || keyId == NULL)
+        return BAD_FUNC_ARG;
+    ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)packet);
+    if (ret == 0) {
+        if (packet->rc != 0)
+            ret = packet->rc;
+        else
+            *keyId = packet->keyCacheRes.id;
+    }
+    return ret;
+}
+
+int wh_Client_KeyEvictRequest(whClientContext* c, uint16_t keyId)
+{
+    whPacket packet[1] = {0};
+    if (c == NULL || keyId == WOLFHSM_ID_ERASED)
+        return BAD_FUNC_ARG;
+    /* set the keyId */
+    packet->keyEvictReq.id = keyId;
+    /* write request */
+    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_KEY, WH_KEY_EVICT,
+            WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->keyEvictReq),
+            (uint8_t*)packet);
+}
+
+int wh_Client_KeyEvictResponse(whClientContext* c)
+{
+    uint16_t group;
+    uint16_t action;
+    uint16_t size;
+    int ret;
+    whPacket packet[1] = {0};
+    if (c == NULL)
+        return BAD_FUNC_ARG;
+    size = sizeof(packet);
+    ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)packet);
+    if (ret == 0) {
+        if (packet->rc != 0)
+            ret = packet->rc;
+    }
+    return ret;
+}
+
+int wh_Client_KeyExportRequest(whClientContext* c, uint16_t keyId)
+{
+    whPacket packet[1] = {0};
+    if (c == NULL || keyId == WOLFHSM_ID_ERASED)
+        return BAD_FUNC_ARG;
+    /* set keyId */
+    packet->keyExportReq.id = keyId;
+    /* write request */
+    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_KEY, WH_KEY_EXPORT,
+            WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->keyExportReq),
+            (uint8_t*)packet);
+}
+
+int wh_Client_KeyExportResponse(whClientContext* c, uint8_t* label,
+    uint8_t* out, uint32_t* outSz)
+{
+    uint16_t group;
+    uint16_t action;
+    uint16_t size;
+    int ret;
+    uint8_t rawPacket[WH_COMM_MTU] = {0};
+    whPacket* packet = (whPacket*)rawPacket;
+    uint8_t* packOut = (uint8_t*)(&packet->keyExportRes + 1);
+    if (c == NULL || label == NULL || outSz == NULL)
+        return BAD_FUNC_ARG;
+    size = sizeof(rawPacket);
+    ret = wh_Client_RecvResponse(c, &group, &action, &size, rawPacket);
+    if (ret == 0) {
+        if (packet->rc != 0)
+            ret = packet->rc;
+        else  {
+            if (out == NULL) {
+                *outSz = packet->keyExportRes.len;
+                ret = LENGTH_ONLY_E;
+            }
+            else if (*outSz < packet->keyExportRes.len) {
+                ret = BUFFER_E;
+            }
+            else {
+                XMEMCPY(label, packet->keyExportRes.label,
+                    WOLFHSM_NVM_LABEL_LEN);
+                XMEMCPY(out, packOut, packet->keyExportRes.len);
+                *outSz = packet->keyExportRes.len;
+            }
+        }
+    }
+    return ret;
+}
+
+#if 0
+int wh_Client_KeyCommit(whClientContext* c, uint16_t keyId);
+int wh_Client_KeyErase(whClientContext* c, uint16_t keyId);
+#endif
