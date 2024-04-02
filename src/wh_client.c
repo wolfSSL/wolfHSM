@@ -202,40 +202,42 @@ int wh_Client_Echo(whClientContext* c, uint16_t snd_len, const void* snd_data,
     return rc;
 }
 
-
-int wh_Client_CustomRequest(whClientContext* c, uint16_t action)
+int wh_Client_CustomRequest(whClientContext* c, const whMessageCustom_Request* req)
 {
-    whMessageCustom_Request req = {0};
-
-    if (NULL == c || action >= WH_MESSAGE_ACTION_MAX) {
+    if (NULL == c || req == NULL || req->id >= WH_MESSAGE_ACTION_MAX) {
         return WH_ERROR_BADARGS;
     }
 
-    req.id = action;
-
-    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_CUSTOM, action,
-                                 sizeof(req), &req);
+    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_CUSTOM, req->id,
+                                 sizeof(*req), req);
 }
 
-
-int wh_Client_CustomResponse(whClientContext* c, int32_t *out_rc)
+int wh_Client_CustomResponse(whClientContext*          c,
+                             whMessageCustom_Response* outResp)
 {
-    whMessageCustom_Response resp = {0};
-    uint16_t resp_group = 0;
-    uint16_t resp_action = 0;
-    uint16_t resp_size = 0;
-    int32_t rc = 0;
+    whMessageCustom_Response resp;
+    uint16_t                 resp_group  = 0;
+    uint16_t                 resp_action = 0;
+    uint16_t                 resp_size   = 0;
+    int32_t                  rc          = 0;
 
-    if (NULL == c || out_rc == NULL) {
+    if (NULL == c || outResp == NULL) {
         return WH_ERROR_BADARGS;
     }
 
-    rc = wh_Client_RecvResponse(c, &resp_group, &resp_action, &resp_size, &resp);
+    rc =
+        wh_Client_RecvResponse(c, &resp_group, &resp_action, &resp_size, &resp);
     if (rc != WH_ERROR_OK) {
         return rc;
     }
 
-    *out_rc = resp.rc;
+    if (resp_size != sizeof(resp) || resp_group != WH_MESSAGE_GROUP_CUSTOM ||
+        resp_action >= WH_MESSAGE_ACTION_MAX) {
+        /* message invalid */
+        return WH_ERROR_ABORTED;
+    }
+
+    memcpy(outResp, &resp, sizeof(resp));
 
     return WH_ERROR_OK;
 }

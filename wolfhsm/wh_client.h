@@ -26,6 +26,7 @@
 
 /* Component includes */
 #include "wolfhsm/wh_comm.h"
+#include "wolfhsm/wh_message_custom.h"
 
 /* Client context */
 struct whClientContext_t {
@@ -179,7 +180,7 @@ int wh_Client_NvmReadDma(whClientContext* c,
 
 
 /* Client custom-callback support */
-int wh_Client_CustomRequest(whClientContext* c, uint16_t action); /* TODO: user data */
-int wh_Client_CustomResponse(whClientContext* c, int32_t *out_rc);
+int wh_Client_CustomRequest(whClientContext* c, const whMessageCustom_Request* req);
+int wh_Client_CustomResponse(whClientContext* c, whMessageCustom_Response *resp);
 
 #endif /* WOLFHSM_WH_CLIENT_H_ */
