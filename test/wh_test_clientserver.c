@@ -17,7 +17,6 @@
 #include "wolfhsm/wh_flash_ramsim.h"
 
 #include "wolfhsm/wh_server.h"
-#include "wolfhsm/wh_server_custom.h"
 #include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_client.h"
 
@@ -34,7 +33,7 @@
 #define ONE_MS 1000
 
 
-/* Dummy callback that copies server data to client data */
+/* Dummy callback that loopback-copies client data */
 static int _customServerCb(whServerContext*               server,
                            const whMessageCustom_Request* req,
                            whMessageCustom_Response*      resp)
@@ -68,19 +67,22 @@ static int _testCallbacks(whServerContext* server, whClientContext* client)
     size_t                   counter;
     whMessageCustom_Request  req  = {0};
     whMessageCustom_Response resp = {0};
+    uint16_t                 outId   = 0;
+    int                      respErr = 0;
 
     const char input[] = "The answer to the ultimate question of life, the "
                          "universe and everything is 42";
     char       output[sizeof(input)] = {0};
 
-    for (counter = 0; counter < WH_MESSAGE_ACTION_MAX; counter++) {
+    for (counter = 0; counter < WH_CUSTOM_RQST_NUM_CALLBACKS; counter++) {
         req.id = counter;
 
         /* Check that the callback shows as unregistered */
         WH_TEST_RETURN_ON_FAIL(wh_Client_CustomRequestCheckRegistered(client, req.id));
         WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
-        WH_TEST_RETURN_ON_FAIL(wh_Client_CustomResponse(client, &resp));
-        WH_TEST_ASSERT_RETURN(resp.err == WH_ERROR_NO_HANDLER);
+        WH_TEST_RETURN_ON_FAIL(wh_Client_CustomResponseCheckRegistered(client, &outId, &respErr));
+        WH_TEST_ASSERT_RETURN(outId == req.id);
+        WH_TEST_ASSERT_RETURN(respErr == WH_ERROR_NO_HANDLER);
 
         /* Test that calling an unregistered callback returns error */
         WH_TEST_RETURN_ON_FAIL(wh_Client_CustomRequest(client, &req));
@@ -90,13 +92,14 @@ static int _testCallbacks(whServerContext* server, whClientContext* client)
 
         /* Register a custom callback */
         WH_TEST_RETURN_ON_FAIL(
-            wh_Server_RegisterCustomCb(counter, _customServerCb));
+            wh_Server_RegisterCustomCb(server, counter, _customServerCb));
 
         /* Check that the callback now shows as registered */
         WH_TEST_RETURN_ON_FAIL(wh_Client_CustomRequestCheckRegistered(client, req.id));
         WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
-        WH_TEST_RETURN_ON_FAIL(wh_Client_CustomResponse(client, &resp));
-        WH_TEST_ASSERT_RETURN(resp.err == WH_ERROR_OK);
+        WH_TEST_RETURN_ON_FAIL(wh_Client_CustomResponseCheckRegistered(client, &outId, &respErr));
+        WH_TEST_ASSERT_RETURN(outId == req.id);
+        WH_TEST_ASSERT_RETURN(respErr == WH_ERROR_OK);
 
         /* prepare the rest of the request */
         if (sizeof(uintptr_t) == sizeof(uint64_t)) {

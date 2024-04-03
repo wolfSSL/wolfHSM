@@ -1,20 +1,18 @@
-#include "wolfhsm/wh_server_custom.h"
+#include "wolfhsm/wh_server.h"
+#include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_message_custom.h"
 
 
-/* Statically allocated callback table holding user callbacks */
-static whServerCustomCb customHandlerTable[WH_MESSAGE_ACTION_MAX] = {NULL};
-
-
-int wh_Server_RegisterCustomCb(uint16_t action, whServerCustomCb handler)
+int wh_Server_RegisterCustomCb(whServerContext* server, uint16_t action, whServerCustomCb handler)
 {
-    if (NULL == handler || action >= WH_MESSAGE_ACTION_MAX) {
+    if (NULL == server || NULL == handler ||
+        action >= WH_CUSTOM_RQST_NUM_CALLBACKS) {
         return WH_ERROR_BADARGS;
     }
 
-    customHandlerTable[action] = handler;
+    server->customHandlerTable[action] = handler;
 
     return WH_ERROR_OK;
 }
@@ -34,7 +32,7 @@ int wh_Server_HandleCustomRequest(whServerContext* server, uint16_t magic,
         return WH_ERROR_BADARGS;
     }
 
-    if (action >= WH_MESSAGE_ACTION_MAX) {
+    if (action >= WH_CUSTOM_RQST_NUM_CALLBACKS) {
         /* Invalid callback index  */
         /* TODO: is this the appropriate error to return? */
         return WH_ERROR_BADARGS;
@@ -51,11 +49,11 @@ int wh_Server_HandleCustomRequest(whServerContext* server, uint16_t magic,
         return rc;
     }
 
-    if (customHandlerTable[action] != NULL) {
+    if (server->customHandlerTable[action] != NULL) {
         /* If this isn't a query to check if the callback exists, invoke the
          * registered callback, storing the return value in the reponse  */
         if (req.type != WH_MESSAGE_CUSTOM_TYPE_QUERY) {
-            resp.rc = customHandlerTable[action](server, &req, &resp);
+            resp.rc = server->customHandlerTable[action](server, &req, &resp);
         }
         /* TODO: propagate other wolfHSM error codes (requires modifiying caller
          * function) once generic server code supports it */
@@ -67,7 +65,10 @@ int wh_Server_HandleCustomRequest(whServerContext* server, uint16_t magic,
         resp.err = WH_ERROR_NO_HANDLER;
     }
 
-    /* Translate the response and set output size */
+    /* tag response with requested callback ID for client-side bookkeeping*/
+    resp.id = req.id;
+
+    /* Translate the response */
     if ((rc = wh_MessageCustom_TranslateResponse(magic, &resp, resp_packet)) !=
         WH_ERROR_OK) {
         return rc;

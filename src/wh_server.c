@@ -20,7 +20,6 @@
 #include "wolfhsm/wh_server.h"
 #include "wolfhsm/wh_server_internal.h"
 #include "wolfhsm/wh_server_crypto.h"
-#include "wolfhsm/wh_server_custom.h"
 #if defined(WOLFHSM_SHE_EXTENSION)
 #include "wolfhsm/wh_server_she.h"
 #endif

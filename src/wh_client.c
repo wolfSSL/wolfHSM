@@ -204,7 +204,7 @@ int wh_Client_Echo(whClientContext* c, uint16_t snd_len, const void* snd_data,
 
 int wh_Client_CustomRequest(whClientContext* c, const whMessageCustom_Request* req)
 {
-    if (NULL == c || req == NULL || req->id >= WH_MESSAGE_ACTION_MAX) {
+    if (NULL == c || req == NULL || req->id >= WH_CUSTOM_RQST_NUM_CALLBACKS) {
         return WH_ERROR_BADARGS;
     }
 
@@ -232,7 +232,7 @@ int wh_Client_CustomResponse(whClientContext*          c,
     }
 
     if (resp_size != sizeof(resp) || resp_group != WH_MESSAGE_GROUP_CUSTOM ||
-        resp_action >= WH_MESSAGE_ACTION_MAX) {
+        resp_action >= WH_CUSTOM_RQST_NUM_CALLBACKS) {
         /* message invalid */
         return WH_ERROR_ABORTED;
     }
@@ -246,7 +246,7 @@ int wh_Client_CustomRequestCheckRegistered(whClientContext* c, uint32_t id)
 {
     whMessageCustom_Request req = {0};
 
-    if (c == NULL || id >= WH_MESSAGE_ACTION_MAX) {
+    if (c == NULL || id >= WH_CUSTOM_RQST_NUM_CALLBACKS) {
         return WH_ERROR_BADARGS;
     }
 
@@ -255,4 +255,35 @@ int wh_Client_CustomRequestCheckRegistered(whClientContext* c, uint32_t id)
 
     return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_CUSTOM, req.id,
                                  sizeof(req), &req);
+}
+
+
+int wh_Client_CustomResponseCheckRegistered(whClientContext* c, uint16_t* outId, int* responseError)
+{
+    int rc = 0;
+    whMessageCustom_Response resp = {0};
+
+    if (c == NULL || outId == NULL || responseError == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    rc = wh_Client_CustomResponse(c, &resp);
+    if (rc != WH_ERROR_OK) {
+        return rc;
+    }
+
+    if (resp.type != WH_MESSAGE_CUSTOM_TYPE_QUERY) {
+        /* message invalid */
+        return WH_ERROR_ABORTED;
+    }
+
+    if (resp.err != WH_ERROR_OK && resp.err != WH_ERROR_NO_HANDLER) {
+        /* error codes that aren't related to the query should be fatal */
+        return WH_ERROR_ABORTED;
+    }
+
+    *outId = resp.id;
+    *responseError = resp.err;
+
+    return WH_ERROR_OK;
 }
