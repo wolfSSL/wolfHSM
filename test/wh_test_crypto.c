@@ -282,10 +282,10 @@ static void wh_ClientServer_MemThreadTest(void)
        .crypto = crypto,
     }};
 
-    wh_Nvm_Init(nvm, n_conf);
+    WH_TEST_RETURN_ON_FAIL(wh_Nvm_Init(nvm, n_conf));
 
-    wolfCrypt_Init();
-    wc_InitRng_ex(crypto->rng, NULL, crypto->devId);
+    WH_TEST_RETURN_ON_FAIL(wolfCrypt_Init());
+    WH_TEST_RETURN_ON_FAIL(wc_InitRng_ex(crypto->rng, NULL, crypto->devId));
 
     _whClientServerThreadTest(c_conf, s_conf);
 

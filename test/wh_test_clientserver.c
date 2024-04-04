@@ -212,9 +212,9 @@ int whTest_ClientServerSequential(void)
     }};
     whServerContext                server[1] = {0};
 
-    wolfCrypt_Init();
-    wc_InitRng_ex(crypto->rng, NULL, crypto->devId);
-    wh_Nvm_Init(nvm, n_conf);
+    WH_TEST_RETURN_ON_FAIL(wolfCrypt_Init());
+    WH_TEST_RETURN_ON_FAIL(wc_InitRng_ex(crypto->rng, NULL, crypto->devId));
+    WH_TEST_RETURN_ON_FAIL(wh_Nvm_Init(nvm, n_conf));
 
     /* Init client and server */
     WH_TEST_RETURN_ON_FAIL(wh_Client_Init(client, c_conf));
