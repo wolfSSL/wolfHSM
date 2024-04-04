@@ -26,7 +26,7 @@
 
 /* Component includes */
 #include "wolfhsm/wh_comm.h"
-#include "wolfhsm/wh_message_custom.h"
+#include "wolfhsm/wh_message_customcb.h"
 
 /* Client context */
 struct whClientContext_t {
@@ -180,14 +180,14 @@ int wh_Client_NvmReadDma(whClientContext* c,
 
 
 /* Client custom-callback support */
-int wh_Client_CustomRequest(whClientContext* c, const whMessageCustom_Request* req);
-int wh_Client_CustomResponse(whClientContext* c, whMessageCustom_Response *resp);
+int wh_Client_CustomCbRequest(whClientContext* c, const whMessageCustomCb_Request* req);
+int wh_Client_CustomCbResponse(whClientContext* c, whMessageCustomCb_Response *resp);
 /* Instructs server to query if a callback is registered */
-int wh_Client_CustomRequestCheckRegistered(whClientContext* c, uint32_t id);
+int wh_Client_CustomCheckRegisteredRequest(whClientContext* c, uint32_t id);
 /* Processes a server response to callback query. OutId is set to the ID of the
  * received query. ResponseError is set to WH_ERROR_OK if the callback is
  * registered, and WH_ERROR_NO_HANDLER if not */
-int wh_Client_CustomResponseCheckRegistered(whClientContext* c, uint16_t* outId, int* responseError);
+int wh_Client_CustomCbCheckRegisteredResponse(whClientContext* c, uint16_t* outId, int* responseError);
 
 
 #endif /* WOLFHSM_WH_CLIENT_H_ */

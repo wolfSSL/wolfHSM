@@ -2,13 +2,14 @@
 #include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_message.h"
-#include "wolfhsm/wh_message_custom.h"
+#include "wolfhsm/wh_message_customcb.h"
 
 
-int wh_Server_RegisterCustomCb(whServerContext* server, uint16_t action, whServerCustomCb handler)
+int wh_Server_RegisterCustomCb(whServerContext* server, uint16_t action,
+                               whServerCustomCb handler)
 {
     if (NULL == server || NULL == handler ||
-        action >= WH_CUSTOM_RQST_NUM_CALLBACKS) {
+        action >= WH_CUSTOM_CB_NUM_CALLBACKS) {
         return WH_ERROR_BADARGS;
     }
 
@@ -18,33 +19,33 @@ int wh_Server_RegisterCustomCb(whServerContext* server, uint16_t action, whServe
 }
 
 
-int wh_Server_HandleCustomRequest(whServerContext* server, uint16_t magic,
-                                  uint16_t action, uint16_t seq,
-                                  uint16_t req_size, const void* req_packet,
-                                  uint16_t* out_resp_size, void* resp_packet)
+int wh_Server_HandleCustomCbRequest(whServerContext* server, uint16_t magic,
+                                    uint16_t action, uint16_t seq,
+                                    uint16_t req_size, const void* req_packet,
+                                    uint16_t* out_resp_size, void* resp_packet)
 {
-    int                      rc   = 0;
-    whMessageCustom_Request  req  = {0};
-    whMessageCustom_Response resp = {0};
+    int                        rc   = 0;
+    whMessageCustomCb_Request  req  = {0};
+    whMessageCustomCb_Response resp = {0};
 
     if (NULL == server || NULL == req_packet || NULL == resp_packet ||
         out_resp_size == NULL) {
         return WH_ERROR_BADARGS;
     }
 
-    if (action >= WH_CUSTOM_RQST_NUM_CALLBACKS) {
+    if (action >= WH_CUSTOM_CB_NUM_CALLBACKS) {
         /* Invalid callback index  */
         /* TODO: is this the appropriate error to return? */
         return WH_ERROR_BADARGS;
     }
 
-    if (req_size != sizeof(whMessageCustom_Request)) {
+    if (req_size != sizeof(whMessageCustomCb_Request)) {
         /* Request is malformed */
         return WH_ERROR_ABORTED;
     }
 
     /* Translate the request */
-    if ((rc = wh_MessageCustom_TranslateRequest(magic, req_packet, &req)) !=
+    if ((rc = wh_MessageCustomCb_TranslateRequest(magic, req_packet, &req)) !=
         WH_ERROR_OK) {
         return rc;
     }
@@ -52,7 +53,7 @@ int wh_Server_HandleCustomRequest(whServerContext* server, uint16_t magic,
     if (server->customHandlerTable[action] != NULL) {
         /* If this isn't a query to check if the callback exists, invoke the
          * registered callback, storing the return value in the reponse  */
-        if (req.type != WH_MESSAGE_CUSTOM_TYPE_QUERY) {
+        if (req.type != WH_MESSAGE_CUSTOM_CB_TYPE_QUERY) {
             resp.rc = server->customHandlerTable[action](server, &req, &resp);
         }
         /* TODO: propagate other wolfHSM error codes (requires modifiying caller
@@ -69,8 +70,8 @@ int wh_Server_HandleCustomRequest(whServerContext* server, uint16_t magic,
     resp.id = req.id;
 
     /* Translate the response */
-    if ((rc = wh_MessageCustom_TranslateResponse(magic, &resp, resp_packet)) !=
-        WH_ERROR_OK) {
+    if ((rc = wh_MessageCustomCb_TranslateResponse(
+             magic, &resp, resp_packet)) != WH_ERROR_OK) {
         return rc;
     }
 

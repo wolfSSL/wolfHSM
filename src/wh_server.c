@@ -265,7 +265,7 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
 #endif
 
         case WH_MESSAGE_GROUP_CUSTOM:
-            rc = wh_Server_HandleCustomRequest(server, magic, action, seq,
+            rc = wh_Server_HandleCustomCbRequest(server, magic, action, seq,
                     size, data, &size, data);
             break;
 

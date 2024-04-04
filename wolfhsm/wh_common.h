@@ -99,6 +99,6 @@ typedef struct {
 extern const whManifest_ex manifests[WOLFHSM_NUM_MANIFESTS];
 
 /* Custom request shared defs */
-#define WH_CUSTOM_RQST_NUM_CALLBACKS 8
+#define WH_CUSTOM_CB_NUM_CALLBACKS 8
 
 #endif /* WOLFHSM_WH_COMMON_H_ */

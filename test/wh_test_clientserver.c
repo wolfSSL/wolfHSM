@@ -35,20 +35,20 @@
 
 /* Dummy callback that loopback-copies client data */
 static int _customServerCb(whServerContext*               server,
-                           const whMessageCustom_Request* req,
-                           whMessageCustom_Response*      resp)
+                           const whMessageCustomCb_Request* req,
+                           whMessageCustomCb_Response*      resp)
 {
     uint8_t* serverPtr = NULL;
     uint8_t* clientPtr = NULL;
     size_t copySz = 0;
 
-    if (req->type == WH_MESSAGE_CUSTOM_TYPE_DMA64) {
+    if (req->type == WH_MESSAGE_CUSTOM_CB_TYPE_DMA64) {
         clientPtr = (uint8_t*)((uintptr_t)req->data.dma64.client_addr);
         serverPtr = (uint8_t*)((uintptr_t)req->data.dma64.server_addr);
         resp->data.dma64.client_sz = req->data.dma64.server_sz;
         copySz = req->data.dma64.server_sz;
     }
-    else if (req->type == WH_MESSAGE_CUSTOM_TYPE_DMA32) {
+    else if (req->type == WH_MESSAGE_CUSTOM_CB_TYPE_DMA32) {
         clientPtr = (uint8_t*)((uintptr_t)req->data.dma32.client_addr);
         serverPtr = (uint8_t*)((uintptr_t)req->data.dma32.server_addr);
         resp->data.dma32.client_sz = req->data.dma32.server_sz;
@@ -65,8 +65,8 @@ static int _customServerCb(whServerContext*               server,
 static int _testCallbacks(whServerContext* server, whClientContext* client)
 {
     size_t                   counter;
-    whMessageCustom_Request  req  = {0};
-    whMessageCustom_Response resp = {0};
+    whMessageCustomCb_Request  req  = {0};
+    whMessageCustomCb_Response resp = {0};
     uint16_t                 outId   = 0;
     int                      respErr = 0;
 
@@ -74,20 +74,20 @@ static int _testCallbacks(whServerContext* server, whClientContext* client)
                          "universe and everything is 42";
     char       output[sizeof(input)] = {0};
 
-    for (counter = 0; counter < WH_CUSTOM_RQST_NUM_CALLBACKS; counter++) {
+    for (counter = 0; counter < WH_CUSTOM_CB_NUM_CALLBACKS; counter++) {
         req.id = counter;
 
         /* Check that the callback shows as unregistered */
-        WH_TEST_RETURN_ON_FAIL(wh_Client_CustomRequestCheckRegistered(client, req.id));
+        WH_TEST_RETURN_ON_FAIL(wh_Client_CustomCheckRegisteredRequest(client, req.id));
         WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
-        WH_TEST_RETURN_ON_FAIL(wh_Client_CustomResponseCheckRegistered(client, &outId, &respErr));
+        WH_TEST_RETURN_ON_FAIL(wh_Client_CustomCbCheckRegisteredResponse(client, &outId, &respErr));
         WH_TEST_ASSERT_RETURN(outId == req.id);
         WH_TEST_ASSERT_RETURN(respErr == WH_ERROR_NO_HANDLER);
 
         /* Test that calling an unregistered callback returns error */
-        WH_TEST_RETURN_ON_FAIL(wh_Client_CustomRequest(client, &req));
+        WH_TEST_RETURN_ON_FAIL(wh_Client_CustomCbRequest(client, &req));
         WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
-        WH_TEST_RETURN_ON_FAIL(wh_Client_CustomResponse(client, &resp));
+        WH_TEST_RETURN_ON_FAIL(wh_Client_CustomCbResponse(client, &resp));
         WH_TEST_ASSERT_RETURN(resp.err == WH_ERROR_NO_HANDLER);
 
         /* Register a custom callback */
@@ -95,16 +95,16 @@ static int _testCallbacks(whServerContext* server, whClientContext* client)
             wh_Server_RegisterCustomCb(server, counter, _customServerCb));
 
         /* Check that the callback now shows as registered */
-        WH_TEST_RETURN_ON_FAIL(wh_Client_CustomRequestCheckRegistered(client, req.id));
+        WH_TEST_RETURN_ON_FAIL(wh_Client_CustomCheckRegisteredRequest(client, req.id));
         WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
-        WH_TEST_RETURN_ON_FAIL(wh_Client_CustomResponseCheckRegistered(client, &outId, &respErr));
+        WH_TEST_RETURN_ON_FAIL(wh_Client_CustomCbCheckRegisteredResponse(client, &outId, &respErr));
         WH_TEST_ASSERT_RETURN(outId == req.id);
         WH_TEST_ASSERT_RETURN(respErr == WH_ERROR_OK);
 
         /* prepare the rest of the request */
         if (sizeof(uintptr_t) == sizeof(uint64_t)) {
             /* 64-bit host system */
-            req.type                   = WH_MESSAGE_CUSTOM_TYPE_DMA64;
+            req.type                   = WH_MESSAGE_CUSTOM_CB_TYPE_DMA64;
             req.data.dma64.server_addr = (uint64_t)((uintptr_t)input);
             req.data.dma64.server_sz   = sizeof(input);
             req.data.dma64.client_addr = (uint64_t)((uintptr_t)output);
@@ -112,16 +112,16 @@ static int _testCallbacks(whServerContext* server, whClientContext* client)
         }
         else if (sizeof(uintptr_t) == sizeof(uint32_t)) {
             /* 32-bit host system */
-            req.type                   = WH_MESSAGE_CUSTOM_TYPE_DMA32;
+            req.type                   = WH_MESSAGE_CUSTOM_CB_TYPE_DMA32;
             req.data.dma32.server_addr = (uint32_t)((uintptr_t)&input);
             req.data.dma32.server_sz   = sizeof(input);
             req.data.dma32.client_addr = (uint32_t)((uintptr_t)output);
             req.data.dma32.client_sz   = 0;
         }
 
-        WH_TEST_RETURN_ON_FAIL(wh_Client_CustomRequest(client, &req));
+        WH_TEST_RETURN_ON_FAIL(wh_Client_CustomCbRequest(client, &req));
         WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
-        WH_TEST_RETURN_ON_FAIL(wh_Client_CustomResponse(client, &resp));
+        WH_TEST_RETURN_ON_FAIL(wh_Client_CustomCbResponse(client, &resp));
         WH_TEST_ASSERT_RETURN(resp.err == WH_ERROR_OK);
         WH_TEST_ASSERT_RETURN(resp.rc == counter);
         WH_TEST_ASSERT_RETURN(0 == memcmp(output, input, sizeof(input)));

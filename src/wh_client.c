@@ -23,7 +23,7 @@
 /* Message definitions */
 #include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_message_comm.h"
-#include "wolfhsm/wh_message_custom.h"
+#include "wolfhsm/wh_message_customcb.h"
 
 #include "wolfhsm/wh_client.h"
 
@@ -202,9 +202,9 @@ int wh_Client_Echo(whClientContext* c, uint16_t snd_len, const void* snd_data,
     return rc;
 }
 
-int wh_Client_CustomRequest(whClientContext* c, const whMessageCustom_Request* req)
+int wh_Client_CustomCbRequest(whClientContext* c, const whMessageCustomCb_Request* req)
 {
-    if (NULL == c || req == NULL || req->id >= WH_CUSTOM_RQST_NUM_CALLBACKS) {
+    if (NULL == c || req == NULL || req->id >= WH_CUSTOM_CB_NUM_CALLBACKS) {
         return WH_ERROR_BADARGS;
     }
 
@@ -212,10 +212,10 @@ int wh_Client_CustomRequest(whClientContext* c, const whMessageCustom_Request* r
                                  sizeof(*req), req);
 }
 
-int wh_Client_CustomResponse(whClientContext*          c,
-                             whMessageCustom_Response* outResp)
+int wh_Client_CustomCbResponse(whClientContext*          c,
+                             whMessageCustomCb_Response* outResp)
 {
-    whMessageCustom_Response resp;
+    whMessageCustomCb_Response resp;
     uint16_t                 resp_group  = 0;
     uint16_t                 resp_action = 0;
     uint16_t                 resp_size   = 0;
@@ -232,7 +232,7 @@ int wh_Client_CustomResponse(whClientContext*          c,
     }
 
     if (resp_size != sizeof(resp) || resp_group != WH_MESSAGE_GROUP_CUSTOM ||
-        resp_action >= WH_CUSTOM_RQST_NUM_CALLBACKS) {
+        resp_action >= WH_CUSTOM_CB_NUM_CALLBACKS) {
         /* message invalid */
         return WH_ERROR_ABORTED;
     }
@@ -242,37 +242,37 @@ int wh_Client_CustomResponse(whClientContext*          c,
     return WH_ERROR_OK;
 }
 
-int wh_Client_CustomRequestCheckRegistered(whClientContext* c, uint32_t id)
+int wh_Client_CustomCheckRegisteredRequest(whClientContext* c, uint32_t id)
 {
-    whMessageCustom_Request req = {0};
+    whMessageCustomCb_Request req = {0};
 
-    if (c == NULL || id >= WH_CUSTOM_RQST_NUM_CALLBACKS) {
+    if (c == NULL || id >= WH_CUSTOM_CB_NUM_CALLBACKS) {
         return WH_ERROR_BADARGS;
     }
 
     req.id = id;
-    req.type = WH_MESSAGE_CUSTOM_TYPE_QUERY;
+    req.type = WH_MESSAGE_CUSTOM_CB_TYPE_QUERY;
 
     return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_CUSTOM, req.id,
                                  sizeof(req), &req);
 }
 
 
-int wh_Client_CustomResponseCheckRegistered(whClientContext* c, uint16_t* outId, int* responseError)
+int wh_Client_CustomCbCheckRegisteredResponse(whClientContext* c, uint16_t* outId, int* responseError)
 {
     int rc = 0;
-    whMessageCustom_Response resp = {0};
+    whMessageCustomCb_Response resp = {0};
 
     if (c == NULL || outId == NULL || responseError == NULL) {
         return WH_ERROR_BADARGS;
     }
 
-    rc = wh_Client_CustomResponse(c, &resp);
+    rc = wh_Client_CustomCbResponse(c, &resp);
     if (rc != WH_ERROR_OK) {
         return rc;
     }
 
-    if (resp.type != WH_MESSAGE_CUSTOM_TYPE_QUERY) {
+    if (resp.type != WH_MESSAGE_CUSTOM_CB_TYPE_QUERY) {
         /* message invalid */
         return WH_ERROR_ABORTED;
     }
@@ -286,4 +286,26 @@ int wh_Client_CustomResponseCheckRegistered(whClientContext* c, uint16_t* outId,
     *responseError = resp.err;
 
     return WH_ERROR_OK;
+}
+
+
+int wh_Client_CustomCbCheckRegistered(whClientContext* c, uint16_t id, int* responseError)
+{
+    int rc = 0;
+
+    if (NULL == c || NULL == responseError || id >= WH_CUSTOM_CB_NUM_CALLBACKS) {
+        return WH_ERROR_BADARGS;
+    }
+
+    do {
+        rc = wh_Client_CustomCheckRegisteredRequest(c, id);
+    } while (rc == WH_ERROR_NOTREADY);
+
+    if (rc == WH_ERROR_OK) {
+        do {
+            rc = wh_Client_CustomCbCheckRegisteredResponse(c, &id, responseError);
+        } while (rc == WH_ERROR_NOTREADY);
+    }
+
+    return rc;
 }
