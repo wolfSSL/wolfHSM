@@ -98,7 +98,7 @@ int whTest_CommMem(void)
                                                     &rx_req_len, rx_req));
 
     for (counter = 0; counter < REPEAT_COUNT; counter++) {
-        sprintf((char*)tx_req, "Request:%u", counter);
+        snprintf((char*)tx_req, sizeof(tx_req), "Request:%u", counter);
         tx_req_len  = strlen((char*)tx_req);
         tx_req_type = counter * 2;
         WH_TEST_RETURN_ON_FAIL(
@@ -130,7 +130,7 @@ int whTest_CommMem(void)
                ret, rx_req_flags, rx_req_type, rx_req_seq, rx_req_len, rx_req);
 #endif
 
-        sprintf((char*)tx_resp, "Response:%s", rx_req);
+        snprintf((char*)tx_resp, sizeof(tx_resp), "Response:%s", rx_req);
         tx_resp_len = strlen((char*)tx_resp);
         ret = wh_CommServer_SendResponse(server, rx_req_flags, rx_req_type,
                                          rx_req_seq, tx_resp_len, tx_resp);
@@ -194,7 +194,7 @@ static void* _whCommClientTask(void* cf)
     WH_TEST_ASSERT_MSG(0 == ret, "Client Init: ret=%d", ret);
 
     for (counter = 0; counter < REPEAT_COUNT; counter++) {
-        sprintf((char*)tx_req, "Request:%u", counter);
+        snprintf((char*)tx_req, sizeof(tx_req), "Request:%u", counter);
         tx_req_len  = strlen((char*)tx_req);
         tx_req_type = counter * 2;
         do {
@@ -287,7 +287,7 @@ static void* _whCommServerTask(void* cf)
         }
 
         do {
-            sprintf((char*)tx_resp, "Response:%s", rx_req);
+            snprintf((char*)tx_resp, sizeof(tx_resp), "Response:%s", rx_req);
             tx_resp_len = strlen((char*)tx_resp);
             ret = wh_CommServer_SendResponse(server, rx_req_flags, rx_req_type,
                                              rx_req_seq, tx_resp_len, tx_resp);
