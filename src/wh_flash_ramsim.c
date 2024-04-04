@@ -14,7 +14,8 @@ static bool isMemoryErased(whFlashRamsimCtx* context, uint32_t offset,
 static bool isMemoryErased(whFlashRamsimCtx* context, uint32_t offset,
                            uint32_t size)
 {
-    for (size_t i = 0; i < size; ++i) {
+    size_t i = 0;
+    for (i = 0; i < size; ++i) {
         if (context->memory[offset + i] != context->erasedByte) {
             return false;
         }
@@ -141,14 +142,14 @@ int whFlashRamsim_Verify(void* context, uint32_t offset, uint32_t size,
                          const uint8_t* data)
 {
     whFlashRamsimCtx* ctx = (whFlashRamsimCtx*)context;
-
+    size_t i = 0;
     if ((ctx == NULL) || (ctx->memory == NULL) ||
         ((offset + size) > ctx->size) || (data == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
     /* Check stored data equals input data */
-    for (size_t i = 0; i < size; ++i) {
+    for (i = 0; i < size; ++i) {
         if (ctx->memory[offset + i] != data[i]) {
             return WH_ERROR_NOTVERIFIED;
         }

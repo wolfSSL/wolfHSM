@@ -199,12 +199,22 @@ int whTest_ClientServerSequential(void)
             .context = nfc,
             .config = nf_conf,
     }};
+    whNvmContext nvm[1] = {{0}};
+
+    crypto_context crypto[1] = {{
+            .devId = INVALID_DEVID,
+    }};
 
     whServerConfig                  s_conf[1] = {{
        .comm_config = cs_conf,
-       .nvm_config = n_conf,
+       .nvm = nvm,
+       .crypto = crypto,
     }};
     whServerContext                server[1] = {0};
+
+    WH_TEST_RETURN_ON_FAIL(wolfCrypt_Init());
+    WH_TEST_RETURN_ON_FAIL(wc_InitRng_ex(crypto->rng, NULL, crypto->devId));
+    WH_TEST_RETURN_ON_FAIL(wh_Nvm_Init(nvm, n_conf));
 
     /* Init client and server */
     WH_TEST_RETURN_ON_FAIL(wh_Client_Init(client, c_conf));
@@ -231,9 +241,9 @@ int whTest_ClientServerSequential(void)
     for (counter = 0; counter < REPEAT_COUNT; counter++) {
 
         /* Prepare echo test */
-        sprintf(send_buffer, "Request:%u", counter);
+        snprintf(send_buffer, sizeof(send_buffer), "Request:%u", counter);
         send_len = strlen(send_buffer);
-        sprintf(recv_buffer, "NOTHING RECEIVED");
+        snprintf(recv_buffer, sizeof(send_buffer), "NOTHING RECEIVED");
         recv_len = 0;
 
         WH_TEST_RETURN_ON_FAIL(
@@ -309,8 +319,8 @@ int whTest_ClientServerSequential(void)
 
         whNvmSize rlen = 0;
 
-        label_len = sprintf(label, "Label:%d", id);
-        len = sprintf(send_buffer, "Data:%d Counter:%d", id, counter);
+        label_len = snprintf(label, sizeof(label), "Label:%d", id);
+        len = snprintf(send_buffer, sizeof(send_buffer), "Data:%d Counter:%d", id, counter);
 
 #if defined(WH_CFG_TEST_VERBOSE)
         printf("Client NvmAddObjectRequest:%d, id:%u, access:0x%x, flags:0x%x, len:%u label:%s\nData:%s\n",
@@ -421,8 +431,8 @@ int whTest_ClientServerSequential(void)
 
         whNvmSize rlen = 0;
 
-        sprintf((char*)(meta.label), "Label:%d", meta.id);
-        len = sprintf(send_buffer, "Data:%d Counter:%d", meta.id, counter);
+        snprintf((char*)(meta.label), sizeof(meta.label), "Label:%d", meta.id);
+        len = snprintf(send_buffer, sizeof(send_buffer), "Data:%d Counter:%d", meta.id, counter);
 
 #if defined(WH_CFG_TEST_VERBOSE)
         printf("Client NvmAddObjectDmaRequest:%d, id:%u, access:0x%x, flags:0x%x, len:%u label:%s\nData:%s\n",
@@ -539,6 +549,10 @@ int whTest_ClientServerSequential(void)
 
     WH_TEST_RETURN_ON_FAIL(wh_Server_Cleanup(server));
     WH_TEST_RETURN_ON_FAIL(wh_Client_Cleanup(client));
+
+    wh_Nvm_Cleanup(nvm);
+    wc_FreeRng(crypto->rng);
+    wolfCrypt_Cleanup();
 
     return ret;
 }

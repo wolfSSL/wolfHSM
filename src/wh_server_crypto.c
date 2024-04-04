@@ -17,6 +17,8 @@
 #include "wolfhsm/wh_server.h"
 #include "wolfhsm/wh_packet.h"
 
+#include "wolfhsm/wh_server_crypto.h"
+
 static int hsmGetUniqueId(whServerContext* server)
 {
     int i;
@@ -63,7 +65,7 @@ static int hsmCacheKey(whServerContext* server, whNvmMetadata* meta, uint8_t* in
     if (meta->id == 0)
         return BAD_FUNC_ARG;
     /* make sure the key fits in a slot */
-    if (meta->len > WOLFHSM_NVM_MAX_OBJECT_SIZE)
+    if (meta->len > sizeof(server->cache[0].buffer))
         return BUFFER_E;
     for (i = 0; i < WOLFHSM_NUM_RAMKEYS; i++) {
         /* check for empty slot or rewrite slot */
@@ -184,9 +186,9 @@ static int hsmReadKey(whServerContext* server, whNvmMetadata* meta, uint8_t* out
 static int hsmCacheKeyCurve25519(whServerContext* server, curve25519_key* key)
 {
     int ret;
-    uint32_t privSz = CURVE25519_KEYSIZE;
-    uint32_t pubSz = CURVE25519_KEYSIZE;
-    whNvmMetadata meta[1] = {0};
+    word32 privSz = CURVE25519_KEYSIZE;
+    word32 pubSz = CURVE25519_KEYSIZE;
+    whNvmMetadata meta[1] = {{0}};
     byte keyBuf[CURVE25519_KEYSIZE * 2];
     /* store public, then private so that loading an external public only key
      * will work along with our keys */
@@ -212,7 +214,7 @@ static int hsmLoadKeyCurve25519(whServerContext* server, curve25519_key* key, ui
     int ret;
     uint32_t privSz = CURVE25519_KEYSIZE;
     uint32_t pubSz = CURVE25519_KEYSIZE;
-    whNvmMetadata meta[1] = {0};
+    whNvmMetadata meta[1] = {{0}};
     byte keyBuf[CURVE25519_KEYSIZE * 2];
     /* retrieve the key */
     XMEMSET(meta, 0, sizeof(whNvmMetadata));
@@ -232,14 +234,14 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
     uint16_t action, uint8_t* data, uint16_t* size)
 {
     int ret = 0;
-    uint32_t field;
+    word32 field;
     uint8_t* out;
     whPacket* packet = (whPacket*)data;
 #ifdef WOLFHSM_SYMMETRIC_INTERNAL
     uint8_t tmpKey[AES_MAX_KEY_SIZE + AES_IV_SIZE];
 #endif
 
-    if (server == NULL || data == NULL || size == NULL)
+    if (server == NULL || server->crypto == NULL || data == NULL || size == NULL)
         return BAD_FUNC_ARG;
 
     switch (action)

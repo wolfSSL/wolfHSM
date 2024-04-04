@@ -18,7 +18,7 @@
 
 /* Server API's */
 #include "wolfhsm/wh_server.h"
-#include "wolfhsm/wh_server_internal.h"
+#include "wolfhsm/wh_server_nvm.h"
 #include "wolfhsm/wh_server_crypto.h"
 #if defined(WOLFHSM_SHE_EXTENSION)
 #include "wolfhsm/wh_server_she.h"
@@ -54,42 +54,15 @@ int wh_Server_Init(whServerContext* server, whServerConfig* config)
     }
 
     memset(server, 0, sizeof(*server));
+    server->crypto = config->crypto;
+    server->nvm = config->nvm;
 
-    rc = wolfCrypt_Init();
-    if (rc != 0) {
-        (void)wh_Server_Cleanup(server);
-        return WH_ERROR_ABORTED;
-    }
-    server->flags.wcInitFlag = true;
-
+    if (server->crypto != NULL) {
 #if defined(WOLF_CRYPTO_CB)
-    server->crypto->devId = config->devId;
-    if (config->cryptocb != NULL) {
-        /* register the crypto callback with wolSSL */
-        rc = wc_CryptoCb_RegisterDevice(server->crypto->devId,
-                                        config->cryptocb,
-                                        NULL);
-        if (rc != 0) {
-            (void)wh_Server_Cleanup(server);
-            return WH_ERROR_ABORTED;
-        }
-    }
+        server->crypto->devId = config->devId;
 #else
-    server->crypto->devId = INVALID_DEVID;
+        server->crypto->devId = INVALID_DEVID;
 #endif
-    server->flags.wcDevIdInitFlag = true;
-
-    rc = wc_InitRng_ex(server->crypto->rng, NULL, server->crypto->devId);
-    if (rc != 0) {
-        (void)wh_Server_Cleanup(server);
-        return WH_ERROR_ABORTED;
-    }
-    server->flags.wcRngInitFlag = true;
-
-    rc = wh_Nvm_Init(server->nvm, config->nvm_config);
-    if (rc != 0) {
-        (void)wh_Server_Cleanup(server);
-        return WH_ERROR_ABORTED;
     }
 
     rc = wh_CommServer_Init(server->comm, config->comm_config);
@@ -107,22 +80,6 @@ int wh_Server_Cleanup(whServerContext* server)
     }
 
     (void)wh_CommServer_Cleanup(server->comm);
-    (void)wh_Nvm_Cleanup(server->nvm);
-
-#if defined(WOLF_CRYPTO_CB)
-    if (server->flags.wcDevIdInitFlag &&
-        server->crypto->devId != INVALID_DEVID) {
-        (void)wc_CryptoCb_UnRegisterDevice(server->crypto->devId);
-    }
-#endif
-
-    if (server->flags.wcRngInitFlag) {
-        (void)wc_FreeRng(server->crypto->rng);
-    }
-
-    if (server->flags.wcInitFlag) {
-        (void)wolfCrypt_Cleanup();
-    }
 
     memset(server, 0, sizeof(*server));
 

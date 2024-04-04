@@ -32,11 +32,6 @@ typedef struct {
     WC_RNG rng[1];
 } crypto_context;
 
-typedef struct {
-    bool wcInitFlag: 1;
-    bool wcRngInitFlag: 1;
-    bool wcDevIdInitFlag: 1;
-} whServerFlags;
 
 /* Forward declaration of the server structure so its elements can reference
  * itself  (e.g. server argument to custom callback) */
@@ -51,24 +46,24 @@ typedef int (*whServerCustomCb)(
 
 /* Context structure to maintain the state of an HSM server */
 typedef struct whServerContext_t {
-    whServerFlags flags;
     whCommServer comm[1];
-    whNvmContext nvm[1];
-    crypto_context crypto[1];
+    whNvmContext* nvm;
+    crypto_context* crypto;
     CacheSlot cache[WOLFHSM_NUM_RAMKEYS];
     whServerCustomCb customHandlerTable[WH_CUSTOM_CB_NUM_CALLBACKS];
 } whServerContext;
 
 typedef struct whServerConfig_t {
     whCommServerConfig* comm_config;
-    whNvmConfig* nvm_config;
+    whNvmContext* nvm;
+    crypto_context* crypto;
 #if defined WOLF_CRYPTO_CB /* TODO: should we be relying on wolfSSL defines? */
     int devId;
-    CryptoDevCallbackFunc cryptocb;
 #endif
 } whServerConfig;
 
-/* Initialize the nvm, crypto, and comms, components.
+/* Initialize the comms and crypto cache components.
+ * Note: NVM and Crypto must be initialized prior to Server Init
  */
 int wh_Server_Init(whServerContext* server, whServerConfig* config);
 

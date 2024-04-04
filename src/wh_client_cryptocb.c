@@ -31,6 +31,7 @@
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_client.h"
 #include "wolfhsm/wh_message.h"
+#include "wolfhsm/wh_cryptocb.h"
 
 int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
 {
@@ -84,7 +85,7 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
                 /* read out */
                 else {
                     info->pk.curve25519kg.key->devCtx =
-                        (void*)0 + packet->pkCurve25519kgRes.keyId;
+                        (void*)((intptr_t)packet->pkCurve25519kgRes.keyId);
                     /* set metadata */
                     info->pk.curve25519kg.key->pubSet = 1;
                     info->pk.curve25519kg.key->privSet = 1;
@@ -94,9 +95,9 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
         case WC_PK_TYPE_CURVE25519:
             out = (uint8_t*)(&packet->pkCurve25519Res + 1);
             packet->pkCurve25519Req.privateKeyId =
-                *((uint32_t*)(&info->pk.curve25519.private_key->devCtx));
+                (intptr_t)(info->pk.curve25519.private_key->devCtx);
             packet->pkCurve25519Req.publicKeyId =
-                *((uint32_t*)(&info->pk.curve25519.public_key->devCtx));
+                (intptr_t)(info->pk.curve25519.public_key->devCtx);
             packet->pkCurve25519Req.endian = info->pk.curve25519.endian;
             /* write request */
             ret = wh_Client_SendRequest(ctx, group,

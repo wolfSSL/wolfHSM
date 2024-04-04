@@ -10,6 +10,42 @@
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_comm.h"
 
+/** Utility functions */
+uint8_t wh_Translate8(uint16_t magic, uint8_t val)
+{
+    (void) magic;
+    return val;
+}
+
+uint16_t wh_Translate16(uint16_t magic, uint16_t val)
+{
+    return WH_COMM_FLAGS_SWAPTEST(magic) ? val :
+            (val >> 8) | (val << 8);
+}
+
+uint32_t wh_Translate32(uint16_t magic, uint32_t val)
+{
+    return WH_COMM_FLAGS_SWAPTEST(magic) ? val :
+            ((val & 0xFF000000ul) >> 24) |
+            ((val & 0xFF0000ul) >> 8) |
+            ((val & 0xFF00ul) >> 8) |
+            ((val & 0xFFul) << 24);
+}
+
+uint64_t wh_Translate64(uint16_t magic, uint64_t val)
+{
+    return WH_COMM_FLAGS_SWAPTEST(magic) ? val :
+            ((val & 0xFF00000000000000ull) >> 56) |
+            ((val & 0xFF000000000000ull) >> 40) |
+            ((val & 0xFF0000000000ull) >> 24) |
+            ((val & 0xFF00000000ull) >> 8)|
+            ((val & 0xFF000000ull) << 8) |
+            ((val & 0xFF0000ull) << 24 ) |
+            ((val & 0xFF00ull) << 40) |
+            ((val & 0xFFull) << 56);
+}
+
+
 /** Client functions */
 
 int wh_CommClient_Init(whCommClient* context, const whCommClientConfig* config)
