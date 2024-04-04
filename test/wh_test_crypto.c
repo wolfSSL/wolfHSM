@@ -212,7 +212,7 @@ static void _whClientServerThreadTest(whClientConfig* c_conf,
     }
 }
 
-static void wh_ClientServer_MemThreadTest(void)
+static int wh_ClientServer_MemThreadTest(void)
 {
     uint8_t req[BUFFER_SIZE] = {0};
     uint8_t resp[BUFFER_SIZE] = {0};
@@ -292,6 +292,8 @@ static void wh_ClientServer_MemThreadTest(void)
     wh_Nvm_Cleanup(nvm);
     wc_FreeRng(crypto->rng);
     wolfCrypt_Cleanup();
+
+    return WH_ERROR_OK;
 }
 #endif /* WH_CFG_TEST_POSIX */
 
@@ -300,7 +302,7 @@ int whTest_Crypto(void)
 {
 #if defined(WH_CFG_TEST_POSIX)
     printf("Testing crypto: (pthread) mem...\n");
-    wh_ClientServer_MemThreadTest();
+    WH_TEST_RETURN_ON_FAIL(wh_ClientServer_MemThreadTest());
 #endif
     return 0;
 }
