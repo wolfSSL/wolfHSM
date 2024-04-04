@@ -269,14 +269,29 @@ static void wh_ClientServer_MemThreadTest(void)
             .context = nfc,
             .config = nf_conf,
     }};
+    whNvmContext nvm[1] = {{0}};
+
+    /* Crypto context */
+    crypto_context crypto[1] = {{
+            .devId = INVALID_DEVID,
+    }};
 
     whServerConfig                  s_conf[1] = {{
        .comm_config = cs_conf,
-       .nvm_config = n_conf,
+       .nvm = nvm,
+       .crypto = crypto,
     }};
 
+    wh_Nvm_Init(nvm, n_conf);
+
+    wolfCrypt_Init();
+    wc_InitRng_ex(crypto->rng, NULL, crypto->devId);
 
     _whClientServerThreadTest(c_conf, s_conf);
+
+    wh_Nvm_Cleanup(nvm);
+    wc_FreeRng(crypto->rng);
+    wolfCrypt_Cleanup();
 }
 #endif /* WH_CFG_TEST_POSIX */
 

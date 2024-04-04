@@ -241,7 +241,7 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
     uint8_t tmpKey[AES_MAX_KEY_SIZE + AES_IV_SIZE];
 #endif
 
-    if (server == NULL || data == NULL || size == NULL)
+    if (server == NULL || server->crypto == NULL || data == NULL || size == NULL)
         return BAD_FUNC_ARG;
 
     switch (action)

@@ -199,12 +199,22 @@ int whTest_ClientServerSequential(void)
             .context = nfc,
             .config = nf_conf,
     }};
+    whNvmContext nvm[1] = {{0}};
+
+    crypto_context crypto[1] = {{
+            .devId = INVALID_DEVID,
+    }};
 
     whServerConfig                  s_conf[1] = {{
        .comm_config = cs_conf,
-       .nvm_config = n_conf,
+       .nvm = nvm,
+       .crypto = crypto,
     }};
-    whServerContext                server[1] = {0};
+    whServerContext                server[1] = {{0}};
+
+    wolfCrypt_Init();
+    wc_InitRng_ex(crypto->rng, NULL, crypto->devId);
+    wh_Nvm_Init(nvm, n_conf);
 
     /* Init client and server */
     WH_TEST_RETURN_ON_FAIL(wh_Client_Init(client, c_conf));
@@ -539,6 +549,10 @@ int whTest_ClientServerSequential(void)
 
     WH_TEST_RETURN_ON_FAIL(wh_Server_Cleanup(server));
     WH_TEST_RETURN_ON_FAIL(wh_Client_Cleanup(client));
+
+    wh_Nvm_Cleanup(nvm);
+    wc_FreeRng(crypto->rng);
+    wolfCrypt_Cleanup();
 
     return ret;
 }
