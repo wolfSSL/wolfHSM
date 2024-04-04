@@ -277,7 +277,7 @@ int wh_Client_CustomCbCheckRegisteredResponse(whClientContext* c, uint16_t* outI
         return WH_ERROR_ABORTED;
     }
 
-    if (resp.err != WH_ERROR_OK && resp.err != WH_ERROR_NO_HANDLER) {
+    if (resp.err != WH_ERROR_OK && resp.err != WH_ERROR_NOHANDLER) {
         /* error codes that aren't related to the query should be fatal */
         return WH_ERROR_ABORTED;
     }

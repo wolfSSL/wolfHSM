@@ -63,7 +63,7 @@ int wh_Server_HandleCustomCbRequest(whServerContext* server, uint16_t magic,
     else {
         /* No callback was registered, populate response error. We must
          * return success to ensure the "error" response is sent  */
-        resp.err = WH_ERROR_NO_HANDLER;
+        resp.err = WH_ERROR_NOHANDLER;
     }
 
     /* tag response with requested callback ID for client-side bookkeeping*/

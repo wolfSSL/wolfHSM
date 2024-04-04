@@ -25,7 +25,6 @@ enum {
 
     WH_MESSAGE_ACTION_MASK         = 0x00FF,  /* 255 subtypes per group*/
     WH_MESSAGE_ACTION_NONE         = 0x0000,  /* No action. Invalid. */
-    WH_MESSAGE_ACTION_MAX          = 0x00FF,  /* Max action value */
 };
 
 /* Construct the message kind based on group and action */

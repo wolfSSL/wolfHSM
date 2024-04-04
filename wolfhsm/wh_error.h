@@ -26,7 +26,7 @@ enum {
     WH_ERROR_NOSPACE        = -415, /* No available space */
 
     /* Custom-callback status returns */
-    WH_ERROR_NO_HANDLER     = -420, /* No handler registered for action */
+    WH_ERROR_NOHANDLER     = -420, /* No handler registered for action */
 };
 
 #endif /* WOLFHSM_WH_ERROR_H_ */
