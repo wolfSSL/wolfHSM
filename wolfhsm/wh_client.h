@@ -186,8 +186,10 @@ int wh_Client_CustomCbResponse(whClientContext* c, whMessageCustomCb_Response *r
 int wh_Client_CustomCheckRegisteredRequest(whClientContext* c, uint32_t id);
 /* Processes a server response to callback query. OutId is set to the ID of the
  * received query. ResponseError is set to WH_ERROR_OK if the callback is
- * registered, and WH_ERROR_NO_HANDLER if not */
+ * registered, and WH_ERROR_NOHANDLER if not */
 int wh_Client_CustomCbCheckRegisteredResponse(whClientContext* c, uint16_t* outId, int* responseError);
+/* Blocking call to check if a callback is registered */
+int wh_Client_CustomCbCheckRegistered(whClientContext* c, uint16_t id, int* responseError);
 
 
 #endif /* WOLFHSM_WH_CLIENT_H_ */

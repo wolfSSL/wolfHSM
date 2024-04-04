@@ -82,13 +82,13 @@ static int _testCallbacks(whServerContext* server, whClientContext* client)
         WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
         WH_TEST_RETURN_ON_FAIL(wh_Client_CustomCbCheckRegisteredResponse(client, &outId, &respErr));
         WH_TEST_ASSERT_RETURN(outId == req.id);
-        WH_TEST_ASSERT_RETURN(respErr == WH_ERROR_NO_HANDLER);
+        WH_TEST_ASSERT_RETURN(respErr == WH_ERROR_NOHANDLER);
 
         /* Test that calling an unregistered callback returns error */
         WH_TEST_RETURN_ON_FAIL(wh_Client_CustomCbRequest(client, &req));
         WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
         WH_TEST_RETURN_ON_FAIL(wh_Client_CustomCbResponse(client, &resp));
-        WH_TEST_ASSERT_RETURN(resp.err == WH_ERROR_NO_HANDLER);
+        WH_TEST_ASSERT_RETURN(resp.err == WH_ERROR_NOHANDLER);
 
         /* Register a custom callback */
         WH_TEST_RETURN_ON_FAIL(
