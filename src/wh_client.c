@@ -12,6 +12,7 @@
 #include "wolfssl/wolfcrypt/error-crypt.h"
 #include "wolfssl/wolfcrypt/wc_port.h"
 #include "wolfssl/wolfcrypt/cryptocb.h"
+#include "wolfssl/wolfcrypt/curve25519.h"
 
 /* Common WolfHSM types and defines shared with the server */
 #include "wolfhsm/wh_common.h"
@@ -502,6 +503,11 @@ int wh_Client_KeyEraseResponse(whClientContext* c)
             ret = packet->rc;
     }
     return ret;
+}
+
+void wh_Client_SetKeyCurve25519(curve25519_key* key, whNvmId keyId)
+{
+    XMEMCPY(key->devCtx, (void*)&keyId, sizeof(keyId));
 }
 
 #if 0
