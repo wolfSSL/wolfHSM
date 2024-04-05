@@ -28,10 +28,6 @@
 
 /** Forward declarations. */
 /* TODO: Move these out to separate C files */
-static int _wh_Server_HandleCommRequest(whServerContext* server,
-        uint16_t magic, uint16_t action, uint16_t seq,
-        uint16_t req_size, const void* req_packet,
-        uint16_t *out_resp_size, void* resp_packet);
 static int _wh_Server_HandlePkcs11Request(whServerContext* server,
         uint16_t magic, uint16_t action, uint16_t seq,
         uint16_t req_size, const void* req_packet,

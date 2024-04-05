@@ -36,9 +36,9 @@ typedef uint16_t whCounterId;
 typedef uint16_t whKeyId;
 
 #define WOLFHSM_KEYID_MASK 0xF000
-#define WOLFHSM_KEYID_RAM 0x1000
-#define WOLFHSM_KEYID_NVM 0x2000
-#define WOLFHSM_KEYID_SHE 0x3000
+#define WOLFHSM_KEYID_CRYPTO 0x1000
+#define WOLFHSM_KEYID_SHE 0x2000
+#define WOLFHSM_KEYID_SHE_RAM 0x3000
 #define MAKE_WOLFHSM_KEYID(_kind, _id) \
     (whKeyId)(((_kind) & WOLFHSM_KEYID_MASK) | ((_id) & ~WOLFHSM_KEYID_MASK))
 

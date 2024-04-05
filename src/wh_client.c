@@ -442,6 +442,68 @@ int wh_Client_KeyExportResponse(whClientContext* c, uint8_t* label,
     return ret;
 }
 
+int wh_Client_KeyCommitRequest(whClientContext* c, whNvmId keyId)
+{
+    whPacket packet[1] = {0};
+    if (c == NULL || keyId == WOLFHSM_ID_ERASED)
+        return BAD_FUNC_ARG;
+    /* set keyId */
+    packet->keyCommitReq.id = keyId;
+    /* write request */
+    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_KEY, WH_KEY_COMMIT,
+            WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->keyCommitReq),
+            (uint8_t*)packet);
+}
+
+int wh_Client_KeyCommitResponse(whClientContext* c)
+{
+    uint16_t group;
+    uint16_t action;
+    uint16_t size;
+    int ret;
+    whPacket packet[1] = {0};
+    if (c == NULL)
+        return BAD_FUNC_ARG;
+    size = sizeof(packet);
+    ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)packet);
+    if (ret == 0) {
+        if (packet->rc != 0)
+            ret = packet->rc;
+    }
+    return ret;
+}
+
+int wh_Client_KeyEraseRequest(whClientContext* c, whNvmId keyId)
+{
+    whPacket packet[1] = {0};
+    if (c == NULL || keyId == WOLFHSM_ID_ERASED)
+        return BAD_FUNC_ARG;
+    /* set keyId */
+    packet->keyEraseReq.id = keyId;
+    /* write request */
+    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_KEY, WH_KEY_ERASE,
+            WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->keyEraseReq),
+            (uint8_t*)packet);
+}
+
+int wh_Client_KeyEraseResponse(whClientContext* c)
+{
+    uint16_t group;
+    uint16_t action;
+    uint16_t size;
+    int ret;
+    whPacket packet[1] = {0};
+    if (c == NULL)
+        return BAD_FUNC_ARG;
+    size = sizeof(packet);
+    ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)packet);
+    if (ret == 0) {
+        if (packet->rc != 0)
+            ret = packet->rc;
+    }
+    return ret;
+}
+
 #if 0
 int wh_Client_KeyCommit(whClientContext* c, uint16_t keyId);
 int wh_Client_KeyErase(whClientContext* c, uint16_t keyId);

@@ -10,42 +10,46 @@
 #include "wolfhsm/wh_server_keystore.h"
 #include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_packet.h"
+#include "wolfhsm/wh_error.h"
 
 int hsmGetUniqueId(whServerContext* server)
 {
     int i;
     int ret = 0;
-    uint16_t id;
-    /* try every index, unless both cache and nvm are full one will work */
-    for (id = 1; id < WOLFHSM_NUM_RAMKEYS + 1; id++) {
+    whNvmId id;
+    whNvmId nvmId = 0;
+    whNvmId keyCount;
+    /* try every index until we find a unique one, don't worry about capacity */
+    for (id = 1; id < sizeof(whNvmId) - WOLFHSM_KEYID_MASK; id++) {
         /* check against chache keys */
         for (i = 0; i < WOLFHSM_NUM_RAMKEYS; i++) {
-            if (id == server->cache[i].meta->id)
+            if ((id | WOLFHSM_KEYID_CRYPTO) == server->cache[i].meta->id)
                 break;
         }
         /* try again if match */
         if (i < WOLFHSM_NUM_RAMKEYS)
             continue;
-#if 0
         /* check against nvm keys */
-        for (i = 0; i < WOLFHSM_KEYSLOT_COUNT && ret == 0; i++) {
-            if (ctx->nvmMetaCache[i].id == id) {
+        do {
+            ret = wh_Nvm_List(server->nvm, WOLFHSM_NVM_ACCESS_ANY,
+                WOLFHSM_NVM_FLAGS_ANY, nvmId, &keyCount, &nvmId);
+            if (ret != 0)
                 break;
-            }
-        }
-        /* try again if match */
-        if (i < WOLFHSM_KEYSLOT_COUNT)
+            if ((id | WOLFHSM_KEYID_CRYPTO) == nvmId)
+                break;
+        } while (keyCount > 0);
+        /* continue if nvm match */
+        if ((id | WOLFHSM_KEYID_CRYPTO) == nvmId)
             continue;
-#endif
         /* break if our id didn't match either cache or nvm */
         break;
     }
-    /* if we've run out of space, return MEMORY_E */
-    if (ret == 0 && id >= WOLFHSM_NUM_RAMKEYS + 1)
-        ret = MEMORY_E;
+    /* unlikely but cover the case where we've run out of ids */
+    if (id >= sizeof(whNvmId) - WOLFHSM_KEYID_MASK)
+        ret = WH_ERROR_NOSPACE;
     /* ultimately, return found id */
     if (ret == 0)
-        ret = id;
+        ret = (id | WOLFHSM_KEYID_CRYPTO);
     return ret;
 }
 
@@ -54,23 +58,23 @@ int hsmCacheKey(whServerContext* server, whNvmMetadata* meta, uint8_t* in)
     int i;
     int foundIndex = -1;
     /* make sure id is valid */
-    if (meta->id == 0)
+    if (meta->id == WOLFHSM_ID_ERASED)
         return BAD_FUNC_ARG;
     /* make sure the key fits in a slot */
     if (meta->len > WOLFHSM_NVM_MAX_OBJECT_SIZE)
         return BUFFER_E;
     for (i = 0; i < WOLFHSM_NUM_RAMKEYS; i++) {
         /* check for empty slot or rewrite slot */
-        if (foundIndex == -1 && (server->cache[i].meta->id == 0 ||
-            server->cache[i].meta->id == meta->id)) {
+        if ((foundIndex == -1 &&
+            server->cache[i].meta->id == WOLFHSM_ID_ERASED) ||
+            server->cache[i].meta->id == meta->id) {
             foundIndex = i;
         }
     }
-#if 0
     /* if no empty slots, check for a commited key we can evict */
     if (foundIndex == -1) {
-        for (i = 0; i < WOLFHSM_CACHE_COUNT; i++) {
-            if (ctx->cache[i].commited == 1) {
+        for (i = 0; i < WOLFHSM_NUM_RAMKEYS; i++) {
+            if (server->cache[i].commited == 1) {
                 foundIndex = i;
                 break;
             }
@@ -78,15 +82,8 @@ int hsmCacheKey(whServerContext* server, whNvmMetadata* meta, uint8_t* in)
     }
     /* return error if we are out of cache slots */
     if (foundIndex == -1)
-        return MEMORY_E;
-    ctx->cache[foundIndex].commited = 0;
-    /* check if the key is in nvm, mark as commited */
-    for (i = 0; i < WOLFHSM_KEYSLOT_COUNT; i++) {
-        /* check for duplicate id, shouldn't cache a key in nvm */
-        if (ctx->nvmMetaCache[i].id == meta->id)
-            ctx->cache[foundIndex].commited = 1;
-    }
-#endif
+        return WH_ERROR_NOSPACE;
+    server->cache[foundIndex].commited = 0;
     /* write key if slot found */
     XMEMCPY((uint8_t*)server->cache[foundIndex].buffer, in, meta->len);
     XMEMCPY((uint8_t*)server->cache[foundIndex].meta, (uint8_t*)meta,
@@ -101,11 +98,12 @@ int hsmCacheKey(whServerContext* server, whNvmMetadata* meta, uint8_t* in)
 
 int hsmReadKey(whServerContext* server, whNvmMetadata* meta, uint8_t* out)
 {
+    int ret = 0;
     int i;
     uint16_t searchId = meta->id;
     uint16_t outLen = meta->len;
     /* make sure id is valid */
-    if (meta->id == 0)
+    if (meta->id == WOLFHSM_ID_ERASED)
         return BAD_FUNC_ARG;
     /* check the cache */
     for (i = 0; i < WOLFHSM_NUM_RAMKEYS; i++) {
@@ -120,48 +118,14 @@ int hsmReadKey(whServerContext* server, whNvmMetadata* meta, uint8_t* out)
             return 0;
         }
     }
-    return BAD_FUNC_ARG;
-#if 0
-    /* setup address */
-    if (ctx->partition == 1)
-        addr = WOLFHSM_PART_1;
-    /* find id in list */
-    for (i = 0; i < WOLFHSM_KEYSLOT_COUNT; i++) {
-        /* check id */
-        if (ctx->nvmMetaCache[i].id == searchId)
-            break;
-        /* keep track of length used by previous keys */
-        keyOffset += ctx->nvmMetaCache[i].len;
-    }
-    /* if we looped to the end, no match */
-    if (i >= WOLFHSM_KEYSLOT_COUNT)
-        ret = BAD_FUNC_ARG;
-    /* check the length, meta->len is the return size */
-    if (ret == 0 && ctx->nvmMetaCache[i].len > outLen)
-        ret = BUFFER_E;
-    /* read key */
-    if (ret == 0) {
-        ret = hal_flash_read(addr + WOLFHSM_HEADER_SIZE + keyOffset, out,
-            ctx->nvmMetaCache[i].len);
-    }
-    /* calculate key digest */
+    /* try to read the metadata */
+    ret = wh_Nvm_GetMetadata(server->nvm, searchId, meta);
+    /* read the object */
     if (ret == 0)
-        ret = wc_InitSha256_ex(sha, ctx->heap, ctx->devId);
+        ret = wh_Nvm_Read(server->nvm, searchId, 0, outLen, out);
+    /* cache key if free slot, will only kick out other commited keys */
     if (ret == 0)
-        ret = wc_Sha256Update(sha, out, ctx->nvmMetaCache[i].len);
-    if (ret == 0)
-        ret = wc_Sha256Final(sha, digest);
-    /* validate key */
-    if (XMEMCMP(digest, ctx->nvmMetaCache[i].confDigest, WOLFHSM_DIGEST_STUB)
-        != 0) {
-        ret = BAD_FUNC_ARG;
-    }
-    if (ret == 0) {
-        /* cache key if free slot, will only kick out other commited keys */
-        hsmCacheKey(ctx, &ctx->nvmMetaCache[i], out);
-        /* update out meta with nvm cache contents */
-        XMEMCPY(meta, &ctx->nvmMetaCache[i], sizeof(NvmMetaData));
-    }
+        hsmCacheKey(server, meta, out);
 #ifdef WOLFHSM_SHE_EXTENSION
     /* use empty string if we couldn't find the master ecu key */
     if (ret != 0 && searchId == WOLFHSM_SHE_MASTER_ECU_KEY_ID) {
@@ -172,13 +136,15 @@ int hsmReadKey(whServerContext* server, whNvmMetadata* meta, uint8_t* out)
     }
 #endif
     return ret;
-#endif
 }
 
-int hsmEvictKey(whServerContext* server, uint16_t keyId)
+int hsmEvictKey(whServerContext* server, whNvmId keyId)
 {
     int ret = 0;
     int i;
+    /* make sure id is valid */
+    if (keyId == WOLFHSM_ID_ERASED)
+        return BAD_FUNC_ARG;
     /* find key */
     for (i = 0; i < WOLFHSM_NUM_RAMKEYS; i++) {
         /* mark key as erased */
@@ -191,6 +157,48 @@ int hsmEvictKey(whServerContext* server, uint16_t keyId)
     if (i >= WOLFHSM_NUM_RAMKEYS)
         ret = BAD_FUNC_ARG;
     return ret;
+}
+
+int hsmCommitKey(whServerContext* server, whNvmId keyId)
+{
+    int i;
+    int ret = 0;
+    CacheSlot* cacheSlot;
+    /* make sure id is valid */
+    if (keyId == WOLFHSM_ID_ERASED)
+        return BAD_FUNC_ARG;
+    /* find key in cache */
+    for (i = 0; i < WOLFHSM_NUM_RAMKEYS; i++) {
+        if (server->cache[i].meta->id == keyId) {
+            cacheSlot = &server->cache[i];
+            break;
+        }
+    }
+    if (i >= WOLFHSM_NUM_RAMKEYS)
+        return WH_ERROR_NOTFOUND;
+    /* add object */
+    ret = wh_Nvm_AddObject(server->nvm, server->cache[i].meta,
+        cacheSlot->meta->len, cacheSlot->buffer);
+    if (ret == 0) {
+        cacheSlot->commited = 1;
+    }
+    return ret;
+}
+
+int hsmEraseKey(whServerContext* server, whNvmId keyId)
+{
+    int i;
+    if (keyId == WOLFHSM_ID_ERASED)
+        return BAD_FUNC_ARG;
+    /* remove the key from the cache if present */
+    for (i = 0; i < WOLFHSM_NUM_RAMKEYS; i++) {
+        if (server->cache[i].meta->id == keyId) {
+            server->cache[i].meta->id = WOLFHSM_ID_ERASED;
+            break;
+        }
+    }
+    /* destroy the object */
+    return wh_Nvm_DestroyObjects(server->nvm, 1, &keyId);
 }
 
 int _wh_Server_HandleKeyRequest(whServerContext* server,
@@ -235,17 +243,6 @@ int _wh_Server_HandleKeyRequest(whServerContext* server,
             *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->keyEvictRes);
         }
         break;
-#if 0
-    case WOLFHSM_KEY_COMMIT:
-        /* commit the cached key */
-        ret = hsmCommitKey(ctx, packet->keyCommitReq.id);
-        if (ret > 0) {
-            packet->len = sizeof(packet->keyCommitRes);
-            packet->keyCommitRes.ok = 0;
-            ret = 0;
-        }
-        break;
-#endif
     case WH_KEY_EXPORT:
         /* out is after fixed size fields */
         out = (uint8_t*)(&packet->keyExportRes + 1);
@@ -265,29 +262,27 @@ int _wh_Server_HandleKeyRequest(whServerContext* server,
                 meta->len;
         }
         break;
-#if 0
-    case WOLFHSM_KEY_ERASE:
-        ret = hsmEraseKey(ctx, packet->keyEraseReq.id);
+    case WH_KEY_COMMIT:
+        /* commit the cached key */
+        ret = hsmCommitKey(server, packet->keyCommitReq.id);
         if (ret == 0) {
-            packet->subType = WOLFHSM_KEY_ERASE;
-            packet->len = sizeof(packet->keyEraseRes);
-            packet->keyEraseRes.ok = 0;
+            packet->keyCommitRes.ok = 0;
+            *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->keyCommitRes);
         }
         break;
-    case WOLFHSM_VERSION_EXCHANGE:
-        /* TODO should the server refuse a connection or should the client
-         * decide? */
-        packet->subType = WOLFHSM_VERSION_EXCHANGE;
-        packet->versionExchange.version = ctx->version;
-        packet->len = sizeof(packet->versionExchange);
+    case WH_KEY_ERASE:
+        ret = hsmEraseKey(server, packet->keyEraseReq.id);
+        if (ret == 0) {
+            packet->keyEraseRes.ok = 0;
+            *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->keyEraseRes);
+        }
         break;
-#endif
     default:
         ret = BAD_FUNC_ARG;
         break;
     }
-    /* set type here in case packet was overwritten */
+    packet->rc = ret;
     (void)magic;
     (void)seq;
-    return ret;
+    return 0;
 }

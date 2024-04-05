@@ -69,29 +69,28 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     WH_TEST_RETURN_ON_FAIL(wh_Client_Init(client, config));
 
     /* test rng */
-    if((ret = wc_InitRng_ex(rng, NULL, WOLFHSM_DEV_ID)) != 0) {
+    if ((ret = wc_InitRng_ex(rng, NULL, WOLFHSM_DEV_ID)) != 0) {
         WH_ERROR_PRINT("Failed to wc_InitRng_ex %d\n", ret);
         goto exit;
     }
 
-    if((ret = wc_RNG_GenerateBlock(rng, key, sizeof(key))) != 0) {
+    if ((ret = wc_RNG_GenerateBlock(rng, key, sizeof(key))) != 0) {
         WH_ERROR_PRINT("Failed to wc_RNG_GenerateBlock %d\n", ret);
         goto exit;
     }
-
-    /* test cache/export/evict */
-    if((ret = wh_Client_KeyCacheRequest(client, 0, labelStart, key, 16)) != 0) {
+    /* test cache/export */
+    if ((ret = wh_Client_KeyCacheRequest(client, 0, labelStart, key, sizeof(key))) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_KeyCacheRequest %d\n", ret);
         goto exit;
     }
     do {
         ret = wh_Client_KeyCacheResponse(client, &keyId);
     } while (ret == WH_ERROR_NOTREADY);
-    if(ret != 0) {
+    if (ret != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_KeyCacheResponse %d\n", ret);
         goto exit;
     }
-    if((ret = wh_Client_KeyExportRequest(client, keyId)) != 0) {
+    if ((ret = wh_Client_KeyExportRequest(client, keyId)) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_KeyExportRequest %d\n", ret);
         goto exit;
     }
@@ -103,17 +102,120 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         WH_ERROR_PRINT("Failed to wh_Client_KeyExportResponse %d\n", ret);
         goto exit;
     }
-    if((ret = wh_Client_KeyEvictRequest(client, keyId)) != 0) {
+    if (ret == 0 && XMEMCMP(key, keyEnd, outLen) == 0 && XMEMCMP(labelStart, labelEnd, sizeof(labelStart)) == 0)
+        printf("KEY CACHE/EXPORT SUCCESS\n");
+    else {
+        WH_ERROR_PRINT("KEY CACHE/EXPORT FAILED TO MATCH\n");
+        goto exit;
+    }
+    /* test evict */
+    if ((ret = wh_Client_KeyEvictRequest(client, keyId)) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_KeyEvictRequest %d\n", ret);
         goto exit;
     }
     do {
         ret = wh_Client_KeyEvictResponse(client);
     } while (ret == WH_ERROR_NOTREADY);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyEvictResponse %d\n", ret);
+        goto exit;
+    }
+    if ((ret = wh_Client_KeyExportRequest(client, keyId)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyExportRequest %d\n", ret);
+        goto exit;
+    }
+    outLen = sizeof(keyEnd);
+    do {
+        ret = wh_Client_KeyExportResponse(client, labelEnd, keyEnd, &outLen);
+    } while (ret == WH_ERROR_NOTREADY);
+    if (ret == WH_ERROR_NOTFOUND) {
+        printf("KEY EVICT SUCCESS");
+    }
+    else {
+        if (ret != 0)
+            WH_ERROR_PRINT("Failed to wh_Client_KeyExportResponse %d\n", ret);
+        goto exit;
+    }
+    /* test commit */
+    if ((ret = wh_Client_KeyCacheRequest(client, WOLFHSM_ID_ERASED, labelStart, key, sizeof(key))) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyCacheRequest %d\n", ret);
+        goto exit;
+    }
+    do {
+        ret = wh_Client_KeyCacheResponse(client, &keyId);
+    } while (ret == WH_ERROR_NOTREADY);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyCacheResponse %d\n", ret);
+        goto exit;
+    }
+    if ((ret = wh_Client_KeyCommitRequest(client, keyId)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyCommitRequest %d\n", ret);
+        goto exit;
+    }
+    do {
+        ret = wh_Client_KeyCommitResponse(client);
+    } while (ret == WH_ERROR_NOTREADY);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyCommitResponse %d\n", ret);
+        goto exit;
+    }
+    if ((ret = wh_Client_KeyEvictRequest(client, keyId)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyEvictRequest %d\n", ret);
+        goto exit;
+    }
+    do {
+        ret = wh_Client_KeyEvictResponse(client);
+    } while (ret == WH_ERROR_NOTREADY);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyEvictResponse %d\n", ret);
+        goto exit;
+    }
+    if ((ret = wh_Client_KeyExportRequest(client, keyId)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyExportRequest %d\n", ret);
+        goto exit;
+    }
+    outLen = sizeof(keyEnd);
+    do {
+        ret = wh_Client_KeyExportResponse(client, labelEnd, keyEnd, &outLen);
+    } while (ret == WH_ERROR_NOTREADY);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyExportResponse %d\n", ret);
+        goto exit;
+    }
     if (ret == 0 && XMEMCMP(key, keyEnd, outLen) == 0 && XMEMCMP(labelStart, labelEnd, sizeof(labelStart)) == 0)
-        printf("KEY CACHE/EXPORT SUCCESS\n");
-    else
-        WH_ERROR_PRINT("KEY CACHE/EXPORT FAILED TO MATCH\n");
+        printf("KEY COMMIT/EXPORT SUCCESS\n");
+    else {
+        WH_ERROR_PRINT("KEY COMMIT/EXPORT FAILED TO MATCH\n");
+        goto exit;
+    }
+    /* test erase */
+    if ((ret = wh_Client_KeyEraseRequest(client, keyId)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyEraseRequest %d\n", ret);
+        goto exit;
+    }
+    do {
+        ret = wh_Client_KeyEraseResponse(client);
+    } while (ret == WH_ERROR_NOTREADY);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyEraseResponse %d\n", ret);
+        goto exit;
+    }
+    if ((ret = wh_Client_KeyExportRequest(client, keyId)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyExportRequest %d\n", ret);
+        goto exit;
+    }
+    outLen = sizeof(keyEnd);
+    do {
+        ret = wh_Client_KeyExportResponse(client, labelEnd, keyEnd, &outLen);
+    } while (ret == WH_ERROR_NOTREADY);
+    if (ret == WH_ERROR_NOTFOUND) {
+        printf("KEY ERASE SUCCESS\n");
+    }
+    else {
+        if (ret != 0)
+            WH_ERROR_PRINT("Failed to wh_Client_KeyExportResponse %d\n", ret);
+        goto exit;
+    }
 
     /* test curve25519 */
     if ((ret = wc_curve25519_init_ex(curve25519PrivateKey, NULL, WOLFHSM_DEV_ID)) != 0) {
@@ -186,10 +288,8 @@ int whTest_CryptoServerConfig(whServerConfig* config)
         WH_ERROR_PRINT("Failed to wh_Server_HandleRequestMessage: %d\n", ret);
         goto exit;
     }
-
-
-    /* handle cache/export/evict */
-    for (i = 0; i < 3; i++) {
+    /* handle cache/export */
+    for (i = 0; i < 2; i++) {
         do {
             ret = wh_Server_HandleRequestMessage(server);
         } while (ret == WH_ERROR_NOTREADY);
@@ -198,7 +298,36 @@ int whTest_CryptoServerConfig(whServerConfig* config)
             goto exit;
         }
     }
-
+    /* handle evict/export, expect not found */
+    for (i = 0; i < 2; i++) {
+        do {
+            ret = wh_Server_HandleRequestMessage(server);
+        } while (ret == WH_ERROR_NOTREADY);
+        if (ret != 0 && ret != WH_ERROR_NOTFOUND) {
+            WH_ERROR_PRINT("Failed to wh_Server_HandleRequestMessage: %d\n", ret);
+            goto exit;
+        }
+    }
+    /* handle cache/commit/evict/export */
+    for (i = 0; i < 4; i++) {
+        do {
+            ret = wh_Server_HandleRequestMessage(server);
+        } while (ret == WH_ERROR_NOTREADY);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wh_Server_HandleRequestMessage: %d\n", ret);
+            goto exit;
+        }
+    }
+    /* handle erase/export, expect not found */
+    for (i = 0; i < 2; i++) {
+        do {
+            ret = wh_Server_HandleRequestMessage(server);
+        } while (ret == WH_ERROR_NOTREADY);
+        if (ret != 0 && ret != WH_ERROR_NOTFOUND) {
+            WH_ERROR_PRINT("Failed to wh_Server_HandleRequestMessage: %d\n", ret);
+            goto exit;
+        }
+    }
     /* handle curve */
     for (i = 0; i < 4; i++) {
         do {
@@ -209,7 +338,6 @@ int whTest_CryptoServerConfig(whServerConfig* config)
             goto exit;
         }
     }
-
 exit:
     if (ret == 0) {
         WH_TEST_RETURN_ON_FAIL(wh_Server_Cleanup(server));
