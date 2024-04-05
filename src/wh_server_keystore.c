@@ -21,7 +21,7 @@ int hsmGetUniqueId(whServerContext* server)
     whNvmId keyCount;
     /* try every index until we find a unique one, don't worry about capacity */
     for (id = 1; id < sizeof(whNvmId) - WOLFHSM_KEYID_MASK; id++) {
-        /* check against chache keys */
+        /* check against cache keys */
         for (i = 0; i < WOLFHSM_NUM_RAMKEYS; i++) {
             if ((id | WOLFHSM_KEYID_CRYPTO) == server->cache[i].meta->id)
                 break;
@@ -59,7 +59,7 @@ int hsmCacheKey(whServerContext* server, whNvmMetadata* meta, uint8_t* in)
     int foundIndex = -1;
     /* make sure id is valid */
     if (meta->id == WOLFHSM_ID_ERASED)
-        return BAD_FUNC_ARG;
+        return WH_ERROR_BADARGS;
     /* make sure the key fits in a slot */
     if (meta->len > WOLFHSM_NVM_MAX_OBJECT_SIZE)
         return BUFFER_E;
@@ -96,15 +96,15 @@ int hsmCacheKey(whServerContext* server, whNvmMetadata* meta, uint8_t* in)
     return 0;
 }
 
-int hsmReadKey(whServerContext* server, whNvmMetadata* meta, uint8_t* out)
+int hsmReadKey(whServerContext* server, whNvmMetadata* meta, uint8_t* out,
+    uint32_t outLen)
 {
     int ret = 0;
     int i;
     uint16_t searchId = meta->id;
-    uint16_t outLen = meta->len;
     /* make sure id is valid */
     if (meta->id == WOLFHSM_ID_ERASED)
-        return BAD_FUNC_ARG;
+        return WH_ERROR_BADARGS;
     /* check the cache */
     for (i = 0; i < WOLFHSM_NUM_RAMKEYS; i++) {
         /* copy the meta and key before returning */
@@ -144,7 +144,7 @@ int hsmEvictKey(whServerContext* server, whNvmId keyId)
     int i;
     /* make sure id is valid */
     if (keyId == WOLFHSM_ID_ERASED)
-        return BAD_FUNC_ARG;
+        return WH_ERROR_BADARGS;
     /* find key */
     for (i = 0; i < WOLFHSM_NUM_RAMKEYS; i++) {
         /* mark key as erased */
@@ -155,7 +155,7 @@ int hsmEvictKey(whServerContext* server, whNvmId keyId)
     }
     /* if the key wasn't found return an error */
     if (i >= WOLFHSM_NUM_RAMKEYS)
-        ret = BAD_FUNC_ARG;
+        ret = WH_ERROR_BADARGS;
     return ret;
 }
 
@@ -166,7 +166,7 @@ int hsmCommitKey(whServerContext* server, whNvmId keyId)
     CacheSlot* cacheSlot;
     /* make sure id is valid */
     if (keyId == WOLFHSM_ID_ERASED)
-        return BAD_FUNC_ARG;
+        return WH_ERROR_BADARGS;
     /* find key in cache */
     for (i = 0; i < WOLFHSM_NUM_RAMKEYS; i++) {
         if (server->cache[i].meta->id == keyId) {
@@ -189,7 +189,7 @@ int hsmEraseKey(whServerContext* server, whNvmId keyId)
 {
     int i;
     if (keyId == WOLFHSM_ID_ERASED)
-        return BAD_FUNC_ARG;
+        return WH_ERROR_BADARGS;
     /* remove the key from the cache if present */
     for (i = 0; i < WOLFHSM_NUM_RAMKEYS; i++) {
         if (server->cache[i].meta->id == keyId) {
@@ -201,7 +201,7 @@ int hsmEraseKey(whServerContext* server, whNvmId keyId)
     return wh_Nvm_DestroyObjects(server->nvm, 1, &keyId);
 }
 
-int _wh_Server_HandleKeyRequest(whServerContext* server,
+int wh_Server_HandleKeyRequest(whServerContext* server,
         uint16_t magic, uint16_t action, uint16_t seq,
         uint8_t* data, uint16_t* size)
 {
@@ -218,8 +218,14 @@ int _wh_Server_HandleKeyRequest(whServerContext* server,
         /* set the metadata fields */
         meta->id = packet->keyCacheReq.id;
         meta->flags = packet->keyCacheReq.flags;
-        meta->len = packet->keyCacheReq.len;
-        XMEMCPY(meta->label, packet->keyCacheReq.label, WOLFHSM_NVM_LABEL_LEN);
+        meta->len = packet->keyCacheReq.sz;
+        /* validate label sz */
+        if (packet->keyCacheReq.labelSz > WOLFHSM_NVM_LABEL_LEN)
+            ret = WH_ERROR_BADARGS;
+        else {
+            XMEMCPY(meta->label, packet->keyCacheReq.label,
+                packet->keyCacheReq.labelSz);
+        }
         /* get a new id if one wasn't provided */
         if (meta->id == WOLFHSM_ID_ERASED) {
             ret =  hsmGetUniqueId(server);
@@ -246,12 +252,11 @@ int _wh_Server_HandleKeyRequest(whServerContext* server,
     case WH_KEY_EXPORT:
         /* out is after fixed size fields */
         out = (uint8_t*)(&packet->keyExportRes + 1);
-        /* set the metadata fields */
+        /* set the id */
         meta->id = packet->keyExportReq.id;
-        meta->len = WH_COMM_MTU -
-            (WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->keyExportRes));
         /* read the key */
-        ret = hsmReadKey(server, meta, out);
+        ret = hsmReadKey(server, meta, out, WH_COMM_MTU -
+            (WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->keyExportRes)));
         if (ret == 0) {
             /* set key len */
             packet->keyExportRes.len = meta->len;
@@ -278,7 +283,7 @@ int _wh_Server_HandleKeyRequest(whServerContext* server,
         }
         break;
     default:
-        ret = BAD_FUNC_ARG;
+        ret = WH_ERROR_BADARGS;
         break;
     }
     packet->rc = ret;

@@ -69,9 +69,10 @@ int wh_Client_Echo(whClientContext* c, uint16_t snd_len, const void* snd_data,
 
 /* Key functions */
 int wh_Client_KeyCacheRequest_ex(whClientContext* c, uint32_t flags,
-    uint8_t* label, uint8_t* in, uint32_t inSz, uint16_t keyId);
+    uint8_t* label, uint32_t labelSz, uint8_t* in, uint32_t inSz,
+    uint16_t keyId);
 int wh_Client_KeyCacheRequest(whClientContext* c, uint32_t flags,
-    uint8_t* label, uint8_t* in, uint32_t inSz);
+    uint8_t* label, uint32_t labelSz, uint8_t* in, uint32_t inSz);
 int wh_Client_KeyCacheResponse(whClientContext* c, uint16_t* keyId);
 int wh_Client_KeyEvictRequest(whClientContext* c, uint16_t keyId);
 int wh_Client_KeyEvictResponse(whClientContext* c);

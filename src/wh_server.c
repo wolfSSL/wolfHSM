@@ -180,7 +180,7 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
             break;
 
         case WH_MESSAGE_GROUP_KEY:
-            rc = _wh_Server_HandleKeyRequest(server, magic, action, seq,
+            rc = wh_Server_HandleKeyRequest(server, magic, action, seq,
                     data, &size);
         break;
 

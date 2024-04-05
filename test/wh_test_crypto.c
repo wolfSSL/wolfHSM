@@ -79,7 +79,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         goto exit;
     }
     /* test cache/export */
-    if ((ret = wh_Client_KeyCacheRequest(client, 0, labelStart, key, sizeof(key))) != 0) {
+    if ((ret = wh_Client_KeyCacheRequest(client, 0, labelStart, sizeof(labelStart), key, sizeof(key))) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_KeyCacheRequest %d\n", ret);
         goto exit;
     }
@@ -137,7 +137,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         goto exit;
     }
     /* test commit */
-    if ((ret = wh_Client_KeyCacheRequest(client, WOLFHSM_ID_ERASED, labelStart, key, sizeof(key))) != 0) {
+    if ((ret = wh_Client_KeyCacheRequest(client, WOLFHSM_ID_ERASED, labelStart, sizeof(labelStart), key, sizeof(key))) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_KeyCacheRequest %d\n", ret);
         goto exit;
     }

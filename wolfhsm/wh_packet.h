@@ -247,7 +247,8 @@ typedef struct WOLFHSM_PACK wh_Packet_cmac_res
 typedef struct WOLFHSM_PACK wh_Packet_key_cache_req
 {
     uint32_t flags;
-    uint32_t len;
+    uint32_t sz;
+    uint32_t labelSz;
     uint16_t id;
     uint8_t label[WOLFHSM_NVM_LABEL_LEN];
     /* uint8_t in[]; */

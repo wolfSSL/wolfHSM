@@ -55,8 +55,7 @@ static int hsmLoadKeyCurve25519(whServerContext* server, curve25519_key* key, ui
     /* retrieve the key */
     XMEMSET(meta, 0, sizeof(whNvmMetadata));
     meta->id = keyId;
-    meta->len = privSz + pubSz;
-    ret = hsmReadKey(server, meta, keyBuf);
+    ret = hsmReadKey(server, meta, keyBuf, privSz + pubSz);
     /* decode the key */
     if (ret == 0)
         ret = wc_curve25519_import_public(keyBuf, pubSz, key);
