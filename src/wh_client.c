@@ -430,10 +430,9 @@ int wh_Client_KeyExportResponse(whClientContext* c, uint8_t* label,
         else  {
             if (out == NULL) {
                 *outSz = packet->keyExportRes.len;
-                ret = LENGTH_ONLY_E;
             }
             else if (*outSz < packet->keyExportRes.len) {
-                ret = BUFFER_E;
+                ret = WH_ERROR_ABORTED;
             }
             else {
                 XMEMCPY(label, packet->keyExportRes.label,

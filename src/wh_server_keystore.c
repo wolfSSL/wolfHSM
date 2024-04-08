@@ -62,7 +62,7 @@ int hsmCacheKey(whServerContext* server, whNvmMetadata* meta, uint8_t* in)
         return WH_ERROR_BADARGS;
     /* make sure the key fits in a slot */
     if (meta->len > WOLFHSM_NVM_MAX_OBJECT_SIZE)
-        return BUFFER_E;
+        return WH_ERROR_NOSPACE;
     for (i = 0; i < WOLFHSM_NUM_RAMKEYS; i++) {
         /* check for empty slot or rewrite slot */
         if ((foundIndex == -1 &&
@@ -111,7 +111,7 @@ int hsmReadKey(whServerContext* server, whNvmMetadata* meta, uint8_t* out,
         if (server->cache[i].meta->id == searchId) {
             /* check outLen */
             if (server->cache[i].meta->len > outLen)
-                return BUFFER_E;
+                return WH_ERROR_NOSPACE;
             XMEMCPY((uint8_t*)meta, (uint8_t*)server->cache[i].meta,
                 sizeof(whNvmMetadata));
             XMEMCPY(out, server->cache[i].buffer, meta->len);
