@@ -96,7 +96,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     }
     outLen = sizeof(keyEnd);
     do {
-        ret = wh_Client_KeyExportResponse(client, labelEnd, keyEnd, &outLen);
+        ret = wh_Client_KeyExportResponse(client, labelEnd, sizeof(labelEnd), keyEnd, &outLen);
     } while (ret == WH_ERROR_NOTREADY);
     if (ret != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_KeyExportResponse %d\n", ret);
@@ -126,7 +126,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     }
     outLen = sizeof(keyEnd);
     do {
-        ret = wh_Client_KeyExportResponse(client, labelEnd, keyEnd, &outLen);
+        ret = wh_Client_KeyExportResponse(client, labelEnd, sizeof(labelEnd), keyEnd, &outLen);
     } while (ret == WH_ERROR_NOTREADY);
     if (ret == WH_ERROR_NOTFOUND) {
         printf("KEY EVICT SUCCESS");
@@ -176,7 +176,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     }
     outLen = sizeof(keyEnd);
     do {
-        ret = wh_Client_KeyExportResponse(client, labelEnd, keyEnd, &outLen);
+        ret = wh_Client_KeyExportResponse(client, labelEnd, sizeof(labelEnd), keyEnd, &outLen);
     } while (ret == WH_ERROR_NOTREADY);
     if (ret != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_KeyExportResponse %d\n", ret);
@@ -206,7 +206,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     }
     outLen = sizeof(keyEnd);
     do {
-        ret = wh_Client_KeyExportResponse(client, labelEnd, keyEnd, &outLen);
+        ret = wh_Client_KeyExportResponse(client, labelEnd, sizeof(labelEnd), keyEnd, &outLen);
     } while (ret == WH_ERROR_NOTREADY);
     if (ret == WH_ERROR_NOTFOUND) {
         printf("KEY ERASE SUCCESS\n");

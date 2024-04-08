@@ -412,7 +412,7 @@ int wh_Client_KeyExportRequest(whClientContext* c, uint16_t keyId)
 }
 
 int wh_Client_KeyExportResponse(whClientContext* c, uint8_t* label,
-    uint8_t* out, uint32_t* outSz)
+    uint32_t labelSz, uint8_t* out, uint32_t* outSz)
 {
     uint16_t group;
     uint16_t action;
@@ -435,8 +435,7 @@ int wh_Client_KeyExportResponse(whClientContext* c, uint8_t* label,
                 ret = WH_ERROR_ABORTED;
             }
             else {
-                XMEMCPY(label, packet->keyExportRes.label,
-                    WOLFHSM_NVM_LABEL_LEN);
+                XMEMCPY(label, packet->keyExportRes.label, labelSz);
                 XMEMCPY(out, packOut, packet->keyExportRes.len);
                 *outSz = packet->keyExportRes.len;
             }

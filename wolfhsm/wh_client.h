@@ -78,7 +78,7 @@ int wh_Client_KeyEvictRequest(whClientContext* c, uint16_t keyId);
 int wh_Client_KeyEvictResponse(whClientContext* c);
 int wh_Client_KeyExportRequest(whClientContext* c, uint16_t keyId);
 int wh_Client_KeyExportResponse(whClientContext* c, uint8_t* label,
-    uint8_t* out, uint32_t* outSz);
+    uint32_t labelSz, uint8_t* out, uint32_t* outSz);
 int wh_Client_KeyCommitRequest(whClientContext* c, whNvmId keyId);
 int wh_Client_KeyCommitResponse(whClientContext* c);
 int wh_Client_KeyEraseRequest(whClientContext* c, whNvmId keyId);
