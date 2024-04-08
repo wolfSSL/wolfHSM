@@ -20,7 +20,7 @@ int hsmGetUniqueId(whServerContext* server)
     whNvmId nvmId = 0;
     whNvmId keyCount;
     /* try every index until we find a unique one, don't worry about capacity */
-    for (id = 1; id < sizeof(whNvmId) - WOLFHSM_KEYID_MASK; id++) {
+    for (id = 1; id < WOLFHSM_KEYID_MASK; id++) {
         /* check against cache keys */
         for (i = 0; i < WOLFHSM_NUM_RAMKEYS; i++) {
             if ((id | WOLFHSM_KEYID_CRYPTO) == server->cache[i].meta->id)
@@ -29,23 +29,16 @@ int hsmGetUniqueId(whServerContext* server)
         /* try again if match */
         if (i < WOLFHSM_NUM_RAMKEYS)
             continue;
-        /* check against nvm keys */
-        do {
-            ret = wh_Nvm_List(server->nvm, WOLFHSM_NVM_ACCESS_ANY,
-                WOLFHSM_NVM_FLAGS_ANY, nvmId, &keyCount, &nvmId);
-            if (ret != 0)
-                break;
-            if ((id | WOLFHSM_KEYID_CRYPTO) == nvmId)
-                break;
-        } while (keyCount > 0);
-        /* continue if nvm match */
-        if ((id | WOLFHSM_KEYID_CRYPTO) == nvmId)
-            continue;
-        /* break if our id didn't match either cache or nvm */
-        break;
+        /* if keyId exists */
+        ret = wh_Nvm_List(server->nvm, WOLFHSM_NVM_ACCESS_ANY,
+            WOLFHSM_NVM_FLAGS_ANY, id | WOLFHSM_KEYID_CRYPTO, &keyCount,
+            &nvmId);
+        /* break if we didn't find a match */
+        if (ret == WH_ERROR_NOTFOUND || nvmId != id)
+            break;
     }
     /* unlikely but cover the case where we've run out of ids */
-    if (id >= sizeof(whNvmId) - WOLFHSM_KEYID_MASK)
+    if (id >= WOLFHSM_KEYID_MASK)
         ret = WH_ERROR_NOSPACE;
     /* ultimately, return found id */
     if (ret == 0)
@@ -58,11 +51,11 @@ int hsmCacheKey(whServerContext* server, whNvmMetadata* meta, uint8_t* in)
     int i;
     int foundIndex = -1;
     /* make sure id is valid */
-    if (meta->id == WOLFHSM_ID_ERASED)
+    if (server == NULL || meta == NULL || in == NULL ||
+        meta->id == WOLFHSM_ID_ERASED ||
+        meta->len > WOLFHSM_NVM_MAX_OBJECT_SIZE) {
         return WH_ERROR_BADARGS;
-    /* make sure the key fits in a slot */
-    if (meta->len > WOLFHSM_NVM_MAX_OBJECT_SIZE)
-        return WH_ERROR_NOSPACE;
+    }
     for (i = 0; i < WOLFHSM_NUM_RAMKEYS; i++) {
         /* check for empty slot or rewrite slot */
         if ((foundIndex == -1 &&
@@ -103,8 +96,10 @@ int hsmReadKey(whServerContext* server, whNvmMetadata* meta, uint8_t* out,
     int i;
     uint16_t searchId = meta->id;
     /* make sure id is valid */
-    if (meta->id == WOLFHSM_ID_ERASED)
+    if (server == NULL || meta == NULL || out == NULL ||
+        meta->id == WOLFHSM_ID_ERASED) {
         return WH_ERROR_BADARGS;
+    }
     /* check the cache */
     for (i = 0; i < WOLFHSM_NUM_RAMKEYS; i++) {
         /* copy the meta and key before returning */
@@ -143,7 +138,7 @@ int hsmEvictKey(whServerContext* server, whNvmId keyId)
     int ret = 0;
     int i;
     /* make sure id is valid */
-    if (keyId == WOLFHSM_ID_ERASED)
+    if (server == NULL || keyId == WOLFHSM_ID_ERASED)
         return WH_ERROR_BADARGS;
     /* find key */
     for (i = 0; i < WOLFHSM_NUM_RAMKEYS; i++) {
@@ -165,7 +160,7 @@ int hsmCommitKey(whServerContext* server, whNvmId keyId)
     int ret = 0;
     CacheSlot* cacheSlot;
     /* make sure id is valid */
-    if (keyId == WOLFHSM_ID_ERASED)
+    if (server == NULL || keyId == WOLFHSM_ID_ERASED)
         return WH_ERROR_BADARGS;
     /* find key in cache */
     for (i = 0; i < WOLFHSM_NUM_RAMKEYS; i++) {
@@ -188,7 +183,7 @@ int hsmCommitKey(whServerContext* server, whNvmId keyId)
 int hsmEraseKey(whServerContext* server, whNvmId keyId)
 {
     int i;
-    if (keyId == WOLFHSM_ID_ERASED)
+    if (server == NULL || keyId == WOLFHSM_ID_ERASED)
         return WH_ERROR_BADARGS;
     /* remove the key from the cache if present */
     for (i = 0; i < WOLFHSM_NUM_RAMKEYS; i++) {
@@ -210,6 +205,14 @@ int wh_Server_HandleKeyRequest(whServerContext* server,
     uint8_t* out;
     whPacket* packet = (whPacket*)data;
     whNvmMetadata meta[1] = {0};
+    /* validate args, even though these functions are only supposed to be
+     * called by internal functions */
+    if (server == NULL || data == NULL || size == NULL)
+        return WH_ERROR_BADARGS;
+#if 0
+    if (WH_COMM_FLAGS_SWAPTEST(magic))
+        return WH_ERROR_ABORTED;
+#endif
     switch (action)
     {
     case WH_KEY_CACHE:

@@ -509,8 +509,3 @@ void wh_Client_SetKeyCurve25519(curve25519_key* key, whNvmId keyId)
 {
     XMEMCPY(key->devCtx, (void*)&keyId, sizeof(keyId));
 }
-
-#if 0
-int wh_Client_KeyCommit(whClientContext* c, uint16_t keyId);
-int wh_Client_KeyErase(whClientContext* c, uint16_t keyId);
-#endif
