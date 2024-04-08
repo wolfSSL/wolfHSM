@@ -421,7 +421,7 @@ int wh_Client_KeyExportResponse(whClientContext* c, uint8_t* label,
     uint8_t rawPacket[WH_COMM_MTU] = {0};
     whPacket* packet = (whPacket*)rawPacket;
     uint8_t* packOut = (uint8_t*)(&packet->keyExportRes + 1);
-    if (c == NULL || label == NULL || outSz == NULL)
+    if (c == NULL || labelSz > WOLFHSM_NVM_LABEL_LEN || outSz == NULL)
         return WH_ERROR_BADARGS;
     ret = wh_Client_RecvResponse(c, &group, &action, &size, rawPacket);
     if (ret == 0) {
@@ -435,10 +435,11 @@ int wh_Client_KeyExportResponse(whClientContext* c, uint8_t* label,
                 ret = WH_ERROR_ABORTED;
             }
             else {
-                XMEMCPY(label, packet->keyExportRes.label, labelSz);
                 XMEMCPY(out, packOut, packet->keyExportRes.len);
                 *outSz = packet->keyExportRes.len;
             }
+            if (label != NULL)
+                XMEMCPY(label, packet->keyExportRes.label, labelSz);
         }
     }
     return ret;
