@@ -320,20 +320,20 @@ int wh_Client_KeyCacheRequest_ex(whClientContext* c, uint32_t flags,
     uint8_t rawPacket[WH_COMM_MTU] = {0};
     whPacket* packet = (whPacket*)rawPacket;
     uint8_t* packIn = (uint8_t*)(&packet->keyCacheReq + 1);
-    if (c == NULL || label == NULL || in == NULL || inSz == 0 ||
-        labelSz > WOLFHSM_NVM_LABEL_LEN) {
+    if (c == NULL || in == NULL || inSz == 0)
         return WH_ERROR_BADARGS;
-    }
-    /* set flags */
     packet->keyCacheReq.flags = flags;
-    /* set inSz */
     packet->keyCacheReq.sz = inSz;
-    /* set labelLen */
-    packet->keyCacheReq.labelSz = labelSz;
-    /* set id */
-    packet->keyCacheReq.id = keyId;
-    /* set label */
-    XMEMCPY(packet->keyCacheReq.label, label, labelSz);
+    if (label == NULL)
+        packet->keyCacheReq.labelSz = 0;
+    else {
+        packet->keyCacheReq.labelSz = labelSz;
+        /* write label */
+        if (labelSz > WOLFHSM_NVM_LABEL_LEN)
+            XMEMCPY(packet->keyCacheReq.label, label, WOLFHSM_NVM_LABEL_LEN);
+        else
+            XMEMCPY(packet->keyCacheReq.label, label, labelSz);
+    }
     /* write in */
     XMEMCPY(packIn, in, inSz);
     /* write request */
@@ -421,7 +421,7 @@ int wh_Client_KeyExportResponse(whClientContext* c, uint8_t* label,
     uint8_t rawPacket[WH_COMM_MTU] = {0};
     whPacket* packet = (whPacket*)rawPacket;
     uint8_t* packOut = (uint8_t*)(&packet->keyExportRes + 1);
-    if (c == NULL || labelSz > WOLFHSM_NVM_LABEL_LEN || outSz == NULL)
+    if (c == NULL || outSz == NULL)
         return WH_ERROR_BADARGS;
     ret = wh_Client_RecvResponse(c, &group, &action, &size, rawPacket);
     if (ret == 0) {
@@ -438,8 +438,14 @@ int wh_Client_KeyExportResponse(whClientContext* c, uint8_t* label,
                 XMEMCPY(out, packOut, packet->keyExportRes.len);
                 *outSz = packet->keyExportRes.len;
             }
-            if (label != NULL)
-                XMEMCPY(label, packet->keyExportRes.label, labelSz);
+            if (label != NULL) {
+                if (labelSz > sizeof(packet->keyExportRes.label)) {
+                    XMEMCPY(label, packet->keyExportRes.label,
+                        WOLFHSM_NVM_LABEL_LEN);
+                }
+                else
+                    XMEMCPY(label, packet->keyExportRes.label, labelSz);
+            }
         }
     }
     return ret;
