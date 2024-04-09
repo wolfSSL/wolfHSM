@@ -71,7 +71,7 @@ SRC_C += \
             $(WOLFSSL_DIR)/wolfcrypt/src/hash.c \
             $(WOLFSSL_DIR)/wolfcrypt/src/sha256.c \
             $(WOLFSSL_DIR)/wolfcrypt/src/aes.c \
-            $(WOLFSSL_DIR)/wolfcrypt/src/cmac.c
+            $(WOLFSSL_DIR)/wolfcrypt/src/cmac.c \
 
 # wolfHSM source files
 SRC_C += \
@@ -92,18 +92,19 @@ SRC_C += \
 SRC_C += \
             $(WOLFHSM_DIR)/src/wh_nvm_flash.c \
             $(WOLFHSM_DIR)/src/wh_flash_unit.c \
-            $(WOLFHSM_DIR)/src/wh_flash_ramsim.c
+            $(WOLFHSM_DIR)/src/wh_flash_ramsim.c \
             $(WOLFHSM_DIR)/src/wh_transport_mem.c \
             $(WOLFHSM_DIR)/port/posix/posix_flash_file.c \
-            $(WOLFHSM_DIR)/port/posix/posix_transport_tcp.c
+            $(WOLFHSM_DIR)/port/posix/posix_transport_tcp.c \
 
 # APP
-SRC_C += ./src/wh_test.c \
-         ./src/wh_test_comm.c \
-         ./src/wh_test_crypto.c \
-         ./src/wh_test_nvm_flash.c \
-         ./src/wh_test_clientserver.c \
-         ./src/wh_test_flash_ramsim.c
+SRC_C += \
+            ./src/wh_test.c \
+            ./src/wh_test_comm.c \
+            ./src/wh_test_crypto.c \
+            ./src/wh_test_nvm_flash.c \
+            ./src/wh_test_clientserver.c \
+            ./src/wh_test_flash_ramsim.c \
 
 
 FILENAMES_C = $(notdir $(SRC_C))
