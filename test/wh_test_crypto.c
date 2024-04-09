@@ -67,6 +67,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     }
 
     WH_TEST_RETURN_ON_FAIL(wh_Client_Init(client, config));
+    memset(labelStart, 0xff, sizeof(labelStart));
 
     /* test rng */
     if ((ret = wc_InitRng_ex(rng, NULL, WOLFHSM_DEV_ID)) != 0) {
@@ -129,7 +130,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         ret = wh_Client_KeyExportResponse(client, labelEnd, sizeof(labelEnd), keyEnd, &outLen);
     } while (ret == WH_ERROR_NOTREADY);
     if (ret == WH_ERROR_NOTFOUND) {
-        printf("KEY EVICT SUCCESS");
+        printf("KEY EVICT SUCCESS\n");
     }
     else {
         if (ret != 0)

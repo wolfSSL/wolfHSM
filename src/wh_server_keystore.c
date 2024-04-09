@@ -122,6 +122,9 @@ int hsmReadKey(whServerContext* server, whKeyId keyId, whNvmMetadata* outMeta,
     if (ret == 0) {
         /* set outSz */
         *outSz = meta->len;
+        /* read meta */
+        if (outMeta != NULL)
+            XMEMCPY((uint8_t*)outMeta, (uint8_t*)meta, sizeof(meta));
         /* read the object */
         if (out != NULL)
             ret = wh_Nvm_Read(server->nvm, keyId, 0, *outSz, out);
@@ -181,11 +184,10 @@ int hsmCommitKey(whServerContext* server, whNvmId keyId)
     if (i >= WOLFHSM_NUM_RAMKEYS)
         return WH_ERROR_NOTFOUND;
     /* add object */
-    ret = wh_Nvm_AddObject(server->nvm, server->cache[i].meta,
+    ret = wh_Nvm_AddObject(server->nvm, cacheSlot->meta,
         cacheSlot->meta->len, cacheSlot->buffer);
-    if (ret == 0) {
+    if (ret == 0)
         cacheSlot->commited = 1;
-    }
     return ret;
 }
 
