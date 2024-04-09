@@ -89,41 +89,41 @@ int hsmCacheKey(whServerContext* server, whNvmMetadata* meta, uint8_t* in)
     return 0;
 }
 
-int hsmReadKey(whServerContext* server, whNvmMetadata* meta, uint8_t* out,
-    uint32_t outLen)
+int hsmReadKey(whServerContext* server, whKeyId keyId, whNvmMetadata* meta,
+    uint8_t* out, uint32_t outLen)
 {
     int ret = 0;
     int i;
-    uint16_t searchId = meta->id;
     /* make sure id is valid */
-    if (server == NULL || meta == NULL || out == NULL ||
-        meta->id == WOLFHSM_ID_ERASED) {
+    if (server == NULL || out == NULL || keyId == WOLFHSM_ID_ERASED)
         return WH_ERROR_BADARGS;
-    }
     /* check the cache */
     for (i = 0; i < WOLFHSM_NUM_RAMKEYS; i++) {
         /* copy the meta and key before returning */
-        if (server->cache[i].meta->id == searchId) {
+        if (server->cache[i].meta->id == keyId) {
             /* check outLen */
             if (server->cache[i].meta->len > outLen)
                 return WH_ERROR_NOSPACE;
-            XMEMCPY((uint8_t*)meta, (uint8_t*)server->cache[i].meta,
-                sizeof(whNvmMetadata));
+            if (meta != NULL) {
+                XMEMCPY((uint8_t*)meta, (uint8_t*)server->cache[i].meta,
+                    sizeof(whNvmMetadata));
+            }
             XMEMCPY(out, server->cache[i].buffer, meta->len);
             return 0;
         }
     }
     /* try to read the metadata */
-    ret = wh_Nvm_GetMetadata(server->nvm, searchId, meta);
+    if (meta != NULL)
+        ret = wh_Nvm_GetMetadata(server->nvm, keyId, meta);
     /* read the object */
     if (ret == 0)
-        ret = wh_Nvm_Read(server->nvm, searchId, 0, outLen, out);
+        ret = wh_Nvm_Read(server->nvm, keyId, 0, outLen, out);
     /* cache key if free slot, will only kick out other commited keys */
     if (ret == 0)
         hsmCacheKey(server, meta, out);
 #ifdef WOLFHSM_SHE_EXTENSION
     /* use empty string if we couldn't find the master ecu key */
-    if (ret != 0 && searchId == WOLFHSM_SHE_MASTER_ECU_KEY_ID) {
+    if (ret != 0 && keyId == WOLFHSM_SHE_MASTER_ECU_KEY_ID) {
         XMEMSET(out, 0, WOLFHSM_SHE_KEY_SZ);
         meta->len = WOLFHSM_SHE_KEY_SZ;
         meta->id = searchId;
@@ -258,8 +258,9 @@ int wh_Server_HandleKeyRequest(whServerContext* server,
         /* set the id */
         meta->id = packet->keyExportReq.id;
         /* read the key */
-        ret = hsmReadKey(server, meta, out, WH_COMM_MTU -
-            (WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->keyExportRes)));
+        ret = hsmReadKey(server, packet->keyExportReq.id, meta, out,
+            WH_COMM_MTU - (WOLFHSM_PACKET_STUB_SIZE +
+            sizeof(packet->keyExportRes)));
         if (ret == 0) {
             /* set key len */
             packet->keyExportRes.len = meta->len;

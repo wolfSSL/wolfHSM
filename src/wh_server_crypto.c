@@ -45,17 +45,14 @@ static int hsmCacheKeyCurve25519(whServerContext* server, curve25519_key* key)
     return ret;
 }
 
-static int hsmLoadKeyCurve25519(whServerContext* server, curve25519_key* key, uint16_t keyId)
+static int hsmLoadKeyCurve25519(whServerContext* server, curve25519_key* key, whKeyId keyId)
 {
     int ret;
     uint32_t privSz = CURVE25519_KEYSIZE;
     uint32_t pubSz = CURVE25519_KEYSIZE;
-    whNvmMetadata meta[1] = {{0}};
+    whNvmMetadata meta[1] = {0};
     byte keyBuf[CURVE25519_KEYSIZE * 2];
-    /* retrieve the key */
-    XMEMSET(meta, 0, sizeof(whNvmMetadata));
-    meta->id = keyId;
-    ret = hsmReadKey(server, meta, keyBuf, privSz + pubSz);
+    ret = hsmReadKey(server, keyId, meta, keyBuf, privSz + pubSz);
     /* decode the key */
     if (ret == 0)
         ret = wc_curve25519_import_public(keyBuf, pubSz, key);
