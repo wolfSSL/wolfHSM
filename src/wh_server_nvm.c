@@ -262,16 +262,27 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
             wh_MessageNvm_TranslateAddObjectDma32Request(magic,
                     (whMessageNvm_AddObjectDma32Request*)req_packet, &req);
 
-            /* TODO: Add hostaddr conversion/checking */
-            metadata =(void*)((intptr_t)req.metadata_hostaddr);
-            data = (void*)((intptr_t)req.data_hostaddr);
-            /* TODO: Add data_len checking */
+            /* perform platform-specific host address processing */
+            wh_Server_DmaProcessClientAddress32(
+                server, req.metadata_hostaddr, &metadata, sizeof(whNvmMetadata),
+                WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
+            wh_Server_DmaProcessClientAddress32(
+                server, req.data_hostaddr, &data, req.data_len,
+                WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
 
             /* Process the AddObject action */
             resp.rc = wh_Nvm_AddObject(server->nvm,
                     (whNvmMetadata*)metadata,
                     req.data_len,
                     (const uint8_t*)data);
+
+            /* perform platform-specific host address processing */
+            wh_Server_DmaProcessClientAddress32(
+                server, req.metadata_hostaddr, &metadata, sizeof(whNvmMetadata),
+                WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
+            wh_Server_DmaProcessClientAddress32(
+                server, req.data_hostaddr, &data, req.data_len,
+                WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
         } else {
             /* Request is malformed */
             resp.rc = WH_ERROR_ABORTED;
@@ -293,12 +304,19 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
             wh_MessageNvm_TranslateReadDma32Request(magic,
                     (whMessageNvm_ReadDma32Request*)req_packet, &req);
 
-            /* TODO: Add hostaddr conversion/checking */
-            data = (void*)((intptr_t)req.data_hostaddr);
+            /* perform platform-specific host address processing */
+            wh_Server_DmaProcessClientAddress32(
+                server, req.data_hostaddr, &data, req.data_len,
+                WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
 
             /* Process the Read action */
             resp.rc = wh_Nvm_Read(server->nvm, req.id, req.offset, req.data_len,
                     (uint8_t*)data);
+
+            /* perform platform-specific host address processing */
+            wh_Server_DmaProcessClientAddress32(
+                server, req.data_hostaddr, &data, req.data_len,
+                WH_DMA_OPER_CLIENT_WRITE_POST, (whDmaFlags){0});
         } else {
             /* Request is malformed */
             resp.rc = WH_ERROR_ABORTED;
@@ -321,15 +339,27 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
             wh_MessageNvm_TranslateAddObjectDma64Request(magic,
                     (whMessageNvm_AddObjectDma64Request*)req_packet, &req);
 
-            /* TODO: Add hostaddr conversion/checking */
-            metadata =(void*)((intptr_t)req.metadata_hostaddr);
-            data = (void*)((intptr_t)req.data_hostaddr);
+            /* perform platform-specific host address processing */
+            wh_Server_DmaProcessClientAddress64(
+                server, req.metadata_hostaddr, &metadata, sizeof(whNvmMetadata),
+                WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
+            wh_Server_DmaProcessClientAddress64(
+                server, req.data_hostaddr, &data, req.data_len,
+                WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
 
             /* Process the AddObject action */
             resp.rc = wh_Nvm_AddObject(server->nvm,
                     (whNvmMetadata*)metadata,
                     req.data_len,
                     (const uint8_t*)data);
+
+            /* perform platform-specific host address processing */
+            wh_Server_DmaProcessClientAddress64(
+                server, req.metadata_hostaddr, &metadata, sizeof(whNvmMetadata),
+                WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
+            wh_Server_DmaProcessClientAddress64(
+                server, req.data_hostaddr, &data, req.data_len,
+                WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
         } else {
             /* Request is malformed */
             resp.rc = WH_ERROR_ABORTED;
@@ -351,12 +381,19 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
             wh_MessageNvm_TranslateReadDma64Request(magic,
                     (whMessageNvm_ReadDma64Request*)req_packet, &req);
 
-            /* TODO: Add hostaddr conversion/checking */
-            data = (void*)((intptr_t)req.data_hostaddr);
+            /* perform platform-specific host address processing */
+            wh_Server_DmaProcessClientAddress64(
+                server, req.data_hostaddr, &data, req.data_len,
+                WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
 
             /* Process the Read action */
             resp.rc = wh_Nvm_Read(server->nvm, req.id, req.offset, req.data_len,
                     (uint8_t*)data);
+
+            /* perform platform-specific host address processing */
+            wh_Server_DmaProcessClientAddress64(
+                server, req.data_hostaddr, &data, req.data_len,
+                WH_DMA_OPER_CLIENT_WRITE_POST, (whDmaFlags){0});
         } else {
             /* Request is malformed */
             resp.rc = WH_ERROR_ABORTED;
