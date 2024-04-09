@@ -89,38 +89,47 @@ int hsmCacheKey(whServerContext* server, whNvmMetadata* meta, uint8_t* in)
     return 0;
 }
 
-int hsmReadKey(whServerContext* server, whKeyId keyId, whNvmMetadata* meta,
-    uint8_t* out, uint32_t outLen)
+int hsmReadKey(whServerContext* server, whKeyId keyId, whNvmMetadata* outMeta,
+    uint8_t* out, uint32_t* outSz)
 {
     int ret = 0;
     int i;
+    whNvmMetadata meta[1] = {0};
     /* make sure id is valid */
-    if (server == NULL || out == NULL || keyId == WOLFHSM_ID_ERASED)
+    if (server == NULL || keyId == WOLFHSM_ID_ERASED || outSz == NULL)
         return WH_ERROR_BADARGS;
     /* check the cache */
     for (i = 0; i < WOLFHSM_NUM_RAMKEYS; i++) {
         /* copy the meta and key before returning */
         if (server->cache[i].meta->id == keyId) {
-            /* check outLen */
-            if (server->cache[i].meta->len > outLen)
+            /* check outSz */
+            if (server->cache[i].meta->len > *outSz)
                 return WH_ERROR_NOSPACE;
-            if (meta != NULL) {
-                XMEMCPY((uint8_t*)meta, (uint8_t*)server->cache[i].meta,
+            if (outMeta != NULL) {
+                XMEMCPY((uint8_t*)outMeta, (uint8_t*)server->cache[i].meta,
                     sizeof(whNvmMetadata));
             }
-            XMEMCPY(out, server->cache[i].buffer, meta->len);
+            if (out != NULL) {
+                XMEMCPY(out, server->cache[i].buffer,
+                    server->cache[i].meta->len);
+            }
+            *outSz = server->cache[i].meta->len;
             return 0;
         }
     }
     /* try to read the metadata */
-    if (meta != NULL)
-        ret = wh_Nvm_GetMetadata(server->nvm, keyId, meta);
-    /* read the object */
-    if (ret == 0)
-        ret = wh_Nvm_Read(server->nvm, keyId, 0, outLen, out);
+    ret = wh_Nvm_GetMetadata(server->nvm, keyId, meta);
+    if (ret == 0) {
+        /* set outSz */
+        *outSz = meta->len;
+        /* read the object */
+        if (out != NULL)
+            ret = wh_Nvm_Read(server->nvm, keyId, 0, *outSz, out);
+    }
     /* cache key if free slot, will only kick out other commited keys */
-    if (ret == 0)
+    if (ret == 0 && out != NULL) {
         hsmCacheKey(server, meta, out);
+    }
 #ifdef WOLFHSM_SHE_EXTENSION
     /* use empty string if we couldn't find the master ecu key */
     if (ret != 0 && keyId == WOLFHSM_SHE_MASTER_ECU_KEY_ID) {
@@ -201,6 +210,7 @@ int wh_Server_HandleKeyRequest(whServerContext* server,
         uint8_t* data, uint16_t* size)
 {
     int ret = 0;
+    uint32_t field;
     uint8_t* in;
     uint8_t* out;
     whPacket* packet = (whPacket*)data;
@@ -255,20 +265,18 @@ int wh_Server_HandleKeyRequest(whServerContext* server,
     case WH_KEY_EXPORT:
         /* out is after fixed size fields */
         out = (uint8_t*)(&packet->keyExportRes + 1);
-        /* set the id */
-        meta->id = packet->keyExportReq.id;
+        field = WH_COMM_MTU - (WOLFHSM_PACKET_STUB_SIZE +
+            sizeof(packet->keyExportRes));
         /* read the key */
-        ret = hsmReadKey(server, packet->keyExportReq.id, meta, out,
-            WH_COMM_MTU - (WOLFHSM_PACKET_STUB_SIZE +
-            sizeof(packet->keyExportRes)));
+        ret = hsmReadKey(server, packet->keyExportReq.id, meta, out, &field);
         if (ret == 0) {
             /* set key len */
-            packet->keyExportRes.len = meta->len;
+            packet->keyExportRes.len = field;
             /* set label */
             XMEMCPY(packet->keyExportRes.label, meta->label,
                 sizeof(meta->label));
             *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->keyExportRes) +
-                meta->len;
+                field;
         }
         break;
     case WH_KEY_COMMIT:

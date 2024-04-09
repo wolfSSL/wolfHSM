@@ -6,7 +6,7 @@
 int hsmGetUniqueId(whServerContext* server);
 int hsmCacheKey(whServerContext* server, whNvmMetadata* meta, uint8_t* in);
 int hsmReadKey(whServerContext* server, whKeyId keyId, whNvmMetadata* meta,
-    uint8_t* out, uint32_t outLen);
+    uint8_t* out, uint32_t* outSz);
 int hsmEvictKey(whServerContext* server, uint16_t keyId);
 int hsmCommitKey(whServerContext* server, uint16_t keyId);
 int hsmEraseKey(whServerContext* server, whNvmId keyId);

@@ -50,14 +50,14 @@ static int hsmLoadKeyCurve25519(whServerContext* server, curve25519_key* key, wh
     int ret;
     uint32_t privSz = CURVE25519_KEYSIZE;
     uint32_t pubSz = CURVE25519_KEYSIZE;
-    whNvmMetadata meta[1] = {0};
+    uint32_t size = privSz + pubSz;
     byte keyBuf[CURVE25519_KEYSIZE * 2];
-    ret = hsmReadKey(server, keyId, meta, keyBuf, privSz + pubSz);
+    ret = hsmReadKey(server, keyId, NULL, keyBuf, &size);
     /* decode the key */
     if (ret == 0)
         ret = wc_curve25519_import_public(keyBuf, pubSz, key);
     /* only import private if what we got back holds 2 keys */
-    if (ret == 0 && meta->len == CURVE25519_KEYSIZE * 2)
+    if (ret == 0 && size == CURVE25519_KEYSIZE * 2)
         ret = wc_curve25519_import_private(keyBuf + pubSz, privSz, key);
     return ret;
 }
