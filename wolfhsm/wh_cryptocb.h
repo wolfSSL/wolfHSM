@@ -25,6 +25,9 @@
     extern "C" {
 #endif
 
+#include "wolfssl/wolfcrypt/settings.h"
+#include "wolfssl/wolfcrypt/cryptocb.h"
+
 int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* ctx);
 
 #ifdef __cplusplus
