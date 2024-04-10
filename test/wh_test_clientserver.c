@@ -31,7 +31,7 @@
 #define RESP_SIZE 64
 #define REPEAT_COUNT 10
 #define ONE_MS 1000
-
+#define FLASH_RAM_SIZE (1024 * 1024) /* 1MB */
 
 /* Dummy callback that loopback-copies client data */
 static int _customServerCb(whServerContext*                 server,
@@ -225,8 +225,8 @@ int whTest_ClientServerSequential(void)
     WH_TEST_RETURN_ON_FAIL(wh_Server_Init(server, s_conf));
 
     int      counter                  = 1;
-    char     recv_buffer[WH_COMM_MTU] = {0};
-    char     send_buffer[WH_COMM_MTU] = {0};
+    char     recv_buffer[WH_COMM_DATA_LEN] = {0};
+    char     send_buffer[WH_COMM_DATA_LEN] = {0};
     uint16_t send_len                 = 0;
     uint16_t recv_len                 = 0;
 
@@ -245,9 +245,9 @@ int whTest_ClientServerSequential(void)
     for (counter = 0; counter < REPEAT_COUNT; counter++) {
 
         /* Prepare echo test */
-        snprintf(send_buffer, sizeof(send_buffer), "Request:%u", counter);
-        send_len = strlen(send_buffer);
-        snprintf(recv_buffer, sizeof(send_buffer), "NOTHING RECEIVED");
+        send_len =
+            snprintf(send_buffer, sizeof(send_buffer), "Request:%u", counter);
+        snprintf(recv_buffer, sizeof(recv_buffer), "NOTHING RECEIVED");
         recv_len = 0;
 
         WH_TEST_RETURN_ON_FAIL(
@@ -631,8 +631,8 @@ int whTest_ClientCfg(whClientConfig* clientCfg)
     WH_TEST_RETURN_ON_FAIL(wh_Client_Init(client, clientCfg));
 
     int counter = 1;
-    char recv_buffer[WH_COMM_MTU] = {0};
-    char send_buffer[WH_COMM_MTU] = {0};
+    char recv_buffer[WH_COMM_DATA_LEN] = {0};
+    char send_buffer[WH_COMM_DATA_LEN] = {0};
     uint16_t send_len = 0;
     uint16_t recv_len = 0;
 
@@ -647,9 +647,9 @@ int whTest_ClientCfg(whClientConfig* clientCfg)
     for (counter = 0; counter < REPEAT_COUNT; counter++) {
 
         /* Prepare echo test */
-        snprintf(send_buffer, sizeof(send_buffer), "Request:%u", counter);
-        send_len = strlen(send_buffer);
-        snprintf(recv_buffer, sizeof(send_buffer), "NOTHING RECEIVED");
+        send_len =
+            snprintf(send_buffer, sizeof(send_buffer), "Request:%u", counter);
+        snprintf(recv_buffer, sizeof(recv_buffer), "NOTHING RECEIVED");
         recv_len = 0;
 
         WH_TEST_RETURN_ON_FAIL(ret = wh_Client_Echo(client, send_len, send_buffer, &recv_len, recv_buffer));
@@ -808,7 +808,7 @@ int whTest_ClientCfg(whClientConfig* clientCfg)
     WH_TEST_RETURN_ON_FAIL(wh_Client_NvmGetAvailable(
         client, &server_rc, &avail_size, &avail_objects, &reclaim_size,
         &reclaim_objects));
-    WH_TEST_ASSERT_RETURN(avail_objects == NF_OBJECT_COUNT);
+    WH_TEST_ASSERT_RETURN(avail_objects == WOLFHSM_NUM_NVMOBJECTS);
 
     for (counter = 0; counter < 5; counter++) {
         whNvmMetadata meta = {
@@ -1040,9 +1040,9 @@ static int wh_ClientServer_MemThreadTest(void)
     /* RamSim Flash state and configuration */
     whFlashRamsimCtx fc[1] = {0};
     whFlashRamsimCfg fc_conf[1] = {{
-        .size       = 1024 * 1024, /* 1MB  Flash */
-        .sectorSize = (1024 * 1024)/2,  /* 128KB  Sector Size */
-        .pageSize   = 8,           /* 8B   Page Size */
+        .size       = FLASH_RAM_SIZE,
+        .sectorSize = FLASH_RAM_SIZE/2,
+        .pageSize   = 8,
         .erasedByte = (uint8_t)0,
     }};
     const whFlashCb  fcb[1]          = {WH_FLASH_RAMSIM_CB};
