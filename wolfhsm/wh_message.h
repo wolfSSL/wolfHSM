@@ -27,6 +27,15 @@ enum {
     WH_MESSAGE_ACTION_NONE         = 0x0000,  /* No action. Invalid. */
 };
 
+/* keystore actions */
+enum {
+    WH_KEY_CACHE,
+    WH_KEY_EVICT,
+    WH_KEY_EXPORT,
+    WH_KEY_COMMIT,
+    WH_KEY_ERASE,
+};
+
 /* Construct the message kind based on group and action */
 #define WH_MESSAGE_KIND(_G, _S) (   ((_G) & WH_MESSAGE_GROUP_MASK) |      \
                                     ((_S) & WH_MESSAGE_ACTION_MASK))

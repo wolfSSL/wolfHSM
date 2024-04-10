@@ -82,11 +82,14 @@ SRC_C += \
             $(WOLFHSM_DIR)/src/wh_server_customcb.c \
             $(WOLFHSM_DIR)/src/wh_server_nvm.c \
             $(WOLFHSM_DIR)/src/wh_server_crypto.c \
+            $(WOLFHSM_DIR)/src/wh_server_keystore.c \
             $(WOLFHSM_DIR)/src/wh_nvm.c \
             $(WOLFHSM_DIR)/src/wh_comm.c \
             $(WOLFHSM_DIR)/src/wh_message_comm.c \
             $(WOLFHSM_DIR)/src/wh_message_customcb.c \
             $(WOLFHSM_DIR)/src/wh_message_nvm.c \
+            $(WOLFHSM_DIR)/src/wh_transport_mem.c \
+            $(WOLFHSM_DIR)/src/wh_flash_ramsim.c \
 
 # WolfHSM port/HAL code
 SRC_C += \
