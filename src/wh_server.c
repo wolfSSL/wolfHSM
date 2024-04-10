@@ -63,6 +63,14 @@ int wh_Server_Init(whServerContext* server, whServerConfig* config)
         (void)wh_Server_Cleanup(server);
         return WH_ERROR_ABORTED;
     }
+
+    /* Initialize DMA configuration and callbacks */
+    if (NULL != config->dmaAddrAllowList) {
+        server->dmaAddrAllowList = config->dmaAddrAllowList;
+    }
+    server->dmaCb.cb32 = NULL;
+    server->dmaCb.cb64 = NULL;
+
     return rc;
 }
 

@@ -45,34 +45,6 @@ typedef int (*whServerCustomCb)(
     whMessageCustomCb_Response*      resp /* response from callback to client */
 );
 
-#if 0
-typedef int (*whDmaClientMem32Cb)(struct whServerContext_t* server,
-                                  uint32_t clientAddr, void** serverPtr,
-                                  uint32_t len, whDmaOper oper,
-                                  whDmaFlags flags);
-typedef int (*whDmaClientMem64Cb)(struct whServerContext_t* server,
-                                  uint64_t clientAddr, void** serverPtr,
-                                  uint64_t len, whDmaOper oper,
-                                  whDmaFlags flags);
-
-typedef struct {
-    whDmaClientMem32Cb cb32;
-    whDmaClientMem64Cb cb64;
-} whDmaCb;
-
-/* Indicates to the callback the type of operation the callback should handle */
-typedef enum {
-    WH_DMA_OPER_CLIENT_READ_PRE = 0, /* Descriptive comment: address validation/Map/unmap/prefetch/cache/etc*/
-    WH_DMA_OPER_CLIENT_READ_POST = 1,
-    WH_DMA_OPER_CLIENT_WRITE_PRE  = 2,
-    WH_DMA_OPER_CLIENT_WRITE_POST = 3,
-} whDmaOper;
-
-/* Flags embedded in request/response structs provided by client */
-typedef struct {
-    uint8_t cacheForceInvalidate : 1;
-} whDmaFlags;
-#endif
 
 /* Context structure to maintain the state of an HSM server */
 typedef struct whServerContext_t {
@@ -81,7 +53,8 @@ typedef struct whServerContext_t {
     crypto_context* crypto;
     CacheSlot cache[WOLFHSM_NUM_RAMKEYS];
     whServerCustomCb customHandlerTable[WH_CUSTOM_CB_NUM_CALLBACKS];
-    whDmaCb dmaCb; 
+    whDmaCb dmaCb;
+    const whDmaAddrAllowList* dmaAddrAllowList;
 } whServerContext;
 
 typedef struct whServerConfig_t {
@@ -91,6 +64,7 @@ typedef struct whServerConfig_t {
 #if defined WOLF_CRYPTO_CB /* TODO: should we be relying on wolfSSL defines? */
     int devId;
 #endif
+    whDmaAddrAllowList* dmaAddrAllowList;
 } whServerConfig;
 
 /* Initialize the comms and crypto cache components.
@@ -120,6 +94,7 @@ int wh_Server_HandleCustomCbRequest(whServerContext* server, uint16_t magic,
 /* Registers custom client DMA callbacs to handle platform specific restrictions
  * on accessing the client address space such as caching and address translation */
 int wh_Server_DmaRegisterCb(whServerContext* server, whDmaCb cb);
+int wh_Server_DmaRegisterAllowList(whServerContext* server, const whDmaAddrAllowList* allowlist);
 
 /* Helper functions to invoke user supplied client address DMA callbacks */
 int wh_Server_DmaProcessClientAddress32(whServerContext* server,
