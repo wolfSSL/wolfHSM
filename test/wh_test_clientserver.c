@@ -154,8 +154,8 @@ static int _testCallbacks(whServerContext* server, whClientContext* client)
 
 static int _customServerDmaCb(struct whServerContext_t* server,
                               void* clientAddr, void** serverPtr,
-                              uint32_t len, whDmaOper oper,
-                              whDmaFlags flags)
+                              uint32_t len, whServerDmaOper oper,
+                              whServerDmaFlags flags)
 {
     /* remapped "client" address, a.k.a. arbitary "server" buffer */
     void *srvTmpBuf = (void*)((uintptr_t)clientAddr +
@@ -196,7 +196,7 @@ static int _customServerDmaCb(struct whServerContext_t* server,
 
 static int _customServerDma32Cb(struct whServerContext_t* server,
                                 uint32_t clientAddr, void** serverPtr,
-                                uint32_t len, whDmaOper oper, whDmaFlags flags)
+                                uint32_t len, whServerDmaOper oper, whServerDmaFlags flags)
 {
     return _customServerDmaCb(server, (void*)((uintptr_t)clientAddr), serverPtr,
                               len, oper, flags);
@@ -204,7 +204,7 @@ static int _customServerDma32Cb(struct whServerContext_t* server,
 
 static int _customServerDma64Cb(struct whServerContext_t* server,
                                 uint64_t clientAddr, void** serverPtr,
-                                uint64_t len, whDmaOper oper, whDmaFlags flags)
+                                uint64_t len, whServerDmaOper oper, whServerDmaFlags flags)
 {
     return _customServerDmaCb(server, (void*)((uintptr_t)clientAddr), serverPtr,
                               len, oper, flags);
@@ -215,7 +215,7 @@ static int _testDma(whServerContext* server, whClientContext* client)
     int rc = 0;
     TestMemory testMem = {0};
 
-    const whDmaAddrAllowList allowList = {
+    const whServerDmaAddrAllowList allowList = {
         .readList =
             {
                 {&testMem.srvBufAllow, sizeof(testMem.srvBufAllow)},
@@ -243,13 +243,13 @@ static int _testDma(whServerContext* server, whClientContext* client)
         /* 64-bit host system */
         WH_TEST_RETURN_ON_FAIL(whServerDma_CopyFromClient64(
             server, testMem.srvBufAllow, (uint64_t)((uintptr_t)testMem.cliBuf),
-            sizeof(testMem.cliBuf), (whDmaFlags){0}));
+            sizeof(testMem.cliBuf), (whServerDmaFlags){0}));
     }
     else if (sizeof(void*) == sizeof(uint32_t)) {
         /* 32-bit host system */
         WH_TEST_RETURN_ON_FAIL(whServerDma_CopyFromClient32(
             server, testMem.srvBufAllow, (uint32_t)((uintptr_t)testMem.cliBuf),
-            sizeof(testMem.cliBuf), (whDmaFlags){0}));
+            sizeof(testMem.cliBuf), (whServerDmaFlags){0}));
     }
 
     /* Ensure data was copied */
@@ -273,13 +273,13 @@ static int _testDma(whServerContext* server, whClientContext* client)
         /* 64-bit host system */
         WH_TEST_RETURN_ON_FAIL(whServerDma_CopyToClient64(
             server, (uint64_t)((uintptr_t)testMem.cliBuf), testMem.srvBufAllow,
-            sizeof(testMem.srvBufAllow), (whDmaFlags){0}));
+            sizeof(testMem.srvBufAllow), (whServerDmaFlags){0}));
     }
     else if (sizeof(void*) == sizeof(uint32_t)) {
         /* 32-bit host system */
         WH_TEST_RETURN_ON_FAIL(whServerDma_CopyToClient32(
             server, (uint32_t)((uintptr_t)testMem.cliBuf), testMem.srvBufAllow,
-            sizeof(testMem.srvBufAllow), (whDmaFlags){0}));
+            sizeof(testMem.srvBufAllow), (whServerDmaFlags){0}));
     }
 
     /* Ensure data was copied */
@@ -293,12 +293,12 @@ static int _testDma(whServerContext* server, whClientContext* client)
                               whServerDma_CopyFromClient64(
                                   server, testMem.srvBufDeny,
                                   (uint64_t)((uintptr_t)testMem.cliBuf),
-                                  sizeof(testMem.cliBuf), (whDmaFlags){0}));
+                                  sizeof(testMem.cliBuf), (whServerDmaFlags){0}));
         WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS ==
                               whServerDma_CopyToClient64(
                                   server, (uint64_t)((uintptr_t)testMem.cliBuf),
                                   testMem.srvBufDeny,
-                                  sizeof(testMem.srvBufDeny), (whDmaFlags){0}));
+                                  sizeof(testMem.srvBufDeny), (whServerDmaFlags){0}));
     }
     else if (sizeof(void*) == sizeof(uint32_t)) {
         /* 32-bit host system */
@@ -306,12 +306,12 @@ static int _testDma(whServerContext* server, whClientContext* client)
                               whServerDma_CopyFromClient32(
                                   server, testMem.srvBufDeny,
                                   (uint32_t)((uintptr_t)testMem.cliBuf),
-                                  sizeof(testMem.cliBuf), (whDmaFlags){0}));
+                                  sizeof(testMem.cliBuf), (whServerDmaFlags){0}));
         WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS ==
                               whServerDma_CopyToClient32(
                                   server, (uint32_t)((uintptr_t)testMem.cliBuf),
                                   testMem.srvBufDeny,
-                                  sizeof(testMem.srvBufDeny), (whDmaFlags){0}));
+                                  sizeof(testMem.srvBufDeny), (whServerDmaFlags){0}));
     }
 
     return rc;

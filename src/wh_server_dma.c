@@ -7,7 +7,7 @@
  * building a binary tree, etc.) */
 
 
-static int _checkAddrAgainstAllowList(const whDmaAddrList allowList, void* addr,
+static int _checkAddrAgainstAllowList(const whServerDmaAddrList allowList, void* addr,
                                       size_t size)
 {
     uintptr_t startAddr = (uintptr_t)addr;
@@ -26,8 +26,8 @@ static int _checkAddrAgainstAllowList(const whDmaAddrList allowList, void* addr,
     return WH_ERROR_ACCESS;
 }
 
-static int _checkMemOperAgainstAllowList(const whDmaAddrAllowList* allowList,
-                                         whDmaOper oper, void* addr,
+static int _checkMemOperAgainstAllowList(const whServerDmaAddrAllowList* allowList,
+                                         whServerDmaOper oper, void* addr,
                                          size_t size)
 {
     int rc = WH_ERROR_OK;
@@ -48,7 +48,7 @@ static int _checkMemOperAgainstAllowList(const whDmaAddrAllowList* allowList,
     return rc;
 }
 
-int wh_Server_DmaRegisterCb32(whServerContext* server, whDmaClientMem32Cb cb)
+int wh_Server_DmaRegisterCb32(whServerContext* server, whServerDmaClientMem32Cb cb)
 {
     if (NULL == server || NULL == cb) {
         return WH_ERROR_BADARGS;
@@ -59,7 +59,7 @@ int wh_Server_DmaRegisterCb32(whServerContext* server, whDmaClientMem32Cb cb)
     return WH_ERROR_OK;
 }
 
-int wh_Server_DmaRegisterCb64(whServerContext* server, whDmaClientMem64Cb cb)
+int wh_Server_DmaRegisterCb64(whServerContext* server, whServerDmaClientMem64Cb cb)
 {
     if (NULL == server || NULL == cb) {
         return WH_ERROR_BADARGS;
@@ -71,7 +71,7 @@ int wh_Server_DmaRegisterCb64(whServerContext* server, whDmaClientMem64Cb cb)
 }
 
 int wh_Server_DmaRegisterAllowList(whServerContext*          server,
-                                   const whDmaAddrAllowList* allowlist)
+                                   const whServerDmaAddrAllowList* allowlist)
 {
     if (NULL == server || NULL == allowlist) {
         return WH_ERROR_BADARGS;
@@ -86,7 +86,7 @@ int wh_Server_DmaRegisterAllowList(whServerContext*          server,
 int wh_Server_DmaProcessClientAddress32(whServerContext* server,
                                         uint32_t         clientAddr,
                                         void** xformedCliAddr, uint32_t len,
-                                        whDmaOper oper, whDmaFlags flags)
+                                        whServerDmaOper oper, whServerDmaFlags flags)
 {
     int rc = WH_ERROR_OK;
 
@@ -117,7 +117,7 @@ int wh_Server_DmaProcessClientAddress32(whServerContext* server,
 int wh_Server_DmaProcessClientAddress64(whServerContext* server,
                                         uint64_t         clientAddr,
                                         void** xformedCliAddr, uint64_t len,
-                                        whDmaOper oper, whDmaFlags flags)
+                                        whServerDmaOper oper, whServerDmaFlags flags)
 {
     int rc = WH_ERROR_OK;
 
@@ -146,7 +146,7 @@ int wh_Server_DmaProcessClientAddress64(whServerContext* server,
 
 int whServerDma_CopyFromClient32(struct whServerContext_t* server,
                                  void* serverPtr, uint32_t clientAddr,
-                                 size_t len, whDmaFlags flags)
+                                 size_t len, whServerDmaFlags flags)
 {
     int rc = WH_ERROR_OK;
 
@@ -187,7 +187,7 @@ int whServerDma_CopyFromClient32(struct whServerContext_t* server,
 
 int whServerDma_CopyFromClient64(struct whServerContext_t* server,
                                  void* serverPtr, uint64_t clientAddr,
-                                 size_t len, whDmaFlags flags)
+                                 size_t len, whServerDmaFlags flags)
 {
     int rc = WH_ERROR_OK;
 
@@ -227,7 +227,7 @@ int whServerDma_CopyFromClient64(struct whServerContext_t* server,
 
 int whServerDma_CopyToClient32(struct whServerContext_t* server,
                                uint32_t clientAddr, void* serverPtr, size_t len,
-                               whDmaFlags flags)
+                               whServerDmaFlags flags)
 {
     int rc = WH_ERROR_OK;
 
@@ -268,7 +268,7 @@ int whServerDma_CopyToClient32(struct whServerContext_t* server,
 
 int whServerDma_CopyToClient64(struct whServerContext_t* server,
                                uint64_t clientAddr, void* serverPtr, size_t len,
-                               whDmaFlags flags)
+                               whServerDmaFlags flags)
 {
     int rc = WH_ERROR_OK;
 
