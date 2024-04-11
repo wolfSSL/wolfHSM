@@ -31,7 +31,7 @@
 #define RESP_SIZE 64
 #define REPEAT_COUNT 10
 #define ONE_MS 1000
-
+#define FLASH_RAM_SIZE (1024 * 1024) /* 1MB */
 
 /* Dummy callback that loopback-copies client data */
 static int _customServerCb(whServerContext*                 server,
@@ -225,8 +225,8 @@ int whTest_ClientServerSequential(void)
     WH_TEST_RETURN_ON_FAIL(wh_Server_Init(server, s_conf));
 
     int      counter                  = 1;
-    char     recv_buffer[WH_COMM_MTU] = {0};
-    char     send_buffer[WH_COMM_MTU] = {0};
+    char     recv_buffer[WH_COMM_DATA_LEN] = {0};
+    char     send_buffer[WH_COMM_DATA_LEN] = {0};
     uint16_t send_len                 = 0;
     uint16_t recv_len                 = 0;
 
@@ -245,9 +245,9 @@ int whTest_ClientServerSequential(void)
     for (counter = 0; counter < REPEAT_COUNT; counter++) {
 
         /* Prepare echo test */
-        snprintf(send_buffer, sizeof(send_buffer), "Request:%u", counter);
-        send_len = strlen(send_buffer);
-        snprintf(recv_buffer, sizeof(send_buffer), "NOTHING RECEIVED");
+        send_len =
+            snprintf(send_buffer, sizeof(send_buffer), "Request:%u", counter);
+        snprintf(recv_buffer, sizeof(recv_buffer), "NOTHING RECEIVED");
         recv_len = 0;
 
         WH_TEST_RETURN_ON_FAIL(
@@ -470,7 +470,6 @@ int whTest_ClientServerSequential(void)
         whNvmFlags  gflags                        = 0;
         char        glabel[WOLFHSM_NVM_LABEL_LEN] = {0};
         whNvmSize   glen                          = 0;
-        whNvmSize   rlen                          = 0;
 
         whNvmId lastAvailObjects = 0;
 
@@ -536,7 +535,7 @@ int whTest_ClientServerSequential(void)
 #if defined(WH_CFG_TEST_VERBOSE)
         printf("Client NvmReadDmaResponse:%d, server_rc:%d id:%u, len:%u "
                "data:%s\n",
-               ret, server_rc, gid, rlen, recv_buffer);
+               ret, server_rc, gid, glen, recv_buffer);
 #endif
 
         /* Ensure data and size of response object matches that of the written
@@ -624,267 +623,483 @@ int whTest_ClientServerSequential(void)
     return ret;
 }
 
-#if 0
-#if defined WH_CFG_TEST_POSIX
-
-
-static void* _whCommClientTask(void* cf)
+int whTest_ClientCfg(whClientConfig* clientCfg)
 {
-    whCommClientConfig* config = (whCommClientConfig*)cf;
-    int                 ret    = 0;
-    whCommClient        client[1];
-    int                 counter = 1;
+    int ret = 0;
+    whClientContext client[1] = {0};
 
-    uint8_t  tx_req[REQ_SIZE] = {0};
-    uint16_t tx_req_len       = 0;
-    uint16_t tx_req_flags     = WH_COMM_MAGIC_NATIVE;
-    uint16_t tx_req_type      = 0;
-    uint16_t tx_req_seq       = 0;
+    WH_TEST_RETURN_ON_FAIL(wh_Client_Init(client, clientCfg));
 
-    uint8_t  rx_resp[RESP_SIZE] = {0};
-    uint16_t rx_resp_len        = 0;
-    uint16_t rx_resp_flags      = 0;
-    uint16_t rx_resp_type       = 0;
-    uint16_t rx_resp_seq        = 0;
+    int counter = 1;
+    char recv_buffer[WH_COMM_DATA_LEN] = {0};
+    char send_buffer[WH_COMM_DATA_LEN] = {0};
+    uint16_t send_len = 0;
+    uint16_t recv_len = 0;
 
-    if (config == NULL) {
-        return NULL;
-    }
-
-    ret = wh_CommClient_Init(client, config);
-    WH_TEST_ASSERT_MSG(0 == ret, "Client Init: ret=%d", ret);
+    int32_t server_rc = 0;
+    uint32_t client_id = 0;
+    uint32_t server_id = 0;
+    uint32_t avail_size = 0;
+    uint32_t reclaim_size = 0;
+    whNvmId avail_objects = 0;
+    whNvmId reclaim_objects = 0;
 
     for (counter = 0; counter < REPEAT_COUNT; counter++) {
-        sprintf((char*)tx_req, "Request:%u", counter);
-        tx_req_len  = strlen((char*)tx_req);
-        tx_req_type = counter * 2;
-        do {
-            ret = wh_CommClient_SendRequest(client, tx_req_flags, tx_req_type,
-                                            &tx_req_seq, tx_req_len, tx_req);
-            WH_TEST_ASSERT_MSG((ret == WH_ERROR_NOTREADY) || (0 == ret),
-                               "Client SendRequest: ret=%d", ret);
-#if defined(WH_CFG_TEST_VERBOSE)
-            printf("Client SendRequest:%d, flags %x, type:%x, seq:%d, len:%d, "
-                   "%s\n",
-                   ret, tx_req_flags, tx_req_type, tx_req_seq, tx_req_len,
-                   tx_req);
-#endif
-        } while ((ret == WH_ERROR_NOTREADY) && (usleep(ONE_MS) == 0));
 
-        if (ret != 0) {
-            printf("Client had failure. Exiting\n");
-            break;
+        /* Prepare echo test */
+        send_len =
+            snprintf(send_buffer, sizeof(send_buffer), "Request:%u", counter);
+        snprintf(recv_buffer, sizeof(recv_buffer), "NOTHING RECEIVED");
+        recv_len = 0;
+
+        WH_TEST_RETURN_ON_FAIL(ret = wh_Client_Echo(client, send_len, send_buffer, &recv_len, recv_buffer));
+
+#if defined(WH_CFG_TEST_VERBOSE)
+        printf("Client Echo:%d, len:%d, %.*s, expected:%.*s\n",
+            ret, recv_len, recv_len, recv_buffer, send_len, send_buffer);
+#endif
+        WH_TEST_ASSERT_RETURN( recv_len == send_len);
+        WH_TEST_ASSERT_RETURN( strncmp(recv_buffer, send_buffer, recv_len) == 0);
+    }
+
+    /* Perform NVM tests */
+
+    WH_TEST_RETURN_ON_FAIL(ret = wh_Client_NvmInit(client, &server_rc, &client_id, &server_id));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+
+    WH_TEST_RETURN_ON_FAIL(ret = wh_Client_NvmGetAvailable(
+        client, &server_rc, &avail_size, &avail_objects, &reclaim_size,
+        &reclaim_objects));
+
+#if defined(WH_CFG_TEST_VERBOSE)
+    printf("Client NvmGetAvailable:%d, server_rc:%d avail_size:%d "
+           "avail_objects:%d, reclaim_size:%d reclaim_objects:%d\n",
+           ret, server_rc, avail_size, avail_objects, reclaim_size,
+           reclaim_objects);
+#endif
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(avail_objects == NF_OBJECT_COUNT);
+
+
+    for (counter = 0; counter < 5; counter++) {
+        whNvmId     id                           = counter + 20;
+        whNvmAccess access                       = WOLFHSM_NVM_ACCESS_ANY;
+        whNvmFlags  flags                        = WOLFHSM_NVM_FLAGS_ANY;
+        whNvmSize   label_len                    = 0;
+        char        label[WOLFHSM_NVM_LABEL_LEN] = {0};
+        whNvmSize   len                          = 0;
+
+        whNvmId     gid                           = 0;
+        whNvmAccess gaccess                       = 0;
+        whNvmFlags  gflags                        = 0;
+        char        glabel[WOLFHSM_NVM_LABEL_LEN] = {0};
+        whNvmSize   glen                          = 0;
+        whNvmSize   rlen                          = 0;
+
+        whNvmId lastAvailObjects = 0;
+
+        label_len = snprintf(label, sizeof(label), "Label:%d", id);
+        len = snprintf(send_buffer, sizeof(send_buffer), "Data:%d Counter:%d",
+                       id, counter);
+
+        lastAvailObjects = avail_objects;
+
+        WH_TEST_RETURN_ON_FAIL(ret = wh_Client_NvmAddObject(
+            client, id, access, flags, label_len, (uint8_t*)label, len,
+            (uint8_t*)send_buffer, &server_rc));
+
+#if defined(WH_CFG_TEST_VERBOSE)
+        printf("Client NvmAddObject:%d, server_rc:%d\n", ret,
+               server_rc);
+#endif
+        WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+
+        WH_TEST_RETURN_ON_FAIL(ret = wh_Client_NvmGetAvailable(
+            client, &server_rc, &avail_size, &avail_objects, &reclaim_size,
+            &reclaim_objects));
+
+#if defined(WH_CFG_TEST_VERBOSE)
+        printf("Client NvmGetAvailable:%d, server_rc:%d, avail_size:%d "
+               "avail_objects:%d, reclaim_size:%d reclaim_objects:%d\n",
+               ret, server_rc, avail_size, avail_objects, reclaim_size,
+               reclaim_objects);
+#endif
+
+        /* Check that available objects decreased by one */
+        WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+        WH_TEST_ASSERT_RETURN(lastAvailObjects - 1 == avail_objects);
+
+        WH_TEST_RETURN_ON_FAIL(
+            ret = wh_Client_NvmGetMetadata(client, id, &server_rc, &gid,
+                                           &gaccess, &gflags, &glen,
+                                           sizeof(glabel), (uint8_t*)glabel));
+
+#if defined(WH_CFG_TEST_VERBOSE)
+        printf("Client NvmGetMetadata:%d, id:%u, access:0x%x, "
+               "flags:0x%x, len:%u label:%s\n",
+               ret, gid, gaccess, gflags, glen, glabel);
+#endif
+
+        /* Ensure metadata matches that of the object we just wrote */
+        WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+        WH_TEST_ASSERT_RETURN(gid == id);
+
+        memset(recv_buffer, 0, sizeof(recv_buffer));
+        WH_TEST_RETURN_ON_FAIL(ret = wh_Client_NvmRead(client, id, 0, glen,
+                                                       &server_rc, &rlen,
+                                                       (uint8_t*)recv_buffer));
+
+#if defined(WH_CFG_TEST_VERBOSE)
+        printf(
+            "Client NvmRead:%d, server_rc:%d id:%u, len:%u data:%s\n",
+            ret, server_rc, gid, rlen, recv_buffer);
+#endif
+
+        /* Ensure data and size of response object matches that of the written
+         * object */
+        WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+        WH_TEST_ASSERT_RETURN(rlen == len);
+        WH_TEST_ASSERT_RETURN(0 == memcmp(send_buffer, recv_buffer, len));
+    }
+
+    whNvmAccess list_access = WOLFHSM_NVM_ACCESS_ANY;
+    whNvmFlags  list_flags  = WOLFHSM_NVM_FLAGS_ANY;
+    whNvmId     list_id     = 0;
+    whNvmId     list_count  = 0;
+    do {
+        WH_TEST_RETURN_ON_FAIL(
+            ret = wh_Client_NvmList(client, list_access, list_flags, list_id,
+                              &server_rc, &list_count, &list_id));
+#if defined(WH_CFG_TEST_VERBOSE)
+        printf("Client NvmList:%d, server_rc:%d count:%u id:%u\n", ret,
+               server_rc, list_count, list_id);
+#endif
+
+        if (list_count > 0) {
+            /* ensure list_id contains ID of object written, and list_count
+             * shows remaining items in list */
+            WH_TEST_ASSERT_RETURN(list_id == 20 + (5 - list_count));
+
+            WH_TEST_RETURN_ON_FAIL(
+                ret = wh_Client_NvmDestroyObjects(client, 1, &list_id, 0, NULL,
+                                                  &server_rc));
+
+#if defined(WH_CFG_TEST_VERBOSE)
+            printf("Client NvmDestroyObjects:%d, server_rc:%d for "
+                   "id:%u with count:%u\n",
+                   ret, server_rc, list_id, list_count);
+#endif
+            WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+
+            /* Ensure object was destroyed and no longer exists */
+            WH_TEST_RETURN_ON_FAIL(ret = wh_Client_NvmGetMetadata(client, list_id, &server_rc, NULL, NULL, NULL, NULL, 0, NULL));
+            WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND == server_rc);
+
+#if defined(WH_CFG_TEST_VERBOSE)
+            printf("Client NvmGetMetadata:%d, server_rc:%d count:%u id:%u\n",
+                   ret, server_rc, list_count, list_id);
+#endif
+
+            list_id = 0;
         }
+    } while (list_count > 0);
 
-        do {
-            ret = wh_CommClient_RecvResponse(client, &rx_resp_flags,
-                                             &rx_resp_type, &rx_resp_seq,
-                                             &rx_resp_len, rx_resp);
-            WH_TEST_ASSERT_MSG((ret == WH_ERROR_NOTREADY) || (0 == ret),
-                               "Client RecvResponse: ret=%d", ret);
+
+    WH_TEST_RETURN_ON_FAIL(wh_Client_NvmGetAvailable(
+        client, &server_rc, &avail_size, &avail_objects, &reclaim_size,
+        &reclaim_objects));
+    WH_TEST_ASSERT_RETURN(avail_objects == WOLFHSM_NUM_NVMOBJECTS);
+
+    for (counter = 0; counter < 5; counter++) {
+        whNvmMetadata meta = {
+            .id     = counter + 40,
+            .access = WOLFHSM_NVM_ACCESS_ANY,
+            .flags  = WOLFHSM_NVM_FLAGS_ANY,
+            .len    = 0,
+            .label  = {0},
+        };
+        whNvmSize len = 0;
+
+        whNvmId     gid                           = 0;
+        whNvmAccess gaccess                       = 0;
+        whNvmFlags  gflags                        = 0;
+        char        glabel[WOLFHSM_NVM_LABEL_LEN] = {0};
+        whNvmSize   glen                          = 0;
+
+        whNvmId lastAvailObjects = 0;
+
+        snprintf((char*)(meta.label), sizeof(meta.label), "Label:%d", meta.id);
+        len = snprintf(send_buffer, sizeof(send_buffer), "Data:%d Counter:%d",
+                       meta.id, counter);
+
+        lastAvailObjects = avail_objects;
+
+        WH_TEST_RETURN_ON_FAIL(ret = wh_Client_NvmAddObjectDma(client, &meta, len, (uint8_t*)send_buffer, &server_rc));
+
 #if defined(WH_CFG_TEST_VERBOSE)
-            printf("Client RecvResponse:%d, flags %x, type:%x, seq:%d, len:%d, "
-                   "%s\n",
-                   ret, rx_resp_flags, rx_resp_type, rx_resp_seq, rx_resp_len,
-                   rx_resp);
+        printf("Client NvmAddObjectDma:%d, server_rc:%d, meta.len:%u\n",
+               ret, server_rc, meta.len);
 #endif
-        } while ((ret == WH_ERROR_NOTREADY) && (usleep(ONE_MS) == 0));
+        WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
 
-        if (ret != 0) {
-            printf("Client had failure. Exiting\n");
-            break;
+        WH_TEST_RETURN_ON_FAIL(ret = wh_Client_NvmGetAvailable(client, &server_rc, &avail_size, &avail_objects, &reclaim_size, &reclaim_objects));
+
+#if defined(WH_CFG_TEST_VERBOSE)
+        printf("Client NvmGetAvailable:%d, server_rc:%d, avail_size:%d "
+               "avail_objects:%d, reclaim_size:%d reclaim_objects:%d\n",
+               ret, server_rc, avail_size, avail_objects, reclaim_size,
+               reclaim_objects);
+#endif
+        WH_TEST_ASSERT_RETURN(lastAvailObjects - 1 == avail_objects);
+
+        WH_TEST_RETURN_ON_FAIL(ret = wh_Client_NvmGetMetadata(client, meta.id, &server_rc, &gid, &gaccess, &gflags, &glen, sizeof(glabel), (uint8_t*)glabel));
+
+#if defined(WH_CFG_TEST_VERBOSE)
+        printf("Client NvmGetMetadata:%d, id:%u, access:0x%x, "
+               "flags:0x%x, len:%u label:%s\n",
+               ret, gid, gaccess, gflags, glen, glabel);
+#endif
+
+        /* Ensure metadata matches that of the object we just wrote */
+        WH_TEST_ASSERT_RETURN(gid == meta.id);
+
+
+        memset(recv_buffer, 0, sizeof(recv_buffer));
+        WH_TEST_RETURN_ON_FAIL(
+            ret = wh_Client_NvmReadDma(client, meta.id, 0, glen,
+                                       (uint8_t*)recv_buffer, &server_rc));
+#if defined(WH_CFG_TEST_VERBOSE)
+        printf("Client NvmReadDma:%d, server_rc:%d id:%u, len:%u "
+               "data:%s\n",
+               ret, server_rc, gid, glen, recv_buffer);
+#endif
+
+        /* Ensure data and size of response object matches that of the written
+         * object */
+        WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+        WH_TEST_ASSERT_RETURN(glen == len);
+        WH_TEST_ASSERT_RETURN(0 == memcmp(send_buffer, recv_buffer, len));
+    }
+
+    do {
+        WH_TEST_RETURN_ON_FAIL(
+            ret = wh_Client_NvmList(client, list_access, list_flags, list_id,
+                                    &server_rc, &list_count, &list_id));
+#if defined(WH_CFG_TEST_VERBOSE)
+        printf("Client NvmList:%d, server_rc:%d count:%u id:%u\n", ret,
+               server_rc, list_count, list_id);
+#endif
+        WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+
+        if (list_count > 0) {
+            /* ensure list_id contains ID of object written, and list_count
+             * shows remaining items in list */
+            WH_TEST_ASSERT_RETURN(list_id == 40 + (5 - list_count));
+
+            WH_TEST_RETURN_ON_FAIL(
+                ret = wh_Client_NvmDestroyObjects(client, 1, &list_id, 0, NULL,
+                                                  &server_rc));
+
+            WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+
+#if defined(WH_CFG_TEST_VERBOSE)
+            printf("Client NvmDestroyObjects:%d, server_rc:%d for "
+                   "id:%u with count:%u\n",
+                   ret, server_rc, list_id, list_count);
+#endif
+
+            /* Ensure object was destroyed and no longer exists */
+            WH_TEST_RETURN_ON_FAIL(ret = wh_Client_NvmGetMetadata(client, list_id, &server_rc, NULL, NULL, NULL, NULL, 0, NULL));
+            WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND == server_rc);
+
+            list_id = 0;
+        }
+    } while (list_count > 0);
+
+
+    WH_TEST_RETURN_ON_FAIL(ret = wh_Client_NvmCleanup(client, &server_rc));
+#if defined(WH_CFG_TEST_VERBOSE)
+    printf("Client NvmCleanup:%d, server_rc:%d\n", ret, server_rc);
+#endif
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+
+    WH_TEST_RETURN_ON_FAIL(ret = wh_Client_NvmGetAvailable(
+        client, &server_rc, &avail_size, &avail_objects, &reclaim_size,
+        &reclaim_objects));
+#if defined(WH_CFG_TEST_VERBOSE)
+    printf("Client NvmGetAvailable:%d, server_rc:%d, avail_size:%d "
+           "avail_objects:%d, reclaim_size:%d reclaim_objects:%d\n",
+           ret, server_rc, avail_size, avail_objects, reclaim_size,
+           reclaim_objects);
+#endif
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(avail_objects == NF_OBJECT_COUNT);
+
+    WH_TEST_RETURN_ON_FAIL(wh_Client_Cleanup(client));
+
+    return ret;
+}
+
+
+int whTest_ServerCfgLoop(whServerConfig* serverCfg)
+{
+    int ret = 0;
+
+    whServerContext server[1] = {0};
+
+    WH_TEST_RETURN_ON_FAIL(wh_Server_Init(server, serverCfg));
+
+    /* Spin and process client requests, exiting on error */
+    while (1) {
+        ret = wh_Server_HandleRequestMessage(server);
+        if (ret != 0 && ret != WH_ERROR_NOTREADY) {
+            printf("[server] whServer_HandleRequestMessage ret=%d\n", ret);
+            return ret;
         }
     }
 
-    ret = wh_CommClient_Cleanup(client);
-    WH_TEST_ASSERT_MSG(0 == ret, "Client Cleanup: ret=%d", ret);
+
+    return 0;
+}
+
+
+#if defined(WH_CFG_TEST_POSIX)
+static void* _whClientTask(void *cf)
+{
+    (void)whTest_ClientCfg(cf);
     return NULL;
 }
 
-static void* _whCommServerTask(void* cf)
+static void* _whServerTask(void* cf)
 {
-    whCommServerConfig* config = (whCommServerConfig*)cf;
-    int                 ret    = 0;
-    whCommServer        server[1];
-    int                 counter = 1;
-
-    ret = wh_CommServer_Init(server, config);
-    WH_TEST_ASSERT_MSG(0 == ret, "Server Init: ret=%d", ret);
-
-    uint8_t  rx_req[REQ_SIZE] = {0};
-    uint16_t rx_req_len       = 0;
-    uint16_t rx_req_flags     = 0;
-    uint16_t rx_req_type      = 0;
-    uint16_t rx_req_seq       = 0;
-
-    uint8_t  tx_resp[RESP_SIZE] = {0};
-    uint16_t tx_resp_len        = 0;
-
-    for (counter = 0; counter < REPEAT_COUNT; counter++) {
-        do {
-            ret = wh_CommServer_RecvRequest(server, &rx_req_flags, &rx_req_type,
-                                            &rx_req_seq, &rx_req_len, rx_req);
-
-            WH_TEST_ASSERT_MSG((ret == WH_ERROR_NOTREADY) || (0 == ret),
-                               "Server RecvRequest: ret=%d", ret);
-#if defined(WH_CONFIG_TEST_VERBOSE)
-            printf("Server RecvRequest:%d, flags %x, type:%x, seq:%d, len:%d, "
-                   "%s\n",
-                   ret, rx_req_flags, rx_req_type, rx_req_seq, rx_req_len,
-                   rx_req);
-#endif
-        } while ((ret == WH_ERROR_NOTREADY) && (usleep(ONE_MS) == 0));
-
-        if (ret != 0) {
-            printf("Server had failure. Exiting\n");
-            break;
-        }
-
-        do {
-            sprintf((char*)tx_resp, "Response:%s", rx_req);
-            tx_resp_len = strlen((char*)tx_resp);
-            ret = wh_CommServer_SendResponse(server, rx_req_flags, rx_req_type,
-                                             rx_req_seq, tx_resp_len, tx_resp);
-
-            WH_TEST_ASSERT_MSG((ret == WH_ERROR_NOTREADY) || (0 == ret),
-                               "Server SendResponse: ret=%d", ret);
-#if defined(WH_CONFIG_TEST_VERBOSE)
-            printf("Server SendResponse:%d, flags %x, type:%x, seq:%d, len:%d, "
-                   "%s\n",
-                   ret, rx_req_flags, rx_req_type, rx_req_seq, tx_resp_len,
-                   tx_resp);
-#endif
-        } while ((ret == WH_ERROR_NOTREADY) && (usleep(ONE_MS) == 0));
-
-        if (ret != 0) {
-            printf("Server had failure. Exiting\n");
-            break;
-        }
-    }
-
-    ret = wh_CommServer_Cleanup(server);
-    WH_TEST_ASSERT_MSG(0 == ret, "Server Cleanup: ret=%d", ret);
-
+    (void)whTest_ServerCfgLoop(cf);
     return NULL;
 }
 
-static void _whCommClientServerThreadTest(whCommClientConfig* c_conf,
-                                          whCommServerConfig* s_conf)
+
+static void _whClientServerThreadTest(whClientConfig* c_conf,
+                                whServerConfig* s_conf)
 {
-    pthread_t cthread;
-    pthread_t sthread;
+    pthread_t cthread = {0};
+    pthread_t sthread = {0};
 
     void* retval;
-    int   rc = 0;
+    int rc = 0;
 
-    rc = pthread_create(&sthread, NULL, _whCommServerTask, s_conf);
-#if defined(WH_CFG_TEST_VERBOSE)
-    printf("Server thread create:%d\n", rc);
-#endif
-
+    rc = pthread_create(&sthread, NULL, _whServerTask, s_conf);
     if (rc == 0) {
-        rc = pthread_create(&cthread, NULL, _whCommClientTask, c_conf);
-#if defined(WH_CFG_TEST_VERBOSE)
-        printf("Client thread create:%d\n", rc);
-#endif
+        rc = pthread_create(&cthread, NULL, _whClientTask, c_conf);
         if (rc == 0) {
             /* All good. Block on joining */
 
             pthread_join(cthread, &retval);
-            pthread_join(sthread, &retval);
-        }
-        else {
+            pthread_cancel(sthread);
+        } else {
             /* Cancel the server thread */
             pthread_cancel(sthread);
-            pthread_join(sthread, &retval);
+
         }
     }
 }
 
-void wh_CommClientServer_MemThreadTest(void)
+static int wh_ClientServer_MemThreadTest(void)
 {
-    /* Transport memory configuration */
-    uint8_t              req[BUFFER_SIZE];
-    uint8_t              resp[BUFFER_SIZE];
+    uint8_t req[BUFFER_SIZE] = {0};
+    uint8_t resp[BUFFER_SIZE] = {0};
+
     whTransportMemConfig tmcf[1] = {{
         .req       = (whTransportMemCsr*)req,
         .req_size  = sizeof(req),
         .resp      = (whTransportMemCsr*)resp,
         .resp_size = sizeof(resp),
     }};
-
     /* Client configuration/contexts */
-    whTransportClientCb         tmccb[1]  = {WH_TRANSPORT_MEM_CLIENT_CB};
-    whTransportMemClientContext csc[1]    = {};
-    whCommClientConfig          c_conf[1] = {{
-                 .transport_cb      = tmccb,
-                 .transport_context = (void*)csc,
+    whTransportClientCb         tccb[1]   = {WH_TRANSPORT_MEM_CLIENT_CB};
+    whTransportMemClientContext tmcc[1]   = {0};
+    whCommClientConfig          cc_conf[1] = {{
+                 .transport_cb      = tccb,
+                 .transport_context = (void*)tmcc,
                  .transport_config  = (void*)tmcf,
                  .client_id         = 1234,
     }};
-
+    whClientConfig c_conf[1] = {{
+       .comm = cc_conf,
+    }};
     /* Server configuration/contexts */
-    whTransportServerCb         tmscb[1]  = {WH_TRANSPORT_MEM_SERVER_CB};
-    whTransportMemServerContext css[1]    = {};
-    whCommServerConfig          s_conf[1] = {{
-                 .transport_cb      = tmscb,
-                 .transport_context = (void*)css,
+    whTransportServerCb         tscb[1]   = {WH_TRANSPORT_MEM_SERVER_CB};
+    whTransportMemServerContext tmsc[1]   = {0};
+    whCommServerConfig          cs_conf[1] = {{
+                 .transport_cb      = tscb,
+                 .transport_context = (void*)tmsc,
                  .transport_config  = (void*)tmcf,
                  .server_id         = 5678,
     }};
 
-    _whCommClientServerThreadTest(c_conf, s_conf);
+    /* RamSim Flash state and configuration */
+    whFlashRamsimCtx fc[1] = {0};
+    whFlashRamsimCfg fc_conf[1] = {{
+        .size       = FLASH_RAM_SIZE,
+        .sectorSize = FLASH_RAM_SIZE/2,
+        .pageSize   = 8,
+        .erasedByte = (uint8_t)0,
+    }};
+    const whFlashCb  fcb[1]          = {WH_FLASH_RAMSIM_CB};
+
+    /* NVM Flash Configuration using RamSim HAL Flash */
+    whNvmFlashConfig nf_conf[1] = {{
+        .cb      = fcb,
+        .context = fc,
+        .config  = fc_conf,
+    }};
+    whNvmFlashContext nfc[1] = {0};
+    whNvmCb nfcb[1] = {WH_NVM_FLASH_CB};
+
+    whNvmConfig n_conf[1] = {{
+            .cb = nfcb,
+            .context = nfc,
+            .config = nf_conf,
+    }};
+    whNvmContext nvm[1] = {{0}};
+
+    /* Crypto context */
+    crypto_context crypto[1] = {{
+            .devId = INVALID_DEVID,
+    }};
+
+    whServerConfig                  s_conf[1] = {{
+       .comm_config = cs_conf,
+       .nvm = nvm,
+       .crypto = crypto,
+    }};
+
+    WH_TEST_RETURN_ON_FAIL(wh_Nvm_Init(nvm, n_conf));
+
+    WH_TEST_RETURN_ON_FAIL(wolfCrypt_Init());
+    WH_TEST_RETURN_ON_FAIL(wc_InitRng_ex(crypto->rng, NULL, crypto->devId));
+
+    _whClientServerThreadTest(c_conf, s_conf);
+
+    wh_Nvm_Cleanup(nvm);
+    wc_FreeRng(crypto->rng);
+    wolfCrypt_Cleanup();
+
+    return WH_ERROR_OK;
 }
-
-void wh_CommClientServer_TcpThreadTest(void)
-{
-
-    posixTransportTcpConfig mytcpconfig[1] = {{
-        .server_ip_string = "127.0.0.1",
-        .server_port      = 23456,
-    }};
+#endif /* WH_CFG_TEST_POSIX */
 
 
-    /* Client configuration/contexts */
-    whTransportClientCb            pttccb[1] = {PTT_CLIENT_CB};
-    posixTransportTcpClientContext tcc[1]    = {};
-    whCommClientConfig             c_conf[1] = {{
-                    .transport_cb      = pttccb,
-                    .transport_context = (void*)tcc,
-                    .transport_config  = (void*)mytcpconfig,
-                    .client_id         = 1234,
-    }};
-
-    /* Server configuration/contexts */
-    whTransportServerCb pttscb[1] = {PTT_SERVER_CB};
-
-    posixTransportTcpServerContext tss[1]    = {};
-    whCommServerConfig             s_conf[1] = {{
-                    .transport_cb      = pttscb,
-                    .transport_context = (void*)tss,
-                    .transport_config  = (void*)mytcpconfig,
-                    .server_id         = 5678,
-    }};
-
-    _whCommClientServerThreadTest(c_conf, s_conf);
-}
-#endif
-
-#endif /* defined(WH_CFG_TEST_POSIX) */
 
 int whTest_ClientServer(void)
 {
     printf("Testing client/server sequential: mem...\n");
     WH_TEST_ASSERT(0 == whTest_ClientServerSequential());
 
-#if 0
 #if defined(WH_CFG_TEST_POSIX)
-    printf("Testing comms: (pthread) mem...\n");
-    wh_CommClientServer_MemThreadTest();
+    printf("Testing client/server: (pthread) mem...\n");
+    WH_TEST_ASSERT(0 == wh_ClientServer_MemThreadTest());
 
-    printf("Testing comms: (pthread) tcp...\n");
-    wh_CommClientServer_TcpThreadTest();
+
 #endif /* defined(WH_CFG_TEST_POSIX) */
-#endif
+
     return 0;
 }
