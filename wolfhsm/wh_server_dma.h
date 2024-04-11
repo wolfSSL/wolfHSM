@@ -31,11 +31,6 @@ typedef int (*whDmaClientMem64Cb)(struct whServerContext_t* server,
                                   whDmaFlags flags);
 
 typedef struct {
-    whDmaClientMem32Cb cb32;
-    whDmaClientMem64Cb cb64;
-} whDmaCb;
-
-typedef struct {
     void*  addr;
     size_t size;
 } whDmaAddr;
@@ -48,6 +43,18 @@ typedef struct {
     whDmaAddrList readList;
     whDmaAddrList writeList;
 } whDmaAddrAllowList;
+
+typedef struct {
+    whDmaClientMem32Cb        cb32; /* DMA callback for 32-bit system */
+    whDmaClientMem64Cb        cb64; /* DMA callback for 64-bit system */
+    const whDmaAddrAllowList* dmaAddrAllowList; /* list of allowed addresses */
+} whDmaConfig;
+
+typedef struct {
+    whDmaClientMem32Cb        cb32; /* DMA callback for 32-bit system */
+    whDmaClientMem64Cb        cb64; /* DMA callback for 64-bit system */
+    const whDmaAddrAllowList* dmaAddrAllowList; /* list of allowed addresses */
+} whDmaContext;
 
 int whServerDma_CopyFromClient32(struct whServerContext_t* server,
                                  void* serverPtr, uint32_t clientAddr,

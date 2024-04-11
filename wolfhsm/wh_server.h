@@ -53,8 +53,7 @@ typedef struct whServerContext_t {
     crypto_context* crypto;
     CacheSlot cache[WOLFHSM_NUM_RAMKEYS];
     whServerCustomCb customHandlerTable[WH_CUSTOM_CB_NUM_CALLBACKS];
-    whDmaCb dmaCb;
-    const whDmaAddrAllowList* dmaAddrAllowList;
+    whDmaContext dma;
 } whServerContext;
 
 typedef struct whServerConfig_t {
@@ -64,7 +63,7 @@ typedef struct whServerConfig_t {
 #if defined WOLF_CRYPTO_CB /* TODO: should we be relying on wolfSSL defines? */
     int devId;
 #endif
-    whDmaAddrAllowList* dmaAddrAllowList;
+    whDmaConfig* dmaConfig;
 } whServerConfig;
 
 /* Initialize the comms and crypto cache components.
@@ -93,7 +92,8 @@ int wh_Server_HandleCustomCbRequest(whServerContext* server, uint16_t magic,
 
 /* Registers custom client DMA callbacs to handle platform specific restrictions
  * on accessing the client address space such as caching and address translation */
-int wh_Server_DmaRegisterCb(whServerContext* server, whDmaCb cb);
+int wh_Server_DmaRegisterCb32(whServerContext* server, whDmaClientMem32Cb cb);
+int wh_Server_DmaRegisterCb64(whServerContext* server, whDmaClientMem64Cb cb);
 int wh_Server_DmaRegisterAllowList(whServerContext* server, const whDmaAddrAllowList* allowlist);
 
 /* Helper functions to invoke user supplied client address DMA callbacks */

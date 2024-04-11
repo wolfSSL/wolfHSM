@@ -229,8 +229,8 @@ static int _testDma(whServerContext* server, whClientContext* client)
     };
 
     /* Register a custom DMA callback */
-    WH_TEST_RETURN_ON_FAIL(wh_Server_DmaRegisterCb(
-        server, (whDmaCb){_customServerDma32Cb, _customServerDma64Cb}));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_DmaRegisterCb32(server, _customServerDma32Cb));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_DmaRegisterCb64(server, _customServerDma64Cb));
 
     /* Register our custom allow list */
     WH_TEST_RETURN_ON_FAIL(wh_Server_DmaRegisterAllowList(server, &allowList));
