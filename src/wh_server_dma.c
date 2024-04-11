@@ -92,7 +92,8 @@ int wh_Server_DmaProcessClientAddress32(whServerContext* server,
         *serverPtr = (void*)((uintptr_t)clientAddr);
     }
 
-    /* if the server has a allowlist registered, check address against it */
+    /* if the server has a allowlist registered, check transformed address
+     * against it */
     if (server->dmaAddrAllowList != NULL) {
         rc = _checkMemOperAgainstAllowList(server->dmaAddrAllowList, oper,
                                            *serverPtr, len);
@@ -139,13 +140,24 @@ int whServerDma_CopyFromClient32(struct whServerContext_t* server,
 {
     int rc = WH_ERROR_OK;
 
+    void* transformedAddr = NULL;
+
     /* TODO: should len be checked against UINTxxMax? Should it be size_t? */
     if (NULL == server || NULL == serverPtr || 0 == len) {
         return WH_ERROR_BADARGS;
     }
 
+    /* Check the server address against the allow list */
+    rc = _checkMemOperAgainstAllowList(server->dmaAddrAllowList,
+                                       WH_DMA_OPER_CLIENT_READ_PRE, serverPtr,
+                                       len);
+    if (rc != WH_ERROR_OK) {
+        return rc;
+    }
+
+    /* Process the client address pre-read */
     rc =
-        wh_Server_DmaProcessClientAddress32(server, clientAddr, &serverPtr, len,
+        wh_Server_DmaProcessClientAddress32(server, clientAddr, &transformedAddr, len,
                                             WH_DMA_OPER_CLIENT_READ_PRE, flags);
     if (rc != WH_ERROR_OK) {
         return rc;
@@ -153,9 +165,10 @@ int whServerDma_CopyFromClient32(struct whServerContext_t* server,
 
     /* Perform the actual copy */
     /* TODO should we add a flag to force client word-sized reads? */
-    memcpy(serverPtr, (void*)((uintptr_t)clientAddr), len);
+    memcpy(serverPtr, transformedAddr, len);
 
-    rc = wh_Server_DmaProcessClientAddress32(server, clientAddr, &serverPtr,
+    /* Process the client address post-read */
+    rc = wh_Server_DmaProcessClientAddress32(server, clientAddr, &transformedAddr,
                                              len, WH_DMA_OPER_CLIENT_READ_POST,
                                              flags);
 
@@ -169,25 +182,37 @@ int whServerDma_CopyFromClient64(struct whServerContext_t* server,
 {
     int rc = WH_ERROR_OK;
 
+    void *transformedAddr = NULL;
+
     /* TODO: should len be checked against UINTxxMax? Should it be size_t? */
     if (NULL == server || NULL == serverPtr || 0 == len) {
         return WH_ERROR_BADARGS;
     }
 
-    rc =
-        wh_Server_DmaProcessClientAddress64(server, clientAddr, &serverPtr, len,
-                                            WH_DMA_OPER_CLIENT_READ_PRE, flags);
+    /* Check the server address against the allow list */
+    rc = _checkMemOperAgainstAllowList(server->dmaAddrAllowList,
+                                       WH_DMA_OPER_CLIENT_READ_PRE, serverPtr,
+                                       len);
+    if (rc != WH_ERROR_OK) {
+        return rc;
+    }
+
+    /* Process the client address pre-read */
+    rc = wh_Server_DmaProcessClientAddress64(
+        server, clientAddr, &transformedAddr, len, WH_DMA_OPER_CLIENT_READ_PRE,
+        flags);
     if (rc != WH_ERROR_OK) {
         return rc;
     }
 
     /* Perform the actual copy */
     /* TODO should we add a flag to force client word-sized reads? */
-    memcpy(serverPtr, (void*)((uintptr_t)clientAddr), len);
+    memcpy(serverPtr, transformedAddr, len);
 
-    rc = wh_Server_DmaProcessClientAddress64(server, clientAddr, &serverPtr,
-                                             len, WH_DMA_OPER_CLIENT_READ_POST,
-                                             flags);
+    /* process the client address post-read */
+    rc = wh_Server_DmaProcessClientAddress64(
+        server, clientAddr, &transformedAddr, len, WH_DMA_OPER_CLIENT_READ_POST,
+        flags);
 
     return rc;
 
@@ -199,13 +224,24 @@ int whServerDma_CopyToClient32(struct whServerContext_t* server,
 {
     int rc = WH_ERROR_OK;
 
+    void *transformedAddr = NULL;
+
     /* TODO: should len be checked against UINTxxMax? Should it be size_t? */
     if (NULL == server || NULL == serverPtr || 0 == len) {
         return WH_ERROR_BADARGS;
     }
 
+    /* Check the server address against the allow list */
+    rc = _checkMemOperAgainstAllowList(server->dmaAddrAllowList,
+                                       WH_DMA_OPER_CLIENT_WRITE_PRE, serverPtr,
+                                       len);
+    if (rc != WH_ERROR_OK) {
+        return rc;
+    }
+
+    /* Process the client address pre-write */
     rc =
-        wh_Server_DmaProcessClientAddress32(server, clientAddr, &serverPtr, len,
+        wh_Server_DmaProcessClientAddress32(server, clientAddr, &transformedAddr, len,
                                             WH_DMA_OPER_CLIENT_WRITE_PRE, flags);
     if (rc != WH_ERROR_OK) {
         return rc;
@@ -213,9 +249,10 @@ int whServerDma_CopyToClient32(struct whServerContext_t* server,
 
     /* Perform the actual copy */
     /* TODO should we add a flag to force client word-sized reads? */
-    memcpy(serverPtr, (void*)((uintptr_t)clientAddr), len);
+    memcpy(transformedAddr, serverPtr, len);
 
-    rc = wh_Server_DmaProcessClientAddress32(server, clientAddr, &serverPtr,
+    /* Process the client address post-write */
+    rc = wh_Server_DmaProcessClientAddress32(server, clientAddr, &transformedAddr,
                                              len, WH_DMA_OPER_CLIENT_WRITE_POST,
                                              flags);
 
@@ -227,15 +264,26 @@ int whServerDma_CopyToClient64(struct whServerContext_t* server,
                                uint64_t clientAddr, void* serverPtr,
                                size_t len, whDmaFlags flags)
 {
-        int rc = WH_ERROR_OK;
+    int rc = WH_ERROR_OK;
+
+    void *transformedAddr = NULL;
 
     /* TODO: should len be checked against UINTxxMax? Should it be size_t? */
     if (NULL == server || NULL == serverPtr || 0 == len) {
         return WH_ERROR_BADARGS;
     }
 
+    /* Check the server address against the allow list */
+    rc = _checkMemOperAgainstAllowList(server->dmaAddrAllowList,
+                                       WH_DMA_OPER_CLIENT_WRITE_PRE, serverPtr,
+                                       len);
+    if (rc != WH_ERROR_OK) {
+        return rc;
+    }
+
+    /* Process the client address pre-write */
     rc =
-        wh_Server_DmaProcessClientAddress64(server, clientAddr, &serverPtr, len,
+        wh_Server_DmaProcessClientAddress64(server, clientAddr, &transformedAddr, len,
                                             WH_DMA_OPER_CLIENT_WRITE_PRE, flags);
     if (rc != WH_ERROR_OK) {
         return rc;
@@ -243,9 +291,10 @@ int whServerDma_CopyToClient64(struct whServerContext_t* server,
 
     /* Perform the actual copy */
     /* TODO should we add a flag to force client word-sized reads? */
-    memcpy(serverPtr, (void*)((uintptr_t)clientAddr), len);
+    memcpy(transformedAddr, serverPtr, len);
 
-    rc = wh_Server_DmaProcessClientAddress64(server, clientAddr, &serverPtr,
+    /* Process the client address post-write */
+    rc = wh_Server_DmaProcessClientAddress64(server, clientAddr, &transformedAddr,
                                              len, WH_DMA_OPER_CLIENT_WRITE_POST,
                                              flags);
 

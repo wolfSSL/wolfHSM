@@ -33,6 +33,20 @@
 #define ONE_MS 1000
 #define FLASH_RAM_SIZE (1024 * 1024) /* 1MB */
 
+typedef struct {
+    /* Simulated client memory region */
+    uint32_t cliBuf[3];
+    /* Simulated server address in the allow list */
+    uint32_t srvBufAllow[3];
+    /* Simulated server mem region not in the allow list */
+    uint32_t srvBufDeny[3];
+    /* Simulated "remapped" client address */
+    uint32_t srvRemapBufAllow[3];
+} TestMemory;
+
+#define TEST_MEM_CLI_BYTE      ((uint8_t)0xAA)
+#define TEST_MEM_UNMAPPED_BYTE ((uint8_t)0xBB)
+
 /* Dummy callback that loopback-copies client data */
 static int _customServerCb(whServerContext*                 server,
                            const whMessageCustomCb_Request* req,
@@ -143,11 +157,42 @@ static int _customServerDmaCb(struct whServerContext_t* server,
                               uint32_t len, whDmaOper oper,
                               whDmaFlags flags)
 {
-    printf("**********CUSTOM DMA CALLBACK\n");
+    /* remapped "client" address, a.k.a. arbitary "server" buffer */
+    void *srvTmpBuf = (void*)((uintptr_t)clientAddr +
+                             (offsetof(TestMemory, srvRemapBufAllow) -
+                              offsetof(TestMemory, cliBuf)));
+
+    /* This DMA callback simulates the remapping of client addresses by simply
+     * copying the data between the client address and the "remapped" server
+     * address, which is just an arbitrary server buffer */
+    switch (oper) {
+        case WH_DMA_OPER_CLIENT_READ_PRE:
+            /* temp buffer to be used as copy source, so copy in data from client */
+            memcpy(srvTmpBuf, (void*)((uintptr_t)clientAddr), len);
+            /* ensure subsequent copies use server temp buf as copy source */
+            *serverPtr = srvTmpBuf;
+            break;
+
+        case WH_DMA_OPER_CLIENT_WRITE_PRE:
+            /* subsequent writes use server temp buf as copy dest */
+            *serverPtr = srvTmpBuf;
+            break;
+
+        case WH_DMA_OPER_CLIENT_READ_POST:
+            /* simulate unmapping of the address by clearing the server temp
+             * buffer */
+            memset(srvTmpBuf, TEST_MEM_UNMAPPED_BYTE, len);
+            break;
+
+        case WH_DMA_OPER_CLIENT_WRITE_POST:
+            /* temp buffer was just used as copy dest, so copy data out to client
+             * address */
+            memcpy(clientAddr, srvTmpBuf, len);
+            break;
+    }
 
     return WH_ERROR_OK;
 }
-
 
 static int _customServerDma32Cb(struct whServerContext_t* server,
                                 uint32_t clientAddr, void** serverPtr,
@@ -167,28 +212,19 @@ static int _customServerDma64Cb(struct whServerContext_t* server,
 
 static int _testDma(whServerContext* server, whClientContext* client)
 {
-    typedef struct {
-        uint32_t cliBuf[3];
-        uint32_t srvBufAllow[3];
-        uint32_t srvBufDeny[3];
-        uint32_t srvBuf2Allow[3];
-    } TestMemory;
-
     int rc = 0;
-
     TestMemory testMem = {0};
 
-    /* Create a custom allow list */
     const whDmaAddrAllowList allowList = {
         .readList =
             {
                 {&testMem.srvBufAllow, sizeof(testMem.srvBufAllow)},
-                {&testMem.srvBuf2Allow, sizeof(testMem.srvBuf2Allow)},
+                {&testMem.srvRemapBufAllow, sizeof(testMem.srvRemapBufAllow)},
             },
         .writeList =
             {
                 {&testMem.srvBufAllow, sizeof(testMem.srvBufAllow)},
-                {&testMem.srvBuf2Allow, sizeof(testMem.srvBuf2Allow)},
+                {&testMem.srvRemapBufAllow, sizeof(testMem.srvRemapBufAllow)},
             },
     };
 
@@ -200,7 +236,7 @@ static int _testDma(whServerContext* server, whClientContext* client)
     WH_TEST_RETURN_ON_FAIL(wh_Server_DmaRegisterAllowList(server, &allowList));
 
     /* Set known pattern in client Buffer */
-    memset(testMem.cliBuf, 0xAA, sizeof(testMem.cliBuf));
+    memset(testMem.cliBuf, TEST_MEM_CLI_BYTE, sizeof(testMem.cliBuf));
 
     /* Perform a copy from "client mem" to allowed "server mem" */
     if (sizeof(void*) == sizeof(uint64_t)) {
@@ -220,8 +256,17 @@ static int _testDma(whServerContext* server, whClientContext* client)
     WH_TEST_ASSERT_RETURN(0 == memcmp(testMem.cliBuf, testMem.srvBufAllow,
                                       sizeof(testMem.cliBuf)));
 
+    /* custom DMA callback uses the tmp server buffer for input data and
+     * should set it to a known pattern on exit */
+    uint8_t tmp[sizeof(testMem.srvRemapBufAllow)];
+    memset(tmp, TEST_MEM_UNMAPPED_BYTE, sizeof(tmp));
+    WH_TEST_ASSERT_RETURN(0 == memcmp(testMem.srvRemapBufAllow,
+                                      tmp,
+                                      sizeof(testMem.srvRemapBufAllow)));
+
     /* Clear client data */
     memset(testMem.cliBuf, 0, sizeof(testMem.cliBuf));
+    memset(testMem.srvRemapBufAllow, 0, sizeof(testMem.srvRemapBufAllow));
 
     /* Perform a copy from "server mem" to "client mem" */
     if (sizeof(void*) == sizeof(uint64_t)) {
