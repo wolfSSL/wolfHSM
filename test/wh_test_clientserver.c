@@ -937,8 +937,6 @@ int whTest_ClientCfg(whClientConfig* clientCfg)
 
     WH_TEST_RETURN_ON_FAIL(wh_Client_Cleanup(client));
 
-    wolfCrypt_Cleanup();
-
     return ret;
 }
 
