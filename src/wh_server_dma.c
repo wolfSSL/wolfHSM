@@ -80,7 +80,7 @@ int wh_Server_DmaProcessClientAddress32(whServerContext* server,
 {
     int rc = WH_ERROR_OK;
 
-    if (NULL == server) {
+    if (NULL == server || NULL == xformedCliAddr) {
         return WH_ERROR_BADARGS;
     }
 
@@ -111,7 +111,7 @@ int wh_Server_DmaProcessClientAddress64(whServerContext* server,
 {
     int rc = WH_ERROR_OK;
 
-    if (NULL == server) {
+    if (NULL == server || NULL == xformedCliAddr) {
         return WH_ERROR_BADARGS;
     }
 
@@ -142,7 +142,7 @@ int whServerDma_CopyFromClient32(struct whServerContext_t* server,
 
     void* transformedAddr = NULL;
 
-    /* TODO: should len be checked against UINTxxMax? Should it be size_t? */
+    /* TODO: should len be checked against UINT32Max? Should it be uint32_t? */
     if (NULL == server || NULL == serverPtr || 0 == len) {
         return WH_ERROR_BADARGS;
     }
@@ -183,7 +183,7 @@ int whServerDma_CopyFromClient64(struct whServerContext_t* server,
 
     void* transformedAddr = NULL;
 
-    /* TODO: should len be checked against UINTxxMax? Should it be size_t? */
+    /* TODO: should len be be uint64_t? */
     if (NULL == server || NULL == serverPtr || 0 == len) {
         return WH_ERROR_BADARGS;
     }
@@ -223,7 +223,7 @@ int whServerDma_CopyToClient32(struct whServerContext_t* server,
 
     void* transformedAddr = NULL;
 
-    /* TODO: should len be checked against UINTxxMax? Should it be size_t? */
+    /* TODO: should len be checked against UINT32Max? Should it be uint32_t ? */
     if (NULL == server || NULL == serverPtr || 0 == len) {
         return WH_ERROR_BADARGS;
     }
@@ -264,7 +264,7 @@ int whServerDma_CopyToClient64(struct whServerContext_t* server,
 
     void* transformedAddr = NULL;
 
-    /* TODO: should len be checked against UINTxxMax? Should it be size_t? */
+    /* TODO: should len be uint64_t? */
     if (NULL == server || NULL == serverPtr || 0 == len) {
         return WH_ERROR_BADARGS;
     }
