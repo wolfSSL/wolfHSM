@@ -330,7 +330,7 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
             ret = hsmCacheKey(server, meta, in);
         if (ret == 0) {
             /* remove the user, client may set type */
-            packet->keyCacheRes.id = (meta->id & (~WOLFHSM_KEYUSER_MASK));
+            packet->keyCacheRes.id = (meta->id & WOLFHSM_KEYID_MASK);
             *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->keyCacheRes);
         }
         break;

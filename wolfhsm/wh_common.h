@@ -58,7 +58,7 @@ typedef uint16_t whKeyId;
 #define WOLFHSM_KEYTYPE_SHE     0x2000
 
 #define MAKE_WOLFHSM_KEYID(_type, _user, _id) \
-    (whKeyId)(((_type) & WOLFHSM_KEYID_MASK) | (((_user) & 0xF) << 8) | ((_id) & WOLFHSM_KEYID_MASK))
+    (whKeyId)(((_type) & WOLFHSM_KEYTYPE_MASK) | (((_user) & 0xF) << 8) | ((_id) & WOLFHSM_KEYID_MASK))
 
 
 /** NVM Management */
