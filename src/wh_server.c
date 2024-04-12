@@ -219,6 +219,7 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
 {
     uint16_t magic = 0;
     uint16_t kind = 0;
+    uint16_t user = 0;
     uint16_t group = 0;
     uint16_t action = 0;
     uint16_t seq = 0;
@@ -258,12 +259,13 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
 
 #ifndef WOLFHSM_NO_CRYPTO
         case WH_MESSAGE_GROUP_KEY:
-            rc = wh_Server_HandleKeyRequest(server, magic, action, seq,
+            rc = wh_Server_HandleKeyRequest(server, magic, action, user, seq,
                     data, &size);
         break;
 
         case WH_MESSAGE_GROUP_CRYPTO:
-            rc = wh_Server_HandleCryptoRequest(server, action, data, &size);
+            rc = wh_Server_HandleCryptoRequest(server, action, user, data,
+                &size);
         break;
 #endif  /* WOLFHSM_NO_CRYPTO */
 

@@ -116,6 +116,37 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         WH_ERROR_PRINT("KEY CACHE/EXPORT FAILED TO MATCH\n");
         goto exit;
     }
+    /* test cache with duplicate keyId for a different user */
+    client->user = 1;
+    if ((ret = wh_Client_KeyCacheRequest_ex(client, 0, labelStart, sizeof(labelStart), key, sizeof(key), keyId)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyCacheRequest %d\n", ret);
+        goto exit;
+    }
+    do {
+        ret = wh_Client_KeyCacheResponse(client, &keyId);
+    } while (ret == WH_ERROR_NOTREADY);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyCacheResponse %d\n", ret);
+        goto exit;
+    }
+    if ((ret = wh_Client_KeyExportRequest(client, keyId)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyExportRequest %d\n", ret);
+        goto exit;
+    }
+    outLen = sizeof(keyEnd);
+    do {
+        ret = wh_Client_KeyExportResponse(client, labelEnd, sizeof(labelEnd), keyEnd, &outLen);
+    } while (ret == WH_ERROR_NOTREADY);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyExportResponse %d\n", ret);
+        goto exit;
+    }
+    if (ret == 0 && XMEMCMP(key, keyEnd, outLen) == 0 && XMEMCMP(labelStart, labelEnd, sizeof(labelStart)) == 0)
+        printf("KEY USER CACHE MUTUAL EXCLUSION SUCCESS\n");
+    else {
+        WH_ERROR_PRINT("KEY CACHE/EXPORT FAILED TO MATCH\n");
+        goto exit;
+    }
     /* test evict */
     if ((ret = wh_Client_KeyEvictRequest(client, keyId)) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_KeyEvictRequest %d\n", ret);
@@ -145,7 +176,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         goto exit;
     }
     /* test commit */
-    if ((ret = wh_Client_KeyCacheRequest(client, WOLFHSM_ID_ERASED, labelStart, sizeof(labelStart), key, sizeof(key))) != 0) {
+    if ((ret = wh_Client_KeyCacheRequest(client, WOLFHSM_KEYID_ERASED, labelStart, sizeof(labelStart), key, sizeof(key))) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_KeyCacheRequest %d\n", ret);
         goto exit;
     }
@@ -318,7 +349,6 @@ exit:
     return ret;
 }
 
-
 int whTest_CryptoServerConfig(whServerConfig* config)
 {
     whServerContext server[1] = {0};
@@ -413,6 +443,7 @@ static int wh_ClientServer_MemThreadTest(void)
     }};
     whClientConfig c_conf[1] = {{
        .comm = cc_conf,
+       .user = 0,
     }};
     /* Server configuration/contexts */
     whTransportServerCb         tscb[1]   = {WH_TRANSPORT_MEM_SERVER_CB};

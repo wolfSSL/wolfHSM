@@ -35,12 +35,30 @@ typedef uint16_t whCounterId;
 /* HSM key identifier type.  Top nibble identifies key type/location */
 typedef uint16_t whKeyId;
 
-#define WOLFHSM_KEYID_MASK 0xF000
-#define WOLFHSM_KEYID_CRYPTO 0x1000
-#define WOLFHSM_KEYID_SHE 0x2000
-#define WOLFHSM_KEYID_SHE_RAM 0x3000
-#define MAKE_WOLFHSM_KEYID(_kind, _id) \
-    (whKeyId)(((_kind) & WOLFHSM_KEYID_MASK) | ((_id) & ~WOLFHSM_KEYID_MASK))
+/* Id Constants */
+#define WOLFHSM_KEYID_ERASED 0x0000
+
+/* Key Masks */
+#define WOLFHSM_KEYID_MASK   0x00FF
+#define WOLFHSM_KEYUSER_MASK 0x0F00
+#define WOLFHSM_KEYTYPE_MASK 0xF000
+
+/* Key Flags */
+#define WOLFHSM_KEYFLAG_RSA         0x1000
+#define WOLFHSM_KEYFLAG_ECC         0x2000
+#define WOLFHSM_KEYFLAG_CURVE25519  0x3000
+#define WOLFHSM_KEYFLAG_ED25519     0x4000
+#define WOLFHSM_KEYFLAG_AES         0x5000
+#define WOLFHSM_KEYFLAG_HMAC        0x6000
+#define WOLFHSM_KEYFLAG_CMAC        0x7000
+
+/* Key Types */
+#define WOLFHSM_KEYTYPE_CRYPTO  0x1000
+/* She keys are technically raw keys but a SHE keyId needs */
+#define WOLFHSM_KEYTYPE_SHE     0x2000
+
+#define MAKE_WOLFHSM_KEYID(_type, _user, _id) \
+    (whKeyId)(((_type) & WOLFHSM_KEYID_MASK) | (((_user) & 0xF) << 8) | ((_id) & WOLFHSM_KEYID_MASK))
 
 
 /** NVM Management */
@@ -81,6 +99,5 @@ typedef struct {
 
 /* Custom request shared defs */
 #define WH_CUSTOM_CB_NUM_CALLBACKS 8
-#define WOLFHSM_ID_ERASED 0
 
 #endif /* WOLFHSM_WH_COMMON_H_ */

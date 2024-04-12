@@ -22,7 +22,7 @@
 #include "wolfhsm/wh_server_crypto.h"
 
 #ifndef NO_RSA
-static int hsmCacheKeyRsa(whServerContext* server, RsaKey* key)
+static int hsmCacheKeyRsa(whServerContext* server, RsaKey* key, whKeyId* outId)
 {
     int ret = 0;
     int slotIdx = 0;
@@ -45,7 +45,8 @@ static int hsmCacheKeyRsa(whServerContext* server, RsaKey* key)
         server->cache[slotIdx].meta->id = keyId;
         server->cache[slotIdx].meta->len = ret;
         /* export keyId */
-        ret = keyId;
+        *outId = keyId;
+        ret = 0;
     }
     return ret;
 }
@@ -69,7 +70,8 @@ static int hsmLoadKeyRsa(whServerContext* server, RsaKey* key, whKeyId keyId)
 #endif /* !NO_RSA */
 
 #ifdef HAVE_CURVE25519
-static int hsmCacheKeyCurve25519(whServerContext* server, curve25519_key* key)
+static int hsmCacheKeyCurve25519(whServerContext* server, curve25519_key* key,
+    whKeyId* outId)
 {
     int ret;
     int slotIdx = 0;
@@ -94,7 +96,8 @@ static int hsmCacheKeyCurve25519(whServerContext* server, curve25519_key* key)
         server->cache[slotIdx].meta->id = keyId;
         server->cache[slotIdx].meta->len = CURVE25519_KEYSIZE * 2;
         /* export keyId */
-        ret = keyId;
+        *outId = keyId;
+        ret = 0;
     }
     return ret;
 }
@@ -123,11 +126,12 @@ static int hsmLoadKeyCurve25519(whServerContext* server, curve25519_key* key,
 #endif /* HAVE_CURVE25519 */
 
 int wh_Server_HandleCryptoRequest(whServerContext* server,
-    uint16_t action, uint8_t* data, uint16_t* size)
+    uint16_t action, uint8_t user, uint8_t* data, uint16_t* size)
 {
     int ret = 0;
     uint32_t field;
     uint8_t* in;
+    whKeyId keyId;
     uint8_t* out;
     whPacket* packet = (whPacket*)data;
 #ifdef WOLFHSM_SYMMETRIC_INTERNAL
@@ -156,10 +160,10 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
             }
             /* cache the generated key, data will be blown away */
             if (ret == 0) {
-                ret = hsmCacheKeyRsa(server, server->crypto->rsa);
+                ret = hsmCacheKeyRsa(server, server->crypto->rsa, &keyId);
             }
             wc_FreeRsaKey(server->crypto->rsa);
-            if (ret > 0) {
+            if (ret == 0) {
                 /* set the assigned id */
                 packet->pkRsakgRes.keyId = ret;
                 *size = WOLFHSM_PACKET_STUB_SIZE +
@@ -241,15 +245,16 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
             /* cache the generated key */
             if (ret == 0) {
                 ret = hsmCacheKeyCurve25519(server,
-                    server->crypto->curve25519Private);
+                    server->crypto->curve25519Private, &keyId);
             }
             /* set the assigned id */
             wc_curve25519_free(server->crypto->curve25519Private);
-            if (ret > 0) {
-                packet->pkCurve25519kgRes.keyId = ret;
+            if (ret == 0) {
+                /* strip user */
+                packet->pkCurve25519kgRes.keyId =
+                    (keyId & ~WOLFHSM_KEYUSER_MASK);
                 *size = WOLFHSM_PACKET_STUB_SIZE +
                     sizeof(packet->pkCurve25519kgRes);
-                ret = 0;
             }
             else
                 ret = BAD_FUNC_ARG;
@@ -268,13 +273,15 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
             if (ret == 0) {
                 ret = hsmLoadKeyCurve25519(server,
                     server->crypto->curve25519Private,
-                    packet->pkCurve25519Req.privateKeyId);
+                    MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_CRYPTO, user,
+                    packet->pkCurve25519Req.privateKeyId));
             }
             /* load the public key */
             if (ret == 0) {
                 ret = hsmLoadKeyCurve25519(server,
                     server->crypto->curve25519Public,
-                    packet->pkEcdhReq.publicKeyId);
+                    MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_CRYPTO, user,
+                    packet->pkCurve25519Req.publicKeyId));
             }
             /* make shared secret */
             if (ret == 0) {

@@ -30,7 +30,7 @@
  * DATA_LEN bytes.
  */
 enum {
-    WH_COMM_HEADER_LEN = 8,    /* whCommHeader */
+    WH_COMM_HEADER_LEN = 10,    /* whCommHeader */
     WH_COMM_DATA_LEN = 1280,
     WH_COMM_MTU = (WH_COMM_HEADER_LEN + WH_COMM_DATA_LEN),
     WH_COMM_MTU_U64_COUNT = (WH_COMM_MTU + 7) / 8,  /* internal U64 buffer */
@@ -57,6 +57,8 @@ typedef struct {
     uint16_t kind;      /* Kind of packet.  Enumerated in message.h */
     uint16_t seq;       /* Sequence number. Incremented on request, copied for
                          * response. */
+    uint16_t user;       /* User ID to allow seperate users to use the same input
+                         * keyId */
     uint16_t aux;       /* Session identifier for request or error indicator
                          * for response. */
 } whCommHeader;
@@ -171,9 +173,9 @@ int wh_CommClient_Init(whCommClient* context, const whCommClientConfig* config);
 /* If a request buffer is available, send a new request to the server.  The
  * transport will update the sequence number on success.
  */
-int wh_CommClient_SendRequest(whCommClient* context,
-        uint16_t magic, uint16_t kind, uint16_t* out_seq,
-        uint16_t data_size, const void* data);
+int wh_CommClient_SendRequest(whCommClient* context, uint16_t magic,
+    uint16_t kind, uint8_t user, uint16_t *out_seq, uint16_t data_size,
+    const void* data);
 
 /* If a response packet has been buffered, get the header and copy the data out
  * of the buffer.
@@ -263,8 +265,8 @@ int wh_CommServer_Init(whCommServer* context, const whCommServerConfig* config,
  * of the buffer.
  */
 int wh_CommServer_RecvRequest(whCommServer* context,
-        uint16_t* out_magic, uint16_t* out_kind, uint16_t* out_seq,
-        uint16_t* out_size, void* buffer);
+        uint16_t* out_magic, uint16_t* out_kind, uint16_t* outUser,
+        uint16_t* out_seq, uint16_t* out_size, void* data);
 
 /* Upon completion of the request, send the response packet using the same seq
  * as the incoming request.  Note that overriding the seq number should only be
