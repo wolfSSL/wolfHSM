@@ -79,6 +79,11 @@ int wh_Server_DmaRegisterCb64(struct whServerContext_t* server,
 int wh_Server_DmaRegisterAllowList(struct whServerContext_t*       server,
                                    const whServerDmaAddrAllowList* allowlist);
 
+/* Checks a desired memory operation against the server allowlist */
+int wh_Server_DmaCheckMemOperAllowed(const struct whServerContext_t* server,
+                                     whServerDmaOper oper, void* addr,
+                                     size_t size);
+
 /* Helper functions to invoke user supplied client address DMA callbacks */
 int wh_Server_DmaProcessClientAddress32(struct whServerContext_t* server,
                                         uint32_t clientAddr, void** serverPtr,
@@ -89,6 +94,8 @@ int wh_Server_DmaProcessClientAddress64(struct whServerContext_t* server,
                                         uint64_t len, whServerDmaOper oper,
                                         whServerDmaFlags flags);
 
+/* Helper functions to copy data to/from client addresses that invoke the
+ * appropriate callbacks and allowlist checks */
 int whServerDma_CopyFromClient32(struct whServerContext_t* server,
                                  void* serverPtr, uint32_t clientAddr,
                                  size_t len, whServerDmaFlags flags);

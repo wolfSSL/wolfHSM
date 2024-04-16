@@ -6,6 +6,15 @@
  * efficient representation (requiring sorted array and binary search, or
  * building a binary tree, etc.) */
 
+static int _checkOperValid(whServerDmaOper oper)
+{
+    if (oper < WH_DMA_OPER_CLIENT_READ_PRE ||
+        oper > WH_DMA_OPER_CLIENT_WRITE_POST) {
+        return WH_ERROR_BADARGS;
+    }
+
+    return WH_ERROR_OK;
+}
 
 static int _checkAddrAgainstAllowList(const whServerDmaAddrList allowList, void* addr,
                                       size_t size)
@@ -34,11 +43,21 @@ static int _checkAddrAgainstAllowList(const whServerDmaAddrList allowList, void*
     return WH_ERROR_ACCESS;
 }
 
-static int _checkMemOperAgainstAllowList(const whServerDmaAddrAllowList* allowList,
+static int _checkMemOperAgainstAllowList(const whServerContext* server,
                                          whServerDmaOper oper, void* addr,
                                          size_t size)
 {
     int rc = WH_ERROR_OK;
+
+    rc = _checkOperValid(oper);
+    if (rc != WH_ERROR_OK) {
+        return rc;
+    }
+
+    /* If no allowlist is registered, anything goes */
+    if (server->dma.dmaAddrAllowList == NULL) {
+        return WH_ERROR_OK;
+    }
 
     /* If a read/write operation is requested, check the transformed address
      * against the appropriate allowlist
@@ -47,13 +66,24 @@ static int _checkMemOperAgainstAllowList(const whServerDmaAddrAllowList* allowLi
      * memory operations for some reason?
      */
     if (oper == WH_DMA_OPER_CLIENT_READ_PRE) {
-        rc = _checkAddrAgainstAllowList(allowList->readList, addr, size);
+        rc = _checkAddrAgainstAllowList(server->dma.dmaAddrAllowList->readList, addr, size);
     }
     else if (oper == WH_DMA_OPER_CLIENT_WRITE_PRE) {
-        rc = _checkAddrAgainstAllowList(allowList->writeList, addr, size);
+        rc = _checkAddrAgainstAllowList(server->dma.dmaAddrAllowList->writeList, addr, size);
     }
 
     return rc;
+}
+
+int wh_Server_DmaCheckMemOperAllowed(const whServerContext* server,
+                                  whServerDmaOper oper, void* addr, size_t size)
+{
+    /* NULL addr is allowed here, since 0 is a valid address */
+    if (NULL == server || 0 == size) {
+        return WH_ERROR_BADARGS;
+    }
+
+    return _checkMemOperAgainstAllowList(server, oper, addr, size);
 }
 
 int wh_Server_DmaRegisterCb32(whServerContext* server, whServerDmaClientMem32Cb cb)
@@ -110,18 +140,15 @@ int wh_Server_DmaProcessClientAddress32(whServerContext* server,
     if (NULL != server->dma.cb32) {
         rc = server->dma.cb32(server, clientAddr, xformedCliAddr, len, oper,
                                 flags);
+        if (rc != WH_ERROR_OK) {
+            return rc;
+        }
     }
 
     /* if the server has a allowlist registered, check transformed address
      * against it */
-    if (server->dma.dmaAddrAllowList != NULL) {
-        rc = _checkMemOperAgainstAllowList(server->dma.dmaAddrAllowList, oper,
-                                           *xformedCliAddr, len);
-    }
-
-    return rc;
+    return _checkMemOperAgainstAllowList(server, oper, *xformedCliAddr, len);
 }
-
 
 int wh_Server_DmaProcessClientAddress64(whServerContext* server,
                                         uint64_t         clientAddr,
@@ -140,16 +167,14 @@ int wh_Server_DmaProcessClientAddress64(whServerContext* server,
     /* Perform user-supplied address transformation, cache manipulation, etc */
     if (NULL != server->dma.cb64) {
         rc = server->dma.cb64(server, clientAddr, xformedCliAddr, len, oper,
-                                flags);
+                              flags);
+        if (rc != WH_ERROR_OK) {
+            return rc;
+        }
     }
 
     /* if the server has a allowlist registered, check address against it */
-    if (server->dma.dmaAddrAllowList != NULL) {
-        rc = _checkMemOperAgainstAllowList(server->dma.dmaAddrAllowList, oper,
-                                           *xformedCliAddr, len);
-    }
-
-    return rc;
+    return _checkMemOperAgainstAllowList(server, oper, *xformedCliAddr, len);
 }
 
 
@@ -167,8 +192,8 @@ int whServerDma_CopyFromClient32(struct whServerContext_t* server,
     }
 
     /* Check the server address against the allow list */
-    rc = _checkMemOperAgainstAllowList(
-        server->dma.dmaAddrAllowList, WH_DMA_OPER_CLIENT_READ_PRE, serverPtr, len);
+    rc = _checkMemOperAgainstAllowList(server, WH_DMA_OPER_CLIENT_READ_PRE,
+                                       serverPtr, len);
     if (rc != WH_ERROR_OK) {
         return rc;
     }
@@ -208,8 +233,8 @@ int whServerDma_CopyFromClient64(struct whServerContext_t* server,
     }
 
     /* Check the server address against the allow list */
-    rc = _checkMemOperAgainstAllowList(
-        server->dma.dmaAddrAllowList, WH_DMA_OPER_CLIENT_READ_PRE, serverPtr, len);
+    rc = _checkMemOperAgainstAllowList(server, WH_DMA_OPER_CLIENT_READ_PRE,
+                                       serverPtr, len);
     if (rc != WH_ERROR_OK) {
         return rc;
     }
@@ -248,8 +273,8 @@ int whServerDma_CopyToClient32(struct whServerContext_t* server,
     }
 
     /* Check the server address against the allow list */
-    rc = _checkMemOperAgainstAllowList(
-        server->dma.dmaAddrAllowList, WH_DMA_OPER_CLIENT_WRITE_PRE, serverPtr, len);
+    rc = _checkMemOperAgainstAllowList(server, WH_DMA_OPER_CLIENT_WRITE_PRE,
+                                       serverPtr, len);
     if (rc != WH_ERROR_OK) {
         return rc;
     }
@@ -289,8 +314,8 @@ int whServerDma_CopyToClient64(struct whServerContext_t* server,
     }
 
     /* Check the server address against the allow list */
-    rc = _checkMemOperAgainstAllowList(
-        server->dma.dmaAddrAllowList, WH_DMA_OPER_CLIENT_WRITE_PRE, serverPtr, len);
+    rc = _checkMemOperAgainstAllowList(server, WH_DMA_OPER_CLIENT_WRITE_PRE,
+                                       serverPtr, len);
     if (rc != WH_ERROR_OK) {
         return rc;
     }

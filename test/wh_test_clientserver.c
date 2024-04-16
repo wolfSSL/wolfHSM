@@ -235,6 +235,46 @@ static int _testDma(whServerContext* server, whClientContext* client)
     /* Register our custom allow list */
     WH_TEST_RETURN_ON_FAIL(wh_Server_DmaRegisterAllowList(server, &allowList));
 
+    /* Check allowed operations for addresses in the allowlist */
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_OK == wh_Server_DmaCheckMemOperAllowed(
+                           server, WH_DMA_OPER_CLIENT_READ_PRE,
+                           testMem.srvBufAllow, sizeof(testMem.srvBufAllow)));
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_OK ==
+        wh_Server_DmaCheckMemOperAllowed(server, WH_DMA_OPER_CLIENT_READ_PRE,
+                                         testMem.srvRemapBufAllow,
+                                         sizeof(testMem.srvRemapBufAllow)));
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_OK == wh_Server_DmaCheckMemOperAllowed(
+                           server, WH_DMA_OPER_CLIENT_WRITE_PRE,
+                           testMem.srvBufAllow, sizeof(testMem.srvBufAllow)));
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_OK ==
+        wh_Server_DmaCheckMemOperAllowed(server, WH_DMA_OPER_CLIENT_WRITE_PRE,
+                                         testMem.srvRemapBufAllow,
+                                         sizeof(testMem.srvRemapBufAllow)));
+
+    /* Ensure an address not in the allowlist is denied for all operations */
+    WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS ==
+                          wh_Server_DmaCheckMemOperAllowed(
+                              server, WH_DMA_OPER_CLIENT_READ_PRE,
+                              testMem.srvBufDeny, sizeof(testMem.srvBufDeny)));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS ==
+                          wh_Server_DmaCheckMemOperAllowed(
+                              server, WH_DMA_OPER_CLIENT_WRITE_PRE,
+                              testMem.srvBufDeny, sizeof(testMem.srvBufDeny)));
+
+    /* Zero sized operations should be denied */
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_BADARGS ==
+        wh_Server_DmaCheckMemOperAllowed(server, WH_DMA_OPER_CLIENT_READ_PRE,
+                                         testMem.srvBufAllow, 0));
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_BADARGS ==
+        wh_Server_DmaCheckMemOperAllowed(server, WH_DMA_OPER_CLIENT_WRITE_PRE,
+                                         testMem.srvBufAllow, 0));
+
     /* Set known pattern in client Buffer */
     memset(testMem.cliBuf, TEST_MEM_CLI_BYTE, sizeof(testMem.cliBuf));
 
@@ -312,6 +352,32 @@ static int _testDma(whServerContext* server, whClientContext* client)
                                   server, (uint32_t)((uintptr_t)testMem.cliBuf),
                                   testMem.srvBufDeny,
                                   sizeof(testMem.srvBufDeny), (whServerDmaFlags){0}));
+    }
+
+    /* Check that zero-sized copies fail, even from allowed addresses */
+    if (sizeof(void*) == sizeof(uint64_t)) {
+        /* 64-bit host system */
+        WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
+                              whServerDma_CopyFromClient64(
+                                  server, testMem.srvBufAllow,
+                                  (uint64_t)((uintptr_t)testMem.cliBuf), 0,
+                                  (whServerDmaFlags){0}));
+        WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
+                              whServerDma_CopyToClient64(
+                                  server, (uint64_t)((uintptr_t)testMem.cliBuf),
+                                  testMem.srvBufAllow, 0, (whServerDmaFlags){0}));
+    }
+    else if (sizeof(void*) == sizeof(uint32_t)) {
+        /* 32-bit host system */
+        WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
+                              whServerDma_CopyFromClient32(
+                                  server, testMem.srvBufAllow,
+                                  (uint32_t)((uintptr_t)testMem.cliBuf), 0,
+                                  (whServerDmaFlags){0}));
+        WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
+                              whServerDma_CopyToClient32(
+                                  server, (uint32_t)((uintptr_t)testMem.cliBuf),
+                                  testMem.srvBufAllow, 0, (whServerDmaFlags){0}));
     }
 
     return rc;
