@@ -88,7 +88,9 @@ int wh_Server_DmaCheckMemOperAllowed(const whServerContext* server,
 
 int wh_Server_DmaRegisterCb32(whServerContext* server, whServerDmaClientMem32Cb cb)
 {
-    if (NULL == server || NULL == cb) {
+    /* No NULL check for cb, since it is optional and always NULL checked before
+     * it is called */
+    if (NULL == server) {
         return WH_ERROR_BADARGS;
     }
 
@@ -99,7 +101,9 @@ int wh_Server_DmaRegisterCb32(whServerContext* server, whServerDmaClientMem32Cb 
 
 int wh_Server_DmaRegisterCb64(whServerContext* server, whServerDmaClientMem64Cb cb)
 {
-    if (NULL == server || NULL == cb) {
+    /* No NULL check for cb, since it is optional and always NULL checked before
+     * it is called */
+    if (NULL == server) {
         return WH_ERROR_BADARGS;
     }
 
