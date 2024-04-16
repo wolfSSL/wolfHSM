@@ -13,12 +13,20 @@ static int _checkAddrAgainstAllowList(const whServerDmaAddrList allowList, void*
     uintptr_t startAddr = (uintptr_t)addr;
     uintptr_t endAddr   = startAddr + size;
 
-    /* Check if the address range is fully within a allowlist entry */
-    for (int i = 0; i < WH_DMA_ADDR_ALLOWLIST_SIZE; i++) {
-        uintptr_t allowlistStartAddr = (uintptr_t)allowList[i].addr;
-        uintptr_t allowlistEndAddr   = allowlistStartAddr + allowList[i].size;
+    if (0 == size) {
+        return WH_ERROR_BADARGS;
+    }
 
-        if (startAddr >= allowlistStartAddr && endAddr <= allowlistEndAddr) {
+    /* Check if the address range is fully within a allowlist entry */
+    for (int i = 0; i < WH_DMA_ADDR_ALLOWLIST_COUNT; i++) {
+        uintptr_t allowListStartAddr = (uintptr_t)allowList[i].addr;
+        uintptr_t allowListEndAddr   = allowListStartAddr + allowList[i].size;
+
+        if (0 == allowList[i].size) {
+            continue;
+        }
+
+        if (startAddr >= allowListStartAddr && endAddr <= allowListEndAddr) {
             return WH_ERROR_OK;
         }
     }
@@ -70,7 +78,7 @@ int wh_Server_DmaRegisterCb64(whServerContext* server, whServerDmaClientMem64Cb 
     return WH_ERROR_OK;
 }
 
-int wh_Server_DmaRegisterAllowList(whServerContext*          server,
+int wh_Server_DmaRegisterAllowList(whServerContext*                server,
                                    const whServerDmaAddrAllowList* allowlist)
 {
     if (NULL == server || NULL == allowlist) {
@@ -86,7 +94,8 @@ int wh_Server_DmaRegisterAllowList(whServerContext*          server,
 int wh_Server_DmaProcessClientAddress32(whServerContext* server,
                                         uint32_t         clientAddr,
                                         void** xformedCliAddr, uint32_t len,
-                                        whServerDmaOper oper, whServerDmaFlags flags)
+                                        whServerDmaOper  oper,
+                                        whServerDmaFlags flags)
 {
     int rc = WH_ERROR_OK;
 

@@ -6,7 +6,7 @@
 
 #include "wolfhsm/wh_server.h"
 
-#define WH_DMA_ADDR_ALLOWLIST_SIZE (10)
+#define WH_DMA_ADDR_ALLOWLIST_COUNT (10)
 
 struct whServerContext_t;
 
@@ -48,7 +48,7 @@ typedef struct {
     size_t size;
 } whServerDmaAddr;
 
-typedef whServerDmaAddr whServerDmaAddrList[WH_DMA_ADDR_ALLOWLIST_SIZE];
+typedef whServerDmaAddr whServerDmaAddrList[WH_DMA_ADDR_ALLOWLIST_COUNT];
 
 /* Holds allowable client read/write addresses */
 typedef struct {
