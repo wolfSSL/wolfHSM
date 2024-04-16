@@ -13,6 +13,7 @@
 #include "wolfhsm/wh_comm.h"
 #include "wolfhsm/wh_nvm.h"
 #include "wolfhsm/wh_message_customcb.h"
+#include "wolfhsm/wh_server_dma.h"
 
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/random.h"
@@ -44,6 +45,7 @@ typedef int (*whServerCustomCb)(
     whMessageCustomCb_Response*      resp /* response from callback to client */
 );
 
+
 /* Context structure to maintain the state of an HSM server */
 typedef struct whServerContext_t {
     whCommServer comm[1];
@@ -51,6 +53,7 @@ typedef struct whServerContext_t {
     crypto_context* crypto;
     CacheSlot cache[WOLFHSM_NUM_RAMKEYS];
     whServerCustomCb customHandlerTable[WH_CUSTOM_CB_NUM_CALLBACKS];
+    whServerDmaContext dma;
 } whServerContext;
 
 typedef struct whServerConfig_t {
@@ -60,6 +63,7 @@ typedef struct whServerConfig_t {
 #if defined WOLF_CRYPTO_CB /* TODO: should we be relying on wolfSSL defines? */
     int devId;
 #endif
+    whServerDmaConfig* dmaConfig;
 } whServerConfig;
 
 /* Initialize the comms and crypto cache components.

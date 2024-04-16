@@ -32,6 +32,21 @@
 #define REPEAT_COUNT 10
 #define ONE_MS 1000
 #define FLASH_RAM_SIZE (1024 * 1024) /* 1MB */
+#define DMA_TEST_MEM_NWORDS 3
+
+typedef struct {
+    /* Simulated client memory region */
+    uint32_t cliBuf[DMA_TEST_MEM_NWORDS];
+    /* Simulated server address in the allow list */
+    uint32_t srvBufAllow[DMA_TEST_MEM_NWORDS];
+    /* Simulated server mem region not in the allow list */
+    uint32_t srvBufDeny[DMA_TEST_MEM_NWORDS];
+    /* Simulated "remapped" client address */
+    uint32_t srvRemapBufAllow[DMA_TEST_MEM_NWORDS];
+} TestMemory;
+
+#define TEST_MEM_CLI_BYTE ((uint8_t)0xAA)
+#define TEST_MEM_UNMAPPED_BYTE ((uint8_t)0xBB)
 
 /* Dummy callback that loopback-copies client data */
 static int _customServerCb(whServerContext*                 server,
@@ -138,6 +153,288 @@ static int _testCallbacks(whServerContext* server, whClientContext* client)
     return WH_ERROR_OK;
 }
 
+static int _customServerDmaCb(struct whServerContext_t* server,
+                              void* clientAddr, void** serverPtr, uint32_t len,
+                              whServerDmaOper oper, whServerDmaFlags flags)
+{
+    /* remapped "client" address, a.k.a. arbitary "server" buffer */
+    void* srvTmpBuf = (void*)((uintptr_t)clientAddr +
+                              (offsetof(TestMemory, srvRemapBufAllow) -
+                               offsetof(TestMemory, cliBuf)));
+
+    /* This DMA callback simulates the remapping of client addresses by simply
+     * copying the data between the client address and the "remapped" server
+     * address, which is just an arbitrary server buffer */
+    switch (oper) {
+        case WH_DMA_OPER_CLIENT_READ_PRE:
+            /* temp buffer to be used as copy source, so copy in data from
+             * client */
+            memcpy(srvTmpBuf, (void*)((uintptr_t)clientAddr), len);
+            /* ensure subsequent copies use server temp buf as copy source */
+            *serverPtr = srvTmpBuf;
+            break;
+
+        case WH_DMA_OPER_CLIENT_WRITE_PRE:
+            /* subsequent writes use server temp buf as copy dest */
+            *serverPtr = srvTmpBuf;
+            break;
+
+        case WH_DMA_OPER_CLIENT_READ_POST:
+            /* simulate unmapping of the address by clearing the server temp
+             * buffer */
+            memset(srvTmpBuf, TEST_MEM_UNMAPPED_BYTE, len);
+            break;
+
+        case WH_DMA_OPER_CLIENT_WRITE_POST:
+            /* temp buffer was just used as copy dest, so copy data out to
+             * client address */
+            memcpy(clientAddr, srvTmpBuf, len);
+            break;
+    }
+
+    return WH_ERROR_OK;
+}
+
+static int _customServerDma32Cb(struct whServerContext_t* server,
+                                uint32_t clientAddr, void** serverPtr,
+                                uint32_t len, whServerDmaOper oper,
+                                whServerDmaFlags flags)
+{
+    return _customServerDmaCb(server, (void*)((uintptr_t)clientAddr), serverPtr,
+                              len, oper, flags);
+}
+
+static int _customServerDma64Cb(struct whServerContext_t* server,
+                                uint64_t clientAddr, void** serverPtr,
+                                uint64_t len, whServerDmaOper oper,
+                                whServerDmaFlags flags)
+{
+    return _customServerDmaCb(server, (void*)((uintptr_t)clientAddr), serverPtr,
+                              len, oper, flags);
+}
+
+static int _testDma(whServerContext* server, whClientContext* client)
+{
+    int        rc      = 0;
+    TestMemory testMem = {0};
+
+    const whServerDmaAddrAllowList allowList = {
+        .readList =
+            {
+                {&testMem.srvBufAllow, sizeof(testMem.srvBufAllow)},
+                {&testMem.srvRemapBufAllow, sizeof(testMem.srvRemapBufAllow)},
+            },
+        .writeList =
+            {
+                {&testMem.srvBufAllow, sizeof(testMem.srvBufAllow)},
+                {&testMem.srvRemapBufAllow, sizeof(testMem.srvRemapBufAllow)},
+            },
+    };
+
+    /* Register a custom DMA callback */
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Server_DmaRegisterCb32(server, _customServerDma32Cb));
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Server_DmaRegisterCb64(server, _customServerDma64Cb));
+
+    /* Register our custom allow list */
+    WH_TEST_RETURN_ON_FAIL(wh_Server_DmaRegisterAllowList(server, &allowList));
+
+    /* Check allowed operations for addresses in the allowlist */
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_OK == wh_Server_DmaCheckMemOperAllowed(
+                           server, WH_DMA_OPER_CLIENT_READ_PRE,
+                           testMem.srvBufAllow, sizeof(testMem.srvBufAllow)));
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_OK ==
+        wh_Server_DmaCheckMemOperAllowed(server, WH_DMA_OPER_CLIENT_READ_PRE,
+                                         testMem.srvRemapBufAllow,
+                                         sizeof(testMem.srvRemapBufAllow)));
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_OK == wh_Server_DmaCheckMemOperAllowed(
+                           server, WH_DMA_OPER_CLIENT_WRITE_PRE,
+                           testMem.srvBufAllow, sizeof(testMem.srvBufAllow)));
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_OK ==
+        wh_Server_DmaCheckMemOperAllowed(server, WH_DMA_OPER_CLIENT_WRITE_PRE,
+                                         testMem.srvRemapBufAllow,
+                                         sizeof(testMem.srvRemapBufAllow)));
+
+    /* Ensure an address not in the allowlist is denied for all operations */
+    WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS ==
+                          wh_Server_DmaCheckMemOperAllowed(
+                              server, WH_DMA_OPER_CLIENT_READ_PRE,
+                              testMem.srvBufDeny, sizeof(testMem.srvBufDeny)));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS ==
+                          wh_Server_DmaCheckMemOperAllowed(
+                              server, WH_DMA_OPER_CLIENT_WRITE_PRE,
+                              testMem.srvBufDeny, sizeof(testMem.srvBufDeny)));
+
+    /* Zero-sized operations should be denied */
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_BADARGS ==
+        wh_Server_DmaCheckMemOperAllowed(server, WH_DMA_OPER_CLIENT_READ_PRE,
+                                         testMem.srvBufAllow, 0));
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_BADARGS ==
+        wh_Server_DmaCheckMemOperAllowed(server, WH_DMA_OPER_CLIENT_WRITE_PRE,
+                                         testMem.srvBufAllow, 0));
+
+    /* Set known pattern in client Buffer */
+    memset(testMem.cliBuf, TEST_MEM_CLI_BYTE, sizeof(testMem.cliBuf));
+
+    /* Perform a copy from "client mem" to allowed "server mem" */
+    if (sizeof(void*) == sizeof(uint64_t)) {
+        /* 64-bit host system */
+        WH_TEST_RETURN_ON_FAIL(whServerDma_CopyFromClient64(
+            server, testMem.srvBufAllow, (uint64_t)((uintptr_t)testMem.cliBuf),
+            sizeof(testMem.cliBuf), (whServerDmaFlags){0}));
+    }
+    else if (sizeof(void*) == sizeof(uint32_t)) {
+        /* 32-bit host system */
+        WH_TEST_RETURN_ON_FAIL(whServerDma_CopyFromClient32(
+            server, testMem.srvBufAllow, (uint32_t)((uintptr_t)testMem.cliBuf),
+            sizeof(testMem.cliBuf), (whServerDmaFlags){0}));
+    }
+
+    /* Ensure data was copied */
+    WH_TEST_ASSERT_RETURN(0 == memcmp(testMem.cliBuf, testMem.srvBufAllow,
+                                      sizeof(testMem.cliBuf)));
+
+    /* custom DMA callback uses the tmp server buffer for input data and
+     * should set it to a known pattern on exit */
+    uint8_t tmp[sizeof(testMem.srvRemapBufAllow)];
+    memset(tmp, TEST_MEM_UNMAPPED_BYTE, sizeof(tmp));
+    WH_TEST_ASSERT_RETURN(0 == memcmp(testMem.srvRemapBufAllow, tmp,
+                                      sizeof(testMem.srvRemapBufAllow)));
+
+    /* Clear client data */
+    memset(testMem.cliBuf, 0, sizeof(testMem.cliBuf));
+    memset(testMem.srvRemapBufAllow, 0, sizeof(testMem.srvRemapBufAllow));
+
+    /* Perform a copy from "server mem" to "client mem" */
+    if (sizeof(void*) == sizeof(uint64_t)) {
+        /* 64-bit host system */
+        WH_TEST_RETURN_ON_FAIL(whServerDma_CopyToClient64(
+            server, (uint64_t)((uintptr_t)testMem.cliBuf), testMem.srvBufAllow,
+            sizeof(testMem.srvBufAllow), (whServerDmaFlags){0}));
+    }
+    else if (sizeof(void*) == sizeof(uint32_t)) {
+        /* 32-bit host system */
+        WH_TEST_RETURN_ON_FAIL(whServerDma_CopyToClient32(
+            server, (uint32_t)((uintptr_t)testMem.cliBuf), testMem.srvBufAllow,
+            sizeof(testMem.srvBufAllow), (whServerDmaFlags){0}));
+    }
+
+    /* Ensure data was copied */
+    WH_TEST_ASSERT_RETURN(0 == memcmp(testMem.srvBufAllow, testMem.cliBuf,
+                                      sizeof(testMem.srvBufAllow)));
+
+    /* Now try and copy from the denylisted addresses */
+    if (sizeof(void*) == sizeof(uint64_t)) {
+        /* 64-bit host system */
+        WH_TEST_ASSERT_RETURN(
+            WH_ERROR_ACCESS ==
+            whServerDma_CopyFromClient64(server, testMem.srvBufDeny,
+                                         (uint64_t)((uintptr_t)testMem.cliBuf),
+                                         sizeof(testMem.cliBuf),
+                                         (whServerDmaFlags){0}));
+        WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS ==
+                              whServerDma_CopyToClient64(
+                                  server, (uint64_t)((uintptr_t)testMem.cliBuf),
+                                  testMem.srvBufDeny,
+                                  sizeof(testMem.srvBufDeny),
+                                  (whServerDmaFlags){0}));
+    }
+    else if (sizeof(void*) == sizeof(uint32_t)) {
+        /* 32-bit host system */
+        WH_TEST_ASSERT_RETURN(
+            WH_ERROR_ACCESS ==
+            whServerDma_CopyFromClient32(server, testMem.srvBufDeny,
+                                         (uint32_t)((uintptr_t)testMem.cliBuf),
+                                         sizeof(testMem.cliBuf),
+                                         (whServerDmaFlags){0}));
+        WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS ==
+                              whServerDma_CopyToClient32(
+                                  server, (uint32_t)((uintptr_t)testMem.cliBuf),
+                                  testMem.srvBufDeny,
+                                  sizeof(testMem.srvBufDeny),
+                                  (whServerDmaFlags){0}));
+    }
+
+    /* Check that zero-sized copies fail, even from allowed addresses */
+    if (sizeof(void*) == sizeof(uint64_t)) {
+        /* 64-bit host system */
+        WH_TEST_ASSERT_RETURN(
+            WH_ERROR_BADARGS ==
+            whServerDma_CopyFromClient64(server, testMem.srvBufAllow,
+                                         (uint64_t)((uintptr_t)testMem.cliBuf),
+                                         0, (whServerDmaFlags){0}));
+        WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
+                              whServerDma_CopyToClient64(
+                                  server, (uint64_t)((uintptr_t)testMem.cliBuf),
+                                  testMem.srvBufAllow, 0,
+                                  (whServerDmaFlags){0}));
+    }
+    else if (sizeof(void*) == sizeof(uint32_t)) {
+        /* 32-bit host system */
+        WH_TEST_ASSERT_RETURN(
+            WH_ERROR_BADARGS ==
+            whServerDma_CopyFromClient32(server, testMem.srvBufAllow,
+                                         (uint32_t)((uintptr_t)testMem.cliBuf),
+                                         0, (whServerDmaFlags){0}));
+        WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
+                              whServerDma_CopyToClient32(
+                                  server, (uint32_t)((uintptr_t)testMem.cliBuf),
+                                  testMem.srvBufAllow, 0,
+                                  (whServerDmaFlags){0}));
+    }
+
+    /* Finally, check that registering a NULL callbacks clears the DMA callback
+     * table, and that the copies otherwise work as normal */
+    WH_TEST_RETURN_ON_FAIL(wh_Server_DmaRegisterCb32(server, NULL));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_DmaRegisterCb64(server, NULL));
+
+    /* Use remap buffer as copy src, since client address isn't in allowlist */
+    memcpy(testMem.srvRemapBufAllow, testMem.cliBuf, sizeof(testMem.cliBuf));
+
+    if (sizeof(void*) == sizeof(uint64_t)) {
+        WH_TEST_RETURN_ON_FAIL(whServerDma_CopyFromClient64(
+            server, testMem.srvBufAllow,
+            (uint64_t)((uintptr_t)testMem.srvRemapBufAllow),
+            sizeof(testMem.cliBuf), (whServerDmaFlags){0}));
+    }
+    else if (sizeof(void*) == sizeof(uint32_t)) {
+        WH_TEST_RETURN_ON_FAIL(whServerDma_CopyFromClient32(
+            server, testMem.srvBufAllow,
+            (uint32_t)((uintptr_t)testMem.srvRemapBufAllow),
+            sizeof(testMem.cliBuf), (whServerDmaFlags){0}));
+    }
+
+    WH_TEST_ASSERT_RETURN(0 == memcmp(testMem.srvRemapBufAllow,
+                                      testMem.srvBufAllow,
+                                      sizeof(testMem.srvBufAllow)));
+    memset(testMem.srvRemapBufAllow, 0, sizeof(testMem.srvRemapBufAllow));
+
+    if (sizeof(void*) == sizeof(uint64_t)) {
+        WH_TEST_RETURN_ON_FAIL(whServerDma_CopyToClient64(
+            server, (uint64_t)((uintptr_t)testMem.srvRemapBufAllow),
+            testMem.srvBufAllow, sizeof(testMem.srvRemapBufAllow),
+            (whServerDmaFlags){0}));
+    }
+    else if (sizeof(void*) == sizeof(uint32_t)) {
+        WH_TEST_RETURN_ON_FAIL(whServerDma_CopyToClient32(
+            server, (uint32_t)((uintptr_t)testMem.srvRemapBufAllow),
+            testMem.srvBufAllow, sizeof(testMem.srvBufAllow),
+            (whServerDmaFlags){0}));
+    }
+
+    WH_TEST_ASSERT_RETURN(0 == memcmp(testMem.srvBufAllow,
+                                      testMem.srvRemapBufAllow,
+                                      sizeof(testMem.srvBufAllow)));
+
+    return rc;
+}
 
 int whTest_ClientServerSequential(void)
 {
@@ -612,6 +909,9 @@ int whTest_ClientServerSequential(void)
 
     /* Test custom registered callbacks */
     WH_TEST_RETURN_ON_FAIL(_testCallbacks(server, client));
+
+    /* Test DMA callbacks and address allowlisting */
+    WH_TEST_RETURN_ON_FAIL(_testDma(server, client));
 
     WH_TEST_RETURN_ON_FAIL(wh_Server_Cleanup(server));
     WH_TEST_RETURN_ON_FAIL(wh_Client_Cleanup(client));
