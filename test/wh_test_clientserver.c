@@ -32,16 +32,17 @@
 #define REPEAT_COUNT 10
 #define ONE_MS 1000
 #define FLASH_RAM_SIZE (1024 * 1024) /* 1MB */
+#define DMA_TEST_MEM_NWORDS 3
 
 typedef struct {
     /* Simulated client memory region */
-    uint32_t cliBuf[3];
+    uint32_t cliBuf[DMA_TEST_MEM_NWORDS];
     /* Simulated server address in the allow list */
-    uint32_t srvBufAllow[3];
+    uint32_t srvBufAllow[DMA_TEST_MEM_NWORDS];
     /* Simulated server mem region not in the allow list */
-    uint32_t srvBufDeny[3];
+    uint32_t srvBufDeny[DMA_TEST_MEM_NWORDS];
     /* Simulated "remapped" client address */
-    uint32_t srvRemapBufAllow[3];
+    uint32_t srvRemapBufAllow[DMA_TEST_MEM_NWORDS];
 } TestMemory;
 
 #define TEST_MEM_CLI_BYTE      ((uint8_t)0xAA)
@@ -265,7 +266,7 @@ static int _testDma(whServerContext* server, whClientContext* client)
                               server, WH_DMA_OPER_CLIENT_WRITE_PRE,
                               testMem.srvBufDeny, sizeof(testMem.srvBufDeny)));
 
-    /* Zero sized operations should be denied */
+    /* Zero-sized operations should be denied */
     WH_TEST_ASSERT_RETURN(
         WH_ERROR_BADARGS ==
         wh_Server_DmaCheckMemOperAllowed(server, WH_DMA_OPER_CLIENT_READ_PRE,
@@ -379,6 +380,45 @@ static int _testDma(whServerContext* server, whClientContext* client)
                                   server, (uint32_t)((uintptr_t)testMem.cliBuf),
                                   testMem.srvBufAllow, 0, (whServerDmaFlags){0}));
     }
+
+    /* Finally, check that registering a NULL callbacks clears the DMA callback
+     * table, and that the copies otherwise work as normal */
+    WH_TEST_RETURN_ON_FAIL(wh_Server_DmaRegisterCb32(server, NULL));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_DmaRegisterCb64(server, NULL));
+
+    /* Use remap buffer as copy src, since client address isn't in allowlist */
+    memcpy(testMem.srvRemapBufAllow, testMem.cliBuf, sizeof(testMem.cliBuf));
+
+    if (sizeof(void*) == sizeof(uint64_t)) {
+        WH_TEST_RETURN_ON_FAIL(whServerDma_CopyFromClient64(
+            server, testMem.srvBufAllow, (uint64_t)((uintptr_t)testMem.srvRemapBufAllow),
+            sizeof(testMem.cliBuf), (whServerDmaFlags){0}));
+    }
+    else if (sizeof(void*) == sizeof(uint32_t)) {
+        WH_TEST_RETURN_ON_FAIL(whServerDma_CopyFromClient32(
+            server, testMem.srvBufAllow, (uint32_t)((uintptr_t)testMem.srvRemapBufAllow),
+            sizeof(testMem.cliBuf), (whServerDmaFlags){0}));
+    }
+
+    WH_TEST_ASSERT_RETURN(0 == memcmp(testMem.srvRemapBufAllow,
+                                      testMem.srvBufAllow,
+                                      sizeof(testMem.srvBufAllow)));
+    memset(testMem.srvRemapBufAllow, 0, sizeof(testMem.srvRemapBufAllow));
+
+    if (sizeof(void*) == sizeof(uint64_t)) {
+        WH_TEST_RETURN_ON_FAIL(whServerDma_CopyToClient64(
+            server, (uint64_t)((uintptr_t)testMem.srvRemapBufAllow), testMem.srvBufAllow,
+            sizeof(testMem.srvRemapBufAllow), (whServerDmaFlags){0}));
+    }
+    else if (sizeof(void*) == sizeof(uint32_t)) {
+        WH_TEST_RETURN_ON_FAIL(whServerDma_CopyToClient32(
+            server, (uint32_t)((uintptr_t)testMem.srvRemapBufAllow), testMem.srvBufAllow,
+            sizeof(testMem.srvBufAllow), (whServerDmaFlags){0}));
+    }
+
+    WH_TEST_ASSERT_RETURN(0 == memcmp(testMem.srvBufAllow,
+                                      testMem.srvRemapBufAllow,
+                                      sizeof(testMem.srvBufAllow)));
 
     return rc;
 }
