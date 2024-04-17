@@ -4,7 +4,9 @@
 #include "wolfhsm/wh_server.h"
 
 int hsmGetUniqueId(whServerContext* server);
+int hsmCacheFindSlot(whServerContext* server);
 int hsmCacheKey(whServerContext* server, whNvmMetadata* meta, uint8_t* in);
+int hsmFreshenKey(whServerContext* server, whKeyId keyId);
 int hsmReadKey(whServerContext* server, whKeyId keyId, whNvmMetadata* meta,
     uint8_t* out, uint32_t* outSz);
 int hsmEvictKey(whServerContext* server, uint16_t keyId);

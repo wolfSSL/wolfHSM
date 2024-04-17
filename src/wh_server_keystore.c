@@ -46,6 +46,34 @@ int hsmGetUniqueId(whServerContext* server)
     return ret;
 }
 
+/* return the index of a free slot */
+int hsmCacheFindSlot(whServerContext* server)
+{
+    int i;
+    int foundIndex = -1;
+    for (i = 0; i < WOLFHSM_NUM_RAMKEYS; i++) {
+        /* check for empty slot or rewrite slot */
+        if (foundIndex == -1 && server->cache[i].meta->id ==
+            WOLFHSM_ID_ERASED) {
+            foundIndex = i;
+            break;
+        }
+    }
+    /* if no empty slots, check for a commited key we can evict */
+    if (foundIndex == -1) {
+        for (i = 0; i < WOLFHSM_NUM_RAMKEYS; i++) {
+            if (server->cache[i].commited == 1) {
+                foundIndex = i;
+                break;
+            }
+        }
+    }
+    /* return error if we are out of cache slots */
+    if (foundIndex == -1)
+        return WH_ERROR_NOSPACE;
+    return foundIndex;
+}
+
 int hsmCacheKey(whServerContext* server, whNvmMetadata* meta, uint8_t* in)
 {
     int i;
@@ -87,6 +115,52 @@ int hsmCacheKey(whServerContext* server, whNvmMetadata* meta, uint8_t* in)
         hsmSheRamKeyPlain = 1;
 #endif
     return 0;
+}
+
+/* try to put the specified key into cache if it isn't already, return index */
+int hsmFreshenKey(whServerContext* server, whKeyId keyId)
+{
+    int ret = 0;
+    int i;
+    int foundIndex = -1;
+    uint32_t outSz = WOLFHSM_KEYCACHE_BUFSIZE;
+    whNvmMetadata meta[1] = {0};
+    if (server == NULL || keyId == WOLFHSM_ID_ERASED)
+        return WH_ERROR_BADARGS;
+    for (i = 0; i < WOLFHSM_NUM_RAMKEYS; i++) {
+        /* check for empty slot or rewrite slot */
+        if ((foundIndex == -1 &&
+            server->cache[i].meta->id == WOLFHSM_ID_ERASED) ||
+            server->cache[i].meta->id == keyId) {
+            foundIndex = i;
+            if (server->cache[i].meta->id == keyId)
+                return i;
+        }
+    }
+    /* if no empty slots, check for a commited key we can evict */
+    if (foundIndex == -1) {
+        for (i = 0; i < WOLFHSM_NUM_RAMKEYS; i++) {
+            if (server->cache[i].commited == 1) {
+                foundIndex = i;
+                break;
+            }
+        }
+    }
+    /* return error if we are out of cache slots */
+    if (foundIndex == -1)
+        return WH_ERROR_NOSPACE;
+    /* try to read the metadata */
+    ret = wh_Nvm_GetMetadata(server->nvm, keyId, meta);
+    if (ret == 0) {
+        /* set meta */
+        XMEMCPY((uint8_t*)server->cache[foundIndex].meta, (uint8_t*)meta,
+            sizeof(meta));
+        /* read the object */
+        ret = wh_Nvm_Read(server->nvm, keyId, 0, outSz,
+            server->cache[foundIndex].buffer);
+    }
+    /* return index */
+    return foundIndex;
 }
 
 int hsmReadKey(whServerContext* server, whKeyId keyId, whNvmMetadata* outMeta,
