@@ -34,6 +34,7 @@ static int hsmCacheKeyRsa(whServerContext* server, RsaKey* key)
     }
     if (ret > 0 ) {
         /* export key */
+        /* TODO: Fix wolfCrypto to allow KeyToDer when KEY_GEN is NOT set */
         ret = wc_RsaKeyToDer(key, server->cache[slotIdx].buffer,
             WOLFHSM_KEYCACHE_BUFSIZE);
     }
@@ -142,6 +143,7 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
         switch (packet->pkAnyReq.type)
         {
 #ifndef NO_RSA
+#ifdef WOLFSSL_KEY_GEN
         case WC_PK_TYPE_RSA_KEYGEN:
             /* init the rsa key */
             ret = wc_InitRsaKey_ex(server->crypto->rsa, NULL, INVALID_DEVID);
@@ -165,6 +167,8 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
                 ret = 0;
             }
             break;
+#endif  /* WOLFSSL_KEY_GEN */
+
         case WC_PK_TYPE_RSA:
             switch (packet->pkRsaReq.opType)
             {

@@ -23,7 +23,7 @@ ARCHFLAGS ?=
 
 # Compiler and linker flags
 ASFLAGS ?= $(ARCHFLAGS)
-CFLAGS_EXTRA ?= -Wmissing-field-initializers -Wmissing-braces -Wpadded
+CFLAGS_EXTRA ?= -Wmissing-field-initializers -Wmissing-braces
 CFLAGS ?= $(ARCHFLAGS) -std=c90 -D_GNU_SOURCE -Wall -Werror -Wno-cpp $(CFLAGS_EXTRA)
 LDFLAGS ?= $(ARCHFLAGS)
 
@@ -47,6 +47,11 @@ CFLAGS += -fsanitize=address
 LDFLAGS += -fsanitize=address
 endif
 
+# Support a NO CRYPTO build
+ifeq ($(NOCRYPTO),1)
+CFLAGS += -DWOLFHSM_NO_CRYPTO -Wpadded
+endif
+
 # wolfHSM-specific defines
 CFLAGS += -DWH_CONFIG -DWOLFHSM_NO_CRYPTO
 
@@ -54,8 +59,9 @@ CFLAGS += -DWH_CONFIG -DWOLFHSM_NO_CRYPTO
 # Assembly source files
 SRC_ASM +=
 
+ifneq ($(NOCRYPTO),1)
 # wolfCrypt source files
-WSRC_C += \
+SRC_C += \
             $(WOLFSSL_DIR)/wolfcrypt/src/wc_port.c \
             $(WOLFSSL_DIR)/wolfcrypt/src/memory.c \
             $(WOLFSSL_DIR)/wolfcrypt/src/misc.c \
@@ -72,6 +78,8 @@ WSRC_C += \
             $(WOLFSSL_DIR)/wolfcrypt/src/sha256.c \
             $(WOLFSSL_DIR)/wolfcrypt/src/aes.c \
             $(WOLFSSL_DIR)/wolfcrypt/src/cmac.c \
+
+endif
 
 # wolfHSM source files
 SRC_C += \
