@@ -87,7 +87,7 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
                     ret = packet->rc;
                 else {
                     info->pk.rsakg.key->devCtx =
-                        (void*)0 + packet->pkRsakgRes.keyId;
+                        (void*)((intptr_t)packet->pkRsakgRes.keyId);
                 }
             }
             break;
@@ -99,7 +99,7 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             packet->pkRsaReq.opType = info->pk.rsa.type;
             /* set keyId */
             packet->pkRsaReq.keyId =
-                *((uint32_t*)(&info->pk.rsa.key->devCtx));
+                (intptr_t)(info->pk.rsa.key->devCtx);
             /* set inLen */
             packet->pkRsaReq.inLen = info->pk.rsa.inLen;
             /* set outLen */
@@ -133,7 +133,7 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
         case WC_PK_TYPE_RSA_GET_SIZE:
             /* set keyId */
             packet->pkRsaGetSizeReq.keyId =
-                *((uint32_t*)(&info->pk.rsa_get_size.key->devCtx));
+                (intptr_t)(info->pk.rsa_get_size.key->devCtx);
             /* write request */
             ret = wh_Client_SendRequest(ctx, group,
                 WC_ALGO_TYPE_PK,

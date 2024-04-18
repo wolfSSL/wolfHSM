@@ -201,8 +201,9 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
             break;
         case WC_PK_TYPE_RSA_GET_SIZE:
             /* init rsa key */
-            ret = wc_InitRsaKey_ex(server->crypto->rsa, NULL, INVALID_DEVID);
-            /* load the key from the keystore, data will be blown away */
+            ret = wc_InitRsaKey_ex(server->crypto->rsa, NULL,
+                server->crypto->devId);
+            /* load the key from the keystore */
             if (ret == 0) {
                 ret = hsmLoadKeyRsa(server, server->crypto->rsa,
                     packet->pkRsaGetSizeReq.keyId);
