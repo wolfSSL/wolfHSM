@@ -1236,7 +1236,7 @@ int whTest_ClientCfg(whClientConfig* clientCfg)
     WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
     WH_TEST_ASSERT_RETURN(avail_objects == NF_OBJECT_COUNT);
 
-    H_TEST_RETURN_ON_FAIL(wh_Client_CommClose(client));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CommClose(client));
     WH_TEST_RETURN_ON_FAIL(wh_Client_Cleanup(client));
 
     return ret;

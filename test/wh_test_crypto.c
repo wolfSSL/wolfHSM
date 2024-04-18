@@ -260,7 +260,7 @@ exit:
     wc_FreeRng(rng);
 
     /* Tell server to close */
-    H_TEST_RETURN_ON_FAIL(wh_Client_CommClose(client));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CommClose(client));
 
     if (ret == 0) {
         WH_TEST_RETURN_ON_FAIL(wh_Client_Cleanup(client));
