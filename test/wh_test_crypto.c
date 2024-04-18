@@ -241,12 +241,18 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         printf("Failed to wc_RsaPrivateDecrypt %d\n", ret);
         goto exit;
     }
-#if 0
-    if((ret = wolfHSM_EvictKey(ctx, (uint32_t)rsa->devCtx)) != 0) {
-        printf("Failed to wolfHSM_EraseKey %d\n", ret);
-        return 1;
+    XMEMCPY((uint8_t*)&keyId, (uint8_t*)&rsa->devCtx, sizeof(keyId));
+    if ((ret = wh_Client_KeyEvictRequest(client, keyId)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyEvictRequest %d\n", ret);
+        goto exit;
     }
-#endif
+    do {
+        ret = wh_Client_KeyEvictResponse(client);
+    } while (ret == WH_ERROR_NOTREADY);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyEvictResponse %d\n", ret);
+        goto exit;
+    }
     if((ret = wc_FreeRsaKey(rsa)) != 0) {
         printf("Failed to wc_FreeRsaKey %d\n", ret);
         goto exit;
@@ -333,7 +339,6 @@ int whTest_CryptoServerConfig(whServerConfig* config)
         }
         wh_Server_GetConnected(server, &am_connected);
     }
-
     if ((ret == 0) || (ret == WH_ERROR_NOTREADY)){
         WH_TEST_RETURN_ON_FAIL(wh_Server_Cleanup(server));
     } else {
@@ -452,6 +457,7 @@ static int wh_ClientServer_MemThreadTest(void)
        .comm_config = cs_conf,
        .nvm = nvm,
        .crypto = crypto,
+       .devId = INVALID_DEVID,
     }};
 
     WH_TEST_RETURN_ON_FAIL(wh_Nvm_Init(nvm, n_conf));

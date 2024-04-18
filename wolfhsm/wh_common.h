@@ -20,7 +20,7 @@ enum {
     WOLFHSM_NUM_RAMKEYS = 2,        /* Number of RAM keys */
     WOLFHSM_NUM_NVMOBJECTS = 32,    /* Number of NVM objects in the directory */
     WOLFHSM_NUM_MANIFESTS = 8,      /* Number of compiletime manifests */
-    WOLFHSM_KEYCACHE_BUFSIZE = 512, /* Size in bytes of key cache buffer  */
+    WOLFHSM_KEYCACHE_BUFSIZE = 1200, /* Size in bytes of key cache buffer  */
 };
 
 

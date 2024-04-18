@@ -40,19 +40,18 @@ static int hsmCacheKeyRsa(whServerContext* server, RsaKey* key)
     return ret;
 }
 
-static int hsmLoadKeyRsa(whServerContext* server, RsaKey* key, uint16_t keyId)
+static int hsmLoadKeyRsa(whServerContext* server, RsaKey* key, whKeyId keyId)
 {
     int ret;
     uint32_t idx = 0;
-    whNvmMetadata meta[1] = {0};
+    uint32_t size;
     byte keyBuf[2048];
     /* retrieve the key */
-    meta->id = keyId;
-    meta->len = sizeof(keyBuf);
-    ret = hsmReadKey(server, meta, keyBuf);
+    size = sizeof(keyBuf);
+    ret = hsmReadKey(server, keyId, NULL, keyBuf, &size);
     /* decode the key */
     if (ret == 0)
-        ret = wc_RsaPrivateKeyDecode(keyBuf, &idx, key, meta->len);
+        ret = wc_RsaPrivateKeyDecode(keyBuf, &idx, key, size);
 
     return ret;
 }
@@ -62,7 +61,7 @@ static int hsmCacheKeyCurve25519(whServerContext* server, curve25519_key* key)
     int ret;
     word32 privSz = CURVE25519_KEYSIZE;
     word32 pubSz = CURVE25519_KEYSIZE;
-    whNvmMetadata meta[1] = {{0}};
+    whNvmMetadata meta[1] = {0};
     byte keyBuf[CURVE25519_KEYSIZE * 2];
     /* store public, then private so that loading an external public only key
      * will work along with our keys */
@@ -73,7 +72,6 @@ static int hsmCacheKeyCurve25519(whServerContext* server, curve25519_key* key)
         ret = hsmGetUniqueId(server);
     }
     if (ret > 0) {
-        XMEMSET(meta, 0, sizeof(whNvmMetadata));
         meta->len = privSz + pubSz;
         meta->id = ret;
         ret = hsmCacheKey(server, meta, keyBuf);
