@@ -9,12 +9,16 @@
 #include <stdint.h>
 
 #include "wolfhsm/wh_error.h"
-#include "wolfhsm/wh_transport.h"
+#include "wolfhsm/wh_comm.h"
 #include "wolfhsm/wh_transport_mem.h"
 
-int wh_TransportMem_Init(void* c, const void* cf)
+int wh_TransportMem_Init(void* c, const void* cf,
+        whCommSetConnectedCb connectcb, void* connectcb_arg)
 {
+    (void)connectcb; (void)connectcb_arg; /* Not used */
+
     whTransportMemContext* context = c;
+
     const whTransportMemConfig* config = cf;
     if (    (context == NULL) ||
             (config == NULL) ||
@@ -35,14 +39,16 @@ int wh_TransportMem_Init(void* c, const void* cf)
     context->resp_data  = (void*)(context->resp + 1);
 
     context->initialized = 1;
-    return 0;
+    return WH_ERROR_OK;
 }
 
-int wh_TransportMem_InitClear(void* c, const void* cf)
+int wh_TransportMem_InitClear(void* c, const void* cf,
+        whCommSetConnectedCb connectcb, void* connectcb_arg)
 {
     whTransportMemContext* context = c;
-    int rc = wh_TransportMem_Init(c, cf);
-    if (rc == 0) {
+
+    int rc = wh_TransportMem_Init(c, cf, connectcb, connectcb_arg);
+    if (rc == WH_ERROR_OK) {
         /* Zero the buffers */
         memset((void*)context->req, 0, context->req_size);
         memset((void*)context->resp, 0, context->resp_size);

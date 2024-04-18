@@ -75,7 +75,7 @@
 
 #include <stdint.h>
 
-#include "wolfhsm/wh_transport.h"
+#include "wolfhsm/wh_comm.h"
 
 /** Common configuration structure */
 typedef struct {
@@ -114,8 +114,10 @@ typedef whTransportMemContext whTransportMemClientContext;
 typedef whTransportMemContext whTransportMemServerContext;
 
 /** Callback function declarations */
-int wh_TransportMem_Init(void* c, const void* cf);
-int wh_TransportMem_InitClear(void* c, const void* cf);
+int wh_TransportMem_Init(void* c, const void* cf,
+        whCommSetConnectedCb connectcb, void* connectcb_arg);
+int wh_TransportMem_InitClear(void* c, const void* cf,
+        whCommSetConnectedCb connectcb, void* connectcb_arg);
 int wh_TransportMem_Cleanup(void* c);
 int wh_TransportMem_SendRequest(void* c, uint16_t len, const void* data);
 int wh_TransportMem_RecvRequest(void* c, uint16_t *out_len, void* data);

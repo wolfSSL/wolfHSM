@@ -125,12 +125,142 @@ int wh_Client_RecvResponse(whClientContext *c,
     return rc;
 }
 
+int wh_Client_CommInitRequest(whClientContext* c)
+{
+    whMessageCommInitRequest msg = {0};
+
+    if (c == NULL) {
+       return WH_ERROR_BADARGS;
+   }
+
+   /* Populate the message.*/
+   msg.client_id = c->comm->client_id;
+
+   return wh_Client_SendRequest(c,
+           WH_MESSAGE_GROUP_COMM, WH_MESSAGE_COMM_ACTION_INIT,
+           sizeof(msg), &msg);
+}
+
+int wh_Client_CommInitResponse(whClientContext* c,
+                                uint32_t *out_clientid,
+                                uint32_t *out_serverid)
+{
+    int rc = 0;
+    whMessageCommInitResponse msg = {0};
+    uint16_t resp_group = 0;
+    uint16_t resp_action = 0;
+    uint16_t resp_size = 0;
+
+    if (c == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    rc = wh_Client_RecvResponse(c,
+            &resp_group, &resp_action,
+            &resp_size, &msg);
+    if (rc == 0) {
+        /* Validate response */
+        if (    (resp_group != WH_MESSAGE_GROUP_COMM) ||
+                (resp_action != WH_MESSAGE_COMM_ACTION_INIT) ||
+                (resp_size != sizeof(msg)) ){
+            /* Invalid message */
+            rc = WH_ERROR_ABORTED;
+        } else {
+            /* Valid message */
+            if (out_clientid != NULL) {
+                *out_clientid = msg.client_id;
+            }
+            if (out_serverid != NULL) {
+                *out_serverid = msg.server_id;
+            }
+        }
+    }
+    return rc;
+}
+
+int wh_Client_CommInit(whClientContext* c,
+                        uint32_t *out_clientid,
+                        uint32_t *out_serverid)
+{
+    int rc = 0;
+    if (c == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    do {
+        rc = wh_Client_CommInitRequest(c);
+    } while (rc == WH_ERROR_NOTREADY);
+
+    if (rc == 0) {
+        do {
+            rc = wh_Client_CommInitResponse(c, out_clientid, out_serverid);
+        } while (rc == WH_ERROR_NOTREADY);
+    }
+    return rc;
+}
+
+int wh_Client_CommCloseRequest(whClientContext* c)
+{
+    if (c == NULL) {
+       return WH_ERROR_BADARGS;
+   }
+
+   return wh_Client_SendRequest(c,
+           WH_MESSAGE_GROUP_COMM, WH_MESSAGE_COMM_ACTION_CLOSE,
+           0, NULL);
+}
+
+int wh_Client_CommCloseResponse(whClientContext* c)
+{
+    int rc = 0;
+    uint16_t resp_group = 0;
+    uint16_t resp_action = 0;
+    uint16_t resp_size = 0;
+
+    if (c == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    rc = wh_Client_RecvResponse(c,
+            &resp_group, &resp_action,
+            &resp_size, NULL);
+    if (rc == 0) {
+        /* Validate response */
+        if (    (resp_group != WH_MESSAGE_GROUP_COMM) ||
+                (resp_action != WH_MESSAGE_COMM_ACTION_CLOSE) ){
+            /* Invalid message */
+            rc = WH_ERROR_ABORTED;
+        } else {
+            /* Valid message. Server is now disconnected */
+            /* TODO: Cleanup the client */
+        }
+    }
+    return rc;
+}
+
+int wh_Client_CommClose(whClientContext* c)
+{
+    int rc = 0;
+    if (c == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    do {
+        rc = wh_Client_CommCloseRequest(c);
+    } while (rc == WH_ERROR_NOTREADY);
+
+    if (rc == 0) {
+        do {
+            rc = wh_Client_CommCloseResponse(c);
+        } while (rc == WH_ERROR_NOTREADY);
+    }
+    return rc;
+}
+
 int wh_Client_EchoRequest(whClientContext* c, uint16_t size, const void* data)
 {
     whMessageCommLenData msg = {0};
 
     if (    (c == NULL) ||
-            ((size > 0) && (data == NULL)) ){
+            ((size > 0) && (data == NULL)) ) {
         return WH_ERROR_BADARGS;
     }
 
@@ -154,7 +284,7 @@ int wh_Client_EchoResponse(whClientContext* c, uint16_t *out_size, void* data)
     uint16_t resp_action = 0;
     uint16_t resp_size = 0;
 
-    if (c == NULL){
+    if (c == NULL) {
         return WH_ERROR_BADARGS;
     }
 

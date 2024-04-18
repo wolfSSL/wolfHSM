@@ -16,6 +16,7 @@
 /* NVM simulator backends to use for testing NVM module */
 #include "wolfhsm/wh_flash_ramsim.h"
 #if defined(WH_CFG_TEST_POSIX)
+#include <unistd.h>  /* For unlink */
 #include "port/posix/posix_transport_tcp.h"
 #include "port/posix/posix_flash_file.h"
 #endif
@@ -251,9 +252,9 @@ int whTest_NvmFlashCfg(whNvmFlashConfig* cfg)
     {
         whNvmMetadata metaBuf = {0};
         unsigned char dataBuf[256];
-
+        size_t i = 0;
         printf("--Read IDs after reclaim\n");
-        for (size_t i=0; i<sizeof(ids)/sizeof(ids[0]); i++) {
+        for (i=0; i<sizeof(ids)/sizeof(ids[0]); i++) {
             if ((ret = cb->GetMetadata(context, ids[i], &metaBuf)) != 0) {
                 WH_ERROR_PRINT("GetMetadata after reclaim returned %d\n", ret);
                 goto cleanup;
@@ -354,6 +355,8 @@ int whTest_NvmFlash_PosixFileSim(void)
 
     WH_TEST_ASSERT(0 == whTest_NvmFlashCfg(&myNvmCfg));
 
+    /* Remove the configured file on success*/
+    unlink(myHalFlashConfig[0].filename);
     return 0;
 }
 

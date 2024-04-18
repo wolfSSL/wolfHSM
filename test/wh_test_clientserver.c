@@ -520,6 +520,7 @@ int whTest_ClientServerSequential(void)
     /* Init client and server */
     WH_TEST_RETURN_ON_FAIL(wh_Client_Init(client, c_conf));
     WH_TEST_RETURN_ON_FAIL(wh_Server_Init(server, s_conf));
+    wh_Server_SetConnected(server, WH_COMM_CONNECTED);
 
     int      counter                  = 1;
     char     recv_buffer[WH_COMM_DATA_LEN] = {0};
@@ -1235,6 +1236,7 @@ int whTest_ClientCfg(whClientConfig* clientCfg)
     WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
     WH_TEST_ASSERT_RETURN(avail_objects == NF_OBJECT_COUNT);
 
+    wh_Client_CommClose(client);
     WH_TEST_RETURN_ON_FAIL(wh_Client_Cleanup(client));
 
     return ret;
@@ -1248,17 +1250,21 @@ int whTest_ServerCfgLoop(whServerConfig* serverCfg)
     whServerContext server[1] = {0};
 
     WH_TEST_RETURN_ON_FAIL(wh_Server_Init(server, serverCfg));
+    wh_Server_SetConnected(server, WH_COMM_CONNECTED);
 
-    /* Spin and process client requests, exiting on error */
-    while (1) {
+    int am_connected = WH_COMM_CONNECTED;
+    for (   wh_Server_SetConnected(server, am_connected);
+            am_connected == WH_COMM_CONNECTED;
+            wh_Server_GetConnected(server, &am_connected) ){
         ret = wh_Server_HandleRequestMessage(server);
-        if (ret != 0 && ret != WH_ERROR_NOTREADY) {
-            printf("[server] whServer_HandleRequestMessage ret=%d\n", ret);
+        if ((ret != WH_ERROR_NOTREADY) &&
+                (ret != WH_ERROR_OK)) {
+            WH_ERROR_PRINT("[server] Failed to wh_Server_HandleRequestMessage ret=%d\n", ret);
             return ret;
         }
     }
-
-
+    WH_TEST_RETURN_ON_FAIL(wh_Server_Cleanupt(server));
+	
     return 0;
 }
 

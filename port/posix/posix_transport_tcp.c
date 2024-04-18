@@ -19,7 +19,7 @@
 #include <poll.h>
 
 #include "wolfhsm/wh_error.h"
-#include "wolfhsm/wh_transport.h"
+#include "wolfhsm/wh_comm.h"
 #include "port/posix/posix_transport_tcp.h"
 
 
@@ -215,7 +215,8 @@ static int posixTransportTcp_Recv(int fd, uint16_t* buffer_offset,
 }
 
 /** Client functions */
-int posixTransportTcp_InitConnect(void* context, const void* config)
+int posixTransportTcp_InitConnect(void* context, const void* config,
+        whCommSetConnectedCb connectcb, void* connectcb_arg)
 {
     int rc = 0;
     posixTransportTcpClientContext* c = context;
@@ -270,6 +271,15 @@ int posixTransportTcp_InitConnect(void* context, const void* config)
         }
     }
 
+    c->connectcb = connectcb;
+    c->connectcb_arg = connectcb_arg;
+
+    /* Since we have started connecting already, invoke the connectcb so that
+     * we can continue to monitor connect status during recv.
+     */
+    if (c->connectcb != NULL) {
+        c->connectcb(connectcb_arg, WH_COMM_CONNECTED);
+    }
     /* All good */
     return 0;
 }
@@ -327,6 +337,11 @@ int posixTransportTcp_SendRequest(void* context,
         c->buffer_offset = 0;
         if (rc == 0) {
             c->request_sent = 1;
+        } else {
+            /* Assume fatal error and trigger disconnect */
+            if (c->connectcb != NULL) {
+                c->connectcb(c->connectcb_arg, WH_COMM_DISCONNECTED);
+            }
         }
     }
     return rc;
@@ -357,6 +372,12 @@ int posixTransportTcp_RecvResponse(void* context,
         /* Success or fatal.  Reset state either way */
         c->buffer_offset = 0;
         c->request_sent = 0;
+        if (rc != 0) {
+            /* Assume fatal error and trigger disconnect */
+            if (c->connectcb != NULL) {
+                c->connectcb(c->connectcb_arg, WH_COMM_DISCONNECTED);
+            }
+        }
     }
     return rc;
 }
@@ -366,6 +387,11 @@ int posixTransportTcp_CleanupConnect(void* context)
      posixTransportTcpClientContext* c = context;
     if (c == NULL) {
         return WH_ERROR_BADARGS;
+    }
+
+    /* Trigger disconnect */
+    if (c->connectcb != NULL) {
+        c->connectcb(c->connectcb_arg, WH_COMM_DISCONNECTED);
     }
 
     if (c->connect_fd_p1 != 0) {
@@ -380,7 +406,8 @@ int posixTransportTcp_CleanupConnect(void* context)
 /** Server Functions */
 
 
-int posixTransportTcp_InitListen(void* context, const void* config)
+int posixTransportTcp_InitListen(void* context, const void* config,
+        whCommSetConnectedCb connectcb, void* connectcb_arg)
 {
     int rc = 0;
     posixTransportTcpServerContext* c = context;
@@ -433,6 +460,14 @@ int posixTransportTcp_InitListen(void* context, const void* config)
         close(c->listen_fd_p1 - 1);
         c->listen_fd_p1 = 0;
         return WH_ERROR_ABORTED;
+    }
+
+    c->connectcb = connectcb;
+    c->connectcb_arg = connectcb_arg;
+
+    /* Connecting is handled internally so we need server to call recv */
+    if (c->connectcb != NULL) {
+        c->connectcb(c->connectcb_arg, WH_COMM_CONNECTED);
     }
 
     /* All good */
@@ -489,6 +524,11 @@ int posixTransportTcp_RecvRequest(void* context,
         c->buffer_offset = 0;
         if (rc == 0) {
             c->request_recv = 1;
+        } else {
+            /* Assume fatal error and trigger disconnect */
+            if (c->connectcb != NULL) {
+                c->connectcb(c->connectcb_arg, WH_COMM_DISCONNECTED);
+            }
         }
     }
     return rc;
@@ -523,6 +563,11 @@ int posixTransportTcp_SendResponse(void* context,
         c->buffer_offset = 0;
         if (rc == 0) {
             c->request_recv = 0;
+        } else {
+            /* Assume fatal error and trigger disconnect */
+            if (c->connectcb != NULL) {
+                c->connectcb(c->connectcb_arg, WH_COMM_DISCONNECTED);
+            }
         }
     }
     return rc;
@@ -533,6 +578,11 @@ int posixTransportTcp_CleanupListen(void* context)
     posixTransportTcpServerContext* c = context;
     if (c == NULL) {
         return WH_ERROR_BADARGS;
+    }
+
+    /* Trigger disconnect */
+    if (c->connectcb != NULL) {
+        c->connectcb(c->connectcb_arg, WH_COMM_DISCONNECTED);
     }
 
     if (c->accept_fd_p1 != 0) {

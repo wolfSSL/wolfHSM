@@ -18,7 +18,8 @@ static void printMemory(uint8_t* buffer, uint32_t size, uint32_t offset);
 
 static void fillTestData(uint8_t* buffer, uint32_t size, uint32_t baseValue)
 {
-    for (size_t i = 0; i < size; i++) {
+    size_t i = 0;
+    for (i = 0; i < size; i++) {
         buffer[i] = (uint8_t)(baseValue + i);
     }
 }
@@ -82,7 +83,8 @@ int whTest_Flash_RamSim(void)
         return ret;
     }
 
-    for (uint32_t sector = 0; sector < cfg.size / cfg.sectorSize; sector++) {
+    uint32_t sector = 0;
+    for (sector = 0; sector < cfg.size / cfg.sectorSize; sector++) {
 
         uint32_t sectorOffset = sector * cfg.sectorSize;
 
@@ -104,8 +106,8 @@ int whTest_Flash_RamSim(void)
             return ret;
         }
 
-
-        for (uint32_t page = 0; page < cfg.sectorSize / cfg.pageSize; page++) {
+        uint32_t page = 0;
+        for (page = 0; page < cfg.sectorSize / cfg.pageSize; page++) {
 
             uint32_t pageOffset = sectorOffset + page * cfg.pageSize;
 

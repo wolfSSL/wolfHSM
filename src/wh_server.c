@@ -58,7 +58,8 @@ int wh_Server_Init(whServerContext* server, whServerConfig* config)
 #endif
     }
 
-    rc = wh_CommServer_Init(server->comm, config->comm_config);
+    rc = wh_CommServer_Init(server->comm, config->comm_config,
+            wh_Server_SetConnectedCb, (void*)server);
     if (rc != 0) {
         (void)wh_Server_Cleanup(server);
         return WH_ERROR_ABORTED;
@@ -84,8 +85,36 @@ int wh_Server_Cleanup(whServerContext* server)
 
     memset(server, 0, sizeof(*server));
 
-    return 0;
+    return WH_ERROR_OK;
 }
+
+int wh_Server_SetConnected(whServerContext *server, int connected)
+{
+    if (server == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    server->connected = connected;
+    return WH_ERROR_OK;
+}
+
+int wh_Server_SetConnectedCb(void* s, int connected)
+{
+    return wh_Server_SetConnected((whServerContext*)s, connected);
+}
+
+int wh_Server_GetConnected(whServerContext *server, int *out_connected)
+{
+    if (server == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    if (out_connected != NULL) {
+        *out_connected = server->connected;
+    }
+    return WH_ERROR_OK;
+}
+
 
 static int _wh_Server_HandleCommRequest(whServerContext* server,
         uint16_t magic, uint16_t action, uint16_t seq,
@@ -94,6 +123,35 @@ static int _wh_Server_HandleCommRequest(whServerContext* server,
 {
     int rc = 0;
     switch (action) {
+    case WH_MESSAGE_COMM_ACTION_INIT:
+    {
+        whMessageCommInitRequest req = {0};
+        whMessageCommInitResponse resp = {0};
+
+        /* Convert request struct */
+        wh_MessageComm_TranslateInitRequest(magic,
+                (whMessageCommInitRequest*)req_packet, &req);
+
+        /* Process the init action */
+        server->comm->client_id = req.client_id;
+        resp.client_id = server->comm->client_id;
+        resp.server_id = server->comm->server_id;
+
+        /* Convert the response struct */
+        wh_MessageComm_TranslateInitResponse(magic,
+                &resp, (whMessageCommInitResponse*)resp_packet);
+        *out_resp_size = sizeof(resp);
+    }; break;
+
+    case WH_MESSAGE_COMM_ACTION_CLOSE:
+    {
+        /* No message */
+        /* Process the close action */
+        wh_Server_SetConnected(server, WH_COMM_DISCONNECTED);
+        *out_resp_size = 0;
+    }; break;
+
+
     case WH_MESSAGE_COMM_ACTION_ECHO:
     {
         whMessageCommLenData req = {0};
@@ -162,10 +220,19 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
     uint16_t action = 0;
     uint16_t seq = 0;
     uint16_t size = 0;
-    uint8_t data[WH_COMM_MTU] = {0};
+    uint8_t* data = NULL;
 
     if (server == NULL) {
         return WH_ERROR_BADARGS;
+    }
+
+    /* Use the CommServer internal buffer to avoid copies */
+    data = wh_CommServer_GetDataPtr(server->comm);
+
+    /* Are we connected with a valid data pointer? */
+    if (    (server->connected == WH_COMM_DISCONNECTED) ||
+            (data == NULL) ) {
+        return WH_ERROR_NOTREADY;
     }
 
     int rc = wh_CommServer_RecvRequest(server->comm, &magic, &kind, &seq,
@@ -179,12 +246,12 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
         case WH_MESSAGE_GROUP_COMM:
             rc = _wh_Server_HandleCommRequest(server, magic, action, seq,
                     size, data, &size, data);
-            break;
+        break;
 
         case WH_MESSAGE_GROUP_NVM:
             rc = wh_Server_HandleNvmRequest(server, magic, action, seq,
                     size, data, &size, data);
-            break;
+        break;
 
         case WH_MESSAGE_GROUP_KEY:
             rc = wh_Server_HandleKeyRequest(server, magic, action, seq,
@@ -209,7 +276,7 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
         case WH_MESSAGE_GROUP_CUSTOM:
             rc = wh_Server_HandleCustomCbRequest(server, magic, action, seq,
                     size, data, &size, data);
-            break;
+        break;
 
         default:
             /* Unknown group. Return empty packet*/

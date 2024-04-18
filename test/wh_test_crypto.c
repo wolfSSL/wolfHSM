@@ -253,6 +253,9 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         WH_ERROR_PRINT("CURVE25519 shared secrets don't match\n");
     }
 
+    /* Tell server to close */
+    wh_Client_CommClose(client);
+
 exit:
     wc_curve25519_free(curve25519PrivateKey);
     wc_curve25519_free(curve25519PublicKey);
@@ -273,7 +276,7 @@ int whTest_CryptoServerConfig(whServerConfig* config)
 {
     whServerContext server[1] = {0};
     int ret = 0;
-    int i;
+    int am_connected = WH_COMM_CONNECTED;
 
     if (config == NULL) {
         return WH_ERROR_BADARGS;
@@ -281,69 +284,20 @@ int whTest_CryptoServerConfig(whServerConfig* config)
 
     WH_TEST_RETURN_ON_FAIL(wh_Server_Init(server, config));
 
-    /* handle client rng */
-    do {
+    for (   wh_Server_SetConnected(server, am_connected);
+            am_connected == WH_COMM_CONNECTED;
+            wh_Server_GetConnected(server, &am_connected) ){
         ret = wh_Server_HandleRequestMessage(server);
-    } while (ret == WH_ERROR_NOTREADY);
-    if (ret != 0) {
-        WH_ERROR_PRINT("Failed to wh_Server_HandleRequestMessage: %d\n", ret);
-        goto exit;
-    }
-    /* handle cache/export */
-    for (i = 0; i < 2; i++) {
-        do {
-            ret = wh_Server_HandleRequestMessage(server);
-        } while (ret == WH_ERROR_NOTREADY);
-        if (ret != 0) {
+        if ((ret != WH_ERROR_NOTREADY) &&
+                (ret != WH_ERROR_OK)) {
             WH_ERROR_PRINT("Failed to wh_Server_HandleRequestMessage: %d\n", ret);
-            goto exit;
+            break;
         }
     }
-    /* handle evict/export, expect not found */
-    for (i = 0; i < 2; i++) {
-        do {
-            ret = wh_Server_HandleRequestMessage(server);
-        } while (ret == WH_ERROR_NOTREADY);
-        if (ret != 0 && ret != WH_ERROR_NOTFOUND) {
-            WH_ERROR_PRINT("Failed to wh_Server_HandleRequestMessage: %d\n", ret);
-            goto exit;
-        }
-    }
-    /* handle cache/commit/evict/export */
-    for (i = 0; i < 4; i++) {
-        do {
-            ret = wh_Server_HandleRequestMessage(server);
-        } while (ret == WH_ERROR_NOTREADY);
-        if (ret != 0) {
-            WH_ERROR_PRINT("Failed to wh_Server_HandleRequestMessage: %d\n", ret);
-            goto exit;
-        }
-    }
-    /* handle erase/export, expect not found */
-    for (i = 0; i < 2; i++) {
-        do {
-            ret = wh_Server_HandleRequestMessage(server);
-        } while (ret == WH_ERROR_NOTREADY);
-        if (ret != 0 && ret != WH_ERROR_NOTFOUND) {
-            WH_ERROR_PRINT("Failed to wh_Server_HandleRequestMessage: %d\n", ret);
-            goto exit;
-        }
-    }
-    /* handle curve */
-    for (i = 0; i < 4; i++) {
-        do {
-            ret = wh_Server_HandleRequestMessage(server);
-        } while (ret == WH_ERROR_NOTREADY);
-        if (ret != 0) {
-            WH_ERROR_PRINT("Failed to wh_Server_HandleRequestMessage: %d\n", ret);
-            goto exit;
-        }
-    }
-exit:
+
     if (ret == 0) {
         WH_TEST_RETURN_ON_FAIL(wh_Server_Cleanup(server));
-    }
-    else {
+    } else {
         ret = wh_Server_Cleanup(server);
     }
 
