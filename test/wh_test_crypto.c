@@ -51,6 +51,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     int ret = 0;
     /* wolfcrypt */
     WC_RNG rng[1];
+    RsaKey rsa[1];
     curve25519_key curve25519PrivateKey[1];
     curve25519_key curve25519PublicKey[1];
     uint32_t outLen;
@@ -59,6 +60,9 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     uint8_t keyEnd[16];
     uint8_t labelStart[WOLFHSM_NVM_LABEL_LEN];
     uint8_t labelEnd[WOLFHSM_NVM_LABEL_LEN];
+    char plainText[16];
+    char cipherText[256];
+    char finalText[256];
     uint8_t sharedOne[CURVE25519_KEYSIZE];
     uint8_t sharedTwo[CURVE25519_KEYSIZE];
 
@@ -79,6 +83,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         WH_ERROR_PRINT("Failed to wc_RNG_GenerateBlock %d\n", ret);
         goto exit;
     }
+    printf("RNG SUCCESS\n");
     /* test cache/export */
     if ((ret = wh_Client_KeyCacheRequest(client, 0, labelStart, sizeof(labelStart), key, sizeof(key))) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_KeyCacheRequest %d\n", ret);
@@ -217,7 +222,46 @@ int whTest_CryptoClientConfig(whClientConfig* config)
             WH_ERROR_PRINT("Failed to wh_Client_KeyExportResponse %d\n", ret);
         goto exit;
     }
-
+    /* test rsa */
+    if((ret = wc_InitRsaKey_ex(rsa, NULL, WOLFHSM_DEV_ID)) != 0) {
+        printf("Failed to wc_InitRsaKey_ex %d\n", ret);
+        goto exit;
+    }
+    if((ret = wc_MakeRsaKey(rsa, 2048, 65537, rng)) != 0) {
+        printf("Failed to wc_MakeRsaKey %d\n", ret);
+        goto exit;
+    }
+    if ((ret = wc_RsaPublicEncrypt((byte*)plainText, sizeof(plainText), (byte*)cipherText,
+        sizeof(cipherText), rsa, rng)) < 0) {
+        printf("Failed to wc_RsaPublicEncrypt %d\n", ret);
+        goto exit;
+    }
+    if ((ret = wc_RsaPrivateDecrypt((byte*)cipherText, ret, (byte*)finalText,
+        sizeof(finalText), rsa)) < 0) {
+        printf("Failed to wc_RsaPrivateDecrypt %d\n", ret);
+        goto exit;
+    }
+    XMEMCPY((uint8_t*)&keyId, (uint8_t*)&rsa->devCtx, sizeof(keyId));
+    if ((ret = wh_Client_KeyEvictRequest(client, keyId)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyEvictRequest %d\n", ret);
+        goto exit;
+    }
+    do {
+        ret = wh_Client_KeyEvictResponse(client);
+    } while (ret == WH_ERROR_NOTREADY);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyEvictResponse %d\n", ret);
+        goto exit;
+    }
+    if((ret = wc_FreeRsaKey(rsa)) != 0) {
+        printf("Failed to wc_FreeRsaKey %d\n", ret);
+        goto exit;
+    }
+    printf("RSA KEYGEN SUCCESS\n");
+    if (memcmp(plainText, finalText, sizeof(plainText)) == 0)
+        printf("RSA SUCCESS\n");
+    else
+        printf("RSA FAILED TO MATCH\n");
     /* test curve25519 */
     if ((ret = wc_curve25519_init_ex(curve25519PrivateKey, NULL, WOLFHSM_DEV_ID)) != 0) {
         WH_ERROR_PRINT("Failed to wc_curve25519_init_ex %d\n", ret);
@@ -295,7 +339,6 @@ int whTest_CryptoServerConfig(whServerConfig* config)
         }
         wh_Server_GetConnected(server, &am_connected);
     }
-
     if ((ret == 0) || (ret == WH_ERROR_NOTREADY)){
         WH_TEST_RETURN_ON_FAIL(wh_Server_Cleanup(server));
     } else {
@@ -414,6 +457,7 @@ static int wh_ClientServer_MemThreadTest(void)
        .comm_config = cs_conf,
        .nvm = nvm,
        .crypto = crypto,
+       .devId = INVALID_DEVID,
     }};
 
     WH_TEST_RETURN_ON_FAIL(wh_Nvm_Init(nvm, n_conf));
