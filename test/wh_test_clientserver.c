@@ -1263,6 +1263,7 @@ int whTest_ServerCfgLoop(whServerConfig* serverCfg)
     }
 
     if ((ret == 0) || (ret == WH_ERROR_NOTREADY)){
+        ret = 0;
         WH_TEST_RETURN_ON_FAIL(wh_Server_Cleanup(server));
     } else {
         ret = wh_Server_Cleanup(server);
@@ -1275,13 +1276,13 @@ int whTest_ServerCfgLoop(whServerConfig* serverCfg)
 #if defined(WH_CFG_TEST_POSIX)
 static void* _whClientTask(void *cf)
 {
-    (void)whTest_ClientCfg(cf);
+    WH_TEST_ASSERT(0 == whTest_ClientCfg(cf));
     return NULL;
 }
 
 static void* _whServerTask(void* cf)
 {
-    (void)whTest_ServerCfgLoop(cf);
+    WH_TEST_ASSERT(0 == whTest_ServerCfgLoop(cf));
     return NULL;
 }
 
