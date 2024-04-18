@@ -309,13 +309,13 @@ int whTest_CryptoServerConfig(whServerConfig* config)
 #if defined(WH_CFG_TEST_POSIX)
 static void* _whClientTask(void *cf)
 {
-    (void)whTest_CryptoClientConfig(cf);
+    WH_TEST_ASSERT(0 == whTest_CryptoClientConfig(cf));
     return NULL;
 }
 
 static void* _whServerTask(void* cf)
 {
-    (void)whTest_CryptoServerConfig(cf);
+    WH_TEST_ASSERT(0 == whTest_CryptoServerConfig(cf));
     return NULL;
 }
 

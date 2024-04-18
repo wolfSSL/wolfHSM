@@ -125,8 +125,7 @@ int wh_CommClient_RecvResponse(whCommClient* context,
     uint16_t size = sizeof(context->packet);
     uint16_t data_size = 0;
 
-    if (    (context == NULL) ||
-            (data == NULL)) {
+    if (context == NULL) {
         return WH_ERROR_BADARGS;
     }
 
