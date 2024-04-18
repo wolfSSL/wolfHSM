@@ -62,12 +62,24 @@ int wh_Client_RecvResponse(whClientContext *c,
 
 
 /** Comm component functions */
+int wh_Client_CommInitRequest(whClientContext* c);
+int wh_Client_CommInitResponse(whClientContext* c,
+                                uint32_t *out_clientid,
+                                uint32_t *out_serverid);
+int wh_Client_CommInit(whClientContext* c,
+                        uint32_t *out_clientid,
+                        uint32_t *out_serverid);
+
+int wh_Client_CommCloseRequest(whClientContext* c);
+int wh_Client_CommCloseResponse(whClientContext* c);
+int wh_Client_CommClose(whClientContext* c);
+
 int wh_Client_EchoRequest(whClientContext* c, uint16_t size, const void* data);
 int wh_Client_EchoResponse(whClientContext* c, uint16_t *out_size, void* data);
 int wh_Client_Echo(whClientContext* c, uint16_t snd_len, const void* snd_data,
         uint16_t *out_rcv_len, void* rcv_data);
 
-/* Key functions */
+/** Key functions */
 int wh_Client_KeyCacheRequest_ex(whClientContext* c, uint32_t flags,
     uint8_t* label, uint32_t labelSz, uint8_t* in, uint32_t inSz,
     uint16_t keyId);

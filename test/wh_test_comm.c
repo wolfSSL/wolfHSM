@@ -66,7 +66,7 @@ int whTest_CommMem(void)
 
     /* Init client and server */
     WH_TEST_RETURN_ON_FAIL(wh_CommClient_Init(client, c_conf));
-    WH_TEST_RETURN_ON_FAIL(wh_CommServer_Init(server, s_conf));
+    WH_TEST_RETURN_ON_FAIL(wh_CommServer_Init(server, s_conf, NULL, NULL));
 
     int counter = 1;
 
@@ -251,7 +251,7 @@ static void* _whCommServerTask(void* cf)
     whCommServer        server[1];
     int                 counter = 1;
 
-    ret = wh_CommServer_Init(server, config);
+    ret = wh_CommServer_Init(server, config, NULL, NULL);
     WH_TEST_ASSERT_MSG(0 == ret, "Server Init: ret=%d", ret);
 
     uint8_t  rx_req[REQ_SIZE] = {0};

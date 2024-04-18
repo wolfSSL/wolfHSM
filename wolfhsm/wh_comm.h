@@ -23,7 +23,7 @@
 
 #include <stdint.h>  /* For sized ints */
 
-#include "wolfhsm/wh_transport.h"
+/** Packet content types */
 
 /* Request/response packets are composed of a single fixed-length header
  * (whHeader) followed immediately by variable-length data between 0 and
@@ -32,7 +32,8 @@
 enum {
     WH_COMM_HEADER_LEN = 8,    /* whCommHeader */
     WH_COMM_DATA_LEN = 1280,
-    WH_COMM_MTU = (WH_COMM_HEADER_LEN + WH_COMM_DATA_LEN)
+    WH_COMM_MTU = (WH_COMM_HEADER_LEN + WH_COMM_DATA_LEN),
+    WH_COMM_MTU_U64_COUNT = (WH_COMM_MTU + 7) / 8,  /* internal U64 buffer */
 };
 
 /* Support for endian and version differences */
@@ -73,18 +74,66 @@ enum {
     WH_COMM_AUX_RESP_UNSUPP     = 0xFFFF, /* Request is not supported */
 };
 
+/** Data translations */
 uint8_t wh_Translate8(uint16_t magic, uint8_t val);
 uint16_t wh_Translate16(uint16_t magic, uint16_t val);
 uint32_t wh_Translate32(uint16_t magic, uint32_t val);
 uint64_t wh_Translate64(uint16_t magic, uint64_t val);
 
-
-/* Helper functions for struct members */
+/* Helper macros for struct members */
 #define WH_T16(_m, _d, _s, _f) _d->_f = wh_Translate16(_m, _s->_f)
 #define WH_T32(_m, _d, _s, _f) _d->_f = wh_Translate32(_m, _s->_f)
 #define WH_T64(_m, _d, _s, _f) _d->_f = wh_Translate64(_m, _s->_f)
 
-/** Client types */
+
+/** Common client/server functions */
+
+/* Status of whether a client is connected or not */
+typedef enum {
+    WH_COMM_DISCONNECTED = 0,
+    WH_COMM_CONNECTED = 1,
+} whCommConnected;
+
+/* Provide a callback to invoke when the transport can detect a connect or a
+ * disconnect */
+typedef int (*whCommSetConnectedCb)(void* context, whCommConnected connected);
+
+
+
+/** CommClient component types */
+
+/* Client transport interface */
+typedef struct {
+    /* Reset the state of the transport and establish communications.
+     * Returns: 0 on success,
+     *          WH_ERROR_BADARGS if NULL context or config, or invalid config
+     *          WH_ERROR_ABORTED if fatal error occurred.
+     */
+    int (*Init)(void* context, const void* config,
+            whCommSetConnectedCb connectcb, void* connectcb_arg);
+
+    /* Send a new request to the server.  This may also reconnect as necessary.
+     * Returns: 0 on success,
+     *          WH_ERROR_BADARGS if NULL data or context, or invalid size
+     *          WH_ERROR_NOTREADY if send buffer is not free. Retry.
+     *          WH_ERROR_ABORTED if fatal error occurred. Cleanup.
+     */
+    int (*Send)(void* context, uint16_t size, const void* data);
+
+    /* Receive a new response from the server.
+     * Returns: 0 on success,
+     *          WH_ERROR_BADARGS if NULL data or context
+     *          WH_ERROR_NOTREADY if recv buffer is not filled. Retry.
+     *          WH_ERROR_ABORTED if fatal error occurred. Cleanup.
+     */
+    int (*Recv)(void* context, uint16_t *out_size, void* data);
+
+    /* Close the connection.
+     * Returns: 0 on success,
+     *          WH_ERROR_BADARGS if NULL context
+     */
+    int (*Cleanup)(void* context);
+} whTransportClientCb;
 
 typedef struct {
     const whTransportClientCb* transport_cb;
@@ -97,17 +146,17 @@ typedef struct {
  * request sequence number and provide a buffer for at least 1 packet.
  */
 typedef struct {
+    uint64_t packet[WH_COMM_MTU_U64_COUNT];
     void* transport_context;
     const whTransportClientCb* transport_cb;
-    uint16_t reqid;
-    uint16_t seq;
-    uint16_t size;
-    uint8_t packet[WH_COMM_MTU];
     whCommHeader* hdr;
     uint8_t* data;
     uint32_t client_id;
     uint32_t server_id;
     int initialized;
+    uint16_t reqid;
+    uint16_t seq;
+    uint16_t size;
 } whCommClient;
 
 
@@ -131,12 +180,52 @@ int wh_CommClient_RecvResponse(whCommClient* context,
         uint16_t* out_magic, uint16_t* out_kind, uint16_t* out_seq,
         uint16_t* out_size, void* data);
 
+/* Get a pointer to the data portion of the internal buffer that is
+ * HW_COMM_DATA_LEN bytes.
+ */
+uint8_t* wh_CommClient_GetDataPtr(whCommClient* context);
+
 /* Inform the server that no further communications are necessary and any
  * unfinished requests can be ignored.
  */
 int wh_CommClient_Cleanup(whCommClient* context);
 
-/** Server types */
+
+/** CommServer component types */
+
+/* Server transport interface */
+typedef struct {
+    /* Reset the state of the transport and be ready for communications.
+     * Returns: 0 on success,
+     *          WH_ERROR_BADARGS if NULL context or config, or invalid config
+     *          WH_ERROR_ABORTED if fatal error occurred.
+     */
+    int (*Init)(void* context, const void* config,
+                  whCommSetConnectedCb connectcb, void* connectcb_arg);
+
+    /* Receive a new request from the client. This may also accept a connection.
+     * Returns: 0 on success,
+     *          WH_ERROR_BADARGS if NULL data or context
+     *          WH_ERROR_NOTREADY if recv buffer is not filled. Retry.
+     *          WH_ERROR_ABORTED if fatal error occurred. Cleanup.
+     */
+    int (*Recv)(void* context, uint16_t* inout_size, void* data);
+
+    /* Send a new request to the server.
+     * Returns: 0 on success,
+     *          WH_ERROR_BADARGS if NULL data or context, or invalid size
+     *          WH_ERROR_NOTREADY if send buffer is not free. Retry.
+     *          WH_ERROR_ABORTED if fatal error occurred. Cleanup.
+     */
+    int (*Send)(void* context, uint16_t data_size, const void* data);
+
+    /* Close the connection.
+     * Returns: 0 on success,
+     *          WH_ERROR_BADARGS if NULL context
+     */
+    int (*Cleanup)(void* context);
+} whTransportServerCb;
+
 typedef struct {
     void* transport_context;
     const whTransportServerCb* transport_cb;
@@ -148,23 +237,23 @@ typedef struct {
  * request sequence number and provide a buffer for at least 1 request packet.
  */
 typedef struct {
-
+    uint64_t packet[WH_COMM_MTU_U64_COUNT];
     void* transport_context;
     const whTransportServerCb* transport_cb;
-    uint16_t reqid;
-    uint8_t packet[WH_COMM_MTU];
     whCommHeader* hdr;
     uint8_t* data;
     uint32_t client_id;
     uint32_t server_id;
     int initialized;
+    uint16_t reqid;
 } whCommServer;
 
 /* Reset the state of the server context and begin the connection to a client
  * using the config data specified.  On success, the Status of the context will
  * be greater than UNINITIALIZED, depending on the transport specifics.
  */
-int wh_CommServer_Init(whCommServer* context, const whCommServerConfig* config);
+int wh_CommServer_Init(whCommServer* context, const whCommServerConfig* config,
+                whCommSetConnectedCb connectcb, void* connectcb_arg);
 
 /* If a request packet has been buffered, get the header and copy the data out
  * of the buffer.
@@ -180,6 +269,12 @@ int wh_CommServer_RecvRequest(whCommServer* context,
 int wh_CommServer_SendResponse(whCommServer* context,
         uint16_t magic, uint16_t kind, uint16_t seq,
         uint16_t data_size, const void* data);
+
+/* Get a pointer to the data portion of the internal buffer that is
+ * WH_COMM_DATA_LEN bytes long.
+ */
+uint8_t* wh_CommServer_GetDataPtr(whCommServer* context);
+
 
 int wh_CommServer_Cleanup(whCommServer* context);
 

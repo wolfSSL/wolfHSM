@@ -105,12 +105,16 @@ extern "C" {
 
 
 /* Allows custom "custom_time()" function to be used for benchmark */
-//#define WOLFSSL_USER_CURRTIME
-//#define USER_TICKS
-//#define HAVE_WC_INTROSPECTION
+/*
+#define WOLFSSL_USER_CURRTIME
+#define USER_TICKS
+#define HAVE_WC_INTROSPECTION
+*/
 
 /* Standard Lib - C89 */
-//#define XSTRCASECMP(s1,s2) strcmp((s1),(s2))
+/*
+#define XSTRCASECMP(s1,s2) strcmp((s1),(s2))
+*/
 
 /* ------------------------------------------------------------------------- */
 /* Memory */

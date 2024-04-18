@@ -41,9 +41,7 @@
 #include <stdint.h>
 #include <netinet/in.h>
 
-#include "wolfhsm/wh_comm.h"        /* For WH_COMM_MTU */
-#include "wolfhsm/wh_transport.h"
-
+#include "wolfhsm/wh_comm.h"
 
 #define PTT_PACKET_MAX_SIZE WH_COMM_MTU
 #define PTT_BUFFER_SIZE (sizeof(uint32_t) + PTT_PACKET_MAX_SIZE)
@@ -62,11 +60,14 @@ typedef struct {
     int connect_fd_p1;      /* fd plus 1 so 0 is invalid */
     int connected;
     int request_sent;
+    whCommSetConnectedCb connectcb;
+    void* connectcb_arg;
     uint16_t buffer_offset;
     uint8_t buffer[PTT_BUFFER_SIZE];
 } posixTransportTcpClientContext;
 
-int posixTransportTcp_InitConnect(void* context, const void* config);
+int posixTransportTcp_InitConnect(void* context, const void* config,
+        whCommSetConnectedCb connectcb, void* connectcb_arg);
 int posixTransportTcp_SendRequest(void* context, uint16_t size,
         const void* data);
 int posixTransportTcp_RecvResponse(void* context, uint16_t *out_size,
@@ -90,11 +91,14 @@ typedef struct {
     int listen_fd_p1;       /* fd plus 1 so 0 is invalid */
     int accept_fd_p1;       /* fd plus 1 so 0 is invalid */
     int request_recv;
+    whCommSetConnectedCb connectcb;
+    void* connectcb_arg;
     uint16_t buffer_offset;
     uint8_t buffer[PTT_BUFFER_SIZE];
 } posixTransportTcpServerContext;
 
-int posixTransportTcp_InitListen(void* context, const void* config);
+int posixTransportTcp_InitListen(void* context, const void* config,
+        whCommSetConnectedCb connectcb, void* connectcb_arg);
 int posixTransportTcp_RecvRequest(void* context, uint16_t *out_size,
         void* data);
 int posixTransportTcp_SendResponse(void* context, uint16_t size,
