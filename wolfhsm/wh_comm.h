@@ -33,7 +33,7 @@ enum {
     WH_COMM_HEADER_LEN = 8,    /* whCommHeader */
     WH_COMM_DATA_LEN = 1280,
     WH_COMM_MTU = (WH_COMM_HEADER_LEN + WH_COMM_DATA_LEN),
-    WH_COMM_MTU_8 = (WH_COMM_MTU + 7) / 8,
+    WH_COMM_MTU_U64_COUNT = (WH_COMM_MTU + 7) / 8,  /* internal U64 buffer */
 };
 
 /* Support for endian and version differences */
@@ -88,15 +88,16 @@ uint64_t wh_Translate64(uint16_t magic, uint64_t val);
 
 /** Common client/server functions */
 
-/* Provide a callback to invoke when the transport can detect a connect or a
- * disconnect */
-typedef int (*whCommSetConnectedCb)(void* context, int connected);
-
 /* Status of whether a client is connected or not */
-enum {
+typedef enum {
     WH_COMM_DISCONNECTED = 0,
     WH_COMM_CONNECTED = 1,
-};
+} whCommConnected;
+
+/* Provide a callback to invoke when the transport can detect a connect or a
+ * disconnect */
+typedef int (*whCommSetConnectedCb)(void* context, whCommConnected connected);
+
 
 
 /** CommClient component types */
@@ -145,7 +146,7 @@ typedef struct {
  * request sequence number and provide a buffer for at least 1 packet.
  */
 typedef struct {
-    uint64_t packet[WH_COMM_MTU_8];
+    uint64_t packet[WH_COMM_MTU_U64_COUNT];
     void* transport_context;
     const whTransportClientCb* transport_cb;
     whCommHeader* hdr;
@@ -236,7 +237,7 @@ typedef struct {
  * request sequence number and provide a buffer for at least 1 request packet.
  */
 typedef struct {
-    uint64_t packet[WH_COMM_MTU_8];
+    uint64_t packet[WH_COMM_MTU_U64_COUNT];
     void* transport_context;
     const whTransportServerCb* transport_cb;
     whCommHeader* hdr;

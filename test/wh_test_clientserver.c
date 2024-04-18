@@ -1236,7 +1236,7 @@ int whTest_ClientCfg(whClientConfig* clientCfg)
     WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
     WH_TEST_ASSERT_RETURN(avail_objects == NF_OBJECT_COUNT);
 
-    wh_Client_CommClose(client);
+    H_TEST_RETURN_ON_FAIL(wh_Client_CommClose(client));
     WH_TEST_RETURN_ON_FAIL(wh_Client_Cleanup(client));
 
     return ret;
@@ -1245,27 +1245,30 @@ int whTest_ClientCfg(whClientConfig* clientCfg)
 
 int whTest_ServerCfgLoop(whServerConfig* serverCfg)
 {
+    whServerContext server[1] = {0};
+    whCommConnected am_connected = WH_COMM_CONNECTED;
     int ret = 0;
 
-    whServerContext server[1] = {0};
-
     WH_TEST_RETURN_ON_FAIL(wh_Server_Init(server, serverCfg));
-    wh_Server_SetConnected(server, WH_COMM_CONNECTED);
+    WH_TEST_RETURN_ON_FAIL(wh_Server_SetConnected(server, am_connected));
 
-    int am_connected = WH_COMM_CONNECTED;
-    for (   wh_Server_SetConnected(server, am_connected);
-            am_connected == WH_COMM_CONNECTED;
-            wh_Server_GetConnected(server, &am_connected) ){
+    while(am_connected == WH_COMM_CONNECTED) {
         ret = wh_Server_HandleRequestMessage(server);
         if ((ret != WH_ERROR_NOTREADY) &&
                 (ret != WH_ERROR_OK)) {
             WH_ERROR_PRINT("[server] Failed to wh_Server_HandleRequestMessage ret=%d\n", ret);
-            return ret;
+            break;
         }
+        wh_Server_GetConnected(server, &am_connected);
     }
-    WH_TEST_RETURN_ON_FAIL(wh_Server_Cleanup(server));
+
+    if ((ret == 0) || (ret == WH_ERROR_NOTREADY)){
+        WH_TEST_RETURN_ON_FAIL(wh_Server_Cleanup(server));
+    } else {
+        ret = wh_Server_Cleanup(server);
+    }
 	
-    return 0;
+    return ret;
 }
 
 

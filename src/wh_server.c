@@ -88,7 +88,7 @@ int wh_Server_Cleanup(whServerContext* server)
     return WH_ERROR_OK;
 }
 
-int wh_Server_SetConnected(whServerContext *server, int connected)
+int wh_Server_SetConnected(whServerContext *server, whCommConnected connected)
 {
     if (server == NULL) {
         return WH_ERROR_BADARGS;
@@ -98,12 +98,13 @@ int wh_Server_SetConnected(whServerContext *server, int connected)
     return WH_ERROR_OK;
 }
 
-int wh_Server_SetConnectedCb(void* s, int connected)
+int wh_Server_SetConnectedCb(void* s, whCommConnected connected)
 {
     return wh_Server_SetConnected((whServerContext*)s, connected);
 }
 
-int wh_Server_GetConnected(whServerContext *server, int *out_connected)
+int wh_Server_GetConnected(whServerContext *server,
+                            whCommConnected *out_connected)
 {
     if (server == NULL) {
         return WH_ERROR_BADARGS;

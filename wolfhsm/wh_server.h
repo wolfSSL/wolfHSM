@@ -147,14 +147,15 @@ struct whServerContext_t {
 int wh_Server_Init(whServerContext* server, whServerConfig* config);
 
 /* Allow an external input to set the connected state. */
-int wh_Server_SetConnected(whServerContext *server, int connected);
+int wh_Server_SetConnected(whServerContext *server, whCommConnected connected);
 
 /* Invoke SetConnected but using an untyped context pointer, suitable for a
  * CommServer callback */
-int wh_Server_SetConnectedCb(void* s, int connected);
+int wh_Server_SetConnectedCb(void* s, whCommConnected connected);
 
 /* Return the connected state. */
-int wh_Server_GetConnected(whServerContext *server, int *out_connected);
+int wh_Server_GetConnected(whServerContext *server,
+                            whCommConnected *out_connected);
 
 /*
  * Receive and handle an incoming request message if present.
