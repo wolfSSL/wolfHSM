@@ -1263,7 +1263,7 @@ int whTest_ServerCfgLoop(whServerConfig* serverCfg)
             return ret;
         }
     }
-    WH_TEST_RETURN_ON_FAIL(wh_Server_Cleanupt(server));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_Cleanup(server));
 	
     return 0;
 }
