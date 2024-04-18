@@ -23,8 +23,8 @@ ARCHFLAGS ?=
 
 # Compiler and linker flags
 ASFLAGS ?= $(ARCHFLAGS)
-CFLAGS_EXTRA ?=
-CFLAGS ?= $(ARCHFLAGS) -std=c99 -D_GNU_SOURCE -Wall -Werror -Wno-cpp $(CFLAGS_EXTRA)
+CFLAGS_EXTRA ?= -Wmissing-field-initializers -Wmissing-braces -Wpadded
+CFLAGS ?= $(ARCHFLAGS) -std=c90 -D_GNU_SOURCE -Wall -Werror -Wno-cpp $(CFLAGS_EXTRA)
 LDFLAGS ?= $(ARCHFLAGS)
 
 # Libc for printf
@@ -48,14 +48,14 @@ LDFLAGS += -fsanitize=address
 endif
 
 # wolfHSM-specific defines
-CFLAGS += -DWH_CONFIG
+CFLAGS += -DWH_CONFIG -DWOLFHSM_NO_CRYPTO
 
 
 # Assembly source files
 SRC_ASM +=
 
 # wolfCrypt source files
-SRC_C += \
+WSRC_C += \
             $(WOLFSSL_DIR)/wolfcrypt/src/wc_port.c \
             $(WOLFSSL_DIR)/wolfcrypt/src/memory.c \
             $(WOLFSSL_DIR)/wolfcrypt/src/misc.c \

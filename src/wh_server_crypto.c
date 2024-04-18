@@ -3,6 +3,8 @@
 #include <stdlib.h>  /* For NULL */
 #include <string.h>  /* For memset, memcpy */
 
+#ifndef WOLFHSM_NO_CRYPTO
+
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/types.h"
 #include "wolfssl/wolfcrypt/error-crypt.h"
@@ -312,3 +314,5 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
     packet->rc = ret;
     return 0;
 }
+
+#endif  /* WOLFHSM_NO_CRYPTO */

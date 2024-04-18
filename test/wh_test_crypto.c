@@ -7,6 +7,8 @@
 #include <stdio.h>  /* For printf */
 #include <string.h> /* For memset, memcpy */
 
+#ifndef WOLFHSM_NO_CRYPTO
+
 #include "wolfssl/wolfcrypt/settings.h"
 
 #if defined(WH_CONFIG)
@@ -484,3 +486,5 @@ int whTest_Crypto(void)
 #endif
     return 0;
 }
+
+#endif  /* WOLFHSM_NO_CRYPTO */

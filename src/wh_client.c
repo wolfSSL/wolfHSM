@@ -7,12 +7,14 @@
 #include <stdlib.h>  /* For NULL */
 #include <string.h>  /* For memset, memcpy */
 
+#ifndef WOLFHSM_NO_CRYPTO
 /* wolfCrypt */
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/error-crypt.h"
 #include "wolfssl/wolfcrypt/wc_port.h"
 #include "wolfssl/wolfcrypt/cryptocb.h"
 #include "wolfssl/wolfcrypt/curve25519.h"
+#endif
 
 /* Common WolfHSM types and defines shared with the server */
 #include "wolfhsm/wh_common.h"
@@ -20,7 +22,10 @@
 
 /* Components */
 #include "wolfhsm/wh_comm.h"
+
+#ifndef WOLFHSM_NO_CRYPTO
 #include "wolfhsm/wh_cryptocb.h"
+#endif
 
 /* Message definitions */
 #include "wolfhsm/wh_message.h"
@@ -40,8 +45,10 @@ int wh_Client_Init(whClientContext* c, const whClientConfig* config)
     memset(c, 0, sizeof(*c));
 
     if (    ((rc = wh_CommClient_Init(c->comm, config->comm)) == 0) &&
+#ifndef WOLFHSM_NO_CRYPTO
             ((rc = wolfCrypt_Init()) == 0) &&
             ((rc = wc_CryptoCb_RegisterDevice(WOLFHSM_DEV_ID, wolfHSM_CryptoCb, c)) == 0) &&
+#endif  /* WOLFHSM_NO_CRYPTO */
             1) {
         /* All good */
     }
@@ -58,7 +65,10 @@ int wh_Client_Cleanup(whClientContext* c)
     }
 
     (void)wh_CommClient_Cleanup(c->comm);
+#ifndef WOLFHSM_NO_CRYPTO
     (void)wolfCrypt_Cleanup();
+#endif  /* WOLFHSM_NO_CRYPTO */
+
     memset(c, 0, sizeof(*c));
     return 0;
 }
@@ -443,6 +453,9 @@ int wh_Client_CustomCbCheckRegistered(whClientContext* c, uint16_t id, int* resp
     return rc;
 }
 
+
+#ifndef WOLFHSM_NO_CRYPTO
+
 int wh_Client_KeyCacheRequest_ex(whClientContext* c, uint32_t flags,
     uint8_t* label, uint32_t labelSz, uint8_t* in, uint32_t inSz,
     uint16_t keyId)
@@ -645,3 +658,4 @@ void wh_Client_SetKeyCurve25519(curve25519_key* key, whNvmId keyId)
 {
     XMEMCPY(key->devCtx, (void*)&keyId, sizeof(keyId));
 }
+#endif  /* WOLFHSM_NO_CRYPTO */

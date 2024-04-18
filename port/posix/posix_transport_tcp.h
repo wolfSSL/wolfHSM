@@ -50,20 +50,22 @@
 typedef struct {
     char* server_ip_string;
     short int server_port;
+    uint8_t padding[6];
 } posixTransportTcpConfig;
 
 
 /** Client context and functions */
 
 typedef struct {
+    whCommSetConnectedCb connectcb;
+    void* connectcb_arg;
     struct sockaddr_in server_addr;
     int connect_fd_p1;      /* fd plus 1 so 0 is invalid */
     int connected;
     int request_sent;
-    whCommSetConnectedCb connectcb;
-    void* connectcb_arg;
     uint16_t buffer_offset;
     uint8_t buffer[PTT_BUFFER_SIZE];
+    uint8_t padding[6];
 } posixTransportTcpClientContext;
 
 int posixTransportTcp_InitConnect(void* context, const void* config,
@@ -86,15 +88,16 @@ int posixTransportTcp_CleanupConnect(void* context);
 /** Server context and functions */
 
 typedef struct {
+    whCommSetConnectedCb connectcb;
+    void* connectcb_arg;
     struct sockaddr_in server_addr;
     struct sockaddr_in client_addr;
     int listen_fd_p1;       /* fd plus 1 so 0 is invalid */
     int accept_fd_p1;       /* fd plus 1 so 0 is invalid */
     int request_recv;
-    whCommSetConnectedCb connectcb;
-    void* connectcb_arg;
     uint16_t buffer_offset;
     uint8_t buffer[PTT_BUFFER_SIZE];
+    uint8_t padding[6];
 } posixTransportTcpServerContext;
 
 int posixTransportTcp_InitListen(void* context, const void* config,

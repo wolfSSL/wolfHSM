@@ -80,7 +80,7 @@ typedef struct {
 
 
 /** Manifest storage  */
-
+#if 0
 enum {
     WOLFHSM_MANIFEST_CMAC_LEN = 16,
 };
@@ -95,8 +95,8 @@ typedef struct {
 } whManifest_ex;
 
 /* TODO Update Stored manifest data at compile time */
-
 extern const whManifest_ex manifests[WOLFHSM_NUM_MANIFESTS];
+#endif
 
 /* Custom request shared defs */
 #define WH_CUSTOM_CB_NUM_CALLBACKS 8

@@ -21,6 +21,8 @@
 #include <stdint.h>
 #include <unistd.h>
 
+#ifndef WOLFHSM_NO_CRYPTO
+
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/types.h"
 #include "wolfssl/wolfcrypt/error-crypt.h"
@@ -246,3 +248,4 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
 
     return ret;
 }
+#endif  /* WOLFHSM_NO_CRYPTO */
