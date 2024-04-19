@@ -26,13 +26,13 @@ static int hsmCacheKeyRsa(whServerContext* server, RsaKey* key, whKeyId* outId)
 {
     int ret = 0;
     int slotIdx = 0;
-    whKeyId keyId = 0;
+    whKeyId keyId = WOLFHSM_KEYTYPE_CRYPTO;
     /* get a free slot */
     ret = slotIdx = hsmCacheFindSlot(server);
     if (ret >= 0) {
-        ret = keyId = hsmGetUniqueId(server);
+        ret = hsmGetUniqueId(server, &keyId);
     }
-    if (ret > 0 ) {
+    if (ret == 0) {
         /* export key */
         /* TODO: Fix wolfCrypto to allow KeyToDer when KEY_GEN is NOT set */
         ret = wc_RsaKeyToDer(key, server->cache[slotIdx].buffer,
@@ -57,6 +57,7 @@ static int hsmLoadKeyRsa(whServerContext* server, RsaKey* key, whKeyId keyId)
     int slotIdx = 0;
     uint32_t idx = 0;
     uint32_t size;
+    keyId |= (WOLFHSM_KEYTYPE_CRYPTO | (server->comm->client_id << 8));
     /* freshen the key */
     ret = slotIdx = hsmFreshenKey(server, keyId);
     /* decode the key */
@@ -77,13 +78,13 @@ static int hsmCacheKeyCurve25519(whServerContext* server, curve25519_key* key,
     int slotIdx = 0;
     word32 privSz = CURVE25519_KEYSIZE;
     word32 pubSz = CURVE25519_KEYSIZE;
-    whKeyId keyId = 0;
+    whKeyId keyId = WOLFHSM_KEYTYPE_CRYPTO;
     /* get a free slot */
     ret = slotIdx = hsmCacheFindSlot(server);
     if (ret >= 0) {
-        ret = keyId = hsmGetUniqueId(server);
+        ret = hsmGetUniqueId(server, &keyId);
     }
-    if (ret > 0) {
+    if (ret == 0) {
         /* export key */
         ret = wc_curve25519_export_key_raw(key,
             server->cache[slotIdx].buffer + CURVE25519_KEYSIZE, &privSz,
@@ -109,6 +110,7 @@ static int hsmLoadKeyCurve25519(whServerContext* server, curve25519_key* key,
     int slotIdx = 0;
     uint32_t privSz = CURVE25519_KEYSIZE;
     uint32_t pubSz = CURVE25519_KEYSIZE;
+    keyId |= WOLFHSM_KEYTYPE_CRYPTO;
     /* freshen the key */
     ret = slotIdx = hsmFreshenKey(server, keyId);
     /* decode the key */
@@ -165,7 +167,8 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
             wc_FreeRsaKey(server->crypto->rsa);
             if (ret == 0) {
                 /* set the assigned id */
-                packet->pkRsakgRes.keyId = ret;
+                packet->pkRsakgRes.keyId =
+                    (keyId & ~WOLFHSM_KEYUSER_MASK);
                 *size = WOLFHSM_PACKET_STUB_SIZE +
                     sizeof(packet->pkRsakgRes);
                 ret = 0;

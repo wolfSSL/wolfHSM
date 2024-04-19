@@ -78,9 +78,8 @@ int wh_CommClient_Init(whCommClient* context, const whCommClientConfig* config)
 /* If a request buffer is available, send a new request to the server.  The
  * sequence number will be incremented on transport success.
  */
-int wh_CommClient_SendRequest(whCommClient* context,
-        uint16_t magic, uint16_t kind, uint8_t user, uint16_t *out_seq,
-        uint16_t data_size, const void* data)
+int wh_CommClient_SendRequest(whCommClient* context, uint16_t magic,
+    uint16_t kind, uint16_t *out_seq, uint16_t data_size, const void* data)
 {
     int rc = WH_ERROR_NOTREADY;
 
@@ -94,7 +93,6 @@ int wh_CommClient_SendRequest(whCommClient* context,
 
         context->hdr->magic = magic;
         context->hdr->kind = wh_Translate16(magic, kind);
-        context->hdr->user = user;
         context->hdr->seq = wh_Translate16(magic, context->seq + 1);
         if (    (data != NULL) &&
                 (data_size != 0) &&
@@ -221,14 +219,13 @@ int wh_CommServer_Init(whCommServer* context, const whCommServerConfig* config,
 }
 
 int wh_CommServer_RecvRequest(whCommServer* context,
-        uint16_t* out_magic, uint16_t* out_kind, uint16_t* outUser,
-        uint16_t* out_seq, uint16_t* out_size, void* data)
+        uint16_t* out_magic, uint16_t* out_kind, uint16_t* out_seq,
+        uint16_t* out_size, void* data)
 {
     int rc = WH_ERROR_NOTREADY;
     uint16_t magic = 0;
     uint16_t kind = 0;
     uint16_t seq = 0;
-    uint16_t user = 0;
     uint16_t size = sizeof(context->packet);
     uint16_t data_size = 0;
 
@@ -251,7 +248,6 @@ int wh_CommServer_RecvRequest(whCommServer* context,
                 magic = context->hdr->magic;
                 kind = wh_Translate16(magic, context->hdr->kind);
                 seq = wh_Translate16(magic, context->hdr->seq);
-                user = wh_Translate16(magic, context->hdr->user);
 
                 /* Copy the data from the internal buffer if necessary */
                 if (    (data != NULL) &&
@@ -261,7 +257,6 @@ int wh_CommServer_RecvRequest(whCommServer* context,
                 }
                 if (out_magic != NULL) *out_magic = magic;
                 if (out_kind != NULL) *out_kind = kind;
-                if (outUser != NULL) *outUser = user;
                 if (out_seq != NULL) *out_seq = seq;
                 if (out_size != NULL) *out_size = data_size;
             } else {

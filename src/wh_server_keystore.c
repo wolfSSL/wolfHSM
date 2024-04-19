@@ -19,13 +19,13 @@ int hsmGetUniqueId(whServerContext* server, whNvmId* outId)
     int i;
     int ret = 0;
     whNvmId id;
-    /* apply user and type as set by the function with context */
-    whNvmId buildId = (*outId & (!WOLFHSM_KEYID_MASK));
+    /* apply client_id and type which should be set by caller on outId */
+    whNvmId buildId = ((*outId | (server->comm->client_id << 8)) & (~WOLFHSM_KEYID_MASK));
     whNvmId nvmId = 0;
     whNvmId keyCount;
     /* try every index until we find a unique one, don't worry about capacity */
     for (id = 1; id < WOLFHSM_KEYID_MASK + 1; id++) {
-        buildId = ((buildId & !WOLFHSM_KEYID_MASK) | id);
+        buildId = ((buildId & ~WOLFHSM_KEYID_MASK) | id);
         /* check against cache keys */
         for (i = 0; i < WOLFHSM_NUM_RAMKEYS; i++) {
             if (buildId == server->cache[i].meta->id)
@@ -59,7 +59,7 @@ int hsmCacheFindSlot(whServerContext* server)
     for (i = 0; i < WOLFHSM_NUM_RAMKEYS; i++) {
         /* check for empty slot or rewrite slot */
         if (foundIndex == -1 && server->cache[i].meta->id ==
-            WOLFHSM_ID_ERASED) {
+            WOLFHSM_KEYID_ERASED) {
             foundIndex = i;
             break;
         }
@@ -89,6 +89,8 @@ int hsmCacheKey(whServerContext* server, whNvmMetadata* meta, uint8_t* in)
         meta->len > WOLFHSM_NVM_MAX_OBJECT_SIZE) {
         return WH_ERROR_BADARGS;
     }
+    /* apply client_id */
+    meta->id |= (server->comm->client_id << 8);
     for (i = 0; i < WOLFHSM_NUM_RAMKEYS; i++) {
         /* check for empty slot or rewrite slot */
         if ((foundIndex == -1 &&
@@ -130,12 +132,14 @@ int hsmFreshenKey(whServerContext* server, whKeyId keyId)
     int foundIndex = -1;
     uint32_t outSz = WOLFHSM_KEYCACHE_BUFSIZE;
     whNvmMetadata meta[1] = {0};
-    if (server == NULL || keyId == WOLFHSM_ID_ERASED)
+    if (server == NULL || keyId == WOLFHSM_KEYID_ERASED)
         return WH_ERROR_BADARGS;
+    /* apply client_id */
+    keyId |= (server->comm->client_id << 8);
     for (i = 0; i < WOLFHSM_NUM_RAMKEYS; i++) {
         /* check for empty slot or rewrite slot */
         if ((foundIndex == -1 &&
-            server->cache[i].meta->id == WOLFHSM_ID_ERASED) ||
+            server->cache[i].meta->id == WOLFHSM_KEYID_ERASED) ||
             server->cache[i].meta->id == keyId) {
             foundIndex = i;
             if (server->cache[i].meta->id == keyId)
@@ -179,6 +183,8 @@ int hsmReadKey(whServerContext* server, whKeyId keyId, whNvmMetadata* outMeta,
         || outSz == NULL) {
         return WH_ERROR_BADARGS;
     }
+    /* apply client_id */
+    keyId |= (server->comm->client_id << 8);
     /* check the cache */
     for (i = 0; i < WOLFHSM_NUM_RAMKEYS; i++) {
         /* copy the meta and key before returning */
@@ -233,6 +239,8 @@ int hsmEvictKey(whServerContext* server, whNvmId keyId)
     /* make sure id is valid */
     if (server == NULL || (keyId & WOLFHSM_KEYID_MASK) == WOLFHSM_KEYID_ERASED)
         return WH_ERROR_BADARGS;
+    /* apply client_id */
+    keyId |= (server->comm->client_id << 8);
     /* find key */
     for (i = 0; i < WOLFHSM_NUM_RAMKEYS; i++) {
         /* mark key as erased */
@@ -243,7 +251,7 @@ int hsmEvictKey(whServerContext* server, whNvmId keyId)
     }
     /* if the key wasn't found return an error */
     if (i >= WOLFHSM_NUM_RAMKEYS)
-        ret = WH_ERROR_BADARGS;
+        ret = WH_ERROR_NOTFOUND;
     return ret;
 }
 
@@ -255,6 +263,8 @@ int hsmCommitKey(whServerContext* server, whNvmId keyId)
     /* make sure id is valid */
     if (server == NULL || keyId == WOLFHSM_KEYID_ERASED)
         return WH_ERROR_BADARGS;
+    /* apply client_id */
+    keyId |= (server->comm->client_id << 8);
     /* find key in cache */
     for (i = 0; i < WOLFHSM_NUM_RAMKEYS; i++) {
         if (server->cache[i].meta->id == keyId) {
@@ -277,6 +287,8 @@ int hsmEraseKey(whServerContext* server, whNvmId keyId)
     int i;
     if (server == NULL || keyId == WOLFHSM_KEYID_ERASED)
         return WH_ERROR_BADARGS;
+    /* apply client_id */
+    keyId |= (server->comm->client_id << 8);
     /* remove the key from the cache if present */
     for (i = 0; i < WOLFHSM_NUM_RAMKEYS; i++) {
         if (server->cache[i].meta->id == keyId) {

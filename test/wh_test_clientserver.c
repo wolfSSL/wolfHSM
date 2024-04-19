@@ -457,7 +457,7 @@ int whTest_ClientServerSequential(void)
                  .transport_cb      = tccb,
                  .transport_context = (void*)tmcc,
                  .transport_config  = (void*)tmcf,
-                 .client_id         = 1234,
+                 .client_id         = 123,
     }};
 
     whClientContext client[1] = {0};
@@ -473,7 +473,7 @@ int whTest_ClientServerSequential(void)
                  .transport_cb      = tscb,
                  .transport_context = (void*)tmsc,
                  .transport_config  = (void*)tmcf,
-                 .server_id         = 5678,
+                 .server_id         = 124,
     }};
 
     /* RamSim Flash state and configuration */
@@ -1337,7 +1337,7 @@ static int wh_ClientServer_MemThreadTest(void)
                  .transport_cb      = tccb,
                  .transport_context = (void*)tmcc,
                  .transport_config  = (void*)tmcf,
-                 .client_id         = 1234,
+                 .client_id         = 123,
     }};
     whClientConfig c_conf[1] = {{
        .comm = cc_conf,
@@ -1349,7 +1349,7 @@ static int wh_ClientServer_MemThreadTest(void)
                  .transport_cb      = tscb,
                  .transport_context = (void*)tmsc,
                  .transport_config  = (void*)tmcf,
-                 .server_id         = 5678,
+                 .server_id         = 124,
     }};
 
     /* RamSim Flash state and configuration */

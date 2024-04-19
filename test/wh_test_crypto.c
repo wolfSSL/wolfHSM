@@ -117,8 +117,22 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         goto exit;
     }
     /* test cache with duplicate keyId for a different user */
-    client->user = 1;
-    if ((ret = wh_Client_KeyCacheRequest_ex(client, 0, labelStart, sizeof(labelStart), key, sizeof(key), keyId)) != 0) {
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CommClose(client));
+    client->comm->client_id = 2;
+    XMEMSET(cipherText, 0xff, sizeof(cipherText));
+    /* first check that evicting the other clients key fails */
+    if ((ret = wh_Client_KeyEvictRequest(client, keyId)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyEvictRequest %d\n", ret);
+        goto exit;
+    }
+    do {
+        ret = wh_Client_KeyEvictResponse(client);
+    } while (ret == WH_ERROR_NOTREADY);
+    if (ret != WH_ERROR_NOTFOUND) {
+        WH_ERROR_PRINT("Failed to stop cross client evict\n");
+        goto exit;
+    }
+    if ((ret = wh_Client_KeyCacheRequest_ex(client, 0, labelStart, sizeof(labelStart), (uint8_t*)cipherText, sizeof(key), keyId)) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_KeyCacheRequest %d\n", ret);
         goto exit;
     }
@@ -141,13 +155,44 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         WH_ERROR_PRINT("Failed to wh_Client_KeyExportResponse %d\n", ret);
         goto exit;
     }
+    if (ret != 0 || XMEMCMP(cipherText, keyEnd, outLen) != 0 || XMEMCMP(labelStart, labelEnd, sizeof(labelStart)) != 0) {
+        WH_ERROR_PRINT("KEY CACHE/EXPORT FAILED TO MATCH\n");
+        goto exit;
+    }
+    /* evict for this client */
+    if ((ret = wh_Client_KeyEvictRequest(client, keyId)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyEvictRequest %d\n", ret);
+        goto exit;
+    }
+    do {
+        ret = wh_Client_KeyEvictResponse(client);
+    } while (ret == WH_ERROR_NOTREADY);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyEvictResponse %d\n", ret);
+        goto exit;
+    }
+    /* switch back and verify original key */
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CommClose(client));
+    client->comm->client_id = 1;
+    if ((ret = wh_Client_KeyExportRequest(client, keyId)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyExportRequest %d\n", ret);
+        goto exit;
+    }
+    outLen = sizeof(keyEnd);
+    do {
+        ret = wh_Client_KeyExportResponse(client, labelEnd, sizeof(labelEnd), keyEnd, &outLen);
+    } while (ret == WH_ERROR_NOTREADY);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyExportResponse %d\n", ret);
+        goto exit;
+    }
     if (ret == 0 && XMEMCMP(key, keyEnd, outLen) == 0 && XMEMCMP(labelStart, labelEnd, sizeof(labelStart)) == 0)
         printf("KEY USER CACHE MUTUAL EXCLUSION SUCCESS\n");
     else {
         WH_ERROR_PRINT("KEY CACHE/EXPORT FAILED TO MATCH\n");
         goto exit;
     }
-    /* test evict */
+    /* evict for original client */
     if ((ret = wh_Client_KeyEvictRequest(client, keyId)) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_KeyEvictRequest %d\n", ret);
         goto exit;
@@ -354,6 +399,7 @@ int whTest_CryptoServerConfig(whServerConfig* config)
     whServerContext server[1] = {0};
     whCommConnected am_connected = WH_COMM_CONNECTED;
     int ret = 0;
+    int userChange = 0;
 
     if (config == NULL) {
         return WH_ERROR_BADARGS;
@@ -361,6 +407,7 @@ int whTest_CryptoServerConfig(whServerConfig* config)
 
     WH_TEST_RETURN_ON_FAIL(wh_Server_Init(server, config));
     WH_TEST_RETURN_ON_FAIL(wh_Server_SetConnected(server, am_connected));
+    server->comm->client_id = 1;
 
     while(am_connected == WH_COMM_CONNECTED) {
         ret = wh_Server_HandleRequestMessage(server);
@@ -370,6 +417,16 @@ int whTest_CryptoServerConfig(whServerConfig* config)
             break;
         }
         wh_Server_GetConnected(server, &am_connected);
+        /* keep alive for 2 user changes */
+        if (am_connected != WH_COMM_CONNECTED && userChange < 2) {
+            if (userChange == 0)
+                server->comm->client_id = 2;
+            else if (userChange == 1)
+                server->comm->client_id = 1;
+            userChange++;
+            am_connected = WH_COMM_CONNECTED;
+            WH_TEST_RETURN_ON_FAIL(wh_Server_SetConnected(server, am_connected));
+        }
     }
     if ((ret == 0) || (ret == WH_ERROR_NOTREADY)){
         WH_TEST_RETURN_ON_FAIL(wh_Server_Cleanup(server));
@@ -409,7 +466,6 @@ static void _whClientServerThreadTest(whClientConfig* c_conf,
         rc = pthread_create(&cthread, NULL, _whClientTask, c_conf);
         if (rc == 0) {
             /* All good. Block on joining */
-
             pthread_join(cthread, &retval);
             pthread_join(sthread, &retval);
         } else {
@@ -439,7 +495,7 @@ static int wh_ClientServer_MemThreadTest(void)
                  .transport_cb      = tccb,
                  .transport_context = (void*)tmcc,
                  .transport_config  = (void*)tmcf,
-                 .client_id         = 1234,
+                 .client_id         = 1,
     }};
     whClientConfig c_conf[1] = {{
        .comm = cc_conf,
@@ -452,7 +508,7 @@ static int wh_ClientServer_MemThreadTest(void)
                  .transport_cb      = tscb,
                  .transport_context = (void*)tmsc,
                  .transport_config  = (void*)tmcf,
-                 .server_id         = 5678,
+                 .server_id         = 124,
     }};
 
     /* RamSim Flash state and configuration */

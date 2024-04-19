@@ -43,7 +43,6 @@ int wh_Client_Init(whClientContext* c, const whClientConfig* config)
     }
 
     memset(c, 0, sizeof(*c));
-    c->user = config->user;
 
     if (    ((rc = wh_CommClient_Init(c->comm, config->comm)) == 0) &&
 #ifndef WOLFHSM_NO_CRYPTO
@@ -85,8 +84,8 @@ int wh_Client_SendRequest(whClientContext* c,
     if (c == NULL) {
         return WH_ERROR_BADARGS;
     }
-    rc = wh_CommClient_SendRequest(c->comm, WH_COMM_MAGIC_NATIVE, kind, c->user,
-        &req_id, data_size, data);
+    rc = wh_CommClient_SendRequest(c->comm, WH_COMM_MAGIC_NATIVE, kind, &req_id,
+        data_size, data);
     if (rc == 0) {
         c->last_req_kind = kind;
         c->last_req_id = req_id;

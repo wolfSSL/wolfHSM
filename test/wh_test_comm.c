@@ -49,7 +49,7 @@ int whTest_CommMem(void)
                  .transport_cb      = tccb,
                  .transport_context = (void*)tmcc,
                  .transport_config  = (void*)tmcf,
-                 .client_id         = 1234,
+                 .client_id         = 123,
     }};
     whCommClient                client[1] = {0};
 
@@ -60,7 +60,7 @@ int whTest_CommMem(void)
                  .transport_cb      = tscb,
                  .transport_context = (void*)tmsc,
                  .transport_config  = (void*)tmcf,
-                 .server_id         = 5678,
+                 .server_id         = 124,
     }};
     whCommServer                server[1] = {0};
 
@@ -80,7 +80,6 @@ int whTest_CommMem(void)
     uint16_t rx_req_len       = 0;
     uint16_t rx_req_flags     = 0;
     uint16_t rx_req_type      = 0;
-    uint16_t user             = 0;
     uint16_t rx_req_seq       = 0;
 
     uint8_t  tx_resp[RESP_SIZE] = {0};
@@ -95,7 +94,7 @@ int whTest_CommMem(void)
     /* Check that neither side is ready to recv */
     WH_TEST_ASSERT_RETURN(WH_ERROR_NOTREADY ==
                           wh_CommServer_RecvRequest(server, &rx_req_flags,
-                                                    &rx_req_type, &user, &rx_req_seq,
+                                                    &rx_req_type, &rx_req_seq,
                                                     &rx_req_len, rx_req));
 
     for (counter = 0; counter < REPEAT_COUNT; counter++) {
@@ -104,7 +103,7 @@ int whTest_CommMem(void)
         tx_req_type = counter * 2;
         WH_TEST_RETURN_ON_FAIL(
             wh_CommClient_SendRequest(client, tx_req_flags, tx_req_type,
-                user, &tx_req_seq, tx_req_len, tx_req));
+                &tx_req_seq, tx_req_len, tx_req));
 #if defined(WH_CFG_TEST_VERBOSE)
         printf("Client SendRequest:%d, flags %x, type:%x, seq:%d, len:%d, %s\n",
                ret, tx_req_flags, tx_req_type, tx_req_seq, tx_req_len, tx_req);
@@ -118,12 +117,12 @@ int whTest_CommMem(void)
 
             WH_TEST_ASSERT_RETURN(
                 WH_ERROR_NOTREADY ==
-                wh_CommClient_SendRequest(client, tx_req_flags, tx_req_type, user,
+                wh_CommClient_SendRequest(client, tx_req_flags, tx_req_type,
                                           &tx_req_seq, tx_req_len, tx_req));
         }
 
         WH_TEST_RETURN_ON_FAIL(
-            wh_CommServer_RecvRequest(server, &rx_req_flags, &rx_req_type, &user,
+            wh_CommServer_RecvRequest(server, &rx_req_flags, &rx_req_type,
                                       &rx_req_seq, &rx_req_len, rx_req));
 
 #if defined(WH_CFG_TEST_VERBOSE)
@@ -186,7 +185,6 @@ static void* _whCommClientTask(void* cf)
     uint16_t rx_resp_flags      = 0;
     uint16_t rx_resp_type       = 0;
     uint16_t rx_resp_seq        = 0;
-    uint16_t user               = 0;
 
     if (config == NULL) {
         return NULL;
@@ -201,8 +199,7 @@ static void* _whCommClientTask(void* cf)
         tx_req_type = counter * 2;
         do {
             ret = wh_CommClient_SendRequest(client, tx_req_flags, tx_req_type,
-                                            user, &tx_req_seq, tx_req_len,
-                                            tx_req);
+                                            &tx_req_seq, tx_req_len, tx_req);
             WH_TEST_ASSERT_MSG((ret == WH_ERROR_NOTREADY) || (0 == ret),
                                "Client SendRequest: ret=%d", ret);
 #if defined(WH_CFG_TEST_VERBOSE)
@@ -262,7 +259,6 @@ static void* _whCommServerTask(void* cf)
     uint16_t rx_req_flags     = 0;
     uint16_t rx_req_type      = 0;
     uint16_t rx_req_seq       = 0;
-    uint16_t user        = 0;
 
     uint8_t  tx_resp[RESP_SIZE] = {0};
     uint16_t tx_resp_len        = 0;
@@ -270,7 +266,7 @@ static void* _whCommServerTask(void* cf)
     for (counter = 0; counter < REPEAT_COUNT; counter++) {
         do {
             ret = wh_CommServer_RecvRequest(server, &rx_req_flags, &rx_req_type,
-                                            &user, &rx_req_seq, &rx_req_len,
+                                            &rx_req_seq, &rx_req_len,
                                             rx_req);
 
             WH_TEST_ASSERT_MSG((ret == WH_ERROR_NOTREADY) || (0 == ret),
@@ -374,7 +370,7 @@ void wh_CommClientServer_MemThreadTest(void)
                  .transport_cb      = tmccb,
                  .transport_context = (void*)csc,
                  .transport_config  = (void*)tmcf,
-                 .client_id         = 1234,
+                 .client_id         = 123,
     }};
 
     /* Server configuration/contexts */
@@ -384,7 +380,7 @@ void wh_CommClientServer_MemThreadTest(void)
                  .transport_cb      = tmscb,
                  .transport_context = (void*)css,
                  .transport_config  = (void*)tmcf,
-                 .server_id         = 5678,
+                 .server_id         = 124,
     }};
 
     _whCommClientServerThreadTest(c_conf, s_conf);
@@ -405,7 +401,7 @@ void wh_CommClientServer_TcpThreadTest(void)
                     .transport_cb      = pttccb,
                     .transport_context = (void*)tcc,
                     .transport_config  = (void*)mytcpconfig,
-                    .client_id         = 1234,
+                    .client_id         = 123,
     }};
 
     /* Server configuration/contexts */
@@ -416,7 +412,7 @@ void wh_CommClientServer_TcpThreadTest(void)
                     .transport_cb      = pttscb,
                     .transport_context = (void*)tss,
                     .transport_config  = (void*)mytcpconfig,
-                    .server_id         = 5678,
+                    .server_id         = 124,
     }};
 
     _whCommClientServerThreadTest(c_conf, s_conf);
