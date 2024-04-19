@@ -58,15 +58,14 @@ typedef struct whNvmFlashConfig_t {
 } whNvmFlashConfig;
 
 typedef struct whNvmFlashContext_t {
-    int initialized;
-
     const whFlashCb* cb;            /* Flash callbacks */
     void* flash;                    /* Flash context to use */
-    uint32_t partition_units;       /* Size of partition in units */
-
-    int active;                     /* Which partition (0 or 1) is active */
     nfMemState state;               /* State of active partition */
     nfMemDirectory directory;       /* Cache of active objects */
+    uint32_t partition_units;       /* Size of partition in units */
+    int active;                     /* Which partition (0 or 1) is active */
+    int initialized;
+    uint8_t padding[4];
 } whNvmFlashContext;
 
 /** whNvm Interface */

@@ -21,11 +21,14 @@
 #include <stdint.h>
 #include <unistd.h>
 
+#ifndef WOLFHSM_NO_CRYPTO
+
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/types.h"
 #include "wolfssl/wolfcrypt/error-crypt.h"
 #include "wolfssl/wolfcrypt/aes.h"
 #include "wolfssl/wolfcrypt/cmac.h"
+#include "wolfssl/wolfcrypt/rsa.h"
 #include "wolfssl/wolfcrypt/cryptocb.h"
 #include "wolfhsm/wh_packet.h"
 #include "wolfhsm/wh_error.h"
@@ -66,6 +69,8 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
         packet->pkAnyReq.type = info->pk.type;
         switch (info->pk.type)
         {
+#ifndef NO_RSA
+#ifdef WOLFSSL_KEY_GEN
         case WC_PK_TYPE_RSA_KEYGEN:
             /* set size */
             packet->pkRsakgReq.size = info->pk.rsakg.size;
@@ -91,6 +96,7 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
                 }
             }
             break;
+#endif  /* WOLFSSL_KEY_GEN */
         case WC_PK_TYPE_RSA:
             /* in and out are after the fixed size fields */
             in = (uint8_t*)(&packet->pkRsaReq + 1);
@@ -156,6 +162,8 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
                 }
             }
             break;
+#endif  /* !NO_RSA */
+
         case WC_PK_TYPE_CURVE25519_KEYGEN:
             packet->pkCurve25519kgReq.sz = info->pk.curve25519kg.size;
             /* write request */
@@ -246,3 +254,4 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
 
     return ret;
 }
+#endif  /* WOLFHSM_NO_CRYPTO */

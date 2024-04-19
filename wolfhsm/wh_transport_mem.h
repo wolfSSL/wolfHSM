@@ -80,9 +80,10 @@
 /** Common configuration structure */
 typedef struct {
     void* req;
-    uint16_t req_size;
     void* resp;
+    uint16_t req_size;
     uint16_t resp_size;
+    uint8_t padding[4];
 } whTransportMemConfig;
 
 
@@ -101,12 +102,12 @@ typedef union whTransportMemCsr_t {
 
 typedef struct {
     volatile whTransportMemCsr* req;
-    void* req_data;
-    uint16_t req_size;
     volatile whTransportMemCsr* resp;
+    void* req_data;
     void* resp_data;
-    uint16_t resp_size;
     int initialized;
+    uint16_t req_size;
+    uint16_t resp_size;
 } whTransportMemContext;
 
 /* Naming conveniences. Reuses the same types. */

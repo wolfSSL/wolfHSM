@@ -21,6 +21,10 @@ jobs:
         repository: wolfssl/wolfssl
         path: wolfssl
 
+    # Build and test debug build with ASAN and NOCRYPTO 
+    - name: Build and test ASAN DEBUG
+      run: cd test && make DEBUG=1 ASAN=1 NOCRYPTO=1 WOLFSSL_DIR=../wolfssl run
+
     # Build and test debug build with ASAN 
     - name: Build and test ASAN DEBUG
       run: cd test && make DEBUG=1 ASAN=1 WOLFSSL_DIR=../wolfssl run

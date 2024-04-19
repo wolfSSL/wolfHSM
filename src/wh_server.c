@@ -47,9 +47,10 @@ int wh_Server_Init(whServerContext* server, whServerConfig* config)
     }
 
     memset(server, 0, sizeof(*server));
-    server->crypto = config->crypto;
     server->nvm = config->nvm;
 
+#ifndef WOLFHSM_NO_CRYPTO
+    server->crypto = config->crypto;
     if (server->crypto != NULL) {
 #if defined(WOLF_CRYPTO_CB)
         server->crypto->devId = config->devId;
@@ -57,6 +58,7 @@ int wh_Server_Init(whServerContext* server, whServerConfig* config)
         server->crypto->devId = INVALID_DEVID;
 #endif
     }
+#endif
 
     rc = wh_CommServer_Init(server->comm, config->comm_config,
             wh_Server_SetConnectedCb, (void*)server);
@@ -254,6 +256,7 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
                     size, data, &size, data);
         break;
 
+#ifndef WOLFHSM_NO_CRYPTO
         case WH_MESSAGE_GROUP_KEY:
             rc = wh_Server_HandleKeyRequest(server, magic, action, seq,
                     data, &size);
@@ -262,6 +265,7 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
         case WH_MESSAGE_GROUP_CRYPTO:
             rc = wh_Server_HandleCryptoRequest(server, action, data, &size);
         break;
+#endif  /* WOLFHSM_NO_CRYPTO */
 
         case WH_MESSAGE_GROUP_PKCS11:
             rc = _wh_Server_HandlePkcs11Request(server, magic, action, seq,

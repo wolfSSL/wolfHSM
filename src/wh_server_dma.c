@@ -2,6 +2,10 @@
  * src/wh_server_dma.c
  */
 
+#include <stdint.h>
+#include <string.h>
+#include <stddef.h>
+
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_server.h"
 

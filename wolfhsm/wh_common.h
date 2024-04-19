@@ -79,25 +79,6 @@ typedef struct {
 /* static_assert(sizeof(whNvmMetadata) == WOLFHSM_NVM_METADATA_LEN) */
 
 
-/** Manifest storage  */
-
-enum {
-    WOLFHSM_MANIFEST_CMAC_LEN = 16,
-};
-
-typedef struct {
-    void* address;              /* Flash address that matches this entry */
-    /* TODO: Make this match customer format */
-    uint8_t payload_cmac[WOLFHSM_MANIFEST_CMAC_LEN];  /* CMAC of the image */
-    uint8_t* payload_start;     /* Flash address where the payload starts */
-    uint32_t payload_len;       /* Leng of the payload */
-    uint8_t manifest_cmac[WOLFHSM_MANIFEST_CMAC_LEN]; /* CMAC of the manifest */
-} whManifest_ex;
-
-/* TODO Update Stored manifest data at compile time */
-
-extern const whManifest_ex manifests[WOLFHSM_NUM_MANIFESTS];
-
 /* Custom request shared defs */
 #define WH_CUSTOM_CB_NUM_CALLBACKS 8
 #define WOLFHSM_ID_ERASED 0

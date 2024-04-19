@@ -18,7 +18,9 @@ int whTest_Unit(void)
 {
     /* Comm tests */
     WH_TEST_ASSERT(0 == whTest_Comm());
+#ifndef WOLFHSM_NO_CRYPTO
     WH_TEST_ASSERT(0 == whTest_Crypto());
+#endif
     WH_TEST_ASSERT(0 == whTest_Flash_RamSim());
     WH_TEST_ASSERT(0 == whTest_NvmFlash());
     WH_TEST_ASSERT(0 == whTest_ClientServer());

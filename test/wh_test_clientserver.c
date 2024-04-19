@@ -501,20 +501,25 @@ int whTest_ClientServerSequential(void)
          .config  = nf_conf,
     }};
     whNvmContext nvm[1]    = {{0}};
-
+#ifndef WOLFHSM_NO_CRYPTO
     crypto_context crypto[1] = {{
         .devId = INVALID_DEVID,
     }};
+#endif
 
     whServerConfig  s_conf[1] = {{
          .comm_config = cs_conf,
          .nvm         = nvm,
+#ifndef WOLFHSM_NO_CRYPTO
          .crypto      = crypto,
+#endif
     }};
     whServerContext server[1] = {0};
 
+#ifndef WOLFHSM_NO_CRYPTO
     WH_TEST_RETURN_ON_FAIL(wolfCrypt_Init());
     WH_TEST_RETURN_ON_FAIL(wc_InitRng_ex(crypto->rng, NULL, crypto->devId));
+#endif
     WH_TEST_RETURN_ON_FAIL(wh_Nvm_Init(nvm, n_conf));
 
     /* Init client and server */
@@ -918,8 +923,10 @@ int whTest_ClientServerSequential(void)
     WH_TEST_RETURN_ON_FAIL(wh_Client_Cleanup(client));
 
     wh_Nvm_Cleanup(nvm);
+#ifndef WOLFHSM_NO_CRYPTO
     wc_FreeRng(crypto->rng);
     wolfCrypt_Cleanup();
+#endif
 
     return ret;
 }
@@ -1371,27 +1378,35 @@ static int wh_ClientServer_MemThreadTest(void)
     }};
     whNvmContext nvm[1] = {{0}};
 
+#ifndef WOLFHSM_NO_CRYPTO
     /* Crypto context */
     crypto_context crypto[1] = {{
             .devId = INVALID_DEVID,
     }};
+#endif
 
     whServerConfig                  s_conf[1] = {{
        .comm_config = cs_conf,
        .nvm = nvm,
+#ifndef WOLFHSM_NO_CRYPTO
        .crypto = crypto,
+#endif
     }};
 
     WH_TEST_RETURN_ON_FAIL(wh_Nvm_Init(nvm, n_conf));
 
+#ifndef WOLFHSM_NO_CRYPTO
     WH_TEST_RETURN_ON_FAIL(wolfCrypt_Init());
     WH_TEST_RETURN_ON_FAIL(wc_InitRng_ex(crypto->rng, NULL, crypto->devId));
-
+#endif
     _whClientServerThreadTest(c_conf, s_conf);
 
     wh_Nvm_Cleanup(nvm);
+
+#ifndef WOLFHSM_NO_CRYPTO
     wc_FreeRng(crypto->rng);
     wolfCrypt_Cleanup();
+#endif
 
     return WH_ERROR_OK;
 }
