@@ -256,7 +256,7 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
                     size, data, &size, data);
         break;
 
-        #ifndef WOLFHSM_NO_CRYPTO
+#ifndef WOLFHSM_NO_CRYPTO
         case WH_MESSAGE_GROUP_KEY:
             rc = wh_Server_HandleKeyRequest(server, magic, action, seq,
                     data, &size);

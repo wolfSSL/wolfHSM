@@ -53,7 +53,7 @@ CFLAGS += -DWOLFHSM_NO_CRYPTO -Wpadded
 endif
 
 # wolfHSM-specific defines
-CFLAGS += -DWH_CONFIG -DWOLFHSM_NO_CRYPTO
+CFLAGS += -DWH_CONFIG
 
 
 # Assembly source files
