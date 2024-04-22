@@ -301,7 +301,7 @@ int hsmEraseKey(whServerContext* server, whNvmId keyId)
 }
 
 int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
-    uint16_t action, uint8_t user, uint16_t seq, uint8_t* data, uint16_t* size)
+    uint16_t action, uint16_t seq, uint8_t* data, uint16_t* size)
 {
     int ret = 0;
     uint32_t field;
@@ -323,7 +323,8 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
         /* in is after fixed size fields */
         in = (uint8_t*)(&packet->keyCacheReq + 1);
         /* set the metadata fields */
-        meta->id = MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_CRYPTO, user,
+        meta->id = MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_CRYPTO,
+            server->comm->client_id,
             packet->keyCacheReq.id);
         meta->flags = packet->keyCacheReq.flags;
         meta->len = packet->keyCacheReq.sz;
@@ -334,21 +335,21 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
             XMEMCPY(meta->label, packet->keyCacheReq.label,
                 packet->keyCacheReq.labelSz);
         }
-        /* get a new id if one wasn't provided, user has already been applied */
+        /* get a new id if one wasn't provided */
         if (packet->keyCacheReq.id == WOLFHSM_KEYID_ERASED)
             ret = hsmGetUniqueId(server, &meta->id);
         /* write the key */
         if (ret == 0)
             ret = hsmCacheKey(server, meta, in);
         if (ret == 0) {
-            /* remove the user, client may set type */
+            /* remove the cleint_id, client may set type */
             packet->keyCacheRes.id = (meta->id & WOLFHSM_KEYID_MASK);
             *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->keyCacheRes);
         }
         break;
     case WH_KEY_EVICT:
         ret = hsmEvictKey(server, MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_CRYPTO,
-            user, packet->keyEvictReq.id));
+            server->comm->client_id, packet->keyEvictReq.id));
         if (ret == 0) {
             packet->keyEvictRes.ok = 0;
             *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->keyEvictRes);
@@ -361,7 +362,8 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
             sizeof(packet->keyExportRes));
         /* read the key */
         ret = hsmReadKey(server, MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_CRYPTO,
-            user, packet->keyExportReq.id), meta, out, &field);
+            server->comm->client_id, packet->keyExportReq.id), meta, out,
+            &field);
         if (ret == 0) {
             /* set key len */
             packet->keyExportRes.len = field;
@@ -375,7 +377,7 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
     case WH_KEY_COMMIT:
         /* commit the cached key */
         ret = hsmCommitKey(server, MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_CRYPTO,
-            user, packet->keyCommitReq.id));
+            server->comm->client_id, packet->keyCommitReq.id));
         if (ret == 0) {
             packet->keyCommitRes.ok = 0;
             *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->keyCommitRes);
@@ -383,7 +385,7 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
         break;
     case WH_KEY_ERASE:
         ret = hsmEraseKey(server, MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_CRYPTO,
-            user, packet->keyEraseReq.id));
+            server->comm->client_id, packet->keyEraseReq.id));
         if (ret == 0) {
             packet->keyEraseRes.ok = 0;
             *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->keyEraseRes);

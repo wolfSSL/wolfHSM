@@ -38,7 +38,6 @@ struct whClientContext_t {
 typedef struct whClientContext_t whClientContext;
 
 struct whClientConfig_t {
-    uint16_t user;
     whCommClientConfig* comm;
 };
 typedef struct whClientConfig_t whClientConfig;

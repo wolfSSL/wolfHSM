@@ -499,7 +499,6 @@ static int wh_ClientServer_MemThreadTest(void)
     }};
     whClientConfig c_conf[1] = {{
        .comm = cc_conf,
-       .user = 0,
     }};
     /* Server configuration/contexts */
     whTransportServerCb         tscb[1]   = {WH_TRANSPORT_MEM_SERVER_CB};

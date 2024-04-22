@@ -128,7 +128,7 @@ static int hsmLoadKeyCurve25519(whServerContext* server, curve25519_key* key,
 #endif /* HAVE_CURVE25519 */
 
 int wh_Server_HandleCryptoRequest(whServerContext* server,
-    uint16_t action, uint8_t user, uint8_t* data, uint16_t* size)
+    uint16_t action, uint8_t* data, uint16_t* size)
 {
     int ret = 0;
     uint32_t field;
@@ -253,7 +253,7 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
             /* set the assigned id */
             wc_curve25519_free(server->crypto->curve25519Private);
             if (ret == 0) {
-                /* strip user */
+                /* strip client_id */
                 packet->pkCurve25519kgRes.keyId =
                     (keyId & ~WOLFHSM_KEYUSER_MASK);
                 *size = WOLFHSM_PACKET_STUB_SIZE +
@@ -276,14 +276,16 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
             if (ret == 0) {
                 ret = hsmLoadKeyCurve25519(server,
                     server->crypto->curve25519Private,
-                    MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_CRYPTO, user,
+                    MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_CRYPTO,
+                    server->comm->client_id,
                     packet->pkCurve25519Req.privateKeyId));
             }
             /* load the public key */
             if (ret == 0) {
                 ret = hsmLoadKeyCurve25519(server,
                     server->crypto->curve25519Public,
-                    MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_CRYPTO, user,
+                    MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_CRYPTO,
+                    server->comm->client_id,
                     packet->pkCurve25519Req.publicKeyId));
             }
             /* make shared secret */

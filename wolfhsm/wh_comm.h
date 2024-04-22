@@ -140,7 +140,7 @@ typedef struct {
     void* transport_context;
     const void* transport_config;
     uint8_t client_id;
-    uint8_t pad[4];
+    uint8_t pad[7];
 } whCommClientConfig;
 
 /* Context structure for a client.  Note the client context will track the
@@ -158,7 +158,7 @@ typedef struct {
     uint16_t size;
     uint8_t client_id;
     uint8_t server_id;
-    uint8_t pad[6];
+    uint8_t pad[4];
 } whCommClient;
 
 
@@ -232,7 +232,7 @@ typedef struct {
     const whTransportServerCb* transport_cb;
     const void* transport_config;
     uint8_t server_id;
-    uint8_t pad[4];
+    uint8_t pad[7];
 } whCommServerConfig;
 
 /* Context structure for a server.  Note the client context will track the
@@ -248,7 +248,6 @@ typedef struct {
     uint16_t reqid;
     uint8_t client_id;
     uint8_t server_id;
-    uint8_t pad[2];
 } whCommServer;
 
 /* Reset the state of the server context and begin the connection to a client

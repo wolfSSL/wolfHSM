@@ -4,7 +4,7 @@
 #include "wolfhsm/wh_server.h"
 
 int wh_Server_HandleCryptoRequest(whServerContext* server, uint16_t action,
-    uint8_t user, uint8_t* data, uint16_t* size);
+    uint8_t* data, uint16_t* size);
 
 
 #endif

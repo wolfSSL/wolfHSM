@@ -13,6 +13,6 @@ int hsmEvictKey(whServerContext* server, uint16_t keyId);
 int hsmCommitKey(whServerContext* server, uint16_t keyId);
 int hsmEraseKey(whServerContext* server, whNvmId keyId);
 int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
-    uint16_t action, uint8_t user, uint16_t seq, uint8_t* data, uint16_t* size);
+    uint16_t action, uint16_t seq, uint8_t* data, uint16_t* size);
 
 #endif
