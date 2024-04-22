@@ -657,4 +657,9 @@ void wh_Client_SetKeyCurve25519(curve25519_key* key, whNvmId keyId)
 {
     XMEMCPY(key->devCtx, (void*)&keyId, sizeof(keyId));
 }
+
+void wh_Client_SetKeyRsa(RsaKey* key, whNvmId keyId)
+{
+    XMEMCPY(key->devCtx, (void*)&keyId, sizeof(keyId));
+}
 #endif  /* WOLFHSM_NO_CRYPTO */
