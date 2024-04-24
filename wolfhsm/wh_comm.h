@@ -139,8 +139,8 @@ typedef struct {
     const whTransportClientCb* transport_cb;
     void* transport_context;
     const void* transport_config;
-    uint32_t client_id;
-    uint8_t pad[4];
+    uint8_t client_id;
+    uint8_t pad[7];
 } whCommClientConfig;
 
 /* Context structure for a client.  Note the client context will track the
@@ -152,13 +152,13 @@ typedef struct {
     const whTransportClientCb* transport_cb;
     whCommHeader* hdr;
     uint8_t* data;
-    uint32_t client_id;
-    uint32_t server_id;
     int initialized;
     uint16_t reqid;
     uint16_t seq;
     uint16_t size;
-    uint8_t pad[6];
+    uint8_t client_id;
+    uint8_t server_id;
+    uint8_t pad[4];
 } whCommClient;
 
 
@@ -171,9 +171,8 @@ int wh_CommClient_Init(whCommClient* context, const whCommClientConfig* config);
 /* If a request buffer is available, send a new request to the server.  The
  * transport will update the sequence number on success.
  */
-int wh_CommClient_SendRequest(whCommClient* context,
-        uint16_t magic, uint16_t kind, uint16_t* out_seq,
-        uint16_t data_size, const void* data);
+int wh_CommClient_SendRequest(whCommClient* context, uint16_t magic,
+    uint16_t kind, uint16_t *out_seq, uint16_t data_size, const void* data);
 
 /* If a response packet has been buffered, get the header and copy the data out
  * of the buffer.
@@ -232,8 +231,8 @@ typedef struct {
     void* transport_context;
     const whTransportServerCb* transport_cb;
     const void* transport_config;
-    uint32_t server_id;
-    uint8_t pad[4];
+    uint8_t server_id;
+    uint8_t pad[7];
 } whCommServerConfig;
 
 /* Context structure for a server.  Note the client context will track the
@@ -245,11 +244,10 @@ typedef struct {
     const whTransportServerCb* transport_cb;
     whCommHeader* hdr;
     uint8_t* data;
-    uint32_t client_id;
-    uint32_t server_id;
     int initialized;
     uint16_t reqid;
-    uint8_t pad[2];
+    uint8_t client_id;
+    uint8_t server_id;
 } whCommServer;
 
 /* Reset the state of the server context and begin the connection to a client
@@ -264,7 +262,7 @@ int wh_CommServer_Init(whCommServer* context, const whCommServerConfig* config,
  */
 int wh_CommServer_RecvRequest(whCommServer* context,
         uint16_t* out_magic, uint16_t* out_kind, uint16_t* out_seq,
-        uint16_t* out_size, void* buffer);
+        uint16_t* out_size, void* data);
 
 /* Upon completion of the request, send the response packet using the same seq
  * as the incoming request.  Note that overriding the seq number should only be

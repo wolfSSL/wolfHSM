@@ -84,10 +84,8 @@ int wh_Client_SendRequest(whClientContext* c,
     if (c == NULL) {
         return WH_ERROR_BADARGS;
     }
-
-    rc = wh_CommClient_SendRequest(c->comm,
-                WH_COMM_MAGIC_NATIVE, kind, &req_id,
-                data_size, data);
+    rc = wh_CommClient_SendRequest(c->comm, WH_COMM_MAGIC_NATIVE, kind, &req_id,
+        data_size, data);
     if (rc == 0) {
         c->last_req_kind = kind;
         c->last_req_id = req_id;
@@ -465,6 +463,7 @@ int wh_Client_KeyCacheRequest_ex(whClientContext* c, uint32_t flags,
     uint8_t* packIn = (uint8_t*)(&packet->keyCacheReq + 1);
     if (c == NULL || in == NULL || inSz == 0)
         return WH_ERROR_BADARGS;
+    packet->keyCacheReq.id = keyId;
     packet->keyCacheReq.flags = flags;
     packet->keyCacheReq.sz = inSz;
     if (label == NULL)
@@ -489,7 +488,7 @@ int wh_Client_KeyCacheRequest(whClientContext* c, uint32_t flags,
     uint8_t* label, uint32_t labelSz, uint8_t* in, uint32_t inSz)
 {
     return wh_Client_KeyCacheRequest_ex(c, flags, label, labelSz, in, inSz,
-        WOLFHSM_ID_ERASED);
+        WOLFHSM_KEYID_ERASED);
 }
 
 int wh_Client_KeyCacheResponse(whClientContext* c, uint16_t* keyId)
@@ -514,7 +513,7 @@ int wh_Client_KeyCacheResponse(whClientContext* c, uint16_t* keyId)
 int wh_Client_KeyEvictRequest(whClientContext* c, uint16_t keyId)
 {
     whPacket packet[1] = {0};
-    if (c == NULL || keyId == WOLFHSM_ID_ERASED)
+    if (c == NULL || keyId == WOLFHSM_KEYID_ERASED)
         return WH_ERROR_BADARGS;
     /* set the keyId */
     packet->keyEvictReq.id = keyId;
@@ -544,7 +543,7 @@ int wh_Client_KeyEvictResponse(whClientContext* c)
 int wh_Client_KeyExportRequest(whClientContext* c, uint16_t keyId)
 {
     whPacket packet[1] = {0};
-    if (c == NULL || keyId == WOLFHSM_ID_ERASED)
+    if (c == NULL || keyId == WOLFHSM_KEYID_ERASED)
         return WH_ERROR_BADARGS;
     /* set keyId */
     packet->keyExportReq.id = keyId;
@@ -597,7 +596,7 @@ int wh_Client_KeyExportResponse(whClientContext* c, uint8_t* label,
 int wh_Client_KeyCommitRequest(whClientContext* c, whNvmId keyId)
 {
     whPacket packet[1] = {0};
-    if (c == NULL || keyId == WOLFHSM_ID_ERASED)
+    if (c == NULL || keyId == WOLFHSM_KEYID_ERASED)
         return WH_ERROR_BADARGS;
     /* set keyId */
     packet->keyCommitReq.id = keyId;
@@ -627,7 +626,7 @@ int wh_Client_KeyCommitResponse(whClientContext* c)
 int wh_Client_KeyEraseRequest(whClientContext* c, whNvmId keyId)
 {
     whPacket packet[1] = {0};
-    if (c == NULL || keyId == WOLFHSM_ID_ERASED)
+    if (c == NULL || keyId == WOLFHSM_KEYID_ERASED)
         return WH_ERROR_BADARGS;
     /* set keyId */
     packet->keyEraseReq.id = keyId;
@@ -655,6 +654,11 @@ int wh_Client_KeyEraseResponse(whClientContext* c)
 }
 
 void wh_Client_SetKeyCurve25519(curve25519_key* key, whNvmId keyId)
+{
+    XMEMCPY(key->devCtx, (void*)&keyId, sizeof(keyId));
+}
+
+void wh_Client_SetKeyRsa(RsaKey* key, whNvmId keyId)
 {
     XMEMCPY(key->devCtx, (void*)&keyId, sizeof(keyId));
 }

@@ -78,9 +78,8 @@ int wh_CommClient_Init(whCommClient* context, const whCommClientConfig* config)
 /* If a request buffer is available, send a new request to the server.  The
  * sequence number will be incremented on transport success.
  */
-int wh_CommClient_SendRequest(whCommClient* context,
-        uint16_t magic, uint16_t kind, uint16_t *out_seq,
-        uint16_t data_size, const void* data)
+int wh_CommClient_SendRequest(whCommClient* context, uint16_t magic,
+    uint16_t kind, uint16_t *out_seq, uint16_t data_size, const void* data)
 {
     int rc = WH_ERROR_NOTREADY;
 

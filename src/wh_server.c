@@ -263,7 +263,8 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
         break;
 
         case WH_MESSAGE_GROUP_CRYPTO:
-            rc = wh_Server_HandleCryptoRequest(server, action, data, &size);
+            rc = wh_Server_HandleCryptoRequest(server, action, data,
+                &size);
         break;
 #endif  /* WOLFHSM_NO_CRYPTO */
 
