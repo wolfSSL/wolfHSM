@@ -27,6 +27,7 @@
 
 /* Consider reusing wolfssl or wolfcrypt errors here */
 
+
 enum {
     WH_ERROR_OK             = 0,    /* Success, no error. */
 
@@ -45,6 +46,21 @@ enum {
 
     /* Custom-callback status returns */
     WH_ERROR_NOHANDLER     = -420, /* No handler registered for action */
+
+    WH_SHE_ERC_SEQUENCE_ERROR = -500,
+    WH_SHE_ERC_KEY_NOT_AVAILABLE = -501,
+    WH_SHE_ERC_KEY_INVALID = -502,
+    WH_SHE_ERC_KEY_EMPTY = -503,
+    WH_SHE_ERC_NO_SECURE_BOOT = -504,
+    WH_SHE_ERC_WRITE_PROTECTED = -505,
+    WH_SHE_ERC_KEY_UPDATE_ERROR = -506,
+    WH_SHE_ERC_RNG_SEED = -507,
+    WH_SHE_ERC_NO_DEBUGGING = -508,
+    WH_SHE_ERC_BUSY = -509,
+    WH_SHE_ERC_MEMORY_FAILURE = -510,
+    WH_SHE_ERC_GENERAL_ERROR = -511,
 };
+
+#define WOLFHSM_SHE_ERC_NO_ERROR WH_ERROR_OK
 
 #endif /* WOLFHSM_WH_ERROR_H_ */

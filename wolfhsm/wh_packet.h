@@ -325,6 +325,11 @@ typedef struct WOLFHSM_PACK wh_Packet_version_exchange
 } wh_Packet_version_exchange;
 
 #ifdef WOLFHSM_SHE_EXTENSION
+typedef struct WOLFHSM_PACK wh_Packet_she_set_uid_req
+{
+    uint8_t uid[WOLFHSM_SHE_UID_SZ];
+} wh_Packet_she_set_uid_req;
+
 typedef struct WOLFHSM_PACK wh_Packet_she_secure_boot_init_req
 {
     uint32_t sz;
@@ -482,6 +487,7 @@ typedef struct WOLFHSM_PACK whPacket
         wh_Packet_key_erase_res keyEraseRes;
 
 #ifdef WOLFHSM_SHE_EXTENSION
+        wh_Packet_she_set_uid_req sheSetUidReq;
         wh_Packet_she_secure_boot_init_req sheSecureBootInitReq;
         wh_Packet_she_secure_boot_init_res sheSecureBootInitRes;
         wh_Packet_she_secure_boot_update_req sheSecureBootUpdateReq;

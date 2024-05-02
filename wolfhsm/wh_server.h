@@ -167,6 +167,9 @@ struct whServerContext_t {
     whServerCustomCb customHandlerTable[WH_CUSTOM_CB_NUM_CALLBACKS];
     whServerDmaContext dma;
     int connected;
+#ifdef WOLFHSM_SHE_EXTENSION
+    uint8_t sheUid[WOLFHSM_SHE_UID_SZ];
+#endif
     uint8_t padding[4];
 };
 

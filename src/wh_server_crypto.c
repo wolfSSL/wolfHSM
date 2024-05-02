@@ -346,6 +346,8 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
         break;
     }
     packet->rc = ret;
+    if (ret != 0)
+        *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->rc);
     return 0;
 }
 

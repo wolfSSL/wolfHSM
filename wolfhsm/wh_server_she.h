@@ -16,12 +16,22 @@
  * You should have received a copy of the GNU General Public License
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
-#include "wolfhsm/wh_server.h"
-
 #ifndef WOLFHSM_WH_SERVER_SHE_H
 #define WOLFHSM_WH_SERVER_SHE_H
-#if 0
-int hsmHandleSHE(WOLFHSM_CTX* ctx, wh_Packet* packet,
-    NvmMetaData* meta);
-#endif
+#include "wolfhsm/wh_server.h"
+
+enum WOLFHSM_SHE_SUBTYPE {
+    WOLFHSM_SHE_SECURE_BOOT_INIT,
+    WOLFHSM_SHE_SECURE_BOOT_UPDATE,
+    WOLFHSM_SHE_SECURE_BOOT_FINISH,
+    WOLFHSM_SHE_GET_STATUS,
+    WOLFHSM_SHE_LOAD_KEY,
+    WOLFHSM_SHE_EXPORT_RAM_KEY,
+    WOLFHSM_SHE_INIT_RNG,
+    WOLFHSM_SHE_RND,
+    WOLFHSM_SHE_EXTEND_SEED,
+};
+
+int wh_Server_HandleSheRequest(whServerContext* server,
+    uint16_t action, uint8_t* data, uint16_t* size);
 #endif
