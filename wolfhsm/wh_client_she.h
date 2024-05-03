@@ -30,6 +30,8 @@
 /* Component includes */
 #include "wolfhsm/wh_comm.h"
 
+int wh_Client_ShePreProgramKey(whClientContext* c, whNvmId keyId,
+    whNvmFlags flags, uint8_t* key, whNvmSize keySz);
 int wh_Client_SheSetUidRequest(whClientContext* c, uint8_t* uid,
     uint32_t uidSz);
 int wh_Client_SheSetUidResponse(whClientContext* c);
@@ -46,6 +48,10 @@ int wh_Client_SheLoadKeyResponse(whClientContext* c, uint8_t* messageFour,
 int wh_Client_SheLoadKey(whClientContext* c, uint8_t* messageOne,
     uint8_t* messageTwo, uint8_t* messageThree, uint8_t* messageFour,
     uint8_t* messageFive);
+int wh_Client_SheLoadPlainKeyRequest(whClientContext* c, uint8_t* key,
+    uint32_t keySz);
+int wh_Client_SheLoadPlainKeyResponse(whClientContext* c);
+int wh_Client_SheLoadPlainKey(whClientContext* c, uint8_t* key, uint32_t keySz);
 int wh_Client_SheExportRamKeyRequest(whClientContext* c);
 int wh_Client_SheExportRamKeyResponse(whClientContext* c, uint8_t* messageOne,
     uint8_t* messageTwo, uint8_t* messageThree, uint8_t* messageFour,
@@ -64,4 +70,24 @@ int wh_Client_SheExtendSeedRequest(whClientContext* c, uint8_t* entropy,
 int wh_Client_SheExtendSeedResponse(whClientContext* c);
 int wh_Client_SheExtendSeed(whClientContext* c, uint8_t* entropy,
     uint32_t entropySz);
+int wh_Client_SheEncEcbRequest(whClientContext* c, uint8_t keyId, uint8_t* in,
+    uint32_t sz);
+int wh_Client_SheEncEcbResponse(whClientContext* c, uint8_t* out, uint32_t sz);
+int wh_Client_SheEncEcb(whClientContext* c, uint8_t keyId, uint8_t* in,
+    uint8_t* out, uint32_t sz);
+int wh_Client_SheEncCbcRequest(whClientContext* c, uint8_t keyId, uint8_t* iv,
+    uint32_t ivSz, uint8_t* in, uint32_t sz);
+int wh_Client_SheEncCbcResponse(whClientContext* c, uint8_t* out, uint32_t sz);
+int wh_Client_SheEncCbc(whClientContext* c, uint8_t keyId, uint8_t* iv,
+    uint32_t ivSz, uint8_t* in, uint8_t* out, uint32_t sz);
+int wh_Client_SheDecEcbRequest(whClientContext* c, uint8_t keyId, uint8_t* in,
+    uint32_t sz);
+int wh_Client_SheDecEcbResponse(whClientContext* c, uint8_t* out, uint32_t sz);
+int wh_Client_SheDecEcb(whClientContext* c, uint8_t keyId, uint8_t* in,
+    uint8_t* out, uint32_t sz);
+int wh_Client_SheDecCbcRequest(whClientContext* c, uint8_t keyId, uint8_t* iv,
+    uint32_t ivSz, uint8_t* in, uint32_t sz);
+int wh_Client_SheDecCbcResponse(whClientContext* c, uint8_t* out, uint32_t sz);
+int wh_Client_SheDecCbc(whClientContext* c, uint8_t keyId, uint8_t* iv,
+    uint32_t ivSz, uint8_t* in, uint8_t* out, uint32_t sz);
 #endif

@@ -115,7 +115,8 @@ int hsmCacheKey(whServerContext* server, whNvmMetadata* meta, uint8_t* in)
     for (i = 0; i < WOLFHSM_NUM_RAMKEYS; i++) {
         /* check for empty slot or rewrite slot */
         if ((foundIndex == -1 &&
-            server->cache[i].meta->id == WOLFHSM_KEYID_ERASED) ||
+            (server->cache[i].meta->id & WOLFHSM_KEYID_MASK) ==
+            WOLFHSM_KEYID_ERASED) ||
             server->cache[i].meta->id == meta->id) {
             foundIndex = i;
         }
@@ -132,11 +133,15 @@ int hsmCacheKey(whServerContext* server, whNvmMetadata* meta, uint8_t* in)
     /* return error if we are out of cache slots */
     if (foundIndex == -1)
         return WH_ERROR_NOSPACE;
-    server->cache[foundIndex].commited = 0;
     /* write key if slot found */
     XMEMCPY((uint8_t*)server->cache[foundIndex].buffer, in, meta->len);
     XMEMCPY((uint8_t*)server->cache[foundIndex].meta, (uint8_t*)meta,
         sizeof(whNvmMetadata));
+    /* check if the key is already commited */
+    if (wh_Nvm_GetMetadata(server->nvm, meta->id, meta) == WH_ERROR_NOTFOUND)
+        server->cache[foundIndex].commited = 0;
+    else
+        server->cache[foundIndex].commited = 1;
     return 0;
 }
 

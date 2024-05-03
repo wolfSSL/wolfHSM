@@ -1,21 +1,3 @@
-/*
- * Copyright (C) 2024 wolfSSL Inc.
- *
- * This file is part of wolfHSM.
- *
- * wolfHSM is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
- * (at your option) any later version.
- *
- * wolfHSM is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
- */
 /* wh_packet.h
  *
  * Copyright (C) 2024 wolfSSL Inc.
@@ -376,6 +358,11 @@ typedef struct WOLFHSM_PACK wh_Packet_she_load_key_res
     uint8_t messageFive[WOLFHSM_SHE_M5_SZ];
 } wh_Packet_she_load_key_res;
 
+typedef struct WOLFHSM_PACK wh_Packet_she_load_plain_key_req
+{
+    uint8_t key[WOLFHSM_SHE_KEY_SZ];
+} wh_Packet_she_load_plain_key_req;
+
 typedef struct WOLFHSM_PACK wh_Packet_she_export_ram_key_res
 {
     uint8_t messageOne[WOLFHSM_SHE_M1_SZ];
@@ -404,6 +391,60 @@ typedef struct WOLFHSM_PACK wh_Packet_she_extend_seed_res
 {
     uint32_t status; 
 } wh_Packet_she_extend_seed_res;
+
+typedef struct WOLFHSM_PACK wh_Packet_she_enc_ecb_req
+{
+    uint8_t keyId;
+    uint32_t sz;
+    /* uint8_t in[sz] */
+} wh_Packet_she_enc_ecb_req;
+
+typedef struct WOLFHSM_PACK wh_Packet_she_enc_ecb_res
+{
+    uint32_t sz;
+    /* uint8_t out[sz] */
+} wh_Packet_she_enc_ecb_res;
+
+typedef struct WOLFHSM_PACK wh_Packet_she_enc_cbc_req
+{
+    uint8_t keyId;
+    uint32_t sz;
+    uint8_t iv[WOLFHSM_SHE_KEY_SZ];
+    /* uint8_t in[sz] */
+} wh_Packet_she_enc_cbc_req;
+
+typedef struct WOLFHSM_PACK wh_Packet_she_enc_cbc_res
+{
+    uint32_t sz;
+    /* uint8_t out[sz] */
+} wh_Packet_she_enc_cbc_res;
+
+typedef struct WOLFHSM_PACK wh_Packet_she_dec_ecb_req
+{
+    uint8_t keyId;
+    uint32_t sz;
+    /* uint8_t in[sz] */
+} wh_Packet_she_dec_ecb_req;
+
+typedef struct WOLFHSM_PACK wh_Packet_she_dec_ecb_res
+{
+    uint32_t sz;
+    /* uint8_t out[sz] */
+} wh_Packet_she_dec_ecb_res;
+
+typedef struct WOLFHSM_PACK wh_Packet_she_dec_cbc_req
+{
+    uint8_t keyId;
+    uint32_t sz;
+    uint8_t iv[WOLFHSM_SHE_KEY_SZ];
+    /* uint8_t in[sz] */
+} wh_Packet_she_dec_cbc_req;
+
+typedef struct WOLFHSM_PACK wh_Packet_she_dec_cbc_res
+{
+    uint32_t sz;
+    /* uint8_t out[sz] */
+} wh_Packet_she_dec_cbc_res;
 #endif
 
 /* use packed structs so we can read a packet in directly */
@@ -496,11 +537,20 @@ typedef struct WOLFHSM_PACK whPacket
         wh_Packet_she_get_status_res sheGetStatusRes;
         wh_Packet_she_load_key_req sheLoadKeyReq;
         wh_Packet_she_load_key_res sheLoadKeyRes;
+        wh_Packet_she_load_plain_key_req sheLoadPlainKeyReq;
         wh_Packet_she_export_ram_key_res sheExportRamKeyRes;
         wh_Packet_she_init_rng_res sheInitRngRes;
         wh_Packet_she_rnd_res sheRndRes;
         wh_Packet_she_extend_seed_req sheExtendSeedReq;
         wh_Packet_she_extend_seed_res sheExtendSeedRes;
+        wh_Packet_she_enc_ecb_req sheEncEcbReq;
+        wh_Packet_she_enc_ecb_res sheEncEcbRes;
+        wh_Packet_she_enc_cbc_req sheEncCbcReq;
+        wh_Packet_she_enc_cbc_res sheEncCbcRes;
+        wh_Packet_she_enc_ecb_req sheDecEcbReq;
+        wh_Packet_she_enc_ecb_res sheDecEcbRes;
+        wh_Packet_she_enc_cbc_req sheDecCbcReq;
+        wh_Packet_she_enc_cbc_res sheDecCbcRes;
 #endif
     };
 } whPacket;

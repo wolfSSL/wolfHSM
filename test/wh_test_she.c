@@ -51,12 +51,16 @@ enum {
 int whTest_SheClientConfig(whClientConfig* config)
 {
     int ret = 0;
-    int outRc = 0;
     WC_RNG rng[1];
     Cmac cmac[1];
     whClientContext client[1] = {0};
     uint8_t key[16] = {0};
     uint32_t keySz = sizeof(key);
+    uint8_t iv[] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09,
+        0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f};
+    uint8_t plainText[64];
+    uint8_t cipherText[64];
+    uint8_t finalText[64];
     /* secretKey and prngSeed are taken from SHE test vectors */
     uint8_t sheUid[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         0x00, 0x00, 0x00, 0x00, 0x00, 0x01};
@@ -90,6 +94,11 @@ int whTest_SheClientConfig(whClientConfig* config)
     uint8_t entropy[] = {0xae, 0x2d, 0x8a, 0x57, 0x1e, 0x03, 0xac, 0x9c, 0x9e,
         0xb7, 0x6f, 0xac, 0x45, 0xaf, 0x8e, 0x51};
     uint8_t sreg;
+    uint8_t messageOne[WOLFHSM_SHE_M1_SZ];
+    uint8_t messageTwo[WOLFHSM_SHE_M2_SZ];
+    uint8_t messageThree[WOLFHSM_SHE_M3_SZ];
+    uint8_t messageFour[WOLFHSM_SHE_M4_SZ];
+    uint8_t messageFive[WOLFHSM_SHE_M5_SZ];
 
     if (config == NULL) {
         return WH_ERROR_BADARGS;
@@ -134,23 +143,23 @@ int whTest_SheClientConfig(whClientConfig* config)
     }
     memcpy(keyAndDigest, key, sizeof(key));
     /* store cmac key and digest */
-    if ((ret = wh_Client_NvmAddObject(client, MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_SHE, client->comm->client_id, WOLFHSM_SHE_BOOT_MAC_KEY_ID), 0, 0, 0, NULL, sizeof(keyAndDigest), keyAndDigest, &outRc)) != 0 || outRc != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_NvmAddObjectRequest %d\n", ret);
+    if ((ret = wh_Client_ShePreProgramKey(client, WOLFHSM_SHE_BOOT_MAC_KEY_ID, 0, keyAndDigest, sizeof(keyAndDigest))) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_ShePreProgramKey %d\n", ret);
         goto exit;
     }
     /* store the vector master ecu key */
-    if ((ret = wh_Client_NvmAddObject(client, MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_SHE, client->comm->client_id, WOLFHSM_SHE_MASTER_ECU_KEY_ID), 0, 0, 0, NULL, sizeof(vectorMasterEcuKey), vectorMasterEcuKey, &outRc)) != 0 || outRc != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_NvmAddObjectRequest %d\n", ret);
+    if ((ret = wh_Client_ShePreProgramKey(client, WOLFHSM_SHE_MASTER_ECU_KEY_ID, 0, vectorMasterEcuKey, sizeof(vectorMasterEcuKey))) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_ShePreProgramKey %d\n", ret);
         goto exit;
     }
     /* store the secret key */
-    if ((ret = wh_Client_NvmAddObject(client, MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_SHE, client->comm->client_id, WOLFHSM_SHE_SECRET_KEY_ID), 0, 0, 0, NULL, sizeof(secretKey), secretKey, &outRc)) != 0 || outRc != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_NvmAddObjectRequest %d\n", ret);
+    if ((ret = wh_Client_ShePreProgramKey(client, WOLFHSM_SHE_SECRET_KEY_ID, 0, secretKey, sizeof(secretKey))) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_ShePreProgramKey %d\n", ret);
         goto exit;
     }
     /* store the prng seed */
-    if ((ret = wh_Client_NvmAddObject(client, MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_SHE, client->comm->client_id, WOLFHSM_SHE_PRNG_SEED_ID), 0, 0, 0, NULL, sizeof(prngSeed), prngSeed, &outRc)) != 0 || outRc != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_NvmAddObjectRequest %d\n", ret);
+    if ((ret = wh_Client_ShePreProgramKey(client, WOLFHSM_SHE_PRNG_SEED_ID, 0, prngSeed, sizeof(prngSeed))) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_ShePreProgramKey %d\n", ret);
         goto exit;
     }
     /* set the she uid */
@@ -201,6 +210,46 @@ int whTest_SheClientConfig(whClientConfig* config)
         goto exit;
     }
     printf("SHE RND SUCCESS\n");
+    if ((ret = wh_Client_SheLoadPlainKey(client, key, sizeof(key))) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_SheLoadPlainKey %d\n", ret);
+        goto exit;
+    }
+    if ((ret = wh_Client_SheEncEcb(client, WOLFHSM_SHE_RAM_KEY_ID, plainText, cipherText, sizeof(plainText))) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_SheEncEcb %d\n", ret);
+        goto exit;
+    }
+    if ((ret = wh_Client_SheExportRamKey(client, messageOne, messageTwo, messageThree, messageFour, messageFive)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_SheExportRamKey %d\n", ret);
+        goto exit;
+    }
+    if ((ret = wh_Client_SheLoadKey(client, messageOne, messageTwo, messageThree, messageFour, messageFive)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_SheLoadKey %d\n", ret);
+        goto exit;
+    }
+    if ((ret = wh_Client_SheDecEcb(client, WOLFHSM_SHE_RAM_KEY_ID, cipherText, finalText, sizeof(cipherText))) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_SheEncEcb %d\n", ret);
+        goto exit;
+    }
+    if (memcmp(finalText, plainText, sizeof(plainText)) == 0)
+        printf("SHE ECB SUCCESS\n");
+    else {
+        WH_ERROR_PRINT("SHE ECB FAILED TO MATCH\n");
+        goto exit;
+    }
+    if ((ret = wh_Client_SheEncCbc(client, WOLFHSM_SHE_RAM_KEY_ID, iv, sizeof(iv), plainText, cipherText, sizeof(plainText))) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_SheEncEcb %d\n", ret);
+        goto exit;
+    }
+    if ((ret = wh_Client_SheDecCbc(client, WOLFHSM_SHE_RAM_KEY_ID, iv, sizeof(iv), cipherText, finalText, sizeof(cipherText))) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_SheEncEcb %d\n", ret);
+        goto exit;
+    }
+    if (memcmp(finalText, plainText, sizeof(plainText)) == 0)
+        printf("SHE CBC SUCCESS\n");
+    else {
+        WH_ERROR_PRINT("SHE CBC FAILED TO MATCH\n");
+        goto exit;
+    }
 exit:
     /* Tell server to close */
     WH_TEST_RETURN_ON_FAIL(wh_Client_CommClose(client));

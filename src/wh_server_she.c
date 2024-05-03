@@ -154,9 +154,11 @@ int wh_Server_HandleSheRequest(whServerContext* server,
     uint16_t action, uint8_t* data, uint16_t* size)
 {
     int ret = 0;
+    uint32_t i = 0;
     uint32_t field;
     uint32_t keySz;
     uint8_t* in;
+    uint8_t* out;
     whPacket* packet = (whPacket*)data;
     whNvmMetadata meta[1];
     /* TODO we might be able to use the unused part of the packet here to save space since SHE keys are always only 16 bytes */
@@ -521,6 +523,17 @@ int wh_Server_HandleSheRequest(whServerContext* server,
                 hsmSheRamKeyPlain = 1;
         }
         break;
+    case WH_SHE_LOAD_PLAIN_KEY:
+        meta->id = MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_SHE,
+            server->comm->client_id, WOLFHSM_SHE_RAM_KEY_ID);
+        meta->len = WOLFHSM_SHE_KEY_SZ;
+        /* cache if ram key, overwrite otherwise */
+        ret = hsmCacheKey(server, meta, packet->sheLoadPlainKeyReq.key);
+        if (ret == 0) {
+            *size = WOLFHSM_PACKET_STUB_SIZE;
+            hsmSheRamKeyPlain = 1;
+        }
+        break;
     case WH_SHE_EXPORT_RAM_KEY:
         /* check if ram key was loaded by CMD_LOAD_PLAIN_KEY */
         if (hsmSheRamKeyPlain == 0)
@@ -837,6 +850,130 @@ int wh_Server_HandleSheRequest(whServerContext* server,
             /* set ERC_NO_ERROR */
             packet->sheExtendSeedRes.status = WOLFHSM_SHE_ERC_NO_ERROR;
             *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->sheExtendSeedRes);
+        }
+        break;
+    case WH_SHE_ENC_ECB:
+        /* in and out are after the fixed sized fields */
+        in = (uint8_t*)(&packet->sheEncEcbReq + 1);
+        out = (uint8_t*)(&packet->sheEncEcbRes + 1);
+        /* load the key */
+        keySz = WOLFHSM_SHE_KEY_SZ;
+        field = packet->sheEncEcbReq.sz;
+        /* only process a multiple of block size */
+        field -= (field % AES_BLOCK_SIZE);
+        ret = hsmReadKey(server, MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_SHE,
+            server->comm->client_id, packet->sheEncEcbReq.keyId), NULL,
+            tmpKey, &keySz);
+        if (ret == 0)
+            ret = wc_AesInit(sheAes, NULL, server->crypto->devId);
+        else
+            ret = WH_SHE_ERC_KEY_NOT_AVAILABLE;
+        if (ret == 0)
+            ret = wc_AesSetKey(sheAes, tmpKey, keySz, NULL, AES_ENCRYPTION);
+        while (ret == 0 && i < field) {
+            ret = wc_AesEcbEncrypt(sheAes, out + i, in + i, AES_BLOCK_SIZE);
+            i += AES_BLOCK_SIZE;
+        }
+        /* free aes for protection */
+        wc_AesFree(sheAes);
+        if (ret == 0) {
+            packet->sheEncEcbRes.sz = field;
+            *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->sheEncEcbRes) +
+                field;
+        }
+        break;
+    case WH_SHE_ENC_CBC:
+        /* in and out are after the fixed sized fields */
+        in = (uint8_t*)(&packet->sheEncCbcReq + 1);
+        out = (uint8_t*)(&packet->sheEncCbcRes + 1);
+        /* load the key */
+        keySz = WOLFHSM_SHE_KEY_SZ;
+        field = packet->sheEncCbcReq.sz;
+        /* only process a multiple of block size */
+        field -= (field % AES_BLOCK_SIZE);
+        ret = hsmReadKey(server, MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_SHE,
+            server->comm->client_id, packet->sheEncCbcReq.keyId), NULL,
+            tmpKey, &keySz);
+        if (ret == 0)
+            ret = wc_AesInit(sheAes, NULL, server->crypto->devId);
+        else
+            ret = WH_SHE_ERC_KEY_NOT_AVAILABLE;
+        if (ret == 0) {
+            ret = wc_AesSetKey(sheAes, tmpKey, keySz, packet->sheEncCbcReq.iv,
+                AES_ENCRYPTION);
+        }
+        while (ret == 0 && i < field) {
+            ret = wc_AesCbcEncrypt(sheAes, out + i, in + i, AES_BLOCK_SIZE);
+            i += AES_BLOCK_SIZE;
+        }
+        /* free aes for protection */
+        wc_AesFree(sheAes);
+        if (ret == 0) {
+            packet->sheEncEcbRes.sz = field;
+            *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->sheEncCbcRes) +
+                field;
+        }
+        break;
+    case WH_SHE_DEC_ECB:
+        /* in and out are after the fixed sized fields */
+        in = (uint8_t*)(&packet->sheDecEcbReq + 1);
+        out = (uint8_t*)(&packet->sheDecEcbRes + 1);
+        /* load the key */
+        keySz = WOLFHSM_SHE_KEY_SZ;
+        field = packet->sheDecEcbReq.sz;
+        /* only process a multiple of block size */
+        field -= (field % AES_BLOCK_SIZE);
+        ret = hsmReadKey(server, MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_SHE,
+            server->comm->client_id, packet->sheDecEcbReq.keyId), NULL,
+            tmpKey, &keySz);
+        if (ret == 0)
+            ret = wc_AesInit(sheAes, NULL, server->crypto->devId);
+        else
+            ret = WH_SHE_ERC_KEY_NOT_AVAILABLE;
+        if (ret == 0)
+            ret = wc_AesSetKey(sheAes, tmpKey, keySz, NULL, AES_DECRYPTION);
+        while (ret == 0 && i < field) {
+            ret = wc_AesEcbDecrypt(sheAes, out + i, in + i, AES_BLOCK_SIZE);
+            i += AES_BLOCK_SIZE;
+        }
+        /* free aes for protection */
+        wc_AesFree(sheAes);
+        if (ret == 0) {
+            packet->sheDecEcbRes.sz = field;
+            *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->sheDecEcbRes) +
+                field;
+        }
+        break;
+    case WH_SHE_DEC_CBC:
+        /* in and out are after the fixed sized fields */
+        in = (uint8_t*)(&packet->sheDecCbcReq + 1);
+        out = (uint8_t*)(&packet->sheDecCbcRes + 1);
+        /* load the key */
+        keySz = WOLFHSM_SHE_KEY_SZ;
+        field = packet->sheDecCbcReq.sz;
+        /* only process a multiple of block size */
+        field -= (field % AES_BLOCK_SIZE);
+        ret = hsmReadKey(server, MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_SHE,
+            server->comm->client_id, packet->sheDecCbcReq.keyId), NULL,
+            tmpKey, &keySz);
+        if (ret == 0)
+            ret = wc_AesInit(sheAes, NULL, server->crypto->devId);
+        else
+            ret = WH_SHE_ERC_KEY_NOT_AVAILABLE;
+        if (ret == 0) {
+            ret = wc_AesSetKey(sheAes, tmpKey, keySz, packet->sheDecCbcReq.iv,
+                AES_DECRYPTION);
+        }
+        while (ret == 0 && i < field) {
+            ret = wc_AesCbcDecrypt(sheAes, out + i, in + i, AES_BLOCK_SIZE);
+            i += AES_BLOCK_SIZE;
+        }
+        /* free aes for protection */
+        wc_AesFree(sheAes);
+        if (ret == 0) {
+            packet->sheDecCbcRes.sz = field;
+            *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->sheDecCbcRes) +
+                field;
         }
         break;
     default:

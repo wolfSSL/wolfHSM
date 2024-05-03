@@ -62,10 +62,15 @@ enum {
     WH_SHE_SECURE_BOOT_FINISH,
     WH_SHE_GET_STATUS,
     WH_SHE_LOAD_KEY,
+    WH_SHE_LOAD_PLAIN_KEY,
     WH_SHE_EXPORT_RAM_KEY,
     WH_SHE_INIT_RND,
     WH_SHE_RND,
     WH_SHE_EXTEND_SEED,
+    WH_SHE_ENC_ECB,
+    WH_SHE_ENC_CBC,
+    WH_SHE_DEC_ECB,
+    WH_SHE_DEC_CBC,
 };
 
 /* Construct the message kind based on group and action */
