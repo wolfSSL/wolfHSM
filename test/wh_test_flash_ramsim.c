@@ -110,7 +110,7 @@ int whTest_Flash_RamSim(void)
             0) {
             WH_ERROR_PRINT("whFlashRamsim_Erase failed to erase sector %u "
                            "(offset=%u, size=%u): ret=%d\n",
-                           sector, sectorOffset, cfg.sectorSize, ret);
+                           (unsigned int)sector, (unsigned int)sectorOffset, (unsigned int)cfg.sectorSize, ret);
             whFlashRamsim_Cleanup(&ctx);
             return ret;
         }
@@ -118,8 +118,8 @@ int whTest_Flash_RamSim(void)
         if ((ret = whFlashRamsim_BlankCheck(&ctx, sectorOffset,
                                             cfg.sectorSize)) != 0) {
             WH_ERROR_PRINT(
-                "Sector %u is not blank (offset=%u, size=%u): ret=%d\n", sector,
-                sectorOffset, cfg.sectorSize, ret);
+                "Sector %u is not blank (offset=%u, size=%u): ret=%d\n", (unsigned int)sector,
+                (unsigned int)sectorOffset, (unsigned int)cfg.sectorSize, ret);
             whFlashRamsim_Cleanup(&ctx);
             return ret;
         }
@@ -139,7 +139,7 @@ int whTest_Flash_RamSim(void)
             };
 
 #if WH_TEST_FLASH_RAMSIM_DEBUG
-            printf("Page %u in sector %u before programming:\n", page, sector);
+            printf("Page %u in sector %u before programming:\n", (unsigned int)page, (unsigned int)sector);
             printMemory(readData, cfg.pageSize, pageOffset);
 #endif /* WH_TEST_FLASH_RAMSIM_DEBUG */
 
@@ -147,13 +147,13 @@ int whTest_Flash_RamSim(void)
                                              testData)) != 0) {
                 WH_ERROR_PRINT("whFlashRamsim_Program failed to program page "
                                "%u in sector %u: ret=%d\n",
-                               page, sector, ret);
+                               (unsigned int)page, (unsigned int)sector, ret);
                 whFlashRamsim_Cleanup(&ctx);
                 return ret;
             }
 
 #if WH_TEST_FLASH_RAMSIM_DEBUG
-            printf("Page %u in sector %u after programming:\n", page, sector);
+            printf("Page %u in sector %u after programming:\n", (unsigned int)page, (unsigned int)sector);
             whFlashRamsim_Read(&ctx, pageOffset, cfg.pageSize, readData);
             printMemory(readData, cfg.pageSize, pageOffset);
 #endif /* WH_TEST_FLASH_RAMSIM_DEBUG */
@@ -162,7 +162,7 @@ int whTest_Flash_RamSim(void)
                                             testData)) != 0) {
                 WH_ERROR_PRINT("whFlashRamsim_Verify failed for page %u in "
                                "sector %u: ret=%d\n",
-                               page, sector, ret);
+                               (unsigned int)page, (unsigned int)sector, ret);
                 whFlashRamsim_Cleanup(&ctx);
                 return ret;
             }
@@ -170,7 +170,7 @@ int whTest_Flash_RamSim(void)
 
         if ((ret = whFlashRamsim_BlankCheck(
                  &ctx, sectorOffset, cfg.sectorSize)) != WH_ERROR_NOTBLANK) {
-            WH_ERROR_PRINT("Sector %u is not blank, ret=%d\n", sector, ret);
+            WH_ERROR_PRINT("Sector %u is not blank, ret=%d\n", (unsigned int)sector, ret);
             whFlashRamsim_Cleanup(&ctx);
             return ret;
         }
@@ -179,14 +179,14 @@ int whTest_Flash_RamSim(void)
             0) {
             WH_ERROR_PRINT(
                 "whFlashRamsim_Erase failed to erase sector %u: ret=%d\n",
-                sector, ret);
+                (unsigned int)sector, ret);
             whFlashRamsim_Cleanup(&ctx);
             return ret;
         }
 
         if ((ret = whFlashRamsim_BlankCheck(&ctx, sectorOffset,
                                             cfg.sectorSize)) != 0) {
-            WH_ERROR_PRINT("Sector %u is not blank, ret=%d\n", sector, ret);
+            WH_ERROR_PRINT("Sector %u is not blank, ret=%d\n", (unsigned int)sector, ret);
             whFlashRamsim_Cleanup(&ctx);
             return ret;
         }

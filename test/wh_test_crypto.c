@@ -380,12 +380,12 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     }
 
     outLen = sizeof(sharedOne);
-    if ((ret = wc_curve25519_shared_secret(curve25519PrivateKey, curve25519PublicKey, sharedOne, &outLen)) != 0) {
+    if ((ret = wc_curve25519_shared_secret(curve25519PrivateKey, curve25519PublicKey, sharedOne, (word32*)&outLen)) != 0) {
         WH_ERROR_PRINT("Failed to wc_curve25519_shared_secret %d\n", ret);
         goto exit;
     }
 
-    if ((ret = wc_curve25519_shared_secret(curve25519PublicKey, curve25519PrivateKey, sharedTwo, &outLen)) != 0) {
+    if ((ret = wc_curve25519_shared_secret(curve25519PublicKey, curve25519PrivateKey, sharedTwo, (word32*)&outLen)) != 0) {
         WH_ERROR_PRINT("Failed to wc_curve25519_shared_secret %d\n", ret);
         goto exit;
     }

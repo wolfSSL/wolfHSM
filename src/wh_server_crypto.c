@@ -81,7 +81,7 @@ static int hsmLoadKeyRsa(whServerContext* server, RsaKey* key, whKeyId keyId)
     /* decode the key */
     if (ret >= 0) {
         size = WOLFHSM_KEYCACHE_BUFSIZE;
-        ret = wc_RsaPrivateKeyDecode(server->cache[slotIdx].buffer, &idx, key,
+        ret = wc_RsaPrivateKeyDecode(server->cache[slotIdx].buffer, (word32*)&idx, key,
             size);
     }
     return ret;
@@ -151,7 +151,7 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
     int ret = 0;
     uint32_t field;
     uint8_t* in;
-    whKeyId keyId;
+    whKeyId keyId = WOLFHSM_KEYID_ERASED;
     uint8_t* out;
     whPacket* packet = (whPacket*)data;
 #ifdef WOLFHSM_SYMMETRIC_INTERNAL
@@ -216,7 +216,7 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
                     if (ret == 0) {
                         field = packet->pkRsaReq.outLen;
                         ret = wc_RsaFunction( in, packet->pkRsaReq.inLen,
-                            out, &field, packet->pkRsaReq.opType,
+                            out, (word32*)&field, packet->pkRsaReq.opType,
                             server->crypto->rsa, server->crypto->rng);
                     }
                     /* free the key */
@@ -311,7 +311,7 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
                 field = CURVE25519_KEYSIZE;
                 ret = wc_curve25519_shared_secret_ex(
                     server->crypto->curve25519Private,
-                    server->crypto->curve25519Public, out, &field,
+                    server->crypto->curve25519Public, out, (word32*)&field,
                     packet->pkCurve25519Req.endian);
             }
             wc_curve25519_free(server->crypto->curve25519Private);
