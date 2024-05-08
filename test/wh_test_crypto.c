@@ -134,6 +134,14 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         WH_ERROR_PRINT("KEY CACHE/EXPORT FAILED TO MATCH\n");
         goto exit;
     }
+#if defined(WH_TEST_USE_CUSTOM_SERVERS)
+    /* WH_TEST_USE_CUSTOM_SERVERS protects the client test code that expects to
+     * interop with the custom server (also defined in this file), so that this
+     * test can be run against a standard server app
+     *
+     * TODO: This is a temporary bodge until we properly split tests into single
+     * client and multi client */
+
     /* test cache with duplicate keyId for a different user */
     WH_TEST_RETURN_ON_FAIL(wh_Client_CommClose(client));
     client->comm->client_id = 2;
@@ -210,6 +218,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         WH_ERROR_PRINT("KEY CACHE/EXPORT FAILED TO MATCH\n");
         goto exit;
     }
+#endif
     /* evict for original client */
     if ((ret = wh_Client_KeyEvictRequest(client, keyId)) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_KeyEvictRequest %d\n", ret);
