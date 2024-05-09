@@ -96,7 +96,7 @@ typedef uint16_t whNvmFlags;
 /* HSM NVM metadata structure */
 enum {
     WOLFHSM_NVM_LABEL_LEN = 24,
-    WOLFHSM_NVM_METADATA_LEN = 40,
+    WOLFHSM_NVM_METADATA_LEN = 32,
     WOLFHSM_NVM_MAX_OBJECT_SIZE = 65535,
 };
 
@@ -112,8 +112,6 @@ typedef struct {
     whNvmFlags flags;       /* Growth */
     whNvmSize len;          /* Length of data in bytes */
     uint8_t label[WOLFHSM_NVM_LABEL_LEN];
-    uint32_t count;
-    uint8_t pad[4];
 } whNvmMetadata;
 /* static_assert(sizeof(whNvmMetadata) == WOLFHSM_NVM_METADATA_LEN) */
 

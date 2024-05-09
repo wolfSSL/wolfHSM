@@ -32,6 +32,11 @@ enum WOLFHSM_SHE_SUBTYPE {
     WOLFHSM_SHE_EXTEND_SEED,
 };
 
+typedef struct {
+    uint32_t count;
+    uint32_t flags;
+} whSheMetadata;
+
 int wh_Server_HandleSheRequest(whServerContext* server,
     uint16_t action, uint8_t* data, uint16_t* size);
 #endif

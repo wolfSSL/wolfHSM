@@ -404,7 +404,8 @@ static int hsmSheLoadKey(whServerContext* server, whPacket* packet,
             &keySz);
         /* if the keyslot is empty or write protection is not on continue */
         if (ret == WH_ERROR_NOTFOUND ||
-            (meta->flags & WOLFHSM_SHE_FLAG_WRITE_PROTECT) == 0) {
+            (((whSheMetadata*)meta->label)->flags &
+            WOLFHSM_SHE_FLAG_WRITE_PROTECT) == 0) {
             keyRet = ret;
             ret = 0;
         }
@@ -415,8 +416,10 @@ static int hsmSheLoadKey(whServerContext* server, whPacket* packet,
     if (ret == 0 && XMEMEQZERO(packet->sheLoadKeyReq.messageOne,
         WOLFHSM_SHE_UID_SZ) == 1) {
         /* check wildcard */
-        if ((meta->flags & WOLFHSM_SHE_FLAG_WILDCARD) == 0)
+        if ((((whSheMetadata*)meta->label)->flags & WOLFHSM_SHE_FLAG_WILDCARD)
+            == 0) {
             ret = WH_SHE_ERC_KEY_UPDATE_ERROR;
+        }
     }
     /* compare to UID */
     else if (ret == 0 && XMEMCMP(packet->sheLoadKeyReq.messageOne,
@@ -427,7 +430,7 @@ static int hsmSheLoadKey(whServerContext* server, whPacket* packet,
     if (ret == 0 &&
         keyRet != WH_ERROR_NOTFOUND &&
         ntohl(*((uint32_t*)packet->sheLoadKeyReq.messageTwo) >> 4) <=
-        ntohl(meta->count)) {
+        ntohl(((whSheMetadata*)meta->label)->count)) {
         ret = WH_SHE_ERC_KEY_UPDATE_ERROR;
     }
     /* write key with counter */
@@ -435,8 +438,10 @@ static int hsmSheLoadKey(whServerContext* server, whPacket* packet,
         meta->id = MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_SHE,
             server->comm->client_id,
             hsmShePopId(packet->sheLoadKeyReq.messageOne));
-        meta->flags = hsmShePopFlags(packet->sheLoadKeyReq.messageTwo);
-        meta->count = (*(uint32_t*)packet->sheLoadKeyReq.messageTwo >> 4);
+        ((whSheMetadata*)meta->label)->flags =
+            hsmShePopFlags(packet->sheLoadKeyReq.messageTwo);
+        ((whSheMetadata*)meta->label)->count =
+            (*(uint32_t*)packet->sheLoadKeyReq.messageTwo >> 4);
         meta->len = WOLFHSM_SHE_KEY_SZ;
         /* cache if ram key, overwrite otherwise */
         if ((meta->id & WOLFHSM_KEYID_MASK) == WOLFHSM_SHE_RAM_KEY_ID) {
@@ -480,7 +485,8 @@ static int hsmSheLoadKey(whServerContext* server, whPacket* packet,
     }
     if (ret == 0) {
         /* reset messageTwo with the nvm read counter, pad with a 1 bit */
-        *(uint32_t*)packet->sheLoadKeyReq.messageTwo = (meta->count << 4);
+        *(uint32_t*)packet->sheLoadKeyReq.messageTwo =
+            (((whSheMetadata*)meta->label)->count << 4);
         packet->sheLoadKeyReq.messageTwo[3] |= 0x08;
         /* encrypt the new counter */
         ret = wc_AesEncryptDirect(sheAes,
