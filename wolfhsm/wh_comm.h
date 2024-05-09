@@ -157,6 +157,7 @@ typedef struct {
     const whTransportClientCb* transport_cb;
     void* transport_context;
     const void* transport_config;
+    whCommSetConnectedCb connect_cb;
     uint8_t client_id;
     uint8_t pad[7];
 } whCommClientConfig;
@@ -168,6 +169,7 @@ typedef struct {
     uint64_t packet[WH_COMM_MTU_U64_COUNT];
     void* transport_context;
     const whTransportClientCb* transport_cb;
+    whCommSetConnectedCb connect_cb;
     whCommHeader* hdr;
     uint8_t* data;
     int initialized;

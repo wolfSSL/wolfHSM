@@ -79,8 +79,8 @@ int wh_CommClient_Init(whCommClient* context, const whCommClientConfig* config)
     context->transport_cb = config->transport_cb;
     context->transport_context = config->transport_context;
     context->client_id = config->client_id;
+    context->connect_cb = config->connect_cb;
     if (context->transport_cb->Init != NULL) {
-        /* TODO: Add support for client connectcb */
         rc = context->transport_cb->Init(context->transport_context,
                 config->transport_config, NULL, NULL);
     }
@@ -89,6 +89,11 @@ int wh_CommClient_Init(whCommClient* context, const whCommClientConfig* config)
         context->hdr = (whCommHeader*)(packet_addr);
         context->data = (void*)(packet_addr + sizeof(*(context->hdr)));
         context->initialized = 1;
+
+        /* Underlying transport is ready, so invoke connect callback */
+        if (context->connect_cb != NULL) {
+            rc = context->connect_cb(context, WH_COMM_CONNECTED);
+        }
     }
     return rc;
 }
@@ -194,6 +199,14 @@ int wh_CommClient_Cleanup(whCommClient* context)
 
     if (context == NULL) {
         return WH_ERROR_BADARGS;
+    }
+
+    /* Signal a non-blocking disconnect to the server if registered */
+    if (context->connect_cb != NULL) {
+        /* TODO: ok to not assign rc error code here? Imagine that the
+         * subsequent cleanup code should be unconditionally called. How should
+         * we propagate a failure to the caller?  */
+        (void)context->connect_cb(context, WH_COMM_DISCONNECTED);
     }
 
     if (    (context->transport_cb != NULL) &&
