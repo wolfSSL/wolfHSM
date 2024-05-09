@@ -123,6 +123,7 @@ typedef struct {
 #define WOLFHSM_SHE_SECRET_KEY_ID 0
 #define WOLFHSM_SHE_MASTER_ECU_KEY_ID 1
 #define WOLFHSM_SHE_BOOT_MAC_KEY_ID 2
+#define WOLFHSM_SHE_BOOT_MAC 3
 #define WOLFHSM_SHE_RAM_KEY_ID 14
 #define WOLFHSM_SHE_PRNG_SEED_ID 15
 
@@ -157,6 +158,10 @@ typedef struct {
 #define WOLFHSM_SHE_M3_SZ WOLFHSM_SHE_M1_SZ
 #define WOLFHSM_SHE_M4_SZ WOLFHSM_SHE_M2_SZ
 #define WOLFHSM_SHE_M5_SZ WOLFHSM_SHE_M1_SZ
+int wh_SheGenerateLoadableKey(uint8_t keyId,
+    uint8_t authKeyId, uint32_t count, uint32_t flags, uint8_t* uid,
+    uint8_t* key, uint8_t* authKey, uint8_t* messageOne, uint8_t* messageTwo,
+    uint8_t* messageThree, uint8_t* messageFour, uint8_t* messageFive);
 #endif
 
 #endif /* WOLFHSM_WH_COMMON_H_ */

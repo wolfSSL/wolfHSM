@@ -243,11 +243,18 @@ int hsmReadKey(whServerContext* server, whKeyId keyId, whNvmMetadata* outMeta,
         hsmCacheKey(server, meta, out);
     }
 #ifdef WOLFHSM_SHE_EXTENSION
-    /* use empty string if we couldn't find the master ecu key */
+    /* use empty key of zeros if we couldn't find the master ecu key */
     if (ret == WH_ERROR_NOTFOUND &&
         (keyId & WOLFHSM_KEYTYPE_MASK) == WOLFHSM_KEYTYPE_SHE &&
         (keyId & WOLFHSM_KEYID_MASK) == WOLFHSM_SHE_MASTER_ECU_KEY_ID) {
         XMEMSET(out, 0, WOLFHSM_SHE_KEY_SZ);
+        *outSz = WOLFHSM_SHE_KEY_SZ;
+        if (outMeta != NULL) {
+            /* need empty flags and corect lenth and id */
+            XMEMSET(outMeta, 0, sizeof(meta));
+            meta->len = WOLFHSM_SHE_KEY_SZ;
+            meta->id = keyId;
+        }
         ret = 0;
     }
 #endif

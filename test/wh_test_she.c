@@ -82,10 +82,10 @@ int whTest_SheClientConfig(whClientConfig* config)
         0x3d, 0x7e, 0x11, 0x73, 0x93, 0x17, 0x2a};
     uint8_t zeros[WOLFHSM_SHE_BOOT_MAC_PREFIX_LEN] = {0};
     uint8_t bootloader[512];
-    uint8_t keyAndDigest[32] = {0};
+    uint8_t bootMacDigest[16] = {0};
     uint8_t vectorMasterEcuKey[16] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06,
         0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f};
-    uint32_t digestSz = sizeof(keyAndDigest);
+    uint32_t digestSz = sizeof(bootMacDigest);
     uint32_t bootloaderSz = sizeof(bootloader);
     uint8_t vectorMessageOne[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x41};
@@ -149,28 +149,17 @@ int whTest_SheClientConfig(whClientConfig* config)
         goto exit;
     }
     digestSz = AES_BLOCK_SIZE;
-    if ((ret = wc_CmacFinal(cmac, keyAndDigest + sizeof(key), &digestSz)) != 0) {
+    if ((ret = wc_CmacFinal(cmac, bootMacDigest, &digestSz)) != 0) {
         WH_ERROR_PRINT("Failed to wc_CmacFinal %d\n", ret);
         goto exit;
     }
-    memcpy(keyAndDigest, key, sizeof(key));
-    /* store cmac key and digest */
-    if ((ret = wh_Client_ShePreProgramKey(client, WOLFHSM_SHE_BOOT_MAC_KEY_ID, 0, keyAndDigest, sizeof(keyAndDigest))) != 0) {
+    /* store cmac key */
+    if ((ret = wh_Client_ShePreProgramKey(client, WOLFHSM_SHE_BOOT_MAC_KEY_ID, 0, key, sizeof(key))) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_ShePreProgramKey %d\n", ret);
         goto exit;
     }
-    /* store the vector master ecu key */
-    if ((ret = wh_Client_ShePreProgramKey(client, WOLFHSM_SHE_MASTER_ECU_KEY_ID, 0, vectorMasterEcuKey, sizeof(vectorMasterEcuKey))) != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_ShePreProgramKey %d\n", ret);
-        goto exit;
-    }
-    /* store the secret key */
-    if ((ret = wh_Client_ShePreProgramKey(client, WOLFHSM_SHE_SECRET_KEY_ID, 0, secretKey, sizeof(secretKey))) != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_ShePreProgramKey %d\n", ret);
-        goto exit;
-    }
-    /* store the prng seed */
-    if ((ret = wh_Client_ShePreProgramKey(client, WOLFHSM_SHE_PRNG_SEED_ID, 0, prngSeed, sizeof(prngSeed))) != 0) {
+    /* store cmac digest */
+    if ((ret = wh_Client_ShePreProgramKey(client, WOLFHSM_SHE_BOOT_MAC, 0, bootMacDigest, sizeof(bootMacDigest))) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_ShePreProgramKey %d\n", ret);
         goto exit;
     }
@@ -197,6 +186,34 @@ int whTest_SheClientConfig(whClientConfig* config)
         goto exit;
     }
     printf("SHE secure boot SUCCESS\n");
+    /* load the vector master ecu key */
+    XMEMSET(finalText, 0, sizeof(vectorMasterEcuKey));
+    if ((ret = wh_SheGenerateLoadableKey(WOLFHSM_SHE_MASTER_ECU_KEY_ID, WOLFHSM_SHE_MASTER_ECU_KEY_ID, 1, 0, sheUid, vectorMasterEcuKey, finalText, messageOne, messageTwo, messageThree, messageFour, messageFive)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_ShePreProgramKey %d\n", ret);
+        goto exit;
+    }
+    if ((ret = wh_Client_SheLoadKey(client, messageOne, messageTwo, messageThree, outMessageFour, outMessageFive)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_SheLoadKey %d\n", ret);
+        goto exit;
+    }
+    /* load the secret key */
+    if ((ret = wh_SheGenerateLoadableKey(WOLFHSM_SHE_SECRET_KEY_ID, WOLFHSM_SHE_MASTER_ECU_KEY_ID, 1, 0, sheUid, secretKey, vectorMasterEcuKey, messageOne, messageTwo, messageThree, messageFour, messageFive)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_ShePreProgramKey %d\n", ret);
+        goto exit;
+    }
+    if ((ret = wh_Client_SheLoadKey(client, messageOne, messageTwo, messageThree, outMessageFour, outMessageFive)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_SheLoadKey %d\n", ret);
+        goto exit;
+    }
+    /* load the prng seed */
+    if ((ret = wh_SheGenerateLoadableKey(WOLFHSM_SHE_PRNG_SEED_ID, WOLFHSM_SHE_SECRET_KEY_ID, 1, 0, sheUid, prngSeed, secretKey, messageOne, messageTwo, messageThree, messageFour, messageFive)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_ShePreProgramKey %d\n", ret);
+        goto exit;
+    }
+    if ((ret = wh_Client_SheLoadKey(client, messageOne, messageTwo, messageThree, outMessageFour, outMessageFive)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_SheLoadKey %d\n", ret);
+        goto exit;
+    }
     /* test CMD_LOAD_KEY with test vector */
     if ((ret = wh_Client_SheLoadKey(client, vectorMessageOne, vectorMessageTwo, vectorMessageThree, outMessageFour, outMessageFive)) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_SheLoadKey %d\n", ret);
