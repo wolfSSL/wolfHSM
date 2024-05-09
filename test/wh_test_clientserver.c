@@ -609,7 +609,7 @@ int whTest_ClientServerSequential(void)
 
 #if defined(WH_CFG_TEST_VERBOSE)
     printf("Client NvmInitResponse:%d, server_rc:%d, clientid:%d serverid:%d\n",
-           ret, server_rc, client_id, server_id);
+           ret, (int)server_rc, (int)client_id, (int)server_id);
 #endif
     WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
 
@@ -622,8 +622,8 @@ int whTest_ClientServerSequential(void)
 #if defined(WH_CFG_TEST_VERBOSE)
     printf("Client NvmGetAvailableResponse:%d, server_rc:%d avail_size:%d "
            "avail_objects:%d, reclaim_size:%d reclaim_objects:%d\n",
-           ret, server_rc, avail_size, avail_objects, reclaim_size,
-           reclaim_objects);
+           ret, (int)server_rc, (int)avail_size, (int)avail_objects, (int)reclaim_size,
+           (int)reclaim_objects);
 #endif
     WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
     WH_TEST_ASSERT_RETURN(avail_objects == NF_OBJECT_COUNT);
@@ -666,7 +666,7 @@ int whTest_ClientServerSequential(void)
             wh_Client_NvmAddObjectResponse(client, &server_rc));
 #if defined(WH_CFG_TEST_VERBOSE)
         printf("Client NvmAddObjectResponse:%d, server_rc:%d\n", ret,
-               server_rc);
+                (int)server_rc);
 #endif
         WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
 
@@ -678,8 +678,8 @@ int whTest_ClientServerSequential(void)
 #if defined(WH_CFG_TEST_VERBOSE)
         printf("Client NvmGetAvailableResponse:%d, server_rc:%d, avail_size:%d "
                "avail_objects:%d, reclaim_size:%d reclaim_objects:%d\n",
-               ret, server_rc, avail_size, avail_objects, reclaim_size,
-               reclaim_objects);
+               ret, (int)server_rc, (int)avail_size, (int)avail_objects, (int)reclaim_size,
+               (int)reclaim_objects);
 #endif
 
         /* Check that available objects decreased by one */
@@ -709,7 +709,7 @@ int whTest_ClientServerSequential(void)
 #if defined(WH_CFG_TEST_VERBOSE)
         printf(
             "Client NvmReadResponse:%d, server_rc:%d id:%u, len:%u data:%s\n",
-            ret, server_rc, gid, rlen, recv_buffer);
+            ret, (int)server_rc, (unsigned int)gid, (unsigned int)rlen, recv_buffer);
 #endif
 
         /* Ensure data and size of response object matches that of the written
@@ -731,7 +731,7 @@ int whTest_ClientServerSequential(void)
             client, &server_rc, &list_count, &list_id));
 #if defined(WH_CFG_TEST_VERBOSE)
         printf("Client NvmListResponse:%d, server_rc:%d count:%u id:%u\n", ret,
-               server_rc, list_count, list_id);
+                (int)server_rc, (unsigned int)list_count, (unsigned int)list_id);
 #endif
 
         if (list_count > 0) {
@@ -747,7 +747,7 @@ int whTest_ClientServerSequential(void)
 #if defined(WH_CFG_TEST_VERBOSE)
             printf("Client NvmDestroyObjectsResponse:%d, server_rc:%d for "
                    "id:%u with count:%u\n",
-                   ret, server_rc, list_id, list_count);
+                   ret, (int)server_rc, (unsigned int)list_id, (unsigned int)list_count);
 #endif
             WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
 
@@ -761,7 +761,7 @@ int whTest_ClientServerSequential(void)
 
 #if defined(WH_CFG_TEST_VERBOSE)
             printf("Client NvmListResponse:%d, server_rc:%d count:%u id:%u\n",
-                   ret, server_rc, list_count, list_id);
+                   ret, (int)server_rc, (unsigned int)list_count, (unsigned int)list_id);
 #endif
 
             list_id = 0;
@@ -814,7 +814,7 @@ int whTest_ClientServerSequential(void)
             wh_Client_NvmAddObjectDmaResponse(client, &server_rc));
 #if defined(WH_CFG_TEST_VERBOSE)
         printf("Client NvmAddObjectDmaResponse:%d, server_rc:%d, meta.len:%u\n",
-               ret, server_rc, meta.len);
+               ret, (int)server_rc, (unsigned int)meta.len);
 #endif
         WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
 
@@ -826,8 +826,8 @@ int whTest_ClientServerSequential(void)
 #if defined(WH_CFG_TEST_VERBOSE)
         printf("Client NvmGetAvailableResponse:%d, server_rc:%d, avail_size:%d "
                "avail_objects:%d, reclaim_size:%d reclaim_objects:%d\n",
-               ret, server_rc, avail_size, avail_objects, reclaim_size,
-               reclaim_objects);
+               ret, (int)server_rc, (int)avail_size, (int)avail_objects, (int)reclaim_size,
+               (int)reclaim_objects);
 #endif
         WH_TEST_ASSERT_RETURN(lastAvailObjects - 1 == avail_objects);
 
@@ -856,7 +856,7 @@ int whTest_ClientServerSequential(void)
 #if defined(WH_CFG_TEST_VERBOSE)
         printf("Client NvmReadDmaResponse:%d, server_rc:%d id:%u, len:%u "
                "data:%s\n",
-               ret, server_rc, gid, glen, recv_buffer);
+               ret, (int)server_rc, (unsigned int)gid, (unsigned int)glen, recv_buffer);
 #endif
 
         /* Ensure data and size of response object matches that of the written
@@ -874,7 +874,7 @@ int whTest_ClientServerSequential(void)
             client, &server_rc, &list_count, &list_id));
 #if defined(WH_CFG_TEST_VERBOSE)
         printf("Client NvmListResponse:%d, server_rc:%d count:%u id:%u\n", ret,
-               server_rc, list_count, list_id);
+                (int)server_rc, (unsigned int)list_count, (unsigned int)list_id);
 #endif
         WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
 
@@ -893,7 +893,7 @@ int whTest_ClientServerSequential(void)
 #if defined(WH_CFG_TEST_VERBOSE)
             printf("Client NvmDestroyObjectsResponse:%d, server_rc:%d for "
                    "id:%u with count:%u\n",
-                   ret, server_rc, list_id, list_count);
+                   ret, (int)server_rc, (unsigned int)list_id, (unsigned int)list_count);
 #endif
 
             /* Ensure object was destroyed and no longer exists */
@@ -913,7 +913,7 @@ int whTest_ClientServerSequential(void)
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
     WH_TEST_RETURN_ON_FAIL(wh_Client_NvmCleanupResponse(client, &server_rc));
 #if defined(WH_CFG_TEST_VERBOSE)
-    printf("Client NvmCleanupResponse:%d, server_rc:%d\n", ret, server_rc);
+    printf("Client NvmCleanupResponse:%d, server_rc:%d\n", ret, (int)server_rc);
 #endif
     WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
 
@@ -925,8 +925,8 @@ int whTest_ClientServerSequential(void)
 #if defined(WH_CFG_TEST_VERBOSE)
     printf("Client NvmGetAvailableResponse:%d, server_rc:%d, avail_size:%d "
            "avail_objects:%d, reclaim_size:%d reclaim_objects:%d\n",
-           ret, server_rc, avail_size, avail_objects, reclaim_size,
-           reclaim_objects);
+           ret, (int)server_rc, (int)avail_size, (int)avail_objects, (int)reclaim_size,
+           (int)reclaim_objects);
 #endif
     WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
     WH_TEST_ASSERT_RETURN(avail_objects == NF_OBJECT_COUNT);
@@ -1000,8 +1000,8 @@ int whTest_ClientCfg(whClientConfig* clientCfg)
 #if defined(WH_CFG_TEST_VERBOSE)
     printf("Client NvmGetAvailable:%d, server_rc:%d avail_size:%d "
            "avail_objects:%d, reclaim_size:%d reclaim_objects:%d\n",
-           ret, server_rc, avail_size, avail_objects, reclaim_size,
-           reclaim_objects);
+           ret, (int)server_rc, (int)avail_size, (int)avail_objects, (int)reclaim_size,
+           (int)reclaim_objects);
 #endif
     WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
     WH_TEST_ASSERT_RETURN(avail_objects == NF_OBJECT_COUNT);
@@ -1036,7 +1036,7 @@ int whTest_ClientCfg(whClientConfig* clientCfg)
 
 #if defined(WH_CFG_TEST_VERBOSE)
         printf("Client NvmAddObject:%d, server_rc:%d\n", ret,
-               server_rc);
+               (int)server_rc);
 #endif
         WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
 
@@ -1047,8 +1047,8 @@ int whTest_ClientCfg(whClientConfig* clientCfg)
 #if defined(WH_CFG_TEST_VERBOSE)
         printf("Client NvmGetAvailable:%d, server_rc:%d, avail_size:%d "
                "avail_objects:%d, reclaim_size:%d reclaim_objects:%d\n",
-               ret, server_rc, avail_size, avail_objects, reclaim_size,
-               reclaim_objects);
+               ret, (int)server_rc, (int)avail_size, (int)avail_objects, (int)reclaim_size,
+               (int)reclaim_objects);
 #endif
 
         /* Check that available objects decreased by one */
@@ -1078,7 +1078,7 @@ int whTest_ClientCfg(whClientConfig* clientCfg)
 #if defined(WH_CFG_TEST_VERBOSE)
         printf(
             "Client NvmRead:%d, server_rc:%d id:%u, len:%u data:%s\n",
-            ret, server_rc, gid, rlen, recv_buffer);
+            ret, (int)server_rc, (unsigned int)gid, (unsigned int)rlen, recv_buffer);
 #endif
 
         /* Ensure data and size of response object matches that of the written
@@ -1098,7 +1098,7 @@ int whTest_ClientCfg(whClientConfig* clientCfg)
                               &server_rc, &list_count, &list_id));
 #if defined(WH_CFG_TEST_VERBOSE)
         printf("Client NvmList:%d, server_rc:%d count:%u id:%u\n", ret,
-               server_rc, list_count, list_id);
+                (int)server_rc, (unsigned int)list_count, (unsigned int)list_id);
 #endif
 
         if (list_count > 0) {
@@ -1113,7 +1113,7 @@ int whTest_ClientCfg(whClientConfig* clientCfg)
 #if defined(WH_CFG_TEST_VERBOSE)
             printf("Client NvmDestroyObjects:%d, server_rc:%d for "
                    "id:%u with count:%u\n",
-                   ret, server_rc, list_id, list_count);
+                   ret, (int)server_rc, (unsigned int)list_id, (unsigned int)list_count);
 #endif
             WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
 
@@ -1123,7 +1123,7 @@ int whTest_ClientCfg(whClientConfig* clientCfg)
 
 #if defined(WH_CFG_TEST_VERBOSE)
             printf("Client NvmGetMetadata:%d, server_rc:%d count:%u id:%u\n",
-                   ret, server_rc, list_count, list_id);
+                   ret, (int)server_rc, (unsigned int)list_count, (unsigned int)list_id);
 #endif
 
             list_id = 0;
@@ -1164,7 +1164,7 @@ int whTest_ClientCfg(whClientConfig* clientCfg)
 
 #if defined(WH_CFG_TEST_VERBOSE)
         printf("Client NvmAddObjectDma:%d, server_rc:%d, meta.len:%u\n",
-               ret, server_rc, meta.len);
+               ret, (int)server_rc, meta.len);
 #endif
         WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
 
@@ -1173,8 +1173,8 @@ int whTest_ClientCfg(whClientConfig* clientCfg)
 #if defined(WH_CFG_TEST_VERBOSE)
         printf("Client NvmGetAvailable:%d, server_rc:%d, avail_size:%d "
                "avail_objects:%d, reclaim_size:%d reclaim_objects:%d\n",
-               ret, server_rc, avail_size, avail_objects, reclaim_size,
-               reclaim_objects);
+               ret, (int)server_rc, (int)avail_size, (int)avail_objects, (int)reclaim_size,
+               (int)reclaim_objects);
 #endif
         WH_TEST_ASSERT_RETURN(lastAvailObjects - 1 == avail_objects);
 
@@ -1183,7 +1183,7 @@ int whTest_ClientCfg(whClientConfig* clientCfg)
 #if defined(WH_CFG_TEST_VERBOSE)
         printf("Client NvmGetMetadata:%d, id:%u, access:0x%x, "
                "flags:0x%x, len:%u label:%s\n",
-               ret, gid, gaccess, gflags, glen, glabel);
+               ret, (unsigned int)gid, (unsigned int)gaccess, (unsigned int)gflags, (unsigned int)glen, glabel);
 #endif
 
         /* Ensure metadata matches that of the object we just wrote */
@@ -1197,7 +1197,7 @@ int whTest_ClientCfg(whClientConfig* clientCfg)
 #if defined(WH_CFG_TEST_VERBOSE)
         printf("Client NvmReadDma:%d, server_rc:%d id:%u, len:%u "
                "data:%s\n",
-               ret, server_rc, gid, glen, recv_buffer);
+               ret, (int)server_rc, (unsigned int)gid, (unsigned int)glen, recv_buffer);
 #endif
 
         /* Ensure data and size of response object matches that of the written
@@ -1213,7 +1213,7 @@ int whTest_ClientCfg(whClientConfig* clientCfg)
                                     &server_rc, &list_count, &list_id));
 #if defined(WH_CFG_TEST_VERBOSE)
         printf("Client NvmList:%d, server_rc:%d count:%u id:%u\n", ret,
-               server_rc, list_count, list_id);
+               (int)server_rc, (unsigned int)list_count, (unsigned int)list_id);
 #endif
         WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
 
@@ -1231,7 +1231,7 @@ int whTest_ClientCfg(whClientConfig* clientCfg)
 #if defined(WH_CFG_TEST_VERBOSE)
             printf("Client NvmDestroyObjects:%d, server_rc:%d for "
                    "id:%u with count:%u\n",
-                   ret, server_rc, list_id, list_count);
+                   ret, (int)server_rc, (unsigned int)list_id, (unsigned int)list_count);
 #endif
 
             /* Ensure object was destroyed and no longer exists */
@@ -1245,7 +1245,7 @@ int whTest_ClientCfg(whClientConfig* clientCfg)
 
     WH_TEST_RETURN_ON_FAIL(ret = wh_Client_NvmCleanup(client, &server_rc));
 #if defined(WH_CFG_TEST_VERBOSE)
-    printf("Client NvmCleanup:%d, server_rc:%d\n", ret, server_rc);
+    printf("Client NvmCleanup:%d, server_rc:%d\n", ret, (int)server_rc);
 #endif
     WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
 
@@ -1255,8 +1255,8 @@ int whTest_ClientCfg(whClientConfig* clientCfg)
 #if defined(WH_CFG_TEST_VERBOSE)
     printf("Client NvmGetAvailable:%d, server_rc:%d, avail_size:%d "
            "avail_objects:%d, reclaim_size:%d reclaim_objects:%d\n",
-           ret, server_rc, avail_size, avail_objects, reclaim_size,
-           reclaim_objects);
+           ret, (int)server_rc, (int)avail_size, (int)avail_objects, (int)reclaim_size,
+           (int)reclaim_objects);
 #endif
     WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
     WH_TEST_ASSERT_RETURN(avail_objects == NF_OBJECT_COUNT);
