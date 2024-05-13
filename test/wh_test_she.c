@@ -101,6 +101,8 @@ int whTest_SheClientConfig(whClientConfig* config)
         0x17};
     uint8_t vectorMessageFive[] = {0x82, 0x0d, 0x8d, 0x95, 0xdc, 0x11, 0xb4,
         0x66, 0x88, 0x78, 0x16, 0x0c, 0xb2, 0xa4, 0xe2, 0x3e};
+    uint8_t vectorRawKey[] = {0x0f, 0x0e, 0x0d, 0x0c, 0x0b, 0x0a, 0x09, 0x08,
+        0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x00};
     uint8_t outMessageFour[sizeof(vectorMessageFour)];
     uint8_t outMessageFive[sizeof(vectorMessageFive)];
     uint8_t entropy[] = {0xae, 0x2d, 0x8a, 0x57, 0x1e, 0x03, 0xac, 0x9c, 0x9e,
@@ -214,6 +216,20 @@ int whTest_SheClientConfig(whClientConfig* config)
         WH_ERROR_PRINT("Failed to wh_Client_SheLoadKey %d\n", ret);
         goto exit;
     }
+    /* verify that our helper function output matches the vector */
+    if ((ret = wh_SheGenerateLoadableKey(4, WOLFHSM_SHE_MASTER_ECU_KEY_ID, 1, 0, sheUid, vectorRawKey, vectorMasterEcuKey, messageOne, messageTwo, messageThree, messageFour, messageFive)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_ShePreProgramKey %d\n", ret);
+        goto exit;
+    }
+    if (memcmp(messageOne, vectorMessageOne, sizeof(vectorMessageOne)) != 0 ||
+        memcmp(messageTwo, vectorMessageTwo, sizeof(vectorMessageTwo)) != 0 ||
+        memcmp(messageThree, vectorMessageThree, sizeof(vectorMessageThree)) != 0 ||
+        memcmp(messageFour, vectorMessageFour, sizeof(vectorMessageFour)) != 0 ||
+        memcmp(messageFive, vectorMessageFive, sizeof(vectorMessageFive)) != 0) {
+        WH_ERROR_PRINT("Failed to generate a loadable key to match the vector\n");
+        goto exit;
+    }
+    printf("SHE wh_SheGenerateLoadableKey SUCCESS\n");
     /* test CMD_LOAD_KEY with test vector */
     if ((ret = wh_Client_SheLoadKey(client, vectorMessageOne, vectorMessageTwo, vectorMessageThree, outMessageFour, outMessageFive)) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_SheLoadKey %d\n", ret);
