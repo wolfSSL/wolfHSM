@@ -90,4 +90,15 @@ int wh_Client_SheDecCbcRequest(whClientContext* c, uint8_t keyId, uint8_t* iv,
 int wh_Client_SheDecCbcResponse(whClientContext* c, uint8_t* out, uint32_t sz);
 int wh_Client_SheDecCbc(whClientContext* c, uint8_t keyId, uint8_t* iv,
     uint32_t ivSz, uint8_t* in, uint8_t* out, uint32_t sz);
+int wh_Client_SheGenerateMacRequest(whClientContext* c, uint8_t keyId,
+    uint8_t* in, uint32_t sz);
+int wh_Client_SheGenerateMacResponse(whClientContext* c, uint8_t* out,
+    uint32_t sz);
+int wh_Client_SheGenerateMac(whClientContext* c, uint8_t keyId, uint8_t* in,
+    uint32_t inSz, uint8_t* out, uint32_t outSz);
+int wh_Client_SheVerifyMacRequest(whClientContext* c, uint8_t keyId,
+    uint8_t* message, uint32_t messageLen, uint8_t* mac, uint32_t macLen);
+int wh_Client_SheVerifyMacResponse(whClientContext* c, uint8_t* outStatus);
+int wh_Client_SheVerifyMac(whClientContext* c, uint8_t keyId, uint8_t* message,
+    uint32_t messageLen, uint8_t* mac, uint32_t macLen, uint8_t* outStatus);
 #endif

@@ -445,6 +445,32 @@ typedef struct WOLFHSM_PACK wh_Packet_she_dec_cbc_res
     uint32_t sz;
     /* uint8_t out[sz] */
 } wh_Packet_she_dec_cbc_res;
+
+typedef struct WOLFHSM_PACK wh_Packet_she_gen_mac_req
+{
+    uint32_t keyId;
+    uint32_t sz;
+    /* uint8_t in[sz] */
+} wh_Packet_she_gen_mac_req;
+
+typedef struct WOLFHSM_PACK wh_Packet_she_gen_mac_res
+{
+    uint8_t mac[WOLFHSM_SHE_KEY_SZ];
+} wh_Packet_she_gen_mac_res;
+
+typedef struct WOLFHSM_PACK wh_Packet_she_verify_mac_req
+{
+    uint32_t keyId;
+    uint32_t messageLen;
+    uint32_t macLen;
+    /* uint8_t message[messageLen] */
+    /* uint8_t mac[macLen] */
+} wh_Packet_she_verify_mac_req;
+
+typedef struct WOLFHSM_PACK wh_Packet_she_verify_mac_res
+{
+    uint8_t status;
+} wh_Packet_she_verify_mac_res;
 #endif
 
 /* use packed structs so we can read a packet in directly */
@@ -551,6 +577,10 @@ typedef struct WOLFHSM_PACK whPacket
         wh_Packet_she_enc_ecb_res sheDecEcbRes;
         wh_Packet_she_enc_cbc_req sheDecCbcReq;
         wh_Packet_she_enc_cbc_res sheDecCbcRes;
+        wh_Packet_she_gen_mac_req sheGenMacReq;
+        wh_Packet_she_gen_mac_res sheGenMacRes;
+        wh_Packet_she_verify_mac_req sheVerifyMacReq;
+        wh_Packet_she_verify_mac_res sheVerifyMacRes;
 #endif
     };
 } whPacket;

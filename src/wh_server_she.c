@@ -1019,6 +1019,70 @@ static int hsmSheDecCbc(whServerContext* server, whPacket* packet,
     return ret;
 }
 
+static int hsmSheGenerateMac(whServerContext* server, whPacket* packet,
+    uint16_t* size)
+{
+    int ret;
+    uint32_t field = AES_BLOCK_SIZE;
+    uint32_t keySz;
+    uint8_t* in;
+    uint8_t tmpKey[WOLFHSM_SHE_KEY_SZ];
+    /* in and out are after the fixed sized fields */
+    in = (uint8_t*)(&packet->sheGenMacReq + 1);
+    /* load the key */
+    keySz = WOLFHSM_SHE_KEY_SZ;
+    ret = hsmReadKey(server, MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_SHE,
+        server->comm->client_id, packet->sheGenMacReq.keyId), NULL, tmpKey,
+        &keySz);
+    /* hash the message */
+    if (ret == 0) {
+        ret = wc_InitCmac_ex(sheCmac, tmpKey, WOLFHSM_SHE_KEY_SZ,
+            WC_CMAC_AES, NULL, NULL, server->crypto->devId);
+    }
+    else
+        ret = WH_SHE_ERC_KEY_NOT_AVAILABLE;
+    if (ret == 0)
+        ret = wc_CmacUpdate(sheCmac, in, packet->sheGenMacReq.sz);
+    if (ret == 0)
+        ret = wc_CmacFinal(sheCmac, packet->sheGenMacRes.mac, &field);
+    if (ret == 0)
+        *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->sheGenMacRes);
+    return ret;
+}
+
+static int hsmSheVerifyMac(whServerContext* server, whPacket* packet,
+    uint16_t* size)
+{
+    int ret;
+    uint32_t keySz;
+    uint8_t* message;
+    uint8_t* mac;
+    uint8_t tmpKey[WOLFHSM_SHE_KEY_SZ];
+    /* in and mac are after the fixed sized fields */
+    message = (uint8_t*)(&packet->sheVerifyMacReq + 1);
+    mac = message + packet->sheVerifyMacReq.messageLen;
+    /* load the key */
+    keySz = WOLFHSM_SHE_KEY_SZ;
+    ret = hsmReadKey(server, MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_SHE,
+        server->comm->client_id, packet->sheVerifyMacReq.keyId), NULL, tmpKey,
+        &keySz);
+    /* verify the mac */
+    if (ret == 0) {
+        ret = wc_AesCmacVerify_ex(sheCmac, mac, packet->sheVerifyMacReq.macLen,
+            message, packet->sheVerifyMacReq.messageLen, tmpKey, keySz, NULL,
+            server->crypto->devId);
+        /* only evaluate if key was found */
+        if (ret == 0)
+            packet->sheVerifyMacRes.status = 0;
+        else
+            packet->sheVerifyMacRes.status = 1;
+        *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->sheVerifyMacRes);
+    }
+    else
+        ret = WH_SHE_ERC_KEY_NOT_AVAILABLE;
+    return ret;
+}
+
 int wh_Server_HandleSheRequest(whServerContext* server,
     uint16_t action, uint8_t* data, uint16_t* size)
 {
@@ -1088,6 +1152,12 @@ int wh_Server_HandleSheRequest(whServerContext* server,
         break;
     case WH_SHE_DEC_CBC:
         ret = hsmSheDecCbc(server, packet, size);
+        break;
+    case WH_SHE_GEN_MAC:
+        ret = hsmSheGenerateMac(server, packet, size);
+        break;
+    case WH_SHE_VERIFY_MAC:
+        ret = hsmSheVerifyMac(server, packet, size);
         break;
     default:
         ret = WH_ERROR_BADARGS;

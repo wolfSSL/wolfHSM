@@ -71,6 +71,8 @@ enum {
     WH_SHE_ENC_CBC,
     WH_SHE_DEC_ECB,
     WH_SHE_DEC_CBC,
+    WH_SHE_GEN_MAC,
+    WH_SHE_VERIFY_MAC,
 };
 
 /* Construct the message kind based on group and action */

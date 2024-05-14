@@ -759,3 +759,121 @@ int wh_Client_SheDecCbc(whClientContext* c, uint8_t keyId, uint8_t* iv,
     }
     return ret;
 }
+
+int wh_Client_SheGenerateMacRequest(whClientContext* c, uint8_t keyId,
+    uint8_t* in, uint32_t sz)
+{
+    int ret;
+    uint8_t* packIn;
+    whPacket* packet;
+    if (c == NULL || in == NULL || sz < WOLFHSM_SHE_KEY_SZ)
+        return WH_ERROR_BADARGS;
+    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
+    /* in is after fixed sized fields */
+    packIn = (uint8_t*)(&packet->sheGenMacReq + 1);
+    packet->sheGenMacReq.keyId = keyId;
+    packet->sheGenMacReq.sz = sz;
+    /* set in */
+    memcpy(packIn, in, sz);
+    /* send enc ecb */
+    ret = wh_Client_SendRequest(c, WH_MESSAGE_GROUP_SHE, WH_SHE_GEN_MAC,
+        WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->sheGenMacReq) + sz,
+        (uint8_t*)packet);
+    return ret;
+}
+
+int wh_Client_SheGenerateMacResponse(whClientContext* c, uint8_t* out,
+    uint32_t sz)
+{
+    int ret;
+    uint16_t group;
+    uint16_t action;
+    uint16_t dataSz;
+    whPacket* packet;
+    if (c == NULL || out == NULL || sz < WOLFHSM_SHE_KEY_SZ)
+        return WH_ERROR_BADARGS;
+    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
+    ret = wh_Client_RecvResponse(c, &group, &action, &dataSz, (uint8_t*)packet);
+    if (ret == 0) {
+        if (packet->rc != WOLFHSM_SHE_ERC_NO_ERROR)
+            ret = packet->rc;
+        else
+            memcpy(out, packet->sheGenMacRes.mac, WOLFHSM_SHE_KEY_SZ);
+    }
+    return ret;
+}
+
+int wh_Client_SheGenerateMac(whClientContext* c, uint8_t keyId, uint8_t* in,
+    uint32_t inSz, uint8_t* out, uint32_t outSz)
+{
+    int ret;
+    ret = wh_Client_SheGenerateMacRequest(c, keyId, in, inSz);
+    if (ret == 0) {
+        do {
+            ret = wh_Client_SheGenerateMacResponse(c, out, outSz);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+    return ret;
+}
+
+int wh_Client_SheVerifyMacRequest(whClientContext* c, uint8_t keyId,
+    uint8_t* message, uint32_t messageLen, uint8_t* mac, uint32_t macLen)
+{
+    int ret;
+    uint8_t* messageIn;
+    uint8_t* macIn;
+    whPacket* packet;
+    if (c == NULL || message == NULL || messageLen < WOLFHSM_SHE_KEY_SZ ||
+        mac == NULL || macLen < WOLFHSM_SHE_KEY_SZ) {
+        return WH_ERROR_BADARGS;
+    }
+    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
+    /* message and mac are after fixed sized fields */
+    messageIn = (uint8_t*)(&packet->sheVerifyMacReq + 1);
+    macIn = messageIn + messageLen;
+    packet->sheVerifyMacReq.keyId = keyId;
+    packet->sheVerifyMacReq.messageLen = messageLen;
+    packet->sheVerifyMacReq.macLen = WOLFHSM_SHE_KEY_SZ;
+    /* set message */
+    memcpy(messageIn, message, messageLen);
+    memcpy(macIn, mac, WOLFHSM_SHE_KEY_SZ);
+    /* send verify mac */
+    ret = wh_Client_SendRequest(c, WH_MESSAGE_GROUP_SHE, WH_SHE_VERIFY_MAC,
+        WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->sheVerifyMacReq) + messageLen
+        + WOLFHSM_SHE_KEY_SZ, (uint8_t*)packet);
+    return ret;
+}
+
+int wh_Client_SheVerifyMacResponse(whClientContext* c, uint8_t* outStatus)
+{
+    int ret;
+    uint16_t group;
+    uint16_t action;
+    uint16_t dataSz;
+    whPacket* packet;
+    if (c == NULL || outStatus == NULL)
+        return WH_ERROR_BADARGS;
+    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
+    ret = wh_Client_RecvResponse(c, &group, &action, &dataSz, (uint8_t*)packet);
+    if (ret == 0) {
+        if (packet->rc != WOLFHSM_SHE_ERC_NO_ERROR)
+            ret = packet->rc;
+        else
+            *outStatus = packet->sheVerifyMacRes.status;
+    }
+    return ret;
+}
+
+int wh_Client_SheVerifyMac(whClientContext* c, uint8_t keyId, uint8_t* message,
+    uint32_t messageLen, uint8_t* mac, uint32_t macLen, uint8_t* outStatus)
+{
+    int ret;
+    ret = wh_Client_SheVerifyMacRequest(c, keyId, message, messageLen, mac,
+        macLen);
+    if (ret == 0) {
+        do {
+            ret = wh_Client_SheVerifyMacResponse(c, outStatus);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+    return ret;
+}

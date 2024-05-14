@@ -275,12 +275,11 @@ int whTest_SheClientConfig(whClientConfig* config)
         WH_ERROR_PRINT("Failed to wh_Client_SheEncEcb %d\n", ret);
         goto exit;
     }
-    if (memcmp(finalText, plainText, sizeof(plainText)) == 0)
-        printf("SHE ECB SUCCESS\n");
-    else {
+    if (memcmp(finalText, plainText, sizeof(plainText)) != 0) {
         WH_ERROR_PRINT("SHE ECB FAILED TO MATCH\n");
         goto exit;
     }
+    printf("SHE ECB SUCCESS\n");
     if ((ret = wh_Client_SheEncCbc(client, WOLFHSM_SHE_RAM_KEY_ID, iv, sizeof(iv), plainText, cipherText, sizeof(plainText))) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_SheEncEcb %d\n", ret);
         goto exit;
@@ -289,12 +288,24 @@ int whTest_SheClientConfig(whClientConfig* config)
         WH_ERROR_PRINT("Failed to wh_Client_SheEncEcb %d\n", ret);
         goto exit;
     }
-    if (memcmp(finalText, plainText, sizeof(plainText)) == 0)
-        printf("SHE CBC SUCCESS\n");
-    else {
+    if (memcmp(finalText, plainText, sizeof(plainText)) != 0) {
         WH_ERROR_PRINT("SHE CBC FAILED TO MATCH\n");
         goto exit;
     }
+    printf("SHE CBC SUCCESS\n");
+    if ((ret = wh_Client_SheGenerateMac(client, WOLFHSM_SHE_RAM_KEY_ID, plainText, sizeof(plainText), cipherText, sizeof(cipherText))) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_SheGenerateMac %d\n", ret);
+        goto exit;
+    }
+    if ((ret = wh_Client_SheVerifyMac(client, WOLFHSM_SHE_RAM_KEY_ID, plainText, sizeof(plainText), cipherText, sizeof(cipherText), &sreg)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_SheVerifyMac %d\n", ret);
+        goto exit;
+    }
+    if (sreg != 0) {
+        WH_ERROR_PRINT("SHE CMAC FAILED TO VERIFY\n");
+        goto exit;
+    }
+    printf("SHE CMAC SUCCESS\n");
 exit:
     /* Tell server to close */
     WH_TEST_RETURN_ON_FAIL(wh_Client_CommClose(client));
