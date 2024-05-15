@@ -106,6 +106,11 @@ int wh_SheGenerateLoadableKey(uint8_t keyId,
     uint8_t kdfInput[WOLFHSM_SHE_KEY_SZ * 2];
     Cmac cmac[1];
     Aes aes[1];
+    if (uid == NULL || key == NULL || authKey == NULL || messageOne == NULL ||
+        messageTwo == NULL || messageThree == NULL || messageFour == NULL ||
+        messageFive == NULL) {
+        return WH_ERROR_BADARGS;
+    }
     /* add authKey to kdfInput */
     XMEMCPY(kdfInput, authKey, WOLFHSM_SHE_KEY_SZ);
     /* set UID, key id and authId */
