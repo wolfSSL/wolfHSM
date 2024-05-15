@@ -25,9 +25,6 @@
 #include <stdlib.h>  /* For NULL */
 #include <string.h>  /* For memset, memcpy */
 
-/* TODO replace with our own to host function */
-#include <arpa/inet.h>
-
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/types.h"
 #include "wolfssl/wolfcrypt/error-crypt.h"
@@ -71,6 +68,26 @@ static uint32_t hsmSheRndInited = 0;
 /* cmac is global since the bootloader update can be called multiple times */
 Cmac sheCmac[1];
 Aes sheAes[1];
+
+static int isLittleEndian() {
+    unsigned int x = 1; /* 0x00000001 */
+    char *c = (char*)&x;
+    return (int)*c;
+}
+
+/* Converts a 32-bit value from host to network byte order */
+static uint32_t htonl(uint32_t hostlong) {
+    if (isLittleEndian()) {
+        return ((hostlong & 0x000000FF) << 24) | ((hostlong & 0x0000FF00) << 8)
+            | ((hostlong & 0x00FF0000) >> 8) | ((hostlong & 0xFF000000) >> 24);
+    }
+    return hostlong; /* No conversion needed if not little endian */
+}
+
+static uint32_t ntohl(uint32_t networklong) {
+    /* same operation */
+    return htonl(networklong);
+}
 
 static int XMEMEQZERO(uint8_t* buffer, uint32_t size)
 {
