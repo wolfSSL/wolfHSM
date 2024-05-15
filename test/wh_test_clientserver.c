@@ -66,6 +66,10 @@ typedef struct {
 #define TEST_MEM_CLI_BYTE ((uint8_t)0xAA)
 #define TEST_MEM_UNMAPPED_BYTE ((uint8_t)0xBB)
 
+/* Pointer to a local server context so a connect callback can access it. Should
+ * be set before calling wh_ClientInit() */
+static whServerContext* clientServerSequentialTestServerCtx = NULL;
+
 /* Dummy callback that loopback-copies client data */
 static int _customServerCb(whServerContext*                 server,
                            const whMessageCustomCb_Request* req,
@@ -454,6 +458,20 @@ static int _testDma(whServerContext* server, whClientContext* client)
     return rc;
 }
 
+int _clientServerSequentialTestConnectCb(void* context, whCommConnected connected)
+{
+    if (clientServerSequentialTestServerCtx == NULL) {
+        WH_ERROR_PRINT("Client connect callback server context is NULL\n");
+        WH_TEST_ASSERT_RETURN(0);
+    }
+
+    /* Set server connect flag. In a "real" system, this should signal the
+     * server via out-of-band mechanism. The server app is responsible for
+     * receiving this signal and calling wh_Server_SetConnected() */
+    return wh_Server_SetConnected(clientServerSequentialTestServerCtx,
+                                  connected);
+}
+
 int whTest_ClientServerSequential(void)
 {
     int ret = 0;
@@ -476,6 +494,7 @@ int whTest_ClientServerSequential(void)
                  .transport_context = (void*)tmcc,
                  .transport_config  = (void*)tmcf,
                  .client_id         = 123,
+                 .connect_cb        = _clientServerSequentialTestConnectCb,
     }};
 
     whClientContext client[1] = {0};
@@ -534,16 +553,34 @@ int whTest_ClientServerSequential(void)
     }};
     whServerContext server[1] = {0};
 
+    whCommConnected server_connected = WH_COMM_DISCONNECTED;
+
+    /* Expose the server context to our client connect callback */
+    clientServerSequentialTestServerCtx = server;
+
 #ifndef WOLFHSM_NO_CRYPTO
     WH_TEST_RETURN_ON_FAIL(wolfCrypt_Init());
     WH_TEST_RETURN_ON_FAIL(wc_InitRng_ex(crypto->rng, NULL, crypto->devId));
 #endif
     WH_TEST_RETURN_ON_FAIL(wh_Nvm_Init(nvm, n_conf));
 
-    /* Init client and server */
-    WH_TEST_RETURN_ON_FAIL(wh_Client_Init(client, c_conf));
+    /* Server API should return NOTREADY until the server is connected */
+    WH_TEST_RETURN_ON_FAIL(wh_Server_GetConnected(server, &server_connected));
+    WH_TEST_ASSERT_RETURN(WH_COMM_DISCONNECTED == server_connected);
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTREADY ==
+                          wh_Server_HandleRequestMessage(server));
+
+
+    /* Init client and server contexts. NOTE: in this test the server MUST be
+    initialized before the client, as the client init function triggers the
+    server "connect" via the connect callback, and this will be overwritten (set
+    to zero) on server init */
     WH_TEST_RETURN_ON_FAIL(wh_Server_Init(server, s_conf));
-    wh_Server_SetConnected(server, WH_COMM_CONNECTED);
+    WH_TEST_RETURN_ON_FAIL(wh_Client_Init(client, c_conf));
+
+    /* Ensure server is now "connected" */
+    WH_TEST_RETURN_ON_FAIL(wh_Server_GetConnected(server, &server_connected));
+    WH_TEST_ASSERT_RETURN(WH_COMM_CONNECTED == server_connected);
 
     int      counter                  = 1;
     char     recv_buffer[WH_COMM_DATA_LEN] = {0};
@@ -937,6 +974,20 @@ int whTest_ClientServerSequential(void)
     /* Test DMA callbacks and address allowlisting */
     WH_TEST_RETURN_ON_FAIL(_testDma(server, client));
 
+    /* Check that we are still connected */
+    WH_TEST_RETURN_ON_FAIL(wh_Server_GetConnected(server, &server_connected));
+    WH_TEST_ASSERT_RETURN(server_connected == WH_COMM_CONNECTED);
+
+    /* Disconnect the server */
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CommCloseRequest(client));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CommCloseResponse(client));
+
+    /* Ensure we show as disconnected */
+    WH_TEST_RETURN_ON_FAIL(wh_Server_GetConnected(server, &server_connected));
+    WH_TEST_ASSERT_RETURN(server_connected == WH_COMM_DISCONNECTED);
+
+    /* Clean up the contexts */
     WH_TEST_RETURN_ON_FAIL(wh_Server_Cleanup(server));
     WH_TEST_RETURN_ON_FAIL(wh_Client_Cleanup(client));
 
