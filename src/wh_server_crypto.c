@@ -137,6 +137,7 @@ static int hsmLoadKeyCurve25519(whServerContext* server, curve25519_key* key,
 }
 #endif /* HAVE_CURVE25519 */
 
+#ifdef HAVE_ECC
 static int hsmCacheKeyEcc(whServerContext* server, ecc_key* key, whKeyId* outId)
 {
     int ret;
@@ -187,6 +188,7 @@ static int hsmLoadKeyEcc(whServerContext* server, ecc_key* key, uint16_t keyId,
     }
     return ret;
 }
+#endif /* HAVE_ECC */
 
 int wh_Server_HandleCryptoRequest(whServerContext* server,
     uint16_t action, uint8_t* data, uint16_t* size)
@@ -216,6 +218,8 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
     case WC_ALGO_TYPE_CIPHER:
         switch (packet->cipherAnyReq.type)
         {
+#ifndef NO_AES
+#ifdef HAVE_AES_CBC
         case WC_CIPHER_AES_CBC:
             /* key, iv, in, and out are after fixed size fields */
             key = (uint8_t*)(&packet->cipherAesCbcReq + 1);
@@ -264,6 +268,8 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
                     sizeof(packet->cipherAesCbcRes) + field;
             }
             break;
+#endif /* HAVE_AES_CBC */
+#ifdef HAVE_AESGCM
         case WC_CIPHER_AES_GCM:
             /* key, iv, in, authIn, and out are after fixed size fields */
             key = (uint8_t*)(&packet->cipherAesGcmReq + 1);
@@ -328,6 +334,8 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
                     sizeof(packet->cipherAesGcmRes) + field;
             }
             break;
+#endif /* HAVE_AESGCM */
+#endif /* HAVE_ECC */
         default:
             ret = NOT_COMPILED_IN;
             break;
@@ -421,6 +429,7 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
             }
             break;
 #endif /* !NO_RSA */
+#ifdef HAVE_ECC
         case WC_PK_TYPE_EC_KEYGEN:
             /* init ecc key */
             ret = wc_ecc_init_ex(server->crypto->eccPrivate, NULL,
@@ -551,6 +560,7 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
                     sizeof(packet->pkEccCheckRes);
             }
             break;
+#endif /* HAVE_ECC */
 #ifdef HAVE_CURVE25519
         case WC_PK_TYPE_CURVE25519_KEYGEN:
             /* init private key */
