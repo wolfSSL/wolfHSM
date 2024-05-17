@@ -25,17 +25,6 @@
 #include <stdlib.h>  /* For NULL */
 #include <string.h>  /* For memset, memcpy */
 
-#ifndef WOLFHSM_NO_CRYPTO
-/* wolfCrypt */
-#include "wolfssl/wolfcrypt/settings.h"
-#include "wolfssl/wolfcrypt/error-crypt.h"
-#include "wolfssl/wolfcrypt/wc_port.h"
-#include "wolfssl/wolfcrypt/cryptocb.h"
-#include "wolfssl/wolfcrypt/curve25519.h"
-#include "wolfssl/wolfcrypt/rsa.h"
-#include "wolfssl/wolfcrypt/ecc.h"
-#endif
-
 /* Common WolfHSM types and defines shared with the server */
 #include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_error.h"
@@ -45,6 +34,13 @@
 
 #ifndef WOLFHSM_NO_CRYPTO
 #include "wolfhsm/wh_cryptocb.h"
+#include "wolfssl/wolfcrypt/settings.h"
+#include "wolfssl/wolfcrypt/error-crypt.h"
+#include "wolfssl/wolfcrypt/wc_port.h"
+#include "wolfssl/wolfcrypt/cryptocb.h"
+#include "wolfssl/wolfcrypt/curve25519.h"
+#include "wolfssl/wolfcrypt/rsa.h"
+#include "wolfssl/wolfcrypt/ecc.h"
 #endif
 
 /* Message definitions */
