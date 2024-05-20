@@ -188,27 +188,18 @@ int whTest_SheClientConfig(whClientConfig* config)
         goto exit;
     }
     printf("SHE secure boot SUCCESS\n");
+    /* load the secret key using pre progam */
+    if ((ret = wh_Client_ShePreProgramKey(client, WOLFHSM_SHE_SECRET_KEY_ID, 0, secretKey, sizeof(secretKey))) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_ShePreProgramKey %d\n", ret);
+        goto exit;
+    }
+    /* load the prng seed using pre program */
+    if ((ret = wh_Client_ShePreProgramKey(client, WOLFHSM_SHE_PRNG_SEED_ID, 0, prngSeed, sizeof(prngSeed))) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_ShePreProgramKey %d\n", ret);
+        goto exit;
+    }
     /* load the vector master ecu key */
-    XMEMSET(finalText, 0, sizeof(vectorMasterEcuKey));
-    if ((ret = wh_SheGenerateLoadableKey(WOLFHSM_SHE_MASTER_ECU_KEY_ID, WOLFHSM_SHE_MASTER_ECU_KEY_ID, 1, 0, sheUid, vectorMasterEcuKey, finalText, messageOne, messageTwo, messageThree, messageFour, messageFive)) != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_ShePreProgramKey %d\n", ret);
-        goto exit;
-    }
-    if ((ret = wh_Client_SheLoadKey(client, messageOne, messageTwo, messageThree, outMessageFour, outMessageFive)) != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_SheLoadKey %d\n", ret);
-        goto exit;
-    }
-    /* load the secret key */
-    if ((ret = wh_SheGenerateLoadableKey(WOLFHSM_SHE_SECRET_KEY_ID, WOLFHSM_SHE_MASTER_ECU_KEY_ID, 1, 0, sheUid, secretKey, vectorMasterEcuKey, messageOne, messageTwo, messageThree, messageFour, messageFive)) != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_ShePreProgramKey %d\n", ret);
-        goto exit;
-    }
-    if ((ret = wh_Client_SheLoadKey(client, messageOne, messageTwo, messageThree, outMessageFour, outMessageFive)) != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_SheLoadKey %d\n", ret);
-        goto exit;
-    }
-    /* load the prng seed */
-    if ((ret = wh_SheGenerateLoadableKey(WOLFHSM_SHE_PRNG_SEED_ID, WOLFHSM_SHE_SECRET_KEY_ID, 1, 0, sheUid, prngSeed, secretKey, messageOne, messageTwo, messageThree, messageFour, messageFive)) != 0) {
+    if ((ret = wh_SheGenerateLoadableKey(WOLFHSM_SHE_MASTER_ECU_KEY_ID, WOLFHSM_SHE_SECRET_KEY_ID, 1, 0, sheUid, vectorMasterEcuKey, secretKey, messageOne, messageTwo, messageThree, messageFour, messageFive)) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_ShePreProgramKey %d\n", ret);
         goto exit;
     }

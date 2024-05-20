@@ -38,14 +38,18 @@
 
 #include "wolfhsm/wh_packet.h"
 #include "wolfhsm/wh_client.h"
+#include "wolfhsm/wh_server_she.h"
 
 int wh_Client_ShePreProgramKey(whClientContext* c, whNvmId keyId,
     whNvmFlags flags, uint8_t* key, whNvmSize keySz)
 {
     int ret;
     int outRc;
+    uint8_t label[WOLFHSM_NVM_LABEL_LEN];
+    memset(label, 0, sizeof(label));
+    ((whSheMetadata*)label)->flags = flags;
     ret = wh_Client_NvmAddObject(c, MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_SHE,
-        c->comm->client_id, keyId), 0, flags, 0, NULL, keySz, key, &outRc);
+        c->comm->client_id, keyId), 0, 0, sizeof(label), label, keySz, key, &outRc);
     if (ret == 0)
         ret = outRc;
     return ret;
