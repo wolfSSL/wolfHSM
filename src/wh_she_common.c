@@ -108,7 +108,8 @@ int wh_SheGenerateLoadableKey(uint8_t keyId,
     Aes aes[1];
     if (uid == NULL || key == NULL || authKey == NULL || messageOne == NULL ||
         messageTwo == NULL || messageThree == NULL || messageFour == NULL ||
-        messageFive == NULL) {
+        messageFive == NULL || keyId > WOLFHSM_SHE_PRNG_SEED_ID ||
+        authKeyId > WOLFHSM_SHE_PRNG_SEED_ID) {
         return WH_ERROR_BADARGS;
     }
     /* add authKey to kdfInput */
