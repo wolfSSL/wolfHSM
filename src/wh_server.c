@@ -70,6 +70,9 @@ int wh_Server_Init(whServerContext* server, whServerConfig* config)
         server->crypto->devId = INVALID_DEVID;
 #endif
     }
+#ifdef WOLFHSM_SHE_EXTENSION
+    server->she = config->she;
+#endif
 #endif
 
     rc = wh_CommServer_Init(server->comm, config->comm_config,

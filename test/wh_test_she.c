@@ -455,10 +455,14 @@ static int wh_ClientServer_MemThreadTest(void)
             .devId = INVALID_DEVID,
     }};
 
+    she_context she[1];
+    memset(she, 0, sizeof(she));
+
     whServerConfig                  s_conf[1] = {{
        .comm_config = cs_conf,
        .nvm = nvm,
        .crypto = crypto,
+       .she = she,
        .devId = INVALID_DEVID,
     }};
 

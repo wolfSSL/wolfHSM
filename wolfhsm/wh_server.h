@@ -60,8 +60,22 @@ typedef struct {
     curve25519_key curve25519Public[1];
     WC_RNG rng[1];
 } crypto_context;
-#endif  /* WOLFHSM_NO_CRYPTO */
 
+#ifdef WOLFHSM_SHE_EXTENSION
+typedef struct {
+    uint8_t sbState;
+    uint8_t cmacKeyFound;
+    uint8_t ramKeyPlain;
+    uint8_t uidSet;
+    uint32_t blSize;
+    uint32_t blSizeReceived;
+    uint32_t rndInited;
+    uint8_t prngState[WOLFHSM_SHE_KEY_SZ];
+    uint8_t prngKey[WOLFHSM_SHE_KEY_SZ];
+    uint8_t uid[WOLFHSM_SHE_UID_SZ];
+} she_context;
+#endif
+#endif  /* WOLFHSM_NO_CRYPTO */
 
 /** Server custom callback */
 
@@ -148,6 +162,9 @@ typedef struct whServerConfig_t {
 
 #ifndef WOLFHSM_NO_CRYPTO
     crypto_context* crypto;
+#ifdef WOLFHSM_SHE_EXTENSION
+    she_context* she;
+#endif
 #if defined WOLF_CRYPTO_CB /* TODO: should we be relying on wolfSSL defines? */
     int devId;
 #endif
@@ -163,12 +180,14 @@ struct whServerContext_t {
 #ifndef WOLFHSM_NO_CRYPTO
     crypto_context* crypto;
     CacheSlot cache[WOLFHSM_NUM_RAMKEYS];
+#ifdef WOLFHSM_SHE_EXTENSION
+    she_context* she;
+#endif
 #endif  /* WOLFHSM_NO_CRYPTO */
     whServerCustomCb customHandlerTable[WH_CUSTOM_CB_NUM_CALLBACKS];
     whServerDmaContext dma;
     int connected;
 #ifdef WOLFHSM_SHE_EXTENSION
-    uint8_t sheUid[WOLFHSM_SHE_UID_SZ];
 #endif
     uint8_t padding[4];
 };
