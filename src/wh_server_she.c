@@ -1072,10 +1072,10 @@ int wh_Server_HandleSheRequest(whServerContext* server,
     /* TODO does SHE specify what this error should be? */
     /* if we haven't secure booted, only allow secure boot requests */
     if ((server->she->sbState != WOLFHSM_SHE_SB_SUCCESS &&
-        (action != WOLFHSM_SHE_SECURE_BOOT_INIT &&
-        action != WOLFHSM_SHE_SECURE_BOOT_UPDATE &&
-        action != WOLFHSM_SHE_SECURE_BOOT_FINISH &&
-        action != WOLFHSM_SHE_GET_STATUS &&
+        (action != WH_SHE_SECURE_BOOT_INIT &&
+        action != WH_SHE_SECURE_BOOT_UPDATE &&
+        action != WH_SHE_SECURE_BOOT_FINISH &&
+        action != WH_SHE_GET_STATUS &&
         action != WH_SHE_SET_UID)) ||
         (action != WH_SHE_SET_UID && server->she->uidSet == 0)) {
         packet->rc = WH_SHE_ERC_SEQUENCE_ERROR;

@@ -25,13 +25,13 @@
 #include <stdio.h>  /* For printf */
 #include <string.h> /* For memset, memcpy */
 
-#ifdef WOLFHSM_SHE_EXTENSION
-
-#include "wolfssl/wolfcrypt/settings.h"
-
 #if defined(WH_CONFIG)
 #include "wh_config.h"
 #endif
+
+#ifdef WOLFHSM_SHE_EXTENSION
+
+#include "wolfssl/wolfcrypt/settings.h"
 
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_nvm.h"
