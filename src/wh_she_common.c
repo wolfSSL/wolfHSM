@@ -151,8 +151,8 @@ int wh_SheGenerateLoadableKey(uint8_t keyId,
         ret = wh_AesMp16(kdfInput,
             WOLFHSM_SHE_KEY_SZ + sizeof(WOLFHSM_SHE_KEY_UPDATE_MAC_C), tmpKey);
     }
+    /* cmac messageOne and messageTwo using K2 as the cmac key */
     if (ret == 0) {
-        /* cmac messageOne and messageTwo using K2 as the cmac key */
         ret = wc_InitCmac_ex(cmac, tmpKey, WOLFHSM_SHE_KEY_SZ,
             WC_CMAC_AES, NULL, NULL, INVALID_DEVID);
     }
@@ -207,16 +207,9 @@ int wh_SheGenerateLoadableKey(uint8_t keyId,
     }
     /* cmac messageFour using K4 as the cmac key */
     if (ret == 0) {
-        ret = wc_InitCmac_ex(cmac, tmpKey, WOLFHSM_SHE_KEY_SZ, WC_CMAC_AES,
-            NULL, NULL, INVALID_DEVID);
-    }
-    /* hash M4, store in M5 */
-    if (ret == 0)
-        ret = wc_CmacUpdate(cmac, messageFour, WOLFHSM_SHE_M4_SZ);
-    /* write M5 */
-    if (ret == 0) {
         field = AES_BLOCK_SIZE;
-        ret = wc_CmacFinal(cmac, messageFive, &field);
+        ret = wc_AesCmacGenerate_ex(cmac, messageFive, &field, messageFour,
+            WOLFHSM_SHE_M4_SZ, tmpKey, WOLFHSM_SHE_KEY_SZ, NULL, INVALID_DEVID);
     }
     return ret;
 }

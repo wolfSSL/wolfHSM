@@ -356,19 +356,12 @@ static int hsmSheLoadKey(whServerContext* server, whPacket* packet,
         ret = WH_SHE_ERC_KEY_NOT_AVAILABLE;
     /* cmac messageOne and messageTwo using K2 as the cmac key */
     if (ret == 0) {
-        ret = wc_InitCmac_ex(sheCmac, tmpKey, WOLFHSM_SHE_KEY_SZ,
-            WC_CMAC_AES, NULL, NULL, server->crypto->devId);
-    }
-    /* hash M1 | M2 in one call */
-    if (ret == 0) {
-        ret = wc_CmacUpdate(sheCmac, (uint8_t*)&packet->sheLoadKeyReq,
-            sizeof(packet->sheLoadKeyReq.messageOne) +
-            sizeof(packet->sheLoadKeyReq.messageTwo));
-    }
-    /* get the digest */
-    if (ret == 0) {
         field = AES_BLOCK_SIZE;
-        ret = wc_CmacFinal(sheCmac, cmacOutput, &field);
+        ret = wc_AesCmacGenerate_ex(sheCmac, cmacOutput, &field,
+            (uint8_t*)&packet->sheLoadKeyReq,
+            sizeof(packet->sheLoadKeyReq.messageOne) +
+            sizeof(packet->sheLoadKeyReq.messageTwo), tmpKey,
+            WOLFHSM_SHE_KEY_SZ, NULL, server->crypto->devId);
     }
     /* compare digest to M3 */
     if (ret == 0 && XMEMCMP(packet->sheLoadKeyReq.messageThree,
@@ -509,19 +502,11 @@ static int hsmSheLoadKey(whServerContext* server, whPacket* packet,
     }
     /* cmac messageFour using K4 as the cmac key */
     if (ret == 0) {
-        ret = wc_InitCmac_ex(sheCmac, tmpKey, WOLFHSM_SHE_KEY_SZ,
-            WC_CMAC_AES, NULL, NULL, server->crypto->devId);
-    }
-    /* hash M4, store in M5 */
-    if (ret == 0) {
-        ret = wc_CmacUpdate(sheCmac, packet->sheLoadKeyRes.messageFour,
-            sizeof(packet->sheLoadKeyRes.messageFour));
-    }
-    /* write M5 */
-    if (ret == 0) {
         field = AES_BLOCK_SIZE;
-        ret = wc_CmacFinal(sheCmac, packet->sheLoadKeyRes.messageFive,
-            &field);
+        ret = wc_AesCmacGenerate_ex(sheCmac, packet->sheLoadKeyRes.messageFive,
+            &field, packet->sheLoadKeyRes.messageFour,
+            sizeof(packet->sheLoadKeyRes.messageFour), tmpKey,
+            WOLFHSM_SHE_KEY_SZ, NULL, server->crypto->devId);
     }
     if (ret == 0) {
         *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->sheLoadKeyRes);
@@ -627,23 +612,15 @@ static int hsmSheExportRamKey(whServerContext* server, whPacket* packet,
         ret = wh_AesMp16(server, kdfInput,
             meta->len + sizeof(WOLFHSM_SHE_KEY_UPDATE_MAC_C), tmpKey);
     }
-    if (ret == 0) {
-        /* cmac messageOne and messageTwo using K2 as the cmac key */
-        ret = wc_InitCmac_ex(sheCmac, tmpKey, WOLFHSM_SHE_KEY_SZ,
-            WC_CMAC_AES, NULL, NULL, server->crypto->devId);
-    }
-    /* hash M1 | M2 in one call */
-    if (ret == 0) {
-        ret = wc_CmacUpdate(sheCmac,
-            (uint8_t*)&packet->sheExportRamKeyRes,
-            sizeof(packet->sheExportRamKeyRes.messageOne) +
-            sizeof(packet->sheExportRamKeyRes.messageTwo));
-    }
-    /* get the digest */
+    /* cmac messageOne and messageTwo using K2 as the cmac key */
     if (ret == 0) {
         field = AES_BLOCK_SIZE;
-        ret = wc_CmacFinal(sheCmac,
-            packet->sheExportRamKeyRes.messageThree, &field);
+        ret = wc_AesCmacGenerate_ex(sheCmac,
+            packet->sheExportRamKeyRes.messageThree, &field,
+            (uint8_t*)&packet->sheExportRamKeyRes,
+            sizeof(packet->sheExportRamKeyRes.messageOne) +
+            sizeof(packet->sheExportRamKeyRes.messageTwo), tmpKey,
+            WOLFHSM_SHE_KEY_SZ, NULL, server->crypto->devId);
     }
     if (ret == 0) {
         /* copy the ram key to kdfInput */
@@ -692,19 +669,12 @@ static int hsmSheExportRamKey(whServerContext* server, whPacket* packet,
     }
     /* cmac messageFour using K4 as the cmac key */
     if (ret == 0) {
-        ret = wc_InitCmac_ex(sheCmac, tmpKey, WOLFHSM_SHE_KEY_SZ,
-            WC_CMAC_AES, NULL, NULL, server->crypto->devId);
-    }
-    /* hash M4, store in M5 */
-    if (ret == 0) {
-        ret = wc_CmacUpdate(sheCmac, packet->sheExportRamKeyRes.messageFour,
-            sizeof(packet->sheExportRamKeyRes.messageFour));
-    }
-    /* write M5 */
-    if (ret == 0) {
         field = AES_BLOCK_SIZE;
-        ret = wc_CmacFinal(sheCmac, packet->sheExportRamKeyRes.messageFive,
-            &field);
+        ret = wc_AesCmacGenerate_ex(sheCmac,
+            packet->sheExportRamKeyRes.messageFive, &field,
+            packet->sheExportRamKeyRes.messageFour,
+            sizeof(packet->sheExportRamKeyRes.messageFour), tmpKey,
+            WOLFHSM_SHE_KEY_SZ, NULL, server->crypto->devId);
     }
     if (ret == 0)
         *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->sheExportRamKeyRes);
@@ -1046,15 +1016,12 @@ static int hsmSheGenerateMac(whServerContext* server, whPacket* packet,
         &keySz);
     /* hash the message */
     if (ret == 0) {
-        ret = wc_InitCmac_ex(sheCmac, tmpKey, WOLFHSM_SHE_KEY_SZ,
-            WC_CMAC_AES, NULL, NULL, server->crypto->devId);
+        ret = wc_AesCmacGenerate_ex(sheCmac, packet->sheGenMacRes.mac, &field,
+            in, packet->sheGenMacReq.sz, tmpKey, WOLFHSM_SHE_KEY_SZ, NULL,
+            server->crypto->devId);
     }
     else
         ret = WH_SHE_ERC_KEY_NOT_AVAILABLE;
-    if (ret == 0)
-        ret = wc_CmacUpdate(sheCmac, in, packet->sheGenMacReq.sz);
-    if (ret == 0)
-        ret = wc_CmacFinal(sheCmac, packet->sheGenMacRes.mac, &field);
     if (ret == 0)
         *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->sheGenMacRes);
     return ret;
