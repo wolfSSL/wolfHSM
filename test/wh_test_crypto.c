@@ -134,6 +134,14 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         WH_ERROR_PRINT("KEY CACHE/EXPORT FAILED TO MATCH\n");
         goto exit;
     }
+#ifndef WH_CFG_TEST_NO_CUSTOM_SERVERS
+    /* WH_CFG_TEST_NO_CUSTOM_SERVERS protects the client test code that expects to
+     * interop with the custom server (also defined in this file), so that this
+     * test can be run against a standard server app
+     *
+     * TODO: This is a temporary bodge until we properly split tests into single
+     * client and multi client */
+
     /* test cache with duplicate keyId for a different user */
     WH_TEST_RETURN_ON_FAIL(wh_Client_CommClose(client));
     client->comm->client_id = 2;
@@ -210,6 +218,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         WH_ERROR_PRINT("KEY CACHE/EXPORT FAILED TO MATCH\n");
         goto exit;
     }
+#endif /* !WH_CFG_TEST_NO_CUSTOM_SERVERS */
     /* evict for original client */
     if ((ret = wh_Client_KeyEvictRequest(client, keyId)) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_KeyEvictRequest %d\n", ret);
@@ -417,7 +426,9 @@ int whTest_CryptoServerConfig(whServerConfig* config)
     whServerContext server[1] = {0};
     whCommConnected am_connected = WH_COMM_CONNECTED;
     int ret = 0;
+#ifndef WH_CFG_TEST_NO_CUSTOM_SERVERS
     int userChange = 0;
+#endif
 
     if (config == NULL) {
         return WH_ERROR_BADARGS;
@@ -435,6 +446,8 @@ int whTest_CryptoServerConfig(whServerConfig* config)
             break;
         }
         wh_Server_GetConnected(server, &am_connected);
+
+#ifndef WH_CFG_TEST_NO_CUSTOM_SERVERS
         /* keep alive for 2 user changes */
         if (am_connected != WH_COMM_CONNECTED && userChange < 2) {
             if (userChange == 0)
@@ -445,8 +458,10 @@ int whTest_CryptoServerConfig(whServerConfig* config)
             am_connected = WH_COMM_CONNECTED;
             WH_TEST_RETURN_ON_FAIL(wh_Server_SetConnected(server, am_connected));
         }
+#endif /* !WH_CFG_TEST_NO_CUSTOM_SERVERS */
     }
-    if ((ret == 0) || (ret == WH_ERROR_NOTREADY)){
+
+    if ((ret == 0) || (ret == WH_ERROR_NOTREADY)) {
         WH_TEST_RETURN_ON_FAIL(wh_Server_Cleanup(server));
     } else {
         ret = wh_Server_Cleanup(server);
@@ -580,7 +595,6 @@ static int wh_ClientServer_MemThreadTest(void)
     return WH_ERROR_OK;
 }
 #endif /* WH_CFG_TEST_POSIX */
-
 
 int whTest_Crypto(void)
 {
