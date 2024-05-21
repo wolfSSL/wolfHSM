@@ -16,12 +16,15 @@
  * You should have received a copy of the GNU General Public License
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
-#include "wolfhsm/wh_server.h"
-
 #ifndef WOLFHSM_WH_SERVER_SHE_H
 #define WOLFHSM_WH_SERVER_SHE_H
-#if 0
-int hsmHandleSHE(WOLFHSM_CTX* ctx, wh_Packet* packet,
-    NvmMetaData* meta);
-#endif
+#include "wolfhsm/wh_server.h"
+
+typedef struct {
+    uint32_t count;
+    uint32_t flags;
+} whSheMetadata;
+
+int wh_Server_HandleSheRequest(whServerContext* server,
+    uint16_t action, uint8_t* data, uint16_t* size);
 #endif

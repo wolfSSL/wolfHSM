@@ -24,6 +24,7 @@
 /* Individual unit test drivers */
 #include "wh_test_comm.h"
 #include "wh_test_crypto.h"
+#include "wh_test_she.h"
 #include "wh_test_flash_ramsim.h"
 #include "wh_test_nvm_flash.h"
 #include "wh_test_clientserver.h"
@@ -38,6 +39,9 @@ int whTest_Unit(void)
     WH_TEST_ASSERT(0 == whTest_Comm());
 #ifndef WOLFHSM_NO_CRYPTO
     WH_TEST_ASSERT(0 == whTest_Crypto());
+#endif
+#ifdef WOLFHSM_SHE_EXTENSION
+    WH_TEST_ASSERT(0 == whTest_She());
 #endif
     WH_TEST_ASSERT(0 == whTest_Flash_RamSim());
     WH_TEST_ASSERT(0 == whTest_NvmFlash());

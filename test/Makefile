@@ -52,6 +52,10 @@ ifeq ($(NOCRYPTO),1)
 CFLAGS += -DWOLFHSM_NO_CRYPTO -Wpadded
 endif
 
+ifeq ($(SHE),1)
+CFLAGS += -DWOLFHSM_SHE_EXTENSION
+endif
+
 # wolfHSM-specific defines
 CFLAGS += -DWH_CONFIG
 
@@ -100,6 +104,14 @@ SRC_C += \
             $(WOLFHSM_DIR)/src/wh_transport_mem.c \
             $(WOLFHSM_DIR)/src/wh_flash_ramsim.c \
 
+ifeq ($(SHE),1)
+SRC_C += \
+            $(WOLFHSM_DIR)/src/wh_client_she.c \
+            $(WOLFHSM_DIR)/src/wh_server_she.c \
+            $(WOLFHSM_DIR)/src/wh_she_common.c \
+
+endif
+
 # WolfHSM port/HAL code
 SRC_C += \
             $(WOLFHSM_DIR)/src/wh_nvm_flash.c \
@@ -114,6 +126,7 @@ SRC_C += \
             ./src/wh_test.c \
             ./src/wh_test_comm.c \
             ./src/wh_test_crypto.c \
+            ./src/wh_test_she.c \
             ./src/wh_test_nvm_flash.c \
             ./src/wh_test_clientserver.c \
             ./src/wh_test_flash_ramsim.c \

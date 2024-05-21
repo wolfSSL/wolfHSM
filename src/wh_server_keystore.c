@@ -31,6 +31,9 @@
 #include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_packet.h"
 #include "wolfhsm/wh_error.h"
+#ifdef WOLFHSM_SHE_EXTENSION
+#include "wolfhsm/wh_server_she.h"
+#endif
 
 int hsmGetUniqueId(whServerContext* server, whNvmId* outId)
 {
@@ -112,7 +115,8 @@ int hsmCacheKey(whServerContext* server, whNvmMetadata* meta, uint8_t* in)
     for (i = 0; i < WOLFHSM_NUM_RAMKEYS; i++) {
         /* check for empty slot or rewrite slot */
         if ((foundIndex == -1 &&
-            server->cache[i].meta->id == WOLFHSM_KEYID_ERASED) ||
+            (server->cache[i].meta->id & WOLFHSM_KEYID_MASK) ==
+            WOLFHSM_KEYID_ERASED) ||
             server->cache[i].meta->id == meta->id) {
             foundIndex = i;
         }
@@ -129,16 +133,15 @@ int hsmCacheKey(whServerContext* server, whNvmMetadata* meta, uint8_t* in)
     /* return error if we are out of cache slots */
     if (foundIndex == -1)
         return WH_ERROR_NOSPACE;
-    server->cache[foundIndex].commited = 0;
     /* write key if slot found */
     XMEMCPY((uint8_t*)server->cache[foundIndex].buffer, in, meta->len);
     XMEMCPY((uint8_t*)server->cache[foundIndex].meta, (uint8_t*)meta,
         sizeof(whNvmMetadata));
-#ifdef WOLFHSM_SHE_EXTENSION
-    /* if this was RAM_KEY, set the global so we can export */
-    if (meta->id == WOLFHSM_SHE_TRANSLATE_KEY_ID(WOLFHSM_SHE_RAM_KEY_ID))
-        hsmSheRamKeyPlain = 1;
-#endif
+    /* check if the key is already commited */
+    if (wh_Nvm_GetMetadata(server->nvm, meta->id, meta) == WH_ERROR_NOTFOUND)
+        server->cache[foundIndex].commited = 0;
+    else
+        server->cache[foundIndex].commited = 1;
     return 0;
 }
 
@@ -197,8 +200,9 @@ int hsmReadKey(whServerContext* server, whKeyId keyId, whNvmMetadata* outMeta,
     int i;
     whNvmMetadata meta[1] = {0};
     /* make sure id is valid */
-    if (server == NULL || (keyId & WOLFHSM_KEYID_MASK) == WOLFHSM_KEYID_ERASED
-        || outSz == NULL) {
+    if (server == NULL || ((keyId & WOLFHSM_KEYID_MASK) == WOLFHSM_KEYID_ERASED
+        && (keyId & WOLFHSM_KEYTYPE_MASK) != WOLFHSM_KEYTYPE_SHE) ||
+        outSz == NULL) {
         return WH_ERROR_BADARGS;
     }
     /* apply client_id */
@@ -239,11 +243,18 @@ int hsmReadKey(whServerContext* server, whKeyId keyId, whNvmMetadata* outMeta,
         hsmCacheKey(server, meta, out);
     }
 #ifdef WOLFHSM_SHE_EXTENSION
-    /* use empty string if we couldn't find the master ecu key */
-    if (ret != 0 && keyId == WOLFHSM_SHE_MASTER_ECU_KEY_ID) {
+    /* use empty key of zeros if we couldn't find the master ecu key */
+    if (ret == WH_ERROR_NOTFOUND &&
+        (keyId & WOLFHSM_KEYTYPE_MASK) == WOLFHSM_KEYTYPE_SHE &&
+        (keyId & WOLFHSM_KEYID_MASK) == WOLFHSM_SHE_MASTER_ECU_KEY_ID) {
         XMEMSET(out, 0, WOLFHSM_SHE_KEY_SZ);
-        meta->len = WOLFHSM_SHE_KEY_SZ;
-        meta->id = searchId;
+        *outSz = WOLFHSM_SHE_KEY_SZ;
+        if (outMeta != NULL) {
+            /* need empty flags and corect lenth and id */
+            XMEMSET(outMeta, 0, sizeof(meta));
+            meta->len = WOLFHSM_SHE_KEY_SZ;
+            meta->id = keyId;
+        }
         ret = 0;
     }
 #endif

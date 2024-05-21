@@ -104,7 +104,8 @@ enum {
 #define WOLFHSM_NVM_ACCESS_ANY (0xFFFF)
 #define WOLFHSM_NVM_FLAGS_ANY (0xFFFF)
 
-/* User-specified metadata for an NVM object */
+/* User-specified metadata for an NVM object, MUST be a multiple of
+ * WHFU_BYTES_PER_UNIT */
 typedef struct {
     whNvmId id;             /* Unique identifier */
     whNvmAccess access;     /* Growth */
@@ -117,5 +118,50 @@ typedef struct {
 
 /* Custom request shared defs */
 #define WH_CUSTOM_CB_NUM_CALLBACKS 8
+
+#ifdef WOLFHSM_SHE_EXTENSION
+#define WOLFHSM_SHE_SECRET_KEY_ID 0
+#define WOLFHSM_SHE_MASTER_ECU_KEY_ID 1
+#define WOLFHSM_SHE_BOOT_MAC_KEY_ID 2
+#define WOLFHSM_SHE_BOOT_MAC 3
+#define WOLFHSM_SHE_RAM_KEY_ID 14
+#define WOLFHSM_SHE_PRNG_SEED_ID 15
+
+#define WOLFHSM_SHE_KEY_SZ 16
+#define WOLFHSM_SHE_UID_SZ 15
+
+#define WOLFHSM_SHE_BOOT_MAC_PREFIX_LEN 12
+
+#define WOLFHSM_SHE_M1_SZ 16
+#define WOLFHSM_SHE_M2_SZ 32
+#define WOLFHSM_SHE_M3_SZ WOLFHSM_SHE_M1_SZ
+#define WOLFHSM_SHE_M4_SZ WOLFHSM_SHE_M2_SZ
+#define WOLFHSM_SHE_M5_SZ WOLFHSM_SHE_M1_SZ
+
+/* sreg flags */
+#define WOLFHSM_SHE_SREG_BUSY (1 << 0)
+#define WOLFHSM_SHE_SREG_SECURE_BOOT (1 << 1)
+#define WOLFHSM_SHE_SREG_BOOT_INIT (1 << 2)
+#define WOLFHSM_SHE_SREG_BOOT_FINISHED (1 << 3)
+#define WOLFHSM_SHE_SREG_BOOT_OK (1 << 4)
+#define WOLFHSM_SHE_SREG_RND_INIT (1 << 5)
+#define WOLFHSM_SHE_SREG_EXT_DEBUGGER (1 << 6)
+#define WOLFHSM_SHE_SREG_INT_DEBUGGER (1 << 7)
+/* key flags */
+#define WOLFHSM_SHE_FLAG_WRITE_PROTECT (1 << 0)
+#define WOLFHSM_SHE_FLAG_BOOT_PROTECT (1 << 1)
+#define WOLFHSM_SHE_FLAG_DEBUGGER_PROTECTION (1 << 2)
+#define WOLFHSM_SHE_FLAG_USAGE (1 << 3)
+#define WOLFHSM_SHE_FLAG_WILDCARD (1 << 4)
+#define WOLFHSM_SHE_M1_SZ 16
+#define WOLFHSM_SHE_M2_SZ 32
+#define WOLFHSM_SHE_M3_SZ WOLFHSM_SHE_M1_SZ
+#define WOLFHSM_SHE_M4_SZ WOLFHSM_SHE_M2_SZ
+#define WOLFHSM_SHE_M5_SZ WOLFHSM_SHE_M1_SZ
+int wh_SheGenerateLoadableKey(uint8_t keyId,
+    uint8_t authKeyId, uint32_t count, uint32_t flags, uint8_t* uid,
+    uint8_t* key, uint8_t* authKey, uint8_t* messageOne, uint8_t* messageTwo,
+    uint8_t* messageThree, uint8_t* messageFour, uint8_t* messageFive);
+#endif
 
 #endif /* WOLFHSM_WH_COMMON_H_ */

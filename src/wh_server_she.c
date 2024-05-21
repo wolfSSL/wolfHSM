@@ -16,44 +16,39 @@
  * You should have received a copy of the GNU General Public License
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
-#if 0
-
+/*
+ * src/wh_server_she.c
+ *
+ */
 /* System libraries */
 #include <stdint.h>
 #include <stdlib.h>  /* For NULL */
 #include <string.h>  /* For memset, memcpy */
 
-#include <arpa/inet.h>
-
-
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/types.h"
 #include "wolfssl/wolfcrypt/error-crypt.h"
 #include "wolfssl/wolfcrypt/wc_port.h"
-#include "wolfssl/wolfcrypt/sha256.h"
 #include "wolfssl/wolfcrypt/aes.h"
-#include "wolfssl/wolfcrypt/rsa.h"
 #include "wolfssl/wolfcrypt/cmac.h"
-#include "wolfssl/wolfcrypt/kdf.h"
-#include "wolfssl/wolfcrypt/cryptocb.h"
 
 #include "wolfhsm/wh_server.h"
+#include "wolfhsm/wh_server_keystore.h"
+#include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_packet.h"
+#include "wolfhsm/wh_error.h"
+#ifdef WOLFHSM_SHE_EXTENSION
+#include "wolfhsm/wh_server_she.h"
+#endif
 
-const uint8_t WOLFHSM_SHE_KEY_UPDATE_ENC_C[] = {0x01, 0x01, 0x53, 0x48, 0x45,
+static const uint8_t WOLFHSM_SHE_KEY_UPDATE_ENC_C[] = {0x01, 0x01, 0x53, 0x48, 0x45,
     0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xB0};
-const uint8_t WOLFHSM_SHE_KEY_UPDATE_MAC_C[] = {0x01, 0x02, 0x53, 0x48, 0x45,
+static const uint8_t WOLFHSM_SHE_KEY_UPDATE_MAC_C[] = {0x01, 0x02, 0x53, 0x48, 0x45,
     0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xB0};
-#define WOLFHSM_SHE_UID_SZ 15
-const uint8_t WOLFHSM_SHE_UID[WOLFHSM_SHE_UID_SZ] = {0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01};
-const uint8_t WOLFHSM_SHE_PRNG_KEY_C[] = {0x01, 0x04, 0x53, 0x48, 0x45, 0x00,
+static const uint8_t WOLFHSM_SHE_PRNG_KEY_C[] = {0x01, 0x04, 0x53, 0x48, 0x45, 0x00,
     0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xB0};
-const uint8_t WOLFHSM_SHE_PRNG_SEED_KEY_C[] = {0x01, 0x05, 0x53, 0x48, 0x45,
+static const uint8_t WOLFHSM_SHE_PRNG_SEED_KEY_C[] = {0x01, 0x05, 0x53, 0x48, 0x45,
     0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xB0};
-const uint8_t WOLFHSM_SHE_PRNG_EXTENSION_C[] = {0x80, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00};
-uint8_t WOLFHSM_SHE_PRNG_KEY[WOLFHSM_SHE_KEY_SZ];
 enum WOLFHSM_SHE_SB_STATE {
     WOLFHSM_SHE_SB_INIT,
     WOLFHSM_SHE_SB_UPDATE,
@@ -61,34 +56,57 @@ enum WOLFHSM_SHE_SB_STATE {
     WOLFHSM_SHE_SB_SUCCESS,
     WOLFHSM_SHE_SB_FAILURE,
 };
-uint8_t hsmShePrngState[WOLFHSM_SHE_KEY_SZ];
-uint8_t hsmSheSbState = WOLFHSM_SHE_SB_INIT;
-uint8_t hsmSheCmacKeyFound = 0;
-uint8_t hsmSheRamKeyPlain = 0;
-uint32_t hsmSheBlSize = 0;
-uint32_t hsmSheBlSizeReceived = 0;
-uint32_t hsmSheInitRng = 0;
 /* cmac is global since the bootloader update can be called multiple times */
 Cmac sheCmac[1];
+Aes sheAes[1];
+
+static int isLittleEndian() {
+    unsigned int x = 1; /* 0x00000001 */
+    char *c = (char*)&x;
+    return (int)*c;
+}
+
+/* Converts a 32-bit value from host to network byte order */
+static uint32_t htonl(uint32_t hostlong) {
+    if (isLittleEndian()) {
+        return ((hostlong & 0x000000FF) << 24) | ((hostlong & 0x0000FF00) << 8)
+            | ((hostlong & 0x00FF0000) >> 8) | ((hostlong & 0xFF000000) >> 24);
+    }
+    return hostlong; /* No conversion needed if not little endian */
+}
+
+static uint32_t ntohl(uint32_t networklong) {
+    /* same operation */
+    return htonl(networklong);
+}
+
+static int XMEMEQZERO(uint8_t* buffer, uint32_t size)
+{
+    while (size > 1) {
+        size--;
+        if (buffer[size] != 0)
+            return 0;
+    }
+    return 1;
+}
 
 /* kdf function based on the Miyaguchi-Preneel one-way compression function */
-static int wh_AesMp16(WOLFHSM_CTX* ctx, byte* in, word32 inSz,
-    byte* messageZero, byte* out)
+static int wh_AesMp16(whServerContext* server, uint8_t* in, word32 inSz, uint8_t* out)
 {
     int ret;
     int i = 0;
     int j;
-    Aes aes[1];
-    byte paddedInput[AES_BLOCK_SIZE];
+    uint8_t paddedInput[AES_BLOCK_SIZE];
+    uint8_t messageZero[WOLFHSM_SHE_KEY_SZ] = {0};
     /* check valid inputs */
-    if (in == NULL || inSz == 0 || messageZero == NULL || out == NULL)
-        return BAD_FUNC_ARG;
+    if (server == NULL || in == NULL || inSz == 0 || out == NULL)
+        return WH_ERROR_BADARGS;
     /* init with hw */
-    ret = wc_AesInit(aes, ctx->heap, ctx->devId);
+    ret = wc_AesInit(sheAes, NULL, server->crypto->devId);
     /* do the first block with messageZero as the key */
     if (ret == 0) {
-        ret = wc_AesSetKeyDirect(aes, messageZero, AES_BLOCK_SIZE, NULL,
-            AES_ENCRYPTION);
+        ret = wc_AesSetKeyDirect(sheAes, messageZero,
+            AES_BLOCK_SIZE, NULL, AES_ENCRYPTION);
     }
     while (ret == 0 && i < (int)inSz) {
         /* copy a block and pad it if we're short */
@@ -99,7 +117,7 @@ static int wh_AesMp16(WOLFHSM_CTX* ctx, byte* in, word32 inSz,
         else
             XMEMCPY(paddedInput, in + i, AES_BLOCK_SIZE);
         /* encrypt this block */
-        ret = wc_AesEncryptDirect(aes, out, paddedInput);
+        ret = wc_AesEncryptDirect(sheAes, out, paddedInput);
         /* xor with the original message and then the previous block */
         for (j = 0; j < (int)AES_BLOCK_SIZE; j++) {
             out[j] ^= paddedInput[j];
@@ -108,8 +126,8 @@ static int wh_AesMp16(WOLFHSM_CTX* ctx, byte* in, word32 inSz,
         }
         /* set the key for the next block */
         if (ret == 0) {
-            ret = wc_AesSetKeyDirect(aes, out, AES_BLOCK_SIZE, NULL,
-                AES_ENCRYPTION);
+            ret = wc_AesSetKeyDirect(sheAes, out, AES_BLOCK_SIZE,
+                NULL, AES_ENCRYPTION);
         }
         if (ret == 0) {
             /* store previous output in messageZero */
@@ -119,806 +137,1033 @@ static int wh_AesMp16(WOLFHSM_CTX* ctx, byte* in, word32 inSz,
         }
     }
     /* free aes for protection */
-    wc_AesFree(aes);
-    return ret;
-}
-
-static int hsmSheOverwriteKey(WOLFHSM_CTX* ctx, NvmMetaData* meta, uint8_t* in)
-{
-    int i;
-    int j;
-    int ret = 0;
-    uint32_t readAddr = WOLFHSM_PART_0;
-    uint32_t writeAddr = WOLFHSM_PART_1;
-    uint32_t readKeyOffset = 0;
-    uint32_t writeKeyOffset = 0;
-    uint32_t counter;
-    wc_Sha256 sha[1];
-    uint8_t key[WOLFHSM_KEYSIZE];
-    uint8_t digest[WC_SHA256_DIGEST_SIZE];
-    /* setup address */
-    if (ctx->partition == 1) {
-        readAddr = WOLFHSM_PART_1;
-        writeAddr = WOLFHSM_PART_0;
-    }
-    /* swap partition */
-    ctx->partition = !ctx->partition;
-    /* erase the write partition */
-    ret = hal_flash_erase(writeAddr, WOLFHSM_PARTITION_SIZE);
-    if (ret != 0)
-        return ret;
-    /* copy all keys except keyId */
-    for (i = 0; i < WOLFHSM_KEYSLOT_COUNT && ret == 0; i++) {
-        /* if erased, skip it */
-        if (ctx->nvmMetaCache[i].id == WOLFHSM_ID_ERASED)
-            continue;
-        /* if this is the key we're overwriting erase and continue*/
-        if (ctx->nvmMetaCache[i].id == meta->id) {
-            /* skip over erase key length */
-            readKeyOffset += ctx->nvmMetaCache[i].len;
-            /* move key meta up to fill empty slot */
-            for (j = i; j < WOLFHSM_KEYSLOT_COUNT - 1; j++) {
-                XMEMCPY((uint8_t*)&ctx->nvmMetaCache[j],
-                    (uint8_t*)&ctx->nvmMetaCache[j + 1], sizeof(NvmMetaData));
-            }
-            /* erase the last slot to prevent duplicate */
-            XMEMSET((uint8_t*)&ctx->nvmMetaCache[j], WOLFHSM_ID_ERASED,
-                sizeof(NvmMetaData));
-            /*  stay at this index*/
-            i--;
-            continue;
-        }
-        /* read key */
-        if (ret == 0) {
-            ret = hal_flash_read(
-                readAddr + WOLFHSM_HEADER_SIZE + readKeyOffset, key,
-                ctx->nvmMetaCache[i].len);
-        }
-        /* write key to new partition */
-        if (ret == 0) {
-            ret = hal_flash_write(writeAddr + WOLFHSM_HEADER_SIZE +
-                writeKeyOffset, key, ctx->nvmMetaCache[i].len);
-        }
-        if (ret == 0) {
-            /* increment the key offsets */
-            writeKeyOffset += ctx->nvmMetaCache[i].len;
-            readKeyOffset += ctx->nvmMetaCache[i].len;
-            /* write packed metadata */
-            ret = hal_flash_write(
-                writeAddr + WOLFHSM_PART_COUNTER_SZ + i * sizeof(NvmMetaData),
-                (uint8_t*)&ctx->nvmMetaCache[i],
-                sizeof(NvmMetaData));
-        }
-    }
-    /* replace the key in the cache */
-    if (ret == 0) {
-        for (i = 0; i < WOLFHSM_CACHE_COUNT; i++) {
-            if (ctx->cache[i].meta->id == meta->id) {
-                XMEMCPY((uint8_t*)ctx->cache[i].meta, (uint8_t*)meta,
-                    sizeof(NvmMetaData));
-                XMEMCPY((uint8_t*)ctx->cache[i].buffer, (uint8_t*)in,
-                    meta->len);
-                break;
-            }
-        }
-    }
-    /* cache the key if not replaced */
-    if (ret == 0 && i >= WOLFHSM_CACHE_COUNT)
-        ret = hsmCacheKey(ctx, meta, in);
-    /* commit the key */
-    if (ret == 0) {
-        ret = hsmCommitKey(ctx, meta->id);
-        if (ret == meta->id)
-            ret = 0;
-    }
-    /* update the counter in the new partition */
-    if (ret == 0)
-        ret = hal_flash_read(readAddr, (uint8_t*)&counter, sizeof(counter));
-    if (ret == 0) {
-        /* if erased set to 1 */
-        if (counter == WOLFHSM_ID_ERASED)
-            counter = 1;
-        else
-            counter++;
-        ret = hal_flash_write(writeAddr, (uint8_t*)&counter, sizeof(counter));
-    }
-    /* erase old partition */
-    if (ret == 0)
-        ret = hal_flash_erase(readAddr, WOLFHSM_PARTITION_SIZE);
+    wc_AesFree(sheAes);
     return ret;
 }
 
 /* AuthID is the 4 rightmost bits of messageOne */
-static inline uint16_t hsmShePopAuthId(uint8_t* messageOne)
+static uint16_t hsmShePopAuthId(uint8_t* messageOne)
 {
-    return WOLFHSM_SHE_TRANSLATE_KEY_ID(
-        (*(messageOne + WOLFHSM_SHE_M1_SZ - 1) & 0x0f));
+    return (*(messageOne + WOLFHSM_SHE_M1_SZ - 1) & 0x0f);
 }
 
 /* ID is the second to last 4 bits of messageOne */
-static inline uint16_t hsmShePopId(uint8_t* messageOne)
+static uint16_t hsmShePopId(uint8_t* messageOne)
 {
-    return WOLFHSM_SHE_TRANSLATE_KEY_ID(
-        ((*(messageOne + WOLFHSM_SHE_M1_SZ - 1) & 0xf0) >> 4));
+    return ((*(messageOne + WOLFHSM_SHE_M1_SZ - 1) & 0xf0) >> 4);
 }
 
 /* flags are the rightmost 4 bits of byte 3 as it's leftmost bits
  * and leftmost bit of byte 4 as it's rightmost bit */
-static inline uint32_t hsmShePopFlags(uint8_t* messageTwo)
+static uint32_t hsmShePopFlags(uint8_t* messageTwo)
 {
     return (((messageTwo[3] & 0x0f) << 4) | ((messageTwo[4] & 0x80) >> 7));
 }
 
-int hsmHandleSHE(WOLFHSM_CTX* ctx, wh_Packet* packet,
-    NvmMetaData* meta)
+static int hsmSheSetUid(whServerContext* server, whPacket* packet)
 {
     int ret = 0;
-    uint32_t field;
-    uint8_t* in;
-    uint8_t* out;
-    uint8_t* keyOne;
-    uint8_t* keyTwo;
-    uint8_t* keyThree;
-    uint8_t* messageThreeDigest;
-    /* TODO we might be able to use the unused part of the packet here to save space since SHE keys are always only 16 bytes */
-    uint8_t kdfInput[WOLFHSM_SHE_KEY_SZ * 2];
-    uint8_t messageZero[WOLFHSM_SHE_KEY_SZ];
-    uint8_t tmpKey[WOLFHSM_SHE_KEY_SZ];
-    uint8_t cmacOutput[AES_BLOCK_SIZE];
-    union {
-        Aes aes[1];
-    } crypto;
-
-    switch (packet->subType)
-    {
-    case WOLFHSM_SHE_SECURE_BOOT_INIT:
-        /* if we aren't looking for init return error */
-        if (hsmSheSbState != WOLFHSM_SHE_SB_INIT)
-            ret = BAD_FUNC_ARG;
-        if (ret == 0) {
-            /* set the expected size */
-            hsmSheBlSize = packet->sheSecureBootInitReq.sz;
-            /* check if the boot mac key is empty */
-            meta->id =WOLFHSM_SHE_TRANSLATE_KEY_ID(WOLFHSM_SHE_BOOT_MAC_KEY_ID);
-            meta->len = sizeof(kdfInput);
-            ret = hsmReadKey(ctx, meta, kdfInput);
-            /* if the key wasn't found */
-            if (ret != 0) {
-                /* return ERC_NO_SECURE_BOOT */
-                ret = WOLFHSM_SHE_ERC_NO_SECURE_BOOT;
-                /* skip SB process since we have no key */
-                hsmSheSbState = WOLFHSM_SHE_SB_SUCCESS;
-                hsmSheCmacKeyFound = 0;
-            }
-            else
-                hsmSheCmacKeyFound = 1;
-        }
-        /* init the cmac, use const length since the nvm key holds both key and
-         * expected digest so meta->len will be too long */
-        if (ret == 0) {
-            ret = wc_InitCmac_ex(sheCmac, kdfInput, WOLFHSM_SHE_KEY_SZ,
-                WC_CMAC_AES, NULL, ctx->heap, ctx->devId);
-        }
-        /* hash 12 zeros */
-        if (ret == 0) {
-            XMEMSET(kdfInput, 0, WOLFHSM_SHE_BOOT_MAC_PREFIX_LEN);
-            ret = wc_CmacUpdate(sheCmac, kdfInput,
-                WOLFHSM_SHE_BOOT_MAC_PREFIX_LEN);
-        }
-        /* TODO is size big or little endian? spec says it is 32 bit */
-        /* hash size */
-        if (ret == 0) {
-            ret = wc_CmacUpdate(sheCmac, (uint8_t*)&hsmSheBlSize,
-                sizeof(hsmSheBlSize));
-        }
-        if (ret == 0) {
-            /* advance to the next state */
-            hsmSheSbState = WOLFHSM_SHE_SB_UPDATE;
-            /* set subType */
-            packet->subType = WOLFHSM_SHE_SECURE_BOOT_INIT;
-            /* set len */
-            packet->len = sizeof(packet->sheSecureBootInitRes);
-            /* set ERC_NO_ERROR */
-            packet->sheSecureBootInitRes.status = WOLFHSM_SHE_ERC_NO_ERROR;
-        }
-        break;
-    case WOLFHSM_SHE_SECURE_BOOT_UPDATE:
-        /* if we aren't looking for update return error */
-        if (hsmSheSbState != WOLFHSM_SHE_SB_UPDATE)
-            ret = BAD_FUNC_ARG;
-        if (ret == 0) {
-            /* the bootloader chunk is after the fixed fields */
-            in = (uint8_t*)(&packet->sheSecureBootUpdateReq + 1);
-            /* increment hsmSheBlSizeReceived */
-            hsmSheBlSizeReceived += packet->sheSecureBootUpdateReq.sz;
-            /* check that we didn't exceed the expected bootloader size */
-            if (hsmSheBlSizeReceived > hsmSheBlSize) {
-                ret = BUFFER_E;
-            }
-        }
-        /* update with the new input */
-        if (ret == 0) {
-            ret = wc_CmacUpdate(sheCmac, in,
-                packet->sheSecureBootUpdateReq.sz);
-        }
-        if (ret == 0) {
-            /* advance to the next state if we've cmaced the entire image */
-            if (hsmSheBlSizeReceived == hsmSheBlSize)
-                hsmSheSbState = WOLFHSM_SHE_SB_FINISH;
-            /* set subType */
-            packet->subType = WOLFHSM_SHE_SECURE_BOOT_UPDATE;
-            /* set len */
-            packet->len = sizeof(packet->sheSecureBootUpdateRes);
-            /* set ERC_NO_ERROR */
-            packet->sheSecureBootUpdateRes.status = WOLFHSM_SHE_ERC_NO_ERROR;
-        }
-        break;
-    case WOLFHSM_SHE_SECURE_BOOT_FINISH:
-        /* if we aren't looking for finish return error */
-        if (hsmSheSbState != WOLFHSM_SHE_SB_FINISH)
-            ret = BAD_FUNC_ARG;
-        /* call final */
-        if (ret == 0) {
-            field = AES_BLOCK_SIZE;
-            ret = wc_CmacFinal(sheCmac, tmpKey, &field);
-        }
-        /* load the cmac to check */
-        if (ret == 0) {
-            meta->id = WOLFHSM_SHE_TRANSLATE_KEY_ID(WOLFHSM_SHE_BOOT_MAC_KEY_ID);
-            meta->len = sizeof(kdfInput);
-            ret = hsmReadKey(ctx, meta, kdfInput);
-        }
-        if (ret == 0) {
-            /* compare and set either success or failure */
-            ret = XMEMCMP(tmpKey, kdfInput + WOLFHSM_SHE_KEY_SZ, field);
-            if (ret == 0) {
-                hsmSheSbState = WOLFHSM_SHE_SB_SUCCESS;
-            }
-            else {
-                hsmSheSbState = WOLFHSM_SHE_SB_FAILURE;
-            }
-            /* set subType */
-            packet->subType = WOLFHSM_SHE_SECURE_BOOT_FINISH;
-            /* set len */
-            packet->len = sizeof(packet->sheSecureBootFinishRes);
-            /* set ERC_NO_ERROR */
-            packet->sheSecureBootFinishRes.status = WOLFHSM_SHE_ERC_NO_ERROR;
-        }
-        break;
-    case WOLFHSM_SHE_GET_STATUS:
-        /* TODO do we care about all the sreg fields? */
-        packet->sheGetStatusRes.sreg = 0;
-        /* SECURE_BOOT */
-        if (hsmSheCmacKeyFound)
-            packet->sheGetStatusRes.sreg |= WOLFHSM_SHE_SREG_SECURE_BOOT;
-        /* BOOT_FINISHED */
-        if (hsmSheSbState == WOLFHSM_SHE_SB_SUCCESS ||
-            hsmSheSbState == WOLFHSM_SHE_SB_FAILURE) {
-            packet->sheGetStatusRes.sreg |= WOLFHSM_SHE_SREG_BOOT_FINISHED;
-        }
-        /* BOOT_OK */
-        if (hsmSheSbState == WOLFHSM_SHE_SB_SUCCESS)
-            packet->sheGetStatusRes.sreg |= WOLFHSM_SHE_SREG_BOOT_OK;
-        /* RND_INIT */
-        if (hsmSheInitRng)
-            packet->sheGetStatusRes.sreg |= WOLFHSM_SHE_SREG_RND_INIT;
-        /* set subType */
-        packet->subType = WOLFHSM_SHE_GET_STATUS;
-        /* set len */
-        packet->len = sizeof(packet->sheGetStatusRes);
-        break;
-    case WOLFHSM_SHE_LOAD_KEY:
-        /* read the auth key by AuthID */
-        meta->id = hsmShePopAuthId(packet->sheLoadKeyReq.messageOne);
-        meta->len = sizeof(kdfInput);
-        ret = hsmReadKey(ctx, meta, kdfInput);
-        /* make K2 using AES-MP(authKey | WOLFHSM_SHE_KEY_UPDATE_MAC_C) */
-        if (ret == 0) {
-            /* add WOLFHSM_SHE_KEY_UPDATE_MAC_C to the input */
-            XMEMCPY(kdfInput + meta->len, WOLFHSM_SHE_KEY_UPDATE_MAC_C,
-                sizeof(WOLFHSM_SHE_KEY_UPDATE_MAC_C));
-            /* setup M0 */
-            XMEMSET(messageZero, 0, AES_BLOCK_SIZE);
-            /* do kdf */
-            ret = wh_AesMp16(ctx, kdfInput,
-                meta->len + sizeof(WOLFHSM_SHE_KEY_UPDATE_MAC_C), messageZero,
-                tmpKey);
-        }
-        /* cmac messageOne and messageTwo using K2 as the cmac key */
-        if (ret == 0) {
-            ret = wc_InitCmac_ex(sheCmac, tmpKey, WOLFHSM_SHE_KEY_SZ,
-                WC_CMAC_AES, NULL, ctx->heap, ctx->devId);
-        }
-        /* hash M1 | M2 in one call */
-        if (ret == 0) {
-            ret = wc_CmacUpdate(sheCmac, (uint8_t*)&packet->sheLoadKeyReq,
-                sizeof(packet->sheLoadKeyReq.messageOne) +
-                sizeof(packet->sheLoadKeyReq.messageTwo));
-        }
-        /* get the digest */
-        if (ret == 0) {
-            field = AES_BLOCK_SIZE;
-            ret = wc_CmacFinal(sheCmac, cmacOutput, &field);
-        }
-        /* compare digest to M3 */
-        if (ret == 0 && XMEMCMP(packet->sheLoadKeyReq.messageThree,
-            cmacOutput, field) != 0) {
-            ret = WOLFHSM_SHE_ERC_KEY_UPDATE_ERROR;
-        }
-        /* make K1 using AES-MP(authKey | WOLFHSM_SHE_KEY_UPDATE_ENC_C) */
-        if (ret == 0) {
-            /* add WOLFHSM_SHE_KEY_UPDATE_ENC_C to the input */
-            XMEMCPY(kdfInput + meta->len, WOLFHSM_SHE_KEY_UPDATE_ENC_C,
-                sizeof(WOLFHSM_SHE_KEY_UPDATE_ENC_C));
-            /* reset M0 */
-            XMEMSET(messageZero, 0, AES_BLOCK_SIZE);
-            /* do kdf */
-            ret = wh_AesMp16(ctx, kdfInput,
-                meta->len + sizeof(WOLFHSM_SHE_KEY_UPDATE_ENC_C), messageZero,
-                tmpKey);
-        }
-        /* decrypt messageTwo */
-        if (ret == 0)
-            ret = wc_AesInit(crypto.aes, ctx->heap, ctx->devId);
-        if (ret == 0) {
-            ret = wc_AesSetKey(crypto.aes, tmpKey, WOLFHSM_SHE_KEY_SZ, NULL,
-                AES_DECRYPTION);
-        }
-        if (ret == 0) {
-            ret = wc_AesCbcDecrypt(crypto.aes, packet->sheLoadKeyReq.messageTwo,
-                packet->sheLoadKeyReq.messageTwo,
-                sizeof(packet->sheLoadKeyReq.messageTwo));
-        }
-        /* free aes for protection */
-        wc_AesFree(crypto.aes);
-        /* load the target key */
-        if (ret == 0) {
-            meta->id = hsmShePopId(packet->sheLoadKeyReq.messageOne);
-            meta->len = sizeof(kdfInput);
-            ret = hsmReadKey(ctx, meta, kdfInput);
-            /* if the keyslot is empty or write protection is not on continue */
-            if (ret == BAD_FUNC_ARG ||
-                (meta->flags & WOLFHSM_SHE_FLAG_WRITE_PROTECT) == 0) {
-                ret = 0;
-            }
-            else
-                ret = WOLFHSM_SHE_ERC_WRITE_PROTECTED;
-        }
-        /* check UID == 0 */
-        if (ret == 0 && XMEMEQZERO(packet->sheLoadKeyReq.messageOne,
-            WOLFHSM_SHE_UID_SZ) == 1) {
-            /* check wildcard */
-            if ((meta->flags & WOLFHSM_SHE_FLAG_WILDCARD) == 0)
-                ret = WOLFHSM_SHE_ERC_KEY_UPDATE_ERROR;
-        }
-        /* compare to UID */
-        else if (ret == 0 && XMEMCMP(packet->sheLoadKeyReq.messageOne,
-            WOLFHSM_SHE_UID, WOLFHSM_SHE_UID_SZ) != 0) {
-            ret = WOLFHSM_SHE_ERC_KEY_UPDATE_ERROR;
-        }
-        /* verify counter is greater than stored value */
-        if (ret == 0 &&
-            ntohl(*((uint32_t*)packet->sheLoadKeyReq.messageTwo) >> 4) <=
-            ntohl(meta->count)) {
-            ret = WOLFHSM_SHE_ERC_KEY_UPDATE_ERROR;
-        }
-        /* write key with counter */
-        if (ret == 0) {
-            meta->id = hsmShePopId(packet->sheLoadKeyReq.messageOne);
-            meta->flags = hsmShePopFlags(packet->sheLoadKeyReq.messageTwo);
-            meta->count = (*(uint32_t*)packet->sheLoadKeyReq.messageTwo >> 4);
-            meta->len = WOLFHSM_SHE_KEY_SZ;
-            /* cache if ram key, overwrite otherwise */
-            if (meta->id ==
-                WOLFHSM_SHE_TRANSLATE_KEY_ID(WOLFHSM_SHE_RAM_KEY_ID)) {
-                hsmEvictKey(ctx, meta->id);
-                ret = hsmCacheKey(ctx, meta, packet->sheLoadKeyReq.messageTwo
-                    + WOLFHSM_SHE_KEY_SZ);
-            }
-            else {
-                ret = hsmSheOverwriteKey(ctx, meta,
-                    packet->sheLoadKeyReq.messageTwo + WOLFHSM_SHE_KEY_SZ);
-                /* evict the key from cache so we can read it from nvm */
-                if (ret == 0)
-                    ret = hsmEvictKey(ctx, meta->id);
-                /* read the evicted key back from nvm */
-                if (ret == 0) {
-                    ret = hsmReadKey(ctx, meta, packet->sheLoadKeyReq.messageTwo
-                        + WOLFHSM_SHE_KEY_SZ);
-                }
-            }
-        }
-        /* generate K3 using the updated key */
-        if (ret == 0) {
-            /* copy new key to kdfInput */
-            XMEMCPY(kdfInput, packet->sheLoadKeyReq.messageTwo +
-                WOLFHSM_SHE_KEY_SZ, WOLFHSM_SHE_KEY_SZ);
-            /* add WOLFHSM_SHE_KEY_UPDATE_ENC_C to the input */
-            XMEMCPY(kdfInput + meta->len, WOLFHSM_SHE_KEY_UPDATE_ENC_C,
-                sizeof(WOLFHSM_SHE_KEY_UPDATE_ENC_C));
-            /* reset M0 */
-            XMEMSET(messageZero, 0, AES_BLOCK_SIZE);
-            /* do kdf */
-            ret = wh_AesMp16(ctx, kdfInput,
-                meta->len + sizeof(WOLFHSM_SHE_KEY_UPDATE_ENC_C), messageZero,
-                tmpKey);
-        }
-        if (ret == 0)
-            ret = wc_AesInit(crypto.aes, ctx->heap, ctx->devId);
-        if (ret == 0) {
-            ret = wc_AesSetKey(crypto.aes, tmpKey, WOLFHSM_SHE_KEY_SZ, NULL,
-                AES_ENCRYPTION);
-        }
-        if (ret == 0) {
-            /* reset messageTwo with the nvm read counter, pad with a 1 bit */
-            *(uint32_t*)packet->sheLoadKeyReq.messageTwo = (meta->count << 4);
-            packet->sheLoadKeyReq.messageTwo[3] |= 0x08;
-            /* encrypt the new counter */
-            ret = wc_AesEncryptDirect(crypto.aes,
-                packet->sheLoadKeyRes.messageFour + WOLFHSM_SHE_KEY_SZ,
-                packet->sheLoadKeyReq.messageTwo);
-        }
-        /* free aes for protection */
-        wc_AesFree(crypto.aes);
-        /* generate K4 using the updated key */
-        if (ret == 0) {
-            /* set our UID, ID and AUTHID are already set from messageOne */
-            XMEMCPY(packet->sheLoadKeyRes.messageFour, WOLFHSM_SHE_UID,
-                WOLFHSM_SHE_UID_SZ);
-            /* add WOLFHSM_SHE_KEY_UPDATE_MAC_C to the input */
-            XMEMCPY(kdfInput + meta->len, WOLFHSM_SHE_KEY_UPDATE_MAC_C,
-                sizeof(WOLFHSM_SHE_KEY_UPDATE_MAC_C));
-            /* reset M0 */
-            XMEMSET(messageZero, 0, AES_BLOCK_SIZE);
-            /* do kdf */
-            ret = wh_AesMp16(ctx, kdfInput,
-                meta->len + sizeof(WOLFHSM_SHE_KEY_UPDATE_MAC_C), messageZero,
-                tmpKey);
-        }
-        /* cmac messageFour using K4 as the cmac key */
-        if (ret == 0) {
-            ret = wc_InitCmac_ex(sheCmac, tmpKey, WOLFHSM_SHE_KEY_SZ,
-                WC_CMAC_AES, NULL, ctx->heap, ctx->devId);
-        }
-        /* hash M4, store in M5 */
-        if (ret == 0) {
-            ret = wc_CmacUpdate(sheCmac, packet->sheLoadKeyRes.messageFour,
-                sizeof(packet->sheLoadKeyRes.messageFour));
-        }
-        /* write M5 */
-        if (ret == 0) {
-            field = AES_BLOCK_SIZE;
-            ret = wc_CmacFinal(sheCmac, packet->sheLoadKeyRes.messageFive,
-                &field);
-        }
-        if (ret == 0) {
-            /* set subType */
-            packet->subType = WOLFHSM_SHE_LOAD_KEY;
-            /* set len */
-            packet->len = sizeof(packet->sheLoadKeyRes);
-            /* set ERC_NO_ERROR */
-            packet->sheSecureBootFinishRes.status = WOLFHSM_SHE_ERC_NO_ERROR;
-        }
-        break;
-    case WOLFHSM_SHE_EXPORT_RAM_KEY:
-        /* check if ram key was loaded by CMD_LOAD_PLAIN_KEY */
-        if (hsmSheRamKeyPlain == 0)
-            return WOLFHSM_SHE_ERC_KEY_INVALID;
-        /* read the auth key by AuthID */
-        meta->id = WOLFHSM_SHE_TRANSLATE_KEY_ID(WOLFHSM_SHE_SECRET_KEY_ID);
-        meta->len = WOLFHSM_SHE_KEY_SZ;
-        ret = hsmReadKey(ctx, meta, kdfInput);
-        if (ret == 0) {
-            /* set UID, key id and authId */
-            XMEMCPY(packet->sheExportRamKeyRes.messageOne, WOLFHSM_SHE_UID,
-                WOLFHSM_SHE_UID_SZ);
-            packet->sheExportRamKeyRes.messageOne[15] =
-                ((WOLFHSM_SHE_RAM_KEY_ID << 4) | (WOLFHSM_SHE_SECRET_KEY_ID));
-            /* add WOLFHSM_SHE_KEY_UPDATE_ENC_C to the input */
-            XMEMCPY(kdfInput + meta->len, WOLFHSM_SHE_KEY_UPDATE_ENC_C,
-                sizeof(WOLFHSM_SHE_KEY_UPDATE_ENC_C));
-            /* reset M0 */
-            XMEMSET(messageZero, 0, AES_BLOCK_SIZE);
-            /* generate K1 */
-            ret = wh_AesMp16(ctx, kdfInput,
-                meta->len + sizeof(WOLFHSM_SHE_KEY_UPDATE_ENC_C), messageZero,
-                tmpKey);
-        }
-        /* build cleartext M2 */
-        if (ret == 0) {
-            /* set the counter, flags and ram key */
-            XMEMSET(packet->sheExportRamKeyRes.messageTwo, 0,
-                sizeof(packet->sheExportRamKeyRes.messageTwo));
-            /* set count to 1 */
-            *((uint32_t*)packet->sheExportRamKeyRes.messageTwo) = (htonl(1) << 4);
-            meta->id = WOLFHSM_SHE_TRANSLATE_KEY_ID(WOLFHSM_SHE_RAM_KEY_ID);
-            meta->len = WOLFHSM_SHE_KEY_SZ;
-            ret = hsmReadKey(ctx, meta,
-                packet->sheExportRamKeyRes.messageTwo + WOLFHSM_SHE_KEY_SZ);
-        }
-        /* encrypt M2 with K1 */
-        if (ret == 0)
-            ret = wc_AesInit(crypto.aes, ctx->heap, ctx->devId);
-        if (ret == 0) {
-            ret = wc_AesSetKey(crypto.aes, tmpKey, WOLFHSM_SHE_KEY_SZ, NULL,
-                AES_ENCRYPTION);
-        }
-        if (ret == 0) {
-            /* copy the ram key to cmacOutput before it gets encrypted */
-            XMEMCPY(cmacOutput,
-                packet->sheExportRamKeyRes.messageTwo + WOLFHSM_SHE_KEY_SZ,
-                WOLFHSM_SHE_KEY_SZ);
-            ret = wc_AesCbcEncrypt(crypto.aes,
-                packet->sheExportRamKeyRes.messageTwo,
-                packet->sheExportRamKeyRes.messageTwo,
-                sizeof(packet->sheExportRamKeyRes.messageTwo));
-        }
-        /* free aes for protection */
-        wc_AesFree(crypto.aes);
-        if (ret == 0) {
-            /* add WOLFHSM_SHE_KEY_UPDATE_MAC_C to the input */
-            XMEMCPY(kdfInput + meta->len, WOLFHSM_SHE_KEY_UPDATE_MAC_C,
-                sizeof(WOLFHSM_SHE_KEY_UPDATE_MAC_C));
-            /* reset M0 */
-            XMEMSET(messageZero, 0, AES_BLOCK_SIZE);
-            /* generate K2 */
-            ret = wh_AesMp16(ctx, kdfInput,
-                meta->len + sizeof(WOLFHSM_SHE_KEY_UPDATE_MAC_C), messageZero,
-                tmpKey);
-        }
-        if (ret == 0) {
-            /* cmac messageOne and messageTwo using K2 as the cmac key */
-            ret = wc_InitCmac_ex(sheCmac, tmpKey, WOLFHSM_SHE_KEY_SZ,
-                WC_CMAC_AES, NULL, ctx->heap, ctx->devId);
-        }
-        /* hash M1 | M2 in one call */
-        if (ret == 0) {
-            ret = wc_CmacUpdate(sheCmac,
-                (uint8_t*)&packet->sheExportRamKeyRes,
-                sizeof(packet->sheExportRamKeyRes.messageOne) +
-                sizeof(packet->sheExportRamKeyRes.messageTwo));
-        }
-        /* get the digest */
-        if (ret == 0) {
-            field = AES_BLOCK_SIZE;
-            ret = wc_CmacFinal(sheCmac,
-                packet->sheExportRamKeyRes.messageThree, &field);
-        }
-        if (ret == 0) {
-            /* copy the ram key to kdfInput */
-            XMEMCPY(kdfInput, cmacOutput, WOLFHSM_SHE_KEY_SZ);
-            /* add WOLFHSM_SHE_KEY_UPDATE_ENC_C to the input */
-            XMEMCPY(kdfInput + WOLFHSM_SHE_KEY_SZ, WOLFHSM_SHE_KEY_UPDATE_ENC_C,
-                sizeof(WOLFHSM_SHE_KEY_UPDATE_ENC_C));
-            /* reset M0 */
-            XMEMSET(messageZero, 0, AES_BLOCK_SIZE);
-            /* generate K3 */
-            ret = wh_AesMp16(ctx, kdfInput,
-                WOLFHSM_SHE_KEY_SZ + sizeof(WOLFHSM_SHE_KEY_UPDATE_ENC_C),
-                messageZero, tmpKey);
-        }
-        /* set K3 as encryption key */
-        if (ret == 0)
-            ret = wc_AesInit(crypto.aes, ctx->heap, ctx->devId);
-        if (ret == 0) {
-            ret = wc_AesSetKey(crypto.aes, tmpKey, WOLFHSM_SHE_KEY_SZ, NULL,
-                AES_ENCRYPTION);
-        }
-        if (ret == 0) {
-            XMEMSET(packet->sheExportRamKeyRes.messageFour, 0,
-                sizeof(packet->sheExportRamKeyRes.messageFour));
-            /* set counter to 1, pad with 1 bit */
-            *((uint32_t*)(packet->sheExportRamKeyRes.messageFour +
-                WOLFHSM_SHE_KEY_SZ)) = (htonl(1) << 4);
-            packet->sheExportRamKeyRes.messageFour[WOLFHSM_SHE_KEY_SZ + 3] |=
-                0x08;
-            /* encrypt the new counter */
-            ret = wc_AesEncryptDirect(crypto.aes,
-                packet->sheExportRamKeyRes.messageFour + WOLFHSM_SHE_KEY_SZ,
-                packet->sheExportRamKeyRes.messageFour + WOLFHSM_SHE_KEY_SZ);
-        }
-        /* free aes for protection */
-        wc_AesFree(crypto.aes);
-        if (ret == 0) {
-            /* set UID, key id and authId */
-            XMEMCPY(packet->sheExportRamKeyRes.messageFour, WOLFHSM_SHE_UID,
-                WOLFHSM_SHE_UID_SZ);
-            packet->sheExportRamKeyRes.messageFour[15] =
-                ((WOLFHSM_SHE_RAM_KEY_ID << 4) | (WOLFHSM_SHE_SECRET_KEY_ID));
-            /* add WOLFHSM_SHE_KEY_UPDATE_MAC_C to the input */
-            XMEMCPY(kdfInput + WOLFHSM_SHE_KEY_SZ, WOLFHSM_SHE_KEY_UPDATE_MAC_C,
-                sizeof(WOLFHSM_SHE_KEY_UPDATE_MAC_C));
-            /* reset M0 */
-            XMEMSET(messageZero, 0, AES_BLOCK_SIZE);
-            /* generate K4 */
-            ret = wh_AesMp16(ctx, kdfInput,
-                WOLFHSM_SHE_KEY_SZ + sizeof(WOLFHSM_SHE_KEY_UPDATE_MAC_C),
-                messageZero, tmpKey);
-        }
-        /* cmac messageFour using K4 as the cmac key */
-        if (ret == 0) {
-            ret = wc_InitCmac_ex(sheCmac, tmpKey, WOLFHSM_SHE_KEY_SZ,
-                WC_CMAC_AES, NULL, ctx->heap, ctx->devId);
-        }
-        /* hash M4, store in M5 */
-        if (ret == 0) {
-            ret = wc_CmacUpdate(sheCmac,
-                packet->sheExportRamKeyRes.messageFour,
-                sizeof(packet->sheExportRamKeyRes.messageFour));
-        }
-        /* write M5 */
-        if (ret == 0) {
-            field = AES_BLOCK_SIZE;
-            ret = wc_CmacFinal(sheCmac,
-                packet->sheExportRamKeyRes.messageFive, &field);
-        }
-        if (ret == 0) {
-            /* set subType */
-            packet->subType = WOLFHSM_SHE_EXPORT_RAM_KEY;
-            /* set len */
-            packet->len = sizeof(packet->sheExportRamKeyRes);
-            /* set ERC_NO_ERROR */
-            packet->sheSecureBootFinishRes.status = WOLFHSM_SHE_ERC_NO_ERROR;
-        }
-        break;
-    case WOLFHSM_SHE_INIT_RNG:
-        /* check that init hasn't already been called since startup */
-        if (hsmSheInitRng == 1)
-            return WOLFHSM_SHE_ERC_SEQUENCE_ERROR;
-        /* read secret key */
-        meta->id = WOLFHSM_SHE_TRANSLATE_KEY_ID(WOLFHSM_SHE_SECRET_KEY_ID);
-        meta->len = WOLFHSM_SHE_KEY_SZ;
-        ret = hsmReadKey(ctx, meta, kdfInput);
-        if (ret == 0) {
-            /* add PRNG_SEED_KEY_C */
-            XMEMCPY(kdfInput + WOLFHSM_SHE_KEY_SZ, WOLFHSM_SHE_PRNG_SEED_KEY_C,
-                sizeof(WOLFHSM_SHE_PRNG_SEED_KEY_C));
-            /* set M0 to all zeros */
-            XMEMSET(messageZero, 0, AES_BLOCK_SIZE);
-            /* generate PRNG_SEED_KEY */
-            ret = wh_AesMp16(ctx, kdfInput,
-                WOLFHSM_SHE_KEY_SZ + sizeof(WOLFHSM_SHE_PRNG_SEED_KEY_C),
-                messageZero, tmpKey);
-        }
-        /* read the current PRNG_SEED, i - 1, to cmacOutput */
-        if (ret == 0) {
-            meta->id = WOLFHSM_SHE_TRANSLATE_KEY_ID(WOLFHSM_SHE_PRNG_SEED_ID);
-            meta->len = WOLFHSM_SHE_KEY_SZ;
-            ret = hsmReadKey(ctx, meta, cmacOutput);
-        }
-        /* set up aes */
-        if (ret == 0)
-            ret = wc_AesInit(crypto.aes, ctx->heap, ctx->devId);
-        if (ret == 0) {
-            ret = wc_AesSetKey(crypto.aes, tmpKey, WOLFHSM_SHE_KEY_SZ, NULL,
-                AES_ENCRYPTION);
-        }
-        /* encrypt to the PRNG_SEED, i */
-        if (ret == 0) {
-            ret = wc_AesCbcEncrypt(crypto.aes, cmacOutput, cmacOutput,
-                WOLFHSM_SHE_KEY_SZ);
-        }
-        /* free aes for protection */
-        wc_AesFree(crypto.aes);
-        /* save PRNG_SEED, i */
-        if (ret == 0) {
-            meta->id = WOLFHSM_SHE_TRANSLATE_KEY_ID(WOLFHSM_SHE_PRNG_SEED_ID);
-            meta->len = WOLFHSM_SHE_KEY_SZ;
-            ret = hsmSheOverwriteKey(ctx, meta, cmacOutput);
-        }
-        if (ret == 0) {
-            /* set PRNG_STATE */
-            XMEMCPY(hsmShePrngState, cmacOutput, WOLFHSM_SHE_KEY_SZ);
-            /* add PRNG_KEY_C to the kdf input */
-            XMEMCPY(kdfInput + WOLFHSM_SHE_KEY_SZ, WOLFHSM_SHE_PRNG_KEY_C,
-                sizeof(WOLFHSM_SHE_PRNG_KEY_C));
-            /* reset M0 */
-            XMEMSET(messageZero, 0, AES_BLOCK_SIZE);
-            /* generate PRNG_KEY */
-            ret = wh_AesMp16(ctx, kdfInput,
-                WOLFHSM_SHE_KEY_SZ + sizeof(WOLFHSM_SHE_PRNG_KEY_C),
-                messageZero, WOLFHSM_SHE_PRNG_KEY);
-        }
-        if (ret == 0) {
-            /* set init rng to 1 */
-            hsmSheInitRng = 1;
-            /* set subType */
-            packet->subType = WOLFHSM_SHE_INIT_RNG;
-            /* set len */
-            packet->len = sizeof(packet->sheInitRngRes);
-            /* set ERC_NO_ERROR */
-            packet->sheInitRngRes.status = WOLFHSM_SHE_ERC_NO_ERROR;
-        }
-        break;
-    case WOLFHSM_SHE_RND:
-        /* check that rng has been inited */
-        if (hsmSheInitRng == 0)
-            return WOLFHSM_SHE_ERC_RNG_SEED;
-        /* set up aes */
-        if (ret == 0)
-            ret = wc_AesInit(crypto.aes, ctx->heap, ctx->devId);
-        /* use PRNG_KEY as the encryption key */
-        if (ret == 0) {
-            ret = wc_AesSetKey(crypto.aes, WOLFHSM_SHE_PRNG_KEY, WOLFHSM_SHE_KEY_SZ,
-                NULL, AES_ENCRYPTION);
-        }
-        /* encrypt the PRNG_STATE, i - 1 to i */
-        if (ret == 0) {
-            ret = wc_AesCbcEncrypt(crypto.aes, hsmShePrngState, hsmShePrngState,
-                WOLFHSM_SHE_KEY_SZ);
-        }
-        /* free aes for protection */
-        wc_AesFree(crypto.aes);
-        if (ret == 0) {
-            /* set subType */
-            packet->subType = WOLFHSM_SHE_RND;
-            /* set len */
-            packet->len = sizeof(packet->sheRndRes);
-            /* copy PRNG_STATE */
-            XMEMCPY(packet->sheRndRes.rnd, hsmShePrngState, WOLFHSM_SHE_KEY_SZ);
-        }
-        break;
-    case WOLFHSM_SHE_EXTEND_SEED:
-        /* check that rng has been inited */
-        if (hsmSheInitRng == 0)
-            return WOLFHSM_SHE_ERC_RNG_SEED;
-        if (ret == 0) {
-            /* set kdfInput to PRNG_STATE */
-            XMEMCPY(kdfInput, hsmShePrngState, WOLFHSM_SHE_KEY_SZ);
-            /* add the user supplied entropy to kdfInput */
-            XMEMCPY(kdfInput + WOLFHSM_SHE_KEY_SZ,
-                packet->sheExtendSeedReq.entropy,
-                sizeof(packet->sheExtendSeedReq.entropy));
-            /* set M0 to all zeros */
-            XMEMSET(messageZero, 0, AES_BLOCK_SIZE);
-            /* extend PRNG_STATE */
-            ret = wh_AesMp16(ctx, kdfInput,
-                WOLFHSM_SHE_KEY_SZ + sizeof(packet->sheExtendSeedReq.entropy),
-                messageZero, hsmShePrngState);
-        }
-        /* read the PRNG_SEED into kdfInput */
-        if (ret == 0) {
-            meta->id = WOLFHSM_SHE_TRANSLATE_KEY_ID(WOLFHSM_SHE_PRNG_SEED_ID);
-            meta->len = WOLFHSM_SHE_KEY_SZ;
-            ret = hsmReadKey(ctx, meta, kdfInput);
-        }
-        if (ret == 0) {
-            /* reset M0 */
-            XMEMSET(messageZero, 0, AES_BLOCK_SIZE);
-            /* extend PRNG_STATE */
-            ret = wh_AesMp16(ctx, kdfInput,
-                WOLFHSM_SHE_KEY_SZ + sizeof(packet->sheExtendSeedReq.entropy),
-                messageZero, kdfInput);
-        }
-        /* save PRNG_SEED */
-        if (ret == 0) {
-            meta->id = WOLFHSM_SHE_TRANSLATE_KEY_ID(WOLFHSM_SHE_PRNG_SEED_ID);
-            meta->len = WOLFHSM_SHE_KEY_SZ;
-            ret = hsmSheOverwriteKey(ctx, meta, kdfInput);
-        }
-        if (ret == 0) {
-            /* set subType */
-            packet->subType = WOLFHSM_SHE_RND;
-            /* set len */
-            packet->len = sizeof(packet->sheExtendSeedRes);
-            /* set ERC_NO_ERROR */
-            packet->sheExtendSeedRes.status = WOLFHSM_SHE_ERC_NO_ERROR;
-        }
-        break;
-    default:
-        ret = BAD_FUNC_ARG;
-        break;
-    }
-    /* set type here in case packet was overwritten */
-    packet->type = WOLFHSM_SHE;
-    /* reset our SHE state */
-    /* TODO is it safe to call wc_InitCmac over and over or do we need to call final first? */
-    if (ret != 0 && ret != WOLFHSM_SHE_ERC_NO_SECURE_BOOT) {
-        hsmSheSbState = WOLFHSM_SHE_SB_INIT;
-        hsmSheBlSize = 0;
-        hsmSheBlSizeReceived = 0;
-        hsmSheCmacKeyFound = 0;
+    if (server->she->uidSet == 1)
+        ret = WH_SHE_ERC_SEQUENCE_ERROR;
+    if (ret == 0) {
+        XMEMCPY(server->she->uid, packet->sheSetUidReq.uid,
+            sizeof(packet->sheSetUidReq.uid));
+        server->she->uidSet = 1;
     }
     return ret;
 }
-#endif
+
+static int hsmSheSecureBootInit(whServerContext* server, whPacket* packet,
+    uint16_t* size)
+{
+    int ret = 0;
+    uint32_t keySz;
+    uint8_t macKey[WOLFHSM_SHE_KEY_SZ];
+    /* if we aren't looking for init return error */
+    if (server->she->sbState != WOLFHSM_SHE_SB_INIT)
+        ret = WH_SHE_ERC_SEQUENCE_ERROR;
+    if (ret == 0) {
+        /* set the expected size */
+        server->she->blSize = packet->sheSecureBootInitReq.sz;
+        /* check if the boot mac key is empty */
+        keySz = sizeof(macKey);
+        ret = hsmReadKey(server, MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_SHE,
+            server->comm->client_id, WOLFHSM_SHE_BOOT_MAC_KEY_ID), NULL,
+            macKey, &keySz);
+        /* if the key wasn't found */
+        if (ret != 0) {
+            /* return ERC_NO_SECURE_BOOT */
+            ret = WH_SHE_ERC_NO_SECURE_BOOT;
+            /* skip SB process since we have no key */
+            server->she->sbState = WOLFHSM_SHE_SB_SUCCESS;
+            server->she->cmacKeyFound = 0;
+        }
+        else
+            server->she->cmacKeyFound = 1;
+    }
+    /* init the cmac, use const length since the nvm key holds both key and
+     * expected digest so meta->len will be too long */
+    if (ret == 0) {
+        ret = wc_InitCmac_ex(sheCmac, macKey, WOLFHSM_SHE_KEY_SZ,
+            WC_CMAC_AES, NULL, NULL, server->crypto->devId);
+    }
+    /* hash 12 zeros */
+    if (ret == 0) {
+        XMEMSET(macKey, 0, WOLFHSM_SHE_BOOT_MAC_PREFIX_LEN);
+        ret = wc_CmacUpdate(sheCmac, macKey, WOLFHSM_SHE_BOOT_MAC_PREFIX_LEN);
+    }
+    /* TODO is size big or little endian? spec says it is 32 bit */
+    /* hash size */
+    if (ret == 0) {
+        ret = wc_CmacUpdate(sheCmac, (uint8_t*)&server->she->blSize,
+            sizeof(server->she->blSize));
+    }
+    if (ret == 0) {
+        /* advance to the next state */
+        server->she->sbState = WOLFHSM_SHE_SB_UPDATE;
+        /* set ERC_NO_ERROR */
+        packet->sheSecureBootInitRes.status = WOLFHSM_SHE_ERC_NO_ERROR;
+        *size = WOLFHSM_PACKET_STUB_SIZE +
+            sizeof(packet->sheSecureBootInitRes);
+    }
+    return ret;
+}
+
+static int hsmSheSecureBootUpdate(whServerContext* server, whPacket* packet,
+    uint16_t* size)
+{
+    int ret = 0;
+    uint8_t* in;
+    /* if we aren't looking for update return error */
+    if (server->she->sbState != WOLFHSM_SHE_SB_UPDATE)
+        ret = WH_SHE_ERC_SEQUENCE_ERROR;
+    if (ret == 0) {
+        /* the bootloader chunk is after the fixed fields */
+        in = (uint8_t*)(&packet->sheSecureBootUpdateReq + 1);
+        /* increment blSizeReceived */
+        server->she->blSizeReceived += packet->sheSecureBootUpdateReq.sz;
+        /* check that we didn't exceed the expected bootloader size */
+        if (server->she->blSizeReceived > server->she->blSize)
+            ret = WH_SHE_ERC_SEQUENCE_ERROR;
+    }
+    /* update with the new input */
+    if (ret == 0)
+        ret = wc_CmacUpdate(sheCmac, in, packet->sheSecureBootUpdateReq.sz);
+    if (ret == 0) {
+        /* advance to the next state if we've cmaced the entire image */
+        if (server->she->blSizeReceived == server->she->blSize)
+            server->she->sbState = WOLFHSM_SHE_SB_FINISH;
+        /* set ERC_NO_ERROR */
+        packet->sheSecureBootUpdateRes.status = WOLFHSM_SHE_ERC_NO_ERROR;
+        *size = WOLFHSM_PACKET_STUB_SIZE +
+            sizeof(packet->sheSecureBootUpdateRes);
+    }
+    return ret;
+}
+
+static int hsmSheSecureBootFinish(whServerContext* server, whPacket* packet,
+    uint16_t* size)
+{
+    int ret = 0;
+    uint32_t keySz;
+    uint32_t field;
+    uint8_t cmacOutput[AES_BLOCK_SIZE];
+    uint8_t macDigest[WOLFHSM_SHE_KEY_SZ];
+    /* if we aren't looking for finish return error */
+    if (server->she->sbState != WOLFHSM_SHE_SB_FINISH)
+        ret = WH_SHE_ERC_SEQUENCE_ERROR;
+    /* call final */
+    if (ret == 0) {
+        field = AES_BLOCK_SIZE;
+        ret = wc_CmacFinal(sheCmac, cmacOutput, &field);
+    }
+    /* load the cmac to check */
+    if (ret == 0) {
+        keySz = sizeof(macDigest);
+        ret = hsmReadKey(server, MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_SHE,
+            server->comm->client_id, WOLFHSM_SHE_BOOT_MAC), NULL, macDigest,
+            &keySz);
+        if (ret != 0)
+            ret = WH_SHE_ERC_KEY_NOT_AVAILABLE;
+    }
+    if (ret == 0) {
+        /* compare and set either success or failure */
+        ret = XMEMCMP(cmacOutput, macDigest, field);
+        if (ret == 0) {
+            server->she->sbState = WOLFHSM_SHE_SB_SUCCESS;
+            packet->sheSecureBootFinishRes.status = WOLFHSM_SHE_ERC_NO_ERROR;
+            *size = WOLFHSM_PACKET_STUB_SIZE +
+                sizeof(packet->sheSecureBootFinishRes);
+        }
+        else {
+            server->she->sbState = WOLFHSM_SHE_SB_FAILURE;
+            ret = WH_SHE_ERC_GENERAL_ERROR;
+        }
+    }
+    return ret;
+}
+
+static int hsmSheGetStatus(whServerContext* server, whPacket* packet,
+    uint16_t* size)
+{
+    /* TODO do we care about all the sreg fields? */
+    packet->sheGetStatusRes.sreg = 0;
+    /* SECURE_BOOT */
+    if (server->she->cmacKeyFound)
+        packet->sheGetStatusRes.sreg |= WOLFHSM_SHE_SREG_SECURE_BOOT;
+    /* BOOT_FINISHED */
+    if (server->she->sbState == WOLFHSM_SHE_SB_SUCCESS ||
+        server->she->sbState == WOLFHSM_SHE_SB_FAILURE) {
+        packet->sheGetStatusRes.sreg |= WOLFHSM_SHE_SREG_BOOT_FINISHED;
+    }
+    /* BOOT_OK */
+    if (server->she->sbState == WOLFHSM_SHE_SB_SUCCESS)
+        packet->sheGetStatusRes.sreg |= WOLFHSM_SHE_SREG_BOOT_OK;
+    /* RND_INIT */
+    if (server->she->rndInited == 1)
+        packet->sheGetStatusRes.sreg |= WOLFHSM_SHE_SREG_RND_INIT;
+    *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->sheGetStatusRes);
+    return 0;
+}
+
+static int hsmSheLoadKey(whServerContext* server, whPacket* packet,
+    uint16_t* size)
+{
+    int ret;
+    int keyRet = 0;
+    uint32_t keySz;
+    uint32_t field;
+    uint8_t kdfInput[WOLFHSM_SHE_KEY_SZ * 2];
+    uint8_t cmacOutput[AES_BLOCK_SIZE];
+    uint8_t tmpKey[WOLFHSM_SHE_KEY_SZ];
+    whNvmMetadata meta[1];
+    /* read the auth key by AuthID */
+    keySz = sizeof(kdfInput);
+    ret = hsmReadKey(server, MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_SHE,
+        server->comm->client_id,
+        hsmShePopAuthId(packet->sheLoadKeyReq.messageOne)), NULL, kdfInput,
+        &keySz);
+    /* make K2 using AES-MP(authKey | WOLFHSM_SHE_KEY_UPDATE_MAC_C) */
+    if (ret == 0) {
+        /* add WOLFHSM_SHE_KEY_UPDATE_MAC_C to the input */
+        XMEMCPY(kdfInput + keySz, WOLFHSM_SHE_KEY_UPDATE_MAC_C,
+            sizeof(WOLFHSM_SHE_KEY_UPDATE_MAC_C));
+        /* do kdf */
+        ret = wh_AesMp16(server, kdfInput,
+            keySz + sizeof(WOLFHSM_SHE_KEY_UPDATE_MAC_C), tmpKey);
+    }
+    else
+        ret = WH_SHE_ERC_KEY_NOT_AVAILABLE;
+    /* cmac messageOne and messageTwo using K2 as the cmac key */
+    if (ret == 0) {
+        field = AES_BLOCK_SIZE;
+        ret = wc_AesCmacGenerate_ex(sheCmac, cmacOutput, &field,
+            (uint8_t*)&packet->sheLoadKeyReq,
+            sizeof(packet->sheLoadKeyReq.messageOne) +
+            sizeof(packet->sheLoadKeyReq.messageTwo), tmpKey,
+            WOLFHSM_SHE_KEY_SZ, NULL, server->crypto->devId);
+    }
+    /* compare digest to M3 */
+    if (ret == 0 && XMEMCMP(packet->sheLoadKeyReq.messageThree,
+        cmacOutput, field) != 0) {
+        ret = WH_SHE_ERC_KEY_UPDATE_ERROR;
+    }
+    /* make K1 using AES-MP(authKey | WOLFHSM_SHE_KEY_UPDATE_ENC_C) */
+    if (ret == 0) {
+        /* add WOLFHSM_SHE_KEY_UPDATE_ENC_C to the input */
+        XMEMCPY(kdfInput + keySz, WOLFHSM_SHE_KEY_UPDATE_ENC_C,
+            sizeof(WOLFHSM_SHE_KEY_UPDATE_ENC_C));
+        /* do kdf */
+        ret = wh_AesMp16(server, kdfInput,
+            keySz + sizeof(WOLFHSM_SHE_KEY_UPDATE_ENC_C), tmpKey);
+    }
+    /* decrypt messageTwo */
+    if (ret == 0)
+        ret = wc_AesInit(sheAes, NULL, server->crypto->devId);
+    if (ret == 0) {
+        ret = wc_AesSetKey(sheAes, tmpKey, WOLFHSM_SHE_KEY_SZ,
+            NULL, AES_DECRYPTION);
+    }
+    if (ret == 0) {
+        ret = wc_AesCbcDecrypt(sheAes,
+            packet->sheLoadKeyReq.messageTwo,
+            packet->sheLoadKeyReq.messageTwo,
+            sizeof(packet->sheLoadKeyReq.messageTwo));
+    }
+    /* free aes for protection */
+    wc_AesFree(sheAes);
+    /* load the target key */
+    if (ret == 0) {
+        ret = hsmReadKey(server, MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_SHE,
+            server->comm->client_id,
+            hsmShePopId(packet->sheLoadKeyReq.messageOne)), meta, kdfInput,
+            &keySz);
+        /* if the keyslot is empty or write protection is not on continue */
+        if (ret == WH_ERROR_NOTFOUND ||
+            (((whSheMetadata*)meta->label)->flags &
+            WOLFHSM_SHE_FLAG_WRITE_PROTECT) == 0) {
+            keyRet = ret;
+            ret = 0;
+        }
+        else
+            ret = WH_SHE_ERC_WRITE_PROTECTED;
+    }
+    /* check UID == 0 */
+    if (ret == 0 && XMEMEQZERO(packet->sheLoadKeyReq.messageOne,
+        WOLFHSM_SHE_UID_SZ) == 1) {
+        /* check wildcard */
+        if ((((whSheMetadata*)meta->label)->flags & WOLFHSM_SHE_FLAG_WILDCARD)
+            == 0) {
+            ret = WH_SHE_ERC_KEY_UPDATE_ERROR;
+        }
+    }
+    /* compare to UID */
+    else if (ret == 0 && XMEMCMP(packet->sheLoadKeyReq.messageOne,
+        server->she->uid, sizeof(server->she->uid)) != 0) {
+        ret = WH_SHE_ERC_KEY_UPDATE_ERROR;
+    }
+    /* verify counter is greater than stored value */
+    if (ret == 0 &&
+        keyRet != WH_ERROR_NOTFOUND &&
+        ntohl(*((uint32_t*)packet->sheLoadKeyReq.messageTwo) >> 4) <=
+        ntohl(((whSheMetadata*)meta->label)->count)) {
+        ret = WH_SHE_ERC_KEY_UPDATE_ERROR;
+    }
+    /* write key with counter */
+    if (ret == 0) {
+        meta->id = MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_SHE,
+            server->comm->client_id,
+            hsmShePopId(packet->sheLoadKeyReq.messageOne));
+        ((whSheMetadata*)meta->label)->flags =
+            hsmShePopFlags(packet->sheLoadKeyReq.messageTwo);
+        ((whSheMetadata*)meta->label)->count =
+            (*(uint32_t*)packet->sheLoadKeyReq.messageTwo >> 4);
+        meta->len = WOLFHSM_SHE_KEY_SZ;
+        /* cache if ram key, overwrite otherwise */
+        if ((meta->id & WOLFHSM_KEYID_MASK) == WOLFHSM_SHE_RAM_KEY_ID) {
+            ret = hsmCacheKey(server, meta, packet->sheLoadKeyReq.messageTwo
+                + WOLFHSM_SHE_KEY_SZ);
+        }
+        else {
+            ret = wh_Nvm_AddObject(server->nvm, meta, meta->len,
+                packet->sheLoadKeyReq.messageTwo + WOLFHSM_SHE_KEY_SZ);
+            /* read the evicted back from nvm */
+            if (ret == 0) {
+                keySz = WOLFHSM_SHE_KEY_SZ;
+                ret = hsmReadKey(server, meta->id, meta,
+                    packet->sheLoadKeyReq.messageTwo + WOLFHSM_SHE_KEY_SZ,
+                    &keySz);
+            }
+        }
+        if (ret != 0)
+            ret = WH_SHE_ERC_KEY_UPDATE_ERROR;
+    }
+    /* generate K3 using the updated key */
+    if (ret == 0) {
+        /* copy new key to kdfInput */
+        XMEMCPY(kdfInput, packet->sheLoadKeyReq.messageTwo +
+            WOLFHSM_SHE_KEY_SZ, WOLFHSM_SHE_KEY_SZ);
+        /* add WOLFHSM_SHE_KEY_UPDATE_ENC_C to the input */
+        XMEMCPY(kdfInput + meta->len, WOLFHSM_SHE_KEY_UPDATE_ENC_C,
+            sizeof(WOLFHSM_SHE_KEY_UPDATE_ENC_C));
+        /* do kdf */
+        ret = wh_AesMp16(server, kdfInput,
+            meta->len + sizeof(WOLFHSM_SHE_KEY_UPDATE_ENC_C), tmpKey);
+    }
+    if (ret == 0)
+        ret = wc_AesInit(sheAes, NULL, server->crypto->devId);
+    if (ret == 0) {
+        ret = wc_AesSetKey(sheAes, tmpKey, WOLFHSM_SHE_KEY_SZ,
+            NULL, AES_ENCRYPTION);
+    }
+    if (ret == 0) {
+        /* reset messageTwo with the nvm read counter, pad with a 1 bit */
+        *(uint32_t*)packet->sheLoadKeyReq.messageTwo =
+            (((whSheMetadata*)meta->label)->count << 4);
+        packet->sheLoadKeyReq.messageTwo[3] |= 0x08;
+        /* encrypt the new counter */
+        ret = wc_AesEncryptDirect(sheAes,
+            packet->sheLoadKeyRes.messageFour + WOLFHSM_SHE_KEY_SZ,
+            packet->sheLoadKeyReq.messageTwo);
+    }
+    /* free aes for protection */
+    wc_AesFree(sheAes);
+    /* generate K4 using the updated key */
+    if (ret == 0) {
+        /* set our UID, ID and AUTHID are already set from messageOne */
+        XMEMCPY(packet->sheLoadKeyRes.messageFour, server->she->uid,
+            sizeof(server->she->uid));
+        /* add WOLFHSM_SHE_KEY_UPDATE_MAC_C to the input */
+        XMEMCPY(kdfInput + meta->len, WOLFHSM_SHE_KEY_UPDATE_MAC_C,
+            sizeof(WOLFHSM_SHE_KEY_UPDATE_MAC_C));
+        /* do kdf */
+        ret = wh_AesMp16(server, kdfInput,
+            meta->len + sizeof(WOLFHSM_SHE_KEY_UPDATE_MAC_C), tmpKey);
+    }
+    /* cmac messageFour using K4 as the cmac key */
+    if (ret == 0) {
+        field = AES_BLOCK_SIZE;
+        ret = wc_AesCmacGenerate_ex(sheCmac, packet->sheLoadKeyRes.messageFive,
+            &field, packet->sheLoadKeyRes.messageFour,
+            sizeof(packet->sheLoadKeyRes.messageFour), tmpKey,
+            WOLFHSM_SHE_KEY_SZ, NULL, server->crypto->devId);
+    }
+    if (ret == 0) {
+        *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->sheLoadKeyRes);
+        /* mark if the ram key was loaded */
+        if ((meta->id & WOLFHSM_KEYID_MASK) == WOLFHSM_SHE_RAM_KEY_ID)
+            server->she->ramKeyPlain = 1;
+    }
+    return ret;
+}
+
+static int hsmSheLoadPlainKey(whServerContext* server, whPacket* packet,
+    uint16_t* size)
+{
+    int ret = 0;
+    whNvmMetadata meta[1] = {0};
+    meta->id = MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_SHE,
+        server->comm->client_id, WOLFHSM_SHE_RAM_KEY_ID);
+    meta->len = WOLFHSM_SHE_KEY_SZ;
+    /* cache if ram key, overwrite otherwise */
+    ret = hsmCacheKey(server, meta, packet->sheLoadPlainKeyReq.key);
+    if (ret == 0) {
+        *size = WOLFHSM_PACKET_STUB_SIZE;
+        server->she->ramKeyPlain = 1;
+    }
+    return ret;
+}
+
+static int hsmSheExportRamKey(whServerContext* server, whPacket* packet,
+    uint16_t* size)
+{
+    int ret = 0;
+    uint32_t keySz;
+    uint32_t field;
+    uint8_t kdfInput[WOLFHSM_SHE_KEY_SZ * 2];
+    uint8_t cmacOutput[AES_BLOCK_SIZE];
+    uint8_t tmpKey[WOLFHSM_SHE_KEY_SZ];
+    whNvmMetadata meta[1];
+    /* check if ram key was loaded by CMD_LOAD_PLAIN_KEY */
+    if (server->she->ramKeyPlain == 0)
+        ret = WH_SHE_ERC_KEY_INVALID;
+    /* read the auth key by AuthID */
+    if (ret == 0) {
+        keySz = WOLFHSM_SHE_KEY_SZ;
+        ret = hsmReadKey(server, MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_SHE,
+            server->comm->client_id, WOLFHSM_SHE_SECRET_KEY_ID), meta,
+            kdfInput, &keySz);
+        if (ret != 0)
+            ret = WH_SHE_ERC_KEY_NOT_AVAILABLE;
+    }
+    if (ret == 0) {
+        /* set UID, key id and authId */
+        XMEMCPY(packet->sheExportRamKeyRes.messageOne, server->she->uid,
+            sizeof(server->she->uid));
+        packet->sheExportRamKeyRes.messageOne[15] =
+            ((WOLFHSM_SHE_RAM_KEY_ID << 4) | (WOLFHSM_SHE_SECRET_KEY_ID));
+        /* add WOLFHSM_SHE_KEY_UPDATE_ENC_C to the input */
+        XMEMCPY(kdfInput + meta->len, WOLFHSM_SHE_KEY_UPDATE_ENC_C,
+            sizeof(WOLFHSM_SHE_KEY_UPDATE_ENC_C));
+        /* generate K1 */
+        ret = wh_AesMp16(server, kdfInput,
+            meta->len + sizeof(WOLFHSM_SHE_KEY_UPDATE_ENC_C), tmpKey);
+    }
+    /* build cleartext M2 */
+    if (ret == 0) {
+        /* set the counter, flags and ram key */
+        XMEMSET(packet->sheExportRamKeyRes.messageTwo, 0,
+            sizeof(packet->sheExportRamKeyRes.messageTwo));
+        /* set count to 1 */
+        *((uint32_t*)packet->sheExportRamKeyRes.messageTwo) =
+            (htonl(1) << 4);
+        keySz = WOLFHSM_SHE_KEY_SZ;
+        ret = hsmReadKey(server, MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_SHE,
+            server->comm->client_id, WOLFHSM_SHE_RAM_KEY_ID), meta,
+            packet->sheExportRamKeyRes.messageTwo + WOLFHSM_SHE_KEY_SZ,
+            &keySz);
+        if (ret != 0)
+            ret = WH_SHE_ERC_KEY_NOT_AVAILABLE;
+    }
+    /* encrypt M2 with K1 */
+    if (ret == 0)
+        ret = wc_AesInit(sheAes, NULL, server->crypto->devId);
+    if (ret == 0) {
+        ret = wc_AesSetKey(sheAes, tmpKey, WOLFHSM_SHE_KEY_SZ, NULL,
+            AES_ENCRYPTION);
+    }
+    if (ret == 0) {
+        /* copy the ram key to cmacOutput before it gets encrypted */
+        XMEMCPY(cmacOutput,
+            packet->sheExportRamKeyRes.messageTwo + WOLFHSM_SHE_KEY_SZ,
+            WOLFHSM_SHE_KEY_SZ);
+        ret = wc_AesCbcEncrypt(sheAes,
+            packet->sheExportRamKeyRes.messageTwo,
+            packet->sheExportRamKeyRes.messageTwo,
+            sizeof(packet->sheExportRamKeyRes.messageTwo));
+    }
+    /* free aes for protection */
+    wc_AesFree(sheAes);
+    if (ret == 0) {
+        /* add WOLFHSM_SHE_KEY_UPDATE_MAC_C to the input */
+        XMEMCPY(kdfInput + meta->len, WOLFHSM_SHE_KEY_UPDATE_MAC_C,
+            sizeof(WOLFHSM_SHE_KEY_UPDATE_MAC_C));
+        /* generate K2 */
+        ret = wh_AesMp16(server, kdfInput,
+            meta->len + sizeof(WOLFHSM_SHE_KEY_UPDATE_MAC_C), tmpKey);
+    }
+    /* cmac messageOne and messageTwo using K2 as the cmac key */
+    if (ret == 0) {
+        field = AES_BLOCK_SIZE;
+        ret = wc_AesCmacGenerate_ex(sheCmac,
+            packet->sheExportRamKeyRes.messageThree, &field,
+            (uint8_t*)&packet->sheExportRamKeyRes,
+            sizeof(packet->sheExportRamKeyRes.messageOne) +
+            sizeof(packet->sheExportRamKeyRes.messageTwo), tmpKey,
+            WOLFHSM_SHE_KEY_SZ, NULL, server->crypto->devId);
+    }
+    if (ret == 0) {
+        /* copy the ram key to kdfInput */
+        XMEMCPY(kdfInput, cmacOutput, WOLFHSM_SHE_KEY_SZ);
+        /* add WOLFHSM_SHE_KEY_UPDATE_ENC_C to the input */
+        XMEMCPY(kdfInput + WOLFHSM_SHE_KEY_SZ, WOLFHSM_SHE_KEY_UPDATE_ENC_C,
+            sizeof(WOLFHSM_SHE_KEY_UPDATE_ENC_C));
+        /* generate K3 */
+        ret = wh_AesMp16(server, kdfInput,
+            WOLFHSM_SHE_KEY_SZ + sizeof(WOLFHSM_SHE_KEY_UPDATE_ENC_C), tmpKey);
+    }
+    /* set K3 as encryption key */
+    if (ret == 0)
+        ret = wc_AesInit(sheAes, NULL, server->crypto->devId);
+    if (ret == 0) {
+        ret = wc_AesSetKey(sheAes, tmpKey, WOLFHSM_SHE_KEY_SZ,
+            NULL, AES_ENCRYPTION);
+    }
+    if (ret == 0) {
+        XMEMSET(packet->sheExportRamKeyRes.messageFour, 0,
+            sizeof(packet->sheExportRamKeyRes.messageFour));
+        /* set counter to 1, pad with 1 bit */
+        *((uint32_t*)(packet->sheExportRamKeyRes.messageFour +
+            WOLFHSM_SHE_KEY_SZ)) = (htonl(1) << 4);
+        packet->sheExportRamKeyRes.messageFour[WOLFHSM_SHE_KEY_SZ + 3] |=
+            0x08;
+        /* encrypt the new counter */
+        ret = wc_AesEncryptDirect(sheAes,
+            packet->sheExportRamKeyRes.messageFour + WOLFHSM_SHE_KEY_SZ,
+            packet->sheExportRamKeyRes.messageFour + WOLFHSM_SHE_KEY_SZ);
+    }
+    /* free aes for protection */
+    wc_AesFree(sheAes);
+    if (ret == 0) {
+        /* set UID, key id and authId */
+        XMEMCPY(packet->sheExportRamKeyRes.messageFour, server->she->uid,
+            sizeof(server->she->uid));
+        packet->sheExportRamKeyRes.messageFour[15] =
+            ((WOLFHSM_SHE_RAM_KEY_ID << 4) | (WOLFHSM_SHE_SECRET_KEY_ID));
+        /* add WOLFHSM_SHE_KEY_UPDATE_MAC_C to the input */
+        XMEMCPY(kdfInput + WOLFHSM_SHE_KEY_SZ, WOLFHSM_SHE_KEY_UPDATE_MAC_C,
+            sizeof(WOLFHSM_SHE_KEY_UPDATE_MAC_C));
+        /* generate K4 */
+        ret = wh_AesMp16(server, kdfInput,
+            WOLFHSM_SHE_KEY_SZ + sizeof(WOLFHSM_SHE_KEY_UPDATE_MAC_C), tmpKey);
+    }
+    /* cmac messageFour using K4 as the cmac key */
+    if (ret == 0) {
+        field = AES_BLOCK_SIZE;
+        ret = wc_AesCmacGenerate_ex(sheCmac,
+            packet->sheExportRamKeyRes.messageFive, &field,
+            packet->sheExportRamKeyRes.messageFour,
+            sizeof(packet->sheExportRamKeyRes.messageFour), tmpKey,
+            WOLFHSM_SHE_KEY_SZ, NULL, server->crypto->devId);
+    }
+    if (ret == 0)
+        *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->sheExportRamKeyRes);
+    return ret;
+}
+
+static int hsmSheInitRnd(whServerContext* server, whPacket* packet,
+    uint16_t* size)
+{
+    int ret = 0;
+    uint32_t keySz;
+    uint8_t kdfInput[WOLFHSM_SHE_KEY_SZ * 2];
+    uint8_t cmacOutput[AES_BLOCK_SIZE];
+    uint8_t tmpKey[WOLFHSM_SHE_KEY_SZ];
+    whNvmMetadata meta[1];
+    /* check that init hasn't already been called since startup */
+    if (server->she->rndInited == 1)
+        ret = WH_SHE_ERC_SEQUENCE_ERROR;
+    /* read secret key */
+    if (ret == 0) {
+        keySz = WOLFHSM_SHE_KEY_SZ;
+        ret = hsmReadKey(server, MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_SHE,
+            server->comm->client_id, WOLFHSM_SHE_SECRET_KEY_ID), meta,
+            kdfInput, &keySz);
+        if (ret != 0)
+            ret = WH_SHE_ERC_KEY_NOT_AVAILABLE;
+    }
+    if (ret == 0) {
+        /* add PRNG_SEED_KEY_C */
+        XMEMCPY(kdfInput + WOLFHSM_SHE_KEY_SZ, WOLFHSM_SHE_PRNG_SEED_KEY_C,
+            sizeof(WOLFHSM_SHE_PRNG_SEED_KEY_C));
+        /* generate PRNG_SEED_KEY */
+        ret = wh_AesMp16(server, kdfInput,
+            WOLFHSM_SHE_KEY_SZ + sizeof(WOLFHSM_SHE_PRNG_SEED_KEY_C), tmpKey);
+    }
+    /* read the current PRNG_SEED, i - 1, to cmacOutput */
+    if (ret == 0) {
+        keySz = WOLFHSM_SHE_KEY_SZ;
+        ret = hsmReadKey(server, MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_SHE,
+            server->comm->client_id, WOLFHSM_SHE_PRNG_SEED_ID), meta,
+            cmacOutput, &keySz);
+        if (ret != 0)
+            ret = WH_SHE_ERC_KEY_NOT_AVAILABLE;
+    }
+    /* set up aes */
+    if (ret == 0)
+        ret = wc_AesInit(sheAes, NULL, server->crypto->devId);
+    if (ret == 0) {
+        ret = wc_AesSetKey(sheAes, tmpKey, WOLFHSM_SHE_KEY_SZ,
+            NULL, AES_ENCRYPTION);
+    }
+    /* encrypt to the PRNG_SEED, i */
+    if (ret == 0) {
+        ret = wc_AesCbcEncrypt(sheAes, cmacOutput, cmacOutput,
+            WOLFHSM_SHE_KEY_SZ);
+    }
+    /* free aes for protection */
+    wc_AesFree(sheAes);
+    /* save PRNG_SEED, i */
+    if (ret == 0) {
+        meta->id = MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_SHE,
+            server->comm->client_id, WOLFHSM_SHE_PRNG_SEED_ID);
+        meta->len = WOLFHSM_SHE_KEY_SZ;
+        ret = wh_Nvm_AddObject(server->nvm, meta, meta->len, cmacOutput);
+        if (ret != 0)
+            ret = WH_SHE_ERC_KEY_UPDATE_ERROR;
+    }
+    if (ret == 0) {
+        /* set PRNG_STATE */
+        XMEMCPY(server->she->prngState, cmacOutput, WOLFHSM_SHE_KEY_SZ);
+        /* add PRNG_KEY_C to the kdf input */
+        XMEMCPY(kdfInput + WOLFHSM_SHE_KEY_SZ, WOLFHSM_SHE_PRNG_KEY_C,
+            sizeof(WOLFHSM_SHE_PRNG_KEY_C));
+        /* generate PRNG_KEY */
+        ret = wh_AesMp16(server, kdfInput,
+            WOLFHSM_SHE_KEY_SZ + sizeof(WOLFHSM_SHE_PRNG_KEY_C),
+            server->she->prngKey);
+    }
+    if (ret == 0) {
+        /* set init rng to 1 */
+        server->she->rndInited = 1;
+        /* set ERC_NO_ERROR */
+        packet->sheInitRngRes.status = WOLFHSM_SHE_ERC_NO_ERROR;
+        *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->sheInitRngRes);
+    }
+    return ret;
+}
+
+static int hsmSheRnd(whServerContext* server, whPacket* packet, uint16_t* size)
+{
+    int ret = 0;
+    /* check that rng has been inited */
+    if (server->she->rndInited == 0)
+        ret = WH_SHE_ERC_RNG_SEED;
+    /* set up aes */
+    if (ret == 0)
+        ret = wc_AesInit(sheAes, NULL, server->crypto->devId);
+    /* use PRNG_KEY as the encryption key */
+    if (ret == 0) {
+        ret = wc_AesSetKey(sheAes, server->she->prngKey,
+            WOLFHSM_SHE_KEY_SZ, NULL, AES_ENCRYPTION);
+    }
+    /* encrypt the PRNG_STATE, i - 1 to i */
+    if (ret == 0) {
+        ret = wc_AesCbcEncrypt(sheAes, server->she->prngState,
+            server->she->prngState, WOLFHSM_SHE_KEY_SZ);
+    }
+    /* free aes for protection */
+    wc_AesFree(sheAes);
+    if (ret == 0) {
+        /* copy PRNG_STATE */
+        XMEMCPY(packet->sheRndRes.rnd, server->she->prngState,
+            WOLFHSM_SHE_KEY_SZ);
+        *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->sheRndRes);
+    }
+    return ret;
+}
+
+static int hsmSheExtendSeed(whServerContext* server, whPacket* packet,
+    uint16_t* size)
+{
+    int ret = 0;
+    uint32_t keySz;
+    uint8_t kdfInput[WOLFHSM_SHE_KEY_SZ * 2];
+    whNvmMetadata meta[1];
+    /* check that rng has been inited */
+    if (server->she->rndInited == 0)
+        ret = WH_SHE_ERC_RNG_SEED;
+    if (ret == 0) {
+        /* set kdfInput to PRNG_STATE */
+        XMEMCPY(kdfInput, server->she->prngState, WOLFHSM_SHE_KEY_SZ);
+        /* add the user supplied entropy to kdfInput */
+        XMEMCPY(kdfInput + WOLFHSM_SHE_KEY_SZ,
+            packet->sheExtendSeedReq.entropy,
+            sizeof(packet->sheExtendSeedReq.entropy));
+        /* extend PRNG_STATE */
+        ret = wh_AesMp16(server, kdfInput,
+            WOLFHSM_SHE_KEY_SZ + sizeof(packet->sheExtendSeedReq.entropy),
+            server->she->prngState);
+    }
+    /* read the PRNG_SEED into kdfInput */
+    if (ret == 0) {
+        keySz = WOLFHSM_SHE_KEY_SZ;
+        ret = hsmReadKey(server, MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_SHE,
+            server->comm->client_id, WOLFHSM_SHE_PRNG_SEED_ID), meta,
+            kdfInput, &keySz);
+        if (ret != 0)
+            ret = WH_SHE_ERC_KEY_NOT_AVAILABLE;
+    }
+    if (ret == 0) {
+        /* extend PRNG_STATE */
+        ret = wh_AesMp16(server, kdfInput,
+            WOLFHSM_SHE_KEY_SZ + sizeof(packet->sheExtendSeedReq.entropy),
+            kdfInput);
+    }
+    /* save PRNG_SEED */
+    if (ret == 0) {
+        meta->id = MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_SHE,
+            server->comm->client_id, WOLFHSM_SHE_PRNG_SEED_ID);
+        meta->len = WOLFHSM_SHE_KEY_SZ;
+        ret = wh_Nvm_AddObject(server->nvm, meta, meta->len, kdfInput);
+        if (ret != 0)
+            ret = WH_SHE_ERC_KEY_UPDATE_ERROR;
+    }
+    if (ret == 0) {
+        /* set ERC_NO_ERROR */
+        packet->sheExtendSeedRes.status = WOLFHSM_SHE_ERC_NO_ERROR;
+        *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->sheExtendSeedRes);
+    }
+    return ret;
+}
+
+static int hsmSheEncEcb(whServerContext* server, whPacket* packet,
+    uint16_t* size)
+{
+    int ret;
+    uint32_t field;
+    uint32_t keySz;
+    uint8_t* in;
+    uint8_t* out;
+    uint8_t tmpKey[WOLFHSM_SHE_KEY_SZ];
+    /* in and out are after the fixed sized fields */
+    in = (uint8_t*)(&packet->sheEncEcbReq + 1);
+    out = (uint8_t*)(&packet->sheEncEcbRes + 1);
+    /* load the key */
+    keySz = WOLFHSM_SHE_KEY_SZ;
+    field = packet->sheEncEcbReq.sz;
+    /* only process a multiple of block size */
+    field -= (field % AES_BLOCK_SIZE);
+    ret = hsmReadKey(server, MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_SHE,
+        server->comm->client_id, packet->sheEncEcbReq.keyId), NULL,
+        tmpKey, &keySz);
+    if (ret == 0)
+        ret = wc_AesInit(sheAes, NULL, server->crypto->devId);
+    else
+        ret = WH_SHE_ERC_KEY_NOT_AVAILABLE;
+    if (ret == 0)
+        ret = wc_AesSetKey(sheAes, tmpKey, keySz, NULL, AES_ENCRYPTION);
+    if (ret == 0)
+        ret = wc_AesEcbEncrypt(sheAes, out, in, field);
+    /* free aes for protection */
+    wc_AesFree(sheAes);
+    if (ret == 0) {
+        packet->sheEncEcbRes.sz = field;
+        *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->sheEncEcbRes) + field;
+    }
+    return ret;
+}
+
+static int hsmSheEncCbc(whServerContext* server, whPacket* packet,
+    uint16_t* size)
+{
+    int ret;
+    uint32_t field;
+    uint32_t keySz;
+    uint8_t* in;
+    uint8_t* out;
+    uint8_t tmpKey[WOLFHSM_SHE_KEY_SZ];
+    /* in and out are after the fixed sized fields */
+    in = (uint8_t*)(&packet->sheEncCbcReq + 1);
+    out = (uint8_t*)(&packet->sheEncCbcRes + 1);
+    /* load the key */
+    keySz = WOLFHSM_SHE_KEY_SZ;
+    field = packet->sheEncCbcReq.sz;
+    /* only process a multiple of block size */
+    field -= (field % AES_BLOCK_SIZE);
+    ret = hsmReadKey(server, MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_SHE,
+        server->comm->client_id, packet->sheEncCbcReq.keyId), NULL,
+        tmpKey, &keySz);
+    if (ret == 0)
+        ret = wc_AesInit(sheAes, NULL, server->crypto->devId);
+    else
+        ret = WH_SHE_ERC_KEY_NOT_AVAILABLE;
+    if (ret == 0) {
+        ret = wc_AesSetKey(sheAes, tmpKey, keySz, packet->sheEncCbcReq.iv,
+            AES_ENCRYPTION);
+    }
+    if (ret == 0)
+        ret = wc_AesCbcEncrypt(sheAes, out, in, field);
+    /* free aes for protection */
+    wc_AesFree(sheAes);
+    if (ret == 0) {
+        packet->sheEncEcbRes.sz = field;
+        *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->sheEncCbcRes) + field;
+    }
+    return ret;
+}
+
+static int hsmSheDecEcb(whServerContext* server, whPacket* packet,
+    uint16_t* size)
+{
+    int ret;
+    uint32_t field;
+    uint32_t keySz;
+    uint8_t* in;
+    uint8_t* out;
+    uint8_t tmpKey[WOLFHSM_SHE_KEY_SZ];
+    /* in and out are after the fixed sized fields */
+    in = (uint8_t*)(&packet->sheDecEcbReq + 1);
+    out = (uint8_t*)(&packet->sheDecEcbRes + 1);
+    /* load the key */
+    keySz = WOLFHSM_SHE_KEY_SZ;
+    field = packet->sheDecEcbReq.sz;
+    /* only process a multiple of block size */
+    field -= (field % AES_BLOCK_SIZE);
+    ret = hsmReadKey(server, MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_SHE,
+        server->comm->client_id, packet->sheDecEcbReq.keyId), NULL,
+        tmpKey, &keySz);
+    if (ret == 0)
+        ret = wc_AesInit(sheAes, NULL, server->crypto->devId);
+    else
+        ret = WH_SHE_ERC_KEY_NOT_AVAILABLE;
+    if (ret == 0)
+        ret = wc_AesSetKey(sheAes, tmpKey, keySz, NULL, AES_DECRYPTION);
+    if (ret == 0)
+        ret = wc_AesEcbDecrypt(sheAes, out, in, field);
+    /* free aes for protection */
+    wc_AesFree(sheAes);
+    if (ret == 0) {
+        packet->sheDecEcbRes.sz = field;
+        *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->sheDecEcbRes) + field;
+    }
+    return ret;
+}
+
+static int hsmSheDecCbc(whServerContext* server, whPacket* packet,
+    uint16_t* size)
+{
+    int ret;
+    uint32_t field;
+    uint32_t keySz;
+    uint8_t* in;
+    uint8_t* out;
+    uint8_t tmpKey[WOLFHSM_SHE_KEY_SZ];
+    /* in and out are after the fixed sized fields */
+    in = (uint8_t*)(&packet->sheDecCbcReq + 1);
+    out = (uint8_t*)(&packet->sheDecCbcRes + 1);
+    /* load the key */
+    keySz = WOLFHSM_SHE_KEY_SZ;
+    field = packet->sheDecCbcReq.sz;
+    /* only process a multiple of block size */
+    field -= (field % AES_BLOCK_SIZE);
+    ret = hsmReadKey(server, MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_SHE,
+        server->comm->client_id, packet->sheDecCbcReq.keyId), NULL,
+        tmpKey, &keySz);
+    if (ret == 0)
+        ret = wc_AesInit(sheAes, NULL, server->crypto->devId);
+    else
+        ret = WH_SHE_ERC_KEY_NOT_AVAILABLE;
+    if (ret == 0) {
+        ret = wc_AesSetKey(sheAes, tmpKey, keySz, packet->sheDecCbcReq.iv,
+            AES_DECRYPTION);
+    }
+    if (ret == 0)
+        ret = wc_AesCbcDecrypt(sheAes, out, in, field);
+    /* free aes for protection */
+    wc_AesFree(sheAes);
+    if (ret == 0) {
+        packet->sheDecCbcRes.sz = field;
+        *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->sheDecCbcRes) + field;
+    }
+    return ret;
+}
+
+static int hsmSheGenerateMac(whServerContext* server, whPacket* packet,
+    uint16_t* size)
+{
+    int ret;
+    uint32_t field = AES_BLOCK_SIZE;
+    uint32_t keySz;
+    uint8_t* in;
+    uint8_t tmpKey[WOLFHSM_SHE_KEY_SZ];
+    /* in and out are after the fixed sized fields */
+    in = (uint8_t*)(&packet->sheGenMacReq + 1);
+    /* load the key */
+    keySz = WOLFHSM_SHE_KEY_SZ;
+    ret = hsmReadKey(server, MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_SHE,
+        server->comm->client_id, packet->sheGenMacReq.keyId), NULL, tmpKey,
+        &keySz);
+    /* hash the message */
+    if (ret == 0) {
+        ret = wc_AesCmacGenerate_ex(sheCmac, packet->sheGenMacRes.mac, &field,
+            in, packet->sheGenMacReq.sz, tmpKey, WOLFHSM_SHE_KEY_SZ, NULL,
+            server->crypto->devId);
+    }
+    else
+        ret = WH_SHE_ERC_KEY_NOT_AVAILABLE;
+    if (ret == 0)
+        *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->sheGenMacRes);
+    return ret;
+}
+
+static int hsmSheVerifyMac(whServerContext* server, whPacket* packet,
+    uint16_t* size)
+{
+    int ret;
+    uint32_t keySz;
+    uint8_t* message;
+    uint8_t* mac;
+    uint8_t tmpKey[WOLFHSM_SHE_KEY_SZ];
+    /* in and mac are after the fixed sized fields */
+    message = (uint8_t*)(&packet->sheVerifyMacReq + 1);
+    mac = message + packet->sheVerifyMacReq.messageLen;
+    /* load the key */
+    keySz = WOLFHSM_SHE_KEY_SZ;
+    ret = hsmReadKey(server, MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_SHE,
+        server->comm->client_id, packet->sheVerifyMacReq.keyId), NULL, tmpKey,
+        &keySz);
+    /* verify the mac */
+    if (ret == 0) {
+        ret = wc_AesCmacVerify_ex(sheCmac, mac, packet->sheVerifyMacReq.macLen,
+            message, packet->sheVerifyMacReq.messageLen, tmpKey, keySz, NULL,
+            server->crypto->devId);
+        /* only evaluate if key was found */
+        if (ret == 0)
+            packet->sheVerifyMacRes.status = 0;
+        else
+            packet->sheVerifyMacRes.status = 1;
+        *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->sheVerifyMacRes);
+    }
+    else
+        ret = WH_SHE_ERC_KEY_NOT_AVAILABLE;
+    return ret;
+}
+
+int wh_Server_HandleSheRequest(whServerContext* server,
+    uint16_t action, uint8_t* data, uint16_t* size)
+{
+    int ret = 0;
+    whPacket* packet = (whPacket*)data;
+
+    if (server == NULL || data == NULL || size == NULL)
+        return WH_ERROR_BADARGS;
+
+    /* TODO does SHE specify what this error should be? */
+    /* if we haven't secure booted, only allow secure boot requests */
+    if ((server->she->sbState != WOLFHSM_SHE_SB_SUCCESS &&
+        (action != WH_SHE_SECURE_BOOT_INIT &&
+        action != WH_SHE_SECURE_BOOT_UPDATE &&
+        action != WH_SHE_SECURE_BOOT_FINISH &&
+        action != WH_SHE_GET_STATUS &&
+        action != WH_SHE_SET_UID)) ||
+        (action != WH_SHE_SET_UID && server->she->uidSet == 0)) {
+        packet->rc = WH_SHE_ERC_SEQUENCE_ERROR;
+        *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->rc);
+        return 0;
+    }
+
+    switch (action)
+    {
+    case WH_SHE_SET_UID:
+        ret = hsmSheSetUid(server, packet);
+        break;
+    case WH_SHE_SECURE_BOOT_INIT:
+        ret = hsmSheSecureBootInit(server, packet, size);
+        break;
+    case WH_SHE_SECURE_BOOT_UPDATE:
+        ret = hsmSheSecureBootUpdate(server, packet, size);
+        break;
+    case WH_SHE_SECURE_BOOT_FINISH:
+        ret = hsmSheSecureBootFinish(server, packet, size);
+        break;
+    case WH_SHE_GET_STATUS:
+        ret = hsmSheGetStatus(server, packet, size);
+        break;
+    case WH_SHE_LOAD_KEY:
+        ret = hsmSheLoadKey(server, packet, size);
+        break;
+    case WH_SHE_LOAD_PLAIN_KEY:
+        ret = hsmSheLoadPlainKey(server, packet, size);
+        break;
+    case WH_SHE_EXPORT_RAM_KEY:
+        ret = hsmSheExportRamKey(server, packet, size);
+        break;
+    case WH_SHE_INIT_RND:
+        ret = hsmSheInitRnd(server, packet, size);
+        break;
+    case WH_SHE_RND:
+        ret = hsmSheRnd(server, packet, size);
+        break;
+    case WH_SHE_EXTEND_SEED:
+        ret = hsmSheExtendSeed(server, packet, size);
+        break;
+    case WH_SHE_ENC_ECB:
+        ret = hsmSheEncEcb(server, packet, size);
+        break;
+    case WH_SHE_ENC_CBC:
+        ret = hsmSheEncCbc(server, packet, size);
+        break;
+    case WH_SHE_DEC_ECB:
+        ret = hsmSheDecEcb(server, packet, size);
+        break;
+    case WH_SHE_DEC_CBC:
+        ret = hsmSheDecCbc(server, packet, size);
+        break;
+    case WH_SHE_GEN_MAC:
+        ret = hsmSheGenerateMac(server, packet, size);
+        break;
+    case WH_SHE_VERIFY_MAC:
+        ret = hsmSheVerifyMac(server, packet, size);
+        break;
+    default:
+        ret = WH_ERROR_BADARGS;
+        break;
+    }
+    /* if a handler didn't set a specific error, set general error */
+    if (ret != 0) {
+        if (ret != WH_SHE_ERC_SEQUENCE_ERROR &&
+        ret != WH_SHE_ERC_KEY_NOT_AVAILABLE && ret != WH_SHE_ERC_KEY_INVALID &&
+        ret != WH_SHE_ERC_KEY_EMPTY && ret != WH_SHE_ERC_NO_SECURE_BOOT &&
+        ret != WH_SHE_ERC_WRITE_PROTECTED && ret != WH_SHE_ERC_KEY_UPDATE_ERROR
+        && ret != WH_SHE_ERC_RNG_SEED && ret != WH_SHE_ERC_NO_DEBUGGING &&
+        ret != WH_SHE_ERC_BUSY && ret != WH_SHE_ERC_MEMORY_FAILURE) {
+            ret = WH_SHE_ERC_GENERAL_ERROR;
+        }
+        packet->rc = ret;
+        *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->rc);
+    }
+    /* reset our SHE state */
+    /* TODO is it safe to call wc_InitCmac over and over or do we need to call final first? */
+    if ((action == WH_SHE_SECURE_BOOT_INIT ||
+        action == WH_SHE_SECURE_BOOT_UPDATE ||
+        action == WH_SHE_SECURE_BOOT_FINISH) && ret != 0 &&
+        ret != WH_SHE_ERC_NO_SECURE_BOOT) {
+        server->she->sbState = WOLFHSM_SHE_SB_INIT;
+        server->she->blSize = 0;
+        server->she->blSizeReceived = 0;
+        server->she->cmacKeyFound = 0;
+    }
+    packet->rc = ret;
+    return 0;
+}

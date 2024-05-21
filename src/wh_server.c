@@ -49,12 +49,6 @@ static int _wh_Server_HandlePkcs11Request(whServerContext* server,
         uint16_t magic, uint16_t action, uint16_t seq,
         uint16_t req_size, const void* req_packet,
         uint16_t *out_resp_size, void* resp_packet);
-#ifdef WOLFHSM_SHE_EXTENSION
-static int _wh_Server_HandleSheRequest(whServerContext* server,
-        uint16_t magic, uint16_t action, uint16_t seq,
-        uint16_t req_size, const void* req_packet,
-        uint16_t *out_resp_size, void* resp_packet);
-#endif
 
 int wh_Server_Init(whServerContext* server, whServerConfig* config)
 {
@@ -76,6 +70,9 @@ int wh_Server_Init(whServerContext* server, whServerConfig* config)
         server->crypto->devId = INVALID_DEVID;
 #endif
     }
+#ifdef WOLFHSM_SHE_EXTENSION
+    server->she = config->she;
+#endif
 #endif
 
     rc = wh_CommServer_Init(server->comm, config->comm_config,
@@ -214,25 +211,6 @@ static int _wh_Server_HandlePkcs11Request(whServerContext* server,
     return rc;
 }
 
-#ifdef WOLFHSM_SHE_EXTENSION
-static int _wh_Server_HandleSheRequest(whServerContext* server,
-        uint16_t magic, uint16_t action, uint16_t seq,
-        uint16_t req_size, const void* req_packet,
-        uint16_t *out_resp_size, void* resp_packet)
-{
-    int rc = 0;
-    switch (action) {
-    /* TODO: Add AUTOSAR SHE message handling here */
-    default:
-        /* Unknown request. Respond with empty packet */
-        *out_resp_size = 0;
-    }
-    return rc;
-}
-#endif
-
-
-
 int wh_Server_HandleRequestMessage(whServerContext* server)
 {
     uint16_t magic = 0;
@@ -292,8 +270,9 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
         break;
 
 #ifdef WOLFHSM_SHE_EXTENSION
-        case WOLFHSM_MESSAGE_GROUP_SHE:
-            rc = _wh_Server_HandleSheRequest(data, size);
+        case WH_MESSAGE_GROUP_SHE:
+            rc = wh_Server_HandleSheRequest(server, action, data,
+                &size);
         break;
 #endif
 

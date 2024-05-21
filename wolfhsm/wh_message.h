@@ -54,6 +54,27 @@ enum {
     WH_KEY_ERASE,
 };
 
+/* SHE actions */
+enum {
+    WH_SHE_SET_UID,
+    WH_SHE_SECURE_BOOT_INIT,
+    WH_SHE_SECURE_BOOT_UPDATE,
+    WH_SHE_SECURE_BOOT_FINISH,
+    WH_SHE_GET_STATUS,
+    WH_SHE_LOAD_KEY,
+    WH_SHE_LOAD_PLAIN_KEY,
+    WH_SHE_EXPORT_RAM_KEY,
+    WH_SHE_INIT_RND,
+    WH_SHE_RND,
+    WH_SHE_EXTEND_SEED,
+    WH_SHE_ENC_ECB,
+    WH_SHE_ENC_CBC,
+    WH_SHE_DEC_ECB,
+    WH_SHE_DEC_CBC,
+    WH_SHE_GEN_MAC,
+    WH_SHE_VERIFY_MAC,
+};
+
 /* Construct the message kind based on group and action */
 #define WH_MESSAGE_KIND(_G, _S) (   ((_G) & WH_MESSAGE_GROUP_MASK) |      \
                                     ((_S) & WH_MESSAGE_ACTION_MASK))
