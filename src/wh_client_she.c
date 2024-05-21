@@ -485,7 +485,8 @@ int wh_Client_SheExtendSeedRequest(whClientContext* c, uint8_t* entropy,
         sizeof(packet->sheExtendSeedReq.entropy));
     /* send init rng req */
     ret = wh_Client_SendRequest(c, WH_MESSAGE_GROUP_SHE, WH_SHE_EXTEND_SEED,
-        WOLFHSM_PACKET_STUB_SIZE, (uint8_t*)packet);
+        WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->sheExtendSeedReq),
+        (uint8_t*)packet);
     return ret;
 }
 
