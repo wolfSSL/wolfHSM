@@ -733,18 +733,24 @@ int wh_Client_KeyErase(whClientContext* c, whNvmId keyId)
     return ret;
 }
 
+#ifdef HAVE_CURVE25519
 void wh_Client_SetKeyCurve25519(curve25519_key* key, whNvmId keyId)
 {
     key->devCtx = (void*)((intptr_t)keyId);
 }
+#endif
 
+#ifndef NO_RSA
 void wh_Client_SetKeyRsa(RsaKey* key, whNvmId keyId)
 {
     key->devCtx = (void*)((intptr_t)keyId);
 }
+#endif
 
+#ifndef NO_AES
 void wh_Client_SetKeyAes(Aes* key, whNvmId keyId)
 {
     key->devCtx = (void*)((intptr_t)keyId);
 }
-#endif  /* WOLFHSM_NO_CRYPTO */
+#endif
+#endif  /* !WOLFHSM_NO_CRYPTO */

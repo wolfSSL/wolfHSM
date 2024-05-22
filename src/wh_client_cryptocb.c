@@ -95,6 +95,8 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
         packet->cipherAnyReq.enc = info->cipher.enc;
         switch (info->cipher.type)
         {
+#ifndef NO_AES
+#ifdef HAVE_AES_CBC
         case WC_CIPHER_AES_CBC:
             /* key, iv, in, and out are after fixed size fields */
             key = (uint8_t*)(&packet->cipherAesCbcReq + 1);
@@ -154,6 +156,8 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
                 }
             }
             break;
+#endif /* HAVE_AES_CBC */
+#ifdef HAVE_AESGCM
         case WC_CIPHER_AES_GCM:
             /* key, iv, in, authIn, and out are after fixed size fields */
             key = (uint8_t*)(&packet->cipherAesGcmReq + 1);
@@ -238,6 +242,8 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
                 }
             }
             break;
+#endif /* HAVE_AESGCM */
+#endif /* NO_AES */
         default:
             ret = CRYPTOCB_UNAVAILABLE;
             break;
@@ -341,6 +347,7 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             }
             break;
 #endif  /* !NO_RSA */
+#ifdef HAVE_ECC
         case WC_PK_TYPE_EC_KEYGEN:
             /* set key size */
             packet->pkEckgReq.sz = info->pk.eckg.size;
@@ -500,6 +507,8 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
                     ret = packet->rc;
             }
             break;
+#endif /* HAVE_ECC */
+#ifdef HAVE_CURVE25519
         case WC_PK_TYPE_CURVE25519_KEYGEN:
             packet->pkCurve25519kgReq.sz = info->pk.curve25519kg.size;
             /* write request */
@@ -554,12 +563,14 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
                 }
             }
             break;
+#endif /* HAVE_CURVE25519 */
         case WC_PK_TYPE_NONE:
         default:
             ret = CRYPTOCB_UNAVAILABLE;
             break;
         }
         break;
+#ifndef WC_NO_RNG
     case WC_ALGO_TYPE_RNG:
         /* out is after the fixed size fields */
         out = (uint8_t*)(&packet->rngRes + 1);
@@ -582,6 +593,7 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
                 XMEMCPY(info->rng.out, out, packet->rngRes.sz);
         }
         break;
+#endif /* !WC_NO_RNG */
     case WC_ALGO_TYPE_NONE:
     default:
         ret = CRYPTOCB_UNAVAILABLE;
