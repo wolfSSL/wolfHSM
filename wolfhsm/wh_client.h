@@ -46,6 +46,16 @@
 #include "wolfhsm/wh_comm.h"
 #include "wolfhsm/wh_message_customcb.h"
 
+#ifndef WOLFHSM_NO_CRYPTO
+#include "wolfssl/wolfcrypt/settings.h"
+#include "wolfssl/wolfcrypt/error-crypt.h"
+#include "wolfssl/wolfcrypt/wc_port.h"
+#include "wolfssl/wolfcrypt/cryptocb.h"
+#include "wolfssl/wolfcrypt/curve25519.h"
+#include "wolfssl/wolfcrypt/rsa.h"
+#include "wolfssl/wolfcrypt/ecc.h"
+#endif
+
 /* Client context */
 struct whClientContext_t {
     whCommClient comm[1];
@@ -99,21 +109,34 @@ int wh_Client_Echo(whClientContext* c, uint16_t snd_len, const void* snd_data,
         uint16_t *out_rcv_len, void* rcv_data);
 
 /** Key functions */
+#ifndef WOLFHSM_NO_CRYPTO
 int wh_Client_KeyCacheRequest_ex(whClientContext* c, uint32_t flags,
     uint8_t* label, uint32_t labelSz, uint8_t* in, uint32_t inSz,
     uint16_t keyId);
 int wh_Client_KeyCacheRequest(whClientContext* c, uint32_t flags,
     uint8_t* label, uint32_t labelSz, uint8_t* in, uint32_t inSz);
 int wh_Client_KeyCacheResponse(whClientContext* c, uint16_t* keyId);
+int wh_Client_KeyCache(whClientContext* c, uint32_t flags,
+    uint8_t* label, uint32_t labelSz, uint8_t* in, uint32_t inSz,
+    uint16_t* keyId);
 int wh_Client_KeyEvictRequest(whClientContext* c, uint16_t keyId);
 int wh_Client_KeyEvictResponse(whClientContext* c);
+int wh_Client_KeyEvict(whClientContext* c, uint16_t keyId);
 int wh_Client_KeyExportRequest(whClientContext* c, uint16_t keyId);
 int wh_Client_KeyExportResponse(whClientContext* c, uint8_t* label,
     uint32_t labelSz, uint8_t* out, uint32_t* outSz);
+int wh_Client_KeyExport(whClientContext* c, uint16_t keyId,
+    uint8_t* label, uint32_t labelSz, uint8_t* out, uint32_t* outSz);
 int wh_Client_KeyCommitRequest(whClientContext* c, whNvmId keyId);
 int wh_Client_KeyCommitResponse(whClientContext* c);
+int wh_Client_KeyCommit(whClientContext* c, whNvmId keyId);
 int wh_Client_KeyEraseRequest(whClientContext* c, whNvmId keyId);
 int wh_Client_KeyEraseResponse(whClientContext* c);
+int wh_Client_KeyErase(whClientContext* c, whNvmId keyId);
+void wh_Client_SetKeyCurve25519(curve25519_key* key, whNvmId keyId);
+void wh_Client_SetKeyRsa(RsaKey* key, whNvmId keyId);
+void wh_Client_SetKeyAes(Aes* aes, whNvmId keyId);
+#endif
 
 /** NVM functions */
 int wh_Client_NvmInitRequest(whClientContext* c);

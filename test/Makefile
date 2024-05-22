@@ -24,7 +24,7 @@ ARCHFLAGS ?=
 # Compiler and linker flags
 ASFLAGS ?= $(ARCHFLAGS)
 CFLAGS_EXTRA ?= -Wmissing-field-initializers -Wmissing-braces
-CFLAGS ?= $(ARCHFLAGS) -std=c90 -D_GNU_SOURCE -Wall -Werror -Wno-cpp $(CFLAGS_EXTRA)
+CFLAGS ?= $(ARCHFLAGS) -std=c90 -D_GNU_SOURCE -DWOLFHSM_SYMMETRIC_INTERNAL -Wall -Werror -Wno-cpp $(CFLAGS_EXTRA)
 LDFLAGS ?= $(ARCHFLAGS)
 
 # Libc for printf
@@ -81,6 +81,7 @@ SRC_C += \
             $(WOLFSSL_DIR)/wolfcrypt/src/hash.c \
             $(WOLFSSL_DIR)/wolfcrypt/src/sha256.c \
             $(WOLFSSL_DIR)/wolfcrypt/src/aes.c \
+            $(WOLFSSL_DIR)/wolfcrypt/src/ecc.c \
             $(WOLFSSL_DIR)/wolfcrypt/src/cmac.c \
 
 endif
@@ -130,7 +131,6 @@ SRC_C += \
             ./src/wh_test_nvm_flash.c \
             ./src/wh_test_clientserver.c \
             ./src/wh_test_flash_ramsim.c \
-
 
 FILENAMES_C = $(notdir $(SRC_C))
 #FILENAMES_C := $(filter-out evp.c, $(FILENAMES_C))
