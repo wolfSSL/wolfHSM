@@ -363,9 +363,8 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
                     ret = packet->rc;
                 else {
                     /* read keyId */
-                    XMEMCPY((void*)&info->pk.eckg.key->devCtx,
-                        (void*)&packet->pkEckgRes.keyId,
-                        sizeof(packet->pkEckgRes.keyId));
+                    info->pk.eckg.key->devCtx =
+                        (void*)((intptr_t)packet->pkEckgRes.keyId);
                 }
             }
             break;
@@ -373,12 +372,10 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             /* out is after the fixed size fields */
             out = (uint8_t*)(&packet->pkEcdhRes + 1);
             /* set ids */
-            XMEMCPY((void*)&packet->pkEcdhReq.privateKeyId,
-                (void*)&info->pk.ecdh.private_key->devCtx,
-                sizeof(packet->pkEcdhReq.privateKeyId));
-            XMEMCPY((void*)&packet->pkEcdhReq.publicKeyId,
-                (void*)&info->pk.ecdh.public_key->devCtx,
-                sizeof(packet->pkEcdhReq.publicKeyId));
+            packet->pkEcdhReq.privateKeyId =
+                (intptr_t)info->pk.ecdh.private_key->devCtx;
+            packet->pkEcdhReq.publicKeyId =
+                (intptr_t)info->pk.ecdh.public_key->devCtx;
             /* set curveId */
             packet->pkEcdhReq.curveId =
                 wc_ecc_get_curve_id(info->pk.ecdh.private_key->idx);
@@ -409,9 +406,7 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             in = (uint8_t*)(&packet->pkEccSignReq + 1);
             out = (uint8_t*)(&packet->pkEccSignRes + 1);
             /* set keyId */
-            XMEMCPY((void*)&packet->pkEccSignReq.keyId,
-                (void*)&info->pk.eccsign.key->devCtx,
-                sizeof(packet->pkEccSignReq.keyId));
+            packet->pkEccSignReq.keyId = (intptr_t)info->pk.eccsign.key->devCtx;
             /* set curveId */
             packet->pkEccSignReq.curveId =
                 wc_ecc_get_curve_id(info->pk.eccsign.key->idx);
@@ -448,9 +443,8 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             hash = (uint8_t*)(&packet->pkEccVerifyReq + 1) +
                 info->pk.eccverify.siglen;
             /* set keyId */
-            XMEMCPY((void*)&packet->pkEccVerifyReq.keyId,
-                (void*)&info->pk.eccverify.key->devCtx,
-                sizeof(packet->pkEccVerifyReq.keyId));
+            packet->pkEccVerifyReq.keyId =
+                (intptr_t)info->pk.eccverify.key->devCtx;
             /* set curveId */
             packet->pkEccVerifyReq.curveId =
                 wc_ecc_get_curve_id(info->pk.eccverify.key->idx);
@@ -484,9 +478,8 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             break;
         case WC_PK_TYPE_EC_CHECK_PRIV_KEY:
             /* set keyId */
-            XMEMCPY((void*)&packet->pkEccCheckReq.keyId,
-                (void*)&info->pk.ecc_check.key->devCtx,
-                sizeof(packet->pkEccCheckReq.keyId));
+            packet->pkEccCheckReq.keyId =
+                (intptr_t)(info->pk.ecc_check.key->devCtx);
             /* set curveId */
             packet->pkEccCheckReq.curveId =
                 wc_ecc_get_curve_id(info->pk.eccverify.key->idx);

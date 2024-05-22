@@ -735,16 +735,16 @@ int wh_Client_KeyErase(whClientContext* c, whNvmId keyId)
 
 void wh_Client_SetKeyCurve25519(curve25519_key* key, whNvmId keyId)
 {
-    XMEMCPY(&(key->devCtx), (void*)&keyId, sizeof(keyId));
+    key->devCtx = (void*)((intptr_t)keyId);
 }
 
 void wh_Client_SetKeyRsa(RsaKey* key, whNvmId keyId)
 {
-    XMEMCPY(&(key->devCtx), (void*)&keyId, sizeof(keyId));
+    key->devCtx = (void*)((intptr_t)keyId);
 }
 
 void wh_Client_SetKeyAes(Aes* key, whNvmId keyId)
 {
-    XMEMCPY(&(key->devCtx), (void*)&keyId, sizeof(keyId));
+    key->devCtx = (void*)((intptr_t)keyId);
 }
 #endif  /* WOLFHSM_NO_CRYPTO */
