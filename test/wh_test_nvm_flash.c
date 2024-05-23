@@ -18,6 +18,7 @@
  */
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
 #if defined(WH_CONFIG)
 #include "wh_config.h"
