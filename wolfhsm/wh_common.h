@@ -100,6 +100,7 @@ enum {
     WOLFHSM_NVM_MAX_OBJECT_SIZE = 65535,
 };
 
+
 /* List flags */
 #define WOLFHSM_NVM_ACCESS_ANY (0xFFFF)
 #define WOLFHSM_NVM_FLAGS_ANY (0xFFFF)

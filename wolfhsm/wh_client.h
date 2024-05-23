@@ -273,6 +273,7 @@ int wh_Client_Echo(whClientContext* c, uint16_t snd_len, const void* snd_data,
  */
 
 
+
 #ifndef WOLFHSM_NO_CRYPTO
 /**
  * @brief Sends a key cache request to the server.
@@ -1529,6 +1530,7 @@ int wh_Client_CustomCbCheckRegisteredResponse(whClientContext* c,
  */
 int wh_Client_CustomCbCheckRegistered(whClientContext* c, uint16_t id,
                                       int* responseError);
+
 
 
 #endif /* WOLFHSM_WH_CLIENT_H_ */
