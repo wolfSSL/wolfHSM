@@ -56,15 +56,6 @@
 
 int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
 {
-#if 0
-    uint32_t field;
-    uint8_t* key;
-    uint8_t* iv;
-    uint8_t* authIn;
-    uint8_t* authTag;
-    uint8_t* sig;
-    uint8_t* hash;
-#endif
     int ret = CRYPTOCB_UNAVAILABLE;
     whClientContext* ctx = inCtx;
     uint8_t rawPacket[WH_COMM_DATA_LEN];
@@ -594,6 +585,57 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
         }
         break;
 #endif /* !WC_NO_RNG */
+#ifdef WOLFSSL_CMAC
+    case WC_ALGO_TYPE_CMAC:
+        /* in, key and out are after the fixed size fields */
+        in = (uint8_t*)(&packet->cmacReq + 1);
+        key = in + info->cmac.inSz;
+        out = (uint8_t*)(&packet->cmacRes + 1);
+        packet->cmacReq.type = info->cmac.type;
+        packet->cmacReq.keyId = (intptr_t)info->cmac.cmac->devCtx;
+        /* multiple modes are possible so we need to set zero size if buffers
+         * are NULL */
+        if (info->cmac.in != NULL) {
+            packet->cmacReq.inSz = info->cmac.inSz;
+            XMEMCPY(in, info->cmac.in, info->cmac.inSz);
+        }
+        else
+            packet->cmacReq.inSz = 0;
+        if (info->cmac.key != NULL) {
+            packet->cmacReq.keySz = info->cmac.keySz;
+            XMEMCPY(key, info->cmac.key, info->cmac.keySz);
+        }
+        else
+            packet->cmacReq.keySz = 0;
+        if (info->cmac.out != NULL)
+            packet->cmacReq.outSz = *(info->cmac.outSz);
+        else
+            packet->cmacReq.outSz = 0;
+        /* write request */
+        ret = wh_Client_SendRequest(ctx, group, WC_ALGO_TYPE_CMAC,
+            WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->cmacReq) +
+            packet->cmacReq.inSz + packet->cmacReq.keySz, rawPacket);
+        if (ret == 0) {
+            do {
+                ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
+                    rawPacket);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+        if (ret == 0) {
+            if (packet->rc != 0)
+                ret = packet->rc;
+            /* read keyId and out */
+            else {
+                if (info->cmac.key != NULL) {
+                    info->cmac.cmac->devCtx =
+                        (void*)((intptr_t)packet->cmacRes.keyId);
+                }
+                if (info->cmac.out != NULL)
+                    XMEMCPY(info->cmac.out, out, packet->cmacRes.outSz);
+            }
+        }
+        break;
+#endif /* WOLFSSL_CMAC */
     case WC_ALGO_TYPE_NONE:
     default:
         ret = CRYPTOCB_UNAVAILABLE;

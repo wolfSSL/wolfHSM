@@ -227,7 +227,6 @@ typedef struct WOLFHSM_PACK wh_Packet_rng_res
 
 typedef struct WOLFHSM_PACK wh_Packet_cmac_req
 {
-    uint8_t opType;
     uint16_t keyId;
     uint32_t outSz;
     uint32_t inSz;

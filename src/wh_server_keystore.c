@@ -41,7 +41,7 @@ int hsmGetUniqueId(whServerContext* server, whNvmId* outId)
     int ret = 0;
     whNvmId id;
     /* apply client_id and type which should be set by caller on outId */
-    whNvmId buildId = ((*outId | (server->comm->client_id << 8)) & (~WOLFHSM_KEYID_MASK));
+    whNvmId buildId = (((*outId | (server->comm->client_id << 8)) & (~WOLFHSM_KEYID_MASK)));
     whNvmId nvmId = 0;
     whNvmId keyCount;
     /* try every index until we find a unique one, don't worry about capacity */

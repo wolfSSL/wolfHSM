@@ -55,16 +55,35 @@ typedef struct CacheSlot {
 } CacheSlot;
 
 typedef struct {
-    int    devId;
-    Aes    aes[1];
-    RsaKey rsa[1];
-#ifdef HAVE_ECC
-    ecc_key eccPrivate[1];
-    ecc_key eccPublic[1];
+    int devId;
+#ifndef WC_NO_RNG
+    WC_RNG rng[1];
 #endif
-    curve25519_key curve25519Private[1];
-    curve25519_key curve25519Public[1];
-    WC_RNG         rng[1];
+    union {
+#ifndef NO_AES
+        Aes aes[1];
+#endif
+#ifndef NO_RSA
+        RsaKey rsa[1];
+#endif
+#ifdef HAVE_ECC
+        ecc_key eccPrivate[1];
+#endif
+#ifdef HAVE_CURVE25519
+        curve25519_key curve25519Private[1];
+#endif
+#ifdef WOLFSSL_CMAC
+        Cmac cmac[1];
+#endif
+    };
+    union {
+#ifdef HAVE_ECC
+        ecc_key eccPublic[1];
+#endif
+#ifdef HAVE_CURVE25519
+        curve25519_key curve25519Public[1];
+#endif
+    };
 } crypto_context;
 
 #ifdef WOLFHSM_SHE_EXTENSION

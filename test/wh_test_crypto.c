@@ -80,6 +80,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     ecc_key eccPublic[1];
     curve25519_key curve25519PrivateKey[1];
     curve25519_key curve25519PublicKey[1];
+    Cmac cmac[1];
     uint32_t outLen;
     uint16_t keyId;
     uint8_t key[16];
@@ -439,8 +440,25 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     if (XMEMCMP(sharedOne, sharedTwo, outLen) != 0) {
         WH_ERROR_PRINT("CURVE25519 shared secrets don't match\n");
     }
-
-
+    /* test cmac */
+    if((ret = wc_InitCmac_ex(cmac, key, sizeof(key), WC_CMAC_AES, NULL, NULL, WOLFHSM_DEV_ID)) != 0) {
+        printf("Failed to wc_InitCmac_ex %d\n", ret);
+        return 1;
+    }
+    if((ret = wc_CmacUpdate(cmac, (byte*)plainText, sizeof(plainText))) != 0) {
+        printf("Failed to wc_CmacUpdate %d\n", ret);
+        return 1;
+    }
+    outLen = sizeof(plainText);
+    if((ret = wc_CmacFinal(cmac, (byte*)cipherText, &outLen)) != 0) {
+        printf("Failed to wc_CmacFinal %d\n", ret);
+        return 1;
+    }
+    if((ret = wc_AesCmacVerify_ex(cmac, (byte*)cipherText, sizeof(cipherText), (byte*)plainText, sizeof(plainText), key, sizeof(key), NULL, WOLFHSM_DEV_ID)) != 0) {
+        printf("Failed to wc_AesCmacVerify_ex %d\n", ret);
+        return 1;
+    }
+    printf("CMAC SUCCESS\n");
 exit:
     wc_curve25519_free(curve25519PrivateKey);
     wc_curve25519_free(curve25519PublicKey);

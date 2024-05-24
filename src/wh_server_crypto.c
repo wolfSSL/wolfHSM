@@ -46,13 +46,12 @@ static int hsmCacheKeyRsa(whServerContext* server, RsaKey* key, whKeyId* outId)
     if (ret == 0) {
         /* export key */
         /* TODO: Fix wolfCrypto to allow KeyToDer when KEY_GEN is NOT set */
+        XMEMSET((uint8_t*)&server->cache[slotIdx], 0, sizeof(CacheSlot));
         ret = wc_RsaKeyToDer(key, server->cache[slotIdx].buffer,
             WOLFHSM_KEYCACHE_BUFSIZE);
     }
     if (ret > 0) {
         /* set meta */
-        XMEMSET((uint8_t*)server->cache[slotIdx].meta, 0,
-            sizeof(server->cache[slotIdx].meta));
         server->cache[slotIdx].meta->id = keyId;
         server->cache[slotIdx].meta->len = ret;
         /* export keyId */
@@ -96,6 +95,7 @@ static int hsmCacheKeyCurve25519(whServerContext* server, curve25519_key* key,
         ret = hsmGetUniqueId(server, &keyId);
     }
     if (ret == 0) {
+        XMEMSET((uint8_t*)&server->cache[slotIdx], 0, sizeof(CacheSlot));
         /* export key */
         ret = wc_curve25519_export_key_raw(key,
             server->cache[slotIdx].buffer + CURVE25519_KEYSIZE, &privSz,
@@ -103,8 +103,6 @@ static int hsmCacheKeyCurve25519(whServerContext* server, curve25519_key* key,
     }
     if (ret == 0) {
         /* set meta */
-        XMEMSET((uint8_t*)server->cache[slotIdx].meta, 0,
-            sizeof(server->cache[slotIdx].meta));
         server->cache[slotIdx].meta->id = keyId;
         server->cache[slotIdx].meta->len = CURVE25519_KEYSIZE * 2;
         /* export keyId */
@@ -153,6 +151,7 @@ static int hsmCacheKeyEcc(whServerContext* server, ecc_key* key, whKeyId* outId)
     }
     /* export key */
     if (ret == 0) {
+        XMEMSET((uint8_t*)&server->cache[slotIdx], 0, sizeof(CacheSlot));
         qxLen = qyLen = qdLen = key->dp->size;
         ret = wc_ecc_export_private_raw(key, server->cache[slotIdx].buffer,
             &qxLen, server->cache[slotIdx].buffer + qxLen,
@@ -160,8 +159,6 @@ static int hsmCacheKeyEcc(whServerContext* server, ecc_key* key, whKeyId* outId)
     }
     if (ret == 0) {
         /* set meta */
-        XMEMSET((uint8_t*)server->cache[slotIdx].meta, 0,
-            sizeof(server->cache[slotIdx].meta));
         server->cache[slotIdx].meta->id = keyId;
         server->cache[slotIdx].meta->len = qxLen + qyLen + qdLen;
         /* export keyId */
@@ -206,6 +203,7 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
     uint8_t* sig;
     uint8_t* hash;
     whPacket* packet = (whPacket*)data;
+    whNvmMetadata meta[1];
 #ifdef WOLFHSM_SYMMETRIC_INTERNAL
     uint8_t tmpKey[AES_MAX_KEY_SIZE + AES_IV_SIZE];
 #endif
@@ -649,6 +647,79 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
         }
         break;
 #endif /* !WC_NO_RNG */
+#ifdef WOLFSSL_CMAC
+    case WC_ALGO_TYPE_CMAC:
+        /* in, out and key are after the fixed size fields */
+        in = (uint8_t*)(&packet->cmacReq + 1);
+        key = in + packet->cmacReq.inSz;
+        out = (uint8_t*)(&packet->cmacRes + 1);
+        /* do oneshot if all fields are present */
+        if (packet->cmacReq.inSz != 0 && packet->cmacReq.keySz != 0 &&
+            packet->cmacReq.outSz != 0) {
+            field = packet->cmacReq.outSz;
+            ret = wc_AesCmacGenerate_ex(server->crypto->cmac, out, &field, in,
+                packet->cmacReq.inSz, key, packet->cmacReq.keySz, NULL,
+                server->crypto->devId);
+            packet->cmacRes.outSz = field;
+        }
+        else {
+            /* do each operation based on which fields are set */
+            /* set key if present, otherwise load the struct from keyId */
+            if (packet->cmacReq.keySz != 0) {
+                /* initialize cmac with key and type */
+                ret = wc_InitCmac_ex(server->crypto->cmac, key,
+                    packet->cmacReq.keySz, packet->cmacReq.type, NULL, NULL,
+                    server->crypto->devId);
+            }
+            else {
+                field = sizeof(server->crypto->cmac);
+                ret = hsmReadKey(server,
+                    MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_CRYPTO,
+                    server->comm->client_id, packet->cmacReq.keyId), NULL,
+                    (uint8_t*)server->crypto->cmac, &field);
+            }
+            if (ret == 0 && packet->cmacReq.inSz != 0) {
+                ret = wc_CmacUpdate(server->crypto->cmac, in,
+                    packet->cmacReq.inSz);
+            }
+            /* do final and evict the struct if outSz is set, otherwise cache
+             * the struct for a future call */
+            if (ret == 0 && packet->cmacReq.outSz != 0) {
+                keyId = packet->cmacReq.keyId;
+                field = packet->cmacReq.outSz;
+                ret = wc_CmacFinal(server->crypto->cmac, out, &field);
+                packet->cmacReq.outSz = field;
+                /* evict the key */
+                if (ret == 0) {
+                    hsmEvictKey(server,
+                        MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_CRYPTO,
+                        server->comm->client_id, keyId));
+                }
+            }
+            else {
+                /* cache/re-cache updated struct */
+                XMEMSET((uint8_t*)meta, 0, sizeof(meta));
+                if (packet->cmacReq.keySz != 0) {
+                    keyId = WOLFHSM_KEYTYPE_CRYPTO;
+                    ret = hsmGetUniqueId(server, &keyId);
+                }
+                else {
+                    keyId = MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_CRYPTO,
+                        server->comm->client_id, packet->cmacReq.keyId);
+                }
+                meta->id = keyId;
+                meta->len = sizeof(server->crypto->cmac);
+                ret = hsmCacheKey(server, meta, (uint8_t*)server->crypto->cmac);
+                packet->cmacRes.keyId = (keyId & WOLFHSM_KEYID_MASK);
+                packet->cmacRes.outSz = 0;
+            }
+        }
+        if (ret == 0) {
+            *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->cmacRes) +
+                packet->cmacRes.outSz;
+        }
+        break;
+#endif
     case WC_ALGO_TYPE_NONE:
     default:
         ret = NOT_COMPILED_IN;
