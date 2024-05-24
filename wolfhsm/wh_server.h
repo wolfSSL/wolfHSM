@@ -58,8 +58,10 @@ typedef struct {
     int devId;
     Aes aes[1];
     RsaKey rsa[1];
+#ifdef HAVE_ECC
     ecc_key eccPrivate[1];
     ecc_key eccPublic[1];
+#endif
     curve25519_key curve25519Private[1];
     curve25519_key curve25519Public[1];
     WC_RNG rng[1];
