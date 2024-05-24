@@ -159,6 +159,10 @@ client/server should Cleanup any context as a result.
 Transports provide intact packets (byte sequences) of variable size (up to a
 maximum MTU), to the messaging layer for the library to process as a request or 
 response.  
+
+## Resources
+[wolfHSM Examples](https://www.github.com/wolfSSL/wolfHSM-examples)
+
 ### API's
 wh_TransportInit();
 wh_TransportSend();
