@@ -559,6 +559,7 @@ void wh_Client_SetKeyRsa(RsaKey* key, whNvmId keyId);
  * @param[in] keyId Key ID to be associated with the AES key.
  */
 void wh_Client_SetKeyAes(Aes* aes, whNvmId keyId);
+void wh_Client_SetKeyCmac(Cmac* key, whNvmId keyId);
 #endif
 
 /** NVM functions */

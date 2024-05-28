@@ -753,4 +753,11 @@ void wh_Client_SetKeyAes(Aes* key, whNvmId keyId)
     key->devCtx = (void*)((intptr_t)keyId);
 }
 #endif
+
+#ifdef WOLFSSL_CMAC
+void wh_Client_SetKeyCmac(Cmac* key, whNvmId keyId)
+{
+    key->devCtx = (void*)((intptr_t)keyId);
+}
+#endif
 #endif  /* !WOLFHSM_NO_CRYPTO */

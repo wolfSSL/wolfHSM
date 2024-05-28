@@ -204,9 +204,7 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
     uint8_t* hash;
     whPacket* packet = (whPacket*)data;
     whNvmMetadata meta[1];
-#ifdef WOLFHSM_SYMMETRIC_INTERNAL
     uint8_t tmpKey[AES_MAX_KEY_SIZE + AES_IV_SIZE];
-#endif
 
     if (server == NULL || server->crypto == NULL || data == NULL || size == NULL)
         return BAD_FUNC_ARG;
@@ -673,10 +671,23 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
             }
             else {
                 field = sizeof(server->crypto->cmac);
+                keyId = packet->cmacReq.keyId;
                 ret = hsmReadKey(server,
                     MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_CRYPTO,
-                    server->comm->client_id, packet->cmacReq.keyId), NULL,
+                    server->comm->client_id, keyId), NULL,
                     (uint8_t*)server->crypto->cmac, &field);
+                /* if the key size is a multiple of aes, init the key and
+                 * replace it with the cmac struct later */
+                if (field == AES_128_KEY_SIZE || field == AES_192_KEY_SIZE ||
+                    field == AES_256_KEY_SIZE) {
+                    XMEMCPY(tmpKey, (uint8_t*)server->crypto->cmac, field);
+                    /* type is not a part of the update call, assume AES */
+                    ret = wc_InitCmac_ex(server->crypto->cmac, tmpKey,
+                        field, WC_CMAC_AES, NULL, NULL,
+                        server->crypto->devId);
+                }
+                else if (field != sizeof(server->crypto->cmac))
+                    ret = BAD_FUNC_ARG;
             }
             if (ret == 0 && packet->cmacReq.inSz != 0) {
                 ret = wc_CmacUpdate(server->crypto->cmac, in,
@@ -696,7 +707,7 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
                         server->comm->client_id, keyId));
                 }
             }
-            else {
+            else if (ret == 0) {
                 /* cache/re-cache updated struct */
                 XMEMSET((uint8_t*)meta, 0, sizeof(meta));
                 if (packet->cmacReq.keySz != 0) {

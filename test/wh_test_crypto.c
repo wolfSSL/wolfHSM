@@ -95,6 +95,16 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     uint8_t authTag[16];
     uint8_t sharedOne[CURVE25519_KEYSIZE];
     uint8_t sharedTwo[CURVE25519_KEYSIZE];
+    uint8_t knownCmacKey[] = {0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6,
+        0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c};
+    uint8_t knownCmacMessage[] = {0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f,
+        0x96, 0xe9, 0x3d, 0x7e, 0x11, 0x73, 0x93, 0x17, 0x2a, 0xae, 0x2d, 0x8a,
+        0x57, 0x1e, 0x03, 0xac, 0x9c, 0x9e, 0xb7, 0x6f, 0xac, 0x45, 0xaf, 0x8e,
+        0x51, 0x30, 0xc8, 0x1c, 0x46, 0xa3, 0x5c, 0xe4, 0x11, 0xe5, 0xfb, 0xc1,
+        0x19, 0x1a, 0x0a, 0x52, 0xef, 0xf6, 0x9f, 0x24, 0x45, 0xdf, 0x4f, 0x9b,
+        0x17, 0xad, 0x2b, 0x41, 0x7b, 0xe6, 0x6c, 0x37, 0x10};
+    uint8_t knownCmacTag[] = {0x51, 0xf0, 0xbe, 0xbf, 0x7e, 0x3b, 0x9d, 0x92,
+        0xfc, 0x49, 0x74, 0x17, 0x79, 0x36, 0x3c, 0xfe};
 
     XMEMCPY(plainText, PLAINTEXT, sizeof(plainText));
 
@@ -219,10 +229,11 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         WH_ERROR_PRINT("Failed to wh_Client_KeyExport %d\n", ret);
         goto exit;
     }
-    if (ret == 0 && XMEMCMP(key, keyEnd, outLen) == 0 && XMEMCMP(labelStart, labelEnd, sizeof(labelStart)) == 0)
+    if (XMEMCMP(key, keyEnd, outLen) == 0 && XMEMCMP(labelStart, labelEnd, sizeof(labelStart)) == 0)
         printf("KEY COMMIT/EXPORT SUCCESS\n");
     else {
         WH_ERROR_PRINT("KEY COMMIT/EXPORT FAILED TO MATCH\n");
+        ret = -1;
         goto exit;
     }
     /* test erase */
@@ -280,8 +291,11 @@ int whTest_CryptoClientConfig(whClientConfig* config)
 #endif
     if (memcmp(plainText, finalText, sizeof(plainText)) == 0)
         printf("AES CBC SUCCESS\n");
-    else
-        printf("AES CBC FAILED TO MATCH\n");
+    else {
+        WH_ERROR_PRINT("AES CBC FAILED TO MATCH\n");
+        ret = -1;
+        goto exit;
+    }
     /* test aes GCM */
     if((ret = wc_AesInit(aes, NULL, WOLFHSM_DEV_ID)) != 0) {
         printf("Failed to wc_AesInit %d\n", ret);
@@ -326,8 +340,11 @@ int whTest_CryptoClientConfig(whClientConfig* config)
 #endif
     if (memcmp(plainText, finalText, sizeof(plainText)) == 0)
         printf("AES GCM SUCCESS\n");
-    else
-        printf("AES GCM FAILED TO MATCH\n");
+    else {
+        WH_ERROR_PRINT("AES GCM FAILED TO MATCH\n");
+        ret = -1;
+        goto exit;
+    }
     /* test rsa */
     if((ret = wc_InitRsaKey_ex(rsa, NULL, WOLFHSM_DEV_ID)) != 0) {
         printf("Failed to wc_InitRsaKey_ex %d\n", ret);
@@ -366,8 +383,11 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     printf("RSA KEYGEN SUCCESS\n");
     if (memcmp(plainText, finalText, sizeof(plainText)) == 0)
         printf("RSA SUCCESS\n");
-    else
-        printf("RSA FAILED TO MATCH\n");
+    else {
+        WH_ERROR_PRINT("RSA FAILED TO MATCH\n");
+        ret = -1;
+        goto exit;
+    }
     /* test ecc */
     if((ret = wc_ecc_init_ex(eccPrivate, NULL, WOLFHSM_DEV_ID)) != 0) {
         printf("Failed to wc_ecc_init_ex %d\n", ret);
@@ -396,8 +416,11 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     }
     if (memcmp(cipherText, finalText, outLen) == 0)
         printf("ECDH SUCCESS\n");
-    else
-        printf("ECDH FAILED TO MATCH\n");
+    else {
+        WH_ERROR_PRINT("ECDH FAILED TO MATCH\n");
+        ret = -1;
+        goto exit;
+    }
     outLen = 32;
     if((ret = wc_ecc_sign_hash((void*)cipherText, sizeof(cipherText), (void*)finalText, &outLen, rng, eccPrivate)) != 0) {
         printf("Failed to wc_ecc_sign_hash %d\n", ret);
@@ -409,8 +432,11 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     }
     if (res == 1)
         printf("ECC SIGN/VERIFY SUCCESS\n");
-    else
-        printf("ECC SIGN/VERIFY FAIL\n");
+    else {
+        WH_ERROR_PRINT("ECC SIGN/VERIFY FAIL\n");
+        ret = -1;
+        goto exit;
+    }
     /* test curve25519 */
     if ((ret = wc_curve25519_init_ex(curve25519PrivateKey, NULL, WOLFHSM_DEV_ID)) != 0) {
         WH_ERROR_PRINT("Failed to wc_curve25519_init_ex %d\n", ret);
@@ -439,26 +465,65 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     }
     if (XMEMCMP(sharedOne, sharedTwo, outLen) != 0) {
         WH_ERROR_PRINT("CURVE25519 shared secrets don't match\n");
+        ret = -1;
+        goto exit;
     }
     /* test cmac */
-    if((ret = wc_InitCmac_ex(cmac, key, sizeof(key), WC_CMAC_AES, NULL, NULL, WOLFHSM_DEV_ID)) != 0) {
-        printf("Failed to wc_InitCmac_ex %d\n", ret);
-        return 1;
+    if((ret = wc_InitCmac_ex(cmac, knownCmacKey, sizeof(knownCmacKey), WC_CMAC_AES, NULL, NULL, WOLFHSM_DEV_ID)) != 0) {
+        WH_ERROR_PRINT("Failed to wc_InitCmac_ex %d\n", ret);
+        goto exit;
     }
-    if((ret = wc_CmacUpdate(cmac, (byte*)plainText, sizeof(plainText))) != 0) {
-        printf("Failed to wc_CmacUpdate %d\n", ret);
-        return 1;
+    if((ret = wc_CmacUpdate(cmac, (byte*)knownCmacMessage, sizeof(knownCmacMessage))) != 0) {
+        WH_ERROR_PRINT("Failed to wc_CmacUpdate %d\n", ret);
+        goto exit;
     }
-    outLen = sizeof(plainText);
+    outLen = sizeof(knownCmacTag);
     if((ret = wc_CmacFinal(cmac, (byte*)cipherText, &outLen)) != 0) {
-        printf("Failed to wc_CmacFinal %d\n", ret);
-        return 1;
+        WH_ERROR_PRINT("Failed to wc_CmacFinal %d\n", ret);
+        goto exit;
     }
-    if((ret = wc_AesCmacVerify_ex(cmac, (byte*)cipherText, sizeof(cipherText), (byte*)plainText, sizeof(plainText), key, sizeof(key), NULL, WOLFHSM_DEV_ID)) != 0) {
-        printf("Failed to wc_AesCmacVerify_ex %d\n", ret);
-        return 1;
+    if (memcmp(knownCmacTag, cipherText, sizeof(knownCmacTag)) != 0) {
+        WH_ERROR_PRINT("CMAC FAILED KNOWN ANSWER TEST\n");
+        ret = -1;
+        goto exit;
     }
-    printf("CMAC SUCCESS\n");
+    if((ret = wc_AesCmacVerify_ex(cmac, (byte*)knownCmacTag, sizeof(knownCmacTag), (byte*)knownCmacMessage, sizeof(knownCmacMessage), knownCmacKey, sizeof(knownCmacKey), NULL, WOLFHSM_DEV_ID)) != 0) {
+        WH_ERROR_PRINT("Failed to wc_AesCmacVerify_ex %d\n", ret);
+        goto exit;
+    }
+    /* test with pre-cached key */
+    if ((ret = wh_Client_KeyCache(client, 0, labelStart, sizeof(labelStart), knownCmacKey, sizeof(knownCmacKey), &keyId)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyCache %d\n", ret);
+        goto exit;
+    }
+    if((ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, NULL, WOLFHSM_DEV_ID)) != 0) {
+        WH_ERROR_PRINT("Failed to wc_InitCmac_ex %d\n", ret);
+        goto exit;
+    }
+    /* sets devCtx */
+    wh_Client_SetKeyCmac(cmac, keyId);
+    if((ret = wc_CmacUpdate(cmac, (byte*)knownCmacMessage, sizeof(knownCmacMessage))) != 0) {
+        WH_ERROR_PRINT("Failed to wc_CmacUpdate %d\n", ret);
+        goto exit;
+    }
+    outLen = sizeof(knownCmacTag);
+    if((ret = wc_CmacFinal(cmac, (byte*)cipherText, &outLen)) != 0) {
+        WH_ERROR_PRINT("Failed to wc_CmacFinal %d\n", ret);
+        goto exit;
+    }
+    if (memcmp(knownCmacTag, cipherText, sizeof(knownCmacTag)) == 0)
+        printf("CMAC SUCCESS\n");
+    else {
+        WH_ERROR_PRINT("CMAC FAILED KNOWN ANSWER TEST\n");
+        ret = -1;
+    }
+    /* verify the key was evicted after final */
+    outLen = sizeof(keyEnd);
+    if ((ret = wh_Client_KeyExport(client, keyId, labelEnd, sizeof(labelEnd), keyEnd, &outLen)) != WH_ERROR_NOTFOUND) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyExport %d\n", ret);
+        goto exit;
+    }
+    ret = 0;
 exit:
     wc_curve25519_free(curve25519PrivateKey);
     wc_curve25519_free(curve25519PublicKey);
