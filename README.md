@@ -5,7 +5,7 @@ wolfHSM is intended to simplify the challenge of moving between hardware with
 enhanced security features without being tied to any vendor-specific library
 calls.
 
-Although initially targetted to automotive-style HSM-enabled microcontrollers,
+Although initially targeted to automotive-style HSM-enabled microcontrollers,
 wolfHSM provides an extensible solution to support future capabilities of
 platforms while still supporting standardized interfaces and protocols such as
 PKCS11 and AUTOSAR SHE.
@@ -79,7 +79,7 @@ The wolfHSM client library and server application provide top-level features
 that combine the communication and message handling functions to simplify usage.
 The wolfHSM server application follows a strict startup sequence and 
 ## Communication Client/Server 
-The wolfHSM server responds to with multiple clients' requests via communcation 
+The wolfHSM server responds to with multiple clients' requests via communication 
 interfaces.  All communications are packet-based with a fixed-size header that
 a transport provides to the library for message processing.  The split request 
 and response processing supports synchronous polling of message reception or
