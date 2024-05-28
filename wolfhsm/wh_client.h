@@ -106,8 +106,10 @@ int wh_Client_Cleanup(whClientContext* c);
  * @param c The client context.
  * @param group The group identifier.
  * @param action The action identifier.
- * @param data_size The size of the data to be sent.
- * @param data A pointer to the data to be sent.
+ * @param data_size The size of the data to be sent. Zero is allowed in the case
+ * of NULL data.
+ * @param data A pointer to the data to be sent. NULL is allowed in the case of
+ * zero-sized data.
  * @return Returns 0 on success, or a negative value on failure.
  */
 int wh_Client_SendRequest(whClientContext* c, uint16_t group, uint16_t action,
@@ -135,7 +137,8 @@ int wh_Client_RecvResponse(whClientContext* c, uint16_t* out_group,
  *
  * This function prepares and sends a communication initialization request
  * message to the server. It populates the message with the client's ID
- * and sends it using the communication context.
+ * (initialized from the config struct at client initialization) and sends it
+ * using the communication context.
  *
  * @param[in] c Pointer to the client context.
  * @return int Returns 0 on success, or a negative error code on failure.
@@ -256,7 +259,20 @@ int wh_Client_EchoResponse(whClientContext* c, uint16_t* out_size, void* data);
 int wh_Client_Echo(whClientContext* c, uint16_t snd_len, const void* snd_data,
                    uint16_t* out_rcv_len, void* rcv_data);
 
-/** Key functions */
+/** Key functions
+ *
+ * For client-side key data to be used, it must first be brought into the key
+ * cache (RAM) of the HSM server.  Key cache requests instruct the server to
+ * transfer key data from client memory and allocate space in the HSM server RAM
+ * to hold this key.  Key eviction requests instruct the HSM server to remove
+ * the key from the cache so that the RAM may be reused.  Key export requests
+ * instruct the server to send back the cached key data to client RAM.  Key
+ * commit requests instruct the HSM server to write the cached key into the HSM
+ * NVM. Key erase requests instruct the HSM server to remove a previously
+ * committed key from NVM.
+ */
+
+
 #ifndef WOLFHSM_NO_CRYPTO
 /**
  * @brief Sends a key cache request to the server.
