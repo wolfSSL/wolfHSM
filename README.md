@@ -17,7 +17,7 @@ configuration, and context storage architecture to allow compile-time, link-
 time, and/or run-time selection of functional components.  Hardware specifics
 are abstracted from the logical operations by associating callback functions
 with untyped context structures, referenced as a void*.
- 
+
 ## Example component initialization
 The prototypical compile-time static instance configuration and initialization
 sequence of a ported component is:
