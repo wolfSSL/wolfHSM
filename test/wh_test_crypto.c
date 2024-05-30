@@ -491,24 +491,14 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         WH_ERROR_PRINT("Failed to wc_AesCmacVerify_ex %d\n", ret);
         goto exit;
     }
-    /* test with pre-cached key */
+    /* test oneshot with pre-cached key */
     if ((ret = wh_Client_KeyCache(client, 0, labelStart, sizeof(labelStart), knownCmacKey, sizeof(knownCmacKey), &keyId)) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_KeyCache %d\n", ret);
         goto exit;
     }
-    if((ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, NULL, WOLFHSM_DEV_ID)) != 0) {
-        WH_ERROR_PRINT("Failed to wc_InitCmac_ex %d\n", ret);
-        goto exit;
-    }
-    /* sets devCtx */
-    wh_Client_SetKeyCmac(cmac, keyId);
-    if((ret = wc_CmacUpdate(cmac, (byte*)knownCmacMessage, sizeof(knownCmacMessage))) != 0) {
-        WH_ERROR_PRINT("Failed to wc_CmacUpdate %d\n", ret);
-        goto exit;
-    }
     outLen = sizeof(knownCmacTag);
-    if((ret = wc_CmacFinal(cmac, (byte*)cipherText, &outLen)) != 0) {
-        WH_ERROR_PRINT("Failed to wc_CmacFinal %d\n", ret);
+    if((ret = wh_Client_AesCmacGenerate(cmac, (byte*)cipherText, &outLen, (byte*)knownCmacMessage, sizeof(knownCmacMessage), keyId, NULL)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_AesCmacGenerate %d\n", ret);
         goto exit;
     }
     if (memcmp(knownCmacTag, cipherText, sizeof(knownCmacTag)) == 0)
@@ -517,9 +507,28 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         WH_ERROR_PRINT("CMAC FAILED KNOWN ANSWER TEST\n");
         ret = -1;
     }
-    /* verify the key was evicted after final */
+    /* verify the key was evicted after oneshot */
     outLen = sizeof(keyEnd);
     if ((ret = wh_Client_KeyExport(client, keyId, labelEnd, sizeof(labelEnd), keyEnd, &outLen)) != WH_ERROR_NOTFOUND) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyExport %d\n", ret);
+        goto exit;
+    }
+    /* test oneshot verify with commited key */
+    if ((ret = wh_Client_KeyCache(client, 0, labelStart, sizeof(labelStart), knownCmacKey, sizeof(knownCmacKey), &keyId)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyCache %d\n", ret);
+        goto exit;
+    }
+    if ((ret = wh_Client_KeyCommit(client, keyId)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyCommit %d\n", ret);
+        goto exit;
+    }
+    if((ret = wh_Client_AesCmacVerify(cmac, (byte*)cipherText, outLen, (byte*)knownCmacMessage, sizeof(knownCmacMessage), keyId, NULL)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_AesCmacVerify %d\n", ret);
+        goto exit;
+    }
+    /* verify the key still exists in NVM */
+    outLen = sizeof(keyEnd);
+    if ((ret = wh_Client_KeyExport(client, keyId, labelEnd, sizeof(labelEnd), keyEnd, &outLen)) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_KeyExport %d\n", ret);
         goto exit;
     }

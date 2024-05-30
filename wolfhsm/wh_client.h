@@ -559,6 +559,57 @@ void wh_Client_SetKeyRsa(RsaKey* key, whNvmId keyId);
  * @param[in] keyId Key ID to be associated with the AES key.
  */
 void wh_Client_SetKeyAes(Aes* aes, whNvmId keyId);
+
+/**
+ * @brief Runs the Cmac operation in a single call with a wolfHSM keyId.
+ *
+ * This function does entire cmac operation in one function call with a key
+ * already stored in the HSM. This operation evicts the key from the HSM cache
+ * after the operation though it will still be in the HSM's NVM if it was
+ * commited
+ *
+ * @param[in] cmac Pointer to the CMAC key structure.
+ * @param[out] out Output buffer for the CMAC tag.
+ * @param[out] outSz Size of the output buffer.
+ * @param[in] in Input buffer to be hashed.
+ * @param[in] inSz Size of the input buffer.
+ * @param[in] keyId ID of the key inside the HSM.
+ * @param[in] heap Heap pointer for the cmac struct.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_AesCmacGenerate(Cmac* cmac, byte* out, word32* outSz,
+    const byte* in, word32 inSz, whNvmId keyId, void* heap);
+
+/**
+ * @brief Verifies a Cmac tag in a single call with a wolfHSM keyId.
+ *
+ * This function does entire cmac verify in one function call with a key
+ * already stored in the HSM. This operation evicts the key from the HSM cache
+ * after the operation though it will still be in the HSM's NVM if it was
+ * commited
+ *
+ * @param[in] cmac Pointer to the CMAC key structure.
+ * @param[out] check Cmac tag to check against.
+ * @param[out] checkSz Size of the check buffer.
+ * @param[in] in Input buffer to be hashed.
+ * @param[in] inSz Size of the input buffer.
+ * @param[in] keyId ID of the key inside the HSM.
+ * @param[in] heap Heap pointer for the cmac struct.
+ * @return int Returns 0 on success, 1 on tag mismatch, or a negative error code on failure.
+ */
+int wh_Client_AesCmacVerify(Cmac* cmac, const byte* check, word32 checkSz,
+    const byte* in, word32 inSz, whNvmId keyId, void* heap);
+
+/**
+ * @brief Associates a CMAC key with a specific key ID.
+ *
+ * This function sets the device context of a CMAC key to the specified key ID.
+ * On the server side, this key ID is used to reference the key stored in the
+ * HSM
+ *
+ * @param[in] key Pointer to the CMAC key structure.
+ * @param[in] keyId Key ID to be associated with the CMAC key.
+ */
 void wh_Client_SetKeyCmac(Cmac* key, whNvmId keyId);
 #endif
 
