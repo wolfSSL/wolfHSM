@@ -12,12 +12,12 @@ PKCS11 and AUTOSAR SHE.
 
 # wolfHSM Internals
 To support easily porting wolfHSM to different hardware platforms and build
-environments, wolfHSM components are designed to have a common initialization, 
+environments, wolfHSM components are designed to have a common initialization,
 configuration, and context storage architecture to allow compile-time, link-
 time, and/or run-time selection of functional components.  Hardware specifics
 are abstracted from the logical operations by associating callback functions
 with untyped context structures, referenced as a void*.
- 
+
 ## Example component initialization
 The prototypical compile-time static instance configuration and initialization
 sequence of a ported component is:
@@ -26,13 +26,13 @@ sequence of a ported component is:
 #include "wolfhsm/component.h"        /* wolfHSM abstract API reference for a component */
 #include "port/vendor/mycomponent.h"  /* Platform specific definitions of configuration
                                        * and context structures, as well as declarations of
-                                       * callback functions */ 
+                                       * callback functions */
 
 /* Provide the lookup table for function callbacks for mycomponent. Note the type
 is the abstract type provided in wolfhsm/component.h */
 whComponentCb my_cb[1] = {MY_COMPONENT_CB};
 
-/* Fixed configuration data.  Note that pertinent data is copied out of the structure 
+/* Fixed configuration data.  Note that pertinent data is copied out of the structure
  * during init() */
 const myComponentConfig my_config = {
     .my_number = 3,
@@ -57,9 +57,9 @@ rc = wh_Component_CleanUp(comp_context);
 
 ## wolfHSM Functional Components
 The wolfHSM server provides the combination of non-volatile object storage,
-persistent key and counter management, boot image management, and offloaded 
+persistent key and counter management, boot image management, and offloaded
 (hardware accelerated) cryptographic operations within an isolated and securable
-environment that is tailored to available hardware features.  
+environment that is tailored to available hardware features.
 ### API's
 wh_NvmInit();
 wh_NvmCleanup();
@@ -75,13 +75,16 @@ wh_CryptoCleanup();
 
 
 ## Client/Server Roles
-The wolfHSM client library and server application provide top-level features 
+The wolfHSM client library and server application provide top-level features
 that combine the communication and message handling functions to simplify usage.
-The wolfHSM server application follows a strict startup sequence and 
-## Communication Client/Server 
-The wolfHSM server responds to with multiple clients' requests via communication 
+The wolfHSM server application follows a strict startup sequence and performs critical
+tasks to ensure secure efficient operation. It handles cryptographic operations, key management
+and non-volatile storage within the secure environment.
+
+## Communication Client/Server
+The wolfHSM server responds to with multiple clients' requests via communication
 interfaces.  All communications are packet-based with a fixed-size header that
-a transport provides to the library for message processing.  The split request 
+a transport provides to the library for message processing.  The split request
 and response processing supports synchronous polling of message reception or
 asynchronous handling based on interrupt/event support.
 
@@ -104,7 +107,7 @@ uint16_t req_magic = wh_COMM_MAGIC_NATIVE;
 uint16_t req_type = 123;
 uint16_t request_id;
 char* req_data = "RequestData";
-rc = wh_ClientSendRequest(context, req_magic, req_type, &request_id, 
+rc = wh_ClientSendRequest(context, req_magic, req_type, &request_id,
                     sizeof(req_data), req_data);
 /* Do other work */
 
@@ -119,19 +122,19 @@ while((rc = wh_ClientRecvResponse(context,&resp_magic, &resp_type, &resp_id,
 
 ## Messages
 Messages comprise a header with a variable length payload.  The header indicates
-the sequence id, and type of a request or response.  The header also provides 
+the sequence id, and type of a request or response.  The header also provides
 additional fields to provide auxiliary flags or session information. Each client
 is only allowed a single outstanding request to the server at a time.  The
 server will process a single request at a time to ensure client isolation.
 
-Messages are used to encapsulate the request data necessary for the server to 
+Messages are used to encapsulate the request data necessary for the server to
 execute the desired function and for the response to provide the results of the
-function execution back to the client.  Message types are grouped based on the 
+function execution back to the client.  Message types are grouped based on the
 component that is performing the function and uniquely identify which of the
 enumerated functions is being performed.  To ensure compatibility (endianness,
-and version), messages include a Magic field which has known values used to 
-indicate what operations are necessary to demarshall data passed within the 
-payload for native processing.  Each functional component has a "remote" 
+and version), messages include a Magic field which has known values used to
+indicate what operations are necessary to demarshall data passed within the
+payload for native processing.  Each functional component has a "remote"
 implementation that converts between native values and the "on-the-wire" message
 formats.  The servers ensures the response format matches the request format.
 
@@ -142,10 +145,10 @@ the data in a DMA fashion.  To avoid integer pointer size (IPS) and size_t
 differences, all pointers and sizes should be sent as uint64_t when
 possible.
 
-Messages are encoded in the "on-the-wire" format using the Magic field of the 
+Messages are encoded in the "on-the-wire" format using the Magic field of the
 header indicating the specified endianness of structure members as well as the
-version of the communications header (currently 0x01).  Server components that 
-process request messages translate the provided values into native format, 
+version of the communications header (currently 0x01).  Server components that
+process request messages translate the provided values into native format,
 perform the task, and then reencode the result into the format of the request.
 Client response handling is not required to process messages that do not match
 the request format. Encoded messages assume the same size and layout as the
@@ -154,11 +157,11 @@ native structure, with the endianness specified by the Magic field.
 Transport errors passed into the message layer are expected to be fatal and the
 client/server should Cleanup any context as a result.
 
- 
+
 ## Transport
 Transports provide intact packets (byte sequences) of variable size (up to a
-maximum MTU), to the messaging layer for the library to process as a request or 
-response.  
+maximum MTU), to the messaging layer for the library to process as a request or
+response.
 
 ## Resources
 [wolfHSM Examples](https://www.github.com/wolfSSL/wolfHSM-examples)
