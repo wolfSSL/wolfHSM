@@ -36,8 +36,8 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1335, USA
  */
-#ifndef WOLFHSM_CRYPTOCB_H
-#define WOLFHSM_CRYPTOCB_H
+#ifndef WOLFHSM_CLIENT_CRYPTOCB_H_
+#define WOLFHSM_CLIENT_CRYPTOCB_H_
 
 #ifdef __cplusplus
     extern "C" {
@@ -52,4 +52,4 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* ctx);
     } /* extern "C" */
 #endif
 
-#endif /* !WOLFHSM_CRYPTOCB_H */
+#endif /* !WOLFHSM_CLIENT_CRYPTOCB_H_ */

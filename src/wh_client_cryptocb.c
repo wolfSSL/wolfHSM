@@ -52,7 +52,7 @@
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_client.h"
 #include "wolfhsm/wh_message.h"
-#include "wolfhsm/wh_cryptocb.h"
+#include "wolfhsm/wh_client_cryptocb.h"
 
 int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
 {
