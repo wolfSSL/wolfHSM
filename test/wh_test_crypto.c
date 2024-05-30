@@ -247,12 +247,37 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         goto exit;
     }
     printf("KEY ERASE SUCCESS\n");
-    /* test aes CBC */
+    /* test aes CBC with client side key */
     if((ret = wc_AesInit(aes, NULL, WOLFHSM_DEV_ID)) != 0) {
         printf("Failed to wc_AesInit %d\n", ret);
         goto exit;
     }
-#ifdef WOLFHSM_SYMMETRIC_INTERNAL
+    if ((ret = wc_AesSetKey(aes, key, AES_BLOCK_SIZE, iv, AES_ENCRYPTION)) != 0) {
+        printf("Failed to wc_AesSetKey %d\n", ret);
+        goto exit;
+    }
+    if ((ret = wc_AesCbcEncrypt(aes, (byte*)cipherText, (byte*)plainText, sizeof(plainText))) != 0) {
+        printf("Failed to wc_AesCbcEncrypt %d\n", ret);
+        goto exit;
+    }
+    if ((ret = wc_AesSetKey(aes, key, AES_BLOCK_SIZE, iv, AES_DECRYPTION)) != 0) {
+        printf("Failed to wc_AesSetKey %d\n", ret);
+        goto exit;
+    }
+    if ((ret = wc_AesCbcDecrypt(aes, (byte*)finalText, (byte*)cipherText, sizeof(plainText))) != 0) {
+        printf("Failed to wc_AesCbcDecrypt %d\n", ret);
+        goto exit;
+    }
+    if (memcmp(plainText, finalText, sizeof(plainText)) != 0) {
+        WH_ERROR_PRINT("AES CBC FAILED TO MATCH\n");
+        ret = -1;
+        goto exit;
+    }
+    /* test aes CBC with HSM side key */
+    if((ret = wc_AesInit(aes, NULL, WOLFHSM_DEV_ID)) != 0) {
+        printf("Failed to wc_AesInit %d\n", ret);
+        goto exit;
+    }
     keyId = 0;
     if ((ret = wh_Client_KeyCache(client, 0, labelStart, sizeof(labelStart), key, sizeof(key), &keyId)) != 0) {
         printf("Failed to wh_Client_KeyCache %d\n", ret);
@@ -263,32 +288,18 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         printf("Failed to wc_AesSetIV %d\n", ret);
         goto exit;
     }
-#else
-    if ((ret = wc_AesSetKey(aes, key, AES_BLOCK_SIZE, iv, AES_ENCRYPTION)) != 0) {
-        printf("Failed to wc_AesSetKey %d\n", ret);
-        goto exit;
-    }
-#endif
     if ((ret = wc_AesCbcEncrypt(aes, (byte*)cipherText, (byte*)plainText, sizeof(plainText))) != 0) {
         printf("Failed to wc_AesCbcEncrypt %d\n", ret);
         goto exit;
     }
-#ifndef WOLFHSM_SYMMETRIC_INTERNAL
     if ((ret = wc_AesSetKey(aes, key, AES_BLOCK_SIZE, iv, AES_DECRYPTION)) != 0) {
         printf("Failed to wc_AesSetKey %d\n", ret);
         goto exit;
     }
-#endif
     if ((ret = wc_AesCbcDecrypt(aes, (byte*)finalText, (byte*)cipherText, sizeof(plainText))) != 0) {
         printf("Failed to wc_AesCbcDecrypt %d\n", ret);
         goto exit;
     }
-#ifdef WOLFHSM_SYMMETRIC_INTERNAL
-    if((ret = wh_Client_KeyEvict(client, keyId)) != 0) {
-        printf("Failed to wh_Client_KeyEvict %d\n", ret);
-        goto exit;
-    }
-#endif
     if (memcmp(plainText, finalText, sizeof(plainText)) == 0)
         printf("AES CBC SUCCESS\n");
     else {
@@ -296,12 +307,41 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         ret = -1;
         goto exit;
     }
-    /* test aes GCM */
+    if((ret = wh_Client_KeyEvict(client, keyId)) != 0) {
+        printf("Failed to wh_Client_KeyEvict %d\n", ret);
+        goto exit;
+    }
+    /* test aes GCM with client side key */
     if((ret = wc_AesInit(aes, NULL, WOLFHSM_DEV_ID)) != 0) {
         printf("Failed to wc_AesInit %d\n", ret);
         goto exit;
     }
-#ifdef WOLFHSM_SYMMETRIC_INTERNAL
+    if ((ret = wc_AesSetKey(aes, key, AES_BLOCK_SIZE, iv, AES_ENCRYPTION)) != 0) {
+        printf("Failed to wc_AesSetKey %d\n", ret);
+        goto exit;
+    }
+    if ((ret = wc_AesGcmEncrypt(aes, (byte*)cipherText, (byte*)plainText, sizeof(plainText), iv, sizeof(iv), authTag, sizeof(authTag), authIn, sizeof(authIn))) != 0) {
+        printf("Failed to wc_AesGcmEncrypt %d\n", ret);
+        goto exit;
+    }
+    if ((ret = wc_AesSetKey(aes, key, AES_BLOCK_SIZE, iv, AES_DECRYPTION)) != 0) {
+        printf("Failed to wc_AesSetKey %d\n", ret);
+        goto exit;
+    }
+    if ((ret = wc_AesGcmDecrypt(aes, (byte*)finalText, (byte*)cipherText, sizeof(plainText), iv, sizeof(iv), authTag, sizeof(authTag), authIn, sizeof(authIn))) != 0) {
+        printf("Failed to wc_AesGcmDecrypt %d\n", ret);
+        goto exit;
+    }
+    if (memcmp(plainText, finalText, sizeof(plainText)) != 0) {
+        WH_ERROR_PRINT("AES GCM FAILED TO MATCH\n");
+        ret = -1;
+        goto exit;
+    }
+    /* test aes GCM with HSM side key */
+    if((ret = wc_AesInit(aes, NULL, WOLFHSM_DEV_ID)) != 0) {
+        printf("Failed to wc_AesInit %d\n", ret);
+        goto exit;
+    }
     keyId = 0;
     if ((ret = wh_Client_KeyCache(client, 0, labelStart, sizeof(labelStart), key, sizeof(key), &keyId)) != 0) {
         printf("Failed to wh_Client_KeyCache %d\n", ret);
@@ -312,37 +352,23 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         printf("Failed to wc_AesSetIV %d\n", ret);
         goto exit;
     }
-#else
-    if ((ret = wc_AesSetKey(aes, key, AES_BLOCK_SIZE, iv, AES_ENCRYPTION)) != 0) {
-        printf("Failed to wc_AesSetKey %d\n", ret);
-        goto exit;
-    }
-#endif
     if ((ret = wc_AesGcmEncrypt(aes, (byte*)cipherText, (byte*)plainText, sizeof(plainText), iv, sizeof(iv), authTag, sizeof(authTag), authIn, sizeof(authIn))) != 0) {
         printf("Failed to wc_AesGcmEncrypt %d\n", ret);
         goto exit;
     }
-#ifndef WOLFHSM_SYMMETRIC_INTERNAL
-    if ((ret = wc_AesSetKey(aes, key, AES_BLOCK_SIZE, iv, AES_DECRYPTION)) != 0) {
-        printf("Failed to wc_AesSetKey %d\n", ret);
-        goto exit;
-    }
-#endif
     if ((ret = wc_AesGcmDecrypt(aes, (byte*)finalText, (byte*)cipherText, sizeof(plainText), iv, sizeof(iv), authTag, sizeof(authTag), authIn, sizeof(authIn))) != 0) {
         printf("Failed to wc_AesGcmDecrypt %d\n", ret);
         goto exit;
     }
-#ifdef WOLFHSM_SYMMETRIC_INTERNAL
-    if((ret = wh_Client_KeyEvict(client, keyId)) != 0) {
-        printf("Failed to wh_Client_KeyEvict %d\n", ret);
-        goto exit;
-    }
-#endif
     if (memcmp(plainText, finalText, sizeof(plainText)) == 0)
         printf("AES GCM SUCCESS\n");
     else {
         WH_ERROR_PRINT("AES GCM FAILED TO MATCH\n");
         ret = -1;
+        goto exit;
+    }
+    if((ret = wh_Client_KeyEvict(client, keyId)) != 0) {
+        printf("Failed to wh_Client_KeyEvict %d\n", ret);
         goto exit;
     }
     /* test rsa */

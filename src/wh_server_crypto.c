@@ -502,28 +502,29 @@ static int hsmCryptoEcCheckPrivKey(whServerContext* server, whPacket* packet,
 static int hsmCryptoAesCbc(whServerContext* server, whPacket* packet,
     uint16_t* size)
 {
-    int ret;
+    int ret = 0;
     word32 len;
     /* key, iv, in, and out are after fixed size fields */
     byte* key = (uint8_t*)(&packet->cipherAesCbcReq + 1);
     byte* iv = key + packet->cipherAesCbcReq.keyLen;
     byte* in = iv + AES_IV_SIZE;
     byte* out = (uint8_t*)(&packet->cipherAesCbcRes + 1);
-#ifdef WOLFHSM_SYMMETRIC_INTERNAL
     uint8_t tmpKey[AES_MAX_KEY_SIZE + AES_IV_SIZE];
-#endif
-#ifdef WOLFHSM_SYMMETRIC_INTERNAL
-    /* load the key from keystore */
-    len = sizeof(tmpKey);
-    ret = hsmReadKey(server, *(uint32_t*)key | WOLFHSM_KEYTYPE_CRYPTO,
-        NULL, tmpKey, &len);
-    if (ret == 0) {
-        /* set key to use tmpKey data */
-        key = tmpKey;
-        /* overwrite keyLen with internal length */
-        packet->cipherAesCbcReq.keyLen = len;
+    /* use keyId and load from keystore if keyId is nonzero, must check for zero
+     * since WOLFHSM_KEYID_ERASED may not be zero while the client always
+     * defaults to devCtx 0 */
+    if (packet->cipherAesCbcReq.keyId != 0) {
+        len = sizeof(tmpKey);
+        ret = hsmReadKey(server, MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_CRYPTO,
+            server->comm->client_id, packet->cipherAesCbcReq.keyId), NULL,
+            tmpKey, &len);
+        if (ret == 0) {
+            /* set key to use tmpKey data */
+            key = tmpKey;
+            /* overwrite keyLen with internal length */
+            packet->cipherAesCbcReq.keyLen = len;
+        }
     }
-#endif
     /* init key with possible hardware */
     if (ret == 0)
         ret = wc_AesInit(server->crypto->aes, NULL, server->crypto->devId);
@@ -558,7 +559,7 @@ static int hsmCryptoAesCbc(whServerContext* server, whPacket* packet,
 static int hsmCryptoAesGcm(whServerContext* server, whPacket* packet,
     uint16_t* size)
 {
-    int ret;
+    int ret = 0;
     word32 len;
     /* key, iv, in, authIn, authTag, and out are after fixed size fields */
     byte* key = (uint8_t*)(&packet->cipherAesGcmReq + 1);
@@ -567,26 +568,25 @@ static int hsmCryptoAesGcm(whServerContext* server, whPacket* packet,
     byte* authIn = in + packet->cipherAesGcmReq.sz;
     byte* out = (uint8_t*)(&packet->cipherAesGcmRes + 1);
     byte* authTag;
-#ifdef WOLFHSM_SYMMETRIC_INTERNAL
     uint8_t tmpKey[AES_MAX_KEY_SIZE + AES_IV_SIZE];
-#endif
-#ifdef WOLFHSM_SYMMETRIC_INTERNAL
-    /* load the key from keystore */
-    len = sizeof(tmpKey);
-    ret = hsmReadKey(server, *(uint32_t*)key | WOLFHSM_KEYTYPE_CRYPTO,
-        NULL, tmpKey, &len);
-    if (ret == 0) {
-        /* set key to use tmpKey data */
-        key = tmpKey;
-        /* overwrite keyLen with internal length */
-        packet->cipherAesGcmReq.keyLen = len;
+    /* use keyId and load from keystore if keyId is nonzero, must check for zero
+     * since WOLFHSM_KEYID_ERASED may not be zero while the client always
+     * defaults to devCtx 0 */
+    if (packet->cipherAesGcmReq.keyId != 0) {
+        len = sizeof(tmpKey);
+        ret = hsmReadKey(server, MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_CRYPTO,
+            server->comm->client_id, packet->cipherAesGcmReq.keyId),
+            NULL, tmpKey, &len);
+        if (ret == 0) {
+            /* set key to use tmpKey data */
+            key = tmpKey;
+            /* overwrite keyLen with internal length */
+            packet->cipherAesGcmReq.keyLen = len;
+        }
     }
-#endif
     /* init key with possible hardware */
-    if (ret == 0) {
-        ret = wc_AesInit(server->crypto->aes, NULL,
-            server->crypto->devId);
-    }
+    if (ret == 0)
+        ret = wc_AesInit(server->crypto->aes, NULL, server->crypto->devId);
     /* load the key */
     if (ret == 0) {
         ret = wc_AesGcmSetKey(server->crypto->aes, key,

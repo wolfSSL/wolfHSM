@@ -47,6 +47,7 @@ typedef struct WOLFHSM_PACK wh_Packet_cipher_aescbc_req
     uint32_t enc;
     uint32_t keyLen;
     uint32_t sz;
+    uint16_t keyId;
     /* key[keyLen] | iv[AES_IV_SIZE] | in[sz] */
 } wh_Packet_cipher_aescbc_req;
 
@@ -65,6 +66,7 @@ typedef struct WOLFHSM_PACK wh_Packet_cipher_aesgcm_req
     uint32_t ivSz;
     uint32_t authInSz;
     uint32_t authTagSz;
+    uint16_t keyId;
     /* key[keyLen] | iv[ivSz] | in[sz] | authIn[authInSz] | authTag[authTagSz] */
 } wh_Packet_cipher_aesgcm_req;
 

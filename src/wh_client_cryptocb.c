@@ -91,14 +91,6 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             /* key, iv, in, and out are after fixed size fields */
             key = (uint8_t*)(&packet->cipherAesCbcReq + 1);
             out = (uint8_t*)(&packet->cipherAesCbcRes + 1);
-#ifdef WOLFHSM_SYMMETRIC_INTERNAL
-            /* set iv to be after key id */
-            iv = key + sizeof(uint32_t);
-            dataSz = sizeof(packet->cipherAesCbcReq) + sizeof(uint32_t) +
-                AES_IV_SIZE + info->cipher.aescbc.sz;
-            /* set keyLen, sizeof key id */
-            packet->cipherAesCbcReq.keyLen = sizeof(uint32_t);
-#else
             iv = key + info->cipher.aescbc.aes->keylen;
             dataSz = sizeof(packet->cipherAesCbcReq) +
                 info->cipher.aescbc.aes->keylen + AES_IV_SIZE +
@@ -106,20 +98,16 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             /* set keyLen */
             packet->cipherAesCbcReq.keyLen =
                 info->cipher.aescbc.aes->keylen;
-#endif
             /* set in to be after iv */
             in = iv + AES_IV_SIZE;
             /* set sz */
             packet->cipherAesCbcReq.sz = info->cipher.aescbc.sz;
-#ifdef WOLFHSM_SYMMETRIC_INTERNAL
             /* set keyId */
-            XMEMCPY(key, (void*)&info->cipher.aescbc.aes->devCtx,
-                sizeof(uint32_t));
-#else
+            packet->cipherAesCbcReq.keyId =
+                (intptr_t)(info->cipher.aescbc.aes->devCtx);
             /* set key */
             XMEMCPY(key, info->cipher.aescbc.aes->devKey,
                 info->cipher.aescbc.aes->keylen);
-#endif
             /* set iv */
             XMEMCPY(iv, info->cipher.aescbc.aes->reg, AES_IV_SIZE);
             /* set in */
@@ -152,16 +140,6 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             /* key, iv, in, authIn, and out are after fixed size fields */
             key = (uint8_t*)(&packet->cipherAesGcmReq + 1);
             out = (uint8_t*)(&packet->cipherAesGcmRes + 1);
-#ifdef WOLFHSM_SYMMETRIC_INTERNAL
-            /* set iv to be after key id */
-            iv = key + sizeof(uint32_t);
-            dataSz = sizeof(packet->cipherAesGcmReq) + sizeof(uint32_t) +
-                info->cipher.aesgcm_enc.ivSz + info->cipher.aesgcm_enc.sz +
-                info->cipher.aesgcm_enc.authInSz +
-                info->cipher.aesgcm_enc.authTagSz;
-            /* set keyLen, sizeof key id */
-            packet->cipherAesGcmReq.keyLen = sizeof(uint32_t);
-#else
             iv = key + info->cipher.aesgcm_enc.aes->keylen;
             dataSz = sizeof(packet->cipherAesGcmReq) +
                 info->cipher.aesgcm_enc.aes->keylen +
@@ -171,7 +149,6 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             /* set keyLen */
             packet->cipherAesGcmReq.keyLen =
                 info->cipher.aesgcm_enc.aes->keylen;
-#endif
             /* set the rest of the buffers */
             in = iv + info->cipher.aesgcm_enc.ivSz;
             authIn = in + info->cipher.aesgcm_enc.sz;
@@ -185,15 +162,11 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             packet->cipherAesGcmReq.authInSz = info->cipher.aesgcm_enc.authInSz;
             packet->cipherAesGcmReq.authTagSz =
                 info->cipher.aesgcm_enc.authTagSz;
-#ifdef WOLFHSM_SYMMETRIC_INTERNAL
-            /* set keyId */
-            XMEMCPY(key, (uint8_t*)&info->cipher.aesgcm_enc.aes->devCtx,
-                sizeof(uint32_t));
-#else
+            packet->cipherAesGcmReq.keyId =
+                (intptr_t)(info->cipher.aescbc.aes->devCtx);
             /* set key */
             XMEMCPY(key, info->cipher.aesgcm_enc.aes->devKey,
                 info->cipher.aesgcm_enc.aes->keylen);
-#endif
             /* write the bulk data */
             XMEMCPY(iv, info->cipher.aesgcm_enc.iv,
                 info->cipher.aesgcm_enc.ivSz);
