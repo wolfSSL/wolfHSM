@@ -517,7 +517,7 @@ static int hsmCryptoAesCbc(whServerContext* server, whPacket* packet,
         len = sizeof(tmpKey);
         ret = hsmReadKey(server, MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_CRYPTO,
             server->comm->client_id, packet->cipherAesCbcReq.keyId), NULL,
-            tmpKey, &len);
+            tmpKey, (uint32_t*)&len);
         if (ret == 0) {
             /* set key to use tmpKey data */
             key = tmpKey;
@@ -576,7 +576,7 @@ static int hsmCryptoAesGcm(whServerContext* server, whPacket* packet,
         len = sizeof(tmpKey);
         ret = hsmReadKey(server, MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_CRYPTO,
             server->comm->client_id, packet->cipherAesGcmReq.keyId),
-            NULL, tmpKey, &len);
+            NULL, tmpKey, (uint32_t*)&len);
         if (ret == 0) {
             /* set key to use tmpKey data */
             key = tmpKey;
@@ -668,7 +668,7 @@ static int hsmCryptoCmac(whServerContext* server, whPacket* packet,
             ret = hsmReadKey(server,
                 MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_CRYPTO,
                 server->comm->client_id, keyId), NULL,
-                (uint8_t*)server->crypto->cmac, &len);
+                (uint8_t*)server->crypto->cmac, (uint32_t*)&len);
             /* if the key size is a multiple of aes, init the key and
              * overwrite the existing key on exit */
             if (len == AES_128_KEY_SIZE || len == AES_192_KEY_SIZE ||
