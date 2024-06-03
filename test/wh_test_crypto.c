@@ -134,7 +134,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     }
     printf("RNG SUCCESS\n");
     /* test cache/export */
-    keyId = 0;
+    keyId = WOLFHSM_KEYID_ERASED;
     if ((ret = wh_Client_KeyCache(client, 0, labelStart, sizeof(labelStart), key, sizeof(key), &keyId)) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_KeyCache %d\n", ret);
         goto exit;
@@ -167,6 +167,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         WH_ERROR_PRINT("Failed to wh_Client_KeyEvict %d\n", ret);
         goto exit;
     }
+    keyId = WOLFHSM_KEYID_ERASED;
     if ((ret = wh_Client_KeyCache(client, 0, labelStart, sizeof(labelStart), (uint8_t*)cipherText, sizeof(key), &keyId)) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_KeyCache %d\n", ret);
         goto exit;
@@ -211,7 +212,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         goto exit;
     }
     /* test commit */
-    keyId = 0;
+    keyId = WOLFHSM_KEYID_ERASED;
     if ((ret = wh_Client_KeyCache(client, 0, labelStart, sizeof(labelStart), key, sizeof(key), &keyId)) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_KeyCache %d\n", ret);
         goto exit;
@@ -278,7 +279,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         printf("Failed to wc_AesInit %d\n", ret);
         goto exit;
     }
-    keyId = 0;
+    keyId = WOLFHSM_KEYID_ERASED;
     if ((ret = wh_Client_KeyCache(client, 0, labelStart, sizeof(labelStart), key, sizeof(key), &keyId)) != 0) {
         printf("Failed to wh_Client_KeyCache %d\n", ret);
         goto exit;
@@ -342,7 +343,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         printf("Failed to wc_AesInit %d\n", ret);
         goto exit;
     }
-    keyId = 0;
+    keyId = WOLFHSM_KEYID_ERASED;
     if ((ret = wh_Client_KeyCache(client, 0, labelStart, sizeof(labelStart), key, sizeof(key), &keyId)) != 0) {
         printf("Failed to wh_Client_KeyCache %d\n", ret);
         goto exit;
@@ -518,6 +519,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         goto exit;
     }
     /* test oneshot with pre-cached key */
+    keyId = WOLFHSM_KEYID_ERASED;
     if ((ret = wh_Client_KeyCache(client, 0, labelStart, sizeof(labelStart), knownCmacKey, sizeof(knownCmacKey), &keyId)) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_KeyCache %d\n", ret);
         goto exit;
@@ -540,6 +542,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         goto exit;
     }
     /* test oneshot verify with commited key */
+    keyId = WOLFHSM_KEYID_ERASED;
     if ((ret = wh_Client_KeyCache(client, 0, labelStart, sizeof(labelStart), knownCmacKey, sizeof(knownCmacKey), &keyId)) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_KeyCache %d\n", ret);
         goto exit;
