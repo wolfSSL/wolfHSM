@@ -33,7 +33,7 @@
 #include "wolfhsm/wh_comm.h"
 
 #ifndef WOLFHSM_NO_CRYPTO
-#include "wolfhsm/wh_cryptocb.h"
+#include "wolfhsm/wh_client_cryptocb.h"
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/error-crypt.h"
 #include "wolfssl/wolfcrypt/wc_port.h"
