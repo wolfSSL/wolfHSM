@@ -534,6 +534,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     else {
         WH_ERROR_PRINT("CMAC FAILED KNOWN ANSWER TEST\n");
         ret = -1;
+        goto exit;
     }
     /* verify the key was evicted after oneshot */
     outLen = sizeof(keyEnd);
