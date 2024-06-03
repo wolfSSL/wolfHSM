@@ -533,8 +533,9 @@ int wh_Client_KeyErase(whClientContext* c, whNvmId keyId);
  *
  * @param[in] key Pointer to the Curve25519 key structure.
  * @param[in] keyId Key ID to be associated with the Curve25519 key.
+ * @return int Returns 0 on success or a negative error code on failure.
  */
-void wh_Client_SetKeyCurve25519(curve25519_key* key, whNvmId keyId);
+int wh_Client_SetKeyCurve25519(curve25519_key* key, whNvmId keyId);
 
 /**
  * @brief Associates an RSA key with a specific key ID.
@@ -545,8 +546,9 @@ void wh_Client_SetKeyCurve25519(curve25519_key* key, whNvmId keyId);
  *
  * @param[in] key Pointer to the RSA key structure.
  * @param[in] keyId Key ID to be associated with the RSA key.
+ * @return int Returns 0 on success or a negative error code on failure.
  */
-void wh_Client_SetKeyRsa(RsaKey* key, whNvmId keyId);
+int wh_Client_SetKeyRsa(RsaKey* key, whNvmId keyId);
 
 /**
  * @brief Associates an AES key with a specific key ID.
@@ -557,8 +559,9 @@ void wh_Client_SetKeyRsa(RsaKey* key, whNvmId keyId);
  *
  * @param[in] aes Pointer to the AES key structure.
  * @param[in] keyId Key ID to be associated with the AES key.
+ * @return int Returns 0 on success or a negative error code on failure.
  */
-void wh_Client_SetKeyAes(Aes* aes, whNvmId keyId);
+int wh_Client_SetKeyAes(Aes* aes, whNvmId keyId);
 
 /**
  * @brief Runs the Cmac operation in a single call with a wolfHSM keyId.
@@ -609,8 +612,9 @@ int wh_Client_AesCmacVerify(Cmac* cmac, const byte* check, word32 checkSz,
  *
  * @param[in] key Pointer to the CMAC key structure.
  * @param[in] keyId Key ID to be associated with the CMAC key.
+ * @return int Returns 0 on success or a negative error code on failure.
  */
-void wh_Client_SetKeyCmac(Cmac* key, whNvmId keyId);
+int wh_Client_SetKeyCmac(Cmac* key, whNvmId keyId);
 #endif
 
 /** NVM functions */
