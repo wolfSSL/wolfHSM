@@ -564,7 +564,7 @@ int wh_Client_SetKeyRsa(RsaKey* key, whNvmId keyId);
 int wh_Client_SetKeyAes(Aes* aes, whNvmId keyId);
 
 /**
- * @brief Runs the Cmac operation in a single call with a wolfHSM keyId.
+ * @brief Runs the AES CMAC operation in a single call with a wolfHSM keyId.
  *
  * This function does entire cmac operation in one function call with a key
  * already stored in the HSM. This operation evicts the key from the HSM cache
@@ -573,9 +573,9 @@ int wh_Client_SetKeyAes(Aes* aes, whNvmId keyId);
  *
  * @param[in] cmac Pointer to the CMAC key structure.
  * @param[out] out Output buffer for the CMAC tag.
- * @param[out] outSz Size of the output buffer.
+ * @param[out] outSz Size of the output buffer in bytes.
  * @param[in] in Input buffer to be hashed.
- * @param[in] inSz Size of the input buffer.
+ * @param[in] inSz Size of the input buffer in bytes.
  * @param[in] keyId ID of the key inside the HSM.
  * @param[in] heap Heap pointer for the cmac struct.
  * @return int Returns 0 on success, or a negative error code on failure.
@@ -584,7 +584,7 @@ int wh_Client_AesCmacGenerate(Cmac* cmac, byte* out, word32* outSz,
     const byte* in, word32 inSz, whNvmId keyId, void* heap);
 
 /**
- * @brief Verifies a Cmac tag in a single call with a wolfHSM keyId.
+ * @brief Verifies a AES CMAC tag in a single call with a wolfHSM keyId.
  *
  * This function does entire cmac verify in one function call with a key
  * already stored in the HSM. This operation evicts the key from the HSM cache
@@ -593,9 +593,9 @@ int wh_Client_AesCmacGenerate(Cmac* cmac, byte* out, word32* outSz,
  *
  * @param[in] cmac Pointer to the CMAC key structure.
  * @param[out] check Cmac tag to check against.
- * @param[out] checkSz Size of the check buffer.
+ * @param[out] checkSz Size of the check buffer in bytes.
  * @param[in] in Input buffer to be hashed.
- * @param[in] inSz Size of the input buffer.
+ * @param[in] inSz Size of the input buffer in bytes.
  * @param[in] keyId ID of the key inside the HSM.
  * @param[in] heap Heap pointer for the cmac struct.
  * @return int Returns 0 on success, 1 on tag mismatch, or a negative error code on failure.
