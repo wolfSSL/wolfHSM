@@ -58,16 +58,6 @@ typedef struct {
     int devId;
 #ifndef WC_NO_RNG
     WC_RNG rng[1];
-    int    devId;
-#ifndef NO_AES
-    Aes    aes[1];
-#endif
-#ifndef NO_RSA
-    RsaKey rsa[1];
-#endif
-#ifndef NO_ECC
-    ecc_key eccPrivate[1];
-    ecc_key eccPublic[1];
 #endif
     union {
 #ifndef NO_AES
