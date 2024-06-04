@@ -618,7 +618,6 @@ int wh_Client_AesCmacVerify(Cmac* cmac, const byte* check, word32 checkSz,
  */
 int wh_Client_SetKeyCmac(Cmac* key, whNvmId keyId);
 #endif
-#endif
 
 /** NVM functions */
 /**
