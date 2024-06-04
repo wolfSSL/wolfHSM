@@ -21,6 +21,8 @@
  *
  */
 
+#ifdef WOLFHSM_SHE_EXTENSION
+
 #include <stdint.h>
 #include <stdlib.h>  /* For NULL */
 #include <string.h>  /* For memset, memcpy */
@@ -38,7 +40,9 @@
 
 #include "wolfhsm/wh_packet.h"
 #include "wolfhsm/wh_client.h"
+
 #include "wolfhsm/wh_server_she.h"
+
 
 int wh_Client_ShePreProgramKey(whClientContext* c, whNvmId keyId,
     whNvmFlags flags, uint8_t* key, whNvmSize keySz)
@@ -882,3 +886,5 @@ int wh_Client_SheVerifyMac(whClientContext* c, uint8_t keyId, uint8_t* message,
     }
     return ret;
 }
+
+#endif /* WOLFHSM_SHE_EXTENSION */

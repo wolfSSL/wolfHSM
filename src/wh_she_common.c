@@ -22,12 +22,11 @@
  */
 /* System libraries */
 
+#ifdef WOLFHSM_SHE_EXTENSION
+
 #include <stdint.h>
 #include <stdlib.h>  /* For NULL */
 #include <string.h>  /* For memset, memcpy */
-
-/* TODO replace with our own to host function */
-#include <arpa/inet.h>
 
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/types.h"
@@ -38,11 +37,14 @@
 
 #include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_error.h"
+#include "wolfhsm/wh_utils.h"
 
 static const uint8_t WOLFHSM_SHE_KEY_UPDATE_ENC_C[] = {0x01, 0x01, 0x53, 0x48, 0x45,
     0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xB0};
 static const uint8_t WOLFHSM_SHE_KEY_UPDATE_MAC_C[] = {0x01, 0x02, 0x53, 0x48, 0x45,
     0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xB0};
+
+
 
 static int wh_AesMp16(uint8_t* in, word32 inSz, uint8_t* out)
 {
@@ -128,7 +130,7 @@ int wh_SheGenerateLoadableKey(uint8_t keyId,
         /* set the counter, flags and key */
         XMEMSET(messageTwo, 0, WOLFHSM_SHE_M2_SZ);
         XMEMCPY(messageTwo + WOLFHSM_SHE_KEY_SZ, key, WOLFHSM_SHE_KEY_SZ);
-        *((uint32_t*)messageTwo) = (htonl(count) << 4);
+        *((uint32_t*)messageTwo) = (wh_Utils_htonl(count) << 4);
         ret = wc_AesInit(aes, NULL, INVALID_DEVID);
     }
     /* encrypt M2 with K1 */
@@ -187,7 +189,7 @@ int wh_SheGenerateLoadableKey(uint8_t keyId,
     if (ret == 0) {
         XMEMSET(messageFour, 0, WOLFHSM_SHE_M4_SZ);
         /* set counter, pad with 1 bit */
-        *((uint32_t*)(messageFour + WOLFHSM_SHE_KEY_SZ)) = (htonl(count) << 4);
+        *((uint32_t*)(messageFour + WOLFHSM_SHE_KEY_SZ)) = (wh_Utils_htonl(count) << 4);
         messageFour[WOLFHSM_SHE_KEY_SZ + 3] |= 0x08;
         /* encrypt the new counter */
         ret = wc_AesEncryptDirect(aes, messageFour + WOLFHSM_SHE_KEY_SZ,
@@ -214,3 +216,6 @@ int wh_SheGenerateLoadableKey(uint8_t keyId,
     }
     return ret;
 }
+
+#endif /* WOLFHSM_SHE_EXTENSION */
+
