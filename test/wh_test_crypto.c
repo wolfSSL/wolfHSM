@@ -464,8 +464,6 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         printf("Failed to wc_RsaPrivateDecrypt %d\n", ret);
         goto exit;
     }
-#endif
-#ifndef NO_RSA
     XMEMCPY((uint8_t*)&keyId, (uint8_t*)&rsa->devCtx, sizeof(keyId));
     if ((ret = wh_Client_KeyEvictRequest(client, keyId)) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_KeyEvictRequest %d\n", ret);
@@ -492,7 +490,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     }
     else
         printf("RSA FAILED TO MATCH\n");
-#endif
+#endif /* !NO_RSA */
     /* test ecc */
     if((ret = wc_ecc_init_ex(eccPrivate, NULL, WOLFHSM_DEV_ID)) != 0) {
         printf("Failed to wc_ecc_init_ex %d\n", ret);
