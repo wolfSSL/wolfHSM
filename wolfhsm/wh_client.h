@@ -533,8 +533,9 @@ int wh_Client_KeyErase(whClientContext* c, whNvmId keyId);
  *
  * @param[in] key Pointer to the Curve25519 key structure.
  * @param[in] keyId Key ID to be associated with the Curve25519 key.
+ * @return int Returns 0 on success or a negative error code on failure.
  */
-void wh_Client_SetKeyCurve25519(curve25519_key* key, whNvmId keyId);
+int wh_Client_SetKeyCurve25519(curve25519_key* key, whNvmId keyId);
 
 /**
  * @brief Associates an RSA key with a specific key ID.
@@ -545,8 +546,9 @@ void wh_Client_SetKeyCurve25519(curve25519_key* key, whNvmId keyId);
  *
  * @param[in] key Pointer to the RSA key structure.
  * @param[in] keyId Key ID to be associated with the RSA key.
+ * @return int Returns 0 on success or a negative error code on failure.
  */
-void wh_Client_SetKeyRsa(RsaKey* key, whNvmId keyId);
+int wh_Client_SetKeyRsa(RsaKey* key, whNvmId keyId);
 
 /**
  * @brief Associates an AES key with a specific key ID.
@@ -557,8 +559,62 @@ void wh_Client_SetKeyRsa(RsaKey* key, whNvmId keyId);
  *
  * @param[in] aes Pointer to the AES key structure.
  * @param[in] keyId Key ID to be associated with the AES key.
+ * @return int Returns 0 on success or a negative error code on failure.
  */
-void wh_Client_SetKeyAes(Aes* aes, whNvmId keyId);
+int wh_Client_SetKeyAes(Aes* aes, whNvmId keyId);
+
+/**
+ * @brief Runs the AES CMAC operation in a single call with a wolfHSM keyId.
+ *
+ * This function does entire cmac operation in one function call with a key
+ * already stored in the HSM. This operation evicts the key from the HSM cache
+ * after the operation though it will still be in the HSM's NVM if it was
+ * commited
+ *
+ * @param[in] cmac Pointer to the CMAC key structure.
+ * @param[out] out Output buffer for the CMAC tag.
+ * @param[out] outSz Size of the output buffer in bytes.
+ * @param[in] in Input buffer to be hashed.
+ * @param[in] inSz Size of the input buffer in bytes.
+ * @param[in] keyId ID of the key inside the HSM.
+ * @param[in] heap Heap pointer for the cmac struct.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_AesCmacGenerate(Cmac* cmac, byte* out, word32* outSz,
+    const byte* in, word32 inSz, whNvmId keyId, void* heap);
+
+/**
+ * @brief Verifies a AES CMAC tag in a single call with a wolfHSM keyId.
+ *
+ * This function does entire cmac verify in one function call with a key
+ * already stored in the HSM. This operation evicts the key from the HSM cache
+ * after the operation though it will still be in the HSM's NVM if it was
+ * commited
+ *
+ * @param[in] cmac Pointer to the CMAC key structure.
+ * @param[out] check Cmac tag to check against.
+ * @param[out] checkSz Size of the check buffer in bytes.
+ * @param[in] in Input buffer to be hashed.
+ * @param[in] inSz Size of the input buffer in bytes.
+ * @param[in] keyId ID of the key inside the HSM.
+ * @param[in] heap Heap pointer for the cmac struct.
+ * @return int Returns 0 on success, 1 on tag mismatch, or a negative error code on failure.
+ */
+int wh_Client_AesCmacVerify(Cmac* cmac, const byte* check, word32 checkSz,
+    const byte* in, word32 inSz, whNvmId keyId, void* heap);
+
+/**
+ * @brief Associates a CMAC key with a specific key ID.
+ *
+ * This function sets the device context of a CMAC key to the specified key ID.
+ * On the server side, this key ID is used to reference the key stored in the
+ * HSM
+ *
+ * @param[in] key Pointer to the CMAC key structure.
+ * @param[in] keyId Key ID to be associated with the CMAC key.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_SetKeyCmac(Cmac* key, whNvmId keyId);
 #endif
 
 /** NVM functions */

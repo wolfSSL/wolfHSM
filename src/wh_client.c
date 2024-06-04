@@ -734,23 +734,78 @@ int wh_Client_KeyErase(whClientContext* c, whNvmId keyId)
 }
 
 #ifdef HAVE_CURVE25519
-void wh_Client_SetKeyCurve25519(curve25519_key* key, whNvmId keyId)
+int wh_Client_SetKeyCurve25519(curve25519_key* key, whNvmId keyId)
 {
+    if (key == NULL)
+        return WH_ERROR_BADARGS;
     key->devCtx = (void*)((intptr_t)keyId);
+    return WH_ERROR_OK;
 }
 #endif
 
 #ifndef NO_RSA
-void wh_Client_SetKeyRsa(RsaKey* key, whNvmId keyId)
+int wh_Client_SetKeyRsa(RsaKey* key, whNvmId keyId)
 {
+    if (key == NULL)
+        return WH_ERROR_BADARGS;
     key->devCtx = (void*)((intptr_t)keyId);
+    return WH_ERROR_OK;
 }
 #endif
 
 #ifndef NO_AES
-void wh_Client_SetKeyAes(Aes* key, whNvmId keyId)
+int wh_Client_SetKeyAes(Aes* key, whNvmId keyId)
 {
+    if (key == NULL)
+        return WH_ERROR_BADARGS;
     key->devCtx = (void*)((intptr_t)keyId);
+    return WH_ERROR_OK;
+}
+#endif
+
+#ifdef WOLFSSL_CMAC
+int wh_Client_SetKeyCmac(Cmac* key, whNvmId keyId)
+{
+    if (key == NULL)
+        return WH_ERROR_BADARGS;
+    key->devCtx = (void*)((intptr_t)keyId);
+    return WH_ERROR_OK;
+}
+
+int wh_Client_AesCmacGenerate(Cmac* cmac, byte* out, word32* outSz,
+    const byte* in, word32 inSz, whNvmId keyId, void* heap)
+{
+    int ret;
+    ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, heap,
+        WOLFHSM_DEV_ID);
+    /* set keyId */
+    if (ret == 0)
+        ret = wh_Client_SetKeyCmac(cmac, keyId);
+    if (ret == 0)
+        ret = wc_CmacUpdate(cmac, in, inSz);
+    if (ret == 0)
+        ret = wc_CmacFinal(cmac, out, outSz);
+    return ret;
+}
+
+int wh_Client_AesCmacVerify(Cmac* cmac, const byte* check, word32 checkSz,
+    const byte* in, word32 inSz, whNvmId keyId, void* heap)
+{
+    int ret;
+    word32 outSz = AES_BLOCK_SIZE;
+    byte out[AES_BLOCK_SIZE];
+    ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, heap,
+        WOLFHSM_DEV_ID);
+    /* set keyId */
+    if (ret == 0)
+        ret = wh_Client_SetKeyCmac(cmac, keyId);
+    if (ret == 0)
+        ret = wc_CmacUpdate(cmac, in, inSz);
+    if (ret == 0)
+        ret = wc_CmacFinal(cmac, out, &outSz);
+    if (ret == 0)
+        ret = memcmp(out, check, outSz) == 0 ? 0 : 1;
+    return ret;
 }
 #endif
 #endif  /* !WOLFHSM_NO_CRYPTO */

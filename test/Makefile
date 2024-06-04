@@ -24,7 +24,7 @@ ARCHFLAGS ?=
 # Compiler and linker flags
 ASFLAGS ?= $(ARCHFLAGS)
 CFLAGS_EXTRA ?= -Wmissing-field-initializers -Wmissing-braces
-CFLAGS ?= $(ARCHFLAGS) -std=c90 -D_GNU_SOURCE -DWOLFHSM_SYMMETRIC_INTERNAL -Wall -Werror -Wno-cpp $(CFLAGS_EXTRA)
+CFLAGS ?= $(ARCHFLAGS) -std=c90 -D_GNU_SOURCE -Wall -Werror -Wno-cpp $(CFLAGS_EXTRA)
 LDFLAGS ?= $(ARCHFLAGS)
 
 # Libc for printf
