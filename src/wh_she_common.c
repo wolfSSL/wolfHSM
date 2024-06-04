@@ -167,7 +167,7 @@ int wh_SheGenerateLoadableKey(uint8_t keyId,
     /* get the digest */
     if (ret == 0) {
         field = AES_BLOCK_SIZE;
-        ret = wc_CmacFinal(cmac, messageThree, &field);
+        ret = wc_CmacFinal(cmac, messageThree, (word32*)&field);
     }
     if (ret == 0) {
         /* copy the ram key to kdfInput */
@@ -211,7 +211,7 @@ int wh_SheGenerateLoadableKey(uint8_t keyId,
     /* cmac messageFour using K4 as the cmac key */
     if (ret == 0) {
         field = AES_BLOCK_SIZE;
-        ret = wc_AesCmacGenerate_ex(cmac, messageFive, &field, messageFour,
+        ret = wc_AesCmacGenerate_ex(cmac, messageFive, (word32*)&field, messageFour,
             WOLFHSM_SHE_M4_SZ, tmpKey, WOLFHSM_SHE_KEY_SZ, NULL, INVALID_DEVID);
     }
     return ret;
