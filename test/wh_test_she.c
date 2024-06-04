@@ -113,12 +113,17 @@ int whTest_SheClientConfig(whClientConfig* config)
     uint8_t messageThree[WOLFHSM_SHE_M3_SZ];
     uint8_t messageFour[WOLFHSM_SHE_M4_SZ];
     uint8_t messageFive[WOLFHSM_SHE_M5_SZ];
+    uint32_t outClientId = 0;
+    uint32_t outServerId = 0;
 
     if (config == NULL) {
         return WH_ERROR_BADARGS;
     }
 
     WH_TEST_RETURN_ON_FAIL(wh_Client_Init(client, config));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CommInit(client, &outClientId, &outServerId));
+    WH_TEST_ASSERT_RETURN(outClientId == client->comm->client_id);
+
     /* generate a new cmac key */
     if ((ret = wc_InitRng_ex(rng, NULL, WOLFHSM_DEV_ID)) != 0) {
         WH_ERROR_PRINT("Failed to wc_InitRng_ex %d\n", ret);
@@ -151,7 +156,7 @@ int whTest_SheClientConfig(whClientConfig* config)
         goto exit;
     }
     digestSz = AES_BLOCK_SIZE;
-    if ((ret = wc_CmacFinal(cmac, bootMacDigest, &digestSz)) != 0) {
+    if ((ret = wc_CmacFinal(cmac, bootMacDigest, (word32*)&digestSz)) != 0) {
         WH_ERROR_PRINT("Failed to wc_CmacFinal %d\n", ret);
         goto exit;
     }
@@ -323,7 +328,6 @@ int whTest_SheServerConfig(whServerConfig* config)
 
     WH_TEST_RETURN_ON_FAIL(wh_Server_Init(server, config));
     WH_TEST_RETURN_ON_FAIL(wh_Server_SetConnected(server, am_connected));
-    server->comm->client_id = 1;
 
     while(am_connected == WH_COMM_CONNECTED) {
         ret = wh_Server_HandleRequestMessage(server);
