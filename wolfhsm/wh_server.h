@@ -59,7 +59,7 @@ typedef struct crypto_context {
 #ifndef WC_NO_RNG
     WC_RNG rng[1];
 #endif
-    union crypto_context_cryptoctx {
+    union {
 #ifndef NO_AES
         Aes aes[1];
 #endif
@@ -75,15 +75,15 @@ typedef struct crypto_context {
 #ifdef WOLFSSL_CMAC
         Cmac cmac[1];
 #endif
-    };
-    union crypto_context_pubkey {
+    } crypto_context_crypto;
+    union {
 #ifdef HAVE_ECC
         ecc_key eccPublic[1];
 #endif
 #ifdef HAVE_CURVE25519
         curve25519_key curve25519Public[1];
 #endif
-    };
+    } crypto_context_pubkey;
 } crypto_context;
 
 #ifdef WOLFHSM_SHE_EXTENSION
