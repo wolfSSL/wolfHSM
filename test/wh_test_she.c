@@ -122,7 +122,6 @@ int whTest_SheClientConfig(whClientConfig* config)
 
     WH_TEST_RETURN_ON_FAIL(wh_Client_Init(client, config));
     WH_TEST_RETURN_ON_FAIL(wh_Client_CommInit(client, &outClientId, &outServerId));
-    WH_TEST_ASSERT_RETURN(outClientId == client->comm->client_id);
 
     /* generate a new cmac key */
     if ((ret = wc_InitRng_ex(rng, NULL, WOLFHSM_DEV_ID)) != 0) {

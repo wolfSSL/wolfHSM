@@ -600,6 +600,13 @@ int whTest_ClientServerSequential(void)
     WH_TEST_ASSERT_RETURN(WH_ERROR_NOTREADY ==
                           wh_Server_HandleRequestMessage(server));
 
+    /* Send the comm init message so server can obtain client ID */
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CommInitRequest(client));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CommInitResponse(client, &client_id, &server_id));
+    WH_TEST_ASSERT_RETURN(client_id == client->comm->client_id);
+
+
     for (counter = 0; counter < REPEAT_COUNT; counter++) {
 
         /* Prepare echo test */
@@ -1020,6 +1027,11 @@ int whTest_ClientCfg(whClientConfig* clientCfg)
     uint32_t reclaim_size = 0;
     whNvmId avail_objects = 0;
     whNvmId reclaim_objects = 0;
+
+    /* Init client/server comms */
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CommInit(client, &client_id, &server_id));
+    WH_TEST_ASSERT_RETURN(client_id == client->comm->client_id);
+
 
     for (counter = 0; counter < REPEAT_COUNT; counter++) {
 
