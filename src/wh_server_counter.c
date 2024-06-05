@@ -19,6 +19,7 @@
 /*
  * src/wh_server_counter.c
  */
+#include <string.h>
 #include "wolfhsm/wh_server.h"
 #include "wolfhsm/wh_server_counter.h"
 #include "wolfhsm/wh_message.h"
