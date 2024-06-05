@@ -745,6 +745,142 @@ int wh_Client_KeyErase(whClientContext* c, whNvmId keyId)
     return ret;
 }
 
+int wh_Client_CounterResetRequest(whClientContext* c, whNvmId keyId)
+{
+    whPacket* packet;
+    if (c == NULL || keyId == WOLFHSM_KEYID_ERASED)
+        return WH_ERROR_BADARGS;
+    packet = (whPacket*)c->comm->data;
+    /* set keyId */
+    packet->counterResetReq.keyId = keyId;
+    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_COUNTER, WH_COUNTER_RESET,
+        WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->counterResetReq),
+        (uint8_t*)packet);
+}
+
+int wh_Client_CounterResetResponse(whClientContext* c, uint32_t* counter)
+{
+    uint16_t group;
+    uint16_t action;
+    uint16_t size;
+    int ret;
+    whPacket* packet;
+    if (c == NULL || counter == NULL)
+        return WH_ERROR_BADARGS;
+    packet = (whPacket*)c->comm->data;
+    ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)packet);
+    if (ret == 0) {
+        if (packet->rc != 0)
+            ret = packet->rc;
+        else
+            *counter = packet->counterResetRes.counter;
+    }
+    return ret;
+}
+
+int wh_Client_CounterReset(whClientContext* c, whNvmId keyId, uint32_t* counter)
+{
+    int ret;
+    ret = wh_Client_CounterResetRequest(c, keyId);
+    if (ret == 0) {
+        do {
+            ret = wh_Client_CounterResetResponse(c, counter);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+    return ret;
+}
+
+int wh_Client_CounterIncrementRequest(whClientContext* c, whNvmId keyId)
+{
+    whPacket* packet;
+    if (c == NULL || keyId == WOLFHSM_KEYID_ERASED)
+        return WH_ERROR_BADARGS;
+    packet = (whPacket*)c->comm->data;
+    /* set keyId */
+    packet->counterIncrementReq.keyId = keyId;
+    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_COUNTER,
+        WH_COUNTER_INCREMENT, WOLFHSM_PACKET_STUB_SIZE +
+        sizeof(packet->counterIncrementReq), (uint8_t*)packet);
+}
+
+int wh_Client_CounterIncrementResponse(whClientContext* c, uint32_t* counter)
+{
+    uint16_t group;
+    uint16_t action;
+    uint16_t size;
+    int ret;
+    whPacket* packet;
+    if (c == NULL || counter == NULL)
+        return WH_ERROR_BADARGS;
+    packet = (whPacket*)c->comm->data;
+    ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)packet);
+    if (ret == 0) {
+        if (packet->rc != 0)
+            ret = packet->rc;
+        else
+            *counter = packet->counterIncrementRes.counter;
+    }
+    return ret;
+}
+
+int wh_Client_CounterIncrement(whClientContext* c, whNvmId keyId,
+    uint32_t* counter)
+{
+    int ret;
+    ret = wh_Client_CounterIncrementRequest(c, keyId);
+    if (ret == 0) {
+        do {
+            ret = wh_Client_CounterIncrementResponse(c, counter);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+    return ret;
+}
+
+int wh_Client_CounterReadRequest(whClientContext* c, whNvmId keyId)
+{
+    whPacket* packet;
+    if (c == NULL || keyId == WOLFHSM_KEYID_ERASED)
+        return WH_ERROR_BADARGS;
+    packet = (whPacket*)c->comm->data;
+    /* set keyId */
+    packet->counterReadReq.keyId = keyId;
+    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_COUNTER,
+        WH_COUNTER_READ, WOLFHSM_PACKET_STUB_SIZE +
+        sizeof(packet->counterReadReq), (uint8_t*)packet);
+}
+
+int wh_Client_CounterReadResponse(whClientContext* c, uint32_t* counter)
+{
+    uint16_t group;
+    uint16_t action;
+    uint16_t size;
+    int ret;
+    whPacket* packet;
+    if (c == NULL || counter == NULL)
+        return WH_ERROR_BADARGS;
+    packet = (whPacket*)c->comm->data;
+    ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)packet);
+    if (ret == 0) {
+        if (packet->rc != 0)
+            ret = packet->rc;
+        else
+            *counter = packet->counterReadRes.counter;
+    }
+    return ret;
+}
+
+int wh_Client_CounterRead(whClientContext* c, whNvmId keyId, uint32_t* counter)
+{
+    int ret;
+    ret = wh_Client_CounterReadRequest(c, keyId);
+    if (ret == 0) {
+        do {
+            ret = wh_Client_CounterReadResponse(c, counter);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+    return ret;
+}
+
 #ifdef HAVE_CURVE25519
 int wh_Client_SetKeyCurve25519(curve25519_key* key, whNvmId keyId)
 {
