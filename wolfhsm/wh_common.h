@@ -33,7 +33,7 @@
 #define WOLFHSM_DIGEST_STUB 8
 
 /** Resource allocations */
-enum {
+enum WOLFHSM_NUM_ENUM {
     WOLFHSM_NUM_COUNTERS = 8,       /* Number of non-volatile 32-bit counters */
     WOLFHSM_NUM_RAMKEYS = 16,        /* Number of RAM keys */
     WOLFHSM_NUM_NVMOBJECTS = 32,    /* Number of NVM objects in the directory */
@@ -94,7 +94,7 @@ typedef uint16_t whNvmAccess;
 typedef uint16_t whNvmFlags;
 
 /* HSM NVM metadata structure */
-enum {
+enum WOLFHSM_NVM_ENUM {
     WOLFHSM_NVM_LABEL_LEN = 24,
     WOLFHSM_NVM_METADATA_LEN = 32,
     WOLFHSM_NVM_MAX_OBJECT_SIZE = 65535,

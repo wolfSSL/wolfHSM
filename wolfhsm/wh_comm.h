@@ -47,7 +47,7 @@
  * (whHeader) followed immediately by variable-length data between 0 and
  * DATA_LEN bytes.
  */
-enum {
+enum WH_COMM_ENUM {
     WH_COMM_HEADER_LEN = 8,    /* whCommHeader */
     WH_COMM_DATA_LEN = 1280,
     WH_COMM_MTU = (WH_COMM_HEADER_LEN + WH_COMM_DATA_LEN),
@@ -81,7 +81,7 @@ typedef struct {
 /* static_assert(sizeof_whHeader == WH_COMM_HEADER_LEN,
                  "Size of whCommHeader doesn't match WH_COMM_HEADER_LEN") */
 
-enum {
+enum WH_COMM_AUX_ENUM {
     WH_COMM_AUX_REQ_NORMAL      = 0x0000, /* Normal request. No session */
     /* Request Aux values 1-0xFFFE are session ids */
     WH_COMM_AUX_REQ_NORESP      = 0xFFFF, /* Async request without response*/

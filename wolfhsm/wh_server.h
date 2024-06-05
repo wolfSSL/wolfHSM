@@ -54,12 +54,12 @@ typedef struct CacheSlot {
     uint8_t       buffer[WOLFHSM_KEYCACHE_BUFSIZE];
 } CacheSlot;
 
-typedef struct {
+typedef struct crypto_context {
     int devId;
 #ifndef WC_NO_RNG
     WC_RNG rng[1];
 #endif
-    union {
+    union crypto_context_cryptoctx {
 #ifndef NO_AES
         Aes aes[1];
 #endif
@@ -76,7 +76,7 @@ typedef struct {
         Cmac cmac[1];
 #endif
     };
-    union {
+    union crypto_context_pubkey {
 #ifdef HAVE_ECC
         ecc_key eccPublic[1];
 #endif
