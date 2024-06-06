@@ -61,13 +61,11 @@
 #error "wolfHSM needs wolfCrypt built with HAVE_ANONYMOUS_INLINE_AGGREGATES=1"
 #endif
 
-
-
 int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
 {
     int ret = CRYPTOCB_UNAVAILABLE;
     whClientContext* ctx = inCtx;
-    whPacket* packet = (whPacket*)ctx->comm->data;
+    whPacket* packet;
     uint16_t group = WH_MESSAGE_GROUP_CRYPTO;
     uint16_t action;
     uint16_t dataSz;
@@ -82,6 +80,8 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
 
     if (devId == INVALID_DEVID || info == NULL || inCtx == NULL)
         return BAD_FUNC_ARG;
+
+    packet = (whPacket*)wh_CommClient_GetDataPtr(ctx->comm);
 
     XMEMSET((uint8_t*)packet, 0, WH_COMM_DATA_LEN);
 
