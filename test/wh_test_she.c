@@ -63,7 +63,7 @@ enum {
 /* Helper function to destroy a SHE key so the unit tests don't
  * leak NVM objects across invocations. Necessary, as SHE doesn't expose a
  * destroy key API since SHE keys are supposed to be fixed hardware keys */
-static int _destroyShePreProgrammedKey(whClientContext* client, whNvmId clientSheKeyId)
+static int _destroySheKey(whClientContext* client, whNvmId clientSheKeyId)
 {
     int rc = 0;
     int32_t serverRc = 0;
@@ -341,28 +341,28 @@ int whTest_SheClientConfig(whClientConfig* config)
     }
 
     /* destroy "pre-programmed" keys so we don't leak NVM */
-    if ((ret = _destroyShePreProgrammedKey(client, WOLFHSM_SHE_BOOT_MAC_KEY_ID)) != 0) {
-        WH_ERROR_PRINT("Failed to _destroyShePreProgrammedKey, ret=%d\n", ret);
+    if ((ret = _destroySheKey(client, WOLFHSM_SHE_BOOT_MAC_KEY_ID)) != 0) {
+        WH_ERROR_PRINT("Failed to _destroySheKey, ret=%d\n", ret);
         goto exit;
     }
-    if ((ret = _destroyShePreProgrammedKey(client, WOLFHSM_SHE_BOOT_MAC)) != 0) {
-        WH_ERROR_PRINT("Failed to _destroyShePreProgrammedKey, ret=%d\n", ret);
+    if ((ret = _destroySheKey(client, WOLFHSM_SHE_BOOT_MAC)) != 0) {
+        WH_ERROR_PRINT("Failed to _destroySheKey, ret=%d\n", ret);
         goto exit;
     }
-    if ((ret = _destroyShePreProgrammedKey(client, WOLFHSM_SHE_SECRET_KEY_ID)) != 0) {
-        WH_ERROR_PRINT("Failed to _destroyShePreProgrammedKey, ret=%d\n", ret);
+    if ((ret = _destroySheKey(client, WOLFHSM_SHE_SECRET_KEY_ID)) != 0) {
+        WH_ERROR_PRINT("Failed to _destroySheKey, ret=%d\n", ret);
         goto exit;
     }
-    if ((ret = _destroyShePreProgrammedKey(client, WOLFHSM_SHE_PRNG_SEED_ID)) != 0) {
-        WH_ERROR_PRINT("Failed to _destroyShePreProgrammedKey, ret=%d\n", ret);
+    if ((ret = _destroySheKey(client, WOLFHSM_SHE_PRNG_SEED_ID)) != 0) {
+        WH_ERROR_PRINT("Failed to _destroySheKey, ret=%d\n", ret);
         goto exit;
     }
-    if ((ret = _destroyShePreProgrammedKey(client, WOLFHSM_SHE_MASTER_ECU_KEY_ID)) != 0) {
-        WH_ERROR_PRINT("Failed to _destroyShePreProgrammedKey, ret=%d\n", ret);
+    if ((ret = _destroySheKey(client, WOLFHSM_SHE_MASTER_ECU_KEY_ID)) != 0) {
+        WH_ERROR_PRINT("Failed to _destroySheKey, ret=%d\n", ret);
         goto exit;
     }
-    if ((ret = _destroyShePreProgrammedKey(client, SHE_TEST_VECTOR_KEY_ID)) != 0) {
-        WH_ERROR_PRINT("Failed to _destroyShePreProgrammedKey, ret=%d\n", ret);
+    if ((ret = _destroySheKey(client, SHE_TEST_VECTOR_KEY_ID)) != 0) {
+        WH_ERROR_PRINT("Failed to _destroySheKey, ret=%d\n", ret);
         goto exit;
     }
     printf("SHE CMAC SUCCESS\n");
