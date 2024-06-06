@@ -28,7 +28,7 @@
 /* Consider reusing wolfssl or wolfcrypt errors here */
 
 
-enum {
+enum WH_ERROR_ENUM {
     WH_ERROR_OK             = 0,    /* Success, no error. */
 
     /* General errors */

@@ -539,7 +539,7 @@ int whTest_ClientServerSequential(void)
     }};
     whNvmContext nvm[1]    = {{0}};
 #ifndef WOLFHSM_NO_CRYPTO
-    crypto_context crypto[1] = {{
+    whServerCryptoContext crypto[1] = {{
         .devId = INVALID_DEVID,
     }};
 #endif
@@ -1449,7 +1449,7 @@ static int wh_ClientServer_MemThreadTest(void)
 
 #ifndef WOLFHSM_NO_CRYPTO
     /* Crypto context */
-    crypto_context crypto[1] = {{
+    whServerCryptoContext crypto[1] = {{
             .devId = INVALID_DEVID,
     }};
 #endif

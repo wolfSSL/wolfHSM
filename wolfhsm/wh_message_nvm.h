@@ -30,7 +30,7 @@
 #include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_nvm.h"
 
-enum {
+enum WH_MESSAGE_NVM_ACTION_ENUM {
     WH_MESSAGE_NVM_ACTION_INIT              = 0x1,
     WH_MESSAGE_NVM_ACTION_CLEANUP           = 0x2,
     WH_MESSAGE_NVM_ACTION_GETAVAILABLE      = 0x3,
@@ -45,7 +45,7 @@ enum {
     WH_MESSAGE_NVM_ACTION_READDMA64         = 0x28,
 };
 
-enum {
+enum WH_MESSAGE_NVM_MAX_ENUM {
     /* must be odd for struct whMessageNvm_DestroyObjectsRequest  alignment */
     WH_MESSAGE_NVM_MAX_DESTROY_OBJECTS_COUNT = 9,
     WH_MESSAGE_NVM_MAX_ADD_OBJECT_LEN =

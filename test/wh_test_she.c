@@ -442,11 +442,11 @@ static int wh_ClientServer_MemThreadTest(void)
     whNvmContext nvm[1] = {{0}};
 
     /* Crypto context */
-    crypto_context crypto[1] = {{
+    whServerCryptoContext crypto[1] = {{
             .devId = INVALID_DEVID,
     }};
 
-    she_context she[1];
+    whServerSheContext she[1];
     memset(she, 0, sizeof(she));
 
     whServerConfig                  s_conf[1] = {{

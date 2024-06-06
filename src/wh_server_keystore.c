@@ -288,7 +288,7 @@ int hsmCommitKey(whServerContext* server, whNvmId keyId)
 {
     int i;
     int ret = 0;
-    CacheSlot* cacheSlot;
+    whServerCacheSlot* cacheSlot;
     /* make sure id is valid */
     if (server == NULL || keyId == WOLFHSM_KEYID_ERASED)
         return WH_ERROR_BADARGS;

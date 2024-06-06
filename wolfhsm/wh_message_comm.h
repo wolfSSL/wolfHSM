@@ -29,7 +29,7 @@
 #include <stdint.h>
 
 /* Comm component message kinds */
-enum {
+enum WH_MESSAGE_COMM_ACTION_ENUM {
     WH_MESSAGE_COMM_ACTION_NONE      = 0x00,
     WH_MESSAGE_COMM_ACTION_INIT      = 0x01,
     WH_MESSAGE_COMM_ACTION_KEEPALIVE = 0x02,
@@ -78,7 +78,7 @@ int wh_MessageComm_TranslateInitResponse(uint16_t magic,
         whMessageCommInitResponse* dest);
 
 /* Info request/response data */
-enum {
+enum WOLFHSM_INFO_ENUM {
     WOLFHSM_INFO_VERSION_LEN = 8,
     WOLFHSM_INFO_BUILD_LEN   = 8,
 };

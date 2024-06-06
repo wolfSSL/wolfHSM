@@ -26,7 +26,7 @@
 #define WOLFHSM_WH_MESSAGE_H_
 
 /* Message groups and kind */
-enum {
+enum WH_MESSAGE_ENUM {
     WH_MESSAGE_KIND_NONE            = 0x0000, /* No message kind. Invalid */
 
     WH_MESSAGE_GROUP_MASK           = 0xFF00, /* 255 groups */
@@ -46,7 +46,7 @@ enum {
 };
 
 /* keystore actions */
-enum {
+enum WH_KEY_ENUM {
     WH_KEY_CACHE,
     WH_KEY_EVICT,
     WH_KEY_EXPORT,
@@ -55,7 +55,7 @@ enum {
 };
 
 /* SHE actions */
-enum {
+enum WH_SHE_ENUM {
     WH_SHE_SET_UID,
     WH_SHE_SECURE_BOOT_INIT,
     WH_SHE_SECURE_BOOT_UPDATE,
