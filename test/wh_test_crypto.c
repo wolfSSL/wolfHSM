@@ -105,8 +105,6 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         0x17, 0xad, 0x2b, 0x41, 0x7b, 0xe6, 0x6c, 0x37, 0x10};
     uint8_t knownCmacTag[] = {0x51, 0xf0, 0xbe, 0xbf, 0x7e, 0x3b, 0x9d, 0x92,
         0xfc, 0x49, 0x74, 0x17, 0x79, 0x36, 0x3c, 0xfe};
-    uint32_t outClientId = 0;
-    uint32_t outServerId = 0;
 
     XMEMCPY(plainText, PLAINTEXT, sizeof(plainText));
 
@@ -115,7 +113,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     }
 
     WH_TEST_RETURN_ON_FAIL(wh_Client_Init(client, config));
-    WH_TEST_RETURN_ON_FAIL(wh_Client_CommInit(client, &outClientId, &outServerId));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CommInit(client, NULL, NULL));
 
 #ifdef WH_CFG_TEST_VERBOSE
     {
@@ -187,7 +185,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     /* test cache with duplicate keyId for a different user */
     WH_TEST_RETURN_ON_FAIL(wh_Client_CommClose(client));
     client->comm->client_id = 2;
-    WH_TEST_RETURN_ON_FAIL(wh_Client_CommInit(client, &outClientId, &outServerId));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CommInit(client, NULL, NULL));
     XMEMSET(cipherText, 0xff, sizeof(cipherText));
     /* first check that evicting the other clients key fails */
     if ((ret = wh_Client_KeyEvict(client, keyId)) != WH_ERROR_NOTFOUND) {
@@ -216,7 +214,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     /* switch back and verify original key */
     WH_TEST_RETURN_ON_FAIL(wh_Client_CommClose(client));
     client->comm->client_id = 1;
-    WH_TEST_RETURN_ON_FAIL(wh_Client_CommInit(client, &outClientId, &outServerId));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CommInit(client, NULL, NULL));
     outLen = sizeof(keyEnd);
     if ((ret = wh_Client_KeyExport(client, keyId, labelEnd, sizeof(labelEnd), keyEnd, &outLen)) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_KeyExport %d\n", ret);
