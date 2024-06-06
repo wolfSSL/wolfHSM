@@ -117,6 +117,27 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     WH_TEST_RETURN_ON_FAIL(wh_Client_Init(client, config));
     WH_TEST_RETURN_ON_FAIL(wh_Client_CommInit(client, &outClientId, &outServerId));
 
+#ifdef WH_CFG_TEST_VERBOSE
+    {
+        int32_t  server_rc       = 0;
+        whNvmId  avail_objects   = 0;
+        whNvmId  reclaim_objects = 0;
+        uint32_t avail_size      = 0;
+        uint32_t reclaim_size    = 0;
+
+        WH_TEST_RETURN_ON_FAIL(
+            ret = wh_Client_NvmGetAvailable(client, &server_rc, &avail_size,
+                                            &avail_objects, &reclaim_size,
+                                            &reclaim_objects));
+
+        printf("PRE-CRYPTO TEST: NvmGetAvailable:%d, server_rc:%d avail_size:%d "
+               "avail_objects:%d, reclaim_size:%d reclaim_objects:%d\n",
+               ret, (int)server_rc, (int)avail_size, (int)avail_objects,
+               (int)reclaim_size, (int)reclaim_objects);
+    }
+#endif /* WH_CFG_TEST_VERBOSE */
+
+
     memset(labelStart, 0xff, sizeof(labelStart));
 
     /* test rng */
@@ -441,11 +462,11 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         goto exit;
     }
     outLen = 32;
-    if((ret = wc_ecc_shared_secret(eccPrivate, eccPublic, (byte*)cipherText, &outLen)) != 0) {
+    if((ret = wc_ecc_shared_secret(eccPrivate, eccPublic, (byte*)cipherText, (word32*)&outLen)) != 0) {
         printf("Failed to wc_ecc_shared_secret %d\n", ret);
         goto exit;
     }
-    if((ret = wc_ecc_shared_secret(eccPublic, eccPrivate, (byte*)finalText, &outLen)) != 0) {
+    if((ret = wc_ecc_shared_secret(eccPublic, eccPrivate, (byte*)finalText, (word32*)&outLen)) != 0) {
         printf("Failed to wc_ecc_shared_secret %d\n", ret);
         goto exit;
     }
@@ -457,7 +478,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         goto exit;
     }
     outLen = 32;
-    if((ret = wc_ecc_sign_hash((void*)cipherText, sizeof(cipherText), (void*)finalText, &outLen, rng, eccPrivate)) != 0) {
+    if((ret = wc_ecc_sign_hash((void*)cipherText, sizeof(cipherText), (void*)finalText, (word32*)&outLen, rng, eccPrivate)) != 0) {
         printf("Failed to wc_ecc_sign_hash %d\n", ret);
         goto exit;
     }
@@ -513,7 +534,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         goto exit;
     }
     outLen = sizeof(knownCmacTag);
-    if((ret = wc_CmacFinal(cmac, (byte*)cipherText, &outLen)) != 0) {
+    if((ret = wc_CmacFinal(cmac, (byte*)cipherText, (word32*)&outLen)) != 0) {
         WH_ERROR_PRINT("Failed to wc_CmacFinal %d\n", ret);
         goto exit;
     }
@@ -533,7 +554,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         goto exit;
     }
     outLen = sizeof(knownCmacTag);
-    if((ret = wh_Client_AesCmacGenerate(cmac, (byte*)cipherText, &outLen, (byte*)knownCmacMessage, sizeof(knownCmacMessage), keyId, NULL)) != 0) {
+    if((ret = wh_Client_AesCmacGenerate(cmac, (byte*)cipherText, (word32*)&outLen, (byte*)knownCmacMessage, sizeof(knownCmacMessage), keyId, NULL)) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_AesCmacGenerate %d\n", ret);
         goto exit;
     }
@@ -570,6 +591,32 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         WH_ERROR_PRINT("Failed to wh_Client_KeyExport %d\n", ret);
         goto exit;
     }
+    /* test finished, erase key */
+    if ((ret = wh_Client_KeyErase(client, keyId)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyErase %d\n", ret);
+        goto exit;
+    }
+
+#ifdef WH_CFG_TEST_VERBOSE
+    {
+        int32_t  server_rc       = 0;
+        whNvmId  avail_objects   = 0;
+        whNvmId  reclaim_objects = 0;
+        uint32_t avail_size      = 0;
+        uint32_t reclaim_size    = 0;
+
+        WH_TEST_RETURN_ON_FAIL(
+            ret = wh_Client_NvmGetAvailable(client, &server_rc, &avail_size,
+                                            &avail_objects, &reclaim_size,
+                                            &reclaim_objects));
+
+        printf("POST-CRYPTO TEST: NvmGetAvailable:%d, server_rc:%d avail_size:%d "
+               "avail_objects:%d, reclaim_size:%d reclaim_objects:%d\n",
+               ret, (int)server_rc, (int)avail_size, (int)avail_objects,
+               (int)reclaim_size, (int)reclaim_objects);
+    }
+#endif /* WH_CFG_TEST_VERBOSE */
+
     ret = 0;
 exit:
     wc_curve25519_free(curve25519PrivateKey);

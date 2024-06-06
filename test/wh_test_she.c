@@ -43,6 +43,7 @@
 #include "wolfhsm/wh_client.h"
 #include "wolfhsm/wh_client_she.h"
 #include "wolfhsm/wh_transport_mem.h"
+#include "wolfhsm/wh_common.h"
 
 #include "wh_test_common.h"
 
@@ -59,6 +60,23 @@ enum {
         BUFFER_SIZE = 4096,
     };
 
+/* Helper function to destroy a SHE key so the unit tests don't
+ * leak NVM objects across invocations. Necessary, as SHE doesn't expose a
+ * destroy key API since SHE keys are supposed to be fixed hardware keys */
+static int _destroyShePreProgrammedKey(whClientContext* client, whNvmId clientSheKeyId)
+{
+    int rc = 0;
+    int32_t serverRc = 0;
+
+    whNvmId id = MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_SHE, client->comm->client_id, clientSheKeyId);
+
+    rc = wh_Client_NvmDestroyObjects(client, 1, &id, 0, NULL, &serverRc);
+    if (rc == WH_ERROR_OK) {
+        rc = serverRc;
+    }
+
+    return rc;
+}
 
 int whTest_SheClientConfig(whClientConfig* config)
 {
@@ -115,6 +133,7 @@ int whTest_SheClientConfig(whClientConfig* config)
     uint8_t messageFive[WOLFHSM_SHE_M5_SZ];
     uint32_t outClientId = 0;
     uint32_t outServerId = 0;
+    const uint32_t SHE_TEST_VECTOR_KEY_ID = 4;
 
     if (config == NULL) {
         return WH_ERROR_BADARGS;
@@ -122,6 +141,26 @@ int whTest_SheClientConfig(whClientConfig* config)
 
     WH_TEST_RETURN_ON_FAIL(wh_Client_Init(client, config));
     WH_TEST_RETURN_ON_FAIL(wh_Client_CommInit(client, &outClientId, &outServerId));
+
+#ifdef WH_CFG_TEST_VERBOSE
+    {
+        int32_t  server_rc       = 0;
+        whNvmId  avail_objects   = 0;
+        whNvmId  reclaim_objects = 0;
+        uint32_t avail_size      = 0;
+        uint32_t reclaim_size    = 0;
+
+        WH_TEST_RETURN_ON_FAIL(
+            ret = wh_Client_NvmGetAvailable(client, &server_rc, &avail_size,
+                                            &avail_objects, &reclaim_size,
+                                            &reclaim_objects));
+
+        printf("PRE-SHE TEST: NvmGetAvailable:%d, server_rc:%d avail_size:%d "
+               "avail_objects:%d, reclaim_size:%d reclaim_objects:%d\n",
+               ret, (int)server_rc, (int)avail_size, (int)avail_objects,
+               (int)reclaim_size, (int)reclaim_objects);
+    }
+#endif /* WH_CFG_TEST_VERBOSE */
 
     /* generate a new cmac key */
     if ((ret = wc_InitRng_ex(rng, NULL, WOLFHSM_DEV_ID)) != 0) {
@@ -204,7 +243,7 @@ int whTest_SheClientConfig(whClientConfig* config)
     }
     /* load the vector master ecu key */
     if ((ret = wh_SheGenerateLoadableKey(WOLFHSM_SHE_MASTER_ECU_KEY_ID, WOLFHSM_SHE_SECRET_KEY_ID, 1, 0, sheUid, vectorMasterEcuKey, secretKey, messageOne, messageTwo, messageThree, messageFour, messageFive)) != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_ShePreProgramKey %d\n", ret);
+        WH_ERROR_PRINT("Failed to wh_Client_SheGenerateLoadableKey %d\n", ret);
         goto exit;
     }
     if ((ret = wh_Client_SheLoadKey(client, messageOne, messageTwo, messageThree, outMessageFour, outMessageFive)) != 0) {
@@ -212,8 +251,8 @@ int whTest_SheClientConfig(whClientConfig* config)
         goto exit;
     }
     /* verify that our helper function output matches the vector */
-    if ((ret = wh_SheGenerateLoadableKey(4, WOLFHSM_SHE_MASTER_ECU_KEY_ID, 1, 0, sheUid, vectorRawKey, vectorMasterEcuKey, messageOne, messageTwo, messageThree, messageFour, messageFive)) != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_ShePreProgramKey %d\n", ret);
+    if ((ret = wh_SheGenerateLoadableKey(SHE_TEST_VECTOR_KEY_ID, WOLFHSM_SHE_MASTER_ECU_KEY_ID, 1, 0, sheUid, vectorRawKey, vectorMasterEcuKey, messageOne, messageTwo, messageThree, messageFour, messageFive)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_SheGenerateLoadableKey %d\n", ret);
         goto exit;
     }
     if (memcmp(messageOne, vectorMessageOne, sizeof(vectorMessageOne)) != 0 ||
@@ -300,7 +339,55 @@ int whTest_SheClientConfig(whClientConfig* config)
         WH_ERROR_PRINT("SHE CMAC FAILED TO VERIFY\n");
         goto exit;
     }
+
+    /* destroy "pre-programmed" keys so we don't leak NVM */
+    if ((ret = _destroyShePreProgrammedKey(client, WOLFHSM_SHE_BOOT_MAC_KEY_ID)) != 0) {
+        WH_ERROR_PRINT("Failed to _destroyShePreProgrammedKey, ret=%d\n", ret);
+        goto exit;
+    }
+    if ((ret = _destroyShePreProgrammedKey(client, WOLFHSM_SHE_BOOT_MAC)) != 0) {
+        WH_ERROR_PRINT("Failed to _destroyShePreProgrammedKey, ret=%d\n", ret);
+        goto exit;
+    }
+    if ((ret = _destroyShePreProgrammedKey(client, WOLFHSM_SHE_SECRET_KEY_ID)) != 0) {
+        WH_ERROR_PRINT("Failed to _destroyShePreProgrammedKey, ret=%d\n", ret);
+        goto exit;
+    }
+    if ((ret = _destroyShePreProgrammedKey(client, WOLFHSM_SHE_PRNG_SEED_ID)) != 0) {
+        WH_ERROR_PRINT("Failed to _destroyShePreProgrammedKey, ret=%d\n", ret);
+        goto exit;
+    }
+    if ((ret = _destroyShePreProgrammedKey(client, WOLFHSM_SHE_MASTER_ECU_KEY_ID)) != 0) {
+        WH_ERROR_PRINT("Failed to _destroyShePreProgrammedKey, ret=%d\n", ret);
+        goto exit;
+    }
+    if ((ret = _destroyShePreProgrammedKey(client, SHE_TEST_VECTOR_KEY_ID)) != 0) {
+        WH_ERROR_PRINT("Failed to _destroyShePreProgrammedKey, ret=%d\n", ret);
+        goto exit;
+    }
     printf("SHE CMAC SUCCESS\n");
+
+#ifdef WH_CFG_TEST_VERBOSE
+    {
+        int32_t  server_rc       = 0;
+        whNvmId  avail_objects   = 0;
+        whNvmId  reclaim_objects = 0;
+        uint32_t avail_size      = 0;
+        uint32_t reclaim_size    = 0;
+
+        WH_TEST_RETURN_ON_FAIL(
+            ret = wh_Client_NvmGetAvailable(client, &server_rc, &avail_size,
+                                            &avail_objects, &reclaim_size,
+                                            &reclaim_objects));
+
+        printf("POST-SHE TEST: NvmGetAvailable:%d, server_rc:%d avail_size:%d "
+               "avail_objects:%d, reclaim_size:%d reclaim_objects:%d\n",
+               ret, (int)server_rc, (int)avail_size, (int)avail_objects,
+               (int)reclaim_size, (int)reclaim_objects);
+    }
+#endif /* WH_CFG_TEST_VERBOSE */
+
+
 exit:
     /* Tell server to close */
     WH_TEST_RETURN_ON_FAIL(wh_Client_CommClose(client));
