@@ -61,13 +61,11 @@
 #error "wolfHSM needs wolfCrypt built with HAVE_ANONYMOUS_INLINE_AGGREGATES=1"
 #endif
 
-
-
 int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
 {
     int ret = CRYPTOCB_UNAVAILABLE;
     whClientContext* ctx = inCtx;
-    whPacket* packet = (whPacket*)ctx->comm->data;
+    whPacket* packet;
     uint16_t group = WH_MESSAGE_GROUP_CRYPTO;
     uint16_t action;
     uint16_t dataSz;
@@ -82,6 +80,8 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
 
     if (devId == INVALID_DEVID || info == NULL || inCtx == NULL)
         return BAD_FUNC_ARG;
+
+    packet = (whPacket*)wh_CommClient_GetDataPtr(ctx->comm);
 
     XMEMSET((uint8_t*)packet, 0, WH_COMM_DATA_LEN);
 
@@ -104,6 +104,13 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             dataSz = sizeof(packet->cipherAesCbcReq) +
                 info->cipher.aescbc.aes->keylen + AES_IV_SIZE +
                 info->cipher.aescbc.sz;
+            if (dataSz > WH_COMM_DATA_LEN) {
+                /* if we're using an HSM key return BAD_FUNC_ARG */
+                if ((intptr_t)info->cipher.aescbc.aes->devCtx != 0)
+                    return BAD_FUNC_ARG;
+                else
+                    return CRYPTOCB_UNAVAILABLE;
+            }
             /* set keyLen */
             packet->cipherAesCbcReq.keyLen =
                 info->cipher.aescbc.aes->keylen;
@@ -155,6 +162,13 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
                 info->cipher.aesgcm_enc.ivSz + info->cipher.aesgcm_enc.sz +
                 info->cipher.aesgcm_enc.authInSz +
                 info->cipher.aesgcm_enc.authTagSz;
+            if (dataSz > WH_COMM_DATA_LEN) {
+                /* if we're using an HSM key return BAD_FUNC_ARG */
+                if ((intptr_t)info->cipher.aesgcm_enc.aes->devCtx != 0)
+                    return BAD_FUNC_ARG;
+                else
+                    return CRYPTOCB_UNAVAILABLE;
+            }
             /* set keyLen */
             packet->cipherAesGcmReq.keyLen =
                 info->cipher.aesgcm_enc.aes->keylen;
@@ -258,6 +272,11 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             /* in and out are after the fixed size fields */
             in = (uint8_t*)(&packet->pkRsaReq + 1);
             out = (uint8_t*)(&packet->pkRsaRes + 1);
+            dataSz = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->pkRsaReq)
+                + info->pk.rsa.inLen;
+            /* can't fallback to software since the key is on the HSM */
+            if (dataSz > WH_COMM_DATA_LEN)
+                return BAD_FUNC_ARG;
             /* set type */
             packet->pkRsaReq.opType = info->pk.rsa.type;
             /* set keyId */
@@ -269,10 +288,7 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             /* set in */
             XMEMCPY(in, info->pk.rsa.in, info->pk.rsa.inLen);
             /* write request */
-            ret = wh_Client_SendRequest(ctx, group,
-                WC_ALGO_TYPE_PK,
-                WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->pkRsaReq)
-                    + info->pk.rsa.inLen,
+            ret = wh_Client_SendRequest(ctx, group, WC_ALGO_TYPE_PK, dataSz,
                 (uint8_t*)packet);
             /* read response */
             if (ret == 0) {
@@ -384,6 +400,11 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             /* in and out are after the fixed size fields */
             in = (uint8_t*)(&packet->pkEccSignReq + 1);
             out = (uint8_t*)(&packet->pkEccSignRes + 1);
+            dataSz = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->pkEccSignReq) +
+                info->pk.eccsign.inlen;
+            /* can't fallback to software since the key is on the HSM */
+            if (dataSz > WH_COMM_DATA_LEN)
+                return BAD_FUNC_ARG;
             /* set keyId */
             packet->pkEccSignReq.keyId = (intptr_t)info->pk.eccsign.key->devCtx;
             /* set curveId */
@@ -394,10 +415,7 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             /* set in */
             XMEMCPY(in, info->pk.eccsign.in, info->pk.eccsign.inlen);
             /* write request */
-            ret = wh_Client_SendRequest(ctx, group,
-                WC_ALGO_TYPE_PK,
-                WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->pkEccSignReq) +
-                    info->pk.eccsign.inlen,
+            ret = wh_Client_SendRequest(ctx, group, WC_ALGO_TYPE_PK, dataSz,
                 (uint8_t*)packet);
             /* read response */
             if (ret == 0) {
@@ -421,6 +439,11 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             sig = (uint8_t*)(&packet->pkEccVerifyReq + 1);
             hash = (uint8_t*)(&packet->pkEccVerifyReq + 1) +
                 info->pk.eccverify.siglen;
+            dataSz = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->pkEccVerifyReq) +
+                info->pk.eccverify.siglen + info->pk.eccverify.hashlen;
+            /* can't fallback to software since the key is on the HSM */
+            if (dataSz > WH_COMM_DATA_LEN)
+                return BAD_FUNC_ARG;
             /* set keyId */
             packet->pkEccVerifyReq.keyId =
                 (intptr_t)info->pk.eccverify.key->devCtx;
@@ -434,10 +457,7 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             XMEMCPY(sig, info->pk.eccverify.sig, info->pk.eccverify.siglen);
             XMEMCPY(hash, info->pk.eccverify.hash, info->pk.eccverify.hashlen);
             /* write request */
-            ret = wh_Client_SendRequest(ctx, group,
-                WC_ALGO_TYPE_PK,
-                WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->pkEccVerifyReq) +
-                info->pk.eccverify.siglen + info->pk.eccverify.hashlen,
+            ret = wh_Client_SendRequest(ctx, group, WC_ALGO_TYPE_PK, dataSz,
                 (uint8_t*)packet);
             /* read response */
             if (ret == 0) {
@@ -568,9 +588,14 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
 #endif /* !WC_NO_RNG */
 #ifdef WOLFSSL_CMAC
     case WC_ALGO_TYPE_CMAC:
-        if (WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->cmacReq) + info->cmac.inSz
-            + info->cmac.keySz > WH_COMM_DATA_LEN) {
-            return BAD_FUNC_ARG;
+        dataSz = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->cmacReq) +
+            info->cmac.inSz + info->cmac.keySz;
+        if (dataSz > WH_COMM_DATA_LEN) {
+            /* if we're using an HSM key return BAD_FUNC_ARG */
+            if ((intptr_t)info->cmac.cmac->devCtx != 0)
+                return BAD_FUNC_ARG;
+            else
+                return CRYPTOCB_UNAVAILABLE;
         }
         /* ignore init call with NULL params */
         if (info->cmac.in == NULL && info->cmac.key == NULL &&
