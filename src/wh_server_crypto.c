@@ -46,7 +46,7 @@ static int hsmCacheKeyRsa(whServerContext* server, RsaKey* key, whKeyId* outId)
     if (ret == 0) {
         /* export key */
         /* TODO: Fix wolfCrypto to allow KeyToDer when KEY_GEN is NOT set */
-        XMEMSET((uint8_t*)&server->cache[slotIdx], 0, sizeof(CacheSlot));
+        XMEMSET((uint8_t*)&server->cache[slotIdx], 0, sizeof(whServerCacheSlot));
         ret = wc_RsaKeyToDer(key, server->cache[slotIdx].buffer,
             WOLFHSM_KEYCACHE_BUFSIZE);
     }
@@ -176,7 +176,7 @@ static int hsmCacheKeyCurve25519(whServerContext* server, curve25519_key* key,
         ret = hsmGetUniqueId(server, &keyId);
     }
     if (ret == 0) {
-        XMEMSET((uint8_t*)&server->cache[slotIdx], 0, sizeof(CacheSlot));
+        XMEMSET((uint8_t*)&server->cache[slotIdx], 0, sizeof(whServerCacheSlot));
         /* export key */
         ret = wc_curve25519_export_key_raw(key,
             server->cache[slotIdx].buffer + CURVE25519_KEYSIZE, &privSz,
@@ -309,7 +309,7 @@ static int hsmCacheKeyEcc(whServerContext* server, ecc_key* key, whKeyId* outId)
     }
     /* export key */
     if (ret == 0) {
-        XMEMSET((uint8_t*)&server->cache[slotIdx], 0, sizeof(CacheSlot));
+        XMEMSET((uint8_t*)&server->cache[slotIdx], 0, sizeof(whServerCacheSlot));
         qxLen = qyLen = qdLen = key->dp->size;
         ret = wc_ecc_export_private_raw(key, server->cache[slotIdx].buffer,
             (word32*)&qxLen, server->cache[slotIdx].buffer + qxLen,

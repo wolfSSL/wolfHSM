@@ -48,13 +48,13 @@ typedef struct whServerContext_t whServerContext;
 
 #ifndef WOLFHSM_NO_CRYPTO
 /** Server crypto context and resource allocation */
-typedef struct CacheSlot {
+typedef struct whServerCacheSlot {
     uint8_t       commited;
     whNvmMetadata meta[1];
     uint8_t       buffer[WOLFHSM_KEYCACHE_BUFSIZE];
-} CacheSlot;
+} whServerCacheSlot;
 
-typedef struct crypto_context {
+typedef struct whServerCryptoContext {
     int devId;
 #ifndef WC_NO_RNG
     WC_RNG rng[1];
@@ -84,7 +84,7 @@ typedef struct crypto_context {
         curve25519_key curve25519Public[1];
 #endif
     } pubKey;
-} crypto_context;
+} whServerCryptoContext;
 
 #ifdef WOLFHSM_SHE_EXTENSION
 typedef struct {
@@ -98,7 +98,7 @@ typedef struct {
     uint8_t  prngState[WOLFHSM_SHE_KEY_SZ];
     uint8_t  prngKey[WOLFHSM_SHE_KEY_SZ];
     uint8_t  uid[WOLFHSM_SHE_UID_SZ];
-} she_context;
+} whServerSheContext;
 #endif
 #endif /* WOLFHSM_NO_CRYPTO */
 
@@ -186,9 +186,9 @@ typedef struct whServerConfig_t {
     whNvmContext*       nvm;
 
 #ifndef WOLFHSM_NO_CRYPTO
-    crypto_context* crypto;
+    whServerCryptoContext* crypto;
 #ifdef WOLFHSM_SHE_EXTENSION
-    she_context* she;
+    whServerSheContext* she;
 #endif
 #if defined WOLF_CRYPTO_CB /* TODO: should we be relying on wolfSSL defines? \
                             */
@@ -204,10 +204,10 @@ struct whServerContext_t {
     whCommServer  comm[1];
     whNvmContext* nvm;
 #ifndef WOLFHSM_NO_CRYPTO
-    crypto_context* crypto;
-    CacheSlot       cache[WOLFHSM_NUM_RAMKEYS];
+    whServerCryptoContext* crypto;
+    whServerCacheSlot       cache[WOLFHSM_NUM_RAMKEYS];
 #ifdef WOLFHSM_SHE_EXTENSION
-    she_context* she;
+    whServerSheContext* she;
 #endif
 #endif /* WOLFHSM_NO_CRYPTO */
     whServerCustomCb   customHandlerTable[WH_CUSTOM_CB_NUM_CALLBACKS];
