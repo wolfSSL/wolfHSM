@@ -618,6 +618,11 @@ int wh_Client_SetKeyCmac(Cmac* key, whNvmId keyId);
 #endif
 
 /* Counter functions */
+int wh_Client_CounterInitRequest(whClientContext* c, whNvmId keyId,
+    uint32_t counter);
+int wh_Client_CounterInitResponse(whClientContext* c, uint32_t* counter);
+int wh_Client_CounterInit(whClientContext* c, whNvmId keyId, uint32_t* counter);
+
 int wh_Client_CounterResetRequest(whClientContext* c, whNvmId keyId);
 int wh_Client_CounterResetResponse(whClientContext* c, uint32_t* counter);
 int wh_Client_CounterReset(whClientContext* c, whNvmId keyId, uint32_t* counter);
@@ -630,6 +635,10 @@ int wh_Client_CounterIncrement(whClientContext* c, whNvmId keyId,
 int wh_Client_CounterReadRequest(whClientContext* c, whNvmId keyId);
 int wh_Client_CounterReadResponse(whClientContext* c, uint32_t* counter);
 int wh_Client_CounterRead(whClientContext* c, whNvmId keyId, uint32_t* counter);
+
+int wh_Client_CounterDestroyRequest(whClientContext* c, whNvmId keyId);
+int wh_Client_CounterDestroyResponse(whClientContext* c);
+int wh_Client_CounterDestroy(whClientContext* c, whNvmId keyId);
 
 /** NVM functions */
 /**

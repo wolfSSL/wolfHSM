@@ -307,15 +307,16 @@ typedef struct WOLFHSM_PACK wh_Packet_version_exchange
     uint32_t version;
 } wh_Packet_version_exchange;
 
-typedef struct WOLFHSM_PACK wh_Packet_counter_reset_req
+typedef struct WOLFHSM_PACK wh_Packet_counter_init_req
 {
     uint16_t keyId;
-} wh_Packet_counter_reset_req;
+    uint32_t counter;
+} wh_Packet_counter_init_req;
 
-typedef struct WOLFHSM_PACK wh_Packet_counter_reset_res
+typedef struct WOLFHSM_PACK wh_Packet_counter_init_res
 {
     uint32_t counter;
-} wh_Packet_counter_reset_res;
+} wh_Packet_counter_init_res;
 
 typedef struct WOLFHSM_PACK wh_Packet_counter_increment_req
 {
@@ -336,6 +337,11 @@ typedef struct WOLFHSM_PACK wh_Packet_counter_read_res
 {
     uint32_t counter;
 } wh_Packet_counter_read_res;
+
+typedef struct WOLFHSM_PACK wh_Packet_counter_destroy_req
+{
+    uint16_t keyId;
+} wh_Packet_counter_destroy_req;
 
 #ifdef WOLFHSM_SHE_EXTENSION
 typedef struct WOLFHSM_PACK wh_Packet_she_set_uid_req
@@ -552,9 +558,10 @@ typedef struct WOLFHSM_PACK whPacket
         /* key erase */
         wh_Packet_key_erase_req keyEraseReq;
         /* counters */
-        wh_Packet_counter_reset_req counterResetReq;
+        wh_Packet_counter_init_req counterInitReq;
         wh_Packet_counter_increment_req counterIncrementReq;
         wh_Packet_counter_read_req counterReadReq;
+        wh_Packet_counter_destroy_req counterDestroyReq;
 
         /* FIXED SIZE RESPONSES */
         /* cipher */
@@ -588,7 +595,7 @@ typedef struct WOLFHSM_PACK whPacket
         /* key erase */
         wh_Packet_key_erase_res keyEraseRes;
         /* counters */
-        wh_Packet_counter_reset_res counterResetRes;
+        wh_Packet_counter_init_res counterInitRes;
         wh_Packet_counter_increment_res counterIncrementRes;
         wh_Packet_counter_read_res counterReadRes;
 

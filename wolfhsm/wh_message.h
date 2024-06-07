@@ -78,9 +78,10 @@ enum WH_SHE_ENUM {
 
 /* counter actions */
 enum {
-    WH_COUNTER_RESET,
+    WH_COUNTER_INIT,
     WH_COUNTER_INCREMENT,
     WH_COUNTER_READ,
+    WH_COUNTER_DESTROY,
 };
 
 /* Construct the message kind based on group and action */

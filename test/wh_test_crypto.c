@@ -69,6 +69,7 @@ enum {
 
 int whTest_CryptoClientConfig(whClientConfig* config)
 {
+    int i;
     whClientContext client[1] = {0};
     int ret = 0;
     int res = 0;
@@ -612,8 +613,33 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         WH_ERROR_PRINT("Failed to wh_Client_CounterReset %d\n", ret);
         goto exit;
     }
-    /* fail to read nonexistent counter */
-    keyId = 2;
+    /* test saturation */
+    counter = 0xffffffff;
+    if ((ret = wh_Client_CounterInit(client, keyId, &counter)) != 0 || counter != 0xffffffff) {
+        WH_ERROR_PRINT("Failed to wh_Client_CounterInit %d\n", ret);
+        goto exit;
+    }
+    if ((ret = wh_Client_CounterIncrement(client, keyId, &counter)) != 0 || counter != 0xffffffff) {
+        WH_ERROR_PRINT("Failed to wh_Client_CounterIncrement %d\n", ret);
+        goto exit;
+    }
+    /* verify increment isn't using new nvm slots */
+    if ((ret = wh_Client_CounterReset(client, keyId, &counter)) != 0 || counter != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_CounterReset %d\n", ret);
+        goto exit;
+    }
+    for (i = 0; i < 64; i++) {
+        if ((ret = wh_Client_CounterIncrement(client, keyId, &counter)) != 0 || counter != i + 1) {
+            WH_ERROR_PRINT("Failed to wh_Client_CounterIncrement %d\n", ret);
+            goto exit;
+        }
+    }
+    /* destroy counter */
+    if ((ret = wh_Client_CounterDestroy(client, keyId)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_CounterDestroy %d\n", ret);
+        goto exit;
+    }
+    /* fail to read destroyed counter */
     if ((ret = wh_Client_CounterRead(client, keyId, &counter)) != WH_ERROR_NOTFOUND) {
         WH_ERROR_PRINT("Failed to wh_Client_CounterRead %d\n", ret);
         goto exit;
