@@ -259,13 +259,19 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         WH_ERROR_PRINT("Failed to wh_Client_KeyExport %d\n", ret);
         goto exit;
     }
-    if (XMEMCMP(key, keyEnd, outLen) == 0 && XMEMCMP(labelStart, labelEnd, sizeof(labelStart)) == 0)
-        printf("KEY COMMIT/EXPORT SUCCESS\n");
-    else {
+    if (XMEMCMP(key, keyEnd, outLen) != 0 || XMEMCMP(labelStart, labelEnd, sizeof(labelStart)) != 0) {
         WH_ERROR_PRINT("KEY COMMIT/EXPORT FAILED TO MATCH\n");
         ret = -1;
         goto exit;
     }
+    /* verify commit isn't using new nvm slots */
+    for (i = 0; i < 64; i++) {
+        if ((ret = wh_Client_KeyCommit(client, keyId)) != 0) {
+            WH_ERROR_PRINT("Failed to wh_Client_KeyCommit %d\n", ret);
+            goto exit;
+        }
+    }
+    printf("KEY COMMIT/EXPORT SUCCESS\n");
     /* test erase */
     if ((ret = wh_Client_KeyErase(client, keyId)) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_KeyErase %d\n", ret);

@@ -306,6 +306,14 @@ int hsmCommitKey(whServerContext* server, whNvmId keyId)
     /* add object */
     ret = wh_Nvm_AddObject(server->nvm, cacheSlot->meta,
         cacheSlot->meta->len, cacheSlot->buffer);
+    /* if we ran out of space clean out duplicate entries and retry */
+    if (ret == WH_ERROR_NOSPACE) {
+        ret = wh_Nvm_DestroyObjects(server->nvm, 0, NULL);
+        if (ret == 0) {
+            ret = wh_Nvm_AddObject(server->nvm, cacheSlot->meta,
+                cacheSlot->meta->len, cacheSlot->buffer);
+        }
+    }
     if (ret == 0)
         cacheSlot->commited = 1;
     return ret;
@@ -342,10 +350,6 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
      * called by internal functions */
     if (server == NULL || data == NULL || size == NULL)
         return WH_ERROR_BADARGS;
-#if 0
-    if (WH_COMM_FLAGS_SWAPTEST(magic))
-        return WH_ERROR_ABORTED;
-#endif
     switch (action)
     {
     case WH_KEY_CACHE:
