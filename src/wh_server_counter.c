@@ -47,6 +47,12 @@ int wh_Server_HandleCounter(whServerContext* server, uint16_t action,
         /* use the label buffer to hold the counter value */
         *(uint32_t*)meta->label = packet->counterInitReq.counter;
         ret = wh_Nvm_AddObject(server->nvm, meta, 0, NULL);
+        /* if we ran out of space try cleaning up duplicate entries and then retry */
+        if (ret == WH_ERROR_NOSPACE) {
+            ret = wh_Nvm_DestroyObjects(server->nvm, 0, NULL);
+            if (ret == 0)
+                ret = wh_Nvm_AddObject(server->nvm, meta, 0, NULL);
+        }
         if (ret == 0) {
             packet->counterInitRes.counter = *(uint32_t*)meta->label;
             *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->counterInitRes);
