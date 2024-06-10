@@ -29,7 +29,7 @@
 int wh_Server_HandleCounter(whServerContext* server, uint16_t action,
     uint8_t* data, uint16_t* size)
 {
-    whKeyId keyId;
+    whKeyId counterId;
     int ret;
     whPacket* packet = (whPacket*)data;
     whNvmMetadata meta[1] = {0};
@@ -43,11 +43,11 @@ int wh_Server_HandleCounter(whServerContext* server, uint16_t action,
         /* write 0 to nvm with the supplied id and user_id */
         memset((void*)meta, 0, sizeof(meta));
         meta->id = MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_COUNTER,
-            server->comm->client_id, packet->counterInitReq.keyId);
+            server->comm->client_id, packet->counterInitReq.counterId);
         /* use the label buffer to hold the counter value */
         *(uint32_t*)meta->label = packet->counterInitReq.counter;
         ret = wh_Nvm_AddObject(server->nvm, meta, 0, NULL);
-        /* if we ran out of space try cleaning up duplicate entries and then retry */
+        /* if we ran out of space try reclaiming space and then retry */
         if (ret == WH_ERROR_NOSPACE) {
             ret = wh_Nvm_DestroyObjects(server->nvm, 0, NULL);
             if (ret == 0)
@@ -62,19 +62,22 @@ int wh_Server_HandleCounter(whServerContext* server, uint16_t action,
         /* read the counter, stored in the metadata label */
         ret = wh_Nvm_GetMetadata(server->nvm, MAKE_WOLFHSM_KEYID(
             WOLFHSM_KEYTYPE_COUNTER, server->comm->client_id,
-            packet->counterIncrementReq.keyId), meta);
+            packet->counterIncrementReq.counterId), meta);
         /* increment and write the counter back */
         if (ret == 0) {
             (*(uint32_t*)meta->label)++;
             /* set counter to uint32_t max if it rolled over */
             if (*(uint32_t*)meta->label == 0)
                 *(uint32_t*)meta->label = 0xffffffff;
-            ret = wh_Nvm_AddObject(server->nvm, meta, 0, NULL);
-            /* if we ran out of space try cleaning up duplicate entries and then retry */
-            if (ret == WH_ERROR_NOSPACE) {
-                ret = wh_Nvm_DestroyObjects(server->nvm, 0, NULL);
-                if (ret == 0)
-                    ret = wh_Nvm_AddObject(server->nvm, meta, 0, NULL);
+            /* only update if we didn't saturate */
+            else {
+                ret = wh_Nvm_AddObject(server->nvm, meta, 0, NULL);
+                /* if we ran out of space try reclaiming space and then retry */
+                if (ret == WH_ERROR_NOSPACE) {
+                    ret = wh_Nvm_DestroyObjects(server->nvm, 0, NULL);
+                    if (ret == 0)
+                        ret = wh_Nvm_AddObject(server->nvm, meta, 0, NULL);
+                }
             }
         }
         /* return counter to the caller */
@@ -88,7 +91,7 @@ int wh_Server_HandleCounter(whServerContext* server, uint16_t action,
         /* read the counter, stored in the metadata label */
         ret = wh_Nvm_GetMetadata(server->nvm, MAKE_WOLFHSM_KEYID(
             WOLFHSM_KEYTYPE_COUNTER, server->comm->client_id,
-            packet->counterReadReq.keyId), meta);
+            packet->counterReadReq.counterId), meta);
         /* return counter to the caller */
         if (ret == 0) {
             packet->counterReadRes.counter = *(uint32_t*)meta->label;
@@ -96,8 +99,9 @@ int wh_Server_HandleCounter(whServerContext* server, uint16_t action,
         }
         break;
     case WH_COUNTER_DESTROY:
-        keyId = packet->counterDestroyReq.keyId;
-        ret = wh_Nvm_DestroyObjects(server->nvm, 1, &keyId);
+        counterId = MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_COUNTER,
+            server->comm->client_id, packet->counterDestroyReq.counterId);
+        ret = wh_Nvm_DestroyObjects(server->nvm, 1, &counterId);
         if (ret == 0)
             *size = WOLFHSM_PACKET_STUB_SIZE;
         break;

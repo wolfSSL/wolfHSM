@@ -645,6 +645,17 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         WH_ERROR_PRINT("Failed to wh_Client_CounterDestroy %d\n", ret);
         goto exit;
     }
+    /* verify reset and destroy work and don't leak slots */
+    for (i = 0; i < 64; i++) {
+        if ((ret = wh_Client_CounterReset(client, (whNvmId)i + 1, &counter)) != 0 || counter != 0) {
+            WH_ERROR_PRINT("Failed to wh_Client_CounterReset %d\n", ret);
+            goto exit;
+        }
+        if ((ret = wh_Client_CounterDestroy(client, (whNvmId)i + 1)) != 0) {
+            WH_ERROR_PRINT("Failed to wh_Client_CounterDestroy %d\n", ret);
+            goto exit;
+        }
+    }
     /* fail to read destroyed counter */
     if ((ret = wh_Client_CounterRead(client, keyId, &counter)) != WH_ERROR_NOTFOUND) {
         WH_ERROR_PRINT("Failed to wh_Client_CounterRead %d\n", ret);
