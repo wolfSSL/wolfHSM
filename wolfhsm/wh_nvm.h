@@ -112,6 +112,9 @@ int wh_Nvm_GetAvailable(whNvmContext* context,
         uint32_t *out_avail_size, whNvmId *out_avail_objects,
         uint32_t *out_reclaim_size, whNvmId *out_reclaim_objects);
 
+int wh_Nvm_AddObjectPessimistic(whNvmContext* context, whNvmMetadata *meta,
+    const uint8_t* data, whNvmSize dataLen);
+
 int wh_Nvm_AddObject(whNvmContext* context, whNvmMetadata *meta,
         whNvmSize data_len, const uint8_t* data);
 

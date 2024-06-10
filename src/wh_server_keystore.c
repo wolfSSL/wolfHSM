@@ -304,8 +304,8 @@ int hsmCommitKey(whServerContext* server, whNvmId keyId)
     if (i >= WOLFHSM_NUM_RAMKEYS)
         return WH_ERROR_NOTFOUND;
     /* add object */
-    ret = wh_Nvm_AddObject(server->nvm, cacheSlot->meta,
-        cacheSlot->meta->len, cacheSlot->buffer);
+    ret = wh_Nvm_AddObjectPessimistic(server->nvm, cacheSlot->meta,
+        cacheSlot->buffer, cacheSlot->meta->len);
     /* if we ran out of space clean out duplicate entries and retry */
     if (ret == WH_ERROR_NOSPACE) {
         ret = wh_Nvm_DestroyObjects(server->nvm, 0, NULL);

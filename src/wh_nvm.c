@@ -87,6 +87,36 @@ int wh_Nvm_GetAvailable(whNvmContext* context,
             out_reclaim_size, out_reclaim_objects);
 }
 
+int wh_Nvm_AddObjectPessimistic(whNvmContext* context, whNvmMetadata *meta,
+    const uint8_t* data, whNvmSize dataLen)
+{
+    uint16_t availableObjects;
+    uint16_t reclaimObjects;
+    int ret;
+    uint32_t availableSize;
+    uint32_t reclaimSize;
+    if (context == NULL)
+        return WH_ERROR_BADARGS;
+    /* check if we have room for the object */
+    ret = wh_Nvm_GetAvailable(context, &availableSize, &availableObjects,
+        &reclaimSize, &reclaimObjects);
+    if (ret == 0) {
+        if (availableSize >= WOLFHSM_NVM_METADATA_LEN + dataLen &&
+            availableObjects > 0) {
+            return wh_Nvm_AddObject(context, meta, dataLen, data);
+        }
+        /* if there's no room, try to reclaim space, otherwise return error */
+        else if (availableSize + reclaimSize >= WOLFHSM_NVM_METADATA_LEN +
+            dataLen && reclaimObjects > 0) {
+            ret = wh_Nvm_DestroyObjects(context, 0, NULL);
+            if (ret == 0)
+                return wh_Nvm_AddObject(context, meta, dataLen, data);
+        }
+        else
+            return WH_ERROR_NOSPACE;
+    }
+    return ret;
+}
 
 int wh_Nvm_AddObject(whNvmContext* context, whNvmMetadata *meta,
         whNvmSize data_len, const uint8_t* data)
