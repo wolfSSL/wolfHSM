@@ -20,6 +20,10 @@
  * src/wh_server_she.c
  *
  */
+
+
+#ifdef WOLFHSM_SHE_EXTENSION
+
 /* System libraries */
 #include <stdint.h>
 #include <stdlib.h>  /* For NULL */
@@ -37,9 +41,9 @@
 #include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_packet.h"
 #include "wolfhsm/wh_error.h"
-#ifdef WOLFHSM_SHE_EXTENSION
+#include "wolfhsm/wh_utils.h"
+
 #include "wolfhsm/wh_server_she.h"
-#endif
 
 static const uint8_t WOLFHSM_SHE_KEY_UPDATE_ENC_C[] = {0x01, 0x01, 0x53, 0x48, 0x45,
     0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xB0};
@@ -60,35 +64,6 @@ enum WOLFHSM_SHE_SB_STATE {
 Cmac sheCmac[1];
 Aes sheAes[1];
 
-static int isLittleEndian() {
-    unsigned int x = 1; /* 0x00000001 */
-    char *c = (char*)&x;
-    return (int)*c;
-}
-
-/* Converts a 32-bit value from host to network byte order */
-static uint32_t htonl(uint32_t hostlong) {
-    if (isLittleEndian()) {
-        return ((hostlong & 0x000000FF) << 24) | ((hostlong & 0x0000FF00) << 8)
-            | ((hostlong & 0x00FF0000) >> 8) | ((hostlong & 0xFF000000) >> 24);
-    }
-    return hostlong; /* No conversion needed if not little endian */
-}
-
-static uint32_t ntohl(uint32_t networklong) {
-    /* same operation */
-    return htonl(networklong);
-}
-
-static int XMEMEQZERO(uint8_t* buffer, uint32_t size)
-{
-    while (size > 1) {
-        size--;
-        if (buffer[size] != 0)
-            return 0;
-    }
-    return 1;
-}
 
 /* kdf function based on the Miyaguchi-Preneel one-way compression function */
 static int wh_AesMp16(whServerContext* server, uint8_t* in, word32 inSz, uint8_t* out)
@@ -275,7 +250,7 @@ static int hsmSheSecureBootFinish(whServerContext* server, whPacket* packet,
     /* call final */
     if (ret == 0) {
         field = AES_BLOCK_SIZE;
-        ret = wc_CmacFinal(sheCmac, cmacOutput, &field);
+        ret = wc_CmacFinal(sheCmac, cmacOutput, (word32*)&field);
     }
     /* load the cmac to check */
     if (ret == 0) {
@@ -357,7 +332,7 @@ static int hsmSheLoadKey(whServerContext* server, whPacket* packet,
     /* cmac messageOne and messageTwo using K2 as the cmac key */
     if (ret == 0) {
         field = AES_BLOCK_SIZE;
-        ret = wc_AesCmacGenerate_ex(sheCmac, cmacOutput, &field,
+        ret = wc_AesCmacGenerate_ex(sheCmac, cmacOutput, (word32*)&field,
             (uint8_t*)&packet->sheLoadKeyReq,
             sizeof(packet->sheLoadKeyReq.messageOne) +
             sizeof(packet->sheLoadKeyReq.messageTwo), tmpKey,
@@ -409,7 +384,7 @@ static int hsmSheLoadKey(whServerContext* server, whPacket* packet,
             ret = WH_SHE_ERC_WRITE_PROTECTED;
     }
     /* check UID == 0 */
-    if (ret == 0 && XMEMEQZERO(packet->sheLoadKeyReq.messageOne,
+    if (ret == 0 && wh_Utils_memeqzero(packet->sheLoadKeyReq.messageOne,
         WOLFHSM_SHE_UID_SZ) == 1) {
         /* check wildcard */
         if ((((whSheMetadata*)meta->label)->flags & WOLFHSM_SHE_FLAG_WILDCARD)
@@ -425,8 +400,8 @@ static int hsmSheLoadKey(whServerContext* server, whPacket* packet,
     /* verify counter is greater than stored value */
     if (ret == 0 &&
         keyRet != WH_ERROR_NOTFOUND &&
-        ntohl(*((uint32_t*)packet->sheLoadKeyReq.messageTwo) >> 4) <=
-        ntohl(((whSheMetadata*)meta->label)->count)) {
+        wh_Utils_ntohl(*((uint32_t*)packet->sheLoadKeyReq.messageTwo) >> 4) <=
+        wh_Utils_ntohl(((whSheMetadata*)meta->label)->count)) {
         ret = WH_SHE_ERC_KEY_UPDATE_ERROR;
     }
     /* write key with counter */
@@ -504,7 +479,7 @@ static int hsmSheLoadKey(whServerContext* server, whPacket* packet,
     if (ret == 0) {
         field = AES_BLOCK_SIZE;
         ret = wc_AesCmacGenerate_ex(sheCmac, packet->sheLoadKeyRes.messageFive,
-            &field, packet->sheLoadKeyRes.messageFour,
+            (word32*)&field, packet->sheLoadKeyRes.messageFour,
             sizeof(packet->sheLoadKeyRes.messageFour), tmpKey,
             WOLFHSM_SHE_KEY_SZ, NULL, server->crypto->devId);
     }
@@ -576,7 +551,7 @@ static int hsmSheExportRamKey(whServerContext* server, whPacket* packet,
             sizeof(packet->sheExportRamKeyRes.messageTwo));
         /* set count to 1 */
         *((uint32_t*)packet->sheExportRamKeyRes.messageTwo) =
-            (htonl(1) << 4);
+            (wh_Utils_htonl(1) << 4);
         keySz = WOLFHSM_SHE_KEY_SZ;
         ret = hsmReadKey(server, MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_SHE,
             server->comm->client_id, WOLFHSM_SHE_RAM_KEY_ID), meta,
@@ -616,7 +591,7 @@ static int hsmSheExportRamKey(whServerContext* server, whPacket* packet,
     if (ret == 0) {
         field = AES_BLOCK_SIZE;
         ret = wc_AesCmacGenerate_ex(sheCmac,
-            packet->sheExportRamKeyRes.messageThree, &field,
+            packet->sheExportRamKeyRes.messageThree, (word32*)&field,
             (uint8_t*)&packet->sheExportRamKeyRes,
             sizeof(packet->sheExportRamKeyRes.messageOne) +
             sizeof(packet->sheExportRamKeyRes.messageTwo), tmpKey,
@@ -644,7 +619,7 @@ static int hsmSheExportRamKey(whServerContext* server, whPacket* packet,
             sizeof(packet->sheExportRamKeyRes.messageFour));
         /* set counter to 1, pad with 1 bit */
         *((uint32_t*)(packet->sheExportRamKeyRes.messageFour +
-            WOLFHSM_SHE_KEY_SZ)) = (htonl(1) << 4);
+            WOLFHSM_SHE_KEY_SZ)) = (wh_Utils_htonl(1) << 4);
         packet->sheExportRamKeyRes.messageFour[WOLFHSM_SHE_KEY_SZ + 3] |=
             0x08;
         /* encrypt the new counter */
@@ -671,7 +646,7 @@ static int hsmSheExportRamKey(whServerContext* server, whPacket* packet,
     if (ret == 0) {
         field = AES_BLOCK_SIZE;
         ret = wc_AesCmacGenerate_ex(sheCmac,
-            packet->sheExportRamKeyRes.messageFive, &field,
+            packet->sheExportRamKeyRes.messageFive, (word32*)&field,
             packet->sheExportRamKeyRes.messageFour,
             sizeof(packet->sheExportRamKeyRes.messageFour), tmpKey,
             WOLFHSM_SHE_KEY_SZ, NULL, server->crypto->devId);
@@ -1016,7 +991,7 @@ static int hsmSheGenerateMac(whServerContext* server, whPacket* packet,
         &keySz);
     /* hash the message */
     if (ret == 0) {
-        ret = wc_AesCmacGenerate_ex(sheCmac, packet->sheGenMacRes.mac, &field,
+        ret = wc_AesCmacGenerate_ex(sheCmac, packet->sheGenMacRes.mac, (word32*)&field,
             in, packet->sheGenMacReq.sz, tmpKey, WOLFHSM_SHE_KEY_SZ, NULL,
             server->crypto->devId);
     }
@@ -1167,3 +1142,5 @@ int wh_Server_HandleSheRequest(whServerContext* server,
     packet->rc = ret;
     return 0;
 }
+
+#endif /* WOLFHSM_SHE_EXTENSION */
