@@ -42,7 +42,7 @@
 #include "wolfhsm/wh_common.h"  /* For whNvm types */
 
 
-enum {
+enum WH_NVM_IDS {
     WH_NVM_INVALID_ID = 0,
 };
 

@@ -729,7 +729,7 @@ static int wh_ClientServer_MemThreadTest(void)
     whNvmContext nvm[1] = {{0}};
 
     /* Crypto context */
-    crypto_context crypto[1] = {{
+    whServerCryptoContext crypto[1] = {{
             .devId = INVALID_DEVID,
     }};
 
