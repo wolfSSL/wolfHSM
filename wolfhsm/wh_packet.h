@@ -475,7 +475,7 @@ typedef struct WOLFHSM_PACK wh_Packet_she_verify_mac_res
 #endif
 
 /* use packed structs so we can read a packet in directly */
-typedef WOLFHSM_PACK struct whPacket
+typedef struct whPacket
 {
     /* header */
     int32_t rc;
