@@ -526,7 +526,8 @@ int wh_Client_NvmGetMetadata(whClientContext* c, whNvmId id,
 int wh_Client_NvmDestroyObjectsRequest(whClientContext* c,
         whNvmId list_count, const whNvmId* id_list)
 {
-    whMessageNvm_DestroyObjectsRequest msg = {0};
+    whMessageNvm_DestroyObjectsRequest msg =
+            WH_MESSAGE_NVM_DESTROY_OBJECT_REQUEST_INITIALIZER;
     int counter = 0;
 
     if (    (c == NULL) ||
@@ -579,7 +580,7 @@ int wh_Client_NvmDestroyObjectsResponse(whClientContext* c, int32_t *out_rc)
 
 int wh_Client_NvmDestroyObjects(whClientContext* c,
         whNvmId list_count, const whNvmId* id_list,
-        whNvmSize len, const uint8_t* data, int32_t *out_rc)
+        int32_t *out_rc)
 {
     int rc = 0;
 

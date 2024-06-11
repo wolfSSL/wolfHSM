@@ -172,6 +172,9 @@ typedef struct {
     uint16_t list_count;
 } whMessageNvm_DestroyObjectsRequest;
 
+#define WH_MESSAGE_NVM_DESTROY_OBJECT_REQUEST_INITIALIZER \
+{   .list = {0}, .list_count = 0, }
+
 int wh_MessageNvm_TranslateDestroyObjectsRequest(uint16_t magic,
         const whMessageNvm_DestroyObjectsRequest* src,
         whMessageNvm_DestroyObjectsRequest* dest);

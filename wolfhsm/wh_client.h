@@ -1235,14 +1235,11 @@ int wh_Client_NvmDestroyObjectsResponse(whClientContext* c, int32_t* out_rc);
  * @param[in] c Pointer to the client context.
  * @param[in] list_count The number of NVM objects to destroy.
  * @param[in] id_list Pointer to an array of IDs of the NVM objects to destroy.
- * @param[in] len The length of the data.
- * @param[in] data Pointer to the data associated with the NVM objects.
  * @param[out] out_rc Pointer to store the return code from the server.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_Client_NvmDestroyObjects(whClientContext* c, whNvmId list_count,
-                                const whNvmId* id_list, whNvmSize len,
-                                const uint8_t* data, int32_t* out_rc);
+                                const whNvmId* id_list, int32_t* out_rc);
 
 /**
  * @brief Sends a request to the server to read data from a non-volatile memory
