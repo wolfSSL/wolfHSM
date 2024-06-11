@@ -106,8 +106,7 @@ int wh_Nvm_AddObjectPessimistic(whNvmContext* context, whNvmMetadata *meta,
             return wh_Nvm_AddObject(context, meta, dataLen, data);
         }
         /* if there's no room, try to reclaim space, otherwise return error */
-        else if (availableSize + reclaimSize >= WOLFHSM_NVM_METADATA_LEN +
-            dataLen && reclaimObjects > 0) {
+        else if (availableSize + reclaimSize >= dataLen && reclaimObjects > 0) {
             ret = wh_Nvm_DestroyObjects(context, 0, NULL);
             if (ret == 0)
                 return wh_Nvm_AddObject(context, meta, dataLen, data);
