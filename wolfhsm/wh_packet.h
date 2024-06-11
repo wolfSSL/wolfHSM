@@ -382,7 +382,7 @@ typedef struct WOLFHSM_PACK wh_Packet_she_get_status_res
     uint8_t sreg;
 } wh_Packet_she_get_status_res;
 
-typedef struct WOLFHSM_PACK wh_Packet_she_load_key_req
+typedef struct wh_Packet_she_load_key_req
 {
     uint8_t messageOne[WOLFHSM_SHE_M1_SZ];
     uint8_t messageTwo[WOLFHSM_SHE_M2_SZ];
@@ -400,7 +400,7 @@ typedef struct WOLFHSM_PACK wh_Packet_she_load_plain_key_req
     uint8_t key[WOLFHSM_SHE_KEY_SZ];
 } wh_Packet_she_load_plain_key_req;
 
-typedef struct WOLFHSM_PACK wh_Packet_she_export_ram_key_res
+typedef struct wh_Packet_she_export_ram_key_res
 {
     uint8_t messageOne[WOLFHSM_SHE_M1_SZ];
     uint8_t messageTwo[WOLFHSM_SHE_M2_SZ];
