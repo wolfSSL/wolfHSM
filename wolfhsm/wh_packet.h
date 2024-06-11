@@ -511,14 +511,14 @@ typedef struct WOLFHSM_PACK wh_Packet_she_verify_mac_res
 #endif
 
 /* use packed structs so we can read a packet in directly */
-typedef struct whPacket
+typedef WOLFHSM_PACK struct whPacket
 {
     /* header */
     int32_t rc;
     uint16_t flags;
     uint16_t spare;
     /* body, will be either a request or a response */
-    union {
+    union WOLFHSM_PACK {
         wh_Packet_version_exchange versionExchange;
         /* FIXED SIZE REQUESTS */
         /* cipher */
