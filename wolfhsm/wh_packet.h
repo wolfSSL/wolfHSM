@@ -480,7 +480,7 @@ typedef WOLFHSM_PACK struct whPacket
     /* header */
     int32_t rc;
     uint16_t flags;
-    //uint16_t spare;
+    /*uint16_t spare;*/
     /* body, will be either a request or a response */
     union WOLFHSM_PACK {
         wh_Packet_version_exchange versionExchange;
