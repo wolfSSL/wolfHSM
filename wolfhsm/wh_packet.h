@@ -519,6 +519,7 @@ typedef struct whPacket
     uint16_t spare;
     /* body, will be either a request or a response */
     union {
+        uint64_t bigpad[100];
         wh_Packet_version_exchange versionExchange;
         /* FIXED SIZE REQUESTS */
         /* cipher */
@@ -628,8 +629,9 @@ typedef struct whPacket
         wh_Packet_she_gen_mac_res sheGenMacRes;
         wh_Packet_she_verify_mac_req sheVerifyMacReq;
         wh_Packet_she_verify_mac_res sheVerifyMacRes;
+
 #endif
-        uint8_t padding[2];
+
     };
 } whPacket;
 
