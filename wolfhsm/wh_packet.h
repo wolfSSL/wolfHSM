@@ -33,7 +33,7 @@
     extern "C" {
 #endif
 
-#define WOLFHSM_PACKET_STUB_SIZE 6
+#define WOLFHSM_PACKET_STUB_SIZE 8
 
 typedef struct WOLFHSM_PACK wh_Packet_cipher_any_req
 {
@@ -480,9 +480,9 @@ typedef struct whPacket
     /* header */
     int32_t rc;
     uint16_t flags;
-    /*uint16_t spare;*/
+    uint16_t spare;
     /* body, will be either a request or a response */
-    union WOLFHSM_PACK {
+    union {
         wh_Packet_version_exchange versionExchange;
         /* FIXED SIZE REQUESTS */
         /* cipher */
@@ -584,6 +584,7 @@ typedef struct whPacket
         wh_Packet_she_verify_mac_req sheVerifyMacReq;
         wh_Packet_she_verify_mac_res sheVerifyMacRes;
 #endif
+        uint8_t padding[2];
     };
 } whPacket;
 
