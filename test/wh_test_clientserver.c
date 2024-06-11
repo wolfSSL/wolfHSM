@@ -1170,8 +1170,7 @@ int whTest_ClientCfg(whClientConfig* clientCfg)
             WH_TEST_ASSERT_RETURN(list_id == 20 + (5 - list_count));
 
             WH_TEST_RETURN_ON_FAIL(
-                ret = wh_Client_NvmDestroyObjects(client, 1, &list_id, 0, NULL,
-                                                  &server_rc));
+                ret = wh_Client_NvmDestroyObjects(client, 1, &list_id, &server_rc));
 
 #if defined(WH_CFG_TEST_VERBOSE)
             printf("Client NvmDestroyObjects:%d, server_rc:%d for "
@@ -1286,8 +1285,7 @@ int whTest_ClientCfg(whClientConfig* clientCfg)
             WH_TEST_ASSERT_RETURN(list_id == 40 + (5 - list_count));
 
             WH_TEST_RETURN_ON_FAIL(
-                ret = wh_Client_NvmDestroyObjects(client, 1, &list_id, 0, NULL,
-                                                  &server_rc));
+                ret = wh_Client_NvmDestroyObjects(client, 1, &list_id, &server_rc));
 
             WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
 
