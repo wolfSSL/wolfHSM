@@ -39,6 +39,7 @@
 #include "wolfhsm/wh_server_nvm.h"
 #include "wolfhsm/wh_server_crypto.h"
 #include "wolfhsm/wh_server_keystore.h"
+#include "wolfhsm/wh_server_counter.h"
 #if defined(WOLFHSM_SHE_EXTENSION)
 #include "wolfhsm/wh_server_she.h"
 #endif
@@ -250,6 +251,10 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
         case WH_MESSAGE_GROUP_NVM:
             rc = wh_Server_HandleNvmRequest(server, magic, action, seq,
                     size, data, &size, data);
+        break;
+
+        case WH_MESSAGE_GROUP_COUNTER:
+            rc = wh_Server_HandleCounter(server, action, data, &size);
         break;
 
 #ifndef WOLFHSM_NO_CRYPTO

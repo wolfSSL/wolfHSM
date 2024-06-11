@@ -71,9 +71,10 @@ typedef uint16_t whKeyId;
 #define WOLFHSM_KEYFLAG_CMAC        0x7000
 
 /* Key Types */
-#define WOLFHSM_KEYTYPE_CRYPTO  0x1000
+#define WOLFHSM_KEYTYPE_CRYPTO    0x1000
 /* She keys are technically raw keys but a SHE keyId needs */
-#define WOLFHSM_KEYTYPE_SHE     0x2000
+#define WOLFHSM_KEYTYPE_SHE       0x2000
+#define WOLFHSM_KEYTYPE_COUNTER   0x3000
 
 #define MAKE_WOLFHSM_KEYID(_type, _user, _id) \
     (whKeyId)(((_type) & WOLFHSM_KEYTYPE_MASK) | (((_user) & 0xF) << 8) | ((_id) & WOLFHSM_KEYID_MASK))

@@ -617,6 +617,85 @@ int wh_Client_AesCmacVerify(Cmac* cmac, const byte* check, word32 checkSz,
 int wh_Client_SetKeyCmac(Cmac* key, whNvmId keyId);
 #endif
 
+/* Counter functions */
+int wh_Client_CounterInitRequest(whClientContext* c, whNvmId counterId,
+    uint32_t counter);
+int wh_Client_CounterInitResponse(whClientContext* c, uint32_t* counter);
+/**
+ * @brief Creates and initializes a counter with the value set in counter.
+ *
+ * This function creates/resets a counter with the supplied counterId and gives
+ * it the value stored in counter at the start of the call.
+ *
+ * @param[in] c Pointer to the whClientContext structure.
+ * @param[in] counterId counter ID to be associated with the counter.
+ * @param[in/out] counter Value to initialize the counter with, retruns with
+ * the value set by the HSM for confirmation.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_CounterInit(whClientContext* c, whNvmId counterId,
+    uint32_t* counter);
+
+int wh_Client_CounterResetRequest(whClientContext* c, whNvmId counterId);
+int wh_Client_CounterResetResponse(whClientContext* c, uint32_t* counter);
+/**
+ * @brief Creates and initializes a counter with to 0.
+ *
+ * This function creates/resets a counter with the supplied counterId and gives
+ * it the value of 0.
+ *
+ * @param[in] c Pointer to the whClientContext structure.
+ * @param[in] counterId Counter ID to be associated with the counter.
+ * @param[out] counter Value set by the HSM for confirmation.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_CounterReset(whClientContext* c, whNvmId counterId,
+    uint32_t* counter);
+
+int wh_Client_CounterIncrementRequest(whClientContext* c, whNvmId counterId);
+int wh_Client_CounterIncrementResponse(whClientContext* c, uint32_t* counter);
+/**
+ * @brief Increments a counter.
+ *
+ * This function increments a counter created previously. If the counter would
+ * roll over the HSM will saturate the value, keeping it at the uint32_t max.
+ *
+ * @param[in] c Pointer to the whClientContext structure.
+ * @param[in] counterId Counter ID to be associated with the counter.
+ * @param[out] counter Value set by the HSM for confirmation.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_CounterIncrement(whClientContext* c, whNvmId counterId,
+    uint32_t* counter);
+
+int wh_Client_CounterReadRequest(whClientContext* c, whNvmId counterId);
+int wh_Client_CounterReadResponse(whClientContext* c, uint32_t* counter);
+/**
+ * @brief Read a counter.
+ *
+ * This function read a counter created previously.
+ *
+ * @param[in] c Pointer to the whClientContext structure.
+ * @param[in] counterId Counter ID to be associated with the counter.
+ * @param[out] counter Value set by the HSM.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_CounterRead(whClientContext* c, whNvmId counterId,
+    uint32_t* counter);
+
+int wh_Client_CounterDestroyRequest(whClientContext* c, whNvmId counterId);
+int wh_Client_CounterDestroyResponse(whClientContext* c);
+/**
+ * @brief Destroy a counter.
+ *
+ * This function destroys an NVM counter created previously.
+ *
+ * @param[in] c Pointer to the whClientContext structure.
+ * @param[in] counterId Counter ID to be associated with the counter.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_CounterDestroy(whClientContext* c, whNvmId counterId);
+
 /** NVM functions */
 /**
  * @brief Sends a non-volatile memory (NVM) initialization request to the

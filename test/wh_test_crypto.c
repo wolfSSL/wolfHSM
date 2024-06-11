@@ -69,6 +69,7 @@ enum {
 
 int whTest_CryptoClientConfig(whClientConfig* config)
 {
+    int i;
     whClientContext client[1] = {0};
     int ret = 0;
     int res = 0;
@@ -105,6 +106,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         0x17, 0xad, 0x2b, 0x41, 0x7b, 0xe6, 0x6c, 0x37, 0x10};
     uint8_t knownCmacTag[] = {0x51, 0xf0, 0xbe, 0xbf, 0x7e, 0x3b, 0x9d, 0x92,
         0xfc, 0x49, 0x74, 0x17, 0x79, 0x36, 0x3c, 0xfe};
+    uint32_t counter;
 
     XMEMCPY(plainText, PLAINTEXT, sizeof(plainText));
 
@@ -257,13 +259,19 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         WH_ERROR_PRINT("Failed to wh_Client_KeyExport %d\n", ret);
         goto exit;
     }
-    if (XMEMCMP(key, keyEnd, outLen) == 0 && XMEMCMP(labelStart, labelEnd, sizeof(labelStart)) == 0)
-        printf("KEY COMMIT/EXPORT SUCCESS\n");
-    else {
+    if (XMEMCMP(key, keyEnd, outLen) != 0 || XMEMCMP(labelStart, labelEnd, sizeof(labelStart)) != 0) {
         WH_ERROR_PRINT("KEY COMMIT/EXPORT FAILED TO MATCH\n");
         ret = -1;
         goto exit;
     }
+    /* verify commit isn't using new nvm slots */
+    for (i = 0; i < 64; i++) {
+        if ((ret = wh_Client_KeyCommit(client, keyId)) != 0) {
+            WH_ERROR_PRINT("Failed to wh_Client_KeyCommit %d\n", ret);
+            goto exit;
+        }
+    }
+    printf("KEY COMMIT/EXPORT SUCCESS\n");
     /* test erase */
     if ((ret = wh_Client_KeyErase(client, keyId)) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_KeyErase %d\n", ret);
@@ -556,9 +564,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         WH_ERROR_PRINT("Failed to wh_Client_AesCmacGenerate %d\n", ret);
         goto exit;
     }
-    if (memcmp(knownCmacTag, cipherText, sizeof(knownCmacTag)) == 0)
-        printf("CMAC SUCCESS\n");
-    else {
+    if (memcmp(knownCmacTag, cipherText, sizeof(knownCmacTag)) != 0) {
         WH_ERROR_PRINT("CMAC FAILED KNOWN ANSWER TEST\n");
         ret = -1;
         goto exit;
@@ -594,7 +600,68 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         WH_ERROR_PRINT("Failed to wh_Client_KeyErase %d\n", ret);
         goto exit;
     }
-
+    printf("CMAC SUCCESS\n");
+    /* test counters */
+    keyId = 1;
+    if ((ret = wh_Client_CounterReset(client, keyId, &counter)) != 0 || counter != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_CounterReset %d\n", ret);
+        goto exit;
+    }
+    if ((ret = wh_Client_CounterIncrement(client, keyId, &counter)) != 0 || counter != 1) {
+        WH_ERROR_PRINT("Failed to wh_Client_CounterIncrement %d\n", ret);
+        goto exit;
+    }
+    if ((ret = wh_Client_CounterRead(client, keyId, &counter)) != 0 || counter != 1) {
+        WH_ERROR_PRINT("Failed to wh_Client_CounterRead %d\n", ret);
+        goto exit;
+    }
+    if ((ret = wh_Client_CounterReset(client, keyId, &counter)) != 0 || counter != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_CounterReset %d\n", ret);
+        goto exit;
+    }
+    /* test saturation */
+    counter = 0xffffffff;
+    if ((ret = wh_Client_CounterInit(client, keyId, &counter)) != 0 || counter != 0xffffffff) {
+        WH_ERROR_PRINT("Failed to wh_Client_CounterInit %d\n", ret);
+        goto exit;
+    }
+    if ((ret = wh_Client_CounterIncrement(client, keyId, &counter)) != 0 || counter != 0xffffffff) {
+        WH_ERROR_PRINT("Failed to wh_Client_CounterIncrement %d\n", ret);
+        goto exit;
+    }
+    /* verify increment isn't using new nvm slots */
+    if ((ret = wh_Client_CounterReset(client, keyId, &counter)) != 0 || counter != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_CounterReset %d\n", ret);
+        goto exit;
+    }
+    for (i = 0; i < 64; i++) {
+        if ((ret = wh_Client_CounterIncrement(client, keyId, &counter)) != 0 || counter != i + 1) {
+            WH_ERROR_PRINT("Failed to wh_Client_CounterIncrement %d\n", ret);
+            goto exit;
+        }
+    }
+    /* destroy counter */
+    if ((ret = wh_Client_CounterDestroy(client, keyId)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_CounterDestroy %d\n", ret);
+        goto exit;
+    }
+    /* verify reset and destroy work and don't leak slots */
+    for (i = 0; i < 64; i++) {
+        if ((ret = wh_Client_CounterReset(client, (whNvmId)i + 1, &counter)) != 0 || counter != 0) {
+            WH_ERROR_PRINT("Failed to wh_Client_CounterReset %d\n", ret);
+            goto exit;
+        }
+        if ((ret = wh_Client_CounterDestroy(client, (whNvmId)i + 1)) != 0) {
+            WH_ERROR_PRINT("Failed to wh_Client_CounterDestroy %d\n", ret);
+            goto exit;
+        }
+    }
+    /* fail to read destroyed counter */
+    if ((ret = wh_Client_CounterRead(client, keyId, &counter)) != WH_ERROR_NOTFOUND) {
+        WH_ERROR_PRINT("Failed to wh_Client_CounterRead %d\n", ret);
+        goto exit;
+    }
+    printf("COUNTER SUCCESS\n");
 #ifdef WH_CFG_TEST_VERBOSE
     {
         int32_t  server_rc       = 0;
@@ -614,7 +681,6 @@ int whTest_CryptoClientConfig(whClientConfig* config)
                (int)reclaim_size, (int)reclaim_objects);
     }
 #endif /* WH_CFG_TEST_VERBOSE */
-
     ret = 0;
 exit:
     wc_curve25519_free(curve25519PrivateKey);

@@ -39,6 +39,7 @@ enum WH_MESSAGE_ENUM {
     WH_MESSAGE_GROUP_IMAGE          = 0x0500, /* Image/boot management */
     WH_MESSAGE_GROUP_PKCS11         = 0x0600, /* PKCS11 protocol */
     WH_MESSAGE_GROUP_SHE            = 0x0700, /* SHE protocol */
+    WH_MESSAGE_GROUP_COUNTER        = 0x0800, /* monotonic counters */
     WH_MESSAGE_GROUP_CUSTOM         = 0x1000, /* User-specified features */
 
     WH_MESSAGE_ACTION_MASK         = 0x00FF,  /* 255 subtypes per group*/
@@ -73,6 +74,14 @@ enum WH_SHE_ENUM {
     WH_SHE_DEC_CBC,
     WH_SHE_GEN_MAC,
     WH_SHE_VERIFY_MAC,
+};
+
+/* counter actions */
+enum {
+    WH_COUNTER_INIT,
+    WH_COUNTER_INCREMENT,
+    WH_COUNTER_READ,
+    WH_COUNTER_DESTROY,
 };
 
 /* Construct the message kind based on group and action */

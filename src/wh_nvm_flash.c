@@ -627,8 +627,11 @@ static int nfObject_Program(whNvmFlashContext* context, int partition,
     rc = nfObject_ProgramBegin(context, partition, object_index,
             epoch, start, meta);
     if (rc == 0) {
-        rc = nfObject_ProgramDataBytes(context, partition,
-                start, meta->len, data);
+        /* allow metadata only entries for things like counters */
+        if (data != NULL) {
+            rc = nfObject_ProgramDataBytes(context, partition,
+                    start, meta->len, data);
+        }
         if (rc == 0) {
             rc = nfObject_ProgramFinish(context, partition, object_index,
                     meta->len);
