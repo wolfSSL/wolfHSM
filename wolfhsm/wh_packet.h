@@ -29,9 +29,19 @@
     #define WOLFHSM_PACK
 #endif
 
+#ifdef WOLFHSM_PACK
+#undef WOLFHSM_PACK
+#define WOLFHSM_PACK
+#endif
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic error "-Wpadded"
+
 #ifdef __cplusplus
     extern "C" {
 #endif
+
+
 
 #define WOLFHSM_PACKET_STUB_SIZE 8
 
@@ -48,6 +58,7 @@ typedef struct WOLFHSM_PACK wh_Packet_cipher_aescbc_req
     uint32_t keyLen;
     uint32_t sz;
     uint16_t keyId;
+    uint8_t padding[2];
     /* key[keyLen] | iv[AES_IV_SIZE] | in[sz] */
 } wh_Packet_cipher_aescbc_req;
 
@@ -67,6 +78,7 @@ typedef struct WOLFHSM_PACK wh_Packet_cipher_aesgcm_req
     uint32_t authInSz;
     uint32_t authTagSz;
     uint16_t keyId;
+    uint8_t padding[2];
     /* key[keyLen] | iv[ivSz] | in[sz] | authIn[authInSz] | authTag[authTagSz] */
 } wh_Packet_cipher_aesgcm_req;
 
@@ -230,6 +242,7 @@ typedef struct WOLFHSM_PACK wh_Packet_rng_res
 typedef struct WOLFHSM_PACK wh_Packet_cmac_req
 {
     uint16_t keyId;
+    uint8_t padding[2];
     uint32_t outSz;
     uint32_t inSz;
     uint32_t keySz;
@@ -241,6 +254,7 @@ typedef struct WOLFHSM_PACK wh_Packet_cmac_req
 typedef struct WOLFHSM_PACK wh_Packet_cmac_res
 {
     uint16_t keyId;
+    uint8_t padding[2];
     uint32_t outSz;
     /* uint8_t out[]; */
 } wh_Packet_cmac_res;
@@ -251,6 +265,7 @@ typedef struct WOLFHSM_PACK wh_Packet_key_cache_req
     uint32_t sz;
     uint32_t labelSz;
     uint16_t id;
+    uint8_t padding[2];
     uint8_t label[WOLFHSM_NVM_LABEL_LEN];
     /* uint8_t in[]; */
 } wh_Packet_key_cache_req;
@@ -258,6 +273,7 @@ typedef struct WOLFHSM_PACK wh_Packet_key_cache_req
 typedef struct WOLFHSM_PACK wh_Packet_key_cache_res
 {
     uint16_t id;
+    uint8_t padding[2];
 } wh_Packet_key_cache_res;
 
 typedef struct WOLFHSM_PACK wh_Packet_key_evict_req
@@ -347,6 +363,7 @@ typedef struct WOLFHSM_PACK wh_Packet_counter_destroy_req
 typedef struct WOLFHSM_PACK wh_Packet_she_set_uid_req
 {
     uint8_t uid[WOLFHSM_SHE_UID_SZ];
+    uint8_t padding[2];
 } wh_Packet_she_set_uid_req;
 
 typedef struct WOLFHSM_PACK wh_Packet_she_secure_boot_init_req
@@ -380,6 +397,7 @@ typedef struct WOLFHSM_PACK wh_Packet_she_secure_boot_finish_res
 typedef struct WOLFHSM_PACK wh_Packet_she_get_status_res
 {
     uint8_t sreg;
+    uint8_t padding[3];
 } wh_Packet_she_get_status_res;
 
 typedef struct wh_Packet_she_load_key_req
@@ -432,6 +450,7 @@ typedef struct WOLFHSM_PACK wh_Packet_she_extend_seed_res
 typedef struct WOLFHSM_PACK wh_Packet_she_enc_ecb_req
 {
     uint8_t keyId;
+    uint8_t padding[3];
     uint32_t sz;
     /* uint8_t in[sz] */
 } wh_Packet_she_enc_ecb_req;
@@ -445,6 +464,7 @@ typedef struct WOLFHSM_PACK wh_Packet_she_enc_ecb_res
 typedef struct WOLFHSM_PACK wh_Packet_she_enc_cbc_req
 {
     uint8_t keyId;
+    uint8_t padding[3];
     uint32_t sz;
     uint8_t iv[WOLFHSM_SHE_KEY_SZ];
     /* uint8_t in[sz] */
@@ -459,6 +479,7 @@ typedef struct WOLFHSM_PACK wh_Packet_she_enc_cbc_res
 typedef struct WOLFHSM_PACK wh_Packet_she_dec_ecb_req
 {
     uint8_t keyId;
+    uint8_t padding[3];
     uint32_t sz;
     /* uint8_t in[sz] */
 } wh_Packet_she_dec_ecb_req;
@@ -472,6 +493,7 @@ typedef struct WOLFHSM_PACK wh_Packet_she_dec_ecb_res
 typedef struct WOLFHSM_PACK wh_Packet_she_dec_cbc_req
 {
     uint8_t keyId;
+    uint8_t padding[3];
     uint32_t sz;
     uint8_t iv[WOLFHSM_SHE_KEY_SZ];
     /* uint8_t in[sz] */
@@ -507,8 +529,10 @@ typedef struct WOLFHSM_PACK wh_Packet_she_verify_mac_req
 typedef struct WOLFHSM_PACK wh_Packet_she_verify_mac_res
 {
     uint8_t status;
+    uint8_t padding[3];
 } wh_Packet_she_verify_mac_res;
 #endif
+
 
 /* use packed structs so we can read a packet in directly */
 typedef struct whPacket
@@ -519,7 +543,6 @@ typedef struct whPacket
     uint16_t spare;
     /* body, will be either a request or a response */
     union {
-        uint64_t bigpad[100];
         wh_Packet_version_exchange versionExchange;
         /* FIXED SIZE REQUESTS */
         /* cipher */
@@ -634,6 +657,8 @@ typedef struct whPacket
 
     };
 } whPacket;
+
+#pragma GCC diagnostic pop
 
 #ifdef __cplusplus
     } /* extern "C" */
