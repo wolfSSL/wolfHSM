@@ -29,12 +29,14 @@
 #include <stdlib.h>  /* For NULL */
 #include <string.h>  /* For memset, memcpy */
 
+#ifndef WOLFHSM_NO_CRYPTO
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/types.h"
 #include "wolfssl/wolfcrypt/error-crypt.h"
 #include "wolfssl/wolfcrypt/wc_port.h"
 #include "wolfssl/wolfcrypt/aes.h"
 #include "wolfssl/wolfcrypt/cmac.h"
+
 
 #include "wolfhsm/wh_server.h"
 #include "wolfhsm/wh_server_keystore.h"
@@ -1145,4 +1147,5 @@ int wh_Server_HandleSheRequest(whServerContext* server,
     return 0;
 }
 
+#endif
 #endif /* WOLFHSM_SHE_EXTENSION */
