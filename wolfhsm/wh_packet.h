@@ -34,8 +34,9 @@
 #define WOLFHSM_PACK
 #endif
 
-#pragma GCC diagnostic push
+/*#pragma GCC diagnostic push
 #pragma GCC diagnostic error "-Wpadded"
+*/
 
 #ifdef __cplusplus
     extern "C" {
@@ -613,9 +614,10 @@ typedef struct whPacket
     };
 } whPacket;
 
+/*
 #pragma GCC diagnostic ignored "-Wpadded"
-
 #pragma GCC diagnostic pop
+*/
 
 #ifdef __cplusplus
     } /* extern "C" */
