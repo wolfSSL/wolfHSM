@@ -613,6 +613,8 @@ typedef struct whPacket
     };
 } whPacket;
 
+#pragma GCC diagnostic ignored "-Wpadded"
+
 #pragma GCC diagnostic pop
 
 #ifdef __cplusplus
