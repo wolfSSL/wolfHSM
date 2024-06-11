@@ -218,6 +218,11 @@ struct whServerContext_t {
     uint8_t padding[4];
 };
 
+#define WH_COMMSERVER_INITIALIZER \
+{ .packet = {0} }
+#define WH_SERVER_CONTEXT_INITIALIZER \
+{ .comm = {WH_COMMSERVER_INITIALIZER} }
+
 
 /** Public server context functions */
 
