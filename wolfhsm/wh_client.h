@@ -65,6 +65,11 @@ struct whClientContext_t {
 };
 typedef struct whClientContext_t whClientContext;
 
+#define WH_COMMCLIENT_INITIALIZER \
+{   .packet = {0}, }
+#define WH_CLIENT_CONTEXT_INITIALIZER \
+{   .comm = {WH_COMMCLIENT_INITIALIZER}, }
+
 struct whClientConfig_t {
     whCommClientConfig* comm;
 };

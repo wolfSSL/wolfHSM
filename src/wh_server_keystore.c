@@ -107,7 +107,7 @@ int hsmCacheKey(whServerContext* server, whNvmMetadata* meta, uint8_t* in)
     /* make sure id is valid */
     if (server == NULL || meta == NULL || in == NULL ||
         (meta->id & WOLFHSM_KEYID_MASK) == WOLFHSM_KEYID_ERASED ||
-        meta->len > WOLFHSM_NVM_MAX_OBJECT_SIZE) {
+        meta->len > WOLFHSM_KEYCACHE_BUFSIZE) {
         return WH_ERROR_BADARGS;
     }
     /* apply client_id */
@@ -152,7 +152,7 @@ int hsmFreshenKey(whServerContext* server, whKeyId keyId)
     int i;
     int foundIndex = -1;
     uint32_t outSz = WOLFHSM_KEYCACHE_BUFSIZE;
-    whNvmMetadata meta[1] = {0};
+    whNvmMetadata meta[1] = {{0}};
     if (server == NULL || keyId == WOLFHSM_KEYID_ERASED)
         return WH_ERROR_BADARGS;
     /* apply client_id */
@@ -198,7 +198,7 @@ int hsmReadKey(whServerContext* server, whKeyId keyId, whNvmMetadata* outMeta,
 {
     int ret = 0;
     int i;
-    whNvmMetadata meta[1] = {0};
+    whNvmMetadata meta[1] = {{0}};
     /* make sure id is valid */
     if (server == NULL || ((keyId & WOLFHSM_KEYID_MASK) == WOLFHSM_KEYID_ERASED
         && (keyId & WOLFHSM_KEYTYPE_MASK) != WOLFHSM_KEYTYPE_SHE) ||
@@ -337,7 +337,7 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
     uint8_t* in;
     uint8_t* out;
     whPacket* packet = (whPacket*)data;
-    whNvmMetadata meta[1] = {0};
+    whNvmMetadata meta[1] = {{0}};
     /* validate args, even though these functions are only supposed to be
      * called by internal functions */
     if (server == NULL || data == NULL || size == NULL)

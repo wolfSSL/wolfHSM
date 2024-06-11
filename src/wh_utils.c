@@ -1,6 +1,6 @@
 #include "wolfhsm/wh_utils.h"
 
-static int isLittleEndian() {
+static int isLittleEndian(void) {
     unsigned int x = 1; /* 0x00000001 */
     char *c = (char*)&x;
     return (int)*c;
