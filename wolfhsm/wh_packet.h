@@ -34,15 +34,9 @@
 #define WOLFHSM_PACK
 #endif
 
-/*#pragma GCC diagnostic push
-#pragma GCC diagnostic error "-Wpadded"
-*/
-
 #ifdef __cplusplus
     extern "C" {
 #endif
-
-
 
 #define WOLFHSM_PACKET_STUB_SIZE 8
 
@@ -613,11 +607,6 @@ typedef struct whPacket
 
     };
 } whPacket;
-
-/*
-#pragma GCC diagnostic ignored "-Wpadded"
-#pragma GCC diagnostic pop
-*/
 
 #ifdef __cplusplus
     } /* extern "C" */
