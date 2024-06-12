@@ -458,6 +458,94 @@ static int _testDma(whServerContext* server, whClientContext* client)
     return rc;
 }
 
+int _testClientCounter(whClientContext* client)
+{
+    const whNvmId  counterId              = 1;
+    const uint32_t MAX_COUNTER_VAL        = 0xFFFFFFFF;
+    const size_t   NUM_COUNTER_INCREMENTS = 2 * NF_OBJECT_COUNT;
+    size_t         i                      = 0;
+    int            rc                     = 0;
+    uint32_t       counter;
+    int32_t        server_rc;
+    uint32_t       avail_size;
+    uint32_t       reclaim_size;
+    whNvmId        avail_objects;
+    whNvmId        reclaim_objects;
+
+#if defined(WH_CFG_TEST_VERBOSE)
+    printf("Testing NVM counters...\n");
+#endif
+
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CounterReset(client, counterId, &counter));
+    WH_TEST_ASSERT_RETURN(counter == 0);
+
+    /* Verify incrementation logic, ensuring we increment past the number of
+     * available NVM objects ensuring we aren't leaking objects  */
+    for (i = 0; i < NUM_COUNTER_INCREMENTS; i++) {
+        WH_TEST_RETURN_ON_FAIL(
+            wh_Client_CounterIncrement(client, counterId, &counter));
+        WH_TEST_ASSERT_RETURN(counter == i + 1);
+
+        WH_TEST_RETURN_ON_FAIL(
+            wh_Client_CounterRead(client, counterId, &counter));
+        WH_TEST_ASSERT_RETURN(counter == i + 1);
+    }
+
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CounterReset(client, counterId, &counter));
+    WH_TEST_ASSERT_RETURN(counter == 0);
+
+    /* test saturation */
+    counter = MAX_COUNTER_VAL;
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CounterInit(client, counterId, &counter));
+    WH_TEST_ASSERT_RETURN(counter == MAX_COUNTER_VAL);
+
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Client_CounterIncrement(client, counterId, &counter));
+    WH_TEST_ASSERT_RETURN(counter == MAX_COUNTER_VAL);
+
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Client_CounterIncrement(client, counterId, &counter));
+    WH_TEST_ASSERT_RETURN(counter == MAX_COUNTER_VAL);
+
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CounterRead(client, counterId, &counter));
+    WH_TEST_ASSERT_RETURN(counter == MAX_COUNTER_VAL);
+
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CounterReset(client, counterId, &counter));
+    WH_TEST_ASSERT_RETURN(counter == 0);
+
+
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CounterDestroy(client, counterId));
+
+    /* verify reset and destroy work and don't leak slots */
+    for (i = 1; i < NUM_COUNTER_INCREMENTS; i++) {
+        WH_TEST_RETURN_ON_FAIL(
+            wh_Client_CounterReset(client, (whNvmId)i, &counter));
+        WH_TEST_ASSERT_RETURN(counter == 0);
+
+        WH_TEST_RETURN_ON_FAIL(wh_Client_CounterDestroy(client, (whNvmId)i));
+
+        /* ensure we fail to read destroyed counter*/
+        WH_TEST_ASSERT_RETURN(
+            WH_ERROR_NOTFOUND ==
+            wh_Client_CounterRead(client, (whNvmId)i, &counter));
+    }
+
+    /* Ensure NVM is empty */
+    WH_TEST_RETURN_ON_FAIL(rc = wh_Client_NvmGetAvailable(
+                               client, &server_rc, &avail_size, &avail_objects,
+                               &reclaim_size, &reclaim_objects));
+#if defined(WH_CFG_TEST_VERBOSE)
+    printf("Client NvmGetAvailable:%d, server_rc:%d, avail_size:%d "
+           "avail_objects:%d, reclaim_size:%d reclaim_objects:%d\n",
+           rc, (int)server_rc, (int)avail_size, (int)avail_objects,
+           (int)reclaim_size, (int)reclaim_objects);
+#endif
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(avail_objects == NF_OBJECT_COUNT);
+
+    return WH_ERROR_OK;
+}
+
 int _clientServerSequentialTestConnectCb(void* context, whCommConnected connected)
 {
     if (clientServerSequentialTestServerCtx == NULL) {
@@ -1312,6 +1400,7 @@ int whTest_ClientCfg(whClientConfig* clientCfg)
 #endif
     WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
 
+    /* Ensure NVM tests didn't leak objects */
     WH_TEST_RETURN_ON_FAIL(ret = wh_Client_NvmGetAvailable(
         client, &server_rc, &avail_size, &avail_objects, &reclaim_size,
         &reclaim_objects));
@@ -1323,6 +1412,9 @@ int whTest_ClientCfg(whClientConfig* clientCfg)
 #endif
     WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
     WH_TEST_ASSERT_RETURN(avail_objects == NF_OBJECT_COUNT);
+
+    /* Test client counter API */
+    WH_TEST_RETURN_ON_FAIL(_testClientCounter(client));
 
     WH_TEST_RETURN_ON_FAIL(wh_Client_CommClose(client));
     WH_TEST_RETURN_ON_FAIL(wh_Client_Cleanup(client));
@@ -1356,7 +1448,7 @@ int whTest_ServerCfgLoop(whServerConfig* serverCfg)
     } else {
         ret = wh_Server_Cleanup(server);
     }
-	
+
     return ret;
 }
 
