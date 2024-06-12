@@ -530,6 +530,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         ret = -1;
         goto exit;
     }
+    printf("CURVE25519 SUCCESS\n");
     /* test cmac */
     if((ret = wc_InitCmac_ex(cmac, knownCmacKey, sizeof(knownCmacKey), WC_CMAC_AES, NULL, NULL, WOLFHSM_DEV_ID)) != 0) {
         WH_ERROR_PRINT("Failed to wc_InitCmac_ex %d\n", ret);
