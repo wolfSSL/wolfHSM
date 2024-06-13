@@ -327,7 +327,7 @@ typedef struct WOLFHSM_PACK wh_Packet_version_exchange
 typedef struct WOLFHSM_PACK wh_Packet_counter_init_req
 {
     uint16_t counterId;
-    uint8_t padding[2]
+    uint8_t padding[2];
     uint32_t counter;
 } wh_Packet_counter_init_req;
 
@@ -339,7 +339,7 @@ typedef struct WOLFHSM_PACK wh_Packet_counter_init_res
 typedef struct WOLFHSM_PACK wh_Packet_counter_increment_req
 {
     uint16_t counterId;
-    uint8_t padding[2]
+    uint8_t padding[2];
 } wh_Packet_counter_increment_req;
 
 typedef struct WOLFHSM_PACK wh_Packet_counter_increment_res
@@ -350,7 +350,7 @@ typedef struct WOLFHSM_PACK wh_Packet_counter_increment_res
 typedef struct WOLFHSM_PACK wh_Packet_counter_read_req
 {
     uint16_t counterId;
-    uint8_t padding[2]
+    uint8_t padding[2];
 } wh_Packet_counter_read_req;
 
 typedef struct WOLFHSM_PACK wh_Packet_counter_read_res
@@ -361,7 +361,7 @@ typedef struct WOLFHSM_PACK wh_Packet_counter_read_res
 typedef struct WOLFHSM_PACK wh_Packet_counter_destroy_req
 {
     uint16_t counterId;
-    uint8_t padding[2]
+    uint8_t padding[2];
 } wh_Packet_counter_destroy_req;
 
 #ifdef WOLFHSM_SHE_EXTENSION
