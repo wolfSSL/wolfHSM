@@ -64,6 +64,7 @@ enum {
         BUFFER_SIZE = 4096,
     };
 
+int serverDelay = 0;
 
 #define PLAINTEXT "mytextisbigplain"
 
@@ -92,6 +93,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     char plainText[16];
     char cipherText[256];
     char finalText[256];
+    char cmacFodder[1000];
     uint8_t authIn[16];
     uint8_t authTag[16];
     uint8_t sharedOne[CURVE25519_KEYSIZE];
@@ -600,6 +602,67 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         WH_ERROR_PRINT("Failed to wh_Client_KeyErase %d\n", ret);
         goto exit;
     }
+    /* test cancelation */
+    wh_Client_EnableCancel(client);
+    if((ret = wc_InitCmac_ex(cmac, knownCmacKey, sizeof(knownCmacKey), WC_CMAC_AES, NULL, NULL, WOLFHSM_DEV_ID)) != 0) {
+        WH_ERROR_PRINT("Failed to wc_InitCmac_ex %d\n", ret);
+        goto exit;
+    }
+    if((ret = wh_Client_CmacCancelableResponse(client, cmac, NULL, 0)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_CmacCancelableResponse %d\n", ret);
+        goto exit;
+    }
+    if((ret = wc_CmacUpdate(cmac, (byte*)cmacFodder, sizeof(knownCmacMessage))) != 0) {
+        WH_ERROR_PRINT("Failed to wc_CmacUpdate %d\n", ret);
+        goto exit;
+    }
+#ifndef WH_CFG_TEST_NO_CUSTOM_SERVERS
+    /* delay the server so scheduling doesn't interfere wih the timing */
+    serverDelay = 1;
+#endif
+    if((ret = wh_Client_Cancel(client)) != 0
+#ifndef WH_CFG_TEST_NO_CUSTOM_SERVERS
+        && ret != WH_ERROR_CANCEL_LATE
+#endif
+    ) {
+        WH_ERROR_PRINT("Failed to wh_Client_Cancel %d\n", ret);
+        goto exit;
+    }
+#ifndef WH_CFG_TEST_NO_CUSTOM_SERVERS
+    serverDelay = 0;
+#endif
+    /* test cancelable request and resposne */
+    if((ret = wc_InitCmac_ex(cmac, knownCmacKey, sizeof(knownCmacKey), WC_CMAC_AES, NULL, NULL, WOLFHSM_DEV_ID)) != 0) {
+        WH_ERROR_PRINT("Failed to wc_InitCmac_ex %d\n", ret);
+        goto exit;
+    }
+    if((ret = wh_Client_CmacCancelableResponse(client, cmac, NULL, 0)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_CmacCancelableResponse %d\n", ret);
+        goto exit;
+    }
+    if((ret = wc_CmacUpdate(cmac, (byte*)knownCmacMessage, sizeof(knownCmacMessage))) != 0) {
+        WH_ERROR_PRINT("Failed to wc_CmacUpdate %d\n", ret);
+        goto exit;
+    }
+    if((ret = wh_Client_CmacCancelableResponse(client, cmac, NULL, 0)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_CmacCancelableResponse %d\n", ret);
+        goto exit;
+    }
+    outLen = sizeof(knownCmacTag);
+    if((ret = wc_CmacFinal(cmac, (byte*)cipherText, (word32*)&outLen)) != 0) {
+        WH_ERROR_PRINT("Failed to wc_CmacFinal %d\n", ret);
+        goto exit;
+    }
+    if((ret = wh_Client_CmacCancelableResponse(client, cmac, (uint8_t*)cipherText, &outLen)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_CmacCancelableResponse %d\n", ret);
+        goto exit;
+    }
+    if (memcmp(knownCmacTag, cipherText, sizeof(knownCmacTag)) != 0) {
+        WH_ERROR_PRINT("CMAC FAILED KNOWN ANSWER TEST\n");
+        ret = -1;
+        goto exit;
+    }
+    wh_Client_DisableCancel(client);
     printf("CMAC SUCCESS\n");
 
 #ifdef WH_CFG_TEST_VERBOSE
@@ -658,6 +721,11 @@ int whTest_CryptoServerConfig(whServerConfig* config)
     server->comm->client_id = 1;
 
     while(am_connected == WH_COMM_CONNECTED) {
+#ifndef WH_CFG_TEST_NO_CUSTOM_SERVERS
+        while (serverDelay) {
+            sleep(1);
+        }
+#endif
         ret = wh_Server_HandleRequestMessage(server);
         if ((ret != WH_ERROR_NOTREADY) &&
                 (ret != WH_ERROR_OK)) {
@@ -732,12 +800,14 @@ static int wh_ClientServer_MemThreadTest(void)
 {
     uint8_t req[BUFFER_SIZE] = {0};
     uint8_t resp[BUFFER_SIZE] = {0};
+    uint16_t cancel_seq;
 
     whTransportMemConfig tmcf[1] = {{
-        .req       = (whTransportMemCsr*)req,
-        .req_size  = sizeof(req),
-        .resp      = (whTransportMemCsr*)resp,
-        .resp_size = sizeof(resp),
+        .req        = (whTransportMemCsr*)req,
+        .req_size   = sizeof(req),
+        .resp       = (whTransportMemCsr*)resp,
+        .resp_size  = sizeof(resp),
+        .cancel_seq = &cancel_seq,
     }};
     /* Client configuration/contexts */
     whTransportClientCb         tccb[1]   = {WH_TRANSPORT_MEM_CLIENT_CB};

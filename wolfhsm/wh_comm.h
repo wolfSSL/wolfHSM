@@ -146,6 +146,11 @@ typedef struct {
      */
     int (*Recv)(void* context, uint16_t *out_size, void* data);
 
+    /* Cancel a request made to the server, currently only supports CMAC.
+     * Returns 0 on success, negative number to indicate error
+     */
+    int (*Cancel)(void* context, uint16_t seq);
+
     /* Close the connection.
      * Returns: 0 on success,
      *          WH_ERROR_BADARGS if NULL context
@@ -201,6 +206,10 @@ int wh_CommClient_RecvResponse(whCommClient* context,
         uint16_t* out_magic, uint16_t* out_kind, uint16_t* out_seq,
         uint16_t* out_size, void* data);
 
+/* Tells the server to cancel the previous request.
+ */
+int wh_CommClient_Cancel(whCommClient* context, uint16_t magic);
+
 /* Get a pointer to the data portion of the internal buffer that is
  * HW_COMM_DATA_LEN bytes.
  */
@@ -239,6 +248,11 @@ typedef struct {
      *          WH_ERROR_ABORTED if fatal error occurred. Cleanup.
      */
     int (*Send)(void* context, uint16_t data_size, const void* data);
+
+    /* Check for a canceled request, currently only supports CMAC.
+     * Returns 0 on success, negative number to indicate error.
+     */
+    int (*Canceled)(void* context, uint16_t* seq);
 
     /* Close the connection.
      * Returns: 0 on success,

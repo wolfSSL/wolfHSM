@@ -48,13 +48,15 @@ int wh_TransportMem_Init(void* c, const void* cf,
     }
 
     memset(context, 0, sizeof(*context));
-    context->req        = (whTransportMemCsr*)config->req;
-    context->req_size   = config->req_size;
-    context->req_data   = (void*)(context->req + 1);
+    context->req            = (whTransportMemCsr*)config->req;
+    context->req_size       = config->req_size;
+    context->req_data       = (void*)(context->req + 1);
 
-    context->resp       = (whTransportMemCsr*)config->resp;
-    context->resp_size  = config->resp_size;
-    context->resp_data  = (void*)(context->resp + 1);
+    context->resp           = (whTransportMemCsr*)config->resp;
+    context->resp_size      = config->resp_size;
+    context->resp_data      = (void*)(context->resp + 1);
+    context->cancel_seq     = (void*)(config->cancel_seq);
+    *(context->cancel_seq)  = 0;
 
     context->initialized = 1;
     return WH_ERROR_OK;
@@ -202,6 +204,40 @@ int wh_TransportMem_RecvResponse(void* c, uint16_t *out_len, void* data)
     if (out_len != NULL) {
         *out_len = resp.s.len;
     }
+
+    return 0;
+}
+
+int wh_TransportMem_Cancel(void* c, uint16_t seq)
+{
+    whTransportMemContext* context = c;
+
+    if (    (context == NULL) ||
+            (context->initialized == 0)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    if (*(context->cancel_seq) != 0)
+        return WH_ERROR_NOTREADY;
+
+    /* Check to see if the current response is the different than the request */
+    *(context->cancel_seq) = seq;
+
+    return 0;
+}
+
+int wh_TransportMem_Canceled(void* c, uint16_t* seq)
+{
+    whTransportMemContext* context = c;
+
+    if (    (context == NULL) ||
+            (context->initialized == 0)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* copy the canceled sequence into the callers buffer and reset */
+    *seq = *(context->cancel_seq);
+    *(context->cancel_seq) = 0;
 
     return 0;
 }

@@ -27,6 +27,7 @@
 
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_comm.h"
+#include "wolfhsm/wh_message.h"
 
 /** Utility functions */
 uint8_t wh_Translate8(uint16_t magic, uint8_t val)
@@ -330,6 +331,22 @@ int wh_CommServer_SendResponse(whCommServer* context,
     return rc;
 }
 
+int wh_CommClient_Cancel(whCommClient* context, uint16_t magic)
+{
+    int rc = WH_ERROR_NOTREADY;
+    if (context == NULL || context->transport_cb == NULL ||
+        context->transport_cb->Cancel == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    context->hdr->magic = magic;
+    context->hdr->kind = wh_Translate16(magic,
+        WH_MESSAGE_KIND(WH_MESSAGE_GROUP_CANCEL, 0));
+    context->hdr->seq = wh_Translate16(magic, context->seq);
+    rc = context->transport_cb->Cancel(context->transport_context,
+        context->seq);
+    return rc;
+}
+
 uint8_t* wh_CommServer_GetDataPtr(whCommServer* context)
 {
     if (context == NULL) {
@@ -337,7 +354,6 @@ uint8_t* wh_CommServer_GetDataPtr(whCommServer* context)
     }
     return context->data;
 }
-
 
 int wh_CommServer_Cleanup(whCommServer* context)
 {
