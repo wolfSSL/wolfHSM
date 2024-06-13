@@ -61,8 +61,8 @@ struct whClientContext_t {
     whCommClient comm[1];
     uint16_t     last_req_id;
     uint16_t     last_req_kind;
-    uint8_t      pad[4];
     uint8_t      cancelable;
+    uint8_t      pad[3];
 };
 typedef struct whClientContext_t whClientContext;
 

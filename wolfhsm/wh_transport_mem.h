@@ -99,9 +99,9 @@
 typedef struct {
     void* req;
     void* resp;
+    uint16_t* cancel_seq;
     uint16_t req_size;
     uint16_t resp_size;
-    uint16_t* cancel_seq;
     uint8_t padding[4];
 } whTransportMemConfig;
 
