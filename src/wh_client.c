@@ -489,12 +489,12 @@ int wh_Client_KeyCacheRequest_ex(whClientContext* c, uint32_t flags,
         packet->keyCacheReq.labelSz = labelSz;
         /* write label */
         if (labelSz > WOLFHSM_NVM_LABEL_LEN)
-            XMEMCPY(packet->keyCacheReq.label, label, WOLFHSM_NVM_LABEL_LEN);
+            memcpy(packet->keyCacheReq.label, label, WOLFHSM_NVM_LABEL_LEN);
         else
-            XMEMCPY(packet->keyCacheReq.label, label, labelSz);
+            memcpy(packet->keyCacheReq.label, label, labelSz);
     }
     /* write in */
-    XMEMCPY(packIn, in, inSz);
+    memcpy(packIn, in, inSz);
     /* write request */
     return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_KEY, WH_KEY_CACHE,
             WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->keyCacheReq) + inSz,
@@ -626,16 +626,16 @@ int wh_Client_KeyExportResponse(whClientContext* c, uint8_t* label,
                 ret = WH_ERROR_ABORTED;
             }
             else {
-                XMEMCPY(out, packOut, packet->keyExportRes.len);
+                memcpy(out, packOut, packet->keyExportRes.len);
                 *outSz = packet->keyExportRes.len;
             }
             if (label != NULL) {
                 if (labelSz > sizeof(packet->keyExportRes.label)) {
-                    XMEMCPY(label, packet->keyExportRes.label,
+                    memcpy(label, packet->keyExportRes.label,
                         WOLFHSM_NVM_LABEL_LEN);
                 }
                 else
-                    XMEMCPY(label, packet->keyExportRes.label, labelSz);
+                    memcpy(label, packet->keyExportRes.label, labelSz);
             }
         }
     }
