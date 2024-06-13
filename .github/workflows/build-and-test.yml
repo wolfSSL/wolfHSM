@@ -14,6 +14,10 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    # List compiler version
+    - name: List compiler version
+      run: gcc --version
+
     # pull and build wolfssl
     - name: Checkout wolfssl
       uses: actions/checkout@v4
