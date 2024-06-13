@@ -27,6 +27,7 @@
 #define WOLFHSM_WH_MESSAGE_COMM_H_
 
 #include <stdint.h>
+#include "wolfhsm/wh_comm.h"
 
 /* Comm component message kinds */
 enum WH_MESSAGE_COMM_ACTION_ENUM {
