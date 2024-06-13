@@ -214,7 +214,7 @@ struct whServerContext_t {
     whServerDmaContext dma;
     int                connected;
     uint16_t cancelSeq;
-    uint8_t padding[2];
+    uint8_t WH_PAD[2];
 };
 
 #define WH_COMMSERVER_INITIALIZER \

@@ -208,7 +208,7 @@ typedef struct {
     uint32_t metadata_hostaddr;
     uint32_t data_hostaddr;
     uint16_t data_len;
-    uint8_t padding[6];
+    uint8_t WH_PAD[6];
 } whMessageNvm_AddObjectDma32Request;
 
 int wh_MessageNvm_TranslateAddObjectDma32Request(uint16_t magic,
@@ -224,7 +224,7 @@ typedef struct {
     uint16_t id;
     uint16_t offset;
     uint16_t data_len;
-    uint8_t padding[6];
+    uint8_t WH_PAD[6];
 } whMessageNvm_ReadDma32Request;
 
 int wh_MessageNvm_TranslateReadDma32Request(uint16_t magic,
@@ -239,7 +239,7 @@ typedef struct {
     uint64_t metadata_hostaddr;
     uint64_t data_hostaddr;
     uint16_t data_len;
-    uint8_t padding[6];
+    uint8_t WH_PAD[6];
 } whMessageNvm_AddObjectDma64Request;
 
 int wh_MessageNvm_TranslateAddObjectDma64Request(uint16_t magic,
@@ -255,7 +255,7 @@ typedef struct {
     uint16_t id;
     uint16_t offset;
     uint16_t data_len;
-    uint8_t padding[2];
+    uint8_t WH_PAD[2];
 } whMessageNvm_ReadDma64Request;
 
 int wh_MessageNvm_TranslateReadDma64Request(uint16_t magic,
