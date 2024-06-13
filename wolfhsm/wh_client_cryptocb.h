@@ -39,17 +39,9 @@
 #ifndef WOLFHSM_CLIENT_CRYPTOCB_H_
 #define WOLFHSM_CLIENT_CRYPTOCB_H_
 
-#ifdef __cplusplus
-    extern "C" {
-#endif
-
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/cryptocb.h"
 
 int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* ctx);
-
-#ifdef __cplusplus
-    } /* extern "C" */
-#endif
 
 #endif /* !WOLFHSM_CLIENT_CRYPTOCB_H_ */

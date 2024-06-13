@@ -49,7 +49,7 @@ enum WH_MESSAGE_NVM_MAX_ENUM {
     /* must be odd for struct whMessageNvm_DestroyObjectsRequest  alignment */
     WH_MESSAGE_NVM_MAX_DESTROY_OBJECTS_COUNT = 9,
     WH_MESSAGE_NVM_MAX_ADD_OBJECT_LEN =
-            WH_COMM_DATA_LEN - WOLFHSM_NVM_METADATA_LEN,
+            WH_COMM_DATA_LEN - sizeof(whNvmMetadata),
     WH_MESSAGE_NVM_MAX_READ_LEN = WH_COMM_DATA_LEN - sizeof(int32_t),
 };
 

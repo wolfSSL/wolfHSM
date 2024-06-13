@@ -22,37 +22,18 @@
 #define WOLFHSM_PACKET_H
 #include "wolfhsm/wh_common.h"
 
-#if (defined(__IAR_SYSTEMS_ICC__) && (__IAR_SYSTEMS_ICC__ > 8)) || \
-                                                    defined(__GNUC__)
-    #define WOLFHSM_PACK __attribute__ ((packed))
-#else
-    #define WOLFHSM_PACK
-#endif
-
-#ifdef WOLFHSM_PACK
-#undef WOLFHSM_PACK
-#define WOLFHSM_PACK
-#endif
-
-/*#pragma GCC diagnostic push
+#pragma GCC diagnostic push
 #pragma GCC diagnostic error "-Wpadded"
-*/
-
-#ifdef __cplusplus
-    extern "C" {
-#endif
-
-
 
 #define WOLFHSM_PACKET_STUB_SIZE 8
 
-typedef struct WOLFHSM_PACK wh_Packet_cipher_any_req
+typedef struct  wh_Packet_cipher_any_req
 {
     uint32_t type;
     uint32_t enc;
 } wh_Packet_cipher_any_req;
 
-typedef struct WOLFHSM_PACK wh_Packet_cipher_aescbc_req
+typedef struct  wh_Packet_cipher_aescbc_req
 {
     uint32_t type;
     uint32_t enc;
@@ -63,13 +44,13 @@ typedef struct WOLFHSM_PACK wh_Packet_cipher_aescbc_req
     /* key[keyLen] | iv[AES_IV_SIZE] | in[sz] */
 } wh_Packet_cipher_aescbc_req;
 
-typedef struct WOLFHSM_PACK wh_Packet_cipher_aescbc_res
+typedef struct  wh_Packet_cipher_aescbc_res
 {
     uint32_t sz;
     /* uint8_t out[]; */
 } wh_Packet_cipher_aescbc_res;
 
-typedef struct WOLFHSM_PACK wh_Packet_cipher_aesgcm_req
+typedef struct  wh_Packet_cipher_aesgcm_req
 {
     uint32_t type;
     uint32_t enc;
@@ -83,7 +64,7 @@ typedef struct WOLFHSM_PACK wh_Packet_cipher_aesgcm_req
     /* key[keyLen] | iv[ivSz] | in[sz] | authIn[authInSz] | authTag[authTagSz] */
 } wh_Packet_cipher_aesgcm_req;
 
-typedef struct WOLFHSM_PACK wh_Packet_cipher_aesgcm_res
+typedef struct  wh_Packet_cipher_aesgcm_res
 {
     uint32_t sz;
     uint32_t authTagSz;
@@ -91,24 +72,24 @@ typedef struct WOLFHSM_PACK wh_Packet_cipher_aesgcm_res
     /* uint8_t authTag[authTagSz] */
 } wh_Packet_cipher_aesgcm_res;
 
-typedef struct WOLFHSM_PACK wh_Packet_pk_any_req
+typedef struct  wh_Packet_pk_any_req
 {
     uint32_t type;
 } wh_Packet_pk_any_req;
 
-typedef struct WOLFHSM_PACK wh_Packet_pk_rsakg_req
+typedef struct  wh_Packet_pk_rsakg_req
 {
     uint32_t type;
     uint32_t size;
     uint32_t e;
 } wh_Packet_pk_rsakg_req;
 
-typedef struct WOLFHSM_PACK wh_Packet_pk_rsakg_res
+typedef struct  wh_Packet_pk_rsakg_res
 {
     uint32_t keyId;
 } wh_Packet_pk_rsakg_res;
 
-typedef struct WOLFHSM_PACK wh_Packet_pk_rsa_req
+typedef struct  wh_Packet_pk_rsa_req
 {
     uint32_t type;
     uint32_t opType;
@@ -118,36 +99,36 @@ typedef struct WOLFHSM_PACK wh_Packet_pk_rsa_req
     /* uint8_t in[]; */
 } wh_Packet_pk_rsa_req;
 
-typedef struct WOLFHSM_PACK wh_Packet_pk_rsa_res
+typedef struct  wh_Packet_pk_rsa_res
 {
     uint32_t outLen;
     /* uint8_t out[]; */
 } wh_Packet_pk_rsa_res;
 
-typedef struct WOLFHSM_PACK wh_Packet_pk_rsa_get_size_req
+typedef struct  wh_Packet_pk_rsa_get_size_req
 {
     uint32_t type;
     uint32_t keyId;
 } wh_Packet_pk_rsa_get_size_req;
 
-typedef struct WOLFHSM_PACK wh_Packet_pk_rsa_get_size_res
+typedef struct  wh_Packet_pk_rsa_get_size_res
 {
     uint32_t keySize;
 } wh_Packet_pk_rsa_get_size_res;
 
-typedef struct WOLFHSM_PACK wh_Packet_pk_eckg_req
+typedef struct  wh_Packet_pk_eckg_req
 {
     uint32_t type;
     uint32_t sz;
     uint32_t curveId;
 } wh_Packet_pk_eckg_req;
 
-typedef struct WOLFHSM_PACK wh_Packet_pk_eckg_res
+typedef struct  wh_Packet_pk_eckg_res
 {
     uint32_t keyId;
 } wh_Packet_pk_eckg_res;
 
-typedef struct WOLFHSM_PACK wh_Packet_pk_ecdh_req
+typedef struct  wh_Packet_pk_ecdh_req
 {
     uint32_t type;
     uint32_t privateKeyId;
@@ -155,13 +136,13 @@ typedef struct WOLFHSM_PACK wh_Packet_pk_ecdh_req
     uint32_t curveId;
 } wh_Packet_pk_ecdh_req;
 
-typedef struct WOLFHSM_PACK wh_Packet_pk_ecdh_res
+typedef struct  wh_Packet_pk_ecdh_res
 {
     uint32_t sz;
     /* uint8_t out[] */
 } wh_Packet_pk_ecdh_res;
 
-typedef struct WOLFHSM_PACK wh_Packet_pk_ecc_sign_req
+typedef struct  wh_Packet_pk_ecc_sign_req
 {
     uint32_t type;
     uint32_t keyId;
@@ -170,13 +151,13 @@ typedef struct WOLFHSM_PACK wh_Packet_pk_ecc_sign_req
     /* uint8_t in[] */
 } wh_Packet_pk_ecc_sign_req;
 
-typedef struct WOLFHSM_PACK wh_Packet_pk_ecc_sign_res
+typedef struct  wh_Packet_pk_ecc_sign_res
 {
     uint32_t sz;
     /* uint8_t out[] */
 } wh_Packet_pk_ecc_sign_res;
 
-typedef struct WOLFHSM_PACK wh_Packet_pk_ecc_verify_req
+typedef struct  wh_Packet_pk_ecc_verify_req
 {
     uint32_t type;
     uint32_t keyId;
@@ -187,35 +168,35 @@ typedef struct WOLFHSM_PACK wh_Packet_pk_ecc_verify_req
     /* uint8_t hash[] */
 } wh_Packet_pk_ecc_verify_req;
 
-typedef struct WOLFHSM_PACK wh_Packet_pk_ecc_verify_res
+typedef struct  wh_Packet_pk_ecc_verify_res
 {
     uint32_t res;
 } wh_Packet_pk_ecc_verify_res;
 
-typedef struct WOLFHSM_PACK wh_Packet_pk_ecc_check_req
+typedef struct  wh_Packet_pk_ecc_check_req
 {
     uint32_t type;
     uint32_t keyId;
     uint32_t curveId;
 } wh_Packet_pk_ecc_check_req;
 
-typedef struct WOLFHSM_PACK wh_Packet_pk_ecc_check_res
+typedef struct  wh_Packet_pk_ecc_check_res
 {
     uint32_t ok;
 } wh_Packet_pk_ecc_check_res;
 
-typedef struct WOLFHSM_PACK wh_Packet_pk_curve25519kg_req
+typedef struct  wh_Packet_pk_curve25519kg_req
 {
     uint32_t type;
     uint32_t sz;
 } wh_Packet_pk_curve25519kg_req;
 
-typedef struct WOLFHSM_PACK wh_Packet_pk_curve25519kg_res
+typedef struct  wh_Packet_pk_curve25519kg_res
 {
     uint32_t keyId;
 } wh_Packet_pk_curve25519kg_res;
 
-typedef struct WOLFHSM_PACK wh_Packet_pk_curve25519_req
+typedef struct  wh_Packet_pk_curve25519_req
 {
     uint32_t type;
     uint32_t privateKeyId;
@@ -223,44 +204,44 @@ typedef struct WOLFHSM_PACK wh_Packet_pk_curve25519_req
     uint32_t endian;
 } wh_Packet_pk_curve25519_req;
 
-typedef struct WOLFHSM_PACK wh_Packet_pk_curve25519_res
+typedef struct  wh_Packet_pk_curve25519_res
 {
     uint32_t sz;
     /* uint8_t out[]; */
 } wh_Packet_pk_curve25519_res;
 
-typedef struct WOLFHSM_PACK wh_Packet_rng_req
+typedef struct  wh_Packet_rng_req
 {
     uint32_t sz;
 } wh_Packet_rng_req;
 
-typedef struct WOLFHSM_PACK wh_Packet_rng_res
+typedef struct  wh_Packet_rng_res
 {
     uint32_t sz;
     /* uint8_t out[]; */
 } wh_Packet_rng_res;
 
-typedef struct WOLFHSM_PACK wh_Packet_cmac_req
+typedef struct  wh_Packet_cmac_req
 {
-    uint16_t keyId;
-    uint8_t padding[2];
     uint32_t outSz;
     uint32_t inSz;
     uint32_t keySz;
     uint32_t type;
+    uint16_t keyId;
+    uint8_t padding[2];
     /* uint8_t in[inSz] */
     /* uint8_t key[keySz] */
 } wh_Packet_cmac_req;
 
-typedef struct WOLFHSM_PACK wh_Packet_cmac_res
+typedef struct  wh_Packet_cmac_res
 {
+    uint32_t outSz;
     uint16_t keyId;
     uint8_t padding[2];
-    uint32_t outSz;
     /* uint8_t out[]; */
 } wh_Packet_cmac_res;
 
-typedef struct WOLFHSM_PACK wh_Packet_key_cache_req
+typedef struct  wh_Packet_key_cache_req
 {
     uint32_t flags;
     uint32_t sz;
@@ -271,135 +252,135 @@ typedef struct WOLFHSM_PACK wh_Packet_key_cache_req
     /* uint8_t in[]; */
 } wh_Packet_key_cache_req;
 
-typedef struct WOLFHSM_PACK wh_Packet_key_cache_res
+typedef struct  wh_Packet_key_cache_res
 {
     uint16_t id;
     uint8_t padding[2];
 } wh_Packet_key_cache_res;
 
-typedef struct WOLFHSM_PACK wh_Packet_key_evict_req
+typedef struct  wh_Packet_key_evict_req
 {
     uint32_t id;
 } wh_Packet_key_evict_req;
 
-typedef struct WOLFHSM_PACK wh_Packet_key_evict_res
+typedef struct  wh_Packet_key_evict_res
 {
     uint32_t ok;
 } wh_Packet_key_evict_res;
 
-typedef struct WOLFHSM_PACK wh_Packet_key_commit_req
+typedef struct  wh_Packet_key_commit_req
 {
     uint32_t id;
 } wh_Packet_key_commit_req;
 
-typedef struct WOLFHSM_PACK wh_Packet_key_commit_res
+typedef struct  wh_Packet_key_commit_res
 {
     uint32_t ok;
 } wh_Packet_key_commit_res;
 
-typedef struct WOLFHSM_PACK wh_Packet_key_export_req
+typedef struct  wh_Packet_key_export_req
 {
     uint32_t id;
 } wh_Packet_key_export_req;
 
-typedef struct WOLFHSM_PACK wh_Packet_key_export_res
+typedef struct  wh_Packet_key_export_res
 {
     uint32_t len;
     uint8_t label[WOLFHSM_NVM_LABEL_LEN];
     /* uint8_t out[len]; */
 } wh_Packet_key_export_res;
 
-typedef struct WOLFHSM_PACK wh_Packet_key_erase_req
+typedef struct  wh_Packet_key_erase_req
 {
     uint32_t id;
 } wh_Packet_key_erase_req;
 
-typedef struct WOLFHSM_PACK wh_Packet_key_erase_res
+typedef struct  wh_Packet_key_erase_res
 {
     uint32_t ok;
 } wh_Packet_key_erase_res;
 
-typedef struct WOLFHSM_PACK wh_Packet_version_exchange
+typedef struct  wh_Packet_version_exchange
 {
     uint32_t version;
 } wh_Packet_version_exchange;
 
-typedef struct WOLFHSM_PACK wh_Packet_counter_init_req
+typedef struct  wh_Packet_counter_init_req
 {
+    uint32_t counter;
     uint16_t counterId;
     uint8_t padding[2];
-    uint32_t counter;
 } wh_Packet_counter_init_req;
 
-typedef struct WOLFHSM_PACK wh_Packet_counter_init_res
+typedef struct  wh_Packet_counter_init_res
 {
     uint32_t counter;
 } wh_Packet_counter_init_res;
 
-typedef struct WOLFHSM_PACK wh_Packet_counter_increment_req
+typedef struct  wh_Packet_counter_increment_req
 {
     uint16_t counterId;
     uint8_t padding[2];
 } wh_Packet_counter_increment_req;
 
-typedef struct WOLFHSM_PACK wh_Packet_counter_increment_res
+typedef struct  wh_Packet_counter_increment_res
 {
     uint32_t counter;
 } wh_Packet_counter_increment_res;
 
-typedef struct WOLFHSM_PACK wh_Packet_counter_read_req
+typedef struct  wh_Packet_counter_read_req
 {
     uint16_t counterId;
     uint8_t padding[2];
 } wh_Packet_counter_read_req;
 
-typedef struct WOLFHSM_PACK wh_Packet_counter_read_res
+typedef struct  wh_Packet_counter_read_res
 {
     uint32_t counter;
 } wh_Packet_counter_read_res;
 
-typedef struct WOLFHSM_PACK wh_Packet_counter_destroy_req
+typedef struct  wh_Packet_counter_destroy_req
 {
     uint16_t counterId;
     uint8_t padding[2];
 } wh_Packet_counter_destroy_req;
 
 #ifdef WOLFHSM_SHE_EXTENSION
-typedef struct WOLFHSM_PACK wh_Packet_she_set_uid_req
+typedef struct  wh_Packet_she_set_uid_req
 {
     uint8_t uid[WOLFHSM_SHE_UID_SZ];
     uint8_t padding[2];
 } wh_Packet_she_set_uid_req;
 
-typedef struct WOLFHSM_PACK wh_Packet_she_secure_boot_init_req
+typedef struct  wh_Packet_she_secure_boot_init_req
 {
     uint32_t sz;
 } wh_Packet_she_secure_boot_init_req;
 
-typedef struct WOLFHSM_PACK wh_Packet_she_secure_boot_init_res
+typedef struct  wh_Packet_she_secure_boot_init_res
 {
     uint32_t status;
 } wh_Packet_she_secure_boot_init_res;
 
-typedef struct WOLFHSM_PACK wh_Packet_she_secure_boot_update_req
+typedef struct  wh_Packet_she_secure_boot_update_req
 {
     uint32_t sz;
     /* uint8_t in[sz] */
 } wh_Packet_she_secure_boot_update_req;
 
-typedef struct WOLFHSM_PACK wh_Packet_she_secure_boot_update_res
+typedef struct  wh_Packet_she_secure_boot_update_res
 {
     uint32_t status;
 } wh_Packet_she_secure_boot_update_res;
 
 /* no req body for a finish request */
-typedef struct WOLFHSM_PACK wh_Packet_she_secure_boot_finish_res
+typedef struct  wh_Packet_she_secure_boot_finish_res
 {
     uint32_t status;
 } wh_Packet_she_secure_boot_finish_res;
 
 /* no req body for get status */
-typedef struct WOLFHSM_PACK wh_Packet_she_get_status_res
+typedef struct  wh_Packet_she_get_status_res
 {
     uint8_t sreg;
     uint8_t padding[3];
@@ -412,13 +393,13 @@ typedef struct wh_Packet_she_load_key_req
     uint8_t messageThree[WOLFHSM_SHE_M3_SZ];
 } wh_Packet_she_load_key_req;
 
-typedef struct WOLFHSM_PACK wh_Packet_she_load_key_res
+typedef struct  wh_Packet_she_load_key_res
 {
     uint8_t messageFour[WOLFHSM_SHE_M4_SZ];
     uint8_t messageFive[WOLFHSM_SHE_M5_SZ];
 } wh_Packet_she_load_key_res;
 
-typedef struct WOLFHSM_PACK wh_Packet_she_load_plain_key_req
+typedef struct  wh_Packet_she_load_plain_key_req
 {
     uint8_t key[WOLFHSM_SHE_KEY_SZ];
 } wh_Packet_she_load_plain_key_req;
@@ -432,97 +413,97 @@ typedef struct wh_Packet_she_export_ram_key_res
     uint8_t messageFive[WOLFHSM_SHE_M5_SZ];
 } wh_Packet_she_export_ram_key_res;
 
-typedef struct WOLFHSM_PACK wh_Packet_she_init_rng_res
+typedef struct  wh_Packet_she_init_rng_res
 {
     uint32_t status;
 } wh_Packet_she_init_rng_res;
 
-typedef struct WOLFHSM_PACK wh_Packet_she_rnd_res
+typedef struct  wh_Packet_she_rnd_res
 {
     uint8_t rnd[WOLFHSM_SHE_KEY_SZ];
 } wh_Packet_she_rnd_res;
 
-typedef struct WOLFHSM_PACK wh_Packet_she_extend_seed_req
+typedef struct  wh_Packet_she_extend_seed_req
 {
     uint8_t entropy[WOLFHSM_SHE_KEY_SZ];
 } wh_Packet_she_extend_seed_req;
 
-typedef struct WOLFHSM_PACK wh_Packet_she_extend_seed_res
+typedef struct  wh_Packet_she_extend_seed_res
 {
     uint32_t status; 
 } wh_Packet_she_extend_seed_res;
 
-typedef struct WOLFHSM_PACK wh_Packet_she_enc_ecb_req
+typedef struct  wh_Packet_she_enc_ecb_req
 {
+    uint32_t sz;
     uint8_t keyId;
     uint8_t padding[3];
-    uint32_t sz;
     /* uint8_t in[sz] */
 } wh_Packet_she_enc_ecb_req;
 
-typedef struct WOLFHSM_PACK wh_Packet_she_enc_ecb_res
+typedef struct  wh_Packet_she_enc_ecb_res
 {
     uint32_t sz;
     /* uint8_t out[sz] */
 } wh_Packet_she_enc_ecb_res;
 
-typedef struct WOLFHSM_PACK wh_Packet_she_enc_cbc_req
+typedef struct  wh_Packet_she_enc_cbc_req
 {
+    uint32_t sz;
     uint8_t keyId;
     uint8_t padding[3];
-    uint32_t sz;
     uint8_t iv[WOLFHSM_SHE_KEY_SZ];
     /* uint8_t in[sz] */
 } wh_Packet_she_enc_cbc_req;
 
-typedef struct WOLFHSM_PACK wh_Packet_she_enc_cbc_res
+typedef struct  wh_Packet_she_enc_cbc_res
 {
     uint32_t sz;
     /* uint8_t out[sz] */
 } wh_Packet_she_enc_cbc_res;
 
-typedef struct WOLFHSM_PACK wh_Packet_she_dec_ecb_req
+typedef struct  wh_Packet_she_dec_ecb_req
 {
+    uint32_t sz;
     uint8_t keyId;
     uint8_t padding[3];
-    uint32_t sz;
     /* uint8_t in[sz] */
 } wh_Packet_she_dec_ecb_req;
 
-typedef struct WOLFHSM_PACK wh_Packet_she_dec_ecb_res
+typedef struct  wh_Packet_she_dec_ecb_res
 {
     uint32_t sz;
     /* uint8_t out[sz] */
 } wh_Packet_she_dec_ecb_res;
 
-typedef struct WOLFHSM_PACK wh_Packet_she_dec_cbc_req
+typedef struct  wh_Packet_she_dec_cbc_req
 {
+    uint32_t sz;
     uint8_t keyId;
     uint8_t padding[3];
-    uint32_t sz;
     uint8_t iv[WOLFHSM_SHE_KEY_SZ];
     /* uint8_t in[sz] */
 } wh_Packet_she_dec_cbc_req;
 
-typedef struct WOLFHSM_PACK wh_Packet_she_dec_cbc_res
+typedef struct  wh_Packet_she_dec_cbc_res
 {
     uint32_t sz;
     /* uint8_t out[sz] */
 } wh_Packet_she_dec_cbc_res;
 
-typedef struct WOLFHSM_PACK wh_Packet_she_gen_mac_req
+typedef struct  wh_Packet_she_gen_mac_req
 {
     uint32_t keyId;
     uint32_t sz;
     /* uint8_t in[sz] */
 } wh_Packet_she_gen_mac_req;
 
-typedef struct WOLFHSM_PACK wh_Packet_she_gen_mac_res
+typedef struct  wh_Packet_she_gen_mac_res
 {
     uint8_t mac[WOLFHSM_SHE_KEY_SZ];
 } wh_Packet_she_gen_mac_res;
 
-typedef struct WOLFHSM_PACK wh_Packet_she_verify_mac_req
+typedef struct  wh_Packet_she_verify_mac_req
 {
     uint32_t keyId;
     uint32_t messageLen;
@@ -531,7 +512,7 @@ typedef struct WOLFHSM_PACK wh_Packet_she_verify_mac_req
     /* uint8_t mac[macLen] */
 } wh_Packet_she_verify_mac_req;
 
-typedef struct WOLFHSM_PACK wh_Packet_she_verify_mac_res
+typedef struct  wh_Packet_she_verify_mac_res
 {
     uint8_t status;
     uint8_t padding[3];
@@ -663,13 +644,6 @@ typedef struct whPacket
     };
 } whPacket;
 
-/*
-#pragma GCC diagnostic ignored "-Wpadded"
 #pragma GCC diagnostic pop
-*/
 
-#ifdef __cplusplus
-    } /* extern "C" */
-#endif
-
-#endif /* !WOLFHSM_PACKET_H */
+#endif /* !ET_H */

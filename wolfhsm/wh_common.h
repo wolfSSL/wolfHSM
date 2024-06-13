@@ -97,7 +97,6 @@ typedef uint16_t whNvmFlags;
 /* HSM NVM metadata structure */
 enum WOLFHSM_NVM_ENUM {
     WOLFHSM_NVM_LABEL_LEN = 24,
-    WOLFHSM_NVM_METADATA_LEN = 32,
     WOLFHSM_NVM_MAX_OBJECT_SIZE = 65535,
 };
 
