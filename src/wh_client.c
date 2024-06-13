@@ -468,8 +468,6 @@ int wh_Client_CustomCbCheckRegistered(whClientContext* c, uint16_t id, int* resp
 }
 
 
-#ifndef WOLFHSM_NO_CRYPTO
-
 int wh_Client_KeyCacheRequest_ex(whClientContext* c, uint32_t flags,
     uint8_t* label, uint32_t labelSz, uint8_t* in, uint32_t inSz,
     uint16_t keyId)
@@ -945,6 +943,8 @@ int wh_Client_CounterDestroy(whClientContext* c, whNvmId counterId)
     return ret;
 }
 
+#ifndef WOLFHSM_NO_CRYPTO
+
 #ifdef HAVE_CURVE25519
 int wh_Client_SetKeyCurve25519(curve25519_key* key, whNvmId keyId)
 {
@@ -1019,5 +1019,5 @@ int wh_Client_AesCmacVerify(Cmac* cmac, const byte* check, word32 checkSz,
         ret = memcmp(out, check, outSz) == 0 ? 0 : 1;
     return ret;
 }
-#endif
+#endif /* WOLFSSL_CMAC */
 #endif  /* !WOLFHSM_NO_CRYPTO */
