@@ -12,28 +12,36 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@master
+    - uses: actions/checkout@v4
+
+    # List compiler version
+    - name: List compiler version
+      run: gcc --version
 
     # pull and build wolfssl
     - name: Checkout wolfssl
-      uses: actions/checkout@master
+      uses: actions/checkout@v4
       with:
         repository: wolfssl/wolfssl
         path: wolfssl
 
-    # Build and test debug build with ASAN and NOCRYPTO 
-    - name: Build and test ASAN DEBUG
-      run: cd test && make clean &&  make DEBUG=1 ASAN=1 NOCRYPTO=1 WOLFSSL_DIR=../wolfssl run
+    # Build and test debug build with ASAN and NOCRYPTO
+    - name: Build and test ASAN DEBUG NOCRYPTO
+      run: cd test && make clean && make DEBUG=1 ASAN=1 NOCRYPTO=1 WOLFSSL_DIR=../wolfssl run
 
-    # Build and test debug build with ASAN 
+    # Build and test debug build with ASAN
     - name: Build and test ASAN DEBUG
       run: cd test && make clean && make DEBUG=1 ASAN=1 WOLFSSL_DIR=../wolfssl run
 
-    # Build and test debug build with SHE 
+    # Build and test debug build with SHE
     - name: Build and test SHE
       run: cd test && make clean && make SHE=1 WOLFSSL_DIR=../wolfssl run
-          
+
     # Build and test standard build
     - name: Build and test
       run: cd test && make clean && make WOLFSSL_DIR=../wolfssl run
+
+    # Test structure padding
+    - name: Check structure padding
+      run: cd test && make clean && make checkpadding
 

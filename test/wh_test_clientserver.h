@@ -19,6 +19,9 @@
 #ifndef WH_TEST_CLIENTSERVER_H_
 #define WH_TEST_CLIENTSERVER_H_
 
+#include "wolfhsm/wh_server.h"
+#include "wolfhsm/wh_client.h"
+
 /*
  * Runs the client/server async tests in a single thread using a memory
  * transport backend.

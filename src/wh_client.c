@@ -468,8 +468,6 @@ int wh_Client_CustomCbCheckRegistered(whClientContext* c, uint16_t id, int* resp
 }
 
 
-#ifndef WOLFHSM_NO_CRYPTO
-
 int wh_Client_KeyCacheRequest_ex(whClientContext* c, uint32_t flags,
     uint8_t* label, uint32_t labelSz, uint8_t* in, uint32_t inSz,
     uint16_t keyId)
@@ -491,12 +489,12 @@ int wh_Client_KeyCacheRequest_ex(whClientContext* c, uint32_t flags,
         packet->keyCacheReq.labelSz = labelSz;
         /* write label */
         if (labelSz > WOLFHSM_NVM_LABEL_LEN)
-            XMEMCPY(packet->keyCacheReq.label, label, WOLFHSM_NVM_LABEL_LEN);
+            memcpy(packet->keyCacheReq.label, label, WOLFHSM_NVM_LABEL_LEN);
         else
-            XMEMCPY(packet->keyCacheReq.label, label, labelSz);
+            memcpy(packet->keyCacheReq.label, label, labelSz);
     }
     /* write in */
-    XMEMCPY(packIn, in, inSz);
+    memcpy(packIn, in, inSz);
     /* write request */
     return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_KEY, WH_KEY_CACHE,
             WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->keyCacheReq) + inSz,
@@ -628,16 +626,16 @@ int wh_Client_KeyExportResponse(whClientContext* c, uint8_t* label,
                 ret = WH_ERROR_ABORTED;
             }
             else {
-                XMEMCPY(out, packOut, packet->keyExportRes.len);
+                memcpy(out, packOut, packet->keyExportRes.len);
                 *outSz = packet->keyExportRes.len;
             }
             if (label != NULL) {
                 if (labelSz > sizeof(packet->keyExportRes.label)) {
-                    XMEMCPY(label, packet->keyExportRes.label,
+                    memcpy(label, packet->keyExportRes.label,
                         WOLFHSM_NVM_LABEL_LEN);
                 }
                 else
-                    XMEMCPY(label, packet->keyExportRes.label, labelSz);
+                    memcpy(label, packet->keyExportRes.label, labelSz);
             }
         }
     }
@@ -945,6 +943,8 @@ int wh_Client_CounterDestroy(whClientContext* c, whNvmId counterId)
     return ret;
 }
 
+#ifndef WOLFHSM_NO_CRYPTO
+
 #ifdef HAVE_CURVE25519
 int wh_Client_SetKeyCurve25519(curve25519_key* key, whNvmId keyId)
 {
@@ -1019,5 +1019,5 @@ int wh_Client_AesCmacVerify(Cmac* cmac, const byte* check, word32 checkSz,
         ret = memcmp(out, check, outSz) == 0 ? 0 : 1;
     return ret;
 }
-#endif
+#endif /* WOLFSSL_CMAC */
 #endif  /* !WOLFHSM_NO_CRYPTO */

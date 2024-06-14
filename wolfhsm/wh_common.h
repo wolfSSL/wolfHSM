@@ -35,7 +35,7 @@
 /** Resource allocations */
 enum WOLFHSM_NUM_ENUM {
     WOLFHSM_NUM_COUNTERS = 8,       /* Number of non-volatile 32-bit counters */
-    WOLFHSM_NUM_RAMKEYS = 16,        /* Number of RAM keys */
+    WOLFHSM_NUM_RAMKEYS = 8,        /* Number of RAM keys */
     WOLFHSM_NUM_NVMOBJECTS = 32,    /* Number of NVM objects in the directory */
     WOLFHSM_NUM_MANIFESTS = 8,      /* Number of compiletime manifests */
     WOLFHSM_KEYCACHE_BUFSIZE = 1200, /* Size in bytes of key cache buffer  */

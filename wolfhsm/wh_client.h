@@ -615,7 +615,7 @@ int wh_Client_AesCmacVerify(Cmac* cmac, const byte* check, word32 checkSz,
  * @return int Returns 0 on success or a negative error code on failure.
  */
 int wh_Client_SetKeyCmac(Cmac* key, whNvmId keyId);
-#endif
+#endif /* ! WOLFHSM_NO_CRYPTO */
 
 /* Counter functions */
 int wh_Client_CounterInitRequest(whClientContext* c, whNvmId counterId,

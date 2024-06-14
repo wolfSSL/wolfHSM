@@ -49,7 +49,7 @@ endif
 
 # Support a NO CRYPTO build
 ifeq ($(NOCRYPTO),1)
-CFLAGS += -DWOLFHSM_NO_CRYPTO -Wpadded
+CFLAGS += -DWOLFHSM_NO_CRYPTO
 endif
 
 ifeq ($(SHE),1)
@@ -142,6 +142,7 @@ vpath %.c $(dir $(SRC_C))
 OBJS_ASM = $(addprefix $(BUILD_DIR)/, $(notdir $(SRC_ASM:.s=.o)))
 vpath %.s $(dir $(SRC_ASM))
 
+.PHONY: all clean run checkpadding
 
 build_app: $(BUILD_DIR) $(BUILD_DIR)/$(BIN).elf
 	@echo Build complete.
@@ -184,3 +185,7 @@ clean:
 run: build_app
 	./$(BUILD_DIR)/$(BIN).elf
 
+checkpadding:
+	@echo "Checking for padding issues with -Wpadded"
+	$(CMD_ECHO) $(CC) -Wpadded $(CFLAGS) $(DEF) $(INC) -c \
+	    -o $(BUILD_DIR)/wh_test_check_struct_padding.o wh_test_check_struct_padding.c
