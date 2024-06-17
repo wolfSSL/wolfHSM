@@ -279,14 +279,20 @@ int wh_Client_CommClose(whClientContext* c)
     return rc;
 }
 
-void wh_Client_EnableCancel(whClientContext* c)
+int wh_Client_EnableCancel(whClientContext* c)
 {
+    if (c == NULL)
+        return WH_ERROR_BADARGS;
     c->cancelable = 1;
+    return 0;
 }
 
-void wh_Client_DisableCancel(whClientContext* c)
+int wh_Client_DisableCancel(whClientContext* c)
 {
+    if (c == NULL)
+        return WH_ERROR_BADARGS;
     c->cancelable = 0;
+    return 0;
 }
 
 int wh_Client_CancelRequest(whClientContext* c)
@@ -1087,6 +1093,11 @@ int wh_Client_CmacCancelableResponse(whClientContext* c, Cmac* cmac,
         ret = wh_Client_RecvResponse(c, &group, &action, &dataSz,
             (uint8_t*)packet);
     } while (ret == WH_ERROR_NOTREADY);
+    /* check for out of sequence action */
+    if (ret == 0 && (group != WH_MESSAGE_GROUP_CRYPTO ||
+        action != WC_ALGO_TYPE_CMAC)) {
+        ret = WH_SHE_ERC_SEQUENCE_ERROR;
+    }
     if (ret == 0) {
         if (packet->rc != 0)
             ret = packet->rc;

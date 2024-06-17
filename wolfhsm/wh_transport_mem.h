@@ -145,7 +145,7 @@ int wh_TransportMem_RecvRequest(void* c, uint16_t *out_len, void* data);
 int wh_TransportMem_SendResponse(void* c, uint16_t len, const void* data);
 int wh_TransportMem_RecvResponse(void* c, uint16_t *out_len, void* data);
 int wh_TransportMem_Cancel(void* c, uint16_t seq);
-int wh_TransportMem_Canceled(void* c, uint16_t* seq);
+int wh_TransportMem_getCanceledSequence(void* c, uint16_t* seq);
 
 #define WH_TRANSPORT_MEM_CLIENT_CB              \
 {                                               \
@@ -161,7 +161,7 @@ int wh_TransportMem_Canceled(void* c, uint16_t* seq);
     .Init =     wh_TransportMem_Init,           \
     .Recv =     wh_TransportMem_RecvRequest,    \
     .Send =     wh_TransportMem_SendResponse,   \
-    .Canceled =   wh_TransportMem_Canceled,     \
+    .GetCanceledSequence = wh_TransportMem_getCanceledSequence,     \
     .Cleanup =  wh_TransportMem_Cleanup,        \
 }
 

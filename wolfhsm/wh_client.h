@@ -196,8 +196,9 @@ int wh_Client_CommCloseRequest(whClientContext* c);
  * wolfHSM specific function call.
  *
  * @param[in] c Pointer to the client context.
+ * @return int Returns 0 on success, or a negative error code on failure.
  */
-void wh_Client_EnableCancel(whClientContext* c);
+int wh_Client_EnableCancel(whClientContext* c);
 
 /**
  * @brief Disables request cancelation.
@@ -206,16 +207,39 @@ void wh_Client_EnableCancel(whClientContext* c);
  * handle responses again.
  *
  * @param[in] c Pointer to the client context.
+ * @return int Returns 0 on success, or a negative error code on failure.
  */
-void wh_Client_DisableCancel(whClientContext* c);
+int wh_Client_DisableCancel(whClientContext* c);
 
+/**
+ * @brief Cancels the previous request, currently only supports CMAC. Async
+ * Request
+ *
+ * This function sends a cancelation request to the server to cancel the
+ * previous request made. Does not wait for the response which must be handled
+ * seperately
+ *
+ * @param[in] c Pointer to the client context.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
 int wh_Client_CancelRequest(whClientContext* c);
+/**
+ * @brief Handles the response for a cancelation the previous request, currently
+ * only supports CMAC. Async response handler.
+ *
+ * This function handles the response for a request cancelation previously sent
+ * to the server. Blocks to wait for the response.
+ *
+ * @param[in] c Pointer to the client context.
+ * @return int Returns 0 or WH_ERROR_CANCEL_LATE on success, or a negative
+ *    error code on failure.
+ */
 int wh_Client_CancelResponse(whClientContext* c);
 /**
  * @brief Cancels the previous request, currently only supports CMAC.
  *
- * This function sends a cancelation request to the server to cancel the
- * previous request made.
+ * This function sends a cancelation request to the server and waits for the
+ * response to cancel the previous request made.
  *
  * @param[in] c Pointer to the client context.
  * @return int Returns 0 or WH_ERROR_CANCEL_LATE on success, or a negative

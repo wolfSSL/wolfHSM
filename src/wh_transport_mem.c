@@ -220,13 +220,13 @@ int wh_TransportMem_Cancel(void* c, uint16_t seq)
     if (*(context->cancel_seq) != 0)
         return WH_ERROR_NOTREADY;
 
-    /* Check to see if the current response is the different than the request */
+    /* set the cancel_seq shared memory to the sequence we want to cancel */
     *(context->cancel_seq) = seq;
 
     return 0;
 }
 
-int wh_TransportMem_Canceled(void* c, uint16_t* seq)
+int wh_TransportMem_getCanceledSequence(void* c, uint16_t* seq)
 {
     whTransportMemContext* context = c;
 

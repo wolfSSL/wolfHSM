@@ -252,7 +252,7 @@ typedef struct {
     /* Check for a canceled request, currently only supports CMAC.
      * Returns 0 on success, negative number to indicate error.
      */
-    int (*Canceled)(void* context, uint16_t* seq);
+    int (*GetCanceledSequence)(void* context, uint16_t* seq);
 
     /* Close the connection.
      * Returns: 0 on success,

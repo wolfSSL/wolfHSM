@@ -603,7 +603,10 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         goto exit;
     }
     /* test cancelation */
-    wh_Client_EnableCancel(client);
+    if((ret = wh_Client_EnableCancel(client)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_EnableCancel %d\n", ret);
+        goto exit;
+    }
     if((ret = wc_InitCmac_ex(cmac, knownCmacKey, sizeof(knownCmacKey), WC_CMAC_AES, NULL, NULL, WOLFHSM_DEV_ID)) != 0) {
         WH_ERROR_PRINT("Failed to wc_InitCmac_ex %d\n", ret);
         goto exit;
@@ -662,7 +665,10 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         ret = -1;
         goto exit;
     }
-    wh_Client_DisableCancel(client);
+    if((ret = wh_Client_DisableCancel(client)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_EnableCancel %d\n", ret);
+        goto exit;
+    }
     printf("CMAC SUCCESS\n");
 
 #ifdef WH_CFG_TEST_VERBOSE
