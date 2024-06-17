@@ -46,6 +46,7 @@ enum WOLFHSM_NUM_ENUM {
 
 /* HSM Counter identifier type. */
 typedef uint16_t whCounterId;
+#define WOLFHSM_COUNTER_ID_INVALID ((whCounterId)0)
 
 
 /** Key Management */
@@ -76,14 +77,17 @@ typedef uint16_t whKeyId;
 #define WOLFHSM_KEYTYPE_SHE       0x2000
 #define WOLFHSM_KEYTYPE_COUNTER   0x3000
 
-#define MAKE_WOLFHSM_KEYID(_type, _user, _id) \
-    (whKeyId)(((_type) & WOLFHSM_KEYTYPE_MASK) | (((_user) & 0xF) << 8) | ((_id) & WOLFHSM_KEYID_MASK))
+#define MAKE_WOLFHSM_KEYID(_type, _user, _id)       \
+    ((whKeyId)(((_type) & WOLFHSM_KEYTYPE_MASK) |   \
+    (((_user) & 0xF) << 8) |                        \
+    ((_id) & WOLFHSM_KEYID_MASK)))
 
 
 /** NVM Management */
 
 /* HSM NVM object identifier type. */
 typedef uint16_t whNvmId;
+#define WOLFHSM_NVM_ID_INVALID ((whNvmId)0)
 
 /* HSM NVM Size type */
 typedef uint16_t whNvmSize;
@@ -101,8 +105,10 @@ enum WOLFHSM_NVM_ENUM {
 };
 
 /* List flags */
-#define WOLFHSM_NVM_ACCESS_ANY (0xFFFF)
-#define WOLFHSM_NVM_FLAGS_ANY (0xFFFF)
+#define WOLFHSM_NVM_ACCESS_NONE ((whNvmAccess)0)
+#define WOLFHSM_NVM_ACCESS_ANY ((whNvmAccess)0xFFFF)
+#define WOLFHSM_NVM_FLAGS_NONE ((whNvmFlags)0)
+#define WOLFHSM_NVM_FLAGS_ANY ((whNmmFlags)0xFFFF)
 
 /* User-specified metadata for an NVM object, MUST be a multiple of
  * WHFU_BYTES_PER_UNIT */
@@ -115,6 +121,13 @@ typedef struct {
 } whNvmMetadata;
 /* static_assert(sizeof(whNvmMetadata) == WOLFHSM_NVM_METADATA_LEN) */
 
+#define whNvmMetadata_INITIALIZER           \
+{   .id         = WOLFHSM_NVM_ID_INVALID,   \
+    .access     = WOLFHSM_NVM_ACCESS_NONE,  \
+    .flags      = WOLFHSM_NVM_FLAGS_NONE,   \
+    .len        = 0,                        \
+    .label      = {0},                      \
+}
 
 /* Custom request shared defs */
 #define WH_CUSTOM_CB_NUM_CALLBACKS 8
