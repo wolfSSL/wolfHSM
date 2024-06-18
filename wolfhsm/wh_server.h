@@ -54,6 +54,14 @@ typedef struct whServerCacheSlot {
     uint8_t       buffer[WOLFHSM_KEYCACHE_BUFSIZE];
 } whServerCacheSlot;
 
+#ifdef WOLFHSM_SEPARATE_BIG_CACHE
+typedef struct whServerBigCacheSlot {
+    uint8_t       commited;
+    whNvmMetadata meta[1];
+    uint8_t       buffer[WOLFHSM_KEYCACHE_BIG_BUFSIZE];
+} whServerBigCacheSlot;
+#endif
+
 typedef struct whServerCryptoContext {
     int devId;
 #ifndef WC_NO_RNG
@@ -204,8 +212,11 @@ struct whServerContext_t {
     whCommServer  comm[1];
     whNvmContext* nvm;
 #ifndef WOLFHSM_NO_CRYPTO
-    whServerCryptoContext* crypto;
+    whServerCryptoContext*  crypto;
     whServerCacheSlot       cache[WOLFHSM_NUM_RAMKEYS];
+#ifdef WOLFHSM_SEPARATE_BIG_CACHE
+    whServerBigCacheSlot    bigCache[WOLFHSM_NUM_BIG_RAMKEYS];
+#endif
 #ifdef WOLFHSM_SHE_EXTENSION
     whServerSheContext* she;
 #endif
