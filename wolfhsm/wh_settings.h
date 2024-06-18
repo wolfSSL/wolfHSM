@@ -94,9 +94,19 @@
 #define WOLFHSM_CFG_SERVER_KEYCACHE_COUNT  8
 #endif
 
+/* Number of big RAM keys */
+#ifndef WOLFHSM_CFG_SERVER_KEYCACHE_BIG_COUNT
+#define WOLFHSM_CFG_SERVER_KEYCACHE_BIG_COUNT  1
+#endif
+
 /* Size in bytes of each key cache buffer  */
 #ifndef WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE
-#define WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE 1200
+#define WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE 256
+#endif
+
+/* Size in bytes of each big key cache buffer  */
+#ifndef WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE
+#define WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE 1200
 #endif
 
 /* Custom request shared defs */

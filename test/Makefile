@@ -60,6 +60,9 @@ ifeq ($(SHE),1)
 CFLAGS += -DWOLFHSM_CFG_SHE_EXTENSION
 endif
 
+# seperate big keys
+CFLAGS += -DWOLFHSM_SEPARATE_BIG_CACHE
+
 # Assembly source files
 SRC_ASM +=
 
