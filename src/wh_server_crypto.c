@@ -646,7 +646,7 @@ static int hsmCryptoCmac(whServerContext* server, whPacket* packet,
     byte* in = (uint8_t*)(&packet->cmacReq + 1);
     byte* key = in + packet->cmacReq.inSz;
     byte* out = (uint8_t*)(&packet->cmacRes + 1);
-    whNvmMetadata meta[1];
+    whNvmMetadata meta[1] = {{0}};
     /* do oneshot if all fields are present */
     if (packet->cmacReq.inSz != 0 && packet->cmacReq.keySz != 0 &&
         packet->cmacReq.outSz != 0) {

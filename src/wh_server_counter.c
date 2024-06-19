@@ -32,7 +32,7 @@ int wh_Server_HandleCounter(whServerContext* server, uint16_t action,
     whKeyId counterId = 0;
     int ret = 0;
     whPacket* packet = (whPacket*)data;
-    whNvmMetadata meta[1] = { whNvmMetadata_INITIALIZER };
+    whNvmMetadata meta[1] = {{0}};
     uint32_t* counter = (uint32_t*)(&meta->label);
 
     if (server == NULL || server->nvm == NULL || data == NULL || size == NULL)

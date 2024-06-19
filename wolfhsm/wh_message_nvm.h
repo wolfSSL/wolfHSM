@@ -168,12 +168,9 @@ int wh_MessageNvm_TranslateGetMetadataResponse(uint16_t magic,
 
 /** NVM DestroyObjects Request */
 typedef struct {
-    uint16_t list[WH_MESSAGE_NVM_MAX_DESTROY_OBJECTS_COUNT];
     uint16_t list_count;
+    uint16_t list[WH_MESSAGE_NVM_MAX_DESTROY_OBJECTS_COUNT];
 } whMessageNvm_DestroyObjectsRequest;
-
-#define WH_MESSAGE_NVM_DESTROY_OBJECT_REQUEST_INITIALIZER \
-{   .list = {0}, .list_count = 0, }
 
 int wh_MessageNvm_TranslateDestroyObjectsRequest(uint16_t magic,
         const whMessageNvm_DestroyObjectsRequest* src,

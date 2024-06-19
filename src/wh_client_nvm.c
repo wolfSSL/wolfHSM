@@ -526,8 +526,7 @@ int wh_Client_NvmGetMetadata(whClientContext* c, whNvmId id,
 int wh_Client_NvmDestroyObjectsRequest(whClientContext* c,
         whNvmId list_count, const whNvmId* id_list)
 {
-    whMessageNvm_DestroyObjectsRequest msg =
-            WH_MESSAGE_NVM_DESTROY_OBJECT_REQUEST_INITIALIZER;
+    whMessageNvm_DestroyObjectsRequest msg = {0};
     int counter = 0;
 
     if (    (c == NULL) ||

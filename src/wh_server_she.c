@@ -353,7 +353,7 @@ static int hsmSheLoadKey(whServerContext* server, whPacket* packet,
     uint8_t kdfInput[WOLFHSM_SHE_KEY_SZ * 2];
     uint8_t cmacOutput[AES_BLOCK_SIZE];
     uint8_t tmpKey[WOLFHSM_SHE_KEY_SZ];
-    whNvmMetadata meta[1];
+    whNvmMetadata meta[1] = {{0}};
     whSheMetadata* she_meta = (whSheMetadata*)meta->label;
     uint32_t* counter;
 
@@ -560,7 +560,7 @@ static int hsmSheExportRamKey(whServerContext* server, whPacket* packet,
     uint8_t kdfInput[WOLFHSM_SHE_KEY_SZ * 2];
     uint8_t cmacOutput[AES_BLOCK_SIZE];
     uint8_t tmpKey[WOLFHSM_SHE_KEY_SZ];
-    whNvmMetadata meta[1];
+    whNvmMetadata meta[1] = {{0}};
     uint32_t* counter;
 
     /* check if ram key was loaded by CMD_LOAD_PLAIN_KEY */
@@ -709,7 +709,7 @@ static int hsmSheInitRnd(whServerContext* server, whPacket* packet,
     uint8_t kdfInput[WOLFHSM_SHE_KEY_SZ * 2];
     uint8_t cmacOutput[AES_BLOCK_SIZE];
     uint8_t tmpKey[WOLFHSM_SHE_KEY_SZ];
-    whNvmMetadata meta[1];
+    whNvmMetadata meta[1] = {{0}};
     /* check that init hasn't already been called since startup */
     if (server->she->rndInited == 1)
         ret = WH_SHE_ERC_SEQUENCE_ERROR;
@@ -820,7 +820,7 @@ static int hsmSheExtendSeed(whServerContext* server, whPacket* packet,
     int ret = 0;
     uint32_t keySz;
     uint8_t kdfInput[WOLFHSM_SHE_KEY_SZ * 2];
-    whNvmMetadata meta[1];
+    whNvmMetadata meta[1] = {{0}};
     /* check that rng has been inited */
     if (server->she->rndInited == 0)
         ret = WH_SHE_ERC_RNG_SEED;

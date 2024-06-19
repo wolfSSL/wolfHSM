@@ -209,8 +209,7 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
 
     case WH_MESSAGE_NVM_ACTION_DESTROYOBJECTS:
     {
-        whMessageNvm_DestroyObjectsRequest req =
-                WH_MESSAGE_NVM_DESTROY_OBJECT_REQUEST_INITIALIZER;
+        whMessageNvm_DestroyObjectsRequest req = {0};
         whMessageNvm_SimpleResponse resp = {0};
 
         if (req_size == sizeof(req)) {

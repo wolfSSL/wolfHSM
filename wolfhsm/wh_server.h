@@ -58,7 +58,7 @@
 #endif
 
 /* Size in bytes of key cache buffer  */
-#ifndef WOLFHAM_KEYCACHE_BUFSIZE
+#ifndef WOLFHSM_KEYCACHE_BUFSIZE
 #define WOLFHSM_KEYCACHE_BUFSIZE 1200
 #endif
 
@@ -67,6 +67,12 @@
 #define WH_CUSTOM_CB_NUM_CALLBACKS 8
 #endif
 
+/* DMA translation allow entries */
+#ifndef WH_DMA_ADDR_ALLOWLIST_COUNT
+#define WH_DMA_ADDR_ALLOWLIST_COUNT (10)
+#endif
+
+
 /* Forward declaration of the server structure so its elements can reference
  * itself  (e.g. server argument to custom callback) */
 typedef struct whServerContext_t whServerContext;
@@ -74,9 +80,9 @@ typedef struct whServerContext_t whServerContext;
 #ifndef WOLFHSM_NO_CRYPTO
 /** Server crypto context and resource allocation */
 typedef struct whServerCacheSlot {
-    uint8_t       commited;
-    whNvmMetadata meta[1];
-    uint8_t       buffer[WOLFHSM_KEYCACHE_BUFSIZE];
+    uint32_t        commited;
+    whNvmMetadata   meta[1];
+    uint8_t         buffer[WOLFHSM_KEYCACHE_BUFSIZE];
 } whServerCacheSlot;
 
 typedef struct whServerCryptoContext {
@@ -139,7 +145,6 @@ typedef int (*whServerCustomCb)(
 
 /** Server DMA address translation and validation */
 
-#define WH_DMA_ADDR_ALLOWLIST_COUNT (10)
 
 /* Indicates to a DMA callback the type of memory operation the callback must
  * act on. Common use cases are remapping client addresses into server address
@@ -226,8 +231,8 @@ typedef struct whServerConfig_t {
 
 /* Context structure to maintain the state of an HSM server */
 struct whServerContext_t {
-    whCommServer  comm[1];
     whNvmContext* nvm;
+    whCommServer  comm[1];
 #ifndef WOLFHSM_NO_CRYPTO
     whServerCryptoContext* crypto;
     whServerCacheSlot       cache[WOLFHSM_NUM_RAMKEYS];
@@ -241,11 +246,6 @@ struct whServerContext_t {
     uint16_t cancelSeq;
     uint8_t WH_PAD[2];
 };
-
-#define WH_COMMSERVER_INITIALIZER \
-{ .packet = {0} }
-#define WH_SERVER_CONTEXT_INITIALIZER \
-{ .comm = {WH_COMMSERVER_INITIALIZER} }
 
 
 /** Public server context functions */

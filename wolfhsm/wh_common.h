@@ -95,12 +95,4 @@ typedef struct {
 } whNvmMetadata;
 /* static_assert(sizeof(whNvmMetadata) == WOLFHSM_NVM_METADATA_LEN) */
 
-#define whNvmMetadata_INITIALIZER           \
-{   .id         = WOLFHSM_NVM_ID_INVALID,   \
-    .access     = WOLFHSM_NVM_ACCESS_NONE,  \
-    .flags      = WOLFHSM_NVM_FLAGS_NONE,   \
-    .len        = 0,                        \
-    .label      = {0},                      \
-}
-
 #endif /* WOLFHSM_WH_COMMON_H_ */
