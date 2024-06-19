@@ -45,10 +45,10 @@ int wh_Server_HandleCounter(whServerContext* server, uint16_t action,
         meta->id = MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_COUNTER,
             server->comm->client_id, packet->counterInitReq.counterId);
         /* use the label buffer to hold the counter value */
-        *(uint32_t*)meta->label = packet->counterInitReq.counter;
+        *counter = packet->counterInitReq.counter;
         ret = wh_Nvm_AddObjectWithReclaim(server->nvm, meta, 0, NULL);
         if (ret == 0) {
-            packet->counterInitRes.counter = *(uint32_t*)meta->label;
+            packet->counterInitRes.counter = *counter;
             *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->counterInitRes);
         }
         break;
