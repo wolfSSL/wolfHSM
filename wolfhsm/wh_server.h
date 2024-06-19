@@ -42,6 +42,31 @@
 #include "wolfssl/wolfcrypt/cryptocb.h"
 #endif /* WOLFHSM_NO_CRYPTO */
 
+#ifdef WOLFHSM_SHE_EXTENSION
+#include "wolfhsm/wh_she_common.h"
+#endif
+
+/** Default server resource configuration */
+/* Number of RAM keys */
+#ifndef WOLFHSM_NUM_RAMKEYS
+#define WOLFHSM_NUM_RAMKEYS  8
+#endif
+
+/* Number of NVM objects in the directory */
+#ifndef WOLFHSM_NUM_NVMOBJECTS
+#define WOLFHSM_NUM_NVMOBJECTS  32
+#endif
+
+/* Size in bytes of key cache buffer  */
+#ifndef WOLFHAM_KEYCACHE_BUFSIZE
+#define WOLFHSM_KEYCACHE_BUFSIZE 1200
+#endif
+
+/* Custom request shared defs */
+#ifndef WH_CUSTOM_CB_NUM_CALLBACKS
+#define WH_CUSTOM_CB_NUM_CALLBACKS 8
+#endif
+
 /* Forward declaration of the server structure so its elements can reference
  * itself  (e.g. server argument to custom callback) */
 typedef struct whServerContext_t whServerContext;

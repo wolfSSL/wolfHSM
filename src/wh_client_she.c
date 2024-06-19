@@ -29,6 +29,7 @@
 
 /* Common WolfHSM types and defines shared with the server */
 #include "wolfhsm/wh_common.h"
+#include "wolfhsm/wh_she_common.h"
 #include "wolfhsm/wh_error.h"
 
 /* Components */

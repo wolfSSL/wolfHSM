@@ -22,7 +22,9 @@
 #define WOLFHSM_PACKET_H
 #include "wolfhsm/wh_common.h"
 
-#define WOLFHSM_PACKET_STUB_SIZE 8
+#ifdef WOLFHSM_SHE_EXTENSION
+#include "wolfhsm/wh_she_common.h"
+#endif
 
 typedef struct  wh_Packet_cipher_any_req
 {
@@ -238,6 +240,8 @@ typedef struct  wh_Packet_cmac_res
     /* uint8_t out[]; */
 } wh_Packet_cmac_res;
 
+
+/** Key Management Packets */
 typedef struct  wh_Packet_key_cache_req
 {
     uint32_t flags;
@@ -302,6 +306,8 @@ typedef struct  wh_Packet_version_exchange
     uint32_t version;
 } wh_Packet_version_exchange;
 
+
+/** Counter packets */
 typedef struct  wh_Packet_counter_init_req
 {
     uint32_t counter;
@@ -342,6 +348,8 @@ typedef struct  wh_Packet_counter_destroy_req
     uint8_t WH_PAD[2];
 } wh_Packet_counter_destroy_req;
 
+
+/** SHE Packets */
 #ifdef WOLFHSM_SHE_EXTENSION
 typedef struct  wh_Packet_she_set_uid_req
 {
@@ -514,7 +522,7 @@ typedef struct  wh_Packet_she_verify_mac_res
     uint8_t status;
     uint8_t WH_PAD[3];
 } wh_Packet_she_verify_mac_res;
-#endif
+#endif  /*WOLFHSM_SHE_EXTENSION */
 
 
 /* use packed structs so we can read a packet in directly */
@@ -524,7 +532,9 @@ typedef struct whPacket
     int32_t rc;
     uint16_t flags;
     uint8_t WH_PAD[2];
-    /* body, will be either a request or a response */
+
+#define WOLFHSM_PACKET_STUB_SIZE 8
+   /* body, will be either a request or a response */
     union {
         wh_Packet_version_exchange versionExchange;
         /* FIXED SIZE REQUESTS */

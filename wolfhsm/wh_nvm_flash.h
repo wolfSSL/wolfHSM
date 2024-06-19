@@ -33,7 +33,10 @@
 #include "wolfhsm/wh_flash_unit.h"
 
 /* Number of objects in a directory */
+#ifndef NF_OBJECT_COUNT
+#include "wolfhsm/wh_server.h"
 #define NF_OBJECT_COUNT (WOLFHSM_NUM_NVMOBJECTS)
+#endif
 
 /* In-memory computed status of an Object or Directory */
 typedef enum {

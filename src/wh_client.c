@@ -430,7 +430,7 @@ int wh_Client_Echo(whClientContext* c, uint16_t snd_len, const void* snd_data,
 
 int wh_Client_CustomCbRequest(whClientContext* c, const whMessageCustomCb_Request* req)
 {
-    if (NULL == c || req == NULL || req->id >= WH_CUSTOM_CB_NUM_CALLBACKS) {
+    if (NULL == c || req == NULL) {
         return WH_ERROR_BADARGS;
     }
 
@@ -457,8 +457,7 @@ int wh_Client_CustomCbResponse(whClientContext*          c,
         return rc;
     }
 
-    if (resp_size != sizeof(resp) || resp_group != WH_MESSAGE_GROUP_CUSTOM ||
-        resp_action >= WH_CUSTOM_CB_NUM_CALLBACKS) {
+    if (resp_size != sizeof(resp) || resp_group != WH_MESSAGE_GROUP_CUSTOM) {
         /* message invalid */
         return WH_ERROR_ABORTED;
     }
@@ -472,7 +471,7 @@ int wh_Client_CustomCheckRegisteredRequest(whClientContext* c, uint32_t id)
 {
     whMessageCustomCb_Request req = {0};
 
-    if (c == NULL || id >= WH_CUSTOM_CB_NUM_CALLBACKS) {
+    if (c == NULL) {
         return WH_ERROR_BADARGS;
     }
 
@@ -519,7 +518,7 @@ int wh_Client_CustomCbCheckRegistered(whClientContext* c, uint16_t id, int* resp
 {
     int rc = 0;
 
-    if (NULL == c || NULL == responseError || id >= WH_CUSTOM_CB_NUM_CALLBACKS) {
+    if (NULL == c || NULL == responseError) {
         return WH_ERROR_BADARGS;
     }
 

@@ -44,17 +44,20 @@
 #include "wolfhsm/wh_packet.h"
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_utils.h"
+#include "wolfhsm/wh_she_common.h"
 
 #include "wolfhsm/wh_server_she.h"
 
-static const uint8_t WOLFHSM_SHE_KEY_UPDATE_ENC_C[] = {0x01, 0x01, 0x53, 0x48, 0x45,
-    0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xB0};
-static const uint8_t WOLFHSM_SHE_KEY_UPDATE_MAC_C[] = {0x01, 0x02, 0x53, 0x48, 0x45,
-    0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xB0};
-static const uint8_t WOLFHSM_SHE_PRNG_KEY_C[] = {0x01, 0x04, 0x53, 0x48, 0x45, 0x00,
-    0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xB0};
-static const uint8_t WOLFHSM_SHE_PRNG_SEED_KEY_C[] = {0x01, 0x05, 0x53, 0x48, 0x45,
-    0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xB0};
+/** SHE defined constants */
+static const uint8_t WOLFHSM_SHE_KEY_UPDATE_ENC_C[] = { 0x01, 0x01, 0x53, 0x48,
+        0x45, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xB0};
+static const uint8_t WOLFHSM_SHE_KEY_UPDATE_MAC_C[] = { 0x01, 0x02, 0x53, 0x48,
+        0x45, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xB0};
+static const uint8_t WOLFHSM_SHE_PRNG_KEY_C[]       = { 0x01, 0x04, 0x53, 0x48,
+        0x45, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xB0};
+static const uint8_t WOLFHSM_SHE_PRNG_SEED_KEY_C[]  = { 0x01, 0x05, 0x53, 0x48,
+        0x45, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xB0};
+
 enum WOLFHSM_SHE_SB_STATE {
     WOLFHSM_SHE_SB_INIT,
     WOLFHSM_SHE_SB_UPDATE,
@@ -66,9 +69,46 @@ enum WOLFHSM_SHE_SB_STATE {
 Cmac sheCmac[1];
 Aes sheAes[1];
 
+/** Local Declarations */
+static int wh_AesMp16(whServerContext* server, uint8_t* in, word32 inSz,
+        uint8_t* out);
+static uint16_t hsmShePopAuthId(uint8_t* messageOne);
+static uint32_t hsmShePopFlags(uint8_t* messageTwo);
+static int hsmSheSetUid(whServerContext* server, whPacket* packet);
+static int hsmSheSecureBootInit(whServerContext* server, whPacket* packet,
+        uint16_t* size);
+static int hsmSheSecureBootUpdate(whServerContext* server, whPacket* packet,
+    uint16_t* size);
+static int hsmSheSecureBootFinish(whServerContext* server, whPacket* packet,
+    uint16_t* size);
+static int hsmSheGetStatus(whServerContext* server, whPacket* packet,
+    uint16_t* size);
+static int hsmSheLoadKey(whServerContext* server, whPacket* packet,
+    uint16_t* size);
+static int hsmSheLoadPlainKey(whServerContext* server, whPacket* packet,
+    uint16_t* size);
+static int hsmSheExportRamKey(whServerContext* server, whPacket* packet,
+    uint16_t* size);
+static int hsmSheRnd(whServerContext* server, whPacket* packet, uint16_t* size);
+static int hsmSheExtendSeed(whServerContext* server, whPacket* packet,
+    uint16_t* size);
+static int hsmSheEncEcb(whServerContext* server, whPacket* packet,
+        uint16_t* size);
+static int hsmSheEncCbc(whServerContext* server, whPacket* packet,
+    uint16_t* size);
+static int hsmSheDecEcb(whServerContext* server, whPacket* packet,
+    uint16_t* size);
+static int hsmSheDecCbc(whServerContext* server, whPacket* packet,
+    uint16_t* size);
+static int hsmSheGenerateMac(whServerContext* server, whPacket* packet,
+    uint16_t* size);
+
+
+/** Local Implementations */
 
 /* kdf function based on the Miyaguchi-Preneel one-way compression function */
-static int wh_AesMp16(whServerContext* server, uint8_t* in, word32 inSz, uint8_t* out)
+static int wh_AesMp16(whServerContext* server, uint8_t* in, word32 inSz,
+        uint8_t* out)
 {
     int ret;
     int i = 0;
@@ -510,6 +550,7 @@ static int hsmSheLoadPlainKey(whServerContext* server, whPacket* packet,
     return ret;
 }
 
+
 static int hsmSheExportRamKey(whServerContext* server, whPacket* packet,
     uint16_t* size)
 {
@@ -741,6 +782,7 @@ static int hsmSheInitRnd(whServerContext* server, whPacket* packet,
     }
     return ret;
 }
+
 
 static int hsmSheRnd(whServerContext* server, whPacket* packet, uint16_t* size)
 {
