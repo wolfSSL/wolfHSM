@@ -44,8 +44,6 @@
 
 #include "wolfhsm/wh_client_she.h"
 
-#include "wolfhsm/wh_server_she.h"
-
 int wh_Client_ShePreProgramKey(whClientContext* c, whNvmId keyId,
     whNvmFlags flags, uint8_t* key, whNvmSize keySz)
 {

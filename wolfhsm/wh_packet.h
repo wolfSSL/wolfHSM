@@ -20,12 +20,21 @@
  */
 #ifndef WOLFHSM_PACKET_H
 #define WOLFHSM_PACKET_H
+
 #include "wolfhsm/wh_common.h"
 
 #ifdef WOLFHSM_SHE_EXTENSION
 #include "wolfhsm/wh_she_common.h"
 #endif
 
+/** Management Packets */
+typedef struct  wh_Packet_version_exchange
+{
+    uint32_t version;
+} wh_Packet_version_exchange;
+
+
+/** Cipher Packets */
 typedef struct  wh_Packet_cipher_any_req
 {
     uint32_t type;
@@ -71,6 +80,8 @@ typedef struct  wh_Packet_cipher_aesgcm_res
     /* uint8_t authTag[authTagSz] */
 } wh_Packet_cipher_aesgcm_res;
 
+
+/** PKI Packets */
 typedef struct  wh_Packet_pk_any_req
 {
     uint32_t type;
@@ -209,6 +220,8 @@ typedef struct  wh_Packet_pk_curve25519_res
     /* uint8_t out[]; */
 } wh_Packet_pk_curve25519_res;
 
+
+/* RNG Messages */
 typedef struct  wh_Packet_rng_req
 {
     uint32_t sz;
@@ -220,6 +233,8 @@ typedef struct  wh_Packet_rng_res
     /* uint8_t out[]; */
 } wh_Packet_rng_res;
 
+
+/** CMAC Packets */
 typedef struct  wh_Packet_cmac_req
 {
     uint32_t outSz;
@@ -301,13 +316,8 @@ typedef struct  wh_Packet_key_erase_res
     uint32_t ok;
 } wh_Packet_key_erase_res;
 
-typedef struct  wh_Packet_version_exchange
-{
-    uint32_t version;
-} wh_Packet_version_exchange;
 
-
-/** Counter packets */
+/** NVM Counter packets */
 typedef struct  wh_Packet_counter_init_req
 {
     uint32_t counter;
@@ -524,8 +534,7 @@ typedef struct  wh_Packet_she_verify_mac_res
 } wh_Packet_she_verify_mac_res;
 #endif  /*WOLFHSM_SHE_EXTENSION */
 
-
-/* use packed structs so we can read a packet in directly */
+/** Union of all packet types with common header */
 typedef struct whPacket
 {
     /* header */
@@ -650,4 +659,4 @@ typedef struct whPacket
     };
 } whPacket;
 
-#endif /* !ET_H */
+#endif /* !WOLFHSM_PACKET_H */

@@ -28,7 +28,7 @@
 #include "wolfhsm/wh_common.h"
 
 /* Component includes */
-#include "wolfhsm/wh_comm.h"
+#include "wolfhsm/wh_client.h"
 
 int wh_Client_ShePreProgramKey(whClientContext* c, whNvmId keyId,
     whNvmFlags flags, uint8_t* key, whNvmSize keySz);

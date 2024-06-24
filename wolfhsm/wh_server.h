@@ -46,7 +46,7 @@
 #include "wolfhsm/wh_she_common.h"
 #endif
 
-/** Default server resource configuration */
+/** Default server resource configurations */
 /* Number of RAM keys */
 #ifndef WOLFHSM_NUM_RAMKEYS
 #define WOLFHSM_NUM_RAMKEYS  8
@@ -87,7 +87,7 @@ typedef struct whServerCacheSlot {
 
 typedef struct whServerCryptoContext {
     int devId;
-#ifndef WC_NO_RNG
+#ifndef WC_NO_RNGzx
     WC_RNG rng[1];
 #endif
     union {
@@ -117,7 +117,12 @@ typedef struct whServerCryptoContext {
     } pubKey;
 } whServerCryptoContext;
 
-#ifdef WOLFHSM_SHE_EXTENSION
+#if defined(WOLFHSM_SHE_EXTENSION) && !defined(WOLFHSM_NO_CRYPTO)
+
+#if defined(NO_AES) || !defined(WOLFSSL_CMAC)
+#error "WolfHSM SHE Server requires AES and AES-CMAC to support secure boot"
+#endif
+
 typedef struct {
     uint8_t  sbState;
     uint8_t  cmacKeyFound;
@@ -126,6 +131,12 @@ typedef struct {
     uint32_t blSize;
     uint32_t blSizeReceived;
     uint32_t rndInited;
+#ifndef NO_AES
+    Aes sheAes[1];
+#ifdef WOLFSSL_CMAC
+    Cmac sheCmac[1];
+#endif /* HAVE_CMAC */
+#endif /* !NO_AES */
     uint8_t  prngState[WOLFHSM_SHE_KEY_SZ];
     uint8_t  prngKey[WOLFHSM_SHE_KEY_SZ];
     uint8_t  uid[WOLFHSM_SHE_UID_SZ];

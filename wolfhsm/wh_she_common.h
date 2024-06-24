@@ -66,6 +66,13 @@
 #define WOLFHSM_SHE_M5_SZ WOLFHSM_SHE_M1_SZ
 
 #ifdef WOLFHSM_SHE_EXTENSION
+
+typedef struct {
+    uint32_t count;
+    uint32_t flags;
+} whSheMetadata;
+
+
 int wh_SheGenerateLoadableKey(uint8_t keyId,
     uint8_t authKeyId, uint32_t count, uint32_t flags, uint8_t* uid,
     uint8_t* key, uint8_t* authKey, uint8_t* messageOne, uint8_t* messageTwo,

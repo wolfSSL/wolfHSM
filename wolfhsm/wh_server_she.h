@@ -20,11 +20,6 @@
 #define WOLFHSM_WH_SERVER_SHE_H
 #include "wolfhsm/wh_server.h"
 
-typedef struct {
-    uint32_t count;
-    uint32_t flags;
-} whSheMetadata;
-
 int wh_Server_HandleSheRequest(whServerContext* server,
     uint16_t action, uint8_t* data, uint16_t* size);
 #endif
