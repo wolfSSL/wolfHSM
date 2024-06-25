@@ -136,6 +136,8 @@ int wh_Server_GetConnected(whServerContext *server,
 
 int wh_Server_GetCanceledSequence(whServerContext* server, uint16_t* outSeq)
 {
+    if (server == NULL || outSeq == NULL)
+        return WH_ERROR_BADARGS;
     *outSeq = server->cancelSeq;
     server->cancelSeq = 0;
     return 0;
