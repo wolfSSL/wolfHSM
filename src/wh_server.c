@@ -134,6 +134,12 @@ int wh_Server_GetConnected(whServerContext *server,
     return WH_ERROR_OK;
 }
 
+int wh_Server_GetCanceledSequence(whServerContext* server, uint16_t* outSeq)
+{
+    *outSeq = server->cancelSeq;
+    server->cancelSeq = 0;
+    return 0;
+}
 
 static int _wh_Server_HandleCommRequest(whServerContext* server,
         uint16_t magic, uint16_t action, uint16_t seq,

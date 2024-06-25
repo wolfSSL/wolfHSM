@@ -99,7 +99,6 @@
 typedef struct {
     void* req;
     void* resp;
-    uint16_t* cancel_seq;
     uint16_t req_size;
     uint16_t resp_size;
     uint8_t padding[4];
@@ -127,7 +126,6 @@ typedef struct {
     int initialized;
     uint16_t req_size;
     uint16_t resp_size;
-    uint16_t* cancel_seq;
 } whTransportMemContext;
 
 /* Naming conveniences. Reuses the same types. */
@@ -144,15 +142,12 @@ int wh_TransportMem_SendRequest(void* c, uint16_t len, const void* data);
 int wh_TransportMem_RecvRequest(void* c, uint16_t *out_len, void* data);
 int wh_TransportMem_SendResponse(void* c, uint16_t len, const void* data);
 int wh_TransportMem_RecvResponse(void* c, uint16_t *out_len, void* data);
-int wh_TransportMem_Cancel(void* c, uint16_t seq);
-int wh_TransportMem_getCanceledSequence(void* c, uint16_t* seq);
 
 #define WH_TRANSPORT_MEM_CLIENT_CB              \
 {                                               \
     .Init =     wh_TransportMem_InitClear,      \
     .Send =     wh_TransportMem_SendRequest,    \
     .Recv =     wh_TransportMem_RecvResponse,   \
-    .Cancel =   wh_TransportMem_Cancel,         \
     .Cleanup =  wh_TransportMem_Cleanup,        \
 }
 
@@ -161,7 +156,6 @@ int wh_TransportMem_getCanceledSequence(void* c, uint16_t* seq);
     .Init =     wh_TransportMem_Init,           \
     .Recv =     wh_TransportMem_RecvRequest,    \
     .Send =     wh_TransportMem_SendResponse,   \
-    .GetCanceledSequence = wh_TransportMem_getCanceledSequence,     \
     .Cleanup =  wh_TransportMem_Cleanup,        \
 }
 

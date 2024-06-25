@@ -689,8 +689,7 @@ static int hsmCryptoCmac(whServerContext* server, whPacket* packet,
                 ret = wc_CmacUpdate(server->crypto->algoCtx.cmac, in + i,
                     AES_BLOCK_SIZE);
                 if (ret == 0) {
-                    ret = server->comm->transport_cb->GetCanceledSequence(
-                        server->comm->transport_context, &cancelSeq);
+                    ret = wh_Server_GetCanceledSequence(server, &cancelSeq);
                     if (ret == 0 && cancelSeq == seq)
                         ret = WH_ERROR_CANCEL;
                 }

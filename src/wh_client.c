@@ -298,10 +298,10 @@ int wh_Client_DisableCancel(whClientContext* c)
 int wh_Client_CancelRequest(whClientContext* c)
 {
     int ret = 0;
-    if (c == NULL)
+    if (c == NULL || c->cancelCb == NULL)
         return WH_ERROR_BADARGS;
     /* send the cancel request */
-    ret = wh_CommClient_Cancel(c->comm, WH_COMM_MAGIC_NATIVE);
+    ret = c->cancelCb(c->comm->seq);
     return ret;
 }
 
@@ -412,6 +412,14 @@ int wh_Client_Echo(whClientContext* c, uint16_t snd_len, const void* snd_data,
         } while (rc == WH_ERROR_NOTREADY);
     }
     return rc;
+}
+
+int wh_Client_RegisterCancelCb(whClientContext* c, whClientCancelCb cb)
+{
+    if (c == NULL || cb == NULL)
+        return WH_ERROR_BADARGS;
+    c->cancelCb = cb;
+    return WH_ERROR_OK;
 }
 
 int wh_Client_CustomCbRequest(whClientContext* c, const whMessageCustomCb_Request* req)

@@ -567,13 +567,11 @@ int whTest_ClientServerSequential(void)
     /* Transport memory configuration */
     uint8_t              req[BUFFER_SIZE];
     uint8_t              resp[BUFFER_SIZE];
-    uint16_t             cancel_seq;
     whTransportMemConfig tmcf[1] = {{
         .req       = (whTransportMemCsr*)req,
         .req_size  = sizeof(req),
         .resp      = (whTransportMemCsr*)resp,
         .resp_size = sizeof(resp),
-        .cancel_seq = &cancel_seq,
     }};
 
     /* Client configuration/contexts */
@@ -1498,14 +1496,12 @@ static int wh_ClientServer_MemThreadTest(void)
 {
     uint8_t req[BUFFER_SIZE] = {0};
     uint8_t resp[BUFFER_SIZE] = {0};
-    uint16_t cancel_seq;
 
     whTransportMemConfig tmcf[1] = {{
         .req       = (whTransportMemCsr*)req,
         .req_size  = sizeof(req),
         .resp      = (whTransportMemCsr*)resp,
         .resp_size = sizeof(resp),
-        .cancel_seq = &cancel_seq,
     }};
     /* Client configuration/contexts */
     whTransportClientCb         tccb[1]   = {WH_TRANSPORT_MEM_CLIENT_CB};

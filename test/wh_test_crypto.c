@@ -68,6 +68,14 @@ int serverDelay = 0;
 
 #define PLAINTEXT "mytextisbigplain"
 
+static uint16_t* cancelSeqP;
+
+static int wh_Client_CancelCb(uint16_t seq)
+{
+    *cancelSeqP = seq;
+    return 0;
+}
+
 int whTest_CryptoClientConfig(whClientConfig* config)
 {
     int i;
@@ -117,6 +125,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
 
     WH_TEST_RETURN_ON_FAIL(wh_Client_Init(client, config));
     WH_TEST_RETURN_ON_FAIL(wh_Client_CommInit(client, NULL, NULL));
+    (void)wh_Client_RegisterCancelCb(client, wh_Client_CancelCb);
 
 #ifdef WH_CFG_TEST_VERBOSE
     {
@@ -722,6 +731,9 @@ int whTest_CryptoServerConfig(whServerConfig* config)
         return WH_ERROR_BADARGS;
     }
 
+    /* set cancelSeqP */
+    cancelSeqP = &server->cancelSeq;
+
     WH_TEST_RETURN_ON_FAIL(wh_Server_Init(server, config));
     WH_TEST_RETURN_ON_FAIL(wh_Server_SetConnected(server, am_connected));
     server->comm->client_id = 1;
@@ -806,14 +818,12 @@ static int wh_ClientServer_MemThreadTest(void)
 {
     uint8_t req[BUFFER_SIZE] = {0};
     uint8_t resp[BUFFER_SIZE] = {0};
-    uint16_t cancel_seq;
 
     whTransportMemConfig tmcf[1] = {{
         .req        = (whTransportMemCsr*)req,
         .req_size   = sizeof(req),
         .resp       = (whTransportMemCsr*)resp,
         .resp_size  = sizeof(resp),
-        .cancel_seq = &cancel_seq,
     }};
     /* Client configuration/contexts */
     whTransportClientCb         tccb[1]   = {WH_TRANSPORT_MEM_CLIENT_CB};

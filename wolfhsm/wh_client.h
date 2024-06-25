@@ -56,9 +56,12 @@
 #include "wolfssl/wolfcrypt/ecc.h"
 #endif
 
+typedef int (*whClientCancelCb)(uint16_t cancelSeq);
+
 /* Client context */
 struct whClientContext_t {
     whCommClient comm[1];
+    whClientCancelCb cancelCb;
     uint16_t     last_req_id;
     uint16_t     last_req_kind;
     uint8_t      cancelable;
@@ -318,6 +321,8 @@ int wh_Client_EchoResponse(whClientContext* c, uint16_t* out_size, void* data);
  */
 int wh_Client_Echo(whClientContext* c, uint16_t snd_len, const void* snd_data,
                    uint16_t* out_rcv_len, void* rcv_data);
+
+int wh_Client_RegisterCancelCb(whClientContext* c, whClientCancelCb cb);
 
 /** Key functions
  *
