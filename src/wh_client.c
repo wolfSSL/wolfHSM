@@ -1104,7 +1104,7 @@ int wh_Client_CmacCancelableResponse(whClientContext* c, Cmac* cmac,
     /* check for out of sequence action */
     if (ret == 0 && (group != WH_MESSAGE_GROUP_CRYPTO ||
         action != WC_ALGO_TYPE_CMAC)) {
-        ret = WH_SHE_ERC_SEQUENCE_ERROR;
+        ret = WH_ERROR_ABORTED;
     }
     if (ret == 0) {
         if (packet->rc != 0)
