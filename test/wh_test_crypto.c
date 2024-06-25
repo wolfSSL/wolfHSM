@@ -741,7 +741,9 @@ int whTest_CryptoServerConfig(whServerConfig* config)
     while(am_connected == WH_COMM_CONNECTED) {
 #ifndef WH_CFG_TEST_NO_CUSTOM_SERVERS
         while (serverDelay) {
+#ifdef WH_CFG_TEST_POSIX
             sleep(1);
+#endif
         }
 #endif
         ret = wh_Server_HandleRequestMessage(server);
