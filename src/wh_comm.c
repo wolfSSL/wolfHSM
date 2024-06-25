@@ -27,7 +27,6 @@
 
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_comm.h"
-#include "wolfhsm/wh_message.h"
 
 /** Utility functions */
 uint8_t wh_Translate8(uint16_t magic, uint8_t val)
