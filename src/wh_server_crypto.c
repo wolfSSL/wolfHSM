@@ -27,6 +27,7 @@
 #include "wolfssl/wolfcrypt/types.h"
 #include "wolfssl/wolfcrypt/error-crypt.h"
 
+#include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_server.h"
 #include "wolfhsm/wh_server_keystore.h"
 #include "wolfhsm/wh_packet.h"
@@ -633,11 +634,13 @@ static int hsmCryptoAesGcm(whServerContext* server, whPacket* packet,
 
 #ifdef WOLFSSL_CMAC
 static int hsmCryptoCmac(whServerContext* server, whPacket* packet,
-    uint16_t* size)
+    uint16_t* size, uint16_t seq)
 {
     whKeyId keyId = WOLFHSM_KEYID_ERASED;
     int ret;
+    int i;
     word32 len;
+    uint16_t cancelSeq;
     uint8_t tmpKey[AES_MAX_KEY_SIZE + AES_IV_SIZE];
     /* in, out and key are after the fixed size fields */
     byte* in = (uint8_t*)(&packet->cmacReq + 1);
@@ -681,18 +684,29 @@ static int hsmCryptoCmac(whServerContext* server, whPacket* packet,
             else if (len != sizeof(server->crypto->algoCtx.cmac))
                 ret = BAD_FUNC_ARG;
         }
-        if (ret == 0 && packet->cmacReq.inSz != 0)
-            ret = wc_CmacUpdate(server->crypto->algoCtx.cmac, in, packet->cmacReq.inSz);
+        if (ret == 0 && packet->cmacReq.inSz != 0) {
+            for (i = 0; ret == 0 && i < packet->cmacReq.inSz; i += AES_BLOCK_SIZE) {
+                ret = wc_CmacUpdate(server->crypto->algoCtx.cmac, in + i,
+                    AES_BLOCK_SIZE);
+                if (ret == 0) {
+                    ret = wh_Server_GetCanceledSequence(server, &cancelSeq);
+                    if (ret == 0 && cancelSeq == seq)
+                        ret = WH_ERROR_CANCEL;
+                }
+            }
+        }
         /* do final and evict the struct if outSz is set, otherwise cache the
          * struct for a future call */
-        if (ret == 0 && packet->cmacReq.outSz != 0) {
-            keyId = packet->cmacReq.keyId;
-            len = packet->cmacReq.outSz;
-            ret = wc_CmacFinal(server->crypto->algoCtx.cmac, out, &len);
-            packet->cmacRes.outSz = len;
-            packet->cmacRes.keyId = WOLFHSM_KEYID_ERASED;
-            /* evict the key */
-            if (ret == 0) {
+        if ((ret == 0 && packet->cmacReq.outSz != 0) || ret == WH_ERROR_CANCEL) {
+            if (ret != WH_ERROR_CANCEL) {
+                keyId = packet->cmacReq.keyId;
+                len = packet->cmacReq.outSz;
+                ret = wc_CmacFinal(server->crypto->algoCtx.cmac, out, &len);
+                packet->cmacRes.outSz = len;
+                packet->cmacRes.keyId = WOLFHSM_KEYID_ERASED;
+            }
+            /* evict the key, canceling means abandoning the current state */
+            if (ret == 0 || ret == WH_ERROR_CANCEL) {
                 ret = hsmEvictKey(server,
                     MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_CRYPTO,
                     server->comm->client_id, keyId));
@@ -725,7 +739,7 @@ static int hsmCryptoCmac(whServerContext* server, whPacket* packet,
 #endif
 
 int wh_Server_HandleCryptoRequest(whServerContext* server,
-    uint16_t action, uint8_t* data, uint16_t* size)
+    uint16_t action, uint8_t* data, uint16_t* size, uint16_t seq)
 {
     int ret = 0;
     uint8_t* out;
@@ -822,7 +836,7 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
 #endif /* !WC_NO_RNG */
 #ifdef WOLFSSL_CMAC
     case WC_ALGO_TYPE_CMAC:
-        ret = hsmCryptoCmac(server, (whPacket*)data, size);
+        ret = hsmCryptoCmac(server, (whPacket*)data, size, seq);
         break;
 #endif
     case WC_ALGO_TYPE_NONE:

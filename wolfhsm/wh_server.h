@@ -213,9 +213,8 @@ struct whServerContext_t {
     whServerCustomCb   customHandlerTable[WH_CUSTOM_CB_NUM_CALLBACKS];
     whServerDmaContext dma;
     int                connected;
-#ifdef WOLFHSM_SHE_EXTENSION
-#endif
-    uint8_t padding[4];
+    uint16_t cancelSeq;
+    uint8_t padding[2];
 };
 
 
@@ -277,6 +276,8 @@ int wh_Server_SetConnectedCb(void* s, whCommConnected connected);
  */
 int wh_Server_GetConnected(whServerContext* server,
                            whCommConnected* out_connected);
+
+int wh_Server_GetCanceledSequence(whServerContext* server, uint16_t* outSeq);
 
 /**
  * @brief Handles incoming request messages and dispatches them to the

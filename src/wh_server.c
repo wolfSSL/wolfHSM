@@ -134,6 +134,14 @@ int wh_Server_GetConnected(whServerContext *server,
     return WH_ERROR_OK;
 }
 
+int wh_Server_GetCanceledSequence(whServerContext* server, uint16_t* outSeq)
+{
+    if (server == NULL || outSeq == NULL)
+        return WH_ERROR_BADARGS;
+    *outSeq = server->cancelSeq;
+    server->cancelSeq = 0;
+    return 0;
+}
 
 static int _wh_Server_HandleCommRequest(whServerContext* server,
         uint16_t magic, uint16_t action, uint16_t seq,
@@ -265,7 +273,7 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
 
         case WH_MESSAGE_GROUP_CRYPTO:
             rc = wh_Server_HandleCryptoRequest(server, action, data,
-                &size);
+                &size, seq);
         break;
 #endif  /* WOLFHSM_NO_CRYPTO */
 
@@ -294,7 +302,13 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
 
         /* Send a response */
         /* TODO: Respond with ErrorResponse if handler returns an error */
-        if (rc == 0) {
+        if (rc == 0 || rc == WH_ERROR_CANCEL) {
+            /* notify the client that their request was canceled */
+            if (rc == WH_ERROR_CANCEL) {
+                kind = WH_MESSAGE_KIND(WH_MESSAGE_GROUP_CANCEL, 0);
+                size = 0;
+                data = NULL;
+            }
             do {
                 rc = wh_CommServer_SendResponse(server->comm, magic, kind, seq,
                     size, data);

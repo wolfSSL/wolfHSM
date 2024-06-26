@@ -338,7 +338,6 @@ uint8_t* wh_CommServer_GetDataPtr(whCommServer* context)
     return context->data;
 }
 
-
 int wh_CommServer_Cleanup(whCommServer* context)
 {
     int rc = 0;

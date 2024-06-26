@@ -614,6 +614,10 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->cmacReq) +
             packet->cmacReq.inSz + packet->cmacReq.keySz, (uint8_t*)packet);
         if (ret == 0) {
+            /* if the client marked they may want to cancel, handle the 
+             * response in a seperate call */
+            if (ctx->cancelable)
+                break;
             do {
                 ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
                     (uint8_t*)packet);

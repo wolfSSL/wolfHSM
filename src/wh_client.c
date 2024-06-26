@@ -60,12 +60,15 @@ int wh_Client_Init(whClientContext* c, const whClientConfig* config)
 
     memset(c, 0, sizeof(*c));
 
-    if (    ((rc = wh_CommClient_Init(c->comm, config->comm)) == 0) &&
+    /* register the cancel callback */
+    c->cancelCb = config->cancelCb;
+
+    if (    ((rc = wh_CommClient_Init(c->comm, config->comm)) == 0)
 #ifndef WOLFHSM_NO_CRYPTO
-            ((rc = wolfCrypt_Init()) == 0) &&
-            ((rc = wc_CryptoCb_RegisterDevice(WOLFHSM_DEV_ID, wolfHSM_CryptoCb, c)) == 0) &&
+            && ((rc = wolfCrypt_Init()) == 0)
+            && ((rc = wc_CryptoCb_RegisterDevice(WOLFHSM_DEV_ID, wolfHSM_CryptoCb, c)) == 0)
 #endif  /* WOLFHSM_NO_CRYPTO */
-            1) {
+            ) {
         /* All good */
     }
     if (rc != 0) {
@@ -277,6 +280,61 @@ int wh_Client_CommClose(whClientContext* c)
         } while (rc == WH_ERROR_NOTREADY);
     }
     return rc;
+}
+
+int wh_Client_EnableCancel(whClientContext* c)
+{
+    if (c == NULL)
+        return WH_ERROR_BADARGS;
+    c->cancelable = 1;
+    return 0;
+}
+
+int wh_Client_DisableCancel(whClientContext* c)
+{
+    if (c == NULL)
+        return WH_ERROR_BADARGS;
+    c->cancelable = 0;
+    return 0;
+}
+
+int wh_Client_CancelRequest(whClientContext* c)
+{
+    int ret = 0;
+    if (c == NULL || c->cancelCb == NULL)
+        return WH_ERROR_BADARGS;
+    /* send the cancel request */
+    ret = c->cancelCb(c->comm->seq);
+    return ret;
+}
+
+int wh_Client_CancelResponse(whClientContext* c)
+{
+    int ret = 0;
+    uint16_t group;
+    uint16_t action;
+    uint16_t size;
+    uint8_t* buf;
+    if (c == NULL)
+        return WH_ERROR_BADARGS;
+    /* check if the request was canceled */
+    buf = wh_CommClient_GetDataPtr(c->comm);
+    ret = wh_Client_RecvResponse(c, &group, &action, &size, buf);
+    if (ret == 0 && group != WH_MESSAGE_GROUP_CANCEL)
+        return WH_ERROR_CANCEL_LATE;
+    return ret;
+}
+
+int wh_Client_Cancel(whClientContext* c)
+{
+    int ret;
+    ret = wh_Client_CancelRequest(c);
+    if (ret == 0) {
+        do {
+            ret = wh_Client_CancelResponse(c);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+    return ret;
 }
 
 int wh_Client_EchoRequest(whClientContext* c, uint16_t size, const void* data)
@@ -1017,6 +1075,48 @@ int wh_Client_AesCmacVerify(Cmac* cmac, const byte* check, word32 checkSz,
         ret = wc_CmacFinal(cmac, out, &outSz);
     if (ret == 0)
         ret = memcmp(out, check, outSz) == 0 ? 0 : 1;
+    return ret;
+}
+
+int wh_Client_CmacCancelableResponse(whClientContext* c, Cmac* cmac,
+    uint8_t* out, uint32_t* outSz)
+{
+    whPacket* packet;
+    uint8_t* packOut;
+    int ret;
+    uint16_t group;
+    uint16_t action;
+    uint16_t dataSz;
+    if (c == NULL || cmac == NULL)
+        return WH_ERROR_BADARGS;
+    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
+    /* out is after the fixed size fields */
+    packOut = (uint8_t*)(&packet->cmacRes + 1);
+    do {
+        ret = wh_Client_RecvResponse(c, &group, &action, &dataSz,
+            (uint8_t*)packet);
+    } while (ret == WH_ERROR_NOTREADY);
+    /* check for out of sequence action */
+    if (ret == 0 && (group != WH_MESSAGE_GROUP_CRYPTO ||
+        action != WC_ALGO_TYPE_CMAC)) {
+        ret = WH_ERROR_ABORTED;
+    }
+    if (ret == 0) {
+        if (packet->rc != 0)
+            ret = packet->rc;
+        /* read keyId and out */
+        else {
+            cmac->devCtx = (void*)((intptr_t)packet->cmacRes.keyId);
+            if (out != NULL) {
+                if (packet->cmacRes.outSz > *outSz)
+                    ret = WH_ERROR_BADARGS;
+                else {
+                    XMEMCPY(out, packOut, packet->cmacRes.outSz);
+                    *outSz = packet->cmacRes.outSz;
+                }
+            }
+        }
+    }
     return ret;
 }
 #endif /* WOLFSSL_CMAC */

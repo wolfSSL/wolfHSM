@@ -56,17 +56,29 @@
 #include "wolfssl/wolfcrypt/ecc.h"
 #endif
 
+/**
+ * Out of band callback function to inform the server to cancel a request,
+ *    internal logic is provided by the port code.
+ *
+ * @param cancelSeq The sequence of the request to cancel.
+ * @return Returns 0 on success, or a negative value indicating an error.
+ */
+typedef int (*whClientCancelCb)(uint16_t cancelSeq);
+
 /* Client context */
 struct whClientContext_t {
     whCommClient comm[1];
+    whClientCancelCb cancelCb;
     uint16_t     last_req_id;
     uint16_t     last_req_kind;
-    uint8_t      pad[4];
+    uint8_t      cancelable;
+    uint8_t      pad[3];
 };
 typedef struct whClientContext_t whClientContext;
 
 struct whClientConfig_t {
     whCommClientConfig* comm;
+    whClientCancelCb cancelCb;
 };
 typedef struct whClientConfig_t whClientConfig;
 
@@ -186,6 +198,65 @@ int wh_Client_CommInit(whClientContext* c, uint32_t* out_clientid,
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_Client_CommCloseRequest(whClientContext* c);
+
+/**
+ * @brief Enables request cancelation.
+ *
+ * This function allows subsequent requests to be canceled, the responses that
+ * are normally handled by automatically by wolfCrypt must be handled with a
+ * wolfHSM specific function call.
+ *
+ * @param[in] c Pointer to the client context.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_EnableCancel(whClientContext* c);
+
+/**
+ * @brief Disables request cancelation.
+ *
+ * This function disables request cancelation, making wolfCrypt automatically
+ * handle responses again.
+ *
+ * @param[in] c Pointer to the client context.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_DisableCancel(whClientContext* c);
+
+/**
+ * @brief Cancels the previous request, currently only supports CMAC. Async
+ * Request
+ *
+ * This function sends a cancelation request to the server to cancel the
+ * previous request made. Does not wait for the response which must be handled
+ * seperately
+ *
+ * @param[in] c Pointer to the client context.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CancelRequest(whClientContext* c);
+/**
+ * @brief Handles the response for a cancelation the previous request, currently
+ * only supports CMAC. Async response handler.
+ *
+ * This function handles the response for a request cancelation previously sent
+ * to the server. Blocks to wait for the response.
+ *
+ * @param[in] c Pointer to the client context.
+ * @return int Returns 0 or WH_ERROR_CANCEL_LATE on success, or a negative
+ *    error code on failure.
+ */
+int wh_Client_CancelResponse(whClientContext* c);
+/**
+ * @brief Cancels the previous request, currently only supports CMAC.
+ *
+ * This function sends a cancelation request to the server and waits for the
+ * response to cancel the previous request made.
+ *
+ * @param[in] c Pointer to the client context.
+ * @return int Returns 0 or WH_ERROR_CANCEL_LATE on success, or a negative
+ *    error code on failure.
+ */
+int wh_Client_Cancel(whClientContext* c);
 
 /**
  * @brief Receives a communication close response from the server.
@@ -598,10 +669,29 @@ int wh_Client_AesCmacGenerate(Cmac* cmac, byte* out, word32* outSz,
  * @param[in] inSz Size of the input buffer in bytes.
  * @param[in] keyId ID of the key inside the HSM.
  * @param[in] heap Heap pointer for the cmac struct.
- * @return int Returns 0 on success, 1 on tag mismatch, or a negative error code on failure.
+ * @return int Returns 0 on success, 1 on tag mismatch, or a negative error
+ *    code on failure.
  */
 int wh_Client_AesCmacVerify(Cmac* cmac, const byte* check, word32 checkSz,
     const byte* in, word32 inSz, whNvmId keyId, void* heap);
+
+/**
+ * @brief Handle cancelable CMAC response.
+ *
+ * This function handles a CMAC operation response from the server when
+ * cancelation has been enabled, since wolfCrypt won't automatically block and
+ * wait for the response.
+ *
+ * @param[in] c Pointer to the client context structure.
+ * @param[in] cmac Pointer to the CMAC key structure.
+ * @param[out] out Buffer to store the CMAC result, only required after
+ *    wc_CmacFinal.
+ * @param[in/out] outSz Pointer to the size of the out buffer in bytes, will be
+ *    set to the size returned by the server on return.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CmacCancelableResponse(whClientContext* c, Cmac* cmac,
+    uint8_t* out, uint32_t* outSz);
 
 /**
  * @brief Associates a CMAC key with a specific key ID.

@@ -48,13 +48,13 @@ int wh_TransportMem_Init(void* c, const void* cf,
     }
 
     memset(context, 0, sizeof(*context));
-    context->req        = (whTransportMemCsr*)config->req;
-    context->req_size   = config->req_size;
-    context->req_data   = (void*)(context->req + 1);
+    context->req            = (whTransportMemCsr*)config->req;
+    context->req_size       = config->req_size;
+    context->req_data       = (void*)(context->req + 1);
 
-    context->resp       = (whTransportMemCsr*)config->resp;
-    context->resp_size  = config->resp_size;
-    context->resp_data  = (void*)(context->resp + 1);
+    context->resp           = (whTransportMemCsr*)config->resp;
+    context->resp_size      = config->resp_size;
+    context->resp_data      = (void*)(context->resp + 1);
 
     context->initialized = 1;
     return WH_ERROR_OK;
