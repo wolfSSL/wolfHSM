@@ -609,6 +609,18 @@ int wh_Client_KeyErase(whClientContext* c, whNvmId keyId);
 int wh_Client_SetKeyCurve25519(curve25519_key* key, whNvmId keyId);
 
 /**
+ * @brief Gets the wolfHSM keyId being used by the wolfCrypt struct.
+ *
+ * This function gets the device context of a Curve25519 key that was previously
+ * set by either the crypto callback layer or wh_Client_SetKeyCurve25519.
+ *
+ * @param[in] key Pointer to the Curve25519 key structure.
+ * @param[out] keyId Pointer to the key ID to return.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_GetKeyCurve25519(curve25519_key* key, whNvmId* outId);
+
+/**
  * @brief Associates an RSA key with a specific key ID.
  *
  * This function sets the device context of an RSA key to the specified key ID.
@@ -622,6 +634,18 @@ int wh_Client_SetKeyCurve25519(curve25519_key* key, whNvmId keyId);
 int wh_Client_SetKeyRsa(RsaKey* key, whNvmId keyId);
 
 /**
+ * @brief Gets the wolfHSM keyId being used by the wolfCrypt struct.
+ *
+ * This function gets the device context of a RSA key that was previously
+ * set by either the crypto callback layer or wh_Client_SetKeyRsa.
+ *
+ * @param[in] key Pointer to the RSA key structure.
+ * @param[out] keyId Pointer to the key ID to return.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_GetKeyRsa(RsaKey* key, whNvmId* outId);
+
+/**
  * @brief Associates an AES key with a specific key ID.
  *
  * This function sets the device context of an AES key to the specified key ID.
@@ -632,7 +656,19 @@ int wh_Client_SetKeyRsa(RsaKey* key, whNvmId keyId);
  * @param[in] keyId Key ID to be associated with the AES key.
  * @return int Returns 0 on success or a negative error code on failure.
  */
-int wh_Client_SetKeyAes(Aes* aes, whNvmId keyId);
+int wh_Client_SetKeyAes(Aes* key, whNvmId keyId);
+
+/**
+ * @brief Gets the wolfHSM keyId being used by the wolfCrypt struct.
+ *
+ * This function gets the device context of a AES key that was previously
+ * set by either the crypto callback layer or wh_Client_SetKeyAes.
+ *
+ * @param[in] key Pointer to the AES key structure.
+ * @param[out] keyId Pointer to the key ID to return.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_GetKeyAes(Aes* key, whNvmId* outId);
 
 /**
  * @brief Runs the AES CMAC operation in a single call with a wolfHSM keyId.
@@ -705,6 +741,18 @@ int wh_Client_CmacCancelableResponse(whClientContext* c, Cmac* cmac,
  * @return int Returns 0 on success or a negative error code on failure.
  */
 int wh_Client_SetKeyCmac(Cmac* key, whNvmId keyId);
+
+/**
+ * @brief Gets the wolfHSM keyId being used by the wolfCrypt struct.
+ *
+ * This function gets the device context of a CMAC key that was previously
+ * set by either the crypto callback layer or wh_Client_SetKeyCmac.
+ *
+ * @param[in] key Pointer to the CMAC key structure.
+ * @param[out] keyId Pointer to the key ID to return.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_GetKeyAes(Aes* key, whNvmId* outId);
 #endif /* ! WOLFHSM_NO_CRYPTO */
 
 /* Counter functions */

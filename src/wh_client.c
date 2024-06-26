@@ -1011,6 +1011,14 @@ int wh_Client_SetKeyCurve25519(curve25519_key* key, whNvmId keyId)
     key->devCtx = (void*)((intptr_t)keyId);
     return WH_ERROR_OK;
 }
+
+int wh_Client_GetKeyCurve25519(curve25519_key* key, whNvmId* outId)
+{
+    if (key == NULL || outId == NULL)
+        return WH_ERROR_BADARGS;
+    *outId = (intptr_t)key->devCtx;
+    return WH_ERROR_OK;
+}
 #endif
 
 #ifndef NO_RSA
@@ -1019,6 +1027,14 @@ int wh_Client_SetKeyRsa(RsaKey* key, whNvmId keyId)
     if (key == NULL)
         return WH_ERROR_BADARGS;
     key->devCtx = (void*)((intptr_t)keyId);
+    return WH_ERROR_OK;
+}
+
+int wh_Client_GetKeyRsa(RsaKey* key, whNvmId* outId)
+{
+    if (key == NULL || outId == NULL)
+        return WH_ERROR_BADARGS;
+    *outId = (intptr_t)key->devCtx;
     return WH_ERROR_OK;
 }
 #endif
@@ -1031,6 +1047,14 @@ int wh_Client_SetKeyAes(Aes* key, whNvmId keyId)
     key->devCtx = (void*)((intptr_t)keyId);
     return WH_ERROR_OK;
 }
+
+int wh_Client_GetKeyAes(Aes* key, whNvmId* outId)
+{
+    if (key == NULL || outId == NULL)
+        return WH_ERROR_BADARGS;
+    *outId = (intptr_t)key->devCtx;
+    return WH_ERROR_OK;
+}
 #endif
 
 #ifdef WOLFSSL_CMAC
@@ -1039,6 +1063,14 @@ int wh_Client_SetKeyCmac(Cmac* key, whNvmId keyId)
     if (key == NULL)
         return WH_ERROR_BADARGS;
     key->devCtx = (void*)((intptr_t)keyId);
+    return WH_ERROR_OK;
+}
+
+int wh_Client_GetKeyCmac(Cmac* key, whNvmId* outId)
+{
+    if (key == NULL || outId == NULL)
+        return WH_ERROR_BADARGS;
+    *outId = (intptr_t)key->devCtx;
     return WH_ERROR_OK;
 }
 
