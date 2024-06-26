@@ -60,12 +60,15 @@ int wh_Client_Init(whClientContext* c, const whClientConfig* config)
 
     memset(c, 0, sizeof(*c));
 
-    if (    ((rc = wh_CommClient_Init(c->comm, config->comm)) == 0) &&
+    /* register the cancel callback */
+    c->cancelCb = config->cancelCb;
+
+    if (    ((rc = wh_CommClient_Init(c->comm, config->comm)) == 0)
 #ifndef WOLFHSM_NO_CRYPTO
-            ((rc = wolfCrypt_Init()) == 0) &&
-            ((rc = wc_CryptoCb_RegisterDevice(WOLFHSM_DEV_ID, wolfHSM_CryptoCb, c)) == 0) &&
+            && ((rc = wolfCrypt_Init()) == 0)
+            && ((rc = wc_CryptoCb_RegisterDevice(WOLFHSM_DEV_ID, wolfHSM_CryptoCb, c)) == 0)
 #endif  /* WOLFHSM_NO_CRYPTO */
-            1) {
+            ) {
         /* All good */
     }
     if (rc != 0) {
@@ -412,14 +415,6 @@ int wh_Client_Echo(whClientContext* c, uint16_t snd_len, const void* snd_data,
         } while (rc == WH_ERROR_NOTREADY);
     }
     return rc;
-}
-
-int wh_Client_RegisterCancelCb(whClientContext* c, whClientCancelCb cb)
-{
-    if (c == NULL || cb == NULL)
-        return WH_ERROR_BADARGS;
-    c->cancelCb = cb;
-    return WH_ERROR_OK;
 }
 
 int wh_Client_CustomCbRequest(whClientContext* c, const whMessageCustomCb_Request* req)

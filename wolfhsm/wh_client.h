@@ -56,6 +56,13 @@
 #include "wolfssl/wolfcrypt/ecc.h"
 #endif
 
+/**
+ * Out of band callback function to inform the server to cancel a request,
+ *    internal logic is provided by the port code.
+ *
+ * @param cancelSeq The sequence of the request to cancel.
+ * @return Returns 0 on success, or a negative value indicating an error.
+ */
 typedef int (*whClientCancelCb)(uint16_t cancelSeq);
 
 /* Client context */
@@ -71,6 +78,7 @@ typedef struct whClientContext_t whClientContext;
 
 struct whClientConfig_t {
     whCommClientConfig* comm;
+    whClientCancelCb cancelCb;
 };
 typedef struct whClientConfig_t whClientConfig;
 
@@ -321,8 +329,6 @@ int wh_Client_EchoResponse(whClientContext* c, uint16_t* out_size, void* data);
  */
 int wh_Client_Echo(whClientContext* c, uint16_t snd_len, const void* snd_data,
                    uint16_t* out_rcv_len, void* rcv_data);
-
-int wh_Client_RegisterCancelCb(whClientContext* c, whClientCancelCb cb);
 
 /** Key functions
  *

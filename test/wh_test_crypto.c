@@ -125,7 +125,6 @@ int whTest_CryptoClientConfig(whClientConfig* config)
 
     WH_TEST_RETURN_ON_FAIL(wh_Client_Init(client, config));
     WH_TEST_RETURN_ON_FAIL(wh_Client_CommInit(client, NULL, NULL));
-    (void)wh_Client_RegisterCancelCb(client, wh_Client_CancelCb);
 
 #ifdef WH_CFG_TEST_VERBOSE
     {
@@ -838,6 +837,7 @@ static int wh_ClientServer_MemThreadTest(void)
     }};
     whClientConfig c_conf[1] = {{
        .comm = cc_conf,
+       .cancelCb = wh_Client_CancelCb,
     }};
     /* Server configuration/contexts */
     whTransportServerCb         tscb[1]   = {WH_TRANSPORT_MEM_SERVER_CB};
