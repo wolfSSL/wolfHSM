@@ -595,6 +595,7 @@ int wh_Client_KeyEraseResponse(whClientContext* c);
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_Client_KeyErase(whClientContext* c, whNvmId keyId);
+
 /**
  * @brief Associates a Curve25519 key with a specific key ID.
  *
@@ -606,7 +607,7 @@ int wh_Client_KeyErase(whClientContext* c, whNvmId keyId);
  * @param[in] keyId Key ID to be associated with the Curve25519 key.
  * @return int Returns 0 on success or a negative error code on failure.
  */
-int wh_Client_SetKeyCurve25519(curve25519_key* key, whNvmId keyId);
+int wh_Client_SetKeyIdCurve25519(curve25519_key* key, whNvmId keyId);
 
 /**
  * @brief Gets the wolfHSM keyId being used by the wolfCrypt struct.
@@ -618,7 +619,7 @@ int wh_Client_SetKeyCurve25519(curve25519_key* key, whNvmId keyId);
  * @param[out] keyId Pointer to the key ID to return.
  * @return int Returns 0 on success or a negative error code on failure.
  */
-int wh_Client_GetKeyCurve25519(curve25519_key* key, whNvmId* outId);
+int wh_Client_GetKeyIdCurve25519(curve25519_key* key, whNvmId* outId);
 
 /**
  * @brief Associates an RSA key with a specific key ID.
@@ -631,7 +632,7 @@ int wh_Client_GetKeyCurve25519(curve25519_key* key, whNvmId* outId);
  * @param[in] keyId Key ID to be associated with the RSA key.
  * @return int Returns 0 on success or a negative error code on failure.
  */
-int wh_Client_SetKeyRsa(RsaKey* key, whNvmId keyId);
+int wh_Client_SetKeyIdRsa(RsaKey* key, whNvmId keyId);
 
 /**
  * @brief Gets the wolfHSM keyId being used by the wolfCrypt struct.
@@ -643,7 +644,7 @@ int wh_Client_SetKeyRsa(RsaKey* key, whNvmId keyId);
  * @param[out] keyId Pointer to the key ID to return.
  * @return int Returns 0 on success or a negative error code on failure.
  */
-int wh_Client_GetKeyRsa(RsaKey* key, whNvmId* outId);
+int wh_Client_GetKeyIdRsa(RsaKey* key, whNvmId* outId);
 
 /**
  * @brief Associates an AES key with a specific key ID.
@@ -656,7 +657,7 @@ int wh_Client_GetKeyRsa(RsaKey* key, whNvmId* outId);
  * @param[in] keyId Key ID to be associated with the AES key.
  * @return int Returns 0 on success or a negative error code on failure.
  */
-int wh_Client_SetKeyAes(Aes* key, whNvmId keyId);
+int wh_Client_SetKeyIdAes(Aes* key, whNvmId keyId);
 
 /**
  * @brief Gets the wolfHSM keyId being used by the wolfCrypt struct.
@@ -668,7 +669,7 @@ int wh_Client_SetKeyAes(Aes* key, whNvmId keyId);
  * @param[out] keyId Pointer to the key ID to return.
  * @return int Returns 0 on success or a negative error code on failure.
  */
-int wh_Client_GetKeyAes(Aes* key, whNvmId* outId);
+int wh_Client_GetKeyIdAes(Aes* key, whNvmId* outId);
 
 /**
  * @brief Runs the AES CMAC operation in a single call with a wolfHSM keyId.
@@ -740,7 +741,7 @@ int wh_Client_CmacCancelableResponse(whClientContext* c, Cmac* cmac,
  * @param[in] keyId Key ID to be associated with the CMAC key.
  * @return int Returns 0 on success or a negative error code on failure.
  */
-int wh_Client_SetKeyCmac(Cmac* key, whNvmId keyId);
+int wh_Client_SetKeyIdCmac(Cmac* key, whNvmId keyId);
 
 /**
  * @brief Gets the wolfHSM keyId being used by the wolfCrypt struct.
@@ -752,7 +753,7 @@ int wh_Client_SetKeyCmac(Cmac* key, whNvmId keyId);
  * @param[out] keyId Pointer to the key ID to return.
  * @return int Returns 0 on success or a negative error code on failure.
  */
-int wh_Client_GetKeyAes(Aes* key, whNvmId* outId);
+int wh_Client_GetKeyIdCmac(Cmac* key, whNvmId* outId);
 #endif /* ! WOLFHSM_NO_CRYPTO */
 
 /* Counter functions */
