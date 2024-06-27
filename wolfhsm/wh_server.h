@@ -277,7 +277,33 @@ int wh_Server_SetConnectedCb(void* s, whCommConnected connected);
 int wh_Server_GetConnected(whServerContext* server,
                            whCommConnected* out_connected);
 
+/**
+ * @brief Gets the canceled sequence number of the server.
+ *
+ * The canceled sequence number is the comms layer sequence number of the last
+ * canceled request. This number is set by the server port in response to an
+ * out-of-band signal from the client when the client wishes to cancel a
+ * request.
+ *
+ * @param[in] server Pointer to the server context.
+ * @param[out] outSeq Pointer to store the canceled sequence number.
+ * @return int Returns 0 on success, or WH_ERROR_BADARGS if the arguments are
+ * invalid
+ *
+ */
 int wh_Server_GetCanceledSequence(whServerContext* server, uint16_t* outSeq);
+
+
+/**
+ * @brief Sets the canceled sequence number of the server.
+ *
+ * The canceled sequence number is the comms layer sequence number of the last
+ * canceled request. This function should be used by the server port to set the
+ * canceled sequence number in response to an out-of-band signal from the
+ * client.
+ *
+ */
+int wh_Server_SetCanceledSequence(whServerContext* server, uint16_t cancelSeq);
 
 /**
  * @brief Handles incoming request messages and dispatches them to the
