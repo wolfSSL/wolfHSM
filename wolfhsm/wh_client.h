@@ -200,7 +200,7 @@ int wh_Client_CommInit(whClientContext* c, uint32_t* out_clientid,
 int wh_Client_CommCloseRequest(whClientContext* c);
 
 /**
- * @brief Enables request cancelation.
+ * @brief Enables request cancellation.
  *
  * This function allows subsequent requests to be canceled, the responses that
  * are normally handled by automatically by wolfCrypt must be handled with a
@@ -212,9 +212,9 @@ int wh_Client_CommCloseRequest(whClientContext* c);
 int wh_Client_EnableCancel(whClientContext* c);
 
 /**
- * @brief Disables request cancelation.
+ * @brief Disables request cancellation.
  *
- * This function disables request cancelation, making wolfCrypt automatically
+ * This function disables request cancellation, making wolfCrypt automatically
  * handle responses again.
  *
  * @param[in] c Pointer to the client context.
@@ -226,7 +226,7 @@ int wh_Client_DisableCancel(whClientContext* c);
  * @brief Cancels the previous request, currently only supports CMAC. Async
  * Request
  *
- * This function sends a cancelation request to the server to cancel the
+ * This function sends a cancellation request to the server to cancel the
  * previous request made. Does not wait for the response which must be handled
  * seperately
  *
@@ -235,10 +235,10 @@ int wh_Client_DisableCancel(whClientContext* c);
  */
 int wh_Client_CancelRequest(whClientContext* c);
 /**
- * @brief Handles the response for a cancelation the previous request, currently
+ * @brief Handles the response for a cancellation the previous request, currently
  * only supports CMAC. Async response handler.
  *
- * This function handles the response for a request cancelation previously sent
+ * This function handles the response for a request cancellation previously sent
  * to the server. Blocks to wait for the response.
  *
  * @param[in] c Pointer to the client context.
@@ -249,7 +249,7 @@ int wh_Client_CancelResponse(whClientContext* c);
 /**
  * @brief Cancels the previous request, currently only supports CMAC.
  *
- * This function sends a cancelation request to the server and waits for the
+ * This function sends a cancellation request to the server and waits for the
  * response to cancel the previous request made.
  *
  * @param[in] c Pointer to the client context.
@@ -716,7 +716,7 @@ int wh_Client_AesCmacVerify(Cmac* cmac, const byte* check, word32 checkSz,
  * @brief Handle cancelable CMAC response.
  *
  * This function handles a CMAC operation response from the server when
- * cancelation has been enabled, since wolfCrypt won't automatically block and
+ * cancellation has been enabled, since wolfCrypt won't automatically block and
  * wait for the response.
  *
  * @param[in] c Pointer to the client context structure.

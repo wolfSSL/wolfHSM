@@ -690,8 +690,9 @@ static int hsmCryptoCmac(whServerContext* server, whPacket* packet,
                     AES_BLOCK_SIZE);
                 if (ret == 0) {
                     ret = wh_Server_GetCanceledSequence(server, &cancelSeq);
-                    if (ret == 0 && cancelSeq == seq)
+                    if (ret == 0 && cancelSeq == seq) {
                         ret = WH_ERROR_CANCEL;
+                    }
                 }
             }
         }
@@ -707,9 +708,13 @@ static int hsmCryptoCmac(whServerContext* server, whPacket* packet,
             }
             /* evict the key, canceling means abandoning the current state */
             if (ret == 0 || ret == WH_ERROR_CANCEL) {
-                ret = hsmEvictKey(server,
-                    MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_CRYPTO,
-                    server->comm->client_id, keyId));
+                /* Don't override return value except on failure */
+                int tmpRet = hsmEvictKey(
+                    server, MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_CRYPTO,
+                                               server->comm->client_id, keyId));
+                if (tmpRet != 0) {
+                    ret = tmpRet;
+                }
             }
         }
         else if (ret == 0) {
@@ -844,9 +849,19 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
         ret = NOT_COMPILED_IN;
         break;
     }
+
+    /* Propagate error code to client in response packet */
     packet->rc = ret;
+
     if (ret != 0)
         *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->rc);
-    return 0;
+
+    /* Since crypto error codes are propagated to the client in the response
+     * packet, return success to the caller unless a cancellation has occurred
+     */
+    if (ret != WH_ERROR_CANCEL) {
+        ret = 0;
+    }
+    return ret;
 }
 #endif  /* WOLFHSM_NO_CRYPTO */

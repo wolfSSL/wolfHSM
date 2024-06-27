@@ -143,6 +143,15 @@ int wh_Server_GetCanceledSequence(whServerContext* server, uint16_t* outSeq)
     return 0;
 }
 
+int wh_Server_SetCanceledSequence(whServerContext* server, uint16_t cancelSeq)
+{
+    if (server == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    server->cancelSeq = cancelSeq;
+    return WH_ERROR_OK;
+}
+
 static int _wh_Server_HandleCommRequest(whServerContext* server,
         uint16_t magic, uint16_t action, uint16_t seq,
         uint16_t req_size, const void* req_packet,
