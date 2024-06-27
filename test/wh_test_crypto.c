@@ -328,7 +328,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         printf("Failed to wh_Client_KeyCache %d\n", ret);
         goto exit;
     }
-    wh_Client_SetKeyAes(aes, keyId);
+    wh_Client_SetKeyIdAes(aes, keyId);
     if ((ret = wc_AesSetIV(aes, iv)) != 0) {
         printf("Failed to wc_AesSetIV %d\n", ret);
         goto exit;
@@ -392,7 +392,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         printf("Failed to wh_Client_KeyCache %d\n", ret);
         goto exit;
     }
-    wh_Client_SetKeyAes(aes, keyId);
+    wh_Client_SetKeyIdAes(aes, keyId);
     if ((ret = wc_AesSetIV(aes, iv)) != 0) {
         printf("Failed to wc_AesSetIV %d\n", ret);
         goto exit;
@@ -435,7 +435,10 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         printf("Failed to wc_RsaPrivateDecrypt %d\n", ret);
         goto exit;
     }
-    XMEMCPY((uint8_t*)&keyId, (uint8_t*)&rsa->devCtx, sizeof(keyId));
+    if((ret = wh_Client_GetKeyIdRsa(rsa, &keyId)) != 0) {
+        printf("Failed to wc_MakeRsaKey %d\n", ret);
+        goto exit;
+    }
     if ((ret = wh_Client_KeyEvictRequest(client, keyId)) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_KeyEvictRequest %d\n", ret);
         goto exit;
