@@ -620,7 +620,8 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         WH_ERROR_PRINT("Failed to wh_Client_KeyErase %d\n", ret);
         goto exit;
     }
-    /* test cancelation */
+
+    /* test CMAC cancelation */
     if((ret = wh_Client_EnableCancel(client)) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_EnableCancel %d\n", ret);
         goto exit;
@@ -638,8 +639,10 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         goto exit;
     }
 #ifndef WH_CFG_TEST_NO_CUSTOM_SERVERS
-    /* delay the server so scheduling doesn't interfere wih the timing */
+    /* delay the server so scheduling doesn't interfere with the timing */
     serverDelay = 1;
+
+    /* TODO: use hsm pause/resume functionality on real hardware */
 #endif
     if((ret = wh_Client_Cancel(client)) != 0
 #if defined(WH_CFG_TEST_NO_CUSTOM_SERVERS)
@@ -652,7 +655,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
 #ifndef WH_CFG_TEST_NO_CUSTOM_SERVERS
     serverDelay = 0;
 #endif
-    /* test cancelable request and resposne */
+    /* test cancelable request and response work for standard CMAC request with no cancelation */
     if((ret = wc_InitCmac_ex(cmac, knownCmacKey, sizeof(knownCmacKey), WC_CMAC_AES, NULL, NULL, WOLFHSM_DEV_ID)) != 0) {
         WH_ERROR_PRINT("Failed to wc_InitCmac_ex %d\n", ret);
         goto exit;

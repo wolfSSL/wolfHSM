@@ -35,7 +35,7 @@ enum WH_ERROR_ENUM {
     WH_ERROR_BADARGS        = -400, /* No side effects. Fix args. */
     WH_ERROR_NOTREADY       = -401, /* Retry function. */
     WH_ERROR_ABORTED        = -402, /* Function has fatally failed. Cleanup. */
-    WH_ERROR_CANCEL         = -403, /* Operation was cancled */
+    WH_ERROR_CANCEL         = -403, /* Operation was canceled */
     WH_ERROR_CANCEL_LATE    = -404, /* Cancel was processed too late */
 
     /* NVM-specific status returns */

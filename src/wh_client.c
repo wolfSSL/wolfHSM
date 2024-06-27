@@ -308,6 +308,14 @@ int wh_Client_CancelRequest(whClientContext* c)
         return WH_ERROR_ABORTED;
     }
 
+    /* Since we aren't sending this request through the standard transport, we
+     * need to update the client context's last sent "kind" to prevent the Comm
+     * Client receive function from discarding the next response as an
+     * out-of-order/corrupted message. No need to update the sequence number/ID
+     * as it will not have been incremented by the cancel operation, as it is
+     * out-of-band */
+    c->last_req_kind = WH_MESSAGE_KIND(WH_MESSAGE_GROUP_CANCEL, 0);
+
     return c->cancelCb(c->comm->seq);
 }
 
