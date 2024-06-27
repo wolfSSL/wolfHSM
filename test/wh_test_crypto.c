@@ -621,7 +621,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         goto exit;
     }
 
-    /* test CMAC cancelation */
+    /* test CMAC cancellation */
     if((ret = wh_Client_EnableCancel(client)) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_EnableCancel %d\n", ret);
         goto exit;
@@ -655,7 +655,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
 #ifndef WH_CFG_TEST_NO_CUSTOM_SERVERS
     serverDelay = 0;
 #endif
-    /* test cancelable request and response work for standard CMAC request with no cancelation */
+    /* test cancelable request and response work for standard CMAC request with no cancellation */
     if((ret = wc_InitCmac_ex(cmac, knownCmacKey, sizeof(knownCmacKey), WC_CMAC_AES, NULL, NULL, WOLFHSM_DEV_ID)) != 0) {
         WH_ERROR_PRINT("Failed to wc_InitCmac_ex %d\n", ret);
         goto exit;
