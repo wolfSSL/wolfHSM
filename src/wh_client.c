@@ -300,12 +300,15 @@ int wh_Client_DisableCancel(whClientContext* c)
 
 int wh_Client_CancelRequest(whClientContext* c)
 {
-    int ret = 0;
-    if (c == NULL || c->cancelCb == NULL)
+    if (c == NULL) {
         return WH_ERROR_BADARGS;
-    /* send the cancel request */
-    ret = c->cancelCb(c->comm->seq);
-    return ret;
+    }
+
+    if (c->cancelCb == NULL) {
+        return WH_ERROR_ABORTED;
+    }
+
+    return c->cancelCb(c->comm->seq);
 }
 
 int wh_Client_CancelResponse(whClientContext* c)
