@@ -64,17 +64,27 @@ enum {
         BUFFER_SIZE = 4096,
     };
 
-int serverDelay = 0;
 
 #define PLAINTEXT "mytextisbigplain"
 
+#ifndef WH_CFG_TEST_NO_CUSTOM_SERVERS
+/* Flag causing the server loop to sleep(1) */
+int serverDelay = 0;
+#endif
+
+#if defined(WH_CFG_TEST_POSIX)
+/* pointer to expose server context cancel sequence to the client cancel
+ * callback */
 static uint16_t* cancelSeqP;
 
-static int wh_Client_CancelCb(uint16_t seq)
+/* Test client cancel callback that directly sets the sequence to cancel in the
+ * server context */
+static int _cancelCb(uint16_t seq)
 {
     *cancelSeqP = seq;
     return 0;
 }
+#endif
 
 int whTest_CryptoClientConfig(whClientConfig* config)
 {
@@ -632,7 +642,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     serverDelay = 1;
 #endif
     if((ret = wh_Client_Cancel(client)) != 0
-#ifndef WH_CFG_TEST_NO_CUSTOM_SERVERS
+#if defined(WH_CFG_TEST_NO_CUSTOM_SERVERS)
         && ret != WH_ERROR_CANCEL_LATE
 #endif
     ) {
@@ -730,8 +740,10 @@ int whTest_CryptoServerConfig(whServerConfig* config)
         return WH_ERROR_BADARGS;
     }
 
-    /* set cancelSeqP */
+#if defined(WH_CFG_TEST_POSIX)
+    /* expose server ctx to client cancel callback */
     cancelSeqP = &server->cancelSeq;
+#endif
 
     WH_TEST_RETURN_ON_FAIL(wh_Server_Init(server, config));
     WH_TEST_RETURN_ON_FAIL(wh_Server_SetConnected(server, am_connected));
@@ -837,7 +849,7 @@ static int wh_ClientServer_MemThreadTest(void)
     }};
     whClientConfig c_conf[1] = {{
        .comm = cc_conf,
-       .cancelCb = wh_Client_CancelCb,
+       .cancelCb = _cancelCb,
     }};
     /* Server configuration/contexts */
     whTransportServerCb         tscb[1]   = {WH_TRANSPORT_MEM_SERVER_CB};
