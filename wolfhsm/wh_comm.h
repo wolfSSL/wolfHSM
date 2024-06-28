@@ -92,7 +92,10 @@ enum WH_COMM_AUX_ENUM {
     WH_COMM_AUX_RESP_UNSUPP     = 0xFFFF, /* Request is not supported */
 };
 
-/** Data translations */
+
+/** Translation utilities */
+
+/* Byteswap val if magic doesn't have the same endianness as native */
 uint8_t wh_Translate8(uint16_t magic, uint8_t val);
 uint16_t wh_Translate16(uint16_t magic, uint16_t val);
 uint32_t wh_Translate32(uint16_t magic, uint32_t val);

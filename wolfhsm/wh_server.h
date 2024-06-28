@@ -16,6 +16,11 @@
  * You should have received a copy of the GNU General Public License
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
+/*
+ * wolfhsm/wh_server.h
+ *
+ */
+
 #ifndef WOLFHSM_WH_SERVER_H_
 #define WOLFHSM_WH_SERVER_H_
 
@@ -27,6 +32,10 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
+
+/* Forward declaration of the server structure so its elements can reference
+ * itself  (e.g. server argument to custom callback) */
+typedef struct whServerContext_t whServerContext;
 
 #include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_comm.h"
@@ -44,6 +53,7 @@
 
 #ifdef WOLFHSM_SHE_EXTENSION
 #include "wolfhsm/wh_she_common.h"
+#include "wolfhsm/wh_server_she.h"
 #endif
 
 /** Default server resource configurations */
@@ -69,13 +79,10 @@
 
 /* DMA translation allow entries */
 #ifndef WH_DMA_ADDR_ALLOWLIST_COUNT
-#define WH_DMA_ADDR_ALLOWLIST_COUNT (10)
+#define WH_DMA_ADDR_ALLOWLIST_COUNT 10
 #endif
 
 
-/* Forward declaration of the server structure so its elements can reference
- * itself  (e.g. server argument to custom callback) */
-typedef struct whServerContext_t whServerContext;
 
 #ifndef WOLFHSM_NO_CRYPTO
 /** Server crypto context and resource allocation */
@@ -117,31 +124,7 @@ typedef struct whServerCryptoContext {
     } pubKey;
 } whServerCryptoContext;
 
-#if defined(WOLFHSM_SHE_EXTENSION) && !defined(WOLFHSM_NO_CRYPTO)
 
-#if defined(NO_AES) || !defined(WOLFSSL_CMAC)
-#error "WolfHSM SHE Server requires AES and AES-CMAC to support secure boot"
-#endif
-
-typedef struct {
-    uint8_t  sbState;
-    uint8_t  cmacKeyFound;
-    uint8_t  ramKeyPlain;
-    uint8_t  uidSet;
-    uint32_t blSize;
-    uint32_t blSizeReceived;
-    uint32_t rndInited;
-#ifndef NO_AES
-    Aes sheAes[1];
-#ifdef WOLFSSL_CMAC
-    Cmac sheCmac[1];
-#endif /* HAVE_CMAC */
-#endif /* !NO_AES */
-    uint8_t  prngState[WOLFHSM_SHE_KEY_SZ];
-    uint8_t  prngKey[WOLFHSM_SHE_KEY_SZ];
-    uint8_t  uid[WOLFHSM_SHE_UID_SZ];
-} whServerSheContext;
-#endif
 #endif /* WOLFHSM_NO_CRYPTO */
 
 /** Server custom callback */

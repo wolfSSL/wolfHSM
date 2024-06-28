@@ -20,11 +20,16 @@
  * src/wh_server_counter.c
  */
 #include <string.h>
-#include "wolfhsm/wh_server.h"
-#include "wolfhsm/wh_server_counter.h"
+#include <stdint.h>
+
+#include "wolfhsm/wh_common.h"
+#include "wolfhsm/wh_error.h"
+
 #include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_packet.h"
-#include "wolfhsm/wh_error.h"
+
+#include "wolfhsm/wh_server.h"
+#include "wolfhsm/wh_server_counter.h"
 
 int wh_Server_HandleCounter(whServerContext* server, uint16_t action,
     uint8_t* data, uint16_t* size)
