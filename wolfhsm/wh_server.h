@@ -60,7 +60,7 @@ typedef struct whServerContext_t whServerContext;
 #ifndef WOLFHSM_CFG_NO_CRYPTO
 /** Server crypto context and resource allocation */
 typedef struct whServerCacheSlot {
-    uint32_t        commited;
+    uint8_t        commited;
     whNvmMetadata   meta[1];
     uint8_t         buffer[WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE];
 } whServerCacheSlot;

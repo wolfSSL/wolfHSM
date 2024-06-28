@@ -55,9 +55,9 @@ static int hsmCacheKeyRsa(whServerContext* server, RsaKey* key, whKeyId* outId)
     /* wc_RsaKeyToDer doesn't have a length check option so we need to just pass
      * the big key size if compiled */
 #ifdef WOLFHSM_SEPARATE_BIG_CACHE
-    uint16_t keySz = WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE;
+    const uint16_t keySz = WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE;
 #else
-    uint16_t keySz = WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE;
+    const uint16_t keySz = WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE;
 #endif
     whKeyId keyId = WH_KEYTYPE_CRYPTO;
     /* get a free slot */
@@ -214,8 +214,9 @@ static int hsmCacheKeyCurve25519(whServerContext* server, curve25519_key* key,
     word32 privSz = CURVE25519_KEYSIZE;
     word32 pubSz = CURVE25519_KEYSIZE;
     whKeyId keyId = WH_KEYTYPE_CRYPTO;
+    const uint16_t keySz = CURVE25519_KEYSIZE * 2;
     /* get a free slot */
-    ret = hsmCacheFindSlotAndZero(server, CURVE25519_KEYSIZE * 2, &cacheBuf,
+    ret = hsmCacheFindSlotAndZero(server, keySz, &cacheBuf,
         &cacheMeta);
     if (ret == 0)
         ret = hsmGetUniqueId(server, &keyId);
@@ -227,7 +228,7 @@ static int hsmCacheKeyCurve25519(whServerContext* server, curve25519_key* key,
     if (ret == 0) {
         /* set meta */
         cacheMeta->id = keyId;
-        cacheMeta->len = CURVE25519_KEYSIZE * 2;
+        cacheMeta->len = keySz;
         /* export keyId */
         *outId = keyId;
     }

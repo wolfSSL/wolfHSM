@@ -510,7 +510,7 @@ int hsmEvictKey(whServerContext* server, whNvmId keyId)
 
 int hsmCommitKey(whServerContext* server, whNvmId keyId)
 {
-    uint32_t* slotCommited;
+    uint8_t* slotCommited;
     uint8_t* slotBuf;
     whNvmMetadata* slotMeta;
     int i;
@@ -534,7 +534,7 @@ int hsmCommitKey(whServerContext* server, whNvmId keyId)
     if (i >= WOLFHSM_CFG_SERVER_KEYCACHE_COUNT) {
         for (i = 0; i < WOLFHSM_CFG_SERVER_KEYCACHE_BIG_COUNT; i++) {
             if (server->bigCache[i].meta->id == keyId) {
-                slotCommited = &server->cache[i].commited;
+                slotCommited = &server->bigCache[i].commited;
                 slotBuf = server->bigCache[i].buffer;
                 slotMeta = server->bigCache[i].meta;
                 break;
