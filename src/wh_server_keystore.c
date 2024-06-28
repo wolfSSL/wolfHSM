@@ -521,7 +521,7 @@ int hsmCommitKey(whServerContext* server, whNvmId keyId)
     if (i >= WOLFHSM_NUM_RAMKEYS) {
         for (i = 0; i < WOLFHSM_NUM_BIG_RAMKEYS; i++) {
             if (server->bigCache[i].meta->id == keyId) {
-                slotCommited = &server->cache[i].commited;
+                slotCommited = &server->bigCache[i].commited;
                 slotBuf = server->bigCache[i].buffer;
                 slotMeta = server->bigCache[i].meta;
                 break;

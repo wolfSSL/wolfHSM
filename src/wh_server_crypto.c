@@ -41,9 +41,9 @@ static int hsmCacheKeyRsa(whServerContext* server, RsaKey* key, whKeyId* outId)
     /* wc_RsaKeyToDer doesn't have a length check option so we need to just pass
      * the big key size if compiled */
 #ifdef WOLFHSM_SEPARATE_BIG_CACHE
-    uint16_t keySz = WOLFHSM_KEYCACHE_BIG_BUFSIZE;
+    const uint16_t keySz = WOLFHSM_KEYCACHE_BIG_BUFSIZE;
 #else
-    uint16_t keySz = WOLFHSM_KEYCACHE_BUFSIZE;
+    const uint16_t keySz = WOLFHSM_KEYCACHE_BUFSIZE;
 #endif
     whKeyId keyId = WOLFHSM_KEYTYPE_CRYPTO;
     /* get a free slot */
@@ -178,9 +178,10 @@ static int hsmCacheKeyCurve25519(whServerContext* server, curve25519_key* key,
     int ret;
     word32 privSz = CURVE25519_KEYSIZE;
     word32 pubSz = CURVE25519_KEYSIZE;
+    const uint16_t keySz = CURVE25519_KEYSIZE * 2;
     whKeyId keyId = WOLFHSM_KEYTYPE_CRYPTO;
     /* get a free slot */
-    ret = hsmCacheFindSlotAndZero(server, CURVE25519_KEYSIZE * 2, &cacheBuf,
+    ret = hsmCacheFindSlotAndZero(server, keySz, &cacheBuf,
         &cacheMeta);
     if (ret == 0)
         ret = hsmGetUniqueId(server, &keyId);
@@ -192,7 +193,7 @@ static int hsmCacheKeyCurve25519(whServerContext* server, curve25519_key* key,
     if (ret == 0) {
         /* set meta */
         cacheMeta->id = keyId;
-        cacheMeta->len = CURVE25519_KEYSIZE * 2;
+        cacheMeta->len = keySz;
         /* export keyId */
         *outId = keyId;
     }
@@ -355,15 +356,17 @@ static int hsmLoadKeyEcc(whServerContext* server, ecc_key* key, uint16_t keyId,
     uint8_t* cacheBuf;
     whNvmMetadata* cacheMeta;
     int ret;
-    uint32_t keySz;
+    word32 keySz;
+    word32 qxAndQyKeySz;
     keyId |= WOLFHSM_KEYTYPE_CRYPTO;
     /* freshen the key */
     ret = hsmFreshenKey(server, keyId, &cacheBuf, &cacheMeta);
     /* decode the key */
     if (ret == 0) {
         keySz = cacheMeta->len / 3;
+        qxAndQyKeySz = keySz * 2;
         ret = wc_ecc_import_unsigned(key, cacheBuf, cacheBuf + keySz,
-            cacheBuf + keySz * 2, curveId);
+            cacheBuf + qxAndQyKeySz, curveId);
     }
     return ret;
 }
