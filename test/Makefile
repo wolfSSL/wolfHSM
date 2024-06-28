@@ -59,6 +59,8 @@ endif
 # wolfHSM-specific defines
 CFLAGS += -DWH_CONFIG
 
+# seperate big keys
+CFLAGS += -DWOLFHSM_SEPARATE_BIG_CACHE
 
 # Assembly source files
 SRC_ASM +=
