@@ -725,7 +725,6 @@ static int hsmCryptoCmac(whServerContext* server, whPacket* packet,
         }
         else if (ret == 0) {
             /* cache/re-cache updated struct */
-            XMEMSET((uint8_t*)meta, 0, sizeof(meta));
             if (packet->cmacReq.keySz != 0) {
                 keyId = WOLFHSM_KEYTYPE_CRYPTO;
                 ret = hsmGetUniqueId(server, &keyId);

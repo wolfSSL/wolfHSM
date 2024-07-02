@@ -221,7 +221,7 @@ int wh_SheGenerateLoadableKey(uint8_t keyId,
     }
     return ret;
 }
-#endif
+#endif /* !WOLFHSM_NO_CRYPTO */
 
 #endif /* WOLFHSM_SHE_EXTENSION */
 

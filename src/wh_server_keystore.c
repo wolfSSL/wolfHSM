@@ -157,7 +157,7 @@ int hsmFreshenKey(whServerContext* server, whKeyId keyId)
     int i;
     int foundIndex = -1;
     uint32_t outSz = WOLFHSM_KEYCACHE_BUFSIZE;
-    whNvmMetadata meta[1] = {{0}};
+    whNvmMetadata meta[1];
     if (server == NULL || keyId == WOLFHSM_KEYID_ERASED)
         return WH_ERROR_BADARGS;
     /* apply client_id */
@@ -203,7 +203,7 @@ int hsmReadKey(whServerContext* server, whKeyId keyId, whNvmMetadata* outMeta,
 {
     int ret = 0;
     int i;
-    whNvmMetadata meta[1] = {{0}};
+    whNvmMetadata meta[1];
     /* make sure id is valid */
     if (server == NULL || ((keyId & WOLFHSM_KEYID_MASK) == WOLFHSM_KEYID_ERASED
         && (keyId & WOLFHSM_KEYTYPE_MASK) != WOLFHSM_KEYTYPE_SHE) ||
