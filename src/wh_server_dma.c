@@ -25,6 +25,7 @@
 #include <stddef.h>
 
 #include "wolfhsm/wh_error.h"
+
 #include "wolfhsm/wh_server.h"
 
 /* TODO: if the Address allowlist ever gets large, we should consider a more

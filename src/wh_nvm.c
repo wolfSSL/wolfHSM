@@ -17,12 +17,11 @@
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
 /*
- * src/wh_flash.c
- *
- * Simple helper library
+ * src/wh_nvm.c
  *
  */
 
+#include <stdint.h>
 #include <stddef.h>     /* For NULL */
 #include <string.h>     /* For memset, memcpy */
 

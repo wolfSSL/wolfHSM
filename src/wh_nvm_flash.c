@@ -23,6 +23,7 @@
  *
  */
 
+#include <stdint.h>
 #include <stddef.h>     /* For NULL */
 #include <string.h>     /* For memset, memcpy */
 
@@ -31,6 +32,7 @@
 #include "wolfhsm/wh_flash.h"
 #include "wolfhsm/wh_flash_unit.h"
 #include "wolfhsm/wh_nvm.h"
+
 #include "wolfhsm/wh_nvm_flash.h"
 
 enum {

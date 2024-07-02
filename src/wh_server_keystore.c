@@ -16,6 +16,10 @@
  * You should have received a copy of the GNU General Public License
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
+/*
+ * src/wh_server_keystore.c
+ *
+ */
 /* System libraries */
 #include <stdint.h>
 #include <stdlib.h>  /* For NULL */
@@ -26,14 +30,15 @@
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/error-crypt.h"
 
-#include "wolfhsm/wh_server.h"
-#include "wolfhsm/wh_server_keystore.h"
+#include "wolfhsm/wh_common.h"
+#include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_packet.h"
-#include "wolfhsm/wh_error.h"
+#include "wolfhsm/wh_server.h"
 #ifdef WOLFHSM_SHE_EXTENSION
 #include "wolfhsm/wh_server_she.h"
 #endif
+#include "wolfhsm/wh_server_keystore.h"
 
 int hsmGetUniqueId(whServerContext* server, whNvmId* outId)
 {

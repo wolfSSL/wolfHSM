@@ -26,13 +26,13 @@
 
 #include <stdint.h>
 
-uint32_t wh_Utils_htonl(uint32_t hostlong);
-uint32_t wh_Utils_ntohl(uint32_t networklong);
-
 /** Byteswap functions */
 uint16_t wh_Utils_Swap16(uint16_t val);
 uint32_t wh_Utils_Swap32(uint32_t val);
 uint64_t wh_Utils_Swap64(uint64_t val);
+
+uint32_t wh_Utils_htonl(uint32_t hostlong);
+uint32_t wh_Utils_ntohl(uint32_t networklong);
 
 int wh_Utils_memeqzero(uint8_t* buffer, uint32_t size);
 

@@ -16,6 +16,10 @@
  * You should have received a copy of the GNU General Public License
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
+/*
+ * src/wh_server_nvm.c
+ *
+ */
 
 /* System libraries */
 #include <stdint.h>
@@ -58,19 +62,17 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
         whMessageNvm_InitRequest req = {0};
         whMessageNvm_InitResponse resp = {0};
 
-        if (req_size == sizeof(req)) {
+        if (req_size != sizeof(req)) {
+            /* Request is malformed */
+            resp.rc = WH_ERROR_ABORTED;
+        } else {
             /* Convert request struct */
             wh_MessageNvm_TranslateInitRequest(magic,
                     (whMessageNvm_InitRequest*)req_packet, &req);
             /* Process the init action */
-            resp.rc = 0;
             resp.clientnvm_id = req.clientnvm_id;
             resp.servernvm_id = server->comm->server_id;
-        } else {
-            /* Request is malformed */
-            resp.rc = WH_ERROR_ABORTED;
         }
-
         /* Convert the response struct */
         wh_MessageNvm_TranslateInitResponse(magic,
                 &resp, (whMessageNvm_InitResponse*)resp_packet);
@@ -82,14 +84,13 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
         /* No request message */
         whMessageNvm_SimpleResponse resp = {0};
 
-        if (req_size == 0) {
-            /* Process the cleanup action */
-            resp.rc = 0;
-        } else {
+        if (req_size != 0) {
             /* Request is malformed */
             resp.rc = WH_ERROR_ABORTED;
+        } else {
+            /* Process the cleanup action */
+            resp.rc = 0;
         }
-
         /* Convert the response struct */
         wh_MessageNvm_TranslateSimpleResponse(magic,
                 &resp, (whMessageNvm_SimpleResponse*)resp_packet);
@@ -101,7 +102,10 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
         whMessageNvm_ListRequest req = {0};
         whMessageNvm_ListResponse resp = {0};
 
-        if (req_size == sizeof(req)) {
+        if (req_size != sizeof(req)) {
+            /* Request is malformed */
+            resp.rc = WH_ERROR_ABORTED;
+        } else {
             /* Convert request struct */
             wh_MessageNvm_TranslateListRequest(magic,
                     (whMessageNvm_ListRequest*)req_packet, &req);
@@ -110,11 +114,7 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
             resp.rc = wh_Nvm_List(server->nvm,
                     req.access, req.flags, req.startId,
                     &resp.count, &resp.id);
-        } else {
-            /* Request is malformed */
-            resp.rc = WH_ERROR_ABORTED;
         }
-
         /* Convert the response struct */
         wh_MessageNvm_TranslateListResponse(magic,
                 &resp, (whMessageNvm_ListResponse*)resp_packet);
@@ -126,16 +126,15 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
         /* No Request packet */
         whMessageNvm_GetAvailableResponse resp = {0};
 
-        if (req_size == 0) {
+        if (req_size != 0) {
+            /* Request is malformed */
+            resp.rc = WH_ERROR_ABORTED;
+        } else {
             /* Process the available action */
             resp.rc = wh_Nvm_GetAvailable(server->nvm,
                     &resp.avail_size, &resp.avail_objects,
                     &resp.reclaim_size, &resp.reclaim_objects);
-        } else {
-            /* Request is malformed */
-            resp.rc = WH_ERROR_ABORTED;
         }
-
         /* Convert the response struct */
         wh_MessageNvm_TranslateGetAvailableResponse(magic,
                 &resp, (whMessageNvm_GetAvailableResponse*)resp_packet);
@@ -148,7 +147,10 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
         whMessageNvm_GetMetadataResponse resp = {0};
         whNvmMetadata meta = {0};
 
-        if (req_size == sizeof(req)) {
+        if (req_size != sizeof(req)) {
+            /* Request is malformed */
+            resp.rc = WH_ERROR_ABORTED;
+        } else {
             /* Convert request struct */
             wh_MessageNvm_TranslateGetMetadataRequest(magic,
                     (whMessageNvm_GetMetadataRequest*)req_packet, &req);
@@ -163,9 +165,6 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
                 resp.len = meta.len;
                 memcpy(resp.label, meta.label, sizeof(resp.label));
             }
-        } else {
-            /* Request is malformed */
-            resp.rc = WH_ERROR_ABORTED;
         }
         /* Convert the response struct */
         wh_MessageNvm_TranslateGetMetadataResponse(magic,
@@ -181,7 +180,10 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
         const uint8_t* data = (const uint8_t*)req_packet + hdr_len;
         whMessageNvm_SimpleResponse resp = {0};
 
-        if (req_size >= sizeof(req)) {
+        if (req_size < sizeof(req)) {
+            /* Problem in the request or transport. */
+            resp.rc = WH_ERROR_ABORTED;
+        } else {
             /* Convert request struct */
             wh_MessageNvm_TranslateAddObjectRequest(magic,
                     (whMessageNvm_AddObjectRequest*)req_packet, &req);
@@ -193,13 +195,7 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
                 meta.len = req.len;
                 memcpy(meta.label, req.label, sizeof(meta.label));
                 resp.rc = wh_Nvm_AddObject(server->nvm, &meta, req.len, data);
-            } else {
-                /* Problem in the request or transport. */
-                resp.rc = WH_ERROR_ABORTED;
             }
-        } else {
-            /* Request is malformed. */
-            resp.rc = WH_ERROR_ABORTED;
         }
         /* Convert the response struct */
         wh_MessageNvm_TranslateSimpleResponse(magic,
@@ -212,7 +208,10 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
         whMessageNvm_DestroyObjectsRequest req = {0};
         whMessageNvm_SimpleResponse resp = {0};
 
-        if (req_size == sizeof(req)) {
+        if (req_size != sizeof(req)) {
+            /* Request is malformed */
+            resp.rc = WH_ERROR_ABORTED;
+        } else {
             /* Convert request struct */
             wh_MessageNvm_TranslateDestroyObjectsRequest(magic,
                     (whMessageNvm_DestroyObjectsRequest*)req_packet, &req);
@@ -225,9 +224,6 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
                 /* Problem in transport or request */
                 resp.rc = WH_ERROR_ABORTED;
             }
-        } else {
-            /* Request is malformed */
-            resp.rc = WH_ERROR_ABORTED;
         }
         /* Convert the response struct */
         wh_MessageNvm_TranslateSimpleResponse(magic,
@@ -243,24 +239,24 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
         uint8_t* data = (uint8_t*)resp_packet + hdr_len;
         uint16_t data_len = 0;
 
-        if (req_size == sizeof(req)) {
+        if (req_size != sizeof(req)) {
+            /* Request is malformed */
+            resp.rc = WH_ERROR_ABORTED;
+        } else {
             /* Convert request struct */
             wh_MessageNvm_TranslateReadRequest(magic,
                     (whMessageNvm_ReadRequest*)req_packet, &req);
 
-            if (req.data_len <= WH_MESSAGE_NVM_MAX_READ_LEN) {
+            if (req.data_len > WH_MESSAGE_NVM_MAX_READ_LEN) {
+                resp.rc = WH_ERROR_ABORTED;
+            } else {
                 /* Process the Read action */
                 resp.rc = wh_Nvm_Read(server->nvm,
                     req.id, req.offset, req.data_len, data);
                 if (resp.rc == 0) {
                     data_len = req.data_len;
                 }
-            } else {
-                resp.rc = WH_ERROR_ABORTED;
             }
-        } else {
-            /* Request is malformed */
-            resp.rc = WH_ERROR_ABORTED;
         }
         /* Convert the response struct */
         wh_MessageNvm_TranslateReadResponse(magic,
@@ -275,7 +271,12 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
         void* metadata = NULL;
         void* data = NULL;
 
-        if (req_size == sizeof(req)) {
+        if (req_size != sizeof(req)) {
+            /* Request is malformed */
+            resp.rc = WH_ERROR_ABORTED;
+        }
+
+        if (resp.rc == 0) {
             /* Convert request struct */
             wh_MessageNvm_TranslateAddObjectDma32Request(magic,
                     (whMessageNvm_AddObjectDma32Request*)req_packet, &req);
@@ -284,42 +285,30 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
             resp.rc = wh_Server_DmaProcessClientAddress32(
                 server, req.metadata_hostaddr, &metadata, sizeof(whNvmMetadata),
                 WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
-            if (resp.rc != WH_ERROR_OK) {
-                goto transRespAddObjDma32;
-            }
-
+        }
+        if (resp.rc == 0) {
             resp.rc = wh_Server_DmaProcessClientAddress32(
                 server, req.data_hostaddr, &data, req.data_len,
                 WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
-            if (resp.rc != WH_ERROR_OK) {
-                goto transRespAddObjDma32;
-            }
-
+        }
+        if (resp.rc == 0) {
             /* Process the AddObject action */
             resp.rc = wh_Nvm_AddObject(server->nvm,
                     (whNvmMetadata*)metadata,
                     req.data_len,
                     (const uint8_t*)data);
-            if (resp.rc != WH_ERROR_OK) {
-                goto transRespAddObjDma32;
-            }
-
+        }
+        if (resp.rc == 0) {
             /* perform platform-specific host address processing */
             resp.rc = wh_Server_DmaProcessClientAddress32(
                 server, req.metadata_hostaddr, &metadata, sizeof(whNvmMetadata),
                 WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
-            if (resp.rc != WH_ERROR_OK) {
-                goto transRespAddObjDma32;
-            }
-
+        }
+        if (resp.rc == 0) {
             resp.rc = wh_Server_DmaProcessClientAddress32(
                 server, req.data_hostaddr, &data, req.data_len,
                 WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
-        } else {
-            /* Request is malformed */
-            resp.rc = WH_ERROR_ABORTED;
         }
-    transRespAddObjDma32:
         /* Convert the response struct */
         wh_MessageNvm_TranslateSimpleResponse(magic,
                 &resp, (whMessageNvm_SimpleResponse*)resp_packet);
@@ -332,7 +321,11 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
         whMessageNvm_SimpleResponse resp = {0};
         void* data = NULL;
 
-        if (req_size == sizeof(req)) {
+        if (req_size != sizeof(req)) {
+            /* Request is malformed */
+            resp.rc = WH_ERROR_ABORTED;
+        }
+        if (resp.rc == 0) {
             /* Convert request struct */
             wh_MessageNvm_TranslateReadDma32Request(magic,
                     (whMessageNvm_ReadDma32Request*)req_packet, &req);
@@ -341,26 +334,18 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
             resp.rc = wh_Server_DmaProcessClientAddress32(
                 server, req.data_hostaddr, &data, req.data_len,
                 WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
-            if (resp.rc != WH_ERROR_OK) {
-                goto transRespReadDma32;
-            }
-
+        }
+        if (resp.rc == 0) {
             /* Process the Read action */
             resp.rc = wh_Nvm_Read(server->nvm, req.id, req.offset, req.data_len,
                     (uint8_t*)data);
-            if (resp.rc != WH_ERROR_OK) {
-                goto transRespReadDma32;
-            }
-
+        }
+        if (resp.rc == 0) {
             /* perform platform-specific host address processing */
             resp.rc = wh_Server_DmaProcessClientAddress32(
                 server, req.data_hostaddr, &data, req.data_len,
                 WH_DMA_OPER_CLIENT_WRITE_POST, (whServerDmaFlags){0});
-        } else {
-            /* Request is malformed */
-            resp.rc = WH_ERROR_ABORTED;
         }
-    transRespReadDma32:
         /* Convert the response struct */
         wh_MessageNvm_TranslateSimpleResponse(magic,
                 &resp, (whMessageNvm_SimpleResponse*)resp_packet);
@@ -374,7 +359,11 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
         void* metadata = NULL;
         void* data = NULL;
 
-        if (req_size == sizeof(req)) {
+        if (req_size != sizeof(req)) {
+            /* Request is malformed */
+            resp.rc = WH_ERROR_ABORTED;
+        }
+        if (resp.rc == 0) {
             /* Convert request struct */
             wh_MessageNvm_TranslateAddObjectDma64Request(magic,
                     (whMessageNvm_AddObjectDma64Request*)req_packet, &req);
@@ -383,42 +372,30 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
             resp.rc = wh_Server_DmaProcessClientAddress64(
                 server, req.metadata_hostaddr, &metadata, sizeof(whNvmMetadata),
                 WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
-            if (resp.rc != WH_ERROR_OK) {
-                goto transRespAddObjectDma64;
-            }
-
+        }
+        if (resp.rc == 0) {
             resp.rc = wh_Server_DmaProcessClientAddress64(
                 server, req.data_hostaddr, &data, req.data_len,
                 WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
-            if (resp.rc != WH_ERROR_OK) {
-                goto transRespAddObjectDma64;
-            }
-
+        }
+        if (resp.rc == 0) {
             /* Process the AddObject action */
             resp.rc = wh_Nvm_AddObject(server->nvm,
                     (whNvmMetadata*)metadata,
                     req.data_len,
                     (const uint8_t*)data);
-            if (resp.rc != WH_ERROR_OK) {
-                goto transRespAddObjectDma64;
-            }
-
+        }
+        if (resp.rc == 0) {
             /* perform platform-specific host address processing */
             resp.rc = wh_Server_DmaProcessClientAddress64(
                 server, req.metadata_hostaddr, &metadata, sizeof(whNvmMetadata),
                 WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
-            if (resp.rc != WH_ERROR_OK) {
-                goto transRespAddObjectDma64;
-            }
-
+        }
+        if (resp.rc == 0) {
             resp.rc = wh_Server_DmaProcessClientAddress64(
                 server, req.data_hostaddr, &data, req.data_len,
                 WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
-        } else {
-            /* Request is malformed */
-            resp.rc = WH_ERROR_ABORTED;
         }
-    transRespAddObjectDma64:
         /* Convert the response struct */
         wh_MessageNvm_TranslateSimpleResponse(magic,
                 &resp, (whMessageNvm_SimpleResponse*)resp_packet);
@@ -431,7 +408,11 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
         whMessageNvm_SimpleResponse resp = {0};
         void* data = NULL;
 
-        if (req_size == sizeof(req)) {
+        if (req_size != sizeof(req)) {
+            /* Request is malformed */
+            resp.rc = WH_ERROR_ABORTED;
+        }
+        if (resp.rc == 0) {
             /* Convert request struct */
             wh_MessageNvm_TranslateReadDma64Request(magic,
                     (whMessageNvm_ReadDma64Request*)req_packet, &req);
@@ -440,26 +421,18 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
             resp.rc = wh_Server_DmaProcessClientAddress64(
                 server, req.data_hostaddr, &data, req.data_len,
                 WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
-            if (resp.rc != WH_ERROR_OK) {
-                goto transRespReadDma64;
-            }
-
+        }
+        if (resp.rc == 0) {
             /* Process the Read action */
             resp.rc = wh_Nvm_Read(server->nvm, req.id, req.offset, req.data_len,
                     (uint8_t*)data);
-            if (resp.rc != WH_ERROR_OK) {
-                goto transRespReadDma64;
-            }
-
+        }
+        if (resp.rc == 0) {
             /* perform platform-specific host address processing */
             resp.rc = wh_Server_DmaProcessClientAddress64(
                 server, req.data_hostaddr, &data, req.data_len,
                 WH_DMA_OPER_CLIENT_WRITE_POST, (whServerDmaFlags){0});
-        } else {
-            /* Request is malformed */
-            resp.rc = WH_ERROR_ABORTED;
         }
-    transRespReadDma64:
         /* Convert the response struct */
         wh_MessageNvm_TranslateSimpleResponse(magic,
                 &resp, (whMessageNvm_SimpleResponse*)resp_packet);

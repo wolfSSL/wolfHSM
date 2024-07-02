@@ -16,11 +16,17 @@
  * You should have received a copy of the GNU General Public License
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
-#include "wolfhsm/wh_server.h"
+/*
+ * src/wh_server_customcb.c
+ *
+ */
+
 #include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_message_customcb.h"
+
+#include "wolfhsm/wh_server.h"
 
 
 int wh_Server_RegisterCustomCb(whServerContext* server, uint16_t action,

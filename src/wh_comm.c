@@ -18,6 +18,7 @@
  */
 /*
  * src/wh_comm.c
+ *
  */
 
 
@@ -29,6 +30,9 @@
 #include "wolfhsm/wh_utils.h"
 
 #include "wolfhsm/wh_comm.h"
+
+
+/** Conditional byteswap functions */
 
 uint8_t wh_Translate8(uint16_t magic, uint8_t val)
 {
@@ -64,10 +68,11 @@ int wh_CommClient_Init(whCommClient* context, const whCommClientConfig* config)
     }
 
     memset(context, 0, sizeof(*context));
-    context->transport_cb = config->transport_cb;
-    context->transport_context = config->transport_context;
-    context->client_id = config->client_id;
-    context->connect_cb = config->connect_cb;
+    context->transport_cb       = config->transport_cb;
+    context->transport_context  = config->transport_context;
+    context->client_id          = config->client_id;
+    context->connect_cb         = config->connect_cb;
+
     if (context->transport_cb->Init != NULL) {
         rc = context->transport_cb->Init(context->transport_context,
                 config->transport_config, NULL, NULL);
@@ -92,31 +97,29 @@ int wh_CommClient_Init(whCommClient* context, const whCommClientConfig* config)
 int wh_CommClient_SendRequest(whCommClient* context, uint16_t magic,
     uint16_t kind, uint16_t *out_seq, uint16_t data_size, const void* data)
 {
-    int rc = WH_ERROR_NOTREADY;
+    int rc = 0;
 
-    if (context == NULL) {
+    if (    (context == NULL) ||
+            (context->initialized == 0) ||
+            (context->transport_cb == NULL) ||
+            (context->transport_cb->Send == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
-    if ((context->initialized != 0) &&
-        (context->transport_cb != NULL) &&
-        (context->transport_cb->Send != NULL)) {
-
-        context->hdr->magic = magic;
-        context->hdr->kind = wh_Translate16(magic, kind);
-        context->hdr->seq = wh_Translate16(magic, context->seq + 1);
-        if (    (data != NULL) &&
-                (data_size != 0) &&
-                (data != context->data)) {
-            memcpy(context->data, data, data_size);
-        }
-        rc = context->transport_cb->Send(context->transport_context,
-                sizeof(*(context->hdr)) + data_size,
-                context->packet);
-        if (rc == 0) {
-            context->seq++;
-            if (out_seq != NULL) *out_seq = context->seq;
-        }
+    context->hdr->magic = magic;
+    context->hdr->kind = wh_Translate16(magic, kind);
+    context->hdr->seq = wh_Translate16(magic, context->seq + 1);
+    if (    (data != NULL) &&
+            (data_size != 0) &&
+            (data != context->data)) {
+        memcpy(context->data, data, data_size);
+    }
+    rc = context->transport_cb->Send(context->transport_context,
+            sizeof(*(context->hdr)) + data_size,
+            context->packet);
+    if (rc == 0) {
+        context->seq++;
+        if (out_seq != NULL) *out_seq = context->seq;
     }
     return rc;
 }
@@ -128,43 +131,42 @@ int wh_CommClient_RecvResponse(whCommClient* context,
         uint16_t* out_magic, uint16_t* out_kind, uint16_t* out_seq,
         uint16_t* out_size, void* data)
 {
-    int rc = WH_ERROR_NOTREADY;
+    int rc = 0;
     uint16_t magic = 0;
     uint16_t kind = 0;
     uint16_t seq = 0;
     uint16_t size = sizeof(context->packet);
     uint16_t data_size = 0;
 
-    if (context == NULL) {
+    if (    (context == NULL) ||
+            (context->initialized == 0) ||
+            (context->transport_cb == NULL) ||
+            (context->transport_cb->Recv == NULL)){
         return WH_ERROR_BADARGS;
     }
 
-    if ((context->initialized != 0) &&
-        (context->transport_cb != NULL) &&
-        (context->transport_cb->Recv != NULL)) {
-
-        rc = context->transport_cb->Recv(context->transport_context,
-                &size,
-                context->packet);
+    rc = context->transport_cb->Recv(context->transport_context,
+            &size,
+            context->packet);
+    if (rc == 0) {
+        if (size < sizeof(*context->hdr)) {
+            /* Size is too small */
+            rc = WH_ERROR_ABORTED;
+        }
         if (rc == 0) {
-            if (size >= sizeof(*context->hdr)) {
-                data_size = size - sizeof(*context->hdr);
-                magic = context->hdr->magic;
-                kind = wh_Translate16(magic, context->hdr->kind);
-                seq = wh_Translate16(magic, context->hdr->seq);
-                if (    (data != NULL) &&
-                        (data_size != 0) &&
-                        (data != context->data)) {
-                    memcpy(data, context->data, data_size);
-                }
-                if (out_magic != NULL) *out_magic = magic;
-                if (out_kind != NULL) *out_kind = kind;
-                if (out_seq != NULL) *out_seq = seq;
-                if (out_size != NULL) *out_size = data_size;
-            } else {
-                /* Size is too small */
-                return WH_ERROR_ABORTED;
+            data_size = size - sizeof(*context->hdr);
+            magic = context->hdr->magic;
+            kind = wh_Translate16(magic, context->hdr->kind);
+            seq = wh_Translate16(magic, context->hdr->seq);
+            if (    (data != NULL) &&
+                    (data_size != 0) &&
+                    (data != context->data)) {
+                memcpy(data, context->data, data_size);
             }
+            if (out_magic != NULL) *out_magic = magic;
+            if (out_kind != NULL) *out_kind = kind;
+            if (out_seq != NULL) *out_seq = seq;
+            if (out_size != NULL) *out_size = data_size;
         }
     }
     return rc;
@@ -191,9 +193,6 @@ int wh_CommClient_Cleanup(whCommClient* context)
 
     /* Signal a non-blocking disconnect to the server if registered */
     if (context->connect_cb != NULL) {
-        /* TODO: ok to not assign rc error code here? Imagine that the
-         * subsequent cleanup code should be unconditionally called. How should
-         * we propagate a failure to the caller?  */
         (void)context->connect_cb(context, WH_COMM_DISCONNECTED);
     }
 
@@ -221,9 +220,10 @@ int wh_CommServer_Init(whCommServer* context, const whCommServerConfig* config,
     }
 
     memset(context, 0, sizeof(*context));
-    context->transport_context = config->transport_context;
-    context->transport_cb = config->transport_cb;
-    context->server_id = config->server_id;
+    context->transport_context  = config->transport_context;
+    context->transport_cb       = config->transport_cb;
+    context->server_id          = config->server_id;
+
     if (context->transport_cb->Init != NULL) {
         rc = context->transport_cb->Init(context->transport_context,
                 config->transport_config, connectcb, connectcb_arg);
@@ -241,7 +241,7 @@ int wh_CommServer_RecvRequest(whCommServer* context,
         uint16_t* out_magic, uint16_t* out_kind, uint16_t* out_seq,
         uint16_t* out_size, void* data)
 {
-    int rc = WH_ERROR_NOTREADY;
+    int rc = 0;
     uint16_t magic = 0;
     uint16_t kind = 0;
     uint16_t seq = 0;
@@ -249,39 +249,35 @@ int wh_CommServer_RecvRequest(whCommServer* context,
     uint16_t data_size = 0;
 
     if (    (context == NULL) ||
-            (data == NULL)) {
+            (context->initialized == 0) ||
+            (context->transport_cb == NULL) ||
+            (context->transport_cb->Recv == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
-    if ((context->initialized != 0) &&
-        (context->transport_cb != NULL) &&
-        (context->transport_cb->Recv != NULL)) {
-
-        rc = context->transport_cb->Recv(context->transport_context,
-                &size,
-                context->packet);
+    rc = context->transport_cb->Recv(context->transport_context,
+            &size,
+            context->packet);
+    if (rc == 0) {
+        if (size < sizeof(*context->hdr)) {
+            rc = WH_ERROR_ABORTED;
+        }
         if (rc == 0) {
-            if (size >= sizeof(*context->hdr)) {
+            data_size = size - sizeof(*context->hdr);
+            magic = context->hdr->magic;
+            kind = wh_Translate16(magic, context->hdr->kind);
+            seq = wh_Translate16(magic, context->hdr->seq);
 
-                data_size = size - sizeof(*context->hdr);
-                magic = context->hdr->magic;
-                kind = wh_Translate16(magic, context->hdr->kind);
-                seq = wh_Translate16(magic, context->hdr->seq);
-
-                /* Copy the data from the internal buffer if necessary */
-                if (    (data != NULL) &&
-                        (data_size != 0) &&
-                        (data != context->data) ) {
-                    memcpy(data, context->data, data_size);
-                }
-                if (out_magic != NULL) *out_magic = magic;
-                if (out_kind != NULL) *out_kind = kind;
-                if (out_seq != NULL) *out_seq = seq;
-                if (out_size != NULL) *out_size = data_size;
-            } else {
-                /* Size is too small */
-                rc = WH_ERROR_ABORTED;
+            /* Copy the data from the internal buffer if necessary */
+            if (    (data != NULL) &&
+                    (data_size != 0) &&
+                    (data != context->data) ) {
+                memcpy(data, context->data, data_size);
             }
+            if (out_magic != NULL) *out_magic = magic;
+            if (out_kind != NULL) *out_kind = kind;
+            if (out_seq != NULL) *out_seq = seq;
+            if (out_size != NULL) *out_size = data_size;
         }
     }
     return rc;
@@ -291,30 +287,28 @@ int wh_CommServer_SendResponse(whCommServer* context,
         uint16_t magic, uint16_t kind, uint16_t seq,
         uint16_t data_size, const void* data)
 {
-    int rc = WH_ERROR_NOTREADY;
+    int rc = 0;
 
-    if (context == NULL) {
+    if (    (context == NULL) ||
+            (context->initialized == 0) ||
+            (context->transport_cb == NULL) ||
+            (context->transport_cb->Send == NULL)){
         return WH_ERROR_BADARGS;
     }
 
-    if ((context->initialized != 0) &&
-        (context->transport_cb != NULL) &&
-        (context->transport_cb->Send != NULL)) {
+    context->hdr->magic = magic;
+    context->hdr->kind = wh_Translate16(magic, kind);
+    context->hdr->seq = wh_Translate16(magic, seq);
 
-        context->hdr->magic = magic;
-        context->hdr->kind = wh_Translate16(magic, kind);
-        context->hdr->seq = wh_Translate16(magic, seq);
-
-        /* Copy the data into the internal buffer if necessary */
-        if (    (data != NULL) &&
-                (data_size != 0) &&
-                (data != context->data) ) {
-            memcpy(context->data, data, data_size);
-        }
-        rc = context->transport_cb->Send(context->transport_context,
-                sizeof(*(context->hdr)) + data_size,
-                context->packet);
+    /* Copy the data into the internal buffer if necessary */
+    if (    (data != NULL) &&
+            (data_size != 0) &&
+            (data != context->data) ) {
+        memcpy(context->data, data, data_size);
     }
+    rc = context->transport_cb->Send(context->transport_context,
+            sizeof(*(context->hdr)) + data_size,
+            context->packet);
     return rc;
 }
 

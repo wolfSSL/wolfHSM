@@ -17,7 +17,7 @@
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
 /*
- * wh_cryptocb.c
+ * src/wh_cryptocb.c
  */
 #include <stdint.h>
 #include <unistd.h>
@@ -31,6 +31,7 @@
 #include "wolfssl/wolfcrypt/cmac.h"
 #include "wolfssl/wolfcrypt/rsa.h"
 #include "wolfssl/wolfcrypt/cryptocb.h"
+
 #include "wolfhsm/wh_packet.h"
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_client.h"
@@ -212,7 +213,7 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             }
             break;
 #endif /* HAVE_AESGCM */
-#endif /* NO_AES */
+#endif /* !NO_AES */
         default:
             ret = CRYPTOCB_UNAVAILABLE;
             break;
@@ -317,7 +318,7 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
                 }
             }
             break;
-#endif  /* !NO_RSA */
+#endif /* !NO_RSA */
 #ifdef HAVE_ECC
         case WC_PK_TYPE_EC_KEYGEN:
             /* set key size */
