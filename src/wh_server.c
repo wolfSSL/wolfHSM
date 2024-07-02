@@ -16,6 +16,11 @@
  * You should have received a copy of the GNU General Public License
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
+/*
+ * src/wh_server.c
+ *
+ */
+
 /* System libraries */
 #include <stdint.h>
 #include <stdlib.h>  /* For NULL */

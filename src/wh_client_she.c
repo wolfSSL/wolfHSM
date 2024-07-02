@@ -29,6 +29,7 @@
 
 /* Common WolfHSM types and defines shared with the server */
 #include "wolfhsm/wh_common.h"
+#include "wolfhsm/wh_she_common.h"
 #include "wolfhsm/wh_error.h"
 
 /* Components */
@@ -41,17 +42,17 @@
 #include "wolfhsm/wh_packet.h"
 #include "wolfhsm/wh_client.h"
 
-#include "wolfhsm/wh_server_she.h"
-
+#include "wolfhsm/wh_client_she.h"
 
 int wh_Client_ShePreProgramKey(whClientContext* c, whNvmId keyId,
     whNvmFlags flags, uint8_t* key, whNvmSize keySz)
 {
     int ret;
     int32_t outRc;
-    uint8_t label[WOLFHSM_NVM_LABEL_LEN];
-    memset(label, 0, sizeof(label));
-    ((whSheMetadata*)label)->flags = flags;
+    uint8_t label[WOLFHSM_NVM_LABEL_LEN] = { 0 };
+    whSheMetadata* she_meta = (whSheMetadata*)label;
+
+    she_meta->flags = flags;
     ret = wh_Client_NvmAddObject(c, MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_SHE,
         c->comm->client_id, keyId), 0, 0, sizeof(label), label, keySz, key, (int32_t*)&outRc);
     if (ret == 0)

@@ -101,7 +101,7 @@ typedef struct {
     void* resp;
     uint16_t req_size;
     uint16_t resp_size;
-    uint8_t padding[4];
+    uint8_t WH_PAD[4];
 } whTransportMemConfig;
 
 

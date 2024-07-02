@@ -18,6 +18,7 @@
  */
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
 #if defined(WH_CONFIG)
 #include "wh_config.h"
@@ -107,8 +108,8 @@ static void _ShowList(const whNvmCb* cb, void* context)
 
             if (rc == 0) {
 
-                uint8_t data[WOLFHSM_NVM_MAX_OBJECT_SIZE];
-                memset(&data, 0, sizeof(data));
+                uint8_t data[16] = {0};
+                whNvmSize offset = 0;
 
                 printf("-Id:%04hX\n-Label:%.*s\n"
                        "-Access:%04hX\n-Flags:%04hX\n-Len:%d\n",
@@ -116,12 +117,26 @@ static void _ShowList(const whNvmCb* cb, void* context)
                        myMetadata.label, myMetadata.access, myMetadata.flags,
                        myMetadata.len);
 
-                /* Read the data from this object */
-                rc = cb->Read(context, id, 0, myMetadata.len, data);
+                while ( (rc == 0) &&
+                        ((myMetadata.len - offset) > sizeof(data))) {
+                    /* Read the data from this object */
+                    rc = cb->Read(context, id, offset, sizeof(data), data);
 
-                if (rc == 0) {
-                    /* Show the data from this object */
-                    _HexDump((const char*)data, (int)(myMetadata.len));
+                    if (rc == 0) {
+                        /* Show the data from this object */
+                        _HexDump((const char*)data, (int)(sizeof(data)));
+                        offset += sizeof(data);
+                    }
+                }
+                if ((rc == 0) && (offset < myMetadata.len)) {
+                    whNvmSize final = myMetadata.len - offset;
+                    rc = cb->Read(context, id, offset, final, data);
+
+                    if (rc == 0) {
+                        /* Show the data from this object */
+                        _HexDump((const char*)data, (int)(final));
+                        offset += final;
+                    }
                 }
             }
         }

@@ -16,15 +16,51 @@
  * You should have received a copy of the GNU General Public License
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
+/*
+ * wolfhsm/wh_server_she.h
+ *
+ */
 #ifndef WOLFHSM_WH_SERVER_SHE_H
 #define WOLFHSM_WH_SERVER_SHE_H
+
+#include <stdint.h>
+
 #include "wolfhsm/wh_server.h"
 
+#ifndef WOLFHSM_NO_CRYPTO
+#include "wolfssl/wolfcrypt/settings.h"
+#include "wolfssl/wolfcrypt/aes.h"
+#include "wolfssl/wolfcrypt/cmac.h"
+#endif /* !WOLFHSM_NO_CRYPTO */
+
+#if defined(WOLFHSM_SHE_EXTENSION)
+
 typedef struct {
-    uint32_t count;
-    uint32_t flags;
-} whSheMetadata;
+    uint8_t  sbState;
+    uint8_t  cmacKeyFound;
+    uint8_t  ramKeyPlain;
+    uint8_t  uidSet;
+    uint32_t blSize;
+    uint32_t blSizeReceived;
+    uint32_t rndInited;
+
+#ifndef WOLFHSM_NO_CRYPTO
+#ifndef NO_AES
+    Aes sheAes[1];
+#endif /* !NO_AES*/
+#ifdef WOLFSSL_CMAC
+    Cmac sheCmac[1];
+#endif /* WOLFSSL_CMAC */
+#endif /* !WOLFHSM_NO_CRYPTO*/
+
+    uint8_t  prngState[WOLFHSM_SHE_KEY_SZ];
+    uint8_t  prngKey[WOLFHSM_SHE_KEY_SZ];
+    uint8_t  uid[WOLFHSM_SHE_UID_SZ];
+} whServerSheContext;
 
 int wh_Server_HandleSheRequest(whServerContext* server,
     uint16_t action, uint8_t* data, uint16_t* size);
-#endif
+
+#endif /* WOLFHSM_SHE_EXTENSION */
+
+#endif /* WOLFHSM_WH_SERVER_SHE_H */

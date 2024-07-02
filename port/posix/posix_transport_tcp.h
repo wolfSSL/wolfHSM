@@ -68,7 +68,7 @@
 typedef struct {
     char* server_ip_string;
     short int server_port;
-    uint8_t padding[6];
+    uint8_t WH_PAD[6];
 } posixTransportTcpConfig;
 
 
@@ -83,7 +83,7 @@ typedef struct {
     int request_sent;
     uint16_t buffer_offset;
     uint8_t buffer[PTT_BUFFER_SIZE];
-    uint8_t padding[6];
+    uint8_t WH_PAD[6];
 } posixTransportTcpClientContext;
 
 int posixTransportTcp_InitConnect(void* context, const void* config,
@@ -115,7 +115,7 @@ typedef struct {
     int request_recv;
     uint16_t buffer_offset;
     uint8_t buffer[PTT_BUFFER_SIZE];
-    uint8_t padding[6];
+    uint8_t WH_PAD[6];
 } posixTransportTcpServerContext;
 
 int posixTransportTcp_InitListen(void* context, const void* config,

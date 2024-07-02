@@ -18,6 +18,7 @@
  */
 /*
  * src/wh_client.c
+ *
  */
 
 /* System libraries */
@@ -33,7 +34,6 @@
 #include "wolfhsm/wh_comm.h"
 
 #ifndef WOLFHSM_NO_CRYPTO
-#include "wolfhsm/wh_client_cryptocb.h"
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/error-crypt.h"
 #include "wolfssl/wolfcrypt/wc_port.h"
@@ -41,14 +41,17 @@
 #include "wolfssl/wolfcrypt/curve25519.h"
 #include "wolfssl/wolfcrypt/rsa.h"
 #include "wolfssl/wolfcrypt/ecc.h"
+
+#include "wolfhsm/wh_client_cryptocb.h"
+
 #endif
 
 /* Message definitions */
 #include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_message_comm.h"
 #include "wolfhsm/wh_message_customcb.h"
-
 #include "wolfhsm/wh_packet.h"
+
 #include "wolfhsm/wh_client.h"
 
 int wh_Client_Init(whClientContext* c, const whClientConfig* config)
@@ -59,18 +62,28 @@ int wh_Client_Init(whClientContext* c, const whClientConfig* config)
     }
 
     memset(c, 0, sizeof(*c));
-
     /* register the cancel callback */
     c->cancelCb = config->cancelCb;
 
-    if (    ((rc = wh_CommClient_Init(c->comm, config->comm)) == 0)
+    rc = wh_CommClient_Init(c->comm, config->comm);
+
 #ifndef WOLFHSM_NO_CRYPTO
-            && ((rc = wolfCrypt_Init()) == 0)
-            && ((rc = wc_CryptoCb_RegisterDevice(WOLFHSM_DEV_ID, wolfHSM_CryptoCb, c)) == 0)
-#endif  /* WOLFHSM_NO_CRYPTO */
-            ) {
-        /* All good */
+    if( rc == 0) {
+        rc = wolfCrypt_Init();
+        if (rc != 0) {
+            rc = WH_ERROR_ABORTED;
+        }
+
+        if (rc == 0) {
+            rc = wc_CryptoCb_RegisterDevice(WOLFHSM_DEV_ID,
+                    wolfHSM_CryptoCb, c);
+            if (rc != 0) {
+                rc = WH_ERROR_ABORTED;
+            }
+        }
     }
+#endif  /* WOLFHSM_NO_CRYPTO */
+
     if (rc != 0) {
         wh_Client_Cleanup(c);
     }
@@ -83,10 +96,11 @@ int wh_Client_Cleanup(whClientContext* c)
         return WH_ERROR_BADARGS;
     }
 
-    (void)wh_CommClient_Cleanup(c->comm);
 #ifndef WOLFHSM_NO_CRYPTO
     (void)wolfCrypt_Cleanup();
 #endif  /* WOLFHSM_NO_CRYPTO */
+
+    (void)wh_CommClient_Cleanup(c->comm);
 
     memset(c, 0, sizeof(*c));
     return 0;
@@ -96,9 +110,9 @@ int wh_Client_SendRequest(whClientContext* c,
         uint16_t group, uint16_t action,
         uint16_t data_size, const void* data)
 {
+    int rc = 0;
     uint16_t req_id = 0;
     uint16_t kind = WH_MESSAGE_KIND(group, action);
-    int rc = 0;
 
     if (c == NULL) {
         return WH_ERROR_BADARGS;
@@ -430,7 +444,7 @@ int wh_Client_Echo(whClientContext* c, uint16_t snd_len, const void* snd_data,
 
 int wh_Client_CustomCbRequest(whClientContext* c, const whMessageCustomCb_Request* req)
 {
-    if (NULL == c || req == NULL || req->id >= WH_CUSTOM_CB_NUM_CALLBACKS) {
+    if (NULL == c || req == NULL) {
         return WH_ERROR_BADARGS;
     }
 
@@ -457,8 +471,7 @@ int wh_Client_CustomCbResponse(whClientContext*          c,
         return rc;
     }
 
-    if (resp_size != sizeof(resp) || resp_group != WH_MESSAGE_GROUP_CUSTOM ||
-        resp_action >= WH_CUSTOM_CB_NUM_CALLBACKS) {
+    if (resp_size != sizeof(resp) || resp_group != WH_MESSAGE_GROUP_CUSTOM) {
         /* message invalid */
         return WH_ERROR_ABORTED;
     }
@@ -472,7 +485,7 @@ int wh_Client_CustomCheckRegisteredRequest(whClientContext* c, uint32_t id)
 {
     whMessageCustomCb_Request req = {0};
 
-    if (c == NULL || id >= WH_CUSTOM_CB_NUM_CALLBACKS) {
+    if (c == NULL) {
         return WH_ERROR_BADARGS;
     }
 
@@ -519,7 +532,7 @@ int wh_Client_CustomCbCheckRegistered(whClientContext* c, uint16_t id, int* resp
 {
     int rc = 0;
 
-    if (NULL == c || NULL == responseError || id >= WH_CUSTOM_CB_NUM_CALLBACKS) {
+    if (NULL == c || NULL == responseError) {
         return WH_ERROR_BADARGS;
     }
 

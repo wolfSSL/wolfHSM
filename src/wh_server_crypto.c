@@ -16,6 +16,11 @@
  * You should have received a copy of the GNU General Public License
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
+/*
+ * src/wh_server/cryptocb.c
+ *
+ */
+
 /* System libraries */
 #include <stdint.h>
 #include <stdlib.h>  /* For NULL */
@@ -28,10 +33,11 @@
 #include "wolfssl/wolfcrypt/error-crypt.h"
 
 #include "wolfhsm/wh_error.h"
-#include "wolfhsm/wh_server.h"
-#include "wolfhsm/wh_server_keystore.h"
 #include "wolfhsm/wh_packet.h"
+#include "wolfhsm/wh_server_keystore.h"
 #include "wolfhsm/wh_server_crypto.h"
+
+#include "wolfhsm/wh_server.h"
 
 #ifndef NO_RSA
 static int hsmCacheKeyRsa(whServerContext* server, RsaKey* key, whKeyId* outId)
@@ -646,7 +652,7 @@ static int hsmCryptoCmac(whServerContext* server, whPacket* packet,
     byte* in = (uint8_t*)(&packet->cmacReq + 1);
     byte* key = in + packet->cmacReq.inSz;
     byte* out = (uint8_t*)(&packet->cmacRes + 1);
-    whNvmMetadata meta[1];
+    whNvmMetadata meta[1] = {{0}};
     /* do oneshot if all fields are present */
     if (packet->cmacReq.inSz != 0 && packet->cmacReq.keySz != 0 &&
         packet->cmacReq.outSz != 0) {
@@ -719,7 +725,6 @@ static int hsmCryptoCmac(whServerContext* server, whPacket* packet,
         }
         else if (ret == 0) {
             /* cache/re-cache updated struct */
-            XMEMSET((uint8_t*)meta, 0, sizeof(meta));
             if (packet->cmacReq.keySz != 0) {
                 keyId = WOLFHSM_KEYTYPE_CRYPTO;
                 ret = hsmGetUniqueId(server, &keyId);

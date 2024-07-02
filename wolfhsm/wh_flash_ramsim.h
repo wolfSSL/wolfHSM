@@ -27,7 +27,7 @@ typedef struct {
     uint32_t sectorSize;
     uint32_t pageSize;
     uint8_t  erasedByte;
-    uint8_t padding[3];
+    uint8_t WH_PAD[3];
 } whFlashRamsimCfg;
 
 typedef struct {
@@ -37,7 +37,7 @@ typedef struct {
     uint32_t pageSize;
     int      writeLocked;
     uint8_t  erasedByte;
-    uint8_t padding[7];
+    uint8_t WH_PAD[7];
 } whFlashRamsimCtx;
 
 

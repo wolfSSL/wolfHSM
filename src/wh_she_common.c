@@ -28,6 +28,8 @@
 #include <stdlib.h>  /* For NULL */
 #include <string.h>  /* For memset, memcpy */
 
+#ifndef WOLFHSM_NO_CRYPTO
+
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/types.h"
 #include "wolfssl/wolfcrypt/error-crypt.h"
@@ -38,6 +40,9 @@
 #include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_utils.h"
+
+#include "wolfhsm/wh_she_common.h"
+
 
 static const uint8_t WOLFHSM_SHE_KEY_UPDATE_ENC_C[] = {0x01, 0x01, 0x53, 0x48, 0x45,
     0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xB0};
@@ -216,6 +221,7 @@ int wh_SheGenerateLoadableKey(uint8_t keyId,
     }
     return ret;
 }
+#endif /* !WOLFHSM_NO_CRYPTO */
 
 #endif /* WOLFHSM_SHE_EXTENSION */
 

@@ -27,6 +27,7 @@
 #include "wolfhsm/wh_comm.h"
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_message.h"
+
 #include "wolfhsm/wh_message_comm.h"
 
 int wh_MessageComm_TranslateInitRequest(uint16_t magic,

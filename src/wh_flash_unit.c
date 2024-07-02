@@ -24,11 +24,13 @@
  *
  */
 
+#include <stdint.h>
 #include <stddef.h>     /* For NULL */
 #include <string.h>     /* For memset, memcpy */
 
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_flash.h"
+
 #include "wolfhsm/wh_flash_unit.h"
 
 /** Helper functions based on units rather than bytes */
