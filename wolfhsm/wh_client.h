@@ -598,10 +598,7 @@ int wh_Client_KeyEraseResponse(whClientContext* c);
  */
 int wh_Client_KeyErase(whClientContext* c, whNvmId keyId);
 
-<<<<<<< Upstream, based on origin/main
-=======
 #ifdef HAVE_CURVE25519
->>>>>>> dce8ec5 Corrections for conditional compiles
 /**
  * @brief Associates a Curve25519 key with a specific key ID.
  *
@@ -613,7 +610,6 @@ int wh_Client_KeyErase(whClientContext* c, whNvmId keyId);
  * @param[in] keyId Key ID to be associated with the Curve25519 key.
  * @return int Returns 0 on success or a negative error code on failure.
  */
-<<<<<<< Upstream, based on origin/main
 int wh_Client_SetKeyIdCurve25519(curve25519_key* key, whNvmId keyId);
 
 /**
@@ -627,10 +623,7 @@ int wh_Client_SetKeyIdCurve25519(curve25519_key* key, whNvmId keyId);
  * @return int Returns 0 on success or a negative error code on failure.
  */
 int wh_Client_GetKeyIdCurve25519(curve25519_key* key, whNvmId* outId);
-=======
-int wh_Client_SetKeyCurve25519(curve25519_key* key, whNvmId keyId);
 #endif
->>>>>>> dce8ec5 Corrections for conditional compiles
 
 #ifndef NO_RSA
 /**
@@ -644,7 +637,6 @@ int wh_Client_SetKeyCurve25519(curve25519_key* key, whNvmId keyId);
  * @param[in] keyId Key ID to be associated with the RSA key.
  * @return int Returns 0 on success or a negative error code on failure.
  */
-<<<<<<< Upstream, based on origin/main
 int wh_Client_SetKeyIdRsa(RsaKey* key, whNvmId keyId);
 
 /**
@@ -658,10 +650,7 @@ int wh_Client_SetKeyIdRsa(RsaKey* key, whNvmId keyId);
  * @return int Returns 0 on success or a negative error code on failure.
  */
 int wh_Client_GetKeyIdRsa(RsaKey* key, whNvmId* outId);
-=======
-int wh_Client_SetKeyRsa(RsaKey* key, whNvmId keyId);
 #endif /* !NO_RSA */
->>>>>>> dce8ec5 Corrections for conditional compiles
 
 #ifndef NO_AES
 /**
@@ -760,7 +749,6 @@ int wh_Client_CmacCancelableResponse(whClientContext* c, Cmac* cmac,
  * @param[in] keyId Key ID to be associated with the CMAC key.
  * @return int Returns 0 on success or a negative error code on failure.
  */
-<<<<<<< Upstream, based on origin/main
 int wh_Client_SetKeyIdCmac(Cmac* key, whNvmId keyId);
 
 /**
@@ -774,11 +762,8 @@ int wh_Client_SetKeyIdCmac(Cmac* key, whNvmId keyId);
  * @return int Returns 0 on success or a negative error code on failure.
  */
 int wh_Client_GetKeyIdCmac(Cmac* key, whNvmId* outId);
-=======
-int wh_Client_SetKeyCmac(Cmac* key, whNvmId keyId);
 #endif /* WOLFSSL_CMAC */
 #endif /* !NO_AES */
->>>>>>> dce8ec5 Corrections for conditional compiles
 #endif /* ! WOLFHSM_NO_CRYPTO */
 
 /* Counter functions */
