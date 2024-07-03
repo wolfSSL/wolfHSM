@@ -44,6 +44,28 @@
 #define WOLFHSM_SHE_M4_SZ WOLFHSM_SHE_M2_SZ
 #define WOLFHSM_SHE_M5_SZ WOLFHSM_SHE_M1_SZ
 
+/* M1 is 15 bytes of UID, 4 bits of KID, 4 bits of AID */
+#define WH_SHE_M1_UID_OFFSET 0
+#define WH_SHE_M1_KID_OFFSET 15
+#define WH_SHE_M1_KID_SHIFT 4
+#define WH_SHE_M1_AID_SHIFT 0
+
+/* M2 is 28 bits of BE counter, 4 bits of flags, 96 bits of 0's, 16 bytes Key */
+#define WH_SHE_M2_COUNT_SHIFT 4
+#define WH_SHE_M2_FLAGS_SHIFT 0
+#define WH_SHE_M2_KEY_OFFSET 16
+
+/* M4 is 15 bytes of UID, 4 bits of KID, 4 bits of AID, like M1.
+ * Followed by 16 bytes of the counter encrypted with K3
+ */
+#define WH_SHE_M4_UID_OFFSET 0
+#define WH_SHE_M4_KID_OFFSET 15
+#define WH_SHE_M4_KID_SHIFT 4
+#define WH_SHE_M4_AID_SHIFT 0
+#define WH_SHE_M4_COUNT_OFFSET 16
+#define WH_SHE_M4_COUNT_SHIFT 4
+#define WH_SHE_M4_COUNT_PAD 0x8
+
 /* sreg flags */
 #define WOLFHSM_SHE_SREG_BUSY (1 << 0)
 #define WOLFHSM_SHE_SREG_SECURE_BOOT (1 << 1)

@@ -94,7 +94,7 @@ typedef struct whServerCacheSlot {
 
 typedef struct whServerCryptoContext {
     int devId;
-#ifndef WC_NO_RNGzx
+#ifndef WC_NO_RNG
     WC_RNG rng[1];
 #endif
     union {
