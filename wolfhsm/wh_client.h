@@ -51,6 +51,8 @@
 #include "wolfssl/wolfcrypt/error-crypt.h"
 #include "wolfssl/wolfcrypt/wc_port.h"
 #include "wolfssl/wolfcrypt/cryptocb.h"
+#include "wolfssl/wolfcrypt/aes.h"
+#include "wolfssl/wolfcrypt/cmac.h"
 #include "wolfssl/wolfcrypt/curve25519.h"
 #include "wolfssl/wolfcrypt/rsa.h"
 #include "wolfssl/wolfcrypt/ecc.h"
@@ -67,12 +69,12 @@ typedef int (*whClientCancelCb)(uint16_t cancelSeq);
 
 /* Client context */
 struct whClientContext_t {
-    whCommClient comm[1];
-    whClientCancelCb cancelCb;
     uint16_t     last_req_id;
     uint16_t     last_req_kind;
     uint8_t      cancelable;
-    uint8_t      pad[3];
+    uint8_t      WH_PAD[3];
+    whCommClient comm[1];
+    whClientCancelCb cancelCb;
 };
 typedef struct whClientContext_t whClientContext;
 
@@ -596,6 +598,7 @@ int wh_Client_KeyEraseResponse(whClientContext* c);
  */
 int wh_Client_KeyErase(whClientContext* c, whNvmId keyId);
 
+#ifdef HAVE_CURVE25519
 /**
  * @brief Associates a Curve25519 key with a specific key ID.
  *
@@ -620,7 +623,9 @@ int wh_Client_SetKeyIdCurve25519(curve25519_key* key, whNvmId keyId);
  * @return int Returns 0 on success or a negative error code on failure.
  */
 int wh_Client_GetKeyIdCurve25519(curve25519_key* key, whNvmId* outId);
+#endif
 
+#ifndef NO_RSA
 /**
  * @brief Associates an RSA key with a specific key ID.
  *
@@ -645,7 +650,9 @@ int wh_Client_SetKeyIdRsa(RsaKey* key, whNvmId keyId);
  * @return int Returns 0 on success or a negative error code on failure.
  */
 int wh_Client_GetKeyIdRsa(RsaKey* key, whNvmId* outId);
+#endif /* !NO_RSA */
 
+#ifndef NO_AES
 /**
  * @brief Associates an AES key with a specific key ID.
  *
@@ -671,6 +678,7 @@ int wh_Client_SetKeyIdAes(Aes* key, whNvmId keyId);
  */
 int wh_Client_GetKeyIdAes(Aes* key, whNvmId* outId);
 
+#ifdef WOLFSSL_CMAC
 /**
  * @brief Runs the AES CMAC operation in a single call with a wolfHSM keyId.
  *
@@ -754,6 +762,8 @@ int wh_Client_SetKeyIdCmac(Cmac* key, whNvmId keyId);
  * @return int Returns 0 on success or a negative error code on failure.
  */
 int wh_Client_GetKeyIdCmac(Cmac* key, whNvmId* outId);
+#endif /* WOLFSSL_CMAC */
+#endif /* !NO_AES */
 #endif /* ! WOLFHSM_NO_CRYPTO */
 
 /* Counter functions */
@@ -1235,14 +1245,11 @@ int wh_Client_NvmDestroyObjectsResponse(whClientContext* c, int32_t* out_rc);
  * @param[in] c Pointer to the client context.
  * @param[in] list_count The number of NVM objects to destroy.
  * @param[in] id_list Pointer to an array of IDs of the NVM objects to destroy.
- * @param[in] len The length of the data.
- * @param[in] data Pointer to the data associated with the NVM objects.
  * @param[out] out_rc Pointer to store the return code from the server.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_Client_NvmDestroyObjects(whClientContext* c, whNvmId list_count,
-                                const whNvmId* id_list, whNvmSize len,
-                                const uint8_t* data, int32_t* out_rc);
+                                const whNvmId* id_list, int32_t* out_rc);
 
 /**
  * @brief Sends a request to the server to read data from a non-volatile memory

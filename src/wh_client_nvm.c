@@ -26,6 +26,7 @@
 #include <string.h>  /* For memset, memcpy */
 
 /* Common WolfHSM types and defines shared with the server */
+#include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_comm.h"
 
@@ -579,7 +580,7 @@ int wh_Client_NvmDestroyObjectsResponse(whClientContext* c, int32_t *out_rc)
 
 int wh_Client_NvmDestroyObjects(whClientContext* c,
         whNvmId list_count, const whNvmId* id_list,
-        whNvmSize len, const uint8_t* data, int32_t *out_rc)
+        int32_t *out_rc)
 {
     int rc = 0;
 

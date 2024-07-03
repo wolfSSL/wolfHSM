@@ -17,12 +17,11 @@
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
 /*
- * src/wh_flash.c
- *
- * Simple helper library
+ * src/wh_nvm.c
  *
  */
 
+#include <stdint.h>
 #include <stddef.h>     /* For NULL */
 #include <string.h>     /* For memset, memcpy */
 
@@ -90,29 +89,37 @@ int wh_Nvm_GetAvailable(whNvmContext* context,
 int wh_Nvm_AddObjectWithReclaim(whNvmContext* context, whNvmMetadata *meta,
     whNvmSize dataLen, const uint8_t* data)
 {
-    uint16_t availableObjects;
-    uint16_t reclaimObjects;
     int ret;
     uint32_t availableSize;
     uint32_t reclaimSize;
-    if (context == NULL)
+    uint16_t availableObjects;
+    uint16_t reclaimObjects;
+
+    /* Note that meta and data pointers are validated by AddObject later */
+    if (context == NULL) {
         return WH_ERROR_BADARGS;
-    /* check if we have room for the object */
-    ret = wh_Nvm_GetAvailable(context, &availableSize, &availableObjects,
-        &reclaimSize, &reclaimObjects);
+    }
+
+    /* check if we have available object and data space */
+    ret = wh_Nvm_GetAvailable(context,
+            &availableSize, &availableObjects,
+            &reclaimSize, &reclaimObjects);
     if (ret == 0) {
-        if (availableSize >= WOLFHSM_NVM_METADATA_LEN + dataLen &&
-            availableObjects > 0) {
-            ret = wh_Nvm_AddObject(context, meta, dataLen, data);
+        if (    (availableSize < dataLen) ||
+                (availableObjects == 0) ) {
+            /* There's no available space, so try to reclaim space, */
+            if  (   (availableSize + reclaimSize >= dataLen) &&
+                    (availableObjects + reclaimObjects > 0) ) {
+                /* Reclaim will make sufficient space available */
+                ret = wh_Nvm_DestroyObjects(context, 0, NULL);
+            } else {
+                /* Reclaim witl not help */
+                ret = WH_ERROR_NOSPACE;
+            }
         }
-        /* if there's no room, try to reclaim space, otherwise return error */
-        else if (availableSize + reclaimSize >= dataLen && reclaimObjects > 0) {
-            ret = wh_Nvm_DestroyObjects(context, 0, NULL);
-            if (ret == 0)
-                ret = wh_Nvm_AddObject(context, meta, dataLen, data);
-        }
-        else
-            ret = WH_ERROR_NOSPACE;
+    }
+    if (ret == 0) {
+        ret = wh_Nvm_AddObject(context, meta, dataLen, data);
     }
     return ret;
 }

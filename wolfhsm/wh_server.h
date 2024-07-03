@@ -16,6 +16,11 @@
  * You should have received a copy of the GNU General Public License
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
+/*
+ * wolfhsm/wh_server.h
+ *
+ */
+
 #ifndef WOLFHSM_WH_SERVER_H_
 #define WOLFHSM_WH_SERVER_H_
 
@@ -27,6 +32,10 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
+
+/* Forward declaration of the server structure so its elements can reference
+ * itself  (e.g. server argument to custom callback) */
+typedef struct whServerContext_t whServerContext;
 
 #include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_comm.h"
@@ -42,16 +51,45 @@
 #include "wolfssl/wolfcrypt/cryptocb.h"
 #endif /* WOLFHSM_NO_CRYPTO */
 
-/* Forward declaration of the server structure so its elements can reference
- * itself  (e.g. server argument to custom callback) */
-typedef struct whServerContext_t whServerContext;
+#ifdef WOLFHSM_SHE_EXTENSION
+#include "wolfhsm/wh_she_common.h"
+#include "wolfhsm/wh_server_she.h"
+#endif
+
+/** Default server resource configurations */
+/* Number of RAM keys */
+#ifndef WOLFHSM_NUM_RAMKEYS
+#define WOLFHSM_NUM_RAMKEYS  8
+#endif
+
+/* Number of NVM objects in the directory */
+#ifndef WOLFHSM_NUM_NVMOBJECTS
+#define WOLFHSM_NUM_NVMOBJECTS  32
+#endif
+
+/* Size in bytes of key cache buffer  */
+#ifndef WOLFHSM_KEYCACHE_BUFSIZE
+#define WOLFHSM_KEYCACHE_BUFSIZE 1200
+#endif
+
+/* Custom request shared defs */
+#ifndef WH_CUSTOM_CB_NUM_CALLBACKS
+#define WH_CUSTOM_CB_NUM_CALLBACKS 8
+#endif
+
+/* DMA translation allow entries */
+#ifndef WH_DMA_ADDR_ALLOWLIST_COUNT
+#define WH_DMA_ADDR_ALLOWLIST_COUNT 10
+#endif
+
+
 
 #ifndef WOLFHSM_NO_CRYPTO
 /** Server crypto context and resource allocation */
 typedef struct whServerCacheSlot {
-    uint8_t       commited;
-    whNvmMetadata meta[1];
-    uint8_t       buffer[WOLFHSM_KEYCACHE_BUFSIZE];
+    uint32_t        commited;
+    whNvmMetadata   meta[1];
+    uint8_t         buffer[WOLFHSM_KEYCACHE_BUFSIZE];
 } whServerCacheSlot;
 
 typedef struct whServerCryptoContext {
@@ -86,20 +124,7 @@ typedef struct whServerCryptoContext {
     } pubKey;
 } whServerCryptoContext;
 
-#ifdef WOLFHSM_SHE_EXTENSION
-typedef struct {
-    uint8_t  sbState;
-    uint8_t  cmacKeyFound;
-    uint8_t  ramKeyPlain;
-    uint8_t  uidSet;
-    uint32_t blSize;
-    uint32_t blSizeReceived;
-    uint32_t rndInited;
-    uint8_t  prngState[WOLFHSM_SHE_KEY_SZ];
-    uint8_t  prngKey[WOLFHSM_SHE_KEY_SZ];
-    uint8_t  uid[WOLFHSM_SHE_UID_SZ];
-} whServerSheContext;
-#endif
+
 #endif /* WOLFHSM_NO_CRYPTO */
 
 /** Server custom callback */
@@ -114,7 +139,6 @@ typedef int (*whServerCustomCb)(
 
 /** Server DMA address translation and validation */
 
-#define WH_DMA_ADDR_ALLOWLIST_COUNT (10)
 
 /* Indicates to a DMA callback the type of memory operation the callback must
  * act on. Common use cases are remapping client addresses into server address
@@ -201,8 +225,8 @@ typedef struct whServerConfig_t {
 
 /* Context structure to maintain the state of an HSM server */
 struct whServerContext_t {
-    whCommServer  comm[1];
     whNvmContext* nvm;
+    whCommServer  comm[1];
 #ifndef WOLFHSM_NO_CRYPTO
     whServerCryptoContext* crypto;
     whServerCacheSlot       cache[WOLFHSM_NUM_RAMKEYS];
@@ -214,7 +238,7 @@ struct whServerContext_t {
     whServerDmaContext dma;
     int                connected;
     uint16_t cancelSeq;
-    uint8_t padding[2];
+    uint8_t WH_PAD[2];
 };
 
 

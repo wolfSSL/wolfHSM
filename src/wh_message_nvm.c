@@ -25,13 +25,13 @@
 #include <stddef.h>
 #include <string.h>
 
+#include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_nvm.h"
 #include "wolfhsm/wh_comm.h"
-
 #include "wolfhsm/wh_message.h"
+
 #include "wolfhsm/wh_message_nvm.h"
 
-#include "wolfhsm/wh_error.h"
 
 int wh_MessageNvm_TranslateSimpleResponse(uint16_t magic,
         const whMessageNvm_SimpleResponse* src,

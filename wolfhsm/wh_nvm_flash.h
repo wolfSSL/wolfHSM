@@ -33,7 +33,10 @@
 #include "wolfhsm/wh_flash_unit.h"
 
 /* Number of objects in a directory */
+#ifndef NF_OBJECT_COUNT
+#include "wolfhsm/wh_server.h"
 #define NF_OBJECT_COUNT (WOLFHSM_NUM_NVMOBJECTS)
+#endif
 
 /* In-memory computed status of an Object or Directory */
 typedef enum {
@@ -83,7 +86,7 @@ typedef struct whNvmFlashContext_t {
     uint32_t partition_units;       /* Size of partition in units */
     int active;                     /* Which partition (0 or 1) is active */
     int initialized;
-    uint8_t padding[4];
+    uint8_t WH_PAD[4];
 } whNvmFlashContext;
 
 /** whNvm Interface */

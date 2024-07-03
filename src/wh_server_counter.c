@@ -18,13 +18,19 @@
  */
 /*
  * src/wh_server_counter.c
+ *
  */
+
 #include <string.h>
-#include "wolfhsm/wh_server.h"
-#include "wolfhsm/wh_server_counter.h"
+#include <stdint.h>
+
+#include "wolfhsm/wh_common.h"
+#include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_packet.h"
-#include "wolfhsm/wh_error.h"
+#include "wolfhsm/wh_server.h"
+
+#include "wolfhsm/wh_server_counter.h"
 
 int wh_Server_HandleCounter(whServerContext* server, uint16_t action,
     uint8_t* data, uint16_t* size)
@@ -32,7 +38,8 @@ int wh_Server_HandleCounter(whServerContext* server, uint16_t action,
     whKeyId counterId = 0;
     int ret = 0;
     whPacket* packet = (whPacket*)data;
-    whNvmMetadata meta[1] = {0};
+    whNvmMetadata meta[1] = {{0}};
+    uint32_t* counter = (uint32_t*)(&meta->label);
 
     if (server == NULL || server->nvm == NULL || data == NULL || size == NULL)
         return WH_ERROR_BADARGS;
@@ -44,10 +51,10 @@ int wh_Server_HandleCounter(whServerContext* server, uint16_t action,
         meta->id = MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_COUNTER,
             server->comm->client_id, packet->counterInitReq.counterId);
         /* use the label buffer to hold the counter value */
-        *(uint32_t*)meta->label = packet->counterInitReq.counter;
+        *counter = packet->counterInitReq.counter;
         ret = wh_Nvm_AddObjectWithReclaim(server->nvm, meta, 0, NULL);
         if (ret == 0) {
-            packet->counterInitRes.counter = *(uint32_t*)meta->label;
+            packet->counterInitRes.counter = *counter;
             *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->counterInitRes);
         }
         break;
@@ -58,10 +65,11 @@ int wh_Server_HandleCounter(whServerContext* server, uint16_t action,
             packet->counterIncrementReq.counterId), meta);
         /* increment and write the counter back */
         if (ret == 0) {
-            (*(uint32_t*)meta->label)++;
+            *counter = *counter + 1;
             /* set counter to uint32_t max if it rolled over */
-            if (*(uint32_t*)meta->label == 0)
-                *(uint32_t*)meta->label = 0xffffffff;
+            if (*counter == 0) {
+                *counter = 0xffffffff;
+            }
             /* only update if we didn't saturate */
             else {
                 ret = wh_Nvm_AddObjectWithReclaim(server->nvm, meta, 0, NULL);
@@ -69,7 +77,7 @@ int wh_Server_HandleCounter(whServerContext* server, uint16_t action,
         }
         /* return counter to the caller */
         if (ret == 0) {
-            packet->counterIncrementRes.counter = *(uint32_t*)meta->label;
+            packet->counterIncrementRes.counter = *counter;
             *size = WOLFHSM_PACKET_STUB_SIZE +
                 sizeof(packet->counterIncrementRes);
         }
@@ -81,7 +89,8 @@ int wh_Server_HandleCounter(whServerContext* server, uint16_t action,
             packet->counterReadReq.counterId), meta);
         /* return counter to the caller */
         if (ret == 0) {
-            packet->counterReadRes.counter = *(uint32_t*)meta->label;
+
+            packet->counterReadRes.counter = *counter;
             *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->counterReadRes);
         }
         break;

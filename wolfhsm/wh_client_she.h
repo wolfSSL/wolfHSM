@@ -1,22 +1,24 @@
-/* wh_client_she.h
+/*
+ * Copyright (C) 2024 wolfSSL Inc.
  *
- * Copyright (C) 2006-2023 wolfHSM Inc.
+ * This file is part of wolfHSM.
  *
- * This file is part of wolfSSL.
- *
- * wolfSSL is free software; you can redistribute it and/or modify
+ * wolfHSM is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation; either version 3 of the License, or
  * (at your option) any later version.
  *
- * wolfSSL is distributed in the hope that it will be useful,
+ * wolfHSM is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1335, USA
+ * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
+ */
+/*
+ * wolfhsm/wh_client_she.h
+ *
  */
 
 #ifndef WOLFHSM_WH_CLIENT_SHE_H_
@@ -28,7 +30,7 @@
 #include "wolfhsm/wh_common.h"
 
 /* Component includes */
-#include "wolfhsm/wh_comm.h"
+#include "wolfhsm/wh_client.h"
 
 int wh_Client_ShePreProgramKey(whClientContext* c, whNvmId keyId,
     whNvmFlags flags, uint8_t* key, whNvmSize keySz);

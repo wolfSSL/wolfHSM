@@ -92,7 +92,10 @@ enum WH_COMM_AUX_ENUM {
     WH_COMM_AUX_RESP_UNSUPP     = 0xFFFF, /* Request is not supported */
 };
 
-/** Data translations */
+
+/** Translation utilities */
+
+/* Byteswap val if magic doesn't have the same endianness as native */
 uint8_t wh_Translate8(uint16_t magic, uint8_t val);
 uint16_t wh_Translate16(uint16_t magic, uint16_t val);
 uint32_t wh_Translate32(uint16_t magic, uint32_t val);
@@ -159,13 +162,14 @@ typedef struct {
     const void* transport_config;
     whCommSetConnectedCb connect_cb;
     uint8_t client_id;
-    uint8_t pad[7];
+    uint8_t WH_PAD[7];
 } whCommClientConfig;
 
 /* Context structure for a client.  Note the client context will track the
  * request sequence number and provide a buffer for at least 1 packet.
  */
 typedef struct {
+    uint64_t WH_ALIGN; /* Ensure following is 64-bit aligned */
     uint64_t packet[WH_COMM_MTU_U64_COUNT];
     void* transport_context;
     const whTransportClientCb* transport_cb;
@@ -178,7 +182,7 @@ typedef struct {
     uint16_t size;
     uint8_t client_id;
     uint8_t server_id;
-    uint8_t pad[4];
+    uint8_t WH_PAD[4];
 } whCommClient;
 
 
@@ -252,13 +256,14 @@ typedef struct {
     const whTransportServerCb* transport_cb;
     const void* transport_config;
     uint8_t server_id;
-    uint8_t pad[7];
+    uint8_t WH_PAD[7];
 } whCommServerConfig;
 
 /* Context structure for a server.  Note the client context will track the
  * request sequence number and provide a buffer for at least 1 request packet.
  */
 typedef struct {
+    uint64_t WH_ALIGN; /* Ensure following is 64-bit aligned */
     uint64_t packet[WH_COMM_MTU_U64_COUNT];
     void* transport_context;
     const whTransportServerCb* transport_cb;

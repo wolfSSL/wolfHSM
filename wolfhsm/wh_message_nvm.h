@@ -49,7 +49,7 @@ enum WH_MESSAGE_NVM_MAX_ENUM {
     /* must be odd for struct whMessageNvm_DestroyObjectsRequest  alignment */
     WH_MESSAGE_NVM_MAX_DESTROY_OBJECTS_COUNT = 9,
     WH_MESSAGE_NVM_MAX_ADD_OBJECT_LEN =
-            WH_COMM_DATA_LEN - WOLFHSM_NVM_METADATA_LEN,
+            WH_COMM_DATA_LEN - sizeof(whNvmMetadata),
     WH_MESSAGE_NVM_MAX_READ_LEN = WH_COMM_DATA_LEN - sizeof(int32_t),
 };
 
@@ -168,8 +168,8 @@ int wh_MessageNvm_TranslateGetMetadataResponse(uint16_t magic,
 
 /** NVM DestroyObjects Request */
 typedef struct {
-    uint16_t list[WH_MESSAGE_NVM_MAX_DESTROY_OBJECTS_COUNT];
     uint16_t list_count;
+    uint16_t list[WH_MESSAGE_NVM_MAX_DESTROY_OBJECTS_COUNT];
 } whMessageNvm_DestroyObjectsRequest;
 
 int wh_MessageNvm_TranslateDestroyObjectsRequest(uint16_t magic,
@@ -205,7 +205,7 @@ typedef struct {
     uint32_t metadata_hostaddr;
     uint32_t data_hostaddr;
     uint16_t data_len;
-    uint8_t padding[6];
+    uint8_t WH_PAD[6];
 } whMessageNvm_AddObjectDma32Request;
 
 int wh_MessageNvm_TranslateAddObjectDma32Request(uint16_t magic,
@@ -221,7 +221,7 @@ typedef struct {
     uint16_t id;
     uint16_t offset;
     uint16_t data_len;
-    uint8_t padding[6];
+    uint8_t WH_PAD[6];
 } whMessageNvm_ReadDma32Request;
 
 int wh_MessageNvm_TranslateReadDma32Request(uint16_t magic,
@@ -236,7 +236,7 @@ typedef struct {
     uint64_t metadata_hostaddr;
     uint64_t data_hostaddr;
     uint16_t data_len;
-    uint8_t padding[6];
+    uint8_t WH_PAD[6];
 } whMessageNvm_AddObjectDma64Request;
 
 int wh_MessageNvm_TranslateAddObjectDma64Request(uint16_t magic,
@@ -252,7 +252,7 @@ typedef struct {
     uint16_t id;
     uint16_t offset;
     uint16_t data_len;
-    uint8_t padding[2];
+    uint8_t WH_PAD[2];
 } whMessageNvm_ReadDma64Request;
 
 int wh_MessageNvm_TranslateReadDma64Request(uint16_t magic,

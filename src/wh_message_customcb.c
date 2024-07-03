@@ -16,13 +16,19 @@
  * You should have received a copy of the GNU General Public License
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
+/*
+ * src/wh_message_customcb.c
+ *
+ */
+
 #include <stddef.h>
+#include <stdint.h>
 #include <string.h>
 
-#include "wolfhsm/wh_message_customcb.h"
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_comm.h"
 
+#include "wolfhsm/wh_message_customcb.h"
 
 static void _translateCustomData(uint16_t magic, uint32_t translatedType,
                                  const whMessageCustomCb_Data* src,

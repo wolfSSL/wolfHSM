@@ -30,8 +30,11 @@
 #endif
 
 #ifdef WOLFHSM_SHE_EXTENSION
+#ifndef WOLFHSM_NO_CRYPTO
 
 #include "wolfssl/wolfcrypt/settings.h"
+#include "wolfssl/wolfcrypt/types.h"
+#include "wolfssl/wolfcrypt/cmac.h"
 
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_nvm.h"
@@ -70,7 +73,7 @@ static int _destroySheKey(whClientContext* client, whNvmId clientSheKeyId)
 
     whNvmId id = MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_SHE, client->comm->client_id, clientSheKeyId);
 
-    rc = wh_Client_NvmDestroyObjects(client, 1, &id, 0, NULL, &serverRc);
+    rc = wh_Client_NvmDestroyObjects(client, 1, &id, &serverRc);
     if (rc == WH_ERROR_OK) {
         rc = serverRc;
     }
@@ -572,4 +575,5 @@ int whTest_She(void)
     return 0;
 }
 
-#endif  /* WOLFHSM_SHE_EXTENSION */
+#endif /* !WOLFHSM_NO_CRYPTO */
+#endif /* WOLFHSM_SHE_EXTENSION */

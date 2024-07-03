@@ -16,15 +16,21 @@
  * You should have received a copy of the GNU General Public License
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
-#include <stdio.h>
-#include <stdlib.h>
+/*
+ * src/wh_flash_ramsim.c
+ *
+ */
+
+#include <stdint.h>
+#include <stdlib.h>  /* For malloc/free */
 #include <string.h>
 #include <stdbool.h>
 
 #include "wolfhsm/wh_error.h"
+
 #include "wolfhsm/wh_flash_ramsim.h"
 
-
+/** Forward declarations */
 static bool isMemoryErased(whFlashRamsimCtx* context, uint32_t offset,
                            uint32_t size);
 
@@ -91,8 +97,10 @@ int whFlashRamsim_Program(void* context, uint32_t offset, uint32_t size,
 {
     whFlashRamsimCtx* ctx = (whFlashRamsimCtx*)context;
 
-    if ((ctx == NULL) || (ctx->memory == NULL) || (ctx->pageSize == 0) ||
-        (data == NULL)) {
+    if (    (ctx == NULL) ||
+            (ctx->memory == NULL) ||
+            (ctx->pageSize == 0) ||
+            ((data == NULL) && (size != 0))) {
         return WH_ERROR_BADARGS;
     }
 
@@ -113,8 +121,9 @@ int whFlashRamsim_Program(void* context, uint32_t offset, uint32_t size,
     }
 
     /* Perform the programming operation */
-    memcpy(ctx->memory + offset, data, size);
-
+    if (size != 0) {
+        memcpy(ctx->memory + offset, data, size);
+    }
     return WH_ERROR_OK;
 }
 
@@ -123,12 +132,16 @@ int whFlashRamsim_Read(void* context, uint32_t offset, uint32_t size,
 {
     whFlashRamsimCtx* ctx = (whFlashRamsimCtx*)context;
 
-    if ((ctx == NULL) || (ctx->memory == NULL) ||
-        ((offset + size) > ctx->size) || (data == NULL)) {
+    if (    (ctx == NULL) ||
+            (ctx->memory == NULL) ||
+            ((offset + size) > ctx->size) ||
+            ((data == NULL) && (size !=0))) {
         return WH_ERROR_BADARGS;
     }
 
-    memcpy(data, ctx->memory + offset, size);
+    if (size != 0) {
+        memcpy(data, ctx->memory + offset, size);
+    }
     return WH_ERROR_OK;
 }
 
@@ -136,8 +149,9 @@ int whFlashRamsim_Erase(void* context, uint32_t offset, uint32_t size)
 {
     whFlashRamsimCtx* ctx = (whFlashRamsimCtx*)context;
 
-    if ((ctx == NULL) || (ctx->memory == NULL) ||
-        ((offset + size) > ctx->size)) {
+    if (    (ctx == NULL) ||
+            (ctx->memory == NULL) ||
+            ((offset + size) > ctx->size)) {
         return WH_ERROR_BADARGS;
     }
 
@@ -146,13 +160,14 @@ int whFlashRamsim_Erase(void* context, uint32_t offset, uint32_t size)
     }
 
     /* Check that partition isn't locked */
-    if (size > 0 && ctx->writeLocked) {
+    if ((size != 0) && (ctx->writeLocked)) {
         return WH_ERROR_LOCKED;
     }
 
     /* Perform the erase */
-    memset(ctx->memory + offset, ctx->erasedByte, size);
-
+    if (size != 0) {
+        memset(ctx->memory + offset, ctx->erasedByte, size);
+    }
     return WH_ERROR_OK;
 }
 
@@ -160,19 +175,19 @@ int whFlashRamsim_Verify(void* context, uint32_t offset, uint32_t size,
                          const uint8_t* data)
 {
     whFlashRamsimCtx* ctx = (whFlashRamsimCtx*)context;
-    size_t i = 0;
-    if ((ctx == NULL) || (ctx->memory == NULL) ||
-        ((offset + size) > ctx->size) || (data == NULL)) {
+    if (    (ctx == NULL) ||
+            (ctx->memory == NULL) ||
+            ((offset + size) > ctx->size) ||
+            ((data == NULL) && (size != 0))) {
         return WH_ERROR_BADARGS;
     }
 
     /* Check stored data equals input data */
-    for (i = 0; i < size; ++i) {
-        if (ctx->memory[offset + i] != data[i]) {
+    if (size != 0) {
+        if(memcmp(ctx->memory + offset, data, size) != 0) {
             return WH_ERROR_NOTVERIFIED;
         }
     }
-
     return WH_ERROR_OK;
 }
 
@@ -181,8 +196,9 @@ int whFlashRamsim_BlankCheck(void* context, uint32_t offset, uint32_t size)
 {
     whFlashRamsimCtx* ctx = (whFlashRamsimCtx*)context;
 
-    if ((ctx == NULL) || (ctx->memory == NULL) ||
-        ((offset + size) > ctx->size)) {
+    if (    (ctx == NULL) ||
+            (ctx->memory == NULL) ||
+            ((offset + size) > ctx->size)) {
         return WH_ERROR_BADARGS;
     }
 
