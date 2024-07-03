@@ -88,17 +88,26 @@
 #define WOLFHSM_SHE_M5_SZ WOLFHSM_SHE_M1_SZ
 
 #ifdef WOLFHSM_SHE_EXTENSION
+#ifndef WOLFHSM_NO_CRYPTO
+
+#include "wolfssl/wolfcrypt/settings.h"
+#include "wolfssl/wolfcrypt/types.h"
+#include "wolfssl/wolfcrypt/aes.h"
 
 typedef struct {
     uint32_t count;
     uint32_t flags;
 } whSheMetadata;
 
+int wh_AesMp16_ex(Aes* aes, void* heap, int devid,
+        uint8_t* in, word32 inSz, uint8_t* out);
 
 int wh_SheGenerateLoadableKey(uint8_t keyId,
     uint8_t authKeyId, uint32_t count, uint32_t flags, uint8_t* uid,
     uint8_t* key, uint8_t* authKey, uint8_t* messageOne, uint8_t* messageTwo,
     uint8_t* messageThree, uint8_t* messageFour, uint8_t* messageFive);
-#endif
+
+#endif /* !WOLFHSM_NO_CRYPTO*/
+#endif /* WOLFHSM_SHE_EXTENSION */
 
 #endif /* WOLFHSM_WH_SHE_COMMON_H_ */

@@ -49,20 +49,18 @@ static const uint8_t WOLFHSM_SHE_KEY_UPDATE_ENC_C[] = { 0x01, 0x01, 0x53, 0x48,
 static const uint8_t WOLFHSM_SHE_KEY_UPDATE_MAC_C[] = { 0x01, 0x02, 0x53, 0x48,
         0x45, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xB0};
 
-
-
-static int wh_AesMp16(uint8_t* in, word32 inSz, uint8_t* out)
+int wh_AesMp16_ex(Aes* aes, void* heap, int devid,
+        uint8_t* in, word32 inSz, uint8_t* out)
 {
     int ret;
     int i = 0;
     int j;
-    Aes aes[1];
     uint8_t paddedInput[AES_BLOCK_SIZE];
     uint8_t messageZero[WOLFHSM_SHE_KEY_SZ] = {0};
     /* check valid inputs */
-    if (in == NULL || inSz == 0 || out == NULL)
+    if (aes == NULL || in == NULL || inSz == 0 || out == NULL)
         return WH_ERROR_BADARGS;
-    ret = wc_AesInit(aes, NULL, INVALID_DEVID);
+    ret = wc_AesInit(aes, heap, devid);
     /* do the first block with messageZero as the key */
     if (ret == 0) {
         ret = wc_AesSetKeyDirect(aes, messageZero, AES_BLOCK_SIZE, NULL,
@@ -99,6 +97,12 @@ static int wh_AesMp16(uint8_t* in, word32 inSz, uint8_t* out)
     /* free aes for protection */
     wc_AesFree(aes);
     return ret;
+}
+
+static int wh_AesMp16(uint8_t* in, word32 inSz, uint8_t* out)
+{
+    Aes aes[1];
+    return wh_AesMp16_ex(aes, NULL, INVALID_DEVID, in, inSz, out);
 }
 
 int wh_SheGenerateLoadableKey(uint8_t keyId,

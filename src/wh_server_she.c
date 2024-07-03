@@ -109,52 +109,11 @@ static int hsmSheGenerateMac(whServerContext* server, whPacket* packet,
 static int wh_AesMp16(whServerContext* server, uint8_t* in, word32 inSz,
         uint8_t* out)
 {
-    int ret;
-    int i = 0;
-    int j;
-    uint8_t paddedInput[AES_BLOCK_SIZE];
-    uint8_t messageZero[WOLFHSM_SHE_KEY_SZ] = {0};
     /* check valid inputs */
-    if (server == NULL || in == NULL || inSz == 0 || out == NULL)
+    if (server == NULL || server->she == NULL)
         return WH_ERROR_BADARGS;
-    /* init with hw */
-    ret = wc_AesInit(server->she->sheAes, NULL, server->crypto->devId);
-    /* do the first block with messageZero as the key */
-    if (ret == 0) {
-        ret = wc_AesSetKeyDirect(server->she->sheAes, messageZero,
-            AES_BLOCK_SIZE, NULL, AES_ENCRYPTION);
-    }
-    while (ret == 0 && i < (int)inSz) {
-        /* copy a block and pad it if we're short */
-        if ((int)inSz - i < (int)AES_BLOCK_SIZE) {
-            XMEMCPY(paddedInput, in + i, inSz - i);
-            XMEMSET(paddedInput + inSz - i, 0, AES_BLOCK_SIZE - (inSz - i));
-        }
-        else
-            XMEMCPY(paddedInput, in + i, AES_BLOCK_SIZE);
-        /* encrypt this block */
-        ret = wc_AesEncryptDirect(server->she->sheAes, out, paddedInput);
-        /* xor with the original message and then the previous block */
-        for (j = 0; j < (int)AES_BLOCK_SIZE; j++) {
-            out[j] ^= paddedInput[j];
-            /* use messageZero as our previous output buffer */
-            out[j] ^= messageZero[j];
-        }
-        /* set the key for the next block */
-        if (ret == 0) {
-            ret = wc_AesSetKeyDirect(server->she->sheAes, out, AES_BLOCK_SIZE,
-                NULL, AES_ENCRYPTION);
-        }
-        if (ret == 0) {
-            /* store previous output in messageZero */
-            XMEMCPY(messageZero, out, AES_BLOCK_SIZE);
-            /* increment to next block */
-            i += AES_BLOCK_SIZE;
-        }
-    }
-    /* free aes for protection */
-    wc_AesFree(server->she->sheAes);
-    return ret;
+    return wh_AesMp16_ex(server->she->sheAes, NULL, server->crypto->devId,
+            in, inSz, out);
 }
 
 /* AuthID is the 4 rightmost bits of messageOne */
