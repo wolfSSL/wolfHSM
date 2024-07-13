@@ -28,7 +28,7 @@
 #include "wolfhsm/wh_server.h"
 
 #ifndef WOLFHSM_NO_CRYPTO
-#include "wolfssl/wolfcrypt/settings.h"
+#include "wolfssl/wolfcrypt/types.h"
 #include "wolfssl/wolfcrypt/aes.h"
 #include "wolfssl/wolfcrypt/cmac.h"
 #endif /* !WOLFHSM_NO_CRYPTO */

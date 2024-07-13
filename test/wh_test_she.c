@@ -25,8 +25,8 @@
 #include <stdio.h>  /* For printf */
 #include <string.h> /* For memset, memcpy */
 
-#if defined(WH_CONFIG)
-#include "wh_config.h"
+#ifdef WOLFSSL_USER_SETTINGS
+#include "user_settings.h"
 #endif
 
 #ifdef WOLFHSM_SHE_EXTENSION
@@ -50,7 +50,7 @@
 
 #include "wh_test_common.h"
 
-#if defined(WH_CFG_TEST_POSIX)
+#if defined(WOLFHSM_CFG_TEST_POSIX)
 #include <unistd.h> /* For sleep */
 #include <pthread.h> /* For pthread_create/cancel/join/_t */
 #include "port/posix/posix_transport_tcp.h"
@@ -145,7 +145,7 @@ int whTest_SheClientConfig(whClientConfig* config)
     WH_TEST_RETURN_ON_FAIL(wh_Client_Init(client, config));
     WH_TEST_RETURN_ON_FAIL(wh_Client_CommInit(client, &outClientId, &outServerId));
 
-#ifdef WH_CFG_TEST_VERBOSE
+#ifdef WOLFHSM_CFG_TEST_VERBOSE
     {
         int32_t  server_rc       = 0;
         whNvmId  avail_objects   = 0;
@@ -163,7 +163,7 @@ int whTest_SheClientConfig(whClientConfig* config)
                ret, (int)server_rc, (int)avail_size, (int)avail_objects,
                (int)reclaim_size, (int)reclaim_objects);
     }
-#endif /* WH_CFG_TEST_VERBOSE */
+#endif /* WOLFHSM_CFG_TEST_VERBOSE */
 
     /* generate a new cmac key */
     if ((ret = wc_InitRng_ex(rng, NULL, WOLFHSM_DEV_ID)) != 0) {
@@ -370,7 +370,7 @@ int whTest_SheClientConfig(whClientConfig* config)
     }
     printf("SHE CMAC SUCCESS\n");
 
-#ifdef WH_CFG_TEST_VERBOSE
+#ifdef WOLFHSM_CFG_TEST_VERBOSE
     {
         int32_t  server_rc       = 0;
         whNvmId  avail_objects   = 0;
@@ -388,7 +388,7 @@ int whTest_SheClientConfig(whClientConfig* config)
                ret, (int)server_rc, (int)avail_size, (int)avail_objects,
                (int)reclaim_size, (int)reclaim_objects);
     }
-#endif /* WH_CFG_TEST_VERBOSE */
+#endif /* WOLFHSM_CFG_TEST_VERBOSE */
 
 
 exit:
@@ -436,7 +436,7 @@ int whTest_SheServerConfig(whServerConfig* config)
     return ret;
 }
 
-#if defined(WH_CFG_TEST_POSIX)
+#if defined(WOLFHSM_CFG_TEST_POSIX)
 static void* _whClientTask(void *cf)
 {
     WH_TEST_ASSERT(0 == whTest_SheClientConfig(cf));
@@ -563,12 +563,12 @@ static int wh_ClientServer_MemThreadTest(void)
 
     return WH_ERROR_OK;
 }
-#endif /* WH_CFG_TEST_POSIX */
+#endif /* WOLFHSM_CFG_TEST_POSIX */
 
 
 int whTest_She(void)
 {
-#if defined(WH_CFG_TEST_POSIX)
+#if defined(WOLFHSM_CFG_TEST_POSIX)
     printf("Testing SHE: (pthread) mem...\n");
     WH_TEST_RETURN_ON_FAIL(wh_ClientServer_MemThreadTest());
 #endif

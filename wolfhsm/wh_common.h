@@ -26,10 +26,6 @@
 
 #include <stdint.h>
 
-/* Device Id to be registered and passed to wolfCrypt functions */
-#define WOLFHSM_DEV_ID 0x5748534D  /* "WHSM" */
-
-
 /** Non-volatile counters */
 /* HSM Counter identifier type. */
 typedef uint16_t whCounterId;
@@ -93,6 +89,5 @@ typedef struct {
     whNvmSize len;          /* Length of data in bytes */
     uint8_t label[WOLFHSM_NVM_LABEL_LEN];
 } whNvmMetadata;
-/* static_assert(sizeof(whNvmMetadata) == WOLFHSM_NVM_METADATA_LEN) */
 
 #endif /* WOLFHSM_WH_COMMON_H_ */

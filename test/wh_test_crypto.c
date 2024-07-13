@@ -29,10 +29,6 @@
 
 #include "wolfssl/wolfcrypt/settings.h"
 
-#if defined(WH_CONFIG)
-#include "wh_config.h"
-#endif
-
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_nvm.h"
 #include "wolfhsm/wh_nvm_flash.h"
@@ -45,13 +41,13 @@
 
 #include "wh_test_common.h"
 
-#if defined(WH_CFG_TEST_POSIX)
+#if defined(WOLFHSM_CFG_TEST_POSIX)
 #include <pthread.h> /* For pthread_create/cancel/join/_t */
 #include "port/posix/posix_transport_tcp.h"
 #include "port/posix/posix_flash_file.h"
 #endif
 
-#if defined(WH_CFG_TEST_POSIX)
+#if defined(WOLFHSM_CFG_TEST_POSIX)
 #include <unistd.h> /* For sleep */
 #include <pthread.h> /* For pthread_create/cancel/join/_t */
 #include "port/posix/posix_transport_tcp.h"
@@ -72,7 +68,7 @@ enum {
 int serverDelay = 0;
 #endif
 
-#if defined(WH_CFG_TEST_POSIX)
+#if defined(WOLFHSM_CFG_TEST_POSIX)
 /* pointer to expose server context cancel sequence to the client cancel
  * callback */
 static uint16_t* cancelSeqP;
@@ -136,7 +132,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     WH_TEST_RETURN_ON_FAIL(wh_Client_Init(client, config));
     WH_TEST_RETURN_ON_FAIL(wh_Client_CommInit(client, NULL, NULL));
 
-#ifdef WH_CFG_TEST_VERBOSE
+#ifdef WOLFHSM_CFG_TEST_VERBOSE
     {
         int32_t  server_rc       = 0;
         whNvmId  avail_objects   = 0;
@@ -154,7 +150,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
                ret, (int)server_rc, (int)avail_size, (int)avail_objects,
                (int)reclaim_size, (int)reclaim_objects);
     }
-#endif /* WH_CFG_TEST_VERBOSE */
+#endif /* WOLFHSM_CFG_TEST_VERBOSE */
 
 
     memset(labelStart, 0xff, sizeof(labelStart));
@@ -695,7 +691,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     }
     printf("CMAC SUCCESS\n");
 
-#ifdef WH_CFG_TEST_VERBOSE
+#ifdef WOLFHSM_CFG_TEST_VERBOSE
     {
         int32_t  server_rc       = 0;
         whNvmId  avail_objects   = 0;
@@ -713,7 +709,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
                ret, (int)server_rc, (int)avail_size, (int)avail_objects,
                (int)reclaim_size, (int)reclaim_objects);
     }
-#endif /* WH_CFG_TEST_VERBOSE */
+#endif /* WOLFHSM_CFG_TEST_VERBOSE */
     ret = 0;
 exit:
     wc_curve25519_free(curve25519PrivateKey);
@@ -746,7 +742,7 @@ int whTest_CryptoServerConfig(whServerConfig* config)
         return WH_ERROR_BADARGS;
     }
 
-#if defined(WH_CFG_TEST_POSIX)
+#if defined(WOLFHSM_CFG_TEST_POSIX)
     /* expose server ctx to client cancel callback */
     cancelSeqP = &server->cancelSeq;
 #endif
@@ -758,7 +754,7 @@ int whTest_CryptoServerConfig(whServerConfig* config)
     while(am_connected == WH_COMM_CONNECTED) {
 #ifndef WH_CFG_TEST_NO_CUSTOM_SERVERS
         while (serverDelay) {
-#ifdef WH_CFG_TEST_POSIX
+#ifdef WOLFHSM_CFG_TEST_POSIX
             sleep(1);
 #endif
         }
@@ -794,7 +790,7 @@ int whTest_CryptoServerConfig(whServerConfig* config)
     return ret;
 }
 
-#if defined(WH_CFG_TEST_POSIX)
+#if defined(WOLFHSM_CFG_TEST_POSIX)
 static void* _whClientTask(void *cf)
 {
     WH_TEST_ASSERT(0 == whTest_CryptoClientConfig(cf));
@@ -918,11 +914,11 @@ static int wh_ClientServer_MemThreadTest(void)
 
     return WH_ERROR_OK;
 }
-#endif /* WH_CFG_TEST_POSIX */
+#endif /* WOLFHSM_CFG_TEST_POSIX */
 
 int whTest_Crypto(void)
 {
-#if defined(WH_CFG_TEST_POSIX)
+#if defined(WOLFHSM_CFG_TEST_POSIX)
     printf("Testing crypto: (pthread) mem...\n");
     WH_TEST_RETURN_ON_FAIL(wh_ClientServer_MemThreadTest());
 #endif

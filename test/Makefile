@@ -56,10 +56,6 @@ ifeq ($(SHE),1)
 CFLAGS += -DWOLFHSM_SHE_EXTENSION
 endif
 
-# wolfHSM-specific defines
-CFLAGS += -DWH_CONFIG
-
-
 # Assembly source files
 SRC_ASM +=
 

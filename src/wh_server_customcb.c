@@ -33,7 +33,7 @@ int wh_Server_RegisterCustomCb(whServerContext* server, uint16_t action,
                                whServerCustomCb handler)
 {
     if (NULL == server || NULL == handler ||
-        action >= WH_CUSTOM_CB_NUM_CALLBACKS) {
+        action >= WOLFHSM_CFG_SERVER_CUSTOMCB_COUNT) {
         return WH_ERROR_BADARGS;
     }
 
@@ -57,7 +57,7 @@ int wh_Server_HandleCustomCbRequest(whServerContext* server, uint16_t magic,
         return WH_ERROR_BADARGS;
     }
 
-    if (action >= WH_CUSTOM_CB_NUM_CALLBACKS) {
+    if (action >= WOLFHSM_CFG_SERVER_CUSTOMCB_COUNT) {
         /* Invalid callback index  */
         /* TODO: is this the appropriate error to return? */
         return WH_ERROR_BADARGS;

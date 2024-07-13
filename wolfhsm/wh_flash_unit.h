@@ -55,32 +55,32 @@ typedef union {
 /* Compute the number of units necessary to hold bytes, rounding up */
 uint32_t wh_FlashUnit_Bytes2Units(uint32_t bytes);
 
-int wh_FlashUnit_WriteUnlock(const whFlashCb* cb, void* context, uint32_t offset,
-        uint32_t count);
+int wh_FlashUnit_WriteUnlock(const whFlashCb* cb, void* context,
+        uint32_t offset, uint32_t count);
 
-int wh_FlashUnit_WriteLock(const whFlashCb* cb, void* context, uint32_t offset,
-        uint32_t count);
+int wh_FlashUnit_WriteLock(const whFlashCb* cb, void* context,
+        uint32_t offset, uint32_t count);
 
 /* Read count units starting at offset into data */
-int wh_FlashUnit_Read(const whFlashCb* cb, void* context, uint32_t offset,
-        uint32_t count, whFlashUnit* data);
+int wh_FlashUnit_Read(const whFlashCb* cb, void* context,
+        uint32_t offset, uint32_t count, whFlashUnit* data);
 
 /* Program from data count units starting at offset */
-int wh_FlashUnit_Program(const whFlashCb* cb, void* context, uint32_t offset,
-        uint32_t count, const whFlashUnit* data);
+int wh_FlashUnit_Program(const whFlashCb* cb, void* context,
+        uint32_t offset, uint32_t count, const whFlashUnit* data);
 
-int wh_FlashUnit_BlankCheck(const whFlashCb* cb, void* context, uint32_t offset,
-        uint32_t count);
+int wh_FlashUnit_BlankCheck(const whFlashCb* cb, void* context,
+        uint32_t offset, uint32_t count);
 
-int wh_FlashUnit_Erase(const whFlashCb* cb, void* context, uint32_t offset,
-        uint32_t count);
+int wh_FlashUnit_Erase(const whFlashCb* cb, void* context,
+        uint32_t offset, uint32_t count);
 
 /** Helper functions to use buffered reads and writes for bytes */
 
-int wh_FlashUnit_ReadBytes(const whFlashCb* cb, void* context, uint32_t byte_offset,
-        uint32_t data_len, uint8_t* data);
+int wh_FlashUnit_ReadBytes(const whFlashCb* cb, void* context,
+        uint32_t byte_offset, uint32_t data_len, uint8_t* data);
 
-int wh_FlashUnit_ProgramBytes(const whFlashCb* cb, void* context, uint32_t byte_offset,
-        uint32_t byte_count, const uint8_t* data);
+int wh_FlashUnit_ProgramBytes(const whFlashCb* cb, void* context,
+        uint32_t byte_offset, uint32_t byte_count, const uint8_t* data);
 
 #endif /* WOLFHSM_WH_FLASH_UNIT_H_ */

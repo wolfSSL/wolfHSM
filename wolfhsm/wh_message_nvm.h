@@ -25,6 +25,7 @@
 #define WOLFHSM_WH_MESSAGE_NVM_H_
 
 #include <stdint.h>
+
 #include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_comm.h"
 #include "wolfhsm/wh_message.h"
@@ -47,9 +48,8 @@ enum WH_MESSAGE_NVM_ACTION_ENUM {
 
 enum WH_MESSAGE_NVM_MAX_ENUM {
     /* must be odd for struct whMessageNvm_DestroyObjectsRequest  alignment */
-    WH_MESSAGE_NVM_MAX_DESTROY_OBJECTS_COUNT = 9,
-    WH_MESSAGE_NVM_MAX_ADD_OBJECT_LEN =
-            WH_COMM_DATA_LEN - sizeof(whNvmMetadata),
+    WH_MESSAGE_NVM_MAX_DESTROY_OBJECTS_COUNT = 19,
+    WH_MESSAGE_NVM_MAX_ADDOBJECT_LEN = WH_COMM_DATA_LEN - sizeof(whNvmMetadata),
     WH_MESSAGE_NVM_MAX_READ_LEN = WH_COMM_DATA_LEN - sizeof(int32_t),
 };
 
@@ -111,7 +111,7 @@ typedef struct {
     uint16_t flags;
     uint16_t len;
     uint8_t label[WOLFHSM_NVM_LABEL_LEN];
-    /* Data up to WH_MESSAGE_NVM_MAX_ADD_OBJECT_LEN follows */
+    /* Data up to WH_MESSAGE_NVM_MAX_ADDOBJECT_LEN follows */
 } whMessageNvm_AddObjectRequest;
 
 int wh_MessageNvm_TranslateAddObjectRequest(uint16_t magic,

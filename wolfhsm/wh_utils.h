@@ -24,6 +24,10 @@
 #ifndef WOLFHSM_WH_UTILS_H_
 #define WOLFHSM_WH_UTILS_H_
 
+#ifdef WOLFSSL_USER_SETTINGS
+#include "user_settings.h"
+#endif
+
 #include <stdint.h>
 
 /** Byteswap functions */

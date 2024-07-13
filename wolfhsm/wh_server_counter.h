@@ -18,10 +18,13 @@
  */
 /*
  * wolfhsm/wh_server_counter.h
+ *
  */
 
-#ifndef WOLFHSM_WH_SERVER_COUNTER
-#define WOLFHSM_WH_SERVER_COUNTER
+#ifndef WOLFHSM_WH_SERVER_COUNTER_H
+#define WOLFHSM_WH_SERVER_COUNTER_H
+
 int wh_Server_HandleCounter(whServerContext* server, uint16_t action,
     uint8_t* data, uint16_t* size);
-#endif
+
+#endif /* WOLFHSM_WH_SERVER_COUNTER_H */

@@ -16,6 +16,11 @@
  * You should have received a copy of the GNU General Public License
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
+/*
+ * wolfhsm/wh_server_crypto.h
+ *
+ */
+
 #ifndef WOLFHSM_WH_SERVER_CRYPTO_H
 #define WOLFHSM_WH_SERVER_CRYPTO_H
 

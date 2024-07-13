@@ -26,7 +26,7 @@
  * Runs the client/server async tests in a single thread using a memory
  * transport backend.
  *
- * Multithreaded tests are also run if WH_CFG_TEST_POSIX is defined.
+ * Multithreaded tests are also run if WOLFHSM_CFG_TEST_POSIX is defined.
  * Returns 0 on success and a non-zero error code on failure
  */
 int whTest_ClientServer(void);

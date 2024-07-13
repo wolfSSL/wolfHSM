@@ -18,25 +18,15 @@
  */
 /*
  * src/wh_cryptocb.c
+ *
  */
+
 #include <stdint.h>
-#include <unistd.h>
 
-#ifndef WOLFHSM_NO_CRYPTO
-
-#include "wolfssl/wolfcrypt/settings.h"
-#include "wolfssl/wolfcrypt/types.h"
-#include "wolfssl/wolfcrypt/error-crypt.h"
-#include "wolfssl/wolfcrypt/aes.h"
-#include "wolfssl/wolfcrypt/cmac.h"
-#include "wolfssl/wolfcrypt/rsa.h"
-#include "wolfssl/wolfcrypt/cryptocb.h"
-
-#include "wolfhsm/wh_packet.h"
-#include "wolfhsm/wh_error.h"
+/* Pick up client configuration */
 #include "wolfhsm/wh_client.h"
-#include "wolfhsm/wh_message.h"
-#include "wolfhsm/wh_client_cryptocb.h"
+
+#ifndef WOLFHSM_CFG_NO_CRYPTO
 
 /* wolfHSM crypto callback assumes wc_CryptoInfo struct is unionized */
 #if !defined(HAVE_ANONYMOUS_INLINE_AGGREGATES) \
@@ -44,6 +34,23 @@
          && HAVE_ANONYMOUS_INLINE_AGGREGATES==0  )
 #error "wolfHSM needs wolfCrypt built with HAVE_ANONYMOUS_INLINE_AGGREGATES=1"
 #endif
+
+#include "wolfhsm/wh_packet.h"
+#include "wolfhsm/wh_error.h"
+#include "wolfhsm/wh_message.h"
+
+#include "wolfssl/wolfcrypt/types.h"
+#include "wolfssl/wolfcrypt/error-crypt.h"
+#include "wolfssl/wolfcrypt/cryptocb.h"
+
+#if 0
+#include "wolfssl/wolfcrypt/aes.h"
+#include "wolfssl/wolfcrypt/cmac.h"
+#include "wolfssl/wolfcrypt/rsa.h"
+#endif
+
+#include "wolfhsm/wh_client_cryptocb.h"
+
 
 int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
 {
@@ -655,4 +662,4 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
 
     return ret;
 }
-#endif  /* WOLFHSM_NO_CRYPTO */
+#endif /* !WOLFHSM_CFG_NO_CRYPTO */

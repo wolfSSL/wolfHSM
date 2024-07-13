@@ -16,9 +16,14 @@
  * You should have received a copy of the GNU General Public License
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
+/*
+ * wolfhsm/wh_server_keystore.h
+ *
+ */
 #ifndef WOLFHSM_WH_SERVER_KEYSTORE_H
 #define WOLFHSM_WH_SERVER_KEYSTORE_H
 
+#include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_server.h"
 
 int hsmGetUniqueId(whServerContext* server, whNvmId* outId);

@@ -29,24 +29,38 @@
 extern "C" {
 #endif
 
+/** Settings specific to the testing */
+/* #define WOLFHSM_CFG_TEST_VERBOSE */
+#define WOLFHSM_CFG_TEST_POSIX
+
+/** wolfHSM settings.  Simple overrides to show they work */
+#define WOLFHSM_CFG_COMM_DATA_LEN 1152
+
+#define WOLFHSM_CFG_NVM_OBJECT_COUNT 30
+#define WOLFHSM_CFG_SERVER_KEYCACHE_COUNT 10
+#define WOLFHSM_CFG_SERVER_KEYCACHE_SIZE 1024
+#define WOLFHSM_CFG_SERVER_DMAADDR_COUNT 8
+#define WOLFHSM_CFG_SERVER_CUSTOMCB_COUNT 6
+
+
 /** Settings specific to the host arch, OS, and compiler */
 /* #define BIG_ENDIAN_ORDER */
 /* #define SINGLE_THREADED */
 /* #define WC_NO_ASYNC_THREADING */
 
-/** wolfHSM required */
+/** wolfHSM required settings for wolfCrypt */
 #define WOLFCRYPT_ONLY
 #define WOLF_CRYPTO_CB
 #define HAVE_HASHDRBG
 #define WOLFSSL_KEY_GEN
 #define WOLFSSL_ASN_TEMPLATE
 #define WOLFSSL_BASE64_ENCODE
+#define HAVE_ANONYMOUS_INLINE_AGGREGATES 1
 
 /** Math library selection for test */
 #define USE_FAST_MATH
 
 /** wolfHSM recommended */
-#define HAVE_ANONYMOUS_INLINE_AGGREGATES 1
 #define WOLFSSL_NO_MALLOC
 #define WOLFSSL_USE_ALIGN
 #define WOLFSSL_IGNORE_FILE_WARN

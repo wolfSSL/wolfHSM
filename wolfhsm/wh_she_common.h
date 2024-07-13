@@ -24,7 +24,13 @@
 #ifndef WOLFHSM_WH_SHE_COMMON_H_
 #define WOLFHSM_WH_SHE_COMMON_H_
 
+#ifdef WOLFSSL_USER_SETTINGS
+#include "user_settings.h"
+#endif
+
 #include <stdint.h>
+
+#ifdef WOLFHSM_SHE_EXTENSION
 
 #define WOLFHSM_SHE_SECRET_KEY_ID 0
 #define WOLFHSM_SHE_MASTER_ECU_KEY_ID 1
@@ -87,10 +93,8 @@
 #define WOLFHSM_SHE_M4_SZ WOLFHSM_SHE_M2_SZ
 #define WOLFHSM_SHE_M5_SZ WOLFHSM_SHE_M1_SZ
 
-#ifdef WOLFHSM_SHE_EXTENSION
 #ifndef WOLFHSM_NO_CRYPTO
 
-#include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/types.h"
 #include "wolfssl/wolfcrypt/aes.h"
 

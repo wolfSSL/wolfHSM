@@ -41,12 +41,6 @@
 
 #include "wolfhsm/wh_common.h"  /* For whNvm types */
 
-
-enum WH_NVM_IDS {
-    WH_NVM_INVALID_ID = 0,
-};
-
-
 typedef struct {
     int (*Init)(void* context, const void *config);
     int (*Cleanup)(void* context);

@@ -16,13 +16,13 @@
  * You should have received a copy of the GNU General Public License
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef WOLFHSM_WH_SERVER_NVM_H_
-#define WOLFHSM_WH_SERVER_NVM_H_
-
 /*
- * WolfHSM Internal Server API
+ * wolfhsm/wh_server_nvm.h
  *
  */
+
+#ifndef WOLFHSM_WH_SERVER_NVM_H_
+#define WOLFHSM_WH_SERVER_NVM_H_
 
 #include <stdint.h>
 

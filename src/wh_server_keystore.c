@@ -53,12 +53,12 @@ int hsmGetUniqueId(whServerContext* server, whNvmId* outId)
     for (id = 1; id < WOLFHSM_KEYID_MASK + 1; id++) {
         buildId = ((buildId & ~WOLFHSM_KEYID_MASK) | id);
         /* check against cache keys */
-        for (i = 0; i < WOLFHSM_NUM_RAMKEYS; i++) {
+        for (i = 0; i < WOLFHSM_CFG_SERVER_KEYCACHE_COUNT; i++) {
             if (buildId == server->cache[i].meta->id)
                 break;
         }
         /* try again if match */
-        if (i < WOLFHSM_NUM_RAMKEYS)
+        if (i < WOLFHSM_CFG_SERVER_KEYCACHE_COUNT)
             continue;
         /* if keyId exists */
         ret = wh_Nvm_List(server->nvm, WOLFHSM_NVM_ACCESS_ANY,
@@ -82,7 +82,7 @@ int hsmCacheFindSlot(whServerContext* server)
 {
     int i;
     int foundIndex = -1;
-    for (i = 0; i < WOLFHSM_NUM_RAMKEYS; i++) {
+    for (i = 0; i < WOLFHSM_CFG_SERVER_KEYCACHE_COUNT; i++) {
         /* check for empty slot or rewrite slot */
         if (foundIndex == -1 && server->cache[i].meta->id ==
             WOLFHSM_KEYID_ERASED) {
@@ -92,7 +92,7 @@ int hsmCacheFindSlot(whServerContext* server)
     }
     /* if no empty slots, check for a commited key we can evict */
     if (foundIndex == -1) {
-        for (i = 0; i < WOLFHSM_NUM_RAMKEYS; i++) {
+        for (i = 0; i < WOLFHSM_CFG_SERVER_KEYCACHE_COUNT; i++) {
             if (server->cache[i].commited == 1) {
                 foundIndex = i;
                 break;
@@ -112,12 +112,12 @@ int hsmCacheKey(whServerContext* server, whNvmMetadata* meta, uint8_t* in)
     /* make sure id is valid */
     if (server == NULL || meta == NULL || in == NULL ||
         (meta->id & WOLFHSM_KEYID_MASK) == WOLFHSM_KEYID_ERASED ||
-        meta->len > WOLFHSM_KEYCACHE_BUFSIZE) {
+        meta->len > WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE) {
         return WH_ERROR_BADARGS;
     }
     /* apply client_id */
     meta->id |= (server->comm->client_id << 8);
-    for (i = 0; i < WOLFHSM_NUM_RAMKEYS; i++) {
+    for (i = 0; i < WOLFHSM_CFG_SERVER_KEYCACHE_COUNT; i++) {
         /* check for empty slot or rewrite slot */
         if ((foundIndex == -1 &&
             (server->cache[i].meta->id & WOLFHSM_KEYID_MASK) ==
@@ -128,7 +128,7 @@ int hsmCacheKey(whServerContext* server, whNvmMetadata* meta, uint8_t* in)
     }
     /* if no empty slots, check for a commited key we can evict */
     if (foundIndex == -1) {
-        for (i = 0; i < WOLFHSM_NUM_RAMKEYS; i++) {
+        for (i = 0; i < WOLFHSM_CFG_SERVER_KEYCACHE_COUNT; i++) {
             if (server->cache[i].commited == 1) {
                 foundIndex = i;
                 break;
@@ -156,13 +156,13 @@ int hsmFreshenKey(whServerContext* server, whKeyId keyId)
     int ret = 0;
     int i;
     int foundIndex = -1;
-    uint32_t outSz = WOLFHSM_KEYCACHE_BUFSIZE;
+    uint32_t outSz = WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE;
     whNvmMetadata meta[1];
     if (server == NULL || keyId == WOLFHSM_KEYID_ERASED)
         return WH_ERROR_BADARGS;
     /* apply client_id */
     keyId |= (server->comm->client_id << 8);
-    for (i = 0; i < WOLFHSM_NUM_RAMKEYS; i++) {
+    for (i = 0; i < WOLFHSM_CFG_SERVER_KEYCACHE_COUNT; i++) {
         /* check for empty slot or rewrite slot */
         if ((foundIndex == -1 &&
             server->cache[i].meta->id == WOLFHSM_KEYID_ERASED) ||
@@ -174,7 +174,7 @@ int hsmFreshenKey(whServerContext* server, whKeyId keyId)
     }
     /* if no empty slots, check for a commited key we can evict */
     if (foundIndex == -1) {
-        for (i = 0; i < WOLFHSM_NUM_RAMKEYS; i++) {
+        for (i = 0; i < WOLFHSM_CFG_SERVER_KEYCACHE_COUNT; i++) {
             if (server->cache[i].commited == 1) {
                 foundIndex = i;
                 break;
@@ -213,7 +213,7 @@ int hsmReadKey(whServerContext* server, whKeyId keyId, whNvmMetadata* outMeta,
     /* apply client_id */
     keyId |= (server->comm->client_id << 8);
     /* check the cache */
-    for (i = 0; i < WOLFHSM_NUM_RAMKEYS; i++) {
+    for (i = 0; i < WOLFHSM_CFG_SERVER_KEYCACHE_COUNT; i++) {
         /* copy the meta and key before returning */
         if (server->cache[i].meta->id == keyId) {
             /* check outSz */
@@ -276,7 +276,7 @@ int hsmEvictKey(whServerContext* server, whNvmId keyId)
     /* apply client_id */
     keyId |= (server->comm->client_id << 8);
     /* find key */
-    for (i = 0; i < WOLFHSM_NUM_RAMKEYS; i++) {
+    for (i = 0; i < WOLFHSM_CFG_SERVER_KEYCACHE_COUNT; i++) {
         /* mark key as erased */
         if (server->cache[i].meta->id == keyId) {
             server->cache[i].meta->id = WOLFHSM_KEYID_ERASED;
@@ -284,7 +284,7 @@ int hsmEvictKey(whServerContext* server, whNvmId keyId)
         }
     }
     /* if the key wasn't found return an error */
-    if (i >= WOLFHSM_NUM_RAMKEYS)
+    if (i >= WOLFHSM_CFG_SERVER_KEYCACHE_COUNT)
         ret = WH_ERROR_NOTFOUND;
     return ret;
 }
@@ -300,13 +300,13 @@ int hsmCommitKey(whServerContext* server, whNvmId keyId)
     /* apply client_id */
     keyId |= (server->comm->client_id << 8);
     /* find key in cache */
-    for (i = 0; i < WOLFHSM_NUM_RAMKEYS; i++) {
+    for (i = 0; i < WOLFHSM_CFG_SERVER_KEYCACHE_COUNT; i++) {
         if (server->cache[i].meta->id == keyId) {
             cacheSlot = &server->cache[i];
             break;
         }
     }
-    if (i >= WOLFHSM_NUM_RAMKEYS)
+    if (i >= WOLFHSM_CFG_SERVER_KEYCACHE_COUNT)
         return WH_ERROR_NOTFOUND;
     /* add object */
     ret = wh_Nvm_AddObjectWithReclaim(server->nvm, cacheSlot->meta,
@@ -324,7 +324,7 @@ int hsmEraseKey(whServerContext* server, whNvmId keyId)
     /* apply client_id */
     keyId |= (server->comm->client_id << 8);
     /* remove the key from the cache if present */
-    for (i = 0; i < WOLFHSM_NUM_RAMKEYS; i++) {
+    for (i = 0; i < WOLFHSM_CFG_SERVER_KEYCACHE_COUNT; i++) {
         if (server->cache[i].meta->id == keyId) {
             server->cache[i].meta->id = WOLFHSM_KEYID_ERASED;
             break;

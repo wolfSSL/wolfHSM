@@ -21,10 +21,18 @@
  *
  * Concrete library to implement an NVM data store using a whFlash bottom end.
  *
+ * Configuration values:
+ *  WOLFHSM_CFG_NF_OBJECT_COUNT Number of objects in ram and disk directories
+ *      Default: 32
+ *
  */
 
 #ifndef WOLFHSM_WH_NVMFLASH_H_
 #define WOLFHSM_WH_NVMFLASH_H_
+
+#ifdef WOLFSSL_USER_SETTINGS
+#include "user_settings.h"
+#endif
 
 #include <stdint.h>
 
@@ -33,10 +41,10 @@
 #include "wolfhsm/wh_flash_unit.h"
 
 /* Number of objects in a directory */
-#ifndef NF_OBJECT_COUNT
-#include "wolfhsm/wh_server.h"
-#define NF_OBJECT_COUNT (WOLFHSM_NUM_NVMOBJECTS)
+#ifndef WOLFHSM_CFG_NVM_OBJECT_COUNT
+#define WOLFHSM_CFG_NVM_OBJECT_COUNT 32
 #endif
+
 
 /* In-memory computed status of an Object or Directory */
 typedef enum {
@@ -63,7 +71,7 @@ typedef struct {
 
 /* In-memory version of a Directory */
 typedef struct {
-    nfMemObject objects[NF_OBJECT_COUNT];
+    nfMemObject objects[WOLFHSM_CFG_NVM_OBJECT_COUNT];
     int next_free_object;
     uint32_t next_free_data;
     int reclaimable_entries;

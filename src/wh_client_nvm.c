@@ -274,7 +274,7 @@ int wh_Client_NvmAddObjectRequest(whClientContext* c,
             ((label == NULL) && (label_len > 0)) ||
             (label_len > WOLFHSM_NVM_LABEL_LEN) ||
             ((data == NULL) && (len > 0)) ||
-            (len > WH_MESSAGE_NVM_MAX_ADD_OBJECT_LEN) ){
+            (len > WH_MESSAGE_NVM_MAX_ADDOBJECT_LEN) ){
         return WH_ERROR_BADARGS;
     }
 

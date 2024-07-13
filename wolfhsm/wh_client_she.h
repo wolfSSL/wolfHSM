@@ -23,14 +23,15 @@
 
 #ifndef WOLFHSM_WH_CLIENT_SHE_H_
 #define WOLFHSM_WH_CLIENT_SHE_H_
+
+/* Pick up client configuration */
+#include "wolfhsm/wh_client.h"
+
 /* System libraries */
 #include <stdint.h>
 
 /* Common WolfHSM types and defines shared with the server */
 #include "wolfhsm/wh_common.h"
-
-/* Component includes */
-#include "wolfhsm/wh_client.h"
 
 int wh_Client_ShePreProgramKey(whClientContext* c, whNvmId keyId,
     whNvmFlags flags, uint8_t* key, whNvmSize keySz);

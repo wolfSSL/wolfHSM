@@ -31,10 +31,20 @@
  * In addition to the offload of cryptographic functions, the WolfHSM Client
  * also exposes WolfHSM Server key management, non-volatile memory, and protocol
  * functions.
+ *
+ * Configuration values:
+ *
+ *  WOLFHSM_CFG_NO_CRYPTO - Define to not include any wolfCrypt dependencies.
+ *      Default:  Not defined
+ *
  */
 
 #ifndef WOLFHSM_WH_CLIENT_H_
 #define WOLFHSM_WH_CLIENT_H_
+
+#ifdef WOLFSSL_USER_SETTINGS
+#include "user_settings.h"
+#endif
 
 /* System libraries */
 #include <stdint.h>
@@ -46,7 +56,7 @@
 #include "wolfhsm/wh_comm.h"
 #include "wolfhsm/wh_message_customcb.h"
 
-#ifndef WOLFHSM_NO_CRYPTO
+#ifndef WOLFHSM_CFG_NO_CRYPTO
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/error-crypt.h"
 #include "wolfssl/wolfcrypt/wc_port.h"
@@ -57,6 +67,9 @@
 #include "wolfssl/wolfcrypt/rsa.h"
 #include "wolfssl/wolfcrypt/ecc.h"
 #endif
+
+/* Device Id to be registered and passed to wolfCrypt functions */
+#define WOLFHSM_DEV_ID 0x5748534D  /* "WHSM" */
 
 /**
  * Out of band callback function to inform the server to cancel a request,

@@ -25,9 +25,6 @@
 #ifndef WOLFHSM_WH_ERROR_H_
 #define WOLFHSM_WH_ERROR_H_
 
-/* Consider reusing wolfssl or wolfcrypt errors here */
-
-
 enum WH_ERROR_ENUM {
     WH_ERROR_OK             = 0,    /* Success, no error. */
 

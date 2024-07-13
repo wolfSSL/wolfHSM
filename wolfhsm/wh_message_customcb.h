@@ -16,12 +16,25 @@
  * You should have received a copy of the GNU General Public License
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
+/*
+ * wolfhsm/wh_message_customcb.h
+ *
+ * Configuration values:
+ *  WOLFHSM_CFG_CUSTOMCB_LEN - Maximum size of a customcb message.
+ *      Default: 256
+ */
 #ifndef WH_MESSAGE_CUSTOM_CB_H_
 #define WH_MESSAGE_CUSTOM_CB_H_
 
 #include <stdint.h>
 
-#define WH_MESSAGE_CUSTOM_CB_BUF_SIZE (256)
+#ifdef WOLFSSL_USER_SETTINGS
+#include "user_settings.h"
+#endif
+
+#ifndef WOLFHSM_CFG_CUSTOMCB_LEN
+#define WOLFHSM_CFG_CUSTOMCB_LEN 256
+#endif
 
 /* Type indicator for custom request/response messages. Indicates how
  * to interpret whMessageCustomData */
@@ -59,7 +72,7 @@ typedef union {
     } dma64;
     /* raw data buffer for user-defined schema */
     struct {
-        uint8_t data[WH_MESSAGE_CUSTOM_CB_BUF_SIZE];
+        uint8_t data[WOLFHSM_CFG_CUSTOMCB_LEN];
     } buffer;
 } whMessageCustomCb_Data;
 

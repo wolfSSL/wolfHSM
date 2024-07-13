@@ -19,6 +19,10 @@
 #ifndef WH_FLASH_RAMSIM_H_
 #define WH_FLASH_RAMSIM_H_
 
+#ifdef WOLFSSL_USER_SETTINGS
+#include "user_settings.h"
+#endif
+
 #include <stdint.h>
 
 /* Configuration and context structures */
@@ -57,18 +61,18 @@ int whFlashRamsim_WriteLock(void* context, uint32_t offset, uint32_t size);
 int whFlashRamsim_WriteUnlock(void* context, uint32_t offset, uint32_t size);
 
 /* clang-format off */
-#define WH_FLASH_RAMSIM_CB                           \
-    {                                                    \
-        .Init          = whFlashRamsim_Init,          \
-        .Cleanup       = whFlashRamsim_Cleanup,       \
-        .PartitionSize = whFlashRamsim_PartitionSize, \
-        .WriteLock     = whFlashRamsim_WriteLock,     \
-        .WriteUnlock   = whFlashRamsim_WriteUnlock,   \
-        .Read          = whFlashRamsim_Read,          \
-        .Program       = whFlashRamsim_Program,       \
-        .Erase         = whFlashRamsim_Erase,         \
-        .Verify        = whFlashRamsim_Verify,        \
-        .BlankCheck    = whFlashRamsim_BlankCheck,    \
+#define WH_FLASH_RAMSIM_CB                              \
+    {                                                   \
+        .Init          = whFlashRamsim_Init,            \
+        .Cleanup       = whFlashRamsim_Cleanup,         \
+        .PartitionSize = whFlashRamsim_PartitionSize,   \
+        .WriteLock     = whFlashRamsim_WriteLock,       \
+        .WriteUnlock   = whFlashRamsim_WriteUnlock,     \
+        .Read          = whFlashRamsim_Read,            \
+        .Program       = whFlashRamsim_Program,         \
+        .Erase         = whFlashRamsim_Erase,           \
+        .Verify        = whFlashRamsim_Verify,          \
+        .BlankCheck    = whFlashRamsim_BlankCheck,      \
     }
 /* clang-format on */
 

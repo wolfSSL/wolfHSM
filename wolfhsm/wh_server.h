@@ -19,14 +19,40 @@
 /*
  * wolfhsm/wh_server.h
  *
+ * Configuration values:
+ *
+ *  WOLFHSM_CFG_NO_CRYPTO - If defined, include no wolfCrypt dependencies
+ *      Default: Not defined
+ *
+ *  WOLFHSM_CFG_SHE_EXTENSION - If defined, include AutoSAR SHE functionality
+ *      Default: Not defined
+ *
+ *  WOLFHSM_CFG_NVM_OBJECT_COUNT - Number of objects in ram and disk directories
+ *      Default: 32
+ *
+ *  WOLFHSM_CFG_SERVER_KEYCACHE_COUNT - Number of RAM keys
+ *      Default: 8
+ *
+ *  WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE - Size of each key in RAM
+ *      Default: 1200
+ *
+ *  WOLFHSM_CFG_SERVER_CUSTOMCB_COUNT - Number of additional callbacks
+ *      Default: 8
+ *
+ *  WOLFHSM_CFG_SERVER_DMAADDR_COUNT - Number of DMA address regions
+ *      Default: 10
+ *
  */
 
 #ifndef WOLFHSM_WH_SERVER_H_
 #define WOLFHSM_WH_SERVER_H_
 
+#ifdef WOLFSSL_USER_SETTINGS
+#include "user_settings.h"
+#endif
+
 /*
  * WolfHSM Public Server API
- *
  */
 
 #include <stdint.h>
@@ -57,31 +83,30 @@ typedef struct whServerContext_t whServerContext;
 #endif
 
 /** Default server resource configurations */
-/* Number of RAM keys */
-#ifndef WOLFHSM_NUM_RAMKEYS
-#define WOLFHSM_NUM_RAMKEYS  8
-#endif
-
 /* Number of NVM objects in the directory */
-#ifndef WOLFHSM_NUM_NVMOBJECTS
-#define WOLFHSM_NUM_NVMOBJECTS  32
+#ifndef WOLFHSM_CFG_NVM_OBJECT_COUNT
+#define WOLFHSM_CFG_NVM_OBJECT_COUNT 32
 #endif
 
-/* Size in bytes of key cache buffer  */
-#ifndef WOLFHSM_KEYCACHE_BUFSIZE
-#define WOLFHSM_KEYCACHE_BUFSIZE 1200
+/* Number of RAM keys */
+#ifndef WOLFHSM_CFG_SERVER_KEYCACHE_COUNT
+#define WOLFHSM_CFG_SERVER_KEYCACHE_COUNT  8
+#endif
+
+/* Size in bytes of each key cache buffer  */
+#ifndef WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE
+#define WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE 1200
 #endif
 
 /* Custom request shared defs */
-#ifndef WH_CUSTOM_CB_NUM_CALLBACKS
-#define WH_CUSTOM_CB_NUM_CALLBACKS 8
+#ifndef WOLFHSM_CFG_SERVER_CUSTOMCB_COUNT
+#define WOLFHSM_CFG_SERVER_CUSTOMCB_COUNT 8
 #endif
 
 /* DMA translation allow entries */
-#ifndef WH_DMA_ADDR_ALLOWLIST_COUNT
-#define WH_DMA_ADDR_ALLOWLIST_COUNT 10
+#ifndef WOLFHSM_CFG_SERVER_DMAADDR_COUNT
+#define WOLFHSM_CFG_SERVER_DMAADDR_COUNT 10
 #endif
-
 
 
 #ifndef WOLFHSM_NO_CRYPTO
@@ -89,7 +114,7 @@ typedef struct whServerContext_t whServerContext;
 typedef struct whServerCacheSlot {
     uint32_t        commited;
     whNvmMetadata   meta[1];
-    uint8_t         buffer[WOLFHSM_KEYCACHE_BUFSIZE];
+    uint8_t         buffer[WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE];
 } whServerCacheSlot;
 
 typedef struct whServerCryptoContext {
@@ -181,7 +206,7 @@ typedef struct {
     size_t size;
 } whServerDmaAddr;
 
-typedef whServerDmaAddr whServerDmaAddrList[WH_DMA_ADDR_ALLOWLIST_COUNT];
+typedef whServerDmaAddr whServerDmaAddrList[WOLFHSM_CFG_SERVER_DMAADDR_COUNT];
 
 /* Holds allowable client read/write addresses */
 typedef struct {
@@ -229,12 +254,12 @@ struct whServerContext_t {
     whCommServer  comm[1];
 #ifndef WOLFHSM_NO_CRYPTO
     whServerCryptoContext* crypto;
-    whServerCacheSlot       cache[WOLFHSM_NUM_RAMKEYS];
+    whServerCacheSlot       cache[WOLFHSM_CFG_SERVER_KEYCACHE_COUNT];
 #ifdef WOLFHSM_SHE_EXTENSION
     whServerSheContext* she;
 #endif
 #endif /* WOLFHSM_NO_CRYPTO */
-    whServerCustomCb   customHandlerTable[WH_CUSTOM_CB_NUM_CALLBACKS];
+    whServerCustomCb   customHandlerTable[WOLFHSM_CFG_SERVER_CUSTOMCB_COUNT];
     whServerDmaContext dma;
     int                connected;
     uint16_t cancelSeq;

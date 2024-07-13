@@ -25,7 +25,8 @@
 #ifndef WOLFHSM_CLIENT_CRYPTOCB_H_
 #define WOLFHSM_CLIENT_CRYPTOCB_H_
 
-#include "wolfssl/wolfcrypt/settings.h"
+#include "wolfhsm/wh_client.h"
+
 #include "wolfssl/wolfcrypt/cryptocb.h"
 
 int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* ctx);

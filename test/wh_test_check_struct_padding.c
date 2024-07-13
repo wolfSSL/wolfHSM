@@ -1,5 +1,5 @@
-#ifndef WH_TEST_CHECK_STRUCT_PADDING_H_
-#define WH_TEST_CHECK_STRUCT_PADDING_H_
+#ifndef WH_TEST_CHECK_STRUCT_PADDING_C_
+#define WH_TEST_CHECK_STRUCT_PADDING_C_
 
 /* For each included file, define an instance of every struct for which we want
  * to check padding. Then, when this file is compiled with -Wpadded it will
@@ -117,4 +117,4 @@ wh_Packet_she_verify_mac_res         sheVerifyMacRes;
 #endif /* WOLFHSM_SHE_EXTENSION */
 
 
-#endif /* WH_TEST_CHECK_STRUCT_PADDING_H_ */
+#endif /* WH_TEST_CHECK_STRUCT_PADDING_C_ */

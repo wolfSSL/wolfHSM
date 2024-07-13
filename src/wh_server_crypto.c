@@ -55,7 +55,7 @@ static int hsmCacheKeyRsa(whServerContext* server, RsaKey* key, whKeyId* outId)
         /* TODO: Fix wolfCrypto to allow KeyToDer when KEY_GEN is NOT set */
         XMEMSET((uint8_t*)&server->cache[slotIdx], 0, sizeof(whServerCacheSlot));
         ret = wc_RsaKeyToDer(key, server->cache[slotIdx].buffer,
-            WOLFHSM_KEYCACHE_BUFSIZE);
+            WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE);
     }
     if (ret > 0) {
         /* set meta */
@@ -79,7 +79,7 @@ static int hsmLoadKeyRsa(whServerContext* server, RsaKey* key, whKeyId keyId)
     ret = slotIdx = hsmFreshenKey(server, keyId);
     /* decode the key */
     if (ret >= 0) {
-        size = WOLFHSM_KEYCACHE_BUFSIZE;
+        size = WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE;
         ret = wc_RsaPrivateKeyDecode(server->cache[slotIdx].buffer, (word32*)&idx, key,
             size);
     }
