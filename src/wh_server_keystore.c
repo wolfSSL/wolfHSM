@@ -35,7 +35,7 @@
 #include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_packet.h"
 #include "wolfhsm/wh_server.h"
-#ifdef WOLFHSM_SHE_EXTENSION
+#ifdef WOLFHSM_CFG_SHE_EXTENSION
 #include "wolfhsm/wh_server_she.h"
 #endif
 #include "wolfhsm/wh_server_keystore.h"
@@ -247,7 +247,7 @@ int hsmReadKey(whServerContext* server, whKeyId keyId, whNvmMetadata* outMeta,
     if (ret == 0 && out != NULL) {
         hsmCacheKey(server, meta, out);
     }
-#ifdef WOLFHSM_SHE_EXTENSION
+#ifdef WOLFHSM_CFG_SHE_EXTENSION
     /* use empty key of zeros if we couldn't find the master ecu key */
     if (ret == WH_ERROR_NOTFOUND &&
         (keyId & WOLFHSM_KEYTYPE_MASK) == WOLFHSM_KEYTYPE_SHE &&

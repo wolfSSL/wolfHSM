@@ -53,7 +53,7 @@ CFLAGS += -DWOLFHSM_CFG_NO_CRYPTO
 endif
 
 ifeq ($(SHE),1)
-CFLAGS += -DWOLFHSM_SHE_EXTENSION
+CFLAGS += -DWOLFHSM_CFG_SHE_EXTENSION
 endif
 
 # Assembly source files

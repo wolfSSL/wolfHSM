@@ -29,7 +29,7 @@
 
 #include "wolfhsm/wh_common.h"
 
-#ifdef WOLFHSM_SHE_EXTENSION
+#ifdef WOLFHSM_CFG_SHE_EXTENSION
 #include "wolfhsm/wh_she_common.h"
 #endif
 
@@ -366,7 +366,7 @@ typedef struct  wh_Packet_counter_destroy_req
 
 
 /** SHE Packets */
-#ifdef WOLFHSM_SHE_EXTENSION
+#ifdef WOLFHSM_CFG_SHE_EXTENSION
 typedef struct  wh_Packet_she_set_uid_req
 {
     uint8_t uid[WOLFHSM_SHE_UID_SZ];
@@ -538,7 +538,7 @@ typedef struct  wh_Packet_she_verify_mac_res
     uint8_t status;
     uint8_t WH_PAD[3];
 } wh_Packet_she_verify_mac_res;
-#endif  /*WOLFHSM_SHE_EXTENSION */
+#endif  /*WOLFHSM_CFG_SHE_EXTENSION */
 
 /** Union of all packet types with common header */
 typedef struct whPacket
@@ -632,7 +632,7 @@ typedef struct whPacket
         wh_Packet_counter_increment_res counterIncrementRes;
         wh_Packet_counter_read_res counterReadRes;
 
-#ifdef WOLFHSM_SHE_EXTENSION
+#ifdef WOLFHSM_CFG_SHE_EXTENSION
         wh_Packet_she_set_uid_req sheSetUidReq;
         wh_Packet_she_secure_boot_init_req sheSecureBootInitReq;
         wh_Packet_she_secure_boot_init_res sheSecureBootInitRes;
@@ -660,7 +660,7 @@ typedef struct whPacket
         wh_Packet_she_gen_mac_res sheGenMacRes;
         wh_Packet_she_verify_mac_req sheVerifyMacReq;
         wh_Packet_she_verify_mac_res sheVerifyMacRes;
-#endif  /*WOLFHSM_SHE_EXTENSION */
+#endif  /*WOLFHSM_CFG_SHE_EXTENSION */
 
     };
 } whPacket;

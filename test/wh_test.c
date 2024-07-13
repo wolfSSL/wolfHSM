@@ -47,7 +47,7 @@ int whTest_Unit(void)
     /* Crypto Tests */
     WH_TEST_ASSERT(0 == whTest_Crypto());
 
-#if defined(WOLFHSM_SHE_EXTENSION)
+#if defined(WOLFHSM_CFG_SHE_EXTENSION)
     WH_TEST_ASSERT(0 == whTest_She());
 #endif /* WOLFHSM_SHE_EXTENTION */
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */

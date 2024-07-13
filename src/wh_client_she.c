@@ -24,7 +24,7 @@
 
 #include "wolfhsm/wh_client.h"
 
-#ifdef WOLFHSM_SHE_EXTENSION
+#ifdef WOLFHSM_CFG_SHE_EXTENSION
 
 #include <stdint.h>
 #include <stdlib.h>  /* For NULL */
@@ -48,6 +48,7 @@
 #include "wolfhsm/wh_client_she.h"
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
+
 int wh_Client_ShePreProgramKey(whClientContext* c, whNvmId keyId,
     whNvmFlags flags, uint8_t* key, whNvmSize keySz)
 {
@@ -894,4 +895,4 @@ int wh_Client_SheVerifyMac(whClientContext* c, uint8_t keyId, uint8_t* message,
     return ret;
 }
 
-#endif /* WOLFHSM_SHE_EXTENSION */
+#endif /* WOLFHSM_CFG_SHE_EXTENSION */

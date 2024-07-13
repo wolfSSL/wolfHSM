@@ -29,7 +29,7 @@
 #include "user_settings.h"
 #endif
 
-#ifdef WOLFHSM_SHE_EXTENSION
+#ifdef WOLFHSM_CFG_SHE_EXTENSION
 #ifndef WOLFHSM_CFG_NO_CRYPTO
 
 #include "wolfssl/wolfcrypt/settings.h"
@@ -576,4 +576,4 @@ int whTest_She(void)
 }
 
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
-#endif /* WOLFHSM_SHE_EXTENSION */
+#endif /* WOLFHSM_CFG_SHE_EXTENSION */

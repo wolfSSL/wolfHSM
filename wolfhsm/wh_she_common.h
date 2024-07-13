@@ -30,7 +30,7 @@
 
 #include <stdint.h>
 
-#ifdef WOLFHSM_SHE_EXTENSION
+#ifdef WOLFHSM_CFG_SHE_EXTENSION
 
 #define WOLFHSM_SHE_SECRET_KEY_ID 0
 #define WOLFHSM_SHE_MASTER_ECU_KEY_ID 1
@@ -112,6 +112,6 @@ int wh_SheGenerateLoadableKey(uint8_t keyId,
     uint8_t* messageThree, uint8_t* messageFour, uint8_t* messageFive);
 
 #endif /* !WOLFHSM_CFG_NO_CRYPTO*/
-#endif /* WOLFHSM_SHE_EXTENSION */
+#endif /* WOLFHSM_CFG_SHE_EXTENSION */
 
 #endif /* WOLFHSM_WH_SHE_COMMON_H_ */

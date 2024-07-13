@@ -45,7 +45,7 @@
 #include "wolfhsm/wh_server_crypto.h"
 #include "wolfhsm/wh_server_keystore.h"
 #include "wolfhsm/wh_server_counter.h"
-#if defined(WOLFHSM_SHE_EXTENSION)
+#if defined(WOLFHSM_CFG_SHE_EXTENSION)
 #include "wolfhsm/wh_server_she.h"
 #endif
 
@@ -76,7 +76,7 @@ int wh_Server_Init(whServerContext* server, whServerConfig* config)
         server->crypto->devId = INVALID_DEVID;
 #endif
     }
-#ifdef WOLFHSM_SHE_EXTENSION
+#ifdef WOLFHSM_CFG_SHE_EXTENSION
     server->she = config->she;
 #endif
 #endif
@@ -296,7 +296,7 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
                     size, data, &size, data);
         break;
 
-#ifdef WOLFHSM_SHE_EXTENSION
+#ifdef WOLFHSM_CFG_SHE_EXTENSION
         case WH_MESSAGE_GROUP_SHE:
             rc = wh_Server_HandleSheRequest(server, action, data,
                 &size);

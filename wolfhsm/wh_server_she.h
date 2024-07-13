@@ -33,7 +33,7 @@
 #include "wolfssl/wolfcrypt/cmac.h"
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
-#if defined(WOLFHSM_SHE_EXTENSION)
+#if defined(WOLFHSM_CFG_SHE_EXTENSION)
 
 typedef struct {
     uint8_t  sbState;
@@ -61,6 +61,6 @@ typedef struct {
 int wh_Server_HandleSheRequest(whServerContext* server,
     uint16_t action, uint8_t* data, uint16_t* size);
 
-#endif /* WOLFHSM_SHE_EXTENSION */
+#endif /* WOLFHSM_CFG_SHE_EXTENSION */
 
 #endif /* WOLFHSM_WH_SERVER_SHE_H */

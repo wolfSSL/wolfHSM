@@ -77,7 +77,7 @@ typedef struct whServerContext_t whServerContext;
 #include "wolfssl/wolfcrypt/cryptocb.h"
 #endif /* WOLFHSM_CFG_NO_CRYPTO */
 
-#ifdef WOLFHSM_SHE_EXTENSION
+#ifdef WOLFHSM_CFG_SHE_EXTENSION
 #include "wolfhsm/wh_she_common.h"
 #include "wolfhsm/wh_server_she.h"
 #endif
@@ -236,7 +236,7 @@ typedef struct whServerConfig_t {
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     whServerCryptoContext* crypto;
-#ifdef WOLFHSM_SHE_EXTENSION
+#ifdef WOLFHSM_CFG_SHE_EXTENSION
     whServerSheContext* she;
 #endif
 #if defined WOLF_CRYPTO_CB /* TODO: should we be relying on wolfSSL defines? \
@@ -255,7 +255,7 @@ struct whServerContext_t {
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     whServerCryptoContext* crypto;
     whServerCacheSlot       cache[WOLFHSM_CFG_SERVER_KEYCACHE_COUNT];
-#ifdef WOLFHSM_SHE_EXTENSION
+#ifdef WOLFHSM_CFG_SHE_EXTENSION
     whServerSheContext* she;
 #endif
 #endif /* WOLFHSM_CFG_NO_CRYPTO */
