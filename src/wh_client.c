@@ -33,7 +33,7 @@
 /* Components */
 #include "wolfhsm/wh_comm.h"
 
-#ifndef WOLFHSM_NO_CRYPTO
+#ifndef WOLFHSM_CFG_NO_CRYPTO
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/error-crypt.h"
 #include "wolfssl/wolfcrypt/wc_port.h"
@@ -67,7 +67,7 @@ int wh_Client_Init(whClientContext* c, const whClientConfig* config)
 
     rc = wh_CommClient_Init(c->comm, config->comm);
 
-#ifndef WOLFHSM_NO_CRYPTO
+#ifndef WOLFHSM_CFG_NO_CRYPTO
     if( rc == 0) {
         rc = wolfCrypt_Init();
         if (rc != 0) {
@@ -82,7 +82,7 @@ int wh_Client_Init(whClientContext* c, const whClientConfig* config)
             }
         }
     }
-#endif  /* WOLFHSM_NO_CRYPTO */
+#endif  /* WOLFHSM_CFG_NO_CRYPTO */
 
     if (rc != 0) {
         wh_Client_Cleanup(c);
@@ -96,9 +96,9 @@ int wh_Client_Cleanup(whClientContext* c)
         return WH_ERROR_BADARGS;
     }
 
-#ifndef WOLFHSM_NO_CRYPTO
+#ifndef WOLFHSM_CFG_NO_CRYPTO
     (void)wolfCrypt_Cleanup();
-#endif  /* WOLFHSM_NO_CRYPTO */
+#endif  /* WOLFHSM_CFG_NO_CRYPTO */
 
     (void)wh_CommClient_Cleanup(c->comm);
 
@@ -1025,7 +1025,7 @@ int wh_Client_CounterDestroy(whClientContext* c, whNvmId counterId)
     return ret;
 }
 
-#ifndef WOLFHSM_NO_CRYPTO
+#ifndef WOLFHSM_CFG_NO_CRYPTO
 
 #ifdef HAVE_CURVE25519
 int wh_Client_SetKeyIdCurve25519(curve25519_key* key, whNvmId keyId)
@@ -1196,4 +1196,4 @@ int wh_Client_CmacCancelableResponse(whClientContext* c, Cmac* cmac,
     return ret;
 }
 #endif /* WOLFSSL_CMAC */
-#endif  /* !WOLFHSM_NO_CRYPTO */
+#endif  /* !WOLFHSM_CFG_NO_CRYPTO */

@@ -33,6 +33,8 @@
 /* Common WolfHSM types and defines shared with the server */
 #include "wolfhsm/wh_common.h"
 
+#ifdef WOLFHSM_CFG_SHE_EXTENSION
+
 int wh_Client_ShePreProgramKey(whClientContext* c, whNvmId keyId,
     whNvmFlags flags, uint8_t* key, whNvmSize keySz);
 int wh_Client_SheSetUidRequest(whClientContext* c, uint8_t* uid,
@@ -104,4 +106,7 @@ int wh_Client_SheVerifyMacRequest(whClientContext* c, uint8_t keyId,
 int wh_Client_SheVerifyMacResponse(whClientContext* c, uint8_t* outStatus);
 int wh_Client_SheVerifyMac(whClientContext* c, uint8_t keyId, uint8_t* message,
     uint32_t messageLen, uint8_t* mac, uint32_t macLen, uint8_t* outStatus);
+
+#endif /* WOLFHSM_CFG_SHE_EXTENSION */
+
 #endif

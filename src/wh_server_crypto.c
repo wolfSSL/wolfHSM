@@ -26,7 +26,7 @@
 #include <stdlib.h>  /* For NULL */
 #include <string.h>  /* For memset, memcpy */
 
-#ifndef WOLFHSM_NO_CRYPTO
+#ifndef WOLFHSM_CFG_NO_CRYPTO
 
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/types.h"
@@ -911,4 +911,4 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
     }
     return ret;
 }
-#endif  /* WOLFHSM_NO_CRYPTO */
+#endif  /* WOLFHSM_CFG_NO_CRYPTO */

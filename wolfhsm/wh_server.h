@@ -68,14 +68,14 @@ typedef struct whServerContext_t whServerContext;
 #include "wolfhsm/wh_nvm.h"
 #include "wolfhsm/wh_message_customcb.h"
 
-#ifndef WOLFHSM_NO_CRYPTO
+#ifndef WOLFHSM_CFG_NO_CRYPTO
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/random.h"
 #include "wolfssl/wolfcrypt/rsa.h"
 #include "wolfssl/wolfcrypt/ecc.h"
 #include "wolfssl/wolfcrypt/curve25519.h"
 #include "wolfssl/wolfcrypt/cryptocb.h"
-#endif /* WOLFHSM_NO_CRYPTO */
+#endif /* WOLFHSM_CFG_NO_CRYPTO */
 
 #ifdef WOLFHSM_SHE_EXTENSION
 #include "wolfhsm/wh_she_common.h"
@@ -109,7 +109,7 @@ typedef struct whServerContext_t whServerContext;
 #endif
 
 
-#ifndef WOLFHSM_NO_CRYPTO
+#ifndef WOLFHSM_CFG_NO_CRYPTO
 /** Server crypto context and resource allocation */
 typedef struct whServerCacheSlot {
     uint32_t        commited;
@@ -150,7 +150,7 @@ typedef struct whServerCryptoContext {
 } whServerCryptoContext;
 
 
-#endif /* WOLFHSM_NO_CRYPTO */
+#endif /* WOLFHSM_CFG_NO_CRYPTO */
 
 /** Server custom callback */
 
@@ -234,7 +234,7 @@ typedef struct whServerConfig_t {
     whCommServerConfig* comm_config;
     whNvmContext*       nvm;
 
-#ifndef WOLFHSM_NO_CRYPTO
+#ifndef WOLFHSM_CFG_NO_CRYPTO
     whServerCryptoContext* crypto;
 #ifdef WOLFHSM_SHE_EXTENSION
     whServerSheContext* she;
@@ -243,7 +243,7 @@ typedef struct whServerConfig_t {
                             */
     int devId;
 #endif
-#endif /* WOLFHSM_NO_CRYPTO */
+#endif /* WOLFHSM_CFG_NO_CRYPTO */
     whServerDmaConfig* dmaConfig;
 } whServerConfig;
 
@@ -252,13 +252,13 @@ typedef struct whServerConfig_t {
 struct whServerContext_t {
     whNvmContext* nvm;
     whCommServer  comm[1];
-#ifndef WOLFHSM_NO_CRYPTO
+#ifndef WOLFHSM_CFG_NO_CRYPTO
     whServerCryptoContext* crypto;
     whServerCacheSlot       cache[WOLFHSM_CFG_SERVER_KEYCACHE_COUNT];
 #ifdef WOLFHSM_SHE_EXTENSION
     whServerSheContext* she;
 #endif
-#endif /* WOLFHSM_NO_CRYPTO */
+#endif /* WOLFHSM_CFG_NO_CRYPTO */
     whServerCustomCb   customHandlerTable[WOLFHSM_CFG_SERVER_CUSTOMCB_COUNT];
     whServerDmaContext dma;
     int                connected;

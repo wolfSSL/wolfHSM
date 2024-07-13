@@ -25,7 +25,7 @@
 #include <stdio.h>  /* For printf */
 #include <string.h> /* For memset, memcpy */
 
-#ifndef WOLFHSM_NO_CRYPTO
+#ifndef WOLFHSM_CFG_NO_CRYPTO
 
 #include "wolfssl/wolfcrypt/settings.h"
 
@@ -925,4 +925,4 @@ int whTest_Crypto(void)
     return 0;
 }
 
-#endif  /* WOLFHSM_NO_CRYPTO */
+#endif  /* WOLFHSM_CFG_NO_CRYPTO */

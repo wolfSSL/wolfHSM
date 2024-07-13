@@ -28,14 +28,14 @@
 #include <stdlib.h>  /* For NULL */
 #include <string.h>  /* For memset, memcpy */
 
-#ifndef WOLFHSM_NO_CRYPTO
+#ifndef WOLFHSM_CFG_NO_CRYPTO
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/types.h"
 #include "wolfssl/wolfcrypt/error-crypt.h"
 #include "wolfssl/wolfcrypt/wc_port.h"
 #include "wolfssl/wolfcrypt/aes.h"
 #include "wolfssl/wolfcrypt/cmac.h"
-#endif /* !WOLFHSM_NO_CRYPTO */
+#endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
 #include "wolfhsm/wh_server.h"
 #include "wolfhsm/wh_server_keystore.h"
@@ -47,7 +47,7 @@
 
 #include "wolfhsm/wh_server_she.h"
 
-#ifndef WOLFHSM_NO_CRYPTO
+#ifndef WOLFHSM_CFG_NO_CRYPTO
 
 /** SHE defined constants */
 static const uint8_t WOLFHSM_SHE_KEY_UPDATE_ENC_C[] = { 0x01, 0x01, 0x53, 0x48,
@@ -1147,7 +1147,7 @@ int wh_Server_HandleSheRequest(whServerContext* server,
     return 0;
 }
 
-#else /* WOLFHSM_NO_CRYPTO */
+#else /* WOLFHSM_CFG_NO_CRYPTO */
 int wh_Server_HandleSheRequest(whServerContext* server,
     uint16_t action, uint8_t* data, uint16_t* size)
 {
@@ -1159,6 +1159,6 @@ int wh_Server_HandleSheRequest(whServerContext* server,
     return WH_ERROR_BADARGS;
 }
 
-#endif /* !WOLFHSM_NO_CRYPTO */
+#endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
 #endif /* WOLFHSM_SHE_EXTENSION*/

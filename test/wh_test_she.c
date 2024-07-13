@@ -30,7 +30,7 @@
 #endif
 
 #ifdef WOLFHSM_SHE_EXTENSION
-#ifndef WOLFHSM_NO_CRYPTO
+#ifndef WOLFHSM_CFG_NO_CRYPTO
 
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/types.h"
@@ -575,5 +575,5 @@ int whTest_She(void)
     return 0;
 }
 
-#endif /* !WOLFHSM_NO_CRYPTO */
+#endif /* !WOLFHSM_CFG_NO_CRYPTO */
 #endif /* WOLFHSM_SHE_EXTENSION */

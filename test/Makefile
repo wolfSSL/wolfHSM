@@ -49,7 +49,7 @@ endif
 
 # Support a NO CRYPTO build
 ifeq ($(NOCRYPTO),1)
-CFLAGS += -DWOLFHSM_NO_CRYPTO
+CFLAGS += -DWOLFHSM_CFG_NO_CRYPTO
 endif
 
 ifeq ($(SHE),1)

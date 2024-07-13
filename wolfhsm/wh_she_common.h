@@ -93,7 +93,7 @@
 #define WOLFHSM_SHE_M4_SZ WOLFHSM_SHE_M2_SZ
 #define WOLFHSM_SHE_M5_SZ WOLFHSM_SHE_M1_SZ
 
-#ifndef WOLFHSM_NO_CRYPTO
+#ifndef WOLFHSM_CFG_NO_CRYPTO
 
 #include "wolfssl/wolfcrypt/types.h"
 #include "wolfssl/wolfcrypt/aes.h"
@@ -111,7 +111,7 @@ int wh_SheGenerateLoadableKey(uint8_t keyId,
     uint8_t* key, uint8_t* authKey, uint8_t* messageOne, uint8_t* messageTwo,
     uint8_t* messageThree, uint8_t* messageFour, uint8_t* messageFive);
 
-#endif /* !WOLFHSM_NO_CRYPTO*/
+#endif /* !WOLFHSM_CFG_NO_CRYPTO*/
 #endif /* WOLFHSM_SHE_EXTENSION */
 
 #endif /* WOLFHSM_WH_SHE_COMMON_H_ */

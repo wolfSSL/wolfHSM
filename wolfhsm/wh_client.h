@@ -359,7 +359,7 @@ int wh_Client_Echo(whClientContext* c, uint16_t snd_len, const void* snd_data,
  */
 
 
-#ifndef WOLFHSM_NO_CRYPTO
+#ifndef WOLFHSM_CFG_NO_CRYPTO
 /**
  * @brief Sends a key cache request to the server.
  *
@@ -804,7 +804,7 @@ int wh_Client_SetKeyIdCmac(Cmac* key, whNvmId keyId);
 int wh_Client_GetKeyIdCmac(Cmac* key, whNvmId* outId);
 #endif /* WOLFSSL_CMAC */
 #endif /* !NO_AES */
-#endif /* ! WOLFHSM_NO_CRYPTO */
+#endif /* ! WOLFHSM_CFG_NO_CRYPTO */
 
 /* Counter functions */
 int wh_Client_CounterInitRequest(whClientContext* c, whNvmId counterId,

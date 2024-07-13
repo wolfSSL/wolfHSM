@@ -23,7 +23,7 @@
 /* System libraries */
 
 #ifdef WOLFHSM_SHE_EXTENSION
-#ifndef WOLFHSM_NO_CRYPTO
+#ifndef WOLFHSM_CFG_NO_CRYPTO
 
 #include <stdint.h>
 #include <stdlib.h>  /* For NULL */
@@ -251,7 +251,7 @@ int wh_SheGenerateLoadableKey(uint8_t keyId,
     }
     return ret;
 }
-#endif /* !WOLFHSM_NO_CRYPTO */
+#endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
 #endif /* WOLFHSM_SHE_EXTENSION */
 

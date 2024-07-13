@@ -27,11 +27,11 @@
 
 #include "wolfhsm/wh_server.h"
 
-#ifndef WOLFHSM_NO_CRYPTO
+#ifndef WOLFHSM_CFG_NO_CRYPTO
 #include "wolfssl/wolfcrypt/types.h"
 #include "wolfssl/wolfcrypt/aes.h"
 #include "wolfssl/wolfcrypt/cmac.h"
-#endif /* !WOLFHSM_NO_CRYPTO */
+#endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
 #if defined(WOLFHSM_SHE_EXTENSION)
 
@@ -44,14 +44,14 @@ typedef struct {
     uint32_t blSizeReceived;
     uint32_t rndInited;
 
-#ifndef WOLFHSM_NO_CRYPTO
+#ifndef WOLFHSM_CFG_NO_CRYPTO
 #ifndef NO_AES
     Aes sheAes[1];
 #endif /* !NO_AES*/
 #ifdef WOLFSSL_CMAC
     Cmac sheCmac[1];
 #endif /* WOLFSSL_CMAC */
-#endif /* !WOLFHSM_NO_CRYPTO*/
+#endif /* !WOLFHSM_CFG_NO_CRYPTO*/
 
     uint8_t  prngState[WOLFHSM_SHE_KEY_SZ];
     uint8_t  prngKey[WOLFHSM_SHE_KEY_SZ];

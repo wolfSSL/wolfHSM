@@ -67,7 +67,7 @@ int wh_Server_Init(whServerContext* server, whServerConfig* config)
     memset(server, 0, sizeof(*server));
     server->nvm = config->nvm;
 
-#ifndef WOLFHSM_NO_CRYPTO
+#ifndef WOLFHSM_CFG_NO_CRYPTO
     server->crypto = config->crypto;
     if (server->crypto != NULL) {
 #if defined(WOLF_CRYPTO_CB)
@@ -279,7 +279,7 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
             rc = wh_Server_HandleCounter(server, action, data, &size);
         break;
 
-#ifndef WOLFHSM_NO_CRYPTO
+#ifndef WOLFHSM_CFG_NO_CRYPTO
         case WH_MESSAGE_GROUP_KEY:
             rc = wh_Server_HandleKeyRequest(server, magic, action, seq,
                     data, &size);
@@ -289,7 +289,7 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
             rc = wh_Server_HandleCryptoRequest(server, action, data,
                 &size, seq);
         break;
-#endif  /* WOLFHSM_NO_CRYPTO */
+#endif  /* WOLFHSM_CFG_NO_CRYPTO */
 
         case WH_MESSAGE_GROUP_PKCS11:
             rc = _wh_Server_HandlePkcs11Request(server, magic, action, seq,
