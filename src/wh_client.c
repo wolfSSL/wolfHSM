@@ -239,6 +239,137 @@ int wh_Client_CommInit(whClientContext* c,
     return rc;
 }
 
+int wh_Client_CommInfoRequest(whClientContext* c)
+{
+    if (c == NULL) {
+       return WH_ERROR_BADARGS;
+   }
+
+   return wh_Client_SendRequest(c,
+           WH_MESSAGE_GROUP_COMM, WH_MESSAGE_COMM_ACTION_INFO,
+           0, NULL);
+}
+
+int wh_Client_CommInfoResponse(whClientContext* c,
+        uint8_t* out_version,
+        uint8_t* out_build,
+        uint32_t *out_cfg_comm_data_len,
+        uint32_t *out_cfg_nvm_object_count,
+        uint32_t *out_cfg_keycache_count,
+        uint32_t *out_cfg_keycache_bufsize,
+        uint32_t *out_cfg_customcb_count,
+        uint32_t *out_cfg_dmaaddr_count,
+        uint32_t *out_debug_state,
+        uint32_t *out_boot_state,
+        uint32_t *out_lifecycle_state,
+        uint32_t *out_nvm_state)
+{
+    int rc = 0;
+    whMessageCommInfoResponse msg = {0};
+    uint16_t resp_group = 0;
+    uint16_t resp_action = 0;
+    uint16_t resp_size = 0;
+
+    if (c == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    rc = wh_Client_RecvResponse(c,
+            &resp_group, &resp_action,
+            &resp_size, &msg);
+    if (rc == 0) {
+        /* Validate response */
+        if (    (resp_group != WH_MESSAGE_GROUP_COMM) ||
+                (resp_action != WH_MESSAGE_COMM_ACTION_INFO) ||
+                (resp_size != sizeof(msg)) ){
+            /* Invalid message */
+            rc = WH_ERROR_ABORTED;
+        } else {
+            /* Valid message */
+            if (out_version != NULL) {
+                memcpy(out_version, msg.version, sizeof(msg.version));
+            }
+            if (out_build != NULL) {
+                memcpy(out_build, msg.build, sizeof(msg.build));
+            }
+            if (out_cfg_comm_data_len != NULL) {
+                *out_cfg_comm_data_len = msg.cfg_comm_data_len;
+            }
+            if (out_cfg_nvm_object_count != NULL) {
+                *out_cfg_nvm_object_count = msg.cfg_nvm_object_count;
+            }
+            if (out_cfg_keycache_count != NULL) {
+                *out_cfg_keycache_count = msg.cfg_server_keycache_count;
+            }
+            if (out_cfg_keycache_bufsize != NULL) {
+                *out_cfg_keycache_bufsize = msg.cfg_server_keycache_bufsize;
+            }
+            if (out_cfg_customcb_count != NULL) {
+                *out_cfg_customcb_count = msg.cfg_server_customcb_count;
+            }
+            if (out_cfg_dmaaddr_count != NULL) {
+                *out_cfg_dmaaddr_count = msg.cfg_server_dmaaddr_count;
+            }
+            if (out_debug_state != NULL) {
+                *out_debug_state = msg.debug_state;
+            }
+            if (out_boot_state != NULL) {
+                *out_boot_state = msg.boot_state;
+            }
+            if (out_lifecycle_state != NULL) {
+                *out_lifecycle_state = msg.lifecycle_state;
+            }
+            if (out_nvm_state != NULL) {
+                *out_nvm_state = msg.nvm_state;
+            }
+        }
+    }
+    return rc;
+}
+
+int wh_Client_CommInfo(whClientContext* c,
+        uint8_t* out_version,
+        uint8_t* out_build,
+        uint32_t *out_cfg_comm_data_len,
+        uint32_t *out_cfg_nvm_object_count,
+        uint32_t *out_cfg_keycache_count,
+        uint32_t *out_cfg_keycache_bufsize,
+        uint32_t *out_cfg_customcb_count,
+        uint32_t *out_cfg_dmaaddr_count,
+        uint32_t *out_debug_state,
+        uint32_t *out_boot_state,
+        uint32_t *out_lifecycle_state,
+        uint32_t *out_nvm_state)
+{
+    int rc = 0;
+    if (c == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    do {
+        rc = wh_Client_CommInfoRequest(c);
+    } while (rc == WH_ERROR_NOTREADY);
+
+    if (rc == 0) {
+        do {
+            rc = wh_Client_CommInfoResponse(c,
+                    out_version,
+                    out_build,
+                    out_cfg_comm_data_len,
+                    out_cfg_nvm_object_count,
+                    out_cfg_keycache_count,
+                    out_cfg_keycache_bufsize,
+                    out_cfg_customcb_count,
+                    out_cfg_dmaaddr_count,
+                    out_debug_state,
+                    out_boot_state,
+                    out_lifecycle_state,
+                    out_nvm_state);
+        } while (rc == WH_ERROR_NOTREADY);
+    }
+    return rc;
+}
+
+
 int wh_Client_CommCloseRequest(whClientContext* c)
 {
     if (c == NULL) {

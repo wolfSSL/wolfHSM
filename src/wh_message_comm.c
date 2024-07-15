@@ -69,3 +69,27 @@ int wh_MessageComm_TranslateLenData(uint16_t magic,
     return 0;
 }
 
+int wh_MessageComm_TranslateInfoResponse(uint16_t magic,
+        const whMessageCommInfoResponse* src,
+        whMessageCommInfoResponse* dest)
+{
+    if (    (src == NULL) ||
+            (dest == NULL)  ) {
+        return WH_ERROR_BADARGS;
+    }
+    memcpy(dest->version, src->version, sizeof(dest->version));
+    memcpy(dest->build, src->build, sizeof(dest->build));
+    dest->cfg_comm_data_len = wh_Translate32(magic, src->cfg_comm_data_len);
+    dest->cfg_nvm_object_count = wh_Translate32(magic, src->cfg_nvm_object_count);
+    dest->cfg_server_keycache_count = wh_Translate32(magic, src->cfg_server_keycache_count);
+    dest->cfg_server_keycache_bufsize = wh_Translate32(magic, src->cfg_server_keycache_bufsize);
+    dest->cfg_server_customcb_count = wh_Translate32(magic, src->cfg_server_customcb_count);
+    dest->cfg_server_dmaaddr_count = wh_Translate32(magic, src->cfg_server_dmaaddr_count);
+    dest->debug_state = wh_Translate32(magic, src->debug_state);
+    dest->boot_state = wh_Translate32(magic, src->boot_state);
+    dest->lifecycle_state = wh_Translate32(magic, src->lifecycle_state);
+    dest->nvm_state = wh_Translate32(magic, src->nvm_state);
+    return 0;
+}
+
+

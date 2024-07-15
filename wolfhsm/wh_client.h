@@ -202,6 +202,106 @@ int wh_Client_CommInitResponse(whClientContext* c, uint32_t* out_clientid,
 int wh_Client_CommInit(whClientContext* c, uint32_t* out_clientid,
                        uint32_t* out_serverid);
 
+
+/**
+ * @brief Sends a communications information request to the server.
+ *
+ * This function prepares and sends a communication information request
+ * message to the server.
+ *
+ * @param[in] c Pointer to the client context.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CommInfoRequest(whClientContext* c);
+
+/**
+ * @brief Receives a communication information response from the server.
+ *
+ * This function waits for and processes a communication information
+ * response message from the server. It validates the response and extracts
+ * the server configuration data from the message.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[out] out_version Pointer to store the server version string (8 bytes)
+ * @param[out] out_build Pointer to store the server build string (8 bytes)
+ * @param[out] out_cfg_comm_data_len Pointer to store the server's maximum data
+ *                                   len for any request or response
+ * @param[out] out_cfg_nvm_object_count Pointer to store the server's
+ *                                      maximum number of NVM objects
+ * @param[out] out_cfg_keycache_count Pointer to store the server's number of
+ *                                    keys in the server RAM
+ * @param[out] out_cfg_keycache_bufsize Pointer to store the server's maximum
+ *                                      size of each key in server RAM
+ * @param[out] out_cfg_customcb_count Pointer to store the server's number of
+ *                                    custom callbacks
+ * @param[out] out_cfg_dmaaddr_count Pointer to store the server's number of
+ *                                   dmaaddr regions
+ * Growth:
+ * @param[out] out_debug_state Pointer to store the server's current debug state
+ * @param[out] out_boot_state Pointer to store the server's current boot state
+ * @param[out] out_lifecycle_state Pointer to store the server's lifecyle state
+ * @param[out] out_nvm_state Pointer to store the server's current nvm state
+ *
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CommInfoResponse(whClientContext* c,
+        uint8_t* out_version,
+        uint8_t* out_build,
+        uint32_t *out_cfg_comm_data_len,
+        uint32_t *out_cfg_nvm_object_count,
+        uint32_t *out_cfg_keycache_count,
+        uint32_t *out_cfg_keycache_bufsize,
+        uint32_t *out_cfg_customcb_count,
+        uint32_t *out_cfg_dmaaddr_count,
+        uint32_t *out_debug_state,
+        uint32_t *out_boot_state,
+        uint32_t *out_lifecycle_state,
+        uint32_t *out_nvm_state);
+
+/**
+ * @brief Retrieves server configuration and state with a blocking call.
+ *
+ * This function handles the complete process of sending communication info
+ * request and parsting the response from the server by busy polling for a
+ * valid response.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[out] out_version Pointer to store the server version string (8 bytes)
+ * @param[out] out_build Pointer to store the server build string (8 bytes)
+ * @param[out] out_cfg_comm_data_len Pointer to store the server's maximum data
+ *                                   len for any request or response
+ * @param[out] out_cfg_nvm_object_count Pointer to store the server's
+ *                                      maximum number of NVM objects
+ * @param[out] out_cfg_keycache_count Pointer to store the server's number of
+ *                                    keys in the server RAM
+ * @param[out] out_cfg_keycache_bufsize Pointer to store the server's maximum
+ *                                      size of each key in server RAM
+ * @param[out] out_cfg_customcb_count Pointer to store the server's number of
+ *                                    custom callbacks
+ * @param[out] out_cfg_dmaaddr_count Pointer to store the server's number of
+ *                                   dmaaddr regions
+ * Growth:
+ * @param[out] out_debug_state Pointer to store the server's current debug state
+ * @param[out] out_boot_state Pointer to store the server's current boot state
+ * @param[out] out_lifecycle_state Pointer to store the server's lifecyle state
+ * @param[out] out_nvm_state Pointer to store the server's current nvm state
+ *
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CommInfo(whClientContext* c,
+        uint8_t* out_version,
+        uint8_t* out_build,
+        uint32_t *out_cfg_comm_data_len,
+        uint32_t *out_cfg_nvm_object_count,
+        uint32_t *out_cfg_keycache_count,
+        uint32_t *out_cfg_keycache_bufsize,
+        uint32_t *out_cfg_customcb_count,
+        uint32_t *out_cfg_dmaaddr_count,
+        uint32_t *out_debug_state,
+        uint32_t *out_boot_state,
+        uint32_t *out_lifecycle_state,
+        uint32_t *out_nvm_state);
+
 /**
  * @brief Sends a communication close request to the server.
  *

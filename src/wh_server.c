@@ -184,6 +184,39 @@ static int _wh_Server_HandleCommRequest(whServerContext* server,
         *out_resp_size = sizeof(resp);
     }; break;
 
+    case WH_MESSAGE_COMM_ACTION_INFO:
+    {
+        const uint8_t version[WOLFHSM_INFO_VERSION_LEN] =
+                WOLFHSM_CFG_INFOVERSION;
+        const uint8_t build[WOLFHSM_INFO_VERSION_LEN] =
+                WOLFHSM_CFG_INFOBUILD;
+
+        /* No request message */
+        whMessageCommInfoResponse resp = {0};
+
+        /* Process the info action */
+        memcpy(resp.version, version, sizeof(resp.version));
+        memcpy(resp.build, build, sizeof(resp.build));
+        resp.cfg_comm_data_len = WOLFHSM_CFG_COMM_DATA_LEN;
+        resp.cfg_nvm_object_count = WOLFHSM_CFG_NVM_OBJECT_COUNT;
+        resp.cfg_server_customcb_count = WOLFHSM_CFG_SERVER_CUSTOMCB_COUNT;
+        resp.cfg_server_dmaaddr_count = WOLFHSM_CFG_SERVER_DMAADDR_COUNT;
+        resp.cfg_server_keycache_bufsize = WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE;
+        resp.cfg_server_keycache_count = WOLFHSM_CFG_SERVER_KEYCACHE_COUNT;
+
+        /* III Growth */
+        resp.debug_state = 1;
+        resp.boot_state = 2;
+        resp.lifecycle_state = 3;
+        resp.nvm_state = 4;
+
+        /* Convert the response struct */
+        wh_MessageComm_TranslateInfoResponse(magic,
+                &resp, (whMessageCommInfoResponse*)resp_packet);
+        *out_resp_size = sizeof(resp);
+    }; break;
+
+
     case WH_MESSAGE_COMM_ACTION_CLOSE:
     {
         /* No message */
@@ -191,7 +224,6 @@ static int _wh_Server_HandleCommRequest(whServerContext* server,
         wh_Server_SetConnected(server, WH_COMM_DISCONNECTED);
         *out_resp_size = 0;
     }; break;
-
 
     case WH_MESSAGE_COMM_ACTION_ECHO:
     {

@@ -36,6 +36,7 @@
 
 #include "wolfhsm/wh_server.h"
 #include "wolfhsm/wh_message.h"
+#include "wolfhsm/wh_message_comm.h"
 #include "wolfhsm/wh_client.h"
 
 #if defined(WOLFHSM_CFG_TEST_POSIX)
@@ -684,6 +685,20 @@ int whTest_ClientServerSequential(void)
     whNvmId  avail_objects   = 0;
     whNvmId  reclaim_objects = 0;
 
+    /* Ensure null terminated */
+    uint8_t version[WOLFHSM_INFO_VERSION_LEN + 1] = {0};
+    uint8_t build[WOLFHSM_INFO_VERSION_LEN + 1] = {0};
+    uint32_t cfg_comm_data_len = 0;
+    uint32_t cfg_nvm_object_count = 0;
+    uint32_t cfg_server_keycache_count = 0;
+    uint32_t cfg_server_keycache_bufsize = 0;
+    uint32_t cfg_server_customcb_count = 0;
+    uint32_t cfg_server_dmaaddr_count = 0;
+    uint32_t debug_state = 0;
+    uint32_t boot_state = 0;
+    uint32_t lifecycle_state = 0;
+    uint32_t nvm_state = 0;
+
     /* Check that the server side is ready to recv */
     WH_TEST_ASSERT_RETURN(WH_ERROR_NOTREADY ==
                           wh_Server_HandleRequestMessage(server));
@@ -694,6 +709,34 @@ int whTest_ClientServerSequential(void)
     WH_TEST_RETURN_ON_FAIL(wh_Client_CommInitResponse(client, &client_id, &server_id));
     WH_TEST_ASSERT_RETURN(client_id == client->comm->client_id);
 
+
+    /* Send the comm info message */
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CommInfoRequest(client));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CommInfoResponse(client,
+            version,
+            build,
+            &cfg_comm_data_len,
+            &cfg_nvm_object_count,
+            &cfg_server_keycache_count,
+            &cfg_server_keycache_bufsize,
+            &cfg_server_customcb_count,
+            &cfg_server_dmaaddr_count,
+            &debug_state,
+            &boot_state,
+            &lifecycle_state,
+            &nvm_state));
+    printf("Server Info: \n - Version:%s\n - Build:%s\n", version, build);
+    printf(" - cfg_comm_data_len:%u\n", cfg_comm_data_len);
+    printf(" - cfg_nvm_object_count:%u\n", cfg_nvm_object_count);
+    printf(" - cfg_server_keycache_count:%u\n", cfg_server_keycache_count);
+    printf(" - cfg_server_keycache_bufsize:%u\n", cfg_server_keycache_bufsize);
+    printf(" - cfg_server_customcb_count:%u\n", cfg_server_customcb_count);
+    printf(" - cfg_server_dmaaddr_count:%u\n", cfg_server_dmaaddr_count);
+    printf(" - debug_state:%u\n", debug_state);
+    printf(" - boot_state:%u\n", boot_state);
+    printf(" - lifecycle_state:%u\n", lifecycle_state);
+    printf(" - nvm_state:%u\n", nvm_state);
 
     for (counter = 0; counter < REPEAT_COUNT; counter++) {
 

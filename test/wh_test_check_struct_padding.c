@@ -11,7 +11,7 @@ whMessageComm_ErrorResponse whMessageComm_ErrorResponse_test;
 whMessageCommLenData        whMessageCommLenData_test;
 whMessageCommInitRequest    whMessageCommInitRequest_test;
 whMessageCommInitResponse   whMessageCommInitResponse_test;
-whMessageCommInfo           whMessageCommInfo_test;
+whMessageCommInfoResponse   whMessageCommInfoResponse_test;
 
 #include "wolfhsm/wh_message_customcb.h"
 whMessageCustomCb_Request  whMessageCustomCb_Request_test;

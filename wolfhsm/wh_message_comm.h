@@ -39,6 +39,13 @@ enum WH_MESSAGE_COMM_ACTION_ENUM {
     WH_MESSAGE_COMM_ACTION_ECHO      = 0x05,
 };
 
+/* Info request/response data sizes*/
+enum WOLFHSM_INFO_ENUM {
+    WOLFHSM_INFO_VERSION_LEN = 8,
+    WOLFHSM_INFO_BUILD_LEN   = 8,
+};
+
+
 
 /* Generic error response message. */
 typedef struct {
@@ -78,21 +85,25 @@ int wh_MessageComm_TranslateInitResponse(uint16_t magic,
         const whMessageCommInitResponse* src,
         whMessageCommInitResponse* dest);
 
-/* Info request/response data */
-enum WOLFHSM_INFO_ENUM {
-    WOLFHSM_INFO_VERSION_LEN = 8,
-    WOLFHSM_INFO_BUILD_LEN   = 8,
-};
 
 typedef struct {
     uint8_t version[WOLFHSM_INFO_VERSION_LEN];
     uint8_t build[WOLFHSM_INFO_BUILD_LEN];
-    uint32_t ramfree;
-    uint32_t nvmfree;
-    uint8_t debug_state;
-    uint8_t boot_state;
-    uint8_t lifecycle_state;
-    uint8_t nvm_state;
-} whMessageCommInfo;
+    uint32_t cfg_comm_data_len;
+    uint32_t cfg_nvm_object_count;
+    uint32_t cfg_server_keycache_count;
+    uint32_t cfg_server_keycache_bufsize;
+    uint32_t cfg_server_customcb_count;
+    uint32_t cfg_server_dmaaddr_count;
+    uint32_t debug_state;
+    uint32_t boot_state;
+    uint32_t lifecycle_state;
+    uint32_t nvm_state;
+} whMessageCommInfoResponse;
+
+int wh_MessageComm_TranslateInfoResponse(uint16_t magic,
+        const whMessageCommInfoResponse* src,
+        whMessageCommInfoResponse* dest);
+
 
 #endif /* WOLFHSM_WH_MESSAGE_COMM_H_ */

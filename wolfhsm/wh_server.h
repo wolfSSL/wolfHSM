@@ -20,6 +20,11 @@
  * wolfhsm/wh_server.h
  *
  * Configuration values:
+ *  WOLFHSM_CFG_INFOVERSION Reported version string
+ *      Default: "01.01.01"
+ *
+ *  WOLFHSM_CFG_INFOBUILD Reported build string (SHA hash)
+ *      Default: "12345678"
  *
  *  WOLFHSM_CFG_NO_CRYPTO - If defined, include no wolfCrypt dependencies
  *      Default: Not defined
@@ -83,6 +88,17 @@ typedef struct whServerContext_t whServerContext;
 #endif
 
 /** Default server resource configurations */
+/* Reported version string */
+#ifndef WOLFHSM_CFG_INFOVERSION
+#define WOLFHSM_CFG_INFOVERSION "01.01.01"
+#endif
+
+/* Reported build identifier string */
+#ifndef WOLFHSM_CFG_INFOBUILD
+#define WOLFHSM_CFG_INFOBUILD "12345678"
+#endif
+
+
 /* Number of NVM objects in the directory */
 #ifndef WOLFHSM_CFG_NVM_OBJECT_COUNT
 #define WOLFHSM_CFG_NVM_OBJECT_COUNT 32
@@ -238,12 +254,11 @@ typedef struct whServerConfig_t {
     whServerCryptoContext* crypto;
 #ifdef WOLFHSM_CFG_SHE_EXTENSION
     whServerSheContext* she;
-#endif
-#if defined WOLF_CRYPTO_CB /* TODO: should we be relying on wolfSSL defines? \
-                            */
+#endif /* WOLFHSM_CFG_SHE_EXTENSION */
+#if defined WOLF_CRYPTO_CB
     int devId;
-#endif
-#endif /* WOLFHSM_CFG_NO_CRYPTO */
+#endif /* WOLF_CRYPTO_CB */
+#endif /* !WOLFHSM_CFG_NO_CRYPTO */
     whServerDmaConfig* dmaConfig;
 } whServerConfig;
 
