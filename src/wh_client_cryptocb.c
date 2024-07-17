@@ -43,17 +43,14 @@
 #include "wolfssl/wolfcrypt/types.h"
 #include "wolfssl/wolfcrypt/error-crypt.h"
 #include "wolfssl/wolfcrypt/cryptocb.h"
-
-#if 0
 #include "wolfssl/wolfcrypt/aes.h"
 #include "wolfssl/wolfcrypt/cmac.h"
 #include "wolfssl/wolfcrypt/rsa.h"
-#endif
 
 #include "wolfhsm/wh_client_cryptocb.h"
 
 
-int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
+int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
 {
     int ret = CRYPTOCB_UNAVAILABLE;
     whClientContext* ctx = inCtx;
@@ -663,4 +660,5 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
 
     return ret;
 }
+
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */

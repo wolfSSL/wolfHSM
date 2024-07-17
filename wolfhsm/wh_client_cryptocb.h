@@ -33,7 +33,7 @@
 #include "wolfssl/wolfcrypt/types.h"
 #include "wolfssl/wolfcrypt/cryptocb.h"
 
-int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* ctx);
+int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* ctx);
 
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
 

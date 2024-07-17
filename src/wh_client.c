@@ -77,7 +77,7 @@ int wh_Client_Init(whClientContext* c, const whClientConfig* config)
 
         if (rc == 0) {
             rc = wc_CryptoCb_RegisterDevice(WOLFHSM_DEV_ID,
-                    wolfHSM_CryptoCb, c);
+                    wh_Client_CryptoCb, c);
             if (rc != 0) {
                 rc = WH_ERROR_ABORTED;
             }

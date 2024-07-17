@@ -411,7 +411,7 @@ static int hsmSheLoadKey(whServerContext* server, whPacket* packet,
     counter = (uint32_t*)packet->sheLoadKeyReq.messageTwo;
     if (ret == 0 &&
         keyRet != WH_ERROR_NOTFOUND &&
-        (*counter >> 4) <= she_meta_count) {
+        wh_Utils_ntohl(*counter) >> 4 <= she_meta_count) {
         ret = WH_SHE_ERC_KEY_UPDATE_ERROR;
     }
     /* write key with counter */
@@ -421,7 +421,7 @@ static int hsmSheLoadKey(whServerContext* server, whPacket* packet,
             hsmShePopId(packet->sheLoadKeyReq.messageOne));
         she_meta_flags =
             hsmShePopFlags(packet->sheLoadKeyReq.messageTwo);
-        she_meta_count = (*counter >> 4);
+        she_meta_count = wh_Utils_ntohl(*counter) >> 4;
         /* Update the meta label with new values */
         wh_She_Meta2Label(she_meta_count, she_meta_flags, meta->label);
         meta->len = WOLFHSM_SHE_KEY_SZ;
@@ -439,6 +439,8 @@ static int hsmSheLoadKey(whServerContext* server, whPacket* packet,
                 ret = hsmReadKey(server, meta->id, meta,
                     packet->sheLoadKeyReq.messageTwo + WOLFHSM_SHE_KEY_SZ,
                     &keySz);
+                /* Extract count and flags from the label, even if it failed */
+                wh_She_Label2Meta(meta->label, &she_meta_count, &she_meta_flags);
             }
         }
         if (ret != 0)
@@ -464,7 +466,7 @@ static int hsmSheLoadKey(whServerContext* server, whPacket* packet,
     }
     if (ret == 0) {
         /* reset messageTwo with the nvm read counter, pad with a 1 bit */
-        *counter = (she_meta_count << 4);
+        *counter = wh_Utils_htonl(she_meta_count << 4);
         packet->sheLoadKeyReq.messageTwo[3] |= 0x08;
         /* encrypt the new counter */
         ret = wc_AesEncryptDirect(server->she->sheAes,
