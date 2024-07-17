@@ -21,6 +21,12 @@
  *
  */
 
+/* Pick up server config */
+#include "wolfhsm/wh_server.h"
+
+#include <stdint.h>
+#include <stddef.h>
+
 #include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_message.h"

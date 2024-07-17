@@ -30,7 +30,7 @@
 
 /* System libraries */
 #include <stdint.h>
-#include <stdlib.h>  /* For NULL */
+#include <stddef.h>  /* For NULL */
 #include <string.h>  /* For memset, memcpy */
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
@@ -319,8 +319,7 @@ static int hsmSheLoadKey(whServerContext* server, whPacket* packet,
     whNvmMetadata meta[1];
     uint32_t she_meta_count = 0;
     uint32_t she_meta_flags = 0;
-    /*whSheMetadata* she_meta = (whSheMetadata*)meta->label; */
-    uint32_t* counter;
+    uint32_t* msg_counter_BE;
 
     /* read the auth key by AuthID */
     keySz = sizeof(kdfInput);
@@ -407,21 +406,21 @@ static int hsmSheLoadKey(whServerContext* server, whPacket* packet,
         server->she->uid, sizeof(server->she->uid)) != 0) {
         ret = WH_SHE_ERC_KEY_UPDATE_ERROR;
     }
-    /* verify counter is greater than stored value */
-    counter = (uint32_t*)packet->sheLoadKeyReq.messageTwo;
+    /* verify msg_counter_BE is greater than stored value */
+    msg_counter_BE = (uint32_t*)packet->sheLoadKeyReq.messageTwo;
     if (ret == 0 &&
         keyRet != WH_ERROR_NOTFOUND &&
-        wh_Utils_ntohl(*counter) >> 4 <= she_meta_count) {
+        wh_Utils_ntohl(*msg_counter_BE) >> 4 <= she_meta_count) {
         ret = WH_SHE_ERC_KEY_UPDATE_ERROR;
     }
-    /* write key with counter */
+    /* write key with msg_counter_BE */
     if (ret == 0) {
         meta->id = MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_SHE,
             server->comm->client_id,
             hsmShePopId(packet->sheLoadKeyReq.messageOne));
         she_meta_flags =
             hsmShePopFlags(packet->sheLoadKeyReq.messageTwo);
-        she_meta_count = wh_Utils_ntohl(*counter) >> 4;
+        she_meta_count = wh_Utils_ntohl(*msg_counter_BE) >> 4;
         /* Update the meta label with new values */
         wh_She_Meta2Label(she_meta_count, she_meta_flags, meta->label);
         meta->len = WOLFHSM_SHE_KEY_SZ;
@@ -465,10 +464,10 @@ static int hsmSheLoadKey(whServerContext* server, whPacket* packet,
             NULL, AES_ENCRYPTION);
     }
     if (ret == 0) {
-        /* reset messageTwo with the nvm read counter, pad with a 1 bit */
-        *counter = wh_Utils_htonl(she_meta_count << 4);
+        /* reset messageTwo with the nvm read msg_counter_BE, pad with a 1 bit */
+        *msg_counter_BE = wh_Utils_htonl(she_meta_count << 4);
         packet->sheLoadKeyReq.messageTwo[3] |= 0x08;
-        /* encrypt the new counter */
+        /* encrypt the new msg_counter_BE */
         ret = wc_AesEncryptDirect(server->she->sheAes,
             packet->sheLoadKeyRes.messageFour + WOLFHSM_SHE_KEY_SZ,
             packet->sheLoadKeyReq.messageTwo);

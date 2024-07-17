@@ -25,7 +25,7 @@
 #ifdef WOLFHSM_CFG_SHE_EXTENSION
 
 #include <stdint.h>
-#include <stdlib.h>  /* For NULL */
+#include <stddef.h>  /* For NULL */
 #include <string.h>  /* For memset, memcpy */
 
 #include "wolfhsm/wh_common.h"

@@ -26,7 +26,7 @@
 #ifndef WOLFHSM_CFG_NO_CRYPTO
 
 #include <stdint.h>
-#include <stdlib.h>  /* For NULL */
+#include <stddef.h>  /* For NULL */
 #include <string.h>  /* For memset, memcpy */
 
 

@@ -21,9 +21,12 @@
  *
  */
 
+/* Pick up server config */
+#include "wolfhsm/wh_server.h"
+
 /* System libraries */
 #include <stdint.h>
-#include <stdlib.h>  /* For NULL */
+#include <stddef.h>  /* For NULL */
 #include <string.h>  /* For memset, memcpy */
 
 /* Common WolfHSM types and defines shared with the server */
@@ -34,7 +37,6 @@
 
 #include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_message_nvm.h"
-#include "wolfhsm/wh_server.h"
 
 #include "wolfhsm/wh_server_nvm.h"
 

@@ -21,9 +21,12 @@
  *
  */
 
+/* Pick up server config */
+#include "wolfhsm/wh_server.h"
+
 /* System libraries */
 #include <stdint.h>
-#include <stdlib.h>  /* For NULL */
+#include <stddef.h>  /* For NULL */
 #include <string.h>  /* For memset, memcpy */
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO

@@ -27,7 +27,7 @@
 #ifdef WOLFHSM_CFG_SHE_EXTENSION
 
 #include <stdint.h>
-#include <stdlib.h>  /* For NULL */
+#include <stddef.h>  /* For NULL */
 #include <string.h>  /* For memset, memcpy */
 
 /* Common WolfHSM types and defines shared with the server */
@@ -53,13 +53,9 @@ int wh_Client_ShePreProgramKey(whClientContext* c, whNvmId keyId,
     int ret;
     int32_t outRc;
     uint8_t label[WOLFHSM_NVM_LABEL_LEN] = { 0 };
-    /*whSheMetadata* she_meta = (whSheMetadata*)label;*/
-    uint32_t she_meta_count = 0;
-    uint32_t she_meta_flags = 0;
 
-    she_meta_flags = flags;
-    she_meta_count = 0;
-    wh_She_Meta2Label(she_meta_count, she_meta_flags, label);
+    /* Create a key with 0 counter */
+    wh_She_Meta2Label(0, flags, label);
     ret = wh_Client_NvmAddObject(c,
             MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_SHE, c->comm->client_id, keyId),
             0, 0, sizeof(label), label, keySz, key, (int32_t*)&outRc);

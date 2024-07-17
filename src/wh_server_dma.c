@@ -20,13 +20,15 @@
  * src/wh_server_dma.c
  */
 
+/* Pick up server config */
+#include "wolfhsm/wh_server.h"
+
 #include <stdint.h>
 #include <string.h>
 #include <stddef.h>
 
 #include "wolfhsm/wh_error.h"
 
-#include "wolfhsm/wh_server.h"
 
 /* TODO: if the Address allowlist ever gets large, we should consider a more
  * efficient representation (requiring sorted array and binary search, or
