@@ -108,6 +108,7 @@ SRC_C += \
             $(WOLFHSM_DIR)/src/wh_client_she.c \
             $(WOLFHSM_DIR)/src/wh_server_she.c \
             $(WOLFHSM_DIR)/src/wh_she_common.c \
+            $(WOLFHSM_DIR)/src/wh_she_crypto.c \
 
 endif
 

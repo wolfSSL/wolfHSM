@@ -47,17 +47,19 @@
 
 #include "wolfhsm/wh_client_she.h"
 
-#ifndef WOLFHSM_CFG_NO_CRYPTO
-
 int wh_Client_ShePreProgramKey(whClientContext* c, whNvmId keyId,
     whNvmFlags flags, uint8_t* key, whNvmSize keySz)
 {
     int ret;
     int32_t outRc;
     uint8_t label[WOLFHSM_NVM_LABEL_LEN] = { 0 };
-    whSheMetadata* she_meta = (whSheMetadata*)label;
+    /*whSheMetadata* she_meta = (whSheMetadata*)label;*/
+    uint32_t she_meta_count = 0;
+    uint32_t she_meta_flags = 0;
 
-    she_meta->flags = flags;
+    she_meta_flags = flags;
+    she_meta_count = 0;
+    wh_She_Meta2Label(she_meta_count, she_meta_flags, label);
     ret = wh_Client_NvmAddObject(c,
             MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_SHE, c->comm->client_id, keyId),
             0, 0, sizeof(label), label, keySz, key, (int32_t*)&outRc);
@@ -65,7 +67,6 @@ int wh_Client_ShePreProgramKey(whClientContext* c, whNvmId keyId,
         ret = outRc;
     return ret;
 }
-#endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
 int wh_Client_SheSetUidRequest(whClientContext* c, uint8_t* uid, uint32_t uidSz)
 {

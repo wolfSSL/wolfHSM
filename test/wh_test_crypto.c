@@ -28,6 +28,7 @@
 #ifndef WOLFHSM_CFG_NO_CRYPTO
 
 #include "wolfssl/wolfcrypt/settings.h"
+#include "wolfssl/wolfcrypt/types.h"
 
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_nvm.h"

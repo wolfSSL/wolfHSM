@@ -21,7 +21,12 @@
  *
  */
 
+#ifdef WOLFSSL_USER_SETTINGS
+#include "user_settings.h"
+#endif
+
 #ifdef WOLFHSM_CFG_SHE_EXTENSION
+
 
 /* System libraries */
 #include <stdint.h>
@@ -44,6 +49,7 @@
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_utils.h"
 #include "wolfhsm/wh_she_common.h"
+#include "wolfhsm/wh_she_crypto.h"
 
 #include "wolfhsm/wh_server_she.h"
 
@@ -66,7 +72,6 @@ enum WOLFHSM_SHE_SB_STATE {
     WOLFHSM_SHE_SB_SUCCESS,
     WOLFHSM_SHE_SB_FAILURE,
 };
-/* cmac is global since the bootloader update can be called multiple times */
 
 /** Local Declarations */
 static int wh_AesMp16(whServerContext* server, uint8_t* in, word32 inSz,
@@ -112,7 +117,7 @@ static int wh_AesMp16(whServerContext* server, uint8_t* in, word32 inSz,
     /* check valid inputs */
     if (server == NULL || server->she == NULL)
         return WH_ERROR_BADARGS;
-    return wh_AesMp16_ex(server->she->sheAes, NULL, server->crypto->devId,
+    return wh_She_AesMp16_ex(server->she->sheAes, NULL, server->crypto->devId,
             in, inSz, out);
 }
 
@@ -312,7 +317,9 @@ static int hsmSheLoadKey(whServerContext* server, whPacket* packet,
     uint8_t cmacOutput[AES_BLOCK_SIZE];
     uint8_t tmpKey[WOLFHSM_SHE_KEY_SZ];
     whNvmMetadata meta[1];
-    whSheMetadata* she_meta = (whSheMetadata*)meta->label;
+    uint32_t she_meta_count = 0;
+    uint32_t she_meta_flags = 0;
+    /*whSheMetadata* she_meta = (whSheMetadata*)meta->label; */
     uint32_t* counter;
 
     /* read the auth key by AuthID */
@@ -376,9 +383,11 @@ static int hsmSheLoadKey(whServerContext* server, whPacket* packet,
             server->comm->client_id,
             hsmShePopId(packet->sheLoadKeyReq.messageOne)), meta, kdfInput,
             &keySz);
+        /* Extract count and flags from the label, even if it failed */
+        wh_She_Label2Meta(meta->label, &she_meta_count, &she_meta_flags);
         /* if the keyslot is empty or write protection is not on continue */
         if (ret == WH_ERROR_NOTFOUND ||
-            (she_meta->flags & WOLFHSM_SHE_FLAG_WRITE_PROTECT) == 0) {
+            (she_meta_flags & WOLFHSM_SHE_FLAG_WRITE_PROTECT) == 0) {
             keyRet = ret;
             ret = 0;
         }
@@ -389,7 +398,7 @@ static int hsmSheLoadKey(whServerContext* server, whPacket* packet,
     if (ret == 0 && wh_Utils_memeqzero(packet->sheLoadKeyReq.messageOne,
         WOLFHSM_SHE_UID_SZ) == 1) {
         /* check wildcard */
-        if ((she_meta->flags & WOLFHSM_SHE_FLAG_WILDCARD) == 0) {
+        if ((she_meta_flags & WOLFHSM_SHE_FLAG_WILDCARD) == 0) {
             ret = WH_SHE_ERC_KEY_UPDATE_ERROR;
         }
     }
@@ -402,7 +411,7 @@ static int hsmSheLoadKey(whServerContext* server, whPacket* packet,
     counter = (uint32_t*)packet->sheLoadKeyReq.messageTwo;
     if (ret == 0 &&
         keyRet != WH_ERROR_NOTFOUND &&
-        wh_Utils_ntohl(*counter >> 4) <= wh_Utils_ntohl(she_meta->count)) {
+        (*counter >> 4) <= she_meta_count) {
         ret = WH_SHE_ERC_KEY_UPDATE_ERROR;
     }
     /* write key with counter */
@@ -410,9 +419,11 @@ static int hsmSheLoadKey(whServerContext* server, whPacket* packet,
         meta->id = MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_SHE,
             server->comm->client_id,
             hsmShePopId(packet->sheLoadKeyReq.messageOne));
-        she_meta->flags =
+        she_meta_flags =
             hsmShePopFlags(packet->sheLoadKeyReq.messageTwo);
-        she_meta->count = (*counter >> 4);
+        she_meta_count = (*counter >> 4);
+        /* Update the meta label with new values */
+        wh_She_Meta2Label(she_meta_count, she_meta_flags, meta->label);
         meta->len = WOLFHSM_SHE_KEY_SZ;
         /* cache if ram key, overwrite otherwise */
         if ((meta->id & WOLFHSM_KEYID_MASK) == WOLFHSM_SHE_RAM_KEY_ID) {
@@ -453,7 +464,7 @@ static int hsmSheLoadKey(whServerContext* server, whPacket* packet,
     }
     if (ret == 0) {
         /* reset messageTwo with the nvm read counter, pad with a 1 bit */
-        *counter = (she_meta->count << 4);
+        *counter = (she_meta_count << 4);
         packet->sheLoadKeyReq.messageTwo[3] |= 0x08;
         /* encrypt the new counter */
         ret = wc_AesEncryptDirect(server->she->sheAes,

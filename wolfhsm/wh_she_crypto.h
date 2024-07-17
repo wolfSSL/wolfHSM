@@ -15,26 +15,37 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
- *
  */
 /*
- * wolfhsm/wh_client_cryptocb.h
+ * wolfhsm/wh_she_crypto.h
  *
  */
 
-#ifndef WOLFHSM_CLIENT_CRYPTOCB_H_
-#define WOLFHSM_CLIENT_CRYPTOCB_H_
+#ifndef WOLFHSM_WH_SHE_CRYPTO_H_
+#define WOLFHSM_WH_SHE_CRYPTO_H_
 
-/* Get client configuration */
-#include "wolfhsm/wh_client.h"
+#ifdef WOLFSSL_USER_SETTINGS
+#include "user_settings.h"
+#endif
 
+#include <stdint.h>
+
+#ifdef WOLFHSM_CFG_SHE_EXTENSION
 #ifndef WOLFHSM_CFG_NO_CRYPTO
+
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/types.h"
-#include "wolfssl/wolfcrypt/cryptocb.h"
+#include "wolfssl/wolfcrypt/aes.h"
 
-int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* ctx);
+int wh_She_AesMp16_ex(Aes* aes, void* heap, int devid,
+        uint8_t* in, word32 inSz, uint8_t* out);
 
-#endif /* !WOLFHSM_CFG_NO_CRYPTO */
+int wh_She_GenerateLoadableKey(uint8_t keyId,
+    uint8_t authKeyId, uint32_t count, uint32_t flags, uint8_t* uid,
+    uint8_t* key, uint8_t* authKey, uint8_t* messageOne, uint8_t* messageTwo,
+    uint8_t* messageThree, uint8_t* messageFour, uint8_t* messageFive);
 
-#endif /* !WOLFHSM_CLIENT_CRYPTOCB_H_ */
+#endif /* !WOLFHSM_CFG_NO_CRYPTO*/
+#endif /* WOLFHSM_CFG_SHE_EXTENSION */
+
+#endif /* WOLFHSM_WH_SHE_CRYPTO_H_ */

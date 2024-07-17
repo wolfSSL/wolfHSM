@@ -39,6 +39,7 @@
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_message.h"
 
+#include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/types.h"
 #include "wolfssl/wolfcrypt/error-crypt.h"
 #include "wolfssl/wolfcrypt/cryptocb.h"

@@ -46,6 +46,8 @@
 #include "wolfhsm/wh_client.h"
 #include "wolfhsm/wh_client_she.h"
 #include "wolfhsm/wh_transport_mem.h"
+#include "wolfhsm/wh_she_common.h"
+#include "wolfhsm/wh_she_crypto.h"
 #include "wolfhsm/wh_common.h"
 
 #include "wh_test_common.h"
@@ -245,7 +247,7 @@ int whTest_SheClientConfig(whClientConfig* config)
         goto exit;
     }
     /* load the vector master ecu key */
-    if ((ret = wh_SheGenerateLoadableKey(WOLFHSM_SHE_MASTER_ECU_KEY_ID, WOLFHSM_SHE_SECRET_KEY_ID, 1, 0, sheUid, vectorMasterEcuKey, secretKey, messageOne, messageTwo, messageThree, messageFour, messageFive)) != 0) {
+    if ((ret = wh_She_GenerateLoadableKey(WOLFHSM_SHE_MASTER_ECU_KEY_ID, WOLFHSM_SHE_SECRET_KEY_ID, 1, 0, sheUid, vectorMasterEcuKey, secretKey, messageOne, messageTwo, messageThree, messageFour, messageFive)) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_SheGenerateLoadableKey %d\n", ret);
         goto exit;
     }
@@ -254,7 +256,7 @@ int whTest_SheClientConfig(whClientConfig* config)
         goto exit;
     }
     /* verify that our helper function output matches the vector */
-    if ((ret = wh_SheGenerateLoadableKey(SHE_TEST_VECTOR_KEY_ID, WOLFHSM_SHE_MASTER_ECU_KEY_ID, 1, 0, sheUid, vectorRawKey, vectorMasterEcuKey, messageOne, messageTwo, messageThree, messageFour, messageFive)) != 0) {
+    if ((ret = wh_She_GenerateLoadableKey(SHE_TEST_VECTOR_KEY_ID, WOLFHSM_SHE_MASTER_ECU_KEY_ID, 1, 0, sheUid, vectorRawKey, vectorMasterEcuKey, messageOne, messageTwo, messageThree, messageFour, messageFive)) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_SheGenerateLoadableKey %d\n", ret);
         goto exit;
     }

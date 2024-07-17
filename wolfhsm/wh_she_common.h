@@ -81,37 +81,20 @@
 #define WOLFHSM_SHE_SREG_RND_INIT (1 << 5)
 #define WOLFHSM_SHE_SREG_EXT_DEBUGGER (1 << 6)
 #define WOLFHSM_SHE_SREG_INT_DEBUGGER (1 << 7)
+
 /* key flags */
 #define WOLFHSM_SHE_FLAG_WRITE_PROTECT (1 << 0)
 #define WOLFHSM_SHE_FLAG_BOOT_PROTECT (1 << 1)
 #define WOLFHSM_SHE_FLAG_DEBUGGER_PROTECTION (1 << 2)
 #define WOLFHSM_SHE_FLAG_USAGE (1 << 3)
 #define WOLFHSM_SHE_FLAG_WILDCARD (1 << 4)
-#define WOLFHSM_SHE_M1_SZ 16
-#define WOLFHSM_SHE_M2_SZ 32
-#define WOLFHSM_SHE_M3_SZ WOLFHSM_SHE_M1_SZ
-#define WOLFHSM_SHE_M4_SZ WOLFHSM_SHE_M2_SZ
-#define WOLFHSM_SHE_M5_SZ WOLFHSM_SHE_M1_SZ
 
-#ifndef WOLFHSM_CFG_NO_CRYPTO
+/* SHE metadata is placed in the NVM object label */
+int wh_She_Label2Meta(const uint8_t* label, uint32_t *out_count,
+        uint32_t *out_flags);
 
-#include "wolfssl/wolfcrypt/types.h"
-#include "wolfssl/wolfcrypt/aes.h"
+int wh_She_Meta2Label(uint32_t count, uint32_t flags, uint8_t* label);
 
-typedef struct {
-    uint32_t count;
-    uint32_t flags;
-} whSheMetadata;
-
-int wh_AesMp16_ex(Aes* aes, void* heap, int devid,
-        uint8_t* in, word32 inSz, uint8_t* out);
-
-int wh_SheGenerateLoadableKey(uint8_t keyId,
-    uint8_t authKeyId, uint32_t count, uint32_t flags, uint8_t* uid,
-    uint8_t* key, uint8_t* authKey, uint8_t* messageOne, uint8_t* messageTwo,
-    uint8_t* messageThree, uint8_t* messageFour, uint8_t* messageFive);
-
-#endif /* !WOLFHSM_CFG_NO_CRYPTO*/
 #endif /* WOLFHSM_CFG_SHE_EXTENSION */
 
 #endif /* WOLFHSM_WH_SHE_COMMON_H_ */
