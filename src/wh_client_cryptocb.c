@@ -67,6 +67,10 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
     uint8_t* sig;
     uint8_t* hash;
 
+    /* Avoid a few warnings */
+    (void)sig;
+    (void)hash;
+
     if (devId == INVALID_DEVID || info == NULL || inCtx == NULL)
         return BAD_FUNC_ARG;
 

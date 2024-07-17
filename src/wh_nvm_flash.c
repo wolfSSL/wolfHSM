@@ -1019,10 +1019,10 @@ int wh_NvmFlash_GetAvailable(void* c,
     }
     if (out_reclaim_size != NULL) {
             *out_reclaim_size = (d->reclaimable_data) * WHFU_BYTES_PER_UNIT;
-        }
-        if (out_reclaim_objects != NULL) {
-            *out_reclaim_objects = d->reclaimable_entries;
-        }
+    }
+    if (out_reclaim_objects != NULL) {
+        *out_reclaim_objects = d->reclaimable_entries;
+    }
     return 0;
 }
 
