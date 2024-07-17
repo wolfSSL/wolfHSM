@@ -21,8 +21,8 @@
  *
  */
 
-#ifndef WOLFHSM_WH_SERVER_CRYPTO_H
-#define WOLFHSM_WH_SERVER_CRYPTO_H
+#ifndef WOLFHSM_WH_SERVER_CRYPTO_H_
+#define WOLFHSM_WH_SERVER_CRYPTO_H_
 
 #include "wolfhsm/wh_server.h"
 
@@ -30,4 +30,4 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
     uint16_t action, uint8_t* data, uint16_t* size, uint16_t seq);
 
 
-#endif
+#endif /* WOLFHSM_WH_SERVER_CRYPTO_H_ */

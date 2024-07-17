@@ -16,8 +16,12 @@
  * You should have received a copy of the GNU General Public License
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef WH_TEST_CLIENTSERVER_H_
-#define WH_TEST_CLIENTSERVER_H_
+/*
+ * wolfhsm/test/wh_test_clientserver.h
+ *
+ */
+#ifndef TEST_WH_TEST_CLIENTSERVER_H_
+#define TEST_WH_TEST_CLIENTSERVER_H_
 
 #include "wolfhsm/wh_server.h"
 #include "wolfhsm/wh_client.h"
@@ -33,4 +37,4 @@ int whTest_ClientServer(void);
 int whTest_ClientCfg(whClientConfig* clientCfg);
 int whTest_ServerCfgLoop(whServerConfig* serverCfg);
 
-#endif /* WH_TEST_CLIENTSERVER_H_ */
+#endif /* TEST_WH_TEST_CLIENTSERVER_H_ */

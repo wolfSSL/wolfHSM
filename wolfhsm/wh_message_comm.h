@@ -40,9 +40,9 @@ enum WH_MESSAGE_COMM_ACTION_ENUM {
 };
 
 /* Info request/response data sizes*/
-enum WOLFHSM_INFO_ENUM {
-    WOLFHSM_INFO_VERSION_LEN = 8,
-    WOLFHSM_INFO_BUILD_LEN   = 8,
+enum WH_INFO_ENUM {
+    WH_INFO_VERSION_LEN = 8,
+    WH_INFO_BUILD_LEN   = 8,
 };
 
 
@@ -87,8 +87,8 @@ int wh_MessageComm_TranslateInitResponse(uint16_t magic,
 
 
 typedef struct {
-    uint8_t version[WOLFHSM_INFO_VERSION_LEN];
-    uint8_t build[WOLFHSM_INFO_BUILD_LEN];
+    uint8_t version[WH_INFO_VERSION_LEN];
+    uint8_t build[WH_INFO_BUILD_LEN];
     uint32_t cfg_comm_data_len;
     uint32_t cfg_nvm_object_count;
     uint32_t cfg_server_keycache_count;

@@ -20,8 +20,8 @@
  * wolfhsm/wh_server_keystore.h
  *
  */
-#ifndef WOLFHSM_WH_SERVER_KEYSTORE_H
-#define WOLFHSM_WH_SERVER_KEYSTORE_H
+#ifndef WOLFHSM_WH_SERVER_KEYSTORE_H_
+#define WOLFHSM_WH_SERVER_KEYSTORE_H_
 
 #include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_server.h"
@@ -38,4 +38,4 @@ int hsmEraseKey(whServerContext* server, whNvmId keyId);
 int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
     uint16_t action, uint16_t seq, uint8_t* data, uint16_t* size);
 
-#endif
+#endif /* WOLFHSM_WH_SERVER_KEYSTORE_H_ */

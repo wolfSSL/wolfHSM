@@ -186,9 +186,9 @@ static int _wh_Server_HandleCommRequest(whServerContext* server,
 
     case WH_MESSAGE_COMM_ACTION_INFO:
     {
-        const uint8_t version[WOLFHSM_INFO_VERSION_LEN] =
+        const uint8_t version[WH_INFO_VERSION_LEN] =
                 WOLFHSM_CFG_INFOVERSION;
-        const uint8_t build[WOLFHSM_INFO_VERSION_LEN] =
+        const uint8_t build[WH_INFO_VERSION_LEN] =
                 WOLFHSM_CFG_INFOBUILD;
 
         /* No request message */

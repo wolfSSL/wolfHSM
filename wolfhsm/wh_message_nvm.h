@@ -110,7 +110,7 @@ typedef struct {
     uint16_t access;
     uint16_t flags;
     uint16_t len;
-    uint8_t label[WOLFHSM_NVM_LABEL_LEN];
+    uint8_t label[WH_NVM_LABEL_LEN];
     /* Data up to WH_MESSAGE_NVM_MAX_ADDOBJECT_LEN follows */
 } whMessageNvm_AddObjectRequest;
 
@@ -159,7 +159,7 @@ typedef struct {
     uint16_t access;
     uint16_t flags;
     uint16_t len;
-    uint8_t label[WOLFHSM_NVM_LABEL_LEN];
+    uint8_t label[WH_NVM_LABEL_LEN];
 } whMessageNvm_GetMetadataResponse;
 
 int wh_MessageNvm_TranslateGetMetadataResponse(uint16_t magic,

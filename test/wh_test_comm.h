@@ -16,8 +16,13 @@
  * You should have received a copy of the GNU General Public License
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef WH_TEST_COMM_H_
-#define WH_TEST_COMM_H_
+/*
+ * test/wh_test_comm.h
+ *
+ */
+
+#ifndef TEST_WH_TEST_COMM_H_
+#define TEST_WH_TEST_COMM_H_
 
 /*
  * Runs the comms tests using a memory transport backend.
@@ -34,4 +39,4 @@ int whTest_CommMem(void);
  */
 int whTest_Comm(void);
 
-#endif /* WH_TEST_COMM_H_ */
+#endif /* TEST_WH_TEST_COMM_H_ */

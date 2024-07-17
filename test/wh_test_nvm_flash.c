@@ -92,7 +92,7 @@ static void _ShowList(const whNvmCb* cb, void* context)
     do {
         listCount = 0;
 
-        rc = cb->List(context, WOLFHSM_NVM_ACCESS_ANY, WOLFHSM_NVM_FLAGS_ANY,
+        rc = cb->List(context, WH_NVM_ACCESS_ANY, WH_NVM_FLAGS_ANY,
                       id, &listCount, &id);
 
         if ((rc == 0) && (listCount > 0)) {

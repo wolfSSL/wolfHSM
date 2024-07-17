@@ -48,20 +48,20 @@ int wh_Server_HandleCounter(whServerContext* server, uint16_t action,
     {
     case WH_COUNTER_INIT:
         /* write 0 to nvm with the supplied id and user_id */
-        meta->id = MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_COUNTER,
+        meta->id = WH_MAKE_KEYID(WH_KEYTYPE_COUNTER,
             server->comm->client_id, packet->counterInitReq.counterId);
         /* use the label buffer to hold the counter value */
         *counter = packet->counterInitReq.counter;
         ret = wh_Nvm_AddObjectWithReclaim(server->nvm, meta, 0, NULL);
         if (ret == 0) {
             packet->counterInitRes.counter = *counter;
-            *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->counterInitRes);
+            *size = WH_PACKET_STUB_SIZE + sizeof(packet->counterInitRes);
         }
         break;
     case WH_COUNTER_INCREMENT:
         /* read the counter, stored in the metadata label */
-        ret = wh_Nvm_GetMetadata(server->nvm, MAKE_WOLFHSM_KEYID(
-            WOLFHSM_KEYTYPE_COUNTER, server->comm->client_id,
+        ret = wh_Nvm_GetMetadata(server->nvm, WH_MAKE_KEYID(
+            WH_KEYTYPE_COUNTER, server->comm->client_id,
             packet->counterIncrementReq.counterId), meta);
         /* increment and write the counter back */
         if (ret == 0) {
@@ -78,28 +78,28 @@ int wh_Server_HandleCounter(whServerContext* server, uint16_t action,
         /* return counter to the caller */
         if (ret == 0) {
             packet->counterIncrementRes.counter = *counter;
-            *size = WOLFHSM_PACKET_STUB_SIZE +
+            *size = WH_PACKET_STUB_SIZE +
                 sizeof(packet->counterIncrementRes);
         }
         break;
     case WH_COUNTER_READ:
         /* read the counter, stored in the metadata label */
-        ret = wh_Nvm_GetMetadata(server->nvm, MAKE_WOLFHSM_KEYID(
-            WOLFHSM_KEYTYPE_COUNTER, server->comm->client_id,
+        ret = wh_Nvm_GetMetadata(server->nvm, WH_MAKE_KEYID(
+            WH_KEYTYPE_COUNTER, server->comm->client_id,
             packet->counterReadReq.counterId), meta);
         /* return counter to the caller */
         if (ret == 0) {
 
             packet->counterReadRes.counter = *counter;
-            *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->counterReadRes);
+            *size = WH_PACKET_STUB_SIZE + sizeof(packet->counterReadRes);
         }
         break;
     case WH_COUNTER_DESTROY:
-        counterId = MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_COUNTER,
+        counterId = WH_MAKE_KEYID(WH_KEYTYPE_COUNTER,
             server->comm->client_id, packet->counterDestroyReq.counterId);
         ret = wh_Nvm_DestroyObjects(server->nvm, 1, &counterId);
         if (ret == 0)
-            *size = WOLFHSM_PACKET_STUB_SIZE;
+            *size = WH_PACKET_STUB_SIZE;
         break;
     default:
         ret = WH_ERROR_BADARGS;
@@ -107,6 +107,6 @@ int wh_Server_HandleCounter(whServerContext* server, uint16_t action,
     }
     packet->rc = ret;
     if (ret != 0)
-        *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->rc);
+        *size = WH_PACKET_STUB_SIZE + sizeof(packet->rc);
     return 0;
 }

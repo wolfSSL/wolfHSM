@@ -16,6 +16,11 @@
  * You should have received a copy of the GNU General Public License
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
+/*
+ * test/wh_test.c
+ *
+ */
+
 #include <assert.h>
 #include <string.h>
 

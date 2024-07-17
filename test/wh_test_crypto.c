@@ -102,8 +102,8 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     uint16_t keyId;
     uint8_t key[16];
     uint8_t keyEnd[16];
-    uint8_t labelStart[WOLFHSM_NVM_LABEL_LEN];
-    uint8_t labelEnd[WOLFHSM_NVM_LABEL_LEN];
+    uint8_t labelStart[WH_NVM_LABEL_LEN];
+    uint8_t labelEnd[WH_NVM_LABEL_LEN];
     uint8_t iv[AES_IV_SIZE];
     char plainText[16];
     char cipherText[256];
@@ -157,7 +157,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     memset(labelStart, 0xff, sizeof(labelStart));
 
     /* test rng */
-    if ((ret = wc_InitRng_ex(rng, NULL, WOLFHSM_DEV_ID)) != 0) {
+    if ((ret = wc_InitRng_ex(rng, NULL, WH_DEV_ID)) != 0) {
         WH_ERROR_PRINT("Failed to wc_InitRng_ex %d\n", ret);
         goto exit;
     }
@@ -175,7 +175,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     }
     printf("RNG SUCCESS\n");
     /* test cache/export */
-    keyId = WOLFHSM_KEYID_ERASED;
+    keyId = WH_KEYID_ERASED;
     if ((ret = wh_Client_KeyCache(client, 0, labelStart, sizeof(labelStart), key, sizeof(key), &keyId)) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_KeyCache %d\n", ret);
         goto exit;
@@ -210,7 +210,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         WH_ERROR_PRINT("Failed to wh_Client_KeyEvict %d\n", ret);
         goto exit;
     }
-    keyId = WOLFHSM_KEYID_ERASED;
+    keyId = WH_KEYID_ERASED;
     if ((ret = wh_Client_KeyCache(client, 0, labelStart, sizeof(labelStart), (uint8_t*)cipherText, sizeof(key), &keyId)) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_KeyCache %d\n", ret);
         goto exit;
@@ -257,7 +257,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         goto exit;
     }
     /* test commit */
-    keyId = WOLFHSM_KEYID_ERASED;
+    keyId = WH_KEYID_ERASED;
     if ((ret = wh_Client_KeyCache(client, 0, labelStart, sizeof(labelStart), key, sizeof(key), &keyId)) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_KeyCache %d\n", ret);
         goto exit;
@@ -300,7 +300,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     }
     printf("KEY ERASE SUCCESS\n");
     /* test aes CBC with client side key */
-    if((ret = wc_AesInit(aes, NULL, WOLFHSM_DEV_ID)) != 0) {
+    if((ret = wc_AesInit(aes, NULL, WH_DEV_ID)) != 0) {
         printf("Failed to wc_AesInit %d\n", ret);
         goto exit;
     }
@@ -326,11 +326,11 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         goto exit;
     }
     /* test aes CBC with HSM side key */
-    if((ret = wc_AesInit(aes, NULL, WOLFHSM_DEV_ID)) != 0) {
+    if((ret = wc_AesInit(aes, NULL, WH_DEV_ID)) != 0) {
         printf("Failed to wc_AesInit %d\n", ret);
         goto exit;
     }
-    keyId = WOLFHSM_KEYID_ERASED;
+    keyId = WH_KEYID_ERASED;
     if ((ret = wh_Client_KeyCache(client, 0, labelStart, sizeof(labelStart), key, sizeof(key), &keyId)) != 0) {
         printf("Failed to wh_Client_KeyCache %d\n", ret);
         goto exit;
@@ -364,7 +364,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         goto exit;
     }
     /* test aes GCM with client side key */
-    if((ret = wc_AesInit(aes, NULL, WOLFHSM_DEV_ID)) != 0) {
+    if((ret = wc_AesInit(aes, NULL, WH_DEV_ID)) != 0) {
         printf("Failed to wc_AesInit %d\n", ret);
         goto exit;
     }
@@ -390,11 +390,11 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         goto exit;
     }
     /* test aes GCM with HSM side key */
-    if((ret = wc_AesInit(aes, NULL, WOLFHSM_DEV_ID)) != 0) {
+    if((ret = wc_AesInit(aes, NULL, WH_DEV_ID)) != 0) {
         printf("Failed to wc_AesInit %d\n", ret);
         goto exit;
     }
-    keyId = WOLFHSM_KEYID_ERASED;
+    keyId = WH_KEYID_ERASED;
     if ((ret = wh_Client_KeyCache(client, 0, labelStart, sizeof(labelStart), key, sizeof(key), &keyId)) != 0) {
         printf("Failed to wh_Client_KeyCache %d\n", ret);
         goto exit;
@@ -424,7 +424,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         goto exit;
     }
     /* test rsa */
-    if((ret = wc_InitRsaKey_ex(rsa, NULL, WOLFHSM_DEV_ID)) != 0) {
+    if((ret = wc_InitRsaKey_ex(rsa, NULL, WH_DEV_ID)) != 0) {
         printf("Failed to wc_InitRsaKey_ex %d\n", ret);
         goto exit;
     }
@@ -470,11 +470,11 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         goto exit;
     }
     /* test ecc */
-    if((ret = wc_ecc_init_ex(eccPrivate, NULL, WOLFHSM_DEV_ID)) != 0) {
+    if((ret = wc_ecc_init_ex(eccPrivate, NULL, WH_DEV_ID)) != 0) {
         printf("Failed to wc_ecc_init_ex %d\n", ret);
         goto exit;
     }
-    if((ret = wc_ecc_init_ex(eccPublic, NULL, WOLFHSM_DEV_ID)) != 0) {
+    if((ret = wc_ecc_init_ex(eccPublic, NULL, WH_DEV_ID)) != 0) {
         printf("Failed to wc_ecc_init_ex %d\n", ret);
         goto exit;
     }
@@ -519,11 +519,11 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         goto exit;
     }
     /* test curve25519 */
-    if ((ret = wc_curve25519_init_ex(curve25519PrivateKey, NULL, WOLFHSM_DEV_ID)) != 0) {
+    if ((ret = wc_curve25519_init_ex(curve25519PrivateKey, NULL, WH_DEV_ID)) != 0) {
         WH_ERROR_PRINT("Failed to wc_curve25519_init_ex %d\n", ret);
         goto exit;
     }
-    if ((ret = wc_curve25519_init_ex(curve25519PublicKey, NULL, WOLFHSM_DEV_ID)) != 0) {
+    if ((ret = wc_curve25519_init_ex(curve25519PublicKey, NULL, WH_DEV_ID)) != 0) {
         WH_ERROR_PRINT("Failed to wc_curve25519_init_ex %d\n", ret);
         goto exit;
     }
@@ -551,7 +551,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     }
     printf("CURVE25519 SUCCESS\n");
     /* test cmac */
-    if((ret = wc_InitCmac_ex(cmac, knownCmacKey, sizeof(knownCmacKey), WC_CMAC_AES, NULL, NULL, WOLFHSM_DEV_ID)) != 0) {
+    if((ret = wc_InitCmac_ex(cmac, knownCmacKey, sizeof(knownCmacKey), WC_CMAC_AES, NULL, NULL, WH_DEV_ID)) != 0) {
         WH_ERROR_PRINT("Failed to wc_InitCmac_ex %d\n", ret);
         goto exit;
     }
@@ -569,12 +569,12 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         ret = -1;
         goto exit;
     }
-    if((ret = wc_AesCmacVerify_ex(cmac, (byte*)knownCmacTag, sizeof(knownCmacTag), (byte*)knownCmacMessage, sizeof(knownCmacMessage), knownCmacKey, sizeof(knownCmacKey), NULL, WOLFHSM_DEV_ID)) != 0) {
+    if((ret = wc_AesCmacVerify_ex(cmac, (byte*)knownCmacTag, sizeof(knownCmacTag), (byte*)knownCmacMessage, sizeof(knownCmacMessage), knownCmacKey, sizeof(knownCmacKey), NULL, WH_DEV_ID)) != 0) {
         WH_ERROR_PRINT("Failed to wc_AesCmacVerify_ex %d\n", ret);
         goto exit;
     }
     /* test oneshot with pre-cached key */
-    keyId = WOLFHSM_KEYID_ERASED;
+    keyId = WH_KEYID_ERASED;
     if ((ret = wh_Client_KeyCache(client, 0, labelStart, sizeof(labelStart), knownCmacKey, sizeof(knownCmacKey), &keyId)) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_KeyCache %d\n", ret);
         goto exit;
@@ -596,7 +596,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         goto exit;
     }
     /* test oneshot verify with commited key */
-    keyId = WOLFHSM_KEYID_ERASED;
+    keyId = WH_KEYID_ERASED;
     if ((ret = wh_Client_KeyCache(client, 0, labelStart, sizeof(labelStart), knownCmacKey, sizeof(knownCmacKey), &keyId)) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_KeyCache %d\n", ret);
         goto exit;
@@ -626,7 +626,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         WH_ERROR_PRINT("Failed to wh_Client_EnableCancel %d\n", ret);
         goto exit;
     }
-    if((ret = wc_InitCmac_ex(cmac, knownCmacKey, sizeof(knownCmacKey), WC_CMAC_AES, NULL, NULL, WOLFHSM_DEV_ID)) != 0) {
+    if((ret = wc_InitCmac_ex(cmac, knownCmacKey, sizeof(knownCmacKey), WC_CMAC_AES, NULL, NULL, WH_DEV_ID)) != 0) {
         WH_ERROR_PRINT("Failed to wc_InitCmac_ex %d\n", ret);
         goto exit;
     }
@@ -656,7 +656,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     serverDelay = 0;
 #endif
     /* test cancelable request and response work for standard CMAC request with no cancellation */
-    if((ret = wc_InitCmac_ex(cmac, knownCmacKey, sizeof(knownCmacKey), WC_CMAC_AES, NULL, NULL, WOLFHSM_DEV_ID)) != 0) {
+    if((ret = wc_InitCmac_ex(cmac, knownCmacKey, sizeof(knownCmacKey), WC_CMAC_AES, NULL, NULL, WH_DEV_ID)) != 0) {
         WH_ERROR_PRINT("Failed to wc_InitCmac_ex %d\n", ret);
         goto exit;
     }

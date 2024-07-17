@@ -55,9 +55,9 @@ typedef struct {
 #endif /* WOLFSSL_CMAC */
 #endif /* !WOLFHSM_CFG_NO_CRYPTO*/
 
-    uint8_t  prngState[WOLFHSM_SHE_KEY_SZ];
-    uint8_t  prngKey[WOLFHSM_SHE_KEY_SZ];
-    uint8_t  uid[WOLFHSM_SHE_UID_SZ];
+    uint8_t  prngState[WH_SHE_KEY_SZ];
+    uint8_t  prngKey[WH_SHE_KEY_SZ];
+    uint8_t  uid[WH_SHE_UID_SZ];
 } whServerSheContext;
 
 int wh_Server_HandleSheRequest(whServerContext* server,

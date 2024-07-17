@@ -27,8 +27,8 @@
  *
  */
 
-#ifndef WOLFHSM_WH_NVMFLASH_H_
-#define WOLFHSM_WH_NVMFLASH_H_
+#ifndef WOLFHSM_WH_NVM_FLASH_H_
+#define WOLFHSM_WH_NVM_FLASH_H_
 
 #ifdef WOLFSSL_USER_SETTINGS
 #include "user_settings.h"
@@ -126,4 +126,4 @@ int wh_NvmFlash_Read(void* c, whNvmId id, whNvmSize offset,
     .Read = wh_NvmFlash_Read,                       \
 }
 
-#endif /* WOLFHSM_WH_NVMFLASH_H_ */
+#endif /* WOLFHSM_WH_NVM_FLASH_H_ */

@@ -25,7 +25,7 @@
  * WolfHSM Server.  All communications and state are internally managed by
  * registering a crypto callback function to be invoked synchronously when
  * wolfCrypt functions are called.  In order to specify to use the WolfHSM
- * Server for cryptographic operations, the device id WOLFHSM_DEV_ID should be
+ * Server for cryptographic operations, the device id WH_DEV_ID should be
  * passed into any of the wolfCrypt init functions.
  *
  * In addition to the offload of cryptographic functions, the WolfHSM Client
@@ -70,7 +70,7 @@
 #endif
 
 /* Device Id to be registered and passed to wolfCrypt functions */
-#define WOLFHSM_DEV_ID 0x5748534D  /* "WHSM" */
+#define WH_DEV_ID 0x5748534D  /* "WHSM" */
 
 /**
  * Out of band callback function to inform the server to cancel a request,
@@ -475,7 +475,7 @@ int wh_Client_Echo(whClientContext* c, uint16_t snd_len, const void* snd_data,
  * @param[in] in Pointer to the key data to be cached.
  * @param[in] inSz Size of the key data.
  * @param[in] keyId Key ID to be used for caching. If set to
- * WOLFHSM_KEYID_ERASED, a new ID will be generated.
+ * WH_KEYID_ERASED, a new ID will be generated.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_Client_KeyCacheRequest_ex(whClientContext* c, uint32_t flags,

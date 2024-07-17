@@ -23,8 +23,8 @@
  *  WOLFHSM_CFG_CUSTOMCB_LEN - Maximum size of a customcb message.
  *      Default: 256
  */
-#ifndef WH_MESSAGE_CUSTOM_CB_H_
-#define WH_MESSAGE_CUSTOM_CB_H_
+#ifndef WOLFHSM_WH_MESSAGE_CUSTOM_CB_H_
+#define WOLFHSM_WH_MESSAGE_CUSTOM_CB_H_
 
 #include <stdint.h>
 
@@ -107,4 +107,4 @@ int wh_MessageCustomCb_TranslateResponse(uint16_t magic,
                                          const whMessageCustomCb_Response* src,
                                          whMessageCustomCb_Response*       dst);
 
-#endif /* WH_MESSAGE_CUSTOM_CB_H_*/
+#endif /* WOLFHSM_WH_MESSAGE_CUSTOM_CB_H_*/

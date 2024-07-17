@@ -73,7 +73,7 @@ static int _destroySheKey(whClientContext* client, whNvmId clientSheKeyId)
     int rc = 0;
     int32_t serverRc = 0;
 
-    whNvmId id = MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_SHE, client->comm->client_id, clientSheKeyId);
+    whNvmId id = WH_MAKE_KEYID(WH_KEYTYPE_SHE, client->comm->client_id, clientSheKeyId);
 
     rc = wh_Client_NvmDestroyObjects(client, 1, &id, &serverRc);
     if (rc == WH_ERROR_OK) {
@@ -103,7 +103,7 @@ int whTest_SheClientConfig(whClientConfig* config)
         0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c};
     uint8_t prngSeed[] = {0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f, 0x96, 0xe9,
         0x3d, 0x7e, 0x11, 0x73, 0x93, 0x17, 0x2a};
-    uint8_t zeros[WOLFHSM_SHE_BOOT_MAC_PREFIX_LEN] = {0};
+    uint8_t zeros[WH_SHE_BOOT_MAC_PREFIX_LEN] = {0};
     uint8_t bootloader[512];
     uint8_t bootMacDigest[16] = {0};
     uint8_t vectorMasterEcuKey[16] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06,
@@ -131,11 +131,11 @@ int whTest_SheClientConfig(whClientConfig* config)
     uint8_t entropy[] = {0xae, 0x2d, 0x8a, 0x57, 0x1e, 0x03, 0xac, 0x9c, 0x9e,
         0xb7, 0x6f, 0xac, 0x45, 0xaf, 0x8e, 0x51};
     uint8_t sreg;
-    uint8_t messageOne[WOLFHSM_SHE_M1_SZ];
-    uint8_t messageTwo[WOLFHSM_SHE_M2_SZ];
-    uint8_t messageThree[WOLFHSM_SHE_M3_SZ];
-    uint8_t messageFour[WOLFHSM_SHE_M4_SZ];
-    uint8_t messageFive[WOLFHSM_SHE_M5_SZ];
+    uint8_t messageOne[WH_SHE_M1_SZ];
+    uint8_t messageTwo[WH_SHE_M2_SZ];
+    uint8_t messageThree[WH_SHE_M3_SZ];
+    uint8_t messageFour[WH_SHE_M4_SZ];
+    uint8_t messageFive[WH_SHE_M5_SZ];
     uint32_t outClientId = 0;
     uint32_t outServerId = 0;
     const uint32_t SHE_TEST_VECTOR_KEY_ID = 4;
@@ -168,7 +168,7 @@ int whTest_SheClientConfig(whClientConfig* config)
 #endif /* WOLFHSM_CFG_TEST_VERBOSE */
 
     /* generate a new cmac key */
-    if ((ret = wc_InitRng_ex(rng, NULL, WOLFHSM_DEV_ID)) != 0) {
+    if ((ret = wc_InitRng_ex(rng, NULL, WH_DEV_ID)) != 0) {
         WH_ERROR_PRINT("Failed to wc_InitRng_ex %d\n", ret);
         goto exit;
     }
@@ -204,12 +204,12 @@ int whTest_SheClientConfig(whClientConfig* config)
         goto exit;
     }
     /* store cmac key */
-    if ((ret = wh_Client_ShePreProgramKey(client, WOLFHSM_SHE_BOOT_MAC_KEY_ID, 0, key, sizeof(key))) != 0) {
+    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_BOOT_MAC_KEY_ID, 0, key, sizeof(key))) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_ShePreProgramKey %d\n", ret);
         goto exit;
     }
     /* store cmac digest */
-    if ((ret = wh_Client_ShePreProgramKey(client, WOLFHSM_SHE_BOOT_MAC, 0, bootMacDigest, sizeof(bootMacDigest))) != 0) {
+    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_BOOT_MAC, 0, bootMacDigest, sizeof(bootMacDigest))) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_ShePreProgramKey %d\n", ret);
         goto exit;
     }
@@ -229,25 +229,25 @@ int whTest_SheClientConfig(whClientConfig* config)
         goto exit;
     }
     /* verify bootOk, bootFinished and secureBoot */
-    if ((sreg & WOLFHSM_SHE_SREG_BOOT_OK) == 0 ||
-        (sreg & WOLFHSM_SHE_SREG_BOOT_FINISHED) == 0 ||
-        (sreg & WOLFHSM_SHE_SREG_SECURE_BOOT) == 0) {
+    if ((sreg & WH_SHE_SREG_BOOT_OK) == 0 ||
+        (sreg & WH_SHE_SREG_BOOT_FINISHED) == 0 ||
+        (sreg & WH_SHE_SREG_SECURE_BOOT) == 0) {
         WH_ERROR_PRINT("Failed to secureBoot with SHE CMAC\n");
         goto exit;
     }
     printf("SHE secure boot SUCCESS\n");
     /* load the secret key using pre progam */
-    if ((ret = wh_Client_ShePreProgramKey(client, WOLFHSM_SHE_SECRET_KEY_ID, 0, secretKey, sizeof(secretKey))) != 0) {
+    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_SECRET_KEY_ID, 0, secretKey, sizeof(secretKey))) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_ShePreProgramKey %d\n", ret);
         goto exit;
     }
     /* load the prng seed using pre program */
-    if ((ret = wh_Client_ShePreProgramKey(client, WOLFHSM_SHE_PRNG_SEED_ID, 0, prngSeed, sizeof(prngSeed))) != 0) {
+    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_PRNG_SEED_ID, 0, prngSeed, sizeof(prngSeed))) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_ShePreProgramKey %d\n", ret);
         goto exit;
     }
     /* load the vector master ecu key */
-    if ((ret = wh_She_GenerateLoadableKey(WOLFHSM_SHE_MASTER_ECU_KEY_ID, WOLFHSM_SHE_SECRET_KEY_ID, 1, 0, sheUid, vectorMasterEcuKey, secretKey, messageOne, messageTwo, messageThree, messageFour, messageFive)) != 0) {
+    if ((ret = wh_She_GenerateLoadableKey(WH_SHE_MASTER_ECU_KEY_ID, WH_SHE_SECRET_KEY_ID, 1, 0, sheUid, vectorMasterEcuKey, secretKey, messageOne, messageTwo, messageThree, messageFour, messageFive)) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_SheGenerateLoadableKey %d\n", ret);
         goto exit;
     }
@@ -256,7 +256,7 @@ int whTest_SheClientConfig(whClientConfig* config)
         goto exit;
     }
     /* verify that our helper function output matches the vector */
-    if ((ret = wh_She_GenerateLoadableKey(SHE_TEST_VECTOR_KEY_ID, WOLFHSM_SHE_MASTER_ECU_KEY_ID, 1, 0, sheUid, vectorRawKey, vectorMasterEcuKey, messageOne, messageTwo, messageThree, messageFour, messageFive)) != 0) {
+    if ((ret = wh_She_GenerateLoadableKey(SHE_TEST_VECTOR_KEY_ID, WH_SHE_MASTER_ECU_KEY_ID, 1, 0, sheUid, vectorRawKey, vectorMasterEcuKey, messageOne, messageTwo, messageThree, messageFour, messageFive)) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_SheGenerateLoadableKey %d\n", ret);
         goto exit;
     }
@@ -298,7 +298,7 @@ int whTest_SheClientConfig(whClientConfig* config)
         WH_ERROR_PRINT("Failed to wh_Client_SheLoadPlainKey %d\n", ret);
         goto exit;
     }
-    if ((ret = wh_Client_SheEncEcb(client, WOLFHSM_SHE_RAM_KEY_ID, plainText, cipherText, sizeof(plainText))) != 0) {
+    if ((ret = wh_Client_SheEncEcb(client, WH_SHE_RAM_KEY_ID, plainText, cipherText, sizeof(plainText))) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_SheEncEcb %d\n", ret);
         goto exit;
     }
@@ -310,7 +310,7 @@ int whTest_SheClientConfig(whClientConfig* config)
         WH_ERROR_PRINT("Failed to wh_Client_SheLoadKey %d\n", ret);
         goto exit;
     }
-    if ((ret = wh_Client_SheDecEcb(client, WOLFHSM_SHE_RAM_KEY_ID, cipherText, finalText, sizeof(cipherText))) != 0) {
+    if ((ret = wh_Client_SheDecEcb(client, WH_SHE_RAM_KEY_ID, cipherText, finalText, sizeof(cipherText))) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_SheEncEcb %d\n", ret);
         goto exit;
     }
@@ -319,11 +319,11 @@ int whTest_SheClientConfig(whClientConfig* config)
         goto exit;
     }
     printf("SHE ECB SUCCESS\n");
-    if ((ret = wh_Client_SheEncCbc(client, WOLFHSM_SHE_RAM_KEY_ID, iv, sizeof(iv), plainText, cipherText, sizeof(plainText))) != 0) {
+    if ((ret = wh_Client_SheEncCbc(client, WH_SHE_RAM_KEY_ID, iv, sizeof(iv), plainText, cipherText, sizeof(plainText))) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_SheEncEcb %d\n", ret);
         goto exit;
     }
-    if ((ret = wh_Client_SheDecCbc(client, WOLFHSM_SHE_RAM_KEY_ID, iv, sizeof(iv), cipherText, finalText, sizeof(cipherText))) != 0) {
+    if ((ret = wh_Client_SheDecCbc(client, WH_SHE_RAM_KEY_ID, iv, sizeof(iv), cipherText, finalText, sizeof(cipherText))) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_SheEncEcb %d\n", ret);
         goto exit;
     }
@@ -332,11 +332,11 @@ int whTest_SheClientConfig(whClientConfig* config)
         goto exit;
     }
     printf("SHE CBC SUCCESS\n");
-    if ((ret = wh_Client_SheGenerateMac(client, WOLFHSM_SHE_RAM_KEY_ID, plainText, sizeof(plainText), cipherText, sizeof(cipherText))) != 0) {
+    if ((ret = wh_Client_SheGenerateMac(client, WH_SHE_RAM_KEY_ID, plainText, sizeof(plainText), cipherText, sizeof(cipherText))) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_SheGenerateMac %d\n", ret);
         goto exit;
     }
-    if ((ret = wh_Client_SheVerifyMac(client, WOLFHSM_SHE_RAM_KEY_ID, plainText, sizeof(plainText), cipherText, sizeof(cipherText), &sreg)) != 0) {
+    if ((ret = wh_Client_SheVerifyMac(client, WH_SHE_RAM_KEY_ID, plainText, sizeof(plainText), cipherText, sizeof(cipherText), &sreg)) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_SheVerifyMac %d\n", ret);
         goto exit;
     }
@@ -346,23 +346,23 @@ int whTest_SheClientConfig(whClientConfig* config)
     }
 
     /* destroy "pre-programmed" keys so we don't leak NVM */
-    if ((ret = _destroySheKey(client, WOLFHSM_SHE_BOOT_MAC_KEY_ID)) != 0) {
+    if ((ret = _destroySheKey(client, WH_SHE_BOOT_MAC_KEY_ID)) != 0) {
         WH_ERROR_PRINT("Failed to _destroySheKey, ret=%d\n", ret);
         goto exit;
     }
-    if ((ret = _destroySheKey(client, WOLFHSM_SHE_BOOT_MAC)) != 0) {
+    if ((ret = _destroySheKey(client, WH_SHE_BOOT_MAC)) != 0) {
         WH_ERROR_PRINT("Failed to _destroySheKey, ret=%d\n", ret);
         goto exit;
     }
-    if ((ret = _destroySheKey(client, WOLFHSM_SHE_SECRET_KEY_ID)) != 0) {
+    if ((ret = _destroySheKey(client, WH_SHE_SECRET_KEY_ID)) != 0) {
         WH_ERROR_PRINT("Failed to _destroySheKey, ret=%d\n", ret);
         goto exit;
     }
-    if ((ret = _destroySheKey(client, WOLFHSM_SHE_PRNG_SEED_ID)) != 0) {
+    if ((ret = _destroySheKey(client, WH_SHE_PRNG_SEED_ID)) != 0) {
         WH_ERROR_PRINT("Failed to _destroySheKey, ret=%d\n", ret);
         goto exit;
     }
-    if ((ret = _destroySheKey(client, WOLFHSM_SHE_MASTER_ECU_KEY_ID)) != 0) {
+    if ((ret = _destroySheKey(client, WH_SHE_MASTER_ECU_KEY_ID)) != 0) {
         WH_ERROR_PRINT("Failed to _destroySheKey, ret=%d\n", ret);
         goto exit;
     }

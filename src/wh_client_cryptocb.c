@@ -120,7 +120,7 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             /* write request */
             ret = wh_Client_SendRequest(ctx, group,
                 WC_ALGO_TYPE_CIPHER,
-                WOLFHSM_PACKET_STUB_SIZE + dataSz,
+                WH_PACKET_STUB_SIZE + dataSz,
                 (uint8_t*)packet);
             /* read response */
             if (ret == 0) {
@@ -193,7 +193,7 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             /* write request */
             ret = wh_Client_SendRequest(ctx, group,
                 WC_ALGO_TYPE_CIPHER,
-                WOLFHSM_PACKET_STUB_SIZE + dataSz,
+                WH_PACKET_STUB_SIZE + dataSz,
                 (uint8_t*)packet);
             /* read response */
             if (ret == 0) {
@@ -239,7 +239,7 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             /* write request */
             ret = wh_Client_SendRequest(ctx, group,
                 WC_ALGO_TYPE_PK,
-                WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->pkRsakgReq),
+                WH_PACKET_STUB_SIZE + sizeof(packet->pkRsakgReq),
                 (uint8_t*)packet);
             if (ret == 0) {
                 do {
@@ -261,7 +261,7 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             /* in and out are after the fixed size fields */
             in = (uint8_t*)(&packet->pkRsaReq + 1);
             out = (uint8_t*)(&packet->pkRsaRes + 1);
-            dataSz = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->pkRsaReq)
+            dataSz = WH_PACKET_STUB_SIZE + sizeof(packet->pkRsaReq)
                 + info->pk.rsa.inLen;
             /* can't fallback to software since the key is on the HSM */
             if (dataSz > WH_COMM_DATA_LEN)
@@ -304,7 +304,7 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             /* write request */
             ret = wh_Client_SendRequest(ctx, group,
                 WC_ALGO_TYPE_PK,
-                WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->pkRsaGetSizeReq),
+                WH_PACKET_STUB_SIZE + sizeof(packet->pkRsaGetSizeReq),
                 (uint8_t*)packet);
             /* read response */
             if (ret == 0) {
@@ -333,7 +333,7 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             /* write request */
             ret = wh_Client_SendRequest(ctx, group,
                 WC_ALGO_TYPE_PK,
-                WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->pkEckgReq),
+                WH_PACKET_STUB_SIZE + sizeof(packet->pkEckgReq),
                 (uint8_t*)packet);
             /* read response */
             if (ret == 0) {
@@ -366,7 +366,7 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             /* write request */
             ret = wh_Client_SendRequest(ctx, group,
                 WC_ALGO_TYPE_PK,
-                WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->pkEcdhReq),
+                WH_PACKET_STUB_SIZE + sizeof(packet->pkEcdhReq),
                 (uint8_t*)packet);
             /* read response */
             if (ret == 0) {
@@ -389,7 +389,7 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             /* in and out are after the fixed size fields */
             in = (uint8_t*)(&packet->pkEccSignReq + 1);
             out = (uint8_t*)(&packet->pkEccSignRes + 1);
-            dataSz = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->pkEccSignReq) +
+            dataSz = WH_PACKET_STUB_SIZE + sizeof(packet->pkEccSignReq) +
                 info->pk.eccsign.inlen;
             /* can't fallback to software since the key is on the HSM */
             if (dataSz > WH_COMM_DATA_LEN)
@@ -434,7 +434,7 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             sig = (uint8_t*)(&packet->pkEccVerifyReq + 1);
             hash = (uint8_t*)(&packet->pkEccVerifyReq + 1) +
                 info->pk.eccverify.siglen;
-            dataSz = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->pkEccVerifyReq) +
+            dataSz = WH_PACKET_STUB_SIZE + sizeof(packet->pkEccVerifyReq) +
                 info->pk.eccverify.siglen + info->pk.eccverify.hashlen;
             /* can't fallback to software since the key is on the HSM */
             if (dataSz > WH_COMM_DATA_LEN)
@@ -480,7 +480,7 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             /* write request */
             ret = wh_Client_SendRequest(ctx, group,
                 WC_ALGO_TYPE_PK,
-                WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->pkEccCheckReq),
+                WH_PACKET_STUB_SIZE + sizeof(packet->pkEccCheckReq),
                 (uint8_t*)packet);
             /* read response */
             if (ret == 0) {
@@ -501,7 +501,7 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             /* write request */
             ret = wh_Client_SendRequest(ctx, group,
                 WC_ALGO_TYPE_PK,
-                WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->pkCurve25519kgReq),
+                WH_PACKET_STUB_SIZE + sizeof(packet->pkCurve25519kgReq),
                 (uint8_t*)packet);
             if (ret == 0) {
                 do {
@@ -532,7 +532,7 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             /* write request */
             ret = wh_Client_SendRequest(ctx, group,
                 WC_ALGO_TYPE_PK,
-                WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->pkCurve25519Req),
+                WH_PACKET_STUB_SIZE + sizeof(packet->pkCurve25519Req),
                 (uint8_t*)packet);
             if (ret == 0) {
                 do {
@@ -565,7 +565,7 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
         packet->rngReq.sz = info->rng.sz;
         /* write request */
         ret = wh_Client_SendRequest(ctx, group, WC_ALGO_TYPE_RNG,
-            WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->rngReq),(uint8_t*)packet);
+            WH_PACKET_STUB_SIZE + sizeof(packet->rngReq),(uint8_t*)packet);
         if (ret == 0) {
             do {
                 ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
@@ -583,7 +583,7 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
 #endif /* !WC_NO_RNG */
 #ifdef WOLFSSL_CMAC
     case WC_ALGO_TYPE_CMAC:
-        dataSz = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->cmacReq) +
+        dataSz = WH_PACKET_STUB_SIZE + sizeof(packet->cmacReq) +
             info->cmac.inSz + info->cmac.keySz;
         if (dataSz > WH_COMM_DATA_LEN) {
             /* if we're using an HSM key return BAD_FUNC_ARG */
@@ -623,7 +623,7 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             packet->cmacReq.outSz = 0;
         /* write request */
         ret = wh_Client_SendRequest(ctx, group, WC_ALGO_TYPE_CMAC,
-            WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->cmacReq) +
+            WH_PACKET_STUB_SIZE + sizeof(packet->cmacReq) +
             packet->cmacReq.inSz + packet->cmacReq.keySz, (uint8_t*)packet);
         if (ret == 0) {
             /* if the client marked they may want to cancel, handle the 

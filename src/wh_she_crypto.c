@@ -20,11 +20,12 @@
  * src/wh_she_crypto.c
  *
  */
-/* System libraries */
+
 
 #ifdef WOLFHSM_CFG_SHE_EXTENSION
 #ifndef WOLFHSM_CFG_NO_CRYPTO
 
+/* System libraries */
 #include <stdint.h>
 #include <stddef.h>  /* For NULL */
 #include <string.h>  /* For memset, memcpy */
@@ -44,10 +45,8 @@
 #include "wolfhsm/wh_she_common.h"
 #include "wolfhsm/wh_she_crypto.h"
 
-static const uint8_t WOLFHSM_SHE_KEY_UPDATE_ENC_C[] = { 0x01, 0x01, 0x53, 0x48,
-        0x45, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xB0};
-static const uint8_t WOLFHSM_SHE_KEY_UPDATE_MAC_C[] = { 0x01, 0x02, 0x53, 0x48,
-        0x45, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xB0};
+static const uint8_t _SHE_KEY_UPDATE_ENC_C[] = WH_SHE_KEY_UPDATE_ENC_C;
+static const uint8_t _SHE_KEY_UPDATE_MAC_C[] = WH_SHE_KEY_UPDATE_MAC_C;
 
 int wh_She_AesMp16_ex(Aes* aes, void* heap, int devid,
         uint8_t* in, word32 inSz, uint8_t* out)
@@ -56,7 +55,7 @@ int wh_She_AesMp16_ex(Aes* aes, void* heap, int devid,
     int i = 0;
     int j;
     uint8_t paddedInput[AES_BLOCK_SIZE];
-    uint8_t messageZero[WOLFHSM_SHE_KEY_SZ] = {0};
+    uint8_t messageZero[WH_SHE_KEY_SZ] = {0};
     /* check valid inputs */
     if (aes == NULL || in == NULL || inSz == 0 || out == NULL)
         return WH_ERROR_BADARGS;
@@ -112,31 +111,31 @@ int wh_She_GenerateLoadableKey(uint8_t keyId,
 {
     int ret = 0;
     uint32_t field;
-    uint8_t tmpKey[WOLFHSM_SHE_KEY_SZ];
+    uint8_t tmpKey[WH_SHE_KEY_SZ];
     uint8_t cmacOutput[AES_BLOCK_SIZE];
-    uint8_t kdfInput[WOLFHSM_SHE_KEY_SZ * 2];
+    uint8_t kdfInput[WH_SHE_KEY_SZ * 2];
     Cmac cmac[1];
     Aes aes[1];
 
     if (uid == NULL || key == NULL || authKey == NULL || messageOne == NULL ||
         messageTwo == NULL || messageThree == NULL || messageFour == NULL ||
-        messageFive == NULL || keyId > WOLFHSM_SHE_PRNG_SEED_ID ||
-        authKeyId > WOLFHSM_SHE_PRNG_SEED_ID) {
+        messageFive == NULL || keyId > WH_SHE_PRNG_SEED_ID ||
+        authKeyId > WH_SHE_PRNG_SEED_ID) {
         return WH_ERROR_BADARGS;
     }
 
     /* Build KDF input for K1. add authKey to kdfInput */
-    XMEMCPY(kdfInput, authKey, WOLFHSM_SHE_KEY_SZ);
-    /* add WOLFHSM_SHE_KEY_UPDATE_ENC_C to the input */
-    XMEMCPY(kdfInput + WOLFHSM_SHE_KEY_SZ, WOLFHSM_SHE_KEY_UPDATE_ENC_C,
-        sizeof(WOLFHSM_SHE_KEY_UPDATE_ENC_C));
+    XMEMCPY(kdfInput, authKey, WH_SHE_KEY_SZ);
+    /* add _SHE_KEY_UPDATE_ENC_C to the input */
+    XMEMCPY(kdfInput + WH_SHE_KEY_SZ, _SHE_KEY_UPDATE_ENC_C,
+        sizeof(_SHE_KEY_UPDATE_ENC_C));
     /* generate K1 */
     ret = wh_AesMp16(kdfInput,
-        WOLFHSM_SHE_KEY_SZ + sizeof(WOLFHSM_SHE_KEY_UPDATE_ENC_C), tmpKey);
+        WH_SHE_KEY_SZ + sizeof(_SHE_KEY_UPDATE_ENC_C), tmpKey);
 
     /* Build M1. set UID, key id and authId */
     if (ret == 0) {
-        XMEMCPY(messageOne, uid, WOLFHSM_SHE_UID_SZ);
+        XMEMCPY(messageOne, uid, WH_SHE_UID_SZ);
         messageOne[WH_SHE_M1_KID_OFFSET] =
                 (keyId      << WH_SHE_M1_KID_SHIFT) |
                 (authKeyId  << WH_SHE_M1_AID_SHIFT);
@@ -145,24 +144,24 @@ int wh_She_GenerateLoadableKey(uint8_t keyId,
     /* build cleartext M2 */
     if (ret == 0) {
         /* set the counter, flags and key */
-        XMEMSET(messageTwo, 0, WOLFHSM_SHE_M2_SZ);
+        XMEMSET(messageTwo, 0, WH_SHE_M2_SZ);
         *((uint32_t*)messageTwo) = wh_Utils_htonl(
                 (count  << WH_SHE_M2_COUNT_SHIFT) |
                 (flags  << WH_SHE_M2_FLAGS_SHIFT) );
-        XMEMCPY(messageTwo + WH_SHE_M2_KEY_OFFSET, key, WOLFHSM_SHE_KEY_SZ);
+        XMEMCPY(messageTwo + WH_SHE_M2_KEY_OFFSET, key, WH_SHE_KEY_SZ);
     }
     /* encrypt M2 with K1 */
     if (ret == 0) {
         ret = wc_AesInit(aes, NULL, INVALID_DEVID);
         if (ret == 0) {
-            ret = wc_AesSetKey(aes, tmpKey, WOLFHSM_SHE_KEY_SZ, NULL,
+            ret = wc_AesSetKey(aes, tmpKey, WH_SHE_KEY_SZ, NULL,
                 AES_ENCRYPTION);
             if (ret == 0) {
                 /* copy the key to cmacOutput before it gets encrypted */
                 XMEMCPY(cmacOutput, messageTwo + WH_SHE_M2_KEY_OFFSET,
-                    WOLFHSM_SHE_KEY_SZ);
+                    WH_SHE_KEY_SZ);
                 ret = wc_AesCbcEncrypt(aes, messageTwo, messageTwo,
-                        WOLFHSM_SHE_M2_SZ);
+                        WH_SHE_M2_SZ);
             }
             /* free aes for protection */
             wc_AesFree(aes);
@@ -171,24 +170,24 @@ int wh_She_GenerateLoadableKey(uint8_t keyId,
 
     /* Update KDF input to create K2 */
     if (ret == 0) {
-        /* add WOLFHSM_SHE_KEY_UPDATE_MAC_C to the input */
-        XMEMCPY(kdfInput + WOLFHSM_SHE_KEY_SZ, WOLFHSM_SHE_KEY_UPDATE_MAC_C,
-            sizeof(WOLFHSM_SHE_KEY_UPDATE_MAC_C));
+        /* add _SHE_KEY_UPDATE_MAC_C to the input */
+        XMEMCPY(kdfInput + WH_SHE_KEY_SZ, _SHE_KEY_UPDATE_MAC_C,
+            sizeof(_SHE_KEY_UPDATE_MAC_C));
         /* generate K2 */
         ret = wh_AesMp16(kdfInput,
-            WOLFHSM_SHE_KEY_SZ + sizeof(WOLFHSM_SHE_KEY_UPDATE_MAC_C), tmpKey);
+            WH_SHE_KEY_SZ + sizeof(_SHE_KEY_UPDATE_MAC_C), tmpKey);
     }
 
     /* cmac messageOne and messageTwo using K2 as the cmac key */
     if (ret == 0) {
-        ret = wc_InitCmac_ex(cmac, tmpKey, WOLFHSM_SHE_KEY_SZ,
+        ret = wc_InitCmac_ex(cmac, tmpKey, WH_SHE_KEY_SZ,
             WC_CMAC_AES, NULL, NULL, INVALID_DEVID);
     }
     /* hash M1 | M2 */
     if (ret == 0)
-        ret = wc_CmacUpdate(cmac, messageOne, WOLFHSM_SHE_M1_SZ);
+        ret = wc_CmacUpdate(cmac, messageOne, WH_SHE_M1_SZ);
     if (ret == 0)
-        ret = wc_CmacUpdate(cmac, messageTwo, WOLFHSM_SHE_M2_SZ);
+        ret = wc_CmacUpdate(cmac, messageTwo, WH_SHE_M2_SZ);
     /* get the digest */
     if (ret == 0) {
         field = AES_BLOCK_SIZE;
@@ -198,20 +197,20 @@ int wh_She_GenerateLoadableKey(uint8_t keyId,
     /* Update the kdf input to create K3 */
     if (ret == 0) {
         /* copy the ram key to kdfInput */
-        XMEMCPY(kdfInput, cmacOutput, WOLFHSM_SHE_KEY_SZ);
-        /* add WOLFHSM_SHE_KEY_UPDATE_ENC_C to the input */
-        XMEMCPY(kdfInput + WOLFHSM_SHE_KEY_SZ, WOLFHSM_SHE_KEY_UPDATE_ENC_C,
-            sizeof(WOLFHSM_SHE_KEY_UPDATE_ENC_C));
+        XMEMCPY(kdfInput, cmacOutput, WH_SHE_KEY_SZ);
+        /* add _SHE_KEY_UPDATE_ENC_C to the input */
+        XMEMCPY(kdfInput + WH_SHE_KEY_SZ, _SHE_KEY_UPDATE_ENC_C,
+            sizeof(_SHE_KEY_UPDATE_ENC_C));
         /* generate K3 */
         ret = wh_AesMp16(kdfInput,
-            WOLFHSM_SHE_KEY_SZ + sizeof(WOLFHSM_SHE_KEY_UPDATE_ENC_C), tmpKey);
+            WH_SHE_KEY_SZ + sizeof(_SHE_KEY_UPDATE_ENC_C), tmpKey);
     }
 
     /* Create M4 using K3 as encryption key */
     if (ret == 0) {
-        XMEMSET(messageFour, 0, WOLFHSM_SHE_M4_SZ);
+        XMEMSET(messageFour, 0, WH_SHE_M4_SZ);
         /* set UID, key id and authId */
-        XMEMCPY(messageFour, uid, WOLFHSM_SHE_UID_SZ);
+        XMEMCPY(messageFour, uid, WH_SHE_UID_SZ);
         messageFour[WH_SHE_M4_KID_OFFSET] =
                 (keyId      << WH_SHE_M4_KID_SHIFT) |
                 (authKeyId  << WH_SHE_M4_AID_SHIFT);
@@ -222,7 +221,7 @@ int wh_She_GenerateLoadableKey(uint8_t keyId,
 
         ret = wc_AesInit(aes, NULL, INVALID_DEVID);
         if (ret == 0) {
-            ret = wc_AesSetKey(aes, tmpKey, WOLFHSM_SHE_KEY_SZ, NULL,
+            ret = wc_AesSetKey(aes, tmpKey, WH_SHE_KEY_SZ, NULL,
                 AES_ENCRYPTION);
             if (ret == 0) {
                 /* encrypt the new counter */
@@ -236,22 +235,23 @@ int wh_She_GenerateLoadableKey(uint8_t keyId,
     }
 
     if (ret == 0) {
-        /* add WOLFHSM_SHE_KEY_UPDATE_MAC_C to the kdf input */
-        XMEMCPY(kdfInput + WOLFHSM_SHE_KEY_SZ, WOLFHSM_SHE_KEY_UPDATE_MAC_C,
-            sizeof(WOLFHSM_SHE_KEY_UPDATE_MAC_C));
+        /* add _SHE_KEY_UPDATE_MAC_C to the kdf input */
+        XMEMCPY(kdfInput + WH_SHE_KEY_SZ, _SHE_KEY_UPDATE_MAC_C,
+            sizeof(_SHE_KEY_UPDATE_MAC_C));
         /* generate K4 */
         ret = wh_AesMp16(kdfInput,
-            WOLFHSM_SHE_KEY_SZ + sizeof(WOLFHSM_SHE_KEY_UPDATE_MAC_C), tmpKey);
+            WH_SHE_KEY_SZ + sizeof(_SHE_KEY_UPDATE_MAC_C), tmpKey);
     }
     /* Build M5 as cmac messageFour using K4 as the cmac key */
     if (ret == 0) {
         field = AES_BLOCK_SIZE;
-        ret = wc_AesCmacGenerate_ex(cmac, messageFive, (word32*)&field, messageFour,
-            WOLFHSM_SHE_M4_SZ, tmpKey, WOLFHSM_SHE_KEY_SZ, NULL, INVALID_DEVID);
+        ret = wc_AesCmacGenerate_ex(cmac, messageFive, (word32*)&field,
+                messageFour, WH_SHE_M4_SZ, tmpKey, WH_SHE_KEY_SZ, NULL,
+                INVALID_DEVID);
     }
     return ret;
 }
-#endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
+#endif /* !WOLFHSM_CFG_NO_CRYPTO */
 #endif /* WOLFHSM_CFG_SHE_EXTENSION */
 

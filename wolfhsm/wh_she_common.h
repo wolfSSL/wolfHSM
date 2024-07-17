@@ -32,23 +32,23 @@
 
 #ifdef WOLFHSM_CFG_SHE_EXTENSION
 
-#define WOLFHSM_SHE_SECRET_KEY_ID 0
-#define WOLFHSM_SHE_MASTER_ECU_KEY_ID 1
-#define WOLFHSM_SHE_BOOT_MAC_KEY_ID 2
-#define WOLFHSM_SHE_BOOT_MAC 3
-#define WOLFHSM_SHE_RAM_KEY_ID 14
-#define WOLFHSM_SHE_PRNG_SEED_ID 15
+#define WH_SHE_SECRET_KEY_ID 0
+#define WH_SHE_MASTER_ECU_KEY_ID 1
+#define WH_SHE_BOOT_MAC_KEY_ID 2
+#define WH_SHE_BOOT_MAC 3
+#define WH_SHE_RAM_KEY_ID 14
+#define WH_SHE_PRNG_SEED_ID 15
 
-#define WOLFHSM_SHE_KEY_SZ 16
-#define WOLFHSM_SHE_UID_SZ 15
+#define WH_SHE_KEY_SZ 16
+#define WH_SHE_UID_SZ 15
 
-#define WOLFHSM_SHE_BOOT_MAC_PREFIX_LEN 12
+#define WH_SHE_BOOT_MAC_PREFIX_LEN 12
 
-#define WOLFHSM_SHE_M1_SZ 16
-#define WOLFHSM_SHE_M2_SZ 32
-#define WOLFHSM_SHE_M3_SZ WOLFHSM_SHE_M1_SZ
-#define WOLFHSM_SHE_M4_SZ WOLFHSM_SHE_M2_SZ
-#define WOLFHSM_SHE_M5_SZ WOLFHSM_SHE_M1_SZ
+#define WH_SHE_M1_SZ 16
+#define WH_SHE_M2_SZ 32
+#define WH_SHE_M3_SZ WH_SHE_M1_SZ
+#define WH_SHE_M4_SZ WH_SHE_M2_SZ
+#define WH_SHE_M5_SZ WH_SHE_M1_SZ
 
 /* M1 is 15 bytes of UID, 4 bits of KID, 4 bits of AID */
 #define WH_SHE_M1_UID_OFFSET 0
@@ -73,21 +73,39 @@
 #define WH_SHE_M4_COUNT_PAD 0x8
 
 /* sreg flags */
-#define WOLFHSM_SHE_SREG_BUSY (1 << 0)
-#define WOLFHSM_SHE_SREG_SECURE_BOOT (1 << 1)
-#define WOLFHSM_SHE_SREG_BOOT_INIT (1 << 2)
-#define WOLFHSM_SHE_SREG_BOOT_FINISHED (1 << 3)
-#define WOLFHSM_SHE_SREG_BOOT_OK (1 << 4)
-#define WOLFHSM_SHE_SREG_RND_INIT (1 << 5)
-#define WOLFHSM_SHE_SREG_EXT_DEBUGGER (1 << 6)
-#define WOLFHSM_SHE_SREG_INT_DEBUGGER (1 << 7)
+#define WH_SHE_SREG_BUSY (1 << 0)
+#define WH_SHE_SREG_SECURE_BOOT (1 << 1)
+#define WH_SHE_SREG_BOOT_INIT (1 << 2)
+#define WH_SHE_SREG_BOOT_FINISHED (1 << 3)
+#define WH_SHE_SREG_BOOT_OK (1 << 4)
+#define WH_SHE_SREG_RND_INIT (1 << 5)
+#define WH_SHE_SREG_EXT_DEBUGGER (1 << 6)
+#define WH_SHE_SREG_INT_DEBUGGER (1 << 7)
 
 /* key flags */
-#define WOLFHSM_SHE_FLAG_WRITE_PROTECT (1 << 0)
-#define WOLFHSM_SHE_FLAG_BOOT_PROTECT (1 << 1)
-#define WOLFHSM_SHE_FLAG_DEBUGGER_PROTECTION (1 << 2)
-#define WOLFHSM_SHE_FLAG_USAGE (1 << 3)
-#define WOLFHSM_SHE_FLAG_WILDCARD (1 << 4)
+#define WH_SHE_FLAG_WRITE_PROTECT (1 << 0)
+#define WH_SHE_FLAG_BOOT_PROTECT (1 << 1)
+#define WH_SHE_FLAG_DEBUGGER_PROTECTION (1 << 2)
+#define WH_SHE_FLAG_USAGE (1 << 3)
+#define WH_SHE_FLAG_WILDCARD (1 << 4)
+
+/** SHE defined constants */
+#define WH_SHE_KEY_UPDATE_ENC_C {   0x01, 0x01, 0x53, 0x48, \
+                                    0x45, 0x00, 0x80, 0x00, \
+                                    0x00, 0x00, 0x00, 0x00, \
+                                    0x00, 0x00, 0x00, 0xB0  }
+#define WH_SHE_KEY_UPDATE_MAC_C {   0x01, 0x02, 0x53, 0x48, \
+                                    0x45, 0x00, 0x80, 0x00, \
+                                    0x00, 0x00, 0x00, 0x00, \
+                                    0x00, 0x00, 0x00, 0xB0  }
+#define WH_SHE_PRNG_KEY_C       {   0x01, 0x04, 0x53, 0x48, \
+                                    0x45, 0x00, 0x80, 0x00, \
+                                    0x00, 0x00, 0x00, 0x00, \
+                                    0x00, 0x00, 0x00, 0xB0  }
+#define WH_SHE_PRNG_SEED_KEY_C  {   0x01, 0x05, 0x53, 0x48, \
+                                    0x45, 0x00, 0x80, 0x00, \
+                                    0x00, 0x00, 0x00, 0x00, \
+                                    0x00, 0x00, 0x00, 0xB0  }
 
 /* SHE metadata is placed in the NVM object label */
 int wh_She_Label2Meta(const uint8_t* label, uint32_t *out_count,

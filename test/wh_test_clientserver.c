@@ -686,8 +686,8 @@ int whTest_ClientServerSequential(void)
     whNvmId  reclaim_objects = 0;
 
     /* Ensure null terminated */
-    uint8_t version[WOLFHSM_INFO_VERSION_LEN + 1] = {0};
-    uint8_t build[WOLFHSM_INFO_VERSION_LEN + 1] = {0};
+    uint8_t version[WH_INFO_VERSION_LEN + 1] = {0};
+    uint8_t build[WH_INFO_VERSION_LEN + 1] = {0};
     uint32_t cfg_comm_data_len = 0;
     uint32_t cfg_nvm_object_count = 0;
     uint32_t cfg_server_keycache_count = 0;
@@ -805,19 +805,19 @@ int whTest_ClientServerSequential(void)
 
 
     for (counter = 0; counter < 5; counter++) {
-        whNvmId     id                           = counter + 20;
-        whNvmAccess access                       = WOLFHSM_NVM_ACCESS_ANY;
-        whNvmFlags  flags                        = WOLFHSM_NVM_FLAGS_ANY;
-        whNvmSize   label_len                    = 0;
-        char        label[WOLFHSM_NVM_LABEL_LEN] = {0};
-        whNvmSize   len                          = 0;
+        whNvmId     id                          = counter + 20;
+        whNvmAccess access                      = WH_NVM_ACCESS_ANY;
+        whNvmFlags  flags                       = WH_NVM_FLAGS_ANY;
+        whNvmSize   label_len                   = 0;
+        char        label[WH_NVM_LABEL_LEN]     = {0};
+        whNvmSize   len                         = 0;
 
-        whNvmId     gid                           = 0;
-        whNvmAccess gaccess                       = 0;
-        whNvmFlags  gflags                        = 0;
-        char        glabel[WOLFHSM_NVM_LABEL_LEN] = {0};
-        whNvmSize   glen                          = 0;
-        whNvmSize   rlen                          = 0;
+        whNvmId     gid                         = 0;
+        whNvmAccess gaccess                     = 0;
+        whNvmFlags  gflags                      = 0;
+        char        glabel[WH_NVM_LABEL_LEN]    = {0};
+        whNvmSize   glen                        = 0;
+        whNvmSize   rlen                        = 0;
 
         whNvmId lastAvailObjects = 0;
 
@@ -894,8 +894,8 @@ int whTest_ClientServerSequential(void)
         WH_TEST_ASSERT_RETURN(0 == memcmp(send_buffer, recv_buffer, len));
     }
 
-    whNvmAccess list_access = WOLFHSM_NVM_ACCESS_ANY;
-    whNvmFlags  list_flags  = WOLFHSM_NVM_FLAGS_ANY;
+    whNvmAccess list_access = WH_NVM_ACCESS_ANY;
+    whNvmFlags  list_flags  = WH_NVM_FLAGS_ANY;
     whNvmId     list_id     = 0;
     whNvmId     list_count  = 0;
     do {
@@ -954,18 +954,18 @@ int whTest_ClientServerSequential(void)
     for (counter = 0; counter < 5; counter++) {
         whNvmMetadata meta = {
             .id     = counter + 40,
-            .access = WOLFHSM_NVM_ACCESS_ANY,
-            .flags  = WOLFHSM_NVM_FLAGS_ANY,
+            .access = WH_NVM_ACCESS_ANY,
+            .flags  = WH_NVM_FLAGS_ANY,
             .len    = 0,
             .label  = {0},
         };
         whNvmSize len = 0;
 
-        whNvmId     gid                           = 0;
-        whNvmAccess gaccess                       = 0;
-        whNvmFlags  gflags                        = 0;
-        char        glabel[WOLFHSM_NVM_LABEL_LEN] = {0};
-        whNvmSize   glen                          = 0;
+        whNvmId     gid                         = 0;
+        whNvmAccess gaccess                     = 0;
+        whNvmFlags  gflags                      = 0;
+        char        glabel[WH_NVM_LABEL_LEN]    = {0};
+        whNvmSize   glen                        = 0;
 
         whNvmId lastAvailObjects = 0;
 
@@ -1202,19 +1202,19 @@ int whTest_ClientCfg(whClientConfig* clientCfg)
 
 
     for (counter = 0; counter < 5; counter++) {
-        whNvmId     id                           = counter + 20;
-        whNvmAccess access                       = WOLFHSM_NVM_ACCESS_ANY;
-        whNvmFlags  flags                        = WOLFHSM_NVM_FLAGS_ANY;
-        whNvmSize   label_len                    = 0;
-        char        label[WOLFHSM_NVM_LABEL_LEN] = {0};
-        whNvmSize   len                          = 0;
+        whNvmId     id                          = counter + 20;
+        whNvmAccess access                      = WH_NVM_ACCESS_ANY;
+        whNvmFlags  flags                       = WH_NVM_FLAGS_ANY;
+        whNvmSize   label_len                   = 0;
+        char        label[WH_NVM_LABEL_LEN]     = {0};
+        whNvmSize   len                         = 0;
 
-        whNvmId     gid                           = 0;
-        whNvmAccess gaccess                       = 0;
-        whNvmFlags  gflags                        = 0;
-        char        glabel[WOLFHSM_NVM_LABEL_LEN] = {0};
-        whNvmSize   glen                          = 0;
-        whNvmSize   rlen                          = 0;
+        whNvmId     gid                         = 0;
+        whNvmAccess gaccess                     = 0;
+        whNvmFlags  gflags                      = 0;
+        char        glabel[WH_NVM_LABEL_LEN]    = {0};
+        whNvmSize   glen                        = 0;
+        whNvmSize   rlen                        = 0;
 
         whNvmId lastAvailObjects = 0;
 
@@ -1282,8 +1282,8 @@ int whTest_ClientCfg(whClientConfig* clientCfg)
         WH_TEST_ASSERT_RETURN(0 == memcmp(send_buffer, recv_buffer, len));
     }
 
-    whNvmAccess list_access = WOLFHSM_NVM_ACCESS_ANY;
-    whNvmFlags  list_flags  = WOLFHSM_NVM_FLAGS_ANY;
+    whNvmAccess list_access = WH_NVM_ACCESS_ANY;
+    whNvmFlags  list_flags  = WH_NVM_FLAGS_ANY;
     whNvmId     list_id     = 0;
     whNvmId     list_count  = 0;
     do {
@@ -1332,18 +1332,18 @@ int whTest_ClientCfg(whClientConfig* clientCfg)
     for (counter = 0; counter < 5; counter++) {
         whNvmMetadata meta = {
             .id     = counter + 40,
-            .access = WOLFHSM_NVM_ACCESS_ANY,
-            .flags  = WOLFHSM_NVM_FLAGS_ANY,
+            .access = WH_NVM_ACCESS_ANY,
+            .flags  = WH_NVM_FLAGS_ANY,
             .len    = 0,
             .label  = {0},
         };
         whNvmSize len = 0;
 
-        whNvmId     gid                           = 0;
-        whNvmAccess gaccess                       = 0;
-        whNvmFlags  gflags                        = 0;
-        char        glabel[WOLFHSM_NVM_LABEL_LEN] = {0};
-        whNvmSize   glen                          = 0;
+        whNvmId     gid                         = 0;
+        whNvmAccess gaccess                     = 0;
+        whNvmFlags  gflags                      = 0;
+        char        glabel[WH_NVM_LABEL_LEN]    = {0};
+        whNvmSize   glen                        = 0;
 
         whNvmId lastAvailObjects = 0;
 
