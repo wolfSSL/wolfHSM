@@ -736,7 +736,9 @@ static int hsmCryptoCmac(whServerContext* server, whPacket* packet,
                 ret = BAD_FUNC_ARG;
         }
         if (ret == 0 && packet->cmacReq.inSz != 0) {
-            for (i = 0; ret == 0 && i < packet->cmacReq.inSz; i += AES_BLOCK_SIZE) {
+            for (   i = 0;
+                    ret == 0 && i < (int)(packet->cmacReq.inSz);
+                    i += AES_BLOCK_SIZE) {
                 ret = wc_CmacUpdate(server->crypto->algoCtx.cmac, in + i,
                     AES_BLOCK_SIZE);
                 if (ret == 0) {
