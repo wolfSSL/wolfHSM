@@ -87,8 +87,6 @@ int wh_MessageComm_TranslateInitResponse(uint16_t magic,
 
 
 typedef struct {
-    uint8_t version[WH_INFO_VERSION_LEN];
-    uint8_t build[WH_INFO_BUILD_LEN];
     uint32_t cfg_comm_data_len;
     uint32_t cfg_nvm_object_count;
     uint32_t cfg_server_keycache_count;
@@ -99,6 +97,8 @@ typedef struct {
     uint32_t boot_state;
     uint32_t lifecycle_state;
     uint32_t nvm_state;
+    uint8_t version[WH_INFO_VERSION_LEN];
+    uint8_t build[WH_INFO_BUILD_LEN];
 } whMessageCommInfoResponse;
 
 int wh_MessageComm_TranslateInfoResponse(uint16_t magic,
