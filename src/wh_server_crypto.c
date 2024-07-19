@@ -355,7 +355,7 @@ static int hsmLoadKeyEcc(whServerContext* server, ecc_key* key, uint16_t keyId,
 {
     int ret;
     int slotIdx = 0;
-<   int curveIdx;
+    int curveIdx;
     word32 qxLen = 0;
     word32 qyLen = 0;
     word32 qdLen = 0;
