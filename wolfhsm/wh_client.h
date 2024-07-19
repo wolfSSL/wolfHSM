@@ -623,7 +623,34 @@ int wh_Client_SetKeyIdCurve25519(curve25519_key* key, whNvmId keyId);
  * @return int Returns 0 on success or a negative error code on failure.
  */
 int wh_Client_GetKeyIdCurve25519(curve25519_key* key, whNvmId* outId);
-#endif
+#endif /* HAVE_CURVE25519 */
+
+#ifdef HAVE_ECC
+/**
+ * @brief Associates a Ecc key with a specific key ID.
+ *
+ * This function sets the device context of a Ecc key to the specified
+ * key ID. On the server side, this key ID is used to reference the key stored
+ * in the HSM
+ *
+ * @param[in] key Pointer to the Ecc key structure.
+ * @param[in] keyId Key ID to be associated with the Ecc key.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_SetKeyIdEcc(ecc_key* key, whNvmId keyId);
+
+/**
+ * @brief Gets the wolfHSM keyId being used by the wolfCrypt struct.
+ *
+ * This function gets the device context of a Ecc key that was previously
+ * set by either the crypto callback layer or wh_Client_SetKeyIdEcc.
+ *
+ * @param[in] key Pointer to the Ecc key structure.
+ * @param[out] keyId Pointer to the key ID to return.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_GetKeyIdEcc(ecc_key* key, whNvmId* outId);
+#endif /* HAVE_ECC */
 
 #ifndef NO_RSA
 /**

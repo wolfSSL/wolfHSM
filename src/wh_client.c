@@ -1033,6 +1033,8 @@ int wh_Client_SetKeyIdCurve25519(curve25519_key* key, whNvmId keyId)
     if (key == NULL)
         return WH_ERROR_BADARGS;
     key->devCtx = (void*)((intptr_t)keyId);
+    key->pubSet = 1;
+    key->privSet = 1;
     return WH_ERROR_OK;
 }
 
@@ -1043,7 +1045,25 @@ int wh_Client_GetKeyIdCurve25519(curve25519_key* key, whNvmId* outId)
     *outId = (intptr_t)key->devCtx;
     return WH_ERROR_OK;
 }
-#endif
+#endif /* HAVE_CURVE25519 */
+
+#ifdef HAVE_ECC
+int wh_Client_SetKeyIdEcc(ecc_key* key, whNvmId keyId)
+{
+    if (key == NULL)
+        return WH_ERROR_BADARGS;
+    key->devCtx = (void*)((intptr_t)keyId);
+    return WH_ERROR_OK;
+}
+
+int wh_Client_GetKeyIdEcc(ecc_key* key, whNvmId* outId)
+{
+    if (key == NULL || outId == NULL)
+        return WH_ERROR_BADARGS;
+    *outId = (intptr_t)key->devCtx;
+    return WH_ERROR_OK;
+}
+#endif /* HAVE_ECC */
 
 #ifndef NO_RSA
 int wh_Client_SetKeyIdRsa(RsaKey* key, whNvmId keyId)

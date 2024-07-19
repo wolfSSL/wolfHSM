@@ -505,7 +505,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         ret = -1;
         goto exit;
     }
-    outLen = 32;
+    outLen = sizeof(finalText);
     if((ret = wc_ecc_sign_hash((void*)cipherText, sizeof(cipherText), (void*)finalText, (word32*)&outLen, rng, eccPrivate)) != 0) {
         printf("Failed to wc_ecc_sign_hash %d\n", ret);
         goto exit;

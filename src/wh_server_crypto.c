@@ -305,10 +305,13 @@ static int hsmCacheKeyEcc(whServerContext* server, ecc_key* key, whKeyId* outId)
 {
     int ret;
     int slotIdx = 0;
-    uint32_t qxLen;
-    uint32_t qyLen;
-    uint32_t qdLen;
+    word32 qxLen = 0;
+    word32 qyLen = 0;
+    word32 qdLen = 0;
     whKeyId keyId = WOLFHSM_KEYTYPE_CRYPTO;
+    byte* qxBuf = NULL;
+    byte* qyBuf = NULL;
+    byte* qdBuf = NULL;
     /* get a free slot */
     ret = slotIdx = hsmCacheFindSlot(server);
     if (ret >= 0) {
@@ -317,11 +320,22 @@ static int hsmCacheKeyEcc(whServerContext* server, ecc_key* key, whKeyId* outId)
     /* export key */
     if (ret == 0) {
         XMEMSET((uint8_t*)&server->cache[slotIdx], 0, sizeof(whServerCacheSlot));
-        qxLen = qyLen = qdLen = key->dp->size;
-        ret = wc_ecc_export_private_raw(key, server->cache[slotIdx].buffer,
-            (word32*)&qxLen, server->cache[slotIdx].buffer + qxLen,
-            (word32*)&qyLen, server->cache[slotIdx].buffer + qxLen + qyLen,
-            (word32*)&qdLen);
+        if (key->type != ECC_PRIVATEKEY_ONLY) {
+            qxLen = qyLen = key->dp->size;
+            qxBuf = server->cache[slotIdx].buffer;
+            qyBuf = qxBuf + qxLen;
+        }
+        if (key->type == ECC_PRIVATEKEY_ONLY || key->type == ECC_PRIVATEKEY) {
+            qdLen = key->dp->size;
+            if (key->type == ECC_PRIVATEKEY_ONLY) {
+                qdBuf = server->cache[slotIdx].buffer;
+            }
+            else {
+                qdBuf = qyBuf + qyLen;
+            }
+        }
+        ret = wc_ecc_export_private_raw(key, qxBuf, &qxLen, qyBuf, &qyLen,
+            qdBuf, &qdLen);
     }
     if (ret == 0) {
         /* set meta */
@@ -338,16 +352,44 @@ static int hsmLoadKeyEcc(whServerContext* server, ecc_key* key, uint16_t keyId,
 {
     int ret;
     int slotIdx = 0;
-    uint32_t keySz;
+    int curveIdx;
+    word32 qxLen = 0;
+    word32 qyLen = 0;
+    word32 qdLen = 0;
+    word32 keySz;
+    byte* qxBuf = NULL;
+    byte* qyBuf = NULL;
+    byte* qdBuf = NULL;
     keyId |= WOLFHSM_KEYTYPE_CRYPTO;
     /* freshen the key */
     ret = slotIdx = hsmFreshenKey(server, keyId);
+    /* get the size by curveId */
+    if (ret >= 0) {
+        ret = curveIdx = wc_ecc_get_curve_idx(curveId);
+        if (curveIdx != ECC_CURVE_INVALID) {
+            keySz = ecc_sets[curveIdx].size;
+        }
+    }
     /* decode the key */
     if (ret >= 0) {
-        keySz = server->cache[slotIdx].meta->len / 3;
-        ret = wc_ecc_import_unsigned(key, server->cache[slotIdx].buffer,
-            server->cache[slotIdx].buffer + keySz,
-            server->cache[slotIdx].buffer + keySz * 2, curveId);
+        /* determine which buffers should be set by size, wc_ecc_import_unsigned
+         * will set the key type accordingly */
+        if (server->cache[slotIdx].meta->len == keySz * 3) {
+            qxLen = qyLen = qdLen = keySz;
+            qxBuf = server->cache[slotIdx].buffer;
+            qyBuf = qxBuf + qxLen;
+            qdBuf = qyBuf + qyLen;
+        }
+        else if (server->cache[slotIdx].meta->len == keySz * 2) {
+            qxLen = qyLen = keySz;
+            qxBuf = server->cache[slotIdx].buffer;
+            qyBuf = qxBuf + qxLen;
+        }
+        else {
+            qxLen = qyLen = qdLen = keySz;
+            qdBuf = server->cache[slotIdx].buffer;
+        }
+        ret = wc_ecc_import_unsigned(key, qxBuf, qyBuf, qdBuf, curveId);
     }
     return ret;
 }
