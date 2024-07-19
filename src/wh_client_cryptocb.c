@@ -412,9 +412,15 @@ int wolfHSM_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
                 if (packet->rc != 0)
                     ret = packet->rc;
                 else {
-                    /* read out */
-                    XMEMCPY(info->pk.eccsign.out, out, packet->pkEccSignRes.sz);
-                    *info->pk.eccsign.outlen = packet->pkEccSignRes.sz;
+                    /* check outlen and read out */
+                    if (*info->pk.eccsign.outlen < packet->pkEccSignRes.sz) {
+                        ret = BUFFER_E;
+                    }
+                    else {
+                        *info->pk.eccsign.outlen = packet->pkEccSignRes.sz;
+                        XMEMCPY(info->pk.eccsign.out, out,
+                            packet->pkEccSignRes.sz);
+                    }
                 }
             }
             break;
