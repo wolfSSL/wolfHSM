@@ -688,6 +688,7 @@ static int hsmCryptoCmac(whServerContext* server, whPacket* packet,
     int ret;
     int i;
     word32 len;
+    word32 blockSz = AES_BLOCK_SIZE;
     uint16_t cancelSeq;
     uint8_t tmpKey[AES_MAX_KEY_SIZE + AES_IV_SIZE];
     /* in, out and key are after the fixed size fields */
@@ -734,8 +735,11 @@ static int hsmCryptoCmac(whServerContext* server, whPacket* packet,
         }
         if (ret == 0 && packet->cmacReq.inSz != 0) {
             for (i = 0; ret == 0 && i < packet->cmacReq.inSz; i += AES_BLOCK_SIZE) {
+                if (i + AES_BLOCK_SIZE > packet->cmacReq.inSz) {
+                    blockSz = packet->cmacReq.inSz - i;
+                }
                 ret = wc_CmacUpdate(server->crypto->algoCtx.cmac, in + i,
-                    AES_BLOCK_SIZE);
+                    blockSz);
                 if (ret == 0) {
                     ret = wh_Server_GetCanceledSequence(server, &cancelSeq);
                     if (ret == 0 && cancelSeq == seq) {
