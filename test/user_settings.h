@@ -34,19 +34,19 @@ extern "C" {
 /* #define SINGLE_THREADED */
 /* #define WC_NO_ASYNC_THREADING */
 
-/** wolfHSM required */
+/** wolfHSM required settings for wolfCrypt */
 #define WOLFCRYPT_ONLY
 #define WOLF_CRYPTO_CB
 #define HAVE_HASHDRBG
 #define WOLFSSL_KEY_GEN
 #define WOLFSSL_ASN_TEMPLATE
 #define WOLFSSL_BASE64_ENCODE
+#define HAVE_ANONYMOUS_INLINE_AGGREGATES 1
 
 /** Math library selection for test */
 #define USE_FAST_MATH
 
 /** wolfHSM recommended */
-#define HAVE_ANONYMOUS_INLINE_AGGREGATES 1
 #define WOLFSSL_NO_MALLOC
 #define WOLFSSL_USE_ALIGN
 #define WOLFSSL_IGNORE_FILE_WARN

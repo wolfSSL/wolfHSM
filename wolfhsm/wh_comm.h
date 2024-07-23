@@ -34,25 +34,24 @@
  * enumerated either within wolfhsm/wh_error.h.  Unless otherwise noted, all
  * functions are non-blocking and each may update the context state or perform
  * other bookkeeping actions as necessary.
+ *
  */
 
 #ifndef WOLFHSM_WH_COMM_H_
 #define WOLFHSM_WH_COMM_H_
 
+/* Pick up compile-time configuration */
+#include "wolfhsm/wh_settings.h"
+
 #include <stdint.h>  /* For sized ints */
 
 /** Packet content types */
-
 /* Request/response packets are composed of a single fixed-length header
- * (whHeader) followed immediately by variable-length data between 0 and
- * DATA_LEN bytes.
+ * (whCommHeader) followed immediately by variable-length data between 0 and
+ * WOLFHSM_CFG_COMM_DATA_LEN bytes.
  */
-enum WH_COMM_ENUM {
-    WH_COMM_HEADER_LEN = 8,    /* whCommHeader */
-    WH_COMM_DATA_LEN = 1280,
-    WH_COMM_MTU = (WH_COMM_HEADER_LEN + WH_COMM_DATA_LEN),
-    WH_COMM_MTU_U64_COUNT = (WH_COMM_MTU + 7) / 8,  /* internal U64 buffer */
-};
+#define WH_COMM_MTU (8 + WOLFHSM_CFG_COMM_DATA_LEN)
+#define WH_COMM_MTU_U64_COUNT ((WH_COMM_MTU + 7) / 8)
 
 /* Support for endian and version differences */
 /* Version is BCD to avoid conflict with endian marker */
@@ -69,7 +68,7 @@ enum WH_COMM_ENUM {
     (_magic                 & WH_COMM_MAGIC_ENDIAN_MASK) ==  \
     (WH_COMM_MAGIC_NATIVE   & WH_COMM_MAGIC_ENDIAN_MASK)
 
-/* Header for a packet, request or response. On-the-wire format */
+/* 8 byte Header for a packet, request or response. On-the-wire format */
 typedef struct {
     uint16_t magic;     /* Endian marker with version */
     uint16_t kind;      /* Kind of packet.  Enumerated in message.h */
@@ -78,8 +77,6 @@ typedef struct {
     uint16_t aux;       /* Session identifier for request or error indicator
                          * for response. */
 } whCommHeader;
-/* static_assert(sizeof_whHeader == WH_COMM_HEADER_LEN,
-                 "Size of whCommHeader doesn't match WH_COMM_HEADER_LEN") */
 
 enum WH_COMM_AUX_ENUM {
     WH_COMM_AUX_REQ_NORMAL      = 0x0000, /* Normal request. No session */
@@ -298,7 +295,7 @@ int wh_CommServer_SendResponse(whCommServer* context,
         uint16_t data_size, const void* data);
 
 /* Get a pointer to the data portion of the internal buffer that is
- * WH_COMM_DATA_LEN bytes long.
+ * WOLFHSM_CFG_COMM_DATA_LEN bytes long.
  */
 uint8_t* wh_CommServer_GetDataPtr(whCommServer* context);
 

@@ -20,13 +20,15 @@
  * src/wh_server_dma.c
  */
 
+/* Pick up server config */
+#include "wolfhsm/wh_server.h"
+
 #include <stdint.h>
 #include <string.h>
 #include <stddef.h>
 
 #include "wolfhsm/wh_error.h"
 
-#include "wolfhsm/wh_server.h"
 
 /* TODO: if the Address allowlist ever gets large, we should consider a more
  * efficient representation (requiring sorted array and binary search, or
@@ -54,7 +56,7 @@ static int _checkAddrAgainstAllowList(const whServerDmaAddrList allowList, void*
     }
 
     /* Check if the address range is fully within a allowlist entry */
-    for (i = 0; i < WH_DMA_ADDR_ALLOWLIST_COUNT; i++) {
+    for (i = 0; i < WOLFHSM_CFG_SERVER_DMAADDR_COUNT; i++) {
         uintptr_t allowListStartAddr = (uintptr_t)allowList[i].addr;
         uintptr_t allowListEndAddr   = allowListStartAddr + allowList[i].size;
 

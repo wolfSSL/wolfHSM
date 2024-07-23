@@ -26,7 +26,11 @@
 #ifndef WOLFHSM_WH_MESSAGE_COMM_H_
 #define WOLFHSM_WH_MESSAGE_COMM_H_
 
+/* Pick up compile-time configuration */
+#include "wolfhsm/wh_settings.h"
+
 #include <stdint.h>
+
 #include "wolfhsm/wh_comm.h"
 
 /* Comm component message kinds */
@@ -38,6 +42,13 @@ enum WH_MESSAGE_COMM_ACTION_ENUM {
     WH_MESSAGE_COMM_ACTION_INFO      = 0x04,
     WH_MESSAGE_COMM_ACTION_ECHO      = 0x05,
 };
+
+/* Info request/response data sizes*/
+enum WH_INFO_ENUM {
+    WH_INFO_VERSION_LEN = 8,
+    WH_INFO_BUILD_LEN   = 8,
+};
+
 
 
 /* Generic error response message. */
@@ -53,7 +64,7 @@ int wh_MessageComm_GetErrorResponse(uint16_t magic,
 /* Generic len/data message that does not require data translation */
 typedef struct {
     uint16_t len;
-    uint8_t data[WH_COMM_DATA_LEN - sizeof(uint16_t)];
+    uint8_t data[WOLFHSM_CFG_COMM_DATA_LEN - sizeof(uint16_t)];
 } whMessageCommLenData;
 
 int wh_MessageComm_TranslateLenData(uint16_t magic,
@@ -78,21 +89,25 @@ int wh_MessageComm_TranslateInitResponse(uint16_t magic,
         const whMessageCommInitResponse* src,
         whMessageCommInitResponse* dest);
 
-/* Info request/response data */
-enum WOLFHSM_INFO_ENUM {
-    WOLFHSM_INFO_VERSION_LEN = 8,
-    WOLFHSM_INFO_BUILD_LEN   = 8,
-};
 
 typedef struct {
-    uint8_t version[WOLFHSM_INFO_VERSION_LEN];
-    uint8_t build[WOLFHSM_INFO_BUILD_LEN];
-    uint32_t ramfree;
-    uint32_t nvmfree;
-    uint8_t debug_state;
-    uint8_t boot_state;
-    uint8_t lifecycle_state;
-    uint8_t nvm_state;
-} whMessageCommInfo;
+    uint32_t cfg_comm_data_len;
+    uint32_t cfg_nvm_object_count;
+    uint32_t cfg_server_keycache_count;
+    uint32_t cfg_server_keycache_bufsize;
+    uint32_t cfg_server_customcb_count;
+    uint32_t cfg_server_dmaaddr_count;
+    uint32_t debug_state;
+    uint32_t boot_state;
+    uint32_t lifecycle_state;
+    uint32_t nvm_state;
+    uint8_t version[WH_INFO_VERSION_LEN];
+    uint8_t build[WH_INFO_BUILD_LEN];
+} whMessageCommInfoResponse;
 
-#endif /* WOLFHSM_WH_MESSAGE_COMM_H_ */
+int wh_MessageComm_TranslateInfoResponse(uint16_t magic,
+        const whMessageCommInfoResponse* src,
+        whMessageCommInfoResponse* dest);
+
+
+#endif /* !WOLFHSM_WH_MESSAGE_COMM_H_ */

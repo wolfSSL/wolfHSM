@@ -37,15 +37,12 @@
 #ifndef WOLFHSM_WH_NVM_H_
 #define WOLFHSM_WH_NVM_H_
 
+/* Pick up compile-time configuration */
+#include "wolfhsm/wh_settings.h"
+
 #include <stdint.h>
 
 #include "wolfhsm/wh_common.h"  /* For whNvm types */
-
-
-enum WH_NVM_IDS {
-    WH_NVM_INVALID_ID = 0,
-};
-
 
 typedef struct {
     int (*Init)(void* context, const void *config);
@@ -131,4 +128,4 @@ int wh_Nvm_DestroyObjects(whNvmContext* context, whNvmId list_count,
 int wh_Nvm_Read(whNvmContext* context, whNvmId id, whNvmSize offset,
         whNvmSize data_len, uint8_t* data);
 
-#endif /* WOLFHSM_WH_NVM_H_ */
+#endif /* !WOLFHSM_WH_NVM_H_ */

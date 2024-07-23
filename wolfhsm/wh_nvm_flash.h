@@ -23,20 +23,17 @@
  *
  */
 
-#ifndef WOLFHSM_WH_NVMFLASH_H_
-#define WOLFHSM_WH_NVMFLASH_H_
+#ifndef WOLFHSM_WH_NVM_FLASH_H_
+#define WOLFHSM_WH_NVM_FLASH_H_
+
+/* Pick up compile-time configuration */
+#include "wolfhsm/wh_settings.h"
 
 #include <stdint.h>
 
 #include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_flash.h"
 #include "wolfhsm/wh_flash_unit.h"
-
-/* Number of objects in a directory */
-#ifndef NF_OBJECT_COUNT
-#include "wolfhsm/wh_server.h"
-#define NF_OBJECT_COUNT (WOLFHSM_NUM_NVMOBJECTS)
-#endif
 
 /* In-memory computed status of an Object or Directory */
 typedef enum {
@@ -63,7 +60,7 @@ typedef struct {
 
 /* In-memory version of a Directory */
 typedef struct {
-    nfMemObject objects[NF_OBJECT_COUNT];
+    nfMemObject objects[WOLFHSM_CFG_NVM_OBJECT_COUNT];
     int next_free_object;
     uint32_t next_free_data;
     int reclaimable_entries;
@@ -118,4 +115,4 @@ int wh_NvmFlash_Read(void* c, whNvmId id, whNvmSize offset,
     .Read = wh_NvmFlash_Read,                       \
 }
 
-#endif /* WOLFHSM_WH_NVMFLASH_H_ */
+#endif /* !WOLFHSM_WH_NVM_FLASH_H_ */

@@ -22,6 +22,7 @@
  */
 
 #include <stdint.h>
+#include <stddef.h>  /* For NULL */
 #include <stdlib.h>  /* For malloc/free */
 #include <string.h>
 #include <stdbool.h>

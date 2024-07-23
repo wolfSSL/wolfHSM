@@ -24,16 +24,15 @@
 #ifndef WOLFHSM_WH_COMMON_H_
 #define WOLFHSM_WH_COMMON_H_
 
+/* Pick up compile-time configuration */
+#include "wolfhsm/wh_settings.h"
+
 #include <stdint.h>
-
-/* Device Id to be registered and passed to wolfCrypt functions */
-#define WOLFHSM_DEV_ID 0x5748534D  /* "WHSM" */
-
 
 /** Non-volatile counters */
 /* HSM Counter identifier type. */
 typedef uint16_t whCounterId;
-#define WOLFHSM_COUNTER_ID_INVALID ((whCounterId)0)
+#define WH_COUNTER_ID_INVALID ((whCounterId)0)
 
 
 /** Key Management */
@@ -41,47 +40,47 @@ typedef uint16_t whCounterId;
 typedef uint16_t whKeyId;
 
 /* KeyId Constants */
-#define WOLFHSM_KEYID_ERASED 0x0000
+#define WH_KEYID_ERASED 0x0000
 
 /* Key Masks */
-#define WOLFHSM_KEYID_MASK   0x00FF
-#define WOLFHSM_KEYUSER_MASK 0x0F00
-#define WOLFHSM_KEYTYPE_MASK 0xF000
+#define WH_KEYID_MASK   0x00FF
+#define WH_KEYUSER_MASK 0x0F00
+#define WH_KEYTYPE_MASK 0xF000
 
 /* Macro to construct a keyid */
-#define MAKE_WOLFHSM_KEYID(_type, _user, _id)       \
-    ((whKeyId)(((_type) & WOLFHSM_KEYTYPE_MASK) |   \
-    (((_user) << 8) & WOLFHSM_KEYUSER_MASK) |       \
-    ((_id) & WOLFHSM_KEYID_MASK)))
+#define WH_MAKE_KEYID(_type, _user, _id)        \
+    ((whKeyId)(((_type) & WH_KEYTYPE_MASK) |    \
+    (((_user) << 8) & WH_KEYUSER_MASK) |        \
+    ((_id) & WH_KEYID_MASK)))
 
 /* Key Types */
-#define WOLFHSM_KEYTYPE_CRYPTO    0x1000
+#define WH_KEYTYPE_CRYPTO    0x1000
 /* She keys are technically raw keys but a SHE keyId needs */
-#define WOLFHSM_KEYTYPE_SHE       0x2000
-#define WOLFHSM_KEYTYPE_COUNTER   0x3000
+#define WH_KEYTYPE_SHE       0x2000
+#define WH_KEYTYPE_COUNTER   0x3000
 
 
 /** NVM Management */
 /* HSM NVM object identifier type. */
 typedef uint16_t whNvmId;
-#define WOLFHSM_NVM_ID_INVALID ((whNvmId)0)
+#define WH_NVM_ID_INVALID ((whNvmId)0)
 
 /* HSM NVM Size type */
 typedef uint16_t whNvmSize;
 
 /* HSM NVM Access type */
 typedef uint16_t whNvmAccess;
-#define WOLFHSM_NVM_ACCESS_NONE ((whNvmAccess)0)
-#define WOLFHSM_NVM_ACCESS_ANY  ((whNvmAccess)-1)
+#define WH_NVM_ACCESS_NONE ((whNvmAccess)0)
+#define WH_NVM_ACCESS_ANY  ((whNvmAccess)-1)
 
 /* HSM NVM Flags type */
 typedef uint16_t whNvmFlags;
-#define WOLFHSM_NVM_FLAGS_NONE  ((whNvmFlags)0)
-#define WOLFHSM_NVM_FLAGS_ANY   ((whNvmFlags)-1)
+#define WH_NVM_FLAGS_NONE  ((whNvmFlags)0)
+#define WH_NVM_FLAGS_ANY   ((whNvmFlags)-1)
 
 /* HSM NVM metadata structure */
-enum WOLFHSM_NVM_ENUM {
-    WOLFHSM_NVM_LABEL_LEN = 24,
+enum WH_NVM_ENUM {
+    WH_NVM_LABEL_LEN = 24,
 };
 
 /* User-specified metadata for an NVM object, MUST be a multiple of
@@ -91,8 +90,7 @@ typedef struct {
     whNvmAccess access;     /* Growth */
     whNvmFlags flags;       /* Growth */
     whNvmSize len;          /* Length of data in bytes */
-    uint8_t label[WOLFHSM_NVM_LABEL_LEN];
+    uint8_t label[WH_NVM_LABEL_LEN];
 } whNvmMetadata;
-/* static_assert(sizeof(whNvmMetadata) == WOLFHSM_NVM_METADATA_LEN) */
 
-#endif /* WOLFHSM_WH_COMMON_H_ */
+#endif /* !WOLFHSM_WH_COMMON_H_ */

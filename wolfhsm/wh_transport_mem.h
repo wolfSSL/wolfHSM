@@ -22,9 +22,6 @@
  * wolfHSM Transport binding using 2 memory blocks
  */
 
-#ifndef WH_TRANSPORT_MEM_H_
-#define WH_TRANSPORT_MEM_H_
-
 /* Memory block comms
  * Client and server each have access to a shared memory, which is split into
  * request and response buffers.  The top 64-bits of each buffer provide control
@@ -90,6 +87,12 @@
  * wh_CommServer_Init(cs, csc);
  *
  */
+
+#ifndef WOLFHSM_WH_TRANSPORT_MEM_H_
+#define WOLFHSM_WH_TRANSPORT_MEM_H_
+
+/* Pick up compile-time configuration */
+#include "wolfhsm/wh_settings.h"
 
 #include <stdint.h>
 
@@ -160,4 +163,4 @@ int wh_TransportMem_RecvResponse(void* c, uint16_t *out_len, void* data);
 }
 
 
-#endif /* WH_TRANSPORT_MEM_H_ */
+#endif /* !WOLFHSM_WH_TRANSPORT_MEM_H_ */

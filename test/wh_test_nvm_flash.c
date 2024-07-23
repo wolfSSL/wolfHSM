@@ -18,11 +18,7 @@
  */
 #include <stdio.h>
 #include <string.h>
-#include <stdlib.h>
-
-#if defined(WH_CONFIG)
-#include "wh_config.h"
-#endif
+#include <stddef.h>
 
 /* core test includes */
 #include "wh_test_common.h"
@@ -34,13 +30,13 @@
 
 /* NVM simulator backends to use for testing NVM module */
 #include "wolfhsm/wh_flash_ramsim.h"
-#if defined(WH_CFG_TEST_POSIX)
+#if defined(WOLFHSM_CFG_TEST_POSIX)
 #include <unistd.h>  /* For unlink */
 #include "port/posix/posix_transport_tcp.h"
 #include "port/posix/posix_flash_file.h"
 #endif
 
-#if defined(WH_CFG_TEST_VERBOSE)
+#if defined(WOLFHSM_CFG_TEST_VERBOSE)
 static void _HexDump(const char* p, size_t data_len)
 {
     const size_t         bytesPerLine = 16;
@@ -96,7 +92,7 @@ static void _ShowList(const whNvmCb* cb, void* context)
     do {
         listCount = 0;
 
-        rc = cb->List(context, WOLFHSM_NVM_ACCESS_ANY, WOLFHSM_NVM_FLAGS_ANY,
+        rc = cb->List(context, WH_NVM_ACCESS_ANY, WH_NVM_FLAGS_ANY,
                       id, &listCount, &id);
 
         if ((rc == 0) && (listCount > 0)) {
@@ -191,7 +187,7 @@ int whTest_NvmFlashCfg(whNvmFlashConfig* cfg)
 
     WH_TEST_RETURN_ON_FAIL(cb->Init(context, cfg));
 
-#if defined(WH_CFG_TEST_VERBOSE)
+#if defined(WOLFHSM_CFG_TEST_VERBOSE)
     printf("--Initial NVM contents\n");
     _ShowAvailable(cb, context);
     _ShowList(cb, context);
@@ -231,7 +227,7 @@ int whTest_NvmFlashCfg(whNvmFlashConfig* cfg)
         goto cleanup;
     }
 
-#if defined(WH_CFG_TEST_VERBOSE)
+#if defined(WOLFHSM_CFG_TEST_VERBOSE)
     _ShowAvailable(cb, context);
     _ShowList(cb, context);
 #endif
@@ -244,7 +240,7 @@ int whTest_NvmFlashCfg(whNvmFlashConfig* cfg)
         goto cleanup;
     }
 
-#if defined(WH_CFG_TEST_VERBOSE)
+#if defined(WOLFHSM_CFG_TEST_VERBOSE)
     _ShowAvailable(cb, context);
     _ShowList(cb, context);
 #endif
@@ -265,7 +261,7 @@ int whTest_NvmFlashCfg(whNvmFlashConfig* cfg)
     }
 
 
-#if defined(WH_CFG_TEST_VERBOSE)
+#if defined(WOLFHSM_CFG_TEST_VERBOSE)
     _ShowAvailable(cb, context);
     _ShowList(cb, context);
 #endif
@@ -276,7 +272,7 @@ int whTest_NvmFlashCfg(whNvmFlashConfig* cfg)
         goto cleanup;
     }
 
-#if defined(WH_CFG_TEST_VERBOSE)
+#if defined(WOLFHSM_CFG_TEST_VERBOSE)
     _ShowAvailable(cb, context);
     _ShowList(cb, context);
 #endif
@@ -307,7 +303,7 @@ int whTest_NvmFlashCfg(whNvmFlashConfig* cfg)
         goto cleanup;
     }
 
-#if defined(WH_CFG_TEST_VERBOSE)
+#if defined(WOLFHSM_CFG_TEST_VERBOSE)
     _ShowAvailable(cb, context);
     _ShowList(cb, context);
 #endif
@@ -320,7 +316,7 @@ int whTest_NvmFlashCfg(whNvmFlashConfig* cfg)
         goto cleanup;
     }
 
-#if defined(WH_CFG_TEST_VERBOSE)
+#if defined(WOLFHSM_CFG_TEST_VERBOSE)
     _ShowAvailable(cb, context);
     _ShowList(cb, context);
 #endif
@@ -364,7 +360,7 @@ int whTest_NvmFlash_RamSim(void)
 }
 
 
-#if defined(WH_CFG_TEST_POSIX)
+#if defined(WOLFHSM_CFG_TEST_POSIX)
 
 int whTest_NvmFlash_PosixFileSim(void)
 {
@@ -401,7 +397,7 @@ int whTest_NvmFlash(void)
     printf("Testing NVM flash with RAM sim...\n");
     WH_TEST_ASSERT(0 == whTest_NvmFlash_RamSim());
 
-#if defined(WH_CFG_TEST_POSIX)
+#if defined(WOLFHSM_CFG_TEST_POSIX)
     printf("Testing NVM flash with POSIX file sim...\n");
     WH_TEST_ASSERT(0 == whTest_NvmFlash_PosixFileSim());
 #endif

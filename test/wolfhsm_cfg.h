@@ -16,10 +16,28 @@
  * You should have received a copy of the GNU General Public License
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef WH_CONFIG_H_
-#define WH_CONFIG_H_
+/*
+ * wolfhsm_cfg.h
+ *
+ * wolfHSM compile-time options.  Override here for your application
+ */
 
-#define WH_CFG_TEST_VERBOSE
-#define WH_CFG_TEST_POSIX
+#ifndef WOLFHSM_CFG_H_
+#define WOLFHSM_CFG_H_
 
-#endif /* WH_CONFIG_H_*/
+
+/** wolfHSM settings.  Simple overrides to show they work */
+/* #define WOLFHSM_CFG_NO_CRYPTO */
+/* #define WOLFHSM_CFG_SHE_EXTENSION */
+
+#define WOLFHSM_CFG_COMM_DATA_LEN 1152
+
+
+#define WOLFHSM_CFG_NVM_OBJECT_COUNT 30
+#define WOLFHSM_CFG_SERVER_KEYCACHE_COUNT 10
+#define WOLFHSM_CFG_SERVER_KEYCACHE_SIZE 1024
+#define WOLFHSM_CFG_SERVER_DMAADDR_COUNT 8
+#define WOLFHSM_CFG_SERVER_CUSTOMCB_COUNT 6
+
+
+#endif /* WOLFHSM_CFG_H_ */

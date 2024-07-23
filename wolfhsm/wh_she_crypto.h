@@ -17,25 +17,34 @@
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
 /*
- * wolfhsm/wh_server_nvm.h
+ * wolfhsm/wh_she_crypto.h
  *
  */
 
-#ifndef WOLFHSM_WH_SERVER_NVM_H_
-#define WOLFHSM_WH_SERVER_NVM_H_
+#ifndef WOLFHSM_WH_SHE_CRYPTO_H_
+#define WOLFHSM_WH_SHE_CRYPTO_H_
 
 /* Pick up compile-time configuration */
 #include "wolfhsm/wh_settings.h"
 
+#ifdef WOLFHSM_CFG_SHE_EXTENSION
+#ifndef WOLFHSM_CFG_NO_CRYPTO
+
 #include <stdint.h>
 
-#include "wolfhsm/wh_server.h"
+#include "wolfssl/wolfcrypt/settings.h"
+#include "wolfssl/wolfcrypt/types.h"
+#include "wolfssl/wolfcrypt/aes.h"
 
-/* Handle an NVM request and generate a response
- * Defined in server_nvm.c */
-int wh_Server_HandleNvmRequest(whServerContext* server,
-        uint16_t magic, uint16_t action, uint16_t seq,
-        uint16_t req_size, const void* req_packet,
-        uint16_t *out_resp_size, void* resp_packet);
+int wh_She_AesMp16_ex(Aes* aes, void* heap, int devid,
+        uint8_t* in, word32 inSz, uint8_t* out);
 
-#endif /* !WOLFHSM_WH_SERVER_NVM_H_ */
+int wh_She_GenerateLoadableKey(uint8_t keyId,
+    uint8_t authKeyId, uint32_t count, uint32_t flags, uint8_t* uid,
+    uint8_t* key, uint8_t* authKey, uint8_t* messageOne, uint8_t* messageTwo,
+    uint8_t* messageThree, uint8_t* messageFour, uint8_t* messageFive);
+
+#endif /* !WOLFHSM_CFG_NO_CRYPTO*/
+#endif /* WOLFHSM_CFG_SHE_EXTENSION */
+
+#endif /* !WOLFHSM_WH_SHE_CRYPTO_H_ */

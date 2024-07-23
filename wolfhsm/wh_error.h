@@ -25,8 +25,8 @@
 #ifndef WOLFHSM_WH_ERROR_H_
 #define WOLFHSM_WH_ERROR_H_
 
-/* Consider reusing wolfssl or wolfcrypt errors here */
-
+/* Pick up compile-time configuration */
+#include "wolfhsm/wh_settings.h"
 
 enum WH_ERROR_ENUM {
     WH_ERROR_OK             = 0,    /* Success, no error. */
@@ -63,6 +63,6 @@ enum WH_ERROR_ENUM {
     WH_SHE_ERC_GENERAL_ERROR = -511,
 };
 
-#define WOLFHSM_SHE_ERC_NO_ERROR WH_ERROR_OK
+#define WH_SHE_ERC_NO_ERROR WH_ERROR_OK
 
-#endif /* WOLFHSM_WH_ERROR_H_ */
+#endif /* !WOLFHSM_WH_ERROR_H_ */

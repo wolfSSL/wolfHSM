@@ -1,12 +1,11 @@
-/* wh_packet.h
- *
+/*
  * Copyright (C) 2024 wolfSSL Inc.
  *
  * This file is part of wolfHSM.
  *
  * wolfHSM is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation; either version 3 of the License, or
  * (at your option) any later version.
  *
  * wolfHSM is distributed in the hope that it will be useful,
@@ -15,15 +14,24 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1335, USA
+ * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef WOLFHSM_PACKET_H
-#define WOLFHSM_PACKET_H
+/*
+ * wolfhsm/wh_packet.h
+ *
+ */
+
+#ifndef WOLFHSM_WH_PACKET_H_
+#define WOLFHSM_WH_PACKET_H_
+
+/* Pick up compile-time configuration */
+#include "wolfhsm/wh_settings.h"
+
+#include <stdint.h>
 
 #include "wolfhsm/wh_common.h"
 
-#ifdef WOLFHSM_SHE_EXTENSION
+#ifdef WOLFHSM_CFG_SHE_EXTENSION
 #include "wolfhsm/wh_she_common.h"
 #endif
 
@@ -264,7 +272,7 @@ typedef struct  wh_Packet_key_cache_req
     uint32_t labelSz;
     uint16_t id;
     uint8_t WH_PAD[2];
-    uint8_t label[WOLFHSM_NVM_LABEL_LEN];
+    uint8_t label[WH_NVM_LABEL_LEN];
     /* uint8_t in[]; */
 } wh_Packet_key_cache_req;
 
@@ -302,7 +310,7 @@ typedef struct  wh_Packet_key_export_req
 typedef struct  wh_Packet_key_export_res
 {
     uint32_t len;
-    uint8_t label[WOLFHSM_NVM_LABEL_LEN];
+    uint8_t label[WH_NVM_LABEL_LEN];
     /* uint8_t out[len]; */
 } wh_Packet_key_export_res;
 
@@ -360,10 +368,10 @@ typedef struct  wh_Packet_counter_destroy_req
 
 
 /** SHE Packets */
-#ifdef WOLFHSM_SHE_EXTENSION
+#ifdef WOLFHSM_CFG_SHE_EXTENSION
 typedef struct  wh_Packet_she_set_uid_req
 {
-    uint8_t uid[WOLFHSM_SHE_UID_SZ];
+    uint8_t uid[WH_SHE_UID_SZ];
     uint8_t WH_PAD[2];
 } wh_Packet_she_set_uid_req;
 
@@ -403,29 +411,29 @@ typedef struct  wh_Packet_she_get_status_res
 
 typedef struct wh_Packet_she_load_key_req
 {
-    uint8_t messageOne[WOLFHSM_SHE_M1_SZ];
-    uint8_t messageTwo[WOLFHSM_SHE_M2_SZ];
-    uint8_t messageThree[WOLFHSM_SHE_M3_SZ];
+    uint8_t messageOne[WH_SHE_M1_SZ];
+    uint8_t messageTwo[WH_SHE_M2_SZ];
+    uint8_t messageThree[WH_SHE_M3_SZ];
 } wh_Packet_she_load_key_req;
 
 typedef struct  wh_Packet_she_load_key_res
 {
-    uint8_t messageFour[WOLFHSM_SHE_M4_SZ];
-    uint8_t messageFive[WOLFHSM_SHE_M5_SZ];
+    uint8_t messageFour[WH_SHE_M4_SZ];
+    uint8_t messageFive[WH_SHE_M5_SZ];
 } wh_Packet_she_load_key_res;
 
 typedef struct  wh_Packet_she_load_plain_key_req
 {
-    uint8_t key[WOLFHSM_SHE_KEY_SZ];
+    uint8_t key[WH_SHE_KEY_SZ];
 } wh_Packet_she_load_plain_key_req;
 
 typedef struct wh_Packet_she_export_ram_key_res
 {
-    uint8_t messageOne[WOLFHSM_SHE_M1_SZ];
-    uint8_t messageTwo[WOLFHSM_SHE_M2_SZ];
-    uint8_t messageThree[WOLFHSM_SHE_M3_SZ];
-    uint8_t messageFour[WOLFHSM_SHE_M4_SZ];
-    uint8_t messageFive[WOLFHSM_SHE_M5_SZ];
+    uint8_t messageOne[WH_SHE_M1_SZ];
+    uint8_t messageTwo[WH_SHE_M2_SZ];
+    uint8_t messageThree[WH_SHE_M3_SZ];
+    uint8_t messageFour[WH_SHE_M4_SZ];
+    uint8_t messageFive[WH_SHE_M5_SZ];
 } wh_Packet_she_export_ram_key_res;
 
 typedef struct  wh_Packet_she_init_rng_res
@@ -435,12 +443,12 @@ typedef struct  wh_Packet_she_init_rng_res
 
 typedef struct  wh_Packet_she_rnd_res
 {
-    uint8_t rnd[WOLFHSM_SHE_KEY_SZ];
+    uint8_t rnd[WH_SHE_KEY_SZ];
 } wh_Packet_she_rnd_res;
 
 typedef struct  wh_Packet_she_extend_seed_req
 {
-    uint8_t entropy[WOLFHSM_SHE_KEY_SZ];
+    uint8_t entropy[WH_SHE_KEY_SZ];
 } wh_Packet_she_extend_seed_req;
 
 typedef struct  wh_Packet_she_extend_seed_res
@@ -467,7 +475,7 @@ typedef struct  wh_Packet_she_enc_cbc_req
     uint32_t sz;
     uint8_t keyId;
     uint8_t WH_PAD[3];
-    uint8_t iv[WOLFHSM_SHE_KEY_SZ];
+    uint8_t iv[WH_SHE_KEY_SZ];
     /* uint8_t in[sz] */
 } wh_Packet_she_enc_cbc_req;
 
@@ -496,7 +504,7 @@ typedef struct  wh_Packet_she_dec_cbc_req
     uint32_t sz;
     uint8_t keyId;
     uint8_t WH_PAD[3];
-    uint8_t iv[WOLFHSM_SHE_KEY_SZ];
+    uint8_t iv[WH_SHE_KEY_SZ];
     /* uint8_t in[sz] */
 } wh_Packet_she_dec_cbc_req;
 
@@ -515,7 +523,7 @@ typedef struct  wh_Packet_she_gen_mac_req
 
 typedef struct  wh_Packet_she_gen_mac_res
 {
-    uint8_t mac[WOLFHSM_SHE_KEY_SZ];
+    uint8_t mac[WH_SHE_KEY_SZ];
 } wh_Packet_she_gen_mac_res;
 
 typedef struct  wh_Packet_she_verify_mac_req
@@ -532,7 +540,7 @@ typedef struct  wh_Packet_she_verify_mac_res
     uint8_t status;
     uint8_t WH_PAD[3];
 } wh_Packet_she_verify_mac_res;
-#endif  /*WOLFHSM_SHE_EXTENSION */
+#endif  /*WOLFHSM_CFG_SHE_EXTENSION */
 
 /** Union of all packet types with common header */
 typedef struct whPacket
@@ -542,7 +550,7 @@ typedef struct whPacket
     uint16_t flags;
     uint8_t WH_PAD[2];
 
-#define WOLFHSM_PACKET_STUB_SIZE 8
+#define WH_PACKET_STUB_SIZE 8
    /* body, will be either a request or a response */
     union {
         wh_Packet_version_exchange versionExchange;
@@ -626,7 +634,7 @@ typedef struct whPacket
         wh_Packet_counter_increment_res counterIncrementRes;
         wh_Packet_counter_read_res counterReadRes;
 
-#ifdef WOLFHSM_SHE_EXTENSION
+#ifdef WOLFHSM_CFG_SHE_EXTENSION
         wh_Packet_she_set_uid_req sheSetUidReq;
         wh_Packet_she_secure_boot_init_req sheSecureBootInitReq;
         wh_Packet_she_secure_boot_init_res sheSecureBootInitRes;
@@ -654,9 +662,9 @@ typedef struct whPacket
         wh_Packet_she_gen_mac_res sheGenMacRes;
         wh_Packet_she_verify_mac_req sheVerifyMacReq;
         wh_Packet_she_verify_mac_res sheVerifyMacRes;
-#endif  /*WOLFHSM_SHE_EXTENSION */
+#endif  /* WOLFHSM_CFG_SHE_EXTENSION */
 
     };
 } whPacket;
 
-#endif /* !WOLFHSM_PACKET_H */
+#endif /* !WOLFHSM_WH_PACKET_H_ */

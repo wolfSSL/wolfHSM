@@ -23,7 +23,7 @@
 
 /* System libraries */
 #include <stdint.h>
-#include <stdlib.h>  /* For NULL */
+#include <stddef.h>  /* For NULL */
 #include <string.h>  /* For memset, memcpy */
 
 /* Common WolfHSM types and defines shared with the server */
@@ -33,8 +33,9 @@
 /* Components */
 #include "wolfhsm/wh_comm.h"
 
-#ifndef WOLFHSM_NO_CRYPTO
+#ifndef WOLFHSM_CFG_NO_CRYPTO
 #include "wolfssl/wolfcrypt/settings.h"
+#include "wolfssl/wolfcrypt/types.h"
 #include "wolfssl/wolfcrypt/error-crypt.h"
 #include "wolfssl/wolfcrypt/wc_port.h"
 #include "wolfssl/wolfcrypt/cryptocb.h"
@@ -67,7 +68,7 @@ int wh_Client_Init(whClientContext* c, const whClientConfig* config)
 
     rc = wh_CommClient_Init(c->comm, config->comm);
 
-#ifndef WOLFHSM_NO_CRYPTO
+#ifndef WOLFHSM_CFG_NO_CRYPTO
     if( rc == 0) {
         rc = wolfCrypt_Init();
         if (rc != 0) {
@@ -75,14 +76,14 @@ int wh_Client_Init(whClientContext* c, const whClientConfig* config)
         }
 
         if (rc == 0) {
-            rc = wc_CryptoCb_RegisterDevice(WOLFHSM_DEV_ID,
-                    wolfHSM_CryptoCb, c);
+            rc = wc_CryptoCb_RegisterDevice(WH_DEV_ID,
+                    wh_Client_CryptoCb, c);
             if (rc != 0) {
                 rc = WH_ERROR_ABORTED;
             }
         }
     }
-#endif  /* WOLFHSM_NO_CRYPTO */
+#endif  /* !WOLFHSM_CFG_NO_CRYPTO */
 
     if (rc != 0) {
         wh_Client_Cleanup(c);
@@ -96,9 +97,9 @@ int wh_Client_Cleanup(whClientContext* c)
         return WH_ERROR_BADARGS;
     }
 
-#ifndef WOLFHSM_NO_CRYPTO
+#ifndef WOLFHSM_CFG_NO_CRYPTO
     (void)wolfCrypt_Cleanup();
-#endif  /* WOLFHSM_NO_CRYPTO */
+#endif  /* !WOLFHSM_CFG_NO_CRYPTO */
 
     (void)wh_CommClient_Cleanup(c->comm);
 
@@ -238,6 +239,137 @@ int wh_Client_CommInit(whClientContext* c,
     }
     return rc;
 }
+
+int wh_Client_CommInfoRequest(whClientContext* c)
+{
+    if (c == NULL) {
+       return WH_ERROR_BADARGS;
+   }
+
+   return wh_Client_SendRequest(c,
+           WH_MESSAGE_GROUP_COMM, WH_MESSAGE_COMM_ACTION_INFO,
+           0, NULL);
+}
+
+int wh_Client_CommInfoResponse(whClientContext* c,
+        uint8_t* out_version,
+        uint8_t* out_build,
+        uint32_t *out_cfg_comm_data_len,
+        uint32_t *out_cfg_nvm_object_count,
+        uint32_t *out_cfg_keycache_count,
+        uint32_t *out_cfg_keycache_bufsize,
+        uint32_t *out_cfg_customcb_count,
+        uint32_t *out_cfg_dmaaddr_count,
+        uint32_t *out_debug_state,
+        uint32_t *out_boot_state,
+        uint32_t *out_lifecycle_state,
+        uint32_t *out_nvm_state)
+{
+    int rc = 0;
+    whMessageCommInfoResponse msg = {0};
+    uint16_t resp_group = 0;
+    uint16_t resp_action = 0;
+    uint16_t resp_size = 0;
+
+    if (c == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    rc = wh_Client_RecvResponse(c,
+            &resp_group, &resp_action,
+            &resp_size, &msg);
+    if (rc == 0) {
+        /* Validate response */
+        if (    (resp_group != WH_MESSAGE_GROUP_COMM) ||
+                (resp_action != WH_MESSAGE_COMM_ACTION_INFO) ||
+                (resp_size != sizeof(msg)) ){
+            /* Invalid message */
+            rc = WH_ERROR_ABORTED;
+        } else {
+            /* Valid message */
+            if (out_version != NULL) {
+                memcpy(out_version, msg.version, sizeof(msg.version));
+            }
+            if (out_build != NULL) {
+                memcpy(out_build, msg.build, sizeof(msg.build));
+            }
+            if (out_cfg_comm_data_len != NULL) {
+                *out_cfg_comm_data_len = msg.cfg_comm_data_len;
+            }
+            if (out_cfg_nvm_object_count != NULL) {
+                *out_cfg_nvm_object_count = msg.cfg_nvm_object_count;
+            }
+            if (out_cfg_keycache_count != NULL) {
+                *out_cfg_keycache_count = msg.cfg_server_keycache_count;
+            }
+            if (out_cfg_keycache_bufsize != NULL) {
+                *out_cfg_keycache_bufsize = msg.cfg_server_keycache_bufsize;
+            }
+            if (out_cfg_customcb_count != NULL) {
+                *out_cfg_customcb_count = msg.cfg_server_customcb_count;
+            }
+            if (out_cfg_dmaaddr_count != NULL) {
+                *out_cfg_dmaaddr_count = msg.cfg_server_dmaaddr_count;
+            }
+            if (out_debug_state != NULL) {
+                *out_debug_state = msg.debug_state;
+            }
+            if (out_boot_state != NULL) {
+                *out_boot_state = msg.boot_state;
+            }
+            if (out_lifecycle_state != NULL) {
+                *out_lifecycle_state = msg.lifecycle_state;
+            }
+            if (out_nvm_state != NULL) {
+                *out_nvm_state = msg.nvm_state;
+            }
+        }
+    }
+    return rc;
+}
+
+int wh_Client_CommInfo(whClientContext* c,
+        uint8_t* out_version,
+        uint8_t* out_build,
+        uint32_t *out_cfg_comm_data_len,
+        uint32_t *out_cfg_nvm_object_count,
+        uint32_t *out_cfg_keycache_count,
+        uint32_t *out_cfg_keycache_bufsize,
+        uint32_t *out_cfg_customcb_count,
+        uint32_t *out_cfg_dmaaddr_count,
+        uint32_t *out_debug_state,
+        uint32_t *out_boot_state,
+        uint32_t *out_lifecycle_state,
+        uint32_t *out_nvm_state)
+{
+    int rc = 0;
+    if (c == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    do {
+        rc = wh_Client_CommInfoRequest(c);
+    } while (rc == WH_ERROR_NOTREADY);
+
+    if (rc == 0) {
+        do {
+            rc = wh_Client_CommInfoResponse(c,
+                    out_version,
+                    out_build,
+                    out_cfg_comm_data_len,
+                    out_cfg_nvm_object_count,
+                    out_cfg_keycache_count,
+                    out_cfg_keycache_bufsize,
+                    out_cfg_customcb_count,
+                    out_cfg_dmaaddr_count,
+                    out_debug_state,
+                    out_boot_state,
+                    out_lifecycle_state,
+                    out_nvm_state);
+        } while (rc == WH_ERROR_NOTREADY);
+    }
+    return rc;
+}
+
 
 int wh_Client_CommCloseRequest(whClientContext* c)
 {
@@ -556,8 +688,8 @@ int wh_Client_KeyCacheRequest_ex(whClientContext* c, uint32_t flags,
 {
     whPacket* packet;
     uint8_t* packIn;
-    if (c == NULL || in == NULL || inSz == 0 || WOLFHSM_PACKET_STUB_SIZE +
-        sizeof(packet->keyCacheReq) + inSz > WH_COMM_DATA_LEN) {
+    if (c == NULL || in == NULL || inSz == 0 || WH_PACKET_STUB_SIZE +
+        sizeof(packet->keyCacheReq) + inSz > WOLFHSM_CFG_COMM_DATA_LEN) {
         return WH_ERROR_BADARGS;
     }
     packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
@@ -570,8 +702,8 @@ int wh_Client_KeyCacheRequest_ex(whClientContext* c, uint32_t flags,
     else {
         packet->keyCacheReq.labelSz = labelSz;
         /* write label */
-        if (labelSz > WOLFHSM_NVM_LABEL_LEN)
-            memcpy(packet->keyCacheReq.label, label, WOLFHSM_NVM_LABEL_LEN);
+        if (labelSz > WH_NVM_LABEL_LEN)
+            memcpy(packet->keyCacheReq.label, label, WH_NVM_LABEL_LEN);
         else
             memcpy(packet->keyCacheReq.label, label, labelSz);
     }
@@ -579,7 +711,7 @@ int wh_Client_KeyCacheRequest_ex(whClientContext* c, uint32_t flags,
     memcpy(packIn, in, inSz);
     /* write request */
     return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_KEY, WH_KEY_CACHE,
-            WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->keyCacheReq) + inSz,
+            WH_PACKET_STUB_SIZE + sizeof(packet->keyCacheReq) + inSz,
             (uint8_t*)packet);
 }
 
@@ -587,7 +719,7 @@ int wh_Client_KeyCacheRequest(whClientContext* c, uint32_t flags,
     uint8_t* label, uint32_t labelSz, uint8_t* in, uint32_t inSz)
 {
     return wh_Client_KeyCacheRequest_ex(c, flags, label, labelSz, in, inSz,
-        WOLFHSM_KEYID_ERASED);
+        WH_KEYID_ERASED);
 }
 
 int wh_Client_KeyCacheResponse(whClientContext* c, uint16_t* keyId)
@@ -628,14 +760,14 @@ int wh_Client_KeyCache(whClientContext* c, uint32_t flags,
 int wh_Client_KeyEvictRequest(whClientContext* c, uint16_t keyId)
 {
     whPacket* packet;
-    if (c == NULL || keyId == WOLFHSM_KEYID_ERASED)
+    if (c == NULL || keyId == WH_KEYID_ERASED)
         return WH_ERROR_BADARGS;
     packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
     /* set the keyId */
     packet->keyEvictReq.id = keyId;
     /* write request */
     return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_KEY, WH_KEY_EVICT,
-            WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->keyEvictReq),
+            WH_PACKET_STUB_SIZE + sizeof(packet->keyEvictReq),
             (uint8_t*)packet);
 }
 
@@ -672,14 +804,14 @@ int wh_Client_KeyEvict(whClientContext* c, uint16_t keyId)
 int wh_Client_KeyExportRequest(whClientContext* c, uint16_t keyId)
 {
     whPacket* packet;
-    if (c == NULL || keyId == WOLFHSM_KEYID_ERASED)
+    if (c == NULL || keyId == WH_KEYID_ERASED)
         return WH_ERROR_BADARGS;
     packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
     /* set keyId */
     packet->keyExportReq.id = keyId;
     /* write request */
     return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_KEY, WH_KEY_EXPORT,
-            WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->keyExportReq),
+            WH_PACKET_STUB_SIZE + sizeof(packet->keyExportReq),
             (uint8_t*)packet);
 }
 
@@ -714,7 +846,7 @@ int wh_Client_KeyExportResponse(whClientContext* c, uint8_t* label,
             if (label != NULL) {
                 if (labelSz > sizeof(packet->keyExportRes.label)) {
                     memcpy(label, packet->keyExportRes.label,
-                        WOLFHSM_NVM_LABEL_LEN);
+                        WH_NVM_LABEL_LEN);
                 }
                 else
                     memcpy(label, packet->keyExportRes.label, labelSz);
@@ -740,14 +872,14 @@ int wh_Client_KeyExport(whClientContext* c, uint16_t keyId,
 int wh_Client_KeyCommitRequest(whClientContext* c, whNvmId keyId)
 {
     whPacket* packet;
-    if (c == NULL || keyId == WOLFHSM_KEYID_ERASED)
+    if (c == NULL || keyId == WH_KEYID_ERASED)
         return WH_ERROR_BADARGS;
     packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
     /* set keyId */
     packet->keyCommitReq.id = keyId;
     /* write request */
     return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_KEY, WH_KEY_COMMIT,
-            WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->keyCommitReq),
+            WH_PACKET_STUB_SIZE + sizeof(packet->keyCommitReq),
             (uint8_t*)packet);
 }
 
@@ -784,14 +916,14 @@ int wh_Client_KeyCommit(whClientContext* c, whNvmId keyId)
 int wh_Client_KeyEraseRequest(whClientContext* c, whNvmId keyId)
 {
     whPacket* packet;
-    if (c == NULL || keyId == WOLFHSM_KEYID_ERASED)
+    if (c == NULL || keyId == WH_KEYID_ERASED)
         return WH_ERROR_BADARGS;
     packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
     /* set keyId */
     packet->keyEraseReq.id = keyId;
     /* write request */
     return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_KEY, WH_KEY_ERASE,
-            WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->keyEraseReq),
+            WH_PACKET_STUB_SIZE + sizeof(packet->keyEraseReq),
             (uint8_t*)packet);
 }
 
@@ -829,14 +961,14 @@ int wh_Client_CounterInitRequest(whClientContext* c, whNvmId counterId,
     uint32_t counter)
 {
     whPacket* packet;
-    if (c == NULL || counterId == WOLFHSM_KEYID_ERASED)
+    if (c == NULL || counterId == WH_KEYID_ERASED)
         return WH_ERROR_BADARGS;
     packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
     /* set counterId and initial value */
     packet->counterInitReq.counterId = counterId;
     packet->counterInitReq.counter = counter;
     return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_COUNTER, WH_COUNTER_INIT,
-        WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->counterInitReq),
+        WH_PACKET_STUB_SIZE + sizeof(packet->counterInitReq),
         (uint8_t*)packet);
 }
 
@@ -893,13 +1025,13 @@ int wh_Client_CounterReset(whClientContext* c, whNvmId counterId,
 int wh_Client_CounterIncrementRequest(whClientContext* c, whNvmId counterId)
 {
     whPacket* packet;
-    if (c == NULL || counterId == WOLFHSM_KEYID_ERASED)
+    if (c == NULL || counterId == WH_KEYID_ERASED)
         return WH_ERROR_BADARGS;
     packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
     /* set counterId */
     packet->counterIncrementReq.counterId = counterId;
     return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_COUNTER,
-        WH_COUNTER_INCREMENT, WOLFHSM_PACKET_STUB_SIZE +
+        WH_COUNTER_INCREMENT, WH_PACKET_STUB_SIZE +
         sizeof(packet->counterIncrementReq), (uint8_t*)packet);
 }
 
@@ -939,13 +1071,13 @@ int wh_Client_CounterIncrement(whClientContext* c, whNvmId counterId,
 int wh_Client_CounterReadRequest(whClientContext* c, whNvmId counterId)
 {
     whPacket* packet;
-    if (c == NULL || counterId == WOLFHSM_KEYID_ERASED)
+    if (c == NULL || counterId == WH_KEYID_ERASED)
         return WH_ERROR_BADARGS;
     packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
     /* set counterId */
     packet->counterReadReq.counterId = counterId;
     return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_COUNTER,
-        WH_COUNTER_READ, WOLFHSM_PACKET_STUB_SIZE +
+        WH_COUNTER_READ, WH_PACKET_STUB_SIZE +
         sizeof(packet->counterReadReq), (uint8_t*)packet);
 }
 
@@ -985,13 +1117,13 @@ int wh_Client_CounterRead(whClientContext* c, whNvmId counterId,
 int wh_Client_CounterDestroyRequest(whClientContext* c, whNvmId counterId)
 {
     whPacket* packet;
-    if (c == NULL || counterId == WOLFHSM_KEYID_ERASED)
+    if (c == NULL || counterId == WH_KEYID_ERASED)
         return WH_ERROR_BADARGS;
     packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
     /* set counterId */
     packet->counterDestroyReq.counterId = counterId;
     return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_COUNTER,
-        WH_COUNTER_DESTROY, WOLFHSM_PACKET_STUB_SIZE +
+        WH_COUNTER_DESTROY, WH_PACKET_STUB_SIZE +
         sizeof(packet->counterReadReq), (uint8_t*)packet);
 }
 
@@ -1025,7 +1157,7 @@ int wh_Client_CounterDestroy(whClientContext* c, whNvmId counterId)
     return ret;
 }
 
-#ifndef WOLFHSM_NO_CRYPTO
+#ifndef WOLFHSM_CFG_NO_CRYPTO
 
 #ifdef HAVE_CURVE25519
 int wh_Client_SetKeyIdCurve25519(curve25519_key* key, whNvmId keyId)
@@ -1123,7 +1255,7 @@ int wh_Client_AesCmacGenerate(Cmac* cmac, byte* out, word32* outSz,
 {
     int ret;
     ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, heap,
-        WOLFHSM_DEV_ID);
+        WH_DEV_ID);
     /* set keyId */
     if (ret == 0)
         ret = wh_Client_SetKeyIdCmac(cmac, keyId);
@@ -1141,7 +1273,7 @@ int wh_Client_AesCmacVerify(Cmac* cmac, const byte* check, word32 checkSz,
     word32 outSz = AES_BLOCK_SIZE;
     byte out[AES_BLOCK_SIZE];
     ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, heap,
-        WOLFHSM_DEV_ID);
+        WH_DEV_ID);
     /* set keyId */
     if (ret == 0)
         ret = wh_Client_SetKeyIdCmac(cmac, keyId);
@@ -1196,4 +1328,4 @@ int wh_Client_CmacCancelableResponse(whClientContext* c, Cmac* cmac,
     return ret;
 }
 #endif /* WOLFSSL_CMAC */
-#endif  /* !WOLFHSM_NO_CRYPTO */
+#endif  /* !WOLFHSM_CFG_NO_CRYPTO */

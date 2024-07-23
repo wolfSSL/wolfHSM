@@ -23,7 +23,7 @@
 
 /* System libraries */
 #include <stdint.h>
-#include <stdlib.h>  /* For NULL */
+#include <stddef.h>  /* For NULL */
 #include <string.h>  /* For memset, memcpy */
 
 /* Common WolfHSM types and defines*/
@@ -45,7 +45,7 @@
 #include "wolfhsm/wh_server_crypto.h"
 #include "wolfhsm/wh_server_keystore.h"
 #include "wolfhsm/wh_server_counter.h"
-#if defined(WOLFHSM_SHE_EXTENSION)
+#if defined(WOLFHSM_CFG_SHE_EXTENSION)
 #include "wolfhsm/wh_server_she.h"
 #endif
 
@@ -67,7 +67,7 @@ int wh_Server_Init(whServerContext* server, whServerConfig* config)
     memset(server, 0, sizeof(*server));
     server->nvm = config->nvm;
 
-#ifndef WOLFHSM_NO_CRYPTO
+#ifndef WOLFHSM_CFG_NO_CRYPTO
     server->crypto = config->crypto;
     if (server->crypto != NULL) {
 #if defined(WOLF_CRYPTO_CB)
@@ -76,7 +76,7 @@ int wh_Server_Init(whServerContext* server, whServerConfig* config)
         server->crypto->devId = INVALID_DEVID;
 #endif
     }
-#ifdef WOLFHSM_SHE_EXTENSION
+#ifdef WOLFHSM_CFG_SHE_EXTENSION
     server->she = config->she;
 #endif
 #endif
@@ -184,6 +184,39 @@ static int _wh_Server_HandleCommRequest(whServerContext* server,
         *out_resp_size = sizeof(resp);
     }; break;
 
+    case WH_MESSAGE_COMM_ACTION_INFO:
+    {
+        const uint8_t version[WH_INFO_VERSION_LEN] =
+                WOLFHSM_CFG_INFOVERSION;
+        const uint8_t build[WH_INFO_VERSION_LEN] =
+                WOLFHSM_CFG_INFOBUILD;
+
+        /* No request message */
+        whMessageCommInfoResponse resp = {0};
+
+        /* Process the info action */
+        memcpy(resp.version, version, sizeof(resp.version));
+        memcpy(resp.build, build, sizeof(resp.build));
+        resp.cfg_comm_data_len = WOLFHSM_CFG_COMM_DATA_LEN;
+        resp.cfg_nvm_object_count = WOLFHSM_CFG_NVM_OBJECT_COUNT;
+        resp.cfg_server_customcb_count = WOLFHSM_CFG_SERVER_CUSTOMCB_COUNT;
+        resp.cfg_server_dmaaddr_count = WOLFHSM_CFG_SERVER_DMAADDR_COUNT;
+        resp.cfg_server_keycache_bufsize = WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE;
+        resp.cfg_server_keycache_count = WOLFHSM_CFG_SERVER_KEYCACHE_COUNT;
+
+        /* III Growth */
+        resp.debug_state = 1;
+        resp.boot_state = 2;
+        resp.lifecycle_state = 3;
+        resp.nvm_state = 4;
+
+        /* Convert the response struct */
+        wh_MessageComm_TranslateInfoResponse(magic,
+                &resp, (whMessageCommInfoResponse*)resp_packet);
+        *out_resp_size = sizeof(resp);
+    }; break;
+
+
     case WH_MESSAGE_COMM_ACTION_CLOSE:
     {
         /* No message */
@@ -191,7 +224,6 @@ static int _wh_Server_HandleCommRequest(whServerContext* server,
         wh_Server_SetConnected(server, WH_COMM_DISCONNECTED);
         *out_resp_size = 0;
     }; break;
-
 
     case WH_MESSAGE_COMM_ACTION_ECHO:
     {
@@ -279,7 +311,7 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
             rc = wh_Server_HandleCounter(server, action, data, &size);
         break;
 
-#ifndef WOLFHSM_NO_CRYPTO
+#ifndef WOLFHSM_CFG_NO_CRYPTO
         case WH_MESSAGE_GROUP_KEY:
             rc = wh_Server_HandleKeyRequest(server, magic, action, seq,
                     data, &size);
@@ -289,14 +321,14 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
             rc = wh_Server_HandleCryptoRequest(server, action, data,
                 &size, seq);
         break;
-#endif  /* WOLFHSM_NO_CRYPTO */
+#endif  /* !WOLFHSM_CFG_NO_CRYPTO */
 
         case WH_MESSAGE_GROUP_PKCS11:
             rc = _wh_Server_HandlePkcs11Request(server, magic, action, seq,
                     size, data, &size, data);
         break;
 
-#ifdef WOLFHSM_SHE_EXTENSION
+#ifdef WOLFHSM_CFG_SHE_EXTENSION
         case WH_MESSAGE_GROUP_SHE:
             rc = wh_Server_HandleSheRequest(server, action, data,
                 &size);

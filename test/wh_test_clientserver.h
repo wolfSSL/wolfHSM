@@ -16,8 +16,12 @@
  * You should have received a copy of the GNU General Public License
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef WH_TEST_CLIENTSERVER_H_
-#define WH_TEST_CLIENTSERVER_H_
+/*
+ * wolfhsm/test/wh_test_clientserver.h
+ *
+ */
+#ifndef TEST_WH_TEST_CLIENTSERVER_H_
+#define TEST_WH_TEST_CLIENTSERVER_H_
 
 #include "wolfhsm/wh_server.h"
 #include "wolfhsm/wh_client.h"
@@ -26,11 +30,11 @@
  * Runs the client/server async tests in a single thread using a memory
  * transport backend.
  *
- * Multithreaded tests are also run if WH_CFG_TEST_POSIX is defined.
+ * Multithreaded tests are also run if WOLFHSM_CFG_TEST_POSIX is defined.
  * Returns 0 on success and a non-zero error code on failure
  */
 int whTest_ClientServer(void);
 int whTest_ClientCfg(whClientConfig* clientCfg);
 int whTest_ServerCfgLoop(whServerConfig* serverCfg);
 
-#endif /* WH_TEST_CLIENTSERVER_H_ */
+#endif /* TEST_WH_TEST_CLIENTSERVER_H_ */

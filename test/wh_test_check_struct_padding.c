@@ -1,5 +1,5 @@
-#ifndef WH_TEST_CHECK_STRUCT_PADDING_H_
-#define WH_TEST_CHECK_STRUCT_PADDING_H_
+#ifndef WH_TEST_CHECK_STRUCT_PADDING_C_
+#define WH_TEST_CHECK_STRUCT_PADDING_C_
 
 /* For each included file, define an instance of every struct for which we want
  * to check padding. Then, when this file is compiled with -Wpadded it will
@@ -11,7 +11,7 @@ whMessageComm_ErrorResponse whMessageComm_ErrorResponse_test;
 whMessageCommLenData        whMessageCommLenData_test;
 whMessageCommInitRequest    whMessageCommInitRequest_test;
 whMessageCommInitResponse   whMessageCommInitResponse_test;
-whMessageCommInfo           whMessageCommInfo_test;
+whMessageCommInfoResponse   whMessageCommInfoResponse_test;
 
 #include "wolfhsm/wh_message_customcb.h"
 whMessageCustomCb_Request  whMessageCustomCb_Request_test;
@@ -86,7 +86,7 @@ wh_Packet_key_erase_res              keyEraseRes;
 wh_Packet_counter_init_res           counterInitRes;
 wh_Packet_counter_increment_res      counterIncrementRes;
 wh_Packet_counter_read_res           counterReadRes;
-#ifdef WOLFHSM_SHE_EXTENSION
+#ifdef WOLFHSM_CFG_SHE_EXTENSION
 wh_Packet_she_set_uid_req            sheSetUidReq;
 wh_Packet_she_secure_boot_init_req   sheSecureBootInitReq;
 wh_Packet_she_secure_boot_init_res   sheSecureBootInitRes;
@@ -114,7 +114,7 @@ wh_Packet_she_gen_mac_req            sheGenMacReq;
 wh_Packet_she_gen_mac_res            sheGenMacRes;
 wh_Packet_she_verify_mac_req         sheVerifyMacReq;
 wh_Packet_she_verify_mac_res         sheVerifyMacRes;
-#endif /* WOLFHSM_SHE_EXTENSION */
+#endif /* WOLFHSM_CFG_SHE_EXTENSION */
 
 
-#endif /* WH_TEST_CHECK_STRUCT_PADDING_H_ */
+#endif /* WH_TEST_CHECK_STRUCT_PADDING_C_ */

@@ -23,13 +23,17 @@
 
 #ifndef WOLFHSM_WH_CLIENT_SHE_H_
 #define WOLFHSM_WH_CLIENT_SHE_H_
+
+/* Pick up compile-time configuration */
+#include "wolfhsm/wh_settings.h"
+
+#ifdef WOLFHSM_CFG_SHE_EXTENSION
+
 /* System libraries */
 #include <stdint.h>
 
-/* Common WolfHSM types and defines shared with the server */
-#include "wolfhsm/wh_common.h"
 
-/* Component includes */
+#include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_client.h"
 
 int wh_Client_ShePreProgramKey(whClientContext* c, whNvmId keyId,
@@ -103,4 +107,7 @@ int wh_Client_SheVerifyMacRequest(whClientContext* c, uint8_t keyId,
 int wh_Client_SheVerifyMacResponse(whClientContext* c, uint8_t* outStatus);
 int wh_Client_SheVerifyMac(whClientContext* c, uint8_t keyId, uint8_t* message,
     uint32_t messageLen, uint8_t* mac, uint32_t macLen, uint8_t* outStatus);
-#endif
+
+#endif /* WOLFHSM_CFG_SHE_EXTENSION */
+
+#endif /* !WOLFHSM_WH_CLIENT_SHE_H_ */

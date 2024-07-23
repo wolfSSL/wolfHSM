@@ -21,12 +21,15 @@
  *
  */
 
+/* Pick up server config */
+#include "wolfhsm/wh_server.h"
+
 /* System libraries */
 #include <stdint.h>
-#include <stdlib.h>  /* For NULL */
+#include <stddef.h>  /* For NULL */
 #include <string.h>  /* For memset, memcpy */
 
-#ifndef WOLFHSM_NO_CRYPTO
+#ifndef WOLFHSM_CFG_NO_CRYPTO
 
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/types.h"
@@ -44,7 +47,7 @@ static int hsmCacheKeyRsa(whServerContext* server, RsaKey* key, whKeyId* outId)
 {
     int ret = 0;
     int slotIdx = 0;
-    whKeyId keyId = WOLFHSM_KEYTYPE_CRYPTO;
+    whKeyId keyId = WH_KEYTYPE_CRYPTO;
     /* get a free slot */
     ret = slotIdx = hsmCacheFindSlot(server);
     if (ret >= 0) {
@@ -55,7 +58,7 @@ static int hsmCacheKeyRsa(whServerContext* server, RsaKey* key, whKeyId* outId)
         /* TODO: Fix wolfCrypto to allow KeyToDer when KEY_GEN is NOT set */
         XMEMSET((uint8_t*)&server->cache[slotIdx], 0, sizeof(whServerCacheSlot));
         ret = wc_RsaKeyToDer(key, server->cache[slotIdx].buffer,
-            WOLFHSM_KEYCACHE_BUFSIZE);
+            WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE);
     }
     if (ret > 0) {
         /* set meta */
@@ -74,12 +77,12 @@ static int hsmLoadKeyRsa(whServerContext* server, RsaKey* key, whKeyId keyId)
     int slotIdx = 0;
     uint32_t idx = 0;
     uint32_t size;
-    keyId |= (WOLFHSM_KEYTYPE_CRYPTO | (server->comm->client_id << 8));
+    keyId |= (WH_KEYTYPE_CRYPTO | (server->comm->client_id << 8));
     /* freshen the key */
     ret = slotIdx = hsmFreshenKey(server, keyId);
     /* decode the key */
     if (ret >= 0) {
-        size = WOLFHSM_KEYCACHE_BUFSIZE;
+        size = WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE;
         ret = wc_RsaPrivateKeyDecode(server->cache[slotIdx].buffer, (word32*)&idx, key,
             size);
     }
@@ -90,7 +93,7 @@ static int hsmCryptoRsaKeyGen(whServerContext* server, whPacket* packet,
     uint16_t* size)
 {
     int ret;
-    whKeyId keyId = WOLFHSM_KEYID_ERASED;
+    whKeyId keyId = WH_KEYID_ERASED;
     /* init the rsa key */
     ret = wc_InitRsaKey_ex(server->crypto->algoCtx.rsa, NULL, server->crypto->devId);
     /* make the rsa key with the given params */
@@ -105,8 +108,8 @@ static int hsmCryptoRsaKeyGen(whServerContext* server, whPacket* packet,
     wc_FreeRsaKey(server->crypto->algoCtx.rsa);
     if (ret == 0) {
         /* set the assigned id */
-        packet->pkRsakgRes.keyId = (keyId & WOLFHSM_KEYID_MASK);
-        *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->pkRsakgRes);
+        packet->pkRsakgRes.keyId = (keyId & WH_KEYID_MASK);
+        *size = WH_PACKET_STUB_SIZE + sizeof(packet->pkRsakgRes);
     }
     return ret;
 }
@@ -138,7 +141,7 @@ static int hsmCryptoRsaFunction(whServerContext* server, whPacket* packet,
     if (ret == 0) {
         /*set outLen */
         packet->pkRsaRes.outLen = len;
-        *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->pkRsaRes) + len;
+        *size = WH_PACKET_STUB_SIZE + sizeof(packet->pkRsaRes) + len;
     }
     return ret;
 }
@@ -161,7 +164,7 @@ static int hsmCryptoRsaGetSize(whServerContext* server, whPacket* packet,
     if (ret > 0) {
         /*set keySize */
         packet->pkRsaGetSizeRes.keySize = ret;
-        *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->pkRsaGetSizeRes);
+        *size = WH_PACKET_STUB_SIZE + sizeof(packet->pkRsaGetSizeRes);
         ret = 0;
     }
     return ret;
@@ -176,7 +179,7 @@ static int hsmCacheKeyCurve25519(whServerContext* server, curve25519_key* key,
     int slotIdx = 0;
     word32 privSz = CURVE25519_KEYSIZE;
     word32 pubSz = CURVE25519_KEYSIZE;
-    whKeyId keyId = WOLFHSM_KEYTYPE_CRYPTO;
+    whKeyId keyId = WH_KEYTYPE_CRYPTO;
     /* get a free slot */
     ret = slotIdx = hsmCacheFindSlot(server);
     if (ret >= 0) {
@@ -206,7 +209,7 @@ static int hsmLoadKeyCurve25519(whServerContext* server, curve25519_key* key,
     int slotIdx = 0;
     uint32_t privSz = CURVE25519_KEYSIZE;
     uint32_t pubSz = CURVE25519_KEYSIZE;
-    keyId |= WOLFHSM_KEYTYPE_CRYPTO;
+    keyId |= WH_KEYTYPE_CRYPTO;
     /* freshen the key */
     ret = slotIdx = hsmFreshenKey(server, keyId);
     /* decode the key */
@@ -226,7 +229,7 @@ static int hsmCryptoCurve25519KeyGen(whServerContext* server, whPacket* packet,
     uint16_t* size)
 {
     int ret;
-    whKeyId keyId = WOLFHSM_KEYID_ERASED;
+    whKeyId keyId = WH_KEYID_ERASED;
     /* init private key */
     ret = wc_curve25519_init_ex(server->crypto->algoCtx.curve25519Private, NULL,
         server->crypto->devId);
@@ -245,8 +248,8 @@ static int hsmCryptoCurve25519KeyGen(whServerContext* server, whPacket* packet,
     wc_curve25519_free(server->crypto->algoCtx.curve25519Private);
     if (ret == 0) {
         /* send only keyId */
-        packet->pkCurve25519kgRes.keyId = (keyId & WOLFHSM_KEYID_MASK);
-        *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->pkCurve25519kgRes);
+        packet->pkCurve25519kgRes.keyId = (keyId & WH_KEYID_MASK);
+        *size = WH_PACKET_STUB_SIZE + sizeof(packet->pkCurve25519kgRes);
     }
     return ret;
 }
@@ -269,7 +272,7 @@ static int hsmCryptoCurve25519(whServerContext* server, whPacket* packet,
     if (ret == 0) {
         ret = hsmLoadKeyCurve25519(server,
             server->crypto->algoCtx.curve25519Private,
-            MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_CRYPTO,
+            WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
             server->comm->client_id,
             packet->pkCurve25519Req.privateKeyId));
     }
@@ -277,7 +280,7 @@ static int hsmCryptoCurve25519(whServerContext* server, whPacket* packet,
     if (ret == 0) {
         ret = hsmLoadKeyCurve25519(server,
             server->crypto->pubKey.curve25519Public,
-            MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_CRYPTO,
+            WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
             server->comm->client_id,
             packet->pkCurve25519Req.publicKeyId));
     }
@@ -292,7 +295,7 @@ static int hsmCryptoCurve25519(whServerContext* server, whPacket* packet,
     wc_curve25519_free(server->crypto->algoCtx.curve25519Private);
     wc_curve25519_free(server->crypto->pubKey.curve25519Public);
     if (ret == 0) {
-        *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->pkCurve25519Res) +
+        *size = WH_PACKET_STUB_SIZE + sizeof(packet->pkCurve25519Res) +
             len;
         packet->pkCurve25519Res.sz = len;
     }
@@ -308,7 +311,7 @@ static int hsmCacheKeyEcc(whServerContext* server, ecc_key* key, whKeyId* outId)
     word32 qxLen = 0;
     word32 qyLen = 0;
     word32 qdLen = 0;
-    whKeyId keyId = WOLFHSM_KEYTYPE_CRYPTO;
+    whKeyId keyId = WH_KEYTYPE_CRYPTO;
     byte* qxBuf = NULL;
     byte* qyBuf = NULL;
     byte* qdBuf = NULL;
@@ -360,7 +363,7 @@ static int hsmLoadKeyEcc(whServerContext* server, ecc_key* key, uint16_t keyId,
     byte* qxBuf = NULL;
     byte* qyBuf = NULL;
     byte* qdBuf = NULL;
-    keyId |= WOLFHSM_KEYTYPE_CRYPTO;
+    keyId |= WH_KEYTYPE_CRYPTO;
     /* freshen the key */
     ret = slotIdx = hsmFreshenKey(server, keyId);
     /* get the size by curveId */
@@ -398,7 +401,7 @@ static int hsmCryptoEcKeyGen(whServerContext* server, whPacket* packet,
     uint16_t* size)
 {
     int ret;
-    whKeyId keyId = WOLFHSM_KEYID_ERASED;
+    whKeyId keyId = WH_KEYID_ERASED;
     /* init ecc key */
     ret = wc_ecc_init_ex(server->crypto->algoCtx.eccPrivate, NULL,
         server->crypto->devId);
@@ -415,7 +418,7 @@ static int hsmCryptoEcKeyGen(whServerContext* server, whPacket* packet,
     wc_ecc_free(server->crypto->algoCtx.eccPrivate);
     if (ret == 0) {
         packet->pkEckgRes.keyId = keyId;
-        *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->pkEckgRes);
+        *size = WH_PACKET_STUB_SIZE + sizeof(packet->pkEckgRes);
     }
     return ret;
 }
@@ -457,7 +460,7 @@ static int hsmCryptoEcdh(whServerContext* server, whPacket* packet,
     wc_ecc_free(server->crypto->pubKey.eccPublic);
     if (ret == 0) {
         packet->pkEcdhRes.sz = len;
-        *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->pkEcdhRes) + len;
+        *size = WH_PACKET_STUB_SIZE + sizeof(packet->pkEcdhRes) + len;
     }
     return ret;
 }
@@ -487,7 +490,7 @@ static int hsmCryptoEcdsaSign(whServerContext* server, whPacket* packet,
     wc_ecc_free(server->crypto->algoCtx.eccPrivate);
     if (ret == 0) {
         packet->pkEccSignRes.sz = len;
-        *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->pkEccSignRes) + len;
+        *size = WH_PACKET_STUB_SIZE + sizeof(packet->pkEccSignRes) + len;
     }
     return ret;
 }
@@ -517,7 +520,7 @@ static int hsmCryptoEcdsaVerify(whServerContext* server, whPacket* packet,
     wc_ecc_free(server->crypto->pubKey.eccPublic);
     if (ret == 0) {
         packet->pkEccVerifyRes.res = res;
-        *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->pkEccVerifyRes);
+        *size = WH_PACKET_STUB_SIZE + sizeof(packet->pkEccVerifyRes);
     }
     return ret;
 }
@@ -540,7 +543,7 @@ static int hsmCryptoEcCheckPrivKey(whServerContext* server, whPacket* packet,
     wc_ecc_free(server->crypto->algoCtx.eccPrivate);
     if (ret == 0) {
         packet->pkEccCheckRes.ok = 1;
-        *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->pkEccCheckRes);
+        *size = WH_PACKET_STUB_SIZE + sizeof(packet->pkEccCheckRes);
     }
     return ret;
 }
@@ -560,11 +563,11 @@ static int hsmCryptoAesCbc(whServerContext* server, whPacket* packet,
     byte* out = (uint8_t*)(&packet->cipherAesCbcRes + 1);
     uint8_t tmpKey[AES_MAX_KEY_SIZE + AES_IV_SIZE];
     /* use keyId and load from keystore if keyId is nonzero, must check for zero
-     * since WOLFHSM_KEYID_ERASED may not be zero while the client always
-     * defaults to devCtx 0 */
+     * since WH_KEYID_ERASED may not be zero while the client always defaults to
+     * devCtx 0 */
     if (packet->cipherAesCbcReq.keyId != 0) {
         len = sizeof(tmpKey);
-        ret = hsmReadKey(server, MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_CRYPTO,
+        ret = hsmReadKey(server, WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
             server->comm->client_id, packet->cipherAesCbcReq.keyId), NULL,
             tmpKey, (uint32_t*)&len);
         if (ret == 0) {
@@ -598,7 +601,7 @@ static int hsmCryptoAesCbc(whServerContext* server, whPacket* packet,
     if (ret == 0) {
         /* set sz */
         packet->cipherAesCbcRes.sz = len;
-        *size = WOLFHSM_PACKET_STUB_SIZE +
+        *size = WH_PACKET_STUB_SIZE +
             sizeof(packet->cipherAesCbcRes) + len;
     }
     return ret;
@@ -619,11 +622,11 @@ static int hsmCryptoAesGcm(whServerContext* server, whPacket* packet,
     byte* authTag;
     uint8_t tmpKey[AES_MAX_KEY_SIZE + AES_IV_SIZE];
     /* use keyId and load from keystore if keyId is nonzero, must check for zero
-     * since WOLFHSM_KEYID_ERASED may not be zero while the client always
-     * defaults to devCtx 0 */
+     * since WH_KEYID_ERASED may not be zero while the client always defaults to
+     * devCtx 0 */
     if (packet->cipherAesGcmReq.keyId != 0) {
         len = sizeof(tmpKey);
-        ret = hsmReadKey(server, MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_CRYPTO,
+        ret = hsmReadKey(server, WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
             server->comm->client_id, packet->cipherAesGcmReq.keyId),
             NULL, tmpKey, (uint32_t*)&len);
         if (ret == 0) {
@@ -672,7 +675,7 @@ static int hsmCryptoAesGcm(whServerContext* server, whPacket* packet,
     if (ret == 0) {
         /* set sz */
         packet->cipherAesGcmRes.sz = len;
-        *size += WOLFHSM_PACKET_STUB_SIZE +
+        *size += WH_PACKET_STUB_SIZE +
             sizeof(packet->cipherAesGcmRes) + len;
     }
     return ret;
@@ -684,7 +687,7 @@ static int hsmCryptoAesGcm(whServerContext* server, whPacket* packet,
 static int hsmCryptoCmac(whServerContext* server, whPacket* packet,
     uint16_t* size, uint16_t seq)
 {
-    whKeyId keyId = WOLFHSM_KEYID_ERASED;
+    whKeyId keyId = WH_KEYID_ERASED;
     int ret;
     int i;
     word32 len;
@@ -718,7 +721,7 @@ static int hsmCryptoCmac(whServerContext* server, whPacket* packet,
             len = sizeof(server->crypto->algoCtx.cmac);
             keyId = packet->cmacReq.keyId;
             ret = hsmReadKey(server,
-                MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_CRYPTO,
+                WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
                 server->comm->client_id, keyId), NULL,
                 (uint8_t*)server->crypto->algoCtx.cmac, (uint32_t*)&len);
             /* if the key size is a multiple of aes, init the key and
@@ -756,13 +759,13 @@ static int hsmCryptoCmac(whServerContext* server, whPacket* packet,
                 len = packet->cmacReq.outSz;
                 ret = wc_CmacFinal(server->crypto->algoCtx.cmac, out, &len);
                 packet->cmacRes.outSz = len;
-                packet->cmacRes.keyId = WOLFHSM_KEYID_ERASED;
+                packet->cmacRes.keyId = WH_KEYID_ERASED;
             }
             /* evict the key, canceling means abandoning the current state */
             if (ret == 0 || ret == WH_ERROR_CANCEL) {
                 /* Don't override return value except on failure */
                 int tmpRet = hsmEvictKey(
-                    server, MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_CRYPTO,
+                    server, WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
                                                server->comm->client_id, keyId));
                 if (tmpRet != 0) {
                     ret = tmpRet;
@@ -772,22 +775,22 @@ static int hsmCryptoCmac(whServerContext* server, whPacket* packet,
         else if (ret == 0) {
             /* cache/re-cache updated struct */
             if (packet->cmacReq.keySz != 0) {
-                keyId = WOLFHSM_KEYTYPE_CRYPTO;
+                keyId = WH_KEYTYPE_CRYPTO;
                 ret = hsmGetUniqueId(server, &keyId);
             }
             else {
-                keyId = MAKE_WOLFHSM_KEYID(WOLFHSM_KEYTYPE_CRYPTO,
+                keyId = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
                     server->comm->client_id, packet->cmacReq.keyId);
             }
             meta->id = keyId;
             meta->len = sizeof(server->crypto->algoCtx.cmac);
             ret = hsmCacheKey(server, meta, (uint8_t*)server->crypto->algoCtx.cmac);
-            packet->cmacRes.keyId = (keyId & WOLFHSM_KEYID_MASK);
+            packet->cmacRes.keyId = (keyId & WH_KEYID_MASK);
             packet->cmacRes.outSz = 0;
         }
     }
     if (ret == 0) {
-        *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->cmacRes) +
+        *size = WH_PACKET_STUB_SIZE + sizeof(packet->cmacRes) +
             packet->cmacRes.outSz;
     }
     return ret;
@@ -885,7 +888,7 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
         /* generate the bytes */
         ret = wc_RNG_GenerateBlock(server->crypto->rng, out, packet->rngReq.sz);
         if (ret == 0) {
-            *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->rngRes) +
+            *size = WH_PACKET_STUB_SIZE + sizeof(packet->rngRes) +
                 packet->rngRes.sz;
         }
         break;
@@ -905,7 +908,7 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
     packet->rc = ret;
 
     if (ret != 0)
-        *size = WOLFHSM_PACKET_STUB_SIZE + sizeof(packet->rc);
+        *size = WH_PACKET_STUB_SIZE + sizeof(packet->rc);
 
     /* Since crypto error codes are propagated to the client in the response
      * packet, return success to the caller unless a cancellation has occurred
@@ -915,4 +918,4 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
     }
     return ret;
 }
-#endif  /* WOLFHSM_NO_CRYPTO */
+#endif  /* !WOLFHSM_CFG_NO_CRYPTO */

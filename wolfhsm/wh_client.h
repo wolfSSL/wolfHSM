@@ -25,16 +25,20 @@
  * WolfHSM Server.  All communications and state are internally managed by
  * registering a crypto callback function to be invoked synchronously when
  * wolfCrypt functions are called.  In order to specify to use the WolfHSM
- * Server for cryptographic operations, the device id WOLFHSM_DEV_ID should be
+ * Server for cryptographic operations, the device id WH_DEV_ID should be
  * passed into any of the wolfCrypt init functions.
  *
  * In addition to the offload of cryptographic functions, the WolfHSM Client
  * also exposes WolfHSM Server key management, non-volatile memory, and protocol
  * functions.
+ *
  */
 
 #ifndef WOLFHSM_WH_CLIENT_H_
 #define WOLFHSM_WH_CLIENT_H_
+
+/* Pick up compile-time configuration */
+#include "wolfhsm/wh_settings.h"
 
 /* System libraries */
 #include <stdint.h>
@@ -46,8 +50,9 @@
 #include "wolfhsm/wh_comm.h"
 #include "wolfhsm/wh_message_customcb.h"
 
-#ifndef WOLFHSM_NO_CRYPTO
+#ifndef WOLFHSM_CFG_NO_CRYPTO
 #include "wolfssl/wolfcrypt/settings.h"
+#include "wolfssl/wolfcrypt/types.h"
 #include "wolfssl/wolfcrypt/error-crypt.h"
 #include "wolfssl/wolfcrypt/wc_port.h"
 #include "wolfssl/wolfcrypt/cryptocb.h"
@@ -57,6 +62,9 @@
 #include "wolfssl/wolfcrypt/rsa.h"
 #include "wolfssl/wolfcrypt/ecc.h"
 #endif
+
+/* Device Id to be registered and passed to wolfCrypt functions */
+#define WH_DEV_ID 0x5748534D  /* "WHSM" */
 
 /**
  * Out of band callback function to inform the server to cancel a request,
@@ -188,6 +196,106 @@ int wh_Client_CommInitResponse(whClientContext* c, uint32_t* out_clientid,
  */
 int wh_Client_CommInit(whClientContext* c, uint32_t* out_clientid,
                        uint32_t* out_serverid);
+
+
+/**
+ * @brief Sends a communications information request to the server.
+ *
+ * This function prepares and sends a communication information request
+ * message to the server.
+ *
+ * @param[in] c Pointer to the client context.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CommInfoRequest(whClientContext* c);
+
+/**
+ * @brief Receives a communication information response from the server.
+ *
+ * This function waits for and processes a communication information
+ * response message from the server. It validates the response and extracts
+ * the server configuration data from the message.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[out] out_version Pointer to store the server version string (8 bytes)
+ * @param[out] out_build Pointer to store the server build string (8 bytes)
+ * @param[out] out_cfg_comm_data_len Pointer to store the server's maximum data
+ *                                   len for any request or response
+ * @param[out] out_cfg_nvm_object_count Pointer to store the server's
+ *                                      maximum number of NVM objects
+ * @param[out] out_cfg_keycache_count Pointer to store the server's number of
+ *                                    keys in the server RAM
+ * @param[out] out_cfg_keycache_bufsize Pointer to store the server's maximum
+ *                                      size of each key in server RAM
+ * @param[out] out_cfg_customcb_count Pointer to store the server's number of
+ *                                    custom callbacks
+ * @param[out] out_cfg_dmaaddr_count Pointer to store the server's number of
+ *                                   dmaaddr regions
+ * Growth:
+ * @param[out] out_debug_state Pointer to store the server's current debug state
+ * @param[out] out_boot_state Pointer to store the server's current boot state
+ * @param[out] out_lifecycle_state Pointer to store the server's lifecyle state
+ * @param[out] out_nvm_state Pointer to store the server's current nvm state
+ *
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CommInfoResponse(whClientContext* c,
+        uint8_t* out_version,
+        uint8_t* out_build,
+        uint32_t *out_cfg_comm_data_len,
+        uint32_t *out_cfg_nvm_object_count,
+        uint32_t *out_cfg_keycache_count,
+        uint32_t *out_cfg_keycache_bufsize,
+        uint32_t *out_cfg_customcb_count,
+        uint32_t *out_cfg_dmaaddr_count,
+        uint32_t *out_debug_state,
+        uint32_t *out_boot_state,
+        uint32_t *out_lifecycle_state,
+        uint32_t *out_nvm_state);
+
+/**
+ * @brief Retrieves server configuration and state with a blocking call.
+ *
+ * This function handles the complete process of sending communication info
+ * request and parsting the response from the server by busy polling for a
+ * valid response.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[out] out_version Pointer to store the server version string (8 bytes)
+ * @param[out] out_build Pointer to store the server build string (8 bytes)
+ * @param[out] out_cfg_comm_data_len Pointer to store the server's maximum data
+ *                                   len for any request or response
+ * @param[out] out_cfg_nvm_object_count Pointer to store the server's
+ *                                      maximum number of NVM objects
+ * @param[out] out_cfg_keycache_count Pointer to store the server's number of
+ *                                    keys in the server RAM
+ * @param[out] out_cfg_keycache_bufsize Pointer to store the server's maximum
+ *                                      size of each key in server RAM
+ * @param[out] out_cfg_customcb_count Pointer to store the server's number of
+ *                                    custom callbacks
+ * @param[out] out_cfg_dmaaddr_count Pointer to store the server's number of
+ *                                   dmaaddr regions
+ * Growth:
+ * @param[out] out_debug_state Pointer to store the server's current debug state
+ * @param[out] out_boot_state Pointer to store the server's current boot state
+ * @param[out] out_lifecycle_state Pointer to store the server's lifecyle state
+ * @param[out] out_nvm_state Pointer to store the server's current nvm state
+ *
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CommInfo(whClientContext* c,
+        uint8_t* out_version,
+        uint8_t* out_build,
+        uint32_t *out_cfg_comm_data_len,
+        uint32_t *out_cfg_nvm_object_count,
+        uint32_t *out_cfg_keycache_count,
+        uint32_t *out_cfg_keycache_bufsize,
+        uint32_t *out_cfg_customcb_count,
+        uint32_t *out_cfg_dmaaddr_count,
+        uint32_t *out_debug_state,
+        uint32_t *out_boot_state,
+        uint32_t *out_lifecycle_state,
+        uint32_t *out_nvm_state);
 
 /**
  * @brief Sends a communication close request to the server.
@@ -346,7 +454,7 @@ int wh_Client_Echo(whClientContext* c, uint16_t snd_len, const void* snd_data,
  */
 
 
-#ifndef WOLFHSM_NO_CRYPTO
+#ifndef WOLFHSM_CFG_NO_CRYPTO
 /**
  * @brief Sends a key cache request to the server.
  *
@@ -361,7 +469,7 @@ int wh_Client_Echo(whClientContext* c, uint16_t snd_len, const void* snd_data,
  * @param[in] in Pointer to the key data to be cached.
  * @param[in] inSz Size of the key data.
  * @param[in] keyId Key ID to be used for caching. If set to
- * WOLFHSM_KEYID_ERASED, a new ID will be generated.
+ * WH_KEYID_ERASED, a new ID will be generated.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_Client_KeyCacheRequest_ex(whClientContext* c, uint32_t flags,
@@ -791,7 +899,7 @@ int wh_Client_SetKeyIdCmac(Cmac* key, whNvmId keyId);
 int wh_Client_GetKeyIdCmac(Cmac* key, whNvmId* outId);
 #endif /* WOLFSSL_CMAC */
 #endif /* !NO_AES */
-#endif /* ! WOLFHSM_NO_CRYPTO */
+#endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
 /* Counter functions */
 int wh_Client_CounterInitRequest(whClientContext* c, whNvmId counterId,
@@ -1783,4 +1891,4 @@ int wh_Client_CustomCbCheckRegistered(whClientContext* c, uint16_t id,
                                       int* responseError);
 
 
-#endif /* WOLFHSM_WH_CLIENT_H_ */
+#endif /* !WOLFHSM_WH_CLIENT_H_ */

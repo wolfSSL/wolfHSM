@@ -16,8 +16,13 @@
  * You should have received a copy of the GNU General Public License
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef WH_TEST_COMM_H_
-#define WH_TEST_COMM_H_
+/*
+ * test/wh_test_comm.h
+ *
+ */
+
+#ifndef TEST_WH_TEST_COMM_H_
+#define TEST_WH_TEST_COMM_H_
 
 /*
  * Runs the comms tests using a memory transport backend.
@@ -26,12 +31,12 @@
 int whTest_CommMem(void);
 
 /* Runs all the comms tests using a memory transport as the backend, and
- * optionally using the POSIX TCP backend if WH_CFG_TEST_POSIX is defined.
+ * optionally using the POSIX TCP backend if WOLFHSM_CFG_TEST_POSIX is defined.
  *
- * Multithreaded tests are also run if WH_CFG_TEST_POSIX is defined.
+ * Multithreaded tests are also run if WOLFHSM_CFG_TEST_POSIX is defined.
  *
  * Returns 0 on success and a non-zero error code on failure
  */
 int whTest_Comm(void);
 
-#endif /* WH_TEST_COMM_H_ */
+#endif /* TEST_WH_TEST_COMM_H_ */

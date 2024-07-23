@@ -15,8 +15,12 @@ INC = -I$(WOLFHSM_DIR) \
       -I$(USER_SETTINGS_DIR) \
       -I$(WOLFSSL_DIR) \
 
-# Defines.  Required to have user_settings to ensure consistent builds */
-DEF = -DWOLFSSL_USER_SETTINGS
+# Library configuration defines to use additional files.
+DEF = -DWOLFSSL_USER_SETTINGS -DWOLFHSM_CFG
+
+# Test program configuration
+#DEF += -DWOLFHSM_CFG_TEST_VERBOSE
+DEF += -DWOLFHSM_CFG_TEST_POSIX
 
 # Architecture
 ARCHFLAGS ?=
@@ -49,16 +53,12 @@ endif
 
 # Support a NO CRYPTO build
 ifeq ($(NOCRYPTO),1)
-CFLAGS += -DWOLFHSM_NO_CRYPTO
+CFLAGS += -DWOLFHSM_CFG_NO_CRYPTO
 endif
 
 ifeq ($(SHE),1)
-CFLAGS += -DWOLFHSM_SHE_EXTENSION
+CFLAGS += -DWOLFHSM_CFG_SHE_EXTENSION
 endif
-
-# wolfHSM-specific defines
-CFLAGS += -DWH_CONFIG
-
 
 # Assembly source files
 SRC_ASM +=
@@ -112,6 +112,7 @@ SRC_C += \
             $(WOLFHSM_DIR)/src/wh_client_she.c \
             $(WOLFHSM_DIR)/src/wh_server_she.c \
             $(WOLFHSM_DIR)/src/wh_she_common.c \
+            $(WOLFHSM_DIR)/src/wh_she_crypto.c \
 
 endif
 

@@ -25,6 +25,9 @@
 #ifndef WOLFHSM_WH_MESSAGE_H_
 #define WOLFHSM_WH_MESSAGE_H_
 
+/* Pick up compile-time configuration */
+#include "wolfhsm/wh_settings.h"
+
 /* Message groups and kind */
 enum WH_MESSAGE_ENUM {
     WH_MESSAGE_KIND_NONE            = 0x0000, /* No message kind. Invalid */
@@ -43,8 +46,8 @@ enum WH_MESSAGE_ENUM {
     WH_MESSAGE_GROUP_CANCEL         = 0x0900, /* request cancellation */
     WH_MESSAGE_GROUP_CUSTOM         = 0x1000, /* User-specified features */
 
-    WH_MESSAGE_ACTION_MASK         = 0x00FF,  /* 255 subtypes per group*/
-    WH_MESSAGE_ACTION_NONE         = 0x0000,  /* No action. Invalid. */
+    WH_MESSAGE_ACTION_MASK          = 0x00FF,  /* 255 subtypes per group*/
+    WH_MESSAGE_ACTION_NONE          = 0x0000,  /* No action. Invalid. */
 };
 
 /* keystore actions */
@@ -95,4 +98,4 @@ enum {
 /* Extract the action from the message kind */
 #define WH_MESSAGE_ACTION(_K)      ((_K) & WH_MESSAGE_ACTION_MASK)
 
-#endif /* WOLFHSM_WH_MESSAGE_H_ */
+#endif /* !WOLFHSM_WH_MESSAGE_H_ */

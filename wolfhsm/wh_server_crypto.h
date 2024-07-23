@@ -16,8 +16,18 @@
  * You should have received a copy of the GNU General Public License
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef WOLFHSM_WH_SERVER_CRYPTO_H
-#define WOLFHSM_WH_SERVER_CRYPTO_H
+/*
+ * wolfhsm/wh_server_crypto.h
+ *
+ */
+
+#ifndef WOLFHSM_WH_SERVER_CRYPTO_H_
+#define WOLFHSM_WH_SERVER_CRYPTO_H_
+
+/* Pick up compile-time configuration */
+#include "wolfhsm/wh_settings.h"
+
+#include <stdint.h>
 
 #include "wolfhsm/wh_server.h"
 
@@ -25,4 +35,4 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
     uint16_t action, uint8_t* data, uint16_t* size, uint16_t seq);
 
 
-#endif
+#endif /* !WOLFHSM_WH_SERVER_CRYPTO_H_ */

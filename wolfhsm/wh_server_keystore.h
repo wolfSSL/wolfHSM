@@ -16,9 +16,19 @@
  * You should have received a copy of the GNU General Public License
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef WOLFHSM_WH_SERVER_KEYSTORE_H
-#define WOLFHSM_WH_SERVER_KEYSTORE_H
+/*
+ * wolfhsm/wh_server_keystore.h
+ *
+ */
+#ifndef WOLFHSM_WH_SERVER_KEYSTORE_H_
+#define WOLFHSM_WH_SERVER_KEYSTORE_H_
 
+/* Pick up compile-time configuration */
+#include "wolfhsm/wh_settings.h"
+
+#include <stdint.h>
+
+#include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_server.h"
 
 int hsmGetUniqueId(whServerContext* server, whNvmId* outId);
@@ -33,4 +43,4 @@ int hsmEraseKey(whServerContext* server, whNvmId keyId);
 int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
     uint16_t action, uint16_t seq, uint8_t* data, uint16_t* size);
 
-#endif
+#endif /* !WOLFHSM_WH_SERVER_KEYSTORE_H_ */

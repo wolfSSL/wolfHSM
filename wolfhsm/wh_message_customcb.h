@@ -16,12 +16,17 @@
  * You should have received a copy of the GNU General Public License
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef WH_MESSAGE_CUSTOM_CB_H_
-#define WH_MESSAGE_CUSTOM_CB_H_
+/*
+ * wolfhsm/wh_message_customcb.h
+ *
+ */
+#ifndef WOLFHSM_WH_MESSAGE_CUSTOM_CB_H_
+#define WOLFHSM_WH_MESSAGE_CUSTOM_CB_H_
+
+/* Pick up compile-time configuration */
+#include "wolfhsm/wh_settings.h"
 
 #include <stdint.h>
-
-#define WH_MESSAGE_CUSTOM_CB_BUF_SIZE (256)
 
 /* Type indicator for custom request/response messages. Indicates how
  * to interpret whMessageCustomData */
@@ -59,7 +64,7 @@ typedef union {
     } dma64;
     /* raw data buffer for user-defined schema */
     struct {
-        uint8_t data[WH_MESSAGE_CUSTOM_CB_BUF_SIZE];
+        uint8_t data[WOLFHSM_CFG_CUSTOMCB_LEN];
     } buffer;
 } whMessageCustomCb_Data;
 
@@ -94,4 +99,4 @@ int wh_MessageCustomCb_TranslateResponse(uint16_t magic,
                                          const whMessageCustomCb_Response* src,
                                          whMessageCustomCb_Response*       dst);
 
-#endif /* WH_MESSAGE_CUSTOM_CB_H_*/
+#endif /* !WOLFHSM_WH_MESSAGE_CUSTOM_CB_H_*/

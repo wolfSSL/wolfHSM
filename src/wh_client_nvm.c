@@ -22,7 +22,7 @@
 
 /* System libraries */
 #include <stdint.h>
-#include <stdlib.h>  /* For NULL */
+#include <stddef.h>  /* For NULL */
 #include <string.h>  /* For memset, memcpy */
 
 /* Common WolfHSM types and defines shared with the server */
@@ -265,16 +265,16 @@ int wh_Client_NvmAddObjectRequest(whClientContext* c,
         whNvmSize len, const uint8_t* data)
 {
     /*TODO: Add scatter/gather into CommClient to avoid construction here */
-    uint8_t buffer[WH_COMM_DATA_LEN] = {0};
+    uint8_t buffer[WOLFHSM_CFG_COMM_DATA_LEN] = {0};
     whMessageNvm_AddObjectRequest* msg = (whMessageNvm_AddObjectRequest*)buffer;
     uint16_t hdr_len = sizeof(*msg);
     uint8_t* payload = (uint8_t*)buffer + hdr_len;
 
     if (    (c == NULL) ||
             ((label == NULL) && (label_len > 0)) ||
-            (label_len > WOLFHSM_NVM_LABEL_LEN) ||
+            (label_len > WH_NVM_LABEL_LEN) ||
             ((data == NULL) && (len > 0)) ||
-            (len > WH_MESSAGE_NVM_MAX_ADD_OBJECT_LEN) ){
+            (len > WH_MESSAGE_NVM_MAX_ADDOBJECT_LEN) ){
         return WH_ERROR_BADARGS;
     }
 

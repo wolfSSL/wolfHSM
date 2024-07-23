@@ -16,6 +16,11 @@
  * You should have received a copy of the GNU General Public License
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
+/*
+ * test/wh_test.c
+ *
+ */
+
 #include <assert.h>
 #include <string.h>
 
@@ -43,14 +48,14 @@ int whTest_Unit(void)
     WH_TEST_ASSERT(0 == whTest_Comm());
     WH_TEST_ASSERT(0 == whTest_ClientServer());
 
-#ifndef WOLFHSM_NO_CRYPTO
+#ifndef WOLFHSM_CFG_NO_CRYPTO
     /* Crypto Tests */
     WH_TEST_ASSERT(0 == whTest_Crypto());
 
-#if defined(WOLFHSM_SHE_EXTENSION)
+#if defined(WOLFHSM_CFG_SHE_EXTENSION)
     WH_TEST_ASSERT(0 == whTest_She());
 #endif /* WOLFHSM_SHE_EXTENTION */
-#endif /* !WOLFHSM_NO_CRYPTO */
+#endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
     return 0;
 }

@@ -71,7 +71,7 @@ typedef struct {
 
 /* On-flash layout of a Directory */
 typedef struct {
-    nfObject objects[NF_OBJECT_COUNT];
+    nfObject objects[WOLFHSM_CFG_NVM_OBJECT_COUNT];
 } nfDirectory;
 #define NF_UNITS_PER_DIRECTORY WHFU_BYTES2UNITS(sizeof(nfDirectory))
 #define NF_DIRECTORY_OBJECTS_OFFSET WHFU_BYTES2UNITS(offsetof(nfDirectory, objects))
@@ -362,7 +362,7 @@ static int nfPartition_ReadMemDirectory(whNvmFlashContext* context, int partitio
                 NF_PARTITION_DIRECTORY_OFFSET;
     memset(directory, 0, sizeof(*directory));
 
-    for(index = 0; (index < NF_OBJECT_COUNT) && (ret == 0); index++) {
+    for(index = 0; (index < WOLFHSM_CFG_NVM_OBJECT_COUNT) && (ret == 0); index++) {
         /* TODO: Handle errors better here.  Break out of loop? */
         ret = nfMemObject_Read(
                 context,
@@ -757,7 +757,7 @@ static int nfMemDirectory_Parse(nfMemDirectory* d)
     d->reclaimable_data = 0;
     d->reclaimable_entries = 0;
     for (   d->next_free_object = 0;
-            d->next_free_object < NF_OBJECT_COUNT;
+            d->next_free_object < WOLFHSM_CFG_NVM_OBJECT_COUNT;
             d->next_free_object++)
     {
         switch(d->objects[d->next_free_object].state.status) {
@@ -792,7 +792,7 @@ static int nfMemDirectory_Parse(nfMemDirectory* d)
     }
 
     /* Now walk through backwards and reclaim any duplicate meta->id data counts */
-    for (this_entry = NF_OBJECT_COUNT - 1; this_entry >= 0; this_entry --) {
+    for (this_entry = WOLFHSM_CFG_NVM_OBJECT_COUNT - 1; this_entry >= 0; this_entry --) {
         if (d->objects[this_entry].state.status == NF_STATUS_USED) {
             whNvmId this_id = d->objects[this_entry].metadata.id;
             for (that_entry = this_entry - 1; that_entry >= 0; that_entry --) {
@@ -1011,14 +1011,14 @@ int wh_NvmFlash_GetAvailable(void* c,
                 WHFU_BYTES_PER_UNIT;
     }
     if (out_avail_objects != NULL) {
-        *out_avail_objects = NF_OBJECT_COUNT - d->next_free_object;
+        *out_avail_objects = WOLFHSM_CFG_NVM_OBJECT_COUNT - d->next_free_object;
     }
     if (out_reclaim_size != NULL) {
             *out_reclaim_size = (d->reclaimable_data) * WHFU_BYTES_PER_UNIT;
-        }
-        if (out_reclaim_objects != NULL) {
-            *out_reclaim_objects = d->reclaimable_entries;
-        }
+    }
+    if (out_reclaim_objects != NULL) {
+        *out_reclaim_objects = d->reclaimable_entries;
+    }
     return 0;
 }
 
@@ -1063,7 +1063,7 @@ int wh_NvmFlash_AddObject(void* c, whNvmMetadata *meta,
     }
 
     d = &context->directory;
-    if (    (d->next_free_object == NF_OBJECT_COUNT) ||
+    if (    (d->next_free_object == WOLFHSM_CFG_NVM_OBJECT_COUNT) ||
             (d->next_free_data * WHFU_BYTES_PER_UNIT + data_len >
                 context->partition_units * WHFU_BYTES_PER_UNIT) ) {
         return WH_ERROR_NOSPACE;
@@ -1175,7 +1175,7 @@ int wh_NvmFlash_DestroyObjects(void* c, whNvmId list_count,
     }
 
     /* Write each used object to new partition */
-    for (entry = 0; entry < NF_OBJECT_COUNT; entry++) {
+    for (entry = 0; entry < WOLFHSM_CFG_NVM_OBJECT_COUNT; entry++) {
         if (d->objects[entry].state.status == NF_STATUS_USED) {
             /* TODO: Handle errors here better. Break out of loop? */
             ret = nfObject_Copy(context, entry,
