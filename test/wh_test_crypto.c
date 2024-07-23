@@ -64,7 +64,7 @@ enum {
 
 #define PLAINTEXT "mytextisbigplain"
 
-#ifndef WH_CFG_TEST_NO_CUSTOM_SERVERS
+#ifndef WOLFHSM_CFG_TEST_NO_CUSTOM_SERVERS
 /* Flag causing the server loop to sleep(1) */
 int serverDelay = 0;
 #endif
@@ -192,8 +192,8 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         goto exit;
     }
 
-#ifndef WH_CFG_TEST_NO_CUSTOM_SERVERS
-    /* WH_CFG_TEST_NO_CUSTOM_SERVERS protects the client test code that expects to
+#ifndef WOLFHSM_CFG_TEST_NO_CUSTOM_SERVERS
+    /* WOLFHSM_CFG_TEST_NO_CUSTOM_SERVERS protects the client test code that expects to
      * interop with the custom server (also defined in this file), so that this
      * test can be run against a standard server app
      *
@@ -244,7 +244,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         WH_ERROR_PRINT("KEY CACHE/EXPORT FAILED TO MATCH\n");
         goto exit;
     }
-#endif /* !WH_CFG_TEST_NO_CUSTOM_SERVERS */
+#endif /* !WOLFHSM_CFG_TEST_NO_CUSTOM_SERVERS */
 
     /* evict for original client */
     if ((ret = wh_Client_KeyEvict(client, keyId)) != 0) {
@@ -638,21 +638,21 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         WH_ERROR_PRINT("Failed to wc_CmacUpdate %d\n", ret);
         goto exit;
     }
-#ifndef WH_CFG_TEST_NO_CUSTOM_SERVERS
+#ifndef WOLFHSM_CFG_TEST_NO_CUSTOM_SERVERS
     /* delay the server so scheduling doesn't interfere with the timing */
     serverDelay = 1;
 
     /* TODO: use hsm pause/resume functionality on real hardware */
 #endif
     if((ret = wh_Client_Cancel(client)) != 0
-#if defined(WH_CFG_TEST_NO_CUSTOM_SERVERS)
+#if defined(WOLFHSM_CFG_TEST_NO_CUSTOM_SERVERS)
         && ret != WH_ERROR_CANCEL_LATE
 #endif
     ) {
         WH_ERROR_PRINT("Failed to wh_Client_Cancel %d\n", ret);
         goto exit;
     }
-#ifndef WH_CFG_TEST_NO_CUSTOM_SERVERS
+#ifndef WOLFHSM_CFG_TEST_NO_CUSTOM_SERVERS
     serverDelay = 0;
 #endif
     /* test cancelable request and response work for standard CMAC request with no cancellation */
@@ -735,7 +735,7 @@ int whTest_CryptoServerConfig(whServerConfig* config)
     whServerContext server[1] = {0};
     whCommConnected am_connected = WH_COMM_CONNECTED;
     int ret = 0;
-#ifndef WH_CFG_TEST_NO_CUSTOM_SERVERS
+#ifndef WOLFHSM_CFG_TEST_NO_CUSTOM_SERVERS
     int userChange = 0;
 #endif
 
@@ -753,7 +753,7 @@ int whTest_CryptoServerConfig(whServerConfig* config)
     server->comm->client_id = 1;
 
     while(am_connected == WH_COMM_CONNECTED) {
-#ifndef WH_CFG_TEST_NO_CUSTOM_SERVERS
+#ifndef WOLFHSM_CFG_TEST_NO_CUSTOM_SERVERS
         while (serverDelay) {
 #ifdef WOLFHSM_CFG_TEST_POSIX
             sleep(1);
@@ -768,7 +768,7 @@ int whTest_CryptoServerConfig(whServerConfig* config)
         }
         wh_Server_GetConnected(server, &am_connected);
 
-#ifndef WH_CFG_TEST_NO_CUSTOM_SERVERS
+#ifndef WOLFHSM_CFG_TEST_NO_CUSTOM_SERVERS
         /* keep alive for 2 user changes */
         if (am_connected != WH_COMM_CONNECTED && userChange < 2) {
             if (userChange == 0)
@@ -779,7 +779,7 @@ int whTest_CryptoServerConfig(whServerConfig* config)
             am_connected = WH_COMM_CONNECTED;
             WH_TEST_RETURN_ON_FAIL(wh_Server_SetConnected(server, am_connected));
         }
-#endif /* !WH_CFG_TEST_NO_CUSTOM_SERVERS */
+#endif /* !WOLFHSM_CFG_TEST_NO_CUSTOM_SERVERS */
     }
 
     if ((ret == 0) || (ret == WH_ERROR_NOTREADY)) {

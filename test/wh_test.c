@@ -40,6 +40,7 @@
 
 int whTest_Unit(void)
 {
+    printf("Enter unit tests\n");
     /* Component Tests */
     WH_TEST_ASSERT(0 == whTest_Flash_RamSim());
     WH_TEST_ASSERT(0 == whTest_NvmFlash());
@@ -61,7 +62,7 @@ int whTest_Unit(void)
 }
 
 
-#if !defined(WH_CFG_TEST_UNIT_NO_MAIN)
+#if !defined(WOLFHSM_CFG_TEST_UNIT_NO_MAIN)
 
 int main(void)
 {
