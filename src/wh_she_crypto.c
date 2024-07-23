@@ -21,6 +21,8 @@
  *
  */
 
+/* Pick up compile-time configuration */
+#include "wolfhsm/wh_settings.h"
 
 #ifdef WOLFHSM_CFG_SHE_EXTENSION
 #ifndef WOLFHSM_CFG_NO_CRYPTO
