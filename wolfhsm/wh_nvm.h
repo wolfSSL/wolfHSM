@@ -128,4 +128,4 @@ int wh_Nvm_DestroyObjects(whNvmContext* context, whNvmId list_count,
 int wh_Nvm_Read(whNvmContext* context, whNvmId id, whNvmSize offset,
         whNvmSize data_len, uint8_t* data);
 
-#endif /* WOLFHSM_WH_NVM_H_ */
+#endif /* !WOLFHSM_WH_NVM_H_ */

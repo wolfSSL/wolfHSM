@@ -114,4 +114,4 @@ int wh_She_Meta2Label(uint32_t count, uint32_t flags, uint8_t* label);
 
 #endif /* WOLFHSM_CFG_SHE_EXTENSION */
 
-#endif /* WOLFHSM_WH_SHE_COMMON_H_ */
+#endif /* !WOLFHSM_WH_SHE_COMMON_H_ */

@@ -21,10 +21,6 @@
  *
  * Concrete library to implement an NVM data store using a whFlash bottom end.
  *
- * Configuration values:
- *  WOLFHSM_CFG_NF_OBJECT_COUNT Number of objects in ram and disk directories
- *      Default: 32
- *
  */
 
 #ifndef WOLFHSM_WH_NVM_FLASH_H_
@@ -38,12 +34,6 @@
 #include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_flash.h"
 #include "wolfhsm/wh_flash_unit.h"
-
-/* Number of objects in a directory */
-#ifndef WOLFHSM_CFG_NVM_OBJECT_COUNT
-#define WOLFHSM_CFG_NVM_OBJECT_COUNT 32
-#endif
-
 
 /* In-memory computed status of an Object or Directory */
 typedef enum {
@@ -125,4 +115,4 @@ int wh_NvmFlash_Read(void* c, whNvmId id, whNvmSize offset,
     .Read = wh_NvmFlash_Read,                       \
 }
 
-#endif /* WOLFHSM_WH_NVM_FLASH_H_ */
+#endif /* !WOLFHSM_WH_NVM_FLASH_H_ */

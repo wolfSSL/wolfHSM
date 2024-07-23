@@ -47,4 +47,4 @@ int wh_She_GenerateLoadableKey(uint8_t keyId,
 #endif /* !WOLFHSM_CFG_NO_CRYPTO*/
 #endif /* WOLFHSM_CFG_SHE_EXTENSION */
 
-#endif /* WOLFHSM_WH_SHE_CRYPTO_H_ */
+#endif /* !WOLFHSM_WH_SHE_CRYPTO_H_ */

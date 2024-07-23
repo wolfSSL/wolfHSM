@@ -93,4 +93,4 @@ typedef struct {
     uint8_t label[WH_NVM_LABEL_LEN];
 } whNvmMetadata;
 
-#endif /* WOLFHSM_WH_COMMON_H_ */
+#endif /* !WOLFHSM_WH_COMMON_H_ */

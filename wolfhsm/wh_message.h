@@ -98,4 +98,4 @@ enum {
 /* Extract the action from the message kind */
 #define WH_MESSAGE_ACTION(_K)      ((_K) & WH_MESSAGE_ACTION_MASK)
 
-#endif /* WOLFHSM_WH_MESSAGE_H_ */
+#endif /* !WOLFHSM_WH_MESSAGE_H_ */

@@ -86,4 +86,4 @@ int wh_FlashUnit_ReadBytes(const whFlashCb* cb, void* context,
 int wh_FlashUnit_ProgramBytes(const whFlashCb* cb, void* context,
         uint32_t byte_offset, uint32_t byte_count, const uint8_t* data);
 
-#endif /* WOLFHSM_WH_FLASH_UNIT_H_ */
+#endif /* !WOLFHSM_WH_FLASH_UNIT_H_ */

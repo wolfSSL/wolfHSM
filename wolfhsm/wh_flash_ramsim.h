@@ -75,4 +75,4 @@ int whFlashRamsim_WriteUnlock(void* context, uint32_t offset, uint32_t size);
     }
 /* clang-format on */
 
-#endif /* WH_FLASH_RAMSIM_H_ */
+#endif /* !WH_FLASH_RAMSIM_H_ */

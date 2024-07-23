@@ -23,21 +23,13 @@
 
 #include <stdint.h>
 
-/* Pick up client configuration */
 #include "wolfhsm/wh_client.h"
-
-#ifndef WOLFHSM_CFG_NO_CRYPTO
-
-/* wolfHSM crypto callback assumes wc_CryptoInfo struct is unionized */
-#if !defined(HAVE_ANONYMOUS_INLINE_AGGREGATES) \
-    || ( defined(HAVE_ANONYMOUS_INLINE_AGGREGATES) \
-         && HAVE_ANONYMOUS_INLINE_AGGREGATES==0  )
-#error "wolfHSM needs wolfCrypt built with HAVE_ANONYMOUS_INLINE_AGGREGATES=1"
-#endif
-
+#include "wolfhsm/wh_comm.h"
 #include "wolfhsm/wh_packet.h"
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_message.h"
+
+#ifndef WOLFHSM_CFG_NO_CRYPTO
 
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/types.h"

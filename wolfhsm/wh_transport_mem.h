@@ -163,4 +163,4 @@ int wh_TransportMem_RecvResponse(void* c, uint16_t *out_len, void* data);
 }
 
 
-#endif /* WOLFHSM_WH_TRANSPORT_MEM_H_ */
+#endif /* !WOLFHSM_WH_TRANSPORT_MEM_H_ */

@@ -43,4 +43,4 @@ int hsmEraseKey(whServerContext* server, whNvmId keyId);
 int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
     uint16_t action, uint16_t seq, uint8_t* data, uint16_t* size);
 
-#endif /* WOLFHSM_WH_SERVER_KEYSTORE_H_ */
+#endif /* !WOLFHSM_WH_SERVER_KEYSTORE_H_ */

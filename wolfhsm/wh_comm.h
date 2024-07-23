@@ -35,10 +35,6 @@
  * functions are non-blocking and each may update the context state or perform
  * other bookkeeping actions as necessary.
  *
- * Configuration values:
- *  WOLFHSM_CFG_COMM_DATA_LEN - Maximum length of data payload
- *      Default: 1280 bytes
- *
  */
 
 #ifndef WOLFHSM_WH_COMM_H_

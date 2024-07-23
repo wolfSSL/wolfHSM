@@ -28,10 +28,6 @@
 /* Pick up compile-time configuration */
 #include "wolfhsm/wh_settings.h"
 
-/*
- * WolfHSM Public Server API
- */
-
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -115,7 +111,6 @@ typedef int (*whServerCustomCb)(
 
 
 /** Server DMA address translation and validation */
-
 
 /* Indicates to a DMA callback the type of memory operation the callback must
  * act on. Common use cases are remapping client addresses into server address
@@ -577,4 +572,4 @@ int whServerDma_CopyToClient32(struct whServerContext_t* server,
 int whServerDma_CopyToClient64(struct whServerContext_t* server,
                                uint64_t clientAddr, void* serverPtr, size_t len,
                                whServerDmaFlags flags);
-#endif /* WOLFHSM_WH_SERVER_H_ */
+#endif /* !WOLFHSM_WH_SERVER_H_ */

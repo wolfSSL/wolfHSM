@@ -99,4 +99,4 @@ int wh_MessageCustomCb_TranslateResponse(uint16_t magic,
                                          const whMessageCustomCb_Response* src,
                                          whMessageCustomCb_Response*       dst);
 
-#endif /* WOLFHSM_WH_MESSAGE_CUSTOM_CB_H_*/
+#endif /* !WOLFHSM_WH_MESSAGE_CUSTOM_CB_H_*/

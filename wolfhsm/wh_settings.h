@@ -20,6 +20,10 @@
  * wolfhsm/wh_settings.h
  *
  * Configuration values:
+ *
+ *  WOLFHSM_CFG_COMM_DATA_LEN - Maximum length of data payload
+ *      Default: 1280 bytes
+ *
  *  WOLFHSM_CFG_INFOVERSION Reported version string
  *      Default: "01.01.01"
  *
@@ -115,10 +119,17 @@
 #ifndef WOLFHSM_CFG_NO_CRYPTO
 /* Crypto Cb is mandatory */
 #ifndef WOLF_CRYPTO_CB
-#error "wolfHSM requires WOLF_CRYPTO_CB"
+#error "wolfHSM requires wolfCrypt built with WOLF_CRYPTO_CB"
+#endif
+
+/* wolfHSM crypto callback assumes wc_CryptoInfo struct is unionized */
+#if !defined(HAVE_ANONYMOUS_INLINE_AGGREGATES) \
+    || ( defined(HAVE_ANONYMOUS_INLINE_AGGREGATES) \
+         && HAVE_ANONYMOUS_INLINE_AGGREGATES==0  )
+#error "wolfHSM needs wolfCrypt built with HAVE_ANONYMOUS_INLINE_AGGREGATES=1"
 #endif
 
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
 
-#endif /* WOLFHSM_WH_SETTINGS_H_ */
+#endif /* !WOLFHSM_WH_SETTINGS_H_ */

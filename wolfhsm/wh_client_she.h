@@ -110,4 +110,4 @@ int wh_Client_SheVerifyMac(whClientContext* c, uint8_t keyId, uint8_t* message,
 
 #endif /* WOLFHSM_CFG_SHE_EXTENSION */
 
-#endif /* WOLFHSM_WH_CLIENT_SHE_H_ */
+#endif /* !WOLFHSM_WH_CLIENT_SHE_H_ */

@@ -265,4 +265,4 @@ int wh_MessageNvm_TranslateReadDma64Request(uint16_t magic,
 /** NVM ReadDma64 Response */
 /* Use SimpleResponse */
 
-#endif /* WOLFHSM_WH_MESSAGE_NVM_H_ */
+#endif /* !WOLFHSM_WH_MESSAGE_NVM_H_ */

@@ -38,4 +38,4 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
         uint16_t req_size, const void* req_packet,
         uint16_t *out_resp_size, void* resp_packet);
 
-#endif /* WOLFHSM_WH_SERVER_NVM_H_ */
+#endif /* !WOLFHSM_WH_SERVER_NVM_H_ */

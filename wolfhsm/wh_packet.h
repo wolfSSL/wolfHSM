@@ -20,11 +20,14 @@
  * wolfhsm/wh_packet.h
  *
  */
+
 #ifndef WOLFHSM_WH_PACKET_H_
 #define WOLFHSM_WH_PACKET_H_
 
 /* Pick up compile-time configuration */
 #include "wolfhsm/wh_settings.h"
+
+#include <stdint.h>
 
 #include "wolfhsm/wh_common.h"
 
@@ -659,7 +662,7 @@ typedef struct whPacket
         wh_Packet_she_gen_mac_res sheGenMacRes;
         wh_Packet_she_verify_mac_req sheVerifyMacReq;
         wh_Packet_she_verify_mac_res sheVerifyMacRes;
-#endif  /*WOLFHSM_CFG_SHE_EXTENSION */
+#endif  /* WOLFHSM_CFG_SHE_EXTENSION */
 
     };
 } whPacket;

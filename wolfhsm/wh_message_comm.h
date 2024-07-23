@@ -30,6 +30,7 @@
 #include "wolfhsm/wh_settings.h"
 
 #include <stdint.h>
+
 #include "wolfhsm/wh_comm.h"
 
 /* Comm component message kinds */
@@ -109,4 +110,4 @@ int wh_MessageComm_TranslateInfoResponse(uint16_t magic,
         whMessageCommInfoResponse* dest);
 
 
-#endif /* WOLFHSM_WH_MESSAGE_COMM_H_ */
+#endif /* !WOLFHSM_WH_MESSAGE_COMM_H_ */

@@ -65,4 +65,4 @@ enum WH_ERROR_ENUM {
 
 #define WH_SHE_ERC_NO_ERROR WH_ERROR_OK
 
-#endif /* WOLFHSM_WH_ERROR_H_ */
+#endif /* !WOLFHSM_WH_ERROR_H_ */

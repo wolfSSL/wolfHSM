@@ -40,4 +40,4 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* ctx);
 
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
-#endif /* WOLFHSM_CLIENT_CRYPTOCB_H_ */
+#endif /* !WOLFHSM_CLIENT_CRYPTOCB_H_ */

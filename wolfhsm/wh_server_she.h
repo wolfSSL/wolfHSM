@@ -20,6 +20,7 @@
  * wolfhsm/wh_server_she.h
  *
  */
+
 #ifndef WOLFHSM_WH_SERVER_SHE_H
 #define WOLFHSM_WH_SERVER_SHE_H
 
@@ -67,4 +68,4 @@ int wh_Server_HandleSheRequest(whServerContext* server,
 
 #endif /* WOLFHSM_CFG_SHE_EXTENSION */
 
-#endif /* WOLFHSM_WH_SERVER_SHE_H */
+#endif /* !WOLFHSM_WH_SERVER_SHE_H */

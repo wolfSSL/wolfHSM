@@ -32,11 +32,6 @@
  * also exposes WolfHSM Server key management, non-volatile memory, and protocol
  * functions.
  *
- * Configuration values:
- *
- *  WOLFHSM_CFG_NO_CRYPTO - Define to not include any wolfCrypt dependencies.
- *      Default:  Not defined
- *
  */
 
 #ifndef WOLFHSM_WH_CLIENT_H_
@@ -1896,4 +1891,4 @@ int wh_Client_CustomCbCheckRegistered(whClientContext* c, uint16_t id,
                                       int* responseError);
 
 
-#endif /* WOLFHSM_WH_CLIENT_H_ */
+#endif /* !WOLFHSM_WH_CLIENT_H_ */

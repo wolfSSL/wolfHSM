@@ -39,4 +39,4 @@ uint32_t wh_Utils_ntohl(uint32_t networklong);
 
 int wh_Utils_memeqzero(uint8_t* buffer, uint32_t size);
 
-#endif /* WOLFHSM_WH_UTILS_H_ */
+#endif /* !WOLFHSM_WH_UTILS_H_ */

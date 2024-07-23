@@ -34,4 +34,4 @@
 int wh_Server_HandleCounter(whServerContext* server, uint16_t action,
     uint8_t* data, uint16_t* size);
 
-#endif /* WOLFHSM_WH_SERVER_COUNTER_H_ */
+#endif /* !WOLFHSM_WH_SERVER_COUNTER_H_ */
