@@ -61,7 +61,7 @@ int whTest_Unit(void)
 }
 
 
-#if !defined(WH_CFG_TEST_UNIT_NO_MAIN)
+#if !defined(WOLFHSM_CFG_TEST_UNIT_NO_MAIN)
 
 int main(void)
 {

@@ -723,16 +723,20 @@ int whTest_ClientServerSequential(void)
             &lifecycle_state,
             &nvm_state));
     printf("Server Info: \n - Version:%s\n - Build:%s\n", version, build);
-    printf(" - cfg_comm_data_len:%u\n", cfg_comm_data_len);
-    printf(" - cfg_nvm_object_count:%u\n", cfg_nvm_object_count);
-    printf(" - cfg_server_keycache_count:%u\n", cfg_server_keycache_count);
-    printf(" - cfg_server_keycache_bufsize:%u\n", cfg_server_keycache_bufsize);
-    printf(" - cfg_server_customcb_count:%u\n", cfg_server_customcb_count);
-    printf(" - cfg_server_dmaaddr_count:%u\n", cfg_server_dmaaddr_count);
-    printf(" - debug_state:%u\n", debug_state);
-    printf(" - boot_state:%u\n", boot_state);
-    printf(" - lifecycle_state:%u\n", lifecycle_state);
-    printf(" - nvm_state:%u\n", nvm_state);
+    printf(" - cfg_comm_data_len:%u\n", (unsigned int)cfg_comm_data_len);
+    printf(" - cfg_nvm_object_count:%u\n", (unsigned int)cfg_nvm_object_count);
+    printf(" - cfg_server_keycache_count:%u\n",
+           (unsigned int)cfg_server_keycache_count);
+    printf(" - cfg_server_keycache_bufsize:%u\n",
+           (unsigned int)cfg_server_keycache_bufsize);
+    printf(" - cfg_server_customcb_count:%u\n",
+           (unsigned int)cfg_server_customcb_count);
+    printf(" - cfg_server_dmaaddr_count:%u\n",
+           (unsigned int)cfg_server_dmaaddr_count);
+    printf(" - debug_state:%u\n", (unsigned int)debug_state);
+    printf(" - boot_state:%u\n", (unsigned int)boot_state);
+    printf(" - lifecycle_state:%u\n", (unsigned int)lifecycle_state);
+    printf(" - nvm_state:%u\n", (unsigned int)nvm_state);
 
     for (counter = 0; counter < REPEAT_COUNT; counter++) {
 
