@@ -727,7 +727,7 @@ int wh_Client_SetKeyIdCurve25519(curve25519_key* key, whNvmId keyId);
  * set by either the crypto callback layer or wh_Client_SetKeyCurve25519.
  *
  * @param[in] key Pointer to the Curve25519 key structure.
- * @param[out] keyId Pointer to the key ID to return.
+ * @param[out] outId Pointer to the key ID to return.
  * @return int Returns 0 on success or a negative error code on failure.
  */
 int wh_Client_GetKeyIdCurve25519(curve25519_key* key, whNvmId* outId);
@@ -754,7 +754,7 @@ int wh_Client_SetKeyIdEcc(ecc_key* key, whNvmId keyId);
  * set by either the crypto callback layer or wh_Client_SetKeyIdEcc.
  *
  * @param[in] key Pointer to the Ecc key structure.
- * @param[out] keyId Pointer to the key ID to return.
+ * @param[out] outId Pointer to the key ID to return.
  * @return int Returns 0 on success or a negative error code on failure.
  */
 int wh_Client_GetKeyIdEcc(ecc_key* key, whNvmId* outId);
@@ -781,7 +781,7 @@ int wh_Client_SetKeyIdRsa(RsaKey* key, whNvmId keyId);
  * set by either the crypto callback layer or wh_Client_SetKeyRsa.
  *
  * @param[in] key Pointer to the RSA key structure.
- * @param[out] keyId Pointer to the key ID to return.
+ * @param[out] outId Pointer to the key ID to return.
  * @return int Returns 0 on success or a negative error code on failure.
  */
 int wh_Client_GetKeyIdRsa(RsaKey* key, whNvmId* outId);
@@ -795,7 +795,7 @@ int wh_Client_GetKeyIdRsa(RsaKey* key, whNvmId* outId);
  * On the server side, this key ID is used to reference the key stored in the
  * HSM
  *
- * @param[in] aes Pointer to the AES key structure.
+ * @param[in] key Pointer to the AES key structure.
  * @param[in] keyId Key ID to be associated with the AES key.
  * @return int Returns 0 on success or a negative error code on failure.
  */
@@ -808,7 +808,7 @@ int wh_Client_SetKeyIdAes(Aes* key, whNvmId keyId);
  * set by either the crypto callback layer or wh_Client_SetKeyAes.
  *
  * @param[in] key Pointer to the AES key structure.
- * @param[out] keyId Pointer to the key ID to return.
+ * @param[out] outId Pointer to the key ID to return.
  * @return int Returns 0 on success or a negative error code on failure.
  */
 int wh_Client_GetKeyIdAes(Aes* key, whNvmId* outId);
@@ -866,7 +866,7 @@ int wh_Client_AesCmacVerify(Cmac* cmac, const byte* check, word32 checkSz,
  * @param[in] cmac Pointer to the CMAC key structure.
  * @param[out] out Buffer to store the CMAC result, only required after
  *    wc_CmacFinal.
- * @param[in/out] outSz Pointer to the size of the out buffer in bytes, will be
+ * @param[in,out] outSz Pointer to the size of the out buffer in bytes, will be
  *    set to the size returned by the server on return.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
@@ -893,7 +893,7 @@ int wh_Client_SetKeyIdCmac(Cmac* key, whNvmId keyId);
  * set by either the crypto callback layer or wh_Client_SetKeyCmac.
  *
  * @param[in] key Pointer to the CMAC key structure.
- * @param[out] keyId Pointer to the key ID to return.
+ * @param[out] outId Pointer to the key ID to return.
  * @return int Returns 0 on success or a negative error code on failure.
  */
 int wh_Client_GetKeyIdCmac(Cmac* key, whNvmId* outId);
@@ -913,7 +913,7 @@ int wh_Client_CounterInitResponse(whClientContext* c, uint32_t* counter);
  *
  * @param[in] c Pointer to the whClientContext structure.
  * @param[in] counterId counter ID to be associated with the counter.
- * @param[in/out] counter Value to initialize the counter with, retruns with
+ * @param[in,out] counter Value to initialize the counter with, returns with
  * the value set by the HSM for confirmation.
  * @return int Returns 0 on success or a negative error code on failure.
  */
