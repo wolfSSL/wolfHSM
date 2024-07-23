@@ -22,6 +22,9 @@
  */
 /* System libraries */
 
+/* Pick up compile-time configuration */
+#include "wolfhsm/wh_settings.h"
+
 #ifdef WOLFHSM_CFG_SHE_EXTENSION
 
 #include <stdint.h>
@@ -32,7 +35,6 @@
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_utils.h"
 
-#include "wolfhsm/wh_she_common.h"
 
 typedef struct {
     uint32_t count;
