@@ -42,22 +42,29 @@ int whTest_Unit(void)
 {
     fprintf(stderr, "Enter unit tests\n");
     /* Component Tests */
+    fprintf(stderr, "Testing ramsim\n");
     WH_TEST_ASSERT(0 == whTest_Flash_RamSim());
+    fprintf(stderr, "Testing nvm flash\n");
     WH_TEST_ASSERT(0 == whTest_NvmFlash());
 
     /* Comm tests */
+    fprintf(stderr, "Testing comm\n");
     WH_TEST_ASSERT(0 == whTest_Comm());
+    fprintf(stderr, "Testing clientserver\n");
     WH_TEST_ASSERT(0 == whTest_ClientServer());
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     /* Crypto Tests */
+    fprintf(stderr, "Testing crypto\n");
     WH_TEST_ASSERT(0 == whTest_Crypto());
 
 #if defined(WOLFHSM_CFG_SHE_EXTENSION)
+    fprintf(stderr, "Testing she\n");
     WH_TEST_ASSERT(0 == whTest_She());
 #endif /* WOLFHSM_SHE_EXTENTION */
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
+    fprintf(stderr, "Testing DONE\n");
     return 0;
 }
 
