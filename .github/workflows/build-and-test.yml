@@ -14,6 +14,10 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    # List host CPU info
+    - name: Host CPU info
+      run: cat /proc/cpuinfo
+
     # List compiler version
     - name: List compiler version
       run: gcc --version
@@ -24,6 +28,10 @@ jobs:
       with:
         repository: wolfssl/wolfssl
         path: wolfssl
+
+    # Build and test standard build
+    - name: Build and test
+      run: cd test && make clean && make WOLFSSL_DIR=../wolfssl run
 
     # Build and test debug build with ASAN and NOCRYPTO
     - name: Build and test ASAN DEBUG NOCRYPTO
@@ -36,10 +44,6 @@ jobs:
     # Build and test debug build with SHE
     - name: Build and test SHE
       run: cd test && make clean && make SHE=1 WOLFSSL_DIR=../wolfssl run
-
-    # Build and test standard build
-    - name: Build and test
-      run: cd test && make clean && make WOLFSSL_DIR=../wolfssl run
 
     # Test structure padding
     - name: Check structure padding
