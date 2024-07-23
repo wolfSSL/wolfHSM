@@ -25,6 +25,9 @@
 #ifndef WOLFHSM_WH_ERROR_H_
 #define WOLFHSM_WH_ERROR_H_
 
+/* Pick up compile-time configuration */
+#include "wolfhsm/wh_settings.h"
+
 enum WH_ERROR_ENUM {
     WH_ERROR_OK             = 0,    /* Success, no error. */
 

@@ -17,26 +17,27 @@
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
 /*
- * wolfhsm/wh_utils.h
+ * wolfhsm_cfg.h
  *
+ * wolfHSM compile-time options.  Override here for your application
  */
 
-#ifndef WOLFHSM_WH_UTILS_H_
-#define WOLFHSM_WH_UTILS_H_
+#ifndef WOLFHSM_CFG_H_
+#define WOLFHSM_CFG_H_
 
-/* Pick up compile-time configuration */
-#include "wolfhsm/wh_settings.h"
 
-#include <stdint.h>
+/** wolfHSM settings.  Simple overrides to show they work */
+/* #define WOLFHSM_CFG_NO_CRYPTO */
+/* #define WOLFHSM_CFG_SHE_EXTENSION */
 
-/** Byteswap functions */
-uint16_t wh_Utils_Swap16(uint16_t val);
-uint32_t wh_Utils_Swap32(uint32_t val);
-uint64_t wh_Utils_Swap64(uint64_t val);
+#define WOLFHSM_CFG_COMM_DATA_LEN 1152
 
-uint32_t wh_Utils_htonl(uint32_t hostlong);
-uint32_t wh_Utils_ntohl(uint32_t networklong);
 
-int wh_Utils_memeqzero(uint8_t* buffer, uint32_t size);
+#define WOLFHSM_CFG_NVM_OBJECT_COUNT 30
+#define WOLFHSM_CFG_SERVER_KEYCACHE_COUNT 10
+#define WOLFHSM_CFG_SERVER_KEYCACHE_SIZE 1024
+#define WOLFHSM_CFG_SERVER_DMAADDR_COUNT 8
+#define WOLFHSM_CFG_SERVER_CUSTOMCB_COUNT 6
 
-#endif /* WOLFHSM_WH_UTILS_H_ */
+
+#endif /* WOLFHSM_CFG_H_ */

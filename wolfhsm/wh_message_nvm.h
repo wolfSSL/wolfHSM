@@ -24,6 +24,9 @@
 #ifndef WOLFHSM_WH_MESSAGE_NVM_H_
 #define WOLFHSM_WH_MESSAGE_NVM_H_
 
+/* Pick up compile-time configuration */
+#include "wolfhsm/wh_settings.h"
+
 #include <stdint.h>
 
 #include "wolfhsm/wh_common.h"
@@ -49,8 +52,8 @@ enum WH_MESSAGE_NVM_ACTION_ENUM {
 enum WH_MESSAGE_NVM_MAX_ENUM {
     /* must be odd for struct whMessageNvm_DestroyObjectsRequest  alignment */
     WH_MESSAGE_NVM_MAX_DESTROY_OBJECTS_COUNT = 19,
-    WH_MESSAGE_NVM_MAX_ADDOBJECT_LEN = WH_COMM_DATA_LEN - sizeof(whNvmMetadata),
-    WH_MESSAGE_NVM_MAX_READ_LEN = WH_COMM_DATA_LEN - sizeof(int32_t),
+    WH_MESSAGE_NVM_MAX_ADDOBJECT_LEN = WOLFHSM_CFG_COMM_DATA_LEN - sizeof(whNvmMetadata),
+    WH_MESSAGE_NVM_MAX_READ_LEN = WOLFHSM_CFG_COMM_DATA_LEN - sizeof(int32_t),
 };
 
 /* Simple reusable response message */

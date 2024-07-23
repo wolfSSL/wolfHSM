@@ -23,9 +23,11 @@
 #ifndef WOLFHSM_WH_SERVER_SHE_H
 #define WOLFHSM_WH_SERVER_SHE_H
 
+/* Pick up compile-time configuration */
+#include "wolfhsm/wh_settings.h"
+
 #include <stdint.h>
 
-/* Get server config */
 #include "wolfhsm/wh_server.h"
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO

@@ -20,10 +20,6 @@
 #include <stdio.h>  /* For printf */
 #include <string.h> /* For memset, memcpy */
 
-#ifdef WOLFSSL_USER_SETTINGS
-#include "user_settings.h"
-#endif
-
 #include "wh_test_common.h"
 #include "wolfhsm/wh_error.h"
 
@@ -672,8 +668,8 @@ int whTest_ClientServerSequential(void)
     WH_TEST_ASSERT_RETURN(WH_COMM_CONNECTED == server_connected);
 
     int      counter                  = 1;
-    char     recv_buffer[WH_COMM_DATA_LEN] = {0};
-    char     send_buffer[WH_COMM_DATA_LEN] = {0};
+    char     recv_buffer[WOLFHSM_CFG_COMM_DATA_LEN] = {0};
+    char     send_buffer[WOLFHSM_CFG_COMM_DATA_LEN] = {0};
     uint16_t send_len                 = 0;
     uint16_t recv_len                 = 0;
 
@@ -1146,8 +1142,8 @@ int whTest_ClientCfg(whClientConfig* clientCfg)
     WH_TEST_RETURN_ON_FAIL(wh_Client_Init(client, clientCfg));
 
     int counter = 1;
-    char recv_buffer[WH_COMM_DATA_LEN] = {0};
-    char send_buffer[WH_COMM_DATA_LEN] = {0};
+    char recv_buffer[WOLFHSM_CFG_COMM_DATA_LEN] = {0};
+    char send_buffer[WOLFHSM_CFG_COMM_DATA_LEN] = {0};
     uint16_t send_len = 0;
     uint16_t recv_len = 0;
 

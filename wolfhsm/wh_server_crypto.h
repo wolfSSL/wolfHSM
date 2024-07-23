@@ -24,6 +24,11 @@
 #ifndef WOLFHSM_WH_SERVER_CRYPTO_H_
 #define WOLFHSM_WH_SERVER_CRYPTO_H_
 
+/* Pick up compile-time configuration */
+#include "wolfhsm/wh_settings.h"
+
+#include <stdint.h>
+
 #include "wolfhsm/wh_server.h"
 
 int wh_Server_HandleCryptoRequest(whServerContext* server,

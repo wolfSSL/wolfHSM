@@ -23,9 +23,8 @@
 #ifndef WOLFHSM_WH_PACKET_H_
 #define WOLFHSM_WH_PACKET_H_
 
-#ifdef WOLFSSL_USER_SETTINGS
-#include "user_settings.h"
-#endif
+/* Pick up compile-time configuration */
+#include "wolfhsm/wh_settings.h"
 
 #include "wolfhsm/wh_common.h"
 

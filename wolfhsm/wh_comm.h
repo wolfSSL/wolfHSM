@@ -44,25 +44,16 @@
 #ifndef WOLFHSM_WH_COMM_H_
 #define WOLFHSM_WH_COMM_H_
 
-#ifdef WOLFSSL_USER_SETTINGS
-#include "user_settings.h"
-#endif
+/* Pick up compile-time configuration */
+#include "wolfhsm/wh_settings.h"
 
 #include <stdint.h>  /* For sized ints */
 
 /** Packet content types */
-
 /* Request/response packets are composed of a single fixed-length header
  * (whCommHeader) followed immediately by variable-length data between 0 and
  * WOLFHSM_CFG_COMM_DATA_LEN bytes.
  */
-#ifndef WOLFHSM_CFG_COMM_DATA_LEN
-#define WOLFHSM_CFG_COMM_DATA_LEN 1280
-#endif
-
-/* III Previous name.  Update */
-#define WH_COMM_DATA_LEN WOLFHSM_CFG_COMM_DATA_LEN
-
 #define WH_COMM_MTU (8 + WOLFHSM_CFG_COMM_DATA_LEN)
 #define WH_COMM_MTU_U64_COUNT ((WH_COMM_MTU + 7) / 8)
 
@@ -308,7 +299,7 @@ int wh_CommServer_SendResponse(whCommServer* context,
         uint16_t data_size, const void* data);
 
 /* Get a pointer to the data portion of the internal buffer that is
- * WH_COMM_DATA_LEN bytes long.
+ * WOLFHSM_CFG_COMM_DATA_LEN bytes long.
  */
 uint8_t* wh_CommServer_GetDataPtr(whCommServer* context);
 

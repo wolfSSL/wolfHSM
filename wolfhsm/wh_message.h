@@ -25,6 +25,9 @@
 #ifndef WOLFHSM_WH_MESSAGE_H_
 #define WOLFHSM_WH_MESSAGE_H_
 
+/* Pick up compile-time configuration */
+#include "wolfhsm/wh_settings.h"
+
 /* Message groups and kind */
 enum WH_MESSAGE_ENUM {
     WH_MESSAGE_KIND_NONE            = 0x0000, /* No message kind. Invalid */

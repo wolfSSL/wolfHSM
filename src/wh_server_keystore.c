@@ -393,7 +393,7 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
     case WH_KEY_EXPORT:
         /* out is after fixed size fields */
         out = (uint8_t*)(&packet->keyExportRes + 1);
-        field = WH_COMM_DATA_LEN - (WH_PACKET_STUB_SIZE +
+        field = WOLFHSM_CFG_COMM_DATA_LEN - (WH_PACKET_STUB_SIZE +
             sizeof(packet->keyExportRes));
         /* read the key */
         ret = hsmReadKey(server, WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
@@ -436,4 +436,4 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
     return 0;
 }
 
-#endif  /* WOLFHSM_CFG_NO_CRYPTO */
+#endif  /* !WOLFHSM_CFG_NO_CRYPTO */

@@ -37,6 +37,9 @@
 #ifndef WOLFHSM_WH_NVM_H_
 #define WOLFHSM_WH_NVM_H_
 
+/* Pick up compile-time configuration */
+#include "wolfhsm/wh_settings.h"
+
 #include <stdint.h>
 
 #include "wolfhsm/wh_common.h"  /* For whNvm types */

@@ -139,8 +139,9 @@ int wh_Client_SheSecureBoot(whClientContext* c, uint8_t* bootloader,
         if (packet->rc != WH_SHE_ERC_NO_ERROR)
             return packet->rc;
         /* send what's left in the size available */
-        packet->sheSecureBootUpdateReq.sz = ((bootloaderLen - bootloaderSent)
-            % (WH_COMM_DATA_LEN - sizeof(packet->sheSecureBootUpdateReq)));
+        packet->sheSecureBootUpdateReq.sz = ((bootloaderLen - bootloaderSent) %
+                (WOLFHSM_CFG_COMM_DATA_LEN -
+                sizeof(packet->sheSecureBootUpdateReq)));
         justSent = packet->sheSecureBootUpdateReq.sz;
         memcpy(in, bootloader + bootloaderSent,
             packet->sheSecureBootUpdateReq.sz);

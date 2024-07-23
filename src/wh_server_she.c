@@ -21,17 +21,19 @@
  *
  */
 
-#ifdef WOLFSSL_USER_SETTINGS
-#include "user_settings.h"
-#endif
-
-#ifdef WOLFHSM_CFG_SHE_EXTENSION
 
 
 /* System libraries */
 #include <stdint.h>
 #include <stddef.h>  /* For NULL */
 #include <string.h>  /* For memset, memcpy */
+
+
+#include "wolfhsm/wh_server.h"
+#include "wolfhsm/wh_message.h"
+#include "wolfhsm/wh_packet.h"
+#include "wolfhsm/wh_error.h"
+#include "wolfhsm/wh_utils.h"
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
 #include "wolfssl/wolfcrypt/settings.h"
@@ -40,17 +42,12 @@
 #include "wolfssl/wolfcrypt/wc_port.h"
 #include "wolfssl/wolfcrypt/aes.h"
 #include "wolfssl/wolfcrypt/cmac.h"
+#include "wolfhsm/wh_server_keystore.h"
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
-#include "wolfhsm/wh_server.h"
-#include "wolfhsm/wh_server_keystore.h"
-#include "wolfhsm/wh_message.h"
-#include "wolfhsm/wh_packet.h"
-#include "wolfhsm/wh_error.h"
-#include "wolfhsm/wh_utils.h"
+#ifdef WOLFHSM_CFG_SHE_EXTENSION
 #include "wolfhsm/wh_she_common.h"
 #include "wolfhsm/wh_she_crypto.h"
-
 #include "wolfhsm/wh_server_she.h"
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO

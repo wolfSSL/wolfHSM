@@ -15,8 +15,12 @@ INC = -I$(WOLFHSM_DIR) \
       -I$(USER_SETTINGS_DIR) \
       -I$(WOLFSSL_DIR) \
 
-# Defines.  Required to have user_settings to ensure consistent builds */
-DEF = -DWOLFSSL_USER_SETTINGS
+# Library configuration defines to use additional files.
+CFLAGS += -DWOLFSSL_USER_SETTINGS -DWOLFHSM_CFG
+
+# Test program configuration
+#CFLAGS += -DWOLFHSM_CFG_TEST_VERBOSE
+CFLAGS += -DWOLFHSM_CFG_TEST_POSIX
 
 # Architecture
 ARCHFLAGS ?=

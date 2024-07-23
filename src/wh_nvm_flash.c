@@ -23,10 +23,6 @@
  *
  */
 
-#ifdef WOLFSSL_USER_SETTINGS
-#include "user_settings.h"
-#endif
-
 #include <stdint.h>
 #include <stddef.h>     /* For NULL */
 #include <string.h>     /* For memset, memcpy */

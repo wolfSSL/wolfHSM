@@ -321,7 +321,7 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
             rc = wh_Server_HandleCryptoRequest(server, action, data,
                 &size, seq);
         break;
-#endif  /* WOLFHSM_CFG_NO_CRYPTO */
+#endif  /* !WOLFHSM_CFG_NO_CRYPTO */
 
         case WH_MESSAGE_GROUP_PKCS11:
             rc = _wh_Server_HandlePkcs11Request(server, magic, action, seq,

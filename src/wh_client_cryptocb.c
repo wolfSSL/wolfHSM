@@ -76,7 +76,7 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
 
     packet = (whPacket*)wh_CommClient_GetDataPtr(ctx->comm);
 
-    XMEMSET((uint8_t*)packet, 0, WH_COMM_DATA_LEN);
+    XMEMSET((uint8_t*)packet, 0, WOLFHSM_CFG_COMM_DATA_LEN);
 
     switch (info->algo_type)
     {
@@ -97,7 +97,7 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             dataSz = sizeof(packet->cipherAesCbcReq) +
                 info->cipher.aescbc.aes->keylen + AES_IV_SIZE +
                 info->cipher.aescbc.sz;
-            if (dataSz > WH_COMM_DATA_LEN) {
+            if (dataSz > WOLFHSM_CFG_COMM_DATA_LEN) {
                 /* if we're using an HSM key return BAD_FUNC_ARG */
                 if ((intptr_t)info->cipher.aescbc.aes->devCtx != 0)
                     return BAD_FUNC_ARG;
@@ -155,7 +155,7 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
                 info->cipher.aesgcm_enc.ivSz + info->cipher.aesgcm_enc.sz +
                 info->cipher.aesgcm_enc.authInSz +
                 info->cipher.aesgcm_enc.authTagSz;
-            if (dataSz > WH_COMM_DATA_LEN) {
+            if (dataSz > WOLFHSM_CFG_COMM_DATA_LEN) {
                 /* if we're using an HSM key return BAD_FUNC_ARG */
                 if ((intptr_t)info->cipher.aesgcm_enc.aes->devCtx != 0)
                     return BAD_FUNC_ARG;
@@ -268,7 +268,7 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             dataSz = WH_PACKET_STUB_SIZE + sizeof(packet->pkRsaReq)
                 + info->pk.rsa.inLen;
             /* can't fallback to software since the key is on the HSM */
-            if (dataSz > WH_COMM_DATA_LEN)
+            if (dataSz > WOLFHSM_CFG_COMM_DATA_LEN)
                 return BAD_FUNC_ARG;
             /* set type */
             packet->pkRsaReq.opType = info->pk.rsa.type;
@@ -396,7 +396,7 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             dataSz = WH_PACKET_STUB_SIZE + sizeof(packet->pkEccSignReq) +
                 info->pk.eccsign.inlen;
             /* can't fallback to software since the key is on the HSM */
-            if (dataSz > WH_COMM_DATA_LEN)
+            if (dataSz > WOLFHSM_CFG_COMM_DATA_LEN)
                 return BAD_FUNC_ARG;
             /* set keyId */
             packet->pkEccSignReq.keyId = (intptr_t)info->pk.eccsign.key->devCtx;
@@ -441,7 +441,7 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             dataSz = WH_PACKET_STUB_SIZE + sizeof(packet->pkEccVerifyReq) +
                 info->pk.eccverify.siglen + info->pk.eccverify.hashlen;
             /* can't fallback to software since the key is on the HSM */
-            if (dataSz > WH_COMM_DATA_LEN)
+            if (dataSz > WOLFHSM_CFG_COMM_DATA_LEN)
                 return BAD_FUNC_ARG;
             /* set keyId */
             packet->pkEccVerifyReq.keyId =
@@ -589,7 +589,7 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
     case WC_ALGO_TYPE_CMAC:
         dataSz = WH_PACKET_STUB_SIZE + sizeof(packet->cmacReq) +
             info->cmac.inSz + info->cmac.keySz;
-        if (dataSz > WH_COMM_DATA_LEN) {
+        if (dataSz > WOLFHSM_CFG_COMM_DATA_LEN) {
             /* if we're using an HSM key return BAD_FUNC_ARG */
             if ((intptr_t)info->cmac.cmac->devCtx != 0)
                 return BAD_FUNC_ARG;

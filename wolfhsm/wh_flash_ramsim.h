@@ -19,9 +19,8 @@
 #ifndef WH_FLASH_RAMSIM_H_
 #define WH_FLASH_RAMSIM_H_
 
-#ifdef WOLFSSL_USER_SETTINGS
-#include "user_settings.h"
-#endif
+/* Pick up compile-time configuration */
+#include "wolfhsm/wh_settings.h"
 
 #include <stdint.h>
 

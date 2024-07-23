@@ -29,20 +29,6 @@
 extern "C" {
 #endif
 
-/** Settings specific to the testing */
-/* #define WOLFHSM_CFG_TEST_VERBOSE */
-#define WOLFHSM_CFG_TEST_POSIX
-
-/** wolfHSM settings.  Simple overrides to show they work */
-#define WOLFHSM_CFG_COMM_DATA_LEN 1152
-
-#define WOLFHSM_CFG_NVM_OBJECT_COUNT 30
-#define WOLFHSM_CFG_SERVER_KEYCACHE_COUNT 10
-#define WOLFHSM_CFG_SERVER_KEYCACHE_SIZE 1024
-#define WOLFHSM_CFG_SERVER_DMAADDR_COUNT 8
-#define WOLFHSM_CFG_SERVER_CUSTOMCB_COUNT 6
-
-
 /** Settings specific to the host arch, OS, and compiler */
 /* #define BIG_ENDIAN_ORDER */
 /* #define SINGLE_THREADED */

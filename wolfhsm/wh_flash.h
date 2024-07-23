@@ -26,6 +26,9 @@
 #ifndef WOLFHSM_WH_FLASH_H_
 #define WOLFHSM_WH_FLASH_H_
 
+/* Pick up compile-time configuration */
+#include "wolfhsm/wh_settings.h"
+
 #include <stdint.h>
 
 typedef struct {

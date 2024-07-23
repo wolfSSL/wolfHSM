@@ -19,22 +19,14 @@
 /*
  * wolfhsm/wh_message_customcb.h
  *
- * Configuration values:
- *  WOLFHSM_CFG_CUSTOMCB_LEN - Maximum size of a customcb message.
- *      Default: 256
  */
 #ifndef WOLFHSM_WH_MESSAGE_CUSTOM_CB_H_
 #define WOLFHSM_WH_MESSAGE_CUSTOM_CB_H_
 
+/* Pick up compile-time configuration */
+#include "wolfhsm/wh_settings.h"
+
 #include <stdint.h>
-
-#ifdef WOLFSSL_USER_SETTINGS
-#include "user_settings.h"
-#endif
-
-#ifndef WOLFHSM_CFG_CUSTOMCB_LEN
-#define WOLFHSM_CFG_CUSTOMCB_LEN 256
-#endif
 
 /* Type indicator for custom request/response messages. Indicates how
  * to interpret whMessageCustomData */

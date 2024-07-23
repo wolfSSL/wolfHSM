@@ -24,6 +24,9 @@
 #ifndef WOLFHSM_WH_COMMON_H_
 #define WOLFHSM_WH_COMMON_H_
 
+/* Pick up compile-time configuration */
+#include "wolfhsm/wh_settings.h"
+
 #include <stdint.h>
 
 /** Non-volatile counters */

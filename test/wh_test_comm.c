@@ -25,10 +25,6 @@
 #include <stdio.h>  /* For printf */
 #include <string.h> /* For memset, memcpy */
 
-#ifdef WOLFSSL_USER_SETTINGS
-#include "user_settings.h"
-#endif
-
 #include "wh_test_common.h"
 
 #include "wolfhsm/wh_error.h"

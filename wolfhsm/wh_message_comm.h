@@ -26,6 +26,9 @@
 #ifndef WOLFHSM_WH_MESSAGE_COMM_H_
 #define WOLFHSM_WH_MESSAGE_COMM_H_
 
+/* Pick up compile-time configuration */
+#include "wolfhsm/wh_settings.h"
+
 #include <stdint.h>
 #include "wolfhsm/wh_comm.h"
 
@@ -60,7 +63,7 @@ int wh_MessageComm_GetErrorResponse(uint16_t magic,
 /* Generic len/data message that does not require data translation */
 typedef struct {
     uint16_t len;
-    uint8_t data[WH_COMM_DATA_LEN - sizeof(uint16_t)];
+    uint8_t data[WOLFHSM_CFG_COMM_DATA_LEN - sizeof(uint16_t)];
 } whMessageCommLenData;
 
 int wh_MessageComm_TranslateLenData(uint16_t magic,

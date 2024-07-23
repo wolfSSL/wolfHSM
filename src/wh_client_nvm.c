@@ -265,7 +265,7 @@ int wh_Client_NvmAddObjectRequest(whClientContext* c,
         whNvmSize len, const uint8_t* data)
 {
     /*TODO: Add scatter/gather into CommClient to avoid construction here */
-    uint8_t buffer[WH_COMM_DATA_LEN] = {0};
+    uint8_t buffer[WOLFHSM_CFG_COMM_DATA_LEN] = {0};
     whMessageNvm_AddObjectRequest* msg = (whMessageNvm_AddObjectRequest*)buffer;
     uint16_t hdr_len = sizeof(*msg);
     uint8_t* payload = (uint8_t*)buffer + hdr_len;

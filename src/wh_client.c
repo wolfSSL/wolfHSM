@@ -83,7 +83,7 @@ int wh_Client_Init(whClientContext* c, const whClientConfig* config)
             }
         }
     }
-#endif  /* WOLFHSM_CFG_NO_CRYPTO */
+#endif  /* !WOLFHSM_CFG_NO_CRYPTO */
 
     if (rc != 0) {
         wh_Client_Cleanup(c);
@@ -99,7 +99,7 @@ int wh_Client_Cleanup(whClientContext* c)
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     (void)wolfCrypt_Cleanup();
-#endif  /* WOLFHSM_CFG_NO_CRYPTO */
+#endif  /* !WOLFHSM_CFG_NO_CRYPTO */
 
     (void)wh_CommClient_Cleanup(c->comm);
 
@@ -689,7 +689,7 @@ int wh_Client_KeyCacheRequest_ex(whClientContext* c, uint32_t flags,
     whPacket* packet;
     uint8_t* packIn;
     if (c == NULL || in == NULL || inSz == 0 || WH_PACKET_STUB_SIZE +
-        sizeof(packet->keyCacheReq) + inSz > WH_COMM_DATA_LEN) {
+        sizeof(packet->keyCacheReq) + inSz > WOLFHSM_CFG_COMM_DATA_LEN) {
         return WH_ERROR_BADARGS;
     }
     packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);

@@ -42,9 +42,8 @@
 #ifndef WOLFHSM_WH_CLIENT_H_
 #define WOLFHSM_WH_CLIENT_H_
 
-#ifdef WOLFSSL_USER_SETTINGS
-#include "user_settings.h"
-#endif
+/* Pick up compile-time configuration */
+#include "wolfhsm/wh_settings.h"
 
 /* System libraries */
 #include <stdint.h>
@@ -905,7 +904,7 @@ int wh_Client_SetKeyIdCmac(Cmac* key, whNvmId keyId);
 int wh_Client_GetKeyIdCmac(Cmac* key, whNvmId* outId);
 #endif /* WOLFSSL_CMAC */
 #endif /* !NO_AES */
-#endif /* ! WOLFHSM_CFG_NO_CRYPTO */
+#endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
 /* Counter functions */
 int wh_Client_CounterInitRequest(whClientContext* c, whNvmId counterId,

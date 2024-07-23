@@ -25,17 +25,7 @@
 #include <stdio.h>  /* For printf */
 #include <string.h> /* For memset, memcpy */
 
-#ifdef WOLFSSL_USER_SETTINGS
-#include "user_settings.h"
-#endif
-
-#ifdef WOLFHSM_CFG_SHE_EXTENSION
-#ifndef WOLFHSM_CFG_NO_CRYPTO
-
-#include "wolfssl/wolfcrypt/settings.h"
-#include "wolfssl/wolfcrypt/types.h"
-#include "wolfssl/wolfcrypt/cmac.h"
-
+#include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_nvm.h"
 #include "wolfhsm/wh_nvm_flash.h"
@@ -44,11 +34,18 @@
 #include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_server.h"
 #include "wolfhsm/wh_client.h"
-#include "wolfhsm/wh_client_she.h"
 #include "wolfhsm/wh_transport_mem.h"
+
+#ifdef WOLFHSM_CFG_SHE_EXTENSION
 #include "wolfhsm/wh_she_common.h"
 #include "wolfhsm/wh_she_crypto.h"
-#include "wolfhsm/wh_common.h"
+#include "wolfhsm/wh_client_she.h"
+
+#ifndef WOLFHSM_CFG_NO_CRYPTO
+
+#include "wolfssl/wolfcrypt/settings.h"
+#include "wolfssl/wolfcrypt/types.h"
+#include "wolfssl/wolfcrypt/cmac.h"
 
 #include "wh_test_common.h"
 

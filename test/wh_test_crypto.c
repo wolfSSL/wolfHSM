@@ -926,4 +926,4 @@ int whTest_Crypto(void)
     return 0;
 }
 
-#endif  /* WOLFHSM_CFG_NO_CRYPTO */
+#endif  /* !WOLFHSM_CFG_NO_CRYPTO */

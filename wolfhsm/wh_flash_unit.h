@@ -33,6 +33,9 @@
 #ifndef WOLFHSM_WH_FLASH_UNIT_H_
 #define WOLFHSM_WH_FLASH_UNIT_H_
 
+/* Pick up compile-time configuration */
+#include "wolfhsm/wh_settings.h"
+
 #include <stdint.h>
 
 #include "wolfhsm/wh_flash.h"

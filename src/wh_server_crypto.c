@@ -916,4 +916,4 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
     }
     return ret;
 }
-#endif  /* WOLFHSM_CFG_NO_CRYPTO */
+#endif  /* !WOLFHSM_CFG_NO_CRYPTO */

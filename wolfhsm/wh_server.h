@@ -19,42 +19,14 @@
 /*
  * wolfhsm/wh_server.h
  *
- * Configuration values:
- *  WOLFHSM_CFG_INFOVERSION Reported version string
- *      Default: "01.01.01"
- *
- *  WOLFHSM_CFG_INFOBUILD Reported build string (SHA hash)
- *      Default: "12345678"
- *
- *  WOLFHSM_CFG_NO_CRYPTO - If defined, include no wolfCrypt dependencies
- *      Default: Not defined
- *
- *  WOLFHSM_CFG_SHE_EXTENSION - If defined, include AutoSAR SHE functionality
- *      Default: Not defined
- *
- *  WOLFHSM_CFG_NVM_OBJECT_COUNT - Number of objects in ram and disk directories
- *      Default: 32
- *
- *  WOLFHSM_CFG_SERVER_KEYCACHE_COUNT - Number of RAM keys
- *      Default: 8
- *
- *  WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE - Size of each key in RAM
- *      Default: 1200
- *
- *  WOLFHSM_CFG_SERVER_CUSTOMCB_COUNT - Number of additional callbacks
- *      Default: 8
- *
- *  WOLFHSM_CFG_SERVER_DMAADDR_COUNT - Number of DMA address regions
- *      Default: 10
- *
+*
  */
 
 #ifndef WOLFHSM_WH_SERVER_H_
 #define WOLFHSM_WH_SERVER_H_
 
-#ifdef WOLFSSL_USER_SETTINGS
-#include "user_settings.h"
-#endif
+/* Pick up compile-time configuration */
+#include "wolfhsm/wh_settings.h"
 
 /*
  * WolfHSM Public Server API
@@ -81,48 +53,11 @@ typedef struct whServerContext_t whServerContext;
 #include "wolfssl/wolfcrypt/ecc.h"
 #include "wolfssl/wolfcrypt/curve25519.h"
 #include "wolfssl/wolfcrypt/cryptocb.h"
-#endif /* WOLFHSM_CFG_NO_CRYPTO */
+#endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
 #ifdef WOLFHSM_CFG_SHE_EXTENSION
 #include "wolfhsm/wh_she_common.h"
 #include "wolfhsm/wh_server_she.h"
-#endif
-
-/** Default server resource configurations */
-/* Reported version string */
-#ifndef WOLFHSM_CFG_INFOVERSION
-#define WOLFHSM_CFG_INFOVERSION "01.01.01"
-#endif
-
-/* Reported build identifier string */
-#ifndef WOLFHSM_CFG_INFOBUILD
-#define WOLFHSM_CFG_INFOBUILD "12345678"
-#endif
-
-
-/* Number of NVM objects in the directory */
-#ifndef WOLFHSM_CFG_NVM_OBJECT_COUNT
-#define WOLFHSM_CFG_NVM_OBJECT_COUNT 32
-#endif
-
-/* Number of RAM keys */
-#ifndef WOLFHSM_CFG_SERVER_KEYCACHE_COUNT
-#define WOLFHSM_CFG_SERVER_KEYCACHE_COUNT  8
-#endif
-
-/* Size in bytes of each key cache buffer  */
-#ifndef WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE
-#define WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE 1200
-#endif
-
-/* Custom request shared defs */
-#ifndef WOLFHSM_CFG_SERVER_CUSTOMCB_COUNT
-#define WOLFHSM_CFG_SERVER_CUSTOMCB_COUNT 8
-#endif
-
-/* DMA translation allow entries */
-#ifndef WOLFHSM_CFG_SERVER_DMAADDR_COUNT
-#define WOLFHSM_CFG_SERVER_DMAADDR_COUNT 10
 #endif
 
 
@@ -167,7 +102,7 @@ typedef struct whServerCryptoContext {
 } whServerCryptoContext;
 
 
-#endif /* WOLFHSM_CFG_NO_CRYPTO */
+#endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
 /** Server custom callback */
 
@@ -274,7 +209,7 @@ struct whServerContext_t {
 #ifdef WOLFHSM_CFG_SHE_EXTENSION
     whServerSheContext* she;
 #endif
-#endif /* WOLFHSM_CFG_NO_CRYPTO */
+#endif /* !WOLFHSM_CFG_NO_CRYPTO */
     whServerCustomCb   customHandlerTable[WOLFHSM_CFG_SERVER_CUSTOMCB_COUNT];
     whServerDmaContext dma;
     int                connected;

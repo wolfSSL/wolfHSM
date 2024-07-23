@@ -25,16 +25,19 @@
 #ifndef WOLFHSM_CLIENT_CRYPTOCB_H_
 #define WOLFHSM_CLIENT_CRYPTOCB_H_
 
-/* Get client configuration */
-#include "wolfhsm/wh_client.h"
+/* Pick up compile-time configuration */
+#include "wolfhsm/wh_settings.h"
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
+
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/types.h"
 #include "wolfssl/wolfcrypt/cryptocb.h"
+
+#include "wolfhsm/wh_client.h"
 
 int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* ctx);
 
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
-#endif /* !WOLFHSM_CLIENT_CRYPTOCB_H_ */
+#endif /* WOLFHSM_CLIENT_CRYPTOCB_H_ */

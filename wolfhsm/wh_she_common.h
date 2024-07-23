@@ -24,13 +24,12 @@
 #ifndef WOLFHSM_WH_SHE_COMMON_H_
 #define WOLFHSM_WH_SHE_COMMON_H_
 
-#ifdef WOLFSSL_USER_SETTINGS
-#include "user_settings.h"
-#endif
-
-#include <stdint.h>
+/* Pick up compile-time configuration */
+#include "wolfhsm/wh_settings.h"
 
 #ifdef WOLFHSM_CFG_SHE_EXTENSION
+
+#include <stdint.h>
 
 #define WH_SHE_SECRET_KEY_ID 0
 #define WH_SHE_MASTER_ECU_KEY_ID 1
