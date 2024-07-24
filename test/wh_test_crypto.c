@@ -634,27 +634,34 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         WH_ERROR_PRINT("Failed to wh_Client_CmacCancelableResponse %d\n", ret);
         goto exit;
     }
-    if((ret = wc_CmacUpdate(cmac, (byte*)cmacFodder, sizeof(knownCmacMessage))) != 0) {
-        WH_ERROR_PRINT("Failed to wc_CmacUpdate %d\n", ret);
-        goto exit;
-    }
 #ifndef WOLFHSM_CFG_TEST_NO_CUSTOM_SERVERS
     /* delay the server so scheduling doesn't interfere with the timing */
     serverDelay = 1;
 
     /* TODO: use hsm pause/resume functionality on real hardware */
 #endif
-    if((ret = wh_Client_Cancel(client)) != 0
-#if defined(WOLFHSM_CFG_TEST_NO_CUSTOM_SERVERS)
-        && ret != WH_ERROR_CANCEL_LATE
-#endif
-    ) {
-        WH_ERROR_PRINT("Failed to wh_Client_Cancel %d\n", ret);
+    if((ret = wc_CmacUpdate(cmac, (byte*)cmacFodder, sizeof(knownCmacMessage))) != 0) {
+        WH_ERROR_PRINT("Failed to wc_CmacUpdate %d\n", ret);
+        goto exit;
+    }
+    if((ret = wh_Client_CancelRequest(client)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_CancelRequest %d\n", ret);
         goto exit;
     }
 #ifndef WOLFHSM_CFG_TEST_NO_CUSTOM_SERVERS
     serverDelay = 0;
 #endif
+    do {
+        ret = wh_Client_CancelResponse(client);
+    } while (ret == WH_ERROR_NOTREADY);
+    if(ret != 0
+#if defined(WOLFHSM_CFG_TEST_NO_CUSTOM_SERVERS)
+        && ret != WH_ERROR_CANCEL_LATE
+#endif
+    ) {
+        WH_ERROR_PRINT("Failed to wh_Client_CancelResponse %d\n", ret);
+        goto exit;
+    }
     /* test cancelable request and response work for standard CMAC request with no cancellation */
     if((ret = wc_InitCmac_ex(cmac, knownCmacKey, sizeof(knownCmacKey), WC_CMAC_AES, NULL, NULL, WH_DEV_ID)) != 0) {
         WH_ERROR_PRINT("Failed to wc_InitCmac_ex %d\n", ret);
@@ -754,7 +761,7 @@ int whTest_CryptoServerConfig(whServerConfig* config)
 
     while(am_connected == WH_COMM_CONNECTED) {
 #ifndef WOLFHSM_CFG_TEST_NO_CUSTOM_SERVERS
-        while (serverDelay) {
+        while (serverDelay == 1) {
 #ifdef WOLFHSM_CFG_TEST_POSIX
             sleep(1);
 #endif
