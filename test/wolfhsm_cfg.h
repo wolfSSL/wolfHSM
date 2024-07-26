@@ -40,7 +40,6 @@
 #define WOLFHSM_CFG_SERVER_CUSTOMCB_COUNT 6
 
 /* Test specific configuration */
-#define WOLFHSM_CFG_TEST_NO_CUSTOM_SERVERS
 
 
 #endif /* WOLFHSM_CFG_H_ */
