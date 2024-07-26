@@ -59,6 +59,9 @@ typedef uint16_t whKeyId;
 #define WH_KEYTYPE_SHE       0x2000
 #define WH_KEYTYPE_COUNTER   0x3000
 
+/* Convert a keyId to a pointer to be stored in wolfcrypt devctx */
+#define WH_KEYID_TO_DEVCTX(_k) ((void*)((intptr_t)(_k)))
+#define WH_DEVCTX_TO_KEYID(_d) ((whKeyId)((intptr_t)(_d)))
 
 /** NVM Management */
 /* HSM NVM object identifier type. */

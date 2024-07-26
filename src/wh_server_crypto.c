@@ -839,12 +839,15 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
         case WC_PK_TYPE_RSA:
             switch (packet->pkRsaReq.opType)
             {
-                case RSA_PUBLIC_ENCRYPT:
-                case RSA_PUBLIC_DECRYPT:
-                case RSA_PRIVATE_ENCRYPT:
-                case RSA_PRIVATE_DECRYPT:
-                    ret = hsmCryptoRsaFunction(server, (whPacket*)data, size);
-                    break;
+            case RSA_PUBLIC_ENCRYPT:
+            case RSA_PUBLIC_DECRYPT:
+            case RSA_PRIVATE_ENCRYPT:
+            case RSA_PRIVATE_DECRYPT:
+                ret = hsmCryptoRsaFunction(server, (whPacket*)data, size);
+                break;
+            default:
+                /* Invalid opType */
+                ret = BAD_FUNC_ARG;
             }
             break;
         case WC_PK_TYPE_RSA_GET_SIZE:
