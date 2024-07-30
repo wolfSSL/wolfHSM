@@ -868,12 +868,12 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
         case WC_PK_TYPE_RSA:
 #ifdef DEBUG_CRYPTOCB_VERBOSE
             printf("RSA req recv. opType:%u inLen:%d keyId:%u outLen:%u type:%u\n",
-#endif
                     packet->pkRsaReq.opType,
                     packet->pkRsaReq.inLen,
                     packet->pkRsaReq.keyId,
                     packet->pkRsaReq.outLen,
                     packet->pkRsaReq.type);
+#endif
             switch (packet->pkRsaReq.opType)
             {
             case RSA_PUBLIC_ENCRYPT:
