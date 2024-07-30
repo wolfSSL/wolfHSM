@@ -319,7 +319,8 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
                     info->pk.rsakg.key->devCtx = WH_KEYID_TO_DEVCTX(keyId);
 
                     if (info->pk.rsakg.key != NULL) {
-                        byte keyDer[2048] = {0};
+                        /* DER cannot be larger than MTU */
+                        byte keyDer[WOLFHSM_CFG_COMM_DATA_LEN] = {0};
                         uint32_t derSize = sizeof(keyDer);
                         word32 idx = 0;
                         uint8_t keyLabel[WH_NVM_LABEL_LEN] = {0};
@@ -328,6 +329,9 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
                         ret = wh_Client_KeyExport(ctx,keyId,
                                 keyLabel, sizeof(keyLabel),
                                 keyDer, &derSize);
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+                        printf("-RSA Keygen Der size:%u\n", derSize);
+#endif
                         if (ret == 0) {
                             /* Update the RSA key structure */
                             ret = wc_RsaPrivateKeyDecode(
@@ -344,7 +348,7 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
         case WC_PK_TYPE_RSA:
         {
             whKeyId cacheKeyId = WH_KEYID_ERASED;
-            byte keyDer[2048] = {0};
+            byte keyDer[5000] = {0};  /* Estimated size of a 4096 keyfile */
             int derSize = 0;
             char keyLabel[] = "ClientCbTemp";
 
