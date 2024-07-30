@@ -144,7 +144,9 @@ static int hsmCryptoRsaFunction(whServerContext* server, whPacket* packet,
     if (ret == 0) {
         ret = hsmLoadKeyRsa(server, server->crypto->algoCtx.rsa,
             packet->pkRsaReq.keyId);
+#ifdef DEBUG_CRYPTOCB_VERBOSE
         printf("-LoadKeyRsa keyid %u:%d\n", packet->pkRsaReq.keyId,ret);
+#endif
     }
     /* do the rsa operation */
     if (ret == 0) {

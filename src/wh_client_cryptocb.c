@@ -301,16 +301,20 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
                 WC_ALGO_TYPE_PK,
                 WH_PACKET_STUB_SIZE + sizeof(packet->pkRsakgReq),
                 (uint8_t*)packet);
+#ifdef DEBUG_CRYPTOCB_VERBOSE
             printf("RSA KeyGen Req sent:size:%u, e:%u, ret:%d\n",
                     packet->pkRsakgReq.size, packet->pkRsakgReq.e, ret);
+#endif
             if (ret == 0) {
                 do {
                     ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
                         (uint8_t*)packet);
                 } while (ret == WH_ERROR_NOTREADY);
             }
+#ifdef DEBUG_CRYPTOCB_VERBOSE
             printf("RSA KeyGen Res recv:keyid:%u, rc:%d, ret:%d\n",
                     packet->pkRsakgRes.keyId, packet->rc, ret);
+#endif
             if (ret == 0) {
                 if (packet->rc != 0)
                     ret = packet->rc;
@@ -372,6 +376,8 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
                 ret = derSize = wc_RsaKeyToDer(info->pk.rsa.key, keyDer, sizeof(keyDer));
                 if(derSize >= 0) {
                     /* Cache the key and get the keyID */
+                    /* WWW This is likely recursive so assume the packet will be
+                     *     trashed by the time this returns */
                     ret = wh_Client_KeyCache(ctx, 0, (uint8_t*)keyLabel,
                         sizeof(keyLabel), keyDer, derSize, &cacheKeyId);
                     packet->pkRsaReq.keyId = cacheKeyId;
@@ -385,7 +391,9 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
 #endif
             /* set type */
             packet->pkRsaReq.opType = info->pk.rsa.type;
+#ifdef DEBUG_CRYPTOCB_VERBOSE
             printf("RSA optype:%u\n",packet->pkRsaReq.opType);
+#endif
             /* set inLen */
             packet->pkRsaReq.inLen = info->pk.rsa.inLen;
             /* set outLen */
