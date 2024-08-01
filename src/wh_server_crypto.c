@@ -54,11 +54,7 @@ static int hsmCacheKeyRsa(whServerContext* server, RsaKey* key, whKeyId* outId)
     int ret = 0;
     /* wc_RsaKeyToDer doesn't have a length check option so we need to just pass
      * the big key size if compiled */
-#ifdef WOLFHSM_SEPARATE_BIG_CACHE
     const uint16_t keySz = WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE;
-#else
-    const uint16_t keySz = WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE;
-#endif
     whKeyId keyId = WH_KEYTYPE_CRYPTO;
     /* get a free slot */
     ret = hsmCacheFindSlotAndZero(server, keySz, &cacheBuf, &cacheMeta);
@@ -741,9 +737,7 @@ static int hsmCryptoCmac(whServerContext* server, whPacket* packet,
     byte* key = in + packet->cmacReq.inSz;
     byte* out = (uint8_t*)(&packet->cmacRes + 1);
     whNvmMetadata meta[1] = {{0}};
-#ifdef WOLFHSM_SEPARATE_BIG_CACHE
     uint8_t moveToBigCache = 0;
-#endif
     /* do oneshot if all fields are present */
     if (packet->cmacReq.inSz != 0 && packet->cmacReq.keySz != 0 &&
         packet->cmacReq.outSz != 0) {
@@ -773,9 +767,7 @@ static int hsmCryptoCmac(whServerContext* server, whPacket* packet,
              * overwrite the existing key on exit */
             if (len == AES_128_KEY_SIZE || len == AES_192_KEY_SIZE ||
                 len == AES_256_KEY_SIZE) {
-#ifdef WOLFHSM_SEPARATE_BIG_CACHE
                 moveToBigCache = 1;
-#endif
                 XMEMCPY(tmpKey, (uint8_t*)server->crypto->algoCtx.cmac, len);
                 /* type is not a part of the update call, assume AES */
                 ret = wc_InitCmac_ex(server->crypto->algoCtx.cmac, tmpKey, len,
@@ -830,12 +822,10 @@ static int hsmCryptoCmac(whServerContext* server, whPacket* packet,
                 keyId = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
                     server->comm->client_id, packet->cmacReq.keyId);
             }
-#ifdef WOLFHSM_SEPARATE_BIG_CACHE
             /* evict the aes sized key in the normal cache */
             if (moveToBigCache == 1) {
                 ret = hsmEvictKey(server, keyId);
             }
-#endif
             meta->id = keyId;
             meta->len = sizeof(server->crypto->algoCtx.cmac);
             ret = hsmCacheKey(server, meta, (uint8_t*)server->crypto->algoCtx.cmac);

@@ -65,7 +65,6 @@ int hsmGetUniqueId(whServerContext* server, whNvmId* outId)
         /* try again if match */
         if (i < WOLFHSM_CFG_SERVER_KEYCACHE_COUNT)
             continue;
-#ifdef WOLFHSM_SEPARATE_BIG_CACHE
         /* check against big cache keys */
         for (i = 0; i < WOLFHSM_CFG_SERVER_KEYCACHE_BIG_COUNT; i++) {
             if (buildId == server->bigCache[i].meta->id)
@@ -74,7 +73,6 @@ int hsmGetUniqueId(whServerContext* server, whNvmId* outId)
         /* try again if match */
         if (i < WOLFHSM_CFG_SERVER_KEYCACHE_BIG_COUNT)
             continue;
-#endif
         /* if keyId exists */
         ret = wh_Nvm_List(server->nvm, WH_NVM_ACCESS_ANY,
             WH_NVM_FLAGS_ANY, buildId, &keyCount,
@@ -99,15 +97,11 @@ int hsmCacheFindSlotAndZero(whServerContext* server, uint16_t keySz,
     int i;
     int foundIndex = -1;
     if (server == NULL || (keySz > WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE
-#ifdef WOLFHSM_SEPARATE_BIG_CACHE
         && keySz > WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE
-#endif
         )) {
         return WH_ERROR_BADARGS;
     }
-#ifdef WOLFHSM_SEPARATE_BIG_CACHE
     if (keySz <= WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE)
-#endif
     {
         for (i = 0; i < WOLFHSM_CFG_SERVER_KEYCACHE_COUNT; i++) {
             /* check for empty slot or rewrite slot */
@@ -133,7 +127,6 @@ int hsmCacheFindSlotAndZero(whServerContext* server, uint16_t keySz,
             *outMeta = server->cache[foundIndex].meta;
         }
     }
-#ifdef WOLFHSM_SEPARATE_BIG_CACHE
     else {
         for (i = 0; i < WOLFHSM_CFG_SERVER_KEYCACHE_BIG_COUNT; i++) {
             /* check for empty slot or rewrite slot */
@@ -159,7 +152,6 @@ int hsmCacheFindSlotAndZero(whServerContext* server, uint16_t keySz,
             *outMeta = server->bigCache[foundIndex].meta;
         }
     }
-#endif /* WOLFHSM_SEPARATE_BIG_CACHE */
     /* return error if we are out of cache slots */
     if (foundIndex == -1)
         return WH_ERROR_NOSPACE;
@@ -174,18 +166,14 @@ int hsmCacheKey(whServerContext* server, whNvmMetadata* meta, uint8_t* in)
     if (server == NULL || meta == NULL || in == NULL ||
         (meta->id & WH_KEYID_MASK) == WH_KEYID_ERASED ||
         (meta->len > WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE
-#ifdef WOLFHSM_SEPARATE_BIG_CACHE
         && meta->len > WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE
-#endif
         )) {
         return WH_ERROR_BADARGS;
     }
     /* apply client_id */
     meta->id |= (server->comm->client_id << 8);
     /* check if we need to use big cache instead */
-#ifdef WOLFHSM_SEPARATE_BIG_CACHE
     if (meta->len <= WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE)
-#endif
     {
         for (i = 0; i < WOLFHSM_CFG_SERVER_KEYCACHE_COUNT; i++) {
             /* check for empty slot or rewrite slot */
@@ -219,7 +207,6 @@ int hsmCacheKey(whServerContext* server, whNvmMetadata* meta, uint8_t* in)
                 server->cache[foundIndex].commited = 1;
         }
     }
-#ifdef WOLFHSM_SEPARATE_BIG_CACHE
     /* try big key cache, don't put small keys into big cache if full */
     else {
         for (i = 0; i < WOLFHSM_CFG_SERVER_KEYCACHE_BIG_COUNT; i++) {
@@ -255,7 +242,6 @@ int hsmCacheKey(whServerContext* server, whNvmMetadata* meta, uint8_t* in)
                 server->bigCache[foundIndex].commited = 1;
         }
     }
-#endif /* WOLFHSM_SEPARATE_BIG_CACHE */
     /* return error if we are out of cache slots */
     if (foundIndex == -1)
         return WH_ERROR_NOSPACE;
@@ -269,9 +255,7 @@ int hsmFreshenKey(whServerContext* server, whKeyId keyId, uint8_t** outBuf,
     int ret = 0;
     int i;
     int foundIndex = -1;
-#ifdef WOLFHSM_SEPARATE_BIG_CACHE
     int foundBigIndex = -1;
-#endif
     whNvmMetadata meta[1];
     if (server == NULL || (keyId & WH_KEYID_MASK) == WH_KEYID_ERASED)
         return WH_ERROR_BADARGS;
@@ -290,7 +274,6 @@ int hsmFreshenKey(whServerContext* server, whKeyId keyId, uint8_t** outBuf,
             }
         }
     }
-#ifdef WOLFHSM_SEPARATE_BIG_CACHE
     /* check if the key is in the big cache */
     if (foundIndex != -1) {
         for (i = 0; i < WOLFHSM_CFG_SERVER_KEYCACHE_BIG_COUNT; i++) {
@@ -307,18 +290,13 @@ int hsmFreshenKey(whServerContext* server, whKeyId keyId, uint8_t** outBuf,
             }
         }
     }
-#endif /* WOLFHSM_SEPARATE_BIG_CACHE */
     /* try to read the metadata, we need to see len so we know which cache to
      * check */
     ret = wh_Nvm_GetMetadata(server->nvm, keyId, meta);
     if (ret != 0)
         return ret;
     /* if no empty slots, check for a commited key we can evict */
-    if (foundIndex == -1
-#ifdef WOLFHSM_SEPARATE_BIG_CACHE
-        && meta->len <= WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE
-#endif
-    ) {
+    if (foundIndex == -1 && meta->len <= WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE) {
         for (i = 0; i < WOLFHSM_CFG_SERVER_KEYCACHE_COUNT; i++) {
             if (server->cache[i].commited == 1) {
                 foundIndex = i;
@@ -326,7 +304,6 @@ int hsmFreshenKey(whServerContext* server, whKeyId keyId, uint8_t** outBuf,
             }
         }
     }
-#ifdef WOLFHSM_SEPARATE_BIG_CACHE
     else if (meta->len <= WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE &&
         foundBigIndex == -1) {
         for (i = 0; i < WOLFHSM_CFG_SERVER_KEYCACHE_BIG_COUNT; i++) {
@@ -336,18 +313,11 @@ int hsmFreshenKey(whServerContext* server, whKeyId keyId, uint8_t** outBuf,
             }
         }
     }
-#endif
     /* return error if we are out of cache slots */
-    if (foundIndex == -1
-#ifdef WOLFHSM_SEPARATE_BIG_CACHE
-        && foundBigIndex == -1
-#endif
-    ) {
+    if (foundIndex == -1 && foundBigIndex == -1) {
         return WH_ERROR_NOSPACE;
     }
-#ifdef WOLFHSM_SEPARATE_BIG_CACHE
     if (foundIndex != -1)
-#endif
     {
         /* set meta */
         XMEMCPY((uint8_t*)server->cache[foundIndex].meta, (uint8_t*)meta,
@@ -361,7 +331,6 @@ int hsmFreshenKey(whServerContext* server, whKeyId keyId, uint8_t** outBuf,
             *outMeta = server->cache[foundIndex].meta;
         }
     }
-#ifdef WOLFHSM_SEPARATE_BIG_CACHE
     else {
         /* set meta */
         XMEMCPY((uint8_t*)server->bigCache[foundBigIndex].meta, (uint8_t*)meta,
@@ -375,7 +344,6 @@ int hsmFreshenKey(whServerContext* server, whKeyId keyId, uint8_t** outBuf,
             *outMeta = server->bigCache[foundBigIndex].meta;
         }
     }
-#endif
     /* return read result */
     return ret;
 }
@@ -413,7 +381,6 @@ int hsmReadKey(whServerContext* server, whKeyId keyId, whNvmMetadata* outMeta,
             return 0;
         }
     }
-#ifdef WOLFHSM_SEPARATE_BIG_CACHE
     /* check the big cache */
     for (i = 0; i < WOLFHSM_CFG_SERVER_KEYCACHE_BIG_COUNT; i++) {
         /* copy the meta and key before returning */
@@ -433,7 +400,6 @@ int hsmReadKey(whServerContext* server, whKeyId keyId, whNvmMetadata* outMeta,
             return 0;
         }
     }
-#endif /* WOLFHSM_SEPARATE_BIG_CACHE */
     /* try to read the metadata */
     ret = wh_Nvm_GetMetadata(server->nvm, keyId, meta);
     if (ret == 0) {
@@ -486,7 +452,6 @@ int hsmEvictKey(whServerContext* server, whNvmId keyId)
             break;
         }
     }
-#ifdef WOLFHSM_SEPARATE_BIG_CACHE
     /* find key in big cache */
     if (i >= WOLFHSM_CFG_SERVER_KEYCACHE_COUNT) {
         for (i = 0; i < WOLFHSM_CFG_SERVER_KEYCACHE_BIG_COUNT; i++) {
@@ -500,11 +465,6 @@ int hsmEvictKey(whServerContext* server, whNvmId keyId)
         if (i >= WOLFHSM_CFG_SERVER_KEYCACHE_BIG_COUNT)
             ret = WH_ERROR_NOTFOUND;
     }
-#else /* WOLFHSM_SEPARATE_BIG_CACHE */
-    /* if the key wasn't found return an error */
-    if (i >= WOLFHSM_CFG_SERVER_KEYCACHE_COUNT)
-        ret = WH_ERROR_NOTFOUND;
-#endif /* !WOLFHSM_SEPARATE_BIG_CACHE */
     return ret;
 }
 
@@ -529,7 +489,6 @@ int hsmCommitKey(whServerContext* server, whNvmId keyId)
             break;
         }
     }
-#ifdef WOLFHSM_SEPARATE_BIG_CACHE
     /* find key in big cache */
     if (i >= WOLFHSM_CFG_SERVER_KEYCACHE_COUNT) {
         for (i = 0; i < WOLFHSM_CFG_SERVER_KEYCACHE_BIG_COUNT; i++) {
@@ -543,10 +502,6 @@ int hsmCommitKey(whServerContext* server, whNvmId keyId)
         if (i >= WOLFHSM_CFG_SERVER_KEYCACHE_BIG_COUNT)
             return WH_ERROR_NOTFOUND;
     }
-#else /* WOLFHSM_SEPARATE_BIG_CACHE */
-    if (i >= WOLFHSM_CFG_SERVER_KEYCACHE_COUNT)
-        return WH_ERROR_NOTFOUND;
-#endif /* !WOLFHSM_SEPARATE_BIG_CACHE */
     /* add object */
     ret = wh_Nvm_AddObjectWithReclaim(server->nvm, slotMeta, slotMeta->len,
         slotBuf);
@@ -569,7 +524,6 @@ int hsmEraseKey(whServerContext* server, whNvmId keyId)
             break;
         }
     }
-#ifdef WOLFHSM_SEPARATE_BIG_CACHE
     if (i >= WOLFHSM_CFG_SERVER_KEYCACHE_COUNT) {
         /* remove the key from the big cache if present */
         for (i = 0; i < WOLFHSM_CFG_SERVER_KEYCACHE_BIG_COUNT; i++) {
@@ -579,7 +533,6 @@ int hsmEraseKey(whServerContext* server, whNvmId keyId)
             }
         }
     }
-#endif /* WOLFHSM_SEPARATE_BIG_CACHE */
     /* destroy the object */
     return wh_Nvm_DestroyObjects(server->nvm, 1, &keyId);
 }
