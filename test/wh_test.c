@@ -34,6 +34,10 @@
 #include "wh_test_she.h"
 #include "wh_test_clientserver.h"
 
+#if defined(WOLFHSM_CFG_TEST_WOLFCRYPTTEST)
+#include "wh_test_wolfcrypt_test.h"
+#endif
+
 
 /* Default test args */
 
@@ -56,6 +60,11 @@ int whTest_Unit(void)
 #if defined(WOLFHSM_CFG_SHE_EXTENSION)
     WH_TEST_ASSERT(0 == whTest_She());
 #endif /* WOLFHSM_SHE_EXTENTION */
+
+#if defined(WOLFHSM_CFG_TEST_WOLFCRYPTTEST)
+    WH_TEST_ASSERT(0 == whTest_WolfCryptTest());
+#endif
+
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
     return 0;
