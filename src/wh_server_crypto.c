@@ -42,6 +42,10 @@
 
 #include "wolfhsm/wh_server.h"
 
+#if defined(DEBUG_CRYPTOCB) || defined(DEBUG_CRYPTOCB_VERBOSE)
+#include <stdio.h>
+#endif
+
 #ifndef NO_RSA
 static int hsmCacheKeyRsa(whServerContext* server, RsaKey* key, whKeyId* outId)
 {
@@ -98,13 +102,24 @@ static int hsmCryptoRsaKeyGen(whServerContext* server, whPacket* packet,
     ret = wc_InitRsaKey_ex(server->crypto->algoCtx.rsa, NULL, server->crypto->devId);
     /* make the rsa key with the given params */
     if (ret == 0) {
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+        printf("-MakeRsaKey: size:%u, e:%u\n",
+                (word32)packet->pkRsakgReq.size, packet->pkRsakgReq.e);
+#endif
         ret = wc_MakeRsaKey(server->crypto->algoCtx.rsa,
             (word32)packet->pkRsakgReq.size, (long)packet->pkRsakgReq.e,
             server->crypto->rng);
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+        printf("-MakeRsaKey: ret:%d\n",ret);
+#endif
     }
     /* cache the generated key, data will be blown away */
-    if (ret == 0)
+    if (ret == 0) {
         ret = hsmCacheKeyRsa(server, server->crypto->algoCtx.rsa, &keyId);
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+        printf("-CacheKey: keyId:%u, ret:%d\n", keyId, ret);
+#endif
+    }
     wc_FreeRsaKey(server->crypto->algoCtx.rsa);
     if (ret == 0) {
         /* set the assigned id */
@@ -129,12 +144,22 @@ static int hsmCryptoRsaFunction(whServerContext* server, whPacket* packet,
     if (ret == 0) {
         ret = hsmLoadKeyRsa(server, server->crypto->algoCtx.rsa,
             packet->pkRsaReq.keyId);
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+        printf("-LoadKeyRsa keyid %u:%d\n", packet->pkRsaReq.keyId,ret);
+#endif
     }
     /* do the rsa operation */
     if (ret == 0) {
         len = packet->pkRsaReq.outLen;
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+        printf("-RSAFunction in:%p %u, out:%p, opType:%d\n",
+                in, packet->pkRsaReq.inLen, out, packet->pkRsaReq.opType);
+#endif
         ret = wc_RsaFunction(in, packet->pkRsaReq.inLen, out, &len,
             packet->pkRsaReq.opType, server->crypto->algoCtx.rsa, server->crypto->rng);
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+        printf("-RSAFunction outLen:%d, ret:%d\n", len, ret);
+#endif
     }
     /* free the key */
     wc_FreeRsaKey(server->crypto->algoCtx.rsa);
@@ -805,6 +830,9 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
     whPacket* packet = (whPacket*)data;
     if (server == NULL || server->crypto == NULL || data == NULL || size == NULL)
         return BAD_FUNC_ARG;
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+    printf("Crypto request. Action:%u\n", action);
+#endif
     switch (action)
     {
     case WC_ALGO_TYPE_CIPHER:
@@ -828,6 +856,9 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
         }
         break;
     case WC_ALGO_TYPE_PK:
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+        printf("-PK type:%u\n", packet->pkAnyReq.type);
+#endif
         switch (packet->pkAnyReq.type)
         {
 #ifndef NO_RSA
@@ -837,18 +868,35 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
             break;
 #endif  /* WOLFSSL_KEY_GEN */
         case WC_PK_TYPE_RSA:
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+            printf("RSA req recv. opType:%u inLen:%d keyId:%u outLen:%u type:%u\n",
+                    packet->pkRsaReq.opType,
+                    packet->pkRsaReq.inLen,
+                    packet->pkRsaReq.keyId,
+                    packet->pkRsaReq.outLen,
+                    packet->pkRsaReq.type);
+#endif
             switch (packet->pkRsaReq.opType)
             {
-                case RSA_PUBLIC_ENCRYPT:
-                case RSA_PUBLIC_DECRYPT:
-                case RSA_PRIVATE_ENCRYPT:
-                case RSA_PRIVATE_DECRYPT:
-                    ret = hsmCryptoRsaFunction(server, (whPacket*)data, size);
-                    break;
+            case RSA_PUBLIC_ENCRYPT:
+            case RSA_PUBLIC_DECRYPT:
+            case RSA_PRIVATE_ENCRYPT:
+            case RSA_PRIVATE_DECRYPT:
+                ret = hsmCryptoRsaFunction(server, (whPacket*)data, size);
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+                printf("RSA req recv. ret:%d type:%d\n", ret, packet->pkRsaRes.outLen);
+#endif
+                break;
+            default:
+                /* Invalid opType */
+                ret = BAD_FUNC_ARG;
             }
             break;
         case WC_PK_TYPE_RSA_GET_SIZE:
             ret = hsmCryptoRsaGetSize(server, (whPacket*)data, size);
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+            printf("RSA req getsize recv.Ret:%d\n", ret);
+#endif
             break;
 #endif /* !NO_RSA */
 #ifdef HAVE_ECC
