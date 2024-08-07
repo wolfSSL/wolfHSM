@@ -49,6 +49,7 @@ typedef struct whServerContext_t whServerContext;
 #include "wolfssl/wolfcrypt/ecc.h"
 #include "wolfssl/wolfcrypt/curve25519.h"
 #include "wolfssl/wolfcrypt/cryptocb.h"
+#include "wolfssl/wolfcrypt/sha256.h"
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
 #ifdef WOLFHSM_CFG_SHE_EXTENSION
@@ -91,6 +92,9 @@ typedef struct whServerCryptoContext {
 #endif
 #ifdef WOLFSSL_CMAC
         Cmac cmac[1];
+#endif
+#ifndef NO_SHA256
+        wc_Sha256 sha256[1];
 #endif
     } algoCtx;
     union {

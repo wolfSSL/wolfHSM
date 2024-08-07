@@ -263,6 +263,36 @@ typedef struct  wh_Packet_cmac_res
     /* uint8_t out[]; */
 } wh_Packet_cmac_res;
 
+typedef struct wh_Packet_hash_any_req {
+    uint32_t type; /* enum wc_HashType */
+} wh_Packet_hash_any_req;
+
+typedef struct wh_Packet_hash_sha256_req {
+    /* TODO change to "wh_Packet_hash_any_req header" */
+    uint32_t type; /* enum wc_HashType */
+    /* Full sha256 input block to hash */
+    uint8_t inBlock[64]; /* TODO (BRN) WC_SHA256_BLOCK_SIZE - should be trailing data */
+    /* intermediate hash value */
+    uint8_t hash[32]; /* TODO (BRN) WC_SHA256_DIGEST_SIZE - should be trailing data */
+    uint32_t hiLen;
+    uint32_t loLen;
+    /* Flag indicating whether to use the intermediate hash */
+    uint32_t resumeHash;
+    /* Flag indicating to the server that this is the last block and it should
+     * finalize the hash. If set, inBlock may be only partially full*/
+    uint32_t isLastBlock;
+    /* Length of the last input block of data. Only valid if isLastBlock=1 */
+    uint32_t lastBlockLen;
+
+} wh_Packet_hash_sha256_req;
+
+typedef struct wh_Packet_hash_sha256_res {
+    /* Resulting hash value */
+    uint8_t hash[32]; /* TODO (BRN) WC_SHA256_DIGEST_SIZE - should be trailing data */
+    uint32_t hiLen;
+    uint32_t loLen;
+} wh_Packet_hash_sha256_res;
+
 
 /** Key Management Packets */
 typedef struct  wh_Packet_key_cache_req
@@ -453,7 +483,7 @@ typedef struct  wh_Packet_she_extend_seed_req
 
 typedef struct  wh_Packet_she_extend_seed_res
 {
-    uint32_t status; 
+    uint32_t status;
 } wh_Packet_she_extend_seed_res;
 
 typedef struct  wh_Packet_she_enc_ecb_req
@@ -582,6 +612,10 @@ typedef struct whPacket
         wh_Packet_rng_req rngReq;
         /* cmac */
         wh_Packet_cmac_req cmacReq;
+        /* Hash */
+        wh_Packet_hash_any_req hashAnyReq;
+        /* Hash: SHA256*/
+        wh_Packet_hash_sha256_req hashSha256Req;
         /* key cache */
         wh_Packet_key_cache_req keyCacheReq;
         /* key evict */
@@ -619,6 +653,8 @@ typedef struct whPacket
         wh_Packet_rng_res rngRes;
         /* cmac */
         wh_Packet_cmac_res cmacRes;
+        /* hash: SHA256 */
+        wh_Packet_hash_sha256_res hashSha256Res;
         /* key cache */
         wh_Packet_key_cache_res keyCacheRes;
         /* key evict */

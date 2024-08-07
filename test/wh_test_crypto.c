@@ -124,6 +124,27 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     uint8_t knownCmacTag[] = {0x51, 0xf0, 0xbe, 0xbf, 0x7e, 0x3b, 0x9d, 0x92,
         0xfc, 0x49, 0x74, 0x17, 0x79, 0x36, 0x3c, 0xfe};
 
+#ifndef NO_SHA256
+    wc_Sha256 sha256[1];
+    uint8_t   sha256Out[WC_SHA256_DIGEST_SIZE];
+    /* Vector exactly one block size in length */
+    const char sha256InOneBlock[] =
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const uint8_t sha256ExpectedOutOneBlock[WC_SHA256_DIGEST_SIZE] = {
+        0xff, 0xe0, 0x54, 0xfe, 0x7a, 0xe0, 0xcb, 0x6d, 0xc6, 0x5c, 0x3a,
+        0xf9, 0xb6, 0x1d, 0x52, 0x09, 0xf4, 0x39, 0x85, 0x1d, 0xb4, 0x3d,
+        0x0b, 0xa5, 0x99, 0x73, 0x37, 0xdf, 0x15, 0x46, 0x68, 0xeb};
+    /* Vector long enough to span a SHA256 block */
+    const char sha256InMultiBlock[] =
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWX"
+        "YZ1234567890abcdefghi";
+    const uint8_t sha256ExpectedOutMultiBlock[WC_SHA256_DIGEST_SIZE] = {
+        0x7b, 0x54, 0x45, 0x86, 0xb3, 0x51, 0x43, 0x4e, 0xf6, 0x83, 0xdb,
+        0x78, 0x1d, 0x94, 0xd6, 0xb0, 0x36, 0x9b, 0x36, 0x56, 0x93, 0x0e,
+        0xf4, 0x47, 0x9b, 0xae, 0xff, 0xfa, 0x1f, 0x36, 0x38, 0x64};
+#endif /* !NO_SHA256 */
+
+
     XMEMCPY(plainText, PLAINTEXT, sizeof(plainText));
 
     if (config == NULL) {
@@ -698,6 +719,90 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         goto exit;
     }
     printf("CMAC SUCCESS\n");
+
+
+#ifndef NO_SHA256
+    /* Initialize SHA256 structure */
+    if ((ret = wc_InitSha256_ex(sha256, NULL, WH_DEV_ID) != 0)) {
+        WH_ERROR_PRINT("Failed to wc_InitSha256 %d\n", ret);
+        goto exit;
+    }
+
+    /* Test SHA256 on a single block worth of data. Should trigger a server
+     * transaction */
+    if ((ret = wc_Sha256Update(sha256, (const byte*)sha256InOneBlock,
+                               WC_SHA256_BLOCK_SIZE) != 0)) {
+        WH_ERROR_PRINT("Failed to wc_Sha256Update %d\n", ret);
+        goto exit;
+    }
+
+    /* Finalize should trigger a server transaction with an empty buffer */
+    if ((ret = wc_Sha256Final(sha256, sha256Out) != 0)) {
+        WH_ERROR_PRINT("Failed to wc_Sha256Final %d\n", ret);
+        goto exit;
+    }
+
+    /* Compare the computed hash with the expected output */
+    if (memcmp(sha256Out, sha256ExpectedOutOneBlock, WC_SHA256_DIGEST_SIZE) !=
+        0) {
+        WH_ERROR_PRINT("SHA256 hash does not match the expected output.\n");
+        goto exit;
+    }
+
+    memset(sha256Out, 0, WC_SHA256_DIGEST_SIZE);
+
+    /* Reset state for multi block test */
+    wc_Sha256Free(sha256);
+    if ((ret = wc_InitSha256_ex(sha256, NULL, WH_DEV_ID) != 0)) {
+        WH_ERROR_PRINT("Failed to wc_InitSha256 %d\n", ret);
+        goto exit;
+    }
+
+    /* Update with a non-block aligned length. Will not trigger server
+     * transaction */
+    if ((ret = wc_Sha256Update(sha256, (const byte*)sha256InMultiBlock, 1) !=
+               0)) {
+        WH_ERROR_PRINT("Failed to wc_Sha256Update %d\n", ret);
+        goto exit;
+    }
+    /* Update with a full block, will trigger block to be sent to server and one
+     * additional byte to be buffered */
+    if ((ret = wc_Sha256Update(sha256, (const byte*)sha256InMultiBlock + 1,
+                               WC_SHA256_BLOCK_SIZE) != 0)) {
+        WH_ERROR_PRINT("Failed to wc_Sha256Update %d\n", ret);
+        goto exit;
+    }
+    /* Update with the remaining data, should not trigger server transaction */
+    if ((ret =
+             wc_Sha256Update(
+                 sha256,
+                 (const byte*)sha256InMultiBlock + 1 + WC_SHA256_BLOCK_SIZE,
+                 strlen(sha256InMultiBlock) - 1 - WC_SHA256_BLOCK_SIZE) != 0)) {
+        WH_ERROR_PRINT("Failed to wc_Sha256Update %d\n", ret);
+        goto exit;
+    }
+
+    /* Finalize should trigger a server transaction on the remaining partial
+     * buffer */
+    if ((ret = wc_Sha256Final(sha256, sha256Out) != 0)) {
+        WH_ERROR_PRINT("Failed to wc_Sha256Final %d\n", ret);
+        goto exit;
+    }
+
+    /* Compare the computed hash with the expected output */
+    if (memcmp(sha256Out, sha256ExpectedOutMultiBlock, WC_SHA256_DIGEST_SIZE) !=
+        0) {
+        WH_ERROR_PRINT("SHA256 hash does not match the expected output.\n");
+        goto exit;
+    }
+
+    /* Cleanup */
+    wc_Sha256Free(sha256);
+
+    printf("SHA256 SUCCESS\n");
+
+#endif /* !NO_SHA256 */
+
 
 #ifdef WOLFHSM_CFG_TEST_VERBOSE
     {
