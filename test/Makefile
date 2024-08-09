@@ -13,7 +13,7 @@ BIN = wh_test
 USER_SETTINGS_DIR ?= ./
 INC = -I$(WOLFHSM_DIR) \
       -I$(USER_SETTINGS_DIR) \
-      -I$(WOLFSSL_DIR) \
+      -I$(WOLFSSL_DIR)
 
 # Library configuration defines to use additional files.
 DEF = -DWOLFSSL_USER_SETTINGS -DWOLFHSM_CFG
@@ -21,6 +21,10 @@ DEF = -DWOLFSSL_USER_SETTINGS -DWOLFHSM_CFG
 # Test program configuration
 #DEF += -DWOLFHSM_CFG_TEST_VERBOSE
 DEF += -DWOLFHSM_CFG_TEST_POSIX
+
+ifeq ($(TESTWOLFCRYPT),1)
+DEF += -DWOLFHSM_CFG_TEST_WOLFCRYPTTEST
+endif
 
 # Architecture
 ARCHFLAGS ?=
@@ -82,8 +86,14 @@ SRC_C += \
             $(WOLFSSL_DIR)/wolfcrypt/src/sha256.c \
             $(WOLFSSL_DIR)/wolfcrypt/src/aes.c \
             $(WOLFSSL_DIR)/wolfcrypt/src/ecc.c \
-            $(WOLFSSL_DIR)/wolfcrypt/src/cmac.c \
+            $(WOLFSSL_DIR)/wolfcrypt/src/cmac.c
+endif
 
+ifeq ($(TESTWOLFCRYPT),1)
+# wolfCrypt test source files
+SRC_C += $(WOLFSSL_DIR)/wolfcrypt/test/test.c
+SRC_C += $(wildcard $(WOLFSSL_DIR)/wolfcrypt/src/*.c)
+CFLAGS += -DWC_USE_DEVID=0x5748534D
 endif
 
 # wolfHSM source files
@@ -105,14 +115,14 @@ SRC_C += \
             $(WOLFHSM_DIR)/src/wh_message_customcb.c \
             $(WOLFHSM_DIR)/src/wh_message_nvm.c \
             $(WOLFHSM_DIR)/src/wh_transport_mem.c \
-            $(WOLFHSM_DIR)/src/wh_flash_ramsim.c \
+            $(WOLFHSM_DIR)/src/wh_flash_ramsim.c
 
 ifeq ($(SHE),1)
 SRC_C += \
             $(WOLFHSM_DIR)/src/wh_client_she.c \
             $(WOLFHSM_DIR)/src/wh_server_she.c \
             $(WOLFHSM_DIR)/src/wh_she_common.c \
-            $(WOLFHSM_DIR)/src/wh_she_crypto.c \
+            $(WOLFHSM_DIR)/src/wh_she_crypto.c
 
 endif
 
@@ -123,7 +133,7 @@ SRC_C += \
             $(WOLFHSM_DIR)/src/wh_flash_ramsim.c \
             $(WOLFHSM_DIR)/src/wh_transport_mem.c \
             $(WOLFHSM_DIR)/port/posix/posix_flash_file.c \
-            $(WOLFHSM_DIR)/port/posix/posix_transport_tcp.c \
+            $(WOLFHSM_DIR)/port/posix/posix_transport_tcp.c
 
 # APP
 SRC_C += \
@@ -134,6 +144,10 @@ SRC_C += \
             ./src/wh_test_nvm_flash.c \
             ./src/wh_test_clientserver.c \
             ./src/wh_test_flash_ramsim.c \
+            
+ifeq ($(TESTWOLFCRYPT),1)
+SRC_C += ./src/wh_test_wolfcrypt_test.c
+endif
 
 FILENAMES_C = $(notdir $(SRC_C))
 #FILENAMES_C := $(filter-out evp.c, $(FILENAMES_C))
