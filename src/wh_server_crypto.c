@@ -864,13 +864,13 @@ static int hsmCryptoSha256(whServerContext* server, whPacket* packet,
 
     /* Init the SHA256 context if this is the first time, otherwise restore the
      * hash state from the client */
-    if (req->resumeHash == 0) {
+    if (req->resumeState.resumeHashFlag == 0) {
         ret = wc_InitSha256_ex(sha256, NULL, server->crypto->devId);
     }
     else {
-        XMEMCPY(sha256->digest, req->hash, WC_SHA256_DIGEST_SIZE);
-        sha256->loLen = req->loLen;
-        sha256->hiLen = req->hiLen;
+        XMEMCPY(sha256->digest, req->resumeState.hash, WC_SHA256_DIGEST_SIZE);
+        sha256->loLen = req->resumeState.loLen;
+        sha256->hiLen = req->resumeState.hiLen;
     }
 
     if (req->isLastBlock) {

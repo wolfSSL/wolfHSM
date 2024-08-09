@@ -949,7 +949,7 @@ static int _xferSha256BlockAndUpdateDigest(whClientContext* ctx,
     wh_Packet_hash_sha256_req* req    = &packet->hashSha256Req;
 
     /* Unused wolfCrypt hash flag value. TODO: use devCtx? */
-    const uint32_t RESUME_HASH_FLAG = 0x80000000;
+    const uint32_t RESUME_HASH_BIT_FLAG = 0x80000000;
 
     /* Ensure we always set the packet type, as if this function is called after
      * a response, it will be overwritten*/
@@ -970,11 +970,11 @@ static int _xferSha256BlockAndUpdateDigest(whClientContext* ctx,
             (isLastBlock) ? sha256->buffLen : WC_SHA256_BLOCK_SIZE);
 
     /* If we are resuming, send the hash state */
-    if ((sha256->flags & RESUME_HASH_FLAG) != 0) {
-        req->resumeHash = 1;
-        XMEMCPY(req->hash, sha256->digest, WC_SHA256_DIGEST_SIZE);
-        packet->hashSha256Req.hiLen = sha256->hiLen;
-        packet->hashSha256Req.loLen = sha256->loLen;
+    if ((sha256->flags & RESUME_HASH_BIT_FLAG) != 0) {
+        req->resumeState.resumeHashFlag = 1;
+        XMEMCPY(req->resumeState.hash, sha256->digest, WC_SHA256_DIGEST_SIZE);
+        packet->hashSha256Req.resumeState.hiLen = sha256->hiLen;
+        packet->hashSha256Req.resumeState.loLen = sha256->loLen;
     }
 
     ret = wh_Client_SendRequest(
@@ -984,11 +984,11 @@ static int _xferSha256BlockAndUpdateDigest(whClientContext* ctx,
 #ifdef DEBUG_CRYPTOCB_VERBOSE
     printf("[client] send SHA256 Req:\n");
     _hexdump("[client] inBlock: ", req->inBlock, WC_SHA256_BLOCK_SIZE);
-    if (req->resumeHash) {
-        _hexdump("  [client] resumeHash: ", req->hash,
+    if (req->resumeState.resumeHashFlag) {
+        _hexdump("  [client] resumeHash: ", req->resumeState.hash,
                  (isLastBlock) ? req->lastBlockLen : WC_SHA256_BLOCK_SIZE);
-        printf("  [client] hiLen: %u, loLen: %u\n", packet->hashSha256Req.hiLen,
-               packet->hashSha256Req.loLen);
+        printf("  [client] hiLen: %u, loLen: %u\n", req->resumeState.hiLen,
+               req->resumeState.loLen);
     }
     printf("  [client] ret = %d\n", ret);
 #endif /* DEBUG_CRYPTOCB_VERBOSE */
@@ -1014,7 +1014,7 @@ static int _xferSha256BlockAndUpdateDigest(whClientContext* ctx,
                     WC_SHA256_DIGEST_SIZE);
             sha256->hiLen = packet->hashSha256Res.hiLen;
             sha256->loLen = packet->hashSha256Res.loLen;
-            sha256->flags |= RESUME_HASH_FLAG;
+            sha256->flags |= RESUME_HASH_BIT_FLAG;
 #ifdef DEBUG_CRYPTOCB_VERBOSE
             printf("[client] Client SHA256 Res recv:\n");
             _hexdump("[client] hash: ", (uint8_t*)sha256->digest,
