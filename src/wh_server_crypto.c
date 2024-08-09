@@ -864,7 +864,7 @@ static int hsmCryptoSha256(whServerContext* server, whPacket* packet,
 
     /* Init the SHA256 context if this is the first time, otherwise restore the
      * hash state from the client */
-    if (req->resumeState.resumeHashFlag == 0) {
+    if (req->resumeState.hiLen == 0 && req->resumeState.loLen == 0) {
         ret = wc_InitSha256_ex(sha256, NULL, server->crypto->devId);
     }
     else {

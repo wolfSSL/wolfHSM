@@ -271,8 +271,6 @@ typedef struct wh_Packet_hash_sha256_req {
     /* TODO change to "wh_Packet_hash_any_req header" */
     uint32_t type; /* enum wc_HashType */
     struct {
-        /* Flag indicating whether to use the intermediate hash */
-        uint32_t resumeHashFlag;
         uint32_t hiLen;
         uint32_t loLen;
         /* intermediate hash value */
