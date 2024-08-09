@@ -93,7 +93,6 @@ ifeq ($(TESTWOLFCRYPT),1)
 # wolfCrypt test source files
 SRC_C += $(WOLFSSL_DIR)/wolfcrypt/test/test.c
 SRC_C += $(wildcard $(WOLFSSL_DIR)/wolfcrypt/src/*.c)
-#CFLAGS += -D_POSIX_C_SOURCE=200809L -DWC_USE_DEVID=0x5748534D
 CFLAGS += -DWC_USE_DEVID=0x5748534D
 endif
 
