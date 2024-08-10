@@ -38,6 +38,7 @@
 #include "wolfssl/wolfcrypt/aes.h"
 #include "wolfssl/wolfcrypt/cmac.h"
 #include "wolfssl/wolfcrypt/rsa.h"
+#include "wolfssl/wolfcrypt/sha256.h"
 
 #include "wolfhsm/wh_client_cryptocb.h"
 
@@ -57,6 +58,15 @@ static void _hexdump(const char* initial,uint8_t* ptr, size_t size)
     }
     printf("\n");
 }
+#endif
+
+#ifndef NO_SHA256
+static int _handleSha256(int devId, wc_CryptoInfo* info, void* inCtx,
+                         whPacket* packet);
+static int _xferSha256BlockAndUpdateDigest(whClientContext* ctx,
+                                           wc_Sha256* sha256,
+                                           whPacket* packet,
+                                           uint32_t isLastBlock);
 #endif
 
 int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
@@ -805,7 +815,7 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             WH_PACKET_STUB_SIZE + sizeof(packet->cmacReq) +
             packet->cmacReq.inSz + packet->cmacReq.keySz, (uint8_t*)packet);
         if (ret == 0) {
-            /* if the client marked they may want to cancel, handle the 
+            /* if the client marked they may want to cancel, handle the
              * response in a seperate call */
             if (ctx->cancelable)
                 break;
@@ -832,6 +842,22 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
     } break;
 
 #endif /* WOLFSSL_CMAC */
+
+    case WC_ALGO_TYPE_HASH: {
+        packet->hashAnyReq.type = info->hash.type;
+        switch (info->hash.type) {
+#ifndef NO_SHA256
+            case WC_HASH_TYPE_SHA256:
+                ret = _handleSha256(devId, info, inCtx, packet);
+                break;
+#endif /* !NO_SHA256 */
+
+            default:
+                ret = CRYPTOCB_UNAVAILABLE;
+                break;
+        }
+    } break; /* case WC_ALGO_TYPE_HASH */
+
     case WC_ALGO_TYPE_NONE:
     default:
         ret = CRYPTOCB_UNAVAILABLE;
@@ -848,5 +874,152 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
 #endif /* DEBUG_CRYPTOCB */
     return ret;
 }
+
+
+#ifndef NO_SHA256
+static int _handleSha256(int devId, wc_CryptoInfo* info, void* inCtx,
+                         whPacket* packet)
+{
+    int              ret               = 0;
+    whClientContext* ctx               = inCtx;
+    wc_Sha256*       sha256            = info->hash.sha256;
+    uint8_t*         sha256BufferBytes = (uint8_t*)sha256->buffer;
+
+    /* Caller invoked SHA Update:
+     * wc_CryptoCb_Sha256Hash(sha256, data, len, NULL) */
+    if (info->hash.in != NULL) {
+        size_t i = 0;
+
+        /* Process the partial blocks directly from the input data. If there is
+         * enough input data to fill a full block, transfer it to the server */
+        if (sha256->buffLen > 0) {
+            while (i < info->hash.inSz &&
+                   sha256->buffLen < WC_SHA256_BLOCK_SIZE) {
+                sha256BufferBytes[sha256->buffLen++] = info->hash.in[i++];
+            }
+            if (sha256->buffLen == WC_SHA256_BLOCK_SIZE) {
+                ret = _xferSha256BlockAndUpdateDigest(ctx, sha256, packet, 0);
+                sha256->buffLen = 0;
+            }
+        }
+
+        /* Process as many full blocks from the input data as we can */
+        while ((info->hash.inSz - i) >= WC_SHA256_BLOCK_SIZE) {
+            XMEMCPY(sha256BufferBytes, info->hash.in + i, WC_SHA256_BLOCK_SIZE);
+            ret = _xferSha256BlockAndUpdateDigest(ctx, sha256, packet, 0);
+            i += WC_SHA256_BLOCK_SIZE;
+        }
+
+        /* Copy any remaining data into the buffer to be sent in a subsequent
+         * call when we have enough input data to send a full block */
+        while (i < info->hash.inSz) {
+            sha256BufferBytes[sha256->buffLen++] = info->hash.in[i++];
+        }
+    }
+
+    /* Caller invoked SHA finalize:
+     * wc_CryptoCb_Sha256Hash(sha256, NULL, 0, * hash) */
+    if (info->hash.digest != NULL) {
+        ret = _xferSha256BlockAndUpdateDigest(ctx, sha256, packet, 1);
+
+        /* Copy out the final hash value */
+        if (ret == 0) {
+            memcpy(info->hash.digest, sha256->digest, WC_SHA256_DIGEST_SIZE);
+        }
+
+        /* reset the state of the sha context (without blowing away devId) */
+        sha256->buffLen = 0;
+        sha256->flags   = 0;
+        sha256->hiLen   = 0;
+        sha256->loLen   = 0;
+        memset(sha256->digest, 0, sizeof(sha256->digest));
+    }
+
+    return ret;
+}
+
+static int _xferSha256BlockAndUpdateDigest(whClientContext* ctx,
+                                           wc_Sha256* sha256, whPacket* packet,
+                                           uint32_t isLastBlock)
+{
+    uint16_t                   group  = WH_MESSAGE_GROUP_CRYPTO;
+    uint16_t                   action = WH_MESSAGE_ACTION_NONE;
+    int                        ret    = 0;
+    uint16_t                   dataSz = 0;
+    wh_Packet_hash_sha256_req* req    = &packet->hashSha256Req;
+
+    /* Ensure we always set the packet type, as if this function is called after
+     * a response, it will be overwritten*/
+    req->type = WC_HASH_TYPE_SHA256;
+
+    /* Send the full block to the server, along with the
+     * current hash state if needed. Finalization/padding of last block is up to
+     * the server, we just need to let it know we are done and sending an
+     * incomplete last block */
+    if (isLastBlock) {
+        req->isLastBlock  = 1;
+        req->lastBlockLen = sha256->buffLen;
+    }
+    else {
+        req->isLastBlock = 0;
+    }
+    XMEMCPY(req->inBlock, sha256->buffer,
+            (isLastBlock) ? sha256->buffLen : WC_SHA256_BLOCK_SIZE);
+
+    /* Send the hash state - this will be 0 on the first block on a properly
+     * initialized sha256 struct */
+    XMEMCPY(req->resumeState.hash, sha256->digest, WC_SHA256_DIGEST_SIZE);
+    packet->hashSha256Req.resumeState.hiLen = sha256->hiLen;
+    packet->hashSha256Req.resumeState.loLen = sha256->loLen;
+
+    ret = wh_Client_SendRequest(
+        ctx, group, WC_ALGO_TYPE_HASH,
+        WH_PACKET_STUB_SIZE + sizeof(packet->hashSha256Req), (uint8_t*)packet);
+
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+    printf("[client] send SHA256 Req:\n");
+    _hexdump("[client] inBlock: ", req->inBlock, WC_SHA256_BLOCK_SIZE);
+    if (req->resumeState.hiLen != 0 || req->resumeState.loLen != 0) {
+        _hexdump("  [client] resumeHash: ", req->resumeState.hash,
+                 (isLastBlock) ? req->lastBlockLen : WC_SHA256_BLOCK_SIZE);
+        printf("  [client] hiLen: %u, loLen: %u\n", req->resumeState.hiLen,
+               req->resumeState.loLen);
+    }
+    printf("  [client] ret = %d\n", ret);
+#endif /* DEBUG_CRYPTOCB_VERBOSE */
+
+    if (ret == 0) {
+        do {
+            ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
+                                         (uint8_t*)packet);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+    if (ret == 0) {
+        if (packet->rc != 0) {
+            ret = packet->rc;
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+            printf("[client] ERROR Client SHA256 Res recv: ret=%d", ret);
+#endif /* DEBUG_CRYPTOCB_VERBOSE */
+        }
+        else {
+            /* Store the received intermediate hash in the sha256
+             * context and indicate the field is now valid and
+             * should be passed back and forth to the server */
+            XMEMCPY(sha256->digest, packet->hashSha256Res.hash,
+                    WC_SHA256_DIGEST_SIZE);
+            sha256->hiLen = packet->hashSha256Res.hiLen;
+            sha256->loLen = packet->hashSha256Res.loLen;
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+            printf("[client] Client SHA256 Res recv:\n");
+            _hexdump("[client] hash: ", (uint8_t*)sha256->digest,
+                     WC_SHA256_DIGEST_SIZE);
+#endif /* DEBUG_CRYPTOCB_VERBOSE */
+        }
+    }
+
+    return ret;
+}
+
+#endif /* !NO_SHA256 */
 
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */

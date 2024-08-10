@@ -105,21 +105,21 @@ static int hsmCryptoRsaKeyGen(whServerContext* server, whPacket* packet,
     /* make the rsa key with the given params */
     if (ret == 0) {
 #ifdef DEBUG_CRYPTOCB_VERBOSE
-        printf("-MakeRsaKey: size:%u, e:%u\n",
+        printf("[server] -MakeRsaKey: size:%u, e:%u\n",
                 (word32)packet->pkRsakgReq.size, packet->pkRsakgReq.e);
 #endif
         ret = wc_MakeRsaKey(server->crypto->algoCtx.rsa,
             (word32)packet->pkRsakgReq.size, (long)packet->pkRsakgReq.e,
             server->crypto->rng);
 #ifdef DEBUG_CRYPTOCB_VERBOSE
-        printf("-MakeRsaKey: ret:%d\n",ret);
+        printf("[server] -MakeRsaKey: ret:%d\n",ret);
 #endif
     }
     /* cache the generated key, data will be blown away */
     if (ret == 0) {
         ret = hsmCacheKeyRsa(server, server->crypto->algoCtx.rsa, &keyId);
 #ifdef DEBUG_CRYPTOCB_VERBOSE
-        printf("-CacheKey: keyId:%u, ret:%d\n", keyId, ret);
+        printf("[server] -CacheKey: keyId:%u, ret:%d\n", keyId, ret);
 #endif
     }
     wc_FreeRsaKey(server->crypto->algoCtx.rsa);
@@ -148,20 +148,20 @@ static int hsmCryptoRsaFunction(whServerContext* server, whPacket* packet,
         ret = hsmLoadKeyRsa(server, server->crypto->algoCtx.rsa,
             packet->pkRsaReq.keyId);
 #ifdef DEBUG_CRYPTOCB_VERBOSE
-        printf("-LoadKeyRsa keyid %u:%d\n", packet->pkRsaReq.keyId,ret);
+        printf("[server] -LoadKeyRsa keyid %u:%d\n", packet->pkRsaReq.keyId,ret);
 #endif
     }
     /* do the rsa operation */
     if (ret == 0) {
         len = packet->pkRsaReq.outLen;
 #ifdef DEBUG_CRYPTOCB_VERBOSE
-        printf("-RSAFunction in:%p %u, out:%p, opType:%d\n",
+        printf("[server] -RSAFunction in:%p %u, out:%p, opType:%d\n",
                 in, packet->pkRsaReq.inLen, out, packet->pkRsaReq.opType);
 #endif
         ret = wc_RsaFunction(in, packet->pkRsaReq.inLen, out, &len,
             packet->pkRsaReq.opType, server->crypto->algoCtx.rsa, server->crypto->rng);
 #ifdef DEBUG_CRYPTOCB_VERBOSE
-        printf("-RSAFunction outLen:%d, ret:%d\n", len, ret);
+        printf("[server] -RSAFunction outLen:%d, ret:%d\n", len, ret);
 #endif
     }
     /* free the key */
@@ -749,33 +749,39 @@ static int hsmCryptoCmac(whServerContext* server, whPacket* packet,
     }
     else {
         /* do each operation based on which fields are set */
-        /* set key if present, otherwise load the struct from keyId */
         if (packet->cmacReq.keySz != 0) {
             /* initialize cmac with key and type */
             ret = wc_InitCmac_ex(server->crypto->algoCtx.cmac, key,
                 packet->cmacReq.keySz, packet->cmacReq.type, NULL, NULL,
                 server->crypto->devId);
         }
+        /* Key is not present, meaning client wants to use AES key from
+         * cache/nvm. In order to support multiple sequential CmacUpdate()
+         * calls, we need to cache the whole CMAC struct between invocations
+         * (which also holds the key). To do this we hijack the requested key's
+         * cache slot until CmacFinal() is called, at which point we evict the
+         * struct from the cache. TODO: client should hold CMAC state */
         else {
             len = sizeof(server->crypto->algoCtx.cmac);
             keyId = packet->cmacReq.keyId;
             ret = hsmReadKey(server,
-                WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
-                server->comm->client_id, keyId), NULL,
-                (uint8_t*)server->crypto->algoCtx.cmac, (uint32_t*)&len);
+                WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, server->comm->client_id, keyId),
+                NULL,
+                (uint8_t*)server->crypto->algoCtx.cmac,
+                (uint32_t*)&len);
             /* if the key size is a multiple of aes, init the key and
              * overwrite the existing key on exit */
             if (len == AES_128_KEY_SIZE || len == AES_192_KEY_SIZE ||
                 len == AES_256_KEY_SIZE) {
                 moveToBigCache = 1;
                 XMEMCPY(tmpKey, (uint8_t*)server->crypto->algoCtx.cmac, len);
-                /* type is not a part of the update call, assume AES */
                 ret = wc_InitCmac_ex(server->crypto->algoCtx.cmac, tmpKey, len,
                     WC_CMAC_AES, NULL, NULL, server->crypto->devId);
             }
             else if (len != sizeof(server->crypto->algoCtx.cmac))
                 ret = BAD_FUNC_ARG;
         }
+        /* Handle CMAC update, checking for cancellation */
         if (ret == 0 && packet->cmacReq.inSz != 0) {
             for (i = 0; ret == 0 && i < packet->cmacReq.inSz; i += AES_BLOCK_SIZE) {
                 if (i + AES_BLOCK_SIZE > packet->cmacReq.inSz) {
@@ -812,6 +818,7 @@ static int hsmCryptoCmac(whServerContext* server, whPacket* packet,
                 }
             }
         }
+        /* Cache the CMAC struct for a future update call */
         else if (ret == 0) {
             /* cache/re-cache updated struct */
             if (packet->cmacReq.keySz != 0) {
@@ -841,6 +848,57 @@ static int hsmCryptoCmac(whServerContext* server, whPacket* packet,
 }
 #endif
 
+#ifndef NO_SHA256
+static int hsmCryptoSha256(whServerContext* server, whPacket* packet,
+                           uint16_t* size)
+{
+    int                        ret    = 0;
+    wc_Sha256*                 sha256 = server->crypto->algoCtx.sha256;
+    wh_Packet_hash_sha256_req* req    = &packet->hashSha256Req;
+    wh_Packet_hash_sha256_res* res    = &packet->hashSha256Res;
+
+    /* THe server SHA256 struct doesn't persist state (it is a union), meaning
+     * the devId may get blown away between calls. We must restore the server
+     * devId each time */
+    sha256->devId = server->crypto->devId;
+
+    /* Init the SHA256 context if this is the first time, otherwise restore the
+     * hash state from the client */
+    if (req->resumeState.hiLen == 0 && req->resumeState.loLen == 0) {
+        ret = wc_InitSha256_ex(sha256, NULL, server->crypto->devId);
+    }
+    else {
+        XMEMCPY(sha256->digest, req->resumeState.hash, WC_SHA256_DIGEST_SIZE);
+        sha256->loLen = req->resumeState.loLen;
+        sha256->hiLen = req->resumeState.hiLen;
+    }
+
+    if (req->isLastBlock) {
+        /* wolfCrypt (or cryptoCb) is responsible for last block padding */
+        if (ret == 0) {
+            ret = wc_Sha256Update(sha256, req->inBlock, req->lastBlockLen);
+        }
+        if (ret == 0) {
+            ret = wc_Sha256Final(sha256, res->hash);
+        }
+    }
+    else {
+        /* Client always sends full blocks, unless it's the last block */
+        if (ret == 0) {
+            ret = wc_Sha256Update(sha256, req->inBlock, WC_SHA256_BLOCK_SIZE);
+        }
+        /* Send the hash state back to the client */
+        if (ret == 0) {
+            XMEMCPY(res->hash, sha256->digest, WC_SHA256_DIGEST_SIZE);
+            res->loLen = sha256->loLen;
+            res->hiLen = sha256->hiLen;
+        }
+    }
+
+    return ret;
+}
+#endif /* !NO_SHA256 */
+
 int wh_Server_HandleCryptoRequest(whServerContext* server,
     uint16_t action, uint8_t* data, uint16_t* size, uint16_t seq)
 {
@@ -850,7 +908,7 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
     if (server == NULL || server->crypto == NULL || data == NULL || size == NULL)
         return BAD_FUNC_ARG;
 #ifdef DEBUG_CRYPTOCB_VERBOSE
-    printf("Crypto request. Action:%u\n", action);
+    printf("[server] Crypto request. Action:%u\n", action);
 #endif
     switch (action)
     {
@@ -876,7 +934,7 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
         break;
     case WC_ALGO_TYPE_PK:
 #ifdef DEBUG_CRYPTOCB_VERBOSE
-        printf("-PK type:%u\n", packet->pkAnyReq.type);
+        printf("[server] -PK type:%u\n", packet->pkAnyReq.type);
 #endif
         switch (packet->pkAnyReq.type)
         {
@@ -888,7 +946,7 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
 #endif  /* WOLFSSL_KEY_GEN */
         case WC_PK_TYPE_RSA:
 #ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("RSA req recv. opType:%u inLen:%d keyId:%u outLen:%u type:%u\n",
+            printf("[server] RSA req recv. opType:%u inLen:%d keyId:%u outLen:%u type:%u\n",
                     packet->pkRsaReq.opType,
                     packet->pkRsaReq.inLen,
                     packet->pkRsaReq.keyId,
@@ -903,7 +961,7 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
             case RSA_PRIVATE_DECRYPT:
                 ret = hsmCryptoRsaFunction(server, (whPacket*)data, size);
 #ifdef DEBUG_CRYPTOCB_VERBOSE
-                printf("RSA req recv. ret:%d type:%d\n", ret, packet->pkRsaRes.outLen);
+                printf("[server] RSA req recv. ret:%d type:%d\n", ret, packet->pkRsaRes.outLen);
 #endif
                 break;
             default:
@@ -914,7 +972,7 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
         case WC_PK_TYPE_RSA_GET_SIZE:
             ret = hsmCryptoRsaGetSize(server, (whPacket*)data, size);
 #ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("RSA req getsize recv.Ret:%d\n", ret);
+            printf("[server] RSA req getsize recv.Ret:%d\n", ret);
 #endif
             break;
 #endif /* !NO_RSA */
@@ -965,6 +1023,32 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
         ret = hsmCryptoCmac(server, (whPacket*)data, size, seq);
         break;
 #endif
+
+    case WC_ALGO_TYPE_HASH:
+        switch (packet->hashAnyReq.type) {
+            case WC_HASH_TYPE_SHA256:
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+                printf("[server] SHA256 req recv. type:%u\n",
+                       packet->hashSha256Req.type);
+#endif
+                ret = hsmCryptoSha256(server, (whPacket*)data, size);
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+                if (ret != 0) {
+                    printf("[server] SHA256 ret = %d\n", ret);
+                }
+#endif
+                break;
+
+            default:
+                ret = NOT_COMPILED_IN;
+                break;
+        }
+        break;
+
+#ifndef NO_SHA256
+#endif /* !NO_SHA256 */
+
+
     case WC_ALGO_TYPE_NONE:
     default:
         ret = NOT_COMPILED_IN;
