@@ -21,6 +21,9 @@
  *
  */
 
+/* Pick up compile-time configuration */
+#include "wolfhsm/wh_settings.h"
+
 /* System libraries */
 #include <stdint.h>
 #include <stddef.h>  /* For NULL */
@@ -44,8 +47,7 @@
 #include "wolfssl/wolfcrypt/ecc.h"
 
 #include "wolfhsm/wh_client_cryptocb.h"
-
-#endif
+#endif /* WOLFHSM_CFG_NO_CRYPTO */
 
 /* Message definitions */
 #include "wolfhsm/wh_message.h"

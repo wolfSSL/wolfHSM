@@ -23,6 +23,9 @@
 
 #include <stdint.h>
 
+/* Pick up compile-time configuration */
+#include "wolfhsm/wh_settings.h"
+
 #include "wolfhsm/wh_client.h"
 #include "wolfhsm/wh_comm.h"
 #include "wolfhsm/wh_packet.h"

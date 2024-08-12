@@ -20,14 +20,15 @@
  * src/wh_server_dma.c
  */
 
-/* Pick up server config */
-#include "wolfhsm/wh_server.h"
+/* Pick up compile-time configuration */
+#include "wolfhsm/wh_settings.h"
 
 #include <stdint.h>
 #include <string.h>
 #include <stddef.h>
 
 #include "wolfhsm/wh_error.h"
+#include "wolfhsm/wh_server.h"
 
 
 /* TODO: if the Address allowlist ever gets large, we should consider a more

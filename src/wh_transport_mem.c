@@ -22,6 +22,9 @@
  * Implementation of transport callbacks using 2 memory blocks
  */
 
+/* Pick up compile-time configuration */
+#include "wolfhsm/wh_settings.h"
+
 #include <stddef.h>
 #include <string.h>
 #include <stdint.h>
