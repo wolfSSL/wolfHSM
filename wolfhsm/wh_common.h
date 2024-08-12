@@ -44,20 +44,27 @@ typedef uint16_t whKeyId;
 
 /* Key Masks */
 #define WH_KEYID_MASK   0x00FF
+#define WH_KEYID_SHIFT  0
 #define WH_KEYUSER_MASK 0x0F00
+#define WH_KEYUSER_SHIFT 8
 #define WH_KEYTYPE_MASK 0xF000
+#define WH_KEYTYPE_SHIFT 12
 
 /* Macro to construct a keyid */
-#define WH_MAKE_KEYID(_type, _user, _id)        \
-    ((whKeyId)(((_type) & WH_KEYTYPE_MASK) |    \
-    (((_user) << 8) & WH_KEYUSER_MASK) |        \
-    ((_id) & WH_KEYID_MASK)))
+#define WH_MAKE_KEYID(_type, _user, _id)                    \
+    ((whKeyId)(                                             \
+     (((_type) << WH_KEYTYPE_SHIFT) & WH_KEYTYPE_MASK) |    \
+     (((_user) << WH_KEYUSER_SHIFT) & WH_KEYUSER_MASK) |    \
+     (((_id) << WH_KEYID_SHIFT) & WH_KEYID_MASK)))
+
+#define WH_KEYID_ISERASED(_kid) (((_kid << WH_KEYID_SHIFT) & WH_KEYID_MASK) \
+                            == WH_KEYID_ERASED)
 
 /* Key Types */
-#define WH_KEYTYPE_CRYPTO    0x1000
+#define WH_KEYTYPE_CRYPTO    0x1
 /* She keys are technically raw keys but a SHE keyId needs */
-#define WH_KEYTYPE_SHE       0x2000
-#define WH_KEYTYPE_COUNTER   0x3000
+#define WH_KEYTYPE_SHE       0x2
+#define WH_KEYTYPE_COUNTER   0x3
 
 /* Convert a keyId to a pointer to be stored in wolfcrypt devctx */
 #define WH_KEYID_TO_DEVCTX(_k) ((void*)((intptr_t)(_k)))
@@ -80,6 +87,15 @@ typedef uint16_t whNvmAccess;
 typedef uint16_t whNvmFlags;
 #define WH_NVM_FLAGS_NONE  ((whNvmFlags)0)
 #define WH_NVM_FLAGS_ANY   ((whNvmFlags)-1)
+
+
+#define WH_NVM_FLAGS_IMMUTABLE      ((whNvmFlags)1 << 0) /* Cannot be overwritten */
+#define WH_NVM_FLAGS_SENSITIVE      ((whNvmFlags)1 << 1) /* Holds private/secret data */
+#define WH_NVM_FLAGS_NONEXPORTABLE  ((whNvmFlags)1 << 2) /* Cannot be exported */
+#define WH_NVM_FLAGS_LOCAL          ((whNvmFlags)1 << 3) /* Was generated locally */
+#define WH_NVM_FLAGS_EPHEMERAL      ((whNvmFlags)1 << 4) /* Cannot be cached nor committed */
+
+
 
 /* HSM NVM metadata structure */
 enum WH_NVM_ENUM {

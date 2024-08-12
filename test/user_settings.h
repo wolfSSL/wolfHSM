@@ -29,6 +29,9 @@
 extern "C" {
 #endif
 
+#define DEBUG_CRYPTOCB
+#define DEBUG_CRYPTOCB_VERBOSE
+
 /** Settings specific to the host arch, OS, and compiler */
 /* #define BIG_ENDIAN_ORDER */
 /* #define SINGLE_THREADED */

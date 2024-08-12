@@ -91,6 +91,7 @@ SRC_C += \
             $(WOLFHSM_DIR)/src/wh_utils.c \
             $(WOLFHSM_DIR)/src/wh_client.c \
             $(WOLFHSM_DIR)/src/wh_client_nvm.c \
+            $(WOLFHSM_DIR)/src/wh_client_crypto.c \
             $(WOLFHSM_DIR)/src/wh_client_cryptocb.c \
             $(WOLFHSM_DIR)/src/wh_server.c \
             $(WOLFHSM_DIR)/src/wh_server_customcb.c \

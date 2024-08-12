@@ -23,6 +23,9 @@
 
 #include <stdint.h>
 
+/* Pick up compile-time configuration */
+#include "wolfhsm/wh_settings.h"
+
 #include "wolfhsm/wh_client.h"
 #include "wolfhsm/wh_comm.h"
 #include "wolfhsm/wh_packet.h"
@@ -39,6 +42,7 @@
 #include "wolfssl/wolfcrypt/cmac.h"
 #include "wolfssl/wolfcrypt/rsa.h"
 
+#include "wolfhsm/wh_client_crypto.h"
 #include "wolfhsm/wh_client_cryptocb.h"
 
 #if defined(DEBUG_CRYPTOCB) || defined(DEBUG_CRYPTOCB_VERBOSE)
@@ -59,6 +63,7 @@ static void _hexdump(const char* initial,uint8_t* ptr, size_t size)
 }
 #endif
 
+
 int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
 {
     /* III When possible, return wolfCrypt-enumerated errors */
@@ -75,6 +80,10 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
         return BAD_FUNC_ARG;
     }
 
+#ifdef DEBUG_CRYPTOCB
+    printf("[client] Client_CryptoCb: ");
+    wc_CryptoCb_InfoString(info);
+#endif
     /* Get data pointer from the context to use as request/response storage */
     packet = (whPacket*)wh_CommClient_GetDataPtr(ctx->comm);
     if (packet == NULL) {
@@ -292,10 +301,21 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
 #ifdef WOLFSSL_KEY_GEN
         case WC_PK_TYPE_RSA_KEYGEN:
         {
-            /* set size */
+            ret = wh_Client_MakeExportRsaKey(ctx,
+                    info->pk.rsakg.size, info->pk.rsakg.e,
+                    info->pk.rsakg.key);
+            /* Fix up error codes to be wolfCrypt*/
+            if (ret == WH_ERROR_BADARGS) {
+                ret = BAD_FUNC_ARG;
+            }
+#if 0
+            XMEMSET(&packet->pkRsakgReq, 0, sizeof(packet->pkRsakgReq));
+            packet->pkRsakgReq.type = info->pk.type;
             packet->pkRsakgReq.size = info->pk.rsakg.size;
-            /* set e */
             packet->pkRsakgReq.e = info->pk.rsakg.e;
+            packet->pkRsakgReq.flags = WH_NVM_FLAGS_EPHEMERAL;
+            packet->pkRsakgReq.keyId = WH_KEYID_ERASED;
+
             /* write request */
             ret = wh_Client_SendRequest(ctx, group,
                 WC_ALGO_TYPE_PK,
@@ -312,94 +332,72 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
                 } while (ret == WH_ERROR_NOTREADY);
             }
 #ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("RSA KeyGen Res recv:keyid:%u, rc:%d, ret:%d\n",
-                    packet->pkRsakgRes.keyId, packet->rc, ret);
+            printf("RSA KeyGen Res recv:keyid:%u, len:%u, rc:%d, ret:%d\n",
+                    packet->pkRsakgRes.keyId, packet->pkRsakgRes.len,
+                    packet->rc, ret);
 #endif
             if (ret == 0) {
                 if (packet->rc != 0)
                     ret = packet->rc;
                 else {
-                    whKeyId keyId = packet->pkRsakgRes.keyId;
-                    info->pk.rsakg.key->devCtx = WH_KEYID_TO_DEVCTX(keyId);
+                    word32 derSize = packet->pkRsakgRes.len;
+                    uint8_t* keyDer = (uint8_t*)(&packet->pkRsakgRes + 1);
+                    word32 idx = 0;
 
-                    if (info->pk.rsakg.key != NULL) {
-                        /* DER cannot be larger than MTU */
-                        byte keyDer[WOLFHSM_CFG_COMM_DATA_LEN] = {0};
-                        uint32_t derSize = sizeof(keyDer);
-                        word32 idx = 0;
-                        uint8_t keyLabel[WH_NVM_LABEL_LEN] = {0};
+                    /* Unset the context keyId */
+                    info->pk.rsakg.key->devCtx = WH_KEYID_TO_DEVCTX(0);
 
-                        /* Now export the key and update the RSA Key structure */
-                        ret = wh_Client_KeyExport(ctx,keyId,
-                                keyLabel, sizeof(keyLabel),
-                                keyDer, &derSize);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-                        printf("-RSA Keygen Der size:%u\n", derSize);
-#endif
-                        if (ret == 0) {
-                            /* Update the RSA key structure */
-                            ret = wc_RsaPrivateKeyDecode(
-                                    keyDer, &idx,
-                                    info->pk.rsakg.key,
-                                    derSize);
-                        }
+                    if (    (info->pk.rsakg.key != NULL) &&
+                            (derSize > 0) ) {
+                        ret = wc_RsaPrivateKeyDecode(
+                                        keyDer, &idx,
+                                        info->pk.rsakg.key,
+                                        derSize);
                     }
                 }
             }
+#endif
         } break;
 #endif  /* WOLFSSL_KEY_GEN */
 
         case WC_PK_TYPE_RSA:
         {
-            whKeyId cacheKeyId = WH_KEYID_ERASED;
-            byte keyDer[5000] = {0};  /* Estimated size of a 4096 keyfile */
-            int derSize = 0;
-            char keyLabel[] = "ClientCbTemp";
-
             /* in and out are after the fixed size fields */
             uint8_t* in = (uint8_t*)(&packet->pkRsaReq + 1);
             uint8_t* out = (uint8_t*)(&packet->pkRsaRes + 1);
             dataSz = WH_PACKET_STUB_SIZE + sizeof(packet->pkRsaReq)
                 + info->pk.rsa.inLen;
+            whKeyId keyId = WH_DEVCTX_TO_KEYID(info->pk.rsa.key->devCtx);
+            int evict = 0;
 
-            /* can't fallback to software since the key is on the HSM */
             if (dataSz > WOLFHSM_CFG_COMM_DATA_LEN) {
                 ret = BAD_FUNC_ARG;
                 break;
             }
 
-            /* set keyId */
-            packet->pkRsaReq.keyId = WH_DEVCTX_TO_KEYID(info->pk.rsa.key->devCtx);
-            if (packet->pkRsaReq.keyId == WH_KEYID_ERASED) {
-                /* Must import the key to the server */
-                /* Convert RSA key to DER format */
-                ret = derSize = wc_RsaKeyToDer(info->pk.rsa.key, keyDer, sizeof(keyDer));
-                if(derSize >= 0) {
-                    /* Cache the key and get the keyID */
-                    /* WWW This is likely recursive so assume the packet will be
-                     *     trashed by the time this returns */
-                    ret = wh_Client_KeyCache(ctx, 0, (uint8_t*)keyLabel,
-                        sizeof(keyLabel), keyDer, derSize, &cacheKeyId);
-                    packet->pkRsaReq.keyId = cacheKeyId;
+            /* check to see if the keyId is erased */
+            if (WH_KEYID_ISERASED(keyId)) {
+                /* Must import the key to the server and evict it afterwards */
+                uint8_t keyLabel[] = "ClientCbTempRSA";
+                whNvmFlags flags = WH_NVM_FLAGS_NONE;
+
+                ret = wh_Client_ImportRsaKey(ctx, info->pk.rsa.key,
+                        flags, sizeof(keyLabel), keyLabel, &keyId);
+                if (ret != 0) {
+                    break;
                 }
+                evict = 1;
             }
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("RSA keyId:%u cacheKeyId:%u derSize:%u\n",
-                    packet->pkRsaReq.keyId,
-                    cacheKeyId,
-                    derSize);
-#endif
-            /* set type */
+
+            /* Set packet members. Reset anyreq.type just in case */
+            packet->pkAnyReq.type = info->pk.type;
+            packet->pkRsaReq.keyId = keyId;
             packet->pkRsaReq.opType = info->pk.rsa.type;
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("RSA optype:%u\n",packet->pkRsaReq.opType);
-#endif
-            /* set inLen */
             packet->pkRsaReq.inLen = info->pk.rsa.inLen;
-            /* set outLen */
             packet->pkRsaReq.outLen = *info->pk.rsa.outLen;
             /* set in */
             XMEMCPY(in, info->pk.rsa.in, info->pk.rsa.inLen);
+
             /* write request */
             ret = wh_Client_SendRequest(ctx, group, WC_ALGO_TYPE_PK, dataSz,
                 (uint8_t*)packet);
@@ -431,9 +429,9 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
                     XMEMCPY(info->pk.rsa.out, out, packet->pkRsaRes.outLen);
                 }
             }
-            if (cacheKeyId != WH_KEYID_ERASED) {
-                /* Evict the cached key */
-                ret = wh_Client_KeyEvict(ctx, cacheKeyId);
+            if (evict != 0) {
+                /* Evict the imported key */
+                ret = wh_Client_KeyEvict(ctx, keyId);
             }
         } break;
 
@@ -840,11 +838,10 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
 
 #ifdef DEBUG_CRYPTOCB
     if (ret == CRYPTOCB_UNAVAILABLE) {
-        printf("X whClientCb not implemented: algo->type:%d\n", info->algo_type);
+        printf("[client] Client_CryptoCb: X not implemented: algo->type:%d\n", info->algo_type);
     } else {
-        printf("- whClientCb ret:%d algo->type:%d\n", ret, info->algo_type);
+        printf("[client] Client_CryptoCb: - ret:%d algo->type:%d\n", ret, info->algo_type);
     }
-    wc_CryptoCb_InfoString(info);
 #endif /* DEBUG_CRYPTOCB */
     return ret;
 }

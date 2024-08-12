@@ -31,7 +31,8 @@
 #include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_server.h"
 
-int hsmGetUniqueId(whServerContext* server, whNvmId* outId);
+/* Find a new unique id using the top bits of inout_id for user and type */
+int hsmGetUniqueId(whServerContext* server, whNvmId* inout_id);
 int hsmCacheFindSlot(whServerContext* server);
 int hsmCacheKey(whServerContext* server, whNvmMetadata* meta, uint8_t* in);
 int hsmFreshenKey(whServerContext* server, whKeyId keyId);

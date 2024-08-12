@@ -22,7 +22,8 @@
  */
 
 
-#include "wolfhsm/wh_client.h"
+/* Pick up compile-time configuration */
+#include "wolfhsm/wh_settings.h"
 
 #ifdef WOLFHSM_CFG_SHE_EXTENSION
 

@@ -20,6 +20,9 @@
  * src/wh_message_comm.c
  */
 
+/* Pick up compile-time configuration */
+#include "wolfhsm/wh_settings.h"
+
 #include <stdint.h>
 #include <stddef.h>
 #include <string.h>

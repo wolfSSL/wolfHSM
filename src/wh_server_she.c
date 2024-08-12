@@ -21,19 +21,19 @@
  *
  */
 
-
+/* Pick up compile-time configuration */
+#include "wolfhsm/wh_settings.h"
 
 /* System libraries */
 #include <stdint.h>
 #include <stddef.h>  /* For NULL */
 #include <string.h>  /* For memset, memcpy */
 
-
-#include "wolfhsm/wh_server.h"
 #include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_packet.h"
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_utils.h"
+#include "wolfhsm/wh_server.h"
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
 #include "wolfssl/wolfcrypt/settings.h"

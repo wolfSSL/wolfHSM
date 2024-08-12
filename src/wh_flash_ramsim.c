@@ -21,6 +21,9 @@
  *
  */
 
+/* Pick up compile-time configuration */
+#include "wolfhsm/wh_settings.h"
+
 #include <stdint.h>
 #include <stddef.h>  /* For NULL */
 #include <stdlib.h>  /* For malloc/free */

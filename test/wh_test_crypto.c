@@ -26,6 +26,8 @@
 #include <string.h> /* For memset, memcpy */
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
+#include "wolfhsm/wh_client.h"
+#include "wolfhsm/wh_client_crypto.h"
 
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/types.h"
@@ -424,6 +426,8 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         goto exit;
     }
     /* test rsa */
+    /* Using ephemral key */
+    printf("RSA testing using wolfCrypt with ephemeral keys\n");
     if((ret = wc_InitRsaKey_ex(rsa, NULL, WH_DEV_ID)) != 0) {
         printf("Failed to wc_InitRsaKey_ex %d\n", ret);
         goto exit;
@@ -442,19 +446,72 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         printf("Failed to wc_RsaPrivateDecrypt %d\n", ret);
         goto exit;
     }
+    if((ret = wc_FreeRsaKey(rsa)) != 0) {
+        printf("Failed to wc_FreeRsaKey %d\n", ret);
+        goto exit;
+    }
+
+    /* Using client export key */
+    printf("RSA testing using whClient ephemeral keys\n");
+    if((ret = wc_InitRsaKey_ex(rsa, NULL, WH_DEV_ID)) != 0) {
+        printf("Failed to wc_InitRsaKey_ex %d\n", ret);
+        goto exit;
+    }
+    if((ret = wh_Client_MakeExportRsaKey(client, 2048, 65537, rsa)) != 0) {
+        printf("Failed to wh_Client_MakeExportRsaKey %d\n", ret);
+        goto exit;
+    }
+    if ((ret = wc_RsaPublicEncrypt((byte*)plainText, sizeof(plainText), (byte*)cipherText,
+        sizeof(cipherText), rsa, rng)) < 0) {
+        printf("Failed to wc_RsaPublicEncrypt %d\n", ret);
+        goto exit;
+    }
+    if ((ret = wc_RsaPrivateDecrypt((byte*)cipherText, ret, (byte*)finalText,
+        sizeof(finalText), rsa)) < 0) {
+        printf("Failed to wc_RsaPrivateDecrypt %d\n", ret);
+        goto exit;
+    }
+    if((ret = wc_FreeRsaKey(rsa)) != 0) {
+        printf("Failed to wc_FreeRsaKey %d\n", ret);
+        goto exit;
+    }
+
+    /* Using keyCache key */
+    /* Using ephemral key */
+    keyId = WH_KEYID_ERASED;
+    printf("RSA testing using whServer cached keys\n");
+    if((ret = wh_Client_MakeCacheRsaKey(client, 2048, 65537,
+            WH_NVM_FLAGS_NONE, 0, NULL, &keyId)) != 0) {
+        printf("Failed to wh_Client_MakeCacheRsaKey %d\n", ret);
+        goto exit;
+    }
+
+    if((ret = wc_InitRsaKey_ex(rsa, NULL, WH_DEV_ID)) != 0) {
+        printf("Failed to wc_InitRsaKey_ex %d\n", ret);
+        goto exit;
+    }
+    if((ret = wh_Client_SetKeyIdRsa(rsa, keyId)) != 0) {
+        printf("Failed to wh_Client_SetKeyIdRsa %d\n", ret);
+        goto exit;
+    }
+
+    if ((ret = wc_RsaPublicEncrypt((byte*)plainText, sizeof(plainText), (byte*)cipherText,
+        sizeof(cipherText), rsa, rng)) < 0) {
+        printf("Failed to wc_RsaPublicEncrypt %d\n", ret);
+        goto exit;
+    }
+    if ((ret = wc_RsaPrivateDecrypt((byte*)cipherText, ret, (byte*)finalText,
+        sizeof(finalText), rsa)) < 0) {
+        printf("Failed to wc_RsaPrivateDecrypt %d\n", ret);
+        goto exit;
+    }
+
     if((ret = wh_Client_GetKeyIdRsa(rsa, &keyId)) != 0) {
-        printf("Failed to wc_MakeRsaKey %d\n", ret);
+        printf("Failed to wc_GetKeyIdRsa %d\n", ret);
         goto exit;
     }
-    if ((ret = wh_Client_KeyEvictRequest(client, keyId)) != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyEvictRequest %d\n", ret);
-        goto exit;
-    }
-    do {
-        ret = wh_Client_KeyEvictResponse(client);
-    } while (ret == WH_ERROR_NOTREADY);
-    if (ret != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyEvictResponse %d\n", ret);
+    if ((ret = wh_Client_KeyEvict(client, keyId)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyEvict %d\n", ret);
         goto exit;
     }
     if((ret = wc_FreeRsaKey(rsa)) != 0) {

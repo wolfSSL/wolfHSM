@@ -21,8 +21,8 @@
  *
  */
 
-/* Pick up server config */
-#include "wolfhsm/wh_server.h"
+/* Pick up compile-time configuration */
+#include "wolfhsm/wh_settings.h"
 
 /* System libraries */
 #include <stdint.h>
@@ -39,19 +39,21 @@
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_packet.h"
+#include "wolfhsm/wh_server.h"
 
 #ifdef WOLFHSM_CFG_SHE_EXTENSION
 #include "wolfhsm/wh_server_she.h"
 #endif
+
 #include "wolfhsm/wh_server_keystore.h"
 
-int hsmGetUniqueId(whServerContext* server, whNvmId* outId)
+int hsmGetUniqueId(whServerContext* server, whNvmId* inout_id)
 {
     int i;
     int ret = 0;
     whNvmId id;
     /* apply client_id and type which should be set by caller on outId */
-    whNvmId buildId = (((*outId | (server->comm->client_id << 8)) & (~WH_KEYID_MASK)));
+    whNvmId buildId = (((*inout_id | (server->comm->client_id << 8)) & (~WH_KEYID_MASK)));
     whNvmId nvmId = 0;
     whNvmId keyCount;
     /* try every index until we find a unique one, don't worry about capacity */
@@ -78,7 +80,7 @@ int hsmGetUniqueId(whServerContext* server, whNvmId* outId)
         ret = WH_ERROR_NOSPACE;
     /* ultimately, return found id */
     if (ret == 0)
-        *outId |= buildId;
+        *inout_id |= buildId;
     return ret;
 }
 
@@ -92,6 +94,9 @@ int hsmCacheFindSlot(whServerContext* server)
         if (foundIndex == -1 && server->cache[i].meta->id ==
             WH_KEYID_ERASED) {
             foundIndex = i;
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+            printf("[server] hsmCacheFindSlot found empty:%d\n", i);
+#endif
             break;
         }
     }
@@ -100,13 +105,20 @@ int hsmCacheFindSlot(whServerContext* server)
         for (i = 0; i < WOLFHSM_CFG_SERVER_KEYCACHE_COUNT; i++) {
             if (server->cache[i].commited == 1) {
                 foundIndex = i;
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+                printf("[server] hsmCacheFindSlot found committed:%d\n", i);
+#endif
                 break;
             }
         }
     }
     /* return error if we are out of cache slots */
-    if (foundIndex == -1)
-        return WH_ERROR_NOSPACE;
+    if (foundIndex == -1) {
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+            printf("[server] hsmCacheFindSlot nospace\n");
+#endif
+            return WH_ERROR_NOSPACE;
+    }
     return foundIndex;
 }
 
@@ -128,6 +140,9 @@ int hsmCacheKey(whServerContext* server, whNvmMetadata* meta, uint8_t* in)
             (server->cache[i].meta->id & WH_KEYID_MASK) ==
             WH_KEYID_ERASED) ||
             server->cache[i].meta->id == meta->id) {
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+            printf("[server] hsmCacheKey id:%x found empty:%d\n", meta->id, i);
+#endif
             foundIndex = i;
         }
     }
@@ -136,22 +151,34 @@ int hsmCacheKey(whServerContext* server, whNvmMetadata* meta, uint8_t* in)
         for (i = 0; i < WOLFHSM_CFG_SERVER_KEYCACHE_COUNT; i++) {
             if (server->cache[i].commited == 1) {
                 foundIndex = i;
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+                printf("[server] hsmCacheKey found committed:%d\n", i);
+#endif
                 break;
             }
         }
     }
     /* return error if we are out of cache slots */
-    if (foundIndex == -1)
-        return WH_ERROR_NOSPACE;
+    if (foundIndex == -1) {
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+            printf("[server] hsmCacheKey nospace\n");
+#endif
+            return WH_ERROR_NOSPACE;
+    }
     /* write key if slot found */
     XMEMCPY((uint8_t*)server->cache[foundIndex].buffer, in, meta->len);
     XMEMCPY((uint8_t*)server->cache[foundIndex].meta, (uint8_t*)meta,
         sizeof(whNvmMetadata));
     /* check if the key is already commited */
-    if (wh_Nvm_GetMetadata(server->nvm, meta->id, meta) == WH_ERROR_NOTFOUND)
+    if (wh_Nvm_GetMetadata(server->nvm, meta->id, meta) == WH_ERROR_NOTFOUND) {
         server->cache[foundIndex].commited = 0;
-    else
+    } else {
         server->cache[foundIndex].commited = 1;
+    }
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+    printf("[server] KeyId %x cached in slot %d with committed:%d\n",
+            meta->id, foundIndex, server->cache[foundIndex].commited);
+#endif
     return 0;
 }
 
@@ -165,6 +192,10 @@ int hsmFreshenKey(whServerContext* server, whKeyId keyId)
     whNvmMetadata meta[1];
     if (server == NULL || keyId == WH_KEYID_ERASED)
         return WH_ERROR_BADARGS;
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+    printf("[server] FreshenKey KeyId %x\n", keyId);
+#endif
+
     /* apply client_id */
     keyId |= (server->comm->client_id << 8);
     for (i = 0; i < WOLFHSM_CFG_SERVER_KEYCACHE_COUNT; i++) {
@@ -173,12 +204,19 @@ int hsmFreshenKey(whServerContext* server, whKeyId keyId)
             server->cache[i].meta->id == WH_KEYID_ERASED) ||
             server->cache[i].meta->id == keyId) {
             foundIndex = i;
-            if (server->cache[i].meta->id == keyId)
+            if (server->cache[i].meta->id == keyId) {
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+    printf("[server] FreshenKey KeyId %x found in slot %d\n", keyId, foundIndex);
+#endif
                 return i;
+            }
         }
     }
     /* if no empty slots, check for a commited key we can evict */
     if (foundIndex == -1) {
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+    printf("[server] FreshenKey no empty slots. checking committed\n");
+#endif
         for (i = 0; i < WOLFHSM_CFG_SERVER_KEYCACHE_COUNT; i++) {
             if (server->cache[i].commited == 1) {
                 foundIndex = i;
@@ -187,8 +225,12 @@ int hsmFreshenKey(whServerContext* server, whKeyId keyId)
         }
     }
     /* return error if we are out of cache slots */
-    if (foundIndex == -1)
+    if (foundIndex == -1) {
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+    printf("[server] FreshenKey nospace \n");
+#endif
         return WH_ERROR_NOSPACE;
+    }
     /* try to read the metadata */
     ret = wh_Nvm_GetMetadata(server->nvm, keyId, meta);
     if (ret == 0) {
@@ -199,6 +241,11 @@ int hsmFreshenKey(whServerContext* server, whKeyId keyId)
         ret = wh_Nvm_Read(server->nvm, keyId, 0, outSz,
             server->cache[foundIndex].buffer);
     }
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+    printf("[server] FreshenKey KeyId %x is now in slot %d \n",
+            keyId, foundIndex);
+#endif
+
     /* return index */
     return foundIndex;
 }
@@ -361,23 +408,26 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
         meta->id = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
             server->comm->client_id,
             packet->keyCacheReq.id);
+        meta->access = WH_NVM_ACCESS_ANY;
         meta->flags = packet->keyCacheReq.flags;
         meta->len = packet->keyCacheReq.sz;
         /* validate label sz */
-        if (packet->keyCacheReq.labelSz > WH_NVM_LABEL_LEN)
+        if (packet->keyCacheReq.labelSz > WH_NVM_LABEL_LEN) {
             ret = WH_ERROR_BADARGS;
-        else {
+        } else {
             XMEMCPY(meta->label, packet->keyCacheReq.label,
                 packet->keyCacheReq.labelSz);
         }
         /* get a new id if one wasn't provided */
-        if (packet->keyCacheReq.id == WH_KEYID_ERASED)
+        if (WH_KEYID_ISERASED(meta->id)) {
             ret = hsmGetUniqueId(server, &meta->id);
+        }
         /* write the key */
-        if (ret == 0)
-            ret = hsmCacheKey(server, meta, in);
         if (ret == 0) {
-            /* remove the cleint_id, client may set type */
+            ret = hsmCacheKey(server, meta, in);
+        }
+        if (ret == 0) {
+            /* remove the user/type from keyid */
             packet->keyCacheRes.id = (meta->id & WH_KEYID_MASK);
             *size = WH_PACKET_STUB_SIZE + sizeof(packet->keyCacheRes);
         }

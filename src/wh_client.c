@@ -21,6 +21,9 @@
  *
  */
 
+/* Pick up compile-time configuration */
+#include "wolfhsm/wh_settings.h"
+
 /* System libraries */
 #include <stdint.h>
 #include <stddef.h>  /* For NULL */
@@ -39,13 +42,9 @@
 #include "wolfssl/wolfcrypt/error-crypt.h"
 #include "wolfssl/wolfcrypt/wc_port.h"
 #include "wolfssl/wolfcrypt/cryptocb.h"
-#include "wolfssl/wolfcrypt/curve25519.h"
-#include "wolfssl/wolfcrypt/rsa.h"
-#include "wolfssl/wolfcrypt/ecc.h"
 
 #include "wolfhsm/wh_client_cryptocb.h"
-
-#endif
+#endif /* WOLFHSM_CFG_NO_CRYPTO */
 
 /* Message definitions */
 #include "wolfhsm/wh_message.h"
@@ -1157,6 +1156,7 @@ int wh_Client_CounterDestroy(whClientContext* c, whNvmId counterId)
     return ret;
 }
 
+#if 0
 #ifndef WOLFHSM_CFG_NO_CRYPTO
 
 #ifdef HAVE_CURVE25519
@@ -1164,7 +1164,7 @@ int wh_Client_SetKeyIdCurve25519(curve25519_key* key, whNvmId keyId)
 {
     if (key == NULL)
         return WH_ERROR_BADARGS;
-    key->devCtx = (void*)((intptr_t)keyId);
+    key->devCtx = WH_KEYID_TO_DEVCTX(keyId);
     key->pubSet = 1;
     key->privSet = 1;
     return WH_ERROR_OK;
@@ -1174,7 +1174,7 @@ int wh_Client_GetKeyIdCurve25519(curve25519_key* key, whNvmId* outId)
 {
     if (key == NULL || outId == NULL)
         return WH_ERROR_BADARGS;
-    *outId = (intptr_t)key->devCtx;
+    *outId = WH_DEVCTX_TO_KEYID(key->devCtx);
     return WH_ERROR_OK;
 }
 #endif /* HAVE_CURVE25519 */
@@ -1184,7 +1184,7 @@ int wh_Client_SetKeyIdEcc(ecc_key* key, whNvmId keyId)
 {
     if (key == NULL)
         return WH_ERROR_BADARGS;
-    key->devCtx = (void*)((intptr_t)keyId);
+    key->devCtx = WH_KEYID_TO_DEVCTX(keyId);
     return WH_ERROR_OK;
 }
 
@@ -1192,8 +1192,77 @@ int wh_Client_GetKeyIdEcc(ecc_key* key, whNvmId* outId)
 {
     if (key == NULL || outId == NULL)
         return WH_ERROR_BADARGS;
-    *outId = (intptr_t)key->devCtx;
+    *outId = WH_DEVCTX_TO_KEYID(key->devCtx);
     return WH_ERROR_OK;
+}
+
+int wh_Client_ImportEccKey(whClientContext* ctx, ecc_key* key,
+        uint32_t label_len, uint8_t* label, whKeyId *out_keyId)
+{
+    int ret = 0;
+    whKeyId cacheKeyId = WH_KEYID_ERASED;
+    byte keyDer[WOLFHSM_CFG_COMM_DATA_LEN] = {0};
+    word32 derSize = 0;
+
+    if (    (ctx == NULL) ||
+            (key == NULL) ||
+            ((label_len != 0) && (label == NULL))) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Convert RSA key to DER format */
+    ret = derSize = wc_EccKeyToDer(key, keyDer, sizeof(keyDer));
+    if( (ret == 0) &&
+        (derSize >= 0)) {
+        /* Cache the key and get the keyID */
+        ret = wh_Client_KeyCache(ctx, WH_NVM_FLAGS_NONE,
+                label, label_len,
+                keyDer, derSize, &cacheKeyId);
+        if (out_keyId != NULL) {
+            *out_keyId = cacheKeyId;
+        }
+    }
+    return ret;
+}
+
+int wh_Client_ExportEccKey(whClientContext* ctx, whKeyId keyId, ecc_key* key,
+        uint32_t label_len, uint8_t* label)
+{
+    int ret = 0;
+    /* DER cannot be larger than MTU */
+    byte keyDer[WOLFHSM_CFG_COMM_DATA_LEN] = {0};
+    uint32_t derSize = sizeof(keyDer);
+    uint8_t keyLabel[WH_NVM_LABEL_LEN] = {0};
+
+    if (    (ctx == NULL) ||
+            (keyId == WH_KEYID_ERASED) ||
+            (key == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Now export the key from the server */
+    ret = wh_Client_KeyExport(ctx,keyId,
+            keyLabel, sizeof(keyLabel),
+            keyDer, &derSize);
+    if (ret == 0) {
+        word32 idx = 0;
+        /* Update the RSA key structure */
+        ret = wc_EccPrivateKeyDecode(
+                keyDer, &idx,
+                key,
+                derSize);
+        if (ret == 0) {
+            /* Successful parsing of RSA key.  Update the label */
+            if ((label_len > 0) && (label != NULL)) {
+                if (label_len > WH_NVM_LABEL_LEN) {
+                    label_len = WH_NVM_LABEL_LEN;
+                }
+                memcpy(label, keyLabel, label_len);
+            }
+        }
+    }
+
+    return ret;
 }
 #endif /* HAVE_ECC */
 
@@ -1202,7 +1271,7 @@ int wh_Client_SetKeyIdRsa(RsaKey* key, whNvmId keyId)
 {
     if (key == NULL)
         return WH_ERROR_BADARGS;
-    key->devCtx = (void*)((intptr_t)keyId);
+    key->devCtx = WH_KEYID_TO_DEVCTX(keyId);
     return WH_ERROR_OK;
 }
 
@@ -1210,17 +1279,92 @@ int wh_Client_GetKeyIdRsa(RsaKey* key, whNvmId* outId)
 {
     if (key == NULL || outId == NULL)
         return WH_ERROR_BADARGS;
-    *outId = (intptr_t)key->devCtx;
+    *outId = WH_DEVCTX_TO_KEYID(key->devCtx);
     return WH_ERROR_OK;
 }
-#endif
+
+int wh_Client_KeyCacheMakeRsa(whClientContext* ctx,
+        uint32_t size, uint32_t e,
+        uint32_t label_len, uint8_t* label, whKeyId *out_keyId)
+{
+
+    return 0;
+}
+int wh_Client_ImportRsaKey(whClientContext* ctx, RsaKey* key,
+        uint32_t label_len, uint8_t* label, whKeyId *out_keyId)
+{
+    int ret = 0;
+    whKeyId cacheKeyId = WH_KEYID_ERASED;
+    byte keyDer[WOLFHSM_CFG_COMM_DATA_LEN] = {0};
+    int derSize = 0;
+
+    if (    (ctx == NULL) ||
+            (key == NULL) ||
+            ((label_len != 0) && (label == NULL))) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Convert RSA key to DER format */
+    ret = derSize = wc_RsaKeyToDer(key, keyDer, sizeof(keyDer));
+    if(derSize >= 0) {
+        /* Cache the key and get the keyID */
+        ret = wh_Client_KeyCache(ctx, WH_NVM_FLAGS_NONE,
+                label, label_len,
+                keyDer, derSize, &cacheKeyId);
+        if (out_keyId != NULL) {
+            *out_keyId = cacheKeyId;
+        }
+    }
+    return ret;
+}
+
+int wh_Client_ExportRsaKey(whClientContext* ctx, whKeyId keyId, RsaKey* key,
+        uint32_t label_len, uint8_t* label)
+{
+    int ret = 0;
+    /* DER cannot be larger than MTU */
+    byte keyDer[WOLFHSM_CFG_COMM_DATA_LEN] = {0};
+    uint32_t derSize = sizeof(keyDer);
+    uint8_t keyLabel[WH_NVM_LABEL_LEN] = {0};
+
+    if (    (ctx == NULL) ||
+            (keyId == WH_KEYID_ERASED) ||
+            (key == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Now export the key from the server */
+    ret = wh_Client_KeyExport(ctx,keyId,
+            keyLabel, sizeof(keyLabel),
+            keyDer, &derSize);
+    if (ret == 0) {
+        word32 idx = 0;
+        /* Update the RSA key structure */
+        ret = wc_RsaPrivateKeyDecode(
+                keyDer, &idx,
+                key,
+                derSize);
+        if (ret == 0) {
+            /* Successful parsing of RSA key.  Update the label */
+            if ((label_len > 0) && (label != NULL)) {
+                if (label_len > WH_NVM_LABEL_LEN) {
+                    label_len = WH_NVM_LABEL_LEN;
+                }
+                memcpy(label, keyLabel, label_len);
+            }
+        }
+    }
+
+    return ret;
+}
+#endif /* !NO_RSA */
 
 #ifndef NO_AES
 int wh_Client_SetKeyIdAes(Aes* key, whNvmId keyId)
 {
     if (key == NULL)
         return WH_ERROR_BADARGS;
-    key->devCtx = (void*)((intptr_t)keyId);
+    key->devCtx = WH_KEYID_TO_DEVCTX(keyId);
     return WH_ERROR_OK;
 }
 
@@ -1228,7 +1372,7 @@ int wh_Client_GetKeyIdAes(Aes* key, whNvmId* outId)
 {
     if (key == NULL || outId == NULL)
         return WH_ERROR_BADARGS;
-    *outId = (intptr_t)key->devCtx;
+    *outId = WH_DEVCTX_TO_KEYID(key->devCtx);
     return WH_ERROR_OK;
 }
 #endif
@@ -1238,7 +1382,7 @@ int wh_Client_SetKeyIdCmac(Cmac* key, whNvmId keyId)
 {
     if (key == NULL)
         return WH_ERROR_BADARGS;
-    key->devCtx = (void*)((intptr_t)keyId);
+    key->devCtx = WH_KEYID_TO_DEVCTX(keyId);
     return WH_ERROR_OK;
 }
 
@@ -1246,7 +1390,7 @@ int wh_Client_GetKeyIdCmac(Cmac* key, whNvmId* outId)
 {
     if (key == NULL || outId == NULL)
         return WH_ERROR_BADARGS;
-    *outId = (intptr_t)key->devCtx;
+    *outId = WH_DEVCTX_TO_KEYID(key->devCtx);
     return WH_ERROR_OK;
 }
 
@@ -1329,3 +1473,4 @@ int wh_Client_CmacCancelableResponse(whClientContext* c, Cmac* cmac,
 }
 #endif /* WOLFSSL_CMAC */
 #endif  /* !WOLFHSM_CFG_NO_CRYPTO */
+#endif /*0*/

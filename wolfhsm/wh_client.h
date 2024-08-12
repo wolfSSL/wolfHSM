@@ -50,6 +50,7 @@
 #include "wolfhsm/wh_comm.h"
 #include "wolfhsm/wh_message_customcb.h"
 
+#if 0
 #ifndef WOLFHSM_CFG_NO_CRYPTO
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/types.h"
@@ -62,6 +63,7 @@
 #include "wolfssl/wolfcrypt/rsa.h"
 #include "wolfssl/wolfcrypt/ecc.h"
 #endif
+#endif /*0*/
 
 /* Device Id to be registered and passed to wolfCrypt functions */
 #define WH_DEV_ID 0x5748534D  /* "WHSM" */
@@ -454,7 +456,6 @@ int wh_Client_Echo(whClientContext* c, uint16_t snd_len, const void* snd_data,
  */
 
 
-#ifndef WOLFHSM_CFG_NO_CRYPTO
 /**
  * @brief Sends a key cache request to the server.
  *
@@ -705,7 +706,7 @@ int wh_Client_KeyEraseResponse(whClientContext* c);
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_Client_KeyErase(whClientContext* c, whNvmId keyId);
-
+#if 0
 #ifdef HAVE_CURVE25519
 /**
  * @brief Associates a Curve25519 key with a specific key ID.
@@ -785,6 +786,45 @@ int wh_Client_SetKeyIdRsa(RsaKey* key, whNvmId keyId);
  * @return int Returns 0 on success or a negative error code on failure.
  */
 int wh_Client_GetKeyIdRsa(RsaKey* key, whNvmId* outId);
+
+/**
+ * @brief Imports wolfCrypt RSA key as a PCKS1 DER-formatted file into the
+ * wolfHSM server key cache.
+ *
+ * This function converts the RsaKey struct to DER format, installs into the
+ * server's key cache, and provides the server-allocated keyId for reference.
+ *
+ * @param[in] ctx Pointer to the wolfHSM client structure.
+ * @param[in] key Pointer to the RSA key structure.
+ * @param[in] label_len Length of the optional label in bytes, Valid values are
+ *              0 to WH_NVM_LABEL_LEN.
+ * @param[in] label pointer to the optional label byte array. May be NULL.
+ * @param[out] out_keyId Pointer to the key ID to return.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_ImportRsaKey(whClientContext* ctx, RsaKey* key,
+        uint32_t label_len, uint8_t* label, whKeyId *out_keyId);
+
+/**
+ * @brief Exports a PKCS1 DER-formated RSA key from the wolfHSM server keycache
+ * and decodes it into the wolfCrypt RSA key structure.
+ *
+ * This function exports the specified key from wolfHSM server key cache as a
+ * PCKS1 DER file and decodes the key into the wolfCrypt RsaKey structure,
+ * optionally copying out the associated label as well.
+ *
+ * @param[in] ctx Pointer to the wolfHSM client structure.
+ * @param[out] out_keyId Server key ID to export.
+ * @param[in] key Pointer to the RSA key structure.
+ * @param[in] label_len Length of the optional label in bytes, Valid values are
+ *              0 to WH_NVM_LABEL_LEN.
+ * @param[in] label pointer to the optional label byte array. May be NULL.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+
+int wh_Client_ExportRsaKey(whClientContext* ctx, whKeyId keyId, RsaKey* key,
+        uint32_t label_len, uint8_t* label);
+
 #endif /* !NO_RSA */
 
 #ifndef NO_AES
@@ -899,7 +939,8 @@ int wh_Client_SetKeyIdCmac(Cmac* key, whNvmId keyId);
 int wh_Client_GetKeyIdCmac(Cmac* key, whNvmId* outId);
 #endif /* WOLFSSL_CMAC */
 #endif /* !NO_AES */
-#endif /* !WOLFHSM_CFG_NO_CRYPTO */
+
+#endif /* 0 */
 
 /* Counter functions */
 int wh_Client_CounterInitRequest(whClientContext* c, whNvmId counterId,

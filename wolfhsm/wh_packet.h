@@ -98,13 +98,18 @@ typedef struct  wh_Packet_pk_any_req
 typedef struct  wh_Packet_pk_rsakg_req
 {
     uint32_t type;
+    uint32_t flags;
+    uint32_t keyId;
     uint32_t size;
     uint32_t e;
+    uint8_t label[WH_NVM_LABEL_LEN];
 } wh_Packet_pk_rsakg_req;
 
 typedef struct  wh_Packet_pk_rsakg_res
 {
     uint32_t keyId;
+    uint32_t len;
+    /* uint8_t out[len]; */
 } wh_Packet_pk_rsakg_res;
 
 typedef struct  wh_Packet_pk_rsa_req
