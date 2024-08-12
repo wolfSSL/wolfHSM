@@ -21,6 +21,8 @@
  *
  */
 
+#include "wolfhsm/wh_settings.h"
+
 #include <stdint.h>
 #include <stdio.h>  /* For printf */
 #include <string.h> /* For memset, memcpy */
@@ -36,8 +38,9 @@
 #include "wolfhsm/wh_flash_ramsim.h"
 #include "wolfhsm/wh_comm.h"
 #include "wolfhsm/wh_message.h"
-#include "wolfhsm/wh_server.h"
 #include "wolfhsm/wh_client.h"
+#include "wolfhsm/wh_server.h"
+
 #include "wolfhsm/wh_transport_mem.h"
 
 #include "wh_test_common.h"

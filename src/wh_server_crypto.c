@@ -21,8 +21,8 @@
  *
  */
 
-/* Pick up server config */
-#include "wolfhsm/wh_server.h"
+/* Pick up compile-time configuration */
+#include "wolfhsm/wh_settings.h"
 
 /* System libraries */
 #include <stdint.h>

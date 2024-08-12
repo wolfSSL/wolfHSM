@@ -21,6 +21,9 @@
  *
  */
 
+/* Pick up compile-time configuration */
+#include "wolfhsm/wh_settings.h"
+
 #include <string.h>
 #include <stdint.h>
 

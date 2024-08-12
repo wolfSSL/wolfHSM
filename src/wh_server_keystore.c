@@ -21,8 +21,8 @@
  *
  */
 
-/* Pick up server config */
-#include "wolfhsm/wh_server.h"
+/* Pick up compile-time configuration */
+#include "wolfhsm/wh_settings.h"
 
 /* System libraries */
 #include <stdint.h>
@@ -39,10 +39,12 @@
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_packet.h"
+#include "wolfhsm/wh_server.h"
 
 #ifdef WOLFHSM_CFG_SHE_EXTENSION
 #include "wolfhsm/wh_server_she.h"
 #endif
+
 #include "wolfhsm/wh_server_keystore.h"
 
 int hsmGetUniqueId(whServerContext* server, whNvmId* outId)
