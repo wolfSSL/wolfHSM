@@ -812,7 +812,7 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             WH_PACKET_STUB_SIZE + sizeof(packet->cmacReq) +
             packet->cmacReq.inSz + packet->cmacReq.keySz, (uint8_t*)packet);
         if (ret == 0) {
-            /* if the client marked they may want to cancel, handle the 
+            /* if the client marked they may want to cancel, handle the
              * response in a seperate call */
             if (ctx->cancelable)
                 break;

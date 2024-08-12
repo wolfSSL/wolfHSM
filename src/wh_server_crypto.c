@@ -51,72 +51,61 @@ static int hsmCacheKeyRsa(whServerContext* server, RsaKey* key,
         whKeyId keyId, whNvmFlags flags, uint32_t label_len, uint8_t* label)
 {
     /* III server!=NULL, keyId != ERASED */
+    uint8_t* cacheBuf;
+    whNvmMetadata* cacheMeta;
     int ret = 0;
-    int slotIdx = 0;
-    whNvmMetadata* meta = NULL;
-    uint8_t* buffer = NULL;
-    int derSize = 0;
 
+    /* wc_RsaKeyToDer doesn't have a length check option so we need to just pass
+     * the big key size if compiled */
+    const uint16_t keySz = WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE;
+    whKeyId keyId = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, server->comm->client_id, WH_KEYID_ERASED);
     /* get a free slot */
-    slotIdx = hsmCacheFindSlot(server);
-    if (slotIdx < 0) {
-        ret = slotIdx;
-    }
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-    printf("[server] CacheKeyRsa findSlot:%d\n", slotIdx);
-#endif
-
+    ret = hsmCacheFindSlotAndZero(server, keySz, &cacheBuf, &cacheMeta);
+    if (ret == 0)
+        ret = hsmGetUniqueId(server, &keyId);
     if (ret == 0) {
-        meta = server->cache[slotIdx].meta;
         if (label_len > sizeof(meta->label)) {
             label_len = sizeof(meta->label);
         }
-        buffer = (uint8_t*)&server->cache[slotIdx].buffer;
-        derSize = sizeof(server->cache[slotIdx].buffer);
-        server->cache[slotIdx].commited = 0;
-    }
-
-    if (ret == 0) {
-        /* Serialize the key to DER format */
-        XMEMSET((uint8_t*)&server->cache[slotIdx], 0, sizeof(whServerCacheSlot));
-        derSize = wc_RsaKeyToDer(key, buffer, derSize);
-        if (derSize < 0) {
-            ret = derSize;
+        //server->cache[slotIdx].commited = 0;
+        /* export key */
+        /* TODO: Fix wolfCrypto to allow KeyToDer when KEY_GEN is NOT set */
+        keySz = wc_RsaKeyToDer(key, cacheBuf, keySz);
+        if (keySz < 0) {
+            ret = keySz;
         }
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-        printf("[server] CacheKeyRsa RsaKeyToDer:%d\n", derSize);
-#endif
     }
 
     if (ret == 0) {
         /* set meta */
-        meta->id = keyId;
-        meta->len = derSize;
-        meta->flags = flags;
-        meta->access = WH_NVM_ACCESS_ANY;
+        cacheMeta->id = keyId;
+        cacheMeta->len = derSize;
+        cacheMeta->flags = flags;
+        cacheMeta->access = WH_NVM_ACCESS_ANY;
 
         if (    (label != NULL) &&
                 (label_len > 0) ) {
-            XMEMCPY(meta->label, label, label_len);
+            XMEMCPY(cacheMeta->label, label, label_len);
         }
+        /* export keyId */
+        *outId = keyId;
     }
     return ret;
 }
 
 static int hsmLoadKeyRsa(whServerContext* server, RsaKey* key, whKeyId keyId)
 {
+    uint8_t* cacheBuf;
+    whNvmMetadata* cacheMeta;
     int ret = 0;
-    int slotIdx = 0;
     uint32_t idx = 0;
-    uint32_t size;
     keyId = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, server->comm->client_id, keyId);
     /* freshen the key */
-    ret = slotIdx = hsmFreshenKey(server, keyId);
+    ret = hsmFreshenKey(server, keyId, &cacheBuf, &cacheMeta);
     /* decode the key */
-    if (ret >= 0) {
-        size = WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE;
-        ret = wc_RsaPrivateKeyDecode(server->cache[slotIdx].buffer, (word32*)&idx, key,
-            size);
+    if (ret == 0) {
+        ret = wc_RsaPrivateKeyDecode(cacheBuf, (word32*)&idx, key,
+            cacheMeta->len);
     }
     return ret;
 }
@@ -210,7 +199,8 @@ static int hsmCryptoRsaFunction(whServerContext* server, whPacket* packet,
     whKeyId key_id = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
             server->comm->client_id, packet->pkRsaReq.keyId);
     /* init rsa key */
-    ret = wc_InitRsaKey_ex(server->crypto->algoCtx.rsa, NULL, server->crypto->devId);
+    ret = wc_InitRsaKey_ex(server->crypto->algoCtx.rsa, NULL,
+        server->crypto->devId);
     /* load the key from the keystore */
     if (ret == 0) {
         ret = hsmLoadKeyRsa(server, server->crypto->algoCtx.rsa, key_id);
@@ -424,9 +414,8 @@ static int hsmCacheKeyEcc(whServerContext* server, ecc_key* key, whKeyId* outId)
     /* get a free slot */
     ret = hsmCacheFindSlotAndZero(server, qxLen + qyLen + qdLen, &cacheBuf,
         &cacheMeta);
-    if (ret == 0) {
+    if (ret == 0)
         ret = hsmGetUniqueId(server, &keyId);
-    }
     /* export key */
     if (ret == 0) {
         if (key->type != ECC_PRIVATEKEY_ONLY) {
@@ -827,7 +816,6 @@ static int hsmCryptoCmac(whServerContext* server, whPacket* packet,
     }
     else {
         /* do each operation based on which fields are set */
-        /* set key if present, otherwise load the struct from keyId */
         if (packet->cmacReq.keySz != 0) {
             /* initialize cmac with key and type */
             ret = wc_InitCmac_ex(server->crypto->algoCtx.cmac, key,
@@ -854,7 +842,6 @@ static int hsmCryptoCmac(whServerContext* server, whPacket* packet,
                 len == AES_256_KEY_SIZE) {
                 moveToBigCache = 1;
                 XMEMCPY(tmpKey, (uint8_t*)server->crypto->algoCtx.cmac, len);
-                /* type is not a part of the update call, assume AES */
                 ret = wc_InitCmac_ex(server->crypto->algoCtx.cmac, tmpKey, len,
                     WC_CMAC_AES, NULL, NULL, server->crypto->devId);
             }

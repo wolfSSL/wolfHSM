@@ -477,7 +477,6 @@ int hsmCommitKey(whServerContext* server, whNvmId keyId)
     whNvmMetadata* slotMeta;
     int i;
     int ret = 0;
-    whServerCacheSlot* cacheSlot;
     /* make sure id is valid */
     if (server == NULL || (keyId & WH_KEYID_MASK) == WH_KEYID_ERASED)
         return WH_ERROR_BADARGS;
