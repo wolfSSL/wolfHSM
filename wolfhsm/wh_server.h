@@ -49,6 +49,7 @@ typedef struct whServerContext_t whServerContext;
 #include "wolfssl/wolfcrypt/ecc.h"
 #include "wolfssl/wolfcrypt/curve25519.h"
 #include "wolfssl/wolfcrypt/cryptocb.h"
+#include "wolfssl/wolfcrypt/sha256.h"
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
 #ifdef WOLFHSM_CFG_SHE_EXTENSION
@@ -60,10 +61,16 @@ typedef struct whServerContext_t whServerContext;
 #ifndef WOLFHSM_CFG_NO_CRYPTO
 /** Server crypto context and resource allocation */
 typedef struct whServerCacheSlot {
-    uint32_t        commited;
+    uint8_t        commited;
     whNvmMetadata   meta[1];
     uint8_t         buffer[WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE];
 } whServerCacheSlot;
+
+typedef struct whServerBigCacheSlot {
+    uint8_t       commited;
+    whNvmMetadata meta[1];
+    uint8_t       buffer[WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE];
+} whServerBigCacheSlot;
 
 typedef struct whServerCryptoContext {
     int devId;
@@ -85,6 +92,9 @@ typedef struct whServerCryptoContext {
 #endif
 #ifdef WOLFSSL_CMAC
         Cmac cmac[1];
+#endif
+#ifndef NO_SHA256
+        wc_Sha256 sha256[1];
 #endif
     } algoCtx;
     union {
@@ -199,8 +209,9 @@ struct whServerContext_t {
     whNvmContext* nvm;
     whCommServer  comm[1];
 #ifndef WOLFHSM_CFG_NO_CRYPTO
-    whServerCryptoContext* crypto;
+    whServerCryptoContext*  crypto;
     whServerCacheSlot       cache[WOLFHSM_CFG_SERVER_KEYCACHE_COUNT];
+    whServerBigCacheSlot    bigCache[WOLFHSM_CFG_SERVER_KEYCACHE_BIG_COUNT];
 #ifdef WOLFHSM_CFG_SHE_EXTENSION
     whServerSheContext* she;
 #endif

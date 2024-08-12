@@ -42,6 +42,9 @@
 #include "wolfssl/wolfcrypt/error-crypt.h"
 #include "wolfssl/wolfcrypt/wc_port.h"
 #include "wolfssl/wolfcrypt/cryptocb.h"
+#include "wolfssl/wolfcrypt/curve25519.h"
+#include "wolfssl/wolfcrypt/rsa.h"
+#include "wolfssl/wolfcrypt/ecc.h"
 
 #include "wolfhsm/wh_client_cryptocb.h"
 #endif /* WOLFHSM_CFG_NO_CRYPTO */
