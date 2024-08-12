@@ -74,6 +74,10 @@ int whTest_WolfCryptTestCfg(whClientConfig* config)
     /* assumes wolfCrypt has been initialized before this function */
     WH_TEST_RETURN_ON_FAIL(wolfcrypt_test(NULL));
 
+    /* Tell server to close */
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CommClose(client));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_Cleanup(client));
+
     return WH_ERROR_OK;
 }
 
