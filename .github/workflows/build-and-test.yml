@@ -33,6 +33,11 @@ jobs:
     - name: Build and test
       run: cd test && make clean && make WOLFSSL_DIR=../wolfssl run
 
+    # Build and test ASAN build, with wolfCrypt tests enabled. FORCE SUCCESS
+    # since wolfCrypt tests aren't all passing yet - this is just a status indicator
+    - name: Build and test ASAN TESTWOLFCRYPT (wolfCrypt tests OK to fail)
+      run: cd test && make clean && make ASAN=1 TESTWOLFCRYPT=1 WOLFSSL_DIR=../wolfssl run || true
+
     # Build and test debug build with ASAN and NOCRYPTO
     - name: Build and test ASAN DEBUG NOCRYPTO
       run: cd test && make clean && make DEBUG=1 ASAN=1 NOCRYPTO=1 WOLFSSL_DIR=../wolfssl run
