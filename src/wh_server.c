@@ -324,6 +324,17 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
             rc = wh_Server_HandleCryptoRequest(server, action, data,
                 &size, seq);
         break;
+
+        case WH_MESSAGE_GROUP_CRYPTO_DMA32:
+            rc = wh_Server_HandleCryptoDma32Request(server, action, data,
+                &size, seq);
+            break;
+
+        case WH_MESSAGE_GROUP_CRYPTO_DMA64:
+            rc = wh_Server_HandleCryptoDma64Request(server, action, data,
+                &size, seq);
+            break;
+
 #endif  /* !WOLFHSM_CFG_NO_CRYPTO */
 
         case WH_MESSAGE_GROUP_PKCS11:

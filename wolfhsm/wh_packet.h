@@ -395,6 +395,64 @@ typedef struct  wh_Packet_counter_destroy_req
     uint8_t WH_PAD[2];
 } wh_Packet_counter_destroy_req;
 
+/* DMA-based crypto messages */
+typedef struct {
+    uint32_t addr;
+    uint32_t sz;
+} wh_Packet_Dma32_buffer;
+
+typedef struct {
+    uint64_t addr;
+    uint64_t sz;
+} wh_Packet_Dma64_buffer;
+
+typedef struct {
+    /* If packet->rc == WH_ERROR_ACCESS, this field will contain the offending
+     * address/size pair. Invalid otherwise. */
+    wh_Packet_Dma32_buffer badAddr;
+    /* wolfCrypt return code. Only valid if packet->rc == WH_ERROR_OK */
+    uint32_t wolfCryptRc;
+} wh_Packet_Dma32_crypto_res;
+
+typedef struct {
+    /* If packet->rc == WH_ERROR_ACCESS, this field will contain the offending
+     * address/size pair. Invalid otherwise. */
+    wh_Packet_Dma64_buffer badAddr;
+    /* wolfCrypt return code. Only valid if packet->rc == WH_ERROR_OK */
+    uint32_t wolfCryptRc;
+} wh_Packet_Dma64_crypto_res;
+
+/* SHA256 DMA messages */
+typedef struct wh_Packet_hash_sha256_Dma32_req {
+    uint32_t type;
+    /* Since client addresses are subject to DMA checking, we can't use them to
+     * determine the requested operation (update/final). Therefore we need to
+     * indicate to the server which SHA256 operation to perform */
+    uint32_t finalize;
+    wh_Packet_Dma32_buffer input;
+    wh_Packet_Dma32_buffer state;
+    wh_Packet_Dma32_buffer output;
+} wh_Packet_hash_sha256_Dma32_req;
+
+typedef struct wh_Packet_hash_sha256_Dma64_req {
+    uint64_t type;
+    /* Since client addresses are subject to DMA checking, we can't use them to
+     * determine the requested operation (update/final). Therefore we need to
+     * indicate to the server which SHA256 operation to perform */
+    uint64_t finalize;
+    wh_Packet_Dma64_buffer input;
+    wh_Packet_Dma64_buffer state;
+    wh_Packet_Dma64_buffer output;
+} wh_Packet_hash_sha256_Dma64_req;
+
+typedef struct wh_Packet_hash_sha256_Dma32_res {
+    wh_Packet_Dma32_crypto_res dmaCryptoRes;
+} wh_Packet_hash_sha256_Dma32_res;
+
+typedef struct wh_Packet_hash_sha256_Dma64_res {
+    wh_Packet_Dma64_crypto_res dmaCryptoRes;
+} wh_Packet_hash_sha256_Dma64_res;
+
 
 /** SHE Packets */
 #ifdef WOLFHSM_CFG_SHE_EXTENSION
@@ -615,6 +673,8 @@ typedef struct whPacket
         wh_Packet_hash_any_req hashAnyReq;
         /* Hash: SHA256*/
         wh_Packet_hash_sha256_req hashSha256Req;
+        wh_Packet_hash_sha256_Dma32_req hashSha256Dma32Req;
+        wh_Packet_hash_sha256_Dma64_req hashSha256Dma64Req;
         /* key cache */
         wh_Packet_key_cache_req keyCacheReq;
         /* key evict */
@@ -654,6 +714,8 @@ typedef struct whPacket
         wh_Packet_cmac_res cmacRes;
         /* hash: SHA256 */
         wh_Packet_hash_sha256_res hashSha256Res;
+        wh_Packet_hash_sha256_Dma32_res hashSha256Dma32Res;
+        wh_Packet_hash_sha256_Dma64_res hashSha256Dma64Res;
         /* key cache */
         wh_Packet_key_cache_res keyCacheRes;
         /* key evict */

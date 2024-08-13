@@ -209,4 +209,20 @@
 #define XCACHEINVLDBLK(_p, _n) wh_Utils_CacheInvalidate((_p), (_n))
 #endif
 
+/* client and server pointer sizes */
+enum { WH_PTR_SIZE = sizeof(void*) };
+#ifndef WOLFHSM_CFG_CLIENT_PTR_SIZE
+#define WOLFHSM_CFG_CLIENT_PTR_SIZE (WH_PTR_SIZE)
+#endif
+
+#ifndef WOLFHSM_CFG_SERVER_PTR_SIZE
+#define WOLFHSM_CFG_SERVER_PTR_SIZE (WH_PTR_SIZE)
+#endif
+
+#define WH_CLIENT_IS_32BIT (WOLFHSM_CFG_CLIENT_PTR_SIZE == 4)
+#define WH_SERVER_IS_32BIT (WOLFHSM_CFG_SERVER_PTR_SIZE == 4)
+#define WH_CLIENT_IS_64BIT (WOLFHSM_CFG_CLIENT_PTR_SIZE == 8)
+#define WH_SERVER_IS_64BIT (WOLFHSM_CFG_SERVER_PTR_SIZE == 8)
+
+
 #endif /* !WOLFHSM_WH_SETTINGS_H_ */

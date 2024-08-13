@@ -93,7 +93,10 @@ ifeq ($(TESTWOLFCRYPT),1)
 # wolfCrypt test source files
 SRC_C += $(WOLFSSL_DIR)/wolfcrypt/test/test.c
 SRC_C += $(wildcard $(WOLFSSL_DIR)/wolfcrypt/src/*.c)
-CFLAGS += -DWC_USE_DEVID=0x5748534D
+# if you want to run wolfCrypt tests with a different devId than the default
+# client devId, pass it in the TESTWOLFCRYPT_DEVID makefile variable
+TESTWOLFCRYPT_DEVID ?= 0x5748534D
+CFLAGS += -DWC_USE_DEVID=$(TESTWOLFCRYPT_DEVID)
 endif
 
 # wolfHSM source files
