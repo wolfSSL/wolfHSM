@@ -98,6 +98,7 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
     /* Based on the info type, process the request */
     switch (info->algo_type)
     {
+#ifndef NO_AES
     case WC_ALGO_TYPE_CIPHER:
         /* Set shared cipher request members */
         packet->cipherAnyReq.type = info->cipher.type;
@@ -105,7 +106,6 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
 
         switch (info->cipher.type)
         {
-#ifndef NO_AES
 #ifdef HAVE_AES_CBC
         case WC_CIPHER_AES_CBC:
         {
@@ -288,13 +288,13 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             }
         } break;
 #endif /* HAVE_AESGCM */
-#endif /* !NO_AES */
 
         default:
             ret = CRYPTOCB_UNAVAILABLE;
             break;
         }
         break;
+#endif /* !NO_AES */
 
     case WC_ALGO_TYPE_PK:
         /* set type */
