@@ -139,13 +139,6 @@
 #error "wolfHSM needs wolfCrypt built with HAVE_ANONYMOUS_INLINE_AGGREGATES=1"
 #endif
 
-/* Need hash flags for SHA256 */
-#ifndef NO_SHA256
-#ifndef WOLFSSL_HASH_FLAGS
-#error "wolfHSM needs wolfCrypt built with WOLFSSL_HASH_FLAGS"
-#endif
-#endif
-
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
 
