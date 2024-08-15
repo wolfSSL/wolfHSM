@@ -39,6 +39,7 @@
 #include "wolfhsm/wh_comm.h"
 #include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_client.h"
+#include "wolfhsm/wh_client_crypto.h"
 #include "wolfhsm/wh_server.h"
 
 #include "wolfhsm/wh_transport_mem.h"
@@ -499,7 +500,6 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     }
 
     /* Using keyCache key */
-    /* Using ephemral key */
     keyId = WH_KEYID_ERASED;
     printf("RSA testing using whServer cached keys\n");
     if((ret = wh_Client_MakeCacheRsaKey(client, 2048, 65537,

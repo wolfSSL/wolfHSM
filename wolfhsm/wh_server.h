@@ -72,17 +72,22 @@ typedef struct whServerBigCacheSlot {
     uint8_t       buffer[WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE];
 } whServerBigCacheSlot;
 
+/* Server Crypto context holds crypto information that must be persisted between
+ * client requests and could be shared among multiple server instances.
+ */
 typedef struct whServerCryptoContext {
     int devId;
 #ifndef WC_NO_RNG
     WC_RNG rng[1];
 #endif
     union {
+#if 0
 #ifndef NO_AES
         Aes aes[1];
 #endif
 #ifndef NO_RSA
         RsaKey rsa[1];
+#endif
 #endif
 #ifdef HAVE_ECC
         ecc_key eccPrivate[1];

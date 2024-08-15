@@ -57,12 +57,14 @@ typedef struct  wh_Packet_cipher_aescbc_req
     uint32_t sz;
     uint16_t keyId;
     uint8_t WH_PAD[2];
-    /* key[keyLen] | iv[AES_IV_SIZE] | in[sz] */
+    /* in[sz] | key[keyLen] | iv[AES_IV_SIZE] */
 } wh_Packet_cipher_aescbc_req;
 
 typedef struct  wh_Packet_cipher_aescbc_res
 {
     uint32_t sz;
+    /* Pad to ensure req and res overlap on in/out */
+    uint8_t WH_PAD[sizeof(wh_Packet_cipher_aescbc_req) - 4];
     /* uint8_t out[]; */
 } wh_Packet_cipher_aescbc_res;
 
@@ -77,13 +79,15 @@ typedef struct  wh_Packet_cipher_aesgcm_req
     uint32_t authTagSz;
     uint16_t keyId;
     uint8_t WH_PAD[2];
-    /* key[keyLen] | iv[ivSz] | in[sz] | authIn[authInSz] | authTag[authTagSz] */
+    /* in[sz] | key[keyLen] | iv[ivSz] | authIn[authInSz] | authTag[authTagSz] */
 } wh_Packet_cipher_aesgcm_req;
 
 typedef struct  wh_Packet_cipher_aesgcm_res
 {
     uint32_t sz;
     uint32_t authTagSz;
+    /* Pad to ensure req and res overlap on in/out */
+    uint8_t WH_PAD[sizeof(wh_Packet_cipher_aesgcm_req) - 8];
     /* uint8_t out[sz]; */
     /* uint8_t authTag[authTagSz] */
 } wh_Packet_cipher_aesgcm_res;
