@@ -32,6 +32,7 @@
 /* Common WolfHSM types and defines shared with the server */
 #include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_error.h"
+#include "wolfhsm/wh_crypto.h"
 
 /* Components */
 #include "wolfhsm/wh_comm.h"
@@ -78,6 +79,202 @@ int wh_Client_GetKeyIdCurve25519(curve25519_key* key, whNvmId* outId)
     *outId = WH_DEVCTX_TO_KEYID(key->devCtx);
     return WH_ERROR_OK;
 }
+
+int wh_Client_ImportCurve25519Key(whClientContext* ctx, curve25519_key* key,
+        whNvmFlags flags, uint32_t label_len, uint8_t* label,
+        whKeyId *out_keyId)
+{
+    int ret = 0;
+    whKeyId cacheKeyId = WH_KEYID_ERASED;
+    byte keyDer[WOLFHSM_CFG_COMM_DATA_LEN] = {0};
+    uint16_t derSize = 0;
+
+    if (    (ctx == NULL) ||
+            (key == NULL) ||
+            ((label_len != 0) && (label == NULL))) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_Crypto_SerializeCurve25519Key(key, sizeof(keyDer),keyDer,
+            &derSize);
+    if (    (ret == 0) &&
+            (derSize >= 0)) {
+        /* Cache the key and get the keyID */
+        ret = wh_Client_KeyCache(ctx, flags,
+                label, label_len,
+                keyDer, derSize, &cacheKeyId);
+        if (out_keyId != NULL) {
+            *out_keyId = cacheKeyId;
+        }
+    }
+    return ret;
+}
+
+int wh_Client_ExportCurve25519Key(whClientContext* ctx, whKeyId keyId,
+        curve25519_key* key,
+        uint32_t label_len, uint8_t* label)
+{
+    int ret = 0;
+    /* DER cannot be larger than MTU */
+    byte keyDer[WOLFHSM_CFG_COMM_DATA_LEN] = {0};
+    uint32_t derSize = sizeof(keyDer);
+    uint8_t keyLabel[WH_NVM_LABEL_LEN] = {0};
+
+    if (    (ctx == NULL) ||
+            (keyId == WH_KEYID_ERASED) ||
+            (key == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Now export the key from the server */
+    ret = wh_Client_KeyExport(ctx,keyId,
+            keyLabel, sizeof(keyLabel),
+            keyDer, &derSize);
+    if (ret == 0) {
+        /* Update the key structure */
+        ret = wh_Crypto_DeserializeCurve25519Key(
+                derSize, keyDer, key);
+        if (ret == 0) {
+            /* Successful parsing of RSA key.  Update the label */
+            if ((label_len > 0) && (label != NULL)) {
+                if (label_len > WH_NVM_LABEL_LEN) {
+                    label_len = WH_NVM_LABEL_LEN;
+                }
+                memcpy(label, keyLabel, label_len);
+            }
+        }
+    }
+
+    return ret;
+}
+
+int wh_Client_MakeCurve25519Key(whClientContext* ctx,
+        uint32_t size,
+        whNvmFlags flags,  uint32_t label_len, uint8_t* label,
+        whKeyId *inout_key_id, curve25519_key* key)
+{
+    int ret = 0;
+    whPacket* packet = NULL;
+    uint16_t group = WH_MESSAGE_GROUP_CRYPTO;
+    uint16_t action = WC_ALGO_TYPE_PK;
+    uint16_t data_len = 0;
+    wh_Packet_pk_curve25519kg_req* req = NULL;
+    wh_Packet_pk_curve25519kg_res* res = NULL;
+    uint32_t type = WC_PK_TYPE_CURVE25519_KEYGEN;
+    whKeyId key_id = WH_KEYID_ERASED;
+
+    if (ctx == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Get data pointer from the context to use as request/response storage */
+    packet = (whPacket*)wh_CommClient_GetDataPtr(ctx->comm);
+    if (packet == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    memset((uint8_t*)packet, 0, WOLFHSM_CFG_COMM_DATA_LEN);
+
+    req = &packet->pkCurve25519kgReq;
+    res = &packet->pkCurve25519kgRes;
+
+    /* Use the supplied key id if provided */
+    if (inout_key_id != NULL) {
+        key_id = *inout_key_id;
+    }
+
+    /* Set up the reqeust packet */
+    req->type = type;
+    req->sz = size;
+    req->flags = flags;
+    req->keyId = key_id;
+    if (    (label != NULL) &&
+            (label_len > 0) ) {
+        if (label_len > WH_NVM_LABEL_LEN) {
+            label_len = WH_NVM_LABEL_LEN;
+        }
+        memcpy(req->label, label, label_len);
+    }
+    data_len = WH_PACKET_STUB_SIZE + sizeof(*req);
+
+    ret = wh_Client_SendRequest(ctx, group, action, data_len, (uint8_t*)packet);
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+    printf("Curve25519 KeyGen Req sent:size:%u, ret:%d\n",
+            req->sz, ret);
+#endif
+    if (ret == 0) {
+        do {
+            ret = wh_Client_RecvResponse(ctx, &group, &action, &data_len,
+                (uint8_t*)packet);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+    printf("Curve25519 KeyGen Res recv:keyid:%u, len:%u, rc:%d, ret:%d\n",
+            res->keyId, res->len, packet->rc, ret);
+#endif
+
+    if (ret == 0) {
+        if (packet->rc == 0) {
+            /* Key is cached on server or is ephemeral */
+            key_id = (whKeyId)(res->keyId);
+
+            /* Update output variable if requested */
+            if (inout_key_id != NULL) {
+                *inout_key_id = key_id;
+            }
+
+            /* Update the RSA context if provided */
+            if (key != NULL) {
+                uint16_t der_size = (uint16_t)(res->len);
+                uint8_t* key_der = (uint8_t*)(res + 1);
+                /* Set the key_id.  Should be ERASED if EPHEMERAL */
+                wh_Client_SetKeyIdCurve25519(key, key_id);
+
+                if (flags & WH_NVM_FLAGS_EPHEMERAL) {
+                    /* Response has the exported key */
+                    ret = wh_Crypto_DeserializeCurve25519Key(
+                            der_size, key_der, key);
+                }
+            }
+        } else {
+            /* Server detected a problem with generation */
+            ret = packet->rc;
+        }
+    }
+    return ret;
+}
+
+int wh_Client_MakeCacheCurve25519Key(whClientContext* ctx,
+        uint32_t size,
+        whNvmFlags flags,  uint32_t label_len, uint8_t* label,
+        whKeyId *inout_key_id)
+{
+    /* Valid keyid ptr is required in this form */
+    if (    (ctx == NULL) ||
+            (inout_key_id == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    return wh_Client_MakeCurve25519Key(ctx,
+            size,
+            flags, label_len, label,
+            inout_key_id, NULL);
+}
+
+int wh_Client_MakeExportCurve25519Key(whClientContext* ctx,
+        uint32_t size, curve25519_key* key)
+{
+    /* Valid ctx and rsa are required for this form */
+    if (    (ctx == NULL) ||
+            (key == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    return wh_Client_MakeCurve25519Key(ctx,
+            size,
+            WH_NVM_FLAGS_EPHEMERAL,  0, NULL,
+            NULL, key);
+}
+
 #endif /* HAVE_CURVE25519 */
 
 #ifdef HAVE_ECC

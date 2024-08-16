@@ -75,6 +75,65 @@ int wh_Client_SetKeyIdCurve25519(curve25519_key* key, whNvmId keyId);
  * @return int Returns 0 on success or a negative error code on failure.
  */
 int wh_Client_GetKeyIdCurve25519(curve25519_key* key, whNvmId* outId);
+
+/**
+ * @brief Imports wolfCrypt Curve25519 key as a raw byte array into the
+ * wolfHSM server key cache.
+ *
+ * This function converts the curve25519_key struct to serialized format,
+ * installs into the server's key cache, and provides the server-allocated keyId
+ * for reference.
+ *
+ * @param[in] ctx Pointer to the wolfHSM client structure.
+ * @param[in] key Pointer to the curve25519 key structure.
+ * @param[in] flags Value of flags to indicate server usage
+ * @param[in] label_len Length of the optional label in bytes, Valid values are
+ *              0 to WH_NVM_LABEL_LEN.
+ * @param[in] label pointer to the optional label byte array. May be NULL.
+ * @param[out] out_keyId Pointer to the key ID to return.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_ImportCurve25519Key(whClientContext* ctx, curve25519_key* key,
+        whNvmFlags flags, uint32_t label_len, uint8_t* label,
+        whKeyId *out_keyId);
+
+/**
+ * @brief Exports a serialized curve25519 key from the wolfHSM server keycache
+ * and decodes it into the wolfCrypt curve25519 key structure.
+ *
+ * This function exports the specified key from wolfHSM server key cache as a
+ * serailized byte array and decodes the key into the wolfCrypt curve25519_key
+ * structure, optionally copying out the associated label as well.
+ *
+ * @param[in] ctx Pointer to the wolfHSM client structure.
+ * @param[out] out_keyId Server key ID to export.
+ * @param[in] key Pointer to the Curve25519 key structure.
+ * @param[in] label_len Length of the optional label in bytes, Valid values are
+ *              0 to WH_NVM_LABEL_LEN.
+ * @param[in] label pointer to the optional label byte array. May be NULL.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+
+int wh_Client_ExportCurve25519Key(whClientContext* ctx, whKeyId keyId,
+        curve25519_key* key, uint32_t label_len, uint8_t* label);
+
+/* Generate an Curve25519 key on the server and export it inta an RSA struct */
+int wh_Client_MakeCurve25519Key(whClientContext* ctx,
+        uint32_t size,
+        whNvmFlags flags,  uint32_t label_len, uint8_t* label,
+        whKeyId *inout_key_id, curve25519_key* key);
+
+/* Generate an Curve25519 key on the server and put it in the server keycache */
+int wh_Client_MakeCacheCurve25519Key(whClientContext* ctx,
+        uint32_t size,
+        whNvmFlags flags,  uint32_t label_len, uint8_t* label,
+        whKeyId *inout_key_Id);
+
+/* Make an Curve25519 key on the server based on the flags */
+int wh_Client_MakeExportCurve25519Key(whClientContext* ctx,
+        uint32_t size,
+        curve25519_key* key);
+
 #endif /* HAVE_CURVE25519 */
 
 #ifdef HAVE_ECC

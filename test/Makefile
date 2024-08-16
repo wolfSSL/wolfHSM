@@ -99,6 +99,7 @@ endif
 # wolfHSM source files
 SRC_C += \
             $(WOLFHSM_DIR)/src/wh_utils.c \
+            $(WOLFHSM_DIR)/src/wh_crypto.c \
             $(WOLFHSM_DIR)/src/wh_client.c \
             $(WOLFHSM_DIR)/src/wh_client_nvm.c \
             $(WOLFHSM_DIR)/src/wh_client_crypto.c \

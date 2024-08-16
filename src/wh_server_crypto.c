@@ -37,6 +37,7 @@
 
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_packet.h"
+#include "wolfhsm/wh_crypto.h"
 #include "wolfhsm/wh_server_keystore.h"
 #include "wolfhsm/wh_server_crypto.h"
 
@@ -66,67 +67,27 @@ static void _hexdump(const char* initial,uint8_t* ptr, size_t size)
 #endif
 
 #ifndef NO_RSA
-static int wh_Server_SerializeRsaKey(RsaKey* key, uint16_t max_size,
-        uint8_t* der, uint16_t *out_size);
-static int wh_Server_DeserializeRsaKey(uint16_t size, const uint8_t* buffer,
-        RsaKey* key);
+
+/* Store a RsaKey into a server key cache with optional metadata */
 static int wh_Server_CacheImportRsaKey(whServerContext* server, RsaKey* key,
         whKeyId keyId, whNvmFlags flags, uint32_t label_len, uint8_t* label);
+/* Restore a RsaKey from a server key cache */
 static int wh_Server_CacheExportRsaKey(whServerContext* server, whKeyId keyId,
         RsaKey* key);
+
+#ifdef WOLFSSL_KEY_GEN
+/* Process a Generate RsaKey request packet and produce a response packet */
 static int wh_Server_HandleGenerateRsaKey(whServerContext* server,
         whPacket* packet, uint16_t *out_size);
+#endif /* WOLFSSL_KEY_GEN */
+
+/* Process a Rsa Function request packet and produce a response packet */
 static int wh_Server_HandleRsaFunction(whServerContext* server,
         whPacket* packet, uint16_t *out_size);
+/* Process a Rsa Get Size request packet and produce a response packet */
 static int wh_server_HandleRsaGetSize(whServerContext* server,
         whPacket* packet, uint16_t *out_size);
 
-
-static int wh_Server_SerializeRsaKey(RsaKey* key, uint16_t max_size,
-        uint8_t* buffer, uint16_t *out_size)
-{
-    int ret = 0;
-    int der_size = 0;
-
-    if (    (key == NULL) ||
-            (buffer == NULL)) {
-        return WH_ERROR_BADARGS;
-    }
-
-    der_size = wc_RsaKeyToDer(key, buffer, max_size);
-    if (der_size >= 0) {
-        ret = 0;
-        if (out_size != NULL) {
-            *out_size = der_size;
-        }
-    } else {
-        /* Error serializing.  Clear the buffer */
-        ret = der_size;
-        memset(buffer, 0, max_size);
-    }
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-    printf("[server] SerializeRsaKey: ret:%d key_size:%d der_size:%u\n",
-            ret, wc_RsaEncryptSize(key), der_size);
-#endif
-
-    return ret;
-}
-
-static int wh_Server_DeserializeRsaKey(uint16_t size, const uint8_t* buffer,
-        RsaKey* key)
-{
-    int ret;
-    word32 idx = 0;
-
-    if (    (size == 0) ||
-            (buffer == NULL) ||
-            (key == NULL)) {
-        return WH_ERROR_BADARGS;
-    }
-    /* Deserialize the RSA key */
-    ret = wc_RsaPrivateKeyDecode(buffer, &idx, key, size);
-    return ret;
-}
 
 
 static int wh_Server_CacheImportRsaKey(whServerContext* server, RsaKey* key,
@@ -157,7 +118,7 @@ static int wh_Server_CacheImportRsaKey(whServerContext* server, RsaKey* key,
     /* get a free slot */
     ret = hsmCacheFindSlotAndZero(server, max_size, &cacheBuf, &cacheMeta);
     if (ret == 0) {
-        ret = wh_Server_SerializeRsaKey(key, max_size, cacheBuf, &der_size);
+        ret = wh_Crypto_SerializeRsaKey(key, max_size, cacheBuf, &der_size);
     }
 
     if (ret == 0) {
@@ -191,7 +152,7 @@ static int wh_Server_CacheExportRsaKey(whServerContext* server, whKeyId keyId,
     ret = hsmFreshenKey(server, keyId, &cacheBuf, &cacheMeta);
 
     if (ret == 0) {
-        wh_Server_DeserializeRsaKey(cacheMeta->len, cacheBuf, key);
+        wh_Crypto_DeserializeRsaKey(cacheMeta->len, cacheBuf, key);
     }
     return ret;
 }
@@ -232,7 +193,7 @@ static int wh_Server_HandleGenerateRsaKey(whServerContext* server,
             /* Check incoming flags */
             if (flags & WH_NVM_FLAGS_EPHEMERAL) {
                 /* Must serialize the key into the response packet */
-                ret = wh_Server_SerializeRsaKey(rsa, max_size, out, &der_size);
+                ret = wh_Crypto_SerializeRsaKey(rsa, max_size, out, &der_size);
                 if (ret == 0) {
                     packet->pkRsakgRes.keyId = 0;
                     packet->pkRsakgRes.len = der_size;
@@ -368,139 +329,210 @@ static int wh_server_HandleRsaGetSize(whServerContext* server, whPacket* packet,
 #endif /* !NO_RSA */
 
 #ifdef HAVE_CURVE25519
-static int hsmCacheKeyCurve25519(whServerContext* server, curve25519_key* key,
-    whKeyId* outId)
+
+/* Store a curve25519_key into a server key cache with optional metadata */
+static int wh_Server_CacheImportCurve25519Key(whServerContext* server,
+        curve25519_key* key,
+        whKeyId keyId, whNvmFlags flags, uint32_t label_len, uint8_t* label);
+/* Restore a curve25519_key from a server key cache */
+static int wh_Server_CacheExportCurve25519Key(whServerContext* server, whKeyId keyId,
+        curve25519_key* key);
+
+#ifdef WOLFSSL_KEY_GEN
+/* Process a Generate curve25519_key request packet and produce a response */
+static int wh_Server_HandleGenerateCurve25519Key(whServerContext* server,
+        whPacket* packet, uint16_t *out_size);
+#endif /* WOLFSSL_KEY_GEN */
+
+/* Process a curve25519_key Function request packet and produce a response */
+static int wh_Server_HandleSharedSecretCurve25519(whServerContext* server,
+        whPacket* packet, uint16_t *out_size);
+
+
+
+static int wh_Server_CacheImportCurve25519Key(whServerContext* server,
+        curve25519_key* key,
+        whKeyId keyId, whNvmFlags flags, uint32_t label_len, uint8_t* label)
 {
     uint8_t* cacheBuf;
     whNvmMetadata* cacheMeta;
     int ret;
-    word32 privSz = CURVE25519_KEYSIZE;
-    word32 pubSz = CURVE25519_KEYSIZE;
-    whKeyId keyId = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, server->comm->client_id, WH_KEYID_ERASED);
     const uint16_t keySz = CURVE25519_KEYSIZE * 2;
-    /* get a free slot */
-    ret = hsmCacheFindSlotAndZero(server, keySz, &cacheBuf,
-        &cacheMeta);
-    if (ret == 0)
-        ret = hsmGetUniqueId(server, &keyId);
-    if (ret == 0) {
-        /* export key */
-        ret = wc_curve25519_export_key_raw(key, cacheBuf + CURVE25519_KEYSIZE,
-            &privSz, cacheBuf, &pubSz);
+    uint16_t size = 0;
+
+    if (    (server == NULL) ||
+            (key == NULL) ||
+            (WH_KEYID_ISERASED(keyId)) ||
+            ((label != NULL) && (label_len > sizeof(cacheMeta->label)))) {
+        return WH_ERROR_BADARGS;
     }
+
+    /* get a free slot */
+    ret = hsmCacheFindSlotAndZero(server, keySz, &cacheBuf, &cacheMeta);
+    if (ret == 0) {
+        ret = wh_Crypto_SerializeCurve25519Key(key, keySz, cacheBuf, &size);
+    }
+
     if (ret == 0) {
         /* set meta */
         cacheMeta->id = keyId;
-        cacheMeta->len = keySz;
-        /* export keyId */
-        *outId = keyId;
+        cacheMeta->len = size;
+        cacheMeta->flags = flags;
+        cacheMeta->access = WH_NVM_ACCESS_ANY;
+
+        if (    (label != NULL) &&
+                (label_len > 0) ) {
+            memcpy(cacheMeta->label, label, label_len);
+        }
     }
     return ret;
 }
 
-static int hsmLoadKeyCurve25519(whServerContext* server, curve25519_key* key,
-    whKeyId keyId)
+static int wh_Server_CacheExportCurve25519Key(whServerContext* server, whKeyId keyId,
+        curve25519_key* key)
 {
     uint8_t* cacheBuf;
     whNvmMetadata* cacheMeta;
     int ret = 0;
-    uint32_t privSz = CURVE25519_KEYSIZE;
-    uint32_t pubSz = CURVE25519_KEYSIZE;
-    keyId = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, server->comm->client_id, keyId);
-    /* freshen the key */
+
+    if (    (server == NULL) ||
+            (key == NULL) ||
+            (WH_KEYID_ISERASED(keyId))) {
+        return WH_ERROR_BADARGS;
+    }
+    /* Load key from NVM into a cache slot if necessary */
     ret = hsmFreshenKey(server, keyId, &cacheBuf, &cacheMeta);
-    /* decode the key */
-    if (ret == 0)
-        ret = wc_curve25519_import_public(cacheBuf, (word32)pubSz, key);
-    /* only import private if what we got back holds 2 keys */
-    if (ret == 0 && cacheMeta->len == CURVE25519_KEYSIZE * 2) {
-        ret = wc_curve25519_import_private( cacheBuf + pubSz, (word32)privSz,
-            key);
+
+    if (ret == 0) {
+        wh_Crypto_DeserializeCurve25519Key(cacheMeta->len, cacheBuf, key);
     }
     return ret;
 }
 
-static int hsmCryptoCurve25519KeyGen(whServerContext* server, whPacket* packet,
-    uint16_t* size)
+static int wh_Server_HandleGenerateCurve25519Key(whServerContext* server, whPacket* packet,
+    uint16_t* out_size)
 {
-    int ret;
-    whKeyId keyId = WH_KEYID_ERASED;
+    int ret = 0;
+    curve25519_key curve25519[1] = {0};
+    int key_size        = packet->pkCurve25519kgReq.sz;
+
+    /* Force incoming key_id to have current user/type */
+    whKeyId key_id      = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
+                            server->comm->client_id,
+                            packet->pkCurve25519kgReq.keyId);
+    whNvmFlags flags    = packet->pkCurve25519kgReq.flags;
+    uint8_t* label      = packet->pkCurve25519kgReq.label;
+    uint32_t label_size = WH_NVM_LABEL_LEN;
+
+    uint8_t* out        = (uint8_t*)(&packet->pkCurve25519kgReq + 1);
+    word32 max_size     = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
+                            (out - (uint8_t*)packet));
+    uint16_t der_size   = 0;
+
     /* init private key */
-    ret = wc_curve25519_init_ex(server->crypto->algoCtx.curve25519Private, NULL,
-        server->crypto->devId);
+    ret = wc_curve25519_init_ex(curve25519, NULL, server->crypto->devId);
     /* make the key */
     if (ret == 0) {
         ret = wc_curve25519_make_key(server->crypto->rng,
-            (word32)packet->pkCurve25519kgReq.sz,
-            server->crypto->algoCtx.curve25519Private);
+            (word32)key_size,
+            curve25519);
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+        printf("[server] MakeCurve25519Key: size:%d, ret:%d\n",
+                key_size, ret);
+#endif
+        if ( ret == 0) {
+            /* Check incoming flags */
+            if (flags & WH_NVM_FLAGS_EPHEMERAL) {
+                /* Must serialize the key into the response packet */
+                ret = wh_Crypto_SerializeCurve25519Key(curve25519, max_size,
+                        out, &der_size);
+                if (ret == 0) {
+                    packet->pkCurve25519kgRes.keyId = 0;
+                    packet->pkCurve25519kgRes.len = der_size;
+                }
+            } else {
+                /* Must import the key into the cache and return keyid */
+                if (WH_KEYID_ISERASED(key_id)) {
+                    /* Generate a new id */
+                    ret = hsmGetUniqueId(server, &key_id);
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+                    printf("[server] MakeCurve25519Key UniqueId: keyId:%u, ret:%d\n",
+                            key_id, ret);
+#endif
+                }
+
+                ret = wh_Server_CacheImportCurve25519Key(server, curve25519,
+                        key_id, flags, label_size, label);
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+                printf("[server] MakeCurve25519Key CacheImport: keyId:%u, ret:%d\n",
+                        key_id, ret);
+#endif
+                packet->pkCurve25519kgRes.keyId = (key_id & WH_KEYID_MASK);
+                packet->pkCurve25519kgRes.len = 0;
+            }
+        }
+        wc_curve25519_free(curve25519);
     }
-    /* cache the generated key */
+
     if (ret == 0) {
-        ret = hsmCacheKeyCurve25519(server,
-            server->crypto->algoCtx.curve25519Private, &keyId);
-        printf("[server] 25519keygen cached in keyid %u\n", keyId);
-    }
-    /* set the assigned id */
-    wc_curve25519_free(server->crypto->algoCtx.curve25519Private);
-    if (ret == 0) {
-        /* send only keyId */
-        packet->pkCurve25519kgRes.keyId = (keyId & WH_KEYID_MASK);
-        *size = WH_PACKET_STUB_SIZE + sizeof(packet->pkCurve25519kgRes);
+        /* set the assigned id */
+        *out_size = WH_PACKET_STUB_SIZE +
+                sizeof(packet->pkCurve25519kgRes) +
+                packet->pkCurve25519kgRes.len;
     }
     return ret;
 }
 
-static int hsmCryptoCurve25519(whServerContext* server, whPacket* packet,
-    uint16_t* size)
+static int wh_Server_HandleSharedSecretCurve25519(whServerContext* server, whPacket* packet,
+    uint16_t* out_size)
 {
     int ret;
-    word32 len;
-    /* out is after the fixed size fields */
-    byte* out = (uint8_t*)(&packet->pkCurve25519Res + 1);
-    /* init ecc key */
-    ret = wc_curve25519_init_ex(server->crypto->algoCtx.curve25519Private, NULL,
-        server->crypto->devId);
+    curve25519_key priv[1] = {0};
+    curve25519_key pub[1] = {0};
+
+    int endian    = (int)(packet->pkCurve25519Req.endian);
+    whKeyId priv_key_id  = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
+                        server->comm->client_id,
+                        packet->pkCurve25519Req.privateKeyId);
+    whKeyId pub_key_id  = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
+                        server->comm->client_id,
+                        packet->pkCurve25519Req.publicKeyId);
+    word32 len      = CURVE25519_KEYSIZE;
+    /* iout is after the fixed size fields */
+    byte* out       = (uint8_t*)(&packet->pkCurve25519Res + 1);
+
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+    printf("[server] HandleSharedSecretCurve25519 endian:%d privkeyId:%u pubkeyid:%u\n",
+            endian, priv_key_id, pub_key_id);
+#endif
+    /* init private key */
+    ret = wc_curve25519_init_ex(priv, NULL, server->crypto->devId);
     if (ret == 0) {
-        ret = wc_curve25519_init_ex(server->crypto->pubKey.curve25519Public,
-            NULL, server->crypto->devId);
+        /* init public key */
+        ret = wc_curve25519_init_ex(pub, NULL, server->crypto->devId);
+        if (ret == 0) {
+            ret = wh_Server_CacheExportCurve25519Key(
+                    server, priv_key_id, priv);
+            if (ret == 0) {
+                ret = wh_Server_CacheExportCurve25519Key(
+                        server, pub_key_id, pub);
+            }
+            if (ret == 0) {
+                ret = wc_curve25519_shared_secret_ex(
+                    priv, pub, out, &len, endian);
+            }
+            wc_curve25519_free(pub);
+        }
+        wc_curve25519_free(priv);
     }
-    /* load the private key */
     if (ret == 0) {
-        printf("[server] curve25519 private keyid:%u\n",
-                packet->pkCurve25519Req.privateKeyId);
-        ret = hsmLoadKeyCurve25519(server,
-            server->crypto->algoCtx.curve25519Private,
-            WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
-            server->comm->client_id,
-            packet->pkCurve25519Req.privateKeyId));
-    }
-    /* load the public key */
-    if (ret == 0) {
-        printf("[server] curve25519 public keyid:%u\n",
-                packet->pkCurve25519Req.publicKeyId);
-        ret = hsmLoadKeyCurve25519(server,
-            server->crypto->pubKey.curve25519Public,
-            WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
-            server->comm->client_id,
-            packet->pkCurve25519Req.publicKeyId));
-    }
-    /* make shared secret */
-    if (ret == 0) {
-        len = CURVE25519_KEYSIZE;
-        ret = wc_curve25519_shared_secret_ex(
-            server->crypto->algoCtx.curve25519Private,
-            server->crypto->pubKey.curve25519Public, out, (word32*)&len,
-            packet->pkCurve25519Req.endian);
-    }
-    wc_curve25519_free(server->crypto->algoCtx.curve25519Private);
-    wc_curve25519_free(server->crypto->pubKey.curve25519Public);
-    if (ret == 0) {
-        *size = WH_PACKET_STUB_SIZE + sizeof(packet->pkCurve25519Res) +
-            len;
+        /*set outLen and outgoing message size */
         packet->pkCurve25519Res.sz = len;
+        *out_size = WH_PACKET_STUB_SIZE + sizeof(packet->pkCurve25519Res) + len;
     }
     return ret;
 }
+
 #endif /* HAVE_CURVE25519 */
 
 #ifdef HAVE_ECC
@@ -895,7 +927,7 @@ static int hsmCryptoAesGcm(whServerContext* server, whPacket* packet,
             } else {
                 /* set authTag as a packet input */
 #ifdef DEBUG_CRYPTOCB_VERBOSE
-                _hexdump("authTag: ", tag_dec,  authtag_len);
+                _hexdump("[server] authTag: ", tag_dec,  authtag_len);
 #endif
                 /*uint8_t temp[4096] = {0};*/
                 ret = wc_AesGcmDecrypt(aes, out,
@@ -1186,11 +1218,15 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
             break;
 #endif /* HAVE_ECC */
 #ifdef HAVE_CURVE25519
+
+
+
+
         case WC_PK_TYPE_CURVE25519_KEYGEN:
-            ret = hsmCryptoCurve25519KeyGen(server, (whPacket*)data, size);
+            ret = wh_Server_HandleGenerateCurve25519Key(server, (whPacket*)data, size);
             break;
         case WC_PK_TYPE_CURVE25519:
-            ret = hsmCryptoCurve25519(server, (whPacket*)data, size);
+            ret = wh_Server_HandleSharedSecretCurve25519(server, (whPacket*)data, size);
             break;
 #endif /* HAVE_CURVE25519 */
         default:
