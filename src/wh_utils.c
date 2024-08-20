@@ -28,6 +28,10 @@
 #include <stddef.h> /* For size_t */
 #include <string.h> /* For memset/cpy */
 
+#if defined(DEBUG_CRYPTOCB) || defined(DEBUG_CRYPTOCB_VERBOSE)
+#include <stdio.h>
+#endif
+
 #include "wolfhsm/wh_utils.h"
 
 /** Byteswap functions */
@@ -132,12 +136,8 @@ void* wh_Utils_memcpy_flush(void* dst, const void* src , size_t n)
 }
 
 
-#if defined(DEBUG_CRYPTOCB) || defined(DEBUG_CRYPTOCB_VERBOSE)
-#include <stdio.h>
-#endif
-
 #ifdef DEBUG_CRYPTOCB_VERBOSE
-void _hexdump(const char* initial, uint8_t* ptr, size_t size)
+void wh_Utils_Hexdump(const char* initial, uint8_t* ptr, size_t size)
 {
 #define HEXDUMP_BYTES_PER_LINE 16
     int count = 0;
