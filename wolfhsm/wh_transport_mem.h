@@ -122,8 +122,8 @@ typedef union whTransportMemCsr_t {
 } whTransportMemCsr;
 
 typedef struct {
-    volatile whTransportMemCsr* req;
-    volatile whTransportMemCsr* resp;
+    whTransportMemCsr* req;
+    whTransportMemCsr* resp;
     void* req_data;
     void* resp_data;
     int initialized;
