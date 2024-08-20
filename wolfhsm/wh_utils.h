@@ -28,6 +28,7 @@
 #include "wolfhsm/wh_settings.h"
 
 #include <stdint.h>
+#include <stddef.h> /* For size_t */
 
 /** Byteswap functions */
 uint16_t wh_Utils_Swap16(uint16_t val);
@@ -38,5 +39,51 @@ uint32_t wh_Utils_htonl(uint32_t hostlong);
 uint32_t wh_Utils_ntohl(uint32_t networklong);
 
 int wh_Utils_memeqzero(uint8_t* buffer, uint32_t size);
+
+/** Cache flushing and memory fencing synchronization primitives */
+/* Create a full sequential memory fence to ensure compiler memory ordering */
+#ifndef XMEMFENCE
+#define XMEMFENCE() __atomic_thread_fence(__ATOMIC_SEQ_CST)
+#endif
+
+/* Return cacheline size */
+#ifndef XCACHELINE
+#define XCACHELINE (32)
+#endif
+
+/* Flush the cache line at _p. Used after writing to ensure the memory is
+ * consistent. */
+#ifndef XCACHEFLUSH
+#define XCACHEFLUSH(_p) (void)(_p)
+/* PPC32: __asm__ volatile ("dcbf 0, %0" : : "r" (_p): "memory") */
+#endif
+
+/* Invalidate the cache line at _p. Used prior to reading to ensure
+ * freshness. */
+#ifndef XCACHEINVLD
+#define XCACHEINVLD(_p) (void)(_p)
+/* PPC32: __asm__ volatile ("dcbi 0, %0" : : "r" (_p): "memory") */
+#endif
+
+/** Cache helper functions */
+/* Flush the cache lines starting at p for at least n bytes */
+void* wh_Utils_CacheFlush(void* p, size_t n);
+
+/* Invalidate the cache lines starting at p for at least n bytes */
+const void* wh_Utils_CacheInvalidate(const void* p, size_t n);
+
+/* Perform memset followed by a cache flush */
+void* wh_Utils_memset_flush(void* p, int c, size_t n);
+
+/* Cache invalidate the src followed by memcpy */
+void* wh_Utils_memcpy_invalidate(void* dst, const void* src, size_t n);
+
+/* Perform memcpy followed by a cache flush of dst */
+void* wh_Utils_memcpy_flush(void* dst, const void* src , size_t n);
+
+
+#if defined(DEBUG_CRYPTOCB) || defined(DEBUG_CRYPTOCB_VERBOSE)
+void _hexdump(const char* initial, uint8_t* ptr, size_t size);
+#endif
 
 #endif /* !WOLFHSM_WH_UTILS_H_ */

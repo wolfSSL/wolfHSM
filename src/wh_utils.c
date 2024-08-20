@@ -25,6 +25,8 @@
 #include "wolfhsm/wh_settings.h"
 
 #include <stdint.h>
+#include <stddef.h> /* For size_t */
+#include <string.h> /* For memset/cpy */
 
 #include "wolfhsm/wh_utils.h"
 
@@ -84,3 +86,71 @@ int wh_Utils_memeqzero(uint8_t* buffer, uint32_t size)
     }
     return 1;
 }
+
+/** Cache helper functions */
+const void* wh_Utils_CacheInvalidate(const void* p, size_t n)
+{
+    int len = (int)n;
+    const uint8_t* ptr = (const uint8_t*)p;
+    do {
+        XCACHEINVLD(ptr);
+        ptr += XCACHELINE;
+        len -= XCACHELINE;
+    } while (len > 0);
+    return p;
+}
+
+void* wh_Utils_CacheFlush(void* p, size_t n)
+{
+    int len = (int)n;
+    uint8_t* ptr = (uint8_t*)p;
+    do {
+        XCACHEFLUSH(ptr);
+        ptr += XCACHELINE;
+        len -= XCACHELINE;
+    } while (len > 0);
+    return p;
+}
+
+void* wh_Utils_memset_flush(void* p, int c, size_t n)
+{
+    return wh_Utils_CacheFlush(memset(p, c, n), n);
+}
+
+void* wh_Utils_memcpy_invalidate(void* dst, const void* src, size_t n)
+{
+    return memcpy(dst,wh_Utils_CacheInvalidate(src,n),n);
+}
+
+void* wh_Utils_memcpy_flush(void* dst, const void* src , size_t n)
+{
+    return wh_Utils_CacheFlush(memcpy(dst,src,n),n);
+}
+
+
+#if defined(DEBUG_CRYPTOCB) || defined(DEBUG_CRYPTOCB_VERBOSE)
+#include <stdio.h>
+#endif
+
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+void _hexdump(const char* initial, uint8_t* ptr, size_t size)
+{
+#define HEXDUMP_BYTES_PER_LINE 16
+    int count = 0;
+    if(initial != NULL)
+        printf("%s",initial);
+    while(size > 0) {
+        printf ("%02X ", *ptr);
+        ptr++;
+        size --;
+        count++;
+        if (count % HEXDUMP_BYTES_PER_LINE == 0) {
+            printf("\n");
+        }
+    }
+    if((count % HEXDUMP_BYTES_PER_LINE) != 0) {
+        printf("\n");
+    }
+}
+#endif
+

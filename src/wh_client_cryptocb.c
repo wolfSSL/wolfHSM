@@ -21,18 +21,21 @@
  *
  */
 
-#include <stdint.h>
-
 /* Pick up compile-time configuration */
 #include "wolfhsm/wh_settings.h"
 
-#include "wolfhsm/wh_client.h"
-#include "wolfhsm/wh_comm.h"
-#include "wolfhsm/wh_packet.h"
-#include "wolfhsm/wh_error.h"
-#include "wolfhsm/wh_message.h"
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
+
+#include <stdint.h>
+
+#include "wolfhsm/wh_common.h"
+#include "wolfhsm/wh_error.h"
+#include "wolfhsm/wh_utils.h"
+#include "wolfhsm/wh_comm.h"
+#include "wolfhsm/wh_packet.h"
+#include "wolfhsm/wh_message.h"
+#include "wolfhsm/wh_client.h"
 
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/types.h"
@@ -45,23 +48,6 @@
 
 #include "wolfhsm/wh_client_cryptocb.h"
 
-#if defined(DEBUG_CRYPTOCB) || defined(DEBUG_CRYPTOCB_VERBOSE)
-#include <stdio.h>
-#endif
-
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-static void _hexdump(const char* initial,uint8_t* ptr, size_t size)
-{
-    if(initial != NULL)
-        printf("%s",initial);
-    while(size > 0) {
-        printf ("%02X ", *ptr);
-        ptr++;
-        size --;
-    }
-    printf("\n");
-}
-#endif
 
 #ifndef NO_SHA256
 static int _handleSha256(int devId, wc_CryptoInfo* info, void* inCtx,
