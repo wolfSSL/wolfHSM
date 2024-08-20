@@ -114,7 +114,9 @@ void* wh_Utils_CacheFlush(void* p, size_t n)
 
 void* wh_Utils_memset_flush(void* p, int c, size_t n)
 {
-    return XCACHEFLUSHBLK(memset(p, c, n), n);
+    memset(p, c, n);
+    XMEMFENCE();
+    return XCACHEFLUSHBLK(p, n);
 }
 
 void* wh_Utils_memcpy_invalidate(void* dst, const void* src, size_t n)
@@ -124,8 +126,9 @@ void* wh_Utils_memcpy_invalidate(void* dst, const void* src, size_t n)
 
 void* wh_Utils_memcpy_flush(void* dst, const void* src , size_t n)
 {
-    XCACHEFLUSHBLK(memcpy(dst,src,n), n);
-    return dst;
+    memcpy(dst,src,n);
+    XMEMFENCE();
+    return XCACHEFLUSHBLK(dst, n);
 }
 
 

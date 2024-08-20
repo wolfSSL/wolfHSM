@@ -123,9 +123,6 @@ int wh_TransportMem_SendRequest(void* c, uint16_t len, const void* data)
         wh_Utils_memcpy_flush((void*)context->req_data, data, len);
     }
 
-    /* Ensure the memcpy is complete */
-    XMEMFENCE();
-
     req.s.len = len;
     req.s.notify++;
 
@@ -194,8 +191,6 @@ int wh_TransportMem_SendResponse(void* c, uint16_t len, const void* data)
     if ((data != NULL) && (len != 0)) {
         wh_Utils_memcpy_flush(context->resp_data, data, len);
     }
-    /* Ensure the memcpy is complete */
-    XMEMFENCE();
 
     resp.s.len = len;
     resp.s.notify = req.s.notify;
