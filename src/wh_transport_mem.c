@@ -109,8 +109,6 @@ int wh_TransportMem_SendRequest(void* c, uint16_t len, const void* data)
     /* Read current CSR's. ctx_req does not need to be invalidated */
     XMEMFENCE();
     XCACHEINVLD(ctx_resp);
-    XCACHEINVLD(ctx_req);
-
     resp.u64 = ctx_resp->u64;
     req.u64 = ctx_req->u64;
 
