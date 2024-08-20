@@ -40,31 +40,6 @@ uint32_t wh_Utils_ntohl(uint32_t networklong);
 
 int wh_Utils_memeqzero(uint8_t* buffer, uint32_t size);
 
-/** Cache flushing and memory fencing synchronization primitives */
-/* Create a full sequential memory fence to ensure compiler memory ordering */
-#ifndef XMEMFENCE
-#define XMEMFENCE() __atomic_thread_fence(__ATOMIC_SEQ_CST)
-#endif
-
-/* Return cacheline size */
-#ifndef XCACHELINE
-#define XCACHELINE (32)
-#endif
-
-/* Flush the cache line at _p. Used after writing to ensure the memory is
- * consistent. */
-#ifndef XCACHEFLUSH
-#define XCACHEFLUSH(_p) (void)(_p)
-/* PPC32: __asm__ volatile ("dcbf 0, %0" : : "r" (_p): "memory") */
-#endif
-
-/* Invalidate the cache line at _p. Used prior to reading to ensure
- * freshness. */
-#ifndef XCACHEINVLD
-#define XCACHEINVLD(_p) (void)(_p)
-/* PPC32: __asm__ volatile ("dcbi 0, %0" : : "r" (_p): "memory") */
-#endif
-
 /** Cache helper functions */
 /* Flush the cache lines starting at p for at least n bytes */
 void* wh_Utils_CacheFlush(void* p, size_t n);
