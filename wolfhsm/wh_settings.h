@@ -57,7 +57,8 @@
  *  XMEMFENCE() - Create a sequential memory consistency sync point.  Note this
  *                is compiler specific and generates hardware specific fence
  *                instructions. Default works for modern gcc and clang
- *      Default: __atomic_thread_fence(__ATOMIC_SEQ_CST)
+ *      Default: (gcc or clang) __atomic_thread_fence(__ATOMIC_SEQ_CST)
+ *               (other) do {} while (0)
  *
  *  XCACHELINE - Size in bytes of a cache line
  *      Default: 32
@@ -170,7 +171,12 @@
 /** Cache flushing and memory fencing synchronization primitives */
 /* Create a full sequential memory fence to ensure compiler memory ordering */
 #ifndef XMEMFENCE
+#if defined(__GCC__) || defined(__clang__)
 #define XMEMFENCE() __atomic_thread_fence(__ATOMIC_SEQ_CST)
+#else
+#define XMEMFENCE() do {} while 0
+#warning "wolfHSM memory transports should have a functional XMEMFENCE"
+#endif
 #endif
 
 /* Return cacheline size */
