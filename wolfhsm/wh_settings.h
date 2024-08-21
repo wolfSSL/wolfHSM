@@ -173,7 +173,7 @@
 #ifndef XMEMFENCE
 #if defined(__GCC__) || defined(__clang__)
 #define XMEMFENCE() __atomic_thread_fence(__ATOMIC_SEQ_CST)
-/* PPC32: __asm__ volatile ("sync" : : : "memory")
+/* PPC32: __asm__ volatile ("sync" : : : "memory") */
 #else
 #define XMEMFENCE() do { } while (0)
 #warning "wolfHSM memory transports should have a functional XMEMFENCE"
