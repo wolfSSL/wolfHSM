@@ -28,6 +28,7 @@
 #include "wolfhsm/wh_settings.h"
 
 #include <stdint.h>
+#include <stddef.h> /* For size_t */
 
 /** Byteswap functions */
 uint16_t wh_Utils_Swap16(uint16_t val);
@@ -38,5 +39,26 @@ uint32_t wh_Utils_htonl(uint32_t hostlong);
 uint32_t wh_Utils_ntohl(uint32_t networklong);
 
 int wh_Utils_memeqzero(uint8_t* buffer, uint32_t size);
+
+/** Cache helper functions */
+/* Flush the cache lines starting at p for at least n bytes */
+void* wh_Utils_CacheFlush(void* p, size_t n);
+
+/* Invalidate the cache lines starting at p for at least n bytes */
+const void* wh_Utils_CacheInvalidate(const void* p, size_t n);
+
+/* Perform memset followed by a cache flush */
+void* wh_Utils_memset_flush(void* p, int c, size_t n);
+
+/* Cache invalidate the src followed by memcpy */
+void* wh_Utils_memcpy_invalidate(void* dst, const void* src, size_t n);
+
+/* Perform memcpy followed by a cache flush of dst */
+void* wh_Utils_memcpy_flush(void* dst, const void* src , size_t n);
+
+
+#if defined(DEBUG_CRYPTOCB) || defined(DEBUG_CRYPTOCB_VERBOSE)
+void wh_Utils_Hexdump(const char* initial, uint8_t* ptr, size_t size);
+#endif
 
 #endif /* !WOLFHSM_WH_UTILS_H_ */

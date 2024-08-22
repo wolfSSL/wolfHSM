@@ -51,6 +51,33 @@
  *  WOLFHSM_CFG_SERVER_DMAADDR_COUNT - Number of DMA address regions
  *      Default: 10
  *
+ *
+ *  Overridable porting functions:
+ *
+ *  XMEMFENCE() - Create a sequential memory consistency sync point.  Note this
+ *                is compiler specific and generates hardware specific fence
+ *                instructions. Default works for modern gcc and clang
+ *      Default: (gcc or clang) __atomic_thread_fence(__ATOMIC_SEQ_CST)
+ *               (other) do {} while (0)
+ *
+ *  XCACHELINE - Size in bytes of a cache line
+ *      Default: 32
+ *
+ *  #ifndef XCACHEFLUSH(ptr) - Flush the cache line uncluding ptr
+ *      DefaultL (void)(ptr)
+ *
+ *  #ifndef XCACHEFLUSHBLK(ptr, n) - Flush the cache lines starting at ptr for
+ *                                   at least n bytes
+ *      DefaultL wh_Utils_CacheFlush(ptr, n)
+ *
+ *  #ifndef XCACHEINVLD(ptr) - Invalidate the cache line uncluding ptr
+ *      DefaultL (void)(ptr)
+ *
+ *  #ifndef XCACHEINVLDBLK(ptr, n) - Invalidate the cache lines starting at ptr
+ *                                   for at least n bytes
+ *      DefaultL wh_Utils_CacheInvalidate(ptr, n)
+ *
+ *
  */
 
 #ifndef WOLFHSM_WH_SETTINGS_H_
@@ -141,5 +168,45 @@
 
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
+/** Cache flushing and memory fencing synchronization primitives */
+/* Create a full sequential memory fence to ensure compiler memory ordering */
+#ifndef XMEMFENCE
+#if defined(__GCC__) || defined(__clang__)
+#define XMEMFENCE() __atomic_thread_fence(__ATOMIC_SEQ_CST)
+/* PPC32: __asm__ volatile ("sync" : : : "memory") */
+#else
+#define XMEMFENCE() do { } while (0)
+#warning "wolfHSM memory transports should have a functional XMEMFENCE"
+#endif
+#endif
+
+/* Return cacheline size */
+#ifndef XCACHELINE
+#define XCACHELINE (32)
+#endif
+
+/* Flush the cache line at _p. Used after writing to ensure the memory is
+ * consistent. */
+#ifndef XCACHEFLUSH
+#define XCACHEFLUSH(_p) (void)(_p)
+/* PPC32: __asm__ volatile ("dcbf 0, %0" : : "r" (_p): "memory") */
+#endif
+
+/* Flush the cache lines starting at _p for at least _n bytes. */
+#ifndef XCACHEFLUSHBLK
+#define XCACHEFLUSHBLK(_p, _n) wh_Utils_CacheFlush((_p), (_n))
+#endif
+
+/* Invalidate the cache line at _p. Used prior to reading to ensure
+ * freshness. */
+#ifndef XCACHEINVLD
+#define XCACHEINVLD(_p) (void)(_p)
+/* PPC32: __asm__ volatile ("dcbi 0, %0" : : "r" (_p): "memory") */
+#endif
+
+/* Invalidate the cache lines starting  at _p for at least _n bytes. */
+#ifndef XCACHEINVLDBLK
+#define XCACHEINVLDBLK(_p, _n) wh_Utils_CacheInvalidate((_p), (_n))
+#endif
 
 #endif /* !WOLFHSM_WH_SETTINGS_H_ */

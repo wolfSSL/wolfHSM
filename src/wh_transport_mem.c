@@ -30,6 +30,7 @@
 #include <stdint.h>
 
 #include "wolfhsm/wh_error.h"
+#include "wolfhsm/wh_utils.h"
 #include "wolfhsm/wh_comm.h"
 
 #include "wolfhsm/wh_transport_mem.h"
@@ -51,7 +52,7 @@ int wh_TransportMem_Init(void* c, const void* cf,
         return WH_ERROR_BADARGS;
     }
 
-    memset(context, 0, sizeof(*context));
+    wh_Utils_memset_flush(context, 0, sizeof(*context));
     context->req            = (whTransportMemCsr*)config->req;
     context->req_size       = config->req_size;
     context->req_data       = (void*)(context->req + 1);
@@ -61,6 +62,8 @@ int wh_TransportMem_Init(void* c, const void* cf,
     context->resp_data      = (void*)(context->resp + 1);
 
     context->initialized = 1;
+    XMEMFENCE();
+
     return WH_ERROR_OK;
 }
 
@@ -72,8 +75,8 @@ int wh_TransportMem_InitClear(void* c, const void* cf,
     int rc = wh_TransportMem_Init(c, cf, connectcb, connectcb_arg);
     if (rc == WH_ERROR_OK) {
         /* Zero the buffers */
-        memset((void*)context->req, 0, context->req_size);
-        memset((void*)context->resp, 0, context->resp_size);
+        wh_Utils_memset_flush((void*)context->req, 0, context->req_size);
+        wh_Utils_memset_flush((void*)context->resp, 0, context->resp_size);
     }
     return rc;
 }
@@ -93,6 +96,8 @@ int wh_TransportMem_Cleanup(void* c)
 int wh_TransportMem_SendRequest(void* c, uint16_t len, const void* data)
 {
     whTransportMemContext* context = c;
+    volatile whTransportMemCsr* ctx_req = context->req;
+    volatile whTransportMemCsr* ctx_resp = context->resp;
     whTransportMemCsr resp;
     whTransportMemCsr req;
 
@@ -101,9 +106,11 @@ int wh_TransportMem_SendRequest(void* c, uint16_t len, const void* data)
         return WH_ERROR_BADARGS;
     }
 
-    /* Read current CSR's */
-    resp.u64 = context->resp->u64;
-    req.u64 = context->req->u64;
+    /* Read current CSR's. ctx_req does not need to be invalidated */
+    XMEMFENCE();
+    XCACHEINVLD(ctx_resp);
+    resp.u64 = ctx_resp->u64;
+    req.u64 = ctx_req->u64;
 
     /* Has server completed with previous request */
     if (req.s.notify != resp.s.notify) {
@@ -111,13 +118,17 @@ int wh_TransportMem_SendRequest(void* c, uint16_t len, const void* data)
     }
 
     if ((data != NULL) && (len != 0)) {
-        memcpy((void*)context->req_data, data, len);
+        wh_Utils_memcpy_flush((void*)context->req_data, data, len);
     }
+
     req.s.len = len;
     req.s.notify++;
 
     /* Write the new CSR's */
-    context->req->u64 = req.u64;
+    ctx_req->u64 = req.u64;
+    /*Ensure the update to the CSR is complete */
+    XMEMFENCE();
+    XCACHEFLUSH(ctx_req);
 
     return 0;
 }
@@ -125,6 +136,8 @@ int wh_TransportMem_SendRequest(void* c, uint16_t len, const void* data)
 int wh_TransportMem_RecvRequest(void* c, uint16_t *out_len, void* data)
 {
     whTransportMemContext* context = c;
+    volatile whTransportMemCsr* ctx_req = context->req;
+    volatile whTransportMemCsr* ctx_resp = context->resp;
     whTransportMemCsr req;
     whTransportMemCsr resp;
 
@@ -133,9 +146,11 @@ int wh_TransportMem_RecvRequest(void* c, uint16_t *out_len, void* data)
         return WH_ERROR_BADARGS;
     }
 
-    /* Read current request CSR's */
-    req.u64 = context->req->u64;
-    resp.u64 = context->resp->u64;
+    /* Read current request CSR's. ctx_resp does not need to be invalidated */
+    XMEMFENCE();
+    XCACHEINVLD(ctx_req);
+    req.u64 = ctx_req->u64;
+    resp.u64 = ctx_resp->u64;
 
     /* Check to see if a new request has arrived */
     if(req.s.notify == resp.s.notify) {
@@ -143,7 +158,7 @@ int wh_TransportMem_RecvRequest(void* c, uint16_t *out_len, void* data)
     }
 
     if ((data != NULL) && (req.s.len != 0)) {
-        memcpy(data, context->req_data, req.s.len);
+        wh_Utils_memcpy_invalidate(data, context->req_data, req.s.len);
     }
     if (out_len != NULL) {
         *out_len = req.s.len;
@@ -155,6 +170,8 @@ int wh_TransportMem_RecvRequest(void* c, uint16_t *out_len, void* data)
 int wh_TransportMem_SendResponse(void* c, uint16_t len, const void* data)
 {
     whTransportMemContext* context = c;
+    volatile whTransportMemCsr* ctx_req = context->req;
+    volatile whTransportMemCsr* ctx_resp = context->resp;
     whTransportMemCsr req;
     whTransportMemCsr resp;
 
@@ -163,18 +180,24 @@ int wh_TransportMem_SendResponse(void* c, uint16_t len, const void* data)
         return WH_ERROR_BADARGS;
     }
 
-    /* Read both CSR's */
-    req.u64 = context->req->u64;
-    resp.u64 = context->resp->u64;
+    /* Read both CSR's. ctx_resp does not need to be invalidated */
+    XMEMFENCE();
+    XCACHEINVLD(ctx_req);
+    req.u64 = ctx_req->u64;
+    resp.u64 = ctx_resp->u64;
 
     if ((data != NULL) && (len != 0)) {
-        memcpy(context->resp_data, data, len);
+        wh_Utils_memcpy_flush(context->resp_data, data, len);
     }
+
     resp.s.len = len;
     resp.s.notify = req.s.notify;
 
-    /* Write the new CSR's */
-    context->resp->u64 = resp.u64;
+   /* Write the new CSR's */
+    ctx_resp->u64 = resp.u64;
+    /*Ensure the update to the CSR is complete */
+    XMEMFENCE();
+    XCACHEFLUSH(ctx_resp);
 
     return 0;
 }
@@ -182,6 +205,8 @@ int wh_TransportMem_SendResponse(void* c, uint16_t len, const void* data)
 int wh_TransportMem_RecvResponse(void* c, uint16_t *out_len, void* data)
 {
     whTransportMemContext* context = c;
+    volatile whTransportMemCsr* ctx_req = context->req;
+    volatile whTransportMemCsr* ctx_resp = context->resp;
     whTransportMemCsr req;
     whTransportMemCsr resp;
 
@@ -190,9 +215,11 @@ int wh_TransportMem_RecvResponse(void* c, uint16_t *out_len, void* data)
         return WH_ERROR_BADARGS;
     }
 
-    /* Read both CSR's */
-    req.u64 = context->req->u64;
-    resp.u64 = context->resp->u64;
+    /* Read both CSR's. ctx_req does not need to be invalidated */
+    XMEMFENCE();
+    XCACHEINVLD(ctx_resp);
+    req.u64 = ctx_req->u64;
+    resp.u64 = ctx_resp->u64;
 
     /* Check to see if the current response is the different than the request */
     if(resp.s.notify != req.s.notify) {
@@ -200,7 +227,7 @@ int wh_TransportMem_RecvResponse(void* c, uint16_t *out_len, void* data)
     }
 
     if ((data != NULL) && (resp.s.len != 0)) {
-        memcpy(data, context->resp_data, resp.s.len);
+        wh_Utils_memcpy_invalidate(data, context->resp_data, resp.s.len);
     }
 
     if (out_len != NULL) {

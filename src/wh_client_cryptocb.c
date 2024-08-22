@@ -21,18 +21,21 @@
  *
  */
 
-#include <stdint.h>
-
 /* Pick up compile-time configuration */
 #include "wolfhsm/wh_settings.h"
 
-#include "wolfhsm/wh_client.h"
-#include "wolfhsm/wh_comm.h"
-#include "wolfhsm/wh_packet.h"
-#include "wolfhsm/wh_error.h"
-#include "wolfhsm/wh_message.h"
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
+
+#include <stdint.h>
+
+#include "wolfhsm/wh_common.h"
+#include "wolfhsm/wh_error.h"
+#include "wolfhsm/wh_utils.h"
+#include "wolfhsm/wh_comm.h"
+#include "wolfhsm/wh_packet.h"
+#include "wolfhsm/wh_message.h"
+#include "wolfhsm/wh_client.h"
 
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/types.h"
@@ -45,23 +48,6 @@
 
 #include "wolfhsm/wh_client_cryptocb.h"
 
-#if defined(DEBUG_CRYPTOCB) || defined(DEBUG_CRYPTOCB_VERBOSE)
-#include <stdio.h>
-#endif
-
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-static void _hexdump(const char* initial,uint8_t* ptr, size_t size)
-{
-    if(initial != NULL)
-        printf("%s",initial);
-    while(size > 0) {
-        printf ("%02X ", *ptr);
-        ptr++;
-        size --;
-    }
-    printf("\n");
-}
-#endif
 
 #ifndef NO_SHA256
 static int _handleSha256(int devId, wc_CryptoInfo* info, void* inCtx,
@@ -176,8 +162,8 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
                     info->cipher.aescbc.aes->devKey, info->cipher.aescbc.aes->keylen,
                     info->cipher.aescbc.in, info->cipher.aescbc.sz,
                     info->cipher.aescbc.out, info->cipher.enc, ret);
-            _hexdump("  In:", in, packet->cipherAesCbcReq.sz);
-            _hexdump("  Key:", key, packet->cipherAesCbcReq.keyLen);
+            wh_Utils_Hexdump("  In:", in, packet->cipherAesCbcReq.sz);
+            wh_Utils_Hexdump("  Key:", key, packet->cipherAesCbcReq.keyLen);
 #endif /* DEBUG_CRYPTOCB */
 
             /* read response */
@@ -193,7 +179,7 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
                     ret = packet->rc;
                 else {
 #ifdef DEBUG_CRYPTOCB_VERBOSE
-                    _hexdump("  Out:", out, packet->cipherAesCbcRes.sz);
+                    wh_Utils_Hexdump("  Out:", out, packet->cipherAesCbcRes.sz);
 #endif /* DEBUG_CRYPTOCB */
                     /* copy the response out */
                     XMEMCPY(info->cipher.aescbc.out, out,
@@ -981,9 +967,9 @@ static int _xferSha256BlockAndUpdateDigest(whClientContext* ctx,
 
 #ifdef DEBUG_CRYPTOCB_VERBOSE
     printf("[client] send SHA256 Req:\n");
-    _hexdump("[client] inBlock: ", req->inBlock, WC_SHA256_BLOCK_SIZE);
+    wh_Utils_Hexdump("[client] inBlock: ", req->inBlock, WC_SHA256_BLOCK_SIZE);
     if (req->resumeState.hiLen != 0 || req->resumeState.loLen != 0) {
-        _hexdump("  [client] resumeHash: ", req->resumeState.hash,
+        wh_Utils_Hexdump("  [client] resumeHash: ", req->resumeState.hash,
                  (isLastBlock) ? req->lastBlockLen : WC_SHA256_BLOCK_SIZE);
         printf("  [client] hiLen: %u, loLen: %u\n", req->resumeState.hiLen,
                req->resumeState.loLen);
@@ -1014,7 +1000,7 @@ static int _xferSha256BlockAndUpdateDigest(whClientContext* ctx,
             sha256->loLen = packet->hashSha256Res.loLen;
 #ifdef DEBUG_CRYPTOCB_VERBOSE
             printf("[client] Client SHA256 Res recv:\n");
-            _hexdump("[client] hash: ", (uint8_t*)sha256->digest,
+            wh_Utils_Hexdump("[client] hash: ", (uint8_t*)sha256->digest,
                      WC_SHA256_DIGEST_SIZE);
 #endif /* DEBUG_CRYPTOCB_VERBOSE */
         }
