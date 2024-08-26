@@ -37,7 +37,7 @@
 #include <pthread.h> /* For pthread_create/cancel/join/_t */
 #include <unistd.h>  /* For sleep */
 #include "port/posix/posix_transport_tcp.h"
-#include "port/posix/posix_transport_mem.h"
+#include "port/posix/posix_transport_shm.h"
 #endif
 
 
@@ -409,30 +409,30 @@ void wh_CommClientServer_MemThreadTest(void)
 void wh_CommClientServer_ShMemThreadTest(void)
 {
     /* Transport memory configuration */
-    posixTransportMemConfig tmcf[1] = {{
-        .shmFileName = "/wh_test_comm_shm",
-        .req_size    = BUFFER_SIZE,
-        .resp_size   = BUFFER_SIZE,
+    posixTransportShmConfig tmcf[1] = {{
+        .shmObjName = "/wh_test_comm_shm",
+        .req_size   = BUFFER_SIZE,
+        .resp_size  = BUFFER_SIZE,
     }};
 
     /* Client configuration/contexts */
-    whTransportClientCb         tmccb[1]  = {POSIX_TRANSPORT_MEM_CLIENT_CB};
-    whTransportMemClientContext csc[1]    = {};
-    whCommClientConfig          c_conf[1] = {{
-                 .transport_cb      = tmccb,
-                 .transport_context = (void*)csc,
-                 .transport_config  = (void*)tmcf,
-                 .client_id         = 123,
+    whTransportClientCb            tmccb[1]  = {POSIX_TRANSPORT_SHM_CLIENT_CB};
+    posixTransportShmClientContext csc[1]    = {};
+    whCommClientConfig             c_conf[1] = {{
+                    .transport_cb      = tmccb,
+                    .transport_context = (void*)csc,
+                    .transport_config  = (void*)tmcf,
+                    .client_id         = 123,
     }};
 
     /* Server configuration/contexts */
-    whTransportServerCb         tmscb[1]  = {POSIX_TRANSPORT_MEM_SERVER_CB};
-    whTransportMemServerContext css[1]    = {};
-    whCommServerConfig          s_conf[1] = {{
-                 .transport_cb      = tmscb,
-                 .transport_context = (void*)css,
-                 .transport_config  = (void*)tmcf,
-                 .server_id         = 124,
+    whTransportServerCb            tmscb[1]  = {POSIX_TRANSPORT_SHM_SERVER_CB};
+    posixTransportShmServerContext css[1]    = {};
+    whCommServerConfig             s_conf[1] = {{
+                    .transport_cb      = tmscb,
+                    .transport_context = (void*)css,
+                    .transport_config  = (void*)tmcf,
+                    .server_id         = 124,
     }};
 
     _whCommClientServerThreadTest(c_conf, s_conf);

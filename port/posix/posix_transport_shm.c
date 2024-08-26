@@ -1,4 +1,4 @@
-#include "port/posix/posix_transport_mem.h"
+#include "port/posix/posix_transport_shm.h"
 
 #include <fcntl.h>     /* For O_* constants */
 #include <sys/mman.h>  /* For shm_open, mmap */
@@ -19,50 +19,49 @@ typedef struct {
 } ShmHeader;
 
 /** Callback function declarations */
-int posixTransportMem_ServerInit(void* c, const void* cf,
+int posixTransportShm_ServerInit(void* c, const void* cf,
                                  whCommSetConnectedCb connectcb,
                                  void*                connectcb_arg)
 {
     int                       rc;
     int                       shmFd;
-    struct stat               shmStat;
     size_t                    shmSize;
     size_t                    shmNameLen;
     ShmHeader*                header;
     whTransportMemConfig      tMemCfg;
-    posixTransportMemContext* ctx    = (posixTransportMemContext*)c;
-    posixTransportMemConfig*  config = (posixTransportMemConfig*)cf;
+    posixTransportShmContext* ctx    = (posixTransportShmContext*)c;
+    posixTransportShmConfig*  config = (posixTransportShmConfig*)cf;
 
-    if (ctx == NULL || config == NULL || config->shmFileName == NULL) {
+    if (ctx == NULL || config == NULL || config->shmObjName == NULL) {
         return WH_ERROR_BADARGS;
     }
 
-    /* check shmFileName for max length */
-    shmNameLen = strnlen(config->shmFileName, NAME_MAX + 1);
+    /* check shmObjName for max length */
+    shmNameLen = strnlen(config->shmObjName, NAME_MAX + 1);
     if (shmNameLen > NAME_MAX) {
         return WH_ERROR_BADARGS;
     }
 
-    ctx->shmFileName = calloc(shmNameLen + 1, sizeof(char));
-    strncpy(ctx->shmFileName, config->shmFileName, shmNameLen);
+    ctx->shmObjName = calloc(shmNameLen + 1, sizeof(char));
+    strncpy(ctx->shmObjName, config->shmObjName, shmNameLen);
 
     shmSize = sizeof(ShmHeader) + config->req_size + config->resp_size;
 
     /* Attempt to open the shared memory object serving as the backing store
      * without attempting to create it. If it already exists, attempt to delete
      * it, and verify that it is gone. */
-    shmFd = shm_open(ctx->shmFileName, O_RDWR, 0666);
+    shmFd = shm_open(ctx->shmObjName, O_RDWR, 0666);
     if (shmFd > 0) {
         close(shmFd);
-        shm_unlink(ctx->shmFileName);
-        shmFd = shm_open(ctx->shmFileName, O_RDWR, 0666);
+        shm_unlink(ctx->shmObjName);
+        shmFd = shm_open(ctx->shmObjName, O_RDWR, 0666);
     }
 
     /* If shared memory object doesn't exist, create it and set the size */
     if (shmFd == -1) {
         if (errno == ENOENT) {
             /* Shared memory object doesn't exist, create it */
-            shmFd = shm_open(ctx->shmFileName, O_CREAT | O_RDWR, 0666);
+            shmFd = shm_open(ctx->shmObjName, O_CREAT | O_RDWR, 0666);
             if (shmFd == -1) {
                 perror("server shm_open");
                 exit(EXIT_FAILURE);
@@ -103,8 +102,8 @@ int posixTransportMem_ServerInit(void* c, const void* cf,
     atomic_fetch_add(&header->refCount, 1);
 
     /* allocate a shared memory transport context */
-    ctx->transport_ctx = malloc(sizeof(whTransportMemContext));
-    if (ctx->transport_ctx == NULL) {
+    ctx->transportMemCtx = malloc(sizeof(whTransportMemContext));
+    if (ctx->transportMemCtx == NULL) {
         return WH_ERROR_ABORTED;
     }
 
@@ -115,7 +114,7 @@ int posixTransportMem_ServerInit(void* c, const void* cf,
     tMemCfg.resp      = ctx->shmBuf + sizeof(ShmHeader) + config->req_size;
 
     /* Initialize the shared memory transport using our newly mmapped buffer */
-    rc = wh_TransportMem_Init(ctx->transport_ctx, &tMemCfg, connectcb,
+    rc = wh_TransportMem_Init(ctx->transportMemCtx, &tMemCfg, connectcb,
                               connectcb_arg);
     if (rc != WH_ERROR_OK) {
         return rc;
@@ -128,7 +127,7 @@ int posixTransportMem_ServerInit(void* c, const void* cf,
 
 
 /** Callback function declarations */
-int posixTransportMem_ClientInit(void* c, const void* cf,
+int posixTransportShm_ClientInit(void* c, const void* cf,
                                  whCommSetConnectedCb connectcb,
                                  void*                connectcb_arg)
 {
@@ -139,28 +138,28 @@ int posixTransportMem_ClientInit(void* c, const void* cf,
     size_t                    shmNameLen;
     ShmHeader*                header;
     whTransportMemConfig      tMemCfg;
-    posixTransportMemContext* ctx    = (posixTransportMemContext*)c;
-    posixTransportMemConfig*  config = (posixTransportMemConfig*)cf;
+    posixTransportShmContext* ctx    = (posixTransportShmContext*)c;
+    posixTransportShmConfig*  config = (posixTransportShmConfig*)cf;
 
-    if (ctx == NULL || config == NULL || config->shmFileName == NULL) {
+    if (ctx == NULL || config == NULL || config->shmObjName == NULL) {
         return WH_ERROR_BADARGS;
     }
 
-    /* check shmFileName for max length */
-    shmNameLen = strnlen(config->shmFileName, NAME_MAX + 1);
+    /* check shmObjName for max length */
+    shmNameLen = strnlen(config->shmObjName, NAME_MAX + 1);
     if (shmNameLen > NAME_MAX) {
         return WH_ERROR_BADARGS;
     }
 
-    ctx->shmFileName = calloc(shmNameLen + 1, sizeof(char));
-    strncpy(ctx->shmFileName, config->shmFileName, shmNameLen);
+    ctx->shmObjName = calloc(shmNameLen + 1, sizeof(char));
+    strncpy(ctx->shmObjName, config->shmObjName, shmNameLen);
 
     shmSize = sizeof(ShmHeader) + config->req_size + config->resp_size;
 
     /* Attempt to open the shared memory backing store. If it doesn't exist yet,
      * sleep */
     while (1) {
-        shmFd = shm_open(ctx->shmFileName, O_RDWR, 0666);
+        shmFd = shm_open(ctx->shmObjName, O_RDWR, 0666);
         if (shmFd == -1) {
             if (errno != ENOENT) {
                 perror("client shm_open");
@@ -209,8 +208,8 @@ int posixTransportMem_ClientInit(void* c, const void* cf,
     }
 
     /* allocate a shared memory transport context */
-    ctx->transport_ctx = malloc(sizeof(whTransportMemContext));
-    if (ctx->transport_ctx == NULL) {
+    ctx->transportMemCtx = malloc(sizeof(whTransportMemContext));
+    if (ctx->transportMemCtx == NULL) {
         return WH_ERROR_ABORTED;
     }
 
@@ -221,17 +220,17 @@ int posixTransportMem_ClientInit(void* c, const void* cf,
     tMemCfg.resp      = ctx->shmBuf + sizeof(ShmHeader) + config->req_size;
 
     /* Initialize the shared memory transport using our newly mmapped buffer */
-    rc = wh_TransportMem_Init(ctx->transport_ctx, &tMemCfg, connectcb,
+    rc = wh_TransportMem_Init(ctx->transportMemCtx, &tMemCfg, connectcb,
                               connectcb_arg);
     if (rc != WH_ERROR_OK) {
         return rc;
     }
 
     /* Clear the comms buffers */
-    wh_Utils_memset_flush((void*)ctx->transport_ctx->req, 0,
-                          ctx->transport_ctx->req_size);
-    wh_Utils_memset_flush((void*)ctx->transport_ctx->resp, 0,
-                          ctx->transport_ctx->resp_size);
+    wh_Utils_memset_flush((void*)ctx->transportMemCtx->req, 0,
+                          ctx->transportMemCtx->req_size);
+    wh_Utils_memset_flush((void*)ctx->transportMemCtx->resp, 0,
+                          ctx->transportMemCtx->resp_size);
 
     /* Close the file descriptor after mmap */
     close(shmFd);
@@ -239,12 +238,12 @@ int posixTransportMem_ClientInit(void* c, const void* cf,
 }
 
 
-int posixTransportMem_Cleanup(void* c)
+int posixTransportShm_Cleanup(void* c)
 {
-    posixTransportMemContext* ctx = (posixTransportMemContext*)c;
+    posixTransportShmContext* ctx = (posixTransportShmContext*)c;
     ShmHeader*                header;
 
-    if (ctx == NULL || ctx->transport_ctx == NULL || ctx->shmBuf == NULL) {
+    if (ctx == NULL || ctx->transportMemCtx == NULL || ctx->shmBuf == NULL) {
         return WH_ERROR_BADARGS;
     }
 
@@ -253,74 +252,74 @@ int posixTransportMem_Cleanup(void* c)
     /* Decrement the reference count */
     if (atomic_fetch_sub(&header->refCount, 1) == 1) {
         /* If the reference count is now zero, unlink the shared memory */
-        if (shm_unlink(ctx->shmFileName) == -1) {
+        if (shm_unlink(ctx->shmObjName) == -1) {
             perror("shm_unlink");
             exit(EXIT_FAILURE);
         }
     }
 
     /* Unmap the shared memory */
-    if (munmap(ctx->shmBuf, sizeof(header) + ctx->transport_ctx->req_size +
-                                ctx->transport_ctx->resp_size) == -1) {
+    if (munmap(ctx->shmBuf, sizeof(header) + ctx->transportMemCtx->req_size +
+                                ctx->transportMemCtx->resp_size) == -1) {
         perror("munmap");
         exit(EXIT_FAILURE);
     }
 
     /* Free the allocated memory */
-    free(ctx->shmFileName);
-    free(ctx->transport_ctx);
+    free(ctx->shmObjName);
+    free(ctx->transportMemCtx);
 
     return 0;
 }
 
 
-int posixTransportMem_SendRequest(void* c, uint16_t len, const void* data)
+int posixTransportShm_SendRequest(void* c, uint16_t len, const void* data)
 {
-    posixTransportMemContext* ctx = (posixTransportMemContext*)c;
+    posixTransportShmContext* ctx = (posixTransportShmContext*)c;
 
     /* Only need to check NULL, mem transport checks other state info */
     if (ctx == NULL) {
         return WH_ERROR_BADARGS;
     }
 
-    return wh_TransportMem_SendRequest(ctx->transport_ctx, len, data);
+    return wh_TransportMem_SendRequest(ctx->transportMemCtx, len, data);
 }
 
 
-int posixTransportMem_RecvRequest(void* c, uint16_t* out_len, void* data)
+int posixTransportShm_RecvRequest(void* c, uint16_t* out_len, void* data)
 {
-    posixTransportMemContext* ctx = (posixTransportMemContext*)c;
+    posixTransportShmContext* ctx = (posixTransportShmContext*)c;
 
     /* Only need to check NULL, mem transport checks other state info */
     if (ctx == NULL) {
         return WH_ERROR_BADARGS;
     }
 
-    return wh_TransportMem_RecvRequest(ctx->transport_ctx, out_len, data);
+    return wh_TransportMem_RecvRequest(ctx->transportMemCtx, out_len, data);
 }
 
 
-int posixTransportMem_SendResponse(void* c, uint16_t len, const void* data)
+int posixTransportShm_SendResponse(void* c, uint16_t len, const void* data)
 {
-    posixTransportMemContext* ctx = (posixTransportMemContext*)c;
+    posixTransportShmContext* ctx = (posixTransportShmContext*)c;
 
     /* Only need to check NULL, mem transport checks other state info */
     if (ctx == NULL) {
         return WH_ERROR_BADARGS;
     }
 
-    return wh_TransportMem_SendResponse(ctx->transport_ctx, len, data);
+    return wh_TransportMem_SendResponse(ctx->transportMemCtx, len, data);
 }
 
 
-int posixTransportMem_RecvResponse(void* c, uint16_t* out_len, void* data)
+int posixTransportShm_RecvResponse(void* c, uint16_t* out_len, void* data)
 {
-    posixTransportMemContext* ctx = (posixTransportMemContext*)c;
+    posixTransportShmContext* ctx = (posixTransportShmContext*)c;
 
     /* Only need to check NULL, mem transport checks other state info */
     if (ctx == NULL) {
         return WH_ERROR_BADARGS;
     }
 
-    return wh_TransportMem_RecvResponse(ctx->transport_ctx, out_len, data);
+    return wh_TransportMem_RecvResponse(ctx->transportMemCtx, out_len, data);
 }

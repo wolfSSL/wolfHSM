@@ -45,6 +45,7 @@
 int whTest_Unit(void)
 {
     printf("Enter unit tests\n");
+
     /* Component Tests */
     WH_TEST_ASSERT(0 == whTest_Flash_RamSim());
     WH_TEST_ASSERT(0 == whTest_NvmFlash());

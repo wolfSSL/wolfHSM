@@ -39,7 +39,7 @@
 #include <pthread.h> /* For pthread_create/cancel/join/_t */
 #include <unistd.h>  /* For sleep */
 
-#include "port/posix/posix_transport_mem.h"
+#include "port/posix/posix_transport_shm.h"
 #endif
 
 
@@ -1630,15 +1630,15 @@ static int wh_ClientServer_MemThreadTest(void)
 
 static int wh_ClientServer_PosixMemMapThreadTest(void)
 {
-    posixTransportMemConfig tmcf[1] = {{
-        .shmFileName = "/wh_test_clientserver_shm",
-        .req_size    = BUFFER_SIZE,
-        .resp_size   = BUFFER_SIZE,
+    posixTransportShmConfig tmcf[1] = {{
+        .shmObjName = "/wh_test_clientserver_shm",
+        .req_size   = BUFFER_SIZE,
+        .resp_size  = BUFFER_SIZE,
     }};
 
     /* Client configuration/contexts */
-    whTransportClientCb            tccb[1]    = {POSIX_TRANSPORT_MEM_CLIENT_CB};
-    posixTransportMemClientContext tmcc[1]    = {0};
+    whTransportClientCb            tccb[1]    = {POSIX_TRANSPORT_SHM_CLIENT_CB};
+    posixTransportShmClientContext tmcc[1]    = {0};
     whCommClientConfig             cc_conf[1] = {{
                     .transport_cb      = tccb,
                     .transport_context = (void*)tmcc,
@@ -1649,8 +1649,8 @@ static int wh_ClientServer_PosixMemMapThreadTest(void)
                          .comm = cc_conf,
     }};
     /* Server configuration/contexts */
-    whTransportServerCb            tscb[1]    = {POSIX_TRANSPORT_MEM_SERVER_CB};
-    posixTransportMemServerContext tmsc[1]    = {0};
+    whTransportServerCb            tscb[1]    = {POSIX_TRANSPORT_SHM_SERVER_CB};
+    posixTransportShmServerContext tmsc[1]    = {0};
     whCommServerConfig             cs_conf[1] = {{
                     .transport_cb      = tscb,
                     .transport_context = (void*)tmsc,
@@ -1729,7 +1729,7 @@ int whTest_ClientServer(void)
     printf("Testing client/server: (pthread) mem...\n");
     WH_TEST_ASSERT(0 == wh_ClientServer_MemThreadTest());
 
-    printf("Testing client/server: (pthread) posix mem...\n");
+    printf("Testing client/server: (pthread) POSIX shared memory ...\n");
     WH_TEST_ASSERT(0 == wh_ClientServer_PosixMemMapThreadTest());
 #endif /* defined(WOLFHSM_CFG_TEST_POSIX) */
 
