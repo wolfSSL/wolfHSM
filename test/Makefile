@@ -133,7 +133,8 @@ SRC_C += \
             $(WOLFHSM_DIR)/src/wh_flash_ramsim.c \
             $(WOLFHSM_DIR)/src/wh_transport_mem.c \
             $(WOLFHSM_DIR)/port/posix/posix_flash_file.c \
-            $(WOLFHSM_DIR)/port/posix/posix_transport_tcp.c
+            $(WOLFHSM_DIR)/port/posix/posix_transport_tcp.c \
+            $(WOLFHSM_DIR)/port/posix/posix_transport_mem.c
 
 # APP
 SRC_C += \
