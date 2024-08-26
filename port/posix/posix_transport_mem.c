@@ -19,8 +19,9 @@ typedef struct {
 } ShmHeader;
 
 /** Callback function declarations */
-int posixTransportMem_Init(void* c, const void* cf,
-                           whCommSetConnectedCb connectcb, void* connectcb_arg)
+int posixTransportMem_ServerInit(void* c, const void* cf,
+                                 whCommSetConnectedCb connectcb,
+                                 void*                connectcb_arg)
 {
     int                       rc;
     int                       shmFd;
@@ -47,14 +48,23 @@ int posixTransportMem_Init(void* c, const void* cf,
 
     shmSize = sizeof(ShmHeader) + config->req_size + config->resp_size;
 
-    /* Attempt to open the shared memory object serving as the backing store */
+    /* Attempt to open the shared memory object serving as the backing store
+     * without attempting to create it. If it already exists, attempt to delete
+     * it, and verify that it is gone. */
     shmFd = shm_open(ctx->shmFileName, O_RDWR, 0666);
+    if (shmFd > 0) {
+        close(shmFd);
+        shm_unlink(ctx->shmFileName);
+        shmFd = shm_open(ctx->shmFileName, O_RDWR, 0666);
+    }
+
+    /* If shared memory object doesn't exist, create it and set the size */
     if (shmFd == -1) {
         if (errno == ENOENT) {
             /* Shared memory object doesn't exist, create it */
             shmFd = shm_open(ctx->shmFileName, O_CREAT | O_RDWR, 0666);
             if (shmFd == -1) {
-                perror("shm_open");
+                perror("server shm_open");
                 exit(EXIT_FAILURE);
             }
 
@@ -65,25 +75,18 @@ int posixTransportMem_Init(void* c, const void* cf,
             }
         }
         else {
-            perror("shm_open");
+            /* Other unspecified error, bail */
+            perror("server shm_open");
             exit(EXIT_FAILURE);
         }
     }
     else {
-        /* Shared memory object already exists, check its size */
-        if (fstat(shmFd, &shmStat) == -1) {
-            perror("fstat");
-            close(shmFd);
-            exit(EXIT_FAILURE);
-        }
-
-        if (shmStat.st_size != shmSize) {
-            fprintf(
-                stderr,
-                "Error: Shared memory size does not match expected size.\n");
-            close(shmFd);
-            exit(EXIT_FAILURE);
-        }
+        /* Something went wrong with unlink, we are unable to remove the
+         * existing shared memory object, bail */
+        fprintf(
+            stderr,
+            "Error: Shared memory object already exists, unable to delete.\n");
+        exit(EXIT_FAILURE);
     }
 
     /* Map the shared memory object */
@@ -124,21 +127,115 @@ int posixTransportMem_Init(void* c, const void* cf,
 }
 
 
-int posixTransportMem_InitClear(void* c, const void* cf,
-                                whCommSetConnectedCb connectcb,
-                                void*                connectcb_arg)
+/** Callback function declarations */
+int posixTransportMem_ClientInit(void* c, const void* cf,
+                                 whCommSetConnectedCb connectcb,
+                                 void*                connectcb_arg)
 {
-    posixTransportMemContext* ctx = (posixTransportMemContext*)c;
+    int                       rc;
+    int                       shmFd;
+    struct stat               shmStat;
+    size_t                    shmSize;
+    size_t                    shmNameLen;
+    ShmHeader*                header;
+    whTransportMemConfig      tMemCfg;
+    posixTransportMemContext* ctx    = (posixTransportMemContext*)c;
+    posixTransportMemConfig*  config = (posixTransportMemConfig*)cf;
 
-    int rc = posixTransportMem_Init(ctx, cf, connectcb, connectcb_arg);
-    if (rc == 0) {
-        /* Zero the buffers */
-        wh_Utils_memset_flush((void*)ctx->transport_ctx->req, 0,
-                              ctx->transport_ctx->req_size);
-        wh_Utils_memset_flush((void*)ctx->transport_ctx->resp, 0,
-                              ctx->transport_ctx->resp_size);
+    if (ctx == NULL || config == NULL || config->shmFileName == NULL) {
+        return WH_ERROR_BADARGS;
     }
-    return rc;
+
+    /* check shmFileName for max length */
+    shmNameLen = strnlen(config->shmFileName, NAME_MAX + 1);
+    if (shmNameLen > NAME_MAX) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ctx->shmFileName = calloc(shmNameLen + 1, sizeof(char));
+    strncpy(ctx->shmFileName, config->shmFileName, shmNameLen);
+
+    shmSize = sizeof(ShmHeader) + config->req_size + config->resp_size;
+
+    /* Attempt to open the shared memory backing store. If it doesn't exist yet,
+     * sleep */
+    while (1) {
+        shmFd = shm_open(ctx->shmFileName, O_RDWR, 0666);
+        if (shmFd == -1) {
+            if (errno != ENOENT) {
+                perror("client shm_open");
+                exit(EXIT_FAILURE);
+            }
+            else {
+                sleep(1);
+            }
+        }
+        else {
+            break;
+        }
+    }
+
+    /* Shared memory object already exists, check its size */
+    if (fstat(shmFd, &shmStat) == -1) {
+        perror("fstat");
+        close(shmFd);
+        exit(EXIT_FAILURE);
+    }
+
+    if (shmStat.st_size != shmSize) {
+        fprintf(stderr,
+                "Error: Shared memory size does not match expected size.\n");
+        close(shmFd);
+        exit(EXIT_FAILURE);
+    }
+
+    /* Ensure the ref count is 1, meaning the server has successfully
+     * initialized */
+
+    /* Map the shared memory object */
+    ctx->shmBuf =
+        mmap(NULL, shmSize, PROT_READ | PROT_WRITE, MAP_SHARED, shmFd, 0);
+    if (ctx->shmBuf == MAP_FAILED) {
+        perror("mmap");
+        close(shmFd);
+        exit(EXIT_FAILURE);
+    }
+    header = (ShmHeader*)ctx->shmBuf;
+
+    /* Spin and wait until the server bumps the ref count. We can now use the
+     * buffer */
+    while (atomic_load(&header->refCount) < 1) {
+        sleep(1);
+    }
+
+    /* allocate a shared memory transport context */
+    ctx->transport_ctx = malloc(sizeof(whTransportMemContext));
+    if (ctx->transport_ctx == NULL) {
+        return WH_ERROR_ABORTED;
+    }
+
+    /* Configure the underlying transport context */
+    tMemCfg.req_size  = config->req_size;
+    tMemCfg.resp_size = config->resp_size;
+    tMemCfg.req       = ctx->shmBuf + sizeof(ShmHeader);
+    tMemCfg.resp      = ctx->shmBuf + sizeof(ShmHeader) + config->req_size;
+
+    /* Initialize the shared memory transport using our newly mmapped buffer */
+    rc = wh_TransportMem_Init(ctx->transport_ctx, &tMemCfg, connectcb,
+                              connectcb_arg);
+    if (rc != WH_ERROR_OK) {
+        return rc;
+    }
+
+    /* Clear the comms buffers */
+    wh_Utils_memset_flush((void*)ctx->transport_ctx->req, 0,
+                          ctx->transport_ctx->req_size);
+    wh_Utils_memset_flush((void*)ctx->transport_ctx->resp, 0,
+                          ctx->transport_ctx->resp_size);
+
+    /* Close the file descriptor after mmap */
+    close(shmFd);
+    return 0;
 }
 
 

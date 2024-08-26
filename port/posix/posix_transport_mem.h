@@ -90,11 +90,13 @@ typedef posixTransportMemContext posixTransportMemClientContext;
 typedef posixTransportMemContext posixTransportMemServerContext;
 
 /** Callback function declarations */
-int posixTransportMem_Init(void* c, const void* cf,
-                           whCommSetConnectedCb connectcb, void* connectcb_arg);
-int posixTransportMem_InitClear(void* c, const void* cf,
-                                whCommSetConnectedCb connectcb,
-                                void*                connectcb_arg);
+int posixTransportMem_ClientInit(void* c, const void* cf,
+                                 whCommSetConnectedCb connectcb,
+                                 void*                connectcb_arg);
+int posixTransportMem_ServerInit(void* c, const void* cf,
+                                 whCommSetConnectedCb connectcb,
+                                 void*                connectcb_arg);
+
 int posixTransportMem_Cleanup(void* c);
 int posixTransportMem_SendRequest(void* c, uint16_t len, const void* data);
 int posixTransportMem_RecvRequest(void* c, uint16_t* out_len, void* data);
@@ -103,17 +105,18 @@ int posixTransportMem_RecvResponse(void* c, uint16_t* out_len, void* data);
 
 #define POSIX_TRANSPORT_MEM_CLIENT_CB              \
     {                                              \
-        .Init    = posixTransportMem_InitClear,    \
+        .Init    = posixTransportMem_ClientInit,   \
         .Send    = posixTransportMem_SendRequest,  \
         .Recv    = posixTransportMem_RecvResponse, \
         .Cleanup = posixTransportMem_Cleanup,      \
     }
 
-#define POSIX_TRANSPORT_MEM_SERVER_CB                                          \
-    {                                                                          \
-        .Init = posixTransportMem_Init, .Recv = posixTransportMem_RecvRequest, \
-        .Send    = posixTransportMem_SendResponse,                             \
-        .Cleanup = posixTransportMem_Cleanup,                                  \
+#define POSIX_TRANSPORT_MEM_SERVER_CB              \
+    {                                              \
+        .Init    = posixTransportMem_ServerInit,   \
+        .Recv    = posixTransportMem_RecvRequest,  \
+        .Send    = posixTransportMem_SendResponse, \
+        .Cleanup = posixTransportMem_Cleanup,      \
     }
 
 
