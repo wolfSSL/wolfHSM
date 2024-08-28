@@ -45,8 +45,7 @@ enum WH_MESSAGE_ENUM {
     WH_MESSAGE_GROUP_COUNTER        = 0x0800, /* monotonic counters */
     WH_MESSAGE_GROUP_CANCEL         = 0x0900, /* request cancellation */
     WH_MESSAGE_GROUP_CUSTOM         = 0x0A00, /* User-specified features */
-    WH_MESSAGE_GROUP_CRYPTO_DMA32   = 0x0B00, /* 32-bit DMA crypto operations */
-    WH_MESSAGE_GROUP_CRYPTO_DMA64   = 0x0C00, /* 64-bit DMA crypto operations */
+    WH_MESSAGE_GROUP_CRYPTO_DMA     = 0x0B00, /* DMA crypto operations */
 
     WH_MESSAGE_ACTION_MASK          = 0x00FF,  /* 255 subtypes per group*/
     WH_MESSAGE_ACTION_NONE          = 0x0000,  /* No action. Invalid. */

@@ -203,6 +203,8 @@ int wh_MessageNvm_TranslateReadResponse(uint16_t magic,
         const whMessageNvm_ReadResponse* src,
         whMessageNvm_ReadResponse* dest);
 
+#ifdef WOLFHSM_CFG_DMA
+#if WH_DMA_IS_32BIT
 /** NVM AddObjectDma32 Request */
 typedef struct {
     uint32_t metadata_hostaddr;
@@ -233,7 +235,9 @@ int wh_MessageNvm_TranslateReadDma32Request(uint16_t magic,
 
 /** NVM ReadDma32 Response */
 /* Use SimpleResponse */
+#endif /* WH_DMA_IS_32BIT */
 
+#if WH_DMA_IS_64BIT
 /** NVM AddObjectDma64 Request */
 typedef struct {
     uint64_t metadata_hostaddr;
@@ -264,5 +268,7 @@ int wh_MessageNvm_TranslateReadDma64Request(uint16_t magic,
 
 /** NVM ReadDma64 Response */
 /* Use SimpleResponse */
+#endif /* WH_DMA_IS_64BIT */
+#endif /* WOLFHSM_CFG_DMA */
 
 #endif /* !WOLFHSM_WH_MESSAGE_NVM_H_ */

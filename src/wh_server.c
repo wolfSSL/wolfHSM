@@ -91,12 +91,14 @@ int wh_Server_Init(whServerContext* server, whServerConfig* config)
         return WH_ERROR_ABORTED;
     }
 
+#ifdef WOLFHSM_CFG_DMA
     /* Initialize DMA configuration and callbacks, if provided */
     if (NULL != config->dmaConfig) {
         server->dma.dmaAddrAllowList = config->dmaConfig->dmaAddrAllowList;
         server->dma.cb32             = config->dmaConfig->cb32;
         server->dma.cb64             = config->dmaConfig->cb64;
     }
+#endif /* WOLFHSM_CFG_DMA */
 
     return rc;
 }
@@ -325,15 +327,12 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
                 &size, seq);
         break;
 
-        case WH_MESSAGE_GROUP_CRYPTO_DMA32:
-            rc = wh_Server_HandleCryptoDma32Request(server, action, data,
+#ifdef WOLFHSM_CFG_DMA
+        case WH_MESSAGE_GROUP_CRYPTO_DMA:
+            rc = wh_Server_HandleCryptoDmaRequest(server, action, data,
                 &size, seq);
             break;
-
-        case WH_MESSAGE_GROUP_CRYPTO_DMA64:
-            rc = wh_Server_HandleCryptoDma64Request(server, action, data,
-                &size, seq);
-            break;
+#endif /* WOLFHSM_CFG_DMA */
 
 #endif  /* !WOLFHSM_CFG_NO_CRYPTO */
 

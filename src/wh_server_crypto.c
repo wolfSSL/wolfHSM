@@ -903,205 +903,6 @@ static int hsmCryptoSha256(whServerContext* server, whPacket* packet,
 
     return ret;
 }
-
-
-static int hsmCryptoSha256Dma32(whServerContext* server, whPacket* packet,
-                              uint16_t* size)
-{
-    int                              ret    = 0;
-    wh_Packet_hash_sha256_Dma32_req* req    = &packet->hashSha256Dma32Req;
-    wh_Packet_hash_sha256_Dma32_res* res    = &packet->hashSha256Dma32Res;
-    wc_Sha256*                       sha256 = server->crypto->algoCtx.sha256;
-
-    /* Ensure state sizes are the same */
-    if (req->state.sz != sizeof(*sha256)) {
-        res->dmaCryptoRes.badAddr = req->state;
-        return WH_ERROR_BADARGS;
-    }
-
-    /* Copy the SHA256 context from client address space */
-    ret = whServerDma_CopyFromClient32(server, sha256, req->state.addr,
-                                       req->state.sz, (whServerDmaFlags){0});
-    if (ret != WH_ERROR_OK) {
-        res->dmaCryptoRes.badAddr = req->state;
-    }
-
-    /* TODO: perhaps we should sequentially update and finalize (need individual
-     * flags as 0x0 could be a valid address?) just to future-proof, even though
-     * sha256 cryptoCb doesn't currently have a one-shot*/
-
-    /* If finalize requested, finalize the SHA256 operation, wrapping client
-     * address accesses with the associated DMA address processing */
-    if (ret == 0 && req->finalize) {
-        void* outAddr;
-        ret = wh_Server_DmaProcessClientAddress32(
-            server, req->output.addr, &outAddr, req->output.sz,
-            WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
-
-        /* Finalize the SHA256 operation */
-        if (ret == WH_ERROR_OK) {
-            ret = wc_Sha256Final(sha256, outAddr);
-            if (ret != 0) {
-                res->dmaCryptoRes.wolfCryptRc = ret;
-            }
-        }
-
-        if (ret == WH_ERROR_OK) {
-            ret = wh_Server_DmaProcessClientAddress32(
-                server, req->output.addr, &outAddr, req->output.sz,
-                WH_DMA_OPER_CLIENT_WRITE_POST, (whServerDmaFlags){0});
-        }
-
-        if (ret == WH_ERROR_ACCESS) {
-            res->dmaCryptoRes.badAddr = req->output;
-        }
-    }
-    else {
-        /* Update requested, update the SHA256 operation, wrapping client
-         * address accesses with the associated DMA address processing */
-        void* inAddr;
-        ret = wh_Server_DmaProcessClientAddress32(
-            server, req->input.addr, &inAddr, req->input.sz,
-            WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
-
-        /* Update the SHA256 operation */
-        if (ret == WH_ERROR_OK) {
-            ret = wc_Sha256Update(sha256, inAddr, req->input.sz);
-            if (ret != 0) {
-                res->dmaCryptoRes.wolfCryptRc = ret;
-            }
-        }
-
-        if (ret == WH_ERROR_OK) {
-            ret = wh_Server_DmaProcessClientAddress32(
-                server, req->input.addr, inAddr, req->input.sz,
-                WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
-        }
-
-        if (ret == WH_ERROR_ACCESS) {
-            res->dmaCryptoRes.badAddr = req->input;
-        }
-    }
-
-    if (ret == WH_ERROR_OK) {
-        ret = whServerDma_CopyToClient32(server, req->state.addr, sha256,
-                                         req->state.sz, (whServerDmaFlags){0});
-        if (ret != WH_ERROR_OK) {
-            res->dmaCryptoRes.badAddr = req->state;
-        }
-    }
-
-    /* return value populates packet->rc */
-    return ret;
-}
-
-
-static int hsmCryptoSha256Dma64(whServerContext* server, whPacket* packet,
-                              uint16_t* size)
-{
-    int                              ret    = 0;
-    wh_Packet_hash_sha256_Dma64_req* req    = &packet->hashSha256Dma64Req;
-    wh_Packet_hash_sha256_Dma64_res* res    = &packet->hashSha256Dma64Res;
-    wc_Sha256*                       sha256 = server->crypto->algoCtx.sha256;
-    int                              clientDevId;
-
-    /* Ensure state sizes are the same */
-    if (req->state.sz != sizeof(*sha256)) {
-        res->dmaCryptoRes.badAddr = req->state;
-        return WH_ERROR_BADARGS;
-    }
-
-    /* Copy the SHA256 context from client address space */
-    ret = whServerDma_CopyFromClient64(server, sha256, req->state.addr,
-                                       req->state.sz, (whServerDmaFlags){0});
-    if (ret != WH_ERROR_OK) {
-        res->dmaCryptoRes.badAddr = req->state;
-    }
-    /* Save the client devId to be restored later, when the context is copied
-     * back into client memory. */
-    clientDevId = sha256->devId;
-    /* overwrite the devId to that of the server for local crypto */
-    sha256->devId = server->crypto->devId;
-
-    /* TODO: perhaps we should sequentially update and finalize (need individual
-     * flags as 0x0 could be a valid address?) just to future-proof, even though
-     * sha256 cryptoCb doesn't currently have a one-shot*/
-
-    /* If finalize requested, finalize the SHA256 operation, wrapping client
-     * address accesses with the associated DMA address processing */
-    if (ret == WH_ERROR_OK && req->finalize) {
-        void* outAddr;
-        ret = wh_Server_DmaProcessClientAddress64(
-            server, req->output.addr, &outAddr, req->output.sz,
-            WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
-
-        /* Finalize the SHA256 operation */
-        if (ret == WH_ERROR_OK) {
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("[server]   wc_Sha256Final: outAddr=%p\n", outAddr);
-#endif
-            ret = wc_Sha256Final(sha256, outAddr);
-            if (ret != 0) {
-                res->dmaCryptoRes.wolfCryptRc = ret;
-            }
-        }
-
-        if (ret == WH_ERROR_OK) {
-            ret = wh_Server_DmaProcessClientAddress64(
-                server, req->output.addr, &outAddr, req->output.sz,
-                WH_DMA_OPER_CLIENT_WRITE_POST, (whServerDmaFlags){0});
-        }
-
-        if (ret == WH_ERROR_ACCESS) {
-            res->dmaCryptoRes.badAddr = req->output;
-        }
-    }
-    else if (ret == WH_ERROR_OK) {
-        /* Update requested, update the SHA256 operation, wrapping client
-         * address accesses with the associated DMA address processing */
-        void* inAddr;
-        ret = wh_Server_DmaProcessClientAddress64(
-            server, req->input.addr, &inAddr, req->input.sz,
-            WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
-
-        /* Update the SHA256 operation */
-        if (ret == WH_ERROR_OK) {
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("[server]   wc_Sha256Update: inAddr=%p, sz=%lu\n", inAddr,
-                   req->input.sz);
-#endif
-            ret = wc_Sha256Update(sha256, inAddr, req->input.sz);
-            if (ret != 0) {
-                res->dmaCryptoRes.wolfCryptRc = ret;
-            }
-        }
-
-        if (ret == WH_ERROR_OK) {
-            ret = wh_Server_DmaProcessClientAddress64(
-                server, req->input.addr, &inAddr, req->input.sz,
-                WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
-        }
-
-        if (ret == WH_ERROR_ACCESS) {
-            res->dmaCryptoRes.badAddr = req->input;
-        }
-    }
-
-    if (ret == WH_ERROR_OK) {
-        /* Reset the devId in the local context to ensure it isn't copied back
-         * to client memory */
-        sha256->devId = clientDevId;
-        /* Copy SHA256 context back into client memory */
-        ret = whServerDma_CopyToClient64(server, req->state.addr, sha256,
-                                         req->state.sz, (whServerDmaFlags){0});
-        if (ret != WH_ERROR_OK) {
-            res->dmaCryptoRes.badAddr = req->state;
-        }
-    }
-
-    /* return value populates packet->rc */
-    return ret;
-}
 #endif /* !NO_SHA256 */
 
 int wh_Server_HandleCryptoRequest(whServerContext* server,
@@ -1274,7 +1075,123 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
     return ret;
 }
 
-int wh_Server_HandleCryptoDma32Request(whServerContext* server,
+#ifdef WOLFHSM_CFG_DMA
+
+#ifndef NO_SHA256
+static int hsmCryptoSha256Dma(whServerContext* server, whPacket* packet,
+                              uint16_t* size)
+{
+    int ret = 0;
+#if WH_SERVER_IS_32_BIT
+    wh_Packet_hash_sha256_Dma32_req* req = &packet->hashSha256Dma32Req;
+    wh_Packet_hash_sha256_Dma32_res* res = &packet->hashSha256Dma32Res;
+#else
+    wh_Packet_hash_sha256_Dma64_req* req = &packet->hashSha256Dma64Req;
+    wh_Packet_hash_sha256_Dma64_res* res = &packet->hashSha256Dma64Res;
+#endif
+    wc_Sha256* sha256 = server->crypto->algoCtx.sha256;
+    int        clientDevId;
+
+    /* Ensure state sizes are the same */
+    if (req->state.sz != sizeof(*sha256)) {
+        res->dmaCryptoRes.badAddr = req->state;
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Copy the SHA256 context from client address space */
+    ret = whServerDma_CopyFromClient(server, sha256, req->state.addr,
+                                       req->state.sz, (whServerDmaFlags){0});
+    if (ret != WH_ERROR_OK) {
+        res->dmaCryptoRes.badAddr = req->state;
+    }
+    /* Save the client devId to be restored later, when the context is copied
+     * back into client memory. */
+    clientDevId = sha256->devId;
+    /* overwrite the devId to that of the server for local crypto */
+    sha256->devId = server->crypto->devId;
+
+    /* TODO: perhaps we should sequentially update and finalize (need individual
+     * flags as 0x0 could be a valid address?) just to future-proof, even though
+     * sha256 cryptoCb doesn't currently have a one-shot*/
+
+    /* If finalize requested, finalize the SHA256 operation, wrapping client
+     * address accesses with the associated DMA address processing */
+    if (ret == WH_ERROR_OK && req->finalize) {
+        void* outAddr;
+        ret = wh_Server_DmaProcessClientAddress(
+            server, req->output.addr, &outAddr, req->output.sz,
+            WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
+
+        /* Finalize the SHA256 operation */
+        if (ret == WH_ERROR_OK) {
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+            printf("[server]   wc_Sha256Final: outAddr=%p\n", outAddr);
+#endif
+            ret = wc_Sha256Final(sha256, outAddr);
+            if (ret != 0) {
+                res->dmaCryptoRes.wolfCryptRc = ret;
+            }
+        }
+
+        if (ret == WH_ERROR_OK) {
+            ret = wh_Server_DmaProcessClientAddress(
+                server, req->output.addr, &outAddr, req->output.sz,
+                WH_DMA_OPER_CLIENT_WRITE_POST, (whServerDmaFlags){0});
+        }
+
+        if (ret == WH_ERROR_ACCESS) {
+            res->dmaCryptoRes.badAddr = req->output;
+        }
+    }
+    else if (ret == WH_ERROR_OK) {
+        /* Update requested, update the SHA256 operation, wrapping client
+         * address accesses with the associated DMA address processing */
+        void* inAddr;
+        ret = wh_Server_DmaProcessClientAddress(
+            server, req->input.addr, &inAddr, req->input.sz,
+            WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
+
+        /* Update the SHA256 operation */
+        if (ret == WH_ERROR_OK) {
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+            printf("[server]   wc_Sha256Update: inAddr=%p, sz=%lu\n", inAddr,
+                   req->input.sz);
+#endif
+            ret = wc_Sha256Update(sha256, inAddr, req->input.sz);
+            if (ret != 0) {
+                res->dmaCryptoRes.wolfCryptRc = ret;
+            }
+        }
+
+        if (ret == WH_ERROR_OK) {
+            ret = wh_Server_DmaProcessClientAddress(
+                server, req->input.addr, &inAddr, req->input.sz,
+                WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
+        }
+
+        if (ret == WH_ERROR_ACCESS) {
+            res->dmaCryptoRes.badAddr = req->input;
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        /* Reset the devId in the local context to ensure it isn't copied back
+         * to client memory */
+        sha256->devId = clientDevId;
+        /* Copy SHA256 context back into client memory */
+        ret = whServerDma_CopyToClient(server, req->state.addr, sha256,
+                                       req->state.sz, (whServerDmaFlags){0});
+        if (ret != WH_ERROR_OK) {
+            res->dmaCryptoRes.badAddr = req->state;
+        }
+    }
+
+    /* return value populates packet->rc */
+    return ret;
+}
+#endif /* ! NO_SHA256 */
+
+int wh_Server_HandleCryptoDmaRequest(whServerContext* server,
     uint16_t action, uint8_t* data, uint16_t* size, uint16_t seq)
 {
     int ret = 0;
@@ -1294,7 +1211,7 @@ int wh_Server_HandleCryptoDma32Request(whServerContext* server,
                 printf("[server] DMA SHA256 req recv. type:%u\n",
                         (unsigned int)packet->hashSha256Req.type);
 #endif
-                ret = hsmCryptoSha256Dma32(server, (whPacket*)data, size);
+                ret = hsmCryptoSha256Dma(server, (whPacket*)data, size);
 #ifdef DEBUG_CRYPTOCB_VERBOSE
                 if (ret != 0) {
                     printf("[server] DMA SHA256 ret = %d\n", ret);
@@ -1329,61 +1246,6 @@ int wh_Server_HandleCryptoDma32Request(whServerContext* server,
     }
     return ret;
 }
+#endif /* WOLFHSM_CFG_DMA */
 
-
-int wh_Server_HandleCryptoDma64Request(whServerContext* server,
-    uint16_t action, uint8_t* data, uint16_t* size, uint16_t seq)
-{
-    int ret = 0;
-    whPacket* packet = (whPacket*)data;
-    if (server == NULL || server->crypto == NULL || data == NULL || size == NULL)
-        return BAD_FUNC_ARG;
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-    printf("[server] Crypto DMA request. Action:%u\n", action);
-#endif
-    switch (action)
-    {
-    case WC_ALGO_TYPE_HASH:
-        switch (packet->hashAnyReq.type) {
-#ifndef NO_SHA256
-            case WC_HASH_TYPE_SHA256:
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-                printf("[server] DMA SHA256 req recv. type:%u\n",
-                        (unsigned int)packet->hashSha256Req.type);
-#endif
-                ret = hsmCryptoSha256Dma64(server, (whPacket*)data, size);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-                if (ret != 0) {
-                    printf("[server] DMA SHA256 ret = %d\n", ret);
-                }
-#endif
-                break;
-#endif /* !NO_SHA256 */
-
-            default:
-                ret = NOT_COMPILED_IN;
-                break;
-        }
-        break;
-
-    case WC_ALGO_TYPE_NONE:
-    default:
-        ret = NOT_COMPILED_IN;
-        break;
-    }
-
-    /* Propagate error code to client in response packet */
-    packet->rc = ret;
-
-    if (ret != 0)
-        *size = WH_PACKET_STUB_SIZE + sizeof(packet->rc);
-
-    /* Since crypto error codes are propagated to the client in the response
-     * packet, return success to the caller unless a cancellation has occurred
-     */
-    if (ret != WH_ERROR_CANCEL) {
-        ret = 0;
-    }
-    return ret;
-}
 #endif  /* !WOLFHSM_CFG_NO_CRYPTO */

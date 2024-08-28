@@ -52,13 +52,15 @@
 #ifndef NO_SHA256
 static int _handleSha256(int devId, wc_CryptoInfo* info, void* inCtx,
                          whPacket* packet);
-static int _handleSha256Dma(int devId, wc_CryptoInfo* info, void* inCtx,
-                         whPacket* packet);
 static int _xferSha256BlockAndUpdateDigest(whClientContext* ctx,
                                            wc_Sha256* sha256,
                                            whPacket* packet,
                                            uint32_t isLastBlock);
-#endif
+#ifdef WOLFHSM_CFG_DMA                                           
+static int _handleSha256Dma(int devId, wc_CryptoInfo* info, void* inCtx,
+                         whPacket* packet);
+#endif /* WOLFHSM_CFG_DMA */
+#endif /* ! NO_SHA256 */
 
 int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
 {
@@ -866,63 +868,6 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
     return ret;
 }
 
-
-int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
-{
-    /* III When possible, return wolfCrypt-enumerated errors */
-    int ret = CRYPTOCB_UNAVAILABLE;
-    whClientContext* ctx = inCtx;
-    whPacket* packet = NULL;
-
-    if (    (devId == INVALID_DEVID) ||
-            (info == NULL) ||
-            (inCtx == NULL)) {
-        return BAD_FUNC_ARG;
-    }
-
-    /* Get data pointer from the context to use as request/response storage */
-    packet = (whPacket*)wh_CommClient_GetDataPtr(ctx->comm);
-    if (packet == NULL) {
-        return BAD_FUNC_ARG;
-    }
-    XMEMSET((uint8_t*)packet, 0, WOLFHSM_CFG_COMM_DATA_LEN);
-
-    /* Based on the info type, process the request */
-    switch (info->algo_type)
-    {
-    case WC_ALGO_TYPE_HASH: {
-        packet->hashAnyReq.type = info->hash.type;
-        switch (info->hash.type) {
-#ifndef NO_SHA256
-            case WC_HASH_TYPE_SHA256:
-                ret = _handleSha256Dma(devId, info, inCtx, packet);
-                break;
-#endif /* !NO_SHA256 */
-
-            default:
-                ret = CRYPTOCB_UNAVAILABLE;
-                break;
-        }
-    } break; /* case WC_ALGO_TYPE_HASH */
-
-    case WC_ALGO_TYPE_NONE:
-    default:
-        ret = CRYPTOCB_UNAVAILABLE;
-        break;
-    }
-
-#ifdef DEBUG_CRYPTOCB
-    if (ret == CRYPTOCB_UNAVAILABLE) {
-        printf("X whClientCb not implemented: algo->type:%d\n", info->algo_type);
-    } else {
-        printf("- whClientCb ret:%d algo->type:%d\n", ret, info->algo_type);
-    }
-    wc_CryptoCb_InfoString(info);
-#endif /* DEBUG_CRYPTOCB */
-    return ret;
-}
-
-
 #ifndef NO_SHA256
 static int _handleSha256(int devId, wc_CryptoInfo* info, void* inCtx,
                          whPacket* packet)
@@ -1067,6 +1012,8 @@ static int _xferSha256BlockAndUpdateDigest(whClientContext* ctx,
     return ret;
 }
 
+#ifdef WOLFHSM_CFG_DMA
+
 static int _handleSha256Dma(int devId, wc_CryptoInfo* info, void* inCtx,
                             whPacket* packet)
 {
@@ -1074,15 +1021,14 @@ static int _handleSha256Dma(int devId, wc_CryptoInfo* info, void* inCtx,
     whClientContext* ctx    = inCtx;
     wc_Sha256*       sha256 = info->hash.sha256;
     uint16_t         respSz = 0;
+    uint16_t         group  = WH_MESSAGE_GROUP_CRYPTO_DMA;
 
-#if WH_CLIENT_IS_32BIT
+#if WH_DMA_IS_32BIT
     wh_Packet_hash_sha256_Dma32_req* req   = &packet->hashSha256Dma32Req;
     wh_Packet_hash_sha256_Dma32_res* resp  = &packet->hashSha256Dma32Res;
-    uint16_t                         group = WH_MESSAGE_GROUP_CRYPTO_DMA32;
 #else
     wh_Packet_hash_sha256_Dma64_req* req   = &packet->hashSha256Dma64Req;
     wh_Packet_hash_sha256_Dma64_res* resp  = &packet->hashSha256Dma64Res;
-    uint16_t                         group = WH_MESSAGE_GROUP_CRYPTO_DMA64;
 #endif
 
     /* Caller invoked SHA Update:
@@ -1156,8 +1102,65 @@ static int _handleSha256Dma(int devId, wc_CryptoInfo* info, void* inCtx,
 
     return ret;
 }
+#endif /* WOLFHSM_CFG_DMA */
+#endif /* ! NO_SHA256 */
 
 
+#ifdef WOLFHSM_CFG_DMA
+int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
+{
+    /* III When possible, return wolfCrypt-enumerated errors */
+    int ret = CRYPTOCB_UNAVAILABLE;
+    whClientContext* ctx = inCtx;
+    whPacket* packet = NULL;
+
+    if (    (devId == INVALID_DEVID) ||
+            (info == NULL) ||
+            (inCtx == NULL)) {
+        return BAD_FUNC_ARG;
+    }
+
+    /* Get data pointer from the context to use as request/response storage */
+    packet = (whPacket*)wh_CommClient_GetDataPtr(ctx->comm);
+    if (packet == NULL) {
+        return BAD_FUNC_ARG;
+    }
+    XMEMSET((uint8_t*)packet, 0, WOLFHSM_CFG_COMM_DATA_LEN);
+
+    /* Based on the info type, process the request */
+    switch (info->algo_type)
+    {
+    case WC_ALGO_TYPE_HASH: {
+        packet->hashAnyReq.type = info->hash.type;
+        switch (info->hash.type) {
+#ifndef NO_SHA256
+            case WC_HASH_TYPE_SHA256:
+                ret = _handleSha256Dma(devId, info, inCtx, packet);
+                break;
 #endif /* !NO_SHA256 */
+
+            default:
+                ret = CRYPTOCB_UNAVAILABLE;
+                break;
+        }
+    } break; /* case WC_ALGO_TYPE_HASH */
+
+    case WC_ALGO_TYPE_NONE:
+    default:
+        ret = CRYPTOCB_UNAVAILABLE;
+        break;
+    }
+
+#ifdef DEBUG_CRYPTOCB
+    if (ret == CRYPTOCB_UNAVAILABLE) {
+        printf("X whClientCb not implemented: algo->type:%d\n", info->algo_type);
+    } else {
+        printf("- whClientCb ret:%d algo->type:%d\n", ret, info->algo_type);
+    }
+    wc_CryptoCb_InfoString(info);
+#endif /* DEBUG_CRYPTOCB */
+    return ret;
+}
+#endif /* WOLFHSM_CFG_DMA */
 
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */

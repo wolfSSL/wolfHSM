@@ -67,6 +67,16 @@ enum {
 
 #define PLAINTEXT "mytextisbigplain"
 
+/* Array allowing you to loop over available devIds */
+/* TODO: find a better way to do this - perhaps best to define a global LUT
+ * holding the devIds and refer to them by enumerated index rather than directly
+ */
+#ifdef WOLFHSM_CFG_DMA
+static const int DEV_IDS[WH_NUM_DEVIDS] = {WH_DEV_ID, WH_DEV_ID_DMA};
+#else
+static const int DEV_IDS[WH_NUM_DEVIDS] = {WH_DEV_ID};
+#endif
+
 #ifndef WOLFHSM_CFG_TEST_NO_CUSTOM_SERVERS
 /* Flag causing the server loop to sleep(1) */
 int serverDelay = 0;
@@ -726,9 +736,6 @@ int whTest_CryptoClientConfig(whClientConfig* config)
 
 #ifndef NO_SHA256
     for (i = 0; i < WH_NUM_DEVIDS; i++) {
-        /* TODO - find a global way to do this, as more tests will need it */
-        const int DEV_IDS[WH_NUM_DEVIDS] = {WH_DEV_ID, WH_DEV_ID_DMA};
-
         /* Initialize SHA256 structure */
         if ((ret = wc_InitSha256_ex(sha256, NULL, DEV_IDS[i]) != 0)) {
             WH_ERROR_PRINT("Failed to wc_InitSha256 %d\n", ret);

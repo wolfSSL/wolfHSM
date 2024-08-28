@@ -686,6 +686,9 @@ int wh_Client_NvmRead(whClientContext* c,
     return rc;
 }
 
+#ifdef WOLFHSM_CFG_DMA
+
+#if WH_DMA_IS_32BIT
 /** NVM AddObjectDma32 */
 int wh_Client_NvmAddObjectDma32Request(whClientContext* c,
         uint32_t metadata_hostaddr,
@@ -759,7 +762,9 @@ int wh_Client_NvmAddObjectDma32(whClientContext* c,
     }
     return rc;
 }
+#endif /* WH_DMA_IS_32BIT */
 
+#if WH_DMA_IS_64BIT
 /** NVM AddObjectDma64 */
 int wh_Client_NvmAddObjectDma64Request(whClientContext* c,
         uint64_t metadata_hostaddr,
@@ -833,31 +838,30 @@ int wh_Client_NvmAddObjectDma64(whClientContext* c,
     }
     return rc;
 }
+#endif /* WH_DMA_IS_64BIT */
 
 /** NVM AddObjectDMA Helper functions */
 int wh_Client_NvmAddObjectDmaRequest(whClientContext* c,
         whNvmMetadata* metadata,
         whNvmSize data_len, const uint8_t* data)
 {
-    if (sizeof(intptr_t) == sizeof(uint32_t)) {
-        return wh_Client_NvmAddObjectDma32Request(c,
-                (intptr_t)metadata, data_len, (intptr_t)data);
-    }
-    if (sizeof(intptr_t) == sizeof(uint64_t)) {
-        return wh_Client_NvmAddObjectDma64Request(c,
-                (intptr_t)metadata, data_len, (intptr_t)data);
-    }
+#if WH_DMA_IS_32BIT
+    return wh_Client_NvmAddObjectDma32Request(c, (intptr_t)metadata, data_len,
+                                              (intptr_t)data);
+#else
+    return wh_Client_NvmAddObjectDma64Request(c, (intptr_t)metadata, data_len,
+                                              (intptr_t)data);
+#endif
     return WH_ERROR_BADARGS;
 }
 
 int wh_Client_NvmAddObjectDmaResponse(whClientContext* c, int32_t *out_rc)
 {
-    if (sizeof(intptr_t) == sizeof(uint32_t)) {
-        return wh_Client_NvmAddObjectDma32Response(c, out_rc);
-    }
-    if (sizeof(intptr_t) == sizeof(uint64_t)) {
-        return wh_Client_NvmAddObjectDma64Response(c, out_rc);
-    }
+#if WH_DMA_IS_32BIT
+    return wh_Client_NvmAddObjectDma32Response(c, out_rc);
+#else
+    return wh_Client_NvmAddObjectDma64Response(c, out_rc);
+#endif
     return WH_ERROR_BADARGS;
 }
 
@@ -865,19 +869,16 @@ int wh_Client_NvmAddObjectDma(whClientContext* c,
         whNvmMetadata* metadata, whNvmSize data_len, const uint8_t* data,
         int32_t *out_rc)
 {
-    if (sizeof(intptr_t) == sizeof(uint32_t)) {
-        return wh_Client_NvmAddObjectDma32(c,
-                (intptr_t)metadata, data_len, (intptr_t)data,
-                out_rc);
-    }
-    if (sizeof(intptr_t) == sizeof(uint64_t)) {
-        return wh_Client_NvmAddObjectDma64(c,
-                (intptr_t)metadata, data_len, (intptr_t)data,
-                out_rc);
-    }
-    return WH_ERROR_BADARGS;
+#if WH_DMA_IS_32BIT
+    return wh_Client_NvmAddObjectDma32(c, (intptr_t)metadata, data_len,
+                                       (intptr_t)data, out_rc);
+#else
+    return wh_Client_NvmAddObjectDma64(c, (intptr_t)metadata, data_len,
+                                       (intptr_t)data, out_rc);
+#endif
 }
 
+#if WH_DMA_IS_32BIT
 /** NVM ReadDma32 */
 int wh_Client_NvmReadDma32Request(whClientContext* c,
         whNvmId id, whNvmSize offset, whNvmSize data_len,
@@ -950,7 +951,9 @@ int wh_Client_NvmReadDma32(whClientContext* c,
     }
     return rc;
 }
+#endif /* WH_DMA_IS_32BIT */
 
+#if WH_DMA_IS_64BIT
 /** NVM ReadDma64 */
 int wh_Client_NvmReadDma64Request(whClientContext* c,
         whNvmId id, whNvmSize offset, whNvmSize data_len,
@@ -1023,6 +1026,7 @@ int wh_Client_NvmReadDma64(whClientContext* c,
     }
     return rc;
 }
+#endif /* WH_DMA_IS_64BIT */
 
 /** NVM ReadDma Helper functions */
 int wh_Client_NvmReadDmaRequest(whClientContext* c,
@@ -1068,3 +1072,4 @@ int wh_Client_NvmReadDma(whClientContext* c,
     return WH_ERROR_BADARGS;
 }
 
+#endif /* WOLFHSM_CFG_DMA */
