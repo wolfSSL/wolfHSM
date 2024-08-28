@@ -41,6 +41,7 @@ enum WH_MESSAGE_COMM_ACTION_ENUM {
     WH_MESSAGE_COMM_ACTION_CLOSE     = 0x03,
     WH_MESSAGE_COMM_ACTION_INFO      = 0x04,
     WH_MESSAGE_COMM_ACTION_ECHO      = 0x05,
+    WH_MESSAGE_COMM_ACTION_VECHO     = 0x06,
 };
 
 /* Info request/response data sizes*/

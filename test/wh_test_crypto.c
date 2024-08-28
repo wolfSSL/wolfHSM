@@ -95,11 +95,8 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     /* wolfcrypt */
     WC_RNG rng[1];
     Aes aes[1];
-    RsaKey rsa[1];
     ecc_key eccPrivate[1];
     ecc_key eccPublic[1];
-    curve25519_key curve25519PrivateKey[1];
-    curve25519_key curve25519PublicKey[1];
     Cmac cmac[1];
     uint32_t outLen;
     uint16_t keyId;
@@ -113,9 +110,6 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     char finalText[256];
     char cmacFodder[1000];
     uint8_t authIn[16];
-    uint8_t authTag[16];
-    uint8_t sharedOne[CURVE25519_KEYSIZE];
-    uint8_t sharedTwo[CURVE25519_KEYSIZE];
     uint8_t knownCmacKey[] = {0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6,
         0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c};
     uint8_t knownCmacMessage[] = {0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f,
@@ -387,6 +381,9 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         printf("Failed to wh_Client_KeyEvict %d\n", ret);
         goto exit;
     }
+#ifdef HAVE_AESGCM
+    uint8_t authTag[16];
+
     /* test aes GCM with client side key */
     if((ret = wc_AesInit(aes, NULL, WH_DEV_ID)) != 0) {
         printf("Failed to wc_AesInit %d\n", ret);
@@ -447,7 +444,11 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         printf("Failed to wh_Client_KeyEvict %d\n", ret);
         goto exit;
     }
+#endif
+
+#ifndef NO_RSA
     /* test rsa */
+    RsaKey rsa[1];
     if((ret = wc_InitRsaKey_ex(rsa, NULL, WH_DEV_ID)) != 0) {
         printf("Failed to wc_InitRsaKey_ex %d\n", ret);
         goto exit;
@@ -493,6 +494,9 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         ret = -1;
         goto exit;
     }
+#endif /* !NO_RSA */
+
+#ifdef HAVE_ECC
     /* test ecc */
     if((ret = wc_ecc_init_ex(eccPrivate, NULL, WH_DEV_ID)) != 0) {
         printf("Failed to wc_ecc_init_ex %d\n", ret);
@@ -542,7 +546,15 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         ret = -1;
         goto exit;
     }
+#endif /* HAVE_ECC */
+
+#ifdef HAVE_CURVE25519
     /* test curve25519 */
+    curve25519_key curve25519PrivateKey[1];
+    curve25519_key curve25519PublicKey[1];
+    uint8_t sharedOne[CURVE25519_KEYSIZE];
+    uint8_t sharedTwo[CURVE25519_KEYSIZE];
+
     if ((ret = wc_curve25519_init_ex(curve25519PrivateKey, NULL, WH_DEV_ID)) != 0) {
         WH_ERROR_PRINT("Failed to wc_curve25519_init_ex %d\n", ret);
         goto exit;
@@ -574,6 +586,8 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         goto exit;
     }
     printf("CURVE25519 SUCCESS\n");
+#endif /* HAVE_CURVE25519 */
+
     /* test cmac */
     if((ret = wc_InitCmac_ex(cmac, knownCmacKey, sizeof(knownCmacKey), WC_CMAC_AES, NULL, NULL, WH_DEV_ID)) != 0) {
         WH_ERROR_PRINT("Failed to wc_InitCmac_ex %d\n", ret);
@@ -832,8 +846,10 @@ int whTest_CryptoClientConfig(whClientConfig* config)
 #endif /* WOLFHSM_CFG_TEST_VERBOSE */
     ret = 0;
 exit:
+#ifdef HAVE_CURVE25519
     wc_curve25519_free(curve25519PrivateKey);
     wc_curve25519_free(curve25519PublicKey);
+#endif
     wc_FreeRng(rng);
 
     /* Tell server to close */

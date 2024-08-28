@@ -35,6 +35,10 @@ CFLAGS_EXTRA ?= -Wmissing-field-initializers -Wmissing-braces
 CFLAGS ?= $(ARCHFLAGS) -std=c90 -D_GNU_SOURCE -Wall -Werror -Wno-cpp $(CFLAGS_EXTRA)
 LDFLAGS ?= $(ARCHFLAGS)
 
+# LD: generate map
+LDFLAGS += -Wl,-map,$(BUILD_DIR)/$(BIN).map
+#LDFLAGS += -Wl,-Map=$(BUILD_DIR)/$(BIN).map
+
 # Libc for printf
 LIBS = -lc
 
@@ -116,8 +120,10 @@ endif
 # wolfHSM source files
 SRC_C += \
             $(WOLFHSM_DIR)/src/wh_utils.c \
+            $(WOLFHSM_DIR)/src/wh_crypto.c \
             $(WOLFHSM_DIR)/src/wh_client.c \
             $(WOLFHSM_DIR)/src/wh_client_nvm.c \
+            $(WOLFHSM_DIR)/src/wh_client_crypto.c \
             $(WOLFHSM_DIR)/src/wh_client_cryptocb.c \
             $(WOLFHSM_DIR)/src/wh_server.c \
             $(WOLFHSM_DIR)/src/wh_server_customcb.c \

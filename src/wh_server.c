@@ -249,6 +249,15 @@ static int _wh_Server_HandleCommRequest(whServerContext* server,
         *out_resp_size = sizeof(resp);
     }; break;
 
+    case WH_MESSAGE_COMM_ACTION_VECHO:
+    {
+        /* Process the echo action */
+        if (req_packet != resp_packet) {
+            memcpy(resp_packet, req_packet, req_size);
+        }
+        *out_resp_size = req_size;
+    }; break;
+
     default:
         /* Unknown request. Respond with empty packet */
         *out_resp_size = 0;

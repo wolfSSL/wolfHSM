@@ -34,6 +34,9 @@ extern "C" {
 /* #define SINGLE_THREADED */
 /* #define WC_NO_ASYNC_THREADING */
 
+#define DEBUG_CRYPTOCB
+#define DEBUG_CRYPTOCB_VERBOSE
+
 /** wolfHSM required settings for wolfCrypt */
 #define WOLFCRYPT_ONLY
 #define WOLF_CRYPTO_CB
@@ -72,9 +75,8 @@ extern "C" {
 #define NO_OLD_MD5_NAME
 
 /** RSA Options */
-/* #define NO_RSA  */
-#define HAVE_RSA
-#define WOLFSSL_KEY_GEN
+#define NO_RSA
+/* #define HAVE_RSA */
 #define WC_RSA_PSS
 #define WOLFSSL_PSS_LONG_SALT
 #define FP_MAX_BITS 4096
@@ -86,7 +88,7 @@ extern "C" {
 #define HAVE_SUPPORTED_CURVES
 
 /** Curve25519 Options */
-#define HAVE_CURVE25519
+/*#define HAVE_CURVE25519 */
 
 /** DH and DHE Options */
 #define NO_DH
@@ -95,7 +97,7 @@ extern "C" {
 
 /** AES Options */
 #define HAVE_AES
-#define HAVE_AESGCM
+/*#define HAVE_AESGCM */
 #define GCM_TABLE_4BIT
 #define WOLFSSL_AES_DIRECT
 #define HAVE_AES_ECB

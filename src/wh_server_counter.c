@@ -71,7 +71,7 @@ int wh_Server_HandleCounter(whServerContext* server, uint16_t action,
             *counter = *counter + 1;
             /* set counter to uint32_t max if it rolled over */
             if (*counter == 0) {
-                *counter = 0xffffffff;
+                *counter = UINT32_MAX;
             }
             /* only update if we didn't saturate */
             else {

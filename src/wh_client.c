@@ -506,6 +506,7 @@ int wh_Client_Cancel(whClientContext* c)
 
 int wh_Client_EchoRequest(whClientContext* c, uint16_t size, const void* data)
 {
+#ifdef WOLFHSM_CFG_USE_FIXED_SIZE_ECHO
     whMessageCommLenData msg = {0};
 
     if (    (c == NULL) ||
@@ -523,10 +524,26 @@ int wh_Client_EchoRequest(whClientContext* c, uint16_t size, const void* data)
     return wh_Client_SendRequest(c,
             WH_MESSAGE_GROUP_COMM, WH_MESSAGE_COMM_ACTION_ECHO,
             sizeof(msg), &msg);
+#else
+    uint8_t* msg = NULL;
+
+    if (    (c == NULL) ||
+            ((size > 0) && (data == NULL)) ||
+            ((size > WOLFHSM_CFG_COMM_DATA_LEN) && (data != NULL)) ){
+        return WH_ERROR_BADARGS;
+    }
+
+    msg = wh_CommClient_GetDataPtr(c->comm);
+    memcpy(msg, data, size);
+    return wh_Client_SendRequest(c,
+            WH_MESSAGE_GROUP_COMM, WH_MESSAGE_COMM_ACTION_VECHO,
+            size, msg);
+#endif
 }
 
 int wh_Client_EchoResponse(whClientContext* c, uint16_t *out_size, void* data)
 {
+#ifdef WOLFHSM_CFG_USE_FIXED_SIZE_ECHO
     int rc = 0;
     whMessageCommLenData msg = {0};
     uint16_t resp_group = 0;
@@ -563,6 +580,39 @@ int wh_Client_EchoResponse(whClientContext* c, uint16_t *out_size, void* data)
         }
     }
     return rc;
+#else
+    int rc = 0;
+    uint8_t*  msg = {0};
+    uint16_t resp_group = 0;
+    uint16_t resp_action = 0;
+    uint16_t resp_size = 0;
+
+    if (c == NULL) {
+     return WH_ERROR_BADARGS;
+    }
+
+    msg = wh_CommClient_GetDataPtr(c->comm);
+
+    rc = wh_Client_RecvResponse(c,
+         &resp_group, &resp_action,
+         &resp_size, msg);
+    if (rc == 0) {
+        /* Validate response */
+        if (    (resp_group != WH_MESSAGE_GROUP_COMM) ||
+                (resp_action != WH_MESSAGE_COMM_ACTION_VECHO) ){
+            /* Invalid message */
+            rc = WH_ERROR_ABORTED;
+        } else {
+            if (out_size != NULL) {
+                *out_size = resp_size;
+            }
+            if (data != NULL) {
+                memcpy(data, msg, resp_size);
+            }
+        }
+    }
+    return rc;
+#endif
 }
 
 int wh_Client_Echo(whClientContext* c, uint16_t snd_len, const void* snd_data,
@@ -1188,24 +1238,6 @@ int wh_Client_GetKeyIdCurve25519(curve25519_key* key, whNvmId* outId)
     return WH_ERROR_OK;
 }
 #endif /* HAVE_CURVE25519 */
-
-#ifdef HAVE_ECC
-int wh_Client_SetKeyIdEcc(ecc_key* key, whNvmId keyId)
-{
-    if (key == NULL)
-        return WH_ERROR_BADARGS;
-    key->devCtx = (void*)((intptr_t)keyId);
-    return WH_ERROR_OK;
-}
-
-int wh_Client_GetKeyIdEcc(ecc_key* key, whNvmId* outId)
-{
-    if (key == NULL || outId == NULL)
-        return WH_ERROR_BADARGS;
-    *outId = (intptr_t)key->devCtx;
-    return WH_ERROR_OK;
-}
-#endif /* HAVE_ECC */
 
 #ifndef NO_RSA
 int wh_Client_SetKeyIdRsa(RsaKey* key, whNvmId keyId)

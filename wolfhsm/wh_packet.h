@@ -147,13 +147,25 @@ typedef struct  wh_Packet_pk_eckg_req
     uint32_t type;
     uint32_t sz;
     uint32_t curveId;
+<<<<<<< Upstream, based on origin/main
     uint8_t WH_PAD[4];
+=======
+    uint32_t keyId;
+    uint32_t flags;
+    uint32_t access;
+    uint8_t label[WH_NVM_LABEL_LEN];
+>>>>>>> 35fce01 Working ecc with lots of printfs.  WIP.
 } wh_Packet_pk_eckg_req;
 
 typedef struct  wh_Packet_pk_eckg_res
 {
     uint32_t keyId;
+<<<<<<< Upstream, based on origin/main
     uint8_t WH_PAD[4];
+=======
+    uint32_t len;
+    /* uint8_t out[] */
+>>>>>>> 35fce01 Working ecc with lots of printfs.  WIP.
 } wh_Packet_pk_eckg_res;
 
 typedef struct  wh_Packet_pk_ecdh_req
@@ -202,7 +214,8 @@ typedef struct  wh_Packet_pk_ecc_verify_req
 typedef struct  wh_Packet_pk_ecc_verify_res
 {
     uint32_t res;
-    uint8_t WH_PAD[4];
+    uint32_t pubSz;
+    /* uint8_t pub[] */
 } wh_Packet_pk_ecc_verify_res;
 
 typedef struct  wh_Packet_pk_ecc_check_req
