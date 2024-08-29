@@ -255,6 +255,12 @@
 #error "wolfHSM only supports 32-bit or 64-bit pointer sizes"
 #endif
 
+#ifndef WOLFHSM_CFG_DMA_ALT_PTR_SIZE
+#if WOLFHSM_CFG_DMA_PTR_SIZE != WH_PTR_SIZE
+#error "wolfHSM DMA pointer size must match system pointer size"
+#endif
+#endif
+
 #endif /* WOLFHSM_CFG_DMA */
 
 #endif /* !WOLFHSM_WH_SETTINGS_H_ */
