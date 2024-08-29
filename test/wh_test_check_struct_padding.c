@@ -1,6 +1,8 @@
 #ifndef WH_TEST_CHECK_STRUCT_PADDING_C_
 #define WH_TEST_CHECK_STRUCT_PADDING_C_
 
+#include "wolfhsm/wh_settings.h"
+
 /* For each included file, define an instance of every struct for which we want
  * to check padding. Then, when this file is compiled with -Wpadded it will
  * generate an error if padding is wrong */
@@ -30,10 +32,14 @@ whMessageNvm_GetMetadataResponse   whMessageNvm_GetMetadataResponse_test;
 whMessageNvm_DestroyObjectsRequest whMessageNvm_DestroyObjectsRequest_test;
 whMessageNvm_ReadRequest           whMessageNvm_ReadRequest_test;
 whMessageNvm_ReadResponse          whMessageNvm_ReadResponse_test;
+
+#if defined(WOLFHSM_CFG_DMA) && WH_DMA_IS_32BIT
 whMessageNvm_AddObjectDma32Request whMessageNvm_AddObjectDma32Request_test;
 whMessageNvm_ReadDma32Request      whMessageNvm_ReadDma32Request_test;
+#elif defined(WOLFHSM_CFG_DMA) && WH_DMA_IS_64BIT
 whMessageNvm_AddObjectDma64Request whMessageNvm_AddObjectDma64Request_test;
 whMessageNvm_ReadDma64Request      whMessageNvm_ReadDma64Request_test;
+#endif
 
 #include "wolfhsm/wh_packet.h"
 whPacket whPacket_test;
@@ -90,6 +96,16 @@ wh_Packet_cmac_res                   cmacRes;
 wh_Packet_hash_any_req               hashAnyReq;
 wh_Packet_hash_sha256_req            hashSha256Req;
 wh_Packet_hash_sha256_res            hashSha256Res;
+
+/* DMA crypto structs */
+#if defined(WOLFHSM_CFG_DMA) && WH_DMA_IS_32BIT
+wh_Packet_hash_sha256_Dma32_req      hashSha256Dma32Req;
+wh_Packet_hash_sha256_Dma32_res      hashSha256Dma32Res;
+#elif defined(WOLFHSM_CFG_DMA) && WH_DMA_IS_64BIT
+wh_Packet_hash_sha256_Dma64_req      hashSha256Dma64Req;
+wh_Packet_hash_sha256_Dma64_res      hashSha256Dma64Res;
+#endif
+
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
 #ifdef WOLFHSM_CFG_SHE_EXTENSION
 wh_Packet_she_set_uid_req            sheSetUidReq;

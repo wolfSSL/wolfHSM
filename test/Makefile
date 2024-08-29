@@ -102,7 +102,7 @@ ifeq ($(TESTWOLFCRYPT),1)
             $(error "Cannot set both TESTWOLFCRYPT_DEVID and TESTWOLFCRYPT_DMA. Please choose one.")
         endif
         # Set TESTWOLFCRYPT_DEVID to a hardcoded value when TESTWOLFCRYPT_DMA is set
-        TESTWOLFCRYPT_DEVID = 0x444D4120
+        TESTWOLFCRYPT_DEVID = 0x57444D41
     endif
 
     # Set default TESTWOLFCRYPT_DEVID if not defined by the user

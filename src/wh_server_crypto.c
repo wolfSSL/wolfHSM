@@ -1128,9 +1128,6 @@ static int hsmCryptoSha256Dma(whServerContext* server, whPacket* packet,
             printf("[server]   wc_Sha256Final: outAddr=%p\n", outAddr);
 #endif
             ret = wc_Sha256Final(sha256, outAddr);
-            if (ret != 0) {
-                res->dmaCryptoRes.wolfCryptRc = ret;
-            }
         }
 
         if (ret == WH_ERROR_OK) {
@@ -1158,9 +1155,6 @@ static int hsmCryptoSha256Dma(whServerContext* server, whPacket* packet,
                    req->input.sz);
 #endif
             ret = wc_Sha256Update(sha256, inAddr, req->input.sz);
-            if (ret != 0) {
-                res->dmaCryptoRes.wolfCryptRc = ret;
-            }
         }
 
         if (ret == WH_ERROR_OK) {

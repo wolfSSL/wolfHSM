@@ -69,7 +69,7 @@
 #ifndef WOLFHSM_CFG_DMA
 #define WH_NUM_DEVIDS (1)        /* Total number of client devIds available */
 #else
-#define WH_DEV_ID_DMA 0x444D4120 /* "DMA" + 32 (0x20)" */
+#define WH_DEV_ID_DMA 0x57444D41 /* "WDMA" */
 #define WH_NUM_DEVIDS (2)        /* Total number of client devIds available */
 #endif
 
