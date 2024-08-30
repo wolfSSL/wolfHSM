@@ -65,13 +65,15 @@
 
 /* Device Id to be registered and passed to wolfCrypt functions */
 #define WH_DEV_ID     0x5748534D /* "WHSM" */
-
-#ifndef WOLFHSM_CFG_DMA
-#define WH_NUM_DEVIDS (1)        /* Total number of client devIds available */
-#else
 #define WH_DEV_ID_DMA 0x57444D41 /* "WDMA" */
-#define WH_NUM_DEVIDS (2)        /* Total number of client devIds available */
+
+static const int WH_DEV_IDS_ARRAY[] = { WH_DEV_ID,
+#ifdef WOLFHSM_CFG_DMA
+                                        WH_DEV_ID_DMA
 #endif
+};
+
+#define WH_NUM_DEVIDS (sizeof(WH_DEV_IDS_ARRAY) / sizeof(WH_DEV_IDS_ARRAY[0]))
 
 /**
  * Out of band callback function to inform the server to cancel a request,

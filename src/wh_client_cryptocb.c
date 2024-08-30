@@ -1017,7 +1017,7 @@ static int _xferSha256BlockAndUpdateDigest(whClientContext* ctx,
 static int _handleSha256Dma(int devId, wc_CryptoInfo* info, void* inCtx,
                             whPacket* packet)
 {
-    int              ret    = 0;
+    int              ret    = WH_ERROR_OK;
     whClientContext* ctx    = inCtx;
     wc_Sha256*       sha256 = info->hash.sha256;
     uint16_t         respSz = 0;
@@ -1066,7 +1066,7 @@ static int _handleSha256Dma(int devId, wc_CryptoInfo* info, void* inCtx,
 
     /* Caller invoked SHA finalize:
      * wc_CryptoCb_Sha256Hash(sha256, NULL, 0, * hash) */
-    if (info->hash.digest != NULL) {
+    if ((ret == WH_ERROR_OK) && (info->hash.digest != NULL)) {
         /* Packet will have been trashed, so re-populate all fields */
         req->type        = WC_HASH_TYPE_SHA256;
         req->finalize    = 1;

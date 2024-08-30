@@ -384,7 +384,7 @@ int wh_Server_HandleCustomCbRequest(whServerContext* server, uint16_t magic,
                                     uint16_t* out_resp_size, void* resp_packet);
 
 /** Server DMA functions */
-
+#ifdef WOLFHSM_CFG_DMA
 /**
  * @brief Registers a custom client DMA callback for 32-bit systems.
  *
@@ -647,6 +647,6 @@ int whServerDma_CopyToClient64(struct whServerContext_t* server,
 int whServerDma_CopyToClient(struct whServerContext_t* server,
                              uintptr_t clientAddr, void* serverPtr, size_t len,
                              whServerDmaFlags flags);
-
+#endif /* WOLFHSM_CFG_DMA */
 
 #endif /* !WOLFHSM_WH_SERVER_H_ */
