@@ -109,13 +109,14 @@ static int hsmCryptoRsaKeyGen(whServerContext* server, whPacket* packet,
     if (ret == 0) {
 #ifdef DEBUG_CRYPTOCB_VERBOSE
         printf("[server] -MakeRsaKey: size:%u, e:%u\n",
-                (word32)packet->pkRsakgReq.size, packet->pkRsakgReq.e);
+                (unsigned int)packet->pkRsakgReq.size,
+                (unsigned int)packet->pkRsakgReq.e);
 #endif
         ret = wc_MakeRsaKey(server->crypto->algoCtx.rsa,
             (word32)packet->pkRsakgReq.size, (long)packet->pkRsakgReq.e,
             server->crypto->rng);
 #ifdef DEBUG_CRYPTOCB_VERBOSE
-        printf("[server] -MakeRsaKey: ret:%d\n",ret);
+        printf("[server] -MakeRsaKey: ret:%d\n", ret);
 #endif
     }
     /* cache the generated key, data will be blown away */
@@ -151,15 +152,17 @@ static int hsmCryptoRsaFunction(whServerContext* server, whPacket* packet,
         ret = hsmLoadKeyRsa(server, server->crypto->algoCtx.rsa,
             packet->pkRsaReq.keyId);
 #ifdef DEBUG_CRYPTOCB_VERBOSE
-        printf("[server] -LoadKeyRsa keyid %u:%d\n", packet->pkRsaReq.keyId,ret);
+        printf("[server] -LoadKeyRsa keyid %u:%d\n",
+                (unsigned int)packet->pkRsaReq.keyId, ret);
 #endif
     }
     /* do the rsa operation */
     if (ret == 0) {
         len = packet->pkRsaReq.outLen;
 #ifdef DEBUG_CRYPTOCB_VERBOSE
-        printf("[server] -RSAFunction in:%p %u, out:%p, opType:%d\n",
-                in, packet->pkRsaReq.inLen, out, packet->pkRsaReq.opType);
+        printf("[server] -RSAFunction in:%p %u, out:%p, opType:%d\n", in,
+                (unsigned int)packet->pkRsaReq.inLen, out,
+                (unsigned int)packet->pkRsaReq.opType);
 #endif
         ret = wc_RsaFunction(in, packet->pkRsaReq.inLen, out, &len,
             packet->pkRsaReq.opType, server->crypto->algoCtx.rsa, server->crypto->rng);
@@ -937,7 +940,7 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
         break;
     case WC_ALGO_TYPE_PK:
 #ifdef DEBUG_CRYPTOCB_VERBOSE
-        printf("[server] -PK type:%u\n", packet->pkAnyReq.type);
+        printf("[server] -PK type:%u\n", (unsigned int)packet->pkAnyReq.type);
 #endif
         switch (packet->pkAnyReq.type)
         {
@@ -950,11 +953,11 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
         case WC_PK_TYPE_RSA:
 #ifdef DEBUG_CRYPTOCB_VERBOSE
             printf("[server] RSA req recv. opType:%u inLen:%d keyId:%u outLen:%u type:%u\n",
-                    packet->pkRsaReq.opType,
-                    packet->pkRsaReq.inLen,
-                    packet->pkRsaReq.keyId,
-                    packet->pkRsaReq.outLen,
-                    packet->pkRsaReq.type);
+                    (unsigned int)packet->pkRsaReq.opType,
+                    (unsigned int)packet->pkRsaReq.inLen,
+                    (unsigned int)packet->pkRsaReq.keyId,
+                    (unsigned int)packet->pkRsaReq.outLen,
+                    (unsigned int)packet->pkRsaReq.type);
 #endif
             switch (packet->pkRsaReq.opType)
             {
@@ -964,7 +967,8 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
             case RSA_PRIVATE_DECRYPT:
                 ret = hsmCryptoRsaFunction(server, (whPacket*)data, size);
 #ifdef DEBUG_CRYPTOCB_VERBOSE
-                printf("[server] RSA req recv. ret:%d type:%d\n", ret, packet->pkRsaRes.outLen);
+                printf("[server] RSA req recv. ret:%d type:%d\n",
+                        ret, (unsigned int)packet->pkRsaRes.outLen);
 #endif
                 break;
             default:
@@ -1029,10 +1033,11 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
 
     case WC_ALGO_TYPE_HASH:
         switch (packet->hashAnyReq.type) {
+#ifndef NO_SHA256
             case WC_HASH_TYPE_SHA256:
 #ifdef DEBUG_CRYPTOCB_VERBOSE
                 printf("[server] SHA256 req recv. type:%u\n",
-                       packet->hashSha256Req.type);
+                        (unsigned int)packet->hashSha256Req.type);
 #endif
                 ret = hsmCryptoSha256(server, (whPacket*)data, size);
 #ifdef DEBUG_CRYPTOCB_VERBOSE
@@ -1041,16 +1046,13 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
                 }
 #endif
                 break;
+#endif /* !NO_SHA256 */
 
             default:
                 ret = NOT_COMPILED_IN;
                 break;
         }
         break;
-
-#ifndef NO_SHA256
-#endif /* !NO_SHA256 */
-
 
     case WC_ALGO_TYPE_NONE:
     default:
@@ -1072,4 +1074,172 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
     }
     return ret;
 }
+
+#ifdef WOLFHSM_CFG_DMA
+
+#ifndef NO_SHA256
+static int hsmCryptoSha256Dma(whServerContext* server, whPacket* packet,
+                              uint16_t* size)
+{
+    int ret = 0;
+#if WH_DMA_IS_32BIT
+    wh_Packet_hash_sha256_Dma32_req* req = &packet->hashSha256Dma32Req;
+    wh_Packet_hash_sha256_Dma32_res* res = &packet->hashSha256Dma32Res;
+#else
+    wh_Packet_hash_sha256_Dma64_req* req = &packet->hashSha256Dma64Req;
+    wh_Packet_hash_sha256_Dma64_res* res = &packet->hashSha256Dma64Res;
+#endif
+    wc_Sha256* sha256 = server->crypto->algoCtx.sha256;
+    int        clientDevId;
+
+    /* Ensure state sizes are the same */
+    if (req->state.sz != sizeof(*sha256)) {
+        res->dmaCryptoRes.badAddr = req->state;
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Copy the SHA256 context from client address space */
+    ret = whServerDma_CopyFromClient(server, sha256, req->state.addr,
+                                       req->state.sz, (whServerDmaFlags){0});
+    if (ret != WH_ERROR_OK) {
+        res->dmaCryptoRes.badAddr = req->state;
+    }
+    /* Save the client devId to be restored later, when the context is copied
+     * back into client memory. */
+    clientDevId = sha256->devId;
+    /* overwrite the devId to that of the server for local crypto */
+    sha256->devId = server->crypto->devId;
+
+    /* TODO: perhaps we should sequentially update and finalize (need individual
+     * flags as 0x0 could be a valid address?) just to future-proof, even though
+     * sha256 cryptoCb doesn't currently have a one-shot*/
+
+    /* If finalize requested, finalize the SHA256 operation, wrapping client
+     * address accesses with the associated DMA address processing */
+    if (ret == WH_ERROR_OK && req->finalize) {
+        void* outAddr;
+        ret = wh_Server_DmaProcessClientAddress(
+            server, req->output.addr, &outAddr, req->output.sz,
+            WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
+
+        /* Finalize the SHA256 operation */
+        if (ret == WH_ERROR_OK) {
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+            printf("[server]   wc_Sha256Final: outAddr=%p\n", outAddr);
+#endif
+            ret = wc_Sha256Final(sha256, outAddr);
+        }
+
+        if (ret == WH_ERROR_OK) {
+            ret = wh_Server_DmaProcessClientAddress(
+                server, req->output.addr, &outAddr, req->output.sz,
+                WH_DMA_OPER_CLIENT_WRITE_POST, (whServerDmaFlags){0});
+        }
+
+        if (ret == WH_ERROR_ACCESS) {
+            res->dmaCryptoRes.badAddr = req->output;
+        }
+    }
+    else if (ret == WH_ERROR_OK) {
+        /* Update requested, update the SHA256 operation, wrapping client
+         * address accesses with the associated DMA address processing */
+        void* inAddr;
+        ret = wh_Server_DmaProcessClientAddress(
+            server, req->input.addr, &inAddr, req->input.sz,
+            WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
+
+        /* Update the SHA256 operation */
+        if (ret == WH_ERROR_OK) {
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+            printf("[server]   wc_Sha256Update: inAddr=%p, sz=%lu\n", inAddr,
+                   req->input.sz);
+#endif
+            ret = wc_Sha256Update(sha256, inAddr, req->input.sz);
+        }
+
+        if (ret == WH_ERROR_OK) {
+            ret = wh_Server_DmaProcessClientAddress(
+                server, req->input.addr, &inAddr, req->input.sz,
+                WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
+        }
+
+        if (ret == WH_ERROR_ACCESS) {
+            res->dmaCryptoRes.badAddr = req->input;
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        /* Reset the devId in the local context to ensure it isn't copied back
+         * to client memory */
+        sha256->devId = clientDevId;
+        /* Copy SHA256 context back into client memory */
+        ret = whServerDma_CopyToClient(server, req->state.addr, sha256,
+                                       req->state.sz, (whServerDmaFlags){0});
+        if (ret != WH_ERROR_OK) {
+            res->dmaCryptoRes.badAddr = req->state;
+        }
+    }
+
+    /* return value populates packet->rc */
+    return ret;
+}
+#endif /* ! NO_SHA256 */
+
+int wh_Server_HandleCryptoDmaRequest(whServerContext* server,
+    uint16_t action, uint8_t* data, uint16_t* size, uint16_t seq)
+{
+    int ret = 0;
+    whPacket* packet = (whPacket*)data;
+    if (server == NULL || server->crypto == NULL || data == NULL || size == NULL)
+        return BAD_FUNC_ARG;
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+    printf("[server] Crypto DMA request. Action:%u\n", action);
+#endif
+    switch (action)
+    {
+    case WC_ALGO_TYPE_HASH:
+        switch (packet->hashAnyReq.type) {
+#ifndef NO_SHA256
+            case WC_HASH_TYPE_SHA256:
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+                printf("[server] DMA SHA256 req recv. type:%u\n",
+                        (unsigned int)packet->hashSha256Req.type);
+#endif
+                ret = hsmCryptoSha256Dma(server, (whPacket*)data, size);
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+                if (ret != 0) {
+                    printf("[server] DMA SHA256 ret = %d\n", ret);
+                }
+#endif
+                break;
+#endif /* !NO_SHA256 */
+
+            default:
+                ret = NOT_COMPILED_IN;
+                break;
+        }
+        break;
+
+    case WC_ALGO_TYPE_NONE:
+    default:
+        ret = NOT_COMPILED_IN;
+        break;
+    }
+
+    /* Propagate error code to client in response packet */
+    packet->rc = ret;
+
+    if (ret != 0)
+        *size = WH_PACKET_STUB_SIZE + sizeof(packet->rc);
+
+    /* Since crypto error codes are propagated to the client in the response
+     * packet, return success to the caller unless a cancellation has occurred
+     */
+    if (ret != WH_ERROR_CANCEL) {
+        ret = 0;
+    }
+    return ret;
+}
+#endif /* WOLFHSM_CFG_DMA */
+
 #endif  /* !WOLFHSM_CFG_NO_CRYPTO */

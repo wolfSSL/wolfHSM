@@ -23,6 +23,8 @@
 /* Pick up compile-time configuration */
 #include "wolfhsm/wh_settings.h"
 
+#ifdef WOLFHSM_CFG_DMA
+
 #include <stdint.h>
 #include <string.h>
 #include <stddef.h>
@@ -116,6 +118,7 @@ int wh_Server_DmaCheckMemOperAllowed(const whServerContext* server,
     return _checkMemOperAgainstAllowList(server, oper, addr, size);
 }
 
+#if WH_DMA_IS_32BIT
 int wh_Server_DmaRegisterCb32(whServerContext* server, whServerDmaClientMem32Cb cb)
 {
     /* No NULL check for cb, since it is optional and always NULL checked before
@@ -128,7 +131,9 @@ int wh_Server_DmaRegisterCb32(whServerContext* server, whServerDmaClientMem32Cb 
 
     return WH_ERROR_OK;
 }
+#endif /* WH_DMA_IS_32BIT */
 
+#if WH_DMA_IS_64BIT
 int wh_Server_DmaRegisterCb64(whServerContext* server, whServerDmaClientMem64Cb cb)
 {
     /* No NULL check for cb, since it is optional and always NULL checked before
@@ -141,6 +146,7 @@ int wh_Server_DmaRegisterCb64(whServerContext* server, whServerDmaClientMem64Cb 
 
     return WH_ERROR_OK;
 }
+#endif /* WH_DMA_IS_64BIT */
 
 int wh_Server_DmaRegisterAllowList(whServerContext*                server,
                                    const whServerDmaAddrAllowList* allowlist)
@@ -154,7 +160,7 @@ int wh_Server_DmaRegisterAllowList(whServerContext*                server,
     return WH_ERROR_OK;
 }
 
-
+#if WH_DMA_IS_32BIT
 int wh_Server_DmaProcessClientAddress32(whServerContext* server,
                                         uint32_t         clientAddr,
                                         void** xformedCliAddr, uint32_t len,
@@ -183,7 +189,9 @@ int wh_Server_DmaProcessClientAddress32(whServerContext* server,
      * against it */
     return _checkMemOperAgainstAllowList(server, oper, *xformedCliAddr, len);
 }
+#endif /* WH_DMA_IS_32BIT */
 
+#if WH_DMA_IS_64BIT
 int wh_Server_DmaProcessClientAddress64(whServerContext* server,
                                         uint64_t         clientAddr,
                                         void** xformedCliAddr, uint64_t len,
@@ -210,8 +218,26 @@ int wh_Server_DmaProcessClientAddress64(whServerContext* server,
     /* if the server has a allowlist registered, check address against it */
     return _checkMemOperAgainstAllowList(server, oper, *xformedCliAddr, len);
 }
+#endif /* WH_DMA_IS_64BIT */
 
+int wh_Server_DmaProcessClientAddress(whServerContext* server,
+                                      uintptr_t clientAddr, void** xformedCliAddr,
+                                      size_t len, whServerDmaOper oper,
+                                      whServerDmaFlags flags)
+{
+    /* TODO: makes the assumption size_t and uintptr_t are the same */
+#if WH_DMA_IS_32BIT
+        return wh_Server_DmaProcessClientAddress32(server, clientAddr,
+                                                   xformedCliAddr, (uint32_t)len,
+                                                   oper, flags);
+#else
+        return wh_Server_DmaProcessClientAddress64(server, clientAddr,
+                                                   xformedCliAddr, (uint64_t)len,
+                                                   oper, flags);
+#endif
+}
 
+#if WH_DMA_IS_32BIT
 int whServerDma_CopyFromClient32(struct whServerContext_t* server,
                                  void* serverPtr, uint32_t clientAddr,
                                  size_t len, whServerDmaFlags flags)
@@ -251,8 +277,9 @@ int whServerDma_CopyFromClient32(struct whServerContext_t* server,
 
     return rc;
 }
+#endif
 
-
+#if WH_DMA_IS_64BIT
 int whServerDma_CopyFromClient64(struct whServerContext_t* server,
                                  void* serverPtr, uint64_t clientAddr,
                                  size_t len, whServerDmaFlags flags)
@@ -292,7 +319,22 @@ int whServerDma_CopyFromClient64(struct whServerContext_t* server,
 
     return rc;
 }
+#endif
 
+int whServerDma_CopyFromClient(struct whServerContext_t* server,
+                               void* serverPtr, uintptr_t clientAddr,
+                               size_t len, whServerDmaFlags flags)
+{
+#if WH_DMA_IS_32BIT
+    return whServerDma_CopyFromClient32(server, serverPtr, clientAddr, len,
+                                        flags);
+#else
+    return whServerDma_CopyFromClient64(server, serverPtr, clientAddr, len,
+                                        flags);
+#endif
+}
+
+#if WH_DMA_IS_32BIT
 int whServerDma_CopyToClient32(struct whServerContext_t* server,
                                uint32_t clientAddr, void* serverPtr, size_t len,
                                whServerDmaFlags flags)
@@ -332,8 +374,9 @@ int whServerDma_CopyToClient32(struct whServerContext_t* server,
 
     return rc;
 }
+#endif /* WH_DMA_IS_32BIT */
 
-
+#if WH_DMA_IS_64BIT
 int whServerDma_CopyToClient64(struct whServerContext_t* server,
                                uint64_t clientAddr, void* serverPtr, size_t len,
                                whServerDmaFlags flags)
@@ -373,3 +416,19 @@ int whServerDma_CopyToClient64(struct whServerContext_t* server,
 
     return rc;
 }
+#endif /* WH_DMA_IS_64BIT */
+
+int whServerDma_CopyToClient(struct whServerContext_t* server,
+                             uintptr_t clientAddr, void* serverPtr, size_t len,
+                             whServerDmaFlags flags)
+{
+#if WH_DMA_IS_32BIT
+    return whServerDma_CopyToClient32(server, clientAddr, serverPtr, len,
+                                      flags);
+#else
+    return whServerDma_CopyToClient64(server, clientAddr, serverPtr, len,
+                                      flags);
+#endif
+}
+
+#endif /* WOLFHSM_CFG_DMA */

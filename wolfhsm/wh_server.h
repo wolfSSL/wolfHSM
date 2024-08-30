@@ -384,7 +384,7 @@ int wh_Server_HandleCustomCbRequest(whServerContext* server, uint16_t magic,
                                     uint16_t* out_resp_size, void* resp_packet);
 
 /** Server DMA functions */
-
+#ifdef WOLFHSM_CFG_DMA
 /**
  * @brief Registers a custom client DMA callback for 32-bit systems.
  *
@@ -499,6 +499,28 @@ int wh_Server_DmaProcessClientAddress64(struct whServerContext_t* server,
                                         whServerDmaFlags flags);
 
 /**
+ * @brief Processes a client address for DMA operations, using the native
+ * pointer size of the system
+ *
+ * This function transforms a client address for DMA operations. It performs
+ * user-supplied address transformations, cache manipulations, and checks the
+ * transformed address against the server's allowlist if registered.
+ *
+ * @param[in] server Pointer to the server context.
+ * @param[in] clientAddr The client address to be processed.
+ * @param[out] serverPtr Pointer to store the transformed server address.
+ * @param[in] len The length of the memory operation.
+ * @param[in] oper The DMA operation type (e.g., read or write).
+ * @param[in] flags Flags for the DMA operation.
+ * @return int Returns WH_ERROR_OK on success, WH_ERROR_BADARGS if the arguments
+ * are invalid, or a negative error code on failure.
+ */
+int wh_Server_DmaProcessClientAddress(struct whServerContext_t* server,
+                                      uintptr_t clientAddr, void** serverPtr,
+                                      size_t len, whServerDmaOper oper,
+                                      whServerDmaFlags flags);
+
+/**
  * @brief Copies data from a client address to a server address on 32-bit
  * systems.
  *
@@ -539,6 +561,26 @@ int whServerDma_CopyFromClient32(struct whServerContext_t* server,
 int whServerDma_CopyFromClient64(struct whServerContext_t* server,
                                  void* serverPtr, uint64_t clientAddr,
                                  size_t len, whServerDmaFlags flags);
+
+/**
+ * @brief Copies data from a client address to a server address using the
+ * native pointer size of the system.
+ *
+ * This function performs a DMA read operation, copying data from a client
+ * address to a server address. It processes the client address, checks the
+ * server address against the allowlist, and performs the actual memory copy.
+ *
+ * @param[in] server Pointer to the server context.
+ * @param[out] serverPtr Pointer to the server memory where data will be copied.
+ * @param[in] clientAddr The client address from which data will be copied.
+ * @param[in] len The length of the data to be copied.
+ * @param[in] flags Flags for the DMA operation.
+ * @return int Returns WH_ERROR_OK on success, WH_ERROR_BADARGS if the arguments
+ * are invalid, or a negative error code on failure.
+ */
+int whServerDma_CopyFromClient(struct whServerContext_t* server,
+                               void* serverPtr, uintptr_t clientAddr,
+                               size_t len, whServerDmaFlags flags);
 
 /**
  * @brief Copies data from a server address to a client address on 32-bit
@@ -583,4 +625,28 @@ int whServerDma_CopyToClient32(struct whServerContext_t* server,
 int whServerDma_CopyToClient64(struct whServerContext_t* server,
                                uint64_t clientAddr, void* serverPtr, size_t len,
                                whServerDmaFlags flags);
+
+/**
+ * @brief Copies data from a server address to a client address using the
+ * native pointer size of the system.
+ *
+ * This function performs a DMA write operation, copying data from a server
+ * address to a client address. It processes the client
+ * address, checks the server address against the allowlist, and performs the
+ * actual memory copy.
+ *
+ * @param[in] server Pointer to the server context.
+ * @param[in] clientAddr The client address to which data will be copied.
+ * @param[in] serverPtr Pointer to the server memory from which data will be
+ * copied.
+ * @param[in] len The length of the data to be copied.
+ * @param[in] flags Flags for the DMA operation.
+ * @return int Returns WH_ERROR_OK on success, WH_ERROR_BADARGS if the arguments
+ * are invalid, or a negative error code on failure.
+ */
+int whServerDma_CopyToClient(struct whServerContext_t* server,
+                             uintptr_t clientAddr, void* serverPtr, size_t len,
+                             whServerDmaFlags flags);
+#endif /* WOLFHSM_CFG_DMA */
+
 #endif /* !WOLFHSM_WH_SERVER_H_ */

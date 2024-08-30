@@ -267,6 +267,8 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
         *out_resp_size = sizeof(resp) + data_len;
     }; break;
 
+#ifdef WOLFHSM_CFG_DMA
+#if WH_DMA_IS_32BIT
     case WH_MESSAGE_NVM_ACTION_ADDOBJECTDMA32:
     {
         whMessageNvm_AddObjectDma32Request req = {0};
@@ -354,7 +356,9 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
                 &resp, (whMessageNvm_SimpleResponse*)resp_packet);
         *out_resp_size = sizeof(resp);
     }; break;
+#endif /* WH_DMA_IS_32BIT */
 
+#if WH_DMA_IS_64BIT
     case WH_MESSAGE_NVM_ACTION_ADDOBJECTDMA64:
     {
         whMessageNvm_AddObjectDma64Request req = {0};
@@ -441,6 +445,8 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
                 &resp, (whMessageNvm_SimpleResponse*)resp_packet);
         *out_resp_size = sizeof(resp);
     }; break;
+#endif /* WH_DMA_IS_64BIT */
+#endif /* WOLFHSM_CFG_DMA */
 
     default:
         /* Unknown request. Respond with empty packet */
@@ -449,4 +455,3 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
     }
     return rc;
 }
-

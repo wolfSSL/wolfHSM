@@ -209,4 +209,58 @@
 #define XCACHEINVLDBLK(_p, _n) wh_Utils_CacheInvalidate((_p), (_n))
 #endif
 
+/* DMA Configuration */
+
+#ifdef WOLFHSM_CFG_DMA
+
+/* Attempt to discover pointer size from build system/architecture */
+#ifndef WH_PTR_SIZE
+/* check for __SIZEOF_POINTER__ if available (GCC/clang) */
+#if defined(__SIZEOF_POINTER__)
+    #define WH_PTR_SIZE __SIZEOF_POINTER__
+/* Fallback to compiler/architecture-specific checks */
+#elif defined(__IAR_SYSTEMS_ICC__)
+/* IAR compiler */
+#if __INTPTR_WIDTH__ == 64
+        #define WH_PTR_SIZE 8
+#elif __INTPTR_WIDTH__ == 32
+        #define WH_PTR_SIZE 4
+#else
+        #error "Unsupported pointer width in IAR toolchain"
+#endif
+#elif defined(__TASKING__)
+/* TASKING compiler */
+#if defined(__CPU__) && __CPU__ == 64
+        #define WH_PTR_SIZE 8
+#elif defined(__CPU__) && __CPU__ == 32
+        #define WH_PTR_SIZE 4
+#else
+        #error "Unsupported pointer width in TASKING toolchain"
+#endif
+#else
+#error \
+    "Unable to automatically determine pointer size, please define WH_PTR_SIZE"
+#endif
+#endif /* WH_PTR_SIZE */
+
+
+#ifndef WOLFHSM_CFG_DMA_PTR_SIZE
+#define WOLFHSM_CFG_DMA_PTR_SIZE (WH_PTR_SIZE)
+#endif
+
+#define WH_DMA_IS_32BIT (WOLFHSM_CFG_DMA_PTR_SIZE == 4)
+#define WH_DMA_IS_64BIT (WOLFHSM_CFG_DMA_PTR_SIZE == 8)
+
+#if (!WH_DMA_IS_32BIT && !WH_DMA_IS_64BIT)
+#error "wolfHSM only supports 32-bit or 64-bit pointer sizes"
+#endif
+
+#ifndef WOLFHSM_CFG_DMA_ALT_PTR_SIZE
+#if WOLFHSM_CFG_DMA_PTR_SIZE != WH_PTR_SIZE
+#error "wolfHSM DMA pointer size must match system pointer size"
+#endif
+#endif
+
+#endif /* WOLFHSM_CFG_DMA */
+
 #endif /* !WOLFHSM_WH_SETTINGS_H_ */

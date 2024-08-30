@@ -38,6 +38,10 @@
 
 int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* ctx);
 
+#ifdef WOLFHSM_CFG_DMA
+int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx);
+#endif /* WOLFHSM_CFG_DMA */
+
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
 #endif /* !WOLFHSM_CLIENT_CRYPTOCB_H_ */

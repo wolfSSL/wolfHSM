@@ -193,6 +193,9 @@ int wh_MessageNvm_TranslateReadResponse(uint16_t magic,
     return 0;
 }
 
+#ifdef WOLFHSM_CFG_DMA
+
+#if WH_DMA_IS_32BIT
 int wh_MessageNvm_TranslateAddObjectDma32Request(uint16_t magic,
         const whMessageNvm_AddObjectDma32Request* src,
         whMessageNvm_AddObjectDma32Request* dest)
@@ -219,7 +222,9 @@ int wh_MessageNvm_TranslateReadDma32Request(uint16_t magic,
     WH_T16(magic, dest, src, data_len);
     return 0;
 }
+#endif /* WH_DMA_IS_32BIT */
 
+#if WH_DMA_IS_64BIT
 int wh_MessageNvm_TranslateAddObjectDma64Request(uint16_t magic,
         const whMessageNvm_AddObjectDma64Request* src,
         whMessageNvm_AddObjectDma64Request* dest)
@@ -246,3 +251,6 @@ int wh_MessageNvm_TranslateReadDma64Request(uint16_t magic,
     WH_T16(magic, dest, src, data_len);
     return 0;
 }
+#endif /* WH_DMA_IS_64BIT */
+
+#endif /* WOLFHSM_CFG_DMA */

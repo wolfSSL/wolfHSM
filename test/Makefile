@@ -90,11 +90,28 @@ SRC_C += \
 endif
 
 ifeq ($(TESTWOLFCRYPT),1)
-# wolfCrypt test source files
-SRC_C += $(WOLFSSL_DIR)/wolfcrypt/test/test.c
-SRC_C += $(wildcard $(WOLFSSL_DIR)/wolfcrypt/src/*.c)
-CFLAGS += -DWC_USE_DEVID=0x5748534D
+    # wolfCrypt test source files
+    SRC_C += $(WOLFSSL_DIR)/wolfcrypt/test/test.c
+    SRC_C += $(wildcard $(WOLFSSL_DIR)/wolfcrypt/src/*.c)
+
+    TESTWOLFCRYPT_DEFAULT_DEVID = 0x5748534D
+
+    # TESTWOLFCRYPT_DEVID and TESTWOLFCRYPT_DMA are mutually exclusive
+    ifneq ($(TESTWOLFCRYPT_DMA),)
+        ifneq ($(TESTWOLFCRYPT_DEVID),)
+            $(error "Cannot set both TESTWOLFCRYPT_DEVID and TESTWOLFCRYPT_DMA. Please choose one.")
+        endif
+        # Set TESTWOLFCRYPT_DEVID to a hardcoded value when TESTWOLFCRYPT_DMA is set
+        TESTWOLFCRYPT_DEVID = 0x57444D41
+    endif
+
+    # Set default TESTWOLFCRYPT_DEVID if not defined by the user
+    TESTWOLFCRYPT_DEVID ?= $(TESTWOLFCRYPT_DEFAULT_DEVID)
+
+    # Set the CFLAGS for WC_USE_DEVID
+    CFLAGS += -DWC_USE_DEVID=$(TESTWOLFCRYPT_DEVID)
 endif
+
 
 # wolfHSM source files
 SRC_C += \

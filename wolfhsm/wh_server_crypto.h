@@ -33,6 +33,7 @@
 
 int wh_Server_HandleCryptoRequest(whServerContext* server,
     uint16_t action, uint8_t* data, uint16_t* size, uint16_t seq);
-
+int wh_Server_HandleCryptoDmaRequest(whServerContext* server,
+    uint16_t action, uint8_t* data, uint16_t* size, uint16_t seq);
 
 #endif /* !WOLFHSM_WH_SERVER_CRYPTO_H_ */
