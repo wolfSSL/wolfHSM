@@ -1082,7 +1082,7 @@ static int hsmCryptoSha256Dma(whServerContext* server, whPacket* packet,
                               uint16_t* size)
 {
     int ret = 0;
-#if WH_SERVER_IS_32_BIT
+#if WH_DMA_IS_32BIT
     wh_Packet_hash_sha256_Dma32_req* req = &packet->hashSha256Dma32Req;
     wh_Packet_hash_sha256_Dma32_res* res = &packet->hashSha256Dma32Res;
 #else
