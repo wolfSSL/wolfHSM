@@ -44,7 +44,7 @@
 #include "wolfhsm/wh_crypto.h"
 
 #ifdef HAVE_ECC
-int wh_Crypto_SerializeEccKey(ecc_key* key, uint16_t max_size,
+int wh_Crypto_EccSerializeKey(ecc_key* key, uint16_t max_size,
         uint8_t* buffer, uint16_t *out_size)
 {
     int ret = 0;
@@ -53,97 +53,102 @@ int wh_Crypto_SerializeEccKey(ecc_key* key, uint16_t max_size,
             (buffer == NULL)) {
         return WH_ERROR_BADARGS;
     }
-#if 1
-    int der_size = 0;
-    der_size = wc_EccKeyToDer(key, (byte*)buffer, (word32)max_size);
-    if (der_size >= 0) {
-        printf("Serialized private and public keys\n");
-        ret = 0;
-        if (out_size != NULL) {
-            *out_size = der_size;
-        }
-    } else  if (der_size == ECC_PRIVATEONLY_E) {
-        /* Private only.  ok. */
-        der_size = wc_EccPrivateKeyToDer(key, (byte*)buffer, (word32)max_size);
-        printf("Serialized private key\n");
-        ret = 0;
-        if (out_size != NULL) {
-            *out_size = der_size;
-        }
-    } else {
-        /* Error private serializing.  Try it as a public key only */
-        printf("Problem serializing private key:%d\n", der_size);
 
-        der_size = wc_EccPublicKeyToDer(key, (byte*)buffer, (word32)max_size, 1);
-        if (der_size >= 0) {
-            ret = 0;
-            if (out_size != NULL) {
-                *out_size = der_size;
-            }
-            printf("Serialized public key\n");
-
-        } else {
-            /* Error serializing.  Clear the buffer */
-            ret = der_size;
-            printf("Problem serializing public key:%d\n", der_size);
-            memset(buffer, 0, max_size);
-        }
+    switch (key->type) {
+    case ECC_PUBLICKEY:
+        ret = wc_EccPublicKeyToDer(key, (byte*)buffer, (word32)max_size, 1);
+        break;
+    case ECC_PRIVATEKEY:
+        ret = wc_EccKeyToDer(key, (byte*)buffer, (word32)max_size);
+        break;
+    case ECC_PRIVATEKEY_ONLY:
+        ret = wc_EccPrivateKeyToDer(key, (byte*)buffer, (word32)max_size);
+        break;
+    default:
+        ret = WH_ERROR_BADARGS;
     }
-#else
-    word32 len = max_size;
-    ret = wc_ecc_export_x963(key, buffer, &len);
-    if (ret == 0) {
-        if(out_size != NULL) {
-            *out_size = len;
+    if (ret >= 0) {
+        if (out_size != NULL) {
+            *out_size = (uint16_t)ret;
         }
-        wh_Utils_Hexdump("Crypto_SerializeEccKey:\n", buffer, len);
+        ret = WH_ERROR_OK;
     }
-#endif
     return ret;
 }
 
-int wh_Crypto_DeserializeEccKey(uint16_t size, const uint8_t* buffer,
+int wh_Crypto_EccDeserializeKey(const uint8_t* buffer, uint16_t size,
         ecc_key* key)
 {
     int ret;
+    word32 idx = 0;
 
     if (    (size == 0) ||
             (buffer == NULL) ||
             (key == NULL)) {
         return WH_ERROR_BADARGS;
     }
-#if 1
-    word32 idx = 0;
-    /* Update the key structure */
-    ret = wc_EccPrivateKeyDecode(
-            buffer, &idx,
-            key,
-            size);
-    if (ret == 0) {
-        printf("Private key decode type:%d\n", key->type);
-        /* Determine if this was a private only key */
-/*
-        key->type = ECC_PRIVATEKEY_ONLY;
-        key->type = ECC_PRIVATEKEY;
-        */
-    } else  {
+
+    /* Try decoding as a key pair or private only */
+    ret = wc_EccPrivateKeyDecode(buffer, &idx, key, size);
+    if (ret != 0) {
         /* Try it as a public only */
         idx = 0;
-        ret = wc_EccPublicKeyDecode(
-                buffer, &idx,
-                key,
-                size);
-        if (ret == 0) {
-            printf("Public key decode type:%d\n", key->type);
-            /* Public only key */
-            key->type = ECC_PUBLICKEY;
-
-        }
+        ret = wc_EccPublicKeyDecode(buffer, &idx, key, size);
     }
-#else
-    wh_Utils_Hexdump("Crypto_DerializeEccKey:\n", (uint8_t*)buffer, size);
+    return ret;
+}
 
-    ret = wc_ecc_import_x963(buffer, size, key);
+int wh_Crypto_UpdatePrivateOnlyEccKey(ecc_key* key, uint16_t der_size,
+        const uint8_t* pub_der)
+{
+    int ret = 0;
+    ecc_key pub_only[1];
+    word32 idx = 0;
+    uint8_t x[ECC_MAXSIZE];
+    word32 x_len = sizeof(x);
+    uint8_t y[ECC_MAXSIZE];
+    word32 y_len = sizeof(y);
+    uint8_t d[ECC_MAXSIZE];
+    word32 d_len = sizeof(d);
+    int curve_id;
+
+    if (    (key == NULL) ||
+            ((der_size > 0) && (pub_der == NULL)) ) {
+        return WH_ERROR_BADARGS;
+    }
+    if (key->type != ECC_PRIVATEKEY_ONLY) {
+        /* No need to update anything */
+        return 0;
+    }
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+    printf("keytype before %d\n", key->type);
+#endif
+
+
+    curve_id = wc_ecc_get_curve_id(key->idx);
+    if (curve_id < 0) {
+        ret = curve_id;
+    }
+    /* TODO: Find more efficient way to doing this */
+    if (ret == 0) {
+        ret = wc_ecc_export_private_only(key, d, &d_len);
+    }
+    if (ret == 0) {
+        ret = wc_ecc_init(pub_only);
+        if (ret == 0) {
+            ret = wc_EccPublicKeyDecode(pub_der, &idx, pub_only, der_size);
+        }
+        if (ret == 0) {
+            ret = wc_ecc_export_public_raw(pub_only, x, &x_len, y, &y_len);
+        }
+        if (ret == 0) {
+            ret = wc_ecc_import_unsigned(key, x, y, d, curve_id);
+        }
+        wc_ecc_free(pub_only);
+    }
+
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+    printf("keytype after %d\n", key->type);
 #endif
     return ret;
 }

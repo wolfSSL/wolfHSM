@@ -41,6 +41,7 @@ typedef uint16_t whKeyId;
 
 /* KeyId Constants */
 #define WH_KEYID_ERASED 0x0000
+#define WH_KEYID_IDMAX 0xFF
 
 /* Key Masks */
 #define WH_KEYID_MASK   0x00FF

@@ -34,8 +34,10 @@ extern "C" {
 /* #define SINGLE_THREADED */
 /* #define WC_NO_ASYNC_THREADING */
 
+/*
 #define DEBUG_CRYPTOCB
 #define DEBUG_CRYPTOCB_VERBOSE
+*/
 
 /** wolfHSM required settings for wolfCrypt */
 #define WOLFCRYPT_ONLY
@@ -96,12 +98,15 @@ extern "C" {
 #define HAVE_FFDHE_2048
 
 /** AES Options */
-#define HAVE_AES
+/*#define NO_AES */
+/*#define HAVE_AES */
 /*#define HAVE_AESGCM */
 #define GCM_TABLE_4BIT
+/*
 #define WOLFSSL_AES_DIRECT
 #define HAVE_AES_ECB
 #define WOLFSSL_CMAC
+*/
 
 /** SHA Options */
 #define NO_SHA

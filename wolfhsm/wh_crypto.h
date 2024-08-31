@@ -40,11 +40,20 @@
 
 #ifdef HAVE_ECC
 /* Store a curve25519_key to a byte sequence */
-int wh_Crypto_SerializeEccKey(ecc_key* key,
+int wh_Crypto_EccSerializeKey(ecc_key* key,
         uint16_t max_size, uint8_t* buffer, uint16_t *out_size);
+
 /* Restore a curve25519_key from a byte sequence */
-int wh_Crypto_DeserializeEccKey(uint16_t size,
-        const uint8_t* buffer, ecc_key* key);
+int wh_Crypto_EccDeserializeKey(const uint8_t* buffer, uint16_t size,
+        ecc_key* key);
+
+/* Helper to update an ECC private-only key with the corresponding public key,
+ * similiar to wc_ecc_make_pub().  The incoming byte arrey of the public key is
+ * expected to have been exported using wc_EccPublicKeyToDer().
+ */
+int wh_Crypto_UpdatePrivateOnlyEccKey(ecc_key* key, uint16_t der_size,
+        const uint8_t* pub_der);
+
 #endif /* HAVE_ECC */
 
 #endif  /* !WOLFHSM_CFG_NO_CRYPTO */

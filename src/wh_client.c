@@ -806,7 +806,7 @@ int wh_Client_KeyCache(whClientContext* c, uint32_t flags,
     uint8_t* label, uint32_t labelSz, uint8_t* in, uint32_t inSz,
     uint16_t* keyId)
 {
-    int ret;
+    int ret = WH_ERROR_OK;
     ret = wh_Client_KeyCacheRequest_ex(c, flags, label, labelSz, in, inSz,
         *keyId);
     if (ret == 0) {
@@ -814,6 +814,11 @@ int wh_Client_KeyCache(whClientContext* c, uint32_t flags,
             ret = wh_Client_KeyCacheResponse(c, keyId);
         } while (ret == WH_ERROR_NOTREADY);
     }
+
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+    printf("[client] %s label:%.*s key_id:%x ret:%d \n",
+            __func__, labelSz, label, *keyId, ret);
+#endif
     return ret;
 }
 
@@ -858,6 +863,10 @@ int wh_Client_KeyEvict(whClientContext* c, uint16_t keyId)
             ret = wh_Client_KeyEvictResponse(c);
         } while (ret == WH_ERROR_NOTREADY);
     }
+
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+    printf("client %s key_id:%x ret:%d \n", __func__, keyId, ret);
+#endif
     return ret;
 }
 

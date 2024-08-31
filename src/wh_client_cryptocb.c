@@ -47,6 +47,7 @@
 #include "wolfssl/wolfcrypt/ecc.h"
 #include "wolfssl/wolfcrypt/sha256.h"
 
+#include "wolfhsm/wh_crypto.h"
 #include "wolfhsm/wh_client_crypto.h"
 #include "wolfhsm/wh_client_cryptocb.h"
 
@@ -81,7 +82,7 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
     }
 
 #ifdef DEBUG_CRYPTOCB
-    printf("[client] Client_CryptoCb: ");
+    printf("[client] %s ", __func__);
     wc_CryptoCb_InfoString(info);
 #endif
     /* Get data pointer from the context to use as request/response storage */
@@ -94,6 +95,7 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
     /* Based on the info type, process the request */
     switch (info->algo_type)
     {
+#if !defined(NO_AES) || !defined(NO_DES3)
     case WC_ALGO_TYPE_CIPHER:
         /* Set shared cipher request members */
         packet->cipherAnyReq.type = info->cipher.type;
@@ -291,6 +293,7 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             break;
         }
         break;
+#endif /* !NO_AES || !NO_DES */
 
     case WC_ALGO_TYPE_PK:
         /* set type */
@@ -478,177 +481,45 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
 #ifdef HAVE_ECC
         case WC_PK_TYPE_EC_KEYGEN:
         {
-            ret = wh_Client_MakeExportEccKey(ctx,
-                                info->pk.eckg.size, info->pk.eckg.curveId,
-                                info->pk.eckg.key);
-                        /* Fix up error code to be wolfCrypt*/
-                        if (ret == WH_ERROR_BADARGS) {
-                            ret = BAD_FUNC_ARG;
-                        }
-#if 0
-            /* set key size */
-            packet->pkEckgReq.sz = info->pk.eckg.size;
-            /* set curveId */
-            packet->pkEckgReq.curveId = info->pk.eckg.curveId;
-            /* write request */
-            ret = wh_Client_SendRequest(ctx, group,
-                WC_ALGO_TYPE_PK,
-                WH_PACKET_STUB_SIZE + sizeof(packet->pkEckgReq),
-                (uint8_t*)packet);
-            /* read response */
-            if (ret == 0) {
-                do {
-                    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
-                        (uint8_t*)packet);
-                } while (ret == WH_ERROR_NOTREADY);
+            /* Extract info fields */
+            uint32_t size       = info->pk.eckg.size;
+            uint32_t curve_id   = info->pk.eckg.curveId;
+            ecc_key* key        = info->pk.eckg.key;
+
+            ret = wh_Client_EccMakeExportKey(ctx, size, curve_id, key);
+            /* Fix up error code to be wolfCrypt */
+            if (ret == WH_ERROR_BADARGS) {
+                ret = BAD_FUNC_ARG;
             }
-            if (ret == 0) {
-                if (packet->rc != 0)
-                    ret = packet->rc;
-                else {
-                    /* read keyId */
-                    info->pk.eckg.key->devCtx =
-                        (void*)((intptr_t)packet->pkEckgRes.keyId);
-                }
-            }
-#endif
         } break;
 
         case WC_PK_TYPE_ECDH:
         {
-            uint32_t type = info->pk.type;
-            ecc_key* priv_key = info->pk.ecdh.private_key;
-            whKeyId priv_key_id = WH_DEVCTX_TO_KEYID(priv_key->devCtx);
-            ecc_key* pub_key = info->pk.ecdh.public_key;
-            whKeyId pub_key_id = WH_DEVCTX_TO_KEYID(pub_key->devCtx);
-            int curve_id = wc_ecc_get_curve_id(priv_key->idx);
+            /* Extract info fields */
+            ecc_key* priv_key   = info->pk.ecdh.private_key;
+            ecc_key* pub_key    = info->pk.ecdh.public_key;
+            word32* out_size    = info->pk.ecdh.outlen;
+            uint8_t* out        = info->pk.ecdh.out;
 
-            printf("[client] EcDH in pub_key_id:%u priv_key_id:%u\n",
-                    pub_key_id, priv_key_id);
-
-
-             /* out is after the fixed size fields */
-            wh_Packet_pk_ecdh_req* req = &packet->pkEcdhReq;
-            wh_Packet_pk_ecdh_res* res = &packet->pkEcdhRes;
-
-            uint8_t* out = (uint8_t*)(res + 1);
-            dataSz = WH_PACKET_STUB_SIZE + sizeof(*req);
-
-            int priv_evict = 0;
-            int pub_evict = 0;
-
-            if (dataSz > WOLFHSM_CFG_COMM_DATA_LEN) {
-                ret = BAD_FUNC_ARG;
-                break;
-            }
-            ret = 0;
-
-            /* check to see if the pub key id is erased */
-            if (WH_KEYID_ISERASED(pub_key_id)) {
-                /* Must import the key to the server and evict it afterwards */
-                uint8_t keyLabel[] = "ClientCbTempEcc-pub";
-                whNvmFlags flags = WH_NVM_FLAGS_NONE;
-
-                ret = wh_Client_ImportEccKey(ctx,
-                        pub_key, &pub_key_id, flags,
-                        sizeof(keyLabel), keyLabel);
-                if (ret == 0) {
-                    pub_evict = 1;
-                }
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("[client] EccDh pubkey imported ret:%d keyid:%u\n",
-                    ret, pub_key_id);
-#endif
-            }
-
-            /* check to see if the priv key id is erased */
-            if (    (ret == 0) &&
-                    (WH_KEYID_ISERASED(priv_key_id))) {
-                /* Must import the key to the server and evict it afterwards */
-                uint8_t keyLabel[] = "ClientCbTempEcc-priv";
-                whNvmFlags flags = WH_NVM_FLAGS_NONE;
-
-                ret = wh_Client_ImportEccKey(ctx,
-                        priv_key, &priv_key_id, flags,
-                        sizeof(keyLabel), keyLabel);
-                if (ret == 0) {
-                    priv_evict = 1;
-                }
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("[client] EccDh privkey imported ret:%d keyid:%u\n",
-                    ret, priv_key_id);
-#endif
-            }
-
-
-            if (ret == 0) {
-                /* Set packet members. Reset anyreq.type just in case */
-                req->type = type;
-                req->privateKeyId = priv_key_id;
-                req->publicKeyId = pub_key_id;
-                req->curveId = curve_id;
-
-                /* write request */
-                ret = wh_Client_SendRequest(ctx, group, WC_ALGO_TYPE_PK, dataSz,
-                    (uint8_t*)packet);
-    #ifdef DEBUG_CRYPTOCB_VERBOSE
-                printf("[client] EccDh req sent. priv:%u pub:%u curveId:%d type:%u\n",
-                        req->privateKeyId,
-                        req->publicKeyId,
-                        req->curveId,
-                        req->type);
-    #endif
-                /* read response */
-                if (ret == 0) {
-                    do {
-                        ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
-                            (uint8_t*)packet);
-                    } while (ret == WH_ERROR_NOTREADY);
-                }
-    #ifdef DEBUG_CRYPTOCB_VERBOSE
-                printf("[client] EccDh resp packet recv. ret:%d rc:%d\n", ret, packet->rc);
-    #endif
-                if (ret == 0) {
-                    if (packet->rc != 0)
-                        ret = packet->rc;
-                    else {
-                        /* read outLen */
-                        *info->pk.ecdh.outlen = res->sz;
-                        /* read out */
-                        XMEMCPY(info->pk.ecdh.out, out, res->sz);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-                        wh_Utils_Hexdump("[client] Eccdh:", out, res->sz);
-#endif
-                    }
-                }
-            }
-            if (pub_evict != 0) {
-                /* Evict the imported key */
-                wh_Client_KeyEvict(ctx, pub_key_id);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("[client] Evicted temp key_id:%d ret:%d \n", pub_key_id, ret);
-#endif
-            }
-            if (priv_evict != 0) {
-                /* Evict the imported key */
-                wh_Client_KeyEvict(ctx, priv_key_id);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("[client] Evicted temp key_id:%d ret:%d \n", priv_key_id, ret);
-#endif
+            ret = wh_Client_EccSharedSecret(ctx,
+                                            priv_key, pub_key,
+                                            out, out_size);
+            if (ret == WH_ERROR_BADARGS) {
+                    ret = BAD_FUNC_ARG;
             }
         } break;
 
         case WC_PK_TYPE_ECDSA_SIGN:
         {
-            /* Extrach info parameters */
+            /* Extract info parameters */
             uint32_t type       = info->pk.type;
             ecc_key* key        = info->pk.eccsign.key;
-            whKeyId key_id      = WH_DEVCTX_TO_KEYID(key->devCtx);
-            int curve_id        = wc_ecc_get_curve_id(key->idx);
             const uint8_t* in   = info->pk.eccsign.in;
             uint32_t in_len     = info->pk.eccsign.inlen;
             uint8_t* out        = info->pk.eccsign.out;
             uint32_t out_len    = *info->pk.eccsign.outlen;
+
+            whKeyId key_id      = WH_DEVCTX_TO_KEYID(key->devCtx);
 
             wh_Packet_pk_ecc_sign_req* req = &packet->pkEccSignReq;
             wh_Packet_pk_ecc_sign_res* res = &packet->pkEccSignRes;
@@ -660,9 +531,10 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
 
             int evict = 0;
 
+#ifdef DEBUG_CRYPTOCB_VERBOSE
             printf("[client] EccSign keyid:%x, dataSz:%d, in_len:%u, out_len:%u\n",
                     key_id, dataSz, in_len, out_len);
-
+#endif
             /* can't fallback to software since the key is on the HSM */
             if (dataSz > WOLFHSM_CFG_COMM_DATA_LEN) {
                 ret = BAD_FUNC_ARG;
@@ -675,7 +547,7 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
                 uint8_t keyLabel[] = "ClientCbTempEccSign";
                 whNvmFlags flags = WH_NVM_FLAGS_NONE;
 
-                ret = wh_Client_ImportEccKey(ctx,
+                ret = wh_Client_EccImportKey(ctx,
                         key, &key_id, flags,
                         sizeof(keyLabel), keyLabel);
                 if (ret == 0) {
@@ -689,12 +561,12 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
 
             /* Set request packet members */
             req->type = type;
-            req->curveId = curve_id;
             req->keyId = key_id;
             req->sz = in_len;
             if( (in != NULL) && (in_len > 0)) {
                 XMEMCPY(req_in, in, in_len);
             }
+            req->evict = evict;
 
             /* write request */
             ret = wh_Client_SendRequest(ctx, group, WC_ALGO_TYPE_PK, dataSz,
@@ -720,6 +592,7 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
                     ret = packet->rc;
                 }
             }
+#if 0
             if (evict != 0) {
                 /* Evict the imported key */
                 wh_Client_KeyEvict(ctx, key_id);
@@ -727,7 +600,7 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             printf("[client] Evicted temp key_id:%d ret:%d \n", key_id, ret);
 #endif
             }
-
+#endif
         } break;
 
         case WC_PK_TYPE_ECDSA_VERIFY:
@@ -735,41 +608,52 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             /* Extract info parameters */
             uint32_t type       = info->pk.type;
             ecc_key* key        = info->pk.eccverify.key;
-            whKeyId key_id      = WH_DEVCTX_TO_KEYID(key->devCtx);
-            int curve_id        = wc_ecc_get_curve_id(key->idx);
             const uint8_t* sig  = info->pk.eccverify.sig;
             uint32_t sig_len    = info->pk.eccverify.siglen;
             const uint8_t* hash = info->pk.eccverify.hash;
             uint32_t hash_len   = info->pk.eccverify.hashlen;
-            int* out            = info->pk.eccverify.res;
+            int* out_res        = info->pk.eccverify.res;
 
+            /* Set up request packet */
             wh_Packet_pk_ecc_verify_req* req = &packet->pkEccVerifyReq;
-            wh_Packet_pk_ecc_verify_res* res = &packet->pkEccVerifyRes;
-
             /* sig and hash are after the fixed size fields */
             uint8_t* req_sig = (uint8_t*)(req + 1);
             uint8_t* req_hash = req_sig + sig_len;
+            uint16_t req_len = WH_PACKET_STUB_SIZE + sizeof(*req) +
+                    sig_len + hash_len;
 
-            /* Optional public key is after the fixed size fields */
-            uint8_t* res_pub_key = (uint8_t*)(res + 1);
-            uint32_t pub_key_len = 0;
+            /* Set up response packet */
+            wh_Packet_pk_ecc_verify_res* res = &packet->pkEccVerifyRes;
+            /* Optional public key der is after the fixed size fields */
+            uint8_t* res_pub_der = (uint8_t*)(res + 1);
+            uint32_t res_der_size = 0;
+            uint16_t res_len = 0;
 
+            whKeyId key_id;
             int evict = 0;
+            int export_pub_key = 0;
 
             dataSz = WH_PACKET_STUB_SIZE + sizeof(*req) + sig_len + hash_len;
+
             /* can't fallback to software since the key is on the HSM */
-            if (dataSz > WOLFHSM_CFG_COMM_DATA_LEN) {
+            if (    (key == NULL) ||
+                    (req_len > WOLFHSM_CFG_COMM_DATA_LEN)) {
                 ret = BAD_FUNC_ARG;
                 break;
             }
 
-            /* Upload key if necessary */
-            if (WH_KEYID_ISERASED(key_id)) {
+            key_id = WH_DEVCTX_TO_KEYID(key->devCtx);
+            if (key->type == ECC_PRIVATEKEY_ONLY) {
+                export_pub_key = 1;
+            }
+
+            if (    (ret ==0) &&
+                    (WH_KEYID_ISERASED(key_id))) {
                 /* Must import the key to the server and evict it afterwards */
                 uint8_t keyLabel[] = "ClientCbTempEccVerify";
                 whNvmFlags flags = WH_NVM_FLAGS_NONE;
 
-                ret = wh_Client_ImportEccKey(ctx,
+                ret = wh_Client_EccImportKey(ctx,
                         key, &key_id, flags,
                         sizeof(keyLabel), keyLabel);
                 if (ret == 0) {
@@ -781,82 +665,87 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
 #endif
             }
 
-            /* Set request packet members */
-            req->type = type;
-            req->curveId = curve_id;
-            req->keyId = key_id;
-            req->sigSz = sig_len;
-            if( (sig != NULL) && (sig_len > 0)) {
-                XMEMCPY(req_sig, sig, sig_len);
-            }
-            req->hashSz = hash_len;
-            if( (hash != NULL) && (hash_len > 0)) {
-                XMEMCPY(req_hash, hash, hash_len);
-            }
-
-            /* write request */
-            ret = wh_Client_SendRequest(ctx, group, WC_ALGO_TYPE_PK, dataSz,
-                (uint8_t*)packet);
-            /* read response */
             if (ret == 0) {
-                do {
-                    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
-                        (uint8_t*)packet);
-                } while (ret == WH_ERROR_NOTREADY);
-            }
-            if (ret == 0) {
-                if (packet->rc == 0) {
-                        *out = res->res;
-                        pub_key_len = res->pubSz;
-                        if (pub_key_len > 0) {
-                            /* Update the key with the generated public key */
-                            word32 idx = 0;
-                            printf("keytype before %d\n", key->type);
-                            if(key->type == ECC_PRIVATEKEY_ONLY) {
-                                /* Yuck.  Need to combine private key with
-                                 * responded key.
-                                 */
-                                ecc_key temp[1];
-                                uint8_t x[64];
-                                word32 x_len = sizeof(x);
-                                uint8_t y[64];
-                                word32 y_len = sizeof(y);
-                                uint8_t d[64];
-                                word32 d_len = sizeof(d);
-
-                                ret = wc_EccPublicKeyDecode(res_pub_key, &idx, temp,
-                                        pub_key_len);
-                                printf("EccPubKeyDecode:%d\n", ret);
-                                ret = wc_ecc_export_private_only(key, d, &d_len);
-                                printf("ecc_export_private_only:%d\n", ret);
-                                ret = wc_ecc_export_public_raw(temp, x, &x_len, y, &y_len);
-                                printf("ecc_export_public_raw:%d\n", ret);
-                                ret = wc_ecc_import_unsigned(key, x, y, d, curve_id);
-                                printf("ecc_import_unsigned:%d\n", ret);
-                            }
-                            printf("keytype after %d\n", key->type);
-                        }
-                } else {
-                    ret = packet->rc;
+                /* Set request packet members */
+                req->type = type;
+                req->keyId = key_id;
+                req->sigSz = sig_len;
+                if( (sig != NULL) && (sig_len > 0)) {
+                    XMEMCPY(req_sig, sig, sig_len);
                 }
-            }
-            if (evict != 0) {
-                /* Evict the imported key */
-                wh_Client_KeyEvict(ctx, key_id);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("[client] Evicted temp key_id:%d ret:%d \n", key_id, ret);
+                req->hashSz = hash_len;
+                if( (hash != NULL) && (hash_len > 0)) {
+                    XMEMCPY(req_hash, hash, hash_len);
+                }
+                req->evict = evict;
+                req->export_pub_key = export_pub_key;
+
+                /* write request */
+                ret = wh_Client_SendRequest(ctx, group, WC_ALGO_TYPE_PK, req_len,
+                    (uint8_t*)packet);
+                /* read response */
+                if (ret == 0) {
+                    do {
+                        ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                            (uint8_t*)packet);
+                    } while (ret == WH_ERROR_NOTREADY);
+                }
+                if (ret == 0) {
+                    if (packet->rc == 0) {
+                        *out_res = res->res;
+                        res_der_size = res->pubSz;
+                        if (res_der_size > 0) {
+                            /* Update the key with the generated public key */
+                            ret = wh_Crypto_UpdatePrivateOnlyEccKey(key,
+                                    res_der_size, res_pub_der);
+                        }
+                    } else {
+                        ret = packet->rc;
+                    }
+                }
+#if 0
+                if (evict != 0) {
+                    /* Evict the imported key */
+                    wh_Client_KeyEvict(ctx, key_id);
+    #ifdef DEBUG_CRYPTOCB_VERBOSE
+                printf("[client] Evicted temp key_id:%d ret:%d \n", key_id, ret);
+    #endif
+                }
 #endif
             }
         } break;
 
+#if 0
+        /* TODO: Check if keyid is set on incoming key.
+         *      if not, import private key to server
+         *      send request with pub key der
+         *      server creates new key with private and public.  check
+         *      evict temp key
+         */
         case WC_PK_TYPE_EC_CHECK_PRIV_KEY:
         {
-            /* set keyId */
-            packet->pkEccCheckReq.keyId =
-                (intptr_t)(info->pk.ecc_check.key->devCtx);
-            /* set curveId */
-            packet->pkEccCheckReq.curveId =
-                wc_ecc_get_curve_id(info->pk.eccverify.key->idx);
+            int ret;
+            /* Extract info parameters */
+            ecc_key* key = info->pk.ecc_check.key;
+            const uint8_t* pub_key = info->pk.ecc_check.pubKey;
+            uint32_t pub_key_len = info->pk.ecc_check.pubKeySz;
+
+            int curve_id = wc_ecc_get_curve_id(key->idx);
+            whKeyId key_id = WH_DEVCTX_TO_KEYID(key->devCtx);
+
+
+            /* Request packet */
+            wh_Packet_pk_ecc_check_req* req = &packet->pkEccCheckReq;
+            uint8_t* req_pub_key = (uint8_t*)(req + 1);
+
+            req->type = WC_PK_TYPE_EC_CHECK_PRIV_KEY;
+            req->keyId = key_id;
+            req->curveId = curve_id;
+
+            /* Response packet */
+            wh_Packet_pk_ecc_check_res* res = &packet->pkEccCheckRes;
+
+
             /* write request */
             ret = wh_Client_SendRequest(ctx, group,
                 WC_ALGO_TYPE_PK,
@@ -874,6 +763,8 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
                     ret = packet->rc;
             }
         } break;
+#endif
+
 #endif /* HAVE_ECC */
 
 #ifdef HAVE_CURVE25519
@@ -1075,9 +966,9 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
 
 #ifdef DEBUG_CRYPTOCB
     if (ret == CRYPTOCB_UNAVAILABLE) {
-        printf("[client] Client_CryptoCb: X not implemented: algo->type:%d\n", info->algo_type);
+        printf("[client] %s X not implemented: algo->type:%d\n", __func__, info->algo_type);
     } else {
-        printf("[client] Client_CryptoCb: - ret:%d algo->type:%d\n", ret, info->algo_type);
+        printf("[client] %s - ret:%d algo->type:%d\n", __func__, ret, info->algo_type);
     }
 #endif /* DEBUG_CRYPTOCB */
     return ret;

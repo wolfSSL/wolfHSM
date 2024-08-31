@@ -53,6 +53,14 @@ CFLAGS += $(DBGFLAGS)
 LDFLAGS += $(DBGFLAGS)
 endif
 
+ifeq ($(DEBUG_CRYPTOCB),1)
+CFLAGS += -DDEBUG_CRYPTOCB
+endif
+
+ifeq ($(DEBUG_CRYPTOCB_VERBOSE),1)
+CFLAGS += -DDEBUG_CRYPTOCB -DDEBUG_CRYPTOCB_VERBOSE
+endif
+
 # Add address sanitizer option
 ifeq ($(ASAN),1)
 CFLAGS += -fsanitize=address

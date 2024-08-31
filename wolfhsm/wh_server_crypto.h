@@ -47,6 +47,15 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
 
 int wh_Server_HandleCryptoDmaRequest(whServerContext* server,
     uint16_t action, uint8_t* data, uint16_t* size, uint16_t seq);
+
+#ifdef HAVE_ECC
+int wh_Server_EccKeyCacheImport(whServerContext* ctx, ecc_key* key,
+        whKeyId keyId, whNvmFlags flags, uint32_t label_len, uint8_t* label);
+
+int wh_Server_EccKeyCacheExport(whServerContext* ctx, whKeyId keyId,
+        ecc_key* key);
+#endif
+
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
 #endif /* !WOLFHSM_WH_SERVER_CRYPTO_H_ */

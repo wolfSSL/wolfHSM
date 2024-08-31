@@ -164,25 +164,30 @@ int wh_Client_SetKeyIdEcc(ecc_key* key, whNvmId keyId);
  */
 int wh_Client_GetKeyIdEcc(ecc_key* key, whNvmId* outId);
 
-int wh_Client_ImportEccKey(whClientContext* ctx, ecc_key* key,
+int wh_Client_EccImportKey(whClientContext* ctx, ecc_key* key,
         whKeyId *inout_keyId, whNvmFlags flags,
         uint32_t label_len, uint8_t* label);
-int wh_Client_ExportEccKey(whClientContext* ctx, whKeyId keyId,
+int wh_Client_EccExportKey(whClientContext* ctx, whKeyId keyId,
         ecc_key* key,
         uint32_t label_len, uint8_t* label);
 
 
-int wh_Client_MakeExportEccKey(whClientContext* ctx,
+int wh_Client_EccMakeExportKey(whClientContext* ctx,
         uint32_t size, uint32_t curveId, ecc_key* key);
-int wh_Client_MakeCacheEccKey(whClientContext* ctx,
+int wh_Client_EccMakeCacheKey(whClientContext* ctx,
         uint32_t size, uint32_t curveId,
         whKeyId *inout_key_id, whNvmFlags flags,
         uint32_t label_len, uint8_t* label);
-int wh_Client_MakeEccKey(whClientContext* ctx,
+int wh_Client_EccMakeKey(whClientContext* ctx,
         uint32_t size, uint32_t curveId,
         whKeyId *inout_key_id, whNvmFlags flags,
         uint32_t label_len, uint8_t* label,
         ecc_key* key);
+
+int wh_Client_EccSharedSecret(whClientContext* ctx,
+                                ecc_key* priv_key, ecc_key* pub_key,
+                                uint8_t* out, word32 *out_size);
+
 
 #endif /* HAVE_ECC */
 
