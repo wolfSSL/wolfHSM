@@ -99,14 +99,13 @@ extern "C" {
 
 /** AES Options */
 /*#define NO_AES */
-/*#define HAVE_AES */
-/*#define HAVE_AESGCM */
+#define HAVE_AESGCM
 #define GCM_TABLE_4BIT
-/*
+
 #define WOLFSSL_AES_DIRECT
 #define HAVE_AES_ECB
 #define WOLFSSL_CMAC
-*/
+
 
 /** SHA Options */
 #define NO_SHA

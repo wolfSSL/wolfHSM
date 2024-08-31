@@ -169,8 +169,9 @@
 #if defined WOLFHSM_CFG_SHE_EXTENSION
 #if defined(NO_AES) || \
     !defined(WOLFSSL_CMAC) || \
-    !defined(WOLFSSL_AES_DIRECT)
-#error "WOLFHSM_CFG_SHE_EXTENSION requires AES, WOLFSSL_CMAC, and WOLFSSL_AES_DIRECT"
+    !defined(WOLFSSL_AES_DIRECT) || \
+    !defined(HAVE_AES_ECB)
+#error "WOLFHSM_CFG_SHE_EXTENSION requires AES, WOLFSSL_CMAC, WOLFSSL_AES_DIRECT, and HAVE_AES_ECB"
 #endif
 #endif
 
