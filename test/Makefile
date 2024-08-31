@@ -36,7 +36,7 @@ CFLAGS ?= $(ARCHFLAGS) -std=c90 -D_GNU_SOURCE -Wall -Werror -Wno-cpp $(CFLAGS_EX
 LDFLAGS ?= $(ARCHFLAGS)
 
 # LD: generate map
-LDFLAGS += -Wl,-map,$(BUILD_DIR)/$(BIN).map
+#LDFLAGS += -Wl,-map,$(BUILD_DIR)/$(BIN).map
 #LDFLAGS += -Wl,-Map=$(BUILD_DIR)/$(BIN).map
 
 # Libc for printf
