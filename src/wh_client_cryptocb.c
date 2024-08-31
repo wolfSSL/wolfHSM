@@ -1117,7 +1117,6 @@ static int _xferSha256BlockAndUpdateDigest(whClientContext* ctx,
 
     return ret;
 }
-<<<<<<< Upstream, based on origin/main
 
 #ifdef WOLFHSM_CFG_DMA
 
@@ -1227,6 +1226,10 @@ int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
         return BAD_FUNC_ARG;
     }
 
+#ifdef DEBUG_CRYPTOCB
+    printf("[client] %s ", __func__);
+    wc_CryptoCb_InfoString(info);
+#endif
     /* Get data pointer from the context to use as request/response storage */
     packet = (whPacket*)wh_CommClient_GetDataPtr(ctx->comm);
     if (packet == NULL) {
@@ -1244,8 +1247,6 @@ int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
             case WC_HASH_TYPE_SHA256:
                 ret = _handleSha256Dma(devId, info, inCtx, packet);
                 break;
-=======
->>>>>>> 35fce01 Working ecc with lots of printfs.  WIP.
 #endif /* !NO_SHA256 */
 
             default:
@@ -1262,11 +1263,10 @@ int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
 
 #ifdef DEBUG_CRYPTOCB
     if (ret == CRYPTOCB_UNAVAILABLE) {
-        printf("X whClientCb not implemented: algo->type:%d\n", info->algo_type);
+        printf("[client] %s X not implemented: algo->type:%d\n", __func__, info->algo_type);
     } else {
-        printf("- whClientCb ret:%d algo->type:%d\n", ret, info->algo_type);
+        printf("[client] %s - ret:%d algo->type:%d\n", __func__, ret, info->algo_type);
     }
-    wc_CryptoCb_InfoString(info);
 #endif /* DEBUG_CRYPTOCB */
     return ret;
 }

@@ -1199,7 +1199,6 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
     return ret;
 }
 
-<<<<<<< Upstream, based on origin/main
 #ifdef WOLFHSM_CFG_DMA
 
 #ifndef NO_SHA256
@@ -1276,7 +1275,7 @@ static int hsmCryptoSha256Dma(whServerContext* server, whPacket* packet,
         /* Update the SHA256 operation */
         if (ret == WH_ERROR_OK) {
 #ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("[server]   wc_Sha256Update: inAddr=%p, sz=%lu\n", inAddr,
+            printf("[server]   wc_Sha256Update: inAddr=%p, sz=%llu\n", inAddr,
                    req->input.sz);
 #endif
             ret = wc_Sha256Update(sha256, inAddr, req->input.sz);
