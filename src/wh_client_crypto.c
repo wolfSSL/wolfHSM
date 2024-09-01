@@ -21,13 +21,16 @@
  *
  */
 
+/* Pick up compile-time configuration */
+#include "wolfhsm/wh_settings.h"
+
+#ifndef WOLFHSM_CFG_NO_CRYPTO
+
 /* System libraries */
 #include <stdint.h>
 #include <stddef.h>  /* For NULL */
 #include <string.h>  /* For memset, memcpy */
 
-/* Pick up compile-time configuration */
-#include "wolfhsm/wh_settings.h"
 
 /* Common WolfHSM types and defines shared with the server */
 #include "wolfhsm/wh_common.h"
@@ -39,15 +42,12 @@
 /* Components */
 #include "wolfhsm/wh_comm.h"
 
-#ifndef WOLFHSM_CFG_NO_CRYPTO
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/types.h"
 #include "wolfssl/wolfcrypt/error-crypt.h"
 #include "wolfssl/wolfcrypt/wc_port.h"
 #include "wolfssl/wolfcrypt/cryptocb.h"
 #include "wolfssl/wolfcrypt/ecc.h"
-
-#endif
 
 /* Message definitions */
 #include "wolfhsm/wh_message.h"
@@ -57,8 +57,6 @@
 
 #include "wolfhsm/wh_client.h"
 #include "wolfhsm/wh_client_crypto.h"
-
-#ifndef WOLFHSM_CFG_NO_CRYPTO
 
 #ifdef HAVE_ECC
 int wh_Client_EccSetKeyId(ecc_key* key, whNvmId keyId)
