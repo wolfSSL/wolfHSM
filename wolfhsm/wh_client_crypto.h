@@ -188,6 +188,18 @@ int wh_Client_EccSharedSecret(whClientContext* ctx,
                                 ecc_key* priv_key, ecc_key* pub_key,
                                 uint8_t* out, word32 *out_size);
 
+int wh_Client_EccDsaSign(whClientContext* ctx,
+        ecc_key* key,
+        const uint8_t* in, word32 in_len,
+        uint8_t* out, word32 *inout_len);
+
+int wh_Client_EccDsaVerify(whClientContext* ctx, ecc_key* key,
+        const uint8_t* sig, word32 sig_len,
+        const uint8_t* hash, word32 hash_len,
+        int *out_res);
+
+
+
 
 #endif /* HAVE_ECC */
 

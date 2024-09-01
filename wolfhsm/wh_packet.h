@@ -163,6 +163,9 @@ typedef struct  wh_Packet_pk_eckg_res
 typedef struct  wh_Packet_pk_ecdh_req
 {
     uint32_t type;
+    uint32_t options;
+#define WH_PACKET_PK_ECDH_OPTIONS_EVICTPUB  (1 << 0)
+#define WH_PACKET_PK_ECDH_OPTIONS_EVICTPRV (1 << 1)
     uint32_t privateKeyId;
     uint32_t publicKeyId;
 } wh_Packet_pk_ecdh_req;
@@ -177,9 +180,10 @@ typedef struct  wh_Packet_pk_ecdh_res
 typedef struct  wh_Packet_pk_ecc_sign_req
 {
     uint32_t type;
+    uint32_t options;
+#define WH_PACKET_PK_ECSIGN_OPTIONS_EVICT  (1 << 0)
     uint32_t keyId;
     uint32_t sz;
-    uint32_t evict;
     /* uint8_t in[] */
 } wh_Packet_pk_ecc_sign_req;
 
@@ -193,12 +197,12 @@ typedef struct  wh_Packet_pk_ecc_sign_res
 typedef struct  wh_Packet_pk_ecc_verify_req
 {
     uint32_t type;
+    uint32_t options;
+#define WH_PACKET_PK_ECCVERIFY_OPTIONS_EVICT  (1 << 0)
+#define WH_PACKET_PK_ECCVERIFY_OPTIONS_EXPORTPUB (1 << 1)
     uint32_t keyId;
-    uint32_t curveId;
     uint32_t sigSz;
     uint32_t hashSz;
-    uint32_t evict;
-    uint32_t export_pub_key;
     uint8_t WH_PAD[4];
     /* uint8_t sig[] */
     /* uint8_t hash[] */

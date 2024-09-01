@@ -87,7 +87,7 @@ int wh_Client_EccImportKey(whClientContext* ctx, ecc_key* key,
 {
     int ret = WH_ERROR_OK;
     whKeyId key_id = WH_KEYID_ERASED;
-    byte buffer[WOLFHSM_CFG_COMM_DATA_LEN] = {0};
+    byte buffer[ECC_BUFSIZE] = {0};
     uint16_t buffer_len = 0;
 
     if (    (ctx == NULL) ||
@@ -179,7 +179,7 @@ int wh_Client_EccMakeKey(whClientContext* ctx,
     if (packet == NULL) {
         return WH_ERROR_BADARGS;
     }
-    memset((uint8_t*)packet, 0, WOLFHSM_CFG_COMM_DATA_LEN);
+    memset((uint8_t*)packet, 0, sizeof(*packet));
 
     req = &packet->pkEckgReq;
     res = &packet->pkEckgRes;
@@ -290,17 +290,14 @@ int wh_Client_EccSharedSecret(whClientContext* ctx,
                                 ecc_key* priv_key, ecc_key* pub_key,
                                 uint8_t* out, word32 *out_size)
 {
-    int ret = 0;
+    int ret = WH_ERROR_OK;
     whPacket* packet;
 
     /* Transaction state */
-    uint16_t group = WH_MESSAGE_GROUP_CRYPTO;
-    uint16_t action = WC_ALGO_TYPE_PK;
-    uint16_t type = WC_PK_TYPE_ECDH;
-    int priv_evict;
-    whKeyId priv_key_id;
-    int pub_evict;
+    whKeyId prv_key_id;
+    int prv_evict = 0;
     whKeyId pub_key_id;
+    int pub_evict = 0;
 
     if (    (ctx == NULL) ||
             (pub_key == NULL) ||
@@ -312,79 +309,90 @@ int wh_Client_EccSharedSecret(whClientContext* ctx,
     if (packet == NULL) {
         return WH_ERROR_BADARGS;
     }
+    memset((uint8_t*)packet, 0, sizeof(*packet));
 
     pub_key_id = WH_DEVCTX_TO_KEYID(pub_key->devCtx);
-    if (    (ret == 0) &&
+    if (    (ret == WH_ERROR_OK) &&
             WH_KEYID_ISERASED(pub_key_id)) {
         /* Must import the key to the server and evict it afterwards */
-        uint8_t keyLabel[] = "ClientCbTempEcc-pub";
+        uint8_t keyLabel[] = "TempEccDh-pub";
         whNvmFlags flags = WH_NVM_FLAGS_NONE;
 
         ret = wh_Client_EccImportKey(ctx,
                 pub_key, &pub_key_id, flags,
                 sizeof(keyLabel), keyLabel);
-        if (ret == 0) {
+        if (ret == WH_ERROR_OK) {
             pub_evict = 1;
         }
-    } else {
-        pub_evict = 0;
     }
 
-    priv_key_id = WH_DEVCTX_TO_KEYID(priv_key->devCtx);
-    if (    (ret == 0) &&
-            WH_KEYID_ISERASED(priv_key_id)) {
+    prv_key_id = WH_DEVCTX_TO_KEYID(priv_key->devCtx);
+    if (    (ret == WH_ERROR_OK) &&
+            WH_KEYID_ISERASED(prv_key_id)) {
         /* Must import the key to the server and evict it afterwards */
-        uint8_t keyLabel[] = "ClientCbTempEcc-priv";
+        uint8_t keyLabel[] = "TempEccDh-prv";
         whNvmFlags flags = WH_NVM_FLAGS_NONE;
 
         ret = wh_Client_EccImportKey(ctx,
-                priv_key, &priv_key_id, flags,
+                priv_key, &prv_key_id, flags,
                 sizeof(keyLabel), keyLabel);
         if (ret == 0) {
-            priv_evict = 1;
+            prv_evict = 1;
         }
-    } else {
-        priv_evict = 0;
     }
 
+    if (ret == WH_ERROR_OK) {
+        /* Request Message*/
+        uint16_t group = WH_MESSAGE_GROUP_CRYPTO;
+        uint16_t action = WC_ALGO_TYPE_PK;
+        uint16_t type = WC_PK_TYPE_ECDH;
 
-    if (ret == 0) {
-        /* Generate Request */
         wh_Packet_pk_ecdh_req* req = &packet->pkEcdhReq;
         uint16_t req_len =  WH_PACKET_STUB_SIZE + sizeof(*req);
+        uint32_t options = 0;
 
         if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
             return WH_ERROR_BADARGS;
         }
 
-        req->type = type;
-        req->privateKeyId = priv_key_id;
-        req->publicKeyId = pub_key_id;
+        if (pub_evict != 0) {
+            options |= WH_PACKET_PK_ECDH_OPTIONS_EVICTPUB;
+        }
+        if (prv_evict != 0) {
+            options |= WH_PACKET_PK_ECDH_OPTIONS_EVICTPRV;
+        }
 
-        /* write request */
+        req->type           = type;
+        req->options        = options;
+        req->privateKeyId   = prv_key_id;
+        req->publicKeyId    = pub_key_id;
+
+        /* Send Request */
         ret = wh_Client_SendRequest(ctx, group, action, req_len,
             (uint8_t*)packet);
 #ifdef DEBUG_CRYPTOCB_VERBOSE
-        printf("[client] EccDh req sent. priv:%u pub:%u type:%u\n",
-                req->privateKeyId,
-                req->publicKeyId,
-                req->type);
+        printf("[client] %s req sent. priv:%u pub:%u\n",
+                __func__, req->privateKeyId, req->publicKeyId);
 #endif
-        if (ret == 0) {
-            wh_Packet_pk_ecdh_res* res = &packet->pkEcdhRes;
-            uint16_t res_len;
-            /* out is after the fixed size fields */
-            uint8_t* res_out = (uint8_t*)(res + 1);
+        if (ret == WH_ERROR_OK) {
+            /* Server will evict.  Reset our flags */
+            pub_evict = prv_evict = 0;
 
-            /* read response */
+            /* Response Message */
+            wh_Packet_pk_ecdh_res* res = &packet->pkEcdhRes;
+            uint8_t* res_out = (uint8_t*)(res + 1);
+            uint16_t res_len;
+
+            /* Recv Response */
             do {
                 ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
                     (uint8_t*)packet);
             } while (ret == WH_ERROR_NOTREADY);
 #ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("[client] EccDh resp packet recv. ret:%d rc:%d\n", ret, packet->rc);
+            printf("[client] %s resp packet recv. ret:%d rc:%d\n",
+                    __func__, ret, packet->rc);
 #endif
-            if (ret == 0) {
+            if (ret == WH_ERROR_OK) {
                 if (packet->rc != 0)
                     ret = packet->rc;
                 else {
@@ -392,7 +400,7 @@ int wh_Client_EccSharedSecret(whClientContext* ctx,
                         *out_size = res->sz;
                     }
                     if (out != NULL) {
-                        XMEMCPY(out, res_out, res->sz);
+                        memcpy(out, res_out, res->sz);
                     }
     #ifdef DEBUG_CRYPTOCB_VERBOSE
                     wh_Utils_Hexdump("[client] Eccdh:", res_out, res->sz);
@@ -401,17 +409,289 @@ int wh_Client_EccSharedSecret(whClientContext* ctx,
             }
         }
     }
-    if (pub_evict != 0) {
-        wh_Client_KeyEvict(ctx, pub_key_id);
+
+    /* Evict the keys manually on error */
+    if(pub_evict != 0) {
+        (void)wh_Client_KeyEvict(ctx, pub_key_id);
     }
-    if (priv_evict != 0) {
-        wh_Client_KeyEvict(ctx, priv_key_id);
+    if(prv_evict != 0) {
+        (void)wh_Client_KeyEvict(ctx, prv_key_id);
     }
 #ifdef DEBUG_CRYPTOCB_VERBOSE
-    printf("client %s ret:%d\n", __func__, ret);
+    printf("[client] %s ret:%d\n", __func__, ret);
 #endif
     return ret;
+}
 
+
+int wh_Client_EccDsaSign(whClientContext* ctx,
+        ecc_key* key,
+        const uint8_t* in, word32 in_len,
+        uint8_t* out, word32 *inout_len)
+{
+    int ret = 0;
+    whPacket* packet;
+
+    /* Transaction state */
+    whKeyId key_id;
+    int evict = 0;
+
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+printf("[client] %s ctx:%p key:%p, in:%p in_len:%u, out:%p inout_len:%p\n",
+        __func__, ctx, key, in, in_len, out, inout_len);
+#endif
+
+    if (    (ctx == NULL) ||
+            (key == NULL) ||
+            ((in == NULL) && (in_len > 0)) ||
+            ((out != NULL) && (inout_len == NULL)) ) {
+        return WH_ERROR_BADARGS;
+    }
+
+    packet = (whPacket*)wh_CommClient_GetDataPtr(ctx->comm);
+    if (packet == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    memset((uint8_t*)packet, 0, sizeof(*packet));
+
+
+    key_id = WH_DEVCTX_TO_KEYID(key->devCtx);
+
+
+    #ifdef DEBUG_CRYPTOCB_VERBOSE
+    printf("[client] %s keyid:%x, in_len:%u, inout_len:%p\n",
+            __func__, key_id, in_len, inout_len);
+    #endif
+
+    /* Import key if necessary */
+    if (WH_KEYID_ISERASED(key_id)) {
+        /* Must import the key to the server and evict it afterwards */
+        uint8_t keyLabel[] = "TempEccDsaSign";
+        whNvmFlags flags = WH_NVM_FLAGS_NONE;
+
+        ret = wh_Client_EccImportKey(ctx,
+                key, &key_id, flags,
+                sizeof(keyLabel), keyLabel);
+        if (ret == 0) {
+            evict = 1;
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        /* Request Message */
+        uint16_t group = WH_MESSAGE_GROUP_CRYPTO;
+        uint16_t action = WC_ALGO_TYPE_PK;
+        uint16_t type = WC_PK_TYPE_ECDSA_SIGN;
+
+        wh_Packet_pk_ecc_sign_req* req;
+        req = &packet->pkEccSignReq;
+        uint8_t* req_in = (uint8_t*)(req + 1);
+        uint16_t req_len = WH_PACKET_STUB_SIZE + sizeof(*req) + in_len;
+        uint32_t options = 0;
+
+        if (req_len <= WOLFHSM_CFG_COMM_DATA_LEN) {
+            if (evict != 0) {
+                options |= WH_PACKET_PK_ECSIGN_OPTIONS_EVICT;
+            }
+            req->type = type;
+            req->options = options;
+            req->keyId = key_id;
+            req->sz = in_len;
+            if( (in != NULL) && (in_len > 0)) {
+                XMEMCPY(req_in, in, in_len);
+            }
+
+            /* Send Request */
+            ret = wh_Client_SendRequest(ctx, group, action, req_len,
+                    (uint8_t*)packet);
+            if (ret == WH_ERROR_OK) {
+                /* Server will evict at this point. Reset evict */
+                evict = 0;
+
+                /* Response Message */
+                wh_Packet_pk_ecc_sign_res* res;
+                res = &packet->pkEccSignRes;
+                uint8_t* res_out = (uint8_t*)(res + 1);
+                uint16_t res_len;
+
+                /* Recv Response */
+                do {
+                    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                        (uint8_t*)packet);
+                } while (ret == WH_ERROR_NOTREADY);
+
+                if (ret == WH_ERROR_OK) {
+                    if (packet->rc == 0) {
+                        uint16_t out_len = res->sz;
+                        /* check inoutlen and read out */
+                        if (inout_len != NULL) {
+                            if (out_len > *inout_len) {
+                                /* Silently truncate the signature */
+                                out_len = *inout_len;
+                            }
+                            *inout_len = out_len;
+                            if (    (out != NULL) &&
+                                    (out_len > 0)) {
+                                memcpy(out, res_out, out_len);
+                            }
+                        }
+                    } else {
+                        ret = packet->rc;
+                    }
+                }
+            }
+        } else {
+            /* Request length is too long */
+            ret = WH_ERROR_BADARGS;
+        }
+    }
+    /* Evict the key manually on error */
+    if(evict != 0) {
+        (void)wh_Client_KeyEvict(ctx, key_id);
+    }
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+    printf("[client] %s ret:%d\n", __func__, ret);
+#endif
+    return ret;
+}
+
+int wh_Client_EccDsaVerify(whClientContext* ctx, ecc_key* key,
+        const uint8_t* sig, word32 sig_len,
+        const uint8_t* hash, word32 hash_len,
+        int *out_res)
+{
+    int ret = 0;
+    whPacket* packet;
+
+    /* Transaction state */
+    whKeyId key_id;
+    int evict = 0;
+    int export_pub_key = 0;
+
+
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+printf("[client] %s ctx:%p key:%p, in:%p in_len:%u, out:%p inout_len:%p\n",
+        __func__, ctx, key, in, in_len, out, inout_len);
+#endif
+
+    if (    (ctx == NULL) ||
+            (key == NULL) ||
+            ((sig == NULL) && (sig_len > 0)) ||
+            ((hash == NULL) && (hash_len > 0)) ) {
+        return WH_ERROR_BADARGS;
+    }
+
+    packet = (whPacket*)wh_CommClient_GetDataPtr(ctx->comm);
+    if (packet == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    memset((uint8_t*)packet, 0, sizeof(*packet));
+
+    /* TODO: Check the request size to ensure it will fit before importing key*/
+#if 0
+    if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
+        ret = WH_ERROR_BADARGS;
+        break;
+    }
+#endif
+
+    key_id = WH_DEVCTX_TO_KEYID(key->devCtx);
+    if (key->type == ECC_PRIVATEKEY_ONLY) {
+            export_pub_key = 1;
+        }
+    /* Import key if necessary */
+    if (WH_KEYID_ISERASED(key_id)) {
+        /* Must import the key to the server and evict it afterwards */
+        uint8_t keyLabel[] = "TempEccDsaVerify";
+        whNvmFlags flags = WH_NVM_FLAGS_NONE;
+
+        ret = wh_Client_EccImportKey(ctx,
+                key, &key_id, flags,
+                sizeof(keyLabel), keyLabel);
+        if (ret == 0) {
+            evict = 1;
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        /* Request Message */
+        uint16_t group = WH_MESSAGE_GROUP_CRYPTO;
+        uint16_t action = WC_ALGO_TYPE_PK;
+        uint16_t type = WC_PK_TYPE_ECDSA_VERIFY;
+
+        wh_Packet_pk_ecc_verify_req* req = &packet->pkEccVerifyReq;
+        uint32_t options = 0;
+        /* sig and hash are after the fixed size fields */
+        uint8_t* req_sig = (uint8_t*)(req + 1);
+        uint8_t* req_hash = req_sig + sig_len;
+        uint16_t req_len = WH_PACKET_STUB_SIZE + sizeof(*req) +
+                sig_len + hash_len;
+
+        if (req_len <= WOLFHSM_CFG_COMM_DATA_LEN) {
+            /* Set request packet members */
+            if (evict != 0) {
+                options |= WH_PACKET_PK_ECCVERIFY_OPTIONS_EVICT;
+            }
+            if (export_pub_key != 0) {
+                options |= WH_PACKET_PK_ECCVERIFY_OPTIONS_EXPORTPUB;
+            }
+            req->type = type;
+            req->options = options;
+            req->keyId = key_id;
+            req->sigSz = sig_len;
+            if( (sig != NULL) && (sig_len > 0)) {
+                XMEMCPY(req_sig, sig, sig_len);
+            }
+            req->hashSz = hash_len;
+            if( (hash != NULL) && (hash_len > 0)) {
+                XMEMCPY(req_hash, hash, hash_len);
+            }
+
+            /* write request */
+            ret = wh_Client_SendRequest(ctx, group, action, req_len,
+                (uint8_t*)packet);
+
+            if (ret == WH_ERROR_OK) {
+                /* Server will evict at this point. Reset evict */
+                evict = 0;
+                /* Response Message */
+                wh_Packet_pk_ecc_verify_res* res = &packet->pkEccVerifyRes;
+                uint8_t* res_pub_der = (uint8_t*)(res + 1);
+                uint32_t res_der_size = 0;
+                uint16_t res_len = 0;
+
+                /* Recv Response */
+                do {
+                    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                        (uint8_t*)packet);
+                } while (ret == WH_ERROR_NOTREADY);
+                if (ret == 0) {
+                    if (packet->rc == 0) {
+                        *out_res = res->res;
+                        res_der_size = res->pubSz;
+                        if (res_der_size > 0) {
+                            /* Update the key with the generated public key */
+                            ret = wh_Crypto_UpdatePrivateOnlyEccKey(key,
+                                    res_der_size, res_pub_der);
+                        }
+                    } else {
+                        ret = packet->rc;
+                    }
+                }
+            }
+        } else {
+            /* Request length is too long */
+            ret = WH_ERROR_BADARGS;
+        }
+    }
+    /* Evict the key manually on error */
+    if(evict != 0) {
+        (void)wh_Client_KeyEvict(ctx, key_id);
+    }
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+    printf("[client] %s ret:%d\n", __func__, ret);
+#endif
+    return ret;
 }
 
 #endif /* HAVE_ECC */

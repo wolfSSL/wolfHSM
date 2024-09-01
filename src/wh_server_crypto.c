@@ -513,6 +513,9 @@ static int wh_Server_HandleEccSharedSecret(whServerContext* server,
     whKeyId prv_key_id  = WH_MAKE_KEYID(    WH_KEYTYPE_CRYPTO,
                                             server->comm->client_id,
                                             req->privateKeyId);
+    uint32_t options    = req->options;
+    int evict_pub       = options & WH_PACKET_PK_ECDH_OPTIONS_EVICTPUB;
+    int evict_prv       = options & WH_PACKET_PK_ECDH_OPTIONS_EVICTPRV;
 
     /* Response message */
     byte* res_out       = (uint8_t*)(res + 1);
@@ -544,6 +547,12 @@ static int wh_Server_HandleEccSharedSecret(whServerContext* server,
         }
         wc_ecc_free(pub_key);
     }
+    if (evict_pub) {
+        (void)hsmEvictKey(server, pub_key_id);
+    }
+    if (evict_prv) {
+        (void)hsmEvictKey(server, prv_key_id);
+    }
     if (ret == 0) {
         res->sz = res_len;
         *out_size = WH_PACKET_STUB_SIZE + sizeof(*res) + res_len;
@@ -565,7 +574,8 @@ static int wh_Server_HandleEccDsaSign(whServerContext* server, whPacket* packet,
                                         server->comm->client_id,
                                         req->keyId);
     word32 in_len   = req->sz;
-    int evict       = req->evict;
+    uint32_t options = req->options;
+    int evict       = options & WH_PACKET_PK_ECSIGN_OPTIONS_EVICT;
 
     /* Response message */
     byte* res_out   = (uint8_t*)(res + 1);
@@ -605,15 +615,16 @@ static int wh_Server_HandleEccDsaVerify(whServerContext* server,
     wh_Packet_pk_ecc_verify_res* res = &packet->pkEccVerifyRes;
 
     /* Request Message */
+    uint32_t options    = req->options;
     whKeyId key_id      = WH_MAKE_KEYID(    WH_KEYTYPE_CRYPTO,
                                             server->comm->client_id,
                                             req->keyId);
     uint32_t hash_len   = req->hashSz;
     uint32_t sig_len    = req->sigSz;
-    int evict           = req->evict;
-    int export_pub_key  = req->export_pub_key;
     byte* req_sig       = (uint8_t*)(req + 1);
     byte* req_hash      = req_sig + sig_len;
+    int evict           = options & WH_PACKET_PK_ECCVERIFY_OPTIONS_EVICT;
+    int export_pub_key  = options & WH_PACKET_PK_ECCVERIFY_OPTIONS_EXPORTPUB;
 
     /* Response message */
     byte* res_pub       = (uint8_t*)(res + 1);
