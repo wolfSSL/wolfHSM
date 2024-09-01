@@ -98,8 +98,8 @@ int wh_Crypto_EccDeserializeKey(const uint8_t* buffer, uint16_t size,
     return ret;
 }
 
-int wh_Crypto_UpdatePrivateOnlyEccKey(ecc_key* key, uint16_t der_size,
-        const uint8_t* pub_der)
+int wh_Crypto_UpdatePrivateOnlyEccKey(ecc_key* key, uint16_t pub_size,
+        const uint8_t* pub_buffer)
 {
     int ret = 0;
     ecc_key pub_only[1];
@@ -113,17 +113,13 @@ int wh_Crypto_UpdatePrivateOnlyEccKey(ecc_key* key, uint16_t der_size,
     int curve_id;
 
     if (    (key == NULL) ||
-            ((der_size > 0) && (pub_der == NULL)) ) {
+            ((pub_size > 0) && (pub_buffer == NULL)) ) {
         return WH_ERROR_BADARGS;
     }
     if (key->type != ECC_PRIVATEKEY_ONLY) {
         /* No need to update anything */
         return 0;
     }
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-    printf("keytype before %d\n", key->type);
-#endif
-
 
     curve_id = wc_ecc_get_curve_id(key->idx);
     if (curve_id < 0) {
@@ -136,7 +132,7 @@ int wh_Crypto_UpdatePrivateOnlyEccKey(ecc_key* key, uint16_t der_size,
     if (ret == 0) {
         ret = wc_ecc_init(pub_only);
         if (ret == 0) {
-            ret = wc_EccPublicKeyDecode(pub_der, &idx, pub_only, der_size);
+            ret = wc_EccPublicKeyDecode(pub_buffer, &idx, pub_only, pub_size);
         }
         if (ret == 0) {
             ret = wc_ecc_export_public_raw(pub_only, x, &x_len, y, &y_len);
@@ -147,9 +143,6 @@ int wh_Crypto_UpdatePrivateOnlyEccKey(ecc_key* key, uint16_t der_size,
         wc_ecc_free(pub_only);
     }
 
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-    printf("keytype after %d\n", key->type);
-#endif
     return ret;
 }
 #endif /* HAVE_ECC */

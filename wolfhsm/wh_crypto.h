@@ -39,20 +39,20 @@
 #include "wolfssl/wolfcrypt/ecc.h"
 
 #ifdef HAVE_ECC
-/* Store a curve25519_key to a byte sequence */
+/* Store an ecc_key to a byte sequence */
 int wh_Crypto_EccSerializeKey(ecc_key* key,
         uint16_t max_size, uint8_t* buffer, uint16_t *out_size);
 
-/* Restore a curve25519_key from a byte sequence */
-int wh_Crypto_EccDeserializeKey(const uint8_t* buffer, uint16_t size,
+/* Restore an ecc_key from a byte sequence */
+int wh_Crypto_EccDeserializeKey(const uint8_t* buffer, uint16_t pub_size,
         ecc_key* key);
 
 /* Helper to update an ECC private-only key with the corresponding public key,
  * similiar to wc_ecc_make_pub().  The incoming byte arrey of the public key is
  * expected to have been exported using wc_EccPublicKeyToDer().
  */
-int wh_Crypto_UpdatePrivateOnlyEccKey(ecc_key* key, uint16_t der_size,
-        const uint8_t* pub_der);
+int wh_Crypto_UpdatePrivateOnlyEccKey(ecc_key* key, uint16_t pub_size,
+        const uint8_t* pub_buffer);
 
 #endif /* HAVE_ECC */
 

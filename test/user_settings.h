@@ -77,8 +77,7 @@ extern "C" {
 #define NO_OLD_MD5_NAME
 
 /** RSA Options */
-#define NO_RSA
-/* #define HAVE_RSA */
+/*#define NO_RSA */
 #define WC_RSA_PSS
 #define WOLFSSL_PSS_LONG_SALT
 #define FP_MAX_BITS 4096
@@ -90,7 +89,7 @@ extern "C" {
 #define HAVE_SUPPORTED_CURVES
 
 /** Curve25519 Options */
-/*#define HAVE_CURVE25519 */
+#define HAVE_CURVE25519
 
 /** DH and DHE Options */
 #define NO_DH
@@ -98,7 +97,7 @@ extern "C" {
 #define HAVE_FFDHE_2048
 
 /** AES Options */
-/*#define NO_AES */
+/* #define NO_AES */
 #define HAVE_AESGCM
 #define GCM_TABLE_4BIT
 
@@ -106,9 +105,9 @@ extern "C" {
 #define HAVE_AES_ECB
 #define WOLFSSL_CMAC
 
-
 /** SHA Options */
 #define NO_SHA
+/* #define NO_SHA256 */
 /* #define WOLFSSL_SHA384 */
 /* #define WOLFSSL_SHA512 */
 
