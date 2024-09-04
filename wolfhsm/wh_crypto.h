@@ -48,7 +48,7 @@ int wh_Crypto_EccDeserializeKey(const uint8_t* buffer, uint16_t pub_size,
         ecc_key* key);
 
 /* Helper to update an ECC private-only key with the corresponding public key,
- * similiar to wc_ecc_make_pub().  The incoming byte arrey of the public key is
+ * similiar to wc_ecc_make_pub().  The incoming byte array of the public key is
  * expected to have been exported using wc_EccPublicKeyToDer().
  */
 int wh_Crypto_UpdatePrivateOnlyEccKey(ecc_key* key, uint16_t pub_size,

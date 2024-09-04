@@ -60,7 +60,7 @@ int wh_Server_EccKeyCacheImport(whServerContext* ctx, ecc_key* key,
     int ret = WH_ERROR_OK;
     uint8_t* cacheBuf;
     whNvmMetadata* cacheMeta;
-    /* Maximum sjze of an ecc key der file */
+    /* Maximum size of an ecc key der file */
     uint16_t max_size = ECC_BUFSIZE;;
     uint16_t der_size;
 
@@ -152,7 +152,7 @@ static int hsmLoadKeyRsa(whServerContext* server, RsaKey* key, whKeyId keyId)
     int ret = 0;
     uint32_t idx = 0;
     keyId = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
-                          server->comm->client_id,keyId);
+                          server->comm->client_id, keyId);
     /* freshen the key */
     ret = hsmFreshenKey(server, keyId, &cacheBuf, &cacheMeta);
     /* decode the key */
@@ -575,7 +575,7 @@ static int wh_Server_HandleEccDsaSign(whServerContext* server, whPacket* packet,
                                         req->keyId);
     word32 in_len   = req->sz;
     uint32_t options = req->options;
-    int evict       = options & WH_PACKET_PK_ECSIGN_OPTIONS_EVICT;
+    int evict       = options & WH_PACKET_PK_ECCSIGN_OPTIONS_EVICT;
 
     /* Response message */
     byte* res_out   = (uint8_t*)(res + 1);

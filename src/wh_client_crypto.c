@@ -218,8 +218,8 @@ int wh_Client_EccMakeKey(whClientContext* ctx,
             __func__, res->keyId, res->len, packet->rc, ret);
 #endif
 
-    if (ret == 0) {
-        if (packet->rc == 0) {
+    if (ret == WH_ERROR_OK) {
+        if (packet->rc == WH_ERROR_OK) {
             /* Key is cached on server or is ephemeral */
             key_id = (whKeyId)(res->keyId);
 
@@ -334,7 +334,7 @@ int wh_Client_EccSharedSecret(whClientContext* ctx,
         ret = wh_Client_EccImportKey(ctx,
                 priv_key, &prv_key_id, flags,
                 sizeof(keyLabel), keyLabel);
-        if (ret == 0) {
+        if (ret == WH_ERROR_OK) {
             prv_evict = 1;
         }
     }
@@ -452,9 +452,7 @@ printf("[client] %s ctx:%p key:%p, in:%p in_len:%u, out:%p inout_len:%p\n",
     }
     memset((uint8_t*)packet, 0, sizeof(*packet));
 
-
     key_id = WH_DEVCTX_TO_KEYID(key->devCtx);
-
 
     #ifdef DEBUG_CRYPTOCB_VERBOSE
     printf("[client] %s keyid:%x, in_len:%u, inout_len:%p\n",
@@ -470,7 +468,7 @@ printf("[client] %s ctx:%p key:%p, in:%p in_len:%u, out:%p inout_len:%p\n",
         ret = wh_Client_EccImportKey(ctx,
                 key, &key_id, flags,
                 sizeof(keyLabel), keyLabel);
-        if (ret == 0) {
+        if (ret == WH_ERROR_OK) {
             evict = 1;
         }
     }
@@ -489,7 +487,7 @@ printf("[client] %s ctx:%p key:%p, in:%p in_len:%u, out:%p inout_len:%p\n",
 
         if (req_len <= WOLFHSM_CFG_COMM_DATA_LEN) {
             if (evict != 0) {
-                options |= WH_PACKET_PK_ECSIGN_OPTIONS_EVICT;
+                options |= WH_PACKET_PK_ECCSIGN_OPTIONS_EVICT;
             }
             req->type = type;
             req->options = options;

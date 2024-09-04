@@ -181,7 +181,7 @@ typedef struct  wh_Packet_pk_ecc_sign_req
 {
     uint32_t type;
     uint32_t options;
-#define WH_PACKET_PK_ECSIGN_OPTIONS_EVICT  (1 << 0)
+#define WH_PACKET_PK_ECCSIGN_OPTIONS_EVICT  (1 << 0)
     uint32_t keyId;
     uint32_t sz;
     /* uint8_t in[] */

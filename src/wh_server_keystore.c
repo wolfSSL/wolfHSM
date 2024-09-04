@@ -310,7 +310,7 @@ static int _FindInCache(whServerContext* server, whKeyId keyId,
         if(out_buffer != NULL) {
             *out_buffer = buffer;
         }
-        ret = 0;
+        ret = WH_ERROR_OK;
     }
     return ret;
 }
@@ -457,7 +457,7 @@ int hsmCommitKey(whServerContext* server, whNvmId keyId)
     }
 
     ret = _FindInCache(server, keyId, &index, &big, &slotBuf, &slotMeta);
-    if (ret == 0) {
+    if (ret == WH_ERROR_OK) {
         size = slotMeta->len;
         ret = wh_Nvm_AddObjectWithReclaim(server->nvm, slotMeta, size, slotBuf);
         if (ret == 0) {
@@ -535,7 +535,7 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
             ret = hsmGetUniqueId(server, &meta->id);
         }
         /* write the key */
-        if (ret == 0) {
+        if (ret == WH_ERROR_OK) {
             ret = hsmCacheKey(server, meta, in);
         }
         if (ret == 0) {
