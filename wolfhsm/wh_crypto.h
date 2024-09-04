@@ -36,6 +36,7 @@
 
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/types.h"
+#include "wolfssl/wolfcrypt/curve25519.h"
 #include "wolfssl/wolfcrypt/ecc.h"
 
 #ifdef HAVE_ECC
@@ -55,6 +56,15 @@ int wh_Crypto_UpdatePrivateOnlyEccKey(ecc_key* key, uint16_t pub_size,
         const uint8_t* pub_buffer);
 
 #endif /* HAVE_ECC */
+
+#ifdef HAVE_CURVE25519
+/* Store a curve25519_key to a byte sequence */
+int wh_Crypto_SerializeCurve25519Key(curve25519_key* key,
+        uint16_t max_size, uint8_t* buffer, uint16_t *out_size);
+/* Restore a curve25519_key from a byte sequence */
+int wh_Crypto_DeserializeCurve25519Key(uint16_t size,
+        const uint8_t* buffer, curve25519_key* key);
+#endif /* HAVE_CURVE25519 */
 
 #endif  /* !WOLFHSM_CFG_NO_CRYPTO */
 

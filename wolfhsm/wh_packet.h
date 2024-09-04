@@ -233,12 +233,16 @@ typedef struct  wh_Packet_pk_curve25519kg_req
 {
     uint32_t type;
     uint32_t sz;
+    uint32_t flags;
+    uint32_t keyId;
+    uint8_t label[WH_NVM_LABEL_LEN];
 } wh_Packet_pk_curve25519kg_req;
 
 typedef struct  wh_Packet_pk_curve25519kg_res
 {
     uint32_t keyId;
-    uint8_t WH_PAD[4];
+    uint32_t len;
+    /* uint8_t out[len]; */
 } wh_Packet_pk_curve25519kg_res;
 
 typedef struct  wh_Packet_pk_curve25519_req

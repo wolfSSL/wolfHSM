@@ -41,6 +41,7 @@
 #include "wolfhsm/wh_client.h"
 #include "wolfhsm/wh_client_crypto.h"
 #include "wolfhsm/wh_server.h"
+#include "wolfhsm/wh_server_crypto.h"
 
 #include "wolfhsm/wh_transport_mem.h"
 
@@ -84,6 +85,157 @@ static int _cancelCb(uint16_t seq)
 {
     *cancelSeqP = seq;
     return 0;
+}
+#endif
+
+#ifdef HAVE_CURVE25519
+static int whTest_CryptoCurve25519(whClientContext* ctx, WC_RNG* rng)
+{
+    int ret = 0;
+    curve25519_key key_a[1] = {0};
+    curve25519_key key_b[1] = {0};
+    uint8_t shared_ab[CURVE25519_KEYSIZE] = {0};
+    uint8_t shared_ba[CURVE25519_KEYSIZE] = {0};
+    int key_size = CURVE25519_KEYSIZE;
+    whNvmFlags flags = WH_NVM_FLAGS_NONE;
+    whKeyId key_id_a = WH_KEYID_ERASED;
+    uint8_t* label_a = (uint8_t*)("Curve25519 Label A");
+    whKeyId key_id_b = 42;
+    uint8_t* label_b = (uint8_t*)("Curve25519 Label B");
+
+    word32 len = 0;
+
+    ret = wc_curve25519_init_ex(key_a, NULL, WH_DEV_ID);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wc_curve25519_init_ex %d\n", ret);
+    } else {
+        ret = wc_curve25519_init_ex(key_b, NULL, WH_DEV_ID);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wc_curve25519_init_ex %d\n", ret);
+        } else {
+            /* Use wolfcrypt ephemeral local keys */
+            printf("-Curve25519 wolfcrypt ephemeral keys\n");
+            ret = wc_curve25519_make_key(rng, key_size, key_a);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to wc_curve25519_make_key %d\n", ret);
+            }
+            if (ret == 0) {
+                ret = wc_curve25519_make_key(rng, key_size, key_b);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("Failed to wc_curve25519_make_key %d\n", ret);
+                }
+            }
+            if (ret == 0) {
+                len = sizeof(shared_ab);
+                ret = wc_curve25519_shared_secret(
+                        key_a, key_b, shared_ab, &len);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("Failed to wc_curve25519_shared_secret %d\n", ret);
+                }
+            }
+            if (ret == 0) {
+                len = sizeof(shared_ba);
+                ret = wc_curve25519_shared_secret(
+                        key_b, key_a, shared_ba, &len);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("Failed to wc_curve25519_shared_secret %d\n", ret);
+                }
+            }
+            if (ret == 0) {
+                if (XMEMCMP(shared_ab, shared_ba, len) != 0) {
+                    WH_ERROR_PRINT("CURVE25519 shared secrets don't match\n");
+                    ret = -1;
+                }
+            }
+
+            /* Test using wh_Client ephemeral local keys */
+            printf("-Curve25519 wolfhsm ephemeral keys\n");
+            if (ret == 0) {
+                wc_curve25519_free(key_a);
+                wc_curve25519_free(key_b);
+            }
+            ret = wh_Client_MakeExportCurve25519Key(ctx, key_size, key_a);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to wh_Client_MakeExportCurve25519Key %d\n", ret);
+            }
+            if (ret == 0) {
+                ret = wh_Client_MakeExportCurve25519Key(ctx, key_size, key_b);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("Failed to wh_Client_MakeExportCurve25519Key %d\n", ret);
+                }
+            }
+            if (ret == 0) {
+                len = sizeof(shared_ab);
+                ret = wc_curve25519_shared_secret(
+                        key_a, key_b, shared_ab, &len);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("Failed to wc_curve25519_shared_secret %d\n", ret);
+                }
+            }
+            if (ret == 0) {
+                len = sizeof(shared_ba);
+                ret = wc_curve25519_shared_secret(
+                        key_b, key_a, shared_ba, &len);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("Failed to wc_curve25519_shared_secret %d\n", ret);
+                }
+            }
+            if (ret == 0) {
+                if (XMEMCMP(shared_ab, shared_ba, len) != 0) {
+                    WH_ERROR_PRINT("CURVE25519 shared secrets don't match\n");
+                    ret = -1;
+                }
+            }
+
+            /* Test using wolfHSM server keys */
+            printf("-Curve25519 wolfhsm server keys\n");
+            if (ret == 0) {
+                wc_curve25519_free(key_a);
+                wc_curve25519_free(key_b);
+            }
+            ret = wh_Client_MakeCacheCurve25519Key(ctx, key_size,
+                    &key_id_a, flags, sizeof(label_a), label_a);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to wh_Client_MakeCacheCurve25519Key %d\n", ret);
+            }
+            if (ret == 0) {
+                ret = wh_Client_MakeCacheCurve25519Key(ctx, key_size,
+                        &key_id_b, flags, sizeof(label_b), label_b);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("Failed to wh_Client_MakeCacheCurve25519Key %d\n", ret);
+                }
+            }
+            if (ret == 0) {
+                len = sizeof(shared_ab);
+                wh_Client_SetCurve25519KeyId(key_a, key_id_a);
+                wh_Client_SetCurve25519KeyId(key_b, key_id_b);
+                printf("Using server keys %u and %u\n",key_id_a, key_id_b);
+                ret = wc_curve25519_shared_secret(
+                        key_a, key_b, shared_ab, &len);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("Failed to wc_curve25519_shared_secret %d\n", ret);
+                }
+            }
+            if (ret == 0) {
+                len = sizeof(shared_ba);
+                ret = wc_curve25519_shared_secret(
+                        key_b, key_a, shared_ba, &len);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("Failed to wc_curve25519_shared_secret %d\n", ret);
+                }
+            }
+            if (ret == 0) {
+                if (XMEMCMP(shared_ab, shared_ba, len) != 0) {
+                    WH_ERROR_PRINT("CURVE25519 shared secrets don't match\n");
+                    ret = -1;
+                }
+            }
+            wc_curve25519_free(key_b);
+        }
+        wc_curve25519_free(key_a);
+    }
+    printf("CURVE25519 SUCCESS\n");
+    return ret;
 }
 #endif
 
@@ -172,11 +324,11 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         goto exit;
     }
     if((ret = wc_RNG_GenerateBlock(rng, iv, sizeof(iv))) != 0) {
-        printf("Failed to wc_RNG_GenerateBlock %d\n", ret);
+        WH_ERROR_PRINT("Failed to wc_RNG_GenerateBlock %d\n", ret);
         goto exit;
     }
     if((ret = wc_RNG_GenerateBlock(rng, authIn, sizeof(authIn))) != 0) {
-        printf("Failed to wc_RNG_GenerateBlock %d\n", ret);
+        WH_ERROR_PRINT("Failed to wc_RNG_GenerateBlock %d\n", ret);
         goto exit;
     }
     printf("RNG SUCCESS\n");
@@ -709,6 +861,14 @@ int whTest_CryptoClientConfig(whClientConfig* config)
 
 #ifdef HAVE_CURVE25519
     /* test curve25519 */
+    if((ret = whTest_CryptoCurve25519(client, rng)) != 0) {
+        goto exit;
+    }
+#endif
+
+#if 0
+#ifdef HAVE_CURVE25519
+    /* test curve25519 */
     curve25519_key curve25519PrivateKey[1];
     curve25519_key curve25519PublicKey[1];
     uint8_t sharedOne[CURVE25519_KEYSIZE];
@@ -746,7 +906,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     }
     printf("CURVE25519 SUCCESS\n");
 #endif /* HAVE_CURVE25519 */
-
+#endif
 
 
 #ifndef NO_SHA256
@@ -857,10 +1017,6 @@ int whTest_CryptoClientConfig(whClientConfig* config)
 #endif /* WOLFHSM_CFG_TEST_VERBOSE */
     ret = 0;
 exit:
-#ifdef HAVE_CURVE25519
-    wc_curve25519_free(curve25519PrivateKey);
-    wc_curve25519_free(curve25519PublicKey);
-#endif
     wc_FreeRng(rng);
 
     /* Tell server to close */

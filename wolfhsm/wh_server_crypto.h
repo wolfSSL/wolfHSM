@@ -50,11 +50,22 @@ int wh_Server_HandleCryptoDmaRequest(whServerContext* server,
 
 #ifdef HAVE_ECC
 int wh_Server_EccKeyCacheImport(whServerContext* ctx, ecc_key* key,
-        whKeyId keyId, whNvmFlags flags, uint32_t label_len, uint8_t* label);
+        whKeyId keyId, whNvmFlags flags, uint16_t label_len, uint8_t* label);
 
 int wh_Server_EccKeyCacheExport(whServerContext* ctx, whKeyId keyId,
         ecc_key* key);
 #endif
+
+#ifdef HAVE_CURVE25519
+
+/* Store a curve25519_key into a server key cache with optional metadata */
+int wh_Server_CacheImportCurve25519Key(whServerContext* ctx,
+        curve25519_key* key,
+        whKeyId keyId, whNvmFlags flags, uint16_t label_len, uint8_t* label);
+/* Restore a curve25519_key from a server key cache */
+int wh_Server_CacheExportCurve25519Key(whServerContext* ctx, whKeyId keyId,
+        curve25519_key* key);
+#endif /* HAVE_CURVE25519 */
 
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
 

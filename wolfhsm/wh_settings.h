@@ -180,13 +180,21 @@
 /** Cache flushing and memory fencing synchronization primitives */
 /* Create a full sequential memory fence to ensure compiler memory ordering */
 #ifndef XMEMFENCE
-#if defined(__GNUC__) || defined(__clang__)
-#define XMEMFENCE() __atomic_thread_fence(__ATOMIC_SEQ_CST)
-/* PPC32: __asm__ volatile ("sync" : : : "memory") */
-#else
-#define XMEMFENCE() do { } while (0)
-#warning "wolfHSM memory transports should have a functional XMEMFENCE"
-#endif
+ #ifndef WOLFHSM_CFG_NO_CRYPTO
+  #include "wolfssl/wolfcrypt/wc_port.h"
+  #define XMEMFENCE() XFENCE()
+ #else
+  #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L) && !defined(__STDC_NO_ATOMICS__)
+   #include <stdatomic.h>
+   #define XMEMFENCE() atomic_thread_fence(memory_order_seq_cst)
+  #elif defined(__GNUC__) || defined(__clang__)
+   #define XMEMFENCE() __atomic_thread_fence(__ATOMIC_SEQ_CST)
+  #else
+   /* PPC32: __asm__ volatile ("sync" : : : "memory") */
+   #define XMEMFENCE() do { } while (0)
+   #warning "wolfHSM memory transports should have a functional XMEMFENCE"
+  #endif
+ #endif
 #endif
 
 /* Return cacheline size */
