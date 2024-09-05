@@ -84,9 +84,6 @@ typedef struct whServerCryptoContext {
 #ifndef NO_RSA
         RsaKey rsa[1];
 #endif
-#ifdef HAVE_ECC
-        ecc_key eccPrivate[1];
-#endif
 #ifdef HAVE_CURVE25519
         curve25519_key curve25519Private[1];
 #endif
@@ -98,9 +95,6 @@ typedef struct whServerCryptoContext {
 #endif
     } algoCtx;
     union {
-#ifdef HAVE_ECC
-        ecc_key eccPublic[1];
-#endif
 #ifdef HAVE_CURVE25519
         curve25519_key curve25519Public[1];
 #endif

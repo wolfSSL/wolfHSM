@@ -482,8 +482,8 @@ int wh_Client_Echo(whClientContext* c, uint16_t snd_len, const void* snd_data,
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_Client_KeyCacheRequest_ex(whClientContext* c, uint32_t flags,
-                                 uint8_t* label, uint32_t labelSz, uint8_t* in,
-                                 uint32_t inSz, uint16_t keyId);
+                                 uint8_t* label, uint16_t labelSz, uint8_t* in,
+                                 uint16_t inSz, uint16_t keyId);
 
 /**
  * @brief Sends a key cache request to the server.
@@ -501,8 +501,8 @@ int wh_Client_KeyCacheRequest_ex(whClientContext* c, uint32_t flags,
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_Client_KeyCacheRequest(whClientContext* c, uint32_t flags,
-                              uint8_t* label, uint32_t labelSz, uint8_t* in,
-                              uint32_t inSz);
+                              uint8_t* label, uint16_t labelSz, uint8_t* in,
+                              uint16_t inSz);
 
 /**
  * @brief Receives a key cache response from the server.
@@ -537,7 +537,7 @@ int wh_Client_KeyCacheResponse(whClientContext* c, uint16_t* keyId);
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_Client_KeyCache(whClientContext* c, uint32_t flags, uint8_t* label,
-                       uint32_t labelSz, uint8_t* in, uint32_t inSz,
+                       uint16_t labelSz, uint8_t* in, uint16_t inSz,
                        uint16_t* keyId);
 
 /**
@@ -610,8 +610,8 @@ int wh_Client_KeyExportRequest(whClientContext* c, uint16_t keyId);
  * available, or a negative error code on failure.
  */
 int wh_Client_KeyExportResponse(whClientContext* c, uint8_t* label,
-                                uint32_t labelSz, uint8_t* out,
-                                uint32_t* outSz);
+                                uint16_t labelSz, uint8_t* out,
+                                uint16_t* outSz);
 
 /**
  * @brief Sends a key export request to the server and receives the response.
@@ -631,7 +631,7 @@ int wh_Client_KeyExportResponse(whClientContext* c, uint8_t* label,
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_Client_KeyExport(whClientContext* c, uint16_t keyId, uint8_t* label,
-                        uint32_t labelSz, uint8_t* out, uint32_t* outSz);
+                        uint16_t labelSz, uint8_t* out, uint16_t* outSz);
 
 /**
  * @brief Sends a key commit request to the server.
@@ -715,199 +715,6 @@ int wh_Client_KeyEraseResponse(whClientContext* c);
  */
 int wh_Client_KeyErase(whClientContext* c, whNvmId keyId);
 
-#ifdef HAVE_CURVE25519
-/**
- * @brief Associates a Curve25519 key with a specific key ID.
- *
- * This function sets the device context of a Curve25519 key to the specified
- * key ID. On the server side, this key ID is used to reference the key stored
- * in the HSM
- *
- * @param[in] key Pointer to the Curve25519 key structure.
- * @param[in] keyId Key ID to be associated with the Curve25519 key.
- * @return int Returns 0 on success or a negative error code on failure.
- */
-int wh_Client_SetKeyIdCurve25519(curve25519_key* key, whNvmId keyId);
-
-/**
- * @brief Gets the wolfHSM keyId being used by the wolfCrypt struct.
- *
- * This function gets the device context of a Curve25519 key that was previously
- * set by either the crypto callback layer or wh_Client_SetKeyCurve25519.
- *
- * @param[in] key Pointer to the Curve25519 key structure.
- * @param[out] outId Pointer to the key ID to return.
- * @return int Returns 0 on success or a negative error code on failure.
- */
-int wh_Client_GetKeyIdCurve25519(curve25519_key* key, whNvmId* outId);
-#endif /* HAVE_CURVE25519 */
-
-#ifdef HAVE_ECC
-/**
- * @brief Associates a Ecc key with a specific key ID.
- *
- * This function sets the device context of a Ecc key to the specified
- * key ID. On the server side, this key ID is used to reference the key stored
- * in the HSM
- *
- * @param[in] key Pointer to the Ecc key structure.
- * @param[in] keyId Key ID to be associated with the Ecc key.
- * @return int Returns 0 on success or a negative error code on failure.
- */
-int wh_Client_SetKeyIdEcc(ecc_key* key, whNvmId keyId);
-
-/**
- * @brief Gets the wolfHSM keyId being used by the wolfCrypt struct.
- *
- * This function gets the device context of a Ecc key that was previously
- * set by either the crypto callback layer or wh_Client_SetKeyIdEcc.
- *
- * @param[in] key Pointer to the Ecc key structure.
- * @param[out] outId Pointer to the key ID to return.
- * @return int Returns 0 on success or a negative error code on failure.
- */
-int wh_Client_GetKeyIdEcc(ecc_key* key, whNvmId* outId);
-#endif /* HAVE_ECC */
-
-#ifndef NO_RSA
-/**
- * @brief Associates an RSA key with a specific key ID.
- *
- * This function sets the device context of an RSA key to the specified key ID.
- * On the server side, this key ID is used to reference the key stored in the
- * HSM.
- *
- * @param[in] key Pointer to the RSA key structure.
- * @param[in] keyId Key ID to be associated with the RSA key.
- * @return int Returns 0 on success or a negative error code on failure.
- */
-int wh_Client_SetKeyIdRsa(RsaKey* key, whNvmId keyId);
-
-/**
- * @brief Gets the wolfHSM keyId being used by the wolfCrypt struct.
- *
- * This function gets the device context of a RSA key that was previously
- * set by either the crypto callback layer or wh_Client_SetKeyRsa.
- *
- * @param[in] key Pointer to the RSA key structure.
- * @param[out] outId Pointer to the key ID to return.
- * @return int Returns 0 on success or a negative error code on failure.
- */
-int wh_Client_GetKeyIdRsa(RsaKey* key, whNvmId* outId);
-#endif /* !NO_RSA */
-
-#ifndef NO_AES
-/**
- * @brief Associates an AES key with a specific key ID.
- *
- * This function sets the device context of an AES key to the specified key ID.
- * On the server side, this key ID is used to reference the key stored in the
- * HSM
- *
- * @param[in] key Pointer to the AES key structure.
- * @param[in] keyId Key ID to be associated with the AES key.
- * @return int Returns 0 on success or a negative error code on failure.
- */
-int wh_Client_SetKeyIdAes(Aes* key, whNvmId keyId);
-
-/**
- * @brief Gets the wolfHSM keyId being used by the wolfCrypt struct.
- *
- * This function gets the device context of a AES key that was previously
- * set by either the crypto callback layer or wh_Client_SetKeyAes.
- *
- * @param[in] key Pointer to the AES key structure.
- * @param[out] outId Pointer to the key ID to return.
- * @return int Returns 0 on success or a negative error code on failure.
- */
-int wh_Client_GetKeyIdAes(Aes* key, whNvmId* outId);
-
-#ifdef WOLFSSL_CMAC
-/**
- * @brief Runs the AES CMAC operation in a single call with a wolfHSM keyId.
- *
- * This function does entire cmac operation in one function call with a key
- * already stored in the HSM. This operation evicts the key from the HSM cache
- * after the operation though it will still be in the HSM's NVM if it was
- * commited
- *
- * @param[in] cmac Pointer to the CMAC key structure.
- * @param[out] out Output buffer for the CMAC tag.
- * @param[out] outSz Size of the output buffer in bytes.
- * @param[in] in Input buffer to be hashed.
- * @param[in] inSz Size of the input buffer in bytes.
- * @param[in] keyId ID of the key inside the HSM.
- * @param[in] heap Heap pointer for the cmac struct.
- * @return int Returns 0 on success, or a negative error code on failure.
- */
-int wh_Client_AesCmacGenerate(Cmac* cmac, byte* out, word32* outSz,
-    const byte* in, word32 inSz, whNvmId keyId, void* heap);
-
-/**
- * @brief Verifies a AES CMAC tag in a single call with a wolfHSM keyId.
- *
- * This function does entire cmac verify in one function call with a key
- * already stored in the HSM. This operation evicts the key from the HSM cache
- * after the operation though it will still be in the HSM's NVM if it was
- * commited
- *
- * @param[in] cmac Pointer to the CMAC key structure.
- * @param[out] check Cmac tag to check against.
- * @param[out] checkSz Size of the check buffer in bytes.
- * @param[in] in Input buffer to be hashed.
- * @param[in] inSz Size of the input buffer in bytes.
- * @param[in] keyId ID of the key inside the HSM.
- * @param[in] heap Heap pointer for the cmac struct.
- * @return int Returns 0 on success, 1 on tag mismatch, or a negative error
- *    code on failure.
- */
-int wh_Client_AesCmacVerify(Cmac* cmac, const byte* check, word32 checkSz,
-    const byte* in, word32 inSz, whNvmId keyId, void* heap);
-
-/**
- * @brief Handle cancelable CMAC response.
- *
- * This function handles a CMAC operation response from the server when
- * cancellation has been enabled, since wolfCrypt won't automatically block and
- * wait for the response.
- *
- * @param[in] c Pointer to the client context structure.
- * @param[in] cmac Pointer to the CMAC key structure.
- * @param[out] out Buffer to store the CMAC result, only required after
- *    wc_CmacFinal.
- * @param[in,out] outSz Pointer to the size of the out buffer in bytes, will be
- *    set to the size returned by the server on return.
- * @return int Returns 0 on success, or a negative error code on failure.
- */
-int wh_Client_CmacCancelableResponse(whClientContext* c, Cmac* cmac,
-    uint8_t* out, uint32_t* outSz);
-
-/**
- * @brief Associates a CMAC key with a specific key ID.
- *
- * This function sets the device context of a CMAC key to the specified key ID.
- * On the server side, this key ID is used to reference the key stored in the
- * HSM
- *
- * @param[in] key Pointer to the CMAC key structure.
- * @param[in] keyId Key ID to be associated with the CMAC key.
- * @return int Returns 0 on success or a negative error code on failure.
- */
-int wh_Client_SetKeyIdCmac(Cmac* key, whNvmId keyId);
-
-/**
- * @brief Gets the wolfHSM keyId being used by the wolfCrypt struct.
- *
- * This function gets the device context of a CMAC key that was previously
- * set by either the crypto callback layer or wh_Client_SetKeyCmac.
- *
- * @param[in] key Pointer to the CMAC key structure.
- * @param[out] outId Pointer to the key ID to return.
- * @return int Returns 0 on success or a negative error code on failure.
- */
-int wh_Client_GetKeyIdCmac(Cmac* key, whNvmId* outId);
-#endif /* WOLFSSL_CMAC */
-#endif /* !NO_AES */
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
 /* Counter functions */

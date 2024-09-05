@@ -232,21 +232,11 @@ static int _wh_Server_HandleCommRequest(whServerContext* server,
 
     case WH_MESSAGE_COMM_ACTION_ECHO:
     {
-        whMessageCommLenData req = {0};
-        whMessageCommLenData resp = {0};
-
-        /* Convert request struct */
-        wh_MessageComm_TranslateLenData(magic,
-                (whMessageCommLenData*)req_packet, &req);
-
         /* Process the echo action */
-        resp.len = req.len;
-        memcpy(resp.data, req.data, resp.len);
-
-        /* Convert the response struct */
-        wh_MessageComm_TranslateLenData(magic,
-                &resp, (whMessageCommLenData*)resp_packet);
-        *out_resp_size = sizeof(resp);
+        if (req_packet != resp_packet) {
+            memcpy(resp_packet, req_packet, req_size);
+        }
+        *out_resp_size = req_size;
     }; break;
 
     default:

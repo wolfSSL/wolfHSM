@@ -418,7 +418,7 @@ static int hsmSheLoadKey(whServerContext* server, whPacket* packet,
         wh_She_Meta2Label(she_meta_count, she_meta_flags, meta->label);
         meta->len = WH_SHE_KEY_SZ;
         /* cache if ram key, overwrite otherwise */
-        if ((meta->id & WH_KEYID_MASK) == WH_SHE_RAM_KEY_ID) {
+        if (WH_KEYID_ID(meta->id) == WH_SHE_RAM_KEY_ID) {
             ret = hsmCacheKey(server, meta, packet->sheLoadKeyReq.messageTwo
                 + WH_SHE_KEY_SZ);
         }
@@ -490,7 +490,7 @@ static int hsmSheLoadKey(whServerContext* server, whPacket* packet,
     if (ret == 0) {
         *size = WH_PACKET_STUB_SIZE + sizeof(packet->sheLoadKeyRes);
         /* mark if the ram key was loaded */
-        if ((meta->id & WH_KEYID_MASK) == WH_SHE_RAM_KEY_ID)
+        if (WH_KEYID_ID(meta->id) == WH_SHE_RAM_KEY_ID)
             server->she->ramKeyPlain = 1;
     }
     return ret;

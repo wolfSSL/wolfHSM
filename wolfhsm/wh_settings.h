@@ -160,10 +160,19 @@
 #endif
 
 /* wolfHSM crypto callback assumes wc_CryptoInfo struct is unionized */
-#if !defined(HAVE_ANONYMOUS_INLINE_AGGREGATES) \
-    || ( defined(HAVE_ANONYMOUS_INLINE_AGGREGATES) \
-         && HAVE_ANONYMOUS_INLINE_AGGREGATES==0  )
+#if !defined(HAVE_ANONYMOUS_INLINE_AGGREGATES) || \
+     (defined(HAVE_ANONYMOUS_INLINE_AGGREGATES) &&\
+         HAVE_ANONYMOUS_INLINE_AGGREGATES==0 )
 #error "wolfHSM needs wolfCrypt built with HAVE_ANONYMOUS_INLINE_AGGREGATES=1"
+#endif
+
+#if defined WOLFHSM_CFG_SHE_EXTENSION
+#if defined(NO_AES) || \
+    !defined(WOLFSSL_CMAC) || \
+    !defined(WOLFSSL_AES_DIRECT) || \
+    !defined(HAVE_AES_ECB)
+#error "WOLFHSM_CFG_SHE_EXTENSION requires AES, WOLFSSL_CMAC, WOLFSSL_AES_DIRECT, and HAVE_AES_ECB"
+#endif
 #endif
 
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */

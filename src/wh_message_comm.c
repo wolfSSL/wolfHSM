@@ -58,20 +58,6 @@ int wh_MessageComm_TranslateInitResponse(uint16_t magic,
     return 0;
 }
 
-int wh_MessageComm_TranslateLenData(uint16_t magic,
-        const whMessageCommLenData* src,
-        whMessageCommLenData* dest)
-{
-    if (    (src == NULL) ||
-            (dest == NULL)  ) {
-        return WH_ERROR_BADARGS;
-    }
-    dest->len = wh_Translate16(magic, src->len);
-    /* III Note that we can't use src->len to minimize this copy */
-    memcpy(dest->data, src->data, sizeof(dest->data));
-    return 0;
-}
-
 int wh_MessageComm_TranslateInfoResponse(uint16_t magic,
         const whMessageCommInfoResponse* src,
         whMessageCommInfoResponse* dest)

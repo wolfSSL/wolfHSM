@@ -41,23 +41,33 @@ typedef uint16_t whKeyId;
 
 /* KeyId Constants */
 #define WH_KEYID_ERASED 0x0000
+#define WH_KEYID_IDMAX 0xFF
 
 /* Key Masks */
 #define WH_KEYID_MASK   0x00FF
+#define WH_KEYID_SHIFT  0
 #define WH_KEYUSER_MASK 0x0F00
+#define WH_KEYUSER_SHIFT 8
 #define WH_KEYTYPE_MASK 0xF000
+#define WH_KEYTYPE_SHIFT 12
 
 /* Macro to construct a keyid */
-#define WH_MAKE_KEYID(_type, _user, _id)        \
-    ((whKeyId)(((_type) & WH_KEYTYPE_MASK) |    \
-    (((_user) << 8) & WH_KEYUSER_MASK) |        \
-    ((_id) & WH_KEYID_MASK)))
+#define WH_MAKE_KEYID(_type, _user, _id)                    \
+    ((whKeyId)(                                             \
+     (((_type) << WH_KEYTYPE_SHIFT) & WH_KEYTYPE_MASK) |    \
+     (((_user) << WH_KEYUSER_SHIFT) & WH_KEYUSER_MASK) |    \
+     (((_id) << WH_KEYID_SHIFT) & WH_KEYID_MASK)))
+#define WH_KEYID_TYPE(_kid) (((_kid) & WH_KEYTYPE_MASK) >> WH_KEYTYPE_SHIFT)
+#define WH_KEYID_USER(_kid) (((_kid) & WH_KEYUSER_MASK) >> WH_KEYUSER_SHIFT)
+#define WH_KEYID_ID(_kid)   (((_kid) & WH_KEYID_MASK) >> WH_KEYID_SHIFT)
+
+#define WH_KEYID_ISERASED(_kid) (WH_KEYID_ID(_kid) == WH_KEYID_ERASED)
 
 /* Key Types */
-#define WH_KEYTYPE_CRYPTO    0x1000
-/* She keys are technically raw keys but a SHE keyId needs */
-#define WH_KEYTYPE_SHE       0x2000
-#define WH_KEYTYPE_COUNTER   0x3000
+#define WH_KEYTYPE_NVM      0x0     /* Ordinary NvmId.  Not a key */
+#define WH_KEYTYPE_CRYPTO   0x1     /* Key for Crypto operations */
+#define WH_KEYTYPE_SHE      0x2     /* SKE keys are AES or CMAC binary arrays */
+#define WH_KEYTYPE_COUNTER  0x3     /* Monotonic counter */
 
 /* Convert a keyId to a pointer to be stored in wolfcrypt devctx */
 #define WH_KEYID_TO_DEVCTX(_k) ((void*)((intptr_t)(_k)))
@@ -76,10 +86,37 @@ typedef uint16_t whNvmAccess;
 #define WH_NVM_ACCESS_NONE ((whNvmAccess)0)
 #define WH_NVM_ACCESS_ANY  ((whNvmAccess)-1)
 
+/* Growth */
+#define WH_ACCESS_OWN_MASK     0x000F
+#define WH_ACCESS_OWN_SHIFT    0
+#define WH_ACCESS_OTH_MASK     0x00F0
+#define WH_ACCESS_OTH_SHIFT    4
+#define WH_ACCESS_USER_MASK     0xFF00
+#define WH_ACCESS_USER_SHIFT    8
+
+#define WH_ACCESS_READ      ((whNvmAccess)1 << 0)
+#define WH_ACCESS_WRITE     ((whNvmAccess)1 << 1)
+#define WH_ACCESS_EXEC      ((whNvmAccess)1 << 2)
+#define WH_ACCESS_SPECIAL   ((whNvmAccess)1 << 3)
+
+#define WH_NVM_MAKE_ACCESS(_user, _oth, _own)                       \
+    ((whAccess)(                                                    \
+     (((_user) << WH_ACCESS_USER_SHIFT) & WH_ACCESS_USER_MASK) |    \
+     (((_oth)  << WH_ACCESS_OTH_SHIFT)  & WH_ACCESS_OTH_MASK)  |    \
+     (((_own)  << WH_ACCESS_OWN_SHIFT)  & WH_ACCESS_OWN_MASK)))
+
 /* HSM NVM Flags type */
 typedef uint16_t whNvmFlags;
 #define WH_NVM_FLAGS_NONE  ((whNvmFlags)0)
 #define WH_NVM_FLAGS_ANY   ((whNvmFlags)-1)
+
+#define WH_NVM_FLAGS_IMMUTABLE      ((whNvmFlags)1 << 0) /* Cannot be overwritten */
+#define WH_NVM_FLAGS_SENSITIVE      ((whNvmFlags)1 << 1) /* Holds private/secret data */
+#define WH_NVM_FLAGS_NONEXPORTABLE  ((whNvmFlags)1 << 2) /* Cannot be exported */
+#define WH_NVM_FLAGS_LOCAL          ((whNvmFlags)1 << 3) /* Was generated locally */
+#define WH_NVM_FLAGS_EPHEMERAL      ((whNvmFlags)1 << 4) /* Cannot be cached nor committed */
+
+
 
 /* HSM NVM metadata structure */
 enum WH_NVM_ENUM {

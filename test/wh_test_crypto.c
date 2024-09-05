@@ -39,6 +39,7 @@
 #include "wolfhsm/wh_comm.h"
 #include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_client.h"
+#include "wolfhsm/wh_client_crypto.h"
 #include "wolfhsm/wh_server.h"
 
 #include "wolfhsm/wh_transport_mem.h"
@@ -94,38 +95,19 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     int res = 0;
     /* wolfcrypt */
     WC_RNG rng[1];
-    Aes aes[1];
-    RsaKey rsa[1];
     ecc_key eccPrivate[1];
     ecc_key eccPublic[1];
-    curve25519_key curve25519PrivateKey[1];
-    curve25519_key curve25519PublicKey[1];
-    Cmac cmac[1];
-    uint32_t outLen;
+    uint16_t outLen;
     uint16_t keyId;
+    uint8_t iv[16];
     uint8_t key[16];
     uint8_t keyEnd[16];
     uint8_t labelStart[WH_NVM_LABEL_LEN];
     uint8_t labelEnd[WH_NVM_LABEL_LEN];
-    uint8_t iv[AES_IV_SIZE];
     char plainText[16];
     char cipherText[256];
     char finalText[256];
-    char cmacFodder[1000];
     uint8_t authIn[16];
-    uint8_t authTag[16];
-    uint8_t sharedOne[CURVE25519_KEYSIZE];
-    uint8_t sharedTwo[CURVE25519_KEYSIZE];
-    uint8_t knownCmacKey[] = {0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6,
-        0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c};
-    uint8_t knownCmacMessage[] = {0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f,
-        0x96, 0xe9, 0x3d, 0x7e, 0x11, 0x73, 0x93, 0x17, 0x2a, 0xae, 0x2d, 0x8a,
-        0x57, 0x1e, 0x03, 0xac, 0x9c, 0x9e, 0xb7, 0x6f, 0xac, 0x45, 0xaf, 0x8e,
-        0x51, 0x30, 0xc8, 0x1c, 0x46, 0xa3, 0x5c, 0xe4, 0x11, 0xe5, 0xfb, 0xc1,
-        0x19, 0x1a, 0x0a, 0x52, 0xef, 0xf6, 0x9f, 0x24, 0x45, 0xdf, 0x4f, 0x9b,
-        0x17, 0xad, 0x2b, 0x41, 0x7b, 0xe6, 0x6c, 0x37, 0x10};
-    uint8_t knownCmacTag[] = {0x51, 0xf0, 0xbe, 0xbf, 0x7e, 0x3b, 0x9d, 0x92,
-        0xfc, 0x49, 0x74, 0x17, 0x79, 0x36, 0x3c, 0xfe};
 
 #ifndef NO_SHA256
     wc_Sha256 sha256[1];
@@ -323,6 +305,11 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         goto exit;
     }
     printf("KEY ERASE SUCCESS\n");
+
+#ifndef NO_AES
+    Aes aes[1];
+
+#ifdef HAVE_AES_CBC
     /* test aes CBC with client side key */
     if((ret = wc_AesInit(aes, NULL, WH_DEV_ID)) != 0) {
         printf("Failed to wc_AesInit %d\n", ret);
@@ -387,6 +374,10 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         printf("Failed to wh_Client_KeyEvict %d\n", ret);
         goto exit;
     }
+#endif /* HAVE_AES_CBC */
+#ifdef HAVE_AESGCM
+    uint8_t authTag[16];
+
     /* test aes GCM with client side key */
     if((ret = wc_AesInit(aes, NULL, WH_DEV_ID)) != 0) {
         printf("Failed to wc_AesInit %d\n", ret);
@@ -447,134 +438,23 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         printf("Failed to wh_Client_KeyEvict %d\n", ret);
         goto exit;
     }
-    /* test rsa */
-    if((ret = wc_InitRsaKey_ex(rsa, NULL, WH_DEV_ID)) != 0) {
-        printf("Failed to wc_InitRsaKey_ex %d\n", ret);
-        goto exit;
-    }
-    if((ret = wc_MakeRsaKey(rsa, 2048, 65537, rng)) != 0) {
-        printf("Failed to wc_MakeRsaKey %d\n", ret);
-        goto exit;
-    }
-    if ((ret = wc_RsaPublicEncrypt((byte*)plainText, sizeof(plainText), (byte*)cipherText,
-        sizeof(cipherText), rsa, rng)) < 0) {
-        printf("Failed to wc_RsaPublicEncrypt %d\n", ret);
-        goto exit;
-    }
-    if ((ret = wc_RsaPrivateDecrypt((byte*)cipherText, ret, (byte*)finalText,
-        sizeof(finalText), rsa)) < 0) {
-        printf("Failed to wc_RsaPrivateDecrypt %d\n", ret);
-        goto exit;
-    }
-    if((ret = wh_Client_GetKeyIdRsa(rsa, &keyId)) != 0) {
-        printf("Failed to wc_MakeRsaKey %d\n", ret);
-        goto exit;
-    }
-    if ((ret = wh_Client_KeyEvictRequest(client, keyId)) != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyEvictRequest %d\n", ret);
-        goto exit;
-    }
-    do {
-        ret = wh_Client_KeyEvictResponse(client);
-    } while (ret == WH_ERROR_NOTREADY);
-    if (ret != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyEvictResponse %d\n", ret);
-        goto exit;
-    }
-    if((ret = wc_FreeRsaKey(rsa)) != 0) {
-        printf("Failed to wc_FreeRsaKey %d\n", ret);
-        goto exit;
-    }
-    printf("RSA KEYGEN SUCCESS\n");
-    if (memcmp(plainText, finalText, sizeof(plainText)) == 0)
-        printf("RSA SUCCESS\n");
-    else {
-        WH_ERROR_PRINT("RSA FAILED TO MATCH\n");
-        ret = -1;
-        goto exit;
-    }
-    /* test ecc */
-    if((ret = wc_ecc_init_ex(eccPrivate, NULL, WH_DEV_ID)) != 0) {
-        printf("Failed to wc_ecc_init_ex %d\n", ret);
-        goto exit;
-    }
-    if((ret = wc_ecc_init_ex(eccPublic, NULL, WH_DEV_ID)) != 0) {
-        printf("Failed to wc_ecc_init_ex %d\n", ret);
-        goto exit;
-    }
-    if((ret = wc_ecc_make_key(rng, 32, eccPrivate)) != 0) {
-        printf("Failed to wc_ecc_make_key %d\n", ret);
-        goto exit;
-    }
-    if((ret = wc_ecc_make_key(rng, 32, eccPublic)) != 0) {
-        printf("Failed to wc_ecc_make_key %d\n", ret);
-        goto exit;
-    }
-    outLen = 32;
-    if((ret = wc_ecc_shared_secret(eccPrivate, eccPublic, (byte*)cipherText, (word32*)&outLen)) != 0) {
-        printf("Failed to wc_ecc_shared_secret %d\n", ret);
-        goto exit;
-    }
-    if((ret = wc_ecc_shared_secret(eccPublic, eccPrivate, (byte*)finalText, (word32*)&outLen)) != 0) {
-        printf("Failed to wc_ecc_shared_secret %d\n", ret);
-        goto exit;
-    }
-    if (memcmp(cipherText, finalText, outLen) == 0)
-        printf("ECDH SUCCESS\n");
-    else {
-        WH_ERROR_PRINT("ECDH FAILED TO MATCH\n");
-        ret = -1;
-        goto exit;
-    }
-    outLen = sizeof(finalText);
-    if((ret = wc_ecc_sign_hash((void*)cipherText, sizeof(cipherText), (void*)finalText, (word32*)&outLen, rng, eccPrivate)) != 0) {
-        printf("Failed to wc_ecc_sign_hash %d\n", ret);
-        goto exit;
-    }
-    if((ret = wc_ecc_verify_hash((void*)finalText, outLen, (void*)cipherText, sizeof(cipherText), &res, eccPrivate)) != 0) {
-        printf("Failed to wc_ecc_verify_hash %d\n", ret);
-        goto exit;
-    }
-    if (res == 1)
-        printf("ECC SIGN/VERIFY SUCCESS\n");
-    else {
-        WH_ERROR_PRINT("ECC SIGN/VERIFY FAIL\n");
-        ret = -1;
-        goto exit;
-    }
-    /* test curve25519 */
-    if ((ret = wc_curve25519_init_ex(curve25519PrivateKey, NULL, WH_DEV_ID)) != 0) {
-        WH_ERROR_PRINT("Failed to wc_curve25519_init_ex %d\n", ret);
-        goto exit;
-    }
-    if ((ret = wc_curve25519_init_ex(curve25519PublicKey, NULL, WH_DEV_ID)) != 0) {
-        WH_ERROR_PRINT("Failed to wc_curve25519_init_ex %d\n", ret);
-        goto exit;
-    }
-    if ((ret = wc_curve25519_make_key(rng, CURVE25519_KEYSIZE, curve25519PrivateKey)) != 0) {
-        WH_ERROR_PRINT("Failed to wc_curve25519_make_key %d\n", ret);
-        goto exit;
-    }
-    if ((ret = wc_curve25519_make_key(rng, CURVE25519_KEYSIZE, curve25519PublicKey)) != 0) {
-        WH_ERROR_PRINT("Failed to wc_curve25519_make_key %d\n", ret);
-        goto exit;
-    }
-    outLen = sizeof(sharedOne);
-    if ((ret = wc_curve25519_shared_secret(curve25519PrivateKey, curve25519PublicKey, sharedOne, (word32*)&outLen)) != 0) {
-        WH_ERROR_PRINT("Failed to wc_curve25519_shared_secret %d\n", ret);
-        goto exit;
-    }
-    if ((ret = wc_curve25519_shared_secret(curve25519PublicKey, curve25519PrivateKey, sharedTwo, (word32*)&outLen)) != 0) {
-        WH_ERROR_PRINT("Failed to wc_curve25519_shared_secret %d\n", ret);
-        goto exit;
-    }
-    if (XMEMCMP(sharedOne, sharedTwo, outLen) != 0) {
-        WH_ERROR_PRINT("CURVE25519 shared secrets don't match\n");
-        ret = -1;
-        goto exit;
-    }
-    printf("CURVE25519 SUCCESS\n");
+#endif /* HAVE_AES_GCM */
+
+#if defined(WOLFSSL_CMAC) && defined(WOLFSSL_AES_DIRECT)
     /* test cmac */
+    Cmac cmac[1];
+    char cmacFodder[1000];
+    uint8_t knownCmacKey[] = {0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6,
+        0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c};
+    uint8_t knownCmacMessage[] = {0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f,
+        0x96, 0xe9, 0x3d, 0x7e, 0x11, 0x73, 0x93, 0x17, 0x2a, 0xae, 0x2d, 0x8a,
+        0x57, 0x1e, 0x03, 0xac, 0x9c, 0x9e, 0xb7, 0x6f, 0xac, 0x45, 0xaf, 0x8e,
+        0x51, 0x30, 0xc8, 0x1c, 0x46, 0xa3, 0x5c, 0xe4, 0x11, 0xe5, 0xfb, 0xc1,
+        0x19, 0x1a, 0x0a, 0x52, 0xef, 0xf6, 0x9f, 0x24, 0x45, 0xdf, 0x4f, 0x9b,
+        0x17, 0xad, 0x2b, 0x41, 0x7b, 0xe6, 0x6c, 0x37, 0x10};
+    uint8_t knownCmacTag[] = {0x51, 0xf0, 0xbe, 0xbf, 0x7e, 0x3b, 0x9d, 0x92,
+        0xfc, 0x49, 0x74, 0x17, 0x79, 0x36, 0x3c, 0xfe};
+
     if((ret = wc_InitCmac_ex(cmac, knownCmacKey, sizeof(knownCmacKey), WC_CMAC_AES, NULL, NULL, WH_DEV_ID)) != 0) {
         WH_ERROR_PRINT("Failed to wc_InitCmac_ex %d\n", ret);
         goto exit;
@@ -583,8 +463,8 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         WH_ERROR_PRINT("Failed to wc_CmacUpdate %d\n", ret);
         goto exit;
     }
-    outLen = sizeof(knownCmacTag);
-    if((ret = wc_CmacFinal(cmac, (byte*)cipherText, (word32*)&outLen)) != 0) {
+    word32 macLen = sizeof(knownCmacTag);
+    if((ret = wc_CmacFinal(cmac, (byte*)cipherText, &macLen)) != 0) {
         WH_ERROR_PRINT("Failed to wc_CmacFinal %d\n", ret);
         goto exit;
     }
@@ -603,8 +483,8 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         WH_ERROR_PRINT("Failed to wh_Client_KeyCache %d\n", ret);
         goto exit;
     }
-    outLen = sizeof(knownCmacTag);
-    if((ret = wh_Client_AesCmacGenerate(cmac, (byte*)cipherText, (word32*)&outLen, (byte*)knownCmacMessage, sizeof(knownCmacMessage), keyId, NULL)) != 0) {
+    macLen = sizeof(knownCmacTag);
+    if((ret = wh_Client_AesCmacGenerate(cmac, (byte*)cipherText, &macLen, (byte*)knownCmacMessage, sizeof(knownCmacMessage), keyId, NULL)) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_AesCmacGenerate %d\n", ret);
         goto exit;
     }
@@ -629,7 +509,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         WH_ERROR_PRINT("Failed to wh_Client_KeyCommit %d\n", ret);
         goto exit;
     }
-    if((ret = wh_Client_AesCmacVerify(cmac, (byte*)cipherText, outLen, (byte*)knownCmacMessage, sizeof(knownCmacMessage), keyId, NULL)) != 0) {
+    if((ret = wh_Client_AesCmacVerify(cmac, (byte*)cipherText, macLen, (byte*)knownCmacMessage, sizeof(knownCmacMessage), keyId, NULL)) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_AesCmacVerify %d\n", ret);
         goto exit;
     }
@@ -703,8 +583,8 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         WH_ERROR_PRINT("Failed to wh_Client_CmacCancelableResponse %d\n", ret);
         goto exit;
     }
-    outLen = sizeof(knownCmacTag);
-    if((ret = wc_CmacFinal(cmac, (byte*)cipherText, (word32*)&outLen)) != 0) {
+    macLen = sizeof(knownCmacTag);
+    if((ret = wc_CmacFinal(cmac, (byte*)cipherText, &macLen)) != 0) {
         WH_ERROR_PRINT("Failed to wc_CmacFinal %d\n", ret);
         goto exit;
     }
@@ -722,6 +602,151 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         goto exit;
     }
     printf("CMAC SUCCESS\n");
+#endif /* WOLFSSL_CMAC && WOLFSSL_AES_DIRECT */
+#endif /* !NO_AES */
+
+#ifndef NO_RSA
+    /* test rsa */
+    RsaKey rsa[1];
+    if((ret = wc_InitRsaKey_ex(rsa, NULL, WH_DEV_ID)) != 0) {
+        printf("Failed to wc_InitRsaKey_ex %d\n", ret);
+        goto exit;
+    }
+    if((ret = wc_MakeRsaKey(rsa, 2048, 65537, rng)) != 0) {
+        printf("Failed to wc_MakeRsaKey %d\n", ret);
+        goto exit;
+    }
+    if ((ret = wc_RsaPublicEncrypt((byte*)plainText, sizeof(plainText), (byte*)cipherText,
+        sizeof(cipherText), rsa, rng)) < 0) {
+        printf("Failed to wc_RsaPublicEncrypt %d\n", ret);
+        goto exit;
+    }
+    if ((ret = wc_RsaPrivateDecrypt((byte*)cipherText, ret, (byte*)finalText,
+        sizeof(finalText), rsa)) < 0) {
+        printf("Failed to wc_RsaPrivateDecrypt %d\n", ret);
+        goto exit;
+    }
+    if((ret = wh_Client_GetKeyIdRsa(rsa, &keyId)) != 0) {
+        printf("Failed to wc_MakeRsaKey %d\n", ret);
+        goto exit;
+    }
+    if ((ret = wh_Client_KeyEvictRequest(client, keyId)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyEvictRequest %d\n", ret);
+        goto exit;
+    }
+    do {
+        ret = wh_Client_KeyEvictResponse(client);
+    } while (ret == WH_ERROR_NOTREADY);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyEvictResponse %d\n", ret);
+        goto exit;
+    }
+    if((ret = wc_FreeRsaKey(rsa)) != 0) {
+        printf("Failed to wc_FreeRsaKey %d\n", ret);
+        goto exit;
+    }
+    printf("RSA KEYGEN SUCCESS\n");
+    if (memcmp(plainText, finalText, sizeof(plainText)) == 0)
+        printf("RSA SUCCESS\n");
+    else {
+        WH_ERROR_PRINT("RSA FAILED TO MATCH\n");
+        ret = -1;
+        goto exit;
+    }
+#endif /* !NO_RSA */
+
+#ifdef HAVE_ECC
+    /* test ecc */
+    if((ret = wc_ecc_init_ex(eccPrivate, NULL, WH_DEV_ID)) != 0) {
+        printf("Failed to wc_ecc_init_ex %d\n", ret);
+        goto exit;
+    }
+    if((ret = wc_ecc_init_ex(eccPublic, NULL, WH_DEV_ID)) != 0) {
+        printf("Failed to wc_ecc_init_ex %d\n", ret);
+        goto exit;
+    }
+    if((ret = wc_ecc_make_key(rng, 32, eccPrivate)) != 0) {
+        printf("Failed to wc_ecc_make_key %d\n", ret);
+        goto exit;
+    }
+    if((ret = wc_ecc_make_key(rng, 32, eccPublic)) != 0) {
+        printf("Failed to wc_ecc_make_key %d\n", ret);
+        goto exit;
+    }
+    word32 secLen = 32;
+    if((ret = wc_ecc_shared_secret(eccPrivate, eccPublic, (byte*)cipherText, &secLen)) != 0) {
+        printf("Failed to wc_ecc_shared_secret %d\n", ret);
+        goto exit;
+    }
+    if((ret = wc_ecc_shared_secret(eccPublic, eccPrivate, (byte*)finalText, &secLen)) != 0) {
+        printf("Failed to wc_ecc_shared_secret %d\n", ret);
+        goto exit;
+    }
+    if (memcmp(cipherText, finalText, secLen) == 0)
+        printf("ECDH SUCCESS\n");
+    else {
+        WH_ERROR_PRINT("ECDH FAILED TO MATCH\n");
+        ret = -1;
+        goto exit;
+    }
+    secLen = sizeof(finalText);
+    if((ret = wc_ecc_sign_hash((void*)cipherText, sizeof(cipherText), (void*)finalText, &secLen, rng, eccPrivate)) != 0) {
+        printf("Failed to wc_ecc_sign_hash %d\n", ret);
+        goto exit;
+    }
+    if((ret = wc_ecc_verify_hash((void*)finalText, secLen, (void*)cipherText, sizeof(cipherText), &res, eccPrivate)) != 0) {
+        printf("Failed to wc_ecc_verify_hash %d\n", ret);
+        goto exit;
+    }
+    if (res == 1)
+        printf("ECC SIGN/VERIFY SUCCESS\n");
+    else {
+        WH_ERROR_PRINT("ECC SIGN/VERIFY FAIL\n");
+        ret = -1;
+        goto exit;
+    }
+#endif /* HAVE_ECC */
+
+#ifdef HAVE_CURVE25519
+    /* test curve25519 */
+    curve25519_key curve25519PrivateKey[1];
+    curve25519_key curve25519PublicKey[1];
+    uint8_t sharedOne[CURVE25519_KEYSIZE];
+    uint8_t sharedTwo[CURVE25519_KEYSIZE];
+
+    if ((ret = wc_curve25519_init_ex(curve25519PrivateKey, NULL, WH_DEV_ID)) != 0) {
+        WH_ERROR_PRINT("Failed to wc_curve25519_init_ex %d\n", ret);
+        goto exit;
+    }
+    if ((ret = wc_curve25519_init_ex(curve25519PublicKey, NULL, WH_DEV_ID)) != 0) {
+        WH_ERROR_PRINT("Failed to wc_curve25519_init_ex %d\n", ret);
+        goto exit;
+    }
+    if ((ret = wc_curve25519_make_key(rng, CURVE25519_KEYSIZE, curve25519PrivateKey)) != 0) {
+        WH_ERROR_PRINT("Failed to wc_curve25519_make_key %d\n", ret);
+        goto exit;
+    }
+    if ((ret = wc_curve25519_make_key(rng, CURVE25519_KEYSIZE, curve25519PublicKey)) != 0) {
+        WH_ERROR_PRINT("Failed to wc_curve25519_make_key %d\n", ret);
+        goto exit;
+    }
+    secLen = sizeof(sharedOne);
+    if ((ret = wc_curve25519_shared_secret(curve25519PrivateKey, curve25519PublicKey, sharedOne, &secLen)) != 0) {
+        WH_ERROR_PRINT("Failed to wc_curve25519_shared_secret %d\n", ret);
+        goto exit;
+    }
+    if ((ret = wc_curve25519_shared_secret(curve25519PublicKey, curve25519PrivateKey, sharedTwo, &secLen)) != 0) {
+        WH_ERROR_PRINT("Failed to wc_curve25519_shared_secret %d\n", ret);
+        goto exit;
+    }
+    if (XMEMCMP(sharedOne, sharedTwo, secLen) != 0) {
+        WH_ERROR_PRINT("CURVE25519 shared secrets don't match\n");
+        ret = -1;
+        goto exit;
+    }
+    printf("CURVE25519 SUCCESS\n");
+#endif /* HAVE_CURVE25519 */
+
 
 
 #ifndef NO_SHA256
@@ -832,8 +857,10 @@ int whTest_CryptoClientConfig(whClientConfig* config)
 #endif /* WOLFHSM_CFG_TEST_VERBOSE */
     ret = 0;
 exit:
+#ifdef HAVE_CURVE25519
     wc_curve25519_free(curve25519PrivateKey);
     wc_curve25519_free(curve25519PublicKey);
+#endif
     wc_FreeRng(rng);
 
     /* Tell server to close */

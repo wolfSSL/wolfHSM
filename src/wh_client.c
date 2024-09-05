@@ -506,59 +506,50 @@ int wh_Client_Cancel(whClientContext* c)
 
 int wh_Client_EchoRequest(whClientContext* c, uint16_t size, const void* data)
 {
-    whMessageCommLenData msg = {0};
+    uint8_t* msg = NULL;
 
     if (    (c == NULL) ||
-            ((size > 0) && (data == NULL)) ) {
+            ((size > 0) && (data == NULL)) ||
+            ((size > WOLFHSM_CFG_COMM_DATA_LEN) && (data != NULL)) ){
         return WH_ERROR_BADARGS;
     }
 
-    /* Populate the message.  Ok to truncate here */
-    if (size > sizeof(msg.data)) {
-        size = sizeof(msg.data);
-    }
-    msg.len = size;
-    memcpy(msg.data, data, size);
-
+    msg = wh_CommClient_GetDataPtr(c->comm);
+    memcpy(msg, data, size);
     return wh_Client_SendRequest(c,
             WH_MESSAGE_GROUP_COMM, WH_MESSAGE_COMM_ACTION_ECHO,
-            sizeof(msg), &msg);
+            size, msg);
 }
 
 int wh_Client_EchoResponse(whClientContext* c, uint16_t *out_size, void* data)
 {
     int rc = 0;
-    whMessageCommLenData msg = {0};
+    uint8_t*  msg = {0};
     uint16_t resp_group = 0;
     uint16_t resp_action = 0;
     uint16_t resp_size = 0;
 
     if (c == NULL) {
-        return WH_ERROR_BADARGS;
+     return WH_ERROR_BADARGS;
     }
 
+    msg = wh_CommClient_GetDataPtr(c->comm);
+
     rc = wh_Client_RecvResponse(c,
-            &resp_group, &resp_action,
-            &resp_size, &msg);
+         &resp_group, &resp_action,
+         &resp_size, msg);
     if (rc == 0) {
         /* Validate response */
         if (    (resp_group != WH_MESSAGE_GROUP_COMM) ||
-                (resp_action != WH_MESSAGE_COMM_ACTION_ECHO) ||
-                (resp_size != sizeof(msg)) ){
+                (resp_action != WH_MESSAGE_COMM_ACTION_ECHO) ){
             /* Invalid message */
             rc = WH_ERROR_ABORTED;
         } else {
-            /* Valid message */
-            if (msg.len > sizeof(msg.data)) {
-                /* Bad incoming msg len.  Truncate */
-                msg.len = sizeof(msg.data);
-            }
-
             if (out_size != NULL) {
-                *out_size = msg.len;
+                *out_size = resp_size;
             }
             if (data != NULL) {
-                memcpy(data, msg.data, msg.len);
+                memcpy(data, msg, resp_size);
             }
         }
     }
@@ -693,7 +684,7 @@ int wh_Client_CustomCbCheckRegistered(whClientContext* c, uint16_t id, int* resp
 
 
 int wh_Client_KeyCacheRequest_ex(whClientContext* c, uint32_t flags,
-    uint8_t* label, uint32_t labelSz, uint8_t* in, uint32_t inSz,
+    uint8_t* label, uint16_t labelSz, uint8_t* in, uint16_t inSz,
     uint16_t keyId)
 {
     whPacket* packet;
@@ -726,7 +717,7 @@ int wh_Client_KeyCacheRequest_ex(whClientContext* c, uint32_t flags,
 }
 
 int wh_Client_KeyCacheRequest(whClientContext* c, uint32_t flags,
-    uint8_t* label, uint32_t labelSz, uint8_t* in, uint32_t inSz)
+    uint8_t* label, uint16_t labelSz, uint8_t* in, uint16_t inSz)
 {
     return wh_Client_KeyCacheRequest_ex(c, flags, label, labelSz, in, inSz,
         WH_KEYID_ERASED);
@@ -753,10 +744,10 @@ int wh_Client_KeyCacheResponse(whClientContext* c, uint16_t* keyId)
 }
 
 int wh_Client_KeyCache(whClientContext* c, uint32_t flags,
-    uint8_t* label, uint32_t labelSz, uint8_t* in, uint32_t inSz,
+    uint8_t* label, uint16_t labelSz, uint8_t* in, uint16_t inSz,
     uint16_t* keyId)
 {
-    int ret;
+    int ret = WH_ERROR_OK;
     ret = wh_Client_KeyCacheRequest_ex(c, flags, label, labelSz, in, inSz,
         *keyId);
     if (ret == 0) {
@@ -764,6 +755,11 @@ int wh_Client_KeyCache(whClientContext* c, uint32_t flags,
             ret = wh_Client_KeyCacheResponse(c, keyId);
         } while (ret == WH_ERROR_NOTREADY);
     }
+
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+    printf("[client] %s label:%.*s key_id:%x ret:%d \n",
+            __func__, labelSz, label, *keyId, ret);
+#endif
     return ret;
 }
 
@@ -808,10 +804,14 @@ int wh_Client_KeyEvict(whClientContext* c, uint16_t keyId)
             ret = wh_Client_KeyEvictResponse(c);
         } while (ret == WH_ERROR_NOTREADY);
     }
+
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+    printf("client %s key_id:%x ret:%d \n", __func__, keyId, ret);
+#endif
     return ret;
 }
 
-int wh_Client_KeyExportRequest(whClientContext* c, uint16_t keyId)
+int wh_Client_KeyExportRequest(whClientContext* c, whKeyId keyId)
 {
     whPacket* packet;
     if (c == NULL || keyId == WH_KEYID_ERASED)
@@ -826,7 +826,7 @@ int wh_Client_KeyExportRequest(whClientContext* c, uint16_t keyId)
 }
 
 int wh_Client_KeyExportResponse(whClientContext* c, uint8_t* label,
-    uint32_t labelSz, uint8_t* out, uint32_t* outSz)
+    uint16_t labelSz, uint8_t* out, uint16_t* outSz)
 {
     uint16_t group;
     uint16_t action;
@@ -866,8 +866,8 @@ int wh_Client_KeyExportResponse(whClientContext* c, uint8_t* label,
     return ret;
 }
 
-int wh_Client_KeyExport(whClientContext* c, uint16_t keyId,
-    uint8_t* label, uint32_t labelSz, uint8_t* out, uint32_t* outSz)
+int wh_Client_KeyExport(whClientContext* c, whKeyId keyId,
+    uint8_t* label, uint16_t labelSz, uint8_t* out, uint16_t* outSz)
 {
     int ret;
     ret = wh_Client_KeyExportRequest(c, keyId);
@@ -1189,24 +1189,6 @@ int wh_Client_GetKeyIdCurve25519(curve25519_key* key, whNvmId* outId)
 }
 #endif /* HAVE_CURVE25519 */
 
-#ifdef HAVE_ECC
-int wh_Client_SetKeyIdEcc(ecc_key* key, whNvmId keyId)
-{
-    if (key == NULL)
-        return WH_ERROR_BADARGS;
-    key->devCtx = (void*)((intptr_t)keyId);
-    return WH_ERROR_OK;
-}
-
-int wh_Client_GetKeyIdEcc(ecc_key* key, whNvmId* outId)
-{
-    if (key == NULL || outId == NULL)
-        return WH_ERROR_BADARGS;
-    *outId = (intptr_t)key->devCtx;
-    return WH_ERROR_OK;
-}
-#endif /* HAVE_ECC */
-
 #ifndef NO_RSA
 int wh_Client_SetKeyIdRsa(RsaKey* key, whNvmId keyId)
 {
@@ -1297,7 +1279,7 @@ int wh_Client_AesCmacVerify(Cmac* cmac, const byte* check, word32 checkSz,
 }
 
 int wh_Client_CmacCancelableResponse(whClientContext* c, Cmac* cmac,
-    uint8_t* out, uint32_t* outSz)
+    uint8_t* out, uint16_t* outSz)
 {
     whPacket* packet;
     uint8_t* packOut;

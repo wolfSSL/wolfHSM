@@ -17,45 +17,46 @@
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
 /*
- * wolfhsm/wh_server_crypto.h
+ * wolfhsm/wh_crypto.h
+ *
+ * Common crypto functions for both the client and server
  *
  */
 
-#ifndef WOLFHSM_WH_SERVER_CRYPTO_H_
-#define WOLFHSM_WH_SERVER_CRYPTO_H_
+#ifndef WOLFHSM_WH_CRYPTO_H_
+#define WOLFHSM_WH_CRYPTO_H_
 
 /* Pick up compile-time configuration */
 #include "wolfhsm/wh_settings.h"
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
 
+/* System libraries */
 #include <stdint.h>
 
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/types.h"
-#include "wolfssl/wolfcrypt/rsa.h"
-#include "wolfssl/wolfcrypt/curve25519.h"
 #include "wolfssl/wolfcrypt/ecc.h"
-#include "wolfssl/wolfcrypt/aes.h"
-#include "wolfssl/wolfcrypt/sha256.h"
-#include "wolfssl/wolfcrypt/cmac.h"
-
-#include "wolfhsm/wh_server.h"
-
-int wh_Server_HandleCryptoRequest(whServerContext* server,
-    uint16_t action, uint8_t* data, uint16_t* size, uint16_t seq);
-
-int wh_Server_HandleCryptoDmaRequest(whServerContext* server,
-    uint16_t action, uint8_t* data, uint16_t* size, uint16_t seq);
 
 #ifdef HAVE_ECC
-int wh_Server_EccKeyCacheImport(whServerContext* ctx, ecc_key* key,
-        whKeyId keyId, whNvmFlags flags, uint32_t label_len, uint8_t* label);
+/* Store an ecc_key to a byte sequence */
+int wh_Crypto_EccSerializeKeyDer(ecc_key* key,
+        uint16_t max_size, uint8_t* buffer, uint16_t *out_size);
 
-int wh_Server_EccKeyCacheExport(whServerContext* ctx, whKeyId keyId,
+/* Restore an ecc_key from a byte sequence */
+int wh_Crypto_EccDeserializeKeyDer(const uint8_t* buffer, uint16_t pub_size,
         ecc_key* key);
-#endif
 
-#endif /* !WOLFHSM_CFG_NO_CRYPTO */
+/* Helper to update an ECC private-only key with the corresponding public key,
+ * similiar to wc_ecc_make_pub().  The incoming byte array of the public key is
+ * expected to have been exported using wc_EccPublicKeyToDer().
+ */
+int wh_Crypto_UpdatePrivateOnlyEccKey(ecc_key* key, uint16_t pub_size,
+        const uint8_t* pub_buffer);
 
-#endif /* !WOLFHSM_WH_SERVER_CRYPTO_H_ */
+#endif /* HAVE_ECC */
+
+#endif  /* !WOLFHSM_CFG_NO_CRYPTO */
+
+#endif /* WOLFHSM_WH_CRYPTO_H_ */
+
