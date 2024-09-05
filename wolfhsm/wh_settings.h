@@ -180,7 +180,7 @@
 /** Cache flushing and memory fencing synchronization primitives */
 /* Create a full sequential memory fence to ensure compiler memory ordering */
 #ifndef XMEMFENCE
-#if defined(__GCC__) || defined(__clang__)
+#if defined(__GNUC__) || defined(__clang__)
 #define XMEMFENCE() __atomic_thread_fence(__ATOMIC_SEQ_CST)
 /* PPC32: __asm__ volatile ("sync" : : : "memory") */
 #else
