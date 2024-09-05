@@ -164,7 +164,8 @@ SRC_C += \
             $(WOLFHSM_DIR)/src/wh_flash_ramsim.c \
             $(WOLFHSM_DIR)/src/wh_transport_mem.c \
             $(WOLFHSM_DIR)/port/posix/posix_flash_file.c \
-            $(WOLFHSM_DIR)/port/posix/posix_transport_tcp.c
+            $(WOLFHSM_DIR)/port/posix/posix_transport_tcp.c \
+            $(WOLFHSM_DIR)/port/posix/posix_transport_shm.c
 
 # APP
 SRC_C += \
@@ -174,8 +175,8 @@ SRC_C += \
             ./src/wh_test_she.c \
             ./src/wh_test_nvm_flash.c \
             ./src/wh_test_clientserver.c \
-            ./src/wh_test_flash_ramsim.c \
-            
+            ./src/wh_test_flash_ramsim.c
+
 ifeq ($(TESTWOLFCRYPT),1)
 SRC_C += ./src/wh_test_wolfcrypt_test.c
 endif

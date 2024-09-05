@@ -38,6 +38,8 @@
 #if defined(WOLFHSM_CFG_TEST_POSIX)
 #include <pthread.h> /* For pthread_create/cancel/join/_t */
 #include <unistd.h>  /* For sleep */
+
+#include "port/posix/posix_transport_shm.h"
 #endif
 
 
@@ -1574,6 +1576,96 @@ static int wh_ClientServer_MemThreadTest(void)
 
     return WH_ERROR_OK;
 }
+
+
+static int wh_ClientServer_PosixMemMapThreadTest(void)
+{
+    posixTransportShmConfig tmcf[1] = {{
+        .shmObjName = "/wh_test_clientserver_shm",
+        .req_size   = BUFFER_SIZE,
+        .resp_size  = BUFFER_SIZE,
+    }};
+
+    /* Client configuration/contexts */
+    whTransportClientCb            tccb[1]    = {POSIX_TRANSPORT_SHM_CLIENT_CB};
+    posixTransportShmClientContext tmcc[1]    = {0};
+    whCommClientConfig             cc_conf[1] = {{
+                    .transport_cb      = tccb,
+                    .transport_context = (void*)tmcc,
+                    .transport_config  = (void*)tmcf,
+                    .client_id         = 123,
+    }};
+    whClientConfig                 c_conf[1]  = {{
+                         .comm = cc_conf,
+    }};
+    /* Server configuration/contexts */
+    whTransportServerCb            tscb[1]    = {POSIX_TRANSPORT_SHM_SERVER_CB};
+    posixTransportShmServerContext tmsc[1]    = {0};
+    whCommServerConfig             cs_conf[1] = {{
+                    .transport_cb      = tscb,
+                    .transport_context = (void*)tmsc,
+                    .transport_config  = (void*)tmcf,
+                    .server_id         = 124,
+    }};
+
+    /* RamSim Flash state and configuration */
+    whFlashRamsimCtx fc[1]      = {0};
+    whFlashRamsimCfg fc_conf[1] = {{
+        .size       = FLASH_RAM_SIZE,
+        .sectorSize = FLASH_RAM_SIZE / 2,
+        .pageSize   = 8,
+        .erasedByte = (uint8_t)0,
+    }};
+    const whFlashCb  fcb[1]     = {WH_FLASH_RAMSIM_CB};
+
+    /* NVM Flash Configuration using RamSim HAL Flash */
+    whNvmFlashConfig  nf_conf[1] = {{
+         .cb      = fcb,
+         .context = fc,
+         .config  = fc_conf,
+    }};
+    whNvmFlashContext nfc[1] = {0};
+    whNvmCb nfcb[1] = {WH_NVM_FLASH_CB};
+
+    whNvmConfig n_conf[1] = {{
+            .cb = nfcb,
+            .context = nfc,
+            .config = nf_conf,
+    }};
+    whNvmContext nvm[1] = {{0}};
+
+#ifndef WOLFHSM_CFG_NO_CRYPTO
+    /* Crypto context */
+    whServerCryptoContext crypto[1] = {{
+            .devId = INVALID_DEVID,
+    }};
+#endif
+
+    whServerConfig                  s_conf[1] = {{
+       .comm_config = cs_conf,
+       .nvm = nvm,
+#ifndef WOLFHSM_CFG_NO_CRYPTO
+       .crypto = crypto,
+#endif
+    }};
+
+    WH_TEST_RETURN_ON_FAIL(wh_Nvm_Init(nvm, n_conf));
+
+#ifndef WOLFHSM_CFG_NO_CRYPTO
+    WH_TEST_RETURN_ON_FAIL(wolfCrypt_Init());
+    WH_TEST_RETURN_ON_FAIL(wc_InitRng_ex(crypto->rng, NULL, crypto->devId));
+#endif
+    _whClientServerThreadTest(c_conf, s_conf);
+
+    wh_Nvm_Cleanup(nvm);
+
+#ifndef WOLFHSM_CFG_NO_CRYPTO
+    wc_FreeRng(crypto->rng);
+    wolfCrypt_Cleanup();
+#endif
+
+    return WH_ERROR_OK;
+}
 #endif /* WOLFHSM_CFG_TEST_POSIX */
 
 
@@ -1587,7 +1679,8 @@ int whTest_ClientServer(void)
     printf("Testing client/server: (pthread) mem...\n");
     WH_TEST_ASSERT(0 == wh_ClientServer_MemThreadTest());
 
-
+    printf("Testing client/server: (pthread) POSIX shared memory ...\n");
+    WH_TEST_ASSERT(0 == wh_ClientServer_PosixMemMapThreadTest());
 #endif /* defined(WOLFHSM_CFG_TEST_POSIX) */
 
     return 0;
