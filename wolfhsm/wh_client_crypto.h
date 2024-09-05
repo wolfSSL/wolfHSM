@@ -118,7 +118,7 @@ int wh_Client_ImportCurve25519Key(whClientContext* ctx, curve25519_key* key,
 int wh_Client_ExportCurve25519Key(whClientContext* ctx, whKeyId keyId,
         curve25519_key* key, uint32_t label_len, uint8_t* label);
 
-/* Make a Curve25519 key on the server based on the flags and update the local
+/* TODO: Make a Curve25519 key on the server based on the flags and update the local
  * struct accordingly */
 int wh_Client_MakeCurve25519Key(whClientContext* ctx,
         uint32_t size,
@@ -126,13 +126,13 @@ int wh_Client_MakeCurve25519Key(whClientContext* ctx,
         uint32_t label_len, uint8_t* label,
         curve25519_key* key);
 
-/* Generate a Curve25519 key on the server and put it in the server keycache */
+/* TODO: Generate a Curve25519 key on the server and put it in the server keycache */
 int wh_Client_MakeCacheCurve25519Key(whClientContext* ctx,
         uint32_t size,
         whKeyId *inout_key_Id, whNvmFlags flags,
         uint32_t label_len, uint8_t* label);
 
-/* Generate a Curve25519 key on the server and export it inta a local struct */
+/* TODO: Generate a Curve25519 key on the server and export it inta a local struct */
 int wh_Client_MakeExportCurve25519Key(whClientContext* ctx,
         uint32_t size,
         curve25519_key* key);
@@ -150,56 +150,54 @@ int wh_Client_MakeExportCurve25519Key(whClientContext* ctx,
  * @param[in] keyId Key ID to be associated with the Ecc key.
  * @return int Returns 0 on success or a negative error code on failure.
  */
-int wh_Client_SetKeyIdEcc(ecc_key* key, whNvmId keyId);
+int wh_Client_EccSetKeyId(ecc_key* key, whKeyId keyId);
 
 /**
  * @brief Gets the wolfHSM keyId being used by the wolfCrypt struct.
  *
  * This function gets the device context of a Ecc key that was previously
- * set by either the crypto callback layer or wh_Client_SetKeyIdEcc.
+ * set by either the crypto callback layer or wh_Client_EccSetKeyId.
  *
  * @param[in] key Pointer to the Ecc key structure.
  * @param[out] outId Pointer to the key ID to return.
  * @return int Returns 0 on success or a negative error code on failure.
  */
-int wh_Client_GetKeyIdEcc(ecc_key* key, whNvmId* outId);
+int wh_Client_EccGetKeyId(ecc_key* key, whKeyId* outId);
 
+/* TODO: Send key to server */
 int wh_Client_EccImportKey(whClientContext* ctx, ecc_key* key,
         whKeyId *inout_keyId, whNvmFlags flags,
-        uint32_t label_len, uint8_t* label);
+        uint16_t label_len, uint8_t* label);
+/* TODO: Recv key from server */
 int wh_Client_EccExportKey(whClientContext* ctx, whKeyId keyId,
         ecc_key* key,
-        uint32_t label_len, uint8_t* label);
+        uint16_t label_len, uint8_t* label);
 
-
+/* TODO: Server creates and exports a key, without caching */
 int wh_Client_EccMakeExportKey(whClientContext* ctx,
-        uint32_t size, uint32_t curveId, ecc_key* key);
+        int size, int curveId, ecc_key* key);
+/* TODO: Server creates and imports the key to cache. */
 int wh_Client_EccMakeCacheKey(whClientContext* ctx,
-        uint32_t size, uint32_t curveId,
+        int size, int curveId,
         whKeyId *inout_key_id, whNvmFlags flags,
-        uint32_t label_len, uint8_t* label);
-int wh_Client_EccMakeKey(whClientContext* ctx,
-        uint32_t size, uint32_t curveId,
-        whKeyId *inout_key_id, whNvmFlags flags,
-        uint32_t label_len, uint8_t* label,
-        ecc_key* key);
+        uint16_t label_len, uint8_t* label);
 
+/* TODO: Perform shared secret computation (ECDH) */
 int wh_Client_EccSharedSecret(whClientContext* ctx,
                                 ecc_key* priv_key, ecc_key* pub_key,
-                                uint8_t* out, word32 *out_size);
+                                uint8_t* sig, uint16_t *out_size);
 
-int wh_Client_EccDsaSign(whClientContext* ctx,
+/* TODO: Server generates signature of input hash */
+int wh_Client_EccSign(whClientContext* ctx,
         ecc_key* key,
-        const uint8_t* in, word32 in_len,
-        uint8_t* out, word32 *inout_len);
+        const uint8_t* hash, uint16_t hash_len,
+        uint8_t* sig, uint16_t *inout_sig_len);
 
-int wh_Client_EccDsaVerify(whClientContext* ctx, ecc_key* key,
-        const uint8_t* sig, word32 sig_len,
-        const uint8_t* hash, word32 hash_len,
+/* TODO: Server verifies the signature of the provided hash */
+int wh_Client_EccVerify(whClientContext* ctx, ecc_key* key,
+        const uint8_t* sig, uint16_t sig_len,
+        const uint8_t* hash, uint16_t hash_len,
         int *out_res);
-
-
-
 
 #endif /* HAVE_ECC */
 
@@ -332,8 +330,8 @@ int wh_Client_GetKeyIdAes(Aes* key, whNvmId* outId);
  * @param[in] heap Heap pointer for the cmac struct.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
-int wh_Client_AesCmacGenerate(Cmac* cmac, byte* out, word32* outSz,
-    const byte* in, word32 inSz, whNvmId keyId, void* heap);
+int wh_Client_AesCmacGenerate(Cmac* cmac, byte* sig, word32* outSz,
+    const byte* hash, word32 inSz, whNvmId keyId, void* heap);
 
 /**
  * @brief Verifies a AES CMAC tag in a single call with a wolfHSM keyId.
@@ -354,7 +352,7 @@ int wh_Client_AesCmacGenerate(Cmac* cmac, byte* out, word32* outSz,
  *    code on failure.
  */
 int wh_Client_AesCmacVerify(Cmac* cmac, const byte* check, word32 checkSz,
-    const byte* in, word32 inSz, whNvmId keyId, void* heap);
+    const byte* hash, word32 inSz, whNvmId keyId, void* heap);
 
 /**
  * @brief Handle cancelable CMAC response.
@@ -372,7 +370,7 @@ int wh_Client_AesCmacVerify(Cmac* cmac, const byte* check, word32 checkSz,
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_Client_CmacCancelableResponse(whClientContext* c, Cmac* cmac,
-    uint8_t* out, uint32_t* outSz);
+    uint8_t* sig, uint16_t* outSz);
 
 /**
  * @brief Associates a CMAC key with a specific key ID.

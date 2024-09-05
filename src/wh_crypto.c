@@ -44,7 +44,7 @@
 #include "wolfhsm/wh_crypto.h"
 
 #ifdef HAVE_ECC
-int wh_Crypto_EccSerializeKey(ecc_key* key, uint16_t max_size,
+int wh_Crypto_EccSerializeKeyDer(ecc_key* key, uint16_t max_size,
         uint8_t* buffer, uint16_t *out_size)
 {
     int ret = 0;
@@ -76,7 +76,7 @@ int wh_Crypto_EccSerializeKey(ecc_key* key, uint16_t max_size,
     return ret;
 }
 
-int wh_Crypto_EccDeserializeKey(const uint8_t* buffer, uint16_t size,
+int wh_Crypto_EccDeserializeKeyDer(const uint8_t* buffer, uint16_t size,
         ecc_key* key)
 {
     int ret;

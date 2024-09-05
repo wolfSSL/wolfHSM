@@ -64,10 +64,10 @@ typedef uint16_t whKeyId;
 #define WH_KEYID_ISERASED(_kid) (WH_KEYID_ID(_kid) == WH_KEYID_ERASED)
 
 /* Key Types */
-#define WH_KEYTYPE_CRYPTO    0x1
-/* She keys are technically raw keys but a SHE keyId needs */
-#define WH_KEYTYPE_SHE       0x2
-#define WH_KEYTYPE_COUNTER   0x3
+#define WH_KEYTYPE_NVM      0x0     /* Ordinary NvmId.  Not a key */
+#define WH_KEYTYPE_CRYPTO   0x1     /* Key for Crypto operations */
+#define WH_KEYTYPE_SHE      0x2     /* SKE keys are AES or CMAC binary arrays */
+#define WH_KEYTYPE_COUNTER  0x3     /* Monotonic counter */
 
 /* Convert a keyId to a pointer to be stored in wolfcrypt devctx */
 #define WH_KEYID_TO_DEVCTX(_k) ((void*)((intptr_t)(_k)))
@@ -86,11 +86,29 @@ typedef uint16_t whNvmAccess;
 #define WH_NVM_ACCESS_NONE ((whNvmAccess)0)
 #define WH_NVM_ACCESS_ANY  ((whNvmAccess)-1)
 
+/* Growth */
+#define WH_ACCESS_OWN_MASK     0x000F
+#define WH_ACCESS_OWN_SHIFT    0
+#define WH_ACCESS_OTH_MASK     0x00F0
+#define WH_ACCESS_OTH_SHIFT    4
+#define WH_ACCESS_USER_MASK     0xFF00
+#define WH_ACCESS_USER_SHIFT    8
+
+#define WH_ACCESS_READ      ((whNvmAccess)1 << 0)
+#define WH_ACCESS_WRITE     ((whNvmAccess)1 << 1)
+#define WH_ACCESS_EXEC      ((whNvmAccess)1 << 2)
+#define WH_ACCESS_SPECIAL   ((whNvmAccess)1 << 3)
+
+#define WH_NVM_MAKE_ACCESS(_user, _oth, _own)                       \
+    ((whAccess)(                                                    \
+     (((_user) << WH_ACCESS_USER_SHIFT) & WH_ACCESS_USER_MASK) |    \
+     (((_oth)  << WH_ACCESS_OTH_SHIFT)  & WH_ACCESS_OTH_MASK)  |    \
+     (((_own)  << WH_ACCESS_OWN_SHIFT)  & WH_ACCESS_OWN_MASK)))
+
 /* HSM NVM Flags type */
 typedef uint16_t whNvmFlags;
 #define WH_NVM_FLAGS_NONE  ((whNvmFlags)0)
 #define WH_NVM_FLAGS_ANY   ((whNvmFlags)-1)
-
 
 #define WH_NVM_FLAGS_IMMUTABLE      ((whNvmFlags)1 << 0) /* Cannot be overwritten */
 #define WH_NVM_FLAGS_SENSITIVE      ((whNvmFlags)1 << 1) /* Holds private/secret data */

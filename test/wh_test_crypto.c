@@ -39,6 +39,7 @@
 #include "wolfhsm/wh_comm.h"
 #include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_client.h"
+#include "wolfhsm/wh_client_crypto.h"
 #include "wolfhsm/wh_server.h"
 
 #include "wolfhsm/wh_transport_mem.h"
@@ -96,7 +97,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     WC_RNG rng[1];
     ecc_key eccPrivate[1];
     ecc_key eccPublic[1];
-    uint32_t outLen;
+    uint16_t outLen;
     uint16_t keyId;
     uint8_t iv[16];
     uint8_t key[16];
@@ -462,8 +463,8 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         WH_ERROR_PRINT("Failed to wc_CmacUpdate %d\n", ret);
         goto exit;
     }
-    outLen = sizeof(knownCmacTag);
-    if((ret = wc_CmacFinal(cmac, (byte*)cipherText, (word32*)&outLen)) != 0) {
+    word32 macLen = sizeof(knownCmacTag);
+    if((ret = wc_CmacFinal(cmac, (byte*)cipherText, &macLen)) != 0) {
         WH_ERROR_PRINT("Failed to wc_CmacFinal %d\n", ret);
         goto exit;
     }
@@ -482,8 +483,8 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         WH_ERROR_PRINT("Failed to wh_Client_KeyCache %d\n", ret);
         goto exit;
     }
-    outLen = sizeof(knownCmacTag);
-    if((ret = wh_Client_AesCmacGenerate(cmac, (byte*)cipherText, (word32*)&outLen, (byte*)knownCmacMessage, sizeof(knownCmacMessage), keyId, NULL)) != 0) {
+    macLen = sizeof(knownCmacTag);
+    if((ret = wh_Client_AesCmacGenerate(cmac, (byte*)cipherText, &macLen, (byte*)knownCmacMessage, sizeof(knownCmacMessage), keyId, NULL)) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_AesCmacGenerate %d\n", ret);
         goto exit;
     }
@@ -508,7 +509,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         WH_ERROR_PRINT("Failed to wh_Client_KeyCommit %d\n", ret);
         goto exit;
     }
-    if((ret = wh_Client_AesCmacVerify(cmac, (byte*)cipherText, outLen, (byte*)knownCmacMessage, sizeof(knownCmacMessage), keyId, NULL)) != 0) {
+    if((ret = wh_Client_AesCmacVerify(cmac, (byte*)cipherText, macLen, (byte*)knownCmacMessage, sizeof(knownCmacMessage), keyId, NULL)) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_AesCmacVerify %d\n", ret);
         goto exit;
     }
@@ -582,8 +583,8 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         WH_ERROR_PRINT("Failed to wh_Client_CmacCancelableResponse %d\n", ret);
         goto exit;
     }
-    outLen = sizeof(knownCmacTag);
-    if((ret = wc_CmacFinal(cmac, (byte*)cipherText, (word32*)&outLen)) != 0) {
+    macLen = sizeof(knownCmacTag);
+    if((ret = wc_CmacFinal(cmac, (byte*)cipherText, &macLen)) != 0) {
         WH_ERROR_PRINT("Failed to wc_CmacFinal %d\n", ret);
         goto exit;
     }
@@ -672,28 +673,28 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         printf("Failed to wc_ecc_make_key %d\n", ret);
         goto exit;
     }
-    outLen = 32;
-    if((ret = wc_ecc_shared_secret(eccPrivate, eccPublic, (byte*)cipherText, (word32*)&outLen)) != 0) {
+    word32 secLen = 32;
+    if((ret = wc_ecc_shared_secret(eccPrivate, eccPublic, (byte*)cipherText, &secLen)) != 0) {
         printf("Failed to wc_ecc_shared_secret %d\n", ret);
         goto exit;
     }
-    if((ret = wc_ecc_shared_secret(eccPublic, eccPrivate, (byte*)finalText, (word32*)&outLen)) != 0) {
+    if((ret = wc_ecc_shared_secret(eccPublic, eccPrivate, (byte*)finalText, &secLen)) != 0) {
         printf("Failed to wc_ecc_shared_secret %d\n", ret);
         goto exit;
     }
-    if (memcmp(cipherText, finalText, outLen) == 0)
+    if (memcmp(cipherText, finalText, secLen) == 0)
         printf("ECDH SUCCESS\n");
     else {
         WH_ERROR_PRINT("ECDH FAILED TO MATCH\n");
         ret = -1;
         goto exit;
     }
-    outLen = sizeof(finalText);
-    if((ret = wc_ecc_sign_hash((void*)cipherText, sizeof(cipherText), (void*)finalText, (word32*)&outLen, rng, eccPrivate)) != 0) {
+    secLen = sizeof(finalText);
+    if((ret = wc_ecc_sign_hash((void*)cipherText, sizeof(cipherText), (void*)finalText, &secLen, rng, eccPrivate)) != 0) {
         printf("Failed to wc_ecc_sign_hash %d\n", ret);
         goto exit;
     }
-    if((ret = wc_ecc_verify_hash((void*)finalText, outLen, (void*)cipherText, sizeof(cipherText), &res, eccPrivate)) != 0) {
+    if((ret = wc_ecc_verify_hash((void*)finalText, secLen, (void*)cipherText, sizeof(cipherText), &res, eccPrivate)) != 0) {
         printf("Failed to wc_ecc_verify_hash %d\n", ret);
         goto exit;
     }
@@ -729,16 +730,16 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         WH_ERROR_PRINT("Failed to wc_curve25519_make_key %d\n", ret);
         goto exit;
     }
-    outLen = sizeof(sharedOne);
-    if ((ret = wc_curve25519_shared_secret(curve25519PrivateKey, curve25519PublicKey, sharedOne, (word32*)&outLen)) != 0) {
+    secLen = sizeof(sharedOne);
+    if ((ret = wc_curve25519_shared_secret(curve25519PrivateKey, curve25519PublicKey, sharedOne, &secLen)) != 0) {
         WH_ERROR_PRINT("Failed to wc_curve25519_shared_secret %d\n", ret);
         goto exit;
     }
-    if ((ret = wc_curve25519_shared_secret(curve25519PublicKey, curve25519PrivateKey, sharedTwo, (word32*)&outLen)) != 0) {
+    if ((ret = wc_curve25519_shared_secret(curve25519PublicKey, curve25519PrivateKey, sharedTwo, &secLen)) != 0) {
         WH_ERROR_PRINT("Failed to wc_curve25519_shared_secret %d\n", ret);
         goto exit;
     }
-    if (XMEMCMP(sharedOne, sharedTwo, outLen) != 0) {
+    if (XMEMCMP(sharedOne, sharedTwo, secLen) != 0) {
         WH_ERROR_PRINT("CURVE25519 shared secrets don't match\n");
         ret = -1;
         goto exit;

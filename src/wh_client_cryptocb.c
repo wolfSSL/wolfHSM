@@ -59,11 +59,11 @@ static int _xferSha256BlockAndUpdateDigest(whClientContext* ctx,
                                            wc_Sha256* sha256,
                                            whPacket* packet,
                                            uint32_t isLastBlock);
-#endif /* ! NO_SHA256 */
 #ifdef WOLFHSM_CFG_DMA                                           
 static int _handleSha256Dma(int devId, wc_CryptoInfo* info, void* inCtx,
                          whPacket* packet);
 #endif /* WOLFHSM_CFG_DMA */
+#endif /* ! NO_SHA256 */
 
 int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
 {
@@ -337,7 +337,7 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
                     if (info->pk.rsakg.key != NULL) {
                         /* DER cannot be larger than MTU */
                         byte keyDer[WOLFHSM_CFG_COMM_DATA_LEN] = {0};
-                        uint32_t derSize = sizeof(keyDer);
+                        uint16_t derSize = sizeof(keyDer);
                         word32 idx = 0;
                         uint8_t keyLabel[WH_NVM_LABEL_LEN] = {0};
 
@@ -496,35 +496,52 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             ecc_key* pub_key    = info->pk.ecdh.public_key;
             uint8_t* out        = info->pk.ecdh.out;
             word32* out_len     = info->pk.ecdh.outlen;
+            uint16_t len = 0;
+            if(out_len != NULL) {
+                len = *out_len;
+            }
 
             ret = wh_Client_EccSharedSecret(ctx,
                                             priv_key, pub_key,
-                                            out, out_len);
+                                            out, &len);
+            if (    (ret == WH_ERROR_OK) &&
+                    (out_len != NULL) ){
+                *out_len = len;
+            }
         } break;
 
         case WC_PK_TYPE_ECDSA_SIGN:
         {
             /* Extract info parameters */
             ecc_key* key        = info->pk.eccsign.key;
-            const uint8_t* in   = info->pk.eccsign.in;
-            uint32_t in_len     = info->pk.eccsign.inlen;
-            uint8_t* out        = info->pk.eccsign.out;
-            word32* inout_len   = info->pk.eccsign.outlen;
+            const uint8_t* hash = (const uint8_t*)info->pk.eccsign.in;
+            uint16_t hash_len   = (uint16_t)info->pk.eccsign.inlen;
+            uint8_t* sig        = (uint8_t*)info->pk.eccsign.out;
+            word32* out_sig_len = info->pk.eccsign.outlen;
+            uint16_t sig_len = 0;
 
-            ret = wh_Client_EccDsaSign(ctx, key, in, in_len, out, inout_len);
+            if(out_sig_len != NULL) {
+                sig_len = (uint16_t)(*out_sig_len);
+            }
+
+            ret = wh_Client_EccSign(ctx, key, hash, hash_len, sig, &sig_len);
+            if (    (ret == WH_ERROR_OK) &&
+                    (out_sig_len != NULL)) {
+                *out_sig_len = sig_len;
+            }
         } break;
 
         case WC_PK_TYPE_ECDSA_VERIFY:
         {
             /* Extract info parameters */
             ecc_key* key        = info->pk.eccverify.key;
-            const uint8_t* sig  = info->pk.eccverify.sig;
-            word32 sig_len    = info->pk.eccverify.siglen;
-            const uint8_t* hash = info->pk.eccverify.hash;
-            uint32_t hash_len   = info->pk.eccverify.hashlen;
+            const uint8_t* sig  = (const uint8_t*)info->pk.eccverify.sig;
+            uint16_t sig_len    = (uint16_t)info->pk.eccverify.siglen;
+            const uint8_t* hash = (const uint8_t*)info->pk.eccverify.hash;
+            uint16_t hash_len   = (uint16_t)info->pk.eccverify.hashlen;
             int* out_res        = info->pk.eccverify.res;
 
-            ret = wh_Client_EccDsaVerify(ctx, key, sig, sig_len, hash, hash_len, out_res);
+            ret = wh_Client_EccVerify(ctx, key, sig, sig_len, hash, hash_len, out_res);
         } break;
 
 #if 0

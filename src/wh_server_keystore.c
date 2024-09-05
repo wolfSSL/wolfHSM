@@ -140,8 +140,7 @@ int hsmCacheFindSlotAndZero(whServerContext* server, uint16_t keySz,
             *outBuf = server->cache[foundIndex].buffer;
             *outMeta = server->cache[foundIndex].meta;
         }
-    }
-    else {
+    } else {
         for (i = 0; i < WOLFHSM_CFG_SERVER_KEYCACHE_BIG_COUNT; i++) {
             /* check for empty slot or rewrite slot */
             if (foundIndex == -1 && server->bigCache[i].meta->id ==
@@ -222,9 +221,8 @@ int hsmCacheKey(whServerContext* server, whNvmMetadata* meta, uint8_t* in)
                 server->cache[foundIndex].commited = 1;
             }
         }
-    }
-    /* try big key cache, don't put small keys into big cache if full */
-    else {
+    } else {
+        /* try big key cache, don't put small keys into big cache if full */
         for (i = 0; i < WOLFHSM_CFG_SERVER_KEYCACHE_BIG_COUNT; i++) {
             /* check for empty slot or rewrite slot */
             if (    WH_KEYID_ISERASED(server->bigCache[i].meta->id) ||
@@ -524,9 +522,9 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
         meta->flags = packet->keyCacheReq.flags;
         meta->len = packet->keyCacheReq.sz;
         /* validate label sz */
-        if (packet->keyCacheReq.labelSz > WH_NVM_LABEL_LEN)
+        if (packet->keyCacheReq.labelSz > WH_NVM_LABEL_LEN) {
             ret = WH_ERROR_BADARGS;
-        else {
+        } else {
             XMEMCPY(meta->label, packet->keyCacheReq.label,
                 packet->keyCacheReq.labelSz);
         }

@@ -51,6 +51,22 @@
 
 #include "wolfhsm/wh_server.h"
 
+/** Forward declarations */
+#ifdef HAVE_ECC
+static int wh_Server_HandleEccKeyGen(whServerContext* ctx, whPacket* packet,
+        uint16_t *out_size);
+
+static int wh_Server_HandleEccSharedSecret(whServerContext* ctx,
+        whPacket* packet, uint16_t *out_size);
+
+static int wh_Server_HandleEccSign(whServerContext* ctx, whPacket* packet,
+        uint16_t *out_size);
+
+static int wh_Server_HandleEccVerify(whServerContext* ctx, whPacket* packet,
+        uint16_t *out_size);
+#endif
+
+
 /** Public server crypto functions */
 
 #ifdef HAVE_ECC
@@ -73,7 +89,7 @@ int wh_Server_EccKeyCacheImport(whServerContext* ctx, ecc_key* key,
     /* get a free slot */
     ret = hsmCacheFindSlotAndZero(ctx, max_size, &cacheBuf, &cacheMeta);
     if (ret == WH_ERROR_OK) {
-        ret = wh_Crypto_EccSerializeKey(key, max_size, cacheBuf, &der_size);
+        ret = wh_Crypto_EccSerializeKeyDer(key, max_size, cacheBuf, &der_size);
     }
 
     if (ret == WH_ERROR_OK) {
@@ -107,7 +123,7 @@ int wh_Server_EccKeyCacheExport(whServerContext* ctx, whKeyId keyId,
     ret = hsmFreshenKey(ctx, keyId, &cacheBuf, &cacheMeta);
 
     if (ret == WH_ERROR_OK) {
-        ret = wh_Crypto_EccDeserializeKey(cacheBuf, cacheMeta->len, key);
+        ret = wh_Crypto_EccDeserializeKeyDer(cacheBuf, cacheMeta->len, key);
     }
     return ret;
 }
@@ -415,21 +431,10 @@ static int hsmCryptoCurve25519(whServerContext* server, whPacket* packet,
 
 
 /** Request/Response Handling functions */
+
 #ifdef HAVE_ECC
-static int wh_Server_HandleEccKeyGen(whServerContext* server, whPacket* packet,
-    uint16_t *out_size);
 
-static int wh_Server_HandleEccSharedSecret(whServerContext* server,
-        whPacket* packet, uint16_t *out_size);
-
-static int wh_Server_HandleEccDsaSign(whServerContext* server, whPacket* packet,
-    uint16_t *out_size);
-
-static int wh_Server_HandleEccDsaVerify(whServerContext* server,
-        whPacket* packet, uint16_t *out_size);
-
-
-static int wh_Server_HandleEccKeyGen(whServerContext* server, whPacket* packet,
+static int wh_Server_HandleEccKeyGen(whServerContext* ctx, whPacket* packet,
     uint16_t* out_size)
 {
     int ret = WH_ERROR_OK;
@@ -441,7 +446,7 @@ static int wh_Server_HandleEccKeyGen(whServerContext* server, whPacket* packet,
     int key_size        = req->sz;
     int curve_id        = req->curveId;
     whKeyId key_id      = WH_MAKE_KEYID(    WH_KEYTYPE_CRYPTO,
-                                            server->comm->client_id,
+                                            ctx->comm->client_id,
                                             req->keyId);
     whNvmFlags flags    = req->flags;
     uint8_t* label      = req->label;
@@ -454,30 +459,30 @@ static int wh_Server_HandleEccKeyGen(whServerContext* server, whPacket* packet,
     uint16_t res_size   = 0;
 
     /* init ecc key */
-    ret = wc_ecc_init_ex(key, NULL, server->crypto->devId);
+    ret = wc_ecc_init_ex(key, NULL, ctx->crypto->devId);
     if (ret == 0) {
         /* generate the key */
-        ret = wc_ecc_make_key_ex(server->crypto->rng,
+        ret = wc_ecc_make_key_ex(ctx->crypto->rng,
             key_size, key, curve_id);
         if ( ret == 0) {
             /* Check incoming flags */
             if (flags & WH_NVM_FLAGS_EPHEMERAL) {
                 /* Must serialize the key into the response message. */
                 key_id = WH_KEYID_ERASED;
-                ret = wh_Crypto_EccSerializeKey(key, max_size, res_out,
+                ret = wh_Crypto_EccSerializeKeyDer(key, max_size, res_out,
                         &res_size);
             } else {
                 /* Must import the key into the cache and return keyid */
                 res_size = 0;
                 if (WH_KEYID_ISERASED(key_id)) {
                     /* Generate a new id */
-                    ret = hsmGetUniqueId(server, &key_id);
+                    ret = hsmGetUniqueId(ctx, &key_id);
     #ifdef DEBUG_CRYPTOCB
                     printf("[server] %s UniqueId: keyId:%u, ret:%d\n",
                             __func__, key_id, ret);
     #endif
                 }
-                ret = wh_Server_EccKeyCacheImport(server, key,
+                ret = wh_Server_EccKeyCacheImport(ctx, key,
                         key_id, flags, label_size, label);
     #ifdef DEBUG_CRYPTOCB
                 printf("[server] %s CacheKeyEcc: keyId:%u, ret:%d\n",
@@ -496,7 +501,7 @@ static int wh_Server_HandleEccKeyGen(whServerContext* server, whPacket* packet,
     return ret;
 }
 
-static int wh_Server_HandleEccSharedSecret(whServerContext* server,
+static int wh_Server_HandleEccSharedSecret(whServerContext* ctx,
         whPacket* packet, uint16_t *out_size)
 {
     int ret = WH_ERROR_OK;
@@ -508,10 +513,10 @@ static int wh_Server_HandleEccSharedSecret(whServerContext* server,
 
     /* Request message */
     whKeyId pub_key_id  = WH_MAKE_KEYID(    WH_KEYTYPE_CRYPTO,
-                                            server->comm->client_id,
+                                            ctx->comm->client_id,
                                             req->publicKeyId);
     whKeyId prv_key_id  = WH_MAKE_KEYID(    WH_KEYTYPE_CRYPTO,
-                                            server->comm->client_id,
+                                            ctx->comm->client_id,
                                             req->privateKeyId);
     uint32_t options    = req->options;
     int evict_pub       = options & WH_PACKET_PK_ECDH_OPTIONS_EVICTPUB;
@@ -524,19 +529,19 @@ static int wh_Server_HandleEccSharedSecret(whServerContext* server,
     word32 res_len;
 
     /* init ecc keys */
-    ret = wc_ecc_init_ex(pub_key, NULL, server->crypto->devId);
+    ret = wc_ecc_init_ex(pub_key, NULL, ctx->crypto->devId);
     if (ret == 0) {
-        ret = wc_ecc_init_ex(prv_key, NULL, server->crypto->devId);
+        ret = wc_ecc_init_ex(prv_key, NULL, ctx->crypto->devId);
         if (ret == 0) {
             /* set rng */
-            ret = wc_ecc_set_rng(prv_key, server->crypto->rng);
+            ret = wc_ecc_set_rng(prv_key, ctx->crypto->rng);
             if (ret == 0) {
                 /* load the private key */
-                ret = wh_Server_EccKeyCacheExport(server, prv_key_id, prv_key);
+                ret = wh_Server_EccKeyCacheExport(ctx, prv_key_id, prv_key);
             }
             if (ret == WH_ERROR_OK) {
                 /* load the public key */
-                ret = wh_Server_EccKeyCacheExport(server, pub_key_id, pub_key);
+                ret = wh_Server_EccKeyCacheExport(ctx, pub_key_id, pub_key);
             }
             if (ret == WH_ERROR_OK) {
                 /* make shared secret */
@@ -548,10 +553,10 @@ static int wh_Server_HandleEccSharedSecret(whServerContext* server,
         wc_ecc_free(pub_key);
     }
     if (evict_pub) {
-        (void)hsmEvictKey(server, pub_key_id);
+        (void)hsmEvictKey(ctx, pub_key_id);
     }
     if (evict_prv) {
-        (void)hsmEvictKey(server, prv_key_id);
+        (void)hsmEvictKey(ctx, prv_key_id);
     }
     if (ret == 0) {
         res->sz = res_len;
@@ -560,7 +565,7 @@ static int wh_Server_HandleEccSharedSecret(whServerContext* server,
     return ret;
 }
 
-static int wh_Server_HandleEccDsaSign(whServerContext* server, whPacket* packet,
+static int wh_Server_HandleEccSign(whServerContext* ctx, whPacket* packet,
     uint16_t *out_size)
 {
     int ret;
@@ -571,7 +576,7 @@ static int wh_Server_HandleEccDsaSign(whServerContext* server, whPacket* packet,
     /* Request message */
     byte* in        = (uint8_t*)(req + 1);
     whKeyId key_id  = WH_MAKE_KEYID(    WH_KEYTYPE_CRYPTO,
-                                        server->comm->client_id,
+                                        ctx->comm->client_id,
                                         req->keyId);
     word32 in_len   = req->sz;
     uint32_t options = req->options;
@@ -584,20 +589,20 @@ static int wh_Server_HandleEccDsaSign(whServerContext* server, whPacket* packet,
     word32 res_len;
 
     /* init private key */
-    ret = wc_ecc_init_ex(key, NULL, server->crypto->devId);
+    ret = wc_ecc_init_ex(key, NULL, ctx->crypto->devId);
     if (ret == 0) {
         /* load the private key */
-        ret = wh_Server_EccKeyCacheExport(server, key_id, key);
+        ret = wh_Server_EccKeyCacheExport(ctx, key_id, key);
         if (ret == WH_ERROR_OK) {
             /* sign the input */
             res_len = max_len;
             ret = wc_ecc_sign_hash(in, in_len, res_out, &res_len,
-                    server->crypto->rng, key);
+                    ctx->crypto->rng, key);
         }
         wc_ecc_free(key);
     }
     if (evict != 0) {
-        (void)hsmEvictKey(server, key_id);
+        (void)hsmEvictKey(ctx, key_id);
     }
     if (ret == 0) {
         res->sz = res_len;
@@ -606,7 +611,7 @@ static int wh_Server_HandleEccDsaSign(whServerContext* server, whPacket* packet,
     return ret;
 }
 
-static int wh_Server_HandleEccDsaVerify(whServerContext* server,
+static int wh_Server_HandleEccVerify(whServerContext* ctx,
         whPacket* packet, uint16_t *out_size)
 {
     int ret;
@@ -617,7 +622,7 @@ static int wh_Server_HandleEccDsaVerify(whServerContext* server,
     /* Request Message */
     uint32_t options    = req->options;
     whKeyId key_id      = WH_MAKE_KEYID(    WH_KEYTYPE_CRYPTO,
-                                            server->comm->client_id,
+                                            ctx->comm->client_id,
                                             req->keyId);
     uint32_t hash_len   = req->hashSz;
     uint32_t sig_len    = req->sigSz;
@@ -634,10 +639,10 @@ static int wh_Server_HandleEccDsaVerify(whServerContext* server,
     int result;
 
     /* init public key */
-    ret = wc_ecc_init_ex(key, NULL, server->crypto->devId);
+    ret = wc_ecc_init_ex(key, NULL, ctx->crypto->devId);
     if (ret == 0) {
         /* load the public key */
-        ret = wh_Server_EccKeyCacheExport(server, key_id, key);
+        ret = wh_Server_EccKeyCacheExport(ctx, key_id, key);
         if (ret == WH_ERROR_OK) {
             /* verify the signature */
             ret = wc_ecc_verify_hash(req_sig, sig_len, req_hash, hash_len,
@@ -657,7 +662,7 @@ static int wh_Server_HandleEccDsaVerify(whServerContext* server,
     }
     if (evict != 0) {
         /* User requested to evict from cache, even if the call failed */
-        (void)hsmEvictKey(server, key_id);
+        (void)hsmEvictKey(ctx, key_id);
     }
     if (ret == 0) {
         res->pubSz  = pub_size;
@@ -1119,10 +1124,10 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
             ret = wh_Server_HandleEccSharedSecret(server, packet, size);
             break;
         case WC_PK_TYPE_ECDSA_SIGN:
-            ret = wh_Server_HandleEccDsaSign(server, packet, size);
+            ret = wh_Server_HandleEccSign(server, packet, size);
             break;
         case WC_PK_TYPE_ECDSA_VERIFY:
-            ret = wh_Server_HandleEccDsaVerify(server, packet, size);
+            ret = wh_Server_HandleEccVerify(server, packet, size);
             break;
 #if 0
         case WC_PK_TYPE_EC_CHECK_PRIV_KEY:

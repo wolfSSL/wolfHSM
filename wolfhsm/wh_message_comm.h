@@ -41,7 +41,6 @@ enum WH_MESSAGE_COMM_ACTION_ENUM {
     WH_MESSAGE_COMM_ACTION_CLOSE     = 0x03,
     WH_MESSAGE_COMM_ACTION_INFO      = 0x04,
     WH_MESSAGE_COMM_ACTION_ECHO      = 0x05,
-    WH_MESSAGE_COMM_ACTION_VECHO     = 0x06,
 };
 
 /* Info request/response data sizes*/
@@ -60,17 +59,6 @@ typedef struct {
 int wh_MessageComm_GetErrorResponse(uint16_t magic,
         const void* data,
         int *out_return_code);
-
-
-/* Generic len/data message that does not require data translation */
-typedef struct {
-    uint16_t len;
-    uint8_t data[WOLFHSM_CFG_COMM_DATA_LEN - sizeof(uint16_t)];
-} whMessageCommLenData;
-
-int wh_MessageComm_TranslateLenData(uint16_t magic,
-        const whMessageCommLenData* src,
-        whMessageCommLenData* dest);
 
 typedef struct {
     uint32_t client_id;
