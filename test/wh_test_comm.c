@@ -25,7 +25,6 @@
 #include <stdio.h>  /* For printf */
 #include <string.h> /* For memset, memcpy */
 
-#include "wh_test_common.h"
 
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_comm.h"
@@ -40,6 +39,8 @@
 #include "port/posix/posix_transport_shm.h"
 #endif
 
+#include "wh_test_common.h"
+#include "wh_test_comm.h"
 
 #define BUFFER_SIZE 4096
 #define REQ_SIZE 32
@@ -413,6 +414,7 @@ void wh_CommClientServer_ShMemThreadTest(void)
         .shmObjName = "/wh_test_comm_shm",
         .req_size   = BUFFER_SIZE,
         .resp_size  = BUFFER_SIZE,
+        .dma_size = BUFFER_SIZE * 4,
     }};
 
     /* Client configuration/contexts */

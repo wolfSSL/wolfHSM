@@ -1,4 +1,3 @@
-#include "port/posix/posix_transport_shm.h"
 
 #include <fcntl.h>     /* For O_* constants */
 #include <sys/mman.h>  /* For shm_open, mmap */
@@ -7,268 +6,413 @@
 #include <errno.h>     /* For errno */
 #include <stdio.h>     /* For perror */
 #include <stdlib.h>    /* For exit */
-#include <stdatomic.h> /* For atomic_int */
-#include <string.h>    /* For strncpy, strlen */
-#include <limits.h>    /* For NAME_MAX */
+#include <string.h>    /* For memcpy, memset */
+#include <stdint.h>
 
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_utils.h"
 
-typedef struct {
-    atomic_int refCount;
-} ShmHeader;
+#include "port/posix/posix_transport_shm.h"
 
-/** Callback function declarations */
+/* Shared memory creation flags */
+#define PTSHM_CREATEMODE 0666
+
+/* Pad header to reasonable alignment */
+#define PTSHM_HEADER_SIZE 64
+typedef union {
+    struct {
+        uint32_t initialized;   /* Set non-zero when setup */
+        uint16_t req_size;      /* Size of request buffer */
+        uint16_t resp_size;     /* Size of response buffer */
+        size_t dma_size;        /* Size of shared DMA space */
+        pid_t creator_pid;      /* Process ID of the creator */
+        pid_t user_pid;         /* Process ID of user */
+    };
+    uint8_t WH_PAD[PTSHM_HEADER_SIZE];
+} ptshmHeader;
+
+typedef struct {
+    void* ptr;
+    size_t size;
+    ptshmHeader* header;
+    uint8_t* req;
+    uint8_t* resp;
+    uint8_t* dma;
+    size_t dma_size;
+    uint16_t req_size;
+    uint16_t resp_size;
+} ptshmMapping;
+
+enum {
+    PTSHM_INITIALIZED_NONE      = 0,
+    PTSHM_INITIALIZED_CLEANUP   = 1,
+    PTSHM_INITIALIZED_CREATOR   = 2,
+    PTSHM_INITIALIZED_USER      = 3,
+};
+/** Local declarations */
+
+/* Memory map and interpret the header block */
+static int posixTransportShm_Map(int fd, size_t size, ptshmMapping* map);
+
+/* Use and map a shared object for transport */
+static int posixTransportShm_UseMap(char* name, ptshmMapping* map);
+
+/* Create and map a shared object for transport */
+static int posixTransportShm_CreateMap(char* name, uint16_t req_size,
+        uint16_t resp_size, size_t dma_size, ptshmMapping* map);
+
+
+/** Local Definitions */
+static int posixTransportShm_Map(int fd, size_t size, ptshmMapping* map)
+{
+    int ret = WH_ERROR_OK;
+    void* ptr = NULL;
+
+    if (    (fd < 0) ||
+            (map == NULL) ) {
+        return WH_ERROR_BADARGS;
+    }
+
+    memset(map, 0, sizeof(*map));
+
+    /* Map the shared memory object */
+    ptr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    if (ptr != MAP_FAILED) {
+        map->ptr = ptr;
+        map->size = size;
+        map->header = (ptshmHeader*)ptr;
+        map->req = (uint8_t*)(map->header + 1);
+        map->resp = map->req + map->header->req_size;
+        map->dma = map->resp + map->header->resp_size;
+    } else {
+        perror("ptshm_Map mmap");
+        ret = WH_ERROR_ABORTED;
+    }
+    return ret;
+}
+
+
+static int posixTransportShm_UseMap(char* name, ptshmMapping* map)
+{
+    int ret = WH_ERROR_OK;
+    int fd = -1;
+
+    if( (name == NULL) || (map == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    memset(map, 0, sizeof(*map));
+    fd = shm_open(name, O_RDWR, 0);
+    if (fd >= 0) {
+        /* Check the size */
+        struct stat st[1] = { 0 };
+        ret = fstat(fd, st);
+        if (ret == 0) {
+            if (st->st_size != 0) {
+                /* Map the header */
+                ptshmHeader* header = (ptshmHeader*)mmap(NULL, sizeof(*header),
+                        PROT_READ, MAP_SHARED, fd, 0);
+                if (header != MAP_FAILED) {
+                    size_t size = 0;
+                    if(header->initialized > PTSHM_INITIALIZED_NONE) {
+                        /* Read provided sizes */
+                        size = sizeof(*header) +
+                                    header->req_size +
+                                    header->resp_size +
+                                    header->dma_size;
+                    } else {
+                        /* Header not configured */
+                        ret = WH_ERROR_NOTREADY;
+                    }
+                    /* Unmap the header and remap the whole area if necessary */
+                    (void)munmap((void*)header, sizeof(*header));
+
+                    if (ret == WH_ERROR_OK) {
+                        ret = posixTransportShm_Map(fd, size, map);
+                        if (ret == WH_ERROR_OK) {
+                            /* Unlnk the object */
+                            (void)shm_unlink(name);
+
+                            map->header->user_pid = getpid();
+                            XMEMFENCE();
+                            map->header->initialized = PTSHM_INITIALIZED_USER;
+                        }
+                    }
+                } else {
+                    /* Mapping the header failed */
+                    perror("Use header mmap failed");
+                    ret = WH_ERROR_ABORTED;
+                }
+            } else {
+                /* ftruncate has not completed */
+                ret = WH_ERROR_NOTREADY;
+            }
+            (void)close(fd);
+        } else {
+            /* Problem getting file stat */
+            perror("Use stat");
+        }
+    } else {
+        perror("Use shm_open");
+        if (errno == ENOENT) {
+            /* File does not exist */
+            ret = WH_ERROR_NOTFOUND;
+        } else {
+            /* Some other error */
+            ret = WH_ERROR_ABORTED;
+        }
+    }
+    return ret;
+}
+
+
+static int posixTransportShm_CreateMap(char* name, uint16_t req_size,
+        uint16_t resp_size, size_t dma_size, ptshmMapping* map)
+{
+    int ret = WH_ERROR_OK;
+    int fd = -1;
+
+    if (    (name == NULL) ||
+            (map == NULL) ) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Attempt to remove any existing object. */
+    (void)shm_unlink(name);
+    /* Create shared emmory objectand set the size */
+    fd = shm_open(name, O_CREAT | O_RDWR, PTSHM_CREATEMODE);
+    if (fd >= 0) {
+        /* Set the size of the shared memory object.
+         * Note this is the minimum size, as the OS may make it larger. */
+        size_t size = sizeof(*(map->header)) + req_size + resp_size + dma_size;
+        if (ftruncate(fd, size) == 0) {
+            /* Map the header */
+            ptshmHeader* header = (ptshmHeader*)mmap(NULL, sizeof(*header),
+                    PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+            if (header != MAP_FAILED) {
+                header->req_size = req_size;
+                header->resp_size = resp_size;
+                header->dma_size = dma_size;
+                header->creator_pid = getpid();
+                XMEMFENCE();
+                header->initialized = PTSHM_INITIALIZED_CREATOR;
+
+                /* Unmap the header and remap the full area */
+                (void)munmap((void*)header, sizeof(*header));
+                ret = posixTransportShm_Map(fd, size, map);
+            } else {
+                /* Problem mapping the header */
+                perror("create mmap");
+                ret = WH_ERROR_ABORTED;
+            }
+        } else {
+            /* Problem setting the size. */
+            perror("create ftruncate");
+            ret = WH_ERROR_ABORTED;
+        }
+        close(fd);
+    } else {
+        /* Problem creating the shared memory */
+        perror("create shm_open");
+        ret = WH_ERROR_ABORTED;
+    }
+    return ret;
+}
+
+
+/** Custom functions */
+int posixTransportShm_IsConnected(posixTransportShmContext* ctx,
+        whCommConnected *out_connected)
+{
+    ptshmHeader* header = NULL;
+    whCommConnected connected = WH_COMM_DISCONNECTED;
+    if (ctx == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    header = (ptshmHeader*)ctx->ptr;
+    if (header == NULL) {
+        return WH_ERROR_NOTREADY;
+    }
+    if (header->initialized > PTSHM_INITIALIZED_CREATOR) {
+        connected = WH_COMM_CONNECTED;
+    }
+    if (out_connected != NULL) {
+        *out_connected = connected;
+    }
+    return WH_ERROR_OK;
+}
+
+
+int posixTransportShm_GetCreatorPid(posixTransportShmContext* ctx,
+        pid_t *out_pid)
+{
+    ptshmHeader* header = NULL;
+    if (ctx == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    header = (ptshmHeader*)ctx->ptr;
+    if (    (header == NULL) ||
+            (header->initialized < PTSHM_INITIALIZED_CREATOR) ) {
+        return WH_ERROR_NOTREADY;
+    }
+    if (out_pid != NULL) {
+        *out_pid = header->creator_pid;
+    }
+    return WH_ERROR_OK;
+}
+
+
+int posixTransportShm_GetUserPid(posixTransportShmContext* ctx,
+        pid_t *out_pid)
+{
+    ptshmHeader* header = NULL;
+    if (ctx == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    header = (ptshmHeader*)ctx->ptr;
+    if (    (header == NULL) ||
+            (header->initialized < PTSHM_INITIALIZED_USER) ) {
+        return WH_ERROR_NOTREADY;
+    }
+    if (out_pid != NULL) {
+        *out_pid = header->user_pid;
+    }
+    return WH_ERROR_OK;
+
+}
+
+
+int posixTransportShm_GetDma(posixTransportShmContext* ctx,
+        void* *out_dma, size_t *out_size)
+{
+    if (ctx == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    if (out_dma!= NULL) {
+        *out_dma = ctx->dma;
+    }
+    if (out_size!= NULL) {
+        *out_size = ctx->dma_size;
+    }
+    return WH_ERROR_OK;
+}
+
+
+/** Callback function definitions */
 int posixTransportShm_ServerInit(void* c, const void* cf,
                                  whCommSetConnectedCb connectcb,
                                  void*                connectcb_arg)
 {
-    int                       rc;
-    int                       shmFd;
-    size_t                    shmSize;
-    size_t                    shmNameLen;
-    ShmHeader*                header;
-    whTransportMemConfig      tMemCfg;
-    posixTransportShmContext* ctx    = (posixTransportShmContext*)c;
-    posixTransportShmConfig*  config = (posixTransportShmConfig*)cf;
+    posixTransportShmContext*   ctx         = (posixTransportShmContext*)c;
+    posixTransportShmConfig*    config      = (posixTransportShmConfig*)cf;
+    int                         ret         = WH_ERROR_OK;
+    ptshmMapping                map[1]      = { 0 };
+    whTransportMemConfig        tMemCfg[1]  = { 0 };
 
-    if (ctx == NULL || config == NULL || config->shmObjName == NULL) {
+    if (    (ctx == NULL) ||
+            (config == NULL) ||
+            (config->name == NULL) ) {
         return WH_ERROR_BADARGS;
     }
 
-    /* check shmObjName for max length */
-    shmNameLen = strnlen(config->shmObjName, NAME_MAX + 1);
-    if (shmNameLen > NAME_MAX) {
-        return WH_ERROR_BADARGS;
-    }
+    ret = posixTransportShm_CreateMap( config->name,
+                            config->req_size,
+                            config->resp_size,
+                            config->dma_size,
+                            map);
 
-    ctx->shmObjName = calloc(shmNameLen + 1, sizeof(char));
-    strncpy(ctx->shmObjName, config->shmObjName, shmNameLen);
+    if (ret == WH_ERROR_OK) {
+        memset(ctx, 0, sizeof(*ctx));
 
-    shmSize = sizeof(ShmHeader) + config->req_size + config->resp_size;
+        /* Configure the underlying transport context */
+        tMemCfg->req_size  = map->header->req_size;
+        tMemCfg->resp_size = map->header->resp_size;
+        tMemCfg->req       = map->req;
+        tMemCfg->resp      = map->resp;
 
-    /* Attempt to open the shared memory object serving as the backing store
-     * without attempting to create it. If it already exists, attempt to delete
-     * it, and verify that it is gone. */
-    shmFd = shm_open(ctx->shmObjName, O_RDWR, 0666);
-    if (shmFd > 0) {
-        close(shmFd);
-        shm_unlink(ctx->shmObjName);
-        shmFd = shm_open(ctx->shmObjName, O_RDWR, 0666);
-    }
+        /* Initialize the shared memory transport */
+        ret = wh_TransportMem_Init(ctx->transportMemCtx, tMemCfg, connectcb,
+                                  connectcb_arg);
 
-    /* If shared memory object doesn't exist, create it and set the size */
-    if (shmFd == -1) {
-        if (errno == ENOENT) {
-            /* Shared memory object doesn't exist, create it */
-            shmFd = shm_open(ctx->shmObjName, O_CREAT | O_RDWR, 0666);
-            if (shmFd == -1) {
-                perror("server shm_open");
-                exit(EXIT_FAILURE);
-            }
-
-            /* Set the size of the shared memory object */
-            if (ftruncate(shmFd, shmSize) == -1) {
-                perror("ftruncate");
-                exit(EXIT_FAILURE);
-            }
-        }
-        else {
-            /* Other unspecified error, bail */
-            perror("server shm_open");
-            exit(EXIT_FAILURE);
+        if (ret == WH_ERROR_OK) {
+            ctx->ptr = map->ptr;
+            ctx->size = map->size;
+            ctx->dma = map->dma;
+            ctx->dma_size = map->dma_size;
+        } else {
+            /* Problem initializing the transport */
+            (void)munmap(map->ptr, map->size);
+            (void)shm_unlink(config->name);
         }
     }
-    else {
-        /* Something went wrong with unlink, we are unable to remove the
-         * existing shared memory object, bail */
-        fprintf(
-            stderr,
-            "Error: Shared memory object already exists, unable to delete.\n");
-        exit(EXIT_FAILURE);
-    }
-
-    /* Map the shared memory object */
-    ctx->shmBuf =
-        mmap(NULL, shmSize, PROT_READ | PROT_WRITE, MAP_SHARED, shmFd, 0);
-    if (ctx->shmBuf == MAP_FAILED) {
-        perror("mmap");
-        close(shmFd);
-        exit(EXIT_FAILURE);
-    }
-    header = (ShmHeader*)ctx->shmBuf;
-
-    /* Initialize or increment the reference count */
-    atomic_fetch_add(&header->refCount, 1);
-
-    /* allocate a shared memory transport context */
-    ctx->transportMemCtx = malloc(sizeof(whTransportMemContext));
-    if (ctx->transportMemCtx == NULL) {
-        return WH_ERROR_ABORTED;
-    }
-
-    /* Configure the underlying transport context */
-    tMemCfg.req_size  = config->req_size;
-    tMemCfg.resp_size = config->resp_size;
-    tMemCfg.req       = ctx->shmBuf + sizeof(ShmHeader);
-    tMemCfg.resp      = ctx->shmBuf + sizeof(ShmHeader) + config->req_size;
-
-    /* Initialize the shared memory transport using our newly mmapped buffer */
-    rc = wh_TransportMem_Init(ctx->transportMemCtx, &tMemCfg, connectcb,
-                              connectcb_arg);
-    if (rc != WH_ERROR_OK) {
-        return rc;
-    }
-
-    /* Close the file descriptor after mmap */
-    close(shmFd);
-    return 0;
+    return ret;
 }
 
 
-/** Callback function declarations */
 int posixTransportShm_ClientInit(void* c, const void* cf,
                                  whCommSetConnectedCb connectcb,
                                  void*                connectcb_arg)
 {
-    int                       rc;
-    int                       shmFd;
-    struct stat               shmStat;
-    size_t                    shmSize;
-    size_t                    shmNameLen;
-    ShmHeader*                header;
-    whTransportMemConfig      tMemCfg;
-    posixTransportShmContext* ctx    = (posixTransportShmContext*)c;
-    posixTransportShmConfig*  config = (posixTransportShmConfig*)cf;
+    posixTransportShmContext*   ctx         = (posixTransportShmContext*)c;
+    posixTransportShmConfig*    config      = (posixTransportShmConfig*)cf;
+    int                         ret         = WH_ERROR_OK;
+    ptshmMapping                map[1]      = { 0 };
+    whTransportMemConfig        tMemCfg[1]  = { 0 };
 
-    if (ctx == NULL || config == NULL || config->shmObjName == NULL) {
+    if (    (ctx == NULL) ||
+            (config == NULL) ||
+            (config->name == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
-    /* check shmObjName for max length */
-    shmNameLen = strnlen(config->shmObjName, NAME_MAX + 1);
-    if (shmNameLen > NAME_MAX) {
-        return WH_ERROR_BADARGS;
-    }
+    /* Ignore the config sizes and read from the shared file */
+    do {
+        ret = posixTransportShm_UseMap( config->name, map);
+    } while ((ret == WH_ERROR_NOTFOUND) || (ret == WH_ERROR_NOTREADY));
 
-    ctx->shmObjName = calloc(shmNameLen + 1, sizeof(char));
-    strncpy(ctx->shmObjName, config->shmObjName, shmNameLen);
+    if (ret == WH_ERROR_OK) {
+        memset(ctx, 0, sizeof(*ctx));
 
-    shmSize = sizeof(ShmHeader) + config->req_size + config->resp_size;
+        /* Configure the underlying transport context */
+        tMemCfg->req_size  = map->header->req_size;
+        tMemCfg->resp_size = map->header->resp_size;
+        tMemCfg->req       = map->req;
+        tMemCfg->resp      = map->resp;
 
-    /* Attempt to open the shared memory backing store. If it doesn't exist yet,
-     * sleep */
-    while (1) {
-        shmFd = shm_open(ctx->shmObjName, O_RDWR, 0666);
-        if (shmFd == -1) {
-            if (errno != ENOENT) {
-                perror("client shm_open");
-                exit(EXIT_FAILURE);
-            }
-            else {
-                sleep(1);
-            }
+        /* Initialize the shared memory transport */
+        ret = wh_TransportMem_InitClear(ctx->transportMemCtx, tMemCfg, connectcb,
+                                  connectcb_arg);
+
+        if (ret == WH_ERROR_OK) {
+            ctx->ptr = map->ptr;
+            ctx->size = map->size;
+            ctx->dma = map->dma;
+            ctx->dma_size = map->dma_size;
+        } else {
+            /* Problem initializing the transport */
+            (void)munmap(map->ptr, map->size);
         }
-        else {
-            break;
-        }
     }
-
-    /* Shared memory object already exists, check its size */
-    if (fstat(shmFd, &shmStat) == -1) {
-        perror("fstat");
-        close(shmFd);
-        exit(EXIT_FAILURE);
-    }
-
-    if (shmStat.st_size != shmSize) {
-        fprintf(stderr,
-                "Error: Shared memory size does not match expected size.\n");
-        close(shmFd);
-        exit(EXIT_FAILURE);
-    }
-
-    /* Ensure the ref count is 1, meaning the server has successfully
-     * initialized */
-
-    /* Map the shared memory object */
-    ctx->shmBuf =
-        mmap(NULL, shmSize, PROT_READ | PROT_WRITE, MAP_SHARED, shmFd, 0);
-    if (ctx->shmBuf == MAP_FAILED) {
-        perror("mmap");
-        close(shmFd);
-        exit(EXIT_FAILURE);
-    }
-    header = (ShmHeader*)ctx->shmBuf;
-
-    /* Spin and wait until the server bumps the ref count. We can now use the
-     * buffer */
-    while (atomic_load(&header->refCount) < 1) {
-        sleep(1);
-    }
-
-    /* allocate a shared memory transport context */
-    ctx->transportMemCtx = malloc(sizeof(whTransportMemContext));
-    if (ctx->transportMemCtx == NULL) {
-        return WH_ERROR_ABORTED;
-    }
-
-    /* Configure the underlying transport context */
-    tMemCfg.req_size  = config->req_size;
-    tMemCfg.resp_size = config->resp_size;
-    tMemCfg.req       = ctx->shmBuf + sizeof(ShmHeader);
-    tMemCfg.resp      = ctx->shmBuf + sizeof(ShmHeader) + config->req_size;
-
-    /* Initialize the shared memory transport using our newly mmapped buffer */
-    rc = wh_TransportMem_Init(ctx->transportMemCtx, &tMemCfg, connectcb,
-                              connectcb_arg);
-    if (rc != WH_ERROR_OK) {
-        return rc;
-    }
-
-    /* Clear the comms buffers */
-    wh_Utils_memset_flush((void*)ctx->transportMemCtx->req, 0,
-                          ctx->transportMemCtx->req_size);
-    wh_Utils_memset_flush((void*)ctx->transportMemCtx->resp, 0,
-                          ctx->transportMemCtx->resp_size);
-
-    /* Close the file descriptor after mmap */
-    close(shmFd);
-    return 0;
+    return ret;
 }
 
 
 int posixTransportShm_Cleanup(void* c)
 {
     posixTransportShmContext* ctx = (posixTransportShmContext*)c;
-    ShmHeader*                header;
 
-    if (ctx == NULL || ctx->transportMemCtx == NULL || ctx->shmBuf == NULL) {
+    if (ctx == NULL) {
         return WH_ERROR_BADARGS;
     }
 
-    header = (ShmHeader*)ctx->shmBuf;
+    if (ctx->ptr != NULL) {
+        ptshmHeader* header = (ptshmHeader*)ctx->ptr;
+        header->initialized = PTSHM_INITIALIZED_CLEANUP;
 
-    /* Decrement the reference count */
-    if (atomic_fetch_sub(&header->refCount, 1) == 1) {
-        /* If the reference count is now zero, unlink the shared memory */
-        if (shm_unlink(ctx->shmObjName) == -1) {
-            perror("shm_unlink");
-            exit(EXIT_FAILURE);
-        }
+        (void)wh_TransportMem_Cleanup(ctx->transportMemCtx);
+        (void)munmap(ctx->ptr, ctx->size);
+        ctx->ptr = NULL;
     }
-
-    /* Unmap the shared memory */
-    if (munmap(ctx->shmBuf, sizeof(header) + ctx->transportMemCtx->req_size +
-                                ctx->transportMemCtx->resp_size) == -1) {
-        perror("munmap");
-        exit(EXIT_FAILURE);
-    }
-
-    /* Free the allocated memory */
-    free(ctx->shmObjName);
-    free(ctx->transportMemCtx);
-
     return 0;
 }
 
