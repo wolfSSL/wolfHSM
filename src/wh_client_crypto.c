@@ -48,8 +48,8 @@
 #include "wolfssl/wolfcrypt/wc_port.h"
 #include "wolfssl/wolfcrypt/cryptocb.h"
 #include "wolfssl/wolfcrypt/asn.h"
-#include "wolfssl/wolfcrypt/curve25519.h"
 #include "wolfssl/wolfcrypt/ecc.h"
+#include "wolfssl/wolfcrypt/curve25519.h"
 
 /* Message definitions */
 #include "wolfhsm/wh_message.h"
@@ -69,6 +69,15 @@ static int _wh_Client_EccMakeKey(whClientContext* ctx,
         uint16_t label_len, uint8_t* label,
         ecc_key* key);
 #endif /* HAVE_ECC */
+
+#ifdef HAVE_CURVE25519
+static int _wh_Client_Curve25519MakeKey(whClientContext* ctx,
+        uint16_t size,
+        whKeyId *inout_key_id, whNvmFlags flags,
+        uint16_t label_len, uint8_t* label,
+        curve25519_key* key);
+#endif /* HAVE_CURVE25519 */
+
 
 
 #ifdef HAVE_ECC
@@ -708,7 +717,7 @@ printf("[client] %s ctx:%p key:%p, sig:%p sig_len:%u, hash:%p hash_len:%u out_re
 #endif /* HAVE_ECC */
 
 #ifdef HAVE_CURVE25519
-int wh_Client_SetCurve25519KeyId(curve25519_key* key, whNvmId keyId)
+int wh_Client_Curve25519SetKeyId(curve25519_key* key, whKeyId keyId)
 {
     if (key == NULL) {
         return WH_ERROR_BADARGS;
@@ -720,7 +729,7 @@ int wh_Client_SetCurve25519KeyId(curve25519_key* key, whNvmId keyId)
     return WH_ERROR_OK;
 }
 
-int wh_Client_GetCurve25519KeyId(curve25519_key* key, whNvmId* outId)
+int wh_Client_Curve25519GetKeyId(curve25519_key* key, whKeyId* outId)
 {
     if (    (key == NULL) ||
             (outId == NULL)) {
@@ -730,9 +739,9 @@ int wh_Client_GetCurve25519KeyId(curve25519_key* key, whNvmId* outId)
     return WH_ERROR_OK;
 }
 
-int wh_Client_ImportCurve25519Key(whClientContext* ctx, curve25519_key* key,
+int wh_Client_Curve25519ImportKey(whClientContext* ctx, curve25519_key* key,
         whKeyId *inout_keyId, whNvmFlags flags,
-        uint32_t label_len, uint8_t* label)
+        uint16_t label_len, uint8_t* label)
 
 {
     int ret = 0;
@@ -764,14 +773,14 @@ int wh_Client_ImportCurve25519Key(whClientContext* ctx, curve25519_key* key,
     return ret;
 }
 
-int wh_Client_ExportCurve25519Key(whClientContext* ctx, whKeyId keyId,
+int wh_Client_Curve25519ExportKey(whClientContext* ctx, whKeyId keyId,
         curve25519_key* key,
-        uint32_t label_len, uint8_t* label)
+        uint16_t label_len, uint8_t* label)
 {
     int ret = 0;
     /* buffer cannot be larger than MTU */
     byte buffer[WOLFHSM_CFG_COMM_DATA_LEN] = {0};
-    uint32_t buffer_len = sizeof(buffer);
+    uint16_t buffer_len = sizeof(buffer);
 
     if (    (ctx == NULL) ||
             WH_KEYID_ISERASED(keyId) ||
@@ -792,10 +801,10 @@ int wh_Client_ExportCurve25519Key(whClientContext* ctx, whKeyId keyId,
     return ret;
 }
 
-int wh_Client_MakeCurve25519Key(whClientContext* ctx,
-        uint32_t size,
+static int _wh_Client_Curve25519MakeKey(whClientContext* ctx,
+        uint16_t size,
         whKeyId *inout_key_id, whNvmFlags flags,
-        uint32_t label_len, uint8_t* label,
+        uint16_t label_len, uint8_t* label,
         curve25519_key* key)
 {
     int ret = 0;
@@ -872,14 +881,14 @@ int wh_Client_MakeCurve25519Key(whClientContext* ctx,
                 uint16_t der_size = (uint16_t)(res->len);
                 uint8_t* key_der = (uint8_t*)(res + 1);
                 /* Set the key_id.  Should be ERASED if EPHEMERAL */
-                wh_Client_SetCurve25519KeyId(key, key_id);
+                wh_Client_Curve25519SetKeyId(key, key_id);
 
                 if (flags & WH_NVM_FLAGS_EPHEMERAL) {
                     /* Response has the exported key */
                     ret = wh_Crypto_DeserializeCurve25519Key(
                             der_size, key_der, key);
 #ifdef DEBUG_CRYPTOCB_VERBOSE
-                    _hexdump("[client] KeyGen export:", key_der, der_size);
+                    wh_Utils_Hexdump("[client] KeyGen export:", key_der, der_size);
 #endif
                 }
             }
@@ -891,36 +900,174 @@ int wh_Client_MakeCurve25519Key(whClientContext* ctx,
     return ret;
 }
 
-int wh_Client_MakeCacheCurve25519Key(whClientContext* ctx,
-        uint32_t size,
+int wh_Client_Curve25519MakeCacheKey(whClientContext* ctx,
+        uint16_t size,
         whKeyId *inout_key_id, whNvmFlags flags,
-        uint32_t label_len, uint8_t* label)
+        uint16_t label_len, uint8_t* label)
 {
     /* Valid keyid ptr is required in this form */
     if (inout_key_id == NULL) {
         return WH_ERROR_BADARGS;
     }
 
-    return wh_Client_MakeCurve25519Key(ctx,
+    return _wh_Client_Curve25519MakeKey(ctx,
             size,
             inout_key_id, flags,
             label_len, label,
             NULL);
 }
 
-int wh_Client_MakeExportCurve25519Key(whClientContext* ctx,
-        uint32_t size, curve25519_key* key)
+int wh_Client_Curve25519MakeExportKey(whClientContext* ctx,
+        uint16_t size, curve25519_key* key)
 {
     /* Valid key is required for this form */
     if (key == NULL) {
         return WH_ERROR_BADARGS;
     }
 
-    return wh_Client_MakeCurve25519Key(ctx,
+    return _wh_Client_Curve25519MakeKey(ctx,
             size,
             NULL, WH_NVM_FLAGS_EPHEMERAL,
             0, NULL,
             key);
+}
+
+int wh_Client_Curve25519SharedSecret(whClientContext* ctx,
+        curve25519_key* priv_key, curve25519_key* pub_key,
+        int endian, uint8_t* out, uint16_t *out_size)
+{
+    int ret = WH_ERROR_OK;
+    whPacket* packet;
+
+    /* Transaction state */
+    whKeyId prv_key_id;
+    int prv_evict = 0;
+    whKeyId pub_key_id;
+    int pub_evict = 0;
+
+    if (    (ctx == NULL) ||
+            (pub_key == NULL) ||
+            (priv_key == NULL) ) {
+        return WH_ERROR_BADARGS;
+    }
+
+    packet = (whPacket*)wh_CommClient_GetDataPtr(ctx->comm);
+    if (packet == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    pub_key_id = WH_DEVCTX_TO_KEYID(pub_key->devCtx);
+    if (    (ret == WH_ERROR_OK) &&
+            WH_KEYID_ISERASED(pub_key_id)) {
+        /* Must import the key to the server and evict it afterwards */
+        uint8_t keyLabel[] = "TempX25519-pub";
+        whNvmFlags flags = WH_NVM_FLAGS_NONE;
+
+        ret = wh_Client_Curve25519ImportKey(ctx,
+                pub_key, &pub_key_id, flags,
+                sizeof(keyLabel), keyLabel);
+        if (ret == WH_ERROR_OK) {
+            pub_evict = 1;
+        }
+    }
+
+    prv_key_id = WH_DEVCTX_TO_KEYID(priv_key->devCtx);
+    if (    (ret == WH_ERROR_OK) &&
+            WH_KEYID_ISERASED(prv_key_id)) {
+        /* Must import the key to the server and evict it afterwards */
+        uint8_t keyLabel[] = "TempX25519-prv";
+        whNvmFlags flags = WH_NVM_FLAGS_NONE;
+
+        ret = wh_Client_Curve25519ImportKey(ctx,
+                priv_key, &prv_key_id, flags,
+                sizeof(keyLabel), keyLabel);
+        if (ret == WH_ERROR_OK) {
+            prv_evict = 1;
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        /* Request Message*/
+        uint16_t group = WH_MESSAGE_GROUP_CRYPTO;
+        uint16_t action = WC_ALGO_TYPE_PK;
+        uint32_t type = WC_PK_TYPE_CURVE25519;
+
+        wh_Packet_pk_curve25519_req* req = &packet->pkCurve25519Req;
+        uint16_t req_len =  WH_PACKET_STUB_SIZE + sizeof(*req);
+        uint32_t options = 0;
+
+        if (req_len <= WOLFHSM_CFG_COMM_DATA_LEN) {
+            if (pub_evict != 0) {
+                options |= WH_PACKET_PK_CURVE25519_OPTIONS_EVICTPUB;
+            }
+            if (prv_evict != 0) {
+                options |= WH_PACKET_PK_CURVE25519_OPTIONS_EVICTPRV;
+            }
+
+            memset(req, 0, sizeof(*req));
+            req->type           = type;
+            req->options        = options;
+            req->privateKeyId   = prv_key_id;
+            req->publicKeyId    = pub_key_id;
+            req->endian         = endian;
+
+            /* Send Request */
+            ret = wh_Client_SendRequest(ctx, group, action, req_len,
+                (uint8_t*)packet);
+    #ifdef DEBUG_CRYPTOCB_VERBOSE
+            printf("[client] %s req sent. priv:%u pub:%u\n",
+                    __func__, req->privateKeyId, req->publicKeyId);
+    #endif
+            if (ret == WH_ERROR_OK) {
+                /* Server will evict.  Reset our flags */
+                pub_evict = prv_evict = 0;
+
+                /* Response Message */
+                wh_Packet_pk_curve25519_res* res = &packet->pkCurve25519Res;
+                uint8_t* res_out = (uint8_t*)(res + 1);
+                uint16_t res_len;
+
+                /* Recv Response */
+                do {
+                    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                        (uint8_t*)packet);
+                } while (ret == WH_ERROR_NOTREADY);
+    #ifdef DEBUG_CRYPTOCB_VERBOSE
+                printf("[client] %s resp packet recv. ret:%d rc:%d\n",
+                        __func__, ret, packet->rc);
+    #endif
+                if (ret == WH_ERROR_OK) {
+                    if (packet->rc != 0)
+                        ret = packet->rc;
+                    else {
+                        if (out_size != NULL) {
+                            *out_size = res->sz;
+                        }
+                        if (out != NULL) {
+                            memcpy(out, res_out, res->sz);
+                        }
+        #ifdef DEBUG_CRYPTOCB_VERBOSE
+                        wh_Utils_Hexdump("[client] X25519:", res_out, res->sz);
+        #endif
+                    }
+                }
+            }
+        } else {
+            ret = WH_ERROR_BADARGS;
+        }
+    }
+
+    /* Evict the keys manually on error */
+    if(pub_evict != 0) {
+        (void)wh_Client_KeyEvict(ctx, pub_key_id);
+    }
+    if(prv_evict != 0) {
+        (void)wh_Client_KeyEvict(ctx, prv_key_id);
+    }
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+    printf("[client] %s ret:%d\n", __func__, ret);
+#endif
+    return ret;
 }
 
 #endif /* HAVE_CURVE25519 */

@@ -88,6 +88,95 @@ static int _cancelCb(uint16_t seq)
 }
 #endif
 
+
+#ifdef HAVE_ECC
+static int whTest_CryptoEcc(whClientContext* ctx, WC_RNG* rng)
+{
+    int ret = WH_ERROR_OK;
+    ecc_key eccPrivate[1];
+    ecc_key eccPublic[1];
+#define TEST_ECC_KEYSIZE 32
+    uint8_t shared_ab[TEST_ECC_KEYSIZE] = {0};
+    uint8_t shared_ba[TEST_ECC_KEYSIZE] = {0};
+    uint8_t hash[TEST_ECC_KEYSIZE] = {0};
+    uint8_t sig[ECC_MAX_SIG_SIZE] = {0};
+
+#if 0
+    whNvmFlags flags = WH_NVM_FLAGS_NONE;
+    whKeyId key_id_a = WH_KEYID_ERASED;
+    uint8_t* label_a = (uint8_t*)("Ecc Label A");
+    whKeyId key_id_b = 24;
+    uint8_t* label_b = (uint8_t*)("Ecc Label B");
+#endif
+
+    ret = wc_ecc_init_ex(eccPrivate, NULL, WH_DEV_ID);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wc_ecc_init_ex %d\n", ret);
+    } else {
+        ret = wc_ecc_init_ex(eccPublic, NULL, WH_DEV_ID);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wc_ecc_init_ex %d\n", ret);
+        } else {
+            ret = wc_ecc_make_key(rng, TEST_ECC_KEYSIZE, eccPrivate);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to wc_ecc_make_key %d\n", ret);
+            } else {
+                ret = wc_ecc_make_key(rng, TEST_ECC_KEYSIZE, eccPublic);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("Failed to wc_ecc_make_key %d\n", ret);
+                } else {
+                    word32 secLen = TEST_ECC_KEYSIZE;
+                    ret = wc_ecc_shared_secret(eccPrivate, eccPublic,
+                            (byte*)shared_ab, &secLen);
+                    if (ret != 0) {
+                        WH_ERROR_PRINT("Failed to wc_ecc_shared_secret %d\n", ret);
+                    } else {
+                        ret = wc_ecc_shared_secret(eccPublic, eccPrivate,
+                                (byte*)shared_ba, &secLen);
+                        if (ret != 0) {
+                            WH_ERROR_PRINT("Failed to wc_ecc_shared_secret %d\n", ret);
+                        } else {
+                            if (memcmp(shared_ab, shared_ba, secLen) == 0) {
+                                printf("ECDH SUCCESS\n");
+                            } else {
+                                WH_ERROR_PRINT("ECDH FAILED TO MATCH\n");
+                                ret = -1;
+                            }
+                        }
+                    }
+                    /*Use the shared secret as a random hash */
+                    memcpy(hash, shared_ba, sizeof(hash));
+                    word32 sigLen = sizeof(sig);
+                    ret = wc_ecc_sign_hash((void*)hash, sizeof(hash),
+                            (void*)sig, &sigLen, rng, eccPrivate);
+                    if (ret != 0) {
+                        WH_ERROR_PRINT("Failed to wc_ecc_sign_hash %d\n", ret);
+                    } else {
+                        int res = 0;
+                        ret = wc_ecc_verify_hash((void*)sig, sigLen,
+                                (void*)hash, sizeof(hash), &res,
+                                eccPrivate);
+                        if (ret != 0) {
+                            WH_ERROR_PRINT("Failed to wc_ecc_verify_hash %d\n", ret);
+                        } else {
+                            if (res == 1) {
+                                printf("ECC SIGN/VERIFY SUCCESS\n");
+                            } else {
+                                WH_ERROR_PRINT("ECC SIGN/VERIFY FAIL\n");
+                                ret = -1;
+                            }
+                        }
+                    }
+                }
+            }
+            wc_ecc_free(eccPublic);
+        }
+        wc_ecc_free(eccPrivate);
+    }
+    return ret;
+}
+#endif /* HAVE_ECC */
+
 #ifdef HAVE_CURVE25519
 static int whTest_CryptoCurve25519(whClientContext* ctx, WC_RNG* rng)
 {
@@ -154,12 +243,12 @@ static int whTest_CryptoCurve25519(whClientContext* ctx, WC_RNG* rng)
                 wc_curve25519_free(key_a);
                 wc_curve25519_free(key_b);
             }
-            ret = wh_Client_MakeExportCurve25519Key(ctx, key_size, key_a);
+            ret = wh_Client_Curve25519MakeExportKey(ctx, key_size, key_a);
             if (ret != 0) {
                 WH_ERROR_PRINT("Failed to wh_Client_MakeExportCurve25519Key %d\n", ret);
             }
             if (ret == 0) {
-                ret = wh_Client_MakeExportCurve25519Key(ctx, key_size, key_b);
+                ret = wh_Client_Curve25519MakeExportKey(ctx, key_size, key_b);
                 if (ret != 0) {
                     WH_ERROR_PRINT("Failed to wh_Client_MakeExportCurve25519Key %d\n", ret);
                 }
@@ -193,13 +282,13 @@ static int whTest_CryptoCurve25519(whClientContext* ctx, WC_RNG* rng)
                 wc_curve25519_free(key_a);
                 wc_curve25519_free(key_b);
             }
-            ret = wh_Client_MakeCacheCurve25519Key(ctx, key_size,
+            ret = wh_Client_Curve25519MakeCacheKey(ctx, key_size,
                     &key_id_a, flags, sizeof(label_a), label_a);
             if (ret != 0) {
                 WH_ERROR_PRINT("Failed to wh_Client_MakeCacheCurve25519Key %d\n", ret);
             }
             if (ret == 0) {
-                ret = wh_Client_MakeCacheCurve25519Key(ctx, key_size,
+                ret = wh_Client_Curve25519MakeCacheKey(ctx, key_size,
                         &key_id_b, flags, sizeof(label_b), label_b);
                 if (ret != 0) {
                     WH_ERROR_PRINT("Failed to wh_Client_MakeCacheCurve25519Key %d\n", ret);
@@ -207,9 +296,8 @@ static int whTest_CryptoCurve25519(whClientContext* ctx, WC_RNG* rng)
             }
             if (ret == 0) {
                 len = sizeof(shared_ab);
-                wh_Client_SetCurve25519KeyId(key_a, key_id_a);
-                wh_Client_SetCurve25519KeyId(key_b, key_id_b);
-                printf("Using server keys %u and %u\n",key_id_a, key_id_b);
+                wh_Client_Curve25519SetKeyId(key_a, key_id_a);
+                wh_Client_Curve25519SetKeyId(key_b, key_id_b);
                 ret = wc_curve25519_shared_secret(
                         key_a, key_b, shared_ab, &len);
                 if (ret != 0) {
@@ -234,7 +322,9 @@ static int whTest_CryptoCurve25519(whClientContext* ctx, WC_RNG* rng)
         }
         wc_curve25519_free(key_a);
     }
-    printf("CURVE25519 SUCCESS\n");
+    if (ret == WH_ERROR_OK) {
+        printf("CURVE25519 SUCCESS\n");
+    }
     return ret;
 }
 #endif
@@ -244,11 +334,8 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     int i;
     whClientContext client[1] = {0};
     int ret = 0;
-    int res = 0;
     /* wolfcrypt */
     WC_RNG rng[1];
-    ecc_key eccPrivate[1];
-    ecc_key eccPublic[1];
     uint16_t outLen;
     uint16_t keyId;
     uint8_t iv[16];
@@ -808,6 +895,10 @@ int whTest_CryptoClientConfig(whClientConfig* config)
 #endif /* !NO_RSA */
 
 #ifdef HAVE_ECC
+    if (ret == 0) {
+        ret = whTest_CryptoEcc(client, rng);
+    }
+#if 0
     /* test ecc */
     if((ret = wc_ecc_init_ex(eccPrivate, NULL, WH_DEV_ID)) != 0) {
         printf("Failed to wc_ecc_init_ex %d\n", ret);
@@ -858,11 +949,12 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         goto exit;
     }
 #endif /* HAVE_ECC */
+#endif
 
 #ifdef HAVE_CURVE25519
     /* test curve25519 */
-    if((ret = whTest_CryptoCurve25519(client, rng)) != 0) {
-        goto exit;
+    if (ret == 0) {
+        ret = whTest_CryptoCurve25519(client, rng);
     }
 #endif
 
@@ -909,6 +1001,9 @@ int whTest_CryptoClientConfig(whClientConfig* config)
 #endif
 
 
+    if (ret != 0) {
+        goto exit;
+    }
 #ifndef NO_SHA256
     for (i = 0; i < WH_NUM_DEVIDS; i++) {
         /* Initialize SHA256 structure */

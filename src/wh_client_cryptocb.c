@@ -600,7 +600,7 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
 #ifdef HAVE_CURVE25519
         case WC_PK_TYPE_CURVE25519_KEYGEN:
         {
-            ret = wh_Client_MakeExportCurve25519Key(ctx,
+            ret = wh_Client_Curve25519MakeExportKey(ctx,
                     info->pk.curve25519kg.size,
                     info->pk.curve25519kg.key);
             /* Fix up error code to be wolfCrypt*/
@@ -611,184 +611,28 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
 
         case WC_PK_TYPE_CURVE25519:
         {
-            /* out is after the fixed size fields */
-            uint8_t* out = (uint8_t*)(&packet->pkCurve25519Res + 1);
-            dataSz = WH_PACKET_STUB_SIZE + sizeof(packet->pkCurve25519Req);
-            whKeyId priv_key_id = WH_DEVCTX_TO_KEYID(
-                    info->pk.curve25519.private_key->devCtx);
-            whKeyId pub_key_id = WH_DEVCTX_TO_KEYID(
-                    info->pk.curve25519.public_key->devCtx);
+            /* Extract info parameters */
+            curve25519_key* pub_key = info->pk.curve25519.public_key;
+            curve25519_key* priv_key = info->pk.curve25519.private_key;
             int endian = info->pk.curve25519.endian;
-            int priv_evict = 0;
-            int pub_evict = 0;
-
-            if (dataSz > WOLFHSM_CFG_COMM_DATA_LEN) {
-                ret = BAD_FUNC_ARG;
-                break;
+            uint8_t* out        = info->pk.curve25519.out;
+            word32* out_len     = info->pk.curve25519.outlen;
+            uint16_t len = 0;
+            if(out_len != NULL) {
+                len = *out_len;
             }
 
-            ret = 0;
-
-            /* check to see if the pub key id is erased */
-            if (WH_KEYID_ISERASED(pub_key_id)) {
-                /* Must import the key to the server and evict it afterwards */
-                uint8_t keyLabel[] = "ClientCbTempC25519-pub";
-                whNvmFlags flags = WH_NVM_FLAGS_NONE;
-
-                ret = wh_Client_ImportCurve25519Key(ctx,
-                        info->pk.curve25519.public_key,
-                        &pub_key_id, flags,
-                        sizeof(keyLabel), keyLabel);
-                if (ret == 0) {
-                    pub_evict = 1;
-                }
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("[client] Curve25519 pubkey imported ret:%d keyid:%u\n",
-                    ret, pub_key_id);
-#endif
-            }
-
-            /* check to see if the priv key id is erased */
-            if (    (ret == 0) &&
-                    (WH_KEYID_ISERASED(priv_key_id))) {
-                /* Must import the key to the server and evict it afterwards */
-                uint8_t keyLabel[] = "ClientCbTempC25519-priv";
-                whNvmFlags flags = WH_NVM_FLAGS_NONE;
-
-                ret = wh_Client_ImportCurve25519Key(ctx,
-                        info->pk.curve25519.private_key,
-                        &priv_key_id, flags,
-                        sizeof(keyLabel), keyLabel);
-                if (ret == 0) {
-                    priv_evict = 1;
-                }
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("[client] Curve25519 privkey imported ret:%d keyid:%u\n",
-                    ret, priv_key_id);
-#endif
-            }
-
-            if (ret == 0) {
-                /* Set packet members. Reset anyreq.type just in case */
-                packet->pkAnyReq.type = info->pk.type;
-                packet->pkCurve25519Req.privateKeyId = priv_key_id;
-                packet->pkCurve25519Req.publicKeyId = pub_key_id;
-                packet->pkCurve25519Req.endian = endian;
-
-                /* write request */
-                ret = wh_Client_SendRequest(ctx, group, WC_ALGO_TYPE_PK, dataSz,
-                    (uint8_t*)packet);
-    #ifdef DEBUG_CRYPTOCB_VERBOSE
-                printf("[client] Curve25519 req sent. priv:%u pub:%u endian:%d type:%u\n",
-                        packet->pkCurve25519Req.privateKeyId,
-                        packet->pkCurve25519Req.publicKeyId,
-                        packet->pkCurve25519Req.endian,
-                        packet->pkCurve25519Req.type);
-    #endif
-                /* read response */
-                if (ret == 0) {
-                    do {
-                        ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
-                            (uint8_t*)packet);
-                    } while (ret == WH_ERROR_NOTREADY);
-                }
-    #ifdef DEBUG_CRYPTOCB_VERBOSE
-                printf("[client] Curve25519 resp packet recv. ret:%d rc:%d\n", ret, packet->rc);
-    #endif
-                if (ret == 0) {
-                    if (packet->rc != 0)
-                        ret = packet->rc;
-                    else {
-                        /* read outLen */
-                        *info->pk.curve25519.outlen = packet->pkCurve25519Res.sz;
-                        /* read out */
-                        XMEMCPY(info->pk.curve25519.out, out, packet->pkCurve25519Res.sz);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-                        _hexdump("[client] Curve25519:", out, packet->pkCurve25519Res.sz);
-#endif
-                    }
-                }
-            }
-            if (pub_evict != 0) {
-                /* Evict the imported key */
-                ret = wh_Client_KeyEvict(ctx, pub_key_id);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("[client] Evicted temp key_id:%d ret:%d \n", pub_key_id, ret);
-#endif
-            }
-            if (priv_evict != 0) {
-                /* Evict the imported key */
-                ret = wh_Client_KeyEvict(ctx, priv_key_id);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("[client] Evicted temp key_id:%d ret:%d \n", priv_key_id, ret);
-#endif
+            ret = wh_Client_Curve25519SharedSecret(ctx,
+                                            priv_key, pub_key,
+                                            endian,
+                                            out, &len);
+            if (    (ret == WH_ERROR_OK) &&
+                    (out_len != NULL) ){
+                *out_len = len;
             }
         } break;
 #endif /* HAVE_CURVE25519 */
 
-#if 0
-#ifdef HAVE_CURVE25519
-        case WC_PK_TYPE_CURVE25519_KEYGEN:
-        {
-            packet->pkCurve25519kgReq.sz = info->pk.curve25519kg.size;
-            /* write request */
-            ret = wh_Client_SendRequest(ctx, group,
-                WC_ALGO_TYPE_PK,
-                WH_PACKET_STUB_SIZE + sizeof(packet->pkCurve25519kgReq),
-                (uint8_t*)packet);
-            if (ret == 0) {
-                do {
-                    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
-                        (uint8_t*)packet);
-                } while (ret == WH_ERROR_NOTREADY);
-            }
-            if (ret == 0) {
-                if (packet->rc != 0)
-                    ret = packet->rc;
-                /* read out */
-                else {
-                    info->pk.curve25519kg.key->devCtx =
-                        (void*)((intptr_t)packet->pkCurve25519kgRes.keyId);
-                    /* set metadata */
-                    info->pk.curve25519kg.key->pubSet = 1;
-                    info->pk.curve25519kg.key->privSet = 1;
-                }
-            }
-        } break;
-
-        case WC_PK_TYPE_CURVE25519:
-        {
-            uint8_t* out = (uint8_t*)(&packet->pkCurve25519Res + 1);
-
-            packet->pkCurve25519Req.privateKeyId =
-                (intptr_t)(info->pk.curve25519.private_key->devCtx);
-            packet->pkCurve25519Req.publicKeyId =
-                (intptr_t)(info->pk.curve25519.public_key->devCtx);
-            packet->pkCurve25519Req.endian = info->pk.curve25519.endian;
-            /* write request */
-            ret = wh_Client_SendRequest(ctx, group,
-                WC_ALGO_TYPE_PK,
-                WH_PACKET_STUB_SIZE + sizeof(packet->pkCurve25519Req),
-                (uint8_t*)packet);
-            if (ret == 0) {
-                do {
-                    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
-                        (uint8_t*)packet);
-                } while (ret == WH_ERROR_NOTREADY);
-            }
-            if (ret == 0) {
-                if (packet->rc != 0)
-                    ret = packet->rc;
-                /* read out */
-                else {
-                    XMEMCPY(info->pk.curve25519.out, out,
-                        packet->pkCurve25519Res.sz);
-                }
-            }
-        } break;
-
-#endif /* HAVE_CURVE25519 */
-#endif
         case WC_PK_TYPE_NONE:
         default:
             ret = CRYPTOCB_UNAVAILABLE;

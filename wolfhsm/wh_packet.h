@@ -248,6 +248,9 @@ typedef struct  wh_Packet_pk_curve25519kg_res
 typedef struct  wh_Packet_pk_curve25519_req
 {
     uint32_t type;
+    uint32_t options;
+#define WH_PACKET_PK_CURVE25519_OPTIONS_EVICTPUB (1 << 0)
+#define WH_PACKET_PK_CURVE25519_OPTIONS_EVICTPRV (1 << 1)
     uint32_t privateKeyId;
     uint32_t publicKeyId;
     uint32_t endian;

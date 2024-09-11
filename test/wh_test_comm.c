@@ -411,7 +411,7 @@ void wh_CommClientServer_ShMemThreadTest(void)
 {
     /* Transport memory configuration */
     posixTransportShmConfig tmcf[1] = {{
-        .shmObjName = "/wh_test_comm_shm",
+        .name = "/wh_test_comm_shm",
         .req_size   = BUFFER_SIZE,
         .resp_size  = BUFFER_SIZE,
         .dma_size = BUFFER_SIZE * 4,

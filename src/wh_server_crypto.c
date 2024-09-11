@@ -64,7 +64,18 @@ static int wh_Server_HandleEccSign(whServerContext* ctx, whPacket* packet,
 
 static int wh_Server_HandleEccVerify(whServerContext* ctx, whPacket* packet,
         uint16_t *out_size);
-#endif
+#endif /* HAVE_ECC */
+
+#ifdef HAVE_CURVE25519
+/* Process a Generate curve25519_key request packet and produce a response */
+static int wh_Server_HandleGenerateCurve25519Key(whServerContext* ctx,
+        whPacket* packet, uint16_t *out_size);
+
+/* Process a curve25519_key Function request packet and produce a response */
+static int wh_Server_HandleSharedSecretCurve25519(whServerContext* ctx,
+        whPacket* packet, uint16_t *out_size);
+#endif /* HAVE_CURVE25519 */
+
 
 
 /** Public server crypto functions */
@@ -187,7 +198,7 @@ int wh_Server_CacheExportCurve25519Key(whServerContext* server, whKeyId keyId,
         ret = wh_Crypto_DeserializeCurve25519Key(cacheMeta->len, cacheBuf, key);
 #ifdef DEBUG_CRYPTOCB_VERBOSE
         printf("[server] Export25519Key id:%u ret:%d\n", keyId, ret);
-        _hexdump("[server] export key:", cacheBuf, cacheMeta->len);
+        wh_Utils_Hexdump("[server] export key:", cacheBuf, cacheMeta->len);
 #endif
     }
     return ret;
@@ -362,7 +373,6 @@ static int hsmCryptoRsaGetSize(whServerContext* server, whPacket* packet,
 /** Request/Response Handling functions */
 
 #ifdef HAVE_ECC
-
 static int wh_Server_HandleEccKeyGen(whServerContext* ctx, whPacket* packet,
     uint16_t* out_size)
 {
@@ -391,8 +401,7 @@ static int wh_Server_HandleEccKeyGen(whServerContext* ctx, whPacket* packet,
     ret = wc_ecc_init_ex(key, NULL, ctx->crypto->devId);
     if (ret == 0) {
         /* generate the key */
-        ret = wc_ecc_make_key_ex(ctx->crypto->rng,
-            key_size, key, curve_id);
+        ret = wc_ecc_make_key_ex(ctx->crypto->rng, key_size, key, curve_id);
         if ( ret == 0) {
             /* Check incoming flags */
             if (flags & WH_NVM_FLAGS_EPHEMERAL) {
@@ -441,15 +450,15 @@ static int wh_Server_HandleEccSharedSecret(whServerContext* ctx,
     wh_Packet_pk_ecdh_res* res = &packet->pkEcdhRes;
 
     /* Request message */
+    uint32_t options    = req->options;
+    int evict_pub       = options & WH_PACKET_PK_ECDH_OPTIONS_EVICTPUB;
+    int evict_prv       = options & WH_PACKET_PK_ECDH_OPTIONS_EVICTPRV;
     whKeyId pub_key_id  = WH_MAKE_KEYID(    WH_KEYTYPE_CRYPTO,
                                             ctx->comm->client_id,
                                             req->publicKeyId);
     whKeyId prv_key_id  = WH_MAKE_KEYID(    WH_KEYTYPE_CRYPTO,
                                             ctx->comm->client_id,
                                             req->privateKeyId);
-    uint32_t options    = req->options;
-    int evict_pub       = options & WH_PACKET_PK_ECDH_OPTIONS_EVICTPUB;
-    int evict_prv       = options & WH_PACKET_PK_ECDH_OPTIONS_EVICTPRV;
 
     /* Response message */
     byte* res_out       = (uint8_t*)(res + 1);
@@ -569,21 +578,26 @@ static int wh_Server_HandleEccVerify(whServerContext* ctx,
 
     /* init public key */
     ret = wc_ecc_init_ex(key, NULL, ctx->crypto->devId);
+    printf("Here1 ret:%d\n",ret);
     if (ret == 0) {
         /* load the public key */
         ret = wh_Server_EccKeyCacheExport(ctx, key_id, key);
+        printf("Here2 ret:%d\n",ret);
         if (ret == WH_ERROR_OK) {
             /* verify the signature */
             ret = wc_ecc_verify_hash(req_sig, sig_len, req_hash, hash_len,
                 &result, key);
+            printf("Here3 ret:%d\n",ret);
             if (    (ret == 0) &&
                     (export_pub_key != 0) ) {
                 /* Export the public key to the result message*/
                 pub_size = wc_EccPublicKeyToDer(key, (byte*)res_pub,
                         max_size, 1);
+                printf("Here4 ret:%d\n",ret);
                 if (pub_size < 0) {
                     /* Problem dumping the public key.  Set to 0 length */
                     pub_size = 0;
+                    printf("Here5 ret:%d\n",ret);
                 }
             }
         }
@@ -593,6 +607,7 @@ static int wh_Server_HandleEccVerify(whServerContext* ctx,
         /* User requested to evict from cache, even if the call failed */
         (void)hsmEvictKey(ctx, key_id);
     }
+    printf("Here6 ret:%d\n",ret);
     if (ret == 0) {
         res->pubSz  = pub_size;
         res->res    = result;
@@ -640,17 +655,6 @@ static int hsmCryptoEcCheckPrivKey(whServerContext* server, whPacket* packet,
 #endif /* HAVE_ECC */
 
 #ifdef HAVE_CURVE25519
-#ifdef WOLFSSL_KEY_GEN
-/* Process a Generate curve25519_key request packet and produce a response */
-static int wh_Server_HandleGenerateCurve25519Key(whServerContext* server,
-        whPacket* packet, uint16_t *out_size);
-#endif /* WOLFSSL_KEY_GEN */
-
-/* Process a curve25519_key Function request packet and produce a response */
-static int wh_Server_HandleSharedSecretCurve25519(whServerContext* server,
-        whPacket* packet, uint16_t *out_size);
-
-
 static int wh_Server_HandleGenerateCurve25519Key(whServerContext* server, whPacket* packet,
     uint16_t* out_size)
 {
@@ -670,14 +674,14 @@ static int wh_Server_HandleGenerateCurve25519Key(whServerContext* server, whPack
 
     /* Response Message */
     uint8_t* out        = (uint8_t*)(res + 1);
-    uint16_t max_size     = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
+    uint16_t max_size   = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
                             (out - (uint8_t*)packet));
     uint16_t res_size   = 0;
 
-    /* init private key */
+    /* init key */
     ret = wc_curve25519_init_ex(key, NULL, server->crypto->devId);
-    /* make the key */
     if (ret == 0) {
+        /* make the key */
         ret = wc_curve25519_make_key(server->crypto->rng, key_size, key);
         if ( ret == 0) {
             /* Check incoming flags */
@@ -717,52 +721,63 @@ static int wh_Server_HandleGenerateCurve25519Key(whServerContext* server, whPack
     return ret;
 }
 
-static int wh_Server_HandleSharedSecretCurve25519(whServerContext* server,
+static int wh_Server_HandleSharedSecretCurve25519(whServerContext* ctx,
         whPacket* packet, uint16_t* out_size)
 {
     int ret;
     curve25519_key priv[1] = {0};
     curve25519_key pub[1] = {0};
 
-    int endian    = (int)(packet->pkCurve25519Req.endian);
-    whKeyId priv_key_id  = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
-                        server->comm->client_id,
-                        packet->pkCurve25519Req.privateKeyId);
-    whKeyId pub_key_id  = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
-                        server->comm->client_id,
-                        packet->pkCurve25519Req.publicKeyId);
-    word32 len      = CURVE25519_KEYSIZE;
-    /* iout is after the fixed size fields */
-    byte* out       = (uint8_t*)(&packet->pkCurve25519Res + 1);
+    wh_Packet_pk_curve25519_req* req = &packet->pkCurve25519Req;
+    wh_Packet_pk_curve25519_res* res = &packet->pkCurve25519Res;
 
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-    printf("[server] HandleSharedSecretCurve25519 endian:%d privkeyId:%u pubkeyid:%u\n",
-            endian, priv_key_id, pub_key_id);
-#endif
+    /* Request message */
+    uint32_t options    = req->options;
+    int evict_pub       = options & WH_PACKET_PK_CURVE25519_OPTIONS_EVICTPUB;
+    int evict_prv       = options & WH_PACKET_PK_CURVE25519_OPTIONS_EVICTPRV;
+    whKeyId pub_key_id  = WH_MAKE_KEYID(    WH_KEYTYPE_CRYPTO,
+                                            ctx->comm->client_id,
+                                            req->publicKeyId);
+    whKeyId prv_key_id  = WH_MAKE_KEYID(    WH_KEYTYPE_CRYPTO,
+                                            ctx->comm->client_id,
+                                            req->privateKeyId);
+    int endian          = req->endian;
+
+    /* Response message */
+    byte* res_out       = (uint8_t*)(res + 1);
+    word32 max_len      = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
+                            (res_out - (uint8_t*)packet));
+    word32 res_len      = max_len;
+
     /* init private key */
-    ret = wc_curve25519_init_ex(priv, NULL, server->crypto->devId);
+    ret = wc_curve25519_init_ex(priv, NULL, ctx->crypto->devId);
     if (ret == 0) {
         /* init public key */
-        ret = wc_curve25519_init_ex(pub, NULL, server->crypto->devId);
+        ret = wc_curve25519_init_ex(pub, NULL, ctx->crypto->devId);
         if (ret == 0) {
             ret = wh_Server_CacheExportCurve25519Key(
-                    server, priv_key_id, priv);
+                    ctx, prv_key_id, priv);
             if (ret == 0) {
                 ret = wh_Server_CacheExportCurve25519Key(
-                        server, pub_key_id, pub);
+                        ctx, pub_key_id, pub);
             }
             if (ret == 0) {
                 ret = wc_curve25519_shared_secret_ex(
-                    priv, pub, out, &len, endian);
+                    priv, pub, res_out, &res_len, endian);
             }
             wc_curve25519_free(pub);
         }
         wc_curve25519_free(priv);
     }
+    if (evict_pub) {
+        (void)hsmEvictKey(ctx, pub_key_id);
+    }
+    if (evict_prv) {
+        (void)hsmEvictKey(ctx, prv_key_id);
+    }
     if (ret == 0) {
-        /*set outLen and outgoing message size */
-        packet->pkCurve25519Res.sz = len;
-        *out_size = WH_PACKET_STUB_SIZE + sizeof(packet->pkCurve25519Res) + len;
+        res->sz = res_len;
+        *out_size = WH_PACKET_STUB_SIZE + sizeof(*res) + res_len;
     }
     return ret;
 }
