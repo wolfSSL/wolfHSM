@@ -2,11 +2,11 @@
 #include <fcntl.h>     /* For O_* constants */
 #include <sys/mman.h>  /* For shm_open, mmap */
 #include <sys/stat.h>  /* For mode constants */
-#include <unistd.h>    /* For ftruncate */
+#include <unistd.h>    /* For ftruncate, getpid, sleep */
 #include <errno.h>     /* For errno */
 #include <stdio.h>     /* For perror */
 #include <stdlib.h>    /* For exit */
-#include <string.h>    /* For memcpy, memset */
+#include <string.h>    /* For memset */
 #include <stdint.h>
 
 #include "wolfhsm/wh_error.h"
@@ -73,11 +73,10 @@ static int posixTransportShm_Map(int fd, size_t size, ptshmMapping* map)
         return WH_ERROR_BADARGS;
     }
 
-    memset(map, 0, sizeof(*map));
-
     /* Map the shared memory object */
     ptr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     if (ptr != MAP_FAILED) {
+        memset(map, 0, sizeof(*map));
         map->ptr = ptr;
         map->size = size;
         map->header = (ptshmHeader*)ptr;
@@ -101,7 +100,6 @@ static int posixTransportShm_UseMap(char* name, ptshmMapping* map)
         return WH_ERROR_BADARGS;
     }
 
-    memset(map, 0, sizeof(*map));
     fd = shm_open(name, O_RDWR, 0);
     if (fd >= 0) {
         /* Check the size */
@@ -109,7 +107,7 @@ static int posixTransportShm_UseMap(char* name, ptshmMapping* map)
         ret = fstat(fd, st);
         if (ret == 0) {
             if (st->st_size != 0) {
-                /* Map the header */
+                /* Map the header and get configuration */
                 ptshmHeader* header = (ptshmHeader*)mmap(NULL, sizeof(*header),
                         PROT_READ, MAP_SHARED, fd, 0);
                 if (header != MAP_FAILED) {
@@ -179,14 +177,14 @@ static int posixTransportShm_CreateMap(char* name, uint16_t req_size,
 
     /* Attempt to remove any existing object. */
     (void)shm_unlink(name);
-    /* Create shared emmory objectand set the size */
+    /* Create shared memory object and set the size */
     fd = shm_open(name, O_CREAT | O_RDWR, PTSHM_CREATEMODE);
     if (fd >= 0) {
         /* Set the size of the shared memory object.
          * Note this is the minimum size, as the OS may make it larger. */
         size_t size = sizeof(*(map->header)) + req_size + resp_size + dma_size;
         if (ftruncate(fd, size) == 0) {
-            /* Map the header */
+            /* Map the header and set the configuration */
             ptshmHeader* header = (ptshmHeader*)mmap(NULL, sizeof(*header),
                     PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
             if (header != MAP_FAILED) {
@@ -368,7 +366,13 @@ int posixTransportShm_ClientInit(void* c, const void* cf,
     /* Ignore the config sizes and read from the shared file */
     do {
         ret = posixTransportShm_UseMap( config->name, map);
-    } while ((ret == WH_ERROR_NOTFOUND) || (ret == WH_ERROR_NOTREADY));
+        if (    (ret == WH_ERROR_NOTFOUND) ||
+                (ret == WH_ERROR_NOTREADY) ) {
+            sleep(1);
+        } else {
+            break;
+        }
+    } while (1);
 
     if (ret == WH_ERROR_OK) {
         memset(ctx, 0, sizeof(*ctx));

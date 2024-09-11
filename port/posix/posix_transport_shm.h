@@ -41,9 +41,9 @@
  * Both the server and the client also provide their process ids within the
  * header block to support asynchronous signalling using POSIX RT signals.
  *
- * The optional DMA block is intended to allow the client to allow the client to
- * use the DMA versions of requests by configuring the base address of the DMA
- * request to be the mapped address of the DMA block.
+ * The optional DMA block is intended to allow the client to use the DMA
+ * versions of requests by configuring the base address of the DMA request to be
+ * the mapped address of the DMA block.
  *
  */
 
