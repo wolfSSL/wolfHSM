@@ -391,7 +391,7 @@ void wh_CommClientServer_MemThreadTest(void)
                  .transport_cb      = tmccb,
                  .transport_context = (void*)csc,
                  .transport_config  = (void*)tmcf,
-                 .client_id         = 123,
+                 .client_id         = 0x1,
     }};
 
     /* Server configuration/contexts */
@@ -401,7 +401,7 @@ void wh_CommClientServer_MemThreadTest(void)
                  .transport_cb      = tmscb,
                  .transport_context = (void*)css,
                  .transport_config  = (void*)tmcf,
-                 .server_id         = 124,
+                 .server_id         = 0xF,
     }};
 
     _whCommClientServerThreadTest(c_conf, s_conf);
@@ -424,7 +424,7 @@ void wh_CommClientServer_ShMemThreadTest(void)
                     .transport_cb      = tmccb,
                     .transport_context = (void*)csc,
                     .transport_config  = (void*)tmcf,
-                    .client_id         = 123,
+                    .client_id         = 0x2,
     }};
 
     /* Server configuration/contexts */
@@ -434,7 +434,7 @@ void wh_CommClientServer_ShMemThreadTest(void)
                     .transport_cb      = tmscb,
                     .transport_context = (void*)css,
                     .transport_config  = (void*)tmcf,
-                    .server_id         = 124,
+                    .server_id         = 0xF,
     }};
 
     _whCommClientServerThreadTest(c_conf, s_conf);
@@ -455,7 +455,7 @@ void wh_CommClientServer_TcpThreadTest(void)
                     .transport_cb      = pttccb,
                     .transport_context = (void*)tcc,
                     .transport_config  = (void*)mytcpconfig,
-                    .client_id         = 123,
+                    .client_id         = 0x3,
     }};
 
     /* Server configuration/contexts */
@@ -466,7 +466,7 @@ void wh_CommClientServer_TcpThreadTest(void)
                     .transport_cb      = pttscb,
                     .transport_context = (void*)tss,
                     .transport_config  = (void*)mytcpconfig,
-                    .server_id         = 124,
+                    .server_id         = 0xF,
     }};
 
     _whCommClientServerThreadTest(c_conf, s_conf);
