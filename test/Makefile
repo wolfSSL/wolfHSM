@@ -175,7 +175,8 @@ SRC_C += \
             ./src/wh_test_she.c \
             ./src/wh_test_nvm_flash.c \
             ./src/wh_test_clientserver.c \
-            ./src/wh_test_flash_ramsim.c
+            ./src/wh_test_flash_ramsim.c \
+            ./src/wh_test_check_struct_padding.c
 
 ifeq ($(TESTWOLFCRYPT),1)
 SRC_C += ./src/wh_test_wolfcrypt_test.c
@@ -189,7 +190,7 @@ vpath %.c $(dir $(SRC_C))
 OBJS_ASM = $(addprefix $(BUILD_DIR)/, $(notdir $(SRC_ASM:.s=.o)))
 vpath %.s $(dir $(SRC_ASM))
 
-.PHONY: all clean run checkpadding
+.PHONY: all clean run
 
 build_app: $(BUILD_DIR) $(BUILD_DIR)/$(BIN).elf
 	@echo Build complete.
@@ -213,6 +214,10 @@ $(BUILD_DIR)/%.o: %.s
 	@echo "Compiling ASM file: $(notdir $<)"
 	$(CMD_ECHO) $(AS) $(ASFLAGS) $(DEF) $(INC) -c -o $@ $<
 
+$(BUILD_DIR)/wh_test_check_struct_padding.o: wh_test_check_struct_padding.c
+	@echo "Compiling C file with PADDING CHECK: $(notdir $<)"
+	$(CMD_ECHO) $(CC) -Wpadded $(CFLAGS) $(DEF) $(INC) -c -o $@ $<
+
 $(BUILD_DIR)/%.o: %.c
 	@echo "Compiling C file: $(notdir $<)"
 	$(CMD_ECHO) $(CC) $(CFLAGS) $(DEF) $(INC) -c -o $@ $<
@@ -232,7 +237,3 @@ clean:
 run: build_app
 	./$(BUILD_DIR)/$(BIN).elf
 
-checkpadding:
-	@echo "Checking for padding issues with -Wpadded"
-	$(CMD_ECHO) $(CC) -Wpadded $(CFLAGS) $(DEF) $(INC) -c \
-	    -o $(BUILD_DIR)/wh_test_check_struct_padding.o wh_test_check_struct_padding.c

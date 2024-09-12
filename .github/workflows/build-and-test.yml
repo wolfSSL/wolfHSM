@@ -54,7 +54,7 @@ jobs:
     - name: Build and test SHE
       run: cd test && make clean && make SHE=1 WOLFSSL_DIR=../wolfssl run
 
-    # Test structure padding
-    - name: Check structure padding
-      run: cd test && make clean && make checkpadding
+    ## Test structure padding
+    #- name: Check structure padding
+    #  run: cd test && make clean && make checkpadding
 
