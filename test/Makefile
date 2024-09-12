@@ -192,6 +192,10 @@ vpath %.s $(dir $(SRC_ASM))
 
 .PHONY: all clean run
 
+#Add additional flag here to avoid pragma
+$(BUILD_DIR)/wh_test_check_struct_padding.o: CFLAGS+=-Wpadded -DWOLFHSM_CFG_NO_CRYPTO
+
+
 build_app: $(BUILD_DIR) $(BUILD_DIR)/$(BIN).elf
 	@echo Build complete.
 
@@ -213,10 +217,6 @@ $(BUILD_DIR)/$(BIN).hex: $(BUILD_DIR)/$(BIN).elf
 $(BUILD_DIR)/%.o: %.s
 	@echo "Compiling ASM file: $(notdir $<)"
 	$(CMD_ECHO) $(AS) $(ASFLAGS) $(DEF) $(INC) -c -o $@ $<
-
-$(BUILD_DIR)/wh_test_check_struct_padding.o: wh_test_check_struct_padding.c
-	@echo "Compiling C file with PADDING CHECK: $(notdir $<)"
-	$(CMD_ECHO) $(CC) -Wpadded $(CFLAGS) $(DEF) $(INC) -c -o $@ $<
 
 $(BUILD_DIR)/%.o: %.c
 	@echo "Compiling C file: $(notdir $<)"
