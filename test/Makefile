@@ -4,7 +4,7 @@ CMD_ECHO =
 # Important directories
 BUILD_DIR = ./Build
 WOLFHSM_DIR = $(CURDIR)/../
-WOLFSSL_DIR ?= $(CURDIR)/../../wolfssl
+WOLFSSL_DIR = $(CURDIR)/../../wolfssl
 
 # Project name
 BIN = wh_test
