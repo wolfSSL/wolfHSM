@@ -272,7 +272,7 @@ static void* _whCommServerTask(void* cf)
     whCommServer        server[1];
     int                 counter = 1;
 
-    sleep(1);
+    sleep(0);
     ret = wh_CommServer_Init(server, config, NULL, NULL);
     WH_TEST_ASSERT_MSG(0 == ret, "Server Init: ret=%d", ret);
 
