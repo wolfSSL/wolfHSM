@@ -54,9 +54,10 @@
 #include "wolfhsm/wh_settings.h"
 
 #include <stdint.h>
+#include <limits.h>
 
-#include "wolfhsm/wh_transport_mem.h"
 #include "wolfhsm/wh_comm.h"
+#include "wolfhsm/wh_transport_mem.h"
 
 /** POSIX SHM configuration structure */
 typedef struct {
@@ -68,12 +69,23 @@ typedef struct {
 
 
 /** POSIX SHM context */
+typedef enum {
+    PTSHM_STATE_NONE = 0,       /* Not opened, not mapped */
+    PTSHM_STATE_MAPPED,         /* Opened and mapped, no client */
+    PTSHM_STATE_INITIALIZED,    /* Fully initialized */
+    PTSHM_STATE_DONE,           /* Closed and complete */
+} posixTransportShmState;
+
 typedef struct {
+    char                    name[NAME_MAX];
+    posixTransportShmState  state;
     void*                   ptr;
     size_t                  size;
     uint8_t*                dma;
     size_t                  dma_size;
     whTransportMemContext   transportMemCtx[1];
+    whCommSetConnectedCb    connectcb;
+    void*                   connectcb_arg;
 } posixTransportShmContext;
 
 /* Naming conveniences. Reuses the same types. */

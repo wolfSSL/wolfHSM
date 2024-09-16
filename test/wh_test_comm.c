@@ -34,7 +34,7 @@
 
 #if defined(WOLFHSM_CFG_TEST_POSIX)
 #include <pthread.h> /* For pthread_create/cancel/join/_t */
-#include <unistd.h>  /* For sleep */
+#include <unistd.h>  /* For usleep */
 #include "port/posix/posix_transport_tcp.h"
 #include "port/posix/posix_transport_shm.h"
 #endif
@@ -212,6 +212,8 @@ static void* _whCommClientTask(void* cf)
     }
 
     ret = wh_CommClient_Init(client, config);
+    printf("%s CommClient_Init ret:%d\n", __func__, ret);
+    fflush(stdout);
     WH_TEST_ASSERT_MSG(0 == ret, "Client Init: ret=%d", ret);
 
     for (counter = 0; counter < REPEAT_COUNT; counter++) {
@@ -416,6 +418,12 @@ void wh_CommClientServer_ShMemThreadTest(void)
         .resp_size  = BUFFER_SIZE,
         .dma_size = BUFFER_SIZE * 4,
     }};
+
+    /* Make unique name for this test */
+    char uniq_name[32] = {0};
+    snprintf(uniq_name, sizeof(uniq_name),"/wh_test_comm_shm.%u",
+            (unsigned) getpid());
+    tmcf->name = uniq_name;
 
     /* Client configuration/contexts */
     whTransportClientCb            tmccb[1]  = {POSIX_TRANSPORT_SHM_CLIENT_CB};

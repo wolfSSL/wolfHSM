@@ -578,26 +578,21 @@ static int wh_Server_HandleEccVerify(whServerContext* ctx,
 
     /* init public key */
     ret = wc_ecc_init_ex(key, NULL, ctx->crypto->devId);
-    printf("Here1 ret:%d\n",ret);
     if (ret == 0) {
         /* load the public key */
         ret = wh_Server_EccKeyCacheExport(ctx, key_id, key);
-        printf("Here2 ret:%d\n",ret);
         if (ret == WH_ERROR_OK) {
             /* verify the signature */
             ret = wc_ecc_verify_hash(req_sig, sig_len, req_hash, hash_len,
                 &result, key);
-            printf("Here3 ret:%d\n",ret);
             if (    (ret == 0) &&
                     (export_pub_key != 0) ) {
                 /* Export the public key to the result message*/
                 pub_size = wc_EccPublicKeyToDer(key, (byte*)res_pub,
                         max_size, 1);
-                printf("Here4 ret:%d\n",ret);
                 if (pub_size < 0) {
                     /* Problem dumping the public key.  Set to 0 length */
                     pub_size = 0;
-                    printf("Here5 ret:%d\n",ret);
                 }
             }
         }
@@ -607,7 +602,6 @@ static int wh_Server_HandleEccVerify(whServerContext* ctx,
         /* User requested to evict from cache, even if the call failed */
         (void)hsmEvictKey(ctx, key_id);
     }
-    printf("Here6 ret:%d\n",ret);
     if (ret == 0) {
         res->pubSz  = pub_size;
         res->res    = result;

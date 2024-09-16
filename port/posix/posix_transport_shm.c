@@ -295,6 +295,57 @@ int posixTransportShm_GetDma(posixTransportShmContext* ctx,
     return WH_ERROR_OK;
 }
 
+/* Map the shared object if not already mapped */
+static int posixTransportShm_HandleMap(posixTransportShmContext *ctx)
+{
+    int ret = WH_ERROR_OK;
+    ptshmMapping                map[1]      = { 0 };
+    whTransportMemConfig        tMemCfg[1]  = { 0 };
+
+    if (ctx == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    if (    (ret == WH_ERROR_OK) &&
+            (ctx->state == PTSHM_STATE_NONE) ) {
+        /* Attempt to map */
+        ret = posixTransportShm_UseMap(ctx->name, map);
+        if (ret == WH_ERROR_OK) {
+            /* Configure the underlying transport context */
+            tMemCfg->req_size  = map->header->req_size;
+            tMemCfg->resp_size = map->header->resp_size;
+            tMemCfg->req       = map->req;
+            tMemCfg->resp      = map->resp;
+
+            /* Initialize the shared memory transport */
+            ret = wh_TransportMem_InitClear(ctx->transportMemCtx, tMemCfg, NULL,
+                    NULL);
+
+            if (ret == WH_ERROR_OK) {
+                ctx->ptr = map->ptr;
+                ctx->size = map->size;
+                ctx->dma = map->dma;
+                ctx->dma_size = map->dma_size;
+                ctx->state = PTSHM_STATE_INITIALIZED;
+
+                if (ctx->connectcb != NULL) {
+                    ctx->connectcb(ctx->connectcb_arg, WH_COMM_CONNECTED);
+                }
+            } else {
+                /* Problem initializing the transport */
+                (void)munmap(map->ptr, map->size);
+            }
+        }
+    }
+    if (    (ret == WH_ERROR_OK) &&
+            ((ctx->state == PTSHM_STATE_MAPPED) ||
+             (ctx->state == PTSHM_STATE_DONE) ) ) {
+        /* Mapped is invalid for a client */
+        ret = WH_ERROR_ABORTED;
+    };
+
+    return ret;
+}
 
 /** Callback function definitions */
 int posixTransportShm_ServerInit(void* c, const void* cf,
@@ -321,6 +372,9 @@ int posixTransportShm_ServerInit(void* c, const void* cf,
 
     if (ret == WH_ERROR_OK) {
         memset(ctx, 0, sizeof(*ctx));
+        strncpy(ctx->name,  config->name, sizeof(ctx->name));
+        ctx->connectcb = connectcb;
+        ctx->connectcb_arg = connectcb_arg;
 
         /* Configure the underlying transport context */
         tMemCfg->req_size  = map->header->req_size;
@@ -329,14 +383,16 @@ int posixTransportShm_ServerInit(void* c, const void* cf,
         tMemCfg->resp      = map->resp;
 
         /* Initialize the shared memory transport */
-        ret = wh_TransportMem_Init(ctx->transportMemCtx, tMemCfg, connectcb,
-                                  connectcb_arg);
+        ret = wh_TransportMem_Init(ctx->transportMemCtx, tMemCfg, NULL, NULL);
 
         if (ret == WH_ERROR_OK) {
             ctx->ptr = map->ptr;
             ctx->size = map->size;
             ctx->dma = map->dma;
             ctx->dma_size = map->dma_size;
+
+            ctx->state = PTSHM_STATE_MAPPED;
+
         } else {
             /* Problem initializing the transport */
             (void)munmap(map->ptr, map->size);
@@ -354,8 +410,6 @@ int posixTransportShm_ClientInit(void* c, const void* cf,
     posixTransportShmContext*   ctx         = (posixTransportShmContext*)c;
     posixTransportShmConfig*    config      = (posixTransportShmConfig*)cf;
     int                         ret         = WH_ERROR_OK;
-    ptshmMapping                map[1]      = { 0 };
-    whTransportMemConfig        tMemCfg[1]  = { 0 };
 
     if (    (ctx == NULL) ||
             (config == NULL) ||
@@ -363,6 +417,22 @@ int posixTransportShm_ClientInit(void* c, const void* cf,
         return WH_ERROR_BADARGS;
     }
 
+    memset(ctx, 0, sizeof(*ctx));
+    strncpy(ctx->name,  config->name, sizeof(ctx->name));
+    ctx->connectcb = connectcb;
+    ctx->connectcb_arg = connectcb_arg;
+
+    ret = posixTransportShm_HandleMap(ctx);
+    if (    (ret == WH_ERROR_NOTFOUND) ||
+            (ret == WH_ERROR_NOTREADY) ) {
+        /* Good enough for now.  Set to ok. */
+        ret = WH_ERROR_OK;
+    }
+
+    return ret;
+#if 0
+    ptshmMapping                map[1]      = { 0 };
+    whTransportMemConfig        tMemCfg[1]  = { 0 };
     /* Ignore the config sizes and read from the shared file */
     do {
         ret = posixTransportShm_UseMap( config->name, map);
@@ -372,10 +442,11 @@ int posixTransportShm_ClientInit(void* c, const void* cf,
         } else {
             break;
         }
-    } while (1);
+    } while (retries-- > 0);
 
     if (ret == WH_ERROR_OK) {
         memset(ctx, 0, sizeof(*ctx));
+        strncpy(ctx->name,  config->name, sizeof(ctx->name));
 
         /* Configure the underlying transport context */
         tMemCfg->req_size  = map->header->req_size;
@@ -398,6 +469,7 @@ int posixTransportShm_ClientInit(void* c, const void* cf,
         }
     }
     return ret;
+#endif
 }
 
 
@@ -424,26 +496,88 @@ int posixTransportShm_Cleanup(void* c)
 int posixTransportShm_SendRequest(void* c, uint16_t len, const void* data)
 {
     posixTransportShmContext* ctx = (posixTransportShmContext*)c;
+    int ret = WH_ERROR_OK;
 
     /* Only need to check NULL, mem transport checks other state info */
     if (ctx == NULL) {
         return WH_ERROR_BADARGS;
     }
 
-    return wh_TransportMem_SendRequest(ctx->transportMemCtx, len, data);
+    /* Check connected status */
+    switch(ctx->state) {
+    case PTSHM_STATE_NONE:
+        ret = posixTransportShm_HandleMap(ctx);
+        if (ret == WH_ERROR_OK) {
+            if(ctx->connectcb != NULL) {
+                ctx->connectcb(ctx->connectcb_arg, WH_COMM_CONNECTED);
+            }
+        }
+        break;
+
+    case PTSHM_STATE_MAPPED:
+        /* Invalid state for a client */
+        ret = WH_ERROR_BADARGS;
+        break;
+
+    case PTSHM_STATE_INITIALIZED:
+        ret = WH_ERROR_OK;
+        break;
+
+    case PTSHM_STATE_DONE:
+    default:
+        ret = WH_ERROR_ABORTED;
+    }
+
+    if (ret == WH_ERROR_OK) {
+        ret = wh_TransportMem_SendRequest(ctx->transportMemCtx, len, data);
+    }
+    return ret;
 }
 
 
 int posixTransportShm_RecvRequest(void* c, uint16_t* out_len, void* data)
 {
     posixTransportShmContext* ctx = (posixTransportShmContext*)c;
+    int ret = WH_ERROR_OK;
 
-    /* Only need to check NULL, mem transport checks other state info */
     if (ctx == NULL) {
         return WH_ERROR_BADARGS;
     }
 
-    return wh_TransportMem_RecvRequest(ctx->transportMemCtx, out_len, data);
+    /* Check connected status */
+    switch(ctx->state) {
+    case PTSHM_STATE_NONE:
+        /* Server should not get this state */
+        ret = WH_ERROR_BADARGS;
+        break;
+
+    case PTSHM_STATE_MAPPED:
+    {
+        /* Check to see if client connected */
+        whCommConnected connected = WH_COMM_DISCONNECTED;
+        posixTransportShm_IsConnected(ctx, &connected);
+        if (connected == WH_COMM_CONNECTED) {
+            ctx->state = PTSHM_STATE_INITIALIZED;
+            if (ctx->connectcb != NULL) {
+                ctx->connectcb(ctx->connectcb_arg, connected);
+            }
+            ret = WH_ERROR_OK;
+        }
+    } break;
+
+    case PTSHM_STATE_INITIALIZED:
+        ret = WH_ERROR_OK;
+        break;
+
+    case PTSHM_STATE_DONE:
+    default:
+        ret = WH_ERROR_ABORTED;
+    }
+
+    if (ret == WH_ERROR_OK) {
+        ret = wh_TransportMem_RecvRequest(ctx->transportMemCtx, out_len, data);
+    }
+    return ret;
 }
 
 
