@@ -1212,16 +1212,6 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
                     packet, size);
             break;
 #endif /* HAVE_CURVE25519 */
-#if 0
-#ifdef HAVE_CURVE25519
-        case WC_PK_TYPE_CURVE25519_KEYGEN:
-            ret = hsmCryptoCurve25519KeyGen(server, (whPacket*)data, size);
-            break;
-        case WC_PK_TYPE_CURVE25519:
-            ret = hsmCryptoCurve25519(server, (whPacket*)data, size);
-            break;
-#endif /* HAVE_CURVE25519 */
-#endif
         default:
             ret = NOT_COMPILED_IN;
             break;
