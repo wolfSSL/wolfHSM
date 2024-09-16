@@ -321,6 +321,8 @@ static int posixTransportTcp_HandleConnect(posixTransportTcpClientContext* c)
 
         /* Check for writeable with no timeout */
         int pollret = poll(&pfd, 1, 0);
+        printf("%s pollret:%d revents:%x\n", __func__, pollret, pfd.revents);
+        fflush(stdout);
         if (pollret > 0) {
             /* Either connected or error */
             /* Check for nonmaskable flags: POLLERR, POLLHUP, POLLNVAL */
