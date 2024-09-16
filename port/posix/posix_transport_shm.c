@@ -151,12 +151,12 @@ static int posixTransportShm_UseMap(char* name, ptshmMapping* map)
             perror("Use stat");
         }
     } else {
-        perror("Use shm_open");
         if (errno == ENOENT) {
             /* File does not exist */
             ret = WH_ERROR_NOTFOUND;
         } else {
             /* Some other error */
+            perror("Use shm_open");
             printf("%s other shm_open error:%d\n", __func__, errno);
             ret = WH_ERROR_ABORTED;
         }
