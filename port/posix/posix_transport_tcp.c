@@ -25,7 +25,6 @@
 #include <stddef.h>
 #include <string.h>
 #include <stdint.h>
-#include <stdio.h>
 
 #include <arpa/inet.h>
 #include <sys/socket.h>
@@ -259,10 +258,6 @@ static int posixTransportTcp_HandleConnect(posixTransportTcpClientContext* c)
             /* Make socket non-blocking */
             ret = posixTransportTcp_MakeNonBlocking(c->connect_fd_p1 - 1);
             if(ret == 0) {
-                printf("%s connecting socket %d  to %08x\n",
-                        __func__, c->connect_fd_p1 - 1,
-                        (uint32_t)c->server_addr.sin_addr.s_addr);
-                fflush(stdout);
                 ret = connect(c->connect_fd_p1 - 1,
                         (struct sockaddr*)&c->server_addr,
                         sizeof(c->server_addr));
@@ -322,8 +317,6 @@ static int posixTransportTcp_HandleConnect(posixTransportTcpClientContext* c)
         /* Check for writeable with no timeout */
         int pollret = poll(&pfd, 1, 0);
         ret = WH_ERROR_OK;
-        printf("%s pollret:%d revents:%x\n", __func__, pollret, pfd.revents);
-        fflush(stdout);
         if (pollret > 0) {
             /* Either connected or error */
             /* Check for nonmaskable flags: POLLERR, POLLHUP, POLLNVAL */
@@ -386,8 +379,6 @@ static int posixTransportTcp_Close(posixTransportTcpClientContext* c)
     if (c == NULL) {
         return WH_ERROR_BADARGS;
     }
-    printf("%s Closing client context fd:%d\n",__func__, c->connect_fd_p1 - 1);
-    fflush(stdout);
     if (c->connect_fd_p1 != 0) {
         close(c->connect_fd_p1 - 1);
         c->connect_fd_p1 = 0;

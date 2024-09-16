@@ -4,7 +4,6 @@
 #include <sys/stat.h>  /* For mode constants */
 #include <unistd.h>    /* For ftruncate, getpid, sleep */
 #include <errno.h>     /* For errno */
-#include <stdio.h>     /* For perror */
 #include <stdlib.h>    /* For exit */
 #include <string.h>    /* For memset */
 #include <stdint.h>
@@ -84,7 +83,6 @@ static int posixTransportShm_Map(int fd, size_t size, ptshmMapping* map)
         map->resp = map->req + map->header->req_size;
         map->dma = map->resp + map->header->resp_size;
     } else {
-        perror("ptshm_Map mmap");
         ret = WH_ERROR_ABORTED;
     }
     return ret;
@@ -138,7 +136,6 @@ static int posixTransportShm_UseMap(char* name, ptshmMapping* map)
                     }
                 } else {
                     /* Mapping the header failed */
-                    perror("Use header mmap failed");
                     ret = WH_ERROR_ABORTED;
                 }
             } else {
@@ -148,7 +145,7 @@ static int posixTransportShm_UseMap(char* name, ptshmMapping* map)
             (void)close(fd);
         } else {
             /* Problem getting file stat */
-            perror("Use stat");
+            ret = WH_ERROR_ABORTED;
         }
     } else {
         if (errno == ENOENT) {
@@ -156,8 +153,6 @@ static int posixTransportShm_UseMap(char* name, ptshmMapping* map)
             ret = WH_ERROR_NOTFOUND;
         } else {
             /* Some other error */
-            perror("Use shm_open");
-            printf("%s other shm_open error:%d\n", __func__, errno);
             ret = WH_ERROR_ABORTED;
         }
     }
@@ -201,18 +196,15 @@ static int posixTransportShm_CreateMap(char* name, uint16_t req_size,
                 ret = posixTransportShm_Map(fd, size, map);
             } else {
                 /* Problem mapping the header */
-                perror("create mmap");
                 ret = WH_ERROR_ABORTED;
             }
         } else {
             /* Problem setting the size. */
-            perror("create ftruncate");
             ret = WH_ERROR_ABORTED;
         }
         close(fd);
     } else {
         /* Problem creating the shared memory */
-        perror("create shm_open");
         ret = WH_ERROR_ABORTED;
     }
     return ret;
@@ -342,7 +334,6 @@ static int posixTransportShm_HandleMap(posixTransportShmContext *ctx)
             ((ctx->state == PTSHM_STATE_MAPPED) ||
              (ctx->state == PTSHM_STATE_DONE) ) ) {
         /* Mapped is invalid for a client */
-        printf("%s invalid state:%d\n", __func__, ctx->state);
         ret = WH_ERROR_ABORTED;
     };
 

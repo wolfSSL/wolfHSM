@@ -212,8 +212,6 @@ static void* _whCommClientTask(void* cf)
     }
 
     ret = wh_CommClient_Init(client, config);
-    printf("%s CommClient_Init ret:%d\n", __func__, ret);
-    fflush(stdout);
     WH_TEST_ASSERT_MSG(0 == ret, "Client Init: ret=%d", ret);
 
     for (counter = 0; counter < REPEAT_COUNT; counter++) {
