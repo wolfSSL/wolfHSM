@@ -157,6 +157,7 @@ static int posixTransportShm_UseMap(char* name, ptshmMapping* map)
             ret = WH_ERROR_NOTFOUND;
         } else {
             /* Some other error */
+            printf("%s other shm_open error:%d\n", __func__, errno);
             ret = WH_ERROR_ABORTED;
         }
     }
@@ -341,6 +342,7 @@ static int posixTransportShm_HandleMap(posixTransportShmContext *ctx)
             ((ctx->state == PTSHM_STATE_MAPPED) ||
              (ctx->state == PTSHM_STATE_DONE) ) ) {
         /* Mapped is invalid for a client */
+        printf("%s invalid state:%d\n", __func__, ctx->state);
         ret = WH_ERROR_ABORTED;
     };
 
@@ -510,6 +512,11 @@ int posixTransportShm_SendRequest(void* c, uint16_t len, const void* data)
         if (ret == WH_ERROR_OK) {
             if(ctx->connectcb != NULL) {
                 ctx->connectcb(ctx->connectcb_arg, WH_COMM_CONNECTED);
+            }
+        } else {
+            if (ret == WH_ERROR_NOTFOUND) {
+                /* Server hasn't created the object yet */
+                ret = WH_ERROR_NOTREADY;
             }
         }
         break;
