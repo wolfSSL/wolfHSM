@@ -321,32 +321,37 @@ static int posixTransportTcp_HandleConnect(posixTransportTcpClientContext* c)
 
         /* Check for writeable with no timeout */
         int pollret = poll(&pfd, 1, 0);
+        ret = WH_ERROR_OK;
         printf("%s pollret:%d revents:%x\n", __func__, pollret, pfd.revents);
         fflush(stdout);
         if (pollret > 0) {
             /* Either connected or error */
             /* Check for nonmaskable flags: POLLERR, POLLHUP, POLLNVAL */
-            /* III These are mutually exclusive with POLL OUT*/
             if ((pfd.revents & POLLHUP) != 0) {
                 /* HUP is set when server isn't listening yet */
                 (void)posixTransportTcp_Close(c);
                 c->state = PTT_STATE_UNCONNECTED;
                 ret = WH_ERROR_NOTFOUND;
-            }
-            if (    ((pfd.revents & POLLNVAL) != 0) ||
-                    ((pfd.revents & POLLERR) != 0) ) {
-                /* Invalid FD.  Fatal error */
-                (void)posixTransportTcp_Close(c);
-                c->state = PTT_STATE_DONE;
-                ret = WH_ERROR_ABORTED;
-            }
-            if ((pfd.revents & POLLOUT) != 0) {
-                /* Connected */
-                c->state = PTT_STATE_CONNECTED;
-                ret = WH_ERROR_OK;
             } else {
-                /* Not connected yet */
-                ret = WH_ERROR_NOTREADY;
+                /* Not HUP.  Might be error or connected */
+                if (
+                        ((pfd.revents & POLLNVAL) != 0) ||
+                        ((pfd.revents & POLLERR) != 0) ) {
+                    /* Invalid FD.  Fatal error */
+                    (void)posixTransportTcp_Close(c);
+                    c->state = PTT_STATE_DONE;
+                    ret = WH_ERROR_ABORTED;
+                } else {
+                    /* Likely connected */
+                    if ((pfd.revents & POLLOUT) != 0) {
+                        /* Connected */
+                        c->state = PTT_STATE_CONNECTED;
+                        ret = WH_ERROR_OK;
+                    } else {
+                        /* Not connected yet, but somehow readable? */
+                        ret = WH_ERROR_NOTREADY;
+                    }
+                }
             }
         }
         if (pollret == 0) {
