@@ -279,10 +279,10 @@ int posixTransportShm_GetDma(posixTransportShmContext* ctx,
     if (ctx == NULL) {
         return WH_ERROR_BADARGS;
     }
-    if (out_dma!= NULL) {
+    if (out_dma != NULL) {
         *out_dma = ctx->dma;
     }
-    if (out_size!= NULL) {
+    if (out_size != NULL) {
         *out_size = ctx->dma_size;
     }
     return WH_ERROR_OK;

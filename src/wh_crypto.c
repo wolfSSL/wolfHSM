@@ -178,7 +178,7 @@ int wh_Crypto_DeserializeCurve25519Key(uint16_t size,
     word32 privSz = CURVE25519_KEYSIZE;
     word32 pubSz = CURVE25519_KEYSIZE;
 
-    if (    (size < (CURVE25519_KEYSIZE*2)) ||
+    if (    (size < (CURVE25519_KEYSIZE * 2)) ||
             (buffer == NULL) ||
             (key == NULL)) {
         return WH_ERROR_BADARGS;

@@ -876,7 +876,7 @@ static int _wh_Client_Curve25519MakeKey(whClientContext* ctx,
                 *inout_key_id = key_id;
             }
 
-            /* Update the RSA context if provided */
+            /* Update the context if provided */
             if (key != NULL) {
                 uint16_t der_size = (uint16_t)(res->len);
                 uint8_t* key_der = (uint8_t*)(res + 1);
