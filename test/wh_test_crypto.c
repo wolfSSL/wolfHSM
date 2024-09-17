@@ -898,58 +898,6 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     if (ret == 0) {
         ret = whTest_CryptoEcc(client, rng);
     }
-#if 0
-    /* test ecc */
-    if((ret = wc_ecc_init_ex(eccPrivate, NULL, WH_DEV_ID)) != 0) {
-        printf("Failed to wc_ecc_init_ex %d\n", ret);
-        goto exit;
-    }
-    if((ret = wc_ecc_init_ex(eccPublic, NULL, WH_DEV_ID)) != 0) {
-        printf("Failed to wc_ecc_init_ex %d\n", ret);
-        goto exit;
-    }
-    if((ret = wc_ecc_make_key(rng, 32, eccPrivate)) != 0) {
-        printf("Failed to wc_ecc_make_key %d\n", ret);
-        goto exit;
-    }
-    if((ret = wc_ecc_make_key(rng, 32, eccPublic)) != 0) {
-        printf("Failed to wc_ecc_make_key %d\n", ret);
-        goto exit;
-    }
-    word32 secLen = 32;
-    if((ret = wc_ecc_shared_secret(eccPrivate, eccPublic, (byte*)cipherText, &secLen)) != 0) {
-        printf("Failed to wc_ecc_shared_secret %d\n", ret);
-        goto exit;
-    }
-    if((ret = wc_ecc_shared_secret(eccPublic, eccPrivate, (byte*)finalText, &secLen)) != 0) {
-        printf("Failed to wc_ecc_shared_secret %d\n", ret);
-        goto exit;
-    }
-    if (memcmp(cipherText, finalText, secLen) == 0)
-        printf("ECDH SUCCESS\n");
-    else {
-        WH_ERROR_PRINT("ECDH FAILED TO MATCH\n");
-        ret = -1;
-        goto exit;
-    }
-    secLen = sizeof(finalText);
-    if((ret = wc_ecc_sign_hash((void*)cipherText, sizeof(cipherText), (void*)finalText, &secLen, rng, eccPrivate)) != 0) {
-        printf("Failed to wc_ecc_sign_hash %d\n", ret);
-        goto exit;
-    }
-    if((ret = wc_ecc_verify_hash((void*)finalText, secLen, (void*)cipherText, sizeof(cipherText), &res, eccPrivate)) != 0) {
-        printf("Failed to wc_ecc_verify_hash %d\n", ret);
-        goto exit;
-    }
-    if (res == 1)
-        printf("ECC SIGN/VERIFY SUCCESS\n");
-    else {
-        WH_ERROR_PRINT("ECC SIGN/VERIFY FAIL\n");
-        ret = -1;
-        goto exit;
-    }
-#endif /* HAVE_ECC */
-#endif
 
 #ifdef HAVE_CURVE25519
     /* test curve25519 */
@@ -957,49 +905,6 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         ret = whTest_CryptoCurve25519(client, rng);
     }
 #endif
-
-#if 0
-#ifdef HAVE_CURVE25519
-    /* test curve25519 */
-    curve25519_key curve25519PrivateKey[1];
-    curve25519_key curve25519PublicKey[1];
-    uint8_t sharedOne[CURVE25519_KEYSIZE];
-    uint8_t sharedTwo[CURVE25519_KEYSIZE];
-
-    if ((ret = wc_curve25519_init_ex(curve25519PrivateKey, NULL, WH_DEV_ID)) != 0) {
-        WH_ERROR_PRINT("Failed to wc_curve25519_init_ex %d\n", ret);
-        goto exit;
-    }
-    if ((ret = wc_curve25519_init_ex(curve25519PublicKey, NULL, WH_DEV_ID)) != 0) {
-        WH_ERROR_PRINT("Failed to wc_curve25519_init_ex %d\n", ret);
-        goto exit;
-    }
-    if ((ret = wc_curve25519_make_key(rng, CURVE25519_KEYSIZE, curve25519PrivateKey)) != 0) {
-        WH_ERROR_PRINT("Failed to wc_curve25519_make_key %d\n", ret);
-        goto exit;
-    }
-    if ((ret = wc_curve25519_make_key(rng, CURVE25519_KEYSIZE, curve25519PublicKey)) != 0) {
-        WH_ERROR_PRINT("Failed to wc_curve25519_make_key %d\n", ret);
-        goto exit;
-    }
-    secLen = sizeof(sharedOne);
-    if ((ret = wc_curve25519_shared_secret(curve25519PrivateKey, curve25519PublicKey, sharedOne, &secLen)) != 0) {
-        WH_ERROR_PRINT("Failed to wc_curve25519_shared_secret %d\n", ret);
-        goto exit;
-    }
-    if ((ret = wc_curve25519_shared_secret(curve25519PublicKey, curve25519PrivateKey, sharedTwo, &secLen)) != 0) {
-        WH_ERROR_PRINT("Failed to wc_curve25519_shared_secret %d\n", ret);
-        goto exit;
-    }
-    if (XMEMCMP(sharedOne, sharedTwo, secLen) != 0) {
-        WH_ERROR_PRINT("CURVE25519 shared secrets don't match\n");
-        ret = -1;
-        goto exit;
-    }
-    printf("CURVE25519 SUCCESS\n");
-#endif /* HAVE_CURVE25519 */
-#endif
-
 
     if (ret != 0) {
         goto exit;

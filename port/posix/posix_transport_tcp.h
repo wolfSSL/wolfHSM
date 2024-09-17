@@ -23,8 +23,8 @@
  *
  * Note in this implementation, all function calls are non-blocking and will
  * return WH_ERROR_NOTREADY when the operation is pending or cannot be started
- * yet.  Async client connection will initially attempt to connect and tear
- * close the socket if the server is not listening (ECONNREFUSED error).
+ * yet.  Async client connection will initially attempt to connect and close the
+ * socket if the server is not listening (ECONNREFUSED error).
  *
  * The server will listen on a given port and accept a connection.  It is
  * recommended that the client issue a wh_Client_CommInfo() transaction tp

@@ -34,9 +34,11 @@
  * attempt to unlink the named shared memory object prior to creation.
  *
  * The client is configured with only the name of the shared object and it busy-
- * retries to open the named shared object.  It then maps the header block,
- * reads the configuration sizes, and configures a TransportMem client context.
- * The client also unlinks the shared object on successful mapping.
+ * retries to open the named shared object, once in the client_init() and
+ * subsequently in send_request(), if the mapping was unsuccessful due to a late
+ * server.  It then maps the header block, reads the configuration sizes, and
+ * configures a TransportMem client context. The client also unlinks the shared
+ * object on successful mapping.
  *
  * Both the server and the client also provide their process ids within the
  * header block to support asynchronous signalling using POSIX RT signals.
