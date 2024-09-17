@@ -84,6 +84,8 @@ typedef struct {
     uint32_t cfg_nvm_object_count;
     uint32_t cfg_server_keycache_count;
     uint32_t cfg_server_keycache_bufsize;
+    uint32_t cfg_server_keycache_bigcount;
+    uint32_t cfg_server_keycache_bigbufsize;
     uint32_t cfg_server_customcb_count;
     uint32_t cfg_server_dmaaddr_count;
     uint32_t debug_state;

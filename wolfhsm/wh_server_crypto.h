@@ -48,6 +48,17 @@ int wh_Server_HandleCryptoRequest(whServerContext* server,
 int wh_Server_HandleCryptoDmaRequest(whServerContext* server,
     uint16_t action, uint8_t* data, uint16_t* size, uint16_t seq);
 
+#ifndef NO_RSA
+
+/* Store a RsaKey into a server key cache with optional metadata */
+int wh_Server_CacheImportRsaKey(whServerContext* ctx, RsaKey* key,
+        whKeyId keyId, whNvmFlags flags, uint32_t label_len, uint8_t* label);
+
+/* Restore a RsaKey from a server key cache */
+int wh_Server_CacheExportRsaKey(whServerContext* ctx, whKeyId keyId,
+        RsaKey* key);
+#endif /* !NO_RSA */
+
 #ifdef HAVE_ECC
 int wh_Server_EccKeyCacheImport(whServerContext* ctx, ecc_key* key,
         whKeyId keyId, whNvmFlags flags, uint16_t label_len, uint8_t* label);

@@ -36,8 +36,26 @@
 
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/types.h"
+#include "wolfssl/wolfcrypt/aes.h"
+#include "wolfssl/wolfcrypt/rsa.h"
 #include "wolfssl/wolfcrypt/curve25519.h"
 #include "wolfssl/wolfcrypt/ecc.h"
+
+#ifndef NO_AES
+int wh_Crypto_SerializeAesKey(Aes* key, uint16_t max_size,
+        uint8_t* buffer, uint16_t *out_size);
+int wh_Crypto_DeserializeAesKey(uint16_t size, const uint8_t* buffer,
+        Aes* key);
+#endif /* !NO_AES */
+
+#ifndef NO_RSA
+/* Store a RsaKey to a byte sequence (currently DER format) */
+int wh_Crypto_SerializeRsaKey(RsaKey* key, uint16_t max_size,
+        uint8_t* buffer, uint16_t *out_size);
+/* Restore a RsaKey from a byte sequence (currently DER format) */
+int wh_Crypto_DeserializeRsaKey(uint16_t size, const uint8_t* buffer,
+        RsaKey* key);
+#endif /* !NO_RSA */
 
 #ifdef HAVE_ECC
 /* Store an ecc_key to a byte sequence */

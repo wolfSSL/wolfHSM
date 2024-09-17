@@ -50,6 +50,7 @@
 #include "wolfhsm/wh_comm.h"
 #include "wolfhsm/wh_message_customcb.h"
 
+#if 0
 #ifndef WOLFHSM_CFG_NO_CRYPTO
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/types.h"
@@ -62,6 +63,7 @@
 #include "wolfssl/wolfcrypt/rsa.h"
 #include "wolfssl/wolfcrypt/ecc.h"
 #endif
+#endif /*0*/
 
 /* Device Id to be registered and passed to wolfCrypt functions */
 #define WH_DEV_ID     0x5748534D /* "WHSM" */
@@ -236,6 +238,10 @@ int wh_Client_CommInfoRequest(whClientContext* c);
  *                                    keys in the server RAM
  * @param[out] out_cfg_keycache_bufsize Pointer to store the server's maximum
  *                                      size of each key in server RAM
+ * @param[out] out_cfg_keycache_bigcount Pointer to store the server's number of
+ *                                    big keys in the server RAM
+ * @param[out] out_cfg_keycache_big bufsize Pointer to store the server's
+ *                                    maximum size of each big key in server RAM
  * @param[out] out_cfg_customcb_count Pointer to store the server's number of
  *                                    custom callbacks
  * @param[out] out_cfg_dmaaddr_count Pointer to store the server's number of
@@ -255,6 +261,8 @@ int wh_Client_CommInfoResponse(whClientContext* c,
         uint32_t *out_cfg_nvm_object_count,
         uint32_t *out_cfg_keycache_count,
         uint32_t *out_cfg_keycache_bufsize,
+        uint32_t *out_cfg_keycache_bigcount,
+        uint32_t *out_cfg_keycache_bigbufsize,
         uint32_t *out_cfg_customcb_count,
         uint32_t *out_cfg_dmaaddr_count,
         uint32_t *out_debug_state,
@@ -463,7 +471,6 @@ int wh_Client_Echo(whClientContext* c, uint16_t snd_len, const void* snd_data,
  */
 
 
-#ifndef WOLFHSM_CFG_NO_CRYPTO
 /**
  * @brief Sends a key cache request to the server.
  *
@@ -714,8 +721,6 @@ int wh_Client_KeyEraseResponse(whClientContext* c);
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_Client_KeyErase(whClientContext* c, whNvmId keyId);
-
-#endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
 /* Counter functions */
 int wh_Client_CounterInitRequest(whClientContext* c, whNvmId counterId,

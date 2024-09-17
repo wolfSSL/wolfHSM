@@ -78,6 +78,7 @@ typedef struct whServerCryptoContext {
     WC_RNG rng[1];
 #endif
     union {
+#if 0
 #ifndef NO_AES
         Aes aes[1];
 #endif
@@ -87,6 +88,7 @@ typedef struct whServerCryptoContext {
 #ifdef HAVE_CURVE25519
         curve25519_key curve25519Private[1];
 #endif
+#endif /* 0 */
 #ifdef WOLFSSL_CMAC
         Cmac cmac[1];
 #endif
@@ -94,11 +96,6 @@ typedef struct whServerCryptoContext {
         wc_Sha256 sha256[1];
 #endif
     } algoCtx;
-    union {
-#ifdef HAVE_CURVE25519
-        curve25519_key curve25519Public[1];
-#endif
-    } pubKey;
 } whServerCryptoContext;
 
 
