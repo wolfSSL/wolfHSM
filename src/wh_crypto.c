@@ -36,6 +36,7 @@
 #include "wolfssl/wolfcrypt/types.h"
 #include "wolfssl/wolfcrypt/error-crypt.h"
 #include "wolfssl/wolfcrypt/asn.h"
+#include "wolfssl/wolfcrypt/curve25519.h"
 #include "wolfssl/wolfcrypt/ecc.h"
 
 #include "wolfhsm/wh_error.h"
@@ -146,5 +147,52 @@ int wh_Crypto_UpdatePrivateOnlyEccKey(ecc_key* key, uint16_t pub_size,
     return ret;
 }
 #endif /* HAVE_ECC */
+
+#ifdef HAVE_CURVE25519
+ int wh_Crypto_SerializeCurve25519Key(curve25519_key* key,
+        uint16_t max_size, uint8_t* buffer, uint16_t *out_size)
+{
+    int ret = 0;
+    word32 privSz = CURVE25519_KEYSIZE;
+    word32 pubSz = CURVE25519_KEYSIZE;
+
+    if (    (key == NULL) ||
+            (buffer == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wc_curve25519_export_key_raw(key,
+            buffer + CURVE25519_KEYSIZE, &privSz,
+            buffer, &pubSz);
+    if (    (ret == 0) &&
+            (out_size != NULL)) {
+        *out_size = CURVE25519_KEYSIZE * 2;
+    }
+    return ret;
+}
+
+int wh_Crypto_DeserializeCurve25519Key(uint16_t size,
+        const uint8_t* buffer, curve25519_key* key)
+{
+    int ret = 0;
+    word32 privSz = CURVE25519_KEYSIZE;
+    word32 pubSz = CURVE25519_KEYSIZE;
+
+    if (    (size < (CURVE25519_KEYSIZE * 2)) ||
+            (buffer == NULL) ||
+            (key == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* decode the key */
+    if (ret == 0) {
+        ret = wc_curve25519_import_private_raw(
+                buffer + CURVE25519_KEYSIZE, privSz,
+                buffer, pubSz,
+                key);
+    }
+    return ret;
+}
+#endif /* HAVE_CURVE25519 */
 
 #endif  /* !WOLFHSM_CFG_NO_CRYPTO */

@@ -44,6 +44,7 @@
 #include "wolfssl/wolfcrypt/aes.h"
 #include "wolfssl/wolfcrypt/cmac.h"
 #include "wolfssl/wolfcrypt/rsa.h"
+#include "wolfssl/wolfcrypt/curve25519.h"
 #include "wolfssl/wolfcrypt/ecc.h"
 #include "wolfssl/wolfcrypt/sha256.h"
 
@@ -599,63 +600,37 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
 #ifdef HAVE_CURVE25519
         case WC_PK_TYPE_CURVE25519_KEYGEN:
         {
-            packet->pkCurve25519kgReq.sz = info->pk.curve25519kg.size;
-            /* write request */
-            ret = wh_Client_SendRequest(ctx, group,
-                WC_ALGO_TYPE_PK,
-                WH_PACKET_STUB_SIZE + sizeof(packet->pkCurve25519kgReq),
-                (uint8_t*)packet);
-            if (ret == 0) {
-                do {
-                    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
-                        (uint8_t*)packet);
-                } while (ret == WH_ERROR_NOTREADY);
-            }
-            if (ret == 0) {
-                if (packet->rc != 0)
-                    ret = packet->rc;
-                /* read out */
-                else {
-                    info->pk.curve25519kg.key->devCtx =
-                        (void*)((intptr_t)packet->pkCurve25519kgRes.keyId);
-                    /* set metadata */
-                    info->pk.curve25519kg.key->pubSet = 1;
-                    info->pk.curve25519kg.key->privSet = 1;
-                }
+            ret = wh_Client_Curve25519MakeExportKey(ctx,
+                    info->pk.curve25519kg.size,
+                    info->pk.curve25519kg.key);
+            /* Fix up error code to be wolfCrypt*/
+            if (ret == WH_ERROR_BADARGS) {
+                ret = BAD_FUNC_ARG;
             }
         } break;
 
         case WC_PK_TYPE_CURVE25519:
         {
-            uint8_t* out = (uint8_t*)(&packet->pkCurve25519Res + 1);
-
-            packet->pkCurve25519Req.privateKeyId =
-                (intptr_t)(info->pk.curve25519.private_key->devCtx);
-            packet->pkCurve25519Req.publicKeyId =
-                (intptr_t)(info->pk.curve25519.public_key->devCtx);
-            packet->pkCurve25519Req.endian = info->pk.curve25519.endian;
-            /* write request */
-            ret = wh_Client_SendRequest(ctx, group,
-                WC_ALGO_TYPE_PK,
-                WH_PACKET_STUB_SIZE + sizeof(packet->pkCurve25519Req),
-                (uint8_t*)packet);
-            if (ret == 0) {
-                do {
-                    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
-                        (uint8_t*)packet);
-                } while (ret == WH_ERROR_NOTREADY);
+            /* Extract info parameters */
+            curve25519_key* pub_key = info->pk.curve25519.public_key;
+            curve25519_key* priv_key = info->pk.curve25519.private_key;
+            int endian = info->pk.curve25519.endian;
+            uint8_t* out        = info->pk.curve25519.out;
+            word32* out_len     = info->pk.curve25519.outlen;
+            uint16_t len = 0;
+            if(out_len != NULL) {
+                len = *out_len;
             }
-            if (ret == 0) {
-                if (packet->rc != 0)
-                    ret = packet->rc;
-                /* read out */
-                else {
-                    XMEMCPY(info->pk.curve25519.out, out,
-                        packet->pkCurve25519Res.sz);
-                }
+
+            ret = wh_Client_Curve25519SharedSecret(ctx,
+                                            priv_key, pub_key,
+                                            endian,
+                                            out, &len);
+            if (    (ret == WH_ERROR_OK) &&
+                    (out_len != NULL) ){
+                *out_len = len;
             }
         } break;
-
 #endif /* HAVE_CURVE25519 */
 
         case WC_PK_TYPE_NONE:

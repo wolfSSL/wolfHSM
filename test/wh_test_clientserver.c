@@ -1581,7 +1581,7 @@ static int wh_ClientServer_MemThreadTest(void)
 static int wh_ClientServer_PosixMemMapThreadTest(void)
 {
     posixTransportShmConfig tmcf[1] = {{
-        .shmObjName = "/wh_test_clientserver_shm",
+        .name       = "/wh_test_clientserver_shm",
         .req_size   = BUFFER_SIZE,
         .resp_size  = BUFFER_SIZE,
     }};

@@ -40,7 +40,6 @@ typedef struct posixFlashFileContext_t {
     int unlocked;
     uint32_t partition_size;
     uint8_t erased_byte;
-    uint8_t WH_PAD[3];
 } posixFlashFileContext;
 
 /* In memory configuration structure associated with an NVM instance */
@@ -48,7 +47,6 @@ typedef struct posixFlashFileConfig_t {
     const char* filename;       /* Null terminated */
     uint32_t partition_size;
     uint8_t erased_byte;
-    uint8_t WH_PAD[3];
 } posixFlashFileConfig;
 
 int posixFlashFile_Init(void* c, const void* cf);

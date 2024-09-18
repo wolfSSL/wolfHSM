@@ -25,7 +25,6 @@
 #include <stdio.h>  /* For printf */
 #include <string.h> /* For memset, memcpy */
 
-#include "wh_test_common.h"
 
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_comm.h"
@@ -35,11 +34,13 @@
 
 #if defined(WOLFHSM_CFG_TEST_POSIX)
 #include <pthread.h> /* For pthread_create/cancel/join/_t */
-#include <unistd.h>  /* For sleep */
+#include <unistd.h>  /* For usleep */
 #include "port/posix/posix_transport_tcp.h"
 #include "port/posix/posix_transport_shm.h"
 #endif
 
+#include "wh_test_common.h"
+#include "wh_test_comm.h"
 
 #define BUFFER_SIZE 4096
 #define REQ_SIZE 32
@@ -390,7 +391,7 @@ void wh_CommClientServer_MemThreadTest(void)
                  .transport_cb      = tmccb,
                  .transport_context = (void*)csc,
                  .transport_config  = (void*)tmcf,
-                 .client_id         = 123,
+                 .client_id         = 0x1,
     }};
 
     /* Server configuration/contexts */
@@ -400,7 +401,7 @@ void wh_CommClientServer_MemThreadTest(void)
                  .transport_cb      = tmscb,
                  .transport_context = (void*)css,
                  .transport_config  = (void*)tmcf,
-                 .server_id         = 124,
+                 .server_id         = 0xF,
     }};
 
     _whCommClientServerThreadTest(c_conf, s_conf);
@@ -410,10 +411,17 @@ void wh_CommClientServer_ShMemThreadTest(void)
 {
     /* Transport memory configuration */
     posixTransportShmConfig tmcf[1] = {{
-        .shmObjName = "/wh_test_comm_shm",
+        .name = "/wh_test_comm_shm",
         .req_size   = BUFFER_SIZE,
         .resp_size  = BUFFER_SIZE,
+        .dma_size = BUFFER_SIZE * 4,
     }};
+
+    /* Make unique name for this test */
+    char uniq_name[32] = {0};
+    snprintf(uniq_name, sizeof(uniq_name),"/wh_test_comm_shm.%u",
+            (unsigned) getpid());
+    tmcf->name = uniq_name;
 
     /* Client configuration/contexts */
     whTransportClientCb            tmccb[1]  = {POSIX_TRANSPORT_SHM_CLIENT_CB};
@@ -422,7 +430,7 @@ void wh_CommClientServer_ShMemThreadTest(void)
                     .transport_cb      = tmccb,
                     .transport_context = (void*)csc,
                     .transport_config  = (void*)tmcf,
-                    .client_id         = 123,
+                    .client_id         = 0x2,
     }};
 
     /* Server configuration/contexts */
@@ -432,7 +440,7 @@ void wh_CommClientServer_ShMemThreadTest(void)
                     .transport_cb      = tmscb,
                     .transport_context = (void*)css,
                     .transport_config  = (void*)tmcf,
-                    .server_id         = 124,
+                    .server_id         = 0xF,
     }};
 
     _whCommClientServerThreadTest(c_conf, s_conf);
@@ -453,7 +461,7 @@ void wh_CommClientServer_TcpThreadTest(void)
                     .transport_cb      = pttccb,
                     .transport_context = (void*)tcc,
                     .transport_config  = (void*)mytcpconfig,
-                    .client_id         = 123,
+                    .client_id         = 0x3,
     }};
 
     /* Server configuration/contexts */
@@ -464,7 +472,7 @@ void wh_CommClientServer_TcpThreadTest(void)
                     .transport_cb      = pttscb,
                     .transport_context = (void*)tss,
                     .transport_config  = (void*)mytcpconfig,
-                    .server_id         = 124,
+                    .server_id         = 0xF,
     }};
 
     _whCommClientServerThreadTest(c_conf, s_conf);

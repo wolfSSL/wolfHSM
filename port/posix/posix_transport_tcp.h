@@ -20,6 +20,17 @@
  * port/posix/posix_transport_tcp.h
  *
  * wolfHSM Transport binding using TCP sockets
+ *
+ * Note in this implementation, all function calls are non-blocking and will
+ * return WH_ERROR_NOTREADY when the operation is pending or cannot be started
+ * yet.  Async client connection will initially attempt to connect and close the
+ * socket if the server is not listening (ECONNREFUSED error).
+ *
+ * The server will listen on a given port and accept a connection.  It is
+ * recommended that the client issue a wh_Client_CommInfo() transaction tp
+ * get the server configuration.  Also, successful response from this command
+ * will indicate bidirectional communications have been established.
+ *
  */
 
 #ifndef PORT_POSIX_POSIX_TRANSPORT_TCP_H_
@@ -38,7 +49,7 @@
  *      .transport_cb = pttccb,
  *      .transport_context = pttcc,
  *      .transport_config = pttcfg,
- *      .client_id = 1234,
+ *      .client_id = 0x1,
  * }}
  * whCommClient cc[1] ={0};
  * wh_CommClient_Init(cc, ccc);
@@ -49,7 +60,7 @@
  *      .transport_cb = pttscb,
  *      .transport_context = pttsc,
  *      .transport_config = pttcfg,
- *      .server_id = 5678,
+ *      .server_id = 0xF,
  * }}
  * whCommServer cs[1] = {0};
  * wh_CommServer_Init(cs, csc);
@@ -68,22 +79,26 @@
 typedef struct {
     char* server_ip_string;
     short int server_port;
-    uint8_t WH_PAD[6];
 } posixTransportTcpConfig;
 
 
 /** Client context and functions */
+typedef enum {
+    PTT_STATE_UNCONNECTED = 0,         /* Not initialized */
+    PTT_STATE_CONNECT_WAIT,     /* Async connect called */
+    PTT_STATE_CONNECTED,        /* Connected and able to handle traffic */
+    PTT_STATE_DONE              /* Was connected, now not */
+} pttClientState;
 
 typedef struct {
     whCommSetConnectedCb connectcb;
     void* connectcb_arg;
     struct sockaddr_in server_addr;
+    pttClientState state;
     int connect_fd_p1;      /* fd plus 1 so 0 is invalid */
-    int connected;
     int request_sent;
     uint16_t buffer_offset;
     uint8_t buffer[PTT_BUFFER_SIZE];
-    uint8_t WH_PAD[6];
 } posixTransportTcpClientContext;
 
 int posixTransportTcp_InitConnect(void* context, const void* config,
@@ -102,6 +117,10 @@ int posixTransportTcp_CleanupConnect(void* context);
     .Cleanup =  posixTransportTcp_CleanupConnect,   \
 }
 
+/* Return the file descriptor of the connected socket to support poll/select */
+int posixTransportTcp_GetConnectFd(posixTransportTcpClientContext *context,
+        int *out_fd);
+
 
 /** Server context and functions */
 
@@ -115,8 +134,8 @@ typedef struct {
     int request_recv;
     uint16_t buffer_offset;
     uint8_t buffer[PTT_BUFFER_SIZE];
-    uint8_t WH_PAD[6];
 } posixTransportTcpServerContext;
+
 
 int posixTransportTcp_InitListen(void* context, const void* config,
         whCommSetConnectedCb connectcb, void* connectcb_arg);
@@ -133,5 +152,13 @@ int posixTransportTcp_CleanupListen(void* context);
     .Send =     posixTransportTcp_SendResponse,     \
     .Cleanup =  posixTransportTcp_CleanupListen,    \
 }
+
+/* Return the file descriptor of the listen socket to support poll/select */
+int posixTransportTcp_GetListenFd(posixTransportTcpServerContext *context,
+        int *out_fd);
+
+/* Return the file descriptor of the accepted socket to support poll/select */
+int posixTransportTcp_GetAcceptFd(posixTransportTcpServerContext *context,
+        int *out_fd);
 
 #endif /* WH_TRANSPORT_TCP_H_ */

@@ -25,7 +25,6 @@
 #include <stddef.h>
 #include <string.h>
 #include <stdint.h>
-#include <stdio.h>
 
 #include <arpa/inet.h>
 #include <sys/socket.h>
@@ -56,6 +55,14 @@ static int posixTransportTcp_Send(int fd, uint16_t* buffer_offset,
 /* Common recv/read function with a byte buffer */
 static int posixTransportTcp_Recv(int fd, uint16_t* buffer_offset,
         uint8_t* buffer, uint16_t *out_size, void* data);
+
+/* Start a non-blocking connect */
+static int posixTransportTcp_HandleConnect(posixTransportTcpClientContext* c);
+
+/* CLose connection and reset state */
+static int posixTransportTcp_Close(posixTransportTcpClientContext* c);
+
+
 
 /** Local implementations */
 static int posixTransportTcp_MakeNonBlocking(int fd)
@@ -233,10 +240,157 @@ static int posixTransportTcp_Recv(int fd, uint16_t* buffer_offset,
 }
 
 /** Client functions */
+
+static int posixTransportTcp_HandleConnect(posixTransportTcpClientContext* c)
+{
+    int ret = WH_ERROR_OK;
+
+    if (c == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    switch (c->state) {
+    case PTT_STATE_UNCONNECTED:
+        /* Create a non-block socket and start async connect */
+        ret = socket(AF_INET, SOCK_STREAM, 0);
+        if (ret >= 0) {
+            c->connect_fd_p1 = ret + 1;
+            /* Make socket non-blocking */
+            ret = posixTransportTcp_MakeNonBlocking(c->connect_fd_p1 - 1);
+            if(ret == 0) {
+                ret = connect(c->connect_fd_p1 - 1,
+                        (struct sockaddr*)&c->server_addr,
+                        sizeof(c->server_addr));
+                if (ret == 0) {
+                    /* Success! */
+                    /* III This is unlikely since we are non-blocking */
+                    c->state = PTT_STATE_CONNECTED;
+                    ret = WH_ERROR_OK;
+                } else {
+                    /* Not connected yet.  Interpret errno */
+                    switch (errno) {
+                    case ECONNREFUSED:
+                        /* Server not listening yet. Rebuild socket on retry. */
+                        /* III This is unlikely since we are non-blocking */
+                        (void)posixTransportTcp_Close(c);
+                        c->state = PTT_STATE_UNCONNECTED;
+                        ret = WH_ERROR_NOTFOUND;
+                        break;
+
+                    case EINPROGRESS:
+                    case EINTR:
+                        /* Connecting async */
+                        c->state = PTT_STATE_CONNECT_WAIT;
+                        ret = WH_ERROR_NOTREADY;
+                        break;
+
+                    default:
+                        /* Some other error. Assume fatal. */
+                        (void)posixTransportTcp_Close(c);
+                        c->state = PTT_STATE_DONE;
+                        ret = WH_ERROR_ABORTED;
+                    }
+                }
+            } else {
+                /* Problem making this non-blocking */
+                (void)posixTransportTcp_Close(c);
+                c->state = PTT_STATE_DONE;
+                ret = WH_ERROR_ABORTED;
+            }
+        } else {
+            /* Problem creating a socket */
+            c->state = PTT_STATE_DONE;
+            ret = WH_ERROR_ABORTED;
+        }
+        break;
+
+    case PTT_STATE_CONNECT_WAIT:
+    {
+        /* Poll for writeable (connected) socket or error */
+        /* Check if writable */
+        struct pollfd pfd = {
+                .fd = c->connect_fd_p1 - 1,
+                .events = POLLOUT,
+                .revents = 0,
+        };
+
+        /* Check for writeable with no timeout */
+        int pollret = poll(&pfd, 1, 0);
+        ret = WH_ERROR_OK;
+        if (pollret > 0) {
+            /* Either connected or error */
+            /* Check for nonmaskable flags: POLLERR, POLLHUP, POLLNVAL */
+            if ((pfd.revents & POLLHUP) != 0) {
+                /* HUP is set when server isn't listening yet */
+                (void)posixTransportTcp_Close(c);
+                c->state = PTT_STATE_UNCONNECTED;
+                ret = WH_ERROR_NOTFOUND;
+            } else {
+                /* Not HUP.  Might be error or connected */
+                if (
+                        ((pfd.revents & POLLNVAL) != 0) ||
+                        ((pfd.revents & POLLERR) != 0) ) {
+                    /* Invalid FD.  Fatal error */
+                    (void)posixTransportTcp_Close(c);
+                    c->state = PTT_STATE_DONE;
+                    ret = WH_ERROR_ABORTED;
+                } else {
+                    /* Likely connected */
+                    if ((pfd.revents & POLLOUT) != 0) {
+                        /* Connected */
+                        c->state = PTT_STATE_CONNECTED;
+                        ret = WH_ERROR_OK;
+                    } else {
+                        /* Not connected yet, but somehow readable? */
+                        ret = WH_ERROR_NOTREADY;
+                    }
+                }
+            }
+        }
+        if (pollret == 0) {
+            /* Poll timeout, not connected yet */
+            ret = WH_ERROR_NOTREADY;
+        }
+        if (pollret < 0) {
+            /* Error polling.  Fatal */
+            (void)posixTransportTcp_Close(c);
+            c->state = PTT_STATE_DONE;
+            ret = WH_ERROR_ABORTED;
+        }
+    } break;
+
+    case PTT_STATE_CONNECTED:
+        ret = WH_ERROR_OK;
+        break;
+
+    case PTT_STATE_DONE:
+        ret = WH_ERROR_ABORTED;
+        break;
+
+    default:
+        c->state = PTT_STATE_DONE;
+        ret = WH_ERROR_ABORTED;
+    }
+    return ret;
+}
+
+static int posixTransportTcp_Close(posixTransportTcpClientContext* c)
+{
+    if (c == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    if (c->connect_fd_p1 != 0) {
+        close(c->connect_fd_p1 - 1);
+        c->connect_fd_p1 = 0;
+    }
+    return WH_ERROR_OK;
+}
+
+
 int posixTransportTcp_InitConnect(void* context, const void* config,
         whCommSetConnectedCb connectcb, void* connectcb_arg)
 {
-    int rc = 0;
+    int rc;
     posixTransportTcpClientContext* c = context;
     const posixTransportTcpConfig* cf = config;
 
@@ -252,63 +406,67 @@ int posixTransportTcp_InitConnect(void* context, const void* config,
         return WH_ERROR_BADARGS;
     }
     c->server_addr.sin_port = htons(cf->server_port);
-    rc = socket(AF_INET, SOCK_STREAM, 0);
-    if (rc < 0) {
-        return WH_ERROR_ABORTED;
-    }
-    c->connect_fd_p1 = rc + 1;
     c->server_addr.sin_family = AF_INET;
 
-    /* Make socket non-blocking */
-    rc = posixTransportTcp_MakeNonBlocking(c->connect_fd_p1 - 1);
-
-    if(rc != 0) {
-        close(c->connect_fd_p1 - 1);
-        c->connect_fd_p1 = 0;
-        return WH_ERROR_ABORTED;
-    }
-
-
     /* Start the connect process */
-    rc = connect(c->connect_fd_p1 - 1,
-            (struct sockaddr*)&c->server_addr,
-            sizeof(c->server_addr));
-    if (rc < 0) {
-        switch (errno) {
-        case EAGAIN:
-        case EINPROGRESS:
-        case EINTR:
-            /* Ok.  Not ready yet. */
-            break;
+    rc = posixTransportTcp_HandleConnect(c);
+    if (    (rc == WH_ERROR_OK) ||          /* Connected.  Unlikely */
+            (rc == WH_ERROR_NOTFOUND) ||    /* Server not listening */
+            (rc == WH_ERROR_NOTREADY) ) {   /* Async connect. Likely */
+        c->connectcb = connectcb;
+        c->connectcb_arg = connectcb_arg;
 
-        default:
-            /* Some other error. Assume fatal. */
-            close(c->connect_fd_p1 - 1);
-            c->connect_fd_p1 = 0;
-            return WH_ERROR_ABORTED;
+        /* Since we have started connecting already, invoke the connectcb so that
+         * we can continue to monitor connect status during recv.
+         */
+        if (c->connectcb != NULL) {
+            c->connectcb(connectcb_arg, WH_COMM_CONNECTED);
         }
+        /* Override to indicate the connection was good enough */
+        rc = WH_ERROR_OK;
     }
-
-    c->connectcb = connectcb;
-    c->connectcb_arg = connectcb_arg;
-
-    /* Since we have started connecting already, invoke the connectcb so that
-     * we can continue to monitor connect status during recv.
-     */
-    if (c->connectcb != NULL) {
-        c->connectcb(connectcb_arg, WH_COMM_CONNECTED);
-    }
-    /* All good */
-    return 0;
+    return rc;
 }
+
+/* Return the file descriptor of the connected socket to support poll/select */
+int posixTransportTcp_GetConnectFd(posixTransportTcpClientContext *context,
+        int *out_fd)
+{
+    int ret = WH_ERROR_OK;
+
+    if (context == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    switch(context->state) {
+    case PTT_STATE_UNCONNECTED:
+        ret = WH_ERROR_NOTREADY;
+        break;
+
+    case PTT_STATE_CONNECT_WAIT:
+    case PTT_STATE_CONNECTED:
+        ret = WH_ERROR_OK;
+        if (*out_fd) {
+            *out_fd = context->connect_fd_p1 - 1;
+        }
+        break;
+
+    case PTT_STATE_DONE:
+    default:
+        ret = WH_ERROR_ABORTED;
+        break;
+    }
+
+    return ret;
+}
+
 
 int posixTransportTcp_SendRequest(void* context,
         uint16_t size, const void* data)
 {
-    int rc = 0;
+    int rc;
     posixTransportTcpClientContext* c = context;
     if (    (c == NULL) ||
-            (c->connect_fd_p1 == 0) ||
             (size == 0) ||
             (size > PTT_PACKET_MAX_SIZE) ||
             (data == NULL) ) {
@@ -320,46 +478,31 @@ int posixTransportTcp_SendRequest(void* context,
     }
 
     /* Handle late/slow connect */
-    if (c->connected == 0) {
-        /* Ensure writeable */
-        struct pollfd pfd = {
-                .fd = c->connect_fd_p1 - 1,
-                .events = POLLOUT,
-                .revents = 0,
-        };
-        /* Check for writeable with no timeout */
-        rc = poll(&pfd, 1, 0);
-        if (rc < 0) {
-            /* Error.  */
-            return WH_ERROR_ABORTED;
-        }
-        if (rc == 0) {
-            /* Poll timeout, not connected yet */
-            return WH_ERROR_NOTREADY;
-        }
-        if ((pfd.revents & POLLOUT) == 0) {
-            /* Not connected yet */
-            return WH_ERROR_NOTREADY;
-        }
-        c->connected = 1;
-    }
+    rc = posixTransportTcp_HandleConnect(c);
+    if (rc == WH_ERROR_OK) {
 
-    rc = posixTransportTcp_Send(
-            c->connect_fd_p1 - 1,
-            &c->buffer_offset,
-            c->buffer,
-            size, data);
+        rc = posixTransportTcp_Send(
+                c->connect_fd_p1 - 1,
+                &c->buffer_offset,
+                c->buffer,
+                size, data);
 
-    if (rc != WH_ERROR_NOTREADY) {
-        /* Reset state */
-        c->buffer_offset = 0;
-        if (rc == 0) {
-            c->request_sent = 1;
-        } else {
-            /* Assume fatal error and trigger disconnect */
-            if (c->connectcb != NULL) {
-                c->connectcb(c->connectcb_arg, WH_COMM_DISCONNECTED);
+        if (rc != WH_ERROR_NOTREADY) {
+            /* Reset state */
+            c->buffer_offset = 0;
+            if (rc == 0) {
+                c->request_sent = 1;
+            } else {
+                /* Assume fatal error and trigger disconnect */
+                if (c->connectcb != NULL) {
+                    c->connectcb(c->connectcb_arg, WH_COMM_DISCONNECTED);
+                }
             }
+        }
+    } else {
+        if (rc == WH_ERROR_NOTFOUND) {
+            /* Squash to not ready */
+            rc = WH_ERROR_NOTREADY;
         }
     }
     return rc;
@@ -368,7 +511,7 @@ int posixTransportTcp_SendRequest(void* context,
 int posixTransportTcp_RecvResponse(void* context,
         uint16_t* out_size, void* data)
 {
-    int rc = 0;
+    int rc;
     posixTransportTcpClientContext* c = context;
     if (    (c == NULL) ||
             (c->connect_fd_p1 == 0) ) {
@@ -423,11 +566,50 @@ int posixTransportTcp_CleanupConnect(void* context)
 
 /** Server Functions */
 
+int posixTransportTcp_GetListenFd(posixTransportTcpServerContext *context,
+        int *out_fd)
+{
+    int ret = WH_ERROR_OK;
+
+    if (context == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    if (context->listen_fd_p1 != 0) {
+        if (out_fd != NULL) {
+            *out_fd = context->listen_fd_p1 - 1;
+        }
+    } else {
+        ret = WH_ERROR_NOTREADY;
+    }
+    return ret;
+}
+
+int posixTransportTcp_GetAcceptFd(posixTransportTcpServerContext *context,
+        int *out_fd)
+{
+    int ret = WH_ERROR_OK;
+
+    if (context == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    if (    (context->listen_fd_p1 != 0) &&
+            (context->accept_fd_p1 != 0) ) {
+        if (out_fd != NULL) {
+            *out_fd = context->accept_fd_p1 - 1;
+        }
+    } else {
+        ret = WH_ERROR_NOTREADY;
+    }
+    return ret;
+}
+
 
 int posixTransportTcp_InitListen(void* context, const void* config,
         whCommSetConnectedCb connectcb, void* connectcb_arg)
 {
-    int rc = 0;
+    int rc;
     posixTransportTcpServerContext* c = context;
     const posixTransportTcpConfig* cf = config;
 
@@ -460,14 +642,13 @@ int posixTransportTcp_InitListen(void* context, const void* config,
     }
 
     /* Ensure listen port does not linger */
-    rc = posixTransportTcp_MakeNoLinger(c->listen_fd_p1 - 1);
+    (void)posixTransportTcp_MakeNoLinger(c->listen_fd_p1 - 1);
     /* Ok to fail to linger.  Annoying, but ok. */
 
     rc = bind(c->listen_fd_p1 - 1,
             (struct sockaddr*)&c->server_addr,
             sizeof(c->server_addr));
     if (rc < 0) {
-        perror("bind failed\n");
         close(c->listen_fd_p1 - 1);
         c->listen_fd_p1 = 0;
         return WH_ERROR_ABORTED;
@@ -487,7 +668,6 @@ int posixTransportTcp_InitListen(void* context, const void* config,
     if (c->connectcb != NULL) {
         c->connectcb(c->connectcb_arg, WH_COMM_CONNECTED);
     }
-
     /* All good */
     return 0;
 }
