@@ -23,12 +23,11 @@
 
 #include "wolfhsm/wh_settings.h"
 
+#ifndef WOLFHSM_CFG_NO_CRYPTO
+
 #include <stdint.h>
 #include <stdio.h>  /* For printf */
 #include <string.h> /* For memset, memcpy */
-#include <unistd.h> /* For sleep */
-
-#ifndef WOLFHSM_CFG_NO_CRYPTO
 
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/types.h"
@@ -49,6 +48,7 @@
 #include "wh_test_common.h"
 
 #if defined(WOLFHSM_CFG_TEST_POSIX)
+#include <unistd.h> /* For sleep */
 #include <pthread.h> /* For pthread_create/cancel/join/_t */
 #include "port/posix/posix_transport_tcp.h"
 #include "port/posix/posix_flash_file.h"
