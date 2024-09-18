@@ -26,6 +26,7 @@
 #include <stdint.h>
 #include <stdio.h>  /* For printf */
 #include <string.h> /* For memset, memcpy */
+#include <unistd.h> /* For sleep */
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
 
