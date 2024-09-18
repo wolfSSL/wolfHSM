@@ -53,13 +53,6 @@
 #include "port/posix/posix_flash_file.h"
 #endif
 
-#if defined(WOLFHSM_CFG_TEST_POSIX)
-#include <unistd.h> /* For sleep */
-#include <pthread.h> /* For pthread_create/cancel/join/_t */
-#include "port/posix/posix_transport_tcp.h"
-#include "port/posix/posix_flash_file.h"
-#endif
-
 enum {
         REQ_SIZE = 32,
         RESP_SIZE = 64,
@@ -327,7 +320,7 @@ static int whTest_CryptoCurve25519(whClientContext* ctx, WC_RNG* rng)
     }
     return ret;
 }
-#endif
+#endif /* HAVE_CURVE25519 */
 
 int whTest_CryptoClientConfig(whClientConfig* config)
 {
@@ -898,13 +891,14 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     if (ret == 0) {
         ret = whTest_CryptoEcc(client, rng);
     }
+#endif /* HAVE_ECC */
 
 #ifdef HAVE_CURVE25519
     /* test curve25519 */
     if (ret == 0) {
         ret = whTest_CryptoCurve25519(client, rng);
     }
-#endif
+#endif /* HAVE_CURVE25519 */
 
     if (ret != 0) {
         goto exit;
