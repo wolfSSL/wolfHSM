@@ -72,6 +72,8 @@ int wh_MessageComm_TranslateInfoResponse(uint16_t magic,
     dest->cfg_nvm_object_count = wh_Translate32(magic, src->cfg_nvm_object_count);
     dest->cfg_server_keycache_count = wh_Translate32(magic, src->cfg_server_keycache_count);
     dest->cfg_server_keycache_bufsize = wh_Translate32(magic, src->cfg_server_keycache_bufsize);
+    dest->cfg_server_keycache_bigcount = wh_Translate32(magic, src->cfg_server_keycache_bigcount);
+    dest->cfg_server_keycache_bigbufsize = wh_Translate32(magic, src->cfg_server_keycache_bigbufsize);
     dest->cfg_server_customcb_count = wh_Translate32(magic, src->cfg_server_customcb_count);
     dest->cfg_server_dmaaddr_count = wh_Translate32(magic, src->cfg_server_dmaaddr_count);
     dest->debug_state = wh_Translate32(magic, src->debug_state);

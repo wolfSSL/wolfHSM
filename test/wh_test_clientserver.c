@@ -660,6 +660,8 @@ int whTest_ClientServerSequential(void)
             &cfg_nvm_object_count,
             &cfg_server_keycache_count,
             &cfg_server_keycache_bufsize,
+            &cfg_server_keycache_bigcount,
+            &cfg_server_keycache_bigbufsize,
             &cfg_server_customcb_count,
             &cfg_server_dmaaddr_count,
             &debug_state,

@@ -49,6 +49,19 @@
 #include "wolfssl/wolfcrypt/rsa.h"
 #include "wolfssl/wolfcrypt/ecc.h"
 
+/**
+ * @brief Generate random bytes
+ *
+ * This function requests the server to generate random bytes by repeatedly
+ * requesting the maximum block size of data from the server at a time
+ *
+ * @param[in] ctx Pointer to the client context
+ * @param[in] out Pointer to the where the bytes are to be placed.  May be NULL.
+ * @param[in] size Number of bytes to generate. *
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_RngGenerate(whClientContext* ctx, uint8_t* out, uint32_t size);
+
 
 #ifdef HAVE_CURVE25519
 /**

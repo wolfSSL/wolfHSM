@@ -50,32 +50,21 @@
 #include "wolfhsm/wh_comm.h"
 #include "wolfhsm/wh_message_customcb.h"
 
-#if 0
+
 #ifndef WOLFHSM_CFG_NO_CRYPTO
-#include "wolfssl/wolfcrypt/settings.h"
-#include "wolfssl/wolfcrypt/types.h"
-#include "wolfssl/wolfcrypt/error-crypt.h"
-#include "wolfssl/wolfcrypt/wc_port.h"
-#include "wolfssl/wolfcrypt/cryptocb.h"
-#include "wolfssl/wolfcrypt/aes.h"
-#include "wolfssl/wolfcrypt/cmac.h"
-#include "wolfssl/wolfcrypt/curve25519.h"
-#include "wolfssl/wolfcrypt/rsa.h"
-#include "wolfssl/wolfcrypt/ecc.h"
-#endif
-#endif /*0*/
 
 /* Device Id to be registered and passed to wolfCrypt functions */
-#define WH_DEV_ID     0x5748534D /* "WHSM" */
-#define WH_DEV_ID_DMA 0x57444D41 /* "WDMA" */
-
-static const int WH_DEV_IDS_ARRAY[] = { WH_DEV_ID,
+enum {
+    WH_DEV_ID = 0x5748534D, /* "WHSM" */
 #ifdef WOLFHSM_CFG_DMA
-                                        WH_DEV_ID_DMA
+    WH_DEV_ID_DMA = 0x57444D41, /* "WDMA" */
+    WH_NUM_DEVIDS = 2
+#else
+    WH_NUM_DEVIDS = 1
 #endif
 };
-
-#define WH_NUM_DEVIDS (sizeof(WH_DEV_IDS_ARRAY) / sizeof(WH_DEV_IDS_ARRAY[0]))
+extern const int WH_DEV_IDS_ARRAY[WH_NUM_DEVIDS];
+#endif
 
 /**
  * Out of band callback function to inform the server to cancel a request,
@@ -91,7 +80,6 @@ struct whClientContext_t {
     uint16_t     last_req_id;
     uint16_t     last_req_kind;
     uint8_t      cancelable;
-    uint8_t      WH_PAD[3];
     whCommClient comm[1];
     whClientCancelCb cancelCb;
 };
@@ -130,8 +118,6 @@ int wh_Client_Cleanup(whClientContext* c);
 
 
 /** Generic request/response functions */
-/* TODO: Move these to internal API */
-
 
 /**
  * Sends a request to the server using the specified client context.
@@ -307,6 +293,8 @@ int wh_Client_CommInfo(whClientContext* c,
         uint32_t *out_cfg_nvm_object_count,
         uint32_t *out_cfg_keycache_count,
         uint32_t *out_cfg_keycache_bufsize,
+        uint32_t *out_cfg_keycache_bigcount,
+        uint32_t *out_cfg_keycache_bigbufsize,
         uint32_t *out_cfg_customcb_count,
         uint32_t *out_cfg_dmaaddr_count,
         uint32_t *out_debug_state,

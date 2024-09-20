@@ -36,6 +36,7 @@
 #include "wolfssl/wolfcrypt/types.h"
 #include "wolfssl/wolfcrypt/error-crypt.h"
 #include "wolfssl/wolfcrypt/asn.h"
+#include "wolfssl/wolfcrypt/rsa.h"
 #include "wolfssl/wolfcrypt/curve25519.h"
 #include "wolfssl/wolfcrypt/ecc.h"
 
@@ -43,6 +44,49 @@
 #include "wolfhsm/wh_utils.h"
 
 #include "wolfhsm/wh_crypto.h"
+
+#ifndef NO_RSA
+int wh_Crypto_SerializeRsaKey(RsaKey* key, uint16_t max_size,
+        uint8_t* buffer, uint16_t *out_size)
+{
+    int ret = 0;
+    int der_size = 0;
+
+    if (    (key == NULL) ||
+            (buffer == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    der_size = wc_RsaKeyToDer(key, (byte*)buffer, (word32)max_size);
+    if (der_size >= 0) {
+        ret = 0;
+        if (out_size != NULL) {
+            *out_size = der_size;
+        }
+    } else {
+        /* Error serializing.  Clear the buffer */
+        ret = der_size;
+        memset(buffer, 0, max_size);
+    }
+    return ret;
+}
+
+int wh_Crypto_DeserializeRsaKey(uint16_t size, const uint8_t* buffer,
+        RsaKey* key)
+{
+    int ret;
+    word32 idx = 0;
+
+    if (    (size == 0) ||
+            (buffer == NULL) ||
+            (key == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    /* Deserialize the RSA key */
+    ret = wc_RsaPrivateKeyDecode(buffer, &idx, key, size);
+    return ret;
+}
+#endif /* !NO_RSA */
 
 #ifdef HAVE_ECC
 int wh_Crypto_EccSerializeKeyDer(ecc_key* key, uint16_t max_size,

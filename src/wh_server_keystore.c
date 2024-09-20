@@ -53,13 +53,13 @@ static int _FindInCache(whServerContext* server, whKeyId keyId,
 
 
 
-int hsmGetUniqueId(whServerContext* server, whNvmId* outId)
+int hsmGetUniqueId(whServerContext* server, whNvmId* inout_id)
 {
     int i;
     int ret = 0;
     whNvmId id;
     /* apply client_id and type which should be set by caller on outId */
-    whKeyId key_id = *outId;
+    whKeyId key_id = *inout_id;
     int type = WH_KEYID_TYPE(key_id);
     int user = WH_KEYID_USER(key_id);
     whNvmId buildId ;
@@ -98,7 +98,7 @@ int hsmGetUniqueId(whServerContext* server, whNvmId* outId)
         ret = WH_ERROR_NOSPACE;
     /* ultimately, return found id */
     if (ret == 0)
-        *outId = buildId;
+        *inout_id = buildId;
     return ret;
 }
 
