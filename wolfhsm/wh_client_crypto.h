@@ -224,7 +224,7 @@ int wh_Client_EccVerify(whClientContext* ctx, ecc_key* key,
  * @param[in] keyId Key ID to be associated with the RSA key.
  * @return int Returns 0 on success or a negative error code on failure.
  */
-int wh_Client_SetKeyIdRsa(RsaKey* key, whNvmId keyId);
+int wh_Client_RsaSetKeyId(RsaKey* key, whNvmId keyId);
 
 /**
  * @brief Gets the wolfHSM keyId being used by the wolfCrypt struct.
@@ -236,7 +236,7 @@ int wh_Client_SetKeyIdRsa(RsaKey* key, whNvmId keyId);
  * @param[out] outId Pointer to the key ID to return.
  * @return int Returns 0 on success or a negative error code on failure.
  */
-int wh_Client_GetKeyIdRsa(RsaKey* key, whNvmId* outId);
+int wh_Client_RsaGetKeyId(RsaKey* key, whNvmId* outId);
 
 /**
  * @brief Imports wolfCrypt RSA key as a PCKS1 DER-formatted file into the
@@ -254,9 +254,9 @@ int wh_Client_GetKeyIdRsa(RsaKey* key, whNvmId* outId);
  * @param[out] out_keyId Pointer to the key ID to return.
  * @return int Returns 0 on success or a negative error code on failure.
  */
-int wh_Client_ImportRsaKey(whClientContext* ctx, RsaKey* key,
-        whNvmFlags flags, uint32_t label_len, uint8_t* label,
-        whKeyId *out_keyId);
+int wh_Client_RsaImportKey(whClientContext* ctx, RsaKey* key,
+        whKeyId *inout_keyId, whNvmFlags flags,
+        uint32_t label_len, uint8_t* label);
 
 /**
  * @brief Exports a PKCS1 DER-formated RSA key from the wolfHSM server keycache
@@ -275,24 +275,24 @@ int wh_Client_ImportRsaKey(whClientContext* ctx, RsaKey* key,
  * @return int Returns 0 on success or a negative error code on failure.
  */
 
-int wh_Client_ExportRsaKey(whClientContext* ctx, whKeyId keyId, RsaKey* key,
-        uint32_t label_len, uint8_t* label);
+int wh_Client_RsaExportKey(whClientContext* ctx, whKeyId keyId,
+        RsaKey* key, uint32_t label_len, uint8_t* label);
 
 /* Generate an RSA key on the server and export it inta an RSA struct */
-int wh_Client_MakeExportRsaKey(whClientContext* ctx,
+int wh_Client_RsaMakeExportKey(whClientContext* ctx,
         uint32_t size, uint32_t e, RsaKey* key);
 
 /* Generate an RSA key on the server and put it in the server keycache */
-int wh_Client_MakeCacheRsaKey(whClientContext* ctx,
+int wh_Client_RsaMakeCacheKey(whClientContext* ctx,
         uint32_t size, uint32_t e,
-        whNvmFlags flags,  uint32_t label_len, uint8_t* label,
-        whKeyId *out_keyId);
+        whKeyId *inout_keyId, whNvmFlags flags,
+        uint32_t label_len, uint8_t* label);
 
-/* Make an RSA key on the server based on the flags */
-int wh_Client_MakeRsaKey(whClientContext* ctx,
-        uint32_t size, uint32_t e,
-        whNvmFlags flags,  uint32_t label_len, uint8_t* label,
-        whKeyId *inout_key_id, RsaKey* rsa);
+/* TODO: Request server to perform the RSA function */
+int wh_Client_RsaFunction(whClientContext* ctx,
+        RsaKey* key, int rsa_type,
+        const uint8_t* in, uint16_t in_len,
+        uint8_t* out, uint16_t *inout_out_len);
 
 
 #endif /* !NO_RSA */
@@ -309,7 +309,7 @@ int wh_Client_MakeRsaKey(whClientContext* ctx,
  * @param[in] keyId Key ID to be associated with the AES key.
  * @return int Returns 0 on success or a negative error code on failure.
  */
-int wh_Client_SetKeyIdAes(Aes* key, whNvmId keyId);
+int wh_Client_AesSetKeyId(Aes* key, whNvmId keyId);
 
 /**
  * @brief Gets the wolfHSM keyId being used by the wolfCrypt struct.
@@ -321,48 +321,48 @@ int wh_Client_SetKeyIdAes(Aes* key, whNvmId keyId);
  * @param[out] outId Pointer to the key ID to return.
  * @return int Returns 0 on success or a negative error code on failure.
  */
-int wh_Client_GetKeyIdAes(Aes* key, whNvmId* outId);
+int wh_Client_AesGetKeyId(Aes* key, whNvmId* outId);
 
 #ifdef WOLFSSL_CMAC
 /**
- * @brief Runs the AES CMAC operation in a single call with a wolfHSM keyId.
+ * @brief Runs the CMAC-AES operation in a single call with a wolfHSM keyId.
  *
- * This function does entire cmac operation in one function call with a key
+ * This function does entire CMAC operation in one function call with a key
  * already stored in the HSM. This operation evicts the key from the HSM cache
  * after the operation though it will still be in the HSM's NVM if it was
- * commited
+ * committed
  *
  * @param[in] cmac Pointer to the CMAC key structure.
  * @param[out] out Output buffer for the CMAC tag.
  * @param[out] outSz Size of the output buffer in bytes.
  * @param[in] in Input buffer to be hashed.
  * @param[in] inSz Size of the input buffer in bytes.
- * @param[in] keyId ID of the key inside the HSM.
+ * @param[in] keyId ID of the AES key inside the HSM.
  * @param[in] heap Heap pointer for the cmac struct.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
-int wh_Client_AesCmacGenerate(Cmac* cmac, byte* sig, word32* outSz,
+int wh_Client_CmacAesGenerate(Cmac* cmac, byte* sig, word32* outSz,
     const byte* hash, word32 inSz, whNvmId keyId, void* heap);
 
 /**
- * @brief Verifies a AES CMAC tag in a single call with a wolfHSM keyId.
+ * @brief Verifies a CMAC-AES tag in a single call with a wolfHSM keyId.
  *
  * This function does entire cmac verify in one function call with a key
  * already stored in the HSM. This operation evicts the key from the HSM cache
  * after the operation though it will still be in the HSM's NVM if it was
- * commited
+ * committed
  *
  * @param[in] cmac Pointer to the CMAC key structure.
  * @param[out] check Cmac tag to check against.
  * @param[out] checkSz Size of the check buffer in bytes.
  * @param[in] in Input buffer to be hashed.
  * @param[in] inSz Size of the input buffer in bytes.
- * @param[in] keyId ID of the key inside the HSM.
+ * @param[in] keyId ID of the AES key inside the HSM.
  * @param[in] heap Heap pointer for the cmac struct.
  * @return int Returns 0 on success, 1 on tag mismatch, or a negative error
  *    code on failure.
  */
-int wh_Client_AesCmacVerify(Cmac* cmac, const byte* check, word32 checkSz,
+int wh_Client_CmacAesVerify(Cmac* cmac, const byte* check, word32 checkSz,
     const byte* hash, word32 inSz, whNvmId keyId, void* heap);
 
 /**
@@ -394,7 +394,7 @@ int wh_Client_CmacCancelableResponse(whClientContext* c, Cmac* cmac,
  * @param[in] keyId Key ID to be associated with the CMAC key.
  * @return int Returns 0 on success or a negative error code on failure.
  */
-int wh_Client_SetKeyIdCmac(Cmac* key, whNvmId keyId);
+int wh_Client_CmacSetKeyId(Cmac* key, whNvmId keyId);
 
 /**
  * @brief Gets the wolfHSM keyId being used by the wolfCrypt struct.
@@ -406,7 +406,7 @@ int wh_Client_SetKeyIdCmac(Cmac* key, whNvmId keyId);
  * @param[out] outId Pointer to the key ID to return.
  * @return int Returns 0 on success or a negative error code on failure.
  */
-int wh_Client_GetKeyIdCmac(Cmac* key, whNvmId* outId);
+int wh_Client_CmacGetKeyId(Cmac* key, whNvmId* outId);
 #endif /* WOLFSSL_CMAC */
 #endif /* !NO_AES */
 

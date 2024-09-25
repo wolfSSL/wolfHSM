@@ -151,7 +151,7 @@ static int whTest_CryptoRsa(whClientContext* ctx, int devId, WC_RNG* rng)
 {
 #define RSA_KEY_BITS 2048
 #define RSA_KEY_BYTES (RSA_KEY_BITS/8)
-#define RSA_EXPONENT 65537
+#define RSA_EXPONENT WC_RSA_EXPONENT
 
     int ret = WH_ERROR_OK;
     RsaKey rsa[1];
@@ -160,7 +160,7 @@ static int whTest_CryptoRsa(whClientContext* ctx, int devId, WC_RNG* rng)
     char finalText[RSA_KEY_BYTES];
     whKeyId keyId = WH_KEYID_ERASED;
 
-    /* Using ephemral key */
+    /* Using ephemeral key */
     memset(cipherText, 0, sizeof(cipherText));
     memset(finalText, 0, sizeof(finalText));
     ret = wc_InitRsaKey_ex(rsa, NULL, devId);
@@ -200,7 +200,7 @@ static int whTest_CryptoRsa(whClientContext* ctx, int devId, WC_RNG* rng)
         if (ret!= 0) {
             WH_ERROR_PRINT("Failed to wc_InitRsaKey_ex %d\n", ret);
         } else {
-            ret = wh_Client_MakeExportRsaKey(ctx, RSA_KEY_BITS, RSA_EXPONENT,
+            ret = wh_Client_RsaMakeExportKey(ctx, RSA_KEY_BITS, RSA_EXPONENT,
                     rsa);
             if (ret != 0) {
                 WH_ERROR_PRINT("Failed to make exported key %d\n", ret);
@@ -232,8 +232,8 @@ static int whTest_CryptoRsa(whClientContext* ctx, int devId, WC_RNG* rng)
         /* Using keyCache key */
         memset(cipherText, 0, sizeof(cipherText));
         memset(finalText, 0, sizeof(finalText));
-        ret = wh_Client_MakeCacheRsaKey(ctx, RSA_KEY_BITS, RSA_EXPONENT,
-                WH_NVM_FLAGS_NONE, 0, NULL, &keyId);
+        ret = wh_Client_RsaMakeCacheKey(ctx, RSA_KEY_BITS, RSA_EXPONENT,
+                &keyId, WH_NVM_FLAGS_NONE, 0, NULL);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed to make cached key %d\n", ret);
         } else {
@@ -241,11 +241,11 @@ static int whTest_CryptoRsa(whClientContext* ctx, int devId, WC_RNG* rng)
             if (ret != 0) {
                 WH_ERROR_PRINT("Failed to wc_InitRsaKey_ex %d\n", ret);
             } else {
-                ret = wh_Client_SetKeyIdRsa(rsa, keyId);
+                ret = wh_Client_RsaSetKeyId(rsa, keyId);
                 if (ret != 0) {
                     WH_ERROR_PRINT("Failed to wh_Client_SetKeyIdRsa %d\n", ret);
                 } else {
-                    ret = wh_Client_GetKeyIdRsa(rsa, &keyId);
+                    ret = wh_Client_RsaGetKeyId(rsa, &keyId);
                     if (ret != 0) {
                         WH_ERROR_PRINT("Failed to wc_GetKeyIdRsa %d\n", ret);
                     } else {
@@ -426,7 +426,7 @@ static int whTest_CryptoCurve25519(whClientContext* ctx, int devId, WC_RNG* rng)
                     ret = wc_curve25519_shared_secret(
                             key_b, key_a, shared_ba, &len);
                     if (ret != 0) {
-                        WH_ERROR_PRINT("Failed to compute shared secrete %d\n",
+                        WH_ERROR_PRINT("Failed to compute shared secret %d\n",
                                 ret);
                     }
                 }
@@ -477,7 +477,7 @@ static int whTest_CryptoCurve25519(whClientContext* ctx, int devId, WC_RNG* rng)
                     ret = wc_curve25519_shared_secret(
                             key_b, key_a, shared_ba, &len);
                     if (ret != 0) {
-                        WH_ERROR_PRINT("Failed to compute shared secrete %d\n",
+                        WH_ERROR_PRINT("Failed to compute shared secret %d\n",
                                 ret);
                     }
                 }
@@ -530,7 +530,7 @@ static int whTest_CryptoCurve25519(whClientContext* ctx, int devId, WC_RNG* rng)
                     ret = wc_curve25519_shared_secret(
                             key_b, key_a, shared_ba, &len);
                     if (ret != 0) {
-                        WH_ERROR_PRINT("Failed to compute shared secrete %d\n",
+                        WH_ERROR_PRINT("Failed to compute shared secret %d\n",
                                 ret);
                     }
                 }
@@ -710,15 +710,23 @@ static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
     uint8_t labelIn[WH_NVM_LABEL_LEN] = "KeyCache Test Label";
     uint8_t labelOut[WH_NVM_LABEL_LEN] = {0};
 
+    /* Randomize inputs */
+    ret = wc_RNG_GenerateBlock(rng, key, sizeof(key));
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wc_RNG_GenerateBlock %d\n", ret);
+    }
+
     /* test cache/export */
     keyId = WH_KEYID_ERASED;
-    ret = whTest_CacheExportKey(ctx, &keyId,
+    if (ret == 0) {
+        ret = whTest_CacheExportKey(ctx, &keyId,
             labelIn, labelOut, sizeof(labelIn),
             key, keyOut, sizeof(key));
-    if (ret != 0) {
-        WH_ERROR_PRINT("Failed to Test CacheExportKey %d\n", ret);
-    } else {
-        printf("KEY CACHE/EXPORT SUCCESS\n");
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to Test CacheExportKey %d\n", ret);
+        } else {
+            printf("KEY CACHE/EXPORT SUCCESS\n");
+        }
     }
 #ifndef WOLFHSM_CFG_TEST_NO_CUSTOM_SERVERS
     /* WOLFHSM_CFG_TEST_NO_CUSTOM_SERVERS protects the client test code that
@@ -953,7 +961,7 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
             if (ret != 0) {
                 WH_ERROR_PRINT("Failed to wh_Client_KeyCache %d\n", ret);
             } else {
-                ret = wh_Client_SetKeyIdAes(aes, keyId);
+                ret = wh_Client_AesSetKeyId(aes, keyId);
                 if (ret != 0) {
                     WH_ERROR_PRINT("Failed to wh_Client_SetKeyIdAes %d\n", ret);
                 } else {
@@ -1062,7 +1070,7 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
             if (ret != 0) {
                 WH_ERROR_PRINT("Failed to wh_Client_KeyCache %d\n", ret);
             } else {
-                ret = wh_Client_SetKeyIdAes(aes, keyId);
+                ret = wh_Client_AesSetKeyId(aes, keyId);
                 if (ret != 0) {
                     WH_ERROR_PRINT("Failed to set key id:%d\n", ret);
                 } else {
@@ -1162,7 +1170,7 @@ static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
             WH_ERROR_PRINT("Failed to wh_Client_KeyCache %d\n", ret);
         } else {
             macLen = sizeof(macOut);
-            ret = wh_Client_AesCmacGenerate(cmac, macOut, &macLen, knownCmacMessage, sizeof(knownCmacMessage), keyId, NULL);
+            ret = wh_Client_CmacAesGenerate(cmac, macOut, &macLen, knownCmacMessage, sizeof(knownCmacMessage), keyId, NULL);
             if (ret != 0) {
                 WH_ERROR_PRINT("Failed to wh_Client_AesCmacGenerate %d\n", ret);
             } else {
@@ -1201,7 +1209,7 @@ static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
                     WH_ERROR_PRINT("Failed to wh_Client_KeyEvict %d\n", ret);
                 } else {
                     macLen = sizeof(macOut);
-                    ret = wh_Client_AesCmacVerify(cmac, macOut, macLen, (byte*)knownCmacMessage, sizeof(knownCmacMessage), keyId, NULL);
+                    ret = wh_Client_CmacAesVerify(cmac, macOut, macLen, (byte*)knownCmacMessage, sizeof(knownCmacMessage), keyId, NULL);
                     if (ret != 0) {
                         WH_ERROR_PRINT("Failed to wh_Client_AesCmacVerify %d\n", ret);
                     } else {

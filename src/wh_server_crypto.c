@@ -132,7 +132,7 @@ int wh_Server_CacheImportRsaKey(whServerContext* ctx, RsaKey* key,
     /* get a free slot */
     ret = hsmCacheFindSlotAndZero(ctx, max_size, &cacheBuf, &cacheMeta);
     if (ret == 0) {
-        ret = wh_Crypto_SerializeRsaKey(key, max_size, cacheBuf, &der_size);
+        ret = wh_Crypto_RsaSerializeKeyDer(key, max_size, cacheBuf, &der_size);
     }
 
     if (ret == 0) {
@@ -166,7 +166,7 @@ int wh_Server_CacheExportRsaKey(whServerContext* ctx, whKeyId keyId,
     ret = hsmFreshenKey(ctx, keyId, &cacheBuf, &cacheMeta);
 
     if (ret == 0) {
-        ret = wh_Crypto_DeserializeRsaKey(cacheMeta->len, cacheBuf, key);
+        ret = wh_Crypto_RsaDeserializeKeyDer(cacheMeta->len, cacheBuf, key);
     }
     return ret;
 }
@@ -207,7 +207,7 @@ static int wh_Server_HandleGenerateRsaKey(whServerContext* server,
             /* Check incoming flags */
             if (flags & WH_NVM_FLAGS_EPHEMERAL) {
                 /* Must serialize the key into the response packet */
-                ret = wh_Crypto_SerializeRsaKey(rsa, max_size, out, &der_size);
+                ret = wh_Crypto_RsaSerializeKeyDer(rsa, max_size, out, &der_size);
                 if (ret == 0) {
                     packet->pkRsakgRes.keyId = 0;
                     packet->pkRsakgRes.len = der_size;
@@ -251,6 +251,9 @@ static int wh_Server_HandleRsaFunction(whServerContext* server, whPacket* packet
     RsaKey rsa[1] = {0};
 
     int op_type     = (int)(packet->pkRsaReq.opType);
+    uint32_t options = packet->pkRsaReq.options;
+    int evict       = options & WH_PACKET_PK_ECCSIGN_OPTIONS_EVICT;
+
     whKeyId key_id  = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
                         server->comm->client_id,
                         packet->pkRsaReq.keyId);
@@ -274,6 +277,11 @@ static int wh_Server_HandleRsaFunction(whServerContext* server, whPacket* packet
         break;
     default:
         /* Invalid opType */
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+    printf("[server] %s Unknown opType:%d\n",
+            __func__, op_type);
+#endif
+
         return BAD_FUNC_ARG;
     }
 
@@ -296,6 +304,9 @@ static int wh_Server_HandleRsaFunction(whServerContext* server, whPacket* packet
         }
         /* free the key */
         wc_FreeRsaKey(rsa);
+    }
+    if (evict != 0) {
+        (void)hsmEvictKey(server, key_id);
     }
     if (ret == 0) {
         /*set outLen and outgoing message size */
@@ -423,7 +434,7 @@ int wh_Server_CacheImportCurve25519Key(whServerContext* server,
     /* get a free slot */
     ret = hsmCacheFindSlotAndZero(server, keySz, &cacheBuf, &cacheMeta);
     if (ret == 0) {
-        ret = wh_Crypto_SerializeCurve25519Key(key, keySz, cacheBuf, &size);
+        ret = wh_Crypto_Curve25519SerializeKey(key, keySz, cacheBuf, &size);
     }
 
     if (ret == 0) {
@@ -457,7 +468,7 @@ int wh_Server_CacheExportCurve25519Key(whServerContext* server, whKeyId keyId,
     ret = hsmFreshenKey(server, keyId, &cacheBuf, &cacheMeta);
 
     if (ret == 0) {
-        ret = wh_Crypto_DeserializeCurve25519Key(cacheMeta->len, cacheBuf, key);
+        ret = wh_Crypto_Curve25519DeserializeKey(cacheMeta->len, cacheBuf, key);
 #ifdef DEBUG_CRYPTOCB_VERBOSE
         printf("[server] Export25519Key id:%u ret:%d\n", keyId, ret);
         wh_Utils_Hexdump("[server] export key:", cacheBuf, cacheMeta->len);
@@ -944,7 +955,7 @@ static int wh_Server_HandleGenerateCurve25519Key(whServerContext* server, whPack
             if (flags & WH_NVM_FLAGS_EPHEMERAL) {
                 /* Must serialize the key into the response packet */
                 key_id = WH_KEYID_ERASED;
-                ret = wh_Crypto_SerializeCurve25519Key(key, max_size,
+                ret = wh_Crypto_Curve25519SerializeKey(key, max_size,
                         out, &res_size);
             } else {
                 /* Must import the key into the cache and return keyid */

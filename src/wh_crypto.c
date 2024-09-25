@@ -46,7 +46,7 @@
 #include "wolfhsm/wh_crypto.h"
 
 #ifndef NO_RSA
-int wh_Crypto_SerializeRsaKey(RsaKey* key, uint16_t max_size,
+int wh_Crypto_RsaSerializeKeyDer(RsaKey* key, uint16_t max_size,
         uint8_t* buffer, uint16_t *out_size)
 {
     int ret = 0;
@@ -71,7 +71,7 @@ int wh_Crypto_SerializeRsaKey(RsaKey* key, uint16_t max_size,
     return ret;
 }
 
-int wh_Crypto_DeserializeRsaKey(uint16_t size, const uint8_t* buffer,
+int wh_Crypto_RsaDeserializeKeyDer(uint16_t size, const uint8_t* buffer,
         RsaKey* key)
 {
     int ret;
@@ -143,7 +143,7 @@ int wh_Crypto_EccDeserializeKeyDer(const uint8_t* buffer, uint16_t size,
     return ret;
 }
 
-int wh_Crypto_UpdatePrivateOnlyEccKey(ecc_key* key, uint16_t pub_size,
+int wh_Crypto_EccUpdatePrivateOnlyKeyDer(ecc_key* key, uint16_t pub_size,
         const uint8_t* pub_buffer)
 {
     int ret = 0;
@@ -193,7 +193,7 @@ int wh_Crypto_UpdatePrivateOnlyEccKey(ecc_key* key, uint16_t pub_size,
 #endif /* HAVE_ECC */
 
 #ifdef HAVE_CURVE25519
- int wh_Crypto_SerializeCurve25519Key(curve25519_key* key,
+ int wh_Crypto_Curve25519SerializeKey(curve25519_key* key,
         uint16_t max_size, uint8_t* buffer, uint16_t *out_size)
 {
     int ret = 0;
@@ -215,7 +215,7 @@ int wh_Crypto_UpdatePrivateOnlyEccKey(ecc_key* key, uint16_t pub_size,
     return ret;
 }
 
-int wh_Crypto_DeserializeCurve25519Key(uint16_t size,
+int wh_Crypto_Curve25519DeserializeKey(uint16_t size,
         const uint8_t* buffer, curve25519_key* key)
 {
     int ret = 0;

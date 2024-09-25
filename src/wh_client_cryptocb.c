@@ -430,24 +430,60 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
 #ifdef WOLFSSL_KEY_GEN
         case WC_PK_TYPE_RSA_KEYGEN:
         {
-            ret = wh_Client_MakeExportRsaKey(ctx,
-                    info->pk.rsakg.size, info->pk.rsakg.e,
-                    info->pk.rsakg.key);
-            /* Fix up error code to be wolfCrypt*/
-            if (ret == WH_ERROR_BADARGS) {
-                ret = BAD_FUNC_ARG;
-            }
+            /* Extract info parameters */
+            int size = info->pk.rsakg.size;
+            int e = info->pk.rsakg.e;
+            RsaKey* rsa = info->pk.rsakg.key;
+            ret = wh_Client_RsaMakeExportKey(ctx, size, e, rsa);
         } break;
 #endif  /* WOLFSSL_KEY_GEN */
 
         case WC_PK_TYPE_RSA:
         {
-            /* in and out are after the fixed size fields */
-            uint8_t* in = (uint8_t*)(&packet->pkRsaReq + 1);
-            uint8_t* out = (uint8_t*)(&packet->pkRsaRes + 1);
+            /* Extract info parameters */
+            RsaKey* rsa         = info->pk.rsa.key;
+            int rsa_type        = info->pk.rsa.type;
+            const uint8_t* in   = info->pk.rsa.in;
+            word32 in_len       = info->pk.rsa.inLen;
+            uint8_t* out        = info->pk.rsa.out;
+            word32* out_len     = info->pk.rsa.outLen;
+
+            uint16_t len = 0;
+            if(out_len != NULL) {
+                len = *out_len;
+            }
+
+            ret = wh_Client_RsaFunction(ctx,
+                    rsa, rsa_type, in, in_len,
+                    out, &len);
+
+            if (    (ret == WH_ERROR_OK) &&
+                    (out_len != NULL) ) {
+                *out_len = len;
+            }
+
+#if 0
+            whKeyId key_id = WH_DEVCTX_TO_KEYID(rsa->devCtx);
+
+            uint16_t len = 0;
+            if(out_len != NULL) {
+                len = *out_len;
+            }
+
+            uint16_t group = WH_MESSAGE_GROUP_CRYPTO;
+            uint16_t action = WC_ALGO_TYPE_PK;
+            uint16_t type = WC_PK_TYPE_RSA;
+
+            wh_Packet_pk_rsa_req* req = &packet->pkRsaReq + 1;
+            uint8_t* req_in = (uint8_t*)req;
+            uint16_t req_len = WH_PACKET_STUB_SIZE + sizeof(*req) +in_len;
+
+            wh_Packet_pk_rsa_res* res = &packet->pkRsaRes + 1;
+            uint8_t* res_out = (uint8_t*)res;
+            uint16_t res_len = 0;
+
             dataSz = WH_PACKET_STUB_SIZE + sizeof(packet->pkRsaReq)
                 + info->pk.rsa.inLen;
-            whKeyId keyId = WH_DEVCTX_TO_KEYID(info->pk.rsa.key->devCtx);
             int evict = 0;
 
             if (dataSz > WOLFHSM_CFG_COMM_DATA_LEN) {
@@ -456,43 +492,40 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             }
 
             /* check to see if the keyId is erased */
-            if (WH_KEYID_ISERASED(keyId)) {
+            if (WH_KEYID_ISERASED(key_id)) {
                 /* Must import the key to the server and evict it afterwards */
                 uint8_t keyLabel[] = "ClientCbTempRSA";
                 whNvmFlags flags = WH_NVM_FLAGS_NONE;
 
-                ret = wh_Client_ImportRsaKey(ctx, info->pk.rsa.key,
-                        flags, sizeof(keyLabel), keyLabel, &keyId);
+                ret = wh_Client_RsaImportKey(ctx, info->pk.rsa.key,
+                        flags, sizeof(keyLabel), keyLabel, &key_id);
                 if (ret != 0) {
                     break;
                 }
                 evict = 1;
             }
 
-            /* Set packet members. Reset anyreq.type just in case */
-            packet->pkAnyReq.type = info->pk.type;
-            packet->pkRsaReq.keyId = keyId;
-            packet->pkRsaReq.opType = info->pk.rsa.type;
-            packet->pkRsaReq.inLen = info->pk.rsa.inLen;
-            packet->pkRsaReq.outLen = *info->pk.rsa.outLen;
-            /* set in */
-            XMEMCPY(in, info->pk.rsa.in, info->pk.rsa.inLen);
+            /* Set packet members. Reset anyreq.type just req_in case */
+            req->type = type;
+            req->keyId = key_id;
+            req->opType = rsa_type;
+            req->inLen = in_len;
+            req->outLen = len;
+            /* set req_in */
+            XMEMCPY(req_in, in, in_len);
 
             /* write request */
-            ret = wh_Client_SendRequest(ctx, group, WC_ALGO_TYPE_PK, dataSz,
+            ret = wh_Client_SendRequest(ctx, group, action, req_len,
                 (uint8_t*)packet);
 #ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("[client] RSA req sent. opType:%u inLen:%d keyId:%u outLen:%u type:%u\n",
-                    packet->pkRsaReq.opType,
-                    packet->pkRsaReq.inLen,
-                    packet->pkRsaReq.keyId,
-                    packet->pkRsaReq.outLen,
-                    packet->pkRsaReq.type);
+            printf("[client] RSA req sent. opType:%u inLen:%d keyId:%u outLen:%u pktype:%u\n",
+                    rsa_type, in_len, key_id, out_len, type);
 #endif
             /* read response */
             if (ret == 0) {
+                evict = 0;
                 do {
-                    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
+                    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
                         (uint8_t*)packet);
                 } while (ret == WH_ERROR_NOTREADY);
             }
@@ -500,19 +533,25 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             printf("[client] RSA resp packet recv. ret:%d rc:%d\n", ret, packet->rc);
 #endif
             if (ret == 0) {
-                if (packet->rc != 0)
+                if (packet->rc != 0) {
                     ret = packet->rc;
-                else {
+                } else {
                     /* read outLen */
-                    *info->pk.rsa.outLen = packet->pkRsaRes.outLen;
-                    /* read out */
-                    XMEMCPY(info->pk.rsa.out, out, packet->pkRsaRes.outLen);
+                    if (out_len != NULL) {
+                        *out_len = res->outLen;
+                    }
+                    /* read res_out */
+                    if (    (out != NULL) &&
+                            (res->outLen > 0) ) {
+                        memcpy(info->pk.rsa.out, res_out, res->outLen);
+                    }
                 }
             }
             if (evict != 0) {
                 /* Evict the imported key */
-                ret = wh_Client_KeyEvict(ctx, keyId);
+                ret = wh_Client_KeyEvict(ctx, key_id);
             }
+#endif
         } break;
 
         case WC_PK_TYPE_RSA_GET_SIZE:
@@ -549,9 +588,9 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
         case WC_PK_TYPE_EC_KEYGEN:
         {
             /* Extract info parameters */
+            ecc_key* key        = info->pk.eckg.key;
             uint32_t size       = info->pk.eckg.size;
             uint32_t curve_id   = info->pk.eckg.curveId;
-            ecc_key* key        = info->pk.eckg.key;
 
             ret = wh_Client_EccMakeExportKey(ctx, size, curve_id, key);
         } break;
@@ -572,7 +611,7 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
                                             priv_key, pub_key,
                                             out, &len);
             if (    (ret == WH_ERROR_OK) &&
-                    (out_len != NULL) ){
+                    (out_len != NULL) ) {
                 *out_len = len;
             }
         } break;
@@ -593,7 +632,7 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
 
             ret = wh_Client_EccSign(ctx, key, hash, hash_len, sig, &sig_len);
             if (    (ret == WH_ERROR_OK) &&
-                    (out_sig_len != NULL)) {
+                    (out_sig_len != NULL) ) {
                 *out_sig_len = sig_len;
             }
         } break;
@@ -788,7 +827,7 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             /* Update the local type since call succeeded */
             cmac->type = type;
             /* if the client marked they may want to cancel, handle the
-             * response req_in a seperate call */
+             * response in a separate call */
             if (ctx->cancelable)
                 break;
 

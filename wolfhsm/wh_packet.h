@@ -122,10 +122,11 @@ typedef struct  wh_Packet_pk_rsa_req
 {
     uint32_t type;
     uint32_t opType;
+    uint32_t options;
+#define WH_PACKET_PK_RSA_OPTIONS_EVICT  (1 << 0)
     uint32_t keyId;
     uint32_t inLen;
     uint32_t outLen;
-    uint8_t WH_PAD[4];
     /* uint8_t in[]; */
 } wh_Packet_pk_rsa_req;
 
