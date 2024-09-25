@@ -1393,12 +1393,14 @@ int wh_Client_GetKeyIdCmac(Cmac* key, whNvmId* outId)
     return WH_ERROR_OK;
 }
 
+#ifndef NO_AES
 int wh_Client_AesCmacGenerate(Cmac* cmac, byte* out, word32* outSz,
     const byte* in, word32 inSz, whNvmId keyId, void* heap)
 {
     int ret;
     ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, heap,
         WH_DEV_ID);
+    printf("aescmac generate cmac type:%d ret:%d\n", cmac->type, ret);
     /* set keyId */
     if (ret == 0)
         ret = wh_Client_SetKeyIdCmac(cmac, keyId);
@@ -1428,6 +1430,7 @@ int wh_Client_AesCmacVerify(Cmac* cmac, const byte* check, word32 checkSz,
         ret = memcmp(out, check, outSz) == 0 ? 0 : 1;
     return ret;
 }
+#endif /* !NO_AES */
 
 int wh_Client_CmacCancelableResponse(whClientContext* c, Cmac* cmac,
     uint8_t* out, uint16_t* outSz)

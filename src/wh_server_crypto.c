@@ -1152,7 +1152,7 @@ static int wh_Server_HandleAesGcm(whServerContext* ctx, whPacket* packet,
                         req_len, res_len);
             printf("[server] AESGCM: req:%p in:%p key:%p iv:%p authin:%p dec_tag:%p res:%p out:%p enc_tag:%p\n",
                     req, in, key, iv, authin, dec_tag, res, out, enc_tag);
-            _hexdump("[server] AESGCM req packet: \n", (uint8_t*)packet, req_len);
+            wh_Utils_Hexdump("[server] AESGCM req packet: \n", (uint8_t*)packet, req_len);
 #endif
     /* use keyId and load from keystore if keyId is not erased */
     if (!WH_KEYID_ISERASED(key_id)) {
@@ -1177,16 +1177,16 @@ static int wh_Server_HandleAesGcm(whServerContext* ctx, whPacket* packet,
 #ifdef DEBUG_CRYPTOCB_VERBOSE
         printf("[server] AesGcmSetKey key_id:%u key_len:%u ret:%d\n",
                 key_id, key_len, ret);
-        _hexdump("[server] key: ", key, key_len);
+        wh_Utils_Hexdump("[server] key: ", key, key_len);
 #endif
         if (ret == 0) {
             /* do the crypto operation */
 #ifdef DEBUG_CRYPTOCB_VERBOSE
             printf("[server] enc:%d len:%d, ivSz:%d authTagSz:%d, authInSz:%d\n",
                     enc, len,iv_len, tag_len, authin_len);
-            _hexdump("[server] in: ", in, len);
-            _hexdump("[server] iv: ", iv, iv_len);
-            _hexdump("[server] authin: ", authin,  authin_len);
+            wh_Utils_Hexdump("[server] in: ", in, len);
+            wh_Utils_Hexdump("[server] iv: ", iv, iv_len);
+            wh_Utils_Hexdump("[server] authin: ", authin,  authin_len);
 #endif
             if (enc != 0) {
                 ret = wc_AesGcmEncrypt(aes, out,
@@ -1196,13 +1196,13 @@ static int wh_Server_HandleAesGcm(whServerContext* ctx, whPacket* packet,
                     authin, authin_len);
 #ifdef DEBUG_CRYPTOCB_VERBOSE
                 printf("[server] enc ret:%d\n",ret);
-                _hexdump("[server] out: \n", out, len);
-                _hexdump("[server] enc tag: ", enc_tag,  tag_len);
+                wh_Utils_Hexdump("[server] out: \n", out, len);
+                wh_Utils_Hexdump("[server] enc tag: ", enc_tag,  tag_len);
 #endif
             } else {
                 /* set authTag as a packet input */
 #ifdef DEBUG_CRYPTOCB_VERBOSE
-                _hexdump("[server] dec tag: ", dec_tag,  tag_len);
+                wh_Utils_Hexdump("[server] dec tag: ", dec_tag,  tag_len);
 #endif
                 ret = wc_AesGcmDecrypt(aes, out,
                     in, len,
@@ -1211,13 +1211,13 @@ static int wh_Server_HandleAesGcm(whServerContext* ctx, whPacket* packet,
                     authin, authin_len);
 #ifdef DEBUG_CRYPTOCB_VERBOSE
                 printf("[server] dec ret:%d\n",ret);
-                _hexdump("[server] out: \n", out, len);
+                wh_Utils_Hexdump("[server] out: \n", out, len);
 
                 #endif
             }
 #ifdef DEBUG_CRYPTOCB_VERBOSE
-            _hexdump("[server] post iv: ", iv, iv_len);
-            _hexdump("[server] post authin: ", authin,  authin_len);
+            wh_Utils_Hexdump("[server] post iv: ", iv, iv_len);
+            wh_Utils_Hexdump("[server] post authin: ", authin,  authin_len);
 #endif
         }
         wc_AesFree(aes);
@@ -1229,7 +1229,7 @@ static int wh_Server_HandleAesGcm(whServerContext* ctx, whPacket* packet,
         *size = res_len;
 #ifdef DEBUG_CRYPTOCB_VERBOSE
         printf("[server] res size:%d\n", *size);
-        _hexdump("[server] AESGCM res packet: \n", (uint8_t*)packet, res_len);
+        wh_Utils_Hexdump("[server] AESGCM res packet: \n", (uint8_t*)packet, res_len);
 
 #endif
         /*
@@ -1245,128 +1245,187 @@ static int wh_Server_HandleAesGcm(whServerContext* ctx, whPacket* packet,
 static int hsmCryptoCmac(whServerContext* server, whPacket* packet,
     uint16_t* size, uint16_t seq)
 {
-    whKeyId keyId = WH_KEYID_ERASED;
     int ret;
-    int i;
-    word32 len;
-    word32 blockSz = AES_BLOCK_SIZE;
-    uint16_t cancelSeq;
-    uint8_t tmpKey[AES_MAX_KEY_SIZE + AES_IV_SIZE];
-    /* in, out and key are after the fixed size fields */
-    byte* in = (uint8_t*)(&packet->cmacReq + 1);
-    byte* key = in + packet->cmacReq.inSz;
-    byte* out = (uint8_t*)(&packet->cmacRes + 1);
-    whNvmMetadata meta[1] = {{0}};
-    uint8_t moveToBigCache = 0;
-    /* do oneshot if all fields are present */
-    if (packet->cmacReq.inSz != 0 && packet->cmacReq.keySz != 0 &&
-        packet->cmacReq.outSz != 0) {
-        len = packet->cmacReq.outSz;
-        ret = wc_AesCmacGenerate_ex(server->crypto->algoCtx.cmac, out, &len, in,
-            packet->cmacReq.inSz, key, packet->cmacReq.keySz, NULL,
-            server->crypto->devId);
-        packet->cmacRes.outSz = len;
-    }
-    else {
-        /* do each operation based on which fields are set */
-        if (packet->cmacReq.keySz != 0) {
-            /* initialize cmac with key and type */
-            ret = wc_InitCmac_ex(server->crypto->algoCtx.cmac, key,
-                packet->cmacReq.keySz, packet->cmacReq.type, NULL, NULL,
-                server->crypto->devId);
-        }
-        /* Key is not present, meaning client wants to use AES key from
-         * cache/nvm. In order to support multiple sequential CmacUpdate()
-         * calls, we need to cache the whole CMAC struct between invocations
-         * (which also holds the key). To do this we hijack the requested key's
-         * cache slot until CmacFinal() is called, at which point we evict the
-         * struct from the cache. TODO: client should hold CMAC state */
-        else {
-            len = sizeof(server->crypto->algoCtx.cmac);
-            keyId = packet->cmacReq.keyId;
-            ret = hsmReadKey(server,
-                WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, server->comm->client_id, keyId),
-                NULL,
-                (uint8_t*)server->crypto->algoCtx.cmac,
-                (uint32_t*)&len);
-            /* if the key size is a multiple of aes, init the key and
-             * overwrite the existing key on exit */
-            if (len == AES_128_KEY_SIZE || len == AES_192_KEY_SIZE ||
-                len == AES_256_KEY_SIZE) {
-                moveToBigCache = 1;
-                XMEMCPY(tmpKey, (uint8_t*)server->crypto->algoCtx.cmac, len);
-                ret = wc_InitCmac_ex(server->crypto->algoCtx.cmac, tmpKey, len,
-                    WC_CMAC_AES, NULL, NULL, server->crypto->devId);
-            }
-            else if (len != sizeof(server->crypto->algoCtx.cmac))
-                ret = BAD_FUNC_ARG;
-        }
-        /* Handle CMAC update, checking for cancellation */
-        if (ret == 0 && packet->cmacReq.inSz != 0) {
-            for (i = 0; ret == 0 && i < packet->cmacReq.inSz; i += AES_BLOCK_SIZE) {
-                if (i + AES_BLOCK_SIZE > packet->cmacReq.inSz) {
-                    blockSz = packet->cmacReq.inSz - i;
+
+    switch(packet->cmacReq.type) {
+#if !defined(NO_AES) && defined(WOLFSSL_AES_DIRECT)
+    case WC_CMAC_AES:
+    {
+        int i;
+        whKeyId keyId = WH_KEYID_ERASED;
+        word32 len;
+        uint16_t cancelSeq;
+        /* in, out and key are after the fixed size fields */
+        byte* in = (uint8_t*)(&packet->cmacReq + 1);
+        byte* key = in + packet->cmacReq.inSz;
+        byte* out = (uint8_t*)(&packet->cmacRes + 1);
+        whNvmMetadata meta[1] = {{0}};
+        uint8_t moveToBigCache = 0;
+        word32 blockSz = AES_BLOCK_SIZE;
+        uint8_t tmpKey[AES_MAX_KEY_SIZE + AES_IV_SIZE];
+
+        /* attempt oneshot if all fields are present */
+        if (packet->cmacReq.inSz != 0 && packet->cmacReq.keySz != 0 &&
+            packet->cmacReq.outSz != 0) {
+            len = packet->cmacReq.outSz;
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+            printf("[server] cmac generate oneshot\n");
+#endif
+                ret = wc_AesCmacGenerate_ex(server->crypto->algoCtx.cmac, out, &len, in,
+                    packet->cmacReq.inSz, key, packet->cmacReq.keySz, NULL,
+                    server->crypto->devId);
+                packet->cmacRes.outSz = len;
+        } else {
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+            printf("[server] cmac begin keySz:%d inSz:%d outSz:%d keyId:%x\n",
+                    packet->cmacReq.keySz,
+                    packet->cmacReq.inSz,
+                    packet->cmacReq.outSz,
+                    packet->cmacReq.keyId);
+#endif
+            /* do each operation based on which fields are set */
+            if (packet->cmacReq.keySz != 0) {
+                /* initialize cmac with key and type */
+                ret = wc_InitCmac_ex(server->crypto->algoCtx.cmac, key,
+                    packet->cmacReq.keySz, packet->cmacReq.type, NULL, NULL,
+                    server->crypto->devId);
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+                printf("[server] cmac init with key:%p keylen:%d, type:%d ret:%d\n",
+                        key, packet->cmacReq.keySz, packet->cmacReq.type, ret);
+#endif
+            } else {
+                /* Key is not present, meaning client wants to use AES key from
+                 * cache/nvm. In order to support multiple sequential CmacUpdate()
+                 * calls, we need to cache the whole CMAC struct between invocations
+                 * (which also holds the key). To do this we hijack the requested key's
+                 * cache slot until CmacFinal() is called, at which point we evict the
+                 * struct from the cache. TODO: client should hold CMAC state */
+                len = sizeof(server->crypto->algoCtx.cmac);
+                keyId = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, server->comm->client_id, packet->cmacReq.keyId);
+                ret = hsmReadKey(server,
+                    keyId,
+                    NULL,
+                    (uint8_t*)server->crypto->algoCtx.cmac,
+                    (uint32_t*)&len);
+                if (ret == WH_ERROR_OK) {
+                    /* if the key size is a multiple of aes, init the key and
+                     * overwrite the existing key on exit */
+                    if (len == AES_128_KEY_SIZE || len == AES_192_KEY_SIZE ||
+                        len == AES_256_KEY_SIZE) {
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+                        printf("[server] cmac readkey got key len:%u\n", len);
+#endif
+                        moveToBigCache = 1;
+                        XMEMCPY(tmpKey, (uint8_t*)server->crypto->algoCtx.cmac, len);
+                        ret = wc_InitCmac_ex(server->crypto->algoCtx.cmac, tmpKey, len,
+                            WC_CMAC_AES, NULL, NULL, server->crypto->devId);
+                    }
+                    else if (len != sizeof(server->crypto->algoCtx.cmac)) {
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+                        printf("[server] cmac bad readkey len:%u. sizeof(cmac):%lu\n",
+                                len, sizeof(server->crypto->algoCtx.cmac));
+#endif
+                        ret = BAD_FUNC_ARG;
+                    }
+                } else {
+                    /* Initialize the cmac with a NULL key */
+                    /* initialize cmac with key and type */
+                    ret = wc_InitCmac_ex(server->crypto->algoCtx.cmac, NULL,
+                        packet->cmacReq.keySz, packet->cmacReq.type, NULL, NULL,
+                        server->crypto->devId);
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+                    printf("[server] cmac init with NULL type:%d ret:%d\n",
+                            packet->cmacReq.type, ret);
+#endif
                 }
-                ret = wc_CmacUpdate(server->crypto->algoCtx.cmac, in + i,
-                    blockSz);
-                if (ret == 0) {
-                    ret = wh_Server_GetCanceledSequence(server, &cancelSeq);
-                    if (ret == 0 && cancelSeq == seq) {
-                        ret = WH_ERROR_CANCEL;
+            }
+            /* Handle CMAC update, checking for cancellation */
+            if (ret == 0 && packet->cmacReq.inSz != 0) {
+                for (i = 0; ret == 0 && i < packet->cmacReq.inSz; i += AES_BLOCK_SIZE) {
+                    if (i + AES_BLOCK_SIZE > packet->cmacReq.inSz) {
+                        blockSz = packet->cmacReq.inSz - i;
+                    }
+                    ret = wc_CmacUpdate(server->crypto->algoCtx.cmac, in + i,
+                        blockSz);
+                    if (ret == 0) {
+                        ret = wh_Server_GetCanceledSequence(server, &cancelSeq);
+                        if (ret == 0 && cancelSeq == seq) {
+                            ret = WH_ERROR_CANCEL;
+                        }
+                    }
+                }
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+                printf("[server] cmac update done. ret:%d\n", ret);
+#endif
+            }
+            /* do final and evict the struct if outSz is set, otherwise cache the
+             * struct for a future call */
+            if ((ret == 0 && packet->cmacReq.outSz != 0) || ret == WH_ERROR_CANCEL) {
+                if (ret != WH_ERROR_CANCEL) {
+                    keyId = packet->cmacReq.keyId;
+                    len = packet->cmacReq.outSz;
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+                    printf("[server] cmac final keyId:%x len:%d\n",keyId, len);
+#endif
+                    ret = wc_CmacFinal(server->crypto->algoCtx.cmac, out, &len);
+                    packet->cmacRes.outSz = len;
+                    packet->cmacRes.keyId = WH_KEYID_ERASED;
+                }
+                /* evict the key, canceling means abandoning the current state */
+                if (ret == 0 || ret == WH_ERROR_CANCEL) {
+                    if (!WH_KEYID_ISERASED(keyId)) {
+                        /* Don't override return value except on failure */
+                        int tmpRet = hsmEvictKey(
+                            server, WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
+                                                       server->comm->client_id, keyId));
+                        if (tmpRet != 0) {
+                            ret = tmpRet;
+                        }
                     }
                 }
             }
-        }
-        /* do final and evict the struct if outSz is set, otherwise cache the
-         * struct for a future call */
-        if ((ret == 0 && packet->cmacReq.outSz != 0) || ret == WH_ERROR_CANCEL) {
-            if (ret != WH_ERROR_CANCEL) {
-                keyId = packet->cmacReq.keyId;
-                len = packet->cmacReq.outSz;
-                ret = wc_CmacFinal(server->crypto->algoCtx.cmac, out, &len);
-                packet->cmacRes.outSz = len;
-                packet->cmacRes.keyId = WH_KEYID_ERASED;
-            }
-            /* evict the key, canceling means abandoning the current state */
-            if (ret == 0 || ret == WH_ERROR_CANCEL) {
-                /* Don't override return value except on failure */
-                int tmpRet = hsmEvictKey(
-                    server, WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
-                                               server->comm->client_id, keyId));
-                if (tmpRet != 0) {
-                    ret = tmpRet;
+            /* Cache the CMAC struct for a future update call */
+            else if (ret == 0) {
+                /* cache/re-cache updated struct */
+                if (packet->cmacReq.keySz != 0) {
+                    keyId = WH_MAKE_KEYID(  WH_KEYTYPE_CRYPTO,
+                                            server->comm->client_id,
+                                            WH_KEYID_ERASED);
+                    ret = hsmGetUniqueId(server, &keyId);
                 }
+                else {
+                    keyId = WH_MAKE_KEYID(  WH_KEYTYPE_CRYPTO,
+                                            server->comm->client_id,
+                                            packet->cmacReq.keyId);
+                }
+                /* evict the aes sized key in the normal cache */
+                if (moveToBigCache == 1) {
+                    ret = hsmEvictKey(server, keyId);
+                }
+                meta->id = keyId;
+                meta->len = sizeof(server->crypto->algoCtx.cmac);
+                ret = hsmCacheKey(server, meta, (uint8_t*)server->crypto->algoCtx.cmac);
+                packet->cmacRes.keyId = WH_KEYID_ID(keyId);
+                packet->cmacRes.outSz = 0;
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+                printf("[server] cmac saved state in keyid:%x %x len:%u ret:%d type:%d\n",
+                        keyId, WH_KEYID_ID(keyId), meta->len, ret, server->crypto->algoCtx.cmac->type);
+#endif
             }
         }
-        /* Cache the CMAC struct for a future update call */
-        else if (ret == 0) {
-            /* cache/re-cache updated struct */
-            if (packet->cmacReq.keySz != 0) {
-                keyId = WH_MAKE_KEYID(  WH_KEYTYPE_CRYPTO,
-                                        server->comm->client_id,
-                                        WH_KEYID_ERASED);
-                ret = hsmGetUniqueId(server, &keyId);
-            }
-            else {
-                keyId = WH_MAKE_KEYID(  WH_KEYTYPE_CRYPTO,
-                                        server->comm->client_id,
-                                        packet->cmacReq.keyId);
-            }
-            /* evict the aes sized key in the normal cache */
-            if (moveToBigCache == 1) {
-                ret = hsmEvictKey(server, keyId);
-            }
-            meta->id = keyId;
-            meta->len = sizeof(server->crypto->algoCtx.cmac);
-            ret = hsmCacheKey(server, meta, (uint8_t*)server->crypto->algoCtx.cmac);
-            packet->cmacRes.keyId = WH_KEYID_ID(keyId);
-            packet->cmacRes.outSz = 0;
-        }
+    } break;
+#endif /* !NO_AES && WOLFSSL_AES_DIRECT */
+    default:
+        /* Type not supported */
+        ret = CRYPTOCB_UNAVAILABLE;
     }
     if (ret == 0) {
         *size = WH_PACKET_STUB_SIZE + sizeof(packet->cmacRes) +
             packet->cmacRes.outSz;
     }
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+    printf("[server] cmac end ret:%d\n", ret);
+#endif
     return ret;
 }
 #endif

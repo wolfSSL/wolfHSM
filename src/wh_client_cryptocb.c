@@ -162,22 +162,22 @@ static int wh_Client_CryptoCbAesGcm(whClientContext* ctx,
     XMEMCPY(req_iv, iv, iv_len);
     XMEMCPY(req_authin, authin, authin_len);
 #ifdef DEBUG_CRYPTOCB_VERBOSE
-    _hexdump("[client] in: \n", req_in, len);
-    _hexdump("[client] key: \n", req_key, key_len);
-    _hexdump("[client] iv: \n", req_iv, iv_len);
-    _hexdump("[client] authin: \n", req_authin, authin_len);
+    wh_Utils_Hexdump("[client] in: \n", req_in, len);
+    wh_Utils_Hexdump("[client] key: \n", req_key, key_len);
+    wh_Utils_Hexdump("[client] iv: \n", req_iv, iv_len);
+    wh_Utils_Hexdump("[client] authin: \n", req_authin, authin_len);
 #endif
     /* set auth tag by direction */
     if (enc == 0) {
         XMEMCPY(req_dec_tag, dec_tag, tag_len);
 #ifdef DEBUG_CRYPTOCB_VERBOSE
-        _hexdump("[client] dec tag: \n", req_dec_tag, tag_len);
+        wh_Utils_Hexdump("[client] dec tag: \n", req_dec_tag, tag_len);
 #endif
     }
 
     /* write request */
 #ifdef DEBUG_CRYPTOCB_VERBOSE
-    _hexdump("[client] AESGCM req packet: \n", (uint8_t*)packet, req_len);
+    wh_Utils_Hexdump("[client] AESGCM req packet: \n", (uint8_t*)packet, req_len);
 #endif
     ret = wh_Client_SendRequest(ctx, group, action,
         req_len,
@@ -192,7 +192,7 @@ static int wh_Client_CryptoCbAesGcm(whClientContext* ctx,
 #ifdef DEBUG_CRYPTOCB_VERBOSE
     printf("[client] GCM Rcv Res ret:%d rc:%d size:%d res_len:%u\n",
             ret, packet->rc, dataSz, res_len);
-    _hexdump("[client] AESGCM res packet: \n", (uint8_t*)packet, res_len);
+    wh_Utils_Hexdump("[client] AESGCM res packet: \n", (uint8_t*)packet, res_len);
 #endif
     if (ret == 0) {
         if (packet->rc != 0) {
@@ -201,7 +201,7 @@ static int wh_Client_CryptoCbAesGcm(whClientContext* ctx,
 #ifdef DEBUG_CRYPTOCB_VERBOSE
             printf("[client] out size:%d datasz:%d tag_len:%d\n",
                     res->sz, dataSz, res->authTagSz);
-            _hexdump("[client] res_out: \n", out, res->sz);
+            wh_Utils_Hexdump("[client] res_out: \n", out, res->sz);
 #endif
             /* copy the response res_out */
             XMEMCPY(out, res_out, res->sz);
@@ -213,7 +213,7 @@ static int wh_Client_CryptoCbAesGcm(whClientContext* ctx,
 #ifdef DEBUG_CRYPTOCB_VERBOSE
                 printf("[client] res tag_len:%d exp tag_len:%u",
                         res->authTagSz, tag_len);
-                _hexdump("[client] enc authtag: ",  res_enc_tag,
+                wh_Utils_Hexdump("[client] enc authtag: ",  res_enc_tag,
                         res->authTagSz);
 #endif
             }
@@ -242,7 +242,8 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
     }
 
 #ifdef DEBUG_CRYPTOCB
-    printf("[client] %s ", __func__);
+    printf("[client] %s info:%p algo_type:%d\n", __func__, info,
+            (info!=NULL)?info->algo_type:-1);
     wc_CryptoCb_InfoString(info);
 #endif
     /* Get data pointer from the context to use as request/response storage */
@@ -339,9 +340,9 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
                     info->cipher.aescbc.aes->devKey, key_len,
                     info->cipher.aescbc.in, len,
                     info->cipher.aescbc.out, info->cipher.enc, ret);
-            _hexdump("  In:", in, len);
-            _hexdump("  Key:", key, key_len);
-            _hexdump("  Iv:", iv, AES_IV_SIZE);
+            wh_Utils_Hexdump("  In:", in, len);
+            wh_Utils_Hexdump("  Key:", key, key_len);
+            wh_Utils_Hexdump("  Iv:", iv, AES_IV_SIZE);
 
 #endif /* DEBUG_CRYPTOCB */
 
@@ -356,7 +357,7 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             if (ret == 0) {
                 if (packet->rc == 0) {
 #ifdef DEBUG_CRYPTOCB_VERBOSE
-                    _hexdump("  Out:", out, packet->cipherAesCbcRes.sz);
+                    wh_Utils_Hexdump("  Out:", out, packet->cipherAesCbcRes.sz);
 #endif /* DEBUG_CRYPTOCB */
                     /* copy the response out */
                     XMEMCPY(info->cipher.aescbc.out, out,
@@ -402,7 +403,7 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
                                                 info->cipher.aesgcm_enc.out;
 
 #ifdef DEBUG_CRYPTOCB_VERBOSE
-            _hexdump("[client] check dec_tag:\n", (uint8_t*)info_dec_tag, tag_len);
+            wh_Utils_Hexdump("[client] check dec_tag:\n", (uint8_t*)info_dec_tag, tag_len);
 #endif
             ret = wh_Client_CryptoCbAesGcm(ctx, enc, aes,
                     len, info_in, iv_len, info_iv, authin_len, info_authin,
@@ -708,107 +709,113 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
 #ifndef WC_NO_RNG
     case WC_ALGO_TYPE_RNG:
     {
-        /* out is after the fixed size fields */
+        /* Extract info parameters */
         uint8_t* out = info->rng.out;
         uint32_t size = info->rng.sz;
 
         ret = wh_Client_RngGenerate(ctx, out, size);
-
-#if 0        /* set sz */
-        packet->rngReq.sz = info->rng.sz;
-        /* write request */
-        ret = wh_Client_SendRequest(ctx, group, WC_ALGO_TYPE_RNG,
-            WH_PACKET_STUB_SIZE + sizeof(packet->rngReq),(uint8_t*)packet);
-        if (ret == 0) {
-            do {
-                ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
-                    (uint8_t*)packet);
-            } while (ret == WH_ERROR_NOTREADY);
-        }
-        if (ret == 0) {
-            if (packet->rc != 0)
-                ret = packet->rc;
-            /* read out */
-            else
-                XMEMCPY(info->rng.out, out, packet->rngRes.sz);
-        }
-#endif
     } break;
 #endif /* !WC_NO_RNG */
 
 #ifdef WOLFSSL_CMAC
     case WC_ALGO_TYPE_CMAC:
     {
-        /* in, key and out are after the fixed size fields */
-        uint8_t* in = (uint8_t*)(&packet->cmacReq + 1);
-        uint8_t* key = in + info->cmac.inSz;
-        uint8_t* out = (uint8_t*)(&packet->cmacRes + 1);
-        dataSz = WH_PACKET_STUB_SIZE + sizeof(packet->cmacReq) +
-            info->cmac.inSz + info->cmac.keySz;
+        /* Extract info parameters */
+        const uint8_t* in = info->cmac.in;
+        uint32_t in_len = (in == NULL) ? 0 : info->cmac.inSz;
+        const uint8_t* key = info->cmac.key;
+        uint32_t key_len = (key == NULL) ? 0 : info->cmac.keySz;
+        uint8_t* mac = info->cmac.out;
+        word32 *out_mac_len = info->cmac.outSz;
+        Cmac* cmac = info->cmac.cmac;
+        int type = info->cmac.type;
 
-        if (dataSz > WOLFHSM_CFG_COMM_DATA_LEN) {
-            /* if we're using an HSM key return BAD_FUNC_ARG */
-            if (info->cmac.cmac->devCtx != NULL) {
+        whKeyId key_id = WH_DEVCTX_TO_KEYID(cmac->devCtx);
+        uint32_t mac_len = (    (mac == NULL) ||
+                                (out_mac_len == NULL)) ? 0 : *out_mac_len;
+
+        /* Return success for a call with NULL params, or 0 len's */
+        if ((in_len == 0) && (key_len == 0) && (mac_len == 0) ) {
+            /* Update the type */
+            cmac->type = type;
+            ret = 0;
+            break;
+        }
+
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+        printf("[client] cmac key:%p key_len:%d in:%p in_len:%d out:%p out_len:%d keyId:%x\n",
+                key, key_len, in, in_len, mac, mac_len, key_id);
+#endif
+        uint16_t group = WH_MESSAGE_GROUP_CRYPTO;
+        uint16_t action = WC_ALGO_TYPE_CMAC;
+
+
+        wh_Packet_cmac_req* req = &packet->cmacReq;
+        uint8_t* req_in = (uint8_t*)(req + 1);
+        uint8_t* req_key = req_in + in_len;
+        uint16_t req_len = WH_PACKET_STUB_SIZE + sizeof(*req) +
+                in_len + key_len;
+
+        if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
+            /* if we're using an HSM req_key return BAD_FUNC_ARG */
+            if (!WH_KEYID_ISERASED(key_id)) {
                 ret = BAD_FUNC_ARG;
             } else {
                 ret = CRYPTOCB_UNAVAILABLE;
             }
             break;
         }
-        /* Return success for init call with NULL params */
-        if (    (info->cmac.in == NULL) &&
-                (info->cmac.key == NULL) &&
-                (info->cmac.out == NULL)) {
-            ret = 0;
-            break;
-        }
 
-        packet->cmacReq.type = info->cmac.type;
-        packet->cmacReq.keyId = (intptr_t)info->cmac.cmac->devCtx;
+        memset(req, 0 , sizeof(*req));
+        req->type = type;
+        req->keyId = key_id;
         /* multiple modes are possible so we need to set zero size if buffers
          * are NULL */
-        if (info->cmac.in != NULL) {
-            packet->cmacReq.inSz = info->cmac.inSz;
-            XMEMCPY(in, info->cmac.in, info->cmac.inSz);
+        req->inSz = in_len;
+        if (in_len != 0) {
+            memcpy(req_in, in, in_len);
         }
-        else
-            packet->cmacReq.inSz = 0;
-        if (info->cmac.key != NULL) {
-            packet->cmacReq.keySz = info->cmac.keySz;
-            XMEMCPY(key, info->cmac.key, info->cmac.keySz);
+        req->keySz = key_len;
+        if (key_len != 0) {
+            memcpy(req_key, key, key_len);
         }
-        else
-            packet->cmacReq.keySz = 0;
-        if (info->cmac.out != NULL)
-            packet->cmacReq.outSz = *(info->cmac.outSz);
-        else
-            packet->cmacReq.outSz = 0;
+        req->outSz = mac_len;
+
         /* write request */
-        ret = wh_Client_SendRequest(ctx, group, WC_ALGO_TYPE_CMAC,
-            WH_PACKET_STUB_SIZE + sizeof(packet->cmacReq) +
-            packet->cmacReq.inSz + packet->cmacReq.keySz, (uint8_t*)packet);
+        ret = wh_Client_SendRequest(ctx, group, action, req_len,
+                (uint8_t*)packet);
         if (ret == 0) {
+            /* Update the local type since call succeeded */
+            cmac->type = type;
             /* if the client marked they may want to cancel, handle the
-             * response in a seperate call */
+             * response req_in a seperate call */
             if (ctx->cancelable)
                 break;
+
+            wh_Packet_cmac_res* res = &packet->cmacRes;
+            uint8_t* res_mac = (uint8_t*)(res + 1);
+            uint16_t res_len = 0;
             do {
-                ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
+                ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
                     (uint8_t*)packet);
             } while (ret == WH_ERROR_NOTREADY);
-        }
-        if (ret == 0) {
-            if (packet->rc != 0)
-                ret = packet->rc;
-            /* read keyId and out */
-            else {
-                if (info->cmac.key != NULL) {
-                    info->cmac.cmac->devCtx =
-                        (void*)((intptr_t)packet->cmacRes.keyId);
-                }
-                if (info->cmac.out != NULL) {
-                    XMEMCPY(info->cmac.out, out, packet->cmacRes.outSz);
-                    *(info->cmac.outSz) = packet->cmacRes.outSz;
+            if (ret == 0) {
+                if (packet->rc != 0) {
+                    ret = packet->rc;
+                } else {
+                    /* read keyId and res_out */
+                    if (key != NULL) {
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+                        printf("[client] got keyid %x\n", res->keyId);
+#endif
+                        cmac->devCtx = WH_KEYID_TO_DEVCTX(res->keyId);
+                    }
+                    if (mac != NULL) {
+                        memcpy(mac, res_mac, res->outSz);
+                        if (out_mac_len != NULL) {
+                            *(out_mac_len) = res->outSz;
+                        }
+                    }
                 }
             }
         }
