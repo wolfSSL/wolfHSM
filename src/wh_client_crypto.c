@@ -66,7 +66,7 @@
 /** Forward declarations */
 #ifdef HAVE_ECC
 /* Server creates a key based on incoming flags */
-static int _wh_Client_EccMakeKey(whClientContext* ctx,
+static int _EccMakeKey(whClientContext* ctx,
         int size, int curveId,
         whKeyId *inout_key_id, whNvmFlags flags,
         uint16_t label_len, uint8_t* label,
@@ -74,7 +74,8 @@ static int _wh_Client_EccMakeKey(whClientContext* ctx,
 #endif /* HAVE_ECC */
 
 #ifdef HAVE_CURVE25519
-static int _wh_Client_Curve25519MakeKey(whClientContext* ctx,
+/* Server creates a key based on incoming flags */
+static int _Curve25519MakeKey(whClientContext* ctx,
         uint16_t size,
         whKeyId *inout_key_id, whNvmFlags flags,
         uint16_t label_len, uint8_t* label,
@@ -83,7 +84,7 @@ static int _wh_Client_Curve25519MakeKey(whClientContext* ctx,
 
 #ifndef NO_RSA
 /* Make an RSA key on the server based on the flags */
-static int _wh_Client_RsaMakeKey(whClientContext* ctx,
+static int _RsaMakeKey(whClientContext* ctx,
         uint32_t size, uint32_t e,
         whNvmFlags flags,  uint32_t label_len, uint8_t* label,
         whKeyId *inout_key_id, RsaKey* rsa);
@@ -156,6 +157,284 @@ int wh_Client_RngGenerate(whClientContext* ctx, uint8_t* out, uint32_t size)
     return ret;
 }
 
+#ifndef NO_AES
+
+#ifdef HAVE_AES_CBC
+int wh_Client_AesCbc(whClientContext* ctx,
+        Aes* aes, int enc,
+        uint32_t len, const uint8_t* in,
+        uint8_t* out)
+{
+    int ret = 0;
+    uint16_t group      = WH_MESSAGE_GROUP_CRYPTO;
+    uint16_t action     = WC_ALGO_TYPE_CIPHER;
+    uint16_t type       = WC_CIPHER_AES_CBC;
+    uint16_t dataSz     = 0;
+
+    uint16_t blocks = len / AES_BLOCK_SIZE;
+    uint32_t last_offset = (blocks - 1) * AES_BLOCK_SIZE;
+
+
+    uint32_t key_len    = aes->keylen;
+    const uint8_t* key  = (const uint8_t*)(aes->devKey);
+    whKeyId key_id      = WH_DEVCTX_TO_KEYID(aes->devCtx);
+
+    whPacket* packet    = (whPacket*)wh_CommClient_GetDataPtr(ctx->comm);
+
+    uint8_t* iv         = (uint8_t*)aes->reg;
+    uint32_t iv_len     = AES_IV_SIZE;
+
+    /* Request packet */
+    wh_Packet_cipher_aescbc_req* req = &packet->cipherAesCbcReq;
+    uint8_t* req_in     = (uint8_t*)(req + 1);
+    uint8_t* req_key    = req_in + len;
+    uint8_t* req_iv     = req_key + key_len;
+
+    uint32_t req_len    = WH_PACKET_STUB_SIZE + sizeof(*req) + len +
+                            key_len + iv_len;
+
+    /* Response packet */
+    wh_Packet_cipher_aescbc_res* res = &packet->cipherAesCbcRes;
+    uint8_t* res_out    = (uint8_t*)(res + 1);
+
+    uint32_t res_len    = WH_PACKET_STUB_SIZE+ sizeof(*res) + len;
+
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+    printf("[client] %s: enc:%d keylen:%d ivsz:%d insz:%d reqsz:%u ressz:%u "
+                      "blocks:%u lastoffset:%u\n",
+                __func__,enc, key_len, iv_len, len,  req_len, res_len,
+                blocks, last_offset);
+    printf("[client] %s: req:%p in:%p key:%p iv:%p res:%p out:%p\n",
+            __func__, req, req_in, req_key, req_iv, res, res_out);
+#endif
+
+    /* III 0 size check is done in wolfCrypt */
+    if(     (blocks == 0) ||
+            ((len % AES_BLOCK_SIZE) != 0) ) {
+        /* CBC requires only full blocks */
+        return BAD_LENGTH_E;
+
+    }
+
+    if (    (req_len > WOLFHSM_CFG_COMM_DATA_LEN) ||
+            (res_len > WOLFHSM_CFG_COMM_DATA_LEN)) {
+        /* if we're using an HSM key return BAD_FUNC_ARG */
+        if (WH_KEYID_ISERASED(key_id)) {
+            return CRYPTOCB_UNAVAILABLE;
+        } else {
+            return BAD_FUNC_ARG;
+        }
+    }
+
+    /* setup request packet */
+    req->type       = type;
+    req->enc        = enc;
+    req->keyLen     = key_len;
+    req->sz         = len;
+    req->keyId      = key_id;
+    if (    (in != NULL) &&
+            (len > 0) ) {
+        memcpy(req_in, in, len);
+    }
+    if (    (key != NULL) &&
+            (key_len > 0) ) {
+        memcpy(req_key, key, key_len);
+    }
+    if (    (iv != NULL) &&
+            (iv_len > 0) ) {
+        memcpy(req_iv, iv, iv_len);
+    }
+
+    /* Determine where ciphertext is for chaining */
+    if(enc == 0) {
+        /* Update the CBC state with the last cipher text black */
+        /* III Must do this before the decrypt if in-place */
+        XMEMCPY(iv, in + last_offset, iv_len);
+    }
+
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+    wh_Utils_Hexdump("[client] in: \n", req_in, len);
+    wh_Utils_Hexdump("[client] key: \n", req_key, key_len);
+    wh_Utils_Hexdump("[client] iv: \n", req_iv, iv_len);
+#endif
+
+    /* write request */
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+    wh_Utils_Hexdump("[client] req packet: \n", (uint8_t*)packet, req_len);
+#endif
+    ret = wh_Client_SendRequest(ctx, group, action, req_len, (uint8_t*)packet);
+    /* read response */
+    if (ret == 0) {
+        do {
+            ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
+                (uint8_t*)packet);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+    printf("[client] %s Rcv Res ret:%d rc:%d size:%d res_len:%u\n",
+            __func__, ret, packet->rc, dataSz, res_len);
+    wh_Utils_Hexdump("[client] res packet: \n", (uint8_t*)packet, res_len);
+#endif
+    if (ret == 0) {
+        if (packet->rc != 0) {
+            ret = packet->rc;
+        } else {
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+            printf("[client] out size:%d datasz:%d\n",
+                    res->sz, dataSz);
+            wh_Utils_Hexdump("[client] res_out: \n", out, res->sz);
+#endif
+            /* copy the response res_out */
+            memcpy(out, res_out, res->sz);
+            if (enc != 0) {
+                /* Update the CBC state with the last cipher text black */
+                memcpy(iv, out + last_offset, AES_IV_SIZE);
+            }
+
+        }
+    }
+    return ret;
+}
+#endif /* HAVE_AES_CBC */
+
+#ifdef HAVE_AESGCM
+int wh_Client_AesGcm(whClientContext* ctx,
+        Aes* aes, int enc,
+        uint32_t len, const uint8_t* in,
+        uint32_t iv_len, const uint8_t* iv,
+        uint32_t authin_len, const uint8_t* authin,
+        uint32_t tag_len, const uint8_t* dec_tag, uint8_t* enc_tag,
+        uint8_t* out)
+{
+    int ret = 0;
+    uint16_t group      = WH_MESSAGE_GROUP_CRYPTO;
+    uint16_t action     = WC_ALGO_TYPE_CIPHER;
+    uint16_t type       = WC_CIPHER_AES_GCM;
+    uint16_t dataSz     = 0;
+
+    uint32_t key_len    = aes->keylen;
+    const uint8_t* key  = (const uint8_t*)(aes->devKey);
+    whKeyId key_id      = WH_DEVCTX_TO_KEYID(aes->devCtx);
+
+    whPacket* packet    = (whPacket*)wh_CommClient_GetDataPtr(ctx->comm);
+
+    /* Request packet */
+    wh_Packet_cipher_aesgcm_req* req = &packet->cipherAesGcmReq;
+    uint8_t* req_in     = (uint8_t*)(req + 1);
+    uint8_t* req_key    = req_in + len;
+    uint8_t* req_iv     = req_key + key_len;
+    uint8_t* req_authin = req_iv + iv_len;
+    uint8_t* req_dec_tag= req_authin + authin_len;
+
+    uint32_t req_len    = WH_PACKET_STUB_SIZE + sizeof(*req) + len +
+                            key_len + iv_len + authin_len +
+                            ((enc == 0) ? tag_len : 0);
+
+    /* Response packet */
+    wh_Packet_cipher_aesgcm_res* res = &packet->cipherAesGcmRes;
+    uint8_t* res_out    = (uint8_t*)(res + 1);
+    uint8_t* res_enc_tag= res_out + len;
+
+    uint32_t res_len    = WH_PACKET_STUB_SIZE+ sizeof(*res) + len +
+                            ((enc == 0) ? 0: tag_len);
+
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+    printf("[client] AESGCM: enc:%d keylen:%d ivsz:%d insz:%d authinsz:%d authtagsz:%d reqsz:%u ressz:%u\n",
+                enc, key_len, iv_len, len, authin_len, tag_len,
+                req_len, res_len);
+    printf("[client] AESGCM: req:%p in:%p key:%p iv:%p authin:%p dec_tag:%p res:%p out:%p res_enc_tag:%p\n",
+            req, req_in, req_key, req_iv, req_authin, req_dec_tag, res, res_out, res_enc_tag);
+#endif
+    if (    (req_len > WOLFHSM_CFG_COMM_DATA_LEN) ||
+            (res_len > WOLFHSM_CFG_COMM_DATA_LEN)) {
+        /* if we're using an HSM key return BAD_FUNC_ARG */
+        if (WH_KEYID_ISERASED(key_id)) {
+            return CRYPTOCB_UNAVAILABLE;
+        } else {
+            return BAD_FUNC_ARG;
+        }
+    }
+
+    /* setup request packet */
+    req->type       = type;
+    req->enc        = enc;
+    req->keyLen     = key_len;
+    req->sz         = len;
+    req->ivSz       = iv_len;
+    req->authInSz   = authin_len;
+    req->authTagSz  = tag_len;
+    req->keyId      = key_id;
+    XMEMCPY(req_in, in, len);
+    XMEMCPY(req_key, key, key_len);
+    XMEMCPY(req_iv, iv, iv_len);
+    XMEMCPY(req_authin, authin, authin_len);
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+    wh_Utils_Hexdump("[client] in: \n", req_in, len);
+    wh_Utils_Hexdump("[client] key: \n", req_key, key_len);
+    wh_Utils_Hexdump("[client] iv: \n", req_iv, iv_len);
+    wh_Utils_Hexdump("[client] authin: \n", req_authin, authin_len);
+#endif
+    /* set auth tag by direction */
+    if (enc == 0) {
+        XMEMCPY(req_dec_tag, dec_tag, tag_len);
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+        wh_Utils_Hexdump("[client] dec tag: \n", req_dec_tag, tag_len);
+#endif
+    }
+
+    /* write request */
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+    wh_Utils_Hexdump("[client] AESGCM req packet: \n", (uint8_t*)packet, req_len);
+#endif
+    ret = wh_Client_SendRequest(ctx, group, action,
+        req_len,
+        (uint8_t*)packet);
+    /* read response */
+    if (ret == 0) {
+        do {
+            ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
+                (uint8_t*)packet);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+    printf("[client] GCM Rcv Res ret:%d rc:%d size:%d res_len:%u\n",
+            ret, packet->rc, dataSz, res_len);
+    wh_Utils_Hexdump("[client] AESGCM res packet: \n", (uint8_t*)packet, res_len);
+#endif
+    if (ret == 0) {
+        if (packet->rc != 0) {
+            ret = packet->rc;
+        } else {
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+            printf("[client] out size:%d datasz:%d tag_len:%d\n",
+                    res->sz, dataSz, res->authTagSz);
+            wh_Utils_Hexdump("[client] res_out: \n", out, res->sz);
+#endif
+            /* copy the response res_out */
+            XMEMCPY(out, res_out, res->sz);
+            /* write the authTag if applicable */
+            if (    (enc != 0) &&
+                    (enc_tag != NULL) &&
+                    (res->authTagSz == tag_len)) {
+                XMEMCPY(enc_tag, res_enc_tag, res->authTagSz);
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+                printf("[client] res tag_len:%d exp tag_len:%u",
+                        res->authTagSz, tag_len);
+                wh_Utils_Hexdump("[client] enc authtag: ",  res_enc_tag,
+                        res->authTagSz);
+#endif
+            }
+        }
+    }
+    return ret;
+}
+#endif /* HAVE_AESGCM */
+
+#ifdef WOLFSSL_CMAC
+
+#endif
+
+#endif /* !NO_AES */
 
 #ifdef HAVE_ECC
 int wh_Client_EccSetKeyId(ecc_key* key, whKeyId keyId)
@@ -250,7 +529,7 @@ int wh_Client_EccExportKey(whClientContext* ctx, whKeyId keyId,
     return ret;
 }
 
-static int _wh_Client_EccMakeKey(whClientContext* ctx,
+static int _EccMakeKey(whClientContext* ctx,
         int size, int curveId,
         whKeyId *inout_key_id, whNvmFlags flags,
         uint16_t label_len, uint8_t* label,
@@ -371,7 +650,7 @@ int wh_Client_EccMakeCacheKey(whClientContext* ctx,
         return WH_ERROR_BADARGS;
     }
 
-    return _wh_Client_EccMakeKey(ctx,
+    return _EccMakeKey(ctx,
             size, curveId,
             inout_key_id, flags,
             label_len, label,
@@ -386,7 +665,7 @@ int wh_Client_EccMakeExportKey(whClientContext* ctx,
         return WH_ERROR_BADARGS;
     }
 
-    return _wh_Client_EccMakeKey(ctx,
+    return _EccMakeKey(ctx,
             size, curveId,
             NULL, WH_NVM_FLAGS_EPHEMERAL,
             0, NULL,
@@ -791,6 +1070,58 @@ printf("[client] %s ctx:%p key:%p, sig:%p sig_len:%u, hash:%p hash_len:%u out_re
     return ret;
 }
 
+#if 0
+int wh_Client_EccCheckPubKey(whClientContext* ctx, ecc_key* key,
+        const uint8_t* pub_key, uint16_t pub_key_len)
+{
+/* TODO: Check if keyid is set on incoming key.
+ *      if not, import private key to server
+ *      send request with pub key der
+ *      server creates new key with private and public.  check
+ *      evict temp key
+ */
+    int ret;
+
+    if (    (ctx == NULL) ||
+            (key == NULL) ||
+            (pub_key == NULL) ||
+            (pub_key_len == 0) ) {
+        return WH_ERROR_BADARGS;
+    }
+    int curve_id = wc_ecc_get_curve_id(key->idx);
+    whKeyId key_id = WH_DEVCTX_TO_KEYID(key->devCtx);
+
+    /* Request packet */
+    wh_Packet_pk_ecc_check_req* req = &packet->pkEccCheckReq;
+    uint8_t* req_pub_key = (uint8_t*)(req + 1);
+
+    req->type = WC_PK_TYPE_EC_CHECK_PRIV_KEY;
+    req->keyId = key_id;
+    req->curveId = curve_id;
+
+    /* Response packet */
+    wh_Packet_pk_ecc_check_res* res = &packet->pkEccCheckRes;
+
+
+    /* write request */
+    ret = wh_Client_SendRequest(ctx, group,
+        WC_ALGO_TYPE_PK,
+        WH_PACKET_STUB_SIZE + sizeof(packet->pkEccCheckReq),
+        (uint8_t*)packet);
+    /* read response */
+    if (ret == 0) {
+        do {
+            ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
+                (uint8_t*)packet);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+    if (ret == 0) {
+        if (packet->rc != 0)
+            ret = packet->rc;
+    }
+}
+#endif /* 0 */
+
 #endif /* HAVE_ECC */
 
 #ifdef HAVE_CURVE25519
@@ -878,7 +1209,7 @@ int wh_Client_Curve25519ExportKey(whClientContext* ctx, whKeyId keyId,
     return ret;
 }
 
-static int _wh_Client_Curve25519MakeKey(whClientContext* ctx,
+static int _Curve25519MakeKey(whClientContext* ctx,
         uint16_t size,
         whKeyId *inout_key_id, whNvmFlags flags,
         uint16_t label_len, uint8_t* label,
@@ -987,7 +1318,7 @@ int wh_Client_Curve25519MakeCacheKey(whClientContext* ctx,
         return WH_ERROR_BADARGS;
     }
 
-    return _wh_Client_Curve25519MakeKey(ctx,
+    return _Curve25519MakeKey(ctx,
             size,
             inout_key_id, flags,
             label_len, label,
@@ -1002,7 +1333,7 @@ int wh_Client_Curve25519MakeExportKey(whClientContext* ctx,
         return WH_ERROR_BADARGS;
     }
 
-    return _wh_Client_Curve25519MakeKey(ctx,
+    return _Curve25519MakeKey(ctx,
             size,
             NULL, WH_NVM_FLAGS_EPHEMERAL,
             0, NULL,
@@ -1166,7 +1497,7 @@ int wh_Client_RsaGetKeyId(RsaKey* key, whNvmId* outId)
 }
 
 
-int wh_Client_RsaImportKey(whClientContext* ctx, RsaKey* key,
+int wh_Client_RsaImportKey(whClientContext* ctx, const RsaKey* key,
         whKeyId *inout_keyId, whNvmFlags flags,
         uint32_t label_len, uint8_t* label)
 {
@@ -1185,7 +1516,8 @@ int wh_Client_RsaImportKey(whClientContext* ctx, RsaKey* key,
         key_id = *inout_keyId;
     }
     /* Convert RSA key to DER format */
-    ret = derSize = wc_RsaKeyToDer(key, keyDer, sizeof(keyDer));
+    /* TODO: Update wc to use a const here */
+    ret = derSize = wc_RsaKeyToDer((RsaKey*)key, keyDer, sizeof(keyDer));
     if(derSize >= 0) {
         /* Cache the key and get the keyID */
         ret = wh_Client_KeyCache(ctx, flags,
@@ -1238,7 +1570,7 @@ int wh_Client_RsaExportKey(whClientContext* ctx, whKeyId keyId, RsaKey* key,
     return ret;
 }
 
-static int _wh_Client_RsaMakeKey(whClientContext* ctx,
+static int _RsaMakeKey(whClientContext* ctx,
         uint32_t size, uint32_t e,
         whNvmFlags flags,  uint32_t label_len, uint8_t* label,
         whKeyId *inout_key_id, RsaKey* rsa)
@@ -1345,7 +1677,7 @@ int wh_Client_RsaMakeCacheKey(whClientContext* ctx,
         return WH_ERROR_BADARGS;
     }
 
-    return _wh_Client_RsaMakeKey(ctx,
+    return _RsaMakeKey(ctx,
             size, e,
             flags, label_len, label,
             inout_key_id, NULL);
@@ -1360,7 +1692,7 @@ int wh_Client_RsaMakeExportKey(whClientContext* ctx,
         return WH_ERROR_BADARGS;
     }
 
-    return _wh_Client_RsaMakeKey(ctx,
+    return _RsaMakeKey(ctx,
             size, e,
             WH_NVM_FLAGS_EPHEMERAL,  0, NULL,
             NULL, rsa);
@@ -1371,7 +1703,7 @@ int wh_Client_RsaFunction(whClientContext* ctx,
         const uint8_t* in, uint16_t in_len,
         uint8_t* out, uint16_t *inout_out_len)
 {
-    int ret = 0;
+    int ret = WH_ERROR_OK;
     whPacket* packet;
 
     /* Transaction state */
@@ -1491,6 +1823,108 @@ printf("[client] %s ctx:%p key:%p, rsa_type:%d in:%p in_len:%u, out:%p inout_out
     return ret;
 }
 
+int wh_Client_RsaGetSize(whClientContext* ctx,
+        const RsaKey* key, int* out_size)
+{
+    int ret = WH_ERROR_OK;
+    whPacket* packet;
+
+    /* Transaction state */
+    whKeyId key_id;
+    int evict = 0;
+
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+printf("[client] %s ctx:%p key:%p, out_size:%p \n",
+        __func__, ctx, key, out_size);
+#endif
+
+    if (    (ctx == NULL) ||
+            (key == NULL) ||
+            (out_size == NULL) ) {
+        return WH_ERROR_BADARGS;
+    }
+
+    packet = (whPacket*)wh_CommClient_GetDataPtr(ctx->comm);
+    if (packet == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    key_id = WH_DEVCTX_TO_KEYID(key->devCtx);
+
+    /* Import key if necessary */
+    if (WH_KEYID_ISERASED(key_id)) {
+        /* Must import the key to the server and evict it afterwards */
+        uint8_t keyLabel[] = "TempRsaGetSize";
+        whNvmFlags flags = WH_NVM_FLAGS_NONE;
+
+        ret = wh_Client_RsaImportKey(ctx,
+                key, &key_id, flags,
+                sizeof(keyLabel), keyLabel);
+        if (ret == WH_ERROR_OK) {
+            evict = 1;
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        /* Request Message */
+        uint16_t group      = WH_MESSAGE_GROUP_CRYPTO;
+        uint16_t action     = WC_ALGO_TYPE_PK;
+        uint32_t type       = WC_PK_TYPE_RSA_GET_SIZE;
+
+        wh_Packet_pk_rsa_get_size_req* req = &packet->pkRsaGetSizeReq;
+        uint16_t req_len    = WH_PACKET_STUB_SIZE + sizeof(*req);
+        uint32_t options    = 0;
+
+        if (req_len <= WOLFHSM_CFG_COMM_DATA_LEN) {
+            if (evict != 0) {
+                options |= WH_PACKET_PK_RSA_GET_SIZE_OPTIONS_EVICT;
+            }
+
+            memset(req, 0, sizeof(*req));
+            req->type = type;
+            req->options = options;
+            req->keyId = key_id;
+
+            /* Send Request */
+            ret = wh_Client_SendRequest(ctx, group, action, req_len,
+                    (uint8_t*)packet);
+            if (ret == WH_ERROR_OK) {
+                /* Server will evict at this point. Reset evict */
+                evict = 0;
+
+                /* Response Message */
+                wh_Packet_pk_rsa_get_size_res* res = &packet->pkRsaGetSizeRes;
+                uint16_t res_len = 0;
+
+                /* Recv Response */
+                do {
+                    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                        (uint8_t*)packet);
+                } while (ret == WH_ERROR_NOTREADY);
+
+                if (ret == WH_ERROR_OK) {
+                    if (packet->rc == 0) {
+                        *out_size = res->keySize;
+                    } else {
+                        ret = packet->rc;
+                    }
+                }
+            }
+        } else {
+            /* Request length is too long */
+            ret = WH_ERROR_BADARGS;
+        }
+    }
+    /* Evict the key manually on error */
+    if(evict != 0) {
+        (void)wh_Client_KeyEvict(ctx, key_id);
+    }
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+    printf("[client] %s ret:%d\n", __func__, ret);
+#endif
+    return ret;
+}
+
 
 #endif /* !NO_RSA */
 
@@ -1536,7 +1970,6 @@ int wh_Client_CmacAesGenerate(Cmac* cmac, byte* out, word32* outSz,
     int ret;
     ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, heap,
         WH_DEV_ID);
-    printf("aescmac generate cmac type:%d ret:%d\n", cmac->type, ret);
     /* set keyId */
     if (ret == 0)
         ret = wh_Client_CmacSetKeyId(cmac, keyId);

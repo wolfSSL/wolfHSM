@@ -140,6 +140,8 @@ typedef struct  wh_Packet_pk_rsa_res
 typedef struct  wh_Packet_pk_rsa_get_size_req
 {
     uint32_t type;
+    uint32_t options;
+#define WH_PACKET_PK_RSA_GET_SIZE_OPTIONS_EVICT  (1 << 0)
     uint32_t keyId;
 } wh_Packet_pk_rsa_get_size_req;
 

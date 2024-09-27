@@ -62,6 +62,29 @@
  */
 int wh_Client_RngGenerate(whClientContext* ctx, uint8_t* out, uint32_t size);
 
+#ifndef NO_AES
+
+#ifdef HAVE_AES_CBC
+int wh_Client_AesCbc(whClientContext* ctx,
+        Aes* aes, int enc,
+        uint32_t len, const uint8_t* in,
+        uint8_t* out);
+#endif /* HAVE_AES_CBC */
+
+#ifdef HAVE_AESGCM
+/* TODO: Add documentation */
+int wh_Client_AesGcm(whClientContext* ctx,
+        Aes* aes, int enc,
+        uint32_t len, const uint8_t* in,
+        uint32_t iv_len, const uint8_t* iv,
+        uint32_t authin_len, const uint8_t* authin,
+        uint32_t tag_len, const uint8_t* dec_tag, uint8_t* enc_tag,
+        uint8_t* out);
+#endif /* HAVE_AESGCM */
+
+#endif /* !NO_AES */
+
+
 
 #ifdef HAVE_CURVE25519
 /**
@@ -254,7 +277,7 @@ int wh_Client_RsaGetKeyId(RsaKey* key, whNvmId* outId);
  * @param[out] out_keyId Pointer to the key ID to return.
  * @return int Returns 0 on success or a negative error code on failure.
  */
-int wh_Client_RsaImportKey(whClientContext* ctx, RsaKey* key,
+int wh_Client_RsaImportKey(whClientContext* ctx, const RsaKey* key,
         whKeyId *inout_keyId, whNvmFlags flags,
         uint32_t label_len, uint8_t* label);
 
@@ -293,6 +316,10 @@ int wh_Client_RsaFunction(whClientContext* ctx,
         RsaKey* key, int rsa_type,
         const uint8_t* in, uint16_t in_len,
         uint8_t* out, uint16_t *inout_out_len);
+
+/* TODO: Request server to get the RSA size */
+int wh_Client_RsaGetSize(whClientContext* ctx,
+        const RsaKey* key, int* out_size);
 
 
 #endif /* !NO_RSA */

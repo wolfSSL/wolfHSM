@@ -1234,7 +1234,6 @@ static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
             WH_ERROR_PRINT("Failed to wh_Client_EnableCancel %d\n", ret);
         } else {
             ret = wc_InitCmac_ex(cmac, knownCmacKey, sizeof(knownCmacKey), WC_CMAC_AES, NULL, NULL, devId);
-            printf("cancel init cmac-type:%d\n", cmac->type);
             if (ret != 0) {
                 WH_ERROR_PRINT("Failed to wc_InitCmac_ex %d\n", ret);
             } else {
@@ -1247,7 +1246,6 @@ static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
                     /* delay the server so scheduling doesn't interfere with the timing */
                     serverDelay = 1;
 #endif
-                    printf("cancel update cmac->type:%d\n", cmac->type);
                     ret = wc_CmacUpdate(cmac, (byte*)cmacFodder, sizeof(cmacFodder));
                     if (ret != 0) {
                         WH_ERROR_PRINT("Failed to wc_CmacUpdate %d\n", ret);
