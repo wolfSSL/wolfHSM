@@ -50,7 +50,7 @@ int wh_Crypto_DeserializeAesKey(uint16_t size, const uint8_t* buffer,
 
 #ifndef NO_RSA
 /* Store a RsaKey to a byte sequence (currently DER format) */
-int wh_Crypto_RsaSerializeKeyDer(RsaKey* key, uint16_t max_size,
+int wh_Crypto_RsaSerializeKeyDer(const RsaKey* key, uint16_t max_size,
         uint8_t* buffer, uint16_t *out_size);
 /* Restore a RsaKey from a byte sequence (currently DER format) */
 int wh_Crypto_RsaDeserializeKeyDer(uint16_t size, const uint8_t* buffer,

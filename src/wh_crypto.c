@@ -46,7 +46,7 @@
 #include "wolfhsm/wh_crypto.h"
 
 #ifndef NO_RSA
-int wh_Crypto_RsaSerializeKeyDer(RsaKey* key, uint16_t max_size,
+int wh_Crypto_RsaSerializeKeyDer(const RsaKey* key, uint16_t max_size,
         uint8_t* buffer, uint16_t *out_size)
 {
     int ret = 0;
@@ -57,7 +57,8 @@ int wh_Crypto_RsaSerializeKeyDer(RsaKey* key, uint16_t max_size,
         return WH_ERROR_BADARGS;
     }
 
-    der_size = wc_RsaKeyToDer(key, (byte*)buffer, (word32)max_size);
+    /* TODO: Update wc to use a const here */
+    der_size = wc_RsaKeyToDer((RsaKey*)key, (byte*)buffer, (word32)max_size);
     if (der_size >= 0) {
         ret = 0;
         if (out_size != NULL) {

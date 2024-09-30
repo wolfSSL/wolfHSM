@@ -62,30 +62,6 @@
  */
 int wh_Client_RngGenerate(whClientContext* ctx, uint8_t* out, uint32_t size);
 
-#ifndef NO_AES
-
-#ifdef HAVE_AES_CBC
-int wh_Client_AesCbc(whClientContext* ctx,
-        Aes* aes, int enc,
-        uint32_t len, const uint8_t* in,
-        uint8_t* out);
-#endif /* HAVE_AES_CBC */
-
-#ifdef HAVE_AESGCM
-/* TODO: Add documentation */
-int wh_Client_AesGcm(whClientContext* ctx,
-        Aes* aes, int enc,
-        uint32_t len, const uint8_t* in,
-        uint32_t iv_len, const uint8_t* iv,
-        uint32_t authin_len, const uint8_t* authin,
-        uint32_t tag_len, const uint8_t* dec_tag, uint8_t* enc_tag,
-        uint8_t* out);
-#endif /* HAVE_AESGCM */
-
-#endif /* !NO_AES */
-
-
-
 #ifdef HAVE_CURVE25519
 /**
  * @brief Associates a Curve25519 key with a specific key ID.
@@ -350,6 +326,27 @@ int wh_Client_AesSetKeyId(Aes* key, whNvmId keyId);
  */
 int wh_Client_AesGetKeyId(Aes* key, whNvmId* outId);
 
+#ifdef HAVE_AES_CBC
+int wh_Client_AesCbc(whClientContext* ctx,
+        Aes* aes, int enc,
+        const uint8_t* in, uint32_t len,
+        uint8_t* out);
+#endif /* HAVE_AES_CBC */
+
+#ifdef HAVE_AESGCM
+/* TODO: Add documentation */
+int wh_Client_AesGcm(whClientContext* ctx,
+        Aes* aes, int enc,
+        const uint8_t* in, uint32_t len,
+        const uint8_t* iv, uint32_t iv_len,
+        const uint8_t* authin, uint32_t authin_len,
+        const uint8_t* dec_tag, uint8_t* enc_tag, uint32_t tag_len,
+        uint8_t* out);
+#endif /* HAVE_AESGCM */
+
+#endif /* !NO_AES */
+
+
 #ifdef WOLFSSL_CMAC
 /**
  * @brief Runs the CMAC-AES operation in a single call with a wolfHSM keyId.
@@ -435,7 +432,6 @@ int wh_Client_CmacSetKeyId(Cmac* key, whNvmId keyId);
  */
 int wh_Client_CmacGetKeyId(Cmac* key, whNvmId* outId);
 #endif /* WOLFSSL_CMAC */
-#endif /* !NO_AES */
 
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
 #endif /* !WOLFHSM_WH_CLIENT_CRYPTO_H_ */
