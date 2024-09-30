@@ -1346,7 +1346,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
 
 #ifdef WOLFHSM_CFG_TEST_VERBOSE
     if (ret == 0) {
-        (void)whTest_ShowNvmAvailable(ctx);
+        (void)whTest_ShowNvmAvailable(client);
     }
 #endif /* WOLFHSM_CFG_TEST_VERBOSE */
 
@@ -1404,7 +1404,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
 
 #ifdef WOLFHSM_CFG_TEST_VERBOSE
     if (ret == 0) {
-        (void)whTest_ShowNvmAvailable(ctx);
+        (void)whTest_ShowNvmAvailable(client);
     }
 #endif /* WOLFHSM_CFG_TEST_VERBOSE */
 
