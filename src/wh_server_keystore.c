@@ -53,13 +53,13 @@ static int _FindInCache(whServerContext* server, whKeyId keyId,
 
 
 
-int hsmGetUniqueId(whServerContext* server, whNvmId* outId)
+int hsmGetUniqueId(whServerContext* server, whNvmId* inout_id)
 {
     int i;
     int ret = 0;
     whNvmId id;
     /* apply client_id and type which should be set by caller on outId */
-    whKeyId key_id = *outId;
+    whKeyId key_id = *inout_id;
     int type = WH_KEYID_TYPE(key_id);
     int user = WH_KEYID_USER(key_id);
     whNvmId buildId ;
@@ -98,7 +98,7 @@ int hsmGetUniqueId(whServerContext* server, whNvmId* outId)
         ret = WH_ERROR_NOSPACE;
     /* ultimately, return found id */
     if (ret == 0)
-        *outId = buildId;
+        *inout_id = buildId;
     return ret;
 }
 
@@ -471,27 +471,14 @@ int hsmCommitKey(whServerContext* server, whNvmId keyId)
 
 int hsmEraseKey(whServerContext* server, whNvmId keyId)
 {
-    int i;
-    if (server == NULL || keyId == WH_KEYID_ERASED)
+    if (    (server == NULL) ||
+            (WH_KEYID_ISERASED(keyId)) ) {
         return WH_ERROR_BADARGS;
-    /* apply client_id */
-    keyId |= (server->comm->client_id << 8);
+    }
+
     /* remove the key from the cache if present */
-    for (i = 0; i < WOLFHSM_CFG_SERVER_KEYCACHE_COUNT; i++) {
-        if (server->cache[i].meta->id == keyId) {
-            server->cache[i].meta->id = WH_KEYID_ERASED;
-            break;
-        }
-    }
-    if (i >= WOLFHSM_CFG_SERVER_KEYCACHE_COUNT) {
-        /* remove the key from the big cache if present */
-        for (i = 0; i < WOLFHSM_CFG_SERVER_KEYCACHE_BIG_COUNT; i++) {
-            if (server->bigCache[i].meta->id == keyId) {
-                server->bigCache[i].meta->id = WH_KEYID_ERASED;
-                break;
-            }
-        }
-    }
+    (void)hsmEvictKey(server, keyId);
+
     /* destroy the object */
     return wh_Nvm_DestroyObjects(server->nvm, 1, &keyId);
 }
@@ -505,10 +492,15 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
     uint8_t* out;
     whPacket* packet = (whPacket*)data;
     whNvmMetadata meta[1] = {{0}};
+
     /* validate args, even though these functions are only supposed to be
      * called by internal functions */
-    if (server == NULL || data == NULL || size == NULL)
+    if (    (server == NULL) ||
+            (data == NULL) ||
+            (size == NULL) ) {
         return WH_ERROR_BADARGS;
+    }
+
     switch (action)
     {
     case WH_KEY_CACHE:

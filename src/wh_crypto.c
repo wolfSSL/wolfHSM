@@ -36,6 +36,7 @@
 #include "wolfssl/wolfcrypt/types.h"
 #include "wolfssl/wolfcrypt/error-crypt.h"
 #include "wolfssl/wolfcrypt/asn.h"
+#include "wolfssl/wolfcrypt/rsa.h"
 #include "wolfssl/wolfcrypt/curve25519.h"
 #include "wolfssl/wolfcrypt/ecc.h"
 
@@ -43,6 +44,50 @@
 #include "wolfhsm/wh_utils.h"
 
 #include "wolfhsm/wh_crypto.h"
+
+#ifndef NO_RSA
+int wh_Crypto_RsaSerializeKeyDer(const RsaKey* key, uint16_t max_size,
+        uint8_t* buffer, uint16_t *out_size)
+{
+    int ret = 0;
+    int der_size = 0;
+
+    if (    (key == NULL) ||
+            (buffer == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* TODO: Update wc to use a const here */
+    der_size = wc_RsaKeyToDer((RsaKey*)key, (byte*)buffer, (word32)max_size);
+    if (der_size >= 0) {
+        ret = 0;
+        if (out_size != NULL) {
+            *out_size = der_size;
+        }
+    } else {
+        /* Error serializing.  Clear the buffer */
+        ret = der_size;
+        memset(buffer, 0, max_size);
+    }
+    return ret;
+}
+
+int wh_Crypto_RsaDeserializeKeyDer(uint16_t size, const uint8_t* buffer,
+        RsaKey* key)
+{
+    int ret;
+    word32 idx = 0;
+
+    if (    (size == 0) ||
+            (buffer == NULL) ||
+            (key == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    /* Deserialize the RSA key */
+    ret = wc_RsaPrivateKeyDecode(buffer, &idx, key, size);
+    return ret;
+}
+#endif /* !NO_RSA */
 
 #ifdef HAVE_ECC
 int wh_Crypto_EccSerializeKeyDer(ecc_key* key, uint16_t max_size,
@@ -99,7 +144,7 @@ int wh_Crypto_EccDeserializeKeyDer(const uint8_t* buffer, uint16_t size,
     return ret;
 }
 
-int wh_Crypto_UpdatePrivateOnlyEccKey(ecc_key* key, uint16_t pub_size,
+int wh_Crypto_EccUpdatePrivateOnlyKeyDer(ecc_key* key, uint16_t pub_size,
         const uint8_t* pub_buffer)
 {
     int ret = 0;
@@ -149,7 +194,7 @@ int wh_Crypto_UpdatePrivateOnlyEccKey(ecc_key* key, uint16_t pub_size,
 #endif /* HAVE_ECC */
 
 #ifdef HAVE_CURVE25519
- int wh_Crypto_SerializeCurve25519Key(curve25519_key* key,
+ int wh_Crypto_Curve25519SerializeKey(curve25519_key* key,
         uint16_t max_size, uint8_t* buffer, uint16_t *out_size)
 {
     int ret = 0;
@@ -171,7 +216,7 @@ int wh_Crypto_UpdatePrivateOnlyEccKey(ecc_key* key, uint16_t pub_size,
     return ret;
 }
 
-int wh_Crypto_DeserializeCurve25519Key(uint16_t size,
+int wh_Crypto_Curve25519DeserializeKey(uint16_t size,
         const uint8_t* buffer, curve25519_key* key)
 {
     int ret = 0;

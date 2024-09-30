@@ -208,6 +208,8 @@ static int _wh_Server_HandleCommRequest(whServerContext* server,
         resp.cfg_server_dmaaddr_count = WOLFHSM_CFG_SERVER_DMAADDR_COUNT;
         resp.cfg_server_keycache_bufsize = WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE;
         resp.cfg_server_keycache_count = WOLFHSM_CFG_SERVER_KEYCACHE_COUNT;
+        resp.cfg_server_keycache_bigbufsize = WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE;
+        resp.cfg_server_keycache_bigcount = WOLFHSM_CFG_SERVER_KEYCACHE_BIG_COUNT;
 
         /* III Growth */
         resp.debug_state = 1;

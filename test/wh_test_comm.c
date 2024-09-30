@@ -25,6 +25,7 @@
 #include <stdio.h>  /* For printf */
 #include <string.h> /* For memset, memcpy */
 
+#include "wh_test_common.h"
 
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_comm.h"

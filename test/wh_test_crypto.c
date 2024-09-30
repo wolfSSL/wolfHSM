@@ -82,9 +82,210 @@ static int _cancelCb(uint16_t seq)
 }
 #endif
 
+#ifdef WOLFHSM_CFG_TEST_VERBOSE
+static int whTest_ShowNvmAvailable(whClientContext* ctx)
+{
+    int ret = 0;
+    int32_t  server_rc       = 0;
+    whNvmId  avail_objects   = 0;
+    whNvmId  reclaim_objects = 0;
+    uint32_t avail_size      = 0;
+    uint32_t reclaim_size    = 0;
+
+    ret = wh_Client_NvmGetAvailable(ctx, &server_rc, &avail_size,
+                                        &avail_objects, &reclaim_size,
+                                        &reclaim_objects);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to get available NVM status\n");
+    } else {
+        printf("CRYPTO TEST NVM STATUS: NvmGetAvailable:%d, server_rc:%d "
+                "avail_size:%d avail_objects:%d, reclaim_size:%d "
+                "reclaim_objects:%d\n",
+               ret, (int)server_rc, (int)avail_size, (int)avail_objects,
+               (int)reclaim_size, (int)reclaim_objects);
+    }
+    return ret;
+}
+#endif /* WOLFHSM_CFG_TEST_VERBOSE */
+
+static int whTest_CryptoRng(whClientContext* ctx, int devId, WC_RNG* rng)
+{
+    (void)ctx; /* Unused */
+
+#define WH_TEST_RNG_LIL 7
+#define WH_TEST_RNG_MED 1024
+#define WH_TEST_RNG_BIG (WOLFHSM_CFG_COMM_DATA_LEN * 2)
+    int ret;
+    uint8_t lil[WH_TEST_RNG_LIL];
+    uint8_t med[WH_TEST_RNG_MED];
+    uint8_t big[WH_TEST_RNG_BIG];
+
+    /* test rng.  Note this rng is used for many tests so is left inited */
+    ret = wc_InitRng_ex(rng, NULL, devId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wc_InitRng_ex %d\n", ret);
+    } else {
+        ret = wc_RNG_GenerateBlock(rng, lil, sizeof(lil));
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wc_RNG_GenerateBlock %d\n", ret);
+        } else {
+            ret = wc_RNG_GenerateBlock(rng, med, sizeof(med));
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to wc_RNG_GenerateBlock %d\n", ret);
+            } else {
+                ret = wc_RNG_GenerateBlock(rng, big, sizeof(big));
+                if (ret != 0) {
+                    WH_ERROR_PRINT("Failed to wc_RNG_GenerateBlock %d\n", ret);
+                }
+            }
+        }
+    }
+    if (ret == 0) {
+        printf("RNG SUCCESS\n");
+    }
+    return ret;
+}
+
+#ifndef NO_RSA
+static int whTest_CryptoRsa(whClientContext* ctx, int devId, WC_RNG* rng)
+{
+#define RSA_KEY_BITS 2048
+#define RSA_KEY_BYTES (RSA_KEY_BITS/8)
+#define RSA_EXPONENT WC_RSA_EXPONENT
+
+    int ret = WH_ERROR_OK;
+    RsaKey rsa[1];
+    char plainText[sizeof(PLAINTEXT)] = PLAINTEXT;
+    char cipherText[RSA_KEY_BYTES];
+    char finalText[RSA_KEY_BYTES];
+    whKeyId keyId = WH_KEYID_ERASED;
+
+    /* Using ephemeral key */
+    memset(cipherText, 0, sizeof(cipherText));
+    memset(finalText, 0, sizeof(finalText));
+    ret = wc_InitRsaKey_ex(rsa, NULL, devId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wc_InitRsaKey_ex %d\n", ret);
+    } else {
+        ret = wc_MakeRsaKey(rsa, RSA_KEY_BITS, RSA_EXPONENT, rng);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wc_MakeRsaKey %d\n", ret);
+        } else {
+            ret = wc_RsaPublicEncrypt((byte*)plainText, sizeof(plainText),
+                    (byte*)cipherText, sizeof(cipherText), rsa, rng);
+            if (ret < 0) {
+                WH_ERROR_PRINT("Failed to wc_RsaPublicEncrypt %d\n", ret);
+            } else {
+                ret = wc_RsaPrivateDecrypt((byte*)cipherText, ret,
+                        (byte*)finalText, sizeof(finalText), rsa);
+                if (ret < 0) {
+                    WH_ERROR_PRINT("Failed to wc_RsaPrivateDecrypt %d\n", ret);
+                } else {
+                    ret = 0;
+                    if (memcmp(plainText, finalText, sizeof(plainText)) != 0) {
+                        WH_ERROR_PRINT("Failed to match\n");
+                        ret = -1;
+                    }
+                }
+            }
+        }
+        (void)wc_FreeRsaKey(rsa);
+    }
+
+    if (ret == 0) {
+        /* Using client export key */
+        memset(cipherText, 0, sizeof(cipherText));
+        memset(finalText, 0, sizeof(finalText));
+        ret = wc_InitRsaKey_ex(rsa, NULL, WH_DEV_ID);
+        if (ret!= 0) {
+            WH_ERROR_PRINT("Failed to wc_InitRsaKey_ex %d\n", ret);
+        } else {
+            ret = wh_Client_RsaMakeExportKey(ctx, RSA_KEY_BITS, RSA_EXPONENT,
+                    rsa);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to make exported key %d\n", ret);
+            } else {
+                ret = wc_RsaPublicEncrypt((byte*)plainText, sizeof(plainText),
+                        (byte*)cipherText, sizeof(cipherText), rsa, rng);
+                if (ret < 0) {
+                    WH_ERROR_PRINT("Failed to encrypt %d\n", ret);
+                } else {
+                    ret = wc_RsaPrivateDecrypt((byte*)cipherText, ret,
+                            (byte*)finalText, sizeof(finalText), rsa);
+                    if (ret < 0) {
+                        WH_ERROR_PRINT("Failed to decrypt %d\n", ret);
+                    } else {
+                        ret = 0;
+                        if (memcmp(plainText, finalText,
+                                sizeof(plainText)) != 0) {
+                            WH_ERROR_PRINT("Failed to match\n");
+                            ret = -1;
+                        }
+                    }
+                }
+            }
+            (void)wc_FreeRsaKey(rsa);
+        }
+    }
+
+    if (ret == 0) {
+        /* Using keyCache key */
+        memset(cipherText, 0, sizeof(cipherText));
+        memset(finalText, 0, sizeof(finalText));
+        ret = wh_Client_RsaMakeCacheKey(ctx, RSA_KEY_BITS, RSA_EXPONENT,
+                &keyId, WH_NVM_FLAGS_NONE, 0, NULL);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to make cached key %d\n", ret);
+        } else {
+            ret = wc_InitRsaKey_ex(rsa, NULL, WH_DEV_ID);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to wc_InitRsaKey_ex %d\n", ret);
+            } else {
+                ret = wh_Client_RsaSetKeyId(rsa, keyId);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("Failed to wh_Client_SetKeyIdRsa %d\n", ret);
+                } else {
+                    ret = wh_Client_RsaGetKeyId(rsa, &keyId);
+                    if (ret != 0) {
+                        WH_ERROR_PRINT("Failed to wc_GetKeyIdRsa %d\n", ret);
+                    } else {
+                        ret = wc_RsaPublicEncrypt(
+                                (byte*)plainText, sizeof(plainText),
+                                (byte*)cipherText, sizeof(cipherText), rsa,
+                                rng);
+                        if (ret < 0) {
+                            WH_ERROR_PRINT("Failed to encrypt %d\n", ret);
+                        } else {
+                            ret = wc_RsaPrivateDecrypt(
+                                    (byte*)cipherText, ret,
+                                    (byte*)finalText, sizeof(finalText), rsa);
+                            if (ret < 0) {
+                                WH_ERROR_PRINT("Failed to decrypt %d\n", ret);
+                            } else {
+                                ret = 0;
+                                if (memcmp(plainText, finalText,
+                                        sizeof(plainText)) != 0) {
+                                    WH_ERROR_PRINT("Failed to match\n");
+                                    ret = -1;
+                                }
+                            }
+                        }
+                    }
+                }
+                (void)wc_FreeRsaKey(rsa);
+            }
+        }
+        (void)wh_Client_KeyEvict(ctx, keyId);
+    }
+    if (ret == 0) {
+        printf("RSA SUCCESS\n");
+    }
+    return ret;
+}
+#endif /* !NO_RSA */
 
 #ifdef HAVE_ECC
-static int whTest_CryptoEcc(whClientContext* ctx, WC_RNG* rng)
+static int whTest_CryptoEcc(whClientContext* ctx, int devId, WC_RNG* rng)
 {
     int ret = WH_ERROR_OK;
     ecc_key eccPrivate[1];
@@ -103,11 +304,11 @@ static int whTest_CryptoEcc(whClientContext* ctx, WC_RNG* rng)
     uint8_t* label_b = (uint8_t*)("Ecc Label B");
 #endif
 
-    ret = wc_ecc_init_ex(eccPrivate, NULL, WH_DEV_ID);
+    ret = wc_ecc_init_ex(eccPrivate, NULL, devId);
     if (ret != 0) {
         WH_ERROR_PRINT("Failed to wc_ecc_init_ex %d\n", ret);
     } else {
-        ret = wc_ecc_init_ex(eccPublic, NULL, WH_DEV_ID);
+        ret = wc_ecc_init_ex(eccPublic, NULL, devId);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed to wc_ecc_init_ex %d\n", ret);
         } else {
@@ -123,12 +324,13 @@ static int whTest_CryptoEcc(whClientContext* ctx, WC_RNG* rng)
                     ret = wc_ecc_shared_secret(eccPrivate, eccPublic,
                             (byte*)shared_ab, &secLen);
                     if (ret != 0) {
-                        WH_ERROR_PRINT("Failed to wc_ecc_shared_secret %d\n", ret);
+                        WH_ERROR_PRINT("Failed to compute secret %d\n", ret);
                     } else {
                         ret = wc_ecc_shared_secret(eccPublic, eccPrivate,
                                 (byte*)shared_ba, &secLen);
                         if (ret != 0) {
-                            WH_ERROR_PRINT("Failed to wc_ecc_shared_secret %d\n", ret);
+                            WH_ERROR_PRINT("Failed to compute secret %d\n",
+                                    ret);
                         } else {
                             if (memcmp(shared_ab, shared_ba, secLen) == 0) {
                                 printf("ECDH SUCCESS\n");
@@ -151,7 +353,8 @@ static int whTest_CryptoEcc(whClientContext* ctx, WC_RNG* rng)
                                 (void*)hash, sizeof(hash), &res,
                                 eccPrivate);
                         if (ret != 0) {
-                            WH_ERROR_PRINT("Failed to wc_ecc_verify_hash %d\n", ret);
+                            WH_ERROR_PRINT("Failed to wc_ecc_verify_hash %d\n",
+                                    ret);
                         } else {
                             if (res == 1) {
                                 printf("ECC SIGN/VERIFY SUCCESS\n");
@@ -172,7 +375,7 @@ static int whTest_CryptoEcc(whClientContext* ctx, WC_RNG* rng)
 #endif /* HAVE_ECC */
 
 #ifdef HAVE_CURVE25519
-static int whTest_CryptoCurve25519(whClientContext* ctx, WC_RNG* rng)
+static int whTest_CryptoCurve25519(whClientContext* ctx, int devId, WC_RNG* rng)
 {
     int ret = 0;
     curve25519_key key_a[1] = {0};
@@ -182,501 +385,732 @@ static int whTest_CryptoCurve25519(whClientContext* ctx, WC_RNG* rng)
     int key_size = CURVE25519_KEYSIZE;
     whNvmFlags flags = WH_NVM_FLAGS_NONE;
     whKeyId key_id_a = WH_KEYID_ERASED;
-    uint8_t* label_a = (uint8_t*)("Curve25519 Label A");
+    uint8_t label_a[WH_NVM_LABEL_LEN] = "Curve25519 Label A";
     whKeyId key_id_b = 42;
-    uint8_t* label_b = (uint8_t*)("Curve25519 Label B");
-
+    uint8_t label_b[WH_NVM_LABEL_LEN] = "Curve25519 Label B";
     word32 len = 0;
 
-    ret = wc_curve25519_init_ex(key_a, NULL, WH_DEV_ID);
-    if (ret != 0) {
-        WH_ERROR_PRINT("Failed to wc_curve25519_init_ex %d\n", ret);
-    } else {
-        ret = wc_curve25519_init_ex(key_b, NULL, WH_DEV_ID);
+    if (ret == 0) {
+        /* Use wolfcrypt ephemeral local keys */
+        ret = wc_curve25519_init_ex(key_a, NULL, devId);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed to wc_curve25519_init_ex %d\n", ret);
         } else {
-            /* Use wolfcrypt ephemeral local keys */
-            printf("-Curve25519 wolfcrypt ephemeral keys\n");
-            ret = wc_curve25519_make_key(rng, key_size, key_a);
+            ret = wc_curve25519_init_ex(key_b, NULL, devId);
             if (ret != 0) {
-                WH_ERROR_PRINT("Failed to wc_curve25519_make_key %d\n", ret);
-            }
-            if (ret == 0) {
-                ret = wc_curve25519_make_key(rng, key_size, key_b);
+                WH_ERROR_PRINT("Failed to wc_curve25519_init_ex %d\n", ret);
+            } else {
+                ret = wc_curve25519_make_key(rng, key_size, key_a);
                 if (ret != 0) {
-                    WH_ERROR_PRINT("Failed to wc_curve25519_make_key %d\n", ret);
+                    WH_ERROR_PRINT("Failed to wc_curve25519_make_key %d\n",
+                            ret);
                 }
-            }
-            if (ret == 0) {
-                len = sizeof(shared_ab);
-                ret = wc_curve25519_shared_secret(
-                        key_a, key_b, shared_ab, &len);
-                if (ret != 0) {
-                    WH_ERROR_PRINT("Failed to wc_curve25519_shared_secret %d\n", ret);
+                if (ret == 0) {
+                    ret = wc_curve25519_make_key(rng, key_size, key_b);
+                    if (ret != 0) {
+                        WH_ERROR_PRINT("Failed to wc_curve25519_make_key %d\n",
+                                ret);
+                    }
                 }
-            }
-            if (ret == 0) {
-                len = sizeof(shared_ba);
-                ret = wc_curve25519_shared_secret(
-                        key_b, key_a, shared_ba, &len);
-                if (ret != 0) {
-                    WH_ERROR_PRINT("Failed to wc_curve25519_shared_secret %d\n", ret);
+                if (ret == 0) {
+                    len = sizeof(shared_ab);
+                    ret = wc_curve25519_shared_secret(
+                            key_a, key_b, shared_ab, &len);
+                    if (ret != 0) {
+                        WH_ERROR_PRINT("Failed to compute shared secret %d\n",
+                                ret);
+                    }
                 }
-            }
-            if (ret == 0) {
-                if (XMEMCMP(shared_ab, shared_ba, len) != 0) {
-                    WH_ERROR_PRINT("CURVE25519 shared secrets don't match\n");
-                    ret = -1;
+                if (ret == 0) {
+                    len = sizeof(shared_ba);
+                    ret = wc_curve25519_shared_secret(
+                            key_b, key_a, shared_ba, &len);
+                    if (ret != 0) {
+                        WH_ERROR_PRINT("Failed to compute shared secret %d\n",
+                                ret);
+                    }
                 }
-            }
-
-            /* Test using wh_Client ephemeral local keys */
-            printf("-Curve25519 wolfhsm ephemeral keys\n");
-            if (ret == 0) {
-                wc_curve25519_free(key_a);
+                if (ret == 0) {
+                    if (XMEMCMP(shared_ab, shared_ba, len) != 0) {
+                        WH_ERROR_PRINT("CURVE25519 secrets don't match\n");
+                        ret = -1;
+                    }
+                }
                 wc_curve25519_free(key_b);
             }
-            ret = wh_Client_Curve25519MakeExportKey(ctx, key_size, key_a);
-            if (ret != 0) {
-                WH_ERROR_PRINT("Failed to wh_Client_MakeExportCurve25519Key %d\n", ret);
-            }
-            if (ret == 0) {
-                ret = wh_Client_Curve25519MakeExportKey(ctx, key_size, key_b);
-                if (ret != 0) {
-                    WH_ERROR_PRINT("Failed to wh_Client_MakeExportCurve25519Key %d\n", ret);
-                }
-            }
-            if (ret == 0) {
-                len = sizeof(shared_ab);
-                ret = wc_curve25519_shared_secret(
-                        key_a, key_b, shared_ab, &len);
-                if (ret != 0) {
-                    WH_ERROR_PRINT("Failed to wc_curve25519_shared_secret %d\n", ret);
-                }
-            }
-            if (ret == 0) {
-                len = sizeof(shared_ba);
-                ret = wc_curve25519_shared_secret(
-                        key_b, key_a, shared_ba, &len);
-                if (ret != 0) {
-                    WH_ERROR_PRINT("Failed to wc_curve25519_shared_secret %d\n", ret);
-                }
-            }
-            if (ret == 0) {
-                if (XMEMCMP(shared_ab, shared_ba, len) != 0) {
-                    WH_ERROR_PRINT("CURVE25519 shared secrets don't match\n");
-                    ret = -1;
-                }
-            }
-
-            /* Test using wolfHSM server keys */
-            printf("-Curve25519 wolfhsm server keys\n");
-            if (ret == 0) {
-                wc_curve25519_free(key_a);
-                wc_curve25519_free(key_b);
-            }
-            ret = wh_Client_Curve25519MakeCacheKey(ctx, key_size,
-                    &key_id_a, flags, sizeof(label_a), label_a);
-            if (ret != 0) {
-                WH_ERROR_PRINT("Failed to wh_Client_MakeCacheCurve25519Key %d\n", ret);
-            }
-            if (ret == 0) {
-                ret = wh_Client_Curve25519MakeCacheKey(ctx, key_size,
-                        &key_id_b, flags, sizeof(label_b), label_b);
-                if (ret != 0) {
-                    WH_ERROR_PRINT("Failed to wh_Client_MakeCacheCurve25519Key %d\n", ret);
-                }
-            }
-            if (ret == 0) {
-                len = sizeof(shared_ab);
-                wh_Client_Curve25519SetKeyId(key_a, key_id_a);
-                wh_Client_Curve25519SetKeyId(key_b, key_id_b);
-                ret = wc_curve25519_shared_secret(
-                        key_a, key_b, shared_ab, &len);
-                if (ret != 0) {
-                    WH_ERROR_PRINT("Failed to wc_curve25519_shared_secret %d\n", ret);
-                }
-            }
-            if (ret == 0) {
-                len = sizeof(shared_ba);
-                ret = wc_curve25519_shared_secret(
-                        key_b, key_a, shared_ba, &len);
-                if (ret != 0) {
-                    WH_ERROR_PRINT("Failed to wc_curve25519_shared_secret %d\n", ret);
-                }
-            }
-            if (ret == 0) {
-                if (XMEMCMP(shared_ab, shared_ba, len) != 0) {
-                    WH_ERROR_PRINT("CURVE25519 shared secrets don't match\n");
-                    ret = -1;
-                }
-            }
-            wc_curve25519_free(key_b);
+            wc_curve25519_free(key_a);
         }
-        wc_curve25519_free(key_a);
     }
-    if (ret == WH_ERROR_OK) {
+
+    if (ret == 0) {
+        /* Test using wh_Client ephemeral local keys */
+        ret = wc_curve25519_init_ex(key_a, NULL, devId);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wc_curve25519_init_ex %d\n", ret);
+        } else {
+            ret = wc_curve25519_init_ex(key_b, NULL, devId);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to wc_curve25519_init_ex %d\n", ret);
+            } else {
+                ret = wh_Client_Curve25519MakeExportKey(ctx, key_size, key_a);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("Failed to make exported key %d\n", ret);
+                }
+                if (ret == 0) {
+                    ret = wh_Client_Curve25519MakeExportKey(ctx, key_size,
+                            key_b);
+                    if (ret != 0) {
+                        WH_ERROR_PRINT("Failed to make exported key %d\n", ret);
+                    }
+                }
+                if (ret == 0) {
+                    len = sizeof(shared_ab);
+                    ret = wc_curve25519_shared_secret(
+                            key_a, key_b, shared_ab, &len);
+                    if (ret != 0) {
+                        WH_ERROR_PRINT("Failed to compute shared secret %d\n",
+                                ret);
+                    }
+                }
+                if (ret == 0) {
+                    len = sizeof(shared_ba);
+                    ret = wc_curve25519_shared_secret(
+                            key_b, key_a, shared_ba, &len);
+                    if (ret != 0) {
+                        WH_ERROR_PRINT("Failed to compute shared secret %d\n",
+                                ret);
+                    }
+                }
+                if (ret == 0) {
+                    if (XMEMCMP(shared_ab, shared_ba, len) != 0) {
+                        WH_ERROR_PRINT("CURVE25519 secrets don't match\n");
+                        ret = -1;
+                    }
+                }
+                wc_curve25519_free(key_b);
+            }
+            wc_curve25519_free(key_a);
+        }
+    }
+    if (ret == 0) {
+        /* Test using wolfHSM server keys */
+        ret = wc_curve25519_init_ex(key_a, NULL, devId);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wc_curve25519_init_ex %d\n", ret);
+        } else {
+            ret = wc_curve25519_init_ex(key_b, NULL, devId);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to wc_curve25519_init_ex %d\n", ret);
+            } else {
+                ret = wh_Client_Curve25519MakeCacheKey(ctx, key_size,
+                        &key_id_a, flags, sizeof(label_a), label_a);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("Failed to make cached key %d\n", ret);
+                }
+                if (ret == 0) {
+                    ret = wh_Client_Curve25519MakeCacheKey(ctx, key_size,
+                            &key_id_b, flags, sizeof(label_b), label_b);
+                    if (ret != 0) {
+                        WH_ERROR_PRINT("Failed to make cached key %d\n", ret);
+                    }
+                }
+                if (ret == 0) {
+                    len = sizeof(shared_ab);
+                    wh_Client_Curve25519SetKeyId(key_a, key_id_a);
+                    wh_Client_Curve25519SetKeyId(key_b, key_id_b);
+                    ret = wc_curve25519_shared_secret(
+                            key_a, key_b, shared_ab, &len);
+                    if (ret != 0) {
+                        WH_ERROR_PRINT("Failed to compute shared secret %d\n",
+                                ret);
+                    }
+                }
+                if (ret == 0) {
+                    len = sizeof(shared_ba);
+                    ret = wc_curve25519_shared_secret(
+                            key_b, key_a, shared_ba, &len);
+                    if (ret != 0) {
+                        WH_ERROR_PRINT("Failed to compute shared secret %d\n",
+                                ret);
+                    }
+                }
+                if (ret == 0) {
+                    if (XMEMCMP(shared_ab, shared_ba, len) != 0) {
+                        WH_ERROR_PRINT("CURVE25519 secrets don't match\n");
+                        ret = -1;
+                    }
+                }
+                wc_curve25519_free(key_b);
+            }
+            wc_curve25519_free(key_a);
+        }
+    }
+    if (ret == 0) {
         printf("CURVE25519 SUCCESS\n");
     }
     return ret;
 }
 #endif /* HAVE_CURVE25519 */
 
-int whTest_CryptoClientConfig(whClientConfig* config)
-{
-    int i;
-    whClientContext client[1] = {0};
-    int ret = 0;
-    /* wolfcrypt */
-    WC_RNG rng[1];
-    uint16_t outLen;
-    uint16_t keyId;
-    uint8_t iv[16];
-    uint8_t key[16];
-    uint8_t keyEnd[16];
-    uint8_t labelStart[WH_NVM_LABEL_LEN];
-    uint8_t labelEnd[WH_NVM_LABEL_LEN];
-    char plainText[16];
-    char cipherText[256];
-    char finalText[256];
-    uint8_t authIn[16];
-
 #ifndef NO_SHA256
+static int whTest_CryptoSha256(whClientContext* ctx, int devId, WC_RNG* rng)
+{
+    (void)ctx; (void)rng; /* Not currently used */
+    int ret = WH_ERROR_OK;
     wc_Sha256 sha256[1];
-    uint8_t   sha256Out[WC_SHA256_DIGEST_SIZE];
+    uint8_t   out[WC_SHA256_DIGEST_SIZE];
     /* Vector exactly one block size in length */
-    const char sha256InOneBlock[] =
+    const char inOne[] =
         "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-    const uint8_t sha256ExpectedOutOneBlock[WC_SHA256_DIGEST_SIZE] = {
+    const uint8_t expectedOutOne[WC_SHA256_DIGEST_SIZE] = {
         0xff, 0xe0, 0x54, 0xfe, 0x7a, 0xe0, 0xcb, 0x6d, 0xc6, 0x5c, 0x3a,
         0xf9, 0xb6, 0x1d, 0x52, 0x09, 0xf4, 0x39, 0x85, 0x1d, 0xb4, 0x3d,
         0x0b, 0xa5, 0x99, 0x73, 0x37, 0xdf, 0x15, 0x46, 0x68, 0xeb};
     /* Vector long enough to span a SHA256 block */
-    const char sha256InMultiBlock[] =
+    const char inMulti[] =
         "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWX"
         "YZ1234567890abcdefghi";
-    const uint8_t sha256ExpectedOutMultiBlock[WC_SHA256_DIGEST_SIZE] = {
+    const uint8_t expectedOutMulti[WC_SHA256_DIGEST_SIZE] = {
         0x7b, 0x54, 0x45, 0x86, 0xb3, 0x51, 0x43, 0x4e, 0xf6, 0x83, 0xdb,
         0x78, 0x1d, 0x94, 0xd6, 0xb0, 0x36, 0x9b, 0x36, 0x56, 0x93, 0x0e,
         0xf4, 0x47, 0x9b, 0xae, 0xff, 0xfa, 0x1f, 0x36, 0x38, 0x64};
-#endif /* !NO_SHA256 */
 
-
-    XMEMCPY(plainText, PLAINTEXT, sizeof(plainText));
-
-    if (config == NULL) {
-        return WH_ERROR_BADARGS;
+    /* Initialize SHA256 structure */
+    ret = wc_InitSha256_ex(sha256, NULL, devId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wc_InitSha256 on devId 0x%X: %d\n", devId,
+                ret);
+    } else {
+        /* Test SHA256 on a single block worth of data. Should trigger a server
+         * transaction */
+        ret = wc_Sha256Update(sha256,
+                (const byte*)inOne,
+                WC_SHA256_BLOCK_SIZE);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wc_Sha256Update %d\n", ret);
+        } else {
+            /* Finalize should trigger a server transaction with empty buffer */
+            ret = wc_Sha256Final(sha256, out);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to wc_Sha256Final %d\n", ret);
+            } else {
+                /* Compare the computed hash with the expected output */
+                if (memcmp(out, expectedOutOne,
+                           WC_SHA256_DIGEST_SIZE) != 0) {
+                    WH_ERROR_PRINT("SHA256 hash does not match expected.\n");
+                    ret = -1;
+                }
+                memset(out, 0, WC_SHA256_DIGEST_SIZE);
+            }
+        }
+        /* Reset state for multi block test */
+        (void)wc_Sha256Free(sha256);
     }
-
-    WH_TEST_RETURN_ON_FAIL(wh_Client_Init(client, config));
-    WH_TEST_RETURN_ON_FAIL(wh_Client_CommInit(client, NULL, NULL));
-
-#ifdef WOLFHSM_CFG_TEST_VERBOSE
-    {
-        int32_t  server_rc       = 0;
-        whNvmId  avail_objects   = 0;
-        whNvmId  reclaim_objects = 0;
-        uint32_t avail_size      = 0;
-        uint32_t reclaim_size    = 0;
-
-        WH_TEST_RETURN_ON_FAIL(
-            ret = wh_Client_NvmGetAvailable(client, &server_rc, &avail_size,
-                                            &avail_objects, &reclaim_size,
-                                            &reclaim_objects));
-
-        printf("PRE-CRYPTO TEST: NvmGetAvailable:%d, server_rc:%d avail_size:%d "
-               "avail_objects:%d, reclaim_size:%d reclaim_objects:%d\n",
-               ret, (int)server_rc, (int)avail_size, (int)avail_objects,
-               (int)reclaim_size, (int)reclaim_objects);
-    }
-#endif /* WOLFHSM_CFG_TEST_VERBOSE */
-
-
-    memset(labelStart, 0xff, sizeof(labelStart));
-
-    /* test rng */
-    if ((ret = wc_InitRng_ex(rng, NULL, WH_DEV_ID)) != 0) {
-        WH_ERROR_PRINT("Failed to wc_InitRng_ex %d\n", ret);
-        goto exit;
-    }
-    if ((ret = wc_RNG_GenerateBlock(rng, key, sizeof(key))) != 0) {
-        WH_ERROR_PRINT("Failed to wc_RNG_GenerateBlock %d\n", ret);
-        goto exit;
-    }
-    if((ret = wc_RNG_GenerateBlock(rng, iv, sizeof(iv))) != 0) {
-        WH_ERROR_PRINT("Failed to wc_RNG_GenerateBlock %d\n", ret);
-        goto exit;
-    }
-    if((ret = wc_RNG_GenerateBlock(rng, authIn, sizeof(authIn))) != 0) {
-        WH_ERROR_PRINT("Failed to wc_RNG_GenerateBlock %d\n", ret);
-        goto exit;
-    }
-    printf("RNG SUCCESS\n");
-    /* test cache/export */
-    keyId = WH_KEYID_ERASED;
-    if ((ret = wh_Client_KeyCache(client, 0, labelStart, sizeof(labelStart), key, sizeof(key), &keyId)) != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyCache %d\n", ret);
-        goto exit;
-    }
-    outLen = sizeof(keyEnd);
-    if ((ret = wh_Client_KeyExport(client, keyId, labelEnd, sizeof(labelEnd), keyEnd, &outLen)) != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyExport %d\n", ret);
-        goto exit;
-    }
-    if (ret == 0 && XMEMCMP(key, keyEnd, outLen) == 0 && XMEMCMP(labelStart, labelEnd, sizeof(labelStart)) == 0)
-        printf("KEY CACHE/EXPORT SUCCESS\n");
-    else {
-        WH_ERROR_PRINT("KEY CACHE/EXPORT FAILED TO MATCH\n");
-        goto exit;
-    }
-
-#ifndef WOLFHSM_CFG_TEST_NO_CUSTOM_SERVERS
-    /* WOLFHSM_CFG_TEST_NO_CUSTOM_SERVERS protects the client test code that expects to
-     * interop with the custom server (also defined in this file), so that this
-     * test can be run against a standard server app
-     *
-     * TODO: This is a temporary bodge until we properly split tests into single
-     * client and multi client */
-
-    /* test cache with duplicate keyId for a different user */
-    WH_TEST_RETURN_ON_FAIL(wh_Client_CommClose(client));
-    client->comm->client_id = 2;
-    WH_TEST_RETURN_ON_FAIL(wh_Client_CommInit(client, NULL, NULL));
-    XMEMSET(cipherText, 0xff, sizeof(cipherText));
-    /* first check that evicting the other clients key fails */
-    if ((ret = wh_Client_KeyEvict(client, keyId)) != WH_ERROR_NOTFOUND) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyEvict %d\n", ret);
-        goto exit;
-    }
-    keyId = WH_KEYID_ERASED;
-    if ((ret = wh_Client_KeyCache(client, 0, labelStart, sizeof(labelStart), (uint8_t*)cipherText, sizeof(key), &keyId)) != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyCache %d\n", ret);
-        goto exit;
-    }
-    outLen = sizeof(keyEnd);
-    if ((ret = wh_Client_KeyExport(client, keyId, labelEnd, sizeof(labelEnd), keyEnd, &outLen)) != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyExport %d\n", ret);
-        goto exit;
-    }
-    if (ret != 0 || XMEMCMP(cipherText, keyEnd, outLen) != 0 || XMEMCMP(labelStart, labelEnd, sizeof(labelStart)) != 0) {
-        WH_ERROR_PRINT("KEY CACHE/EXPORT FAILED TO MATCH\n");
-        goto exit;
-    }
-    /* evict for this client */
-    if ((ret = wh_Client_KeyEvict(client, keyId)) != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyEvict %d\n", ret);
-        goto exit;
-    }
-    /* switch back and verify original key */
-    WH_TEST_RETURN_ON_FAIL(wh_Client_CommClose(client));
-    client->comm->client_id = 1;
-    WH_TEST_RETURN_ON_FAIL(wh_Client_CommInit(client, NULL, NULL));
-    outLen = sizeof(keyEnd);
-    if ((ret = wh_Client_KeyExport(client, keyId, labelEnd, sizeof(labelEnd), keyEnd, &outLen)) != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyExport %d\n", ret);
-        goto exit;
-    }
-    if (ret == 0 && XMEMCMP(key, keyEnd, outLen) == 0 && XMEMCMP(labelStart, labelEnd, sizeof(labelStart)) == 0)
-        printf("KEY USER CACHE MUTUAL EXCLUSION SUCCESS\n");
-    else {
-        WH_ERROR_PRINT("KEY CACHE/EXPORT FAILED TO MATCH\n");
-        goto exit;
-    }
-#endif /* !WOLFHSM_CFG_TEST_NO_CUSTOM_SERVERS */
-
-    /* evict for original client */
-    if ((ret = wh_Client_KeyEvict(client, keyId)) != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyEvict %d\n", ret);
-        goto exit;
-    }
-    outLen = sizeof(keyEnd);
-    if ((ret = wh_Client_KeyExport(client, keyId, labelEnd, sizeof(labelEnd), keyEnd, &outLen)) != WH_ERROR_NOTFOUND) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyExport %d\n", ret);
-        goto exit;
-    }
-    /* test commit */
-    keyId = WH_KEYID_ERASED;
-    if ((ret = wh_Client_KeyCache(client, 0, labelStart, sizeof(labelStart), key, sizeof(key), &keyId)) != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyCache %d\n", ret);
-        goto exit;
-    }
-    if ((ret = wh_Client_KeyCommit(client, keyId)) != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyCommit %d\n", ret);
-        goto exit;
-    }
-    if ((ret = wh_Client_KeyEvict(client, keyId)) != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyEvict %d\n", ret);
-        goto exit;
-    }
-    outLen = sizeof(keyEnd);
-    if ((ret = wh_Client_KeyExport(client, keyId, labelEnd, sizeof(labelEnd), keyEnd, &outLen)) != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyExport %d\n", ret);
-        goto exit;
-    }
-    if (XMEMCMP(key, keyEnd, outLen) != 0 || XMEMCMP(labelStart, labelEnd, sizeof(labelStart)) != 0) {
-        WH_ERROR_PRINT("KEY COMMIT/EXPORT FAILED TO MATCH\n");
-        ret = -1;
-        goto exit;
-    }
-    /* verify commit isn't using new nvm slots */
-    for (i = 0; i < 64; i++) {
-        if ((ret = wh_Client_KeyCommit(client, keyId)) != 0) {
-            WH_ERROR_PRINT("Failed to wh_Client_KeyCommit %d\n", ret);
-            goto exit;
+    if (ret == 0) {
+        /* Multiblock test */
+        ret = wc_InitSha256_ex(sha256, NULL, devId);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wc_InitSha256 for devId 0x%X: %d\n",
+                    devId, ret);
+        } else {
+            /* Update with a non-block aligned length. Will not trigger server
+             * transaction */
+            ret = wc_Sha256Update(sha256,
+                    (const byte*)inMulti,
+                    1);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to wc_Sha256Update (first) %d\n", ret);
+            } else {
+                /* Update with a full block, will trigger block to be sent to
+                 * server and one additional byte to be buffered */
+                ret = wc_Sha256Update(sha256,
+                        (const byte*)inMulti + 1,
+                        WC_SHA256_BLOCK_SIZE);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("Failed to wc_Sha256Update (mid) %d\n", ret);
+                } else {
+                    /* Update with the remaining data, should not trigger server
+                     * transaction */
+                    ret = wc_Sha256Update(sha256,
+                            (const byte*)inMulti + 1 + WC_SHA256_BLOCK_SIZE,
+                           strlen(inMulti) - 1 - WC_SHA256_BLOCK_SIZE);
+                    if (ret != 0) {
+                        WH_ERROR_PRINT("Failed to wc_Sha256Update (last) %d\n",
+                                ret);
+                    } else {
+                        /* Finalize should trigger a server transaction on the
+                         * remaining partial buffer */
+                        ret = wc_Sha256Final(sha256, out);
+                        if (ret != 0) {
+                            WH_ERROR_PRINT("Failed to wc_Sha256Final %d\n",
+                                    ret);
+                        } else {
+                            /* Compare the computed hash with the expected
+                             * output */
+                            if (memcmp(out, expectedOutMulti,
+                                       WC_SHA256_DIGEST_SIZE) != 0) {
+                                WH_ERROR_PRINT("SHA256 hash does not match the "
+                                        "expected output.\n");
+                                ret = -1;
+                            }
+                        }
+                    }
+                }
+            }
+            (void)wc_Sha256Free(sha256);
         }
     }
-    printf("KEY COMMIT/EXPORT SUCCESS\n");
-    /* test erase */
-    if ((ret = wh_Client_KeyErase(client, keyId)) != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyErase %d\n", ret);
-        goto exit;
+    if (ret == 0) {
+        printf("SHA256 DEVID=0x%X SUCCESS\n", devId);
     }
-    outLen = sizeof(keyEnd);
-    if ((ret = wh_Client_KeyExport(client, keyId, labelEnd, sizeof(labelEnd), keyEnd, &outLen)) != WH_ERROR_NOTFOUND) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyExport %d\n", ret);
-        goto exit;
+    return ret;
+}
+#endif /* !NO_SHA256 */
+
+static int whTest_CacheExportKey(whClientContext* ctx, whKeyId* inout_key_id,
+        uint8_t* label_in,  uint8_t* label_out, uint16_t label_len,
+        uint8_t* key_in, uint8_t* key_out, uint16_t key_len)
+{
+    int ret = 0;
+    uint16_t label_len_out = label_len;
+    uint16_t key_len_out = key_len;
+    whKeyId key_id_out = *inout_key_id;
+    ret = wh_Client_KeyCache(ctx, 0, label_in, label_len, key_in, key_len,
+            &key_id_out);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyCache %d\n", ret);
+    } else {
+        ret = wh_Client_KeyExport(ctx, key_id_out, label_out, label_len_out,
+                key_out, &key_len_out);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wh_Client_KeyExport %d\n", ret);
+        } else {
+            if ((key_len_out != key_len) ||
+                (memcmp(key_in, key_out, key_len_out) != 0) ||
+                (memcmp(label_in, label_out, label_len) != 0) ) {
+                ret = -1;
+            }
+        }
     }
-    printf("KEY ERASE SUCCESS\n");
+    *inout_key_id = key_id_out;
+    return ret;
+}
+
+static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
+{
+    (void)devId; (void)rng; /* Unused */
+
+#define WH_TEST_KEYCACHE_KEYSIZE 16
+    int ret;
+    int i;
+    uint16_t outLen;
+    uint16_t keyId;
+    uint8_t key[WH_TEST_KEYCACHE_KEYSIZE];
+    uint8_t keyOut[WH_TEST_KEYCACHE_KEYSIZE] = {0};
+    uint8_t labelIn[WH_NVM_LABEL_LEN] = "KeyCache Test Label";
+    uint8_t labelOut[WH_NVM_LABEL_LEN] = {0};
+
+    /* Randomize inputs */
+    ret = wc_RNG_GenerateBlock(rng, key, sizeof(key));
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wc_RNG_GenerateBlock %d\n", ret);
+    }
+
+    /* test cache/export */
+    keyId = WH_KEYID_ERASED;
+    if (ret == 0) {
+        ret = whTest_CacheExportKey(ctx, &keyId,
+            labelIn, labelOut, sizeof(labelIn),
+            key, keyOut, sizeof(key));
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to Test CacheExportKey %d\n", ret);
+        } else {
+            printf("KEY CACHE/EXPORT SUCCESS\n");
+        }
+    }
+#ifndef WOLFHSM_CFG_TEST_NO_CUSTOM_SERVERS
+    /* WOLFHSM_CFG_TEST_NO_CUSTOM_SERVERS protects the client test code that
+     * expects to interop with the custom server (also defined in this
+     * file), so that this test can be run against a standard server app
+     *
+     * TODO: This is a temporary bodge until we properly split tests into
+     * single client and multi client */
+
+    if (ret == 0) {
+        /* test cache with duplicate keyId for a different user */
+        ret = wh_Client_CommClose(ctx);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to CommClose:%d\n",ret);
+        } else {
+            ctx->comm->client_id = 2;
+            ret = wh_Client_CommInit(ctx, NULL, NULL);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to CommInit:%d\n", ret);
+            } else {
+                /* Check that evicting the other client's key fails */
+                ret = wh_Client_KeyEvict(ctx, keyId);
+                if (ret != WH_ERROR_NOTFOUND) {
+                    WH_ERROR_PRINT("Failed to wh_Client_KeyEvict %d\n",
+                            ret);
+                } else {
+                    ret = whTest_CacheExportKey(ctx, &keyId,
+                            labelIn, labelOut, sizeof(labelIn),
+                            key, keyOut, sizeof(key));
+                    if (ret != 0) {
+                        WH_ERROR_PRINT("Failed to Test CacheExportKey %d\n",
+                                ret);
+                    } else {
+                        /* evict for this client */
+                        (void)wh_Client_KeyEvict(ctx, keyId);
+                    }
+                }
+                /* switch back and verify original key */
+                (void)wh_Client_CommClose(ctx);
+                ctx->comm->client_id = 1;
+                ret = wh_Client_CommInit(ctx, NULL, NULL);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("Failed to reconnect: %d\n", ret);
+                } else {
+                    outLen = sizeof(keyOut);
+                    ret = wh_Client_KeyExport(ctx, keyId, labelOut,
+                            sizeof(labelOut), keyOut, &outLen);
+                    if (ret != 0) {
+                        WH_ERROR_PRINT("Failed to wh_Client_KeyExport %d\n",
+                                ret);
+                    } else {
+                        if ( (outLen != sizeof(key)) ||
+                                (memcmp(key, keyOut, outLen) != 0) ||
+                                (memcmp(labelIn, labelOut,
+                                        sizeof(labelIn)) != 0) ) {
+                            WH_ERROR_PRINT("Failed to match\n");
+                            ret = -1;
+                        } else {
+                            printf("KEY CACHE USER EXCLUSION SUCCESS\n");
+                        }
+                    }
+                }
+            }
+        }
+    }
+#endif /* !WOLFHSM_CFG_TEST_NO_CUSTOM_SERVERS */
+    if (ret == 0) {
+        /* test evict for original client */
+        ret = wh_Client_KeyEvict(ctx, keyId);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wh_Client_KeyEvict %d\n", ret);
+        } else {
+            outLen = sizeof(keyOut);
+            ret = wh_Client_KeyExport(ctx, keyId, labelOut, sizeof(labelOut),
+                    keyOut, &outLen);
+            if (ret != WH_ERROR_NOTFOUND) {
+                WH_ERROR_PRINT("Failed to not find evicted key %d\n", ret);
+            } else {
+                printf("KEY CACHE EVICT SUCCESS\n");
+                ret = 0;
+            }
+        }
+    }
+
+    if (ret == 0) {
+        /* test commit/erase */
+        keyId = WH_KEYID_ERASED;
+        ret = wh_Client_KeyCache(ctx, 0, labelIn, sizeof(labelIn), key,
+                sizeof(key), &keyId);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wh_Client_KeyCache %d\n", ret);
+        } else {
+            ret = wh_Client_KeyCommit(ctx, keyId);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to wh_Client_KeyCommit %d\n", ret);
+            } else {
+                ret = wh_Client_KeyEvict(ctx, keyId);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("Failed to wh_Client_KeyEvict %d\n", ret);
+                } else {
+                    outLen = sizeof(keyOut);
+                    ret = wh_Client_KeyExport(ctx, keyId, labelOut,
+                            sizeof(labelOut), keyOut, &outLen);
+                    if (ret != 0) {
+                        WH_ERROR_PRINT("Failed to wh_Client_KeyExport %d\n",
+                                ret);
+                    } else {
+                        if ((outLen != sizeof(key) ||
+                                (memcmp(key, keyOut, outLen) != 0) ||
+                                (memcmp(labelIn, labelOut,
+                                        sizeof(labelIn))) != 0) ) {
+                            WH_ERROR_PRINT("Failed to match committed key\n");
+                            ret = -1;
+                        } else {
+                            /* verify commit isn't using new nvm objects */
+                            for (i = 0; i < WOLFHSM_CFG_NVM_OBJECT_COUNT; i++) {
+                                ret = wh_Client_KeyCommit(ctx, keyId);
+                                if (ret != 0) {
+                                    WH_ERROR_PRINT("Failed to over commit %d\n",
+                                            ret);
+                                }
+                            }
+                            if (ret == 0) {
+                                ret = wh_Client_KeyErase(ctx, keyId);
+                                if (ret != 0) {
+                                    WH_ERROR_PRINT("Failed to erase key %d\n",
+                                            ret);
+                                } else {
+                                    outLen = sizeof(keyOut);
+                                    ret = wh_Client_KeyExport(ctx, keyId,
+                                            labelOut, sizeof(labelOut), keyOut,
+                                            &outLen);
+                                    if (ret != WH_ERROR_NOTFOUND) {
+                                        WH_ERROR_PRINT("Failed to not find "
+                                                        "erased key\n");
+                                        ret = -1;
+                                    } else {
+                                        ret = 0;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if (ret == 0) {
+            printf("KEY COMMIT/ERASE SUCCESS\n");
+        }
+    }
+    return ret;
+}
 
 #ifndef NO_AES
+static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
+{
+#define WH_TEST_AES_KEYSIZE 16
+#define WH_TEST_AES_TEXTSIZE 16
+    int ret = 0;
     Aes aes[1];
+    uint8_t iv[AES_BLOCK_SIZE];
+    uint8_t key[WH_TEST_AES_KEYSIZE];
+    uint8_t plainIn[WH_TEST_AES_TEXTSIZE];
+    uint8_t cipher[WH_TEST_AES_TEXTSIZE] = { 0 };
+    uint8_t plainOut[WH_TEST_AES_TEXTSIZE] = { 0 };
+    whKeyId keyId = WH_KEYID_ERASED;
+    uint8_t labelIn[WH_NVM_LABEL_LEN] = "AES Key Label";
+
+    XMEMCPY(plainIn, PLAINTEXT, sizeof(plainIn));
+
+    /* Randomize inputs */
+    ret = wc_RNG_GenerateBlock(rng, key, sizeof(key));
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wc_RNG_GenerateBlock %d\n", ret);
+    } else {
+        ret = wc_RNG_GenerateBlock(rng, iv, sizeof(iv));
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wc_RNG_GenerateBlock %d\n", ret);
+        }
+    }
 
 #ifdef HAVE_AES_CBC
-    /* test aes CBC with client side key */
-    if((ret = wc_AesInit(aes, NULL, WH_DEV_ID)) != 0) {
-        printf("Failed to wc_AesInit %d\n", ret);
-        goto exit;
+    if (ret == 0) {
+        /* test aes CBC with client side key */
+        ret = wc_AesInit(aes, NULL, devId);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wc_AesInit %d\n", ret);
+        } else {
+            ret = wc_AesSetKey(aes, key, sizeof(key), iv, AES_ENCRYPTION);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to wc_AesSetKey %d\n", ret);
+            } else {
+                ret = wc_AesCbcEncrypt(aes, cipher, plainIn,
+                        sizeof(plainIn));
+                if (ret != 0) {
+                    WH_ERROR_PRINT("Failed to wc_AesCbcEncrypt %d\n", ret);
+                } else {
+                    ret = wc_AesSetKey(aes, key, sizeof(key), iv,
+                            AES_DECRYPTION);
+                    if (ret != 0) {
+                        WH_ERROR_PRINT("Failed to wc_AesSetKey %d\n", ret);
+                    } else {
+                        ret = wc_AesCbcDecrypt(aes, plainOut, cipher,
+                                sizeof(cipher));
+                        if (ret != 0) {
+                            WH_ERROR_PRINT("Failed to wc_AesCbcDecrypt %d\n",
+                                    ret);
+                        } else {
+                            if (memcmp(plainIn, plainOut,
+                                    sizeof(plainIn)) != 0) {
+                                WH_ERROR_PRINT("Failed to match AES-CBC\n");
+                                ret = -1;
+                            }
+                        }
+                    }
+                }
+            }
+            (void)wc_AesFree(aes);
+            memset(cipher, 0, sizeof(cipher));
+            memset(plainOut, 0, sizeof(plainOut));
+        }
     }
-    if ((ret = wc_AesSetKey(aes, key, AES_BLOCK_SIZE, iv, AES_ENCRYPTION)) != 0) {
-        printf("Failed to wc_AesSetKey %d\n", ret);
-        goto exit;
-    }
-    if ((ret = wc_AesCbcEncrypt(aes, (byte*)cipherText, (byte*)plainText, sizeof(plainText))) != 0) {
-        printf("Failed to wc_AesCbcEncrypt %d\n", ret);
-        goto exit;
-    }
-    if ((ret = wc_AesSetKey(aes, key, AES_BLOCK_SIZE, iv, AES_DECRYPTION)) != 0) {
-        printf("Failed to wc_AesSetKey %d\n", ret);
-        goto exit;
-    }
-    if ((ret = wc_AesCbcDecrypt(aes, (byte*)finalText, (byte*)cipherText, sizeof(plainText))) != 0) {
-        printf("Failed to wc_AesCbcDecrypt %d\n", ret);
-        goto exit;
-    }
-    if (memcmp(plainText, finalText, sizeof(plainText)) != 0) {
-        WH_ERROR_PRINT("AES CBC FAILED TO MATCH\n");
-        ret = -1;
-        goto exit;
-    }
-    /* test aes CBC with HSM side key */
-    if((ret = wc_AesInit(aes, NULL, WH_DEV_ID)) != 0) {
-        printf("Failed to wc_AesInit %d\n", ret);
-        goto exit;
-    }
-    keyId = WH_KEYID_ERASED;
-    if ((ret = wh_Client_KeyCache(client, 0, labelStart, sizeof(labelStart), key, sizeof(key), &keyId)) != 0) {
-        printf("Failed to wh_Client_KeyCache %d\n", ret);
-        goto exit;
-    }
-    wh_Client_SetKeyIdAes(aes, keyId);
-    if ((ret = wc_AesSetIV(aes, iv)) != 0) {
-        printf("Failed to wc_AesSetIV %d\n", ret);
-        goto exit;
-    }
-    if ((ret = wc_AesCbcEncrypt(aes, (byte*)cipherText, (byte*)plainText, sizeof(plainText))) != 0) {
-        printf("Failed to wc_AesCbcEncrypt %d\n", ret);
-        goto exit;
-    }
-    if ((ret = wc_AesSetKey(aes, key, AES_BLOCK_SIZE, iv, AES_DECRYPTION)) != 0) {
-        printf("Failed to wc_AesSetKey %d\n", ret);
-        goto exit;
-    }
-    if ((ret = wc_AesCbcDecrypt(aes, (byte*)finalText, (byte*)cipherText, sizeof(plainText))) != 0) {
-        printf("Failed to wc_AesCbcDecrypt %d\n", ret);
-        goto exit;
-    }
-    if (memcmp(plainText, finalText, sizeof(plainText)) == 0)
-        printf("AES CBC SUCCESS\n");
-    else {
-        WH_ERROR_PRINT("AES CBC FAILED TO MATCH\n");
-        ret = -1;
-        goto exit;
-    }
-    if((ret = wh_Client_KeyEvict(client, keyId)) != 0) {
-        printf("Failed to wh_Client_KeyEvict %d\n", ret);
-        goto exit;
+    if (ret == 0) {
+        /* test aes CBC with HSM side key */
+        ret = wc_AesInit(aes, NULL, devId);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wc_AesInit %d\n", ret);
+        } else {
+            keyId = WH_KEYID_ERASED;
+            ret = wh_Client_KeyCache(ctx, 0, labelIn, sizeof(labelIn),
+                    key, sizeof(key), &keyId);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to wh_Client_KeyCache %d\n", ret);
+            } else {
+                ret = wh_Client_AesSetKeyId(aes, keyId);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("Failed to wh_Client_SetKeyIdAes %d\n", ret);
+                } else {
+                    ret = wc_AesSetIV(aes, iv);
+                    if (ret != 0) {
+                        WH_ERROR_PRINT("Failed to wc_AesSetIV %d\n", ret);
+                    } else {
+                        ret = wc_AesCbcEncrypt(aes, cipher, plainIn,
+                                sizeof(plainIn));
+                        if (ret != 0) {
+                            WH_ERROR_PRINT("Failed to wc_AesCbcEncrypt %d\n",
+                                    ret);
+                        } else {
+                            /* Reset the IV to support decryption */
+                            ret = wc_AesSetIV(aes, iv);
+                            if (ret != 0) {
+                                WH_ERROR_PRINT("Failed to wc_AesSetIV %d\n",
+                                        ret);
+                            } else {
+                                ret = wc_AesCbcDecrypt(aes, plainOut,
+                                        cipher, sizeof(plainIn));
+                                if (ret != 0) {
+                                    WH_ERROR_PRINT("Failed to decrypt %d\n",
+                                            ret);
+                                } else {
+                                    if (memcmp(plainIn, plainOut,
+                                            sizeof(plainIn)) != 0) {
+                                        WH_ERROR_PRINT("Failed to match\n");
+                                        ret = -1;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                (void)wh_Client_KeyEvict(ctx, keyId);
+            }
+            (void)wc_AesFree(aes);
+            memset(cipher, 0, sizeof(cipher));
+            memset(plainOut, 0, sizeof(plainOut));
+        }
+        if (ret == 0) {
+            printf("AES CBC SUCCESS\n");
+        }
     }
 #endif /* HAVE_AES_CBC */
-#ifdef HAVE_AESGCM
-    uint8_t authTag[16];
 
-    /* test aes GCM with client side key */
-    if((ret = wc_AesInit(aes, NULL, WH_DEV_ID)) != 0) {
-        printf("Failed to wc_AesInit %d\n", ret);
-        goto exit;
+#ifdef HAVE_AESGCM
+#define WH_TEST_AES_AUTHSIZE 16
+#define WH_TEST_AES_TAGSIZE 16
+    uint8_t authIn[WH_TEST_AES_AUTHSIZE];
+    uint8_t authTag[WH_TEST_AES_TAGSIZE] = { 0 };
+
+    /* Generate random auth */
+    if (ret == 0){
+        ret = wc_RNG_GenerateBlock(rng, authIn, sizeof(authIn));
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wc_RNG_GenerateBlock %d\n", ret);
+        }
     }
-    if ((ret = wc_AesSetKey(aes, key, AES_BLOCK_SIZE, iv, AES_ENCRYPTION)) != 0) {
-        printf("Failed to wc_AesSetKey %d\n", ret);
-        goto exit;
+
+    if (ret == 0) {
+        /* test aes GCM with client side key */
+        ret = wc_AesInit(aes, NULL, devId);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wc_AesInit %d\n", ret);
+        } else {
+            ret = wc_AesGcmSetKey(aes, key, sizeof(key));
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to wc_AesGcmSetKey %d\n", ret);
+            } else {
+                ret = wc_AesGcmEncrypt(aes, cipher, plainIn,
+                        sizeof(plainIn), iv, sizeof(iv), authTag,
+                        sizeof(authTag), authIn, sizeof(authIn));
+                if (ret != 0) {
+                    WH_ERROR_PRINT("Failed to wc_AesGcmEncrypt %d\n", ret);
+                } else {
+                    ret = wc_AesGcmDecrypt(aes, plainOut, cipher,
+                            sizeof(plainIn), iv, sizeof(iv), authTag,
+                            sizeof(authTag), authIn, sizeof(authIn));
+                    if (ret != 0) {
+                        WH_ERROR_PRINT("Failed to wc_AesGcmDecrypt %d\n", ret);
+                    } else {
+                        if (memcmp(plainIn, plainOut, sizeof(plainIn)) != 0) {
+                            WH_ERROR_PRINT("AES GCM FAILED TO MATCH\n");
+                            ret = -1;
+                        }
+                    }
+                }
+            }
+            (void)wc_AesFree(aes);
+            memset(cipher, 0, sizeof(cipher));
+            memset(plainOut, 0, sizeof(plainOut));
+            memset(authTag, 0, sizeof(authTag));
+        }
     }
-    if ((ret = wc_AesGcmEncrypt(aes, (byte*)cipherText, (byte*)plainText, sizeof(plainText), iv, sizeof(iv), authTag, sizeof(authTag), authIn, sizeof(authIn))) != 0) {
-        printf("Failed to wc_AesGcmEncrypt %d\n", ret);
-        goto exit;
-    }
-    if ((ret = wc_AesSetKey(aes, key, AES_BLOCK_SIZE, iv, AES_DECRYPTION)) != 0) {
-        printf("Failed to wc_AesSetKey %d\n", ret);
-        goto exit;
-    }
-    if ((ret = wc_AesGcmDecrypt(aes, (byte*)finalText, (byte*)cipherText, sizeof(plainText), iv, sizeof(iv), authTag, sizeof(authTag), authIn, sizeof(authIn))) != 0) {
-        printf("Failed to wc_AesGcmDecrypt %d\n", ret);
-        goto exit;
-    }
-    if (memcmp(plainText, finalText, sizeof(plainText)) != 0) {
-        WH_ERROR_PRINT("AES GCM FAILED TO MATCH\n");
-        ret = -1;
-        goto exit;
-    }
-    /* test aes GCM with HSM side key */
-    if((ret = wc_AesInit(aes, NULL, WH_DEV_ID)) != 0) {
-        printf("Failed to wc_AesInit %d\n", ret);
-        goto exit;
-    }
-    keyId = WH_KEYID_ERASED;
-    if ((ret = wh_Client_KeyCache(client, 0, labelStart, sizeof(labelStart), key, sizeof(key), &keyId)) != 0) {
-        printf("Failed to wh_Client_KeyCache %d\n", ret);
-        goto exit;
-    }
-    wh_Client_SetKeyIdAes(aes, keyId);
-    if ((ret = wc_AesSetIV(aes, iv)) != 0) {
-        printf("Failed to wc_AesSetIV %d\n", ret);
-        goto exit;
-    }
-    if ((ret = wc_AesGcmEncrypt(aes, (byte*)cipherText, (byte*)plainText, sizeof(plainText), iv, sizeof(iv), authTag, sizeof(authTag), authIn, sizeof(authIn))) != 0) {
-        printf("Failed to wc_AesGcmEncrypt %d\n", ret);
-        goto exit;
-    }
-    if ((ret = wc_AesGcmDecrypt(aes, (byte*)finalText, (byte*)cipherText, sizeof(plainText), iv, sizeof(iv), authTag, sizeof(authTag), authIn, sizeof(authIn))) != 0) {
-        printf("Failed to wc_AesGcmDecrypt %d\n", ret);
-        goto exit;
-    }
-    if (memcmp(plainText, finalText, sizeof(plainText)) == 0)
-        printf("AES GCM SUCCESS\n");
-    else {
-        WH_ERROR_PRINT("AES GCM FAILED TO MATCH\n");
-        ret = -1;
-        goto exit;
-    }
-    if((ret = wh_Client_KeyEvict(client, keyId)) != 0) {
-        printf("Failed to wh_Client_KeyEvict %d\n", ret);
-        goto exit;
+
+    if (ret == 0) {
+        /* test aes GCM with HSM side key */
+        ret = wc_AesInit(aes, NULL, devId);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wc_AesInit %d\n", ret);
+        } else {
+            keyId = WH_KEYID_ERASED;
+            ret = wh_Client_KeyCache(ctx, 0, labelIn, sizeof(labelIn), key, sizeof(key), &keyId);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to wh_Client_KeyCache %d\n", ret);
+            } else {
+                ret = wh_Client_AesSetKeyId(aes, keyId);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("Failed to set key id:%d\n", ret);
+                } else {
+                    ret = wc_AesGcmEncrypt(aes, (byte*)cipher, (byte*)plainIn, sizeof(plainIn), iv, sizeof(iv), authTag, sizeof(authTag), authIn, sizeof(authIn));
+                    if (ret != 0) {
+                        WH_ERROR_PRINT("Failed to wc_AesGcmEncrypt %d\n", ret);
+                    } else {
+                        ret = wc_AesGcmDecrypt(aes, (byte*)plainOut, (byte*)cipher, sizeof(plainIn), iv, sizeof(iv), authTag, sizeof(authTag), authIn, sizeof(authIn));
+                        if (ret != 0) {
+                            WH_ERROR_PRINT("Failed to wc_AesGcmDecrypt %d\n", ret);
+                        } else {
+                            if (memcmp(plainIn, plainOut, sizeof(plainIn)) != 0) {
+                                WH_ERROR_PRINT("AES GCM FAILED TO MATCH\n");
+                                ret = -1;
+                            }
+                        }
+                    }
+                }
+                (void)wh_Client_KeyEvict(ctx, keyId);
+            }
+            (void)wc_AesFree(aes);
+            memset(cipher, 0, sizeof(cipher));
+            memset(plainOut, 0, sizeof(plainOut));
+            memset(authTag, 0, sizeof(authTag));
+        }
+        if (ret == 0) {
+            printf("AES GCM SUCCESS\n");
+        }
     }
 #endif /* HAVE_AES_GCM */
+    return ret;
+}
+#endif /* !NO_AES */
 
-#if defined(WOLFSSL_CMAC) && defined(WOLFSSL_AES_DIRECT)
+#if defined(WOLFSSL_CMAC) && !defined(NO_AES) && defined(WOLFSSL_AES_DIRECT)
+static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
+{
+    int ret;
     /* test cmac */
     Cmac cmac[1];
-    char cmacFodder[1000];
     uint8_t knownCmacKey[] = {0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6,
         0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c};
     uint8_t knownCmacMessage[] = {0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f,
@@ -685,344 +1119,299 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         0x51, 0x30, 0xc8, 0x1c, 0x46, 0xa3, 0x5c, 0xe4, 0x11, 0xe5, 0xfb, 0xc1,
         0x19, 0x1a, 0x0a, 0x52, 0xef, 0xf6, 0x9f, 0x24, 0x45, 0xdf, 0x4f, 0x9b,
         0x17, 0xad, 0x2b, 0x41, 0x7b, 0xe6, 0x6c, 0x37, 0x10};
-    uint8_t knownCmacTag[] = {0x51, 0xf0, 0xbe, 0xbf, 0x7e, 0x3b, 0x9d, 0x92,
+    uint8_t knownCmacTag[AES_BLOCK_SIZE] = {0x51, 0xf0, 0xbe, 0xbf, 0x7e, 0x3b, 0x9d, 0x92,
         0xfc, 0x49, 0x74, 0x17, 0x79, 0x36, 0x3c, 0xfe};
 
-    if((ret = wc_InitCmac_ex(cmac, knownCmacKey, sizeof(knownCmacKey), WC_CMAC_AES, NULL, NULL, WH_DEV_ID)) != 0) {
+    uint8_t labelIn[WH_NVM_LABEL_LEN] = "CMAC Key Label";
+
+    uint8_t keyEnd[sizeof(knownCmacKey)] = {0};
+    uint8_t labelEnd[WH_NVM_LABEL_LEN] = {0};
+    uint16_t outLen = 0;
+    uint8_t macOut[AES_BLOCK_SIZE] = {0};
+    word32 macLen;
+    whKeyId keyId;
+
+    ret = wc_InitCmac_ex(cmac, knownCmacKey, sizeof(knownCmacKey), WC_CMAC_AES, NULL, NULL, devId);
+    if (ret != 0) {
         WH_ERROR_PRINT("Failed to wc_InitCmac_ex %d\n", ret);
-        goto exit;
-    }
-    if((ret = wc_CmacUpdate(cmac, (byte*)knownCmacMessage, sizeof(knownCmacMessage))) != 0) {
-        WH_ERROR_PRINT("Failed to wc_CmacUpdate %d\n", ret);
-        goto exit;
-    }
-    word32 macLen = sizeof(knownCmacTag);
-    if((ret = wc_CmacFinal(cmac, (byte*)cipherText, &macLen)) != 0) {
-        WH_ERROR_PRINT("Failed to wc_CmacFinal %d\n", ret);
-        goto exit;
-    }
-    if (memcmp(knownCmacTag, cipherText, sizeof(knownCmacTag)) != 0) {
-        WH_ERROR_PRINT("CMAC FAILED KNOWN ANSWER TEST\n");
-        ret = -1;
-        goto exit;
-    }
-    if((ret = wc_AesCmacVerify_ex(cmac, (byte*)knownCmacTag, sizeof(knownCmacTag), (byte*)knownCmacMessage, sizeof(knownCmacMessage), knownCmacKey, sizeof(knownCmacKey), NULL, WH_DEV_ID)) != 0) {
-        WH_ERROR_PRINT("Failed to wc_AesCmacVerify_ex %d\n", ret);
-        goto exit;
-    }
-    /* test oneshot with pre-cached key */
-    keyId = WH_KEYID_ERASED;
-    if ((ret = wh_Client_KeyCache(client, 0, labelStart, sizeof(labelStart), knownCmacKey, sizeof(knownCmacKey), &keyId)) != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyCache %d\n", ret);
-        goto exit;
-    }
-    macLen = sizeof(knownCmacTag);
-    if((ret = wh_Client_AesCmacGenerate(cmac, (byte*)cipherText, &macLen, (byte*)knownCmacMessage, sizeof(knownCmacMessage), keyId, NULL)) != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_AesCmacGenerate %d\n", ret);
-        goto exit;
-    }
-    if (memcmp(knownCmacTag, cipherText, sizeof(knownCmacTag)) != 0) {
-        WH_ERROR_PRINT("CMAC FAILED KNOWN ANSWER TEST\n");
-        ret = -1;
-        goto exit;
-    }
-    /* verify the key was evicted after oneshot */
-    outLen = sizeof(keyEnd);
-    if ((ret = wh_Client_KeyExport(client, keyId, labelEnd, sizeof(labelEnd), keyEnd, &outLen)) != WH_ERROR_NOTFOUND) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyExport %d\n", ret);
-        goto exit;
-    }
-    /* test oneshot verify with commited key */
-    keyId = WH_KEYID_ERASED;
-    if ((ret = wh_Client_KeyCache(client, 0, labelStart, sizeof(labelStart), knownCmacKey, sizeof(knownCmacKey), &keyId)) != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyCache %d\n", ret);
-        goto exit;
-    }
-    if ((ret = wh_Client_KeyCommit(client, keyId)) != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyCommit %d\n", ret);
-        goto exit;
-    }
-    if((ret = wh_Client_AesCmacVerify(cmac, (byte*)cipherText, macLen, (byte*)knownCmacMessage, sizeof(knownCmacMessage), keyId, NULL)) != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_AesCmacVerify %d\n", ret);
-        goto exit;
-    }
-    /* verify the key still exists in NVM */
-    outLen = sizeof(keyEnd);
-    if ((ret = wh_Client_KeyExport(client, keyId, labelEnd, sizeof(labelEnd), keyEnd, &outLen)) != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyExport %d\n", ret);
-        goto exit;
-    }
-    /* test finished, erase key */
-    if ((ret = wh_Client_KeyErase(client, keyId)) != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyErase %d\n", ret);
-        goto exit;
+    } else {
+        ret = wc_CmacUpdate(cmac, knownCmacMessage, sizeof(knownCmacMessage));
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wc_CmacUpdate %d\n", ret);
+        } else {
+            macLen = sizeof(macOut);
+            ret = wc_CmacFinal(cmac, macOut, &macLen);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to wc_CmacFinal %d\n", ret);
+            } else {
+                if (memcmp(knownCmacTag, macOut, sizeof(knownCmacTag)) != 0) {
+                    WH_ERROR_PRINT("CMAC FAILED KNOWN ANSWER TEST\n");
+                    ret = -1;
+                }
+            }
+        }
+        wc_CmacFree(cmac);
+        memset(macOut, 0, sizeof(macOut));
     }
 
-    /* test CMAC cancellation */
-    if((ret = wh_Client_EnableCancel(client)) != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_EnableCancel %d\n", ret);
-        goto exit;
+    if (ret == 0) {
+        /* test oneshot verify */
+        ret = wc_AesCmacVerify_ex(cmac, knownCmacTag, sizeof(knownCmacTag), knownCmacMessage, sizeof(knownCmacMessage), knownCmacKey, sizeof(knownCmacKey), NULL, WH_DEV_ID);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wc_AesCmacVerify_ex %d\n", ret);
+        }
     }
-    if((ret = wc_InitCmac_ex(cmac, knownCmacKey, sizeof(knownCmacKey), WC_CMAC_AES, NULL, NULL, WH_DEV_ID)) != 0) {
-        WH_ERROR_PRINT("Failed to wc_InitCmac_ex %d\n", ret);
-        goto exit;
-    }
-    if((ret = wh_Client_CmacCancelableResponse(client, cmac, NULL, 0)) != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_CmacCancelableResponse %d\n", ret);
-        goto exit;
-    }
-#ifndef WOLFHSM_CFG_TEST_NO_CUSTOM_SERVERS
-    /* delay the server so scheduling doesn't interfere with the timing */
-    serverDelay = 1;
 
-    /* TODO: use hsm pause/resume functionality on real hardware */
-#endif
-    if((ret = wc_CmacUpdate(cmac, (byte*)cmacFodder, sizeof(knownCmacMessage))) != 0) {
-        WH_ERROR_PRINT("Failed to wc_CmacUpdate %d\n", ret);
-        goto exit;
+    if (ret == 0) {
+        /* test oneshot generate with pre-cached key */
+        keyId = WH_KEYID_ERASED;
+        ret = wh_Client_KeyCache(ctx, 0, labelIn, sizeof(labelIn), knownCmacKey, sizeof(knownCmacKey), &keyId);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wh_Client_KeyCache %d\n", ret);
+        } else {
+            macLen = sizeof(macOut);
+            ret = wh_Client_CmacAesGenerate(cmac, macOut, &macLen, knownCmacMessage, sizeof(knownCmacMessage), keyId, NULL);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to wh_Client_AesCmacGenerate %d\n", ret);
+            } else {
+                if (memcmp(knownCmacTag, macOut, sizeof(knownCmacTag)) != 0) {
+                    WH_ERROR_PRINT("CMAC FAILED KNOWN ANSWER TEST\n");
+                    ret = -1;
+                } else {
+                    /* TODO: Eliminate this autoevict */
+                    /* verify the key was evicted after oneshot */
+                    outLen = sizeof(keyEnd);
+                    ret = wh_Client_KeyExport(ctx, keyId, labelEnd, sizeof(labelEnd), keyEnd, &outLen);
+                    if (ret != WH_ERROR_NOTFOUND) {
+                        WH_ERROR_PRINT("Failed to not find evicted key: %d\n", ret);
+                        ret = -1;
+                    } else {
+                        ret = 0;
+                    }
+                }
+            }
+        }
     }
-    if((ret = wh_Client_CancelRequest(client)) != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_CancelRequest %d\n", ret);
-        goto exit;
+
+    if (ret == 0) {
+        /* test oneshot verify with commited key */
+        keyId = WH_KEYID_ERASED;
+        ret = wh_Client_KeyCache(ctx, 0, labelIn, sizeof(labelIn), knownCmacKey, sizeof(knownCmacKey), &keyId);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wh_Client_KeyCache %d\n", ret);
+        } else {
+            ret = wh_Client_KeyCommit(ctx, keyId);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to wh_Client_KeyCommit %d\n", ret);
+            } else {
+                ret = wh_Client_KeyEvict(ctx, keyId);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("Failed to wh_Client_KeyEvict %d\n", ret);
+                } else {
+                    macLen = sizeof(macOut);
+                    ret = wh_Client_CmacAesVerify(cmac, macOut, macLen, (byte*)knownCmacMessage, sizeof(knownCmacMessage), keyId, NULL);
+                    if (ret != 0) {
+                        WH_ERROR_PRINT("Failed to wh_Client_AesCmacVerify %d\n", ret);
+                    } else {
+                        /* test finished, erase key */
+                        ret = wh_Client_KeyErase(ctx, keyId);
+                        if (ret != 0) {
+                            WH_ERROR_PRINT("Failed to wh_Client_KeyErase %d\n", ret);
+                        }
+                    }
+                }
+            }
+        }
     }
+
+    if (ret == 0) {
+        /* test CMAC cancellation */
+#define WH_TEST_CMAC_TEXTSIZE 1000
+        char cmacFodder[WH_TEST_CMAC_TEXTSIZE] = {0};
+
+        ret = wh_Client_EnableCancel(ctx);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wh_Client_EnableCancel %d\n", ret);
+        } else {
+            ret = wc_InitCmac_ex(cmac, knownCmacKey, sizeof(knownCmacKey), WC_CMAC_AES, NULL, NULL, devId);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to wc_InitCmac_ex %d\n", ret);
+            } else {
+                ret = wh_Client_CmacCancelableResponse(ctx, cmac, NULL, 0);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("Failed to wh_Client_CmacCancelableResponse %d\n", ret);
+                } else {
 #ifndef WOLFHSM_CFG_TEST_NO_CUSTOM_SERVERS
-    serverDelay = 0;
+                    /* TODO: use hsm pause/resume functionality on real hardware */
+                    /* delay the server so scheduling doesn't interfere with the timing */
+                    serverDelay = 1;
 #endif
-    do {
-        ret = wh_Client_CancelResponse(client);
-    } while (ret == WH_ERROR_NOTREADY);
-    if(ret != 0
+                    ret = wc_CmacUpdate(cmac, (byte*)cmacFodder, sizeof(cmacFodder));
+                    if (ret != 0) {
+                        WH_ERROR_PRINT("Failed to wc_CmacUpdate %d\n", ret);
+                    } else {
+                        ret = wh_Client_CancelRequest(ctx);
+                        if (ret != 0) {
+                            WH_ERROR_PRINT("Failed to wh_Client_CancelRequest %d\n", ret);
+                        } else {
+#ifndef WOLFHSM_CFG_TEST_NO_CUSTOM_SERVERS
+                            serverDelay = 0;
+#endif
+                            do {
+                                ret = wh_Client_CancelResponse(ctx);
+                            } while (ret == WH_ERROR_NOTREADY);
+                            if(     (ret != 0) &&
 #if defined(WOLFHSM_CFG_TEST_NO_CUSTOM_SERVERS)
-        && ret != WH_ERROR_CANCEL_LATE
+                                    (ret != WH_ERROR_CANCEL_LATE) &&
 #endif
-    ) {
-        WH_ERROR_PRINT("Failed to wh_Client_CancelResponse %d\n", ret);
-        goto exit;
+                                    (!0) ) {
+                                WH_ERROR_PRINT("Failed to wh_Client_CancelResponse %d\n", ret);
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (ret == 0) {
+                /* test cancelable request and response work for standard CMAC request with no cancellation */
+                ret = wc_InitCmac_ex(cmac, knownCmacKey, sizeof(knownCmacKey), WC_CMAC_AES, NULL, NULL, devId);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("Failed to wc_InitCmac_ex %d\n", ret);
+                } else {
+                    ret = wh_Client_CmacCancelableResponse(ctx, cmac, NULL, 0);
+                    if (ret != 0) {
+                        WH_ERROR_PRINT("Failed to wh_Client_CmacCancelableResponse %d\n", ret);
+                    } else {
+                        ret = wc_CmacUpdate(cmac, (byte*)knownCmacMessage, sizeof(knownCmacMessage));
+                        if (ret != 0) {
+                            WH_ERROR_PRINT("Failed to wc_CmacUpdate %d\n", ret);
+                        } else {
+                            ret = wh_Client_CmacCancelableResponse(ctx, cmac, NULL, 0);
+                            if (ret != 0) {
+                                WH_ERROR_PRINT("Failed to wh_Client_CmacCancelableResponse %d\n", ret);
+                            } else {
+                                macLen = sizeof(knownCmacTag);
+                                ret = wc_CmacFinal(cmac, macOut, &macLen);
+                                if (ret != 0) {
+                                    WH_ERROR_PRINT("Failed to wc_CmacFinal %d\n", ret);
+                                } else {
+                                    ret = wh_Client_CmacCancelableResponse(ctx, cmac, macOut, &outLen);
+                                    if (ret != 0) {
+                                        WH_ERROR_PRINT("Failed to wh_Client_CmacCancelableResponse %d\n", ret);
+                                    } else {
+                                        if (memcmp(knownCmacTag, macOut, sizeof(knownCmacTag)) != 0) {
+                                            WH_ERROR_PRINT("CMAC FAILED KNOWN ANSWER TEST\n");
+                                            ret = -1;
+                                        } else {
+                                            ret = wh_Client_DisableCancel(ctx);
+                                            if (ret != 0) {
+                                                WH_ERROR_PRINT("Failed to wh_Client_DisableCancel %d\n", ret);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
-    /* test cancelable request and response work for standard CMAC request with no cancellation */
-    if((ret = wc_InitCmac_ex(cmac, knownCmacKey, sizeof(knownCmacKey), WC_CMAC_AES, NULL, NULL, WH_DEV_ID)) != 0) {
-        WH_ERROR_PRINT("Failed to wc_InitCmac_ex %d\n", ret);
-        goto exit;
+    if (ret == 0) {
+        printf("CMAC SUCCESS\n");
     }
-    if((ret = wh_Client_CmacCancelableResponse(client, cmac, NULL, 0)) != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_CmacCancelableResponse %d\n", ret);
-        goto exit;
+    return ret;
+}
+#endif /* WOLFSSL_CMAC && !NO_AES && WOLFSSL_AES_DIRECT */
+
+
+int whTest_CryptoClientConfig(whClientConfig* config)
+{
+    int i;
+    whClientContext client[1] = {0};
+    int ret = 0;
+    /* wolfcrypt */
+    WC_RNG rng[1];
+
+    if (config == NULL) {
+        return WH_ERROR_BADARGS;
     }
-    if((ret = wc_CmacUpdate(cmac, (byte*)knownCmacMessage, sizeof(knownCmacMessage))) != 0) {
-        WH_ERROR_PRINT("Failed to wc_CmacUpdate %d\n", ret);
-        goto exit;
+
+    WH_TEST_RETURN_ON_FAIL(wh_Client_Init(client, config));
+
+    ret = wh_Client_CommInit(client, NULL, NULL);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to comm init:%d\n", ret);
     }
-    if((ret = wh_Client_CmacCancelableResponse(client, cmac, NULL, 0)) != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_CmacCancelableResponse %d\n", ret);
-        goto exit;
+
+#ifdef WOLFHSM_CFG_TEST_VERBOSE
+    if (ret == 0) {
+        (void)whTest_ShowNvmAvailable(client);
     }
-    macLen = sizeof(knownCmacTag);
-    if((ret = wc_CmacFinal(cmac, (byte*)cipherText, &macLen)) != 0) {
-        WH_ERROR_PRINT("Failed to wc_CmacFinal %d\n", ret);
-        goto exit;
+#endif /* WOLFHSM_CFG_TEST_VERBOSE */
+
+    if (ret == 0) {
+        ret = whTest_CryptoRng(client, WH_DEV_ID, rng);
     }
-    if((ret = wh_Client_CmacCancelableResponse(client, cmac, (uint8_t*)cipherText, &outLen)) != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_CmacCancelableResponse %d\n", ret);
-        goto exit;
+
+    if (ret == 0) {
+        /* Test Key Cache functions */
+        ret = whTest_KeyCache(client, WH_DEV_ID, rng);
     }
-    if (memcmp(knownCmacTag, cipherText, sizeof(knownCmacTag)) != 0) {
-        WH_ERROR_PRINT("CMAC FAILED KNOWN ANSWER TEST\n");
-        ret = -1;
-        goto exit;
+
+#ifndef NO_AES
+    if (ret == 0) {
+        ret = whTestCrypto_Aes(client, WH_DEV_ID, rng);
     }
-    if((ret = wh_Client_DisableCancel(client)) != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_EnableCancel %d\n", ret);
-        goto exit;
-    }
-    printf("CMAC SUCCESS\n");
-#endif /* WOLFSSL_CMAC && WOLFSSL_AES_DIRECT */
 #endif /* !NO_AES */
 
+#if defined(WOLFSSL_CMAC) && !defined(NO_AES) && defined(WOLFSSL_AES_DIRECT)
+    if (ret == 0) {
+        ret = whTestCrypto_Cmac(client, WH_DEV_ID, rng);
+    }
+#endif /* WOLFSSL_CMAC && !NO_AES && WOLFSSL_AES_DIRECT */
+
 #ifndef NO_RSA
-    /* test rsa */
-    RsaKey rsa[1];
-    if((ret = wc_InitRsaKey_ex(rsa, NULL, WH_DEV_ID)) != 0) {
-        printf("Failed to wc_InitRsaKey_ex %d\n", ret);
-        goto exit;
+    if (ret == 0) {
+        ret = whTest_CryptoRsa(client, WH_DEV_ID, rng);
     }
-    if((ret = wc_MakeRsaKey(rsa, 2048, 65537, rng)) != 0) {
-        printf("Failed to wc_MakeRsaKey %d\n", ret);
-        goto exit;
-    }
-    if ((ret = wc_RsaPublicEncrypt((byte*)plainText, sizeof(plainText), (byte*)cipherText,
-        sizeof(cipherText), rsa, rng)) < 0) {
-        printf("Failed to wc_RsaPublicEncrypt %d\n", ret);
-        goto exit;
-    }
-    if ((ret = wc_RsaPrivateDecrypt((byte*)cipherText, ret, (byte*)finalText,
-        sizeof(finalText), rsa)) < 0) {
-        printf("Failed to wc_RsaPrivateDecrypt %d\n", ret);
-        goto exit;
-    }
-    if((ret = wh_Client_GetKeyIdRsa(rsa, &keyId)) != 0) {
-        printf("Failed to wc_MakeRsaKey %d\n", ret);
-        goto exit;
-    }
-    if ((ret = wh_Client_KeyEvictRequest(client, keyId)) != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyEvictRequest %d\n", ret);
-        goto exit;
-    }
-    do {
-        ret = wh_Client_KeyEvictResponse(client);
-    } while (ret == WH_ERROR_NOTREADY);
-    if (ret != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyEvictResponse %d\n", ret);
-        goto exit;
-    }
-    if((ret = wc_FreeRsaKey(rsa)) != 0) {
-        printf("Failed to wc_FreeRsaKey %d\n", ret);
-        goto exit;
-    }
-    printf("RSA KEYGEN SUCCESS\n");
-    if (memcmp(plainText, finalText, sizeof(plainText)) == 0)
-        printf("RSA SUCCESS\n");
-    else {
-        WH_ERROR_PRINT("RSA FAILED TO MATCH\n");
-        ret = -1;
-        goto exit;
-    }
-#endif /* !NO_RSA */
+#endif /* NO_RSA */
 
 #ifdef HAVE_ECC
     if (ret == 0) {
-        ret = whTest_CryptoEcc(client, rng);
+        ret = whTest_CryptoEcc(client, WH_DEV_ID, rng);
     }
 #endif /* HAVE_ECC */
 
 #ifdef HAVE_CURVE25519
     /* test curve25519 */
     if (ret == 0) {
-        ret = whTest_CryptoCurve25519(client, rng);
+        ret = whTest_CryptoCurve25519(client, WH_DEV_ID, rng);
     }
 #endif /* HAVE_CURVE25519 */
 
-    if (ret != 0) {
-        goto exit;
-    }
 #ifndef NO_SHA256
-    for (i = 0; i < WH_NUM_DEVIDS; i++) {
-        /* Initialize SHA256 structure */
-        if ((ret = wc_InitSha256_ex(sha256, NULL, WH_DEV_IDS_ARRAY[i]) != 0)) {
-            WH_ERROR_PRINT("Failed to wc_InitSha256 %d\n", ret);
-            goto exit;
+    i = 0;
+    while ( (ret == WH_ERROR_OK) &&
+            (i < WH_NUM_DEVIDS)) {
+        ret = whTest_CryptoSha256(client, WH_DEV_IDS_ARRAY[i], rng);
+        if (ret == WH_ERROR_OK) {
+            i++;
         }
-
-        /* Test SHA256 on a single block worth of data. Should trigger a server
-         * transaction */
-        if ((ret = wc_Sha256Update(sha256, (const byte*)sha256InOneBlock,
-                                   WC_SHA256_BLOCK_SIZE) != 0)) {
-            WH_ERROR_PRINT("Failed to wc_Sha256Update %d\n", ret);
-            goto exit;
-        }
-
-        /* Finalize should trigger a server transaction with an empty buffer */
-        if ((ret = wc_Sha256Final(sha256, sha256Out) != 0)) {
-            WH_ERROR_PRINT("Failed to wc_Sha256Final %d\n", ret);
-            goto exit;
-        }
-
-        /* Compare the computed hash with the expected output */
-        if (memcmp(sha256Out, sha256ExpectedOutOneBlock,
-                   WC_SHA256_DIGEST_SIZE) != 0) {
-            WH_ERROR_PRINT("SHA256 hash does not match the expected output.\n");
-            goto exit;
-        }
-
-        memset(sha256Out, 0, WC_SHA256_DIGEST_SIZE);
-
-        /* Reset state for multi block test */
-        wc_Sha256Free(sha256);
-        if ((ret = wc_InitSha256_ex(sha256, NULL, WH_DEV_IDS_ARRAY[i]) != 0)) {
-            WH_ERROR_PRINT("Failed to wc_InitSha256 %d\n", ret);
-            goto exit;
-        }
-
-        /* Update with a non-block aligned length. Will not trigger server
-         * transaction */
-        if ((ret = wc_Sha256Update(sha256, (const byte*)sha256InMultiBlock,
-                                   1) != 0)) {
-            WH_ERROR_PRINT("Failed to wc_Sha256Update %d\n", ret);
-            goto exit;
-        }
-        /* Update with a full block, will trigger block to be sent to server and
-         * one additional byte to be buffered */
-        if ((ret = wc_Sha256Update(sha256, (const byte*)sha256InMultiBlock + 1,
-                                   WC_SHA256_BLOCK_SIZE) != 0)) {
-            WH_ERROR_PRINT("Failed to wc_Sha256Update %d\n", ret);
-            goto exit;
-        }
-        /* Update with the remaining data, should not trigger server transaction
-         */
-        if ((ret = wc_Sha256Update(sha256,
-                                   (const byte*)sha256InMultiBlock + 1 +
-                                       WC_SHA256_BLOCK_SIZE,
-                                   strlen(sha256InMultiBlock) - 1 -
-                                       WC_SHA256_BLOCK_SIZE) != 0)) {
-            WH_ERROR_PRINT("Failed to wc_Sha256Update %d\n", ret);
-            goto exit;
-        }
-
-        /* Finalize should trigger a server transaction on the remaining partial
-         * buffer */
-        if ((ret = wc_Sha256Final(sha256, sha256Out) != 0)) {
-            WH_ERROR_PRINT("Failed to wc_Sha256Final %d\n", ret);
-            goto exit;
-        }
-
-        /* Compare the computed hash with the expected output */
-        if (memcmp(sha256Out, sha256ExpectedOutMultiBlock,
-                   WC_SHA256_DIGEST_SIZE) != 0) {
-            WH_ERROR_PRINT("SHA256 hash does not match the expected output.\n");
-            goto exit;
-        }
-
-        /* Cleanup */
-        wc_Sha256Free(sha256);
-
-        printf("SHA256 DEVID=0x%X SUCCESS\n", WH_DEV_IDS_ARRAY[i]);
     }
-
-
 #endif /* !NO_SHA256 */
 
 
 #ifdef WOLFHSM_CFG_TEST_VERBOSE
-    {
-        int32_t  server_rc       = 0;
-        whNvmId  avail_objects   = 0;
-        whNvmId  reclaim_objects = 0;
-        uint32_t avail_size      = 0;
-        uint32_t reclaim_size    = 0;
-
-        WH_TEST_RETURN_ON_FAIL(
-            ret = wh_Client_NvmGetAvailable(client, &server_rc, &avail_size,
-                                            &avail_objects, &reclaim_size,
-                                            &reclaim_objects));
-
-        printf("POST-CRYPTO TEST: NvmGetAvailable:%d, server_rc:%d avail_size:%d "
-               "avail_objects:%d, reclaim_size:%d reclaim_objects:%d\n",
-               ret, (int)server_rc, (int)avail_size, (int)avail_objects,
-               (int)reclaim_size, (int)reclaim_objects);
+    if (ret == 0) {
+        (void)whTest_ShowNvmAvailable(client);
     }
 #endif /* WOLFHSM_CFG_TEST_VERBOSE */
-    ret = 0;
-exit:
-    wc_FreeRng(rng);
 
-    /* Tell server to close */
-    WH_TEST_RETURN_ON_FAIL(wh_Client_CommClose(client));
-
-    if (ret == 0) {
-        WH_TEST_RETURN_ON_FAIL(wh_Client_Cleanup(client));
-    }
-    else {
-        wh_Client_Cleanup(client);
-    }
+    /* Clean up used resources */
+    (void)wc_FreeRng(rng);
+    (void)wh_Client_CommClose(client);
+    (void)wh_Client_Cleanup(client);
 
     return ret;
 }

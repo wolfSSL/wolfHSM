@@ -57,14 +57,15 @@ typedef struct  wh_Packet_cipher_aescbc_req
     uint32_t keyLen;
     uint32_t sz;
     uint16_t keyId;
-    uint8_t WH_PAD[6];
-    /* key[keyLen] | iv[AES_IV_SIZE] | in[sz] */
+    uint8_t WH_PAD[2];
+    /* in[sz] | key[keyLen] | iv[AES_IV_SIZE] */
 } wh_Packet_cipher_aescbc_req;
 
 typedef struct  wh_Packet_cipher_aescbc_res
 {
     uint32_t sz;
-    uint8_t WH_PAD[4];
+    /* Pad to ensure req and res overlap on in/out */
+    uint8_t WH_PAD[sizeof(wh_Packet_cipher_aescbc_req) - sizeof(uint32_t)];
     /* uint8_t out[]; */
 } wh_Packet_cipher_aescbc_res;
 
@@ -79,13 +80,15 @@ typedef struct  wh_Packet_cipher_aesgcm_req
     uint32_t authTagSz;
     uint16_t keyId;
     uint8_t WH_PAD[2];
-    /* key[keyLen] | iv[ivSz] | in[sz] | authIn[authInSz] | authTag[authTagSz] */
+    /* in[sz] | key[keyLen] | iv[ivSz] | authIn[authInSz] | authTag[authTagSz] */
 } wh_Packet_cipher_aesgcm_req;
 
 typedef struct  wh_Packet_cipher_aesgcm_res
 {
     uint32_t sz;
     uint32_t authTagSz;
+    /* Pad to ensure req and res overlap on in/out */
+    uint8_t WH_PAD[sizeof(wh_Packet_cipher_aesgcm_req) - (sizeof(uint32_t) * 2)];
     /* uint8_t out[sz]; */
     /* uint8_t authTag[authTagSz] */
 } wh_Packet_cipher_aesgcm_res;
@@ -101,25 +104,29 @@ typedef struct  wh_Packet_pk_any_req
 typedef struct  wh_Packet_pk_rsakg_req
 {
     uint32_t type;
+    uint32_t flags;
+    uint32_t keyId;
     uint32_t size;
     uint32_t e;
-    uint8_t WH_PAD[4];
+    uint8_t label[WH_NVM_LABEL_LEN];
 } wh_Packet_pk_rsakg_req;
 
 typedef struct  wh_Packet_pk_rsakg_res
 {
     uint32_t keyId;
-    uint8_t WH_PAD[4];
+    uint32_t len;
+    /* uint8_t out[len]; */
 } wh_Packet_pk_rsakg_res;
 
 typedef struct  wh_Packet_pk_rsa_req
 {
     uint32_t type;
     uint32_t opType;
+    uint32_t options;
+#define WH_PACKET_PK_RSA_OPTIONS_EVICT  (1 << 0)
     uint32_t keyId;
     uint32_t inLen;
     uint32_t outLen;
-    uint8_t WH_PAD[4];
     /* uint8_t in[]; */
 } wh_Packet_pk_rsa_req;
 
@@ -133,6 +140,8 @@ typedef struct  wh_Packet_pk_rsa_res
 typedef struct  wh_Packet_pk_rsa_get_size_req
 {
     uint32_t type;
+    uint32_t options;
+#define WH_PACKET_PK_RSA_GET_SIZE_OPTIONS_EVICT  (1 << 0)
     uint32_t keyId;
 } wh_Packet_pk_rsa_get_size_req;
 

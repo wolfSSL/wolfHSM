@@ -57,6 +57,16 @@
 
 #include "wolfhsm/wh_client.h"
 
+
+#ifndef WOLFHSM_CFG_NO_CRYPTO
+const int WH_DEV_IDS_ARRAY[WH_NUM_DEVIDS] = {
+        WH_DEV_ID,
+#ifdef WOLFHSM_CFG_DMA
+        WH_DEV_ID_DMA,
+#endif /* WOLFHSM_CFG_DMA */
+};
+#endif /* WOLFHSM_CFG_NO_CRYPTO */
+
 int wh_Client_Init(whClientContext* c, const whClientConfig* config)
 {
     int rc = 0;
@@ -268,6 +278,8 @@ int wh_Client_CommInfoResponse(whClientContext* c,
         uint32_t *out_cfg_nvm_object_count,
         uint32_t *out_cfg_keycache_count,
         uint32_t *out_cfg_keycache_bufsize,
+        uint32_t *out_cfg_keycache_bigcount,
+        uint32_t *out_cfg_keycache_bigbufsize,
         uint32_t *out_cfg_customcb_count,
         uint32_t *out_cfg_dmaaddr_count,
         uint32_t *out_debug_state,
@@ -315,6 +327,12 @@ int wh_Client_CommInfoResponse(whClientContext* c,
             if (out_cfg_keycache_bufsize != NULL) {
                 *out_cfg_keycache_bufsize = msg.cfg_server_keycache_bufsize;
             }
+            if (out_cfg_keycache_count != NULL) {
+                *out_cfg_keycache_bigcount = msg.cfg_server_keycache_bigcount;
+            }
+            if (out_cfg_keycache_bufsize != NULL) {
+                *out_cfg_keycache_bigbufsize = msg.cfg_server_keycache_bigbufsize;
+            }
             if (out_cfg_customcb_count != NULL) {
                 *out_cfg_customcb_count = msg.cfg_server_customcb_count;
             }
@@ -345,6 +363,8 @@ int wh_Client_CommInfo(whClientContext* c,
         uint32_t *out_cfg_nvm_object_count,
         uint32_t *out_cfg_keycache_count,
         uint32_t *out_cfg_keycache_bufsize,
+        uint32_t *out_cfg_keycache_bigcount,
+        uint32_t *out_cfg_keycache_bigbufsize,
         uint32_t *out_cfg_customcb_count,
         uint32_t *out_cfg_dmaaddr_count,
         uint32_t *out_debug_state,
@@ -369,6 +389,8 @@ int wh_Client_CommInfo(whClientContext* c,
                     out_cfg_nvm_object_count,
                     out_cfg_keycache_count,
                     out_cfg_keycache_bufsize,
+                    out_cfg_keycache_bigcount,
+                    out_cfg_keycache_bigbufsize,
                     out_cfg_customcb_count,
                     out_cfg_dmaaddr_count,
                     out_debug_state,
@@ -1167,6 +1189,7 @@ int wh_Client_CounterDestroy(whClientContext* c, whNvmId counterId)
     return ret;
 }
 
+#if 0
 #ifndef WOLFHSM_CFG_NO_CRYPTO
 
 #ifdef HAVE_CURVE25519
@@ -1321,3 +1344,4 @@ int wh_Client_CmacCancelableResponse(whClientContext* c, Cmac* cmac,
 }
 #endif /* WOLFSSL_CMAC */
 #endif  /* !WOLFHSM_CFG_NO_CRYPTO */
+#endif /*0*/

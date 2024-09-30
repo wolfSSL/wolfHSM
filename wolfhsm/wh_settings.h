@@ -166,6 +166,11 @@
 #error "wolfHSM needs wolfCrypt built with HAVE_ANONYMOUS_INLINE_AGGREGATES=1"
 #endif
 
+/* Rng is mandatory */
+#ifdef NO_RNG
+#error "wolfHSM requires wolfCrypt built without NO_RNG"
+#endif
+
 #if defined WOLFHSM_CFG_SHE_EXTENSION
 #if defined(NO_AES) || \
     !defined(WOLFSSL_CMAC) || \

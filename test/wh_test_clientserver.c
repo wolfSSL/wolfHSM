@@ -630,6 +630,8 @@ int whTest_ClientServerSequential(void)
     uint32_t cfg_nvm_object_count = 0;
     uint32_t cfg_server_keycache_count = 0;
     uint32_t cfg_server_keycache_bufsize = 0;
+    uint32_t cfg_server_keycache_bigcount = 0;
+    uint32_t cfg_server_keycache_bigbufsize = 0;
     uint32_t cfg_server_customcb_count = 0;
     uint32_t cfg_server_dmaaddr_count = 0;
     uint32_t debug_state = 0;
@@ -658,6 +660,8 @@ int whTest_ClientServerSequential(void)
             &cfg_nvm_object_count,
             &cfg_server_keycache_count,
             &cfg_server_keycache_bufsize,
+            &cfg_server_keycache_bigcount,
+            &cfg_server_keycache_bigbufsize,
             &cfg_server_customcb_count,
             &cfg_server_dmaaddr_count,
             &debug_state,
@@ -671,6 +675,10 @@ int whTest_ClientServerSequential(void)
            (unsigned int)cfg_server_keycache_count);
     printf(" - cfg_server_keycache_bufsize:%u\n",
            (unsigned int)cfg_server_keycache_bufsize);
+    printf(" - cfg_server_keycache_bigcount:%u\n",
+           (unsigned int)cfg_server_keycache_bigcount);
+    printf(" - cfg_server_keycache_bigbufsize:%u\n",
+           (unsigned int)cfg_server_keycache_bigbufsize);
     printf(" - cfg_server_customcb_count:%u\n",
            (unsigned int)cfg_server_customcb_count);
     printf(" - cfg_server_dmaaddr_count:%u\n",

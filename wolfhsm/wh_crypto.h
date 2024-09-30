@@ -36,8 +36,26 @@
 
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/types.h"
+#include "wolfssl/wolfcrypt/aes.h"
+#include "wolfssl/wolfcrypt/rsa.h"
 #include "wolfssl/wolfcrypt/curve25519.h"
 #include "wolfssl/wolfcrypt/ecc.h"
+
+#ifndef NO_AES
+int wh_Crypto_SerializeAesKey(Aes* key, uint16_t max_size,
+        uint8_t* buffer, uint16_t *out_size);
+int wh_Crypto_DeserializeAesKey(uint16_t size, const uint8_t* buffer,
+        Aes* key);
+#endif /* !NO_AES */
+
+#ifndef NO_RSA
+/* Store a RsaKey to a byte sequence (currently DER format) */
+int wh_Crypto_RsaSerializeKeyDer(const RsaKey* key, uint16_t max_size,
+        uint8_t* buffer, uint16_t *out_size);
+/* Restore a RsaKey from a byte sequence (currently DER format) */
+int wh_Crypto_RsaDeserializeKeyDer(uint16_t size, const uint8_t* buffer,
+        RsaKey* key);
+#endif /* !NO_RSA */
 
 #ifdef HAVE_ECC
 /* Store an ecc_key to a byte sequence */
@@ -52,17 +70,17 @@ int wh_Crypto_EccDeserializeKeyDer(const uint8_t* buffer, uint16_t pub_size,
  * similiar to wc_ecc_make_pub().  The incoming byte array of the public key is
  * expected to have been exported using wc_EccPublicKeyToDer().
  */
-int wh_Crypto_UpdatePrivateOnlyEccKey(ecc_key* key, uint16_t pub_size,
+int wh_Crypto_EccUpdatePrivateOnlyKeyDer(ecc_key* key, uint16_t pub_size,
         const uint8_t* pub_buffer);
 
 #endif /* HAVE_ECC */
 
 #ifdef HAVE_CURVE25519
 /* Store a curve25519_key to a byte sequence */
-int wh_Crypto_SerializeCurve25519Key(curve25519_key* key,
+int wh_Crypto_Curve25519SerializeKey(curve25519_key* key,
         uint16_t max_size, uint8_t* buffer, uint16_t *out_size);
 /* Restore a curve25519_key from a byte sequence */
-int wh_Crypto_DeserializeCurve25519Key(uint16_t size,
+int wh_Crypto_Curve25519DeserializeKey(uint16_t size,
         const uint8_t* buffer, curve25519_key* key);
 #endif /* HAVE_CURVE25519 */
 

@@ -33,15 +33,15 @@ jobs:
     - name: Build and test
       run: cd test && make clean && make WOLFSSL_DIR=../wolfssl run
 
-    # Build and test ASAN build, with wolfCrypt tests enabled. FORCE SUCCESS
+    # Build and test ASAN build, with wolfCrypt tests enabled.
     # since wolfCrypt tests aren't all passing yet - this is just a status indicator
     - name: Build and test ASAN TESTWOLFCRYPT (wolfCrypt tests OK to fail)
-      run: cd test && make clean && make ASAN=1 TESTWOLFCRYPT=1 WOLFSSL_DIR=../wolfssl run || true
+      run: cd test && make clean && make ASAN=1 TESTWOLFCRYPT=1 WOLFSSL_DIR=../wolfssl run
 
-    # Build and test ASAN build, with wolfCrypt tests enabled and using the DMA devId. FORCE SUCCESS
+    # Build and test ASAN build, with wolfCrypt tests enabled and using the DMA devId.
     # since wolfCrypt tests aren't all passing yet - this is just a status indicator
     - name: Build and test ASAN TESTWOLFCRYPT TESTWOLFCRYPT_DMA
-      run: cd test && make clean && make ASAN=1 TESTWOLFCRYPT=1 TESTWOLFCRYPT_DMA=1 WOLFSSL_DIR=../wolfssl run || true
+      run: cd test && make clean && make ASAN=1 TESTWOLFCRYPT=1 TESTWOLFCRYPT_DMA=1 WOLFSSL_DIR=../wolfssl run
 
     # Build and test debug build with ASAN and NOCRYPTO
     - name: Build and test ASAN DEBUG NOCRYPTO
