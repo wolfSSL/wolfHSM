@@ -130,18 +130,63 @@ int wh_Client_Curve25519ImportKey(whClientContext* ctx, curve25519_key* key,
 int wh_Client_Curve25519ExportKey(whClientContext* ctx, whKeyId keyId,
         curve25519_key* key, uint16_t label_len, uint8_t* label);
 
-/* TODO: Generate a Curve25519 key on the server and put it in the server keycache */
+/**
+ * @brief Generate a Curve25519 key in the server key cache
+ *
+ * This function requests the server to generate a new Curve25519 key and insert
+ * it into the server's key cache.
+ *
+ * @param[in] ctx Pointer to the client context
+ * @param[in] size Size of the key to generate in bytes, normally set to
+ *                 CURVE25519_KEY_SIZE.
+ * @param[in,out] inout_key_id. Set to WH_KEYID_ERASED to have the server
+ *                select a unique id for this key.
+ * @param[in] flags Optional flags to be associated with the key while in the
+ *                  key cache or after being committed. Set to WH_NVM_FLAGS_NONE
+ *                  if not used.
+ * @param[in] label Optional label to be associated with the key while in the
+ *                  key cache or after being committed. Set to NULL if not used.
+ * @param[in] label_len Size of the label up to WH_NVM_LABEL_SIZE. Set to 0 if
+ *                      not used.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
 int wh_Client_Curve25519MakeCacheKey(whClientContext* ctx,
         uint16_t size,
-        whKeyId *inout_key_Id, whNvmFlags flags,
-        uint16_t label_len, uint8_t* label);
+        whKeyId *inout_key_id, whNvmFlags flags,
+        const uint8_t* label, uint16_t label_len);
 
-/* TODO: Generate a Curve25519 key on the server and export it inta a local struct */
+/**
+ * @brief Generate a Curve25519 key by the server and export to the client
+ *
+ * This function requests the server to generate a new Curve25519 key pair and
+ * export it to the client, without using any key cache or additional resources
+ *
+ * @param[in] ctx Pointer to the client context
+ * @param[in] size Size of the key to generate in bytes, normally set to
+ *                 CURVE25519_KEY_SIZE.
+ * @param[in] key Pointer to a wolfCrypt key structure, which will be
+ *                initialized to the new key pair when successful
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
 int wh_Client_Curve25519MakeExportKey(whClientContext* ctx,
-        uint16_t size,
-        curve25519_key* key);
+        uint16_t size, curve25519_key* key);
 
-/* TODO: Compute an X25519 shared secret */
+/**
+ * @brief Compute an X25519 shared secret using a public and private key
+ *
+ * This function requests the server compute the shared secret using the
+ * provided wolfCrypt private and public keys.  Note, the client will
+ * temporarily import any missing key material to the server as required.
+ *
+ * @param[in] ctx Pointer to the client context
+ * @param[in] priv_key Pointer to a wolfCrypt key structure that holds the
+ *                     private key
+ * @param[in] pub_key Pointer to a wolfCrypt key structure that holds the
+ *                    public key
+ * @param[in] endian Endianness of the values.  EC25519_BIG_ENDIAN (typical) or
+ *                   EC25519_LITTLE_ENDIAN
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
 int wh_Client_Curve25519SharedSecret(whClientContext* ctx,
         curve25519_key* priv_key, curve25519_key* pub_key,
         int endian, uint8_t* out, uint16_t *out_size);

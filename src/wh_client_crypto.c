@@ -78,7 +78,7 @@ static int _EccMakeKey(whClientContext* ctx,
 static int _Curve25519MakeKey(whClientContext* ctx,
         uint16_t size,
         whKeyId *inout_key_id, whNvmFlags flags,
-        uint16_t label_len, uint8_t* label,
+        const uint8_t* label, uint16_t label_len,
         curve25519_key* key);
 #endif /* HAVE_CURVE25519 */
 
@@ -1230,7 +1230,7 @@ int wh_Client_Curve25519ExportKey(whClientContext* ctx, whKeyId keyId,
 static int _Curve25519MakeKey(whClientContext* ctx,
         uint16_t size,
         whKeyId *inout_key_id, whNvmFlags flags,
-        uint16_t label_len, uint8_t* label,
+        const uint8_t* label, uint16_t label_len,
         curve25519_key* key)
 {
     int ret = 0;
@@ -1329,7 +1329,7 @@ static int _Curve25519MakeKey(whClientContext* ctx,
 int wh_Client_Curve25519MakeCacheKey(whClientContext* ctx,
         uint16_t size,
         whKeyId *inout_key_id, whNvmFlags flags,
-        uint16_t label_len, uint8_t* label)
+        const uint8_t* label, uint16_t label_len)
 {
     /* Valid keyid ptr is required in this form */
     if (inout_key_id == NULL) {
@@ -1339,7 +1339,7 @@ int wh_Client_Curve25519MakeCacheKey(whClientContext* ctx,
     return _Curve25519MakeKey(ctx,
             size,
             inout_key_id, flags,
-            label_len, label,
+            label, label_len,
             NULL);
 }
 
@@ -1354,7 +1354,7 @@ int wh_Client_Curve25519MakeExportKey(whClientContext* ctx,
     return _Curve25519MakeKey(ctx,
             size,
             NULL, WH_NVM_FLAGS_EPHEMERAL,
-            0, NULL,
+            NULL, 0,
             key);
 }
 
