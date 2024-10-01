@@ -54,7 +54,7 @@
 #ifndef WOLFHSM_CFG_NO_CRYPTO
 
 /* Device Id to be registered and passed to wolfCrypt functions */
-enum {
+enum WH_CLIENT_DEVID_ENUM {
     WH_DEV_ID = 0x5748534D, /* "WHSM" */
 #ifdef WOLFHSM_CFG_DMA
     WH_DEV_ID_DMA = 0x57444D41, /* "WDMA" */
@@ -226,7 +226,7 @@ int wh_Client_CommInfoRequest(whClientContext* c);
  *                                      size of each key in server RAM
  * @param[out] out_cfg_keycache_bigcount Pointer to store the server's number of
  *                                    big keys in the server RAM
- * @param[out] out_cfg_keycache_big bufsize Pointer to store the server's
+ * @param[out] out_cfg_keycache_bigbufsize bufsize Pointer to store the server's
  *                                    maximum size of each big key in server RAM
  * @param[out] out_cfg_customcb_count Pointer to store the server's number of
  *                                    custom callbacks
@@ -273,6 +273,10 @@ int wh_Client_CommInfoResponse(whClientContext* c,
  * @param[out] out_cfg_keycache_count Pointer to store the server's number of
  *                                    keys in the server RAM
  * @param[out] out_cfg_keycache_bufsize Pointer to store the server's maximum
+ *                                      size of each key in server RAM
+ * @param[out] out_cfg_keycache_bigcount Pointer to store the server's number of
+ *                                    keys in the server RAM
+ * @param[out] out_cfg_keycache_bigbufsize Pointer to store the server's maximum
  *                                      size of each key in server RAM
  * @param[out] out_cfg_customcb_count Pointer to store the server's number of
  *                                    custom callbacks
@@ -1698,6 +1702,5 @@ int wh_Client_CustomCbCheckRegisteredResponse(whClientContext* c,
  */
 int wh_Client_CustomCbCheckRegistered(whClientContext* c, uint16_t id,
                                       int* responseError);
-
 
 #endif /* !WOLFHSM_WH_CLIENT_H_ */
