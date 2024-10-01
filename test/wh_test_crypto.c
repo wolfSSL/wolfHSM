@@ -503,13 +503,13 @@ static int whTest_CryptoCurve25519(whClientContext* ctx, int devId, WC_RNG* rng)
                 WH_ERROR_PRINT("Failed to wc_curve25519_init_ex %d\n", ret);
             } else {
                 ret = wh_Client_Curve25519MakeCacheKey(ctx, key_size,
-                        &key_id_a, flags, sizeof(label_a), label_a);
+                        &key_id_a, flags, label_a, sizeof(label_a));
                 if (ret != 0) {
                     WH_ERROR_PRINT("Failed to make cached key %d\n", ret);
                 }
                 if (ret == 0) {
                     ret = wh_Client_Curve25519MakeCacheKey(ctx, key_size,
-                            &key_id_b, flags, sizeof(label_b), label_b);
+                            &key_id_b, flags, label_b, sizeof(label_b));
                     if (ret != 0) {
                         WH_ERROR_PRINT("Failed to make cached key %d\n", ret);
                     }
