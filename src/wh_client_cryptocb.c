@@ -60,7 +60,7 @@ static int _xferSha256BlockAndUpdateDigest(whClientContext* ctx,
                                            wc_Sha256* sha256,
                                            whPacket* packet,
                                            uint32_t isLastBlock);
-#ifdef WOLFHSM_CFG_DMA                                           
+#ifdef WOLFHSM_CFG_DMA
 static int _handleSha256Dma(int devId, wc_CryptoInfo* info, void* inCtx,
                          whPacket* packet);
 #endif /* WOLFHSM_CFG_DMA */
