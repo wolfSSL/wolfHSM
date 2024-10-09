@@ -57,8 +57,15 @@ int wh_Crypto_RsaSerializeKeyDer(const RsaKey* key, uint16_t max_size,
         return WH_ERROR_BADARGS;
     }
 
-    /* TODO: Update wc to use a const here */
-    der_size = wc_RsaKeyToDer((RsaKey*)key, (byte*)buffer, (word32)max_size);
+    if (key->type == RSA_PUBLIC) {
+        der_size = wc_RsaKeyToPublicDer((RsaKey*)key, (byte*)buffer, (word32)max_size);
+    } else if (key->type == RSA_PRIVATE) {
+        /* TODO: Update wc to use a const here */
+        der_size = wc_RsaKeyToDer((RsaKey*)key, (byte*)buffer, (word32)max_size);
+    } else {
+        return WH_ERROR_BADARGS;
+    }
+
     if (der_size >= 0) {
         ret = 0;
         if (out_size != NULL) {
@@ -83,8 +90,14 @@ int wh_Crypto_RsaDeserializeKeyDer(uint16_t size, const uint8_t* buffer,
             (key == NULL)) {
         return WH_ERROR_BADARGS;
     }
-    /* Deserialize the RSA key */
+    /* Deserialize the RSA key. Since there is no good way to determine if it is
+     * public or private with only the DER, try to decode as private first, and
+     * if that fails, assume it is public and try to decode again */
     ret = wc_RsaPrivateKeyDecode(buffer, &idx, key, size);
+    if (ret == ASN_PARSE_E) {
+        idx = 0;
+        ret = wc_RsaPublicKeyDecode(buffer, &idx, key, size);
+    }
     return ret;
 }
 #endif /* !NO_RSA */
