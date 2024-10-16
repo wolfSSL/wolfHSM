@@ -529,7 +529,7 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
             ret = hsmCacheKey(server, meta, in);
         }
         if (ret == 0) {
-            /* remove the cleint_id, client may set type */
+            /* remove the client_id, client may set type */
             packet->keyCacheRes.id = WH_KEYID_ID(meta->id);
             *size = WH_PACKET_STUB_SIZE + sizeof(packet->keyCacheRes);
         }

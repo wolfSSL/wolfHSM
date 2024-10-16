@@ -74,8 +74,12 @@ int whFlashRamsim_Init(void* context, const void* config)
         return WH_ERROR_BADARGS;
     }
 
-    /* Simulate starting from erased flash */
-    memset(ctx->memory, ctx->erasedByte, ctx->size);
+    /* Initialize memory based on initData or simulate starting from erased flash */
+    if (cfg->initData != NULL) {
+        memcpy(ctx->memory, cfg->initData, ctx->size);
+    } else {
+        memset(ctx->memory, ctx->erasedByte, ctx->size);
+    }
 
     return WH_ERROR_OK;
 }

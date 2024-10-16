@@ -30,7 +30,8 @@ typedef struct {
     uint32_t sectorSize;
     uint32_t pageSize;
     uint8_t  erasedByte;
-    uint8_t WH_PAD[3];
+    const uint8_t* initData;  /* Optional initialization data */
+    uint8_t WH_PAD[7];
 } whFlashRamsimCfg;
 
 typedef struct {
