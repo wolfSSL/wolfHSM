@@ -1,4 +1,3 @@
-
 #include <fcntl.h>     /* For O_* constants */
 #include <sys/mman.h>  /* For shm_open, mmap */
 #include <sys/stat.h>  /* For mode constants */
@@ -7,6 +6,7 @@
 #include <stdlib.h>    /* For exit */
 #include <string.h>    /* For memset */
 #include <stdint.h>
+#include <stdio.h>
 
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_utils.h"
@@ -370,7 +370,7 @@ int posixTransportShm_ServerInit(void* c, const void* cf,
 
     if (ret == WH_ERROR_OK) {
         memset(ctx, 0, sizeof(*ctx));
-        strncpy(ctx->name,  config->name, sizeof(ctx->name));
+        snprintf(ctx->name, sizeof(ctx->name), "%s", config->name);
         ctx->connectcb = connectcb;
         ctx->connectcb_arg = connectcb_arg;
 
@@ -416,7 +416,7 @@ int posixTransportShm_ClientInit(void* c, const void* cf,
     }
 
     memset(ctx, 0, sizeof(*ctx));
-    strncpy(ctx->name,  config->name, sizeof(ctx->name));
+    snprintf(ctx->name, sizeof(ctx->name), "%s", config->name);
     ctx->connectcb = connectcb;
     ctx->connectcb_arg = connectcb_arg;
 

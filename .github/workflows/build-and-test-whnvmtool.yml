@@ -1,0 +1,39 @@
+name: whnvmtool build and test
+
+on:
+  push:
+    branches: [ 'master', 'main', 'release/**' ]
+  pull_request:
+    branches: [ '*' ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    # List host CPU info
+    - name: Host CPU info
+      run: cat /proc/cpuinfo
+
+    # List compiler version
+    - name: List compiler version
+      run: gcc --version
+
+    # pull and build wolfssl
+    - name: Checkout wolfssl
+      uses: actions/checkout@v4
+      with:
+        repository: wolfssl/wolfssl
+        path: wolfssl
+
+    # Build and test standard build of whnvmtool
+    - name: Build and test NVM tool
+      run: cd tools/whnvmtool && make clean && make check WOLFSSL_DIR=../../wolfssl
+
+    # Build and test ASAN
+    - name: Build and test NVM tool with ASAN
+      run: cd tools/whnvmtool && make clean && make check WOLFSSL_DIR=../../wolfssl ASAN=1
+
