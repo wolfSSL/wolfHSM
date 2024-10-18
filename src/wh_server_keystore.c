@@ -321,17 +321,33 @@ int hsmFreshenKey(whServerContext* server, whKeyId keyId, uint8_t** outBuf,
     int ret = 0;
     int foundIndex = -1;
     int foundBigIndex = -1;
-    whNvmMetadata meta[1];
+    whNvmMetadata tmpMeta[1];
 
     if (    (server == NULL) ||
             WH_KEYID_ISERASED(keyId)) {
         return WH_ERROR_BADARGS;
     }
 
-    ret = _FindInCache(server, keyId, &foundIndex, &foundBigIndex, outBuf, outMeta);
-    if (ret != 0) {
-        /* Not in cache.  Check if it is in the NVM */
-        ret = wh_Nvm_GetMetadata(server->nvm, keyId, meta);
+    ret = _FindInCache(server, keyId, &foundIndex, &foundBigIndex, outBuf,
+                       outMeta);
+    if (ret != WH_ERROR_OK) {
+        /* Not in cache. Check if it is in NVM */
+        ret = wh_Nvm_GetMetadata(server->nvm, keyId, tmpMeta);
+        if (ret == WH_ERROR_OK) {
+            /* Key found in NVM, get a free cache slot */
+            ret = hsmCacheFindSlotAndZero(server, tmpMeta->len, outBuf,
+                                          outMeta);
+            if (ret == WH_ERROR_OK) {
+                /* Read the key from NVM into the cache slot */
+                ret = wh_Nvm_Read(server->nvm, keyId, 0, tmpMeta->len, *outBuf);
+                if (ret == WH_ERROR_OK) {
+                    /* Copy the metadata to the cache slot if key read is
+                     * successful*/
+                    XMEMCPY((uint8_t*)*outMeta, (uint8_t*)tmpMeta,
+                            sizeof(whNvmMetadata));
+                }
+            }
+        }
     }
     return ret;
 }
