@@ -1,4 +1,4 @@
-#wolfHSM Release v1.0.1 (October 21, 2024)
+# wolfHSM Release v1.0.1 (October 21, 2024)
 Bug-fix release. Due to NDA restrictions, access to the Infineon and ST Micro ports is limited. Please contact support@wolfssl.com for access.
 
 ## New Feature Additions
@@ -11,7 +11,7 @@ Bug-fix release. Due to NDA restrictions, access to the Infineon and ST Micro po
 * Updated RSA key handling to support private-only and public-only keys (PR#76)
 
 
-#wolfHSM Release v1.0.0 (October 17, 2024)
+# wolfHSM Release v1.0.0 (October 17, 2024)
 Initial release after internal and early evaluator testing. Due to NDA restrictions, access to the Infineon and ST Micro ports is limited. Please contact support@wolfssl.com for access.
 
 ## New Feature Additions
