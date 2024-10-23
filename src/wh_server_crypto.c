@@ -697,7 +697,7 @@ static int _HandleEccVerify(whServerContext* ctx, whPacket* packet,
     byte* res_pub       = (uint8_t*)(res + 1);
     word32 max_size     = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
                                 (res_pub - (uint8_t*)packet));
-    uint16_t pub_size   = 0;
+    uint32_t pub_size   = 0;
     int result;
 
     /* init public key */
@@ -712,11 +712,14 @@ static int _HandleEccVerify(whServerContext* ctx, whPacket* packet,
             if (    (ret == 0) &&
                     (export_pub_key != 0) ) {
                 /* Export the public key to the result message*/
-                pub_size = wc_EccPublicKeyToDer(key, (byte*)res_pub,
+                ret = wc_EccPublicKeyToDer(key, (byte*)res_pub,
                         max_size, 1);
-                if (pub_size < 0) {
+                if (ret < 0) {
                     /* Problem dumping the public key.  Set to 0 length */
                     pub_size = 0;
+                } else {
+                    pub_size = ret;
+                    ret = 0;
                 }
             }
         }
