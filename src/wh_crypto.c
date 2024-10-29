@@ -225,7 +225,7 @@ WOLFSSL_API int wc_Curve25519PublicKeyToDer(
 #endif /* HAVE_CURVE25519 */
 
 
-/* TODO make input key const */
+/* Store a curve25519_key to a byte sequence in DER format */
 int wh_Crypto_Curve25519SerializeKey(curve25519_key* key, uint8_t* buffer,
                                      uint16_t* derSize)
 {
@@ -245,10 +245,10 @@ int wh_Crypto_Curve25519SerializeKey(curve25519_key* key, uint8_t* buffer,
     return ret;
 }
 
+/* Restore a curve25519_key from a byte sequence in DER format */
 int wh_Crypto_Curve25519DeserializeKey(const uint8_t* derBuffer,
                                        uint16_t derSize, curve25519_key* key)
 {
-    int    ret = WH_ERROR_OK;
     word32 idx = 0;
 
     if ((derBuffer == NULL) || (key == NULL)) {

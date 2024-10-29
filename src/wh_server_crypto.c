@@ -430,40 +430,42 @@ int wh_Server_EccKeyCacheExport(whServerContext* ctx, whKeyId keyId,
 
 #ifdef HAVE_CURVE25519
 int wh_Server_CacheImportCurve25519Key(whServerContext* server,
-        curve25519_key* key,
-        whKeyId keyId, whNvmFlags flags, uint16_t label_len, uint8_t* label)
+                                       curve25519_key* key, whKeyId keyId,
+                                       whNvmFlags flags, uint16_t label_len,
+                                       uint8_t* label)
 {
-    uint8_t* cacheBuf;
+    uint8_t*       cacheBuf;
     whNvmMetadata* cacheMeta;
-    int ret;
-    /* TODO: This should be enough, but does wolfCrypt have a macro for the max
-     * size of DER encoded key? Can we just use ECC? */
-    uint16_t keySz = CURVE25519_KEYSIZE * 4;
+    int            ret;
+    /* Max size of a DER encoded curve25519 keypair with SubjectPublicKeyInfo
+     * included. Determined by experiment */
+    const uint16_t MAX_DER_SIZE = 128;
+    uint16_t       keySz        = keySz;
 
-    if (    (server == NULL) ||
-            (key == NULL) ||
-            (WH_KEYID_ISERASED(keyId)) ||
-            ((label != NULL) && (label_len > sizeof(cacheMeta->label)))) {
+    uint8_t der_buf[MAX_DER_SIZE];
+
+
+    if ((server == NULL) || (key == NULL) || (WH_KEYID_ISERASED(keyId)) ||
+        ((label != NULL) && (label_len > sizeof(cacheMeta->label)))) {
         return WH_ERROR_BADARGS;
     }
 
-    /* get a free slot */
-    /* TODO: Should we serialize first, to get the size up front? */
-    ret = hsmCacheFindSlotAndZero(server, keySz, &cacheBuf, &cacheMeta);
-    if (ret == 0) {
-        ret = wh_Crypto_Curve25519SerializeKey(key, cacheBuf, &keySz);
-    }
+    /* Serialize the key into the temporary buffer so we can get the size */
+    ret = wh_Crypto_Curve25519SerializeKey(key, der_buf, &keySz);
 
+    /* if successful, find a free cache slot and copy in the key data */
     if (ret == 0) {
-        /* set meta */
-        cacheMeta->id = keyId;
-        cacheMeta->len = keySz;
-        cacheMeta->flags = flags;
-        cacheMeta->access = WH_NVM_ACCESS_ANY;
-
-        if (    (label != NULL) &&
-                (label_len > 0) ) {
-            memcpy(cacheMeta->label, label, label_len);
+        ret = hsmCacheFindSlotAndZero(server, keySz, &cacheBuf, &cacheMeta);
+        if (ret == 0) {
+            memcpy(cacheBuf, der_buf, keySz);
+            /* Update metadata to cache the key */
+            cacheMeta->id     = keyId;
+            cacheMeta->len    = keySz;
+            cacheMeta->flags  = flags;
+            cacheMeta->access = WH_NVM_ACCESS_ANY;
+            if ((label != NULL) && (label_len > 0)) {
+                memcpy(cacheMeta->label, label, label_len);
+            }
         }
     }
     return ret;
