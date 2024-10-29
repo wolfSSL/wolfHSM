@@ -436,8 +436,9 @@ int wh_Server_CacheImportCurve25519Key(whServerContext* server,
     uint8_t* cacheBuf;
     whNvmMetadata* cacheMeta;
     int ret;
-    const uint16_t keySz = CURVE25519_KEYSIZE * 2;
-    uint16_t size = 0;
+    /* TODO: This should be enough, but does wolfCrypt have a macro for the max
+     * size of DER encoded key? Can we just use ECC? */
+    uint16_t keySz = CURVE25519_KEYSIZE * 4;
 
     if (    (server == NULL) ||
             (key == NULL) ||
@@ -447,15 +448,16 @@ int wh_Server_CacheImportCurve25519Key(whServerContext* server,
     }
 
     /* get a free slot */
+    /* TODO: Should we serialize first, to get the size up front? */
     ret = hsmCacheFindSlotAndZero(server, keySz, &cacheBuf, &cacheMeta);
     if (ret == 0) {
-        ret = wh_Crypto_Curve25519SerializeKey(key, keySz, cacheBuf, &size);
+        ret = wh_Crypto_Curve25519SerializeKey(key, cacheBuf, &keySz);
     }
 
     if (ret == 0) {
         /* set meta */
         cacheMeta->id = keyId;
-        cacheMeta->len = size;
+        cacheMeta->len = keySz;
         cacheMeta->flags = flags;
         cacheMeta->access = WH_NVM_ACCESS_ANY;
 
@@ -483,7 +485,7 @@ int wh_Server_CacheExportCurve25519Key(whServerContext* server, whKeyId keyId,
     ret = hsmFreshenKey(server, keyId, &cacheBuf, &cacheMeta);
 
     if (ret == 0) {
-        ret = wh_Crypto_Curve25519DeserializeKey(cacheMeta->len, cacheBuf, key);
+        ret = wh_Crypto_Curve25519DeserializeKey(cacheBuf, cacheMeta->len, key);
 #ifdef DEBUG_CRYPTOCB_VERBOSE
         printf("[server] Export25519Key id:%u ret:%d\n", keyId, ret);
         wh_Utils_Hexdump("[server] export key:", cacheBuf, cacheMeta->len);
@@ -795,9 +797,9 @@ static int _HandleCurve25519KeyGen(whServerContext* server, whPacket* packet,
 
     /* Response Message */
     uint8_t* out        = (uint8_t*)(res + 1);
-    uint16_t max_size   = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
+    /* Initialize the key size to the max size of the buffer */
+    uint16_t ser_size   = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
                             (out - (uint8_t*)packet));
-    uint16_t res_size   = 0;
 
     /* init key */
     ret = wc_curve25519_init_ex(key, NULL, server->crypto->devId);
@@ -809,11 +811,10 @@ static int _HandleCurve25519KeyGen(whServerContext* server, whPacket* packet,
             if (flags & WH_NVM_FLAGS_EPHEMERAL) {
                 /* Must serialize the key into the response packet */
                 key_id = WH_KEYID_ERASED;
-                ret = wh_Crypto_Curve25519SerializeKey(key, max_size,
-                        out, &res_size);
+                ret = wh_Crypto_Curve25519SerializeKey(key, out, &ser_size);
             } else {
+                ser_size = 0;
                 /* Must import the key into the cache and return keyid */
-                res_size = 0;
                 if (WH_KEYID_ISERASED(key_id)) {
                     /* Generate a new id */
                     ret = hsmGetUniqueId(server, &key_id);
@@ -836,8 +837,8 @@ static int _HandleCurve25519KeyGen(whServerContext* server, whPacket* packet,
 
     if (ret == 0) {
         res->keyId  = WH_KEYID_ID(key_id);
-        res->len    = res_size;
-        *out_size   = WH_PACKET_STUB_SIZE + sizeof(*res) + res_size;
+        res->len    = ser_size;
+        *out_size   = WH_PACKET_STUB_SIZE + sizeof(*res) + ser_size;
     }
     return ret;
 }
