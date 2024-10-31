@@ -54,15 +54,13 @@
 
 
 #ifndef NO_SHA256
-static int _handleSha256(int devId, wc_CryptoInfo* info, void* inCtx,
-                         whPacket* packet);
+static int _handleSha256(wc_CryptoInfo* info, void* inCtx, whPacket* packet);
 static int _xferSha256BlockAndUpdateDigest(whClientContext* ctx,
                                            wc_Sha256* sha256,
                                            whPacket* packet,
                                            uint32_t isLastBlock);
 #ifdef WOLFHSM_CFG_DMA
-static int _handleSha256Dma(int devId, wc_CryptoInfo* info, void* inCtx,
-                         whPacket* packet);
+static int _handleSha256Dma(wc_CryptoInfo* info, void* inCtx, whPacket* packet);
 #endif /* WOLFHSM_CFG_DMA */
 #endif /* ! NO_SHA256 */
 
@@ -462,7 +460,7 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
         switch (info->hash.type) {
 #ifndef NO_SHA256
             case WC_HASH_TYPE_SHA256:
-                ret = _handleSha256(devId, info, inCtx, packet);
+                ret = _handleSha256(info, inCtx, packet);
                 break;
 #endif /* !NO_SHA256 */
 
@@ -494,8 +492,7 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
 }
 
 #ifndef NO_SHA256
-static int _handleSha256(int devId, wc_CryptoInfo* info, void* inCtx,
-                         whPacket* packet)
+static int _handleSha256(wc_CryptoInfo* info, void* inCtx, whPacket* packet)
 {
     int              ret               = 0;
     whClientContext* ctx               = inCtx;
@@ -639,8 +636,7 @@ static int _xferSha256BlockAndUpdateDigest(whClientContext* ctx,
 
 #ifdef WOLFHSM_CFG_DMA
 
-static int _handleSha256Dma(int devId, wc_CryptoInfo* info, void* inCtx,
-                            whPacket* packet)
+static int _handleSha256Dma(wc_CryptoInfo* info, void* inCtx, whPacket* packet)
 {
     int              ret    = WH_ERROR_OK;
     whClientContext* ctx    = inCtx;
@@ -764,7 +760,7 @@ int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
         switch (info->hash.type) {
 #ifndef NO_SHA256
             case WC_HASH_TYPE_SHA256:
-                ret = _handleSha256Dma(devId, info, inCtx, packet);
+                ret = _handleSha256Dma(info, inCtx, packet);
                 break;
 #endif /* !NO_SHA256 */
 
