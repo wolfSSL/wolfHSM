@@ -82,12 +82,6 @@ int wh_Crypto_Curve25519SerializeKey(curve25519_key* key, uint8_t* buffer,
 /* Restore a curve25519_key from a byte sequence */
 int wh_Crypto_Curve25519DeserializeKey(const uint8_t* derBuffer,
                                        uint16_t derSize, curve25519_key* key);
-/* Store a curve25519_key to a byte sequence in raw format */
-int wh_Crypto_Curve25519SerializeKeyRaw(curve25519_key* key, uint16_t max_size,
-                                        uint8_t* buffer, uint16_t* out_size);
-/* Restore a curve25519_key from a byte sequence in raw format */
-int wh_Crypto_Curve25519DeserializeKeyRaw(uint16_t size, const uint8_t* buffer,
-                                          curve25519_key* key);
 #endif /* HAVE_CURVE25519 */
 
 #endif  /* !WOLFHSM_CFG_NO_CRYPTO */
