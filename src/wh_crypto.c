@@ -208,22 +208,6 @@ int wh_Crypto_EccUpdatePrivateOnlyKeyDer(ecc_key* key, uint16_t pub_size,
 
 #ifdef HAVE_CURVE25519
 
-#ifdef HAVE_CURVE25519
-#ifdef HAVE_CURVE25519_KEY_IMPORT
-WOLFSSL_API int wc_Curve25519PrivateKeyDecode(
-    const byte* input, word32* inOutIdx, curve25519_key* key, word32 inSz);
-WOLFSSL_API int wc_Curve25519PublicKeyDecode(
-    const byte* input, word32* inOutIdx, curve25519_key* key, word32 inSz);
-#endif
-#ifdef HAVE_CURVE25519_KEY_EXPORT
-WOLFSSL_API int wc_Curve25519PrivateKeyToDer(
-    curve25519_key* key, byte* output, word32 inLen);
-WOLFSSL_API int wc_Curve25519PublicKeyToDer(
-    curve25519_key* key, byte* output, word32 inLen, int withAlg);
-#endif
-#endif /* HAVE_CURVE25519 */
-
-
 /* Store a curve25519_key to a byte sequence in DER format */
 int wh_Crypto_Curve25519SerializeKey(curve25519_key* key, uint8_t* buffer,
                                      uint16_t* derSize)
