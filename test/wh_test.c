@@ -48,7 +48,7 @@ int whTest_Unit(void)
 
     /* Component Tests */
     WH_TEST_ASSERT(0 == whTest_Flash_RamSim());
-    /* WH_TEST_ASSERT(0 == whTest_NvmFlash()); */
+    WH_TEST_ASSERT(0 == whTest_NvmFlash());
 
     /* Comm tests */
     WH_TEST_ASSERT(0 == whTest_Comm());
