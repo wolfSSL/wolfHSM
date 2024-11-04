@@ -34,12 +34,10 @@ jobs:
       run: cd test && make clean && make WOLFSSL_DIR=../wolfssl run
 
     # Build and test ASAN build, with wolfCrypt tests enabled.
-    # since wolfCrypt tests aren't all passing yet - this is just a status indicator
-    - name: Build and test ASAN TESTWOLFCRYPT (wolfCrypt tests OK to fail)
+    - name: Build and test ASAN TESTWOLFCRYPT
       run: cd test && make clean && make ASAN=1 TESTWOLFCRYPT=1 WOLFSSL_DIR=../wolfssl run
 
     # Build and test ASAN build, with wolfCrypt tests enabled and using the DMA devId.
-    # since wolfCrypt tests aren't all passing yet - this is just a status indicator
     - name: Build and test ASAN TESTWOLFCRYPT TESTWOLFCRYPT_DMA
       run: cd test && make clean && make ASAN=1 TESTWOLFCRYPT=1 TESTWOLFCRYPT_DMA=1 WOLFSSL_DIR=../wolfssl run
 
@@ -54,8 +52,3 @@ jobs:
     # Build and test debug build with SHE
     - name: Build and test SHE
       run: cd test && make clean && make SHE=1 WOLFSSL_DIR=../wolfssl run
-
-    ## Test structure padding
-    #- name: Check structure padding
-    #  run: cd test && make clean && make checkpadding
-
