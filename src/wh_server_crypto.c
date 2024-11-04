@@ -1588,7 +1588,7 @@ static int _HandleSha256Dma(whServerContext* server, whPacket* packet,
         if (ret == WH_ERROR_OK) {
 #ifdef DEBUG_CRYPTOCB_VERBOSE
             printf("[server]   wc_Sha256Update: inAddr=%p, sz=%llu\n", inAddr,
-                   req->input.sz);
+                   (long long unsigned int)req->input.sz);
 #endif
             ret = wc_Sha256Update(sha256, inAddr, req->input.sz);
         }

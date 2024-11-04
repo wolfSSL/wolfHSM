@@ -1195,6 +1195,10 @@ int wh_Client_Curve25519ImportKey(whClientContext* ctx, curve25519_key* key,
         if (inout_keyId != NULL) {
             *inout_keyId = key_id;
         }
+#if defined(DEBUG_CRYPTOCB) && defined(DEBUG_CRYPTOCB_VERBOSE)
+        printf("[client] importKey: cached keyid=%u\n", key_id);
+        wh_Utils_Hexdump("[client] importKey: key=", buffer, buffer_len);
+#endif
     }
     return ret;
 }
