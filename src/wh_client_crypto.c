@@ -1185,8 +1185,8 @@ int wh_Client_Curve25519ImportKey(whClientContext* ctx, curve25519_key* key,
         key_id = *inout_keyId;
     }
 
-    ret = wh_Crypto_Curve25519SerializeKey(key, sizeof(buffer),buffer,
-            &buffer_len);
+    buffer_len = sizeof(buffer);
+    ret        = wh_Crypto_Curve25519SerializeKey(key, buffer, &buffer_len);
     if (ret == 0) {
         /* Cache the key and get the keyID */
         ret = wh_Client_KeyCache(ctx,
@@ -1195,6 +1195,10 @@ int wh_Client_Curve25519ImportKey(whClientContext* ctx, curve25519_key* key,
         if (inout_keyId != NULL) {
             *inout_keyId = key_id;
         }
+#if defined(DEBUG_CRYPTOCB) && defined(DEBUG_CRYPTOCB_VERBOSE)
+        printf("[client] importKey: cached keyid=%u\n", key_id);
+        wh_Utils_Hexdump("[client] importKey: key=", buffer, buffer_len);
+#endif
     }
     return ret;
 }
@@ -1220,8 +1224,7 @@ int wh_Client_Curve25519ExportKey(whClientContext* ctx, whKeyId keyId,
             buffer, &buffer_len);
     if (ret == 0) {
         /* Update the key structure */
-        ret = wh_Crypto_Curve25519DeserializeKey(
-                buffer_len, buffer, key);
+        ret = wh_Crypto_Curve25519DeserializeKey(buffer, buffer_len, key);
     }
 
     return ret;
@@ -1311,8 +1314,7 @@ static int _Curve25519MakeKey(whClientContext* ctx,
 
                 if (flags & WH_NVM_FLAGS_EPHEMERAL) {
                     /* Response has the exported key */
-                    ret = wh_Crypto_Curve25519DeserializeKey(
-                            der_size, key_der, key);
+                    ret = wh_Crypto_Curve25519DeserializeKey(key_der, der_size, key);
 #ifdef DEBUG_CRYPTOCB_VERBOSE
                     wh_Utils_Hexdump("[client] KeyGen export:", key_der, der_size);
 #endif

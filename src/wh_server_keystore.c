@@ -220,6 +220,10 @@ int hsmCacheKey(whServerContext* server, whNvmMetadata* meta, uint8_t* in)
             } else {
                 server->cache[foundIndex].commited = 1;
             }
+#if defined(DEBUG_CRYPTOCB) && defined(DEBUG_CRYPTOCB_VERBOSE)
+            printf("[server] cacheKey: caching keyid=%u\n", meta->id);
+            wh_Utils_Hexdump("[server] cacheKey: key=", in, meta->len);
+#endif
         }
     } else {
         /* try big key cache, don't put small keys into big cache if full */

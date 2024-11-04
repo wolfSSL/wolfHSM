@@ -207,49 +207,42 @@ int wh_Crypto_EccUpdatePrivateOnlyKeyDer(ecc_key* key, uint16_t pub_size,
 #endif /* HAVE_ECC */
 
 #ifdef HAVE_CURVE25519
- int wh_Crypto_Curve25519SerializeKey(curve25519_key* key,
-        uint16_t max_size, uint8_t* buffer, uint16_t *out_size)
+
+/* Store a curve25519_key to a byte sequence in DER format */
+int wh_Crypto_Curve25519SerializeKey(curve25519_key* key, uint8_t* buffer,
+                                     uint16_t* derSize)
 {
     int ret = 0;
-    word32 privSz = CURVE25519_KEYSIZE;
-    word32 pubSz = CURVE25519_KEYSIZE;
+    /* We must include the algorithm identifier in the DER encoding, or we will
+     * not be able to deserialize it properly in the public key only case*/
+    const int WITH_ALG_ENABLE_SUBJECT_PUBLIC_KEY_INFO = 1;
 
-    if (    (key == NULL) ||
-            (buffer == NULL)) {
+    if ((key == NULL) || (buffer == NULL) || (derSize == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
-    ret = wc_curve25519_export_key_raw(key,
-            buffer + CURVE25519_KEYSIZE, &privSz,
-            buffer, &pubSz);
-    if (    (ret == 0) &&
-            (out_size != NULL)) {
-        *out_size = CURVE25519_KEYSIZE * 2;
+    ret = wc_Curve25519KeyToDer(key, buffer, *derSize,
+                                WITH_ALG_ENABLE_SUBJECT_PUBLIC_KEY_INFO);
+
+    /* ASN.1 functions return the size of the DER encoded key on success */
+    if (ret > 0) {
+        *derSize = ret;
+        ret      = WH_ERROR_OK;
     }
     return ret;
 }
 
-int wh_Crypto_Curve25519DeserializeKey(uint16_t size,
-        const uint8_t* buffer, curve25519_key* key)
+/* Restore a curve25519_key from a byte sequence in DER format */
+int wh_Crypto_Curve25519DeserializeKey(const uint8_t* derBuffer,
+                                       uint16_t derSize, curve25519_key* key)
 {
-    int ret = 0;
-    word32 privSz = CURVE25519_KEYSIZE;
-    word32 pubSz = CURVE25519_KEYSIZE;
+    word32 idx = 0;
 
-    if (    (size < (CURVE25519_KEYSIZE * 2)) ||
-            (buffer == NULL) ||
-            (key == NULL)) {
+    if ((derBuffer == NULL) || (key == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
-    /* decode the key */
-    if (ret == 0) {
-        ret = wc_curve25519_import_private_raw(
-                buffer + CURVE25519_KEYSIZE, privSz,
-                buffer, pubSz,
-                key);
-    }
-    return ret;
+    return wc_Curve25519KeyDecode(derBuffer, &idx, key, derSize);
 }
 #endif /* HAVE_CURVE25519 */
 
