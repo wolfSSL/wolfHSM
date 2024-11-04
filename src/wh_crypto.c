@@ -36,7 +36,6 @@
 #include "wolfssl/wolfcrypt/types.h"
 #include "wolfssl/wolfcrypt/error-crypt.h"
 #include "wolfssl/wolfcrypt/asn.h"
-#include "wolfssl/wolfcrypt/asn_public.h"
 #include "wolfssl/wolfcrypt/rsa.h"
 #include "wolfssl/wolfcrypt/curve25519.h"
 #include "wolfssl/wolfcrypt/ecc.h"
@@ -230,12 +229,16 @@ int wh_Crypto_Curve25519SerializeKey(curve25519_key* key, uint8_t* buffer,
                                      uint16_t* derSize)
 {
     int ret = 0;
+    /* We must include the algorithm identifier in the DER encoding, or we will
+     * not be able to deserialize it properly in the public key only case*/
+    const int WITH_ALG_ENABLE_SUBJECT_PUBLIC_KEY_INFO = 1;
 
     if ((key == NULL) || (buffer == NULL) || (derSize == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
-    ret = wc_Curve25519KeyToDer(key, buffer, *derSize, 0);
+    ret = wc_Curve25519KeyToDer(key, buffer, *derSize,
+                                WITH_ALG_ENABLE_SUBJECT_PUBLIC_KEY_INFO);
 
     /* ASN.1 functions return the size of the DER encoded key on success */
     if (ret > 0) {
