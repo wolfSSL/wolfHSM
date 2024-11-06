@@ -78,6 +78,16 @@ int wh_Server_CacheExportCurve25519Key(whServerContext* ctx, whKeyId keyId,
         curve25519_key* key);
 #endif /* HAVE_CURVE25519 */
 
+#ifdef HAVE_DILITHIUM
+/* Store a MlDsaKey into a server key cache with optional metadata */
+int wh_Server_MlDsaKeyCacheImport(whServerContext* ctx, MlDsaKey* key,
+                                  whKeyId keyId, whNvmFlags flags,
+                                  uint16_t label_len, uint8_t* label);
+/* Restore a MlDsaKey from a server key cache */
+int wh_Server_MlDsaKeyCacheExport(whServerContext* ctx, whKeyId keyId,
+                                  MlDsaKey* key);
+#endif /* HAVE_DILITHIUM */
+
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
 #endif /* !WOLFHSM_WH_SERVER_CRYPTO_H_ */

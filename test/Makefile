@@ -98,7 +98,9 @@ SRC_C += \
             $(WOLFSSL_DIR)/wolfcrypt/src/sha256.c \
             $(WOLFSSL_DIR)/wolfcrypt/src/aes.c \
             $(WOLFSSL_DIR)/wolfcrypt/src/ecc.c \
-            $(WOLFSSL_DIR)/wolfcrypt/src/cmac.c
+            $(WOLFSSL_DIR)/wolfcrypt/src/cmac.c \
+			$(WOLFSSL_DIR)/wolfcrypt/src/dilithium.c \
+			$(WOLFSSL_DIR)/wolfcrypt/src/sha3.c
 endif
 
 ifeq ($(TESTWOLFCRYPT),1)

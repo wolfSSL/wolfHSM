@@ -101,6 +101,29 @@ typedef struct  wh_Packet_pk_any_req
     uint8_t WH_PAD[4];
 } wh_Packet_pk_any_req;
 
+/* Special instance of PK packets is needed for PQC algorithms */
+typedef struct wh_Packet_pk_pq_any_req {
+    /* enum wc_PkType. For PQ algorithms there is an additional layer of
+     * dispatch/algorithm identification needed since the PQ type used by crypto
+     * callbacks doesn't actually indicate the algorithm, only the general algorithm
+     * "Type" (e.g. Signature or Key Encapsulation).
+     * 
+     * Valid values indicating this is a PQ PK type are:
+     *   - WC_PK_TYPE_PQC_KEM_KEYGEN
+     *   - WC_PK_TYPE_PQC_KEM_ENCAPS
+     *   - WC_PK_TYPE_PQC_KEM_DECAPS
+     *   - WC_PK_TYPE_PQC_SIG_KEYGEN
+     *   - WC_PK_TYPE_PQC_SIG_SIGN
+     *   - WC_PK_TYPE_PQC_SIG_VERIFY
+     *   - WC_PK_TYPE_PQC_SIG_CHECK_PRIV_KEY
+     */
+    uint32_t type; /* enum wc_PkType */
+    /* enum wc_PqcSignatureType OR enum wc_PqcKemType depending on the value of
+     * the type field above This field will actually indicate the specific
+     * algorithm (e.g. ML-DSA, Kyber, etc.) */
+    uint32_t pqAlgoType; /* enum wc_PqcSignatureType or enum wc_PqcKemType */
+} wh_Packet_pk_pq_any_req;
+
 typedef struct  wh_Packet_pk_rsakg_req
 {
     uint32_t type;
@@ -340,6 +363,65 @@ typedef struct wh_Packet_hash_sha256_res {
     uint8_t  hash[32]; /* TODO WC_SHA256_DIGEST_SIZE */
 } wh_Packet_hash_sha256_res;
 
+typedef struct  wh_Packet_pq_mldsa_kg_req
+{
+    uint32_t type; /* enum wc_PkType */
+    uint32_t pqAlgoType; /* enum wc_PqcSignatureType */
+    uint32_t sz;
+    uint32_t level;
+    uint32_t keyId;
+    uint32_t flags;
+    uint32_t access;
+    uint8_t label[WH_NVM_LABEL_LEN];
+} wh_Packet_pq_mldsa_kg_req;
+
+typedef struct  wh_Packet_pq_mldsa_kg_res
+{
+    uint32_t keyId;
+    uint32_t len;
+    /* uint8_t out[] */
+} wh_Packet_pq_mldsa_kg_res;
+
+
+typedef struct  wh_Packet_pq_mldsa_sign_req
+{
+    uint32_t type; /* enum wc_PkType */
+    uint32_t pqAlgoType; /* enum wc_PqcSignatureType */
+    uint32_t options;
+#define WH_PACKET_PQ_MLDSA_SIGN_OPTIONS_EVICT  (1 << 0)
+    uint32_t level;
+    uint32_t keyId;
+    uint32_t sz;
+    /* uint8_t in[] */
+} wh_Packet_pq_mldsa_sign_req;
+
+typedef struct  wh_Packet_pq_mldsa_sign_res
+{
+    uint32_t sz;
+    uint8_t WH_PAD[4];
+    /* uint8_t out[] */
+} wh_Packet_pq_mldsa_sign_res;
+
+typedef struct  wh_Packet_pq_mldsa_verify_req
+{
+    uint32_t type; /* enum wc_PkType */
+    uint32_t pqAlgoType; /* enum wc_PqcSignatureType */
+    uint32_t options;
+#define WH_PACKET_PQ_MLDSAVERIFY_OPTIONS_EVICT  (1 << 0)
+#define WH_PACKET_PQ_MLDSAVERIFY_OPTIONS_EXPORTPUB (1 << 1)
+    uint32_t level;
+    uint32_t keyId;
+    uint32_t sigSz;
+    uint32_t hashSz;
+    uint8_t WH_PAD[4];
+    /* uint8_t sig[] */
+    /* uint8_t hash[] */
+} wh_Packet_pq_mldsa_verify_req;
+
+typedef struct  wh_Packet_pq_mldsa_verify_res
+{
+    uint32_t res;
+} wh_Packet_pq_mldsa_verify_res;
 
 /** Key Management Packets */
 typedef struct  wh_Packet_key_cache_req
@@ -735,6 +817,16 @@ typedef struct whPacket
         wh_Packet_pk_curve25519kg_res pkCurve25519kgRes;
         wh_Packet_pk_curve25519_req pkCurve25519Req;
         wh_Packet_pk_curve25519_res pkCurve25519Res;
+        /* Special PK case: PQC algorithms need additional algorithm type */
+        wh_Packet_pk_pq_any_req pkPqAnyReq;
+        /* ML-DSA/Dilithium */
+        wh_Packet_pq_mldsa_kg_req pqMldsaKgReq;
+        wh_Packet_pq_mldsa_kg_res pqMldsaKgRes;
+        wh_Packet_pq_mldsa_sign_req pqMldsaSignReq;
+        wh_Packet_pq_mldsa_sign_res pqMldsaSignRes;
+        wh_Packet_pq_mldsa_verify_req pqMldsaVerifyReq;
+        wh_Packet_pq_mldsa_verify_res pqMldsaVerifyRes;
+
         /* rng */
         wh_Packet_rng_req rngReq;
         /* cmac */

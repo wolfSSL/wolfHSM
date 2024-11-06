@@ -108,6 +108,11 @@ int wh_CommClient_SendRequest(whCommClient* context, uint16_t magic,
         return WH_ERROR_BADARGS;
     }
 
+    /* Check if the data size is within allowed limits */
+    if (data_size > WOLFHSM_CFG_COMM_DATA_LEN) {
+        return WH_ERROR_BADARGS;
+    }
+
     context->hdr->magic = magic;
     context->hdr->kind = wh_Translate16(magic, kind);
     context->hdr->seq = wh_Translate16(magic, context->seq + 1);
@@ -295,6 +300,11 @@ int wh_CommServer_SendResponse(whCommServer* context,
             (context->initialized == 0) ||
             (context->transport_cb == NULL) ||
             (context->transport_cb->Send == NULL)){
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Check if the data size is within allowed limits */
+    if (data_size > WOLFHSM_CFG_COMM_DATA_LEN) {
         return WH_ERROR_BADARGS;
     }
 
