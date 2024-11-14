@@ -1530,7 +1530,7 @@ static int _HandleSha256Dma(whServerContext* server, whPacket* packet,
 
     /* Ensure state sizes are the same */
     if (req->state.sz != sizeof(*sha256)) {
-        res->dmaCryptoRes.badAddr = req->state;
+        res->dmaAddrStatus.badAddr = req->state;
         return WH_ERROR_BADARGS;
     }
 
@@ -1538,7 +1538,7 @@ static int _HandleSha256Dma(whServerContext* server, whPacket* packet,
     ret = whServerDma_CopyFromClient(server, sha256, req->state.addr,
                                        req->state.sz, (whServerDmaFlags){0});
     if (ret != WH_ERROR_OK) {
-        res->dmaCryptoRes.badAddr = req->state;
+        res->dmaAddrStatus.badAddr = req->state;
     }
     /* Save the client devId to be restored later, when the context is copied
      * back into client memory. */
@@ -1573,7 +1573,7 @@ static int _HandleSha256Dma(whServerContext* server, whPacket* packet,
         }
 
         if (ret == WH_ERROR_ACCESS) {
-            res->dmaCryptoRes.badAddr = req->output;
+            res->dmaAddrStatus.badAddr = req->output;
         }
     }
     else if (ret == WH_ERROR_OK) {
@@ -1600,7 +1600,7 @@ static int _HandleSha256Dma(whServerContext* server, whPacket* packet,
         }
 
         if (ret == WH_ERROR_ACCESS) {
-            res->dmaCryptoRes.badAddr = req->input;
+            res->dmaAddrStatus.badAddr = req->input;
         }
     }
 
@@ -1612,7 +1612,7 @@ static int _HandleSha256Dma(whServerContext* server, whPacket* packet,
         ret = whServerDma_CopyToClient(server, req->state.addr, sha256,
                                        req->state.sz, (whServerDmaFlags){0});
         if (ret != WH_ERROR_OK) {
-            res->dmaCryptoRes.badAddr = req->state;
+            res->dmaAddrStatus.badAddr = req->state;
         }
     }
 

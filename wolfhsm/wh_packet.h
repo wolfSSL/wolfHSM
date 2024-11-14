@@ -42,6 +42,28 @@ typedef struct  wh_Packet_version_exchange
     uint8_t WH_PAD[4];
 } wh_Packet_version_exchange;
 
+/* DMA common structures */
+typedef struct {
+    uint32_t addr;
+    uint32_t sz;
+} wh_Packet_Dma32_buffer;
+
+typedef struct {
+    uint64_t addr;
+    uint64_t sz;
+} wh_Packet_Dma64_buffer;
+
+typedef struct {
+    /* If packet->rc == WH_ERROR_ACCESS, this field will contain the offending
+     * address/size pair. Invalid otherwise. */
+    wh_Packet_Dma32_buffer badAddr;
+} wh_Packet_Dma32_addr_status;
+
+typedef struct {
+    /* If packet->rc == WH_ERROR_ACCESS, this field will contain the offending
+     * address/size pair. Invalid otherwise. */
+    wh_Packet_Dma64_buffer badAddr;
+} wh_Packet_Dma64_addr_status;
 
 /** Cipher Packets */
 typedef struct  wh_Packet_cipher_any_req
@@ -409,6 +431,66 @@ typedef struct  wh_Packet_key_erase_res
     uint8_t WH_PAD[4];
 } wh_Packet_key_erase_res;
 
+/* DMA key management structures */
+typedef struct wh_Packet_key_cache_Dma32_req {
+    wh_Packet_Dma32_buffer key; /* Client memory buffer containing key data */
+    uint32_t               flags;
+    uint32_t               sz;
+    uint32_t               labelSz;
+    uint16_t               id;
+    uint8_t                label[WH_NVM_LABEL_LEN];
+    uint8_t                WH_PAD[6]; /* Pad to 8-byte alignment */
+} wh_Packet_key_cache_Dma32_req;
+
+typedef struct wh_Packet_key_cache_Dma64_req {
+    wh_Packet_Dma64_buffer key; /* Client memory buffer containing key data */
+    uint32_t               flags;
+    uint32_t               sz;
+    uint32_t               labelSz;
+    uint16_t               id;
+    uint8_t                label[WH_NVM_LABEL_LEN];
+    uint8_t                WH_PAD[2]; /* Pad to 8-byte alignment */
+} wh_Packet_key_cache_Dma64_req;
+
+typedef struct wh_Packet_key_cache_Dma32_res {
+    wh_Packet_Dma32_addr_status dmaAddrStatus;
+    uint16_t                    id;
+    uint8_t                     WH_PAD[6]; /* Pad to 8-byte alignment */
+} wh_Packet_key_cache_Dma32_res;
+
+typedef struct wh_Packet_key_cache_Dma64_res {
+    wh_Packet_Dma64_addr_status dmaAddrStatus;
+    uint16_t                    id;
+    uint8_t                     WH_PAD[6]; /* Pad to 8-byte alignment */
+} wh_Packet_key_cache_Dma64_res;
+
+/* DMA key export request structures */
+typedef struct wh_Packet_key_export_Dma32_req {
+    wh_Packet_Dma32_buffer key; /* Client memory buffer to receive key data */
+    uint32_t               id;
+    uint8_t                WH_PAD[4]; /* Pad to 8-byte alignment */
+} wh_Packet_key_export_Dma32_req;
+
+typedef struct wh_Packet_key_export_Dma64_req {
+    wh_Packet_Dma64_buffer key; /* Client memory buffer to receive key data */
+    uint32_t               id;
+    uint8_t                WH_PAD[4]; /* Pad to 8-byte alignment */
+} wh_Packet_key_export_Dma64_req;
+
+typedef struct wh_Packet_key_export_Dma32_res {
+    wh_Packet_Dma32_addr_status dmaAddrStatus;
+    uint32_t                    len;
+    uint8_t                     label[WH_NVM_LABEL_LEN];
+    uint8_t                     WH_PAD[4]; /* Pad to 8-byte alignment */
+} wh_Packet_key_export_Dma32_res;
+
+typedef struct wh_Packet_key_export_Dma64_res {
+    wh_Packet_Dma64_addr_status dmaAddrStatus;
+    uint32_t                    len;
+    uint8_t                     label[WH_NVM_LABEL_LEN];
+    uint8_t                     WH_PAD[4]; /* Pad to 8-byte alignment */
+} wh_Packet_key_export_Dma64_res;
+
 
 /** NVM Counter packets */
 typedef struct  wh_Packet_counter_init_req
@@ -455,27 +537,6 @@ typedef struct  wh_Packet_counter_destroy_req
 } wh_Packet_counter_destroy_req;
 
 /* DMA-based crypto messages */
-typedef struct {
-    uint32_t addr;
-    uint32_t sz;
-} wh_Packet_Dma32_buffer;
-
-typedef struct {
-    uint64_t addr;
-    uint64_t sz;
-} wh_Packet_Dma64_buffer;
-
-typedef struct {
-    /* If packet->rc == WH_ERROR_ACCESS, this field will contain the offending
-     * address/size pair. Invalid otherwise. */
-    wh_Packet_Dma32_buffer badAddr;
-} wh_Packet_Dma32_crypto_res;
-
-typedef struct {
-    /* If packet->rc == WH_ERROR_ACCESS, this field will contain the offending
-     * address/size pair. Invalid otherwise. */
-    wh_Packet_Dma64_buffer badAddr;
-} wh_Packet_Dma64_crypto_res;
 
 /* SHA256 DMA messages */
 typedef struct wh_Packet_hash_sha256_Dma32_req {
@@ -501,11 +562,11 @@ typedef struct wh_Packet_hash_sha256_Dma64_req {
 } wh_Packet_hash_sha256_Dma64_req;
 
 typedef struct wh_Packet_hash_sha256_Dma32_res {
-    wh_Packet_Dma32_crypto_res dmaCryptoRes;
+    wh_Packet_Dma32_addr_status dmaAddrStatus;
 } wh_Packet_hash_sha256_Dma32_res;
 
 typedef struct wh_Packet_hash_sha256_Dma64_res {
-    wh_Packet_Dma64_crypto_res dmaCryptoRes;
+    wh_Packet_Dma64_addr_status dmaAddrStatus;
 } wh_Packet_hash_sha256_Dma64_res;
 
 
@@ -694,7 +755,8 @@ typedef struct  wh_Packet_she_verify_mac_res
     uint8_t status;
     uint8_t WH_PAD[7];
 } wh_Packet_she_verify_mac_res;
-#endif  /*WOLFHSM_CFG_SHE_EXTENSION */
+#endif /* WOLFHSM_CFG_SHE_EXTENSION */
+
 
 /** Union of all packet types with common header
  * NOTE: This union, and therefore all structures within it, must be padded out
@@ -801,9 +863,17 @@ typedef struct whPacket
 #if defined(WOLFHSM_CFG_DMA) && WH_DMA_IS_32BIT
         wh_Packet_hash_sha256_Dma32_req hashSha256Dma32Req;
         wh_Packet_hash_sha256_Dma32_res hashSha256Dma32Res;
+        wh_Packet_key_cache_Dma32_req keyCacheDma32Req;
+        wh_Packet_key_cache_Dma32_res keyCacheDma32Res;
+        wh_Packet_key_export_Dma32_req keyExportDma32Req;
+        wh_Packet_key_export_Dma32_res keyExportDma32Res;
 #elif defined(WOLFHSM_CFG_DMA) && WH_DMA_IS_64BIT
         wh_Packet_hash_sha256_Dma64_req hashSha256Dma64Req;
         wh_Packet_hash_sha256_Dma64_res hashSha256Dma64Res;
+        wh_Packet_key_cache_Dma64_req keyCacheDma64Req;
+        wh_Packet_key_cache_Dma64_res keyCacheDma64Res;
+        wh_Packet_key_export_Dma64_req keyExportDma64Req;
+        wh_Packet_key_export_Dma64_res keyExportDma64Res;
 #endif
 
 #ifdef WOLFHSM_CFG_SHE_EXTENSION
