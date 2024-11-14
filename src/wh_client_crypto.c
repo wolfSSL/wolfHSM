@@ -53,6 +53,7 @@
 #include "wolfssl/wolfcrypt/rsa.h"
 #include "wolfssl/wolfcrypt/ecc.h"
 #include "wolfssl/wolfcrypt/curve25519.h"
+#include "wolfssl/wolfcrypt/dilithium.h"
 
 /* Message definitions */
 #include "wolfhsm/wh_message.h"
@@ -90,6 +91,20 @@ static int _RsaMakeKey(whClientContext* ctx,
         whKeyId *inout_key_id, RsaKey* rsa);
 #endif
 
+#ifdef HAVE_DILITHIUM
+/* Make a ML-DSA key on the server based on the flags */
+static int _MlDsaMakeKey(whClientContext* ctx,
+        int size, int level,
+        whKeyId *inout_key_id, whNvmFlags flags,
+        uint16_t label_len, uint8_t* label,
+        MlDsaKey* key);
+
+#ifdef WOLFHSM_CFG_DMA
+static int _MlDsaMakeKeyDma(whClientContext* ctx, int size, int level,
+        whKeyId *inout_key_id, whNvmFlags flags,
+        uint16_t label_len, uint8_t* label, MlDsaKey* key);
+#endif /* WOLFHSM_CFG_DMA */
+#endif /* HAVE_DILITHIUM */
 
 /** Implementations */
 int wh_Client_RngGenerate(whClientContext* ctx, uint8_t* out, uint32_t size)
@@ -2558,6 +2573,457 @@ int wh_Client_MlDsaCheckPrivKey(whClientContext* ctx, MlDsaKey* key,
 }
 
 
+
+#ifdef WOLFHSM_CFG_DMA
+
+int wh_Client_MlDsaImportKeyDma(whClientContext* ctx, MlDsaKey* key,
+                                whKeyId* inout_keyId, whNvmFlags flags,
+                                uint16_t label_len, uint8_t* label)
+{
+    int      ret    = WH_ERROR_OK;
+    whKeyId  key_id = WH_KEYID_ERASED;
+    byte     buffer[DILITHIUM_MAX_PRV_KEY_SIZE];
+    uint16_t buffer_len = 0;
+
+    if ((ctx == NULL) || (key == NULL) ||
+        ((label_len != 0) && (label == NULL))) {
+        return WH_ERROR_BADARGS;
+    }
+
+    if (inout_keyId != NULL) {
+        key_id = *inout_keyId;
+    }
+
+    /* Serialize the key to a temporary buffer first */
+    ret = wh_Crypto_MlDsaSerializeKeyDer(key, sizeof(buffer), buffer,
+                                         &buffer_len);
+    if (ret == WH_ERROR_OK) {
+        /* Cache the key using DMA and get the keyID */
+#if WH_DMA_IS_32BIT
+        ret = wh_Client_KeyCacheDma32(ctx, flags, label, label_len,
+                                      (uint32_t)(uintptr_t)buffer, buffer_len,
+                                      &key_id);
+#else
+        ret = wh_Client_KeyCacheDma64(ctx, flags, label, label_len,
+                                      (uint64_t)(uintptr_t)buffer, buffer_len,
+                                      &key_id);
+#endif
+        if ((ret == WH_ERROR_OK) && (inout_keyId != NULL)) {
+            *inout_keyId = key_id;
+        }
+    }
+
+    return ret;
+}
+
+int wh_Client_MlDsaExportKeyDma(whClientContext* ctx, whKeyId keyId,
+                                MlDsaKey* key, uint16_t label_len,
+                                uint8_t* label)
+{
+    int      ret = WH_ERROR_OK;
+    byte     buffer[DILITHIUM_MAX_PRV_KEY_SIZE];
+    uint16_t buffer_len = sizeof(buffer);
+
+    if ((ctx == NULL) || WH_KEYID_ISERASED(keyId) || (key == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Export the key from server using DMA */
+#if WH_DMA_IS_32BIT
+    ret = wh_Client_KeyExportDma32(ctx, keyId, (uint32_t)(uintptr_t)buffer,
+                                   buffer_len, label, label_len, &buffer_len);
+#else
+    ret = wh_Client_KeyExportDma64(ctx, keyId, (uint64_t)(uintptr_t)buffer,
+                                   buffer_len, label, label_len, &buffer_len);
+#endif
+    if (ret == WH_ERROR_OK) {
+        /* Deserialize the key */
+        ret = wh_Crypto_MlDsaDeserializeKeyDer(buffer, buffer_len, key);
+    }
+
+    return ret;
+}
+
+static int _MlDsaMakeKeyDma(whClientContext* ctx, int size, int level,
+                            whKeyId* inout_key_id, whNvmFlags flags,
+                            uint16_t label_len, uint8_t* label, MlDsaKey* key)
+{
+    int       ret    = WH_ERROR_OK;
+    whPacket* packet = NULL;
+    whKeyId   key_id = WH_KEYID_ERASED;
+    byte      buffer[DILITHIUM_MAX_PRV_KEY_SIZE];
+
+    if (ctx == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Get data pointer from the context to use as request/response storage */
+    packet = (whPacket*)wh_CommClient_GetDataPtr(ctx->comm);
+    if (packet == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Use the supplied key id if provided */
+    if (inout_key_id != NULL) {
+        key_id = *inout_key_id;
+    }
+
+    /* Request Message */
+    uint16_t group  = WH_MESSAGE_GROUP_CRYPTO_DMA;
+    uint16_t action = WC_ALGO_TYPE_PK;
+
+#if WH_DMA_IS_32BIT
+    wh_Packet_pq_mldsa_keygen_Dma32_req* req = &packet->pqMldsaKeygenDma32Req;
+#else
+    wh_Packet_pq_mldsa_keygen_Dma64_req* req = &packet->pqMldsaKeygenDma64Req;
+#endif
+    uint16_t req_len = WH_PACKET_STUB_SIZE + sizeof(*req);
+
+    if (req_len <= WOLFHSM_CFG_COMM_DATA_LEN) {
+        memset(req, 0, sizeof(*req));
+        req->type       = WC_PK_TYPE_PQC_SIG_KEYGEN;
+        req->pqAlgoType = WC_PQC_SIG_TYPE_DILITHIUM;
+        req->level      = level;
+        req->flags      = flags;
+        req->keyId      = key_id;
+#if WH_DMA_IS_32BIT
+        req->key.addr = (uint32_t)(uintptr_t)buffer;
+#else
+        req->key.addr = (uint64_t)(uintptr_t)buffer;
+#endif
+        req->key.sz = sizeof(buffer);
+
+        if ((label != NULL) && (label_len > 0)) {
+            if (label_len > WH_NVM_LABEL_LEN) {
+                label_len = WH_NVM_LABEL_LEN;
+            }
+            memcpy(req->label, label, label_len);
+            req->labelSize = label_len;
+        }
+
+        ret = wh_Client_SendRequest(ctx, group, action, req_len,
+                                    (uint8_t*)packet);
+        if (ret == WH_ERROR_OK) {
+            /* Response Message */
+#if WH_DMA_IS_32BIT
+            wh_Packet_pq_mldsa_Dma32_res* res = &packet->pqMldsaDma32Res;
+#else
+            wh_Packet_pq_mldsa_Dma64_res* res = &packet->pqMldsaDma64Res;
+#endif
+            uint16_t res_len;
+
+            do {
+                ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                             (uint8_t*)packet);
+            } while (ret == WH_ERROR_NOTREADY);
+
+            if (ret == WH_ERROR_OK) {
+                if (packet->rc == WH_ERROR_OK) {
+                    /* Key is cached on server or is ephemeral */
+                    key_id = (whKeyId)(res->keyId);
+
+                    /* Update output variable if requested */
+                    if (inout_key_id != NULL) {
+                        *inout_key_id = key_id;
+                    }
+
+                    /* Update the context if provided */
+                    if (key != NULL) {
+                        /* Set the key_id. Should be ERASED if EPHEMERAL */
+                        wh_Client_MlDsaSetKeyId(key, key_id);
+
+                        if (flags & WH_NVM_FLAGS_EPHEMERAL) {
+                            /* Response has the exported key */
+                            ret = wh_Crypto_MlDsaDeserializeKeyDer(
+                                buffer, res->keySize, key);
+                        }
+                    }
+                }
+                else {
+                    /* Server detected a problem with generation */
+                    ret = packet->rc;
+                }
+            }
+        }
+    }
+    else {
+        ret = WH_ERROR_BADARGS;
+    }
+    return ret;
+}
+
+
+int wh_Client_MlDsaMakeExportKeyDma(whClientContext* ctx, int level, MlDsaKey* key,
+                                    int size, WC_RNG* rng)
+{
+    if (key == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    return _MlDsaMakeKeyDma(ctx, size, level, NULL, WH_NVM_FLAGS_EPHEMERAL, 0,
+                            NULL, key);
+}
+
+
+int wh_Client_MlDsaSignDma(whClientContext* ctx, const byte* in, word32 in_len,
+                           byte* out, word32* out_len, WC_RNG* rng,
+                           MlDsaKey* key)
+{
+    int       ret = 0;
+    whPacket* packet;
+
+    /* Transaction state */
+    whKeyId key_id;
+    int     evict = 0;
+
+    if ((ctx == NULL) || (key == NULL) || ((in == NULL) && (in_len > 0)) ||
+        (out == NULL) || (out_len == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    packet = (whPacket*)wh_CommClient_GetDataPtr(ctx->comm);
+    if (packet == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    key_id = WH_DEVCTX_TO_KEYID(key->devCtx);
+
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+    printf("[client] %s keyid:%x, in_len:%u, inout_len:%p\n", __func__, key_id,
+           in_len, out_len);
+#endif
+
+    /* Import key if necessary */
+    if (WH_KEYID_ISERASED(key_id)) {
+        /* Must import the key to the server and evict it afterwards */
+        uint8_t    keyLabel[] = "TempMlDsaSign";
+        whNvmFlags flags      = WH_NVM_FLAGS_NONE;
+
+        ret = wh_Client_MlDsaImportKeyDma(ctx, key, &key_id, flags,
+                                          sizeof(keyLabel), keyLabel);
+        if (ret == WH_ERROR_OK) {
+            evict = 1;
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        /* Request Message */
+        uint16_t group  = WH_MESSAGE_GROUP_CRYPTO_DMA;
+        uint16_t action = WC_ALGO_TYPE_PK;
+
+#if WH_DMA_IS_32BIT
+        wh_Packet_pq_mldsa_sign_Dma32_req* req = &packet->pqMldsaSignDma32Req;
+#else
+        wh_Packet_pq_mldsa_sign_Dma64_req* req = &packet->pqMldsaSignDma64Req;
+#endif
+        uint16_t req_len = WH_PACKET_STUB_SIZE + sizeof(*req);
+        uint32_t options = 0;
+
+        if (req_len <= WOLFHSM_CFG_COMM_DATA_LEN) {
+            if (evict != 0) {
+                options |= WH_PACKET_PQ_MLDSA_SIGN_OPTIONS_EVICT;
+            }
+
+            memset(req, 0, sizeof(*req));
+            req->type       = WC_PK_TYPE_PQC_SIG_SIGN;
+            req->pqAlgoType = WC_PQC_SIG_TYPE_DILITHIUM;
+            req->options    = options;
+            req->level      = key->level;
+            req->keyId      = key_id;
+
+            /* Set up DMA buffers */
+#if WH_DMA_IS_32BIT
+            req->msg.addr = (uint32_t)(uintptr_t)in;
+            req->msg.sz   = in_len;
+            req->sig.addr = (uint32_t)(uintptr_t)out;
+            req->sig.sz   = *out_len;
+#else
+            req->msg.addr = (uint64_t)(uintptr_t)in;
+            req->msg.sz   = in_len;
+            req->sig.addr = (uint64_t)(uintptr_t)out;
+            req->sig.sz   = *out_len;
+#endif
+
+            /* Send Request */
+            ret = wh_Client_SendRequest(ctx, group, action, req_len,
+                                        (uint8_t*)packet);
+            if (ret == WH_ERROR_OK) {
+                /* Server will evict at this point if requested */
+                evict = 0;
+
+                /* Response Message */
+#if WH_DMA_IS_32BIT
+                wh_Packet_pq_mldsa_sign_Dma32_res* res =
+                    &packet->pqMldsaSignDma32Res;
+#else
+                wh_Packet_pq_mldsa_sign_Dma64_res* res =
+                    &packet->pqMldsaSignDma64Res;
+#endif
+                uint16_t res_len = 0;
+
+                /* Recv Response */
+                do {
+                    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                                 (uint8_t*)packet);
+                } while (ret == WH_ERROR_NOTREADY);
+
+                if (ret == WH_ERROR_OK) {
+                    if (packet->rc == 0) {
+                        /* Update signature length */
+                        *out_len = res->sigLen;
+                    }
+                    else {
+                        ret = packet->rc;
+                    }
+                }
+            }
+        }
+        else {
+            ret = WH_ERROR_BADARGS;
+        }
+    }
+
+    /* Evict the key manually on error if needed */
+    if (evict != 0) {
+        (void)wh_Client_KeyEvict(ctx, key_id);
+    }
+
+    return ret;
+}
+
+int wh_Client_MlDsaVerifyDma(whClientContext* ctx, const byte* sig,
+                             word32 sig_len, const byte* msg, word32 msg_len,
+                             int* out_res, MlDsaKey* key)
+{
+    int       ret = 0;
+    whPacket* packet;
+
+    /* Transaction state */
+    whKeyId key_id;
+    int     evict = 0;
+
+    if ((ctx == NULL) || (key == NULL) || ((sig == NULL) && (sig_len > 0)) ||
+        ((msg == NULL) && (msg_len > 0)) || (out_res == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    packet = (whPacket*)wh_CommClient_GetDataPtr(ctx->comm);
+    if (packet == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    key_id = WH_DEVCTX_TO_KEYID(key->devCtx);
+
+    /* Import key if necessary */
+    if (WH_KEYID_ISERASED(key_id)) {
+        /* Must import the key to the server and evict it afterwards */
+        uint8_t    keyLabel[] = "TempMlDsaVerify";
+        whNvmFlags flags      = WH_NVM_FLAGS_NONE;
+
+        ret = wh_Client_MlDsaImportKeyDma(ctx, key, &key_id, flags,
+                                          sizeof(keyLabel), keyLabel);
+        if (ret == 0) {
+            evict = 1;
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        /* Request Message */
+        uint16_t group  = WH_MESSAGE_GROUP_CRYPTO_DMA;
+        uint16_t action = WC_ALGO_TYPE_PK;
+
+#if WH_DMA_IS_32BIT
+        wh_Packet_pq_mldsa_verify_Dma32_req* req =
+            &packet->pqMldsaVerifyDma32Req;
+#else
+        wh_Packet_pq_mldsa_verify_Dma64_req* req =
+            &packet->pqMldsaVerifyDma64Req;
+#endif
+        uint16_t req_len = WH_PACKET_STUB_SIZE + sizeof(*req);
+        uint32_t options = 0;
+
+        if (req_len <= WOLFHSM_CFG_COMM_DATA_LEN) {
+            if (evict != 0) {
+                options |= WH_PACKET_PQ_MLDSAVERIFY_OPTIONS_EVICT;
+            }
+
+            memset(req, 0, sizeof(*req));
+            req->type       = WC_PK_TYPE_PQC_SIG_VERIFY;
+            req->pqAlgoType = WC_PQC_SIG_TYPE_DILITHIUM;
+            req->options    = options;
+            req->level      = key->level;
+            req->keyId      = key_id;
+
+            /* Set up DMA buffers */
+#if WH_DMA_IS_32BIT
+            req->sig.addr = (uint32_t)(uintptr_t)sig;
+            req->sig.sz   = sig_len;
+            req->msg.addr = (uint32_t)(uintptr_t)msg;
+            req->msg.sz   = msg_len;
+#else
+            req->sig.addr = (uint64_t)(uintptr_t)sig;
+            req->sig.sz   = sig_len;
+            req->msg.addr = (uint64_t)(uintptr_t)msg;
+            req->msg.sz   = msg_len;
+#endif
+
+            /* Send Request */
+            ret = wh_Client_SendRequest(ctx, group, action, req_len,
+                                        (uint8_t*)packet);
+            if (ret == WH_ERROR_OK) {
+                /* Server will evict at this point if requested */
+                evict = 0;
+
+                /* Response Message */
+#if WH_DMA_IS_32BIT
+                wh_Packet_pq_mldsa_verify_Dma32_res* res =
+                    &packet->pqMldsaVerifyDma32Res;
+#else
+                wh_Packet_pq_mldsa_verify_Dma64_res* res =
+                    &packet->pqMldsaVerifyDma64Res;
+#endif
+                uint16_t res_len = 0;
+
+                /* Recv Response */
+                do {
+                    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                                 (uint8_t*)packet);
+                } while (ret == WH_ERROR_NOTREADY);
+
+                if (ret == WH_ERROR_OK) {
+                    if (packet->rc == 0) {
+                        /* Set verification result */
+                        *out_res = res->verifyResult;
+                    }
+                    else {
+                        ret = packet->rc;
+                    }
+                }
+            }
+        }
+        else {
+            ret = WH_ERROR_BADARGS;
+        }
+    }
+
+    /* Evict the key manually on error if needed */
+    if (evict != 0) {
+        (void)wh_Client_KeyEvict(ctx, key_id);
+    }
+
+    return ret;
+}
+
+
+int wh_Client_MlDsaCheckPrivKeyDma(whClientContext* ctx, MlDsaKey* key,
+                                const byte* pubKey, word32 pubKeySz)
+{
+    /* TODO */
+    return CRYPTOCB_UNAVAILABLE;
+}
+
+
+#endif /* WOLFHSM_CFG_DMA */
 #endif /* HAVE_DILITHIUM */
 
-#endif  /* !WOLFHSM_CFG_NO_CRYPTO */
+#endif /* !WOLFHSM_CFG_NO_CRYPTO */

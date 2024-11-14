@@ -1384,7 +1384,8 @@ static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
 
 #ifdef HAVE_DILITHIUM
 
-static int whTestCrypto_MlDsa(whClientContext* ctx, int devId, WC_RNG* rng)
+static int whTestCrypto_MlDsaWolfCrypt(whClientContext* ctx, int devId,
+                                       WC_RNG* rng)
 {
     int ret      = 0;
     int verified = 0;
@@ -1463,9 +1464,166 @@ static int whTestCrypto_MlDsa(whClientContext* ctx, int devId, WC_RNG* rng)
         ret = -1;
     }
 
-    printf("ML DSA SUCCESS\n");
+    printf("ML-DSA DEVID=0x%X SUCCESS\n", devId);
 
     wc_MlDsaKey_Free(&key);
+
+    return ret;
+}
+
+static int whTestCrypto_MlDsaDmaClient(whClientContext* ctx, int devId,
+                                       WC_RNG* rng)
+{
+    int      ret = 0;
+    MlDsaKey key[1];
+    MlDsaKey imported_key[1];
+    whKeyId  keyId       = WH_KEYID_ERASED;
+    uint8_t  label[]     = "ML-DSA Test Key";
+    int      keyImported = 0;
+
+    /* Buffers for comparing serialized keys */
+    byte   key_der1[DILITHIUM_MAX_PRV_KEY_SIZE];
+    byte   key_der2[DILITHIUM_MAX_PRV_KEY_SIZE];
+    word32 key_der1_len = sizeof(key_der1);
+    word32 key_der2_len = sizeof(key_der2);
+
+    /* Initialize keys */
+    ret = wc_MlDsaKey_Init(key, NULL, devId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to initialize ML-DSA key: %d\n", ret);
+        return ret;
+    }
+
+    ret = wc_MlDsaKey_Init(imported_key, NULL, devId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to initialize imported ML-DSA key: %d\n", ret);
+        wc_MlDsaKey_Free(key);
+        return ret;
+    }
+
+    /* Generate ephemeral key using DMA */
+    if (ret == 0) {
+        ret = wh_Client_MlDsaMakeExportKeyDma(ctx, WC_ML_DSA_44, key, 0, rng);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to generate ML-DSA key using DMA: %d\n",
+                           ret);
+        }
+    }
+
+    /* Serialize the generated key for comparison */
+    if (ret == 0) {
+        ret = wc_Dilithium_PrivateKeyToDer(key, key_der1, key_der1_len);
+        if (ret < 0) {
+            WH_ERROR_PRINT("Failed to serialize generated key: %d\n", ret);
+        }
+        else {
+            key_der1_len = ret;
+            ret          = 0;
+        }
+    }
+
+    /* Import the key to cache using DMA */
+    if (ret == 0) {
+        ret = wh_Client_MlDsaImportKeyDma(ctx, key, &keyId, WH_NVM_FLAGS_NONE,
+                                          sizeof(label), label);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to import ML-DSA key using DMA: %d\n", ret);
+        }
+        keyImported = (ret == 0);
+    }
+
+    /* Export the key back using DMA */
+    if (ret == 0) {
+        ret = wh_Client_MlDsaExportKeyDma(ctx, keyId, imported_key,
+                                          sizeof(label), label);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to export ML-DSA key using DMA: %d\n", ret);
+        }
+    }
+
+    /* Serialize the exported key for comparison */
+    if (ret == 0) {
+        ret =
+            wc_Dilithium_PrivateKeyToDer(imported_key, key_der2, key_der2_len);
+        if (ret < 0) {
+            WH_ERROR_PRINT("Failed to serialize exported key: %d\n", ret);
+        }
+        else {
+            key_der2_len = ret;
+            ret          = 0;
+        }
+    }
+
+    /* Compare the keys */
+    if (ret == 0) {
+        if (key_der1_len != key_der2_len ||
+            XMEMCMP(key_der1, key_der2, key_der1_len) != 0) {
+            WH_ERROR_PRINT("Exported key does not match generated key\n");
+            ret = -1;
+        }
+    }
+    /* Test signing and verification */
+    if (ret == 0) {
+        byte msg[] = "Test message to sign";
+        byte sig[DILITHIUM_MAX_SIG_SIZE];
+        word32 sigLen = sizeof(sig);
+        int verified = 0;
+
+        /* Sign the message */
+        ret = wh_Client_MlDsaSignDma(ctx, msg, sizeof(msg), sig, &sigLen, rng, key);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to sign message using ML-DSA: %d\n", ret);
+        }
+        else {
+            /* Verify the signature - should succeed */
+            ret = wh_Client_MlDsaVerifyDma(ctx, sig, sigLen, msg,
+                                          sizeof(msg), &verified, key);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to verify signature using ML-DSA: %d\n", ret);
+            }
+            else if (!verified) {
+                WH_ERROR_PRINT("Signature verification failed when it should have succeeded\n");
+                ret = -1;
+            }
+            else {
+                /* Modify signature and verify again - should fail */
+                sig[0] ^= 0xFF;
+                ret = wh_Client_MlDsaVerifyDma(ctx, sig, sigLen, msg,
+                                              sizeof(msg), &verified, key);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("Failed to verify modified signature using ML-DSA: %d\n", ret);
+                }
+                else if (verified) {
+                    WH_ERROR_PRINT("Signature verification succeeded when it should have failed\n");
+                    ret = -1;
+                }
+                else {
+                    /* Test passed - verification failed as expected */
+                    ret = 0;
+                }
+            }
+        }
+    }
+
+    /* Clean up the cached key if it was imported */
+    if (keyImported) {
+        int evict_ret = wh_Client_KeyEvict(ctx, keyId);
+        if (evict_ret != 0) {
+            WH_ERROR_PRINT("Failed to evict ML-DSA key: %d\n", evict_ret);
+            if (ret == 0) {
+                ret = evict_ret;
+            }
+        }
+    }
+
+
+
+    if (ret == 0) {
+        printf("ML-DSA Client DMA API SUCCESS\n");
+    }
+
+    wc_MlDsaKey_Free(key);
+    wc_MlDsaKey_Free(imported_key);
     return ret;
 }
 
@@ -1539,8 +1697,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
 
 #ifndef NO_SHA256
     i = 0;
-    while ( (ret == WH_ERROR_OK) &&
-            (i < WH_NUM_DEVIDS)) {
+    while ((ret == WH_ERROR_OK) && (i < WH_NUM_DEVIDS)) {
         ret = whTest_CryptoSha256(client, WH_DEV_IDS_ARRAY[i], rng);
         if (ret == WH_ERROR_OK) {
             i++;
@@ -1549,8 +1706,15 @@ int whTest_CryptoClientConfig(whClientConfig* config)
 #endif /* !NO_SHA256 */
 
 #ifdef HAVE_DILITHIUM
+    i = 0;
+    while (ret == WH_ERROR_OK && i < WH_NUM_DEVIDS) {
+        ret = whTestCrypto_MlDsaWolfCrypt(client, WH_DEV_IDS_ARRAY[i], rng);
+        if (ret == WH_ERROR_OK) {
+            i++;
+        }
+    }
     if (ret == 0) {
-        ret = whTestCrypto_MlDsa(client, WH_DEV_ID, rng);
+        ret = whTestCrypto_MlDsaDmaClient(client, WH_DEV_ID_DMA, rng);
     }
 #endif /* HAVE_DILITHIUM */
 

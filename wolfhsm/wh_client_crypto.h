@@ -632,6 +632,75 @@ int wh_Client_MlDsaVerify(whClientContext* ctx, const byte* sig, word32 sig_len,
  */
 int wh_Client_MlDsaCheckPrivKey(whClientContext* ctx, MlDsaKey* key,
                                 const byte* pubKey, word32 pubKeySz);
+
+
+#ifdef WOLFHSM_CFG_DMA
+/**
+ * @brief Import a ML-DSA key using DMA.
+ *
+ * This function imports a ML-DSA key into the HSM using DMA.
+ *
+ * @param[in] ctx Pointer to the client context structure.
+ * @param[in] key Pointer to the ML-DSA key structure representing the key to
+ * import.
+ * @param[in,out] inout_keyId Pointer to store/provide the key ID.
+ * @param[in] flags NVM flags for key storage.
+ * @param[in] label_len Length of the key label in bytes.
+ * @param[in] label Pointer to the key label.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_MlDsaImportKeyDma(whClientContext* ctx, MlDsaKey* key,
+                                whKeyId* inout_keyId, whNvmFlags flags,
+                                uint16_t label_len, uint8_t* label);
+
+/**
+ * @brief Export a ML-DSA key using DMA.
+ *
+ * This function exports a ML-DSA key from the HSM using DMA.
+ *
+ * @param[in] ctx Pointer to the client context structure.
+ * @param[in] keyId ID of the key to export.
+ * @param[out] key Pointer to the ML-DSA key structure to hold the exported key.
+ * @param[in] label_len Length of the key label in bytes.
+ * @param[in] label Pointer to the key label.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_MlDsaExportKeyDma(whClientContext* ctx, whKeyId keyId,
+                                MlDsaKey* key, uint16_t label_len,
+                                uint8_t* label);
+
+/**
+ * @brief Generate a new ML-DSA key pair and export it using DMA.
+ *
+ * This function generates a new ML-DSA key pair in the HSM and exports it using
+ * DMA.
+ *
+ * @param[in] ctx Pointer to the client context structure.
+ * @param[in] level The ML-DSA security level.
+ * @param[out] key Pointer to the ML-DSA key structure to store the key.
+ * @param[in] size Size of the key in bits.
+ * @param[in] rng Pointer to initialized RNG structure.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_MlDsaMakeExportKeyDma(whClientContext* ctx, int level,
+                                    MlDsaKey* key, int size, WC_RNG* rng);
+
+
+
+
+int wh_Client_MlDsaSignDma(whClientContext* ctx, const byte* in, word32 in_len,
+                        byte* out, word32* out_len, WC_RNG* rng, MlDsaKey* key);
+
+int wh_Client_MlDsaVerifyDma(whClientContext* ctx, const byte* sig, word32 sig_len,
+                          const byte* msg, word32 msg_len, int* res,
+                          MlDsaKey* key);
+
+
+int wh_Client_MlDsaCheckPrivKeyDma(whClientContext* ctx, MlDsaKey* key,
+                                const byte* pubKey, word32 pubKeySz);
+
+#endif /* WOLFHSM_CFG_DMA */
+
 #endif /* HAVE_DILITHIUM */
 
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
