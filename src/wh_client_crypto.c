@@ -2155,11 +2155,6 @@ int wh_Client_MlDsaExportKey(whClientContext* ctx, whKeyId keyId, MlDsaKey* key,
     if (ret == WH_ERROR_OK) {
         /* Update the key structure */
         ret = wh_Crypto_MlDsaDeserializeKeyDer(buffer, buffer_len, key);
-        if (ret == WH_ERROR_OK) {
-            /* DILITHIUM-TODO: need to set securitly level. Hardcode level for
-             * now */
-            ret = wc_MlDsaKey_SetParams(key, WC_ML_DSA_44);
-        }
     }
 
 #ifdef DEBUG_CRYPTOCB_VERBOSE
