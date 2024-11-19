@@ -1384,6 +1384,10 @@ static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
 
 #ifdef HAVE_DILITHIUM
 
+#if !defined(WOLFSSL_DILITHIUM_NO_VERIFY) && \
+    !defined(WOLFSSL_DILITHIUM_NO_SIGN) && \
+    !defined(WOLFSSL_DILITHIUM_NO_MAKE_KEY) && \
+    !defined(WOLFSSL_NO_ML_DSA_44)
 static int whTestCrypto_MlDsaWolfCrypt(whClientContext* ctx, int devId,
                                        WC_RNG* rng)
 {
@@ -1626,6 +1630,10 @@ static int whTestCrypto_MlDsaDmaClient(whClientContext* ctx, int devId,
     wc_MlDsaKey_Free(imported_key);
     return ret;
 }
+#endif /* !defined(WOLFSSL_DILITHIUM_NO_VERIFY) && \
+          !defined(WOLFSSL_DILITHIUM_NO_SIGN) && \
+          !defined(WOLFSSL_DILITHIUM_NO_MAKE_KEY) && \
+          !defined(WOLFSSL_NO_ML_DSA_44) */
 
 #endif /* HAVE_DILITHIUM */
 
@@ -1708,6 +1716,12 @@ int whTest_CryptoClientConfig(whClientConfig* config)
 #ifdef HAVE_DILITHIUM
     i = 0;
     while (ret == WH_ERROR_OK && i < WH_NUM_DEVIDS) {
+#ifdef WOLFHSM_CFG_TEST_CLIENT_LARGE_DATA_DMA_ONLY
+        if (WH_DEV_IDS_ARRAY[i] != WH_DEV_ID_DMA) {
+            i++;
+            continue;
+        }
+#endif /* WOLFHSM_CFG_TEST_CLIENT_LARGE_DATA_DMA_ONLY */
         ret = whTestCrypto_MlDsaWolfCrypt(client, WH_DEV_IDS_ARRAY[i], rng);
         if (ret == WH_ERROR_OK) {
             i++;
