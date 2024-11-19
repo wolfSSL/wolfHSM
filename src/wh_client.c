@@ -1338,7 +1338,7 @@ int wh_Client_KeyExportDma32Response(whClientContext* c, uint8_t* label,
             }
         }
     }
-    return ret;
+    return rc;
 }
 
 int wh_Client_KeyExportDma32(whClientContext* c, uint16_t keyId,

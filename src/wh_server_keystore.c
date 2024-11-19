@@ -775,7 +775,7 @@ static int hsmExportKeyDma32(whServerContext* server, whKeyId keyId,
     XMEMCPY(outMeta, cacheMeta, sizeof(whNvmMetadata));
 
     /* Copy key data using DMA */
-    ret = whServerDma_CopyToClient32(server, keyAddr, buffer, meta->len,
+    ret = whServerDma_CopyToClient32(server, keyAddr, buffer, outMeta->len,
                                      (whServerDmaFlags){0});
 
     return ret;
