@@ -1385,9 +1385,8 @@ static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
 #ifdef HAVE_DILITHIUM
 
 #if !defined(WOLFSSL_DILITHIUM_NO_VERIFY) && \
-    !defined(WOLFSSL_DILITHIUM_NO_SIGN) && \
-    !defined(WOLFSSL_DILITHIUM_NO_MAKE_KEY) && \
-    !defined(WOLFSSL_NO_ML_DSA_44)
+    !defined(WOLFSSL_DILITHIUM_NO_SIGN) &&   \
+    !defined(WOLFSSL_DILITHIUM_NO_MAKE_KEY) && !defined(WOLFSSL_NO_ML_DSA_44)
 static int whTestCrypto_MlDsaWolfCrypt(whClientContext* ctx, int devId,
                                        WC_RNG* rng)
 {
@@ -1507,7 +1506,7 @@ static int whTestCrypto_MlDsaDmaClient(whClientContext* ctx, int devId,
 
     /* Generate ephemeral key using DMA */
     if (ret == 0) {
-        ret = wh_Client_MlDsaMakeExportKeyDma(ctx, WC_ML_DSA_44, key, 0, rng);
+        ret = wh_Client_MlDsaMakeExportKeyDma(ctx, WC_ML_DSA_44, key);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed to generate ML-DSA key using DMA: %d\n",
                            ret);
@@ -1568,37 +1567,42 @@ static int whTestCrypto_MlDsaDmaClient(whClientContext* ctx, int devId,
     }
     /* Test signing and verification */
     if (ret == 0) {
-        byte msg[] = "Test message to sign";
-        byte sig[DILITHIUM_MAX_SIG_SIZE];
-        word32 sigLen = sizeof(sig);
-        int verified = 0;
+        byte   msg[] = "Test message to sign";
+        byte   sig[DILITHIUM_MAX_SIG_SIZE];
+        word32 sigLen   = sizeof(sig);
+        int    verified = 0;
 
         /* Sign the message */
-        ret = wh_Client_MlDsaSignDma(ctx, msg, sizeof(msg), sig, &sigLen, rng, key);
+        ret = wh_Client_MlDsaSignDma(ctx, msg, sizeof(msg), sig, &sigLen, key);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed to sign message using ML-DSA: %d\n", ret);
         }
         else {
             /* Verify the signature - should succeed */
-            ret = wh_Client_MlDsaVerifyDma(ctx, sig, sigLen, msg,
-                                          sizeof(msg), &verified, key);
+            ret = wh_Client_MlDsaVerifyDma(ctx, sig, sigLen, msg, sizeof(msg),
+                                           &verified, key);
             if (ret != 0) {
-                WH_ERROR_PRINT("Failed to verify signature using ML-DSA: %d\n", ret);
+                WH_ERROR_PRINT("Failed to verify signature using ML-DSA: %d\n",
+                               ret);
             }
             else if (!verified) {
-                WH_ERROR_PRINT("Signature verification failed when it should have succeeded\n");
+                WH_ERROR_PRINT("Signature verification failed when it should "
+                               "have succeeded\n");
                 ret = -1;
             }
             else {
                 /* Modify signature and verify again - should fail */
                 sig[0] ^= 0xFF;
                 ret = wh_Client_MlDsaVerifyDma(ctx, sig, sigLen, msg,
-                                              sizeof(msg), &verified, key);
+                                               sizeof(msg), &verified, key);
                 if (ret != 0) {
-                    WH_ERROR_PRINT("Failed to verify modified signature using ML-DSA: %d\n", ret);
+                    WH_ERROR_PRINT("Failed to verify modified signature using "
+                                   "ML-DSA: %d\n",
+                                   ret);
                 }
                 else if (verified) {
-                    WH_ERROR_PRINT("Signature verification succeeded when it should have failed\n");
+                    WH_ERROR_PRINT("Signature verification succeeded when it "
+                                   "should have failed\n");
                     ret = -1;
                 }
                 else {
@@ -1621,7 +1625,6 @@ static int whTestCrypto_MlDsaDmaClient(whClientContext* ctx, int devId,
     }
 
 
-
     if (ret == 0) {
         printf("ML-DSA Client DMA API SUCCESS\n");
     }
@@ -1630,8 +1633,8 @@ static int whTestCrypto_MlDsaDmaClient(whClientContext* ctx, int devId,
     wc_MlDsaKey_Free(imported_key);
     return ret;
 }
-#endif /* !defined(WOLFSSL_DILITHIUM_NO_VERIFY) && \
-          !defined(WOLFSSL_DILITHIUM_NO_SIGN) && \
+#endif /* !defined(WOLFSSL_DILITHIUM_NO_VERIFY) &&   \
+          !defined(WOLFSSL_DILITHIUM_NO_SIGN) &&     \
           !defined(WOLFSSL_DILITHIUM_NO_MAKE_KEY) && \
           !defined(WOLFSSL_NO_ML_DSA_44) */
 

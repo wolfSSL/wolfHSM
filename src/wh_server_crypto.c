@@ -523,7 +523,14 @@ int wh_Server_MlDsaKeyCacheImport(whServerContext* ctx, MlDsaKey* key,
     whNvmMetadata* cacheMeta;
     uint16_t       der_size;
 
-    const uint16_t MAX_MLDSA_DER_SIZE = 5000;
+    const uint16_t MAX_MLDSA_DER_SIZE =
+    #if !defined(WOLFSSL_NO_ML_DSA_87)
+        ML_DSA_LEVEL5_PRV_KEY_DER_SIZE;
+    # elif !defined(WOLFSSL_NO_ML_DSA_65)
+        ML_DSA_LEVEL3_PRV_KEY_DER_SIZE;
+    #else
+        ML_DSA_LEVEL2_PRV_KEY_DER_SIZE;
+    #endif
 
     if ((ctx == NULL) || (key == NULL) || (WH_KEYID_ISERASED(keyId)) ||
         ((label != NULL) && (label_len > sizeof(cacheMeta->label)))) {

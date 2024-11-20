@@ -100,9 +100,9 @@ static int _MlDsaMakeKey(whClientContext* ctx,
         MlDsaKey* key);
 
 #ifdef WOLFHSM_CFG_DMA
-static int _MlDsaMakeKeyDma(whClientContext* ctx, int size, int level,
-        whKeyId *inout_key_id, whNvmFlags flags,
-        uint16_t label_len, uint8_t* label, MlDsaKey* key);
+static int _MlDsaMakeKeyDma(whClientContext* ctx, int level,
+                            whKeyId* inout_key_id, whNvmFlags flags,
+                            uint16_t label_len, uint8_t* label, MlDsaKey* key);
 #endif /* WOLFHSM_CFG_DMA */
 #endif /* HAVE_DILITHIUM */
 
@@ -2096,7 +2096,8 @@ int wh_Client_MlDsaSetKeyId(MlDsaKey* key, whKeyId keyId)
         return WH_ERROR_BADARGS;
     }
 
-    key->devCtx = (void*)((intptr_t)keyId);
+    key->devCtx = WH_KEYID_TO_DEVCTX(keyId);
+
     return WH_ERROR_OK;
 }
 
@@ -2106,7 +2107,8 @@ int wh_Client_MlDsaGetKeyId(MlDsaKey* key, whKeyId* outId)
         return WH_ERROR_BADARGS;
     }
 
-    *outId = (whKeyId)((intptr_t)key->devCtx);
+    *outId = WH_DEVCTX_TO_KEYID(key->devCtx);
+
     return WH_ERROR_OK;
 }
 
@@ -2303,8 +2305,8 @@ int wh_Client_MlDsaMakeCacheKey(whClientContext* ctx, int size, int level,
                          label, NULL);
 }
 
-int wh_Client_MlDsaMakeExportKey(whClientContext* ctx, int level, MlDsaKey* key,
-                                 int size, WC_RNG* rng)
+int wh_Client_MlDsaMakeExportKey(whClientContext* ctx, int level, int size,
+                                 MlDsaKey* key)
 {
     if (key == NULL) {
         return WH_ERROR_BADARGS;
@@ -2316,8 +2318,7 @@ int wh_Client_MlDsaMakeExportKey(whClientContext* ctx, int level, MlDsaKey* key,
 
 
 int wh_Client_MlDsaSign(whClientContext* ctx, const byte* in, word32 in_len,
-                        byte* out, word32* inout_len, WC_RNG* rng,
-                        MlDsaKey* key)
+                        byte* out, word32* inout_len, MlDsaKey* key)
 {
     int       ret = 0;
     whPacket* packet;
@@ -2644,7 +2645,7 @@ int wh_Client_MlDsaExportKeyDma(whClientContext* ctx, whKeyId keyId,
     return ret;
 }
 
-static int _MlDsaMakeKeyDma(whClientContext* ctx, int size, int level,
+static int _MlDsaMakeKeyDma(whClientContext* ctx, int level,
                             whKeyId* inout_key_id, whNvmFlags flags,
                             uint16_t label_len, uint8_t* label, MlDsaKey* key)
 {
@@ -2753,21 +2754,20 @@ static int _MlDsaMakeKeyDma(whClientContext* ctx, int size, int level,
 }
 
 
-int wh_Client_MlDsaMakeExportKeyDma(whClientContext* ctx, int level, MlDsaKey* key,
-                                    int size, WC_RNG* rng)
+int wh_Client_MlDsaMakeExportKeyDma(whClientContext* ctx, int level,
+                                    MlDsaKey* key)
 {
     if (key == NULL) {
         return WH_ERROR_BADARGS;
     }
 
-    return _MlDsaMakeKeyDma(ctx, size, level, NULL, WH_NVM_FLAGS_EPHEMERAL, 0,
-                            NULL, key);
+    return _MlDsaMakeKeyDma(ctx, level, NULL, WH_NVM_FLAGS_EPHEMERAL, 0, NULL,
+                            key);
 }
 
 
 int wh_Client_MlDsaSignDma(whClientContext* ctx, const byte* in, word32 in_len,
-                           byte* out, word32* out_len, WC_RNG* rng,
-                           MlDsaKey* key)
+                           byte* out, word32* out_len, MlDsaKey* key)
 {
     int       ret = 0;
     whPacket* packet;

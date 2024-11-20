@@ -780,11 +780,10 @@ static int _handlePqcSigKeyGen(whClientContext* ctx, wc_CryptoInfo* info,
         case WC_PQC_SIG_TYPE_DILITHIUM: {
             int level = ((MlDsaKey*)key)->level;
             if (useDma) {
-                ret =
-                    wh_Client_MlDsaMakeExportKeyDma(ctx, level, key, size, rng);
+                ret = wh_Client_MlDsaMakeExportKeyDma(ctx, level, key);
             }
             else {
-                ret = wh_Client_MlDsaMakeExportKey(ctx, level, key, size, rng);
+                ret = wh_Client_MlDsaMakeExportKey(ctx, level, size, key);
             }
         } break;
 #endif /* HAVE_DILITHIUM */
@@ -823,12 +822,11 @@ static int _handlePqcSign(whClientContext* ctx, wc_CryptoInfo* info, int useDma)
 #ifdef HAVE_DILITHIUM
         case WC_PQC_SIG_TYPE_DILITHIUM:
             if (useDma) {
-                ret = wh_Client_MlDsaSignDma(ctx, in, in_len, out, out_len, rng,
-                                             key);
+                ret =
+                    wh_Client_MlDsaSignDma(ctx, in, in_len, out, out_len, key);
             }
             else {
-                ret = wh_Client_MlDsaSign(ctx, in, in_len, out, out_len, rng,
-                                          key);
+                ret = wh_Client_MlDsaSign(ctx, in, in_len, out, out_len, key);
             }
             break;
 #endif /* HAVE_DILITHIUM */
