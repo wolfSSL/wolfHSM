@@ -117,6 +117,22 @@ extern "C" {
 #define WOLFSSL_SHA3
 #define WOLFSSL_SHAKE128
 #define WOLFSSL_SHAKE256
+#define WOLFSSL_DILITHIUM_INCLUDE_BENCH_KEYS
+
+/* The following options can be individually controlled to customize the
+ * ML-DSA configuration */
+#if 0
+#define WOLFSSL_DILITHIUM_VERIFY_ONLY
+#endif
+#if 0
+#define WOLFSSL_DILITHIUM_NO_VERIFY
+#endif
+#if 0
+#define WOLFSSL_DILITHIUM_NO_SIGN
+#endif
+#if 0
+#define WOLFSSL_DILITHIUM_NO_MAKE_KEY
+#endif
 
 /** Composite features */
 #define HAVE_HKDF
