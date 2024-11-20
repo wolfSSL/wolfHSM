@@ -257,7 +257,23 @@ int wh_Crypto_MlDsaSerializeKeyDer(MlDsaKey* key, uint16_t max_size,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wc_Dilithium_KeyToDer(key, buffer, max_size);
+    /* Choose appropriate serialization based on key flags */
+    if (key->prvKeySet && key->pubKeySet) {
+        /* Full keypair - use KeyToDer */
+        ret = wc_Dilithium_KeyToDer(key, buffer, max_size);
+    }
+    else if (key->pubKeySet) {
+        /* Public key only - use PublicKeyToDer with SPKI format */
+        ret = wc_Dilithium_PublicKeyToDer(key, buffer, max_size, 1);
+    }
+    else if (key->prvKeySet) {
+        /* Private key only */
+        ret = wc_Dilithium_PrivateKeyToDer(key, buffer, max_size);
+    }
+    else {
+        /* No key data set */
+        return WH_ERROR_BADARGS;
+    }
 
     /* ASN.1 functions return the size of the DER encoded key on success */
     if (ret > 0) {
@@ -271,12 +287,20 @@ int wh_Crypto_MlDsaDeserializeKeyDer(const uint8_t* buffer, uint16_t size,
         MlDsaKey* key)
 {
     word32 idx = 0;
+    int ret;
 
     if ((buffer == NULL) || (key == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
-    return wc_Dilithium_PrivateKeyDecode(buffer, &idx, key, size);
+    /* Try private key first, if that fails try public key */
+    ret = wc_Dilithium_PrivateKeyDecode(buffer, &idx, key, size);
+    if (ret != 0) {
+        /* Reset index before trying public key */
+        idx = 0;
+        ret = wc_Dilithium_PublicKeyDecode(buffer, &idx, key, size);
+    }
+    return ret;
 }
 #endif /* HAVE_DILITHIUM */
 
