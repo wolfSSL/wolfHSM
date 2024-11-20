@@ -1443,17 +1443,17 @@ static int _IsMlDsaLevelSupported(int level)
         case WC_ML_DSA_44:
             ret = 1;
             break;
-#endif /* WOLFSSL_NO_ML_DSA_44 */
+#endif /* !WOLFSSL_NO_ML_DSA_44 */
 #ifndef WOLFSSL_NO_ML_DSA_65
         case WC_ML_DSA_65:
             ret = 1;
             break;
-#endif /* WOLFSSL_NO_ML_DSA_65 */
+#endif /* !WOLFSSL_NO_ML_DSA_65 */
 #ifndef WOLFSSL_NO_ML_DSA_87
         case WC_ML_DSA_87:
             ret = 1;
             break;
-#endif /* WOLFSSL_NO_ML_DSA_87 */
+#endif /* !WOLFSSL_NO_ML_DSA_87 */
         default:
             ret = 0;
             break;
