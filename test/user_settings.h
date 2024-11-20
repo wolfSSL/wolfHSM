@@ -52,7 +52,7 @@ extern "C" {
 #define USE_FAST_MATH
 
 /** wolfHSM recommended */
-#define WOLFSSL_NO_MALLOC
+/* #define WOLFSSL_NO_MALLOC */
 #define WOLFSSL_USE_ALIGN
 #define WOLFSSL_IGNORE_FILE_WARN
 #define TFM_TIMING_RESISTANT
@@ -111,6 +111,13 @@ extern "C" {
 /* #define WOLFSSL_SHA384 */
 /* #define WOLFSSL_SHA512 */
 
+/* Dilithium Options */
+#define HAVE_DILITHIUM
+#define WOLFSSL_WC_DILITHIUM /* use wolfCrypt implementation, not libOQS */
+#define WOLFSSL_SHA3
+#define WOLFSSL_SHAKE128
+#define WOLFSSL_SHAKE256
+
 /** Composite features */
 #define HAVE_HKDF
 
@@ -121,8 +128,6 @@ extern "C" {
 #define NO_MD4
 #define NO_MD5
 #define NO_DES3
-#define WOLFSSL_NO_SHAKE128
-#define WOLFSSL_NO_SHAKE256
 #define NO_PWDBASED
 
 

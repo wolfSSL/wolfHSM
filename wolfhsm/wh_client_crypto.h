@@ -48,6 +48,7 @@
 #include "wolfssl/wolfcrypt/curve25519.h"
 #include "wolfssl/wolfcrypt/rsa.h"
 #include "wolfssl/wolfcrypt/ecc.h"
+#include "wolfssl/wolfcrypt/dilithium.h"
 
 /**
  * @brief Generate random bytes
@@ -477,6 +478,161 @@ int wh_Client_CmacSetKeyId(Cmac* key, whNvmId keyId);
  */
 int wh_Client_CmacGetKeyId(Cmac* key, whNvmId* outId);
 #endif /* WOLFSSL_CMAC */
+
+#ifdef HAVE_DILITHIUM
+
+/**
+ * @brief Associates a ML-DSA key with a specific key ID.
+ *
+ * This function sets the device context of a ML-DSA key to the specified
+ * key ID. On the server side, this key ID is used to reference the key stored
+ * in the HSM
+ *
+ * @param[in] key Pointer to the ML-DSA key structure.
+ * @param[in] keyId Key ID to be associated with the ML-DSA key.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_MlDsaSetKeyId(MlDsaKey* key, whKeyId keyId);
+
+/**
+ * @brief Gets the wolfHSM keyId being used by the wolfCrypt struct.
+ *
+ * This function gets the device context of a ML-DSA key that was previously
+ * set by either the crypto callback layer or wh_Client_MlDsaSetKeyId.
+ *
+ * @param[in] key Pointer to the ML-DSA key structure.
+ * @param[out] outId Pointer to the key ID to return.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_MlDsaGetKeyId(MlDsaKey* key, whKeyId* outId);
+
+/**
+ * @brief Import a ML-DSA key to the server key cache.
+ *
+ * @param[in] ctx Pointer to the client context
+ * @param[in] key Pointer to the key to import
+ * @param[in,out] inout_keyId Pointer to key ID to use/receive
+ * @param[in] flags Flags to control key persistence
+ * @param[in] label_len Length of optional label
+ * @param[in] label Optional label to associate with key
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_MlDsaImportKey(whClientContext* ctx, MlDsaKey* key,
+                             whKeyId* inout_keyId, whNvmFlags flags,
+                             uint16_t label_len, uint8_t* label);
+
+/**
+ * @brief Export a ML-DSA key from the server.
+ *
+ * @param[in] ctx Pointer to the client context
+ * @param[in] keyId ID of key to export
+ * @param[out] key Pointer to receive exported key
+ * @param[in] label_len Length of optional label buffer
+ * @param[in] label Optional buffer to receive key label
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_MlDsaExportKey(whClientContext* ctx, whKeyId keyId, MlDsaKey* key,
+                             uint16_t label_len, uint8_t* label);
+
+/**
+ * @brief Generate a new ML-DSA key pair and export the public key.
+ *
+ * This function generates a new ML-DSA key pair in the HSM and exports the
+ * public key to the client. The private key remains securely stored in the HSM.
+ *
+ * @param[in] ctx Pointer to the client context structure.
+ * @param[in] type The ML-DSA algorithm type.
+ * @param[in,out] key Pointer to the ML-DSA key structure to store the key.
+ * @param[in] size Size of the key in bits.
+ * @param[in] rng Pointer to initialized RNG structure.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_MlDsaMakeExportKey(whClientContext* ctx, int type, MlDsaKey* key,
+                                 int size, WC_RNG* rng);
+/**
+ * @brief Create and cache a new ML-DSA key on the server.
+ *
+ * @param[in] ctx Pointer to the client context
+ * @param[in] size Size of key to generate
+ * @param[in] level ML-DSA security level of the key to generate
+ * @param[in,out] inout_key_id Pointer to key ID to use/receive
+ * @param[in] flags Flags to control key persistence
+ * @param[in] label_len Length of optional label
+ * @param[in] label Optional label to associate with key
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_MlDsaMakeCacheKey(whClientContext* ctx, int size, int level,
+                                whKeyId* inout_key_id, whNvmFlags flags,
+                                uint16_t label_len, uint8_t* label);
+
+/**
+ * @brief Generate a new ML-DSA key pair and export it.
+ *
+ * This function generates a new ML-DSA key pair in the HSM and exports both
+ * the public and private key components to the client.
+ *
+ * @param[in] ctx Pointer to the client context structure.
+ * @param[in] level The ML-DSA security level.
+ * @param[out] key Pointer to the ML-DSA key structure to store the key.
+ * @param[in] size Size of the key in bits.
+ * @param[in] rng Pointer to initialized RNG structure.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_MlDsaMakeExportKey(whClientContext* ctx, int level, MlDsaKey* key,
+                                 int size, WC_RNG* rng);
+
+/**
+ * @brief Sign a message using a ML-DSA private key.
+ *
+ * This function signs a message using a ML-DSA private key stored in the
+ * HSM.
+ *
+ * @param[in] ctx Pointer to the client context structure.
+ * @param[in] in Pointer to the message to sign.
+ * @param[in] in_len Length of the message in bytes.
+ * @param[out] out Buffer to store the signature.
+ * @param[in,out] out_len Pointer to size of output buffer, updated with actual
+ * size.
+ * @param[in] rng Pointer to initialized RNG structure.
+ * @param[in] key Pointer to the ML-DSA key structure.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_MlDsaSign(whClientContext* ctx, const byte* in, word32 in_len,
+                        byte* out, word32* out_len, WC_RNG* rng, MlDsaKey* key);
+
+/**
+ * @brief Verify a ML-DSA signature.
+ *
+ * This function verifies a ML-DSA signature using the HSM.
+ *
+ * @param[in] ctx Pointer to the client context structure.
+ * @param[in] sig Pointer to the signature to verify.
+ * @param[in] sig_len Length of the signature in bytes.
+ * @param[in] msg Pointer to the original message.
+ * @param[in] msg_len Length of the message in bytes.
+ * @param[out] res Pointer to store verification result (1=success, 0=failure).
+ * @param[in] key Pointer to the ML-DSA key structure.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_MlDsaVerify(whClientContext* ctx, const byte* sig, word32 sig_len,
+                          const byte* msg, word32 msg_len, int* res,
+                          MlDsaKey* key);
+
+/**
+ * @brief Check a ML-DSA private key.
+ *
+ * This function validates a ML-DSA private key against its public key using
+ * the HSM.
+ *
+ * @param[in] ctx Pointer to the client context structure.
+ * @param[in] key Pointer to the ML-DSA key structure.
+ * @param[in] pubKey Pointer to the public key data.
+ * @param[in] pubKeySz Size of the public key in bytes.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_MlDsaCheckPrivKey(whClientContext* ctx, MlDsaKey* key,
+                                const byte* pubKey, word32 pubKeySz);
+#endif /* HAVE_DILITHIUM */
 
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
 #endif /* !WOLFHSM_WH_CLIENT_CRYPTO_H_ */

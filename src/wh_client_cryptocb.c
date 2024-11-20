@@ -59,6 +59,11 @@ static int _xferSha256BlockAndUpdateDigest(whClientContext* ctx,
                                            wc_Sha256* sha256,
                                            whPacket* packet,
                                            uint32_t isLastBlock);
+static int _handlePqcSigKeyGen(whClientContext* ctx, wc_CryptoInfo* info);
+static int _handlePqcSign(whClientContext* ctx, wc_CryptoInfo* info);
+static int _handlePqcVerify(whClientContext* ctx, wc_CryptoInfo* info);
+static int _handlePqcSigCheckPrivKey(whClientContext* ctx, wc_CryptoInfo* info);
+
 #ifdef WOLFHSM_CFG_DMA
 static int _handleSha256Dma(wc_CryptoInfo* info, void* inCtx, whPacket* packet);
 #endif /* WOLFHSM_CFG_DMA */
@@ -330,6 +335,25 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             }
         } break;
 #endif /* HAVE_CURVE25519 */
+
+#if defined(HAVE_DILITHIUM) || defined(HAVE_FALCON)
+        case WC_PK_TYPE_PQC_SIG_KEYGEN:
+            ret = _handlePqcSigKeyGen(ctx, info);
+            break;
+
+        case WC_PK_TYPE_PQC_SIG_SIGN:
+            ret = _handlePqcSign(ctx, info);
+            break;
+
+        case WC_PK_TYPE_PQC_SIG_VERIFY:
+            ret = _handlePqcVerify(ctx, info);
+            break;
+
+        case WC_PK_TYPE_PQC_SIG_CHECK_PRIV_KEY:
+            ret = _handlePqcSigCheckPrivKey(ctx, info);
+            break;
+
+#endif /* HAVE_DILITHIUM || HAVE_FALCON */
 
         case WC_PK_TYPE_NONE:
         default:
@@ -725,6 +749,125 @@ static int _handleSha256Dma(wc_CryptoInfo* info, void* inCtx, whPacket* packet)
 }
 #endif /* WOLFHSM_CFG_DMA */
 #endif /* ! NO_SHA256 */
+
+
+#if defined(HAVE_FALCON) || defined(HAVE_DILITHIUM)
+static int _handlePqcSigKeyGen(whClientContext* ctx, wc_CryptoInfo* info)
+{
+    int ret = CRYPTOCB_UNAVAILABLE;
+
+    /* Extract info parameters */
+    WC_RNG* rng  = info->pk.pqc_sig_kg.rng;
+    int     size = info->pk.pqc_sig_kg.size;
+    void*   key  = info->pk.pqc_sig_kg.key;
+    int     type = info->pk.pqc_sig_kg.type;
+
+    switch (type) {
+#ifdef HAVE_DILITHIUM
+        case WC_PQC_SIG_TYPE_DILITHIUM: {
+            int level = ((MlDsaKey*)key)->level;
+            ret = wh_Client_MlDsaMakeExportKey(ctx, level, key, size, rng);
+        } break;
+#endif /* HAVE_DILITHIUM */
+
+        /* Support for additional PQC algorithms should be added here */
+
+        default:
+            ret = CRYPTOCB_UNAVAILABLE;
+            break;
+    }
+
+    return ret;
+}
+
+static int _handlePqcSign(whClientContext* ctx, wc_CryptoInfo* info)
+{
+    int ret = CRYPTOCB_UNAVAILABLE;
+
+    /* Extract info parameters */
+    const byte* in      = info->pk.pqc_sign.in;
+    word32      in_len  = info->pk.pqc_sign.inlen;
+    byte*       out     = info->pk.pqc_sign.out;
+    word32*     out_len = info->pk.pqc_sign.outlen;
+    WC_RNG*     rng     = info->pk.pqc_sign.rng;
+    void*       key     = info->pk.pqc_sign.key;
+    int         type    = info->pk.pqc_sign.type;
+
+    switch (type) {
+#ifdef HAVE_DILITHIUM
+        case WC_PQC_SIG_TYPE_DILITHIUM:
+            ret = wh_Client_MlDsaSign(ctx, in, in_len, out, out_len, rng, key);
+            break;
+#endif /* HAVE_DILITHIUM */
+
+        /* Support for additional PQC algorithms should be added here */
+
+        default:
+            ret = CRYPTOCB_UNAVAILABLE;
+            break;
+    }
+
+    return ret;
+}
+
+static int _handlePqcVerify(whClientContext* ctx, wc_CryptoInfo* info)
+{
+    int ret = CRYPTOCB_UNAVAILABLE;
+
+    /* Extract info parameters */
+    const byte* sig     = info->pk.pqc_verify.sig;
+    word32      sig_len = info->pk.pqc_verify.siglen;
+    const byte* msg     = info->pk.pqc_verify.msg;
+    word32      msg_len = info->pk.pqc_verify.msglen;
+    int*        res     = info->pk.pqc_verify.res;
+    void*       key     = info->pk.pqc_verify.key;
+    int         type    = info->pk.pqc_verify.type;
+
+    switch (type) {
+#ifdef HAVE_DILITHIUM
+        case WC_PQC_SIG_TYPE_DILITHIUM:
+            ret = wh_Client_MlDsaVerify(ctx, sig, sig_len, msg, msg_len, res,
+                                        key);
+            break;
+#endif /* HAVE_DILITHIUM */
+
+        /* Support for additional PQC algorithms should be added here */
+
+        default:
+            ret = CRYPTOCB_UNAVAILABLE;
+            break;
+    }
+
+    return ret;
+}
+
+static int _handlePqcSigCheckPrivKey(whClientContext* ctx, wc_CryptoInfo* info)
+{
+    int ret = CRYPTOCB_UNAVAILABLE;
+
+    /* Extract info parameters */
+    void*       key      = info->pk.pqc_sig_check.key;
+    const byte* pubKey   = info->pk.pqc_sig_check.pubKey;
+    word32      pubKeySz = info->pk.pqc_sig_check.pubKeySz;
+    int         type     = info->pk.pqc_sig_check.type;
+
+    switch (type) {
+#ifdef HAVE_DILITHIUM
+        case WC_PQC_SIG_TYPE_DILITHIUM:
+            ret = wh_Client_MlDsaCheckPrivKey(ctx, key, pubKey, pubKeySz);
+            break;
+#endif /* HAVE_DILITHIUM */
+
+        /* Support for additional PQC algorithms should be added here */
+
+        default:
+            ret = CRYPTOCB_UNAVAILABLE;
+            break;
+    }
+
+    return ret;
+}
+#endif /* HAVE_FALCON || HAVE_DILITHIUM */
 
 
 #ifdef WOLFHSM_CFG_DMA

@@ -106,6 +106,11 @@ int wh_TransportMem_SendRequest(void* c, uint16_t len, const void* data)
         return WH_ERROR_BADARGS;
     }
 
+    /* Don't send more data than we have space for in the request buffer */
+    if (len > (context->req_size - sizeof(whTransportMemCsr))) {
+        return WH_ERROR_BADARGS;
+    }
+
     /* Read current CSR's. ctx_req does not need to be invalidated */
     XMEMFENCE();
     XCACHEINVLD(ctx_resp);
@@ -177,6 +182,11 @@ int wh_TransportMem_SendResponse(void* c, uint16_t len, const void* data)
 
     if (    (context == NULL) ||
             (context->initialized == 0)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Check against available data space (total size minus CSR size) */
+    if (len > (context->resp_size - sizeof(whTransportMemCsr))) {
         return WH_ERROR_BADARGS;
     }
 

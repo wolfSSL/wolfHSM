@@ -39,6 +39,7 @@
 #include "wolfssl/wolfcrypt/rsa.h"
 #include "wolfssl/wolfcrypt/curve25519.h"
 #include "wolfssl/wolfcrypt/ecc.h"
+#include "wolfssl/wolfcrypt/dilithium.h"
 
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_utils.h"
@@ -245,5 +246,38 @@ int wh_Crypto_Curve25519DeserializeKey(const uint8_t* derBuffer,
     return wc_Curve25519KeyDecode(derBuffer, &idx, key, derSize);
 }
 #endif /* HAVE_CURVE25519 */
+
+#ifdef HAVE_DILITHIUM
+int wh_Crypto_MlDsaSerializeKeyDer(MlDsaKey* key, uint16_t max_size,
+                                   uint8_t* buffer, uint16_t* out_size)
+{
+    int ret = 0;
+
+    if ((key == NULL) || (buffer == NULL) || (out_size == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wc_Dilithium_KeyToDer(key, buffer, max_size);
+
+    /* ASN.1 functions return the size of the DER encoded key on success */
+    if (ret > 0) {
+        *out_size = ret;
+        ret       = WH_ERROR_OK;
+    }
+    return ret;
+}
+
+int wh_Crypto_MlDsaDeserializeKeyDer(const uint8_t* buffer, uint16_t size,
+        MlDsaKey* key)
+{
+    word32 idx = 0;
+
+    if ((buffer == NULL) || (key == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    return wc_Dilithium_PrivateKeyDecode(buffer, &idx, key, size);
+}
+#endif /* HAVE_DILITHIUM */
 
 #endif  /* !WOLFHSM_CFG_NO_CRYPTO */

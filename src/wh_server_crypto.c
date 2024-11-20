@@ -41,6 +41,7 @@
 #include "wolfssl/wolfcrypt/aes.h"
 #include "wolfssl/wolfcrypt/sha256.h"
 #include "wolfssl/wolfcrypt/cmac.h"
+#include "wolfssl/wolfcrypt/dilithium.h"
 
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_packet.h"
@@ -105,6 +106,21 @@ static int _HandleCurve25519SharedSecret(whServerContext* ctx, whPacket* packet,
         uint16_t *out_size);
 #endif /* HAVE_CURVE25519 */
 
+#ifdef HAVE_DILITHIUM
+/* Process a Dilithium KeyGen request packet and produce a response packet */
+static int _HandleMlDsaKeyGen(whServerContext* ctx, whPacket* packet,
+        uint16_t *out_size);
+/* Process a Dilithium Sign request packet and produce a response packet */
+static int _HandleMlDsaSign(whServerContext* ctx, whPacket* packet,
+        uint16_t *out_size);
+/* Process a Dilithium Verify request packet and produce a response packet */
+static int _HandleMlDsaVerify(whServerContext* ctx, whPacket* packet,
+        uint16_t *out_size);
+/* Process a Dilithium Check PrivKey request packet and produce a response
+ * packet */
+static int _HandleMlDsaCheckPrivKey(whServerContext* ctx, whPacket* packet,
+        uint16_t *out_size);
+#endif /* HAVE_DILITHIUM */ 
 
 /** Public server crypto functions */
 
@@ -496,6 +512,70 @@ int wh_Server_CacheExportCurve25519Key(whServerContext* server, whKeyId keyId,
     return ret;
 }
 #endif /* HAVE_CURVE25519 */
+
+#ifdef HAVE_DILITHIUM
+int wh_Server_MlDsaKeyCacheImport(whServerContext* ctx, MlDsaKey* key,
+                                  whKeyId keyId, whNvmFlags flags,
+                                  uint16_t label_len, uint8_t* label)
+{
+    int            ret = WH_ERROR_OK;
+    uint8_t*       cacheBuf;
+    whNvmMetadata* cacheMeta;
+    uint16_t       der_size;
+
+    const uint16_t MAX_MLDSA_DER_SIZE = 5000;
+
+    if ((ctx == NULL) || (key == NULL) || (WH_KEYID_ISERASED(keyId)) ||
+        ((label != NULL) && (label_len > sizeof(cacheMeta->label)))) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret =
+        hsmCacheFindSlotAndZero(ctx, MAX_MLDSA_DER_SIZE, &cacheBuf, &cacheMeta);
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Crypto_MlDsaSerializeKeyDer(key, MAX_MLDSA_DER_SIZE, cacheBuf,
+                                             &der_size);
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+        printf("[server] %s keyId:%u, ret:%d\n", __func__, keyId, ret);
+#endif
+    }
+
+    if (ret == WH_ERROR_OK) {
+        cacheMeta->id     = keyId;
+        cacheMeta->len    = der_size;
+        cacheMeta->flags  = flags;
+        cacheMeta->access = WH_NVM_ACCESS_ANY;
+
+        if ((label != NULL) && (label_len > 0)) {
+            memcpy(cacheMeta->label, label, label_len);
+        }
+    }
+
+    return ret;
+}
+
+int wh_Server_MlDsaKeyCacheExport(whServerContext* ctx, whKeyId keyId,
+                                  MlDsaKey* key)
+{
+    uint8_t* cacheBuf;
+    whNvmMetadata* cacheMeta;
+    int ret = WH_ERROR_OK;
+
+    if ((ctx == NULL) || (key == NULL) || (WH_KEYID_ISERASED(keyId))) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = hsmFreshenKey(ctx, keyId, &cacheBuf, &cacheMeta);
+
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Crypto_MlDsaDeserializeKeyDer(cacheBuf, cacheMeta->len, key);
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+        printf("[server] %s keyId:%u, ret:%d\n", __func__, keyId, ret);
+#endif
+    }
+    return ret;
+}
+#endif /* HAVE_DILITHIUM */
 
 
 /** Request/Response Handling functions */
@@ -1317,6 +1397,7 @@ static int _HandleSha256(whServerContext* server, whPacket* packet,
         ret = wc_InitSha256_ex(sha256, NULL, server->crypto->devId);
     }
     else {
+         /* HAVE_DILITHIUM */
         XMEMCPY(sha256->digest, req->resumeState.hash, WC_SHA256_DIGEST_SIZE);
         sha256->loLen = req->resumeState.loLen;
         sha256->hiLen = req->resumeState.hiLen;
@@ -1347,6 +1428,250 @@ static int _HandleSha256(whServerContext* server, whPacket* packet,
     return ret;
 }
 #endif /* !NO_SHA256 */
+
+#ifdef HAVE_DILITHIUM
+/* Check if the ML-DSA security level is supported 
+ * returns 1 if supported, 0 otherwise */
+static int _IsMlDsaLevelSupported(int level)
+{
+    int ret = 0;
+
+    switch (level) {
+        case WC_ML_DSA_44:
+        case WC_ML_DSA_65:
+        case WC_ML_DSA_87:
+            ret = 1;
+            break;
+    }
+
+    return ret;
+}
+
+static int _HandleMlDsaKeyGen(whServerContext* ctx, whPacket* packet,
+    uint16_t* out_size)
+{
+    int ret = WH_ERROR_OK;
+    MlDsaKey key[1];
+    wh_Packet_pq_mldsa_kg_req* req = &packet->pqMldsaKgReq;
+    wh_Packet_pq_mldsa_kg_res* res = &packet->pqMldsaKgRes;
+
+    /* Request message */
+    int     key_size = req->sz;
+    whKeyId key_id =
+        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req->keyId);
+    int        level      = req->level;
+    whNvmFlags flags      = req->flags;
+    uint8_t*   label      = req->label;
+    uint16_t   label_size = WH_NVM_LABEL_LEN;
+
+    /* Response message */
+    uint8_t* res_out    = (uint8_t*)(res + 1);
+    uint16_t max_size     = (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN -
+                            (res_out - (uint8_t*)packet));
+    uint16_t res_size   = 0;
+
+    /* TODO key_sz is not used. Should this instead be used as max_size? Figure
+     * out the relation between all three */
+    (void)key_size;
+
+    /* Check the ML-DSA security level is valid and supported */
+    if (0 ==_IsMlDsaLevelSupported(level)) {
+        ret = WH_ERROR_BADARGS;
+    }
+    else {
+        /* init mldsa key */
+        ret = wc_MlDsaKey_Init(key, NULL, ctx->crypto->devId);
+        if (ret == 0) {
+            /* Set the ML-DSA security level */
+            ret = wc_MlDsaKey_SetParams(key, level);
+            if (ret == 0) {
+                /* generate the key */
+                ret = wc_MlDsaKey_MakeKey(key, ctx->crypto->rng);
+                if (ret == 0) {
+                    /* Check incoming flags */
+                    if (flags & WH_NVM_FLAGS_EPHEMERAL) {
+                        /* Must serialize the key into the response message. */
+                        key_id = WH_KEYID_ERASED;
+                        ret    = wh_Crypto_MlDsaSerializeKeyDer(
+                            key, max_size, res_out, &res_size);
+                    }
+                    else {
+                        /* Must import the key into the cache and return keyid
+                         */
+                        res_size = 0;
+                        if (WH_KEYID_ISERASED(key_id)) {
+                            /* Generate a new id */
+                            ret = hsmGetUniqueId(ctx, &key_id);
+#ifdef DEBUG_CRYPTOCB
+                            printf("[server] %s UniqueId: keyId:%u, ret:%d\n",
+                                   __func__, key_id, ret);
+#endif
+                        }
+                        ret = wh_Server_MlDsaKeyCacheImport(
+                            ctx, key, key_id, flags, label_size, label);
+#ifdef DEBUG_CRYPTOCB
+                        printf("[server] %s CacheImport: keyId:%u, ret:%d\n",
+                               __func__, key_id, ret);
+#endif
+                    }
+                }
+            }
+            wc_MlDsaKey_Free(key);
+        }
+
+        if (ret == WH_ERROR_OK) {
+            res->keyId = WH_KEYID_ID(key_id);
+            res->len   = res_size;
+            *out_size  = WH_PACKET_STUB_SIZE + sizeof(*res) + res_size;
+        }
+    }
+    return ret;
+}
+
+static int _HandleMlDsaSign(whServerContext* ctx, whPacket* packet,
+    uint16_t *out_size)
+{
+    int                          ret;
+    MlDsaKey                     key[1];
+    wh_Packet_pq_mldsa_sign_req* req = &packet->pqMldsaSignReq;
+    wh_Packet_pq_mldsa_sign_res* res = &packet->pqMldsaSignRes;
+
+    /* Request message */
+    byte*   in = (uint8_t*)(req + 1);
+    whKeyId key_id =
+        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req->keyId);
+    word32   in_len  = req->sz;
+    uint32_t options = req->options;
+    int      evict   = !!(options & WH_PACKET_PQ_MLDSA_SIGN_OPTIONS_EVICT);
+
+    /* Response message */
+    byte*        res_out = (uint8_t*)(res + 1);
+    const word32 max_len =
+        (word32)(WOLFHSM_CFG_COMM_DATA_LEN - (res_out - (uint8_t*)packet));
+    word32 res_len;
+
+    /* init private key */
+    ret = wc_MlDsaKey_Init(key, NULL, ctx->crypto->devId);
+    if (ret == 0) {
+        /* load the private key */
+        ret = wh_Server_MlDsaKeyCacheExport(ctx, key_id, key);
+        if (ret == WH_ERROR_OK) {
+            /* sign the input */
+            res_len = max_len;
+            ret     = wc_MlDsaKey_Sign(key, res_out, &res_len, in, in_len,
+                                       ctx->crypto->rng);
+        }
+        wc_MlDsaKey_Free(key);
+    }
+    if (evict != 0) {
+        (void)hsmEvictKey(ctx, key_id);
+    }
+    if (ret == 0) {
+        res->sz   = res_len;
+        *out_size = WH_PACKET_STUB_SIZE + sizeof(*res) + res_len;
+    }
+    return ret;
+}
+
+static int _HandleMlDsaVerify(whServerContext* ctx, whPacket* packet,
+        uint16_t *out_size)
+{
+    int                            ret;
+    MlDsaKey                       key[1];
+    wh_Packet_pq_mldsa_verify_req* req = &packet->pqMldsaVerifyReq;
+    wh_Packet_pq_mldsa_verify_res* res = &packet->pqMldsaVerifyRes;
+
+    /* Request Message */
+    uint32_t options = req->options;
+    whKeyId  key_id =
+        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req->keyId);
+    uint32_t hash_len = req->hashSz;
+    uint32_t sig_len  = req->sigSz;
+    byte*    req_sig  = (uint8_t*)(req + 1);
+    byte*    req_hash = req_sig + sig_len;
+    int      evict    = !!(options & WH_PACKET_PQ_MLDSAVERIFY_OPTIONS_EVICT);
+
+    /* Response message */
+    int result;
+
+    /* init public key */
+    ret = wc_MlDsaKey_Init(key, NULL, ctx->crypto->devId);
+    if (ret == 0) {
+        /* load the public key */
+        ret = wh_Server_MlDsaKeyCacheExport(ctx, key_id, key);
+        if (ret == WH_ERROR_OK) {
+            /* verify the signature */
+            ret = wc_MlDsaKey_Verify(key, req_sig, sig_len, req_hash, hash_len,
+                                     &result);
+        }
+        wc_MlDsaKey_Free(key);
+    }
+    if (evict != 0) {
+        /* User requested to evict from cache, even if the call failed */
+        (void)hsmEvictKey(ctx, key_id);
+    }
+    if (ret == 0) {
+        res->res  = result;
+        *out_size = WH_PACKET_STUB_SIZE + sizeof(*res);
+    }
+    return ret;
+}
+
+static int _HandleMlDsaCheckPrivKey(whServerContext* ctx, whPacket* packet,
+        uint16_t *out_size)
+{
+    return WH_ERROR_NOHANDLER;
+}
+#endif /* HAVE_DILITHIUM */
+
+#if defined(HAVE_DILITHIUM) || defined(HAVE_FALCON)
+static int _HandlePqcSigAlgorithm(whServerContext* ctx, whPacket* packet,
+                                  uint16_t* size)
+{
+    int                      ret = WH_ERROR_NOHANDLER;
+    wh_Packet_pk_pq_any_req* req = &packet->pkPqAnyReq;
+
+    /* Dispatch the appropriate algorithm handler based on the requested PK type
+     * and the algorithm type. */
+    switch (req->pqAlgoType) {
+#ifdef HAVE_DILITHIUM
+        case WC_PQC_SIG_TYPE_DILITHIUM: {
+            switch (req->type) {
+                case WC_PK_TYPE_PQC_SIG_KEYGEN:
+                    ret = _HandleMlDsaKeyGen(ctx, packet, size);
+                    break;
+                case WC_PK_TYPE_PQC_SIG_SIGN:
+                    ret = _HandleMlDsaSign(ctx, packet, size);
+                    break;
+                case WC_PK_TYPE_PQC_SIG_VERIFY:
+                    ret = _HandleMlDsaVerify(ctx, packet, size);
+                    break;
+                case WC_PK_TYPE_PQC_SIG_CHECK_PRIV_KEY:
+                    ret = _HandleMlDsaCheckPrivKey(ctx, packet, size);
+                    break;
+                default:
+                    ret = WH_ERROR_NOHANDLER;
+                    break;
+            }
+        } break;
+#endif /* HAVE_DILITHIUM */
+        default:
+            ret = WH_ERROR_NOHANDLER;
+            break;
+    }
+
+    return ret;
+}
+#endif
+
+#if defined(HAVE_KYBER)
+static int _HandlePqcKemAlgorithm(whServerContext* ctx, whPacket* packet,
+                                  uint16_t* size)
+{
+    /* Placeholder for KEM algorithm handling */
+    return WH_ERROR_NOHANDLER;
+}
+#endif
 
 int wh_Server_HandleCryptoRequest(whServerContext* ctx,
     uint16_t action, uint8_t* data, uint16_t *inout_size, uint16_t seq)
@@ -1438,6 +1763,23 @@ int wh_Server_HandleCryptoRequest(whServerContext* ctx,
                     packet, inout_size);
             break;
 #endif /* HAVE_CURVE25519 */
+
+#if defined(HAVE_DILITHIUM) || defined(HAVE_FALCON)
+        case WC_PK_TYPE_PQC_SIG_KEYGEN:
+        case WC_PK_TYPE_PQC_SIG_SIGN:
+        case WC_PK_TYPE_PQC_SIG_VERIFY:
+        case WC_PK_TYPE_PQC_SIG_CHECK_PRIV_KEY:
+            ret = _HandlePqcSigAlgorithm(ctx, packet, inout_size);
+            break;
+#endif
+
+#if defined(HAVE_KYBER)
+        case WC_PK_TYPE_PQC_KEM_KEYGEN:
+        case WC_PK_TYPE_PQC_KEM_ENCAPS:
+        case WC_PK_TYPE_PQC_KEM_DECAPS:
+            ret = _HandlePqcKemAlgorithm(ctx, packet, inout_size);
+            break;
+#endif
 
         default:
             ret = NOT_COMPILED_IN;

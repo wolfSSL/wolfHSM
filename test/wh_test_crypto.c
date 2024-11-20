@@ -55,10 +55,14 @@
 #endif
 
 enum {
-        REQ_SIZE = 32,
-        RESP_SIZE = 64,
-        BUFFER_SIZE = 4096,
-    };
+    /* Total size needs to fit:
+     * - Transport CSR (whTransportMemCsr)
+     * - Comm header (whCommHeader)
+     * - Max data size (WOLFHSM_CFG_COMM_DATA_LEN)
+     */
+    BUFFER_SIZE = sizeof(whTransportMemCsr) + sizeof(whCommHeader) +
+                  WOLFHSM_CFG_COMM_DATA_LEN,
+};
 
 
 #define PLAINTEXT "mytextisbigplain"
@@ -1324,6 +1328,95 @@ static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
 }
 #endif /* WOLFSSL_CMAC && !NO_AES && WOLFSSL_AES_DIRECT */
 
+#ifdef HAVE_DILITHIUM
+
+static int whTestCrypto_MlDsa(whClientContext* ctx, int devId, WC_RNG* rng)
+{
+    int ret      = 0;
+    int verified = 0;
+
+    /* Test ML DSA key generation, signing and verification */
+    MlDsaKey key;
+    byte     msg[] = "Test message for ML DSA signing";
+    byte     sig[DILITHIUM_ML_DSA_44_SIG_SIZE];
+    word32   sigSz = sizeof(sig);
+
+    /* Initialize key */
+    ret = wc_MlDsaKey_Init(&key, NULL, devId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to initialize ML DSA key: %d\n", ret);
+        return ret;
+    }
+
+    /* Set security level to 44-bit */
+    ret = wc_MlDsaKey_SetParams(&key, WC_ML_DSA_44);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to set ML DSA params: %d\n", ret);
+        wc_MlDsaKey_Free(&key);
+        return ret;
+    }
+
+    /* Generate key pair */
+    ret = wc_MlDsaKey_MakeKey(&key, rng);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to generate ML DSA key: %d\n", ret);
+        wc_MlDsaKey_Free(&key);
+        return ret;
+    }
+
+    /* Get the signature size */
+    ret = wc_MlDsaKey_GetSigLen(&key, (int*)&sigSz);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to get ML DSA signature length: %d\n", ret);
+        wc_MlDsaKey_Free(&key);
+        return ret;
+    }
+
+    /* Sign message */
+    ret = wc_MlDsaKey_Sign(&key, sig, &sigSz, msg, sizeof(msg), rng);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to sign with ML DSA: %d\n", ret);
+        wc_MlDsaKey_Free(&key);
+        return ret;
+    }
+
+    /* Verify signature */
+    ret = wc_MlDsaKey_Verify(&key, sig, sigSz, msg, sizeof(msg), &verified);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to verify ML DSA signature: %d\n", ret);
+        wc_MlDsaKey_Free(&key);
+        return ret;
+    }
+
+    if (!verified) {
+        WH_ERROR_PRINT("ML DSA signature verification failed\n");
+        ret = -1;
+    }
+
+    /* Modify signature to ensure verification fails */
+    sig[0] ^= 1;
+
+    ret = wc_MlDsaKey_Verify(&key, sig, sigSz, msg, sizeof(msg), &verified);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to verify modified ML DSA signature: %d\n", ret);
+        wc_MlDsaKey_Free(&key);
+        return ret;
+    }
+
+    if (verified) {
+        WH_ERROR_PRINT("ML DSA signature verification succeeded when it should "
+                       "have failed\n");
+        ret = -1;
+    }
+
+    printf("ML DSA SUCCESS\n");
+
+    wc_MlDsaKey_Free(&key);
+    return ret;
+}
+
+#endif /* HAVE_DILITHIUM */
+
 
 int whTest_CryptoClientConfig(whClientConfig* config)
 {
@@ -1401,6 +1494,11 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     }
 #endif /* !NO_SHA256 */
 
+#ifdef HAVE_DILITHIUM
+    if (ret == 0) {
+        ret = whTestCrypto_MlDsa(client, WH_DEV_ID, rng);
+    }
+#endif /* HAVE_DILITHIUM */
 
 #ifdef WOLFHSM_CFG_TEST_VERBOSE
     if (ret == 0) {
