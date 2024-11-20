@@ -2328,7 +2328,7 @@ int wh_Client_MlDsaSign(whClientContext* ctx, const byte* in, word32 in_len,
 
 #ifdef DEBUG_CRYPTOCB_VERBOSE
     printf("[client] %s ctx:%p key:%p, in:%p in_len:%u, out:%p inout_len:%p\n",
-           __func__, ctx, key, hash, (unsigned)hash_len, sig, inout_sig_len);
+           __func__, ctx, key, in, (unsigned)in_len, out, inout_len);
 #endif
 
     if (    (ctx == NULL) ||
