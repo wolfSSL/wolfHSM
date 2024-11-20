@@ -1188,3 +1188,396 @@ int wh_Client_CounterDestroy(whClientContext* c, whNvmId counterId)
     }
     return ret;
 }
+
+#ifdef WOLFHSM_CFG_DMA
+#if WH_DMA_IS_32BIT
+int wh_Client_KeyCacheDma32Request(whClientContext* c, uint32_t flags,
+                                   uint8_t* label, uint16_t labelSz,
+                                   uint32_t keyAddr, uint16_t keySz,
+                                   uint16_t keyId)
+{
+    whPacket* packet;
+    if (c == NULL || (labelSz > 0 && label == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    packet                      = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
+    packet->keyCacheDma32Req.id = keyId;
+    packet->keyCacheDma32Req.flags   = flags;
+    packet->keyCacheDma32Req.sz      = keySz;
+    packet->keyCacheDma32Req.labelSz = labelSz;
+
+    /* Set up DMA buffer info */
+    packet->keyCacheDma32Req.key.addr = keyAddr;
+    packet->keyCacheDma32Req.key.sz   = keySz;
+
+    /* Copy label if provided */
+    if (labelSz > 0) {
+        if (labelSz > WH_NVM_LABEL_LEN) {
+            memcpy(packet->keyCacheDma32Req.label, label, WH_NVM_LABEL_LEN);
+        }
+        else {
+            memcpy(packet->keyCacheDma32Req.label, label, labelSz);
+        }
+    }
+
+    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_KEY, WH_KEY_CACHE_DMA32,
+                                 WH_PACKET_STUB_SIZE +
+                                     sizeof(packet->keyCacheDma32Req),
+                                 (uint8_t*)packet);
+}
+
+int wh_Client_KeyCacheDma32Response(whClientContext* c, uint16_t* keyId)
+{
+    uint16_t  group;
+    uint16_t  action;
+    uint16_t  size;
+    int       ret;
+    whPacket* packet;
+
+    if (c == NULL || keyId == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
+    ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)packet);
+    if (ret == 0) {
+        /* Validate response */
+        if ((group != WH_MESSAGE_GROUP_KEY) || (action != WH_KEY_CACHE_DMA32) ||
+            (size != WH_PACKET_STUB_SIZE + sizeof(packet->keyCacheDma32Res))) {
+            /* Invalid message */
+            ret = WH_ERROR_ABORTED;
+        }
+        else {
+            /* Valid message */
+            if (packet->rc != 0) {
+                ret = packet->rc;
+            }
+            else {
+                *keyId = packet->keyCacheDma32Res.id;
+            }
+        }
+    }
+    return ret;
+}
+
+int wh_Client_KeyCacheDma32(whClientContext* c, uint32_t flags, uint8_t* label,
+                            uint16_t labelSz, uint32_t keyAddr, uint16_t keySz,
+                            uint16_t* keyId)
+{
+    int ret;
+    ret = wh_Client_KeyCacheDma32Request(c, flags, label, labelSz, keyAddr,
+                                         keySz, *keyId);
+    if (ret == 0) {
+        do {
+            ret = wh_Client_KeyCacheDma32Response(c, keyId);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+    return ret;
+}
+
+int wh_Client_KeyExportDma32Request(whClientContext* c, uint16_t keyId,
+                                    uint32_t keyAddr, uint16_t keySz)
+{
+    whPacket* packet;
+    if (c == NULL || keyId == WH_KEYID_ERASED) {
+        return WH_ERROR_BADARGS;
+    }
+
+    packet                       = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
+    packet->keyExportDma32Req.id = keyId;
+    packet->keyExportDma32Req.key.addr = keyAddr;
+    packet->keyExportDma32Req.key.sz   = keySz;
+
+    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_KEY, WH_KEY_EXPORT_DMA32,
+                                 WH_PACKET_STUB_SIZE +
+                                     sizeof(packet->keyExportDma32Req),
+                                 (uint8_t*)packet);
+}
+int wh_Client_KeyExportDma32Response(whClientContext* c, uint8_t* label,
+                                     uint16_t labelSz, uint16_t* outSz)
+{
+    uint16_t  resp_group;
+    uint16_t  resp_action;
+    uint16_t  resp_size;
+    int       rc = 0;
+    whPacket* packet;
+
+    if (c == NULL || outSz == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
+    rc     = wh_Client_RecvResponse(c, &resp_group, &resp_action, &resp_size,
+                                    (uint8_t*)packet);
+    if (rc == 0) {
+        /* Validate response */
+        if ((resp_group != WH_MESSAGE_GROUP_KEY) ||
+            (resp_action != WH_KEY_EXPORT_DMA32) ||
+            (resp_size !=
+             WH_PACKET_STUB_SIZE + sizeof(packet->keyExportDma32Res))) {
+            /* Invalid message */
+            rc = WH_ERROR_ABORTED;
+        }
+        else {
+            /* Valid message */
+            if (packet->rc != 0) {
+                rc = packet->rc;
+            }
+            else {
+                *outSz = packet->keyExportDma32Res.len;
+                if (label != NULL) {
+                    if (labelSz > WH_NVM_LABEL_LEN) {
+                        memcpy(label, packet->keyExportDma32Res.label,
+                               WH_NVM_LABEL_LEN);
+                    }
+                    else {
+                        memcpy(label, packet->keyExportDma32Res.label, labelSz);
+                    }
+                }
+            }
+        }
+    }
+    return rc;
+}
+
+int wh_Client_KeyExportDma32(whClientContext* c, uint16_t keyId,
+                             uint32_t keyAddr, uint16_t keySz, uint8_t* label,
+                             uint16_t labelSz, uint16_t* outSz)
+{
+    int ret;
+    ret = wh_Client_KeyExportDma32Request(c, keyId, keyAddr, keySz);
+    if (ret == 0) {
+        do {
+            ret = wh_Client_KeyExportDma32Response(c, label, labelSz, outSz);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+    return ret;
+}
+#endif /* WH_DMA_IS_32BIT */
+
+#if WH_DMA_IS_64BIT
+int wh_Client_KeyCacheDma64Request(whClientContext* c, uint32_t flags,
+                                   uint8_t* label, uint16_t labelSz,
+                                   uint64_t keyAddr, uint16_t keySz,
+                                   uint16_t keyId)
+{
+    whPacket* packet;
+    if (c == NULL || (labelSz > 0 && label == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    packet                      = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
+    packet->keyCacheDma64Req.id = keyId;
+    packet->keyCacheDma64Req.flags   = flags;
+    packet->keyCacheDma64Req.sz      = keySz;
+    packet->keyCacheDma64Req.labelSz = labelSz;
+
+    /* Set up DMA buffer info */
+    packet->keyCacheDma64Req.key.addr = keyAddr;
+    packet->keyCacheDma64Req.key.sz   = keySz;
+
+    /* Copy label if provided */
+    if (labelSz > 0) {
+        if (labelSz > WH_NVM_LABEL_LEN) {
+            memcpy(packet->keyCacheDma64Req.label, label, WH_NVM_LABEL_LEN);
+        }
+        else {
+            memcpy(packet->keyCacheDma64Req.label, label, labelSz);
+        }
+    }
+
+    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_KEY, WH_KEY_CACHE_DMA64,
+                                 WH_PACKET_STUB_SIZE +
+                                     sizeof(packet->keyCacheDma64Req),
+                                 (uint8_t*)packet);
+}
+
+int wh_Client_KeyCacheDma64Response(whClientContext* c, uint16_t* keyId)
+{
+    uint16_t  group;
+    uint16_t  action;
+    uint16_t  size;
+    int       ret;
+    whPacket* packet;
+
+    if (c == NULL || keyId == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
+    ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)packet);
+    if (ret == 0) {
+        /* Validate response */
+        if ((group != WH_MESSAGE_GROUP_KEY) || (action != WH_KEY_CACHE_DMA64) ||
+            (size != WH_PACKET_STUB_SIZE + sizeof(packet->keyCacheDma64Res))) {
+            /* Invalid message */
+            ret = WH_ERROR_ABORTED;
+        }
+        else {
+            /* Valid message */
+            if (packet->rc != 0) {
+                ret = packet->rc;
+            }
+            else {
+                *keyId = packet->keyCacheDma64Res.id;
+            }
+        }
+    }
+    return ret;
+}
+
+int wh_Client_KeyCacheDma64(whClientContext* c, uint32_t flags, uint8_t* label,
+                            uint16_t labelSz, uint64_t keyAddr, uint16_t keySz,
+                            uint16_t* keyId)
+{
+    int ret;
+    ret = wh_Client_KeyCacheDma64Request(c, flags, label, labelSz, keyAddr,
+                                         keySz, *keyId);
+    if (ret == 0) {
+        do {
+            ret = wh_Client_KeyCacheDma64Response(c, keyId);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+    return ret;
+}
+
+int wh_Client_KeyExportDma64Request(whClientContext* c, uint16_t keyId,
+                                    uint64_t keyAddr, uint16_t keySz)
+{
+    whPacket* packet;
+    if (c == NULL || keyId == WH_KEYID_ERASED) {
+        return WH_ERROR_BADARGS;
+    }
+
+    packet                       = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
+    packet->keyExportDma64Req.id = keyId;
+    packet->keyExportDma64Req.key.addr = keyAddr;
+    packet->keyExportDma64Req.key.sz   = keySz;
+
+    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_KEY, WH_KEY_EXPORT_DMA64,
+                                 WH_PACKET_STUB_SIZE +
+                                     sizeof(packet->keyExportDma64Req),
+                                 (uint8_t*)packet);
+}
+
+int wh_Client_KeyExportDma64Response(whClientContext* c, uint8_t* label,
+                                     uint16_t labelSz, uint16_t* outSz)
+{
+    uint16_t  resp_group;
+    uint16_t  resp_action;
+    uint16_t  resp_size;
+    int       rc;
+    whPacket* packet;
+
+    if (c == NULL || outSz == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
+    rc     = wh_Client_RecvResponse(c, &resp_group, &resp_action, &resp_size,
+                                    (uint8_t*)packet);
+    if (rc == 0) {
+        /* Validate response */
+        if ((resp_group != WH_MESSAGE_GROUP_KEY) ||
+            (resp_action != WH_KEY_EXPORT_DMA64) ||
+            (resp_size !=
+             WH_PACKET_STUB_SIZE + sizeof(packet->keyExportDma64Res))) {
+            /* Invalid message */
+            rc = WH_ERROR_ABORTED;
+        }
+        else {
+            /* Valid message */
+            if (packet->rc != 0) {
+                rc = packet->rc;
+            }
+            else {
+                *outSz = packet->keyExportDma64Res.len;
+                if (label != NULL) {
+                    if (labelSz > WH_NVM_LABEL_LEN) {
+                        memcpy(label, packet->keyExportDma64Res.label,
+                               WH_NVM_LABEL_LEN);
+                    }
+                    else {
+                        memcpy(label, packet->keyExportDma64Res.label, labelSz);
+                    }
+                }
+            }
+        }
+    }
+    return rc;
+}
+
+int wh_Client_KeyExportDma64(whClientContext* c, uint16_t keyId,
+                             uint64_t keyAddr, uint16_t keySz, uint8_t* label,
+                             uint16_t labelSz, uint16_t* outSz)
+{
+    int ret;
+    ret = wh_Client_KeyExportDma64Request(c, keyId, keyAddr, keySz);
+    if (ret == 0) {
+        do {
+            ret = wh_Client_KeyExportDma64Response(c, label, labelSz, outSz);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+    return ret;
+}
+#endif /* WH_DMA_IS_64BIT */
+
+/* Generic DMA wrapper functions */
+int wh_Client_KeyCacheDmaResponse(whClientContext* c, uint16_t* keyId)
+{
+#if WH_DMA_IS_32BIT
+    return wh_Client_KeyCacheDma32Response(c, keyId);
+#else
+    return wh_Client_KeyCacheDma64Response(c, keyId);
+#endif
+}
+
+int wh_Client_KeyCacheDma(whClientContext* c, uint32_t flags, uint8_t* label,
+                          uint16_t labelSz, uint8_t* key, uint16_t keySz,
+                          uint16_t* keyId)
+{
+#if WH_DMA_IS_32BIT
+    return wh_Client_KeyCacheDma32(c, flags, label, labelSz,
+                                   (uint32_t)(uintptr_t)key, keySz, keyId);
+#else
+    return wh_Client_KeyCacheDma64(c, flags, label, labelSz,
+                                   (uint64_t)(uintptr_t)key, keySz, keyId);
+#endif
+}
+
+int wh_Client_KeyExportDmaRequest(whClientContext* c, uint16_t keyId,
+                                  uint8_t* key, uint16_t keySz)
+{
+#if WH_DMA_IS_32BIT
+    return wh_Client_KeyExportDma32Request(c, keyId, (uint32_t)(uintptr_t)key,
+                                           keySz);
+#else
+    return wh_Client_KeyExportDma64Request(c, keyId, (uint64_t)(uintptr_t)key,
+                                           keySz);
+#endif
+}
+
+int wh_Client_KeyExportDmaResponse(whClientContext* c, uint8_t* label,
+                                   uint16_t labelSz, uint16_t* outSz)
+{
+#if WH_DMA_IS_32BIT
+    return wh_Client_KeyExportDma32Response(c, label, labelSz, outSz);
+#else
+    return wh_Client_KeyExportDma64Response(c, label, labelSz, outSz);
+#endif
+}
+
+int wh_Client_KeyExportDma(whClientContext* c, uint16_t keyId, uint8_t* key,
+                           uint16_t keySz, uint8_t* label, uint16_t labelSz,
+                           uint16_t* outSz)
+{
+#if WH_DMA_IS_32BIT
+    return wh_Client_KeyExportDma32(c, keyId, (uint32_t)(uintptr_t)key, keySz,
+                                    label, labelSz, outSz);
+#else
+    return wh_Client_KeyExportDma64(c, keyId, (uint64_t)(uintptr_t)key, keySz,
+                                    label, labelSz, outSz);
+#endif
+}
+#endif /* WOLFHSM_CFG_DMA */

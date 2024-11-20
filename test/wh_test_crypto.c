@@ -700,6 +700,39 @@ static int whTest_CacheExportKey(whClientContext* ctx, whKeyId* inout_key_id,
     return ret;
 }
 
+static int whTest_CacheExportKeyDma(whClientContext* ctx, whKeyId* inout_key_id,
+                                    uint8_t* label_in, uint8_t* label_out,
+                                    uint16_t label_len, uint8_t* key_in,
+                                    uint8_t* key_out, uint16_t key_len)
+{
+    int      ret           = 0;
+    uint16_t label_len_out = label_len;
+    uint16_t key_len_out   = key_len;
+    whKeyId  key_id_out    = *inout_key_id;
+
+    ret = wh_Client_KeyCacheDma(ctx, 0, label_in, label_len, key_in, key_len,
+                                &key_id_out);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyCacheDma %d\n", ret);
+    }
+    else {
+        ret = wh_Client_KeyExportDma(ctx, key_id_out, key_out, key_len_out,
+                                     label_out, label_len_out, &key_len_out);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wh_Client_KeyExportDma %d\n", ret);
+        }
+        else {
+            if ((key_len_out != key_len) ||
+                (memcmp(key_in, key_out, key_len_out) != 0) ||
+                (memcmp(label_in, label_out, label_len) != 0)) {
+                ret = -1;
+            }
+        }
+    }
+    *inout_key_id = key_id_out;
+    return ret;
+}
+
 static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
 {
     (void)devId; (void)rng; /* Unused */
@@ -720,7 +753,7 @@ static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
         WH_ERROR_PRINT("Failed to wc_RNG_GenerateBlock %d\n", ret);
     }
 
-    /* test cache/export */
+    /* test regular cache/export */
     keyId = WH_KEYID_ERASED;
     if (ret == 0) {
         ret = whTest_CacheExportKey(ctx, &keyId,
@@ -881,6 +914,27 @@ static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
             printf("KEY COMMIT/ERASE SUCCESS\n");
         }
     }
+
+    /* test cache/export using DMA */
+    if (ret == 0) {
+        keyId = WH_KEYID_ERASED;
+        ret =
+            whTest_CacheExportKeyDma(ctx, &keyId, labelIn, labelOut,
+                                     sizeof(labelIn), key, keyOut, sizeof(key));
+        if (ret != WH_ERROR_OK) {
+            WH_ERROR_PRINT("Failed to Test CacheExportKeyDma %d\n", ret);
+        }
+        else {
+            ret = wh_Client_KeyEvict(ctx, keyId);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to wh_Client_KeyEvict %d\n", ret);
+            }
+            else {
+                printf("KEY CACHE/EXPORT DMA SUCCESS\n");
+            }
+        }
+    }
+
     return ret;
 }
 

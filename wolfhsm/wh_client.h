@@ -714,6 +714,298 @@ int wh_Client_KeyEraseResponse(whClientContext* c);
  */
 int wh_Client_KeyErase(whClientContext* c, whNvmId keyId);
 
+#ifdef WOLFHSM_CFG_DMA
+#if WH_DMA_IS_32BIT
+/**
+ * @brief Sends a key cache request using 32-bit DMA to the server.
+ *
+ * This function prepares and sends a key cache request message using 32-bit DMA
+ * addressing to the server. The message contains the key data and metadata.
+ * This function does not block; it returns immediately after sending the
+ * request.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] flags Key flags.
+ * @param[in] label Optional label for the key.
+ * @param[in] labelSz Size of the label in bytes.
+ * @param[in] keyAddr 32-bit DMA address of the key data.
+ * @param[in] keySz Size of the key in bytes.
+ * @param[in] keyId Key ID to be associated with the cached key.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_KeyCacheDma32Request(whClientContext* c, uint32_t flags,
+                                   uint8_t* label, uint16_t labelSz,
+                                   uint32_t keyAddr, uint16_t keySz,
+                                   uint16_t keyId);
+
+/**
+ * @brief Receives a key cache response for 32-bit DMA from the server.
+ *
+ * This function processes a key cache response message for a 32-bit DMA
+ * operation from the server. It validates the response and returns the assigned
+ * key ID.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[out] keyId Pointer to store the assigned key ID.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_KeyCacheDma32Response(whClientContext* c, uint16_t* keyId);
+
+/**
+ * @brief Performs a complete key cache operation using 32-bit DMA.
+ *
+ * This function handles the complete process of caching a key using 32-bit DMA,
+ * including sending the request and receiving the response.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] flags Key flags.
+ * @param[in] label Optional label for the key.
+ * @param[in] labelSz Size of the label in bytes.
+ * @param[in] keyAddr 32-bit DMA address of the key data.
+ * @param[in] keySz Size of the key in bytes.
+ * @param[out] keyId Pointer to store the assigned key ID.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_KeyCacheDma32(whClientContext* c, uint32_t flags, uint8_t* label,
+                            uint16_t labelSz, uint32_t keyAddr, uint16_t keySz,
+                            uint16_t* keyId);
+
+/**
+ * @brief Sends a key export request using 32-bit DMA to the server.
+ *
+ * This function prepares and sends a key export request message using 32-bit
+ * DMA addressing to the server.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] keyId Key ID to export.
+ * @param[in] keyAddr 32-bit DMA address where the key should be exported.
+ * @param[in] keySz Size of the key buffer in bytes.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_KeyExportDma32Request(whClientContext* c, uint16_t keyId,
+                                    uint32_t keyAddr, uint16_t keySz);
+
+/**
+ * @brief Receives a key export response for 32-bit DMA from the server.
+ *
+ * This function processes a key export response message for a 32-bit DMA
+ * operation from the server.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[out] label Buffer to store the key's label.
+ * @param[in] labelSz Size of the label buffer.
+ * @param[out] outSz Pointer to store the actual size of the exported key.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_KeyExportDma32Response(whClientContext* c, uint8_t* label,
+                                     uint16_t labelSz, uint16_t* outSz);
+
+/**
+ * @brief Performs a complete key export operation using 32-bit DMA.
+ *
+ * This function handles the complete process of exporting a key using 32-bit
+ * DMA, including sending the request and receiving the response.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] keyId Key ID to export.
+ * @param[in] keyAddr 32-bit DMA address where the key should be exported.
+ * @param[in] keySz Size of the key buffer in bytes.
+ * @param[out] label Buffer to store the key's label.
+ * @param[in] labelSz Size of the label buffer.
+ * @param[out] outSz Pointer to store the actual size of the exported key.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_KeyExportDma32(whClientContext* c, uint16_t keyId,
+                             uint32_t keyAddr, uint16_t keySz, uint8_t* label,
+                             uint16_t labelSz, uint16_t* outSz);
+#else
+/**
+ * @brief Sends a key cache request using 64-bit DMA to the server.
+ *
+ * This function prepares and sends a key cache request message using 64-bit DMA
+ * addressing to the server. The message contains the key data and metadata.
+ * This function does not block; it returns immediately after sending the
+ * request.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] flags Key flags.
+ * @param[in] label Optional label for the key.
+ * @param[in] labelSz Size of the label in bytes.
+ * @param[in] keyAddr 64-bit DMA address of the key data.
+ * @param[in] keySz Size of the key in bytes.
+ * @param[in] keyId Key ID to be associated with the cached key.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_KeyCacheDma64Request(whClientContext* c, uint32_t flags,
+                                   uint8_t* label, uint16_t labelSz,
+                                   uint64_t keyAddr, uint16_t keySz,
+                                   uint16_t keyId);
+
+/**
+ * @brief Receives a key cache response for 64-bit DMA from the server.
+ *
+ * This function processes a key cache response message for a 64-bit DMA
+ * operation from the server. It validates the response and returns the assigned
+ * key ID.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[out] keyId Pointer to store the assigned key ID.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_KeyCacheDma64Response(whClientContext* c, uint16_t* keyId);
+
+/**
+ * @brief Performs a complete key cache operation using 64-bit DMA.
+ *
+ * This function handles the complete process of caching a key using 64-bit DMA,
+ * including sending the request and receiving the response.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] flags Key flags.
+ * @param[in] label Optional label for the key.
+ * @param[in] labelSz Size of the label in bytes.
+ * @param[in] keyAddr 64-bit DMA address of the key data.
+ * @param[in] keySz Size of the key in bytes.
+ * @param[out] keyId Pointer to store the assigned key ID.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_KeyCacheDma64(whClientContext* c, uint32_t flags, uint8_t* label,
+                            uint16_t labelSz, uint64_t keyAddr, uint16_t keySz,
+                            uint16_t* keyId);
+
+/**
+ * @brief Sends a key export request using 64-bit DMA to the server.
+ *
+ * This function prepares and sends a key export request message using 64-bit
+ * DMA addressing to the server.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] keyId Key ID to export.
+ * @param[in] keyAddr 64-bit DMA address where the key should be exported.
+ * @param[in] keySz Size of the key buffer in bytes.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_KeyExportDma64Request(whClientContext* c, uint16_t keyId,
+                                    uint64_t keyAddr, uint16_t keySz);
+
+/**
+ * @brief Receives a key export response for 64-bit DMA from the server.
+ *
+ * This function processes a key export response message for a 64-bit DMA
+ * operation from the server.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[out] label Buffer to store the key's label.
+ * @param[in] labelSz Size of the label buffer.
+ * @param[out] outSz Pointer to store the actual size of the exported key.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_KeyExportDma64Response(whClientContext* c, uint8_t* label,
+                                     uint16_t labelSz, uint16_t* outSz);
+
+/**
+ * @brief Performs a complete key export operation using 64-bit DMA.
+ *
+ * This function handles the complete process of exporting a key using 64-bit
+ * DMA, including sending the request and receiving the response.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] keyId Key ID to export.
+ * @param[in] keyAddr 64-bit DMA address where the key should be exported.
+ * @param[in] keySz Size of the key buffer in bytes.
+ * @param[out] label Buffer to store the key's label.
+ * @param[in] labelSz Size of the label buffer.
+ * @param[out] outSz Pointer to store the actual size of the exported key.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_KeyExportDma64(whClientContext* c, uint16_t keyId,
+                             uint64_t keyAddr, uint16_t keySz, uint8_t* label,
+                             uint16_t labelSz, uint16_t* outSz);
+#endif /* WH_DMA_IS_32BIT */
+
+/* Generic DMA wrapper functions */
+/**
+ * @brief Generic wrapper for receiving a key cache DMA response.
+ *
+ * This function provides a generic interface for receiving key cache DMA
+ * responses, automatically selecting between 32-bit and 64-bit implementations.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[out] keyId Pointer to store the assigned key ID.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_KeyCacheDmaResponse(whClientContext* c, uint16_t* keyId);
+
+/**
+ * @brief Generic wrapper for performing a complete key cache DMA operation.
+ *
+ * This function provides a generic interface for key cache DMA operations,
+ * automatically selecting between 32-bit and 64-bit implementations.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] flags Key flags.
+ * @param[in] label Optional label for the key.
+ * @param[in] labelSz Size of the label in bytes.
+ * @param[in] key Pointer to the key data.
+ * @param[in] keySz Size of the key in bytes.
+ * @param[out] keyId Pointer to store the assigned key ID.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_KeyCacheDma(whClientContext* c, uint32_t flags, uint8_t* label,
+                          uint16_t labelSz, uint8_t* key, uint16_t keySz,
+                          uint16_t* keyId);
+
+/**
+ * @brief Generic wrapper for sending a key export DMA request.
+ *
+ * This function provides a generic interface for sending key export DMA
+ * requests, automatically selecting between 32-bit and 64-bit implementations.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] keyId Key ID to export.
+ * @param[in] key Buffer to receive the exported key.
+ * @param[in] keySz Size of the key buffer in bytes.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_KeyExportDmaRequest(whClientContext* c, uint16_t keyId,
+                                  uint8_t* key, uint16_t keySz);
+
+/**
+ * @brief Generic wrapper for receiving a key export DMA response.
+ *
+ * This function provides a generic interface for receiving key export DMA
+ * responses, automatically selecting between 32-bit and 64-bit implementations.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[out] label Buffer to store the key's label.
+ * @param[in] labelSz Size of the label buffer.
+ * @param[out] outSz Pointer to store the actual size of the exported key.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_KeyExportDmaResponse(whClientContext* c, uint8_t* label,
+                                   uint16_t labelSz, uint16_t* outSz);
+
+/**
+ * @brief Generic wrapper for performing a complete key export DMA operation.
+ *
+ * This function provides a generic interface for key export DMA operations,
+ * automatically selecting between 32-bit and 64-bit implementations.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] keyId Key ID to export.
+ * @param[in] key Buffer to receive the exported key.
+ * @param[in] keySz Size of the key buffer in bytes.
+ * @param[out] label Buffer to store the key's label.
+ * @param[in] labelSz Size of the label buffer.
+ * @param[out] outSz Pointer to store the actual size of the exported key.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_KeyExportDma(whClientContext* c, uint16_t keyId, uint8_t* key,
+                           uint16_t keySz, uint8_t* label, uint16_t labelSz,
+                           uint16_t* outSz);
+#endif /* WOLFHSM_CFG_DMA */
+
+
 /* Counter functions */
 int wh_Client_CounterInitRequest(whClientContext* c, whNvmId counterId,
     uint32_t counter);
