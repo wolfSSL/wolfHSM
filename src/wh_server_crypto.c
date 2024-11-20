@@ -1431,6 +1431,7 @@ static int _HandleSha256(whServerContext* server, whPacket* packet,
 
 #ifdef HAVE_DILITHIUM
 
+#ifndef WOLFSSL_DILITHIUM_NO_MAKE_KEY
 /* Check if the ML-DSA security level is supported
  * returns 1 if supported, 0 otherwise */
 static int _IsMlDsaLevelSupported(int level)
@@ -1460,6 +1461,7 @@ static int _IsMlDsaLevelSupported(int level)
 
     return ret;
 }
+#endif /* WOLFSSL_DILITHIUM_NO_MAKE_KEY */
 
 static int _HandleMlDsaKeyGen(whServerContext* ctx, whPacket* packet,
     uint16_t* out_size)

@@ -306,6 +306,8 @@ int wh_Crypto_MlDsaDeserializeKeyDer(const uint8_t* buffer, uint16_t size,
         return WH_ERROR_BADARGS;
     }
 
+#if defined(WOLFSSL_DILITHIUM_PRIVATE_KEY) && \
+    defined(WOLFSSL_DILITHIUM_PUBLIC_KEY)
     /* Try private key first, if that fails try public key */
     ret = wc_Dilithium_PrivateKeyDecode(buffer, &idx, key, size);
     if (ret != 0) {
@@ -313,6 +315,13 @@ int wh_Crypto_MlDsaDeserializeKeyDer(const uint8_t* buffer, uint16_t size,
         idx = 0;
         ret = wc_Dilithium_PublicKeyDecode(buffer, &idx, key, size);
     }
+#elif defined(WOLFSSL_DILITHIUM_PUBLIC_KEY)
+    ret = wc_Dilithium_PublicKeyDecode(buffer, &idx, key, size);
+#elif defined(WOLFSSL_DILITHIUM_PRIVATE_KEY)
+    ret = wc_Dilithium_PrivateKeyDecode(buffer, &idx, key, size);
+#else
+    ret = WH_ERROR_NOHANDLER;
+#endif
     return ret;
 }
 #endif /* HAVE_DILITHIUM */
