@@ -1430,17 +1430,31 @@ static int _HandleSha256(whServerContext* server, whPacket* packet,
 #endif /* !NO_SHA256 */
 
 #ifdef HAVE_DILITHIUM
-/* Check if the ML-DSA security level is supported 
+
+/* Check if the ML-DSA security level is supported
  * returns 1 if supported, 0 otherwise */
 static int _IsMlDsaLevelSupported(int level)
 {
     int ret = 0;
 
     switch (level) {
+#ifdef WOLFSSL_NO_ML_DSA_44
         case WC_ML_DSA_44:
+            ret = 1;
+            break;
+#endif /* WOLFSSL_NO_ML_DSA_44 */
+#ifdef WOLFSSL_NO_ML_DSA_65
         case WC_ML_DSA_65:
+            ret = 1;
+            break;
+#endif /* WOLFSSL_NO_ML_DSA_65 */
+#ifdef WOLFSSL_NO_ML_DSA_87
         case WC_ML_DSA_87:
             ret = 1;
+            break;
+#endif /* WOLFSSL_NO_ML_DSA_87 */
+        default:
+            ret = 0;
             break;
     }
 
@@ -1450,6 +1464,12 @@ static int _IsMlDsaLevelSupported(int level)
 static int _HandleMlDsaKeyGen(whServerContext* ctx, whPacket* packet,
     uint16_t* out_size)
 {
+#ifdef WOLFSSL_DILITHIUM_NO_MAKE_KEY
+    (void)ctx;
+    (void)packet;
+    (void)out_size;
+    return WH_ERROR_NOHANDLER;
+#else
     int ret = WH_ERROR_OK;
     MlDsaKey key[1];
     wh_Packet_pq_mldsa_kg_req* req = &packet->pqMldsaKgReq;
@@ -1526,11 +1546,18 @@ static int _HandleMlDsaKeyGen(whServerContext* ctx, whPacket* packet,
         }
     }
     return ret;
+#endif /* WOLFSSL_DILITHIUM_NO_MAKE_KEY */
 }
 
 static int _HandleMlDsaSign(whServerContext* ctx, whPacket* packet,
     uint16_t *out_size)
 {
+#ifdef WOLFSSL_DILITHIUM_NO_SIGN
+    (void)ctx;
+    (void)packet;
+    (void)out_size;
+    return WH_ERROR_NOHANDLER;
+#else
     int                          ret;
     MlDsaKey                     key[1];
     wh_Packet_pq_mldsa_sign_req* req = &packet->pqMldsaSignReq;
@@ -1571,11 +1598,18 @@ static int _HandleMlDsaSign(whServerContext* ctx, whPacket* packet,
         *out_size = WH_PACKET_STUB_SIZE + sizeof(*res) + res_len;
     }
     return ret;
+#endif /* WOLFSSL_DILITHIUM_NO_SIGN */
 }
 
 static int _HandleMlDsaVerify(whServerContext* ctx, whPacket* packet,
         uint16_t *out_size)
 {
+#ifdef WOLFSSL_DILITHIUM_NO_VERIFY
+    (void)ctx;
+    (void)packet;
+    (void)out_size;
+    return WH_ERROR_NOHANDLER;
+#else
     int                            ret;
     MlDsaKey                       key[1];
     wh_Packet_pq_mldsa_verify_req* req = &packet->pqMldsaVerifyReq;
@@ -1615,6 +1649,7 @@ static int _HandleMlDsaVerify(whServerContext* ctx, whPacket* packet,
         *out_size = WH_PACKET_STUB_SIZE + sizeof(*res);
     }
     return ret;
+#endif /* WOLFSSL_DILITHIUM_NO_VERIFY */
 }
 
 static int _HandleMlDsaCheckPrivKey(whServerContext* ctx, whPacket* packet,
@@ -1969,6 +2004,12 @@ static int _HandleSha256Dma(whServerContext* server, whPacket* packet,
 static int _HandleMlDsaKeyGenDma(whServerContext* server, whPacket* packet,
                                  uint16_t* size)
 {
+#ifdef WOLFSSL_DILITHIUM_NO_MAKE_KEY
+    (void)server;
+    (void)packet;
+    (void)size;
+    return WH_ERROR_NOHANDLER;
+#else
     int      ret = WH_ERROR_OK;
     MlDsaKey key[1];
     void*    clientOutAddr = NULL;
@@ -2063,11 +2104,18 @@ static int _HandleMlDsaKeyGenDma(whServerContext* server, whPacket* packet,
     }
 
     return ret;
+#endif /* WOLFSSL_DILITHIUM_NO_MAKE_KEY */
 }
 
 static int _HandleMlDsaSignDma(whServerContext* ctx, whPacket* packet,
                                uint16_t* out_size)
 {
+#ifdef WOLFSSL_DILITHIUM_NO_SIGN
+    (void)ctx;
+    (void)packet;
+    (void)out_size;
+    return WH_ERROR_NOHANDLER;
+#else
     int      ret = 0;
     MlDsaKey key[1];
     void*    msgAddr = NULL;
@@ -2148,11 +2196,18 @@ static int _HandleMlDsaSignDma(whServerContext* ctx, whPacket* packet,
 
     wc_MlDsaKey_Free(key);
     return ret;
+#endif /* WOLFSSL_DILITHIUM_NO_SIGN */
 }
 
 static int _HandleMlDsaVerifyDma(whServerContext* ctx, whPacket* packet,
         uint16_t* out_size)
 {
+#ifdef WOLFSSL_DILITHIUM_NO_VERIFY
+    (void)ctx;
+    (void)packet;
+    (void)out_size;
+    return WH_ERROR_NOHANDLER;
+#else
     int      ret = 0;
     MlDsaKey key[1];
     void*    msgAddr  = NULL;
@@ -2235,6 +2290,7 @@ static int _HandleMlDsaVerifyDma(whServerContext* ctx, whPacket* packet,
 
     wc_MlDsaKey_Free(key);
     return ret;
+#endif /* WOLFSSL_DILITHIUM_NO_VERIFY */
 }
 
 static int _HandleMlDsaCheckPrivKeyDma(whServerContext* server, whPacket* packet,
