@@ -3,4 +3,5 @@ Build/
 *.o
 *.a
 *.la
+**/.gdb_history
 
