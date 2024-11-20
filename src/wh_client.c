@@ -1211,14 +1211,12 @@ int wh_Client_KeyCacheDma32Request(whClientContext* c, uint32_t flags,
     packet->keyCacheDma32Req.key.addr = keyAddr;
     packet->keyCacheDma32Req.key.sz   = keySz;
 
-    /* Copy label if provided */
+    /* Copy label if provided, truncate if necessary */
     if (labelSz > 0) {
         if (labelSz > WH_NVM_LABEL_LEN) {
-            memcpy(packet->keyCacheDma32Req.label, label, WH_NVM_LABEL_LEN);
+            labelSz = WH_NVM_LABEL_LEN;
         }
-        else {
-            memcpy(packet->keyCacheDma32Req.label, label, labelSz);
-        }
+        memcpy(packet->keyCacheDma32Req.label, label, labelSz);
     }
 
     return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_KEY, WH_KEY_CACHE_DMA32,
@@ -1377,14 +1375,12 @@ int wh_Client_KeyCacheDma64Request(whClientContext* c, uint32_t flags,
     packet->keyCacheDma64Req.key.addr = keyAddr;
     packet->keyCacheDma64Req.key.sz   = keySz;
 
-    /* Copy label if provided */
+    /* Copy label if provided, truncate if necessary */
     if (labelSz > 0) {
         if (labelSz > WH_NVM_LABEL_LEN) {
-            memcpy(packet->keyCacheDma64Req.label, label, WH_NVM_LABEL_LEN);
+            labelSz = WH_NVM_LABEL_LEN;
         }
-        else {
-            memcpy(packet->keyCacheDma64Req.label, label, labelSz);
-        }
+        memcpy(packet->keyCacheDma64Req.label, label, labelSz);
     }
 
     return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_KEY, WH_KEY_CACHE_DMA64,
