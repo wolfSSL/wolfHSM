@@ -763,7 +763,6 @@ static int _handlePqcSigKeyGen(whClientContext* ctx, wc_CryptoInfo* info,
     int ret = CRYPTOCB_UNAVAILABLE;
 
     /* Extract info parameters */
-    WC_RNG* rng  = info->pk.pqc_sig_kg.rng;
     int     size = info->pk.pqc_sig_kg.size;
     void*   key  = info->pk.pqc_sig_kg.key;
     int     type = info->pk.pqc_sig_kg.type;
@@ -807,7 +806,6 @@ static int _handlePqcSign(whClientContext* ctx, wc_CryptoInfo* info, int useDma)
     word32      in_len  = info->pk.pqc_sign.inlen;
     byte*       out     = info->pk.pqc_sign.out;
     word32*     out_len = info->pk.pqc_sign.outlen;
-    WC_RNG*     rng     = info->pk.pqc_sign.rng;
     void*       key     = info->pk.pqc_sign.key;
     int         type    = info->pk.pqc_sign.type;
 
