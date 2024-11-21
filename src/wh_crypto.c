@@ -259,25 +259,25 @@ int wh_Crypto_MlDsaSerializeKeyDer(MlDsaKey* key, uint16_t max_size,
 
     /* Choose appropriate serialization based on key flags */
     if (key->prvKeySet && key->pubKeySet) {
-/* Full keypair - use KeyToDer */
 #if defined(WOLFSSL_DILITHIUM_PRIVATE_KEY) && \
     defined(WOLFSSL_DILITHIUM_PUBLIC_KEY)
+        /* Full keypair - use KeyToDer */
         ret = wc_Dilithium_KeyToDer(key, buffer, max_size);
 #else
         ret = WH_ERROR_NOHANDLER;
 #endif
     }
     else if (key->pubKeySet) {
-/* Public key only - use PublicKeyToDer with SPKI format */
 #ifdef WOLFSSL_DILITHIUM_PUBLIC_KEY
+        /* Public key only - use PublicKeyToDer with SPKI format */
         ret = wc_Dilithium_PublicKeyToDer(key, buffer, max_size, 1);
 #else
         ret = WH_ERROR_NOHANDLER;
 #endif
     }
     else if (key->prvKeySet) {
-/* Private key only */
 #ifdef WOLFSSL_DILITHIUM_PRIVATE_KEY
+        /* Private key only */
         ret = wc_Dilithium_PrivateKeyToDer(key, buffer, max_size);
 #else
         ret = WH_ERROR_NOHANDLER;

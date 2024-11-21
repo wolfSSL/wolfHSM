@@ -524,13 +524,13 @@ int wh_Server_MlDsaKeyCacheImport(whServerContext* ctx, MlDsaKey* key,
     uint16_t       der_size;
 
     const uint16_t MAX_MLDSA_DER_SIZE =
-    #if !defined(WOLFSSL_NO_ML_DSA_87)
+#if !defined(WOLFSSL_NO_ML_DSA_87)
         ML_DSA_LEVEL5_PRV_KEY_DER_SIZE;
-    # elif !defined(WOLFSSL_NO_ML_DSA_65)
+#elif !defined(WOLFSSL_NO_ML_DSA_65)
         ML_DSA_LEVEL3_PRV_KEY_DER_SIZE;
-    #else
+#else
         ML_DSA_LEVEL2_PRV_KEY_DER_SIZE;
-    #endif
+#endif
 
     if ((ctx == NULL) || (key == NULL) || (WH_KEYID_ISERASED(keyId)) ||
         ((label != NULL) && (label_len > sizeof(cacheMeta->label)))) {
@@ -564,9 +564,9 @@ int wh_Server_MlDsaKeyCacheImport(whServerContext* ctx, MlDsaKey* key,
 int wh_Server_MlDsaKeyCacheExport(whServerContext* ctx, whKeyId keyId,
                                   MlDsaKey* key)
 {
-    uint8_t* cacheBuf;
+    uint8_t*       cacheBuf;
     whNvmMetadata* cacheMeta;
-    int ret = WH_ERROR_OK;
+    int            ret = WH_ERROR_OK;
 
     if ((ctx == NULL) || (key == NULL) || (WH_KEYID_ISERASED(keyId))) {
         return WH_ERROR_BADARGS;
