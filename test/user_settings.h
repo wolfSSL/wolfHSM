@@ -117,7 +117,6 @@ extern "C" {
 #define WOLFSSL_SHA3
 #define WOLFSSL_SHAKE128
 #define WOLFSSL_SHAKE256
-#define WOLFSSL_DILITHIUM_INCLUDE_BENCH_KEYS
 
 /* The following options can be individually controlled to customize the
  * ML-DSA configuration */
