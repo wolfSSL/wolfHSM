@@ -985,6 +985,7 @@ int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
 
     case WC_ALGO_TYPE_PK: {
         switch (info->pk.type) {
+#if defined(HAVE_DILITHIUM) || defined(HAVE_FALCON)
             case WC_PK_TYPE_PQC_SIG_KEYGEN:
                 ret = _handlePqcSigKeyGen(ctx, info, 1);
                 break;
@@ -997,6 +998,7 @@ int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
             case WC_PK_TYPE_PQC_SIG_CHECK_PRIV_KEY:
                 ret = _handlePqcSigCheckPrivKey(ctx, info, 1);
                 break;
+#endif /* HAVE_DILITHIUM || HAVE_FALCON */
         }
     } break; /* case WC_ALGO_TYPE_PK */
 
