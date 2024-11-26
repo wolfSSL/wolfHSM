@@ -778,10 +778,13 @@ static int _handlePqcSigKeyGen(whClientContext* ctx, wc_CryptoInfo* info,
 #ifdef HAVE_DILITHIUM
         case WC_PQC_SIG_TYPE_DILITHIUM: {
             int level = ((MlDsaKey*)key)->level;
+#ifdef WOLFHSM_CFG_DMA
             if (useDma) {
                 ret = wh_Client_MlDsaMakeExportKeyDma(ctx, level, key);
             }
-            else {
+            else
+#endif /* WOLFHSM_CFG_DMA */
+            {
                 ret = wh_Client_MlDsaMakeExportKey(ctx, level, size, key);
             }
         } break;
@@ -819,11 +822,14 @@ static int _handlePqcSign(whClientContext* ctx, wc_CryptoInfo* info, int useDma)
     switch (type) {
 #ifdef HAVE_DILITHIUM
         case WC_PQC_SIG_TYPE_DILITHIUM:
+#ifdef WOLFHSM_CFG_DMA
             if (useDma) {
                 ret =
                     wh_Client_MlDsaSignDma(ctx, in, in_len, out, out_len, key);
             }
-            else {
+            else
+#endif /* WOLFHSM_CFG_DMA */
+            {
                 ret = wh_Client_MlDsaSign(ctx, in, in_len, out, out_len, key);
             }
             break;
@@ -863,11 +869,14 @@ static int _handlePqcVerify(whClientContext* ctx, wc_CryptoInfo* info,
     switch (type) {
 #ifdef HAVE_DILITHIUM
         case WC_PQC_SIG_TYPE_DILITHIUM:
+#ifdef WOLFHSM_CFG_DMA
             if (useDma) {
                 ret = wh_Client_MlDsaVerifyDma(ctx, sig, sig_len, msg, msg_len,
                                                res, key);
             }
-            else {
+            else
+#endif /* WOLFHSM_CFG_DMA */
+            {
                 ret = wh_Client_MlDsaVerify(ctx, sig, sig_len, msg, msg_len, res,
                                             key);
             }
@@ -905,11 +914,14 @@ static int _handlePqcSigCheckPrivKey(whClientContext* ctx, wc_CryptoInfo* info,
     switch (type) {
 #ifdef HAVE_DILITHIUM
         case WC_PQC_SIG_TYPE_DILITHIUM:
+#ifdef WOLFHSM_CFG_DMA
             if (useDma) {
                 ret =
                     wh_Client_MlDsaCheckPrivKeyDma(ctx, key, pubKey, pubKeySz);
             }
-            else {
+            else
+#endif /* WOLFHSM_CFG_DMA */
+            {
                 ret = wh_Client_MlDsaCheckPrivKey(ctx, key, pubKey, pubKeySz);
             }
             break;
