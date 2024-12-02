@@ -264,7 +264,7 @@ int wh_Crypto_MlDsaSerializeKeyDer(MlDsaKey* key, uint16_t max_size,
         /* Full keypair - use KeyToDer */
         ret = wc_Dilithium_KeyToDer(key, buffer, max_size);
 #else
-        ret = WH_ERROR_NOHANDLER;
+        ret = WH_ERROR_BADARGS;
 #endif
     }
     else if (key->pubKeySet) {
@@ -272,7 +272,7 @@ int wh_Crypto_MlDsaSerializeKeyDer(MlDsaKey* key, uint16_t max_size,
         /* Public key only - use PublicKeyToDer with SPKI format */
         ret = wc_Dilithium_PublicKeyToDer(key, buffer, max_size, 1);
 #else
-        ret = WH_ERROR_NOHANDLER;
+        ret = WH_ERROR_BADARGS;
 #endif
     }
     else if (key->prvKeySet) {
@@ -280,7 +280,7 @@ int wh_Crypto_MlDsaSerializeKeyDer(MlDsaKey* key, uint16_t max_size,
         /* Private key only */
         ret = wc_Dilithium_PrivateKeyToDer(key, buffer, max_size);
 #else
-        ret = WH_ERROR_NOHANDLER;
+        ret = WH_ERROR_BADARGS;
 #endif
     }
     else {
@@ -320,7 +320,7 @@ int wh_Crypto_MlDsaDeserializeKeyDer(const uint8_t* buffer, uint16_t size,
 #elif defined(WOLFSSL_DILITHIUM_PRIVATE_KEY)
     ret = wc_Dilithium_PrivateKeyDecode(buffer, &idx, key, size);
 #else
-    ret = WH_ERROR_NOHANDLER;
+    ret = WH_ERROR_BADARGS;
 #endif
     return ret;
 }
