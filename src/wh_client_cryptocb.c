@@ -56,18 +56,23 @@
 #ifndef NO_SHA256
 static int _handleSha256(wc_CryptoInfo* info, void* inCtx, whPacket* packet);
 static int _xferSha256BlockAndUpdateDigest(whClientContext* ctx,
-                                           wc_Sha256* sha256,
-                                           whPacket* packet,
+                                           wc_Sha256* sha256, whPacket* packet,
                                            uint32_t isLastBlock);
-static int _handlePqcSigKeyGen(whClientContext* ctx, wc_CryptoInfo* info);
-static int _handlePqcSign(whClientContext* ctx, wc_CryptoInfo* info);
-static int _handlePqcVerify(whClientContext* ctx, wc_CryptoInfo* info);
-static int _handlePqcSigCheckPrivKey(whClientContext* ctx, wc_CryptoInfo* info);
-
 #ifdef WOLFHSM_CFG_DMA
 static int _handleSha256Dma(wc_CryptoInfo* info, void* inCtx, whPacket* packet);
 #endif /* WOLFHSM_CFG_DMA */
 #endif /* ! NO_SHA256 */
+
+#if defined(HAVE_DILITHIUM) || defined(HAVE_FALCON)
+static int _handlePqcSigKeyGen(whClientContext* ctx, wc_CryptoInfo* info,
+                               int useDma);
+static int _handlePqcSign(whClientContext* ctx, wc_CryptoInfo* info,
+                          int useDma);
+static int _handlePqcVerify(whClientContext* ctx, wc_CryptoInfo* info,
+                            int useDma);
+static int _handlePqcSigCheckPrivKey(whClientContext* ctx, wc_CryptoInfo* info,
+                                     int useDma);
+#endif /* HAVE_DILITHIUM || HAVE_FALCON */
 
 int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
 {
@@ -338,19 +343,19 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
 
 #if defined(HAVE_DILITHIUM) || defined(HAVE_FALCON)
         case WC_PK_TYPE_PQC_SIG_KEYGEN:
-            ret = _handlePqcSigKeyGen(ctx, info);
+            ret = _handlePqcSigKeyGen(ctx, info, 0);
             break;
 
         case WC_PK_TYPE_PQC_SIG_SIGN:
-            ret = _handlePqcSign(ctx, info);
+            ret = _handlePqcSign(ctx, info, 0);
             break;
 
         case WC_PK_TYPE_PQC_SIG_VERIFY:
-            ret = _handlePqcVerify(ctx, info);
+            ret = _handlePqcVerify(ctx, info, 0);
             break;
 
         case WC_PK_TYPE_PQC_SIG_CHECK_PRIV_KEY:
-            ret = _handlePqcSigCheckPrivKey(ctx, info);
+            ret = _handlePqcSigCheckPrivKey(ctx, info, 0);
             break;
 
 #endif /* HAVE_DILITHIUM || HAVE_FALCON */
@@ -752,21 +757,36 @@ static int _handleSha256Dma(wc_CryptoInfo* info, void* inCtx, whPacket* packet)
 
 
 #if defined(HAVE_FALCON) || defined(HAVE_DILITHIUM)
-static int _handlePqcSigKeyGen(whClientContext* ctx, wc_CryptoInfo* info)
+static int _handlePqcSigKeyGen(whClientContext* ctx, wc_CryptoInfo* info,
+                               int useDma)
 {
     int ret = CRYPTOCB_UNAVAILABLE;
 
     /* Extract info parameters */
-    WC_RNG* rng  = info->pk.pqc_sig_kg.rng;
     int     size = info->pk.pqc_sig_kg.size;
     void*   key  = info->pk.pqc_sig_kg.key;
     int     type = info->pk.pqc_sig_kg.type;
+
+#ifndef WOLFHSM_CFG_DMA
+    if (useDma) {
+        /* TODO: proper error code? */
+        return WC_HW_E;
+    }
+#endif
 
     switch (type) {
 #ifdef HAVE_DILITHIUM
         case WC_PQC_SIG_TYPE_DILITHIUM: {
             int level = ((MlDsaKey*)key)->level;
-            ret = wh_Client_MlDsaMakeExportKey(ctx, level, key, size, rng);
+#ifdef WOLFHSM_CFG_DMA
+            if (useDma) {
+                ret = wh_Client_MlDsaMakeExportKeyDma(ctx, level, key);
+            }
+            else
+#endif /* WOLFHSM_CFG_DMA */
+            {
+                ret = wh_Client_MlDsaMakeExportKey(ctx, level, size, key);
+            }
         } break;
 #endif /* HAVE_DILITHIUM */
 
@@ -780,7 +800,7 @@ static int _handlePqcSigKeyGen(whClientContext* ctx, wc_CryptoInfo* info)
     return ret;
 }
 
-static int _handlePqcSign(whClientContext* ctx, wc_CryptoInfo* info)
+static int _handlePqcSign(whClientContext* ctx, wc_CryptoInfo* info, int useDma)
 {
     int ret = CRYPTOCB_UNAVAILABLE;
 
@@ -789,14 +809,29 @@ static int _handlePqcSign(whClientContext* ctx, wc_CryptoInfo* info)
     word32      in_len  = info->pk.pqc_sign.inlen;
     byte*       out     = info->pk.pqc_sign.out;
     word32*     out_len = info->pk.pqc_sign.outlen;
-    WC_RNG*     rng     = info->pk.pqc_sign.rng;
     void*       key     = info->pk.pqc_sign.key;
     int         type    = info->pk.pqc_sign.type;
+
+#ifndef WOLFHSM_CFG_DMA
+    if (useDma) {
+        /* TODO: proper error code? */
+        return WC_HW_E;
+    }
+#endif
 
     switch (type) {
 #ifdef HAVE_DILITHIUM
         case WC_PQC_SIG_TYPE_DILITHIUM:
-            ret = wh_Client_MlDsaSign(ctx, in, in_len, out, out_len, rng, key);
+#ifdef WOLFHSM_CFG_DMA
+            if (useDma) {
+                ret =
+                    wh_Client_MlDsaSignDma(ctx, in, in_len, out, out_len, key);
+            }
+            else
+#endif /* WOLFHSM_CFG_DMA */
+            {
+                ret = wh_Client_MlDsaSign(ctx, in, in_len, out, out_len, key);
+            }
             break;
 #endif /* HAVE_DILITHIUM */
 
@@ -810,7 +845,8 @@ static int _handlePqcSign(whClientContext* ctx, wc_CryptoInfo* info)
     return ret;
 }
 
-static int _handlePqcVerify(whClientContext* ctx, wc_CryptoInfo* info)
+static int _handlePqcVerify(whClientContext* ctx, wc_CryptoInfo* info,
+                            int useDma)
 {
     int ret = CRYPTOCB_UNAVAILABLE;
 
@@ -823,11 +859,27 @@ static int _handlePqcVerify(whClientContext* ctx, wc_CryptoInfo* info)
     void*       key     = info->pk.pqc_verify.key;
     int         type    = info->pk.pqc_verify.type;
 
+#ifndef WOLFHSM_CFG_DMA
+    if (useDma) {
+        /* TODO: proper error code? */
+        return WC_HW_E;
+    }
+#endif
+
     switch (type) {
 #ifdef HAVE_DILITHIUM
         case WC_PQC_SIG_TYPE_DILITHIUM:
-            ret = wh_Client_MlDsaVerify(ctx, sig, sig_len, msg, msg_len, res,
-                                        key);
+#ifdef WOLFHSM_CFG_DMA
+            if (useDma) {
+                ret = wh_Client_MlDsaVerifyDma(ctx, sig, sig_len, msg, msg_len,
+                                               res, key);
+            }
+            else
+#endif /* WOLFHSM_CFG_DMA */
+            {
+                ret = wh_Client_MlDsaVerify(ctx, sig, sig_len, msg, msg_len, res,
+                                            key);
+            }
             break;
 #endif /* HAVE_DILITHIUM */
 
@@ -841,7 +893,8 @@ static int _handlePqcVerify(whClientContext* ctx, wc_CryptoInfo* info)
     return ret;
 }
 
-static int _handlePqcSigCheckPrivKey(whClientContext* ctx, wc_CryptoInfo* info)
+static int _handlePqcSigCheckPrivKey(whClientContext* ctx, wc_CryptoInfo* info,
+                                     int useDma)
 {
     int ret = CRYPTOCB_UNAVAILABLE;
 
@@ -851,14 +904,30 @@ static int _handlePqcSigCheckPrivKey(whClientContext* ctx, wc_CryptoInfo* info)
     word32      pubKeySz = info->pk.pqc_sig_check.pubKeySz;
     int         type     = info->pk.pqc_sig_check.type;
 
+#ifndef WOLFHSM_CFG_DMA
+    if (useDma) {
+        /* TODO: proper error code? */
+        return WC_HW_E;
+    }
+#endif
+
     switch (type) {
 #ifdef HAVE_DILITHIUM
         case WC_PQC_SIG_TYPE_DILITHIUM:
-            ret = wh_Client_MlDsaCheckPrivKey(ctx, key, pubKey, pubKeySz);
+#ifdef WOLFHSM_CFG_DMA
+            if (useDma) {
+                ret =
+                    wh_Client_MlDsaCheckPrivKeyDma(ctx, key, pubKey, pubKeySz);
+            }
+            else
+#endif /* WOLFHSM_CFG_DMA */
+            {
+                ret = wh_Client_MlDsaCheckPrivKey(ctx, key, pubKey, pubKeySz);
+            }
             break;
 #endif /* HAVE_DILITHIUM */
 
-        /* Support for additional PQC algorithms should be added here */
+            /* Support for additional PQC algorithms should be added here */
 
         default:
             ret = CRYPTOCB_UNAVAILABLE;
@@ -912,6 +981,26 @@ int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
                 break;
         }
     } break; /* case WC_ALGO_TYPE_HASH */
+
+
+    case WC_ALGO_TYPE_PK: {
+        switch (info->pk.type) {
+#if defined(HAVE_DILITHIUM) || defined(HAVE_FALCON)
+            case WC_PK_TYPE_PQC_SIG_KEYGEN:
+                ret = _handlePqcSigKeyGen(ctx, info, 1);
+                break;
+            case WC_PK_TYPE_PQC_SIG_SIGN:
+                ret = _handlePqcSign(ctx, info, 1);
+                break;
+            case WC_PK_TYPE_PQC_SIG_VERIFY:
+                ret = _handlePqcVerify(ctx, info, 1);
+                break;
+            case WC_PK_TYPE_PQC_SIG_CHECK_PRIV_KEY:
+                ret = _handlePqcSigCheckPrivKey(ctx, info, 1);
+                break;
+#endif /* HAVE_DILITHIUM || HAVE_FALCON */
+        }
+    } break; /* case WC_ALGO_TYPE_PK */
 
     case WC_ALGO_TYPE_NONE:
     default:

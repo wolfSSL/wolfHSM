@@ -651,6 +651,115 @@ typedef struct wh_Packet_hash_sha256_Dma64_res {
     wh_Packet_Dma64_addr_status dmaAddrStatus;
 } wh_Packet_hash_sha256_Dma64_res;
 
+/* ML-DSA DMA key generation messages */
+typedef struct wh_Packet_pq_mldsa_keygen_Dma32_req {
+    uint32_t               type;       /* enum wc_PkType */
+    uint32_t               pqAlgoType; /* enum wc_PqcSignatureType */
+    wh_Packet_Dma32_buffer key;        /* Key output buffer (pub or pub+priv) */
+    uint32_t               level;      /* ML-DSA security level */
+    uint32_t               flags;      /* Key generation flags */
+    uint32_t               keyId;      /* Output keyId if successful */
+    uint32_t               access;     /* Key access permissions */
+    uint32_t               labelSize;  /* Size of label */
+    uint8_t                label[WH_NVM_LABEL_LEN];
+    uint8_t                WH_PAD2[4]; /* Final padding for 8-byte alignment */
+} wh_Packet_pq_mldsa_keygen_Dma32_req;
+
+typedef struct wh_Packet_pq_mldsa_Dma32_res {
+    wh_Packet_Dma32_addr_status dmaAddrStatus;
+    uint32_t                    keyId;   /* Assigned key ID */
+    uint32_t                    keySize; /* Actual size of generated key */
+} wh_Packet_pq_mldsa_Dma32_res;
+
+/* 64-bit version */
+typedef struct wh_Packet_pq_mldsa_keygen_Dma64_req {
+    uint32_t               type;
+    uint32_t               pqAlgoType;
+    wh_Packet_Dma64_buffer key;
+    uint32_t               level;
+    uint32_t               flags;
+    uint32_t               keyId;
+    uint32_t               access; /* Key access permissions */
+    uint32_t               labelSize;
+    uint8_t                label[WH_NVM_LABEL_LEN];
+    uint8_t                WH_PAD2[4]; /* Final padding for 8-byte alignment */
+} wh_Packet_pq_mldsa_keygen_Dma64_req;
+
+typedef struct wh_Packet_pq_mldsa_Dma64_res {
+    wh_Packet_Dma64_addr_status dmaAddrStatus;
+    uint32_t                    keyId;   /* Assigned key ID */
+    uint32_t                    keySize; /* Actual size of generated key */
+} wh_Packet_pq_mldsa_Dma64_res;
+
+/* ML-DSA DMA sign request structures */
+typedef struct wh_Packet_pq_mldsa_sign_Dma32_req {
+    uint32_t               type;       /* enum wc_PkType */
+    uint32_t               pqAlgoType; /* enum wc_PqcSignatureType */
+    wh_Packet_Dma32_buffer msg;        /* Message buffer */
+    wh_Packet_Dma32_buffer sig;        /* Signature buffer */
+    uint32_t               options;    /* Same options as non-DMA version */
+    uint32_t               level;      /* ML-DSA security level */
+    uint32_t               keyId;      /* Key ID to use for signing */
+    uint8_t                WH_PAD[4];  /* Pad to 8-byte alignment */
+} wh_Packet_pq_mldsa_sign_Dma32_req;
+
+typedef struct wh_Packet_pq_mldsa_sign_Dma64_req {
+    uint32_t               type;       /* enum wc_PkType */
+    uint32_t               pqAlgoType; /* enum wc_PqcSignatureType */
+    wh_Packet_Dma64_buffer msg;        /* Message buffer */
+    wh_Packet_Dma64_buffer sig;        /* Signature buffer */
+    uint32_t               options;    /* Same options as non-DMA version */
+    uint32_t               level;      /* ML-DSA security level */
+    uint32_t               keyId;      /* Key ID to use for signing */
+    uint8_t                WH_PAD[4];  /* Pad to 8-byte alignment */
+} wh_Packet_pq_mldsa_sign_Dma64_req;
+
+typedef struct wh_Packet_pq_mldsa_sign_Dma32_res {
+    wh_Packet_Dma32_addr_status dmaAddrStatus;
+    uint32_t                    sigLen;    /* Actual signature length */
+    uint8_t                     WH_PAD[4]; /* Pad to 8-byte alignment */
+} wh_Packet_pq_mldsa_sign_Dma32_res;
+
+typedef struct wh_Packet_pq_mldsa_sign_Dma64_res {
+    wh_Packet_Dma64_addr_status dmaAddrStatus;
+    uint32_t                    sigLen;    /* Actual signature length */
+    uint8_t                     WH_PAD[4]; /* Pad to 8-byte alignment */
+} wh_Packet_pq_mldsa_sign_Dma64_res;
+
+/* ML-DSA DMA verify request/response structures */
+typedef struct wh_Packet_pq_mldsa_verify_Dma32_req {
+    uint32_t               type;       /* enum wc_PkType */
+    uint32_t               pqAlgoType; /* enum wc_PqcSignatureType */
+    wh_Packet_Dma32_buffer sig;        /* Signature buffer */
+    wh_Packet_Dma32_buffer msg;        /* Message buffer */
+    uint32_t               options;    /* Same options as non-DMA version */
+    uint32_t               level;      /* ML-DSA security level */
+    uint32_t               keyId;      /* Key ID to use for verification */
+    uint8_t                WH_PAD[4];  /* Pad to 8-byte alignment */
+} wh_Packet_pq_mldsa_verify_Dma32_req;
+
+typedef struct wh_Packet_pq_mldsa_verify_Dma64_req {
+    uint32_t               type;       /* enum wc_PkType */
+    uint32_t               pqAlgoType; /* enum wc_PqcSignatureType */
+    wh_Packet_Dma64_buffer sig;        /* Signature buffer */
+    wh_Packet_Dma64_buffer msg;        /* Message buffer */
+    uint32_t               options;    /* Same options as non-DMA version */
+    uint32_t               level;      /* ML-DSA security level */
+    uint32_t               keyId;      /* Key ID to use for verification */
+    uint8_t                WH_PAD[4];  /* Pad to 8-byte alignment */
+} wh_Packet_pq_mldsa_verify_Dma64_req;
+
+typedef struct wh_Packet_pq_mldsa_verify_Dma32_res {
+    wh_Packet_Dma32_addr_status dmaAddrStatus;
+    int32_t                     verifyResult; /* Result of verification */
+    uint8_t                     WH_PAD[4];    /* Pad to 8-byte alignment */
+} wh_Packet_pq_mldsa_verify_Dma32_res;
+
+typedef struct wh_Packet_pq_mldsa_verify_Dma64_res {
+    wh_Packet_Dma64_addr_status dmaAddrStatus;
+    int32_t                     verifyResult; /* Result of verification */
+    uint8_t                     WH_PAD[4];    /* Pad to 8-byte alignment */
+} wh_Packet_pq_mldsa_verify_Dma64_res;
 
 /** SHE Packets */
 #ifdef WOLFHSM_CFG_SHE_EXTENSION
@@ -953,20 +1062,33 @@ typedef struct whPacket
 
         /* DMA messages*/
 #if defined(WOLFHSM_CFG_DMA) && WH_DMA_IS_32BIT
-        wh_Packet_hash_sha256_Dma32_req hashSha256Dma32Req;
-        wh_Packet_hash_sha256_Dma32_res hashSha256Dma32Res;
-        wh_Packet_key_cache_Dma32_req keyCacheDma32Req;
-        wh_Packet_key_cache_Dma32_res keyCacheDma32Res;
-        wh_Packet_key_export_Dma32_req keyExportDma32Req;
-        wh_Packet_key_export_Dma32_res keyExportDma32Res;
+        wh_Packet_hash_sha256_Dma32_req     hashSha256Dma32Req;
+        wh_Packet_hash_sha256_Dma32_res     hashSha256Dma32Res;
+        wh_Packet_key_cache_Dma32_req       keyCacheDma32Req;
+        wh_Packet_key_cache_Dma32_res       keyCacheDma32Res;
+        wh_Packet_key_export_Dma32_req      keyExportDma32Req;
+        wh_Packet_key_export_Dma32_res      keyExportDma32Res;
+        wh_Packet_pq_mldsa_keygen_Dma32_req pqMldsaKeygenDma32Req;
+        wh_Packet_pq_mldsa_Dma32_res        pqMldsaDma32Res;
+        wh_Packet_pq_mldsa_sign_Dma32_req   pqMldsaSignDma32Req;
+        wh_Packet_pq_mldsa_sign_Dma32_res   pqMldsaSignDma32Res;
+        wh_Packet_pq_mldsa_verify_Dma32_req  pqMldsaVerifyDma32Req;
+        wh_Packet_pq_mldsa_verify_Dma32_res  pqMldsaVerifyDma32Res;
 #elif defined(WOLFHSM_CFG_DMA) && WH_DMA_IS_64BIT
-        wh_Packet_hash_sha256_Dma64_req hashSha256Dma64Req;
-        wh_Packet_hash_sha256_Dma64_res hashSha256Dma64Res;
-        wh_Packet_key_cache_Dma64_req keyCacheDma64Req;
-        wh_Packet_key_cache_Dma64_res keyCacheDma64Res;
-        wh_Packet_key_export_Dma64_req keyExportDma64Req;
-        wh_Packet_key_export_Dma64_res keyExportDma64Res;
+        wh_Packet_hash_sha256_Dma64_req     hashSha256Dma64Req;
+        wh_Packet_hash_sha256_Dma64_res     hashSha256Dma64Res;
+        wh_Packet_key_cache_Dma64_req       keyCacheDma64Req;
+        wh_Packet_key_cache_Dma64_res       keyCacheDma64Res;
+        wh_Packet_key_export_Dma64_req      keyExportDma64Req;
+        wh_Packet_key_export_Dma64_res      keyExportDma64Res;
+        wh_Packet_pq_mldsa_keygen_Dma64_req pqMldsaKeygenDma64Req;
+        wh_Packet_pq_mldsa_Dma64_res        pqMldsaDma64Res;
+        wh_Packet_pq_mldsa_sign_Dma64_req   pqMldsaSignDma64Req;
+        wh_Packet_pq_mldsa_sign_Dma64_res   pqMldsaSignDma64Res;
+        wh_Packet_pq_mldsa_verify_Dma64_req pqMldsaVerifyDma64Req;
+        wh_Packet_pq_mldsa_verify_Dma64_res pqMldsaVerifyDma64Res;
 #endif
+
 
 #ifdef WOLFHSM_CFG_SHE_EXTENSION
         wh_Packet_she_set_uid_req sheSetUidReq;

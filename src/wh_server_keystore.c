@@ -147,7 +147,7 @@ int hsmCacheFindSlotAndZero(whServerContext* server, uint16_t keySz,
 
         /* zero the cache slot and set the output buffers */
         if (foundIndex >= 0) {
-            XMEMSET(&server->cache[foundIndex], 0, sizeof(whServerCacheSlot));
+            memset(&server->cache[foundIndex], 0, sizeof(whServerCacheSlot));
             *outBuf  = server->cache[foundIndex].buffer;
             *outMeta = server->cache[foundIndex].meta;
         }
@@ -171,7 +171,7 @@ int hsmCacheFindSlotAndZero(whServerContext* server, uint16_t keySz,
             }
         }
         if (foundIndex >= 0) {
-            XMEMSET(&server->bigCache[foundIndex], 0,
+            memset(&server->bigCache[foundIndex], 0,
                     sizeof(whServerBigCacheSlot));
             *outBuf  = server->bigCache[foundIndex].buffer;
             *outMeta = server->bigCache[foundIndex].meta;
@@ -219,8 +219,8 @@ int hsmCacheKey(whServerContext* server, whNvmMetadata* meta, uint8_t* in)
 
         /* write key if slot found */
         if (foundIndex != -1) {
-            XMEMCPY((uint8_t*)server->cache[foundIndex].buffer, in, meta->len);
-            XMEMCPY((uint8_t*)server->cache[foundIndex].meta, (uint8_t*)meta,
+            memcpy((uint8_t*)server->cache[foundIndex].buffer, in, meta->len);
+            memcpy((uint8_t*)server->cache[foundIndex].meta, (uint8_t*)meta,
                     sizeof(whNvmMetadata));
             /* check if the key is already commited */
             if (wh_Nvm_GetMetadata(server->nvm, meta->id, meta) ==
@@ -259,9 +259,9 @@ int hsmCacheKey(whServerContext* server, whNvmMetadata* meta, uint8_t* in)
 
         /* write key if slot found */
         if (foundIndex != -1) {
-            XMEMCPY((uint8_t*)server->bigCache[foundIndex].buffer, in,
+            memcpy((uint8_t*)server->bigCache[foundIndex].buffer, in,
                     meta->len);
-            XMEMCPY((uint8_t*)server->bigCache[foundIndex].meta, (uint8_t*)meta,
+            memcpy((uint8_t*)server->bigCache[foundIndex].meta, (uint8_t*)meta,
                     sizeof(whNvmMetadata));
             /* check if the key is already commited */
             if (wh_Nvm_GetMetadata(server->nvm, meta->id, meta) ==
@@ -358,7 +358,7 @@ int hsmFreshenKey(whServerContext* server, whKeyId keyId, uint8_t** outBuf,
                 if (ret == WH_ERROR_OK) {
                     /* Copy the metadata to the cache slot if key read is
                      * successful*/
-                    XMEMCPY((uint8_t*)*outMeta, (uint8_t*)tmpMeta,
+                    memcpy((uint8_t*)*outMeta, (uint8_t*)tmpMeta,
                             sizeof(whNvmMetadata));
                 }
             }
@@ -388,11 +388,11 @@ int hsmReadKey(whServerContext* server, whKeyId keyId, whNvmMetadata* outMeta,
             if (server->cache[i].meta->len > *outSz)
                 return WH_ERROR_NOSPACE;
             if (outMeta != NULL) {
-                XMEMCPY((uint8_t*)outMeta, (uint8_t*)server->cache[i].meta,
+                memcpy((uint8_t*)outMeta, (uint8_t*)server->cache[i].meta,
                         sizeof(whNvmMetadata));
             }
             if (out != NULL) {
-                XMEMCPY(out, server->cache[i].buffer,
+                memcpy(out, server->cache[i].buffer,
                         server->cache[i].meta->len);
             }
             *outSz = server->cache[i].meta->len;
@@ -407,11 +407,11 @@ int hsmReadKey(whServerContext* server, whKeyId keyId, whNvmMetadata* outMeta,
             if (server->bigCache[i].meta->len > *outSz)
                 return WH_ERROR_NOSPACE;
             if (outMeta != NULL) {
-                XMEMCPY((uint8_t*)outMeta, (uint8_t*)server->bigCache[i].meta,
+                memcpy((uint8_t*)outMeta, (uint8_t*)server->bigCache[i].meta,
                         sizeof(whNvmMetadata));
             }
             if (out != NULL) {
-                XMEMCPY(out, server->bigCache[i].buffer,
+                memcpy(out, server->bigCache[i].buffer,
                         server->bigCache[i].meta->len);
             }
             *outSz = server->bigCache[i].meta->len;
@@ -425,7 +425,7 @@ int hsmReadKey(whServerContext* server, whKeyId keyId, whNvmMetadata* outMeta,
         *outSz = meta->len;
         /* read meta */
         if (outMeta != NULL)
-            XMEMCPY((uint8_t*)outMeta, (uint8_t*)meta, sizeof(meta));
+            memcpy((uint8_t*)outMeta, (uint8_t*)meta, sizeof(meta));
         /* read the object */
         if (out != NULL)
             ret = wh_Nvm_Read(server->nvm, keyId, 0, *outSz, out);
@@ -439,11 +439,11 @@ int hsmReadKey(whServerContext* server, whKeyId keyId, whNvmMetadata* outMeta,
     if ((ret == WH_ERROR_NOTFOUND) &&
         (WH_KEYID_TYPE(keyId) == WH_KEYTYPE_SHE) &&
         (WH_KEYID_ID(keyId) == WH_SHE_MASTER_ECU_KEY_ID)) {
-        XMEMSET(out, 0, WH_SHE_KEY_SZ);
+        memset(out, 0, WH_SHE_KEY_SZ);
         *outSz = WH_SHE_KEY_SZ;
         if (outMeta != NULL) {
             /* need empty flags and correct length and id */
-            XMEMSET(outMeta, 0, sizeof(meta));
+            memset(outMeta, 0, sizeof(meta));
             meta->len = WH_SHE_KEY_SZ;
             meta->id  = keyId;
         }
@@ -543,7 +543,7 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
                 ret = WH_ERROR_BADARGS;
             }
             else {
-                XMEMCPY(meta->label, packet->keyCacheReq.label,
+                memcpy(meta->label, packet->keyCacheReq.label,
                         packet->keyCacheReq.labelSz);
             }
             /* get a new id if one wasn't provided */
@@ -575,7 +575,7 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
                 ret = WH_ERROR_BADARGS;
             }
             else {
-                XMEMCPY(meta->label, packet->keyCacheDma32Req.label,
+                memcpy(meta->label, packet->keyCacheDma32Req.label,
                         packet->keyCacheDma32Req.labelSz);
             }
             /* get a new id if one wasn't provided */
@@ -606,7 +606,7 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
                 packet->keyExportDma32Res.len =
                     packet->keyExportDma32Req.key.sz;
                 /* set label */
-                XMEMCPY(packet->keyExportDma32Res.label, meta->label,
+                memcpy(packet->keyExportDma32Res.label, meta->label,
                         sizeof(meta->label));
                 *size = WH_PACKET_STUB_SIZE + sizeof(packet->keyExportDma32Res);
             }
@@ -626,7 +626,7 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
                 ret = WH_ERROR_BADARGS;
             }
             else {
-                XMEMCPY(meta->label, packet->keyCacheDma64Req.label,
+                memcpy(meta->label, packet->keyCacheDma64Req.label,
                         packet->keyCacheDma64Req.labelSz);
             }
             /* get a new id if one wasn't provided */
@@ -657,7 +657,7 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
                 packet->keyExportDma64Res.len =
                     packet->keyExportDma64Req.key.sz;
                 /* set label */
-                XMEMCPY(packet->keyExportDma64Res.label, meta->label,
+                memcpy(packet->keyExportDma64Res.label, meta->label,
                         sizeof(meta->label));
                 *size = WH_PACKET_STUB_SIZE + sizeof(packet->keyExportDma64Res);
             }
@@ -689,7 +689,7 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
                 /* set key len */
                 packet->keyExportRes.len = field;
                 /* set label */
-                XMEMCPY(packet->keyExportRes.label, meta->label,
+                memcpy(packet->keyExportRes.label, meta->label,
                         sizeof(meta->label));
                 *size =
                     WH_PACKET_STUB_SIZE + sizeof(packet->keyExportRes) + field;
@@ -740,14 +740,14 @@ static int hsmCacheKeyDma32(whServerContext* server, whNvmMetadata* meta,
     }
 
     /* Copy metadata */
-    XMEMCPY(slotMeta, meta, sizeof(whNvmMetadata));
+    memcpy(slotMeta, meta, sizeof(whNvmMetadata));
 
     /* Copy key data using DMA */
     ret = whServerDma_CopyFromClient32(server, buffer, keyAddr, meta->len,
                                        (whServerDmaFlags){0});
     if (ret != 0) {
         /* Clear the slot on error */
-        XMEMSET(buffer, 0, meta->len);
+        memset(buffer, 0, meta->len);
         slotMeta->id = WH_KEYID_ERASED;
     }
 
@@ -772,7 +772,7 @@ static int hsmExportKeyDma32(whServerContext* server, whKeyId keyId,
         return WH_ERROR_NOSPACE;
     }
 
-    XMEMCPY(outMeta, cacheMeta, sizeof(whNvmMetadata));
+    memcpy(outMeta, cacheMeta, sizeof(whNvmMetadata));
 
     /* Copy key data using DMA */
     ret = whServerDma_CopyToClient32(server, keyAddr, buffer, outMeta->len,
@@ -797,14 +797,14 @@ static int hsmCacheKeyDma64(whServerContext* server, whNvmMetadata* meta,
     }
 
     /* Copy metadata */
-    XMEMCPY(slotMeta, meta, sizeof(whNvmMetadata));
+    memcpy(slotMeta, meta, sizeof(whNvmMetadata));
 
     /* Copy key data using DMA */
     ret = whServerDma_CopyFromClient64(server, buffer, keyAddr, meta->len,
                                        (whServerDmaFlags){0});
     if (ret != 0) {
         /* Clear the slot on error */
-        XMEMSET(buffer, 0, meta->len);
+        memset(buffer, 0, meta->len);
         slotMeta->id = WH_KEYID_ERASED;
     }
 
@@ -829,7 +829,7 @@ static int hsmExportKeyDma64(whServerContext* server, whKeyId keyId,
         return WH_ERROR_NOSPACE;
     }
 
-    XMEMCPY(outMeta, cacheMeta, sizeof(whNvmMetadata));
+    memcpy(outMeta, cacheMeta, sizeof(whNvmMetadata));
 
     /* Copy key data using DMA */
     ret = whServerDma_CopyToClient64(server, keyAddr, buffer, outMeta->len,

@@ -523,7 +523,14 @@ int wh_Server_MlDsaKeyCacheImport(whServerContext* ctx, MlDsaKey* key,
     whNvmMetadata* cacheMeta;
     uint16_t       der_size;
 
-    const uint16_t MAX_MLDSA_DER_SIZE = 5000;
+    const uint16_t MAX_MLDSA_DER_SIZE =
+#if !defined(WOLFSSL_NO_ML_DSA_87)
+        ML_DSA_LEVEL5_PRV_KEY_DER_SIZE;
+#elif !defined(WOLFSSL_NO_ML_DSA_65)
+        ML_DSA_LEVEL3_PRV_KEY_DER_SIZE;
+#else
+        ML_DSA_LEVEL2_PRV_KEY_DER_SIZE;
+#endif
 
     if ((ctx == NULL) || (key == NULL) || (WH_KEYID_ISERASED(keyId)) ||
         ((label != NULL) && (label_len > sizeof(cacheMeta->label)))) {
@@ -557,9 +564,9 @@ int wh_Server_MlDsaKeyCacheImport(whServerContext* ctx, MlDsaKey* key,
 int wh_Server_MlDsaKeyCacheExport(whServerContext* ctx, whKeyId keyId,
                                   MlDsaKey* key)
 {
-    uint8_t* cacheBuf;
+    uint8_t*       cacheBuf;
     whNvmMetadata* cacheMeta;
-    int ret = WH_ERROR_OK;
+    int            ret = WH_ERROR_OK;
 
     if ((ctx == NULL) || (key == NULL) || (WH_KEYID_ISERASED(keyId))) {
         return WH_ERROR_BADARGS;
@@ -1430,26 +1437,48 @@ static int _HandleSha256(whServerContext* server, whPacket* packet,
 #endif /* !NO_SHA256 */
 
 #ifdef HAVE_DILITHIUM
-/* Check if the ML-DSA security level is supported 
+
+#ifndef WOLFSSL_DILITHIUM_NO_MAKE_KEY
+/* Check if the ML-DSA security level is supported
  * returns 1 if supported, 0 otherwise */
 static int _IsMlDsaLevelSupported(int level)
 {
     int ret = 0;
 
     switch (level) {
+#ifndef WOLFSSL_NO_ML_DSA_44
         case WC_ML_DSA_44:
+            ret = 1;
+            break;
+#endif /* !WOLFSSL_NO_ML_DSA_44 */
+#ifndef WOLFSSL_NO_ML_DSA_65
         case WC_ML_DSA_65:
+            ret = 1;
+            break;
+#endif /* !WOLFSSL_NO_ML_DSA_65 */
+#ifndef WOLFSSL_NO_ML_DSA_87
         case WC_ML_DSA_87:
             ret = 1;
+            break;
+#endif /* !WOLFSSL_NO_ML_DSA_87 */
+        default:
+            ret = 0;
             break;
     }
 
     return ret;
 }
+#endif /* WOLFSSL_DILITHIUM_NO_MAKE_KEY */
 
 static int _HandleMlDsaKeyGen(whServerContext* ctx, whPacket* packet,
     uint16_t* out_size)
 {
+#ifdef WOLFSSL_DILITHIUM_NO_MAKE_KEY
+    (void)ctx;
+    (void)packet;
+    (void)out_size;
+    return WH_ERROR_NOHANDLER;
+#else
     int ret = WH_ERROR_OK;
     MlDsaKey key[1];
     wh_Packet_pq_mldsa_kg_req* req = &packet->pqMldsaKgReq;
@@ -1526,11 +1555,18 @@ static int _HandleMlDsaKeyGen(whServerContext* ctx, whPacket* packet,
         }
     }
     return ret;
+#endif /* WOLFSSL_DILITHIUM_NO_MAKE_KEY */
 }
 
 static int _HandleMlDsaSign(whServerContext* ctx, whPacket* packet,
     uint16_t *out_size)
 {
+#ifdef WOLFSSL_DILITHIUM_NO_SIGN
+    (void)ctx;
+    (void)packet;
+    (void)out_size;
+    return WH_ERROR_NOHANDLER;
+#else
     int                          ret;
     MlDsaKey                     key[1];
     wh_Packet_pq_mldsa_sign_req* req = &packet->pqMldsaSignReq;
@@ -1571,11 +1607,18 @@ static int _HandleMlDsaSign(whServerContext* ctx, whPacket* packet,
         *out_size = WH_PACKET_STUB_SIZE + sizeof(*res) + res_len;
     }
     return ret;
+#endif /* WOLFSSL_DILITHIUM_NO_SIGN */
 }
 
 static int _HandleMlDsaVerify(whServerContext* ctx, whPacket* packet,
         uint16_t *out_size)
 {
+#ifdef WOLFSSL_DILITHIUM_NO_VERIFY
+    (void)ctx;
+    (void)packet;
+    (void)out_size;
+    return WH_ERROR_NOHANDLER;
+#else
     int                            ret;
     MlDsaKey                       key[1];
     wh_Packet_pq_mldsa_verify_req* req = &packet->pqMldsaVerifyReq;
@@ -1615,6 +1658,7 @@ static int _HandleMlDsaVerify(whServerContext* ctx, whPacket* packet,
         *out_size = WH_PACKET_STUB_SIZE + sizeof(*res);
     }
     return ret;
+#endif /* WOLFSSL_DILITHIUM_NO_VERIFY */
 }
 
 static int _HandleMlDsaCheckPrivKey(whServerContext* ctx, whPacket* packet,
@@ -1963,6 +2007,348 @@ static int _HandleSha256Dma(whServerContext* server, whPacket* packet,
 }
 #endif /* ! NO_SHA256 */
 
+
+#if defined(HAVE_DILITHIUM)
+
+static int _HandleMlDsaKeyGenDma(whServerContext* server, whPacket* packet,
+                                 uint16_t* size)
+{
+#ifdef WOLFSSL_DILITHIUM_NO_MAKE_KEY
+    (void)server;
+    (void)packet;
+    (void)size;
+    return WH_ERROR_NOHANDLER;
+#else
+    int      ret = WH_ERROR_OK;
+    MlDsaKey key[1];
+    void*    clientOutAddr = NULL;
+    uint16_t keySize       = 0;
+
+#if WH_DMA_IS_32BIT
+    wh_Packet_pq_mldsa_keygen_Dma32_req* req = &packet->pqMldsaKeygenDma32Req;
+    wh_Packet_pq_mldsa_Dma32_res*        res = &packet->pqMldsaDma32Res;
+#else
+    wh_Packet_pq_mldsa_keygen_Dma64_req* req = &packet->pqMldsaKeygenDma64Req;
+    wh_Packet_pq_mldsa_Dma64_res*        res = &packet->pqMldsaDma64Res;
+#endif
+
+    /* Check the ML-DSA security level is valid and supported */
+    if (0 == _IsMlDsaLevelSupported(req->level)) {
+        ret = WH_ERROR_BADARGS;
+    }
+    else {
+        /* init mldsa key */
+        ret = wc_MlDsaKey_Init(key, NULL, server->crypto->devId);
+        if (ret == 0) {
+            /* Set the ML-DSA security level */
+            ret = wc_MlDsaKey_SetParams(key, req->level);
+            if (ret == 0) {
+                /* generate the key */
+                ret = wc_MlDsaKey_MakeKey(key, server->crypto->rng);
+                if (ret == 0) {
+                    /* Check incoming flags */
+                    if (req->flags & WH_NVM_FLAGS_EPHEMERAL) {
+                        /* Must serialize the key into client memory */
+                        ret = wh_Server_DmaProcessClientAddress(
+                            server, req->key.addr, &clientOutAddr, req->key.sz,
+                            WH_DMA_OPER_CLIENT_WRITE_PRE,
+                            (whServerDmaFlags){0});
+
+                        if (ret == 0) {
+                            ret = wh_Crypto_MlDsaSerializeKeyDer(
+                                key, req->key.sz, clientOutAddr, &keySize);
+                            if (ret == 0) {
+                                res->keyId   = WH_KEYID_ERASED;
+                                res->keySize = keySize;
+                            }
+                        }
+
+                        if (ret == 0) {
+                            ret = wh_Server_DmaProcessClientAddress(
+                                server, req->key.addr, &clientOutAddr, keySize,
+                                WH_DMA_OPER_CLIENT_WRITE_POST,
+                                (whServerDmaFlags){0});
+                        }
+                    }
+                    else {
+                        /* Must import the key into the cache and return keyid
+                         */
+                        whKeyId keyId =
+                            WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
+                                          server->comm->client_id, req->keyId);
+
+                        if (WH_KEYID_ISERASED(keyId)) {
+                            /* Generate a new id */
+                            ret = hsmGetUniqueId(server, &keyId);
+#ifdef DEBUG_CRYPTOCB
+                            printf("[server] %s UniqueId: keyId:%u, ret:%d\n",
+                                   __func__, keyId, ret);
+#endif
+                        }
+
+                        if (ret == 0) {
+                            ret = wh_Server_MlDsaKeyCacheImport(
+                                server, key, keyId, req->flags, req->labelSize,
+                                req->label);
+#ifdef DEBUG_CRYPTOCB
+                            printf(
+                                "[server] %s CacheImport: keyId:%u, ret:%d\n",
+                                __func__, keyId, ret);
+#endif
+                            if (ret == 0) {
+                                res->keyId   = WH_KEYID_ID(keyId);
+                                res->keySize = keySize;
+                                *size = WH_PACKET_STUB_SIZE + sizeof(res);
+                            }
+                        }
+                    }
+                }
+            }
+            wc_MlDsaKey_Free(key);
+        }
+    }
+
+    if (ret == WH_ERROR_ACCESS) {
+        res->dmaAddrStatus.badAddr = req->key;
+    }
+
+    return ret;
+#endif /* WOLFSSL_DILITHIUM_NO_MAKE_KEY */
+}
+
+static int _HandleMlDsaSignDma(whServerContext* ctx, whPacket* packet,
+                               uint16_t* out_size)
+{
+#ifdef WOLFSSL_DILITHIUM_NO_SIGN
+    (void)ctx;
+    (void)packet;
+    (void)out_size;
+    return WH_ERROR_NOHANDLER;
+#else
+    int      ret = 0;
+    MlDsaKey key[1];
+    void*    msgAddr = NULL;
+    void*    sigAddr = NULL;
+
+#if WH_DMA_IS_32BIT
+    wh_Packet_pq_mldsa_sign_Dma32_req* req = &packet->pqMldsaSignDma32Req;
+    wh_Packet_pq_mldsa_sign_Dma32_res* res = &packet->pqMldsaSignDma32Res;
+#else
+    wh_Packet_pq_mldsa_sign_Dma64_req* req = &packet->pqMldsaSignDma64Req;
+    wh_Packet_pq_mldsa_sign_Dma64_res* res = &packet->pqMldsaSignDma64Res;
+#endif
+
+    /* Transaction state */
+    whKeyId key_id;
+    int     evict = 0;
+
+    if (ctx == NULL || packet == NULL || out_size == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Get key ID and evict flag */
+    key_id = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req->keyId);
+    evict  = !!(req->options & WH_PACKET_PQ_MLDSA_SIGN_OPTIONS_EVICT);
+
+    /* Initialize key */
+    ret = wc_MlDsaKey_Init(key, NULL, ctx->crypto->devId);
+    if (ret != 0) {
+        return ret;
+    }
+
+    /* Export key from cache */
+    /* TODO: sanity check security level against key pulled from cache? */
+    ret = wh_Server_MlDsaKeyCacheExport(ctx, key_id, key);
+    if (ret == 0) {
+        /* Process client message buffer address */
+        ret = wh_Server_DmaProcessClientAddress(
+            ctx, (uintptr_t)req->msg.addr, &msgAddr, req->msg.sz,
+            WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
+
+        if (ret == 0) {
+            /* Process client signature buffer address */
+            ret = wh_Server_DmaProcessClientAddress(
+                ctx, (uintptr_t)req->sig.addr, &sigAddr, req->sig.sz,
+                WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
+
+            if (ret == 0) {
+                /* Sign the message */
+                word32 sigLen = req->sig.sz;
+                ret           = wc_MlDsaKey_Sign(key, sigAddr, &sigLen, msgAddr,
+                                                 req->msg.sz, ctx->crypto->rng);
+
+                if (ret == 0) {
+                    /* Post-write processing of signature buffer */
+                    ret = wh_Server_DmaProcessClientAddress(
+                        ctx, (uintptr_t)req->sig.addr, &sigAddr, sigLen,
+                        WH_DMA_OPER_CLIENT_WRITE_POST, (whServerDmaFlags){0});
+
+                    if (ret == 0) {
+                        /* Set response signature length */
+                        res->sigLen = sigLen;
+                        *out_size   = WH_PACKET_STUB_SIZE + sizeof(*res);
+                    }
+
+                    /* Post-read processing of message buffer */
+                    ret = wh_Server_DmaProcessClientAddress(
+                        ctx, (uintptr_t)req->msg.addr, &msgAddr, req->msg.sz,
+                        WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
+                }
+            }
+        }
+
+        /* Evict key if requested */
+        if (evict) {
+            (void)hsmEvictKey(ctx, key_id);
+        }
+    }
+
+    wc_MlDsaKey_Free(key);
+    return ret;
+#endif /* WOLFSSL_DILITHIUM_NO_SIGN */
+}
+
+static int _HandleMlDsaVerifyDma(whServerContext* ctx, whPacket* packet,
+        uint16_t* out_size)
+{
+#ifdef WOLFSSL_DILITHIUM_NO_VERIFY
+    (void)ctx;
+    (void)packet;
+    (void)out_size;
+    return WH_ERROR_NOHANDLER;
+#else
+    int      ret = 0;
+    MlDsaKey key[1];
+    void*    msgAddr  = NULL;
+    void*    sigAddr  = NULL;
+    int      verified = 0;
+
+#if WH_DMA_IS_32BIT
+    wh_Packet_pq_mldsa_verify_Dma32_req* req = &packet->pqMldsaVerifyDma32Req;
+    wh_Packet_pq_mldsa_verify_Dma32_res* res = &packet->pqMldsaVerifyDma32Res;
+#else
+    wh_Packet_pq_mldsa_verify_Dma64_req* req = &packet->pqMldsaVerifyDma64Req;
+    wh_Packet_pq_mldsa_verify_Dma64_res* res = &packet->pqMldsaVerifyDma64Res;
+#endif
+
+    /* Transaction state */
+    whKeyId key_id;
+    int     evict = 0;
+
+    if (ctx == NULL || packet == NULL || out_size == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Get key ID and evict flag */
+    key_id = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req->keyId);
+    evict  = !!(req->options & WH_PACKET_PQ_MLDSAVERIFY_OPTIONS_EVICT);
+
+    /* Initialize key */
+    ret = wc_MlDsaKey_Init(key, NULL, ctx->crypto->devId);
+    if (ret != 0) {
+        return ret;
+    }
+
+    /* Export key from cache */
+    ret = wh_Server_MlDsaKeyCacheExport(ctx, key_id, key);
+    if (ret == 0) {
+        /* Process client signature buffer address */
+        ret = wh_Server_DmaProcessClientAddress(
+            ctx, (uintptr_t)req->sig.addr, &sigAddr, req->sig.sz,
+            WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
+
+        if (ret == 0) {
+            /* Process client message buffer address */
+            ret = wh_Server_DmaProcessClientAddress(
+                ctx, (uintptr_t)req->msg.addr, &msgAddr, req->msg.sz,
+                WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
+
+            if (ret == 0) {
+                /* Verify the signature */
+                ret = wc_MlDsaKey_Verify(key, sigAddr, req->sig.sz, msgAddr,
+                                         req->msg.sz, &verified);
+
+                if (ret == 0) {
+                    /* Post-read processing of signature buffer */
+                    ret = wh_Server_DmaProcessClientAddress(
+                        ctx, (uintptr_t)req->sig.addr, &sigAddr, req->sig.sz,
+                        WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
+
+                    if (ret == 0) {
+                        /* Post-read processing of message buffer */
+                        ret = wh_Server_DmaProcessClientAddress(
+                            ctx, (uintptr_t)req->msg.addr, &msgAddr,
+                            req->msg.sz, WH_DMA_OPER_CLIENT_READ_POST,
+                            (whServerDmaFlags){0});
+
+                        if (ret == 0) {
+                            /* Set verification result */
+                            res->verifyResult = verified;
+                            *out_size = WH_PACKET_STUB_SIZE + sizeof(*res);
+                        }
+                    }
+                }
+            }
+        }
+
+        /* Evict key if requested */
+        if (evict) {
+            (void)hsmEvictKey(ctx, key_id);
+        }
+    }
+
+    wc_MlDsaKey_Free(key);
+    return ret;
+#endif /* WOLFSSL_DILITHIUM_NO_VERIFY */
+}
+
+static int _HandleMlDsaCheckPrivKeyDma(whServerContext* server, whPacket* packet,
+                                        uint16_t* size)
+{
+    return WH_ERROR_NOHANDLER;
+}
+#endif /* HAVE_DILITHIUM */
+
+#if defined(HAVE_DILITHIUM) || defined(HAVE_FALCON)
+static int _HandlePqcSigAlgorithmDma(whServerContext* server, whPacket* packet,
+                                     uint16_t* size)
+{
+    int                      ret = WH_ERROR_NOHANDLER;
+    wh_Packet_pk_pq_any_req* req = &packet->pkPqAnyReq;
+
+    /* Dispatch the appropriate algorithm handler based on the requested PK type
+     * and the algorithm type. */
+    switch (req->pqAlgoType) {
+#ifdef HAVE_DILITHIUM
+        case WC_PQC_SIG_TYPE_DILITHIUM: {
+            switch (req->type) {
+                case WC_PK_TYPE_PQC_SIG_KEYGEN:
+                    ret = _HandleMlDsaKeyGenDma(server, packet, size);
+                    break;
+                case WC_PK_TYPE_PQC_SIG_SIGN:
+                    ret = _HandleMlDsaSignDma(server, packet, size);
+                    break;
+                case WC_PK_TYPE_PQC_SIG_VERIFY:
+                    ret = _HandleMlDsaVerifyDma(server, packet, size);
+                    break;
+                case WC_PK_TYPE_PQC_SIG_CHECK_PRIV_KEY:
+                    ret = _HandleMlDsaCheckPrivKeyDma(server, packet, size);
+                    break;
+                default:
+                    ret = WH_ERROR_NOHANDLER;
+                    break;
+            }
+        } break;
+#endif /* HAVE_DILITHIUM */
+        default:
+            ret = WH_ERROR_NOHANDLER;
+            break;
+    }
+
+    return ret;
+}
+#endif /* HAVE_DILITHIUM || HAVE_FALCON */
+
 int wh_Server_HandleCryptoDmaRequest(whServerContext* server,
     uint16_t action, uint8_t* data, uint16_t* size, uint16_t seq)
 {
@@ -1991,12 +2377,22 @@ int wh_Server_HandleCryptoDmaRequest(whServerContext* server,
 #endif
                 break;
 #endif /* !NO_SHA256 */
-
-            default:
-                ret = NOT_COMPILED_IN;
-                break;
         }
-        break;
+        break; /* WC_ALGO_TYPE_HASH */
+
+    case WC_ALGO_TYPE_PK:
+        switch (packet->pkAnyReq.type) {
+#if defined(HAVE_DILITHIUM) || defined(HAVE_FALCON)
+            case WC_PK_TYPE_PQC_SIG_KEYGEN:
+            case WC_PK_TYPE_PQC_SIG_SIGN:
+            case WC_PK_TYPE_PQC_SIG_VERIFY:
+            case WC_PK_TYPE_PQC_SIG_CHECK_PRIV_KEY:
+                ret = _HandlePqcSigAlgorithmDma(server, packet, size);
+                break;
+#endif /* HAVE_DILITHIUM || HAVE_FALCON */
+        }
+        break; /* WC_ALGO_TYPE_PK */
+
 
     case WC_ALGO_TYPE_NONE:
     default:

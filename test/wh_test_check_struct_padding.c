@@ -61,69 +61,95 @@ whMessageNvm_ReadDma64Request      whMessageNvm_ReadDma64Request_test;
 #include "wolfhsm/wh_packet.h"
 whPacket whPacket_test;
 /* Test every variant of the nested union */
-wh_Packet_version_exchange           versionExchange;
-wh_Packet_key_cache_req              keyCacheReq;
-wh_Packet_key_evict_req              keyEvictReq;
-wh_Packet_key_commit_req             keyCommitReq;
-wh_Packet_key_export_req             keyExportReq;
-wh_Packet_key_erase_req              keyEraseReq;
-wh_Packet_counter_init_req           counterInitReq;
-wh_Packet_counter_increment_req      counterIncrementReq;
-wh_Packet_counter_read_req           counterReadReq;
-wh_Packet_counter_destroy_req        counterDestroyReq;
-wh_Packet_key_cache_res              keyCacheRes;
-wh_Packet_key_evict_res              keyEvictRes;
-wh_Packet_key_commit_res             keyCommitRes;
-wh_Packet_key_export_res             keyExportRes;
-wh_Packet_key_erase_res              keyEraseRes;
-wh_Packet_counter_init_res           counterInitRes;
-wh_Packet_counter_increment_res      counterIncrementRes;
-wh_Packet_counter_read_res           counterReadRes;
-#ifndef WOLFHSM_CFG_NO_CRYPTO
-wh_Packet_cipher_any_req             cipherAnyReq;
-wh_Packet_cipher_aescbc_req          cipherAesCbcReq;
-wh_Packet_cipher_aesgcm_req          cipherAesGcmReq;
-wh_Packet_pk_any_req                 pkAnyReq;
-wh_Packet_pk_rsakg_req               pkRsakgReq;
-wh_Packet_pk_rsa_req                 pkRsaReq;
-wh_Packet_pk_rsa_get_size_req        pkRsaGetSizeReq;
-wh_Packet_pk_eckg_req                pkEckgReq;
-wh_Packet_pk_ecdh_req                pkEcdhReq;
-wh_Packet_pk_ecc_sign_req            pkEccSignReq;
-wh_Packet_pk_ecc_verify_req          pkEccVerifyReq;
-wh_Packet_pk_ecc_check_req           pkEccCheckReq;
-wh_Packet_pk_curve25519kg_req        pkCurve25519kgReq;
-wh_Packet_pk_curve25519kg_res        pkCurve25519kgRes;
-wh_Packet_pk_curve25519_req          pkCurve25519Req;
-wh_Packet_pk_curve25519_res          pkCurve25519Res;
-wh_Packet_rng_req                    rngReq;
-wh_Packet_cmac_req                   cmacReq;
-wh_Packet_cipher_aescbc_res          cipherAesCbcRes;
-wh_Packet_cipher_aesgcm_res          cipherAesGcmRes;
-wh_Packet_pk_rsakg_res               pkRsakgRes;
-wh_Packet_pk_rsa_res                 pkRsaRes;
-wh_Packet_pk_rsa_get_size_res        pkRsaGetSizeRes;
-wh_Packet_pk_eckg_res                pkEckgRes;
-wh_Packet_pk_ecdh_res                pkEcdhRes;
-wh_Packet_pk_ecc_sign_res            pkEccSignRes;
-wh_Packet_pk_ecc_verify_res          pkEccVerifyRes;
-wh_Packet_pk_ecc_check_res           pkEccCheckRes;
-wh_Packet_rng_res                    rngRes;
-wh_Packet_cmac_res                   cmacRes;
-wh_Packet_hash_any_req               hashAnyReq;
-wh_Packet_hash_sha256_req            hashSha256Req;
-wh_Packet_hash_sha256_res            hashSha256Res;
+wh_Packet_version_exchange      versionExchange;
+wh_Packet_key_cache_req         keyCacheReq;
+wh_Packet_key_evict_req         keyEvictReq;
+wh_Packet_key_commit_req        keyCommitReq;
+wh_Packet_key_export_req        keyExportReq;
+wh_Packet_key_erase_req         keyEraseReq;
+wh_Packet_counter_init_req      counterInitReq;
+wh_Packet_counter_increment_req counterIncrementReq;
+wh_Packet_counter_read_req      counterReadReq;
+wh_Packet_counter_destroy_req   counterDestroyReq;
+wh_Packet_key_cache_res         keyCacheRes;
+wh_Packet_key_evict_res         keyEvictRes;
+wh_Packet_key_commit_res        keyCommitRes;
+wh_Packet_key_export_res        keyExportRes;
+wh_Packet_key_erase_res         keyEraseRes;
+wh_Packet_counter_init_res      counterInitRes;
+wh_Packet_counter_increment_res counterIncrementRes;
+wh_Packet_counter_read_res      counterReadRes;
 
-/* DMA crypto structs */
 #if defined(WOLFHSM_CFG_DMA) && WH_DMA_IS_32BIT
-wh_Packet_hash_sha256_Dma32_req      hashSha256Dma32Req;
-wh_Packet_hash_sha256_Dma32_res      hashSha256Dma32Res;
+wh_Packet_key_cache_Dma32_req  keyCacheDma32Req;
+wh_Packet_key_cache_Dma32_res  keyCacheDma32Res;
+wh_Packet_key_export_Dma32_req keyExportDma32Req;
+wh_Packet_key_export_Dma32_res keyExportDma32Res;
 #elif defined(WOLFHSM_CFG_DMA) && WH_DMA_IS_64BIT
-wh_Packet_hash_sha256_Dma64_req      hashSha256Dma64Req;
-wh_Packet_hash_sha256_Dma64_res      hashSha256Dma64Res;
+wh_Packet_key_cache_Dma64_req      keyCacheDma64Req;
+wh_Packet_key_cache_Dma64_res      keyCacheDma64Res;
+wh_Packet_key_export_Dma64_req     keyExportDma64Req;
+wh_Packet_key_export_Dma64_res     keyExportDma64Res;
+#endif
+
+#ifndef WOLFHSM_CFG_NO_CRYPTO
+wh_Packet_cipher_any_req      cipherAnyReq;
+wh_Packet_cipher_aescbc_req   cipherAesCbcReq;
+wh_Packet_cipher_aesgcm_req   cipherAesGcmReq;
+wh_Packet_pk_any_req          pkAnyReq;
+wh_Packet_pk_rsakg_req        pkRsakgReq;
+wh_Packet_pk_rsa_req          pkRsaReq;
+wh_Packet_pk_rsa_get_size_req pkRsaGetSizeReq;
+wh_Packet_pk_eckg_req         pkEckgReq;
+wh_Packet_pk_ecdh_req         pkEcdhReq;
+wh_Packet_pk_ecc_sign_req     pkEccSignReq;
+wh_Packet_pk_ecc_verify_req   pkEccVerifyReq;
+wh_Packet_pk_ecc_check_req    pkEccCheckReq;
+wh_Packet_pk_curve25519kg_req pkCurve25519kgReq;
+wh_Packet_pk_curve25519kg_res pkCurve25519kgRes;
+wh_Packet_pk_curve25519_req   pkCurve25519Req;
+wh_Packet_pk_curve25519_res   pkCurve25519Res;
+wh_Packet_rng_req             rngReq;
+wh_Packet_cmac_req            cmacReq;
+wh_Packet_cipher_aescbc_res   cipherAesCbcRes;
+wh_Packet_cipher_aesgcm_res   cipherAesGcmRes;
+wh_Packet_pk_rsakg_res        pkRsakgRes;
+wh_Packet_pk_rsa_res          pkRsaRes;
+wh_Packet_pk_rsa_get_size_res pkRsaGetSizeRes;
+wh_Packet_pk_eckg_res         pkEckgRes;
+wh_Packet_pk_ecdh_res         pkEcdhRes;
+wh_Packet_pk_ecc_sign_res     pkEccSignRes;
+wh_Packet_pk_ecc_verify_res   pkEccVerifyRes;
+wh_Packet_pk_ecc_check_res    pkEccCheckRes;
+wh_Packet_rng_res             rngRes;
+wh_Packet_cmac_res            cmacRes;
+wh_Packet_hash_any_req        hashAnyReq;
+wh_Packet_hash_sha256_req     hashSha256Req;
+wh_Packet_hash_sha256_res     hashSha256Res;
+
+/* DMA structs */
+#if defined(WOLFHSM_CFG_DMA) && WH_DMA_IS_32BIT
+wh_Packet_hash_sha256_Dma32_req     hashSha256Dma32Req;
+wh_Packet_hash_sha256_Dma32_res     hashSha256Dma32Res;
+wh_Packet_pq_mldsa_keygen_Dma32_req pqMldsaKeygenDma32Req;
+wh_Packet_pq_mldsa_Dma32_res        pqMldsaDma32Res;
+wh_Packet_pq_mldsa_sign_Dma32_req   pqMldsaSignDma32Req;
+wh_Packet_pq_mldsa_sign_Dma32_res   pqMldsaSignDma32Res;
+wh_Packet_pq_mldsa_verify_Dma32_req pqMldsaVerifyDma32Req;
+wh_Packet_pq_mldsa_verify_Dma32_res pqMldsaVerifyDma32Res;
+#elif defined(WOLFHSM_CFG_DMA) && WH_DMA_IS_64BIT
+wh_Packet_hash_sha256_Dma64_req     hashSha256Dma64Req;
+wh_Packet_hash_sha256_Dma64_res     hashSha256Dma64Res;
+wh_Packet_pq_mldsa_keygen_Dma64_req pqMldsaKeygenDma64Req;
+wh_Packet_pq_mldsa_Dma64_res        pqMldsaDma64Res;
+wh_Packet_pq_mldsa_sign_Dma64_req   pqMldsaSignDma64Req;
+wh_Packet_pq_mldsa_sign_Dma64_res   pqMldsaSignDma64Res;
+wh_Packet_pq_mldsa_verify_Dma64_req pqMldsaVerifyDma64Req;
+wh_Packet_pq_mldsa_verify_Dma64_res pqMldsaVerifyDma64Res;
 #endif
 
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
+
 #ifdef WOLFHSM_CFG_SHE_EXTENSION
 wh_Packet_she_set_uid_req            sheSetUidReq;
 wh_Packet_she_secure_boot_init_req   sheSecureBootInitReq;
