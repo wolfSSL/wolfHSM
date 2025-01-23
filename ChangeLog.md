@@ -1,4 +1,4 @@
-# wolfHSM Release v1.0.1 (January 22, 2025)
+# wolfHSM Release v1.1.0 (January 22, 2025)
 Due to NDA restrictions, access to the Infineon and ST Micro ports is limited. Please contact support@wolfssl.com for access.
 
 ## New Feature Additions
