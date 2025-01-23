@@ -49,6 +49,6 @@ jobs:
     - name: Build and test ASAN DEBUG
       run: cd test && make clean && make DEBUG=1 ASAN=1 WOLFSSL_DIR=../wolfssl run
 
-    # Build and test debug build with SHE
-    - name: Build and test SHE
-      run: cd test && make clean && make SHE=1 WOLFSSL_DIR=../wolfssl run
+    # Build and test with SHE and ASAN
+    - name: Build and test ASAN SHE
+      run: cd test && make clean && make SHE=1 ASAN=1 WOLFSSL_DIR=../wolfssl run

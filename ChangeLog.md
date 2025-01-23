@@ -1,4 +1,4 @@
-# wolfHSM Release v1.1.0 (January 22, 2025)
+# wolfHSM Release v1.1.0 (January 23, 2025)
 Due to NDA restrictions, access to the Infineon and ST Micro ports is limited. Please contact support@wolfssl.com for access.
 
 ## New Feature Additions
@@ -8,6 +8,7 @@ Due to NDA restrictions, access to the Infineon and ST Micro ports is limited. P
 ## Bug Fixes
 * Fixes memory error in ECC verify (PR#81)
 * Removes unused argument warnings on 32 bit targets (PR#82)
+* Fixes memory leak in SHE test (PR#88)
 
 ## Enhancements and Optimizations
 * Improved handling of Curve25519 DER encoded keys using new wolfCrypt APIs (PR#83)
