@@ -178,6 +178,8 @@ int whTest_SheClientConfig(whClientConfig* config)
         WH_ERROR_PRINT("Failed to wc_RNG_GenerateBlock %d\n", ret);
         goto exit;
     }
+    /* Done generating test data, free RNG */
+    wc_FreeRng(rng);
     /* cmac 0..0 | size | bootloader */
     if ((ret = wc_InitCmac(cmac, key, sizeof(key), WC_CMAC_AES, NULL)) != 0) {
         WH_ERROR_PRINT("Failed to wc_InitCmac %d\n", ret);
