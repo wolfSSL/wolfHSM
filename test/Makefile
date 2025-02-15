@@ -32,8 +32,20 @@ ARCHFLAGS ?=
 # Compiler and linker flags
 ASFLAGS ?= $(ARCHFLAGS)
 CFLAGS_EXTRA ?= -Wmissing-field-initializers -Wmissing-braces
-CFLAGS ?= $(ARCHFLAGS) -std=c90 -D_GNU_SOURCE -Wall -Werror -Wno-cpp $(CFLAGS_EXTRA)
-LDFLAGS ?= $(ARCHFLAGS)
+
+# Base flags
+BASE_CFLAGS = $(ARCHFLAGS) -std=c90 -D_GNU_SOURCE -Wall -Werror -Wno-cpp $(CFLAGS_EXTRA)
+BASE_LDFLAGS = $(ARCHFLAGS)
+
+# Coverage flags
+ifeq ($(COVERAGE),1)
+COVERAGE_FLAGS = --coverage
+else
+COVERAGE_FLAGS =
+endif
+
+CFLAGS = $(BASE_CFLAGS) $(COVERAGE_FLAGS)
+LDFLAGS = $(BASE_LDFLAGS) $(COVERAGE_FLAGS)
 
 # LD: generate map
 #LDFLAGS += -Wl,-map,$(BUILD_DIR)/$(BIN).map
@@ -235,6 +247,12 @@ $(BUILD_DIR)/$(BIN).a: $(OBJS_ASM) $(OBJS_C)
 clean:
 	rm -f $(BUILD_DIR)/*.elf $(BUILD_DIR)/*.hex $(BUILD_DIR)/*.map
 	rm -f $(BUILD_DIR)/*.o $(BUILD_DIR)/*.a $(BUILD_DIR)/*.sym $(BUILD_DIR)/*.disasm
+	rm -f $(BUILD_DIR)/*.gcno $(BUILD_DIR)/*.gcda $(BUILD_DIR)/*.gcov
+
+coverage: COVERAGE=1
+coverage: clean build_app
+	./$(BUILD_DIR)/$(BIN).elf
+	gcov -o $(BUILD_DIR) $(SRC_C)
 
 run: build_app
 	./$(BUILD_DIR)/$(BIN).elf
