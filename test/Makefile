@@ -44,8 +44,17 @@ else
 COVERAGE_FLAGS =
 endif
 
-CFLAGS = $(BASE_CFLAGS) $(COVERAGE_FLAGS)
-LDFLAGS = $(BASE_LDFLAGS) $(COVERAGE_FLAGS)
+# Base flags for all files
+CFLAGS = $(BASE_CFLAGS)
+LDFLAGS = $(BASE_LDFLAGS)
+
+# Coverage flags only for wolfHSM files
+ifeq ($(COVERAGE),1)
+WOLFHSM_CFLAGS = $(BASE_CFLAGS) --coverage
+LDFLAGS += --coverage
+else
+WOLFHSM_CFLAGS = $(BASE_CFLAGS)
+endif
 
 # LD: generate map
 #LDFLAGS += -Wl,-map,$(BUILD_DIR)/$(BIN).map
@@ -92,8 +101,8 @@ endif
 SRC_ASM +=
 
 ifneq ($(NOCRYPTO),1)
-# wolfCrypt source files
-SRC_C += \
+# wolfCrypt source files (no coverage)
+WOLFSSL_SRC = \
             $(WOLFSSL_DIR)/wolfcrypt/src/wc_port.c \
             $(WOLFSSL_DIR)/wolfcrypt/src/memory.c \
             $(WOLFSSL_DIR)/wolfcrypt/src/misc.c \
@@ -111,8 +120,15 @@ SRC_C += \
             $(WOLFSSL_DIR)/wolfcrypt/src/aes.c \
             $(WOLFSSL_DIR)/wolfcrypt/src/ecc.c \
             $(WOLFSSL_DIR)/wolfcrypt/src/cmac.c \
-			$(WOLFSSL_DIR)/wolfcrypt/src/dilithium.c \
-			$(WOLFSSL_DIR)/wolfcrypt/src/sha3.c
+            $(WOLFSSL_DIR)/wolfcrypt/src/dilithium.c \
+            $(WOLFSSL_DIR)/wolfcrypt/src/sha3.c
+
+# wolfHSM source files (with coverage)
+WOLFHSM_SRC = $(filter-out $(WOLFSSL_DIR)/%, $(SRC_C))
+
+# Object files
+WOLFSSL_OBJS = $(addprefix $(BUILD_DIR)/, $(notdir $(WOLFSSL_SRC:.c=.o)))
+WOLFHSM_OBJS = $(addprefix $(BUILD_DIR)/, $(notdir $(WOLFHSM_SRC:.c=.o)))
 endif
 
 ifeq ($(TESTWOLFCRYPT),1)
@@ -196,12 +212,14 @@ ifeq ($(TESTWOLFCRYPT),1)
 SRC_C += ./src/wh_test_wolfcrypt_test.c
 endif
 
-FILENAMES_C = $(notdir $(SRC_C))
-#FILENAMES_C := $(filter-out evp.c, $(FILENAMES_C))
-OBJS_C = $(addprefix $(BUILD_DIR)/, $(FILENAMES_C:.c=.o))
-vpath %.c $(dir $(SRC_C))
-
+# Object files
+WOLFSSL_OBJS = $(addprefix $(BUILD_DIR)/, $(notdir $(WOLFSSL_SRC:.c=.o)))
+WOLFHSM_OBJS = $(addprefix $(BUILD_DIR)/, $(notdir $(WOLFHSM_SRC:.c=.o)))
 OBJS_ASM = $(addprefix $(BUILD_DIR)/, $(notdir $(SRC_ASM:.s=.o)))
+
+# Source paths
+vpath %.c $(dir $(WOLFSSL_SRC))
+vpath %.c $(dir $(WOLFHSM_SRC))
 vpath %.s $(dir $(SRC_ASM))
 
 .PHONY: all clean run
@@ -232,15 +250,21 @@ $(BUILD_DIR)/%.o: %.s
 	@echo "Compiling ASM file: $(notdir $<)"
 	$(CMD_ECHO) $(AS) $(ASFLAGS) $(DEF) $(INC) -c -o $@ $<
 
-$(BUILD_DIR)/%.o: %.c
-	@echo "Compiling C file: $(notdir $<)"
-	$(CMD_ECHO) $(CC) $(CFLAGS) $(DEF) $(INC) -c -o $@ $<
+# Compile rules for wolfSSL files (no coverage)
+$(BUILD_DIR)/%.o: $(WOLFSSL_DIR)/wolfcrypt/src/%.c
+	@echo "Compiling wolfSSL file: $(notdir $<)"
+	$(CMD_ECHO) $(CC) $(BASE_CFLAGS) $(DEF) $(INC) -c -o $@ $<
 
-$(BUILD_DIR)/$(BIN).elf: $(OBJS_ASM) $(OBJS_C)
+# Compile rules for wolfHSM files (with coverage)
+$(BUILD_DIR)/%.o: %.c
+	@echo "Compiling wolfHSM file: $(notdir $<)"
+	$(CMD_ECHO) $(CC) $(WOLFHSM_CFLAGS) $(DEF) $(INC) -c -o $@ $<
+
+$(BUILD_DIR)/$(BIN).elf: $(OBJS_ASM) $(WOLFSSL_OBJS) $(WOLFHSM_OBJS)
 	@echo "Linking ELF binary: $(notdir $@)"
 	$(CMD_ECHO) $(CC) $(LDFLAGS) $(SRC_LD) -o $@ $^ $(LIBS)
 
-$(BUILD_DIR)/$(BIN).a: $(OBJS_ASM) $(OBJS_C)
+$(BUILD_DIR)/$(BIN).a: $(OBJS_ASM) $(WOLFSSL_OBJS) $(WOLFHSM_OBJS)
 	@echo "Building static library: $(notdir $@)"
 	$(CMD_ECHO) $(AR) -r $@ $^
 
@@ -253,7 +277,9 @@ coverage: COVERAGE=1
 coverage: clean build_app
 	./$(BUILD_DIR)/$(BIN).elf
 	# Only generate coverage for wolfHSM source files
-	gcov -o $(BUILD_DIR) $(filter-out $(WOLFSSL_DIR)/%, $(SRC_C))
+	cd $(BUILD_DIR) && \
+	gcov -o . $(notdir $(filter-out $(WOLFSSL_DIR)/%, $(SRC_C))) && \
+	mv *.gcov ..
 
 run: build_app
 	./$(BUILD_DIR)/$(BIN).elf
