@@ -252,7 +252,8 @@ clean:
 coverage: COVERAGE=1
 coverage: clean build_app
 	./$(BUILD_DIR)/$(BIN).elf
-	gcov -o $(BUILD_DIR) $(SRC_C)
+	# Only generate coverage for wolfHSM source files
+	gcov -o $(BUILD_DIR) $(filter-out $(WOLFSSL_DIR)/%, $(SRC_C))
 
 run: build_app
 	./$(BUILD_DIR)/$(BIN).elf
