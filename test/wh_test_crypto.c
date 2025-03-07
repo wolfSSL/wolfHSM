@@ -2215,7 +2215,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
 
     return ret;
 }
-
+#ifndef NO_WOLFHSM_CFG_TEST_CRYPTSVR_CFG
 int whTest_CryptoServerConfig(whServerConfig* config)
 {
     whServerContext server[1] = {0};
@@ -2276,7 +2276,7 @@ int whTest_CryptoServerConfig(whServerConfig* config)
 
     return ret;
 }
-
+#endif /* NO_WOLFHSM_CFG_TEST_CRYPTSVR_CFG */
 #if defined(WOLFHSM_CFG_TEST_POSIX)
 static void* _whClientTask(void *cf)
 {
