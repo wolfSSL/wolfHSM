@@ -152,6 +152,15 @@
 #define WOLFHSM_CFG_CUSTOMCB_LEN 256
 #endif
 
+/* Maximum size of a certificate */
+#ifndef WOLFHSM_CFG_MAX_CERT_SIZE
+#ifndef WOLFHSM_CFG_DMA
+#define WOLFHSM_CFG_MAX_CERT_SIZE WOLFHSM_CFG_COMM_DATA_LEN
+#else
+#define WOLFHSM_CFG_MAX_CERT_SIZE 4096
+#endif
+#endif
+
 /** Configuration checks */
 #ifndef WOLFHSM_CFG_NO_CRYPTO
 /* Crypto Cb is mandatory */

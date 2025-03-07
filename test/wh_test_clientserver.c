@@ -20,6 +20,8 @@
 #include <stdio.h>  /* For printf */
 #include <string.h> /* For memset, memcpy */
 
+#include "wolfhsm/wh_settings.h"
+
 #include "wh_test_common.h"
 #include "wolfhsm/wh_error.h"
 
@@ -34,6 +36,10 @@
 #include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_message_comm.h"
 #include "wolfhsm/wh_client.h"
+
+#if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER)
+#include "wh_test_cert.h"
+#endif
 
 #if defined(WOLFHSM_CFG_TEST_POSIX)
 #include <pthread.h> /* For pthread_create/cancel/join/_t */
@@ -1417,6 +1423,15 @@ int whTest_ClientCfg(whClientConfig* clientCfg)
     /* Test client counter API */
     WH_TEST_RETURN_ON_FAIL(_testClientCounter(client));
 
+#if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER)
+    /* Test certificate API */
+    WH_TEST_RETURN_ON_FAIL(whTest_CertClient(client));
+#if defined(WOLFHSM_CFG_TEST_POSIX) && defined(WOLFHSM_CFG_DMA)
+    WH_TEST_RETURN_ON_FAIL(
+        whTest_CertClientDma_ClientServerTestInternal(client));
+#endif
+#endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER */
+
     WH_TEST_RETURN_ON_FAIL(wh_Client_CommClose(client));
     WH_TEST_RETURN_ON_FAIL(wh_Client_Cleanup(client));
 
@@ -1559,11 +1574,12 @@ static int wh_ClientServer_MemThreadTest(void)
     }};
 #endif
 
-    whServerConfig                  s_conf[1] = {{
-       .comm_config = cs_conf,
-       .nvm = nvm,
+    whServerConfig s_conf[1] = {{
+        .comm_config = cs_conf,
+        .nvm         = nvm,
 #ifndef WOLFHSM_CFG_NO_CRYPTO
-       .crypto = crypto,
+        .crypto = crypto,
+        .devId = INVALID_DEVID,
 #endif
     }};
 
