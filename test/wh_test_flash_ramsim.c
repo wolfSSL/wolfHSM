@@ -19,6 +19,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "wolfhsm/wh_settings.h"
+
 #include "wh_test_common.h"
 #include "wh_test_flash_ramsim.h"
 #include "wolfhsm/wh_flash_ramsim.h"
