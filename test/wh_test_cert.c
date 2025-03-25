@@ -25,7 +25,7 @@
 
 #include "wolfhsm/wh_settings.h"
 
-#if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER)
+#if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER) && !defined(WOLFHSM_CFG_NO_CRYPTO)
 
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_server.h"
@@ -392,4 +392,4 @@ int whTest_CertRamSim(void)
     return rc;
 }
 
-#endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER */
+#endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER && !WOLFHSM_CFG_NO_CRYPTO */

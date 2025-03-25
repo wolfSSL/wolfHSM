@@ -23,7 +23,7 @@
 /* Pick up compile-time configuration */
 #include "wolfhsm/wh_settings.h"
 
-#if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER)
+#if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER) && !defined(WOLFHSM_CFG_NO_CRYPTO)
 
 #include <stdint.h>
 #include <stddef.h>
@@ -980,4 +980,4 @@ int wh_Client_CertVerifyDma(whClientContext* c, const uint8_t* cert,
 
 #endif /* WOLFHSM_CFG_DMA */
 
-#endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER */
+#endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER && !WOLFHSM_CFG_NO_CRYPTO */

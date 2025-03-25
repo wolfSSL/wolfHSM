@@ -37,7 +37,8 @@
 #include "wolfhsm/wh_message_comm.h"
 #include "wolfhsm/wh_client.h"
 
-#if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER)
+#if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER) && !defined(WOLFHSM_CFG_NO_CRYPTO)
+
 #include "wh_test_cert.h"
 #endif
 
@@ -1423,14 +1424,14 @@ int whTest_ClientCfg(whClientConfig* clientCfg)
     /* Test client counter API */
     WH_TEST_RETURN_ON_FAIL(_testClientCounter(client));
 
-#if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER)
+#if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER) && !defined(WOLFHSM_CFG_NO_CRYPTO)
     /* Test certificate API */
     WH_TEST_RETURN_ON_FAIL(whTest_CertClient(client));
 #if defined(WOLFHSM_CFG_TEST_POSIX) && defined(WOLFHSM_CFG_DMA)
     WH_TEST_RETURN_ON_FAIL(
         whTest_CertClientDma_ClientServerTestInternal(client));
 #endif
-#endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER */
+#endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER && !WOLFHSM_CFG_NO_CRYPTO */
 
     WH_TEST_RETURN_ON_FAIL(wh_Client_CommClose(client));
     WH_TEST_RETURN_ON_FAIL(wh_Client_Cleanup(client));

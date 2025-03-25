@@ -55,9 +55,9 @@ int whTest_Unit(void)
     /* Component Tests */
     WH_TEST_ASSERT(0 == whTest_Flash_RamSim());
     WH_TEST_ASSERT(0 == whTest_NvmFlash());
-#if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER)
+#if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER) && !defined(WOLFHSM_CFG_NO_CRYPTO)
     WH_TEST_ASSERT(0 == whTest_CertRamSim());
-#endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER */
+#endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER && !WOLFHSM_CFG_NO_CRYPTO */
 
 
     /* Comm tests */

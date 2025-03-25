@@ -23,7 +23,7 @@
 /* Pick up compile-time configuration */
 #include "wolfhsm/wh_settings.h"
 
-#if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER)
+#if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER) && !defined(WOLFHSM_CFG_NO_CRYPTO)
 
 #include <stdint.h>
 #include <stddef.h>
@@ -187,4 +187,4 @@ int wh_MessageCert_TranslateVerifyDma64Request(
 #endif /* WH_DMA_IS_64BIT */
 #endif /* WOLFHSM_CFG_DMA */
 
-#endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER */
+#endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER && !WOLFHSM_CFG_NO_CRYPTO */
