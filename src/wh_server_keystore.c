@@ -39,6 +39,7 @@
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_packet.h"
+#include "wolfhsm/wh_utils.h"
 #include "wolfhsm/wh_server.h"
 
 #ifdef WOLFHSM_CFG_SHE_EXTENSION

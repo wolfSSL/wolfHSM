@@ -270,10 +270,9 @@ static int _HandleRsaFunction(whServerContext* ctx, whPacket* packet,
 {
     int ret;
     RsaKey rsa[1];
-
     int op_type         = (int)(packet->pkRsaReq.opType);
     uint32_t options    = packet->pkRsaReq.options;
-    int evict           = !!(options & WH_PACKET_PK_ECCSIGN_OPTIONS_EVICT);
+    int evict           = !!(options & WH_PACKET_PK_RSA_OPTIONS_EVICT);
 
     whKeyId key_id      = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
                             ctx->comm->client_id,
@@ -622,25 +621,24 @@ static int _HandleEccKeyGen(whServerContext* ctx, whPacket* packet,
             if (flags & WH_NVM_FLAGS_EPHEMERAL) {
                 /* Must serialize the key into the response message. */
                 key_id = WH_KEYID_ERASED;
-                ret = wh_Crypto_EccSerializeKeyDer(key, max_size, res_out,
-                        &res_size);
+                ret = wh_Crypto_EccSerializeKeyDer(key, max_size, res_out, &res_size);
             } else {
                 /* Must import the key into the cache and return keyid */
                 res_size = 0;
                 if (WH_KEYID_ISERASED(key_id)) {
                     /* Generate a new id */
                     ret = hsmGetUniqueId(ctx, &key_id);
-    #ifdef DEBUG_CRYPTOCB
+#ifdef DEBUG_CRYPTOCB
                     printf("[server] %s UniqueId: keyId:%u, ret:%d\n",
                             __func__, key_id, ret);
-    #endif
+#endif
                 }
                 ret = wh_Server_EccKeyCacheImport(ctx, key,
                         key_id, flags, label_size, label);
-    #ifdef DEBUG_CRYPTOCB
+#ifdef DEBUG_CRYPTOCB
                 printf("[server] %s CacheImport: keyId:%u, ret:%d\n",
                         __func__, key_id, ret);
-    #endif
+#endif
             }
         }
         wc_ecc_free(key);
@@ -1559,7 +1557,7 @@ static int _HandleMlDsaKeyGen(whServerContext* ctx, whPacket* packet,
 }
 
 static int _HandleMlDsaSign(whServerContext* ctx, whPacket* packet,
-    uint16_t *out_size)
+        uint16_t *out_size)
 {
 #ifdef WOLFSSL_DILITHIUM_NO_SIGN
     (void)ctx;
@@ -2349,25 +2347,178 @@ static int _HandlePqcSigAlgorithmDma(whServerContext* server, whPacket* packet,
 }
 #endif /* HAVE_DILITHIUM || HAVE_FALCON */
 
+#ifdef WOLFSSL_CMAC
+static int _HandleCmacDma(whServerContext* server, whPacket* packet,
+                              uint16_t* size)
+{
+    int ret = 0;
+#if WH_DMA_IS_32BIT
+    wh_Packet_cmac_Dma32_req* req = &packet->cmacDma32Req;
+    wh_Packet_cmac_Dma32_res* res = &packet->cmacDma32Res;
+#else
+    wh_Packet_cmac_Dma64_req* req = &packet->cmacDma64Req;
+    wh_Packet_cmac_Dma64_res* res = &packet->cmacDma64Res;
+#endif
+    Cmac* cmac = server->crypto->algoCtx.cmac;
+    int clientDevId;
+    whKeyId keyId;
+    byte tmpKey[AES_256_KEY_SIZE];
+    uint32_t keyLen;
+
+    /* Ensure state sizes are the same */
+    if (req->state.sz != sizeof(*cmac)) {
+        res->dmaAddrStatus.badAddr = req->state;
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Copy the CMAC context from client address space */
+    ret = whServerDma_CopyFromClient(server, cmac, req->state.addr,
+                                       req->state.sz, (whServerDmaFlags){0});
+    if (ret != WH_ERROR_OK) {
+        res->dmaAddrStatus.badAddr = req->state;
+        return ret;
+    }
+    /* Save the client devId to be restored later */
+    clientDevId = cmac->devId;
+    /* overwrite the devId to that of the server for local crypto */
+    cmac->devId = server->crypto->devId;
+
+    /* Print out the state of req */
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+    printf("[server] DMA CMAC req recv. type:%u keySz:%u inSz:%u outSz:%u finalize:%u\n",
+           (unsigned int)req->type, (unsigned int)req->key.sz,
+           (unsigned int)req->input.sz, (unsigned int)req->output.sz,
+           (unsigned int)req->finalize);
+#endif
+
+    /* Initialize CMAC with key if provided */
+    if (ret == WH_ERROR_OK && req->key.sz != 0) {
+        void* keyAddr;
+        ret = wh_Server_DmaProcessClientAddress(
+            server, req->key.addr, &keyAddr, req->key.sz,
+            WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
+
+        if (ret == WH_ERROR_OK) {
+            ret = wc_InitCmac_ex(cmac, keyAddr, req->key.sz, req->type, NULL, NULL,
+                server->crypto->devId);
+        }
+
+        if (ret == WH_ERROR_OK) {
+            ret = wh_Server_DmaProcessClientAddress(
+                server, req->key.addr, &keyAddr, req->key.sz,
+                WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
+        }
+
+        if (ret == WH_ERROR_ACCESS) {
+            res->dmaAddrStatus.badAddr = req->key;
+            return ret;
+        }
+    }
+    /* Check if we need deferred initialization with cached key */
+    else if (ret == WH_ERROR_OK && (req->input.sz != 0 || req->finalize)) {
+        /* Check if there's a key ID in the context that needs to be loaded */
+        whNvmId nvmId = WH_DEVCTX_TO_KEYID(cmac->devCtx);
+        if (nvmId != WH_KEYID_ERASED) {
+            /* Get key ID from CMAC context */
+            keyId = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, server->comm->client_id, nvmId);
+            keyLen = sizeof(tmpKey);
+            
+            /* Load key from cache */
+            ret = hsmReadKey(server, keyId, NULL, tmpKey, &keyLen);
+            if (ret == WH_ERROR_OK) {
+                /* Verify key size is valid for AES */
+                if (keyLen != AES_128_KEY_SIZE && keyLen != AES_192_KEY_SIZE &&
+                    keyLen != AES_256_KEY_SIZE) {
+                    ret = BAD_FUNC_ARG;
+                }
+                else {
+                    ret = wc_InitCmac_ex(cmac, tmpKey, keyLen, WC_CMAC_AES,
+                                         NULL, NULL, server->crypto->devId);
+                }
+            }
+        }
+    }
+
+    /* Process update if requested */
+    if (ret == WH_ERROR_OK && req->input.sz != 0) {
+        /* Update requested, update the CMAC operation */
+        void* inAddr;
+        ret = wh_Server_DmaProcessClientAddress(
+            server, req->input.addr, &inAddr, req->input.sz,
+            WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
+
+        if (ret == WH_ERROR_OK) {
+            ret = wc_CmacUpdate(cmac, inAddr, req->input.sz);
+        }
+
+        if (ret == WH_ERROR_OK) {
+            ret = wh_Server_DmaProcessClientAddress(
+                server, req->input.addr, &inAddr, req->input.sz,
+                WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
+        }
+
+        if (ret == WH_ERROR_ACCESS) {
+            res->dmaAddrStatus.badAddr = req->input;
+            return ret;
+        }
+    }
+
+    /* Process finalize if requested */
+    if (ret == WH_ERROR_OK && req->finalize) {
+        void* outAddr;
+        ret = wh_Server_DmaProcessClientAddress(
+            server, req->output.addr, &outAddr, req->output.sz,
+            WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
+
+        if (ret == WH_ERROR_OK) {
+            word32 len = *(word32*)req->output.sz;
+            ret = wc_CmacFinal(cmac, outAddr, &len);
+            res->outSz = len;
+        }
+
+        if (ret == WH_ERROR_OK) {
+            ret = wh_Server_DmaProcessClientAddress(
+                server, req->output.addr, &outAddr, req->output.sz,
+                WH_DMA_OPER_CLIENT_WRITE_POST, (whServerDmaFlags){0});
+        }
+
+        if (ret == WH_ERROR_ACCESS) {
+            res->dmaAddrStatus.badAddr = req->output;
+            return ret;
+        }
+    }
+
+    /* Reset the devId in the local context */
+    cmac->devId = clientDevId;
+    
+    /* Copy CMAC context back into client memory */
+    if (ret == WH_ERROR_OK) {
+        ret = whServerDma_CopyToClient(server, req->state.addr, cmac,
+                                       req->state.sz, (whServerDmaFlags){0});
+        if (ret != WH_ERROR_OK) {
+            res->dmaAddrStatus.badAddr = req->state;
+        }
+    }
+
+    /* return value populates packet->rc */
+    return ret;
+}
+#endif /* WOLFHSM_CFG_DMA */
+
 int wh_Server_HandleCryptoDmaRequest(whServerContext* server,
     uint16_t action, uint8_t* data, uint16_t* size, uint16_t seq)
 {
     int ret = 0;
     whPacket* packet = (whPacket*)data;
-    if (server == NULL || server->crypto == NULL || data == NULL || size == NULL)
-        return BAD_FUNC_ARG;
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-    printf("[server] Crypto DMA request. Action:%u\n", action);
-#endif
-    switch (action)
-    {
+
+    switch (action) {
     case WC_ALGO_TYPE_HASH:
         switch (packet->hashAnyReq.type) {
 #ifndef NO_SHA256
             case WC_HASH_TYPE_SHA256:
 #ifdef DEBUG_CRYPTOCB_VERBOSE
                 printf("[server] DMA SHA256 req recv. type:%u\n",
-                        (unsigned int)packet->hashSha256Req.type);
+                       (unsigned int)packet->hashSha256Req.type);
 #endif
                 ret = _HandleSha256Dma(server, (whPacket*)data, size);
 #ifdef DEBUG_CRYPTOCB_VERBOSE
@@ -2393,6 +2544,9 @@ int wh_Server_HandleCryptoDmaRequest(whServerContext* server,
         }
         break; /* WC_ALGO_TYPE_PK */
 
+    case WC_ALGO_TYPE_CMAC:
+        ret = _HandleCmacDma(server, packet, size);
+        break;
 
     case WC_ALGO_TYPE_NONE:
     default:
@@ -2406,6 +2560,9 @@ int wh_Server_HandleCryptoDmaRequest(whServerContext* server,
     if (ret != 0)
         *size = WH_PACKET_STUB_SIZE + sizeof(packet->rc);
 
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+    printf("[server] Crypto DMA request. Action:%u\n", action);
+#endif
     /* Since crypto error codes are propagated to the client in the response
      * packet, return success to the caller unless a cancellation has occurred
      */

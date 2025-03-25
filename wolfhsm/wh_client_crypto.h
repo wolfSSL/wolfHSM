@@ -409,10 +409,11 @@ int wh_Client_AesGcm(whClientContext* ctx,
  * @param[in] inSz Size of the input buffer in bytes.
  * @param[in] keyId ID of the AES key inside the HSM.
  * @param[in] heap Heap pointer for the cmac struct.
+ * @param[in] devId ID of the wolfHSM device.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_Client_CmacAesGenerate(Cmac* cmac, byte* sig, word32* outSz,
-    const byte* hash, word32 inSz, whNvmId keyId, void* heap);
+    const byte* hash, word32 inSz, whNvmId keyId, void* heap, int devId);
 
 /**
  * @brief Verifies a CMAC-AES tag in a single call with a wolfHSM keyId.
@@ -429,18 +430,20 @@ int wh_Client_CmacAesGenerate(Cmac* cmac, byte* sig, word32* outSz,
  * @param[in] inSz Size of the input buffer in bytes.
  * @param[in] keyId ID of the AES key inside the HSM.
  * @param[in] heap Heap pointer for the cmac struct.
+ * @param[in] devId ID of the wolfHSM device.
  * @return int Returns 0 on success, 1 on tag mismatch, or a negative error
  *    code on failure.
  */
 int wh_Client_CmacAesVerify(Cmac* cmac, const byte* check, word32 checkSz,
-    const byte* hash, word32 inSz, whNvmId keyId, void* heap);
+    const byte* hash, word32 inSz, whNvmId keyId, void* heap, int devId);
 
 /**
  * @brief Handle cancelable CMAC response.
  *
  * This function handles a CMAC operation response from the server when
  * cancellation has been enabled, since wolfCrypt won't automatically block and
- * wait for the response.
+ * wait for the response. Note that DMA-based CMAC operations are NOT cancellable
+ * and if a cancel is requested, the operation will be aborted.
  *
  * @param[in] c Pointer to the client context structure.
  * @param[in] cmac Pointer to the CMAC key structure.

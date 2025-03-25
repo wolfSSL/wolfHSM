@@ -354,6 +354,38 @@ typedef struct  wh_Packet_cmac_res
     /* uint8_t out[]; */
 } wh_Packet_cmac_res;
 
+/* CMAC DMA packet structures */
+typedef struct wh_Packet_cmac_Dma32_req {
+    uint32_t type;             /* enum wc_CmacType */
+    uint32_t finalize;         /* 1 if final, 0 if update */
+    wh_Packet_Dma32_buffer state;  /* CMAC state buffer */
+    wh_Packet_Dma32_buffer key;    /* Key buffer */
+    wh_Packet_Dma32_buffer input;  /* Input buffer */
+    wh_Packet_Dma32_buffer output; /* Output buffer */
+    uint8_t WH_PAD[4]; /* Pad to 8-byte alignment */
+} wh_Packet_cmac_Dma32_req;
+
+typedef struct wh_Packet_cmac_Dma32_res {
+    wh_Packet_Dma32_addr_status dmaAddrStatus;
+    uint32_t outSz;
+    uint8_t WH_PAD[4]; /* Pad to 8-byte alignment */
+} wh_Packet_cmac_Dma32_res;
+
+typedef struct wh_Packet_cmac_Dma64_req {
+    uint32_t type;             /* enum wc_CmacType */
+    uint32_t finalize;         /* 1 if final, 0 if update */
+    wh_Packet_Dma64_buffer state;  /* CMAC state buffer */
+    wh_Packet_Dma64_buffer key;    /* Key buffer */
+    wh_Packet_Dma64_buffer input;  /* Input buffer */
+    wh_Packet_Dma64_buffer output; /* Output buffer */
+} wh_Packet_cmac_Dma64_req;
+
+typedef struct wh_Packet_cmac_Dma64_res {
+    wh_Packet_Dma64_addr_status dmaAddrStatus;
+    uint32_t outSz;
+    uint8_t WH_PAD[4]; /* Pad to 8-byte alignment */
+} wh_Packet_cmac_Dma64_res;
+
 typedef struct wh_Packet_hash_any_req {
     uint32_t type; /* enum wc_HashType */
     uint8_t WH_PAD[4];
@@ -403,7 +435,6 @@ typedef struct  wh_Packet_pq_mldsa_kg_res
     uint32_t len;
     /* uint8_t out[] */
 } wh_Packet_pq_mldsa_kg_res;
-
 
 typedef struct  wh_Packet_pq_mldsa_sign_req
 {
@@ -572,7 +603,6 @@ typedef struct wh_Packet_key_export_Dma64_res {
     uint8_t                     label[WH_NVM_LABEL_LEN];
     uint8_t                     WH_PAD[4]; /* Pad to 8-byte alignment */
 } wh_Packet_key_export_Dma64_res;
-
 
 /** NVM Counter packets */
 typedef struct  wh_Packet_counter_init_req
@@ -1074,6 +1104,8 @@ typedef struct whPacket
         wh_Packet_pq_mldsa_sign_Dma32_res   pqMldsaSignDma32Res;
         wh_Packet_pq_mldsa_verify_Dma32_req  pqMldsaVerifyDma32Req;
         wh_Packet_pq_mldsa_verify_Dma32_res  pqMldsaVerifyDma32Res;
+        wh_Packet_cmac_Dma32_req           cmacDma32Req;
+        wh_Packet_cmac_Dma32_res           cmacDma32Res;
 #elif defined(WOLFHSM_CFG_DMA) && WH_DMA_IS_64BIT
         wh_Packet_hash_sha256_Dma64_req     hashSha256Dma64Req;
         wh_Packet_hash_sha256_Dma64_res     hashSha256Dma64Res;
@@ -1087,6 +1119,8 @@ typedef struct whPacket
         wh_Packet_pq_mldsa_sign_Dma64_res   pqMldsaSignDma64Res;
         wh_Packet_pq_mldsa_verify_Dma64_req pqMldsaVerifyDma64Req;
         wh_Packet_pq_mldsa_verify_Dma64_res pqMldsaVerifyDma64Res;
+        wh_Packet_cmac_Dma64_req           cmacDma64Req;
+        wh_Packet_cmac_Dma64_res           cmacDma64Res;
 #endif
 
 

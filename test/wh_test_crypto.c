@@ -1168,40 +1168,46 @@ static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
 {
     int ret;
     /* test cmac */
-    Cmac cmac[1];
+    Cmac    cmac[1];
     uint8_t knownCmacKey[] = {0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6,
-        0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c};
-    uint8_t knownCmacMessage[] = {0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f,
-        0x96, 0xe9, 0x3d, 0x7e, 0x11, 0x73, 0x93, 0x17, 0x2a, 0xae, 0x2d, 0x8a,
-        0x57, 0x1e, 0x03, 0xac, 0x9c, 0x9e, 0xb7, 0x6f, 0xac, 0x45, 0xaf, 0x8e,
-        0x51, 0x30, 0xc8, 0x1c, 0x46, 0xa3, 0x5c, 0xe4, 0x11, 0xe5, 0xfb, 0xc1,
-        0x19, 0x1a, 0x0a, 0x52, 0xef, 0xf6, 0x9f, 0x24, 0x45, 0xdf, 0x4f, 0x9b,
+                              0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c};
+    uint8_t knownCmacMessage[] = {
+        0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f, 0x96, 0xe9, 0x3d, 0x7e,
+        0x11, 0x73, 0x93, 0x17, 0x2a, 0xae, 0x2d, 0x8a, 0x57, 0x1e, 0x03,
+        0xac, 0x9c, 0x9e, 0xb7, 0x6f, 0xac, 0x45, 0xaf, 0x8e, 0x51, 0x30,
+        0xc8, 0x1c, 0x46, 0xa3, 0x5c, 0xe4, 0x11, 0xe5, 0xfb, 0xc1, 0x19,
+        0x1a, 0x0a, 0x52, 0xef, 0xf6, 0x9f, 0x24, 0x45, 0xdf, 0x4f, 0x9b,
         0x17, 0xad, 0x2b, 0x41, 0x7b, 0xe6, 0x6c, 0x37, 0x10};
-    uint8_t knownCmacTag[AES_BLOCK_SIZE] = {0x51, 0xf0, 0xbe, 0xbf, 0x7e, 0x3b, 0x9d, 0x92,
-        0xfc, 0x49, 0x74, 0x17, 0x79, 0x36, 0x3c, 0xfe};
+    uint8_t knownCmacTag[AES_BLOCK_SIZE] = {0x51, 0xf0, 0xbe, 0xbf, 0x7e, 0x3b,
+                                            0x9d, 0x92, 0xfc, 0x49, 0x74, 0x17,
+                                            0x79, 0x36, 0x3c, 0xfe};
 
     uint8_t labelIn[WH_NVM_LABEL_LEN] = "CMAC Key Label";
 
-    uint8_t keyEnd[sizeof(knownCmacKey)] = {0};
-    uint8_t labelEnd[WH_NVM_LABEL_LEN] = {0};
-    uint16_t outLen = 0;
-    uint8_t macOut[AES_BLOCK_SIZE] = {0};
-    word32 macLen;
-    whKeyId keyId;
+    uint8_t  keyEnd[sizeof(knownCmacKey)] = {0};
+    uint8_t  labelEnd[WH_NVM_LABEL_LEN]   = {0};
+    uint16_t outLen                       = 0;
+    uint8_t  macOut[AES_BLOCK_SIZE]       = {0};
+    word32   macLen;
+    whKeyId  keyId;
 
-    ret = wc_InitCmac_ex(cmac, knownCmacKey, sizeof(knownCmacKey), WC_CMAC_AES, NULL, NULL, devId);
+    ret = wc_InitCmac_ex(cmac, knownCmacKey, sizeof(knownCmacKey), WC_CMAC_AES,
+                         NULL, NULL, devId);
     if (ret != 0) {
         WH_ERROR_PRINT("Failed to wc_InitCmac_ex %d\n", ret);
-    } else {
+    }
+    else {
         ret = wc_CmacUpdate(cmac, knownCmacMessage, sizeof(knownCmacMessage));
         if (ret != 0) {
             WH_ERROR_PRINT("Failed to wc_CmacUpdate %d\n", ret);
-        } else {
+        }
+        else {
             macLen = sizeof(macOut);
-            ret = wc_CmacFinal(cmac, macOut, &macLen);
+            ret    = wc_CmacFinal(cmac, macOut, &macLen);
             if (ret != 0) {
                 WH_ERROR_PRINT("Failed to wc_CmacFinal %d\n", ret);
-            } else {
+            }
+            else {
                 if (memcmp(knownCmacTag, macOut, sizeof(knownCmacTag)) != 0) {
                     WH_ERROR_PRINT("CMAC FAILED KNOWN ANSWER TEST\n");
                     ret = -1;
@@ -1214,7 +1220,10 @@ static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
 
     if (ret == 0) {
         /* test oneshot verify */
-        ret = wc_AesCmacVerify_ex(cmac, knownCmacTag, sizeof(knownCmacTag), knownCmacMessage, sizeof(knownCmacMessage), knownCmacKey, sizeof(knownCmacKey), NULL, WH_DEV_ID);
+        ret = wc_AesCmacVerify_ex(cmac, knownCmacTag, sizeof(knownCmacTag),
+                                  knownCmacMessage, sizeof(knownCmacMessage),
+                                  knownCmacKey, sizeof(knownCmacKey), NULL,
+                                  devId);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed to wc_AesCmacVerify_ex %d\n", ret);
         }
@@ -1223,28 +1232,49 @@ static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
     if (ret == 0) {
         /* test oneshot generate with pre-cached key */
         keyId = WH_KEYID_ERASED;
-        ret = wh_Client_KeyCache(ctx, 0, labelIn, sizeof(labelIn), knownCmacKey, sizeof(knownCmacKey), &keyId);
+        ret = wh_Client_KeyCache(ctx, 0, labelIn, sizeof(labelIn), knownCmacKey,
+                                 sizeof(knownCmacKey), &keyId);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed to wh_Client_KeyCache %d\n", ret);
-        } else {
+        }
+        else {
             macLen = sizeof(macOut);
-            ret = wh_Client_CmacAesGenerate(cmac, macOut, &macLen, knownCmacMessage, sizeof(knownCmacMessage), keyId, NULL);
+            ret    = wh_Client_CmacAesGenerate(
+                cmac, macOut, &macLen, knownCmacMessage,
+                sizeof(knownCmacMessage), keyId, NULL, devId);
             if (ret != 0) {
                 WH_ERROR_PRINT("Failed to wh_Client_AesCmacGenerate %d\n", ret);
-            } else {
+            }
+            else {
                 if (memcmp(knownCmacTag, macOut, sizeof(knownCmacTag)) != 0) {
                     WH_ERROR_PRINT("CMAC FAILED KNOWN ANSWER TEST\n");
                     ret = -1;
-                } else {
-                    /* TODO: Eliminate this autoevict */
-                    /* verify the key was evicted after oneshot */
-                    outLen = sizeof(keyEnd);
-                    ret = wh_Client_KeyExport(ctx, keyId, labelEnd, sizeof(labelEnd), keyEnd, &outLen);
-                    if (ret != WH_ERROR_NOTFOUND) {
-                        WH_ERROR_PRINT("Failed to not find evicted key: %d\n", ret);
-                        ret = -1;
-                    } else {
-                        ret = 0;
+                }
+                else {
+                    /* DMA doesn't autoevict keys after use */
+                    /* TODO: should we instead match autoevict behavior for DMA */
+                    if (devId == WH_DEV_ID_DMA) {
+                        ret = wh_Client_KeyEvict(ctx, keyId);
+                        if (ret != 0) {
+                            WH_ERROR_PRINT("Failed to wh_Client_KeyEvict %d\n", ret);
+                            ret = -1;
+                        }
+                    }
+                    else {
+                        /* TODO: Eliminate this autoevict */
+                        /* verify the key was evicted after oneshot */
+                        outLen = sizeof(keyEnd);
+                        ret    = wh_Client_KeyExport(ctx, keyId, labelEnd,
+                                                     sizeof(labelEnd), keyEnd,
+                                                     &outLen);
+                        if (ret != WH_ERROR_NOTFOUND) {
+                            WH_ERROR_PRINT(
+                                "Failed to not find evicted key: %d\n", ret);
+                            ret = -1;
+                        }
+                        else {
+                            ret = 0;
+                        }
                     }
                 }
             }
@@ -1254,27 +1284,36 @@ static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
     if (ret == 0) {
         /* test oneshot verify with commited key */
         keyId = WH_KEYID_ERASED;
-        ret = wh_Client_KeyCache(ctx, 0, labelIn, sizeof(labelIn), knownCmacKey, sizeof(knownCmacKey), &keyId);
+        ret = wh_Client_KeyCache(ctx, 0, labelIn, sizeof(labelIn), knownCmacKey,
+                                 sizeof(knownCmacKey), &keyId);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed to wh_Client_KeyCache %d\n", ret);
-        } else {
+        }
+        else {
             ret = wh_Client_KeyCommit(ctx, keyId);
             if (ret != 0) {
                 WH_ERROR_PRINT("Failed to wh_Client_KeyCommit %d\n", ret);
-            } else {
+            }
+            else {
                 ret = wh_Client_KeyEvict(ctx, keyId);
                 if (ret != 0) {
                     WH_ERROR_PRINT("Failed to wh_Client_KeyEvict %d\n", ret);
-                } else {
+                }
+                else {
                     macLen = sizeof(macOut);
-                    ret = wh_Client_CmacAesVerify(cmac, macOut, macLen, (byte*)knownCmacMessage, sizeof(knownCmacMessage), keyId, NULL);
+                    ret    = wh_Client_CmacAesVerify(
+                        cmac, macOut, macLen, (byte*)knownCmacMessage,
+                        sizeof(knownCmacMessage), keyId, NULL, devId);
                     if (ret != 0) {
-                        WH_ERROR_PRINT("Failed to wh_Client_AesCmacVerify %d\n", ret);
-                    } else {
+                        WH_ERROR_PRINT("Failed to wh_Client_AesCmacVerify %d\n",
+                                       ret);
+                    }
+                    else {
                         /* test finished, erase key */
                         ret = wh_Client_KeyErase(ctx, keyId);
                         if (ret != 0) {
-                            WH_ERROR_PRINT("Failed to wh_Client_KeyErase %d\n", ret);
+                            WH_ERROR_PRINT("Failed to wh_Client_KeyErase %d\n",
+                                           ret);
                         }
                     }
                 }
@@ -1282,48 +1321,61 @@ static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
         }
     }
 
-    if (ret == 0) {
-        /* test CMAC cancellation */
+    /* test CMAC cancellation for supported devIds */
+    if (ret == 0 && devId != WH_DEV_ID_DMA) {
 #define WH_TEST_CMAC_TEXTSIZE 1000
         char cmacFodder[WH_TEST_CMAC_TEXTSIZE] = {0};
 
         ret = wh_Client_EnableCancel(ctx);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed to wh_Client_EnableCancel %d\n", ret);
-        } else {
-            ret = wc_InitCmac_ex(cmac, knownCmacKey, sizeof(knownCmacKey), WC_CMAC_AES, NULL, NULL, devId);
+        }
+        else {
+            ret = wc_InitCmac_ex(cmac, knownCmacKey, sizeof(knownCmacKey),
+                                 WC_CMAC_AES, NULL, NULL, devId);
             if (ret != 0) {
                 WH_ERROR_PRINT("Failed to wc_InitCmac_ex %d\n", ret);
-            } else {
+            }
+            else {
                 ret = wh_Client_CmacCancelableResponse(ctx, cmac, NULL, 0);
                 if (ret != 0) {
-                    WH_ERROR_PRINT("Failed to wh_Client_CmacCancelableResponse %d\n", ret);
-                } else {
+                    WH_ERROR_PRINT(
+                        "Failed to wh_Client_CmacCancelableResponse %d\n", ret);
+                }
+                else {
 #ifndef WOLFHSM_CFG_TEST_NO_CUSTOM_SERVERS
-                    /* TODO: use hsm pause/resume functionality on real hardware */
-                    /* delay the server so scheduling doesn't interfere with the timing */
+                    /* TODO: use hsm pause/resume functionality on real hardware
+                     */
+                    /* delay the server so scheduling doesn't interfere with the
+                     * timing */
                     serverDelay = 1;
 #endif
-                    ret = wc_CmacUpdate(cmac, (byte*)cmacFodder, sizeof(cmacFodder));
+                    ret = wc_CmacUpdate(cmac, (byte*)cmacFodder,
+                                        sizeof(cmacFodder));
                     if (ret != 0) {
                         WH_ERROR_PRINT("Failed to wc_CmacUpdate %d\n", ret);
-                    } else {
+                    }
+                    else {
                         ret = wh_Client_CancelRequest(ctx);
                         if (ret != 0) {
-                            WH_ERROR_PRINT("Failed to wh_Client_CancelRequest %d\n", ret);
-                        } else {
+                            WH_ERROR_PRINT(
+                                "Failed to wh_Client_CancelRequest %d\n", ret);
+                        }
+                        else {
 #ifndef WOLFHSM_CFG_TEST_NO_CUSTOM_SERVERS
                             serverDelay = 0;
 #endif
                             do {
                                 ret = wh_Client_CancelResponse(ctx);
                             } while (ret == WH_ERROR_NOTREADY);
-                            if(     (ret != 0) &&
+                            if ((ret != 0) &&
 #if defined(WOLFHSM_CFG_TEST_NO_CUSTOM_SERVERS)
-                                    (ret != WH_ERROR_CANCEL_LATE) &&
+                                (ret != WH_ERROR_CANCEL_LATE) &&
 #endif
-                                    (!0) ) {
-                                WH_ERROR_PRINT("Failed to wh_Client_CancelResponse %d\n", ret);
+                                (!0)) {
+                                WH_ERROR_PRINT(
+                                    "Failed to wh_Client_CancelResponse %d\n",
+                                    ret);
                             }
                         }
                     }
@@ -1331,39 +1383,67 @@ static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
             }
 
             if (ret == 0) {
-                /* test cancelable request and response work for standard CMAC request with no cancellation */
-                ret = wc_InitCmac_ex(cmac, knownCmacKey, sizeof(knownCmacKey), WC_CMAC_AES, NULL, NULL, devId);
+                /* test cancelable request and response work for standard CMAC
+                 * request with no cancellation */
+                ret = wc_InitCmac_ex(cmac, knownCmacKey, sizeof(knownCmacKey),
+                                     WC_CMAC_AES, NULL, NULL, devId);
                 if (ret != 0) {
                     WH_ERROR_PRINT("Failed to wc_InitCmac_ex %d\n", ret);
-                } else {
+                }
+                else {
                     ret = wh_Client_CmacCancelableResponse(ctx, cmac, NULL, 0);
                     if (ret != 0) {
-                        WH_ERROR_PRINT("Failed to wh_Client_CmacCancelableResponse %d\n", ret);
-                    } else {
-                        ret = wc_CmacUpdate(cmac, (byte*)knownCmacMessage, sizeof(knownCmacMessage));
+                        WH_ERROR_PRINT(
+                            "Failed to wh_Client_CmacCancelableResponse %d\n",
+                            ret);
+                    }
+                    else {
+                        ret = wc_CmacUpdate(cmac, (byte*)knownCmacMessage,
+                                            sizeof(knownCmacMessage));
                         if (ret != 0) {
                             WH_ERROR_PRINT("Failed to wc_CmacUpdate %d\n", ret);
-                        } else {
-                            ret = wh_Client_CmacCancelableResponse(ctx, cmac, NULL, 0);
+                        }
+                        else {
+                            ret = wh_Client_CmacCancelableResponse(ctx, cmac,
+                                                                   NULL, 0);
                             if (ret != 0) {
-                                WH_ERROR_PRINT("Failed to wh_Client_CmacCancelableResponse %d\n", ret);
-                            } else {
+                                WH_ERROR_PRINT(
+                                    "Failed to "
+                                    "wh_Client_CmacCancelableResponse %d\n",
+                                    ret);
+                            }
+                            else {
                                 macLen = sizeof(knownCmacTag);
-                                ret = wc_CmacFinal(cmac, macOut, &macLen);
+                                ret    = wc_CmacFinal(cmac, macOut, &macLen);
                                 if (ret != 0) {
-                                    WH_ERROR_PRINT("Failed to wc_CmacFinal %d\n", ret);
-                                } else {
-                                    ret = wh_Client_CmacCancelableResponse(ctx, cmac, macOut, &outLen);
+                                    WH_ERROR_PRINT(
+                                        "Failed to wc_CmacFinal %d\n", ret);
+                                }
+                                else {
+                                    ret = wh_Client_CmacCancelableResponse(
+                                        ctx, cmac, macOut, &outLen);
                                     if (ret != 0) {
-                                        WH_ERROR_PRINT("Failed to wh_Client_CmacCancelableResponse %d\n", ret);
-                                    } else {
-                                        if (memcmp(knownCmacTag, macOut, sizeof(knownCmacTag)) != 0) {
-                                            WH_ERROR_PRINT("CMAC FAILED KNOWN ANSWER TEST\n");
+                                        WH_ERROR_PRINT(
+                                            "Failed to "
+                                            "wh_Client_CmacCancelableResponse "
+                                            "%d\n",
+                                            ret);
+                                    }
+                                    else {
+                                        if (memcmp(knownCmacTag, macOut,
+                                                   sizeof(knownCmacTag)) != 0) {
+                                            WH_ERROR_PRINT("CMAC FAILED KNOWN "
+                                                           "ANSWER TEST\n");
                                             ret = -1;
-                                        } else {
+                                        }
+                                        else {
                                             ret = wh_Client_DisableCancel(ctx);
                                             if (ret != 0) {
-                                                WH_ERROR_PRINT("Failed to wh_Client_DisableCancel %d\n", ret);
+                                                WH_ERROR_PRINT(
+                                                    "Failed to "
+                                                    "wh_Client_DisableCancel "
+                                                    "%d\n",
+                                                    ret);
                                             }
                                         }
                                     }
@@ -2130,8 +2210,11 @@ int whTest_CryptoClientConfig(whClientConfig* config)
 #endif /* !NO_AES */
 
 #if defined(WOLFSSL_CMAC) && !defined(NO_AES) && defined(WOLFSSL_AES_DIRECT)
-    if (ret == 0) {
-        ret = whTestCrypto_Cmac(client, WH_DEV_ID, rng);
+    while ((ret == WH_ERROR_OK) && (i < WH_NUM_DEVIDS)) {
+        ret = whTestCrypto_Cmac(client, WH_DEV_IDS_ARRAY[i], rng);
+        if (ret == WH_ERROR_OK) {
+            i++;
+        }
     }
 #endif /* WOLFSSL_CMAC && !NO_AES && WOLFSSL_AES_DIRECT */
 

@@ -74,6 +74,81 @@ static int _handlePqcSigCheckPrivKey(whClientContext* ctx, wc_CryptoInfo* info,
                                      int useDma);
 #endif /* HAVE_DILITHIUM || HAVE_FALCON */
 
+#ifdef WOLFSSL_CMAC
+#ifdef WOLFHSM_CFG_DMA
+static int _handleCmacDma(wc_CryptoInfo* info, void* inCtx, whPacket* packet)
+{
+    int ret = WH_ERROR_OK;
+    whClientContext* ctx = inCtx;
+    Cmac* cmac = info->cmac.cmac;
+
+#if WH_DMA_IS_32BIT
+    wh_Packet_cmac_Dma32_req* req = &packet->cmacDma32Req;
+    wh_Packet_cmac_Dma32_res* res = &packet->cmacDma32Res;
+#else
+    wh_Packet_cmac_Dma64_req* req = &packet->cmacDma64Req;
+    wh_Packet_cmac_Dma64_res* res = &packet->cmacDma64Res;
+#endif
+
+    XMEMSET(req, 0, sizeof(*req));
+    req->type = info->cmac.type;
+
+    /* Set up DMA state buffer in client address space */
+    req->state.addr = (uintptr_t)cmac;
+    req->state.sz = sizeof(*cmac);
+
+    /* Handle different CMAC operations based on input parameters */
+    if (info->cmac.key != NULL) {
+        /* Initialize with provided key */
+        req->key.addr = (uintptr_t)info->cmac.key;
+        req->key.sz = info->cmac.keySz;
+    }
+
+    if (info->cmac.in != NULL) {
+        /* Update operation */
+        req->input.addr = (uintptr_t)info->cmac.in;
+        req->input.sz = info->cmac.inSz;
+    }
+
+    if (info->cmac.out != NULL) {
+        /* Finalize operation */
+        req->output.addr = (uintptr_t)info->cmac.out;
+        req->output.sz = (size_t)info->cmac.outSz;
+        req->finalize = 1;
+    }
+
+    /* If this is just a deferred initialization (NULL key, but keyId set),
+     * don't send a request - server will initialize on first update */
+    if (info->cmac.key == NULL && info->cmac.in == NULL && info->cmac.out == NULL) {
+        /* Just a keyId set operation, nothing to do via DMA */
+        return 0;
+    }
+
+    /* Send the request */
+    ret = wh_Client_SendRequest(ctx, WH_MESSAGE_GROUP_CRYPTO_DMA, WC_ALGO_TYPE_CMAC,
+                                WH_PACKET_STUB_SIZE + sizeof(*req),
+                                (uint8_t*)packet);
+    if (ret == WH_ERROR_OK) {
+        uint16_t respSz = 0;
+        do {
+            ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
+                                        (uint8_t*)packet);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+
+    if (ret == WH_ERROR_OK) {
+        ret = packet->rc;
+        if (ret == WH_ERROR_OK && req->finalize) {
+            /* Update outSz with actual size of CMAC output */
+            *info->cmac.outSz = res->outSz;
+        }
+    }
+
+    return ret;
+}
+#endif /* WOLFHSM_CFG_DMA */
+#endif /* WOLFSSL_CMAC */
+
 int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
 {
     /* III When possible, return wolfCrypt-enumerated errors */
@@ -1002,6 +1077,12 @@ int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
         }
     } break; /* case WC_ALGO_TYPE_PK */
 
+#ifdef WOLFSSL_CMAC
+    case WC_ALGO_TYPE_CMAC:
+        ret = _handleCmacDma(info, inCtx, packet);
+        break;
+#endif
+
     case WC_ALGO_TYPE_NONE:
     default:
         ret = CRYPTOCB_UNAVAILABLE;
@@ -1020,3 +1101,8 @@ int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
 #endif /* WOLFHSM_CFG_DMA */
 
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
+
+#ifdef WOLFSSL_CMAC
+#ifdef WOLFHSM_CFG_DMA
+#endif /* WOLFHSM_CFG_DMA */
+#endif /* WOLFSSL_CMAC */
