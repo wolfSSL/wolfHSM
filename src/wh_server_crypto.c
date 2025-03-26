@@ -2349,7 +2349,7 @@ static int _HandlePqcSigAlgorithmDma(whServerContext* server, whPacket* packet,
 
 #ifdef WOLFSSL_CMAC
 static int _HandleCmacDma(whServerContext* server, whPacket* packet,
-                              uint16_t* size)
+                          uint16_t* size)
 {
     int ret = 0;
 #if WH_DMA_IS_32BIT
@@ -2359,11 +2359,17 @@ static int _HandleCmacDma(whServerContext* server, whPacket* packet,
     wh_Packet_cmac_Dma64_req* req = &packet->cmacDma64Req;
     wh_Packet_cmac_Dma64_res* res = &packet->cmacDma64Res;
 #endif
-    Cmac* cmac = server->crypto->algoCtx.cmac;
-    int clientDevId;
-    whKeyId keyId;
-    byte tmpKey[AES_256_KEY_SIZE];
+    Cmac*    cmac = server->crypto->algoCtx.cmac;
+    int      clientDevId;
+    whKeyId  keyId;
+    byte     tmpKey[AES_256_KEY_SIZE];
     uint32_t keyLen;
+
+    /* DMA translated addresses */
+    void*  inAddr  = NULL;
+    void*  outAddr = NULL;
+    void*  keyAddr = NULL;
+    word32 outSz   = 0;
 
     /* Ensure state sizes are the same */
     if (req->state.sz != sizeof(*cmac)) {
@@ -2373,7 +2379,7 @@ static int _HandleCmacDma(whServerContext* server, whPacket* packet,
 
     /* Copy the CMAC context from client address space */
     ret = whServerDma_CopyFromClient(server, cmac, req->state.addr,
-                                       req->state.sz, (whServerDmaFlags){0});
+                                     req->state.sz, (whServerDmaFlags){0});
     if (ret != WH_ERROR_OK) {
         res->dmaAddrStatus.badAddr = req->state;
         return ret;
@@ -2385,112 +2391,188 @@ static int _HandleCmacDma(whServerContext* server, whPacket* packet,
 
     /* Print out the state of req */
 #ifdef DEBUG_CRYPTOCB_VERBOSE
-    printf("[server] DMA CMAC req recv. type:%u keySz:%u inSz:%u outSz:%u finalize:%u\n",
+    printf("[server] DMA CMAC req recv. type:%u keySz:%u inSz:%u outSz:%u "
+           "finalize:%u\n",
            (unsigned int)req->type, (unsigned int)req->key.sz,
            (unsigned int)req->input.sz, (unsigned int)req->output.sz,
            (unsigned int)req->finalize);
 #endif
 
-    /* Initialize CMAC with key if provided */
-    if (ret == WH_ERROR_OK && req->key.sz != 0) {
-        void* keyAddr;
-        ret = wh_Server_DmaProcessClientAddress(
-            server, req->key.addr, &keyAddr, req->key.sz,
-            WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
-
-        if (ret == WH_ERROR_OK) {
-            ret = wc_InitCmac_ex(cmac, keyAddr, req->key.sz, req->type, NULL, NULL,
-                server->crypto->devId);
-        }
-
-        if (ret == WH_ERROR_OK) {
-            ret = wh_Server_DmaProcessClientAddress(
-                server, req->key.addr, &keyAddr, req->key.sz,
-                WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
-        }
-
-        if (ret == WH_ERROR_ACCESS) {
-            res->dmaAddrStatus.badAddr = req->key;
-            return ret;
-        }
-    }
-    /* Check if we need deferred initialization with cached key */
-    else if (ret == WH_ERROR_OK && (req->input.sz != 0 || req->finalize)) {
-        /* Check if there's a key ID in the context that needs to be loaded */
-        whNvmId nvmId = WH_DEVCTX_TO_KEYID(cmac->devCtx);
-        if (nvmId != WH_KEYID_ERASED) {
-            /* Get key ID from CMAC context */
-            keyId = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, server->comm->client_id, nvmId);
-            keyLen = sizeof(tmpKey);
-            
-            /* Load key from cache */
-            ret = hsmReadKey(server, keyId, NULL, tmpKey, &keyLen);
-            if (ret == WH_ERROR_OK) {
-                /* Verify key size is valid for AES */
-                if (keyLen != AES_128_KEY_SIZE && keyLen != AES_192_KEY_SIZE &&
-                    keyLen != AES_256_KEY_SIZE) {
-                    ret = BAD_FUNC_ARG;
-                }
-                else {
-                    ret = wc_InitCmac_ex(cmac, tmpKey, keyLen, WC_CMAC_AES,
-                                         NULL, NULL, server->crypto->devId);
-                }
-            }
-        }
-    }
-
-    /* Process update if requested */
-    if (ret == WH_ERROR_OK && req->input.sz != 0) {
-        /* Update requested, update the CMAC operation */
-        void* inAddr;
+    /* Translate all DMA addresses upfront */
+    if (req->input.sz != 0) {
         ret = wh_Server_DmaProcessClientAddress(
             server, req->input.addr, &inAddr, req->input.sz,
             WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
-
-        if (ret == WH_ERROR_OK) {
-            ret = wc_CmacUpdate(cmac, inAddr, req->input.sz);
-        }
-
-        if (ret == WH_ERROR_OK) {
-            ret = wh_Server_DmaProcessClientAddress(
-                server, req->input.addr, &inAddr, req->input.sz,
-                WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
-        }
-
         if (ret == WH_ERROR_ACCESS) {
             res->dmaAddrStatus.badAddr = req->input;
-            return ret;
+            goto cleanup;
         }
     }
-
-    /* Process finalize if requested */
-    if (ret == WH_ERROR_OK && req->finalize) {
-        void* outAddr;
+    if (req->output.sz != 0) {
         ret = wh_Server_DmaProcessClientAddress(
             server, req->output.addr, &outAddr, req->output.sz,
             WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
-
-        if (ret == WH_ERROR_OK) {
-            word32 len = *(word32*)req->output.sz;
-            ret = wc_CmacFinal(cmac, outAddr, &len);
-            res->outSz = len;
-        }
-
-        if (ret == WH_ERROR_OK) {
-            ret = wh_Server_DmaProcessClientAddress(
-                server, req->output.addr, &outAddr, req->output.sz,
-                WH_DMA_OPER_CLIENT_WRITE_POST, (whServerDmaFlags){0});
-        }
-
         if (ret == WH_ERROR_ACCESS) {
             res->dmaAddrStatus.badAddr = req->output;
-            return ret;
+            goto cleanup;
+        }
+    }
+    if (req->key.sz != 0) {
+        ret = wh_Server_DmaProcessClientAddress(
+            server, req->key.addr, &keyAddr, req->key.sz,
+            WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
+        if (ret == WH_ERROR_ACCESS) {
+            res->dmaAddrStatus.badAddr = req->key;
+            goto cleanup;
+        }
+    }
+
+    /* Check for one-shot operation (both input and output are non-NULL) */
+    if (req->input.sz != 0 && req->output.sz != 0) {
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+        printf("[server] CMAC one-shot operation detected\n");
+#endif
+
+        /* One-shot case: Key is provided by client */
+        if (req->key.sz != 0) {
+            outSz = req->output.sz;
+            /* Perform one-shot CMAC operation with provided key */
+            ret        = wc_AesCmacGenerate_ex(cmac, outAddr, &outSz, inAddr,
+                                               req->input.sz, keyAddr, req->key.sz,
+                                               NULL, server->crypto->devId);
+            res->outSz = outSz;
+        }
+        /* One-shot case: Key is referenced by ID in the context */
+        else {
+            /* Check if there's a key ID in the context that needs to be loaded
+             */
+            whNvmId nvmId = WH_DEVCTX_TO_KEYID(cmac->devCtx);
+            if (nvmId != WH_KEYID_ERASED) {
+                /* Get key ID from CMAC context */
+                keyId  = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
+                                       server->comm->client_id, nvmId);
+                keyLen = sizeof(tmpKey);
+
+                /* Load key from cache */
+                ret = hsmReadKey(server, keyId, NULL, tmpKey, &keyLen);
+                if (ret == WH_ERROR_OK) {
+                    /* Verify key size is valid for AES */
+                    if (keyLen != AES_128_KEY_SIZE &&
+                        keyLen != AES_192_KEY_SIZE &&
+                        keyLen != AES_256_KEY_SIZE) {
+                        ret = WH_ERROR_ABORTED;
+                    }
+                    else {
+                        /* Initialize CMAC with loaded key */
+                        ret = wc_InitCmac_ex(cmac, tmpKey, keyLen, WC_CMAC_AES,
+                                             NULL, NULL, server->crypto->devId);
+                        if (ret == WH_ERROR_OK) {
+                            /* Perform one-shot CMAC operation */
+                            outSz = req->output.sz;
+                            ret   = wc_AesCmacGenerate_ex(
+                                cmac, outAddr, &outSz, inAddr, req->input.sz,
+                                NULL, 0, NULL, server->crypto->devId);
+                            res->outSz = outSz;
+                        }
+                    }
+                }
+            }
+            else {
+                /* Context is already initialized, just do the one-shot
+                 * operation */
+                outSz = req->output.sz;
+                ret   = wc_AesCmacGenerate_ex(cmac, outAddr, &outSz, inAddr,
+                                              req->input.sz, NULL, 0, NULL,
+                                              server->crypto->devId);
+                res->outSz = outSz;
+            }
+        }
+    }
+    else {
+        /* Incremental: Initialize CMAC with key if provided */
+        if (req->key.sz != 0) {
+            ret = wc_InitCmac_ex(cmac, keyAddr, req->key.sz, req->type, NULL,
+                                 NULL, server->crypto->devId);
+        }
+        /* Check for deferred initialization with cached key */
+        else if (req->input.sz != 0 || req->finalize) {
+            /* Check if there's a key ID in the context that needs to be loaded
+             */
+            whNvmId nvmId = WH_DEVCTX_TO_KEYID(cmac->devCtx);
+            if (nvmId != WH_KEYID_ERASED) {
+                /* Get key ID from CMAC context */
+                keyId  = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
+                                       server->comm->client_id, nvmId);
+                keyLen = sizeof(tmpKey);
+
+                /* Load key from cache */
+                ret = hsmReadKey(server, keyId, NULL, tmpKey, &keyLen);
+                if (ret == WH_ERROR_OK) {
+                    /* Verify key size is valid for AES */
+                    if (keyLen != AES_128_KEY_SIZE &&
+                        keyLen != AES_192_KEY_SIZE &&
+                        keyLen != AES_256_KEY_SIZE) {
+                        ret = WH_ERROR_ABORTED;
+                    }
+                    else {
+                        ret = wc_InitCmac_ex(cmac, tmpKey, keyLen, WC_CMAC_AES,
+                                             NULL, NULL, server->crypto->devId);
+                    }
+                }
+            }
+        }
+
+        /* Process update if requested */
+        if (ret == WH_ERROR_OK && req->input.sz != 0) {
+            ret = wc_CmacUpdate(cmac, inAddr, req->input.sz);
+        }
+
+        /* Process finalize if requested */
+        if (ret == WH_ERROR_OK && req->finalize) {
+            word32 len = (word32)req->output.sz;
+            ret        = wc_CmacFinal(cmac, outAddr, &len);
+            res->outSz = len;
+        }
+    }
+
+cleanup:
+    /* Clean up all DMA addresses */
+    if (inAddr != NULL) {
+        if (wh_Server_DmaProcessClientAddress(
+                server, req->input.addr, &inAddr, req->input.sz,
+                WH_DMA_OPER_CLIENT_READ_POST,
+                (whServerDmaFlags){0}) != WH_ERROR_OK) {
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+            printf("[server] Error cleaning up input DMA address\n");
+#endif
+        }
+    }
+
+    if (outAddr != NULL) {
+        if (wh_Server_DmaProcessClientAddress(
+                server, req->output.addr, &outAddr, req->output.sz,
+                WH_DMA_OPER_CLIENT_WRITE_POST,
+                (whServerDmaFlags){0}) != WH_ERROR_OK) {
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+            printf("[server] Error cleaning up output DMA address\n");
+#endif
+        }
+    }
+
+    if (keyAddr != NULL) {
+        if (wh_Server_DmaProcessClientAddress(
+                server, req->key.addr, &keyAddr, req->key.sz,
+                WH_DMA_OPER_CLIENT_READ_POST,
+                (whServerDmaFlags){0}) != WH_ERROR_OK) {
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+            printf("[server] Error cleaning up key DMA address\n");
+#endif
         }
     }
 
     /* Reset the devId in the local context */
     cmac->devId = clientDevId;
-    
+
     /* Copy CMAC context back into client memory */
     if (ret == WH_ERROR_OK) {
         ret = whServerDma_CopyToClient(server, req->state.addr, cmac,

@@ -113,7 +113,7 @@ static int _handleCmacDma(wc_CryptoInfo* info, void* inCtx, whPacket* packet)
     if (info->cmac.out != NULL) {
         /* Finalize operation */
         req->output.addr = (uintptr_t)info->cmac.out;
-        req->output.sz = (size_t)info->cmac.outSz;
+        req->output.sz = (size_t)*info->cmac.outSz;
         req->finalize = 1;
     }
 
