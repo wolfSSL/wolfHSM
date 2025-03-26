@@ -2405,137 +2405,158 @@ static int _HandleCmacDma(whServerContext* server, whPacket* packet,
             WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
         if (ret == WH_ERROR_ACCESS) {
             res->dmaAddrStatus.badAddr = req->input;
-            goto cleanup;
         }
     }
-    if (req->output.sz != 0) {
+    if (ret == WH_ERROR_OK && req->output.sz != 0) {
         ret = wh_Server_DmaProcessClientAddress(
             server, req->output.addr, &outAddr, req->output.sz,
             WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
         if (ret == WH_ERROR_ACCESS) {
             res->dmaAddrStatus.badAddr = req->output;
-            goto cleanup;
         }
     }
-    if (req->key.sz != 0) {
+    if (ret == WH_ERROR_OK && req->key.sz != 0) {
         ret = wh_Server_DmaProcessClientAddress(
             server, req->key.addr, &keyAddr, req->key.sz,
             WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
         if (ret == WH_ERROR_ACCESS) {
             res->dmaAddrStatus.badAddr = req->key;
-            goto cleanup;
         }
     }
 
-    /* Check for one-shot operation (both input and output are non-NULL) */
-    if (req->input.sz != 0 && req->output.sz != 0) {
+    if (ret == WH_ERROR_OK) {
+        /* Check for one-shot operation (both input and output are non-NULL).
+         * There are three distinct cases we need to handle for one-shots:
+         * 1. Direct one-shot operation with key provided in request
+         * 2. One-shot operation with key referenced by context that needs to be
+         *     loaded from cache
+         * 3. One-shot operation with context already initialized with a key */
+        if (req->input.sz != 0 && req->output.sz != 0) {
 #ifdef DEBUG_CRYPTOCB_VERBOSE
-        printf("[server] CMAC one-shot operation detected\n");
+            printf("[server] CMAC one-shot operation detected\n");
 #endif
 
-        /* One-shot case: Key is provided by client */
-        if (req->key.sz != 0) {
-            outSz = req->output.sz;
-            /* Perform one-shot CMAC operation with provided key */
-            ret        = wc_AesCmacGenerate_ex(cmac, outAddr, &outSz, inAddr,
-                                               req->input.sz, keyAddr, req->key.sz,
-                                               NULL, server->crypto->devId);
-            res->outSz = outSz;
-        }
-        /* One-shot case: Key is referenced by ID in the context */
-        else {
-            /* Check if there's a key ID in the context that needs to be loaded
-             */
-            whNvmId nvmId = WH_DEVCTX_TO_KEYID(cmac->devCtx);
-            if (nvmId != WH_KEYID_ERASED) {
-                /* Get key ID from CMAC context */
-                keyId  = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
-                                       server->comm->client_id, nvmId);
-                keyLen = sizeof(tmpKey);
+            /* Case 1: Direct one-shot operation with key provided in request
+             * This is the simplest case - we have the key directly and can use
+             * it immediately for the CMAC operation */
+            if (req->key.sz != 0) {
+                outSz = req->output.sz;
+                /* Perform one-shot CMAC operation with provided key */
+                ret = wc_AesCmacGenerate_ex(cmac, outAddr, &outSz, inAddr,
+                                            req->input.sz, keyAddr, req->key.sz,
+                                            NULL, server->crypto->devId);
+                res->outSz = outSz;
+            }
+            /* Case 2 & 3: One-shot operation with key referenced by context
+             * We need to check if the context is already initialized or needs
+             * to be initialized with a key from cache */
+            else {
+                /* Check if there's a keyID in the context that we need to load
+                 */
+                whKeyId clientKeyId = WH_DEVCTX_TO_KEYID(cmac->devCtx);
+                if (clientKeyId != WH_KEYID_ERASED) {
+                    /* Case 2: Client-supplied context references a key ID that
+                     * needs to be loaded from cache This happens when the
+                     * client invokes the one-shot generate on a context that
+                     * has been initialized to use a keyId by reference. We need
+                     * to load the key from cache and initialize a new context
+                     * with it */
+                    keyId  = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
+                                           server->comm->client_id, clientKeyId);
+                    keyLen = sizeof(tmpKey);
 
-                /* Load key from cache */
-                ret = hsmReadKey(server, keyId, NULL, tmpKey, &keyLen);
-                if (ret == WH_ERROR_OK) {
-                    /* Verify key size is valid for AES */
-                    if (keyLen != AES_128_KEY_SIZE &&
-                        keyLen != AES_192_KEY_SIZE &&
-                        keyLen != AES_256_KEY_SIZE) {
-                        ret = WH_ERROR_ABORTED;
+                    /* Load key from cache */
+                    ret = hsmReadKey(server, keyId, NULL, tmpKey, &keyLen);
+                    if (ret == WH_ERROR_OK) {
+                        /* Verify key size is valid for AES */
+                        if (keyLen != AES_128_KEY_SIZE &&
+                            keyLen != AES_192_KEY_SIZE &&
+                            keyLen != AES_256_KEY_SIZE) {
+                            ret = WH_ERROR_ABORTED;
+                        }
+                        else {
+                            /* Initialize CMAC with loaded key */
+                            ret = wc_InitCmac_ex(cmac, tmpKey, keyLen,
+                                                 WC_CMAC_AES, NULL, NULL,
+                                                 server->crypto->devId);
+                            if (ret == WH_ERROR_OK) {
+                                /* Perform one-shot CMAC operation */
+                                outSz = req->output.sz;
+                                ret   = wc_AesCmacGenerate_ex(
+                                    cmac, outAddr, &outSz, inAddr,
+                                    req->input.sz, NULL, 0, NULL,
+                                    server->crypto->devId);
+                                res->outSz = outSz;
+                            }
+                        }
                     }
-                    else {
-                        /* Initialize CMAC with loaded key */
-                        ret = wc_InitCmac_ex(cmac, tmpKey, keyLen, WC_CMAC_AES,
-                                             NULL, NULL, server->crypto->devId);
-                        if (ret == WH_ERROR_OK) {
-                            /* Perform one-shot CMAC operation */
-                            outSz = req->output.sz;
-                            ret   = wc_AesCmacGenerate_ex(
-                                cmac, outAddr, &outSz, inAddr, req->input.sz,
-                                NULL, 0, NULL, server->crypto->devId);
-                            res->outSz = outSz;
+                }
+                else {
+                    /* Case 3: Context is already initialized with a key
+                     * This happens when invoking the one-shot generate on a
+                     * context that has been initialized with a previous
+                     * wc_InitCmac_ex call where the key was already loaded into
+                     * the context. We can use the context directly without
+                     * needing to load or initialize anything */
+                    outSz = req->output.sz;
+                    ret   = wc_AesCmacGenerate_ex(cmac, outAddr, &outSz, inAddr,
+                                                  req->input.sz, NULL, 0, NULL,
+                                                  server->crypto->devId);
+                    res->outSz = outSz;
+                }
+            }
+        }
+        /* Otherwise, process the request as an incremental operation */
+        else {
+            /* Incremental: Initialize CMAC with key if provided */
+            if (req->key.sz != 0) {
+                ret = wc_InitCmac_ex(cmac, keyAddr, req->key.sz, req->type,
+                                     NULL, NULL, server->crypto->devId);
+            }
+            /* Check for deferred initialization with cached key */
+            else if (req->input.sz != 0 || req->finalize) {
+                /* Check if there's a key ID in the context that needs to be
+                 * loaded
+                 */
+                whNvmId nvmId = WH_DEVCTX_TO_KEYID(cmac->devCtx);
+                if (nvmId != WH_KEYID_ERASED) {
+                    /* Get key ID from CMAC context */
+                    keyId  = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
+                                           server->comm->client_id, nvmId);
+                    keyLen = sizeof(tmpKey);
+
+                    /* Load key from cache */
+                    ret = hsmReadKey(server, keyId, NULL, tmpKey, &keyLen);
+                    if (ret == WH_ERROR_OK) {
+                        /* Verify key size is valid for AES */
+                        if (keyLen != AES_128_KEY_SIZE &&
+                            keyLen != AES_192_KEY_SIZE &&
+                            keyLen != AES_256_KEY_SIZE) {
+                            ret = WH_ERROR_ABORTED;
+                        }
+                        else {
+                            ret = wc_InitCmac_ex(cmac, tmpKey, keyLen,
+                                                 WC_CMAC_AES, NULL, NULL,
+                                                 server->crypto->devId);
                         }
                     }
                 }
             }
-            else {
-                /* Context is already initialized, just do the one-shot
-                 * operation */
-                outSz = req->output.sz;
-                ret   = wc_AesCmacGenerate_ex(cmac, outAddr, &outSz, inAddr,
-                                              req->input.sz, NULL, 0, NULL,
-                                              server->crypto->devId);
-                res->outSz = outSz;
+
+            /* Process update if requested */
+            if (ret == WH_ERROR_OK && req->input.sz != 0) {
+                ret = wc_CmacUpdate(cmac, inAddr, req->input.sz);
+            }
+
+            /* Process finalize if requested */
+            if (ret == WH_ERROR_OK && req->finalize) {
+                word32 len = (word32)req->output.sz;
+                ret        = wc_CmacFinal(cmac, outAddr, &len);
+                res->outSz = len;
             }
         }
     }
-    else {
-        /* Incremental: Initialize CMAC with key if provided */
-        if (req->key.sz != 0) {
-            ret = wc_InitCmac_ex(cmac, keyAddr, req->key.sz, req->type, NULL,
-                                 NULL, server->crypto->devId);
-        }
-        /* Check for deferred initialization with cached key */
-        else if (req->input.sz != 0 || req->finalize) {
-            /* Check if there's a key ID in the context that needs to be loaded
-             */
-            whNvmId nvmId = WH_DEVCTX_TO_KEYID(cmac->devCtx);
-            if (nvmId != WH_KEYID_ERASED) {
-                /* Get key ID from CMAC context */
-                keyId  = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
-                                       server->comm->client_id, nvmId);
-                keyLen = sizeof(tmpKey);
 
-                /* Load key from cache */
-                ret = hsmReadKey(server, keyId, NULL, tmpKey, &keyLen);
-                if (ret == WH_ERROR_OK) {
-                    /* Verify key size is valid for AES */
-                    if (keyLen != AES_128_KEY_SIZE &&
-                        keyLen != AES_192_KEY_SIZE &&
-                        keyLen != AES_256_KEY_SIZE) {
-                        ret = WH_ERROR_ABORTED;
-                    }
-                    else {
-                        ret = wc_InitCmac_ex(cmac, tmpKey, keyLen, WC_CMAC_AES,
-                                             NULL, NULL, server->crypto->devId);
-                    }
-                }
-            }
-        }
-
-        /* Process update if requested */
-        if (ret == WH_ERROR_OK && req->input.sz != 0) {
-            ret = wc_CmacUpdate(cmac, inAddr, req->input.sz);
-        }
-
-        /* Process finalize if requested */
-        if (ret == WH_ERROR_OK && req->finalize) {
-            word32 len = (word32)req->output.sz;
-            ret        = wc_CmacFinal(cmac, outAddr, &len);
-            res->outSz = len;
-        }
-    }
-
-cleanup:
     /* Clean up all DMA addresses */
     if (inAddr != NULL) {
         if (wh_Server_DmaProcessClientAddress(
