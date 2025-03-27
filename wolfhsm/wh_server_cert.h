@@ -39,10 +39,10 @@ int wh_Server_CertAddTrusted(whServerContext* server, whNvmId id,
                              const uint8_t* cert, uint32_t cert_len);
 
 /* Delete a trusted certificate from NVM storage */
-int wh_Server_CertDeleteTrusted(whServerContext* server, whNvmId id);
+int wh_Server_CertEraseTrusted(whServerContext* server, whNvmId id);
 
 /* Get a trusted certificate from NVM storage */
-int wh_Server_CertGetTrusted(whServerContext* server, whNvmId id, uint8_t* cert,
+int wh_Server_CertReadTrusted(whServerContext* server, whNvmId id, uint8_t* cert,
                              uint32_t* inout_cert_len);
 
 /* Verify a certificate against trusted certificates */

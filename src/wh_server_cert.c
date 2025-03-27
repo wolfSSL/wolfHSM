@@ -152,7 +152,7 @@ int wh_Server_CertAddTrusted(whServerContext* server, whNvmId id,
 }
 
 /* Delete a trusted certificate from NVM storage */
-int wh_Server_CertDeleteTrusted(whServerContext* server, whNvmId id)
+int wh_Server_CertEraseTrusted(whServerContext* server, whNvmId id)
 {
     int     rc;
     whNvmId id_list[1];
@@ -168,7 +168,7 @@ int wh_Server_CertDeleteTrusted(whServerContext* server, whNvmId id)
 }
 
 /* Get a trusted certificate from NVM storage */
-int wh_Server_CertGetTrusted(whServerContext* server, whNvmId id, uint8_t* cert,
+int wh_Server_CertReadTrusted(whServerContext* server, whNvmId id, uint8_t* cert,
                              uint32_t* inout_cert_len)
 {
     int           rc;
@@ -221,7 +221,7 @@ int wh_Server_CertVerify(whServerContext* server, const uint8_t* cert,
     }
 
     /* Get the trusted root certificate */
-    rc = wh_Server_CertGetTrusted(server, trustedRootNvmId, root_cert,
+    rc = wh_Server_CertReadTrusted(server, trustedRootNvmId, root_cert,
                                   &root_cert_len);
     if (rc == WH_ERROR_OK) {
         /* Load the trusted root certificate */
@@ -295,16 +295,16 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
             *out_resp_size = sizeof(resp);
         }; break;
 
-        case WH_MESSAGE_CERT_ACTION_DELETETRUSTED: {
-            whMessageCert_DeleteTrustedRequest req  = {0};
+        case WH_MESSAGE_CERT_ACTION_ERASETRUSTED: {
+            whMessageCert_EraseTrustedRequest req  = {0};
             whMessageCert_SimpleResponse       resp = {0};
 
             /* Convert request struct */
-            wh_MessageCert_TranslateDeleteTrustedRequest(
-                magic, (whMessageCert_DeleteTrustedRequest*)req_packet, &req);
+            wh_MessageCert_TranslateEraseTrustedRequest(
+                magic, (whMessageCert_EraseTrustedRequest*)req_packet, &req);
 
             /* Process the delete trusted action */
-            rc      = wh_Server_CertDeleteTrusted(server, req.id);
+            rc      = wh_Server_CertEraseTrusted(server, req.id);
             resp.rc = rc;
 
             /* Convert the response struct */
@@ -313,28 +313,28 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
             *out_resp_size = sizeof(resp);
         }; break;
 
-        case WH_MESSAGE_CERT_ACTION_GETTRUSTED: {
-            whMessageCert_GetTrustedRequest  req  = {0};
-            whMessageCert_GetTrustedResponse resp = {0};
+        case WH_MESSAGE_CERT_ACTION_READTRUSTED: {
+            whMessageCert_ReadTrustedRequest  req  = {0};
+            whMessageCert_ReadTrustedResponse resp = {0};
             uint8_t*                         cert_data;
             uint32_t                         cert_len;
 
             /* Convert request struct */
-            wh_MessageCert_TranslateGetTrustedRequest(
-                magic, (whMessageCert_GetTrustedRequest*)req_packet, &req);
+            wh_MessageCert_TranslateReadTrustedRequest(
+                magic, (whMessageCert_ReadTrustedRequest*)req_packet, &req);
 
             /* Get pointer to certificate data buffer */
             cert_data = (uint8_t*)resp_packet + sizeof(resp);
             cert_len  = WOLFHSM_CFG_COMM_DATA_LEN - sizeof(resp);
 
             /* Process the get trusted action */
-            rc = wh_Server_CertGetTrusted(server, req.id, cert_data, &cert_len);
+            rc = wh_Server_CertReadTrusted(server, req.id, cert_data, &cert_len);
             resp.rc       = rc;
             resp.cert_len = cert_len;
 
             /* Convert the response struct */
-            wh_MessageCert_TranslateGetTrustedResponse(
-                magic, &resp, (whMessageCert_GetTrustedResponse*)resp_packet);
+            wh_MessageCert_TranslateReadTrustedResponse(
+                magic, &resp, (whMessageCert_ReadTrustedResponse*)resp_packet);
             *out_resp_size = sizeof(resp) + cert_len;
         }; break;
 
@@ -406,8 +406,8 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
             *out_resp_size = sizeof(resp);
         }; break;
 
-        case WH_MESSAGE_CERT_ACTION_GETTRUSTED_DMA32: {
-            whMessageCert_GetTrustedDma32Request req       = {0};
+        case WH_MESSAGE_CERT_ACTION_READTRUSTED_DMA32: {
+            whMessageCert_ReadTrustedDma32Request req       = {0};
             whMessageCert_SimpleResponse         resp      = {0};
             void*                                cert_data = NULL;
             uint32_t                             cert_len;
@@ -418,8 +418,8 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
             }
             if (resp.rc == 0) {
                 /* Convert request struct */
-                wh_MessageCert_TranslateGetTrustedDma32Request(
-                    magic, (whMessageCert_GetTrustedDma32Request*)req_packet,
+                wh_MessageCert_TranslateReadTrustedDma32Request(
+                    magic, (whMessageCert_ReadTrustedDma32Request*)req_packet,
                     &req);
 
                 /* Process client address */
@@ -430,7 +430,7 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
             if (resp.rc == 0) {
                 /* Process the get trusted action */
                 cert_len = req.cert_len;
-                resp.rc  = wh_Server_CertGetTrusted(server, req.id, cert_data,
+                resp.rc  = wh_Server_CertReadTrusted(server, req.id, cert_data,
                                                     &cert_len);
             }
             if (resp.rc == 0) {
@@ -523,8 +523,8 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
             *out_resp_size = sizeof(resp);
         }; break;
 
-        case WH_MESSAGE_CERT_ACTION_GETTRUSTED_DMA64: {
-            whMessageCert_GetTrustedDma64Request req       = {0};
+        case WH_MESSAGE_CERT_ACTION_READTRUSTED_DMA64: {
+            whMessageCert_ReadTrustedDma64Request req       = {0};
             whMessageCert_SimpleResponse         resp      = {0};
             void*                                cert_data = NULL;
             uint32_t                             cert_len;
@@ -535,8 +535,8 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
             }
             if (resp.rc == 0) {
                 /* Convert request struct */
-                wh_MessageCert_TranslateGetTrustedDma64Request(
-                    magic, (whMessageCert_GetTrustedDma64Request*)req_packet,
+                wh_MessageCert_TranslateReadTrustedDma64Request(
+                    magic, (whMessageCert_ReadTrustedDma64Request*)req_packet,
                     &req);
 
                 /* Process client address */
@@ -547,7 +547,7 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
             if (resp.rc == 0) {
                 /* Process the get trusted action */
                 cert_len = req.cert_len;
-                resp.rc  = wh_Server_CertGetTrusted(server, req.id, cert_data,
+                resp.rc  = wh_Server_CertReadTrusted(server, req.id, cert_data,
                                                     &cert_len);
             }
             if (resp.rc == 0) {

@@ -106,8 +106,8 @@ int whTest_CertServerCfg(whServerConfig* serverCfg)
 
     /* remove trusted root certificate for chain A */
     WH_DEBUG_PRINT("Removing trusted root certificates...\n");
-    WH_TEST_RETURN_ON_FAIL(wh_Server_CertDeleteTrusted(server, rootCertA));
-    WH_TEST_RETURN_ON_FAIL(wh_Server_CertDeleteTrusted(server, rootCertB));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_CertEraseTrusted(server, rootCertA));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_CertEraseTrusted(server, rootCertB));
 
     WH_DEBUG_PRINT("Test completed successfully\n");
     return rc;
@@ -194,10 +194,10 @@ int whTest_CertClient(whClientContext* client)
 
     /* Clean up - delete the root certificates */
     WH_DEBUG_PRINT("Deleting root certificates...\n");
-    WH_TEST_RETURN_ON_FAIL(wh_Client_CertDeleteTrusted(client, rootCertA_id, &out_rc));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CertEraseTrusted(client, rootCertA_id, &out_rc));
     WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
 
-    WH_TEST_RETURN_ON_FAIL(wh_Client_CertDeleteTrusted(client, rootCertB_id, &out_rc));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CertEraseTrusted(client, rootCertB_id, &out_rc));
     WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
 
     WH_DEBUG_PRINT("Certificate client test completed successfully\n");
@@ -292,10 +292,10 @@ int whTest_CertClientDma_ClientServerTestInternal(whClientContext* client)
 
     /* Clean up - delete the root certificates */
     WH_DEBUG_PRINT("Deleting root certificates...\n");
-    WH_TEST_RETURN_ON_FAIL(wh_Client_CertDeleteTrusted(client, rootCertA_id, &out_rc));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CertEraseTrusted(client, rootCertA_id, &out_rc));
     WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
 
-    WH_TEST_RETURN_ON_FAIL(wh_Client_CertDeleteTrusted(client, rootCertB_id, &out_rc));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CertEraseTrusted(client, rootCertB_id, &out_rc));
     WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
 
     WH_DEBUG_PRINT("Certificate client DMA test completed successfully\n");

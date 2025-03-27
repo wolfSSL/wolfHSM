@@ -36,14 +36,14 @@
 enum WH_MESSAGE_CERT_ACTION_ENUM {
     WH_MESSAGE_CERT_ACTION_INIT             = 0x1,
     WH_MESSAGE_CERT_ACTION_ADDTRUSTED       = 0x2,
-    WH_MESSAGE_CERT_ACTION_DELETETRUSTED    = 0x3,
-    WH_MESSAGE_CERT_ACTION_GETTRUSTED       = 0x4,
+    WH_MESSAGE_CERT_ACTION_ERASETRUSTED    = 0x3,
+    WH_MESSAGE_CERT_ACTION_READTRUSTED       = 0x4,
     WH_MESSAGE_CERT_ACTION_VERIFY           = 0x5,
     WH_MESSAGE_CERT_ACTION_ADDTRUSTED_DMA32 = 0x12,
-    WH_MESSAGE_CERT_ACTION_GETTRUSTED_DMA32 = 0x14,
+    WH_MESSAGE_CERT_ACTION_READTRUSTED_DMA32 = 0x14,
     WH_MESSAGE_CERT_ACTION_VERIFY_DMA32     = 0x15,
     WH_MESSAGE_CERT_ACTION_ADDTRUSTED_DMA64 = 0x22,
-    WH_MESSAGE_CERT_ACTION_GETTRUSTED_DMA64 = 0x24,
+    WH_MESSAGE_CERT_ACTION_READTRUSTED_DMA64 = 0x24,
     WH_MESSAGE_CERT_ACTION_VERIFY_DMA64     = 0x25,
 };
 
@@ -76,39 +76,39 @@ int wh_MessageCert_TranslateAddTrustedRequest(
 /* AddTrusted Response */
 /* Use SimpleResponse */
 
-/* DeleteTrusted Request */
+/* EraseTrusted Request */
 typedef struct {
     whNvmId id;
     uint8_t WH_PAD[6];
-} whMessageCert_DeleteTrustedRequest;
+} whMessageCert_EraseTrustedRequest;
 
-int wh_MessageCert_TranslateDeleteTrustedRequest(
-    uint16_t magic, const whMessageCert_DeleteTrustedRequest* src,
-    whMessageCert_DeleteTrustedRequest* dest);
+int wh_MessageCert_TranslateEraseTrustedRequest(
+    uint16_t magic, const whMessageCert_EraseTrustedRequest* src,
+    whMessageCert_EraseTrustedRequest* dest);
 
-/* DeleteTrusted Response */
+/* EraseTrusted Response */
 /* Use SimpleResponse */
 
-/* GetTrusted Request */
+/* ReadTrusted Request */
 typedef struct {
     whNvmId id;
     uint8_t WH_PAD[6];
-} whMessageCert_GetTrustedRequest;
+} whMessageCert_ReadTrustedRequest;
 
-int wh_MessageCert_TranslateGetTrustedRequest(
-    uint16_t magic, const whMessageCert_GetTrustedRequest* src,
-    whMessageCert_GetTrustedRequest* dest);
+int wh_MessageCert_TranslateReadTrustedRequest(
+    uint16_t magic, const whMessageCert_ReadTrustedRequest* src,
+    whMessageCert_ReadTrustedRequest* dest);
 
-/* GetTrusted Response */
+/* ReadTrusted Response */
 typedef struct {
     int32_t  rc;
     uint32_t cert_len;
     /* Certificate data follows */
-} whMessageCert_GetTrustedResponse;
+} whMessageCert_ReadTrustedResponse;
 
-int wh_MessageCert_TranslateGetTrustedResponse(
-    uint16_t magic, const whMessageCert_GetTrustedResponse* src,
-    whMessageCert_GetTrustedResponse* dest);
+int wh_MessageCert_TranslateReadTrustedResponse(
+    uint16_t magic, const whMessageCert_ReadTrustedResponse* src,
+    whMessageCert_ReadTrustedResponse* dest);
 
 /* Verify Request */
 typedef struct {
@@ -139,17 +139,17 @@ int wh_MessageCert_TranslateAddTrustedDma32Request(
     uint16_t magic, const whMessageCert_AddTrustedDma32Request* src,
     whMessageCert_AddTrustedDma32Request* dest);
 
-/* GetTrusted DMA32 Request */
+/* ReadTrusted DMA32 Request */
 typedef struct {
     uint32_t cert_addr;
     uint32_t cert_len;
     whNvmId  id;
     uint8_t  WH_PAD[2];
-} whMessageCert_GetTrustedDma32Request;
+} whMessageCert_ReadTrustedDma32Request;
 
-int wh_MessageCert_TranslateGetTrustedDma32Request(
-    uint16_t magic, const whMessageCert_GetTrustedDma32Request* src,
-    whMessageCert_GetTrustedDma32Request* dest);
+int wh_MessageCert_TranslateReadTrustedDma32Request(
+    uint16_t magic, const whMessageCert_ReadTrustedDma32Request* src,
+    whMessageCert_ReadTrustedDma32Request* dest);
 
 /* Verify DMA32 Request */
 typedef struct {
@@ -177,17 +177,17 @@ int wh_MessageCert_TranslateAddTrustedDma64Request(
     uint16_t magic, const whMessageCert_AddTrustedDma64Request* src,
     whMessageCert_AddTrustedDma64Request* dest);
 
-/* GetTrusted DMA64 Request */
+/* ReadTrusted DMA64 Request */
 typedef struct {
     uint64_t cert_addr;
     uint32_t cert_len;
     whNvmId  id;
     uint8_t  WH_PAD[2];
-} whMessageCert_GetTrustedDma64Request;
+} whMessageCert_ReadTrustedDma64Request;
 
-int wh_MessageCert_TranslateGetTrustedDma64Request(
-    uint16_t magic, const whMessageCert_GetTrustedDma64Request* src,
-    whMessageCert_GetTrustedDma64Request* dest);
+int wh_MessageCert_TranslateReadTrustedDma64Request(
+    uint16_t magic, const whMessageCert_ReadTrustedDma64Request* src,
+    whMessageCert_ReadTrustedDma64Request* dest);
 
 /* Verify DMA64 Request */
 typedef struct {
