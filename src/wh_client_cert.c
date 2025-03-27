@@ -105,7 +105,8 @@ int wh_Client_CertAddTrustedRequest(whClientContext* c, whNvmId id,
     uint16_t                        hdr_len = sizeof(req);
     uint8_t*                        payload = buffer + hdr_len;
 
-    if ((c == NULL) || (cert == NULL) || (cert_len == 0)) {
+    if ((c == NULL) || (cert == NULL) || (cert_len == 0) ||
+        (cert_len > (sizeof(buffer) - hdr_len))) {
         return WH_ERROR_BADARGS;
     }
 
@@ -333,7 +334,8 @@ int wh_Client_CertVerifyRequest(whClientContext* c, const uint8_t* cert,
     uint16_t                    hdr_len                           = sizeof(req);
     uint8_t*                    payload = buffer + hdr_len;
 
-    if ((c == NULL) || (cert == NULL) || (cert_len == 0)) {
+    if ((c == NULL) || (cert == NULL) || (cert_len == 0) ||
+        (cert_len > (sizeof(buffer) - hdr_len))) {
         return WH_ERROR_BADARGS;
     }
 
@@ -387,9 +389,7 @@ int wh_Client_CertVerify(whClientContext* c, const uint8_t* cert,
 {
     int rc = 0;
 
-    if ((c == NULL) || (cert == NULL) || (cert_len == 0) ||
-        (cert_len >
-         WOLFHSM_CFG_COMM_DATA_LEN - sizeof(whMessageCert_VerifyRequest))) {
+    if ((c == NULL) || (cert == NULL) || (cert_len == 0)) {
         return WH_ERROR_BADARGS;
     }
 
