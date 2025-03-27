@@ -30,7 +30,7 @@
 int whTest_CertRamSim(void);
 int whTest_CertServerCfg(whServerConfig* serverCfg);
 int whTest_CertClient(whClientContext* client);
-#if defined(WOLFHSM_CFG_TEST_POSIX) && defined(WOLFHSM_CFG_DMA)
+#if defined(WOLFHSM_CFG_DMA)
 int whTest_CertClientDma_ClientServerTestInternal(whClientContext* client);
 #endif
 

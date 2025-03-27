@@ -38,8 +38,6 @@
 #include "wh_test_cert.h"
 #include "wh_test_cert_data.h"
 
-/* wolfSSL test certificates */
-
 
 /* Run certificate configuration tests */
 int whTest_CertServerCfg(whServerConfig* serverCfg)
@@ -207,12 +205,12 @@ int whTest_CertClient(whClientContext* client)
     return rc;
 }
 
-#if defined(WOLFHSM_CFG_TEST_POSIX) && defined(WOLFHSM_CFG_DMA)
+#if defined(WOLFHSM_CFG_DMA)
 /* Run certificate client DMA tests
  *
- * Only suitable for internal use in wolfHSM POSIX test harness, as it requires
+ * Only suitable for internal use in wolfHSM test harness, as it requires
  * the client and server to have direct access to each others process memory
- * with no additional DMA translation */
+ * and assumes the server has the appropriate DMA translation configured */
 int whTest_CertClientDma_ClientServerTestInternal(whClientContext* client)
 {
     int rc = WH_ERROR_OK;
@@ -304,7 +302,7 @@ int whTest_CertClientDma_ClientServerTestInternal(whClientContext* client)
 
     return rc;
 }
-#endif /* WOLFHSM_CFG_TEST_POSIX && WOLFHSM_CFG_DMA */
+#endif /* WOLFHSM_CFG_DMA */
 
 int whTest_CertRamSim(void)
 {
