@@ -38,6 +38,8 @@ enum WH_ERROR_ENUM {
     WH_ERROR_CANCEL         = -403, /* Operation was canceled */
     WH_ERROR_CANCEL_LATE    = -404, /* Cancel was processed too late */
     WH_ERROR_CERT_VERIFY    = -405, /* Certificate verification failed */
+    WH_ERROR_BUFFER_SIZE    = -406, /* Generic buffer size mismatch. Buffer
+                                      * length is not what was expected */
 
     /* NVM-specific status returns */
     WH_ERROR_LOCKED         = -410, /* Unlock and retry if necessary */

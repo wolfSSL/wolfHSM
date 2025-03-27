@@ -288,9 +288,13 @@ int wh_Client_CertReadTrustedResponse(whClientContext* c, uint8_t* cert,
         else {
             if (out_rc != NULL) {
                 *out_rc = resp->rc;
+                /* Ensure we return the actual certificate length */
+                if (resp->rc == WH_ERROR_BUFFER_SIZE) {
+                    *cert_len = resp->cert_len;
+                }
             }
 
-            if (resp->rc == 0) {
+            if (resp->rc == WH_ERROR_OK) {
                 /* Copy certificate data if buffer is large enough */
                 if (*cert_len >= resp->cert_len) {
                     memcpy(cert, payload, resp->cert_len);

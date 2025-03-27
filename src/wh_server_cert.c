@@ -172,7 +172,7 @@ int wh_Server_CertReadTrusted(whServerContext* server, whNvmId id, uint8_t* cert
                              uint32_t* inout_cert_len)
 {
     int           rc;
-    whNvmSize     len;
+    whNvmSize     userLen;
     whNvmMetadata meta;
 
     if ((server == NULL) || (cert == NULL) || (inout_cert_len == NULL) ||
@@ -187,16 +187,17 @@ int wh_Server_CertReadTrusted(whServerContext* server, whNvmId id, uint8_t* cert
         return rc;
     }
 
+    /* Clamp the input length to the actual length of the certificate. This will
+     * be reflected back to the user on length mismatch failure */
+    userLen = *inout_cert_len;
+    *inout_cert_len = meta.len;
+
     /* Check if the provided buffer is large enough */
-    if (meta.len > *inout_cert_len) {
-        return WH_ERROR_BADARGS;
+    if (meta.len > userLen) {
+        return WH_ERROR_BUFFER_SIZE;
     }
 
-    /* Clamp the certificate length to the actual length */
-    len = meta.len;
-    *inout_cert_len = len;
-
-    return wh_Nvm_Read(server->nvm, id, 0, len, cert);
+    return wh_Nvm_Read(server->nvm, id, 0, userLen, cert);
 }
 
 /* Verify a certificate against trusted certificates */
