@@ -169,32 +169,32 @@ int wh_Server_CertDeleteTrusted(whServerContext* server, whNvmId id)
 
 /* Get a trusted certificate from NVM storage */
 int wh_Server_CertGetTrusted(whServerContext* server, whNvmId id, uint8_t* cert,
-                             uint32_t* cert_len)
+                             uint32_t* inout_cert_len)
 {
     int           rc;
     whNvmSize     len;
     whNvmMetadata meta;
 
-    if ((server == NULL) || (cert == NULL) || (cert_len == NULL) ||
-        (*cert_len > WOLFHSM_CFG_MAX_CERT_SIZE)) {
+    if ((server == NULL) || (cert == NULL) || (inout_cert_len == NULL) ||
+        (*inout_cert_len > WOLFHSM_CFG_MAX_CERT_SIZE)) {
         return WH_ERROR_BADARGS;
     }
 
-    
+
     /* Get metadata to check the certificate size */
     rc = wh_Nvm_GetMetadata(server->nvm, id, &meta);
     if (rc != 0) {
         return rc;
     }
-    
+
     /* Check if the provided buffer is large enough */
-    if (meta.len > *cert_len) {
+    if (meta.len > *inout_cert_len) {
         return WH_ERROR_BADARGS;
     }
-    
+
     /* Clamp the certificate length to the actual length */
     len = meta.len;
-    *cert_len = len;
+    *inout_cert_len = len;
 
     return wh_Nvm_Read(server->nvm, id, 0, len, cert);
 }

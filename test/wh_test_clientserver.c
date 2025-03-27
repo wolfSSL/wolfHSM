@@ -38,7 +38,6 @@
 #include "wolfhsm/wh_client.h"
 
 #if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER) && !defined(WOLFHSM_CFG_NO_CRYPTO)
-
 #include "wh_test_cert.h"
 #endif
 
