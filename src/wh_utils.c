@@ -43,9 +43,9 @@ uint16_t wh_Utils_Swap16(uint16_t val)
 uint32_t wh_Utils_Swap32(uint32_t val)
 {
     return  ((val & 0xFF000000ul) >> 24) |
-            ((val & 0xFF0000ul) >> 8) |
-            ((val & 0xFF00ul) >> 8) |
-            ((val & 0xFFul) << 24);
+            ((val & 0x00FF0000ul) >> 8) |
+            ((val & 0x0000FF00ul) << 8) |
+            ((val & 0x000000FFul) << 24);
 }
 
 uint64_t wh_Utils_Swap64(uint64_t val)
