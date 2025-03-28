@@ -2544,13 +2544,14 @@ static int _HandleCmacDma(whServerContext* server, whPacket* packet,
                         }
                         else {
                             ctxHoldsLocalKey = 1;
-                            /* Save CMAC context fields before initialization */
+
+                            /* Save CMAC state so we can resume operation after
+                             * initialization with key, as reinit will clear the
+                             * state */
                             byte   savedBuffer[AES_BLOCK_SIZE];
                             byte   savedDigest[AES_BLOCK_SIZE];
                             word32 savedBufferSz = cmac->bufferSz;
                             word32 savedTotalSz  = cmac->totalSz;
-
-                            /* Copy buffer and digest contents */
                             memcpy(savedBuffer, cmac->buffer, AES_BLOCK_SIZE);
                             memcpy(savedDigest, cmac->digest, AES_BLOCK_SIZE);
 
@@ -2558,8 +2559,7 @@ static int _HandleCmacDma(whServerContext* server, whPacket* packet,
                                                  WC_CMAC_AES, NULL, NULL,
                                                  server->crypto->devId);
 
-                            /* Restore CMAC context fields after initialization
-                             */
+                            /* Restore CMAC state */
                             memcpy(cmac->buffer, savedBuffer, AES_BLOCK_SIZE);
                             memcpy(cmac->digest, savedDigest, AES_BLOCK_SIZE);
                             cmac->bufferSz = savedBufferSz;
