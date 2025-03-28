@@ -1456,7 +1456,7 @@ static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
         }
     }
     if (ret == 0) {
-        printf("CMAC SUCCESS\n");
+        printf("CMAC DEVID=0x%X SUCCESS\n", devId);
     }
     return ret;
 }
@@ -2210,6 +2210,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
 #endif /* !NO_AES */
 
 #if defined(WOLFSSL_CMAC) && !defined(NO_AES) && defined(WOLFSSL_AES_DIRECT)
+    i = 0;
     while ((ret == WH_ERROR_OK) && (i < WH_NUM_DEVIDS)) {
         ret = whTestCrypto_Cmac(client, WH_DEV_IDS_ARRAY[i], rng);
         if (ret == WH_ERROR_OK) {
