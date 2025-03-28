@@ -761,7 +761,6 @@ static int _HandleEccSign(whServerContext* ctx, whPacket* packet,
     }
     return ret;
 }
-
 static int _HandleEccVerify(whServerContext* ctx, whPacket* packet,
         uint16_t *out_size)
 {
@@ -2364,6 +2363,11 @@ static int _HandleCmacDma(whServerContext* server, whPacket* packet,
     whKeyId  keyId;
     byte     tmpKey[AES_256_KEY_SIZE];
     uint32_t keyLen;
+    /* Flag indicating if the CMAC context holds a local key that should not be
+     * returned to the client   */
+    int ctxHoldsLocalKey = 0;
+    /* Flag indicating if the CMAC operation has been finalized */
+    int cmacFinalized = 0;
 
     /* DMA translated addresses */
     void*  inAddr  = NULL;
@@ -2445,7 +2449,8 @@ static int _HandleCmacDma(whServerContext* server, whPacket* packet,
                 ret = wc_AesCmacGenerate_ex(cmac, outAddr, &outSz, inAddr,
                                             req->input.sz, keyAddr, req->key.sz,
                                             NULL, server->crypto->devId);
-                res->outSz = outSz;
+                cmacFinalized = 1;
+                res->outSz    = outSz;
             }
             /* Case 2 & 3: One-shot operation with key referenced by context
              * We need to check if the context is already initialized or needs
@@ -2476,6 +2481,7 @@ static int _HandleCmacDma(whServerContext* server, whPacket* packet,
                         }
                         else {
                             /* Initialize CMAC with loaded key */
+                            ctxHoldsLocalKey = 1;
                             ret = wc_InitCmac_ex(cmac, tmpKey, keyLen,
                                                  WC_CMAC_AES, NULL, NULL,
                                                  server->crypto->devId);
@@ -2486,7 +2492,8 @@ static int _HandleCmacDma(whServerContext* server, whPacket* packet,
                                     cmac, outAddr, &outSz, inAddr,
                                     req->input.sz, NULL, 0, NULL,
                                     server->crypto->devId);
-                                res->outSz = outSz;
+                                res->outSz    = outSz;
+                                cmacFinalized = 1;
                             }
                         }
                     }
@@ -2502,7 +2509,8 @@ static int _HandleCmacDma(whServerContext* server, whPacket* packet,
                     ret   = wc_AesCmacGenerate_ex(cmac, outAddr, &outSz, inAddr,
                                                   req->input.sz, NULL, 0, NULL,
                                                   server->crypto->devId);
-                    res->outSz = outSz;
+                    res->outSz    = outSz;
+                    cmacFinalized = 1;
                 }
             }
         }
@@ -2535,9 +2543,28 @@ static int _HandleCmacDma(whServerContext* server, whPacket* packet,
                             ret = WH_ERROR_ABORTED;
                         }
                         else {
+                            ctxHoldsLocalKey = 1;
+                            /* Save CMAC context fields before initialization */
+                            byte   savedBuffer[AES_BLOCK_SIZE];
+                            byte   savedDigest[AES_BLOCK_SIZE];
+                            word32 savedBufferSz = cmac->bufferSz;
+                            word32 savedTotalSz  = cmac->totalSz;
+
+                            /* Copy buffer and digest contents */
+                            memcpy(savedBuffer, cmac->buffer, AES_BLOCK_SIZE);
+                            memcpy(savedDigest, cmac->digest, AES_BLOCK_SIZE);
+
                             ret = wc_InitCmac_ex(cmac, tmpKey, keyLen,
                                                  WC_CMAC_AES, NULL, NULL,
                                                  server->crypto->devId);
+
+                            /* Restore CMAC context fields after initialization
+                             */
+                            memcpy(cmac->buffer, savedBuffer, AES_BLOCK_SIZE);
+                            memcpy(cmac->digest, savedDigest, AES_BLOCK_SIZE);
+                            cmac->bufferSz = savedBufferSz;
+                            cmac->totalSz  = savedTotalSz;
+                            cmac->devCtx   = (void*)(uintptr_t)nvmId;
                         }
                     }
                 }
@@ -2550,9 +2577,10 @@ static int _HandleCmacDma(whServerContext* server, whPacket* packet,
 
             /* Process finalize if requested */
             if (ret == WH_ERROR_OK && req->finalize) {
-                word32 len = (word32)req->output.sz;
-                ret        = wc_CmacFinal(cmac, outAddr, &len);
-                res->outSz = len;
+                word32 len    = (word32)req->output.sz;
+                ret           = wc_CmacFinal(cmac, outAddr, &len);
+                cmacFinalized = 1;
+                res->outSz    = len;
             }
         }
     }
@@ -2594,8 +2622,14 @@ static int _HandleCmacDma(whServerContext* server, whPacket* packet,
     /* Reset the devId in the local context */
     cmac->devId = clientDevId;
 
+    /* If we are using HSM-local keys, sanitize the key material from the CMAC
+     * state before returning it to the client */
+    if (ctxHoldsLocalKey) {
+        wc_AesFree(&cmac->aes);
+    }
+
     /* Copy CMAC context back into client memory */
-    if (ret == WH_ERROR_OK) {
+    if (ret == WH_ERROR_OK && !cmacFinalized) {
         ret = whServerDma_CopyToClient(server, req->state.addr, cmac,
                                        req->state.sz, (whServerDmaFlags){0});
         if (ret != WH_ERROR_OK) {

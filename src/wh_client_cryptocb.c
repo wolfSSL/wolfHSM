@@ -93,6 +93,10 @@ static int _handleCmacDma(wc_CryptoInfo* info, void* inCtx, whPacket* packet)
     XMEMSET(req, 0, sizeof(*req));
     req->type = info->cmac.type;
 
+    /* Store devId and devCtx to restore after request */
+    int   devId  = cmac->devId;
+    void* devCtx = cmac->devCtx;
+
     /* Set up DMA state buffer in client address space */
     req->state.addr = (uintptr_t)cmac;
     req->state.sz = sizeof(*cmac);
@@ -143,6 +147,10 @@ static int _handleCmacDma(wc_CryptoInfo* info, void* inCtx, whPacket* packet)
             *info->cmac.outSz = res->outSz;
         }
     }
+
+    /* Restore devId and devCtx after DMA operation */
+    cmac->devId  = devId;
+    cmac->devCtx = devCtx;
 
     return ret;
 }
