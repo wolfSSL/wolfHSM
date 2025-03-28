@@ -137,6 +137,8 @@ wh_Packet_pq_mldsa_sign_Dma32_req   pqMldsaSignDma32Req;
 wh_Packet_pq_mldsa_sign_Dma32_res   pqMldsaSignDma32Res;
 wh_Packet_pq_mldsa_verify_Dma32_req pqMldsaVerifyDma32Req;
 wh_Packet_pq_mldsa_verify_Dma32_res pqMldsaVerifyDma32Res;
+wh_Packet_cmac_Dma32_req            cmacDma32Req;
+wh_Packet_cmac_Dma32_res            cmacDma32Res;
 #elif defined(WOLFHSM_CFG_DMA) && WH_DMA_IS_64BIT
 wh_Packet_hash_sha256_Dma64_req     hashSha256Dma64Req;
 wh_Packet_hash_sha256_Dma64_res     hashSha256Dma64Res;
@@ -146,6 +148,8 @@ wh_Packet_pq_mldsa_sign_Dma64_req   pqMldsaSignDma64Req;
 wh_Packet_pq_mldsa_sign_Dma64_res   pqMldsaSignDma64Res;
 wh_Packet_pq_mldsa_verify_Dma64_req pqMldsaVerifyDma64Req;
 wh_Packet_pq_mldsa_verify_Dma64_res pqMldsaVerifyDma64Res;
+wh_Packet_cmac_Dma64_req            cmacDma64Req;
+wh_Packet_cmac_Dma64_res            cmacDma64Res;
 #endif
 
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */

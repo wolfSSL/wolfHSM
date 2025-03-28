@@ -442,8 +442,8 @@ int wh_Client_CmacAesVerify(Cmac* cmac, const byte* check, word32 checkSz,
  *
  * This function handles a CMAC operation response from the server when
  * cancellation has been enabled, since wolfCrypt won't automatically block and
- * wait for the response. Note that DMA-based CMAC operations are NOT cancellable
- * and if a cancel is requested, the operation will be aborted.
+ * wait for the response. Note that DMA-based CMAC operations are NOT
+ * cancellable and if a cancel is requested, the cancellation will be aborted.
  *
  * @param[in] c Pointer to the client context structure.
  * @param[in] cmac Pointer to the CMAC key structure.

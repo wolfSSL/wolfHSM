@@ -362,7 +362,6 @@ typedef struct wh_Packet_cmac_Dma32_req {
     wh_Packet_Dma32_buffer key;    /* Key buffer */
     wh_Packet_Dma32_buffer input;  /* Input buffer */
     wh_Packet_Dma32_buffer output; /* Output buffer */
-    uint8_t WH_PAD[4]; /* Pad to 8-byte alignment */
 } wh_Packet_cmac_Dma32_req;
 
 typedef struct wh_Packet_cmac_Dma32_res {
