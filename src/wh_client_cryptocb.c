@@ -1110,7 +1110,3 @@ int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
 
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
-#ifdef WOLFSSL_CMAC
-#ifdef WOLFHSM_CFG_DMA
-#endif /* WOLFHSM_CFG_DMA */
-#endif /* WOLFSSL_CMAC */
