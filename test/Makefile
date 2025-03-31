@@ -53,6 +53,11 @@ CFLAGS += $(DBGFLAGS)
 LDFLAGS += $(DBGFLAGS)
 endif
 
+ifeq ($(DEBUG_WOLFSSL),1)
+CFLAGS += -DDEBUG_WOLFSSL
+SRC_C += $(WOLFSSL_DIR)/wolfcrypt/src/logging.c
+endif
+
 ifeq ($(DEBUG_CRYPTOCB),1)
 CFLAGS += -DDEBUG_CRYPTOCB
 endif
@@ -101,6 +106,12 @@ SRC_C += \
             $(WOLFSSL_DIR)/wolfcrypt/src/cmac.c \
 			$(WOLFSSL_DIR)/wolfcrypt/src/dilithium.c \
 			$(WOLFSSL_DIR)/wolfcrypt/src/sha3.c
+
+# wolfSSL source files
+SRC_C += \
+            $(WOLFSSL_DIR)/src/ssl_certman.c \
+            $(WOLFSSL_DIR)/src/ssl.c \
+            $(WOLFSSL_DIR)/src/internal.c
 endif
 
 ifeq ($(TESTWOLFCRYPT),1)
@@ -135,6 +146,7 @@ SRC_C += \
             $(WOLFHSM_DIR)/src/wh_client_nvm.c \
             $(WOLFHSM_DIR)/src/wh_client_crypto.c \
             $(WOLFHSM_DIR)/src/wh_client_cryptocb.c \
+            $(WOLFHSM_DIR)/src/wh_client_cert.c \
             $(WOLFHSM_DIR)/src/wh_server.c \
             $(WOLFHSM_DIR)/src/wh_server_customcb.c \
             $(WOLFHSM_DIR)/src/wh_server_dma.c \
@@ -142,11 +154,13 @@ SRC_C += \
             $(WOLFHSM_DIR)/src/wh_server_crypto.c \
             $(WOLFHSM_DIR)/src/wh_server_keystore.c \
             $(WOLFHSM_DIR)/src/wh_server_counter.c \
+            $(WOLFHSM_DIR)/src/wh_server_cert.c \
             $(WOLFHSM_DIR)/src/wh_nvm.c \
             $(WOLFHSM_DIR)/src/wh_comm.c \
             $(WOLFHSM_DIR)/src/wh_message_comm.c \
             $(WOLFHSM_DIR)/src/wh_message_customcb.c \
             $(WOLFHSM_DIR)/src/wh_message_nvm.c \
+            $(WOLFHSM_DIR)/src/wh_message_cert.c \
             $(WOLFHSM_DIR)/src/wh_transport_mem.c \
             $(WOLFHSM_DIR)/src/wh_flash_ramsim.c
 
@@ -178,7 +192,8 @@ SRC_C += \
             ./src/wh_test_nvm_flash.c \
             ./src/wh_test_clientserver.c \
             ./src/wh_test_flash_ramsim.c \
-            ./src/wh_test_check_struct_padding.c
+            ./src/wh_test_check_struct_padding.c \
+            ./src/wh_test_cert.c
 
 ifeq ($(TESTWOLFCRYPT),1)
 SRC_C += ./src/wh_test_wolfcrypt_test.c

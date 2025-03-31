@@ -4,4 +4,5 @@ Build/
 *.a
 *.la
 **/.gdb_history
+tools/testcertgen/ca/
 

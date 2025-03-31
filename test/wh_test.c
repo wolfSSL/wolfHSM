@@ -24,6 +24,8 @@
 #include <assert.h>
 #include <string.h>
 
+#include "wolfhsm/wh_settings.h"
+
 #include "wh_test_common.h"
 
 /* Individual unit test drivers */
@@ -33,6 +35,10 @@
 #include "wh_test_crypto.h"
 #include "wh_test_she.h"
 #include "wh_test_clientserver.h"
+
+#if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER)
+#include "wh_test_cert.h"
+#endif
 
 #if defined(WOLFHSM_CFG_TEST_WOLFCRYPTTEST)
 #include "wh_test_wolfcrypt_test.h"
@@ -49,6 +55,10 @@ int whTest_Unit(void)
     /* Component Tests */
     WH_TEST_ASSERT(0 == whTest_Flash_RamSim());
     WH_TEST_ASSERT(0 == whTest_NvmFlash());
+#if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER) && !defined(WOLFHSM_CFG_NO_CRYPTO)
+    WH_TEST_ASSERT(0 == whTest_CertRamSim());
+#endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER && !WOLFHSM_CFG_NO_CRYPTO */
+
 
     /* Comm tests */
     WH_TEST_ASSERT(0 == whTest_Comm());

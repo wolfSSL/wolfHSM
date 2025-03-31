@@ -20,6 +20,8 @@
 #include <string.h>
 #include <stddef.h>
 
+#include "wolfhsm/wh_settings.h"
+
 /* core test includes */
 #include "wh_test_common.h"
 

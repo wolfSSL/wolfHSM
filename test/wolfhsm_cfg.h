@@ -40,7 +40,7 @@
 #define WOLFHSM_CFG_SERVER_DMAADDR_COUNT 8
 #define WOLFHSM_CFG_SERVER_CUSTOMCB_COUNT 6
 
-/* Test specific configuration */
 #define WOLFHSM_CFG_DMA
+#define WOLFHSM_CFG_CERTIFICATE_MANAGER
 
 #endif /* WOLFHSM_CFG_H_ */

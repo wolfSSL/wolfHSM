@@ -25,6 +25,8 @@
 #include <stdio.h>  /* For printf */
 #include <string.h> /* For memset, memcpy */
 
+#include "wolfhsm/wh_settings.h"
+
 #ifndef WOLFHSM_CFG_NO_CRYPTO
 
 #include "wolfssl/wolfcrypt/settings.h"

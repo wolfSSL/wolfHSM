@@ -37,6 +37,9 @@ enum WH_ERROR_ENUM {
     WH_ERROR_ABORTED        = -402, /* Function has fatally failed. Cleanup. */
     WH_ERROR_CANCEL         = -403, /* Operation was canceled */
     WH_ERROR_CANCEL_LATE    = -404, /* Cancel was processed too late */
+    WH_ERROR_CERT_VERIFY    = -405, /* Certificate verification failed */
+    WH_ERROR_BUFFER_SIZE    = -406, /* Generic buffer size mismatch. Buffer
+                                      * length is not what was expected */
 
     /* NVM-specific status returns */
     WH_ERROR_LOCKED         = -410, /* Unlock and retry if necessary */
@@ -49,6 +52,7 @@ enum WH_ERROR_ENUM {
     /* Custom-callback status returns */
     WH_ERROR_NOHANDLER     = -420, /* No handler registered for action */
 
+    /* SHE-specific error codes */
     WH_SHE_ERC_SEQUENCE_ERROR = -500,
     WH_SHE_ERC_KEY_NOT_AVAILABLE = -501,
     WH_SHE_ERC_KEY_INVALID = -502,

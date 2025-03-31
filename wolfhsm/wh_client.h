@@ -1995,4 +1995,718 @@ int wh_Client_CustomCbCheckRegisteredResponse(whClientContext* c,
 int wh_Client_CustomCbCheckRegistered(whClientContext* c, uint16_t id,
                                       int* responseError);
 
+/* Certificate functions */
+
+/**
+ * @brief Sends a request to initialize the certificate manager on the server.
+ *
+ * This function prepares and sends a request to initialize the certificate
+ * manager on the server. This function does not block; it returns immediately
+ * after sending the request.
+ *
+ * @param[in] c Pointer to the client context.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertInitRequest(whClientContext* c);
+
+/**
+ * @brief Receives a response from the server after initializing the certificate
+ * manager.
+ *
+ * This function attempts to process a response message from the server after
+ * initializing the certificate manager. It validates the response and extracts
+ * the return code. This function does not block; it returns WH_ERROR_NOTREADY
+ * if a response has not been received.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[out] out_rc Pointer to store the response code from the server.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertInitResponse(whClientContext* c, int32_t* out_rc);
+
+/**
+ * @brief Sends a request and receives a response to initialize the certificate
+ * manager.
+ *
+ * This function handles the complete process of sending a request to initialize
+ * the certificate manager and receiving the response. It blocks until the
+ * entire operation is complete or an error occurs.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[out] out_rc Pointer to store the response code from the server.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertInit(whClientContext* c, int32_t* out_rc);
+
+/**
+ * @brief Sends a request to add a trusted certificate to NVM storage.
+ *
+ * This function prepares and sends a request to add a trusted certificate to
+ * NVM storage. This function does not block; it returns immediately after
+ * sending the request.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] id The NVM ID to store the certificate.
+ * @param[in] cert Pointer to the certificate data.
+ * @param[in] cert_len Length of the certificate data.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertAddTrustedRequest(whClientContext* c, whNvmId id,
+                                    const uint8_t* cert, uint32_t cert_len);
+
+/**
+ * @brief Receives a response from the server after adding a trusted
+ * certificate.
+ *
+ * This function attempts to process a response message from the server after
+ * adding a trusted certificate. It validates the response and extracts the
+ * return code. This function does not block; it returns WH_ERROR_NOTREADY
+ * if a response has not been received.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[out] out_rc Pointer to store the response code from the server.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertAddTrustedResponse(whClientContext* c, int32_t* out_rc);
+
+/**
+ * @brief Sends a request and receives a response to add a trusted certificate.
+ *
+ * This function handles the complete process of sending a request to add a
+ * trusted certificate and receiving the response. It blocks until the entire
+ * operation is complete or an error occurs.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] id The NVM ID to store the certificate.
+ * @param[in] cert Pointer to the certificate data.
+ * @param[in] cert_len Length of the certificate data.
+ * @param[out] out_rc Pointer to store the response code from the server.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertAddTrusted(whClientContext* c, whNvmId id,
+                             const uint8_t* cert, uint32_t cert_len,
+                             int32_t* out_rc);
+
+/**
+ * @brief Sends a request to erase a trusted certificate from NVM storage.
+ *
+ * This function prepares and sends a request to erase a trusted certificate
+ * from NVM storage. This function does not block; it returns immediately after
+ * sending the request.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] id The NVM ID of the certificate to delete.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertEraseTrustedRequest(whClientContext* c, whNvmId id);
+
+/**
+ * @brief Receives a response from the server after erasing a trusted
+ * certificate.
+ *
+ * This function attempts to process a response message from the server after
+ * erasing a trusted certificate. It validates the response and extracts the
+ * return code. This function does not block; it returns WH_ERROR_NOTREADY
+ * if a response has not been received.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[out] out_rc Pointer to store the response code from the server.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertEraseTrustedResponse(whClientContext* c, int32_t* out_rc);
+
+/**
+ * @brief Sends a request and receives a response to erase a trusted
+ * certificate.
+ *
+ * This function handles the complete process of sending a request to erase a
+ * trusted certificate and receiving the response. It blocks until the entire
+ * operation is complete or an error occurs.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] id The NVM ID of the certificate to delete.
+ * @param[out] out_rc Pointer to store the response code from the server.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertEraseTrusted(whClientContext* c, whNvmId id, int32_t* out_rc);
+
+/**
+ * @brief Sends a request to read a trusted certificate from NVM storage.
+ *
+ * This function prepares and sends a request to read a trusted certificate
+ * from NVM storage. This function does not block; it returns immediately after
+ * sending the request.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] id The NVM ID of the certificate to retrieve.
+ * @param[in] cert_len Maximum length of the certificate buffer.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertReadTrustedRequest(whClientContext* c, whNvmId id,
+                                     uint32_t cert_len);
+
+/**
+ * @brief Receives a response from the server after getting a trusted
+ * certificate.
+ *
+ * This function attempts to process a response message from the server after
+ * getting a trusted certificate. It validates the response, extracts the
+ * certificate data, and updates the certificate length. This function does not
+ * block; it returns WH_ERROR_NOTREADY if a response has not been received.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[out] cert Pointer to store the certificate data.
+ * @param[in,out] cert_len Pointer to the maximum length of the certificate
+ * buffer. On output, contains the actual length of the certificate.
+ * @param[out] out_rc Pointer to store the response code from the server.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertReadTrustedResponse(whClientContext* c, uint8_t* cert,
+                                      uint32_t* cert_len, int32_t* out_rc);
+
+/**
+ * @brief Sends a request and receives a response to read a trusted certificate.
+ *
+ * This function handles the complete process of sending a request to read a
+ * trusted certificate and receiving the response. It blocks until the entire
+ * operation is complete or an error occurs.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] id The NVM ID of the certificate to retrieve.
+ * @param[out] cert Pointer to store the certificate data.
+ * @param[in,out] cert_len Pointer to the maximum length of the certificate
+ * buffer. On output, contains the actual length of the certificate.
+ * @param[out] out_rc Pointer to store the response code from the server.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertReadTrusted(whClientContext* c, whNvmId id, uint8_t* cert,
+                              uint32_t* cert_len, int32_t* out_rc);
+
+/**
+ * @brief Sends a request to verify a certificate against trusted certificates.
+ *
+ * This function prepares and sends a request to verify a certificate against
+ * trusted certificates. This function does not block; it returns immediately
+ * after sending the request.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] cert Pointer to the certificate data to verify.
+ * @param[in] cert_len Length of the certificate data.
+ * @param[in] trustedRootNvmId NVM ID of the trusted root certificate to verify
+ * against.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertVerifyRequest(whClientContext* c, const uint8_t* cert,
+                                uint32_t cert_len, whNvmId trustedRootNvmId);
+
+/**
+ * @brief Receives a response from the server after verifying a certificate.
+ *
+ * This function attempts to process a response message from the server after
+ * verifying a certificate. It validates the response and extracts the
+ * return code. This function does not block; it returns WH_ERROR_NOTREADY
+ * if a response has not been received.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[out] out_rc Pointer to store the response code from the server.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertVerifyResponse(whClientContext* c, int32_t* out_rc);
+
+/**
+ * @brief Sends a request and receives a response to verify a certificate.
+ *
+ * This function handles the complete process of sending a request to verify a
+ * certificate and receiving the response. It blocks until the entire operation
+ * is complete or an error occurs.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] cert Pointer to the certificate data to verify.
+ * @param[in] cert_len Length of the certificate data.
+ * @param[in] trustedRootNvmId NVM ID of the trusted root certificate to verify
+ * against.
+ * @param[out] out_rc Pointer to store the response code from the server.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertVerify(whClientContext* c, const uint8_t* cert,
+                         uint32_t cert_len, whNvmId trustedRootNvmId,
+                         int32_t* out_rc);
+
+#ifdef WOLFHSM_CFG_DMA
+#if WH_DMA_IS_32BIT
+/**
+ * @brief Sends a request to add a trusted certificate using DMA (32-bit).
+ *
+ * This function prepares and sends a request to add a trusted certificate using
+ * DMA with 32-bit addressing. This function does not block; it returns
+ * immediately after sending the request.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] id The NVM ID to store the certificate.
+ * @param[in] cert_addr 32-bit DMA address of the certificate data.
+ * @param[in] cert_len Length of the certificate data.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertAddTrustedDma32Request(whClientContext* c, whNvmId id,
+                                         uint32_t cert_addr, uint32_t cert_len);
+
+/**
+ * @brief Receives a response from the server after adding a trusted certificate
+ * using DMA (32-bit).
+ *
+ * This function attempts to process a response message from the server after
+ * adding a trusted certificate using DMA. It validates the response and
+ * extracts the return code. This function does not block; it returns
+ * WH_ERROR_NOTREADY if a response has not been received.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[out] out_rc Pointer to store the response code from the server.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertAddTrustedDma32Response(whClientContext* c, int32_t* out_rc);
+
+/**
+ * @brief Sends a request and receives a response to add a trusted certificate
+ * using DMA (32-bit).
+ *
+ * This function handles the complete process of sending a request to add a
+ * trusted certificate using DMA and receiving the response. It blocks until the
+ * entire operation is complete or an error occurs.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] id The NVM ID to store the certificate.
+ * @param[in] cert_addr 32-bit DMA address of the certificate data.
+ * @param[in] cert_len Length of the certificate data.
+ * @param[out] out_rc Pointer to store the response code from the server.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertAddTrustedDma32(whClientContext* c, whNvmId id,
+                                  uint32_t cert_addr, uint32_t cert_len,
+                                  int32_t* out_rc);
+
+/**
+ * @brief Sends a request to read a trusted certificate using DMA (32-bit).
+ *
+ * This function prepares and sends a request to read a trusted certificate
+ * using DMA with 32-bit addressing. This function does not block; it returns
+ * immediately after sending the request.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] id The NVM ID of the certificate to retrieve.
+ * @param[in] cert_addr 32-bit DMA address to store the certificate data.
+ * @param[in] cert_len Maximum length of the certificate buffer.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertReadTrustedDma32Request(whClientContext* c, whNvmId id,
+                                          uint32_t cert_addr,
+                                          uint32_t cert_len);
+
+/**
+ * @brief Receives a response from the server after getting a trusted
+ * certificate using DMA (32-bit).
+ *
+ * This function attempts to process a response message from the server after
+ * getting a trusted certificate using DMA. It validates the response and
+ * extracts the return code. This function does not block; it returns
+ * WH_ERROR_NOTREADY if a response has not been received.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[out] out_rc Pointer to store the response code from the server.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertReadTrustedDma32Response(whClientContext* c, int32_t* out_rc);
+
+/**
+ * @brief Sends a request and receives a response to read a trusted certificate
+ * using DMA (32-bit).
+ *
+ * This function handles the complete process of sending a request to read a
+ * trusted certificate using DMA and receiving the response. It blocks until the
+ * entire operation is complete or an error occurs.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] id The NVM ID of the certificate to retrieve.
+ * @param[in] cert_addr 32-bit DMA address to store the certificate data.
+ * @param[in] cert_len Maximum length of the certificate buffer.
+ * @param[out] out_rc Pointer to store the response code from the server.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertReadTrustedDma32(whClientContext* c, whNvmId id,
+                                   uint32_t cert_addr, uint32_t cert_len,
+                                   int32_t* out_rc);
+
+/**
+ * @brief Sends a request to verify a certificate using DMA (32-bit).
+ *
+ * This function prepares and sends a request to verify a certificate using
+ * DMA with 32-bit addressing. This function does not block; it returns
+ * immediately after sending the request.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] cert_addr 32-bit DMA address of the certificate data to verify.
+ * @param[in] cert_len Length of the certificate data.
+ * @param[in] trustedRootNvmId NVM ID of the trusted root certificate to verify
+ * against.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertVerifyDma32Request(whClientContext* c, uint32_t cert_addr,
+                                     uint32_t cert_len,
+                                     whNvmId  trustedRootNvmId);
+
+/**
+ * @brief Receives a response from the server after verifying a certificate
+ * using DMA (32-bit).
+ *
+ * This function attempts to process a response message from the server after
+ * verifying a certificate using DMA. It validates the response and extracts
+ * the return code. This function does not block; it returns WH_ERROR_NOTREADY
+ * if a response has not been received.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[out] out_rc Pointer to store the response code from the server.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertVerifyDma32Response(whClientContext* c, int32_t* out_rc);
+
+/**
+ * @brief Sends a request and receives a response to verify a certificate using
+ * DMA (32-bit).
+ *
+ * This function handles the complete process of sending a request to verify a
+ * certificate using DMA and receiving the response. It blocks until the entire
+ * operation is complete or an error occurs.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] cert_addr 32-bit DMA address of the certificate data to verify.
+ * @param[in] cert_len Length of the certificate data.
+ * @param[in] trustedRootNvmId NVM ID of the trusted root certificate to verify
+ * against.
+ * @param[out] out_rc Pointer to store the response code from the server.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertVerifyDma32(whClientContext* c, uint32_t cert_addr,
+                              uint32_t cert_len, whNvmId trustedRootNvmId,
+                              int32_t* out_rc);
+#endif /* WH_DMA_IS_32BIT */
+
+#if WH_DMA_IS_64BIT
+/**
+ * @brief Sends a request to add a trusted certificate using DMA (64-bit).
+ *
+ * This function prepares and sends a request to add a trusted certificate using
+ * DMA with 64-bit addressing. This function does not block; it returns
+ * immediately after sending the request.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] id The NVM ID to store the certificate.
+ * @param[in] cert_addr 64-bit DMA address of the certificate data.
+ * @param[in] cert_len Length of the certificate data.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertAddTrustedDma64Request(whClientContext* c, whNvmId id,
+                                         uint64_t cert_addr, uint32_t cert_len);
+
+/**
+ * @brief Receives a response from the server after adding a trusted certificate
+ * using DMA (64-bit).
+ *
+ * This function attempts to process a response message from the server after
+ * adding a trusted certificate using DMA. It validates the response and
+ * extracts the return code. This function does not block; it returns
+ * WH_ERROR_NOTREADY if a response has not been received.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[out] out_rc Pointer to store the response code from the server.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertAddTrustedDma64Response(whClientContext* c, int32_t* out_rc);
+
+/**
+ * @brief Sends a request and receives a response to add a trusted certificate
+ * using DMA (64-bit).
+ *
+ * This function handles the complete process of sending a request to add a
+ * trusted certificate using DMA and receiving the response. It blocks until the
+ * entire operation is complete or an error occurs.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] id The NVM ID to store the certificate.
+ * @param[in] cert_addr 64-bit DMA address of the certificate data.
+ * @param[in] cert_len Length of the certificate data.
+ * @param[out] out_rc Pointer to store the response code from the server.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertAddTrustedDma64(whClientContext* c, whNvmId id,
+                                  uint64_t cert_addr, uint32_t cert_len,
+                                  int32_t* out_rc);
+
+/**
+ * @brief Sends a request to read a trusted certificate using DMA (64-bit).
+ *
+ * This function prepares and sends a request to read a trusted certificate
+ * using DMA with 64-bit addressing. This function does not block; it returns
+ * immediately after sending the request.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] id The NVM ID of the certificate to retrieve.
+ * @param[in] cert_addr 64-bit DMA address to store the certificate data.
+ * @param[in] cert_len Maximum length of the certificate buffer.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertReadTrustedDma64Request(whClientContext* c, whNvmId id,
+                                          uint64_t cert_addr,
+                                          uint32_t cert_len);
+
+/**
+ * @brief Receives a response from the server after getting a trusted
+ * certificate using DMA (64-bit).
+ *
+ * This function attempts to process a response message from the server after
+ * getting a trusted certificate using DMA. It validates the response and
+ * extracts the return code. This function does not block; it returns
+ * WH_ERROR_NOTREADY if a response has not been received.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[out] out_rc Pointer to store the response code from the server.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertReadTrustedDma64Response(whClientContext* c, int32_t* out_rc);
+
+/**
+ * @brief Sends a request and receives a response to read a trusted certificate
+ * using DMA (64-bit).
+ *
+ * This function handles the complete process of sending a request to read a
+ * trusted certificate using DMA and receiving the response. It blocks until the
+ * entire operation is complete or an error occurs.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] id The NVM ID of the certificate to retrieve.
+ * @param[in] cert_addr 64-bit DMA address to store the certificate data.
+ * @param[in] cert_len Maximum length of the certificate buffer.
+ * @param[out] out_rc Pointer to store the response code from the server.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertReadTrustedDma64(whClientContext* c, whNvmId id,
+                                   uint64_t cert_addr, uint32_t cert_len,
+                                   int32_t* out_rc);
+
+/**
+ * @brief Sends a request to verify a certificate using DMA (64-bit).
+ *
+ * This function prepares and sends a request to verify a certificate using
+ * DMA with 64-bit addressing. This function does not block; it returns
+ * immediately after sending the request.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] cert_addr 64-bit DMA address of the certificate data to verify.
+ * @param[in] cert_len Length of the certificate data.
+ * @param[in] trustedRootNvmId NVM ID of the trusted root certificate to verify
+ * against.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertVerifyDma64Request(whClientContext* c, uint64_t cert_addr,
+                                     uint32_t cert_len,
+                                     whNvmId  trustedRootNvmId);
+
+/**
+ * @brief Receives a response from the server after verifying a certificate
+ * using DMA (64-bit).
+ *
+ * This function attempts to process a response message from the server after
+ * verifying a certificate using DMA. It validates the response and extracts
+ * the return code. This function does not block; it returns WH_ERROR_NOTREADY
+ * if a response has not been received.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[out] out_rc Pointer to store the response code from the server.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertVerifyDma64Response(whClientContext* c, int32_t* out_rc);
+
+/**
+ * @brief Sends a request and receives a response to verify a certificate using
+ * DMA (64-bit).
+ *
+ * This function handles the complete process of sending a request to verify a
+ * certificate using DMA and receiving the response. It blocks until the entire
+ * operation is complete or an error occurs.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] cert_addr 64-bit DMA address of the certificate data to verify.
+ * @param[in] cert_len Length of the certificate data.
+ * @param[in] trustedRootNvmId NVM ID of the trusted root certificate to verify
+ * against.
+ * @param[out] out_rc Pointer to store the response code from the server.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertVerifyDma64(whClientContext* c, uint64_t cert_addr,
+                              uint32_t cert_len, whNvmId trustedRootNvmId,
+                              int32_t* out_rc);
+
+#endif /* WH_DMA_IS_64BIT */
+
+/**
+ * @brief Sends a request to add a trusted certificate to NVM storage using DMA.
+ *
+ * This function prepares and sends a request to add a trusted certificate to
+ * NVM storage using DMA, with automatic detection of client address width
+ * (32-bit or 64-bit). This function does not block; it returns immediately
+ * after sending the request.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] id NVM ID to store the trusted certificate.
+ * @param[in] cert Pointer to the certificate data to add.
+ * @param[in] cert_len Length of the certificate data.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertAddTrustedDmaRequest(whClientContext* c, whNvmId id,
+                                       const uint8_t* cert, uint32_t cert_len);
+
+/**
+ * @brief Receives a response from the server after adding a trusted certificate
+ * using DMA.
+ *
+ * This function attempts to process a response message from the server after
+ * adding a trusted certificate using DMA, with automatic detection of client
+ * address width (32-bit or 64-bit). It validates the response and extracts
+ * the return code. This function does not block; it returns WH_ERROR_NOTREADY
+ * if a response has not been received.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[out] out_rc Pointer to store the response code from the server.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertAddTrustedDmaResponse(whClientContext* c, int32_t* out_rc);
+
+/**
+ * @brief Sends a request and receives a response to add a trusted certificate
+ * using DMA.
+ *
+ * This function handles the complete process of sending a request to add a
+ * trusted certificate using DMA and receiving the response, with automatic
+ * detection of client address width (32-bit or 64-bit). It blocks until the
+ * entire operation is complete or an error occurs.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] id NVM ID to store the trusted certificate.
+ * @param[in] cert Pointer to the certificate data to add.
+ * @param[in] cert_len Length of the certificate data.
+ * @param[out] out_rc Pointer to store the response code from the server.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertAddTrustedDma(whClientContext* c, whNvmId id,
+                                const uint8_t* cert, uint32_t cert_len,
+                                int32_t* out_rc);
+
+/**
+ * @brief Sends a request to read a trusted certificate from NVM storage using
+ * DMA.
+ *
+ * This function prepares and sends a request to read a trusted certificate from
+ * NVM storage using DMA, with automatic detection of client address width
+ * (32-bit or 64-bit). This function does not block; it returns immediately
+ * after sending the request.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] id NVM ID of the trusted certificate to get.
+ * @param[in] cert Pointer to buffer to store the certificate data.
+ * @param[in] cert_len Length of the certificate buffer.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertReadTrustedDmaRequest(whClientContext* c, whNvmId id,
+                                        uint8_t* cert, uint32_t cert_len);
+
+/**
+ * @brief Receives a response from the server after reading a trusted
+ * certificate using DMA.
+ *
+ * This function attempts to process a response message from the server after
+ * reading a trusted certificate using DMA, with automatic detection of client
+ * address width (32-bit or 64-bit). It validates the response and extracts
+ * the return code. This function does not block; it returns WH_ERROR_NOTREADY
+ * if a response has not been received.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[out] out_rc Pointer to store the response code from the server.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertReadTrustedDmaResponse(whClientContext* c, int32_t* out_rc);
+
+/**
+ * @brief Sends a request and receives a response to read trusted certificate
+ * using DMA.
+ *
+ * This function handles the complete process of sending a request to read a
+ * trusted certificate using DMA and receiving the response, with automatic
+ * detection of client address width (32-bit or 64-bit). It blocks until the
+ * entire operation is complete or an error occurs.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] id NVM ID of the trusted certificate to get.
+ * @param[in] cert Pointer to buffer to store the certificate data.
+ * @param[in] cert_len Length of the certificate buffer.
+ * @param[out] out_rc Pointer to store the response code from the server.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertReadTrustedDma(whClientContext* c, whNvmId id, uint8_t* cert,
+                                 uint32_t cert_len, int32_t* out_rc);
+
+/**
+ * @brief Sends a request to verify a certificate using DMA.
+ *
+ * This function prepares and sends a request to verify a certificate using DMA,
+ * with automatic detection of client address width (32-bit or 64-bit). This
+ * function does not block; it returns immediately after sending the request.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] cert Pointer to the certificate data to verify.
+ * @param[in] cert_len Length of the certificate data.
+ * @param[in] trustedRootNvmId NVM ID of the trusted root certificate to verify
+ * against.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertVerifyDmaRequest(whClientContext* c, const uint8_t* cert,
+                                   uint32_t cert_len, whNvmId trustedRootNvmId);
+
+/**
+ * @brief Receives a response from the server after verifying a certificate
+ * using DMA.
+ *
+ * This function attempts to process a response message from the server after
+ * verifying a certificate using DMA, with automatic detection of client address
+ * width (32-bit or 64-bit). It validates the response and extracts the return
+ * code. This function does not block; it returns WH_ERROR_NOTREADY if a
+ * response has not been received.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[out] out_rc Pointer to store the response code from the server.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertVerifyDmaResponse(whClientContext* c, int32_t* out_rc);
+
+/**
+ * @brief Sends a request and receives a response to verify a certificate using
+ * DMA.
+ *
+ * This function handles the complete process of sending a request to verify a
+ * certificate using DMA and receiving the response, with automatic detection of
+ * client address width (32-bit or 64-bit). It blocks until the entire operation
+ * is complete or an error occurs.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] cert Pointer to the certificate data to verify.
+ * @param[in] cert_len Length of the certificate data.
+ * @param[in] trustedRootNvmId NVM ID of the trusted root certificate to verify
+ * against.
+ * @param[out] out_rc Pointer to store the response code from the server.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertVerifyDma(whClientContext* c, const uint8_t* cert,
+                            uint32_t cert_len, whNvmId trustedRootNvmId,
+                            int32_t* out_rc);
+
+
+#endif /* WOLFHSM_CFG_DMA */
+
 #endif /* !WOLFHSM_WH_CLIENT_H_ */

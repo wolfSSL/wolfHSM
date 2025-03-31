@@ -48,6 +48,11 @@
 #include "wolfhsm/wh_server_crypto.h"
 #include "wolfhsm/wh_server_keystore.h"
 #include "wolfhsm/wh_server_counter.h"
+
+#if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER) && !defined(WOLFHSM_CFG_NO_CRYPTO)
+#include "wolfhsm/wh_server_cert.h"
+#endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER && !WOLFHSM_CFG_NO_CRYPTO */
+
 #if defined(WOLFHSM_CFG_SHE_EXTENSION)
 #include "wolfhsm/wh_server_she.h"
 #endif
@@ -344,6 +349,13 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
             rc = wh_Server_HandleCustomCbRequest(server, magic, action, seq,
                     size, data, &size, data);
         break;
+
+#if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER) && !defined(WOLFHSM_CFG_NO_CRYPTO)
+        case WH_MESSAGE_GROUP_CERT:
+            rc = wh_Server_HandleCertRequest(server, magic, action, seq,
+                    size, data, &size, data);
+        break;
+#endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER && !WOLFHSM_CFG_NO_CRYPTO */
 
         default:
             /* Unknown group. Return empty packet*/

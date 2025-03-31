@@ -40,13 +40,18 @@ extern "C" {
 */
 
 /** wolfHSM required settings for wolfCrypt */
-#define WOLFCRYPT_ONLY
+/* #define WOLFCRYPT_ONLY */
 #define WOLF_CRYPTO_CB
 #define HAVE_HASHDRBG
 #define WOLFSSL_KEY_GEN
 #define WOLFSSL_ASN_TEMPLATE
 #define WOLFSSL_BASE64_ENCODE
 #define HAVE_ANONYMOUS_INLINE_AGGREGATES 1
+
+/* For cert manager */
+#define NO_TLS
+/* Elminates need for IO layer since we only use CM */
+#define WOLFSSL_USER_IO
 
 /** Math library selection for test */
 #define USE_FAST_MATH
@@ -68,6 +73,9 @@ extern "C" {
 #define NO_OLD_TLS
 #define WOLFSSL_NO_TLS12
 #define NO_DO178
+/* Prevents certain functions (SHA, hash.c) on server from falling back to
+ * client cryptoCb when using non-devId APIs */
+#define WC_NO_DEFAULT_DEVID
 
 /** Remove unneded namespace */
 #define NO_OLD_RNGNAME
@@ -80,13 +88,12 @@ extern "C" {
 /*#define NO_RSA */
 #define WC_RSA_PSS
 #define WOLFSSL_PSS_LONG_SALT
-#define FP_MAX_BITS 4096
+#define FP_MAX_BITS 8192
 
 /** ECC Options */
 #define HAVE_ECC
 #define TFM_ECC256
 #define ECC_SHAMIR
-#define HAVE_SUPPORTED_CURVES
 
 /** Curve25519 Options */
 #define HAVE_CURVE25519
