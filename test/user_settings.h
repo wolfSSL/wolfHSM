@@ -42,7 +42,6 @@ extern "C" {
 /** wolfHSM required settings for wolfCrypt */
 /* #define WOLFCRYPT_ONLY */
 #define WOLF_CRYPTO_CB
-#define HAVE_HASHDRBG
 #define WOLFSSL_KEY_GEN
 #define WOLFSSL_ASN_TEMPLATE
 #define WOLFSSL_BASE64_ENCODE

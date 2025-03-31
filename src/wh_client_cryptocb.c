@@ -32,7 +32,6 @@
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_utils.h"
 #include "wolfhsm/wh_comm.h"
-#include "wolfhsm/wh_packet.h"
 #include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_client.h"
 
@@ -51,17 +50,8 @@
 #include "wolfhsm/wh_crypto.h"
 #include "wolfhsm/wh_client_crypto.h"
 #include "wolfhsm/wh_client_cryptocb.h"
+#include "wolfhsm/wh_message_crypto.h"
 
-
-#ifndef NO_SHA256
-static int _handleSha256(wc_CryptoInfo* info, void* inCtx, whPacket* packet);
-static int _xferSha256BlockAndUpdateDigest(whClientContext* ctx,
-                                           wc_Sha256* sha256, whPacket* packet,
-                                           uint32_t isLastBlock);
-#ifdef WOLFHSM_CFG_DMA
-static int _handleSha256Dma(wc_CryptoInfo* info, void* inCtx, whPacket* packet);
-#endif /* WOLFHSM_CFG_DMA */
-#endif /* ! NO_SHA256 */
 
 #if defined(HAVE_DILITHIUM) || defined(HAVE_FALCON)
 static int _handlePqcSigKeyGen(whClientContext* ctx, wc_CryptoInfo* info,
@@ -74,90 +64,11 @@ static int _handlePqcSigCheckPrivKey(whClientContext* ctx, wc_CryptoInfo* info,
                                      int useDma);
 #endif /* HAVE_DILITHIUM || HAVE_FALCON */
 
-#ifdef WOLFSSL_CMAC
-#ifdef WOLFHSM_CFG_DMA
-static int _handleCmacDma(wc_CryptoInfo* info, void* inCtx, whPacket* packet)
-{
-    int ret = WH_ERROR_OK;
-    whClientContext* ctx = inCtx;
-    Cmac* cmac = info->cmac.cmac;
-
-    wh_Packet_cmac_Dma_req* req = &packet->cmacDmaReq;
-    wh_Packet_cmac_Dma_res* res = &packet->cmacDmaRes;
-
-    XMEMSET(req, 0, sizeof(*req));
-    req->type = info->cmac.type;
-
-    /* Store devId and devCtx to restore after request */
-    int   devId  = cmac->devId;
-    void* devCtx = cmac->devCtx;
-
-    /* Set up DMA state buffer in client address space */
-    req->state.addr = (uintptr_t)cmac;
-    req->state.sz = sizeof(*cmac);
-
-    /* Handle different CMAC operations based on input parameters */
-    if (info->cmac.key != NULL) {
-        /* Initialize with provided key */
-        req->key.addr = (uintptr_t)info->cmac.key;
-        req->key.sz = info->cmac.keySz;
-    }
-
-    if (info->cmac.in != NULL) {
-        /* Update operation */
-        req->input.addr = (uintptr_t)info->cmac.in;
-        req->input.sz = info->cmac.inSz;
-    }
-
-    if (info->cmac.out != NULL) {
-        /* Finalize operation */
-        req->output.addr = (uintptr_t)info->cmac.out;
-        req->output.sz = (size_t)*info->cmac.outSz;
-        req->finalize = 1;
-    }
-
-    /* If this is just a deferred initialization (NULL key, but keyId set),
-     * don't send a request - server will initialize on first update */
-    if (info->cmac.key == NULL && info->cmac.in == NULL && info->cmac.out == NULL) {
-        /* Just a keyId set operation, nothing to do via DMA */
-        return 0;
-    }
-
-    /* Send the request */
-    ret = wh_Client_SendRequest(ctx, WH_MESSAGE_GROUP_CRYPTO_DMA, WC_ALGO_TYPE_CMAC,
-                                WH_PACKET_STUB_SIZE + sizeof(*req),
-                                (uint8_t*)packet);
-    if (ret == WH_ERROR_OK) {
-        uint16_t respSz = 0;
-        do {
-            ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
-                                        (uint8_t*)packet);
-        } while (ret == WH_ERROR_NOTREADY);
-    }
-
-    if (ret == WH_ERROR_OK) {
-        ret = packet->rc;
-        if (ret == WH_ERROR_OK && req->finalize) {
-            /* Update outSz with actual size of CMAC output */
-            *info->cmac.outSz = res->outSz;
-        }
-    }
-
-    /* Restore devId and devCtx after DMA operation */
-    cmac->devId  = devId;
-    cmac->devCtx = devCtx;
-
-    return ret;
-}
-#endif /* WOLFHSM_CFG_DMA */
-#endif /* WOLFSSL_CMAC */
-
 int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
 {
     /* III When possible, return wolfCrypt-enumerated errors */
     int ret = CRYPTOCB_UNAVAILABLE;
     whClientContext* ctx = inCtx;
-    whPacket* packet = NULL;
     if (    (devId == INVALID_DEVID) ||
             (info == NULL) ||
             (inCtx == NULL)) {
@@ -169,13 +80,6 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             (info!=NULL)?info->algo_type:-1);
     wc_CryptoCb_InfoString(info);
 #endif
-    /* Get data pointer from the context to use as request/response storage */
-    packet = (whPacket*)wh_CommClient_GetDataPtr(ctx->comm);
-    if (packet == NULL) {
-        return BAD_FUNC_ARG;
-    }
-    XMEMSET((uint8_t*)packet, 0, WOLFHSM_CFG_COMM_DATA_LEN);
-
     /* Based on the info type, process the request */
     switch (info->algo_type)
     {
@@ -464,111 +368,28 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
         uint32_t in_len = (in == NULL) ? 0 : info->cmac.inSz;
         const uint8_t* key = info->cmac.key;
         uint32_t key_len = (key == NULL) ? 0 : info->cmac.keySz;
-        uint8_t* mac = info->cmac.out;
+        uint8_t* outMac = info->cmac.out;
         word32 *out_mac_len = info->cmac.outSz;
         Cmac* cmac = info->cmac.cmac;
         int type = info->cmac.type;
 
-        whKeyId key_id = WH_DEVCTX_TO_KEYID(cmac->devCtx);
-        uint32_t mac_len = (    (mac == NULL) ||
-                                (out_mac_len == NULL)) ? 0 : *out_mac_len;
-
-        /* Return success for a call with NULL params, or 0 len's */
-        if ((in_len == 0) && (key_len == 0) && (mac_len == 0) ) {
-            /* Update the type */
-            cmac->type = type;
-            ret = 0;
-            break;
-        }
-
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-        printf("[client] cmac key:%p key_len:%d in:%p in_len:%d out:%p out_len:%d keyId:%x\n",
-                key, key_len, in, in_len, mac, mac_len, key_id);
-#endif
-        uint16_t group = WH_MESSAGE_GROUP_CRYPTO;
-        uint16_t action = WC_ALGO_TYPE_CMAC;
-
-
-        wh_Packet_cmac_req* req = &packet->cmacReq;
-        uint8_t* req_in = (uint8_t*)(req + 1);
-        uint8_t* req_key = req_in + in_len;
-        uint16_t req_len = WH_PACKET_STUB_SIZE + sizeof(*req) +
-                in_len + key_len;
-
-        if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
-            /* if we're using an HSM req_key return BAD_FUNC_ARG */
-            if (!WH_KEYID_ISERASED(key_id)) {
-                ret = BAD_FUNC_ARG;
-            } else {
-                ret = CRYPTOCB_UNAVAILABLE;
-            }
-            break;
-        }
-
-        memset(req, 0 , sizeof(*req));
-        req->type = type;
-        req->keyId = key_id;
-        /* multiple modes are possible so we need to set zero size if buffers
-         * are NULL */
-        req->inSz = in_len;
-        if (in_len != 0) {
-            memcpy(req_in, in, in_len);
-        }
-        req->keySz = key_len;
-        if (key_len != 0) {
-            memcpy(req_key, key, key_len);
-        }
-        req->outSz = mac_len;
-
-        /* write request */
-        ret = wh_Client_SendRequest(ctx, group, action, req_len,
-                (uint8_t*)packet);
-        if (ret == 0) {
-            /* Update the local type since call succeeded */
-            cmac->type = type;
-            /* if the client marked they may want to cancel, handle the
-             * response in a separate call */
-            if (ctx->cancelable)
-                break;
-
-            wh_Packet_cmac_res* res = &packet->cmacRes;
-            uint8_t* res_mac = (uint8_t*)(res + 1);
-            uint16_t res_len = 0;
-            do {
-                ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
-                    (uint8_t*)packet);
-            } while (ret == WH_ERROR_NOTREADY);
-            if (ret == 0) {
-                if (packet->rc != 0) {
-                    ret = packet->rc;
-                } else {
-                    /* read keyId and res_out */
-                    if (key != NULL) {
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-                        printf("[client] got keyid %x\n", res->keyId);
-#endif
-                        cmac->devCtx = WH_KEYID_TO_DEVCTX(res->keyId);
-                    }
-                    if (mac != NULL) {
-                        memcpy(mac, res_mac, res->outSz);
-                        if (out_mac_len != NULL) {
-                            *(out_mac_len) = res->outSz;
-                        }
-                    }
-                }
-            }
-        }
-    } break;
+        ret = wh_Client_Cmac(ctx, cmac, type, key, key_len, in, in_len, outMac,
+                             out_mac_len);
+    } break; /* case WC_ALGO_TYPE_CMAC */
 
 #endif /* WOLFSSL_CMAC */
 
     case WC_ALGO_TYPE_HASH: {
-        packet->hashAnyReq.type = info->hash.type;
         switch (info->hash.type) {
 #ifndef NO_SHA256
-            case WC_HASH_TYPE_SHA256:
-                ret = _handleSha256(info, inCtx, packet);
-                break;
+            case WC_HASH_TYPE_SHA256: {
+                wc_Sha256*     sha   = info->hash.sha256;
+                const uint8_t* in    = info->hash.in;
+                uint32_t       inLen = info->hash.inSz;
+                uint8_t*       out   = info->hash.digest;
+
+                ret = wh_Client_Sha256(ctx, sha, in, inLen, out);
+            } break;
 #endif /* !NO_SHA256 */
 
             default:
@@ -597,237 +418,6 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
 #endif /* DEBUG_CRYPTOCB */
     return ret;
 }
-
-#ifndef NO_SHA256
-static int _handleSha256(wc_CryptoInfo* info, void* inCtx, whPacket* packet)
-{
-    int              ret               = 0;
-    whClientContext* ctx               = inCtx;
-    wc_Sha256*       sha256            = info->hash.sha256;
-    uint8_t*         sha256BufferBytes = (uint8_t*)sha256->buffer;
-
-    /* Caller invoked SHA Update:
-     * wc_CryptoCb_Sha256Hash(sha256, data, len, NULL) */
-    if (info->hash.in != NULL) {
-        size_t i = 0;
-
-        /* Process the partial blocks directly from the input data. If there is
-         * enough input data to fill a full block, transfer it to the server */
-        if (sha256->buffLen > 0) {
-            while (i < info->hash.inSz &&
-                   sha256->buffLen < WC_SHA256_BLOCK_SIZE) {
-                sha256BufferBytes[sha256->buffLen++] = info->hash.in[i++];
-            }
-            if (sha256->buffLen == WC_SHA256_BLOCK_SIZE) {
-                ret = _xferSha256BlockAndUpdateDigest(ctx, sha256, packet, 0);
-                sha256->buffLen = 0;
-            }
-        }
-
-        /* Process as many full blocks from the input data as we can */
-        while ((info->hash.inSz - i) >= WC_SHA256_BLOCK_SIZE) {
-            XMEMCPY(sha256BufferBytes, info->hash.in + i, WC_SHA256_BLOCK_SIZE);
-            ret = _xferSha256BlockAndUpdateDigest(ctx, sha256, packet, 0);
-            i += WC_SHA256_BLOCK_SIZE;
-        }
-
-        /* Copy any remaining data into the buffer to be sent in a subsequent
-         * call when we have enough input data to send a full block */
-        while (i < info->hash.inSz) {
-            sha256BufferBytes[sha256->buffLen++] = info->hash.in[i++];
-        }
-    }
-
-    /* Caller invoked SHA finalize:
-     * wc_CryptoCb_Sha256Hash(sha256, NULL, 0, * hash) */
-    if (info->hash.digest != NULL) {
-        ret = _xferSha256BlockAndUpdateDigest(ctx, sha256, packet, 1);
-
-        /* Copy out the final hash value */
-        if (ret == 0) {
-            memcpy(info->hash.digest, sha256->digest, WC_SHA256_DIGEST_SIZE);
-        }
-
-        /* reset the state of the sha context (without blowing away devId) */
-        sha256->buffLen = 0;
-        sha256->flags   = 0;
-        sha256->hiLen   = 0;
-        sha256->loLen   = 0;
-        memset(sha256->digest, 0, sizeof(sha256->digest));
-    }
-
-    return ret;
-}
-
-static int _xferSha256BlockAndUpdateDigest(whClientContext* ctx,
-                                           wc_Sha256* sha256, whPacket* packet,
-                                           uint32_t isLastBlock)
-{
-    uint16_t                   group  = WH_MESSAGE_GROUP_CRYPTO;
-    uint16_t                   action = WH_MESSAGE_ACTION_NONE;
-    int                        ret    = 0;
-    uint16_t                   dataSz = 0;
-    wh_Packet_hash_sha256_req* req    = &packet->hashSha256Req;
-
-    /* Ensure we always set the packet type, as if this function is called after
-     * a response, it will be overwritten*/
-    req->type = WC_HASH_TYPE_SHA256;
-
-    /* Send the full block to the server, along with the
-     * current hash state if needed. Finalization/padding of last block is up to
-     * the server, we just need to let it know we are done and sending an
-     * incomplete last block */
-    if (isLastBlock) {
-        req->isLastBlock  = 1;
-        req->lastBlockLen = sha256->buffLen;
-    }
-    else {
-        req->isLastBlock = 0;
-    }
-    XMEMCPY(req->inBlock, sha256->buffer,
-            (isLastBlock) ? sha256->buffLen : WC_SHA256_BLOCK_SIZE);
-
-    /* Send the hash state - this will be 0 on the first block on a properly
-     * initialized sha256 struct */
-    XMEMCPY(req->resumeState.hash, sha256->digest, WC_SHA256_DIGEST_SIZE);
-    packet->hashSha256Req.resumeState.hiLen = sha256->hiLen;
-    packet->hashSha256Req.resumeState.loLen = sha256->loLen;
-
-    ret = wh_Client_SendRequest(
-        ctx, group, WC_ALGO_TYPE_HASH,
-        WH_PACKET_STUB_SIZE + sizeof(packet->hashSha256Req), (uint8_t*)packet);
-
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-    printf("[client] send SHA256 Req:\n");
-    wh_Utils_Hexdump("[client] inBlock: ", req->inBlock, WC_SHA256_BLOCK_SIZE);
-    if (req->resumeState.hiLen != 0 || req->resumeState.loLen != 0) {
-        wh_Utils_Hexdump("  [client] resumeHash: ", req->resumeState.hash,
-                 (isLastBlock) ? req->lastBlockLen : WC_SHA256_BLOCK_SIZE);
-        printf("  [client] hiLen: %u, loLen: %u\n", req->resumeState.hiLen,
-               req->resumeState.loLen);
-    }
-    printf("  [client] ret = %d\n", ret);
-#endif /* DEBUG_CRYPTOCB_VERBOSE */
-
-    if (ret == 0) {
-        do {
-            ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
-                                         (uint8_t*)packet);
-        } while (ret == WH_ERROR_NOTREADY);
-    }
-    if (ret == 0) {
-        if (packet->rc != 0) {
-            ret = packet->rc;
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("[client] ERROR Client SHA256 Res recv: ret=%d", ret);
-#endif /* DEBUG_CRYPTOCB_VERBOSE */
-        }
-        else {
-            /* Store the received intermediate hash in the sha256
-             * context and indicate the field is now valid and
-             * should be passed back and forth to the server */
-            XMEMCPY(sha256->digest, packet->hashSha256Res.hash,
-                    WC_SHA256_DIGEST_SIZE);
-            sha256->hiLen = packet->hashSha256Res.hiLen;
-            sha256->loLen = packet->hashSha256Res.loLen;
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("[client] Client SHA256 Res recv:\n");
-            wh_Utils_Hexdump("[client] hash: ", (uint8_t*)sha256->digest,
-                     WC_SHA256_DIGEST_SIZE);
-#endif /* DEBUG_CRYPTOCB_VERBOSE */
-        }
-    }
-
-    return ret;
-}
-
-#ifdef WOLFHSM_CFG_DMA
-
-static int _handleSha256Dma(wc_CryptoInfo* info, void* inCtx, whPacket* packet)
-{
-    int              ret    = WH_ERROR_OK;
-    whClientContext* ctx    = inCtx;
-    wc_Sha256*       sha256 = info->hash.sha256;
-    uint16_t         respSz = 0;
-    uint16_t         group  = WH_MESSAGE_GROUP_CRYPTO_DMA;
-
-    wh_Packet_hash_sha256_Dma_req* req   = &packet->hashSha256DmaReq;
-    wh_Packet_hash_sha256_Dma_res* resp  = &packet->hashSha256DmaRes;
-
-    /* Caller invoked SHA Update:
-     * wc_CryptoCb_Sha256Hash(sha256, data, len, NULL) */
-    if (info->hash.in != NULL) {
-        req->type       = WC_HASH_TYPE_SHA256;
-        req->finalize   = 0;
-        req->state.addr = (uintptr_t)sha256;
-        req->state.sz   = sizeof(*sha256);
-        req->input.addr = (uintptr_t)info->hash.in;
-        req->input.sz   = info->hash.inSz;
-
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-        printf("[client] SHA256 DMA UPDATE: inAddr=%p, inSz=%u\n",
-               info->hash.in, info->hash.inSz);
-#endif
-        ret = wh_Client_SendRequest(ctx, group, WC_ALGO_TYPE_HASH,
-                                    WH_PACKET_STUB_SIZE + sizeof(*req),
-                                    (uint8_t*)packet);
-        if (ret == WH_ERROR_OK) {
-            do {
-                ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
-                                             (uint8_t*)packet);
-            } while (ret == WH_ERROR_NOTREADY);
-        }
-
-        if (ret == WH_ERROR_OK) {
-            if (packet->rc != WH_ERROR_OK) {
-                ret = packet->rc;
-            }
-            /* Nothing to do on success, as server will have updated the context
-             * in client memory */
-        }
-    }
-
-    /* Caller invoked SHA finalize:
-     * wc_CryptoCb_Sha256Hash(sha256, NULL, 0, * hash) */
-    if ((ret == WH_ERROR_OK) && (info->hash.digest != NULL)) {
-        /* Packet will have been trashed, so re-populate all fields */
-        req->type        = WC_HASH_TYPE_SHA256;
-        req->finalize    = 1;
-        req->state.addr  = (uintptr_t)sha256;
-        req->state.sz    = sizeof(*sha256);
-        req->output.addr = (uintptr_t)info->hash.digest;
-        req->output.sz   = WC_SHA256_DIGEST_SIZE; /* not needed, but YOLO */
-
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-        printf("[client] SHA256 DMA FINAL: outAddr=%p\n", info->hash.digest);
-#endif
-        /* send the request to the server */
-        ret = wh_Client_SendRequest(ctx, group, WC_ALGO_TYPE_HASH,
-                                    WH_PACKET_STUB_SIZE + sizeof(*req),
-                                    (uint8_t*)packet);
-        if (ret == WH_ERROR_OK) {
-            do {
-                ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
-                                             (uint8_t*)packet);
-            } while (ret == WH_ERROR_NOTREADY);
-        }
-
-        /* Copy out the final hash value */
-        if (ret == WH_ERROR_OK) {
-            if (packet->rc != WH_ERROR_OK) {
-                ret = packet->rc;
-                (void)resp;
-            }
-            /* Nothing to do on success, as server will have updated the output
-             * hash in client memory */
-        }
-    }
-
-    return ret;
-}
-#endif /* WOLFHSM_CFG_DMA */
-#endif /* ! NO_SHA256 */
-
 
 #if defined(HAVE_FALCON) || defined(HAVE_DILITHIUM)
 static int _handlePqcSigKeyGen(whClientContext* ctx, wc_CryptoInfo* info,
@@ -1018,7 +608,6 @@ int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
     /* III When possible, return wolfCrypt-enumerated errors */
     int ret = CRYPTOCB_UNAVAILABLE;
     whClientContext* ctx = inCtx;
-    whPacket* packet = NULL;
 
     if (    (devId == INVALID_DEVID) ||
             (info == NULL) ||
@@ -1030,23 +619,21 @@ int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
     printf("[client] %s ", __func__);
     wc_CryptoCb_InfoString(info);
 #endif
-    /* Get data pointer from the context to use as request/response storage */
-    packet = (whPacket*)wh_CommClient_GetDataPtr(ctx->comm);
-    if (packet == NULL) {
-        return BAD_FUNC_ARG;
-    }
-    XMEMSET((uint8_t*)packet, 0, WOLFHSM_CFG_COMM_DATA_LEN);
 
     /* Based on the info type, process the request */
     switch (info->algo_type)
     {
     case WC_ALGO_TYPE_HASH: {
-        packet->hashAnyReq.type = info->hash.type;
         switch (info->hash.type) {
 #ifndef NO_SHA256
-            case WC_HASH_TYPE_SHA256:
-                ret = _handleSha256Dma(info, inCtx, packet);
-                break;
+            case WC_HASH_TYPE_SHA256: {
+                wc_Sha256*     sha   = info->hash.sha256;
+                const uint8_t* in    = info->hash.in;
+                uint32_t       inLen = info->hash.inSz;
+                uint8_t*       out   = info->hash.digest;
+
+                ret = wh_Client_Sha256Dma(ctx, sha, in, inLen, out);
+            } break;
 #endif /* !NO_SHA256 */
 
             default:
@@ -1076,9 +663,19 @@ int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
     } break; /* case WC_ALGO_TYPE_PK */
 
 #ifdef WOLFSSL_CMAC
-    case WC_ALGO_TYPE_CMAC:
-        ret = _handleCmacDma(info, inCtx, packet);
-        break;
+    case WC_ALGO_TYPE_CMAC: {
+        Cmac*          cmac      = info->cmac.cmac;
+        CmacType       type      = info->cmac.type;
+        const uint8_t* key       = info->cmac.key;
+        uint32_t       keyLen    = info->cmac.keySz;
+        const uint8_t* in        = info->cmac.in;
+        uint32_t       inLen     = info->cmac.inSz;
+        uint8_t*       outMac    = info->cmac.out;
+        uint32_t*      outMacLen = info->cmac.outSz;
+
+        ret = wh_Client_CmacDma(ctx, cmac, type, key, keyLen, in, inLen, outMac,
+                                outMacLen);
+    } break;
 #endif
 
     case WC_ALGO_TYPE_NONE:

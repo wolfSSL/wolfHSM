@@ -42,11 +42,16 @@
 
 #include "wolfhsm/wh_server.h"
 
-int wh_Server_HandleCryptoRequest(whServerContext* server,
-    uint16_t action, uint8_t* data, uint16_t* size, uint16_t seq);
+int wh_Server_HandleCryptoRequest(whServerContext* ctx, uint16_t magic,
+                                  uint16_t action, uint16_t seq,
+                                  uint16_t req_size, const void* req_packet,
+                                  uint16_t* out_resp_size, void* resp_packet);
 
-int wh_Server_HandleCryptoDmaRequest(whServerContext* server,
-    uint16_t action, uint8_t* data, uint16_t* size, uint16_t seq);
+int wh_Server_HandleCryptoDmaRequest(whServerContext* ctx, uint16_t magic,
+                                     uint16_t action, uint16_t seq,
+                                     uint16_t req_size, const void* req_packet,
+                                     uint16_t* out_resp_size,
+                                     void*     resp_packet);
 
 #ifndef NO_RSA
 

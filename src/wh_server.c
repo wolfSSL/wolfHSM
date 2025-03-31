@@ -40,7 +40,6 @@
 #include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_message_comm.h"
 #include "wolfhsm/wh_message_nvm.h"
-#include "wolfhsm/wh_packet.h"
 
 /* Server API's */
 #include "wolfhsm/wh_server.h"
@@ -309,24 +308,25 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
         break;
 
         case WH_MESSAGE_GROUP_COUNTER:
-            rc = wh_Server_HandleCounter(server, action, data, &size);
-        break;
+            rc = wh_Server_HandleCounter(server, magic, action, size, data,
+                                         &size, data);
+            break;
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
         case WH_MESSAGE_GROUP_KEY:
-            rc = wh_Server_HandleKeyRequest(server, magic, action, seq,
-                    data, &size);
-        break;
+            rc = wh_Server_HandleKeyRequest(server, magic, action, size, data,
+                                            &size, data);
+            break;
 
         case WH_MESSAGE_GROUP_CRYPTO:
-            rc = wh_Server_HandleCryptoRequest(server, action, data,
-                &size, seq);
-        break;
+            rc = wh_Server_HandleCryptoRequest(server, magic, action, seq, size,
+                                               data, &size, data);
+            break;
 
 #ifdef WOLFHSM_CFG_DMA
         case WH_MESSAGE_GROUP_CRYPTO_DMA:
-            rc = wh_Server_HandleCryptoDmaRequest(server, action, data,
-                &size, seq);
+            rc = wh_Server_HandleCryptoDmaRequest(server, magic, action, seq,
+                                                  size, data, &size, data);
             break;
 #endif /* WOLFHSM_CFG_DMA */
 

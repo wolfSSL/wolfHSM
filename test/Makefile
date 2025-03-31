@@ -173,6 +173,9 @@ SRC_C += \
             $(WOLFHSM_DIR)/src/wh_message_customcb.c \
             $(WOLFHSM_DIR)/src/wh_message_nvm.c \
             $(WOLFHSM_DIR)/src/wh_message_cert.c \
+            $(WOLFHSM_DIR)/src/wh_message_crypto.c \
+            $(WOLFHSM_DIR)/src/wh_message_keystore.c \
+            $(WOLFHSM_DIR)/src/wh_message_counter.c \
             $(WOLFHSM_DIR)/src/wh_transport_mem.c \
             $(WOLFHSM_DIR)/src/wh_flash_ramsim.c
 

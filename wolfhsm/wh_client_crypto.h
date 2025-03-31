@@ -394,6 +394,32 @@ int wh_Client_AesGcm(whClientContext* ctx,
 
 
 #ifdef WOLFSSL_CMAC
+
+/**
+ * @brief Performs a CMAC operation on the input data.
+ *
+ * This function performs a CMAC operation with the specified parameters.
+ * It can be used for initialization, update, or finalization of CMAC
+ * operations, depending on the input arguments.
+ *
+ * @param[in] ctx Pointer to the wolfHSM client context.
+ * @param[in,out] cmac Pointer to the CMAC structure.
+ * @param[in] type The type of CMAC operation.
+ * @param[in] key Pointer to the key buffer, or NULL if using a key stored in
+ * HSM.
+ * @param[in] keyLen Length of the key in bytes.
+ * @param[in] in Pointer to the input data buffer, or NULL for finalization.
+ * @param[in] inLen Length of the input data in bytes.
+ * @param[out] outMac Pointer to the output buffer for the CMAC tag.
+ * @param[in,out] outMacLen Pointer to the size of the output buffer, updated
+ * with actual size.
+ * @return int Returns WH_ERROR_OK (0) on success, or a negative error code on
+ * failure.
+ */
+int wh_Client_Cmac(whClientContext* ctx, Cmac* cmac, CmacType type,
+                   const uint8_t* key, uint32_t keyLen, const uint8_t* in,
+                   uint32_t inLen, uint8_t* outMac, uint32_t* outMacLen);
+
 /**
  * @brief Runs the CMAC-AES operation in a single call with a wolfHSM keyId.
  *
@@ -480,7 +506,69 @@ int wh_Client_CmacSetKeyId(Cmac* key, whNvmId keyId);
  * @return int Returns 0 on success or a negative error code on failure.
  */
 int wh_Client_CmacGetKeyId(Cmac* key, whNvmId* outId);
+
+#ifdef WOLFHSM_CFG_DMA
+/**
+ * @brief Performs CMAC operations using DMA for data transfer.
+ *
+ * This function performs CMAC operations (initialize, update, finalize) using
+ * DMA for efficient data transfer between client and server. The operation
+ * performed depends on which parameters are non-NULL.
+ *
+ * @param[in] ctx Pointer to the client context structure.
+ * @param[in,out] cmac Pointer to the CMAC structure to be used.
+ * @param[in] type The type of CMAC operation (e.g., WC_CMAC_AES).
+ * @param[in] key Pointer to the key data. NULL if using a stored key.
+ * @param[in] keyLen Length of the key in bytes.
+ * @param[in] in Pointer to the input data. NULL if not performing an update.
+ * @param[in] inLen Length of the input data in bytes.
+ * @param[out] outMac Pointer to store the CMAC result. NULL if not finalizing.
+ * @param[in,out] outMacLen Pointer to the size of the outMac buffer. Updated
+ * with actual size on return.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_CmacDma(whClientContext* ctx, Cmac* cmac, CmacType type,
+                      const uint8_t* key, uint32_t keyLen, const uint8_t* in,
+                      uint32_t inLen, uint8_t* outMac, uint32_t* outMacLen);
+#endif /* WOLFHSM_CFG_DMA */
+
 #endif /* WOLFSSL_CMAC */
+
+#ifndef NO_SHA256
+
+/**
+ * @brief Performs a SHA-256 hash operation on the input data.
+         *
+ * This function performs a SHA-256 hash operation on the input data and stores
+ * the result in the output buffer.
+ *
+ * @param[in] ctx Pointer to the client context structure.
+ * @param[in] sha Pointer to the SHA-256 context structure.
+ * @param[in] in Pointer to the input data.
+ * @param[in] inLen Length of the input data in bytes.
+ * @param[out] out Pointer to the output buffer.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_Sha256(whClientContext* ctx, wc_Sha256* sha, const uint8_t* in,
+                     uint32_t inLen, uint8_t* out);
+
+/**
+ * @brief Performs a SHA-256 hash operation on the input data using DMA.
+ *
+ * This function performs a SHA-256 hash operation on the input data and stores
+ * the result in the output buffer using DMA.
+ *
+ * @param[in] ctx Pointer to the client context structure.
+ * @param[in] sha Pointer to the SHA-256 context structure.
+ * @param[in] in Pointer to the input data.
+ * @param[in] inLen Length of the input data in bytes.
+ * @param[out] out Pointer to the output buffer.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_Sha256Dma(whClientContext* ctx, wc_Sha256* sha, const uint8_t* in,
+                        uint32_t inLen, uint8_t* out);
+
+#endif /* !NO_SHA256 */
 
 #ifdef HAVE_DILITHIUM
 
