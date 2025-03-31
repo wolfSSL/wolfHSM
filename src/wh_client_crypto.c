@@ -2009,11 +2009,11 @@ int wh_Client_CmacGetKeyId(Cmac* key, whNvmId* outId)
 
 #ifndef NO_AES
 int wh_Client_CmacAesGenerate(Cmac* cmac, byte* out, word32* outSz,
-    const byte* in, word32 inSz, whNvmId keyId, void* heap)
+    const byte* in, word32 inSz, whNvmId keyId, void* heap, int devId)
 {
     int ret;
     ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, heap,
-        WH_DEV_ID);
+        devId);
     /* set keyId */
     if (ret == 0)
         ret = wh_Client_CmacSetKeyId(cmac, keyId);
@@ -2025,13 +2025,13 @@ int wh_Client_CmacAesGenerate(Cmac* cmac, byte* out, word32* outSz,
 }
 
 int wh_Client_CmacAesVerify(Cmac* cmac, const byte* check, word32 checkSz,
-    const byte* in, word32 inSz, whNvmId keyId, void* heap)
+    const byte* in, word32 inSz, whNvmId keyId, void* heap, int devId)
 {
     int ret;
     word32 outSz = AES_BLOCK_SIZE;
     byte out[AES_BLOCK_SIZE];
     ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, heap,
-        WH_DEV_ID);
+        devId);
     /* set keyId */
     if (ret == 0)
         ret = wh_Client_CmacSetKeyId(cmac, keyId);
