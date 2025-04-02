@@ -699,7 +699,7 @@ static int whTest_CacheExportKey(whClientContext* ctx, whKeyId* inout_key_id,
     *inout_key_id = key_id_out;
     return ret;
 }
-
+#ifdef WOLFHSM_CFG_DMA
 static int whTest_CacheExportKeyDma(whClientContext* ctx, whKeyId* inout_key_id,
                                     uint8_t* label_in, uint8_t* label_out,
                                     uint16_t label_len, uint8_t* key_in,
@@ -732,7 +732,7 @@ static int whTest_CacheExportKeyDma(whClientContext* ctx, whKeyId* inout_key_id,
     *inout_key_id = key_id_out;
     return ret;
 }
-
+#endif
 static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
 {
     (void)devId; (void)rng; /* Unused */
@@ -914,7 +914,7 @@ static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
             printf("KEY COMMIT/ERASE SUCCESS\n");
         }
     }
-
+#ifdef WOLFHSM_CFG_DMA
     /* test cache/export using DMA */
     if (ret == 0) {
         keyId = WH_KEYID_ERASED;
@@ -934,7 +934,7 @@ static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
             }
         }
     }
-
+#endif
     return ret;
 }
 
