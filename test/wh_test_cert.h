@@ -33,5 +33,8 @@ int whTest_CertClient(whClientContext* client);
 #if defined(WOLFHSM_CFG_DMA)
 int whTest_CertClientDma_ClientServerTestInternal(whClientContext* client);
 #endif
+#if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT)
+int whTest_CertClientAcert(whClientContext* client);
+#endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT */
 
 #endif /* !WOLFHSM_WH_TEST_CERT_H_ */ 

@@ -2707,6 +2707,59 @@ int wh_Client_CertVerifyDma(whClientContext* c, const uint8_t* cert,
                             int32_t* out_rc);
 
 
+/**
+ * @brief Sends a request to verify an attribute certificate.
+ *
+ * This function prepares and sends a request to verify an attribute certificate
+ * against a trusted root certificate. This function does not block; it returns
+ * immediately after sending the request.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] cert Pointer to the attribute certificate data to verify.
+ * @param[in] cert_len Length of the attribute certificate data.
+ * @param[in] trustedRootNvmId NVM ID of the trusted root certificate to verify
+ * against.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertVerifyAcertRequest(whClientContext* c, const uint8_t* cert,
+                                     uint32_t cert_len,
+                                     whNvmId  trustedRootNvmId);
+
+/**
+ * @brief Receives a response from the server after verifying an attribute
+ * certificate.
+ *
+ * This function attempts to process a response message from the server after
+ * verifying an attribute certificate. It validates the response and extracts
+ * the return code. This function does not block; it returns WH_ERROR_NOTREADY
+ * if a response has not been received.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[out] out_rc Pointer to store the response code from the server.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertVerifyAcertResponse(whClientContext* c, int32_t* out_rc);
+
+/**
+ * @brief Sends a request and receives a response to verify an attribute
+ * certificate.
+ *
+ * This function handles the complete process of sending a request to verify an
+ * attribute certificate and receiving the response. It blocks until the entire
+ * operation is complete or an error occurs.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] cert Pointer to the attribute certificate data to verify.
+ * @param[in] cert_len Length of the attribute certificate data.
+ * @param[in] trustedRootNvmId NVM ID of the trusted root certificate to verify
+ * against.
+ * @param[out] out_rc Pointer to store the response code from the server.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertVerifyAcert(whClientContext* c, const uint8_t* cert,
+                              uint32_t cert_len, whNvmId trustedRootNvmId,
+                              int32_t* out_rc);
+
 #endif /* WOLFHSM_CFG_DMA */
 
 #endif /* !WOLFHSM_WH_CLIENT_H_ */

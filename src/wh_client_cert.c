@@ -984,4 +984,85 @@ int wh_Client_CertVerifyDma(whClientContext* c, const uint8_t* cert,
 
 #endif /* WOLFHSM_CFG_DMA */
 
+#ifdef WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT
+
+
+int wh_Client_CertVerifyAcertRequest(whClientContext* c, const uint8_t* cert,
+                                     uint32_t cert_len,
+                                     whNvmId  trustedRootNvmId)
+{
+    whMessageCert_VerifyAcertRequest req;
+    uint8_t                          buffer[WOLFHSM_CFG_COMM_DATA_LEN];
+    size_t                           hdr_len = sizeof(req);
+    uint8_t*                         payload = buffer + hdr_len;
+
+
+    if ((c == NULL) || (trustedRootNvmId == WH_NVM_ID_INVALID) ||
+        (cert == NULL) || (cert_len == 0) ||
+        (cert_len > (sizeof(buffer) - hdr_len))) {
+        return WH_ERROR_BADARGS;
+    }
+
+    req.cert_len         = cert_len;
+    req.trustedRootNvmId = trustedRootNvmId;
+
+    memcpy(buffer, &req, sizeof(req));
+    memcpy(payload, cert, cert_len);
+
+    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_CERT,
+                                 WH_MESSAGE_CERT_ACTION_VERIFY_ACERT,
+                                 hdr_len + cert_len, buffer);
+}
+
+int wh_Client_CertVerifyAcertResponse(whClientContext* c, int32_t* out_rc)
+{
+    int                          rc;
+    uint16_t                     group;
+    uint16_t                     action;
+    uint16_t                     size;
+    whMessageCert_SimpleResponse resp;
+
+    rc = wh_Client_RecvResponse(c, &group, &action, &size, &resp);
+    if (rc == 0) {
+        if ((group != WH_MESSAGE_GROUP_CERT) ||
+            (action != WH_MESSAGE_CERT_ACTION_VERIFY_ACERT) ||
+            (size != sizeof(resp))) {
+            rc = WH_ERROR_ABORTED;
+        }
+        else {
+            if (out_rc != NULL) {
+                *out_rc = resp.rc;
+            }
+        }
+    }
+
+    return rc;
+}
+
+int wh_Client_CertVerifyAcert(whClientContext* c, const uint8_t* cert,
+                              uint32_t cert_len, whNvmId trustedRootNvmId,
+                              int32_t* out_rc)
+{
+    int rc = 0;
+
+    if (c == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    do {
+        rc = wh_Client_CertVerifyAcertRequest(c, cert, cert_len,
+                                              trustedRootNvmId);
+    } while (rc == WH_ERROR_NOTREADY);
+
+    if (rc == 0) {
+        do {
+            rc = wh_Client_CertVerifyAcertResponse(c, out_rc);
+        } while (rc == WH_ERROR_NOTREADY);
+    }
+
+    return rc;
+}
+
+#endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT */
+
 #endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER && !WOLFHSM_CFG_NO_CRYPTO */

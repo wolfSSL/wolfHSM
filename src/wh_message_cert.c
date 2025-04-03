@@ -187,4 +187,17 @@ int wh_MessageCert_TranslateVerifyDma64Request(
 #endif /* WH_DMA_IS_64BIT */
 #endif /* WOLFHSM_CFG_DMA */
 
+#ifdef WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT
+int wh_MessageCert_TranslateVerifyAcertRequest(
+    uint16_t magic, const whMessageCert_VerifyAcertRequest* src,
+    whMessageCert_VerifyAcertRequest* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, cert_len);
+    WH_T16(magic, dest, src, trustedRootNvmId);
+    return 0;
+}
+#endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT */
 #endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER && !WOLFHSM_CFG_NO_CRYPTO */

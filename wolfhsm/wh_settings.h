@@ -189,6 +189,13 @@
 #endif
 #endif
 
+#if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT)
+#if !defined(WOLFSSL_ACERT) || !defined(WOLFSSL_ASN_TEMPLATE)
+#error \
+    "WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT requires WOLFSSL_ACERT and WOLFSSL_ASN_TEMPLATE configured in wolfSSL"
+#endif /* !WOLFSSL_ACERT || !WOLFSSL_ASN_TEMPLATE */
+#endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT */
+
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
 /** Cache flushing and memory fencing synchronization primitives */

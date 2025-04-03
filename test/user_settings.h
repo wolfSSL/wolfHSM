@@ -52,6 +52,8 @@ extern "C" {
 #define NO_TLS
 /* Elminates need for IO layer since we only use CM */
 #define WOLFSSL_USER_IO
+/* For ACert support (also requires WOLFSSL_ASN_TEMPLATE) */
+#define WOLFSSL_ACERT
 
 /** Math library selection for test */
 #define USE_FAST_MATH
