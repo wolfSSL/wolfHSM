@@ -224,6 +224,4 @@ int wh_MessageCert_TranslateVerifyAcertRequest(
 #endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT */
 
 
-
-
 #endif /* !WOLFHSM_WH_MESSAGE_CERT_H_ */

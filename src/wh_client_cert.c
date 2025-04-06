@@ -1063,6 +1063,80 @@ int wh_Client_CertVerifyAcert(whClientContext* c, const uint8_t* cert,
     return rc;
 }
 
+#if defined(WOLFHSM_CFG_DMA)
+
+int wh_Client_CertVerifyAcertDmaRequest(whClientContext* c, const uint8_t* cert,
+                                        uint32_t cert_len,
+                                        whNvmId  trustedRootNvmId)
+{
+    whMessageCert_VerifyDma64Request req;
+
+    if (c == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    req.cert_addr        = (uint64_t)(intptr_t)cert;
+    req.cert_len         = cert_len;
+    req.trustedRootNvmId = trustedRootNvmId;
+    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_CERT,
+                                 WH_MESSAGE_CERT_ACTION_VERIFY_ACERT_DMA,
+                                 sizeof(req), &req);
+}
+
+int wh_Client_CertVerifyAcertDmaResponse(whClientContext* c, int32_t* out_rc)
+{
+    int                          rc;
+    uint16_t                     group;
+    uint16_t                     action;
+    uint16_t                     size;
+    whMessageCert_SimpleResponse resp;
+
+    if (c == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    rc = wh_Client_RecvResponse(c, &group, &action, &size, &resp);
+    if (rc == 0) {
+        if ((group != WH_MESSAGE_GROUP_CERT) ||
+            (action != WH_MESSAGE_CERT_ACTION_VERIFY_ACERT_DMA) ||
+            (size != sizeof(resp))) {
+            rc = WH_ERROR_ABORTED;
+        }
+        else {
+            if (out_rc != NULL) {
+                *out_rc = resp.rc;
+            }
+        }
+    }
+
+    return rc;
+}
+
+int wh_Client_CertVerifyAcertDma(whClientContext* c, const uint8_t* cert,
+                                 uint32_t cert_len, whNvmId trustedRootNvmId,
+                                 int32_t* out_rc)
+{
+    int rc = 0;
+
+    if (c == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    do {
+        rc = wh_Client_CertVerifyAcertDmaRequest(c, cert, cert_len,
+                                                 trustedRootNvmId);
+    } while (rc == WH_ERROR_NOTREADY);
+
+    if (rc == 0) {
+        do {
+            rc = wh_Client_CertVerifyAcertDmaResponse(c, out_rc);
+        } while (rc == WH_ERROR_NOTREADY);
+    }
+
+    return rc;
+}
+#endif /* WOLFHSM_CFG_DMA */
+
 #endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT */
 
 #endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER && !WOLFHSM_CFG_NO_CRYPTO */
