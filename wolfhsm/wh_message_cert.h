@@ -128,7 +128,6 @@ int wh_MessageCert_TranslateVerifyRequest(
 /* Use SimpleResponse */
 
 #ifdef WOLFHSM_CFG_DMA
-#if WH_DMA_IS_32BIT
 /* AddTrusted DMA32 Request */
 typedef struct {
     uint32_t cert_addr;
@@ -164,9 +163,7 @@ typedef struct {
 int wh_MessageCert_TranslateVerifyDma32Request(
     uint16_t magic, const whMessageCert_VerifyDma32Request* src,
     whMessageCert_VerifyDma32Request* dest);
-#endif /* WH_DMA_IS_32BIT */
 
-#if WH_DMA_IS_64BIT
 /* AddTrusted DMA64 Request */
 typedef struct {
     uint64_t cert_addr;
@@ -202,7 +199,6 @@ typedef struct {
 int wh_MessageCert_TranslateVerifyDma64Request(
     uint16_t magic, const whMessageCert_VerifyDma64Request* src,
     whMessageCert_VerifyDma64Request* dest);
-#endif /* WH_DMA_IS_64BIT */
 #endif /* WOLFHSM_CFG_DMA */
 
 #ifdef WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT

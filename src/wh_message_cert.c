@@ -104,7 +104,6 @@ int wh_MessageCert_TranslateVerifyRequest(
 }
 
 #ifdef WOLFHSM_CFG_DMA
-#if WH_DMA_IS_32BIT
 int wh_MessageCert_TranslateAddTrustedDma32Request(
     uint16_t magic, const whMessageCert_AddTrustedDma32Request* src,
     whMessageCert_AddTrustedDma32Request* dest)
@@ -143,9 +142,7 @@ int wh_MessageCert_TranslateVerifyDma32Request(
     WH_T16(magic, dest, src, trustedRootNvmId);
     return 0;
 }
-#endif /* WH_DMA_IS_32BIT */
 
-#if WH_DMA_IS_64BIT
 int wh_MessageCert_TranslateAddTrustedDma64Request(
     uint16_t magic, const whMessageCert_AddTrustedDma64Request* src,
     whMessageCert_AddTrustedDma64Request* dest)
@@ -184,7 +181,6 @@ int wh_MessageCert_TranslateVerifyDma64Request(
     WH_T16(magic, dest, src, trustedRootNvmId);
     return 0;
 }
-#endif /* WH_DMA_IS_64BIT */
 #endif /* WOLFHSM_CFG_DMA */
 
 #ifdef WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT
