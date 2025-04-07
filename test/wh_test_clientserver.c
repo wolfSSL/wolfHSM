@@ -185,13 +185,14 @@ static int _testCallbacks(whServerContext* server, whClientContext* client)
 
 #ifdef WOLFHSM_CFG_DMA
 static int _customServerDmaCb(struct whServerContext_t* server,
-                              void* clientAddr, void** serverPtr, uint32_t len,
-                              whServerDmaOper oper, whServerDmaFlags flags)
+                              uintptr_t clientAddr, void** serverPtr,
+                              size_t len, whServerDmaOper oper,
+                              whServerDmaFlags flags)
 {
     /* remapped "client" address, a.k.a. arbitary "server" buffer */
-    void* srvTmpBuf = (void*)((uintptr_t)clientAddr +
-                              (offsetof(TestMemory, srvRemapBufAllow) -
-                               offsetof(TestMemory, cliBuf)));
+    void* srvTmpBuf =
+        (void*)(clientAddr + (offsetof(TestMemory, srvRemapBufAllow) -
+                              offsetof(TestMemory, cliBuf)));
 
     /* This DMA callback simulates the remapping of client addresses by simply
      * copying the data between the client address and the "remapped" server
@@ -200,7 +201,7 @@ static int _customServerDmaCb(struct whServerContext_t* server,
         case WH_DMA_OPER_CLIENT_READ_PRE:
             /* temp buffer to be used as copy source, so copy in data from
              * client */
-            memcpy(srvTmpBuf, (void*)((uintptr_t)clientAddr), len);
+            memcpy(srvTmpBuf, (void*)clientAddr, len);
             /* ensure subsequent copies use server temp buf as copy source */
             *serverPtr = srvTmpBuf;
             break;
@@ -219,33 +220,12 @@ static int _customServerDmaCb(struct whServerContext_t* server,
         case WH_DMA_OPER_CLIENT_WRITE_POST:
             /* temp buffer was just used as copy dest, so copy data out to
              * client address */
-            memcpy(clientAddr, srvTmpBuf, len);
+            memcpy((void*)clientAddr, srvTmpBuf, len);
             break;
     }
 
     return WH_ERROR_OK;
 }
-
-#if WH_DMA_IS_32BIT
-static int _customServerDma32Cb(struct whServerContext_t* server,
-                                uint32_t clientAddr, void** serverPtr,
-                                uint32_t len, whServerDmaOper oper,
-                                whServerDmaFlags flags)
-{
-    return _customServerDmaCb(server, (void*)((uintptr_t)clientAddr), serverPtr,
-                              len, oper, flags);
-}
-#endif /* WH_DMA_IS_32BIT */
-#if WH_DMA_IS_64BIT
-static int _customServerDma64Cb(struct whServerContext_t* server,
-                                uint64_t clientAddr, void** serverPtr,
-                                uint64_t len, whServerDmaOper oper,
-                                whServerDmaFlags flags)
-{
-    return _customServerDmaCb(server, (void*)((uintptr_t)clientAddr), serverPtr,
-                              len, oper, flags);
-}
-#endif /* WH_DMA_IS_64BIT */
 
 static int _testDma(whServerContext* server, whClientContext* client)
 {
@@ -266,13 +246,7 @@ static int _testDma(whServerContext* server, whClientContext* client)
     };
 
     /* Register a custom DMA callback */
-#if WH_DMA_IS_32BIT
-    WH_TEST_RETURN_ON_FAIL(
-        wh_Server_DmaRegisterCb32(server, _customServerDma32Cb));
-#else
-    WH_TEST_RETURN_ON_FAIL(
-        wh_Server_DmaRegisterCb(server, _customServerDma64Cb));
-#endif
+    WH_TEST_RETURN_ON_FAIL(wh_Server_DmaRegisterCb(server, _customServerDmaCb));
 
     /* Register our custom allow list */
     WH_TEST_RETURN_ON_FAIL(wh_Server_DmaRegisterAllowList(server, &allowList));
@@ -373,11 +347,7 @@ static int _testDma(whServerContext* server, whClientContext* client)
 
     /* Finally, check that registering a NULL callbacks clears the DMA callback
      * table, and that the copies otherwise work as normal */
-#if WH_DMA_IS_32BIT
-    WH_TEST_RETURN_ON_FAIL(wh_Server_DmaRegisterCb32(server, NULL));
-#else
     WH_TEST_RETURN_ON_FAIL(wh_Server_DmaRegisterCb(server, NULL));
-#endif
 
     /* Use remap buffer as copy src, since client address isn't in allowlist */
     memcpy(testMem.srvRemapBufAllow, testMem.cliBuf, sizeof(testMem.cliBuf));
