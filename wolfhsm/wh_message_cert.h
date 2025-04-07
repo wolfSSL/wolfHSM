@@ -34,17 +34,19 @@
 #include "wolfhsm/wh_nvm.h"
 
 enum WH_MESSAGE_CERT_ACTION_ENUM {
-    WH_MESSAGE_CERT_ACTION_INIT             = 0x1,
-    WH_MESSAGE_CERT_ACTION_ADDTRUSTED       = 0x2,
-    WH_MESSAGE_CERT_ACTION_ERASETRUSTED    = 0x3,
+    WH_MESSAGE_CERT_ACTION_INIT              = 0x1,
+    WH_MESSAGE_CERT_ACTION_ADDTRUSTED        = 0x2,
+    WH_MESSAGE_CERT_ACTION_ERASETRUSTED      = 0x3,
     WH_MESSAGE_CERT_ACTION_READTRUSTED       = 0x4,
-    WH_MESSAGE_CERT_ACTION_VERIFY           = 0x5,
-    WH_MESSAGE_CERT_ACTION_ADDTRUSTED_DMA32 = 0x12,
+    WH_MESSAGE_CERT_ACTION_VERIFY            = 0x5,
+    WH_MESSAGE_CERT_ACTION_ADDTRUSTED_DMA32  = 0x12,
     WH_MESSAGE_CERT_ACTION_READTRUSTED_DMA32 = 0x14,
-    WH_MESSAGE_CERT_ACTION_VERIFY_DMA32     = 0x15,
-    WH_MESSAGE_CERT_ACTION_ADDTRUSTED_DMA64 = 0x22,
+    WH_MESSAGE_CERT_ACTION_VERIFY_DMA32      = 0x15,
+    WH_MESSAGE_CERT_ACTION_ADDTRUSTED_DMA64  = 0x22,
     WH_MESSAGE_CERT_ACTION_READTRUSTED_DMA64 = 0x24,
-    WH_MESSAGE_CERT_ACTION_VERIFY_DMA64     = 0x25,
+    WH_MESSAGE_CERT_ACTION_VERIFY_DMA64      = 0x25,
+    WH_MESSAGE_CERT_ACTION_VERIFY_ACERT      = 0x26,
+    WH_MESSAGE_CERT_ACTION_VERIFY_ACERT_DMA  = 0x27,
 };
 
 /* Simple reusable response message */
@@ -126,7 +128,6 @@ int wh_MessageCert_TranslateVerifyRequest(
 /* Use SimpleResponse */
 
 #ifdef WOLFHSM_CFG_DMA
-#if WH_DMA_IS_32BIT
 /* AddTrusted DMA32 Request */
 typedef struct {
     uint32_t cert_addr;
@@ -162,9 +163,7 @@ typedef struct {
 int wh_MessageCert_TranslateVerifyDma32Request(
     uint16_t magic, const whMessageCert_VerifyDma32Request* src,
     whMessageCert_VerifyDma32Request* dest);
-#endif /* WH_DMA_IS_32BIT */
 
-#if WH_DMA_IS_64BIT
 /* AddTrusted DMA64 Request */
 typedef struct {
     uint64_t cert_addr;
@@ -200,7 +199,25 @@ typedef struct {
 int wh_MessageCert_TranslateVerifyDma64Request(
     uint16_t magic, const whMessageCert_VerifyDma64Request* src,
     whMessageCert_VerifyDma64Request* dest);
-#endif /* WH_DMA_IS_64BIT */
 #endif /* WOLFHSM_CFG_DMA */
+
+#ifdef WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT
+/* Verify ACERT Request */
+typedef struct {
+    uint32_t cert_len;
+    whNvmId  trustedRootNvmId;
+    uint8_t  WH_PAD[2];
+    /* Attribute Certificate data follows */
+} whMessageCert_VerifyAcertRequest;
+
+int wh_MessageCert_TranslateVerifyAcertRequest(
+    uint16_t magic, const whMessageCert_VerifyAcertRequest* src,
+    whMessageCert_VerifyAcertRequest* dest);
+
+/* Verify ACERT Response */
+/* Use SimpleResponse */
+
+#endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT */
+
 
 #endif /* !WOLFHSM_WH_MESSAGE_CERT_H_ */

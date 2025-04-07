@@ -37,6 +37,9 @@
 #include "wh_test_common.h"
 #include "wh_test_cert.h"
 #include "wh_test_cert_data.h"
+#if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT)
+#include "wh_test_cert_data_acert.h"
+#endif
 
 
 /* Run certificate configuration tests */
@@ -205,6 +208,64 @@ int whTest_CertClient(whClientContext* client)
     return rc;
 }
 
+#if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT)
+/* Run attribute certificate client tests */
+int whTest_CertClientAcert(whClientContext* client)
+{
+    int     rc = WH_ERROR_OK;
+    int32_t out_rc;
+    whNvmId trustedCertId = 1;
+    whNvmId rootCertB_id  = 2;
+
+    WH_DEBUG_PRINT("Starting attribute certificate client test...\n");
+
+    /* Initialize certificate manager */
+    WH_DEBUG_PRINT("Initializing certificate manager...\n");
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CertInit(client, &out_rc));
+    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+
+    /* Add trusted certificate to NVM */
+    WH_DEBUG_PRINT("Adding trusted certificate to NVM...\n");
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CertAddTrusted(
+        client, trustedCertId, caCert_der, caCert_der_len, &out_rc));
+    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+
+    WH_DEBUG_PRINT("Adding root certificate B to NVM...\n");
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CertAddTrusted(
+        client, rootCertB_id, ROOT_B_CERT, ROOT_B_CERT_len, &out_rc));
+    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+
+    /* Verify attribute certificate */
+    WH_DEBUG_PRINT("Verifying attribute certificate...\n");
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CertVerifyAcert(
+        client, attrCert_der, attrCert_der_len, trustedCertId, &out_rc));
+    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+
+    /* Attempt to verify attribute certificate with different root, should fail
+     */
+    WH_DEBUG_PRINT(
+        "Attempting to verify attribute certificate with different root...\n");
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CertVerifyAcert(
+        client, attrCert_der, attrCert_der_len, rootCertB_id, &out_rc));
+    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_CERT_VERIFY);
+
+    /* Clean up - delete the trusted certificates */
+    WH_DEBUG_PRINT("Deleting trusted certificates...\n");
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Client_CertEraseTrusted(client, trustedCertId, &out_rc));
+    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Client_CertEraseTrusted(client, rootCertB_id, &out_rc));
+    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+
+    WH_DEBUG_PRINT(
+        "Attribute certificate client test completed successfully\n");
+
+    return rc;
+}
+#endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT */
+
 #if defined(WOLFHSM_CFG_DMA)
 /* Run certificate client DMA tests
  *
@@ -302,6 +363,69 @@ int whTest_CertClientDma_ClientServerTestInternal(whClientContext* client)
 
     return rc;
 }
+
+#if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT)
+/* Run attribute certificate client DMA tests
+ *
+ * Only suitable for internal use in wolfHSM test harness, as it requires
+ * the client and server to have direct access to each others process memory
+ * and assumes the server has the appropriate DMA translation configured */
+int whTest_CertClientAcertDma_ClientServerTestInternal(whClientContext* client)
+{
+    int     rc = WH_ERROR_OK;
+    int32_t out_rc;
+    whNvmId trustedCertId = 1;
+    whNvmId rootCertB_id  = 2;
+
+    WH_DEBUG_PRINT("Starting attribute certificate client test...\n");
+
+    /* Initialize certificate manager */
+    WH_DEBUG_PRINT("Initializing certificate manager...\n");
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CertInit(client, &out_rc));
+    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+
+    /* Add trusted certificate to NVM */
+    WH_DEBUG_PRINT("Adding trusted certificate to NVM...\n");
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CertAddTrustedDma(
+        client, trustedCertId, caCert_der, caCert_der_len, &out_rc));
+    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+
+    WH_DEBUG_PRINT("Adding root certificate B to NVM...\n");
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CertAddTrustedDma(
+        client, rootCertB_id, ROOT_B_CERT, ROOT_B_CERT_len, &out_rc));
+    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+
+    /* Verify attribute certificate */
+    WH_DEBUG_PRINT("Verifying attribute certificate...\n");
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CertVerifyAcertDma(
+        client, attrCert_der, attrCert_der_len, trustedCertId, &out_rc));
+    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+
+    /* Attempt to verify attribute certificate with different root, should fail
+     */
+    WH_DEBUG_PRINT(
+        "Attempting to verify attribute certificate with different root...\n");
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CertVerifyAcertDma(
+        client, attrCert_der, attrCert_der_len, rootCertB_id, &out_rc));
+    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_CERT_VERIFY);
+
+    /* Clean up - delete the trusted certificates */
+    WH_DEBUG_PRINT("Deleting trusted certificates...\n");
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Client_CertEraseTrusted(client, trustedCertId, &out_rc));
+    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Client_CertEraseTrusted(client, rootCertB_id, &out_rc));
+    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+
+    WH_DEBUG_PRINT(
+        "Attribute certificate client test completed successfully\n");
+
+    return rc;
+}
+#endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT */
+
 #endif /* WOLFHSM_CFG_DMA */
 
 int whTest_CertRamSim(void)

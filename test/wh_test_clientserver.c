@@ -1424,15 +1424,31 @@ int whTest_ClientCfg(whClientConfig* clientCfg)
     WH_TEST_RETURN_ON_FAIL(_testClientCounter(client));
 
 #if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER) && !defined(WOLFHSM_CFG_NO_CRYPTO)
+
 #if !defined(WOLFHSM_CFG_TEST_CLIENT_LARGE_DATA_DMA_ONLY)
     /* Test certificate API using non-DMA messages */
     WH_TEST_RETURN_ON_FAIL(whTest_CertClient(client));
-#endif
+
+#if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT)
+    /* Test attribute certificate API */
+    WH_TEST_RETURN_ON_FAIL(whTest_CertClientAcert(client));
+#endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT */
+
+#endif /* !WOLFHSM_CFG_TEST_CLIENT_LARGE_DATA_DMA_ONLY */
+
 #if defined(WOLFHSM_CFG_DMA)
     /* Test certificate API using DMA messages */
     WH_TEST_RETURN_ON_FAIL(
         whTest_CertClientDma_ClientServerTestInternal(client));
-#endif
+
+#if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT)
+    /* Test attribute certificate API using DMA messages */
+    WH_TEST_RETURN_ON_FAIL(
+        whTest_CertClientAcertDma_ClientServerTestInternal(client));
+#endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT */
+
+#endif /* WOLFHSM_CFG_DMA */
+
 #endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER && !WOLFHSM_CFG_NO_CRYPTO */
 
     WH_TEST_RETURN_ON_FAIL(wh_Client_CommClose(client));

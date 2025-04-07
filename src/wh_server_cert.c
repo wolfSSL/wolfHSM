@@ -246,6 +246,48 @@ int wh_Server_CertVerify(whServerContext* server, const uint8_t* cert,
     return rc;
 }
 
+#if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT)
+int wh_Server_CertVerifyAcert(whServerContext* server, const uint8_t* cert,
+                              uint32_t cert_len, whNvmId trustedRootNvmId)
+{
+    int rc;
+
+    /* Stack-based buffer for root certificate */
+    uint8_t root_cert[WOLFHSM_CFG_MAX_CERT_SIZE];
+    uint32_t root_cert_len = sizeof(root_cert);
+
+    /* Load the trusted root certificate into the buffer */
+    rc = wh_Server_CertReadTrusted(server, trustedRootNvmId, root_cert,
+                                  &root_cert_len);
+    if (rc != WH_ERROR_OK) {
+        return rc;
+    }
+
+    /* Decode and parse the root certificate */
+    DecodedCert dc;
+    wc_InitDecodedCert(&dc, root_cert, root_cert_len, NULL);
+    rc = wc_ParseCert(&dc, CERT_TYPE, 0, NULL);
+    if (rc != 0) {
+        wc_FreeDecodedCert(&dc);
+        return rc;
+    }
+
+    /* Ensure wolfCrypt was able to decode the certificate and store the
+     * public key */
+    if (dc.pubKeyStored == 0) {
+        wc_FreeDecodedCert(&dc);
+        return WH_ERROR_ABORTED;
+    }
+
+    /* Verify the Acert against the root certificate public key */
+    rc = wc_VerifyX509Acert(cert, cert_len, dc.publicKey, dc.pubKeySize,
+                            dc.keyOID, NULL);
+
+    wc_FreeDecodedCert(&dc);
+    return rc; 
+}
+#endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT */
+
 /* Handle a certificate request and generate a response */
 int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
                                 uint16_t action, uint16_t seq,
@@ -602,6 +644,113 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
         }; break;
 #endif /* WH_DMA_IS_64BIT */
 #endif /* WOLFHSM_CFG_DMA */
+
+#if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT)
+        case WH_MESSAGE_CERT_ACTION_VERIFY_ACERT: {
+            whMessageCert_VerifyAcertRequest req       = {0};
+            whMessageCert_SimpleResponse     resp      = {0};
+            const uint8_t*                   cert_data = NULL;
+
+            /* Convert request struct */
+            wh_MessageCert_TranslateVerifyAcertRequest(
+                magic, (whMessageCert_VerifyAcertRequest*)req_packet, &req);
+
+            cert_data = (const uint8_t*)req_packet + sizeof(req);
+
+            /* Process the verify action */
+            rc      = wh_Server_CertVerifyAcert(server, cert_data, req.cert_len,
+                                                req.trustedRootNvmId);
+
+            /* Signature confirmation error is not an error for the server, so
+             * propagate this error to the client in the response, otherwise
+             * return the error code from the verify action */
+            if (rc == ASN_SIG_CONFIRM_E) {
+                resp.rc = WH_ERROR_CERT_VERIFY;
+                rc = WH_ERROR_OK;
+            }
+            else {
+                resp.rc = rc;
+            }
+
+            /* Convert the response struct */
+            wh_MessageCert_TranslateSimpleResponse(
+                magic, &resp, (whMessageCert_SimpleResponse*)resp_packet);
+            *out_resp_size = sizeof(resp);
+        }; break;
+
+#if defined(WOLFHSM_CFG_DMA)
+        case WH_MESSAGE_CERT_ACTION_VERIFY_ACERT_DMA: {
+            /* Acert verify request uses standard cert verify request struct,
+             * and uses 64-bit DMA messages regardless of the platform, in
+             * anticipation of refactoring DMA to be generic */
+            whMessageCert_VerifyDma64Request req       = {0};
+            whMessageCert_SimpleResponse     resp      = {0};
+            void*                            cert_data = NULL;
+
+            if (req_size != sizeof(req)) {
+                /* Request is malformed */
+                rc = WH_ERROR_ABORTED;
+            }
+            if (rc == WH_ERROR_OK) {
+                /* Convert request struct */
+                wh_MessageCert_TranslateVerifyDma64Request(
+                    magic, (whMessageCert_VerifyDma64Request*)req_packet, &req);
+
+                /* Process client address */
+                /* TODO: This will get ripped out once we refactor DMA to be
+                 * generic */
+#if WH_DMA_IS_32BIT
+                rc = wh_Server_DmaProcessClientAddress32(
+                    server, req.cert_addr, &cert_data, req.cert_len,
+                    WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
+#elif WH_DMA_IS_64BIT
+                rc = wh_Server_DmaProcessClientAddress64(
+                    server, req.cert_addr, &cert_data, req.cert_len,
+                    WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
+#endif /* WH_DMA_IS_64BIT */
+            }
+            if (rc == WH_ERROR_OK) {
+                /* Process the verify action */
+                rc = wh_Server_CertVerifyAcert(server, cert_data, req.cert_len,
+                                               req.trustedRootNvmId);
+                /* Signature confirmation error is not an error for the server,
+                 * so propagate this error to the client in the response,
+                 * otherwise return the error code from the verify action */
+                if (rc == ASN_SIG_CONFIRM_E) {
+                    resp.rc = WH_ERROR_CERT_VERIFY;
+                    rc      = WH_ERROR_OK;
+                }
+                else {
+                    resp.rc = rc;
+                }
+            }
+            if (rc == WH_ERROR_OK) {
+                /* Post-process client address */
+                /* TODO: This will get ripped out once we refactor DMA to be
+                 * generic */
+#if WH_DMA_IS_32BIT
+                rc = wh_Server_DmaProcessClientAddress32(
+                    server, req.cert_addr, &cert_data, req.cert_len,
+                    WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
+#elif WH_DMA_IS_64BIT
+                rc = wh_Server_DmaProcessClientAddress64(
+                    server, req.cert_addr, &cert_data, req.cert_len,
+                    WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
+#endif /* WH_DMA_IS_64BIT */
+            }
+
+            /* Convert the response struct */
+            wh_MessageCert_TranslateSimpleResponse(
+                magic, &resp, (whMessageCert_SimpleResponse*)resp_packet);
+            *out_resp_size = sizeof(resp);
+
+            /* If there was an error, return it in the response */
+            if (rc != WH_ERROR_OK) {
+                resp.rc = rc;
+            }
+        } break;
+#endif /* WOLFHSM_CFG_DMA */
+#endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT */
 
         default:
             /* Unknown request. Respond with empty packet */
