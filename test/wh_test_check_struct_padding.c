@@ -54,8 +54,8 @@ whMessageNvm_ReadResponse          whMessageNvm_ReadResponse_test;
 whMessageNvm_AddObjectDma32Request whMessageNvm_AddObjectDma32Request_test;
 whMessageNvm_ReadDma32Request      whMessageNvm_ReadDma32Request_test;
 #elif defined(WOLFHSM_CFG_DMA) && WH_DMA_IS_64BIT
-whMessageNvm_AddObjectDma64Request whMessageNvm_AddObjectDma64Request_test;
-whMessageNvm_ReadDma64Request      whMessageNvm_ReadDma64Request_test;
+whMessageNvm_AddObjectDmaRequest whMessageNvm_AddObjectDma64Request_test;
+whMessageNvm_ReadDmaRequest      whMessageNvm_ReadDma64Request_test;
 #endif
 
 #include "wolfhsm/wh_packet.h"
@@ -86,10 +86,10 @@ wh_Packet_key_cache_Dma32_res  keyCacheDma32Res;
 wh_Packet_key_export_Dma32_req keyExportDma32Req;
 wh_Packet_key_export_Dma32_res keyExportDma32Res;
 #elif defined(WOLFHSM_CFG_DMA) && WH_DMA_IS_64BIT
-wh_Packet_key_cache_Dma64_req      keyCacheDma64Req;
-wh_Packet_key_cache_Dma64_res      keyCacheDma64Res;
-wh_Packet_key_export_Dma64_req     keyExportDma64Req;
-wh_Packet_key_export_Dma64_res     keyExportDma64Res;
+wh_Packet_key_cache_Dma_req      keyCacheDmaReq;
+wh_Packet_key_cache_Dma_res      keyCacheDmaRes;
+wh_Packet_key_export_Dma_req     keyExportDmaReq;
+wh_Packet_key_export_Dma_res     keyExportDmaRes;
 #endif
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
@@ -140,16 +140,16 @@ wh_Packet_pq_mldsa_verify_Dma32_res pqMldsaVerifyDma32Res;
 wh_Packet_cmac_Dma32_req            cmacDma32Req;
 wh_Packet_cmac_Dma32_res            cmacDma32Res;
 #elif defined(WOLFHSM_CFG_DMA) && WH_DMA_IS_64BIT
-wh_Packet_hash_sha256_Dma64_req     hashSha256Dma64Req;
-wh_Packet_hash_sha256_Dma64_res     hashSha256Dma64Res;
-wh_Packet_pq_mldsa_keygen_Dma64_req pqMldsaKeygenDma64Req;
-wh_Packet_pq_mldsa_Dma64_res        pqMldsaDma64Res;
-wh_Packet_pq_mldsa_sign_Dma64_req   pqMldsaSignDma64Req;
-wh_Packet_pq_mldsa_sign_Dma64_res   pqMldsaSignDma64Res;
-wh_Packet_pq_mldsa_verify_Dma64_req pqMldsaVerifyDma64Req;
-wh_Packet_pq_mldsa_verify_Dma64_res pqMldsaVerifyDma64Res;
-wh_Packet_cmac_Dma64_req            cmacDma64Req;
-wh_Packet_cmac_Dma64_res            cmacDma64Res;
+wh_Packet_hash_sha256_Dma_req     hashSha256DmaReq;
+wh_Packet_hash_sha256_Dma_res     hashSha256DmaRes;
+wh_Packet_pq_mldsa_keygen_Dma_req pqMldsaKeygenDmaReq;
+wh_Packet_pq_mldsa_Dma_res        pqMldsaDmaRes;
+wh_Packet_pq_mldsa_sign_Dma_req   pqMldsaSignDmaReq;
+wh_Packet_pq_mldsa_sign_Dma_res   pqMldsaSignDmaRes;
+wh_Packet_pq_mldsa_verify_Dma_req pqMldsaVerifyDmaReq;
+wh_Packet_pq_mldsa_verify_Dma_res pqMldsaVerifyDmaRes;
+wh_Packet_cmac_Dma_req            cmacDmaReq;
+wh_Packet_cmac_Dma_res            cmacDmaRes;
 #endif
 
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */

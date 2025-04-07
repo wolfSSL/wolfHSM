@@ -53,19 +53,11 @@ static int _FindInCache(whServerContext* server, whKeyId keyId,
         whNvmMetadata* *out_meta);
 
 #ifdef WOLFHSM_CFG_DMA
-#if WH_DMA_IS_32BIT
-static int hsmCacheKeyDma32(whServerContext* server, whNvmMetadata* meta,
-    uint32_t keyAddr);
-static int hsmExportKeyDma32(whServerContext* server, whKeyId keyId,
-    uint32_t keyAddr, uint32_t keySz, whNvmMetadata* outMeta);
-#endif
-#if WH_DMA_IS_64BIT
-static int hsmCacheKeyDma64(whServerContext* server, whNvmMetadata* meta,
-    uint64_t keyAddr);
-static int hsmExportKeyDma64(whServerContext* server, whKeyId keyId,
-                             uint64_t keyAddr, uint64_t keySz,
-                             whNvmMetadata* outMeta);
-#endif
+static int hsmCacheKeyDma(whServerContext* server, whNvmMetadata* meta,
+                          uint64_t keyAddr);
+static int hsmExportKeyDma(whServerContext* server, whKeyId keyId,
+                           uint64_t keyAddr, uint64_t keySz,
+                           whNvmMetadata* outMeta);
 #endif
 
 int hsmGetUniqueId(whServerContext* server, whNvmId* inout_id)
@@ -563,21 +555,21 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
             break;
 
 #ifdef WOLFHSM_CFG_DMA
-#if WH_DMA_IS_32BIT
-        case WH_KEY_CACHE_DMA32:
+
+        case WH_KEY_CACHE_DMA:
             /* set the metadata fields */
             meta->id = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, server->comm->client_id,
-                                     packet->keyCacheDma32Req.id);
+                                     packet->keyCacheDmaReq.id);
             meta->access = WH_NVM_ACCESS_ANY;
-            meta->flags  = packet->keyCacheDma32Req.flags;
-            meta->len    = packet->keyCacheDma32Req.sz;
+            meta->flags  = packet->keyCacheDmaReq.flags;
+            meta->len    = packet->keyCacheDmaReq.sz;
             /* validate label sz */
-            if (packet->keyCacheDma32Req.labelSz > WH_NVM_LABEL_LEN) {
+            if (packet->keyCacheDmaReq.labelSz > WH_NVM_LABEL_LEN) {
                 ret = WH_ERROR_BADARGS;
             }
             else {
-                memcpy(meta->label, packet->keyCacheDma32Req.label,
-                        packet->keyCacheDma32Req.labelSz);
+                memcpy(meta->label, packet->keyCacheDmaReq.label,
+                        packet->keyCacheDmaReq.labelSz);
             }
             /* get a new id if one wasn't provided */
             if (WH_KEYID_ISERASED(meta->id)) {
@@ -585,85 +577,32 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
             }
             /* write the key using DMA */
             if (ret == WH_ERROR_OK) {
-                ret = hsmCacheKeyDma32(server, meta,
-                                       packet->keyCacheDma32Req.key.addr);
+                ret = hsmCacheKeyDma(server, meta,
+                                     packet->keyCacheDmaReq.key.addr);
             }
             if (ret == 0) {
                 /* remove the client_id, client may set type */
-                packet->keyCacheDma32Res.id = WH_KEYID_ID(meta->id);
-                *size = WH_PACKET_STUB_SIZE + sizeof(packet->keyCacheDma32Res);
+                packet->keyCacheDmaRes.id = WH_KEYID_ID(meta->id);
+                *size = WH_PACKET_STUB_SIZE + sizeof(packet->keyCacheDmaRes);
             }
             break;
 
-        case WH_KEY_EXPORT_DMA32:
-            ret = hsmExportKeyDma32(server,
-                                    WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
-                                                  server->comm->client_id,
-                                                  packet->keyExportDma32Req.id),
-                                    packet->keyExportDma32Req.key.addr,
-                                    packet->keyExportDma32Req.key.sz, meta);
+        case WH_KEY_EXPORT_DMA:
+            ret = hsmExportKeyDma(server,
+                                  WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
+                                                server->comm->client_id,
+                                                packet->keyExportDmaReq.id),
+                                  packet->keyExportDmaReq.key.addr,
+                                  packet->keyExportDmaReq.key.sz, meta);
             if (ret == 0) {
                 /* set key len */
-                packet->keyExportDma32Res.len =
-                    packet->keyExportDma32Req.key.sz;
+                packet->keyExportDmaRes.len = packet->keyExportDmaReq.key.sz;
                 /* set label */
-                memcpy(packet->keyExportDma32Res.label, meta->label,
-                        sizeof(meta->label));
-                *size = WH_PACKET_STUB_SIZE + sizeof(packet->keyExportDma32Res);
+                memcpy(packet->keyExportDmaRes.label, meta->label,
+                       sizeof(meta->label));
+                *size = WH_PACKET_STUB_SIZE + sizeof(packet->keyExportDmaRes);
             }
             break;
-#endif /* WH_DMA_IS_32BIT */
-
-#if WH_DMA_IS_64BIT
-        case WH_KEY_CACHE_DMA64:
-            /* set the metadata fields */
-            meta->id = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, server->comm->client_id,
-                                     packet->keyCacheDma64Req.id);
-            meta->access = WH_NVM_ACCESS_ANY;
-            meta->flags  = packet->keyCacheDma64Req.flags;
-            meta->len    = packet->keyCacheDma64Req.sz;
-            /* validate label sz */
-            if (packet->keyCacheDma64Req.labelSz > WH_NVM_LABEL_LEN) {
-                ret = WH_ERROR_BADARGS;
-            }
-            else {
-                memcpy(meta->label, packet->keyCacheDma64Req.label,
-                        packet->keyCacheDma64Req.labelSz);
-            }
-            /* get a new id if one wasn't provided */
-            if (WH_KEYID_ISERASED(meta->id)) {
-                ret = hsmGetUniqueId(server, &meta->id);
-            }
-            /* write the key using DMA */
-            if (ret == WH_ERROR_OK) {
-                ret = hsmCacheKeyDma64(server, meta,
-                                       packet->keyCacheDma64Req.key.addr);
-            }
-            if (ret == 0) {
-                /* remove the client_id, client may set type */
-                packet->keyCacheDma64Res.id = WH_KEYID_ID(meta->id);
-                *size = WH_PACKET_STUB_SIZE + sizeof(packet->keyCacheDma64Res);
-            }
-            break;
-
-        case WH_KEY_EXPORT_DMA64:
-            ret = hsmExportKeyDma64(server,
-                                    WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
-                                                  server->comm->client_id,
-                                                  packet->keyExportDma64Req.id),
-                                    packet->keyExportDma64Req.key.addr,
-                                    packet->keyExportDma64Req.key.sz, meta);
-            if (ret == 0) {
-                /* set key len */
-                packet->keyExportDma64Res.len =
-                    packet->keyExportDma64Req.key.sz;
-                /* set label */
-                memcpy(packet->keyExportDma64Res.label, meta->label,
-                        sizeof(meta->label));
-                *size = WH_PACKET_STUB_SIZE + sizeof(packet->keyExportDma64Res);
-            }
-            break;
-#endif /* WH_DMA_IS_64BIT */
 #endif /* WOLFHSM_CFG_DMA */
 
         case WH_KEY_EVICT:
@@ -726,9 +665,9 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
 }
 
 #ifdef WOLFHSM_CFG_DMA
-#if WH_DMA_IS_32BIT
-static int hsmCacheKeyDma32(whServerContext* server, whNvmMetadata* meta,
-                            uint32_t keyAddr)
+
+static int hsmCacheKeyDma(whServerContext* server, whNvmMetadata* meta,
+                          uint64_t keyAddr)
 {
     int            ret;
     uint8_t*       buffer;
@@ -744,8 +683,8 @@ static int hsmCacheKeyDma32(whServerContext* server, whNvmMetadata* meta,
     memcpy(slotMeta, meta, sizeof(whNvmMetadata));
 
     /* Copy key data using DMA */
-    ret = whServerDma_CopyFromClient32(server, buffer, keyAddr, meta->len,
-                                       (whServerDmaFlags){0});
+    ret = whServerDma_CopyFromClient(server, buffer, keyAddr, meta->len,
+                                     (whServerDmaFlags){0});
     if (ret != 0) {
         /* Clear the slot on error */
         memset(buffer, 0, meta->len);
@@ -755,9 +694,9 @@ static int hsmCacheKeyDma32(whServerContext* server, whNvmMetadata* meta,
     return ret;
 }
 
-static int hsmExportKeyDma32(whServerContext* server, whKeyId keyId,
-                             uint32_t keyAddr, uint32_t keySz,
-                             whNvmMetadata* outMeta)
+static int hsmExportKeyDma(whServerContext* server, whKeyId keyId,
+                           uint64_t keyAddr, uint64_t keySz,
+                           whNvmMetadata* outMeta)
 {
     int            ret;
     uint8_t*       buffer;
@@ -776,69 +715,11 @@ static int hsmExportKeyDma32(whServerContext* server, whKeyId keyId,
     memcpy(outMeta, cacheMeta, sizeof(whNvmMetadata));
 
     /* Copy key data using DMA */
-    ret = whServerDma_CopyToClient32(server, keyAddr, buffer, outMeta->len,
-                                     (whServerDmaFlags){0});
+    ret = whServerDma_CopyToClient(server, keyAddr, buffer, outMeta->len,
+                                   (whServerDmaFlags){0});
 
     return ret;
 }
-#endif /* WH_DMA_IS_32BIT */
-
-#if WH_DMA_IS_64BIT
-static int hsmCacheKeyDma64(whServerContext* server, whNvmMetadata* meta,
-                            uint64_t keyAddr)
-{
-    int            ret;
-    uint8_t*       buffer;
-    whNvmMetadata* slotMeta;
-
-    /* Get a cache slot */
-    ret = hsmCacheFindSlotAndZero(server, meta->len, &buffer, &slotMeta);
-    if (ret != 0) {
-        return ret;
-    }
-
-    /* Copy metadata */
-    memcpy(slotMeta, meta, sizeof(whNvmMetadata));
-
-    /* Copy key data using DMA */
-    ret = whServerDma_CopyFromClient64(server, buffer, keyAddr, meta->len,
-                                       (whServerDmaFlags){0});
-    if (ret != 0) {
-        /* Clear the slot on error */
-        memset(buffer, 0, meta->len);
-        slotMeta->id = WH_KEYID_ERASED;
-    }
-
-    return ret;
-}
-
-static int hsmExportKeyDma64(whServerContext* server, whKeyId keyId,
-                             uint64_t keyAddr, uint64_t keySz,
-                             whNvmMetadata* outMeta)
-{
-    int            ret;
-    uint8_t*       buffer;
-    whNvmMetadata* cacheMeta;
-
-    /* Find key in cache */
-    ret = _FindInCache(server, keyId, NULL, NULL, &buffer, &cacheMeta);
-    if (ret != 0) {
-        return ret;
-    }
-
-    if (keySz < cacheMeta->len) {
-        return WH_ERROR_NOSPACE;
-    }
-
-    memcpy(outMeta, cacheMeta, sizeof(whNvmMetadata));
-
-    /* Copy key data using DMA */
-    ret = whServerDma_CopyToClient64(server, keyAddr, buffer, outMeta->len,
-                                     (whServerDmaFlags){0});
-
-    return ret;
-}
-#endif /* WH_DMA_IS_64BIT */
 #endif /* WOLFHSM_CFG_DMA */
 
 #endif /* WOLFHSM_CFG_NO_CRYPTO */

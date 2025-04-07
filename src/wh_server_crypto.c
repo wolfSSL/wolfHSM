@@ -1898,17 +1898,12 @@ int wh_Server_HandleCryptoRequest(whServerContext* ctx,
 
 #ifndef NO_SHA256
 static int _HandleSha256Dma(whServerContext* server, whPacket* packet,
-                              uint16_t* size)
+                            uint16_t* size)
 {
-    int ret = 0;
-#if WH_DMA_IS_32BIT
-    wh_Packet_hash_sha256_Dma32_req* req = &packet->hashSha256Dma32Req;
-    wh_Packet_hash_sha256_Dma32_res* res = &packet->hashSha256Dma32Res;
-#else
-    wh_Packet_hash_sha256_Dma64_req* req = &packet->hashSha256Dma64Req;
-    wh_Packet_hash_sha256_Dma64_res* res = &packet->hashSha256Dma64Res;
-#endif
-    wc_Sha256* sha256 = server->crypto->algoCtx.sha256;
+    int                            ret    = 0;
+    wh_Packet_hash_sha256_Dma_req* req    = &packet->hashSha256DmaReq;
+    wh_Packet_hash_sha256_Dma_res* res    = &packet->hashSha256DmaRes;
+    wc_Sha256*                     sha256 = server->crypto->algoCtx.sha256;
     int        clientDevId;
 
     /* Ensure state sizes are the same */
@@ -1919,7 +1914,7 @@ static int _HandleSha256Dma(whServerContext* server, whPacket* packet,
 
     /* Copy the SHA256 context from client address space */
     ret = whServerDma_CopyFromClient(server, sha256, req->state.addr,
-                                       req->state.sz, (whServerDmaFlags){0});
+                                     req->state.sz, (whServerDmaFlags){0});
     if (ret != WH_ERROR_OK) {
         res->dmaAddrStatus.badAddr = req->state;
     }
@@ -2021,13 +2016,8 @@ static int _HandleMlDsaKeyGenDma(whServerContext* server, whPacket* packet,
     void*    clientOutAddr = NULL;
     uint16_t keySize       = 0;
 
-#if WH_DMA_IS_32BIT
-    wh_Packet_pq_mldsa_keygen_Dma32_req* req = &packet->pqMldsaKeygenDma32Req;
-    wh_Packet_pq_mldsa_Dma32_res*        res = &packet->pqMldsaDma32Res;
-#else
-    wh_Packet_pq_mldsa_keygen_Dma64_req* req = &packet->pqMldsaKeygenDma64Req;
-    wh_Packet_pq_mldsa_Dma64_res*        res = &packet->pqMldsaDma64Res;
-#endif
+    wh_Packet_pq_mldsa_keygen_Dma_req* req = &packet->pqMldsaKeygenDmaReq;
+    wh_Packet_pq_mldsa_Dma_res*        res = &packet->pqMldsaDmaRes;
 
     /* Check the ML-DSA security level is valid and supported */
     if (0 == _IsMlDsaLevelSupported(req->level)) {
@@ -2127,13 +2117,8 @@ static int _HandleMlDsaSignDma(whServerContext* ctx, whPacket* packet,
     void*    msgAddr = NULL;
     void*    sigAddr = NULL;
 
-#if WH_DMA_IS_32BIT
-    wh_Packet_pq_mldsa_sign_Dma32_req* req = &packet->pqMldsaSignDma32Req;
-    wh_Packet_pq_mldsa_sign_Dma32_res* res = &packet->pqMldsaSignDma32Res;
-#else
-    wh_Packet_pq_mldsa_sign_Dma64_req* req = &packet->pqMldsaSignDma64Req;
-    wh_Packet_pq_mldsa_sign_Dma64_res* res = &packet->pqMldsaSignDma64Res;
-#endif
+    wh_Packet_pq_mldsa_sign_Dma_req* req = &packet->pqMldsaSignDmaReq;
+    wh_Packet_pq_mldsa_sign_Dma_res* res = &packet->pqMldsaSignDmaRes;
 
     /* Transaction state */
     whKeyId key_id;
@@ -2220,13 +2205,8 @@ static int _HandleMlDsaVerifyDma(whServerContext* ctx, whPacket* packet,
     void*    sigAddr  = NULL;
     int      verified = 0;
 
-#if WH_DMA_IS_32BIT
-    wh_Packet_pq_mldsa_verify_Dma32_req* req = &packet->pqMldsaVerifyDma32Req;
-    wh_Packet_pq_mldsa_verify_Dma32_res* res = &packet->pqMldsaVerifyDma32Res;
-#else
-    wh_Packet_pq_mldsa_verify_Dma64_req* req = &packet->pqMldsaVerifyDma64Req;
-    wh_Packet_pq_mldsa_verify_Dma64_res* res = &packet->pqMldsaVerifyDma64Res;
-#endif
+    wh_Packet_pq_mldsa_verify_Dma_req* req = &packet->pqMldsaVerifyDmaReq;
+    wh_Packet_pq_mldsa_verify_Dma_res* res = &packet->pqMldsaVerifyDmaRes;
 
     /* Transaction state */
     whKeyId key_id;
@@ -2351,18 +2331,13 @@ static int _HandleCmacDma(whServerContext* server, whPacket* packet,
                           uint16_t* size)
 {
     int ret = 0;
-#if WH_DMA_IS_32BIT
-    wh_Packet_cmac_Dma32_req* req = &packet->cmacDma32Req;
-    wh_Packet_cmac_Dma32_res* res = &packet->cmacDma32Res;
-#else
-    wh_Packet_cmac_Dma64_req* req = &packet->cmacDma64Req;
-    wh_Packet_cmac_Dma64_res* res = &packet->cmacDma64Res;
-#endif
-    Cmac*    cmac = server->crypto->algoCtx.cmac;
-    int      clientDevId;
-    whKeyId  keyId;
-    byte     tmpKey[AES_256_KEY_SIZE];
-    uint32_t keyLen;
+    wh_Packet_cmac_Dma_req* req  = &packet->cmacDmaReq;
+    wh_Packet_cmac_Dma_res* res  = &packet->cmacDmaRes;
+    Cmac*                   cmac = server->crypto->algoCtx.cmac;
+    int                     clientDevId;
+    whKeyId                 keyId;
+    byte                    tmpKey[AES_256_KEY_SIZE];
+    uint32_t                keyLen;
     /* Flag indicating if the CMAC context holds a local key that should not be
      * returned to the client   */
     int ctxHoldsLocalKey = 0;

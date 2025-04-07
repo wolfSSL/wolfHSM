@@ -268,10 +268,10 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
     }; break;
 
 #ifdef WOLFHSM_CFG_DMA
-#if WH_DMA_IS_32BIT
-    case WH_MESSAGE_NVM_ACTION_ADDOBJECTDMA32:
+
+    case WH_MESSAGE_NVM_ACTION_ADDOBJECTDMA:
     {
-        whMessageNvm_AddObjectDma32Request req = {0};
+        whMessageNvm_AddObjectDmaRequest req = {0};
         whMessageNvm_SimpleResponse resp = {0};
         void* metadata = NULL;
         void* data = NULL;
@@ -280,19 +280,18 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
             /* Request is malformed */
             resp.rc = WH_ERROR_ABORTED;
         }
-
         if (resp.rc == 0) {
             /* Convert request struct */
-            wh_MessageNvm_TranslateAddObjectDma32Request(magic,
-                    (whMessageNvm_AddObjectDma32Request*)req_packet, &req);
+            wh_MessageNvm_TranslateAddObjectDmaRequest(magic,
+                    (whMessageNvm_AddObjectDmaRequest*)req_packet, &req);
 
             /* perform platform-specific host address processing */
-            resp.rc = wh_Server_DmaProcessClientAddress32(
+            resp.rc = wh_Server_DmaProcessClientAddress(
                 server, req.metadata_hostaddr, &metadata, sizeof(whNvmMetadata),
                 WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
         }
         if (resp.rc == 0) {
-            resp.rc = wh_Server_DmaProcessClientAddress32(
+            resp.rc = wh_Server_DmaProcessClientAddress(
                 server, req.data_hostaddr, &data, req.data_len,
                 WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
         }
@@ -305,12 +304,12 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
         }
         if (resp.rc == 0) {
             /* perform platform-specific host address processing */
-            resp.rc = wh_Server_DmaProcessClientAddress32(
+            resp.rc = wh_Server_DmaProcessClientAddress(
                 server, req.metadata_hostaddr, &metadata, sizeof(whNvmMetadata),
                 WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
         }
         if (resp.rc == 0) {
-            resp.rc = wh_Server_DmaProcessClientAddress32(
+            resp.rc = wh_Server_DmaProcessClientAddress(
                 server, req.data_hostaddr, &data, req.data_len,
                 WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
         }
@@ -320,9 +319,9 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
         *out_resp_size = sizeof(resp);
     }; break;
 
-    case WH_MESSAGE_NVM_ACTION_READDMA32:
+    case WH_MESSAGE_NVM_ACTION_READDMA:
     {
-        whMessageNvm_ReadDma32Request req = {0};
+        whMessageNvm_ReadDmaRequest req = {0};
         whMessageNvm_SimpleResponse resp = {0};
         void* data = NULL;
 
@@ -332,11 +331,11 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
         }
         if (resp.rc == 0) {
             /* Convert request struct */
-            wh_MessageNvm_TranslateReadDma32Request(magic,
-                    (whMessageNvm_ReadDma32Request*)req_packet, &req);
+            wh_MessageNvm_TranslateReadDmaRequest(magic,
+                    (whMessageNvm_ReadDmaRequest*)req_packet, &req);
 
             /* perform platform-specific host address processing */
-            resp.rc = wh_Server_DmaProcessClientAddress32(
+            resp.rc = wh_Server_DmaProcessClientAddress(
                 server, req.data_hostaddr, &data, req.data_len,
                 WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
         }
@@ -347,7 +346,7 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
         }
         if (resp.rc == 0) {
             /* perform platform-specific host address processing */
-            resp.rc = wh_Server_DmaProcessClientAddress32(
+            resp.rc = wh_Server_DmaProcessClientAddress(
                 server, req.data_hostaddr, &data, req.data_len,
                 WH_DMA_OPER_CLIENT_WRITE_POST, (whServerDmaFlags){0});
         }
@@ -356,96 +355,6 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
                 &resp, (whMessageNvm_SimpleResponse*)resp_packet);
         *out_resp_size = sizeof(resp);
     }; break;
-#endif /* WH_DMA_IS_32BIT */
-
-#if WH_DMA_IS_64BIT
-    case WH_MESSAGE_NVM_ACTION_ADDOBJECTDMA64:
-    {
-        whMessageNvm_AddObjectDma64Request req = {0};
-        whMessageNvm_SimpleResponse resp = {0};
-        void* metadata = NULL;
-        void* data = NULL;
-
-        if (req_size != sizeof(req)) {
-            /* Request is malformed */
-            resp.rc = WH_ERROR_ABORTED;
-        }
-        if (resp.rc == 0) {
-            /* Convert request struct */
-            wh_MessageNvm_TranslateAddObjectDma64Request(magic,
-                    (whMessageNvm_AddObjectDma64Request*)req_packet, &req);
-
-            /* perform platform-specific host address processing */
-            resp.rc = wh_Server_DmaProcessClientAddress64(
-                server, req.metadata_hostaddr, &metadata, sizeof(whNvmMetadata),
-                WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
-        }
-        if (resp.rc == 0) {
-            resp.rc = wh_Server_DmaProcessClientAddress64(
-                server, req.data_hostaddr, &data, req.data_len,
-                WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
-        }
-        if (resp.rc == 0) {
-            /* Process the AddObject action */
-            resp.rc = wh_Nvm_AddObject(server->nvm,
-                    (whNvmMetadata*)metadata,
-                    req.data_len,
-                    (const uint8_t*)data);
-        }
-        if (resp.rc == 0) {
-            /* perform platform-specific host address processing */
-            resp.rc = wh_Server_DmaProcessClientAddress64(
-                server, req.metadata_hostaddr, &metadata, sizeof(whNvmMetadata),
-                WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
-        }
-        if (resp.rc == 0) {
-            resp.rc = wh_Server_DmaProcessClientAddress64(
-                server, req.data_hostaddr, &data, req.data_len,
-                WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
-        }
-        /* Convert the response struct */
-        wh_MessageNvm_TranslateSimpleResponse(magic,
-                &resp, (whMessageNvm_SimpleResponse*)resp_packet);
-        *out_resp_size = sizeof(resp);
-    }; break;
-
-    case WH_MESSAGE_NVM_ACTION_READDMA64:
-    {
-        whMessageNvm_ReadDma64Request req = {0};
-        whMessageNvm_SimpleResponse resp = {0};
-        void* data = NULL;
-
-        if (req_size != sizeof(req)) {
-            /* Request is malformed */
-            resp.rc = WH_ERROR_ABORTED;
-        }
-        if (resp.rc == 0) {
-            /* Convert request struct */
-            wh_MessageNvm_TranslateReadDma64Request(magic,
-                    (whMessageNvm_ReadDma64Request*)req_packet, &req);
-
-            /* perform platform-specific host address processing */
-            resp.rc = wh_Server_DmaProcessClientAddress64(
-                server, req.data_hostaddr, &data, req.data_len,
-                WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
-        }
-        if (resp.rc == 0) {
-            /* Process the Read action */
-            resp.rc = wh_Nvm_Read(server->nvm, req.id, req.offset, req.data_len,
-                    (uint8_t*)data);
-        }
-        if (resp.rc == 0) {
-            /* perform platform-specific host address processing */
-            resp.rc = wh_Server_DmaProcessClientAddress64(
-                server, req.data_hostaddr, &data, req.data_len,
-                WH_DMA_OPER_CLIENT_WRITE_POST, (whServerDmaFlags){0});
-        }
-        /* Convert the response struct */
-        wh_MessageNvm_TranslateSimpleResponse(magic,
-                &resp, (whMessageNvm_SimpleResponse*)resp_packet);
-        *out_resp_size = sizeof(resp);
-    }; break;
-#endif /* WH_DMA_IS_64BIT */
 #endif /* WOLFHSM_CFG_DMA */
 
     default:

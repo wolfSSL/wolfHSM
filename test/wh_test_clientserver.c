@@ -271,7 +271,7 @@ static int _testDma(whServerContext* server, whClientContext* client)
         wh_Server_DmaRegisterCb32(server, _customServerDma32Cb));
 #else
     WH_TEST_RETURN_ON_FAIL(
-        wh_Server_DmaRegisterCb64(server, _customServerDma64Cb));
+        wh_Server_DmaRegisterCb(server, _customServerDma64Cb));
 #endif
 
     /* Register our custom allow list */
@@ -376,7 +376,7 @@ static int _testDma(whServerContext* server, whClientContext* client)
 #if WH_DMA_IS_32BIT
     WH_TEST_RETURN_ON_FAIL(wh_Server_DmaRegisterCb32(server, NULL));
 #else
-    WH_TEST_RETURN_ON_FAIL(wh_Server_DmaRegisterCb64(server, NULL));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_DmaRegisterCb(server, NULL));
 #endif
 
     /* Use remap buffer as copy src, since client address isn't in allowlist */

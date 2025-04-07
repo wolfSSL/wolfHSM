@@ -82,13 +82,8 @@ static int _handleCmacDma(wc_CryptoInfo* info, void* inCtx, whPacket* packet)
     whClientContext* ctx = inCtx;
     Cmac* cmac = info->cmac.cmac;
 
-#if WH_DMA_IS_32BIT
-    wh_Packet_cmac_Dma32_req* req = &packet->cmacDma32Req;
-    wh_Packet_cmac_Dma32_res* res = &packet->cmacDma32Res;
-#else
-    wh_Packet_cmac_Dma64_req* req = &packet->cmacDma64Req;
-    wh_Packet_cmac_Dma64_res* res = &packet->cmacDma64Res;
-#endif
+    wh_Packet_cmac_Dma_req* req = &packet->cmacDmaReq;
+    wh_Packet_cmac_Dma_res* res = &packet->cmacDmaRes;
 
     XMEMSET(req, 0, sizeof(*req));
     req->type = info->cmac.type;
@@ -756,13 +751,8 @@ static int _handleSha256Dma(wc_CryptoInfo* info, void* inCtx, whPacket* packet)
     uint16_t         respSz = 0;
     uint16_t         group  = WH_MESSAGE_GROUP_CRYPTO_DMA;
 
-#if WH_DMA_IS_32BIT
-    wh_Packet_hash_sha256_Dma32_req* req   = &packet->hashSha256Dma32Req;
-    wh_Packet_hash_sha256_Dma32_res* resp  = &packet->hashSha256Dma32Res;
-#else
-    wh_Packet_hash_sha256_Dma64_req* req   = &packet->hashSha256Dma64Req;
-    wh_Packet_hash_sha256_Dma64_res* resp  = &packet->hashSha256Dma64Res;
-#endif
+    wh_Packet_hash_sha256_Dma_req* req   = &packet->hashSha256DmaReq;
+    wh_Packet_hash_sha256_Dma_res* resp  = &packet->hashSha256DmaRes;
 
     /* Caller invoked SHA Update:
      * wc_CryptoCb_Sha256Hash(sha256, data, len, NULL) */
