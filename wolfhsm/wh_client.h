@@ -1472,14 +1472,12 @@ int wh_Client_NvmRead(whClientContext* c, whNvmId id, whNvmSize offset,
 
 /**
  * @brief Sends a request to the server to add an object to non-volatile memory
- * (NVM) using DMA, with automatic detection of client address width (32-bit or
- * 64-bit).
+ * (NVM) using DMA.
  *
  * This function prepares and sends a request to the server to add an object to
- * NVM using DMA. The client address width (32-bit or 64-bit) is automatically
- * detected. The request includes the metadata client address, the length of the
- * data, and the data client address. This function does not block; it returns
- * immediately after sending the request.
+ * NVM using DMA. The request includes the metadata client address, the length
+ * of the data, and the data client address. This function does not block; it
+ * returns immediately after sending the request.
  *
  * @param[in] c Pointer to the client context.
  * @param[in] metadata Pointer to the metadata.
@@ -1493,12 +1491,10 @@ int wh_Client_NvmAddObjectDmaRequest(whClientContext* c,
 
 /**
  * @brief Receives a response from the server after attempting to add an object
- * to non-volatile memory (NVM) using DMA, with automatic detection of client
- * address width (32-bit or 64-bit).
+ * to non-volatile memory (NVM) using DMA.
  *
  * This function attempts to process a response message from the server after
- * attempting to add an object to NVM using DMA. The client address width
- * (32-bit or 64-bit) is automatically detected. It validates the response and
+ * attempting to add an object to NVM using DMA. It validates the response and
  * extracts the return code. This function does not block; it returns
  * WH_ERROR_NOTREADY if a response has not been received.
  *
@@ -1511,12 +1507,10 @@ int wh_Client_NvmAddObjectDmaResponse(whClientContext* c, int32_t* out_rc);
 
 /**
  * @brief Sends a request to the server and receives a response to add an object
- * to non-volatile memory (NVM) using DMA, with automatic detection of client
- * address width (32-bit or 64-bit).
+ * to non-volatile memory (NVM) using DMA.
  *
  * This function handles the complete process of sending a request to the server
- * to add an object to NVM using DMA and receiving the response. The client
- * address width (32-bit or 64-bit) is automatically detected. It sends the
+ * to add an object to NVM using DMA and receiving the response. It sends the
  * request and repeatedly attempts to receive a valid response. This function
  * blocks until the entire operation is complete or an error occurs.
  *
@@ -1924,8 +1918,7 @@ int wh_Client_CertVerify(whClientContext* c, const uint8_t* cert,
  * @brief Sends a request to add a trusted certificate to NVM storage using DMA.
  *
  * This function prepares and sends a request to add a trusted certificate to
- * NVM storage using DMA, with automatic detection of client address width
- * (32-bit or 64-bit). This function does not block; it returns immediately
+ * NVM storage using DMA. This function does not block; it returns immediately
  * after sending the request.
  *
  * @param[in] c Pointer to the client context.
@@ -1942,8 +1935,7 @@ int wh_Client_CertAddTrustedDmaRequest(whClientContext* c, whNvmId id,
  * using DMA.
  *
  * This function attempts to process a response message from the server after
- * adding a trusted certificate using DMA, with automatic detection of client
- * address width (32-bit or 64-bit). It validates the response and extracts
+ * adding a trusted certificate using DMA. It validates the response and extracts
  * the return code. This function does not block; it returns WH_ERROR_NOTREADY
  * if a response has not been received.
  *
@@ -1958,8 +1950,7 @@ int wh_Client_CertAddTrustedDmaResponse(whClientContext* c, int32_t* out_rc);
  * using DMA.
  *
  * This function handles the complete process of sending a request to add a
- * trusted certificate using DMA and receiving the response, with automatic
- * detection of client address width (32-bit or 64-bit). It blocks until the
+ * trusted certificate using DMA and receiving the response. It blocks until the
  * entire operation is complete or an error occurs.
  *
  * @param[in] c Pointer to the client context.
@@ -1978,8 +1969,7 @@ int wh_Client_CertAddTrustedDma(whClientContext* c, whNvmId id,
  * DMA.
  *
  * This function prepares and sends a request to read a trusted certificate from
- * NVM storage using DMA, with automatic detection of client address width
- * (32-bit or 64-bit). This function does not block; it returns immediately
+ * NVM storage using DMA. This function does not block; it returns immediately
  * after sending the request.
  *
  * @param[in] c Pointer to the client context.
@@ -1996,8 +1986,7 @@ int wh_Client_CertReadTrustedDmaRequest(whClientContext* c, whNvmId id,
  * certificate using DMA.
  *
  * This function attempts to process a response message from the server after
- * reading a trusted certificate using DMA, with automatic detection of client
- * address width (32-bit or 64-bit). It validates the response and extracts
+ * reading a trusted certificate using DMA. It validates the response and extracts
  * the return code. This function does not block; it returns WH_ERROR_NOTREADY
  * if a response has not been received.
  *
@@ -2012,8 +2001,7 @@ int wh_Client_CertReadTrustedDmaResponse(whClientContext* c, int32_t* out_rc);
  * using DMA.
  *
  * This function handles the complete process of sending a request to read a
- * trusted certificate using DMA and receiving the response, with automatic
- * detection of client address width (32-bit or 64-bit). It blocks until the
+ * trusted certificate using DMA and receiving the response. It blocks until the
  * entire operation is complete or an error occurs.
  *
  * @param[in] c Pointer to the client context.
@@ -2029,9 +2017,8 @@ int wh_Client_CertReadTrustedDma(whClientContext* c, whNvmId id, void* cert,
 /**
  * @brief Sends a request to verify a certificate using DMA.
  *
- * This function prepares and sends a request to verify a certificate using DMA,
- * with automatic detection of client address width (32-bit or 64-bit). This
- * function does not block; it returns immediately after sending the request.
+ * This function prepares and sends a request to verify a certificate using DMA.
+ * This function does not block; it returns immediately after sending the request.
  *
  * @param[in] c Pointer to the client context.
  * @param[in] cert Pointer to the certificate data to verify.
@@ -2048,9 +2035,8 @@ int wh_Client_CertVerifyDmaRequest(whClientContext* c, const void* cert,
  * using DMA.
  *
  * This function attempts to process a response message from the server after
- * verifying a certificate using DMA, with automatic detection of client address
- * width (32-bit or 64-bit). It validates the response and extracts the return
- * code. This function does not block; it returns WH_ERROR_NOTREADY if a
+ * verifying a certificate using DMA. It validates the response and extracts the
+ * return code. This function does not block; it returns WH_ERROR_NOTREADY if a
  * response has not been received.
  *
  * @param[in] c Pointer to the client context.
@@ -2064,9 +2050,8 @@ int wh_Client_CertVerifyDmaResponse(whClientContext* c, int32_t* out_rc);
  * DMA.
  *
  * This function handles the complete process of sending a request to verify a
- * certificate using DMA and receiving the response, with automatic detection of
- * client address width (32-bit or 64-bit). It blocks until the entire operation
- * is complete or an error occurs.
+ * certificate using DMA and receiving the response. It blocks until the entire
+ * operation is complete or an error occurs.
  *
  * @param[in] c Pointer to the client context.
  * @param[in] cert Pointer to the certificate data to verify.
