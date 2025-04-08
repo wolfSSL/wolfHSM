@@ -700,6 +700,7 @@ static int whTest_CacheExportKey(whClientContext* ctx, whKeyId* inout_key_id,
     return ret;
 }
 
+#ifdef WOLFHSM_CFG_DMA
 static int whTest_CacheExportKeyDma(whClientContext* ctx, whKeyId* inout_key_id,
                                     uint8_t* label_in, uint8_t* label_out,
                                     uint16_t label_len, uint8_t* key_in,
@@ -732,6 +733,7 @@ static int whTest_CacheExportKeyDma(whClientContext* ctx, whKeyId* inout_key_id,
     *inout_key_id = key_id_out;
     return ret;
 }
+#endif /* WOLFHSM_CFG_DMA */
 
 static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
 {
@@ -915,6 +917,7 @@ static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
         }
     }
 
+#ifdef WOLFHSM_CFG_DMA
     /* test cache/export using DMA */
     if (ret == 0) {
         keyId = WH_KEYID_ERASED;
@@ -934,6 +937,7 @@ static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
             }
         }
     }
+#endif /* WOLFHSM_CFG_DMA */
 
     return ret;
 }
@@ -1251,16 +1255,21 @@ static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
                     ret = -1;
                 }
                 else {
+#ifdef WOLFHSM_CFG_DMA
                     /* DMA doesn't autoevict keys after use */
-                    /* TODO: should we instead match autoevict behavior for DMA */
+                    /* TODO: should we instead match autoevict behavior for DMA
+                     */
                     if (devId == WH_DEV_ID_DMA) {
                         ret = wh_Client_KeyEvict(ctx, keyId);
                         if (ret != 0) {
-                            WH_ERROR_PRINT("Failed to wh_Client_KeyEvict %d\n", ret);
+                            WH_ERROR_PRINT("Failed to wh_Client_KeyEvict %d\n",
+                                           ret);
                             ret = -1;
                         }
                     }
-                    else {
+                    else
+#endif /* WOLFHSM_CFG_DMA */
+                    {
                         /* TODO: Eliminate this autoevict */
                         /* verify the key was evicted after oneshot */
                         outLen = sizeof(keyEnd);
@@ -1322,7 +1331,11 @@ static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
     }
 
     /* test CMAC cancellation for supported devIds */
-    if (ret == 0 && devId != WH_DEV_ID_DMA) {
+    if (ret == 0
+#ifdef WOLFHSM_CFG_DMA
+        && devId != WH_DEV_ID_DMA
+#endif
+    ) {
 #define WH_TEST_CMAC_TEXTSIZE 1000
         char cmacFodder[WH_TEST_CMAC_TEXTSIZE] = {0};
 
@@ -1554,6 +1567,7 @@ static int whTestCrypto_MlDsaWolfCrypt(whClientContext* ctx, int devId,
     return ret;
 }
 
+#ifdef WOLFHSM_CFG_DMA
 static int whTestCrypto_MlDsaDmaClient(whClientContext* ctx, int devId,
                                        WC_RNG* rng)
 {
@@ -1713,6 +1727,7 @@ static int whTestCrypto_MlDsaDmaClient(whClientContext* ctx, int devId,
     wc_MlDsaKey_Free(imported_key);
     return ret;
 }
+#endif /* WOLFHSM_CFG_DMA */
 #endif /* !defined(WOLFSSL_DILITHIUM_NO_VERIFY) &&   \
           !defined(WOLFSSL_DILITHIUM_NO_SIGN) &&     \
           !defined(WOLFSSL_DILITHIUM_NO_MAKE_KEY) && \
@@ -1720,6 +1735,7 @@ static int whTestCrypto_MlDsaDmaClient(whClientContext* ctx, int devId,
 
 #if !defined(WOLFSSL_DILITHIUM_NO_VERIFY) && \
     !defined(WOLFSSL_NO_ML_DSA_44)
+#ifdef WOLFHSM_CFG_DMA
 int whTestCrypto_MlDsaVerifyOnlyDma(whClientContext* ctx, int devId,
                                     WC_RNG* rng)
 {
@@ -2162,9 +2178,10 @@ int whTestCrypto_MlDsaVerifyOnlyDma(whClientContext* ctx, int devId,
 
     return ret;
 }
-
+#endif /* WOLFHSM_CFG_DMA */
 #endif /* !defined(WOLFSSL_DILITHIUM_NO_VERIFY) && \
           !defined(WOLFSSL_NO_ML_DSA_44) */
+
 
 #endif /* HAVE_DILITHIUM */
 
@@ -2268,21 +2285,25 @@ int whTest_CryptoClientConfig(whClientConfig* config)
             i++;
         }
     }
+#ifdef WOLFHSM_CFG_DMA
     if (ret == 0) {
         ret = whTestCrypto_MlDsaDmaClient(client, WH_DEV_ID_DMA, rng);
     }
+#endif /* WOLFHSM_CFG_DMA*/
 #endif /* !defined(WOLFSSL_DILITHIUM_NO_VERIFY) && \
           !defined(WOLFSSL_DILITHIUM_NO_SIGN) && \
           !defined(WOLFSSL_DILITHIUM_NO_MAKE_KEY) && \
           !defined(WOLFSSL_NO_ML_DSA_44) */
 
 #if !defined(WOLFSSL_DILITHIUM_NO_VERIFY) && \
-    !defined(WOLFSSL_NO_ML_DSA_44)
+    !defined(WOLFSSL_NO_ML_DSA_44) && \
+    defined(WOLFHSM_CFG_DMA)
     if (ret == 0) {
         ret = whTestCrypto_MlDsaVerifyOnlyDma(client, WH_DEV_ID_DMA, rng);
     }
 #endif /* !defined(WOLFSSL_DILITHIUM_NO_VERIFY) && \
-          !defined(WOLFSSL_NO_ML_DSA_44) */
+          !defined(WOLFSSL_NO_ML_DSA_44) && \
+          defined(WOLFHSM_CFG_DMA) */
 
 #endif /* HAVE_DILITHIUM */
 
