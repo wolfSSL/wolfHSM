@@ -77,6 +77,11 @@ ifeq ($(NOCRYPTO),1)
 CFLAGS += -DWOLFHSM_CFG_NO_CRYPTO
 endif
 
+# Support a DMA-capable build
+ifeq ($(DMA), 1)
+CFLAGS += -DWOLFHSM_CFG_DMA
+endif
+
 ifeq ($(SHE),1)
 CFLAGS += -DWOLFHSM_CFG_SHE_EXTENSION
 endif
@@ -120,6 +125,13 @@ ifeq ($(TESTWOLFCRYPT),1)
     SRC_C += $(wildcard $(WOLFSSL_DIR)/wolfcrypt/src/*.c)
 
     TESTWOLFCRYPT_DEFAULT_DEVID = 0x5748534D
+
+    # If TESTWOLFCRYPT_DMA is defined but DMA is not, error
+    ifneq ($(TESTWOLFCRYPT_DMA),)
+        ifeq ($(DMA),)
+            $(error "TESTWOLFCRYPT_DMA=1 requires DMA=1 to be set")
+        endif
+    endif
 
     # TESTWOLFCRYPT_DEVID and TESTWOLFCRYPT_DMA are mutually exclusive
     ifneq ($(TESTWOLFCRYPT_DMA),)
