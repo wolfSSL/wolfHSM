@@ -1734,8 +1734,8 @@ static int whTestCrypto_MlDsaDmaClient(whClientContext* ctx, int devId,
           !defined(WOLFSSL_NO_ML_DSA_44) */
 
 #if !defined(WOLFSSL_DILITHIUM_NO_VERIFY) && \
-    !defined(WOLFSSL_NO_ML_DSA_44)
-#ifdef WOLFHSM_CFG_DMA
+    !defined(WOLFSSL_NO_ML_DSA_44) && \
+    defined(WOLFHSM_CFG_DMA)
 int whTestCrypto_MlDsaVerifyOnlyDma(whClientContext* ctx, int devId,
                                     WC_RNG* rng)
 {
@@ -2178,9 +2178,9 @@ int whTestCrypto_MlDsaVerifyOnlyDma(whClientContext* ctx, int devId,
 
     return ret;
 }
-#endif /* WOLFHSM_CFG_DMA */
 #endif /* !defined(WOLFSSL_DILITHIUM_NO_VERIFY) && \
-          !defined(WOLFSSL_NO_ML_DSA_44) */
+          !defined(WOLFSSL_NO_ML_DSA_44) && \
+          defined(WOLFHSM_CFG_DMA) */
 
 
 #endif /* HAVE_DILITHIUM */
