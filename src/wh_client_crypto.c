@@ -2614,9 +2614,9 @@ int wh_Client_MlDsaExportKeyDma(whClientContext* ctx, whKeyId keyId,
                                 MlDsaKey* key, uint16_t label_len,
                                 uint8_t* label)
 {
-    int      ret = WH_ERROR_OK;
-    byte     buffer[DILITHIUM_MAX_PRV_KEY_SIZE];
-    uint16_t buffer_len = sizeof(buffer);
+    int      ret                                = WH_ERROR_OK;
+    byte     buffer[DILITHIUM_MAX_PRV_KEY_SIZE] = {0};
+    uint16_t buffer_len                         = sizeof(buffer);
 
     if ((ctx == NULL) || WH_KEYID_ISERASED(keyId) || (key == NULL)) {
         return WH_ERROR_BADARGS;
