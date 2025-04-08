@@ -41,8 +41,8 @@
 #include "wolfssl/wolfcrypt/asn.h"
 
 
-static int _verifyChainAgainstCmStore(WOLFSSL_CERT_MANAGER *cm,
-                                      const uint8_t *chain, uint32_t chain_len)
+static int _verifyChainAgainstCmStore(WOLFSSL_CERT_MANAGER* cm,
+                                      const uint8_t* chain, uint32_t chain_len)
 {
     int            rc            = 0;
     const uint8_t* cert_ptr      = chain;
@@ -168,8 +168,8 @@ int wh_Server_CertEraseTrusted(whServerContext* server, whNvmId id)
 }
 
 /* Get a trusted certificate from NVM storage */
-int wh_Server_CertReadTrusted(whServerContext* server, whNvmId id, uint8_t* cert,
-                             uint32_t* inout_cert_len)
+int wh_Server_CertReadTrusted(whServerContext* server, whNvmId id,
+                              uint8_t* cert, uint32_t* inout_cert_len)
 {
     int           rc;
     whNvmSize     userLen;
@@ -189,7 +189,7 @@ int wh_Server_CertReadTrusted(whServerContext* server, whNvmId id, uint8_t* cert
 
     /* Clamp the input length to the actual length of the certificate. This will
      * be reflected back to the user on length mismatch failure */
-    userLen = *inout_cert_len;
+    userLen         = *inout_cert_len;
     *inout_cert_len = meta.len;
 
     /* Check if the provided buffer is large enough */
@@ -204,10 +204,10 @@ int wh_Server_CertReadTrusted(whServerContext* server, whNvmId id, uint8_t* cert
 int wh_Server_CertVerify(whServerContext* server, const uint8_t* cert,
                          uint32_t cert_len, whNvmId trustedRootNvmId)
 {
-    WOLFSSL_CERT_MANAGER *cm = NULL;
+    WOLFSSL_CERT_MANAGER* cm = NULL;
 
     /* Stack-based buffer for root certificate */
-    uint8_t root_cert[WOLFHSM_CFG_MAX_CERT_SIZE];
+    uint8_t  root_cert[WOLFHSM_CFG_MAX_CERT_SIZE];
     uint32_t root_cert_len = sizeof(root_cert);
     int      rc;
 
@@ -223,7 +223,7 @@ int wh_Server_CertVerify(whServerContext* server, const uint8_t* cert,
 
     /* Get the trusted root certificate */
     rc = wh_Server_CertReadTrusted(server, trustedRootNvmId, root_cert,
-                                  &root_cert_len);
+                                   &root_cert_len);
     if (rc == WH_ERROR_OK) {
         /* Load the trusted root certificate */
         rc = wolfSSL_CertManagerLoadCABuffer(cm, root_cert, root_cert_len,
@@ -253,12 +253,12 @@ int wh_Server_CertVerifyAcert(whServerContext* server, const uint8_t* cert,
     int rc;
 
     /* Stack-based buffer for root certificate */
-    uint8_t root_cert[WOLFHSM_CFG_MAX_CERT_SIZE];
+    uint8_t  root_cert[WOLFHSM_CFG_MAX_CERT_SIZE];
     uint32_t root_cert_len = sizeof(root_cert);
 
     /* Load the trusted root certificate into the buffer */
     rc = wh_Server_CertReadTrusted(server, trustedRootNvmId, root_cert,
-                                  &root_cert_len);
+                                   &root_cert_len);
     if (rc != WH_ERROR_OK) {
         return rc;
     }
@@ -284,7 +284,7 @@ int wh_Server_CertVerifyAcert(whServerContext* server, const uint8_t* cert,
                             dc.keyOID, NULL);
 
     wc_FreeDecodedCert(&dc);
-    return rc; 
+    return rc;
 }
 #endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT */
 
@@ -340,7 +340,7 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
 
         case WH_MESSAGE_CERT_ACTION_ERASETRUSTED: {
             whMessageCert_EraseTrustedRequest req  = {0};
-            whMessageCert_SimpleResponse       resp = {0};
+            whMessageCert_SimpleResponse      resp = {0};
 
             /* Convert request struct */
             wh_MessageCert_TranslateEraseTrustedRequest(
@@ -359,8 +359,8 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
         case WH_MESSAGE_CERT_ACTION_READTRUSTED: {
             whMessageCert_ReadTrustedRequest  req  = {0};
             whMessageCert_ReadTrustedResponse resp = {0};
-            uint8_t*                         cert_data;
-            uint32_t                         cert_len;
+            uint8_t*                          cert_data;
+            uint32_t                          cert_len;
 
             /* Convert request struct */
             wh_MessageCert_TranslateReadTrustedRequest(
@@ -371,7 +371,8 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
             cert_len  = WOLFHSM_CFG_COMM_DATA_LEN - sizeof(resp);
 
             /* Process the get trusted action */
-            rc = wh_Server_CertReadTrusted(server, req.id, cert_data, &cert_len);
+            rc =
+                wh_Server_CertReadTrusted(server, req.id, cert_data, &cert_len);
             resp.rc       = rc;
             resp.cert_len = cert_len;
 
@@ -410,11 +411,10 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
         }; break;
 
 #ifdef WOLFHSM_CFG_DMA
-#if WH_DMA_IS_32BIT
-        case WH_MESSAGE_CERT_ACTION_ADDTRUSTED_DMA32: {
-            whMessageCert_AddTrustedDma32Request req       = {0};
-            whMessageCert_SimpleResponse         resp      = {0};
-            void*                                cert_data = NULL;
+        case WH_MESSAGE_CERT_ACTION_ADDTRUSTED_DMA: {
+            whMessageCert_AddTrustedDmaRequest req       = {0};
+            whMessageCert_SimpleResponse       resp      = {0};
+            void*                              cert_data = NULL;
 
             if (req_size != sizeof(req)) {
                 /* Request is malformed */
@@ -422,12 +422,12 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
             }
             if (resp.rc == 0) {
                 /* Convert request struct */
-                wh_MessageCert_TranslateAddTrustedDma32Request(
-                    magic, (whMessageCert_AddTrustedDma32Request*)req_packet,
+                wh_MessageCert_TranslateAddTrustedDmaRequest(
+                    magic, (whMessageCert_AddTrustedDmaRequest*)req_packet,
                     &req);
 
                 /* Process client address */
-                resp.rc = wh_Server_DmaProcessClientAddress32(
+                resp.rc = wh_Server_DmaProcessClientAddress(
                     server, req.cert_addr, &cert_data, req.cert_len,
                     WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
             }
@@ -438,7 +438,7 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
             }
             if (resp.rc == 0) {
                 /* Post-process client address */
-                resp.rc = wh_Server_DmaProcessClientAddress32(
+                resp.rc = wh_Server_DmaProcessClientAddress(
                     server, req.cert_addr, &cert_data, req.cert_len,
                     WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
             }
@@ -449,11 +449,11 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
             *out_resp_size = sizeof(resp);
         }; break;
 
-        case WH_MESSAGE_CERT_ACTION_READTRUSTED_DMA32: {
-            whMessageCert_ReadTrustedDma32Request req       = {0};
-            whMessageCert_SimpleResponse         resp      = {0};
-            void*                                cert_data = NULL;
-            uint32_t                             cert_len;
+        case WH_MESSAGE_CERT_ACTION_READTRUSTED_DMA: {
+            whMessageCert_ReadTrustedDmaRequest req       = {0};
+            whMessageCert_SimpleResponse        resp      = {0};
+            void*                               cert_data = NULL;
+            uint32_t                            cert_len;
 
             if (req_size != sizeof(req)) {
                 /* Request is malformed */
@@ -461,12 +461,12 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
             }
             if (resp.rc == 0) {
                 /* Convert request struct */
-                wh_MessageCert_TranslateReadTrustedDma32Request(
-                    magic, (whMessageCert_ReadTrustedDma32Request*)req_packet,
+                wh_MessageCert_TranslateReadTrustedDmaRequest(
+                    magic, (whMessageCert_ReadTrustedDmaRequest*)req_packet,
                     &req);
 
                 /* Process client address */
-                resp.rc = wh_Server_DmaProcessClientAddress32(
+                resp.rc = wh_Server_DmaProcessClientAddress(
                     server, req.cert_addr, &cert_data, req.cert_len,
                     WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
             }
@@ -474,11 +474,11 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
                 /* Process the get trusted action */
                 cert_len = req.cert_len;
                 resp.rc  = wh_Server_CertReadTrusted(server, req.id, cert_data,
-                                                    &cert_len);
+                                                     &cert_len);
             }
             if (resp.rc == 0) {
                 /* Post-process client address */
-                resp.rc = wh_Server_DmaProcessClientAddress32(
+                resp.rc = wh_Server_DmaProcessClientAddress(
                     server, req.cert_addr, &cert_data, cert_len,
                     WH_DMA_OPER_CLIENT_WRITE_POST, (whServerDmaFlags){0});
             }
@@ -489,10 +489,10 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
             *out_resp_size = sizeof(resp);
         }; break;
 
-        case WH_MESSAGE_CERT_ACTION_VERIFY_DMA32: {
-            whMessageCert_VerifyDma32Request req       = {0};
-            whMessageCert_SimpleResponse     resp      = {0};
-            void*                            cert_data = NULL;
+        case WH_MESSAGE_CERT_ACTION_VERIFY_DMA: {
+            whMessageCert_VerifyDmaRequest req       = {0};
+            whMessageCert_SimpleResponse   resp      = {0};
+            void*                          cert_data = NULL;
 
             if (req_size != sizeof(req)) {
                 /* Request is malformed */
@@ -500,11 +500,11 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
             }
             if (resp.rc == 0) {
                 /* Convert request struct */
-                wh_MessageCert_TranslateVerifyDma32Request(
-                    magic, (whMessageCert_VerifyDma32Request*)req_packet, &req);
+                wh_MessageCert_TranslateVerifyDmaRequest(
+                    magic, (whMessageCert_VerifyDmaRequest*)req_packet, &req);
 
                 /* Process client address */
-                resp.rc = wh_Server_DmaProcessClientAddress32(
+                resp.rc = wh_Server_DmaProcessClientAddress(
                     server, req.cert_addr, &cert_data, req.cert_len,
                     WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
             }
@@ -515,7 +515,7 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
             }
             if (resp.rc == 0) {
                 /* Post-process client address */
-                resp.rc = wh_Server_DmaProcessClientAddress32(
+                resp.rc = wh_Server_DmaProcessClientAddress(
                     server, req.cert_addr, &cert_data, req.cert_len,
                     WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
             }
@@ -525,124 +525,6 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
                 magic, &resp, (whMessageCert_SimpleResponse*)resp_packet);
             *out_resp_size = sizeof(resp);
         }; break;
-#endif /* WH_DMA_IS_32BIT */
-
-#if WH_DMA_IS_64BIT
-        case WH_MESSAGE_CERT_ACTION_ADDTRUSTED_DMA64: {
-            whMessageCert_AddTrustedDma64Request req       = {0};
-            whMessageCert_SimpleResponse         resp      = {0};
-            void*                                cert_data = NULL;
-
-            if (req_size != sizeof(req)) {
-                /* Request is malformed */
-                resp.rc = WH_ERROR_ABORTED;
-            }
-            if (resp.rc == 0) {
-                /* Convert request struct */
-                wh_MessageCert_TranslateAddTrustedDma64Request(
-                    magic, (whMessageCert_AddTrustedDma64Request*)req_packet,
-                    &req);
-
-                /* Process client address */
-                resp.rc = wh_Server_DmaProcessClientAddress64(
-                    server, req.cert_addr, &cert_data, req.cert_len,
-                    WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
-            }
-            if (resp.rc == 0) {
-                /* Process the add trusted action */
-                resp.rc = wh_Server_CertAddTrusted(server, req.id, cert_data,
-                                                   req.cert_len);
-            }
-            if (resp.rc == 0) {
-                /* Post-process client address */
-                resp.rc = wh_Server_DmaProcessClientAddress64(
-                    server, req.cert_addr, &cert_data, req.cert_len,
-                    WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
-            }
-
-            /* Convert the response struct */
-            wh_MessageCert_TranslateSimpleResponse(
-                magic, &resp, (whMessageCert_SimpleResponse*)resp_packet);
-            *out_resp_size = sizeof(resp);
-        }; break;
-
-        case WH_MESSAGE_CERT_ACTION_READTRUSTED_DMA64: {
-            whMessageCert_ReadTrustedDma64Request req       = {0};
-            whMessageCert_SimpleResponse         resp      = {0};
-            void*                                cert_data = NULL;
-            uint32_t                             cert_len;
-
-            if (req_size != sizeof(req)) {
-                /* Request is malformed */
-                resp.rc = WH_ERROR_ABORTED;
-            }
-            if (resp.rc == 0) {
-                /* Convert request struct */
-                wh_MessageCert_TranslateReadTrustedDma64Request(
-                    magic, (whMessageCert_ReadTrustedDma64Request*)req_packet,
-                    &req);
-
-                /* Process client address */
-                resp.rc = wh_Server_DmaProcessClientAddress64(
-                    server, req.cert_addr, &cert_data, req.cert_len,
-                    WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
-            }
-            if (resp.rc == 0) {
-                /* Process the get trusted action */
-                cert_len = req.cert_len;
-                resp.rc  = wh_Server_CertReadTrusted(server, req.id, cert_data,
-                                                    &cert_len);
-            }
-            if (resp.rc == 0) {
-                /* Post-process client address */
-                resp.rc = wh_Server_DmaProcessClientAddress64(
-                    server, req.cert_addr, &cert_data, cert_len,
-                    WH_DMA_OPER_CLIENT_WRITE_POST, (whServerDmaFlags){0});
-            }
-
-            /* Convert the response struct */
-            wh_MessageCert_TranslateSimpleResponse(
-                magic, &resp, (whMessageCert_SimpleResponse*)resp_packet);
-            *out_resp_size = sizeof(resp);
-        }; break;
-
-        case WH_MESSAGE_CERT_ACTION_VERIFY_DMA64: {
-            whMessageCert_VerifyDma64Request req       = {0};
-            whMessageCert_SimpleResponse     resp      = {0};
-            void*                            cert_data = NULL;
-
-            if (req_size != sizeof(req)) {
-                /* Request is malformed */
-                resp.rc = WH_ERROR_ABORTED;
-            }
-            if (resp.rc == 0) {
-                /* Convert request struct */
-                wh_MessageCert_TranslateVerifyDma64Request(
-                    magic, (whMessageCert_VerifyDma64Request*)req_packet, &req);
-
-                /* Process client address */
-                resp.rc = wh_Server_DmaProcessClientAddress64(
-                    server, req.cert_addr, &cert_data, req.cert_len,
-                    WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
-            }
-            if (resp.rc == 0) {
-                /* Process the verify action */
-                resp.rc = wh_Server_CertVerify(server, cert_data, req.cert_len,
-                                               req.trustedRootNvmId);
-            }
-            if (resp.rc == 0) {
-                /* Post-process client address */
-                resp.rc = wh_Server_DmaProcessClientAddress64(
-                    server, req.cert_addr, &cert_data, req.cert_len,
-                    WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
-            }
-
-            /* Convert the response struct */
-            wh_MessageCert_TranslateSimpleResponse(
-                magic, &resp, (whMessageCert_SimpleResponse*)resp_packet);
-            *out_resp_size = sizeof(resp);
-        }; break;
-#endif /* WH_DMA_IS_64BIT */
 #endif /* WOLFHSM_CFG_DMA */
 
 #if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT)
@@ -658,15 +540,15 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
             cert_data = (const uint8_t*)req_packet + sizeof(req);
 
             /* Process the verify action */
-            rc      = wh_Server_CertVerifyAcert(server, cert_data, req.cert_len,
-                                                req.trustedRootNvmId);
+            rc = wh_Server_CertVerifyAcert(server, cert_data, req.cert_len,
+                                           req.trustedRootNvmId);
 
             /* Signature confirmation error is not an error for the server, so
              * propagate this error to the client in the response, otherwise
              * return the error code from the verify action */
             if (rc == ASN_SIG_CONFIRM_E) {
                 resp.rc = WH_ERROR_CERT_VERIFY;
-                rc = WH_ERROR_OK;
+                rc      = WH_ERROR_OK;
             }
             else {
                 resp.rc = rc;
@@ -680,12 +562,10 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
 
 #if defined(WOLFHSM_CFG_DMA)
         case WH_MESSAGE_CERT_ACTION_VERIFY_ACERT_DMA: {
-            /* Acert verify request uses standard cert verify request struct,
-             * and uses 64-bit DMA messages regardless of the platform, in
-             * anticipation of refactoring DMA to be generic */
-            whMessageCert_VerifyDma64Request req       = {0};
-            whMessageCert_SimpleResponse     resp      = {0};
-            void*                            cert_data = NULL;
+            /* Acert verify request uses standard cert verify request struct */
+            whMessageCert_VerifyDmaRequest req       = {0};
+            whMessageCert_SimpleResponse   resp      = {0};
+            void*                          cert_data = NULL;
 
             if (req_size != sizeof(req)) {
                 /* Request is malformed */
@@ -693,21 +573,13 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
             }
             if (rc == WH_ERROR_OK) {
                 /* Convert request struct */
-                wh_MessageCert_TranslateVerifyDma64Request(
-                    magic, (whMessageCert_VerifyDma64Request*)req_packet, &req);
+                wh_MessageCert_TranslateVerifyDmaRequest(
+                    magic, (whMessageCert_VerifyDmaRequest*)req_packet, &req);
 
                 /* Process client address */
-                /* TODO: This will get ripped out once we refactor DMA to be
-                 * generic */
-#if WH_DMA_IS_32BIT
-                rc = wh_Server_DmaProcessClientAddress32(
+                rc = wh_Server_DmaProcessClientAddress(
                     server, req.cert_addr, &cert_data, req.cert_len,
                     WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
-#elif WH_DMA_IS_64BIT
-                rc = wh_Server_DmaProcessClientAddress64(
-                    server, req.cert_addr, &cert_data, req.cert_len,
-                    WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
-#endif /* WH_DMA_IS_64BIT */
             }
             if (rc == WH_ERROR_OK) {
                 /* Process the verify action */
@@ -726,17 +598,9 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
             }
             if (rc == WH_ERROR_OK) {
                 /* Post-process client address */
-                /* TODO: This will get ripped out once we refactor DMA to be
-                 * generic */
-#if WH_DMA_IS_32BIT
-                rc = wh_Server_DmaProcessClientAddress32(
+                rc = wh_Server_DmaProcessClientAddress(
                     server, req.cert_addr, &cert_data, req.cert_len,
                     WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
-#elif WH_DMA_IS_64BIT
-                rc = wh_Server_DmaProcessClientAddress64(
-                    server, req.cert_addr, &cert_data, req.cert_len,
-                    WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
-#endif /* WH_DMA_IS_64BIT */
             }
 
             /* Convert the response struct */

@@ -2600,15 +2600,8 @@ int wh_Client_MlDsaImportKeyDma(whClientContext* ctx, MlDsaKey* key,
                                          &buffer_len);
     if (ret == WH_ERROR_OK) {
         /* Cache the key using DMA and get the keyID */
-#if WH_DMA_IS_32BIT
-        ret = wh_Client_KeyCacheDma32(ctx, flags, label, label_len,
-                                      (uint32_t)(uintptr_t)buffer, buffer_len,
-                                      &key_id);
-#else
-        ret = wh_Client_KeyCacheDma64(ctx, flags, label, label_len,
-                                      (uint64_t)(uintptr_t)buffer, buffer_len,
-                                      &key_id);
-#endif
+        ret = wh_Client_KeyCacheDma(ctx, flags, label, label_len, buffer,
+                                    buffer_len, &key_id);
         if ((ret == WH_ERROR_OK) && (inout_keyId != NULL)) {
             *inout_keyId = key_id;
         }
@@ -2621,22 +2614,17 @@ int wh_Client_MlDsaExportKeyDma(whClientContext* ctx, whKeyId keyId,
                                 MlDsaKey* key, uint16_t label_len,
                                 uint8_t* label)
 {
-    int      ret = WH_ERROR_OK;
-    byte     buffer[DILITHIUM_MAX_PRV_KEY_SIZE];
-    uint16_t buffer_len = sizeof(buffer);
+    int      ret                                = WH_ERROR_OK;
+    byte     buffer[DILITHIUM_MAX_PRV_KEY_SIZE] = {0};
+    uint16_t buffer_len                         = sizeof(buffer);
 
     if ((ctx == NULL) || WH_KEYID_ISERASED(keyId) || (key == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
     /* Export the key from server using DMA */
-#if WH_DMA_IS_32BIT
-    ret = wh_Client_KeyExportDma32(ctx, keyId, (uint32_t)(uintptr_t)buffer,
-                                   buffer_len, label, label_len, &buffer_len);
-#else
-    ret = wh_Client_KeyExportDma64(ctx, keyId, (uint64_t)(uintptr_t)buffer,
-                                   buffer_len, label, label_len, &buffer_len);
-#endif
+    ret = wh_Client_KeyExportDma(ctx, keyId, buffer, buffer_len, label,
+                                 label_len, &buffer_len);
     if (ret == WH_ERROR_OK) {
         /* Deserialize the key */
         ret = wh_Crypto_MlDsaDeserializeKeyDer(buffer, buffer_len, key);
@@ -2673,12 +2661,8 @@ static int _MlDsaMakeKeyDma(whClientContext* ctx, int level,
     uint16_t group  = WH_MESSAGE_GROUP_CRYPTO_DMA;
     uint16_t action = WC_ALGO_TYPE_PK;
 
-#if WH_DMA_IS_32BIT
-    wh_Packet_pq_mldsa_keygen_Dma32_req* req = &packet->pqMldsaKeygenDma32Req;
-#else
-    wh_Packet_pq_mldsa_keygen_Dma64_req* req = &packet->pqMldsaKeygenDma64Req;
-#endif
-    uint16_t req_len = WH_PACKET_STUB_SIZE + sizeof(*req);
+    wh_Packet_pq_mldsa_keygen_Dma_req* req = &packet->pqMldsaKeygenDmaReq;
+    uint16_t req_len                       = WH_PACKET_STUB_SIZE + sizeof(*req);
 
     if (req_len <= WOLFHSM_CFG_COMM_DATA_LEN) {
         memset(req, 0, sizeof(*req));
@@ -2687,11 +2671,7 @@ static int _MlDsaMakeKeyDma(whClientContext* ctx, int level,
         req->level      = level;
         req->flags      = flags;
         req->keyId      = key_id;
-#if WH_DMA_IS_32BIT
-        req->key.addr = (uint32_t)(uintptr_t)buffer;
-#else
-        req->key.addr = (uint64_t)(uintptr_t)buffer;
-#endif
+        req->key.addr   = (uint64_t)(uintptr_t)buffer;
         req->key.sz = sizeof(buffer);
 
         if ((label != NULL) && (label_len > 0)) {
@@ -2706,11 +2686,7 @@ static int _MlDsaMakeKeyDma(whClientContext* ctx, int level,
                                     (uint8_t*)packet);
         if (ret == WH_ERROR_OK) {
             /* Response Message */
-#if WH_DMA_IS_32BIT
-            wh_Packet_pq_mldsa_Dma32_res* res = &packet->pqMldsaDma32Res;
-#else
-            wh_Packet_pq_mldsa_Dma64_res* res = &packet->pqMldsaDma64Res;
-#endif
+            wh_Packet_pq_mldsa_Dma_res* res = &packet->pqMldsaDmaRes;
             uint16_t res_len;
 
             do {
@@ -2810,12 +2786,7 @@ int wh_Client_MlDsaSignDma(whClientContext* ctx, const byte* in, word32 in_len,
         /* Request Message */
         uint16_t group  = WH_MESSAGE_GROUP_CRYPTO_DMA;
         uint16_t action = WC_ALGO_TYPE_PK;
-
-#if WH_DMA_IS_32BIT
-        wh_Packet_pq_mldsa_sign_Dma32_req* req = &packet->pqMldsaSignDma32Req;
-#else
-        wh_Packet_pq_mldsa_sign_Dma64_req* req = &packet->pqMldsaSignDma64Req;
-#endif
+        wh_Packet_pq_mldsa_sign_Dma_req* req    = &packet->pqMldsaSignDmaReq;
         uint16_t req_len = WH_PACKET_STUB_SIZE + sizeof(*req);
         uint32_t options = 0;
 
@@ -2832,17 +2803,10 @@ int wh_Client_MlDsaSignDma(whClientContext* ctx, const byte* in, word32 in_len,
             req->keyId      = key_id;
 
             /* Set up DMA buffers */
-#if WH_DMA_IS_32BIT
-            req->msg.addr = (uint32_t)(uintptr_t)in;
-            req->msg.sz   = in_len;
-            req->sig.addr = (uint32_t)(uintptr_t)out;
-            req->sig.sz   = *out_len;
-#else
             req->msg.addr = (uint64_t)(uintptr_t)in;
             req->msg.sz   = in_len;
             req->sig.addr = (uint64_t)(uintptr_t)out;
             req->sig.sz   = *out_len;
-#endif
 
             /* Send Request */
             ret = wh_Client_SendRequest(ctx, group, action, req_len,
@@ -2852,13 +2816,8 @@ int wh_Client_MlDsaSignDma(whClientContext* ctx, const byte* in, word32 in_len,
                 evict = 0;
 
                 /* Response Message */
-#if WH_DMA_IS_32BIT
-                wh_Packet_pq_mldsa_sign_Dma32_res* res =
-                    &packet->pqMldsaSignDma32Res;
-#else
-                wh_Packet_pq_mldsa_sign_Dma64_res* res =
-                    &packet->pqMldsaSignDma64Res;
-#endif
+                wh_Packet_pq_mldsa_sign_Dma_res* res =
+                    &packet->pqMldsaSignDmaRes;
                 uint16_t res_len = 0;
 
                 /* Recv Response */
@@ -2931,14 +2890,7 @@ int wh_Client_MlDsaVerifyDma(whClientContext* ctx, const byte* sig,
         /* Request Message */
         uint16_t group  = WH_MESSAGE_GROUP_CRYPTO_DMA;
         uint16_t action = WC_ALGO_TYPE_PK;
-
-#if WH_DMA_IS_32BIT
-        wh_Packet_pq_mldsa_verify_Dma32_req* req =
-            &packet->pqMldsaVerifyDma32Req;
-#else
-        wh_Packet_pq_mldsa_verify_Dma64_req* req =
-            &packet->pqMldsaVerifyDma64Req;
-#endif
+        wh_Packet_pq_mldsa_verify_Dma_req* req = &packet->pqMldsaVerifyDmaReq;
         uint16_t req_len = WH_PACKET_STUB_SIZE + sizeof(*req);
         uint32_t options = 0;
 
@@ -2955,17 +2907,10 @@ int wh_Client_MlDsaVerifyDma(whClientContext* ctx, const byte* sig,
             req->keyId      = key_id;
 
             /* Set up DMA buffers */
-#if WH_DMA_IS_32BIT
-            req->sig.addr = (uint32_t)(uintptr_t)sig;
-            req->sig.sz   = sig_len;
-            req->msg.addr = (uint32_t)(uintptr_t)msg;
-            req->msg.sz   = msg_len;
-#else
             req->sig.addr = (uint64_t)(uintptr_t)sig;
             req->sig.sz   = sig_len;
             req->msg.addr = (uint64_t)(uintptr_t)msg;
             req->msg.sz   = msg_len;
-#endif
 
             /* Send Request */
             ret = wh_Client_SendRequest(ctx, group, action, req_len,
@@ -2975,13 +2920,8 @@ int wh_Client_MlDsaVerifyDma(whClientContext* ctx, const byte* sig,
                 evict = 0;
 
                 /* Response Message */
-#if WH_DMA_IS_32BIT
-                wh_Packet_pq_mldsa_verify_Dma32_res* res =
-                    &packet->pqMldsaVerifyDma32Res;
-#else
-                wh_Packet_pq_mldsa_verify_Dma64_res* res =
-                    &packet->pqMldsaVerifyDma64Res;
-#endif
+                wh_Packet_pq_mldsa_verify_Dma_res* res =
+                    &packet->pqMldsaVerifyDmaRes;
                 uint16_t res_len = 0;
 
                 /* Recv Response */
@@ -3016,7 +2956,7 @@ int wh_Client_MlDsaVerifyDma(whClientContext* ctx, const byte* sig,
 
 
 int wh_Client_MlDsaCheckPrivKeyDma(whClientContext* ctx, MlDsaKey* key,
-                                const byte* pubKey, word32 pubKeySz)
+                                   const byte* pubKey, word32 pubKeySz)
 {
     /* TODO */
     return CRYPTOCB_UNAVAILABLE;

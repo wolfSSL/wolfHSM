@@ -104,48 +104,10 @@ int wh_MessageCert_TranslateVerifyRequest(
 }
 
 #ifdef WOLFHSM_CFG_DMA
-int wh_MessageCert_TranslateAddTrustedDma32Request(
-    uint16_t magic, const whMessageCert_AddTrustedDma32Request* src,
-    whMessageCert_AddTrustedDma32Request* dest)
-{
-    if ((src == NULL) || (dest == NULL)) {
-        return WH_ERROR_BADARGS;
-    }
-    WH_T16(magic, dest, src, id);
-    WH_T32(magic, dest, src, cert_addr);
-    WH_T32(magic, dest, src, cert_len);
-    return 0;
-}
 
-int wh_MessageCert_TranslateReadTrustedDma32Request(
-    uint16_t magic, const whMessageCert_ReadTrustedDma32Request* src,
-    whMessageCert_ReadTrustedDma32Request* dest)
-{
-    if ((src == NULL) || (dest == NULL)) {
-        return WH_ERROR_BADARGS;
-    }
-    WH_T16(magic, dest, src, id);
-    WH_T32(magic, dest, src, cert_addr);
-    WH_T32(magic, dest, src, cert_len);
-    return 0;
-}
-
-int wh_MessageCert_TranslateVerifyDma32Request(
-    uint16_t magic, const whMessageCert_VerifyDma32Request* src,
-    whMessageCert_VerifyDma32Request* dest)
-{
-    if ((src == NULL) || (dest == NULL)) {
-        return WH_ERROR_BADARGS;
-    }
-    WH_T32(magic, dest, src, cert_addr);
-    WH_T32(magic, dest, src, cert_len);
-    WH_T16(magic, dest, src, trustedRootNvmId);
-    return 0;
-}
-
-int wh_MessageCert_TranslateAddTrustedDma64Request(
-    uint16_t magic, const whMessageCert_AddTrustedDma64Request* src,
-    whMessageCert_AddTrustedDma64Request* dest)
+int wh_MessageCert_TranslateAddTrustedDmaRequest(
+    uint16_t magic, const whMessageCert_AddTrustedDmaRequest* src,
+    whMessageCert_AddTrustedDmaRequest* dest)
 {
     if ((src == NULL) || (dest == NULL)) {
         return WH_ERROR_BADARGS;
@@ -156,9 +118,9 @@ int wh_MessageCert_TranslateAddTrustedDma64Request(
     return 0;
 }
 
-int wh_MessageCert_TranslateReadTrustedDma64Request(
-    uint16_t magic, const whMessageCert_ReadTrustedDma64Request* src,
-    whMessageCert_ReadTrustedDma64Request* dest)
+int wh_MessageCert_TranslateReadTrustedDmaRequest(
+    uint16_t magic, const whMessageCert_ReadTrustedDmaRequest* src,
+    whMessageCert_ReadTrustedDmaRequest* dest)
 {
     if ((src == NULL) || (dest == NULL)) {
         return WH_ERROR_BADARGS;
@@ -169,9 +131,9 @@ int wh_MessageCert_TranslateReadTrustedDma64Request(
     return 0;
 }
 
-int wh_MessageCert_TranslateVerifyDma64Request(
-    uint16_t magic, const whMessageCert_VerifyDma64Request* src,
-    whMessageCert_VerifyDma64Request* dest)
+int wh_MessageCert_TranslateVerifyDmaRequest(
+    uint16_t magic, const whMessageCert_VerifyDmaRequest* src,
+    whMessageCert_VerifyDmaRequest* dest)
 {
     if ((src == NULL) || (dest == NULL)) {
         return WH_ERROR_BADARGS;

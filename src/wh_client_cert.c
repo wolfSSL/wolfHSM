@@ -246,7 +246,7 @@ int wh_Client_CertEraseTrusted(whClientContext* c, whNvmId id, int32_t* out_rc)
 
 /* Get a trusted certificate */
 int wh_Client_CertReadTrustedRequest(whClientContext* c, whNvmId id,
-                                    uint32_t cert_len)
+                                     uint32_t cert_len)
 {
     whMessageCert_ReadTrustedRequest req;
 
@@ -257,18 +257,18 @@ int wh_Client_CertReadTrustedRequest(whClientContext* c, whNvmId id,
     /* Prepare and send request */
     req.id = id;
     return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_CERT,
-                                 WH_MESSAGE_CERT_ACTION_READTRUSTED, sizeof(req),
-                                 &req);
+                                 WH_MESSAGE_CERT_ACTION_READTRUSTED,
+                                 sizeof(req), &req);
 }
 
 int wh_Client_CertReadTrustedResponse(whClientContext* c, uint8_t* cert,
-                                     uint32_t* cert_len, int32_t* out_rc)
+                                      uint32_t* cert_len, int32_t* out_rc)
 {
-    int                               rc;
-    uint16_t                          group;
-    uint16_t                          action;
-    uint16_t                          size;
-    uint8_t                           buffer[WOLFHSM_CFG_COMM_DATA_LEN] = {0};
+    int                                rc;
+    uint16_t                           group;
+    uint16_t                           action;
+    uint16_t                           size;
+    uint8_t                            buffer[WOLFHSM_CFG_COMM_DATA_LEN] = {0};
     whMessageCert_ReadTrustedResponse* resp =
         (whMessageCert_ReadTrustedResponse*)buffer;
     uint8_t* payload = buffer + sizeof(*resp);
@@ -308,7 +308,7 @@ int wh_Client_CertReadTrustedResponse(whClientContext* c, uint8_t* cert,
 }
 
 int wh_Client_CertReadTrusted(whClientContext* c, whNvmId id, uint8_t* cert,
-                             uint32_t* cert_len, int32_t* out_rc)
+                              uint32_t* cert_len, int32_t* out_rc)
 {
     int rc = 0;
 
@@ -411,468 +411,57 @@ int wh_Client_CertVerify(whClientContext* c, const uint8_t* cert,
 }
 
 #ifdef WOLFHSM_CFG_DMA
-#if WH_DMA_IS_32BIT
-/* DMA 32-bit variants */
-int wh_Client_CertAddTrustedDma32Request(whClientContext* c, whNvmId id,
-                                         uint32_t cert_addr, uint32_t cert_len)
-{
-    whMessageCert_AddTrustedDma32Request req;
 
-    if (c == NULL || cert_len > WOLFHSM_CFG_MAX_CERT_SIZE) {
-        return WH_ERROR_BADARGS;
-    }
-
-    /* Prepare and send request */
-    req.id        = id;
-    req.cert_addr = cert_addr;
-    req.cert_len  = cert_len;
-    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_CERT,
-                                 WH_MESSAGE_CERT_ACTION_ADDTRUSTED_DMA32,
-                                 sizeof(req), &req);
-}
-
-int wh_Client_CertAddTrustedDma32Response(whClientContext* c, int32_t* out_rc)
-{
-    int                          rc;
-    uint16_t                     group;
-    uint16_t                     action;
-    uint16_t                     size;
-    whMessageCert_SimpleResponse resp;
-
-    if (c == NULL) {
-        return WH_ERROR_BADARGS;
-    }
-
-    /* Receive and validate response */
-    rc = wh_Client_RecvResponse(c, &group, &action, &size, &resp);
-    if (rc == 0) {
-        if ((group != WH_MESSAGE_GROUP_CERT) ||
-            (action != WH_MESSAGE_CERT_ACTION_ADDTRUSTED_DMA32) ||
-            (size != sizeof(resp))) {
-            rc = WH_ERROR_ABORTED;
-        }
-        else {
-            if (out_rc != NULL) {
-                *out_rc = resp.rc;
-            }
-        }
-    }
-
-    return rc;
-}
-
-int wh_Client_CertAddTrustedDma32(whClientContext* c, whNvmId id,
-                                  uint32_t cert_addr, uint32_t cert_len,
-                                  int32_t* out_rc)
-{
-    int rc = 0;
-
-    if (c == NULL) {
-        return WH_ERROR_BADARGS;
-    }
-
-    do {
-        rc = wh_Client_CertAddTrustedDma32Request(c, id, cert_addr, cert_len);
-    } while (rc == WH_ERROR_NOTREADY);
-
-    if (rc == 0) {
-        do {
-            rc = wh_Client_CertAddTrustedDma32Response(c, out_rc);
-        } while (rc == WH_ERROR_NOTREADY);
-    }
-
-    return rc;
-}
-
-int wh_Client_CertReadTrustedDma32Request(whClientContext* c, whNvmId id,
-                                         uint32_t cert_addr, uint32_t cert_len)
-{
-    whMessageCert_ReadTrustedDma32Request req;
-
-    if (c == NULL) {
-        return WH_ERROR_BADARGS;
-    }
-
-    /* Prepare and send request */
-    req.id        = id;
-    req.cert_addr = cert_addr;
-    req.cert_len  = cert_len;
-    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_CERT,
-                                 WH_MESSAGE_CERT_ACTION_READTRUSTED_DMA32,
-                                 sizeof(req), &req);
-}
-
-int wh_Client_CertReadTrustedDma32Response(whClientContext* c, int32_t* out_rc)
-{
-    int                          rc;
-    uint16_t                     group;
-    uint16_t                     action;
-    uint16_t                     size;
-    whMessageCert_SimpleResponse resp;
-
-    if (c == NULL) {
-        return WH_ERROR_BADARGS;
-    }
-
-    /* Receive and validate response */
-    rc = wh_Client_RecvResponse(c, &group, &action, &size, &resp);
-    if (rc == 0) {
-        if ((group != WH_MESSAGE_GROUP_CERT) ||
-            (action != WH_MESSAGE_CERT_ACTION_READTRUSTED_DMA32) ||
-            (size != sizeof(resp))) {
-            rc = WH_ERROR_ABORTED;
-        }
-        else {
-            if (out_rc != NULL) {
-                *out_rc = resp.rc;
-            }
-        }
-    }
-
-    return rc;
-}
-
-int wh_Client_CertReadTrustedDma32(whClientContext* c, whNvmId id,
-                                  uint32_t cert_addr, uint32_t cert_len,
-                                  int32_t* out_rc)
-{
-    int rc = 0;
-
-    if (c == NULL) {
-        return WH_ERROR_BADARGS;
-    }
-
-    do {
-        rc = wh_Client_CertReadTrustedDma32Request(c, id, cert_addr, cert_len);
-    } while (rc == WH_ERROR_NOTREADY);
-
-    if (rc == 0) {
-        do {
-            rc = wh_Client_CertReadTrustedDma32Response(c, out_rc);
-        } while (rc == WH_ERROR_NOTREADY);
-    }
-
-    return rc;
-}
-
-int wh_Client_CertVerifyDma32Request(whClientContext* c, uint32_t cert_addr,
-                                     uint32_t cert_len,
-                                     whNvmId  trustedRootNvmId)
-{
-    whMessageCert_VerifyDma32Request req;
-
-    if (c == NULL || cert_len > WOLFHSM_CFG_MAX_CERT_SIZE) {
-        return WH_ERROR_BADARGS;
-    }
-
-    /* Prepare and send request */
-    req.cert_addr        = cert_addr;
-    req.cert_len         = cert_len;
-    req.trustedRootNvmId = trustedRootNvmId;
-    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_CERT,
-                                 WH_MESSAGE_CERT_ACTION_VERIFY_DMA32,
-                                 sizeof(req), &req);
-}
-
-int wh_Client_CertVerifyDma32Response(whClientContext* c, int32_t* out_rc)
-{
-    int                          rc;
-    uint16_t                     group;
-    uint16_t                     action;
-    uint16_t                     size;
-    whMessageCert_SimpleResponse resp;
-
-    if (c == NULL) {
-        return WH_ERROR_BADARGS;
-    }
-
-    /* Receive and validate response */
-    rc = wh_Client_RecvResponse(c, &group, &action, &size, &resp);
-    if (rc == 0) {
-        if ((group != WH_MESSAGE_GROUP_CERT) ||
-            (action != WH_MESSAGE_CERT_ACTION_VERIFY_DMA32) ||
-            (size != sizeof(resp))) {
-            rc = WH_ERROR_ABORTED;
-        }
-        else {
-            if (out_rc != NULL) {
-                *out_rc = resp.rc;
-            }
-        }
-    }
-
-    return rc;
-}
-
-int wh_Client_CertVerifyDma32(whClientContext* c, uint32_t cert_addr,
-                              uint32_t cert_len, whNvmId trustedRootNvmId,
-                              int32_t* out_rc)
-{
-    int rc = 0;
-
-    if (c == NULL) {
-        return WH_ERROR_BADARGS;
-    }
-
-    do {
-        rc = wh_Client_CertVerifyDma32Request(c, cert_addr, cert_len,
-                                              trustedRootNvmId);
-    } while (rc == WH_ERROR_NOTREADY);
-
-    if (rc == 0) {
-        do {
-            rc = wh_Client_CertVerifyDma32Response(c, out_rc);
-        } while (rc == WH_ERROR_NOTREADY);
-    }
-
-    return rc;
-}
-#endif /* WH_DMA_IS_32BIT */
-
-#if WH_DMA_IS_64BIT
-/* DMA 64-bit variants */
-int wh_Client_CertAddTrustedDma64Request(whClientContext* c, whNvmId id,
-                                         uint64_t cert_addr, uint32_t cert_len)
-{
-    whMessageCert_AddTrustedDma64Request req;
-
-    if (c == NULL || cert_len > WOLFHSM_CFG_MAX_CERT_SIZE) {
-        return WH_ERROR_BADARGS;
-    }
-
-    /* Prepare and send request */
-    req.id        = id;
-    req.cert_addr = cert_addr;
-    req.cert_len  = cert_len;
-    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_CERT,
-                                 WH_MESSAGE_CERT_ACTION_ADDTRUSTED_DMA64,
-                                 sizeof(req), &req);
-}
-
-int wh_Client_CertAddTrustedDma64Response(whClientContext* c, int32_t* out_rc)
-{
-    int                          rc;
-    uint16_t                     group;
-    uint16_t                     action;
-    uint16_t                     size;
-    whMessageCert_SimpleResponse resp;
-
-    if (c == NULL) {
-        return WH_ERROR_BADARGS;
-    }
-
-    /* Receive and validate response */
-    rc = wh_Client_RecvResponse(c, &group, &action, &size, &resp);
-    if (rc == 0) {
-        if ((group != WH_MESSAGE_GROUP_CERT) ||
-            (action != WH_MESSAGE_CERT_ACTION_ADDTRUSTED_DMA64) ||
-            (size != sizeof(resp))) {
-            rc = WH_ERROR_ABORTED;
-        }
-        else {
-            if (out_rc != NULL) {
-                *out_rc = resp.rc;
-            }
-        }
-    }
-
-    return rc;
-}
-
-int wh_Client_CertAddTrustedDma64(whClientContext* c, whNvmId id,
-                                  uint64_t cert_addr, uint32_t cert_len,
-                                  int32_t* out_rc)
-{
-    int rc = 0;
-
-    if (c == NULL) {
-        return WH_ERROR_BADARGS;
-    }
-
-    do {
-        rc = wh_Client_CertAddTrustedDma64Request(c, id, cert_addr, cert_len);
-    } while (rc == WH_ERROR_NOTREADY);
-
-    if (rc == 0) {
-        do {
-            rc = wh_Client_CertAddTrustedDma64Response(c, out_rc);
-        } while (rc == WH_ERROR_NOTREADY);
-    }
-
-    return rc;
-}
-
-int wh_Client_CertReadTrustedDma64Request(whClientContext* c, whNvmId id,
-                                         uint64_t cert_addr, uint32_t cert_len)
-{
-    whMessageCert_ReadTrustedDma64Request req;
-
-    if (c == NULL) {
-        return WH_ERROR_BADARGS;
-    }
-
-    /* Prepare and send request */
-    req.id        = id;
-    req.cert_addr = cert_addr;
-    req.cert_len  = cert_len;
-    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_CERT,
-                                 WH_MESSAGE_CERT_ACTION_READTRUSTED_DMA64,
-                                 sizeof(req), &req);
-}
-
-int wh_Client_CertReadTrustedDma64Response(whClientContext* c, int32_t* out_rc)
-{
-    int                          rc;
-    uint16_t                     group;
-    uint16_t                     action;
-    uint16_t                     size;
-    whMessageCert_SimpleResponse resp;
-
-    if (c == NULL) {
-        return WH_ERROR_BADARGS;
-    }
-
-    /* Receive and validate response */
-    rc = wh_Client_RecvResponse(c, &group, &action, &size, &resp);
-    if (rc == 0) {
-        if ((group != WH_MESSAGE_GROUP_CERT) ||
-            (action != WH_MESSAGE_CERT_ACTION_READTRUSTED_DMA64) ||
-            (size != sizeof(resp))) {
-            rc = WH_ERROR_ABORTED;
-        }
-        else {
-            if (out_rc != NULL) {
-                *out_rc = resp.rc;
-            }
-        }
-    }
-
-    return rc;
-}
-
-int wh_Client_CertReadTrustedDma64(whClientContext* c, whNvmId id,
-                                  uint64_t cert_addr, uint32_t cert_len,
-                                  int32_t* out_rc)
-{
-    int rc = 0;
-
-    if (c == NULL) {
-        return WH_ERROR_BADARGS;
-    }
-
-    do {
-        rc = wh_Client_CertReadTrustedDma64Request(c, id, cert_addr, cert_len);
-    } while (rc == WH_ERROR_NOTREADY);
-
-    if (rc == 0) {
-        do {
-            rc = wh_Client_CertReadTrustedDma64Response(c, out_rc);
-        } while (rc == WH_ERROR_NOTREADY);
-    }
-
-    return rc;
-}
-
-int wh_Client_CertVerifyDma64Request(whClientContext* c, uint64_t cert_addr,
-                                     uint32_t cert_len,
-                                     whNvmId  trustedRootNvmId)
-{
-    whMessageCert_VerifyDma64Request req;
-
-    if (c == NULL) {
-        return WH_ERROR_BADARGS;
-    }
-
-    /* Prepare and send request */
-    req.cert_addr        = cert_addr;
-    req.cert_len         = cert_len;
-    req.trustedRootNvmId = trustedRootNvmId;
-    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_CERT,
-                                 WH_MESSAGE_CERT_ACTION_VERIFY_DMA64,
-                                 sizeof(req), &req);
-}
-
-int wh_Client_CertVerifyDma64Response(whClientContext* c, int32_t* out_rc)
-{
-    int                          rc;
-    uint16_t                     group;
-    uint16_t                     action;
-    uint16_t                     size;
-    whMessageCert_SimpleResponse resp;
-
-    if (c == NULL) {
-        return WH_ERROR_BADARGS;
-    }
-
-    /* Receive and validate response */
-    rc = wh_Client_RecvResponse(c, &group, &action, &size, &resp);
-    if (rc == 0) {
-        if ((group != WH_MESSAGE_GROUP_CERT) ||
-            (action != WH_MESSAGE_CERT_ACTION_VERIFY_DMA64) ||
-            (size != sizeof(resp))) {
-            rc = WH_ERROR_ABORTED;
-        }
-        else {
-            if (out_rc != NULL) {
-                *out_rc = resp.rc;
-            }
-        }
-    }
-
-    return rc;
-}
-
-int wh_Client_CertVerifyDma64(whClientContext* c, uint64_t cert_addr,
-                              uint32_t cert_len, whNvmId trustedRootNvmId,
-                              int32_t* out_rc)
-{
-    int rc = 0;
-
-    if (c == NULL) {
-        return WH_ERROR_BADARGS;
-    }
-
-    do {
-        rc = wh_Client_CertVerifyDma64Request(c, cert_addr, cert_len,
-                                              trustedRootNvmId);
-    } while (rc == WH_ERROR_NOTREADY);
-
-    if (rc == 0) {
-        do {
-            rc = wh_Client_CertVerifyDma64Response(c, out_rc);
-        } while (rc == WH_ERROR_NOTREADY);
-    }
-
-    return rc;
-}
-#endif /* WH_DMA_IS_64BIT */
-
-/** Cert Verify DMA Helper functions */
-
-/** Cert Add Trusted DMA Helper functions */
 int wh_Client_CertAddTrustedDmaRequest(whClientContext* c, whNvmId id,
-                                       const uint8_t* cert, uint32_t cert_len)
+                                       const void* cert, uint32_t cert_len)
 {
-#if WH_DMA_IS_32BIT
-    return wh_Client_CertAddTrustedDma32Request(c, id, (uint32_t)(intptr_t)cert,
-                                                cert_len);
-#else
-    return wh_Client_CertAddTrustedDma64Request(c, id, (uint64_t)(intptr_t)cert,
-                                                cert_len);
-#endif
+    whMessageCert_AddTrustedDmaRequest req;
+
+    if (c == NULL || cert_len > WOLFHSM_CFG_MAX_CERT_SIZE) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Prepare and send request */
+    req.id        = id;
+    req.cert_addr = (uint64_t)(uintptr_t)cert;
+    req.cert_len  = cert_len;
+    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_CERT,
+                                 WH_MESSAGE_CERT_ACTION_ADDTRUSTED_DMA,
+                                 sizeof(req), &req);
 }
 
 int wh_Client_CertAddTrustedDmaResponse(whClientContext* c, int32_t* out_rc)
 {
-#if WH_DMA_IS_32BIT
-    return wh_Client_CertAddTrustedDma32Response(c, out_rc);
-#else
-    return wh_Client_CertAddTrustedDma64Response(c, out_rc);
-#endif
+    int                          rc;
+    uint16_t                     group;
+    uint16_t                     action;
+    uint16_t                     size;
+    whMessageCert_SimpleResponse resp;
+
+    if (c == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Receive and validate response */
+    rc = wh_Client_RecvResponse(c, &group, &action, &size, &resp);
+    if (rc == 0) {
+        if ((group != WH_MESSAGE_GROUP_CERT) ||
+            (action != WH_MESSAGE_CERT_ACTION_ADDTRUSTED_DMA) ||
+            (size != sizeof(resp))) {
+            rc = WH_ERROR_ABORTED;
+        }
+        else {
+            if (out_rc != NULL) {
+                *out_rc = resp.rc;
+            }
+        }
+    }
+
+    return rc;
 }
 
 int wh_Client_CertAddTrustedDma(whClientContext* c, whNvmId id,
-                                const uint8_t* cert, uint32_t cert_len,
+                                const void* cert, uint32_t cert_len,
                                 int32_t* out_rc)
 {
     int rc = 0;
@@ -894,30 +483,56 @@ int wh_Client_CertAddTrustedDma(whClientContext* c, whNvmId id,
     return rc;
 }
 
-/** Cert Get Trusted DMA Helper functions */
 int wh_Client_CertReadTrustedDmaRequest(whClientContext* c, whNvmId id,
-                                       uint8_t* cert, uint32_t cert_len)
+                                        void* cert, uint32_t cert_len)
 {
-#if WH_DMA_IS_32BIT
-    return wh_Client_CertReadTrustedDma32Request(c, id, (uint32_t)(intptr_t)cert,
-                                                cert_len);
-#else
-    return wh_Client_CertReadTrustedDma64Request(c, id, (uint64_t)(intptr_t)cert,
-                                                cert_len);
-#endif
+    whMessageCert_ReadTrustedDmaRequest req;
+
+    if (c == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Prepare and send request */
+    req.id        = id;
+    req.cert_addr = (uint64_t)(uintptr_t)cert;
+    req.cert_len  = cert_len;
+    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_CERT,
+                                 WH_MESSAGE_CERT_ACTION_READTRUSTED_DMA,
+                                 sizeof(req), &req);
 }
 
 int wh_Client_CertReadTrustedDmaResponse(whClientContext* c, int32_t* out_rc)
 {
-#if WH_DMA_IS_32BIT
-    return wh_Client_CertReadTrustedDma32Response(c, out_rc);
-#else
-    return wh_Client_CertReadTrustedDma64Response(c, out_rc);
-#endif
+    int                          rc;
+    uint16_t                     group;
+    uint16_t                     action;
+    uint16_t                     size;
+    whMessageCert_SimpleResponse resp;
+
+    if (c == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Receive and validate response */
+    rc = wh_Client_RecvResponse(c, &group, &action, &size, &resp);
+    if (rc == 0) {
+        if ((group != WH_MESSAGE_GROUP_CERT) ||
+            (action != WH_MESSAGE_CERT_ACTION_READTRUSTED_DMA) ||
+            (size != sizeof(resp))) {
+            rc = WH_ERROR_ABORTED;
+        }
+        else {
+            if (out_rc != NULL) {
+                *out_rc = resp.rc;
+            }
+        }
+    }
+
+    return rc;
 }
 
-int wh_Client_CertReadTrustedDma(whClientContext* c, whNvmId id, uint8_t* cert,
-                                uint32_t cert_len, int32_t* out_rc)
+int wh_Client_CertReadTrustedDma(whClientContext* c, whNvmId id, void* cert,
+                                 uint32_t cert_len, int32_t* out_rc)
 {
     int rc = 0;
 
@@ -938,28 +553,55 @@ int wh_Client_CertReadTrustedDma(whClientContext* c, whNvmId id, uint8_t* cert,
     return rc;
 }
 
-int wh_Client_CertVerifyDmaRequest(whClientContext* c, const uint8_t* cert,
+int wh_Client_CertVerifyDmaRequest(whClientContext* c, const void* cert,
                                    uint32_t cert_len, whNvmId trustedRootNvmId)
 {
-#if WH_DMA_IS_32BIT
-    return wh_Client_CertVerifyDma32Request(c, (uint32_t)(intptr_t)cert, cert_len,
-                                            trustedRootNvmId);
-#else
-    return wh_Client_CertVerifyDma64Request(c, (uint64_t)(intptr_t)cert, cert_len,
-                                            trustedRootNvmId);
-#endif
+    whMessageCert_VerifyDmaRequest req;
+
+    if (c == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Prepare and send request */
+    req.cert_addr        = (uint64_t)(uintptr_t)cert;
+    req.cert_len         = cert_len;
+    req.trustedRootNvmId = trustedRootNvmId;
+    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_CERT,
+                                 WH_MESSAGE_CERT_ACTION_VERIFY_DMA,
+                                 sizeof(req), &req);
 }
 
 int wh_Client_CertVerifyDmaResponse(whClientContext* c, int32_t* out_rc)
 {
-#if WH_DMA_IS_32BIT
-    return wh_Client_CertVerifyDma32Response(c, out_rc);
-#else
-    return wh_Client_CertVerifyDma64Response(c, out_rc);
-#endif
+    int                          rc;
+    uint16_t                     group;
+    uint16_t                     action;
+    uint16_t                     size;
+    whMessageCert_SimpleResponse resp;
+
+    if (c == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Receive and validate response */
+    rc = wh_Client_RecvResponse(c, &group, &action, &size, &resp);
+    if (rc == 0) {
+        if ((group != WH_MESSAGE_GROUP_CERT) ||
+            (action != WH_MESSAGE_CERT_ACTION_VERIFY_DMA) ||
+            (size != sizeof(resp))) {
+            rc = WH_ERROR_ABORTED;
+        }
+        else {
+            if (out_rc != NULL) {
+                *out_rc = resp.rc;
+            }
+        }
+    }
+
+    return rc;
 }
 
-int wh_Client_CertVerifyDma(whClientContext* c, const uint8_t* cert,
+int wh_Client_CertVerifyDma(whClientContext* c, const void* cert,
                             uint32_t cert_len, whNvmId trustedRootNvmId,
                             int32_t* out_rc)
 {
@@ -970,7 +612,8 @@ int wh_Client_CertVerifyDma(whClientContext* c, const uint8_t* cert,
     }
 
     do {
-        rc = wh_Client_CertVerifyDmaRequest(c, cert, cert_len, trustedRootNvmId);
+        rc =
+            wh_Client_CertVerifyDmaRequest(c, cert, cert_len, trustedRootNvmId);
     } while (rc == WH_ERROR_NOTREADY);
 
     if (rc == 0) {
@@ -987,7 +630,7 @@ int wh_Client_CertVerifyDma(whClientContext* c, const uint8_t* cert,
 #ifdef WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT
 
 
-int wh_Client_CertVerifyAcertRequest(whClientContext* c, const uint8_t* cert,
+int wh_Client_CertVerifyAcertRequest(whClientContext* c, const void* cert,
                                      uint32_t cert_len,
                                      whNvmId  trustedRootNvmId)
 {
@@ -1039,7 +682,7 @@ int wh_Client_CertVerifyAcertResponse(whClientContext* c, int32_t* out_rc)
     return rc;
 }
 
-int wh_Client_CertVerifyAcert(whClientContext* c, const uint8_t* cert,
+int wh_Client_CertVerifyAcert(whClientContext* c, const void* cert,
                               uint32_t cert_len, whNvmId trustedRootNvmId,
                               int32_t* out_rc)
 {
@@ -1065,11 +708,11 @@ int wh_Client_CertVerifyAcert(whClientContext* c, const uint8_t* cert,
 
 #if defined(WOLFHSM_CFG_DMA)
 
-int wh_Client_CertVerifyAcertDmaRequest(whClientContext* c, const uint8_t* cert,
+int wh_Client_CertVerifyAcertDmaRequest(whClientContext* c, const void* cert,
                                         uint32_t cert_len,
                                         whNvmId  trustedRootNvmId)
 {
-    whMessageCert_VerifyDma64Request req;
+    whMessageCert_VerifyDmaRequest req;
 
     if (c == NULL) {
         return WH_ERROR_BADARGS;
@@ -1112,7 +755,7 @@ int wh_Client_CertVerifyAcertDmaResponse(whClientContext* c, int32_t* out_rc)
     return rc;
 }
 
-int wh_Client_CertVerifyAcertDma(whClientContext* c, const uint8_t* cert,
+int wh_Client_CertVerifyAcertDma(whClientContext* c, const void* cert,
                                  uint32_t cert_len, whNvmId trustedRootNvmId,
                                  int32_t* out_rc)
 {

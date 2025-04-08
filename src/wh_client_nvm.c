@@ -688,240 +688,47 @@ int wh_Client_NvmRead(whClientContext* c,
 
 #ifdef WOLFHSM_CFG_DMA
 
-#if WH_DMA_IS_32BIT
-/** NVM AddObjectDma32 */
-int wh_Client_NvmAddObjectDma32Request(whClientContext* c,
-        uint32_t metadata_hostaddr,
-        whNvmSize data_len, uint32_t data_hostaddr)
-{
-    whMessageNvm_AddObjectDma32Request msg = {0};
-
-    if (c == NULL) {
-        return WH_ERROR_BADARGS;
-    }
-
-    msg.metadata_hostaddr = metadata_hostaddr;
-    msg.data_hostaddr = data_hostaddr;
-    msg.data_len = data_len;
-
-    return wh_Client_SendRequest(c,
-            WH_MESSAGE_GROUP_NVM, WH_MESSAGE_NVM_ACTION_ADDOBJECTDMA32,
-            sizeof(msg), &msg);
-}
-
-int wh_Client_NvmAddObjectDma32Response(whClientContext* c, int32_t *out_rc)
-{
-    whMessageNvm_SimpleResponse msg = {0};
-    int rc = 0;
-    uint16_t resp_group = 0;
-    uint16_t resp_action = 0;
-    uint16_t resp_size = 0;
-
-    if (c == NULL){
-        return WH_ERROR_BADARGS;
-    }
-
-    rc = wh_Client_RecvResponse(c,
-            &resp_group, &resp_action,
-            &resp_size, &msg);
-    if (rc == 0) {
-        /* Validate response */
-        if (    (resp_group != WH_MESSAGE_GROUP_NVM) ||
-                (resp_action != WH_MESSAGE_NVM_ACTION_ADDOBJECTDMA32) ||
-                (resp_size != sizeof(msg)) ){
-            /* Invalid message */
-            rc = WH_ERROR_ABORTED;
-        } else {
-            /* Valid message */
-            if (out_rc != NULL) {
-                *out_rc = msg.rc;
-            }
-        }
-    }
-    return rc;
-}
-
-int wh_Client_NvmAddObjectDma32(whClientContext* c,
-        uint32_t metadata_hostaddr, whNvmSize data_len, uint32_t data_hostaddr,
-        int32_t *out_rc)
-{
-    int rc = 0;
-
-    if (c == NULL) {
-        return WH_ERROR_BADARGS;
-    }
-
-    do {
-        rc = wh_Client_NvmAddObjectDma32Request(c,
-                metadata_hostaddr, data_len, data_hostaddr);
-    } while (rc == WH_ERROR_NOTREADY);
-    if (rc == 0) {
-        do {
-            rc = wh_Client_NvmAddObjectDma32Response(c, out_rc);
-        } while (rc == WH_ERROR_NOTREADY);
-    }
-    return rc;
-}
-#endif /* WH_DMA_IS_32BIT */
-
-#if WH_DMA_IS_64BIT
-/** NVM AddObjectDma64 */
-int wh_Client_NvmAddObjectDma64Request(whClientContext* c,
-        uint64_t metadata_hostaddr,
-        whNvmSize data_len, uint64_t data_hostaddr)
-{
-    whMessageNvm_AddObjectDma64Request msg = {0};
-
-    if (c == NULL) {
-        return WH_ERROR_BADARGS;
-    }
-
-    msg.metadata_hostaddr = metadata_hostaddr;
-    msg.data_hostaddr = data_hostaddr;
-    msg.data_len = data_len;
-
-    return wh_Client_SendRequest(c,
-            WH_MESSAGE_GROUP_NVM, WH_MESSAGE_NVM_ACTION_ADDOBJECTDMA64,
-            sizeof(msg), &msg);
-}
-
-int wh_Client_NvmAddObjectDma64Response(whClientContext* c, int32_t *out_rc)
-{
-    whMessageNvm_SimpleResponse msg = {0};
-    int rc = 0;
-    uint16_t resp_group = 0;
-    uint16_t resp_action = 0;
-    uint16_t resp_size = 0;
-
-    if (c == NULL){
-        return WH_ERROR_BADARGS;
-    }
-
-    rc = wh_Client_RecvResponse(c,
-            &resp_group, &resp_action,
-            &resp_size, &msg);
-    if (rc == 0) {
-        /* Validate response */
-        if (    (resp_group != WH_MESSAGE_GROUP_NVM) ||
-                (resp_action != WH_MESSAGE_NVM_ACTION_ADDOBJECTDMA64) ||
-                (resp_size != sizeof(msg)) ){
-            /* Invalid message */
-            rc = WH_ERROR_ABORTED;
-        } else {
-            /* Valid message */
-            if (out_rc != NULL) {
-                *out_rc = msg.rc;
-            }
-        }
-    }
-    return rc;
-}
-
-int wh_Client_NvmAddObjectDma64(whClientContext* c,
-        uint64_t metadata_hostaddr, whNvmSize data_len, uint64_t data_hostaddr,
-        int32_t *out_rc)
-{
-    int rc = 0;
-
-    if (c == NULL) {
-        return WH_ERROR_BADARGS;
-    }
-
-    do {
-        rc = wh_Client_NvmAddObjectDma64Request(c,
-                metadata_hostaddr, data_len, data_hostaddr);
-    } while (rc == WH_ERROR_NOTREADY);
-    if (rc == 0) {
-        do {
-            rc = wh_Client_NvmAddObjectDma64Response(c, out_rc);
-        } while (rc == WH_ERROR_NOTREADY);
-    }
-    return rc;
-}
-#endif /* WH_DMA_IS_64BIT */
-
-/** NVM AddObjectDMA Helper functions */
 int wh_Client_NvmAddObjectDmaRequest(whClientContext* c,
-        whNvmMetadata* metadata,
-        whNvmSize data_len, const uint8_t* data)
+                                     whNvmMetadata*   metadata,
+                                     whNvmSize data_len, const uint8_t* data)
 {
-#if WH_DMA_IS_32BIT
-    return wh_Client_NvmAddObjectDma32Request(c, (intptr_t)metadata, data_len,
-                                              (intptr_t)data);
-#else
-    return wh_Client_NvmAddObjectDma64Request(c, (intptr_t)metadata, data_len,
-                                              (intptr_t)data);
-#endif
-    return WH_ERROR_BADARGS;
-}
+    whMessageNvm_AddObjectDmaRequest msg = {0};
 
-int wh_Client_NvmAddObjectDmaResponse(whClientContext* c, int32_t *out_rc)
-{
-#if WH_DMA_IS_32BIT
-    return wh_Client_NvmAddObjectDma32Response(c, out_rc);
-#else
-    return wh_Client_NvmAddObjectDma64Response(c, out_rc);
-#endif
-    return WH_ERROR_BADARGS;
-}
-
-int wh_Client_NvmAddObjectDma(whClientContext* c,
-        whNvmMetadata* metadata, whNvmSize data_len, const uint8_t* data,
-        int32_t *out_rc)
-{
-#if WH_DMA_IS_32BIT
-    return wh_Client_NvmAddObjectDma32(c, (intptr_t)metadata, data_len,
-                                       (intptr_t)data, out_rc);
-#else
-    return wh_Client_NvmAddObjectDma64(c, (intptr_t)metadata, data_len,
-                                       (intptr_t)data, out_rc);
-#endif
-}
-
-#if WH_DMA_IS_32BIT
-/** NVM ReadDma32 */
-int wh_Client_NvmReadDma32Request(whClientContext* c,
-        whNvmId id, whNvmSize offset, whNvmSize data_len,
-        uint32_t data_hostaddr)
-{
-    whMessageNvm_ReadDma32Request msg = {0};
-
-    if (c == NULL){
+    if (c == NULL) {
         return WH_ERROR_BADARGS;
     }
 
-    msg.id = id;
-    msg.offset = offset;
-    msg.data_len = data_len;
-    msg.data_hostaddr = data_hostaddr;
-    return wh_Client_SendRequest(c,
-            WH_MESSAGE_GROUP_NVM, WH_MESSAGE_NVM_ACTION_READDMA32,
-            sizeof(msg), &msg);
+    msg.metadata_hostaddr = (uint64_t)(uintptr_t)metadata;
+    msg.data_hostaddr     = (uint64_t)(uintptr_t)data;
+    msg.data_len          = data_len;
+
+    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_NVM,
+                                 WH_MESSAGE_NVM_ACTION_ADDOBJECTDMA,
+                                 sizeof(msg), &msg);
 }
 
-int wh_Client_NvmReadDma32Response(whClientContext* c, int32_t *out_rc)
+int wh_Client_NvmAddObjectDmaResponse(whClientContext* c, int32_t* out_rc)
 {
-    whMessageNvm_SimpleResponse msg = {0};
-    int rc = 0;
-    uint16_t resp_group = 0;
-    uint16_t resp_action = 0;
-    uint16_t resp_size = 0;
+    whMessageNvm_SimpleResponse msg         = {0};
+    int                         rc          = 0;
+    uint16_t                    resp_group  = 0;
+    uint16_t                    resp_action = 0;
+    uint16_t                    resp_size   = 0;
 
-    if (c == NULL){
+    if (c == NULL) {
         return WH_ERROR_BADARGS;
     }
 
-    rc = wh_Client_RecvResponse(c,
-            &resp_group, &resp_action,
-            &resp_size, &msg);
+    rc = wh_Client_RecvResponse(c, &resp_group, &resp_action, &resp_size, &msg);
     if (rc == 0) {
         /* Validate response */
-        if (    (resp_group != WH_MESSAGE_GROUP_NVM) ||
-                (resp_action != WH_MESSAGE_NVM_ACTION_READDMA32) ||
-                (resp_size != sizeof(msg)) ){
+        if ((resp_group != WH_MESSAGE_GROUP_NVM) ||
+            (resp_action != WH_MESSAGE_NVM_ACTION_ADDOBJECTDMA) ||
+            (resp_size != sizeof(msg))) {
             /* Invalid message */
             rc = WH_ERROR_ABORTED;
-        } else {
+        }
+        else {
             /* Valid message */
             if (out_rc != NULL) {
                 *out_rc = msg.rc;
@@ -931,72 +738,68 @@ int wh_Client_NvmReadDma32Response(whClientContext* c, int32_t *out_rc)
     return rc;
 }
 
-int wh_Client_NvmReadDma32(whClientContext* c,
-        whNvmId id, whNvmSize offset, whNvmSize data_len,
-        uint32_t data_hostaddr, int32_t *out_rc)
+int wh_Client_NvmAddObjectDma(whClientContext* c, whNvmMetadata* metadata,
+                              whNvmSize data_len, const uint8_t* data,
+                              int32_t* out_rc)
 {
     int rc = 0;
 
     if (c == NULL) {
         return WH_ERROR_BADARGS;
     }
+
     do {
-        rc = wh_Client_NvmReadDma32Request(c,
-                id, offset, data_len, data_hostaddr);
+        rc = wh_Client_NvmAddObjectDmaRequest(c, metadata, data_len, data);
     } while (rc == WH_ERROR_NOTREADY);
     if (rc == 0) {
         do {
-            rc = wh_Client_NvmReadDma32Response(c, out_rc);
+            rc = wh_Client_NvmAddObjectDmaResponse(c, out_rc);
         } while (rc == WH_ERROR_NOTREADY);
     }
     return rc;
 }
-#endif /* WH_DMA_IS_32BIT */
 
-#if WH_DMA_IS_64BIT
-/** NVM ReadDma64 */
-int wh_Client_NvmReadDma64Request(whClientContext* c,
-        whNvmId id, whNvmSize offset, whNvmSize data_len,
-        uint64_t data_hostaddr)
+int wh_Client_NvmReadDmaRequest(whClientContext* c, whNvmId id,
+                                whNvmSize offset, whNvmSize data_len,
+                                uint8_t* data)
 {
-    whMessageNvm_ReadDma64Request msg = {0};
+    whMessageNvm_ReadDmaRequest msg = {0};
 
-    if (c == NULL){
+    if (c == NULL) {
         return WH_ERROR_BADARGS;
     }
 
-    msg.id = id;
-    msg.offset = offset;
-    msg.data_len = data_len;
-    msg.data_hostaddr = data_hostaddr;
-    return wh_Client_SendRequest(c,
-            WH_MESSAGE_GROUP_NVM, WH_MESSAGE_NVM_ACTION_READDMA64,
-            sizeof(msg), &msg);
+    msg.id            = id;
+    msg.offset        = offset;
+    msg.data_len      = data_len;
+    msg.data_hostaddr = (uint64_t)(uintptr_t)data;
+    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_NVM,
+                                 WH_MESSAGE_NVM_ACTION_READDMA, sizeof(msg),
+                                 &msg);
 }
 
-int wh_Client_NvmReadDma64Response(whClientContext* c, int32_t *out_rc)
+int wh_Client_NvmReadDmaResponse(whClientContext* c, int32_t* out_rc)
 {
-    whMessageNvm_SimpleResponse msg = {0};
-    int rc = 0;
-    uint16_t resp_group = 0;
-    uint16_t resp_action = 0;
-    uint16_t resp_size = 0;
+    whMessageNvm_SimpleResponse msg         = {0};
+    int                         rc          = 0;
+    uint16_t                    resp_group  = 0;
+    uint16_t                    resp_action = 0;
+    uint16_t                    resp_size   = 0;
 
-    if (c == NULL){
+    if (c == NULL) {
         return WH_ERROR_BADARGS;
     }
 
-    rc = wh_Client_RecvResponse(c,
-            &resp_group, &resp_action,
-            &resp_size, &msg);
+    rc = wh_Client_RecvResponse(c, &resp_group, &resp_action, &resp_size, &msg);
     if (rc == 0) {
         /* Validate response */
-        if (    (resp_group != WH_MESSAGE_GROUP_NVM) ||
-                (resp_action != WH_MESSAGE_NVM_ACTION_READDMA64) ||
-                (resp_size != sizeof(msg)) ){
+        if ((resp_group != WH_MESSAGE_GROUP_NVM) ||
+            (resp_action != WH_MESSAGE_NVM_ACTION_READDMA) ||
+            (resp_size != sizeof(msg))) {
             /* Invalid message */
             rc = WH_ERROR_ABORTED;
-        } else {
+        }
+        else {
             /* Valid message */
             if (out_rc != NULL) {
                 *out_rc = msg.rc;
@@ -1006,9 +809,8 @@ int wh_Client_NvmReadDma64Response(whClientContext* c, int32_t *out_rc)
     return rc;
 }
 
-int wh_Client_NvmReadDma64(whClientContext* c,
-        whNvmId id, whNvmSize offset, whNvmSize data_len,
-        uint64_t data_hostaddr, int32_t *out_rc)
+int wh_Client_NvmReadDma(whClientContext* c, whNvmId id, whNvmSize offset,
+                         whNvmSize data_len, uint8_t* data, int32_t* out_rc)
 {
     int rc = 0;
 
@@ -1016,60 +818,14 @@ int wh_Client_NvmReadDma64(whClientContext* c,
         return WH_ERROR_BADARGS;
     }
     do {
-        rc = wh_Client_NvmReadDma64Request(c,
-                id, offset, data_len, data_hostaddr);
+        rc = wh_Client_NvmReadDmaRequest(c, id, offset, data_len, data);
     } while (rc == WH_ERROR_NOTREADY);
     if (rc == 0) {
         do {
-            rc = wh_Client_NvmReadDma64Response(c, out_rc);
+            rc = wh_Client_NvmReadDmaResponse(c, out_rc);
         } while (rc == WH_ERROR_NOTREADY);
     }
     return rc;
-}
-#endif /* WH_DMA_IS_64BIT */
-
-/** NVM ReadDma Helper functions */
-int wh_Client_NvmReadDmaRequest(whClientContext* c,
-        whNvmId id, whNvmSize offset, whNvmSize data_len,
-        uint8_t* data)
-{
-    if (sizeof(intptr_t) == sizeof(uint32_t)) {
-        return wh_Client_NvmReadDma32Request(c,
-                id, offset, data_len, (intptr_t)data);
-    }
-    if (sizeof(intptr_t) == sizeof(uint64_t)) {
-        return wh_Client_NvmReadDma64Request(c,
-                id, offset, data_len, (intptr_t)data);
-    }
-    return WH_ERROR_BADARGS;
-}
-
-int wh_Client_NvmReadDmaResponse(whClientContext* c, int32_t *out_rc)
-{
-    if (sizeof(intptr_t) == sizeof(uint32_t)) {
-        return wh_Client_NvmReadDma32Response(c, out_rc);
-    }
-    if (sizeof(intptr_t) == sizeof(uint64_t)) {
-        return wh_Client_NvmReadDma64Response(c, out_rc);
-    }
-    return WH_ERROR_BADARGS;
-}
-
-int wh_Client_NvmReadDma(whClientContext* c,
-        whNvmId id, whNvmSize offset, whNvmSize data_len, uint8_t* data,
-        int32_t *out_rc)
-{
-    if (sizeof(intptr_t) == sizeof(uint32_t)) {
-        return wh_Client_NvmReadDma32(c,
-                id, offset, data_len, (intptr_t)data,
-                out_rc);
-    }
-    if (sizeof(intptr_t) == sizeof(uint64_t)) {
-        return wh_Client_NvmReadDma64(c,
-                id, offset, data_len, (intptr_t)data,
-                out_rc);
-    }
-    return WH_ERROR_BADARGS;
 }
 
 #endif /* WOLFHSM_CFG_DMA */

@@ -195,39 +195,9 @@ int wh_MessageNvm_TranslateReadResponse(uint16_t magic,
 
 #ifdef WOLFHSM_CFG_DMA
 
-#if WH_DMA_IS_32BIT
-int wh_MessageNvm_TranslateAddObjectDma32Request(uint16_t magic,
-        const whMessageNvm_AddObjectDma32Request* src,
-        whMessageNvm_AddObjectDma32Request* dest)
-{
-    if ((src == NULL) || (dest == NULL)) {
-        return WH_ERROR_BADARGS;
-    }
-    WH_T32(magic, dest, src, metadata_hostaddr);
-    WH_T32(magic, dest, src, data_hostaddr);
-    WH_T16(magic, dest, src, data_len);
-    return 0;
-}
-
-int wh_MessageNvm_TranslateReadDma32Request(uint16_t magic,
-        const whMessageNvm_ReadDma32Request* src,
-        whMessageNvm_ReadDma32Request* dest)
-{
-    if ((src == NULL) || (dest == NULL)) {
-        return WH_ERROR_BADARGS;
-    }
-    WH_T32(magic, dest, src, data_hostaddr);
-    WH_T16(magic, dest, src, id);
-    WH_T16(magic, dest, src, offset);
-    WH_T16(magic, dest, src, data_len);
-    return 0;
-}
-#endif /* WH_DMA_IS_32BIT */
-
-#if WH_DMA_IS_64BIT
-int wh_MessageNvm_TranslateAddObjectDma64Request(uint16_t magic,
-        const whMessageNvm_AddObjectDma64Request* src,
-        whMessageNvm_AddObjectDma64Request* dest)
+int wh_MessageNvm_TranslateAddObjectDmaRequest(
+    uint16_t magic, const whMessageNvm_AddObjectDmaRequest* src,
+    whMessageNvm_AddObjectDmaRequest* dest)
 {
     if ((src == NULL) || (dest == NULL)) {
         return WH_ERROR_BADARGS;
@@ -238,9 +208,9 @@ int wh_MessageNvm_TranslateAddObjectDma64Request(uint16_t magic,
     return 0;
 }
 
-int wh_MessageNvm_TranslateReadDma64Request(uint16_t magic,
-        const whMessageNvm_ReadDma64Request* src,
-        whMessageNvm_ReadDma64Request* dest)
+int wh_MessageNvm_TranslateReadDmaRequest(
+    uint16_t magic, const whMessageNvm_ReadDmaRequest* src,
+    whMessageNvm_ReadDmaRequest* dest)
 {
     if ((src == NULL) || (dest == NULL)) {
         return WH_ERROR_BADARGS;
@@ -251,6 +221,5 @@ int wh_MessageNvm_TranslateReadDma64Request(uint16_t magic,
     WH_T16(magic, dest, src, data_len);
     return 0;
 }
-#endif /* WH_DMA_IS_64BIT */
 
 #endif /* WOLFHSM_CFG_DMA */

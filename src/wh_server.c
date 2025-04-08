@@ -100,8 +100,7 @@ int wh_Server_Init(whServerContext* server, whServerConfig* config)
     /* Initialize DMA configuration and callbacks, if provided */
     if (NULL != config->dmaConfig) {
         server->dma.dmaAddrAllowList = config->dmaConfig->dmaAddrAllowList;
-        server->dma.cb32             = config->dmaConfig->cb32;
-        server->dma.cb64             = config->dmaConfig->cb64;
+        server->dma.cb               = config->dmaConfig->cb;
     }
 #endif /* WOLFHSM_CFG_DMA */
 

@@ -34,19 +34,16 @@
 #include "wolfhsm/wh_nvm.h"
 
 enum WH_MESSAGE_CERT_ACTION_ENUM {
-    WH_MESSAGE_CERT_ACTION_INIT              = 0x1,
-    WH_MESSAGE_CERT_ACTION_ADDTRUSTED        = 0x2,
-    WH_MESSAGE_CERT_ACTION_ERASETRUSTED      = 0x3,
-    WH_MESSAGE_CERT_ACTION_READTRUSTED       = 0x4,
-    WH_MESSAGE_CERT_ACTION_VERIFY            = 0x5,
-    WH_MESSAGE_CERT_ACTION_ADDTRUSTED_DMA32  = 0x12,
-    WH_MESSAGE_CERT_ACTION_READTRUSTED_DMA32 = 0x14,
-    WH_MESSAGE_CERT_ACTION_VERIFY_DMA32      = 0x15,
-    WH_MESSAGE_CERT_ACTION_ADDTRUSTED_DMA64  = 0x22,
-    WH_MESSAGE_CERT_ACTION_READTRUSTED_DMA64 = 0x24,
-    WH_MESSAGE_CERT_ACTION_VERIFY_DMA64      = 0x25,
-    WH_MESSAGE_CERT_ACTION_VERIFY_ACERT      = 0x26,
-    WH_MESSAGE_CERT_ACTION_VERIFY_ACERT_DMA  = 0x27,
+    WH_MESSAGE_CERT_ACTION_INIT             = 0x1,
+    WH_MESSAGE_CERT_ACTION_ADDTRUSTED       = 0x2,
+    WH_MESSAGE_CERT_ACTION_ERASETRUSTED     = 0x3,
+    WH_MESSAGE_CERT_ACTION_READTRUSTED      = 0x4,
+    WH_MESSAGE_CERT_ACTION_VERIFY           = 0x5,
+    WH_MESSAGE_CERT_ACTION_ADDTRUSTED_DMA   = 0x22,
+    WH_MESSAGE_CERT_ACTION_READTRUSTED_DMA  = 0x24,
+    WH_MESSAGE_CERT_ACTION_VERIFY_DMA       = 0x25,
+    WH_MESSAGE_CERT_ACTION_VERIFY_ACERT     = 0x26,
+    WH_MESSAGE_CERT_ACTION_VERIFY_ACERT_DMA = 0x27,
 };
 
 /* Simple reusable response message */
@@ -128,77 +125,42 @@ int wh_MessageCert_TranslateVerifyRequest(
 /* Use SimpleResponse */
 
 #ifdef WOLFHSM_CFG_DMA
-/* AddTrusted DMA32 Request */
-typedef struct {
-    uint32_t cert_addr;
-    uint32_t cert_len;
-    whNvmId  id;
-    uint8_t  WH_PAD[2];
-} whMessageCert_AddTrustedDma32Request;
 
-int wh_MessageCert_TranslateAddTrustedDma32Request(
-    uint16_t magic, const whMessageCert_AddTrustedDma32Request* src,
-    whMessageCert_AddTrustedDma32Request* dest);
-
-/* ReadTrusted DMA32 Request */
-typedef struct {
-    uint32_t cert_addr;
-    uint32_t cert_len;
-    whNvmId  id;
-    uint8_t  WH_PAD[2];
-} whMessageCert_ReadTrustedDma32Request;
-
-int wh_MessageCert_TranslateReadTrustedDma32Request(
-    uint16_t magic, const whMessageCert_ReadTrustedDma32Request* src,
-    whMessageCert_ReadTrustedDma32Request* dest);
-
-/* Verify DMA32 Request */
-typedef struct {
-    uint32_t cert_addr;
-    uint32_t cert_len;
-    whNvmId  trustedRootNvmId;
-    uint8_t  WH_PAD[2];
-} whMessageCert_VerifyDma32Request;
-
-int wh_MessageCert_TranslateVerifyDma32Request(
-    uint16_t magic, const whMessageCert_VerifyDma32Request* src,
-    whMessageCert_VerifyDma32Request* dest);
-
-/* AddTrusted DMA64 Request */
+/* AddTrusted DMA Request */
 typedef struct {
     uint64_t cert_addr;
     uint32_t cert_len;
     whNvmId  id;
     uint8_t  WH_PAD[2];
-} whMessageCert_AddTrustedDma64Request;
+} whMessageCert_AddTrustedDmaRequest;
 
-int wh_MessageCert_TranslateAddTrustedDma64Request(
-    uint16_t magic, const whMessageCert_AddTrustedDma64Request* src,
-    whMessageCert_AddTrustedDma64Request* dest);
+int wh_MessageCert_TranslateAddTrustedDmaRequest(
+    uint16_t magic, const whMessageCert_AddTrustedDmaRequest* src,
+    whMessageCert_AddTrustedDmaRequest* dest);
 
-/* ReadTrusted DMA64 Request */
+/* ReadTrusted DMA Request */
 typedef struct {
     uint64_t cert_addr;
     uint32_t cert_len;
     whNvmId  id;
     uint8_t  WH_PAD[2];
-} whMessageCert_ReadTrustedDma64Request;
+} whMessageCert_ReadTrustedDmaRequest;
 
-int wh_MessageCert_TranslateReadTrustedDma64Request(
-    uint16_t magic, const whMessageCert_ReadTrustedDma64Request* src,
-    whMessageCert_ReadTrustedDma64Request* dest);
+int wh_MessageCert_TranslateReadTrustedDmaRequest(
+    uint16_t magic, const whMessageCert_ReadTrustedDmaRequest* src,
+    whMessageCert_ReadTrustedDmaRequest* dest);
 
-/* Verify DMA64 Request */
+/* Verify DMA Request */
 typedef struct {
     uint64_t cert_addr;
     uint32_t cert_len;
     whNvmId  trustedRootNvmId;
     uint8_t  WH_PAD[2];
-} whMessageCert_VerifyDma64Request;
+} whMessageCert_VerifyDmaRequest;
 
-int wh_MessageCert_TranslateVerifyDma64Request(
-    uint16_t magic, const whMessageCert_VerifyDma64Request* src,
-    whMessageCert_VerifyDma64Request* dest);
+int wh_MessageCert_TranslateVerifyDmaRequest(
+    uint16_t magic, const whMessageCert_VerifyDmaRequest* src,
+    whMessageCert_VerifyDmaRequest* dest);
 #endif /* WOLFHSM_CFG_DMA */
 
 #ifdef WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT

@@ -715,11 +715,11 @@ int wh_Client_KeyEraseResponse(whClientContext* c);
 int wh_Client_KeyErase(whClientContext* c, whNvmId keyId);
 
 #ifdef WOLFHSM_CFG_DMA
-#if WH_DMA_IS_32BIT
+
 /**
- * @brief Sends a key cache request using 32-bit DMA to the server.
+ * @brief Sends a key cache request using DMA to the server.
  *
- * This function prepares and sends a key cache request message using 32-bit DMA
+ * This function prepares and sends a key cache request message using DMA
  * addressing to the server. The message contains the key data and metadata.
  * This function does not block; it returns immediately after sending the
  * request.
@@ -728,20 +728,20 @@ int wh_Client_KeyErase(whClientContext* c, whNvmId keyId);
  * @param[in] flags Key flags.
  * @param[in] label Optional label for the key.
  * @param[in] labelSz Size of the label in bytes.
- * @param[in] keyAddr 32-bit DMA address of the key data.
+ * @param[in] keyAddr DMA address of the key data.
  * @param[in] keySz Size of the key in bytes.
  * @param[in] keyId Key ID to be associated with the cached key.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
-int wh_Client_KeyCacheDma32Request(whClientContext* c, uint32_t flags,
-                                   uint8_t* label, uint16_t labelSz,
-                                   uint32_t keyAddr, uint16_t keySz,
-                                   uint16_t keyId);
+int wh_Client_KeyCacheDmaRequest(whClientContext* c, uint32_t flags,
+                                 uint8_t* label, uint16_t labelSz,
+                                 const void* keyAddr, uint16_t keySz,
+                                 uint16_t keyId);
 
 /**
- * @brief Receives a key cache response for 32-bit DMA from the server.
+ * @brief Receives a key cache response for DMA from the server.
  *
- * This function processes a key cache response message for a 32-bit DMA
+ * This function processes a key cache response message for a DMA
  * operation from the server. It validates the response and returns the assigned
  * key ID.
  *
@@ -749,46 +749,46 @@ int wh_Client_KeyCacheDma32Request(whClientContext* c, uint32_t flags,
  * @param[out] keyId Pointer to store the assigned key ID.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
-int wh_Client_KeyCacheDma32Response(whClientContext* c, uint16_t* keyId);
+int wh_Client_KeyCacheDmaResponse(whClientContext* c, uint16_t* keyId);
 
 /**
- * @brief Performs a complete key cache operation using 32-bit DMA.
+ * @brief Performs a complete key cache operation using DMA.
  *
- * This function handles the complete process of caching a key using 32-bit DMA,
+ * This function handles the complete process of caching a key using DMA,
  * including sending the request and receiving the response.
  *
  * @param[in] c Pointer to the client context.
  * @param[in] flags Key flags.
  * @param[in] label Optional label for the key.
  * @param[in] labelSz Size of the label in bytes.
- * @param[in] keyAddr 32-bit DMA address of the key data.
+ * @param[in] keyAddr DMA address of the key data.
  * @param[in] keySz Size of the key in bytes.
  * @param[out] keyId Pointer to store the assigned key ID.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
-int wh_Client_KeyCacheDma32(whClientContext* c, uint32_t flags, uint8_t* label,
-                            uint16_t labelSz, uint32_t keyAddr, uint16_t keySz,
-                            uint16_t* keyId);
+int wh_Client_KeyCacheDma(whClientContext* c, uint32_t flags, uint8_t* label,
+                          uint16_t labelSz, const void* keyAddr, uint16_t keySz,
+                          uint16_t* keyId);
 
 /**
- * @brief Sends a key export request using 32-bit DMA to the server.
+ * @brief Sends a key export request using DMA to the server.
  *
- * This function prepares and sends a key export request message using 32-bit
- * DMA addressing to the server.
+ * This function prepares and sends a key export request message using DMA
+ * addressing to the server.
  *
  * @param[in] c Pointer to the client context.
  * @param[in] keyId Key ID to export.
- * @param[in] keyAddr 32-bit DMA address where the key should be exported.
+ * @param[in] keyAddr DMA address where the key should be exported.
  * @param[in] keySz Size of the key buffer in bytes.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
-int wh_Client_KeyExportDma32Request(whClientContext* c, uint16_t keyId,
-                                    uint32_t keyAddr, uint16_t keySz);
+int wh_Client_KeyExportDmaRequest(whClientContext* c, uint16_t keyId,
+                                  const void* keyAddr, uint16_t keySz);
 
 /**
- * @brief Receives a key export response for 32-bit DMA from the server.
+ * @brief Receives a key export response for DMA from the server.
  *
- * This function processes a key export response message for a 32-bit DMA
+ * This function processes a key export response message for a DMA
  * operation from the server.
  *
  * @param[in] c Pointer to the client context.
@@ -797,133 +797,50 @@ int wh_Client_KeyExportDma32Request(whClientContext* c, uint16_t keyId,
  * @param[out] outSz Pointer to store the actual size of the exported key.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
-int wh_Client_KeyExportDma32Response(whClientContext* c, uint8_t* label,
-                                     uint16_t labelSz, uint16_t* outSz);
+int wh_Client_KeyExportDmaResponse(whClientContext* c, uint8_t* label,
+                                   uint16_t labelSz, uint16_t* outSz);
 
 /**
- * @brief Performs a complete key export operation using 32-bit DMA.
+ * @brief Performs a complete key export operation using DMA.
  *
- * This function handles the complete process of exporting a key using 32-bit
- * DMA, including sending the request and receiving the response.
- *
- * @param[in] c Pointer to the client context.
- * @param[in] keyId Key ID to export.
- * @param[in] keyAddr 32-bit DMA address where the key should be exported.
- * @param[in] keySz Size of the key buffer in bytes.
- * @param[out] label Buffer to store the key's label.
- * @param[in] labelSz Size of the label buffer.
- * @param[out] outSz Pointer to store the actual size of the exported key.
- * @return int Returns 0 on success, or a negative error code on failure.
- */
-int wh_Client_KeyExportDma32(whClientContext* c, uint16_t keyId,
-                             uint32_t keyAddr, uint16_t keySz, uint8_t* label,
-                             uint16_t labelSz, uint16_t* outSz);
-#else
-/**
- * @brief Sends a key cache request using 64-bit DMA to the server.
- *
- * This function prepares and sends a key cache request message using 64-bit DMA
- * addressing to the server. The message contains the key data and metadata.
- * This function does not block; it returns immediately after sending the
- * request.
- *
- * @param[in] c Pointer to the client context.
- * @param[in] flags Key flags.
- * @param[in] label Optional label for the key.
- * @param[in] labelSz Size of the label in bytes.
- * @param[in] keyAddr 64-bit DMA address of the key data.
- * @param[in] keySz Size of the key in bytes.
- * @param[in] keyId Key ID to be associated with the cached key.
- * @return int Returns 0 on success, or a negative error code on failure.
- */
-int wh_Client_KeyCacheDma64Request(whClientContext* c, uint32_t flags,
-                                   uint8_t* label, uint16_t labelSz,
-                                   uint64_t keyAddr, uint16_t keySz,
-                                   uint16_t keyId);
-
-/**
- * @brief Receives a key cache response for 64-bit DMA from the server.
- *
- * This function processes a key cache response message for a 64-bit DMA
- * operation from the server. It validates the response and returns the assigned
- * key ID.
- *
- * @param[in] c Pointer to the client context.
- * @param[out] keyId Pointer to store the assigned key ID.
- * @return int Returns 0 on success, or a negative error code on failure.
- */
-int wh_Client_KeyCacheDma64Response(whClientContext* c, uint16_t* keyId);
-
-/**
- * @brief Performs a complete key cache operation using 64-bit DMA.
- *
- * This function handles the complete process of caching a key using 64-bit DMA,
+ * This function handles the complete process of exporting a key using DMA,
  * including sending the request and receiving the response.
  *
  * @param[in] c Pointer to the client context.
- * @param[in] flags Key flags.
- * @param[in] label Optional label for the key.
- * @param[in] labelSz Size of the label in bytes.
- * @param[in] keyAddr 64-bit DMA address of the key data.
- * @param[in] keySz Size of the key in bytes.
- * @param[out] keyId Pointer to store the assigned key ID.
- * @return int Returns 0 on success, or a negative error code on failure.
- */
-int wh_Client_KeyCacheDma64(whClientContext* c, uint32_t flags, uint8_t* label,
-                            uint16_t labelSz, uint64_t keyAddr, uint16_t keySz,
-                            uint16_t* keyId);
-
-/**
- * @brief Sends a key export request using 64-bit DMA to the server.
- *
- * This function prepares and sends a key export request message using 64-bit
- * DMA addressing to the server.
- *
- * @param[in] c Pointer to the client context.
  * @param[in] keyId Key ID to export.
- * @param[in] keyAddr 64-bit DMA address where the key should be exported.
- * @param[in] keySz Size of the key buffer in bytes.
- * @return int Returns 0 on success, or a negative error code on failure.
- */
-int wh_Client_KeyExportDma64Request(whClientContext* c, uint16_t keyId,
-                                    uint64_t keyAddr, uint16_t keySz);
-
-/**
- * @brief Receives a key export response for 64-bit DMA from the server.
- *
- * This function processes a key export response message for a 64-bit DMA
- * operation from the server.
- *
- * @param[in] c Pointer to the client context.
- * @param[out] label Buffer to store the key's label.
- * @param[in] labelSz Size of the label buffer.
- * @param[out] outSz Pointer to store the actual size of the exported key.
- * @return int Returns 0 on success, or a negative error code on failure.
- */
-int wh_Client_KeyExportDma64Response(whClientContext* c, uint8_t* label,
-                                     uint16_t labelSz, uint16_t* outSz);
-
-/**
- * @brief Performs a complete key export operation using 64-bit DMA.
- *
- * This function handles the complete process of exporting a key using 64-bit
- * DMA, including sending the request and receiving the response.
- *
- * @param[in] c Pointer to the client context.
- * @param[in] keyId Key ID to export.
- * @param[in] keyAddr 64-bit DMA address where the key should be exported.
+ * @param[in] keyAddr DMA address where the key should be exported.
  * @param[in] keySz Size of the key buffer in bytes.
  * @param[out] label Buffer to store the key's label.
  * @param[in] labelSz Size of the label buffer.
  * @param[out] outSz Pointer to store the actual size of the exported key.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
-int wh_Client_KeyExportDma64(whClientContext* c, uint16_t keyId,
-                             uint64_t keyAddr, uint16_t keySz, uint8_t* label,
-                             uint16_t labelSz, uint16_t* outSz);
-#endif /* WH_DMA_IS_32BIT */
+int wh_Client_KeyExportDma(whClientContext* c, uint16_t keyId,
+                           const void* keyAddr, uint16_t keySz, uint8_t* label,
+                           uint16_t labelSz, uint16_t* outSz);
 
 /* Generic DMA wrapper functions */
+/**
+ * @brief Generic wrapper for sending a key cache DMA request.
+ *
+ * This function provides a generic interface for sending key cache DMA
+ * requests, automatically selecting between 32-bit and 64-bit implementations.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] flags Key flags.
+ * @param[in] label Optional label for the key.
+ * @param[in] labelSz Size of the label in bytes.
+ * @param[in] keyAddr DMA address of the key data.
+ * @param[in] keySz Size of the key in bytes.
+ * @param[in] keyId Key ID to be used for caching. If set to
+ * WH_KEYID_ERASED, a new ID will be generated.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_KeyCacheDmaRequest(whClientContext* c, uint32_t flags,
+                                 uint8_t* label, uint16_t labelSz,
+                                 const void* keyAddr, uint16_t keySz,
+                                 uint16_t keyId);
+
 /**
  * @brief Generic wrapper for receiving a key cache DMA response.
  *
@@ -952,7 +869,7 @@ int wh_Client_KeyCacheDmaResponse(whClientContext* c, uint16_t* keyId);
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_Client_KeyCacheDma(whClientContext* c, uint32_t flags, uint8_t* label,
-                          uint16_t labelSz, uint8_t* key, uint16_t keySz,
+                          uint16_t labelSz, const void* keyAddr, uint16_t keySz,
                           uint16_t* keyId);
 
 /**
@@ -968,7 +885,7 @@ int wh_Client_KeyCacheDma(whClientContext* c, uint32_t flags, uint8_t* label,
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_Client_KeyExportDmaRequest(whClientContext* c, uint16_t keyId,
-                                  uint8_t* key, uint16_t keySz);
+                                  const void* keyAddr, uint16_t keySz);
 
 /**
  * @brief Generic wrapper for receiving a key export DMA response.
@@ -1000,9 +917,9 @@ int wh_Client_KeyExportDmaResponse(whClientContext* c, uint8_t* label,
  * @param[out] outSz Pointer to store the actual size of the exported key.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
-int wh_Client_KeyExportDma(whClientContext* c, uint16_t keyId, uint8_t* key,
-                           uint16_t keySz, uint8_t* label, uint16_t labelSz,
-                           uint16_t* outSz);
+int wh_Client_KeyExportDma(whClientContext* c, uint16_t keyId,
+                           const void* keyAddr, uint16_t keySz, uint8_t* label,
+                           uint16_t labelSz, uint16_t* outSz);
 #endif /* WOLFHSM_CFG_DMA */
 
 
@@ -1552,128 +1469,15 @@ int wh_Client_NvmRead(whClientContext* c, whNvmId id, whNvmSize offset,
                       whNvmSize data_len, int32_t* out_rc, whNvmSize* out_len,
                       uint8_t* data);
 
+
 /**
  * @brief Sends a request to the server to add an object to non-volatile memory
- * (NVM) using DMA with 32-bit client addresses.
+ * (NVM) using DMA.
  *
  * This function prepares and sends a request to the server to add an object to
  * NVM using DMA. The request includes the metadata client address, the length
  * of the data, and the data client address. This function does not block; it
  * returns immediately after sending the request.
- *
- * @param[in] c Pointer to the client context.
- * @param[in] metadata_hostaddr The client address of the metadata.
- * @param[in] data_len The length of the data to be added.
- * @param[in] data_hostaddr The client address of the data to be added.
- * @return int Returns 0 on success, or a negative error code on failure.
- */
-int wh_Client_NvmAddObjectDma32Request(whClientContext* c,
-                                       uint32_t         metadata_hostaddr,
-                                       whNvmSize        data_len,
-                                       uint32_t         data_hostaddr);
-
-/**
- * @brief Receives a response from the server after attempting to add an object
- * to non-volatile memory (NVM) using DMA with 32-bit client addresses.
- *
- * This function attempts to process a response message from the server after
- * attempting to add an object to NVM using DMA. It validates the response and
- * extracts the return code. This function does not block; it returns
- * WH_ERROR_NOTREADY if a response has not been received.
- *
- * @param[in] c Pointer to the client context.
- * @param[out] out_rc Pointer to store the return code from the server.
- * @return int Returns 0 on success, WH_ERROR_NOTREADY if no response is
- * available, or a negative error code on failure.
- */
-int wh_Client_NvmAddObjectDma32Response(whClientContext* c, int32_t* out_rc);
-
-/**
- * @brief Sends a request to the server and receives a response to add an object
- * to non-volatile memory (NVM) using DMA with 32-bit client addresses.
- *
- * This function handles the complete process of sending a request to the server
- * to add an object to NVM using DMA and receiving the response. It sends the
- * request and repeatedly attempts to receive a valid response. This function
- * blocks until the entire operation is complete or an error occurs.
- *
- * @param[in] c Pointer to the client context.
- * @param[in] metadata_hostaddr The client address of the metadata.
- * @param[in] data_len The length of the data to be added.
- * @param[in] data_hostaddr The client address of the data to be added.
- * @param[out] out_rc Pointer to store the return code from the server.
- * @return int Returns 0 on success, or a negative error code on failure.
- */
-int wh_Client_NvmAddObjectDma32(whClientContext* c, uint32_t metadata_hostaddr,
-                                whNvmSize data_len, uint32_t data_hostaddr,
-                                int32_t* out_rc);
-
-/**
- * @brief Sends a request to the server to add an object to non-volatile memory
- * (NVM) using DMA with 64-bit client addresses.
- *
- * This function prepares and sends a request to the server to add an object to
- * NVM using DMA. The request includes the metadata client address, the length
- * of the data, and the data client address. This function does not block; it
- * returns immediately after sending the request.
- *
- * @param[in] c Pointer to the client context.
- * @param[in] metadata_hostaddr The client address of the metadata.
- * @param[in] data_len The length of the data to be added.
- * @param[in] data_hostaddr The client address of the data to be added.
- * @return int Returns 0 on success, or a negative error code on failure.
- */
-int wh_Client_NvmAddObjectDma64Request(whClientContext* c,
-                                       uint64_t         metadata_hostaddr,
-                                       whNvmSize        data_len,
-                                       uint64_t         data_hostaddr);
-
-/**
- * @brief Receives a response from the server after attempting to add an object
- * to non-volatile memory (NVM) using DMA with 64-bit client addresses.
- *
- * This function attempts to process a response message from the server after
- * attempting to add an object to NVM using DMA. It validates the response and
- * extracts the return code. This function does not block; it returns
- * WH_ERROR_NOTREADY if a response has not been received.
- *
- * @param[in] c Pointer to the client context.
- * @param[out] out_rc Pointer to store the return code from the server.
- * @return int Returns 0 on success, WH_ERROR_NOTREADY if no response is
- * available, or a negative error code on failure.
- */
-int wh_Client_NvmAddObjectDma64Response(whClientContext* c, int32_t* out_rc);
-
-/**
- * @brief Sends a request to the server and receives a response to add an object
- * to non-volatile memory (NVM) using DMA with 64-bit client addresses.
- *
- * This function handles the complete process of sending a request to the server
- * to add an object to NVM using DMA and receiving the response. It sends the
- * request and repeatedly attempts to receive a valid response. This function
- * blocks until the entire operation is complete or an error occurs.
- *
- * @param[in] c Pointer to the client context.
- * @param[in] metadata_hostaddr The client address of the metadata.
- * @param[in] data_len The length of the data to be added.
- * @param[in] data_hostaddr The client address of the data to be added.
- * @param[out] out_rc Pointer to store the return code from the server.
- * @return int Returns 0 on success, or a negative error code on failure.
- */
-int wh_Client_NvmAddObjectDma64(whClientContext* c, uint64_t metadata_hostaddr,
-                                whNvmSize data_len, uint64_t data_hostaddr,
-                                int32_t* out_rc);
-
-/**
- * @brief Sends a request to the server to add an object to non-volatile memory
- * (NVM) using DMA, with automatic detection of client address width (32-bit or
- * 64-bit).
- *
- * This function prepares and sends a request to the server to add an object to
- * NVM using DMA. The client address width (32-bit or 64-bit) is automatically
- * detected. The request includes the metadata client address, the length of the
- * data, and the data client address. This function does not block; it returns
- * immediately after sending the request.
  *
  * @param[in] c Pointer to the client context.
  * @param[in] metadata Pointer to the metadata.
@@ -1687,12 +1491,10 @@ int wh_Client_NvmAddObjectDmaRequest(whClientContext* c,
 
 /**
  * @brief Receives a response from the server after attempting to add an object
- * to non-volatile memory (NVM) using DMA, with automatic detection of client
- * address width (32-bit or 64-bit).
+ * to non-volatile memory (NVM) using DMA.
  *
  * This function attempts to process a response message from the server after
- * attempting to add an object to NVM using DMA. The client address width
- * (32-bit or 64-bit) is automatically detected. It validates the response and
+ * attempting to add an object to NVM using DMA. It validates the response and
  * extracts the return code. This function does not block; it returns
  * WH_ERROR_NOTREADY if a response has not been received.
  *
@@ -1705,12 +1507,10 @@ int wh_Client_NvmAddObjectDmaResponse(whClientContext* c, int32_t* out_rc);
 
 /**
  * @brief Sends a request to the server and receives a response to add an object
- * to non-volatile memory (NVM) using DMA, with automatic detection of client
- * address width (32-bit or 64-bit).
+ * to non-volatile memory (NVM) using DMA.
  *
  * This function handles the complete process of sending a request to the server
- * to add an object to NVM using DMA and receiving the response. The client
- * address width (32-bit or 64-bit) is automatically detected. It sends the
+ * to add an object to NVM using DMA and receiving the response. It sends the
  * request and repeatedly attempts to receive a valid response. This function
  * blocks until the entire operation is complete or an error occurs.
  *
@@ -1725,127 +1525,7 @@ int wh_Client_NvmAddObjectDma(whClientContext* c, whNvmMetadata* metadata,
                               whNvmSize data_len, const uint8_t* data,
                               int32_t* out_rc);
 
-/**
- * @brief Sends a request to the server to read data from non-volatile memory
- * (NVM) using DMA with a 32-bit client address.
- *
- * This function prepares and sends a request to the server to read data from
- * NVM using DMA with a 32-bit client address. The request includes the NVM ID,
- * offset, length of the data, and the data client address. This function does
- * not block; it returns immediately after sending the request.
- *
- * @param[in] c Pointer to the client context.
- * @param[in] id The NVM ID of the object to read.
- * @param[in] offset The offset within the object to start reading from.
- * @param[in] data_len The length of the data to be read.
- * @param[in] data_hostaddr The 32-bit client address where the data will be
- * read into.
- * @return int Returns 0 on success, or a negative error code on failure.
- */
-int wh_Client_NvmReadDma32Request(whClientContext* c, whNvmId id,
-                                  whNvmSize offset, whNvmSize data_len,
-                                  uint32_t data_hostaddr);
-
-/**
- * @brief Receives a response from the server after attempting to read data from
- * non-volatile memory (NVM) using DMA with a 32-bit client address.
- *
- * This function attempts to process a response message from the server after
- * attempting to read data from NVM using DMA with a 32-bit client address. It
- * validates the response and extracts the return code. This function does not
- * block; it returns WH_ERROR_NOTREADY if a response has not been received.
- *
- * @param[in] c Pointer to the client context.
- * @param[out] out_rc Pointer to store the return code from the server.
- * @return int Returns 0 on success, WH_ERROR_NOTREADY if no response is
- * available, or a negative error code on failure.
- */
-int wh_Client_NvmReadDma32Response(whClientContext* c, int32_t* out_rc);
-
-/**
- * @brief Sends a request to the server and receives a response to read data
- * from non-volatile memory (NVM) using DMA with a 32-bit client address.
- *
- * This function handles the complete process of sending a request to the server
- * to read data from NVM using DMA with a 32-bit client address and receiving
- * the response. It sends the request and repeatedly attempts to receive a valid
- * response. This function blocks until the entire operation is complete or an
- * error occurs.
- *
- * @param[in] c Pointer to the client context.
- * @param[in] id The NVM ID of the object to read.
- * @param[in] offset The offset within the object to start reading from.
- * @param[in] data_len The length of the data to be read.
- * @param[in] data_hostaddr The 32-bit client address where the data will be
- * read into.
- * @param[out] out_rc Pointer to store the return code from the server.
- * @return int Returns 0 on success, or a negative error code on failure.
- */
-int wh_Client_NvmReadDma32(whClientContext* c, whNvmId id, whNvmSize offset,
-                           whNvmSize data_len, uint32_t data_hostaddr,
-                           int32_t* out_rc);
-
-/**
- * @brief Sends a request to the server to read data from non-volatile memory
- * (NVM) using DMA with a 64-bit client address.
- *
- * This function prepares and sends a request to the server to read data from
- * NVM using DMA with a 64-bit client address. The request includes the NVM ID,
- * offset, length of the data, and the data client address. This function does
- * not block; it returns immediately after sending the request.
- *
- * @param[in] c Pointer to the client context.
- * @param[in] id The NVM ID of the object to read.
- * @param[in] offset The offset within the object to start reading from.
- * @param[in] data_len The length of the data to be read.
- * @param[in] data_hostaddr The 64-bit client address where the data will be
- * read into.
- * @return int Returns 0 on success, or a negative error code on failure.
- */
-int wh_Client_NvmReadDma64Request(whClientContext* c, whNvmId id,
-                                  whNvmSize offset, whNvmSize data_len,
-                                  uint64_t data_hostaddr);
-
-/**
- * @brief Receives a response from the server after attempting to read data from
- * non-volatile memory (NVM) using DMA with a 64-bit client address.
- *
- * This function attempts to process a response message from the server after
- * attempting to read data from NVM using DMA with a 64-bit client address. It
- * validates the response and extracts the return code. This function does not
- * block; it returns WH_ERROR_NOTREADY if a response has not been received.
- *
- * @param[in] c Pointer to the client context.
- * @param[out] out_rc Pointer to store the return code from the server.
- * @return int Returns 0 on success, WH_ERROR_NOTREADY if no response is
- * available, or a negative error code on failure.
- */
-int wh_Client_NvmReadDma64Response(whClientContext* c, int32_t* out_rc);
-
-/**
- * @brief Sends a request to the server and receives a response to read data
- * from non-volatile memory (NVM) using DMA with a 64-bit client address.
- *
- * This function handles the complete process of sending a request to the server
- * to read data from NVM using DMA with a 64-bit client address and receiving
- * the response. It sends the request and repeatedly attempts to receive a valid
- * response. This function blocks until the entire operation is complete or an
- * error occurs.
- *
- * @param[in] c Pointer to the client context.
- * @param[in] id The NVM ID of the object to read.
- * @param[in] offset The offset within the object to start reading from.
- * @param[in] data_len The length of the data to be read.
- * @param[in] data_hostaddr The 64-bit client address where the data will be
- * read into.
- * @param[out] out_rc Pointer to store the return code from the server.
- * @return int Returns 0 on success, or a negative error code on failure.
- */
-int wh_Client_NvmReadDma64(whClientContext* c, whNvmId id, whNvmSize offset,
-                           whNvmSize data_len, uint64_t data_hostaddr,
-                           int32_t* out_rc);
-
-/**
+/*
  * @brief Sends a request to the server to read data from non-volatile memory
  * (NVM) using DMA, with automatic detection of client address width (32-bit or
  * 64-bit).
@@ -2233,325 +1913,12 @@ int wh_Client_CertVerify(whClientContext* c, const uint8_t* cert,
                          int32_t* out_rc);
 
 #ifdef WOLFHSM_CFG_DMA
-#if WH_DMA_IS_32BIT
-/**
- * @brief Sends a request to add a trusted certificate using DMA (32-bit).
- *
- * This function prepares and sends a request to add a trusted certificate using
- * DMA with 32-bit addressing. This function does not block; it returns
- * immediately after sending the request.
- *
- * @param[in] c Pointer to the client context.
- * @param[in] id The NVM ID to store the certificate.
- * @param[in] cert_addr 32-bit DMA address of the certificate data.
- * @param[in] cert_len Length of the certificate data.
- * @return int Returns 0 on success, or a negative error code on failure.
- */
-int wh_Client_CertAddTrustedDma32Request(whClientContext* c, whNvmId id,
-                                         uint32_t cert_addr, uint32_t cert_len);
-
-/**
- * @brief Receives a response from the server after adding a trusted certificate
- * using DMA (32-bit).
- *
- * This function attempts to process a response message from the server after
- * adding a trusted certificate using DMA. It validates the response and
- * extracts the return code. This function does not block; it returns
- * WH_ERROR_NOTREADY if a response has not been received.
- *
- * @param[in] c Pointer to the client context.
- * @param[out] out_rc Pointer to store the response code from the server.
- * @return int Returns 0 on success, or a negative error code on failure.
- */
-int wh_Client_CertAddTrustedDma32Response(whClientContext* c, int32_t* out_rc);
-
-/**
- * @brief Sends a request and receives a response to add a trusted certificate
- * using DMA (32-bit).
- *
- * This function handles the complete process of sending a request to add a
- * trusted certificate using DMA and receiving the response. It blocks until the
- * entire operation is complete or an error occurs.
- *
- * @param[in] c Pointer to the client context.
- * @param[in] id The NVM ID to store the certificate.
- * @param[in] cert_addr 32-bit DMA address of the certificate data.
- * @param[in] cert_len Length of the certificate data.
- * @param[out] out_rc Pointer to store the response code from the server.
- * @return int Returns 0 on success, or a negative error code on failure.
- */
-int wh_Client_CertAddTrustedDma32(whClientContext* c, whNvmId id,
-                                  uint32_t cert_addr, uint32_t cert_len,
-                                  int32_t* out_rc);
-
-/**
- * @brief Sends a request to read a trusted certificate using DMA (32-bit).
- *
- * This function prepares and sends a request to read a trusted certificate
- * using DMA with 32-bit addressing. This function does not block; it returns
- * immediately after sending the request.
- *
- * @param[in] c Pointer to the client context.
- * @param[in] id The NVM ID of the certificate to retrieve.
- * @param[in] cert_addr 32-bit DMA address to store the certificate data.
- * @param[in] cert_len Maximum length of the certificate buffer.
- * @return int Returns 0 on success, or a negative error code on failure.
- */
-int wh_Client_CertReadTrustedDma32Request(whClientContext* c, whNvmId id,
-                                          uint32_t cert_addr,
-                                          uint32_t cert_len);
-
-/**
- * @brief Receives a response from the server after getting a trusted
- * certificate using DMA (32-bit).
- *
- * This function attempts to process a response message from the server after
- * getting a trusted certificate using DMA. It validates the response and
- * extracts the return code. This function does not block; it returns
- * WH_ERROR_NOTREADY if a response has not been received.
- *
- * @param[in] c Pointer to the client context.
- * @param[out] out_rc Pointer to store the response code from the server.
- * @return int Returns 0 on success, or a negative error code on failure.
- */
-int wh_Client_CertReadTrustedDma32Response(whClientContext* c, int32_t* out_rc);
-
-/**
- * @brief Sends a request and receives a response to read a trusted certificate
- * using DMA (32-bit).
- *
- * This function handles the complete process of sending a request to read a
- * trusted certificate using DMA and receiving the response. It blocks until the
- * entire operation is complete or an error occurs.
- *
- * @param[in] c Pointer to the client context.
- * @param[in] id The NVM ID of the certificate to retrieve.
- * @param[in] cert_addr 32-bit DMA address to store the certificate data.
- * @param[in] cert_len Maximum length of the certificate buffer.
- * @param[out] out_rc Pointer to store the response code from the server.
- * @return int Returns 0 on success, or a negative error code on failure.
- */
-int wh_Client_CertReadTrustedDma32(whClientContext* c, whNvmId id,
-                                   uint32_t cert_addr, uint32_t cert_len,
-                                   int32_t* out_rc);
-
-/**
- * @brief Sends a request to verify a certificate using DMA (32-bit).
- *
- * This function prepares and sends a request to verify a certificate using
- * DMA with 32-bit addressing. This function does not block; it returns
- * immediately after sending the request.
- *
- * @param[in] c Pointer to the client context.
- * @param[in] cert_addr 32-bit DMA address of the certificate data to verify.
- * @param[in] cert_len Length of the certificate data.
- * @param[in] trustedRootNvmId NVM ID of the trusted root certificate to verify
- * against.
- * @return int Returns 0 on success, or a negative error code on failure.
- */
-int wh_Client_CertVerifyDma32Request(whClientContext* c, uint32_t cert_addr,
-                                     uint32_t cert_len,
-                                     whNvmId  trustedRootNvmId);
-
-/**
- * @brief Receives a response from the server after verifying a certificate
- * using DMA (32-bit).
- *
- * This function attempts to process a response message from the server after
- * verifying a certificate using DMA. It validates the response and extracts
- * the return code. This function does not block; it returns WH_ERROR_NOTREADY
- * if a response has not been received.
- *
- * @param[in] c Pointer to the client context.
- * @param[out] out_rc Pointer to store the response code from the server.
- * @return int Returns 0 on success, or a negative error code on failure.
- */
-int wh_Client_CertVerifyDma32Response(whClientContext* c, int32_t* out_rc);
-
-/**
- * @brief Sends a request and receives a response to verify a certificate using
- * DMA (32-bit).
- *
- * This function handles the complete process of sending a request to verify a
- * certificate using DMA and receiving the response. It blocks until the entire
- * operation is complete or an error occurs.
- *
- * @param[in] c Pointer to the client context.
- * @param[in] cert_addr 32-bit DMA address of the certificate data to verify.
- * @param[in] cert_len Length of the certificate data.
- * @param[in] trustedRootNvmId NVM ID of the trusted root certificate to verify
- * against.
- * @param[out] out_rc Pointer to store the response code from the server.
- * @return int Returns 0 on success, or a negative error code on failure.
- */
-int wh_Client_CertVerifyDma32(whClientContext* c, uint32_t cert_addr,
-                              uint32_t cert_len, whNvmId trustedRootNvmId,
-                              int32_t* out_rc);
-#endif /* WH_DMA_IS_32BIT */
-
-#if WH_DMA_IS_64BIT
-/**
- * @brief Sends a request to add a trusted certificate using DMA (64-bit).
- *
- * This function prepares and sends a request to add a trusted certificate using
- * DMA with 64-bit addressing. This function does not block; it returns
- * immediately after sending the request.
- *
- * @param[in] c Pointer to the client context.
- * @param[in] id The NVM ID to store the certificate.
- * @param[in] cert_addr 64-bit DMA address of the certificate data.
- * @param[in] cert_len Length of the certificate data.
- * @return int Returns 0 on success, or a negative error code on failure.
- */
-int wh_Client_CertAddTrustedDma64Request(whClientContext* c, whNvmId id,
-                                         uint64_t cert_addr, uint32_t cert_len);
-
-/**
- * @brief Receives a response from the server after adding a trusted certificate
- * using DMA (64-bit).
- *
- * This function attempts to process a response message from the server after
- * adding a trusted certificate using DMA. It validates the response and
- * extracts the return code. This function does not block; it returns
- * WH_ERROR_NOTREADY if a response has not been received.
- *
- * @param[in] c Pointer to the client context.
- * @param[out] out_rc Pointer to store the response code from the server.
- * @return int Returns 0 on success, or a negative error code on failure.
- */
-int wh_Client_CertAddTrustedDma64Response(whClientContext* c, int32_t* out_rc);
-
-/**
- * @brief Sends a request and receives a response to add a trusted certificate
- * using DMA (64-bit).
- *
- * This function handles the complete process of sending a request to add a
- * trusted certificate using DMA and receiving the response. It blocks until the
- * entire operation is complete or an error occurs.
- *
- * @param[in] c Pointer to the client context.
- * @param[in] id The NVM ID to store the certificate.
- * @param[in] cert_addr 64-bit DMA address of the certificate data.
- * @param[in] cert_len Length of the certificate data.
- * @param[out] out_rc Pointer to store the response code from the server.
- * @return int Returns 0 on success, or a negative error code on failure.
- */
-int wh_Client_CertAddTrustedDma64(whClientContext* c, whNvmId id,
-                                  uint64_t cert_addr, uint32_t cert_len,
-                                  int32_t* out_rc);
-
-/**
- * @brief Sends a request to read a trusted certificate using DMA (64-bit).
- *
- * This function prepares and sends a request to read a trusted certificate
- * using DMA with 64-bit addressing. This function does not block; it returns
- * immediately after sending the request.
- *
- * @param[in] c Pointer to the client context.
- * @param[in] id The NVM ID of the certificate to retrieve.
- * @param[in] cert_addr 64-bit DMA address to store the certificate data.
- * @param[in] cert_len Maximum length of the certificate buffer.
- * @return int Returns 0 on success, or a negative error code on failure.
- */
-int wh_Client_CertReadTrustedDma64Request(whClientContext* c, whNvmId id,
-                                          uint64_t cert_addr,
-                                          uint32_t cert_len);
-
-/**
- * @brief Receives a response from the server after getting a trusted
- * certificate using DMA (64-bit).
- *
- * This function attempts to process a response message from the server after
- * getting a trusted certificate using DMA. It validates the response and
- * extracts the return code. This function does not block; it returns
- * WH_ERROR_NOTREADY if a response has not been received.
- *
- * @param[in] c Pointer to the client context.
- * @param[out] out_rc Pointer to store the response code from the server.
- * @return int Returns 0 on success, or a negative error code on failure.
- */
-int wh_Client_CertReadTrustedDma64Response(whClientContext* c, int32_t* out_rc);
-
-/**
- * @brief Sends a request and receives a response to read a trusted certificate
- * using DMA (64-bit).
- *
- * This function handles the complete process of sending a request to read a
- * trusted certificate using DMA and receiving the response. It blocks until the
- * entire operation is complete or an error occurs.
- *
- * @param[in] c Pointer to the client context.
- * @param[in] id The NVM ID of the certificate to retrieve.
- * @param[in] cert_addr 64-bit DMA address to store the certificate data.
- * @param[in] cert_len Maximum length of the certificate buffer.
- * @param[out] out_rc Pointer to store the response code from the server.
- * @return int Returns 0 on success, or a negative error code on failure.
- */
-int wh_Client_CertReadTrustedDma64(whClientContext* c, whNvmId id,
-                                   uint64_t cert_addr, uint32_t cert_len,
-                                   int32_t* out_rc);
-
-/**
- * @brief Sends a request to verify a certificate using DMA (64-bit).
- *
- * This function prepares and sends a request to verify a certificate using
- * DMA with 64-bit addressing. This function does not block; it returns
- * immediately after sending the request.
- *
- * @param[in] c Pointer to the client context.
- * @param[in] cert_addr 64-bit DMA address of the certificate data to verify.
- * @param[in] cert_len Length of the certificate data.
- * @param[in] trustedRootNvmId NVM ID of the trusted root certificate to verify
- * against.
- * @return int Returns 0 on success, or a negative error code on failure.
- */
-int wh_Client_CertVerifyDma64Request(whClientContext* c, uint64_t cert_addr,
-                                     uint32_t cert_len,
-                                     whNvmId  trustedRootNvmId);
-
-/**
- * @brief Receives a response from the server after verifying a certificate
- * using DMA (64-bit).
- *
- * This function attempts to process a response message from the server after
- * verifying a certificate using DMA. It validates the response and extracts
- * the return code. This function does not block; it returns WH_ERROR_NOTREADY
- * if a response has not been received.
- *
- * @param[in] c Pointer to the client context.
- * @param[out] out_rc Pointer to store the response code from the server.
- * @return int Returns 0 on success, or a negative error code on failure.
- */
-int wh_Client_CertVerifyDma64Response(whClientContext* c, int32_t* out_rc);
-
-/**
- * @brief Sends a request and receives a response to verify a certificate using
- * DMA (64-bit).
- *
- * This function handles the complete process of sending a request to verify a
- * certificate using DMA and receiving the response. It blocks until the entire
- * operation is complete or an error occurs.
- *
- * @param[in] c Pointer to the client context.
- * @param[in] cert_addr 64-bit DMA address of the certificate data to verify.
- * @param[in] cert_len Length of the certificate data.
- * @param[in] trustedRootNvmId NVM ID of the trusted root certificate to verify
- * against.
- * @param[out] out_rc Pointer to store the response code from the server.
- * @return int Returns 0 on success, or a negative error code on failure.
- */
-int wh_Client_CertVerifyDma64(whClientContext* c, uint64_t cert_addr,
-                              uint32_t cert_len, whNvmId trustedRootNvmId,
-                              int32_t* out_rc);
-
-#endif /* WH_DMA_IS_64BIT */
 
 /**
  * @brief Sends a request to add a trusted certificate to NVM storage using DMA.
  *
  * This function prepares and sends a request to add a trusted certificate to
- * NVM storage using DMA, with automatic detection of client address width
- * (32-bit or 64-bit). This function does not block; it returns immediately
+ * NVM storage using DMA. This function does not block; it returns immediately
  * after sending the request.
  *
  * @param[in] c Pointer to the client context.
@@ -2561,15 +1928,14 @@ int wh_Client_CertVerifyDma64(whClientContext* c, uint64_t cert_addr,
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_Client_CertAddTrustedDmaRequest(whClientContext* c, whNvmId id,
-                                       const uint8_t* cert, uint32_t cert_len);
+                                       const void* cert, uint32_t cert_len);
 
 /**
  * @brief Receives a response from the server after adding a trusted certificate
  * using DMA.
  *
  * This function attempts to process a response message from the server after
- * adding a trusted certificate using DMA, with automatic detection of client
- * address width (32-bit or 64-bit). It validates the response and extracts
+ * adding a trusted certificate using DMA. It validates the response and extracts
  * the return code. This function does not block; it returns WH_ERROR_NOTREADY
  * if a response has not been received.
  *
@@ -2584,8 +1950,7 @@ int wh_Client_CertAddTrustedDmaResponse(whClientContext* c, int32_t* out_rc);
  * using DMA.
  *
  * This function handles the complete process of sending a request to add a
- * trusted certificate using DMA and receiving the response, with automatic
- * detection of client address width (32-bit or 64-bit). It blocks until the
+ * trusted certificate using DMA and receiving the response. It blocks until the
  * entire operation is complete or an error occurs.
  *
  * @param[in] c Pointer to the client context.
@@ -2596,7 +1961,7 @@ int wh_Client_CertAddTrustedDmaResponse(whClientContext* c, int32_t* out_rc);
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_Client_CertAddTrustedDma(whClientContext* c, whNvmId id,
-                                const uint8_t* cert, uint32_t cert_len,
+                                const void* cert, uint32_t cert_len,
                                 int32_t* out_rc);
 
 /**
@@ -2604,8 +1969,7 @@ int wh_Client_CertAddTrustedDma(whClientContext* c, whNvmId id,
  * DMA.
  *
  * This function prepares and sends a request to read a trusted certificate from
- * NVM storage using DMA, with automatic detection of client address width
- * (32-bit or 64-bit). This function does not block; it returns immediately
+ * NVM storage using DMA. This function does not block; it returns immediately
  * after sending the request.
  *
  * @param[in] c Pointer to the client context.
@@ -2615,15 +1979,14 @@ int wh_Client_CertAddTrustedDma(whClientContext* c, whNvmId id,
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_Client_CertReadTrustedDmaRequest(whClientContext* c, whNvmId id,
-                                        uint8_t* cert, uint32_t cert_len);
+                                        void* cert, uint32_t cert_len);
 
 /**
  * @brief Receives a response from the server after reading a trusted
  * certificate using DMA.
  *
  * This function attempts to process a response message from the server after
- * reading a trusted certificate using DMA, with automatic detection of client
- * address width (32-bit or 64-bit). It validates the response and extracts
+ * reading a trusted certificate using DMA. It validates the response and extracts
  * the return code. This function does not block; it returns WH_ERROR_NOTREADY
  * if a response has not been received.
  *
@@ -2638,8 +2001,7 @@ int wh_Client_CertReadTrustedDmaResponse(whClientContext* c, int32_t* out_rc);
  * using DMA.
  *
  * This function handles the complete process of sending a request to read a
- * trusted certificate using DMA and receiving the response, with automatic
- * detection of client address width (32-bit or 64-bit). It blocks until the
+ * trusted certificate using DMA and receiving the response. It blocks until the
  * entire operation is complete or an error occurs.
  *
  * @param[in] c Pointer to the client context.
@@ -2649,15 +2011,14 @@ int wh_Client_CertReadTrustedDmaResponse(whClientContext* c, int32_t* out_rc);
  * @param[out] out_rc Pointer to store the response code from the server.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
-int wh_Client_CertReadTrustedDma(whClientContext* c, whNvmId id, uint8_t* cert,
+int wh_Client_CertReadTrustedDma(whClientContext* c, whNvmId id, void* cert,
                                  uint32_t cert_len, int32_t* out_rc);
 
 /**
  * @brief Sends a request to verify a certificate using DMA.
  *
- * This function prepares and sends a request to verify a certificate using DMA,
- * with automatic detection of client address width (32-bit or 64-bit). This
- * function does not block; it returns immediately after sending the request.
+ * This function prepares and sends a request to verify a certificate using DMA.
+ * This function does not block; it returns immediately after sending the request.
  *
  * @param[in] c Pointer to the client context.
  * @param[in] cert Pointer to the certificate data to verify.
@@ -2666,7 +2027,7 @@ int wh_Client_CertReadTrustedDma(whClientContext* c, whNvmId id, uint8_t* cert,
  * against.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
-int wh_Client_CertVerifyDmaRequest(whClientContext* c, const uint8_t* cert,
+int wh_Client_CertVerifyDmaRequest(whClientContext* c, const void* cert,
                                    uint32_t cert_len, whNvmId trustedRootNvmId);
 
 /**
@@ -2674,9 +2035,8 @@ int wh_Client_CertVerifyDmaRequest(whClientContext* c, const uint8_t* cert,
  * using DMA.
  *
  * This function attempts to process a response message from the server after
- * verifying a certificate using DMA, with automatic detection of client address
- * width (32-bit or 64-bit). It validates the response and extracts the return
- * code. This function does not block; it returns WH_ERROR_NOTREADY if a
+ * verifying a certificate using DMA. It validates the response and extracts the
+ * return code. This function does not block; it returns WH_ERROR_NOTREADY if a
  * response has not been received.
  *
  * @param[in] c Pointer to the client context.
@@ -2690,9 +2050,8 @@ int wh_Client_CertVerifyDmaResponse(whClientContext* c, int32_t* out_rc);
  * DMA.
  *
  * This function handles the complete process of sending a request to verify a
- * certificate using DMA and receiving the response, with automatic detection of
- * client address width (32-bit or 64-bit). It blocks until the entire operation
- * is complete or an error occurs.
+ * certificate using DMA and receiving the response. It blocks until the entire
+ * operation is complete or an error occurs.
  *
  * @param[in] c Pointer to the client context.
  * @param[in] cert Pointer to the certificate data to verify.
@@ -2702,7 +2061,7 @@ int wh_Client_CertVerifyDmaResponse(whClientContext* c, int32_t* out_rc);
  * @param[out] out_rc Pointer to store the response code from the server.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
-int wh_Client_CertVerifyDma(whClientContext* c, const uint8_t* cert,
+int wh_Client_CertVerifyDma(whClientContext* c, const void* cert,
                             uint32_t cert_len, whNvmId trustedRootNvmId,
                             int32_t* out_rc);
 
@@ -2722,7 +2081,7 @@ int wh_Client_CertVerifyDma(whClientContext* c, const uint8_t* cert,
  * against.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
-int wh_Client_CertVerifyAcertRequest(whClientContext* c, const uint8_t* cert,
+int wh_Client_CertVerifyAcertRequest(whClientContext* c, const void* cert,
                                      uint32_t cert_len,
                                      whNvmId  trustedRootNvmId);
 
@@ -2757,7 +2116,7 @@ int wh_Client_CertVerifyAcertResponse(whClientContext* c, int32_t* out_rc);
  * @param[out] out_rc Pointer to store the response code from the server.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
-int wh_Client_CertVerifyAcert(whClientContext* c, const uint8_t* cert,
+int wh_Client_CertVerifyAcert(whClientContext* c, const void* cert,
                               uint32_t cert_len, whNvmId trustedRootNvmId,
                               int32_t* out_rc);
 
@@ -2775,7 +2134,7 @@ int wh_Client_CertVerifyAcert(whClientContext* c, const uint8_t* cert,
  * against.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
-int wh_Client_CertVerifyAcertDmaRequest(whClientContext* c, const uint8_t* cert,
+int wh_Client_CertVerifyAcertDmaRequest(whClientContext* c, const void* cert,
                                         uint32_t cert_len,
                                         whNvmId  trustedRootNvmId);
 
@@ -2811,7 +2170,7 @@ int wh_Client_CertVerifyAcertDmaResponse(whClientContext* c, int32_t* out_rc);
  * @param[out] out_rc Pointer to store the response code from the server.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
-int wh_Client_CertVerifyAcertDma(whClientContext* c, const uint8_t* cert,
+int wh_Client_CertVerifyAcertDma(whClientContext* c, const void* cert,
                                  uint32_t cert_len, whNvmId trustedRootNvmId,
                                  int32_t* out_rc);
 

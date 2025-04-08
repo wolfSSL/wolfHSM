@@ -35,18 +35,16 @@
 #include "wolfhsm/wh_nvm.h"
 
 enum WH_MESSAGE_NVM_ACTION_ENUM {
-    WH_MESSAGE_NVM_ACTION_INIT              = 0x1,
-    WH_MESSAGE_NVM_ACTION_CLEANUP           = 0x2,
-    WH_MESSAGE_NVM_ACTION_GETAVAILABLE      = 0x3,
-    WH_MESSAGE_NVM_ACTION_ADDOBJECT         = 0x4,
-    WH_MESSAGE_NVM_ACTION_LIST              = 0x5,
-    WH_MESSAGE_NVM_ACTION_GETMETADATA       = 0x6,
-    WH_MESSAGE_NVM_ACTION_DESTROYOBJECTS    = 0x7,
-    WH_MESSAGE_NVM_ACTION_READ              = 0x8,
-    WH_MESSAGE_NVM_ACTION_ADDOBJECTDMA32    = 0x14,
-    WH_MESSAGE_NVM_ACTION_READDMA32         = 0x18,
-    WH_MESSAGE_NVM_ACTION_ADDOBJECTDMA64    = 0x24,
-    WH_MESSAGE_NVM_ACTION_READDMA64         = 0x28,
+    WH_MESSAGE_NVM_ACTION_INIT           = 0x1,
+    WH_MESSAGE_NVM_ACTION_CLEANUP        = 0x2,
+    WH_MESSAGE_NVM_ACTION_GETAVAILABLE   = 0x3,
+    WH_MESSAGE_NVM_ACTION_ADDOBJECT      = 0x4,
+    WH_MESSAGE_NVM_ACTION_LIST           = 0x5,
+    WH_MESSAGE_NVM_ACTION_GETMETADATA    = 0x6,
+    WH_MESSAGE_NVM_ACTION_DESTROYOBJECTS = 0x7,
+    WH_MESSAGE_NVM_ACTION_READ           = 0x8,
+    WH_MESSAGE_NVM_ACTION_ADDOBJECTDMA   = 0x24,
+    WH_MESSAGE_NVM_ACTION_READDMA        = 0x28,
 };
 
 enum WH_MESSAGE_NVM_MAX_ENUM {
@@ -204,71 +202,38 @@ int wh_MessageNvm_TranslateReadResponse(uint16_t magic,
         whMessageNvm_ReadResponse* dest);
 
 #ifdef WOLFHSM_CFG_DMA
-#if WH_DMA_IS_32BIT
-/** NVM AddObjectDma32 Request */
-typedef struct {
-    uint32_t metadata_hostaddr;
-    uint32_t data_hostaddr;
-    uint16_t data_len;
-    uint8_t WH_PAD[6];
-} whMessageNvm_AddObjectDma32Request;
 
-int wh_MessageNvm_TranslateAddObjectDma32Request(uint16_t magic,
-        const whMessageNvm_AddObjectDma32Request* src,
-        whMessageNvm_AddObjectDma32Request* dest);
-
-/** NVM AddObjectDma32 Response */
-/* Use SimpleResponse */
-
-/** NVM ReadDma32 Request */
-typedef struct {
-    uint32_t data_hostaddr;
-    uint16_t id;
-    uint16_t offset;
-    uint16_t data_len;
-    uint8_t WH_PAD[6];
-} whMessageNvm_ReadDma32Request;
-
-int wh_MessageNvm_TranslateReadDma32Request(uint16_t magic,
-        const whMessageNvm_ReadDma32Request* src,
-        whMessageNvm_ReadDma32Request* dest);
-
-/** NVM ReadDma32 Response */
-/* Use SimpleResponse */
-#endif /* WH_DMA_IS_32BIT */
-
-#if WH_DMA_IS_64BIT
-/** NVM AddObjectDma64 Request */
+/** NVM AddObjectDma Request */
 typedef struct {
     uint64_t metadata_hostaddr;
     uint64_t data_hostaddr;
     uint16_t data_len;
     uint8_t WH_PAD[6];
-} whMessageNvm_AddObjectDma64Request;
+} whMessageNvm_AddObjectDmaRequest;
 
-int wh_MessageNvm_TranslateAddObjectDma64Request(uint16_t magic,
-        const whMessageNvm_AddObjectDma64Request* src,
-        whMessageNvm_AddObjectDma64Request* dest);
+int wh_MessageNvm_TranslateAddObjectDmaRequest(uint16_t magic,
+        const whMessageNvm_AddObjectDmaRequest* src,
+        whMessageNvm_AddObjectDmaRequest* dest);
 
-/** NVM AddObjectDma64 Response */
+/** NVM AddObjectDma Response */
 /* Use SimpleResponse */
 
-/** NVM ReadDma64 Request */
+/** NVM ReadDma Request */
 typedef struct {
     uint64_t data_hostaddr;
     uint16_t id;
     uint16_t offset;
     uint16_t data_len;
     uint8_t WH_PAD[2];
-} whMessageNvm_ReadDma64Request;
+} whMessageNvm_ReadDmaRequest;
 
-int wh_MessageNvm_TranslateReadDma64Request(uint16_t magic,
-        const whMessageNvm_ReadDma64Request* src,
-        whMessageNvm_ReadDma64Request* dest);
+int wh_MessageNvm_TranslateReadDmaRequest(uint16_t magic,
+        const whMessageNvm_ReadDmaRequest* src,
+        whMessageNvm_ReadDmaRequest* dest);
 
-/** NVM ReadDma64 Response */
+/** NVM ReadDma Response */
 /* Use SimpleResponse */
-#endif /* WH_DMA_IS_64BIT */
+
 #endif /* WOLFHSM_CFG_DMA */
 
 #endif /* !WOLFHSM_WH_MESSAGE_NVM_H_ */
