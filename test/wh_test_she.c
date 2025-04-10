@@ -320,11 +320,11 @@ int whTest_SheClientConfig(whClientConfig* config)
     }
     printf("SHE ECB SUCCESS\n");
     if ((ret = wh_Client_SheEncCbc(client, WH_SHE_RAM_KEY_ID, iv, sizeof(iv), plainText, cipherText, sizeof(plainText))) != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_SheEncEcb %d\n", ret);
+        WH_ERROR_PRINT("Failed to wh_Client_SheEncCbc %d\n", ret);
         goto exit;
     }
     if ((ret = wh_Client_SheDecCbc(client, WH_SHE_RAM_KEY_ID, iv, sizeof(iv), cipherText, finalText, sizeof(cipherText))) != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_SheEncEcb %d\n", ret);
+        WH_ERROR_PRINT("Failed to wh_Client_SheDecCbc %d\n", ret);
         goto exit;
     }
     if (memcmp(finalText, plainText, sizeof(plainText)) != 0) {

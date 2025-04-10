@@ -339,9 +339,9 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
 
 #ifdef WOLFHSM_CFG_SHE_EXTENSION
         case WH_MESSAGE_GROUP_SHE:
-            rc = wh_Server_HandleSheRequest(server, action, data,
-                &size);
-        break;
+            rc = wh_Server_HandleSheRequest(server, magic, action, size, data,
+                                            &size, data);
+            break;
 #endif
 
         case WH_MESSAGE_GROUP_CUSTOM:

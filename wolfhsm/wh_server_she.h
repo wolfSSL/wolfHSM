@@ -63,9 +63,10 @@ typedef struct {
     uint8_t  uid[WH_SHE_UID_SZ];
 } whServerSheContext;
 
-int wh_Server_HandleSheRequest(whServerContext* server,
-    uint16_t action, uint8_t* data, uint16_t* size);
-
+int wh_Server_HandleSheRequest(whServerContext* server, uint16_t magic,
+                               uint16_t action, uint16_t req_size,
+                               const void* req_packet, uint16_t* out_resp_size,
+                               void* resp_packet);
 #endif /* WOLFHSM_CFG_SHE_EXTENSION */
 
 #endif /* !WOLFHSM_WH_SERVER_SHE_H */

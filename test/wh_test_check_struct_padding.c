@@ -139,33 +139,37 @@ whMessageCrypto_CmacDmaResponse         cmacDmaRes;
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
 #ifdef WOLFHSM_CFG_SHE_EXTENSION
-wh_Packet_she_set_uid_req            sheSetUidReq;
-wh_Packet_she_secure_boot_init_req   sheSecureBootInitReq;
-wh_Packet_she_secure_boot_init_res   sheSecureBootInitRes;
-wh_Packet_she_secure_boot_update_req sheSecureBootUpdateReq;
-wh_Packet_she_secure_boot_update_res sheSecureBootUpdateRes;
-wh_Packet_she_secure_boot_finish_res sheSecureBootFinishRes;
-wh_Packet_she_get_status_res         sheGetStatusRes;
-wh_Packet_she_load_key_req           sheLoadKeyReq;
-wh_Packet_she_load_key_res           sheLoadKeyRes;
-wh_Packet_she_load_plain_key_req     sheLoadPlainKeyReq;
-wh_Packet_she_export_ram_key_res     sheExportRamKeyRes;
-wh_Packet_she_init_rng_res           sheInitRngRes;
-wh_Packet_she_rnd_res                sheRndRes;
-wh_Packet_she_extend_seed_req        sheExtendSeedReq;
-wh_Packet_she_extend_seed_res        sheExtendSeedRes;
-wh_Packet_she_enc_ecb_req            sheEncEcbReq;
-wh_Packet_she_enc_ecb_res            sheEncEcbRes;
-wh_Packet_she_enc_cbc_req            sheEncCbcReq;
-wh_Packet_she_enc_cbc_res            sheEncCbcRes;
-wh_Packet_she_enc_ecb_req            sheDecEcbReq;
-wh_Packet_she_enc_ecb_res            sheDecEcbRes;
-wh_Packet_she_enc_cbc_req            sheDecCbcReq;
-wh_Packet_she_enc_cbc_res            sheDecCbcRes;
-wh_Packet_she_gen_mac_req            sheGenMacReq;
-wh_Packet_she_gen_mac_res            sheGenMacRes;
-wh_Packet_she_verify_mac_req         sheVerifyMacReq;
-wh_Packet_she_verify_mac_res         sheVerifyMacRes;
+/* Include SHE message header for SHE message structures */
+#include "wolfhsm/wh_message_she.h"
+whMessageShe_SetUidRequest            sheSetUidReq;
+whMessageShe_SetUidResponse           sheSetUidRes;
+whMessageShe_SecureBootInitRequest    sheSecureBootInitReq;
+whMessageShe_SecureBootInitResponse   sheSecureBootInitRes;
+whMessageShe_SecureBootUpdateRequest  sheSecureBootUpdateReq;
+whMessageShe_SecureBootUpdateResponse sheSecureBootUpdateRes;
+whMessageShe_SecureBootFinishResponse sheSecureBootFinishRes;
+whMessageShe_GetStatusResponse        sheGetStatusRes;
+whMessageShe_LoadKeyRequest           sheLoadKeyReq;
+whMessageShe_LoadKeyResponse          sheLoadKeyRes;
+whMessageShe_LoadPlainKeyRequest      sheLoadPlainKeyReq;
+whMessageShe_LoadPlainKeyResponse     sheLoadPlainKeyRes;
+whMessageShe_ExportRamKeyResponse     sheExportRamKeyRes;
+whMessageShe_InitRngResponse          sheInitRngRes;
+whMessageShe_RndResponse              sheRndRes;
+whMessageShe_ExtendSeedRequest        sheExtendSeedReq;
+whMessageShe_ExtendSeedResponse       sheExtendSeedRes;
+whMessageShe_EncEcbRequest            sheEncEcbReq;
+whMessageShe_EncEcbResponse           sheEncEcbRes;
+whMessageShe_EncCbcRequest            sheEncCbcReq;
+whMessageShe_EncCbcResponse           sheEncCbcRes;
+whMessageShe_DecEcbRequest            sheDecEcbReq;
+whMessageShe_DecEcbResponse           sheDecEcbRes;
+whMessageShe_DecCbcRequest            sheDecCbcReq;
+whMessageShe_DecCbcResponse           sheDecCbcRes;
+whMessageShe_GenMacRequest            sheGenMacReq;
+whMessageShe_GenMacResponse           sheGenMacRes;
+whMessageShe_VerifyMacRequest         sheVerifyMacReq;
+whMessageShe_VerifyMacResponse        sheVerifyMacRes;
 #endif /* WOLFHSM_CFG_SHE_EXTENSION */
 
 
