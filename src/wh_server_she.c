@@ -124,11 +124,11 @@ static int _GenerateMac(whServerContext* server, uint16_t magic,
 static int _VerifyMac(whServerContext* server, uint16_t magic,
                       uint16_t req_size, const void* req_packet,
                       uint16_t* out_resp_size, void* resp_packet);
-static int      _TranslateSheReturnCode(int ret);
-static int      _ReportInvalidSheState(whServerContext* server, uint16_t magic,
-                                       uint16_t action, uint16_t req_size,
-                                       const void* req_packet,
-                                       uint16_t* out_resp_size, void* resp_packet);
+static int _TranslateSheReturnCode(int ret);
+static int _ReportInvalidSheState(whServerContext* server, uint16_t magic,
+                                  uint16_t action, uint16_t req_size,
+                                  const void* req_packet,
+                                  uint16_t* out_resp_size, void* resp_packet);
 
 /** Local Implementations */
 static int _TranslateSheReturnCode(int ret)
@@ -155,8 +155,9 @@ static int _AesMp16(whServerContext* server, uint8_t* in, word32 inSz,
                     uint8_t* out)
 {
     /* check valid inputs */
-    if (server == NULL || server->she == NULL)
+    if (server == NULL || server->she == NULL) {
         return WH_ERROR_BADARGS;
+    }
     return wh_She_AesMp16_ex(server->she->sheAes, NULL, server->crypto->devId,
                              in, inSz, out);
 }
@@ -219,8 +220,9 @@ static int _SecureBootInit(whServerContext* server, uint16_t magic,
     (void)wh_MessageShe_TranslateSecureBootInitRequest(magic, req_packet, &req);
 
     /* if we aren't looking for init return error */
-    if (server->she->sbState != WH_SHE_SB_INIT)
+    if (server->she->sbState != WH_SHE_SB_INIT) {
         ret = WH_SHE_ERC_SEQUENCE_ERROR;
+    }
     if (ret == 0) {
         /* set the expected size */
         server->she->blSize = req.sz;
@@ -238,8 +240,9 @@ static int _SecureBootInit(whServerContext* server, uint16_t magic,
             server->she->sbState      = WH_SHE_SB_SUCCESS;
             server->she->cmacKeyFound = 0;
         }
-        else
+        else {
             server->she->cmacKeyFound = 1;
+        }
     }
     /* init the cmac, use const length since the nvm key holds both key and
      * expected digest so meta->len will be too long */
@@ -291,24 +294,28 @@ static int _SecureBootUpdate(whServerContext* server, uint16_t magic,
                                                          &req);
 
     /* if we aren't looking for update return error */
-    if (server->she->sbState != WH_SHE_SB_UPDATE)
+    if (server->she->sbState != WH_SHE_SB_UPDATE) {
         ret = WH_SHE_ERC_SEQUENCE_ERROR;
+    }
     if (ret == 0) {
         /* the bootloader chunk is after the fixed fields */
         in = (uint8_t*)req_packet + sizeof(req);
         /* increment blSizeReceived */
         server->she->blSizeReceived += req.sz;
         /* check that we didn't exceed the expected bootloader size */
-        if (server->she->blSizeReceived > server->she->blSize)
+        if (server->she->blSizeReceived > server->she->blSize) {
             ret = WH_SHE_ERC_SEQUENCE_ERROR;
+        }
     }
     /* update with the new input */
-    if (ret == 0)
+    if (ret == 0) {
         ret = wc_CmacUpdate(server->she->sheCmac, in, req.sz);
+    }
     if (ret == 0) {
         /* advance to the next state if we've cmaced the entire image */
-        if (server->she->blSizeReceived == server->she->blSize)
+        if (server->she->blSizeReceived == server->she->blSize) {
             server->she->sbState = WH_SHE_SB_FINISH;
+        }
         /* set ERC_NO_ERROR */
         resp.status = WH_SHE_ERC_NO_ERROR;
     }
@@ -452,8 +459,9 @@ static int _LoadKey(whServerContext* server, uint16_t magic, uint16_t req_size,
         ret = _AesMp16(server, kdfInput, keySz + sizeof(_SHE_KEY_UPDATE_MAC_C),
                        tmpKey);
     }
-    else
+    else {
         ret = WH_SHE_ERC_KEY_NOT_AVAILABLE;
+    }
     /* cmac messageOne and messageTwo using K2 as the cmac key */
     if (ret == 0) {
         uint8_t cmacInput[sizeof(req.messageOne) + sizeof(req.messageTwo)];
@@ -482,8 +490,9 @@ static int _LoadKey(whServerContext* server, uint16_t magic, uint16_t req_size,
                        tmpKey);
     }
     /* decrypt messageTwo */
-    if (ret == 0)
+    if (ret == 0) {
         ret = wc_AesInit(server->she->sheAes, NULL, server->crypto->devId);
+    }
     if (ret == 0) {
         ret = wc_AesSetKey(server->she->sheAes, tmpKey, WH_SHE_KEY_SZ, NULL,
                            AES_DECRYPTION);
@@ -508,8 +517,9 @@ static int _LoadKey(whServerContext* server, uint16_t magic, uint16_t req_size,
             keyRet = ret;
             ret    = 0;
         }
-        else
+        else {
             ret = WH_SHE_ERC_WRITE_PROTECTED;
+        }
     }
     /* check UID == 0 */
     if (ret == 0 && wh_Utils_memeqzero(req.messageOne, WH_SHE_UID_SZ) == 1) {
@@ -555,8 +565,9 @@ static int _LoadKey(whServerContext* server, uint16_t magic, uint16_t req_size,
                                   &she_meta_flags);
             }
         }
-        if (ret != 0)
+        if (ret != 0) {
             ret = WH_SHE_ERC_KEY_UPDATE_ERROR;
+        }
     }
     /* generate K3 using the updated key */
     if (ret == 0) {
@@ -569,8 +580,9 @@ static int _LoadKey(whServerContext* server, uint16_t magic, uint16_t req_size,
         ret = _AesMp16(server, kdfInput,
                        meta->len + sizeof(_SHE_KEY_UPDATE_ENC_C), tmpKey);
     }
-    if (ret == 0)
+    if (ret == 0) {
         ret = wc_AesInit(server->she->sheAes, NULL, server->crypto->devId);
+    }
     if (ret == 0) {
         ret = wc_AesSetKey(server->she->sheAes, tmpKey, WH_SHE_KEY_SZ, NULL,
                            AES_ENCRYPTION);
@@ -613,8 +625,9 @@ static int _LoadKey(whServerContext* server, uint16_t magic, uint16_t req_size,
     }
     if (ret == 0) {
         /* mark if the ram key was loaded */
-        if (WH_KEYID_ID(meta->id) == WH_SHE_RAM_KEY_ID)
+        if (WH_KEYID_ID(meta->id) == WH_SHE_RAM_KEY_ID) {
             server->she->ramKeyPlain = 1;
+        }
     }
 
     *out_resp_size = sizeof(resp);
@@ -1356,9 +1369,9 @@ static int _VerifyMac(whServerContext* server, uint16_t magic,
  * do for crypto layer, there is no way to return non-request specific error
  * codes */
 static int _ReportInvalidSheState(whServerContext* server, uint16_t magic,
-                           uint16_t action, uint16_t req_size,
-                           const void* req_packet, uint16_t* out_resp_size,
-                           void* resp_packet)
+                                  uint16_t action, uint16_t req_size,
+                                  const void* req_packet,
+                                  uint16_t* out_resp_size, void* resp_packet)
 {
     /* TODO does SHE specify what this error should be? */
     /* if we haven't secure booted, only allow secure boot requests */
