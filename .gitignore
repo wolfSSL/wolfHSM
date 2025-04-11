@@ -5,4 +5,5 @@ Build/
 *.la
 **/.gdb_history
 tools/testcertgen/ca/
+tools/testcertgen/*.der
 

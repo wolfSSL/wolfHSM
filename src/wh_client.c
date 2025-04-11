@@ -53,8 +53,8 @@
 #include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_message_comm.h"
 #include "wolfhsm/wh_message_customcb.h"
-#include "wolfhsm/wh_packet.h"
-
+#include "wolfhsm/wh_message_keystore.h"
+#include "wolfhsm/wh_message_counter.h"
 #include "wolfhsm/wh_client.h"
 
 
@@ -706,72 +706,87 @@ int wh_Client_CustomCbCheckRegistered(whClientContext* c, uint16_t id, int* resp
 
 
 int wh_Client_KeyCacheRequest_ex(whClientContext* c, uint32_t flags,
-    uint8_t* label, uint16_t labelSz, uint8_t* in, uint16_t inSz,
-    uint16_t keyId)
+                                 uint8_t* label, uint16_t labelSz, uint8_t* in,
+                                 uint16_t inSz, uint16_t keyId)
 {
-    whPacket* packet;
-    uint8_t* packIn;
-    if (c == NULL || in == NULL || inSz == 0 || WH_PACKET_STUB_SIZE +
-        sizeof(packet->keyCacheReq) + inSz > WOLFHSM_CFG_COMM_DATA_LEN) {
+    whMessageKeystore_CacheRequest* req = NULL;
+    uint8_t*                        packIn;
+
+    if (c == NULL || in == NULL || inSz == 0 ||
+        sizeof(*req) + inSz > WOLFHSM_CFG_COMM_DATA_LEN) {
         return WH_ERROR_BADARGS;
     }
-    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
-    packIn = (uint8_t*)(&packet->keyCacheReq + 1);
-    packet->keyCacheReq.id = keyId;
-    packet->keyCacheReq.flags = flags;
-    packet->keyCacheReq.sz = inSz;
-    if (label == NULL)
-        packet->keyCacheReq.labelSz = 0;
+
+    req    = (whMessageKeystore_CacheRequest*)wh_CommClient_GetDataPtr(c->comm);
+    packIn = (uint8_t*)(req + 1);
+    req->id    = keyId;
+    req->flags = flags;
+    req->sz    = inSz;
+
+    if (label == NULL) {
+        req->labelSz = 0;
+    }
     else {
-        packet->keyCacheReq.labelSz = labelSz;
+        req->labelSz = labelSz;
         /* write label */
         if (labelSz > WH_NVM_LABEL_LEN)
-            memcpy(packet->keyCacheReq.label, label, WH_NVM_LABEL_LEN);
+            memcpy(req->label, label, WH_NVM_LABEL_LEN);
         else
-            memcpy(packet->keyCacheReq.label, label, labelSz);
+            memcpy(req->label, label, labelSz);
     }
+
     /* write in */
     memcpy(packIn, in, inSz);
+
     /* write request */
     return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_KEY, WH_KEY_CACHE,
-            WH_PACKET_STUB_SIZE + sizeof(packet->keyCacheReq) + inSz,
-            (uint8_t*)packet);
+                                 sizeof(*req) + inSz, (uint8_t*)req);
 }
 
 int wh_Client_KeyCacheRequest(whClientContext* c, uint32_t flags,
-    uint8_t* label, uint16_t labelSz, uint8_t* in, uint16_t inSz)
+                              uint8_t* label, uint16_t labelSz, uint8_t* in,
+                              uint16_t inSz)
 {
     return wh_Client_KeyCacheRequest_ex(c, flags, label, labelSz, in, inSz,
-        WH_KEYID_ERASED);
+                                        WH_KEYID_ERASED);
 }
 
 int wh_Client_KeyCacheResponse(whClientContext* c, uint16_t* keyId)
 {
-    uint16_t group;
-    uint16_t action;
-    uint16_t size;
-    int ret;
-    whPacket* packet;
-    if (c == NULL || keyId == NULL)
+    uint16_t                        group;
+    uint16_t                        action;
+    uint16_t                        size;
+    int                             ret;
+    whMessageKeystore_CacheResponse *resp = NULL;
+
+    if (c == NULL || keyId == NULL) {
         return WH_ERROR_BADARGS;
-    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
-    ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)packet);
-    if (ret == 0) {
-        if (packet->rc != 0)
-            ret = packet->rc;
-        else
-            *keyId = packet->keyCacheRes.id;
     }
+
+    resp = (whMessageKeystore_CacheResponse*)wh_CommClient_GetDataPtr(c->comm);
+
+    ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)resp);
+    if (ret == WH_ERROR_OK) {
+        if (resp->rc != 0) {
+            ret = resp->rc;
+        }
+        else {
+            *keyId = resp->id;
+        }
+    }
+
     return ret;
 }
 
-int wh_Client_KeyCache(whClientContext* c, uint32_t flags,
-    uint8_t* label, uint16_t labelSz, uint8_t* in, uint16_t inSz,
-    uint16_t* keyId)
+int wh_Client_KeyCache(whClientContext* c, uint32_t flags, uint8_t* label,
+                       uint16_t labelSz, uint8_t* in, uint16_t inSz,
+                       uint16_t* keyId)
 {
     int ret = WH_ERROR_OK;
+
     ret = wh_Client_KeyCacheRequest_ex(c, flags, label, labelSz, in, inSz,
-        *keyId);
+                                       *keyId);
+
     if (ret == 0) {
         do {
             ret = wh_Client_KeyCacheResponse(c, keyId);
@@ -779,41 +794,47 @@ int wh_Client_KeyCache(whClientContext* c, uint32_t flags,
     }
 
 #ifdef DEBUG_CRYPTOCB_VERBOSE
-    printf("[client] %s label:%.*s key_id:%x ret:%d \n",
-            __func__, labelSz, label, *keyId, ret);
+    printf("[client] %s label:%.*s key_id:%x ret:%d \n", __func__, labelSz,
+           label, *keyId, ret);
 #endif
     return ret;
 }
 
 int wh_Client_KeyEvictRequest(whClientContext* c, uint16_t keyId)
 {
-    whPacket* packet;
-    if (c == NULL || keyId == WH_KEYID_ERASED)
+    whMessageKeystore_EvictRequest* req = NULL;
+
+    if (c == NULL || keyId == WH_KEYID_ERASED) {
         return WH_ERROR_BADARGS;
-    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
-    /* set the keyId */
-    packet->keyEvictReq.id = keyId;
-    /* write request */
+    }
+
+    req = (whMessageKeystore_EvictRequest*)wh_CommClient_GetDataPtr(c->comm);
+    req->id = keyId;
+
     return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_KEY, WH_KEY_EVICT,
-            WH_PACKET_STUB_SIZE + sizeof(packet->keyEvictReq),
-            (uint8_t*)packet);
+                                 sizeof(*req), (uint8_t*)req);
 }
 
 int wh_Client_KeyEvictResponse(whClientContext* c)
 {
-    uint16_t group;
-    uint16_t action;
-    uint16_t size;
-    int ret;
-    whPacket* packet;
-    if (c == NULL)
+    uint16_t                         group;
+    uint16_t                         action;
+    uint16_t                         size;
+    int                              ret;
+    whMessageKeystore_EvictResponse resp;
+
+    if (c == NULL) {
         return WH_ERROR_BADARGS;
-    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
-    ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)packet);
-    if (ret == 0) {
-        if (packet->rc != 0)
-            ret = packet->rc;
     }
+
+    ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)&resp);
+
+    if (ret == 0) {
+        if (resp.rc != 0) {
+            ret = resp.rc;
+        }
+    }
+
     return ret;
 }
 
@@ -835,61 +856,66 @@ int wh_Client_KeyEvict(whClientContext* c, uint16_t keyId)
 
 int wh_Client_KeyExportRequest(whClientContext* c, whKeyId keyId)
 {
-    whPacket* packet;
-    if (c == NULL || keyId == WH_KEYID_ERASED)
+    whMessageKeystore_ExportRequest* req = NULL;
+
+    if (c == NULL || keyId == WH_KEYID_ERASED) {
         return WH_ERROR_BADARGS;
-    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
-    /* set keyId */
-    packet->keyExportReq.id = keyId;
-    /* write request */
+    }
+
+    req = (whMessageKeystore_ExportRequest*)wh_CommClient_GetDataPtr(c->comm);
+    req->id = keyId;
+
     return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_KEY, WH_KEY_EXPORT,
-            WH_PACKET_STUB_SIZE + sizeof(packet->keyExportReq),
-            (uint8_t*)packet);
+                                 sizeof(*req), (uint8_t*)req);
 }
 
 int wh_Client_KeyExportResponse(whClientContext* c, uint8_t* label,
-    uint16_t labelSz, uint8_t* out, uint16_t* outSz)
+                                uint16_t labelSz, uint8_t* out, uint16_t* outSz)
 {
-    uint16_t group;
-    uint16_t action;
-    uint16_t size;
-    int ret;
-    whPacket* packet;
-    uint8_t* packOut;
-    if (c == NULL || outSz == NULL)
+    uint16_t                          group;
+    uint16_t                          action;
+    uint16_t                          size;
+    int                               ret;
+    whMessageKeystore_ExportResponse *resp = NULL;
+    uint8_t*                          packOut;
+
+    if (c == NULL || outSz == NULL) {
         return WH_ERROR_BADARGS;
-    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
-    packOut = (uint8_t*)(&packet->keyExportRes + 1);
-    ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)packet);
-    if (ret == 0) {
-        if (packet->rc != 0)
-            ret = packet->rc;
-        else  {
+    }
+
+    resp = (whMessageKeystore_ExportResponse*)wh_CommClient_GetDataPtr(c->comm);
+    packOut = (uint8_t*)(resp + 1);
+
+    ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)resp);
+    if (ret == WH_ERROR_OK) {
+        if (resp->rc != 0) {
+            ret = resp->rc;
+        }
+        else {
             if (out == NULL) {
-                *outSz = packet->keyExportRes.len;
+                *outSz = resp->len;
             }
-            else if (*outSz < packet->keyExportRes.len) {
+            else if (*outSz < resp->len) {
                 ret = WH_ERROR_ABORTED;
             }
             else {
-                memcpy(out, packOut, packet->keyExportRes.len);
-                *outSz = packet->keyExportRes.len;
+                memcpy(out, packOut, resp->len);
+                *outSz = resp->len;
             }
             if (label != NULL) {
-                if (labelSz > sizeof(packet->keyExportRes.label)) {
-                    memcpy(label, packet->keyExportRes.label,
-                        WH_NVM_LABEL_LEN);
+                if (labelSz > sizeof(resp->label)) {
+                    memcpy(label, resp->label, WH_NVM_LABEL_LEN);
                 }
                 else
-                    memcpy(label, packet->keyExportRes.label, labelSz);
+                    memcpy(label, resp->label, labelSz);
             }
         }
     }
     return ret;
 }
 
-int wh_Client_KeyExport(whClientContext* c, whKeyId keyId,
-    uint8_t* label, uint16_t labelSz, uint8_t* out, uint16_t* outSz)
+int wh_Client_KeyExport(whClientContext* c, whKeyId keyId, uint8_t* label,
+                        uint16_t labelSz, uint8_t* out, uint16_t* outSz)
 {
     int ret;
     ret = wh_Client_KeyExportRequest(c, keyId);
@@ -903,32 +929,38 @@ int wh_Client_KeyExport(whClientContext* c, whKeyId keyId,
 
 int wh_Client_KeyCommitRequest(whClientContext* c, whNvmId keyId)
 {
-    whPacket* packet;
-    if (c == NULL || keyId == WH_KEYID_ERASED)
+    whMessageKeystore_CommitRequest* req = NULL;
+
+    if (c == NULL || keyId == WH_KEYID_ERASED) {
         return WH_ERROR_BADARGS;
-    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
-    /* set keyId */
-    packet->keyCommitReq.id = keyId;
-    /* write request */
+    }
+
+    req = (whMessageKeystore_CommitRequest*)wh_CommClient_GetDataPtr(c->comm);
+    req->id = keyId;
+
     return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_KEY, WH_KEY_COMMIT,
-            WH_PACKET_STUB_SIZE + sizeof(packet->keyCommitReq),
-            (uint8_t*)packet);
+                                 sizeof(*req), (uint8_t*)req);
 }
 
 int wh_Client_KeyCommitResponse(whClientContext* c)
 {
-    uint16_t group;
-    uint16_t action;
-    uint16_t size;
-    int ret;
-    whPacket* packet;
-    if (c == NULL)
+    uint16_t                          group;
+    uint16_t                          action;
+    uint16_t                          size;
+    int                               ret;
+    whMessageKeystore_CommitResponse* resp = NULL;
+
+    if (c == NULL) {
         return WH_ERROR_BADARGS;
-    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
-    ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)packet);
-    if (ret == 0) {
-        if (packet->rc != 0)
-            ret = packet->rc;
+    }
+
+    resp = (whMessageKeystore_CommitResponse*)wh_CommClient_GetDataPtr(c->comm);
+
+    ret  = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)resp);
+    if (ret == WH_ERROR_OK) {
+        if (resp->rc != 0) {
+            ret = resp->rc;
+        }
     }
     return ret;
 }
@@ -947,32 +979,38 @@ int wh_Client_KeyCommit(whClientContext* c, whNvmId keyId)
 
 int wh_Client_KeyEraseRequest(whClientContext* c, whNvmId keyId)
 {
-    whPacket* packet;
-    if (c == NULL || keyId == WH_KEYID_ERASED)
+    whMessageKeystore_EraseRequest* req = NULL;
+
+    if (c == NULL || keyId == WH_KEYID_ERASED) {
         return WH_ERROR_BADARGS;
-    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
-    /* set keyId */
-    packet->keyEraseReq.id = keyId;
-    /* write request */
+    }
+
+    req = (whMessageKeystore_EraseRequest*)wh_CommClient_GetDataPtr(c->comm);
+    req->id = keyId;
+
     return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_KEY, WH_KEY_ERASE,
-            WH_PACKET_STUB_SIZE + sizeof(packet->keyEraseReq),
-            (uint8_t*)packet);
+                                 sizeof(*req), (uint8_t*)req);
 }
 
 int wh_Client_KeyEraseResponse(whClientContext* c)
 {
-    uint16_t group;
-    uint16_t action;
-    uint16_t size;
-    int ret;
-    whPacket* packet;
-    if (c == NULL)
+    uint16_t                         group;
+    uint16_t                         action;
+    uint16_t                         size;
+    int                              ret;
+    whMessageKeystore_EraseResponse* resp = NULL;
+
+    if (c == NULL) {
         return WH_ERROR_BADARGS;
-    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
-    ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)packet);
+    }
+
+    resp = (whMessageKeystore_EraseResponse*)wh_CommClient_GetDataPtr(c->comm);
+
+    ret  = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)resp);
     if (ret == 0) {
-        if (packet->rc != 0)
-            ret = packet->rc;
+        if (resp->rc != 0) {
+            ret = resp->rc;
+        }
     }
     return ret;
 }
@@ -992,16 +1030,18 @@ int wh_Client_KeyErase(whClientContext* c, whNvmId keyId)
 int wh_Client_CounterInitRequest(whClientContext* c, whNvmId counterId,
     uint32_t counter)
 {
-    whPacket* packet;
-    if (c == NULL || counterId == WH_KEYID_ERASED)
+    whMessageCounter_InitRequest* req = NULL;
+
+    if (c == NULL || counterId == WH_KEYID_ERASED) {
         return WH_ERROR_BADARGS;
-    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
-    /* set counterId and initial value */
-    packet->counterInitReq.counterId = counterId;
-    packet->counterInitReq.counter = counter;
+    }
+
+    req = (whMessageCounter_InitRequest*)wh_CommClient_GetDataPtr(c->comm);
+    req->counterId = counterId;
+    req->counter = counter;
+
     return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_COUNTER, WH_COUNTER_INIT,
-        WH_PACKET_STUB_SIZE + sizeof(packet->counterInitReq),
-        (uint8_t*)packet);
+                                 sizeof(*req), (uint8_t*)req);
 }
 
 int wh_Client_CounterInitResponse(whClientContext* c, uint32_t* counter)
@@ -1010,16 +1050,22 @@ int wh_Client_CounterInitResponse(whClientContext* c, uint32_t* counter)
     uint16_t action;
     uint16_t size;
     int ret;
-    whPacket* packet;
-    if (c == NULL)
+    whMessageCounter_InitResponse* resp = NULL;
+
+    if (c == NULL) {
         return WH_ERROR_BADARGS;
-    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
-    ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)packet);
-    if (ret == 0) {
-        if (packet->rc != 0)
-            ret = packet->rc;
-        else if (counter != NULL)
-            *counter = packet->counterInitRes.counter;
+    }
+
+    resp = (whMessageCounter_InitResponse*)wh_CommClient_GetDataPtr(c->comm);
+
+    ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)resp);
+    if (ret == WH_ERROR_OK) {
+        if (resp->rc != 0) {
+            ret = resp->rc;
+        }
+        else if (counter != NULL) {
+            *counter = resp->counter;
+        }
     }
     return ret;
 }
@@ -1056,15 +1102,18 @@ int wh_Client_CounterReset(whClientContext* c, whNvmId counterId,
 
 int wh_Client_CounterIncrementRequest(whClientContext* c, whNvmId counterId)
 {
-    whPacket* packet;
-    if (c == NULL || counterId == WH_KEYID_ERASED)
+    whMessageCounter_IncrementRequest* req = NULL;
+
+    if (c == NULL || counterId == WH_KEYID_ERASED) {
         return WH_ERROR_BADARGS;
-    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
-    /* set counterId */
-    packet->counterIncrementReq.counterId = counterId;
+    }
+
+    req = (whMessageCounter_IncrementRequest*)wh_CommClient_GetDataPtr(c->comm);
+    req->counterId = counterId;
+
     return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_COUNTER,
-        WH_COUNTER_INCREMENT, WH_PACKET_STUB_SIZE +
-        sizeof(packet->counterIncrementReq), (uint8_t*)packet);
+                                 WH_COUNTER_INCREMENT, sizeof(*req),
+                                 (uint8_t*)req);
 }
 
 int wh_Client_CounterIncrementResponse(whClientContext* c, uint32_t* counter)
@@ -1073,16 +1122,22 @@ int wh_Client_CounterIncrementResponse(whClientContext* c, uint32_t* counter)
     uint16_t action;
     uint16_t size;
     int ret;
-    whPacket* packet;
-    if (c == NULL)
+    whMessageCounter_IncrementResponse* resp = NULL;
+
+    if (c == NULL) {
         return WH_ERROR_BADARGS;
-    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
-    ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)packet);
-    if (ret == 0) {
-        if (packet->rc != 0)
-            ret = packet->rc;
-        else if (counter != NULL)
-            *counter = packet->counterIncrementRes.counter;
+    }
+
+    resp = (whMessageCounter_IncrementResponse*)wh_CommClient_GetDataPtr(c->comm);
+
+    ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)resp);
+    if (ret == WH_ERROR_OK) {
+        if (resp->rc != 0) {
+            ret = resp->rc;
+        }
+        else if (counter != NULL) {
+            *counter = resp->counter;
+        }
     }
     return ret;
 }
@@ -1102,15 +1157,17 @@ int wh_Client_CounterIncrement(whClientContext* c, whNvmId counterId,
 
 int wh_Client_CounterReadRequest(whClientContext* c, whNvmId counterId)
 {
-    whPacket* packet;
-    if (c == NULL || counterId == WH_KEYID_ERASED)
+    whMessageCounter_ReadRequest* req = NULL;
+
+    if (c == NULL || counterId == WH_KEYID_ERASED) {
         return WH_ERROR_BADARGS;
-    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
-    /* set counterId */
-    packet->counterReadReq.counterId = counterId;
-    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_COUNTER,
-        WH_COUNTER_READ, WH_PACKET_STUB_SIZE +
-        sizeof(packet->counterReadReq), (uint8_t*)packet);
+    }
+
+    req = (whMessageCounter_ReadRequest*)wh_CommClient_GetDataPtr(c->comm);
+    req->counterId = counterId;
+
+    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_COUNTER, WH_COUNTER_READ,
+                                 sizeof(*req), (uint8_t*)req);
 }
 
 int wh_Client_CounterReadResponse(whClientContext* c, uint32_t* counter)
@@ -1119,16 +1176,22 @@ int wh_Client_CounterReadResponse(whClientContext* c, uint32_t* counter)
     uint16_t action;
     uint16_t size;
     int ret;
-    whPacket* packet;
-    if (c == NULL || counter == NULL)
+    whMessageCounter_ReadResponse* resp = NULL;
+
+    if (c == NULL || counter == NULL) {
         return WH_ERROR_BADARGS;
-    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
-    ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)packet);
-    if (ret == 0) {
-        if (packet->rc != 0)
-            ret = packet->rc;
-        else
-            *counter = packet->counterReadRes.counter;
+    }
+
+    resp = (whMessageCounter_ReadResponse*)wh_CommClient_GetDataPtr(c->comm);
+
+    ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)resp);
+    if (ret == WH_ERROR_OK) {
+        if (resp->rc != 0) {
+            ret = resp->rc;
+        }
+        else {
+            *counter = resp->counter;
+        }
     }
     return ret;
 }
@@ -1148,15 +1211,17 @@ int wh_Client_CounterRead(whClientContext* c, whNvmId counterId,
 
 int wh_Client_CounterDestroyRequest(whClientContext* c, whNvmId counterId)
 {
-    whPacket* packet;
-    if (c == NULL || counterId == WH_KEYID_ERASED)
+    whMessageCounter_DestroyRequest* req = NULL;
+
+    if (c == NULL || counterId == WH_KEYID_ERASED) {
         return WH_ERROR_BADARGS;
-    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
-    /* set counterId */
-    packet->counterDestroyReq.counterId = counterId;
-    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_COUNTER,
-        WH_COUNTER_DESTROY, WH_PACKET_STUB_SIZE +
-        sizeof(packet->counterReadReq), (uint8_t*)packet);
+    }
+
+    req = (whMessageCounter_DestroyRequest*)wh_CommClient_GetDataPtr(c->comm);
+    req->counterId = counterId;
+
+    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_COUNTER, WH_COUNTER_DESTROY,
+                                 sizeof(*req), (uint8_t*)req);
 }
 
 int wh_Client_CounterDestroyResponse(whClientContext* c)
@@ -1165,14 +1230,19 @@ int wh_Client_CounterDestroyResponse(whClientContext* c)
     uint16_t action;
     uint16_t size;
     int ret;
-    whPacket* packet;
-    if (c == NULL)
+    whMessageCounter_DestroyResponse* resp = NULL;
+
+    if (c == NULL) {
         return WH_ERROR_BADARGS;
-    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
-    ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)packet);
-    if (ret == 0) {
-        if (packet->rc != 0)
-            ret = packet->rc;
+    }
+
+    resp = (whMessageCounter_DestroyResponse*)wh_CommClient_GetDataPtr(c->comm);
+
+    ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)resp);
+    if (ret == WH_ERROR_OK) {
+        if (resp->rc != 0) {
+            ret = resp->rc;
+        }
     }
     return ret;
 }
@@ -1196,63 +1266,64 @@ int wh_Client_KeyCacheDmaRequest(whClientContext* c, uint32_t flags,
                                  const void* keyAddr, uint16_t keySz,
                                  uint16_t keyId)
 {
-    whPacket* packet;
+    whMessageKeystore_CacheDmaRequest* req = NULL;
+
     if (c == NULL || (labelSz > 0 && label == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
-    packet                      = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
-    packet->keyCacheDmaReq.id = keyId;
-    packet->keyCacheDmaReq.flags   = flags;
-    packet->keyCacheDmaReq.sz      = keySz;
-    packet->keyCacheDmaReq.labelSz = labelSz;
+    req = (whMessageKeystore_CacheDmaRequest*)wh_CommClient_GetDataPtr(c->comm);
+    req->id      = keyId;
+    req->flags   = flags;
+    req->labelSz = labelSz;
 
     /* Set up DMA buffer info */
-    packet->keyCacheDmaReq.key.addr = (uint64_t)((uintptr_t)keyAddr);
-    packet->keyCacheDmaReq.key.sz   = keySz;
+    req->key.addr = (uint64_t)((uintptr_t)keyAddr);
+    req->key.sz   = keySz;
 
     /* Copy label if provided, truncate if necessary */
     if (labelSz > 0) {
         if (labelSz > WH_NVM_LABEL_LEN) {
             labelSz = WH_NVM_LABEL_LEN;
         }
-        memcpy(packet->keyCacheDmaReq.label, label, labelSz);
+        memcpy(req->label, label, labelSz);
     }
 
     return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_KEY, WH_KEY_CACHE_DMA,
-                                 WH_PACKET_STUB_SIZE +
-                                     sizeof(packet->keyCacheDmaReq),
-                                 (uint8_t*)packet);
+                                 sizeof(*req), (uint8_t*)req);
 }
 
 int wh_Client_KeyCacheDmaResponse(whClientContext* c, uint16_t* keyId)
 {
-    uint16_t  group;
-    uint16_t  action;
-    uint16_t  size;
-    int       ret;
-    whPacket* packet;
+    uint16_t                            group;
+    uint16_t                            action;
+    uint16_t                            size;
+    int                                 ret;
+    whMessageKeystore_CacheDmaResponse* resp = NULL;
 
     if (c == NULL || keyId == NULL) {
         return WH_ERROR_BADARGS;
     }
 
-    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
-    ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)packet);
+    resp =
+        (whMessageKeystore_CacheDmaResponse*)wh_CommClient_GetDataPtr(c->comm);
+
+    ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)resp);
+
     if (ret == 0) {
         /* Validate response */
         if ((group != WH_MESSAGE_GROUP_KEY) || (action != WH_KEY_CACHE_DMA) ||
-            (size != WH_PACKET_STUB_SIZE + sizeof(packet->keyCacheDmaRes))) {
+            (size != sizeof(*resp))) {
             /* Invalid message */
             ret = WH_ERROR_ABORTED;
         }
         else {
             /* Valid message */
-            if (packet->rc != 0) {
-                ret = packet->rc;
+            if (resp->rc != 0) {
+                ret = resp->rc;
             }
             else {
-                *keyId = packet->keyCacheDmaRes.id;
+                *keyId = resp->id;
             }
         }
     }
@@ -1264,8 +1335,8 @@ int wh_Client_KeyCacheDma(whClientContext* c, uint32_t flags, uint8_t* label,
                           uint16_t* keyId)
 {
     int ret;
-    ret = wh_Client_KeyCacheDmaRequest(c, flags, label, labelSz, keyAddr,
-                                         keySz, *keyId);
+    ret = wh_Client_KeyCacheDmaRequest(c, flags, label, labelSz, keyAddr, keySz,
+                                       *keyId);
     if (ret == 0) {
         do {
             ret = wh_Client_KeyCacheDmaResponse(c, keyId);
@@ -1277,62 +1348,60 @@ int wh_Client_KeyCacheDma(whClientContext* c, uint32_t flags, uint8_t* label,
 int wh_Client_KeyExportDmaRequest(whClientContext* c, uint16_t keyId,
                                   const void* keyAddr, uint16_t keySz)
 {
-    whPacket* packet;
+    whMessageKeystore_ExportDmaRequest* req = NULL;
+
     if (c == NULL || keyId == WH_KEYID_ERASED) {
         return WH_ERROR_BADARGS;
     }
 
-    packet                     = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
-    packet->keyExportDmaReq.id = keyId;
-    packet->keyExportDmaReq.key.addr = (uint64_t)((uintptr_t)keyAddr);
-    packet->keyExportDmaReq.key.sz   = keySz;
+    req =
+        (whMessageKeystore_ExportDmaRequest*)wh_CommClient_GetDataPtr(c->comm);
+    req->id       = keyId;
+    req->key.addr = (uint64_t)((uintptr_t)keyAddr);
+    req->key.sz   = keySz;
 
     return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_KEY, WH_KEY_EXPORT_DMA,
-                                 WH_PACKET_STUB_SIZE +
-                                     sizeof(packet->keyExportDmaReq),
-                                 (uint8_t*)packet);
+                                 sizeof(*req), (uint8_t*)req);
 }
 
 int wh_Client_KeyExportDmaResponse(whClientContext* c, uint8_t* label,
                                    uint16_t labelSz, uint16_t* outSz)
 {
-    uint16_t  resp_group;
-    uint16_t  resp_action;
-    uint16_t  resp_size;
-    int       rc;
-    whPacket* packet;
+    uint16_t                             resp_group;
+    uint16_t                             resp_action;
+    uint16_t                             resp_size;
+    int                                  rc;
+    whMessageKeystore_ExportDmaResponse* resp = NULL;
 
     if (c == NULL || outSz == NULL) {
         return WH_ERROR_BADARGS;
     }
 
-    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
-    rc     = wh_Client_RecvResponse(c, &resp_group, &resp_action, &resp_size,
-                                    (uint8_t*)packet);
+    resp =
+        (whMessageKeystore_ExportDmaResponse*)wh_CommClient_GetDataPtr(c->comm);
+
+    rc = wh_Client_RecvResponse(c, &resp_group, &resp_action, &resp_size,
+                                (uint8_t*)resp);
     if (rc == 0) {
         /* Validate response */
         if ((resp_group != WH_MESSAGE_GROUP_KEY) ||
             (resp_action != WH_KEY_EXPORT_DMA) ||
-            (resp_size !=
-             WH_PACKET_STUB_SIZE + sizeof(packet->keyExportDmaRes))) {
+            (resp_size != sizeof(*resp))) {
             /* Invalid message */
             rc = WH_ERROR_ABORTED;
         }
         else {
             /* Valid message */
-            if (packet->rc != 0) {
-                rc = packet->rc;
+            if (resp->rc != 0) {
+                rc = resp->rc;
             }
             else {
-                *outSz = packet->keyExportDmaRes.len;
+                *outSz = resp->len;
                 if (label != NULL) {
                     if (labelSz > WH_NVM_LABEL_LEN) {
-                        memcpy(label, packet->keyExportDmaRes.label,
-                               WH_NVM_LABEL_LEN);
+                        labelSz = WH_NVM_LABEL_LEN;
                     }
-                    else {
-                        memcpy(label, packet->keyExportDmaRes.label, labelSz);
-                    }
+                    memcpy(label, resp->label, labelSz);
                 }
             }
         }

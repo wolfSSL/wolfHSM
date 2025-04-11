@@ -42,8 +42,8 @@
 /* Message definitions */
 #include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_message_comm.h"
+#include "wolfhsm/wh_message_she.h"
 
-#include "wolfhsm/wh_packet.h"
 #include "wolfhsm/wh_client.h"
 
 #include "wolfhsm/wh_client_she.h"
@@ -68,15 +68,18 @@ int wh_Client_ShePreProgramKey(whClientContext* c, whNvmId keyId,
 int wh_Client_SheSetUidRequest(whClientContext* c, uint8_t* uid, uint32_t uidSz)
 {
     int ret;
-    whPacket* packet;
-    if (c == NULL || uid == NULL || uidSz < WH_SHE_UID_SZ)
+    whMessageShe_SetUidRequest *req = NULL;
+
+    if (c == NULL || uid == NULL || uidSz < WH_SHE_UID_SZ) {
         return WH_ERROR_BADARGS;
-    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
-    /* set uid */
-    memcpy(packet->sheSetUidReq.uid, uid, sizeof(packet->sheSetUidReq.uid));
+    }
+
+    req = (whMessageShe_SetUidRequest*)wh_CommClient_GetDataPtr(c->comm);
+
+    memcpy(req->uid, uid, sizeof(req->uid));
+
     ret = wh_Client_SendRequest(c, WH_MESSAGE_GROUP_SHE, WH_SHE_SET_UID,
-        WH_PACKET_STUB_SIZE + sizeof(packet->sheSetUidReq),
-        (uint8_t*)packet);
+                                sizeof(*req), (uint8_t*)req);
     return ret;
 }
 
@@ -86,13 +89,17 @@ int wh_Client_SheSetUidResponse(whClientContext* c)
     uint16_t action;
     uint16_t dataSz;
     int ret;
-    whPacket* packet;
-    if (c == NULL)
+    whMessageShe_SetUidResponse *resp = NULL;
+
+    if (c == NULL) {
         return WH_ERROR_BADARGS;
-    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
-    ret = wh_Client_RecvResponse(c, &group, &action, &dataSz, (uint8_t*)packet);
-    if (ret == 0)
-        ret = packet->rc;
+    }
+
+    resp = (whMessageShe_SetUidResponse*)wh_CommClient_GetDataPtr(c->comm);
+    ret = wh_Client_RecvResponse(c, &group, &action, &dataSz, (uint8_t*)resp);
+    if (ret == WH_ERROR_OK) {
+        ret = resp->rc;
+    }
     return ret;
 }
 
@@ -109,86 +116,114 @@ int wh_Client_SheSetUid(whClientContext* c, uint8_t* uid, uint32_t uidSz)
 }
 
 int wh_Client_SheSecureBoot(whClientContext* c, uint8_t* bootloader,
-    uint32_t bootloaderLen)
+                            uint32_t bootloaderLen)
 {
-    int ret;
+    int      ret;
     uint32_t bootloaderSent = 0;
-    uint32_t justSent = 0;
+    uint32_t justSent       = 0;
     uint16_t group;
     uint16_t action;
     uint16_t dataSz;
     uint8_t* in;
-    whPacket* packet;
-    if (c == NULL || bootloader == NULL || bootloaderLen == 0)
+    uint8_t* respBuf;
+
+    whMessageShe_SecureBootInitRequest*    initReq    = NULL;
+    whMessageShe_SecureBootUpdateRequest*  updateReq  = NULL;
+    whMessageShe_SecureBootInitResponse*   initResp   = NULL;
+    whMessageShe_SecureBootFinishResponse* finishResp = NULL;
+
+    if (c == NULL || bootloader == NULL || bootloaderLen == 0) {
         return WH_ERROR_BADARGS;
-    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
+    }
+
+    /* Get request and response buffers from comm client */
+    initReq =
+        (whMessageShe_SecureBootInitRequest*)wh_CommClient_GetDataPtr(c->comm);
+    respBuf = (uint8_t*)wh_CommClient_GetDataPtr(c->comm);
+
     /* in is after the size argument */
-    in = (uint8_t*)(&packet->sheSecureBootUpdateReq + 1);
+    in = (uint8_t*)(initReq + 1);
+
     /* send init sub command */
-    packet->sheSecureBootInitReq.sz = bootloaderLen;
-    ret = wh_Client_SendRequest(c, WH_MESSAGE_GROUP_SHE,
-        WH_SHE_SECURE_BOOT_INIT, WH_PACKET_STUB_SIZE +
-        sizeof(packet->sheSecureBootInitReq), (uint8_t*)packet);
+    initReq->sz = bootloaderLen;
+    ret =
+        wh_Client_SendRequest(c, WH_MESSAGE_GROUP_SHE, WH_SHE_SECURE_BOOT_INIT,
+                              sizeof(*initReq), (uint8_t*)initReq);
+
     if (ret == 0) {
         do {
-            ret = wh_Client_RecvResponse(c, &group, &action, &dataSz,
-                (uint8_t*)packet);
+            ret = wh_Client_RecvResponse(c, &group, &action, &dataSz, respBuf);
+            initResp = (whMessageShe_SecureBootInitResponse*)respBuf;
         } while (ret == WH_ERROR_NOTREADY);
     }
+
     /* send update sub command until we've sent the entire bootloader */
     while (ret == 0 && bootloaderSent < bootloaderLen) {
-        if (packet->rc != WH_SHE_ERC_NO_ERROR)
-            return packet->rc;
+        if (initResp->rc != WH_SHE_ERC_NO_ERROR) {
+            return initResp->rc;
+        }
+
+        /* Get fresh request buffer for update */
+        updateReq =
+            (whMessageShe_SecureBootUpdateRequest*)wh_CommClient_GetDataPtr(
+                c->comm);
+        in = (uint8_t*)(updateReq + 1);
+
         /* send what's left in the size available */
-        packet->sheSecureBootUpdateReq.sz = ((bootloaderLen - bootloaderSent) %
-                (WOLFHSM_CFG_COMM_DATA_LEN -
-                sizeof(packet->sheSecureBootUpdateReq)));
-        justSent = packet->sheSecureBootUpdateReq.sz;
-        memcpy(in, bootloader + bootloaderSent,
-            packet->sheSecureBootUpdateReq.sz);
-        ret = wh_Client_SendRequest(c, WH_MESSAGE_GROUP_SHE,
-            WH_SHE_SECURE_BOOT_UPDATE,
-            WH_PACKET_STUB_SIZE + sizeof(packet->sheSecureBootUpdateReq) +
-            packet->sheSecureBootUpdateReq.sz,
-            (uint8_t*)packet);
+        updateReq->sz = ((bootloaderLen - bootloaderSent) %
+                         (WOLFHSM_CFG_COMM_DATA_LEN - sizeof(*updateReq)));
+
+        justSent = updateReq->sz;
+        memcpy(in, bootloader + bootloaderSent, updateReq->sz);
+
+        ret = wh_Client_SendRequest(
+            c, WH_MESSAGE_GROUP_SHE, WH_SHE_SECURE_BOOT_UPDATE,
+            sizeof(*updateReq) + updateReq->sz, (uint8_t*)updateReq);
+
         if (ret == 0) {
             do {
                 ret = wh_Client_RecvResponse(c, &group, &action, &dataSz,
-                    (uint8_t*)packet);
+                                             respBuf);
             } while (ret == WH_ERROR_NOTREADY);
         }
+
         /* increment sent  */
-        if (ret == 0)
+        if (ret == 0) {
             bootloaderSent += justSent;
+        }
     }
+
     /* send finish sub command */
     if (ret == 0) {
         ret = wh_Client_SendRequest(c, WH_MESSAGE_GROUP_SHE,
-            WH_SHE_SECURE_BOOT_FINISH, WH_PACKET_STUB_SIZE,
-            (uint8_t*)packet);
+                                    WH_SHE_SECURE_BOOT_FINISH, 0, NULL);
     }
+
     if (ret == 0) {
         do {
-            ret = wh_Client_RecvResponse(c, &group, &action, &dataSz,
-                (uint8_t*)packet);
+            ret = wh_Client_RecvResponse(c, &group, &action, &dataSz, respBuf);
+            finishResp = (whMessageShe_SecureBootFinishResponse*)respBuf;
         } while (ret == WH_ERROR_NOTREADY);
     }
-    if (ret == 0)
-        ret = packet->rc;
+
+    if (ret == 0) {
+        ret = finishResp->rc;
+    }
+
     return ret;
 }
 
 int wh_Client_SheGetStatusRequest(whClientContext* c)
 {
     int ret;
-    whPacket* packet;
-    if (c == NULL)
+
+    if (c == NULL) {
         return WH_ERROR_BADARGS;
-    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
-    /* send status request */
+    }
+
+    /* Status request is a zero-length message */
     ret = wh_Client_SendRequest(c, WH_MESSAGE_GROUP_SHE,
-        WH_SHE_GET_STATUS, WH_PACKET_STUB_SIZE,
-        (uint8_t*)packet);
+        WH_SHE_GET_STATUS, 0, NULL);
     return ret;
 }
 
@@ -198,17 +233,22 @@ int wh_Client_SheGetStatusResponse(whClientContext* c, uint8_t* sreg)
     uint16_t action;
     uint16_t dataSz;
     int ret;
-    whPacket* packet;
-    if (c == NULL || sreg == NULL)
+    whMessageShe_GetStatusResponse *resp = NULL;
+
+    if (c == NULL || sreg == NULL) {
         return WH_ERROR_BADARGS;
-    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
-    ret = wh_Client_RecvResponse(c, &group, &action, &dataSz, (uint8_t*)packet);
+    }
+
+    resp = (whMessageShe_GetStatusResponse*)wh_CommClient_GetDataPtr(c->comm);
+
+    ret = wh_Client_RecvResponse(c, &group, &action, &dataSz, (uint8_t*)resp);
+
     /* return error or set sreg */
     if (ret == 0) {
-        if (packet->rc != WH_SHE_ERC_NO_ERROR)
-            ret = packet->rc;
+        if (resp->rc != WH_SHE_ERC_NO_ERROR)
+            ret = resp->rc;
         else
-            *sreg = packet->sheGetStatusRes.sreg;
+            *sreg = resp->sreg;
     }
     return ret;
 }
@@ -226,49 +266,54 @@ int wh_Client_SheGetStatus(whClientContext* c, uint8_t* sreg)
 }
 
 int wh_Client_SheLoadKeyRequest(whClientContext* c, uint8_t* messageOne,
-    uint8_t* messageTwo, uint8_t* messageThree)
+                                uint8_t* messageTwo, uint8_t* messageThree)
 {
-    int ret;
-    whPacket* packet;
+    int       ret;
+    whMessageShe_LoadKeyRequest *req = NULL;
+
     if (c == NULL || messageOne == NULL || messageTwo == NULL ||
-        messageThree == NULL)
+        messageThree == NULL) {
         return WH_ERROR_BADARGS;
-    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
+    }
+
+    req = (whMessageShe_LoadKeyRequest*)wh_CommClient_GetDataPtr(c->comm);
     /* copy in messages 1-3 */
-    memcpy(packet->sheLoadKeyReq.messageOne, messageOne,
-        sizeof(packet->sheLoadKeyReq.messageOne));
-    memcpy(packet->sheLoadKeyReq.messageTwo, messageTwo,
-        sizeof(packet->sheLoadKeyReq.messageTwo));
-    memcpy(packet->sheLoadKeyReq.messageThree, messageThree,
-        sizeof(packet->sheLoadKeyReq.messageThree));
+    memcpy(req->messageOne, messageOne,
+           sizeof(req->messageOne));
+    memcpy(req->messageTwo, messageTwo,
+           sizeof(req->messageTwo));
+    memcpy(req->messageThree, messageThree,
+           sizeof(req->messageThree));
     /* send load key req */
-    ret = wh_Client_SendRequest(c, WH_MESSAGE_GROUP_SHE,
-        WH_SHE_LOAD_KEY, WH_PACKET_STUB_SIZE +
-        sizeof(packet->sheLoadKeyReq), (uint8_t*)packet);
+    ret = wh_Client_SendRequest(c, WH_MESSAGE_GROUP_SHE, WH_SHE_LOAD_KEY,
+                                sizeof(*req), (uint8_t*)req);
     return ret;
 }
 
 int wh_Client_SheLoadKeyResponse(whClientContext* c, uint8_t* messageFour,
-    uint8_t* messageFive)
+                                 uint8_t* messageFive)
 {
-    int ret;
-    uint16_t group;
-    uint16_t action;
-    uint16_t dataSz;
-    whPacket* packet;
-    if (c == NULL || messageFour == NULL || messageFive == NULL)
+    int                           ret;
+    uint16_t                      group;
+    uint16_t                      action;
+    uint16_t                      dataSz;
+    whMessageShe_LoadKeyResponse* resp = NULL;
+
+    if (c == NULL || messageFour == NULL || messageFive == NULL) {
         return WH_ERROR_BADARGS;
-    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
-    ret = wh_Client_RecvResponse(c, &group, &action, &dataSz, (uint8_t*)packet);
+    }
+
+    resp = (whMessageShe_LoadKeyResponse*)wh_CommClient_GetDataPtr(c->comm);
+
+    ret = wh_Client_RecvResponse(c, &group, &action, &dataSz, (uint8_t*)resp);
     if (ret == 0) {
-        if (packet->rc != WH_SHE_ERC_NO_ERROR)
-            ret = packet->rc;
+        if (resp->rc != WH_SHE_ERC_NO_ERROR) {
+            ret = resp->rc;
+        }
         else {
             /* copy out message 4 and 5 */
-            memcpy(messageFour, packet->sheLoadKeyRes.messageFour,
-                sizeof(packet->sheLoadKeyRes.messageFour));
-            memcpy(messageFive, packet->sheLoadKeyRes.messageFive,
-                sizeof(packet->sheLoadKeyRes.messageFive));
+            memcpy(messageFour, resp->messageFour, sizeof(resp->messageFour));
+            memcpy(messageFive, resp->messageFive, sizeof(resp->messageFive));
         }
     }
     return ret;
@@ -289,35 +334,41 @@ int wh_Client_SheLoadKey(whClientContext* c, uint8_t* messageOne,
 }
 
 int wh_Client_SheLoadPlainKeyRequest(whClientContext* c, uint8_t* key,
-    uint32_t keySz)
+                                     uint32_t keySz)
 {
-    int ret;
-    whPacket* packet;
-    if (c == NULL || key == NULL || keySz < WH_SHE_KEY_SZ)
+    whMessageShe_LoadPlainKeyRequest* req = NULL;
+
+    if (c == NULL || key == NULL || keySz < WH_SHE_KEY_SZ) {
         return WH_ERROR_BADARGS;
-    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
-    /* copy the key */
-    memcpy(packet->sheLoadPlainKeyReq.key, key, WH_SHE_KEY_SZ);
-    /* send load key req */
-    ret = wh_Client_SendRequest(c, WH_MESSAGE_GROUP_SHE,
-        WH_SHE_LOAD_PLAIN_KEY, WH_PACKET_STUB_SIZE +
-        sizeof(packet->sheLoadPlainKeyReq), (uint8_t*)packet);
-    return ret;
+    }
+
+    req = (whMessageShe_LoadPlainKeyRequest*)wh_CommClient_GetDataPtr(c->comm);
+
+    memcpy(req->key, key, WH_SHE_KEY_SZ);
+
+    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_SHE, WH_SHE_LOAD_PLAIN_KEY,
+                                 sizeof(*req), (uint8_t*)req);
 }
 
 int wh_Client_SheLoadPlainKeyResponse(whClientContext* c)
 {
-    int ret;
-    uint16_t group;
-    uint16_t action;
-    uint16_t dataSz;
-    whPacket* packet;
-    if (c == NULL)
+    int                                ret;
+    uint16_t                           group;
+    uint16_t                           action;
+    uint16_t                           dataSz;
+    whMessageShe_LoadPlainKeyResponse* resp = NULL;
+
+    if (c == NULL) {
         return WH_ERROR_BADARGS;
-    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
-    ret = wh_Client_RecvResponse(c, &group, &action, &dataSz, (uint8_t*)packet);
-    if (ret == 0)
-        ret = packet->rc;
+    }
+
+    resp =
+        (whMessageShe_LoadPlainKeyResponse*)wh_CommClient_GetDataPtr(c->comm);
+
+    ret = wh_Client_RecvResponse(c, &group, &action, &dataSz, (uint8_t*)resp);
+    if (ret == 0) {
+        ret = resp->rc;
+    }
     return ret;
 }
 
@@ -335,47 +386,50 @@ int wh_Client_SheLoadPlainKey(whClientContext* c, uint8_t* key, uint32_t keySz)
 
 int wh_Client_SheExportRamKeyRequest(whClientContext* c)
 {
-    int ret;
-    whPacket* packet;
-    if (c == NULL)
+    if (c == NULL) {
         return WH_ERROR_BADARGS;
-    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
-    /* send export ram key req */
-    ret = wh_Client_SendRequest(c, WH_MESSAGE_GROUP_SHE, WH_SHE_EXPORT_RAM_KEY,
-        WH_PACKET_STUB_SIZE, (uint8_t*)packet);
-    return ret;
+    }
+
+    /* Export RAM Key is a zero-length message */
+    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_SHE, WH_SHE_EXPORT_RAM_KEY,
+                                 0, NULL);
 }
 
 int wh_Client_SheExportRamKeyResponse(whClientContext* c, uint8_t* messageOne,
-    uint8_t* messageTwo, uint8_t* messageThree, uint8_t* messageFour,
-    uint8_t* messageFive)
+                                      uint8_t* messageTwo,
+                                      uint8_t* messageThree,
+                                      uint8_t* messageFour,
+                                      uint8_t* messageFive)
 {
-    int ret;
-    uint16_t group;
-    uint16_t action;
-    uint16_t dataSz;
-    whPacket* packet;
+    int                                ret;
+    uint16_t                           group;
+    uint16_t                           action;
+    uint16_t                           dataSz;
+    whMessageShe_ExportRamKeyResponse* resp = NULL;
+
     if (c == NULL || messageOne == NULL || messageTwo == NULL ||
-        messageThree == NULL || messageFour == NULL || messageFive == NULL)
+        messageThree == NULL || messageFour == NULL || messageFive == NULL) {
         return WH_ERROR_BADARGS;
-    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
-    ret = wh_Client_RecvResponse(c, &group, &action, &dataSz, (uint8_t*)packet);
+    }
+
+    resp =
+        (whMessageShe_ExportRamKeyResponse*)wh_CommClient_GetDataPtr(c->comm);
+
+    ret = wh_Client_RecvResponse(c, &group, &action, &dataSz, (uint8_t*)resp);
     if (ret == 0) {
-        if (packet->rc != WH_SHE_ERC_NO_ERROR)
-            ret = packet->rc;
+        if (resp->rc != WH_SHE_ERC_NO_ERROR) {
+            ret = resp->rc;
+        }
         else {
-            memcpy(messageOne, packet->sheExportRamKeyRes.messageOne,
-                sizeof(packet->sheExportRamKeyRes.messageOne));
-            memcpy(messageTwo, packet->sheExportRamKeyRes.messageTwo,
-                sizeof(packet->sheExportRamKeyRes.messageTwo));
-            memcpy(messageThree, packet->sheExportRamKeyRes.messageThree,
-                sizeof(packet->sheExportRamKeyRes.messageThree));
-            memcpy(messageFour, packet->sheExportRamKeyRes.messageFour,
-                sizeof(packet->sheExportRamKeyRes.messageFour));
-            memcpy(messageFive, packet->sheExportRamKeyRes.messageFive,
-                sizeof(packet->sheExportRamKeyRes.messageFive));
+            memcpy(messageOne, resp->messageOne, sizeof(resp->messageOne));
+            memcpy(messageTwo, resp->messageTwo, sizeof(resp->messageTwo));
+            memcpy(messageThree, resp->messageThree,
+                   sizeof(resp->messageThree));
+            memcpy(messageFour, resp->messageFour, sizeof(resp->messageFour));
+            memcpy(messageFive, resp->messageFive, sizeof(resp->messageFive));
         }
     }
+
     return ret;
 }
 
@@ -396,15 +450,13 @@ int wh_Client_SheExportRamKey(whClientContext* c, uint8_t* messageOne,
 
 int wh_Client_SheInitRndRequest(whClientContext* c)
 {
-    int ret;
-    whPacket* packet;
-    if (c == NULL)
+    if (c == NULL) {
         return WH_ERROR_BADARGS;
-    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
-    /* send init rnd req */
-    ret = wh_Client_SendRequest(c, WH_MESSAGE_GROUP_SHE, WH_SHE_INIT_RND,
-        WH_PACKET_STUB_SIZE, (uint8_t*)packet);
-    return ret;
+    }
+
+    /* Init RND is a zero-length message */    
+    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_SHE, WH_SHE_INIT_RND, 0,
+                                NULL);
 }
 
 int wh_Client_SheInitRndResponse(whClientContext* c)
@@ -413,13 +465,16 @@ int wh_Client_SheInitRndResponse(whClientContext* c)
     uint16_t group;
     uint16_t action;
     uint16_t dataSz;
-    whPacket* packet;
-    if (c == NULL)
+    whMessageShe_InitRngResponse* resp = NULL;
+
+    if (c == NULL) {
         return WH_ERROR_BADARGS;
-    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
-    ret = wh_Client_RecvResponse(c, &group, &action, &dataSz, (uint8_t*)packet);
+    }
+
+    resp = (whMessageShe_InitRngResponse*)wh_CommClient_GetDataPtr(c->comm);
+    ret = wh_Client_RecvResponse(c, &group, &action, &dataSz, (uint8_t*)resp);
     if (ret == 0) {
-        ret = packet->rc;
+        ret = resp->rc;
     }
     return ret;
 }
@@ -438,15 +493,12 @@ int wh_Client_SheInitRnd(whClientContext* c)
 
 int wh_Client_SheRndRequest(whClientContext* c)
 {
-    int ret;
-    whPacket* packet;
-    if (c == NULL)
+    if (c == NULL) {
         return WH_ERROR_BADARGS;
-    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
-    /* send rnd req */
-    ret = wh_Client_SendRequest(c, WH_MESSAGE_GROUP_SHE, WH_SHE_RND,
-        WH_PACKET_STUB_SIZE, (uint8_t*)packet);
-    return ret;
+    }
+
+    /* RND is a zero-length message */
+    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_SHE, WH_SHE_RND, 0, NULL);
 }
 
 int wh_Client_SheRndResponse(whClientContext* c, uint8_t* out, uint32_t* outSz)
@@ -455,17 +507,22 @@ int wh_Client_SheRndResponse(whClientContext* c, uint8_t* out, uint32_t* outSz)
     uint16_t group;
     uint16_t action;
     uint16_t dataSz;
-    whPacket* packet;
-    if (c == NULL || out == NULL || outSz == NULL ||*outSz < WH_SHE_KEY_SZ)
+    whMessageShe_RndResponse* resp = NULL;
+
+    if (c == NULL || out == NULL || outSz == NULL || *outSz < WH_SHE_KEY_SZ) {
         return WH_ERROR_BADARGS;
-    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
-    ret = wh_Client_RecvResponse(c, &group, &action, &dataSz, (uint8_t*)packet);
+    }
+
+    resp = (whMessageShe_RndResponse*)wh_CommClient_GetDataPtr(c->comm);
+
+    ret = wh_Client_RecvResponse(c, &group, &action, &dataSz, (uint8_t*)resp);
+
     if (ret == 0) {
-        if (packet->rc != WH_SHE_ERC_NO_ERROR)
-            ret = packet->rc;
+        if (resp->rc != WH_SHE_ERC_NO_ERROR)
+            ret = resp->rc;
         else {
-            memcpy(out, packet->sheRndRes.rnd, sizeof(packet->sheRndRes.rnd));
-            *outSz = sizeof(packet->sheRndRes.rnd);
+            memcpy(out, resp->rnd, sizeof(resp->rnd));
+            *outSz = sizeof(resp->rnd);
         }
     }
     return ret;
@@ -487,33 +544,43 @@ int wh_Client_SheExtendSeedRequest(whClientContext* c, uint8_t* entropy,
     uint32_t entropySz)
 {
     int ret;
-    whPacket* packet;
-    if (c == NULL || entropy == NULL || entropySz != WH_SHE_KEY_SZ)
+    whMessageShe_ExtendSeedRequest *req = NULL;
+
+    if (c == NULL || entropy == NULL || entropySz != WH_SHE_KEY_SZ) {
         return WH_ERROR_BADARGS;
-    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
+    }
+
+    req = (whMessageShe_ExtendSeedRequest*)wh_CommClient_GetDataPtr(c->comm);
+
     /* set entropy */
-    memcpy(packet->sheExtendSeedReq.entropy, entropy,
-        sizeof(packet->sheExtendSeedReq.entropy));
+    memcpy(req->entropy, entropy, sizeof(req->entropy));
+
     /* send init rng req */
     ret = wh_Client_SendRequest(c, WH_MESSAGE_GROUP_SHE, WH_SHE_EXTEND_SEED,
-        WH_PACKET_STUB_SIZE + sizeof(packet->sheExtendSeedReq),
-        (uint8_t*)packet);
+                                sizeof(*req), (uint8_t*)req);
+
     return ret;
 }
 
 int wh_Client_SheExtendSeedResponse(whClientContext* c)
 {
-    int ret;
-    uint16_t group;
-    uint16_t action;
-    uint16_t dataSz;
-    whPacket* packet;
-    if (c == NULL)
+    int                              ret;
+    uint16_t                         group;
+    uint16_t                         action;
+    uint16_t                         dataSz;
+    whMessageShe_ExtendSeedResponse* resp = NULL;
+
+    if (c == NULL) {
         return WH_ERROR_BADARGS;
-    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
-    ret = wh_Client_RecvResponse(c, &group, &action, &dataSz, (uint8_t*)packet);
-    if (ret == 0)
-        ret = packet->rc;
+    }
+
+    resp = (whMessageShe_ExtendSeedResponse*)wh_CommClient_GetDataPtr(c->comm);
+    ret  = wh_Client_RecvResponse(c, &group, &action, &dataSz, (uint8_t*)resp);
+
+    if (ret == 0) {
+        ret = resp->rc;
+    }
+
     return ret;
 }
 
@@ -531,48 +598,56 @@ int wh_Client_SheExtendSeed(whClientContext* c, uint8_t* entropy,
 }
 
 int wh_Client_SheEncEcbRequest(whClientContext* c, uint8_t keyId, uint8_t* in,
-    uint32_t sz)
+                               uint32_t sz)
 {
-    int ret;
-    uint8_t* packIn;
-    whPacket* packet;
-    if (c == NULL || in == NULL || sz < WH_SHE_KEY_SZ)
+    uint8_t*                    packIn;
+    whMessageShe_EncEcbRequest* req = NULL;
+
+    if (c == NULL || in == NULL || sz < WH_SHE_KEY_SZ) {
         return WH_ERROR_BADARGS;
-    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
+    }
+
+    req = (whMessageShe_EncEcbRequest*)wh_CommClient_GetDataPtr(c->comm);
+
     /* in is after fixed sized fields */
-    packIn = (uint8_t*)(&packet->sheEncEcbReq + 1);
-    packet->sheEncEcbReq.keyId = keyId;
-    packet->sheEncEcbReq.sz = sz;
-    /* set in */
+    packIn     = (uint8_t*)(req + 1);
+    req->keyId = keyId;
+    req->sz    = sz;
     memcpy(packIn, in, sz);
-    /* send enc ecb */
-    ret = wh_Client_SendRequest(c, WH_MESSAGE_GROUP_SHE, WH_SHE_ENC_ECB,
-        WH_PACKET_STUB_SIZE + sizeof(packet->sheEncEcbReq) + sz,
-        (uint8_t*)packet);
-    return ret;
+
+    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_SHE, WH_SHE_ENC_ECB,
+                                 sizeof(*req) + sz, (uint8_t*)req);
 }
 
 int wh_Client_SheEncEcbResponse(whClientContext* c, uint8_t* out, uint32_t sz)
 {
-    int ret;
-    uint16_t group;
-    uint16_t action;
-    uint16_t dataSz;
-    uint8_t* packOut;
-    whPacket* packet;
-    if (c == NULL || out == NULL || sz < WH_SHE_KEY_SZ)
+    int                          ret;
+    uint16_t                     group;
+    uint16_t                     action;
+    uint16_t                     dataSz;
+    uint8_t*                     packOut;
+    whMessageShe_EncEcbResponse* resp = NULL;
+
+    if (c == NULL || out == NULL || sz < WH_SHE_KEY_SZ) {
         return WH_ERROR_BADARGS;
-    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
+    }
+
+    resp = (whMessageShe_EncEcbResponse*)wh_CommClient_GetDataPtr(c->comm);
+
     /* out is after fixed sized fields */
-    packOut = (uint8_t*)(&packet->sheEncEcbRes + 1);
-    ret = wh_Client_RecvResponse(c, &group, &action, &dataSz, (uint8_t*)packet);
+    packOut = (uint8_t*)(resp + 1);
+
+    ret = wh_Client_RecvResponse(c, &group, &action, &dataSz, (uint8_t*)resp);
     if (ret == 0) {
-        if (packet->rc != WH_SHE_ERC_NO_ERROR)
-            ret = packet->rc;
-        else if (sz < packet->sheEncEcbRes.sz)
+        if (resp->rc != WH_SHE_ERC_NO_ERROR) {
+            ret = resp->rc;
+        }
+        else if (sz < resp->sz) {
             ret = WH_ERROR_BADARGS;
-        else
-            memcpy(out, packOut, packet->sheEncEcbRes.sz);
+        }
+        else {
+            memcpy(out, packOut, resp->sz);
+        }
     }
     return ret;
 }
@@ -591,51 +666,59 @@ int wh_Client_SheEncEcb(whClientContext* c, uint8_t keyId, uint8_t* in,
 }
 
 int wh_Client_SheEncCbcRequest(whClientContext* c, uint8_t keyId, uint8_t* iv,
-    uint32_t ivSz, uint8_t* in, uint32_t sz)
+                               uint32_t ivSz, uint8_t* in, uint32_t sz)
 {
-    int ret;
-    uint8_t* packIn;
-    whPacket* packet;
+    uint8_t*                    packIn;
+    whMessageShe_EncCbcRequest* req = NULL;
+
     if (c == NULL || in == NULL || sz < WH_SHE_KEY_SZ || iv == NULL ||
-        ivSz < WH_SHE_KEY_SZ)
+        ivSz < WH_SHE_KEY_SZ) {
         return WH_ERROR_BADARGS;
-    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
+    }
+
+    req = (whMessageShe_EncCbcRequest*)wh_CommClient_GetDataPtr(c->comm);
     /* in is after fixed sized fields */
-    packIn = (uint8_t*)(&packet->sheEncCbcReq + 1);
-    packet->sheEncCbcReq.keyId = keyId;
-    packet->sheEncCbcReq.sz = sz;
+    packIn     = (uint8_t*)(req + 1);
+    req->keyId = keyId;
+    req->sz    = sz;
     /* set iv */
-    memcpy(packet->sheEncCbcReq.iv, iv, ivSz);
+    memcpy(req->iv, iv, ivSz);
     /* set in */
     memcpy(packIn, in, sz);
+
     /* send enc ecb */
-    ret = wh_Client_SendRequest(c, WH_MESSAGE_GROUP_SHE, WH_SHE_ENC_CBC,
-        WH_PACKET_STUB_SIZE + sizeof(packet->sheEncCbcReq) + sz,
-        (uint8_t*)packet);
-    return ret;
+    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_SHE, WH_SHE_ENC_CBC,
+                                 sizeof(*req) + sz, (uint8_t*)req);
 }
 
 int wh_Client_SheEncCbcResponse(whClientContext* c, uint8_t* out, uint32_t sz)
 {
-    int ret;
-    uint16_t group;
-    uint16_t action;
-    uint16_t dataSz;
-    uint8_t* packOut;
-    whPacket* packet;
-    if (c == NULL || out == NULL || sz < WH_SHE_KEY_SZ)
+    int                          ret;
+    uint16_t                     group;
+    uint16_t                     action;
+    uint16_t                     dataSz;
+    uint8_t*                     packOut;
+    whMessageShe_EncCbcResponse* resp = NULL;
+
+    if (c == NULL || out == NULL || sz < WH_SHE_KEY_SZ) {
         return WH_ERROR_BADARGS;
-    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
+    }
+
+    resp = (whMessageShe_EncCbcResponse*)wh_CommClient_GetDataPtr(c->comm);
     /* out is after fixed sized fields */
-    packOut = (uint8_t*)(&packet->sheEncCbcRes + 1);
-    ret = wh_Client_RecvResponse(c, &group, &action, &dataSz, (uint8_t*)packet);
+    packOut = (uint8_t*)(resp + 1);
+
+    ret = wh_Client_RecvResponse(c, &group, &action, &dataSz, (uint8_t*)resp);
     if (ret == 0) {
-        if (packet->rc != WH_SHE_ERC_NO_ERROR)
-            ret = packet->rc;
-        else if (sz < packet->sheEncCbcRes.sz)
+        if (resp->rc != WH_SHE_ERC_NO_ERROR) {
+            ret = resp->rc;
+        }
+        else if (sz < resp->sz) {
             ret = WH_ERROR_BADARGS;
-        else
-            memcpy(out, packOut, packet->sheEncCbcRes.sz);
+        }
+        else {
+            memcpy(out, packOut, resp->sz);
+        }
     }
     return ret;
 }
@@ -654,48 +737,55 @@ int wh_Client_SheEncCbc(whClientContext* c, uint8_t keyId, uint8_t* iv,
 }
 
 int wh_Client_SheDecEcbRequest(whClientContext* c, uint8_t keyId, uint8_t* in,
-    uint32_t sz)
+                               uint32_t sz)
 {
-    int ret;
-    uint8_t* packIn;
-    whPacket* packet;
-    if (c == NULL || in == NULL || sz < WH_SHE_KEY_SZ)
+    uint8_t*                    packIn;
+    whMessageShe_DecEcbRequest* req = NULL;
+
+    if (c == NULL || in == NULL || sz < WH_SHE_KEY_SZ) {
         return WH_ERROR_BADARGS;
-    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
+    }
+
+    req = (whMessageShe_DecEcbRequest*)wh_CommClient_GetDataPtr(c->comm);
     /* in is after fixed sized fields */
-    packIn = (uint8_t*)(&packet->sheDecEcbReq + 1);
-    packet->sheDecEcbReq.keyId = keyId;
-    packet->sheDecEcbReq.sz = sz;
-    /* set in */
+    packIn     = (uint8_t*)(req + 1);
+    req->keyId = keyId;
+    req->sz    = sz;
     memcpy(packIn, in, sz);
+
     /* send enc ecb */
-    ret = wh_Client_SendRequest(c, WH_MESSAGE_GROUP_SHE, WH_SHE_DEC_ECB,
-        WH_PACKET_STUB_SIZE + sizeof(packet->sheDecEcbReq) + sz,
-        (uint8_t*)packet);
-    return ret;
+    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_SHE, WH_SHE_DEC_ECB,
+                                 sizeof(*req) + sz, (uint8_t*)req);
 }
 
 int wh_Client_SheDecEcbResponse(whClientContext* c, uint8_t* out, uint32_t sz)
 {
-    int ret;
-    uint16_t group;
-    uint16_t action;
-    uint16_t dataSz;
-    uint8_t* packOut;
-    whPacket* packet;
-    if (c == NULL || out == NULL || sz < WH_SHE_KEY_SZ)
+    int                          ret;
+    uint16_t                     group;
+    uint16_t                     action;
+    uint16_t                     dataSz;
+    uint8_t*                     packOut;
+    whMessageShe_DecEcbResponse* resp = NULL;
+
+    if (c == NULL || out == NULL || sz < WH_SHE_KEY_SZ) {
         return WH_ERROR_BADARGS;
-    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
+    }
+
+    resp = (whMessageShe_DecEcbResponse*)wh_CommClient_GetDataPtr(c->comm);
     /* out is after fixed sized fields */
-    packOut = (uint8_t*)(&packet->sheDecEcbRes + 1);
-    ret = wh_Client_RecvResponse(c, &group, &action, &dataSz, (uint8_t*)packet);
+    packOut = (uint8_t*)(resp + 1);
+
+    ret = wh_Client_RecvResponse(c, &group, &action, &dataSz, (uint8_t*)resp);
     if (ret == 0) {
-        if (packet->rc != WH_SHE_ERC_NO_ERROR)
-            ret = packet->rc;
-        else if (sz < packet->sheDecEcbRes.sz)
+        if (resp->rc != WH_SHE_ERC_NO_ERROR) {
+            ret = resp->rc;
+        }
+        else if (sz < resp->sz) {
             ret = WH_ERROR_BADARGS;
-        else
-            memcpy(out, packOut, packet->sheDecEcbRes.sz);
+        }
+        else {
+            memcpy(out, packOut, resp->sz);
+        }
     }
     return ret;
 }
@@ -714,51 +804,59 @@ int wh_Client_SheDecEcb(whClientContext* c, uint8_t keyId, uint8_t* in,
 }
 
 int wh_Client_SheDecCbcRequest(whClientContext* c, uint8_t keyId, uint8_t* iv,
-    uint32_t ivSz, uint8_t* in, uint32_t sz)
+                               uint32_t ivSz, uint8_t* in, uint32_t sz)
 {
-    int ret;
-    uint8_t* packIn;
-    whPacket* packet;
+    uint8_t*                    packIn;
+    whMessageShe_DecCbcRequest* req = NULL;
+
     if (c == NULL || in == NULL || sz < WH_SHE_KEY_SZ || iv == NULL ||
-        ivSz < WH_SHE_KEY_SZ)
+        ivSz < WH_SHE_KEY_SZ) {
         return WH_ERROR_BADARGS;
-    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
+    }
+
+    req = (whMessageShe_DecCbcRequest*)wh_CommClient_GetDataPtr(c->comm);
     /* in is after fixed sized fields */
-    packIn = (uint8_t*)(&packet->sheDecCbcReq + 1);
-    packet->sheDecCbcReq.keyId = keyId;
-    packet->sheDecCbcReq.sz = sz;
+    packIn     = (uint8_t*)(req + 1);
+    req->keyId = keyId;
+    req->sz    = sz;
     /* set iv */
-    memcpy(packet->sheDecCbcReq.iv, iv, ivSz);
+    memcpy(req->iv, iv, ivSz);
     /* set in */
     memcpy(packIn, in, sz);
+
     /* send enc ecb */
-    ret = wh_Client_SendRequest(c, WH_MESSAGE_GROUP_SHE, WH_SHE_DEC_CBC,
-        WH_PACKET_STUB_SIZE + sizeof(packet->sheDecCbcReq) + sz,
-        (uint8_t*)packet);
-    return ret;
+    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_SHE, WH_SHE_DEC_CBC,
+                                 sizeof(*req) + sz, (uint8_t*)req);
 }
 
 int wh_Client_SheDecCbcResponse(whClientContext* c, uint8_t* out, uint32_t sz)
 {
-    int ret;
-    uint16_t group;
-    uint16_t action;
-    uint16_t dataSz;
-    uint8_t* packOut;
-    whPacket* packet;
-    if (c == NULL || out == NULL || sz < WH_SHE_KEY_SZ)
+    int                          ret;
+    uint16_t                     group;
+    uint16_t                     action;
+    uint16_t                     dataSz;
+    uint8_t*                     packOut;
+    whMessageShe_DecCbcResponse* resp = NULL;
+
+    if (c == NULL || out == NULL || sz < WH_SHE_KEY_SZ) {
         return WH_ERROR_BADARGS;
-    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
+    }
+
+    resp = (whMessageShe_DecCbcResponse*)wh_CommClient_GetDataPtr(c->comm);
     /* out is after fixed sized fields */
-    packOut = (uint8_t*)(&packet->sheDecCbcRes + 1);
-    ret = wh_Client_RecvResponse(c, &group, &action, &dataSz, (uint8_t*)packet);
+    packOut = (uint8_t*)(resp + 1);
+
+    ret = wh_Client_RecvResponse(c, &group, &action, &dataSz, (uint8_t*)resp);
     if (ret == 0) {
-        if (packet->rc != WH_SHE_ERC_NO_ERROR)
-            ret = packet->rc;
-        else if (sz < packet->sheDecCbcRes.sz)
+        if (resp->rc != WH_SHE_ERC_NO_ERROR) {
+            ret = resp->rc;
+        }
+        else if (sz < resp->sz) {
             ret = WH_ERROR_BADARGS;
-        else
-            memcpy(out, packOut, packet->sheDecCbcRes.sz);
+        }
+        else {
+            memcpy(out, packOut, resp->sz);
+        }
     }
     return ret;
 }
@@ -777,44 +875,51 @@ int wh_Client_SheDecCbc(whClientContext* c, uint8_t keyId, uint8_t* iv,
 }
 
 int wh_Client_SheGenerateMacRequest(whClientContext* c, uint8_t keyId,
-    uint8_t* in, uint32_t sz)
+                                    uint8_t* in, uint32_t sz)
 {
-    int ret;
-    uint8_t* packIn;
-    whPacket* packet;
-    if (c == NULL || in == NULL || sz < WH_SHE_KEY_SZ)
+    uint8_t*                    packIn;
+    whMessageShe_GenMacRequest* req = NULL;
+
+    if (c == NULL || in == NULL || sz < WH_SHE_KEY_SZ) {
         return WH_ERROR_BADARGS;
-    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
+    }
+
+    req = (whMessageShe_GenMacRequest*)wh_CommClient_GetDataPtr(c->comm);
     /* in is after fixed sized fields */
-    packIn = (uint8_t*)(&packet->sheGenMacReq + 1);
-    packet->sheGenMacReq.keyId = keyId;
-    packet->sheGenMacReq.sz = sz;
+    packIn     = (uint8_t*)(req + 1);
+    req->keyId = keyId;
+    req->sz    = sz;
     /* set in */
     memcpy(packIn, in, sz);
+
     /* send enc ecb */
-    ret = wh_Client_SendRequest(c, WH_MESSAGE_GROUP_SHE, WH_SHE_GEN_MAC,
-        WH_PACKET_STUB_SIZE + sizeof(packet->sheGenMacReq) + sz,
-        (uint8_t*)packet);
-    return ret;
+    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_SHE, WH_SHE_GEN_MAC,
+                                 sizeof(*req) + sz, (uint8_t*)req);
 }
 
 int wh_Client_SheGenerateMacResponse(whClientContext* c, uint8_t* out,
-    uint32_t sz)
+                                     uint32_t sz)
 {
-    int ret;
-    uint16_t group;
-    uint16_t action;
-    uint16_t dataSz;
-    whPacket* packet;
-    if (c == NULL || out == NULL || sz < WH_SHE_KEY_SZ)
+    int                          ret;
+    uint16_t                     group;
+    uint16_t                     action;
+    uint16_t                     dataSz;
+    whMessageShe_GenMacResponse* resp = NULL;
+
+    if (c == NULL || out == NULL || sz < WH_SHE_KEY_SZ) {
         return WH_ERROR_BADARGS;
-    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
-    ret = wh_Client_RecvResponse(c, &group, &action, &dataSz, (uint8_t*)packet);
+    }
+
+    resp = (whMessageShe_GenMacResponse*)wh_CommClient_GetDataPtr(c->comm);
+
+    ret = wh_Client_RecvResponse(c, &group, &action, &dataSz, (uint8_t*)resp);
     if (ret == 0) {
-        if (packet->rc != WH_SHE_ERC_NO_ERROR)
-            ret = packet->rc;
-        else
-            memcpy(out, packet->sheGenMacRes.mac, WH_SHE_KEY_SZ);
+        if (resp->rc != WH_SHE_ERC_NO_ERROR) {
+            ret = resp->rc;
+        }
+        else {
+            memcpy(out, resp->mac, WH_SHE_KEY_SZ);
+        }
     }
     return ret;
 }
@@ -833,49 +938,59 @@ int wh_Client_SheGenerateMac(whClientContext* c, uint8_t keyId, uint8_t* in,
 }
 
 int wh_Client_SheVerifyMacRequest(whClientContext* c, uint8_t keyId,
-    uint8_t* message, uint32_t messageLen, uint8_t* mac, uint32_t macLen)
+                                  uint8_t* message, uint32_t messageLen,
+                                  uint8_t* mac, uint32_t macLen)
 {
-    int ret;
-    uint8_t* messageIn;
-    uint8_t* macIn;
-    whPacket* packet;
+    int       ret;
+    uint8_t*  messageIn;
+    uint8_t*  macIn;
+    whMessageShe_VerifyMacRequest* req = NULL;
+
     if (c == NULL || message == NULL || messageLen < WH_SHE_KEY_SZ ||
         mac == NULL || macLen < WH_SHE_KEY_SZ) {
         return WH_ERROR_BADARGS;
     }
-    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
+
+    req = (whMessageShe_VerifyMacRequest*)wh_CommClient_GetDataPtr(c->comm);
+
     /* message and mac are after fixed sized fields */
-    messageIn = (uint8_t*)(&packet->sheVerifyMacReq + 1);
-    macIn = messageIn + messageLen;
-    packet->sheVerifyMacReq.keyId = keyId;
-    packet->sheVerifyMacReq.messageLen = messageLen;
-    packet->sheVerifyMacReq.macLen = WH_SHE_KEY_SZ;
+    messageIn                     = (uint8_t*)(req + 1);
+    macIn                         = messageIn + messageLen;
+    req->keyId = keyId;
+    req->messageLen = messageLen;
+    req->macLen     = WH_SHE_KEY_SZ;
     /* set message */
     memcpy(messageIn, message, messageLen);
     memcpy(macIn, mac, WH_SHE_KEY_SZ);
+
     /* send verify mac */
     ret = wh_Client_SendRequest(c, WH_MESSAGE_GROUP_SHE, WH_SHE_VERIFY_MAC,
-        WH_PACKET_STUB_SIZE + sizeof(packet->sheVerifyMacReq) + messageLen
-        + WH_SHE_KEY_SZ, (uint8_t*)packet);
+                                sizeof(*req) + messageLen + WH_SHE_KEY_SZ,
+                                (uint8_t*)req);
     return ret;
 }
 
 int wh_Client_SheVerifyMacResponse(whClientContext* c, uint8_t* outStatus)
 {
-    int ret;
-    uint16_t group;
-    uint16_t action;
-    uint16_t dataSz;
-    whPacket* packet;
-    if (c == NULL || outStatus == NULL)
+    int                             ret;
+    uint16_t                        group;
+    uint16_t                        action;
+    uint16_t                        dataSz;
+    whMessageShe_VerifyMacResponse* resp = NULL;
+
+    if (c == NULL || outStatus == NULL) {
         return WH_ERROR_BADARGS;
-    packet = (whPacket*)wh_CommClient_GetDataPtr(c->comm);
-    ret = wh_Client_RecvResponse(c, &group, &action, &dataSz, (uint8_t*)packet);
+    }
+
+    resp = (whMessageShe_VerifyMacResponse*)wh_CommClient_GetDataPtr(c->comm);
+    ret  = wh_Client_RecvResponse(c, &group, &action, &dataSz, (uint8_t*)resp);
     if (ret == 0) {
-        if (packet->rc != WH_SHE_ERC_NO_ERROR)
-            ret = packet->rc;
-        else
-            *outStatus = packet->sheVerifyMacRes.status;
+        if (resp->rc != WH_SHE_ERC_NO_ERROR) {
+            ret = resp->rc;
+        }
+        else {
+            *outStatus = resp->status;
+        }
     }
     return ret;
 }
