@@ -176,7 +176,7 @@ int wh_Server_CacheImportRsaKey(whServerContext* ctx, RsaKey* key,
     }
 
     /* get a free slot */
-    ret = hsmCacheFindSlotAndZero(ctx, max_size, &cacheBuf, &cacheMeta);
+    ret = wh_Server_KeystoreGetCacheSlot(ctx, max_size, &cacheBuf, &cacheMeta);
     if (ret == 0) {
         ret = wh_Crypto_RsaSerializeKeyDer(key, max_size, cacheBuf, &der_size);
     }
@@ -209,7 +209,7 @@ int wh_Server_CacheExportRsaKey(whServerContext* ctx, whKeyId keyId,
         return WH_ERROR_BADARGS;
     }
     /* Load key from NVM into a cache slot if necessary */
-    ret = hsmFreshenKey(ctx, keyId, &cacheBuf, &cacheMeta);
+    ret = wh_Server_KeystoreFreshenKey(ctx, keyId, &cacheBuf, &cacheMeta);
 
     if (ret == 0) {
         ret = wh_Crypto_RsaDeserializeKeyDer(cacheMeta->len, cacheBuf, key);
@@ -277,7 +277,7 @@ static int _HandleRsaKeyGen(whServerContext* ctx, uint16_t magic,
                 /* Must import the key into the cache and return keyid */
                 if (WH_KEYID_ISERASED(key_id)) {
                     /* Generate a new id */
-                    ret = hsmGetUniqueId(ctx, &key_id);
+                    ret = wh_Server_KeystoreGetUniqueId(ctx, &key_id);
 #ifdef DEBUG_CRYPTOCB_VERBOSE
                     printf("[server] RsaKeyGen UniqueId: keyId:%u, ret:%d\n",
                            key_id, ret);
@@ -378,7 +378,7 @@ static int _HandleRsaFunction( whServerContext* ctx, uint16_t magic,
         wc_FreeRsaKey(rsa);
     }
     if (evict != 0) {
-        (void)hsmEvictKey(ctx, key_id);
+        (void)wh_Server_KeystoreEvictKey(ctx, key_id);
     }
     if (ret == 0) {
         whMessageCrypto_RsaResponse res;
@@ -435,7 +435,7 @@ static int _HandleRsaGetSize(whServerContext* ctx, uint16_t magic,
         printf("[server] %s evicting temp key:%x options:%u evict:%u\n",
                __func__, key_id, options, evict);
 #endif
-        (void)hsmEvictKey(ctx, key_id);
+        (void)wh_Server_KeystoreEvictKey(ctx, key_id);
     }
     if (ret == 0) {
         res.keySize = key_size;
@@ -471,7 +471,7 @@ int wh_Server_EccKeyCacheImport(whServerContext* ctx, ecc_key* key,
         return WH_ERROR_BADARGS;
     }
     /* get a free slot */
-    ret = hsmCacheFindSlotAndZero(ctx, max_size, &cacheBuf, &cacheMeta);
+    ret = wh_Server_KeystoreGetCacheSlot(ctx, max_size, &cacheBuf, &cacheMeta);
     if (ret == WH_ERROR_OK) {
         ret = wh_Crypto_EccSerializeKeyDer(key, max_size, cacheBuf, &der_size);
     }
@@ -504,7 +504,7 @@ int wh_Server_EccKeyCacheExport(whServerContext* ctx, whKeyId keyId,
         return WH_ERROR_BADARGS;
     }
     /* Load key from NVM into a cache slot if necessary */
-    ret = hsmFreshenKey(ctx, keyId, &cacheBuf, &cacheMeta);
+    ret = wh_Server_KeystoreFreshenKey(ctx, keyId, &cacheBuf, &cacheMeta);
 
     if (ret == WH_ERROR_OK) {
         ret = wh_Crypto_EccDeserializeKeyDer(cacheBuf, cacheMeta->len, key);
@@ -540,7 +540,8 @@ int wh_Server_CacheImportCurve25519Key(whServerContext* server,
 
     /* if successful, find a free cache slot and copy in the key data */
     if (ret == 0) {
-        ret = hsmCacheFindSlotAndZero(server, keySz, &cacheBuf, &cacheMeta);
+        ret = wh_Server_KeystoreGetCacheSlot(server, keySz, &cacheBuf,
+                                             &cacheMeta);
         if (ret == 0) {
             memcpy(cacheBuf, der_buf, keySz);
             /* Update metadata to cache the key */
@@ -569,7 +570,7 @@ int wh_Server_CacheExportCurve25519Key(whServerContext* server, whKeyId keyId,
         return WH_ERROR_BADARGS;
     }
     /* Load key from NVM into a cache slot if necessary */
-    ret = hsmFreshenKey(server, keyId, &cacheBuf, &cacheMeta);
+    ret = wh_Server_KeystoreFreshenKey(server, keyId, &cacheBuf, &cacheMeta);
 
     if (ret == 0) {
         ret = wh_Crypto_Curve25519DeserializeKey(cacheBuf, cacheMeta->len, key);
@@ -606,8 +607,8 @@ int wh_Server_MlDsaKeyCacheImport(whServerContext* ctx, MlDsaKey* key,
         return WH_ERROR_BADARGS;
     }
 
-    ret =
-        hsmCacheFindSlotAndZero(ctx, MAX_MLDSA_DER_SIZE, &cacheBuf, &cacheMeta);
+    ret = wh_Server_KeystoreGetCacheSlot(ctx, MAX_MLDSA_DER_SIZE, &cacheBuf,
+                                         &cacheMeta);
     if (ret == WH_ERROR_OK) {
         ret = wh_Crypto_MlDsaSerializeKeyDer(key, MAX_MLDSA_DER_SIZE, cacheBuf,
                                              &der_size);
@@ -641,7 +642,7 @@ int wh_Server_MlDsaKeyCacheExport(whServerContext* ctx, whKeyId keyId,
         return WH_ERROR_BADARGS;
     }
 
-    ret = hsmFreshenKey(ctx, keyId, &cacheBuf, &cacheMeta);
+    ret = wh_Server_KeystoreFreshenKey(ctx, keyId, &cacheBuf, &cacheMeta);
 
     if (ret == WH_ERROR_OK) {
         ret = wh_Crypto_MlDsaDeserializeKeyDer(cacheBuf, cacheMeta->len, key);
@@ -715,7 +716,7 @@ static int _HandleEccKeyGen(whServerContext* ctx, uint16_t magic,
                 res_size = 0;
                 if (WH_KEYID_ISERASED(key_id)) {
                     /* Generate a new id */
-                    ret = hsmGetUniqueId(ctx, &key_id);
+                    ret = wh_Server_KeystoreGetUniqueId(ctx, &key_id);
 #ifdef DEBUG_CRYPTOCB
                     printf("[server] %s UniqueId: keyId:%u, ret:%d\n", __func__,
                            key_id, ret);
@@ -806,10 +807,10 @@ static int _HandleEccSharedSecret(whServerContext* ctx, uint16_t magic,
         wc_ecc_free(pub_key);
     }
     if (evict_pub) {
-        (void)hsmEvictKey(ctx, pub_key_id);
+        (void)wh_Server_KeystoreEvictKey(ctx, pub_key_id);
     }
     if (evict_prv) {
-        (void)hsmEvictKey(ctx, prv_key_id);
+        (void)wh_Server_KeystoreEvictKey(ctx, prv_key_id);
     }
     if (ret == 0) {
         whMessageCrypto_EcdhResponse res;
@@ -876,7 +877,7 @@ static int _HandleEccSign(whServerContext* ctx, uint16_t magic,
         wc_ecc_free(key);
     }
     if (evict != 0) {
-        (void)hsmEvictKey(ctx, key_id);
+        (void)wh_Server_KeystoreEvictKey(ctx, key_id);
     }
     if (ret == 0) {
         whMessageCrypto_EccSignResponse res;
@@ -962,7 +963,7 @@ static int _HandleEccVerify(whServerContext* ctx, uint16_t magic,
     }
     if (evict != 0) {
         /* User requested to evict from cache, even if the call failed */
-        (void)hsmEvictKey(ctx, key_id);
+        (void)wh_Server_KeystoreEvictKey(ctx, key_id);
     }
     if (ret == 0) {
         res.pubSz = pub_size;
@@ -1102,7 +1103,7 @@ static int _HandleCurve25519KeyGen(whServerContext* ctx, uint16_t magic,
                 /* Must import the key into the cache and return keyid */
                 if (WH_KEYID_ISERASED(key_id)) {
                     /* Generate a new id */
-                    ret = hsmGetUniqueId(ctx, &key_id);
+                    ret = wh_Server_KeystoreGetUniqueId(ctx, &key_id);
 #ifdef DEBUG_CRYPTOCB
                     printf("[server] %s UniqueId: keyId:%u, ret:%d\n", __func__,
                            key_id, ret);
@@ -1193,10 +1194,10 @@ static int _HandleCurve25519SharedSecret(whServerContext* ctx, uint16_t magic,
         wc_curve25519_free(priv);
     }
     if (evict_pub) {
-        (void)hsmEvictKey(ctx, pub_key_id);
+        (void)wh_Server_KeystoreEvictKey(ctx, pub_key_id);
     }
     if (evict_prv) {
-        (void)hsmEvictKey(ctx, prv_key_id);
+        (void)wh_Server_KeystoreEvictKey(ctx, prv_key_id);
     }
     if (ret == 0) {
         res.sz = res_len;
@@ -1253,7 +1254,8 @@ static int _HandleAesCbc(whServerContext* ctx, uint16_t magic, const void* crypt
 #endif
     /* Read the key if it is not erased */
     if (!WH_KEYID_ISERASED(key_id)) {
-        ret = hsmReadKey(ctx, key_id, NULL, read_key, &read_key_len);
+        ret = wh_Server_KeystoreReadKey(ctx, key_id, NULL, read_key,
+                                        &read_key_len);
         if (ret == 0) {
             /* override the incoming values */
             key     = read_key;
@@ -1376,7 +1378,8 @@ static int _HandleAesGcm(whServerContext* ctx, uint16_t magic,
 
     /* Read the key if it is not erased */
     if (!WH_KEYID_ISERASED(key_id)) {
-        ret = hsmReadKey(ctx, key_id, NULL, read_key, &read_key_len);
+        ret = wh_Server_KeystoreReadKey(ctx, key_id, NULL, read_key,
+                                        &read_key_len);
 #ifdef DEBUG_CRYPTOCB_VERBOSE
         printf("[server] AesGcm ReadKey key_id:%u, key_len:%d ret:%d\n", key_id,
                read_key_len, ret);
@@ -1533,9 +1536,9 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
                 len   = sizeof(ctx->crypto->algoCtx.cmac);
                 keyId = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id,
                                       req.keyId);
-                ret   = hsmReadKey(ctx, keyId, NULL,
-                                   (uint8_t*)ctx->crypto->algoCtx.cmac,
-                                   (uint32_t*)&len);
+                ret   = wh_Server_KeystoreReadKey(
+                      ctx, keyId, NULL, (uint8_t*)ctx->crypto->algoCtx.cmac,
+                      (uint32_t*)&len);
                 if (ret == WH_ERROR_OK) {
                     /* if the key size is a multiple of aes, init the key and
                      * overwrite the existing key on exit */
@@ -1604,7 +1607,7 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
                 if (ret == 0 || ret == WH_ERROR_CANCEL) {
                     if (!WH_KEYID_ISERASED(keyId)) {
                         /* Don't override return value except on failure */
-                        int tmpRet = hsmEvictKey(
+                        int tmpRet = wh_Server_KeystoreEvictKey(
                             ctx, WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
                                                ctx->comm->client_id, keyId));
                         if (tmpRet != 0) {
@@ -1620,7 +1623,7 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
                     keyId = WH_MAKE_KEYID(  WH_KEYTYPE_CRYPTO,
                                             ctx->comm->client_id,
                                             WH_KEYID_ERASED);
-                    ret = hsmGetUniqueId(ctx, &keyId);
+                    ret   = wh_Server_KeystoreGetUniqueId(ctx, &keyId);
                 }
                 else {
                     keyId = WH_MAKE_KEYID(  WH_KEYTYPE_CRYPTO,
@@ -1629,11 +1632,12 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
                 }
                 /* evict the aes sized key in the normal cache */
                 if (moveToBigCache == 1) {
-                    ret = hsmEvictKey(ctx, keyId);
+                    ret = wh_Server_KeystoreEvictKey(ctx, keyId);
                 }
                 meta->id = keyId;
                 meta->len = sizeof(ctx->crypto->algoCtx.cmac);
-                ret = hsmCacheKey(ctx, meta, (uint8_t*)ctx->crypto->algoCtx.cmac);
+                ret       = wh_Server_KeystoreCacheKey(
+                          ctx, meta, (uint8_t*)ctx->crypto->algoCtx.cmac);
                 res.keyId = WH_KEYID_ID(keyId);
                 res.outSz = 0;
 #ifdef DEBUG_CRYPTOCB_VERBOSE
@@ -1835,7 +1839,7 @@ static int _HandleMlDsaKeyGen(whServerContext* ctx, uint16_t magic,
                         res_size = 0;
                         if (WH_KEYID_ISERASED(key_id)) {
                             /* Generate a new id */
-                            ret = hsmGetUniqueId(ctx, &key_id);
+                            ret = wh_Server_KeystoreGetUniqueId(ctx, &key_id);
 #ifdef DEBUG_CRYPTOCB
                             printf("[server] %s UniqueId: keyId:%u, ret:%d\n",
                                    __func__, key_id, ret);
@@ -1920,7 +1924,7 @@ static int _HandleMlDsaSign(whServerContext* ctx, uint16_t magic,
         wc_MlDsaKey_Free(key);
     }
     if (evict != 0) {
-        (void)hsmEvictKey(ctx, key_id);
+        (void)wh_Server_KeystoreEvictKey(ctx, key_id);
     }
     if (ret == 0) {
         res.sz   = res_len;
@@ -1987,7 +1991,7 @@ static int _HandleMlDsaVerify(whServerContext* ctx, uint16_t magic,
     }
     if (evict != 0) {
         /* User requested to evict from cache, even if the call failed */
-        (void)hsmEvictKey(ctx, key_id);
+        (void)wh_Server_KeystoreEvictKey(ctx, key_id);
     }
     if (ret == 0) {
         res.res  = result;
@@ -2494,7 +2498,7 @@ static int _HandleMlDsaKeyGenDma(whServerContext* ctx, uint16_t magic,
 
                         if (WH_KEYID_ISERASED(keyId)) {
                             /* Generate a new id */
-                            ret = hsmGetUniqueId(ctx, &keyId);
+                            ret = wh_Server_KeystoreGetUniqueId(ctx, &keyId);
 #ifdef DEBUG_CRYPTOCB
                             printf("[server] %s UniqueId: keyId:%u, ret:%d\n",
                                    __func__, keyId, ret);
@@ -2621,7 +2625,7 @@ static int _HandleMlDsaSignDma(whServerContext* ctx, uint16_t magic,
 
             /* Evict key if requested */
             if (evict) {
-                (void)hsmEvictKey(ctx, key_id);
+                (void)wh_Server_KeystoreEvictKey(ctx, key_id);
             }
         }
         wc_MlDsaKey_Free(key);
@@ -2726,7 +2730,7 @@ static int _HandleMlDsaVerifyDma(whServerContext* ctx, uint16_t magic,
 
         /* Evict key if requested */
         if (evict) {
-            (void)hsmEvictKey(ctx, key_id);
+            (void)wh_Server_KeystoreEvictKey(ctx, key_id);
         }
     }
 
@@ -2939,7 +2943,8 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
                         keyLen = sizeof(tmpKey);
 
                         /* Load key from cache */
-                        ret = hsmReadKey(ctx, keyId, NULL, tmpKey, &keyLen);
+                        ret = wh_Server_KeystoreReadKey(ctx, keyId, NULL,
+                                                        tmpKey, &keyLen);
                         if (ret == WH_ERROR_OK) {
                             /* Verify key size is valid for AES */
                             if (keyLen != AES_128_KEY_SIZE &&
@@ -3002,7 +3007,8 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
                         keyLen = sizeof(tmpKey);
 
                         /* Load key from cache */
-                        ret = hsmReadKey(ctx, keyId, NULL, tmpKey, &keyLen);
+                        ret = wh_Server_KeystoreReadKey(ctx, keyId, NULL,
+                                                        tmpKey, &keyLen);
                         if (ret == WH_ERROR_OK) {
                             /* Verify key size is valid for AES */
                             if (keyLen != AES_128_KEY_SIZE &&

@@ -52,15 +52,8 @@ static int _FindInCache(whServerContext* server, whKeyId keyId,
         int *out_index, int *out_big, uint8_t* *out_buffer,
         whNvmMetadata* *out_meta);
 
-#ifdef WOLFHSM_CFG_DMA
-static int hsmCacheKeyDma(whServerContext* server, whNvmMetadata* meta,
-                          uint64_t keyAddr);
-static int hsmExportKeyDma(whServerContext* server, whKeyId keyId,
-                           uint64_t keyAddr, uint64_t keySz,
-                           whNvmMetadata* outMeta);
-#endif
 
-int hsmGetUniqueId(whServerContext* server, whNvmId* inout_id)
+int wh_Server_KeystoreGetUniqueId(whServerContext* server, whNvmId* inout_id)
 {
     int     i;
     int     ret = 0;
@@ -109,8 +102,8 @@ int hsmGetUniqueId(whServerContext* server, whNvmId* inout_id)
 }
 
 /* find an available slot for the size, return the slots buffer and meta */
-int hsmCacheFindSlotAndZero(whServerContext* server, uint16_t keySz,
-                            uint8_t** outBuf, whNvmMetadata** outMeta)
+int wh_Server_KeystoreGetCacheSlot(whServerContext* server, uint16_t keySz,
+                                   uint8_t** outBuf, whNvmMetadata** outMeta)
 {
     int i;
     int foundIndex = -1;
@@ -176,7 +169,8 @@ int hsmCacheFindSlotAndZero(whServerContext* server, uint16_t keySz,
     return 0;
 }
 
-int hsmCacheKey(whServerContext* server, whNvmMetadata* meta, uint8_t* in)
+int wh_Server_KeystoreCacheKey(whServerContext* server, whNvmMetadata* meta,
+                               uint8_t* in)
 {
     int i;
     int foundIndex = -1;
@@ -330,8 +324,8 @@ static int _FindInCache(whServerContext* server, whKeyId keyId, int* out_index,
 
 /* try to put the specified key into cache if it isn't already, return pointers
  * to meta and the cached data*/
-int hsmFreshenKey(whServerContext* server, whKeyId keyId, uint8_t** outBuf,
-                  whNvmMetadata** outMeta)
+int wh_Server_KeystoreFreshenKey(whServerContext* server, whKeyId keyId,
+                                 uint8_t** outBuf, whNvmMetadata** outMeta)
 {
     int           ret           = 0;
     int           foundIndex    = -1;
@@ -349,8 +343,8 @@ int hsmFreshenKey(whServerContext* server, whKeyId keyId, uint8_t** outBuf,
         ret = wh_Nvm_GetMetadata(server->nvm, keyId, tmpMeta);
         if (ret == WH_ERROR_OK) {
             /* Key found in NVM, get a free cache slot */
-            ret =
-                hsmCacheFindSlotAndZero(server, tmpMeta->len, outBuf, outMeta);
+            ret = wh_Server_KeystoreGetCacheSlot(server, tmpMeta->len, outBuf,
+                                                 outMeta);
             if (ret == WH_ERROR_OK) {
                 /* Read the key from NVM into the cache slot */
                 ret = wh_Nvm_Read(server->nvm, keyId, 0, tmpMeta->len, *outBuf);
@@ -366,8 +360,9 @@ int hsmFreshenKey(whServerContext* server, whKeyId keyId, uint8_t** outBuf,
     return ret;
 }
 
-int hsmReadKey(whServerContext* server, whKeyId keyId, whNvmMetadata* outMeta,
-               uint8_t* out, uint32_t* outSz)
+int wh_Server_KeystoreReadKey(whServerContext* server, whKeyId keyId,
+                              whNvmMetadata* outMeta, uint8_t* out,
+                              uint32_t* outSz)
 {
     int           ret = 0;
     int           i;
@@ -431,7 +426,7 @@ int hsmReadKey(whServerContext* server, whKeyId keyId, whNvmMetadata* outMeta,
     }
     /* cache key if free slot, will only kick out other commited keys */
     if (ret == 0 && out != NULL) {
-        hsmCacheKey(server, meta, out);
+        wh_Server_KeystoreCacheKey(server, meta, out);
     }
 #ifdef WOLFHSM_CFG_SHE_EXTENSION
     /* use empty key of zeros if we couldn't find the master ecu key */
@@ -452,7 +447,7 @@ int hsmReadKey(whServerContext* server, whKeyId keyId, whNvmMetadata* outMeta,
     return ret;
 }
 
-int hsmEvictKey(whServerContext* server, whNvmId keyId)
+int wh_Server_KeystoreEvictKey(whServerContext* server, whNvmId keyId)
 {
     int            ret = 0;
     whNvmMetadata* meta;
@@ -464,14 +459,15 @@ int hsmEvictKey(whServerContext* server, whNvmId keyId)
     ret = _FindInCache(server, keyId, NULL, NULL, NULL, &meta);
     if (ret == 0) {
 #if defined(DEBUG_CRYPTOCB) && defined(DEBUG_CRYPTOCB_VERBOSE)
-        printf("[server] hsmEvictKey: evicted keyid=0x%X\n", keyId);
+        printf("[server] wh_Server_KeystoreEvictKey: evicted keyid=0x%X\n",
+               keyId);
 #endif
         meta->id = WH_KEYID_ERASED;
     }
     return ret;
 }
 
-int hsmCommitKey(whServerContext* server, whNvmId keyId)
+int wh_Server_KeystoreCommitKey(whServerContext* server, whNvmId keyId)
 {
     uint8_t*       slotBuf;
     whNvmMetadata* slotMeta;
@@ -500,14 +496,14 @@ int hsmCommitKey(whServerContext* server, whNvmId keyId)
     return ret;
 }
 
-int hsmEraseKey(whServerContext* server, whNvmId keyId)
+int wh_Server_KeystoreEraseKey(whServerContext* server, whNvmId keyId)
 {
     if ((server == NULL) || (WH_KEYID_ISERASED(keyId))) {
         return WH_ERROR_BADARGS;
     }
 
     /* remove the key from the cache if present */
-    (void)hsmEvictKey(server, keyId);
+    (void)wh_Server_KeystoreEvictKey(server, keyId);
 
     /* destroy the object */
     return wh_Nvm_DestroyObjects(server->nvm, 1, &keyId);
@@ -556,14 +552,14 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
             }
             /* get a new id if one wasn't provided */
             if (WH_KEYID_ISERASED(meta->id)) {
-                ret     = hsmGetUniqueId(server, &meta->id);
+                ret     = wh_Server_KeystoreGetUniqueId(server, &meta->id);
                 resp.rc = ret;
                 /* TODO: Are there any fatal server errors? */
                 ret = WH_ERROR_OK;
             }
             /* write the key */
             if (ret == WH_ERROR_OK) {
-                ret     = hsmCacheKey(server, meta, in);
+                ret     = wh_Server_KeystoreCacheKey(server, meta, in);
                 resp.rc = ret;
                 /* TODO: Are there any fatal server errors? */
                 ret = WH_ERROR_OK;
@@ -607,13 +603,13 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
 
             /* get a new id if one wasn't provided */
             if (WH_KEYID_ISERASED(meta->id)) {
-                ret     = hsmGetUniqueId(server, &meta->id);
+                ret     = wh_Server_KeystoreGetUniqueId(server, &meta->id);
                 resp.rc = ret;
             }
 
             /* write the key using DMA */
             if (ret == WH_ERROR_OK) {
-                ret     = hsmCacheKeyDma(server, meta, req.key.addr);
+                ret = wh_Server_KeystoreCacheKeyDma(server, meta, req.key.addr);
                 resp.rc = ret;
                 /* propagate bad address to client if DMA operation failed */
                 if (ret != WH_ERROR_OK) {
@@ -641,11 +637,11 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
             (void)wh_MessageKeystore_TranslateExportDmaRequest(
                 magic, (whMessageKeystore_ExportDmaRequest*)req_packet, &req);
 
-            ret =
-                hsmExportKeyDma(server,
-                                WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
-                                              server->comm->client_id, req.id),
-                                req.key.addr, req.key.sz, meta);
+            ret = wh_Server_KeystoreExportKeyDma(
+                server,
+                WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, server->comm->client_id,
+                              req.id),
+                req.key.addr, req.key.sz, meta);
             resp.rc = ret;
             /* propagate bad address to client if DMA operation failed */
             if (ret != WH_ERROR_OK) {
@@ -675,9 +671,9 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
             (void)wh_MessageKeystore_TranslateEvictRequest(
                 magic, (whMessageKeystore_EvictRequest*)req_packet, &req);
 
-            ret     = hsmEvictKey(server,
-                                  WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
-                                                server->comm->client_id, req.id));
+            ret = wh_Server_KeystoreEvictKey(
+                server, WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
+                                      server->comm->client_id, req.id));
             resp.rc = ret;
             /* TODO: Are there any fatal server errors? */
             ret = WH_ERROR_OK;
@@ -701,10 +697,11 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
             keySz = WOLFHSM_CFG_COMM_DATA_LEN - sizeof(resp);
 
             /* read the key */
-            ret     = hsmReadKey(server,
-                                 WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
-                                               server->comm->client_id, req.id),
-                                 meta, out, &keySz);
+            ret = wh_Server_KeystoreReadKey(
+                server,
+                WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, server->comm->client_id,
+                              req.id),
+                meta, out, &keySz);
             resp.rc = ret;
             /* TODO: Are there any fatal server errors? */
             ret = WH_ERROR_OK;
@@ -729,9 +726,9 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
             (void)wh_MessageKeystore_TranslateCommitRequest(
                 magic, (whMessageKeystore_CommitRequest*)req_packet, &req);
 
-            ret     = hsmCommitKey(server,
-                                   WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
-                                                 server->comm->client_id, req.id));
+            ret = wh_Server_KeystoreCommitKey(
+                server, WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
+                                      server->comm->client_id, req.id));
             resp.rc = ret;
             /* TODO: Are there any fatal server errors? */
             ret = WH_ERROR_OK;
@@ -755,9 +752,9 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
             (void)wh_MessageKeystore_TranslateEraseRequest(
                 magic, (whMessageKeystore_EraseRequest*)req_packet, &req);
 
-            ret     = hsmEraseKey(server,
-                                  WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
-                                                server->comm->client_id, req.id));
+            ret = wh_Server_KeystoreEraseKey(
+                server, WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
+                                      server->comm->client_id, req.id));
             resp.rc = ret;
             /* TODO: Are there any fatal server errors? */
             ret = WH_ERROR_OK;
@@ -783,15 +780,15 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
 
 #ifdef WOLFHSM_CFG_DMA
 
-static int hsmCacheKeyDma(whServerContext* server, whNvmMetadata* meta,
-                          uint64_t keyAddr)
+int wh_Server_KeystoreCacheKeyDma(whServerContext* server, whNvmMetadata* meta,
+                                  uint64_t keyAddr)
 {
     int            ret;
     uint8_t*       buffer;
     whNvmMetadata* slotMeta;
 
     /* Get a cache slot */
-    ret = hsmCacheFindSlotAndZero(server, meta->len, &buffer, &slotMeta);
+    ret = wh_Server_KeystoreGetCacheSlot(server, meta->len, &buffer, &slotMeta);
     if (ret != 0) {
         return ret;
     }
@@ -811,9 +808,9 @@ static int hsmCacheKeyDma(whServerContext* server, whNvmMetadata* meta,
     return ret;
 }
 
-static int hsmExportKeyDma(whServerContext* server, whKeyId keyId,
-                           uint64_t keyAddr, uint64_t keySz,
-                           whNvmMetadata* outMeta)
+int wh_Server_KeystoreExportKeyDma(whServerContext* server, whKeyId keyId,
+                                   uint64_t keyAddr, uint64_t keySz,
+                                   whNvmMetadata* outMeta)
 {
     int            ret;
     uint8_t*       buffer;
