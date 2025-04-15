@@ -452,12 +452,10 @@ int wh_Server_CacheImportCurve25519Key(whServerContext* server,
     uint8_t*       cacheBuf;
     whNvmMetadata* cacheMeta;
     int            ret;
-    /* Max size of a DER encoded curve25519 keypair with SubjectPublicKeyInfo
-     * included. Determined by experiment */
-    const uint16_t MAX_DER_SIZE = 128;
-    uint16_t       keySz        = keySz;
 
-    uint8_t der_buf[MAX_DER_SIZE];
+    /* CURVE2219_MAX_KEY_TO_DER_SZ should be 82 */
+    uint8_t        der_buf[CURVE25519_MAX_KEY_TO_DER_SZ];
+    uint16_t       keySz = sizeof(der_buf);
 
 
     if ((server == NULL) || (key == NULL) || (WH_KEYID_ISERASED(keyId)) ||
