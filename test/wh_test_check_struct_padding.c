@@ -59,108 +59,117 @@ whMessageNvm_ReadDmaRequest      whMessageNvm_ReadDmaRequest_test;
 whPacket whPacket_test;
 /* Test every variant of the nested union */
 wh_Packet_version_exchange      versionExchange;
-wh_Packet_key_cache_req         keyCacheReq;
-wh_Packet_key_evict_req         keyEvictReq;
-wh_Packet_key_commit_req        keyCommitReq;
-wh_Packet_key_export_req        keyExportReq;
-wh_Packet_key_erase_req         keyEraseReq;
-wh_Packet_counter_init_req      counterInitReq;
-wh_Packet_counter_increment_req counterIncrementReq;
-wh_Packet_counter_read_req      counterReadReq;
-wh_Packet_counter_destroy_req   counterDestroyReq;
-wh_Packet_key_cache_res         keyCacheRes;
-wh_Packet_key_evict_res         keyEvictRes;
-wh_Packet_key_commit_res        keyCommitRes;
-wh_Packet_key_export_res        keyExportRes;
-wh_Packet_key_erase_res         keyEraseRes;
-wh_Packet_counter_init_res      counterInitRes;
-wh_Packet_counter_increment_res counterIncrementRes;
-wh_Packet_counter_read_res      counterReadRes;
 
-wh_Packet_key_cache_Dma_req      keyCacheDmaReq;
-wh_Packet_key_cache_Dma_res      keyCacheDmaRes;
-wh_Packet_key_export_Dma_req     keyExportDmaReq;
-wh_Packet_key_export_Dma_res     keyExportDmaRes;
+/* Include keystore message header for new keystore message structures */
+#include "wolfhsm/wh_message_keystore.h"
+whMessageKeystore_CacheRequest     keyCacheReq;
+whMessageKeystore_EvictRequest     keyEvictReq;
+whMessageKeystore_CommitRequest    keyCommitReq;
+whMessageKeystore_ExportRequest    keyExportReq;
+whMessageKeystore_EraseRequest     keyEraseReq;
+whMessageKeystore_CacheResponse    keyCacheRes;
+whMessageKeystore_EvictResponse    keyEvictRes;
+whMessageKeystore_CommitResponse   keyCommitRes;
+whMessageKeystore_ExportResponse   keyExportRes;
+whMessageKeystore_EraseResponse    keyEraseRes;
+
+/* Include counter message header for new counter message structures */
+#include "wolfhsm/wh_message_counter.h"
+whMessageCounter_InitRequest       counterInitReq;
+whMessageCounter_IncrementRequest  counterIncrementReq;
+whMessageCounter_ReadRequest       counterReadReq;
+whMessageCounter_DestroyRequest    counterDestroyReq;
+whMessageCounter_InitResponse      counterInitRes;
+whMessageCounter_IncrementResponse counterIncrementRes;
+whMessageCounter_ReadResponse      counterReadRes;
+whMessageCounter_DestroyResponse   counterDestroyRes;
+
+/* DMA keystore messages */
+whMessageKeystore_CacheDmaRequest   keyCacheDmaReq;
+whMessageKeystore_CacheDmaResponse  keyCacheDmaRes;
+whMessageKeystore_ExportDmaRequest  keyExportDmaReq;
+whMessageKeystore_ExportDmaResponse keyExportDmaRes;
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
-wh_Packet_cipher_any_req      cipherAnyReq;
-wh_Packet_cipher_aescbc_req   cipherAesCbcReq;
-wh_Packet_cipher_aesgcm_req   cipherAesGcmReq;
-wh_Packet_pk_any_req          pkAnyReq;
-wh_Packet_pk_rsakg_req        pkRsakgReq;
-wh_Packet_pk_rsa_req          pkRsaReq;
-wh_Packet_pk_rsa_get_size_req pkRsaGetSizeReq;
-wh_Packet_pk_eckg_req         pkEckgReq;
-wh_Packet_pk_ecdh_req         pkEcdhReq;
-wh_Packet_pk_ecc_sign_req     pkEccSignReq;
-wh_Packet_pk_ecc_verify_req   pkEccVerifyReq;
-wh_Packet_pk_ecc_check_req    pkEccCheckReq;
-wh_Packet_pk_curve25519kg_req pkCurve25519kgReq;
-wh_Packet_pk_curve25519kg_res pkCurve25519kgRes;
-wh_Packet_pk_curve25519_req   pkCurve25519Req;
-wh_Packet_pk_curve25519_res   pkCurve25519Res;
-wh_Packet_rng_req             rngReq;
-wh_Packet_cmac_req            cmacReq;
-wh_Packet_cipher_aescbc_res   cipherAesCbcRes;
-wh_Packet_cipher_aesgcm_res   cipherAesGcmRes;
-wh_Packet_pk_rsakg_res        pkRsakgRes;
-wh_Packet_pk_rsa_res          pkRsaRes;
-wh_Packet_pk_rsa_get_size_res pkRsaGetSizeRes;
-wh_Packet_pk_eckg_res         pkEckgRes;
-wh_Packet_pk_ecdh_res         pkEcdhRes;
-wh_Packet_pk_ecc_sign_res     pkEccSignRes;
-wh_Packet_pk_ecc_verify_res   pkEccVerifyRes;
-wh_Packet_pk_ecc_check_res    pkEccCheckRes;
-wh_Packet_rng_res             rngRes;
-wh_Packet_cmac_res            cmacRes;
-wh_Packet_hash_any_req        hashAnyReq;
-wh_Packet_hash_sha256_req     hashSha256Req;
-wh_Packet_hash_sha256_res     hashSha256Res;
+/* Include crypto message header for new crypto message structures */
+#include "wolfhsm/wh_message_crypto.h"
+whMessageCrypto_GenericRequestHeader  cryptoGenericReqHeader;
+whMessageCrypto_GenericResponseHeader cryptoGenericResHeader;
+whMessageCrypto_AesCbcRequest        cipherAesCbcReq;
+whMessageCrypto_AesGcmRequest        cipherAesGcmReq;
+whMessageCrypto_RsaKeyGenRequest     pkRsakgReq;
+whMessageCrypto_RsaRequest           pkRsaReq;
+whMessageCrypto_RsaGetSizeRequest    pkRsaGetSizeReq;
+whMessageCrypto_EccKeyGenRequest     pkEckgReq;
+whMessageCrypto_EcdhRequest          pkEcdhReq;
+whMessageCrypto_EccSignRequest       pkEccSignReq;
+whMessageCrypto_EccVerifyRequest     pkEccVerifyReq;
+whMessageCrypto_EccCheckRequest      pkEccCheckReq;
+whMessageCrypto_RngRequest           rngReq;
+whMessageCrypto_CmacRequest          cmacReq;
+whMessageCrypto_AesCbcResponse       cipherAesCbcRes;
+whMessageCrypto_AesGcmResponse       cipherAesGcmRes;
+whMessageCrypto_RsaKeyGenResponse    pkRsakgRes;
+whMessageCrypto_RsaResponse          pkRsaRes;
+whMessageCrypto_RsaGetSizeResponse   pkRsaGetSizeRes;
+whMessageCrypto_EccKeyGenResponse    pkEckgRes;
+whMessageCrypto_EcdhResponse         pkEcdhRes;
+whMessageCrypto_EccSignResponse      pkEccSignRes;
+whMessageCrypto_EccVerifyResponse    pkEccVerifyRes;
+whMessageCrypto_EccCheckResponse     pkEccCheckRes;
+whMessageCrypto_RngResponse          rngRes;
+whMessageCrypto_CmacResponse         cmacRes;
+whMessageCrypto_Sha256Request        hashSha256Req;
+whMessageCrypto_Sha256Response       hashSha256Res;
 
-/* DMA structs */
+/* DMA crypto messages */
 #if defined(WOLFHSM_CFG_DMA)
-wh_Packet_hash_sha256_Dma_req     hashSha256DmaReq;
-wh_Packet_hash_sha256_Dma_res     hashSha256DmaRes;
-wh_Packet_pq_mldsa_keygen_Dma_req pqMldsaKeygenDmaReq;
-wh_Packet_pq_mldsa_Dma_res        pqMldsaDmaRes;
-wh_Packet_pq_mldsa_sign_Dma_req   pqMldsaSignDmaReq;
-wh_Packet_pq_mldsa_sign_Dma_res   pqMldsaSignDmaRes;
-wh_Packet_pq_mldsa_verify_Dma_req pqMldsaVerifyDmaReq;
-wh_Packet_pq_mldsa_verify_Dma_res pqMldsaVerifyDmaRes;
-wh_Packet_cmac_Dma_req            cmacDmaReq;
-wh_Packet_cmac_Dma_res            cmacDmaRes;
+whMessageCrypto_Sha256DmaRequest        hashSha256DmaReq;
+whMessageCrypto_Sha256DmaResponse       hashSha256DmaRes;
+whMessageCrypto_MlDsaKeyGenDmaRequest   pqMldsaKeygenDmaReq;
+whMessageCrypto_MlDsaKeyGenDmaResponse  pqMldsaKeygenDmaRes;
+whMessageCrypto_MlDsaSignDmaRequest     pqMldsaSignDmaReq;
+whMessageCrypto_MlDsaSignDmaResponse    pqMldsaSignDmaRes;
+whMessageCrypto_MlDsaVerifyDmaRequest   pqMldsaVerifyDmaReq;
+whMessageCrypto_MlDsaVerifyDmaResponse  pqMldsaVerifyDmaRes;
+whMessageCrypto_CmacDmaRequest          cmacDmaReq;
+whMessageCrypto_CmacDmaResponse         cmacDmaRes;
 #endif /* WOLFHSM_CFG_DMA */
 
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
 #ifdef WOLFHSM_CFG_SHE_EXTENSION
-wh_Packet_she_set_uid_req            sheSetUidReq;
-wh_Packet_she_secure_boot_init_req   sheSecureBootInitReq;
-wh_Packet_she_secure_boot_init_res   sheSecureBootInitRes;
-wh_Packet_she_secure_boot_update_req sheSecureBootUpdateReq;
-wh_Packet_she_secure_boot_update_res sheSecureBootUpdateRes;
-wh_Packet_she_secure_boot_finish_res sheSecureBootFinishRes;
-wh_Packet_she_get_status_res         sheGetStatusRes;
-wh_Packet_she_load_key_req           sheLoadKeyReq;
-wh_Packet_she_load_key_res           sheLoadKeyRes;
-wh_Packet_she_load_plain_key_req     sheLoadPlainKeyReq;
-wh_Packet_she_export_ram_key_res     sheExportRamKeyRes;
-wh_Packet_she_init_rng_res           sheInitRngRes;
-wh_Packet_she_rnd_res                sheRndRes;
-wh_Packet_she_extend_seed_req        sheExtendSeedReq;
-wh_Packet_she_extend_seed_res        sheExtendSeedRes;
-wh_Packet_she_enc_ecb_req            sheEncEcbReq;
-wh_Packet_she_enc_ecb_res            sheEncEcbRes;
-wh_Packet_she_enc_cbc_req            sheEncCbcReq;
-wh_Packet_she_enc_cbc_res            sheEncCbcRes;
-wh_Packet_she_enc_ecb_req            sheDecEcbReq;
-wh_Packet_she_enc_ecb_res            sheDecEcbRes;
-wh_Packet_she_enc_cbc_req            sheDecCbcReq;
-wh_Packet_she_enc_cbc_res            sheDecCbcRes;
-wh_Packet_she_gen_mac_req            sheGenMacReq;
-wh_Packet_she_gen_mac_res            sheGenMacRes;
-wh_Packet_she_verify_mac_req         sheVerifyMacReq;
-wh_Packet_she_verify_mac_res         sheVerifyMacRes;
+/* Include SHE message header for SHE message structures */
+#include "wolfhsm/wh_message_she.h"
+whMessageShe_SetUidRequest            sheSetUidReq;
+whMessageShe_SetUidResponse           sheSetUidRes;
+whMessageShe_SecureBootInitRequest    sheSecureBootInitReq;
+whMessageShe_SecureBootInitResponse   sheSecureBootInitRes;
+whMessageShe_SecureBootUpdateRequest  sheSecureBootUpdateReq;
+whMessageShe_SecureBootUpdateResponse sheSecureBootUpdateRes;
+whMessageShe_SecureBootFinishResponse sheSecureBootFinishRes;
+whMessageShe_GetStatusResponse        sheGetStatusRes;
+whMessageShe_LoadKeyRequest           sheLoadKeyReq;
+whMessageShe_LoadKeyResponse          sheLoadKeyRes;
+whMessageShe_LoadPlainKeyRequest      sheLoadPlainKeyReq;
+whMessageShe_LoadPlainKeyResponse     sheLoadPlainKeyRes;
+whMessageShe_ExportRamKeyResponse     sheExportRamKeyRes;
+whMessageShe_InitRngResponse          sheInitRngRes;
+whMessageShe_RndResponse              sheRndRes;
+whMessageShe_ExtendSeedRequest        sheExtendSeedReq;
+whMessageShe_ExtendSeedResponse       sheExtendSeedRes;
+whMessageShe_EncEcbRequest            sheEncEcbReq;
+whMessageShe_EncEcbResponse           sheEncEcbRes;
+whMessageShe_EncCbcRequest            sheEncCbcReq;
+whMessageShe_EncCbcResponse           sheEncCbcRes;
+whMessageShe_DecEcbRequest            sheDecEcbReq;
+whMessageShe_DecEcbResponse           sheDecEcbRes;
+whMessageShe_DecCbcRequest            sheDecCbcReq;
+whMessageShe_DecCbcResponse           sheDecCbcRes;
+whMessageShe_GenMacRequest            sheGenMacReq;
+whMessageShe_GenMacResponse           sheGenMacRes;
+whMessageShe_VerifyMacRequest         sheVerifyMacReq;
+whMessageShe_VerifyMacResponse        sheVerifyMacRes;
 #endif /* WOLFHSM_CFG_SHE_EXTENSION */
 
 
