@@ -453,6 +453,7 @@ int wh_Server_CacheImportCurve25519Key(whServerContext* server,
     whNvmMetadata* cacheMeta;
     int            ret;
 
+    uint8_t der_buf[MAX_DER_SIZE];
     /* CURVE25519_MAX_KEY_TO_DER_SZ should be 82 */
     uint16_t       keySz = sizeof(der_buf);
 
