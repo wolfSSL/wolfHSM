@@ -33,6 +33,13 @@
 int whTest_NvmFlash(void);
 
 /*
+ * Runs low-level flash tests on a custom NVM flash configuration. Useful to
+ * test your FLASH HAL implementation. This will erase the first partition.
+ * Returns 0 on success, and a non-zero error code on failure
+ */
+int whTest_FlashCfg(const whFlashCb* fcb, void* fctx, const void* cfg);
+
+/*
  * Runs NVM flash tests on a custom NVM flash configuration. Useful to test your
  * NVM HAL implementation
  * Returns 0 on success, and a non-zero error code on failure

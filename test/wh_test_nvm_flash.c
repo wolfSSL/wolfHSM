@@ -29,6 +29,7 @@
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_nvm.h"
 #include "wolfhsm/wh_nvm_flash.h"
+#include "wolfhsm/wh_flash_unit.h"
 
 /* NVM simulator backends to use for testing NVM module */
 #include "wolfhsm/wh_flash_ramsim.h"
@@ -180,6 +181,131 @@ static int destroyObjectWithReadBackCheck(const whNvmCb*     cb,
     return 0;
 }
 
+int whTest_Flash(const whFlashCb* fcb, void* fctx, const void* cfg)
+{
+    uint8_t write_bytes[8] = { 0xF0, 0xE1, 0xD2, 0xC3, 0xB4, 0xA5, 0x96, 0x87};
+    uint8_t read_bytes[8] = {0};
+    whFlashUnit write_buffer[4] = {0};
+    whFlashUnit read_buffer[4] = {0};
+
+    uint32_t partition_units = 0;
+
+    WH_TEST_RETURN_ON_FAIL(fcb->Init(fctx, cfg));
+
+    partition_units = wh_FlashUnit_Bytes2Units(fcb->PartitionSize(fctx)) ;
+
+    /* Unlock the first partition */
+    WH_TEST_RETURN_ON_FAIL(wh_FlashUnit_WriteUnlock(fcb, fctx,
+            0, partition_units));
+
+    /* Erase the first partition */
+    WH_TEST_RETURN_ON_FAIL(wh_FlashUnit_Erase(fcb, fctx,
+            0, partition_units));
+
+    /* Blank check the first partition */
+    WH_TEST_RETURN_ON_FAIL(wh_FlashUnit_BlankCheck(fcb, fctx,
+            0, partition_units));
+
+    /* Program a few different unit sizes */
+    WH_TEST_RETURN_ON_FAIL(wh_FlashUnit_Program(fcb, fctx,
+            0, 1, write_buffer));
+    WH_TEST_RETURN_ON_FAIL(wh_FlashUnit_Program(fcb, fctx,
+            1, 2, write_buffer));
+    WH_TEST_RETURN_ON_FAIL(wh_FlashUnit_Program(fcb, fctx,
+            3, 3, write_buffer));
+    WH_TEST_RETURN_ON_FAIL(wh_FlashUnit_Program(fcb, fctx,
+            6, 4, write_buffer));
+
+    /* Read back and check */
+    memset(read_buffer, 0, sizeof(read_buffer));
+    WH_TEST_RETURN_ON_FAIL(wh_FlashUnit_Read(fcb, fctx,
+            0, 1, read_buffer));
+    WH_TEST_RETURN_ON_FAIL(memcmp(write_buffer, read_buffer,
+               1 * WHFU_BYTES_PER_UNIT));
+    memset(read_buffer, 0, sizeof(read_buffer));
+    WH_TEST_RETURN_ON_FAIL(wh_FlashUnit_Read(fcb, fctx,
+            1, 2, read_buffer));
+    WH_TEST_RETURN_ON_FAIL(memcmp(write_buffer, read_buffer,
+               2 * WHFU_BYTES_PER_UNIT));
+    memset(read_buffer, 0, sizeof(read_buffer));
+    WH_TEST_RETURN_ON_FAIL(wh_FlashUnit_Read(fcb, fctx,
+            3, 3, read_buffer));
+    WH_TEST_RETURN_ON_FAIL(memcmp(write_buffer, read_buffer,
+               3 * WHFU_BYTES_PER_UNIT));
+    memset(read_buffer, 0, sizeof(read_buffer));
+    WH_TEST_RETURN_ON_FAIL(wh_FlashUnit_Read(fcb, fctx,
+            6, 4, read_buffer));
+    WH_TEST_RETURN_ON_FAIL(memcmp(write_buffer, read_buffer,
+               4 * WHFU_BYTES_PER_UNIT));
+
+    /* Program a few different byte sizes */
+    WH_TEST_RETURN_ON_FAIL(wh_FlashUnit_ProgramBytes(fcb, fctx,
+                10 * WHFU_BYTES_PER_UNIT, 1, write_bytes));
+    WH_TEST_RETURN_ON_FAIL(wh_FlashUnit_ProgramBytes(fcb, fctx,
+                11 * WHFU_BYTES_PER_UNIT, 2, write_bytes));
+    WH_TEST_RETURN_ON_FAIL(wh_FlashUnit_ProgramBytes(fcb, fctx,
+                12 * WHFU_BYTES_PER_UNIT, 3, write_bytes));
+    WH_TEST_RETURN_ON_FAIL(wh_FlashUnit_ProgramBytes(fcb, fctx,
+                13 * WHFU_BYTES_PER_UNIT, 4, write_bytes));
+    WH_TEST_RETURN_ON_FAIL(wh_FlashUnit_ProgramBytes(fcb, fctx,
+                14 * WHFU_BYTES_PER_UNIT, 5, write_bytes));
+    WH_TEST_RETURN_ON_FAIL(wh_FlashUnit_ProgramBytes(fcb, fctx,
+                15 * WHFU_BYTES_PER_UNIT, 6, write_bytes));
+    WH_TEST_RETURN_ON_FAIL(wh_FlashUnit_ProgramBytes(fcb, fctx,
+                16 * WHFU_BYTES_PER_UNIT, 7, write_bytes));
+    WH_TEST_RETURN_ON_FAIL(wh_FlashUnit_ProgramBytes(fcb, fctx,
+                17 * WHFU_BYTES_PER_UNIT, 8, write_bytes));
+
+    /* Read back and compare */
+    memset(read_bytes, 0, sizeof(read_bytes));
+    WH_TEST_RETURN_ON_FAIL(wh_FlashUnit_ReadBytes(fcb, fctx,
+                10 * WHFU_BYTES_PER_UNIT, 1, read_bytes));
+    WH_TEST_RETURN_ON_FAIL(memcmp(write_bytes, read_bytes, 1));
+    memset(read_bytes, 0, sizeof(read_bytes));
+    WH_TEST_RETURN_ON_FAIL(wh_FlashUnit_ReadBytes(fcb, fctx,
+                11 * WHFU_BYTES_PER_UNIT, 2, read_bytes));
+    WH_TEST_RETURN_ON_FAIL(memcmp(write_bytes, read_bytes, 2));
+    memset(read_bytes, 0, sizeof(read_bytes));
+    WH_TEST_RETURN_ON_FAIL(wh_FlashUnit_ReadBytes(fcb, fctx,
+                12 * WHFU_BYTES_PER_UNIT, 3, read_bytes));
+    WH_TEST_RETURN_ON_FAIL(memcmp(write_bytes, read_bytes, 3));
+    memset(read_bytes, 0, sizeof(read_bytes));
+    WH_TEST_RETURN_ON_FAIL(wh_FlashUnit_ReadBytes(fcb, fctx,
+                13 * WHFU_BYTES_PER_UNIT, 4, read_bytes));
+    WH_TEST_RETURN_ON_FAIL(memcmp(write_bytes, read_bytes, 4));
+    memset(read_bytes, 0, sizeof(read_bytes));
+    WH_TEST_RETURN_ON_FAIL(wh_FlashUnit_ReadBytes(fcb, fctx,
+                14 * WHFU_BYTES_PER_UNIT, 5, read_bytes));
+    WH_TEST_RETURN_ON_FAIL(memcmp(write_bytes, read_bytes, 5));
+    memset(read_bytes, 0, sizeof(read_bytes));
+    WH_TEST_RETURN_ON_FAIL(wh_FlashUnit_ReadBytes(fcb, fctx,
+                15 * WHFU_BYTES_PER_UNIT, 6, read_bytes));
+    WH_TEST_RETURN_ON_FAIL(memcmp(write_bytes, read_bytes, 6));
+    memset(read_bytes, 0, sizeof(read_bytes));
+    WH_TEST_RETURN_ON_FAIL(wh_FlashUnit_ReadBytes(fcb, fctx,
+                16 * WHFU_BYTES_PER_UNIT, 7, read_bytes));
+    WH_TEST_RETURN_ON_FAIL(memcmp(write_bytes, read_bytes, 7));
+    memset(read_bytes, 0, sizeof(read_bytes));
+    WH_TEST_RETURN_ON_FAIL(wh_FlashUnit_ReadBytes(fcb, fctx,
+                17 * WHFU_BYTES_PER_UNIT, 8, read_bytes));
+    WH_TEST_RETURN_ON_FAIL(memcmp(write_bytes, read_bytes, 8));
+
+    /* Erase the first partition */
+    WH_TEST_RETURN_ON_FAIL(wh_FlashUnit_Erase(fcb, fctx,
+            0, partition_units));
+
+    /* Blank check the first partition */
+    WH_TEST_RETURN_ON_FAIL(wh_FlashUnit_BlankCheck(fcb, fctx,
+            0, partition_units));
+
+    /* Lock the first partition */
+    WH_TEST_RETURN_ON_FAIL(wh_FlashUnit_WriteLock(fcb, fctx,
+            0, partition_units));
+
+    WH_TEST_RETURN_ON_FAIL(fcb->Cleanup(fctx));
+
+    return 0;
+}
 
 int whTest_NvmFlashCfg(whNvmFlashConfig* cfg)
 {
@@ -350,6 +476,8 @@ int whTest_NvmFlash_RamSim(void)
         .erasedByte = (uint8_t)0,
     }};
 
+    WH_TEST_RETURN_ON_FAIL(whTest_Flash(myCb, myHalFlashCtx, myHalFlashCfg));
+
     /* NVM Configuration using PosixSim HAL Flash */
     whNvmFlashConfig myNvmCfg = {
         .cb      = myCb,
@@ -375,6 +503,8 @@ int whTest_NvmFlash_PosixFileSim(void)
           .erased_byte    = (~(uint8_t)0),
     }};
 
+    WH_TEST_RETURN_ON_FAIL(whTest_Flash(myCb, myHalFlashContext,
+            myHalFlashConfig));
 
     /* NVM Configuration using PosixSim HAL Flash */
     whNvmFlashConfig myNvmCfg = {
@@ -382,7 +512,6 @@ int whTest_NvmFlash_PosixFileSim(void)
         .context = myHalFlashContext,
         .config  = myHalFlashConfig,
     };
-
 
     WH_TEST_ASSERT(0 == whTest_NvmFlashCfg(&myNvmCfg));
 
