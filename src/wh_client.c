@@ -537,6 +537,9 @@ int wh_Client_EchoRequest(whClientContext* c, uint16_t size, const void* data)
     }
 
     msg = wh_CommClient_GetDataPtr(c->comm);
+    if (msg == NULL) {
+        return WH_ERROR_BADARGS;
+    }
     memcpy(msg, data, size);
     return wh_Client_SendRequest(c,
             WH_MESSAGE_GROUP_COMM, WH_MESSAGE_COMM_ACTION_ECHO,
@@ -556,6 +559,9 @@ int wh_Client_EchoResponse(whClientContext* c, uint16_t *out_size, void* data)
     }
 
     msg = wh_CommClient_GetDataPtr(c->comm);
+    if (msg == NULL) {
+        return WH_ERROR_BADARGS;
+    }
 
     rc = wh_Client_RecvResponse(c,
          &resp_group, &resp_action,
@@ -717,7 +723,11 @@ int wh_Client_KeyCacheRequest_ex(whClientContext* c, uint32_t flags,
         return WH_ERROR_BADARGS;
     }
 
-    req    = (whMessageKeystore_CacheRequest*)wh_CommClient_GetDataPtr(c->comm);
+    req = (whMessageKeystore_CacheRequest*)wh_CommClient_GetDataPtr(c->comm);
+    if (req == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    memset(req, 0, sizeof(*req));
     packIn = (uint8_t*)(req + 1);
     req->id    = keyId;
     req->flags = flags;
@@ -764,6 +774,9 @@ int wh_Client_KeyCacheResponse(whClientContext* c, uint16_t* keyId)
     }
 
     resp = (whMessageKeystore_CacheResponse*)wh_CommClient_GetDataPtr(c->comm);
+    if (resp == NULL) {
+        return WH_ERROR_BADARGS;
+    }
 
     ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)resp);
     if (ret == WH_ERROR_OK) {
@@ -809,6 +822,9 @@ int wh_Client_KeyEvictRequest(whClientContext* c, uint16_t keyId)
     }
 
     req = (whMessageKeystore_EvictRequest*)wh_CommClient_GetDataPtr(c->comm);
+    if (req == NULL) {
+        return WH_ERROR_BADARGS;
+    }
     req->id = keyId;
 
     return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_KEY, WH_KEY_EVICT,
@@ -863,6 +879,9 @@ int wh_Client_KeyExportRequest(whClientContext* c, whKeyId keyId)
     }
 
     req = (whMessageKeystore_ExportRequest*)wh_CommClient_GetDataPtr(c->comm);
+    if (req == NULL) {
+        return WH_ERROR_BADARGS;
+    }
     req->id = keyId;
 
     return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_KEY, WH_KEY_EXPORT,
@@ -884,6 +903,9 @@ int wh_Client_KeyExportResponse(whClientContext* c, uint8_t* label,
     }
 
     resp = (whMessageKeystore_ExportResponse*)wh_CommClient_GetDataPtr(c->comm);
+    if (resp == NULL) {
+        return WH_ERROR_BADARGS;
+    }
     packOut = (uint8_t*)(resp + 1);
 
     ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)resp);
@@ -936,6 +958,9 @@ int wh_Client_KeyCommitRequest(whClientContext* c, whNvmId keyId)
     }
 
     req = (whMessageKeystore_CommitRequest*)wh_CommClient_GetDataPtr(c->comm);
+    if (req == NULL) {
+        return WH_ERROR_BADARGS;
+    }
     req->id = keyId;
 
     return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_KEY, WH_KEY_COMMIT,
@@ -955,6 +980,9 @@ int wh_Client_KeyCommitResponse(whClientContext* c)
     }
 
     resp = (whMessageKeystore_CommitResponse*)wh_CommClient_GetDataPtr(c->comm);
+    if (resp == NULL) {
+        return WH_ERROR_BADARGS;
+    }
 
     ret  = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)resp);
     if (ret == WH_ERROR_OK) {
@@ -986,6 +1014,9 @@ int wh_Client_KeyEraseRequest(whClientContext* c, whNvmId keyId)
     }
 
     req = (whMessageKeystore_EraseRequest*)wh_CommClient_GetDataPtr(c->comm);
+    if (req == NULL) {
+        return WH_ERROR_BADARGS;
+    }
     req->id = keyId;
 
     return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_KEY, WH_KEY_ERASE,
@@ -1005,6 +1036,9 @@ int wh_Client_KeyEraseResponse(whClientContext* c)
     }
 
     resp = (whMessageKeystore_EraseResponse*)wh_CommClient_GetDataPtr(c->comm);
+    if (resp == NULL) {
+        return WH_ERROR_BADARGS;
+    }
 
     ret  = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)resp);
     if (ret == 0) {
@@ -1037,6 +1071,9 @@ int wh_Client_CounterInitRequest(whClientContext* c, whNvmId counterId,
     }
 
     req = (whMessageCounter_InitRequest*)wh_CommClient_GetDataPtr(c->comm);
+    if (req == NULL) {
+        return WH_ERROR_BADARGS;
+    }
     req->counterId = counterId;
     req->counter = counter;
 
@@ -1057,6 +1094,9 @@ int wh_Client_CounterInitResponse(whClientContext* c, uint32_t* counter)
     }
 
     resp = (whMessageCounter_InitResponse*)wh_CommClient_GetDataPtr(c->comm);
+    if (resp == NULL) {
+        return WH_ERROR_BADARGS;
+    }
 
     ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)resp);
     if (ret == WH_ERROR_OK) {
@@ -1109,6 +1149,9 @@ int wh_Client_CounterIncrementRequest(whClientContext* c, whNvmId counterId)
     }
 
     req = (whMessageCounter_IncrementRequest*)wh_CommClient_GetDataPtr(c->comm);
+    if (req == NULL) {
+        return WH_ERROR_BADARGS;
+    }
     req->counterId = counterId;
 
     return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_COUNTER,
@@ -1129,6 +1172,9 @@ int wh_Client_CounterIncrementResponse(whClientContext* c, uint32_t* counter)
     }
 
     resp = (whMessageCounter_IncrementResponse*)wh_CommClient_GetDataPtr(c->comm);
+    if (resp == NULL) {
+        return WH_ERROR_BADARGS;
+    }
 
     ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)resp);
     if (ret == WH_ERROR_OK) {
@@ -1164,6 +1210,9 @@ int wh_Client_CounterReadRequest(whClientContext* c, whNvmId counterId)
     }
 
     req = (whMessageCounter_ReadRequest*)wh_CommClient_GetDataPtr(c->comm);
+    if (req == NULL) {
+        return WH_ERROR_BADARGS;
+    }
     req->counterId = counterId;
 
     return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_COUNTER, WH_COUNTER_READ,
@@ -1183,6 +1232,9 @@ int wh_Client_CounterReadResponse(whClientContext* c, uint32_t* counter)
     }
 
     resp = (whMessageCounter_ReadResponse*)wh_CommClient_GetDataPtr(c->comm);
+    if (resp == NULL) {
+        return WH_ERROR_BADARGS;
+    }
 
     ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)resp);
     if (ret == WH_ERROR_OK) {
@@ -1218,6 +1270,9 @@ int wh_Client_CounterDestroyRequest(whClientContext* c, whNvmId counterId)
     }
 
     req = (whMessageCounter_DestroyRequest*)wh_CommClient_GetDataPtr(c->comm);
+    if (req == NULL) {
+        return WH_ERROR_BADARGS;
+    }
     req->counterId = counterId;
 
     return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_COUNTER, WH_COUNTER_DESTROY,
@@ -1237,6 +1292,9 @@ int wh_Client_CounterDestroyResponse(whClientContext* c)
     }
 
     resp = (whMessageCounter_DestroyResponse*)wh_CommClient_GetDataPtr(c->comm);
+    if (resp == NULL) {
+        return WH_ERROR_BADARGS;
+    }
 
     ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)resp);
     if (ret == WH_ERROR_OK) {
@@ -1273,6 +1331,10 @@ int wh_Client_KeyCacheDmaRequest(whClientContext* c, uint32_t flags,
     }
 
     req = (whMessageKeystore_CacheDmaRequest*)wh_CommClient_GetDataPtr(c->comm);
+    if (req == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    memset(req, 0, sizeof(*req));
     req->id      = keyId;
     req->flags   = flags;
     req->labelSz = labelSz;
@@ -1307,6 +1369,9 @@ int wh_Client_KeyCacheDmaResponse(whClientContext* c, uint16_t* keyId)
 
     resp =
         (whMessageKeystore_CacheDmaResponse*)wh_CommClient_GetDataPtr(c->comm);
+    if (resp == NULL) {
+        return WH_ERROR_BADARGS;
+    }
 
     ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)resp);
 
@@ -1356,6 +1421,9 @@ int wh_Client_KeyExportDmaRequest(whClientContext* c, uint16_t keyId,
 
     req =
         (whMessageKeystore_ExportDmaRequest*)wh_CommClient_GetDataPtr(c->comm);
+    if (req == NULL) {
+        return WH_ERROR_BADARGS;
+    }
     req->id       = keyId;
     req->key.addr = (uint64_t)((uintptr_t)keyAddr);
     req->key.sz   = keySz;
@@ -1379,6 +1447,9 @@ int wh_Client_KeyExportDmaResponse(whClientContext* c, uint8_t* label,
 
     resp =
         (whMessageKeystore_ExportDmaResponse*)wh_CommClient_GetDataPtr(c->comm);
+    if (resp == NULL) {
+        return WH_ERROR_BADARGS;
+    }
 
     rc = wh_Client_RecvResponse(c, &resp_group, &resp_action, &resp_size,
                                 (uint8_t*)resp);

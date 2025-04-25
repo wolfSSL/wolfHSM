@@ -1548,7 +1548,8 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
                         printf("[server] cmac readkey got key len:%u\n", len);
 #endif
                         moveToBigCache = 1;
-                        XMEMCPY(tmpKey, (uint8_t*)ctx->crypto->algoCtx.cmac, len);
+                        memcpy(tmpKey, (uint8_t*)ctx->crypto->algoCtx.cmac,
+                               len);
                         ret = wc_InitCmac_ex(ctx->crypto->algoCtx.cmac, tmpKey, len,
                             WC_CMAC_AES, NULL, NULL, ctx->crypto->devId);
                     }

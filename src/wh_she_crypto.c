@@ -70,11 +70,11 @@ int wh_She_AesMp16_ex(Aes* aes, void* heap, int devid,
     while (ret == 0 && i < (int)inSz) {
         /* copy a block and pad it if we're short */
         if ((int)inSz - i < (int)AES_BLOCK_SIZE) {
-            XMEMCPY(paddedInput, in + i, inSz - i);
-            XMEMSET(paddedInput + inSz - i, 0, AES_BLOCK_SIZE - (inSz - i));
+            memcpy(paddedInput, in + i, inSz - i);
+            memset(paddedInput + inSz - i, 0, AES_BLOCK_SIZE - (inSz - i));
         }
         else
-            XMEMCPY(paddedInput, in + i, AES_BLOCK_SIZE);
+            memcpy(paddedInput, in + i, AES_BLOCK_SIZE);
         /* encrypt this block */
         ret = wc_AesEncryptDirect(aes, out, paddedInput);
         /* xor with the original message and then the previous block */
@@ -90,7 +90,7 @@ int wh_She_AesMp16_ex(Aes* aes, void* heap, int devid,
         }
         if (ret == 0) {
             /* store previous output in messageZero */
-            XMEMCPY(messageZero, out, AES_BLOCK_SIZE);
+            memcpy(messageZero, out, AES_BLOCK_SIZE);
             /* increment to next block */
             i += AES_BLOCK_SIZE;
         }
@@ -127,17 +127,17 @@ int wh_She_GenerateLoadableKey(uint8_t keyId,
     }
 
     /* Build KDF input for K1. add authKey to kdfInput */
-    XMEMCPY(kdfInput, authKey, WH_SHE_KEY_SZ);
+    memcpy(kdfInput, authKey, WH_SHE_KEY_SZ);
     /* add _SHE_KEY_UPDATE_ENC_C to the input */
-    XMEMCPY(kdfInput + WH_SHE_KEY_SZ, _SHE_KEY_UPDATE_ENC_C,
-        sizeof(_SHE_KEY_UPDATE_ENC_C));
+    memcpy(kdfInput + WH_SHE_KEY_SZ, _SHE_KEY_UPDATE_ENC_C,
+           sizeof(_SHE_KEY_UPDATE_ENC_C));
     /* generate K1 */
     ret = wh_AesMp16(kdfInput,
         WH_SHE_KEY_SZ + sizeof(_SHE_KEY_UPDATE_ENC_C), tmpKey);
 
     /* Build M1. set UID, key id and authId */
     if (ret == 0) {
-        XMEMCPY(messageOne, uid, WH_SHE_UID_SZ);
+        memcpy(messageOne, uid, WH_SHE_UID_SZ);
         messageOne[WH_SHE_M1_KID_OFFSET] =
                 (keyId      << WH_SHE_M1_KID_SHIFT) |
                 (authKeyId  << WH_SHE_M1_AID_SHIFT);
@@ -146,11 +146,11 @@ int wh_She_GenerateLoadableKey(uint8_t keyId,
     /* build cleartext M2 */
     if (ret == 0) {
         /* set the counter, flags and key */
-        XMEMSET(messageTwo, 0, WH_SHE_M2_SZ);
+        memset(messageTwo, 0, WH_SHE_M2_SZ);
         *((uint32_t*)messageTwo) = wh_Utils_htonl(
                 (count  << WH_SHE_M2_COUNT_SHIFT) |
                 (flags  << WH_SHE_M2_FLAGS_SHIFT) );
-        XMEMCPY(messageTwo + WH_SHE_M2_KEY_OFFSET, key, WH_SHE_KEY_SZ);
+        memcpy(messageTwo + WH_SHE_M2_KEY_OFFSET, key, WH_SHE_KEY_SZ);
     }
     /* encrypt M2 with K1 */
     if (ret == 0) {
@@ -160,10 +160,10 @@ int wh_She_GenerateLoadableKey(uint8_t keyId,
                 AES_ENCRYPTION);
             if (ret == 0) {
                 /* copy the key to cmacOutput before it gets encrypted */
-                XMEMCPY(cmacOutput, messageTwo + WH_SHE_M2_KEY_OFFSET,
-                    WH_SHE_KEY_SZ);
-                ret = wc_AesCbcEncrypt(aes, messageTwo, messageTwo,
-                        WH_SHE_M2_SZ);
+                memcpy(cmacOutput, messageTwo + WH_SHE_M2_KEY_OFFSET,
+                       WH_SHE_KEY_SZ);
+                ret =
+                    wc_AesCbcEncrypt(aes, messageTwo, messageTwo, WH_SHE_M2_SZ);
             }
             /* free aes for protection */
             wc_AesFree(aes);
@@ -173,8 +173,8 @@ int wh_She_GenerateLoadableKey(uint8_t keyId,
     /* Update KDF input to create K2 */
     if (ret == 0) {
         /* add _SHE_KEY_UPDATE_MAC_C to the input */
-        XMEMCPY(kdfInput + WH_SHE_KEY_SZ, _SHE_KEY_UPDATE_MAC_C,
-            sizeof(_SHE_KEY_UPDATE_MAC_C));
+        memcpy(kdfInput + WH_SHE_KEY_SZ, _SHE_KEY_UPDATE_MAC_C,
+               sizeof(_SHE_KEY_UPDATE_MAC_C));
         /* generate K2 */
         ret = wh_AesMp16(kdfInput,
             WH_SHE_KEY_SZ + sizeof(_SHE_KEY_UPDATE_MAC_C), tmpKey);
@@ -199,10 +199,10 @@ int wh_She_GenerateLoadableKey(uint8_t keyId,
     /* Update the kdf input to create K3 */
     if (ret == 0) {
         /* copy the ram key to kdfInput */
-        XMEMCPY(kdfInput, cmacOutput, WH_SHE_KEY_SZ);
+        memcpy(kdfInput, cmacOutput, WH_SHE_KEY_SZ);
         /* add _SHE_KEY_UPDATE_ENC_C to the input */
-        XMEMCPY(kdfInput + WH_SHE_KEY_SZ, _SHE_KEY_UPDATE_ENC_C,
-            sizeof(_SHE_KEY_UPDATE_ENC_C));
+        memcpy(kdfInput + WH_SHE_KEY_SZ, _SHE_KEY_UPDATE_ENC_C,
+               sizeof(_SHE_KEY_UPDATE_ENC_C));
         /* generate K3 */
         ret = wh_AesMp16(kdfInput,
             WH_SHE_KEY_SZ + sizeof(_SHE_KEY_UPDATE_ENC_C), tmpKey);
@@ -210,9 +210,9 @@ int wh_She_GenerateLoadableKey(uint8_t keyId,
 
     /* Create M4 using K3 as encryption key */
     if (ret == 0) {
-        XMEMSET(messageFour, 0, WH_SHE_M4_SZ);
+        memset(messageFour, 0, WH_SHE_M4_SZ);
         /* set UID, key id and authId */
-        XMEMCPY(messageFour, uid, WH_SHE_UID_SZ);
+        memcpy(messageFour, uid, WH_SHE_UID_SZ);
         messageFour[WH_SHE_M4_KID_OFFSET] =
                 (keyId      << WH_SHE_M4_KID_SHIFT) |
                 (authKeyId  << WH_SHE_M4_AID_SHIFT);
@@ -238,8 +238,8 @@ int wh_She_GenerateLoadableKey(uint8_t keyId,
 
     if (ret == 0) {
         /* add _SHE_KEY_UPDATE_MAC_C to the kdf input */
-        XMEMCPY(kdfInput + WH_SHE_KEY_SZ, _SHE_KEY_UPDATE_MAC_C,
-            sizeof(_SHE_KEY_UPDATE_MAC_C));
+        memcpy(kdfInput + WH_SHE_KEY_SZ, _SHE_KEY_UPDATE_MAC_C,
+               sizeof(_SHE_KEY_UPDATE_MAC_C));
         /* generate K4 */
         ret = wh_AesMp16(kdfInput,
             WH_SHE_KEY_SZ + sizeof(_SHE_KEY_UPDATE_MAC_C), tmpKey);

@@ -135,16 +135,24 @@ static int _TranslateSheReturnCode(int ret)
 {
     /* if a handler didn't set a specific error, set general error */
     if (ret != WH_SHE_ERC_NO_ERROR) {
-        if (ret != WH_SHE_ERC_SEQUENCE_ERROR &&
-            ret != WH_SHE_ERC_KEY_NOT_AVAILABLE &&
-            ret != WH_SHE_ERC_KEY_INVALID && ret != WH_SHE_ERC_KEY_EMPTY &&
-            ret != WH_SHE_ERC_NO_SECURE_BOOT &&
-            ret != WH_SHE_ERC_WRITE_PROTECTED &&
-            ret != WH_SHE_ERC_KEY_UPDATE_ERROR && ret != WH_SHE_ERC_RNG_SEED &&
-            ret != WH_SHE_ERC_NO_DEBUGGING && ret != WH_SHE_ERC_BUSY &&
-            ret != WH_SHE_ERC_MEMORY_FAILURE) {
-            /* set general error */
-            ret = WH_SHE_ERC_GENERAL_ERROR;
+        switch (ret) {
+            case WH_SHE_ERC_SEQUENCE_ERROR:
+            case WH_SHE_ERC_KEY_NOT_AVAILABLE:
+            case WH_SHE_ERC_KEY_INVALID:
+            case WH_SHE_ERC_KEY_EMPTY:
+            case WH_SHE_ERC_NO_SECURE_BOOT:
+            case WH_SHE_ERC_WRITE_PROTECTED:
+            case WH_SHE_ERC_KEY_UPDATE_ERROR:
+            case WH_SHE_ERC_RNG_SEED:
+            case WH_SHE_ERC_NO_DEBUGGING:
+            case WH_SHE_ERC_BUSY:
+            case WH_SHE_ERC_MEMORY_FAILURE:
+                /* Keep the specific error code */
+                break;
+            default:
+                /* set general error */
+                ret = WH_SHE_ERC_GENERAL_ERROR;
+                break;
         }
     }
     return ret;
@@ -253,7 +261,7 @@ static int _SecureBootInit(whServerContext* server, uint16_t magic,
     }
     /* hash 12 zeros */
     if (ret == 0) {
-        XMEMSET(macKey, 0, WH_SHE_BOOT_MAC_PREFIX_LEN);
+        memset(macKey, 0, WH_SHE_BOOT_MAC_PREFIX_LEN);
         ret = wc_CmacUpdate(server->she->sheCmac, macKey,
                             WH_SHE_BOOT_MAC_PREFIX_LEN);
     }
@@ -367,7 +375,7 @@ static int _SecureBootFinish(whServerContext* server, uint16_t magic,
     }
     if (ret == 0) {
         /* compare and set either success or failure */
-        ret = XMEMCMP(cmacOutput, macDigest, field);
+        ret = memcmp(cmacOutput, macDigest, field);
         if (ret == 0) {
             server->she->sbState = WH_SHE_SB_SUCCESS;
             resp.status          = WH_SHE_ERC_NO_ERROR;
@@ -456,8 +464,8 @@ static int _LoadKey(whServerContext* server, uint16_t magic, uint16_t req_size,
     /* make K2 using AES-MP(authKey | WH_SHE_KEY_UPDATE_MAC_C) */
     if (ret == 0) {
         /* add WH_SHE_KEY_UPDATE_MAC_C to the input */
-        XMEMCPY(kdfInput + keySz, _SHE_KEY_UPDATE_MAC_C,
-                sizeof(_SHE_KEY_UPDATE_MAC_C));
+        memcpy(kdfInput + keySz, _SHE_KEY_UPDATE_MAC_C,
+               sizeof(_SHE_KEY_UPDATE_MAC_C));
         /* do kdf */
         ret = _AesMp16(server, kdfInput, keySz + sizeof(_SHE_KEY_UPDATE_MAC_C),
                        tmpKey);
@@ -480,14 +488,14 @@ static int _LoadKey(whServerContext* server, uint16_t magic, uint16_t req_size,
                                       NULL, server->crypto->devId);
     }
     /* compare digest to M3 */
-    if (ret == 0 && XMEMCMP(req.messageThree, cmacOutput, field) != 0) {
+    if (ret == 0 && memcmp(req.messageThree, cmacOutput, field) != 0) {
         ret = WH_SHE_ERC_KEY_UPDATE_ERROR;
     }
     /* make K1 using AES-MP(authKey | WH_SHE_KEY_UPDATE_ENC_C) */
     if (ret == 0) {
         /* add WH_SHE_KEY_UPDATE_ENC_C to the input */
-        XMEMCPY(kdfInput + keySz, _SHE_KEY_UPDATE_ENC_C,
-                sizeof(_SHE_KEY_UPDATE_ENC_C));
+        memcpy(kdfInput + keySz, _SHE_KEY_UPDATE_ENC_C,
+               sizeof(_SHE_KEY_UPDATE_ENC_C));
         /* do kdf */
         ret = _AesMp16(server, kdfInput, keySz + sizeof(_SHE_KEY_UPDATE_ENC_C),
                        tmpKey);
@@ -533,8 +541,8 @@ static int _LoadKey(whServerContext* server, uint16_t magic, uint16_t req_size,
         }
     }
     /* compare to UID */
-    else if (ret == 0 && XMEMCMP(req.messageOne, server->she->uid,
-                                 sizeof(server->she->uid)) != 0) {
+    else if (ret == 0 && memcmp(req.messageOne, server->she->uid,
+                                sizeof(server->she->uid)) != 0) {
         ret = WH_SHE_ERC_KEY_UPDATE_ERROR;
     }
     /* verify msg_counter_BE is greater than stored value */
@@ -578,10 +586,10 @@ static int _LoadKey(whServerContext* server, uint16_t magic, uint16_t req_size,
     /* generate K3 using the updated key */
     if (ret == 0) {
         /* copy new key to kdfInput */
-        XMEMCPY(kdfInput, req.messageTwo + WH_SHE_KEY_SZ, WH_SHE_KEY_SZ);
+        memcpy(kdfInput, req.messageTwo + WH_SHE_KEY_SZ, WH_SHE_KEY_SZ);
         /* add WH_SHE_KEY_UPDATE_ENC_C to the input */
-        XMEMCPY(kdfInput + meta->len, _SHE_KEY_UPDATE_ENC_C,
-                sizeof(_SHE_KEY_UPDATE_ENC_C));
+        memcpy(kdfInput + meta->len, _SHE_KEY_UPDATE_ENC_C,
+               sizeof(_SHE_KEY_UPDATE_ENC_C));
         /* do kdf */
         ret = _AesMp16(server, kdfInput,
                        meta->len + sizeof(_SHE_KEY_UPDATE_ENC_C), tmpKey);
@@ -600,7 +608,7 @@ static int _LoadKey(whServerContext* server, uint16_t magic, uint16_t req_size,
         counter_buffer[3] |= 0x08;
 
         /* First copy UID into messageFour */
-        XMEMCPY(resp.messageFour, server->she->uid, sizeof(server->she->uid));
+        memcpy(resp.messageFour, server->she->uid, sizeof(server->she->uid));
         /* Set ID and AuthID in last byte */
         resp.messageFour[15] =
             ((_PopId(req.messageOne) << 4) | _PopAuthId(req.messageOne));
@@ -615,8 +623,8 @@ static int _LoadKey(whServerContext* server, uint16_t magic, uint16_t req_size,
     /* generate K4 using the updated key */
     if (ret == 0) {
         /* add WH_SHE_KEY_UPDATE_MAC_C to the input */
-        XMEMCPY(kdfInput + meta->len, _SHE_KEY_UPDATE_MAC_C,
-                sizeof(_SHE_KEY_UPDATE_MAC_C));
+        memcpy(kdfInput + meta->len, _SHE_KEY_UPDATE_MAC_C,
+               sizeof(_SHE_KEY_UPDATE_MAC_C));
         /* do kdf */
         ret = _AesMp16(server, kdfInput,
                        meta->len + sizeof(_SHE_KEY_UPDATE_MAC_C), tmpKey);
@@ -706,12 +714,12 @@ static int _ExportRamKey(whServerContext* server, uint16_t magic,
     }
     if (ret == 0) {
         /* set UID, key id and authId */
-        XMEMCPY(resp.messageOne, server->she->uid, sizeof(server->she->uid));
+        memcpy(resp.messageOne, server->she->uid, sizeof(server->she->uid));
         resp.messageOne[15] =
             ((WH_SHE_RAM_KEY_ID << 4) | (WH_SHE_SECRET_KEY_ID));
         /* add WH_SHE_KEY_UPDATE_ENC_C to the input */
-        XMEMCPY(kdfInput + meta->len, _SHE_KEY_UPDATE_ENC_C,
-                sizeof(_SHE_KEY_UPDATE_ENC_C));
+        memcpy(kdfInput + meta->len, _SHE_KEY_UPDATE_ENC_C,
+               sizeof(_SHE_KEY_UPDATE_ENC_C));
         /* generate K1 */
         ret = _AesMp16(server, kdfInput,
                        meta->len + sizeof(_SHE_KEY_UPDATE_ENC_C), tmpKey);
@@ -719,7 +727,7 @@ static int _ExportRamKey(whServerContext* server, uint16_t magic,
     /* build cleartext M2 */
     if (ret == 0) {
         /* set the counter, flags and ram key */
-        XMEMSET(resp.messageTwo, 0, sizeof(resp.messageTwo));
+        memset(resp.messageTwo, 0, sizeof(resp.messageTwo));
         /* set count to 1 */
         counter  = (uint32_t*)resp.messageTwo;
         *counter = (wh_Utils_htonl(1) << 4);
@@ -743,7 +751,7 @@ static int _ExportRamKey(whServerContext* server, uint16_t magic,
     }
     if (ret == 0) {
         /* copy the ram key to cmacOutput before it gets encrypted */
-        XMEMCPY(cmacOutput, resp.messageTwo + WH_SHE_KEY_SZ, WH_SHE_KEY_SZ);
+        memcpy(cmacOutput, resp.messageTwo + WH_SHE_KEY_SZ, WH_SHE_KEY_SZ);
         ret = wc_AesCbcEncrypt(server->she->sheAes, resp.messageTwo,
                                resp.messageTwo, sizeof(resp.messageTwo));
     }
@@ -751,8 +759,8 @@ static int _ExportRamKey(whServerContext* server, uint16_t magic,
     wc_AesFree(server->she->sheAes);
     if (ret == 0) {
         /* add WH_SHE_KEY_UPDATE_MAC_C to the input */
-        XMEMCPY(kdfInput + meta->len, _SHE_KEY_UPDATE_MAC_C,
-                sizeof(_SHE_KEY_UPDATE_MAC_C));
+        memcpy(kdfInput + meta->len, _SHE_KEY_UPDATE_MAC_C,
+               sizeof(_SHE_KEY_UPDATE_MAC_C));
         /* generate K2 */
         ret = _AesMp16(server, kdfInput,
                        meta->len + sizeof(_SHE_KEY_UPDATE_MAC_C), tmpKey);
@@ -773,10 +781,10 @@ static int _ExportRamKey(whServerContext* server, uint16_t magic,
     }
     if (ret == 0) {
         /* copy the ram key to kdfInput */
-        XMEMCPY(kdfInput, cmacOutput, WH_SHE_KEY_SZ);
+        memcpy(kdfInput, cmacOutput, WH_SHE_KEY_SZ);
         /* add WH_SHE_KEY_UPDATE_ENC_C to the input */
-        XMEMCPY(kdfInput + WH_SHE_KEY_SZ, _SHE_KEY_UPDATE_ENC_C,
-                sizeof(_SHE_KEY_UPDATE_ENC_C));
+        memcpy(kdfInput + WH_SHE_KEY_SZ, _SHE_KEY_UPDATE_ENC_C,
+               sizeof(_SHE_KEY_UPDATE_ENC_C));
         /* generate K3 */
         ret = _AesMp16(server, kdfInput,
                        WH_SHE_KEY_SZ + sizeof(_SHE_KEY_UPDATE_ENC_C), tmpKey);
@@ -790,7 +798,7 @@ static int _ExportRamKey(whServerContext* server, uint16_t magic,
                            AES_ENCRYPTION);
     }
     if (ret == 0) {
-        XMEMSET(resp.messageFour, 0, sizeof(resp.messageFour));
+        memset(resp.messageFour, 0, sizeof(resp.messageFour));
         /* set counter to 1, pad with 1 bit */
         counter  = (uint32_t*)(resp.messageFour + WH_SHE_KEY_SZ);
         *counter = (wh_Utils_htonl(1) << 4);
@@ -804,12 +812,12 @@ static int _ExportRamKey(whServerContext* server, uint16_t magic,
     wc_AesFree(server->she->sheAes);
     if (ret == 0) {
         /* set UID, key id and authId */
-        XMEMCPY(resp.messageFour, server->she->uid, sizeof(server->she->uid));
+        memcpy(resp.messageFour, server->she->uid, sizeof(server->she->uid));
         resp.messageFour[15] =
             ((WH_SHE_RAM_KEY_ID << 4) | (WH_SHE_SECRET_KEY_ID));
         /* add WH_SHE_KEY_UPDATE_MAC_C to the input */
-        XMEMCPY(kdfInput + WH_SHE_KEY_SZ, _SHE_KEY_UPDATE_MAC_C,
-                sizeof(_SHE_KEY_UPDATE_MAC_C));
+        memcpy(kdfInput + WH_SHE_KEY_SZ, _SHE_KEY_UPDATE_MAC_C,
+               sizeof(_SHE_KEY_UPDATE_MAC_C));
         /* generate K4 */
         ret = _AesMp16(server, kdfInput,
                        WH_SHE_KEY_SZ + sizeof(_SHE_KEY_UPDATE_MAC_C), tmpKey);
@@ -861,8 +869,8 @@ static int _InitRnd(whServerContext* server, uint16_t magic, uint16_t req_size,
     }
     if (ret == 0) {
         /* add PRNG_SEED_KEY_C */
-        XMEMCPY(kdfInput + WH_SHE_KEY_SZ, _SHE_PRNG_SEED_KEY_C,
-                sizeof(_SHE_PRNG_SEED_KEY_C));
+        memcpy(kdfInput + WH_SHE_KEY_SZ, _SHE_PRNG_SEED_KEY_C,
+               sizeof(_SHE_PRNG_SEED_KEY_C));
         /* generate PRNG_SEED_KEY */
         ret = _AesMp16(server, kdfInput,
                        WH_SHE_KEY_SZ + sizeof(_SHE_PRNG_SEED_KEY_C), tmpKey);
@@ -906,10 +914,10 @@ static int _InitRnd(whServerContext* server, uint16_t magic, uint16_t req_size,
     }
     if (ret == 0) {
         /* set PRNG_STATE */
-        XMEMCPY(server->she->prngState, cmacOutput, WH_SHE_KEY_SZ);
+        memcpy(server->she->prngState, cmacOutput, WH_SHE_KEY_SZ);
         /* add PRNG_KEY_C to the kdf input */
-        XMEMCPY(kdfInput + WH_SHE_KEY_SZ, _SHE_PRNG_KEY_C,
-                sizeof(_SHE_PRNG_KEY_C));
+        memcpy(kdfInput + WH_SHE_KEY_SZ, _SHE_PRNG_KEY_C,
+               sizeof(_SHE_PRNG_KEY_C));
         /* generate PRNG_KEY */
         ret =
             _AesMp16(server, kdfInput, WH_SHE_KEY_SZ + sizeof(_SHE_PRNG_KEY_C),
@@ -920,9 +928,6 @@ static int _InitRnd(whServerContext* server, uint16_t magic, uint16_t req_size,
         server->she->rndInited = 1;
     }
 
-    /* TODO: In the original code we don't set the status on failure. I took
-     * the liberty to set it and doesn't appear to have any negative side
-     * effects. */
     resp.status = (ret == 0) ? WH_SHE_ERC_NO_ERROR : WH_SHE_ERC_GENERAL_ERROR;
     resp.rc     = _TranslateSheReturnCode(ret);
     (void)wh_MessageShe_TranslateInitRngResponse(magic, &resp, resp_packet);
@@ -966,7 +971,7 @@ static int _Rnd(whServerContext* server, uint16_t magic, uint16_t req_size,
 
     if (ret == 0) {
         /* copy PRNG_STATE */
-        XMEMCPY(resp.rnd, server->she->prngState, WH_SHE_KEY_SZ);
+        memcpy(resp.rnd, server->she->prngState, WH_SHE_KEY_SZ);
     }
 
     resp.rc = _TranslateSheReturnCode(ret);
@@ -995,9 +1000,9 @@ static int _ExtendSeed(whServerContext* server, uint16_t magic,
     }
     if (ret == 0) {
         /* set kdfInput to PRNG_STATE */
-        XMEMCPY(kdfInput, server->she->prngState, WH_SHE_KEY_SZ);
+        memcpy(kdfInput, server->she->prngState, WH_SHE_KEY_SZ);
         /* add the user supplied entropy to kdfInput */
-        XMEMCPY(kdfInput + WH_SHE_KEY_SZ, req.entropy, sizeof(req.entropy));
+        memcpy(kdfInput + WH_SHE_KEY_SZ, req.entropy, sizeof(req.entropy));
         /* extend PRNG_STATE */
         ret = _AesMp16(server, kdfInput, WH_SHE_KEY_SZ + sizeof(req.entropy),
                        server->she->prngState);
@@ -1030,9 +1035,6 @@ static int _ExtendSeed(whServerContext* server, uint16_t magic,
         }
     }
 
-    /* TODO: In the original code we don't set the status on failure. I took
-     * the liberty to set it and doesn't appear to have any negative side
-     * effects. */
     resp.status = (ret == 0) ? WH_SHE_ERC_NO_ERROR : WH_SHE_ERC_RNG_SEED;
     resp.rc     = _TranslateSheReturnCode(ret);
     (void)wh_MessageShe_TranslateExtendSeedResponse(magic, &resp, resp_packet);

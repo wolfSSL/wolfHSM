@@ -63,8 +63,8 @@ int wh_MessageKeystore_TranslateCacheResponse(
 
 /* Key Evict Request */
 typedef struct {
-    uint32_t id;
-    uint8_t  WH_PAD[4];
+    uint16_t id;
+    uint8_t  WH_PAD[6];
 } whMessageKeystore_EvictRequest;
 
 /* Key Evict Response */
@@ -85,8 +85,8 @@ int wh_MessageKeystore_TranslateEvictResponse(
 
 /* Key Commit Request */
 typedef struct {
-    uint32_t id;
-    uint8_t  WH_PAD[4];
+    uint16_t id;
+    uint8_t  WH_PAD[6];
 } whMessageKeystore_CommitRequest;
 
 /* Key Commit Response */
@@ -107,8 +107,8 @@ int wh_MessageKeystore_TranslateCommitResponse(
 
 /* Key Export Request */
 typedef struct {
-    uint32_t id;
-    uint8_t  WH_PAD[4];
+    uint16_t id;
+    uint8_t  WH_PAD[6];
 } whMessageKeystore_ExportRequest;
 
 /* Key Export Response */
@@ -133,8 +133,8 @@ int wh_MessageKeystore_TranslateExportResponse(
 
 /* Key Erase Request */
 typedef struct {
-    uint32_t id;
-    uint8_t  WH_PAD[4];
+    uint16_t id;
+    uint8_t  WH_PAD[6];
 } whMessageKeystore_EraseRequest;
 
 /* Key Erase Response */
@@ -202,8 +202,8 @@ int wh_MessageKeystore_TranslateCacheDmaResponse(
 typedef struct {
     whMessageKeystore_DmaBuffer
              key; /* Client memory buffer to receive key data */
-    uint32_t id;
-    uint8_t  WH_PAD[4]; /* Pad to 8-byte alignment */
+    uint16_t id;
+    uint8_t  WH_PAD[6]; /* Pad to 8-byte alignment */
 } whMessageKeystore_ExportDmaRequest;
 
 /* Key Export DMA Response */

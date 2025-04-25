@@ -65,7 +65,7 @@ int wh_MessageKeystore_TranslateEvictRequest(
     if ((src == NULL) || (dest == NULL)) {
         return WH_ERROR_BADARGS;
     }
-    WH_T32(magic, dest, src, id);
+    WH_T16(magic, dest, src, id);
     return 0;
 }
 
@@ -90,7 +90,7 @@ int wh_MessageKeystore_TranslateCommitRequest(
     if ((src == NULL) || (dest == NULL)) {
         return WH_ERROR_BADARGS;
     }
-    WH_T32(magic, dest, src, id);
+    WH_T16(magic, dest, src, id);
     return 0;
 }
 
@@ -115,7 +115,7 @@ int wh_MessageKeystore_TranslateExportRequest(
     if ((src == NULL) || (dest == NULL)) {
         return WH_ERROR_BADARGS;
     }
-    WH_T32(magic, dest, src, id);
+    WH_T16(magic, dest, src, id);
     return 0;
 }
 
@@ -142,7 +142,7 @@ int wh_MessageKeystore_TranslateEraseRequest(
     if ((src == NULL) || (dest == NULL)) {
         return WH_ERROR_BADARGS;
     }
-    WH_T32(magic, dest, src, id);
+    WH_T16(magic, dest, src, id);
     return 0;
 }
 
@@ -207,7 +207,7 @@ int wh_MessageKeystore_TranslateExportDmaRequest(
     }
     WH_T64(magic, dest, src, key.addr);
     WH_T64(magic, dest, src, key.sz);
-    WH_T32(magic, dest, src, id);
+    WH_T16(magic, dest, src, id);
     return 0;
 }
 

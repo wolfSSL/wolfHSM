@@ -32,7 +32,7 @@
 
 #include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_message.h"
-
+#include "wolfhsm/wh_utils.h"
 
 /*
  * Crypto Message Protocol Packet Structure
@@ -86,7 +86,7 @@ typedef struct {
 } whMessageCrypto_GenericResponseHeader;
 
 /* TODO fix, make this a generic static assert*/
-_Static_assert(
+WH_UTILS_STATIC_ASSERT(
     sizeof(whMessageCrypto_GenericRequestHeader) ==
         sizeof(whMessageCrypto_GenericResponseHeader),
     "GenericRequestHeader and GenericResponseHeader must be the same size");
@@ -165,7 +165,7 @@ typedef struct {
 } whMessageCrypto_AesCbcResponse;
 
 /* TODO fix, make this a generic static assert*/
-_Static_assert(sizeof(whMessageCrypto_AesCbcRequest) ==
+WH_UTILS_STATIC_ASSERT(sizeof(whMessageCrypto_AesCbcRequest) ==
                    sizeof(whMessageCrypto_AesCbcResponse),
                "AesCbcRequest and AesCbcResponse must be the same size");
 
@@ -210,7 +210,7 @@ typedef struct {
 } whMessageCrypto_AesGcmResponse;
 
 /* TODO fix, make this a generic static assert*/
-_Static_assert(sizeof(whMessageCrypto_AesGcmRequest) ==
+WH_UTILS_STATIC_ASSERT(sizeof(whMessageCrypto_AesGcmRequest) ==
                    sizeof(whMessageCrypto_AesGcmResponse),
                "AesGcmRequest and AesGcmResponse must be the same size");
 

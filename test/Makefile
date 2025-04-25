@@ -9,6 +9,9 @@ WOLFSSL_DIR ?= $(CURDIR)/../../wolfssl
 # Project name
 BIN = wh_test
 
+# C standard to use (default to c90 if not specified)
+CSTD ?= c90
+
 # Includes
 USER_SETTINGS_DIR ?= ./
 INC = -I$(WOLFHSM_DIR) \
@@ -32,7 +35,7 @@ ARCHFLAGS ?=
 # Compiler and linker flags
 ASFLAGS ?= $(ARCHFLAGS)
 CFLAGS_EXTRA ?= -Wmissing-field-initializers -Wmissing-braces
-CFLAGS ?= $(ARCHFLAGS) -std=c90 -D_GNU_SOURCE -Wall -Werror -Wno-cpp $(CFLAGS_EXTRA)
+CFLAGS ?= $(ARCHFLAGS) -std=$(CSTD) -D_GNU_SOURCE -Wall -Werror -Wno-cpp $(CFLAGS_EXTRA)
 LDFLAGS ?= $(ARCHFLAGS)
 
 # LD: generate map

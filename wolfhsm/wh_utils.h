@@ -30,6 +30,36 @@
 #include <stdint.h>
 #include <stddef.h> /* For size_t */
 
+
+/* Macro magic: join two tokens together */
+#define WH_UTILS_JOIN(a, b) WH_UTILS_DO_JOIN(a, b)
+#define WH_UTILS_DO_JOIN(a, b) a##b
+
+/* Portable compile-time assertion macro across different compilers and
+ * language standards. When no static assert support is detected, it compiles
+ * to nothing rather than attempting error-prone workarounds.
+ *
+ * Usage:
+ *   WH_UTILS_STATIC_ASSERT(expression, message)
+ * Where:
+ *   expression - Compile-time constant expression to check (must be true)
+ *   message - String literal or identifier describing the assertion
+ */
+#if defined(__cplusplus) && (__cplusplus >= 201103L)
+/* C++11 or later */
+#define WH_UTILS_STATIC_ASSERT(expr, msg) static_assert(expr, msg)
+#elif defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
+/* C11 or later */
+#define WH_UTILS_STATIC_ASSERT(expr, msg) _Static_assert(expr, msg)
+#else
+/* C90/C99 fallback: create a typedef with a negative array size on failure.
+ * Works at file scope or inside functions, but cannot be used in control flow
+ * blocks. 'msg' is ignored in this fallback. */
+#define WH_UTILS_STATIC_ASSERT(expr, msg) \
+    typedef char WH_UTILS_JOIN(staticAssertAtLine, __LINE__)[(expr) ? 1 : -1]
+#endif
+
+
 /** Byteswap functions */
 uint16_t wh_Utils_Swap16(uint16_t val);
 uint32_t wh_Utils_Swap32(uint32_t val);
