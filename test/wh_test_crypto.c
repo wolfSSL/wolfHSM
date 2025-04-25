@@ -2287,6 +2287,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
             i++;
         }
     }
+
 #ifdef WOLFHSM_CFG_DMA
     if (ret == 0) {
         ret = whTestCrypto_MlDsaDmaClient(client, WH_DEV_ID_DMA, rng);

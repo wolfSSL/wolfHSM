@@ -87,6 +87,7 @@ extern "C" {
 
 /** RSA Options */
 /*#define NO_RSA */
+#define RSA_MIN_SIZE 1024
 #define WC_RSA_PSS
 #define WOLFSSL_PSS_LONG_SALT
 #define FP_MAX_BITS 8192

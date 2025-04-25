@@ -78,7 +78,8 @@ int posixFlashFile_Init(   void* c,
     }
 
     /* Open the storage backend */
-    rc = open(config->filename, O_RDWR|O_CREAT|O_SYNC, S_IRUSR | S_IWUSR);
+    /* III Recommend to add O_SYNC if realtime data consistency is a concern */
+    rc = open(config->filename, O_RDWR|O_CREAT, S_IRUSR | S_IWUSR);
     if (rc >= 0) {
         /* File is open, setup context */
         memset(context, 0, sizeof(*context));

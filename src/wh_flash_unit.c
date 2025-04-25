@@ -217,8 +217,10 @@ int wh_FlashUnit_ProgramBytes(const whFlashCb* cb, void* context,
     }
 
     /* Aligned programming */
-    ret = wh_FlashUnit_Program(cb, context,
+    if(count) {
+        ret = wh_FlashUnit_Program(cb, context,
             offset, count, (whFlashUnit*)data);
+    }
 
     /* Final partial unit */
     if ((ret == 0) && (rem != 0)) {
