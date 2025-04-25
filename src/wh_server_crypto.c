@@ -522,13 +522,8 @@ int wh_Server_CacheImportCurve25519Key(whServerContext* server,
     uint8_t*       cacheBuf;
     whNvmMetadata* cacheMeta;
     int            ret;
-    /* Max size of a DER encoded curve25519 keypair with SubjectPublicKeyInfo
-     * included. Determined by experiment */
-    const uint16_t MAX_DER_SIZE = 128;
-    uint16_t       keySz        = keySz;
-
-    uint8_t der_buf[MAX_DER_SIZE];
-
+    uint8_t        der_buf[CURVE25519_MAX_KEY_TO_DER_SZ];
+    uint16_t       keySz = sizeof(der_buf);
 
     if ((server == NULL) || (key == NULL) || (WH_KEYID_ISERASED(keyId)) ||
         ((label != NULL) && (label_len > sizeof(cacheMeta->label)))) {
@@ -922,7 +917,7 @@ static int _HandleEccVerify(whServerContext* ctx, uint16_t magic,
 
     /* Response message */
     byte* res_pub =
-        (uint8_t*)(cryptoDataOut + sizeof(whMessageCrypto_EccVerifyResponse));
+        (uint8_t*)(cryptoDataOut) + sizeof(whMessageCrypto_EccVerifyResponse);
     word32   max_size = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
                                (res_pub - (uint8_t*)cryptoDataOut));
     uint32_t pub_size = 0;
@@ -1240,12 +1235,12 @@ static int _HandleAesCbc(whServerContext* ctx, uint16_t magic, const void* crypt
 
     /* in, key, iv, and out are after fixed size fields */
     uint8_t* in =
-        (uint8_t*)(cryptoDataIn + sizeof(whMessageCrypto_AesCbcRequest));
+        (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_AesCbcRequest);
     uint8_t* key = in + len;
     uint8_t* iv  = key + key_len;
 
     uint8_t* out =
-        (uint8_t*)(cryptoDataOut + sizeof(whMessageCrypto_AesCbcResponse));
+        (uint8_t*)(cryptoDataOut) + sizeof(whMessageCrypto_AesCbcResponse);
 
     /* Debug printouts */
 #ifdef DEBUG_CRYPTOCB_VERBOSE
