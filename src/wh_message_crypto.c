@@ -148,7 +148,9 @@ int wh_MessageCrypto_TranslateRsaKeyGenRequest(
     WH_T32(magic, dest, src, size);
     WH_T32(magic, dest, src, e);
     /* Label is just a byte array, no translation needed */
-    memcpy(dest->label, src->label, WH_NVM_LABEL_LEN);
+    if (src != dest) {
+        memcpy(dest->label, src->label, WH_NVM_LABEL_LEN);
+    }
     return 0;
 }
 
@@ -232,7 +234,9 @@ int wh_MessageCrypto_TranslateEccKeyGenRequest(
     WH_T32(magic, dest, src, flags);
     WH_T32(magic, dest, src, access);
     /* Label is just a byte array, no translation needed */
-    memcpy(dest->label, src->label, sizeof(src->label));
+    if (src != dest) {
+        memcpy(dest->label, src->label, sizeof(src->label));
+    }
     return 0;
 }
 
@@ -366,7 +370,9 @@ int wh_MessageCrypto_TranslateCurve25519KeyGenRequest(
     WH_T32(magic, dest, src, flags);
     WH_T32(magic, dest, src, keyId);
     /* Label is just a byte array, no translation needed */
-    memcpy(dest->label, src->label, sizeof(src->label));
+    if (src != dest) {
+        memcpy(dest->label, src->label, sizeof(src->label));
+    }
     return 0;
 }
 
@@ -407,8 +413,6 @@ int wh_MessageCrypto_TranslateCurve25519Response(
         return WH_ERROR_BADARGS;
     }
     WH_T32(magic, dest, src, sz);
-    /* Padding is just a byte array, no translation needed */
-    memcpy(dest->WH_PAD, src->WH_PAD, sizeof(src->WH_PAD));
     return 0;
 }
 
@@ -423,12 +427,16 @@ int wh_MessageCrypto_TranslateSha256Request(
     WH_T32(magic, dest, src, resumeState.hiLen);
     WH_T32(magic, dest, src, resumeState.loLen);
     /* Hash value is just a byte array, no translation needed */
-    memcpy(dest->resumeState.hash, src->resumeState.hash,
-           sizeof(src->resumeState.hash));
+    if (src != dest) {
+        memcpy(dest->resumeState.hash, src->resumeState.hash,
+               sizeof(src->resumeState.hash));
+    }
     WH_T32(magic, dest, src, isLastBlock);
     WH_T32(magic, dest, src, lastBlockLen);
     /* Input block is just a byte array, no translation needed */
-    memcpy(dest->inBlock, src->inBlock, sizeof(src->inBlock));
+    if (src != dest) {
+        memcpy(dest->inBlock, src->inBlock, sizeof(src->inBlock));
+    }
     return 0;
 }
 
@@ -443,7 +451,9 @@ int wh_MessageCrypto_TranslateSha256Response(
     WH_T32(magic, dest, src, hiLen);
     WH_T32(magic, dest, src, loLen);
     /* Hash value is just a byte array, no translation needed */
-    memcpy(dest->hash, src->hash, sizeof(src->hash));
+    if (src != dest) {
+        memcpy(dest->hash, src->hash, sizeof(src->hash));
+    }
     return 0;
 }
 
@@ -490,7 +500,9 @@ int wh_MessageCrypto_TranslateMlDsaKeyGenRequest(
     WH_T32(magic, dest, src, flags);
     WH_T32(magic, dest, src, access);
     /* Label is just a byte array, no translation needed */
-    memcpy(dest->label, src->label, sizeof(src->label));
+    if (src != dest) {
+        memcpy(dest->label, src->label, sizeof(src->label));
+    }
     return 0;
 }
 
@@ -713,7 +725,9 @@ int wh_MessageCrypto_TranslateMlDsaKeyGenDmaRequest(
     WH_T32(magic, dest, src, access);
     WH_T32(magic, dest, src, labelSize);
     /* Label is just a byte array, no translation needed */
-    memcpy(dest->label, src->label, sizeof(src->label));
+    if (src != dest) {
+        memcpy(dest->label, src->label, sizeof(src->label));
+    }
 
     return 0;
 }

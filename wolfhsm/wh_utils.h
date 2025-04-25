@@ -59,7 +59,6 @@
     typedef char WH_UTILS_JOIN(staticAssertAtLine, __LINE__)[(expr) ? 1 : -1]
 #endif
 
-
 /** Byteswap functions */
 uint16_t wh_Utils_Swap16(uint16_t val);
 uint32_t wh_Utils_Swap32(uint32_t val);

@@ -40,7 +40,9 @@ int wh_MessageKeystore_TranslateCacheRequest(
     WH_T32(magic, dest, src, labelSz);
     WH_T16(magic, dest, src, id);
     /* Label is just a byte array, no translation needed */
-    memcpy(dest->label, src->label, WH_NVM_LABEL_LEN);
+    if (src != dest) {
+        memcpy(dest->label, src->label, WH_NVM_LABEL_LEN);
+    }
     return 0;
 }
 
@@ -130,7 +132,9 @@ int wh_MessageKeystore_TranslateExportResponse(
     WH_T32(magic, dest, src, rc);
     WH_T32(magic, dest, src, len);
     /* Label is just a byte array, no translation needed */
-    memcpy(dest->label, src->label, WH_NVM_LABEL_LEN);
+    if (src != dest) {
+        memcpy(dest->label, src->label, WH_NVM_LABEL_LEN);
+    }
     return 0;
 }
 
@@ -178,7 +182,9 @@ int wh_MessageKeystore_TranslateCacheDmaRequest(
     WH_T32(magic, dest, src, labelSz);
     WH_T16(magic, dest, src, id);
     /* Label is just a byte array, no translation needed */
-    memcpy(dest->label, src->label, WH_NVM_LABEL_LEN);
+    if (src != dest) {
+        memcpy(dest->label, src->label, WH_NVM_LABEL_LEN);
+    }
     return 0;
 }
 
@@ -224,7 +230,9 @@ int wh_MessageKeystore_TranslateExportDmaResponse(
     WH_T64(magic, dest, src, dmaAddrStatus.badAddr.sz);
     WH_T32(magic, dest, src, len);
     /* Label is just a byte array, no translation needed */
-    memcpy(dest->label, src->label, WH_NVM_LABEL_LEN);
+    if (src != dest) {
+        memcpy(dest->label, src->label, WH_NVM_LABEL_LEN);
+    }
     return 0;
 }
 
