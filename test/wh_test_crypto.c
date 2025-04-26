@@ -220,8 +220,8 @@ static int whTest_CryptoRsa(whClientContext* ctx, int devId, WC_RNG* rng)
                         WH_ERROR_PRINT("Failed to decrypt %d\n", ret);
                     } else {
                         ret = 0;
-                        if (memcmp(plainText, finalText,
-                                sizeof(plainText)) != 0) {
+                        if (memcmp(plainText, finalText, sizeof(plainText)) !=
+                            0) {
                             WH_ERROR_PRINT("Failed to match\n");
                             ret = -1;
                         }
@@ -268,7 +268,7 @@ static int whTest_CryptoRsa(whClientContext* ctx, int devId, WC_RNG* rng)
                             } else {
                                 ret = 0;
                                 if (memcmp(plainText, finalText,
-                                        sizeof(plainText)) != 0) {
+                                           sizeof(plainText)) != 0) {
                                     WH_ERROR_PRINT("Failed to match\n");
                                     ret = -1;
                                 }
@@ -338,7 +338,8 @@ static int whTest_CryptoEcc(whClientContext* ctx, int devId, WC_RNG* rng)
                         } else {
                             if (memcmp(shared_ab, shared_ba, secLen) == 0) {
                                 printf("ECDH SUCCESS\n");
-                            } else {
+                            }
+                            else {
                                 WH_ERROR_PRINT("ECDH FAILED TO MATCH\n");
                                 ret = -1;
                             }
@@ -435,7 +436,7 @@ static int whTest_CryptoCurve25519(whClientContext* ctx, int devId, WC_RNG* rng)
                     }
                 }
                 if (ret == 0) {
-                    if (XMEMCMP(shared_ab, shared_ba, len) != 0) {
+                    if (memcmp(shared_ab, shared_ba, len) != 0) {
                         WH_ERROR_PRINT("CURVE25519 secrets don't match\n");
                         ret = -1;
                     }
@@ -486,7 +487,7 @@ static int whTest_CryptoCurve25519(whClientContext* ctx, int devId, WC_RNG* rng)
                     }
                 }
                 if (ret == 0) {
-                    if (XMEMCMP(shared_ab, shared_ba, len) != 0) {
+                    if (memcmp(shared_ab, shared_ba, len) != 0) {
                         WH_ERROR_PRINT("CURVE25519 secrets don't match\n");
                         ret = -1;
                     }
@@ -539,7 +540,7 @@ static int whTest_CryptoCurve25519(whClientContext* ctx, int devId, WC_RNG* rng)
                     }
                 }
                 if (ret == 0) {
-                    if (XMEMCMP(shared_ab, shared_ba, len) != 0) {
+                    if (memcmp(shared_ab, shared_ba, len) != 0) {
                         WH_ERROR_PRINT("CURVE25519 secrets don't match\n");
                         ret = -1;
                     }
@@ -599,8 +600,7 @@ static int whTest_CryptoSha256(whClientContext* ctx, int devId, WC_RNG* rng)
                 WH_ERROR_PRINT("Failed to wc_Sha256Final %d\n", ret);
             } else {
                 /* Compare the computed hash with the expected output */
-                if (memcmp(out, expectedOutOne,
-                           WC_SHA256_DIGEST_SIZE) != 0) {
+                if (memcmp(out, expectedOutOne, WC_SHA256_DIGEST_SIZE) != 0) {
                     WH_ERROR_PRINT("SHA256 hash does not match expected.\n");
                     ret = -1;
                 }
@@ -691,7 +691,7 @@ static int whTest_CacheExportKey(whClientContext* ctx, whKeyId* inout_key_id,
         } else {
             if ((key_len_out != key_len) ||
                 (memcmp(key_in, key_out, key_len_out) != 0) ||
-                (memcmp(label_in, label_out, label_len) != 0) ) {
+                (memcmp(label_in, label_out, label_len) != 0)) {
                 ret = -1;
             }
         }
@@ -817,13 +817,13 @@ static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
                         WH_ERROR_PRINT("Failed to wh_Client_KeyExport %d\n",
                                 ret);
                     } else {
-                        if ( (outLen != sizeof(key)) ||
-                                (memcmp(key, keyOut, outLen) != 0) ||
-                                (memcmp(labelIn, labelOut,
-                                        sizeof(labelIn)) != 0) ) {
+                        if ((outLen != sizeof(key)) ||
+                            (memcmp(key, keyOut, outLen) != 0) ||
+                            (memcmp(labelIn, labelOut, sizeof(labelIn)) != 0)) {
                             WH_ERROR_PRINT("Failed to match\n");
                             ret = -1;
-                        } else {
+                        }
+                        else {
                             printf("KEY CACHE USER EXCLUSION SUCCESS\n");
                         }
                     }
@@ -874,12 +874,13 @@ static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
                                 ret);
                     } else {
                         if ((outLen != sizeof(key) ||
-                                (memcmp(key, keyOut, outLen) != 0) ||
-                                (memcmp(labelIn, labelOut,
-                                        sizeof(labelIn))) != 0) ) {
+                             (memcmp(key, keyOut, outLen) != 0) ||
+                             (memcmp(labelIn, labelOut, sizeof(labelIn))) !=
+                                 0)) {
                             WH_ERROR_PRINT("Failed to match committed key\n");
                             ret = -1;
-                        } else {
+                        }
+                        else {
                             /* verify commit isn't using new nvm objects */
                             for (i = 0; i < WOLFHSM_CFG_NVM_OBJECT_COUNT; i++) {
                                 ret = wh_Client_KeyCommit(ctx, keyId);
@@ -957,7 +958,7 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
     whKeyId keyId = WH_KEYID_ERASED;
     uint8_t labelIn[WH_NVM_LABEL_LEN] = "AES Key Label";
 
-    XMEMCPY(plainIn, PLAINTEXT, sizeof(plainIn));
+    memcpy(plainIn, PLAINTEXT, sizeof(plainIn));
 
     /* Randomize inputs */
     ret = wc_RNG_GenerateBlock(rng, key, sizeof(key));
@@ -997,8 +998,8 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
                             WH_ERROR_PRINT("Failed to wc_AesCbcDecrypt %d\n",
                                     ret);
                         } else {
-                            if (memcmp(plainIn, plainOut,
-                                    sizeof(plainIn)) != 0) {
+                            if (memcmp(plainIn, plainOut, sizeof(plainIn)) !=
+                                0) {
                                 WH_ERROR_PRINT("Failed to match AES-CBC\n");
                                 ret = -1;
                             }
@@ -1050,7 +1051,7 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
                                             ret);
                                 } else {
                                     if (memcmp(plainIn, plainOut,
-                                            sizeof(plainIn)) != 0) {
+                                               sizeof(plainIn)) != 0) {
                                         WH_ERROR_PRINT("Failed to match\n");
                                         ret = -1;
                                     }
@@ -1144,7 +1145,8 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
                         if (ret != 0) {
                             WH_ERROR_PRINT("Failed to wc_AesGcmDecrypt %d\n", ret);
                         } else {
-                            if (memcmp(plainIn, plainOut, sizeof(plainIn)) != 0) {
+                            if (memcmp(plainIn, plainOut, sizeof(plainIn)) !=
+                                0) {
                                 WH_ERROR_PRINT("AES GCM FAILED TO MATCH\n");
                                 ret = -1;
                             }
@@ -1654,7 +1656,7 @@ static int whTestCrypto_MlDsaDmaClient(whClientContext* ctx, int devId,
     /* Compare the keys */
     if (ret == 0) {
         if (key_der1_len != key_der2_len ||
-            XMEMCMP(key_der1, key_der2, key_der1_len) != 0) {
+            memcmp(key_der1, key_der2, key_der1_len) != 0) {
             WH_ERROR_PRINT("Exported key does not match generated key\n");
             ret = -1;
         }

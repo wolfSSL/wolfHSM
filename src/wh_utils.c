@@ -137,12 +137,12 @@ void* wh_Utils_memcpy_flush(void* dst, const void* src , size_t n)
 
 
 #ifdef DEBUG_CRYPTOCB_VERBOSE
-void wh_Utils_Hexdump(const char* initial, uint8_t* ptr, size_t size)
+void wh_Utils_Hexdump(const char* initial, const uint8_t* ptr, size_t size)
 {
 #define HEXDUMP_BYTES_PER_LINE 16
     int count = 0;
     if(initial != NULL)
-        printf("%s",initial);
+        printf("%s ",initial);
     while(size > 0) {
         printf ("%02X ", *ptr);
         ptr++;

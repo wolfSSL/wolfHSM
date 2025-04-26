@@ -44,7 +44,6 @@
 #include "wolfssl/wolfcrypt/dilithium.h"
 
 #include "wolfhsm/wh_error.h"
-#include "wolfhsm/wh_packet.h"
 #include "wolfhsm/wh_crypto.h"
 #include "wolfhsm/wh_utils.h"
 #include "wolfhsm/wh_server_keystore.h"
@@ -52,43 +51,62 @@
 
 #include "wolfhsm/wh_server.h"
 
+#include "wolfhsm/wh_message_crypto.h"
+
 /** Forward declarations */
 #ifndef NO_RSA
 #ifdef WOLFSSL_KEY_GEN
 /* Process a Generate RsaKey request packet and produce a response packet */
-static int _HandleRsaKeyGen(whServerContext* ctx, whPacket* packet,
-        uint16_t *out_size);
+static int _HandleRsaKeyGen(whServerContext* ctx, uint16_t magic,
+                            const void* cryptoDataIn, uint16_t inSize,
+                            void* cryptoDataOut, uint16_t* outSize);
 #endif /* WOLFSSL_KEY_GEN */
 
+/* Process a Rng request packet and produce a response packet */
+static int _HandleRng(whServerContext* ctx, uint16_t magic,
+                      const void* cryptoDataIn, uint16_t inSize,
+                      void* cryptoDataOut, uint16_t* outSize);
+
 /* Process a Rsa Function request packet and produce a response packet */
-static int _HandleRsaFunction(whServerContext* ctx, whPacket* packet,
-        uint16_t *out_size);
+static int _HandleRsaFunction(whServerContext* ctx, uint16_t magic,
+                              const void* cryptoDataIn, uint16_t inSize,
+                              void* cryptoDataOut, uint16_t* outSize);
+
 /* Process a Rsa Get Size request packet and produce a response packet */
-static int _HandleRsaGetSize(whServerContext* ctx, whPacket* packet,
-        uint16_t *out_size);
+static int _HandleRsaGetSize(whServerContext* ctx, uint16_t magic,
+                             const void* cryptoDataIn, uint16_t inSize,
+                             void* cryptoDataOut, uint16_t* outSize);
 #endif /* !NO_RSA */
 
 #ifndef NO_AES
 
 #ifdef HAVE_AESGCM
-static int _HandleAesGcm(whServerContext* ctx, whPacket* packet,
-        uint16_t* out_size);
+static int _HandleAesCbc(whServerContext* ctx, uint16_t magic,
+                         const void* cryptoDataIn, uint16_t inSize,
+                         void* cryptoDataOut, uint16_t* outSize);
+static int _HandleAesGcm(whServerContext* ctx, uint16_t magic,
+                         const void* cryptoDataIn, uint16_t inSize,
+                         void* cryptoDataOut, uint16_t* outSize);
 #endif
 
 #endif /* !NO_AES */
 
 #ifdef HAVE_ECC
-static int _HandleEccKeyGen(whServerContext* ctx, whPacket* packet,
-        uint16_t *out_size);
+static int _HandleEccKeyGen(whServerContext* ctx, uint16_t magic,
+                            const void* cryptoDataIn, uint16_t inSize,
+                            void* cryptoDataOut, uint16_t* outSize);
 
-static int _HandleEccSharedSecret(whServerContext* ctx, whPacket* packet,
-        uint16_t *out_size);
+static int _HandleEccSharedSecret(whServerContext* ctx, uint16_t magic,
+                                  const void* cryptoDataIn, uint16_t inSize,
+                                  void* cryptoDataOut, uint16_t* outSize);
 
-static int _HandleEccSign(whServerContext* ctx, whPacket* packet,
-        uint16_t *out_size);
+static int _HandleEccSign(whServerContext* ctx, uint16_t magic,
+                          const void* cryptoDataIn, uint16_t inSize,
+                          void* cryptoDataOut, uint16_t* outSize);
 
-static int _HandleEccVerify(whServerContext* ctx, whPacket* packet,
-        uint16_t *out_size);
+static int _HandleEccVerify(whServerContext* ctx, uint16_t magic,
+                            const void* cryptoDataIn, uint16_t inSize,
+                            void* cryptoDataOut, uint16_t* outSize);
 #if 0
 static int _HandleEccCheckPrivKey(whServerContext* server, whPacket* packet,
     uint16_t* size)
@@ -98,29 +116,36 @@ static int _HandleEccCheckPrivKey(whServerContext* server, whPacket* packet,
 
 #ifdef HAVE_CURVE25519
 /* Process a Generate curve25519_key request packet and produce a response */
-static int _HandleCurve25519KeyGen(whServerContext* ctx, whPacket* packet,
-        uint16_t *out_size);
+static int _HandleCurve25519KeyGen(whServerContext* ctx, uint16_t magic,
+                                   const void* cryptoDataIn, uint16_t inSize,
+                                   void* cryptoDataOut, uint16_t* outSize);
 
 /* Process a curve25519_key Function request packet and produce a response */
-static int _HandleCurve25519SharedSecret(whServerContext* ctx, whPacket* packet,
-        uint16_t *out_size);
+static int _HandleCurve25519SharedSecret(whServerContext* ctx, uint16_t magic,
+                                         const void* cryptoDataIn,
+                                         uint16_t inSize, void* cryptoDataOut,
+                                         uint16_t* outSize);
 #endif /* HAVE_CURVE25519 */
 
 #ifdef HAVE_DILITHIUM
 /* Process a Dilithium KeyGen request packet and produce a response packet */
-static int _HandleMlDsaKeyGen(whServerContext* ctx, whPacket* packet,
-        uint16_t *out_size);
+static int _HandleMlDsaKeyGen(whServerContext* ctx, uint16_t magic,
+                              const void* cryptoDataIn, uint16_t inSize,
+                              void* cryptoDataOut, uint16_t* outSize);
 /* Process a Dilithium Sign request packet and produce a response packet */
-static int _HandleMlDsaSign(whServerContext* ctx, whPacket* packet,
-        uint16_t *out_size);
+static int _HandleMlDsaSign(whServerContext* ctx, uint16_t magic,
+                            const void* cryptoDataIn, uint16_t inSize,
+                            void* cryptoDataOut, uint16_t* outSize);
 /* Process a Dilithium Verify request packet and produce a response packet */
-static int _HandleMlDsaVerify(whServerContext* ctx, whPacket* packet,
-        uint16_t *out_size);
+static int _HandleMlDsaVerify(whServerContext* ctx, uint16_t magic,
+                              const void* cryptoDataIn, uint16_t inSize,
+                              void* cryptoDataOut, uint16_t* outSize);
 /* Process a Dilithium Check PrivKey request packet and produce a response
  * packet */
-static int _HandleMlDsaCheckPrivKey(whServerContext* ctx, whPacket* packet,
-        uint16_t *out_size);
-#endif /* HAVE_DILITHIUM */ 
+static int _HandleMlDsaCheckPrivKey(whServerContext* ctx, uint16_t magic,
+                                    const void* cryptoDataIn, uint16_t inSize,
+                                    void* cryptoDataOut, uint16_t* outSize);
+#endif /* HAVE_DILITHIUM */
 
 /** Public server crypto functions */
 
@@ -151,7 +176,7 @@ int wh_Server_CacheImportRsaKey(whServerContext* ctx, RsaKey* key,
     }
 
     /* get a free slot */
-    ret = hsmCacheFindSlotAndZero(ctx, max_size, &cacheBuf, &cacheMeta);
+    ret = wh_Server_KeystoreGetCacheSlot(ctx, max_size, &cacheBuf, &cacheMeta);
     if (ret == 0) {
         ret = wh_Crypto_RsaSerializeKeyDer(key, max_size, cacheBuf, &der_size);
     }
@@ -184,7 +209,7 @@ int wh_Server_CacheExportRsaKey(whServerContext* ctx, whKeyId keyId,
         return WH_ERROR_BADARGS;
     }
     /* Load key from NVM into a cache slot if necessary */
-    ret = hsmFreshenKey(ctx, keyId, &cacheBuf, &cacheMeta);
+    ret = wh_Server_KeystoreFreshenKey(ctx, keyId, &cacheBuf, &cacheMeta);
 
     if (ret == 0) {
         ret = wh_Crypto_RsaDeserializeKeyDer(cacheMeta->len, cacheBuf, key);
@@ -193,26 +218,39 @@ int wh_Server_CacheExportRsaKey(whServerContext* ctx, whKeyId keyId,
 }
 
 #ifdef WOLFSSL_KEY_GEN
-static int _HandleRsaKeyGen(whServerContext* ctx,
-        whPacket* packet, uint16_t *out_size)
+static int _HandleRsaKeyGen(whServerContext* ctx, uint16_t magic,
+                         const void* cryptoDataIn, uint16_t inSize,
+                         void* cryptoDataOut, uint16_t* outSize)
 {
-    int ret = 0;
+    int    ret    = 0;
     RsaKey rsa[1] = {0};
-    int key_size        = packet->pkRsakgReq.size;
-    long e              = packet->pkRsakgReq.e;
+    whMessageCrypto_RsaKeyGenRequest req;
+    whMessageCrypto_RsaKeyGenResponse res;
+
+    /* Translate request */
+    ret = wh_MessageCrypto_TranslateRsaKeyGenRequest(
+        magic, (const whMessageCrypto_RsaKeyGenRequest*)cryptoDataIn, &req);
+    if (ret != 0) {
+        return ret;
+    }
+
+    /* Extract parameters from translated request */
+    int  key_size = req.size;
+    long e        = req.e;
 
     /* Force incoming key_id to have current user/type */
-    whKeyId key_id      = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
-                            ctx->comm->client_id,
-                            packet->pkRsakgReq.keyId);
-    whNvmFlags flags    = packet->pkRsakgReq.flags;
-    uint8_t* label      = packet->pkRsakgReq.label;
-    uint32_t label_size = WH_NVM_LABEL_LEN;
+    whKeyId key_id =
+        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+    whNvmFlags flags      = req.flags;
+    uint8_t*   label      = req.label;
+    uint32_t   label_size = WH_NVM_LABEL_LEN;
 
-    uint8_t* out        = (uint8_t*)(&packet->pkRsakgRes + 1);
-    word32 max_size     = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
-                            (out - (uint8_t*)packet));
-    uint16_t der_size        = 0;
+    /* Get pointer to where key data would be stored (after response struct) */
+    uint8_t* out =
+        (uint8_t*)cryptoDataOut + sizeof(whMessageCrypto_RsaKeyGenResponse);
+    uint16_t max_size = (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN -
+                                   ((uint8_t*)out - (uint8_t*)cryptoDataOut));
+    uint16_t der_size = 0;
 
     /* init the rsa key */
     ret = wc_InitRsaKey_ex(rsa, NULL, ctx->crypto->devId);
@@ -220,68 +258,82 @@ static int _HandleRsaKeyGen(whServerContext* ctx,
         /* make the rsa key with the given params */
         ret = wc_MakeRsaKey(rsa, key_size, e, ctx->crypto->rng);
 #ifdef DEBUG_CRYPTOCB_VERBOSE
-        printf("[server] MakeRsaKey: size:%d, e:%ld, ret:%d\n",
-                key_size, e, ret);
+        printf("[server] MakeRsaKey: size:%d, e:%ld, ret:%d\n", key_size, e,
+               ret);
 #endif
 
-        if ( ret == 0) {
+        if (ret == 0) {
             /* Check incoming flags */
             if (flags & WH_NVM_FLAGS_EPHEMERAL) {
                 /* Must serialize the key into the response packet */
-                ret = wh_Crypto_RsaSerializeKeyDer(rsa, max_size, out, &der_size);
+                ret =
+                    wh_Crypto_RsaSerializeKeyDer(rsa, max_size, out, &der_size);
                 if (ret == 0) {
-                    packet->pkRsakgRes.keyId = 0;
-                    packet->pkRsakgRes.len = der_size;
+                    res.keyId = 0;
+                    res.len   = der_size;
                 }
-            } else {
+            }
+            else {
                 /* Must import the key into the cache and return keyid */
                 if (WH_KEYID_ISERASED(key_id)) {
                     /* Generate a new id */
-                    ret = hsmGetUniqueId(ctx, &key_id);
+                    ret = wh_Server_KeystoreGetUniqueId(ctx, &key_id);
 #ifdef DEBUG_CRYPTOCB_VERBOSE
-                    printf("[server] RsaKeyGen UniqueId: keyId:%u, ret:%d\n", key_id, ret);
+                    printf("[server] RsaKeyGen UniqueId: keyId:%u, ret:%d\n",
+                           key_id, ret);
 #endif
                 }
 
-                ret = wh_Server_CacheImportRsaKey(ctx, rsa,
-                        key_id, flags, label_size, label);
+                ret = wh_Server_CacheImportRsaKey(ctx, rsa, key_id, flags,
+                                                  label_size, label);
 #ifdef DEBUG_CRYPTOCB_VERBOSE
-                printf("[server] RsaKeyGen CacheKeyRsa: keyId:%u, ret:%d\n", key_id, ret);
+                printf("[server] RsaKeyGen CacheKeyRsa: keyId:%u, ret:%d\n",
+                       key_id, ret);
 #endif
-                packet->pkRsakgRes.keyId = (key_id & WH_KEYID_MASK);
-                packet->pkRsakgRes.len = 0;
+                res.keyId = WH_KEYID_ID(key_id);
+                res.len   = 0;
             }
         }
         wc_FreeRsaKey(rsa);
     }
 
     if (ret == 0) {
-        /* set the assigned id */
-        *out_size = WH_PACKET_STUB_SIZE +
-                sizeof(packet->pkRsakgRes) +
-                packet->pkRsakgRes.len;
+        wh_MessageCrypto_TranslateRsaKeyGenResponse(
+            magic, &res, (whMessageCrypto_RsaKeyGenResponse*)cryptoDataOut);
+
+        *outSize = sizeof(whMessageCrypto_RsaKeyGenResponse) + res.len;
     }
+
     return ret;
 }
 #endif /* WOLFSSL_KEY_GEN */
 
-static int _HandleRsaFunction(whServerContext* ctx, whPacket* packet,
-    uint16_t *out_size)
+static int _HandleRsaFunction( whServerContext* ctx, uint16_t magic,
+                      const void* cryptoDataIn, uint16_t inSize,
+                      void* cryptoDataOut, uint16_t* outSize)
 {
-    int ret;
-    RsaKey rsa[1];
-    int op_type         = (int)(packet->pkRsaReq.opType);
-    uint32_t options    = packet->pkRsaReq.options;
-    int evict           = !!(options & WH_PACKET_PK_RSA_OPTIONS_EVICT);
+    int                        ret;
+    RsaKey                     rsa[1];
+    whMessageCrypto_RsaRequest req;
 
-    whKeyId key_id      = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
-                            ctx->comm->client_id,
-                            packet->pkRsaReq.keyId);
-    word32 in_len       = (word32)(packet->pkRsaReq.inLen);
-    word32 out_len      = (word32)(packet->pkRsaReq.outLen);
+    /* Translate request */
+    ret = wh_MessageCrypto_TranslateRsaRequest(
+        magic, (const whMessageCrypto_RsaRequest*)cryptoDataIn, &req);
+    if (ret != 0) {
+        return ret;
+    }
+
+    /* Extract parameters from translated request */
+    int      op_type = (int)(req.opType);
+    uint32_t options = req.options;
+    int      evict   = !!(options & WH_MESSAGE_CRYPTO_RSA_OPTIONS_EVICT);
+    whKeyId  key_id =
+        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+    word32 in_len  = (word32)(req.inLen);
+    word32 out_len = (word32)(req.outLen);
     /* in and out are after the fixed size fields */
-    byte* in            = (uint8_t*)(&packet->pkRsaReq + 1);
-    byte* out           = (uint8_t*)(&packet->pkRsaRes + 1);
+    byte* in  = (uint8_t*)(cryptoDataIn + sizeof(whMessageCrypto_RsaRequest));
+    byte* out = (uint8_t*)(cryptoDataOut + sizeof(whMessageCrypto_RsaResponse));
 
 #ifdef DEBUG_CRYPTOCB_VERBOSE
     printf("[server] HandleRsaFunction opType:%d inLen:%u keyId:%u outLen:%u\n",
@@ -326,26 +378,41 @@ static int _HandleRsaFunction(whServerContext* ctx, whPacket* packet,
         wc_FreeRsaKey(rsa);
     }
     if (evict != 0) {
-        (void)hsmEvictKey(ctx, key_id);
+        (void)wh_Server_KeystoreEvictKey(ctx, key_id);
     }
     if (ret == 0) {
+        whMessageCrypto_RsaResponse res;
         /*set outLen and outgoing message size */
-        packet->pkRsaRes.outLen = out_len;
-        *out_size = WH_PACKET_STUB_SIZE + sizeof(packet->pkRsaRes) + out_len;
+        res.outLen = out_len;
+        wh_MessageCrypto_TranslateRsaResponse(
+            magic, &res, (whMessageCrypto_RsaResponse*)cryptoDataOut);
+
+        *outSize = sizeof(whMessageCrypto_RsaResponse) + out_len;
     }
     return ret;
 }
 
-static int _HandleRsaGetSize(whServerContext* ctx, whPacket* packet,
-    uint16_t *out_size)
+static int _HandleRsaGetSize(whServerContext* ctx, uint16_t magic,
+                             const void* cryptoDataIn, uint16_t inSize,
+                             void* cryptoDataOut, uint16_t* outSize)
 {
-    int ret;
-    RsaKey rsa[1];
-    whKeyId key_id      = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
-                            ctx->comm->client_id,
-                            packet->pkRsaGetSizeReq.keyId);
-    uint32_t options    = packet->pkRsaGetSizeReq.options;
-    int evict           = !!(options & WH_PACKET_PK_RSA_GET_SIZE_OPTIONS_EVICT);
+    int                                ret;
+    RsaKey                             rsa[1];
+    whMessageCrypto_RsaGetSizeRequest  req;
+    whMessageCrypto_RsaGetSizeResponse res;
+
+    /* Translate request */
+    ret = wh_MessageCrypto_TranslateRsaGetSizeRequest(
+        magic, (const whMessageCrypto_RsaGetSizeRequest*)cryptoDataIn, &req);
+    if (ret != 0) {
+        return ret;
+    }
+
+    /* Extract parameters from translated request */
+    whKeyId key_id =
+        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+    uint32_t options = req.options;
+    int      evict = !!(options & WH_MESSAGE_CRYPTO_RSA_GET_SIZE_OPTIONS_EVICT);
 
     int key_size = 0;
 
@@ -366,18 +433,21 @@ static int _HandleRsaGetSize(whServerContext* ctx, whPacket* packet,
     if (evict != 0) {
 #ifdef DEBUG_CRYPTOCB_VERBOSE
         printf("[server] %s evicting temp key:%x options:%u evict:%u\n",
-                __func__, key_id, options, evict);
+               __func__, key_id, options, evict);
 #endif
-        (void)hsmEvictKey(ctx, key_id);
+        (void)wh_Server_KeystoreEvictKey(ctx, key_id);
     }
     if (ret == 0) {
-        /*set keySize */
-        packet->pkRsaGetSizeRes.keySize = key_size;
-        *out_size = WH_PACKET_STUB_SIZE + sizeof(packet->pkRsaGetSizeRes);
+        res.keySize = key_size;
+
+        wh_MessageCrypto_TranslateRsaGetSizeResponse(
+            magic, &res, (whMessageCrypto_RsaGetSizeResponse*)cryptoDataOut);
+
+        *outSize = sizeof(whMessageCrypto_RsaGetSizeResponse);
     }
 #ifdef DEBUG_CRYPTOCB_VERBOSE
-        printf("[server] %s keyId:%d, key_size:%d, ret:%d\n",
-                __func__, key_id, key_size, ret);
+    printf("[server] %s keyId:%d, key_size:%d, ret:%d\n", __func__, key_id,
+           key_size, ret);
 #endif
     return ret;
 }
@@ -401,7 +471,7 @@ int wh_Server_EccKeyCacheImport(whServerContext* ctx, ecc_key* key,
         return WH_ERROR_BADARGS;
     }
     /* get a free slot */
-    ret = hsmCacheFindSlotAndZero(ctx, max_size, &cacheBuf, &cacheMeta);
+    ret = wh_Server_KeystoreGetCacheSlot(ctx, max_size, &cacheBuf, &cacheMeta);
     if (ret == WH_ERROR_OK) {
         ret = wh_Crypto_EccSerializeKeyDer(key, max_size, cacheBuf, &der_size);
     }
@@ -434,7 +504,7 @@ int wh_Server_EccKeyCacheExport(whServerContext* ctx, whKeyId keyId,
         return WH_ERROR_BADARGS;
     }
     /* Load key from NVM into a cache slot if necessary */
-    ret = hsmFreshenKey(ctx, keyId, &cacheBuf, &cacheMeta);
+    ret = wh_Server_KeystoreFreshenKey(ctx, keyId, &cacheBuf, &cacheMeta);
 
     if (ret == WH_ERROR_OK) {
         ret = wh_Crypto_EccDeserializeKeyDer(cacheBuf, cacheMeta->len, key);
@@ -452,11 +522,8 @@ int wh_Server_CacheImportCurve25519Key(whServerContext* server,
     uint8_t*       cacheBuf;
     whNvmMetadata* cacheMeta;
     int            ret;
-
-    /* CURVE25519_MAX_KEY_TO_DER_SZ should be 82 */
-    uint8_t der_buf[CURVE25519_MAX_KEY_TO_DER_SZ];
+    uint8_t        der_buf[CURVE25519_MAX_KEY_TO_DER_SZ];
     uint16_t       keySz = sizeof(der_buf);
-
 
     if ((server == NULL) || (key == NULL) || (WH_KEYID_ISERASED(keyId)) ||
         ((label != NULL) && (label_len > sizeof(cacheMeta->label)))) {
@@ -468,7 +535,8 @@ int wh_Server_CacheImportCurve25519Key(whServerContext* server,
 
     /* if successful, find a free cache slot and copy in the key data */
     if (ret == 0) {
-        ret = hsmCacheFindSlotAndZero(server, keySz, &cacheBuf, &cacheMeta);
+        ret = wh_Server_KeystoreGetCacheSlot(server, keySz, &cacheBuf,
+                                             &cacheMeta);
         if (ret == 0) {
             memcpy(cacheBuf, der_buf, keySz);
             /* Update metadata to cache the key */
@@ -497,7 +565,7 @@ int wh_Server_CacheExportCurve25519Key(whServerContext* server, whKeyId keyId,
         return WH_ERROR_BADARGS;
     }
     /* Load key from NVM into a cache slot if necessary */
-    ret = hsmFreshenKey(server, keyId, &cacheBuf, &cacheMeta);
+    ret = wh_Server_KeystoreFreshenKey(server, keyId, &cacheBuf, &cacheMeta);
 
     if (ret == 0) {
         ret = wh_Crypto_Curve25519DeserializeKey(cacheBuf, cacheMeta->len, key);
@@ -534,8 +602,8 @@ int wh_Server_MlDsaKeyCacheImport(whServerContext* ctx, MlDsaKey* key,
         return WH_ERROR_BADARGS;
     }
 
-    ret =
-        hsmCacheFindSlotAndZero(ctx, MAX_MLDSA_DER_SIZE, &cacheBuf, &cacheMeta);
+    ret = wh_Server_KeystoreGetCacheSlot(ctx, MAX_MLDSA_DER_SIZE, &cacheBuf,
+                                         &cacheMeta);
     if (ret == WH_ERROR_OK) {
         ret = wh_Crypto_MlDsaSerializeKeyDer(key, MAX_MLDSA_DER_SIZE, cacheBuf,
                                              &der_size);
@@ -569,7 +637,7 @@ int wh_Server_MlDsaKeyCacheExport(whServerContext* ctx, whKeyId keyId,
         return WH_ERROR_BADARGS;
     }
 
-    ret = hsmFreshenKey(ctx, keyId, &cacheBuf, &cacheMeta);
+    ret = wh_Server_KeystoreFreshenKey(ctx, keyId, &cacheBuf, &cacheMeta);
 
     if (ret == WH_ERROR_OK) {
         ret = wh_Crypto_MlDsaDeserializeKeyDer(cacheBuf, cacheMeta->len, key);
@@ -585,96 +653,128 @@ int wh_Server_MlDsaKeyCacheExport(whServerContext* ctx, whKeyId keyId,
 /** Request/Response Handling functions */
 
 #ifdef HAVE_ECC
-static int _HandleEccKeyGen(whServerContext* ctx, whPacket* packet,
-    uint16_t* out_size)
+static int _HandleEccKeyGen(whServerContext* ctx, uint16_t magic,
+                            const void* cryptoDataIn, uint16_t inSize,
+                            void* cryptoDataOut, uint16_t* outSize)
 {
-    int ret = WH_ERROR_OK;
-    ecc_key key[1];
-    wh_Packet_pk_eckg_req* req = &packet->pkEckgReq;
-    wh_Packet_pk_eckg_res* res = &packet->pkEckgRes;
+    int                               ret = WH_ERROR_OK;
+    ecc_key                           key[1];
+    whMessageCrypto_EccKeyGenRequest  req;
+    whMessageCrypto_EccKeyGenResponse res;
 
-    /* Request message */
-    int key_size        = req->sz;
-    int curve_id        = req->curveId;
-    whKeyId key_id      = WH_MAKE_KEYID(    WH_KEYTYPE_CRYPTO,
-                                            ctx->comm->client_id,
-                                            req->keyId);
-    whNvmFlags flags    = req->flags;
-    uint8_t* label      = req->label;
-    uint16_t label_size = WH_NVM_LABEL_LEN;
+    /* Translate request */
+    ret = wh_MessageCrypto_TranslateEccKeyGenRequest(
+        magic, (const whMessageCrypto_EccKeyGenRequest*)cryptoDataIn, &req);
+    if (ret != 0) {
+        return ret;
+    }
+
+    /* Extract parameters from translated request */
+    int     key_size = req.sz;
+    int     curve_id = req.curveId;
+    whKeyId key_id =
+        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+    whNvmFlags flags      = req.flags;
+    uint8_t*   label      = req.label;
+    uint16_t   label_size = WH_NVM_LABEL_LEN;
 
     /* Response message */
-    uint8_t* res_out    = (uint8_t*)(res + 1);
-    uint16_t max_size     = (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN -
-                            (res_out - (uint8_t*)packet));
-    uint16_t res_size   = 0;
+    uint8_t* res_out =
+        (uint8_t*)cryptoDataOut + sizeof(whMessageCrypto_EccKeyGenResponse);
+    uint16_t max_size = (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN -
+                                   (res_out - (uint8_t*)cryptoDataOut));
+    uint16_t res_size = 0;
 
     /* init ecc key */
     ret = wc_ecc_init_ex(key, NULL, ctx->crypto->devId);
     if (ret == 0) {
         /* generate the key */
         ret = wc_ecc_make_key_ex(ctx->crypto->rng, key_size, key, curve_id);
-        if ( ret == 0) {
+        if (ret == 0) {
             /* Check incoming flags */
             if (flags & WH_NVM_FLAGS_EPHEMERAL) {
                 /* Must serialize the key into the response message. */
                 key_id = WH_KEYID_ERASED;
-                ret = wh_Crypto_EccSerializeKeyDer(key, max_size, res_out, &res_size);
-            } else {
-                /* Must import the key into the cache and return keyid */
+                ret    = wh_Crypto_EccSerializeKeyDer(key, max_size, res_out,
+                                                      &res_size);
+                /* TODO: RSA has the following, should we do the same? */
+                /*
+                if (ret == 0) {
+                    res.keyId = 0;
+                    res.len = res_size;
+                }
+                */
+            }
+            else {
+                /* Must import the key into the cache and return keyid
+                 */
                 res_size = 0;
                 if (WH_KEYID_ISERASED(key_id)) {
                     /* Generate a new id */
-                    ret = hsmGetUniqueId(ctx, &key_id);
+                    ret = wh_Server_KeystoreGetUniqueId(ctx, &key_id);
 #ifdef DEBUG_CRYPTOCB
-                    printf("[server] %s UniqueId: keyId:%u, ret:%d\n",
-                            __func__, key_id, ret);
+                    printf("[server] %s UniqueId: keyId:%u, ret:%d\n", __func__,
+                           key_id, ret);
 #endif
                 }
-                ret = wh_Server_EccKeyCacheImport(ctx, key,
-                        key_id, flags, label_size, label);
+                ret = wh_Server_EccKeyCacheImport(ctx, key, key_id, flags,
+                                                  label_size, label);
 #ifdef DEBUG_CRYPTOCB
-                printf("[server] %s CacheImport: keyId:%u, ret:%d\n",
-                        __func__, key_id, ret);
+                printf("[server] %s CacheImport: keyId:%u, ret:%d\n", __func__,
+                       key_id, ret);
 #endif
+                /* TODO: RSA has the following, should we do the same? */
+                /*
+                res.keyId = WH_KEYID_ID(key_id);
+                res.len = 0;
+                */
             }
         }
         wc_ecc_free(key);
     }
 
     if (ret == WH_ERROR_OK) {
-        res->keyId  = WH_KEYID_ID(key_id);
-        res->len    = res_size;
-        *out_size   = WH_PACKET_STUB_SIZE + sizeof(*res) + res_size;
+        res.keyId = WH_KEYID_ID(key_id);
+        res.len   = res_size;
+
+        wh_MessageCrypto_TranslateEccKeyGenResponse(
+            magic, &res, (whMessageCrypto_EccKeyGenResponse*)cryptoDataOut);
+
+        *outSize = sizeof(whMessageCrypto_EccKeyGenResponse) + res_size;
     }
     return ret;
 }
 
-static int _HandleEccSharedSecret(whServerContext* ctx, whPacket* packet,
-        uint16_t *out_size)
+static int _HandleEccSharedSecret(whServerContext* ctx, uint16_t magic,
+                                  const void* cryptoDataIn, uint16_t inSize,
+                                  void* cryptoDataOut, uint16_t* outSize)
 {
-    int ret = WH_ERROR_OK;
-    ecc_key pub_key[1];
-    ecc_key prv_key[1];
+    int                         ret = WH_ERROR_OK;
+    ecc_key                     pub_key[1];
+    ecc_key                     prv_key[1];
+    whMessageCrypto_EcdhRequest req;
 
-    wh_Packet_pk_ecdh_req* req = &packet->pkEcdhReq;
-    wh_Packet_pk_ecdh_res* res = &packet->pkEcdhRes;
+    /* Translate request */
+    ret = wh_MessageCrypto_TranslateEcdhRequest(
+        magic, (const whMessageCrypto_EcdhRequest*)cryptoDataIn, &req);
+    if (ret != 0) {
+        return ret;
+    }
 
-    /* Request message */
-    uint32_t options    = req->options;
-    int evict_pub       = !!(options & WH_PACKET_PK_ECDH_OPTIONS_EVICTPUB);
-    int evict_prv       = !!(options & WH_PACKET_PK_ECDH_OPTIONS_EVICTPRV);
-    whKeyId pub_key_id  = WH_MAKE_KEYID(    WH_KEYTYPE_CRYPTO,
-                                            ctx->comm->client_id,
-                                            req->publicKeyId);
-    whKeyId prv_key_id  = WH_MAKE_KEYID(    WH_KEYTYPE_CRYPTO,
-                                            ctx->comm->client_id,
-                                            req->privateKeyId);
+    /* Extract parameters from translated request */
+    uint32_t options   = req.options;
+    int      evict_pub = !!(options & WH_MESSAGE_CRYPTO_ECDH_OPTIONS_EVICTPUB);
+    int      evict_prv = !!(options & WH_MESSAGE_CRYPTO_ECDH_OPTIONS_EVICTPRV);
+    whKeyId  pub_key_id =
+        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.publicKeyId);
+    whKeyId prv_key_id = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id,
+                                       req.privateKeyId);
 
     /* Response message */
-    byte* res_out       = (uint8_t*)(res + 1);
-    word32 max_len      = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
-                            (res_out - (uint8_t*)packet));
+    byte* res_out =
+        (byte*)cryptoDataOut + sizeof(whMessageCrypto_EcdhResponse);
+    word32 max_len = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
+                              (res_out - (uint8_t*)cryptoDataOut));
     word32 res_len;
 
     /* init ecc keys */
@@ -702,40 +802,53 @@ static int _HandleEccSharedSecret(whServerContext* ctx, whPacket* packet,
         wc_ecc_free(pub_key);
     }
     if (evict_pub) {
-        (void)hsmEvictKey(ctx, pub_key_id);
+        (void)wh_Server_KeystoreEvictKey(ctx, pub_key_id);
     }
     if (evict_prv) {
-        (void)hsmEvictKey(ctx, prv_key_id);
+        (void)wh_Server_KeystoreEvictKey(ctx, prv_key_id);
     }
     if (ret == 0) {
-        res->sz = res_len;
-        *out_size = WH_PACKET_STUB_SIZE + sizeof(*res) + res_len;
+        whMessageCrypto_EcdhResponse res;
+        res.sz = res_len;
+
+        wh_MessageCrypto_TranslateEcdhResponse(
+            magic, &res, (whMessageCrypto_EcdhResponse*)cryptoDataOut);
+
+        *outSize = sizeof(whMessageCrypto_EcdhResponse) + res_len;
     }
     return ret;
 }
 
-static int _HandleEccSign(whServerContext* ctx, whPacket* packet,
-    uint16_t *out_size)
+static int _HandleEccSign(whServerContext* ctx, uint16_t magic,
+                          const void* cryptoDataIn, uint16_t inSize,
+                          void* cryptoDataOut, uint16_t* outSize)
 {
-    int ret;
-    ecc_key key[1];
-    wh_Packet_pk_ecc_sign_req* req = &packet->pkEccSignReq;
-    wh_Packet_pk_ecc_sign_res* res = &packet->pkEccSignRes;
+    int                            ret;
+    ecc_key                        key[1];
+    whMessageCrypto_EccSignRequest req;
 
-    /* Request message */
-    byte* in        = (uint8_t*)(req + 1);
-    whKeyId key_id  = WH_MAKE_KEYID(    WH_KEYTYPE_CRYPTO,
-                                        ctx->comm->client_id,
-                                        req->keyId);
-    word32 in_len   = req->sz;
-    uint32_t options = req->options;
-    int evict       = !!(options & WH_PACKET_PK_ECCSIGN_OPTIONS_EVICT);
+    /* Translate request */
+    ret = wh_MessageCrypto_TranslateEccSignRequest(
+        magic, (const whMessageCrypto_EccSignRequest*)cryptoDataIn, &req);
+    if (ret != 0) {
+        return ret;
+    }
+
+    /* Extract parameters from translated request */
+    uint8_t* in =
+        (uint8_t*)cryptoDataIn + sizeof(whMessageCrypto_EccSignRequest);
+    whKeyId key_id =
+        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+    word32   in_len  = req.sz;
+    uint32_t options = req.options;
+    int      evict   = !!(options & WH_MESSAGE_CRYPTO_ECCSIGN_OPTIONS_EVICT);
 
     /* Response message */
-    byte* res_out   = (uint8_t*)(res + 1);
-    word32 max_len  = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
-                        (res_out - (uint8_t*)packet));
-    word32 res_len;
+    byte* res_out =
+        (byte*)cryptoDataOut + sizeof(whMessageCrypto_EccSignResponse);
+    word32 max_len = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
+                              (res_out - (uint8_t*)cryptoDataOut));
+    word32 res_len = max_len;
 
     /* init private key */
     ret = wc_ecc_init_ex(key, NULL, ctx->crypto->devId);
@@ -743,48 +856,72 @@ static int _HandleEccSign(whServerContext* ctx, whPacket* packet,
         /* load the private key */
         ret = wh_Server_EccKeyCacheExport(ctx, key_id, key);
         if (ret == WH_ERROR_OK) {
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+            printf(
+                "[server] EccSign: key_id=%x, in_len=%u, res_len=%u, ret=%d\n",
+                key_id, (unsigned)in_len, (unsigned)res_len, ret);
+            wh_Utils_Hexdump("[server] EccSign in:", in, in_len);
+#endif
             /* sign the input */
-            res_len = max_len;
             ret = wc_ecc_sign_hash(in, in_len, res_out, &res_len,
-                    ctx->crypto->rng, key);
+                                   ctx->crypto->rng, key);
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+            wh_Utils_Hexdump("[server] EccSign res:", res_out, res_len);
+#endif
         }
         wc_ecc_free(key);
     }
     if (evict != 0) {
-        (void)hsmEvictKey(ctx, key_id);
+        (void)wh_Server_KeystoreEvictKey(ctx, key_id);
     }
     if (ret == 0) {
-        res->sz = res_len;
-        *out_size = WH_PACKET_STUB_SIZE + sizeof(*res) + res_len;
+        whMessageCrypto_EccSignResponse res;
+        res.sz = res_len;
+
+        wh_MessageCrypto_TranslateEccSignResponse(
+            magic, &res, (whMessageCrypto_EccSignResponse*)cryptoDataOut);
+
+        *outSize = sizeof(whMessageCrypto_EccSignResponse) + res_len;
     }
     return ret;
 }
-static int _HandleEccVerify(whServerContext* ctx, whPacket* packet,
-        uint16_t *out_size)
-{
-    int ret;
-    ecc_key key[1];
-    wh_Packet_pk_ecc_verify_req* req = &packet->pkEccVerifyReq;
-    wh_Packet_pk_ecc_verify_res* res = &packet->pkEccVerifyRes;
 
-    /* Request Message */
-    uint32_t options    = req->options;
-    whKeyId key_id      = WH_MAKE_KEYID(    WH_KEYTYPE_CRYPTO,
-                                            ctx->comm->client_id,
-                                            req->keyId);
-    uint32_t hash_len   = req->hashSz;
-    uint32_t sig_len    = req->sigSz;
-    byte* req_sig       = (uint8_t*)(req + 1);
-    byte* req_hash      = req_sig + sig_len;
-    int evict           = !!(options & WH_PACKET_PK_ECCVERIFY_OPTIONS_EVICT);
-    int export_pub_key  = !!(options & WH_PACKET_PK_ECCVERIFY_OPTIONS_EXPORTPUB);
+static int _HandleEccVerify(whServerContext* ctx, uint16_t magic,
+                            const void* cryptoDataIn, uint16_t inSize,
+                            void* cryptoDataOut, uint16_t* outSize)
+{
+    int                               ret;
+    ecc_key                           key[1];
+    whMessageCrypto_EccVerifyRequest  req;
+    whMessageCrypto_EccVerifyResponse res;
+
+    /* Translate request */
+    ret = wh_MessageCrypto_TranslateEccVerifyRequest(
+        magic, (const whMessageCrypto_EccVerifyRequest*)cryptoDataIn, &req);
+    if (ret != 0) {
+        return ret;
+    }
+
+    /* Extract parameters from translated request */
+    uint32_t options = req.options;
+    whKeyId  key_id =
+        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+    uint32_t hash_len = req.hashSz;
+    uint32_t sig_len  = req.sigSz;
+    uint8_t* req_sig =
+        (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_EccVerifyRequest);
+    uint8_t* req_hash = req_sig + sig_len;
+    int      evict    = !!(options & WH_MESSAGE_CRYPTO_ECCVERIFY_OPTIONS_EVICT);
+    int      export_pub_key =
+        !!(options & WH_MESSAGE_CRYPTO_ECCVERIFY_OPTIONS_EXPORTPUB);
 
     /* Response message */
-    byte* res_pub       = (uint8_t*)(res + 1);
-    word32 max_size     = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
-                                (res_pub - (uint8_t*)packet));
-    uint32_t pub_size   = 0;
-    int result;
+    byte* res_pub =
+        (uint8_t*)(cryptoDataOut) + sizeof(whMessageCrypto_EccVerifyResponse);
+    word32   max_size = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
+                               (res_pub - (uint8_t*)cryptoDataOut));
+    uint32_t pub_size = 0;
+    int      result;
 
     /* init public key */
     ret = wc_ecc_init_ex(key, NULL, ctx->crypto->devId);
@@ -794,18 +931,26 @@ static int _HandleEccVerify(whServerContext* ctx, whPacket* packet,
         if (ret == WH_ERROR_OK) {
             /* verify the signature */
             ret = wc_ecc_verify_hash(req_sig, sig_len, req_hash, hash_len,
-                &result, key);
-            if (    (ret == 0) &&
-                    (export_pub_key != 0) ) {
+                                     &result, key);
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+            printf("[server] EccVerify: key_id=%x, sig_len=%u, hash_len=%u, "
+                   "result=%d, ret=%d\n",
+                   key_id, (unsigned)sig_len, (unsigned)hash_len, result, ret);
+
+            wh_Utils_Hexdump("[server] EccVerify hash:", req_hash, hash_len);
+            wh_Utils_Hexdump("[server] EccVerify sig:", req_sig, sig_len);
+#endif
+
+            if ((ret == 0) && (export_pub_key != 0)) {
                 /* Export the public key to the result message*/
-                ret = wc_EccPublicKeyToDer(key, (byte*)res_pub,
-                        max_size, 1);
+                ret = wc_EccPublicKeyToDer(key, (byte*)res_pub, max_size, 1);
                 if (ret < 0) {
                     /* Problem dumping the public key.  Set to 0 length */
                     pub_size = 0;
-                } else {
+                }
+                else {
                     pub_size = ret;
-                    ret = 0;
+                    ret      = 0;
                 }
             }
         }
@@ -813,12 +958,16 @@ static int _HandleEccVerify(whServerContext* ctx, whPacket* packet,
     }
     if (evict != 0) {
         /* User requested to evict from cache, even if the call failed */
-        (void)hsmEvictKey(ctx, key_id);
+        (void)wh_Server_KeystoreEvictKey(ctx, key_id);
     }
     if (ret == 0) {
-        res->pubSz  = pub_size;
-        res->res    = result;
-        *out_size   = WH_PACKET_STUB_SIZE + sizeof(*res) + pub_size;
+        res.pubSz = pub_size;
+        res.res   = result;
+
+        wh_MessageCrypto_TranslateEccVerifyResponse(
+            magic, &res, (whMessageCrypto_EccVerifyResponse*)cryptoDataOut);
+
+        *outSize = sizeof(whMessageCrypto_EccVerifyResponse) + pub_size;
     }
     return ret;
 }
@@ -861,58 +1010,106 @@ static int _HandleEccCheckPrivKey(whServerContext* server, whPacket* packet,
 #endif
 #endif /* HAVE_ECC */
 
-#ifdef HAVE_CURVE25519
-static int _HandleCurve25519KeyGen(whServerContext* server, whPacket* packet,
-    uint16_t* out_size)
-{
-    int ret = WH_ERROR_OK;
-    curve25519_key key[1];
-    wh_Packet_pk_curve25519kg_req* req = &packet->pkCurve25519kgReq;
-    wh_Packet_pk_curve25519kg_res* res = &packet->pkCurve25519kgRes;
 
-    /* Request Message */
-    int key_size        = req->sz;
-    whKeyId key_id      = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
-                            server->comm->client_id,
-                            req->keyId);
-    whNvmFlags flags    = req->flags;
-    uint8_t* label      = req->label;
-    uint16_t label_size = WH_NVM_LABEL_LEN;
+#ifndef WC_NO_RNG
+static int _HandleRng(whServerContext* ctx, uint16_t magic,
+                      const void* cryptoDataIn, uint16_t inSize,
+                      void* cryptoDataOut, uint16_t* outSize)
+{
+    int                         ret = WH_ERROR_OK;
+    whMessageCrypto_RngRequest  req;
+    whMessageCrypto_RngResponse res;
+
+    /* Translate request */
+    ret = wh_MessageCrypto_TranslateRngRequest(
+        magic, (const whMessageCrypto_RngRequest*)cryptoDataIn, &req);
+    if (ret != 0) {
+        return ret;
+    }
+
+    /* Generate the random data */
+    ret = wc_RNG_GenerateBlock(ctx->crypto->rng, (byte*)cryptoDataOut, req.sz);
+    if (ret != 0) {
+        return ret;
+    }
+
+    /* Translate response */
+    res.sz = req.sz;
+    ret    = wh_MessageCrypto_TranslateRngResponse(
+        magic, &res, (whMessageCrypto_RngResponse*)cryptoDataOut);
+    if (ret != 0) {
+        return ret;
+    }
+
+    /* set the output size */
+    *outSize = sizeof(whMessageCrypto_RngResponse) + req.sz;
+
+    return ret;
+}
+#endif /* WC_NO_RNG */
+
+#ifdef HAVE_CURVE25519
+static int _HandleCurve25519KeyGen(whServerContext* ctx, uint16_t magic,
+                                   const void* cryptoDataIn, uint16_t inSize,
+                                   void* cryptoDataOut, uint16_t* outSize)
+{
+    int                                      ret = WH_ERROR_OK;
+    curve25519_key                           key[1];
+    whMessageCrypto_Curve25519KeyGenRequest  req;
+    whMessageCrypto_Curve25519KeyGenResponse res;
+
+    /* Translate request */
+    ret = wh_MessageCrypto_TranslateCurve25519KeyGenRequest(
+        magic, (const whMessageCrypto_Curve25519KeyGenRequest*)cryptoDataIn,
+        &req);
+    if (ret != 0) {
+        return ret;
+    }
+
+    /* Extract parameters from translated request */
+    int     key_size = req.sz;
+    whKeyId key_id =
+        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+    whNvmFlags flags      = req.flags;
+    uint8_t*   label      = req.label;
+    uint16_t   label_size = WH_NVM_LABEL_LEN;
 
     /* Response Message */
-    uint8_t* out        = (uint8_t*)(res + 1);
+    uint8_t* out = (uint8_t*)cryptoDataOut +
+                   sizeof(whMessageCrypto_Curve25519KeyGenResponse);
     /* Initialize the key size to the max size of the buffer */
-    uint16_t ser_size   = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
-                            (out - (uint8_t*)packet));
+    uint16_t ser_size =
+        (word32)(WOLFHSM_CFG_COMM_DATA_LEN - (out - (uint8_t*)cryptoDataOut));
 
     /* init key */
-    ret = wc_curve25519_init_ex(key, NULL, server->crypto->devId);
+    ret = wc_curve25519_init_ex(key, NULL, ctx->crypto->devId);
     if (ret == 0) {
         /* make the key */
-        ret = wc_curve25519_make_key(server->crypto->rng, key_size, key);
-        if ( ret == 0) {
+        ret = wc_curve25519_make_key(ctx->crypto->rng, key_size, key);
+        if (ret == 0) {
             /* Check incoming flags */
             if (flags & WH_NVM_FLAGS_EPHEMERAL) {
                 /* Must serialize the key into the response packet */
                 key_id = WH_KEYID_ERASED;
-                ret = wh_Crypto_Curve25519SerializeKey(key, out, &ser_size);
-            } else {
+                ret    = wh_Crypto_Curve25519SerializeKey(key, out, &ser_size);
+            }
+            else {
                 ser_size = 0;
                 /* Must import the key into the cache and return keyid */
                 if (WH_KEYID_ISERASED(key_id)) {
                     /* Generate a new id */
-                    ret = hsmGetUniqueId(server, &key_id);
+                    ret = wh_Server_KeystoreGetUniqueId(ctx, &key_id);
 #ifdef DEBUG_CRYPTOCB
-                    printf("[server] %s UniqueId: keyId:%u, ret:%d\n",
-                            __func__, key_id, ret);
+                    printf("[server] %s UniqueId: keyId:%u, ret:%d\n", __func__,
+                           key_id, ret);
 #endif
                 }
 
-                ret = wh_Server_CacheImportCurve25519Key(server, key,
-                        key_id, flags, label_size, label);
+                ret = wh_Server_CacheImportCurve25519Key(
+                    ctx, key, key_id, flags, label_size, label);
 #ifdef DEBUG_CRYPTOCB
-                    printf("[server] %s CacheImport: keyId:%u, ret:%d\n",
-                            __func__, key_id, ret);
+                printf("[server] %s CacheImport: keyId:%u, ret:%d\n", __func__,
+                       key_id, ret);
 #endif
             }
         }
@@ -920,38 +1117,55 @@ static int _HandleCurve25519KeyGen(whServerContext* server, whPacket* packet,
     }
 
     if (ret == 0) {
-        res->keyId  = WH_KEYID_ID(key_id);
-        res->len    = ser_size;
-        *out_size   = WH_PACKET_STUB_SIZE + sizeof(*res) + ser_size;
+        res.keyId = WH_KEYID_ID(key_id);
+        res.len   = ser_size;
+
+        /* Translate response */
+        wh_MessageCrypto_TranslateCurve25519KeyGenResponse(
+            magic, &res,
+            (whMessageCrypto_Curve25519KeyGenResponse*)cryptoDataOut);
+
+        *outSize = sizeof(whMessageCrypto_Curve25519KeyGenResponse) + ser_size;
     }
     return ret;
 }
 
-static int _HandleCurve25519SharedSecret(whServerContext* ctx, whPacket* packet, uint16_t* out_size)
+static int _HandleCurve25519SharedSecret(whServerContext* ctx, uint16_t magic,
+                                         const void* cryptoDataIn,
+                                         uint16_t inSize, void* cryptoDataOut,
+                                         uint16_t* outSize)
 {
     int ret;
     curve25519_key priv[1] = {0};
     curve25519_key pub[1] = {0};
 
-    wh_Packet_pk_curve25519_req* req = &packet->pkCurve25519Req;
-    wh_Packet_pk_curve25519_res* res = &packet->pkCurve25519Res;
+    whMessageCrypto_Curve25519Request  req;
+    whMessageCrypto_Curve25519Response res;
 
-    /* Request message */
-    uint32_t options    = req->options;
-    int evict_pub       = !!(options & WH_PACKET_PK_CURVE25519_OPTIONS_EVICTPUB);
-    int evict_prv       = !!(options & WH_PACKET_PK_CURVE25519_OPTIONS_EVICTPRV);
+    /* Translate request */
+    ret = wh_MessageCrypto_TranslateCurve25519Request(
+        magic, (const whMessageCrypto_Curve25519Request*)cryptoDataIn, &req);
+    if (ret != 0) {
+        return ret;
+    }
+
+    /* Extract parameters from translated request */
+    uint32_t options    = req.options;
+    int evict_pub = !!(options & WH_MESSAGE_CRYPTO_CURVE25519_OPTIONS_EVICTPUB);
+    int evict_prv = !!(options & WH_MESSAGE_CRYPTO_CURVE25519_OPTIONS_EVICTPRV);
     whKeyId pub_key_id  = WH_MAKE_KEYID(    WH_KEYTYPE_CRYPTO,
                                             ctx->comm->client_id,
-                                            req->publicKeyId);
+                                            req.publicKeyId);
     whKeyId prv_key_id  = WH_MAKE_KEYID(    WH_KEYTYPE_CRYPTO,
                                             ctx->comm->client_id,
-                                            req->privateKeyId);
-    int endian          = req->endian;
+                                            req.privateKeyId);
+    int endian          = req.endian;
 
     /* Response message */
-    byte* res_out       = (uint8_t*)(res + 1);
-    word32 max_len      = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
-                            (res_out - (uint8_t*)packet));
+    uint8_t* res_out       = (uint8_t*)cryptoDataOut +
+                             sizeof(whMessageCrypto_Curve25519Response);
+    uint16_t max_len      = (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN -
+                            (res_out - (uint8_t*)cryptoDataOut));
     word32 res_len      = max_len;
 
     /* init private key */
@@ -975,14 +1189,19 @@ static int _HandleCurve25519SharedSecret(whServerContext* ctx, whPacket* packet,
         wc_curve25519_free(priv);
     }
     if (evict_pub) {
-        (void)hsmEvictKey(ctx, pub_key_id);
+        (void)wh_Server_KeystoreEvictKey(ctx, pub_key_id);
     }
     if (evict_prv) {
-        (void)hsmEvictKey(ctx, prv_key_id);
+        (void)wh_Server_KeystoreEvictKey(ctx, prv_key_id);
     }
     if (ret == 0) {
-        res->sz = res_len;
-        *out_size = WH_PACKET_STUB_SIZE + sizeof(*res) + res_len;
+        res.sz = res_len;
+
+        wh_MessageCrypto_TranslateCurve25519Response(
+            magic, &res,
+            (whMessageCrypto_Curve25519Response*)cryptoDataOut);
+
+        *outSize = sizeof(whMessageCrypto_Curve25519Response) + res_len;
     }
     return ret;
 }
@@ -990,38 +1209,179 @@ static int _HandleCurve25519SharedSecret(whServerContext* ctx, whPacket* packet,
 
 #ifndef NO_AES
 #ifdef HAVE_AES_CBC
-static int _HandleAesCbc(whServerContext* ctx, whPacket* packet,
-        uint16_t* size)
+static int _HandleAesCbc(whServerContext* ctx, uint16_t magic, const void* cryptoDataIn,
+                         uint16_t inSize, void* cryptoDataOut,
+                         uint16_t* outSize)
 {
-    int ret = 0;
-    Aes aes[1] = {0};
-    uint8_t read_key[AES_MAX_KEY_SIZE];
-    uint32_t read_key_len = sizeof(read_key);
+    int                            ret    = 0;
+    Aes                            aes[1] = {0};
+    whMessageCrypto_AesCbcRequest  req;
+    whMessageCrypto_AesCbcResponse res;
+    uint8_t                        read_key[AES_MAX_KEY_SIZE];
+    uint32_t                       read_key_len = sizeof(read_key);
 
-    wh_Packet_cipher_aescbc_req* req = &packet->cipherAesCbcReq;
-    wh_Packet_cipher_aescbc_res* res = &packet->cipherAesCbcRes;
+    /* Translate request */
+    ret = wh_MessageCrypto_TranslateAesCbcRequest(
+        magic, (const whMessageCrypto_AesCbcRequest*)cryptoDataIn, &req);
+    if (ret != 0) {
+        return ret;
+    }
 
-    uint32_t enc = req->enc;
-    uint32_t key_len = req->keyLen;
-    uint32_t len = req->sz;
-    whKeyId key_id = WH_MAKE_KEYID(
-                        WH_KEYTYPE_CRYPTO,
-                        ctx->comm->client_id,
-                        req->keyId);
+    uint32_t enc     = req.enc;
+    uint32_t key_len = req.keyLen;
+    uint32_t len     = req.sz;
+    whKeyId  key_id =
+        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
 
     /* in, key, iv, and out are after fixed size fields */
-    uint8_t* in = (uint8_t*)(req + 1);
+    uint8_t* in =
+        (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_AesCbcRequest);
+    uint8_t* key = in + len;
+    uint8_t* iv  = key + key_len;
+
+    uint8_t* out =
+        (uint8_t*)(cryptoDataOut) + sizeof(whMessageCrypto_AesCbcResponse);
+
+    /* Debug printouts */
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+    wh_Utils_Hexdump("[AesCbc] Input data", in, len);
+    wh_Utils_Hexdump("[AesCbc] IV", iv, AES_BLOCK_SIZE);
+#endif
+    /* Read the key if it is not erased */
+    if (!WH_KEYID_ISERASED(key_id)) {
+        ret = wh_Server_KeystoreReadKey(ctx, key_id, NULL, read_key,
+                                        &read_key_len);
+        if (ret == 0) {
+            /* override the incoming values */
+            key     = read_key;
+            key_len = read_key_len;
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+            wh_Utils_Hexdump("[AesCbc] Key from HSM", key, key_len);
+#endif
+        }
+    }
+    else {
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+        wh_Utils_Hexdump("[AesCbc] Key ", key, key_len);
+#endif
+    }
+    if (ret == 0) {
+        /* init key with possible hardware */
+        ret = wc_AesInit(aes, NULL, ctx->crypto->devId);
+    }
+    if (ret == 0) {
+        /* load the key */
+        ret = wc_AesSetKey(aes, (byte*)key, (word32)key_len, (byte*)iv,
+                           enc != 0 ? AES_ENCRYPTION : AES_DECRYPTION);
+        if (ret == 0) {
+            /* do the crypto operation */
+            if (enc != 0) {
+                ret = wc_AesCbcEncrypt(aes, (byte*)out, (byte*)in, (word32)len);
+                if (ret == 0) {
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+                    wh_Utils_Hexdump("[AesCbc] Encrypted output", out, len);
+#endif
+                }
+            }
+            else {
+                ret = wc_AesCbcDecrypt(aes, (byte*)out, (byte*)in, (word32)len);
+                if (ret == 0) {
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+                    wh_Utils_Hexdump("[AesCbc] Decrypted output", out, len);
+#endif
+                }
+            }
+        }
+        wc_AesFree(aes);
+    }
+    /* encode the return sz */
+    if (ret == 0) {
+        /* set sz */
+        res.sz   = len;
+        *outSize = sizeof(whMessageCrypto_AesCbcResponse) + len;
+
+        /* Translate response back */
+        ret = wh_MessageCrypto_TranslateAesCbcResponse(
+            magic, &res, (whMessageCrypto_AesCbcResponse*)cryptoDataOut);
+    }
+    return ret;
+}
+#endif /* HAVE_AES_CBC */
+
+#ifdef HAVE_AESGCM
+static int _HandleAesGcm(whServerContext* ctx, uint16_t magic,
+                         const void* cryptoDataIn, uint16_t inSize,
+                         void* cryptoDataOut, uint16_t* outSize)
+{
+    int      ret    = 0;
+    Aes      aes[1] = {0};
+    uint8_t  read_key[AES_MAX_KEY_SIZE];
+    uint32_t read_key_len = sizeof(read_key);
+
+    /* Translate request */
+    whMessageCrypto_AesGcmRequest req;
+    ret = wh_MessageCrypto_TranslateAesGcmRequest(
+        magic, (const whMessageCrypto_AesGcmRequest*)cryptoDataIn, &req);
+    if (ret != 0) {
+        return ret;
+    }
+
+    /* Translate response */
+    whMessageCrypto_AesGcmResponse res;
+    res.sz        = req.sz;
+    res.authTagSz = (req.enc == 0) ? 0 : req.authTagSz;
+
+    uint32_t enc        = req.enc;
+    uint32_t key_len    = req.keyLen;
+    uint32_t len        = req.sz;
+    uint32_t iv_len     = req.ivSz;
+    uint32_t authin_len = req.authInSz;
+    uint32_t tag_len    = req.authTagSz;
+    whKeyId  key_id =
+        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+
+    /* in, key, iv, authin, tag, and out are after fixed size fields */
+    uint8_t* in = (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_AesGcmRequest);
     uint8_t* key = in + len;
     uint8_t* iv = key + key_len;
+    uint8_t* authin = iv + iv_len;
+    uint8_t* tag = authin + authin_len;
 
-    uint8_t* out = (uint8_t*)(res + 1);
+    /* TODO: This should not include the generic request header, though doesn't
+     * matter since it is just a debug printf*/
+    uint32_t req_len = sizeof(whMessageCrypto_AesGcmRequest) + len + key_len +
+                       iv_len + authin_len + ((enc == 0) ? tag_len : 0);
+    (void)req_len;
+
+    /* Set up response pointers */
+    uint8_t* out = (uint8_t*)(cryptoDataOut) + sizeof(whMessageCrypto_AesGcmResponse);
+    uint8_t* out_tag = out + len;
+
+    uint32_t res_len = sizeof(whMessageCrypto_AesGcmResponse) + len +
+                       ((enc == 0) ? 0 : tag_len);
+
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+    printf("[server] AESGCM: enc:%d keylen:%d ivsz:%d insz:%d authinsz:%d "
+           "authtagsz:%d reqsz:%u ressz:%u\n",
+           enc, key_len, iv_len, len, authin_len, tag_len, req_len, res_len);
+    printf("[server] AESGCM: req:%p in:%p key:%p iv:%p authin:%p tag:%p res:%p "
+           "out:%p out_tag:%p\n",
+           &req, in, key, iv, authin, tag, &res, out, out_tag);
+    wh_Utils_Hexdump("[server] AESGCM req packet: \n", (uint8_t*)cryptoDataIn,
+                     req_len);
+#endif
 
     /* Read the key if it is not erased */
     if (!WH_KEYID_ISERASED(key_id)) {
-        ret = hsmReadKey(ctx, key_id, NULL, read_key, &read_key_len);
+        ret = wh_Server_KeystoreReadKey(ctx, key_id, NULL, read_key,
+                                        &read_key_len);
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+        printf("[server] AesGcm ReadKey key_id:%u, key_len:%d ret:%d\n", key_id,
+               read_key_len, ret);
+#endif
         if (ret == 0) {
             /* override the incoming values */
-            key = read_key;
+            key     = read_key;
             key_len = read_key_len;
         }
     }
@@ -1031,159 +1391,70 @@ static int _HandleAesCbc(whServerContext* ctx, whPacket* packet,
     }
     if (ret == 0) {
         /* load the key */
-        ret = wc_AesSetKey(aes, (byte*)key, (word32)key_len, (byte*)iv,
-            enc != 0 ? AES_ENCRYPTION : AES_DECRYPTION);
+        ret = wc_AesGcmSetKey(aes, (byte*)key, (word32)key_len);
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+        printf("[server] AesGcmSetKey key_id:%u key_len:%u ret:%d\n", key_id,
+               key_len, ret);
+        wh_Utils_Hexdump("[server] key: ", key, key_len);
+#endif
         if (ret == 0) {
             /* do the crypto operation */
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+            printf(
+                "[server] enc:%d len:%d, ivSz:%d authTagSz:%d, authInSz:%d\n",
+                enc, len, iv_len, tag_len, authin_len);
+            wh_Utils_Hexdump("[server] in: ", in, len);
+            wh_Utils_Hexdump("[server] iv: ", iv, iv_len);
+            wh_Utils_Hexdump("[server] authin: ", authin, authin_len);
+#endif
             if (enc != 0) {
-                ret = wc_AesCbcEncrypt(aes, (byte*)out, (byte*)in, (word32)len);
-            } else {
-                ret = wc_AesCbcDecrypt(aes, (byte*)out, (byte*)in, (word32)len);
+                /* For encryption, write tag to the response output tag area */
+                ret = wc_AesGcmEncrypt(aes, (byte*)out, (byte*)in, (word32)len,
+                                       (byte*)iv, (word32)iv_len, (byte*)out_tag,
+                                       (word32)tag_len, (byte*)authin,
+                                       (word32)authin_len);
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+                printf("[server] enc ret:%d\n", ret);
+                wh_Utils_Hexdump("[server] out: \n", out, len);
+                wh_Utils_Hexdump("[server] enc tag: ", out_tag, tag_len);
+#endif
             }
+            else {
+                /* set authTag as a packet input */
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+                wh_Utils_Hexdump("[server] dec tag: ", tag, tag_len);
+#endif
+                ret = wc_AesGcmDecrypt(aes, (byte*)out, (byte*)in, (word32)len,
+                                       (byte*)iv, (word32)iv_len, (byte*)tag,
+                                       (word32)tag_len, (byte*)authin,
+                                       (word32)authin_len);
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+                printf("[server] dec ret:%d\n", ret);
+                wh_Utils_Hexdump("[server] out: \n", out, len);
+#endif
+            }
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+            wh_Utils_Hexdump("[server] post iv: ", iv, iv_len);
+            wh_Utils_Hexdump("[server] post authin: ", authin, authin_len);
+#endif
         }
         wc_AesFree(aes);
     }
     /* encode the return sz */
     if (ret == 0) {
         /* set sz */
-        res->sz = len;
-        *size = WH_PACKET_STUB_SIZE + sizeof(*res) + len;
-    }
-    return ret;
-}
-#endif /* HAVE_AES_CBC */
-
-#ifdef HAVE_AESGCM
-static int _HandleAesGcm(whServerContext* ctx, whPacket* packet,
-        uint16_t* out_size)
-{
-    int ret = 0;
-    Aes aes[1] = {0};
-
-    wh_Packet_cipher_aesgcm_req* req = &packet->cipherAesGcmReq;
-    wh_Packet_cipher_aesgcm_res* res = &packet->cipherAesGcmRes;
-
-    uint32_t enc        = req->enc;
-    uint32_t key_len    = req->keyLen;
-    uint32_t len        = req->sz;
-    uint32_t iv_len     = req->ivSz;
-    uint32_t authin_len = req->authInSz;
-    uint32_t tag_len    = req->authTagSz;
-    whKeyId key_id      = WH_MAKE_KEYID(
-                            WH_KEYTYPE_CRYPTO,
-                            ctx->comm->client_id,
-                            req->keyId);
-
-    /* Request packet */
-    uint8_t* in         = (uint8_t*)(req + 1);
-    uint8_t* key        = in + len;
-    uint8_t* iv         = key + key_len;
-    uint8_t* authin     = iv + iv_len;
-    uint8_t* dec_tag    = authin + authin_len;
-
-    uint32_t req_len    = WH_PACKET_STUB_SIZE + sizeof(*req) + len +
-                            key_len + iv_len + authin_len +
-                            ((enc == 0) ? tag_len : 0);
-    (void)req_len;
-
-    /* Response packet */
-    uint8_t* out        = (uint8_t*)(res + 1);
-    uint8_t* enc_tag    = out + len;
-
-    uint32_t res_len    = WH_PACKET_STUB_SIZE+ sizeof(*res) + len +
-                            ((enc == 0) ? 0: tag_len);
-
-    uint8_t tmpKey[AES_MAX_KEY_SIZE + AES_IV_SIZE];
-
+        res.sz        = len;
+        res.authTagSz = (enc == 0) ? 0 : tag_len;
+        *outSize      = res_len;
 #ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("[server] AESGCM: enc:%d keylen:%d ivsz:%d insz:%d authinsz:%d authtagsz:%d reqsz:%u ressz:%u\n",
-                        enc, key_len, iv_len, len, authin_len, tag_len,
-                        req_len, res_len);
-            printf("[server] AESGCM: req:%p in:%p key:%p iv:%p authin:%p dec_tag:%p res:%p out:%p enc_tag:%p\n",
-                    req, in, key, iv, authin, dec_tag, res, out, enc_tag);
-            wh_Utils_Hexdump("[server] AESGCM req packet: \n", (uint8_t*)packet, req_len);
+        printf("[server] res out_size:%d\n", *outSize);
+        wh_Utils_Hexdump("[server] AESGCM res packet: \n",
+                         (uint8_t*)cryptoDataOut, res_len);
 #endif
-    /* use keyId and load from keystore if keyId is not erased */
-    if (!WH_KEYID_ISERASED(key_id)) {
-        key_len = sizeof(tmpKey);
-        ret = hsmReadKey(ctx, key_id, NULL, tmpKey, &key_len);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-        printf("[server] AesGcm ReadKey key_id:%u, key_len:%d ret:%d\n",
-                key_id, key_len, ret);
-#endif
-        if (ret == 0) {
-            /* set key to use tmpKey data */
-            key = tmpKey;
-        }
-    }
-    if (ret == 0) {
-        /* init key with possible hardware */
-        ret = wc_AesInit(aes, NULL, ctx->crypto->devId);
-    }
-    if (ret == 0) {
-        /* load the key */
-        ret = wc_AesGcmSetKey(aes, key, key_len);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-        printf("[server] AesGcmSetKey key_id:%u key_len:%u ret:%d\n",
-                key_id, key_len, ret);
-        wh_Utils_Hexdump("[server] key: ", key, key_len);
-#endif
-        if (ret == 0) {
-            /* do the crypto operation */
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("[server] enc:%d len:%d, ivSz:%d authTagSz:%d, authInSz:%d\n",
-                    enc, len,iv_len, tag_len, authin_len);
-            wh_Utils_Hexdump("[server] in: ", in, len);
-            wh_Utils_Hexdump("[server] iv: ", iv, iv_len);
-            wh_Utils_Hexdump("[server] authin: ", authin,  authin_len);
-#endif
-            if (enc != 0) {
-                ret = wc_AesGcmEncrypt(aes, out,
-                    in, len,
-                    iv, iv_len,
-                    enc_tag, tag_len,
-                    authin, authin_len);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-                printf("[server] enc ret:%d\n",ret);
-                wh_Utils_Hexdump("[server] out: \n", out, len);
-                wh_Utils_Hexdump("[server] enc tag: ", enc_tag,  tag_len);
-#endif
-            } else {
-                /* set authTag as a packet input */
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-                wh_Utils_Hexdump("[server] dec tag: ", dec_tag,  tag_len);
-#endif
-                ret = wc_AesGcmDecrypt(aes, out,
-                    in, len,
-                    iv, iv_len,
-                    dec_tag, tag_len,
-                    authin, authin_len);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-                printf("[server] dec ret:%d\n",ret);
-                wh_Utils_Hexdump("[server] out: \n", out, len);
 
-                #endif
-            }
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-            wh_Utils_Hexdump("[server] post iv: ", iv, iv_len);
-            wh_Utils_Hexdump("[server] post authin: ", authin,  authin_len);
-#endif
-        }
-        wc_AesFree(aes);
-    }
-    /* encode the return sz */
-    if (ret == 0) {
-        res->sz = len;
-        res->authTagSz = (enc == 0) ? 0 : tag_len;
-        *out_size = res_len;
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-        printf("[server] res out_size:%d\n", *out_size);
-        wh_Utils_Hexdump("[server] AESGCM res packet: \n", (uint8_t*)packet, res_len);
-
-#endif
-        /*
-        memcpy(packet, res_packet, res_len);
-        */
+        /* Translate response back */
+        ret = wh_MessageCrypto_TranslateAesGcmResponse(
+            magic, &res, (whMessageCrypto_AesGcmResponse*)cryptoDataOut);
     }
     return ret;
 }
@@ -1191,56 +1462,64 @@ static int _HandleAesGcm(whServerContext* ctx, whPacket* packet,
 #endif /* !NO_AES */
 
 #ifdef WOLFSSL_CMAC
-static int _HandleCmac(whServerContext* server, whPacket* packet,
-    uint16_t* size, uint16_t seq)
+static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
+                       const void* cryptoDataIn, uint16_t inSize,
+                       void* cryptoDataOut, uint16_t* outSize)
 {
     int ret;
+    whMessageCrypto_CmacRequest req;
+    whMessageCrypto_CmacResponse res;
 
-    switch(packet->cmacReq.type) {
+    /* Translate request */
+    ret = wh_MessageCrypto_TranslateCmacRequest(magic, cryptoDataIn, &req);
+    if (ret != 0) {
+        return ret;
+    }
+
+    int i;
+    word32 len;
+    uint16_t cancelSeq;
+    whKeyId keyId = WH_KEYID_ERASED;
+
+    /* Setup fixed size fields */
+    uint8_t* in =
+        (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_CmacRequest);
+    uint8_t* key = in + req.inSz;
+    uint8_t* out =
+        (uint8_t*)(cryptoDataOut) + sizeof(whMessageCrypto_CmacResponse);
+
+    switch(req.type) {
 #if !defined(NO_AES) && defined(WOLFSSL_AES_DIRECT)
     case WC_CMAC_AES:
     {
-        int i;
-        whKeyId keyId = WH_KEYID_ERASED;
-        word32 len;
-        uint16_t cancelSeq;
-        /* in, out and key are after the fixed size fields */
-        byte* in = (uint8_t*)(&packet->cmacReq + 1);
-        byte* key = in + packet->cmacReq.inSz;
-        byte* out = (uint8_t*)(&packet->cmacRes + 1);
         whNvmMetadata meta[1] = {{0}};
         uint8_t moveToBigCache = 0;
         word32 blockSz = AES_BLOCK_SIZE;
         uint8_t tmpKey[AES_MAX_KEY_SIZE + AES_IV_SIZE];
 
         /* attempt oneshot if all fields are present */
-        if (packet->cmacReq.inSz != 0 && packet->cmacReq.keySz != 0 &&
-            packet->cmacReq.outSz != 0) {
-            len = packet->cmacReq.outSz;
+        if (req.inSz != 0 && req.keySz != 0 && req.outSz != 0) {
+            len = req.outSz;
 #ifdef DEBUG_CRYPTOCB_VERBOSE
             printf("[server] cmac generate oneshot\n");
 #endif
-                ret = wc_AesCmacGenerate_ex(server->crypto->algoCtx.cmac, out, &len, in,
-                    packet->cmacReq.inSz, key, packet->cmacReq.keySz, NULL,
-                    server->crypto->devId);
-                packet->cmacRes.outSz = len;
+            ret = wc_AesCmacGenerate_ex(ctx->crypto->algoCtx.cmac, out, &len, in,
+                                        req.inSz, key, req.keySz, NULL,
+                                        ctx->crypto->devId);
+            res.outSz = len;
         } else {
 #ifdef DEBUG_CRYPTOCB_VERBOSE
             printf("[server] cmac begin keySz:%d inSz:%d outSz:%d keyId:%x\n",
-                    packet->cmacReq.keySz,
-                    packet->cmacReq.inSz,
-                    packet->cmacReq.outSz,
-                    packet->cmacReq.keyId);
+                    req.keySz, req.inSz, req.outSz, req.keyId);
 #endif
             /* do each operation based on which fields are set */
-            if (packet->cmacReq.keySz != 0) {
+            if (req.keySz != 0) {
                 /* initialize cmac with key and type */
-                ret = wc_InitCmac_ex(server->crypto->algoCtx.cmac, key,
-                    packet->cmacReq.keySz, packet->cmacReq.type, NULL, NULL,
-                    server->crypto->devId);
+                ret = wc_InitCmac_ex(ctx->crypto->algoCtx.cmac, key, req.keySz,
+                                     req.type, NULL, NULL, ctx->crypto->devId);
 #ifdef DEBUG_CRYPTOCB_VERBOSE
                 printf("[server] cmac init with key:%p keylen:%d, type:%d ret:%d\n",
-                        key, packet->cmacReq.keySz, packet->cmacReq.type, ret);
+                        key, req.keySz, req.type, ret);
 #endif
             } else {
                 /* Key is not present, meaning client wants to use AES key from
@@ -1249,13 +1528,12 @@ static int _HandleCmac(whServerContext* server, whPacket* packet,
                  * (which also holds the key). To do this we hijack the requested key's
                  * cache slot until CmacFinal() is called, at which point we evict the
                  * struct from the cache. TODO: client should hold CMAC state */
-                len = sizeof(server->crypto->algoCtx.cmac);
-                keyId = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, server->comm->client_id, packet->cmacReq.keyId);
-                ret = hsmReadKey(server,
-                    keyId,
-                    NULL,
-                    (uint8_t*)server->crypto->algoCtx.cmac,
-                    (uint32_t*)&len);
+                len   = sizeof(ctx->crypto->algoCtx.cmac);
+                keyId = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id,
+                                      req.keyId);
+                ret   = wh_Server_KeystoreReadKey(
+                      ctx, keyId, NULL, (uint8_t*)ctx->crypto->algoCtx.cmac,
+                      (uint32_t*)&len);
                 if (ret == WH_ERROR_OK) {
                     /* if the key size is a multiple of aes, init the key and
                      * overwrite the existing key on exit */
@@ -1265,39 +1543,40 @@ static int _HandleCmac(whServerContext* server, whPacket* packet,
                         printf("[server] cmac readkey got key len:%u\n", len);
 #endif
                         moveToBigCache = 1;
-                        XMEMCPY(tmpKey, (uint8_t*)server->crypto->algoCtx.cmac, len);
-                        ret = wc_InitCmac_ex(server->crypto->algoCtx.cmac, tmpKey, len,
-                            WC_CMAC_AES, NULL, NULL, server->crypto->devId);
+                        memcpy(tmpKey, (uint8_t*)ctx->crypto->algoCtx.cmac,
+                               len);
+                        ret = wc_InitCmac_ex(ctx->crypto->algoCtx.cmac, tmpKey, len,
+                            WC_CMAC_AES, NULL, NULL, ctx->crypto->devId);
                     }
-                    else if (len != sizeof(server->crypto->algoCtx.cmac)) {
+                    else if (len != sizeof(ctx->crypto->algoCtx.cmac)) {
 #ifdef DEBUG_CRYPTOCB_VERBOSE
                         printf("[server] cmac bad readkey len:%u. sizeof(cmac):%lu\n",
-                                len, sizeof(server->crypto->algoCtx.cmac));
+                                len, sizeof(ctx->crypto->algoCtx.cmac));
 #endif
                         ret = BAD_FUNC_ARG;
                     }
-                } else {
+                }
+                else {
                     /* Initialize the cmac with a NULL key */
                     /* initialize cmac with key and type */
-                    ret = wc_InitCmac_ex(server->crypto->algoCtx.cmac, NULL,
-                        packet->cmacReq.keySz, packet->cmacReq.type, NULL, NULL,
-                        server->crypto->devId);
+                    ret = wc_InitCmac_ex(ctx->crypto->algoCtx.cmac, NULL,
+                        req.keySz, req.type, NULL, NULL, ctx->crypto->devId);
 #ifdef DEBUG_CRYPTOCB_VERBOSE
                     printf("[server] cmac init with NULL type:%d ret:%d\n",
-                            packet->cmacReq.type, ret);
+                            req.type, ret);
 #endif
                 }
             }
             /* Handle CMAC update, checking for cancellation */
-            if (ret == 0 && packet->cmacReq.inSz != 0) {
-                for (i = 0; ret == 0 && i < packet->cmacReq.inSz; i += AES_BLOCK_SIZE) {
-                    if (i + AES_BLOCK_SIZE > packet->cmacReq.inSz) {
-                        blockSz = packet->cmacReq.inSz - i;
+            if (ret == 0 && req.inSz != 0) {
+                for (i = 0; ret == 0 && i < req.inSz; i += AES_BLOCK_SIZE) {
+                    if (i + AES_BLOCK_SIZE > req.inSz) {
+                        blockSz = req.inSz - i;
                     }
-                    ret = wc_CmacUpdate(server->crypto->algoCtx.cmac, in + i,
+                    ret = wc_CmacUpdate(ctx->crypto->algoCtx.cmac, in + i,
                         blockSz);
                     if (ret == 0) {
-                        ret = wh_Server_GetCanceledSequence(server, &cancelSeq);
+                        ret = wh_Server_GetCanceledSequence(ctx, &cancelSeq);
                         if (ret == 0 && cancelSeq == seq) {
                             ret = WH_ERROR_CANCEL;
                         }
@@ -1309,24 +1588,24 @@ static int _HandleCmac(whServerContext* server, whPacket* packet,
             }
             /* do final and evict the struct if outSz is set, otherwise cache the
              * struct for a future call */
-            if ((ret == 0 && packet->cmacReq.outSz != 0) || ret == WH_ERROR_CANCEL) {
+            if ((ret == 0 && req.outSz != 0) || ret == WH_ERROR_CANCEL) {
                 if (ret != WH_ERROR_CANCEL) {
-                    keyId = packet->cmacReq.keyId;
-                    len = packet->cmacReq.outSz;
+                    keyId = req.keyId;
+                    len = req.outSz;
 #ifdef DEBUG_CRYPTOCB_VERBOSE
                     printf("[server] cmac final keyId:%x len:%d\n",keyId, len);
 #endif
-                    ret = wc_CmacFinal(server->crypto->algoCtx.cmac, out, &len);
-                    packet->cmacRes.outSz = len;
-                    packet->cmacRes.keyId = WH_KEYID_ERASED;
+                    ret = wc_CmacFinal(ctx->crypto->algoCtx.cmac, out, &len);
+                    res.outSz = len;
+                    res.keyId = WH_KEYID_ERASED;
                 }
                 /* evict the key, canceling means abandoning the current state */
                 if (ret == 0 || ret == WH_ERROR_CANCEL) {
                     if (!WH_KEYID_ISERASED(keyId)) {
                         /* Don't override return value except on failure */
-                        int tmpRet = hsmEvictKey(
-                            server, WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
-                                                       server->comm->client_id, keyId));
+                        int tmpRet = wh_Server_KeystoreEvictKey(
+                            ctx, WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
+                                               ctx->comm->client_id, keyId));
                         if (tmpRet != 0) {
                             ret = tmpRet;
                         }
@@ -1336,29 +1615,30 @@ static int _HandleCmac(whServerContext* server, whPacket* packet,
             /* Cache the CMAC struct for a future update call */
             else if (ret == 0) {
                 /* cache/re-cache updated struct */
-                if (packet->cmacReq.keySz != 0) {
+                if (req.keySz != 0) {
                     keyId = WH_MAKE_KEYID(  WH_KEYTYPE_CRYPTO,
-                                            server->comm->client_id,
+                                            ctx->comm->client_id,
                                             WH_KEYID_ERASED);
-                    ret = hsmGetUniqueId(server, &keyId);
+                    ret   = wh_Server_KeystoreGetUniqueId(ctx, &keyId);
                 }
                 else {
                     keyId = WH_MAKE_KEYID(  WH_KEYTYPE_CRYPTO,
-                                            server->comm->client_id,
-                                            packet->cmacReq.keyId);
+                                            ctx->comm->client_id,
+                                            req.keyId);
                 }
                 /* evict the aes sized key in the normal cache */
                 if (moveToBigCache == 1) {
-                    ret = hsmEvictKey(server, keyId);
+                    ret = wh_Server_KeystoreEvictKey(ctx, keyId);
                 }
                 meta->id = keyId;
-                meta->len = sizeof(server->crypto->algoCtx.cmac);
-                ret = hsmCacheKey(server, meta, (uint8_t*)server->crypto->algoCtx.cmac);
-                packet->cmacRes.keyId = WH_KEYID_ID(keyId);
-                packet->cmacRes.outSz = 0;
+                meta->len = sizeof(ctx->crypto->algoCtx.cmac);
+                ret       = wh_Server_KeystoreCacheKey(
+                          ctx, meta, (uint8_t*)ctx->crypto->algoCtx.cmac);
+                res.keyId = WH_KEYID_ID(keyId);
+                res.outSz = 0;
 #ifdef DEBUG_CRYPTOCB_VERBOSE
                 printf("[server] cmac saved state in keyid:%x %x len:%u ret:%d type:%d\n",
-                        keyId, WH_KEYID_ID(keyId), meta->len, ret, server->crypto->algoCtx.cmac->type);
+                        keyId, WH_KEYID_ID(keyId), meta->len, ret, ctx->crypto->algoCtx.cmac->type);
 #endif
             }
         }
@@ -1369,8 +1649,10 @@ static int _HandleCmac(whServerContext* server, whPacket* packet,
         ret = CRYPTOCB_UNAVAILABLE;
     }
     if (ret == 0) {
-        *size = WH_PACKET_STUB_SIZE + sizeof(packet->cmacRes) +
-            packet->cmacRes.outSz;
+        ret = wh_MessageCrypto_TranslateCmacResponse(magic, &res, cryptoDataOut);
+        if (ret == 0) {
+            *outSize = sizeof(res) + res.outSz;
+        }
     }
 #ifdef DEBUG_CRYPTOCB_VERBOSE
     printf("[server] cmac end ret:%d\n", ret);
@@ -1380,50 +1662,66 @@ static int _HandleCmac(whServerContext* server, whPacket* packet,
 #endif
 
 #ifndef NO_SHA256
-static int _HandleSha256(whServerContext* server, whPacket* packet,
-                           uint16_t* size)
+static int _HandleSha256(whServerContext* ctx, uint16_t magic,
+                         const void* cryptoDataIn, uint16_t inSize,
+                         void* cryptoDataOut, uint16_t* outSize)
 {
-    int                        ret    = 0;
-    wc_Sha256*                 sha256 = server->crypto->algoCtx.sha256;
-    wh_Packet_hash_sha256_req* req    = &packet->hashSha256Req;
-    wh_Packet_hash_sha256_res* res    = &packet->hashSha256Res;
+    int                            ret    = 0;
+    wc_Sha256*                     sha256 = ctx->crypto->algoCtx.sha256;
+    whMessageCrypto_Sha256Request  req;
+    whMessageCrypto_Sha256Response res;
 
     /* THe server SHA256 struct doesn't persist state (it is a union), meaning
      * the devId may get blown away between calls. We must restore the server
      * devId each time */
-    sha256->devId = server->crypto->devId;
+    sha256->devId = ctx->crypto->devId;
+
+    /* Translate the request */
+    ret = wh_MessageCrypto_TranslateSha256Request(magic, cryptoDataIn, &req);
+    if (ret != 0) {
+        return ret;
+    }
 
     /* Init the SHA256 context if this is the first time, otherwise restore the
      * hash state from the client */
-    if (req->resumeState.hiLen == 0 && req->resumeState.loLen == 0) {
-        ret = wc_InitSha256_ex(sha256, NULL, server->crypto->devId);
+    if (req.resumeState.hiLen == 0 && req.resumeState.loLen == 0) {
+        ret = wc_InitSha256_ex(sha256, NULL, ctx->crypto->devId);
     }
     else {
-         /* HAVE_DILITHIUM */
-        XMEMCPY(sha256->digest, req->resumeState.hash, WC_SHA256_DIGEST_SIZE);
-        sha256->loLen = req->resumeState.loLen;
-        sha256->hiLen = req->resumeState.hiLen;
+        /* HAVE_DILITHIUM */
+        memcpy(sha256->digest, req.resumeState.hash, WC_SHA256_DIGEST_SIZE);
+        sha256->loLen = req.resumeState.loLen;
+        sha256->hiLen = req.resumeState.hiLen;
     }
 
-    if (req->isLastBlock) {
+    if (req.isLastBlock) {
         /* wolfCrypt (or cryptoCb) is responsible for last block padding */
         if (ret == 0) {
-            ret = wc_Sha256Update(sha256, req->inBlock, req->lastBlockLen);
+            ret = wc_Sha256Update(sha256, req.inBlock, req.lastBlockLen);
         }
         if (ret == 0) {
-            ret = wc_Sha256Final(sha256, res->hash);
+            ret = wc_Sha256Final(sha256, res.hash);
         }
     }
     else {
         /* Client always sends full blocks, unless it's the last block */
         if (ret == 0) {
-            ret = wc_Sha256Update(sha256, req->inBlock, WC_SHA256_BLOCK_SIZE);
+            ret = wc_Sha256Update(sha256, req.inBlock, WC_SHA256_BLOCK_SIZE);
         }
         /* Send the hash state back to the client */
         if (ret == 0) {
-            XMEMCPY(res->hash, sha256->digest, WC_SHA256_DIGEST_SIZE);
-            res->loLen = sha256->loLen;
-            res->hiLen = sha256->hiLen;
+            memcpy(res.hash, sha256->digest, WC_SHA256_DIGEST_SIZE);
+            res.loLen = sha256->loLen;
+            res.hiLen = sha256->hiLen;
+        }
+    }
+
+    /* Translate the response */
+    if (ret == 0) {
+        ret = wh_MessageCrypto_TranslateSha256Response(magic, &res,
+                                                       cryptoDataOut);
+        if (ret == 0) {
+            *outSize = sizeof(res);
         }
     }
 
@@ -1465,41 +1763,53 @@ static int _IsMlDsaLevelSupported(int level)
 }
 #endif /* WOLFSSL_DILITHIUM_NO_MAKE_KEY */
 
-static int _HandleMlDsaKeyGen(whServerContext* ctx, whPacket* packet,
-    uint16_t* out_size)
+static int _HandleMlDsaKeyGen(whServerContext* ctx, uint16_t magic,
+                              const void* cryptoDataIn, uint16_t inSize,
+                              void* cryptoDataOut, uint16_t* outSize)
 {
 #ifdef WOLFSSL_DILITHIUM_NO_MAKE_KEY
     (void)ctx;
-    (void)packet;
-    (void)out_size;
+    (void)magic;
+    (void)cryptoDataIn;
+    (void)inSize;
+    (void)cryptoDataOut;
+    (void)outSize;
     return WH_ERROR_NOHANDLER;
 #else
-    int ret = WH_ERROR_OK;
-    MlDsaKey key[1];
-    wh_Packet_pq_mldsa_kg_req* req = &packet->pqMldsaKgReq;
-    wh_Packet_pq_mldsa_kg_res* res = &packet->pqMldsaKgRes;
+    int                                 ret = WH_ERROR_OK;
+    MlDsaKey                            key[1];
+    whMessageCrypto_MlDsaKeyGenRequest  req;
+    whMessageCrypto_MlDsaKeyGenResponse res;
 
-    /* Request message */
-    int     key_size = req->sz;
+    /* Translate the request */
+    ret = wh_MessageCrypto_TranslateMlDsaKeyGenRequest(
+        magic, (whMessageCrypto_MlDsaKeyGenRequest*)cryptoDataIn, &req);
+    if (ret != 0) {
+        return ret;
+    }
+
+    /* Extract parameters from translated request */
+    int     key_size = req.sz;
     whKeyId key_id =
-        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req->keyId);
-    int        level      = req->level;
-    whNvmFlags flags      = req->flags;
-    uint8_t*   label      = req->label;
+        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+    int        level      = req.level;
+    whNvmFlags flags      = req.flags;
+    uint8_t*   label      = req.label;
     uint16_t   label_size = WH_NVM_LABEL_LEN;
 
     /* Response message */
-    uint8_t* res_out    = (uint8_t*)(res + 1);
-    uint16_t max_size     = (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN -
-                            (res_out - (uint8_t*)packet));
-    uint16_t res_size   = 0;
+    uint8_t* res_out =
+        (uint8_t*)cryptoDataOut + sizeof(whMessageCrypto_MlDsaKeyGenResponse);
+    uint16_t max_size = (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN -
+                                   (res_out - (uint8_t*)cryptoDataOut));
+    uint16_t res_size = 0;
 
     /* TODO key_sz is not used. Should this instead be used as max_size? Figure
      * out the relation between all three */
     (void)key_size;
 
     /* Check the ML-DSA security level is valid and supported */
-    if (0 ==_IsMlDsaLevelSupported(level)) {
+    if (0 == _IsMlDsaLevelSupported(level)) {
         ret = WH_ERROR_BADARGS;
     }
     else {
@@ -1525,7 +1835,7 @@ static int _HandleMlDsaKeyGen(whServerContext* ctx, whPacket* packet,
                         res_size = 0;
                         if (WH_KEYID_ISERASED(key_id)) {
                             /* Generate a new id */
-                            ret = hsmGetUniqueId(ctx, &key_id);
+                            ret = wh_Server_KeystoreGetUniqueId(ctx, &key_id);
 #ifdef DEBUG_CRYPTOCB
                             printf("[server] %s UniqueId: keyId:%u, ret:%d\n",
                                    __func__, key_id, ret);
@@ -1544,42 +1854,58 @@ static int _HandleMlDsaKeyGen(whServerContext* ctx, whPacket* packet,
         }
 
         if (ret == WH_ERROR_OK) {
-            res->keyId = WH_KEYID_ID(key_id);
-            res->len   = res_size;
-            *out_size  = WH_PACKET_STUB_SIZE + sizeof(*res) + res_size;
+            res.keyId = WH_KEYID_ID(key_id);
+            res.len   = res_size;
+
+            wh_MessageCrypto_TranslateMlDsaKeyGenResponse(magic, &res,
+                                                          cryptoDataOut);
+
+            *outSize = sizeof(whMessageCrypto_MlDsaKeyGenResponse) + res_size;
         }
     }
     return ret;
 #endif /* WOLFSSL_DILITHIUM_NO_MAKE_KEY */
 }
 
-static int _HandleMlDsaSign(whServerContext* ctx, whPacket* packet,
-        uint16_t *out_size)
+static int _HandleMlDsaSign(whServerContext* ctx, uint16_t magic,
+                            const void* cryptoDataIn, uint16_t inSize,
+                            void* cryptoDataOut, uint16_t* outSize)
 {
 #ifdef WOLFSSL_DILITHIUM_NO_SIGN
     (void)ctx;
-    (void)packet;
-    (void)out_size;
+    (void)magic;
+    (void)cryptoDataIn;
+    (void)inSize;
+    (void)cryptoDataOut;
+    (void)outSize;
     return WH_ERROR_NOHANDLER;
 #else
-    int                          ret;
-    MlDsaKey                     key[1];
-    wh_Packet_pq_mldsa_sign_req* req = &packet->pqMldsaSignReq;
-    wh_Packet_pq_mldsa_sign_res* res = &packet->pqMldsaSignRes;
+    int                                 ret;
+    MlDsaKey                            key[1];
+    whMessageCrypto_MlDsaSignRequest    req;
+    whMessageCrypto_MlDsaSignResponse   res;
 
-    /* Request message */
-    byte*   in = (uint8_t*)(req + 1);
+    /* Translate the request */
+    ret = wh_MessageCrypto_TranslateMlDsaSignRequest(
+        magic, (whMessageCrypto_MlDsaSignRequest*)cryptoDataIn, &req);
+    if (ret != 0) {
+        return ret;
+    }
+
+    /* Extract parameters from translated request */
+    byte*   in = (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_MlDsaSignRequest);
     whKeyId key_id =
-        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req->keyId);
-    word32   in_len  = req->sz;
-    uint32_t options = req->options;
-    int      evict   = !!(options & WH_PACKET_PQ_MLDSA_SIGN_OPTIONS_EVICT);
+        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+    word32   in_len  = req.sz;
+    uint32_t options = req.options;
+    int      evict   = !!(options & WH_MESSAGE_CRYPTO_MLDSA_SIGN_OPTIONS_EVICT);
 
     /* Response message */
-    byte*        res_out = (uint8_t*)(res + 1);
-    const word32 max_len =
-        (word32)(WOLFHSM_CFG_COMM_DATA_LEN - (res_out - (uint8_t*)packet));
-    word32 res_len;
+    byte* res_out =
+        (uint8_t*)(cryptoDataOut) + sizeof(whMessageCrypto_MlDsaSignResponse);
+    const word32 max_len = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
+                                    (res_out - (uint8_t*)cryptoDataOut));
+    word32       res_len = max_len;
 
     /* init private key */
     ret = wc_MlDsaKey_Init(key, NULL, ctx->crypto->devId);
@@ -1588,46 +1914,61 @@ static int _HandleMlDsaSign(whServerContext* ctx, whPacket* packet,
         ret = wh_Server_MlDsaKeyCacheExport(ctx, key_id, key);
         if (ret == WH_ERROR_OK) {
             /* sign the input */
-            res_len = max_len;
             ret     = wc_MlDsaKey_Sign(key, res_out, &res_len, in, in_len,
                                        ctx->crypto->rng);
         }
         wc_MlDsaKey_Free(key);
     }
     if (evict != 0) {
-        (void)hsmEvictKey(ctx, key_id);
+        (void)wh_Server_KeystoreEvictKey(ctx, key_id);
     }
     if (ret == 0) {
-        res->sz   = res_len;
-        *out_size = WH_PACKET_STUB_SIZE + sizeof(*res) + res_len;
+        res.sz   = res_len;
+
+        wh_MessageCrypto_TranslateMlDsaSignResponse(
+            magic, &res, (whMessageCrypto_MlDsaSignResponse*)cryptoDataOut);
+
+        *outSize = sizeof(whMessageCrypto_MlDsaSignResponse) + res_len;
     }
     return ret;
 #endif /* WOLFSSL_DILITHIUM_NO_SIGN */
 }
 
-static int _HandleMlDsaVerify(whServerContext* ctx, whPacket* packet,
-        uint16_t *out_size)
+static int _HandleMlDsaVerify(whServerContext* ctx, uint16_t magic,
+                              const void* cryptoDataIn, uint16_t inSize,
+                              void* cryptoDataOut, uint16_t* outSize)
 {
 #ifdef WOLFSSL_DILITHIUM_NO_VERIFY
     (void)ctx;
-    (void)packet;
-    (void)out_size;
+    (void)magic;
+    (void)cryptoDataIn;
+    (void)inSize;
+    (void)cryptoDataOut;
+    (void)outSize;
     return WH_ERROR_NOHANDLER;
 #else
-    int                            ret;
-    MlDsaKey                       key[1];
-    wh_Packet_pq_mldsa_verify_req* req = &packet->pqMldsaVerifyReq;
-    wh_Packet_pq_mldsa_verify_res* res = &packet->pqMldsaVerifyRes;
+    int                                 ret;
+    MlDsaKey                            key[1];
+    whMessageCrypto_MlDsaVerifyRequest  req;
+    whMessageCrypto_MlDsaVerifyResponse res;
 
-    /* Request Message */
-    uint32_t options = req->options;
+    /* Translate the request */
+    ret = wh_MessageCrypto_TranslateMlDsaVerifyRequest(
+        magic, (whMessageCrypto_MlDsaVerifyRequest*)cryptoDataIn, &req);
+    if (ret != 0) {
+        return ret;
+    }
+
+    /* Extract parameters from translated request */
+    uint32_t options = req.options;
     whKeyId  key_id =
-        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req->keyId);
-    uint32_t hash_len = req->hashSz;
-    uint32_t sig_len  = req->sigSz;
-    byte*    req_sig  = (uint8_t*)(req + 1);
+        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+    uint32_t hash_len = req.hashSz;
+    uint32_t sig_len  = req.sigSz;
+    byte*    req_sig =
+        (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_MlDsaVerifyRequest);
     byte*    req_hash = req_sig + sig_len;
-    int      evict    = !!(options & WH_PACKET_PQ_MLDSAVERIFY_OPTIONS_EVICT);
+    int      evict = !!(options & WH_MESSAGE_CRYPTO_MLDSA_VERIFY_OPTIONS_EVICT);
 
     /* Response message */
     int result;
@@ -1646,47 +1987,62 @@ static int _HandleMlDsaVerify(whServerContext* ctx, whPacket* packet,
     }
     if (evict != 0) {
         /* User requested to evict from cache, even if the call failed */
-        (void)hsmEvictKey(ctx, key_id);
+        (void)wh_Server_KeystoreEvictKey(ctx, key_id);
     }
     if (ret == 0) {
-        res->res  = result;
-        *out_size = WH_PACKET_STUB_SIZE + sizeof(*res);
+        res.res  = result;
+
+        wh_MessageCrypto_TranslateMlDsaVerifyResponse(
+            magic, &res, (whMessageCrypto_MlDsaVerifyResponse*)cryptoDataOut);
+
+        *outSize = sizeof(whMessageCrypto_MlDsaVerifyResponse);
     }
     return ret;
 #endif /* WOLFSSL_DILITHIUM_NO_VERIFY */
 }
 
-static int _HandleMlDsaCheckPrivKey(whServerContext* ctx, whPacket* packet,
-        uint16_t *out_size)
+static int _HandleMlDsaCheckPrivKey(whServerContext* ctx, uint16_t magic,
+                                    const void* cryptoDataIn, uint16_t inSize,
+                                    void* cryptoDataOut, uint16_t* outSize)
 {
     return WH_ERROR_NOHANDLER;
 }
 #endif /* HAVE_DILITHIUM */
 
 #if defined(HAVE_DILITHIUM) || defined(HAVE_FALCON)
-static int _HandlePqcSigAlgorithm(whServerContext* ctx, whPacket* packet,
-                                  uint16_t* size)
+static int _HandlePqcSigAlgorithm(whServerContext* ctx, uint16_t magic,
+                                  const void* cryptoDataIn,
+                                  uint16_t cryptoInSize, void* cryptoDataOut,
+                                  uint16_t* cryptoOutSize, uint32_t pkAlgoType,
+                                  uint32_t pqAlgoType)
 {
-    int                      ret = WH_ERROR_NOHANDLER;
-    wh_Packet_pk_pq_any_req* req = &packet->pkPqAnyReq;
+    int ret = WH_ERROR_NOHANDLER;
 
     /* Dispatch the appropriate algorithm handler based on the requested PK type
      * and the algorithm type. */
-    switch (req->pqAlgoType) {
+    switch (pqAlgoType) {
 #ifdef HAVE_DILITHIUM
         case WC_PQC_SIG_TYPE_DILITHIUM: {
-            switch (req->type) {
+            switch (pkAlgoType) {
                 case WC_PK_TYPE_PQC_SIG_KEYGEN:
-                    ret = _HandleMlDsaKeyGen(ctx, packet, size);
+                    ret = _HandleMlDsaKeyGen(ctx, magic, cryptoDataIn,
+                                             cryptoInSize, cryptoDataOut,
+                                             cryptoOutSize);
                     break;
                 case WC_PK_TYPE_PQC_SIG_SIGN:
-                    ret = _HandleMlDsaSign(ctx, packet, size);
+                    ret =
+                        _HandleMlDsaSign(ctx, magic, cryptoDataIn, cryptoInSize,
+                                         cryptoDataOut, cryptoOutSize);
                     break;
                 case WC_PK_TYPE_PQC_SIG_VERIFY:
-                    ret = _HandleMlDsaVerify(ctx, packet, size);
+                    ret = _HandleMlDsaVerify(ctx, magic, cryptoDataIn,
+                                             cryptoInSize, cryptoDataOut,
+                                             cryptoOutSize);
                     break;
                 case WC_PK_TYPE_PQC_SIG_CHECK_PRIV_KEY:
-                    ret = _HandleMlDsaCheckPrivKey(ctx, packet, size);
+                    ret = _HandleMlDsaCheckPrivKey(ctx, magic, cryptoDataIn,
+                                                   cryptoInSize, cryptoDataOut,
+                                                   cryptoOutSize);
                     break;
                 default:
                     ret = WH_ERROR_NOHANDLER;
@@ -1712,172 +2068,218 @@ static int _HandlePqcKemAlgorithm(whServerContext* ctx, whPacket* packet,
 }
 #endif
 
-int wh_Server_HandleCryptoRequest(whServerContext* ctx,
-    uint16_t action, uint8_t* data, uint16_t *inout_size, uint16_t seq)
+int wh_Server_HandleCryptoRequest(whServerContext* ctx, uint16_t magic,
+                                  uint16_t action, uint16_t seq,
+                                  uint16_t req_size, const void* req_packet,
+                                  uint16_t* out_resp_size, void* resp_packet)
 {
-    int ret = 0;
-    uint8_t* out;
-    whPacket* packet = (whPacket*)data;
+    int                                   ret        = 0;
+    whMessageCrypto_GenericRequestHeader  rqstHeader = {0};
+    whMessageCrypto_GenericResponseHeader respHeader = {0};
 
-    if (    (ctx == NULL) ||
-            (ctx->crypto == NULL) ||
-            (data == NULL) ||
-            (inout_size == NULL)) {
-        return BAD_FUNC_ARG;
+    const void* cryptoDataIn =
+        (uint8_t*)req_packet + sizeof(whMessageCrypto_GenericRequestHeader);
+    void* cryptoDataOut =
+        (uint8_t*)resp_packet + sizeof(whMessageCrypto_GenericResponseHeader);
+
+    /* Input and output sizes for data passed to crypto handlers. cryptoOutSize
+     * should be set by the crypto handler as an output parameter */
+    uint16_t cryptoInSize =
+        req_size - sizeof(whMessageCrypto_GenericResponseHeader);
+    uint16_t cryptoOutSize = 0;
+
+    if ((ctx == NULL) || (ctx->crypto == NULL) || (req_packet == NULL) ||
+        (resp_packet == NULL) || (out_resp_size == NULL)) {
+        return WH_ERROR_BADARGS;
     }
 
-#ifdef DEBUG_CRYPTOCB_VERBOSE
+    /* Translate the request message to get the algo type */
+    wh_MessageCrypto_TranslateGenericRequestHeader(
+        magic, (whMessageCrypto_GenericRequestHeader*)req_packet, &rqstHeader);
+
+
+#ifdef DEBUG_CRYPTOCB
     printf("[server] HandleCryptoRequest. Action:%u\n", action);
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+    wh_Utils_Hexdump("[server] Crypto Request:\n", (const uint8_t*)req_packet,
+                     req_size);
 #endif
-    switch (action)
-    {
-    case WC_ALGO_TYPE_CIPHER:
-        switch (packet->cipherAnyReq.type)
-        {
+#endif
+    switch (action) {
+        case WC_ALGO_TYPE_CIPHER:
+            switch (rqstHeader.algoType) {
 #ifndef NO_AES
 #ifdef HAVE_AES_CBC
-        case WC_CIPHER_AES_CBC:
-            ret = _HandleAesCbc(ctx, packet, inout_size);
-            break;
+                case WC_CIPHER_AES_CBC:
+                    ret = _HandleAesCbc(ctx, magic, cryptoDataIn, cryptoInSize,
+                                        cryptoDataOut, &cryptoOutSize);
+                    break;
 #endif /* HAVE_AES_CBC */
 #ifdef HAVE_AESGCM
-        case WC_CIPHER_AES_GCM:
-            ret = _HandleAesGcm(ctx, packet, inout_size);
-            break;
+                case WC_CIPHER_AES_GCM:
+                    ret = _HandleAesGcm(ctx, magic, cryptoDataIn, cryptoInSize,
+                                        cryptoDataOut, &cryptoOutSize);
+                    break;
 #endif /* HAVE_AESGCM */
 #endif /* !NO_AES */
-        default:
-            ret = NOT_COMPILED_IN;
+                default:
+                    ret = NOT_COMPILED_IN;
+                    break;
+            }
             break;
-        }
-        break;
-    case WC_ALGO_TYPE_PK:
-    {
-        int type = (int)(packet->pkAnyReq.type);
+        case WC_ALGO_TYPE_PK: {
 #ifdef DEBUG_CRYPTOCB_VERBOSE
-        printf("[server] PK type:%d\n", type);
+            printf("[server] PK type:%d\n", rqstHeader.algoType);
 #endif
-        switch (type)
-        {
+            switch (rqstHeader.algoType) {
 #ifndef NO_RSA
 #ifdef WOLFSSL_KEY_GEN
-        case WC_PK_TYPE_RSA_KEYGEN:
-            ret = _HandleRsaKeyGen(ctx, packet, inout_size);
-            break;
-#endif  /* WOLFSSL_KEY_GEN */
-        case WC_PK_TYPE_RSA:
-            ret = _HandleRsaFunction(ctx, packet, inout_size);
-            break;
-        case WC_PK_TYPE_RSA_GET_SIZE:
-            ret = _HandleRsaGetSize(ctx, packet, inout_size);
-            break;
+                case WC_PK_TYPE_RSA_KEYGEN:
+                    ret =
+                        _HandleRsaKeyGen(ctx, magic, cryptoDataIn, cryptoInSize,
+                                         cryptoDataOut, &cryptoOutSize);
+                    break;
+#endif /* WOLFSSL_KEY_GEN */
+                case WC_PK_TYPE_RSA:
+                    ret = _HandleRsaFunction(ctx, magic, cryptoDataIn,
+                                             cryptoInSize, cryptoDataOut,
+                                             &cryptoOutSize);
+                    break;
+
+                case WC_PK_TYPE_RSA_GET_SIZE:
+                    ret = _HandleRsaGetSize(ctx, magic, cryptoDataIn,
+                                            cryptoInSize, cryptoDataOut,
+                                            &cryptoOutSize);
+                    break;
 #endif /* !NO_RSA */
+
 #ifdef HAVE_ECC
-        case WC_PK_TYPE_EC_KEYGEN:
-            ret = _HandleEccKeyGen(ctx, packet, inout_size);
-            break;
-        case WC_PK_TYPE_ECDH:
-            ret = _HandleEccSharedSecret(ctx, packet, inout_size);
-            break;
-        case WC_PK_TYPE_ECDSA_SIGN:
-            ret = _HandleEccSign(ctx, packet, inout_size);
-            break;
-        case WC_PK_TYPE_ECDSA_VERIFY:
-            ret = _HandleEccVerify(ctx, packet, inout_size);
-            break;
+                case WC_PK_TYPE_EC_KEYGEN:
+                    ret =
+                        _HandleEccKeyGen(ctx, magic, cryptoDataIn, cryptoInSize,
+                                         cryptoDataOut, &cryptoOutSize);
+                    break;
+                case WC_PK_TYPE_ECDH:
+                    ret = _HandleEccSharedSecret(ctx, magic, cryptoDataIn,
+                                                 cryptoInSize, cryptoDataOut,
+                                                 &cryptoOutSize);
+                    break;
+                case WC_PK_TYPE_ECDSA_SIGN:
+                    ret = _HandleEccSign(ctx, magic, cryptoDataIn, cryptoInSize,
+                                         cryptoDataOut, &cryptoOutSize);
+                    break;
+                case WC_PK_TYPE_ECDSA_VERIFY:
+                    ret = _HandleEccVerify(ctx, magic, cryptoDataIn, cryptoInSize,
+                                           cryptoDataOut, &cryptoOutSize);
+                    break;
 #if 0
         case WC_PK_TYPE_EC_CHECK_PRIV_KEY:
-            ret = _HandleEccCheckPrivKey(ctx, (whPacket*)data, inout_size);
+            ret = _HandleEccCheckPrivKey(ctx, magic, cryptoDataIn, cryptoInSize,
+                                          cryptoDataOut, &cryptoOutSize);
             break;
 #endif
 #endif /* HAVE_ECC */
 
 #ifdef HAVE_CURVE25519
-        case WC_PK_TYPE_CURVE25519_KEYGEN:
-            ret = _HandleCurve25519KeyGen(ctx,
-                    packet, inout_size);
-            break;
-        case WC_PK_TYPE_CURVE25519:
-            ret = _HandleCurve25519SharedSecret(ctx,
-                    packet, inout_size);
-            break;
+                case WC_PK_TYPE_CURVE25519_KEYGEN:
+                    ret = _HandleCurve25519KeyGen(ctx, magic, cryptoDataIn,
+                                                  cryptoInSize, cryptoDataOut,
+                                                  &cryptoOutSize);
+                    break;
+                case WC_PK_TYPE_CURVE25519:
+                    ret = _HandleCurve25519SharedSecret(
+                        ctx, magic, cryptoDataIn, cryptoInSize, cryptoDataOut,
+                        &cryptoOutSize);
+                    break;
 #endif /* HAVE_CURVE25519 */
 
 #if defined(HAVE_DILITHIUM) || defined(HAVE_FALCON)
-        case WC_PK_TYPE_PQC_SIG_KEYGEN:
-        case WC_PK_TYPE_PQC_SIG_SIGN:
-        case WC_PK_TYPE_PQC_SIG_VERIFY:
-        case WC_PK_TYPE_PQC_SIG_CHECK_PRIV_KEY:
-            ret = _HandlePqcSigAlgorithm(ctx, packet, inout_size);
-            break;
+                case WC_PK_TYPE_PQC_SIG_KEYGEN:
+                case WC_PK_TYPE_PQC_SIG_SIGN:
+                case WC_PK_TYPE_PQC_SIG_VERIFY:
+                case WC_PK_TYPE_PQC_SIG_CHECK_PRIV_KEY:
+                    ret = _HandlePqcSigAlgorithm(
+                        ctx, magic, cryptoDataIn, cryptoInSize, cryptoDataOut,
+                        &cryptoOutSize, rqstHeader.algoType,
+                        rqstHeader.algoSubType);
+                    break;
 #endif
 
 #if defined(HAVE_KYBER)
-        case WC_PK_TYPE_PQC_KEM_KEYGEN:
-        case WC_PK_TYPE_PQC_KEM_ENCAPS:
-        case WC_PK_TYPE_PQC_KEM_DECAPS:
-            ret = _HandlePqcKemAlgorithm(ctx, packet, inout_size);
+                case WC_PK_TYPE_PQC_KEM_KEYGEN:
+                case WC_PK_TYPE_PQC_KEM_ENCAPS:
+                case WC_PK_TYPE_PQC_KEM_DECAPS:
+                    ret =
+                        _HandlePqcKemAlgorithm(ctx, magic, cryptoDataIn, cryptoInSize,
+                                               cryptoDataOut, &cryptoOutSize);
+                    break;
+#endif
+
+                default:
+                    ret = NOT_COMPILED_IN;
+                    break;
+            }
+        }; break;
+
+#ifndef WC_NO_RNG
+        case WC_ALGO_TYPE_RNG:
+            ret = _HandleRng(ctx, magic, cryptoDataIn, cryptoInSize,
+                             cryptoDataOut, &cryptoOutSize);
+            break;
+#endif /* !WC_NO_RNG */
+
+#ifdef WOLFSSL_CMAC
+        case WC_ALGO_TYPE_CMAC:
+            ret = _HandleCmac(ctx, magic, seq, cryptoDataIn, cryptoInSize,
+                              cryptoDataOut, &cryptoOutSize);
             break;
 #endif
 
+        case WC_ALGO_TYPE_HASH:
+            switch (rqstHeader.algoType) {
+#ifndef NO_SHA256
+                case WC_HASH_TYPE_SHA256:
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+                    printf("[server] SHA256 req recv. type:%u\n",
+                           rqstHeader.algoType);
+#endif
+                    ret = _HandleSha256(ctx, magic, cryptoDataIn, cryptoInSize,
+                                        cryptoDataOut, &cryptoOutSize);
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+                    if (ret != 0) {
+                        printf("[server] SHA256 ret = %d\n", ret);
+                    }
+#endif
+                    break;
+#endif /* !NO_SHA256 */
+                default:
+                    ret = NOT_COMPILED_IN;
+                    break;
+            }
+            break;
+
+        case WC_ALGO_TYPE_NONE:
         default:
             ret = NOT_COMPILED_IN;
             break;
-        }
-    }; break;
-
-#ifndef WC_NO_RNG
-    case WC_ALGO_TYPE_RNG:
-        /* out is after the fixed size fields */
-        out = (uint8_t*)(&packet->rngRes + 1);
-        /* generate the bytes */
-        ret = wc_RNG_GenerateBlock(ctx->crypto->rng, out, packet->rngReq.sz);
-        if (ret == 0) {
-            *inout_size = WH_PACKET_STUB_SIZE + sizeof(packet->rngRes) +
-                packet->rngRes.sz;
-        }
-        break;
-#endif /* !WC_NO_RNG */
-#ifdef WOLFSSL_CMAC
-    case WC_ALGO_TYPE_CMAC:
-        ret = _HandleCmac(ctx, packet, inout_size, seq);
-        break;
-#endif
-
-    case WC_ALGO_TYPE_HASH:
-        switch (packet->hashAnyReq.type) {
-#ifndef NO_SHA256
-            case WC_HASH_TYPE_SHA256:
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-                printf("[server] SHA256 req recv. type:%u\n",
-                       packet->hashSha256Req.type);
-#endif
-                ret = _HandleSha256(ctx, packet, inout_size);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-                if (ret != 0) {
-                    printf("[server] SHA256 ret = %d\n", ret);
-                }
-#endif
-                break;
-#endif /* !NO_SHA256 */
-
-            default:
-                ret = NOT_COMPILED_IN;
-                break;
-        }
-        break;
-
-    case WC_ALGO_TYPE_NONE:
-    default:
-        ret = NOT_COMPILED_IN;
-        break;
     }
 
-    /* Propagate error code to client in response packet */
-    packet->rc = ret;
+    /* Propagate error code to client in response packet header. Crypto handlers
+     * have already populated the response packet with the output data. */
+    respHeader.rc = ret;
+    respHeader.algoType = rqstHeader.algoType;
+    wh_MessageCrypto_TranslateGenericResponseHeader(
+        magic, &respHeader,
+        (whMessageCrypto_GenericResponseHeader*)resp_packet);
 
-    if (ret != 0)
-        *inout_size = WH_PACKET_STUB_SIZE;
+    /* Update the size of the response packet if crypto handler didn't fail */
+    if (ret != WH_ERROR_OK) {
+        *out_resp_size = sizeof(whMessageCrypto_GenericResponseHeader);
+    }
+    else {
+        *out_resp_size =
+            sizeof(whMessageCrypto_GenericResponseHeader) + cryptoOutSize;
+    }
 
 #ifdef DEBUG_CRYPTOCB
     printf("[server] %s End ret:%d\n", __func__, ret);
@@ -1887,7 +2289,7 @@ int wh_Server_HandleCryptoRequest(whServerContext* ctx,
      * packet, return success to the caller unless a cancellation has occurred
      */
     if (ret != WH_ERROR_CANCEL) {
-        ret = 0;
+        ret = WH_ERROR_OK;
     }
     return ret;
 }
@@ -1895,32 +2297,44 @@ int wh_Server_HandleCryptoRequest(whServerContext* ctx,
 #ifdef WOLFHSM_CFG_DMA
 
 #ifndef NO_SHA256
-static int _HandleSha256Dma(whServerContext* server, whPacket* packet,
-                            uint16_t* size)
+static int _HandleSha256Dma(whServerContext* ctx, uint16_t magic, uint16_t seq,
+                            const void* cryptoDataIn, uint16_t inSize,
+                            void* cryptoDataOut, uint16_t* outSize)
 {
-    int                            ret    = 0;
-    wh_Packet_hash_sha256_Dma_req* req    = &packet->hashSha256DmaReq;
-    wh_Packet_hash_sha256_Dma_res* res    = &packet->hashSha256DmaRes;
-    wc_Sha256*                     sha256 = server->crypto->algoCtx.sha256;
-    int        clientDevId;
+    int                               ret = 0;
+    whMessageCrypto_Sha256DmaRequest  req;
+    whMessageCrypto_Sha256DmaResponse res;
+    wc_Sha256*                        sha256 = ctx->crypto->algoCtx.sha256;
+    int                               clientDevId;
+
+    /* Translate the request */
+    ret = wh_MessageCrypto_TranslateSha256DmaRequest(
+        magic, (whMessageCrypto_Sha256DmaRequest*)cryptoDataIn, &req);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
 
     /* Ensure state sizes are the same */
-    if (req->state.sz != sizeof(*sha256)) {
-        res->dmaAddrStatus.badAddr = req->state;
-        return WH_ERROR_BADARGS;
+    if (req.state.sz != sizeof(*sha256)) {
+        res.dmaAddrStatus.badAddr = req.state;
+        ret                       = WH_ERROR_BADARGS;
     }
 
-    /* Copy the SHA256 context from client address space */
-    ret = whServerDma_CopyFromClient(server, sha256, req->state.addr,
-                                     req->state.sz, (whServerDmaFlags){0});
-    if (ret != WH_ERROR_OK) {
-        res->dmaAddrStatus.badAddr = req->state;
+    if (ret == WH_ERROR_OK) {
+        /* Copy the SHA256 context from client address space */
+        ret = whServerDma_CopyFromClient(ctx, sha256, req.state.addr,
+                                         req.state.sz, (whServerDmaFlags){0});
+        if (ret != WH_ERROR_OK) {
+            res.dmaAddrStatus.badAddr = req.state;
+        }
+        else {
+            /* Save the client devId to be restored later, when the context is
+             * copied back into client memory. */
+            clientDevId = sha256->devId;
+            /* overwrite the devId to that of the server for local crypto */
+            sha256->devId = ctx->crypto->devId;
+        }
     }
-    /* Save the client devId to be restored later, when the context is copied
-     * back into client memory. */
-    clientDevId = sha256->devId;
-    /* overwrite the devId to that of the server for local crypto */
-    sha256->devId = server->crypto->devId;
 
     /* TODO: perhaps we should sequentially update and finalize (need individual
      * flags as 0x0 could be a valid address?) just to future-proof, even though
@@ -1928,10 +2342,10 @@ static int _HandleSha256Dma(whServerContext* server, whPacket* packet,
 
     /* If finalize requested, finalize the SHA256 operation, wrapping client
      * address accesses with the associated DMA address processing */
-    if (ret == WH_ERROR_OK && req->finalize) {
+    if (ret == WH_ERROR_OK && req.finalize) {
         void* outAddr;
         ret = wh_Server_DmaProcessClientAddress(
-            server, req->output.addr, &outAddr, req->output.sz,
+            ctx, req.output.addr, &outAddr, req.output.sz,
             WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
 
         /* Finalize the SHA256 operation */
@@ -1944,12 +2358,12 @@ static int _HandleSha256Dma(whServerContext* server, whPacket* packet,
 
         if (ret == WH_ERROR_OK) {
             ret = wh_Server_DmaProcessClientAddress(
-                server, req->output.addr, &outAddr, req->output.sz,
+                ctx, req.output.addr, &outAddr, req.output.sz,
                 WH_DMA_OPER_CLIENT_WRITE_POST, (whServerDmaFlags){0});
         }
 
         if (ret == WH_ERROR_ACCESS) {
-            res->dmaAddrStatus.badAddr = req->output;
+            res.dmaAddrStatus.badAddr = req.output;
         }
     }
     else if (ret == WH_ERROR_OK) {
@@ -1957,26 +2371,26 @@ static int _HandleSha256Dma(whServerContext* server, whPacket* packet,
          * address accesses with the associated DMA address processing */
         void* inAddr;
         ret = wh_Server_DmaProcessClientAddress(
-            server, req->input.addr, &inAddr, req->input.sz,
+            ctx, req.input.addr, &inAddr, req.input.sz,
             WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
 
         /* Update the SHA256 operation */
         if (ret == WH_ERROR_OK) {
 #ifdef DEBUG_CRYPTOCB_VERBOSE
             printf("[server]   wc_Sha256Update: inAddr=%p, sz=%llu\n", inAddr,
-                   (long long unsigned int)req->input.sz);
+                   (long long unsigned int)req.input.sz);
 #endif
-            ret = wc_Sha256Update(sha256, inAddr, req->input.sz);
+            ret = wc_Sha256Update(sha256, inAddr, req.input.sz);
         }
 
         if (ret == WH_ERROR_OK) {
             ret = wh_Server_DmaProcessClientAddress(
-                server, req->input.addr, &inAddr, req->input.sz,
+                ctx, req.input.addr, &inAddr, req.input.sz,
                 WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
         }
 
         if (ret == WH_ERROR_ACCESS) {
-            res->dmaAddrStatus.badAddr = req->input;
+            res.dmaAddrStatus.badAddr = req.input;
         }
     }
 
@@ -1985,14 +2399,19 @@ static int _HandleSha256Dma(whServerContext* server, whPacket* packet,
          * to client memory */
         sha256->devId = clientDevId;
         /* Copy SHA256 context back into client memory */
-        ret = whServerDma_CopyToClient(server, req->state.addr, sha256,
-                                       req->state.sz, (whServerDmaFlags){0});
+        ret = whServerDma_CopyToClient(ctx, req.state.addr, sha256,
+                                       req.state.sz, (whServerDmaFlags){0});
         if (ret != WH_ERROR_OK) {
-            res->dmaAddrStatus.badAddr = req->state;
+            res.dmaAddrStatus.badAddr = req.state;
         }
     }
 
-    /* return value populates packet->rc */
+    /* Translate the response */
+    (void)wh_MessageCrypto_TranslateSha256DmaResponse(
+        magic, &res, (whMessageCrypto_Sha256DmaResponse*)cryptoDataOut);
+    *outSize = sizeof(res);
+
+    /* return value populates rc in response message */
     return ret;
 }
 #endif /* ! NO_SHA256 */
@@ -2000,13 +2419,17 @@ static int _HandleSha256Dma(whServerContext* server, whPacket* packet,
 
 #if defined(HAVE_DILITHIUM)
 
-static int _HandleMlDsaKeyGenDma(whServerContext* server, whPacket* packet,
-                                 uint16_t* size)
+static int _HandleMlDsaKeyGenDma(whServerContext* ctx, uint16_t magic,
+                                 const void* cryptoDataIn, uint16_t inSize,
+                                 void* cryptoDataOut, uint16_t* outSize)
 {
 #ifdef WOLFSSL_DILITHIUM_NO_MAKE_KEY
-    (void)server;
-    (void)packet;
-    (void)size;
+    (void)ctx;
+    (void)magic;
+    (void)cryptoDataIn;
+    (void)inSize;
+    (void)cryptoDataOut;
+    (void)outSize;
     return WH_ERROR_NOHANDLER;
 #else
     int      ret = WH_ERROR_OK;
@@ -2014,43 +2437,50 @@ static int _HandleMlDsaKeyGenDma(whServerContext* server, whPacket* packet,
     void*    clientOutAddr = NULL;
     uint16_t keySize       = 0;
 
-    wh_Packet_pq_mldsa_keygen_Dma_req* req = &packet->pqMldsaKeygenDmaReq;
-    wh_Packet_pq_mldsa_Dma_res*        res = &packet->pqMldsaDmaRes;
+    whMessageCrypto_MlDsaKeyGenDmaRequest req;
+    whMessageCrypto_MlDsaKeyGenDmaResponse res;
+
+    /* Translate the request */
+    ret = wh_MessageCrypto_TranslateMlDsaKeyGenDmaRequest(
+        magic, (whMessageCrypto_MlDsaKeyGenDmaRequest*)cryptoDataIn, &req);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
 
     /* Check the ML-DSA security level is valid and supported */
-    if (0 == _IsMlDsaLevelSupported(req->level)) {
+    if (0 == _IsMlDsaLevelSupported(req.level)) {
         ret = WH_ERROR_BADARGS;
     }
     else {
         /* init mldsa key */
-        ret = wc_MlDsaKey_Init(key, NULL, server->crypto->devId);
+        ret = wc_MlDsaKey_Init(key, NULL, ctx->crypto->devId);
         if (ret == 0) {
             /* Set the ML-DSA security level */
-            ret = wc_MlDsaKey_SetParams(key, req->level);
+            ret = wc_MlDsaKey_SetParams(key, req.level);
             if (ret == 0) {
                 /* generate the key */
-                ret = wc_MlDsaKey_MakeKey(key, server->crypto->rng);
+                ret = wc_MlDsaKey_MakeKey(key, ctx->crypto->rng);
                 if (ret == 0) {
                     /* Check incoming flags */
-                    if (req->flags & WH_NVM_FLAGS_EPHEMERAL) {
+                    if (req.flags & WH_NVM_FLAGS_EPHEMERAL) {
                         /* Must serialize the key into client memory */
                         ret = wh_Server_DmaProcessClientAddress(
-                            server, req->key.addr, &clientOutAddr, req->key.sz,
+                            ctx, req.key.addr, &clientOutAddr, req.key.sz,
                             WH_DMA_OPER_CLIENT_WRITE_PRE,
                             (whServerDmaFlags){0});
 
                         if (ret == 0) {
                             ret = wh_Crypto_MlDsaSerializeKeyDer(
-                                key, req->key.sz, clientOutAddr, &keySize);
+                                key, req.key.sz, clientOutAddr, &keySize);
                             if (ret == 0) {
-                                res->keyId   = WH_KEYID_ERASED;
-                                res->keySize = keySize;
+                                res.keyId   = WH_KEYID_ERASED;
+                                res.keySize = keySize;
                             }
                         }
 
                         if (ret == 0) {
                             ret = wh_Server_DmaProcessClientAddress(
-                                server, req->key.addr, &clientOutAddr, keySize,
+                                ctx, req.key.addr, &clientOutAddr, keySize,
                                 WH_DMA_OPER_CLIENT_WRITE_POST,
                                 (whServerDmaFlags){0});
                         }
@@ -2060,11 +2490,11 @@ static int _HandleMlDsaKeyGenDma(whServerContext* server, whPacket* packet,
                          */
                         whKeyId keyId =
                             WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
-                                          server->comm->client_id, req->keyId);
+                                          ctx->comm->client_id, req.keyId);
 
                         if (WH_KEYID_ISERASED(keyId)) {
                             /* Generate a new id */
-                            ret = hsmGetUniqueId(server, &keyId);
+                            ret = wh_Server_KeystoreGetUniqueId(ctx, &keyId);
 #ifdef DEBUG_CRYPTOCB
                             printf("[server] %s UniqueId: keyId:%u, ret:%d\n",
                                    __func__, keyId, ret);
@@ -2073,17 +2503,16 @@ static int _HandleMlDsaKeyGenDma(whServerContext* server, whPacket* packet,
 
                         if (ret == 0) {
                             ret = wh_Server_MlDsaKeyCacheImport(
-                                server, key, keyId, req->flags, req->labelSize,
-                                req->label);
+                                ctx, key, keyId, req.flags, req.labelSize,
+                                req.label);
 #ifdef DEBUG_CRYPTOCB
                             printf(
                                 "[server] %s CacheImport: keyId:%u, ret:%d\n",
                                 __func__, keyId, ret);
 #endif
                             if (ret == 0) {
-                                res->keyId   = WH_KEYID_ID(keyId);
-                                res->keySize = keySize;
-                                *size = WH_PACKET_STUB_SIZE + sizeof(res);
+                                res.keyId   = WH_KEYID_ID(keyId);
+                                res.keySize = keySize;
                             }
                         }
                     }
@@ -2094,20 +2523,30 @@ static int _HandleMlDsaKeyGenDma(whServerContext* server, whPacket* packet,
     }
 
     if (ret == WH_ERROR_ACCESS) {
-        res->dmaAddrStatus.badAddr = req->key;
+        res.dmaAddrStatus.badAddr = req.key;
     }
+
+    /* Translate the response */
+    (void)wh_MessageCrypto_TranslateMlDsaKeyGenDmaResponse(
+        magic, &res, (whMessageCrypto_MlDsaKeyGenDmaResponse*)cryptoDataOut);
+
+    *outSize = sizeof(res);
 
     return ret;
 #endif /* WOLFSSL_DILITHIUM_NO_MAKE_KEY */
 }
 
-static int _HandleMlDsaSignDma(whServerContext* ctx, whPacket* packet,
-                               uint16_t* out_size)
+static int _HandleMlDsaSignDma(whServerContext* ctx, uint16_t magic,
+                               const void* cryptoDataIn, uint16_t inSize,
+                               void* cryptoDataOut, uint16_t* outSize)
 {
 #ifdef WOLFSSL_DILITHIUM_NO_SIGN
     (void)ctx;
-    (void)packet;
-    (void)out_size;
+    (void)magic;
+    (void)cryptoDataIn;
+    (void)inSize;
+    (void)cryptoDataOut;
+    (void)outSize;
     return WH_ERROR_NOHANDLER;
 #else
     int      ret = 0;
@@ -2115,86 +2554,103 @@ static int _HandleMlDsaSignDma(whServerContext* ctx, whPacket* packet,
     void*    msgAddr = NULL;
     void*    sigAddr = NULL;
 
-    wh_Packet_pq_mldsa_sign_Dma_req* req = &packet->pqMldsaSignDmaReq;
-    wh_Packet_pq_mldsa_sign_Dma_res* res = &packet->pqMldsaSignDmaRes;
+    whMessageCrypto_MlDsaSignDmaRequest req;
+    whMessageCrypto_MlDsaSignDmaResponse res;
+
+    /* Translate the request */
+    ret = wh_MessageCrypto_TranslateMlDsaSignDmaRequest(
+        magic, (whMessageCrypto_MlDsaSignDmaRequest*)cryptoDataIn, &req);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
 
     /* Transaction state */
     whKeyId key_id;
     int     evict = 0;
 
-    if (ctx == NULL || packet == NULL || out_size == NULL) {
-        return WH_ERROR_BADARGS;
-    }
 
     /* Get key ID and evict flag */
-    key_id = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req->keyId);
-    evict  = !!(req->options & WH_PACKET_PQ_MLDSA_SIGN_OPTIONS_EVICT);
+    key_id = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+    evict  = !!(req.options & WH_MESSAGE_CRYPTO_MLDSA_SIGN_OPTIONS_EVICT);
 
     /* Initialize key */
     ret = wc_MlDsaKey_Init(key, NULL, ctx->crypto->devId);
-    if (ret != 0) {
-        return ret;
-    }
-
-    /* Export key from cache */
-    /* TODO: sanity check security level against key pulled from cache? */
-    ret = wh_Server_MlDsaKeyCacheExport(ctx, key_id, key);
     if (ret == 0) {
-        /* Process client message buffer address */
-        ret = wh_Server_DmaProcessClientAddress(
-            ctx, (uintptr_t)req->msg.addr, &msgAddr, req->msg.sz,
-            WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
-
+        /* Export key from cache */
+        /* TODO: sanity check security level against key pulled from cache? */
+        ret = wh_Server_MlDsaKeyCacheExport(ctx, key_id, key);
         if (ret == 0) {
-            /* Process client signature buffer address */
+            /* Process client message buffer address */
             ret = wh_Server_DmaProcessClientAddress(
-                ctx, (uintptr_t)req->sig.addr, &sigAddr, req->sig.sz,
-                WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
+                ctx, (uintptr_t)req.msg.addr, &msgAddr, req.msg.sz,
+                WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
 
             if (ret == 0) {
-                /* Sign the message */
-                word32 sigLen = req->sig.sz;
-                ret           = wc_MlDsaKey_Sign(key, sigAddr, &sigLen, msgAddr,
-                                                 req->msg.sz, ctx->crypto->rng);
+                /* Process client signature buffer address */
+                ret = wh_Server_DmaProcessClientAddress(
+                    ctx, (uintptr_t)req.sig.addr, &sigAddr, req.sig.sz,
+                    WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
 
                 if (ret == 0) {
-                    /* Post-write processing of signature buffer */
-                    ret = wh_Server_DmaProcessClientAddress(
-                        ctx, (uintptr_t)req->sig.addr, &sigAddr, sigLen,
-                        WH_DMA_OPER_CLIENT_WRITE_POST, (whServerDmaFlags){0});
+                    /* Sign the message */
+                    word32 sigLen = req.sig.sz;
+                    ret = wc_MlDsaKey_Sign(key, sigAddr, &sigLen, msgAddr,
+                                           req.msg.sz, ctx->crypto->rng);
 
                     if (ret == 0) {
-                        /* Set response signature length */
-                        res->sigLen = sigLen;
-                        *out_size   = WH_PACKET_STUB_SIZE + sizeof(*res);
-                    }
+                        /* Post-write processing of signature buffer */
+                        ret = wh_Server_DmaProcessClientAddress(
+                            ctx, (uintptr_t)req.sig.addr, &sigAddr, sigLen,
+                            WH_DMA_OPER_CLIENT_WRITE_POST,
+                            (whServerDmaFlags){0});
 
-                    /* Post-read processing of message buffer */
-                    ret = wh_Server_DmaProcessClientAddress(
-                        ctx, (uintptr_t)req->msg.addr, &msgAddr, req->msg.sz,
-                        WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
+                        if (ret == 0) {
+                            /* Set response signature length */
+                            res.sigLen = sigLen;
+                            *outSize   = sizeof(res);
+                        }
+
+                        /* Post-read processing of message buffer */
+                        ret = wh_Server_DmaProcessClientAddress(
+                            ctx, (uintptr_t)req.msg.addr, &msgAddr,
+                            req.msg.sz, WH_DMA_OPER_CLIENT_READ_POST,
+                            (whServerDmaFlags){0});
+                    }
                 }
             }
-        }
 
-        /* Evict key if requested */
-        if (evict) {
-            (void)hsmEvictKey(ctx, key_id);
+            /* Evict key if requested */
+            if (evict) {
+                (void)wh_Server_KeystoreEvictKey(ctx, key_id);
+            }
         }
+        wc_MlDsaKey_Free(key);
     }
 
-    wc_MlDsaKey_Free(key);
+    if (ret == 0) {
+
+        /* Translate the response */
+        (void)wh_MessageCrypto_TranslateMlDsaSignDmaResponse(
+            magic, &res, (whMessageCrypto_MlDsaSignDmaResponse*)cryptoDataOut);
+
+        *outSize = sizeof(res);
+    }
+
     return ret;
 #endif /* WOLFSSL_DILITHIUM_NO_SIGN */
 }
 
-static int _HandleMlDsaVerifyDma(whServerContext* ctx, whPacket* packet,
-        uint16_t* out_size)
+static int _HandleMlDsaVerifyDma(whServerContext* ctx, uint16_t magic,
+                                 const void* cryptoDataIn, uint16_t inSize,
+                                 void* cryptoDataOut, uint16_t* outSize)
 {
 #ifdef WOLFSSL_DILITHIUM_NO_VERIFY
     (void)ctx;
-    (void)packet;
-    (void)out_size;
+    (void)magic;
+    (void)cryptoDataIn;
+    (void)inSize;
+    (void)cryptoDataOut;
+    (void)outSize;
     return WH_ERROR_NOHANDLER;
 #else
     int      ret = 0;
@@ -2203,20 +2659,23 @@ static int _HandleMlDsaVerifyDma(whServerContext* ctx, whPacket* packet,
     void*    sigAddr  = NULL;
     int      verified = 0;
 
-    wh_Packet_pq_mldsa_verify_Dma_req* req = &packet->pqMldsaVerifyDmaReq;
-    wh_Packet_pq_mldsa_verify_Dma_res* res = &packet->pqMldsaVerifyDmaRes;
+    whMessageCrypto_MlDsaVerifyDmaRequest req;
+    whMessageCrypto_MlDsaVerifyDmaResponse res;
+
+    /* Translate the request */
+    ret = wh_MessageCrypto_TranslateMlDsaVerifyDmaRequest(
+        magic, (whMessageCrypto_MlDsaVerifyDmaRequest*)cryptoDataIn, &req);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
 
     /* Transaction state */
     whKeyId key_id;
     int     evict = 0;
 
-    if (ctx == NULL || packet == NULL || out_size == NULL) {
-        return WH_ERROR_BADARGS;
-    }
-
     /* Get key ID and evict flag */
-    key_id = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req->keyId);
-    evict  = !!(req->options & WH_PACKET_PQ_MLDSAVERIFY_OPTIONS_EVICT);
+    key_id = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+    evict  = !!(req.options & WH_MESSAGE_CRYPTO_MLDSA_VERIFY_OPTIONS_EVICT);
 
     /* Initialize key */
     ret = wc_MlDsaKey_Init(key, NULL, ctx->crypto->devId);
@@ -2229,37 +2688,36 @@ static int _HandleMlDsaVerifyDma(whServerContext* ctx, whPacket* packet,
     if (ret == 0) {
         /* Process client signature buffer address */
         ret = wh_Server_DmaProcessClientAddress(
-            ctx, (uintptr_t)req->sig.addr, &sigAddr, req->sig.sz,
+            ctx, (uintptr_t)req.sig.addr, &sigAddr, req.sig.sz,
             WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
 
         if (ret == 0) {
             /* Process client message buffer address */
             ret = wh_Server_DmaProcessClientAddress(
-                ctx, (uintptr_t)req->msg.addr, &msgAddr, req->msg.sz,
+                ctx, (uintptr_t)req.msg.addr, &msgAddr, req.msg.sz,
                 WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
 
             if (ret == 0) {
                 /* Verify the signature */
-                ret = wc_MlDsaKey_Verify(key, sigAddr, req->sig.sz, msgAddr,
-                                         req->msg.sz, &verified);
+                ret = wc_MlDsaKey_Verify(key, sigAddr, req.sig.sz, msgAddr,
+                                         req.msg.sz, &verified);
 
                 if (ret == 0) {
                     /* Post-read processing of signature buffer */
                     ret = wh_Server_DmaProcessClientAddress(
-                        ctx, (uintptr_t)req->sig.addr, &sigAddr, req->sig.sz,
+                        ctx, (uintptr_t)req.sig.addr, &sigAddr, req.sig.sz,
                         WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
 
                     if (ret == 0) {
                         /* Post-read processing of message buffer */
                         ret = wh_Server_DmaProcessClientAddress(
-                            ctx, (uintptr_t)req->msg.addr, &msgAddr,
-                            req->msg.sz, WH_DMA_OPER_CLIENT_READ_POST,
+                            ctx, (uintptr_t)req.msg.addr, &msgAddr,
+                            req.msg.sz, WH_DMA_OPER_CLIENT_READ_POST,
                             (whServerDmaFlags){0});
 
                         if (ret == 0) {
                             /* Set verification result */
-                            res->verifyResult = verified;
-                            *out_size = WH_PACKET_STUB_SIZE + sizeof(*res);
+                            res.verifyResult = verified;
                         }
                     }
                 }
@@ -2268,8 +2726,17 @@ static int _HandleMlDsaVerifyDma(whServerContext* ctx, whPacket* packet,
 
         /* Evict key if requested */
         if (evict) {
-            (void)hsmEvictKey(ctx, key_id);
+            (void)wh_Server_KeystoreEvictKey(ctx, key_id);
         }
+    }
+
+    if (ret == 0) {
+        /* Translate the response */
+        (void)wh_MessageCrypto_TranslateMlDsaVerifyDmaResponse(
+            magic, &res,
+            (whMessageCrypto_MlDsaVerifyDmaResponse*)cryptoDataOut);
+
+        *outSize = sizeof(res);
     }
 
     wc_MlDsaKey_Free(key);
@@ -2277,37 +2744,49 @@ static int _HandleMlDsaVerifyDma(whServerContext* ctx, whPacket* packet,
 #endif /* WOLFSSL_DILITHIUM_NO_VERIFY */
 }
 
-static int _HandleMlDsaCheckPrivKeyDma(whServerContext* server, whPacket* packet,
-                                        uint16_t* size)
+static int _HandleMlDsaCheckPrivKeyDma(whServerContext* ctx, uint16_t magic,
+                                       const void* cryptoDataIn,
+                                       uint16_t inSize, void* cryptoDataOut,
+                                       uint16_t* outSize)
 {
     return WH_ERROR_NOHANDLER;
 }
 #endif /* HAVE_DILITHIUM */
 
 #if defined(HAVE_DILITHIUM) || defined(HAVE_FALCON)
-static int _HandlePqcSigAlgorithmDma(whServerContext* server, whPacket* packet,
-                                     uint16_t* size)
+static int _HandlePqcSigAlgorithmDma(whServerContext* ctx, uint16_t magic,
+                                     const void* cryptoDataIn,
+                                     uint16_t cryptoInSize, void* cryptoDataOut,
+                                     uint16_t* cryptoOutSize,
+                                     uint32_t pkAlgoType, uint32_t pqAlgoType)
 {
-    int                      ret = WH_ERROR_NOHANDLER;
-    wh_Packet_pk_pq_any_req* req = &packet->pkPqAnyReq;
+    int ret = WH_ERROR_NOHANDLER;
 
     /* Dispatch the appropriate algorithm handler based on the requested PK type
      * and the algorithm type. */
-    switch (req->pqAlgoType) {
+    switch (pqAlgoType) {
 #ifdef HAVE_DILITHIUM
         case WC_PQC_SIG_TYPE_DILITHIUM: {
-            switch (req->type) {
+            switch (pkAlgoType) {
                 case WC_PK_TYPE_PQC_SIG_KEYGEN:
-                    ret = _HandleMlDsaKeyGenDma(server, packet, size);
+                    ret = _HandleMlDsaKeyGenDma(ctx, magic, cryptoDataIn,
+                                                cryptoInSize, cryptoDataOut,
+                                                cryptoOutSize);
                     break;
                 case WC_PK_TYPE_PQC_SIG_SIGN:
-                    ret = _HandleMlDsaSignDma(server, packet, size);
+                    ret = _HandleMlDsaSignDma(ctx, magic, cryptoDataIn,
+                                              cryptoInSize, cryptoDataOut,
+                                              cryptoOutSize);
                     break;
                 case WC_PK_TYPE_PQC_SIG_VERIFY:
-                    ret = _HandleMlDsaVerifyDma(server, packet, size);
+                    ret = _HandleMlDsaVerifyDma(ctx, magic, cryptoDataIn,
+                                                cryptoInSize, cryptoDataOut,
+                                                cryptoOutSize);
                     break;
                 case WC_PK_TYPE_PQC_SIG_CHECK_PRIV_KEY:
-                    ret = _HandleMlDsaCheckPrivKeyDma(server, packet, size);
+                    ret = _HandleMlDsaCheckPrivKeyDma(
+                        ctx, magic, cryptoDataIn, cryptoInSize, cryptoDataOut,
+                        cryptoOutSize);
                     break;
                 default:
                     ret = WH_ERROR_NOHANDLER;
@@ -2325,13 +2804,22 @@ static int _HandlePqcSigAlgorithmDma(whServerContext* server, whPacket* packet,
 #endif /* HAVE_DILITHIUM || HAVE_FALCON */
 
 #ifdef WOLFSSL_CMAC
-static int _HandleCmacDma(whServerContext* server, whPacket* packet,
-                          uint16_t* size)
+static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
+                          const void* cryptoDataIn, uint16_t inSize,
+                          void* cryptoDataOut, uint16_t* outSize)
 {
     int ret = 0;
-    wh_Packet_cmac_Dma_req* req  = &packet->cmacDmaReq;
-    wh_Packet_cmac_Dma_res* res  = &packet->cmacDmaRes;
-    Cmac*                   cmac = server->crypto->algoCtx.cmac;
+    whMessageCrypto_CmacDmaRequest req;
+    whMessageCrypto_CmacDmaResponse res;
+
+    /* Translate request */
+    ret = wh_MessageCrypto_TranslateCmacDmaRequest(
+        magic, (whMessageCrypto_CmacDmaRequest*)cryptoDataIn, &req);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    Cmac*                   cmac = ctx->crypto->algoCtx.cmac;
     int                     clientDevId;
     whKeyId                 keyId;
     byte                    tmpKey[AES_256_KEY_SIZE];
@@ -2349,211 +2837,225 @@ static int _HandleCmacDma(whServerContext* server, whPacket* packet,
     word32 outSz   = 0;
 
     /* Ensure state sizes are the same */
-    if (req->state.sz != sizeof(*cmac)) {
-        res->dmaAddrStatus.badAddr = req->state;
-        return WH_ERROR_BADARGS;
+    if (req.state.sz != sizeof(*cmac)) {
+        res.dmaAddrStatus.badAddr = req.state;
+        ret = WH_ERROR_BADARGS;
     }
 
-    /* Copy the CMAC context from client address space */
-    ret = whServerDma_CopyFromClient(server, cmac, req->state.addr,
-                                     req->state.sz, (whServerDmaFlags){0});
-    if (ret != WH_ERROR_OK) {
-        res->dmaAddrStatus.badAddr = req->state;
-        return ret;
-    }
-    /* Save the client devId to be restored later */
-    clientDevId = cmac->devId;
-    /* overwrite the devId to that of the server for local crypto */
-    cmac->devId = server->crypto->devId;
-
-    /* Print out the state of req */
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-    printf("[server] DMA CMAC req recv. type:%u keySz:%u inSz:%u outSz:%u "
-           "finalize:%u\n",
-           (unsigned int)req->type, (unsigned int)req->key.sz,
-           (unsigned int)req->input.sz, (unsigned int)req->output.sz,
-           (unsigned int)req->finalize);
-#endif
-
-    /* Translate all DMA addresses upfront */
-    if (req->input.sz != 0) {
-        ret = wh_Server_DmaProcessClientAddress(
-            server, req->input.addr, &inAddr, req->input.sz,
-            WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
-        if (ret == WH_ERROR_ACCESS) {
-            res->dmaAddrStatus.badAddr = req->input;
-        }
-    }
-    if (ret == WH_ERROR_OK && req->output.sz != 0) {
-        ret = wh_Server_DmaProcessClientAddress(
-            server, req->output.addr, &outAddr, req->output.sz,
-            WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
-        if (ret == WH_ERROR_ACCESS) {
-            res->dmaAddrStatus.badAddr = req->output;
-        }
-    }
-    if (ret == WH_ERROR_OK && req->key.sz != 0) {
-        ret = wh_Server_DmaProcessClientAddress(
-            server, req->key.addr, &keyAddr, req->key.sz,
-            WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
-        if (ret == WH_ERROR_ACCESS) {
-            res->dmaAddrStatus.badAddr = req->key;
+    if (ret == WH_ERROR_OK) {
+        /* Copy the CMAC context from client address space */
+        ret = whServerDma_CopyFromClient(ctx, cmac, req.state.addr,
+                                         req.state.sz, (whServerDmaFlags){0});
+        if (ret != WH_ERROR_OK) {
+            res.dmaAddrStatus.badAddr = req.state;
         }
     }
 
     if (ret == WH_ERROR_OK) {
-        /* Check for one-shot operation (both input and output are non-NULL).
-         * There are three distinct cases we need to handle for one-shots:
-         * 1. Direct one-shot operation with key provided in request
-         * 2. One-shot operation with key referenced by context that needs to be
-         *     loaded from cache
-         * 3. One-shot operation with context already initialized with a key */
-        if (req->input.sz != 0 && req->output.sz != 0) {
+        /* Save the client devId to be restored later */
+        clientDevId = cmac->devId;
+        /* overwrite the devId to that of the server for local crypto */
+        cmac->devId = ctx->crypto->devId;
+
+        /* Print out the state of req */
 #ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("[server] CMAC one-shot operation detected\n");
+        printf("[server] DMA CMAC req recv. type:%u keySz:%u inSz:%u outSz:%u "
+               "finalize:%u\n",
+               (unsigned int)req.type, (unsigned int)req.key.sz,
+               (unsigned int)req.input.sz, (unsigned int)req.output.sz,
+               (unsigned int)req.finalize);
 #endif
 
-            /* Case 1: Direct one-shot operation with key provided in request
-             * This is the simplest case - we have the key directly and can use
-             * it immediately for the CMAC operation */
-            if (req->key.sz != 0) {
-                outSz = req->output.sz;
-                /* Perform one-shot CMAC operation with provided key */
-                ret = wc_AesCmacGenerate_ex(cmac, outAddr, &outSz, inAddr,
-                                            req->input.sz, keyAddr, req->key.sz,
-                                            NULL, server->crypto->devId);
-                cmacFinalized = 1;
-                res->outSz    = outSz;
+        /* Translate all DMA addresses upfront */
+        if (req.input.sz != 0) {
+            ret = wh_Server_DmaProcessClientAddress(
+                ctx, req.input.addr, &inAddr, req.input.sz,
+                WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
+            if (ret == WH_ERROR_ACCESS) {
+                res.dmaAddrStatus.badAddr = req.input;
             }
-            /* Case 2 & 3: One-shot operation with key referenced by context
-             * We need to check if the context is already initialized or needs
-             * to be initialized with a key from cache */
-            else {
-                /* Check if there's a keyID in the context that we need to load
-                 */
-                whKeyId clientKeyId = WH_DEVCTX_TO_KEYID(cmac->devCtx);
-                if (clientKeyId != WH_KEYID_ERASED) {
-                    /* Case 2: Client-supplied context references a key ID that
-                     * needs to be loaded from cache This happens when the
-                     * client invokes the one-shot generate on a context that
-                     * has been initialized to use a keyId by reference. We need
-                     * to load the key from cache and initialize a new context
-                     * with it */
-                    keyId  = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
-                                           server->comm->client_id, clientKeyId);
-                    keyLen = sizeof(tmpKey);
+        }
+        if (ret == WH_ERROR_OK && req.output.sz != 0) {
+            ret = wh_Server_DmaProcessClientAddress(
+                ctx, req.output.addr, &outAddr, req.output.sz,
+                WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
+            if (ret == WH_ERROR_ACCESS) {
+                res.dmaAddrStatus.badAddr = req.output;
+            }
+        }
+        if (ret == WH_ERROR_OK && req.key.sz != 0) {
+            ret = wh_Server_DmaProcessClientAddress(
+                ctx, req.key.addr, &keyAddr, req.key.sz,
+                WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
+            if (ret == WH_ERROR_ACCESS) {
+                res.dmaAddrStatus.badAddr = req.key;
+            }
+        }
 
-                    /* Load key from cache */
-                    ret = hsmReadKey(server, keyId, NULL, tmpKey, &keyLen);
-                    if (ret == WH_ERROR_OK) {
-                        /* Verify key size is valid for AES */
-                        if (keyLen != AES_128_KEY_SIZE &&
-                            keyLen != AES_192_KEY_SIZE &&
-                            keyLen != AES_256_KEY_SIZE) {
-                            ret = WH_ERROR_ABORTED;
+        if (ret == WH_ERROR_OK) {
+            /* Check for one-shot operation (both input and output are
+             * non-NULL). There are three distinct cases we need to handle for
+             * one-shots:
+             * 1. Direct one-shot operation with key provided in request
+             * 2. One-shot operation with key referenced by context that needs
+             * to be loaded from cache
+             * 3. One-shot operation with context already initialized with a key
+             */
+            if (req.input.sz != 0 && req.output.sz != 0) {
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+                printf("[server] CMAC one-shot operation detected\n");
+#endif
+
+                /* Case 1: Direct one-shot operation with key provided in
+                 * request This is the simplest case - we have the key directly
+                 * and can use it immediately for the CMAC operation */
+                if (req.key.sz != 0) {
+                    outSz = req.output.sz;
+                    /* Perform one-shot CMAC operation with provided key */
+                    ret = wc_AesCmacGenerate_ex(
+                        cmac, outAddr, &outSz, inAddr, req.input.sz, keyAddr,
+                        req.key.sz, NULL, ctx->crypto->devId);
+                    cmacFinalized = 1;
+                    res.outSz    = outSz;
+                }
+                /* Case 2 & 3: One-shot operation with key referenced by context
+                 * We need to check if the context is already initialized or
+                 * needs to be initialized with a key from cache */
+                else {
+                    /* Check if there's a keyID in the context that we need to
+                     * load
+                     */
+                    whKeyId clientKeyId = WH_DEVCTX_TO_KEYID(cmac->devCtx);
+                    if (clientKeyId != WH_KEYID_ERASED) {
+                        /* Case 2: Client-supplied context references a key ID
+                         * that needs to be loaded from cache This happens when
+                         * the client invokes the one-shot generate on a context
+                         * that has been initialized to use a keyId by
+                         * reference. We need to load the key from cache and
+                         * initialize a new context with it */
+                        keyId =
+                            WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
+                                          ctx->comm->client_id, clientKeyId);
+                        keyLen = sizeof(tmpKey);
+
+                        /* Load key from cache */
+                        ret = wh_Server_KeystoreReadKey(ctx, keyId, NULL,
+                                                        tmpKey, &keyLen);
+                        if (ret == WH_ERROR_OK) {
+                            /* Verify key size is valid for AES */
+                            if (keyLen != AES_128_KEY_SIZE &&
+                                keyLen != AES_192_KEY_SIZE &&
+                                keyLen != AES_256_KEY_SIZE) {
+                                ret = WH_ERROR_ABORTED;
+                            }
+                            else {
+                                /* Initialize CMAC with loaded key */
+                                ctxHoldsLocalKey = 1;
+                                ret = wc_InitCmac_ex(cmac, tmpKey, keyLen,
+                                                     WC_CMAC_AES, NULL, NULL,
+                                                     ctx->crypto->devId);
+                                if (ret == WH_ERROR_OK) {
+                                    /* Perform one-shot CMAC operation */
+                                    outSz = req.output.sz;
+                                    ret   = wc_AesCmacGenerate_ex(
+                                        cmac, outAddr, &outSz, inAddr,
+                                        req.input.sz, NULL, 0, NULL,
+                                        ctx->crypto->devId);
+                                    res.outSz    = outSz;
+                                    cmacFinalized = 1;
+                                }
+                            }
                         }
-                        else {
-                            /* Initialize CMAC with loaded key */
-                            ctxHoldsLocalKey = 1;
-                            ret = wc_InitCmac_ex(cmac, tmpKey, keyLen,
-                                                 WC_CMAC_AES, NULL, NULL,
-                                                 server->crypto->devId);
-                            if (ret == WH_ERROR_OK) {
-                                /* Perform one-shot CMAC operation */
-                                outSz = req->output.sz;
-                                ret   = wc_AesCmacGenerate_ex(
-                                    cmac, outAddr, &outSz, inAddr,
-                                    req->input.sz, NULL, 0, NULL,
-                                    server->crypto->devId);
-                                res->outSz    = outSz;
-                                cmacFinalized = 1;
+                    }
+                    else {
+                        /* Case 3: Context is already initialized with a key
+                         * This happens when invoking the one-shot generate on a
+                         * context that has been initialized with a previous
+                         * wc_InitCmac_ex call where the key was already loaded
+                         * into the context. We can use the context directly
+                         * without needing to load or initialize anything */
+                        outSz = req.output.sz;
+                        ret   = wc_AesCmacGenerate_ex(
+                            cmac, outAddr, &outSz, inAddr, req.input.sz, NULL,
+                            0, NULL, ctx->crypto->devId);
+                        res.outSz    = outSz;
+                        cmacFinalized = 1;
+                    }
+                }
+            }
+            /* Otherwise, process the request as an incremental operation */
+            else {
+                /* Incremental: Initialize CMAC with key if provided */
+                if (req.key.sz != 0) {
+                    ret = wc_InitCmac_ex(cmac, keyAddr, req.key.sz, req.type,
+                                         NULL, NULL, ctx->crypto->devId);
+                }
+                /* Check for deferred initialization with cached key */
+                else if (req.input.sz != 0 || req.finalize) {
+                    /* Check if there's a key ID in the context that needs to be
+                     * loaded
+                     */
+                    whNvmId nvmId = WH_DEVCTX_TO_KEYID(cmac->devCtx);
+                    if (nvmId != WH_KEYID_ERASED) {
+                        /* Get key ID from CMAC context */
+                        keyId  = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
+                                               ctx->comm->client_id, nvmId);
+                        keyLen = sizeof(tmpKey);
+
+                        /* Load key from cache */
+                        ret = wh_Server_KeystoreReadKey(ctx, keyId, NULL,
+                                                        tmpKey, &keyLen);
+                        if (ret == WH_ERROR_OK) {
+                            /* Verify key size is valid for AES */
+                            if (keyLen != AES_128_KEY_SIZE &&
+                                keyLen != AES_192_KEY_SIZE &&
+                                keyLen != AES_256_KEY_SIZE) {
+                                ret = WH_ERROR_ABORTED;
+                            }
+                            else {
+                                ctxHoldsLocalKey = 1;
+
+                                /* Save CMAC state so we can resume operation
+                                 * after initialization with key, as reinit will
+                                 * clear the state */
+                                byte   savedBuffer[AES_BLOCK_SIZE];
+                                byte   savedDigest[AES_BLOCK_SIZE];
+                                word32 savedBufferSz = cmac->bufferSz;
+                                word32 savedTotalSz  = cmac->totalSz;
+                                memcpy(savedBuffer, cmac->buffer,
+                                       AES_BLOCK_SIZE);
+                                memcpy(savedDigest, cmac->digest,
+                                       AES_BLOCK_SIZE);
+
+                                ret = wc_InitCmac_ex(cmac, tmpKey, keyLen,
+                                                     WC_CMAC_AES, NULL, NULL,
+                                                     ctx->crypto->devId);
+
+                                /* Restore CMAC state */
+                                memcpy(cmac->buffer, savedBuffer,
+                                       AES_BLOCK_SIZE);
+                                memcpy(cmac->digest, savedDigest,
+                                       AES_BLOCK_SIZE);
+                                cmac->bufferSz = savedBufferSz;
+                                cmac->totalSz  = savedTotalSz;
+                                cmac->devCtx   = (void*)(uintptr_t)nvmId;
                             }
                         }
                     }
                 }
-                else {
-                    /* Case 3: Context is already initialized with a key
-                     * This happens when invoking the one-shot generate on a
-                     * context that has been initialized with a previous
-                     * wc_InitCmac_ex call where the key was already loaded into
-                     * the context. We can use the context directly without
-                     * needing to load or initialize anything */
-                    outSz = req->output.sz;
-                    ret   = wc_AesCmacGenerate_ex(cmac, outAddr, &outSz, inAddr,
-                                                  req->input.sz, NULL, 0, NULL,
-                                                  server->crypto->devId);
-                    res->outSz    = outSz;
+
+                /* Process update if requested */
+                if (ret == WH_ERROR_OK && req.input.sz != 0) {
+                    ret = wc_CmacUpdate(cmac, inAddr, req.input.sz);
+                }
+
+                /* Process finalize if requested */
+                if (ret == WH_ERROR_OK && req.finalize) {
+                    word32 len    = (word32)req.output.sz;
+                    ret           = wc_CmacFinal(cmac, outAddr, &len);
                     cmacFinalized = 1;
+                    res.outSz    = len;
                 }
-            }
-        }
-        /* Otherwise, process the request as an incremental operation */
-        else {
-            /* Incremental: Initialize CMAC with key if provided */
-            if (req->key.sz != 0) {
-                ret = wc_InitCmac_ex(cmac, keyAddr, req->key.sz, req->type,
-                                     NULL, NULL, server->crypto->devId);
-            }
-            /* Check for deferred initialization with cached key */
-            else if (req->input.sz != 0 || req->finalize) {
-                /* Check if there's a key ID in the context that needs to be
-                 * loaded
-                 */
-                whNvmId nvmId = WH_DEVCTX_TO_KEYID(cmac->devCtx);
-                if (nvmId != WH_KEYID_ERASED) {
-                    /* Get key ID from CMAC context */
-                    keyId  = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
-                                           server->comm->client_id, nvmId);
-                    keyLen = sizeof(tmpKey);
-
-                    /* Load key from cache */
-                    ret = hsmReadKey(server, keyId, NULL, tmpKey, &keyLen);
-                    if (ret == WH_ERROR_OK) {
-                        /* Verify key size is valid for AES */
-                        if (keyLen != AES_128_KEY_SIZE &&
-                            keyLen != AES_192_KEY_SIZE &&
-                            keyLen != AES_256_KEY_SIZE) {
-                            ret = WH_ERROR_ABORTED;
-                        }
-                        else {
-                            ctxHoldsLocalKey = 1;
-
-                            /* Save CMAC state so we can resume operation after
-                             * initialization with key, as reinit will clear the
-                             * state */
-                            byte   savedBuffer[AES_BLOCK_SIZE];
-                            byte   savedDigest[AES_BLOCK_SIZE];
-                            word32 savedBufferSz = cmac->bufferSz;
-                            word32 savedTotalSz  = cmac->totalSz;
-                            memcpy(savedBuffer, cmac->buffer, AES_BLOCK_SIZE);
-                            memcpy(savedDigest, cmac->digest, AES_BLOCK_SIZE);
-
-                            ret = wc_InitCmac_ex(cmac, tmpKey, keyLen,
-                                                 WC_CMAC_AES, NULL, NULL,
-                                                 server->crypto->devId);
-
-                            /* Restore CMAC state */
-                            memcpy(cmac->buffer, savedBuffer, AES_BLOCK_SIZE);
-                            memcpy(cmac->digest, savedDigest, AES_BLOCK_SIZE);
-                            cmac->bufferSz = savedBufferSz;
-                            cmac->totalSz  = savedTotalSz;
-                            cmac->devCtx   = (void*)(uintptr_t)nvmId;
-                        }
-                    }
-                }
-            }
-
-            /* Process update if requested */
-            if (ret == WH_ERROR_OK && req->input.sz != 0) {
-                ret = wc_CmacUpdate(cmac, inAddr, req->input.sz);
-            }
-
-            /* Process finalize if requested */
-            if (ret == WH_ERROR_OK && req->finalize) {
-                word32 len    = (word32)req->output.sz;
-                ret           = wc_CmacFinal(cmac, outAddr, &len);
-                cmacFinalized = 1;
-                res->outSz    = len;
             }
         }
     }
@@ -2561,7 +3063,7 @@ static int _HandleCmacDma(whServerContext* server, whPacket* packet,
     /* Clean up all DMA addresses */
     if (inAddr != NULL) {
         if (wh_Server_DmaProcessClientAddress(
-                server, req->input.addr, &inAddr, req->input.sz,
+                ctx, req.input.addr, &inAddr, req.input.sz,
                 WH_DMA_OPER_CLIENT_READ_POST,
                 (whServerDmaFlags){0}) != WH_ERROR_OK) {
 #ifdef DEBUG_CRYPTOCB_VERBOSE
@@ -2572,7 +3074,7 @@ static int _HandleCmacDma(whServerContext* server, whPacket* packet,
 
     if (outAddr != NULL) {
         if (wh_Server_DmaProcessClientAddress(
-                server, req->output.addr, &outAddr, req->output.sz,
+                ctx, req.output.addr, &outAddr, req.output.sz,
                 WH_DMA_OPER_CLIENT_WRITE_POST,
                 (whServerDmaFlags){0}) != WH_ERROR_OK) {
 #ifdef DEBUG_CRYPTOCB_VERBOSE
@@ -2583,7 +3085,7 @@ static int _HandleCmacDma(whServerContext* server, whPacket* packet,
 
     if (keyAddr != NULL) {
         if (wh_Server_DmaProcessClientAddress(
-                server, req->key.addr, &keyAddr, req->key.sz,
+                ctx, req.key.addr, &keyAddr, req.key.sz,
                 WH_DMA_OPER_CLIENT_READ_POST,
                 (whServerDmaFlags){0}) != WH_ERROR_OK) {
 #ifdef DEBUG_CRYPTOCB_VERBOSE
@@ -2592,7 +3094,7 @@ static int _HandleCmacDma(whServerContext* server, whPacket* packet,
         }
     }
 
-    /* Reset the devId in the local context */
+    /* Reset the devId and type in the local context */
     cmac->devId = clientDevId;
 
     /* If we are using HSM-local keys, sanitize the key material from the CMAC
@@ -2603,72 +3105,115 @@ static int _HandleCmacDma(whServerContext* server, whPacket* packet,
 
     /* Copy CMAC context back into client memory */
     if (ret == WH_ERROR_OK && !cmacFinalized) {
-        ret = whServerDma_CopyToClient(server, req->state.addr, cmac,
-                                       req->state.sz, (whServerDmaFlags){0});
+        ret = whServerDma_CopyToClient(ctx, req.state.addr, cmac,
+                                       req.state.sz, (whServerDmaFlags){0});
         if (ret != WH_ERROR_OK) {
-            res->dmaAddrStatus.badAddr = req->state;
+            res.dmaAddrStatus.badAddr = req.state;
         }
     }
 
-    /* return value populates packet->rc */
+    /* Translate response */
+    (void)wh_MessageCrypto_TranslateCmacDmaResponse(
+        magic, &res, (whMessageCrypto_CmacDmaResponse*)cryptoDataOut);
+    *outSize = sizeof(res);
+
+    /* return value populates rc in response message */
     return ret;
 }
 #endif /* WOLFHSM_CFG_DMA */
 
-int wh_Server_HandleCryptoDmaRequest(whServerContext* server,
-    uint16_t action, uint8_t* data, uint16_t* size, uint16_t seq)
+int wh_Server_HandleCryptoDmaRequest(whServerContext* ctx, uint16_t magic,
+                                     uint16_t action, uint16_t seq,
+                                     uint16_t req_size, const void* req_packet,
+                                     uint16_t* out_resp_size, void* resp_packet)
 {
-    int ret = 0;
-    whPacket* packet = (whPacket*)data;
+    int                                   ret        = 0;
+    whMessageCrypto_GenericRequestHeader  rqstHeader = {0};
+    whMessageCrypto_GenericResponseHeader respHeader = {0};
 
-    switch (action) {
-    case WC_ALGO_TYPE_HASH:
-        switch (packet->hashAnyReq.type) {
-#ifndef NO_SHA256
-            case WC_HASH_TYPE_SHA256:
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-                printf("[server] DMA SHA256 req recv. type:%u\n",
-                       (unsigned int)packet->hashSha256Req.type);
-#endif
-                ret = _HandleSha256Dma(server, (whPacket*)data, size);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-                if (ret != 0) {
-                    printf("[server] DMA SHA256 ret = %d\n", ret);
-                }
-#endif
-                break;
-#endif /* !NO_SHA256 */
-        }
-        break; /* WC_ALGO_TYPE_HASH */
+    const void* cryptoDataIn =
+        (uint8_t*)req_packet + sizeof(whMessageCrypto_GenericRequestHeader);
+    void* cryptoDataOut =
+        (uint8_t*)resp_packet + sizeof(whMessageCrypto_GenericResponseHeader);
 
-    case WC_ALGO_TYPE_PK:
-        switch (packet->pkAnyReq.type) {
-#if defined(HAVE_DILITHIUM) || defined(HAVE_FALCON)
-            case WC_PK_TYPE_PQC_SIG_KEYGEN:
-            case WC_PK_TYPE_PQC_SIG_SIGN:
-            case WC_PK_TYPE_PQC_SIG_VERIFY:
-            case WC_PK_TYPE_PQC_SIG_CHECK_PRIV_KEY:
-                ret = _HandlePqcSigAlgorithmDma(server, packet, size);
-                break;
-#endif /* HAVE_DILITHIUM || HAVE_FALCON */
-        }
-        break; /* WC_ALGO_TYPE_PK */
+    /* Input and output sizes for data passed to crypto handlers. cryptoOutSize
+     * should be set by the crypto handler as an output parameter */
+    uint16_t cryptoInSize =
+        req_size - sizeof(whMessageCrypto_GenericResponseHeader);
+    uint16_t cryptoOutSize = 0;
 
-    case WC_ALGO_TYPE_CMAC:
-        ret = _HandleCmacDma(server, packet, size);
-        break;
-
-    case WC_ALGO_TYPE_NONE:
-    default:
-        ret = NOT_COMPILED_IN;
-        break;
+    if ((ctx == NULL) || (ctx->crypto == NULL) || (req_packet == NULL) ||
+        (resp_packet == NULL) || (out_resp_size == NULL)) {
+        return WH_ERROR_BADARGS;
     }
 
-    /* Propagate error code to client in response packet */
-    packet->rc = ret;
+    /* Translate the request message to get the algo type */
+    wh_MessageCrypto_TranslateGenericRequestHeader(
+        magic, (whMessageCrypto_GenericRequestHeader*)req_packet, &rqstHeader);
 
-    if (ret != 0)
-        *size = WH_PACKET_STUB_SIZE + sizeof(packet->rc);
+
+    switch (action) {
+        case WC_ALGO_TYPE_HASH:
+            switch (rqstHeader.algoType) {
+#ifndef NO_SHA256
+                case WC_HASH_TYPE_SHA256:
+                    ret = _HandleSha256Dma(ctx, magic, seq, cryptoDataIn,
+                                           cryptoInSize, cryptoDataOut,
+                                           &cryptoOutSize);
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+                    if (ret != 0) {
+                        printf("[server] DMA SHA256 ret = %d\n", ret);
+                    }
+#endif
+                    break;
+#endif /* !NO_SHA256 */
+            }
+            break; /* WC_ALGO_TYPE_HASH */
+
+        case WC_ALGO_TYPE_PK:
+            switch (rqstHeader.algoType) {
+#if defined(HAVE_DILITHIUM) || defined(HAVE_FALCON)
+                case WC_PK_TYPE_PQC_SIG_KEYGEN:
+                case WC_PK_TYPE_PQC_SIG_SIGN:
+                case WC_PK_TYPE_PQC_SIG_VERIFY:
+                case WC_PK_TYPE_PQC_SIG_CHECK_PRIV_KEY:
+                    ret = _HandlePqcSigAlgorithmDma(
+                        ctx, magic, cryptoDataIn, cryptoInSize, cryptoDataOut,
+                        &cryptoOutSize, rqstHeader.algoType,
+                        rqstHeader.algoSubType);
+                    break;
+#endif /* HAVE_DILITHIUM || HAVE_FALCON */
+            }
+            break; /* WC_ALGO_TYPE_PK */
+
+        case WC_ALGO_TYPE_CMAC:
+            ret = _HandleCmacDma(ctx, magic, seq, cryptoDataIn, cryptoInSize,
+                                 cryptoDataOut, &cryptoOutSize);
+            break;
+
+        case WC_ALGO_TYPE_NONE:
+        default:
+            ret = NOT_COMPILED_IN;
+            break;
+    }
+
+    /* Propagate error code to client in response packet header. Crypto handlers
+     * have already populated the response packet with the output data. */
+    respHeader.rc       = ret;
+    respHeader.algoType = rqstHeader.algoType;
+    wh_MessageCrypto_TranslateGenericResponseHeader(
+        magic, &respHeader,
+        (whMessageCrypto_GenericResponseHeader*)resp_packet);
+
+    /* Update the size of the response packet if crypto handler didn't fail */
+    if (ret != WH_ERROR_OK) {
+        *out_resp_size = sizeof(whMessageCrypto_GenericResponseHeader);
+    }
+    else {
+        *out_resp_size =
+            sizeof(whMessageCrypto_GenericResponseHeader) + cryptoOutSize;
+    }
+
 
 #ifdef DEBUG_CRYPTOCB_VERBOSE
     printf("[server] Crypto DMA request. Action:%u\n", action);
@@ -2677,7 +3222,7 @@ int wh_Server_HandleCryptoDmaRequest(whServerContext* server,
      * packet, return success to the caller unless a cancellation has occurred
      */
     if (ret != WH_ERROR_CANCEL) {
-        ret = 0;
+        ret = WH_ERROR_OK;
     }
     return ret;
 }

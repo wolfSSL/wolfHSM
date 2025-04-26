@@ -9,6 +9,9 @@ WOLFSSL_DIR ?= $(CURDIR)/../../wolfssl
 # Project name
 BIN = wh_test
 
+# C standard to use (default to c90 if not specified)
+CSTD ?= c90
+
 # Includes
 USER_SETTINGS_DIR ?= ./
 INC = -I$(WOLFHSM_DIR) \
@@ -32,7 +35,7 @@ ARCHFLAGS ?=
 # Compiler and linker flags
 ASFLAGS ?= $(ARCHFLAGS)
 CFLAGS_EXTRA ?= -Wmissing-field-initializers -Wmissing-braces
-CFLAGS ?= $(ARCHFLAGS) -std=c90 -D_GNU_SOURCE -Wall -Werror -Wno-cpp $(CFLAGS_EXTRA)
+CFLAGS ?= $(ARCHFLAGS) -std=$(CSTD) -D_GNU_SOURCE -Wall -Werror -Wno-cpp $(CFLAGS_EXTRA)
 LDFLAGS ?= $(ARCHFLAGS)
 
 # LD: generate map
@@ -173,6 +176,10 @@ SRC_C += \
             $(WOLFHSM_DIR)/src/wh_message_customcb.c \
             $(WOLFHSM_DIR)/src/wh_message_nvm.c \
             $(WOLFHSM_DIR)/src/wh_message_cert.c \
+            $(WOLFHSM_DIR)/src/wh_message_crypto.c \
+            $(WOLFHSM_DIR)/src/wh_message_keystore.c \
+            $(WOLFHSM_DIR)/src/wh_message_counter.c \
+            $(WOLFHSM_DIR)/src/wh_message_she.c \
             $(WOLFHSM_DIR)/src/wh_transport_mem.c \
             $(WOLFHSM_DIR)/src/wh_flash_ramsim.c
 
