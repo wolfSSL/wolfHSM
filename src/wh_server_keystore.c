@@ -707,7 +707,12 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
             ret = WH_ERROR_OK;
 
             if (ret == WH_ERROR_OK) {
-                resp.len = keySz;
+                /* Only provide key output if no error */
+                if (resp.rc == WH_ERROR_OK) {
+                    resp.len = keySz;
+                } else {
+                    resp.len = 0;
+                }
                 memcpy(resp.label, meta->label, sizeof(meta->label));
 
                 (void)wh_MessageKeystore_TranslateExportResponse(
