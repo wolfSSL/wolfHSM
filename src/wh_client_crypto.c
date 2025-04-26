@@ -118,11 +118,7 @@ static int      _getCryptoResponse(uint8_t* respBuf, uint16_t type,
 /* Helper function to prepare a crypto request buffer with generic header */
 static uint8_t* _createCryptoRequest(uint8_t* reqBuf, uint16_t type)
 {
-    whMessageCrypto_GenericRequestHeader* header =
-        (whMessageCrypto_GenericRequestHeader*)reqBuf;
-    header->algoType    = type;
-    header->algoSubType = WH_MESSAGE_CRYPTO_ALGO_SUBTYPE_NONE;
-    return reqBuf + sizeof(whMessageCrypto_GenericRequestHeader);
+    return _createCryptoRequestWithSubtype(reqBuf, type, WH_MESSAGE_CRYPTO_ALGO_SUBTYPE_NONE);
 }
 
 /* Helper function to prepare a crypto request buffer with generic header and
@@ -2549,9 +2545,11 @@ int wh_Client_Sha256(whClientContext* ctx, wc_Sha256* sha256, const uint8_t* in,
 
         /* reset the state of the sha context (without blowing away devId) */
         sha256->buffLen = 0;
-        sha256->flags   = 0;
         sha256->hiLen   = 0;
         sha256->loLen   = 0;
+#ifdef WOLFSSL_HASH_FLAGS
+        sha256->flags   = 0;
+#endif
         memset(sha256->digest, 0, sizeof(sha256->digest));
     }
 
