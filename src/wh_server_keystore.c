@@ -719,7 +719,7 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
                     magic, &resp,
                     (whMessageKeystore_ExportResponse*)resp_packet);
 
-                *out_resp_size = sizeof(resp) + keySz;
+                *out_resp_size = sizeof(resp) + resp.len;
             }
         } break;
 
