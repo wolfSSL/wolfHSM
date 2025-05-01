@@ -364,14 +364,14 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
     case WC_ALGO_TYPE_CMAC:
     {
         /* Extract info parameters */
-        const uint8_t* in = info->cmac.in;
-        uint32_t in_len = (in == NULL) ? 0 : info->cmac.inSz;
-        const uint8_t* key = info->cmac.key;
-        uint32_t key_len = (key == NULL) ? 0 : info->cmac.keySz;
-        uint8_t* outMac = info->cmac.out;
-        word32 *out_mac_len = info->cmac.outSz;
-        Cmac* cmac = info->cmac.cmac;
-        int type = info->cmac.type;
+        const uint8_t* in          = info->cmac.in;
+        uint32_t       in_len      = (in == NULL) ? 0 : info->cmac.inSz;
+        const uint8_t* key         = info->cmac.key;
+        uint32_t       key_len     = (key == NULL) ? 0 : info->cmac.keySz;
+        uint8_t*       outMac      = info->cmac.out;
+        uint32_t*      out_mac_len = (uint32_t*)info->cmac.outSz;
+        Cmac*          cmac        = info->cmac.cmac;
+        int            type        = info->cmac.type;
 
         ret = wh_Client_Cmac(ctx, cmac, type, key, key_len, in, in_len, outMac,
                              out_mac_len);
@@ -671,7 +671,7 @@ int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
         const uint8_t* in        = info->cmac.in;
         uint32_t       inLen     = info->cmac.inSz;
         uint8_t*       outMac    = info->cmac.out;
-        uint32_t*      outMacLen = info->cmac.outSz;
+        uint32_t*      outMacLen = (uint32_t*)info->cmac.outSz;
 
         ret = wh_Client_CmacDma(ctx, cmac, type, key, keyLen, in, inLen, outMac,
                                 outMacLen);
