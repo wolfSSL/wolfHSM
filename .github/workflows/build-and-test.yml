@@ -32,7 +32,7 @@ jobs:
     # Build and test standard build
     - name: Build and test
       run: cd test && make clean && make WOLFSSL_DIR=../wolfssl run
-    
+
     # Build and test standard build, with DMA and ASAN enabled
     - name: Build and test DMA ASAN
       run: cd test && make clean && make DMA=1 ASAN=1 WOLFSSL_DIR=../wolfssl run
