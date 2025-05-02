@@ -2819,11 +2819,11 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
         return ret;
     }
 
-    Cmac*                   cmac = ctx->crypto->algoCtx.cmac;
-    int                     clientDevId;
-    whKeyId                 keyId;
-    byte                    tmpKey[AES_256_KEY_SIZE];
-    uint32_t                keyLen;
+    Cmac*    cmac        = ctx->crypto->algoCtx.cmac;
+    int      clientDevId = 0;
+    whKeyId  keyId;
+    byte     tmpKey[AES_256_KEY_SIZE];
+    uint32_t keyLen;
     /* Flag indicating if the CMAC context holds a local key that should not be
      * returned to the client   */
     int ctxHoldsLocalKey = 0;
