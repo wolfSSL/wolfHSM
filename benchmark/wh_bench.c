@@ -17,7 +17,6 @@
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
 #include <stdint.h>
-#include <stdio.h>  /* For printf */
 #include <string.h> /* For memset, memcpy */
 
 #if defined(WOLFHSM_CFG_TEST_POSIX)

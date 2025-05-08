@@ -16,7 +16,6 @@
  * You should have received a copy of the GNU General Public License
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
-#include <stdio.h>
 #include "wh_bench_mod.h"
 #include "wolfhsm/wh_error.h"
 

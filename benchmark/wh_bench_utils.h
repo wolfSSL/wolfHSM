@@ -22,8 +22,8 @@
 
 #include "wolfhsm/wh_settings.h"
 
-#if defined(WOLFHSM_CFG_BENCH_CUSTOM_PRINTF)
-#include <stdio.h>
+#if !defined(WOLFHSM_CFG_BENCH_CUSTOM_PRINTF)
+#include <stdio.h> /* use default printf */
 #endif
 
 /* Define the WH_BENCH_PRINTF macro */
