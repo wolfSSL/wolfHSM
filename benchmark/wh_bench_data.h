@@ -31,13 +31,11 @@
 #define WH_BENCH_DATA_IN_BUFFER ((void*)WOLFHSM_CFG_BENCH_CUSTOM_DATA_IN_BUFFER)
 #define WH_BENCH_DATA_OUT_BUFFER \
     ((void*)WOLFHSM_CFG_BENCH_CUSTOM_DATA_OUT_BUFFER)
-#define WH_BENCH_DATA_IN_BUFFER WOLFHSM_CFG_BENCH_CUSTOM_DATA_IN_BUFFER
-#define WH_BENCH_DATA_OUT_BUFFER WOLFHSM_CFG_BENCH_CUSTOM_DATA_OUT_BUFFER
 #else
 extern uint8_t wh_bench_data_in_buffer[WOLFHSM_CFG_BENCH_DATA_BUFFER_SIZE];
 extern uint8_t wh_bench_data_out_buffer[WOLFHSM_CFG_BENCH_DATA_BUFFER_SIZE];
-#define WH_BENCH_DATA_IN_BUFFER wh_bench_data_in_buffer
-#define WH_BENCH_DATA_OUT_BUFFER wh_bench_data_out_buffer
+#define WH_BENCH_DATA_IN_BUFFER (void*)wh_bench_data_in_buffer
+#define WH_BENCH_DATA_OUT_BUFFER (void*)wh_bench_data_out_buffer
 #endif
 
 #if defined(WOLFHSM_CFG_DMA)
