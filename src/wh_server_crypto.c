@@ -1174,15 +1174,21 @@ static int _HandleCurve25519SharedSecret(whServerContext* ctx, uint16_t magic,
         /* init public key */
         ret = wc_curve25519_init_ex(pub, NULL, ctx->crypto->devId);
         if (ret == 0) {
-            ret = wh_Server_CacheExportCurve25519Key(
-                    ctx, prv_key_id, priv);
+#ifdef WOLFSSL_CURVE25519_BLINDING
+            ret = wc_curve25519_set_rng(priv, ctx->crypto->rng);
             if (ret == 0) {
-                ret = wh_Server_CacheExportCurve25519Key(
-                        ctx, pub_key_id, pub);
+                ret = wc_curve25519_set_rng(pub, ctx->crypto->rng);
+            }
+#endif
+            if (ret == 0) {
+                ret = wh_Server_CacheExportCurve25519Key(ctx, prv_key_id, priv);
             }
             if (ret == 0) {
-                ret = wc_curve25519_shared_secret_ex(
-                    priv, pub, res_out, &res_len, endian);
+                ret = wh_Server_CacheExportCurve25519Key(ctx, pub_key_id, pub);
+            }
+            if (ret == 0) {
+                ret = wc_curve25519_shared_secret_ex(priv, pub, res_out,
+                                                     &res_len, endian);
             }
             wc_curve25519_free(pub);
         }
