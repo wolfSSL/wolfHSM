@@ -2,6 +2,7 @@
 # Certificate Chain Generation Script with Dual Chains
 # Creates two distinct certificate chains (A and B), each with their own root, intermediate, and leaf
 # Outputs both PEM and DER formats, plus C arrays for embedding
+# Also exports the public key from Chain A's leaf certificate
 
 set -e  # Exit on any error
 
@@ -83,6 +84,12 @@ openssl x509 -req -days 365 -sha256 \
 # Convert leaf key and certificate to DER format
 openssl rsa -in ca/leaf_a/private/pem/leaf_a.key -outform DER -out ca/leaf_a/private/der/leaf_a.key
 openssl x509 -in ca/leaf_a/certs/pem/leaf_a.crt -outform DER -out ca/leaf_a/certs/der/leaf_a.crt
+
+# Extract the public key from Chain A's leaf certificate in DER format
+echo "Extracting public key from Chain A's leaf certificate..."
+mkdir -p ca/leaf_a/pubkey
+openssl x509 -in ca/leaf_a/certs/pem/leaf_a.crt -pubkey -noout > ca/leaf_a/pubkey/leaf_a_pubkey.pem
+openssl rsa -pubin -in ca/leaf_a/pubkey/leaf_a_pubkey.pem -outform DER -out ca/leaf_a/pubkey/leaf_a_pubkey.der
 
 # Step 6A: Create certificate chains in PEM format for Chain A
 echo "Creating certificate chains for Chain A..."
@@ -227,6 +234,8 @@ append_cert_array "ca/intermediate_a/certs/der/intermediate_a.crt" "INTERMEDIATE
 append_cert_array "ca/leaf_a/certs/der/leaf_a.crt" "LEAF_A_CERT" "Chain A - Leaf/Server Certificate (DER format)"
 append_cert_array "ca/leaf_a/certs/der/raw_chain_a.der" "RAW_CERT_CHAIN_A" "Chain A - Raw Certificate Chain (Intermediate+Leaf) (DER format)"
 append_cert_array "ca/leaf_a/certs/der/chain_a.p7b" "CERT_CHAIN_A_P7B" "Chain A - Certificate Chain - PKCS#7 bundle (DER format)"
+# Add Chain A leaf certificate public key
+append_cert_array "ca/leaf_a/pubkey/leaf_a_pubkey.der" "LEAF_A_PUBKEY" "Chain A - Leaf Certificate Public Key (DER format)"
 
 ### Add Chain B certificates to the header file
 echo "/* Chain B Certificates */" >> "${HEADER_FILE}"
@@ -276,6 +285,7 @@ echo "    Intermediate certificate:   ca/intermediate_a/certs/pem/intermediate_a
 echo "    Leaf certificate:           ca/leaf_a/certs/pem/leaf_a.crt"
 echo "    Chain (leaf+intermediate):  ca/leaf_a/certs/pem/chain_a.crt"
 echo "    Full chain:                 ca/leaf_a/certs/pem/fullchain_a.crt"
+echo "    Leaf public key:            ca/leaf_a/pubkey/leaf_a_pubkey.pem"
 echo ""
 echo "  DER Format:"
 echo "    Root CA certificate:        ca/root_a/certs/der/root_a.crt"
@@ -283,6 +293,7 @@ echo "    Intermediate certificate:   ca/intermediate_a/certs/der/intermediate_a
 echo "    Leaf certificate:           ca/leaf_a/certs/der/leaf_a.crt"
 echo "    Raw chain:                  ca/leaf_a/certs/der/raw_chain_a.der"
 echo "    PKCS#7 bundle:              ca/leaf_a/certs/der/chain_a.p7b"
+echo "    Leaf public key:            ca/leaf_a/pubkey/leaf_a_pubkey.der"
 echo ""
 echo "Chain B:"
 echo "  PEM Format:"

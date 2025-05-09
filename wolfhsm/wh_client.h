@@ -1912,6 +1912,69 @@ int wh_Client_CertVerify(whClientContext* c, const uint8_t* cert,
                          uint32_t cert_len, whNvmId trustedRootNvmId,
                          int32_t* out_rc);
 
+/**
+ * @brief Sends a request to verify a certificate and cache the leaf public key.
+ *
+ * This function prepares and sends a request to verify a certificate and also
+ * instructs the server to cache the public key of the leaf certificate. This
+ * function does not block; it returns immediately after sending the request.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] cert Pointer to the certificate data to verify.
+ * @param[in] cert_len Length of the certificate data.
+ * @param[in] trustedRootNvmId NVM ID of the trusted root certificate to verify
+ * against.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertVerifyAndCacheLeafPubKeyRequest(whClientContext* c,
+                                                  const uint8_t*   cert,
+                                                  uint32_t         cert_len,
+                                                  whNvmId trustedRootNvmId);
+
+/**
+ * @brief Receives a response from the server after verifying a certificate and
+ * caching the leaf public key.
+ *
+ * This function attempts to process a response message from the server after
+ * verifying a certificate and caching the leaf public key. It validates the
+ * response and extracts the return code and key ID. This function does not
+ * block; it returns WH_ERROR_NOTREADY if a response has not been received.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[out] out_keyId Pointer to store the key ID of the cached leaf public
+ * key.
+ * @param[out] out_rc Pointer to store the response code from the server.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertVerifyAndCacheLeafPubKeyResponse(whClientContext* c,
+                                                   whKeyId*         out_keyId,
+                                                   int32_t*         out_rc);
+
+/**
+ * @brief Sends a request and receives a response to verify a certificate, while
+ * also instructing the server to cache the public key of the leaf certificate.
+ *
+ * This function handles the complete process of sending a request to verify a
+ * certificate and cache the leaf public key, and receiving the response. It
+ * blocks until the entire operation is complete or an error occurs.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] cert Pointer to the certificate data to verify.
+ * @param[in] cert_len Length of the certificate data.
+ * @param[in] trustedRootNvmId NVM ID of the trusted root certificate to verify
+ * against.
+ * @param[out] out_keyId Pointer to store the key ID of the cached leaf public
+ * key.
+ * @param[out] out_rc Pointer to store the response code from the server.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertVerifyAndCacheLeafPubKey(whClientContext* c,
+                                           const uint8_t*   cert,
+                                           uint32_t         cert_len,
+                                           whNvmId          trustedRootNvmId,
+                                           whKeyId* out_keyId, int32_t* out_rc);
+
+
 #ifdef WOLFHSM_CFG_DMA
 
 /**
@@ -2064,6 +2127,72 @@ int wh_Client_CertVerifyDmaResponse(whClientContext* c, int32_t* out_rc);
 int wh_Client_CertVerifyDma(whClientContext* c, const void* cert,
                             uint32_t cert_len, whNvmId trustedRootNvmId,
                             int32_t* out_rc);
+
+
+/**
+ * @brief Sends a request to verify a certificate using DMA and cache the leaf
+ * certificate public key.
+ *
+ * This function prepares and sends a request to verify a certificate using DMA
+ * and also instructs the server to cache the public key of the leaf
+ * certificate. This function does not block; it returns immediately after
+ * sending the request.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] cert Pointer to the certificate data to verify.
+ * @param[in] cert_len Length of the certificate data.
+ * @param[in] trustedRootNvmId NVM ID of the trusted root certificate to verify
+ * against.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertVerifyDmaAndCacheLeafPubKeyRequest(whClientContext* c,
+                                                     const void*      cert,
+                                                     uint32_t         cert_len,
+                                                     whNvmId trustedRootNvmId);
+
+/**
+ * @brief Receives a response from the server after verifying a certificate
+ * using DMA and caching the leaf public key.
+ *
+ * This function attempts to process a response message from the server after
+ * verifying a certificate using DMA and caching the leaf public key. It
+ * validates the response and extracts the return code and key ID. This function
+ * does not block; it returns WH_ERROR_NOTREADY if a response has not been
+ * received.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[out] out_keyId Pointer to store the key ID of the cached leaf public
+ * key.
+ * @param[out] out_rc Pointer to store the response code from the server.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertVerifyDmaAndCacheLeafPubKeyResponse(whClientContext* c,
+                                                      whKeyId* out_keyId,
+                                                      int32_t* out_rc);
+
+/**
+ * @brief Sends a request and receives a response to verify a certificate using
+ * DMA and cache the leaf certificate public key.
+ *
+ * This function handles the complete process of sending a request to verify a
+ * certificate using DMA and cache the leaf certificate public key, and
+ * receiving the response. It blocks until the entire operation is complete or
+ * an error occurs.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] cert Pointer to the certificate data to verify.
+ * @param[in] cert_len Length of the certificate data.
+ * @param[in] trustedRootNvmId NVM ID of the trusted root certificate to verify
+ * against.
+ * @param[out] out_keyId Pointer to store the key ID of the cached leaf public
+ * key.
+ * @param[out] out_rc Pointer to store the response code from the server.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertVerifyDmaAndCacheLeafPubKey(
+    whClientContext* c, const void* cert, uint32_t cert_len,
+    whNvmId trustedRootNvmId, whKeyId* out_keyId, int32_t* out_rc);
+
 
 #endif /* WOLFHSM_CFG_DMA */
 
