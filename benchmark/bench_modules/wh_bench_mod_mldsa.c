@@ -614,8 +614,8 @@ static byte test_msg[512] = {
 
 #if !defined(WOLFSSL_DILITHIUM_NO_SIGN)
 /* Helper function for ML-DSA sign benchmark */
-static int _benchMlDsaSign(whClientContext* client, BenchOpContext* ctx, int id,
-                           int securityLevel, int devId)
+static int _benchMlDsaSign(whClientContext* client, whBenchOpContext* ctx,
+                           int id, int securityLevel, int devId)
 {
     int      ret = 0;
     MlDsaKey key;
@@ -762,7 +762,7 @@ exit:
 
 #if !defined(WOLFSSL_DILITHIUM_NO_VERIFY)
 /* Helper function for ML-DSA verify benchmark */
-static int _benchMlDsaVerify(whClientContext* client, BenchOpContext* ctx,
+static int _benchMlDsaVerify(whClientContext* client, whBenchOpContext* ctx,
                              int id, int securityLevel, int devId)
 {
     int      ret = 0;
@@ -891,7 +891,7 @@ exit:
 
 #if !defined(WOLFSSL_DILITHIUM_NO_MAKE_KEY)
 /* Helper function for ML-DSA key generation benchmark */
-static int _benchMlDsaKeyGen(whClientContext* client, BenchOpContext* ctx,
+static int _benchMlDsaKeyGen(whClientContext* client, whBenchOpContext* ctx,
                              int id, int securityLevel, int devId)
 {
     int      ret = 0;
@@ -969,145 +969,145 @@ static int _benchMlDsaKeyGen(whClientContext* client, BenchOpContext* ctx,
 
 /* Benchmark functions for ML-DSA with security level 44 */
 #if !defined(WOLFSSL_NO_ML_DSA_44)
-int wh_Bench_Mod_MlDsa44Sign(whClientContext* client, BenchOpContext* ctx,
+int wh_Bench_Mod_MlDsa44Sign(whClientContext* client, whBenchOpContext* ctx,
                              int id, void* params)
 {
 #if !defined(WOLFSSL_DILITHIUM_NO_SIGN) && \
     !defined(WOLFHSM_CFG_TEST_CLIENT_LARGE_DATA_DMA_ONLY)
     return _benchMlDsaSign(client, ctx, id, WC_ML_DSA_44, WH_DEV_ID);
 #else
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 #endif
 }
 
-int wh_Bench_Mod_MlDsa44SignDma(whClientContext* client, BenchOpContext* ctx,
+int wh_Bench_Mod_MlDsa44SignDma(whClientContext* client, whBenchOpContext* ctx,
                                 int id, void* params)
 {
 #if defined(WOLFHSM_CFG_DMA) && !defined(WOLFSSL_DILITHIUM_NO_SIGN)
     return _benchMlDsaSign(client, ctx, id, WC_ML_DSA_44, WH_DEV_ID_DMA);
 #else
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 #endif
 }
 
-int wh_Bench_Mod_MlDsa44Verify(whClientContext* client, BenchOpContext* ctx,
+int wh_Bench_Mod_MlDsa44Verify(whClientContext* client, whBenchOpContext* ctx,
                                int id, void* params)
 {
 #if !defined(WOLFSSL_DILITHIUM_NO_VERIFY) && \
     !defined(WOLFHSM_CFG_TEST_CLIENT_LARGE_DATA_DMA_ONLY)
     return _benchMlDsaVerify(client, ctx, id, WC_ML_DSA_44, WH_DEV_ID);
 #else
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 #endif
 }
 
-int wh_Bench_Mod_MlDsa44VerifyDma(whClientContext* client, BenchOpContext* ctx,
-                                  int id, void* params)
+int wh_Bench_Mod_MlDsa44VerifyDma(whClientContext*  client,
+                                  whBenchOpContext* ctx, int id, void* params)
 {
 #if defined(WOLFHSM_CFG_DMA) && !defined(WOLFSSL_DILITHIUM_NO_VERIFY)
     return _benchMlDsaVerify(client, ctx, id, WC_ML_DSA_44, WH_DEV_ID_DMA);
 #else
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 #endif
 }
 
-int wh_Bench_Mod_MlDsa44KeyGen(whClientContext* client, BenchOpContext* ctx,
+int wh_Bench_Mod_MlDsa44KeyGen(whClientContext* client, whBenchOpContext* ctx,
                                int id, void* params)
 {
 #if !defined(WOLFSSL_DILITHIUM_NO_MAKE_KEY) && \
     !defined(WOLFHSM_CFG_TEST_CLIENT_LARGE_DATA_DMA_ONLY)
     return _benchMlDsaKeyGen(client, ctx, id, WC_ML_DSA_44, WH_DEV_ID);
 #else
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 #endif
 }
 
-int wh_Bench_Mod_MlDsa44KeyGenDma(whClientContext* client, BenchOpContext* ctx,
-                                  int id, void* params)
+int wh_Bench_Mod_MlDsa44KeyGenDma(whClientContext*  client,
+                                  whBenchOpContext* ctx, int id, void* params)
 {
 #if defined(WOLFHSM_CFG_DMA) && !defined(WOLFSSL_DILITHIUM_NO_MAKE_KEY)
     return _benchMlDsaKeyGen(client, ctx, id, WC_ML_DSA_44, WH_DEV_ID_DMA);
 #else
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 #endif
 }
 #endif /* !defined(WOLFSSL_NO_ML_DSA_44) */
 
 /* Benchmark functions for ML-DSA with security level 65 */
 #if !defined(WOLFSSL_NO_ML_DSA_65)
-int wh_Bench_Mod_MlDsa65Sign(whClientContext* client, BenchOpContext* ctx,
+int wh_Bench_Mod_MlDsa65Sign(whClientContext* client, whBenchOpContext* ctx,
                              int id, void* params)
 {
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 }
 
-int wh_Bench_Mod_MlDsa65SignDma(whClientContext* client, BenchOpContext* ctx,
+int wh_Bench_Mod_MlDsa65SignDma(whClientContext* client, whBenchOpContext* ctx,
                                 int id, void* params)
 {
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 }
 
-int wh_Bench_Mod_MlDsa65Verify(whClientContext* client, BenchOpContext* ctx,
+int wh_Bench_Mod_MlDsa65Verify(whClientContext* client, whBenchOpContext* ctx,
                                int id, void* params)
 {
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 }
 
-int wh_Bench_Mod_MlDsa65VerifyDma(whClientContext* client, BenchOpContext* ctx,
-                                  int id, void* params)
+int wh_Bench_Mod_MlDsa65VerifyDma(whClientContext*  client,
+                                  whBenchOpContext* ctx, int id, void* params)
 {
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 }
 
-int wh_Bench_Mod_MlDsa65KeyGen(whClientContext* client, BenchOpContext* ctx,
+int wh_Bench_Mod_MlDsa65KeyGen(whClientContext* client, whBenchOpContext* ctx,
                                int id, void* params)
 {
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 }
 
-int wh_Bench_Mod_MlDsa65KeyGenDma(whClientContext* client, BenchOpContext* ctx,
-                                  int id, void* params)
+int wh_Bench_Mod_MlDsa65KeyGenDma(whClientContext*  client,
+                                  whBenchOpContext* ctx, int id, void* params)
 {
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 }
 #endif /* !defined(WOLFSSL_NO_ML_DSA_65) */
 
 /* Benchmark functions for ML-DSA with security level 87 */
 #if !defined(WOLFSSL_DILITHIUM_NO_SIGN)
-int wh_Bench_Mod_MlDsa87Sign(whClientContext* client, BenchOpContext* ctx,
+int wh_Bench_Mod_MlDsa87Sign(whClientContext* client, whBenchOpContext* ctx,
                              int id, void* params)
 {
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 }
 
-int wh_Bench_Mod_MlDsa87SignDma(whClientContext* client, BenchOpContext* ctx,
+int wh_Bench_Mod_MlDsa87SignDma(whClientContext* client, whBenchOpContext* ctx,
                                 int id, void* params)
 {
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 }
 
-int wh_Bench_Mod_MlDsa87Verify(whClientContext* client, BenchOpContext* ctx,
+int wh_Bench_Mod_MlDsa87Verify(whClientContext* client, whBenchOpContext* ctx,
                                int id, void* params)
 {
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 }
 
-int wh_Bench_Mod_MlDsa87VerifyDma(whClientContext* client, BenchOpContext* ctx,
-                                  int id, void* params)
+int wh_Bench_Mod_MlDsa87VerifyDma(whClientContext*  client,
+                                  whBenchOpContext* ctx, int id, void* params)
 {
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 }
 
-int wh_Bench_Mod_MlDsa87KeyGen(whClientContext* client, BenchOpContext* ctx,
+int wh_Bench_Mod_MlDsa87KeyGen(whClientContext* client, whBenchOpContext* ctx,
                                int id, void* params)
 {
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 }
 
-int wh_Bench_Mod_MlDsa87KeyGenDma(whClientContext* client, BenchOpContext* ctx,
-                                  int id, void* params)
+int wh_Bench_Mod_MlDsa87KeyGenDma(whClientContext*  client,
+                                  whBenchOpContext* ctx, int id, void* params)
 {
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 }
 #endif /* !defined(WOLFSSL_NO_ML_DSA_87) */
 

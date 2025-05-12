@@ -17,11 +17,11 @@
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
 /*
- * benchmark/wh_benchmark.h
+ * benchmark/wh_bench.h
  *
  */
-#ifndef BENCHMARK_WH_BENCHMARK_H_
-#define BENCHMARK_WH_BENCHMARK_H_
+#ifndef WH_BENCH_H_
+#define WH_BENCH_H_
 
 #include "wolfhsm/wh_server.h"
 #include "wolfhsm/wh_client.h"
@@ -48,4 +48,4 @@ int wh_Bench_ClientCtx(whClientContext* client);
 /* Server-side processing loop for benchmarking */
 int wh_Bench_ServerCfgLoop(whServerConfig* serverCfg);
 
-#endif /* BENCHMARK_WH_BENCHMARK_H_ */
+#endif /* WH_BENCH_H_ */

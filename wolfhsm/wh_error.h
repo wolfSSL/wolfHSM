@@ -41,7 +41,7 @@ enum WH_ERROR_ENUM {
     WH_ERROR_BUFFER_SIZE = -2006, /* Generic buffer size mismatch. Buffer
                                    * length is not what was expected */
     WH_ERROR_NOHANDLER = -2007,   /* No customcb handler registered */
-    WH_ERROR_NOT_IMPL  = -2008,   /* Functionality not implemented given the
+    WH_ERROR_NOTIMPL  = -2008,   /* Functionality not implemented given the
                                      compile-time configuration */
 
     /* NVM-specific status returns */

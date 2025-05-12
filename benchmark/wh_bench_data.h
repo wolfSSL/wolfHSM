@@ -17,8 +17,8 @@
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef WH_BENCH_DATA_H
-#define WH_BENCH_DATA_H
+#ifndef WH_BENCH_DATA_H_
+#define WH_BENCH_DATA_H_
 #include <stdint.h>
 #include "wolfhsm/wh_settings.h"
 
@@ -57,4 +57,4 @@ extern uint8_t wh_bench_data_dma_buffer[WOLFHSM_CFG_BENCH_DMA_BUFFER_SIZE];
 
 #endif /* WOLFHSM_CFG_DMA */
 
-#endif /* WH_BENCH_DATA_H */
+#endif /* WH_BENCH_DATA_H_ */

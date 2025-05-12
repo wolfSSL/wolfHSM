@@ -17,11 +17,11 @@
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
 /*
- * benchmark/benchmark_timer.h
+ * benchmark/wh_bench_ops.h
  *
  */
-#ifndef BENCHMARK_TIMER_H_
-#define BENCHMARK_TIMER_H_
+#ifndef WH_BENCH_OPS_H_
+#define WH_BENCH_OPS_H_
 
 #include <stdint.h>
 
@@ -35,9 +35,9 @@ typedef enum {
     BENCH_THROUGHPUT_NONE, /* No throughput calculation */
     BENCH_THROUGHPUT_XBPS, /* Auto-scaled bytes per second */
     BENCH_THROUGHPUT_OPS   /* Operations per second */
-} BenchOpThroughputType;
+} whBenchOpThroughputType;
 
-typedef struct BenchOp {
+typedef struct whBenchOp {
     /* Name of the operation being timed */
     char name[MAX_OP_NAME];
     /* Is this a valid benchmark entry */
@@ -55,49 +55,49 @@ typedef struct BenchOp {
     /* Number of times this operation has been performed */
     uint64_t count;
     /* Type of throughput measurement */
-    BenchOpThroughputType throughputType;
+    whBenchOpThroughputType throughputType;
     /* Size of data processed in bytes */
     uint64_t dataSize;
     /* Calculated throughput value */
     double throughput;
-} BenchOp;
+} whBenchOp;
 
-typedef struct BenchOpContext {
-    BenchOp ops[MAX_BENCH_OPS]; /* Array of operations */
-    int     opCount;            /* Number of registered operations */
-} BenchOpContext;
+typedef struct whBenchOpContext {
+    whBenchOp ops[MAX_BENCH_OPS]; /* Array of operations */
+    int       opCount;            /* Number of registered operations */
+} whBenchOpContext;
 
 /*
  * Benchmark Timing API
  */
 
 /* Initialize benchmark context */
-int wh_Bench_Init(BenchOpContext* ctx);
+int wh_Bench_Init(whBenchOpContext* ctx);
 
 /* Register a new benchmark operation with a name, returns ID via pointer */
-int wh_Bench_RegisterOp(BenchOpContext* ctx, const char* name,
-                        BenchOpThroughputType tpType, int* id);
+int wh_Bench_RegisterOp(whBenchOpContext* ctx, const char* name,
+                        whBenchOpThroughputType tpType, int* id);
 
 /* Set the data size for throughput calculation (needed for MBps/KBps metrics)
  */
-int wh_Bench_SetDataSize(BenchOpContext* ctx, int id, uint64_t bytes);
+int wh_Bench_SetDataSize(whBenchOpContext* ctx, int id, uint64_t bytes);
 
 /* Start timing an operation with given ID */
-int wh_Bench_StartOp(BenchOpContext* ctx, int id);
+int wh_Bench_StartOp(whBenchOpContext* ctx, int id);
 
 /* Stop timing an operation with given ID and update statistics */
-int wh_Bench_StopOp(BenchOpContext* ctx, int id);
+int wh_Bench_StopOp(whBenchOpContext* ctx, int id);
 
 /* Print benchmark results as formatted table */
-int wh_Bench_PrintResults(BenchOpContext* ctx);
+int wh_Bench_PrintResults(whBenchOpContext* ctx);
 
 /* Print intermediate benchmark results for a single operation */
-int wh_Bench_PrintIntermediateResult(BenchOpContext* ctx, int id);
+int wh_Bench_PrintIntermediateResult(whBenchOpContext* ctx, int id);
 
 /* Reset benchmark statistics but keep registered operations */
-int wh_Bench_Reset(BenchOpContext* ctx);
+int wh_Bench_Reset(whBenchOpContext* ctx);
 
 /* Clean up benchmark context */
-int wh_Bench_Cleanup(BenchOpContext* ctx);
+int wh_Bench_Cleanup(whBenchOpContext* ctx);
 
-#endif /* BENCHMARK_TIMER_H_ */
+#endif /* WH_BENCH_OPS_H_ */

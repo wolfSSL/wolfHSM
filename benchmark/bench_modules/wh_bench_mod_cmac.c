@@ -37,7 +37,7 @@ static const uint8_t key256[] = {
     0x3c, 0x82, 0x09, 0x01, 0x02, 0x42, 0x03, 0x04, 0x05, 0x06};
 
 
-int _benchCmacAes(whClientContext* client, BenchOpContext* ctx, int id,
+int _benchCmacAes(whClientContext* client, whBenchOpContext* ctx, int id,
                   const uint8_t* key, size_t keyLen, int devId)
 {
     int      ret = 0;
@@ -55,7 +55,7 @@ int _benchCmacAes(whClientContext* client, BenchOpContext* ctx, int id,
                              (uint8_t*)key, keyLen, &keyId);
     if (ret != 0) {
         WH_BENCH_PRINTF("Failed to wh_Client_KeyCache %d\n", ret);
-        goto exit;
+        return ret;
     }
 
 #if defined(WOLFHSM_CFG_DMA)
@@ -123,41 +123,50 @@ int _benchCmacAes(whClientContext* client, BenchOpContext* ctx, int id,
     }
 
 exit:
+    /* Evict the key from the cache if it's not DMA */
+    if (keyId != WH_KEYID_ERASED) {
+        int evictRet = wh_Client_KeyEvict(client, keyId);
+        if (evictRet != 0) {
+            /* Log the error but continue with cleanup */
+            WH_BENCH_PRINTF("Failed to evict key from cache: %d\n", evictRet);
+            ret = evictRet;
+        }
+    }
     (void)wc_CmacFree(cmac);
     return ret;
 }
 
-int wh_Bench_Mod_CmacAes128(whClientContext* client, BenchOpContext* ctx,
+int wh_Bench_Mod_CmacAes128(whClientContext* client, whBenchOpContext* ctx,
                             int id, void* params)
 {
     return _benchCmacAes(client, ctx, id, key128, sizeof(key128), WH_DEV_ID);
 }
 
-int wh_Bench_Mod_CmacAes128Dma(whClientContext* client, BenchOpContext* ctx,
+int wh_Bench_Mod_CmacAes128Dma(whClientContext* client, whBenchOpContext* ctx,
                                int id, void* params)
 {
 #if defined(WOLFHSM_CFG_DMA)
     return _benchCmacAes(client, ctx, id, key128, sizeof(key128),
                          WH_DEV_ID_DMA);
 #else
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 #endif
 }
 
-int wh_Bench_Mod_CmacAes256(whClientContext* client, BenchOpContext* ctx,
+int wh_Bench_Mod_CmacAes256(whClientContext* client, whBenchOpContext* ctx,
                             int id, void* params)
 {
     return _benchCmacAes(client, ctx, id, key256, sizeof(key256), WH_DEV_ID);
 }
 
-int wh_Bench_Mod_CmacAes256Dma(whClientContext* client, BenchOpContext* ctx,
+int wh_Bench_Mod_CmacAes256Dma(whClientContext* client, whBenchOpContext* ctx,
                                int id, void* params)
 {
 #if defined(WOLFHSM_CFG_DMA)
     return _benchCmacAes(client, ctx, id, key256, sizeof(key256),
                          WH_DEV_ID_DMA);
 #else
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 #endif
 }
 

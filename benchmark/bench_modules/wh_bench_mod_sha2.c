@@ -27,7 +27,7 @@
 
 #if !defined(NO_SHA256)
 
-int _benchSha256(whClientContext* client, BenchOpContext* ctx, int id,
+int _benchSha256(whClientContext* client, whBenchOpContext* ctx, int id,
                  int devId)
 {
     int            ret = 0;
@@ -112,23 +112,23 @@ int _benchSha256(whClientContext* client, BenchOpContext* ctx, int id,
     return ret;
 }
 
-int wh_Bench_Mod_Sha256(whClientContext* client, BenchOpContext* ctx, int id,
+int wh_Bench_Mod_Sha256(whClientContext* client, whBenchOpContext* ctx, int id,
                         void* params)
 {
 #if defined(WOLFHSM_CFG_DMA)
     return _benchSha256(client, ctx, id, WH_DEV_ID);
 #else
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 #endif
 }
 
-int wh_Bench_Mod_Sha256Dma(whClientContext* client, BenchOpContext* ctx, int id,
-                           void* params)
+int wh_Bench_Mod_Sha256Dma(whClientContext* client, whBenchOpContext* ctx,
+                           int id, void* params)
 {
 #if defined(WOLFHSM_CFG_DMA)
     return _benchSha256(client, ctx, id, WH_DEV_ID_DMA);
 #else
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 #endif
 }
 

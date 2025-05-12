@@ -30,8 +30,9 @@
 
 static const uint8_t key[] =
     "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+static const size_t keyLen = sizeof(key) - 1; /* -1 for null terminator */
 
-int _benchHmacSha256(whClientContext* client, BenchOpContext* ctx, int id,
+int _benchHmacSha256(whClientContext* client, whBenchOpContext* ctx, int id,
                      int devId)
 {
     int            ret = 0;
@@ -74,11 +75,10 @@ int _benchHmacSha256(whClientContext* client, BenchOpContext* ctx, int id,
         /* Defer error checking until after all operations are complete */
         benchStartRet = wh_Bench_StartOp(ctx, id);
         initRet       = wc_HmacInit(hmac, NULL, devId);
-        setKeyRet =
-            wc_HmacSetKey(hmac, WC_SHA256, key, (word32)sizeof(key) - 1);
-        updateRet    = wc_HmacUpdate(hmac, in, inLen);
-        finalRet     = wc_HmacFinal(hmac, out);
-        benchStopRet = wh_Bench_StopOp(ctx, id);
+        setKeyRet     = wc_HmacSetKey(hmac, WC_SHA256, key, (word32)keyLen);
+        updateRet     = wc_HmacUpdate(hmac, in, inLen);
+        finalRet      = wc_HmacFinal(hmac, out);
+        benchStopRet  = wh_Bench_StopOp(ctx, id);
 
         /* Check for errors after all operations are complete */
         if (benchStartRet != 0) {
@@ -124,19 +124,19 @@ int _benchHmacSha256(whClientContext* client, BenchOpContext* ctx, int id,
     return ret;
 }
 
-int wh_Bench_Mod_HmacSha256(whClientContext* client, BenchOpContext* ctx,
+int wh_Bench_Mod_HmacSha256(whClientContext* client, whBenchOpContext* ctx,
                             int id, void* params)
 {
     return _benchHmacSha256(client, ctx, id, WH_DEV_ID);
 }
 
-int wh_Bench_Mod_HmacSha256Dma(whClientContext* client, BenchOpContext* ctx,
+int wh_Bench_Mod_HmacSha256Dma(whClientContext* client, whBenchOpContext* ctx,
                                int id, void* params)
 {
 #if defined(WOLFHSM_CFG_DMA)
     return _benchHmacSha256(client, ctx, id, WH_DEV_ID_DMA);
 #else
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 #endif
 }
 
@@ -144,16 +144,16 @@ int wh_Bench_Mod_HmacSha256Dma(whClientContext* client, BenchOpContext* ctx,
 
 #if defined(WOLFSSL_SHA3)
 
-int wh_Bench_Mod_HmacSha3256(whClientContext* client, BenchOpContext* ctx,
+int wh_Bench_Mod_HmacSha3256(whClientContext* client, whBenchOpContext* ctx,
                              int id, void* params)
 {
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 }
 
-int wh_Bench_Mod_HmacSha3256Dma(whClientContext* client, BenchOpContext* ctx,
+int wh_Bench_Mod_HmacSha3256Dma(whClientContext* client, whBenchOpContext* ctx,
                                 int id, void* params)
 {
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 }
 
 #endif /* WOLFSSL_SHA3 */

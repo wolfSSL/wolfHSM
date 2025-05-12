@@ -330,7 +330,7 @@ unsigned char rsa4096KeyDer[] = {
     0x45, 0x70, 0x6d, 0x7f, 0x91, 0x08};
 
 
-int _benchRsaCrypt(whClientContext* client, BenchOpContext* ctx, int id,
+int _benchRsaCrypt(whClientContext* client, whBenchOpContext* ctx, int id,
                    const uint8_t* key, size_t keyLen, int operation, int devId)
 {
     int         ret   = 0;
@@ -466,7 +466,7 @@ exit:
     return ret;
 }
 
-int _benchRsaVerify(whClientContext* client, BenchOpContext* ctx, int id,
+int _benchRsaVerify(whClientContext* client, whBenchOpContext* ctx, int id,
                     const uint8_t* key, size_t keyLen, int devId)
 {
     int     ret   = 0;
@@ -589,7 +589,7 @@ exit:
     return ret;
 }
 
-int _benchRsaSign(whClientContext* client, BenchOpContext* ctx, int id,
+int _benchRsaSign(whClientContext* client, whBenchOpContext* ctx, int id,
                   const uint8_t* key, size_t keyLen, int devId)
 {
     int     ret   = 0;
@@ -697,7 +697,7 @@ exit:
     return ret;
 }
 
-int _benchRsaKeyGen(whClientContext* client, BenchOpContext* ctx, int id,
+int _benchRsaKeyGen(whClientContext* client, whBenchOpContext* ctx, int id,
                     int keySize, int devId)
 {
     int    ret = 0;
@@ -766,213 +766,217 @@ int _benchRsaKeyGen(whClientContext* client, BenchOpContext* ctx, int id,
     return ret;
 }
 
-int wh_Bench_Mod_Rsa2048PubEncrypt(whClientContext* client, BenchOpContext* ctx,
-                                   int id, void* params)
+int wh_Bench_Mod_Rsa2048PubEncrypt(whClientContext*  client,
+                                   whBenchOpContext* ctx, int id, void* params)
 {
 #if (RSA_MAX_SIZE >= 2048)
     return _benchRsaCrypt(client, ctx, id, rsa2048KeyDer, sizeof(rsa2048KeyDer),
                           RSA_PUBLIC_ENCRYPT, WH_DEV_ID);
 #else
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 #endif
 }
 
-int wh_Bench_Mod_Rsa2048PubEncryptDma(whClientContext* client,
-                                      BenchOpContext* ctx, int id, void* params)
+int wh_Bench_Mod_Rsa2048PubEncryptDma(whClientContext*  client,
+                                      whBenchOpContext* ctx, int id,
+                                      void* params)
 {
 #if (RSA_MAX_SIZE >= 2048)
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 #else
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 #endif
 }
 
-int wh_Bench_Mod_Rsa2048PrvDecrypt(whClientContext* client, BenchOpContext* ctx,
-                                   int id, void* params)
+int wh_Bench_Mod_Rsa2048PrvDecrypt(whClientContext*  client,
+                                   whBenchOpContext* ctx, int id, void* params)
 {
 #if (RSA_MAX_SIZE >= 2048)
     return _benchRsaCrypt(client, ctx, id, rsa2048KeyDer, sizeof(rsa2048KeyDer),
                           RSA_PRIVATE_DECRYPT, WH_DEV_ID);
 #else
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 #endif
 }
 
-int wh_Bench_Mod_Rsa2048PrvDecryptDma(whClientContext* client,
-                                      BenchOpContext* ctx, int id, void* params)
+int wh_Bench_Mod_Rsa2048PrvDecryptDma(whClientContext*  client,
+                                      whBenchOpContext* ctx, int id,
+                                      void* params)
 {
 #if (RSA_MAX_SIZE >= 2048)
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 #else
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 #endif
 }
 
 
-int wh_Bench_Mod_Rsa2048Sign(whClientContext* client, BenchOpContext* ctx,
+int wh_Bench_Mod_Rsa2048Sign(whClientContext* client, whBenchOpContext* ctx,
                              int id, void* params)
 {
 #if (RSA_MAX_SIZE >= 2048)
     return _benchRsaSign(client, ctx, id, rsa2048KeyDer, sizeof(rsa2048KeyDer),
                          WH_DEV_ID);
 #else
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 #endif
 }
 
-int wh_Bench_Mod_Rsa2048SignDma(whClientContext* client, BenchOpContext* ctx,
+int wh_Bench_Mod_Rsa2048SignDma(whClientContext* client, whBenchOpContext* ctx,
                                 int id, void* params)
 {
 #if (RSA_MAX_SIZE >= 2048)
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 #else
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 #endif
 }
 
 
-int wh_Bench_Mod_Rsa2048Verify(whClientContext* client, BenchOpContext* ctx,
+int wh_Bench_Mod_Rsa2048Verify(whClientContext* client, whBenchOpContext* ctx,
                                int id, void* params)
 {
 #if (RSA_MAX_SIZE >= 2048)
     return _benchRsaVerify(client, ctx, id, rsa2048KeyDer,
                            sizeof(rsa2048KeyDer), WH_DEV_ID);
 #else
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 #endif
 }
 
-int wh_Bench_Mod_Rsa2048VerifyDma(whClientContext* client, BenchOpContext* ctx,
-                                  int id, void* params)
+int wh_Bench_Mod_Rsa2048VerifyDma(whClientContext*  client,
+                                  whBenchOpContext* ctx, int id, void* params)
 {
 #if (RSA_MAX_SIZE >= 2048)
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 #else
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 #endif
 }
 
-int wh_Bench_Mod_Rsa2048KeyGen(whClientContext* client, BenchOpContext* ctx,
+int wh_Bench_Mod_Rsa2048KeyGen(whClientContext* client, whBenchOpContext* ctx,
                                int id, void* params)
 {
 #if (RSA_MAX_SIZE >= 2048)
     return _benchRsaKeyGen(client, ctx, id, 2048, WH_DEV_ID);
 #else
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 #endif
 }
 
-int wh_Bench_Mod_Rsa2048KeyGenDma(whClientContext* client, BenchOpContext* ctx,
-                                  int id, void* params)
+int wh_Bench_Mod_Rsa2048KeyGenDma(whClientContext*  client,
+                                  whBenchOpContext* ctx, int id, void* params)
 {
 #if (RSA_MAX_SIZE >= 2048)
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 #else
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 #endif
 }
 
-int wh_Bench_Mod_Rsa4096PubEncrypt(whClientContext* client, BenchOpContext* ctx,
-                                   int id, void* params)
+int wh_Bench_Mod_Rsa4096PubEncrypt(whClientContext*  client,
+                                   whBenchOpContext* ctx, int id, void* params)
 {
 #if (RSA_MAX_SIZE >= 4096)
     return _benchRsaCrypt(client, ctx, id, rsa4096KeyDer, sizeof(rsa4096KeyDer),
                           RSA_PUBLIC_ENCRYPT, WH_DEV_ID);
 #else
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 #endif
 }
 
-int wh_Bench_Mod_Rsa4096PubEncryptDma(whClientContext* client,
-                                      BenchOpContext* ctx, int id, void* params)
+int wh_Bench_Mod_Rsa4096PubEncryptDma(whClientContext*  client,
+                                      whBenchOpContext* ctx, int id,
+                                      void* params)
 {
 #if (RSA_MAX_SIZE >= 4096)
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 #else
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 #endif
 }
 
-int wh_Bench_Mod_Rsa4096PrvDecrypt(whClientContext* client, BenchOpContext* ctx,
-                                   int id, void* params)
+int wh_Bench_Mod_Rsa4096PrvDecrypt(whClientContext*  client,
+                                   whBenchOpContext* ctx, int id, void* params)
 {
 #if (RSA_MAX_SIZE >= 4096)
     return _benchRsaCrypt(client, ctx, id, rsa4096KeyDer, sizeof(rsa4096KeyDer),
                           RSA_PRIVATE_DECRYPT, WH_DEV_ID);
 #else
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 #endif
 }
 
-int wh_Bench_Mod_Rsa4096PrvDecryptDma(whClientContext* client,
-                                      BenchOpContext* ctx, int id, void* params)
+int wh_Bench_Mod_Rsa4096PrvDecryptDma(whClientContext*  client,
+                                      whBenchOpContext* ctx, int id,
+                                      void* params)
 {
 #if (RSA_MAX_SIZE >= 4096)
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 #else
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 #endif
 }
 
-int wh_Bench_Mod_Rsa4096Sign(whClientContext* client, BenchOpContext* ctx,
+int wh_Bench_Mod_Rsa4096Sign(whClientContext* client, whBenchOpContext* ctx,
                              int id, void* params)
 {
 #if (RSA_MAX_SIZE >= 4096)
     return _benchRsaSign(client, ctx, id, rsa4096KeyDer, sizeof(rsa4096KeyDer),
                          WH_DEV_ID);
 #else
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 #endif
 }
 
-int wh_Bench_Mod_Rsa4096SignDma(whClientContext* client, BenchOpContext* ctx,
+int wh_Bench_Mod_Rsa4096SignDma(whClientContext* client, whBenchOpContext* ctx,
                                 int id, void* params)
 {
 #if (RSA_MAX_SIZE >= 3072)
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 #else
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 #endif
 }
 
-int wh_Bench_Mod_Rsa4096Verify(whClientContext* client, BenchOpContext* ctx,
+int wh_Bench_Mod_Rsa4096Verify(whClientContext* client, whBenchOpContext* ctx,
                                int id, void* params)
 {
 #if (RSA_MAX_SIZE >= 4096)
     return _benchRsaVerify(client, ctx, id, rsa4096KeyDer,
                            sizeof(rsa4096KeyDer), WH_DEV_ID);
 #else
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 #endif
 }
 
-int wh_Bench_Mod_Rsa4096VerifyDma(whClientContext* client, BenchOpContext* ctx,
-                                  int id, void* params)
+int wh_Bench_Mod_Rsa4096VerifyDma(whClientContext*  client,
+                                  whBenchOpContext* ctx, int id, void* params)
 {
 #if (RSA_MAX_SIZE >= 4096)
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 #else
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 #endif
 }
 
-int wh_Bench_Mod_Rsa4096KeyGen(whClientContext* client, BenchOpContext* ctx,
+int wh_Bench_Mod_Rsa4096KeyGen(whClientContext* client, whBenchOpContext* ctx,
                                int id, void* params)
 {
 #if (RSA_MAX_SIZE >= 4096)
     return _benchRsaKeyGen(client, ctx, id, 4096, WH_DEV_ID);
 #else
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 #endif
 }
 
-int wh_Bench_Mod_Rsa4096KeyGenDma(whClientContext* client, BenchOpContext* ctx,
-                                  int id, void* params)
+int wh_Bench_Mod_Rsa4096KeyGenDma(whClientContext*  client,
+                                  whBenchOpContext* ctx, int id, void* params)
 {
 #if (RSA_MAX_SIZE >= 4096)
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 #else
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 #endif
 }
 

@@ -56,7 +56,7 @@ static const uint8_t bobKeyDer[] = {
     0x40, 0x10, 0x1d, 0x99, 0x09, 0xae, 0xc4, 0xb6, 0x78, 0xf7, 0x6e};
 
 /* Helper function for ECC sign benchmark */
-int _benchEccSign(whClientContext* client, BenchOpContext* ctx, int id,
+int _benchEccSign(whClientContext* client, whBenchOpContext* ctx, int id,
                   const uint8_t* key, size_t keyLen, int curveSize, int devId)
 {
     int     ret = 0;
@@ -166,7 +166,7 @@ exit:
 }
 
 /* Helper function for ECC verify benchmark */
-int _benchEccVerify(whClientContext* client, BenchOpContext* ctx, int id,
+int _benchEccVerify(whClientContext* client, whBenchOpContext* ctx, int id,
                     const uint8_t* key, size_t keyLen, int curveSize, int devId)
 {
     int     ret = 0;
@@ -289,7 +289,7 @@ exit:
 }
 
 /* Helper function for ECC key generation benchmark */
-int _benchEccKeyGen(whClientContext* client, BenchOpContext* ctx, int id,
+int _benchEccKeyGen(whClientContext* client, whBenchOpContext* ctx, int id,
                     int curveSize, int devId)
 {
     int     ret    = 0;
@@ -361,7 +361,7 @@ exit:
 }
 
 /* Helper function for ECC ECDH (shared secret) benchmark */
-int _benchEccEcdh(whClientContext* client, BenchOpContext* ctx, int id,
+int _benchEccEcdh(whClientContext* client, whBenchOpContext* ctx, int id,
                   const uint8_t* aliceKeyData, size_t aliceKeyLen,
                   const uint8_t* bobKeyData, size_t bobKeyLen, int curveSize,
                   int devId)
@@ -511,39 +511,39 @@ exit:
     return ret;
 }
 
-int wh_Bench_Mod_EccP256Sign(whClientContext* client, BenchOpContext* ctx,
+int wh_Bench_Mod_EccP256Sign(whClientContext* client, whBenchOpContext* ctx,
                              int id, void* params)
 {
     return _benchEccSign(client, ctx, id, aliceKeyDer, sizeof(aliceKeyDer), 32,
                          WH_DEV_ID);
 }
 
-int wh_Bench_Mod_EccP256SignDma(whClientContext* client, BenchOpContext* ctx,
+int wh_Bench_Mod_EccP256SignDma(whClientContext* client, whBenchOpContext* ctx,
                                 int id, void* params)
 {
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 }
 
-int wh_Bench_Mod_EccP256Verify(whClientContext* client, BenchOpContext* ctx,
+int wh_Bench_Mod_EccP256Verify(whClientContext* client, whBenchOpContext* ctx,
                                int id, void* params)
 {
     return _benchEccVerify(client, ctx, id, aliceKeyDer, sizeof(aliceKeyDer),
                            32, WH_DEV_ID);
 }
 
-int wh_Bench_Mod_EccP256VerifyDma(whClientContext* client, BenchOpContext* ctx,
-                                  int id, void* params)
+int wh_Bench_Mod_EccP256VerifyDma(whClientContext*  client,
+                                  whBenchOpContext* ctx, int id, void* params)
 {
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 }
 
-int wh_Bench_Mod_EccP256KeyGen(whClientContext* client, BenchOpContext* ctx,
+int wh_Bench_Mod_EccP256KeyGen(whClientContext* client, whBenchOpContext* ctx,
                                int id, void* params)
 {
     return _benchEccKeyGen(client, ctx, id, 32, WH_DEV_ID);
 }
 
-int wh_Bench_Mod_EccP256Ecdh(whClientContext* client, BenchOpContext* ctx,
+int wh_Bench_Mod_EccP256Ecdh(whClientContext* client, whBenchOpContext* ctx,
                              int id, void* params)
 {
     return _benchEccEcdh(client, ctx, id, aliceKeyDer, sizeof(aliceKeyDer),

@@ -49,8 +49,8 @@ uint8_t key2_der[] = {
     0x07, 0xaa, 0xc5, 0xa0, 0x98, 0x61, 0x85, 0x31, 0x72, 0xd9};
 
 
-int wh_Bench_Mod_Curve25519KeyGen(whClientContext* client, BenchOpContext* ctx,
-                                  int id, void* params)
+int wh_Bench_Mod_Curve25519KeyGen(whClientContext*  client,
+                                  whBenchOpContext* ctx, int id, void* params)
 {
     int            ret    = 0;
     curve25519_key key[1] = {0};
@@ -119,8 +119,8 @@ int wh_Bench_Mod_Curve25519KeyGen(whClientContext* client, BenchOpContext* ctx,
     return ret;
 }
 
-int wh_Bench_Mod_Curve25519SharedSecret(whClientContext* client,
-                                        BenchOpContext* ctx, int id,
+int wh_Bench_Mod_Curve25519SharedSecret(whClientContext*  client,
+                                        whBenchOpContext* ctx, int id,
                                         void* params)
 {
     int            ret = 0;

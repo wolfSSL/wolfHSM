@@ -54,8 +54,8 @@
  *
  * @return 0 on success, or a negative error code on failure
  */
-typedef int (*wh_BenchModuleFunc)(whClientContext* client,
-                                  BenchOpContext* benchCtx, int opId,
+typedef int (*wh_BenchModuleFunc)(whClientContext*  client,
+                                  whBenchOpContext* benchCtx, int opId,
                                   void* params);
 
 

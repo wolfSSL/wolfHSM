@@ -73,7 +73,7 @@ static uint64_t _benchGetTimeUs(void)
 }
 
 /* Initialize benchmark context */
-int wh_Bench_Init(BenchOpContext* ctx)
+int wh_Bench_Init(whBenchOpContext* ctx)
 {
     int i;
 
@@ -82,7 +82,7 @@ int wh_Bench_Init(BenchOpContext* ctx)
     }
 
     /* Clear all benchmark operations */
-    memset(ctx, 0, sizeof(BenchOpContext));
+    memset(ctx, 0, sizeof(whBenchOpContext));
 
     /* Initialize each operation entry */
     for (i = 0; i < MAX_BENCH_OPS; i++) {
@@ -98,8 +98,8 @@ int wh_Bench_Init(BenchOpContext* ctx)
 }
 
 /* Register a new benchmark operation */
-int wh_Bench_RegisterOp(BenchOpContext* ctx, const char* name,
-                        BenchOpThroughputType tpType, int* id)
+int wh_Bench_RegisterOp(whBenchOpContext* ctx, const char* name,
+                        whBenchOpThroughputType tpType, int* id)
 {
     int i;
 
@@ -109,7 +109,8 @@ int wh_Bench_RegisterOp(BenchOpContext* ctx, const char* name,
 
     /* Check if operation with this name already exists */
     for (i = 0; i < ctx->opCount; i++) {
-        if (ctx->ops[i].valid && strcmp(ctx->ops[i].name, name) == 0) {
+        if (ctx->ops[i].valid &&
+            strncmp(ctx->ops[i].name, name, sizeof((ctx->ops[i].name))) == 0) {
             *id = i;
             return WH_ERROR_OK; /* Operation already registered */
         }
@@ -140,7 +141,7 @@ int wh_Bench_RegisterOp(BenchOpContext* ctx, const char* name,
 }
 
 /* Set data size for throughput calculation */
-int wh_Bench_SetDataSize(BenchOpContext* ctx, int id, uint64_t bytes)
+int wh_Bench_SetDataSize(whBenchOpContext* ctx, int id, uint64_t bytes)
 {
     if (ctx == NULL || id < 0 || id >= ctx->opCount || !ctx->ops[id].valid) {
         return WH_ERROR_BADARGS;
@@ -152,7 +153,7 @@ int wh_Bench_SetDataSize(BenchOpContext* ctx, int id, uint64_t bytes)
 }
 
 /* Start timing an operation */
-int wh_Bench_StartOp(BenchOpContext* ctx, int id)
+int wh_Bench_StartOp(whBenchOpContext* ctx, int id)
 {
     if (ctx == NULL || id < 0 || id >= ctx->opCount || !ctx->ops[id].valid) {
         return WH_ERROR_BADARGS;
@@ -173,7 +174,7 @@ int wh_Bench_StartOp(BenchOpContext* ctx, int id)
 }
 
 /* Stop timing an operation and update statistics */
-int wh_Bench_StopOp(BenchOpContext* ctx, int id)
+int wh_Bench_StopOp(whBenchOpContext* ctx, int id)
 {
     uint64_t endTime;
     uint64_t elapsedTime;
@@ -240,7 +241,7 @@ int wh_Bench_StopOp(BenchOpContext* ctx, int id)
 }
 
 /* Print intermediate benchmark results for a single operation */
-int wh_Bench_PrintIntermediateResult(BenchOpContext* ctx, int id)
+int wh_Bench_PrintIntermediateResult(whBenchOpContext* ctx, int id)
 {
 
     if (ctx == NULL || id < 0 || id >= ctx->opCount || !ctx->ops[id].valid) {
@@ -275,7 +276,7 @@ int wh_Bench_PrintIntermediateResult(BenchOpContext* ctx, int id)
         }
         else if (throughput < 1024.0 * 1024.0) {
             /* Kilobytes per second */
-            WH_BENCH_PRINTF("%.2f KB/s", throughput / 1024.0);
+            WH_BENCH_PRINTF("%.2f kB/s", throughput / 1024.0);
         }
         else {
             /* Megabytes per second */
@@ -296,7 +297,7 @@ int wh_Bench_PrintIntermediateResult(BenchOpContext* ctx, int id)
 }
 
 /* Print benchmark results */
-int wh_Bench_PrintResults(BenchOpContext* ctx)
+int wh_Bench_PrintResults(whBenchOpContext* ctx)
 {
     int      i;
     uint64_t avgTime;
@@ -380,7 +381,7 @@ int wh_Bench_PrintResults(BenchOpContext* ctx)
 }
 
 /* Reset benchmark statistics but keep registered operations */
-int wh_Bench_Reset(BenchOpContext* ctx)
+int wh_Bench_Reset(whBenchOpContext* ctx)
 {
     int i;
 
@@ -405,14 +406,14 @@ int wh_Bench_Reset(BenchOpContext* ctx)
 }
 
 /* Clean up benchmark context */
-int wh_Bench_Cleanup(BenchOpContext* ctx)
+int wh_Bench_Cleanup(whBenchOpContext* ctx)
 {
     if (ctx == NULL) {
         return WH_ERROR_BADARGS;
     }
 
     /* Clear benchmark context */
-    memset(ctx, 0, sizeof(BenchOpContext));
+    memset(ctx, 0, sizeof(whBenchOpContext));
 
     return WH_ERROR_OK;
 }

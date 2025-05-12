@@ -24,7 +24,7 @@
 
 #if !defined(WC_NO_RNG)
 
-int _benchRng(whClientContext* client, BenchOpContext* ctx, int id, int devId)
+int _benchRng(whClientContext* client, whBenchOpContext* ctx, int id, int devId)
 {
     int      ret = 0;
     WC_RNG   rng;
@@ -81,7 +81,7 @@ int _benchRng(whClientContext* client, BenchOpContext* ctx, int id, int devId)
     return ret;
 }
 
-int wh_Bench_Mod_Rng(whClientContext* client, BenchOpContext* ctx, int id,
+int wh_Bench_Mod_Rng(whClientContext* client, whBenchOpContext* ctx, int id,
                      void* params)
 {
     return _benchRng(client, ctx, id, WH_DEV_ID);

@@ -41,33 +41,33 @@ enum { DECRYPT = 0, ENCRYPT = 1 };
 
 
 #if defined(HAVE_AES_ECB)
-int wh_Bench_Mod_Aes128ECBEncrypt(whClientContext* client, BenchOpContext* ctx,
-                                  int id, void* params)
+int wh_Bench_Mod_Aes128ECBEncrypt(whClientContext*  client,
+                                  whBenchOpContext* ctx, int id, void* params)
 {
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 }
 
-int wh_Bench_Mod_Aes128ECBDecrypt(whClientContext* client, BenchOpContext* ctx,
-                                  int id, void* params)
+int wh_Bench_Mod_Aes128ECBDecrypt(whClientContext*  client,
+                                  whBenchOpContext* ctx, int id, void* params)
 {
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 }
 
-int wh_Bench_Mod_Aes256ECBEncrypt(whClientContext* client, BenchOpContext* ctx,
-                                  int id, void* params)
+int wh_Bench_Mod_Aes256ECBEncrypt(whClientContext*  client,
+                                  whBenchOpContext* ctx, int id, void* params)
 {
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 }
 
-int wh_Bench_Mod_Aes256ECBDecrypt(whClientContext* client, BenchOpContext* ctx,
-                                  int id, void* params)
+int wh_Bench_Mod_Aes256ECBDecrypt(whClientContext*  client,
+                                  whBenchOpContext* ctx, int id, void* params)
 {
-    return WH_ERROR_NOT_IMPL;
+    return WH_ERROR_NOTIMPL;
 }
 #endif /* HAVE_AES_ECB */
 
 #if defined(HAVE_AES_CBC)
-static int _benchAesCbc(whClientContext* client, BenchOpContext* ctx, int id,
+static int _benchAesCbc(whClientContext* client, whBenchOpContext* ctx, int id,
                         const uint8_t* key, size_t keyLen, int encrypt)
 {
     int     ret       = 0;
@@ -168,29 +168,29 @@ exit:
 }
 
 
-int wh_Bench_Mod_Aes128CBCEncrypt(whClientContext* client, BenchOpContext* ctx,
-                                  int id, void* params)
+int wh_Bench_Mod_Aes128CBCEncrypt(whClientContext*  client,
+                                  whBenchOpContext* ctx, int id, void* params)
 {
     return _benchAesCbc(client, ctx, id, (uint8_t*)key128, sizeof(key128),
                         ENCRYPT);
 }
 
-int wh_Bench_Mod_Aes128CBCDecrypt(whClientContext* client, BenchOpContext* ctx,
-                                  int id, void* params)
+int wh_Bench_Mod_Aes128CBCDecrypt(whClientContext*  client,
+                                  whBenchOpContext* ctx, int id, void* params)
 {
     return _benchAesCbc(client, ctx, id, (uint8_t*)key128, sizeof(key128),
                         DECRYPT);
 }
 
-int wh_Bench_Mod_Aes256CBCEncrypt(whClientContext* client, BenchOpContext* ctx,
-                                  int id, void* params)
+int wh_Bench_Mod_Aes256CBCEncrypt(whClientContext*  client,
+                                  whBenchOpContext* ctx, int id, void* params)
 {
     return _benchAesCbc(client, ctx, id, (uint8_t*)key256, sizeof(key256),
                         ENCRYPT);
 }
 
-int wh_Bench_Mod_Aes256CBCDecrypt(whClientContext* client, BenchOpContext* ctx,
-                                  int id, void* params)
+int wh_Bench_Mod_Aes256CBCDecrypt(whClientContext*  client,
+                                  whBenchOpContext* ctx, int id, void* params)
 {
     return _benchAesCbc(client, ctx, id, (uint8_t*)key256, sizeof(key256),
                         DECRYPT);
@@ -198,7 +198,7 @@ int wh_Bench_Mod_Aes256CBCDecrypt(whClientContext* client, BenchOpContext* ctx,
 #endif /* HAVE_AES_CBC */
 
 #if defined(HAVE_AESGCM)
-static int _benchAesGcm(whClientContext* client, BenchOpContext* ctx, int id,
+static int _benchAesGcm(whClientContext* client, whBenchOpContext* ctx, int id,
                         const uint8_t* key, size_t keyLen, int encrypt)
 {
     int     ret       = 0;
@@ -325,29 +325,29 @@ exit:
 }
 
 
-int wh_Bench_Mod_Aes128GCMEncrypt(whClientContext* client, BenchOpContext* ctx,
-                                  int id, void* params)
+int wh_Bench_Mod_Aes128GCMEncrypt(whClientContext*  client,
+                                  whBenchOpContext* ctx, int id, void* params)
 {
     return _benchAesGcm(client, ctx, id, (uint8_t*)key128, sizeof(key128),
                         ENCRYPT);
 }
 
-int wh_Bench_Mod_Aes128GCMDecrypt(whClientContext* client, BenchOpContext* ctx,
-                                  int id, void* params)
+int wh_Bench_Mod_Aes128GCMDecrypt(whClientContext*  client,
+                                  whBenchOpContext* ctx, int id, void* params)
 {
     return _benchAesGcm(client, ctx, id, (uint8_t*)key128, sizeof(key128),
                         DECRYPT);
 }
 
-int wh_Bench_Mod_Aes256GCMEncrypt(whClientContext* client, BenchOpContext* ctx,
-                                  int id, void* params)
+int wh_Bench_Mod_Aes256GCMEncrypt(whClientContext*  client,
+                                  whBenchOpContext* ctx, int id, void* params)
 {
     return _benchAesGcm(client, ctx, id, (uint8_t*)key256, sizeof(key256),
                         ENCRYPT);
 }
 
-int wh_Bench_Mod_Aes256GCMDecrypt(whClientContext* client, BenchOpContext* ctx,
-                                  int id, void* params)
+int wh_Bench_Mod_Aes256GCMDecrypt(whClientContext*  client,
+                                  whBenchOpContext* ctx, int id, void* params)
 {
     return _benchAesGcm(client, ctx, id, (uint8_t*)key256, sizeof(key256),
                         DECRYPT);

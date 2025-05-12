@@ -137,6 +137,8 @@ To add a new benchmark module:
 2. Implement the benchmark module function following this pattern:
 
 ```c
+#include "benchmark/wh_bench_mod.h"
+
 int wh_Bench_Mod_NewOp(whClientContext* client, BenchOpContext* benchCtx, int id, void* params)
 {
     int ret = 0;

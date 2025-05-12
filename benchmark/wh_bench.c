@@ -54,9 +54,9 @@
 
 typedef struct BenchModule {
     /* Name and function pointer should be supplied at array initialization */
-    const char* const           name;
-    const wh_BenchModuleFunc    func;
-    const BenchOpThroughputType tpType;
+    const char* const             name;
+    const wh_BenchModuleFunc      func;
+    const whBenchOpThroughputType tpType;
     /* ID and parameters are set after registration */
     int   id;
     void* params;
@@ -343,7 +343,7 @@ static BenchModule g_benchModules[] = {
 };
 /* clang-format on */
 
-static int _registerBenchModules(BenchOpContext* benchCtx)
+static int _registerBenchModules(whBenchOpContext* benchCtx)
 {
     int ret = 0;
     int i;
@@ -363,9 +363,9 @@ static int _registerBenchModules(BenchOpContext* benchCtx)
 /* Placeholder for the benchmarking function */
 static int _runClientBenchmarks(whClientContext* client)
 {
-    int            ret = 0;
-    BenchOpContext benchCtx;
-    int            i;
+    int              ret = 0;
+    whBenchOpContext benchCtx;
+    int              i;
 
     WH_BENCH_PRINTF("Running benchmarks...\n");
 
@@ -391,7 +391,7 @@ static int _runClientBenchmarks(whClientContext* client)
         /* Allow skipping not implemented modules. Return code could be
          * wolfCrypt or wolfSSL error */
         if (ret != 0) {
-            if (ret == WH_ERROR_NOT_IMPL) {
+            if (ret == WH_ERROR_NOTIMPL) {
                 WH_BENCH_PRINTF(" -> SKIPPED \"%s\"\n", g_benchModules[i].name);
                 ret = 0;
                 continue;
@@ -505,13 +505,11 @@ int wh_Bench_ServerCfgLoop(whServerConfig* serverCfg)
     }
 
     /* Clean up */
-    if ((ret == 0) || (ret == WH_ERROR_NOTREADY)) {
-        ret = 0;
-        wh_Server_Cleanup(server);
+    if (ret == WH_ERROR_NOTREADY) {
+        /* Ignore not ready status */
+        ret = WH_ERROR_OK;
     }
-    else {
-        wh_Server_Cleanup(server);
-    }
+    (void)wh_Server_Cleanup(server);
 
     return ret;
 }
