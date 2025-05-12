@@ -121,7 +121,7 @@ static int _verifyChainAgainstCmStore(whServerContext*      server,
                     rc = wh_Server_KeystoreGetCacheSlot(server, cacheBufSize,
                                                         &cacheBuf, &cacheMeta);
                     if (rc == WH_ERROR_OK) {
-                        rc = wc_ExportX509PubKeyWithSpki(
+                        rc = wc_GetSubjectPubKeyInfoDerFromCert(
                             cert_ptr, cert_len + idx, cacheBuf, &cacheBufSize);
 
                         /* Populate the metadata to seal the deal */
