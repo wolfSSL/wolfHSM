@@ -20,6 +20,8 @@
 #include <string.h>
 #include "wh_bench_mod.h"
 
+#if defined(WOLFHSM_CFG_BENCH_ENABLE)
+
 int wh_Bench_Mod_Echo(whClientContext* client, BenchOpContext* benchCtx, int id,
                       void* params)
 {
@@ -86,3 +88,5 @@ int wh_Bench_Mod_Echo(whClientContext* client, BenchOpContext* benchCtx, int id,
 
     return ret;
 }
+
+#endif /* WOLFHSM_CFG_BENCH_ENABLE */

@@ -28,6 +28,8 @@
 #include "wh_bench_ops.h"
 #include "wh_bench_utils.h"
 
+#if defined(WOLFHSM_CFG_BENCH_ENABLE)
+
 static uint64_t _benchGetTimeUs(void);
 #if !defined(WOLFHSM_CFG_BENCH_CUSTOM_TIME_FUNC)
 static uint64_t _benchGetTimeUsDefault(void);
@@ -414,3 +416,5 @@ int wh_Bench_Cleanup(BenchOpContext* ctx)
 
     return WH_ERROR_OK;
 }
+
+#endif /* WOLFHSM_CFG_BENCH_ENABLE */

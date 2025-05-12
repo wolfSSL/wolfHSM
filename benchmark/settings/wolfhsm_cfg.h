@@ -40,5 +40,5 @@
 #define WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT
 
 /* Benchmark configs */
-#define WOLFHSM_CFG_BENCH_KG_ITERS 1
+#define WOLFHSM_CFG_BENCH_ENABLE
 #endif /* WOLFHSM_CFG_H_ */

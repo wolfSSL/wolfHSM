@@ -44,6 +44,8 @@
 #include "wh_bench_ops.h"
 #include "wh_bench_utils.h"
 
+#if defined(WOLFHSM_CFG_BENCH_ENABLE)
+
 /* Buffer sizes for transport */
 /* Large enough to handle an RSA 4096 key */
 #define BUFFER_SIZE \
@@ -678,3 +680,5 @@ int wh_Bench_ClientServer_Posix(void)
 
 
 #endif /* WOLFHSM_CFG_TEST_POSIX */
+
+#endif /* WOLFHSM_CFG_BENCH_ENABLE */

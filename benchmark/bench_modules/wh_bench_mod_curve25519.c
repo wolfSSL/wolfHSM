@@ -25,6 +25,8 @@
 #include "wolfssl/wolfcrypt/random.h"
 #include "wolfssl/wolfcrypt/curve25519.h"
 
+#if defined(WOLFHSM_CFG_BENCH_ENABLE)
+
 #if defined(HAVE_CURVE25519)
 
 uint8_t key1_der[] = {
@@ -244,3 +246,5 @@ exit:
 }
 
 #endif /* HAVE_CURVE25519 */
+
+#endif /* WOLFHSM_CFG_BENCH_ENABLE */

@@ -19,6 +19,8 @@
 #include "wh_bench_mod.h"
 #include "wolfhsm/wh_error.h"
 
+#if defined(WOLFHSM_CFG_BENCH_ENABLE)
+
 #if defined(WOLFSSL_SHA3)
 
 int wh_Bench_Mod_Sha3256(whClientContext* client, BenchOpContext* ctx, int id,
@@ -34,3 +36,5 @@ int wh_Bench_Mod_Sha3256Dma(whClientContext* client, BenchOpContext* ctx,
 }
 
 #endif /* WOLFSSL_SHA3 */
+
+#endif /* WOLFHSM_CFG_BENCH_ENABLE */

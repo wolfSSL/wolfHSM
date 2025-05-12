@@ -20,6 +20,8 @@
 #include "wolfhsm/wh_error.h"
 #include "wolfssl/wolfcrypt/random.h"
 
+#if defined(WOLFHSM_CFG_BENCH_ENABLE)
+
 #if !defined(WC_NO_RNG)
 
 int _benchRng(whClientContext* client, BenchOpContext* ctx, int id, int devId)
@@ -86,3 +88,5 @@ int wh_Bench_Mod_Rng(whClientContext* client, BenchOpContext* ctx, int id,
 }
 
 #endif /* !defined(WC_NO_RNG) */
+
+#endif /* WOLFHSM_CFG_BENCH_ENABLE */

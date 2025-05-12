@@ -23,6 +23,8 @@
 
 #include "wolfssl/wolfcrypt/cmac.h"
 
+#if defined(WOLFHSM_CFG_BENCH_ENABLE)
+
 #if defined(WOLFSSL_CMAC) && !defined(NO_AES) && defined(WOLFSSL_AES_DIRECT)
 
 static const uint8_t key128[] = {0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae,
@@ -160,3 +162,5 @@ int wh_Bench_Mod_CmacAes256Dma(whClientContext* client, BenchOpContext* ctx,
 }
 
 #endif /* WOLFSSL_CMAC && !defined(NO_AES) && defined(WOLFSSL_AES_DIRECT) */
+
+#endif /* WOLFHSM_CFG_BENCH_ENABLE */

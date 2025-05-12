@@ -24,6 +24,8 @@
 #include "wolfssl/wolfcrypt/rsa.h"
 #include "wolfssl/wolfcrypt/random.h"
 
+#if defined(WOLFHSM_CFG_BENCH_ENABLE)
+
 #if !defined(NO_RSA)
 
 /* RSA 2048-bit key in DER format for benchmarking */
@@ -975,3 +977,5 @@ int wh_Bench_Mod_Rsa4096KeyGenDma(whClientContext* client, BenchOpContext* ctx,
 }
 
 #endif /* !(NO_RSA) */
+
+#endif /* WOLFHSM_CFG_BENCH_ENABLE */

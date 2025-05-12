@@ -24,6 +24,8 @@
 #include "wolfssl/wolfcrypt/ecc.h"
 #include "wolfssl/wolfcrypt/random.h"
 
+#if defined(WOLFHSM_CFG_BENCH_ENABLE)
+
 #if defined(HAVE_ECC)
 
 /* hardcoded DER-encoded ECC keys for benchmarking */
@@ -549,3 +551,5 @@ int wh_Bench_Mod_EccP256Ecdh(whClientContext* client, BenchOpContext* ctx,
 }
 
 #endif /* HAVE_ECC */
+
+#endif /* WOLFHSM_CFG_BENCH_ENABLE */

@@ -24,6 +24,8 @@
 #include "wolfssl/wolfcrypt/dilithium.h"
 #include "wolfssl/wolfcrypt/random.h"
 
+#if defined(WOLFHSM_CFG_BENCH_ENABLE)
+
 #if defined(HAVE_DILITHIUM)
 
 #if !defined(WOLFSSL_DILITHIUM_NO_SIGN)
@@ -1110,3 +1112,5 @@ int wh_Bench_Mod_MlDsa87KeyGenDma(whClientContext* client, BenchOpContext* ctx,
 #endif /* !defined(WOLFSSL_NO_ML_DSA_87) */
 
 #endif /* HAVE_DILITHIUM */
+
+#endif /* WOLFHSM_CFG_BENCH_ENABLE */

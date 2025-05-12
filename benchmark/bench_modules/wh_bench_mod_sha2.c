@@ -23,6 +23,8 @@
 #include "wolfssl/wolfcrypt/hash.h"
 #include "wolfssl/wolfcrypt/sha256.h"
 
+#if defined(WOLFHSM_CFG_BENCH_ENABLE)
+
 #if !defined(NO_SHA256)
 
 int _benchSha256(whClientContext* client, BenchOpContext* ctx, int id,
@@ -131,3 +133,5 @@ int wh_Bench_Mod_Sha256Dma(whClientContext* client, BenchOpContext* ctx, int id,
 }
 
 #endif /* !defined(NO_SHA256) */
+
+#endif /* WOLFHSM_CFG_BENCH_ENABLE */

@@ -20,6 +20,8 @@
 #include "wh_bench.h"
 #include "wh_bench_utils.h"
 
+#if defined(WOLFHSM_CFG_BENCH_ENABLE)
+
 int main(void)
 {
     WH_BENCH_PRINTF("Running wolfHSM benchmarks\n");
@@ -40,3 +42,5 @@ int main(void)
 
     return 0;
 }
+
+#endif /* WOLFHSM_CFG_BENCH_ENABLE */

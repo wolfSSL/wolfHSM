@@ -22,6 +22,8 @@
 #include "wolfssl/wolfcrypt/hmac.h"
 #include "wolfssl/wolfcrypt/sha256.h"
 
+#if defined(WOLFHSM_CFG_BENCH_ENABLE)
+
 #if !defined(NO_HMAC)
 
 #if !defined(NO_SHA256)
@@ -157,3 +159,5 @@ int wh_Bench_Mod_HmacSha3256Dma(whClientContext* client, BenchOpContext* ctx,
 #endif /* WOLFSSL_SHA3 */
 
 #endif /* !defined(NO_HMAC) */
+
+#endif /* WOLFHSM_CFG_BENCH_ENABLE */

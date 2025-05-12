@@ -23,6 +23,8 @@
 
 #include "wolfssl/wolfcrypt/aes.h"
 
+#if defined(WOLFHSM_CFG_BENCH_ENABLE)
+
 #if !defined(NO_AES)
 
 /* 128-bit key */
@@ -353,3 +355,5 @@ int wh_Bench_Mod_Aes256GCMDecrypt(whClientContext* client, BenchOpContext* ctx,
 #endif /* HAVE_AESGCM */
 
 #endif /* !defined(NO_AES) */
+
+#endif /* WOLFHSM_CFG_BENCH_ENABLE */
