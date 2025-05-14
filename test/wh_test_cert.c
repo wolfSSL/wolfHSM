@@ -205,11 +205,19 @@ int whTest_CertClient(whClientContext* client)
         &out_keyId, &out_rc));
     WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
 
-    /* Export the cached public key and verify it matches the expected leaf
-     * public key */
-    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyExport(
-        client, out_keyId, NULL, 0, exportedPubKey, &exportedPubKeyLen));
+    /* Export the cached public key so we can verify it matches the expected
+     * leaf public key. Don't assert on the result as we must evict the key
+     * first */
+    rc = wh_Client_KeyExport(client, out_keyId, NULL, 0, exportedPubKey,
+                             &exportedPubKeyLen);
 
+    /* Evict the cached key before any further assertions so it doesn't leak
+     * cache slots */
+    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvict(client, out_keyId));
+
+    /* Now that we have ecicted the key, check that the export and leaf key
+     * caching worked as expected */
+    WH_TEST_ASSERT(rc == WH_ERROR_OK);
     WH_TEST_ASSERT_RETURN(exportedPubKeyLen == LEAF_A_PUBKEY_len);
     WH_TEST_ASSERT_RETURN(
         0 == memcmp(exportedPubKey, LEAF_A_PUBKEY, LEAF_A_PUBKEY_len));
@@ -375,12 +383,20 @@ int whTest_CertClientDma_ClientServerTestInternal(whClientContext* client)
         &out_keyId, &out_rc));
     WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
 
-    /* Export the cached public key and verify it matches the expected leaf
-     * public key */
-    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyExportDma(
+    /* Export the cached public key so we can verify it matches the expected
+     * leaf public key. Don't assert on the result as we must evict the key
+     * first */
+    rc = wh_Client_KeyExportDma(
         client, out_keyId, exportedPubKey, sizeof(exportedPubKey), NULL, 0,
-        &exportedPubKeyLen));
+        &exportedPubKeyLen);
 
+    /* Evict the cached key before any further assertions so it doesn't leak
+     * cache slots */
+    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvict(client, out_keyId));
+
+    /* Now that we have ecicted the key, check that the export and leaf key
+     * caching worked as expected */
+    WH_TEST_ASSERT(rc == WH_ERROR_OK);
     WH_TEST_ASSERT_RETURN(exportedPubKeyLen == LEAF_A_PUBKEY_len);
     WH_TEST_ASSERT_RETURN(
         0 == memcmp(exportedPubKey, LEAF_A_PUBKEY, LEAF_A_PUBKEY_len));
