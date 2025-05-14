@@ -166,7 +166,6 @@ typedef struct {
     uint32_t cert_len;
     whNvmId  trustedRootNvmId;
     uint16_t flags;
-    uint8_t  WH_PAD[2];
 } whMessageCert_VerifyDmaRequest;
 
 /* Verify DMA Response */
