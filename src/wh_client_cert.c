@@ -330,9 +330,9 @@ int wh_Client_CertReadTrusted(whClientContext* c, whNvmId id, uint8_t* cert,
 }
 
 /* Helper function to send a verify request */
-int _certVerifyRequest(whClientContext* c, const uint8_t* cert,
-                       uint32_t cert_len, whNvmId trustedRootNvmId,
-                       uint16_t flags)
+static int _certVerifyRequest(whClientContext* c, const uint8_t* cert,
+                              uint32_t cert_len, whNvmId trustedRootNvmId,
+                              uint16_t flags)
 {
     whMessageCert_VerifyRequest req;
     uint8_t                     buffer[WOLFHSM_CFG_COMM_DATA_LEN] = {0};
@@ -360,7 +360,8 @@ int _certVerifyRequest(whClientContext* c, const uint8_t* cert,
 }
 
 /* Helper function to receive a verify response */
-int _certVerifyResponse(whClientContext* c, whKeyId* out_keyId, int32_t* out_rc)
+static int _certVerifyResponse(whClientContext* c, whKeyId* out_keyId,
+                               int32_t* out_rc)
 {
     int                          rc;
     uint16_t                     group;
@@ -393,9 +394,9 @@ int _certVerifyResponse(whClientContext* c, whKeyId* out_keyId, int32_t* out_rc)
     return rc;
 }
 
-int _certVerify(whClientContext* c, const uint8_t* cert, uint32_t cert_len,
-                whNvmId trustedRootNvmId, uint16_t flags, whKeyId* out_keyId,
-                int32_t* out_rc)
+static int _certVerify(whClientContext* c, const uint8_t* cert,
+                       uint32_t cert_len, whNvmId trustedRootNvmId,
+                       uint16_t flags, whKeyId* out_keyId, int32_t* out_rc)
 {
     int rc = 0;
 
@@ -606,9 +607,9 @@ int wh_Client_CertReadTrustedDma(whClientContext* c, whNvmId id, void* cert,
     return rc;
 }
 
-int _certVerifyDmaRequest(whClientContext* c, const void* cert,
-                          uint32_t cert_len, whNvmId trustedRootNvmId,
-                          uint16_t flags)
+static int _certVerifyDmaRequest(whClientContext* c, const void* cert,
+                                 uint32_t cert_len, whNvmId trustedRootNvmId,
+                                 uint16_t flags)
 {
     whMessageCert_VerifyDmaRequest req;
 
@@ -626,8 +627,8 @@ int _certVerifyDmaRequest(whClientContext* c, const void* cert,
                                  &req);
 }
 
-int _certVerifyDmaResponse(whClientContext* c, whKeyId* out_keyId,
-                           int32_t* out_rc)
+static int _certVerifyDmaResponse(whClientContext* c, whKeyId* out_keyId,
+                                  int32_t* out_rc)
 {
     int                             rc;
     uint16_t                        group;
@@ -660,9 +661,9 @@ int _certVerifyDmaResponse(whClientContext* c, whKeyId* out_keyId,
     return rc;
 }
 
-int _certVerifyDma(whClientContext* c, const void* cert, uint32_t cert_len,
-                   whNvmId trustedRootNvmId, uint16_t flags, whKeyId* out_keyId,
-                   int32_t* out_rc)
+static int _certVerifyDma(whClientContext* c, const void* cert,
+                          uint32_t cert_len, whNvmId trustedRootNvmId,
+                          uint16_t flags, whKeyId* out_keyId, int32_t* out_rc)
 {
     int rc = 0;
 
