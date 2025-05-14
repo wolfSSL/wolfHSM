@@ -80,7 +80,7 @@ int wh_Server_CertReadTrusted(whServerContext* server, whNvmId id,
  * @return WH_ERROR_OK on success, error code on failure
  */
 int wh_Server_CertVerify(whServerContext* server, const uint8_t* cert,
-                         uint32_t cert_len, whNvmId trustedRootNvmI,
+                         uint32_t cert_len, whNvmId trustedRootNvmId,
                          whCertFlags flags, whKeyId* out_keyId);
 
 /**
