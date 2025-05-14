@@ -34,6 +34,21 @@
 #include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_message_cert.h"
 
+/* Helper function to send a certificate verification request */
+static int _certVerifyRequest(whClientContext* c, const uint8_t* cert,
+                              uint32_t cert_len, whNvmId trustedRootNvmId,
+                              uint16_t flags);
+
+/* Helper function to receive a verify response */
+static int _certVerifyResponse(whClientContext* c, whKeyId* out_keyId,
+                               int32_t* out_rc);
+
+/* Helper function to perform certificate verification */
+static int _certVerify(whClientContext* c, const uint8_t* cert,
+                       uint32_t cert_len, whNvmId trustedRootNvmId,
+                       uint16_t flags, whKeyId* out_keyId, int32_t* out_rc);
+
+
 /* Initialize the certificate manager */
 int wh_Client_CertInitRequest(whClientContext* c)
 {
