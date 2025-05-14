@@ -33,6 +33,7 @@
 #include "wolfhsm/wh_server.h"
 #include "wolfhsm/wh_server_cert.h"
 #include "wolfhsm/wh_server_nvm.h"
+#include "wolfhsm/wh_server_keystore.h"
 #include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_message_cert.h"
 
@@ -41,8 +42,10 @@
 #include "wolfssl/wolfcrypt/asn.h"
 
 
-static int _verifyChainAgainstCmStore(WOLFSSL_CERT_MANAGER* cm,
-                                      const uint8_t* chain, uint32_t chain_len)
+static int _verifyChainAgainstCmStore(whServerContext*      server,
+                                      WOLFSSL_CERT_MANAGER* cm,
+                                      const uint8_t* chain, uint32_t chain_len,
+                                      whCertFlags flags, whKeyId* out_keyId)
 {
     int            rc            = 0;
     const uint8_t* cert_ptr      = chain;
@@ -98,6 +101,51 @@ static int _verifyChainAgainstCmStore(WOLFSSL_CERT_MANAGER* cm,
                     wc_FreeDecodedCert(&dc);
                     return rc;
                 }
+            }
+            /* This is the leaf cert, so if requested, cache the public key */
+            else if (flags & WH_CERT_FLAGS_CACHE_LEAF_PUBKEY) {
+                /* Get a unique key id for the public key */
+                whKeyId keyId =
+                    WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, server->comm->client_id,
+                                  WH_KEYID_ERASED);
+
+                rc = wh_Server_KeystoreGetUniqueId(server, &keyId);
+                if (rc == WH_ERROR_OK) {
+                    whNvmMetadata* cacheMeta;
+                    uint8_t*       cacheBuf;
+                    word32         cacheBufSize =
+                        WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE;
+
+                    /* Grab the cache slot and dump the public key from the cert
+                     * into it */
+                    rc = wh_Server_KeystoreGetCacheSlot(server, cacheBufSize,
+                                                        &cacheBuf, &cacheMeta);
+                    if (rc == WH_ERROR_OK) {
+                        rc = wc_GetSubjectPubKeyInfoDerFromCert(
+                            cert_ptr, cert_len + idx, cacheBuf, &cacheBufSize);
+
+                        /* Populate the metadata to seal the deal */
+                        if (rc == 0) {
+                            const char label[] = "cert_pubkey";
+                            cacheMeta->len     = (whNvmSize)cacheBufSize;
+                            cacheMeta->flags   = WH_NVM_FLAGS_NONE;
+                            cacheMeta->access  = WH_NVM_ACCESS_ANY;
+                            cacheMeta->id      = keyId;
+                            memset(cacheMeta->label, 0,
+                                   sizeof(cacheMeta->label));
+                            strncpy((char*)cacheMeta->label, label,
+                                    sizeof(cacheMeta->label));
+                        }
+                    }
+                }
+
+                if (rc != WH_ERROR_OK) {
+                    wc_FreeDecodedCert(&dc);
+                    return rc;
+                }
+
+                /* Propagate cached keyId back to client */
+                *out_keyId = WH_KEYID_ID(keyId);
             }
             wc_FreeDecodedCert(&dc);
         }
@@ -202,7 +250,8 @@ int wh_Server_CertReadTrusted(whServerContext* server, whNvmId id,
 
 /* Verify a certificate against trusted certificates */
 int wh_Server_CertVerify(whServerContext* server, const uint8_t* cert,
-                         uint32_t cert_len, whNvmId trustedRootNvmId)
+                         uint32_t cert_len, whNvmId trustedRootNvmId,
+                         whCertFlags flags, whKeyId* out_keyId)
 {
     WOLFSSL_CERT_MANAGER* cm = NULL;
 
@@ -230,7 +279,8 @@ int wh_Server_CertVerify(whServerContext* server, const uint8_t* cert,
                                              WOLFSSL_FILETYPE_ASN1);
         if (rc == WOLFSSL_SUCCESS) {
             /* Verify the certificate */
-            rc = _verifyChainAgainstCmStore(cm, cert, cert_len);
+            rc = _verifyChainAgainstCmStore(server, cm, cert, cert_len, flags,
+                                            out_keyId);
             if (rc != WH_ERROR_OK) {
                 rc = WH_ERROR_CERT_VERIFY;
             }
@@ -384,7 +434,7 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
 
         case WH_MESSAGE_CERT_ACTION_VERIFY: {
             whMessageCert_VerifyRequest  req  = {0};
-            whMessageCert_SimpleResponse resp = {0};
+            whMessageCert_VerifyResponse resp = {0};
             const uint8_t*               cert_data;
 
             if (req_size < sizeof(req)) {
@@ -401,12 +451,13 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
 
                 /* Process the verify action */
                 resp.rc = wh_Server_CertVerify(server, cert_data, req.cert_len,
-                                               req.trustedRootNvmId);
+                                               req.trustedRootNvmId, req.flags,
+                                               &resp.keyId);
             }
 
             /* Convert the response struct */
-            wh_MessageCert_TranslateSimpleResponse(
-                magic, &resp, (whMessageCert_SimpleResponse*)resp_packet);
+            wh_MessageCert_TranslateVerifyResponse(
+                magic, &resp, (whMessageCert_VerifyResponse*)resp_packet);
             *out_resp_size = sizeof(resp);
         }; break;
 
@@ -491,7 +542,7 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
 
         case WH_MESSAGE_CERT_ACTION_VERIFY_DMA: {
             whMessageCert_VerifyDmaRequest req       = {0};
-            whMessageCert_SimpleResponse   resp      = {0};
+            whMessageCert_VerifyDmaResponse resp      = {0};
             void*                          cert_data = NULL;
 
             if (req_size != sizeof(req)) {
@@ -511,7 +562,8 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
             if (resp.rc == 0) {
                 /* Process the verify action */
                 resp.rc = wh_Server_CertVerify(server, cert_data, req.cert_len,
-                                               req.trustedRootNvmId);
+                                               req.trustedRootNvmId, req.flags,
+                                               &resp.keyId);
             }
             if (resp.rc == 0) {
                 /* Post-process client address */
@@ -521,8 +573,8 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
             }
 
             /* Convert the response struct */
-            wh_MessageCert_TranslateSimpleResponse(
-                magic, &resp, (whMessageCert_SimpleResponse*)resp_packet);
+            wh_MessageCert_TranslateVerifyDmaResponse(
+                magic, &resp, (whMessageCert_VerifyDmaResponse*)resp_packet);
             *out_resp_size = sizeof(resp);
         }; break;
 #endif /* WOLFHSM_CFG_DMA */

@@ -172,5 +172,28 @@ whMessageShe_VerifyMacRequest         sheVerifyMacReq;
 whMessageShe_VerifyMacResponse        sheVerifyMacRes;
 #endif /* WOLFHSM_CFG_SHE_EXTENSION */
 
+#if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER)
+/* Include certificate manager message header for new certificate manager
+ * message structures */
+#include "wolfhsm/wh_message_cert.h"
+whMessageCert_SimpleResponse      whMessageCert_SimpleResponse_test;
+whMessageCert_AddTrustedRequest   whMessageCert_AddTrustedRequest_test;
+whMessageCert_EraseTrustedRequest whMessageCert_EraseTrustedRequest_test;
+whMessageCert_ReadTrustedRequest  whMessageCert_ReadTrustedRequest_test;
+whMessageCert_ReadTrustedResponse whMessageCert_ReadTrustedResponse_test;
+whMessageCert_VerifyRequest       whMessageCert_VerifyRequest_test;
+whMessageCert_VerifyResponse      whMessageCert_VerifyResponse_test;
+
+#if defined(WOLFHSM_CFG_DMA)
+whMessageCert_AddTrustedDmaRequest  whMessageCert_AddTrustedDmaRequest_test;
+whMessageCert_ReadTrustedDmaRequest whMessageCert_ReadTrustedDmaRequest_test;
+whMessageCert_VerifyDmaRequest      whMessageCert_VerifyDmaRequest_test;
+whMessageCert_VerifyDmaResponse     whMessageCert_VerifyDmaResponse_test;
+#endif /* WOLFHSM_CFG_DMA */
+
+#if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT)
+whMessageCert_VerifyAcertRequest whMessageCert_VerifyAcertRequest_test;
+#endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT */
+#endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER */
 
 #endif /* WH_TEST_CHECK_STRUCT_PADDING_C_ */

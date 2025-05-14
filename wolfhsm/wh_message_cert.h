@@ -113,16 +113,26 @@ int wh_MessageCert_TranslateReadTrustedResponse(
 typedef struct {
     uint32_t cert_len;
     whNvmId  trustedRootNvmId;
+    uint16_t flags;
+    whKeyId  keyId;
     uint8_t  WH_PAD[2];
     /* Certificate data follows */
 } whMessageCert_VerifyRequest;
+
+/* Verify Response */
+typedef struct {
+    int32_t rc;
+    whKeyId keyId;
+    uint8_t WH_PAD[2];
+} whMessageCert_VerifyResponse;
 
 int wh_MessageCert_TranslateVerifyRequest(
     uint16_t magic, const whMessageCert_VerifyRequest* src,
     whMessageCert_VerifyRequest* dest);
 
-/* Verify Response */
-/* Use SimpleResponse */
+int wh_MessageCert_TranslateVerifyResponse(
+    uint16_t magic, const whMessageCert_VerifyResponse* src,
+    whMessageCert_VerifyResponse* dest);
 
 #ifdef WOLFHSM_CFG_DMA
 
@@ -155,12 +165,24 @@ typedef struct {
     uint64_t cert_addr;
     uint32_t cert_len;
     whNvmId  trustedRootNvmId;
-    uint8_t  WH_PAD[2];
+    uint16_t flags;
 } whMessageCert_VerifyDmaRequest;
+
+/* Verify DMA Response */
+typedef struct {
+    int32_t rc;
+    whKeyId keyId;
+    uint8_t WH_PAD[2];
+} whMessageCert_VerifyDmaResponse;
 
 int wh_MessageCert_TranslateVerifyDmaRequest(
     uint16_t magic, const whMessageCert_VerifyDmaRequest* src,
     whMessageCert_VerifyDmaRequest* dest);
+
+int wh_MessageCert_TranslateVerifyDmaResponse(
+    uint16_t magic, const whMessageCert_VerifyDmaResponse* src,
+    whMessageCert_VerifyDmaResponse* dest);
+
 #endif /* WOLFHSM_CFG_DMA */
 
 #ifdef WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT

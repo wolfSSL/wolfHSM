@@ -100,6 +100,19 @@ int wh_MessageCert_TranslateVerifyRequest(
     }
     WH_T32(magic, dest, src, cert_len);
     WH_T16(magic, dest, src, trustedRootNvmId);
+    WH_T16(magic, dest, src, flags);
+    return 0;
+}
+
+int wh_MessageCert_TranslateVerifyResponse(
+    uint16_t magic, const whMessageCert_VerifyResponse* src,
+    whMessageCert_VerifyResponse* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, rc);
+    WH_T16(magic, dest, src, keyId);
     return 0;
 }
 
@@ -141,6 +154,19 @@ int wh_MessageCert_TranslateVerifyDmaRequest(
     WH_T64(magic, dest, src, cert_addr);
     WH_T32(magic, dest, src, cert_len);
     WH_T16(magic, dest, src, trustedRootNvmId);
+    WH_T16(magic, dest, src, flags);
+    return 0;
+}
+
+int wh_MessageCert_TranslateVerifyDmaResponse(
+    uint16_t magic, const whMessageCert_VerifyDmaResponse* src,
+    whMessageCert_VerifyDmaResponse* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, rc);
+    WH_T16(magic, dest, src, keyId);
     return 0;
 }
 #endif /* WOLFHSM_CFG_DMA */

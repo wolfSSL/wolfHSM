@@ -45,10 +45,10 @@
 /* Run certificate configuration tests */
 int whTest_CertServerCfg(whServerConfig* serverCfg)
 {
-    int rc = WH_ERROR_OK;
+    int             rc        = WH_ERROR_OK;
     whServerContext server[1] = {0};
-    const whNvmId rootCertA = 1;
-    const whNvmId rootCertB = 2;
+    const whNvmId   rootCertA = 1;
+    const whNvmId   rootCertB = 2;
 
     /* Initialize server */
     WH_TEST_RETURN_ON_FAIL(wh_Server_Init(server, serverCfg));
@@ -57,8 +57,8 @@ int whTest_CertServerCfg(whServerConfig* serverCfg)
 
     /* Add trusted root certificate for chain A */
     WH_DEBUG_PRINT("Adding trusted root certificate for chain A...\n");
-    WH_TEST_RETURN_ON_FAIL(wh_Server_CertAddTrusted(server, rootCertA,
-                                                   ROOT_A_CERT, ROOT_A_CERT_len));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_CertAddTrusted(
+        server, rootCertA, ROOT_A_CERT, ROOT_A_CERT_len));
 
     /* Add trusted root certificate for chain B */
     WH_DEBUG_PRINT("Adding trusted root certificate for chain B...\n");
@@ -69,15 +69,17 @@ int whTest_CertServerCfg(whServerConfig* serverCfg)
     WH_DEBUG_PRINT(
         "Verifying valid single certificate...using intermediate cert\n");
     WH_TEST_RETURN_ON_FAIL(wh_Server_CertVerify(
-        server, INTERMEDIATE_A_CERT, INTERMEDIATE_A_CERT_len, rootCertA));
+        server, INTERMEDIATE_A_CERT, INTERMEDIATE_A_CERT_len, rootCertA,
+        WH_CERT_FLAGS_NONE, NULL));
 
     /* attempt to verify invalid cert (leaf w/o intermediate), should fail */
     WH_DEBUG_PRINT(
         "Attempting to verify invalid single certificate...using leaf cert "
         "without intermediate\n");
     WH_TEST_ASSERT_RETURN(WH_ERROR_CERT_VERIFY ==
-                         wh_Server_CertVerify(server, LEAF_A_CERT, LEAF_A_CERT_len,
-                                              rootCertA));
+                          wh_Server_CertVerify(server, LEAF_A_CERT,
+                                               LEAF_A_CERT_len, rootCertA,
+                                               WH_CERT_FLAGS_NONE, NULL));
 
     /* attempt to verify invalid cert (intermediate with different root),
      * should fail */
@@ -86,26 +88,31 @@ int whTest_CertServerCfg(whServerConfig* serverCfg)
     WH_TEST_ASSERT_RETURN(WH_ERROR_CERT_VERIFY ==
                           wh_Server_CertVerify(server, INTERMEDIATE_B_CERT,
                                                INTERMEDIATE_B_CERT_len,
-                                               rootCertA));
+                                               rootCertA, WH_CERT_FLAGS_NONE,
+                                               NULL));
 
     /* Verify valid chain */
     WH_DEBUG_PRINT("Verifying valid certificate chain...\n");
-    WH_TEST_RETURN_ON_FAIL(wh_Server_CertVerify(
-        server, RAW_CERT_CHAIN_A, RAW_CERT_CHAIN_A_len, rootCertA));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_CertVerify(server, RAW_CERT_CHAIN_A,
+                                                RAW_CERT_CHAIN_A_len, rootCertA,
+                                                WH_CERT_FLAGS_NONE, NULL));
 
     /* Verify valid chain B */
     WH_DEBUG_PRINT("Verifying valid certificate chain B...\n");
-    WH_TEST_RETURN_ON_FAIL(wh_Server_CertVerify(
-        server, RAW_CERT_CHAIN_B, RAW_CERT_CHAIN_B_len, rootCertB));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_CertVerify(server, RAW_CERT_CHAIN_B,
+                                                RAW_CERT_CHAIN_B_len, rootCertB,
+                                                WH_CERT_FLAGS_NONE, NULL));
 
     /* attempt to verify invalid chains, should fail */
     WH_DEBUG_PRINT("Attempting to verify invalid certificate chains...\n");
     WH_TEST_ASSERT_RETURN(WH_ERROR_CERT_VERIFY ==
-                         wh_Server_CertVerify(server, RAW_CERT_CHAIN_A,
-                                              RAW_CERT_CHAIN_A_len, rootCertB));
+                          wh_Server_CertVerify(server, RAW_CERT_CHAIN_A,
+                                               RAW_CERT_CHAIN_A_len, rootCertB,
+                                               WH_CERT_FLAGS_NONE, NULL));
     WH_TEST_ASSERT_RETURN(WH_ERROR_CERT_VERIFY ==
-                         wh_Server_CertVerify(server, RAW_CERT_CHAIN_B,
-                                              RAW_CERT_CHAIN_B_len, rootCertA));
+                          wh_Server_CertVerify(server, RAW_CERT_CHAIN_B,
+                                               RAW_CERT_CHAIN_B_len, rootCertA,
+                                               WH_CERT_FLAGS_NONE, NULL));
 
     /* remove trusted root certificate for chain A */
     WH_DEBUG_PRINT("Removing trusted root certificates...\n");
@@ -118,10 +125,13 @@ int whTest_CertServerCfg(whServerConfig* serverCfg)
 
 int whTest_CertClient(whClientContext* client)
 {
-    int rc = WH_ERROR_OK;
-    int32_t out_rc;
-    whNvmId rootCertA_id = 1;
-    whNvmId rootCertB_id = 2;
+    int      rc = WH_ERROR_OK;
+    int32_t  out_rc;
+    whNvmId  rootCertA_id = 1;
+    whNvmId  rootCertB_id = 2;
+    whKeyId  out_keyId;
+    uint8_t  exportedPubKey[LEAF_A_PUBKEY_len];
+    uint16_t exportedPubKeyLen = sizeof(exportedPubKey);
 
     WH_DEBUG_PRINT("Starting certificate client test...\n");
 
@@ -132,32 +142,29 @@ int whTest_CertClient(whClientContext* client)
 
     /* Add root certificates to NVM */
     WH_DEBUG_PRINT("Adding root certificate A to NVM...\n");
-    WH_TEST_RETURN_ON_FAIL(wh_Client_CertAddTrusted(client, rootCertA_id,
-                                                   ROOT_A_CERT, ROOT_A_CERT_len,
-                                                   &out_rc));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CertAddTrusted(
+        client, rootCertA_id, ROOT_A_CERT, ROOT_A_CERT_len, &out_rc));
     WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
 
     WH_DEBUG_PRINT("Adding root certificate B to NVM...\n");
-    WH_TEST_RETURN_ON_FAIL(wh_Client_CertAddTrusted(client, rootCertB_id,
-                                                   ROOT_B_CERT, ROOT_B_CERT_len,
-                                                   &out_rc));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CertAddTrusted(
+        client, rootCertB_id, ROOT_B_CERT, ROOT_B_CERT_len, &out_rc));
     WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
 
     /* Verify valid single cert (intermediate) */
     WH_DEBUG_PRINT(
         "Verifying valid single certificate...using intermediate cert\n");
     WH_TEST_RETURN_ON_FAIL(wh_Client_CertVerify(client, INTERMEDIATE_A_CERT,
-                                               INTERMEDIATE_A_CERT_len,
-                                               rootCertA_id, &out_rc));
+                                                INTERMEDIATE_A_CERT_len,
+                                                rootCertA_id, &out_rc));
     WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
 
     /* attempt to verify invalid cert (leaf w/o intermediate), should fail */
     WH_DEBUG_PRINT(
         "Attempting to verify invalid single certificate...using leaf cert "
         "without intermediate\n");
-    WH_TEST_RETURN_ON_FAIL(wh_Client_CertVerify(client, LEAF_A_CERT,
-                                               LEAF_A_CERT_len,
-                                               rootCertA_id, &out_rc));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CertVerify(
+        client, LEAF_A_CERT, LEAF_A_CERT_len, rootCertA_id, &out_rc));
     WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_CERT_VERIFY);
 
     /* attempt to verify invalid cert (intermediate with different root),
@@ -165,42 +172,64 @@ int whTest_CertClient(whClientContext* client)
     WH_DEBUG_PRINT("Attempting to verify invalid single certificate...using "
                    "intermediate cert with different root\n");
     WH_TEST_RETURN_ON_FAIL(wh_Client_CertVerify(client, INTERMEDIATE_B_CERT,
-                                               INTERMEDIATE_B_CERT_len,
-                                               rootCertA_id, &out_rc));
+                                                INTERMEDIATE_B_CERT_len,
+                                                rootCertA_id, &out_rc));
     WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_CERT_VERIFY);
 
     /* Verify valid chain */
     WH_DEBUG_PRINT("Verifying valid certificate chain...\n");
-    WH_TEST_RETURN_ON_FAIL(wh_Client_CertVerify(client, RAW_CERT_CHAIN_A,
-                                               RAW_CERT_CHAIN_A_len,
-                                               rootCertA_id, &out_rc));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CertVerify(
+        client, RAW_CERT_CHAIN_A, RAW_CERT_CHAIN_A_len, rootCertA_id, &out_rc));
     WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
 
     /* Verify valid chain B */
     WH_DEBUG_PRINT("Verifying valid certificate chain B...\n");
-    WH_TEST_RETURN_ON_FAIL(wh_Client_CertVerify(client, RAW_CERT_CHAIN_B,
-                                               RAW_CERT_CHAIN_B_len,
-                                               rootCertB_id, &out_rc));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CertVerify(
+        client, RAW_CERT_CHAIN_B, RAW_CERT_CHAIN_B_len, rootCertB_id, &out_rc));
     WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
 
     /* attempt to verify invalid chains, should fail */
     WH_DEBUG_PRINT("Attempting to verify invalid certificate chains...\n");
-    WH_TEST_RETURN_ON_FAIL(wh_Client_CertVerify(client, RAW_CERT_CHAIN_A,
-                                               RAW_CERT_CHAIN_A_len,
-                                               rootCertB_id, &out_rc));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CertVerify(
+        client, RAW_CERT_CHAIN_A, RAW_CERT_CHAIN_A_len, rootCertB_id, &out_rc));
     WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_CERT_VERIFY);
 
-    WH_TEST_RETURN_ON_FAIL(wh_Client_CertVerify(client, RAW_CERT_CHAIN_B,
-                                               RAW_CERT_CHAIN_B_len,
-                                               rootCertA_id, &out_rc));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CertVerify(
+        client, RAW_CERT_CHAIN_B, RAW_CERT_CHAIN_B_len, rootCertA_id, &out_rc));
     WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_CERT_VERIFY);
+
+    /* Test verify with cached leaf public key */
+    WH_DEBUG_PRINT("Testing verify with cached leaf public key...\n");
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CertVerifyAndCacheLeafPubKey(
+        client, RAW_CERT_CHAIN_A, RAW_CERT_CHAIN_A_len, rootCertA_id,
+        &out_keyId, &out_rc));
+    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+
+    /* Export the cached public key so we can verify it matches the expected
+     * leaf public key. Don't assert on the result as we must evict the key
+     * first */
+    rc = wh_Client_KeyExport(client, out_keyId, NULL, 0, exportedPubKey,
+                             &exportedPubKeyLen);
+
+    /* Evict the cached key before any further assertions so it doesn't leak
+     * cache slots */
+    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvict(client, out_keyId));
+
+    /* Now that we have ecicted the key, check that the export and leaf key
+     * caching worked as expected */
+    WH_TEST_ASSERT(rc == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(exportedPubKeyLen == LEAF_A_PUBKEY_len);
+    WH_TEST_ASSERT_RETURN(
+        0 == memcmp(exportedPubKey, LEAF_A_PUBKEY, LEAF_A_PUBKEY_len));
 
     /* Clean up - delete the root certificates */
     WH_DEBUG_PRINT("Deleting root certificates...\n");
-    WH_TEST_RETURN_ON_FAIL(wh_Client_CertEraseTrusted(client, rootCertA_id, &out_rc));
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Client_CertEraseTrusted(client, rootCertA_id, &out_rc));
     WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
 
-    WH_TEST_RETURN_ON_FAIL(wh_Client_CertEraseTrusted(client, rootCertB_id, &out_rc));
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Client_CertEraseTrusted(client, rootCertB_id, &out_rc));
     WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
 
     WH_DEBUG_PRINT("Certificate client test completed successfully\n");
@@ -274,10 +303,13 @@ int whTest_CertClientAcert(whClientContext* client)
  * and assumes the server has the appropriate DMA translation configured */
 int whTest_CertClientDma_ClientServerTestInternal(whClientContext* client)
 {
-    int rc = WH_ERROR_OK;
+    int     rc = WH_ERROR_OK;
     int32_t out_rc;
     whNvmId rootCertA_id = 1;
     whNvmId rootCertB_id = 2;
+    whKeyId  out_keyId;
+    uint8_t  exportedPubKey[LEAF_A_PUBKEY_len];
+    uint16_t exportedPubKeyLen = sizeof(exportedPubKey);
 
     WH_DEBUG_PRINT("Starting certificate client DMA test...\n");
 
@@ -288,32 +320,29 @@ int whTest_CertClientDma_ClientServerTestInternal(whClientContext* client)
 
     /* Add root certificates to NVM */
     WH_DEBUG_PRINT("Adding root certificate A to NVM...\n");
-    WH_TEST_RETURN_ON_FAIL(wh_Client_CertAddTrustedDma(client, rootCertA_id,
-                                                      ROOT_A_CERT, ROOT_A_CERT_len,
-                                                      &out_rc));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CertAddTrustedDma(
+        client, rootCertA_id, ROOT_A_CERT, ROOT_A_CERT_len, &out_rc));
     WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
 
     WH_DEBUG_PRINT("Adding root certificate B to NVM...\n");
-    WH_TEST_RETURN_ON_FAIL(wh_Client_CertAddTrustedDma(client, rootCertB_id,
-                                                      ROOT_B_CERT, ROOT_B_CERT_len,
-                                                      &out_rc));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CertAddTrustedDma(
+        client, rootCertB_id, ROOT_B_CERT, ROOT_B_CERT_len, &out_rc));
     WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
 
     /* Verify valid single cert (intermediate) */
     WH_DEBUG_PRINT(
         "Verifying valid single certificate...using intermediate cert\n");
     WH_TEST_RETURN_ON_FAIL(wh_Client_CertVerifyDma(client, INTERMEDIATE_A_CERT,
-                                                  INTERMEDIATE_A_CERT_len,
-                                                  rootCertA_id, &out_rc));
+                                                   INTERMEDIATE_A_CERT_len,
+                                                   rootCertA_id, &out_rc));
     WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
 
     /* attempt to verify invalid cert (leaf w/o intermediate), should fail */
     WH_DEBUG_PRINT(
         "Attempting to verify invalid single certificate...using leaf cert "
         "without intermediate\n");
-    WH_TEST_RETURN_ON_FAIL(wh_Client_CertVerifyDma(client, LEAF_A_CERT,
-                                                  LEAF_A_CERT_len,
-                                                  rootCertA_id, &out_rc));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CertVerifyDma(
+        client, LEAF_A_CERT, LEAF_A_CERT_len, rootCertA_id, &out_rc));
     WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_CERT_VERIFY);
 
     /* attempt to verify invalid cert (intermediate with different root),
@@ -321,42 +350,65 @@ int whTest_CertClientDma_ClientServerTestInternal(whClientContext* client)
     WH_DEBUG_PRINT("Attempting to verify invalid single certificate...using "
                    "intermediate cert with different root\n");
     WH_TEST_RETURN_ON_FAIL(wh_Client_CertVerifyDma(client, INTERMEDIATE_B_CERT,
-                                                  INTERMEDIATE_B_CERT_len,
-                                                  rootCertA_id, &out_rc));
+                                                   INTERMEDIATE_B_CERT_len,
+                                                   rootCertA_id, &out_rc));
     WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_CERT_VERIFY);
 
     /* Verify valid chain */
     WH_DEBUG_PRINT("Verifying valid certificate chain...\n");
-    WH_TEST_RETURN_ON_FAIL(wh_Client_CertVerifyDma(client, RAW_CERT_CHAIN_A,
-                                                  RAW_CERT_CHAIN_A_len,
-                                                  rootCertA_id, &out_rc));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CertVerifyDma(
+        client, RAW_CERT_CHAIN_A, RAW_CERT_CHAIN_A_len, rootCertA_id, &out_rc));
     WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
 
     /* Verify valid chain B */
     WH_DEBUG_PRINT("Verifying valid certificate chain B...\n");
-    WH_TEST_RETURN_ON_FAIL(wh_Client_CertVerifyDma(client, RAW_CERT_CHAIN_B,
-                                                  RAW_CERT_CHAIN_B_len,
-                                                  rootCertB_id, &out_rc));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CertVerifyDma(
+        client, RAW_CERT_CHAIN_B, RAW_CERT_CHAIN_B_len, rootCertB_id, &out_rc));
     WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
 
     /* attempt to verify invalid chains, should fail */
     WH_DEBUG_PRINT("Attempting to verify invalid certificate chains...\n");
-    WH_TEST_RETURN_ON_FAIL(wh_Client_CertVerifyDma(client, RAW_CERT_CHAIN_A,
-                                                  RAW_CERT_CHAIN_A_len,
-                                                  rootCertB_id, &out_rc));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CertVerifyDma(
+        client, RAW_CERT_CHAIN_A, RAW_CERT_CHAIN_A_len, rootCertB_id, &out_rc));
     WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_CERT_VERIFY);
 
-    WH_TEST_RETURN_ON_FAIL(wh_Client_CertVerifyDma(client, RAW_CERT_CHAIN_B,
-                                                  RAW_CERT_CHAIN_B_len,
-                                                  rootCertA_id, &out_rc));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CertVerifyDma(
+        client, RAW_CERT_CHAIN_B, RAW_CERT_CHAIN_B_len, rootCertA_id, &out_rc));
     WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_CERT_VERIFY);
+
+    /* Test verify with cached leaf public key */
+    WH_DEBUG_PRINT("Testing verify with cached leaf public key using DMA...\n");
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CertVerifyDmaAndCacheLeafPubKey(
+        client, RAW_CERT_CHAIN_A, RAW_CERT_CHAIN_A_len, rootCertA_id,
+        &out_keyId, &out_rc));
+    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+
+    /* Export the cached public key so we can verify it matches the expected
+     * leaf public key. Don't assert on the result as we must evict the key
+     * first */
+    rc = wh_Client_KeyExportDma(
+        client, out_keyId, exportedPubKey, sizeof(exportedPubKey), NULL, 0,
+        &exportedPubKeyLen);
+
+    /* Evict the cached key before any further assertions so it doesn't leak
+     * cache slots */
+    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvict(client, out_keyId));
+
+    /* Now that we have ecicted the key, check that the export and leaf key
+     * caching worked as expected */
+    WH_TEST_ASSERT(rc == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(exportedPubKeyLen == LEAF_A_PUBKEY_len);
+    WH_TEST_ASSERT_RETURN(
+        0 == memcmp(exportedPubKey, LEAF_A_PUBKEY, LEAF_A_PUBKEY_len));
 
     /* Clean up - delete the root certificates */
     WH_DEBUG_PRINT("Deleting root certificates...\n");
-    WH_TEST_RETURN_ON_FAIL(wh_Client_CertEraseTrusted(client, rootCertA_id, &out_rc));
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Client_CertEraseTrusted(client, rootCertA_id, &out_rc));
     WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
 
-    WH_TEST_RETURN_ON_FAIL(wh_Client_CertEraseTrusted(client, rootCertB_id, &out_rc));
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Client_CertEraseTrusted(client, rootCertB_id, &out_rc));
     WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
 
     WH_DEBUG_PRINT("Certificate client DMA test completed successfully\n");
@@ -430,7 +482,7 @@ int whTest_CertClientAcertDma_ClientServerTestInternal(whClientContext* client)
 
 int whTest_CertRamSim(void)
 {
-    int rc = WH_ERROR_OK;
+    int            rc          = WH_ERROR_OK;
     const uint32_t BUFFER_SIZE = 1024;
 
     /* Transport memory configuration */
@@ -483,11 +535,11 @@ int whTest_CertRamSim(void)
     }};
 #endif
 
-    whServerConfig  s_conf[1] = {{
-         .comm_config = cs_conf,
-         .nvm         = nvm,
+    whServerConfig s_conf[1] = {{
+        .comm_config = cs_conf,
+        .nvm         = nvm,
 #ifndef WOLFHSM_CFG_NO_CRYPTO
-         .crypto      = crypto,
+        .crypto = crypto,
 #endif
     }};
 

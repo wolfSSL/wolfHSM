@@ -116,8 +116,6 @@ typedef uint16_t whNvmFlags;
 #define WH_NVM_FLAGS_LOCAL          ((whNvmFlags)1 << 3) /* Was generated locally */
 #define WH_NVM_FLAGS_EPHEMERAL      ((whNvmFlags)1 << 4) /* Cannot be cached nor committed */
 
-
-
 /* HSM NVM metadata structure */
 enum WH_NVM_ENUM {
     WH_NVM_LABEL_LEN = 24,
@@ -132,5 +130,13 @@ typedef struct {
     whNvmSize len;          /* Length of data in bytes */
     uint8_t label[WH_NVM_LABEL_LEN];
 } whNvmMetadata;
+
+/* Certificate management flags */
+typedef uint16_t whCertFlags;
+#define WH_CERT_FLAGS_NONE ((whCertFlags)0)
+#define WH_CERT_FLAGS_ANY ((whCertFlags)-1)
+
+/* Cache public key belonging to the leaf certificate */
+#define WH_CERT_FLAGS_CACHE_LEAF_PUBKEY ((whCertFlags)1 << 0)
 
 #endif /* !WOLFHSM_WH_COMMON_H_ */
