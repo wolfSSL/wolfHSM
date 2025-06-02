@@ -13,7 +13,7 @@ BIN = wh_test
 CSTD ?= c90
 
 # Includes
-USER_SETTINGS_DIR ?= ./
+USER_SETTINGS_DIR ?= ./config
 INC = -I$(WOLFHSM_DIR) \
       -I$(USER_SETTINGS_DIR) \
       -I$(WOLFSSL_DIR)

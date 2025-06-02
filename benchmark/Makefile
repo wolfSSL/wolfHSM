@@ -17,7 +17,7 @@ USER_SETTINGS_DIR ?= ./
 INC = -I$(WOLFHSM_DIR) \
       -I$(USER_SETTINGS_DIR) \
       -I$(WOLFSSL_DIR) \
-      -I./settings \
+      -I./config \
       -I./bench_modules
 
 # Library configuration defines to use additional files.
