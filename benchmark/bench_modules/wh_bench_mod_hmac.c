@@ -46,13 +46,13 @@ int _benchHmacSha256(whClientContext* client, whBenchOpContext* ctx, int id,
 #if defined(WOLFHSM_CFG_DMA)
     if (devId == WH_DEV_ID_DMA) {
         in    = WH_BENCH_DMA_BUFFER;
-        inLen = sizeof(WH_BENCH_DMA_BUFFER);
+        inLen = WOLFHSM_CFG_BENCH_DMA_BUFFER_SIZE;
     }
     else
 #endif
     {
         in    = WH_BENCH_DATA_IN_BUFFER;
-        inLen = sizeof(WH_BENCH_DATA_IN_BUFFER);
+        inLen = WOLFHSM_CFG_BENCH_DATA_BUFFER_SIZE;
 #if defined(WOLFHSM_CFG_BENCH_INIT_DATA_BUFFERS)
         memset(WH_BENCH_DATA_IN_BUFFER, 0xAA, inLen);
 #endif
