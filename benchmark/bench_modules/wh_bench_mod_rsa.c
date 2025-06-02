@@ -877,7 +877,8 @@ int wh_Bench_Mod_Rsa2048KeyGenDma(whClientContext*  client,
 int wh_Bench_Mod_Rsa4096PubEncrypt(whClientContext*  client,
                                    whBenchOpContext* ctx, int id, void* params)
 {
-#if (RSA_MAX_SIZE >= 4096)
+#if (RSA_MAX_SIZE >= 4096) && \
+    !defined(WOLFHSM_CFG_TEST_CLIENT_LARGE_DATA_DMA_ONLY)
     return _benchRsaCrypt(client, ctx, id, rsa4096KeyDer, sizeof(rsa4096KeyDer),
                           RSA_PUBLIC_ENCRYPT, WH_DEV_ID);
 #else
@@ -899,7 +900,8 @@ int wh_Bench_Mod_Rsa4096PubEncryptDma(whClientContext*  client,
 int wh_Bench_Mod_Rsa4096PrvDecrypt(whClientContext*  client,
                                    whBenchOpContext* ctx, int id, void* params)
 {
-#if (RSA_MAX_SIZE >= 4096)
+#if (RSA_MAX_SIZE >= 4096) && \
+    !defined(WOLFHSM_CFG_TEST_CLIENT_LARGE_DATA_DMA_ONLY)
     return _benchRsaCrypt(client, ctx, id, rsa4096KeyDer, sizeof(rsa4096KeyDer),
                           RSA_PRIVATE_DECRYPT, WH_DEV_ID);
 #else
@@ -921,7 +923,8 @@ int wh_Bench_Mod_Rsa4096PrvDecryptDma(whClientContext*  client,
 int wh_Bench_Mod_Rsa4096Sign(whClientContext* client, whBenchOpContext* ctx,
                              int id, void* params)
 {
-#if (RSA_MAX_SIZE >= 4096)
+#if (RSA_MAX_SIZE >= 4096) && \
+    !defined(WOLFHSM_CFG_TEST_CLIENT_LARGE_DATA_DMA_ONLY)
     return _benchRsaSign(client, ctx, id, rsa4096KeyDer, sizeof(rsa4096KeyDer),
                          WH_DEV_ID);
 #else
@@ -942,7 +945,8 @@ int wh_Bench_Mod_Rsa4096SignDma(whClientContext* client, whBenchOpContext* ctx,
 int wh_Bench_Mod_Rsa4096Verify(whClientContext* client, whBenchOpContext* ctx,
                                int id, void* params)
 {
-#if (RSA_MAX_SIZE >= 4096)
+#if (RSA_MAX_SIZE >= 4096) && \
+    !defined(WOLFHSM_CFG_TEST_CLIENT_LARGE_DATA_DMA_ONLY)
     return _benchRsaVerify(client, ctx, id, rsa4096KeyDer,
                            sizeof(rsa4096KeyDer), WH_DEV_ID);
 #else
@@ -963,7 +967,8 @@ int wh_Bench_Mod_Rsa4096VerifyDma(whClientContext*  client,
 int wh_Bench_Mod_Rsa4096KeyGen(whClientContext* client, whBenchOpContext* ctx,
                                int id, void* params)
 {
-#if (RSA_MAX_SIZE >= 4096)
+#if (RSA_MAX_SIZE >= 4096) && \
+    !defined(WOLFHSM_CFG_TEST_CLIENT_LARGE_DATA_DMA_ONLY)
     return _benchRsaKeyGen(client, ctx, id, 4096, WH_DEV_ID);
 #else
     return WH_ERROR_NOTIMPL;
