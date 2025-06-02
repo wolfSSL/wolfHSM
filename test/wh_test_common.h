@@ -19,8 +19,12 @@
 #ifndef WH_TEST_COMMON_H_
 #define WH_TEST_COMMON_H_
 
-#include <assert.h>
+#include "wolfhsm/wh_settings.h"
+
 #include <stdio.h>
+#if !defined(WOLFHSM_CFG_TEST_ASSERT_FUNC)
+#include <assert.h>
+#endif
 
 
 #define WH_TEST_FAIL (-1)
@@ -75,8 +79,11 @@
         }                                                \
     } while (0)
 
-
+#if defined(WOLFHSM_CFG_TEST_ASSERT_FUNC)
+#define WH_TEST_ASSERT(condition) WOLFHSM_CFG_TEST_ASSERT_FUNC((condition))
+#else
 #define WH_TEST_ASSERT(condition) assert((condition))
+#endif
 
 /*
  * Helper macro for test error propagation
@@ -87,7 +94,7 @@
         if (!(condition)) {                                                \
             printf("\n\n***TEST FAILURE***\nin %s:%s():%d: " message "\n", \
                    __FILE__, __func__, __LINE__, ##__VA_ARGS__);           \
-            assert(condition);                                             \
+            WH_TEST_ASSERT(condition);                                             \
         }                                                                  \
     } while (0)
 
