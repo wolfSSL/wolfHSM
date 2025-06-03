@@ -181,7 +181,8 @@ int wh_TransportMem_SendResponse(void* c, uint16_t len, const void* data)
     whTransportMemCsr resp;
 
     if (    (context == NULL) ||
-            (context->initialized == 0)) {
+            (context->initialized == 0) ||
+            (data == NULL && len != 0)) {
         return WH_ERROR_BADARGS;
     }
 
