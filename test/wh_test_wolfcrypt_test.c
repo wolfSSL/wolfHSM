@@ -83,6 +83,8 @@ int whTest_WolfCryptTestCfg(whClientConfig* config)
     return WH_ERROR_OK;
 }
 
+#if defined(WOLFHSM_CFG_TEST_POSIX)
+
 static int whTest_ServerCfgLoop(whServerConfig* serverCfg)
 {
     whServerContext server[1]    = {0};
@@ -115,7 +117,6 @@ static int whTest_ServerCfgLoop(whServerConfig* serverCfg)
 }
 
 
-#if defined(WOLFHSM_CFG_TEST_POSIX)
 static void* _whClientTask(void* cf)
 {
     WH_TEST_ASSERT(0 == whTest_WolfCryptTestCfg(cf));
