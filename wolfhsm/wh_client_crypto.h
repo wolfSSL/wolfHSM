@@ -421,49 +421,6 @@ int wh_Client_Cmac(whClientContext* ctx, Cmac* cmac, CmacType type,
                    uint32_t inLen, uint8_t* outMac, uint32_t* outMacLen);
 
 /**
- * @brief Runs the CMAC-AES operation in a single call with a wolfHSM keyId.
- *
- * This function does entire CMAC operation in one function call with a key
- * already stored in the HSM. This operation evicts the key from the HSM cache
- * after the operation though it will still be in the HSM's NVM if it was
- * committed
- *
- * @param[in] cmac Pointer to the CMAC key structure.
- * @param[out] out Output buffer for the CMAC tag.
- * @param[out] outSz Size of the output buffer in bytes.
- * @param[in] in Input buffer to be hashed.
- * @param[in] inSz Size of the input buffer in bytes.
- * @param[in] keyId ID of the AES key inside the HSM.
- * @param[in] heap Heap pointer for the cmac struct.
- * @param[in] devId ID of the wolfHSM device.
- * @return int Returns 0 on success, or a negative error code on failure.
- */
-int wh_Client_CmacAesGenerate(Cmac* cmac, byte* sig, word32* outSz,
-    const byte* hash, word32 inSz, whNvmId keyId, void* heap, int devId);
-
-/**
- * @brief Verifies a CMAC-AES tag in a single call with a wolfHSM keyId.
- *
- * This function does entire cmac verify in one function call with a key
- * already stored in the HSM. This operation evicts the key from the HSM cache
- * after the operation though it will still be in the HSM's NVM if it was
- * committed
- *
- * @param[in] cmac Pointer to the CMAC key structure.
- * @param[out] check Cmac tag to check against.
- * @param[out] checkSz Size of the check buffer in bytes.
- * @param[in] in Input buffer to be hashed.
- * @param[in] inSz Size of the input buffer in bytes.
- * @param[in] keyId ID of the AES key inside the HSM.
- * @param[in] heap Heap pointer for the cmac struct.
- * @param[in] devId ID of the wolfHSM device.
- * @return int Returns 0 on success, 1 on tag mismatch, or a negative error
- *    code on failure.
- */
-int wh_Client_CmacAesVerify(Cmac* cmac, const byte* check, word32 checkSz,
-    const byte* hash, word32 inSz, whNvmId keyId, void* heap, int devId);
-
-/**
  * @brief Handle cancelable CMAC response.
  *
  * This function handles a CMAC operation response from the server when

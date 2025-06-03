@@ -1244,47 +1244,57 @@ static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
             WH_ERROR_PRINT("Failed to wh_Client_KeyCache %d\n", ret);
         }
         else {
-            macLen = sizeof(macOut);
-            ret    = wh_Client_CmacAesGenerate(
-                cmac, macOut, &macLen, knownCmacMessage,
-                sizeof(knownCmacMessage), keyId, NULL, devId);
+            ret = wh_Client_CmacSetKeyId(cmac, keyId);
             if (ret != 0) {
-                WH_ERROR_PRINT("Failed to wh_Client_AesCmacGenerate %d\n", ret);
+                WH_ERROR_PRINT("Failed to wh_Client_CmacSetKeyId %d\n", ret);
             }
             else {
-                if (memcmp(knownCmacTag, macOut, sizeof(knownCmacTag)) != 0) {
-                    WH_ERROR_PRINT("CMAC FAILED KNOWN ANSWER TEST\n");
-                    ret = -1;
+                macLen = sizeof(macOut);
+                ret    = wc_AesCmacGenerate_ex(
+                    cmac, macOut, &macLen, knownCmacMessage,
+                    sizeof(knownCmacMessage), NULL, 0, NULL, devId);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("Failed to wh_Client_AesCmacGenerate %d\n",
+                                   ret);
                 }
                 else {
-#ifdef WOLFHSM_CFG_DMA
-                    /* DMA doesn't autoevict keys after use */
-                    /* TODO: should we instead match autoevict behavior for DMA
-                     */
-                    if (devId == WH_DEV_ID_DMA) {
-                        ret = wh_Client_KeyEvict(ctx, keyId);
-                        if (ret != 0) {
-                            WH_ERROR_PRINT("Failed to wh_Client_KeyEvict %d\n",
-                                           ret);
-                            ret = -1;
-                        }
+                    if (memcmp(knownCmacTag, macOut, sizeof(knownCmacTag)) !=
+                        0) {
+                        WH_ERROR_PRINT("CMAC FAILED KNOWN ANSWER TEST\n");
+                        ret = -1;
                     }
-                    else
-#endif /* WOLFHSM_CFG_DMA */
-                    {
-                        /* TODO: Eliminate this autoevict */
-                        /* verify the key was evicted after oneshot */
-                        outLen = sizeof(keyEnd);
-                        ret    = wh_Client_KeyExport(ctx, keyId, labelEnd,
-                                                     sizeof(labelEnd), keyEnd,
-                                                     &outLen);
-                        if (ret != WH_ERROR_NOTFOUND) {
-                            WH_ERROR_PRINT(
-                                "Failed to not find evicted key: %d\n", ret);
-                            ret = -1;
+                    else {
+#ifdef WOLFHSM_CFG_DMA
+                        /* DMA doesn't autoevict keys after use */
+                        /* TODO: should we instead match autoevict behavior for
+                         * DMA
+                         */
+                        if (devId == WH_DEV_ID_DMA) {
+                            ret = wh_Client_KeyEvict(ctx, keyId);
+                            if (ret != 0) {
+                                WH_ERROR_PRINT(
+                                    "Failed to wh_Client_KeyEvict %d\n", ret);
+                                ret = -1;
+                            }
                         }
-                        else {
-                            ret = 0;
+                        else
+#endif /* WOLFHSM_CFG_DMA */
+                        {
+                            /* TODO: Eliminate this autoevict */
+                            /* verify the key was evicted after oneshot */
+                            outLen = sizeof(keyEnd);
+                            ret    = wh_Client_KeyExport(ctx, keyId, labelEnd,
+                                                         sizeof(labelEnd), keyEnd,
+                                                         &outLen);
+                            if (ret != WH_ERROR_NOTFOUND) {
+                                WH_ERROR_PRINT(
+                                    "Failed to not find evicted key: %d\n",
+                                    ret);
+                                ret = -1;
+                            }
+                            else {
+                                ret = 0;
+                            }
                         }
                     }
                 }
@@ -1311,20 +1321,38 @@ static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
                     WH_ERROR_PRINT("Failed to wh_Client_KeyEvict %d\n", ret);
                 }
                 else {
-                    macLen = sizeof(macOut);
-                    ret    = wh_Client_CmacAesVerify(
-                        cmac, macOut, macLen, (byte*)knownCmacMessage,
-                        sizeof(knownCmacMessage), keyId, NULL, devId);
+                    ret =
+                        wc_InitCmac_ex(cmac, knownCmacKey, sizeof(knownCmacKey),
+                                       WC_CMAC_AES, NULL, NULL, devId);
                     if (ret != 0) {
-                        WH_ERROR_PRINT("Failed to wh_Client_AesCmacVerify %d\n",
-                                       ret);
+                        WH_ERROR_PRINT("Failed to wc_InitCmac_ex %d\n", ret);
                     }
                     else {
-                        /* test finished, erase key */
-                        ret = wh_Client_KeyErase(ctx, keyId);
+                        ret = wh_Client_CmacSetKeyId(cmac, keyId);
                         if (ret != 0) {
-                            WH_ERROR_PRINT("Failed to wh_Client_KeyErase %d\n",
-                                           ret);
+                            WH_ERROR_PRINT(
+                                "Failed to wh_Client_CmacSetKeyId %d\n", ret);
+                        }
+                        else {
+                            macLen = sizeof(macOut);
+                            ret    = wc_AesCmacVerify_ex(
+                                cmac, knownCmacTag, sizeof(knownCmacTag),
+                                (byte*)knownCmacMessage,
+                                sizeof(knownCmacMessage), NULL, 0, NULL, devId);
+                            if (ret != 0) {
+                                WH_ERROR_PRINT(
+                                    "Failed to wh_Client_AesCmacVerify %d\n",
+                                    ret);
+                            }
+                            else {
+                                /* test finished, erase key */
+                                ret = wh_Client_KeyErase(ctx, keyId);
+                                if (ret != 0) {
+                                    WH_ERROR_PRINT(
+                                        "Failed to wh_Client_KeyErase %d\n",
+                                        ret);
+                                }
+                            }
                         }
                     }
                 }
