@@ -55,11 +55,6 @@ whMessageNvm_AddObjectDmaRequest whMessageNvm_AddObjectDmaRequest_test;
 whMessageNvm_ReadDmaRequest      whMessageNvm_ReadDmaRequest_test;
 #endif
 
-#include "wolfhsm/wh_packet.h"
-whPacket whPacket_test;
-/* Test every variant of the nested union */
-wh_Packet_version_exchange      versionExchange;
-
 /* Include keystore message header for new keystore message structures */
 #include "wolfhsm/wh_message_keystore.h"
 whMessageKeystore_CacheRequest     keyCacheReq;

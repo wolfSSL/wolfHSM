@@ -2210,41 +2210,6 @@ int wh_Client_Cmac(whClientContext* ctx, Cmac* cmac, CmacType type,
     return ret;
 }
 
-int wh_Client_CmacAesGenerate(Cmac* cmac, byte* out, word32* outSz,
-                              const byte* in, word32 inSz, whNvmId keyId,
-                              void* heap, int devId)
-{
-    int ret;
-    ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, heap, devId);
-    /* set keyId */
-    if (ret == 0)
-        ret = wh_Client_CmacSetKeyId(cmac, keyId);
-    if (ret == 0)
-        ret = wc_CmacUpdate(cmac, in, inSz);
-    if (ret == 0)
-        ret = wc_CmacFinal(cmac, out, outSz);
-    return ret;
-}
-
-int wh_Client_CmacAesVerify(Cmac* cmac, const byte* check, word32 checkSz,
-                            const byte* in, word32 inSz, whNvmId keyId,
-                            void* heap, int devId)
-{
-    int    ret;
-    word32 outSz = AES_BLOCK_SIZE;
-    byte   out[AES_BLOCK_SIZE];
-    ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, heap, devId);
-    /* set keyId */
-    if (ret == 0)
-        ret = wh_Client_CmacSetKeyId(cmac, keyId);
-    if (ret == 0)
-        ret = wc_CmacUpdate(cmac, in, inSz);
-    if (ret == 0)
-        ret = wc_CmacFinal(cmac, out, &outSz);
-    if (ret == 0)
-        ret = memcmp(out, check, outSz) == 0 ? 0 : 1;
-    return ret;
-}
 #endif /* !NO_AES */
 
 int wh_Client_CmacCancelableResponse(whClientContext* c, Cmac* cmac,
