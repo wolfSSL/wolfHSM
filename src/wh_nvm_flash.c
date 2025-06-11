@@ -26,6 +26,8 @@
 /* Pick up compile-time configuration */
 #include "wolfhsm/wh_settings.h"
 
+#ifdef WOLFHSM_CFG_ENABLE_SERVER
+
 #include <stdint.h>
 #include <stddef.h>     /* For NULL */
 #include <string.h>     /* For memset, memcpy */
@@ -1241,3 +1243,5 @@ int wh_NvmFlash_Read(void* c, whNvmId id, whNvmSize offset,
     }
     return ret;
 }
+
+#endif /* WOLFHSM_CFG_ENABLE_SERVER */

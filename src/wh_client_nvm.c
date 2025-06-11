@@ -28,6 +28,8 @@
 /* Pick up compile-time configuration */
 #include "wolfhsm/wh_settings.h"
 
+#ifdef WOLFHSM_CFG_ENABLE_CLIENT
+
 /* Common WolfHSM types and defines shared with the server */
 #include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_error.h"
@@ -829,3 +831,5 @@ int wh_Client_NvmReadDma(whClientContext* c, whNvmId id, whNvmSize offset,
 }
 
 #endif /* WOLFHSM_CFG_DMA */
+
+#endif /* WOLFHSM_CFG_ENABLE_CLIENT */

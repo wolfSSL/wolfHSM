@@ -24,7 +24,7 @@
 /* Pick up compile-time configuration */
 #include "wolfhsm/wh_settings.h"
 
-#ifndef WOLFHSM_CFG_NO_CRYPTO
+#if !defined(WOLFHSM_CFG_NO_CRYPTO) && defined(WOLFHSM_CFG_ENABLE_SERVER)
 
 /* System libraries */
 #include <stdint.h>
@@ -1025,6 +1025,16 @@ static int _HandleRng(whServerContext* ctx, uint16_t magic,
         magic, (const whMessageCrypto_RngRequest*)cryptoDataIn, &req);
     if (ret != 0) {
         return ret;
+    }
+
+    /* TODO: Should we be silently trucating this? */
+    const size_t max_payload_size =
+        WOLFHSM_CFG_COMM_DATA_LEN -
+        sizeof(whMessageCrypto_GenericRequestHeader) -
+        sizeof(whMessageCrypto_RngResponse);
+
+    if (req.sz > max_payload_size) {
+        req.sz = max_payload_size;
     }
 
     /* Generate the random data */
@@ -3234,4 +3244,4 @@ int wh_Server_HandleCryptoDmaRequest(whServerContext* ctx, uint16_t magic,
 }
 #endif /* WOLFHSM_CFG_DMA */
 
-#endif  /* !WOLFHSM_CFG_NO_CRYPTO */
+#endif /* !WOLFHSM_CFG_NO_CRYPTO && WOLFHSM_CFG_ENABLE_SERVER */

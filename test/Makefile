@@ -21,10 +21,6 @@ INC = -I$(WOLFHSM_DIR) \
 # Library configuration defines to use additional files.
 DEF = -DWOLFSSL_USER_SETTINGS -DWOLFHSM_CFG
 
-# Test program configuration
-#DEF += -DWOLFHSM_CFG_TEST_VERBOSE
-DEF += -DWOLFHSM_CFG_TEST_POSIX
-
 ifeq ($(TESTWOLFCRYPT),1)
 DEF += -DWOLFHSM_CFG_TEST_WOLFCRYPTTEST
 endif
@@ -85,9 +81,21 @@ ifeq ($(DMA), 1)
 CFLAGS += -DWOLFHSM_CFG_DMA
 endif
 
+# Support a SHE-capable build
 ifeq ($(SHE),1)
 CFLAGS += -DWOLFHSM_CFG_SHE_EXTENSION
 endif
+
+# Build a client-only test driver expecting to connect to a remote server over TCP
+ifeq ($(CLIENT_ONLY_TCP),1)
+    CFLAGS += -DWOLFHSM_CFG_ENABLE_CLIENT -DWOLFHSM_CFG_TEST_CLIENT_ONLY_TCP -DWOLFHSM_CFG_TEST_NO_CUSTOM_SERVERS
+else
+    CFLAGS += -DWOLFHSM_CFG_ENABLE_CLIENT -DWOLFHSM_CFG_ENABLE_SERVER
+endif
+
+# Building via this makefile is implicitly POSIX
+DEF += -DWOLFHSM_CFG_TEST_POSIX
+#DEF += -DWOLFHSM_CFG_TEST_VERBOSE
 
 # Assembly source files
 SRC_ASM +=

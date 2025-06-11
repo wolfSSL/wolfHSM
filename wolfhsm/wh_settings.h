@@ -36,6 +36,12 @@
  *  WOLFHSM_CFG_SHE_EXTENSION - If defined, include AutoSAR SHE functionality
  *      Default: Not defined
  *
+ *  WOLFHSM_CFG_ENABLE_CLIENT - If defined, include client-specific functionality
+ *      Default: Defined (enabled)
+ *
+ *  WOLFHSM_CFG_ENABLE_SERVER - If defined, include server-specific functionality
+ *      Default: Defined (enabled)
+ *
  *  WOLFHSM_CFG_NVM_OBJECT_COUNT - Number of objects in ram and disk directories
  *      Default: 32
  *
@@ -109,7 +115,6 @@
 #ifndef WOLFHSM_CFG_INFOBUILD
 #define WOLFHSM_CFG_INFOBUILD "12345678"
 #endif
-
 
 /* Number of NVM objects in the directory */
 #ifndef WOLFHSM_CFG_NVM_OBJECT_COUNT

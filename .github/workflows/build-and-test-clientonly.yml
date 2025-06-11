@@ -1,0 +1,69 @@
+name: Build and Test Client-Only
+
+on:
+  push:
+    branches: [ 'master', 'main', 'release/**' ]
+  pull_request:
+    branches: [ '*' ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    # List host CPU info
+    - name: Host CPU info
+      run: cat /proc/cpuinfo
+
+    # List compiler version
+    - name: List compiler version
+      run: gcc --version
+
+    # pull and build wolfssl
+    - name: Checkout wolfssl
+      uses: actions/checkout@v4
+      with:
+        repository: wolfssl/wolfssl
+        path: wolfssl
+    
+    # pull and build wolfhsm examples
+    - name: Checkout wolfhsm examples
+      uses: actions/checkout@v4
+      with:
+        repository: wolfssl/wolfHSM-examples
+        path: wolfHSM-examples
+
+    # Build example server
+    - name: Build POSIX TCP server
+      run: ls && cd wolfHSM-examples/posix/tcp/wh_server_tcp && ls && pwd && make WOLFSSL_DIR=../../../../wolfssl WOLFHSM_DIR=../../../../
+
+    # Start the server in the background
+    - name: Run POSIX TCP server
+      run: |
+        cd wolfHSM-examples/posix/tcp/wh_server_tcp
+        ./Build/wh_server_tcp.elf &
+        TCP_SERVER_PID=$!
+        echo "TCP_SERVER_PID=$TCP_SERVER_PID" >> $GITHUB_ENV
+
+    # Build and test client-only build with everything enabled
+    - name: Build client-only unit tests
+      run: |
+        cd wolfhsm/test
+        make clean
+        make TEST_CLIENT_ONLY_TCP=1 SHE=1 ASAN=1 run
+
+    # Build and test client-only build with everything enabled and ASAN
+    - name: Build client-only unit tests with ASAN
+      run: |
+        cd wolfhsm/test
+        make clean
+        make TEST_CLIENT_ONLY_TCP=1 SHE=1 ASAN=1 run
+
+     # Optional: Kill the server process if it doesn't exit on its own
+    - name: Cleanup POSIX TCP server
+      if: always()
+      run: kill $TCP_SERVER_PID || true
+ 

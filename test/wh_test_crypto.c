@@ -33,15 +33,25 @@
 #include "wolfssl/wolfcrypt/types.h"
 
 #include "wolfhsm/wh_error.h"
+
+#ifdef WOLFHSM_CFG_ENABLE_SERVER
 #include "wolfhsm/wh_nvm.h"
 #include "wolfhsm/wh_nvm_flash.h"
 #include "wolfhsm/wh_flash_ramsim.h"
+#endif
+
 #include "wolfhsm/wh_comm.h"
 #include "wolfhsm/wh_message.h"
+
+#ifdef WOLFHSM_CFG_ENABLE_CLIENT
 #include "wolfhsm/wh_client.h"
 #include "wolfhsm/wh_client_crypto.h"
+#endif
+
+#ifdef WOLFHSM_CFG_ENABLE_SERVER
 #include "wolfhsm/wh_server.h"
 #include "wolfhsm/wh_server_crypto.h"
+#endif
 
 #include "wolfhsm/wh_transport_mem.h"
 
@@ -72,21 +82,16 @@ enum {
 int serverDelay = 0;
 #endif
 
-#if defined(WOLFHSM_CFG_TEST_POSIX)
+#if defined(WOLFHSM_CFG_TEST_POSIX) && defined(WOLFHSM_CFG_ENABLE_CLIENT) && \
+    defined(WOLFHSM_CFG_ENABLE_SERVER)
 /* pointer to expose server context cancel sequence to the client cancel
  * callback */
 static uint16_t* cancelSeqP;
 
-/* Test client cancel callback that directly sets the sequence to cancel in the
- * server context */
-static int _cancelCb(uint16_t seq)
-{
-    *cancelSeqP = seq;
-    return 0;
-}
-#endif
+#endif /* WOLFHSM_CFG_TEST_POSIX && WOLFHSM_CFG_ENABLE_CLIENT && \
+          WOLFHSM_CFG_ENABLE_SERVER */
 
-#ifdef WOLFHSM_CFG_TEST_VERBOSE
+#if defined(WOLFHSM_CFG_TEST_VERBOSE) && defined(WOLFHSM_CFG_ENABLE_CLIENT)
 static int whTest_ShowNvmAvailable(whClientContext* ctx)
 {
     int ret = 0;
@@ -110,8 +115,9 @@ static int whTest_ShowNvmAvailable(whClientContext* ctx)
     }
     return ret;
 }
-#endif /* WOLFHSM_CFG_TEST_VERBOSE */
+#endif /* WOLFHSM_CFG_TEST_VERBOSE && WOLFHSM_CFG_ENABLE_CLIENT */
 
+#ifdef WOLFHSM_CFG_ENABLE_CLIENT
 static int whTest_CryptoRng(whClientContext* ctx, int devId, WC_RNG* rng)
 {
     (void)ctx; /* Unused */
@@ -1684,6 +1690,7 @@ static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
         }
     }
 
+#if !defined(WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP)
     /* test CMAC cancellation for supported devIds */
     if (ret == 0
 #ifdef WOLFHSM_CFG_DMA
@@ -1822,6 +1829,7 @@ static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
             }
         }
     }
+#endif /* !defined(WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP) */
     if (ret == 0) {
         printf("CMAC DEVID=0x%X SUCCESS\n", devId);
     }
@@ -2675,6 +2683,9 @@ int whTest_CryptoClientConfig(whClientConfig* config)
 
     return ret;
 }
+#endif /* WOLFHSM_CFG_ENABLE_CLIENT */
+
+#ifdef WOLFHSM_CFG_ENABLE_SERVER
 #ifndef NO_WOLFHSM_CFG_TEST_CRYPTSVR_CFG
 int whTest_CryptoServerConfig(whServerConfig* config)
 {
@@ -2737,19 +2748,35 @@ int whTest_CryptoServerConfig(whServerConfig* config)
     return ret;
 }
 #endif /* NO_WOLFHSM_CFG_TEST_CRYPTSVR_CFG */
-#if defined(WOLFHSM_CFG_TEST_POSIX)
+#endif /* WOLFHSM_CFG_ENABLE_SERVER */
+
+#if defined(WOLFHSM_CFG_TEST_POSIX) && defined(WOLFHSM_CFG_ENABLE_CLIENT) && \
+    !defined(WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP)
 static void* _whClientTask(void *cf)
 {
     WH_TEST_ASSERT(0 == whTest_CryptoClientConfig(cf));
     return NULL;
 }
+#endif /* WOLFHSM_CFG_TEST_POSIX && WOLFHSM_CFG_ENABLE_CLIENT */
 
+#if defined(WOLFHSM_CFG_TEST_POSIX) && defined(WOLFHSM_CFG_ENABLE_SERVER)
 static void* _whServerTask(void* cf)
 {
     WH_TEST_ASSERT(0 == whTest_CryptoServerConfig(cf));
     return NULL;
 }
+#endif /* WOLFHSM_CFG_TEST_POSIX && WOLFHSM_CFG_ENABLE_SERVER */
 
+#if defined(WOLFHSM_CFG_TEST_POSIX) && defined(WOLFHSM_CFG_ENABLE_CLIENT) && \
+    defined(WOLFHSM_CFG_ENABLE_SERVER)
+
+/* Test client cancel callback that directly sets the sequence to cancel in the
+ * server context */
+static int _cancelCb(uint16_t seq)
+{
+    *cancelSeqP = seq;
+    return 0;
+}
 
 static void _whClientServerThreadTest(whClientConfig* c_conf,
                                 whServerConfig* s_conf)
@@ -2863,13 +2890,15 @@ static int wh_ClientServer_MemThreadTest(void)
 }
 #endif /* WOLFHSM_CFG_TEST_POSIX */
 
+#if defined(WOLFHSM_CFG_TEST_POSIX) && defined(WOLFHSM_CFG_ENABLE_CLIENT) && \
+    defined(WOLFHSM_CFG_ENABLE_SERVER)
 int whTest_Crypto(void)
 {
-#if defined(WOLFHSM_CFG_TEST_POSIX)
     printf("Testing crypto: (pthread) mem...\n");
     WH_TEST_RETURN_ON_FAIL(wh_ClientServer_MemThreadTest());
-#endif
     return 0;
 }
+#endif /* WOLFHSM_CFG_TEST_POSIX && WOLFHSM_CFG_ENABLE_CLIENT && \
+          WOLFHSM_CFG_ENABLE_SERVER */
 
 #endif  /* !WOLFHSM_CFG_NO_CRYPTO */

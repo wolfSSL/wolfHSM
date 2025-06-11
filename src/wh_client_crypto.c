@@ -24,7 +24,7 @@
 /* Pick up compile-time configuration */
 #include "wolfhsm/wh_settings.h"
 
-#ifndef WOLFHSM_CFG_NO_CRYPTO
+#if !defined(WOLFHSM_CFG_NO_CRYPTO) && defined(WOLFHSM_CFG_ENABLE_CLIENT)
 
 /* System libraries */
 #include <stdint.h>
@@ -160,7 +160,6 @@ int wh_Client_RngGenerate(whClientContext* ctx, uint8_t* out, uint32_t size)
     whMessageCrypto_RngResponse* res;
     uint8_t*                     dataPtr;
     uint8_t*                     reqData;
-    uint16_t                     max_size;
 
     if (ctx == NULL) {
         return WH_ERROR_BADARGS;
@@ -177,16 +176,6 @@ int wh_Client_RngGenerate(whClientContext* ctx, uint8_t* out, uint32_t size)
 
     /* Setup request header */
     req = (whMessageCrypto_RngRequest*)reqData;
-    res =
-        (whMessageCrypto_RngResponse*)(dataPtr +
-                                       sizeof(
-                                           whMessageCrypto_GenericResponseHeader) +
-                                       sizeof(whMessageCrypto_RngResponse));
-    uint8_t* res_out = (uint8_t*)(res + 1);
-
-    /* Compute maximum response size */
-    max_size =
-        (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN - (res_out - (uint8_t*)dataPtr));
 
     while ((size > 0) && (ret == WH_ERROR_OK)) {
         /* Request Message */
@@ -196,10 +185,10 @@ int wh_Client_RngGenerate(whClientContext* ctx, uint8_t* out, uint32_t size)
                            sizeof(whMessageCrypto_RngRequest);
         uint16_t res_len;
 
-        uint16_t req_size = size;
-        if (req_size > max_size) {
-            req_size = max_size;
-        }
+        /* TODO: Should we be silently trucating this? */
+        uint16_t req_size = (size < WOLFHSM_CFG_COMM_DATA_LEN)
+                                ? size
+                                : WOLFHSM_CFG_COMM_DATA_LEN;
         req->sz = req_size;
 
 #ifdef DEBUG_CRYPTOCB_VERBOSE
@@ -221,7 +210,7 @@ int wh_Client_RngGenerate(whClientContext* ctx, uint8_t* out, uint32_t size)
                 _getCryptoResponse(dataPtr, WC_ALGO_TYPE_RNG, (uint8_t**)&res);
             if (ret == WH_ERROR_OK) {
                 if (res->sz <= req_size) {
-                    res_out = (uint8_t*)(res + 1);
+                    uint8_t* res_out = (uint8_t*)(res + 1);
                     if (out != NULL) {
                         memcpy(out, res_out, res->sz);
                         out += res->sz;
@@ -3532,4 +3521,4 @@ int wh_Client_MlDsaCheckPrivKeyDma(whClientContext* ctx, MlDsaKey* key,
 #endif /* WOLFHSM_CFG_DMA */
 #endif /* HAVE_DILITHIUM */
 
-#endif /* !WOLFHSM_CFG_NO_CRYPTO */
+#endif /* !WOLFHSM_CFG_NO_CRYPTO && WOLFHSM_CFG_ENABLE_CLIENT */

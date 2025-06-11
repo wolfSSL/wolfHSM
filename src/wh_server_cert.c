@@ -23,7 +23,8 @@
 /* Pick up compile-time configuration */
 #include "wolfhsm/wh_settings.h"
 
-#if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER) && !defined(WOLFHSM_CFG_NO_CRYPTO)
+#if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER) && \
+    !defined(WOLFHSM_CFG_NO_CRYPTO) && defined(WOLFHSM_CFG_ENABLE_SERVER)
 
 #include <stdint.h>
 #include <stddef.h>
@@ -696,4 +697,5 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
     return rc;
 }
 
-#endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER && !WOLFHSM_CFG_NO_CRYPTO */
+#endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER && !WOLFHSM_CFG_NO_CRYPTO && \
+          WOLFHSM_CFG_ENABLE_SERVER */

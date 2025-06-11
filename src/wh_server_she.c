@@ -24,6 +24,8 @@
 /* Pick up compile-time configuration */
 #include "wolfhsm/wh_settings.h"
 
+#if !defined(WOLFHSM_CFG_NO_CRYPTO) && defined(WOLFHSM_CFG_ENABLE_SERVER)
+
 /* System libraries */
 #include <stdint.h>
 #include <stddef.h> /* For NULL */
@@ -34,7 +36,6 @@
 #include "wolfhsm/wh_utils.h"
 #include "wolfhsm/wh_server.h"
 
-#ifndef WOLFHSM_CFG_NO_CRYPTO
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/types.h"
 #include "wolfssl/wolfcrypt/error-crypt.h"
@@ -42,7 +43,6 @@
 #include "wolfssl/wolfcrypt/aes.h"
 #include "wolfssl/wolfcrypt/cmac.h"
 #include "wolfhsm/wh_server_keystore.h"
-#endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
 #ifdef WOLFHSM_CFG_SHE_EXTENSION
 #include "wolfhsm/wh_she_common.h"
@@ -50,8 +50,6 @@
 #include "wolfhsm/wh_server_she.h"
 #include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_message_she.h"
-
-#ifndef WOLFHSM_CFG_NO_CRYPTO
 
 /** SHE defined constants */
 static const uint8_t _SHE_KEY_UPDATE_ENC_C[] = WH_SHE_KEY_UPDATE_ENC_C;
@@ -1547,7 +1545,8 @@ int wh_Server_HandleSheRequest(whServerContext* server, uint16_t magic,
 {
     int ret = 0;
 
-    if (server == NULL || req_packet == NULL || out_resp_size == NULL) {
+    if (server == NULL || server->she == NULL || req_packet == NULL ||
+        out_resp_size == NULL) {
         return WH_ERROR_BADARGS;
     }
 
@@ -1650,20 +1649,5 @@ int wh_Server_HandleSheRequest(whServerContext* server, uint16_t magic,
     return 0;
 }
 
-#else /* WOLFHSM_CFG_NO_CRYPTO */
-int wh_Server_HandleSheRequest(whServerContext* server, uint16_t magic,
-                               uint16_t action, uint16_t req_size,
-                               const void* req_packet, uint16_t* out_resp_size,
-                               void* resp_packet)
-{
-    /* No crypto build, so always return bad args */
-    (void)server;
-    (void)action;
-    (void)data;
-    (void)size;
-    return WH_ERROR_BADARGS;
-}
-
-#endif /* !WOLFHSM_CFG_NO_CRYPTO */
-
-#endif /* WOLFHSM_CFG_SHE_EXTENSION*/
+#endif /* WOLFHSM_CFG_SHE_EXTENSION */
+#endif /* !WOLFHSM_CFG_NO_CRYPTO && WOLFHSM_CFG_ENABLE_SERVER */
