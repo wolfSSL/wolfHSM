@@ -1,0 +1,49 @@
+name: Build and Run Examples
+
+on:
+  push:
+    branches: [ 'master', 'main', 'release/**' ]
+  pull_request:
+    branches: [ '*' ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@master
+
+    # pull and build wolfssl
+    - name: Checkout wolfssl
+      uses: actions/checkout@master
+      with:
+        repository: wolfssl/wolfssl
+        path: wolfssl
+
+    # Build examples
+    - name: Build POSIX TCP server
+      run: cd examples/posix/tcp/wh_server_tcp && make -j WOLFSSL_DIR=../../../../wolfssl
+    - name: Build POSIX TCP client
+      run: cd examples/posix/tcp/wh_client_tcp && make -j WOLFSSL_DIR=../../../../wolfssl
+
+    # Start the server in the background
+    - name: Run POSIX TCP server
+      run: |
+        cd examples/posix/tcp/wh_server_tcp
+        ./Build/wh_server_tcp.elf &
+        TCP_SERVER_PID=$!
+        echo "TCP_SERVER_PID=$TCP_SERVER_PID" >> $GITHUB_ENV
+
+    # Run the client that connects to the server
+    - name: Run POSIX TCP client
+      run: |
+        cd examples/posix/tcp/wh_client_tcp
+        ./Build/wh_client_tcp.elf
+
+    # Optional: Kill the server process if it doesn't exit on its own
+    - name: Cleanup POSIX TCP server
+      if: always()
+      run: kill $TCP_SERVER_PID || true
+
+
