@@ -918,6 +918,82 @@ static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
         }
     }
 
+    /* Test cross-cache duplicate detection */
+    if (ret == 0) {
+        uint16_t keyId1, keyId2;
+        /* Key for regular cache (≤ WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE) */
+        const size_t smallKeySize = WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE / 2;
+        uint8_t      smallKey[smallKeySize];
+        /* Key for big cache (> WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE) */
+        const size_t bigKeySize = WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE + 100;
+        uint8_t      bigKey[bigKeySize];
+
+        uint8_t labelSmall[WH_NVM_LABEL_LEN] = "Small Key Label";
+        uint8_t labelBig[WH_NVM_LABEL_LEN]   = "Big Key Label";
+
+        /* Initialize test keys with different data */
+        memset(smallKey, 0xAA, sizeof(smallKey));
+        memset(bigKey, 0xBB, sizeof(bigKey));
+
+        /* Test 1: Cache small key first, then try to cache same keyId with big
+         * key */
+        keyId1 = 0x1000; /* Use specific keyId to ensure we control the ID */
+        ret    = wh_Client_KeyCache(ctx, 0, labelSmall, sizeof(labelSmall),
+                                    smallKey, sizeof(smallKey), &keyId1);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to cache small key: %d\n", ret);
+        }
+        else {
+            /* Now try to cache big key with same keyId - should fail with
+             * WH_ERROR_DUPLICATE */
+            keyId2 = keyId1; /* Same keyId */
+            ret = wh_Client_KeyCache(ctx, 0, labelBig, sizeof(labelBig), bigKey,
+                                     sizeof(bigKey), &keyId2);
+            if (ret != WH_ERROR_DUPLICATE) {
+                WH_ERROR_PRINT("Expected WH_ERROR_DUPLICATE but got: %d\n",
+                               ret);
+                ret = -1;
+            }
+            else {
+                /* Clean up the small key */
+                (void)wh_Client_KeyEvict(ctx, keyId1);
+                ret = 0;
+            }
+        }
+
+        /* Test 2: Cache big key first, then try to cache same keyId with small
+         * key */
+        if (ret == 0) {
+            keyId1 = 0x2000; /* Use different keyId */
+            ret = wh_Client_KeyCache(ctx, 0, labelBig, sizeof(labelBig), bigKey,
+                                     sizeof(bigKey), &keyId1);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to cache big key: %d\n", ret);
+            }
+            else {
+                /* Now try to cache small key with same keyId - should fail with
+                 * WH_ERROR_DUPLICATE */
+                keyId2 = keyId1; /* Same keyId */
+                ret = wh_Client_KeyCache(ctx, 0, labelSmall, sizeof(labelSmall),
+                                         smallKey, sizeof(smallKey), &keyId2);
+                if (ret != WH_ERROR_DUPLICATE) {
+                    WH_ERROR_PRINT("Expected WH_ERROR_DUPLICATE but got: %d\n",
+                                   ret);
+                    ret = -1;
+                }
+                else {
+                    /* Clean up the big key */
+                    (void)wh_Client_KeyEvict(ctx, keyId1);
+                    ret = 0;
+                }
+            }
+        }
+
+        if (ret == 0) {
+            printf("KEY CROSS-CACHE DUPLICATE DETECTION SUCCESS\n");
+        }
+    }
+
 #ifdef WOLFHSM_CFG_DMA
     /* test cache/export using DMA */
     if (ret == 0) {
@@ -936,6 +1012,83 @@ static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
             else {
                 printf("KEY CACHE/EXPORT DMA SUCCESS\n");
             }
+        }
+    }
+
+    /* Test cross-cache duplicate detection with DMA */
+    if (ret == 0) {
+        uint16_t keyId1, keyId2;
+        /* Key for regular cache (≤ WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE) */
+        const size_t smallKeySize = WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE / 2;
+        uint8_t      smallKey[smallKeySize];
+        /* Key for big cache (> WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE) */
+        const size_t bigKeySize = WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE + 100;
+        uint8_t      bigKey[bigKeySize];
+
+        uint8_t labelSmall[WH_NVM_LABEL_LEN] = "Small DMA Key Label";
+        uint8_t labelBig[WH_NVM_LABEL_LEN]   = "Big DMA Key Label";
+
+        /* Initialize test keys with different data */
+        memset(smallKey, 0xCC, sizeof(smallKey));
+        memset(bigKey, 0xDD, sizeof(bigKey));
+
+        /* Test 1: Cache small key with DMA first, then try to cache same keyId
+         * with big key using regular cache */
+        keyId1 = 0x3000;
+        ret    = wh_Client_KeyCacheDma(ctx, 0, labelSmall, sizeof(labelSmall),
+                                       smallKey, sizeof(smallKey), &keyId1);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to cache small key with DMA: %d\n", ret);
+        }
+        else {
+            /* Now try to cache big key with same keyId using regular cache -
+             * should fail with WH_ERROR_DUPLICATE */
+            keyId2 = keyId1; /* Same keyId */
+            ret = wh_Client_KeyCache(ctx, 0, labelBig, sizeof(labelBig), bigKey,
+                                     sizeof(bigKey), &keyId2);
+            if (ret != WH_ERROR_DUPLICATE) {
+                WH_ERROR_PRINT("Expected WH_ERROR_DUPLICATE but got: %d\n",
+                               ret);
+                ret = -1;
+            }
+            else {
+                /* Clean up the small key */
+                (void)wh_Client_KeyEvict(ctx, keyId1);
+                ret = 0;
+            }
+        }
+
+        /* Test 2: Cache big key with regular cache first, then try to cache
+         * same keyId with small key using DMA */
+        if (ret == 0) {
+            keyId1 = 0x4000; /* Use different keyId */
+            ret = wh_Client_KeyCache(ctx, 0, labelBig, sizeof(labelBig), bigKey,
+                                     sizeof(bigKey), &keyId1);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to cache big key: %d\n", ret);
+            }
+            else {
+                /* Now try to cache small key with same keyId using DMA - should
+                 * fail with WH_ERROR_DUPLICATE */
+                keyId2 = keyId1; /* Same keyId */
+                ret    = wh_Client_KeyCacheDma(ctx, 0, labelSmall,
+                                               sizeof(labelSmall), smallKey,
+                                               sizeof(smallKey), &keyId2);
+                if (ret != WH_ERROR_DUPLICATE) {
+                    WH_ERROR_PRINT("Expected WH_ERROR_DUPLICATE but got: %d\n",
+                                   ret);
+                    ret = -1;
+                }
+                else {
+                    /* Clean up the big key */
+                    (void)wh_Client_KeyEvict(ctx, keyId1);
+                    ret = 0;
+                }
+            }
+        }
+
+        if (ret == 0) {
+            printf("KEY CROSS-CACHE DUPLICATE DETECTION DMA SUCCESS\n");
         }
     }
 #endif /* WOLFHSM_CFG_DMA */
