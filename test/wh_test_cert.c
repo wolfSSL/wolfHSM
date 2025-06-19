@@ -129,7 +129,7 @@ int whTest_CertClient(whClientContext* client)
     int32_t  out_rc;
     whNvmId  rootCertA_id = 1;
     whNvmId  rootCertB_id = 2;
-    whKeyId  out_keyId;
+    whKeyId  out_keyId    = WH_KEYID_ERASED;
     uint8_t  exportedPubKey[LEAF_A_PUBKEY_len];
     uint16_t exportedPubKeyLen = sizeof(exportedPubKey);
 
