@@ -65,15 +65,24 @@ extern "C" {
 #define ECC_TIMING_RESISTANT
 #define WC_RSA_BLINDING
 
+/* Cert buffers required for wolfCrypt tests to not need to run in the wolfSSL
+ * root directory in conjuction with filesystem usage */
+#define USE_CERT_BUFFERS_256
+#define USE_CERT_BUFFERS_1024
+#define USE_CERT_BUFFERS_2048
+#define USE_CERT_BUFFERS_3072
+#define USE_CERT_BUFFERS_4096
+
 /** Remove unneeded features*/
 #define NO_MAIN_DRIVER
 #define NO_ERROR_STRINGS
 #define NO_ERROR_QUEUE
-#define NO_FILESYSTEM
 #define NO_INLINE
 #define NO_OLD_TLS
 #define WOLFSSL_NO_TLS12
 #define NO_DO178
+#define NO_WRITE_TEMP_FILES
+
 /* Prevents certain functions (SHA, hash.c) on server from falling back to
  * client cryptoCb when using non-devId APIs */
 #define WC_NO_DEFAULT_DEVID
