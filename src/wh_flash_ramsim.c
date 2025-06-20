@@ -24,8 +24,6 @@
 /* Pick up compile-time configuration */
 #include "wolfhsm/wh_settings.h"
 
-#ifdef WOLFHSM_CFG_ENABLE_SERVER
-
 #include <stdint.h>
 #include <stddef.h>  /* For NULL */
 #include <stdlib.h>  /* For malloc/free */
@@ -264,5 +262,3 @@ int whFlashRamsim_WriteUnlock(void* context, uint32_t offset, uint32_t size)
 
     return WH_ERROR_OK;
 }
-
-#endif /* WOLFHSM_CFG_ENABLE_SERVER */

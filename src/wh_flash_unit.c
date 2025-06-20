@@ -27,8 +27,6 @@
 /* Pick up compile-time configuration */
 #include "wolfhsm/wh_settings.h"
 
-#ifdef WOLFHSM_CFG_ENABLE_SERVER
-
 #include <stdint.h>
 #include <stddef.h>     /* For NULL */
 #include <string.h>     /* For memset, memcpy */
@@ -235,4 +233,3 @@ int wh_FlashUnit_ProgramBytes(const whFlashCb* cb, void* context,
     return ret;
 }
 
-#endif /* WOLFHSM_CFG_ENABLE_SERVER */
