@@ -28,10 +28,18 @@
 #if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER) && !defined(WOLFHSM_CFG_NO_CRYPTO)
 
 #include "wolfhsm/wh_error.h"
+
+#ifdef WOLFHSM_CFG_ENABLE_SERVER
 #include "wolfhsm/wh_server.h"
 #include "wolfhsm/wh_server_cert.h"
 #include "wolfhsm/wh_flash_ramsim.h"
 #include "wolfhsm/wh_nvm_flash.h"
+#endif
+
+#ifdef WOLFHSM_CFG_ENABLE_CLIENT
+#include "wolfhsm/wh_client.h"
+#endif
+
 #include "wolfhsm/wh_transport_mem.h"
 
 #include "wh_test_common.h"
@@ -41,7 +49,7 @@
 #include "wh_test_cert_data_acert.h"
 #endif
 
-
+#ifdef WOLFHSM_CFG_ENABLE_SERVER
 /* Run certificate configuration tests */
 int whTest_CertServerCfg(whServerConfig* serverCfg)
 {
@@ -122,7 +130,9 @@ int whTest_CertServerCfg(whServerConfig* serverCfg)
     WH_DEBUG_PRINT("Test completed successfully\n");
     return rc;
 }
+#endif /* WOLFHSM_CFG_ENABLE_SERVER */
 
+#ifdef WOLFHSM_CFG_ENABLE_CLIENT
 int whTest_CertClient(whClientContext* client)
 {
     int      rc = WH_ERROR_OK;
@@ -479,7 +489,9 @@ int whTest_CertClientAcertDma_ClientServerTestInternal(whClientContext* client)
 #endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT */
 
 #endif /* WOLFHSM_CFG_DMA */
+#endif /* WOLFHSM_CFG_ENABLE_CLIENT */
 
+#ifdef WOLFHSM_CFG_ENABLE_SERVER
 int whTest_CertRamSim(void)
 {
     int            rc          = WH_ERROR_OK;
@@ -565,5 +577,6 @@ int whTest_CertRamSim(void)
 
     return rc;
 }
+#endif /* WOLFHSM_CFG_ENABLE_SERVER */
 
 #endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER && !WOLFHSM_CFG_NO_CRYPTO */

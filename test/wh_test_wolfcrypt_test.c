@@ -34,13 +34,24 @@
 #include "wolfcrypt/test/test.h"
 
 #include "wolfhsm/wh_error.h"
+
+#ifdef WOLFHSM_CFG_ENABLE_SERVER
 #include "wolfhsm/wh_nvm.h"
 #include "wolfhsm/wh_nvm_flash.h"
 #include "wolfhsm/wh_flash_ramsim.h"
+#endif
+
 #include "wolfhsm/wh_comm.h"
 #include "wolfhsm/wh_message.h"
+
+#ifdef WOLFHSM_CFG_ENABLE_SERVER
 #include "wolfhsm/wh_server.h"
+#endif
+
+#ifdef WOLFHSM_CFG_ENABLE_CLIENT
 #include "wolfhsm/wh_client.h"
+#endif
+
 #include "wolfhsm/wh_transport_mem.h"
 
 #include "wh_test_common.h"
@@ -62,6 +73,7 @@
 #define BUFFER_SIZE 4096
 #define FLASH_RAM_SIZE (1024 * 1024) /* 1MB */
 
+#ifdef WOLFHSM_CFG_ENABLE_CLIENT
 int whTest_WolfCryptTestCfg(whClientConfig* config)
 {
     whClientContext client[1] = {0};
@@ -82,9 +94,9 @@ int whTest_WolfCryptTestCfg(whClientConfig* config)
 
     return WH_ERROR_OK;
 }
+#endif /* WOLFHSM_CFG_ENABLE_CLIENT */
 
-#if defined(WOLFHSM_CFG_TEST_POSIX)
-
+#if defined(WOLFHSM_CFG_TEST_POSIX) && defined(WOLFHSM_CFG_ENABLE_SERVER)
 static int whTest_ServerCfgLoop(whServerConfig* serverCfg)
 {
     whServerContext server[1]    = {0};
@@ -115,21 +127,26 @@ static int whTest_ServerCfgLoop(whServerConfig* serverCfg)
 
     return ret;
 }
+#endif /* WOLFHSM_CFG_TEST_POSIX && WOLFHSM_CFG_ENABLE_SERVER */
 
-
+#if defined(WOLFHSM_CFG_TEST_POSIX) && defined(WOLFHSM_CFG_ENABLE_CLIENT)
 static void* _whClientTask(void* cf)
 {
     WH_TEST_ASSERT(0 == whTest_WolfCryptTestCfg(cf));
     return NULL;
 }
+#endif /* WOLFHSM_CFG_TEST_POSIX && WOLFHSM_CFG_ENABLE_CLIENT */
 
+#if defined(WOLFHSM_CFG_TEST_POSIX) && defined(WOLFHSM_CFG_ENABLE_SERVER)
 static void* _whServerTask(void* cf)
 {
     WH_TEST_ASSERT(0 == whTest_ServerCfgLoop(cf));
     return NULL;
 }
+#endif /* WOLFHSM_CFG_TEST_POSIX && WOLFHSM_CFG_ENABLE_SERVER */
 
-
+#if defined(WOLFHSM_CFG_TEST_POSIX) && defined(WOLFHSM_CFG_ENABLE_CLIENT) && \
+    defined(WOLFHSM_CFG_ENABLE_SERVER)
 static void _whClientServerThreadTest(whClientConfig* c_conf,
                                       whServerConfig* s_conf)
 {
@@ -238,16 +255,18 @@ static int wh_ClientServer_MemThreadTest(void)
 
     return WH_ERROR_OK;
 }
-#endif /* WOLFHSM_CFG_TEST_POSIX */
+#endif /* WOLFHSM_CFG_TEST_POSIX && WOLFHSM_CFG_ENABLE_CLIENT && \
+          WOLFHSM_CFG_ENABLE_SERVER */
 
-
+#if defined(WOLFHSM_CFG_TEST_POSIX) && defined(WOLFHSM_CFG_ENABLE_CLIENT) && \
+    defined(WOLFHSM_CFG_ENABLE_SERVER)
 int whTest_WolfCryptTest(void)
 {
-#if defined(WOLFHSM_CFG_TEST_POSIX)
     printf("Testing wolfCrypt tests: (pthread) mem...\n");
     WH_TEST_RETURN_ON_FAIL(wh_ClientServer_MemThreadTest());
-#endif
     return 0;
 }
+#endif /* WOLFHSM_CFG_TEST_POSIX && WOLFHSM_CFG_ENABLE_CLIENT && \
+          WOLFHSM_CFG_ENABLE_SERVER */
 
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */

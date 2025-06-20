@@ -24,6 +24,8 @@
 /* Pick up compile-time configuration */
 #include "wolfhsm/wh_settings.h"
 
+#ifdef WOLFHSM_CFG_ENABLE_SERVER
+
 #include <stdint.h>
 #include <stddef.h>
 
@@ -47,7 +49,6 @@ int wh_Server_RegisterCustomCb(whServerContext* server, uint16_t action,
 
     return WH_ERROR_OK;
 }
-
 
 int wh_Server_HandleCustomCbRequest(whServerContext* server, uint16_t magic,
                                     uint16_t action, uint16_t seq,
@@ -109,3 +110,5 @@ int wh_Server_HandleCustomCbRequest(whServerContext* server, uint16_t magic,
 
     return WH_ERROR_OK;
 }
+
+#endif /* WOLFHSM_CFG_ENABLE_SERVER */

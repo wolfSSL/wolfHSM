@@ -24,7 +24,7 @@
 /* Pick up compile-time configuration */
 #include "wolfhsm/wh_settings.h"
 
-#ifndef WOLFHSM_CFG_NO_CRYPTO
+#if !defined(WOLFHSM_CFG_NO_CRYPTO) && defined(WOLFHSM_CFG_ENABLE_SERVER)
 
 /* System libraries */
 #include <stdint.h>
@@ -836,7 +836,7 @@ static int _HandleEccSign(whServerContext* ctx, uint16_t magic,
 
     /* Extract parameters from translated request */
     uint8_t* in =
-        (uint8_t*)cryptoDataIn + sizeof(whMessageCrypto_EccSignRequest);
+        (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_EccSignRequest);
     whKeyId key_id =
         WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
     word32   in_len  = req.sz;
@@ -1027,14 +1027,26 @@ static int _HandleRng(whServerContext* ctx, uint16_t magic,
         return ret;
     }
 
-    /* Generate the random data */
-    ret = wc_RNG_GenerateBlock(ctx->crypto->rng, (byte*)cryptoDataOut, req.sz);
+    /* Calculate maximum data size server can respond with (subtract headers) */
+    const uint32_t server_max_data =
+        WOLFHSM_CFG_COMM_DATA_LEN -
+        sizeof(whMessageCrypto_GenericResponseHeader) -
+        sizeof(whMessageCrypto_RngResponse);
+
+    /* Server responds with minimum of requested size and server max capacity */
+    uint32_t actual_size =
+        (req.sz < server_max_data) ? req.sz : server_max_data;
+
+    /* Generate the random data directly into response buffer */
+    uint8_t* res_out =
+        (uint8_t*)cryptoDataOut + sizeof(whMessageCrypto_RngResponse);
+    ret = wc_RNG_GenerateBlock(ctx->crypto->rng, res_out, actual_size);
     if (ret != 0) {
         return ret;
     }
 
-    /* Translate response */
-    res.sz = req.sz;
+    /* Translate response with actual size generated */
+    res.sz = actual_size;
     ret    = wh_MessageCrypto_TranslateRngResponse(
         magic, &res, (whMessageCrypto_RngResponse*)cryptoDataOut);
     if (ret != 0) {
@@ -1042,7 +1054,7 @@ static int _HandleRng(whServerContext* ctx, uint16_t magic,
     }
 
     /* set the output size */
-    *outSize = sizeof(whMessageCrypto_RngResponse) + req.sz;
+    *outSize = sizeof(whMessageCrypto_RngResponse) + actual_size;
 
     return ret;
 }
@@ -3234,4 +3246,4 @@ int wh_Server_HandleCryptoDmaRequest(whServerContext* ctx, uint16_t magic,
 }
 #endif /* WOLFHSM_CFG_DMA */
 
-#endif  /* !WOLFHSM_CFG_NO_CRYPTO */
+#endif /* !WOLFHSM_CFG_NO_CRYPTO && WOLFHSM_CFG_ENABLE_SERVER */

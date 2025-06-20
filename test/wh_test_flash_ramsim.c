@@ -21,6 +21,8 @@
 
 #include "wolfhsm/wh_settings.h"
 
+#if defined(WOLFHSM_CFG_ENABLE_SERVER)
+
 #include "wh_test_common.h"
 #include "wh_test_flash_ramsim.h"
 #include "wolfhsm/wh_flash_ramsim.h"
@@ -198,3 +200,5 @@ int whTest_Flash_RamSim(void)
 
     return 0;
 }
+
+#endif /* WOLFHSM_CFG_ENABLE_SERVER */

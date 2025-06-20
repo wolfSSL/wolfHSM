@@ -34,7 +34,7 @@
  * Returns 0 on success and a non-zero error code on failure
  */
 int whTest_ClientServer(void);
-int whTest_ClientCfg(whClientConfig* clientCfg);
+int whTest_ClientServerClientConfig(whClientConfig* clientCfg);
 int whTest_ServerCfgLoop(whServerConfig* serverCfg);
 
 #endif /* TEST_WH_TEST_CLIENTSERVER_H_ */

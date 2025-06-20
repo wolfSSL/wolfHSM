@@ -24,6 +24,8 @@
 /* Pick up compile-time configuration */
 #include "wolfhsm/wh_settings.h"
 
+#ifdef WOLFHSM_CFG_ENABLE_CLIENT
+
 /* System libraries */
 #include <stdint.h>
 #include <stddef.h>  /* For NULL */
@@ -1495,3 +1497,5 @@ int wh_Client_KeyExportDma(whClientContext* c, uint16_t keyId,
 }
 
 #endif /* WOLFHSM_CFG_DMA */
+
+#endif /* WOLFHSM_CFG_ENABLE_CLIENT */

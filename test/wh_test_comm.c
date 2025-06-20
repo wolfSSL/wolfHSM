@@ -32,8 +32,14 @@
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_comm.h"
 #include "wolfhsm/wh_transport_mem.h"
+
+#ifdef WOLFHSM_CFG_ENABLE_SERVER
 #include "wolfhsm/wh_server.h"
+#endif
+
+#ifdef WOLFHSM_CFG_ENABLE_CLIENT
 #include "wolfhsm/wh_client.h"
+#endif
 
 #if defined(WOLFHSM_CFG_TEST_POSIX)
 #include <pthread.h> /* For pthread_create/cancel/join/_t */
@@ -50,6 +56,7 @@
 #define REPEAT_COUNT 10
 #define ONE_MS 1000
 
+#if defined(WOLFHSM_CFG_ENABLE_CLIENT) && defined(WOLFHSM_CFG_ENABLE_SERVER)
 int whTest_CommMem(void)
 {
     int ret = 0;
@@ -185,11 +192,10 @@ int whTest_CommMem(void)
 
     return ret;
 }
+#endif /* WOLFHSM_CFG_ENABLE_CLIENT && WOLFHSM_CFG_ENABLE_SERVER */
 
-
-#if defined WOLFHSM_CFG_TEST_POSIX
-
-
+#if defined(WOLFHSM_CFG_TEST_POSIX) && defined(WOLFHSM_CFG_ENABLE_CLIENT) && \
+    defined(WOLFHSM_CFG_ENABLE_SERVER)
 static void* _whCommClientTask(void* cf)
 {
     whCommClientConfig* config = (whCommClientConfig*)cf;
@@ -340,7 +346,10 @@ static void* _whCommServerTask(void* cf)
 
     return NULL;
 }
+#endif /* WOLFHSM_CFG_TEST_POSIX && WOLFHSM_CFG_ENABLE_SERVER */
 
+#if defined(WOLFHSM_CFG_TEST_POSIX) && defined(WOLFHSM_CFG_ENABLE_CLIENT) && \
+    defined(WOLFHSM_CFG_ENABLE_SERVER)
 static void _whCommClientServerThreadTest(whCommClientConfig* c_conf,
                                           whCommServerConfig* s_conf)
 {
@@ -479,9 +488,10 @@ void wh_CommClientServer_TcpThreadTest(void)
 
     _whCommClientServerThreadTest(c_conf, s_conf);
 }
+#endif /* WOLFHSM_CFG_TEST_POSIX && WOLFHSM_CFG_ENABLE_CLIENT && \
+          WOLFHSM_CFG_ENABLE_SERVER */
 
-#endif /* defined(WOLFHSM_CFG_TEST_POSIX) */
-
+#if defined(WOLFHSM_CFG_ENABLE_CLIENT) && defined(WOLFHSM_CFG_ENABLE_SERVER)
 int whTest_Comm(void)
 {
     printf("Testing comms: mem...\n");
@@ -500,3 +510,4 @@ int whTest_Comm(void)
 
     return 0;
 }
+#endif /* WOLFHSM_CFG_ENABLE_CLIENT && WOLFHSM_CFG_ENABLE_SERVER */

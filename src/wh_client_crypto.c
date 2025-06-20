@@ -24,7 +24,7 @@
 /* Pick up compile-time configuration */
 #include "wolfhsm/wh_settings.h"
 
-#ifndef WOLFHSM_CFG_NO_CRYPTO
+#if !defined(WOLFHSM_CFG_NO_CRYPTO) && defined(WOLFHSM_CFG_ENABLE_CLIENT)
 
 /* System libraries */
 #include <stdint.h>
@@ -160,7 +160,6 @@ int wh_Client_RngGenerate(whClientContext* ctx, uint8_t* out, uint32_t size)
     whMessageCrypto_RngResponse* res;
     uint8_t*                     dataPtr;
     uint8_t*                     reqData;
-    uint16_t                     max_size;
 
     if (ctx == NULL) {
         return WH_ERROR_BADARGS;
@@ -177,16 +176,12 @@ int wh_Client_RngGenerate(whClientContext* ctx, uint8_t* out, uint32_t size)
 
     /* Setup request header */
     req = (whMessageCrypto_RngRequest*)reqData;
-    res =
-        (whMessageCrypto_RngResponse*)(dataPtr +
-                                       sizeof(
-                                           whMessageCrypto_GenericResponseHeader) +
-                                       sizeof(whMessageCrypto_RngResponse));
-    uint8_t* res_out = (uint8_t*)(res + 1);
 
-    /* Compute maximum response size */
-    max_size =
-        (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN - (res_out - (uint8_t*)dataPtr));
+    /* Calculate maximum data size client can request (subtract headers) */
+    const uint32_t client_max_data =
+        WOLFHSM_CFG_COMM_DATA_LEN -
+        sizeof(whMessageCrypto_GenericRequestHeader) -
+        sizeof(whMessageCrypto_RngRequest);
 
     while ((size > 0) && (ret == WH_ERROR_OK)) {
         /* Request Message */
@@ -196,14 +191,13 @@ int wh_Client_RngGenerate(whClientContext* ctx, uint8_t* out, uint32_t size)
                            sizeof(whMessageCrypto_RngRequest);
         uint16_t res_len;
 
-        uint16_t req_size = size;
-        if (req_size > max_size) {
-            req_size = max_size;
-        }
-        req->sz = req_size;
+        /* Request up to client max, but no more than remaining size */
+        uint32_t chunk_size = (size < client_max_data) ? size : client_max_data;
+        req->sz             = chunk_size;
 
 #ifdef DEBUG_CRYPTOCB_VERBOSE
-        printf("[client] RNG: size:%d reqsz:%u\n", req_size, req_len);
+        printf("[client] RNG: size:%u reqsz:%u remaining:%u\n", chunk_size,
+               req_len, size);
         printf("[client] RNG: req:%p\n", req);
 #endif
 
@@ -220,18 +214,24 @@ int wh_Client_RngGenerate(whClientContext* ctx, uint8_t* out, uint32_t size)
             ret =
                 _getCryptoResponse(dataPtr, WC_ALGO_TYPE_RNG, (uint8_t**)&res);
             if (ret == WH_ERROR_OK) {
-                if (res->sz <= req_size) {
-                    res_out = (uint8_t*)(res + 1);
+                /* Validate server didn't respond with more than requested */
+                if (res->sz <= chunk_size) {
+                    uint8_t* res_out = (uint8_t*)(res + 1);
                     if (out != NULL) {
                         memcpy(out, res_out, res->sz);
                         out += res->sz;
                     }
                     size -= res->sz;
 #ifdef DEBUG_CRYPTOCB_VERBOSE
-                    printf("[client] out size:%d\n", res->sz);
+                    printf("[client] out size:%u remaining:%u\n", res->sz,
+                           size);
                     wh_Utils_Hexdump("[client] res_out: \n", out - res->sz,
                                      res->sz);
 #endif
+                }
+                else {
+                    /* Server returned more than we can handle - error */
+                    ret = WH_ERROR_ABORTED;
                 }
             }
         }
@@ -3532,4 +3532,4 @@ int wh_Client_MlDsaCheckPrivKeyDma(whClientContext* ctx, MlDsaKey* key,
 #endif /* WOLFHSM_CFG_DMA */
 #endif /* HAVE_DILITHIUM */
 
-#endif /* !WOLFHSM_CFG_NO_CRYPTO */
+#endif /* !WOLFHSM_CFG_NO_CRYPTO && WOLFHSM_CFG_ENABLE_CLIENT */

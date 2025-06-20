@@ -25,7 +25,7 @@
 /* Pick up compile-time configuration */
 #include "wolfhsm/wh_settings.h"
 
-#ifdef WOLFHSM_CFG_SHE_EXTENSION
+#if defined(WOLFHSM_CFG_SHE_EXTENSION) && defined(WOLFHSM_CFG_ENABLE_CLIENT)
 
 #include <stdint.h>
 #include <stddef.h>  /* For NULL */
@@ -1009,4 +1009,4 @@ int wh_Client_SheVerifyMac(whClientContext* c, uint8_t keyId, uint8_t* message,
     return ret;
 }
 
-#endif /* WOLFHSM_CFG_SHE_EXTENSION */
+#endif /* WOLFHSM_CFG_SHE_EXTENSION && WOLFHSM_CFG_ENABLE_CLIENT */

@@ -24,6 +24,8 @@
 /* Pick up compile-time configuration */
 #include "wolfhsm/wh_settings.h"
 
+#ifdef WOLFHSM_CFG_ENABLE_SERVER
+
 /* System libraries */
 #include <stdint.h>
 #include <stddef.h>  /* For NULL */
@@ -379,3 +381,5 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
     }
     return rc;
 }
+
+#endif /* WOLFHSM_CFG_ENABLE_SERVER */

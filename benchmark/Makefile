@@ -89,26 +89,26 @@ SRC_ASM +=
 ifneq ($(NOCRYPTO),1)
 # wolfCrypt source files
 SRC_C += \
-            $(WOLFSSL_DIR)/wolfcrypt/src/wc_port.c \
-            $(WOLFSSL_DIR)/wolfcrypt/src/memory.c \
-            $(WOLFSSL_DIR)/wolfcrypt/src/misc.c \
-            $(WOLFSSL_DIR)/wolfcrypt/src/cryptocb.c \
-            $(WOLFSSL_DIR)/wolfcrypt/src/random.c \
-            $(WOLFSSL_DIR)/wolfcrypt/src/asn.c \
-            $(WOLFSSL_DIR)/wolfcrypt/src/coding.c \
-            $(WOLFSSL_DIR)/wolfcrypt/src/wolfmath.c \
-            $(WOLFSSL_DIR)/wolfcrypt/src/tfm.c \
-            $(WOLFSSL_DIR)/wolfcrypt/src/fe_operations.c \
-            $(WOLFSSL_DIR)/wolfcrypt/src/rsa.c \
-            $(WOLFSSL_DIR)/wolfcrypt/src/curve25519.c \
-            $(WOLFSSL_DIR)/wolfcrypt/src/hash.c \
-            $(WOLFSSL_DIR)/wolfcrypt/src/hmac.c \
-            $(WOLFSSL_DIR)/wolfcrypt/src/sha256.c \
-            $(WOLFSSL_DIR)/wolfcrypt/src/aes.c \
-            $(WOLFSSL_DIR)/wolfcrypt/src/ecc.c \
-            $(WOLFSSL_DIR)/wolfcrypt/src/cmac.c \
-			$(WOLFSSL_DIR)/wolfcrypt/src/dilithium.c \
-			$(WOLFSSL_DIR)/wolfcrypt/src/sha3.c
+		$(WOLFSSL_DIR)/wolfcrypt/src/wc_port.c \
+		$(WOLFSSL_DIR)/wolfcrypt/src/memory.c \
+		$(WOLFSSL_DIR)/wolfcrypt/src/misc.c \
+		$(WOLFSSL_DIR)/wolfcrypt/src/cryptocb.c \
+		$(WOLFSSL_DIR)/wolfcrypt/src/random.c \
+		$(WOLFSSL_DIR)/wolfcrypt/src/asn.c \
+		$(WOLFSSL_DIR)/wolfcrypt/src/coding.c \
+		$(WOLFSSL_DIR)/wolfcrypt/src/wolfmath.c \
+		$(WOLFSSL_DIR)/wolfcrypt/src/tfm.c \
+		$(WOLFSSL_DIR)/wolfcrypt/src/fe_operations.c \
+		$(WOLFSSL_DIR)/wolfcrypt/src/rsa.c \
+		$(WOLFSSL_DIR)/wolfcrypt/src/curve25519.c \
+		$(WOLFSSL_DIR)/wolfcrypt/src/hash.c \
+		$(WOLFSSL_DIR)/wolfcrypt/src/hmac.c \
+		$(WOLFSSL_DIR)/wolfcrypt/src/sha256.c \
+		$(WOLFSSL_DIR)/wolfcrypt/src/aes.c \
+		$(WOLFSSL_DIR)/wolfcrypt/src/ecc.c \
+		$(WOLFSSL_DIR)/wolfcrypt/src/cmac.c \
+		$(WOLFSSL_DIR)/wolfcrypt/src/dilithium.c \
+		$(WOLFSSL_DIR)/wolfcrypt/src/sha3.c
 
 # wolfSSL source files
 SRC_C += \
