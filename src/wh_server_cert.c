@@ -45,7 +45,7 @@
 static int _verifyChainAgainstCmStore(whServerContext*      server,
                                       WOLFSSL_CERT_MANAGER* cm,
                                       const uint8_t* chain, uint32_t chain_len,
-                                      whCertFlags flags, whKeyId* out_keyId)
+                                      whCertFlags flags, whKeyId* inout_keyId)
 {
     int            rc            = 0;
     const uint8_t* cert_ptr      = chain;
@@ -104,12 +104,15 @@ static int _verifyChainAgainstCmStore(whServerContext*      server,
             }
             /* This is the leaf cert, so if requested, cache the public key */
             else if (flags & WH_CERT_FLAGS_CACHE_LEAF_PUBKEY) {
-                /* Get a unique key id for the public key */
-                whKeyId keyId =
-                    WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, server->comm->client_id,
-                                  WH_KEYID_ERASED);
+                /* If the keyId is erased, get a unique key id for the public
+                 * key. Otherwise cache the key using the provided keyId */
+                if (WH_KEYID_ISERASED(*inout_keyId)) {
+                    rc = wh_Server_KeystoreGetUniqueId(server, inout_keyId);
+                    if (rc != WH_ERROR_OK) {
+                        return rc;
+                    }
+                }
 
-                rc = wh_Server_KeystoreGetUniqueId(server, &keyId);
                 if (rc == WH_ERROR_OK) {
                     whNvmMetadata* cacheMeta;
                     uint8_t*       cacheBuf;
@@ -130,7 +133,7 @@ static int _verifyChainAgainstCmStore(whServerContext*      server,
                             cacheMeta->len     = (whNvmSize)cacheBufSize;
                             cacheMeta->flags   = WH_NVM_FLAGS_NONE;
                             cacheMeta->access  = WH_NVM_ACCESS_ANY;
-                            cacheMeta->id      = keyId;
+                            cacheMeta->id      = *inout_keyId;
                             memset(cacheMeta->label, 0,
                                    sizeof(cacheMeta->label));
                             strncpy((char*)cacheMeta->label, label,
@@ -143,9 +146,6 @@ static int _verifyChainAgainstCmStore(whServerContext*      server,
                     wc_FreeDecodedCert(&dc);
                     return rc;
                 }
-
-                /* Propagate cached keyId back to client */
-                *out_keyId = WH_KEYID_ID(keyId);
             }
             wc_FreeDecodedCert(&dc);
         }
@@ -251,7 +251,7 @@ int wh_Server_CertReadTrusted(whServerContext* server, whNvmId id,
 /* Verify a certificate against trusted certificates */
 int wh_Server_CertVerify(whServerContext* server, const uint8_t* cert,
                          uint32_t cert_len, whNvmId trustedRootNvmId,
-                         whCertFlags flags, whKeyId* out_keyId)
+                         whCertFlags flags, whKeyId* inout_keyId)
 {
     WOLFSSL_CERT_MANAGER* cm = NULL;
 
@@ -261,6 +261,12 @@ int wh_Server_CertVerify(whServerContext* server, const uint8_t* cert,
     int      rc;
 
     if ((server == NULL) || (cert == NULL) || (cert_len == 0)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* If the leaf public key is to be cached, then the user must provide a
+     * keyId */
+    if ((flags & WH_CERT_FLAGS_CACHE_LEAF_PUBKEY) && (inout_keyId == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
@@ -280,7 +286,7 @@ int wh_Server_CertVerify(whServerContext* server, const uint8_t* cert,
         if (rc == WOLFSSL_SUCCESS) {
             /* Verify the certificate */
             rc = _verifyChainAgainstCmStore(server, cm, cert, cert_len, flags,
-                                            out_keyId);
+                                            inout_keyId);
             if (rc != WH_ERROR_OK) {
                 rc = WH_ERROR_CERT_VERIFY;
             }
@@ -449,10 +455,17 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
                 /* Get pointer to certificate data */
                 cert_data = (const uint8_t*)req_packet + sizeof(req);
 
+                /* Map client keyId to server keyId space */
+                whKeyId keyId = WH_MAKE_KEYID(
+                    WH_KEYTYPE_CRYPTO, server->comm->client_id, req.keyId);
+
                 /* Process the verify action */
                 resp.rc = wh_Server_CertVerify(server, cert_data, req.cert_len,
                                                req.trustedRootNvmId, req.flags,
-                                               &resp.keyId);
+                                               &keyId);
+
+                /* Propagate the keyId back to the client */
+                resp.keyId = WH_KEYID_ID(keyId);
             }
 
             /* Convert the response struct */
@@ -560,10 +573,17 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
                     WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
             }
             if (resp.rc == 0) {
+                /* Map client keyId to server keyId space */
+                whKeyId keyId = WH_MAKE_KEYID(
+                    WH_KEYTYPE_CRYPTO, server->comm->client_id, req.keyId);
+
                 /* Process the verify action */
                 resp.rc = wh_Server_CertVerify(server, cert_data, req.cert_len,
                                                req.trustedRootNvmId, req.flags,
-                                               &resp.keyId);
+                                               &keyId);
+
+                /* Propagate the keyId back to the client */
+                resp.keyId = WH_KEYID_ID(keyId);
             }
             if (resp.rc == 0) {
                 /* Post-process client address */

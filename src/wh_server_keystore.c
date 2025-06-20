@@ -183,6 +183,28 @@ int wh_Server_KeystoreCacheKey(whServerContext* server, whNvmMetadata* meta,
         return WH_ERROR_BADARGS;
     }
 
+    /* Check for cross-cache duplicates and evict from other cache if found */
+    if (meta->len <= WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE) {
+        /* We're going to use regular cache, check if key exists in big cache */
+        for (i = 0; i < WOLFHSM_CFG_SERVER_KEYCACHE_BIG_COUNT; i++) {
+            if (server->bigCache[i].meta->id == meta->id) {
+                /* Evict the key from big cache */
+                server->bigCache[i].meta->id = WH_KEYID_ERASED;
+                break;
+            }
+        }
+    }
+    else {
+        /* We're going to use big cache, check if key exists in regular cache */
+        for (i = 0; i < WOLFHSM_CFG_SERVER_KEYCACHE_COUNT; i++) {
+            if (server->cache[i].meta->id == meta->id) {
+                /* Evict the key from regular cache */
+                server->cache[i].meta->id = WH_KEYID_ERASED;
+                break;
+            }
+        }
+    }
+
     /* check if we need to use big cache instead */
     if (meta->len <= WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE) {
         for (i = 0; i < WOLFHSM_CFG_SERVER_KEYCACHE_COUNT; i++) {
@@ -791,6 +813,29 @@ int wh_Server_KeystoreCacheKeyDma(whServerContext* server, whNvmMetadata* meta,
     int            ret;
     uint8_t*       buffer;
     whNvmMetadata* slotMeta;
+    int            i;
+
+    /* Check for cross-cache duplicates and evict from other cache if found */
+    if (meta->len <= WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE) {
+        /* We're going to use regular cache, check if key exists in big cache */
+        for (i = 0; i < WOLFHSM_CFG_SERVER_KEYCACHE_BIG_COUNT; i++) {
+            if (server->bigCache[i].meta->id == meta->id) {
+                /* Evict the key from big cache */
+                server->bigCache[i].meta->id = WH_KEYID_ERASED;
+                break;
+            }
+        }
+    }
+    else {
+        /* We're going to use big cache, check if key exists in regular cache */
+        for (i = 0; i < WOLFHSM_CFG_SERVER_KEYCACHE_COUNT; i++) {
+            if (server->cache[i].meta->id == meta->id) {
+                /* Evict the key from regular cache */
+                server->cache[i].meta->id = WH_KEYID_ERASED;
+                break;
+            }
+        }
+    }
 
     /* Get a cache slot */
     ret = wh_Server_KeystoreGetCacheSlot(server, meta->len, &buffer, &slotMeta);

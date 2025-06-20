@@ -155,6 +155,7 @@ int wh_MessageCert_TranslateVerifyDmaRequest(
     WH_T32(magic, dest, src, cert_len);
     WH_T16(magic, dest, src, trustedRootNvmId);
     WH_T16(magic, dest, src, flags);
+    WH_T16(magic, dest, src, keyId);
     return 0;
 }
 
