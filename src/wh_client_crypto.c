@@ -177,6 +177,12 @@ int wh_Client_RngGenerate(whClientContext* ctx, uint8_t* out, uint32_t size)
     /* Setup request header */
     req = (whMessageCrypto_RngRequest*)reqData;
 
+    /* Calculate maximum data size client can request (subtract headers) */
+    const uint32_t client_max_data =
+        WOLFHSM_CFG_COMM_DATA_LEN -
+        sizeof(whMessageCrypto_GenericRequestHeader) -
+        sizeof(whMessageCrypto_RngRequest);
+
     while ((size > 0) && (ret == WH_ERROR_OK)) {
         /* Request Message */
         uint16_t group   = WH_MESSAGE_GROUP_CRYPTO;
@@ -185,14 +191,13 @@ int wh_Client_RngGenerate(whClientContext* ctx, uint8_t* out, uint32_t size)
                            sizeof(whMessageCrypto_RngRequest);
         uint16_t res_len;
 
-        /* TODO: Should we be silently trucating this? */
-        uint16_t req_size = (size < WOLFHSM_CFG_COMM_DATA_LEN)
-                                ? size
-                                : WOLFHSM_CFG_COMM_DATA_LEN;
+        /* Request up to client max, but no more than remaining size */
+        uint32_t req_size = (size < client_max_data) ? size : client_max_data;
         req->sz = req_size;
 
 #ifdef DEBUG_CRYPTOCB_VERBOSE
-        printf("[client] RNG: size:%d reqsz:%u\n", req_size, req_len);
+        printf("[client] RNG: size:%u reqsz:%u remaining:%u\n", req_size,
+               req_len, size);
         printf("[client] RNG: req:%p\n", req);
 #endif
 
@@ -209,6 +214,7 @@ int wh_Client_RngGenerate(whClientContext* ctx, uint8_t* out, uint32_t size)
             ret =
                 _getCryptoResponse(dataPtr, WC_ALGO_TYPE_RNG, (uint8_t**)&res);
             if (ret == WH_ERROR_OK) {
+                /* Server responds with actual amount it can provide */
                 if (res->sz <= req_size) {
                     uint8_t* res_out = (uint8_t*)(res + 1);
                     if (out != NULL) {
@@ -217,10 +223,15 @@ int wh_Client_RngGenerate(whClientContext* ctx, uint8_t* out, uint32_t size)
                     }
                     size -= res->sz;
 #ifdef DEBUG_CRYPTOCB_VERBOSE
-                    printf("[client] out size:%d\n", res->sz);
+                    printf("[client] out size:%u remaining:%u\n", res->sz,
+                           size);
                     wh_Utils_Hexdump("[client] res_out: \n", out - res->sz,
                                      res->sz);
 #endif
+                }
+                else {
+                    /* Server returned more than we can handle - error */
+                    ret = WH_ERROR_ABORTED;
                 }
             }
         }
