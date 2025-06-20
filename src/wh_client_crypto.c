@@ -192,11 +192,11 @@ int wh_Client_RngGenerate(whClientContext* ctx, uint8_t* out, uint32_t size)
         uint16_t res_len;
 
         /* Request up to client max, but no more than remaining size */
-        uint32_t req_size = (size < client_max_data) ? size : client_max_data;
-        req->sz = req_size;
+        uint32_t chunk_size = (size < client_max_data) ? size : client_max_data;
+        req->sz             = chunk_size;
 
 #ifdef DEBUG_CRYPTOCB_VERBOSE
-        printf("[client] RNG: size:%u reqsz:%u remaining:%u\n", req_size,
+        printf("[client] RNG: size:%u reqsz:%u remaining:%u\n", chunk_size,
                req_len, size);
         printf("[client] RNG: req:%p\n", req);
 #endif
@@ -214,8 +214,8 @@ int wh_Client_RngGenerate(whClientContext* ctx, uint8_t* out, uint32_t size)
             ret =
                 _getCryptoResponse(dataPtr, WC_ALGO_TYPE_RNG, (uint8_t**)&res);
             if (ret == WH_ERROR_OK) {
-                /* Server responds with actual amount it can provide */
-                if (res->sz <= req_size) {
+                /* Validate server didn't respond with more than requested */
+                if (res->sz <= chunk_size) {
                     uint8_t* res_out = (uint8_t*)(res + 1);
                     if (out != NULL) {
                         memcpy(out, res_out, res->sz);
