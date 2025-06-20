@@ -424,9 +424,6 @@ static int _certVerify(whClientContext* c, const uint8_t* cert,
     if (inout_keyId != NULL) {
         keyId = *inout_keyId;
     }
-    else {
-        keyId = WH_KEYID_ERASED;
-    }
 
     do {
         rc = _certVerifyRequest(c, cert, cert_len, trustedRootNvmId, flags,
