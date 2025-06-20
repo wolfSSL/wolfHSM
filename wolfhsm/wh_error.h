@@ -51,7 +51,6 @@ enum WH_ERROR_ENUM {
     WH_ERROR_NOTBLANK    = -2103, /* Area is no blank */
     WH_ERROR_NOTFOUND    = -2104, /* Matching object not found */
     WH_ERROR_NOSPACE     = -2105, /* No available space */
-    WH_ERROR_DUPLICATE   = -2106, /* Duplicate object found */
 
     /* SHE-specific error codes */
     WH_SHE_ERC_SEQUENCE_ERROR    = -2200,
