@@ -59,7 +59,7 @@ uint64_t wh_Translate64(uint16_t magic, uint64_t val)
 
 
 /** Client functions */
-
+#if defined(WOLFHSM_CFG_ENABLE_CLIENT)
 int wh_CommClient_Init(whCommClient* context, const whCommClientConfig* config)
 {
     int rc = 0;
@@ -213,9 +213,10 @@ int wh_CommClient_Cleanup(whCommClient* context)
     return rc;
 }
 
+#endif /* WOLFHSM_CFG_ENABLE_CLIENT */
 
 /** Server Functions */
-
+#if defined(WOLFHSM_CFG_ENABLE_SERVER)
 int wh_CommServer_Init(whCommServer* context, const whCommServerConfig* config,
                         whCommSetConnectedCb connectcb, void* connectcb_arg)
 {
@@ -348,3 +349,5 @@ int wh_CommServer_Cleanup(whCommServer* context)
     context->initialized = 0;
     return rc;
 }
+
+#endif /* WOLFHSM_CFG_ENABLE_SERVER */

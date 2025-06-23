@@ -28,14 +28,20 @@
 #include "wolfhsm/wh_comm.h"
 #include "wolfhsm/wh_transport_mem.h"
 
+#ifdef WOLFHSM_CFG_ENABLE_SERVER
 #include "wolfhsm/wh_nvm.h"
 #include "wolfhsm/wh_nvm_flash.h"
 #include "wolfhsm/wh_flash_ramsim.h"
 
 #include "wolfhsm/wh_server.h"
+#endif
+
 #include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_message_comm.h"
+
+#ifdef WOLFHSM_CFG_ENABLE_CLIENT
 #include "wolfhsm/wh_client.h"
+#endif
 
 #if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER) && !defined(WOLFHSM_CFG_NO_CRYPTO)
 #include "wh_test_cert.h"
@@ -74,6 +80,7 @@ typedef struct {
 #define TEST_MEM_UNMAPPED_BYTE ((uint8_t)0xBB)
 #endif /* WOLFHSM_CFG_DMA */
 
+#ifdef WOLFHSM_CFG_ENABLE_SERVER
 /* Pointer to a local server context so a connect callback can access it. Should
  * be set before calling wh_ClientInit() */
 static whServerContext* clientServerSequentialTestServerCtx = NULL;
@@ -104,7 +111,9 @@ static int _customServerCb(whServerContext*                 server,
 
     return req->id;
 }
+#endif /* WOLFHSM_CFG_ENABLE_SERVER */
 
+#if defined(WOLFHSM_CFG_ENABLE_CLIENT) && defined(WOLFHSM_CFG_ENABLE_SERVER)
 /* Helper function to test client server callbacks. Client and server must be
  * already initialized */
 static int _testCallbacks(whServerContext* server, whClientContext* client)
@@ -182,8 +191,9 @@ static int _testCallbacks(whServerContext* server, whClientContext* client)
 
     return WH_ERROR_OK;
 }
+#endif /* WOLFHSM_CFG_ENABLE_CLIENT && WOLFHSM_CFG_ENABLE_SERVER */
 
-#ifdef WOLFHSM_CFG_DMA
+#if defined(WOLFHSM_CFG_DMA) && defined(WOLFHSM_CFG_ENABLE_SERVER)
 static int _customServerDmaCb(struct whServerContext_t* server,
                               uintptr_t clientAddr, void** serverPtr,
                               size_t len, whServerDmaOper oper,
@@ -226,7 +236,10 @@ static int _customServerDmaCb(struct whServerContext_t* server,
 
     return WH_ERROR_OK;
 }
+#endif /* WOLFHSM_CFG_DMA && WOLFHSM_CFG_ENABLE_SERVER */
 
+#if defined(WOLFHSM_CFG_DMA) && defined(WOLFHSM_CFG_ENABLE_CLIENT) && \
+    defined(WOLFHSM_CFG_ENABLE_SERVER)
 static int _testDma(whServerContext* server, whClientContext* client)
 {
     int        rc      = 0;
@@ -371,8 +384,10 @@ static int _testDma(whServerContext* server, whClientContext* client)
 
     return rc;
 }
-#endif /* WOLFHSM_CFG_DMA */
+#endif /* WOLFHSM_CFG_DMA && WOLFHSM_CFG_ENABLE_CLIENT && \
+          WOLFHSM_CFG_ENABLE_SERVER */
 
+#ifdef WOLFHSM_CFG_ENABLE_CLIENT
 int _testClientCounter(whClientContext* client)
 {
     const whNvmId  counterId              = 1;
@@ -460,7 +475,9 @@ int _testClientCounter(whClientContext* client)
 
     return WH_ERROR_OK;
 }
+#endif /* WOLFHSM_CFG_ENABLE_CLIENT */
 
+#if defined(WOLFHSM_CFG_ENABLE_CLIENT) && defined(WOLFHSM_CFG_ENABLE_SERVER)
 int _clientServerSequentialTestConnectCb(void* context, whCommConnected connected)
 {
     if (clientServerSequentialTestServerCtx == NULL) {
@@ -1069,8 +1086,10 @@ int whTest_ClientServerSequential(void)
 
     return ret;
 }
+#endif /* WOLFHSM_CFG_ENABLE_CLIENT && WOLFHSM_CFG_ENABLE_SERVER */
 
-int whTest_ClientCfg(whClientConfig* clientCfg)
+#ifdef WOLFHSM_CFG_ENABLE_CLIENT
+int whTest_ClientServerClientConfig(whClientConfig* clientCfg)
 {
     int ret = 0;
     whClientContext client[1] = {0};
@@ -1426,8 +1445,9 @@ int whTest_ClientCfg(whClientConfig* clientCfg)
 
     return ret;
 }
+#endif /* WOLFHSM_CFG_ENABLE_CLIENT */
 
-
+#ifdef WOLFHSM_CFG_ENABLE_SERVER
 int whTest_ServerCfgLoop(whServerConfig* serverCfg)
 {
     whServerContext server[1] = {0};
@@ -1456,22 +1476,27 @@ int whTest_ServerCfgLoop(whServerConfig* serverCfg)
 
     return ret;
 }
+#endif /* WOLFHSM_CFG_ENABLE_SERVER */
 
-
-#if defined(WOLFHSM_CFG_TEST_POSIX)
+#if defined(WOLFHSM_CFG_TEST_POSIX) && defined(WOLFHSM_CFG_ENABLE_CLIENT) && \
+    !defined(WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP)
 static void* _whClientTask(void *cf)
 {
-    WH_TEST_ASSERT(0 == whTest_ClientCfg(cf));
+    WH_TEST_ASSERT(0 == whTest_ClientServerClientConfig(cf));
     return NULL;
 }
+#endif /* WOLFHSM_CFG_TEST_POSIX && WOLFHSM_CFG_ENABLE_CLIENT */
 
+#if defined(WOLFHSM_CFG_TEST_POSIX) && defined(WOLFHSM_CFG_ENABLE_SERVER)
 static void* _whServerTask(void* cf)
 {
     WH_TEST_ASSERT(0 == whTest_ServerCfgLoop(cf));
     return NULL;
 }
+#endif /* WOLFHSM_CFG_TEST_POSIX && WOLFHSM_CFG_ENABLE_SERVER */
 
-
+#if defined(WOLFHSM_CFG_TEST_POSIX) && defined(WOLFHSM_CFG_ENABLE_CLIENT) && \
+    defined(WOLFHSM_CFG_ENABLE_SERVER)
 static void _whClientServerThreadTest(whClientConfig* c_conf,
                                 whServerConfig* s_conf)
 {
@@ -1679,10 +1704,10 @@ static int wh_ClientServer_PosixMemMapThreadTest(void)
 
     return WH_ERROR_OK;
 }
-#endif /* WOLFHSM_CFG_TEST_POSIX */
+#endif /* WOLFHSM_CFG_TEST_POSIX && WOLFHSM_CFG_ENABLE_CLIENT && \
+          WOLFHSM_CFG_ENABLE_SERVER */
 
-
-
+#if defined(WOLFHSM_CFG_ENABLE_CLIENT) && defined(WOLFHSM_CFG_ENABLE_SERVER)
 int whTest_ClientServer(void)
 {
     printf("Testing client/server sequential: mem...\n");
@@ -1698,3 +1723,4 @@ int whTest_ClientServer(void)
 
     return 0;
 }
+#endif /* WOLFHSM_CFG_ENABLE_CLIENT && WOLFHSM_CFG_ENABLE_SERVER */

@@ -24,6 +24,8 @@
 /* Pick up compile-time configuration */
 #include "wolfhsm/wh_settings.h"
 
+#ifdef WOLFHSM_CFG_ENABLE_SERVER
+
 #include <string.h>
 #include <stdint.h>
 
@@ -183,3 +185,5 @@ int wh_Server_HandleCounter(whServerContext* server, uint16_t magic,
 
     return ret;
 }
+
+#endif /* WOLFHSM_CFG_ENABLE_SERVER */

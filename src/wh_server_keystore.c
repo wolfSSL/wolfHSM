@@ -24,12 +24,12 @@
 /* Pick up compile-time configuration */
 #include "wolfhsm/wh_settings.h"
 
+#if !defined(WOLFHSM_CFG_NO_CRYPTO) && defined(WOLFHSM_CFG_ENABLE_SERVER)
+
 /* System libraries */
 #include <stdint.h>
 #include <stddef.h>  /* For NULL */
 #include <string.h>  /* For memset, memcpy */
-
-#ifndef WOLFHSM_CFG_NO_CRYPTO
 
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/types.h"
@@ -886,4 +886,4 @@ int wh_Server_KeystoreExportKeyDma(whServerContext* server, whKeyId keyId,
 }
 #endif /* WOLFHSM_CFG_DMA */
 
-#endif /* WOLFHSM_CFG_NO_CRYPTO */
+#endif /* !WOLFHSM_CFG_NO_CRYPTO && WOLFHSM_CFG_ENABLE_SERVER */

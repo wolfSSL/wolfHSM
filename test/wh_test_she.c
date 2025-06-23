@@ -28,19 +28,33 @@
 #include "wolfhsm/wh_settings.h"
 #include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_error.h"
+
+#ifdef WOLFHSM_CFG_ENABLE_SERVER
 #include "wolfhsm/wh_nvm.h"
 #include "wolfhsm/wh_nvm_flash.h"
 #include "wolfhsm/wh_flash_ramsim.h"
+#endif
+
 #include "wolfhsm/wh_comm.h"
 #include "wolfhsm/wh_message.h"
+
+#ifdef WOLFHSM_CFG_ENABLE_SERVER
 #include "wolfhsm/wh_server.h"
+#endif
+
+#ifdef WOLFHSM_CFG_ENABLE_CLIENT
 #include "wolfhsm/wh_client.h"
+#endif
+
 #include "wolfhsm/wh_transport_mem.h"
 
 #ifdef WOLFHSM_CFG_SHE_EXTENSION
 #include "wolfhsm/wh_she_common.h"
 #include "wolfhsm/wh_she_crypto.h"
+
+#ifdef WOLFHSM_CFG_ENABLE_CLIENT
 #include "wolfhsm/wh_client_she.h"
+#endif
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
 
@@ -63,6 +77,7 @@ enum {
         BUFFER_SIZE = 4096,
     };
 
+#ifdef WOLFHSM_CFG_ENABLE_CLIENT
 /* Helper function to destroy a SHE key so the unit tests don't
  * leak NVM objects across invocations. Necessary, as SHE doesn't expose a
  * destroy key API since SHE keys are supposed to be fixed hardware keys */
@@ -406,7 +421,9 @@ exit:
 
     return ret;
 }
+#endif /* WOLFHSM_CFG_ENABLE_CLIENT */
 
+#ifdef WOLFHSM_CFG_ENABLE_SERVER
 int whTest_SheServerConfig(whServerConfig* config)
 {
     whServerContext server[1] = {0};
@@ -437,21 +454,28 @@ int whTest_SheServerConfig(whServerConfig* config)
 
     return ret;
 }
+#endif /* WOLFHSM_CFG_ENABLE_SERVER */
 
-#if defined(WOLFHSM_CFG_TEST_POSIX)
-static void* _whClientTask(void *cf)
+#if defined(WOLFHSM_CFG_TEST_POSIX) && defined(WOLFHSM_CFG_ENABLE_CLIENT) && \
+    !defined(WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP)
+static void* _whClientTask(void* cf)
 {
     WH_TEST_ASSERT(0 == whTest_SheClientConfig(cf));
     return NULL;
 }
+#endif /* WOLFHSM_CFG_TEST_POSIX && WOLFHSM_CFG_ENABLE_CLIENT && \
+          !defined(WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP) */
 
+#if defined(WOLFHSM_CFG_TEST_POSIX) && defined(WOLFHSM_CFG_ENABLE_SERVER)
 static void* _whServerTask(void* cf)
 {
     WH_TEST_ASSERT(0 == whTest_SheServerConfig(cf));
     return NULL;
 }
+#endif /* WOLFHSM_CFG_TEST_POSIX && WOLFHSM_CFG_ENABLE_SERVER */
 
-
+#if defined(WOLFHSM_CFG_TEST_POSIX) && defined(WOLFHSM_CFG_ENABLE_CLIENT) && \
+    defined(WOLFHSM_CFG_ENABLE_SERVER)
 static void _whClientServerThreadTest(whClientConfig* c_conf,
                                 whServerConfig* s_conf)
 {
@@ -565,17 +589,18 @@ static int wh_ClientServer_MemThreadTest(void)
 
     return WH_ERROR_OK;
 }
-#endif /* WOLFHSM_CFG_TEST_POSIX */
+#endif /* WOLFHSM_CFG_TEST_POSIX && WOLFHSM_CFG_ENABLE_CLIENT && \
+          WOLFHSM_CFG_ENABLE_SERVER */
 
-
+#if defined(WOLFHSM_CFG_TEST_POSIX) && defined(WOLFHSM_CFG_ENABLE_CLIENT) && \
+    defined(WOLFHSM_CFG_ENABLE_SERVER)
 int whTest_She(void)
 {
-#if defined(WOLFHSM_CFG_TEST_POSIX)
     printf("Testing SHE: (pthread) mem...\n");
     WH_TEST_RETURN_ON_FAIL(wh_ClientServer_MemThreadTest());
-#endif
     return 0;
 }
+#endif
 
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
 #endif /* WOLFHSM_CFG_SHE_EXTENSION */

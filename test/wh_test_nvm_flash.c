@@ -22,6 +22,8 @@
 
 #include "wolfhsm/wh_settings.h"
 
+#if defined(WOLFHSM_CFG_ENABLE_SERVER)
+
 /* core test includes */
 #include "wh_test_common.h"
 
@@ -535,3 +537,5 @@ int whTest_NvmFlash(void)
 
     return 0;
 }
+
+#endif /* WOLFHSM_CFG_ENABLE_SERVER */
