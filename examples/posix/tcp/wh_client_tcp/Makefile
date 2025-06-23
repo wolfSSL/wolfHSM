@@ -5,7 +5,7 @@ CMD_ECHO =
 BUILD_DIR = ./Build
 WOLFHSM_DIR = $(CURDIR)/../../../../
 WOLFHSM_CLIENT_DEMO_DIR = $(CURDIR)/../../../demo/client
-WOLFSSL_DIR ?= $(CURDIR)/../../../../wolfssl
+WOLFSSL_DIR ?= $(CURDIR)/../../../../../wolfssl
 
 
 # Project name
@@ -55,10 +55,9 @@ LDFLAGS += $(DBGFLAGS)
 #wolfCrypt source files
 SRC_C += $(wildcard $(WOLFSSL_DIR)/wolfcrypt/src/*.c)
 
-#wolfCrypt test/benchmark source files
-DEF +=   -DNO_MAIN_DRIVER -DBENCH_EMBEDDED -DNO_FILESYSTEM  \
-         -D_POSIX_C_SOURCE=200809L -DWC_USE_DEVID=0x5748534D
+DEF += -D_POSIX_C_SOURCE=200809L -DWC_USE_DEVID=0x5748534D
 
+#wolfCrypt test/benchmark source files
 SRC_C += $(wildcard $(WOLFSSL_DIR)/wolfcrypt/test/*.c)
 SRC_C += $(wildcard $(WOLFSSL_DIR)/wolfcrypt/benchmark/*.c)
 
