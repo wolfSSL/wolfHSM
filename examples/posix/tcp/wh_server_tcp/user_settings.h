@@ -69,7 +69,6 @@ extern "C" {
 #define NO_MAIN_DRIVER
 #define NO_ERROR_STRINGS
 #define NO_ERROR_QUEUE
-#define NO_FILESYSTEM
 #define NO_INLINE
 #define NO_OLD_TLS
 #define WOLFSSL_NO_TLS12
