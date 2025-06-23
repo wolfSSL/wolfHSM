@@ -818,108 +818,6 @@ int wh_Client_KeyExportDmaResponse(whClientContext* c, uint8_t* label,
 int wh_Client_KeyExportDma(whClientContext* c, uint16_t keyId,
                            const void* keyAddr, uint16_t keySz, uint8_t* label,
                            uint16_t labelSz, uint16_t* outSz);
-
-/* Generic DMA wrapper functions */
-/**
- * @brief Generic wrapper for sending a key cache DMA request.
- *
- * This function provides a generic interface for sending key cache DMA
- * requests, automatically selecting between 32-bit and 64-bit implementations.
- *
- * @param[in] c Pointer to the client context.
- * @param[in] flags Key flags.
- * @param[in] label Optional label for the key.
- * @param[in] labelSz Size of the label in bytes.
- * @param[in] keyAddr DMA address of the key data.
- * @param[in] keySz Size of the key in bytes.
- * @param[in] keyId Key ID to be used for caching. If set to
- * WH_KEYID_ERASED, a new ID will be generated.
- * @return int Returns 0 on success, or a negative error code on failure.
- */
-int wh_Client_KeyCacheDmaRequest(whClientContext* c, uint32_t flags,
-                                 uint8_t* label, uint16_t labelSz,
-                                 const void* keyAddr, uint16_t keySz,
-                                 uint16_t keyId);
-
-/**
- * @brief Generic wrapper for receiving a key cache DMA response.
- *
- * This function provides a generic interface for receiving key cache DMA
- * responses, automatically selecting between 32-bit and 64-bit implementations.
- *
- * @param[in] c Pointer to the client context.
- * @param[out] keyId Pointer to store the assigned key ID.
- * @return int Returns 0 on success, or a negative error code on failure.
- */
-int wh_Client_KeyCacheDmaResponse(whClientContext* c, uint16_t* keyId);
-
-/**
- * @brief Generic wrapper for performing a complete key cache DMA operation.
- *
- * This function provides a generic interface for key cache DMA operations,
- * automatically selecting between 32-bit and 64-bit implementations.
- *
- * @param[in] c Pointer to the client context.
- * @param[in] flags Key flags.
- * @param[in] label Optional label for the key.
- * @param[in] labelSz Size of the label in bytes.
- * @param[in] key Pointer to the key data.
- * @param[in] keySz Size of the key in bytes.
- * @param[out] keyId Pointer to store the assigned key ID.
- * @return int Returns 0 on success, or a negative error code on failure.
- */
-int wh_Client_KeyCacheDma(whClientContext* c, uint32_t flags, uint8_t* label,
-                          uint16_t labelSz, const void* keyAddr, uint16_t keySz,
-                          uint16_t* keyId);
-
-/**
- * @brief Generic wrapper for sending a key export DMA request.
- *
- * This function provides a generic interface for sending key export DMA
- * requests, automatically selecting between 32-bit and 64-bit implementations.
- *
- * @param[in] c Pointer to the client context.
- * @param[in] keyId Key ID to export.
- * @param[in] key Buffer to receive the exported key.
- * @param[in] keySz Size of the key buffer in bytes.
- * @return int Returns 0 on success, or a negative error code on failure.
- */
-int wh_Client_KeyExportDmaRequest(whClientContext* c, uint16_t keyId,
-                                  const void* keyAddr, uint16_t keySz);
-
-/**
- * @brief Generic wrapper for receiving a key export DMA response.
- *
- * This function provides a generic interface for receiving key export DMA
- * responses, automatically selecting between 32-bit and 64-bit implementations.
- *
- * @param[in] c Pointer to the client context.
- * @param[out] label Buffer to store the key's label.
- * @param[in] labelSz Size of the label buffer.
- * @param[out] outSz Pointer to store the actual size of the exported key.
- * @return int Returns 0 on success, or a negative error code on failure.
- */
-int wh_Client_KeyExportDmaResponse(whClientContext* c, uint8_t* label,
-                                   uint16_t labelSz, uint16_t* outSz);
-
-/**
- * @brief Generic wrapper for performing a complete key export DMA operation.
- *
- * This function provides a generic interface for key export DMA operations,
- * automatically selecting between 32-bit and 64-bit implementations.
- *
- * @param[in] c Pointer to the client context.
- * @param[in] keyId Key ID to export.
- * @param[in] key Buffer to receive the exported key.
- * @param[in] keySz Size of the key buffer in bytes.
- * @param[out] label Buffer to store the key's label.
- * @param[in] labelSz Size of the label buffer.
- * @param[out] outSz Pointer to store the actual size of the exported key.
- * @return int Returns 0 on success, or a negative error code on failure.
- */
-int wh_Client_KeyExportDma(whClientContext* c, uint16_t keyId,
-                           const void* keyAddr, uint16_t keySz, uint8_t* label,
-                           uint16_t labelSz, uint16_t* outSz);
 #endif /* WOLFHSM_CFG_DMA */
 
 
@@ -1924,12 +1822,15 @@ int wh_Client_CertVerify(whClientContext* c, const uint8_t* cert,
  * @param[in] cert_len Length of the certificate data.
  * @param[in] trustedRootNvmId NVM ID of the trusted root certificate to verify
  * against.
+ * @param[in] keyId The keyId to cache the leaf public key in. If set to
+ * WH_KEYID_ERASED, the server will pick a keyId.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_Client_CertVerifyAndCacheLeafPubKeyRequest(whClientContext* c,
                                                   const uint8_t*   cert,
                                                   uint32_t         cert_len,
-                                                  whNvmId trustedRootNvmId);
+                                                  whNvmId trustedRootNvmId,
+                                                  whKeyId keyId);
 
 /**
  * @brief Receives a response from the server after verifying a certificate and
@@ -1963,16 +1864,15 @@ int wh_Client_CertVerifyAndCacheLeafPubKeyResponse(whClientContext* c,
  * @param[in] cert_len Length of the certificate data.
  * @param[in] trustedRootNvmId NVM ID of the trusted root certificate to verify
  * against.
- * @param[out] out_keyId Pointer to store the key ID of the cached leaf public
- * key.
+ * @param[in,out] inout_keyId Pointer to the desired key ID of the cached leaf
+ * public key. If set to WH_KEYID_ERASED, the server will pick a keyId. On
+ * output, contains the keyId of the cached leaf public key.
  * @param[out] out_rc Pointer to store the response code from the server.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
-int wh_Client_CertVerifyAndCacheLeafPubKey(whClientContext* c,
-                                           const uint8_t*   cert,
-                                           uint32_t         cert_len,
-                                           whNvmId          trustedRootNvmId,
-                                           whKeyId* out_keyId, int32_t* out_rc);
+int wh_Client_CertVerifyAndCacheLeafPubKey(
+    whClientContext* c, const uint8_t* cert, uint32_t cert_len,
+    whNvmId trustedRootNvmId, whKeyId* inout_keyId, int32_t* out_rc);
 
 
 #ifdef WOLFHSM_CFG_DMA
@@ -2143,12 +2043,15 @@ int wh_Client_CertVerifyDma(whClientContext* c, const void* cert,
  * @param[in] cert_len Length of the certificate data.
  * @param[in] trustedRootNvmId NVM ID of the trusted root certificate to verify
  * against.
+ * @param[in] keyId The keyId to cache the leaf public key in. If set to
+ * WH_KEYID_ERASED, the server will pick a keyId.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_Client_CertVerifyDmaAndCacheLeafPubKeyRequest(whClientContext* c,
                                                      const void*      cert,
                                                      uint32_t         cert_len,
-                                                     whNvmId trustedRootNvmId);
+                                                     whNvmId trustedRootNvmId,
+                                                     whKeyId keyId);
 
 /**
  * @brief Receives a response from the server after verifying a certificate
@@ -2184,14 +2087,15 @@ int wh_Client_CertVerifyDmaAndCacheLeafPubKeyResponse(whClientContext* c,
  * @param[in] cert_len Length of the certificate data.
  * @param[in] trustedRootNvmId NVM ID of the trusted root certificate to verify
  * against.
- * @param[out] out_keyId Pointer to store the key ID of the cached leaf public
- * key.
+ * @param[in,out] inout_keyId Pointer to the desired key ID of the cached leaf
+ * public key. If set to WH_KEYID_ERASED, the server will pick a keyId. On
+ * output, contains the keyId of the cached leaf public key.
  * @param[out] out_rc Pointer to store the response code from the server.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_Client_CertVerifyDmaAndCacheLeafPubKey(
     whClientContext* c, const void* cert, uint32_t cert_len,
-    whNvmId trustedRootNvmId, whKeyId* out_keyId, int32_t* out_rc);
+    whNvmId trustedRootNvmId, whKeyId* inout_keyId, int32_t* out_rc);
 
 
 #endif /* WOLFHSM_CFG_DMA */

@@ -918,6 +918,165 @@ static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
         }
     }
 
+    /* Test cross-cache key eviction and replacement */
+    if (ret == 0) {
+        uint16_t keyId;
+        /* Key for regular cache (≤ WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE) */
+        const size_t smallKeySize = WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE / 2;
+        uint8_t      smallKey[smallKeySize];
+        /* Key for big cache (> WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE) */
+        const size_t bigKeySize = WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE + 100;
+        uint8_t      bigKey[bigKeySize];
+
+        uint8_t labelSmall[WH_NVM_LABEL_LEN] = "Small Key Label";
+        uint8_t labelBig[WH_NVM_LABEL_LEN]   = "Big Key Label";
+
+        /* Buffer for exported key and metadata */
+        uint8_t  exportedKey[bigKeySize];
+        uint8_t  exportedLabel[WH_NVM_LABEL_LEN];
+        uint16_t exportedKeySize;
+
+        /* Initialize test keys with different data */
+        memset(smallKey, 0xAA, sizeof(smallKey));
+        memset(bigKey, 0xBB, sizeof(bigKey));
+
+        /* Test 1: Cache small key first, then cache same keyId with big key */
+        keyId = 0x1000; /* Use specific keyId to ensure we control the ID */
+        ret   = wh_Client_KeyCache(ctx, 0, labelSmall, sizeof(labelSmall),
+                                   smallKey, sizeof(smallKey), &keyId);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to cache small key: %d\n", ret);
+        }
+        else {
+            /* Now cache big key with same keyId - should succeed and evict the
+             * small key */
+            ret = wh_Client_KeyCache(ctx, 0, labelBig, sizeof(labelBig), bigKey,
+                                     sizeof(bigKey), &keyId);
+            if (ret != 0) {
+                WH_ERROR_PRINT(
+                    "Failed to cache big key (expected success): %d\n", ret);
+            }
+            else {
+                /* Verify the cached key is the big key by exporting it */
+                ret = wh_Client_KeyExport(ctx, keyId, exportedLabel,
+                                          sizeof(exportedLabel), exportedKey,
+                                          &exportedKeySize);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("Failed to export key after eviction: %d\n",
+                                   ret);
+                }
+                else {
+                    /* Verify exported key matches the big key */
+                    if (exportedKeySize != bigKeySize ||
+                        memcmp(exportedKey, bigKey, bigKeySize) != 0) {
+                        WH_ERROR_PRINT(
+                            "Exported key data doesn't match big key\n");
+                        ret = -1;
+                    }
+                    /* Verify exported label matches the big key label */
+                    else if (memcmp(exportedLabel, labelBig,
+                                    sizeof(labelBig)) != 0) {
+                        WH_ERROR_PRINT(
+                            "Exported label doesn't match big key label\n");
+                        ret = -1;
+                    }
+                    else {
+                        ret = 0;
+                    }
+                }
+                /* Clean up */
+                ret = wh_Client_KeyEvict(ctx, keyId);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("Failed to evict key: %d\n", ret);
+                }
+                if (ret == 0) {
+                    ret = wh_Client_KeyEvict(ctx, keyId);
+                    if (ret != 0) {
+                        /* double evict should fail */
+                        ret = 0;
+                    }
+                    else {
+                        WH_ERROR_PRINT("Double evict shouldn't succeed, "
+                                       "cross-cache duplication test failed\n");
+                        ret = -1;
+                    }
+                }
+            }
+        }
+
+        /* Test 2: Cache big key first, then cache same keyId with small key */
+        if (ret == 0) {
+            keyId = 0x2000; /* Use different keyId */
+            ret = wh_Client_KeyCache(ctx, 0, labelBig, sizeof(labelBig), bigKey,
+                                     sizeof(bigKey), &keyId);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to cache big key: %d\n", ret);
+            }
+            else {
+                /* Now cache small key with same keyId - should succeed and
+                 * evict the big key */
+                ret = wh_Client_KeyCache(ctx, 0, labelSmall, sizeof(labelSmall),
+                                         smallKey, sizeof(smallKey), &keyId);
+                if (ret != 0) {
+                    WH_ERROR_PRINT(
+                        "Failed to cache small key (expected success): %d\n",
+                        ret);
+                }
+                else {
+                    /* Verify the cached key is the small key by exporting it */
+                    ret = wh_Client_KeyExport(ctx, keyId, exportedLabel,
+                                              sizeof(exportedLabel),
+                                              exportedKey, &exportedKeySize);
+                    if (ret != 0) {
+                        WH_ERROR_PRINT(
+                            "Failed to export key after eviction: %d\n", ret);
+                    }
+                    else {
+                        /* Verify exported key matches the small key */
+                        if (exportedKeySize != smallKeySize ||
+                            memcmp(exportedKey, smallKey, smallKeySize) != 0) {
+                            WH_ERROR_PRINT(
+                                "Exported key data doesn't match small key\n");
+                            ret = -1;
+                        }
+                        /* Verify exported label matches the small key label */
+                        else if (memcmp(exportedLabel, labelSmall,
+                                        sizeof(labelSmall)) != 0) {
+                            WH_ERROR_PRINT("Exported label doesn't match small "
+                                           "key label\n");
+                            ret = -1;
+                        }
+                        else {
+                            ret = 0;
+                        }
+                    }
+                    /* Clean up */
+                    ret = wh_Client_KeyEvict(ctx, keyId);
+                    if (ret != 0) {
+                        WH_ERROR_PRINT("Failed to evict key: %d\n", ret);
+                    }
+                    if (ret == 0) {
+                        ret = wh_Client_KeyEvict(ctx, keyId);
+                        if (ret != 0) {
+                            /* double evict should fail */
+                            ret = 0;
+                        }
+                        else {
+                            WH_ERROR_PRINT(
+                                "Double evict shouldn't succeed, "
+                                "cross-cache duplication test failed\n");
+                            ret = -1;
+                        }
+                    }
+                }
+            }
+        }
+
+        if (ret == 0) {
+            printf("KEY CROSS-CACHE EVICTION AND REPLACEMENT SUCCESS\n");
+        }
+    }
+
 #ifdef WOLFHSM_CFG_DMA
     /* test cache/export using DMA */
     if (ret == 0) {
@@ -936,6 +1095,171 @@ static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
             else {
                 printf("KEY CACHE/EXPORT DMA SUCCESS\n");
             }
+        }
+    }
+
+    /* Test cross-cache key eviction and replacement with DMA */
+    if (ret == 0) {
+        uint16_t keyId;
+        /* Key for regular cache (≤ WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE) */
+        const size_t smallKeySize = WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE / 2;
+        uint8_t      smallKey[smallKeySize];
+        /* Key for big cache (> WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE) */
+        const size_t bigKeySize = WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE + 100;
+        uint8_t      bigKey[bigKeySize];
+
+        uint8_t labelSmall[WH_NVM_LABEL_LEN] = "Small DMA Key Label";
+        uint8_t labelBig[WH_NVM_LABEL_LEN]   = "Big DMA Key Label";
+
+        /* Buffer for exported key and metadata */
+        uint8_t  exportedKey[bigKeySize];
+        uint8_t  exportedLabel[WH_NVM_LABEL_LEN];
+        uint16_t exportedKeySize;
+
+        /* Initialize test keys with different data */
+        memset(smallKey, 0xCC, sizeof(smallKey));
+        memset(bigKey, 0xDD, sizeof(bigKey));
+
+        /* Test 1: Cache small key with DMA first, then cache same keyId
+         * with big key using DMA */
+        keyId = 0x3000;
+        ret   = wh_Client_KeyCacheDma(ctx, 0, labelSmall, sizeof(labelSmall),
+                                      smallKey, sizeof(smallKey), &keyId);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to cache small key with DMA: %d\n", ret);
+        }
+        else {
+            /* Now cache big key with same keyId using DMA - should succeed and
+             * evict the small key */
+            ret = wh_Client_KeyCacheDma(ctx, 0, labelBig, sizeof(labelBig),
+                                        bigKey, sizeof(bigKey), &keyId);
+            if (ret != 0) {
+                WH_ERROR_PRINT(
+                    "Failed to cache big key with DMA (expected success): %d\n",
+                    ret);
+            }
+            else {
+                /* Verify the cached key is the big key by exporting it */
+                exportedKeySize = bigKeySize;
+                ret             = wh_Client_KeyExportDma(
+                                ctx, keyId, exportedKey, exportedKeySize, exportedLabel,
+                                sizeof(exportedLabel), &exportedKeySize);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("Failed to export key after eviction: %d\n",
+                                   ret);
+                }
+                else {
+                    /* Verify exported key matches the big key */
+                    if (exportedKeySize != bigKeySize ||
+                        memcmp(exportedKey, bigKey, bigKeySize) != 0) {
+                        WH_ERROR_PRINT(
+                            "Exported key data doesn't match big key\n");
+                        ret = -1;
+                    }
+                    /* Verify exported label matches the big key label */
+                    else if (memcmp(exportedLabel, labelBig,
+                                    sizeof(labelBig)) != 0) {
+                        WH_ERROR_PRINT(
+                            "Exported label doesn't match big key label\n");
+                        ret = -1;
+                    }
+                    else {
+                        ret = 0;
+                    }
+                }
+                /* Clean up */
+                ret = wh_Client_KeyEvict(ctx, keyId);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("Failed to evict key: %d\n", ret);
+                }
+                if (ret == 0) {
+                    ret = wh_Client_KeyEvict(ctx, keyId);
+                    if (ret != 0) {
+                        /* double evict should fail */
+                        ret = 0;
+                    }
+                    else {
+                        WH_ERROR_PRINT("Double evict shouldn't succeed, "
+                                       "cross-cache duplication test failed\n");
+                        ret = -1;
+                    }
+                }
+            }
+        }
+
+        /* Test 2: Cache big key with DMA first, then cache
+         * same keyId with small key using DMA */
+        if (ret == 0) {
+            keyId = 0x4000; /* Use different keyId */
+            ret   = wh_Client_KeyCacheDma(ctx, 0, labelBig, sizeof(labelBig),
+                                          bigKey, sizeof(bigKey), &keyId);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to cache big key with DMA: %d\n", ret);
+            }
+            else {
+                /* Now cache small key with same keyId using DMA - should
+                 * succeed and evict the big key */
+                ret = wh_Client_KeyCacheDma(ctx, 0, labelSmall,
+                                            sizeof(labelSmall), smallKey,
+                                            sizeof(smallKey), &keyId);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("Failed to cache small key with DMA "
+                                   "(expected success): %d\n",
+                                   ret);
+                }
+                else {
+                    /* Verify the cached key is the small key by exporting it */
+                    exportedKeySize = smallKeySize;
+                    ret             = wh_Client_KeyExportDma(
+                                    ctx, keyId, exportedKey, exportedKeySize, exportedLabel,
+                                    sizeof(exportedLabel), &exportedKeySize);
+                    if (ret != 0) {
+                        WH_ERROR_PRINT(
+                            "Failed to export key after eviction: %d\n", ret);
+                    }
+                    else {
+                        /* Verify exported key matches the small key */
+                        if (exportedKeySize != smallKeySize ||
+                            memcmp(exportedKey, smallKey, smallKeySize) != 0) {
+                            WH_ERROR_PRINT(
+                                "Exported key data doesn't match small key\n");
+                            ret = -1;
+                        }
+                        /* Verify exported label matches the small key label */
+                        else if (memcmp(exportedLabel, labelSmall,
+                                        sizeof(labelSmall)) != 0) {
+                            WH_ERROR_PRINT("Exported label doesn't match small "
+                                           "key label\n");
+                            ret = -1;
+                        }
+                        else {
+                            ret = 0;
+                        }
+                    }
+                    /* Clean up */
+                    ret = wh_Client_KeyEvict(ctx, keyId);
+                    if (ret != 0) {
+                        WH_ERROR_PRINT("Failed to evict key: %d\n", ret);
+                    }
+                    if (ret == 0) {
+                        ret = wh_Client_KeyEvict(ctx, keyId);
+                        if (ret != 0) {
+                            /* double evict should fail */
+                            ret = 0;
+                        }
+                        else {
+                            WH_ERROR_PRINT(
+                                "Double evict shouldn't succeed, "
+                                "cross-cache duplication test failed\n");
+                            ret = -1;
+                        }
+                    }
+                }
+            }
+        }
+
+        if (ret == 0) {
+            printf("KEY CROSS-CACHE EVICTION AND REPLACEMENT DMA SUCCESS\n");
         }
     }
 #endif /* WOLFHSM_CFG_DMA */
