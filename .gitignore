@@ -6,4 +6,6 @@ Build/
 **/.gdb_history
 tools/testcertgen/ca/
 tools/testcertgen/*.der
+*.code-workspace
+.vscode
 
