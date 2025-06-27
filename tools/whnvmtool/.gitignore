@@ -2,3 +2,4 @@ whnvmtool
 test/test_whnvmtool
 *.bin
 *.hex
+nvm_metadata.txt

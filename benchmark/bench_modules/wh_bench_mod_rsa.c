@@ -406,7 +406,7 @@ int _benchRsaCrypt(whClientContext* client, whBenchOpContext* ctx, int id,
     }
 
     for (i = 0; i < WOLFHSM_CFG_BENCH_PK_ITERS && ret == 0; i++) {
-        int benchStartRet;
+        int benchStartRet = 0;
         int benchStopRet;
         int opRet;
 
