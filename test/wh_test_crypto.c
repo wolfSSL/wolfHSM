@@ -964,6 +964,7 @@ static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
             }
             else {
                 /* Verify the cached key is the big key by exporting it */
+                exportedKeySize = sizeof(exportedKey);
                 ret = wh_Client_KeyExport(ctx, keyId, exportedLabel,
                                           sizeof(exportedLabel), exportedKey,
                                           &exportedKeySize);
@@ -1037,6 +1038,7 @@ static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
                 }
                 else {
                     /* Verify the cached key is the small key by exporting it */
+                    exportedKeySize = sizeof(exportedKey);
                     ret = wh_Client_KeyExport(ctx, keyId, exportedLabel,
                                               sizeof(exportedLabel),
                                               exportedKey, &exportedKeySize);
@@ -1162,8 +1164,8 @@ static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
                 /* Verify the cached key is the big key by exporting it */
                 exportedKeySize = bigKeySize;
                 ret             = wh_Client_KeyExportDma(
-                                ctx, keyId, exportedKey, exportedKeySize, exportedLabel,
-                                sizeof(exportedLabel), &exportedKeySize);
+                    ctx, keyId, exportedKey, exportedKeySize, exportedLabel,
+                    sizeof(exportedLabel), &exportedKeySize);
                 if (ret != 0) {
                     WH_ERROR_PRINT("Failed to export key after cache: %d\n",
                                    ret);
@@ -1238,8 +1240,8 @@ static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
                     /* Verify the cached key is the small key by exporting it */
                     exportedKeySize = smallKeySize;
                     ret             = wh_Client_KeyExportDma(
-                                    ctx, keyId, exportedKey, exportedKeySize, exportedLabel,
-                                    sizeof(exportedLabel), &exportedKeySize);
+                        ctx, keyId, exportedKey, exportedKeySize, exportedLabel,
+                        sizeof(exportedLabel), &exportedKeySize);
                     if (ret != 0) {
                         WH_ERROR_PRINT(
                             "Failed to export key after cache: %d\n", ret);
