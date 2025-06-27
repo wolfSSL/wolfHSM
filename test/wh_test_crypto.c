@@ -947,7 +947,7 @@ static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
         memset(bigKey, 0xBB, sizeof(bigKey));
 
         /* Test 1: Cache small key first, then cache same keyId with big key */
-        keyId = 0x1000; /* Use specific keyId to ensure we control the ID */
+        keyId = WH_KEYID_ERASED;
         ret   = wh_Client_KeyCache(ctx, 0, labelSmall, sizeof(labelSmall),
                                    smallKey, sizeof(smallKey), &keyId);
         if (ret != 0) {
@@ -968,7 +968,7 @@ static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
                                           sizeof(exportedLabel), exportedKey,
                                           &exportedKeySize);
                 if (ret != 0) {
-                    WH_ERROR_PRINT("Failed to export key after eviction: %d\n",
+                    WH_ERROR_PRINT("Failed to export key after cache: %d\n",
                                    ret);
                 }
                 else {
@@ -991,10 +991,17 @@ static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
                     }
                 }
                 /* Clean up */
-                ret = wh_Client_KeyEvict(ctx, keyId);
-                if (ret != 0) {
-                    WH_ERROR_PRINT("Failed to evict key: %d\n", ret);
+                if (ret == 0) {
+                    ret = wh_Client_KeyEvict(ctx, keyId);
+                    if (ret != 0) {
+                        WH_ERROR_PRINT("Failed to evict key: %d\n", ret);
+                    }
                 }
+                else {
+                    /* On error, try our best to clean up */
+                    (void)wh_Client_KeyEvict(ctx, keyId);
+                }
+                
                 if (ret == 0) {
                     ret = wh_Client_KeyEvict(ctx, keyId);
                     if (ret != 0) {
@@ -1012,7 +1019,7 @@ static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
 
         /* Test 2: Cache big key first, then cache same keyId with small key */
         if (ret == 0) {
-            keyId = 0x2000; /* Use different keyId */
+            keyId = WH_KEYID_ERASED;
             ret = wh_Client_KeyCache(ctx, 0, labelBig, sizeof(labelBig), bigKey,
                                      sizeof(bigKey), &keyId);
             if (ret != 0) {
@@ -1035,7 +1042,7 @@ static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
                                               exportedKey, &exportedKeySize);
                     if (ret != 0) {
                         WH_ERROR_PRINT(
-                            "Failed to export key after eviction: %d\n", ret);
+                            "Failed to export key after cache: %d\n", ret);
                     }
                     else {
                         /* Verify exported key matches the small key */
@@ -1057,10 +1064,17 @@ static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
                         }
                     }
                     /* Clean up */
-                    ret = wh_Client_KeyEvict(ctx, keyId);
-                    if (ret != 0) {
-                        WH_ERROR_PRINT("Failed to evict key: %d\n", ret);
+                    if (ret == 0) {
+                        ret = wh_Client_KeyEvict(ctx, keyId);
+                        if (ret != 0) {
+                            WH_ERROR_PRINT("Failed to evict key: %d\n", ret);
+                        }
                     }
+                    else {
+                        /* On error, try our best to clean up */
+                        (void)wh_Client_KeyEvict(ctx, keyId);
+                    }
+                    
                     if (ret == 0) {
                         ret = wh_Client_KeyEvict(ctx, keyId);
                         if (ret != 0) {
@@ -1128,7 +1142,7 @@ static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
 
         /* Test 1: Cache small key with DMA first, then cache same keyId
          * with big key using DMA */
-        keyId = 0x3000;
+        keyId = WH_KEYID_ERASED;
         ret   = wh_Client_KeyCacheDma(ctx, 0, labelSmall, sizeof(labelSmall),
                                       smallKey, sizeof(smallKey), &keyId);
         if (ret != 0) {
@@ -1151,7 +1165,7 @@ static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
                                 ctx, keyId, exportedKey, exportedKeySize, exportedLabel,
                                 sizeof(exportedLabel), &exportedKeySize);
                 if (ret != 0) {
-                    WH_ERROR_PRINT("Failed to export key after eviction: %d\n",
+                    WH_ERROR_PRINT("Failed to export key after cache: %d\n",
                                    ret);
                 }
                 else {
@@ -1174,10 +1188,17 @@ static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
                     }
                 }
                 /* Clean up */
-                ret = wh_Client_KeyEvict(ctx, keyId);
-                if (ret != 0) {
-                    WH_ERROR_PRINT("Failed to evict key: %d\n", ret);
+                if (ret == 0) {
+                    ret = wh_Client_KeyEvict(ctx, keyId);
+                    if (ret != 0) {
+                        WH_ERROR_PRINT("Failed to evict key: %d\n", ret);
+                    }
                 }
+                else {
+                    /* On error, try our best to clean up */
+                    (void)wh_Client_KeyEvict(ctx, keyId);
+                }
+                
                 if (ret == 0) {
                     ret = wh_Client_KeyEvict(ctx, keyId);
                     if (ret != 0) {
@@ -1196,7 +1217,7 @@ static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
         /* Test 2: Cache big key with DMA first, then cache
          * same keyId with small key using DMA */
         if (ret == 0) {
-            keyId = 0x4000; /* Use different keyId */
+            keyId = WH_KEYID_ERASED;
             ret   = wh_Client_KeyCacheDma(ctx, 0, labelBig, sizeof(labelBig),
                                           bigKey, sizeof(bigKey), &keyId);
             if (ret != 0) {
@@ -1221,7 +1242,7 @@ static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
                                     sizeof(exportedLabel), &exportedKeySize);
                     if (ret != 0) {
                         WH_ERROR_PRINT(
-                            "Failed to export key after eviction: %d\n", ret);
+                            "Failed to export key after cache: %d\n", ret);
                     }
                     else {
                         /* Verify exported key matches the small key */
@@ -1243,10 +1264,17 @@ static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
                         }
                     }
                     /* Clean up */
-                    ret = wh_Client_KeyEvict(ctx, keyId);
-                    if (ret != 0) {
-                        WH_ERROR_PRINT("Failed to evict key: %d\n", ret);
+                    if (ret == 0) {
+                        ret = wh_Client_KeyEvict(ctx, keyId);
+                        if (ret != 0) {
+                            WH_ERROR_PRINT("Failed to evict key: %d\n", ret);
+                        }
                     }
+                    else {
+                        /* On error, try our best to clean up */
+                        (void)wh_Client_KeyEvict(ctx, keyId);
+                    }
+                    
                     if (ret == 0) {
                         ret = wh_Client_KeyEvict(ctx, keyId);
                         if (ret != 0) {
