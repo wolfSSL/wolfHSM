@@ -57,6 +57,12 @@
  *  WOLFHSM_CFG_SERVER_DMAADDR_COUNT - Number of DMA address regions
  *      Default: 10
  *
+ *  WOLFHSM_CFG_SERVER_IMG_MGR_MAX_IMG_COUNT - Maximum number of images that can
+ * be managed Default: 4
+ *
+ *  WOLFHSM_CFG_SERVER_IMG_MGR_MAX_SIG_SIZE - Maximum signature size for image
+ * verification Default: 512 bytes (RSA4096)
+ *
  *
  *  Overridable porting functions:
  *
@@ -149,6 +155,16 @@
 /* DMA translation allow entries */
 #ifndef WOLFHSM_CFG_SERVER_DMAADDR_COUNT
 #define WOLFHSM_CFG_SERVER_DMAADDR_COUNT 10
+#endif
+
+/* Image manager maximum number of images */
+#ifndef WOLFHSM_CFG_SERVER_IMG_MGR_MAX_IMG_COUNT
+#define WOLFHSM_CFG_SERVER_IMG_MGR_MAX_IMG_COUNT 4
+#endif
+
+/* Image manager maximum signature size (RSA4096 = 512 bytes) */
+#ifndef WOLFHSM_CFG_SERVER_IMG_MGR_MAX_SIG_SIZE
+#define WOLFHSM_CFG_SERVER_IMG_MGR_MAX_SIG_SIZE 512
 #endif
 
 /*  WOLFHSM_CFG_CUSTOMCB_LEN - Maximum size of a customcb message.

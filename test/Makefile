@@ -178,6 +178,7 @@ SRC_C += \
             $(WOLFHSM_DIR)/src/wh_server_keystore.c \
             $(WOLFHSM_DIR)/src/wh_server_counter.c \
             $(WOLFHSM_DIR)/src/wh_server_cert.c \
+            $(WOLFHSM_DIR)/src/wh_server_img_mgr.c \
             $(WOLFHSM_DIR)/src/wh_nvm.c \
             $(WOLFHSM_DIR)/src/wh_comm.c \
             $(WOLFHSM_DIR)/src/wh_message_comm.c \
@@ -212,15 +213,16 @@ SRC_C += \
 
 # APP
 SRC_C += \
-            ./src/wh_test.c \
-            ./src/wh_test_comm.c \
-            ./src/wh_test_crypto.c \
-            ./src/wh_test_she.c \
-            ./src/wh_test_nvm_flash.c \
-            ./src/wh_test_clientserver.c \
-            ./src/wh_test_flash_ramsim.c \
-            ./src/wh_test_check_struct_padding.c \
-            ./src/wh_test_cert.c
+            wh_test.c \
+            wh_test_comm.c \
+            wh_test_crypto.c \
+            wh_test_she.c \
+            wh_test_nvm_flash.c \
+            wh_test_clientserver.c \
+            wh_test_flash_ramsim.c \
+            wh_test_check_struct_padding.c \
+            wh_test_cert.c \
+            wh_test_server_img_mgr.c
 
 ifeq ($(TESTWOLFCRYPT),1)
 SRC_C += ./src/wh_test_wolfcrypt_test.c

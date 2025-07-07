@@ -45,6 +45,10 @@
 #include "wh_test_wolfcrypt_test.h"
 #endif
 
+#if defined(WOLFHSM_CFG_SERVER_IMG_MGR)
+#include "wh_test_server_img_mgr.h"
+#endif
+
 #if defined(WOLFHSM_CFG_TEST_POSIX) && defined(WOLFHSM_CFG_ENABLE_CLIENT)
 #include "port/posix/posix_transport_tcp.h"
 #endif
@@ -72,6 +76,11 @@ int whTest_Unit(void)
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     /* Crypto Tests */
     WH_TEST_ASSERT(0 == whTest_Crypto());
+
+#if defined(WOLFHSM_CFG_SERVER_IMG_MGR) && !defined(WOLFHSM_CFG_NO_CRYPTO)
+    /* Image Manager Tests */
+    WH_TEST_ASSERT(0 == whTest_ServerImgMgr());
+#endif /* WOLFHSM_CFG_SERVER_IMG_MGR && !WOLFHSM_CFG_NO_CRYPTO */
 
 #if defined(WOLFHSM_CFG_SHE_EXTENSION)
     WH_TEST_ASSERT(0 == whTest_She());
