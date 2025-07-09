@@ -736,12 +736,11 @@ static int nfObject_Copy(whNvmFlashContext* context, int object_index,
     }
     ret = nfObject_ProgramFinish(context, partition, dest_object, data_len);
     if (ret != 0) return ret;
-    dest_object++;
 
-    if (ret == 0) {
-        *inout_next_object = dest_object;
-        *inout_next_data = dest_data;
-    }
+    dest_object++;
+    *inout_next_object = dest_object;
+    *inout_next_data = dest_data;
+
     return ret;
 }
 
