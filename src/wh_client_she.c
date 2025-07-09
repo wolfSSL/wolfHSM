@@ -120,7 +120,6 @@ int wh_Client_SheSecureBoot(whClientContext* c, uint8_t* bootloader,
 {
     int      ret;
     uint32_t bootloaderSent = 0;
-    uint32_t justSent       = 0;
     uint16_t group;
     uint16_t action;
     uint16_t dataSz;
@@ -159,6 +158,8 @@ int wh_Client_SheSecureBoot(whClientContext* c, uint8_t* bootloader,
 
     /* send update sub command until we've sent the entire bootloader */
     while (ret == 0 && bootloaderSent < bootloaderLen) {
+        uint32_t justSent;
+
         if (initResp->rc != WH_SHE_ERC_NO_ERROR) {
             return initResp->rc;
         }
