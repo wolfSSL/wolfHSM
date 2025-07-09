@@ -96,8 +96,8 @@ int wh_TransportMem_Cleanup(void* c)
 int wh_TransportMem_SendRequest(void* c, uint16_t len, const void* data)
 {
     whTransportMemContext* context = c;
-    volatile whTransportMemCsr* ctx_req = context->req;
-    volatile whTransportMemCsr* ctx_resp = context->resp;
+    volatile whTransportMemCsr* ctx_req;
+    volatile whTransportMemCsr* ctx_resp;
     whTransportMemCsr resp;
     whTransportMemCsr req;
 
@@ -106,6 +106,9 @@ int wh_TransportMem_SendRequest(void* c, uint16_t len, const void* data)
             (data == NULL && len != 0)) {
         return WH_ERROR_BADARGS;
     }
+
+    ctx_req  = context->req;
+    ctx_resp = context->resp;
 
     /* Don't send more data than we have space for in the request buffer */
     if (len > (context->req_size - sizeof(whTransportMemCsr))) {
@@ -142,8 +145,8 @@ int wh_TransportMem_SendRequest(void* c, uint16_t len, const void* data)
 int wh_TransportMem_RecvRequest(void* c, uint16_t *out_len, void* data)
 {
     whTransportMemContext* context = c;
-    volatile whTransportMemCsr* ctx_req = context->req;
-    volatile whTransportMemCsr* ctx_resp = context->resp;
+    volatile whTransportMemCsr* ctx_req;
+    volatile whTransportMemCsr* ctx_resp;
     whTransportMemCsr req;
     whTransportMemCsr resp;
 
@@ -151,6 +154,9 @@ int wh_TransportMem_RecvRequest(void* c, uint16_t *out_len, void* data)
             (context->initialized == 0)) {
         return WH_ERROR_BADARGS;
     }
+
+    ctx_req  = context->req;
+    ctx_resp = context->resp;
 
     /* Read current request CSR's. ctx_resp does not need to be invalidated */
     XMEMFENCE();
@@ -176,8 +182,8 @@ int wh_TransportMem_RecvRequest(void* c, uint16_t *out_len, void* data)
 int wh_TransportMem_SendResponse(void* c, uint16_t len, const void* data)
 {
     whTransportMemContext* context = c;
-    volatile whTransportMemCsr* ctx_req = context->req;
-    volatile whTransportMemCsr* ctx_resp = context->resp;
+    volatile whTransportMemCsr* ctx_req;
+    volatile whTransportMemCsr* ctx_resp;
     whTransportMemCsr req;
     whTransportMemCsr resp;
 
@@ -186,6 +192,9 @@ int wh_TransportMem_SendResponse(void* c, uint16_t len, const void* data)
             (data == NULL && len != 0)) {
         return WH_ERROR_BADARGS;
     }
+
+    ctx_req  = context->req;
+    ctx_resp = context->resp;
 
     /* Check against available data space (total size minus CSR size) */
     if (len > (context->resp_size - sizeof(whTransportMemCsr))) {
@@ -217,8 +226,8 @@ int wh_TransportMem_SendResponse(void* c, uint16_t len, const void* data)
 int wh_TransportMem_RecvResponse(void* c, uint16_t *out_len, void* data)
 {
     whTransportMemContext* context = c;
-    volatile whTransportMemCsr* ctx_req = context->req;
-    volatile whTransportMemCsr* ctx_resp = context->resp;
+    volatile whTransportMemCsr* ctx_req;
+    volatile whTransportMemCsr* ctx_resp;
     whTransportMemCsr req;
     whTransportMemCsr resp;
 
@@ -226,6 +235,9 @@ int wh_TransportMem_RecvResponse(void* c, uint16_t *out_len, void* data)
             (context->initialized == 0)) {
         return WH_ERROR_BADARGS;
     }
+
+    ctx_req  = context->req;
+    ctx_resp = context->resp;
 
     /* Read both CSR's. ctx_req does not need to be invalidated */
     XMEMFENCE();
