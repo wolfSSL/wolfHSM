@@ -442,6 +442,12 @@ static int nfPartition_ProgramCount(whNvmFlashContext* context,
 
 static int nfPartition_ProgramInit(whNvmFlashContext* context, int partition)
 {
+    int ret = 0;
+
+    if ((context == NULL) || (context->cb == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
     /* Valid initial state values for a partition */
     nfMemState init_state =
     {
@@ -450,11 +456,6 @@ static int nfPartition_ProgramInit(whNvmFlashContext* context, int partition)
         .start = NF_PARTITION_DATA_OFFSET,
         .count = context->partition_units,
     };
-    int ret = 0;
-
-    if ((context == NULL) || (context->cb == NULL)) {
-        return WH_ERROR_BADARGS;
-    }
 
     /* Blankcheck/Erase partition */
     ret = nfPartition_BlankCheck(context, partition);
