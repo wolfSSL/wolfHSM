@@ -97,10 +97,12 @@ int wh_Client_Init(whClientContext* c, const whClientConfig* config)
             }
 
 #ifdef WOLFHSM_CFG_DMA
-            rc = wc_CryptoCb_RegisterDevice(WH_DEV_ID_DMA,
-                                            wh_Client_CryptoCbDma, c);
-            if (rc != 0) {
-                rc = WH_ERROR_ABORTED;
+            if (rc == 0) {
+                rc = wc_CryptoCb_RegisterDevice(WH_DEV_ID_DMA,
+                                                wh_Client_CryptoCbDma, c);
+                if (rc != 0) {
+                    rc = WH_ERROR_ABORTED;
+                }
             }
 #endif /* WOLFHSM_CFG_DMA */
         }
