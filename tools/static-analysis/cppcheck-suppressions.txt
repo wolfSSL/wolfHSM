@@ -1,0 +1,12 @@
+# cppcheck suppressions for wolfHSM
+# Format: [error id]:[filename]:[line] (filename and line are optional)
+
+# System includes are not our concern
+missingIncludeSystem
+
+# Unused functions may be part of the public API
+unusedFunction
+
+# Const parameters and variables are often design choices
+constParameter
+constVariable
