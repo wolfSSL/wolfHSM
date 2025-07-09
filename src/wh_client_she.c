@@ -140,9 +140,6 @@ int wh_Client_SheSecureBoot(whClientContext* c, uint8_t* bootloader,
         (whMessageShe_SecureBootInitRequest*)wh_CommClient_GetDataPtr(c->comm);
     respBuf = (uint8_t*)wh_CommClient_GetDataPtr(c->comm);
 
-    /* in is after the size argument */
-    in = (uint8_t*)(initReq + 1);
-
     /* send init sub command */
     initReq->sz = bootloaderLen;
     ret =
