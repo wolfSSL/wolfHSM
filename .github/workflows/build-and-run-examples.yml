@@ -41,6 +41,24 @@ jobs:
         cd examples/posix/tcp/wh_client_tcp
         ./Build/wh_client_tcp.elf
 
+    # Run the provisioning client that connects to the server
+    - name: Run POSIX TCP provisioning client
+      run: |
+        cd examples/posix/tcp/wh_client_tcp
+        ./Build/wh_client_provision.elf
+
+    # Run the secboot client that connects to the server
+    - name: Run POSIX TCP provisioning client
+      run: |
+        cd examples/posix/tcp/wh_client_tcp
+        ./Build/wh_client_secboot.elf
+
+    # Run the zeroize client that connects to the server
+    - name: Run POSIX TCP provisioning client
+      run: |
+        cd examples/posix/tcp/wh_client_tcp
+        ./Build/wh_client_zeroize.elf
+
     # Optional: Kill the server process if it doesn't exit on its own
     - name: Cleanup POSIX TCP server
       if: always()
