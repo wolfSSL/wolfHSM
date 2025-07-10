@@ -283,8 +283,6 @@ int wh_Server_ImgMgrVerifyMethodAesCmac(whServerImgMgrContext*   context,
 {
     int     ret = WH_ERROR_OK;
     Cmac    cmac;
-    uint8_t computed_cmac[AES_BLOCK_SIZE];
-    word32  cmac_size = sizeof(computed_cmac);
 
     (void)context; /* Unused parameter */
 
@@ -298,15 +296,8 @@ int wh_Server_ImgMgrVerifyMethodAesCmac(whServerImgMgrContext*   context,
     }
 
     /* Validate signature size for AES CMAC */
-    if (sigSz != AES_BLOCK_SIZE) {
+    if (sigSz != WC_AES_BLOCK_SIZE) {
         return WH_ERROR_BADARGS;
-    }
-
-    /* Initialize CMAC */
-    ret = wc_InitCmac_ex(&cmac, key, (word32)keySz, WC_CMAC_AES, NULL, NULL,
-                         context->server->crypto->devId);
-    if (ret != 0) {
-        return WH_ERROR_ABORTED;
     }
 
 #ifdef WOLFHSM_CFG_DMA
@@ -323,29 +314,21 @@ int wh_Server_ImgMgrVerifyMethodAesCmac(whServerImgMgrContext*   context,
     }
 
     /* Compute CMAC of the image data from server pointer */
-    ret = wc_CmacUpdate(&cmac, (const byte*)serverPtr, (word32)img->size);
+    ret = wc_AesCmacVerify_ex(&cmac, sig, (word32)sigSz, (const byte*)serverPtr,
+                              (word32)img->size, key, (word32)keySz, NULL,
+                              server->crypto->devId);
 
     wh_Server_DmaProcessClientAddress(server, img->addr, &serverPtr, img->size,
                                       WH_DMA_OPER_CLIENT_READ_POST,
                                       (whServerDmaFlags){0});
 #else
-    /* Direct memory access case */
-    ret = wc_CmacUpdate(&cmac, (const byte*)img->addr, (word32)img->size);
+    ret = wc_AesCmacVerify_ex(&cmac, sig, (word32)sigSz, (const byte*)img->addr,
+                              (word32)img->size, key, (word32)keySz, NULL,
+                              context->server->crypto->devId);
 #endif
 
     if (ret != 0) {
         return WH_ERROR_ABORTED;
-    }
-
-    /* Finalize CMAC computation */
-    ret = wc_CmacFinal(&cmac, computed_cmac, &cmac_size);
-    if (ret != 0) {
-        return WH_ERROR_ABORTED;
-    }
-
-    /* Compare computed CMAC with provided signature */
-    if (cmac_size != sigSz || XMEMCMP(computed_cmac, sig, sigSz) != 0) {
-        return WH_ERROR_NOTVERIFIED; /* CMAC verification failed */
     }
 
     return WH_ERROR_OK; /* CMAC verification succeeded */
