@@ -16,6 +16,7 @@
 #include "port/posix/posix_transport_tcp.h"
 
 #include "wolfhsm/wh_utils.h"
+#include <fcntl.h> /* For open, close, lseek */
 #include <libgen.h>
 #include <sys/mman.h>
 #include "wolfssl/wolfcrypt/ecc.h"
