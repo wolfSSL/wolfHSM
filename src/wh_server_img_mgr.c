@@ -201,8 +201,8 @@ int wh_Server_ImgMgrVerifyMethodEccWithSha256(whServerImgMgrContext*   context,
     int     ret = WH_ERROR_OK;
     ecc_key eccKey;
     uint8_t hash[WC_SHA256_DIGEST_SIZE];
-    int     mp_ret   = 0;
-    word32  inOutIdx = 0;
+    int     verifyResult = 0;
+    word32  inOutIdx     = 0;
 
     (void)context; /* Unused parameter */
 
@@ -240,38 +240,41 @@ int wh_Server_ImgMgrVerifyMethodEccWithSha256(whServerImgMgrContext*   context,
     /* Hash the image data from server pointer using one-shot API */
     ret = wc_Sha256Hash_ex((const uint8_t*)serverPtr, (word32)img->size, hash,
                            NULL, server->crypto->devId);
-
-    wh_Server_DmaProcessClientAddress(server, img->addr, &serverPtr, img->size,
-                                      WH_DMA_OPER_CLIENT_READ_POST,
-                                      (whServerDmaFlags){0});
 #else
     /* Hash the image data using one-shot API */
     ret = wc_Sha256Hash_ex((const uint8_t*)img->addr, (word32)img->size, hash,
                            NULL, context->server->crypto->devId);
 #endif
-
     if (ret != 0) {
         wc_ecc_free(&eccKey);
-        return WH_ERROR_ABORTED;
+        return ret;
     }
+
+#ifdef WOLFHSM_CFG_DMA
+    ret = wh_Server_DmaProcessClientAddress(
+        server, img->addr, &serverPtr, img->size, WH_DMA_OPER_CLIENT_READ_POST,
+        (whServerDmaFlags){0});
+    if (ret != WH_ERROR_OK) {
+        wc_ecc_free(&eccKey);
+        return ret;
+    }
+#endif
 
     /* Verify the signature */
-    ret = wc_ecc_verify_hash(sig, (word32)sigSz, hash, sizeof(hash), &mp_ret,
-                             &eccKey);
+    ret = wc_ecc_verify_hash(sig, (word32)sigSz, hash, sizeof(hash),
+                             &verifyResult, &eccKey);
 
     /* Cleanup */
-    wc_ecc_free(&eccKey);
+    (void)wc_ecc_free(&eccKey);
 
     if (ret != 0) {
-        return WH_ERROR_ABORTED;
+        return ret;
     }
 
-    /* Check verification result */
-    if (mp_ret != 1) {
-        return WH_ERROR_NOTVERIFIED; /* Signature verification failed */
+    if (verifyResult != 1) {
+        return WH_ERROR_NOTVERIFIED;
     }
-
-    return WH_ERROR_OK; /* Signature verification succeeded */
+    return WH_ERROR_OK;
 }
 #endif /* HAVE_ECC */
 
@@ -317,19 +320,23 @@ int wh_Server_ImgMgrVerifyMethodAesCmac(whServerImgMgrContext*   context,
     ret = wc_AesCmacVerify_ex(&cmac, sig, (word32)sigSz, (const byte*)serverPtr,
                               (word32)img->size, key, (word32)keySz, NULL,
                               server->crypto->devId);
-
-    wh_Server_DmaProcessClientAddress(server, img->addr, &serverPtr, img->size,
-                                      WH_DMA_OPER_CLIENT_READ_POST,
-                                      (whServerDmaFlags){0});
 #else
     ret = wc_AesCmacVerify_ex(&cmac, sig, (word32)sigSz, (const byte*)img->addr,
                               (word32)img->size, key, (word32)keySz, NULL,
                               context->server->crypto->devId);
 #endif
-
     if (ret != 0) {
-        return WH_ERROR_ABORTED;
+        return ret;
     }
+
+#ifdef WOLFHSM_CFG_DMA
+    ret = wh_Server_DmaProcessClientAddress(
+        server, img->addr, &serverPtr, img->size, WH_DMA_OPER_CLIENT_READ_POST,
+        (whServerDmaFlags){0});
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+#endif
 
     return WH_ERROR_OK; /* CMAC verification succeeded */
 }
@@ -383,27 +390,32 @@ int wh_Server_ImgMgrVerifyMethodRsaSslWithSha256(
     /* Hash the image data from server pointer using one-shot API */
     ret = wc_Sha256Hash_ex((const uint8_t*)serverPtr, (word32)img->size, hash,
                            NULL, server->crypto->devId);
-
-    wh_Server_DmaProcessClientAddress(server, img->addr, &serverPtr, img->size,
-                                      WH_DMA_OPER_CLIENT_READ_POST,
-                                      (whServerDmaFlags){0});
 #else
     /* Hash the image data using one-shot API */
     ret = wc_Sha256Hash_ex((const uint8_t*)img->addr, (word32)img->size, hash,
                            NULL, context->server->crypto->devId);
 #endif
-
     if (ret != 0) {
         wc_FreeRsaKey(&rsaKey);
-        return WH_ERROR_ABORTED;
+        return ret;
     }
+
+#ifdef WOLFHSM_CFG_DMA
+    ret = wh_Server_DmaProcessClientAddress(
+        server, img->addr, &serverPtr, img->size, WH_DMA_OPER_CLIENT_READ_POST,
+        (whServerDmaFlags){0});
+    if (ret != WH_ERROR_OK) {
+        wc_FreeRsaKey(&rsaKey);
+        return ret;
+    }
+#endif
 
     /* Verify the signature using RSA SSL verify */
     ret =
         wc_RsaSSL_Verify(sig, (word32)sigSz, decrypted, decryptedLen, &rsaKey);
     if (ret < 0) {
         wc_FreeRsaKey(&rsaKey);
-        return WH_ERROR_ABORTED;
+        return ret;
     }
     decryptedLen = (word32)ret;
 
