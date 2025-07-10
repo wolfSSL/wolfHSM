@@ -54,8 +54,7 @@ struct whServerImgMgrImg;
  * @param[in] sig Signature data for verification
  * @param[in] sigSz Size of signature data
  * @return WH_ERROR_OK on successful verification, WH_ERROR_NOTVERIFIED when
- *         verification fails, other negative error codes for operational
- * failures
+ * verification fails, other negative error codes for operational failures
  */
 typedef int (*whServerImgMgrVerifyMethod)(whServerImgMgrContext* context,
                                           const struct whServerImgMgrImg* img,
