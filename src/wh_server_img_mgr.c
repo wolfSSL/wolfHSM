@@ -70,8 +70,10 @@ int wh_Server_ImgMgrInit(whServerImgMgrContext*      context,
 
     /* Copy image configurations */
     if (config->images != NULL && config->imageCount > 0) {
-        memcpy(context->images, config->images,
-               config->imageCount * sizeof(whServerImgMgrImg));
+        size_t i;
+        for (i = 0; i < config->imageCount; i++) {
+            context->images[i] = config->images[i];
+        }
     }
 
     return ret;
@@ -96,7 +98,8 @@ int wh_Server_ImgMgrVerifyImg(whServerImgMgrContext*      context,
     }
 
     /* Initialize result structure */
-    memset(result, 0, sizeof(*result));
+    result->verifyMethodResult = WH_ERROR_ABORTED;
+    result->verifyActionResult = WH_ERROR_ABORTED;
 
     server = context->server;
     if (server == NULL) {
@@ -160,9 +163,8 @@ int wh_Server_ImgMgrVerifyImgIdx(whServerImgMgrContext* context, size_t imgIdx,
 
 int wh_Server_ImgMgrVerifyAll(whServerImgMgrContext*      context,
                               whServerImgMgrVerifyResult* outResults,
-                              size_t                      outResultsSize)
+                              size_t outResultsCount, size_t* outErrorIdx)
 {
-    int    ret       = WH_ERROR_OK;
     int    verifyRet = WH_ERROR_OK;
     size_t i;
 
@@ -170,7 +172,7 @@ int wh_Server_ImgMgrVerifyAll(whServerImgMgrContext*      context,
         return WH_ERROR_BADARGS;
     }
 
-    if (outResultsSize < context->imageCount) {
+    if (outResultsCount < context->imageCount) {
         return WH_ERROR_BADARGS;
     }
 
@@ -178,14 +180,14 @@ int wh_Server_ImgMgrVerifyAll(whServerImgMgrContext*      context,
         verifyRet = wh_Server_ImgMgrVerifyImg(context, &context->images[i],
                                               &outResults[i]);
         if (verifyRet != WH_ERROR_OK) {
-            /* Continue verification but track first error */
-            if (ret == WH_ERROR_OK) {
-                ret = verifyRet;
+            if (outErrorIdx != NULL) {
+                *outErrorIdx = i;
             }
+            return verifyRet;
         }
     }
 
-    return ret;
+    return WH_ERROR_OK;
 }
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
@@ -236,14 +238,16 @@ int wh_Server_ImgMgrVerifyMethodEccWithSha256(whServerImgMgrContext*   context,
     }
 
     /* Hash the image data from server pointer using one-shot API */
-    ret = wc_Sha256Hash((const uint8_t*)serverPtr, (word32)img->size, hash);
+    ret = wc_Sha256Hash_ex((const uint8_t*)serverPtr, (word32)img->size, hash,
+                           NULL, server->crypto->devId);
 
     wh_Server_DmaProcessClientAddress(server, img->addr, &serverPtr, img->size,
                                       WH_DMA_OPER_CLIENT_READ_POST,
                                       (whServerDmaFlags){0});
 #else
     /* Hash the image data using one-shot API */
-    ret = wc_Sha256Hash((const uint8_t*)img->addr, (word32)img->size, hash);
+    ret = wc_Sha256Hash_ex((const uint8_t*)img->addr, (word32)img->size, hash,
+                           NULL, context->server->crypto->devId);
 #endif
 
     if (ret != 0) {
@@ -264,7 +268,7 @@ int wh_Server_ImgMgrVerifyMethodEccWithSha256(whServerImgMgrContext*   context,
 
     /* Check verification result */
     if (mp_ret != 1) {
-        return WH_ERROR_ABORTED; /* Signature verification failed */
+        return WH_ERROR_NOTVERIFIED; /* Signature verification failed */
     }
 
     return WH_ERROR_OK; /* Signature verification succeeded */
@@ -299,7 +303,8 @@ int wh_Server_ImgMgrVerifyMethodAesCmac(whServerImgMgrContext*   context,
     }
 
     /* Initialize CMAC */
-    ret = wc_InitCmac(&cmac, key, (word32)keySz, WC_CMAC_AES, NULL);
+    ret = wc_InitCmac_ex(&cmac, key, (word32)keySz, WC_CMAC_AES, NULL, NULL,
+                         context->server->crypto->devId);
     if (ret != 0) {
         return WH_ERROR_ABORTED;
     }
@@ -340,7 +345,7 @@ int wh_Server_ImgMgrVerifyMethodAesCmac(whServerImgMgrContext*   context,
 
     /* Compare computed CMAC with provided signature */
     if (cmac_size != sigSz || XMEMCMP(computed_cmac, sig, sigSz) != 0) {
-        return WH_ERROR_ABORTED; /* CMAC verification failed */
+        return WH_ERROR_NOTVERIFIED; /* CMAC verification failed */
     }
 
     return WH_ERROR_OK; /* CMAC verification succeeded */
@@ -393,14 +398,16 @@ int wh_Server_ImgMgrVerifyMethodRsaSslWithSha256(
     }
 
     /* Hash the image data from server pointer using one-shot API */
-    ret = wc_Sha256Hash((const uint8_t*)serverPtr, (word32)img->size, hash);
+    ret = wc_Sha256Hash_ex((const uint8_t*)serverPtr, (word32)img->size, hash,
+                           NULL, server->crypto->devId);
 
     wh_Server_DmaProcessClientAddress(server, img->addr, &serverPtr, img->size,
                                       WH_DMA_OPER_CLIENT_READ_POST,
                                       (whServerDmaFlags){0});
 #else
     /* Hash the image data using one-shot API */
-    ret = wc_Sha256Hash((const uint8_t*)img->addr, (word32)img->size, hash);
+    ret = wc_Sha256Hash_ex((const uint8_t*)img->addr, (word32)img->size, hash,
+                           NULL, context->server->crypto->devId);
 #endif
 
     if (ret != 0) {
@@ -421,7 +428,7 @@ int wh_Server_ImgMgrVerifyMethodRsaSslWithSha256(
     if (decryptedLen != sizeof(hash) ||
         XMEMCMP(decrypted, hash, sizeof(hash)) != 0) {
         wc_FreeRsaKey(&rsaKey);
-        return WH_ERROR_ABORTED; /* RSA verification failed */
+        return WH_ERROR_NOTVERIFIED; /* RSA verification failed */
     }
 
     /* Cleanup */
@@ -443,5 +450,5 @@ int wh_Server_ImgMgrVerifyActionDefault(whServerImgMgrContext*   context,
     return verifyResult;
 }
 
-#endif /* WOLFHSM_CFG_SERVER_IMG_MGR && WOLFHSM_CFG_ENABLE_SERVER &&
+#endif /* WOLFHSM_CFG_SERVER_IMG_MGR && WOLFHSM_CFG_ENABLE_SERVER && \
           !WOLFHSM_CFG_NO_CRYPTO */

@@ -451,7 +451,7 @@ static int whTest_ServerImgMgrServerCfgEcc256(whServerConfig* serverCfg)
 
     /* Test verify all */
     whServerImgMgrVerifyResult results[1];
-    ret = wh_Server_ImgMgrVerifyAll(&imgMgr, results, 1);
+    ret = wh_Server_ImgMgrVerifyAll(&imgMgr, results, 1, NULL);
     if (ret != WH_ERROR_OK) {
         printf("Verify all images failed: %d\n", ret);
         wh_Server_Cleanup(server);
@@ -719,7 +719,7 @@ static int whTest_ServerImgMgrServerCfgAes128Cmac(whServerConfig* serverCfg)
 
     /* Test verify all */
     whServerImgMgrVerifyResult results[1];
-    ret = wh_Server_ImgMgrVerifyAll(&imgMgr, results, 1);
+    ret = wh_Server_ImgMgrVerifyAll(&imgMgr, results, 1, NULL);
     if (ret != WH_ERROR_OK) {
         printf("CMAC verify all images failed: %d\n", ret);
         wh_Server_Cleanup(server);
@@ -1070,7 +1070,7 @@ static int whTest_ServerImgMgrServerCfgRsa2048(whServerConfig* serverCfg)
 
     /* Test verify all */
     whServerImgMgrVerifyResult results[1];
-    ret = wh_Server_ImgMgrVerifyAll(&imgMgr, results, 1);
+    ret = wh_Server_ImgMgrVerifyAll(&imgMgr, results, 1, NULL);
     if (ret != WH_ERROR_OK) {
         printf("RSA verify all images failed: %d\n", ret);
         wh_Server_Cleanup(server);

@@ -53,7 +53,9 @@ struct whServerImgMgrImg;
  * @param[in] keySz Size of key data
  * @param[in] sig Signature data for verification
  * @param[in] sigSz Size of signature data
- * @return 0 on successful verification, negative error code on failure
+ * @return WH_ERROR_OK on successful verification, WH_ERROR_NOTVERIFIED when
+ *         verification fails, other negative error codes for operational
+ * failures
  */
 typedef int (*whServerImgMgrVerifyMethod)(whServerImgMgrContext* context,
                                           const struct whServerImgMgrImg* img,
@@ -70,7 +72,7 @@ typedef int (*whServerImgMgrVerifyMethod)(whServerImgMgrContext* context,
  * @param[in] context Image manager context
  * @param[in] img Image structure containing verification parameters
  * @param[in] verifyResult Result from the verification method
- * @return 0 on success, negative error code on failure
+ * @return WH_ERROR_OK on success, negative error code on failure
  */
 typedef int (*whServerImgMgrVerifyAction)(whServerImgMgrContext* context,
                                           const struct whServerImgMgrImg* img,
@@ -135,7 +137,7 @@ struct whServerImgMgrContext_t {
  *
  * @param[in] context Image manager context to initialize
  * @param[in] config Configuration containing image list
- * @return 0 on success, negative error code on failure
+ * @return WH_ERROR_OK on success, negative error code on failure
  */
 int wh_Server_ImgMgrInit(whServerImgMgrContext*      context,
                          const whServerImgMgrConfig* config);
@@ -149,13 +151,18 @@ int wh_Server_ImgMgrInit(whServerImgMgrContext*      context,
  *
  * @param[in] context Image manager context
  * @param[out] outResults Array to store verification results for each image
- * @param[in] outResultsSize Size of the results array (must be >=
- * context->imageCount)
- * @return 0 on success, negative error code on failure
+ * @param[in] outResultsCount Number of result slots in the results array (must
+ * be == context->imageCount)
+ * @param[out] outErrorIdx Holds the index of the image whose verification
+ * returned an error (indicated via this function's return value).  Only valid
+ * if return value is not WH_ERROR_OK.  If no error occurred, this value is not
+ * updated.
+ *
+ * @return WH_ERROR_OK on success, negative error code on failure.
  */
 int wh_Server_ImgMgrVerifyAll(whServerImgMgrContext*      context,
                               whServerImgMgrVerifyResult* outResults,
-                              size_t                      outResultsSize);
+                              size_t outResultsCount, size_t* outErrorIdx);
 
 /**
  * @brief Verify an image by reference
@@ -166,8 +173,9 @@ int wh_Server_ImgMgrVerifyAll(whServerImgMgrContext*      context,
  *
  * @param[in] context Image manager context
  * @param[in] img Image structure to verify
- * @param[out] outResult Verification result structure to populate
- * @return 0 on success, negative error code on failure
+ * @param[out] outResult Verification result. Only valid when function returns
+ * WH_ERROR_OK.
+ * @return WH_ERROR_OK on success, negative error code on failure
  */
 int wh_Server_ImgMgrVerifyImg(whServerImgMgrContext*      context,
                               const whServerImgMgrImg*    img,
@@ -181,8 +189,9 @@ int wh_Server_ImgMgrVerifyImg(whServerImgMgrContext*      context,
  *
  * @param[in] context Image manager context
  * @param[in] imgIdx Index of image to verify
- * @param[out] outResult Verification result structure to populate
- * @return 0 on success, negative error code on failure
+ * @param[out] outResult Verification result. Only valid when function returns
+ * WH_ERROR_OK.
+ * @return WH_ERROR_OK on success, negative error code on failure
  */
 int wh_Server_ImgMgrVerifyImgIdx(whServerImgMgrContext* context, size_t imgIdx,
                                  whServerImgMgrVerifyResult* outResult);
@@ -201,7 +210,8 @@ int wh_Server_ImgMgrVerifyImgIdx(whServerImgMgrContext* context, size_t imgIdx,
  * @param[in] keySz Size of key data
  * @param[in] sig Signature data
  * @param[in] sigSz Size of signature data
- * @return 0 on successful verification, negative error code on failure
+ * @return WH_ERROR_OK on successful verification, negative error code on
+ * failure
  */
 int wh_Server_ImgMgrVerifyMethodEccWithSha256(whServerImgMgrContext*   context,
                                               const whServerImgMgrImg* img,
@@ -220,7 +230,8 @@ int wh_Server_ImgMgrVerifyMethodEccWithSha256(whServerImgMgrContext*   context,
  * @param[in] keySz Size of key data (must be 16)
  * @param[in] sig CMAC signature data (16 bytes)
  * @param[in] sigSz Size of signature data (must be 16)
- * @return 0 on successful verification, negative error code on failure
+ * @return WH_ERROR_OK on successful verification, negative error code on
+ * failure
  */
 int wh_Server_ImgMgrVerifyMethodAesCmac(whServerImgMgrContext*   context,
                                         const whServerImgMgrImg* img,
@@ -239,7 +250,8 @@ int wh_Server_ImgMgrVerifyMethodAesCmac(whServerImgMgrContext*   context,
  * @param[in] keySz Size of key data
  * @param[in] sig RSA signature data
  * @param[in] sigSz Size of signature data
- * @return 0 on successful verification, negative error code on failure
+ * @return WH_ERROR_OK on successful verification, negative error code on
+ * failure
  */
 int wh_Server_ImgMgrVerifyMethodRsaSslWithSha256(
     whServerImgMgrContext* context, const whServerImgMgrImg* img,
