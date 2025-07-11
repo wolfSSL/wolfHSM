@@ -42,4 +42,8 @@
 
 #define WOLFHSM_CFG_CERTIFICATE_MANAGER
 #define WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT
+
+/* Enable Image Manager feature */
+#define WOLFHSM_CFG_SERVER_IMG_MGR
+
 #endif /* WOLFHSM_CFG_H_ */

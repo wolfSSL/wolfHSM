@@ -193,9 +193,9 @@ struct whServerContext_t {
     whNvmContext* nvm;
     whCommServer  comm[1];
 #ifndef WOLFHSM_CFG_NO_CRYPTO
-    whServerCryptoContext*  crypto;
-    whServerCacheSlot       cache[WOLFHSM_CFG_SERVER_KEYCACHE_COUNT];
-    whServerBigCacheSlot    bigCache[WOLFHSM_CFG_SERVER_KEYCACHE_BIG_COUNT];
+    whServerCryptoContext* crypto;
+    whServerCacheSlot      cache[WOLFHSM_CFG_SERVER_KEYCACHE_COUNT];
+    whServerBigCacheSlot   bigCache[WOLFHSM_CFG_SERVER_KEYCACHE_BIG_COUNT];
 #ifdef WOLFHSM_CFG_SHE_EXTENSION
     whServerSheContext* she;
 #endif
@@ -203,8 +203,7 @@ struct whServerContext_t {
     whServerCustomCb   customHandlerTable[WOLFHSM_CFG_SERVER_CUSTOMCB_COUNT];
     whServerDmaContext dma;
     int                connected;
-    uint16_t cancelSeq;
-    uint8_t WH_PAD[2];
+    uint16_t           cancelSeq;
 };
 
 

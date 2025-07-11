@@ -48,7 +48,7 @@ enum WH_ERROR_ENUM {
     WH_ERROR_LOCKED      = -2100, /* Unlock and retry if necessary */
     WH_ERROR_ACCESS      = -2101, /* Update access and retry */
     WH_ERROR_NOTVERIFIED = -2102, /* Backing store does not match */
-    WH_ERROR_NOTBLANK    = -2103, /* Area is no blank */
+    WH_ERROR_NOTBLANK    = -2103, /* Area is not blank */
     WH_ERROR_NOTFOUND    = -2104, /* Matching object not found */
     WH_ERROR_NOSPACE     = -2105, /* No available space */
 
