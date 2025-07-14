@@ -79,7 +79,7 @@ int wh_Crypto_EccUpdatePrivateOnlyKeyDer(ecc_key* key, uint16_t pub_size,
 #ifdef HAVE_CURVE25519
 /* Store a curve25519_key to a byte sequence */
 int wh_Crypto_Curve25519SerializeKey(curve25519_key* key, uint8_t* buffer,
-                                     uint16_t* out_size);
+                                     uint16_t* outDerSize);
 /* Restore a curve25519_key from a byte sequence */
 int wh_Crypto_Curve25519DeserializeKey(const uint8_t* derBuffer,
                                        uint16_t derSize, curve25519_key* key);

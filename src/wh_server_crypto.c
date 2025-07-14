@@ -298,6 +298,9 @@ static int _HandleRsaKeyGen(whServerContext* ctx, uint16_t magic,
                 if (WH_KEYID_ISERASED(key_id)) {
                     /* Generate a new id */
                     ret = wh_Server_KeystoreGetUniqueId(ctx, &key_id);
+                    if (ret != 0) {
+                        return ret;
+                    }
 #ifdef DEBUG_CRYPTOCB_VERBOSE
                     printf("[server] RsaKeyGen UniqueId: keyId:%u, ret:%d\n",
                            key_id, ret);
@@ -738,6 +741,9 @@ static int _HandleEccKeyGen(whServerContext* ctx, uint16_t magic,
                 if (WH_KEYID_ISERASED(key_id)) {
                     /* Generate a new id */
                     ret = wh_Server_KeystoreGetUniqueId(ctx, &key_id);
+                    if (ret != 0) {
+                        return ret;
+                    }
 #ifdef DEBUG_CRYPTOCB
                     printf("[server] %s UniqueId: keyId:%u, ret:%d\n", __func__,
                            key_id, ret);
@@ -1155,6 +1161,9 @@ static int _HandleCurve25519KeyGen(whServerContext* ctx, uint16_t magic,
                 if (WH_KEYID_ISERASED(key_id)) {
                     /* Generate a new id */
                     ret = wh_Server_KeystoreGetUniqueId(ctx, &key_id);
+                    if (ret != 0) {
+                        return ret;
+                    }
 #ifdef DEBUG_CRYPTOCB
                     printf("[server] %s UniqueId: keyId:%u, ret:%d\n", __func__,
                            key_id, ret);
@@ -1918,6 +1927,9 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
                                             ctx->comm->client_id,
                                             WH_KEYID_ERASED);
                     ret   = wh_Server_KeystoreGetUniqueId(ctx, &keyId);
+                    if (ret != 0) {
+                        return ret;
+                    }
                 }
                 else {
                     keyId = WH_MAKE_KEYID(  WH_KEYTYPE_CRYPTO,
@@ -1927,6 +1939,9 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
                 /* evict the aes sized key in the normal cache */
                 if (moveToBigCache == 1) {
                     ret = wh_Server_KeystoreEvictKey(ctx, keyId);
+                    if (ret != 0) {
+                        return ret;
+                    }
                 }
                 meta->id = keyId;
                 meta->len = sizeof(ctx->crypto->algoCtx.cmac);
@@ -2344,6 +2359,9 @@ static int _HandleMlDsaKeyGen(whServerContext* ctx, uint16_t magic,
                         if (WH_KEYID_ISERASED(key_id)) {
                             /* Generate a new id */
                             ret = wh_Server_KeystoreGetUniqueId(ctx, &key_id);
+                            if (ret != 0) {
+                                return ret;
+                            }
 #ifdef DEBUG_CRYPTOCB
                             printf("[server] %s UniqueId: keyId:%u, ret:%d\n",
                                    __func__, key_id, ret);
@@ -3459,6 +3477,9 @@ static int _HandleMlDsaKeyGenDma(whServerContext* ctx, uint16_t magic,
                         if (WH_KEYID_ISERASED(keyId)) {
                             /* Generate a new id */
                             ret = wh_Server_KeystoreGetUniqueId(ctx, &keyId);
+                            if (ret != 0) {
+                                return ret;
+                            }
 #ifdef DEBUG_CRYPTOCB
                             printf("[server] %s UniqueId: keyId:%u, ret:%d\n",
                                    __func__, keyId, ret);

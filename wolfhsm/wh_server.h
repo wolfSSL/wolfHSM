@@ -356,8 +356,8 @@ int wh_Server_Cleanup(whServerContext* server);
  * @return int Returns WH_ERROR_OK on success, or WH_ERROR_BADARGS if the
  * arguments are invalid.
  */
-int wh_Server_RegisterCustomCb(whServerContext* server, uint16_t actionId,
-                               whServerCustomCb cb);
+int wh_Server_RegisterCustomCb(whServerContext* server, uint16_t action,
+                               whServerCustomCb handler);
 
 /**
  * @brief Handles incoming custom callback requests.

@@ -913,7 +913,13 @@ int wh_NvmFlash_Init(void* c, const void* cf)
                 context,
                 context->active,
                 &context->directory);
+        if (ret != 0) {
+            return ret;
+        }
         ret = nfMemDirectory_Parse(&context->directory);
+        if (ret != 0) {
+            return ret;
+        }
 
         context->initialized = 1;
         return 0;
@@ -946,7 +952,7 @@ int wh_NvmFlash_Cleanup(void* c)
 
 int wh_NvmFlash_List(void* c,
         whNvmAccess access, whNvmFlags flags, whNvmId start_id,
-        whNvmId *out_count, whNvmId *out_id)
+        whNvmId *out_avail_objects, whNvmId *out_id)
 {
     /* TODO: Implement access and flag matching */
     (void)access; (void)flags;
@@ -1004,7 +1010,7 @@ int wh_NvmFlash_List(void* c,
             }
         }
     }
-    if (out_count != NULL) *out_count = this_count;
+    if (out_avail_objects != NULL) *out_avail_objects = this_count;
     if (out_id != NULL) *out_id = this_id;
     return 0;
 }
@@ -1083,7 +1089,7 @@ int wh_NvmFlash_AddObject(void* c, whNvmMetadata *meta,
     }
 
     /* Find existing object so we can increment the epoch */
-    ret = nfMemDirectory_FindObjectIndexById(d, meta->id, &oldentry);
+    (void)nfMemDirectory_FindObjectIndexById(d, meta->id, &oldentry);
     if (oldentry >= 0) {
         epoch = d->objects[oldentry].state.epoch + 1;
     }
@@ -1190,9 +1196,12 @@ int wh_NvmFlash_DestroyObjects(void* c, whNvmId list_count,
     /* Write each used object to new partition */
     for (entry = 0; entry < WOLFHSM_CFG_NVM_OBJECT_COUNT; entry++) {
         if (d->objects[entry].state.status == NF_STATUS_USED) {
-            /* TODO: Handle errors here better. Break out of loop? */
+            /* Handle errors by breaking out of loop on failure */
             ret = nfObject_Copy(context, entry,
                     dest_part, &dest_object, &dest_data);
+            if (ret != 0) {
+                return ret;
+            }
         }
     }
 

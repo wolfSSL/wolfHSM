@@ -241,7 +241,7 @@ int wh_Client_EccMakeCacheKey(whClientContext* ctx,
 /* TODO: Perform shared secret computation (ECDH) */
 int wh_Client_EccSharedSecret(whClientContext* ctx,
                                 ecc_key* priv_key, ecc_key* pub_key,
-                                uint8_t* sig, uint16_t *out_size);
+                                uint8_t* out, uint16_t *out_size);
 
 /* TODO: Server generates signature of input hash */
 int wh_Client_EccSign(whClientContext* ctx,
@@ -325,12 +325,12 @@ int wh_Client_RsaExportKey(whClientContext* ctx, whKeyId keyId,
 
 /* Generate an RSA key on the server and export it inta an RSA struct */
 int wh_Client_RsaMakeExportKey(whClientContext* ctx,
-        uint32_t size, uint32_t e, RsaKey* key);
+        uint32_t size, uint32_t e, RsaKey* rsa);
 
 /* Generate an RSA key on the server and put it in the server keycache */
 int wh_Client_RsaMakeCacheKey(whClientContext* ctx,
         uint32_t size, uint32_t e,
-        whKeyId *inout_keyId, whNvmFlags flags,
+        whKeyId* inout_key_id, whNvmFlags flags,
         uint32_t label_len, uint8_t* label);
 
 /* TODO: Request server to perform the RSA function */
@@ -445,7 +445,7 @@ int wh_Client_Cmac(whClientContext* ctx, Cmac* cmac, CmacType type,
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_Client_CmacCancelableResponse(whClientContext* c, Cmac* cmac,
-    uint8_t* sig, uint16_t* outSz);
+    uint8_t* out, uint16_t* outSz);
 
 /**
  * @brief Associates a CMAC key with a specific key ID.
@@ -703,7 +703,7 @@ int wh_Client_MlDsaExportKey(whClientContext* ctx, whKeyId keyId, MlDsaKey* key,
  * @param[in,out] key Pointer to the ML-DSA key structure to store the key.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
-int wh_Client_MlDsaMakeExportKey(whClientContext* ctx, int type, int size,
+int wh_Client_MlDsaMakeExportKey(whClientContext* ctx, int level, int size,
                                  MlDsaKey* key);
 /**
  * @brief Create and cache a new ML-DSA key on the server.

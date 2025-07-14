@@ -211,23 +211,23 @@ int wh_Crypto_EccUpdatePrivateOnlyKeyDer(ecc_key* key, uint16_t pub_size,
 
 /* Store a curve25519_key to a byte sequence in DER format */
 int wh_Crypto_Curve25519SerializeKey(curve25519_key* key, uint8_t* buffer,
-                                     uint16_t* derSize)
+                                     uint16_t* outDerSize)
 {
     int ret = 0;
     /* We must include the algorithm identifier in the DER encoding, or we will
      * not be able to deserialize it properly in the public key only case*/
     const int WITH_ALG_ENABLE_SUBJECT_PUBLIC_KEY_INFO = 1;
 
-    if ((key == NULL) || (buffer == NULL) || (derSize == NULL)) {
+    if ((key == NULL) || (buffer == NULL) || (outDerSize == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
-    ret = wc_Curve25519KeyToDer(key, buffer, *derSize,
+    ret = wc_Curve25519KeyToDer(key, buffer, *outDerSize,
                                 WITH_ALG_ENABLE_SUBJECT_PUBLIC_KEY_INFO);
 
     /* ASN.1 functions return the size of the DER encoded key on success */
     if (ret > 0) {
-        *derSize = ret;
+        *outDerSize = ret;
         ret      = WH_ERROR_OK;
     }
     return ret;

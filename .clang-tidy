@@ -1,0 +1,74 @@
+# wolfHSM clang-tidy configuration
+# Focused on security, correctness, and portability for embedded HSM framework
+
+Checks: >
+  -*,
+  bugprone-*,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-reserved-identifier,
+  -bugprone-macro-parentheses,
+  -bugprone-narrowing-conversions,
+  -bugprone-assignment-in-if-condition,
+  -bugprone-branch-clone,
+  -bugprone-implicit-widening-of-multiplication-result,
+  -bugprone-switch-missing-default-case,
+  cert-*,
+  -cert-dcl37-c,
+  -cert-dcl51-cpp,
+  clang-analyzer-*,
+  -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling,
+  misc-*,
+  -misc-include-cleaner,
+  -misc-header-include-cycle,
+  -misc-no-recursion,
+  -misc-unused-parameters,
+  -misc-redundant-expression,
+  performance-*,
+  -performance-no-int-to-ptr,
+  portability-*,
+  readability-duplicate-include,
+  readability-misleading-indentation,
+  -readability-non-const-parameter,
+  readability-redundant-control-flow,
+  readability-inconsistent-declaration-parameter-name,
+  readability-isolate-declaration,
+  -readability-magic-numbers,
+  -readability-else-after-return,
+  -readability-avoid-const-params-in-decls,
+
+# Don't generate warnings in system headers
+HeaderFilterRegex: '^(src[\\\/]|wolfhsm[\\\/]).*\.(c|h)$'
+
+# C-specific settings for wolfHSM
+CheckOptions:
+  - key: bugprone-reserved-identifier.AllowedIdentifiers
+    value: '__.*'
+  - key: cert-dcl16-c.NewSuffixes
+    value: 'L;LL;LU;LLU'
+  - key: misc-non-private-member-variables-in-classes.IgnoreClassesWithAllMemberVariablesBeingPublic
+    value: '1'
+  - key: bugprone-argument-comment.StrictMode
+    value: '0'
+  - key: bugprone-sizeof-expression.WarnOnSizeOfConstant
+    value: '0'
+  - key: bugprone-sizeof-expression.WarnOnSizeOfIntegerExpression
+    value: '0'
+  - key: bugprone-sizeof-expression.WarnOnOffsetDividedBySizeOf
+    value: '0'
+  - key: performance-inefficient-string-concatenation.StrictMode
+    value: '0'
+  - key: readability-non-const-parameter.IgnoreMacros
+    value: '1'
+  - key: bugprone-unused-return-value.AllowCastToVoid
+    value: '1'
+  - key: bugprone-unused-return-value.CheckedFunctions
+    value: 'snprintf;vsnprintf;fread;fwrite;fseek;realloc;malloc;calloc'
+
+# Treat specific warnings as errors for security-critical issues
+WarningsAsErrors: >
+  bugprone-use-after-move,
+  clang-analyzer-core.NullDereference,
+  clang-analyzer-core.uninitialized.*,
+  clang-analyzer-security.*,
+  cert-err34-c,
+  cert-str31-c
