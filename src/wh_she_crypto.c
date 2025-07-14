@@ -135,25 +135,22 @@ int wh_She_GenerateLoadableKey(uint8_t keyId,
     ret = wh_AesMp16(kdfInput,
         WH_SHE_KEY_SZ + sizeof(_SHE_KEY_UPDATE_ENC_C), tmpKey);
 
-    /* Build M1. set UID, key id and authId */
+    /* Build M1 and cleartext M2, then encrypt M2 with K1 */
     if (ret == 0) {
+        /* Build M1: set UID, key id and authId */
         memcpy(messageOne, uid, WH_SHE_UID_SZ);
         messageOne[WH_SHE_M1_KID_OFFSET] =
-                (keyId      << WH_SHE_M1_KID_SHIFT) |
-                (authKeyId  << WH_SHE_M1_AID_SHIFT);
-    }
+            (keyId      << WH_SHE_M1_KID_SHIFT) |
+            (authKeyId  << WH_SHE_M1_AID_SHIFT);
 
-    /* build cleartext M2 */
-    if (ret == 0) {
-        /* set the counter, flags and key */
+        /* Build cleartext M2: set the counter, flags and key */
         memset(messageTwo, 0, WH_SHE_M2_SZ);
         *((uint32_t*)messageTwo) = wh_Utils_htonl(
                 (count  << WH_SHE_M2_COUNT_SHIFT) |
                 (flags  << WH_SHE_M2_FLAGS_SHIFT) );
         memcpy(messageTwo + WH_SHE_M2_KEY_OFFSET, key, WH_SHE_KEY_SZ);
-    }
-    /* encrypt M2 with K1 */
-    if (ret == 0) {
+
+        /* encrypt M2 with K1 */
         ret = wc_AesInit(aes, NULL, INVALID_DEVID);
         if (ret == 0) {
             ret = wc_AesSetKey(aes, tmpKey, WH_SHE_KEY_SZ, NULL,

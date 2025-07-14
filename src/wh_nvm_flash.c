@@ -442,6 +442,12 @@ static int nfPartition_ProgramCount(whNvmFlashContext* context,
 
 static int nfPartition_ProgramInit(whNvmFlashContext* context, int partition)
 {
+    int ret = 0;
+
+    if ((context == NULL) || (context->cb == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
     /* Valid initial state values for a partition */
     nfMemState init_state =
     {
@@ -450,11 +456,6 @@ static int nfPartition_ProgramInit(whNvmFlashContext* context, int partition)
         .start = NF_PARTITION_DATA_OFFSET,
         .count = context->partition_units,
     };
-    int ret = 0;
-
-    if ((context == NULL) || (context->cb == NULL)) {
-        return WH_ERROR_BADARGS;
-    }
 
     /* Blankcheck/Erase partition */
     ret = nfPartition_BlankCheck(context, partition);
@@ -735,12 +736,11 @@ static int nfObject_Copy(whNvmFlashContext* context, int object_index,
     }
     ret = nfObject_ProgramFinish(context, partition, dest_object, data_len);
     if (ret != 0) return ret;
-    dest_object++;
 
-    if (ret == 0) {
-        *inout_next_object = dest_object;
-        *inout_next_data = dest_data;
-    }
+    dest_object++;
+    *inout_next_object = dest_object;
+    *inout_next_data = dest_data;
+
     return ret;
 }
 

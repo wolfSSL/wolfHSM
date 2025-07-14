@@ -1,0 +1,57 @@
+name: Static Analysis
+
+on:
+  pull_request:
+    branches: [ main, master ]
+  push:
+    branches: [ main, master ]
+
+jobs:
+  cppcheck:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Install cppcheck
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cppcheck
+
+    - name: Run cppcheck
+      id: cppcheck
+      continue-on-error: true
+      run: |
+        chmod +x tools/static-analysis/run_cppcheck.sh
+        tools/static-analysis/run_cppcheck.sh
+
+    - name: Display errors and warnings
+      if: always()
+      run: |
+        if [ -f tools/static-analysis/reports/cppcheck_summary.txt ]; then
+          ERROR_COUNT=$(grep -c "error:" tools/static-analysis/reports/cppcheck_summary.txt 2>/dev/null) || ERROR_COUNT=0
+          WARNING_COUNT=$(grep -c "warning:" tools/static-analysis/reports/cppcheck_summary.txt 2>/dev/null) || WARNING_COUNT=0
+          STYLE_COUNT=$(grep -c "style:" tools/static-analysis/reports/cppcheck_summary.txt 2>/dev/null) || STYLE_COUNT=0
+
+          echo "## Static Analysis Summary"
+          echo "- Errors: $ERROR_COUNT"
+          echo "- Warnings: $WARNING_COUNT"
+          echo "- Style issues: $STYLE_COUNT (informational only)"
+
+          if [ "$ERROR_COUNT" -gt 0 ] || [ "$WARNING_COUNT" -gt 0 ]; then
+            echo ""
+            echo "### Issues that must be fixed:"
+            echo ""
+            # Show only errors and warnings, not style issues
+            grep -E "(error|warning):" tools/static-analysis/reports/cppcheck_summary.txt || true
+          fi
+        else
+          echo "⚠️ No cppcheck summary file found"
+        fi
+
+    - name: Fail if issues found
+      if: steps.cppcheck.outcome == 'failure'
+      run: |
+        echo "❌ Static analysis failed - errors or warnings were found"
+        exit 1

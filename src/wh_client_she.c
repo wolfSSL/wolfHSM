@@ -120,11 +120,9 @@ int wh_Client_SheSecureBoot(whClientContext* c, uint8_t* bootloader,
 {
     int      ret;
     uint32_t bootloaderSent = 0;
-    uint32_t justSent       = 0;
     uint16_t group;
     uint16_t action;
     uint16_t dataSz;
-    uint8_t* in;
     uint8_t* respBuf;
 
     whMessageShe_SecureBootInitRequest*    initReq    = NULL;
@@ -141,9 +139,6 @@ int wh_Client_SheSecureBoot(whClientContext* c, uint8_t* bootloader,
         (whMessageShe_SecureBootInitRequest*)wh_CommClient_GetDataPtr(c->comm);
     respBuf = (uint8_t*)wh_CommClient_GetDataPtr(c->comm);
 
-    /* in is after the size argument */
-    in = (uint8_t*)(initReq + 1);
-
     /* send init sub command */
     initReq->sz = bootloaderLen;
     ret =
@@ -159,6 +154,9 @@ int wh_Client_SheSecureBoot(whClientContext* c, uint8_t* bootloader,
 
     /* send update sub command until we've sent the entire bootloader */
     while (ret == 0 && bootloaderSent < bootloaderLen) {
+        uint8_t* in;
+        uint32_t justSent;
+
         if (initResp->rc != WH_SHE_ERC_NO_ERROR) {
             return initResp->rc;
         }

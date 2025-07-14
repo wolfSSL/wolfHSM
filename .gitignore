@@ -9,3 +9,8 @@ tools/testcertgen/*.der
 *.code-workspace
 .vscode
 
+# Static analysis reports
+tools/static-analysis/reports/
+*.xml
+*.html
+
