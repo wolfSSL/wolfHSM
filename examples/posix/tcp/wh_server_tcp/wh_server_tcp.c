@@ -30,6 +30,10 @@
 static int wh_ServerTask(void* cf, const char* keyFilePath, int keyId,
                          int clientId);
 
+static void _SleepMs(long milliseconds);
+static void _HexDump(const char* initial, const uint8_t* ptr, size_t size);
+static int _HardwareCryptoCb(int devId, struct wc_CryptoInfo* info, void* ctx);
+
 /* Macros for maximum client ID and key ID */
 #define MAX_CLIENT_ID 255
 #define MAX_KEY_ID UINT16_MAX
@@ -72,7 +76,7 @@ static int  parseInteger(const char* str, uint32_t maxValue, uint32_t* result);
 static void parseNvmInitFile(const char* filePath);
 static int initializeNvm(whNvmContext* nvmContext, const char* nvmInitFilePath);
 
-static void sleepMs(long milliseconds)
+static void _SleepMs(long milliseconds)
 {
     struct timespec req;
     req.tv_sec  = milliseconds / 1000;
@@ -504,7 +508,7 @@ static int wh_ServerTask(void* cf, const char* keyFilePath, int keyId,
         while (1) {
             ret = wh_Server_HandleRequestMessage(server);
             if (ret == WH_ERROR_NOTREADY) {
-                sleepMs(ONE_MS);
+                _SleepMs(ONE_MS);
             }
             else if (ret != WH_ERROR_OK) {
                 printf("Failed to wh_Server_HandleRequestMessage: %d\n", ret);
@@ -556,6 +560,59 @@ static int wh_ServerTask(void* cf, const char* keyFilePath, int keyId,
                 }
             }
         }
+    }
+    return ret;
+}
+
+static void _HexDump(const char* initial, const uint8_t* ptr, size_t size)
+{
+#define HEXDUMP_BYTES_PER_LINE 16
+    int count = 0;
+    if(initial != NULL)
+        printf("%s ",initial);
+    while(size > 0) {
+        printf ("%02X ", *ptr);
+        ptr++;
+        size --;
+        count++;
+        if (count % HEXDUMP_BYTES_PER_LINE == 0) {
+            printf("\n");
+        }
+    }
+    if((count % HEXDUMP_BYTES_PER_LINE) != 0) {
+        printf("\n");
+    }
+}
+
+static int _HardwareCryptoCb(int devId, struct wc_CryptoInfo* info,
+                                   void* ctx)
+{
+    /* Default response */
+    int ret = CRYPTOCB_UNAVAILABLE;
+    switch(info->algo_type) {
+        case WC_ALGO_TYPE_RNG: {
+            /*printf("Hardware Crypto Callback: RNG operation requested\n");*/
+            /* Extract info parameters */
+            uint8_t* out = info->rng.out;
+            uint32_t size = info->rng.sz;
+
+            /* III Not random, just simple counter */
+            static uint16_t my_counter = 1;
+            if(my_counter > 4096) {
+                /* Only allow 4096 bytes to be generated */
+                ret= CRYPTOCB_UNAVAILABLE;
+            } else {
+                uint32_t i = 0;
+                for (i = 0; i < size; i++) {
+                    out[i] = (uint8_t)my_counter++;
+                }
+                ret = 0;
+            }
+            break;
+        }
+        default:
+            /*printf("Hardware Crypto Callback: Unsupported algorithm type\n"); */
+            ret = CRYPTOCB_UNAVAILABLE;
     }
     return ret;
 }
@@ -663,7 +720,27 @@ int main(int argc, char** argv)
     /* Initialize crypto library and hardware */
     wolfCrypt_Init();
 
-    wc_InitRng_ex(crypto->rng, NULL, crypto->devId);
+    /* Context 3: Server Software Crypto */
+    WC_RNG rng[1];
+    uint8_t buffer[128] = {0};
+    wc_InitRng_ex(rng, NULL, INVALID_DEVID);
+    wc_RNG_GenerateBlock(rng, buffer, sizeof(buffer));
+    wc_FreeRng(rng);
+    _HexDump("Context 3 RNG:\n", buffer, sizeof(buffer));
+
+    /* Context 4: Server Hardware Crypto */
+    #define HW_DEV_ID 100
+    memset(buffer, 0, sizeof(buffer));
+    wc_CryptoCb_RegisterDevice(HW_DEV_ID, _HardwareCryptoCb, NULL);
+    wc_InitRng_ex(rng, NULL, HW_DEV_ID);
+    wc_RNG_GenerateBlock(rng, buffer, sizeof(buffer));
+    wc_FreeRng(rng);
+    _HexDump("Context 4 RNG:\n", buffer, sizeof(buffer));
+
+    /* Context 5: Set default server crypto to use cryptocb */
+    crypto->devId = HW_DEV_ID;
+    printf("Context 5: Setting up server crypto with devId=%d\n",
+                crypto->devId);
 
     rc = wc_InitRng_ex(crypto->rng, NULL, crypto->devId);
     if (rc != 0) {

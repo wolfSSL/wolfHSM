@@ -115,9 +115,6 @@ $(BUILD_DIR)/%.o: %.c
 $(BUILD_DIR)/$(BIN).elf: $(OBJS_ASM) $(OBJS_C)
 	@echo "Linking ELF binary: $(notdir $@)"
 	$(CMD_ECHO) $(CC) $(LDFLAGS) $(SRC_LD) -o $@ $^ $(LIBS)
-	ln -sf $(BIN).elf $(BUILD_DIR)/wh_client_provision.elf
-	ln -sf $(BIN).elf $(BUILD_DIR)/wh_client_secboot.elf
-	ln -sf $(BIN).elf $(BUILD_DIR)/wh_client_zeroize.elf
 
 $(BUILD_DIR)/$(BIN).a: $(OBJS_ASM) $(OBJS_C)
 	@echo "Building static library: $(notdir $@)"
