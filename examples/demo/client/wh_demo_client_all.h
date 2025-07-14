@@ -1,8 +1,8 @@
-#ifndef CLIENT_DEMO_DRIVER_H_
-#define CLIENT_DEMO_DRIVER_H_
+#ifndef DEMO_CLIENT_ALL_H_
+#define DEMO_CLIENT_ALL_H_
 
 #include "wolfhsm/wh_client.h"
 
 int wh_DemoClient_All(whClientContext* clientContext);
 
-#endif /* CLIENT_DEMO_DRIVER_H_ */
+#endif /* !DEMO_CLIENT_ALL_H_ */

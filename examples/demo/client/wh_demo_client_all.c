@@ -1,9 +1,9 @@
-#include "wh_demo_client_all.h"
+#include "wh_demo_client_wctest.h"
+#include "wh_demo_client_wcbench.h"
 #include "wh_demo_client_nvm.h"
 #include "wh_demo_client_keystore.h"
 #include "wh_demo_client_crypto.h"
-#include "wh_demo_client_wctest.h"
-#include "wh_demo_client_wcbench.h"
+#include "wh_demo_client_all.h"
 
 int wh_DemoClient_All(whClientContext* clientContext)
 {
