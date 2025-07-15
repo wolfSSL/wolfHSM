@@ -10,6 +10,7 @@
 
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_comm.h"
+#include "wolfhsm/wh_utils.h"
 #include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_client.h"
 #include "wolfhsm/wh_client_crypto.h"
@@ -18,37 +19,16 @@
 #include "wh_demo_client_all.h"
 
 /** Local declarations */
-static void _SleepMs(long milliseconds);
-static void _HexDump(const char* initial, const uint8_t* ptr, size_t size);
+static void _aleepMs(long milliseconds);
 static int wh_ClientTask(void* cf);
 
 
-static void _SleepMs(long milliseconds)
+static void _aleepMs(long milliseconds)
 {
     struct timespec req;
     req.tv_sec  = milliseconds / 1000;
     req.tv_nsec = (milliseconds % 1000) * 1000000;
     nanosleep(&req, NULL);
-}
-
-static void _HexDump(const char* initial, const uint8_t* ptr, size_t size)
-{
-#define HEXDUMP_BYTES_PER_LINE 16
-    int count = 0;
-    if(initial != NULL)
-        printf("%s ",initial);
-    while(size > 0) {
-        printf ("%02X ", *ptr);
-        ptr++;
-        size --;
-        count++;
-        if (count % HEXDUMP_BYTES_PER_LINE == 0) {
-            printf("\n");
-        }
-    }
-    if((count % HEXDUMP_BYTES_PER_LINE) != 0) {
-        printf("\n");
-    }
 }
 
 enum {
@@ -101,7 +81,7 @@ static int wh_ClientTask(void* cf)
                     printf("wh_CLient_EchoRequest failed with ret=%d\n", ret);
                 }
             }
-            _SleepMs(ONE_MS);
+            _aleepMs(ONE_MS);
         } while (ret == WH_ERROR_NOTREADY);
 
         if (ret != 0) {
@@ -115,7 +95,7 @@ static int wh_ClientTask(void* cf)
         do {
             ret = wh_Client_EchoResponse(client,
                     &rx_resp_len, rx_resp);
-            _SleepMs(ONE_MS);
+            _aleepMs(ONE_MS);
         } while (ret == WH_ERROR_NOTREADY);
 
         if (ret != 0) {
@@ -130,14 +110,14 @@ static int wh_ClientTask(void* cf)
     wc_InitRng_ex(rng, NULL, INVALID_DEVID);
     wc_RNG_GenerateBlock(rng, buffer, sizeof(buffer));
     wc_FreeRng(rng);
-    _HexDump("Context 1 RNG:\n", buffer, sizeof(buffer));
+    wh_Utils_Hexdump("Context 1 RNG:\n", buffer, sizeof(buffer));
 
     /* Context 2: Client Remote Crypto */
     memset(buffer, 0, sizeof(buffer));
     wc_InitRng_ex(rng, NULL, WH_DEV_ID);
     wc_RNG_GenerateBlock(rng, buffer, sizeof(buffer));
     wc_FreeRng(rng);
-    _HexDump("Context 2 RNG:\n", buffer, sizeof(buffer));
+    wh_Utils_Hexdump("Context 2 RNG:\n", buffer, sizeof(buffer));
 
 
     /* run the client demos */

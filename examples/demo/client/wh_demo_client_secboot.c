@@ -9,6 +9,7 @@
 
 #include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_error.h"
+#include "wolfhsm/wh_utils.h"
 #include "wolfhsm/wh_client.h"
 #include "wolfhsm/wh_client_crypto.h"
 
@@ -46,20 +47,19 @@ const uint8_t sig_nvmLabel[] = "File Signature";
 const char file_to_measure[] = "/bin/sh";
 
 /* Forward declarations */
-static int _ShowNvm(whClientContext* clientContext);
-static void _HexDump(const char* initial, const uint8_t* ptr, size_t size);
+static int _showNvm(whClientContext* clientContext);
 
-static int _Provision_MakeCommitKey(whClientContext* clientContext);
-static int _SHA256_File(const char* file_to_measure, uint8_t* hash);
-static int _SignHash(  whClientContext* clientContext, 
+static int _provisionMakeCommitKey(whClientContext* clientContext);
+static int _sha256File(const char* file_to_measure, uint8_t* hash);
+static int _signHash(  whClientContext* clientContext, 
                 const uint8_t* hash, size_t hash_len, 
                 uint8_t* sig, uint16_t* sig_len);
-static int _VerifyHash(  whClientContext* clientContext, 
+static int _verifyHash(  whClientContext* clientContext, 
                 const uint8_t* hash, size_t hash_len, 
                 const uint8_t* sig, uint16_t* sig_len,
                 int32_t* rc);
 
-static int _ShowNvm(whClientContext* clientContext)   
+static int _showNvm(whClientContext* clientContext)   
 {
     int ret = 0;
     whNvmAccess access = WH_NVM_ACCESS_ANY;
@@ -103,28 +103,7 @@ static int _ShowNvm(whClientContext* clientContext)
     return ret;
 }
 
-
-static void _HexDump(const char* initial, const uint8_t* ptr, size_t size)
-{
-#define HEXDUMP_BYTES_PER_LINE 16
-    int count = 0;
-    if(initial != NULL)
-        printf("%s ",initial);
-    while(size > 0) {
-        printf ("%02X ", *ptr);
-        ptr++;
-        size --;
-        count++;
-        if (count % HEXDUMP_BYTES_PER_LINE == 0) {
-            printf("\n");
-        }
-    }
-    if((count % HEXDUMP_BYTES_PER_LINE) != 0) {
-        printf("\n");
-    }
-}
-
-static int _Provision_MakeCommitKey(whClientContext* clientContext) 
+static int _provisionMakeCommitKey(whClientContext* clientContext) 
 {
     int ret;
     
@@ -142,7 +121,7 @@ static int _Provision_MakeCommitKey(whClientContext* clientContext)
     return ret;
 }
 
-static int _SHA256_File(const char* file_to_measure, uint8_t* hash)
+static int _sha256File(const char* file_to_measure, uint8_t* hash)
 {
     int ret = 0;
     int fd = open(file_to_measure, O_RDONLY);
@@ -163,7 +142,7 @@ static int _SHA256_File(const char* file_to_measure, uint8_t* hash)
             wc_Sha256Free(sha256);
             (void)munmap(ptr, size);
 
-            _HexDump("Hash:", hash, sizeof(hash));
+            wh_Utils_Hexdump("Hash:\n", hash, sizeof(hash));
         } else {
             perror("Unable to mmap input file:");
             ret = WH_ERROR_BADARGS;
@@ -175,7 +154,7 @@ static int _SHA256_File(const char* file_to_measure, uint8_t* hash)
     return ret;
 }
 
-static int _SignHash(  whClientContext* clientContext, 
+static int _signHash(  whClientContext* clientContext, 
                 const uint8_t* hash, size_t hash_len, 
                 uint8_t* sig, uint16_t* sig_len)
 {
@@ -189,7 +168,7 @@ static int _SignHash(  whClientContext* clientContext,
     return ret;
 }
 
-static int _VerifyHash(  whClientContext* clientContext, 
+static int _verifyHash(  whClientContext* clientContext, 
                 const uint8_t* hash, size_t hash_len, 
                 const uint8_t* sig, uint16_t* sig_len,
                 int32_t* rc)
@@ -221,21 +200,21 @@ int wh_DemoClient_SecBoot_Provision(whClientContext* clientContext)
     if (ret == WH_ERROR_OK) {
         printf("Provision client connected to server id %u with client id %u\n",
                 server_id, client_id);
-        _ShowNvm(clientContext);
+        _showNvm(clientContext);
 
         printf("Server generating and committing keypair...\n");
-        ret = _Provision_MakeCommitKey(clientContext);
+        ret = _provisionMakeCommitKey(clientContext);
         if (ret == WH_ERROR_OK) {
             uint8_t hash[WC_SHA256_DIGEST_SIZE] = {0};
 
             printf("Measuring image %s...\n", file_to_measure);
-            ret = _SHA256_File(file_to_measure, hash);
+            ret = _sha256File(file_to_measure, hash);
             if (ret == WH_ERROR_OK) {
                 uint8_t sig[ECC_MAX_SIG_SIZE] = {0};
                 uint16_t siglen = sizeof(sig);
 
                 printf("Signing hash...\n");
-                ret = _SignHash(clientContext, 
+                ret = _signHash(clientContext, 
                     hash, sizeof(hash), 
                     sig, &siglen);
                 if (ret == WH_ERROR_OK) {
@@ -243,7 +222,7 @@ int wh_DemoClient_SecBoot_Provision(whClientContext* clientContext)
                     uint8_t sigLabel[WH_NVM_LABEL_LEN] = {0};
                     memcpy(sigLabel, sig_nvmLabel, sizeof(sig_nvmLabel));
 
-                    _HexDump("Signature:", sig, siglen);
+                    wh_Utils_Hexdump("Signature:\n", sig, siglen);
                     printf("Storing the signature in NVM as nvmId %u\n",
                             sig_nvmId);
                     ret = wh_Client_NvmAddObject(clientContext, sig_nvmId,
@@ -254,7 +233,7 @@ int wh_DemoClient_SecBoot_Provision(whClientContext* clientContext)
                     printf("Stored signature with ret:%d and rc:%d\n", ret, rc);
                 }
             }
-            _ShowNvm(clientContext);
+            _showNvm(clientContext);
         }
     }
     printf("Provision Client completed with ret:%d\n", ret);
@@ -276,7 +255,7 @@ int wh_DemoClient_SecBoot_Boot(whClientContext* clientContext)
         printf("SecBoot Client connected to server id %u with client id %u\n",
                 server_id, client_id);
         
-        _ShowNvm(clientContext);
+        _showNvm(clientContext);
 
         uint8_t sig[ECC_MAX_SIG_SIZE] = {0};
         whNvmSize siglen = 0;
@@ -289,16 +268,16 @@ int wh_DemoClient_SecBoot_Boot(whClientContext* clientContext)
         ret = wh_Client_NvmRead(clientContext, sig_nvmId, 
                                 0, siglen, &rc, 
                                 NULL, sig);
-        _HexDump("Signature:", sig, siglen);
+        wh_Utils_Hexdump("Signature:\n", sig, siglen);
 
 
         uint8_t hash[WC_SHA256_DIGEST_SIZE] = {0};
         printf("Measuring image %s...\n", file_to_measure);
-        ret = _SHA256_File(file_to_measure, hash);
+        ret = _sha256File(file_to_measure, hash);
         if (ret == WH_ERROR_OK) {
 
             printf("SecBoot Client Verifying signature using keyId %u\n", prov_keyId);
-            ret = _VerifyHash(clientContext, 
+            ret = _verifyHash(clientContext, 
                                         hash, sizeof(hash), 
                                         sig, &siglen, 
                                         &rc);
@@ -330,7 +309,7 @@ int wh_DemoClient_SecBoot_Zeroize(whClientContext* clientContext)
             server_id, client_id, ret);
     if (ret == WH_ERROR_OK) {
         int rc = 0;
-        _ShowNvm(clientContext);
+        _showNvm(clientContext);
 
         ret = wh_Client_KeyErase(clientContext, prov_keyId);
         printf("Zeroize Client erased keyId:%u ret:%d\n", prov_keyId, ret);
@@ -339,7 +318,7 @@ int wh_DemoClient_SecBoot_Zeroize(whClientContext* clientContext)
         printf("Zeroize Client destroyed NVM object:%u ret:%d with rc:%d\n", 
             sig_nvmId, ret, rc);
 
-        _ShowNvm(clientContext);
+        _showNvm(clientContext);
     }
     printf("SecBoot Zeroize Client completed with ret:%d\n", ret);
     return ret;

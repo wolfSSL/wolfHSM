@@ -36,6 +36,10 @@
  *  WOLFHSM_CFG_SHE_EXTENSION - If defined, include AutoSAR SHE functionality
  *      Default: Not defined
  *
+ *  WOLFHSM_CFG_HEXDUMP - If defined, include wh_Utils_HexDump functionality
+ *                          using stdio.h
+ *      Default: Not defined
+ *
  *  WOLFHSM_CFG_ENABLE_CLIENT - If defined, include client-specific
  * functionality
  *
@@ -97,6 +101,10 @@
 #ifdef WOLFSSL_USER_SETTINGS
 #include "user_settings.h"
 #endif /* WOLFSSL_USER_SETTINGS */
+
+#if defined(DEBUG_CRYPTOCB) || defined(DEBUG_CRYPTOCB_VERBOSE)
+#define WOLFHSM_CFG_HEXDUMP
+#endif /* DEBUG_CRYPTOCB || DEBUG_CRYPTOCB_VERBOSE */
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
 /** Default shares configurations */
