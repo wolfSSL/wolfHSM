@@ -24,8 +24,6 @@
 /* Pick up compile-time configuration */
 #include "wolfhsm/wh_settings.h"
 
-#if !defined(WOLFHSM_CFG_NO_CRYPTO) && defined(WOLFHSM_CFG_ENABLE_SERVER)
-
 /* System libraries */
 #include <stdint.h>
 #include <stddef.h> /* For NULL */
@@ -51,6 +49,7 @@
 #include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_message_she.h"
 
+
 /** SHE defined constants */
 static const uint8_t _SHE_KEY_UPDATE_ENC_C[] = WH_SHE_KEY_UPDATE_ENC_C;
 static const uint8_t _SHE_KEY_UPDATE_MAC_C[] = WH_SHE_KEY_UPDATE_MAC_C;
@@ -64,6 +63,8 @@ enum WH_SHE_SB_STATE {
     WH_SHE_SB_SUCCESS,
     WH_SHE_SB_FAILURE,
 };
+
+
 
 /** Local Declarations */
 static int      _AesMp16(whServerContext* server, uint8_t* in, word32 inSz,
@@ -123,10 +124,6 @@ static int _VerifyMac(whServerContext* server, uint16_t magic,
                       uint16_t req_size, const void* req_packet,
                       uint16_t* out_resp_size, void* resp_packet);
 static int _TranslateSheReturnCode(int ret);
-static int _ReportInvalidSheState(whServerContext* server, uint16_t magic,
-                                  uint16_t action, uint16_t req_size,
-                                  const void* req_packet,
-                                  uint16_t* out_resp_size, void* resp_packet);
 
 /** Local Implementations */
 static int _TranslateSheReturnCode(int ret)
@@ -1058,7 +1055,7 @@ static int _EncEcb(whServerContext* server, uint16_t magic, uint16_t req_size,
     /* in and out are after the fixed sized fields */
     in  = (uint8_t*)req_packet + sizeof(req);
     out = (uint8_t*)resp_packet + sizeof(resp);
-
+    //req->sz =req_packet->sz, req->keyId=req_packet->keyId
     (void)wh_MessageShe_TranslateEncEcbRequest(magic, req_packet, &req);
 
     /* load the key */
@@ -1375,168 +1372,29 @@ static int _VerifyMac(whServerContext* server, uint16_t magic,
     return ret;
 }
 
-
-/* TODO: This is terrible, but without implementing a SHE sub-protocol like we
- * do for crypto layer, there is no way to return non-request specific error
- * codes */
-static int _ReportInvalidSheState(whServerContext* server, uint16_t magic,
-                                  uint16_t action, uint16_t req_size,
-                                  const void* req_packet,
-                                  uint16_t* out_resp_size, void* resp_packet)
-{
-    /* TODO does SHE specify what this error should be? */
-    /* if we haven't secure booted, only allow secure boot requests */
-    if ((server->she->sbState != WH_SHE_SB_SUCCESS &&
-         (action != WH_SHE_SECURE_BOOT_INIT &&
-          action != WH_SHE_SECURE_BOOT_UPDATE &&
-          action != WH_SHE_SECURE_BOOT_FINISH && action != WH_SHE_GET_STATUS &&
-          action != WH_SHE_SET_UID)) ||
-        (action != WH_SHE_SET_UID && server->she->uidSet == 0)) {
-        /* Create an error response based on the action */
-        switch (action) {
-            case WH_SHE_SET_UID: {
-                whMessageShe_SetUidResponse resp;
-                resp.rc = WH_SHE_ERC_SEQUENCE_ERROR;
-                (void)wh_MessageShe_TranslateSetUidResponse(magic, &resp,
-                                                            resp_packet);
-                *out_resp_size = sizeof(resp);
-                break;
-            }
-            case WH_SHE_SECURE_BOOT_INIT: {
-                whMessageShe_SecureBootInitResponse resp;
-                resp.rc = WH_SHE_ERC_SEQUENCE_ERROR;
-                (void)wh_MessageShe_TranslateSecureBootInitResponse(
-                    magic, &resp, resp_packet);
-                *out_resp_size = sizeof(resp);
-                break;
-            }
-            case WH_SHE_SECURE_BOOT_UPDATE: {
-                whMessageShe_SecureBootUpdateResponse resp;
-                resp.rc = WH_SHE_ERC_SEQUENCE_ERROR;
-                (void)wh_MessageShe_TranslateSecureBootUpdateResponse(
-                    magic, &resp, resp_packet);
-                *out_resp_size = sizeof(resp);
-                break;
-            }
-            case WH_SHE_SECURE_BOOT_FINISH: {
-                whMessageShe_SecureBootFinishResponse resp;
-                resp.rc = WH_SHE_ERC_SEQUENCE_ERROR;
-                (void)wh_MessageShe_TranslateSecureBootFinishResponse(
-                    magic, &resp, resp_packet);
-                *out_resp_size = sizeof(resp);
-                break;
-            }
-            case WH_SHE_GET_STATUS: {
-                whMessageShe_GetStatusResponse resp;
-                resp.rc   = WH_SHE_ERC_SEQUENCE_ERROR;
-                resp.sreg = 0;
-                (void)wh_MessageShe_TranslateGetStatusResponse(magic, &resp,
-                                                               resp_packet);
-                *out_resp_size = sizeof(resp);
-                break;
-            }
-            case WH_SHE_LOAD_KEY: {
-                whMessageShe_LoadKeyResponse resp;
-                resp.rc = WH_SHE_ERC_SEQUENCE_ERROR;
-                (void)wh_MessageShe_TranslateLoadKeyResponse(magic, &resp,
-                                                             resp_packet);
-                *out_resp_size = sizeof(resp);
-                break;
-            }
-            case WH_SHE_LOAD_PLAIN_KEY: {
-                whMessageShe_LoadPlainKeyResponse resp;
-                resp.rc = WH_SHE_ERC_SEQUENCE_ERROR;
-                (void)wh_MessageShe_TranslateLoadPlainKeyResponse(magic, &resp,
-                                                                  resp_packet);
-                *out_resp_size = sizeof(resp);
-                break;
-            }
-            case WH_SHE_EXPORT_RAM_KEY: {
-                whMessageShe_ExportRamKeyResponse resp;
-                resp.rc = WH_SHE_ERC_SEQUENCE_ERROR;
-                (void)wh_MessageShe_TranslateExportRamKeyResponse(magic, &resp,
-                                                                  resp_packet);
-                *out_resp_size = sizeof(resp);
-                break;
-            }
-            case WH_SHE_INIT_RND: {
-                whMessageShe_InitRngResponse resp;
-                resp.rc = WH_SHE_ERC_SEQUENCE_ERROR;
-                (void)wh_MessageShe_TranslateInitRngResponse(magic, &resp,
-                                                             resp_packet);
-                *out_resp_size = sizeof(resp);
-                break;
-            }
-            case WH_SHE_RND: {
-                whMessageShe_RndResponse resp;
-                resp.rc = WH_SHE_ERC_SEQUENCE_ERROR;
-                (void)wh_MessageShe_TranslateRndResponse(magic, &resp,
-                                                         resp_packet);
-                *out_resp_size = sizeof(resp);
-                break;
-            }
-            case WH_SHE_EXTEND_SEED: {
-                whMessageShe_ExtendSeedResponse resp;
-                resp.rc = WH_SHE_ERC_SEQUENCE_ERROR;
-                (void)wh_MessageShe_TranslateExtendSeedResponse(magic, &resp,
-                                                                resp_packet);
-                *out_resp_size = sizeof(resp);
-                break;
-            }
-            case WH_SHE_ENC_ECB: {
-                whMessageShe_EncEcbResponse resp;
-                resp.rc = WH_SHE_ERC_SEQUENCE_ERROR;
-                (void)wh_MessageShe_TranslateEncEcbResponse(magic, &resp,
-                                                            resp_packet);
-                *out_resp_size = sizeof(resp);
-                break;
-            }
-            case WH_SHE_ENC_CBC: {
-                whMessageShe_EncCbcResponse resp;
-                resp.rc = WH_SHE_ERC_SEQUENCE_ERROR;
-                (void)wh_MessageShe_TranslateEncCbcResponse(magic, &resp,
-                                                            resp_packet);
-                *out_resp_size = sizeof(resp);
-                break;
-            }
-            case WH_SHE_DEC_ECB: {
-                whMessageShe_DecEcbResponse resp;
-                resp.rc = WH_SHE_ERC_SEQUENCE_ERROR;
-                (void)wh_MessageShe_TranslateDecEcbResponse(magic, &resp,
-                                                            resp_packet);
-                *out_resp_size = sizeof(resp);
-                break;
-            }
-            case WH_SHE_DEC_CBC: {
-                whMessageShe_DecCbcResponse resp;
-                resp.rc = WH_SHE_ERC_SEQUENCE_ERROR;
-                (void)wh_MessageShe_TranslateDecCbcResponse(magic, &resp,
-                                                            resp_packet);
-                *out_resp_size = sizeof(resp);
-                break;
-            }
-            case WH_SHE_GEN_MAC: {
-                whMessageShe_GenMacResponse resp;
-                resp.rc = WH_SHE_ERC_SEQUENCE_ERROR;
-                (void)wh_MessageShe_TranslateGenMacResponse(magic, &resp,
-                                                            resp_packet);
-                *out_resp_size = sizeof(resp);
-                break;
-            }
-            case WH_SHE_VERIFY_MAC: {
-                whMessageShe_VerifyMacResponse resp;
-                resp.rc     = WH_SHE_ERC_SEQUENCE_ERROR;
-                resp.status = 1; /* Verification failed */
-                (void)wh_MessageShe_TranslateVerifyMacResponse(magic, &resp,
-                                                               resp_packet);
-                *out_resp_size = sizeof(resp);
-                break;
-            }
-        }
-        return WH_SHE_ERC_SEQUENCE_ERROR;
-    }
-    return 0;
-}
+//WARNING: this assumes the SHE enum and SHE function pointers are in the same order!!!
+//It assumes that the SHE enum is sequential starting up from 0 and have identical arguments!!!
+//It would be much better to use a C++ map or better yet some classes and templates here.
+//This is safe as long as the mapping is respected. 
+//Note: using an array instead of a struct to allow for clean bounds checking.
+int (*wh_she_function_pointers[])(whServerContext* server, uint16_t magic,uint16_t req_size, const void* req_packet,uint16_t* out_resp_size, void* resp_packet)= {
+    _SetUid,
+    _SecureBootInit,
+    _SecureBootUpdate,
+    _SecureBootFinish,
+    _GetStatus,
+    _LoadKey,
+    _LoadPlainKey,
+    _ExportRamKey,
+    _InitRnd,
+    _Rnd,
+    _ExtendSeed,
+    _EncEcb,
+    _EncCbc,
+    _DecEcb,
+    _DecCbc,
+    _GenerateMac,
+    _VerifyMac};
 
 int wh_Server_HandleSheRequest(whServerContext* server, uint16_t magic,
                                uint16_t action, uint16_t req_size,
@@ -1545,90 +1403,29 @@ int wh_Server_HandleSheRequest(whServerContext* server, uint16_t magic,
 {
     int ret = 0;
 
-    if (server == NULL || server->she == NULL || req_packet == NULL ||
-        out_resp_size == NULL) {
-        return WH_ERROR_BADARGS;
+    if (server == NULL || server->she == NULL|| req_packet == NULL || resp_packet==NULL) {
+        return WH_ERROR_BADARGS;//*out_resp_size is directly written to so it's OK if it's null
     }
 
-    ret = _ReportInvalidSheState(server, magic, action, req_size, req_packet,
-                                 out_resp_size, resp_packet);
-    if (ret != 0) {
-        return ret;
+    // _ReportInvalidSheState function was mostly checking if endianness of client message is right and fixing it if it isn't but just for certain parts.
+    // If the client gets endianness wrong it's a problem and who knows what else is wrong. Throwing an exception and making the client fix its comms is much safer
+    // If the client needs to check it can send one packet of each endiannes and see which one works then keep track of that.
+    if (magic!=WH_COMM_MAGIC_NATIVE)
+    {
+        return WH_ERROR_BADARGS;//endianness mismatch between server and client.
     }
+    //WARNING: This is assuming the resp_packet starts with rc for all the structs. This is the case but still would benefit from formal enforcement.
+    //doesn't matter which type of response. Just need this because of the void cast on the input. 
+    //The specific SHE function will overwrite this during execution.
+    ((whMessageShe_SetUidResponse*)resp_packet)->rc= WH_SHE_ERC_SEQUENCE_ERROR;
+    *out_resp_size=0;//should be set by the SHE function, not sure of correct vaule. Wasn't being initialized correctly in old code.
 
-    switch (action) {
-        case WH_SHE_SET_UID:
-            ret = _SetUid(server, magic, req_size, req_packet, out_resp_size,
-                          resp_packet);
-            break;
-        case WH_SHE_SECURE_BOOT_INIT:
-            ret = _SecureBootInit(server, magic, req_size, req_packet,
-                                  out_resp_size, resp_packet);
-            break;
-        case WH_SHE_SECURE_BOOT_UPDATE:
-            ret = _SecureBootUpdate(server, magic, req_size, req_packet,
-                                    out_resp_size, resp_packet);
-            break;
-        case WH_SHE_SECURE_BOOT_FINISH:
-            ret = _SecureBootFinish(server, magic, req_size, req_packet,
-                                    out_resp_size, resp_packet);
-            break;
-        case WH_SHE_GET_STATUS:
-            ret = _GetStatus(server, magic, req_size, req_packet, out_resp_size,
-                             resp_packet);
-            break;
-        case WH_SHE_LOAD_KEY:
-            ret = _LoadKey(server, magic, req_size, req_packet, out_resp_size,
-                           resp_packet);
-            break;
-        case WH_SHE_LOAD_PLAIN_KEY:
-            ret = _LoadPlainKey(server, magic, req_size, req_packet,
-                                out_resp_size, resp_packet);
-            break;
-        case WH_SHE_EXPORT_RAM_KEY:
-            ret = _ExportRamKey(server, magic, req_size, req_packet,
-                                out_resp_size, resp_packet);
-            break;
-        case WH_SHE_INIT_RND:
-            ret = _InitRnd(server, magic, req_size, req_packet, out_resp_size,
-                           resp_packet);
-            break;
-        case WH_SHE_RND:
-            ret = _Rnd(server, magic, req_size, req_packet, out_resp_size,
-                       resp_packet);
-            break;
-        case WH_SHE_EXTEND_SEED:
-            ret = _ExtendSeed(server, magic, req_size, req_packet,
-                              out_resp_size, resp_packet);
-            break;
-        case WH_SHE_ENC_ECB:
-            ret = _EncEcb(server, magic, req_size, req_packet, out_resp_size,
-                          resp_packet);
-            break;
-        case WH_SHE_ENC_CBC:
-            ret = _EncCbc(server, magic, req_size, req_packet, out_resp_size,
-                          resp_packet);
-            break;
-        case WH_SHE_DEC_ECB:
-            ret = _DecEcb(server, magic, req_size, req_packet, out_resp_size,
-                          resp_packet);
-            break;
-        case WH_SHE_DEC_CBC:
-            ret = _DecCbc(server, magic, req_size, req_packet, out_resp_size,
-                          resp_packet);
-            break;
-        case WH_SHE_GEN_MAC:
-            ret = _GenerateMac(server, magic, req_size, req_packet,
-                               out_resp_size, resp_packet);
-            break;
-        case WH_SHE_VERIFY_MAC:
-            ret = _VerifyMac(server, magic, req_size, req_packet, out_resp_size,
-                             resp_packet);
-            break;
-        default:
-            ret = WH_ERROR_BADARGS;
-            break;
+    if(action>=sizeof(wh_she_function_pointers)/sizeof(wh_she_function_pointers[0]))
+    {
+        return WH_ERROR_BADARGS;//if this isn't a vaild SHE code
     }
+    ret = wh_she_function_pointers[action](server, magic, req_size, req_packet, out_resp_size,
+                          resp_packet);
 
     /* reset our SHE state */
     /* TODO is it safe to call wc_InitCmac over and over or do we need to call
@@ -1649,5 +1446,5 @@ int wh_Server_HandleSheRequest(whServerContext* server, uint16_t magic,
     return 0;
 }
 
-#endif /* WOLFHSM_CFG_SHE_EXTENSION */
-#endif /* !WOLFHSM_CFG_NO_CRYPTO && WOLFHSM_CFG_ENABLE_SERVER */
+
+#endif /* WOLFHSM_CFG_SHE_EXTENSION*/
