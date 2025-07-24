@@ -19,11 +19,11 @@
 #include "wh_demo_client_all.h"
 
 /** Local declarations */
-static void _aleepMs(long milliseconds);
+static void _sleepMs(long milliseconds);
 static int wh_ClientTask(void* cf);
 
 
-static void _aleepMs(long milliseconds)
+static void _sleepMs(long milliseconds)
 {
     struct timespec req;
     req.tv_sec  = milliseconds / 1000;
@@ -81,7 +81,7 @@ static int wh_ClientTask(void* cf)
                     printf("wh_CLient_EchoRequest failed with ret=%d\n", ret);
                 }
             }
-            _aleepMs(ONE_MS);
+            _sleepMs(ONE_MS);
         } while (ret == WH_ERROR_NOTREADY);
 
         if (ret != 0) {
@@ -95,7 +95,7 @@ static int wh_ClientTask(void* cf)
         do {
             ret = wh_Client_EchoResponse(client,
                     &rx_resp_len, rx_resp);
-            _aleepMs(ONE_MS);
+            _sleepMs(ONE_MS);
         } while (ret == WH_ERROR_NOTREADY);
 
         if (ret != 0) {
@@ -110,14 +110,14 @@ static int wh_ClientTask(void* cf)
     wc_InitRng_ex(rng, NULL, INVALID_DEVID);
     wc_RNG_GenerateBlock(rng, buffer, sizeof(buffer));
     wc_FreeRng(rng);
-    wh_Utils_Hexdump("Context 1 RNG:\n", buffer, sizeof(buffer));
+    wh_Utils_Hexdump("Context 1: Client Local RNG:\n", buffer, sizeof(buffer));
 
     /* Context 2: Client Remote Crypto */
     memset(buffer, 0, sizeof(buffer));
     wc_InitRng_ex(rng, NULL, WH_DEV_ID);
     wc_RNG_GenerateBlock(rng, buffer, sizeof(buffer));
     wc_FreeRng(rng);
-    wh_Utils_Hexdump("Context 2 RNG:\n", buffer, sizeof(buffer));
+    wh_Utils_Hexdump("Context 2: Client Remote RNG:\n", buffer, sizeof(buffer));
 
 
     /* run the client demos */

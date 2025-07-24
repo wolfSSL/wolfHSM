@@ -27,6 +27,7 @@
  * 4. Sign the hash using the server keypair
  * 5. Store the signature to server NVM as object 29 
  * 6. Hexdump hash, public key, and signature
+ * Note: Provisioning can also be done offline using the whnvmtool
  * 
  * SecBoot process:
  * 1. Load the signature from server NVM as object 29
@@ -51,13 +52,11 @@ static int _showNvm(whClientContext* clientContext);
 
 static int _provisionMakeCommitKey(whClientContext* clientContext);
 static int _sha256File(const char* file_to_measure, uint8_t* hash);
-static int _signHash(  whClientContext* clientContext, 
-                const uint8_t* hash, size_t hash_len, 
-                uint8_t* sig, uint16_t* sig_len);
-static int _verifyHash(  whClientContext* clientContext, 
-                const uint8_t* hash, size_t hash_len, 
-                const uint8_t* sig, uint16_t* sig_len,
-                int32_t* rc);
+static int _signHash(   const uint8_t* hash, size_t hash_len, 
+                        uint8_t* sig, uint16_t* sig_len);
+static int _verifyHash( const uint8_t* hash, size_t hash_len, 
+                        const uint8_t* sig, uint16_t sig_len,
+                        int32_t* rc);
 
 static int _showNvm(whClientContext* clientContext)   
 {
@@ -136,10 +135,14 @@ static int _sha256File(const char* file_to_measure, uint8_t* hash)
             printf("Generating SHA256 of %s over %u bytes at %p\n", 
                 file_to_measure, (unsigned int)size, ptr);
             wc_Sha256 sha256[1];
-            wc_InitSha256_ex(sha256, NULL, WH_DEV_ID);
-            wc_Sha256Update(sha256, ptr, size);
-            wc_Sha256Final(sha256, hash);
-            wc_Sha256Free(sha256);
+            ret = wc_InitSha256_ex(sha256, NULL, WH_DEV_ID);
+            if (ret == 0) {
+                ret = wc_Sha256Update(sha256, ptr, (word32)size);
+                if (ret == 0) {
+                    ret = wc_Sha256Final(sha256, hash);
+                }
+                (void)wc_Sha256Free(sha256);
+            }
             (void)munmap(ptr, size);
 
             wh_Utils_Hexdump("Hash:\n", hash, sizeof(hash));
@@ -154,35 +157,45 @@ static int _sha256File(const char* file_to_measure, uint8_t* hash)
     return ret;
 }
 
-static int _signHash(  whClientContext* clientContext, 
-                const uint8_t* hash, size_t hash_len, 
-                uint8_t* sig, uint16_t* sig_len)
+static int _signHash(   const uint8_t* hash, size_t hash_len, 
+                        uint8_t* sig, uint16_t* sig_len)
 {
-    int ret = 0;
     ecc_key key[1];
-    wc_ecc_init_ex(key, NULL, WH_DEV_ID);
-    wh_Client_EccSetKeyId(key, prov_keyId);
-
-    ret = wh_Client_EccSign(clientContext, key, hash, hash_len, sig, sig_len);
-    (void)wc_ecc_free(key);
+    int ret = wc_ecc_init_ex(key, NULL, WH_DEV_ID);
+    if (ret == 0) {
+        ret = wh_Client_EccSetKeyId(key, prov_keyId);
+        if (ret == 0) {
+            word32 siglen32 = *sig_len;
+            /* III Rng is not necessary since server will be doing the work */
+            ret = wc_ecc_sign_hash(hash, hash_len, sig, &siglen32, NULL, key);
+            if(ret == 0) {
+                *sig_len = (uint16_t)siglen32;
+            }
+        }
+        (void)wc_ecc_free(key);
+    }
     return ret;
 }
 
-static int _verifyHash(  whClientContext* clientContext, 
-                const uint8_t* hash, size_t hash_len, 
-                const uint8_t* sig, uint16_t* sig_len,
-                int32_t* rc)
+static int _verifyHash( const uint8_t* hash, size_t hash_len, 
+                        const uint8_t* sig, uint16_t sig_len,
+                        int32_t* rc)
 {
-    int ret = 0;
     ecc_key key[1];
-    wc_ecc_init_ex(key, NULL, WH_DEV_ID);
-    wh_Client_EccSetKeyId(key, prov_keyId);
-
-    ret = wh_Client_EccVerify(  clientContext, key, 
-                                sig, (size_t)(*sig_len), 
-                                hash, hash_len, 
-                                rc);
-    (void)wc_ecc_free(key);
+    int ret = wc_ecc_init_ex(key, NULL, WH_DEV_ID);
+    if (ret == 0) {
+        ret = wh_Client_EccSetKeyId(key, prov_keyId);
+        if (ret == 0) {
+            int res = 0;
+            ret = wc_ecc_verify_hash(   sig, (word32)sig_len, 
+                                        hash, (word32)hash_len, 
+                                        &res, key);
+            if (ret == 0) {
+                *rc = res;
+            }
+        }
+        (void)wc_ecc_free(key);
+    }
     return ret;
 }
 
@@ -214,9 +227,8 @@ int wh_DemoClient_SecBoot_Provision(whClientContext* clientContext)
                 uint16_t siglen = sizeof(sig);
 
                 printf("Signing hash...\n");
-                ret = _signHash(clientContext, 
-                    hash, sizeof(hash), 
-                    sig, &siglen);
+                ret = _signHash(    hash, sizeof(hash), 
+                                    sig, &siglen);
                 if (ret == WH_ERROR_OK) {
                     int32_t rc = 0;
                     uint8_t sigLabel[WH_NVM_LABEL_LEN] = {0};
@@ -277,10 +289,9 @@ int wh_DemoClient_SecBoot_Boot(whClientContext* clientContext)
         if (ret == WH_ERROR_OK) {
 
             printf("SecBoot Client Verifying signature using keyId %u\n", prov_keyId);
-            ret = _verifyHash(clientContext, 
-                                        hash, sizeof(hash), 
-                                        sig, &siglen, 
-                                        &rc);
+            ret = _verifyHash(  hash, sizeof(hash), 
+                                sig, siglen, 
+                                &rc);
             printf("ecc_verify:%d rc:%d\n", ret, rc);
 
             if ((ret == 0) && (rc == 1)) {

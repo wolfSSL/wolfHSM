@@ -31,7 +31,7 @@
 static int wh_ServerTask(void* cf, const char* keyFilePath, int keyId,
                          int clientId);
 
-static void _aleepMs(long milliseconds);
+static void _sleepMs(long milliseconds);
 static int _hardwareCryptoCb(int devId, struct wc_CryptoInfo* info, void* ctx);
 
 /* Macros for maximum client ID and key ID */
@@ -76,7 +76,7 @@ static int  parseInteger(const char* str, uint32_t maxValue, uint32_t* result);
 static void parseNvmInitFile(const char* filePath);
 static int initializeNvm(whNvmContext* nvmContext, const char* nvmInitFilePath);
 
-static void _aleepMs(long milliseconds)
+static void _sleepMs(long milliseconds)
 {
     struct timespec req;
     req.tv_sec  = milliseconds / 1000;
@@ -508,7 +508,7 @@ static int wh_ServerTask(void* cf, const char* keyFilePath, int keyId,
         while (1) {
             ret = wh_Server_HandleRequestMessage(server);
             if (ret == WH_ERROR_NOTREADY) {
-                _aleepMs(ONE_MS);
+                _sleepMs(ONE_MS);
             }
             else if (ret != WH_ERROR_OK) {
                 printf("Failed to wh_Server_HandleRequestMessage: %d\n", ret);
@@ -706,7 +706,7 @@ int main(int argc, char** argv)
     wc_InitRng_ex(rng, NULL, INVALID_DEVID);
     wc_RNG_GenerateBlock(rng, buffer, sizeof(buffer));
     wc_FreeRng(rng);
-    wh_Utils_Hexdump("Context 3 RNG:\n", buffer, sizeof(buffer));
+    wh_Utils_Hexdump("Context 3: Server SW RNG:\n", buffer, sizeof(buffer));
 
     /* Context 4: Server Hardware Crypto */
     #define HW_DEV_ID 100
@@ -715,11 +715,11 @@ int main(int argc, char** argv)
     wc_InitRng_ex(rng, NULL, HW_DEV_ID);
     wc_RNG_GenerateBlock(rng, buffer, sizeof(buffer));
     wc_FreeRng(rng);
-    wh_Utils_Hexdump("Context 4 RNG:\n", buffer, sizeof(buffer));
+    wh_Utils_Hexdump("Context 4: Server HW RNG:\n", buffer, sizeof(buffer));
 
     /* Context 5: Set default server crypto to use cryptocb */
     crypto->devId = HW_DEV_ID;
-    printf("Context 5: Setting up server crypto with devId=%d\n",
+    printf("Context 5: Setting up default server crypto with devId=%d\n",
                 crypto->devId);
 
     rc = wc_InitRng_ex(crypto->rng, NULL, crypto->devId);
