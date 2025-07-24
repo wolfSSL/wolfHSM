@@ -28,6 +28,8 @@
 /** wolfHSM settings.  Simple overrides to show they work */
 #define WOLFHSM_CFG_ENABLE_SERVER
 
+#define WOLFHSM_CFG_HEXDUMP
+
 /* Large enough for ML-DSA level 5 key */
 #define WOLFHSM_CFG_COMM_DATA_LEN 5000
 

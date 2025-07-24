@@ -2,9 +2,10 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "wolfhsm/wh_common.h"
+#include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_client.h"
 #include "wolfhsm/wh_client_crypto.h"
-#include "wolfhsm/wh_error.h"
 
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/aes.h"

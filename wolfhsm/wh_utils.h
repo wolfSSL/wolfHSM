@@ -86,7 +86,7 @@ void* wh_Utils_memcpy_invalidate(void* dst, const void* src, size_t n);
 void* wh_Utils_memcpy_flush(void* dst, const void* src , size_t n);
 
 
-#if defined(DEBUG_CRYPTOCB) || defined(DEBUG_CRYPTOCB_VERBOSE)
+#if defined(WOLFHSM_CFG_HEXDUMP)
 void wh_Utils_Hexdump(const char* initial, const uint8_t* ptr, size_t size);
 #endif
 

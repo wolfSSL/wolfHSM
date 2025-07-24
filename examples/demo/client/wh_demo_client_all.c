@@ -1,9 +1,10 @@
-#include "wh_demo_client_all.h"
+#include "wh_demo_client_wctest.h"
+#include "wh_demo_client_wcbench.h"
 #include "wh_demo_client_nvm.h"
 #include "wh_demo_client_keystore.h"
 #include "wh_demo_client_crypto.h"
-#include "wh_demo_client_wctest.h"
-#include "wh_demo_client_wcbench.h"
+#include "wh_demo_client_secboot.h"
+#include "wh_demo_client_all.h"
 
 int wh_DemoClient_All(whClientContext* clientContext)
 {
@@ -120,6 +121,20 @@ int wh_DemoClient_All(whClientContext* clientContext)
     if (rc != 0) {
         return rc;
     }
+
+    rc = wh_DemoClient_SecBoot_Provision(clientContext);
+    if (rc != 0) {
+        return rc;
+    }
+    rc = wh_DemoClient_SecBoot_Boot(clientContext);
+    if (rc != 0) {
+        return rc;
+    }
+    rc = wh_DemoClient_SecBoot_Zeroize(clientContext);
+    if (rc != 0) {
+        return rc;
+    }
+
 #endif /* WOLFSSL_CMAC */
 
     return rc;

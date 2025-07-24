@@ -1,7 +1,8 @@
-#ifndef CLIENT_COUNTER_H
-#define CLIENT_COUNTER_H
+#ifndef DEMO_CLIENT_COUNTER_H_
+#define DEMO_CLIENT_COUNTER_H_
+
 #include "wolfhsm/wh_client.h"
 
 int wh_DemoClient_Counter(whClientContext* clientContext);
 
-#endif /* CLIENT_COUNTER_H */
+#endif /* !DEMO_CLIENT_COUNTER_H_ */
