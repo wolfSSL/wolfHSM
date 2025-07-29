@@ -95,23 +95,27 @@ static int _HandleAesGcm(whServerContext* ctx, uint16_t magic,
 static int _HandleEccKeyGen(whServerContext* ctx, uint16_t magic,
                             const void* cryptoDataIn, uint16_t inSize,
                             void* cryptoDataOut, uint16_t* outSize);
-
+#ifdef HAVE_ECC_DHE
 static int _HandleEccSharedSecret(whServerContext* ctx, uint16_t magic,
                                   const void* cryptoDataIn, uint16_t inSize,
                                   void* cryptoDataOut, uint16_t* outSize);
-
+#endif /* HAVE_ECC_DHE */
+#ifdef HAVE_ECC_SIGN
 static int _HandleEccSign(whServerContext* ctx, uint16_t magic,
                           const void* cryptoDataIn, uint16_t inSize,
                           void* cryptoDataOut, uint16_t* outSize);
-
+#endif /* HAVE_ECC_SIGN */
+#ifdef HAVE_ECC_VERIFY
 static int _HandleEccVerify(whServerContext* ctx, uint16_t magic,
                             const void* cryptoDataIn, uint16_t inSize,
                             void* cryptoDataOut, uint16_t* outSize);
+#endif /* HAVE_ECC_VERIFY */
 #if 0
+#ifdef HAVE_ECC_CHECK_KEY
 static int _HandleEccCheckPrivKey(whServerContext* server, whPacket* packet,
     uint16_t* size)
+#endif /* HAVE_ECC_CHECK_KEY */
 #endif
-
 #endif /* HAVE_ECC */
 
 #ifdef HAVE_CURVE25519
@@ -745,6 +749,7 @@ static int _HandleEccKeyGen(whServerContext* ctx, uint16_t magic,
     return ret;
 }
 
+#ifdef HAVE_ECC_DHE
 static int _HandleEccSharedSecret(whServerContext* ctx, uint16_t magic,
                                   const void* cryptoDataIn, uint16_t inSize,
                                   void* cryptoDataOut, uint16_t* outSize)
@@ -818,7 +823,9 @@ static int _HandleEccSharedSecret(whServerContext* ctx, uint16_t magic,
     }
     return ret;
 }
+#endif /* HAVE_ECC_DHE */
 
+#ifdef HAVE_ECC_SIGN
 static int _HandleEccSign(whServerContext* ctx, uint16_t magic,
                           const void* cryptoDataIn, uint16_t inSize,
                           void* cryptoDataOut, uint16_t* outSize)
@@ -885,7 +892,9 @@ static int _HandleEccSign(whServerContext* ctx, uint16_t magic,
     }
     return ret;
 }
+#endif /* HAVE_ECC_SIGN */
 
+#ifdef HAVE_ECC_VERIFY
 static int _HandleEccVerify(whServerContext* ctx, uint16_t magic,
                             const void* cryptoDataIn, uint16_t inSize,
                             void* cryptoDataOut, uint16_t* outSize)
@@ -971,8 +980,10 @@ static int _HandleEccVerify(whServerContext* ctx, uint16_t magic,
     }
     return ret;
 }
+#endif /* HAVE_ECC_VERIFY */
 
 #if 0
+#ifdef HAVE_ECC_CHECK_KEY
 /* TODO: Implement check key */
 static int _HandleEccCheckPrivKey(whServerContext* server, whPacket* packet,
     uint16_t* size)
@@ -1007,6 +1018,7 @@ static int _HandleEccCheckPrivKey(whServerContext* server, whPacket* packet,
     }
     return ret;
 }
+#endif /* HAVE_ECC_CHECK_KEY */
 #endif
 #endif /* HAVE_ECC */
 
@@ -2177,19 +2189,25 @@ int wh_Server_HandleCryptoRequest(whServerContext* ctx, uint16_t magic,
                         _HandleEccKeyGen(ctx, magic, cryptoDataIn, cryptoInSize,
                                          cryptoDataOut, &cryptoOutSize);
                     break;
+#ifdef HAVE_ECC_DHE
                 case WC_PK_TYPE_ECDH:
                     ret = _HandleEccSharedSecret(ctx, magic, cryptoDataIn,
                                                  cryptoInSize, cryptoDataOut,
                                                  &cryptoOutSize);
                     break;
+#endif /* HAVE_ECC_DHE */
+#ifdef HAVE_ECC_SIGN
                 case WC_PK_TYPE_ECDSA_SIGN:
                     ret = _HandleEccSign(ctx, magic, cryptoDataIn, cryptoInSize,
                                          cryptoDataOut, &cryptoOutSize);
                     break;
+#endif /* HAVE_ECC_SIGN */
+#ifdef HAVE_ECC_VERIFY
                 case WC_PK_TYPE_ECDSA_VERIFY:
                     ret = _HandleEccVerify(ctx, magic, cryptoDataIn, cryptoInSize,
                                            cryptoDataOut, &cryptoOutSize);
                     break;
+#endif /* HAVE_ECC_VERIFY */
 #if 0
         case WC_PK_TYPE_EC_CHECK_PRIV_KEY:
             ret = _HandleEccCheckPrivKey(ctx, magic, cryptoDataIn, cryptoInSize,
