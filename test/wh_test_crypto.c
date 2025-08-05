@@ -1970,6 +1970,8 @@ static int whTestCrypto_MlDsaWolfCrypt(whClientContext* ctx, int devId,
 static int whTestCrypto_MlDsaDmaClient(whClientContext* ctx, int devId,
                                        WC_RNG* rng)
 {
+    (void)rng;
+
     int      ret = 0;
     MlDsaKey key[1];
     MlDsaKey imported_key[1];
@@ -2138,6 +2140,8 @@ static int whTestCrypto_MlDsaDmaClient(whClientContext* ctx, int devId,
 int whTestCrypto_MlDsaVerifyOnlyDma(whClientContext* ctx, int devId,
                                     WC_RNG* rng)
 {
+    (void)rng;
+
     /* Vectors from wolfCrypt test vectors, but decoupled for isolated usage */
     const byte ml_dsa_44_pub_key[] = {
         0xd8, 0xac, 0xaf, 0xd8, 0x2e, 0x14, 0x23, 0x78, 0xf7, 0x0d, 0x9a, 0x04,

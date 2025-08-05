@@ -201,6 +201,9 @@ static int _customServerDmaCb(struct whServerContext_t* server,
                               size_t len, whServerDmaOper oper,
                               whServerDmaFlags flags)
 {
+    (void)server;
+    (void)flags;
+
     /* remapped "client" address, a.k.a. arbitary "server" buffer */
     void* srvTmpBuf =
         (void*)(clientAddr + (offsetof(TestMemory, srvRemapBufAllow) -
@@ -244,6 +247,8 @@ static int _customServerDmaCb(struct whServerContext_t* server,
     defined(WOLFHSM_CFG_ENABLE_SERVER)
 static int _testDma(whServerContext* server, whClientContext* client)
 {
+    (void)client;
+
     int        rc      = 0;
     TestMemory testMem = {0};
 

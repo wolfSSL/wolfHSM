@@ -138,6 +138,8 @@ int wh_MessageShe_TranslateLoadKeyRequest(
     uint16_t magic, const whMessageShe_LoadKeyRequest* src,
     whMessageShe_LoadKeyRequest* dest)
 {
+    (void)magic;
+
     if ((src == NULL) || (dest == NULL)) {
         return WH_ERROR_BADARGS;
     }
@@ -169,6 +171,8 @@ int wh_MessageShe_TranslateLoadPlainKeyRequest(
     uint16_t magic, const whMessageShe_LoadPlainKeyRequest* src,
     whMessageShe_LoadPlainKeyRequest* dest)
 {
+    (void)magic;
+
     if ((src == NULL) || (dest == NULL)) {
         return WH_ERROR_BADARGS;
     }
@@ -241,6 +245,8 @@ int wh_MessageShe_TranslateExtendSeedRequest(
     uint16_t magic, const whMessageShe_ExtendSeedRequest* src,
     whMessageShe_ExtendSeedRequest* dest)
 {
+    (void)magic;
+
     if ((src == NULL) || (dest == NULL)) {
         return WH_ERROR_BADARGS;
     }
