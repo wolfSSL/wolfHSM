@@ -191,6 +191,9 @@ static int _SetUid(whServerContext* server, uint16_t magic, uint16_t req_size,
                    const void* req_packet, uint16_t* out_resp_size,
                    void* resp_packet)
 {
+    (void)req_size;
+    (void)out_resp_size;
+
     int                         ret = WH_SHE_ERC_NO_ERROR;
     whMessageShe_SetUidRequest  req;
     whMessageShe_SetUidResponse resp;
@@ -217,6 +220,8 @@ static int _SecureBootInit(whServerContext* server, uint16_t magic,
                            uint16_t req_size, const void* req_packet,
                            uint16_t* out_resp_size, void* resp_packet)
 {
+    (void)req_size;
+
     int                                 ret = 0;
     uint32_t                            keySz;
     uint8_t                             macKey[WH_SHE_KEY_SZ];
@@ -292,6 +297,8 @@ static int _SecureBootUpdate(whServerContext* server, uint16_t magic,
                              uint16_t req_size, const void* req_packet,
                              uint16_t* out_resp_size, void* resp_packet)
 {
+    (void)req_size;
+
     int                                   ret = 0;
     uint8_t*                              in;
     whMessageShe_SecureBootUpdateRequest  req;
@@ -342,6 +349,9 @@ static int _SecureBootFinish(whServerContext* server, uint16_t magic,
                              uint16_t req_size, const void* req_packet,
                              uint16_t* out_resp_size, void* resp_packet)
 {
+    (void)req_size;
+    (void)req_packet;
+
     int      ret = 0;
     uint32_t keySz;
     uint32_t field;
@@ -397,6 +407,9 @@ static int _GetStatus(whServerContext* server, uint16_t magic,
                       uint16_t req_size, const void* req_packet,
                       uint16_t* out_resp_size, void* resp_packet)
 {
+    (void)req_size;
+    (void)req_packet;
+
     whMessageShe_GetStatusResponse resp;
 
     /* TODO do we care about all the sreg fields? */
@@ -431,6 +444,9 @@ static int _LoadKey(whServerContext* server, uint16_t magic, uint16_t req_size,
                     const void* req_packet, uint16_t* out_resp_size,
                     void* resp_packet)
 {
+    (void)req_size;
+    (void)req_packet;
+
     int           ret;
     int           keyRet = 0;
     uint32_t      keySz;
@@ -653,6 +669,8 @@ static int _LoadPlainKey(whServerContext* server, uint16_t magic,
                          uint16_t req_size, const void* req_packet,
                          uint16_t* out_resp_size, void* resp_packet)
 {
+    (void)req_size;
+
     int           ret     = 0;
     whNvmMetadata meta[1] = {{0}};
 
@@ -684,6 +702,9 @@ static int _ExportRamKey(whServerContext* server, uint16_t magic,
                          uint16_t req_size, const void* req_packet,
                          uint16_t* out_resp_size, void* resp_packet)
 {
+    (void)req_size;
+    (void)req_packet;
+
     int                               ret = 0;
     uint32_t                          keySz;
     uint32_t                          field;
@@ -841,6 +862,9 @@ static int _InitRnd(whServerContext* server, uint16_t magic, uint16_t req_size,
                     const void* req_packet, uint16_t* out_resp_size,
                     void* resp_packet)
 {
+    (void)req_size;
+    (void)req_packet;
+
     int                          ret = 0;
     uint32_t                     keySz;
     uint8_t                      kdfInput[WH_SHE_KEY_SZ * 2];
@@ -939,6 +963,9 @@ static int _Rnd(whServerContext* server, uint16_t magic, uint16_t req_size,
                 const void* req_packet, uint16_t* out_resp_size,
                 void* resp_packet)
 {
+    (void)req_size;
+    (void)req_packet;
+
     int                      ret = 0;
     whMessageShe_RndResponse resp;
 
@@ -983,6 +1010,8 @@ static int _ExtendSeed(whServerContext* server, uint16_t magic,
                        uint16_t req_size, const void* req_packet,
                        uint16_t* out_resp_size, void* resp_packet)
 {
+    (void)req_size;
+
     int                             ret = 0;
     uint32_t                        keySz;
     uint8_t                         kdfInput[WH_SHE_KEY_SZ * 2];
@@ -1045,6 +1074,8 @@ static int _EncEcb(whServerContext* server, uint16_t magic, uint16_t req_size,
                    const void* req_packet, uint16_t* out_resp_size,
                    void* resp_packet)
 {
+    (void)req_size;
+
     int      ret;
     uint32_t field;
     uint32_t keySz;
@@ -1102,6 +1133,8 @@ static int _EncCbc(whServerContext* server, uint16_t magic, uint16_t req_size,
                    const void* req_packet, uint16_t* out_resp_size,
                    void* resp_packet)
 {
+    (void)req_size;
+
     int                         ret;
     uint32_t                    field;
     uint32_t                    keySz;
@@ -1165,6 +1198,8 @@ static int _DecEcb(whServerContext* server, uint16_t magic, uint16_t req_size,
                    const void* req_packet, uint16_t* out_resp_size,
                    void* resp_packet)
 {
+    (void)req_size;
+
     int      ret;
     uint32_t field;
     uint32_t keySz;
@@ -1227,6 +1262,8 @@ static int _DecCbc(whServerContext* server, uint16_t magic, uint16_t req_size,
                    const void* req_packet, uint16_t* out_resp_size,
                    void* resp_packet)
 {
+    (void)req_size;
+
     int                         ret;
     uint32_t                    field;
     uint32_t                    keySz;
@@ -1290,6 +1327,8 @@ static int _GenerateMac(whServerContext* server, uint16_t magic,
                         uint16_t req_size, const void* req_packet,
                         uint16_t* out_resp_size, void* resp_packet)
 {
+    (void)req_size;
+
     int                         ret;
     uint32_t                    field = AES_BLOCK_SIZE;
     uint32_t                    keySz;
@@ -1330,6 +1369,8 @@ static int _VerifyMac(whServerContext* server, uint16_t magic,
                       uint16_t req_size, const void* req_packet,
                       uint16_t* out_resp_size, void* resp_packet)
 {
+    (void)req_size;
+
     int                            ret;
     uint32_t                       keySz;
     uint8_t*                       message;
@@ -1384,6 +1425,9 @@ static int _ReportInvalidSheState(whServerContext* server, uint16_t magic,
                                   const void* req_packet,
                                   uint16_t* out_resp_size, void* resp_packet)
 {
+    (void)req_size;
+    (void)req_packet;
+
     /* TODO does SHE specify what this error should be? */
     /* if we haven't secure booted, only allow secure boot requests */
     if ((server->she->sbState != WH_SHE_SB_SUCCESS &&

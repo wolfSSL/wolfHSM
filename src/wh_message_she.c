@@ -38,6 +38,8 @@ int wh_MessageShe_TranslateSetUidRequest(uint16_t magic,
                                          const whMessageShe_SetUidRequest* src,
                                          whMessageShe_SetUidRequest*       dest)
 {
+    (void)magic;
+
     if ((src == NULL) || (dest == NULL)) {
         return WH_ERROR_BADARGS;
     }
