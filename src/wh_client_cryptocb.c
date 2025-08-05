@@ -670,7 +670,7 @@ int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
         }
     } break; /* case WC_ALGO_TYPE_PK */
 
-#ifdef WOLFSSL_CMAC
+#if defined(WOLFSSL_CMAC) && !defined(WOLFHSM_CFG_NO_CMAC_DMA)
     case WC_ALGO_TYPE_CMAC: {
         Cmac*          cmac      = info->cmac.cmac;
         CmacType       type      = info->cmac.type;
@@ -684,7 +684,7 @@ int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
         ret = wh_Client_CmacDma(ctx, cmac, type, key, keyLen, in, inLen, outMac,
                                 outMacLen);
     } break;
-#endif
+#endif /* WOLFSSL_CMAC && !WOLFHSM_CFG_NO_CMAC_DMA */
 
     case WC_ALGO_TYPE_NONE:
     default:
