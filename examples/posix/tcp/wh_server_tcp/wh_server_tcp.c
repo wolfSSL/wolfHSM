@@ -567,6 +567,9 @@ static int wh_ServerTask(void* cf, const char* keyFilePath, int keyId,
 static int _hardwareCryptoCb(int devId, struct wc_CryptoInfo* info,
                                    void* ctx)
 {
+    (void)devId;
+    (void)ctx;
+
     /* Default response */
     int ret = CRYPTOCB_UNAVAILABLE;
     switch(info->algo_type) {
