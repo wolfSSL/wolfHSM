@@ -72,6 +72,12 @@
  * operation in DMA requests.
  *     Default: Not defined
  *
+ *  WOLFHSM_CFG_NO_CMAC_DMA - if defined, disables the use of CMAC for DMA
+ *     Default: Not defined
+ *
+ *  WOLFHSM_CFG_NO_KEY_DMA  - if defined, disables the use of DMA for keys
+ *     Default: Not defined
+ *
  *  Overridable porting functions:
  *
  *  XMEMFENCE() - Create a sequential memory consistency sync point.  Note this
