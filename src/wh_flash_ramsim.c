@@ -26,7 +26,11 @@
 
 #include <stdint.h>
 #include <stddef.h>  /* For NULL */
+
+#if defined(WOLFHSM_CFG_FLASH_RAMSIM_MALLOC)
 #include <stdlib.h>  /* For malloc/free */
+#endif
+
 #include <string.h>
 #include <stdbool.h>
 
@@ -66,7 +70,11 @@ int whFlashRamsim_Init(void* context, const void* config)
     ctx->size        = cfg->size;
     ctx->sectorSize  = cfg->sectorSize;
     ctx->pageSize    = cfg->pageSize;
+#if defined(WOLFHSM_CFG_FLASH_RAMSIM_MALLOC)
     ctx->memory      = (uint8_t*)malloc(ctx->size);
+#else
+    ctx->memory      = cfg->memory;
+#endif
     ctx->erasedByte  = cfg->erasedByte;
     ctx->writeLocked = 0;
 
@@ -92,10 +100,12 @@ int whFlashRamsim_Cleanup(void* context)
         return WH_ERROR_BADARGS;
     }
 
+#if defined(WOLFHSM_CFG_FLASH_RAMSIM_MALLOC)
     if (ctx->memory != NULL) {
         free(ctx->memory);
         ctx->memory = NULL;
     }
+#endif
 
     return WH_ERROR_OK;
 }
