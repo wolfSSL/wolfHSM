@@ -204,6 +204,7 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
 #endif /* !NO_RSA */
 
 #ifdef HAVE_ECC
+#ifdef HAVE_ECC_DHE
         case WC_PK_TYPE_EC_KEYGEN:
         {
             /* Extract info parameters */
@@ -235,7 +236,9 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
                 *out_len = len;
             }
         } break;
+#endif /* HAVE_ECC_DHE */
 
+#ifdef HAVE_ECC_SIGN
         case WC_PK_TYPE_ECDSA_SIGN:
         {
             /* Extract info parameters */
@@ -256,7 +259,9 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
                 *out_sig_len = sig_len;
             }
         } break;
+#endif /* HAVE_ECC_SIGN */
 
+#ifdef HAVE_ECC_VERIFY
         case WC_PK_TYPE_ECDSA_VERIFY:
         {
             /* Extract info parameters */
@@ -270,7 +275,9 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             ret = wh_Client_EccVerify(ctx, key, sig, sig_len, hash, hash_len,
                     out_res);
         } break;
+#endif /* HAVE_ECC_VERIFY */
 
+#ifdef HAVE_ECC_CHECK_KEY
         case WC_PK_TYPE_EC_CHECK_PRIV_KEY:
         {
 #if 0
@@ -285,6 +292,7 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             ret = CRYPTOCB_UNAVAILABLE;
 #endif
         } break;
+#endif /* HAVE_ECC_CHECK_KEY */
 
 #endif /* HAVE_ECC */
 

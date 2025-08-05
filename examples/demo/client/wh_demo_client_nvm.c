@@ -1,11 +1,12 @@
-#include "wh_demo_client_nvm.h"
-
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
 
-#include "wolfhsm/wh_client.h"
+#include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_error.h"
+#include "wolfhsm/wh_client.h"
+
+#include "wh_demo_client_nvm.h"
 
 /**
   * @brief Demonstrates use of client NVM API

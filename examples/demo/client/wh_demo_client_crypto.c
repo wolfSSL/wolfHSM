@@ -1,19 +1,15 @@
 #include <stdint.h>
 #include <string.h>
 #include <stddef.h>
-
-
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
 
 #include "wolfhsm/wh_common.h"
+#include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_client.h"
 #include "wolfhsm/wh_client_crypto.h"
-#include "wolfhsm/wh_error.h"
-
-#include "user_settings.h"
 
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/types.h"

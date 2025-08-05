@@ -27,7 +27,7 @@
 
 /** wolfHSM settings */
 #define WOLFHSM_CFG_ENABLE_CLIENT
-
+#define WOLFHSM_CFG_HEXDUMP
 #define WOLFHSM_CFG_COMM_DATA_LEN 1280
 
 
