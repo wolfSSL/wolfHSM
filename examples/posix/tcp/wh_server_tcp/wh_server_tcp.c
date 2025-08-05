@@ -323,7 +323,7 @@ static void processEntry(Entry* entry, int isKey, whNvmContext* nvmContext)
     size_t bytesRead = fread(buffer, 1, fileSize, file);
     fclose(file);
 
-    if (bytesRead != fileSize) {
+    if (bytesRead != (size_t)fileSize) {
         fprintf(stderr, "Error: Failed to read entire file %s\n",
                 entry->filePath);
         free(buffer);

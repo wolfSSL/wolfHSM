@@ -26,7 +26,7 @@ ARCHFLAGS ?=
 
 # Compiler and linker flags
 ASFLAGS ?= $(ARCHFLAGS)
-CFLAGS_EXTRA ?=
+CFLAGS_EXTRA ?= -Wextra
 CFLAGS ?= $(ARCHFLAGS) -Wno-cpp -std=c99 -Wall -Werror $(CFLAGS_EXTRA)
 LDFLAGS ?= $(ARCHFLAGS)
 

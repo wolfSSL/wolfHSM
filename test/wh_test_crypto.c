@@ -297,6 +297,8 @@ static int whTest_CryptoRsa(whClientContext* ctx, int devId, WC_RNG* rng)
 #ifdef HAVE_ECC
 static int whTest_CryptoEcc(whClientContext* ctx, int devId, WC_RNG* rng)
 {
+    (void)ctx;
+
     int ret = WH_ERROR_OK;
     ecc_key eccPrivate[1];
     ecc_key eccPublic[1];
@@ -1532,6 +1534,9 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
 #if defined(WOLFSSL_CMAC) && !defined(NO_AES) && defined(WOLFSSL_AES_DIRECT)
 static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
 {
+    (void)ctx;
+    (void)rng;
+
     int ret;
     /* test cmac */
     Cmac    cmac[1];
@@ -1875,6 +1880,8 @@ static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
 static int whTestCrypto_MlDsaWolfCrypt(whClientContext* ctx, int devId,
                                        WC_RNG* rng)
 {
+    (void)ctx;
+
     int ret      = 0;
     int verified = 0;
 

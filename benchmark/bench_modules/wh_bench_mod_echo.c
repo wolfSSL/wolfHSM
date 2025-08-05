@@ -25,6 +25,8 @@
 int wh_Bench_Mod_Echo(whClientContext* client, whBenchOpContext* benchCtx,
                       int id, void* params)
 {
+    (void)params;
+
     int      i;
     int      ret;
     uint16_t send_len;

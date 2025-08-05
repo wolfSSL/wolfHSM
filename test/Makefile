@@ -30,7 +30,7 @@ ARCHFLAGS ?=
 
 # Compiler and linker flags
 ASFLAGS ?= $(ARCHFLAGS)
-CFLAGS_EXTRA ?= -Wmissing-field-initializers -Wmissing-braces
+CFLAGS_EXTRA ?= -Wmissing-field-initializers -Wmissing-braces -Wextra
 CFLAGS ?= $(ARCHFLAGS) -std=$(CSTD) -D_GNU_SOURCE -Wall -Werror -Wno-cpp $(CFLAGS_EXTRA)
 LDFLAGS ?= $(ARCHFLAGS)
 

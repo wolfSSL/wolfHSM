@@ -222,6 +222,8 @@ static int _HandleRsaKeyGen(whServerContext* ctx, uint16_t magic,
                          const void* cryptoDataIn, uint16_t inSize,
                          void* cryptoDataOut, uint16_t* outSize)
 {
+    (void)inSize;
+
     int    ret    = 0;
     RsaKey rsa[1] = {0};
     whMessageCrypto_RsaKeyGenRequest req;
@@ -312,6 +314,8 @@ static int _HandleRsaFunction( whServerContext* ctx, uint16_t magic,
                       const void* cryptoDataIn, uint16_t inSize,
                       void* cryptoDataOut, uint16_t* outSize)
 {
+    (void)inSize;
+
     int                        ret;
     RsaKey                     rsa[1];
     whMessageCrypto_RsaRequest req;
@@ -396,6 +400,8 @@ static int _HandleRsaGetSize(whServerContext* ctx, uint16_t magic,
                              const void* cryptoDataIn, uint16_t inSize,
                              void* cryptoDataOut, uint16_t* outSize)
 {
+    (void)inSize;
+
     int                                ret;
     RsaKey                             rsa[1];
     whMessageCrypto_RsaGetSizeRequest  req;
@@ -657,6 +663,8 @@ static int _HandleEccKeyGen(whServerContext* ctx, uint16_t magic,
                             const void* cryptoDataIn, uint16_t inSize,
                             void* cryptoDataOut, uint16_t* outSize)
 {
+    (void)inSize;
+
     int                               ret = WH_ERROR_OK;
     ecc_key                           key[1];
     whMessageCrypto_EccKeyGenRequest  req;
@@ -749,6 +757,8 @@ static int _HandleEccSharedSecret(whServerContext* ctx, uint16_t magic,
                                   const void* cryptoDataIn, uint16_t inSize,
                                   void* cryptoDataOut, uint16_t* outSize)
 {
+    (void)inSize;
+
     int                         ret = WH_ERROR_OK;
     ecc_key                     pub_key[1];
     ecc_key                     prv_key[1];
@@ -823,6 +833,8 @@ static int _HandleEccSign(whServerContext* ctx, uint16_t magic,
                           const void* cryptoDataIn, uint16_t inSize,
                           void* cryptoDataOut, uint16_t* outSize)
 {
+    (void)inSize;
+
     int                            ret;
     ecc_key                        key[1];
     whMessageCrypto_EccSignRequest req;
@@ -890,6 +902,8 @@ static int _HandleEccVerify(whServerContext* ctx, uint16_t magic,
                             const void* cryptoDataIn, uint16_t inSize,
                             void* cryptoDataOut, uint16_t* outSize)
 {
+    (void)inSize;
+
     int                               ret;
     ecc_key                           key[1];
     whMessageCrypto_EccVerifyRequest  req;
@@ -1016,6 +1030,8 @@ static int _HandleRng(whServerContext* ctx, uint16_t magic,
                       const void* cryptoDataIn, uint16_t inSize,
                       void* cryptoDataOut, uint16_t* outSize)
 {
+    (void)inSize;
+
     int                         ret = WH_ERROR_OK;
     whMessageCrypto_RngRequest  req;
     whMessageCrypto_RngResponse res;
@@ -1065,6 +1081,8 @@ static int _HandleCurve25519KeyGen(whServerContext* ctx, uint16_t magic,
                                    const void* cryptoDataIn, uint16_t inSize,
                                    void* cryptoDataOut, uint16_t* outSize)
 {
+    (void)inSize;
+
     int                                      ret = WH_ERROR_OK;
     curve25519_key                           key[1];
     whMessageCrypto_Curve25519KeyGenRequest  req;
@@ -1147,6 +1165,8 @@ static int _HandleCurve25519SharedSecret(whServerContext* ctx, uint16_t magic,
                                          uint16_t inSize, void* cryptoDataOut,
                                          uint16_t* outSize)
 {
+    (void)inSize;
+
     int ret;
     curve25519_key priv[1] = {0};
     curve25519_key pub[1] = {0};
@@ -1231,6 +1251,8 @@ static int _HandleAesCbc(whServerContext* ctx, uint16_t magic, const void* crypt
                          uint16_t inSize, void* cryptoDataOut,
                          uint16_t* outSize)
 {
+    (void)inSize;
+
     int                            ret    = 0;
     Aes                            aes[1] = {0};
     whMessageCrypto_AesCbcRequest  req;
@@ -1331,6 +1353,8 @@ static int _HandleAesGcm(whServerContext* ctx, uint16_t magic,
                          const void* cryptoDataIn, uint16_t inSize,
                          void* cryptoDataOut, uint16_t* outSize)
 {
+    (void)inSize;
+
     int      ret    = 0;
     Aes      aes[1] = {0};
     uint8_t  read_key[AES_MAX_KEY_SIZE];
@@ -1484,6 +1508,8 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
                        const void* cryptoDataIn, uint16_t inSize,
                        void* cryptoDataOut, uint16_t* outSize)
 {
+    (void)inSize;
+
     int ret;
     whMessageCrypto_CmacRequest req;
     whMessageCrypto_CmacResponse res;
@@ -1494,7 +1520,7 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
         return ret;
     }
 
-    int i;
+    uint32_t i;
     word32 len;
     uint16_t cancelSeq;
     whKeyId keyId = WH_KEYID_ERASED;
@@ -1684,6 +1710,8 @@ static int _HandleSha256(whServerContext* ctx, uint16_t magic,
                          const void* cryptoDataIn, uint16_t inSize,
                          void* cryptoDataOut, uint16_t* outSize)
 {
+    (void)inSize;
+
     int                            ret    = 0;
     wc_Sha256*                     sha256 = ctx->crypto->algoCtx.sha256;
     whMessageCrypto_Sha256Request  req;
@@ -1794,6 +1822,8 @@ static int _HandleMlDsaKeyGen(whServerContext* ctx, uint16_t magic,
     (void)outSize;
     return WH_ERROR_NOHANDLER;
 #else
+    (void)inSize;
+
     int                                 ret = WH_ERROR_OK;
     MlDsaKey                            key[1];
     whMessageCrypto_MlDsaKeyGenRequest  req;
@@ -1898,6 +1928,8 @@ static int _HandleMlDsaSign(whServerContext* ctx, uint16_t magic,
     (void)outSize;
     return WH_ERROR_NOHANDLER;
 #else
+    (void)inSize;
+
     int                                 ret;
     MlDsaKey                            key[1];
     whMessageCrypto_MlDsaSignRequest    req;
@@ -1965,6 +1997,8 @@ static int _HandleMlDsaVerify(whServerContext* ctx, uint16_t magic,
     (void)outSize;
     return WH_ERROR_NOHANDLER;
 #else
+    (void)inSize;
+
     int                                 ret;
     MlDsaKey                            key[1];
     whMessageCrypto_MlDsaVerifyRequest  req;
@@ -2023,6 +2057,12 @@ static int _HandleMlDsaCheckPrivKey(whServerContext* ctx, uint16_t magic,
                                     const void* cryptoDataIn, uint16_t inSize,
                                     void* cryptoDataOut, uint16_t* outSize)
 {
+    (void)ctx;
+    (void)magic;
+    (void)cryptoDataIn;
+    (void)inSize;
+    (void)cryptoDataOut;
+    (void)outSize;
     return WH_ERROR_NOHANDLER;
 }
 #endif /* HAVE_DILITHIUM */

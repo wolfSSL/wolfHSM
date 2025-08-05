@@ -26,6 +26,8 @@
 
 int _benchRng(whClientContext* client, whBenchOpContext* ctx, int id, int devId)
 {
+    (void)client;
+
     int      ret = 0;
     WC_RNG   rng;
     int      i              = 0;
@@ -84,6 +86,8 @@ int _benchRng(whClientContext* client, whBenchOpContext* ctx, int id, int devId)
 int wh_Bench_Mod_Rng(whClientContext* client, whBenchOpContext* ctx, int id,
                      void* params)
 {
+    (void)params;
+
     return _benchRng(client, ctx, id, WH_DEV_ID);
 }
 

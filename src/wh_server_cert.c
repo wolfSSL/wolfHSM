@@ -351,6 +351,8 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
                                 uint16_t req_size, const void* req_packet,
                                 uint16_t* out_resp_size, void* resp_packet)
 {
+    (void)seq;
+
     int rc = 0;
 
     if ((server == NULL) || (req_packet == NULL) || (resp_packet == NULL) ||

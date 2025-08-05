@@ -6,5 +6,6 @@
 
 int wh_DemoClient_wcTest(whClientContext* clientContext)
 {
+    (void)clientContext;
     return wolfcrypt_test(NULL);
 }

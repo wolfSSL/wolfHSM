@@ -52,6 +52,9 @@ uint8_t key2_der[] = {
 int wh_Bench_Mod_Curve25519KeyGen(whClientContext*  client,
                                   whBenchOpContext* ctx, int id, void* params)
 {
+    (void)client;
+    (void)params;
+
     int            ret    = 0;
     curve25519_key key[1] = {0};
     WC_RNG         rng[1] = {0};
@@ -123,6 +126,8 @@ int wh_Bench_Mod_Curve25519SharedSecret(whClientContext*  client,
                                         whBenchOpContext* ctx, int id,
                                         void* params)
 {
+    (void)params;
+
     int            ret = 0;
     word32         outLen;
     curve25519_key keyAlice[1] = {0};

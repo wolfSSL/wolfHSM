@@ -6,5 +6,6 @@
 
 int wh_DemoClient_wcBench(whClientContext* clientContext)
 {
+    (void)clientContext;
     return benchmark_test(NULL);
 }

@@ -139,6 +139,7 @@ exit:
 int wh_Bench_Mod_CmacAes128(whClientContext* client, whBenchOpContext* ctx,
                             int id, void* params)
 {
+    (void)params;
     return _benchCmacAes(client, ctx, id, key128, sizeof(key128), WH_DEV_ID);
 }
 
@@ -146,9 +147,14 @@ int wh_Bench_Mod_CmacAes128Dma(whClientContext* client, whBenchOpContext* ctx,
                                int id, void* params)
 {
 #if defined(WOLFHSM_CFG_DMA)
+    (void)params;
     return _benchCmacAes(client, ctx, id, key128, sizeof(key128),
                          WH_DEV_ID_DMA);
 #else
+    (void)client;
+    (void)ctx;
+    (void)id;
+    (void)params;
     return WH_ERROR_NOTIMPL;
 #endif
 }
@@ -156,6 +162,7 @@ int wh_Bench_Mod_CmacAes128Dma(whClientContext* client, whBenchOpContext* ctx,
 int wh_Bench_Mod_CmacAes256(whClientContext* client, whBenchOpContext* ctx,
                             int id, void* params)
 {
+    (void)params;
     return _benchCmacAes(client, ctx, id, key256, sizeof(key256), WH_DEV_ID);
 }
 
@@ -163,9 +170,14 @@ int wh_Bench_Mod_CmacAes256Dma(whClientContext* client, whBenchOpContext* ctx,
                                int id, void* params)
 {
 #if defined(WOLFHSM_CFG_DMA)
+    (void)params;
     return _benchCmacAes(client, ctx, id, key256, sizeof(key256),
                          WH_DEV_ID_DMA);
 #else
+    (void)client;
+    (void)ctx;
+    (void)id;
+    (void)params;
     return WH_ERROR_NOTIMPL;
 #endif
 }

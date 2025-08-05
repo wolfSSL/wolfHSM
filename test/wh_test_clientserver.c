@@ -90,6 +90,8 @@ static int _customServerCb(whServerContext*                 server,
                            const whMessageCustomCb_Request* req,
                            whMessageCustomCb_Response*      resp)
 {
+    (void)server;
+
     uint8_t* serverPtr = NULL;
     uint8_t* clientPtr = NULL;
     size_t   copySz    = 0;
@@ -181,7 +183,7 @@ static int _testCallbacks(whServerContext* server, whClientContext* client)
         WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
         WH_TEST_RETURN_ON_FAIL(wh_Client_CustomCbResponse(client, &resp));
         WH_TEST_ASSERT_RETURN(resp.err == WH_ERROR_OK);
-        WH_TEST_ASSERT_RETURN(resp.rc == counter);
+        WH_TEST_ASSERT_RETURN(resp.rc == (int32_t)counter);
         WH_TEST_ASSERT_RETURN(0 == memcmp(output, input, sizeof(input)));
 
         memset(output, 0, sizeof(output));
@@ -480,6 +482,8 @@ int _testClientCounter(whClientContext* client)
 #if defined(WOLFHSM_CFG_ENABLE_CLIENT) && defined(WOLFHSM_CFG_ENABLE_SERVER)
 int _clientServerSequentialTestConnectCb(void* context, whCommConnected connected)
 {
+    (void)context;
+
     if (clientServerSequentialTestServerCtx == NULL) {
         WH_ERROR_PRINT("Client connect callback server context is NULL\n");
         WH_TEST_ASSERT_RETURN(0);

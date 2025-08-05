@@ -42,6 +42,8 @@ int wh_Server_HandleCounter(whServerContext* server, uint16_t magic,
                             const void* req_packet, uint16_t* out_resp_size,
                             void* resp_packet)
 {
+    (void)req_size;
+
     whKeyId       counterId = 0;
     int           ret       = 0;
     whNvmMetadata meta[1]   = {{0}};
