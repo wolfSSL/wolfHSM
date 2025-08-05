@@ -2377,6 +2377,9 @@ static int _HandleSha256Dma(whServerContext* ctx, uint16_t magic, uint16_t seq,
                             const void* cryptoDataIn, uint16_t inSize,
                             void* cryptoDataOut, uint16_t* outSize)
 {
+    (void)seq;
+    (void)inSize;
+
     int                               ret = 0;
     whMessageCrypto_Sha256DmaRequest  req;
     whMessageCrypto_Sha256DmaResponse res;
@@ -2508,6 +2511,8 @@ static int _HandleMlDsaKeyGenDma(whServerContext* ctx, uint16_t magic,
     (void)outSize;
     return WH_ERROR_NOHANDLER;
 #else
+    (void)inSize;
+
     int      ret = WH_ERROR_OK;
     MlDsaKey key[1];
     void*    clientOutAddr = NULL;
@@ -2625,6 +2630,8 @@ static int _HandleMlDsaSignDma(whServerContext* ctx, uint16_t magic,
     (void)outSize;
     return WH_ERROR_NOHANDLER;
 #else
+    (void)inSize;
+
     int      ret = 0;
     MlDsaKey key[1];
     void*    msgAddr = NULL;
@@ -2729,6 +2736,8 @@ static int _HandleMlDsaVerifyDma(whServerContext* ctx, uint16_t magic,
     (void)outSize;
     return WH_ERROR_NOHANDLER;
 #else
+    (void)inSize;
+
     int      ret = 0;
     MlDsaKey key[1];
     void*    msgAddr  = NULL;
@@ -2825,6 +2834,12 @@ static int _HandleMlDsaCheckPrivKeyDma(whServerContext* ctx, uint16_t magic,
                                        uint16_t inSize, void* cryptoDataOut,
                                        uint16_t* outSize)
 {
+    (void)ctx;
+    (void)magic;
+    (void)cryptoDataIn;
+    (void)inSize;
+    (void)cryptoDataOut;
+    (void)outSize;
     return WH_ERROR_NOHANDLER;
 }
 #endif /* HAVE_DILITHIUM */
@@ -2884,6 +2899,9 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
                           const void* cryptoDataIn, uint16_t inSize,
                           void* cryptoDataOut, uint16_t* outSize)
 {
+    (void)seq;
+    (void)inSize;
+
     int ret = 0;
     whMessageCrypto_CmacDmaRequest req;
     whMessageCrypto_CmacDmaResponse res;
