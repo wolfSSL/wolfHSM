@@ -121,8 +121,8 @@ static int nfPartition_CheckDataRange(whNvmFlashContext* context,
                                        uint32_t byte_offset,
                                        uint32_t byte_count);
 
-static uint32_t nfObject_Offset(whNvmFlashContext* context, int partition,
-        int object_index);
+static int nfObject_Offset(whNvmFlashContext* context, int partition,
+        int object_index, uint32_t *out_object_offset);
 static int nfObject_ProgramBegin(whNvmFlashContext* context, int partition,
         int object_index, uint32_t epoch, uint32_t start, whNvmMetadata* meta);
 static int nfObject_ProgramDataBytes(whNvmFlashContext* context, int partition,
@@ -512,16 +512,19 @@ static int nfPartition_CheckDataRange(whNvmFlashContext* context,
     return WH_ERROR_OK;
 }
 
-static uint32_t nfObject_Offset(whNvmFlashContext* context, int partition,
-        int object_index)
+static int nfObject_Offset(whNvmFlashContext* context, int partition,
+        int object_index, uint32_t *out_object_offset)
 {
-    if (context == NULL) {
+    if (context == NULL || out_object_offset == NULL) {
         return WH_ERROR_BADARGS;
     }
 
-    return nfPartition_Offset(context,partition) +
-            NF_PARTITION_DIRECTORY_OFFSET +
-            NF_DIRECTORY_OBJECT_OFFSET(object_index);
+
+    *out_object_offset = nfPartition_Offset(context,partition) +
+        NF_PARTITION_DIRECTORY_OFFSET +
+        NF_DIRECTORY_OBJECT_OFFSET(object_index);
+
+    return WH_ERROR_OK;
 }
 
 static int nfObject_ProgramBegin(whNvmFlashContext* context, int partition,
@@ -539,7 +542,10 @@ static int nfObject_ProgramBegin(whNvmFlashContext* context, int partition,
         return WH_ERROR_BADARGS;
     }
 
-    object_offset = nfObject_Offset(context, partition, object_index);
+    rc = nfObject_Offset(context, partition, object_index, &object_offset);
+    if (rc != WH_ERROR_OK) {
+        return rc;
+    }
 
     /* Program the object epoch */
     rc = wh_FlashUnit_Program(
@@ -601,6 +607,7 @@ static int nfObject_ProgramDataBytes(whNvmFlashContext* context, int partition,
 static int nfObject_ProgramFinish(whNvmFlashContext* context, int partition,
         int object_index, uint32_t byte_count)
 {
+    int rc;
     uint32_t object_offset = 0;
     whFlashUnit state_count = BASE_STATE | WHFU_BYTES2UNITS(byte_count);
 
@@ -608,7 +615,10 @@ static int nfObject_ProgramFinish(whNvmFlashContext* context, int partition,
         return WH_ERROR_BADARGS;
     }
 
-    object_offset = nfObject_Offset(context, partition, object_index);
+    rc = nfObject_Offset(context, partition, object_index, &object_offset);
+    if (rc != WH_ERROR_OK) {
+        return rc;
+    }
 
     /* Program the object flag->state_count */
     return wh_FlashUnit_Program(
