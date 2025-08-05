@@ -46,6 +46,7 @@
 #include "wolfssl/wolfcrypt/curve25519.h"
 #include "wolfssl/wolfcrypt/ecc.h"
 #include "wolfssl/wolfcrypt/sha256.h"
+#include "wolfssl/wolfcrypt/sha512.h"
 
 #include "wolfhsm/wh_crypto.h"
 #include "wolfhsm/wh_client_crypto.h"
@@ -399,7 +400,36 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
                 ret = wh_Client_Sha256(ctx, sha, in, inLen, out);
             } break;
 #endif /* !NO_SHA256 */
+#ifdef WOLFSSL_SHA224
+            case WC_HASH_TYPE_SHA224: {
+                wc_Sha224*     sha   = info->hash.sha224;
+                const uint8_t* in    = info->hash.in;
+                uint32_t       inLen = info->hash.inSz;
+                uint8_t*       out   = info->hash.digest;
 
+                ret = wh_Client_Sha224(ctx, sha, in, inLen, out);
+            } break;
+#endif /* WOLFSSL_SHA224 */
+#ifdef WOLFSSL_SHA384
+            case WC_HASH_TYPE_SHA384: {
+                wc_Sha384*     sha   = info->hash.sha384;
+                const uint8_t* in    = info->hash.in;
+                uint32_t       inLen = info->hash.inSz;
+                uint8_t*       out   = info->hash.digest;
+
+                ret = wh_Client_Sha384(ctx, sha, in, inLen, out);
+            } break;
+#endif /* WOLFSSL_SHA384 */
+#ifdef WOLFSSL_SHA512
+            case WC_HASH_TYPE_SHA512: {
+                wc_Sha512*     sha   = info->hash.sha512;
+                const uint8_t* in    = info->hash.in;
+                uint32_t       inLen = info->hash.inSz;
+                uint8_t*       out   = info->hash.digest;
+
+                ret = wh_Client_Sha512(ctx, sha, in, inLen, out);
+            } break;
+#endif /* WOLFSSL_SHA512 */
             default:
                 ret = CRYPTOCB_UNAVAILABLE;
                 break;
