@@ -67,7 +67,7 @@ int whTest_Flash_RamSim(void)
                             .pageSize   = TEST_PAGE_SIZE,
                             .erasedByte = 0xFF,
 #ifndef WOLFHSM_CFG_FLASH_RAMSIM_MALLOC
-                            .memory     = WH_TEST_FLASH_RAMSIM_MEMORY_ADDR;
+                            .memory     = WOLFHSM_CFG_TEST_FLASH_RAMSIM_MEMORY_ADDR;
 #endif
     };
 
