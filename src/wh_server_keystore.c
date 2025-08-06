@@ -536,6 +536,8 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
                                const void* req_packet, uint16_t* out_resp_size,
                                void* resp_packet)
 {
+    (void)req_size;
+
     int           ret = WH_ERROR_OK;
     uint8_t*      in;
     uint8_t*      out;

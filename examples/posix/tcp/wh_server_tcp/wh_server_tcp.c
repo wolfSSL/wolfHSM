@@ -327,7 +327,7 @@ static void processEntry(Entry* entry, int isKey, whNvmContext* nvmContext)
     size_t bytesRead = fread(buffer, 1, fileSize, file);
     fclose(file);
 
-    if (bytesRead != fileSize) {
+    if (bytesRead != (size_t)fileSize) {
         fprintf(stderr, "Error: Failed to read entire file %s\n",
                 entry->filePath);
         free(buffer);
@@ -567,6 +567,9 @@ static int wh_ServerTask(void* cf, const char* keyFilePath, int keyId,
 static int _hardwareCryptoCb(int devId, struct wc_CryptoInfo* info,
                                    void* ctx)
 {
+    (void)devId;
+    (void)ctx;
+
     /* Default response */
     int ret = CRYPTOCB_UNAVAILABLE;
     switch(info->algo_type) {

@@ -292,6 +292,8 @@ exit:
 int _benchEccKeyGen(whClientContext* client, whBenchOpContext* ctx, int id,
                     int curveSize, int devId)
 {
+    (void)client;
+
     int     ret    = 0;
     ecc_key key[1] = {0};
     WC_RNG  rng[1] = {0};
@@ -514,6 +516,7 @@ exit:
 int wh_Bench_Mod_EccP256Sign(whClientContext* client, whBenchOpContext* ctx,
                              int id, void* params)
 {
+    (void)params;
     return _benchEccSign(client, ctx, id, aliceKeyDer, sizeof(aliceKeyDer), 32,
                          WH_DEV_ID);
 }
@@ -521,12 +524,17 @@ int wh_Bench_Mod_EccP256Sign(whClientContext* client, whBenchOpContext* ctx,
 int wh_Bench_Mod_EccP256SignDma(whClientContext* client, whBenchOpContext* ctx,
                                 int id, void* params)
 {
+    (void)client;
+    (void)ctx;
+    (void)id;
+    (void)params;
     return WH_ERROR_NOTIMPL;
 }
 
 int wh_Bench_Mod_EccP256Verify(whClientContext* client, whBenchOpContext* ctx,
                                int id, void* params)
 {
+    (void)params;
     return _benchEccVerify(client, ctx, id, aliceKeyDer, sizeof(aliceKeyDer),
                            32, WH_DEV_ID);
 }
@@ -534,18 +542,24 @@ int wh_Bench_Mod_EccP256Verify(whClientContext* client, whBenchOpContext* ctx,
 int wh_Bench_Mod_EccP256VerifyDma(whClientContext*  client,
                                   whBenchOpContext* ctx, int id, void* params)
 {
+    (void)client;
+    (void)ctx;
+    (void)id;
+    (void)params;
     return WH_ERROR_NOTIMPL;
 }
 
 int wh_Bench_Mod_EccP256KeyGen(whClientContext* client, whBenchOpContext* ctx,
                                int id, void* params)
 {
+    (void)params;
     return _benchEccKeyGen(client, ctx, id, 32, WH_DEV_ID);
 }
 
 int wh_Bench_Mod_EccP256Ecdh(whClientContext* client, whBenchOpContext* ctx,
                              int id, void* params)
 {
+    (void)params;
     return _benchEccEcdh(client, ctx, id, aliceKeyDer, sizeof(aliceKeyDer),
                          bobKeyDer, sizeof(bobKeyDer), 32, WH_DEV_ID);
 }

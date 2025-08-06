@@ -3116,6 +3116,10 @@ int wh_Client_MlDsaCheckPrivKey(whClientContext* ctx, MlDsaKey* key,
                                 const byte* pubKey, word32 pubKeySz)
 {
     /* TODO */
+    (void)ctx;
+    (void)key;
+    (void)pubKey;
+    (void)pubKeySz;
     return WH_ERROR_NOHANDLER;
 }
 
@@ -3525,6 +3529,10 @@ int wh_Client_MlDsaCheckPrivKeyDma(whClientContext* ctx, MlDsaKey* key,
                                    const byte* pubKey, word32 pubKeySz)
 {
     /* TODO */
+    (void)ctx;
+    (void)key;
+    (void)pubKey;
+    (void)pubKeySz;
     return CRYPTOCB_UNAVAILABLE;
 }
 

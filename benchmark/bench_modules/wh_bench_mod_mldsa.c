@@ -894,6 +894,8 @@ exit:
 static int _benchMlDsaKeyGen(whClientContext* client, whBenchOpContext* ctx,
                              int id, int securityLevel, int devId)
 {
+    (void)client;
+
     int      ret = 0;
     MlDsaKey key;
     WC_RNG   rng[1] = {0};
@@ -974,8 +976,13 @@ int wh_Bench_Mod_MlDsa44Sign(whClientContext* client, whBenchOpContext* ctx,
 {
 #if !defined(WOLFSSL_DILITHIUM_NO_SIGN) && \
     !defined(WOLFHSM_CFG_TEST_CLIENT_LARGE_DATA_DMA_ONLY)
+    (void)params;
     return _benchMlDsaSign(client, ctx, id, WC_ML_DSA_44, WH_DEV_ID);
 #else
+    (void)client;
+    (void)ctx;
+    (void)id;
+    (void)params;
     return WH_ERROR_NOTIMPL;
 #endif
 }
@@ -984,8 +991,13 @@ int wh_Bench_Mod_MlDsa44SignDma(whClientContext* client, whBenchOpContext* ctx,
                                 int id, void* params)
 {
 #if defined(WOLFHSM_CFG_DMA) && !defined(WOLFSSL_DILITHIUM_NO_SIGN)
+    (void)params;
     return _benchMlDsaSign(client, ctx, id, WC_ML_DSA_44, WH_DEV_ID_DMA);
 #else
+    (void)client;
+    (void)ctx;
+    (void)id;
+    (void)params;
     return WH_ERROR_NOTIMPL;
 #endif
 }
@@ -995,8 +1007,13 @@ int wh_Bench_Mod_MlDsa44Verify(whClientContext* client, whBenchOpContext* ctx,
 {
 #if !defined(WOLFSSL_DILITHIUM_NO_VERIFY) && \
     !defined(WOLFHSM_CFG_TEST_CLIENT_LARGE_DATA_DMA_ONLY)
+    (void)params;
     return _benchMlDsaVerify(client, ctx, id, WC_ML_DSA_44, WH_DEV_ID);
 #else
+    (void)client;
+    (void)ctx;
+    (void)id;
+    (void)params;
     return WH_ERROR_NOTIMPL;
 #endif
 }
@@ -1005,8 +1022,13 @@ int wh_Bench_Mod_MlDsa44VerifyDma(whClientContext*  client,
                                   whBenchOpContext* ctx, int id, void* params)
 {
 #if defined(WOLFHSM_CFG_DMA) && !defined(WOLFSSL_DILITHIUM_NO_VERIFY)
+    (void)params;
     return _benchMlDsaVerify(client, ctx, id, WC_ML_DSA_44, WH_DEV_ID_DMA);
 #else
+    (void)client;
+    (void)ctx;
+    (void)id;
+    (void)params;
     return WH_ERROR_NOTIMPL;
 #endif
 }
@@ -1016,8 +1038,13 @@ int wh_Bench_Mod_MlDsa44KeyGen(whClientContext* client, whBenchOpContext* ctx,
 {
 #if !defined(WOLFSSL_DILITHIUM_NO_MAKE_KEY) && \
     !defined(WOLFHSM_CFG_TEST_CLIENT_LARGE_DATA_DMA_ONLY)
+    (void)params;
     return _benchMlDsaKeyGen(client, ctx, id, WC_ML_DSA_44, WH_DEV_ID);
 #else
+    (void)client;
+    (void)ctx;
+    (void)id;
+    (void)params;
     return WH_ERROR_NOTIMPL;
 #endif
 }
@@ -1026,8 +1053,13 @@ int wh_Bench_Mod_MlDsa44KeyGenDma(whClientContext*  client,
                                   whBenchOpContext* ctx, int id, void* params)
 {
 #if defined(WOLFHSM_CFG_DMA) && !defined(WOLFSSL_DILITHIUM_NO_MAKE_KEY)
+    (void)params;
     return _benchMlDsaKeyGen(client, ctx, id, WC_ML_DSA_44, WH_DEV_ID_DMA);
 #else
+    (void)client;
+    (void)ctx;
+    (void)id;
+    (void)params;
     return WH_ERROR_NOTIMPL;
 #endif
 }
@@ -1038,36 +1070,60 @@ int wh_Bench_Mod_MlDsa44KeyGenDma(whClientContext*  client,
 int wh_Bench_Mod_MlDsa65Sign(whClientContext* client, whBenchOpContext* ctx,
                              int id, void* params)
 {
+    (void)client;
+    (void)ctx;
+    (void)id;
+    (void)params;
     return WH_ERROR_NOTIMPL;
 }
 
 int wh_Bench_Mod_MlDsa65SignDma(whClientContext* client, whBenchOpContext* ctx,
                                 int id, void* params)
 {
+    (void)client;
+    (void)ctx;
+    (void)id;
+    (void)params;
     return WH_ERROR_NOTIMPL;
 }
 
 int wh_Bench_Mod_MlDsa65Verify(whClientContext* client, whBenchOpContext* ctx,
                                int id, void* params)
 {
+    (void)client;
+    (void)ctx;
+    (void)id;
+    (void)params;
     return WH_ERROR_NOTIMPL;
 }
 
 int wh_Bench_Mod_MlDsa65VerifyDma(whClientContext*  client,
                                   whBenchOpContext* ctx, int id, void* params)
 {
+    (void)client;
+    (void)ctx;
+    (void)id;
+    (void)params;
     return WH_ERROR_NOTIMPL;
 }
 
 int wh_Bench_Mod_MlDsa65KeyGen(whClientContext* client, whBenchOpContext* ctx,
                                int id, void* params)
 {
+    (void)client;
+    (void)ctx;
+    (void)id;
+    (void)params;
     return WH_ERROR_NOTIMPL;
 }
 
 int wh_Bench_Mod_MlDsa65KeyGenDma(whClientContext*  client,
                                   whBenchOpContext* ctx, int id, void* params)
 {
+    (void)client;
+    (void)ctx;
+    (void)id;
+    (void)params;
     return WH_ERROR_NOTIMPL;
 }
 #endif /* !defined(WOLFSSL_NO_ML_DSA_65) */
@@ -1077,36 +1133,60 @@ int wh_Bench_Mod_MlDsa65KeyGenDma(whClientContext*  client,
 int wh_Bench_Mod_MlDsa87Sign(whClientContext* client, whBenchOpContext* ctx,
                              int id, void* params)
 {
+    (void)client;
+    (void)ctx;
+    (void)id;
+    (void)params;
     return WH_ERROR_NOTIMPL;
 }
 
 int wh_Bench_Mod_MlDsa87SignDma(whClientContext* client, whBenchOpContext* ctx,
                                 int id, void* params)
 {
+    (void)client;
+    (void)ctx;
+    (void)id;
+    (void)params;
     return WH_ERROR_NOTIMPL;
 }
 
 int wh_Bench_Mod_MlDsa87Verify(whClientContext* client, whBenchOpContext* ctx,
                                int id, void* params)
 {
+    (void)client;
+    (void)ctx;
+    (void)id;
+    (void)params;
     return WH_ERROR_NOTIMPL;
 }
 
 int wh_Bench_Mod_MlDsa87VerifyDma(whClientContext*  client,
                                   whBenchOpContext* ctx, int id, void* params)
 {
+    (void)client;
+    (void)ctx;
+    (void)id;
+    (void)params;
     return WH_ERROR_NOTIMPL;
 }
 
 int wh_Bench_Mod_MlDsa87KeyGen(whClientContext* client, whBenchOpContext* ctx,
                                int id, void* params)
 {
+    (void)client;
+    (void)ctx;
+    (void)id;
+    (void)params;
     return WH_ERROR_NOTIMPL;
 }
 
 int wh_Bench_Mod_MlDsa87KeyGenDma(whClientContext*  client,
                                   whBenchOpContext* ctx, int id, void* params)
 {
+    (void)client;
+    (void)ctx;
+    (void)id;
+    (void)params;
     return WH_ERROR_NOTIMPL;
 }
 #endif /* !defined(WOLFSSL_NO_ML_DSA_87) */

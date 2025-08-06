@@ -4,5 +4,6 @@
 
 int wh_DemoClient_Counter(whClientContext* clientContext)
 {
+    (void)clientContext;
     return WH_ERROR_OK;
 }

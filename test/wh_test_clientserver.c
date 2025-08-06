@@ -90,6 +90,8 @@ static int _customServerCb(whServerContext*                 server,
                            const whMessageCustomCb_Request* req,
                            whMessageCustomCb_Response*      resp)
 {
+    (void)server;
+
     uint8_t* serverPtr = NULL;
     uint8_t* clientPtr = NULL;
     size_t   copySz    = 0;
@@ -181,7 +183,7 @@ static int _testCallbacks(whServerContext* server, whClientContext* client)
         WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
         WH_TEST_RETURN_ON_FAIL(wh_Client_CustomCbResponse(client, &resp));
         WH_TEST_ASSERT_RETURN(resp.err == WH_ERROR_OK);
-        WH_TEST_ASSERT_RETURN(resp.rc == counter);
+        WH_TEST_ASSERT_RETURN(resp.rc == (int32_t)counter);
         WH_TEST_ASSERT_RETURN(0 == memcmp(output, input, sizeof(input)));
 
         memset(output, 0, sizeof(output));
@@ -199,6 +201,9 @@ static int _customServerDmaCb(struct whServerContext_t* server,
                               size_t len, whServerDmaOper oper,
                               whServerDmaFlags flags)
 {
+    (void)server;
+    (void)flags;
+
     /* remapped "client" address, a.k.a. arbitary "server" buffer */
     void* srvTmpBuf =
         (void*)(clientAddr + (offsetof(TestMemory, srvRemapBufAllow) -
@@ -242,6 +247,8 @@ static int _customServerDmaCb(struct whServerContext_t* server,
     defined(WOLFHSM_CFG_ENABLE_SERVER)
 static int _testDma(whServerContext* server, whClientContext* client)
 {
+    (void)client;
+
     int        rc      = 0;
     TestMemory testMem = {0};
 
@@ -480,6 +487,8 @@ int _testClientCounter(whClientContext* client)
 #if defined(WOLFHSM_CFG_ENABLE_CLIENT) && defined(WOLFHSM_CFG_ENABLE_SERVER)
 int _clientServerSequentialTestConnectCb(void* context, whCommConnected connected)
 {
+    (void)context;
+
     if (clientServerSequentialTestServerCtx == NULL) {
         WH_ERROR_PRINT("Client connect callback server context is NULL\n");
         WH_TEST_ASSERT_RETURN(0);

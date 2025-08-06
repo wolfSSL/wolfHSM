@@ -35,6 +35,8 @@ static const size_t keyLen = sizeof(key) - 1; /* -1 for null terminator */
 int _benchHmacSha256(whClientContext* client, whBenchOpContext* ctx, int id,
                      int devId)
 {
+    (void)client;
+
     int            ret = 0;
     Hmac           hmac[1];
     uint8_t        out[WC_SHA256_DIGEST_SIZE];
@@ -127,6 +129,7 @@ int _benchHmacSha256(whClientContext* client, whBenchOpContext* ctx, int id,
 int wh_Bench_Mod_HmacSha256(whClientContext* client, whBenchOpContext* ctx,
                             int id, void* params)
 {
+    (void)params;
     return _benchHmacSha256(client, ctx, id, WH_DEV_ID);
 }
 
@@ -134,8 +137,13 @@ int wh_Bench_Mod_HmacSha256Dma(whClientContext* client, whBenchOpContext* ctx,
                                int id, void* params)
 {
 #if defined(WOLFHSM_CFG_DMA)
+    (void)params;
     return _benchHmacSha256(client, ctx, id, WH_DEV_ID_DMA);
 #else
+    (void)client;
+    (void)ctx;
+    (void)id;
+    (void)params;
     return WH_ERROR_NOTIMPL;
 #endif
 }
@@ -147,12 +155,20 @@ int wh_Bench_Mod_HmacSha256Dma(whClientContext* client, whBenchOpContext* ctx,
 int wh_Bench_Mod_HmacSha3256(whClientContext* client, whBenchOpContext* ctx,
                              int id, void* params)
 {
+    (void)client;
+    (void)ctx;
+    (void)id;
+    (void)params;
     return WH_ERROR_NOTIMPL;
 }
 
 int wh_Bench_Mod_HmacSha3256Dma(whClientContext* client, whBenchOpContext* ctx,
                                 int id, void* params)
 {
+    (void)client;
+    (void)ctx;
+    (void)id;
+    (void)params;
     return WH_ERROR_NOTIMPL;
 }
 

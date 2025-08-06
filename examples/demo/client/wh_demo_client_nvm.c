@@ -16,6 +16,8 @@
  */
 int wh_DemoClient_Nvm(whClientContext* clientContext)
 {
+    (void)clientContext;
+
     const int NUM_OBJECTS = 3;
 
     int32_t  rc;

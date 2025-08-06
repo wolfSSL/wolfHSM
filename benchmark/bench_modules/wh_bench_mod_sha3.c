@@ -26,12 +26,20 @@
 int wh_Bench_Mod_Sha3256(whClientContext* client, whBenchOpContext* ctx, int id,
                          void* params)
 {
+    (void)client;
+    (void)ctx;
+    (void)id;
+    (void)params;
     return WH_ERROR_NOTIMPL;
 }
 
 int wh_Bench_Mod_Sha3256Dma(whClientContext* client, whBenchOpContext* ctx,
                             int id, void* params)
 {
+    (void)client;
+    (void)ctx;
+    (void)id;
+    (void)params;
     return WH_ERROR_NOTIMPL;
 }
 

@@ -297,6 +297,8 @@ static int whTest_CryptoRsa(whClientContext* ctx, int devId, WC_RNG* rng)
 #ifdef HAVE_ECC
 static int whTest_CryptoEcc(whClientContext* ctx, int devId, WC_RNG* rng)
 {
+    (void)ctx;
+
     int ret = WH_ERROR_OK;
     ecc_key eccPrivate[1];
     ecc_key eccPublic[1];
@@ -1532,6 +1534,9 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
 #if defined(WOLFSSL_CMAC) && !defined(NO_AES) && defined(WOLFSSL_AES_DIRECT)
 static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
 {
+    (void)ctx;
+    (void)rng;
+
     int ret;
     /* test cmac */
     Cmac    cmac[1];
@@ -1875,6 +1880,8 @@ static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
 static int whTestCrypto_MlDsaWolfCrypt(whClientContext* ctx, int devId,
                                        WC_RNG* rng)
 {
+    (void)ctx;
+
     int ret      = 0;
     int verified = 0;
 
@@ -1963,6 +1970,8 @@ static int whTestCrypto_MlDsaWolfCrypt(whClientContext* ctx, int devId,
 static int whTestCrypto_MlDsaDmaClient(whClientContext* ctx, int devId,
                                        WC_RNG* rng)
 {
+    (void)rng;
+
     int      ret = 0;
     MlDsaKey key[1];
     MlDsaKey imported_key[1];
@@ -2131,6 +2140,8 @@ static int whTestCrypto_MlDsaDmaClient(whClientContext* ctx, int devId,
 int whTestCrypto_MlDsaVerifyOnlyDma(whClientContext* ctx, int devId,
                                     WC_RNG* rng)
 {
+    (void)rng;
+
     /* Vectors from wolfCrypt test vectors, but decoupled for isolated usage */
     const byte ml_dsa_44_pub_key[] = {
         0xd8, 0xac, 0xaf, 0xd8, 0x2e, 0x14, 0x23, 0x78, 0xf7, 0x0d, 0x9a, 0x04,

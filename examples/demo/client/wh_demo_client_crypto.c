@@ -50,6 +50,8 @@
  */
 int wh_DemoClient_CryptoRsa(whClientContext* clientContext)
 {
+    (void)clientContext;
+
     int        ret           = 0;
     int        encSz         = 0;
     const char plainString[] = "The quick brown fox jumps over the lazy dog.";
@@ -236,6 +238,8 @@ exit:
  */
 int wh_DemoClient_CryptoCurve25519(whClientContext* clientContext)
 {
+    (void)clientContext;
+
     int            ret = 0;
     word32         outLen;
     uint8_t        sharedOne[CURVE25519_KEYSIZE];
@@ -476,6 +480,8 @@ exit:
  */
 int wh_DemoClient_CryptoEcc(whClientContext* clientContext)
 {
+    (void)clientContext;
+
     int        ret = 0;
     int        res;
     word32     outLen;
@@ -809,6 +815,8 @@ exit:
  */
 int wh_DemoClient_CryptoAesCbc(whClientContext* clientContext)
 {
+    (void)clientContext;
+
     int  ret = 0;
     Aes  aes[1];
     byte key[]       = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
@@ -960,6 +968,8 @@ exit:
  */
 int wh_DemoClient_CryptoAesGcm(whClientContext* clientContext)
 {
+    (void)clientContext;
+
     int  ret = 0;
     Aes  aes[1];
     byte key[]    = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
@@ -1113,6 +1123,8 @@ exit:
  */
 int wh_DemoClient_CryptoCmac(whClientContext* clientContext)
 {
+    (void)clientContext;
+
     int    ret = 0;
     word32 outLen;
     Cmac   cmac[1];
