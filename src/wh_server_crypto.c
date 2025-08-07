@@ -1282,6 +1282,12 @@ static int _HandleAesCbc(whServerContext* ctx, uint16_t magic, const void* crypt
     uint32_t enc     = req.enc;
     uint32_t key_len = req.keyLen;
     uint32_t len     = req.sz;
+    uint64_t needed_size = sizeof(whMessageCrypto_AesCbcResponse) + len +
+                          key_len + AES_BLOCK_SIZE;
+    if (needed_size > inSize) {
+        return WH_ERROR_BADARGS;
+    }
+
     whKeyId  key_id =
         WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
 
