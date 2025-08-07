@@ -726,6 +726,15 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
                 WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, server->comm->client_id,
                               req.id),
                 meta, out, &keySz);
+
+            /* Check if key is non-exportable */
+            if (ret == WH_ERROR_OK &&
+                (meta->flags & WH_NVM_FLAGS_NONEXPORTABLE)) {
+                ret = WH_ERROR_ACCESS;
+                /* Clear any key data that may have been read */
+                memset(out, 0, keySz);
+            }
+
             resp.rc = ret;
             /* TODO: Are there any fatal server errors? */
             ret = WH_ERROR_OK;
@@ -872,6 +881,11 @@ int wh_Server_KeystoreExportKeyDma(whServerContext* server, whKeyId keyId,
     ret = _FindInCache(server, keyId, NULL, NULL, &buffer, &cacheMeta);
     if (ret != 0) {
         return ret;
+    }
+
+    /* Check if key is non-exportable */
+    if (cacheMeta->flags & WH_NVM_FLAGS_NONEXPORTABLE) {
+        return WH_ERROR_ACCESS;
     }
 
     if (keySz < cacheMeta->len) {

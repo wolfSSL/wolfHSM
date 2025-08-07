@@ -175,12 +175,11 @@ int wh_Server_CertInit(whServerContext* server)
 
 /* Add a trusted certificate to NVM storage */
 int wh_Server_CertAddTrusted(whServerContext* server, whNvmId id,
-                             const uint8_t* cert, uint32_t cert_len)
+                             const uint8_t* cert, uint32_t cert_len,
+                             whNvmFlags flags)
 {
-    int rc;
-    /* TODO: Properly set access and flags */
+    int           rc;
     whNvmAccess   access                  = WH_NVM_ACCESS_ANY;
-    whNvmFlags    flags                   = WH_NVM_FLAGS_IMMUTABLE;
     uint8_t       label[WH_NVM_LABEL_LEN] = "trusted_cert";
     whNvmMetadata metadata;
 
@@ -388,7 +387,7 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
 
             /* Process the add trusted action */
             rc      = wh_Server_CertAddTrusted(server, req.id, cert_data,
-                                               req.cert_len);
+                                               req.cert_len, req.flags);
             resp.rc = rc;
 
             /* Convert the response struct */
@@ -416,10 +415,14 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
         }; break;
 
         case WH_MESSAGE_CERT_ACTION_READTRUSTED: {
+            const uint32_t max_transport_cert_len =
+                WOLFHSM_CFG_COMM_DATA_LEN -
+                sizeof(whMessageCert_ReadTrustedResponse);
             whMessageCert_ReadTrustedRequest  req  = {0};
             whMessageCert_ReadTrustedResponse resp = {0};
             uint8_t*                          cert_data;
             uint32_t                          cert_len;
+            whNvmMetadata                     meta;
 
             /* Convert request struct */
             wh_MessageCert_TranslateReadTrustedRequest(
@@ -427,18 +430,35 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
 
             /* Get pointer to certificate data buffer */
             cert_data = (uint8_t*)resp_packet + sizeof(resp);
-            cert_len  = WOLFHSM_CFG_COMM_DATA_LEN - sizeof(resp);
+            cert_len  = WOLFHSM_CFG_MAX_CERT_SIZE > max_transport_cert_len
+                            ? max_transport_cert_len
+                            : WOLFHSM_CFG_MAX_CERT_SIZE;
 
-            /* Process the get trusted action */
-            rc =
-                wh_Server_CertReadTrusted(server, req.id, cert_data, &cert_len);
-            resp.rc       = rc;
-            resp.cert_len = cert_len;
+            /* Check metadata to check if the certificate is non-exportable.
+             * This is unfortunately redundant since metadata is checked in
+             * wh_Server_CertReadTrusted(). */
+            rc = wh_Nvm_GetMetadata(server->nvm, req.id, &meta);
+            if (rc == WH_ERROR_OK) {
+                /* Check if the certificate is non-exportable */
+                if (meta.flags & WH_NVM_FLAGS_NONEXPORTABLE) {
+                    resp.rc = WH_ERROR_ACCESS;
+                }
+                else {
+                    rc = wh_Server_CertReadTrusted(server, req.id, cert_data,
+                                                   &cert_len);
+                    resp.rc       = rc;
+                    resp.cert_len = cert_len;
+                }
+            }
+            else {
+                resp.rc       = rc;
+                resp.cert_len = 0;
+            }
 
             /* Convert the response struct */
             wh_MessageCert_TranslateReadTrustedResponse(
                 magic, &resp, (whMessageCert_ReadTrustedResponse*)resp_packet);
-            *out_resp_size = sizeof(resp) + cert_len;
+            *out_resp_size = sizeof(resp) + resp.cert_len;
         }; break;
 
         case WH_MESSAGE_CERT_ACTION_VERIFY: {
@@ -487,7 +507,7 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
                 /* Request is malformed */
                 resp.rc = WH_ERROR_ABORTED;
             }
-            if (resp.rc == 0) {
+            if (resp.rc == WH_ERROR_OK) {
                 /* Convert request struct */
                 wh_MessageCert_TranslateAddTrustedDmaRequest(
                     magic, (whMessageCert_AddTrustedDmaRequest*)req_packet,
@@ -498,12 +518,12 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
                     server, req.cert_addr, &cert_data, req.cert_len,
                     WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
             }
-            if (resp.rc == 0) {
+            if (resp.rc == WH_ERROR_OK) {
                 /* Process the add trusted action */
                 resp.rc = wh_Server_CertAddTrusted(server, req.id, cert_data,
-                                                   req.cert_len);
+                                                   req.cert_len, req.flags);
             }
-            if (resp.rc == 0) {
+            if (resp.rc == WH_ERROR_OK) {
                 /* Post-process client address */
                 resp.rc = wh_Server_DmaProcessClientAddress(
                     server, req.cert_addr, &cert_data, req.cert_len,
@@ -521,12 +541,13 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
             whMessageCert_SimpleResponse        resp      = {0};
             void*                               cert_data = NULL;
             uint32_t                            cert_len;
+            whNvmMetadata                       meta;
 
             if (req_size != sizeof(req)) {
                 /* Request is malformed */
                 resp.rc = WH_ERROR_ABORTED;
             }
-            if (resp.rc == 0) {
+            if (resp.rc == WH_ERROR_OK) {
                 /* Convert request struct */
                 wh_MessageCert_TranslateReadTrustedDmaRequest(
                     magic, (whMessageCert_ReadTrustedDmaRequest*)req_packet,
@@ -537,13 +558,22 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
                     server, req.cert_addr, &cert_data, req.cert_len,
                     WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
             }
-            if (resp.rc == 0) {
-                /* Process the get trusted action */
-                cert_len = req.cert_len;
-                resp.rc  = wh_Server_CertReadTrusted(server, req.id, cert_data,
-                                                     &cert_len);
+            if (resp.rc == WH_ERROR_OK) {
+                /* Check metadata to see if the certificate is non-exportable */
+                resp.rc = wh_Nvm_GetMetadata(server->nvm, req.id, &meta);
+                if (resp.rc == WH_ERROR_OK) {
+                    if ((meta.flags & WH_NVM_FLAGS_NONEXPORTABLE) != 0) {
+                        resp.rc = WH_ERROR_ACCESS;
+                    }
+                    else {
+                        /* Clamp cert_len to actual stored length */
+                        cert_len = req.cert_len;
+                        resp.rc  = wh_Server_CertReadTrusted(
+                             server, req.id, cert_data, &cert_len);
+                    }
+                }
             }
-            if (resp.rc == 0) {
+            if (resp.rc == WH_ERROR_OK) {
                 /* Post-process client address */
                 resp.rc = wh_Server_DmaProcessClientAddress(
                     server, req.cert_addr, &cert_data, cert_len,
@@ -565,7 +595,7 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
                 /* Request is malformed */
                 resp.rc = WH_ERROR_ABORTED;
             }
-            if (resp.rc == 0) {
+            if (resp.rc == WH_ERROR_OK) {
                 /* Convert request struct */
                 wh_MessageCert_TranslateVerifyDmaRequest(
                     magic, (whMessageCert_VerifyDmaRequest*)req_packet, &req);
@@ -575,7 +605,7 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
                     server, req.cert_addr, &cert_data, req.cert_len,
                     WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
             }
-            if (resp.rc == 0) {
+            if (resp.rc == WH_ERROR_OK) {
                 /* Map client keyId to server keyId space */
                 whKeyId keyId = WH_MAKE_KEYID(
                     WH_KEYTYPE_CRYPTO, server->comm->client_id, req.keyId);
@@ -588,7 +618,7 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
                 /* Propagate the keyId back to the client */
                 resp.keyId = WH_KEYID_ID(keyId);
             }
-            if (resp.rc == 0) {
+            if (resp.rc == WH_ERROR_OK) {
                 /* Post-process client address */
                 resp.rc = wh_Server_DmaProcessClientAddress(
                     server, req.cert_addr, &cert_data, req.cert_len,

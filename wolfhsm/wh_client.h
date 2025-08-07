@@ -1630,7 +1630,8 @@ int wh_Client_CertInit(whClientContext* c, int32_t* out_rc);
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_Client_CertAddTrustedRequest(whClientContext* c, whNvmId id,
-                                    const uint8_t* cert, uint32_t cert_len);
+                                    const uint8_t* cert, uint32_t cert_len,
+                                    whNvmFlags flags);
 
 /**
  * @brief Receives a response from the server after adding a trusted
@@ -1663,7 +1664,7 @@ int wh_Client_CertAddTrustedResponse(whClientContext* c, int32_t* out_rc);
  */
 int wh_Client_CertAddTrusted(whClientContext* c, whNvmId id,
                              const uint8_t* cert, uint32_t cert_len,
-                             int32_t* out_rc);
+                             whNvmFlags flags, int32_t* out_rc);
 
 /**
  * @brief Sends a request to erase a trusted certificate from NVM storage.
@@ -1891,7 +1892,8 @@ int wh_Client_CertVerifyAndCacheLeafPubKey(
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_Client_CertAddTrustedDmaRequest(whClientContext* c, whNvmId id,
-                                       const void* cert, uint32_t cert_len);
+                                       const void* cert, uint32_t cert_len,
+                                       whNvmFlags flags);
 
 /**
  * @brief Receives a response from the server after adding a trusted certificate
@@ -1925,7 +1927,7 @@ int wh_Client_CertAddTrustedDmaResponse(whClientContext* c, int32_t* out_rc);
  */
 int wh_Client_CertAddTrustedDma(whClientContext* c, whNvmId id,
                                 const void* cert, uint32_t cert_len,
-                                int32_t* out_rc);
+                                whNvmFlags flags, int32_t* out_rc);
 
 /**
  * @brief Sends a request to read a trusted certificate from NVM storage using

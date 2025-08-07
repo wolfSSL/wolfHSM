@@ -54,6 +54,7 @@ int wh_MessageCert_TranslateAddTrustedRequest(
     }
     WH_T16(magic, dest, src, id);
     WH_T32(magic, dest, src, cert_len);
+    WH_T16(magic, dest, src, flags);
     return 0;
 }
 
@@ -128,6 +129,7 @@ int wh_MessageCert_TranslateAddTrustedDmaRequest(
     WH_T16(magic, dest, src, id);
     WH_T64(magic, dest, src, cert_addr);
     WH_T32(magic, dest, src, cert_len);
+    WH_T16(magic, dest, src, flags);
     return 0;
 }
 

@@ -49,6 +49,10 @@
 #include "wh_test_cert_data_acert.h"
 #endif
 
+#ifdef WOLFHSM_CFG_ENABLE_CLIENT
+static int whTest_CertNonExportable(whClientContext* client);
+#endif
+
 #ifdef WOLFHSM_CFG_ENABLE_SERVER
 /* Run certificate configuration tests */
 int whTest_CertServerCfg(whServerConfig* serverCfg)
@@ -65,13 +69,15 @@ int whTest_CertServerCfg(whServerConfig* serverCfg)
 
     /* Add trusted root certificate for chain A */
     WH_DEBUG_PRINT("Adding trusted root certificate for chain A...\n");
-    WH_TEST_RETURN_ON_FAIL(wh_Server_CertAddTrusted(
-        server, rootCertA, ROOT_A_CERT, ROOT_A_CERT_len));
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Server_CertAddTrusted(server, rootCertA, ROOT_A_CERT,
+                                 ROOT_A_CERT_len, WH_NVM_FLAGS_IMMUTABLE));
 
     /* Add trusted root certificate for chain B */
     WH_DEBUG_PRINT("Adding trusted root certificate for chain B...\n");
-    WH_TEST_RETURN_ON_FAIL(wh_Server_CertAddTrusted(
-        server, rootCertB, ROOT_B_CERT, ROOT_B_CERT_len));
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Server_CertAddTrusted(server, rootCertB, ROOT_B_CERT,
+                                 ROOT_B_CERT_len, WH_NVM_FLAGS_IMMUTABLE));
 
     /* Verify valid single cert (intermediate) */
     WH_DEBUG_PRINT(
@@ -153,12 +159,14 @@ int whTest_CertClient(whClientContext* client)
     /* Add root certificates to NVM */
     WH_DEBUG_PRINT("Adding root certificate A to NVM...\n");
     WH_TEST_RETURN_ON_FAIL(wh_Client_CertAddTrusted(
-        client, rootCertA_id, ROOT_A_CERT, ROOT_A_CERT_len, &out_rc));
+        client, rootCertA_id, ROOT_A_CERT, ROOT_A_CERT_len,
+        WH_NVM_FLAGS_IMMUTABLE, &out_rc));
     WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
 
     WH_DEBUG_PRINT("Adding root certificate B to NVM...\n");
     WH_TEST_RETURN_ON_FAIL(wh_Client_CertAddTrusted(
-        client, rootCertB_id, ROOT_B_CERT, ROOT_B_CERT_len, &out_rc));
+        client, rootCertB_id, ROOT_B_CERT, ROOT_B_CERT_len,
+        WH_NVM_FLAGS_IMMUTABLE, &out_rc));
     WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
 
     /* Verify valid single cert (intermediate) */
@@ -242,6 +250,9 @@ int whTest_CertClient(whClientContext* client)
         wh_Client_CertEraseTrusted(client, rootCertB_id, &out_rc));
     WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
 
+    /* Test non-exportable flag enforcement */
+    WH_TEST_RETURN_ON_FAIL(whTest_CertNonExportable(client));
+
     WH_DEBUG_PRINT("Certificate client test completed successfully\n");
 
     return rc;
@@ -266,12 +277,14 @@ int whTest_CertClientAcert(whClientContext* client)
     /* Add trusted certificate to NVM */
     WH_DEBUG_PRINT("Adding trusted certificate to NVM...\n");
     WH_TEST_RETURN_ON_FAIL(wh_Client_CertAddTrusted(
-        client, trustedCertId, caCert_der, caCert_der_len, &out_rc));
+        client, trustedCertId, caCert_der, caCert_der_len,
+        WH_NVM_FLAGS_IMMUTABLE, &out_rc));
     WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
 
     WH_DEBUG_PRINT("Adding root certificate B to NVM...\n");
     WH_TEST_RETURN_ON_FAIL(wh_Client_CertAddTrusted(
-        client, rootCertB_id, ROOT_B_CERT, ROOT_B_CERT_len, &out_rc));
+        client, rootCertB_id, ROOT_B_CERT, ROOT_B_CERT_len,
+        WH_NVM_FLAGS_IMMUTABLE, &out_rc));
     WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
 
     /* Verify attribute certificate */
@@ -331,12 +344,14 @@ int whTest_CertClientDma_ClientServerTestInternal(whClientContext* client)
     /* Add root certificates to NVM */
     WH_DEBUG_PRINT("Adding root certificate A to NVM...\n");
     WH_TEST_RETURN_ON_FAIL(wh_Client_CertAddTrustedDma(
-        client, rootCertA_id, ROOT_A_CERT, ROOT_A_CERT_len, &out_rc));
+        client, rootCertA_id, ROOT_A_CERT, ROOT_A_CERT_len,
+        WH_NVM_FLAGS_IMMUTABLE, &out_rc));
     WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
 
     WH_DEBUG_PRINT("Adding root certificate B to NVM...\n");
     WH_TEST_RETURN_ON_FAIL(wh_Client_CertAddTrustedDma(
-        client, rootCertB_id, ROOT_B_CERT, ROOT_B_CERT_len, &out_rc));
+        client, rootCertB_id, ROOT_B_CERT, ROOT_B_CERT_len,
+        WH_NVM_FLAGS_IMMUTABLE, &out_rc));
     WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
 
     /* Verify valid single cert (intermediate) */
@@ -449,12 +464,14 @@ int whTest_CertClientAcertDma_ClientServerTestInternal(whClientContext* client)
     /* Add trusted certificate to NVM */
     WH_DEBUG_PRINT("Adding trusted certificate to NVM...\n");
     WH_TEST_RETURN_ON_FAIL(wh_Client_CertAddTrustedDma(
-        client, trustedCertId, caCert_der, caCert_der_len, &out_rc));
+        client, trustedCertId, caCert_der, caCert_der_len,
+        WH_NVM_FLAGS_IMMUTABLE, &out_rc));
     WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
 
     WH_DEBUG_PRINT("Adding root certificate B to NVM...\n");
     WH_TEST_RETURN_ON_FAIL(wh_Client_CertAddTrustedDma(
-        client, rootCertB_id, ROOT_B_CERT, ROOT_B_CERT_len, &out_rc));
+        client, rootCertB_id, ROOT_B_CERT, ROOT_B_CERT_len,
+        WH_NVM_FLAGS_IMMUTABLE, &out_rc));
     WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
 
     /* Verify attribute certificate */
@@ -489,6 +506,70 @@ int whTest_CertClientAcertDma_ClientServerTestInternal(whClientContext* client)
 #endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT */
 
 #endif /* WOLFHSM_CFG_DMA */
+
+static int whTest_CertNonExportable(whClientContext* client)
+{
+    int      rc                    = WH_ERROR_OK;
+    int32_t  out_rc                = 0;
+    whNvmId  exportable_cert_id    = 101;
+    whNvmId  nonexportable_cert_id = 102;
+    uint8_t  cert_buffer[2048]     = {0};
+    uint32_t cert_len              = sizeof(cert_buffer);
+
+    WH_DEBUG_PRINT("Testing non-exportable certificate functionality...\n");
+
+    /* Add exportable certificate */
+    WH_DEBUG_PRINT("Adding exportable certificate...\n");
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CertAddTrusted(
+        client, exportable_cert_id, ROOT_A_CERT, ROOT_A_CERT_len,
+        WH_NVM_FLAGS_IMMUTABLE, &out_rc));
+    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+
+    /* Add non-exportable certificate */
+    WH_DEBUG_PRINT("Adding non-exportable certificate...\n");
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CertAddTrusted(
+        client, nonexportable_cert_id, ROOT_B_CERT, ROOT_B_CERT_len,
+        WH_NVM_FLAGS_IMMUTABLE | WH_NVM_FLAGS_NONEXPORTABLE, &out_rc));
+    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+
+    /* Test reading exportable certificate - should succeed */
+    WH_DEBUG_PRINT("Reading exportable certificate (should succeed)...\n");
+    cert_len = sizeof(cert_buffer);
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CertReadTrusted(
+        client, exportable_cert_id, cert_buffer, &cert_len, &out_rc));
+    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+
+    /* Test reading non-exportable certificate - should fail */
+    WH_DEBUG_PRINT("Reading non-exportable certificate (should fail)...\n");
+    cert_len = sizeof(cert_buffer);
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CertReadTrusted(
+        client, nonexportable_cert_id, cert_buffer, &cert_len, &out_rc));
+    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_ACCESS);
+
+#ifdef WOLFHSM_CFG_DMA
+    /* Test DMA variant with non-exportable certificate */
+    WH_DEBUG_PRINT(
+        "Reading non-exportable certificate via DMA (should fail)...\n");
+    cert_len = sizeof(cert_buffer);
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CertReadTrustedDma(
+        client, nonexportable_cert_id, cert_buffer, cert_len, &out_rc));
+    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_ACCESS);
+#endif
+
+    /* Clean up - delete the certificates */
+    WH_DEBUG_PRINT("Cleaning up certificates...\n");
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Client_CertEraseTrusted(client, exportable_cert_id, &out_rc));
+    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Client_CertEraseTrusted(client, nonexportable_cert_id, &out_rc));
+    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+
+    WH_DEBUG_PRINT("Non-exportable certificate test completed successfully\n");
+    return rc;
+}
+
 #endif /* WOLFHSM_CFG_ENABLE_CLIENT */
 
 #ifdef WOLFHSM_CFG_ENABLE_SERVER
