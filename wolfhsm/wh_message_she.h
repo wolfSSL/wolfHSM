@@ -43,7 +43,7 @@ typedef struct {
 
 /* Set UID Response */
 typedef struct {
-    uint32_t rc;
+    int32_t rc;
     uint8_t  WH_PAD[4];
 } whMessageShe_SetUidResponse;
 
@@ -64,8 +64,8 @@ typedef struct {
 
 /* Secure Boot Init Response */
 typedef struct {
-    uint32_t rc;
-    uint32_t status;
+    int32_t rc;
+    int32_t status;
 } whMessageShe_SecureBootInitResponse;
 
 /* Secure Boot Init translation functions */
@@ -88,8 +88,8 @@ typedef struct {
 
 /* Secure Boot Update Response */
 typedef struct {
-    uint32_t rc;
-    uint32_t status;
+    int32_t rc;
+    int32_t status;
 } whMessageShe_SecureBootUpdateResponse;
 
 /* Secure Boot Update translation functions */
@@ -103,8 +103,8 @@ int wh_MessageShe_TranslateSecureBootUpdateResponse(
 
 /* Secure Boot Finish Response */
 typedef struct {
-    uint32_t rc;
-    uint32_t status;
+    int32_t rc;
+    int32_t status;
 } whMessageShe_SecureBootFinishResponse;
 
 /* Secure Boot Finish translation function */
@@ -114,7 +114,7 @@ int wh_MessageShe_TranslateSecureBootFinishResponse(
 
 /* Get Status Response */
 typedef struct {
-    uint32_t rc;
+    int32_t rc;
     uint8_t  sreg;
     uint8_t  WH_PAD[7];
 } whMessageShe_GetStatusResponse;
@@ -133,7 +133,7 @@ typedef struct {
 
 /* Load Key Response */
 typedef struct {
-    uint32_t rc;
+    int32_t rc;
     uint8_t  messageFour[WH_SHE_M4_SZ];
     uint8_t  messageFive[WH_SHE_M5_SZ];
 } whMessageShe_LoadKeyResponse;
@@ -154,7 +154,7 @@ typedef struct {
 
 /* Load Plain Key Response */
 typedef struct {
-    uint32_t rc;
+    int32_t rc;
 } whMessageShe_LoadPlainKeyResponse;
 
 /* Load Plain Key translation function */
@@ -168,7 +168,7 @@ int wh_MessageShe_TranslateLoadPlainKeyResponse(
 
 /* Export RAM Key Response */
 typedef struct {
-    uint32_t rc;
+    int32_t rc;
     uint8_t  messageOne[WH_SHE_M1_SZ];
     uint8_t  messageTwo[WH_SHE_M2_SZ];
     uint8_t  messageThree[WH_SHE_M3_SZ];
@@ -183,8 +183,8 @@ int wh_MessageShe_TranslateExportRamKeyResponse(
 
 /* Init RNG Response */
 typedef struct {
-    uint32_t rc;
-    uint32_t status;
+    int32_t rc;
+    int32_t status;
 } whMessageShe_InitRngResponse;
 
 /* Init RNG translation function */
@@ -194,7 +194,7 @@ int wh_MessageShe_TranslateInitRngResponse(
 
 /* RND Response */
 typedef struct {
-    uint32_t rc;
+    int32_t rc;
     uint8_t  rnd[WH_SHE_KEY_SZ];
 } whMessageShe_RndResponse;
 
@@ -210,8 +210,8 @@ typedef struct {
 
 /* Extend Seed Response */
 typedef struct {
-    uint32_t rc;
-    uint32_t status;
+    int32_t rc;
+    int32_t status;
 } whMessageShe_ExtendSeedResponse;
 
 /* Extend Seed translation functions */
@@ -235,7 +235,7 @@ typedef struct {
 
 /* Encrypt ECB Response */
 typedef struct {
-    uint32_t rc;
+    int32_t rc;
     uint32_t sz;
     /* Data follows:
      * uint8_t out[sz]
@@ -264,7 +264,7 @@ typedef struct {
 
 /* Encrypt CBC Response */
 typedef struct {
-    uint32_t rc;
+    int32_t rc;
     uint32_t sz;
     /* Data follows:
      * uint8_t out[sz]
@@ -292,7 +292,7 @@ typedef struct {
 
 /* Decrypt ECB Response */
 typedef struct {
-    uint32_t rc;
+    int32_t rc;
     uint32_t sz;
     /* Data follows:
      * uint8_t out[sz]
@@ -321,7 +321,7 @@ typedef struct {
 
 /* Decrypt CBC Response */
 typedef struct {
-    uint32_t rc;
+    int32_t rc;
     uint32_t sz;
     /* Data follows:
      * uint8_t out[sz]
@@ -348,7 +348,7 @@ typedef struct {
 
 /* Generate MAC Response */
 typedef struct {
-    uint32_t rc;
+    int32_t rc;
     uint8_t  mac[WH_SHE_KEY_SZ];
 } whMessageShe_GenMacResponse;
 
@@ -375,8 +375,8 @@ typedef struct {
 
 /* Verify MAC Response */
 typedef struct {
-    uint32_t rc;
-    uint8_t  status;
+    int32_t rc;
+    int8_t  status;
     uint8_t  WH_PAD[7];
 } whMessageShe_VerifyMacResponse;
 
