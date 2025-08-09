@@ -152,6 +152,8 @@ int wh_Bench_Mod_Sha256Dma(whClientContext* client, whBenchOpContext* ctx,
 int _benchSha224(whClientContext* client, whBenchOpContext* ctx, int id,
                  int devId)
 {
+    (void)client;
+
     int            ret = 0;
     wc_Sha224      sha224[1];
     uint8_t        out[WC_SHA224_DIGEST_SIZE];
@@ -238,8 +240,13 @@ int wh_Bench_Mod_Sha224(whClientContext* client, whBenchOpContext* ctx, int id,
                         void* params)
 {
 #if defined(WOLFHSM_CFG_DMA)
+    (void)params;
     return _benchSha224(client, ctx, id, WH_DEV_ID);
 #else
+    (void)client;
+    (void)ctx;
+    (void)id;
+    (void)params;
     return WH_ERROR_NOTIMPL;
 #endif
 }
@@ -248,8 +255,13 @@ int wh_Bench_Mod_Sha224Dma(whClientContext* client, whBenchOpContext* ctx,
                            int id, void* params)
 {
 #if defined(WOLFHSM_CFG_DMA)
+    (void)params;
     return _benchSha224(client, ctx, id, WH_DEV_ID_DMA);
 #else
+    (void)client;
+    (void)ctx;
+    (void)id;
+    (void)params;
     return WH_ERROR_NOTIMPL;
 #endif
 }
@@ -261,6 +273,8 @@ int wh_Bench_Mod_Sha224Dma(whClientContext* client, whBenchOpContext* ctx,
 int _benchSha384(whClientContext* client, whBenchOpContext* ctx, int id,
                  int devId)
 {
+    (void)client;
+
     int            ret = 0;
     wc_Sha384      sha384[1];
     uint8_t        out[WC_SHA384_DIGEST_SIZE];
@@ -347,8 +361,13 @@ int wh_Bench_Mod_Sha384(whClientContext* client, whBenchOpContext* ctx, int id,
                         void* params)
 {
 #if defined(WOLFHSM_CFG_DMA)
+    (void)params;
     return _benchSha384(client, ctx, id, WH_DEV_ID);
 #else
+    (void)client;
+    (void)ctx;
+    (void)id;
+    (void)params;
     return WH_ERROR_NOTIMPL;
 #endif
 }
@@ -357,8 +376,13 @@ int wh_Bench_Mod_Sha384Dma(whClientContext* client, whBenchOpContext* ctx,
                            int id, void* params)
 {
 #if defined(WOLFHSM_CFG_DMA)
+    (void)params;
     return _benchSha384(client, ctx, id, WH_DEV_ID_DMA);
 #else
+    (void)client;
+    (void)ctx;
+    (void)id;
+    (void)params;
     return WH_ERROR_NOTIMPL;
 #endif
 }
@@ -369,6 +393,8 @@ int wh_Bench_Mod_Sha384Dma(whClientContext* client, whBenchOpContext* ctx,
 int _benchSha512(whClientContext* client, whBenchOpContext* ctx, int id,
                  int devId)
 {
+    (void)client;
+
     int            ret = 0;
     wc_Sha512      sha512[1];
     uint8_t        out[WC_SHA512_DIGEST_SIZE];
@@ -455,8 +481,13 @@ int wh_Bench_Mod_Sha512(whClientContext* client, whBenchOpContext* ctx, int id,
                         void* params)
 {
 #if defined(WOLFHSM_CFG_DMA)
+    (void)params;
     return _benchSha512(client, ctx, id, WH_DEV_ID);
 #else
+    (void)client;
+    (void)ctx;
+    (void)id;
+    (void)params;
     return WH_ERROR_NOTIMPL;
 #endif
 }
@@ -465,8 +496,13 @@ int wh_Bench_Mod_Sha512Dma(whClientContext* client, whBenchOpContext* ctx,
                            int id, void* params)
 {
 #if defined(WOLFHSM_CFG_DMA)
+    (void)params;
     return _benchSha512(client, ctx, id, WH_DEV_ID_DMA);
 #else
+    (void)client;
+    (void)ctx;
+    (void)id;
+    (void)params;
     return WH_ERROR_NOTIMPL;
 #endif
 }
