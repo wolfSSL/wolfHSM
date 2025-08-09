@@ -577,7 +577,7 @@ typedef struct {
     uint32_t isLastBlock;
     /* Length of the last input block of data. Only valid if isLastBlock=1 */
     uint32_t lastBlockLen;
-    /* Full sha256 input block to hash */
+    /* Full sha384 input block to hash */
     uint8_t inBlock[128]; /* TODO (HM) WC_SHA384_BLOCK_SIZE */
     uint8_t WH_PAD[4];
 } whMessageCrypto_Sha384Request;
