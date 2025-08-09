@@ -1803,7 +1803,7 @@ static int _HandleSha224(whServerContext* ctx, uint16_t magic,
     wc_Sha224*                     sha224 = ctx->crypto->algoCtx.sha224;
     whMessageCrypto_Sha224Request  req;
     whMessageCrypto_Sha224Response res;
-
+    (void)inSize;
     /* The server SHA224 struct doesn't persist state (it is a union), meaning
      * the devId may get blown away between calls. We must restore the server
      * devId each time */
@@ -1843,7 +1843,7 @@ static int _HandleSha224(whServerContext* ctx, uint16_t magic,
         }
         /* Send the hash state back to the client */
         if (ret == 0) {
-            memcpy(res.hash, sha224->digest, WC_SHA224_BLOCK_SIZE);
+            memcpy(res.hash, sha224->digest, WC_SHA224_DIGEST_SIZE);
             res.loLen = sha224->loLen;
             res.hiLen = sha224->hiLen;
         }
@@ -1871,8 +1871,8 @@ static int _HandleSha384(whServerContext* ctx, uint16_t magic,
     wc_Sha384*                     sha384 = ctx->crypto->algoCtx.sha384;
     whMessageCrypto_Sha384Request  req;
     whMessageCrypto_Sha384Response res;
-
-    /* THe server SHA384 struct doesn't persist state (it is a union), meaning
+    (void)inSize;
+    /* The server SHA384 struct doesn't persist state (it is a union), meaning
      * the devId may get blown away between calls. We must restore the server
      * devId each time */
     sha384->devId = ctx->crypto->devId;
@@ -1911,7 +1911,7 @@ static int _HandleSha384(whServerContext* ctx, uint16_t magic,
         }
         /* Send the hash state back to the client */
         if (ret == 0) {
-            memcpy(res.hash, sha384->digest, WC_SHA384_BLOCK_SIZE);
+            memcpy(res.hash, sha384->digest, WC_SHA384_DIGEST_SIZE);
             res.loLen = sha384->loLen;
             res.hiLen = sha384->hiLen;
         }
@@ -1938,7 +1938,7 @@ static int _HandleSha512(whServerContext* ctx, uint16_t magic,
     wc_Sha512*                     sha512 = ctx->crypto->algoCtx.sha512;
     whMessageCrypto_Sha512Request  req;
     whMessageCrypto_Sha512Response res;
-
+    (void)inSize;
     /* The server SHA512 struct doesn't persist state (it is a union), meaning
      * the devId may get blown away between calls. We must restore the server
      * devId each time */
@@ -1978,7 +1978,7 @@ static int _HandleSha512(whServerContext* ctx, uint16_t magic,
         }
         /* Send the hash state back to the client */
         if (ret == 0) {
-            memcpy(res.hash, sha512->digest, WC_SHA512_BLOCK_SIZE);
+            memcpy(res.hash, sha512->digest, WC_SHA512_DIGEST_SIZE);
             res.loLen = sha512->loLen;
             res.hiLen = sha512->hiLen;
         }
@@ -2540,7 +2540,7 @@ int wh_Server_HandleCryptoRequest(whServerContext* ctx, uint16_t magic,
 #if defined(WOLFSSL_SHA224)
                     case WC_HASH_TYPE_SHA224:
 #ifdef DEBUG_CRYPTOCB_VERBOSE
-                    printf("[server] SHA256 req recv. type:%u\n",
+                    printf("[server] SHA224 req recv. type:%u\n",
                            rqstHeader.algoType);
 #endif
                     ret = _HandleSha224(ctx, magic, cryptoDataIn, cryptoInSize,
@@ -2754,6 +2754,8 @@ static int _HandleSha224Dma(whServerContext* ctx, uint16_t magic, uint16_t seq,
                             const void* cryptoDataIn, uint16_t inSize,
                             void* cryptoDataOut, uint16_t* outSize)
 {
+    (void)seq;
+    (void)inSize;
     int                               ret = 0;
     whMessageCrypto_Sha224DmaRequest  req;
     whMessageCrypto_Sha224DmaResponse res;
@@ -2874,6 +2876,8 @@ static int _HandleSha384Dma(whServerContext* ctx, uint16_t magic, uint16_t seq,
                             const void* cryptoDataIn, uint16_t inSize,
                             void* cryptoDataOut, uint16_t* outSize)
 {
+    (void)seq;
+    (void)inSize;
     int                               ret = 0;
     whMessageCrypto_Sha384DmaRequest  req;
     whMessageCrypto_Sha384DmaResponse res;
@@ -2994,6 +2998,8 @@ static int _HandleSha512Dma(whServerContext* ctx, uint16_t magic, uint16_t seq,
                             const void* cryptoDataIn, uint16_t inSize,
                             void* cryptoDataOut, uint16_t* outSize)
 {
+    (void)seq;
+    (void)inSize;
     int                               ret = 0;
     whMessageCrypto_Sha512DmaRequest  req;
     whMessageCrypto_Sha512DmaResponse res;

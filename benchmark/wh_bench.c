@@ -277,7 +277,7 @@ static BenchModule g_benchModules[] = {
 #if defined(WOLFSSL_SHA512)
     [BENCH_MODULE_IDX_SHA2_512]                = {"SHA2-512",                     wh_Bench_Mod_Sha512,               BENCH_THROUGHPUT_XBPS, 0, NULL},
     [BENCH_MODULE_IDX_SHA2_512_DMA]            = {"SHA2-512-DMA",                 wh_Bench_Mod_Sha512Dma,            BENCH_THROUGHPUT_XBPS, 0, NULL},
-#endif /* WOLFSSL_SHA384 */
+#endif /* WOLFSSL_SHA512 */
     /* SHA3 */
 #if defined(WOLFSSL_SHA3)
     [BENCH_MODULE_IDX_SHA3_256]                = {"SHA3-256",                     wh_Bench_Mod_Sha3256,               BENCH_THROUGHPUT_NONE, 0, NULL},

@@ -2669,7 +2669,7 @@ static int _xferSha224BlockAndUpdateDigest(whClientContext* ctx,
             (isLastBlock) ? sha224->buffLen : WC_SHA224_BLOCK_SIZE);
 
     /* Send the hash state - this will be 0 on the first block on a properly
-     * initialized sha256 struct */
+     * initialized sha224 struct */
     memcpy(req->resumeState.hash, sha224->digest, WC_SHA224_DIGEST_SIZE);
     req->resumeState.hiLen = sha224->hiLen;
     req->resumeState.loLen = sha224->loLen;
@@ -2785,6 +2785,106 @@ int wh_Client_Sha224(whClientContext* ctx, wc_Sha224* sha224, const uint8_t* in,
 
     return ret;
 }
+
+
+int wh_Client_Sha224Dma(whClientContext* ctx, wc_Sha224* sha, const uint8_t* in,
+                        uint32_t inLen, uint8_t* out)
+{
+    int                                ret     = WH_ERROR_OK;
+    wc_Sha224*                         sha224  = sha;
+    uint16_t                           respSz  = 0;
+    uint16_t                           group   = WH_MESSAGE_GROUP_CRYPTO_DMA;
+    uint8_t*                           dataPtr = NULL;
+    whMessageCrypto_Sha224DmaRequest*  req     = NULL;
+    whMessageCrypto_Sha224DmaResponse* resp    = NULL;
+
+    /* Get data pointer from the context to use as request/response storage */
+    dataPtr = (uint8_t*)wh_CommClient_GetDataPtr(ctx->comm);
+    if (dataPtr == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Setup generic header and get pointer to request data */
+    req = (whMessageCrypto_Sha224DmaRequest*)_createCryptoRequest(
+        dataPtr, WC_HASH_TYPE_SHA224);
+
+
+    /* Caller invoked SHA Update:
+     * wc_CryptoCb_Sha224Hash(sha224, data, len, NULL) */
+    if (in != NULL) {
+        req->finalize    = 0;
+        req->state.addr  = (uint64_t)(uintptr_t)sha224;
+        req->state.sz    = sizeof(*sha224);
+        req->input.addr  = (uint64_t)(uintptr_t)in;
+        req->input.sz    = inLen;
+        req->output.addr = (uint64_t)(uintptr_t)out;
+        req->output.sz   = WC_SHA224_DIGEST_SIZE; /* not needed, but YOLO */
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+        printf("[client] SHA224 DMA UPDATE: inAddr=%p, inSz=%u\n", in, inLen);
+#endif
+        ret = wh_Client_SendRequest(
+            ctx, group, WC_ALGO_TYPE_HASH,
+            sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req),
+            (uint8_t*)dataPtr);
+
+        if (ret == WH_ERROR_OK) {
+            do {
+                ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
+                                             (uint8_t*)dataPtr);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+
+        if (ret == WH_ERROR_OK) {
+            /* Get response structure pointer, validates generic header
+             * rc */
+            ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA224,
+                                     (uint8_t**)&resp);
+            /* Nothing to do on success, as server will have updated the context
+             * in client memory */
+        }
+    }
+
+    /* Caller invoked SHA finalize:
+     * wc_CryptoCb_Sha224Hash(sha224, NULL, 0, * hash) */
+    if ((ret == WH_ERROR_OK) && (out != NULL)) {
+        /* Packet will have been trashed, so re-populate all fields */
+        req->finalize    = 1;
+        req->state.addr  = (uint64_t)(uintptr_t)sha224;
+        req->state.sz    = sizeof(*sha224);
+        req->input.addr  = (uint64_t)(uintptr_t)in;
+        req->input.sz    = inLen;
+        req->output.addr = (uint64_t)(uintptr_t)out;
+        req->output.sz   = WC_SHA224_DIGEST_SIZE; /* not needed, but YOLO */
+
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+        printf("[client] SHA224 DMA FINAL: outAddr=%p\n", out);
+#endif
+        /* send the request to the server */
+        ret = wh_Client_SendRequest(
+            ctx, group, WC_ALGO_TYPE_HASH,
+            sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req),
+            (uint8_t*)dataPtr);
+
+        if (ret == WH_ERROR_OK) {
+            do {
+                ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
+                                             (uint8_t*)dataPtr);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+
+        /* Copy out the final hash value */
+        if (ret == WH_ERROR_OK) {
+            /* Get response structure pointer, validates generic header
+             * rc */
+            ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA224,
+                                     (uint8_t**)&resp);
+            /* Nothing to do on success, as server will have updated the output
+             * hash in client memory */
+        }
+    }
+
+    return ret;
+}
 #endif /* WOLFSSL_SHA224 */
 
 #ifdef WOLFSSL_SHA384
@@ -2827,7 +2927,7 @@ static int _xferSha384BlockAndUpdateDigest(whClientContext* ctx,
             (isLastBlock) ? sha384->buffLen : WC_SHA384_BLOCK_SIZE);
 
     /* Send the hash state - this will be 0 on the first block on a properly
-     * initialized sha256 struct */
+     * initialized sha384 struct */
     memcpy(req->resumeState.hash, sha384->digest, WC_SHA384_DIGEST_SIZE);
     req->resumeState.hiLen = sha384->hiLen;
     req->resumeState.loLen = sha384->loLen;
@@ -2939,6 +3039,104 @@ int wh_Client_Sha384(whClientContext* ctx, wc_Sha384* sha384, const uint8_t* in,
         sha384->flags   = 0;
 #endif
         memset(sha384->digest, 0, sizeof(sha384->digest));
+    }
+
+    return ret;
+}
+int wh_Client_Sha384Dma(whClientContext* ctx, wc_Sha384* sha, const uint8_t* in,
+                        uint32_t inLen, uint8_t* out)
+{
+    int                                ret     = WH_ERROR_OK;
+    wc_Sha384*                         sha384  = sha;
+    uint16_t                           respSz  = 0;
+    uint16_t                           group   = WH_MESSAGE_GROUP_CRYPTO_DMA;
+    uint8_t*                           dataPtr = NULL;
+    whMessageCrypto_Sha384DmaRequest*  req     = NULL;
+    whMessageCrypto_Sha384DmaResponse* resp    = NULL;
+
+    /* Get data pointer from the context to use as request/response storage */
+    dataPtr = (uint8_t*)wh_CommClient_GetDataPtr(ctx->comm);
+    if (dataPtr == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Setup generic header and get pointer to request data */
+    req = (whMessageCrypto_Sha384DmaRequest*)_createCryptoRequest(
+        dataPtr, WC_HASH_TYPE_SHA384);
+
+
+    /* Caller invoked SHA Update:
+     * wc_CryptoCb_Sha384Hash(sha384, data, len, NULL) */
+    if (in != NULL) {
+        req->finalize    = 0;
+        req->state.addr  = (uint64_t)(uintptr_t)sha384;
+        req->state.sz    = sizeof(*sha384);
+        req->input.addr  = (uint64_t)(uintptr_t)in;
+        req->input.sz    = inLen;
+        req->output.addr = (uint64_t)(uintptr_t)out;
+        req->output.sz   = WC_SHA384_DIGEST_SIZE; /* not needed, but YOLO */
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+        printf("[client] SHA384 DMA UPDATE: inAddr=%p, inSz=%u\n", in, inLen);
+#endif
+        ret = wh_Client_SendRequest(
+            ctx, group, WC_ALGO_TYPE_HASH,
+            sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req),
+            (uint8_t*)dataPtr);
+
+        if (ret == WH_ERROR_OK) {
+            do {
+                ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
+                                             (uint8_t*)dataPtr);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+
+        if (ret == WH_ERROR_OK) {
+            /* Get response structure pointer, validates generic header
+             * rc */
+            ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA384,
+                                     (uint8_t**)&resp);
+            /* Nothing to do on success, as server will have updated the context
+             * in client memory */
+        }
+    }
+
+    /* Caller invoked SHA finalize:
+     * wc_CryptoCb_Sha384Hash(sha384, NULL, 0, * hash) */
+    if ((ret == WH_ERROR_OK) && (out != NULL)) {
+        /* Packet will have been trashed, so re-populate all fields */
+        req->finalize    = 1;
+        req->state.addr  = (uint64_t)(uintptr_t)sha384;
+        req->state.sz    = sizeof(*sha384);
+        req->input.addr  = (uint64_t)(uintptr_t)in;
+        req->input.sz    = inLen;
+        req->output.addr = (uint64_t)(uintptr_t)out;
+        req->output.sz   = WC_SHA384_DIGEST_SIZE; /* not needed, but YOLO */
+
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+        printf("[client] SHA384 DMA FINAL: outAddr=%p\n", out);
+#endif
+        /* send the request to the server */
+        ret = wh_Client_SendRequest(
+            ctx, group, WC_ALGO_TYPE_HASH,
+            sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req),
+            (uint8_t*)dataPtr);
+
+        if (ret == WH_ERROR_OK) {
+            do {
+                ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
+                                             (uint8_t*)dataPtr);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+
+        /* Copy out the final hash value */
+        if (ret == WH_ERROR_OK) {
+            /* Get response structure pointer, validates generic header
+             * rc */
+            ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA384,
+                                     (uint8_t**)&resp);
+            /* Nothing to do on success, as server will have updated the output
+             * hash in client memory */
+        }
     }
 
     return ret;
@@ -3098,6 +3296,104 @@ int wh_Client_Sha512(whClientContext* ctx, wc_Sha512* sha512, const uint8_t* in,
         sha512->flags   = 0;
 #endif
         memset(sha512->digest, 0, sizeof(sha512->digest));
+    }
+
+    return ret;
+}
+int wh_Client_Sha512Dma(whClientContext* ctx, wc_Sha512* sha, const uint8_t* in,
+                        uint32_t inLen, uint8_t* out)
+{
+    int                                ret     = WH_ERROR_OK;
+    wc_Sha512*                         sha512  = sha;
+    uint16_t                           respSz  = 0;
+    uint16_t                           group   = WH_MESSAGE_GROUP_CRYPTO_DMA;
+    uint8_t*                           dataPtr = NULL;
+    whMessageCrypto_Sha512DmaRequest*  req     = NULL;
+    whMessageCrypto_Sha512DmaResponse* resp    = NULL;
+
+    /* Get data pointer from the context to use as request/response storage */
+    dataPtr = (uint8_t*)wh_CommClient_GetDataPtr(ctx->comm);
+    if (dataPtr == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Setup generic header and get pointer to request data */
+    req = (whMessageCrypto_Sha512DmaRequest*)_createCryptoRequest(
+        dataPtr, WC_HASH_TYPE_SHA512);
+
+
+    /* Caller invoked SHA Update:
+     * wc_CryptoCb_Sha512Hash(sha512, data, len, NULL) */
+    if (in != NULL) {
+        req->finalize    = 0;
+        req->state.addr  = (uint64_t)(uintptr_t)sha512;
+        req->state.sz    = sizeof(*sha512);
+        req->input.addr  = (uint64_t)(uintptr_t)in;
+        req->input.sz    = inLen;
+        req->output.addr = (uint64_t)(uintptr_t)out;
+        req->output.sz   = WC_SHA512_DIGEST_SIZE; /* not needed, but YOLO */
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+        printf("[client] SHA512 DMA UPDATE: inAddr=%p, inSz=%u\n", in, inLen);
+#endif
+        ret = wh_Client_SendRequest(
+            ctx, group, WC_ALGO_TYPE_HASH,
+            sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req),
+            (uint8_t*)dataPtr);
+
+        if (ret == WH_ERROR_OK) {
+            do {
+                ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
+                                             (uint8_t*)dataPtr);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+
+        if (ret == WH_ERROR_OK) {
+            /* Get response structure pointer, validates generic header
+             * rc */
+            ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA512,
+                                     (uint8_t**)&resp);
+            /* Nothing to do on success, as server will have updated the context
+             * in client memory */
+        }
+    }
+
+    /* Caller invoked SHA finalize:
+     * wc_CryptoCb_Sha512Hash(sha512, NULL, 0, * hash) */
+    if ((ret == WH_ERROR_OK) && (out != NULL)) {
+        /* Packet will have been trashed, so re-populate all fields */
+        req->finalize    = 1;
+        req->state.addr  = (uint64_t)(uintptr_t)sha512;
+        req->state.sz    = sizeof(*sha512);
+        req->input.addr  = (uint64_t)(uintptr_t)in;
+        req->input.sz    = inLen;
+        req->output.addr = (uint64_t)(uintptr_t)out;
+        req->output.sz   = WC_SHA512_DIGEST_SIZE; /* not needed, but YOLO */
+
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+        printf("[client] SHA512 DMA FINAL: outAddr=%p\n", out);
+#endif
+        /* send the request to the server */
+        ret = wh_Client_SendRequest(
+            ctx, group, WC_ALGO_TYPE_HASH,
+            sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req),
+            (uint8_t*)dataPtr);
+
+        if (ret == WH_ERROR_OK) {
+            do {
+                ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
+                                             (uint8_t*)dataPtr);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+
+        /* Copy out the final hash value */
+        if (ret == WH_ERROR_OK) {
+            /* Get response structure pointer, validates generic header
+             * rc */
+            ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA512,
+                                     (uint8_t**)&resp);
+            /* Nothing to do on success, as server will have updated the output
+             * hash in client memory */
+        }
     }
 
     return ret;
