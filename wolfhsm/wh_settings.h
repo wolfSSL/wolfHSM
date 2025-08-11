@@ -67,6 +67,10 @@
  *  WOLFHSM_CFG_SERVER_IMG_MGR_MAX_SIG_SIZE - Maximum signature size for image
  * verification Default: 512 bytes (RSA4096)
  *
+ *  WOLFHSM_CFG_DMA_CUSTOM_CLIENT_COPY - if defined, allows to setup a custom
+ * callback to handle client to server and/or server to client memory copy
+ * operation in DMA requests.
+ *     Default: Not defined
  *
  *  Overridable porting functions:
  *
