@@ -131,6 +131,22 @@ int wh_Server_DmaRegisterCb(whServerContext* server, whServerDmaClientMemCb cb)
     return WH_ERROR_OK;
 }
 
+#ifdef WOLFHSM_CFG_DMA_CUSTOM_CLIENT_COPY
+int wh_Server_DmaRegisterMemCopyCb(whServerContext* server,
+                                   whServerDmaMemCopyCb cb)
+{
+    /* No NULL check for cb, since it is optional and always NULL checked before
+     * it is called */
+    if (NULL == server) {
+        return WH_ERROR_BADARGS;
+    }
+
+    server->dma.memCopyCb = cb;
+
+    return WH_ERROR_OK;
+}
+#endif /* WOLFHSM_CFG_DMA_CUSTOM_CLIENT_COPY */
+
 int wh_Server_DmaRegisterAllowList(whServerContext*                server,
                                    const whServerDmaAddrAllowList* allowlist)
 {
@@ -199,8 +215,22 @@ int whServerDma_CopyFromClient(struct whServerContext_t* server,
     }
 
     /* Perform the actual copy */
-    /* TODO: should we add a flag to force client word-sized reads? */
-    memcpy(serverPtr, transformedAddr, len);
+#ifdef WOLFHSM_CFG_DMA_CUSTOM_CLIENT_COPY
+    if (server->dma.memCopyCb != NULL) {
+        rc = server->dma.memCopyCb(server, (uintptr_t)transformedAddr,
+                                   (uintptr_t)serverPtr, len,
+                                   WH_DMA_OPER_CLIENT_READ, flags);
+        if (rc != WH_ERROR_OK) {
+            return rc;
+        }
+    }
+    else 
+#endif /* WOLFHSM_CFG_DMA_CUSTOM_CLIENT_COPY */
+    {
+
+        /* TODO: should we add a flag to force client word-sized reads? */
+        memcpy(serverPtr, transformedAddr, len);
+    }
 
     /* process the client address post-read */
     rc = wh_Server_DmaProcessClientAddress(
@@ -238,8 +268,21 @@ int whServerDma_CopyToClient(struct whServerContext_t* server,
     }
 
     /* Perform the actual copy */
-    /* TODO: should we add a flag to force client word-sized reads? */
-    memcpy(transformedAddr, serverPtr, len);
+#ifdef WOLFHSM_CFG_DMA_CUSTOM_CLIENT_COPY
+    if (server->dma.memCopyCb != NULL) {
+        rc = server->dma.memCopyCb(server, clientAddr, (uintptr_t)serverPtr,
+                                   len, WH_DMA_OPER_CLIENT_WRITE, flags);
+        if (rc != WH_ERROR_OK) {
+            return rc;
+        }
+    }
+    else
+#endif /* WOLFHSM_CFG_DMA_CUSTOM_CLIENT_COPY */
+    {
+
+        /* TODO: should we add a flag to force client word-sized reads? */
+        memcpy(transformedAddr, serverPtr, len);
+    }
 
     /* Process the client address post-write */
     rc = wh_Server_DmaProcessClientAddress(server, clientAddr, &transformedAddr,

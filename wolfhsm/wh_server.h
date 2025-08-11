@@ -129,6 +129,13 @@ typedef enum {
     WH_DMA_OPER_CLIENT_WRITE_POST = 3,
 } whServerDmaOper;
 
+#ifdef WOLFHSM_CFG_DMA_CUSTOM_CLIENT_COPY
+typedef enum {
+    WH_DMA_OPER_CLIENT_READ = 0,
+    WH_DMA_OPER_CLIENT_WRITE = 1,
+} whServerDmaCopyOper;
+#endif /* WOLFHSM_CFG_DMA_CUSTOM_CLIENT_COPY */
+
 /* Flags embedded in request/response structs provided by client */
 typedef struct {
     uint8_t cacheForceInvalidate : 1;
@@ -141,6 +148,14 @@ typedef int (*whServerDmaClientMemCb)(struct whServerContext_t* server,
                                       uintptr_t clientAddr, void** serverPtr,
                                       size_t len, whServerDmaOper oper,
                                       whServerDmaFlags flags);
+
+#ifdef WOLFHSM_CFG_DMA_CUSTOM_CLIENT_COPY
+/* DMA callback invoked to copy from the client */
+typedef int (*whServerDmaMemCopyCb)(struct whServerContext_t* server,
+                                      uintptr_t clientAddr, uintptr_t serverPtr,
+                                      size_t len, whServerDmaCopyOper oper,
+                                      whServerDmaFlags flags);
+#endif /* WOLFHSM_CFG_DMA_CUSTOM_CLIENT_COPY */
 
 /* DMA address entry within the allowed tables. */
 /* Note: These are translated addresses from the Server's perspective*/
@@ -160,11 +175,17 @@ typedef struct {
 /* Server DMA configuration struct for initializing a server */
 typedef struct {
     whServerDmaClientMemCb          cb;               /* DMA callback */
+#ifdef WOLFHSM_CFG_DMA_CUSTOM_CLIENT_COPY
+    whServerDmaMemCopyCb            memCopyCb;       /* DMA memory copy callback */
+#endif /* WOLFHSM_CFG_DMA_CUSTOM_CLIENT_COPY */
     const whServerDmaAddrAllowList* dmaAddrAllowList; /* allowed addresses */
 } whServerDmaConfig;
 
 typedef struct {
     whServerDmaClientMemCb          cb;               /* DMA callback */
+#ifdef WOLFHSM_CFG_DMA_CUSTOM_CLIENT_COPY
+    whServerDmaMemCopyCb            memCopyCb;       /* DMA memory copy callback */
+#endif /* WOLFHSM_CFG_DMA_CUSTOM_CLIENT_COPY */
     const whServerDmaAddrAllowList* dmaAddrAllowList; /* allowed addresses */
 } whServerDmaContext;
 
@@ -383,6 +404,23 @@ int wh_Server_HandleCustomCbRequest(whServerContext* server, uint16_t magic,
  */
 int wh_Server_DmaRegisterCb(struct whServerContext_t* server,
                             whServerDmaClientMemCb    cb);
+
+
+#ifdef WOLFHSM_CFG_DMA_CUSTOM_CLIENT_COPY
+/**
+ * @brief Registers a custom memory copy callback for DMA operations.
+ * This function allows the server to register a callback that will be invoked
+ * during DMA memory copy operations. The callback can be used to
+ * perform custom memory copy operations, such as remapping addresses
+ * or handling special cases.
+ * @param[in] server Pointer to the server context.
+ * @param[in] cb The custom memory copy callback handler to register.
+ * @return int Returns WH_ERROR_OK on success, or WH_ERROR_BADARGS if the
+ * arguments are invalid.
+ */
+int wh_Server_DmaRegisterMemCopyCb(whServerContext*     server,
+                                   whServerDmaMemCopyCb cb);
+#endif /* WOLFHSM_CFG_DMA_CUSTOM_CLIENT_COPY */
 
 /**
  * @brief Registers the allowable client read/write addresses for DMA.
