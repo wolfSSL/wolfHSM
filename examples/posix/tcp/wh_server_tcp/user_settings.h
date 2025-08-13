@@ -116,9 +116,10 @@ extern "C" {
 /** SHA Options */
 #define NO_SHA
 /* #define NO_SHA256 */
-/* #define WOLFSSL_SHA224 */
-/* #define WOLFSSL_SHA384 */
-/* #define WOLFSSL_SHA512 */
+#define WOLFSSL_SHA224
+#define WOLFSSL_SHA384
+#define WOLFSSL_SHA512
+#define WOLFSSL_SHA512_HASHTYPE
 
 /* Dilithium Options */
 #define HAVE_DILITHIUM

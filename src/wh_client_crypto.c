@@ -3188,7 +3188,7 @@ static int _xferSha512BlockAndUpdateDigest(whClientContext* ctx,
     memcpy(req->resumeState.hash, sha512->digest, WC_SHA512_DIGEST_SIZE);
     req->resumeState.hiLen = sha512->hiLen;
     req->resumeState.loLen = sha512->loLen;
-
+    req->resumeState.hashType = sha512->hashType;
     uint32_t req_len =
         sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
 
@@ -3221,6 +3221,7 @@ static int _xferSha512BlockAndUpdateDigest(whClientContext* ctx,
         if (ret >= 0) {
 #ifdef DEBUG_CRYPTOCB_VERBOSE
             printf("[client] ERROR Client SHA512 Res recv: ret=%d", ret);
+            printf("[client] hashType: %d\n", sha512->hashType);
 #endif /* DEBUG_CRYPTOCB_VERBOSE */
             /* Store the received intermediate hash in the sha512
              * context and indicate the field is now valid and
@@ -3288,7 +3289,9 @@ int wh_Client_Sha512(whClientContext* ctx, wc_Sha512* sha512, const uint8_t* in,
             memcpy(out, sha512->digest, WC_SHA512_DIGEST_SIZE);
         }
 
-        /* reset the state of the sha context (without blowing away devId) */
+        /* reset the state of the sha context (without blowing away devId and
+         *  hashType)
+         */
         sha512->buffLen = 0;
         sha512->hiLen   = 0;
         sha512->loLen   = 0;

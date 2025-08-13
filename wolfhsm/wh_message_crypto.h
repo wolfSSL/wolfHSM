@@ -605,6 +605,7 @@ typedef struct {
         uint32_t loLen;
         /* intermediate hash value */
         uint8_t hash[64]; /* TODO (HM) WC_SHA512_DIGEST_SIZE */
+        int hashType;
     } resumeState;
     /* Flag indicating to the server that this is the last block and it should
      * finalize the hash. If set, inBlock may be only partially full*/
@@ -622,6 +623,7 @@ typedef struct {
     uint32_t hiLen;
     uint32_t loLen;
     uint8_t  hash[64]; /* TODO WC_SHA512_DIGEST_SIZE */
+    int hashType;
 } whMessageCrypto_Sha512Response;
 
 int wh_MessageCrypto_TranslateSha512Request(
