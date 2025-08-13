@@ -410,9 +410,12 @@ int wh_Server_DmaRegisterCb(struct whServerContext_t* server,
 /**
  * @brief Registers a custom memory copy callback for DMA operations.
  * This function allows the server to register a callback that will be invoked
- * during DMA memory copy operations. The callback can be used to
- * perform custom memory copy operations, such as remapping addresses
- * or handling special cases.
+ * during DMA memory copy operations. The callback overrides the use of
+ * memcpy when copying to and from client memory. This is useful if standard
+ * memcpy cannot be used to copy data back and forth between the client, even
+ * after client addresses are transformed through the standard DMA callbacks
+ * (e.g. if client memory can only be accessed though a hardware FIFO or register
+ * interface)
  * @param[in] server Pointer to the server context.
  * @param[in] cb The custom memory copy callback handler to register.
  * @return int Returns WH_ERROR_OK on success, or WH_ERROR_BADARGS if the
