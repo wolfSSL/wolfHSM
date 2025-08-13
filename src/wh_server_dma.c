@@ -219,7 +219,7 @@ int whServerDma_CopyFromClient(struct whServerContext_t* server,
     if (server->dma.memCopyCb != NULL) {
         rc = server->dma.memCopyCb(server, (uintptr_t)transformedAddr,
                                    (uintptr_t)serverPtr, len,
-                                   WH_DMA_OPER_CLIENT_READ, flags);
+                                   WH_DMA_COPY_OPER_CLIENT_READ, flags);
         if (rc != WH_ERROR_OK) {
             return rc;
         }
@@ -271,7 +271,7 @@ int whServerDma_CopyToClient(struct whServerContext_t* server,
 #ifdef WOLFHSM_CFG_DMA_CUSTOM_CLIENT_COPY
     if (server->dma.memCopyCb != NULL) {
         rc = server->dma.memCopyCb(server, clientAddr, (uintptr_t)serverPtr,
-                                   len, WH_DMA_OPER_CLIENT_WRITE, flags);
+                                   len, WH_DMA_COPY_OPER_CLIENT_WRITE, flags);
         if (rc != WH_ERROR_OK) {
             return rc;
         }
