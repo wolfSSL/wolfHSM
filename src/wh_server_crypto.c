@@ -3223,11 +3223,9 @@ int wh_Server_HandleCryptoDmaRequest(whServerContext* ctx, uint16_t magic,
             break; /* WC_ALGO_TYPE_PK */
 
         case WC_ALGO_TYPE_CMAC:
-#if defined(WOLFSSL_CMAC) && !defined(WOLFHSM_CFG_NO_CMAC_DMA)
             ret = _HandleCmacDma(ctx, magic, seq, cryptoDataIn, cryptoInSize,
                                  cryptoDataOut, &cryptoOutSize);
             break;
-#endif /* WOLFSSL_CMAC && !WOLFHSM_CFG_NO_CMAC_DMA */
 
         case WC_ALGO_TYPE_NONE:
         default:

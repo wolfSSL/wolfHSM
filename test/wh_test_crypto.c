@@ -1099,7 +1099,7 @@ static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
         }
     }
 
-#if defined(WOLFHSM_CFG_DMA) && !defined(WOLFHSM_CFG_NO_KEY_DMA)
+#ifdef WOLFHSM_CFG_DMA
     /* test cache/export using DMA */
     if (ret == 0) {
         keyId = WH_KEYID_ERASED;
@@ -1298,7 +1298,7 @@ static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
             printf("KEY CROSS-CACHE EVICTION AND REPLACEMENT DMA SUCCESS\n");
         }
     }
-#endif /* WOLFHSM_CFG_DMA && !WOLFHSM_CFG_NO_KEY_DMA */
+#endif /* WOLFHSM_CFG_DMA */
 
     return ret;
 }
