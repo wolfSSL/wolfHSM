@@ -26,7 +26,7 @@
 #include <stdint.h>
 
 /* Maximum number of operations that can be registered */
-#define MAX_BENCH_OPS 73
+#define MAX_BENCH_OPS 79
 /* Maximum length of operation name */
 #define MAX_OP_NAME 64
 

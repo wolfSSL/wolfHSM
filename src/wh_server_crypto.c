@@ -1938,6 +1938,7 @@ static int _HandleSha512(whServerContext* ctx, uint16_t magic,
     wc_Sha512*                     sha512 = ctx->crypto->algoCtx.sha512;
     whMessageCrypto_Sha512Request  req;
     whMessageCrypto_Sha512Response res;
+    int                            hashType = WC_HASH_TYPE_SHA512;
     (void)inSize;
     /* The server SHA512 struct doesn't persist state (it is a union), meaning
      * the devId may get blown away between calls. We must restore the server
@@ -1949,17 +1950,28 @@ static int _HandleSha512(whServerContext* ctx, uint16_t magic,
     if (ret != 0) {
         return ret;
     }
-
+    hashType = req.resumeState.hashType;
     /* Init the SHA512 context if this is the first time, otherwise restore the
      * hash state from the client */
     if (req.resumeState.hiLen == 0 && req.resumeState.loLen == 0) {
-        ret = wc_InitSha512_ex(sha512, NULL, ctx->crypto->devId);
+        switch(hashType) {
+            case WC_HASH_TYPE_SHA512_224:
+                ret = wc_InitSha512_224_ex(sha512, NULL, ctx->crypto->devId);
+                break;
+            case WC_HASH_TYPE_SHA512_256:
+                ret = wc_InitSha512_256_ex(sha512, NULL, ctx->crypto->devId);
+                break;
+            default:
+                ret = wc_InitSha512_ex(sha512, NULL, ctx->crypto->devId);
+                break;
+        }
     }
     else {
         /* HAVE_DILITHIUM */
         memcpy(sha512->digest, req.resumeState.hash, WC_SHA512_DIGEST_SIZE);
         sha512->loLen = req.resumeState.loLen;
         sha512->hiLen = req.resumeState.hiLen;
+        hashType = req.resumeState.hashType;
     }
 
     if (req.isLastBlock) {
@@ -1968,7 +1980,17 @@ static int _HandleSha512(whServerContext* ctx, uint16_t magic,
             ret = wc_Sha512Update(sha512, req.inBlock, req.lastBlockLen);
         }
         if (ret == 0) {
-            ret = wc_Sha512Final(sha512, res.hash);
+            switch(hashType) {
+                case WC_HASH_TYPE_SHA512_224:
+                    ret = wc_Sha512_224Final(sha512, res.hash);
+                    break;
+                case WC_HASH_TYPE_SHA512_256:
+                    ret = wc_Sha512_256Final(sha512, res.hash);
+                    break;
+                default:
+                    ret = wc_Sha512Final(sha512, res.hash);
+                    break;
+            }
         }
     }
     else {
@@ -3005,6 +3027,7 @@ static int _HandleSha512Dma(whServerContext* ctx, uint16_t magic, uint16_t seq,
     whMessageCrypto_Sha512DmaResponse res;
     wc_Sha512*                        sha512 = ctx->crypto->algoCtx.sha512;
     int                               clientDevId;
+    int                               hashType = WC_HASH_TYPE_SHA512;
 
     /* Translate the request */
     ret = wh_MessageCrypto_TranslateSha512DmaRequest(
@@ -3012,7 +3035,6 @@ static int _HandleSha512Dma(whServerContext* ctx, uint16_t magic, uint16_t seq,
     if (ret != WH_ERROR_OK) {
         return ret;
     }
-
     /* Ensure state sizes are the same */
     if (req.state.sz != sizeof(*sha512)) {
         res.dmaAddrStatus.badAddr = req.state;
@@ -3032,6 +3054,8 @@ static int _HandleSha512Dma(whServerContext* ctx, uint16_t magic, uint16_t seq,
             clientDevId = sha512->devId;
             /* overwrite the devId to that of the server for local crypto */
             sha512->devId = ctx->crypto->devId;
+            /* retrieve hash Type to handle 512, 512-224, or 512-256 */
+            hashType = sha512->hashType;
         }
     }
 
@@ -3051,8 +3075,19 @@ static int _HandleSha512Dma(whServerContext* ctx, uint16_t magic, uint16_t seq,
         if (ret == WH_ERROR_OK) {
 #ifdef DEBUG_CRYPTOCB_VERBOSE
             printf("[server]   wc_Sha512Final: outAddr=%p\n", outAddr);
+            printf("[server]   hashTpe: %d\n", hashType);
 #endif
-            ret = wc_Sha512Final(sha512, outAddr);
+             switch(hashType) {
+                case WC_HASH_TYPE_SHA512_224:
+                    ret = wc_Sha512_224Final(sha512, outAddr);
+                    break;
+                case WC_HASH_TYPE_SHA512_256:
+                    ret = wc_Sha512_256Final(sha512, outAddr);
+                    break;
+                default:
+                    ret = wc_Sha512Final(sha512, outAddr);
+                    break;
+            }
         }
 
         if (ret == WH_ERROR_OK) {

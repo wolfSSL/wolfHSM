@@ -553,6 +553,7 @@ int wh_MessageCrypto_TranslateSha512Request(
     }
     WH_T32(magic, dest, src, resumeState.hiLen);
     WH_T32(magic, dest, src, resumeState.loLen);
+    WH_T32(magic, dest, src, resumeState.hashType);
     /* Hash value is just a byte array, no translation needed */
     if (src != dest) {
         memcpy(dest->resumeState.hash, src->resumeState.hash,
@@ -577,6 +578,7 @@ int wh_MessageCrypto_TranslateSha512Response(
     }
     WH_T32(magic, dest, src, hiLen);
     WH_T32(magic, dest, src, loLen);
+    WH_T32(magic, dest, src, hashType);
     /* Hash value is just a byte array, no translation needed */
     if (src != dest) {
         memcpy(dest->hash, src->hash, sizeof(src->hash));
