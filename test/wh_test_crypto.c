@@ -1305,6 +1305,150 @@ static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
     return ret;
 }
 
+static int whTest_NonExportableKeystore(whClientContext* ctx, int devId,
+                                        WC_RNG* rng)
+{
+    (void)devId;
+    (void)rng;
+
+    int     ret                   = 0;
+    whKeyId keyId                 = WH_KEYID_ERASED;
+    uint8_t key[AES_256_KEY_SIZE] = {
+        0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x11, 0x22, 0x33, 0x44, 0x55,
+        0x66, 0x77, 0x88, 0x99, 0x00, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF,
+        0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0x00};
+    uint8_t  exportedKey[AES_256_KEY_SIZE]   = {0};
+    uint8_t  label[WH_NVM_LABEL_LEN]         = "NonExportableTestKey";
+    uint8_t  exportedLabel[WH_NVM_LABEL_LEN] = {0};
+    uint16_t exportedKeySize;
+
+    printf("Testing non-exportable keystore enforcement...\n");
+
+    /* Test 1: Cache a key with non-exportable flag and try to export it */
+    ret = wh_Client_KeyCache(ctx, WH_NVM_FLAGS_NONEXPORTABLE, label,
+                             sizeof(label), key, sizeof(key), &keyId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to cache non-exportable key: %d\n", ret);
+        return ret;
+    }
+
+    /* Try to export the non-exportable key - should fail */
+    exportedKeySize = sizeof(exportedKey);
+    ret = wh_Client_KeyExport(ctx, keyId, exportedLabel, sizeof(exportedLabel),
+                              exportedKey, &exportedKeySize);
+    if (ret != WH_ERROR_ACCESS) {
+        WH_ERROR_PRINT("Non-exportable key was exported unexpectedly: %d\n",
+                       ret);
+        return -1;
+    }
+
+    printf("Non-exportable key export correctly denied\n");
+
+    /* Clean up the key */
+    wh_Client_KeyEvict(ctx, keyId);
+
+    /* Test 2: Cache a key without non-exportable flag and verify it can be
+     * exported */
+    keyId = WH_KEYID_ERASED;
+    ret = wh_Client_KeyCache(ctx, WH_NVM_FLAGS_NONE, label, sizeof(label), key,
+                             sizeof(key), &keyId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to cache exportable key: %d\n", ret);
+        return ret;
+    }
+
+    /* Try to export the exportable key - should succeed */
+    exportedKeySize = sizeof(exportedKey);
+    ret = wh_Client_KeyExport(ctx, keyId, exportedLabel, sizeof(exportedLabel),
+                              exportedKey, &exportedKeySize);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to export exportable key: %d\n", ret);
+        return ret;
+    }
+
+    /* Verify exported data matches original */
+    if (exportedKeySize != sizeof(key) ||
+        memcmp(key, exportedKey, exportedKeySize) != 0 ||
+        memcmp(label, exportedLabel, sizeof(label)) != 0) {
+        WH_ERROR_PRINT("Exported key data doesn't match original\n");
+        return -1;
+    }
+
+    printf("Exportable key export succeeded\n");
+
+    /* Clean up */
+    wh_Client_KeyEvict(ctx, keyId);
+
+#ifdef WOLFHSM_CFG_DMA
+    /* Test 3: Test DMA export with non-exportable key */
+    printf("Testing DMA key export protection...\n");
+
+    /* Cache a key with non-exportable flag */
+    keyId = WH_KEYID_ERASED;
+    ret   = wh_Client_KeyCache(ctx, WH_NVM_FLAGS_NONEXPORTABLE, label,
+                               sizeof(label), key, sizeof(key), &keyId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to cache non-exportable key for DMA test: %d\n",
+                       ret);
+        return ret;
+    }
+
+    /* Try to export the non-exportable key via DMA - should fail */
+    exportedKeySize = sizeof(exportedKey);
+    ret = wh_Client_KeyExportDma(ctx, keyId, exportedKey, sizeof(exportedKey),
+                                 exportedLabel, sizeof(exportedLabel),
+                                 &exportedKeySize);
+    if (ret != WH_ERROR_ACCESS) {
+        WH_ERROR_PRINT(
+            "Non-exportable key was exported via DMA unexpectedly: %d\n", ret);
+        return -1;
+    }
+
+    printf("Non-exportable key DMA export correctly denied\n");
+
+    /* Clean up the key */
+    wh_Client_KeyEvict(ctx, keyId);
+
+    /* Test 4: Test DMA export with exportable key */
+    keyId = WH_KEYID_ERASED;
+    ret = wh_Client_KeyCache(ctx, WH_NVM_FLAGS_NONE, label, sizeof(label), key,
+                             sizeof(key), &keyId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to cache exportable key for DMA test: %d\n",
+                       ret);
+        return ret;
+    }
+
+    /* Try to export the exportable key via DMA - should succeed */
+    memset(exportedKey, 0, sizeof(exportedKey));
+    memset(exportedLabel, 0, sizeof(exportedLabel));
+    exportedKeySize = sizeof(exportedKey);
+    ret = wh_Client_KeyExportDma(ctx, keyId, exportedKey, sizeof(exportedKey),
+                                 exportedLabel, sizeof(exportedLabel),
+                                 &exportedKeySize);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to export exportable key via DMA: %d\n", ret);
+        return ret;
+    }
+
+    /* Verify exported data matches original */
+    if (exportedKeySize != sizeof(key) ||
+        memcmp(key, exportedKey, exportedKeySize) != 0 ||
+        memcmp(label, exportedLabel, sizeof(label)) != 0) {
+        WH_ERROR_PRINT("DMA exported key data doesn't match original\n");
+        return -1;
+    }
+
+    printf("Exportable key DMA export succeeded\n");
+
+    /* Clean up */
+    wh_Client_KeyEvict(ctx, keyId);
+#endif /* WOLFHSM_CFG_DMA */
+
+    printf("NON-EXPORTABLE KEYSTORE TEST SUCCESS\n");
+    return 0;
+}
+
 #ifndef NO_AES
 static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
 {
@@ -2621,6 +2765,11 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     if (ret == 0) {
         /* Test Key Cache functions */
         ret = whTest_KeyCache(client, WH_DEV_ID, rng);
+    }
+
+    if (ret == 0) {
+        /* Test Non-Exportable Flag enforcement on keystore */
+        ret = whTest_NonExportableKeystore(client, WH_DEV_ID, rng);
     }
 
 #ifndef NO_AES

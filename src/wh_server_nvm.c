@@ -245,6 +245,7 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
         uint16_t hdr_len = sizeof(resp);
         uint8_t* data = (uint8_t*)resp_packet + hdr_len;
         uint16_t data_len = 0;
+        whNvmMetadata             meta     = {0};
 
         if (req_size != sizeof(req)) {
             /* Request is malformed */
@@ -257,11 +258,20 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
             if (req.data_len > WH_MESSAGE_NVM_MAX_READ_LEN) {
                 resp.rc = WH_ERROR_ABORTED;
             } else {
-                /* Process the Read action */
-                resp.rc = wh_Nvm_Read(server->nvm,
-                    req.id, req.offset, req.data_len, data);
+                /* Check metadata for non-exportable flag */
+                resp.rc = wh_Nvm_GetMetadata(server->nvm, req.id, &meta);
                 if (resp.rc == 0) {
-                    data_len = req.data_len;
+                    if (meta.flags & WH_NVM_FLAGS_NONEXPORTABLE) {
+                        resp.rc = WH_ERROR_ACCESS;
+                    }
+                    else {
+                        /* Process the Read action */
+                        resp.rc = wh_Nvm_Read(server->nvm, req.id, req.offset,
+                                              req.data_len, data);
+                        if (resp.rc == 0) {
+                            data_len = req.data_len;
+                        }
+                    }
                 }
             }
         }
@@ -325,9 +335,10 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
 
     case WH_MESSAGE_NVM_ACTION_READDMA:
     {
-        whMessageNvm_ReadDmaRequest req = {0};
+        whMessageNvm_ReadDmaRequest req  = {0};
         whMessageNvm_SimpleResponse resp = {0};
-        void* data = NULL;
+        whNvmMetadata               meta = {0};
+        void*                       data = NULL;
 
         if (req_size != sizeof(req)) {
             /* Request is malformed */
@@ -338,6 +349,13 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
             wh_MessageNvm_TranslateReadDmaRequest(magic,
                     (whMessageNvm_ReadDmaRequest*)req_packet, &req);
 
+            /* Check metadata for non-exportable flag */
+            resp.rc = wh_Nvm_GetMetadata(server->nvm, req.id, &meta);
+            if (resp.rc == 0 && (meta.flags & WH_NVM_FLAGS_NONEXPORTABLE)) {
+                resp.rc = WH_ERROR_ACCESS;
+            }
+        }
+        if (resp.rc == 0) {
             /* perform platform-specific host address processing */
             resp.rc = wh_Server_DmaProcessClientAddress(
                 server, req.data_hostaddr, &data, req.data_len,

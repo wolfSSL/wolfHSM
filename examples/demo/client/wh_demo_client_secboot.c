@@ -62,7 +62,7 @@ static int _showNvm(whClientContext* clientContext)
 {
     int ret = 0;
     whNvmAccess access = WH_NVM_ACCESS_ANY;
-    whNvmFlags flags = WH_NVM_FLAGS_ANY;
+    whNvmFlags  flags  = WH_NVM_FLAGS_NONE;
     whNvmId id = 0;
     whNvmId count = 0;
 

@@ -44,9 +44,12 @@ int wh_Server_CertInit(whServerContext* server);
  * @param id The NVM ID to store the certificate under
  * @param cert The certificate data buffer
  * @param cert_len Length of the certificate data
+ * @param flags NVM flags for the certificate storage
  * @return WH_ERROR_OK on success, error code on failure
  */
 int wh_Server_CertAddTrusted(whServerContext* server, whNvmId id,
+                             whNvmAccess access, whNvmFlags flags,
+                             const uint8_t* label, whNvmSize label_len,
                              const uint8_t* cert, uint32_t cert_len);
 
 /**
