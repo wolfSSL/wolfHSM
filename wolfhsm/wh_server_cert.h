@@ -48,8 +48,9 @@ int wh_Server_CertInit(whServerContext* server);
  * @return WH_ERROR_OK on success, error code on failure
  */
 int wh_Server_CertAddTrusted(whServerContext* server, whNvmId id,
-                             const uint8_t* cert, uint32_t cert_len,
-                             whNvmFlags flags);
+                             whNvmAccess access, whNvmFlags flags,
+                             const uint8_t* label, whNvmSize label_len,
+                             const uint8_t* cert, uint32_t cert_len);
 
 /**
  * @brief Delete a trusted certificate from NVM storage

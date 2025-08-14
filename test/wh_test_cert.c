@@ -69,15 +69,15 @@ int whTest_CertServerCfg(whServerConfig* serverCfg)
 
     /* Add trusted root certificate for chain A */
     WH_DEBUG_PRINT("Adding trusted root certificate for chain A...\n");
-    WH_TEST_RETURN_ON_FAIL(
-        wh_Server_CertAddTrusted(server, rootCertA, ROOT_A_CERT,
-                                 ROOT_A_CERT_len, WH_NVM_FLAGS_IMMUTABLE));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_CertAddTrusted(
+        server, rootCertA, WH_NVM_ACCESS_ANY, WH_NVM_FLAGS_IMMUTABLE, NULL, 0,
+        ROOT_A_CERT, ROOT_A_CERT_len));
 
     /* Add trusted root certificate for chain B */
     WH_DEBUG_PRINT("Adding trusted root certificate for chain B...\n");
-    WH_TEST_RETURN_ON_FAIL(
-        wh_Server_CertAddTrusted(server, rootCertB, ROOT_B_CERT,
-                                 ROOT_B_CERT_len, WH_NVM_FLAGS_IMMUTABLE));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_CertAddTrusted(
+        server, rootCertB, WH_NVM_ACCESS_ANY, WH_NVM_FLAGS_IMMUTABLE, NULL, 0,
+        ROOT_B_CERT, ROOT_B_CERT_len));
 
     /* Verify valid single cert (intermediate) */
     WH_DEBUG_PRINT(
@@ -159,14 +159,14 @@ int whTest_CertClient(whClientContext* client)
     /* Add root certificates to NVM */
     WH_DEBUG_PRINT("Adding root certificate A to NVM...\n");
     WH_TEST_RETURN_ON_FAIL(wh_Client_CertAddTrusted(
-        client, rootCertA_id, ROOT_A_CERT, ROOT_A_CERT_len,
-        WH_NVM_FLAGS_IMMUTABLE, &out_rc));
+        client, rootCertA_id, WH_NVM_ACCESS_ANY, WH_NVM_FLAGS_IMMUTABLE, NULL,
+        0, ROOT_A_CERT, ROOT_A_CERT_len, &out_rc));
     WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
 
     WH_DEBUG_PRINT("Adding root certificate B to NVM...\n");
     WH_TEST_RETURN_ON_FAIL(wh_Client_CertAddTrusted(
-        client, rootCertB_id, ROOT_B_CERT, ROOT_B_CERT_len,
-        WH_NVM_FLAGS_IMMUTABLE, &out_rc));
+        client, rootCertB_id, WH_NVM_ACCESS_ANY, WH_NVM_FLAGS_IMMUTABLE, NULL,
+        0, ROOT_B_CERT, ROOT_B_CERT_len, &out_rc));
     WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
 
     /* Verify valid single cert (intermediate) */
@@ -277,14 +277,14 @@ int whTest_CertClientAcert(whClientContext* client)
     /* Add trusted certificate to NVM */
     WH_DEBUG_PRINT("Adding trusted certificate to NVM...\n");
     WH_TEST_RETURN_ON_FAIL(wh_Client_CertAddTrusted(
-        client, trustedCertId, caCert_der, caCert_der_len,
-        WH_NVM_FLAGS_IMMUTABLE, &out_rc));
+        client, trustedCertId, WH_NVM_ACCESS_ANY, WH_NVM_FLAGS_IMMUTABLE, NULL,
+        0, caCert_der, caCert_der_len, &out_rc));
     WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
 
     WH_DEBUG_PRINT("Adding root certificate B to NVM...\n");
     WH_TEST_RETURN_ON_FAIL(wh_Client_CertAddTrusted(
-        client, rootCertB_id, ROOT_B_CERT, ROOT_B_CERT_len,
-        WH_NVM_FLAGS_IMMUTABLE, &out_rc));
+        client, rootCertB_id, WH_NVM_ACCESS_ANY, WH_NVM_FLAGS_IMMUTABLE, NULL,
+        0, ROOT_B_CERT, ROOT_B_CERT_len, &out_rc));
     WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
 
     /* Verify attribute certificate */
@@ -344,14 +344,14 @@ int whTest_CertClientDma_ClientServerTestInternal(whClientContext* client)
     /* Add root certificates to NVM */
     WH_DEBUG_PRINT("Adding root certificate A to NVM...\n");
     WH_TEST_RETURN_ON_FAIL(wh_Client_CertAddTrustedDma(
-        client, rootCertA_id, ROOT_A_CERT, ROOT_A_CERT_len,
-        WH_NVM_FLAGS_IMMUTABLE, &out_rc));
+        client, rootCertA_id, WH_NVM_ACCESS_ANY, WH_NVM_FLAGS_IMMUTABLE, NULL,
+        0, ROOT_A_CERT, ROOT_A_CERT_len, &out_rc));
     WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
 
     WH_DEBUG_PRINT("Adding root certificate B to NVM...\n");
     WH_TEST_RETURN_ON_FAIL(wh_Client_CertAddTrustedDma(
-        client, rootCertB_id, ROOT_B_CERT, ROOT_B_CERT_len,
-        WH_NVM_FLAGS_IMMUTABLE, &out_rc));
+        client, rootCertB_id, WH_NVM_ACCESS_ANY, WH_NVM_FLAGS_IMMUTABLE, NULL,
+        0, ROOT_B_CERT, ROOT_B_CERT_len, &out_rc));
     WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
 
     /* Verify valid single cert (intermediate) */
@@ -464,14 +464,14 @@ int whTest_CertClientAcertDma_ClientServerTestInternal(whClientContext* client)
     /* Add trusted certificate to NVM */
     WH_DEBUG_PRINT("Adding trusted certificate to NVM...\n");
     WH_TEST_RETURN_ON_FAIL(wh_Client_CertAddTrustedDma(
-        client, trustedCertId, caCert_der, caCert_der_len,
-        WH_NVM_FLAGS_IMMUTABLE, &out_rc));
+        client, trustedCertId, WH_NVM_ACCESS_ANY, WH_NVM_FLAGS_IMMUTABLE, NULL,
+        0, caCert_der, caCert_der_len, &out_rc));
     WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
 
     WH_DEBUG_PRINT("Adding root certificate B to NVM...\n");
     WH_TEST_RETURN_ON_FAIL(wh_Client_CertAddTrustedDma(
-        client, rootCertB_id, ROOT_B_CERT, ROOT_B_CERT_len,
-        WH_NVM_FLAGS_IMMUTABLE, &out_rc));
+        client, rootCertB_id, WH_NVM_ACCESS_ANY, WH_NVM_FLAGS_IMMUTABLE, NULL,
+        0, ROOT_B_CERT, ROOT_B_CERT_len, &out_rc));
     WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
 
     /* Verify attribute certificate */
@@ -521,15 +521,16 @@ static int whTest_CertNonExportable(whClientContext* client)
     /* Add exportable certificate */
     WH_DEBUG_PRINT("Adding exportable certificate...\n");
     WH_TEST_RETURN_ON_FAIL(wh_Client_CertAddTrusted(
-        client, exportable_cert_id, ROOT_A_CERT, ROOT_A_CERT_len,
-        WH_NVM_FLAGS_IMMUTABLE, &out_rc));
+        client, exportable_cert_id, WH_NVM_ACCESS_ANY, WH_NVM_FLAGS_IMMUTABLE,
+        NULL, 0, ROOT_A_CERT, ROOT_A_CERT_len, &out_rc));
     WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
 
     /* Add non-exportable certificate */
     WH_DEBUG_PRINT("Adding non-exportable certificate...\n");
     WH_TEST_RETURN_ON_FAIL(wh_Client_CertAddTrusted(
-        client, nonexportable_cert_id, ROOT_B_CERT, ROOT_B_CERT_len,
-        WH_NVM_FLAGS_IMMUTABLE | WH_NVM_FLAGS_NONEXPORTABLE, &out_rc));
+        client, nonexportable_cert_id, WH_NVM_ACCESS_ANY,
+        WH_NVM_FLAGS_IMMUTABLE | WH_NVM_FLAGS_NONEXPORTABLE, NULL, 0,
+        ROOT_B_CERT, ROOT_B_CERT_len, &out_rc));
     WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
 
     /* Test reading exportable certificate - should succeed */

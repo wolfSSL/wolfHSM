@@ -115,8 +115,9 @@ int wh_Client_CertInit(whClientContext* c, int32_t* out_rc)
 
 /* Add a trusted certificate */
 int wh_Client_CertAddTrustedRequest(whClientContext* c, whNvmId id,
-                                    const uint8_t* cert, uint32_t cert_len,
-                                    whNvmFlags flags)
+                                    whNvmAccess access, whNvmFlags flags,
+                                    uint8_t* label, whNvmSize label_len,
+                                    const uint8_t* cert, uint32_t cert_len)
 {
     whMessageCert_AddTrustedRequest req;
     uint8_t                         buffer[WOLFHSM_CFG_COMM_DATA_LEN] = {0};
@@ -129,9 +130,16 @@ int wh_Client_CertAddTrustedRequest(whClientContext* c, whNvmId id,
     }
 
     /* Prepare request */
+    memset(&req, 0, sizeof(req));
     req.id       = id;
-    req.cert_len = cert_len;
+    req.access   = access;
     req.flags    = flags;
+    req.cert_len = cert_len;
+    if (label != NULL && label_len > 0) {
+        whNvmSize copy_len =
+            (label_len > WH_NVM_LABEL_LEN) ? WH_NVM_LABEL_LEN : label_len;
+        memcpy(req.label, label, copy_len);
+    }
 
     /* Copy request struct and certificate data */
     memcpy(buffer, &req, hdr_len);
@@ -173,9 +181,10 @@ int wh_Client_CertAddTrustedResponse(whClientContext* c, int32_t* out_rc)
     return rc;
 }
 
-int wh_Client_CertAddTrusted(whClientContext* c, whNvmId id,
-                             const uint8_t* cert, uint32_t cert_len,
-                             whNvmFlags flags, int32_t* out_rc)
+int wh_Client_CertAddTrusted(whClientContext* c, whNvmId id, whNvmAccess access,
+                             whNvmFlags flags, uint8_t* label,
+                             whNvmSize label_len, const uint8_t* cert,
+                             uint32_t cert_len, int32_t* out_rc)
 {
     int rc = 0;
 
@@ -184,7 +193,8 @@ int wh_Client_CertAddTrusted(whClientContext* c, whNvmId id,
     }
 
     do {
-        rc = wh_Client_CertAddTrustedRequest(c, id, cert, cert_len, flags);
+        rc = wh_Client_CertAddTrustedRequest(c, id, access, flags, label,
+                                             label_len, cert, cert_len);
     } while (rc == WH_ERROR_NOTREADY);
 
     if (rc == 0) {
@@ -493,8 +503,9 @@ int wh_Client_CertVerifyAndCacheLeafPubKey(
 #ifdef WOLFHSM_CFG_DMA
 
 int wh_Client_CertAddTrustedDmaRequest(whClientContext* c, whNvmId id,
-                                       const void* cert, uint32_t cert_len,
-                                       whNvmFlags flags)
+                                       whNvmAccess access, whNvmFlags flags,
+                                       uint8_t* label, whNvmSize label_len,
+                                       const void* cert, uint32_t cert_len)
 {
     whMessageCert_AddTrustedDmaRequest req;
 
@@ -503,10 +514,17 @@ int wh_Client_CertAddTrustedDmaRequest(whClientContext* c, whNvmId id,
     }
 
     /* Prepare and send request */
+    memset(&req, 0, sizeof(req));
     req.id        = id;
+    req.access    = access;
+    req.flags     = flags;
     req.cert_addr = (uint64_t)(uintptr_t)cert;
     req.cert_len  = cert_len;
-    req.flags     = flags;
+    if (label != NULL && label_len > 0) {
+        whNvmSize copy_len =
+            (label_len > WH_NVM_LABEL_LEN) ? WH_NVM_LABEL_LEN : label_len;
+        memcpy(req.label, label, copy_len);
+    }
     return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_CERT,
                                  WH_MESSAGE_CERT_ACTION_ADDTRUSTED_DMA,
                                  sizeof(req), &req);
@@ -543,8 +561,10 @@ int wh_Client_CertAddTrustedDmaResponse(whClientContext* c, int32_t* out_rc)
 }
 
 int wh_Client_CertAddTrustedDma(whClientContext* c, whNvmId id,
+                                whNvmAccess access, whNvmFlags flags,
+                                uint8_t* label, whNvmSize label_len,
                                 const void* cert, uint32_t cert_len,
-                                whNvmFlags flags, int32_t* out_rc)
+                                int32_t* out_rc)
 {
     int rc = 0;
 
@@ -553,7 +573,8 @@ int wh_Client_CertAddTrustedDma(whClientContext* c, whNvmId id,
     }
 
     do {
-        rc = wh_Client_CertAddTrustedDmaRequest(c, id, cert, cert_len, flags);
+        rc = wh_Client_CertAddTrustedDmaRequest(c, id, access, flags, label,
+                                                label_len, cert, cert_len);
     } while (rc == WH_ERROR_NOTREADY);
 
     if (rc == 0) {

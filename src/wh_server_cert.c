@@ -175,12 +175,11 @@ int wh_Server_CertInit(whServerContext* server)
 
 /* Add a trusted certificate to NVM storage */
 int wh_Server_CertAddTrusted(whServerContext* server, whNvmId id,
-                             const uint8_t* cert, uint32_t cert_len,
-                             whNvmFlags flags)
+                             whNvmAccess access, whNvmFlags flags,
+                             const uint8_t* label, whNvmSize label_len,
+                             const uint8_t* cert, uint32_t cert_len)
 {
     int           rc;
-    whNvmAccess   access                  = WH_NVM_ACCESS_ANY;
-    uint8_t       label[WH_NVM_LABEL_LEN] = "trusted_cert";
     whNvmMetadata metadata;
 
     if ((server == NULL) || (cert == NULL) || (cert_len == 0)) {
@@ -192,7 +191,16 @@ int wh_Server_CertAddTrusted(whServerContext* server, whNvmId id,
     metadata.access = access;
     metadata.flags  = flags;
     metadata.len    = cert_len;
-    memcpy(metadata.label, label, sizeof(label));
+    memset(metadata.label, 0, WH_NVM_LABEL_LEN);
+    if (label != NULL && label_len > 0) {
+        whNvmSize copy_len =
+            (label_len > WH_NVM_LABEL_LEN) ? WH_NVM_LABEL_LEN : label_len;
+        memcpy(metadata.label, label, copy_len);
+    }
+    else {
+        /* Default label if none provided */
+        memcpy(metadata.label, "trusted_cert", sizeof("trusted_cert"));
+    }
 
     rc = wh_Nvm_AddObject(server->nvm, &metadata, cert_len, cert);
 
@@ -386,8 +394,9 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
             cert_data = (const uint8_t*)req_packet + sizeof(req);
 
             /* Process the add trusted action */
-            rc      = wh_Server_CertAddTrusted(server, req.id, cert_data,
-                                               req.cert_len, req.flags);
+            rc = wh_Server_CertAddTrusted(server, req.id, req.access, req.flags,
+                                          req.label, WH_NVM_LABEL_LEN,
+                                          cert_data, req.cert_len);
             resp.rc = rc;
 
             /* Convert the response struct */
@@ -520,8 +529,9 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
             }
             if (resp.rc == WH_ERROR_OK) {
                 /* Process the add trusted action */
-                resp.rc = wh_Server_CertAddTrusted(server, req.id, cert_data,
-                                                   req.cert_len, req.flags);
+                resp.rc = wh_Server_CertAddTrusted(
+                    server, req.id, req.access, req.flags, req.label,
+                    WH_NVM_LABEL_LEN, cert_data, req.cert_len);
             }
             if (resp.rc == WH_ERROR_OK) {
                 /* Post-process client address */
