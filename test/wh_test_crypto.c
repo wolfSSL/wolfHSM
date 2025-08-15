@@ -931,16 +931,16 @@ static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
         uint16_t keyId;
         /* Key for regular cache (≤ WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE) */
         const size_t smallKeySize = WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE / 2;
-        uint8_t      smallKey[smallKeySize];
+        uint8_t      smallKey[WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE/2];
         /* Key for big cache (> WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE) */
         const size_t bigKeySize = WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE + 100;
-        uint8_t      bigKey[bigKeySize];
+        uint8_t      bigKey[WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE+100];
 
         uint8_t labelSmall[WH_NVM_LABEL_LEN] = "Small Key Label";
         uint8_t labelBig[WH_NVM_LABEL_LEN]   = "Big Key Label";
 
         /* Buffer for exported key and metadata */
-        uint8_t  exportedKey[bigKeySize];
+        uint8_t  exportedKey[WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE+100];
         uint8_t  exportedLabel[WH_NVM_LABEL_LEN];
         uint16_t exportedKeySize;
 
@@ -1004,7 +1004,7 @@ static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
                     /* On error, try our best to clean up */
                     (void)wh_Client_KeyEvict(ctx, keyId);
                 }
-                
+
                 if (ret == 0) {
                     ret = wh_Client_KeyEvict(ctx, keyId);
                     if (ret != 0) {
@@ -1078,7 +1078,7 @@ static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
                         /* On error, try our best to clean up */
                         (void)wh_Client_KeyEvict(ctx, keyId);
                     }
-                    
+
                     if (ret == 0) {
                         ret = wh_Client_KeyEvict(ctx, keyId);
                         if (ret != 0) {
@@ -1202,7 +1202,7 @@ static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
                     /* On error, try our best to clean up */
                     (void)wh_Client_KeyEvict(ctx, keyId);
                 }
-                
+
                 if (ret == 0) {
                     ret = wh_Client_KeyEvict(ctx, keyId);
                     if (ret != 0) {
@@ -1278,7 +1278,7 @@ static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
                         /* On error, try our best to clean up */
                         (void)wh_Client_KeyEvict(ctx, keyId);
                     }
-                    
+
                     if (ret == 0) {
                         ret = wh_Client_KeyEvict(ctx, keyId);
                         if (ret != 0) {
