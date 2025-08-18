@@ -83,14 +83,14 @@
  *  XCACHELINE - Size in bytes of a cache line
  *      Default: 32
  *
- *  #ifndef XCACHEFLUSH(ptr) - Flush the cache line uncluding ptr
+ *  #ifndef XCACHEFLUSH(ptr) - Flush the cache line including ptr
  *      DefaultL (void)(ptr)
  *
  *  #ifndef XCACHEFLUSHBLK(ptr, n) - Flush the cache lines starting at ptr for
  *                                   at least n bytes
  *      DefaultL wh_Utils_CacheFlush(ptr, n)
  *
- *  #ifndef XCACHEINVLD(ptr) - Invalidate the cache line uncluding ptr
+ *  #ifndef XCACHEINVLD(ptr) - Invalidate the cache line including ptr
  *      DefaultL (void)(ptr)
  *
  *  #ifndef XCACHEINVLDBLK(ptr, n) - Invalidate the cache lines starting at ptr

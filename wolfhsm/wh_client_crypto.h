@@ -116,7 +116,7 @@ int wh_Client_Curve25519ImportKey(whClientContext* ctx, curve25519_key* key,
  * and decodes it into the wolfCrypt curve25519 key structure.
  *
  * This function exports the specified key from wolfHSM server key cache as a
- * serailized byte array and decodes the key into the wolfCrypt curve25519_key
+ * serialized byte array and decodes the key into the wolfCrypt curve25519_key
  * structure, optionally copying out the associated label as well.
  *
  * @param[in] ctx Pointer to the wolfHSM client structure.

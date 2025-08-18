@@ -235,7 +235,7 @@ int wh_Client_CommInfoRequest(whClientContext* c);
  * Growth:
  * @param[out] out_debug_state Pointer to store the server's current debug state
  * @param[out] out_boot_state Pointer to store the server's current boot state
- * @param[out] out_lifecycle_state Pointer to store the server's lifecyle state
+ * @param[out] out_lifecycle_state Pointer to store the server's lifecycle state
  * @param[out] out_nvm_state Pointer to store the server's current nvm state
  *
  * @return int Returns 0 on success, or a negative error code on failure.
@@ -285,7 +285,7 @@ int wh_Client_CommInfoResponse(whClientContext* c,
  * Growth:
  * @param[out] out_debug_state Pointer to store the server's current debug state
  * @param[out] out_boot_state Pointer to store the server's current boot state
- * @param[out] out_lifecycle_state Pointer to store the server's lifecyle state
+ * @param[out] out_lifecycle_state Pointer to store the server's lifecycle state
  * @param[out] out_nvm_state Pointer to store the server's current nvm state
  *
  * @return int Returns 0 on success, or a negative error code on failure.
@@ -347,7 +347,7 @@ int wh_Client_DisableCancel(whClientContext* c);
  *
  * This function sends a cancellation request to the server to cancel the
  * previous request made. Does not wait for the response which must be handled
- * seperately
+ * separately
  *
  * @param[in] c Pointer to the client context.
  * @return int Returns 0 on success, or a negative error code on failure.

@@ -1687,7 +1687,7 @@ int wh_Server_HandleSheRequest(whServerContext* server, uint16_t magic,
         server->she->cmacKeyFound   = 0;
     }
 
-    /* Unconditionaly return success so response message is sent, propagating
+    /* Unconditionally return success so response message is sent, propagating
      * the error code to the client */
     /* TODO: Are there any fatal server errors that should be handled here? */
     return 0;

@@ -1,6 +1,6 @@
 # examples
 
-This directory contains examples code demonstrating how to use various wolfHSM features. The examples provided are split between port-agnostic demo code, and port-specific server/client applications that use the aformentioned demo code.
+This directory contains examples code demonstrating how to use various wolfHSM features. The examples provided are split between port-agnostic demo code, and port-specific server/client applications that use the aforementioned demo code.
 
 - `demo/`: port-agnostic demonstration code (`demo/`). This code is intended to be used as a reference for how to use wolfHSM features, and are organized by high-level wolfHSM feature.
 - `port/`: Example server and client applications for each port. These applications initialize the server and client context and then run the demo code.

@@ -85,11 +85,11 @@ int wh_Server_HandleCustomCbRequest(whServerContext* server, uint16_t magic,
 
     if (server->customHandlerTable[action] != NULL) {
         /* If this isn't a query to check if the callback exists, invoke the
-         * registered callback, storing the return value in the reponse  */
+         * registered callback, storing the return value in the response  */
         if (req.type != WH_MESSAGE_CUSTOM_CB_TYPE_QUERY) {
             resp.rc = server->customHandlerTable[action](server, &req, &resp);
         }
-        /* TODO: propagate other wolfHSM error codes (requires modifiying caller
+        /* TODO: propagate other wolfHSM error codes (requires modifying caller
          * function) once generic server code supports it */
         resp.err = WH_ERROR_OK;
     }

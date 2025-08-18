@@ -70,14 +70,14 @@ typedef union {
 
 /* request message to the custom server callback */
 typedef struct {
-    uint32_t               id;   /* indentifier of registered callback  */
+    uint32_t               id;   /* identifier of registered callback  */
     uint32_t               type; /* whMessageCustomCb_Type */
     whMessageCustomCb_Data data;
 } whMessageCustomCb_Request;
 
 /* response message from the custom server callback */
 typedef struct {
-    uint32_t id;   /* indentifier of registered callback  */
+    uint32_t id;   /* identifier of registered callback  */
     uint32_t type; /* whMessageCustomCb_Type */
     int32_t  rc;   /* Return code from custom callback. Invalid if err != 0 */
     int32_t  err;  /* wolfHSM-specific error. If err != 0, rc is invalid */

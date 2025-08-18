@@ -251,7 +251,7 @@ int whTest_SheClientConfig(whClientConfig* config)
         goto exit;
     }
     printf("SHE secure boot SUCCESS\n");
-    /* load the secret key using pre progam */
+    /* load the secret key using pre program */
     if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_SECRET_KEY_ID, 0, secretKey, sizeof(secretKey))) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_ShePreProgramKey %d\n", ret);
         goto exit;

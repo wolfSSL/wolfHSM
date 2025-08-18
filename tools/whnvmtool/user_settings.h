@@ -69,7 +69,7 @@ extern "C" {
 #define WOLFSSL_NO_TLS12
 #define NO_DO178
 
-/** Remove unneded namespace */
+/** Remove unneeded namespace */
 #define NO_OLD_RNGNAME
 #define NO_OLD_WC_NAMES
 #define NO_OLD_SSL_NAMES

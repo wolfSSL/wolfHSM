@@ -210,7 +210,7 @@ static int _customServerDmaCb(struct whServerContext_t* server,
     (void)server;
     (void)flags;
 
-    /* remapped "client" address, a.k.a. arbitary "server" buffer */
+    /* remapped "client" address, a.k.a. arbitrary "server" buffer */
     void* srvTmpBuf =
         (void*)(clientAddr + (offsetof(TestMemory, srvRemapBufAllow) -
                               offsetof(TestMemory, cliBuf)));
