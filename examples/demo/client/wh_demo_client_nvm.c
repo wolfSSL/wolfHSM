@@ -52,10 +52,9 @@ int wh_DemoClient_Nvm(whClientContext* clientContext)
      * against what we wrote */
     for (int i = 0; i < NUM_OBJECTS; i++) {
         /* Add an object */
-        rc = wh_Client_NvmAddObject(clientContext, objectIds[i],
-                                    WH_NVM_ACCESS_ANY,
-                                    WH_NVM_FLAGS_ANY, sizeof(labels[i]),
-                                    labels[i], dataLen, data[i], &serverRc);
+        rc = wh_Client_NvmAddObject(
+            clientContext, objectIds[i], WH_NVM_ACCESS_ANY, WH_NVM_FLAGS_NONE,
+            sizeof(labels[i]), labels[i], dataLen, data[i], &serverRc);
         if (rc != 0 || serverRc != 0) {
             printf("Add Object %d failed with error code: %d, server error "
                    "code: %d\n",

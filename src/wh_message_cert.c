@@ -52,8 +52,12 @@ int wh_MessageCert_TranslateAddTrustedRequest(
     if ((src == NULL) || (dest == NULL)) {
         return WH_ERROR_BADARGS;
     }
-    WH_T16(magic, dest, src, id);
     WH_T32(magic, dest, src, cert_len);
+    WH_T16(magic, dest, src, id);
+    WH_T16(magic, dest, src, access);
+    WH_T16(magic, dest, src, flags);
+    /* Label array doesn't need byte-order translation */
+    memcpy(dest->label, src->label, WH_NVM_LABEL_LEN);
     return 0;
 }
 
@@ -125,9 +129,13 @@ int wh_MessageCert_TranslateAddTrustedDmaRequest(
     if ((src == NULL) || (dest == NULL)) {
         return WH_ERROR_BADARGS;
     }
-    WH_T16(magic, dest, src, id);
     WH_T64(magic, dest, src, cert_addr);
     WH_T32(magic, dest, src, cert_len);
+    WH_T16(magic, dest, src, id);
+    WH_T16(magic, dest, src, access);
+    WH_T16(magic, dest, src, flags);
+    /* Label array doesn't need byte-order translation */
+    memcpy(dest->label, src->label, WH_NVM_LABEL_LEN);
     return 0;
 }
 
