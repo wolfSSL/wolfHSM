@@ -73,7 +73,7 @@
 #define BUFFER_SIZE 4096
 #define FLASH_RAM_SIZE (1024 * 1024) /* 1MB */
 
-#ifdef WOLFHSM_CFG_ENABLE_CLIENT
+#if defined(WOLFHSM_CFG_ENABLE_CLIENT) && !defined(NO_CRYPT_TEST)
 int whTest_WolfCryptTestCfg(whClientConfig* config)
 {
     whClientContext client[1] = {0};
