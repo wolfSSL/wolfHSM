@@ -62,13 +62,12 @@ int whTest_Flash_RamSim(void)
 {
     int              ret;
     whFlashRamsimCtx ctx;
+    uint8_t memory[TEST_FLASH_SIZE] = {0};
     whFlashRamsimCfg cfg = {.size       = TEST_FLASH_SIZE,
                             .sectorSize = TEST_SECTOR_SIZE,
                             .pageSize   = TEST_PAGE_SIZE,
                             .erasedByte = 0xFF,
-#ifndef WOLFHSM_CFG_FLASH_RAMSIM_MALLOC
-                            .memory     = WOLFHSM_CFG_TEST_FLASH_RAMSIM_MEMORY_ADDR;
-#endif
+                            .memory     = memory,
     };
 
     uint8_t testData[TEST_PAGE_SIZE] = {0};

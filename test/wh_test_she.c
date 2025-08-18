@@ -77,6 +77,10 @@ enum {
         BUFFER_SIZE = 4096,
     };
 
+#define FLASH_RAM_SIZE (1024 * 1024) /* 1MB */
+#define FLASH_SECTOR_SIZE (128 * 1024) /* 128KB */
+#define FLASH_PAGE_SIZE (8) /* 8B */
+
 #ifdef WOLFHSM_CFG_ENABLE_CLIENT
 /* Helper function to destroy a SHE key so the unit tests don't
  * leak NVM objects across invocations. Necessary, as SHE doesn't expose a
@@ -535,12 +539,14 @@ static int wh_ClientServer_MemThreadTest(void)
     }};
 
     /* RamSim Flash state and configuration */
+    uint8_t memory[FLASH_RAM_SIZE] = {0};
     whFlashRamsimCtx fc[1] = {0};
     whFlashRamsimCfg fc_conf[1] = {{
-        .size       = 1024 * 1024, /* 1MB  Flash */
-        .sectorSize = 128 * 1024,  /* 128KB  Sector Size */
-        .pageSize   = 8,           /* 8B   Page Size */
+        .size       = FLASH_RAM_SIZE,     /* 1MB  Flash */
+        .sectorSize = FLASH_SECTOR_SIZE,  /* 128KB  Sector Size */
+        .pageSize   = FLASH_PAGE_SIZE,    /* 8B   Page Size */
         .erasedByte = ~(uint8_t)0,
+        .memory     = memory,
     }};
     const whFlashCb  fcb[1]          = {WH_FLASH_RAMSIM_CB};
 

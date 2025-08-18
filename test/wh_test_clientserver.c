@@ -61,6 +61,8 @@
 #define REPEAT_COUNT 10
 #define ONE_MS 1000
 #define FLASH_RAM_SIZE (1024 * 1024) /* 1MB */
+#define FLASH_SECTOR_SIZE (128 * 1024) /* 128KB */
+#define FLASH_PAGE_SIZE (8) /* 8B */
 
 #ifdef WOLFHSM_CFG_DMA
 #define DMA_TEST_MEM_NWORDS 3
@@ -708,12 +710,14 @@ int whTest_ClientServerSequential(void)
     }};
 
     /* RamSim Flash state and configuration */
+    uint8_t memory[FLASH_RAM_SIZE] = {0};
     whFlashRamsimCtx fc[1]      = {0};
     whFlashRamsimCfg fc_conf[1] = {{
-        .size       = 1024 * 1024, /* 1MB  Flash */
-        .sectorSize = 128 * 1024,  /* 128KB  Sector Size */
-        .pageSize   = 8,           /* 8B   Page Size */
+        .size       = FLASH_RAM_SIZE,    /* 1MB  Flash */
+        .sectorSize = FLASH_SECTOR_SIZE, /* 128KB  Sector Size */
+        .pageSize   = FLASH_PAGE_SIZE,   /* 8B   Page Size */
         .erasedByte = ~(uint8_t)0,
+        .memory     = memory,
     }};
     const whFlashCb  fcb[1]     = {WH_FLASH_RAMSIM_CB};
 
@@ -1734,12 +1738,14 @@ static int wh_ClientServer_MemThreadTest(void)
     }};
 
     /* RamSim Flash state and configuration */
+    uint8_t memory[FLASH_RAM_SIZE] = {0};
     whFlashRamsimCtx fc[1] = {0};
     whFlashRamsimCfg fc_conf[1] = {{
         .size       = FLASH_RAM_SIZE,
         .sectorSize = FLASH_RAM_SIZE/2,
         .pageSize   = 8,
         .erasedByte = (uint8_t)0,
+        .memory     = memory,
     }};
     const whFlashCb  fcb[1]          = {WH_FLASH_RAMSIM_CB};
 
@@ -1825,12 +1831,14 @@ static int wh_ClientServer_PosixMemMapThreadTest(void)
     }};
 
     /* RamSim Flash state and configuration */
+    uint8_t memory[FLASH_RAM_SIZE] = {0};
     whFlashRamsimCtx fc[1]      = {0};
     whFlashRamsimCfg fc_conf[1] = {{
         .size       = FLASH_RAM_SIZE,
         .sectorSize = FLASH_RAM_SIZE / 2,
         .pageSize   = 8,
         .erasedByte = (uint8_t)0,
+        .memory     = memory,
     }};
     const whFlashCb  fcb[1]     = {WH_FLASH_RAMSIM_CB};
 

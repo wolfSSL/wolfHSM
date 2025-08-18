@@ -41,6 +41,10 @@
 #include "port/posix/posix_flash_file.h"
 #endif
 
+#define FLASH_RAM_SIZE (1024 * 1024) /* 1MB */
+#define FLASH_SECTOR_SIZE (4096) /* 4KB */
+#define FLASH_PAGE_SIZE (8) /* 8B */
+
 #if defined(WOLFHSM_CFG_TEST_VERBOSE)
 static void _HexDump(const char* p, size_t data_len)
 {
@@ -469,13 +473,15 @@ cleanup:
 int whTest_NvmFlash_RamSim(void)
 {
     /* HAL Flash state and configuration */
+    uint8_t memory[FLASH_RAM_SIZE] = {0};
     const whFlashCb  myCb[1]          = {WH_FLASH_RAMSIM_CB};
     whFlashRamsimCtx myHalFlashCtx[1] = {0};
     whFlashRamsimCfg myHalFlashCfg[1] = {{
-        .size       = 1024 * 1024, /* 1MB  Flash */
-        .sectorSize = 4096,        /* 4KB  Sector Size */
-        .pageSize   = 8,           /* 8B   Page Size */
+        .size       = FLASH_RAM_SIZE,    /* 1MB  Flash */
+        .sectorSize = FLASH_SECTOR_SIZE, /* 4KB  Sector Size */
+        .pageSize   = FLASH_PAGE_SIZE,   /* 8B   Page Size */
         .erasedByte = (uint8_t)0,
+        .memory     = memory,
     }};
 
     WH_TEST_RETURN_ON_FAIL(whTest_Flash(myCb, myHalFlashCtx, myHalFlashCfg));

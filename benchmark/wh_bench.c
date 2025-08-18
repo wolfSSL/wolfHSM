@@ -562,6 +562,7 @@ int wh_Bench_ClientServer_Posix(void)
 {
     uint8_t req[BUFFER_SIZE]  = {0};
     uint8_t resp[BUFFER_SIZE] = {0};
+    uint8_t memory[FLASH_RAM_SIZE] = {0};
 
     /* Transport memory configuration */
     whTransportMemConfig tmcf[1] = {{
@@ -601,6 +602,7 @@ int wh_Bench_ClientServer_Posix(void)
         .sectorSize = FLASH_RAM_SIZE / 2,
         .pageSize   = 8,
         .erasedByte = (uint8_t)0,
+        .memory     = memory,
     }};
     const whFlashCb  fcb[1]     = {WH_FLASH_RAMSIM_CB};
 
