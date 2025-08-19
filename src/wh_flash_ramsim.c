@@ -27,10 +27,6 @@
 #include <stdint.h>
 #include <stddef.h>  /* For NULL */
 
-#if defined(WOLFHSM_CFG_FLASH_RAMSIM_MALLOC)
-#include <stdlib.h>  /* For malloc/free */
-#endif
-
 #include <string.h>
 #include <stdbool.h>
 
@@ -63,20 +59,18 @@ int whFlashRamsim_Init(void* context, const void* config)
     const whFlashRamsimCfg* cfg = (const whFlashRamsimCfg*)config;
 
     if (ctx == NULL || cfg == NULL || (cfg->sectorSize == 0) ||
-        (cfg->pageSize == 0) || (cfg->sectorSize % cfg->pageSize != 0)) {
+        (cfg->pageSize == 0) || (cfg->sectorSize % cfg->pageSize != 0) ||
+        cfg->memory == NULL || cfg->size == 0) {
         return WH_ERROR_BADARGS;
     }
 
+    memset(ctx, 0, sizeof(*ctx));
     ctx->size        = cfg->size;
     ctx->sectorSize  = cfg->sectorSize;
     ctx->pageSize    = cfg->pageSize;
     ctx->memory      = cfg->memory;
     ctx->erasedByte  = cfg->erasedByte;
     ctx->writeLocked = 0;
-
-    if (!ctx->memory) {
-        return WH_ERROR_BADARGS;
-    }
 
     /* Initialize memory based on initData or simulate starting from erased flash */
     if (cfg->initData != NULL) {
@@ -95,13 +89,6 @@ int whFlashRamsim_Cleanup(void* context)
     if (ctx == NULL) {
         return WH_ERROR_BADARGS;
     }
-
-#if defined(WOLFHSM_CFG_FLASH_RAMSIM_MALLOC)
-    if (ctx->memory != NULL) {
-        free(ctx->memory);
-        ctx->memory = NULL;
-    }
-#endif
 
     return WH_ERROR_OK;
 }
