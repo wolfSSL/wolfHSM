@@ -607,6 +607,8 @@ int main(int argc, char** argv)
     const char* nvmInitFilePath = NULL;
     int         keyId = WH_KEYID_ERASED; /* Default key ID if none provided */
     int         clientId = 12; /* Default client ID if none provided */
+    uint8_t     memory[FLASH_RAM_SIZE] = {0};
+
 
     /* Parse command-line arguments */
     for (int i = 1; i < argc; i++) {
@@ -645,6 +647,7 @@ int main(int argc, char** argv)
         .sectorSize = FLASH_RAM_SIZE / 2,
         .pageSize   = 8,
         .erasedByte = (uint8_t)0,
+        .memory     = memory,
     }};
     const whFlashCb  fcb[1]     = {WH_FLASH_RAMSIM_CB};
 

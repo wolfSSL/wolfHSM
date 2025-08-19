@@ -26,6 +26,7 @@
 
 /* Configuration and context structures */
 typedef struct {
+    uint8_t* memory;
     uint32_t size;
     uint32_t sectorSize;
     uint32_t pageSize;

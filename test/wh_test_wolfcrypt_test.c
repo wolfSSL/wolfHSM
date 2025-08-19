@@ -205,12 +205,14 @@ static int wh_ClientServer_MemThreadTest(void)
     }};
 
     /* RamSim Flash state and configuration */
+    uint8_t memory[FLASH_RAM_SIZE] = {0};
     whFlashRamsimCtx fc[1]      = {0};
     whFlashRamsimCfg fc_conf[1] = {{
         .size       = FLASH_RAM_SIZE,
         .sectorSize = FLASH_RAM_SIZE / 2,
         .pageSize   = 8,
         .erasedByte = (uint8_t)0,
+        .memory     = memory,
     }};
     const whFlashCb  fcb[1]     = {WH_FLASH_RAMSIM_CB};
 

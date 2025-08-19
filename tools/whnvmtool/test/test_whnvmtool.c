@@ -79,6 +79,7 @@ whCommServerConfig gCommServerConfig[1] = {{
 /* Global NVM Configurations that should be checked */
 
 /* RamSim Flash state and configuration */
+uint8_t memory[FLASH_PARTITION_SIZE * 2] = {0};
 whFlashRamsimCtx gFlashRamsimContext[1] = {0};
 whFlashRamsimCfg gFlashRamsimConfig[1]  = {{
      .size       = FLASH_PARTITION_SIZE * 2,
@@ -86,6 +87,7 @@ whFlashRamsimCfg gFlashRamsimConfig[1]  = {{
      .pageSize   = 8,
      .erasedByte = FLASH_ERASED_BYTE,
      .initData   = NULL, /* Init data will be set dynamically */
+     .memory     = memory,
 }};
 const whFlashCb  gFlashRamsimCb[1]      = {WH_FLASH_RAMSIM_CB};
 #define INIT_RAMSIM_NVM_FLASH_CONFIG                          \
