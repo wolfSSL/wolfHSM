@@ -26,7 +26,7 @@
  * size and provide the number of bytes received.
  *
  * Note: Multibyte data will be passed in native order, which means clients and
- * servers must be the SAME endianess or will be required to translate data
+ * servers must be the SAME endianness or will be required to translate data
  * elements in messages.  Translate helper functions are provided here and used
  * to interpret header fields.
  *

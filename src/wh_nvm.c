@@ -199,7 +199,7 @@ int wh_Nvm_Read(whNvmContext* context, whNvmId id, whNvmSize offset,
         return WH_ERROR_BADARGS;
     }
 
-    /* No callcack? Return ABORTED */
+    /* No callback? Return ABORTED */
     if (context->cb->Read == NULL) {
         return WH_ERROR_ABORTED;
     }

@@ -80,7 +80,7 @@ key 1 1 0x0001 0x0000 "My Key" "path/to/key.bin"
 
 ## Generated NVM Image
 
-The generated NVM image is a binary file that can be used to initialize an instance of `whNvmFlash` or loaded directly into device memory at a device-specific address. In order for a generated NVM image to be compatible with a wolfHSM server implemenation, the following must be true:
+The generated NVM image is a binary file that can be used to initialize an instance of `whNvmFlash` or loaded directly into device memory at a device-specific address. In order for a generated NVM image to be compatible with a wolfHSM server implementation, the following must be true:
 
 1. `whnvmtool` must be compiled against the same version of wolfHSM as the server, and be compiled to use the same value of `WOLFHSM_CFG_NVM_OBJECT_COUNT`
 2. The partition size specified for the NVM image must match that of the server's `whNvmFlash` provider

@@ -49,7 +49,7 @@ extern "C" {
 
 /* For cert manager */
 #define NO_TLS
-/* Elminates need for IO layer since we only use CM */
+/* Eliminates need for IO layer since we only use CM */
 #define WOLFSSL_USER_IO
 /* For ACert support (also requires WOLFSSL_ASN_TEMPLATE) */
 #define WOLFSSL_ACERT
@@ -69,7 +69,7 @@ extern "C" {
 #define NO_MAIN_DRIVER
 #define NO_WRITE_TEMP_FILES
 /* Cert buffers required for wolfCrypt tests to not need to run in the wolfSSL
- * root directory in conjuction with filesystem usage */
+ * root directory in conjunction with filesystem usage */
 #define USE_CERT_BUFFERS_256
 #define USE_CERT_BUFFERS_1024
 #define USE_CERT_BUFFERS_2048
@@ -88,7 +88,7 @@ extern "C" {
  * client cryptoCb when using non-devId APIs */
 #define WC_NO_DEFAULT_DEVID
 
-/** Remove unneded namespace */
+/** Remove unneeded namespace */
 #define NO_OLD_RNGNAME
 #define NO_OLD_WC_NAMES
 #define NO_OLD_SSL_NAMES
