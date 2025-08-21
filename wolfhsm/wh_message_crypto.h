@@ -139,6 +139,81 @@ int wh_MessageCrypto_TranslateRngResponse(
 /*
  * AES
  */
+/* AES CTR Request */
+typedef struct {
+    uint32_t enc;       /* 1 for encrypt, 0 for decrypt */
+    uint32_t keyLen;    /* Length of key in bytes */
+    uint32_t sz;        /* Size of input data */
+    uint16_t keyId;     /* Key ID if using stored key */
+    uint32_t left;      /* unused bytes left from last call */
+    uint8_t  WH_PAD[2]; /* Padding for alignment */
+    /* Data follows:
+     * uint8_t in[sz]
+     * uint8_t key[keyLen]
+     * uint8_t iv[AES_IV_SIZE]
+     * uint8_t tmp[AES_BLOCK_SIZE]
+     */
+} whMessageCrypto_AesCtrRequest;
+/* AES CTR Response */
+typedef struct {
+    uint32_t sz;    /* Size of output data */
+    uint32_t left;  /* unused bytes left from last call */
+    /* Pad to ensure overlap for input and output buffers */
+    uint8_t
+        WH_PAD[sizeof(whMessageCrypto_AesCtrRequest) - (sizeof(uint32_t) * 2)];
+    /* Data follows:
+     * uint8_t out[sz]
+     * uint8_t reg[AES_BLOCK_SIZE]
+     * uint8_t tmp[AES_BLOCK_SIZE]
+     */
+} whMessageCrypto_AesCtrResponse;
+WH_UTILS_STATIC_ASSERT(sizeof(whMessageCrypto_AesCtrRequest) ==
+                   sizeof(whMessageCrypto_AesCtrResponse),
+               "AesCtrRequest and AesCtrResponse must be the same size");
+int wh_MessageCrypto_TranslateAesCtrRequest(
+    uint16_t magic, const whMessageCrypto_AesCtrRequest* src,
+    whMessageCrypto_AesCtrRequest* dest);
+int wh_MessageCrypto_TranslateAesCtrResponse(
+    uint16_t magic, const whMessageCrypto_AesCtrResponse* src,
+    whMessageCrypto_AesCtrResponse* dest);
+
+/* AES ECB Request */
+typedef struct {
+    uint32_t enc;       /* 1 for encrypt, 0 for decrypt */
+    uint32_t keyLen;    /* Length of key in bytes */
+    uint32_t sz;        /* Size of input data */
+    uint16_t keyId;     /* Key ID if using stored key */
+    uint8_t  WH_PAD[2]; /* Padding for alignment */
+    /* Data follows:
+     * uint8_t in[sz]
+     * uint8_t key[keyLen]
+     * uint8_t iv[AES_IV_SIZE]
+     */
+} whMessageCrypto_AesEcbRequest;
+
+/* AES ECB Response */
+typedef struct {
+    uint32_t sz; /* Size of output data */
+    /* Pad to ensure overlap for input and output buffers */
+    uint8_t WH_PAD[sizeof(whMessageCrypto_AesEcbRequest) - sizeof(uint32_t)];
+    /* Data follows:
+     * uint8_t out[sz]
+     */
+} whMessageCrypto_AesEcbResponse;
+
+/* TODO fix, make this a generic static assert*/
+WH_UTILS_STATIC_ASSERT(sizeof(whMessageCrypto_AesEcbRequest) ==
+                   sizeof(whMessageCrypto_AesEcbResponse),
+               "AesEcbRequest and AesEcbResponse must be the same size");
+
+int wh_MessageCrypto_TranslateAesEcbRequest(
+    uint16_t magic, const whMessageCrypto_AesEcbRequest* src,
+    whMessageCrypto_AesEcbRequest* dest);
+
+int wh_MessageCrypto_TranslateAesEcbResponse(
+    uint16_t magic, const whMessageCrypto_AesEcbResponse* src,
+    whMessageCrypto_AesEcbResponse* dest);
+
 
 /* AES CBC Request */
 typedef struct {

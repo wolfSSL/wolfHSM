@@ -81,14 +81,27 @@ static int _HandleRsaGetSize(whServerContext* ctx, uint16_t magic,
 
 #ifndef NO_AES
 
-#ifdef HAVE_AESGCM
+#ifdef WOLFSSL_AES_COUNTER
+/* Process a AES CBC request packet and produce a response packet */
+static int _HandleAesCtr(whServerContext* ctx, uint16_t magic,
+                         const void* cryptoDataIn, uint16_t inSize,
+                         void* cryptoDataOut, uint16_t* outSize);
+#endif /* WOLFSSL_AES_COUNTER */
+#ifdef HAVE_AES_ECB
+static int _HandleAesEcb(whServerContext* ctx, uint16_t magic,
+                         const void* cryptoDataIn, uint16_t inSize,
+                         void* cryptoDataOut, uint16_t* outSize);
+#endif /* HAVE_AES_ECB */
+#ifdef HAVE_AES_CBC
 static int _HandleAesCbc(whServerContext* ctx, uint16_t magic,
                          const void* cryptoDataIn, uint16_t inSize,
                          void* cryptoDataOut, uint16_t* outSize);
+#endif /* HAVE_AES_CBC */
+#ifdef HAVE_AESGCM
 static int _HandleAesGcm(whServerContext* ctx, uint16_t magic,
                          const void* cryptoDataIn, uint16_t inSize,
                          void* cryptoDataOut, uint16_t* outSize);
-#endif
+#endif /* HAVE_AESGCM */
 
 #endif /* !NO_AES */
 
@@ -1259,6 +1272,228 @@ static int _HandleCurve25519SharedSecret(whServerContext* ctx, uint16_t magic,
 #endif /* HAVE_CURVE25519 */
 
 #ifndef NO_AES
+#ifdef WOLFSSL_AES_COUNTER
+static int _HandleAesCtr(whServerContext* ctx, uint16_t magic,
+                         const void* cryptoDataIn, uint16_t inSize,
+                         void* cryptoDataOut, uint16_t* outSize)
+{
+    (void)inSize;
+    int                            ret    = 0;
+    Aes                            aes[1] = {0};
+    whMessageCrypto_AesCtrRequest  req;
+    whMessageCrypto_AesCtrResponse res;
+    uint8_t                        read_key[AES_MAX_KEY_SIZE];
+    uint32_t                       read_key_len = sizeof(read_key);
+    /* Translate request */
+    ret = wh_MessageCrypto_TranslateAesCtrRequest(
+        magic, (const whMessageCrypto_AesCtrRequest*)cryptoDataIn, &req);
+    if (ret != 0) {
+        return ret;
+    }
+    uint32_t enc     = req.enc;
+    uint32_t key_len = req.keyLen;
+    uint32_t len     = req.sz;
+    uint32_t left    = req.left;
+    uint64_t needed_size = sizeof(whMessageCrypto_AesCtrResponse) + len +
+                          key_len + AES_IV_SIZE + AES_BLOCK_SIZE;
+    if (needed_size > inSize) {
+        return WH_ERROR_BADARGS;
+    }
+    whKeyId  key_id =
+        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+    /* in, key, iv, and out are after fixed size fields */
+    uint8_t* in =
+        (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_AesCtrRequest);
+    uint8_t* key = in + len;
+    uint8_t* iv  = key + key_len;
+    uint8_t* tmp = iv + AES_BLOCK_SIZE;
+    uint8_t* out =
+        (uint8_t*)(cryptoDataOut) + sizeof(whMessageCrypto_AesCtrResponse);
+    uint8_t* out_reg = out + len;
+    uint8_t* out_tmp = out_reg + AES_BLOCK_SIZE;
+
+    /* Debug printouts */
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+    wh_Utils_Hexdump("[AesCtr] Input data ", in, len);
+    wh_Utils_Hexdump("[AesCtr] IV " , iv, AES_BLOCK_SIZE);
+    wh_Utils_Hexdump("[AesCtr] tmp ", tmp, AES_BLOCK_SIZE);
+#endif
+    /* Read the key if it is not erased */
+    if (!WH_KEYID_ISERASED(key_id)) {
+        ret = wh_Server_KeystoreReadKey(ctx, key_id, NULL, read_key,
+                                        &read_key_len);
+        if (ret == 0) {
+            /* override the incoming values */
+            key     = read_key;
+            key_len = read_key_len;
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+            wh_Utils_Hexdump("[AesCtr] Key from HSM", key, key_len);
+#endif
+        }
+    }
+    else {
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+        wh_Utils_Hexdump("[AesCtr] Key ", key, key_len);
+#endif
+    }
+    if (ret == 0) {
+        /* init key with possible hardware */
+        ret = wc_AesInit(aes, NULL, ctx->crypto->devId);
+    }
+    if (ret == 0) {
+        /* load the key */
+        ret = wc_AesSetKeyDirect(aes, (byte*)key, (word32)key_len, (byte*)iv,
+                           enc != 0 ? AES_ENCRYPTION : AES_DECRYPTION);
+        if (ret == 0) {
+            /* do the crypto operation */
+            /* restore previous left */
+            aes->left = left;
+            memcpy(aes->tmp, tmp, AES_MAX_KEY_SIZE);
+            if (enc != 0) {
+                ret = wc_AesCtrEncrypt(aes, (byte*)out, (byte*)in, (word32)len);
+                if (ret == 0) {
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+                    wh_Utils_Hexdump("[AesCtr] Encrypted output", out, len);
+#endif
+                }
+            }
+            else {
+                /* CTR uses the same function for encrypt and decrypt */
+                ret = wc_AesCtrEncrypt(aes, (byte*)out, (byte*)in, (word32)len);
+                if (ret == 0) {
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+                    wh_Utils_Hexdump("[AesCtr] Decrypted output", out, len);
+#endif
+                }
+            }
+        }
+        left = aes->left;
+        memcpy(out_reg, aes->reg, AES_BLOCK_SIZE);
+        memcpy(out_tmp, aes->tmp, AES_MAX_KEY_SIZE);
+        wc_AesFree(aes);
+    }
+    /* encode the return sz */
+    if (ret == 0) {
+        /* set sz */
+        res.sz   = len;
+        res.left = left;
+        *outSize = sizeof(whMessageCrypto_AesCtrResponse) + len +
+                                                        (AES_BLOCK_SIZE * 2);
+        /* Translate response back */
+        ret = wh_MessageCrypto_TranslateAesCtrResponse(
+            magic, &res, (whMessageCrypto_AesCtrResponse*)cryptoDataOut);
+    }
+    return ret;
+}
+#endif /* WOLFSSL_AES_COUNTER */
+#ifdef HAVE_AES_ECB
+static int _HandleAesEcb(whServerContext* ctx, uint16_t magic, const void* cryptoDataIn,
+                         uint16_t inSize, void* cryptoDataOut,
+                         uint16_t* outSize)
+{
+    (void)inSize;
+
+    int                            ret    = 0;
+    Aes                            aes[1] = {0};
+    whMessageCrypto_AesEcbRequest  req;
+    whMessageCrypto_AesEcbResponse res;
+    uint8_t                        read_key[AES_MAX_KEY_SIZE];
+    uint32_t                       read_key_len = sizeof(read_key);
+
+    /* Translate request */
+    ret = wh_MessageCrypto_TranslateAesEcbRequest(
+        magic, (const whMessageCrypto_AesEcbRequest*)cryptoDataIn, &req);
+    if (ret != 0) {
+        return ret;
+    }
+
+    uint32_t enc     = req.enc;
+    uint32_t key_len = req.keyLen;
+    uint32_t len     = req.sz;
+    uint64_t needed_size = sizeof(whMessageCrypto_AesEcbResponse) + len +
+                          key_len + AES_BLOCK_SIZE;
+    if (needed_size > inSize) {
+        return WH_ERROR_BADARGS;
+    }
+
+    whKeyId  key_id =
+        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+
+    /* in, key, iv, and out are after fixed size fields */
+    uint8_t* in =
+        (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_AesEcbRequest);
+    uint8_t* key = in + len;
+    uint8_t* iv  = key + key_len;
+
+    uint8_t* out =
+        (uint8_t*)(cryptoDataOut) + sizeof(whMessageCrypto_AesEcbResponse);
+
+    /* Debug printouts */
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+    wh_Utils_Hexdump("[AesCbc] Input data", in, len);
+    wh_Utils_Hexdump("[AesCbc] IV", iv, AES_BLOCK_SIZE);
+#endif
+    /* Read the key if it is not erased */
+    if (!WH_KEYID_ISERASED(key_id)) {
+        ret = wh_Server_KeystoreReadKey(ctx, key_id, NULL, read_key,
+                                        &read_key_len);
+        if (ret == 0) {
+            /* override the incoming values */
+            key     = read_key;
+            key_len = read_key_len;
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+            wh_Utils_Hexdump("[AesEcb] Key from HSM", key, key_len);
+#endif
+        }
+    }
+    else {
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+        wh_Utils_Hexdump("[AesEcb] Key ", key, key_len);
+#endif
+    }
+    if (ret == 0) {
+        /* init key with possible hardware */
+        ret = wc_AesInit(aes, NULL, ctx->crypto->devId);
+    }
+    if (ret == 0) {
+        /* load the key */
+        ret = wc_AesSetKey(aes, (byte*)key, (word32)key_len, (byte*)iv,
+                           enc != 0 ? AES_ENCRYPTION : AES_DECRYPTION);
+        if (ret == 0) {
+            /* do the crypto operation */
+            if (enc != 0) {
+                ret = wc_AesEcbEncrypt(aes, (byte*)out, (byte*)in, (word32)len);
+                if (ret == 0) {
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+                    wh_Utils_Hexdump("[AesEcb] Encrypted output", out, len);
+#endif
+                }
+            }
+            else {
+                ret = wc_AesEcbDecrypt(aes, (byte*)out, (byte*)in, (word32)len);
+                if (ret == 0) {
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+                    wh_Utils_Hexdump("[AesEcb] Decrypted output", out, len);
+#endif
+                }
+            }
+        }
+        wc_AesFree(aes);
+    }
+    /* encode the return sz */
+    if (ret == 0) {
+        /* set sz */
+        res.sz   = len;
+        *outSize = sizeof(whMessageCrypto_AesEcbResponse) + len;
+
+        /* Translate response back */
+        ret = wh_MessageCrypto_TranslateAesEcbResponse(
+            magic, &res, (whMessageCrypto_AesEcbResponse*)cryptoDataOut);
+    }
+    return ret;
+}
+#endif /* HAVE_AES_ECB */
+
 #ifdef HAVE_AES_CBC
 static int _HandleAesCbc(whServerContext* ctx, uint16_t magic, const void* cryptoDataIn,
                          uint16_t inSize, void* cryptoDataOut,
@@ -2392,6 +2627,18 @@ int wh_Server_HandleCryptoRequest(whServerContext* ctx, uint16_t magic,
         case WC_ALGO_TYPE_CIPHER:
             switch (rqstHeader.algoType) {
 #ifndef NO_AES
+#ifdef WOLFSSL_AES_COUNTER
+                case WC_CIPHER_AES_CTR:
+                    ret = _HandleAesCtr(ctx, magic, cryptoDataIn, cryptoInSize,
+                                        cryptoDataOut, &cryptoOutSize);
+                    break;
+#endif /* WOLFSSL_AES_COUNTER */
+#ifdef HAVE_AES_CBC
+                case WC_CIPHER_AES_ECB:
+                    ret = _HandleAesEcb(ctx, magic, cryptoDataIn, cryptoInSize,
+                                        cryptoDataOut, &cryptoOutSize);
+                    break;
+#endif /* HAVE_AES_CBC */
 #ifdef HAVE_AES_CBC
                 case WC_CIPHER_AES_CBC:
                     ret = _HandleAesCbc(ctx, magic, cryptoDataIn, cryptoInSize,

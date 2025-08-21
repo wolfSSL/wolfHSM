@@ -39,46 +39,271 @@ static const byte key256[] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
 
 enum { DECRYPT = 0, ENCRYPT = 1 };
 
+#if defined(WOLFSSL_AES_COUNTER)
+static int _benchAesCtr(whClientContext* client, whBenchOpContext* ctx, int id,
+                        const uint8_t* key, size_t keyLen, int encrypt)
+{
+    int     ret       = 0;
+    int     needEvict = 0;
+    whKeyId keyId     = WH_KEYID_ERASED;
+    Aes     aes[1];
+    char    keyLabel[] = "key label";
+    /* Input size is largest multiple of AES block size that fits in buffer */
+    /* BUFFER-TODO */
+    const size_t inLen =
+        (WOLFHSM_CFG_BENCH_DATA_BUFFER_SIZE / WC_AES_BLOCK_SIZE) *
+        WC_AES_BLOCK_SIZE;
+    int i;
 
+#if defined(WOLFHSM_CFG_BENCH_INIT_DATA_BUFFERS)
+    /* Initialize the input buffer with something non-zero */
+    memset(WH_BENCH_DATA_IN_BUFFER, 0xAA, inLen);
+    memset(WH_BENCH_DATA_OUT_BUFFER, 0xAA, inLen);
+#endif
+
+    /* Initialize the aes struct */
+    ret = wc_AesInit(aes, NULL, WH_DEV_ID);
+    if (ret != 0) {
+        WH_BENCH_PRINTF("Failed to wc_AesInit %d\n", ret);
+        return ret;
+    }
+
+    /* cache the key on the HSM */
+    ret = wh_Client_KeyCache(client, 0, (uint8_t*)keyLabel, sizeof(keyLabel),
+                             (uint8_t*)key, keyLen, &keyId);
+    if (ret != 0) {
+        WH_BENCH_PRINTF("Failed to wh_Client_KeyCache %d\n", ret);
+        goto exit;
+    }
+
+    needEvict = 1;
+
+    /* set the keyId on the struct */
+    ret = wh_Client_AesSetKeyId(aes, keyId);
+    if (ret != 0) {
+        WH_BENCH_PRINTF("Failed to wh_Client_SetKeyIdAes %d\n", ret);
+        goto exit;
+    }
+
+    ret = wh_Bench_SetDataSize(ctx, id, inLen);
+    if (ret != 0) {
+        WH_BENCH_PRINTF("Failed to wh_Bench_SetDataSize %d\n", ret);
+        goto exit;
+    }
+
+    for (i = 0; i < WOLFHSM_CFG_BENCH_CRYPT_ITERS; i++) {
+        int benchStartRet;
+        int benchStopRet;
+
+        if (encrypt) {
+            benchStartRet = wh_Bench_StartOp(ctx, id);
+            ret           = wc_AesCtrEncrypt(aes, WH_BENCH_DATA_OUT_BUFFER,
+                                             WH_BENCH_DATA_IN_BUFFER, inLen);
+            benchStopRet  = wh_Bench_StopOp(ctx, id);
+        }
+        else {
+            benchStartRet = wh_Bench_StartOp(ctx, id);
+            ret           = wc_AesCtrEncrypt(aes, WH_BENCH_DATA_OUT_BUFFER,
+                                             WH_BENCH_DATA_IN_BUFFER, inLen);
+            benchStopRet  = wh_Bench_StopOp(ctx, id);
+        }
+
+        if (benchStartRet != 0) {
+            WH_BENCH_PRINTF("Failed to wh_Bench_StartOp %d\n", benchStartRet);
+            ret = benchStartRet;
+            goto exit;
+        }
+        if (ret != 0) {
+            WH_BENCH_PRINTF("Failed to wc_AesCbc%s %d\n",
+                            encrypt ? "Encrypt" : "Decrypt", ret);
+            goto exit;
+        }
+        if (benchStopRet != 0) {
+            WH_BENCH_PRINTF("Failed to wh_Bench_StopOp %d\n", benchStopRet);
+            ret = benchStopRet;
+            goto exit;
+        }
+    }
+
+exit:
+    wc_AesFree(aes);
+
+    if (needEvict) {
+        int evictRet = wh_Client_KeyEvict(client, keyId);
+        if (evictRet != 0) {
+            WH_BENCH_PRINTF("Failed to wh_Client_KeyEvict %d\n", evictRet);
+            if (ret == 0) {
+                ret = evictRet;
+            }
+        }
+    }
+    return ret;
+}
+
+int wh_Bench_Mod_Aes128CTREncrypt(whClientContext*  client,
+                                  whBenchOpContext* ctx, int id, void* params)
+{
+    (void)params;
+    return _benchAesCtr(client, ctx, id, (uint8_t*)key128, sizeof(key128),
+                        ENCRYPT);
+}
+
+int wh_Bench_Mod_Aes128CTRDecrypt(whClientContext*  client,
+                                  whBenchOpContext* ctx, int id, void* params)
+{
+    (void)params;
+    return _benchAesCtr(client, ctx, id, (uint8_t*)key128, sizeof(key128),
+                        DECRYPT);
+}
+
+int wh_Bench_Mod_Aes256CTREncrypt(whClientContext*  client,
+                                  whBenchOpContext* ctx, int id, void* params)
+{
+    (void)params;
+    return _benchAesCtr(client, ctx, id, (uint8_t*)key256, sizeof(key256),
+                        ENCRYPT);
+}
+
+int wh_Bench_Mod_Aes256CTRDecrypt(whClientContext*  client,
+                                  whBenchOpContext* ctx, int id, void* params)
+{
+    (void)params;
+    return _benchAesCtr(client, ctx, id, (uint8_t*)key256, sizeof(key256),
+                        DECRYPT);
+}
+
+#endif /* WOLFSSL_AES_COUNTER */
 #if defined(HAVE_AES_ECB)
+static int _benchAesEcb(whClientContext* client, whBenchOpContext* ctx, int id,
+                        const uint8_t* key, size_t keyLen, int encrypt)
+{
+    int     ret       = 0;
+    int     needEvict = 0;
+    whKeyId keyId     = WH_KEYID_ERASED;
+    Aes     aes[1];
+    char    keyLabel[] = "key label";
+    /* Input size is largest multiple of AES block size that fits in buffer */
+    /* BUFFER-TODO */
+    const size_t inLen =
+        (WOLFHSM_CFG_BENCH_DATA_BUFFER_SIZE / WC_AES_BLOCK_SIZE) *
+        WC_AES_BLOCK_SIZE;
+    int i;
+
+#if defined(WOLFHSM_CFG_BENCH_INIT_DATA_BUFFERS)
+    /* Initialize the input buffer with something non-zero */
+    memset(WH_BENCH_DATA_IN_BUFFER, 0xAA, inLen);
+    memset(WH_BENCH_DATA_OUT_BUFFER, 0xAA, inLen);
+#endif
+
+    /* Initialize the aes struct */
+    ret = wc_AesInit(aes, NULL, WH_DEV_ID);
+    if (ret != 0) {
+        WH_BENCH_PRINTF("Failed to wc_AesInit %d\n", ret);
+        return ret;
+    }
+
+    /* cache the key on the HSM */
+    ret = wh_Client_KeyCache(client, 0, (uint8_t*)keyLabel, sizeof(keyLabel),
+                             (uint8_t*)key, keyLen, &keyId);
+    if (ret != 0) {
+        WH_BENCH_PRINTF("Failed to wh_Client_KeyCache %d\n", ret);
+        goto exit;
+    }
+
+    needEvict = 1;
+
+    /* set the keyId on the struct */
+    ret = wh_Client_AesSetKeyId(aes, keyId);
+    if (ret != 0) {
+        WH_BENCH_PRINTF("Failed to wh_Client_SetKeyIdAes %d\n", ret);
+        goto exit;
+    }
+
+    ret = wh_Bench_SetDataSize(ctx, id, inLen);
+    if (ret != 0) {
+        WH_BENCH_PRINTF("Failed to wh_Bench_SetDataSize %d\n", ret);
+        goto exit;
+    }
+
+    for (i = 0; i < WOLFHSM_CFG_BENCH_CRYPT_ITERS; i++) {
+        int benchStartRet;
+        int benchStopRet;
+
+        if (encrypt) {
+            benchStartRet = wh_Bench_StartOp(ctx, id);
+            ret           = wc_AesEcbEncrypt(aes, WH_BENCH_DATA_OUT_BUFFER,
+                                             WH_BENCH_DATA_IN_BUFFER, inLen);
+            benchStopRet  = wh_Bench_StopOp(ctx, id);
+        }
+        else {
+            benchStartRet = wh_Bench_StartOp(ctx, id);
+            ret           = wc_AesEcbDecrypt(aes, WH_BENCH_DATA_OUT_BUFFER,
+                                             WH_BENCH_DATA_IN_BUFFER, inLen);
+            benchStopRet  = wh_Bench_StopOp(ctx, id);
+        }
+
+        if (benchStartRet != 0) {
+            WH_BENCH_PRINTF("Failed to wh_Bench_StartOp %d\n", benchStartRet);
+            ret = benchStartRet;
+            goto exit;
+        }
+        if (ret != 0) {
+            WH_BENCH_PRINTF("Failed to wc_AesCbc%s %d\n",
+                            encrypt ? "Encrypt" : "Decrypt", ret);
+            goto exit;
+        }
+        if (benchStopRet != 0) {
+            WH_BENCH_PRINTF("Failed to wh_Bench_StopOp %d\n", benchStopRet);
+            ret = benchStopRet;
+            goto exit;
+        }
+    }
+
+exit:
+    wc_AesFree(aes);
+
+    if (needEvict) {
+        int evictRet = wh_Client_KeyEvict(client, keyId);
+        if (evictRet != 0) {
+            WH_BENCH_PRINTF("Failed to wh_Client_KeyEvict %d\n", evictRet);
+            if (ret == 0) {
+                ret = evictRet;
+            }
+        }
+    }
+    return ret;
+}
+
 int wh_Bench_Mod_Aes128ECBEncrypt(whClientContext*  client,
                                   whBenchOpContext* ctx, int id, void* params)
 {
-    (void)client;
-    (void)ctx;
-    (void)id;
     (void)params;
-    return WH_ERROR_NOTIMPL;
+    return _benchAesEcb(client, ctx, id, (uint8_t*)key128, sizeof(key128),
+                        ENCRYPT);
 }
 
 int wh_Bench_Mod_Aes128ECBDecrypt(whClientContext*  client,
                                   whBenchOpContext* ctx, int id, void* params)
 {
-    (void)client;
-    (void)ctx;
-    (void)id;
     (void)params;
-    return WH_ERROR_NOTIMPL;
+    return _benchAesEcb(client, ctx, id, (uint8_t*)key128, sizeof(key128),
+                        DECRYPT);
 }
 
 int wh_Bench_Mod_Aes256ECBEncrypt(whClientContext*  client,
                                   whBenchOpContext* ctx, int id, void* params)
 {
-    (void)client;
-    (void)ctx;
-    (void)id;
     (void)params;
-    return WH_ERROR_NOTIMPL;
+    return _benchAesEcb(client, ctx, id, (uint8_t*)key256, sizeof(key256),
+                        ENCRYPT);
 }
 
 int wh_Bench_Mod_Aes256ECBDecrypt(whClientContext*  client,
                                   whBenchOpContext* ctx, int id, void* params)
 {
-    (void)client;
-    (void)ctx;
-    (void)id;
     (void)params;
-    return WH_ERROR_NOTIMPL;
+    return _benchAesEcb(client, ctx, id, (uint8_t*)key256, sizeof(key256),
+                        DECRYPT);
 }
 #endif /* HAVE_AES_ECB */
 

@@ -75,6 +75,12 @@ typedef enum BenchModuleIdx {
 
 /* AES */
 #if !defined(NO_AES)
+#if defined(WOLFSSL_AES_COUNTER)
+    BENCH_MODULE_IDX_AES_128_CTR_ENCRYPT,
+    BENCH_MODULE_IDX_AES_128_CTR_DECRYPT,
+    BENCH_MODULE_IDX_AES_256_CTR_ENCRYPT,
+    BENCH_MODULE_IDX_AES_256_CTR_DECRYPT,
+#endif /* WOLFSSL_AES_COUNTER */
 #if defined(HAVE_AES_ECB)
     BENCH_MODULE_IDX_AES_128_ECB_ENCRYPT,
     BENCH_MODULE_IDX_AES_128_ECB_DECRYPT,
@@ -233,6 +239,12 @@ static BenchModule g_benchModules[] = {
 
     /* AES */
 #if !defined(NO_AES)
+#if defined(WOLFSSL_AES_COUNTER)
+    [BENCH_MODULE_IDX_AES_128_CTR_ENCRYPT]     = {"AES-128-CTR-Encrypt",          wh_Bench_Mod_Aes128CTREncrypt,     BENCH_THROUGHPUT_XBPS, 0, NULL},
+    [BENCH_MODULE_IDX_AES_128_CTR_DECRYPT]     = {"AES-128-CTR-Decrypt",          wh_Bench_Mod_Aes128CTRDecrypt,     BENCH_THROUGHPUT_XBPS, 0, NULL},
+    [BENCH_MODULE_IDX_AES_256_CTR_ENCRYPT]     = {"AES-256-CTR-Encrypt",          wh_Bench_Mod_Aes256CTREncrypt,     BENCH_THROUGHPUT_XBPS, 0, NULL},
+    [BENCH_MODULE_IDX_AES_256_CTR_DECRYPT]     = {"AES-256-CTR-Decrypt",          wh_Bench_Mod_Aes256CTRDecrypt,     BENCH_THROUGHPUT_XBPS, 0, NULL},
+#endif /* WOLFSSL_AES_COUNTER */
 #if defined(HAVE_AES_ECB)
     [BENCH_MODULE_IDX_AES_128_ECB_ENCRYPT]     = {"AES-128-ECB-Encrypt",          wh_Bench_Mod_Aes128ECBEncrypt,     BENCH_THROUGHPUT_XBPS, 0, NULL},
     [BENCH_MODULE_IDX_AES_128_ECB_DECRYPT]     = {"AES-128-ECB-Decrypt",          wh_Bench_Mod_Aes128ECBDecrypt,     BENCH_THROUGHPUT_XBPS, 0, NULL},
