@@ -28,6 +28,11 @@ int wh_Bench_Mod_Echo(whClientContext* client, whBenchOpContext* benchCtx,
 /*
  * AES benchmark module prototypes (wh_bench_mod_aes.c)
  */
+int wh_Bench_Mod_Aes128CTREncrypt(whClientContext*  client,
+                                  whBenchOpContext* ctx, int id, void* params);
+
+int wh_Bench_Mod_Aes128CTRDecrypt(whClientContext*  client,
+                                  whBenchOpContext* ctx, int id, void* params);
 int wh_Bench_Mod_Aes128ECBEncrypt(whClientContext*  client,
                                   whBenchOpContext* ctx, int id, void* params);
 
@@ -44,6 +49,12 @@ int wh_Bench_Mod_Aes128GCMEncrypt(whClientContext*  client,
                                   whBenchOpContext* ctx, int id, void* params);
 
 int wh_Bench_Mod_Aes128GCMDecrypt(whClientContext*  client,
+                                  whBenchOpContext* ctx, int id, void* params);
+
+int wh_Bench_Mod_Aes256CTREncrypt(whClientContext*  client,
+                                  whBenchOpContext* ctx, int id, void* params);
+
+int wh_Bench_Mod_Aes256CTRDecrypt(whClientContext*  client,
                                   whBenchOpContext* ctx, int id, void* params);
 
 int wh_Bench_Mod_Aes256ECBEncrypt(whClientContext*  client,
