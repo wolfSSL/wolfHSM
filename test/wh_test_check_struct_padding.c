@@ -115,7 +115,8 @@ whMessageCrypto_EccCheckResponse     pkEccCheckRes;
 whMessageCrypto_RngResponse          rngRes;
 whMessageCrypto_CmacResponse         cmacRes;
 whMessageCrypto_Sha256Request        hashSha256Req;
-whMessageCrypto_Sha256Response       hashSha256Res;
+whMessageCrypto_Sha512Request        hashSha512Req;
+whMessageCrypto_Sha2Response         hashSha2Res;
 
 /* DMA crypto messages */
 #if defined(WOLFHSM_CFG_DMA)

@@ -92,18 +92,6 @@ typedef struct whServerCryptoContext {
 #ifdef WOLFSSL_CMAC
         Cmac cmac[1];
 #endif
-#ifndef NO_SHA256
-        wc_Sha256 sha256[1];
-#endif
-#ifdef WOLFSSL_SHA224
-        wc_Sha224 sha224[1];
-#endif
-#ifdef WOLFSSL_SHA384
-        wc_Sha384 sha384[1];
-#endif
-#ifdef WOLFSSL_SHA512
-        wc_Sha512 sha512[1];
-#endif
     } algoCtx;
 } whServerCryptoContext;
 
