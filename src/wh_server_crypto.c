@@ -1732,32 +1732,24 @@ static int _HandleSha256(whServerContext* ctx, uint16_t magic,
     (void)inSize;
 
     int                            ret    = 0;
-    wc_Sha256*                     sha256 = ctx->crypto->algoCtx.sha256;
+    wc_Sha256                      sha256[1];
     whMessageCrypto_Sha256Request  req;
-    whMessageCrypto_Sha256Response res;
-
-    /* THe server SHA256 struct doesn't persist state (it is a union), meaning
-     * the devId may get blown away between calls. We must restore the server
-     * devId each time */
-    sha256->devId = ctx->crypto->devId;
-
+    whMessageCrypto_Sha2Response   res;
     /* Translate the request */
     ret = wh_MessageCrypto_TranslateSha256Request(magic, cryptoDataIn, &req);
     if (ret != 0) {
         return ret;
     }
-
+    /* always init sha2 struct with the devid */
+    ret = wc_InitSha256_ex(sha256, NULL, ctx->crypto->devId);
+    if (ret != 0) {
+        return ret;
+    }
     /* Init the SHA256 context if this is the first time, otherwise restore the
      * hash state from the client */
-    if (req.resumeState.hiLen == 0 && req.resumeState.loLen == 0) {
-        ret = wc_InitSha256_ex(sha256, NULL, ctx->crypto->devId);
-    }
-    else {
-        /* HAVE_DILITHIUM */
-        memcpy(sha256->digest, req.resumeState.hash, WC_SHA256_DIGEST_SIZE);
-        sha256->loLen = req.resumeState.loLen;
-        sha256->hiLen = req.resumeState.hiLen;
-    }
+    memcpy(sha256->digest, req.resumeState.hash, WC_SHA256_DIGEST_SIZE);
+    sha256->loLen = req.resumeState.loLen;
+    sha256->hiLen = req.resumeState.hiLen;
 
     if (req.isLastBlock) {
         /* wolfCrypt (or cryptoCb) is responsible for last block padding */
@@ -1783,7 +1775,7 @@ static int _HandleSha256(whServerContext* ctx, uint16_t magic,
 
     /* Translate the response */
     if (ret == 0) {
-        ret = wh_MessageCrypto_TranslateSha256Response(magic, &res,
+        ret = wh_MessageCrypto_TranslateSha2Response(magic, &res,
                                                        cryptoDataOut);
         if (ret == 0) {
             *outSize = sizeof(res);
@@ -1800,32 +1792,26 @@ static int _HandleSha224(whServerContext* ctx, uint16_t magic,
                          void* cryptoDataOut, uint16_t* outSize)
 {
     int                            ret    = 0;
-    wc_Sha224*                     sha224 = ctx->crypto->algoCtx.sha224;
-    whMessageCrypto_Sha224Request  req;
-    whMessageCrypto_Sha224Response res;
+    wc_Sha224                      sha224[1];
+    whMessageCrypto_Sha256Request  req;
+    whMessageCrypto_Sha2Response   res;
     (void)inSize;
-    /* The server SHA224 struct doesn't persist state (it is a union), meaning
-     * the devId may get blown away between calls. We must restore the server
-     * devId each time */
-    sha224->devId = ctx->crypto->devId;
 
     /* Translate the request */
-    ret = wh_MessageCrypto_TranslateSha224Request(magic, cryptoDataIn, &req);
+    ret = wh_MessageCrypto_TranslateSha256Request(magic, cryptoDataIn, &req);
     if (ret != 0) {
         return ret;
     }
-
-    /* Init the SHA224 context if this is the first time, otherwise restore the
-     * hash state from the client */
-    if (req.resumeState.hiLen == 0 && req.resumeState.loLen == 0) {
-        ret = wc_InitSha224_ex(sha224, NULL, ctx->crypto->devId);
+    ret = wc_InitSha224_ex(sha224, NULL, ctx->crypto->devId);
+    if (ret != 0) {
+        return ret;
     }
-    else {
-        /* HAVE_DILITHIUM */
-        memcpy(sha224->digest, req.resumeState.hash, WC_SHA224_DIGEST_SIZE);
-        sha224->loLen = req.resumeState.loLen;
-        sha224->hiLen = req.resumeState.hiLen;
-    }
+    /* sha224 is a part of sha256. It expects to have sha256 digest size of
+     * intermediate hash data.
+     */
+    memcpy(sha224->digest, req.resumeState.hash, WC_SHA256_DIGEST_SIZE);
+    sha224->loLen = req.resumeState.loLen;
+    sha224->hiLen = req.resumeState.hiLen;
 
     if (req.isLastBlock) {
         /* wolfCrypt (or cryptoCb) is responsible for last block padding */
@@ -1843,7 +1829,10 @@ static int _HandleSha224(whServerContext* ctx, uint16_t magic,
         }
         /* Send the hash state back to the client */
         if (ret == 0) {
-            memcpy(res.hash, sha224->digest, WC_SHA224_DIGEST_SIZE);
+            /* return back the digest which has the same length of sha256
+             * for further operation
+             */
+            memcpy(res.hash, sha224->digest, WC_SHA256_DIGEST_SIZE);
             res.loLen = sha224->loLen;
             res.hiLen = sha224->hiLen;
         }
@@ -1851,7 +1840,7 @@ static int _HandleSha224(whServerContext* ctx, uint16_t magic,
 
     /* Translate the response */
     if (ret == 0) {
-        ret = wh_MessageCrypto_TranslateSha224Response(magic, &res,
+        ret = wh_MessageCrypto_TranslateSha2Response(magic, &res,
                                                        cryptoDataOut);
         if (ret == 0) {
             *outSize = sizeof(res);
@@ -1868,32 +1857,30 @@ static int _HandleSha384(whServerContext* ctx, uint16_t magic,
                          void* cryptoDataOut, uint16_t* outSize)
 {
     int                            ret    = 0;
-    wc_Sha384*                     sha384 = ctx->crypto->algoCtx.sha384;
-    whMessageCrypto_Sha384Request  req;
-    whMessageCrypto_Sha384Response res;
+    wc_Sha384                      sha384[1];
+    whMessageCrypto_Sha512Request  req;
+    whMessageCrypto_Sha2Response   res;
     (void)inSize;
-    /* The server SHA384 struct doesn't persist state (it is a union), meaning
-     * the devId may get blown away between calls. We must restore the server
-     * devId each time */
-    sha384->devId = ctx->crypto->devId;
 
     /* Translate the request */
-    ret = wh_MessageCrypto_TranslateSha384Request(magic, cryptoDataIn, &req);
+    ret = wh_MessageCrypto_TranslateSha512Request(magic, cryptoDataIn, &req);
     if (ret != 0) {
         return ret;
     }
 
-    /* Init the SHA384 context if this is the first time, otherwise restore the
-     * hash state from the client */
-    if (req.resumeState.hiLen == 0 && req.resumeState.loLen == 0) {
-        ret = wc_InitSha384_ex(sha384, NULL, ctx->crypto->devId);
+    /* init sha2 struct with the devid */
+    ret = wc_InitSha384_ex(sha384, NULL, ctx->crypto->devId);
+    if (ret != 0) {
+        return ret;
     }
-    else {
-        /* HAVE_DILITHIUM */
-        memcpy(sha384->digest, req.resumeState.hash, WC_SHA384_DIGEST_SIZE);
-        sha384->loLen = req.resumeState.loLen;
-        sha384->hiLen = req.resumeState.hiLen;
-    }
+
+    /* restore the hash state from the client */
+    /* sha384 is a part of sha512. It expects to have sha512 digest
+     * size of intermediate hash data.
+     */
+    memcpy(sha384->digest, req.resumeState.hash, WC_SHA512_DIGEST_SIZE);
+    sha384->loLen = req.resumeState.loLen;
+    sha384->hiLen = req.resumeState.hiLen;
 
     if (req.isLastBlock) {
         /* wolfCrypt (or cryptoCb) is responsible for last block padding */
@@ -1911,7 +1898,10 @@ static int _HandleSha384(whServerContext* ctx, uint16_t magic,
         }
         /* Send the hash state back to the client */
         if (ret == 0) {
-            memcpy(res.hash, sha384->digest, WC_SHA384_DIGEST_SIZE);
+            /* return back the digest which has the same length of sha512
+             * for further operation
+             */
+            memcpy(res.hash, sha384->digest, WC_SHA512_DIGEST_SIZE);
             res.loLen = sha384->loLen;
             res.hiLen = sha384->hiLen;
         }
@@ -1919,7 +1909,7 @@ static int _HandleSha384(whServerContext* ctx, uint16_t magic,
 
     /* Translate the response */
     if (ret == 0) {
-        ret = wh_MessageCrypto_TranslateSha384Response(magic, &res,
+        ret = wh_MessageCrypto_TranslateSha2Response(magic, &res,
                                                        cryptoDataOut);
         if (ret == 0) {
             *outSize = sizeof(res);
@@ -1935,44 +1925,37 @@ static int _HandleSha512(whServerContext* ctx, uint16_t magic,
                          void* cryptoDataOut, uint16_t* outSize)
 {
     int                            ret    = 0;
-    wc_Sha512*                     sha512 = ctx->crypto->algoCtx.sha512;
+    wc_Sha512                      sha512[1];
     whMessageCrypto_Sha512Request  req;
-    whMessageCrypto_Sha512Response res;
+    whMessageCrypto_Sha2Response   res;
     int                            hashType = WC_HASH_TYPE_SHA512;
     (void)inSize;
-    /* The server SHA512 struct doesn't persist state (it is a union), meaning
-     * the devId may get blown away between calls. We must restore the server
-     * devId each time */
-    sha512->devId = ctx->crypto->devId;
 
     /* Translate the request */
     ret = wh_MessageCrypto_TranslateSha512Request(magic, cryptoDataIn, &req);
     if (ret != 0) {
         return ret;
     }
+    /* init sha2 struct with devid */
     hashType = req.resumeState.hashType;
-    /* Init the SHA512 context if this is the first time, otherwise restore the
-     * hash state from the client */
-    if (req.resumeState.hiLen == 0 && req.resumeState.loLen == 0) {
-        switch(hashType) {
-            case WC_HASH_TYPE_SHA512_224:
-                ret = wc_InitSha512_224_ex(sha512, NULL, ctx->crypto->devId);
-                break;
-            case WC_HASH_TYPE_SHA512_256:
-                ret = wc_InitSha512_256_ex(sha512, NULL, ctx->crypto->devId);
-                break;
-            default:
-                ret = wc_InitSha512_ex(sha512, NULL, ctx->crypto->devId);
-                break;
-        }
+    switch(hashType) {
+        case WC_HASH_TYPE_SHA512_224:
+            ret = wc_InitSha512_224_ex(sha512, NULL, ctx->crypto->devId);
+            break;
+        case WC_HASH_TYPE_SHA512_256:
+            ret = wc_InitSha512_256_ex(sha512, NULL, ctx->crypto->devId);
+            break;
+        default:
+            ret = wc_InitSha512_ex(sha512, NULL, ctx->crypto->devId);
+            break;
     }
-    else {
-        /* HAVE_DILITHIUM */
-        memcpy(sha512->digest, req.resumeState.hash, WC_SHA512_DIGEST_SIZE);
-        sha512->loLen = req.resumeState.loLen;
-        sha512->hiLen = req.resumeState.hiLen;
-        hashType = req.resumeState.hashType;
+    if (ret != 0) {
+        return ret;
     }
+
+    memcpy(sha512->digest, req.resumeState.hash, WC_SHA512_DIGEST_SIZE);
+    sha512->loLen = req.resumeState.loLen;
+    sha512->hiLen = req.resumeState.hiLen;
 
     if (req.isLastBlock) {
         /* wolfCrypt (or cryptoCb) is responsible for last block padding */
@@ -2003,12 +1986,13 @@ static int _HandleSha512(whServerContext* ctx, uint16_t magic,
             memcpy(res.hash, sha512->digest, WC_SHA512_DIGEST_SIZE);
             res.loLen = sha512->loLen;
             res.hiLen = sha512->hiLen;
+
         }
     }
 
     /* Translate the response */
     if (ret == 0) {
-        ret = wh_MessageCrypto_TranslateSha512Response(magic, &res,
+        ret = wh_MessageCrypto_TranslateSha2Response(magic, &res,
                                                        cryptoDataOut);
         if (ret == 0) {
             *outSize = sizeof(res);
@@ -2659,7 +2643,7 @@ static int _HandleSha256Dma(whServerContext* ctx, uint16_t magic, uint16_t seq,
     int                               ret = 0;
     whMessageCrypto_Sha256DmaRequest  req;
     whMessageCrypto_Sha256DmaResponse res;
-    wc_Sha256*                        sha256 = ctx->crypto->algoCtx.sha256;
+    wc_Sha256                         sha256[1];
     int                               clientDevId;
 
     /* Translate the request */
@@ -2781,7 +2765,7 @@ static int _HandleSha224Dma(whServerContext* ctx, uint16_t magic, uint16_t seq,
     int                               ret = 0;
     whMessageCrypto_Sha224DmaRequest  req;
     whMessageCrypto_Sha224DmaResponse res;
-    wc_Sha224*                        sha224 = ctx->crypto->algoCtx.sha224;
+    wc_Sha224                         sha224[1];
     int                               clientDevId;
 
     /* Translate the request */
@@ -2903,7 +2887,7 @@ static int _HandleSha384Dma(whServerContext* ctx, uint16_t magic, uint16_t seq,
     int                               ret = 0;
     whMessageCrypto_Sha384DmaRequest  req;
     whMessageCrypto_Sha384DmaResponse res;
-    wc_Sha384*                        sha384 = ctx->crypto->algoCtx.sha384;
+    wc_Sha384                         sha384[1];
     int                               clientDevId;
 
     /* Translate the request */
@@ -3025,7 +3009,7 @@ static int _HandleSha512Dma(whServerContext* ctx, uint16_t magic, uint16_t seq,
     int                               ret = 0;
     whMessageCrypto_Sha512DmaRequest  req;
     whMessageCrypto_Sha512DmaResponse res;
-    wc_Sha512*                        sha512 = ctx->crypto->algoCtx.sha512;
+    wc_Sha512                         sha512[1];
     int                               clientDevId;
     int                               hashType = WC_HASH_TYPE_SHA512;
 

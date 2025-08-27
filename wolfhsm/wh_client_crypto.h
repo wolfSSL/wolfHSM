@@ -585,7 +585,7 @@ int wh_Client_Sha384(whClientContext* ctx, wc_Sha384* sha, const uint8_t* in,
  * the result in the output buffer using DMA.
  *
  * @param[in] ctx Pointer to the client context structure.
- * @param[in] sha Pointer to the SHA-224 context structure.
+ * @param[in] sha Pointer to the SHA-384 context structure.
  * @param[in] in Pointer to the input data.
  * @param[in] inLen Length of the input data in bytes.
  * @param[out] out Pointer to the output buffer.
@@ -619,7 +619,7 @@ int wh_Client_Sha512(whClientContext* ctx, wc_Sha512* sha, const uint8_t* in,
  * the result in the output buffer using DMA.
  *
  * @param[in] ctx Pointer to the client context structure.
- * @param[in] sha Pointer to the SHA-224 context structure.
+ * @param[in] sha Pointer to the SHA-512 context structure.
  * @param[in] in Pointer to the input data.
  * @param[in] inLen Length of the input data in bytes.
  * @param[out] out Pointer to the output buffer.
