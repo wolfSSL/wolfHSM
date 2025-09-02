@@ -11,6 +11,9 @@ Currently, the only public example for wolfHSM uses the POSIX simulator. If you 
 ### Posix TCP server and client
 This example spawns a wolfHSM client and server, both in their own thread, and runs the client-side unit tests against the server.
 
+### Posix SHM server and client
+This example spawns a wolfHSM client and server, both in their own thread, and runs the client-side unit tests against the server.
+
 ### Building
 To build the client and the server examples, wolfHSM must be configured and built along side wolfSSL.
 
