@@ -114,7 +114,7 @@ static int _benchAesCtr(whClientContext* client, whBenchOpContext* ctx, int id,
             goto exit;
         }
         if (ret != 0) {
-            WH_BENCH_PRINTF("Failed to wc_AesCbc%s %d\n",
+            WH_BENCH_PRINTF("Failed to wc_AesCtrc%s %d\n",
                             encrypt ? "Encrypt" : "Decrypt", ret);
             goto exit;
         }
@@ -248,7 +248,7 @@ static int _benchAesEcb(whClientContext* client, whBenchOpContext* ctx, int id,
             goto exit;
         }
         if (ret != 0) {
-            WH_BENCH_PRINTF("Failed to wc_AesCbc%s %d\n",
+            WH_BENCH_PRINTF("Failed to wc_AesEcb%s %d\n",
                             encrypt ? "Encrypt" : "Decrypt", ret);
             goto exit;
         }
