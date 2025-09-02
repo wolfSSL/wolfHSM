@@ -1430,8 +1430,8 @@ static int _HandleAesEcb(whServerContext* ctx, uint16_t magic, const void* crypt
 
     /* Debug printouts */
 #ifdef DEBUG_CRYPTOCB_VERBOSE
-    wh_Utils_Hexdump("[AesCbc] Input data", in, len);
-    wh_Utils_Hexdump("[AesCbc] IV", iv, AES_BLOCK_SIZE);
+    wh_Utils_Hexdump("[AesEcb] Input data", in, len);
+    wh_Utils_Hexdump("[AesEcb] IV", iv, AES_BLOCK_SIZE);
 #endif
     /* Read the key if it is not erased */
     if (!WH_KEYID_ISERASED(key_id)) {
@@ -2633,12 +2633,12 @@ int wh_Server_HandleCryptoRequest(whServerContext* ctx, uint16_t magic,
                                         cryptoDataOut, &cryptoOutSize);
                     break;
 #endif /* WOLFSSL_AES_COUNTER */
-#ifdef HAVE_AES_CBC
+#ifdef HAVE_AES_ECB
                 case WC_CIPHER_AES_ECB:
                     ret = _HandleAesEcb(ctx, magic, cryptoDataIn, cryptoInSize,
                                         cryptoDataOut, &cryptoOutSize);
                     break;
-#endif /* HAVE_AES_CBC */
+#endif /* HAVE_AES_ECB */
 #ifdef HAVE_AES_CBC
                 case WC_CIPHER_AES_CBC:
                     ret = _HandleAesCbc(ctx, magic, cryptoDataIn, cryptoInSize,

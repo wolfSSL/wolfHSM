@@ -1906,7 +1906,7 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
                         ret = wc_AesCtrEncrypt(aes, cipher, plainIn,
                                 sizeof(plainIn));
                         if (ret != 0) {
-                            WH_ERROR_PRINT("Failed to wc_AesCbcEncrypt %d\n",
+                            WH_ERROR_PRINT("Failed to wc_AesCtrEncrypt %d\n",
                                     ret);
                         } else {
                             /* Reset the IV to support decryption */
@@ -1958,7 +1958,7 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
                 ret = wc_AesEcbEncrypt(aes, cipher, plainIn,
                         sizeof(plainIn));
                 if (ret != 0) {
-                    WH_ERROR_PRINT("Failed to wc_AesCbcEncrypt %d\n", ret);
+                    WH_ERROR_PRINT("Failed to wc_AesEcbEncrypt %d\n", ret);
                 } else {
                     ret = wc_AesSetKey(aes, key, sizeof(key), iv,
                             AES_DECRYPTION);
@@ -1968,12 +1968,12 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
                         ret = wc_AesEcbDecrypt(aes, plainOut, cipher,
                                 sizeof(cipher));
                         if (ret != 0) {
-                            WH_ERROR_PRINT("Failed to wc_AesCbcDecrypt %d\n",
+                            WH_ERROR_PRINT("Failed to wc_AesEcbDecrypt %d\n",
                                     ret);
                         } else {
                             if (memcmp(plainIn, plainOut, sizeof(plainIn)) !=
                                 0) {
-                                WH_ERROR_PRINT("Failed to match AES-CBC\n");
+                                WH_ERROR_PRINT("Failed to match AES-ECB\n");
                                 ret = -1;
                             }
                         }
@@ -2008,7 +2008,7 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
                         ret = wc_AesEcbEncrypt(aes, cipher, plainIn,
                                 sizeof(plainIn));
                         if (ret != 0) {
-                            WH_ERROR_PRINT("Failed to wc_AesCbcEncrypt %d\n",
+                            WH_ERROR_PRINT("Failed to wc_AesEcbEncrypt %d\n",
                                     ret);
                         } else {
                             /* Reset the IV to support decryption */
