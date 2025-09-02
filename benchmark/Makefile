@@ -1,48 +1,71 @@
-# Set to @ if you want to suppress command echo
-CMD_ECHO =
+## Makefile for wolfHSM tests using POSIX port
 
-# Important directories
-BUILD_DIR = ./Build
-WOLFHSM_DIR = $(CURDIR)/../
-WOLFSSL_DIR ?= $(CURDIR)/../../wolfssl
-
-# Project name
+## Project name
+# Sets output filenames
 BIN = wh_benchmark
 
-# C standard to use (default to c90 if not specified)
-CSTD ?= c90
+## Important directories
+# Base directory for additional project files
+PROJECT_DIR			?= .
+MODULES_DIR			?= $(PROJECT_DIR)/bench_modules
+CONFIG_DIR			?= $(PROJECT_DIR)/config
+# wolfSSL and wolfHSM directories
+WOLFSSL_DIR			?= ../../wolfssl
+WOLFHSM_DIR			?= ../../wolfHSM
+WOLFHSM_PORT_DIR	?= $(WOLFHSM_DIR)/port/posix
+
+# Output directory for build files
+BUILD_DIR			?= $(PROJECT_DIR)/Build
 
 # Includes
-USER_SETTINGS_DIR ?= ./
-INC = -I$(WOLFHSM_DIR) \
-      -I$(USER_SETTINGS_DIR) \
-      -I$(WOLFSSL_DIR) \
-      -I./config \
-      -I./bench_modules
+INC =	-I$(PROJECT_DIR) \
+		-I$(CONFIG_DIR) \
+		-I$(MODULES_DIR) \
+		-I$(WOLFSSL_DIR) \
+		-I$(WOLFHSM_DIR) \
+		-I$(WOLFHSM_PORT_DIR)
 
-# Library configuration defines to use additional files.
-DEF = -DWOLFSSL_USER_SETTINGS -DWOLFHSM_CFG
+# POSIX requires C source be defined before any header
+DEF += -D_POSIX_C_SOURCE=200809L
 
-# Test program configuration
-#DEF += -DWOLFHSM_CFG_TEST_VERBOSE
+# Library configuration defines for user-supplied settings
+DEF += -DWOLFSSL_USER_SETTINGS -DWOLFHSM_CFG
+
+# Ensure this build uses POSIX test features
 DEF += -DWOLFHSM_CFG_TEST_POSIX
 
-# Architecture
+# Architecture flags for assembler, C compiler and linker
 ARCHFLAGS ?=
 
-# Compiler and linker flags
-ASFLAGS ?= $(ARCHFLAGS)
-CFLAGS_EXTRA ?= -Wmissing-field-initializers -Wmissing-braces -Wextra
-CFLAGS ?= $(ARCHFLAGS) -std=$(CSTD) -D_GNU_SOURCE -Wall -Werror -Wno-cpp $(CFLAGS_EXTRA)
-LDFLAGS ?= $(ARCHFLAGS)
+# Enable extra C compiler warnings
+CFLAGS_EXTRA = -Werror -Wall -Wextra
+# Place functions / data into separate sections to allow unused code removal
+CFLAGS_EXTRA += -ffunction-sections -fdata-sections
 
-# Libc for printf
-LIBS = -lc
+# C standard to use (default to c90 if not specified)
+CSTD 		?= -std=c90
 
-# Optimization level and place functions / data into separate sections to allow dead code removal
-CFLAGS += -ffunction-sections -fdata-sections
+ASFLAGS		?= $(ARCHFLAGS)
+CFLAGS		?= $(ARCHFLAGS) $(CSTD) $(CFLAGS_EXTRA)
+LDFLAGS		?= $(ARCHFLAGS) 
 
-# Debugging
+# Enable garbage collection.  Inexact handling of dead_strip
+OS_NAME := $(shell uname -s | tr A-Z a-z)
+ifeq ($(OS_NAME),darwin)
+	LDFLAGS += -Wl,-dead_strip
+else
+	LDFLAGS += -Wl,--gc-sections
+endif
+
+# LD: generate map
+#LDFLAGS += -Wl,-map,$(BUILD_DIR)/$(BIN).map
+#LDFLAGS += -Wl,-Map=$(BUILD_DIR)/$(BIN).map
+
+## Makefile options
+
+# Set to @ if you want to suppress command echo
+CMD_ECHO ?=
+
 # Check if DEBUG is set to 1 and append debug flags
 ifeq ($(DEBUG),1)
 DBGFLAGS = -ggdb -g3
@@ -50,143 +73,66 @@ CFLAGS += $(DBGFLAGS)
 LDFLAGS += $(DBGFLAGS)
 endif
 
+# Add address sanitizer option
+ifeq ($(ASAN),1)
+	CFLAGS += -fsanitize=address
+	LDFLAGS += -fsanitize=address
+endif
+
+## wolfSSL defines
 ifeq ($(DEBUG_WOLFSSL),1)
-CFLAGS += -DDEBUG_WOLFSSL
-SRC_C += $(WOLFSSL_DIR)/wolfcrypt/src/logging.c
+	DEF += -DDEBUG_WOLFSSL
 endif
 
 ifeq ($(DEBUG_CRYPTOCB),1)
-CFLAGS += -DDEBUG_CRYPTOCB
+	DEF += -DDEBUG_CRYPTOCB
 endif
 
 ifeq ($(DEBUG_CRYPTOCB_VERBOSE),1)
-CFLAGS += -DDEBUG_CRYPTOCB -DDEBUG_CRYPTOCB_VERBOSE
+	DEF += -DDEBUG_CRYPTOCB -DDEBUG_CRYPTOCB_VERBOSE
 endif
 
-# Add address sanitizer option
-ifeq ($(ASAN),1)
-CFLAGS += -fsanitize=address
-LDFLAGS += -fsanitize=address
-endif
 
-# Support a NO CRYPTO build
+## wolfHSM defines
 ifeq ($(NOCRYPTO),1)
-CFLAGS += -DWOLFHSM_CFG_NO_CRYPTO
+	DEF += -DWOLFHSM_CFG_NO_CRYPTO
 endif
 
 # Support a DMA-capable build
-ifeq ($(DMA), 1)
-CFLAGS += -DWOLFHSM_CFG_DMA
+ifeq ($(DMA),1)
+	DEF += -DWOLFHSM_CFG_DMA
 endif
 
+# Support a SHE-capable build
 ifeq ($(SHE),1)
-CFLAGS += -DWOLFHSM_CFG_SHE_EXTENSION
+	DEF += -DWOLFHSM_CFG_SHE_EXTENSION
 endif
-
+## Source files
 # Assembly source files
 SRC_ASM +=
 
 ifneq ($(NOCRYPTO),1)
 # wolfCrypt source files
-SRC_C += \
-		$(WOLFSSL_DIR)/wolfcrypt/src/wc_port.c \
-		$(WOLFSSL_DIR)/wolfcrypt/src/memory.c \
-		$(WOLFSSL_DIR)/wolfcrypt/src/misc.c \
-		$(WOLFSSL_DIR)/wolfcrypt/src/cryptocb.c \
-		$(WOLFSSL_DIR)/wolfcrypt/src/random.c \
-		$(WOLFSSL_DIR)/wolfcrypt/src/asn.c \
-		$(WOLFSSL_DIR)/wolfcrypt/src/coding.c \
-		$(WOLFSSL_DIR)/wolfcrypt/src/wolfmath.c \
-		$(WOLFSSL_DIR)/wolfcrypt/src/tfm.c \
-		$(WOLFSSL_DIR)/wolfcrypt/src/fe_operations.c \
-		$(WOLFSSL_DIR)/wolfcrypt/src/rsa.c \
-		$(WOLFSSL_DIR)/wolfcrypt/src/curve25519.c \
-		$(WOLFSSL_DIR)/wolfcrypt/src/hash.c \
-		$(WOLFSSL_DIR)/wolfcrypt/src/hmac.c \
-		$(WOLFSSL_DIR)/wolfcrypt/src/sha256.c \
-		$(WOLFSSL_DIR)/wolfcrypt/src/aes.c \
-		$(WOLFSSL_DIR)/wolfcrypt/src/ecc.c \
-		$(WOLFSSL_DIR)/wolfcrypt/src/cmac.c \
-		$(WOLFSSL_DIR)/wolfcrypt/src/dilithium.c \
-		$(WOLFSSL_DIR)/wolfcrypt/src/sha3.c
+SRC_C +=  $(wildcard $(WOLFSSL_DIR)/wolfcrypt/src/*.c)
 
 # wolfSSL source files
-SRC_C += \
-            $(WOLFSSL_DIR)/src/ssl_certman.c \
-            $(WOLFSSL_DIR)/src/ssl.c \
-            $(WOLFSSL_DIR)/src/internal.c
+SRC_C +=  $(wildcard $(WOLFSSL_DIR)/src/*.c)
+
+# End of NOCRYPTO
 endif
 
 
 # wolfHSM source files
-SRC_C += \
-            $(WOLFHSM_DIR)/src/wh_utils.c \
-            $(WOLFHSM_DIR)/src/wh_crypto.c \
-            $(WOLFHSM_DIR)/src/wh_client.c \
-            $(WOLFHSM_DIR)/src/wh_client_nvm.c \
-            $(WOLFHSM_DIR)/src/wh_client_crypto.c \
-            $(WOLFHSM_DIR)/src/wh_client_cryptocb.c \
-            $(WOLFHSM_DIR)/src/wh_client_cert.c \
-            $(WOLFHSM_DIR)/src/wh_server.c \
-            $(WOLFHSM_DIR)/src/wh_server_customcb.c \
-            $(WOLFHSM_DIR)/src/wh_server_dma.c \
-            $(WOLFHSM_DIR)/src/wh_server_nvm.c \
-            $(WOLFHSM_DIR)/src/wh_server_crypto.c \
-            $(WOLFHSM_DIR)/src/wh_server_keystore.c \
-            $(WOLFHSM_DIR)/src/wh_server_counter.c \
-            $(WOLFHSM_DIR)/src/wh_server_cert.c \
-            $(WOLFHSM_DIR)/src/wh_nvm.c \
-            $(WOLFHSM_DIR)/src/wh_comm.c \
-            $(WOLFHSM_DIR)/src/wh_message_comm.c \
-            $(WOLFHSM_DIR)/src/wh_message_customcb.c \
-            $(WOLFHSM_DIR)/src/wh_message_nvm.c \
-            $(WOLFHSM_DIR)/src/wh_message_cert.c \
-            $(WOLFHSM_DIR)/src/wh_message_crypto.c \
-            $(WOLFHSM_DIR)/src/wh_message_keystore.c \
-            $(WOLFHSM_DIR)/src/wh_message_counter.c \
-            $(WOLFHSM_DIR)/src/wh_message_she.c \
-            $(WOLFHSM_DIR)/src/wh_transport_mem.c \
-            $(WOLFHSM_DIR)/src/wh_flash_ramsim.c
+SRC_C +=  $(wildcard $(WOLFHSM_DIR)/src/*.c)
 
-ifeq ($(SHE),1)
-SRC_C += \
-            $(WOLFHSM_DIR)/src/wh_client_she.c \
-            $(WOLFHSM_DIR)/src/wh_server_she.c \
-            $(WOLFHSM_DIR)/src/wh_she_common.c \
-            $(WOLFHSM_DIR)/src/wh_she_crypto.c
+# wolfHSM port/HAL code
+SRC_C +=  $(wildcard $(WOLFHSM_PORT_DIR)/*.c)
 
-endif
+# Project
+SRC_C +=  $(wildcard $(PROJECT_DIR)/*.c)
+SRC_C +=  $(wildcard $(MODULES_DIR)/*.c)
 
-# WolfHSM port/HAL code
-SRC_C += \
-            $(WOLFHSM_DIR)/src/wh_nvm_flash.c \
-            $(WOLFHSM_DIR)/src/wh_flash_unit.c \
-            $(WOLFHSM_DIR)/src/wh_flash_ramsim.c \
-            $(WOLFHSM_DIR)/src/wh_transport_mem.c \
-            $(WOLFHSM_DIR)/port/posix/posix_flash_file.c \
-            $(WOLFHSM_DIR)/port/posix/posix_transport_tcp.c \
-            $(WOLFHSM_DIR)/port/posix/posix_transport_shm.c
-
-# Benchmark drivers
-SRC_C += \
-            ./src/wh_bench.c \
-            ./src/wh_bench_ops.c \
-            ./src/wh_bench_main.c \
-            ./src/wh_bench_data.c
-
-# Benchmark modules
-SRC_C += \
-            ./bench_modules/wh_bench_mod_echo.c \
-            ./bench_modules/wh_bench_mod_rng.c \
-            ./bench_modules/wh_bench_mod_aes.c \
-            ./bench_modules/wh_bench_mod_cmac.c \
-            ./bench_modules/wh_bench_mod_hmac.c \
-            ./bench_modules/wh_bench_mod_sha2.c \
-            ./bench_modules/wh_bench_mod_sha3.c \
-            ./bench_modules/wh_bench_mod_ecc.c \
-            ./bench_modules/wh_bench_mod_rsa.c \
-            ./bench_modules/wh_bench_mod_curve25519.c \
-            ./bench_modules/wh_bench_mod_mldsa.c
+## Automated processing below
 
 FILENAMES_C = $(notdir $(SRC_C))
 OBJS_C = $(addprefix $(BUILD_DIR)/, $(FILENAMES_C:.c=.o))
@@ -195,7 +141,10 @@ vpath %.c $(dir $(SRC_C))
 OBJS_ASM = $(addprefix $(BUILD_DIR)/, $(notdir $(SRC_ASM:.s=.o)))
 vpath %.s $(dir $(SRC_ASM))
 
-.PHONY: all clean run
+
+## Makefile Targets
+
+.PHONY: build_app build_hex build_static clean run
 
 build_app: $(BUILD_DIR) $(BUILD_DIR)/$(BIN).elf
 	@echo Build complete.
@@ -232,9 +181,20 @@ $(BUILD_DIR)/$(BIN).a: $(OBJS_ASM) $(OBJS_C)
 	$(CMD_ECHO) $(AR) -r $@ $^
 
 clean:
-	rm -f $(BUILD_DIR)/*.elf $(BUILD_DIR)/*.hex $(BUILD_DIR)/*.map
-	rm -f $(BUILD_DIR)/*.o $(BUILD_DIR)/*.a $(BUILD_DIR)/*.sym $(BUILD_DIR)/*.disasm
+	@echo "Cleaning build files"
+	@rm -f 	\
+			$(BUILD_DIR)/*.elf \
+			$(BUILD_DIR)/*.hex \
+			$(BUILD_DIR)/*.map \
+			$(BUILD_DIR)/*.o \
+			$(BUILD_DIR)/*.a \
+			$(BUILD_DIR)/*.sym \
+			$(BUILD_DIR)/*.disasm
 
-run: build_app
-	./$(BUILD_DIR)/$(BIN).elf
-
+# No prereq's here to stop from rebuilding with different options
+run:
+ifeq (,$(wildcard $(BUILD_DIR)/$(BIN).elf))
+	$(error $(BUILD_DIR)/$(BIN).elf not found.  Try: make)
+else
+	$(BUILD_DIR)/$(BIN).elf
+endif

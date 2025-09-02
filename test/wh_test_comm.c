@@ -43,7 +43,7 @@
 
 #if defined(WOLFHSM_CFG_TEST_POSIX)
 #include <pthread.h> /* For pthread_create/cancel/join/_t */
-#include <unistd.h>  /* For usleep */
+#include <unistd.h>  /* For nanosleep */
 #include "port/posix/posix_transport_tcp.h"
 #include "port/posix/posix_transport_shm.h"
 #endif
@@ -54,7 +54,8 @@
 #define REQ_SIZE 32
 #define RESP_SIZE 64
 #define REPEAT_COUNT 10
-#define ONE_MS 1000
+
+const struct timespec ONE_MS = { .tv_sec = 0, .tv_nsec = 1000000 };
 
 #if defined(WOLFHSM_CFG_ENABLE_CLIENT) && defined(WOLFHSM_CFG_ENABLE_SERVER)
 int whTest_CommMem(void)
@@ -239,7 +240,7 @@ static void* _whCommClientTask(void* cf)
                    tx_req);
             }
 #endif
-        } while ((ret == WH_ERROR_NOTREADY) && (usleep(ONE_MS) == 0));
+        } while ((ret == WH_ERROR_NOTREADY) && (nanosleep(&ONE_MS, NULL) == 0));
 
         if (ret != 0) {
             printf("Client had failure. Exiting\n");
@@ -260,7 +261,7 @@ static void* _whCommClientTask(void* cf)
                    rx_resp);
             }
 #endif
-        } while ((ret == WH_ERROR_NOTREADY) && (usleep(ONE_MS) == 0));
+        } while ((ret == WH_ERROR_NOTREADY) && (nanosleep(&ONE_MS, NULL) == 0));
 
         if (ret != 0) {
             printf("Client had failure. Exiting\n");
@@ -309,7 +310,7 @@ static void* _whCommServerTask(void* cf)
                    rx_req);
            }
 #endif
-        } while ((ret == WH_ERROR_NOTREADY) && (usleep(ONE_MS) == 0));
+        } while ((ret == WH_ERROR_NOTREADY) && (nanosleep(&ONE_MS, NULL) == 0));
 
         if (ret != 0) {
             printf("Server had failure. Exiting\n");
@@ -333,7 +334,7 @@ static void* _whCommServerTask(void* cf)
                    tx_resp);
             }
 #endif
-        } while ((ret == WH_ERROR_NOTREADY) && (usleep(ONE_MS) == 0));
+        } while ((ret == WH_ERROR_NOTREADY) && (nanosleep(&ONE_MS, NULL) == 0));
 
         if (ret != 0) {
             printf("Server had failure. Exiting\n");

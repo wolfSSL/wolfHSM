@@ -25,10 +25,6 @@
 #ifndef USER_SETTINGS_H
 #define USER_SETTINGS_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /** Settings specific to the host arch, OS, and compiler */
 /* #define BIG_ENDIAN_ORDER */
 /* #define SINGLE_THREADED */
@@ -40,12 +36,15 @@ extern "C" {
 */
 
 /** wolfHSM required settings for wolfCrypt */
-/* #define WOLFCRYPT_ONLY */
 #define WOLF_CRYPTO_CB
 #define WOLFSSL_KEY_GEN
 #define WOLFSSL_ASN_TEMPLATE
 #define WOLFSSL_BASE64_ENCODE
 #define HAVE_ANONYMOUS_INLINE_AGGREGATES 1
+#define NO_INLINE
+#define WOLFSSL_IGNORE_FILE_WARN
+
+
 
 /* For cert manager */
 #define NO_TLS
@@ -60,7 +59,6 @@ extern "C" {
 /** wolfHSM recommended */
 /* #define WOLFSSL_NO_MALLOC */
 #define WOLFSSL_USE_ALIGN
-#define WOLFSSL_IGNORE_FILE_WARN
 #define TFM_TIMING_RESISTANT
 #define ECC_TIMING_RESISTANT
 #define WC_RSA_BLINDING
@@ -80,7 +78,6 @@ extern "C" {
 /** Remove unneeded features*/
 #define NO_ERROR_STRINGS
 #define NO_ERROR_QUEUE
-#define NO_INLINE
 #define NO_OLD_TLS
 #define WOLFSSL_NO_TLS12
 #define NO_DO178
@@ -178,6 +175,9 @@ extern "C" {
 #define XSTRCASECMP(s1,s2) strcmp((s1),(s2))
 */
 
+/* POSIX version of strcasecmp */
+#include <strings.h>
+
 /* ------------------------------------------------------------------------- */
 /* Memory */
 /* ------------------------------------------------------------------------- */
@@ -190,11 +190,6 @@ extern "C" {
     #if 1
         #define WOLFSSL_MALLOC_CHECK /* trap malloc failure */
     #endif
-#endif
-
-
-#ifdef __cplusplus
-}
 #endif
 
 #endif /* USER_SETTINGS_H */

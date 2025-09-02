@@ -53,9 +53,6 @@
 #ifndef PORT_POSIX_POSIX_TRANSPORT_SHM_H_
 #define PORT_POSIX_POSIX_TRANSPORT_SHM_H_
 
-/* Pick up compile-time configuration */
-#include "wolfhsm/wh_settings.h"
-
 #include <stdint.h>
 #include <limits.h>
 
@@ -137,6 +134,5 @@ int posixTransportShm_RecvResponse(void* c, uint16_t* out_len, void* data);
         .Send    = posixTransportShm_SendResponse, \
         .Cleanup = posixTransportShm_Cleanup,      \
     }
-
 
 #endif /* !PORT_POSIX_POSIX_TRANSPORT_SHM_H_ */

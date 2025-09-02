@@ -31,28 +31,28 @@ jobs:
 
     # Build and test standard build
     - name: Build and test
-      run: cd test && make clean && make -j WOLFSSL_DIR=../wolfssl run
+      run: cd test && make clean && make -j WOLFSSL_DIR=../wolfssl && make run
 
     # Build and test standard build, with DMA and ASAN enabled
     - name: Build and test DMA ASAN
-      run: cd test && make clean && make -j DMA=1 ASAN=1 WOLFSSL_DIR=../wolfssl run
+      run: cd test && make clean && make -j DMA=1 ASAN=1 WOLFSSL_DIR=../wolfssl && make run
 
     # Build and test ASAN build, with wolfCrypt tests enabled.
     - name: Build and test ASAN TESTWOLFCRYPT
-      run: cd test && make clean && make -j ASAN=1 TESTWOLFCRYPT=1 WOLFSSL_DIR=../wolfssl run
+      run: cd test && make clean && make -j ASAN=1 TESTWOLFCRYPT=1 WOLFSSL_DIR=../wolfssl && make run
 
     # Build and test ASAN build, with wolfCrypt tests enabled and using the DMA devId.
     - name: Build and test ASAN TESTWOLFCRYPT TESTWOLFCRYPT_DMA
-      run: cd test && make clean && make -j ASAN=1 TESTWOLFCRYPT=1 TESTWOLFCRYPT_DMA=1 DMA=1 WOLFSSL_DIR=../wolfssl run
+      run: cd test && make clean && make -j ASAN=1 TESTWOLFCRYPT=1 TESTWOLFCRYPT_DMA=1 DMA=1 WOLFSSL_DIR=../wolfssl && make run
 
     # Build and test debug build with ASAN and NOCRYPTO
     - name: Build and test ASAN DEBUG NOCRYPTO
-      run: cd test && make clean && make -j DEBUG=1 ASAN=1 NOCRYPTO=1 WOLFSSL_DIR=../wolfssl run
+      run: cd test && make clean && make -j DEBUG=1 ASAN=1 NOCRYPTO=1 WOLFSSL_DIR=../wolfssl && make run
 
     # Build and test debug build with ASAN and DMA
     - name: Build and test ASAN DEBUG DMA
-      run: cd test && make clean && make -j DEBUG=1 ASAN=1 DMA=1 WOLFSSL_DIR=../wolfssl run
+      run: cd test && make clean && make -j DEBUG=1 ASAN=1 DMA=1 WOLFSSL_DIR=../wolfssl && make run
 
     # Build and test with SHE and ASAN
     - name: Build and test ASAN SHE
-      run: cd test && make clean && make -j SHE=1 ASAN=1 WOLFSSL_DIR=../wolfssl run
+      run: cd test && make clean && make -j SHE=1 ASAN=1 WOLFSSL_DIR=../wolfssl && make run
