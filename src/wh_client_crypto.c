@@ -2531,8 +2531,8 @@ int wh_Client_Sha256Dma(whClientContext* ctx, wc_Sha256* sha, const uint8_t* in,
     uint16_t                           respSz  = 0;
     uint16_t                           group   = WH_MESSAGE_GROUP_CRYPTO_DMA;
     uint8_t*                           dataPtr = NULL;
-    whMessageCrypto_Sha256DmaRequest*  req     = NULL;
-    whMessageCrypto_Sha256DmaResponse* resp    = NULL;
+    whMessageCrypto_Sha2DmaRequest*  req     = NULL;
+    whMessageCrypto_Sha2DmaResponse* resp    = NULL;
 
     /* Get data pointer from the context to use as request/response storage */
     dataPtr = (uint8_t*)wh_CommClient_GetDataPtr(ctx->comm);
@@ -2541,7 +2541,7 @@ int wh_Client_Sha256Dma(whClientContext* ctx, wc_Sha256* sha, const uint8_t* in,
     }
 
     /* Setup generic header and get pointer to request data */
-    req = (whMessageCrypto_Sha256DmaRequest*)_createCryptoRequest(
+    req = (whMessageCrypto_Sha2DmaRequest*)_createCryptoRequest(
         dataPtr, WC_HASH_TYPE_SHA256);
 
 
@@ -2787,8 +2787,8 @@ int wh_Client_Sha224Dma(whClientContext* ctx, wc_Sha224* sha, const uint8_t* in,
     uint16_t                           respSz  = 0;
     uint16_t                           group   = WH_MESSAGE_GROUP_CRYPTO_DMA;
     uint8_t*                           dataPtr = NULL;
-    whMessageCrypto_Sha224DmaRequest*  req     = NULL;
-    whMessageCrypto_Sha224DmaResponse* resp    = NULL;
+    whMessageCrypto_Sha2DmaRequest*  req     = NULL;
+    whMessageCrypto_Sha2DmaResponse* resp    = NULL;
 
     /* Get data pointer from the context to use as request/response storage */
     dataPtr = (uint8_t*)wh_CommClient_GetDataPtr(ctx->comm);
@@ -2797,7 +2797,7 @@ int wh_Client_Sha224Dma(whClientContext* ctx, wc_Sha224* sha, const uint8_t* in,
     }
 
     /* Setup generic header and get pointer to request data */
-    req = (whMessageCrypto_Sha224DmaRequest*)_createCryptoRequest(
+    req = (whMessageCrypto_Sha2DmaRequest*)_createCryptoRequest(
         dataPtr, WC_HASH_TYPE_SHA224);
 
 
@@ -3041,8 +3041,8 @@ int wh_Client_Sha384Dma(whClientContext* ctx, wc_Sha384* sha, const uint8_t* in,
     uint16_t                           respSz  = 0;
     uint16_t                           group   = WH_MESSAGE_GROUP_CRYPTO_DMA;
     uint8_t*                           dataPtr = NULL;
-    whMessageCrypto_Sha384DmaRequest*  req     = NULL;
-    whMessageCrypto_Sha384DmaResponse* resp    = NULL;
+    whMessageCrypto_Sha2DmaRequest*  req     = NULL;
+    whMessageCrypto_Sha2DmaResponse* resp    = NULL;
 
     /* Get data pointer from the context to use as request/response storage */
     dataPtr = (uint8_t*)wh_CommClient_GetDataPtr(ctx->comm);
@@ -3051,7 +3051,7 @@ int wh_Client_Sha384Dma(whClientContext* ctx, wc_Sha384* sha, const uint8_t* in,
     }
 
     /* Setup generic header and get pointer to request data */
-    req = (whMessageCrypto_Sha384DmaRequest*)_createCryptoRequest(
+    req = (whMessageCrypto_Sha2DmaRequest*)_createCryptoRequest(
         dataPtr, WC_HASH_TYPE_SHA384);
 
 
@@ -3307,8 +3307,8 @@ int wh_Client_Sha512Dma(whClientContext* ctx, wc_Sha512* sha, const uint8_t* in,
     uint16_t                           respSz  = 0;
     uint16_t                           group   = WH_MESSAGE_GROUP_CRYPTO_DMA;
     uint8_t*                           dataPtr = NULL;
-    whMessageCrypto_Sha512DmaRequest*  req     = NULL;
-    whMessageCrypto_Sha512DmaResponse* resp    = NULL;
+    whMessageCrypto_Sha2DmaRequest*  req     = NULL;
+    whMessageCrypto_Sha2DmaResponse* resp    = NULL;
 
     /* Get data pointer from the context to use as request/response storage */
     dataPtr = (uint8_t*)wh_CommClient_GetDataPtr(ctx->comm);
@@ -3317,7 +3317,7 @@ int wh_Client_Sha512Dma(whClientContext* ctx, wc_Sha512* sha, const uint8_t* in,
     }
 
     /* Setup generic header and get pointer to request data */
-    req = (whMessageCrypto_Sha512DmaRequest*)_createCryptoRequest(
+    req = (whMessageCrypto_Sha2DmaRequest*)_createCryptoRequest(
         dataPtr, WC_HASH_TYPE_SHA512);
 
 

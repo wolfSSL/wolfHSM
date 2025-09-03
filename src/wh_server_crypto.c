@@ -1745,8 +1745,7 @@ static int _HandleSha256(whServerContext* ctx, uint16_t magic,
     if (ret != 0) {
         return ret;
     }
-    /* Init the SHA256 context if this is the first time, otherwise restore the
-     * hash state from the client */
+    /* restore the hash state from the client */
     memcpy(sha256->digest, req.resumeState.hash, WC_SHA256_DIGEST_SIZE);
     sha256->loLen = req.resumeState.loLen;
     sha256->hiLen = req.resumeState.hiLen;
@@ -2641,14 +2640,14 @@ static int _HandleSha256Dma(whServerContext* ctx, uint16_t magic, uint16_t seq,
     (void)inSize;
 
     int                               ret = 0;
-    whMessageCrypto_Sha256DmaRequest  req;
-    whMessageCrypto_Sha256DmaResponse res;
+    whMessageCrypto_Sha2DmaRequest  req;
+    whMessageCrypto_Sha2DmaResponse res;
     wc_Sha256                         sha256[1];
     int                               clientDevId;
 
     /* Translate the request */
-    ret = wh_MessageCrypto_TranslateSha256DmaRequest(
-        magic, (whMessageCrypto_Sha256DmaRequest*)cryptoDataIn, &req);
+    ret = wh_MessageCrypto_TranslateSha2DmaRequest(
+        magic, (whMessageCrypto_Sha2DmaRequest*)cryptoDataIn, &req);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
@@ -2746,8 +2745,8 @@ static int _HandleSha256Dma(whServerContext* ctx, uint16_t magic, uint16_t seq,
     }
 
     /* Translate the response */
-    (void)wh_MessageCrypto_TranslateSha256DmaResponse(
-        magic, &res, (whMessageCrypto_Sha256DmaResponse*)cryptoDataOut);
+    (void)wh_MessageCrypto_TranslateSha2DmaResponse(
+        magic, &res, (whMessageCrypto_Sha2DmaResponse*)cryptoDataOut);
     *outSize = sizeof(res);
 
     /* return value populates rc in response message */
@@ -2763,14 +2762,14 @@ static int _HandleSha224Dma(whServerContext* ctx, uint16_t magic, uint16_t seq,
     (void)seq;
     (void)inSize;
     int                               ret = 0;
-    whMessageCrypto_Sha224DmaRequest  req;
-    whMessageCrypto_Sha224DmaResponse res;
+    whMessageCrypto_Sha2DmaRequest  req;
+    whMessageCrypto_Sha2DmaResponse res;
     wc_Sha224                         sha224[1];
     int                               clientDevId;
 
     /* Translate the request */
-    ret = wh_MessageCrypto_TranslateSha224DmaRequest(
-        magic, (whMessageCrypto_Sha224DmaRequest*)cryptoDataIn, &req);
+    ret = wh_MessageCrypto_TranslateSha2DmaRequest(
+        magic, (whMessageCrypto_Sha2DmaRequest*)cryptoDataIn, &req);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
@@ -2868,8 +2867,8 @@ static int _HandleSha224Dma(whServerContext* ctx, uint16_t magic, uint16_t seq,
     }
 
     /* Translate the response */
-    (void)wh_MessageCrypto_TranslateSha224DmaResponse(
-        magic, &res, (whMessageCrypto_Sha224DmaResponse*)cryptoDataOut);
+    (void)wh_MessageCrypto_TranslateSha2DmaResponse(
+        magic, &res, (whMessageCrypto_Sha2DmaResponse*)cryptoDataOut);
     *outSize = sizeof(res);
 
     /* return value populates rc in response message */
@@ -2885,14 +2884,14 @@ static int _HandleSha384Dma(whServerContext* ctx, uint16_t magic, uint16_t seq,
     (void)seq;
     (void)inSize;
     int                               ret = 0;
-    whMessageCrypto_Sha384DmaRequest  req;
-    whMessageCrypto_Sha384DmaResponse res;
+    whMessageCrypto_Sha2DmaRequest  req;
+    whMessageCrypto_Sha2DmaResponse res;
     wc_Sha384                         sha384[1];
     int                               clientDevId;
 
     /* Translate the request */
-    ret = wh_MessageCrypto_TranslateSha384DmaRequest(
-        magic, (whMessageCrypto_Sha384DmaRequest*)cryptoDataIn, &req);
+    ret = wh_MessageCrypto_TranslateSha2DmaRequest(
+        magic, (whMessageCrypto_Sha2DmaRequest*)cryptoDataIn, &req);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
@@ -2990,8 +2989,8 @@ static int _HandleSha384Dma(whServerContext* ctx, uint16_t magic, uint16_t seq,
     }
 
     /* Translate the response */
-    (void)wh_MessageCrypto_TranslateSha384DmaResponse(
-        magic, &res, (whMessageCrypto_Sha384DmaResponse*)cryptoDataOut);
+    (void)wh_MessageCrypto_TranslateSha2DmaResponse(
+        magic, &res, (whMessageCrypto_Sha2DmaResponse*)cryptoDataOut);
     *outSize = sizeof(res);
 
     /* return value populates rc in response message */
@@ -3007,15 +3006,15 @@ static int _HandleSha512Dma(whServerContext* ctx, uint16_t magic, uint16_t seq,
     (void)seq;
     (void)inSize;
     int                               ret = 0;
-    whMessageCrypto_Sha512DmaRequest  req;
-    whMessageCrypto_Sha512DmaResponse res;
+    whMessageCrypto_Sha2DmaRequest  req;
+    whMessageCrypto_Sha2DmaResponse res;
     wc_Sha512                         sha512[1];
     int                               clientDevId;
     int                               hashType = WC_HASH_TYPE_SHA512;
 
     /* Translate the request */
-    ret = wh_MessageCrypto_TranslateSha512DmaRequest(
-        magic, (whMessageCrypto_Sha512DmaRequest*)cryptoDataIn, &req);
+    ret = wh_MessageCrypto_TranslateSha2DmaRequest(
+        magic, (whMessageCrypto_Sha2DmaRequest*)cryptoDataIn, &req);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
@@ -3125,8 +3124,8 @@ static int _HandleSha512Dma(whServerContext* ctx, uint16_t magic, uint16_t seq,
     }
 
     /* Translate the response */
-    (void)wh_MessageCrypto_TranslateSha512DmaResponse(
-        magic, &res, (whMessageCrypto_Sha512DmaResponse*)cryptoDataOut);
+    (void)wh_MessageCrypto_TranslateSha2DmaResponse(
+        magic, &res, (whMessageCrypto_Sha2DmaResponse*)cryptoDataOut);
     *outSize = sizeof(res);
 
     /* return value populates rc in response message */

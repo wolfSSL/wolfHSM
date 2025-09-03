@@ -628,55 +628,10 @@ int wh_MessageCrypto_TranslateDmaAddrStatus(
     return wh_MessageCrypto_TranslateDmaBuffer(magic, &src->badAddr,
                                                &dest->badAddr);
 }
-
-/* SHA256 DMA Request translation */
-int wh_MessageCrypto_TranslateSha256DmaRequest(
-    uint16_t magic, const whMessageCrypto_Sha256DmaRequest* src,
-    whMessageCrypto_Sha256DmaRequest* dest)
-{
-    int ret;
-
-    if ((src == NULL) || (dest == NULL)) {
-        return WH_ERROR_BADARGS;
-    }
-
-    WH_T64(magic, dest, src, finalize);
-
-    ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->input, &dest->input);
-    if (ret != 0) {
-        return ret;
-    }
-
-    ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->state, &dest->state);
-    if (ret != 0) {
-        return ret;
-    }
-
-    ret =
-        wh_MessageCrypto_TranslateDmaBuffer(magic, &src->output, &dest->output);
-    if (ret != 0) {
-        return ret;
-    }
-
-    return 0;
-}
-
-/* SHA256 DMA Response translation */
-int wh_MessageCrypto_TranslateSha256DmaResponse(
-    uint16_t magic, const whMessageCrypto_Sha256DmaResponse* src,
-    whMessageCrypto_Sha256DmaResponse* dest)
-{
-    if ((src == NULL) || (dest == NULL)) {
-        return WH_ERROR_BADARGS;
-    }
-    return wh_MessageCrypto_TranslateDmaAddrStatus(magic, &src->dmaAddrStatus,
-                                                   &dest->dmaAddrStatus);
-}
-
 /* SHA224 DMA Request translation */
-int wh_MessageCrypto_TranslateSha224DmaRequest(
-    uint16_t magic, const whMessageCrypto_Sha224DmaRequest* src,
-    whMessageCrypto_Sha224DmaRequest* dest)
+int wh_MessageCrypto_TranslateSha2DmaRequest(
+    uint16_t magic, const whMessageCrypto_Sha2DmaRequest* src,
+    whMessageCrypto_Sha2DmaRequest* dest)
 {
     int ret;
 
@@ -705,10 +660,10 @@ int wh_MessageCrypto_TranslateSha224DmaRequest(
     return 0;
 }
 
-/* SHA224 DMA Response translation */
-int wh_MessageCrypto_TranslateSha224DmaResponse(
-    uint16_t magic, const whMessageCrypto_Sha224DmaResponse* src,
-    whMessageCrypto_Sha224DmaResponse* dest)
+/* SHA2 DMA Response translation */
+int wh_MessageCrypto_TranslateSha2DmaResponse(
+    uint16_t magic, const whMessageCrypto_Sha2DmaResponse* src,
+    whMessageCrypto_Sha2DmaResponse* dest)
 {
     if ((src == NULL) || (dest == NULL)) {
         return WH_ERROR_BADARGS;
@@ -716,94 +671,6 @@ int wh_MessageCrypto_TranslateSha224DmaResponse(
     return wh_MessageCrypto_TranslateDmaAddrStatus(magic, &src->dmaAddrStatus,
                                                    &dest->dmaAddrStatus);
 }
-
-/* SHA384 DMA Request translation */
-int wh_MessageCrypto_TranslateSha384DmaRequest(
-    uint16_t magic, const whMessageCrypto_Sha384DmaRequest* src,
-    whMessageCrypto_Sha384DmaRequest* dest)
-{
-    int ret;
-
-    if ((src == NULL) || (dest == NULL)) {
-        return WH_ERROR_BADARGS;
-    }
-
-    WH_T64(magic, dest, src, finalize);
-
-    ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->input, &dest->input);
-    if (ret != 0) {
-        return ret;
-    }
-
-    ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->state, &dest->state);
-    if (ret != 0) {
-        return ret;
-    }
-
-    ret =
-        wh_MessageCrypto_TranslateDmaBuffer(magic, &src->output, &dest->output);
-    if (ret != 0) {
-        return ret;
-    }
-
-    return 0;
-}
-
-/* SHA384 DMA Response translation */
-int wh_MessageCrypto_TranslateSha384DmaResponse(
-    uint16_t magic, const whMessageCrypto_Sha384DmaResponse* src,
-    whMessageCrypto_Sha384DmaResponse* dest)
-{
-    if ((src == NULL) || (dest == NULL)) {
-        return WH_ERROR_BADARGS;
-    }
-    return wh_MessageCrypto_TranslateDmaAddrStatus(magic, &src->dmaAddrStatus,
-                                                   &dest->dmaAddrStatus);
-}
-/* SHA512 DMA Request translation */
-int wh_MessageCrypto_TranslateSha512DmaRequest(
-    uint16_t magic, const whMessageCrypto_Sha512DmaRequest* src,
-    whMessageCrypto_Sha512DmaRequest* dest)
-{
-    int ret;
-
-    if ((src == NULL) || (dest == NULL)) {
-        return WH_ERROR_BADARGS;
-    }
-
-    WH_T64(magic, dest, src, finalize);
-
-    ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->input, &dest->input);
-    if (ret != 0) {
-        return ret;
-    }
-
-    ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->state, &dest->state);
-    if (ret != 0) {
-        return ret;
-    }
-
-    ret =
-        wh_MessageCrypto_TranslateDmaBuffer(magic, &src->output, &dest->output);
-    if (ret != 0) {
-        return ret;
-    }
-
-    return 0;
-}
-
-/* SHA512 DMA Response translation */
-int wh_MessageCrypto_TranslateSha512DmaResponse(
-    uint16_t magic, const whMessageCrypto_Sha512DmaResponse* src,
-    whMessageCrypto_Sha512DmaResponse* dest)
-{
-    if ((src == NULL) || (dest == NULL)) {
-        return WH_ERROR_BADARGS;
-    }
-    return wh_MessageCrypto_TranslateDmaAddrStatus(magic, &src->dmaAddrStatus,
-                                                   &dest->dmaAddrStatus);
-}
-
 
 /* CMAC DMA Request translation */
 int wh_MessageCrypto_TranslateCmacDmaRequest(
