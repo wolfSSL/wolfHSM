@@ -18,25 +18,25 @@
 /* client configuration structures */
 whTransportClientCb            pttcClientShmCb[1] =
     {POSIX_TRANSPORT_SHM_CLIENT_CB};
-posixTransportShmClientContext tcc;
+posixTransportShmClientContext tccShm;
 posixTransportShmConfig        myshmconfig;
-whCommClientConfig             cc_conf;
+whCommClientConfig             ccShmConf;
 
 /* client configuration setup example for transport */
 int wh_Client_ExampleSHMConfig(whClientConfig* c_conf)
 {
-    memset(&tcc, 0, sizeof(posixTransportShmClientContext));
+    memset(&tccShm, 0, sizeof(posixTransportShmClientContext));
 
     myshmconfig.name = WH_SHARED_MEMORY_NAME;
     myshmconfig.req_size  = 1024;
     myshmconfig.resp_size = 1024;
     myshmconfig.dma_size  = 4096;
 
-    cc_conf.transport_cb      = pttcClientShmCb;
-    cc_conf.transport_context = (void*)&tcc;
-    cc_conf.transport_config  = (void*)&myshmconfig,
-    cc_conf.client_id         = WH_CLIENT_ID,
-    c_conf->comm              = &cc_conf;
+    ccShmConf.transport_cb      = pttcClientShmCb;
+    ccShmConf.transport_context = (void*)&tccShm;
+    ccShmConf.transport_config  = (void*)&myshmconfig,
+    ccShmConf.client_id         = WH_CLIENT_ID,
+    c_conf->comm              = &ccShmConf;
 
     return WH_ERROR_OK;
 }
@@ -44,27 +44,27 @@ int wh_Client_ExampleSHMConfig(whClientConfig* c_conf)
 /* server configuration structures */
 whTransportServerCb            pttServerShmCb[1] =
     {POSIX_TRANSPORT_SHM_SERVER_CB};
-posixTransportShmServerContext tsc;
+posixTransportShmServerContext tscShm;
 posixTransportShmConfig        myshmconfig;
-whCommServerConfig             cs_conf;
+whCommServerConfig             csShmConf;
 
 /* Server configuration setup example for transport
  * Does not setup flash, nvm, crypto, she, etc. */
 int wh_Server_ExampleSHMConfig(whServerConfig* s_conf)
 {
-    memset(&tsc, 0, sizeof(posixTransportShmServerContext));
+    memset(&tscShm, 0, sizeof(posixTransportShmServerContext));
 
     myshmconfig.name = WH_SHARED_MEMORY_NAME;
     myshmconfig.req_size  = 1024;
     myshmconfig.resp_size = 1024;
     myshmconfig.dma_size  = 4096;
 
-    cs_conf.transport_cb      = pttServerShmCb;
-    cs_conf.transport_context = (void*)&tsc;
-    cs_conf.transport_config  = (void*)&myshmconfig;
-    cs_conf.server_id         = WH_SERVER_ID;
+    csShmConf.transport_cb      = pttServerShmCb;
+    csShmConf.transport_context = (void*)&tscShm;
+    csShmConf.transport_config  = (void*)&myshmconfig;
+    csShmConf.server_id         = WH_SERVER_ID;
 
-    s_conf->comm_config = &cs_conf;
+    s_conf->comm_config = &csShmConf;
 
     return WH_ERROR_OK;
 }
