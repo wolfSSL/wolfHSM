@@ -85,7 +85,6 @@ typedef struct {
     int32_t                  rc;       /* Return code */
 } whMessageCrypto_GenericResponseHeader;
 
-/* TODO fix, make this a generic static assert*/
 WH_UTILS_STATIC_ASSERT(
     sizeof(whMessageCrypto_GenericRequestHeader) ==
         sizeof(whMessageCrypto_GenericResponseHeader),
@@ -156,8 +155,8 @@ typedef struct {
 } whMessageCrypto_AesCtrRequest;
 /* AES CTR Response */
 typedef struct {
-    uint32_t sz;    /* Size of output data */
-    uint32_t left;  /* unused bytes left from last call */
+    uint32_t sz;   /* Size of output data */
+    uint32_t left; /* unused bytes left from last call */
     /* Pad to ensure overlap for input and output buffers */
     uint8_t
         WH_PAD[sizeof(whMessageCrypto_AesCtrRequest) - (sizeof(uint32_t) * 2)];
@@ -167,9 +166,10 @@ typedef struct {
      * uint8_t tmp[AES_BLOCK_SIZE]
      */
 } whMessageCrypto_AesCtrResponse;
-WH_UTILS_STATIC_ASSERT(sizeof(whMessageCrypto_AesCtrRequest) ==
-                   sizeof(whMessageCrypto_AesCtrResponse),
-               "AesCtrRequest and AesCtrResponse must be the same size");
+WH_UTILS_STATIC_ASSERT(
+    sizeof(whMessageCrypto_AesCtrRequest) ==
+        sizeof(whMessageCrypto_AesCtrResponse),
+    "AesCtrRequest and AesCtrResponse must be the same size");
 int wh_MessageCrypto_TranslateAesCtrRequest(
     uint16_t magic, const whMessageCrypto_AesCtrRequest* src,
     whMessageCrypto_AesCtrRequest* dest);
@@ -201,10 +201,10 @@ typedef struct {
      */
 } whMessageCrypto_AesEcbResponse;
 
-/* TODO fix, make this a generic static assert*/
-WH_UTILS_STATIC_ASSERT(sizeof(whMessageCrypto_AesEcbRequest) ==
-                   sizeof(whMessageCrypto_AesEcbResponse),
-               "AesEcbRequest and AesEcbResponse must be the same size");
+WH_UTILS_STATIC_ASSERT(
+    sizeof(whMessageCrypto_AesEcbRequest) ==
+        sizeof(whMessageCrypto_AesEcbResponse),
+    "AesEcbRequest and AesEcbResponse must be the same size");
 
 int wh_MessageCrypto_TranslateAesEcbRequest(
     uint16_t magic, const whMessageCrypto_AesEcbRequest* src,
@@ -239,7 +239,7 @@ typedef struct {
      */
 } whMessageCrypto_AesCbcResponse;
 
-/* TODO fix, make this a generic static assert*/
+
 WH_UTILS_STATIC_ASSERT(sizeof(whMessageCrypto_AesCbcRequest) ==
                    sizeof(whMessageCrypto_AesCbcResponse),
                "AesCbcRequest and AesCbcResponse must be the same size");
@@ -284,7 +284,6 @@ typedef struct {
      */
 } whMessageCrypto_AesGcmResponse;
 
-/* TODO fix, make this a generic static assert*/
 WH_UTILS_STATIC_ASSERT(sizeof(whMessageCrypto_AesGcmRequest) ==
                    sizeof(whMessageCrypto_AesGcmResponse),
                "AesGcmRequest and AesGcmResponse must be the same size");

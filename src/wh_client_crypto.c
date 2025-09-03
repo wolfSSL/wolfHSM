@@ -250,11 +250,10 @@ int wh_Client_RngGenerate(whClientContext* ctx, uint8_t* out, uint32_t size)
 #ifndef NO_AES
 
 #ifdef WOLFSSL_AES_COUNTER
-int wh_Client_AesCtr(whClientContext* ctx, Aes* aes, int enc,
-                     const uint8_t* in, uint32_t len, uint8_t* out)
+int wh_Client_AesCtr(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
+                     uint32_t len, uint8_t* out)
 {
-    int                             ret    = WH_ERROR_OK;
-    /*uint16_t                        blocks = len / AES_BLOCK_SIZE;*/
+    int                             ret = WH_ERROR_OK;
     whMessageCrypto_AesCtrRequest*  req;
     whMessageCrypto_AesCtrResponse* res;
     uint8_t*                        dataPtr;
@@ -268,8 +267,8 @@ int wh_Client_AesCtr(whClientContext* ctx, Aes* aes, int enc,
     whKeyId        key_id  = WH_DEVCTX_TO_KEYID(aes->devCtx);
     uint8_t*       iv      = (uint8_t*)aes->reg;
     uint32_t       iv_len  = AES_IV_SIZE;
-    uint32_t       left = aes->left;
-    uint8_t*       tmp   = (uint8_t*)aes->tmp;
+    uint32_t       left    = aes->left;
+    uint8_t*       tmp     = (uint8_t*)aes->tmp;
 
     uint16_t group  = WH_MESSAGE_GROUP_CRYPTO;
     uint16_t action = WC_ALGO_TYPE_CIPHER;
@@ -288,8 +287,8 @@ int wh_Client_AesCtr(whClientContext* ctx, Aes* aes, int enc,
     uint8_t* req_iv  = req_key + key_len;
     uint8_t* req_tmp = req_iv + AES_BLOCK_SIZE;
     uint32_t req_len = sizeof(whMessageCrypto_GenericRequestHeader) +
-                       sizeof(*req) + len + key_len +
-                       iv_len + (AES_BLOCK_SIZE*2);
+                       sizeof(*req) + len + key_len + iv_len +
+                       (AES_BLOCK_SIZE * 2);
 #ifdef DEBUG_CRYPTOCB_VERBOSE
     printf("[client] %s: enc:%d keylen:%d ivsz:%d insz:%d reqsz:%u "
            "left:%d\n",
@@ -341,8 +340,8 @@ int wh_Client_AesCtr(whClientContext* ctx, Aes* aes, int enc,
         /* Response packet */
         uint16_t res_len = 0;
         do {
-            ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
-                                             dataPtr);
+            ret =
+                wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
         } while (ret == WH_ERROR_NOTREADY);
         if (ret == WH_ERROR_OK) {
             ret = _getCryptoResponse(dataPtr, type, (uint8_t**)&res);
@@ -357,7 +356,7 @@ int wh_Client_AesCtr(whClientContext* ctx, Aes* aes, int enc,
                 printf("[client] out size:%d res_len:%d\n", res->sz, res_len);
                 wh_Utils_Hexdump("[client] res_out: \n", res_out, res->sz);
                 wh_Utils_Hexdump("[client] res_tmp: \n", res_tmp,
-                                                                AES_BLOCK_SIZE);
+                                 AES_BLOCK_SIZE);
 #endif
                 /* copy the response res_out */
                 memcpy(out, res_out, res->sz);
@@ -396,11 +395,11 @@ int wh_Client_AesEcb(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
         return WH_ERROR_BADARGS;
     }
 
-    uint32_t       key_len     = aes->keylen;
-    const uint8_t* key         = (const uint8_t*)(aes->devKey);
-    whKeyId        key_id      = WH_DEVCTX_TO_KEYID(aes->devCtx);
-    uint8_t*       iv          = (uint8_t*)aes->reg;
-    uint32_t       iv_len      = AES_IV_SIZE;
+    uint32_t       key_len = aes->keylen;
+    const uint8_t* key     = (const uint8_t*)(aes->devKey);
+    whKeyId        key_id  = WH_DEVCTX_TO_KEYID(aes->devCtx);
+    uint8_t*       iv      = (uint8_t*)aes->reg;
+    uint32_t       iv_len  = AES_IV_SIZE;
 
     uint16_t group  = WH_MESSAGE_GROUP_CRYPTO;
     uint16_t action = WC_ALGO_TYPE_CIPHER;

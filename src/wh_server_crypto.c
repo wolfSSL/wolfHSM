@@ -1290,16 +1290,16 @@ static int _HandleAesCtr(whServerContext* ctx, uint16_t magic,
     if (ret != 0) {
         return ret;
     }
-    uint32_t enc     = req.enc;
-    uint32_t key_len = req.keyLen;
-    uint32_t len     = req.sz;
-    uint32_t left    = req.left;
+    uint32_t enc         = req.enc;
+    uint32_t key_len     = req.keyLen;
+    uint32_t len         = req.sz;
+    uint32_t left        = req.left;
     uint64_t needed_size = sizeof(whMessageCrypto_AesCtrResponse) + len +
-                          key_len + AES_IV_SIZE + AES_BLOCK_SIZE;
+                           key_len + AES_IV_SIZE + AES_BLOCK_SIZE;
     if (needed_size > inSize) {
         return WH_ERROR_BADARGS;
     }
-    whKeyId  key_id =
+    whKeyId key_id =
         WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
     /* in, key, iv, and out are after fixed size fields */
     uint8_t* in =
@@ -1315,7 +1315,7 @@ static int _HandleAesCtr(whServerContext* ctx, uint16_t magic,
     /* Debug printouts */
 #ifdef DEBUG_CRYPTOCB_VERBOSE
     wh_Utils_Hexdump("[AesCtr] Input data ", in, len);
-    wh_Utils_Hexdump("[AesCtr] IV " , iv, AES_BLOCK_SIZE);
+    wh_Utils_Hexdump("[AesCtr] IV ", iv, AES_BLOCK_SIZE);
     wh_Utils_Hexdump("[AesCtr] tmp ", tmp, AES_BLOCK_SIZE);
 #endif
     /* Read the key if it is not erased */
@@ -1343,7 +1343,7 @@ static int _HandleAesCtr(whServerContext* ctx, uint16_t magic,
     if (ret == 0) {
         /* load the key */
         ret = wc_AesSetKeyDirect(aes, (byte*)key, (word32)key_len, (byte*)iv,
-                           enc != 0 ? AES_ENCRYPTION : AES_DECRYPTION);
+                                 enc != 0 ? AES_ENCRYPTION : AES_DECRYPTION);
         if (ret == 0) {
             /* do the crypto operation */
             /* restore previous left */
@@ -1377,8 +1377,8 @@ static int _HandleAesCtr(whServerContext* ctx, uint16_t magic,
         /* set sz */
         res.sz   = len;
         res.left = left;
-        *outSize = sizeof(whMessageCrypto_AesCtrResponse) + len +
-                                                        (AES_BLOCK_SIZE * 2);
+        *outSize =
+            sizeof(whMessageCrypto_AesCtrResponse) + len + (AES_BLOCK_SIZE * 2);
         /* Translate response back */
         ret = wh_MessageCrypto_TranslateAesCtrResponse(
             magic, &res, (whMessageCrypto_AesCtrResponse*)cryptoDataOut);
@@ -1387,9 +1387,9 @@ static int _HandleAesCtr(whServerContext* ctx, uint16_t magic,
 }
 #endif /* WOLFSSL_AES_COUNTER */
 #ifdef HAVE_AES_ECB
-static int _HandleAesEcb(whServerContext* ctx, uint16_t magic, const void* cryptoDataIn,
-                         uint16_t inSize, void* cryptoDataOut,
-                         uint16_t* outSize)
+static int _HandleAesEcb(whServerContext* ctx, uint16_t magic,
+                         const void* cryptoDataIn, uint16_t inSize,
+                         void* cryptoDataOut, uint16_t* outSize)
 {
     (void)inSize;
 
@@ -1410,13 +1410,13 @@ static int _HandleAesEcb(whServerContext* ctx, uint16_t magic, const void* crypt
     uint32_t enc     = req.enc;
     uint32_t key_len = req.keyLen;
     uint32_t len     = req.sz;
-    uint64_t needed_size = sizeof(whMessageCrypto_AesEcbResponse) + len +
-                          key_len + AES_BLOCK_SIZE;
+    uint64_t needed_size =
+        sizeof(whMessageCrypto_AesEcbResponse) + len + key_len + AES_BLOCK_SIZE;
     if (needed_size > inSize) {
         return WH_ERROR_BADARGS;
     }
 
-    whKeyId  key_id =
+    whKeyId key_id =
         WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
 
     /* in, key, iv, and out are after fixed size fields */

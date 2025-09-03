@@ -105,14 +105,13 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
 #endif /* HAVE_AES_CBC */
 
 #ifdef WOLFSSL_AES_COUNTER
-        case WC_CIPHER_AES_CTR:
-        {
+        case WC_CIPHER_AES_CTR: {
             /* Extract info parameters */
-            uint32_t enc        = info->cipher.enc;
-            Aes* aes            = info->cipher.aesctr.aes;
-            const uint8_t* in   = info->cipher.aesctr.in;
-            uint32_t len        = info->cipher.aesctr.sz;
-            uint8_t* out        = info->cipher.aesctr.out;
+            uint32_t       enc = info->cipher.enc;
+            Aes*           aes = info->cipher.aesctr.aes;
+            const uint8_t* in  = info->cipher.aesctr.in;
+            uint32_t       len = info->cipher.aesctr.sz;
+            uint8_t*       out = info->cipher.aesctr.out;
 
             ret = wh_Client_AesCtr(ctx, aes, enc, in, len, out);
 
@@ -120,14 +119,13 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
 #endif /* WOLFSSL_AES_COUNTER */
 
 #ifdef HAVE_AES_ECB
-        case WC_CIPHER_AES_ECB:
-        {
+        case WC_CIPHER_AES_ECB: {
             /* Extract info parameters */
-            uint32_t enc        = info->cipher.enc;
-            Aes* aes            = info->cipher.aesecb.aes;
-            const uint8_t* in   = info->cipher.aesecb.in;
-            uint32_t len        = info->cipher.aesecb.sz;
-            uint8_t* out        = info->cipher.aesecb.out;
+            uint32_t       enc = info->cipher.enc;
+            Aes*           aes = info->cipher.aesecb.aes;
+            const uint8_t* in  = info->cipher.aesecb.in;
+            uint32_t       len = info->cipher.aesecb.sz;
+            uint8_t*       out = info->cipher.aesecb.out;
 
             ret = wh_Client_AesEcb(ctx, aes, enc, in, len, out);
 

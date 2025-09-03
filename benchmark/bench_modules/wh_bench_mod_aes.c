@@ -49,7 +49,6 @@ static int _benchAesCtr(whClientContext* client, whBenchOpContext* ctx, int id,
     Aes     aes[1];
     char    keyLabel[] = "key label";
     /* Input size is largest multiple of AES block size that fits in buffer */
-    /* BUFFER-TODO */
     const size_t inLen =
         (WOLFHSM_CFG_BENCH_DATA_BUFFER_SIZE / WC_AES_BLOCK_SIZE) *
         WC_AES_BLOCK_SIZE;
@@ -183,7 +182,6 @@ static int _benchAesEcb(whClientContext* client, whBenchOpContext* ctx, int id,
     Aes     aes[1];
     char    keyLabel[] = "key label";
     /* Input size is largest multiple of AES block size that fits in buffer */
-    /* BUFFER-TODO */
     const size_t inLen =
         (WOLFHSM_CFG_BENCH_DATA_BUFFER_SIZE / WC_AES_BLOCK_SIZE) *
         WC_AES_BLOCK_SIZE;
@@ -317,7 +315,6 @@ static int _benchAesCbc(whClientContext* client, whBenchOpContext* ctx, int id,
     Aes     aes[1];
     char    keyLabel[] = "key label";
     /* Input size is largest multiple of AES block size that fits in buffer */
-    /* BUFFER-TODO */
     const size_t inLen =
         (WOLFHSM_CFG_BENCH_DATA_BUFFER_SIZE / WC_AES_BLOCK_SIZE) *
         WC_AES_BLOCK_SIZE;

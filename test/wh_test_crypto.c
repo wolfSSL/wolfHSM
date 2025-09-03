@@ -1848,27 +1848,32 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
         ret = wc_AesInit(aes, NULL, devId);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed to wc_AesInit %d\n", ret);
-        } else {
+        }
+        else {
             ret = wc_AesSetKeyDirect(aes, key, sizeof(key), iv, AES_ENCRYPTION);
             if (ret != 0) {
                 WH_ERROR_PRINT("Failed to wc_AesSetKeyDirect %d\n", ret);
-            } else {
-                ret = wc_AesCtrEncrypt(aes, cipher, plainIn,
-                        sizeof(plainIn));
+            }
+            else {
+                ret = wc_AesCtrEncrypt(aes, cipher, plainIn, sizeof(plainIn));
                 if (ret != 0) {
                     WH_ERROR_PRINT("Failed to wc_AesCtrEncrypt %d\n", ret);
-                } else {
+                }
+                else {
                     ret = wc_AesSetKeyDirect(aes, key, sizeof(key), iv,
-                    AES_DECRYPTION);
+                                             AES_DECRYPTION);
                     if (ret != 0) {
-                        WH_ERROR_PRINT("Failed to wc_AesSetKeyDirect %d\n", ret);
-                    } else {
+                        WH_ERROR_PRINT("Failed to wc_AesSetKeyDirect %d\n",
+                                       ret);
+                    }
+                    else {
                         ret = wc_AesCtrEncrypt(aes, plainOut, cipher,
-                        sizeof(cipher));
+                                               sizeof(cipher));
                         if (ret != 0) {
                             WH_ERROR_PRINT("Failed to wc_AesCtrEncrypt %d\n",
-                                    ret);
-                        } else {
+                                           ret);
+                        }
+                        else {
                             if (memcmp(plainIn, plainOut, sizeof(plainIn)) !=
                                 0) {
                                 WH_ERROR_PRINT("Failed to match AES-CTR\n");
@@ -1888,39 +1893,46 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
         ret = wc_AesInit(aes, NULL, devId);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed to wc_AesInit %d\n", ret);
-        } else {
+        }
+        else {
             keyId = WH_KEYID_ERASED;
-            ret = wh_Client_KeyCache(ctx, 0, labelIn, sizeof(labelIn),
-                    key, sizeof(key), &keyId);
+            ret   = wh_Client_KeyCache(ctx, 0, labelIn, sizeof(labelIn), key,
+                                       sizeof(key), &keyId);
             if (ret != 0) {
                 WH_ERROR_PRINT("Failed to wh_Client_KeyCache %d\n", ret);
-            } else {
+            }
+            else {
                 ret = wh_Client_AesSetKeyId(aes, keyId);
                 if (ret != 0) {
                     WH_ERROR_PRINT("Failed to wh_Client_SetKeyIdAes %d\n", ret);
-                } else {
+                }
+                else {
                     ret = wc_AesSetIV(aes, iv);
                     if (ret != 0) {
                         WH_ERROR_PRINT("Failed to wc_AesSetIV %d\n", ret);
-                    } else {
+                    }
+                    else {
                         ret = wc_AesCtrEncrypt(aes, cipher, plainIn,
-                                sizeof(plainIn));
+                                               sizeof(plainIn));
                         if (ret != 0) {
                             WH_ERROR_PRINT("Failed to wc_AesCtrEncrypt %d\n",
-                                    ret);
-                        } else {
+                                           ret);
+                        }
+                        else {
                             /* Reset the IV to support decryption */
                             ret = wc_AesSetIV(aes, iv);
                             if (ret != 0) {
                                 WH_ERROR_PRINT("Failed to wc_AesSetIV %d\n",
-                                        ret);
-                            } else {
-                                ret = wc_AesCtrEncrypt(aes, plainOut,
-                                        cipher, sizeof(plainIn));
+                                               ret);
+                            }
+                            else {
+                                ret = wc_AesCtrEncrypt(aes, plainOut, cipher,
+                                                       sizeof(plainIn));
                                 if (ret != 0) {
                                     WH_ERROR_PRINT("Failed to decrypt %d\n",
-                                            ret);
-                                } else {
+                                                   ret);
+                                }
+                                else {
                                     if (memcmp(plainIn, plainOut,
                                                sizeof(plainIn)) != 0) {
                                         WH_ERROR_PRINT("Failed to match\n");
@@ -1950,27 +1962,31 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
         ret = wc_AesInit(aes, NULL, devId);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed to wc_AesInit %d\n", ret);
-        } else {
+        }
+        else {
             ret = wc_AesSetKey(aes, key, sizeof(key), iv, AES_ENCRYPTION);
             if (ret != 0) {
                 WH_ERROR_PRINT("Failed to wc_AesSetKey %d\n", ret);
-            } else {
-                ret = wc_AesEcbEncrypt(aes, cipher, plainIn,
-                        sizeof(plainIn));
+            }
+            else {
+                ret = wc_AesEcbEncrypt(aes, cipher, plainIn, sizeof(plainIn));
                 if (ret != 0) {
                     WH_ERROR_PRINT("Failed to wc_AesEcbEncrypt %d\n", ret);
-                } else {
-                    ret = wc_AesSetKey(aes, key, sizeof(key), iv,
-                            AES_DECRYPTION);
+                }
+                else {
+                    ret =
+                        wc_AesSetKey(aes, key, sizeof(key), iv, AES_DECRYPTION);
                     if (ret != 0) {
                         WH_ERROR_PRINT("Failed to wc_AesSetKey %d\n", ret);
-                    } else {
+                    }
+                    else {
                         ret = wc_AesEcbDecrypt(aes, plainOut, cipher,
-                                sizeof(cipher));
+                                               sizeof(cipher));
                         if (ret != 0) {
                             WH_ERROR_PRINT("Failed to wc_AesEcbDecrypt %d\n",
-                                    ret);
-                        } else {
+                                           ret);
+                        }
+                        else {
                             if (memcmp(plainIn, plainOut, sizeof(plainIn)) !=
                                 0) {
                                 WH_ERROR_PRINT("Failed to match AES-ECB\n");
@@ -1990,39 +2006,46 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
         ret = wc_AesInit(aes, NULL, devId);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed to wc_AesInit %d\n", ret);
-        } else {
+        }
+        else {
             keyId = WH_KEYID_ERASED;
-            ret = wh_Client_KeyCache(ctx, 0, labelIn, sizeof(labelIn),
-                    key, sizeof(key), &keyId);
+            ret   = wh_Client_KeyCache(ctx, 0, labelIn, sizeof(labelIn), key,
+                                       sizeof(key), &keyId);
             if (ret != 0) {
                 WH_ERROR_PRINT("Failed to wh_Client_KeyCache %d\n", ret);
-            } else {
+            }
+            else {
                 ret = wh_Client_AesSetKeyId(aes, keyId);
                 if (ret != 0) {
                     WH_ERROR_PRINT("Failed to wh_Client_SetKeyIdAes %d\n", ret);
-                } else {
+                }
+                else {
                     ret = wc_AesSetIV(aes, iv);
                     if (ret != 0) {
                         WH_ERROR_PRINT("Failed to wc_AesSetIV %d\n", ret);
-                    } else {
+                    }
+                    else {
                         ret = wc_AesEcbEncrypt(aes, cipher, plainIn,
-                                sizeof(plainIn));
+                                               sizeof(plainIn));
                         if (ret != 0) {
                             WH_ERROR_PRINT("Failed to wc_AesEcbEncrypt %d\n",
-                                    ret);
-                        } else {
+                                           ret);
+                        }
+                        else {
                             /* Reset the IV to support decryption */
                             ret = wc_AesSetIV(aes, iv);
                             if (ret != 0) {
                                 WH_ERROR_PRINT("Failed to wc_AesSetIV %d\n",
-                                        ret);
-                            } else {
-                                ret = wc_AesEcbDecrypt(aes, plainOut,
-                                        cipher, sizeof(plainIn));
+                                               ret);
+                            }
+                            else {
+                                ret = wc_AesEcbDecrypt(aes, plainOut, cipher,
+                                                       sizeof(plainIn));
                                 if (ret != 0) {
                                     WH_ERROR_PRINT("Failed to decrypt %d\n",
-                                            ret);
-                                } else {
+                                                   ret);
+                                }
+                                else {
                                     if (memcmp(plainIn, plainOut,
                                                sizeof(plainIn)) != 0) {
                                         WH_ERROR_PRINT("Failed to match\n");
