@@ -701,31 +701,8 @@ typedef struct {
     whMessageCrypto_DmaBuffer badAddr;
 } whMessageCrypto_DmaAddrStatus;
 
-/* SHA256 DMA Request */
-typedef struct {
-    /* Since client addresses are subject to DMA checking, we can't use them to
-     * determine the requested operation (update/final). Therefore we need to
-     * indicate to the server which SHA256 operation to perform */
-    uint64_t                  finalize;
-    whMessageCrypto_DmaBuffer input;
-    whMessageCrypto_DmaBuffer state;
-    whMessageCrypto_DmaBuffer output;
-} whMessageCrypto_Sha256DmaRequest;
 
-/* SHA256 DMA Response */
-typedef struct {
-    whMessageCrypto_DmaAddrStatus dmaAddrStatus;
-} whMessageCrypto_Sha256DmaResponse;
-
-/* SHA256 DMA translation functions */
-int wh_MessageCrypto_TranslateSha256DmaRequest(
-    uint16_t magic, const whMessageCrypto_Sha256DmaRequest* src,
-    whMessageCrypto_Sha256DmaRequest* dest);
-
-int wh_MessageCrypto_TranslateSha256DmaResponse(
-    uint16_t magic, const whMessageCrypto_Sha256DmaResponse* src,
-    whMessageCrypto_Sha256DmaResponse* dest);
-/* SHA224 DMA Request */
+/* SHA2 DMA Request */
 typedef struct {
     /* Since client addresses are subject to DMA checking, we can't use them to
      * determine the requested operation (update/final). Therefore we need to
@@ -734,69 +711,21 @@ typedef struct {
     whMessageCrypto_DmaBuffer input;
     whMessageCrypto_DmaBuffer state;
     whMessageCrypto_DmaBuffer output;
-} whMessageCrypto_Sha224DmaRequest;
+} whMessageCrypto_Sha2DmaRequest;
 
 /* SHA224 DMA Response */
 typedef struct {
     whMessageCrypto_DmaAddrStatus dmaAddrStatus;
-} whMessageCrypto_Sha224DmaResponse;
+} whMessageCrypto_Sha2DmaResponse;
 
-/* SHA256 DMA translation functions */
-int wh_MessageCrypto_TranslateSha224DmaRequest(
-    uint16_t magic, const whMessageCrypto_Sha224DmaRequest* src,
-    whMessageCrypto_Sha224DmaRequest* dest);
+/* SHA2 DMA translation functions */
+int wh_MessageCrypto_TranslateSha2DmaRequest(
+    uint16_t magic, const whMessageCrypto_Sha2DmaRequest* src,
+    whMessageCrypto_Sha2DmaRequest* dest);
 
-int wh_MessageCrypto_TranslateSha224DmaResponse(
-    uint16_t magic, const whMessageCrypto_Sha224DmaResponse* src,
-    whMessageCrypto_Sha224DmaResponse* dest);
-/* SHA384 DMA Request */
-typedef struct {
-    /* Since client addresses are subject to DMA checking, we can't use them to
-     * determine the requested operation (update/final). Therefore we need to
-     * indicate to the server which SHA384 operation to perform */
-    uint64_t                  finalize;
-    whMessageCrypto_DmaBuffer input;
-    whMessageCrypto_DmaBuffer state;
-    whMessageCrypto_DmaBuffer output;
-} whMessageCrypto_Sha384DmaRequest;
-
-/* SHA384 DMA Response */
-typedef struct {
-    whMessageCrypto_DmaAddrStatus dmaAddrStatus;
-} whMessageCrypto_Sha384DmaResponse;
-
-/* SHA384 DMA translation functions */
-int wh_MessageCrypto_TranslateSha384DmaRequest(
-    uint16_t magic, const whMessageCrypto_Sha384DmaRequest* src,
-    whMessageCrypto_Sha384DmaRequest* dest);
-
-int wh_MessageCrypto_TranslateSha384DmaResponse(
-    uint16_t magic, const whMessageCrypto_Sha384DmaResponse* src,
-    whMessageCrypto_Sha384DmaResponse* dest);
-/* SHA512 DMA Request */
-typedef struct {
-    /* Since client addresses are subject to DMA checking, we can't use them to
-     * determine the requested operation (update/final). Therefore we need to
-     * indicate to the server which SHA512 operation to perform */
-    uint64_t                  finalize;
-    whMessageCrypto_DmaBuffer input;
-    whMessageCrypto_DmaBuffer state;
-    whMessageCrypto_DmaBuffer output;
-} whMessageCrypto_Sha512DmaRequest;
-/* SHA512 DMA Response */
-typedef struct {
-    whMessageCrypto_DmaAddrStatus dmaAddrStatus;
-} whMessageCrypto_Sha512DmaResponse;
-
-/* SHA512 DMA translation functions */
-int wh_MessageCrypto_TranslateSha512DmaRequest(
-    uint16_t magic, const whMessageCrypto_Sha512DmaRequest* src,
-    whMessageCrypto_Sha512DmaRequest* dest);
-
-int wh_MessageCrypto_TranslateSha512DmaResponse(
-    uint16_t magic, const whMessageCrypto_Sha512DmaResponse* src,
-    whMessageCrypto_Sha512DmaResponse* dest);
-
+int wh_MessageCrypto_TranslateSha2DmaResponse(
+    uint16_t magic, const whMessageCrypto_Sha2DmaResponse* src,
+    whMessageCrypto_Sha2DmaResponse* dest);
 /* CMAC DMA Request */
 typedef struct {
     uint32_t                  type;     /* enum wc_CmacType */
