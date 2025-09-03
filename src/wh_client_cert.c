@@ -119,7 +119,7 @@ int wh_Client_CertAddTrustedRequest(whClientContext* c, whNvmId id,
                                     uint8_t* label, whNvmSize label_len,
                                     const uint8_t* cert, uint32_t cert_len)
 {
-    whMessageCert_AddTrustedRequest req = {0};
+    whMessageCert_AddTrustedRequest req                               = {0};
     uint8_t                         buffer[WOLFHSM_CFG_COMM_DATA_LEN] = {0};
     uint16_t                        hdr_len = sizeof(req);
     uint8_t*                        payload = buffer + hdr_len;
@@ -363,7 +363,7 @@ static int _certVerifyRequest(whClientContext* c, const uint8_t* cert,
                               uint32_t cert_len, whNvmId trustedRootNvmId,
                               uint16_t flags, whKeyId keyId)
 {
-    whMessageCert_VerifyRequest req = {0};
+    whMessageCert_VerifyRequest req                               = {0};
     uint8_t                     buffer[WOLFHSM_CFG_COMM_DATA_LEN] = {0};
     uint16_t                    hdr_len                           = sizeof(req);
     uint8_t*                    payload = buffer + hdr_len;
