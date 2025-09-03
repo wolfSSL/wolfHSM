@@ -8,8 +8,11 @@ on:
 
 jobs:
   build:
-
+    strategy:
+        matrix:
+            transport: [ 'tcp', 'shm' ]
     runs-on: ubuntu-latest
+    timeout-minutes: 5
 
     steps:
     - uses: actions/checkout@master
@@ -23,27 +26,27 @@ jobs:
 
     # Build examples
     - name: Build POSIX TCP server
-      run: cd examples/posix/tcp/wh_server_tcp && make -j WOLFSSL_DIR=../../../../wolfssl
+      run: cd examples/posix/wh_server_posix && make -j WOLFSSL_DIR=../../../wolfssl
     - name: Build POSIX TCP client
-      run: cd examples/posix/tcp/wh_client_tcp && make -j WOLFSSL_DIR=../../../../wolfssl
+      run: cd examples/posix/wh_client_posix && make -j WOLFSSL_DIR=../../../wolfssl
 
     # Start the server in the background
     - name: Run POSIX TCP server
       run: |
-        cd examples/posix/tcp/wh_server_tcp
-        ./Build/wh_server_tcp.elf &
-        TCP_SERVER_PID=$!
-        echo "TCP_SERVER_PID=$TCP_SERVER_PID" >> $GITHUB_ENV
+        cd examples/posix/wh_server_posix
+        ./Build/wh_server_posix.elf --type ${{ matrix.transport }} &
+        POSIX_SERVER_PID=$!
+        echo "POSIX_SERVER_PID=$POSIX_SERVER_PID" >> $GITHUB_ENV
 
     # Run the client that connects to the server
     - name: Run POSIX TCP client
       run: |
-        cd examples/posix/tcp/wh_client_tcp
-        ./Build/wh_client_tcp.elf
+        cd examples/posix/wh_client_posix
+        ./Build/wh_client_posix.elf --type ${{ matrix.transport }}
 
     # Optional: Kill the server process if it doesn't exit on its own
     - name: Cleanup POSIX TCP server
       if: always()
-      run: kill $TCP_SERVER_PID || true
+      run: kill $POSIX_SERVER_PID || true
 
 
