@@ -551,8 +551,8 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
 
     switch (action) {
         case WH_KEY_CACHE: {
-            whMessageKeystore_CacheRequest  req;
-            whMessageKeystore_CacheResponse resp;
+            whMessageKeystore_CacheRequest  req = {0};
+            whMessageKeystore_CacheResponse resp = {0};
 
             /* translate request */
             (void)wh_MessageKeystore_TranslateCacheRequest(
@@ -562,8 +562,9 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
             in = (uint8_t*)req_packet + sizeof(req);
 
             /* set the metadata fields */
-            meta->id = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, server->comm->client_id,
-                                     req.id);
+            meta->id = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
+                                     (uint16_t)server->comm->client_id,
+                                     (uint16_t)req.id);
             meta->access = WH_NVM_ACCESS_ANY;
             meta->flags  = req.flags;
             meta->len    = req.sz;
@@ -603,16 +604,17 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
 #ifdef WOLFHSM_CFG_DMA
 
         case WH_KEY_CACHE_DMA: {
-            whMessageKeystore_CacheDmaRequest  req;
-            whMessageKeystore_CacheDmaResponse resp;
+            whMessageKeystore_CacheDmaRequest  req = {0};
+            whMessageKeystore_CacheDmaResponse resp = {0};
 
             /* translate request */
             (void)wh_MessageKeystore_TranslateCacheDmaRequest(
                 magic, (whMessageKeystore_CacheDmaRequest*)req_packet, &req);
 
             /* set the metadata fields */
-            meta->id = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, server->comm->client_id,
-                                     req.id);
+            meta->id = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
+                                     (uint16_t)server->comm->client_id,
+                                     (uint16_t)req.id);
             meta->access = WH_NVM_ACCESS_ANY;
             meta->flags  = req.flags;
             meta->len    = req.key.sz;
@@ -654,8 +656,8 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
         } break;
 
         case WH_KEY_EXPORT_DMA: {
-            whMessageKeystore_ExportDmaRequest  req;
-            whMessageKeystore_ExportDmaResponse resp;
+            whMessageKeystore_ExportDmaRequest  req = {0};
+            whMessageKeystore_ExportDmaResponse resp = {0};
 
             /* translate request */
             (void)wh_MessageKeystore_TranslateExportDmaRequest(
@@ -663,8 +665,9 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
 
             ret = wh_Server_KeystoreExportKeyDma(
                 server,
-                WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, server->comm->client_id,
-                              req.id),
+                WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
+                              (uint16_t)server->comm->client_id,
+                              (uint16_t)req.id),
                 req.key.addr, req.key.sz, meta);
             resp.rc = ret;
             /* propagate bad address to client if DMA operation failed */
@@ -689,15 +692,16 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
 #endif /* WOLFHSM_CFG_DMA */
 
         case WH_KEY_EVICT: {
-            whMessageKeystore_EvictRequest  req;
-            whMessageKeystore_EvictResponse resp;
+            whMessageKeystore_EvictRequest  req = {0};
+            whMessageKeystore_EvictResponse resp = {0};
 
             (void)wh_MessageKeystore_TranslateEvictRequest(
                 magic, (whMessageKeystore_EvictRequest*)req_packet, &req);
 
             ret = wh_Server_KeystoreEvictKey(
                 server, WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
-                                      server->comm->client_id, req.id));
+                                      (uint16_t)server->comm->client_id,
+                                      (uint16_t)req.id));
             resp.rc = ret;
             /* TODO: Are there any fatal server errors? */
             ret = WH_ERROR_OK;
@@ -708,8 +712,8 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
         } break;
 
         case WH_KEY_EXPORT: {
-            whMessageKeystore_ExportRequest  req;
-            whMessageKeystore_ExportResponse resp;
+            whMessageKeystore_ExportRequest  req = {0};
+            whMessageKeystore_ExportResponse resp = {0};
             uint32_t                         keySz;
 
             /* translate request */
@@ -723,8 +727,9 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
             /* read the key */
             ret = wh_Server_KeystoreReadKey(
                 server,
-                WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, server->comm->client_id,
-                              req.id),
+                WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
+                              (uint16_t)server->comm->client_id,
+                              (uint16_t)req.id),
                 meta, out, &keySz);
 
             /* Check if key is non-exportable */
@@ -757,8 +762,8 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
         } break;
 
         case WH_KEY_COMMIT: {
-            whMessageKeystore_CommitRequest  req;
-            whMessageKeystore_CommitResponse resp;
+            whMessageKeystore_CommitRequest  req = {0};
+            whMessageKeystore_CommitResponse resp = {0};
 
             /* translate request */
             (void)wh_MessageKeystore_TranslateCommitRequest(
@@ -766,7 +771,8 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
 
             ret = wh_Server_KeystoreCommitKey(
                 server, WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
-                                      server->comm->client_id, req.id));
+                                      (uint16_t)server->comm->client_id,
+                                      (uint16_t)req.id));
             resp.rc = ret;
             /* TODO: Are there any fatal server errors? */
             ret = WH_ERROR_OK;
@@ -783,8 +789,8 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
         } break;
 
         case WH_KEY_ERASE: {
-            whMessageKeystore_EraseRequest  req;
-            whMessageKeystore_EraseResponse resp;
+            whMessageKeystore_EraseRequest  req = {0};
+            whMessageKeystore_EraseResponse resp = {0};
 
             /* translate request */
             (void)wh_MessageKeystore_TranslateEraseRequest(
@@ -792,7 +798,8 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
 
             ret = wh_Server_KeystoreEraseKey(
                 server, WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
-                                      server->comm->client_id, req.id));
+                                      (uint16_t)server->comm->client_id,
+                                      (uint16_t)req.id));
             resp.rc = ret;
             /* TODO: Are there any fatal server errors? */
             ret = WH_ERROR_OK;
