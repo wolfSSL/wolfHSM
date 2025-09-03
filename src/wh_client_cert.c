@@ -119,7 +119,7 @@ int wh_Client_CertAddTrustedRequest(whClientContext* c, whNvmId id,
                                     uint8_t* label, whNvmSize label_len,
                                     const uint8_t* cert, uint32_t cert_len)
 {
-    whMessageCert_AddTrustedRequest req;
+    whMessageCert_AddTrustedRequest req = {0};
     uint8_t                         buffer[WOLFHSM_CFG_COMM_DATA_LEN] = {0};
     uint16_t                        hdr_len = sizeof(req);
     uint8_t*                        payload = buffer + hdr_len;
@@ -209,7 +209,7 @@ int wh_Client_CertAddTrusted(whClientContext* c, whNvmId id, whNvmAccess access,
 /* Delete a trusted certificate */
 int wh_Client_CertEraseTrustedRequest(whClientContext* c, whNvmId id)
 {
-    whMessageCert_EraseTrustedRequest req;
+    whMessageCert_EraseTrustedRequest req = {0};
 
     if (c == NULL) {
         return WH_ERROR_BADARGS;
@@ -277,8 +277,7 @@ int wh_Client_CertEraseTrusted(whClientContext* c, whNvmId id, int32_t* out_rc)
 int wh_Client_CertReadTrustedRequest(whClientContext* c, whNvmId id,
                                      uint32_t cert_len)
 {
-    (void)cert_len;
-    whMessageCert_ReadTrustedRequest req;
+    whMessageCert_ReadTrustedRequest req = {0};
 
     if (c == NULL) {
         return WH_ERROR_BADARGS;
@@ -364,7 +363,7 @@ static int _certVerifyRequest(whClientContext* c, const uint8_t* cert,
                               uint32_t cert_len, whNvmId trustedRootNvmId,
                               uint16_t flags, whKeyId keyId)
 {
-    whMessageCert_VerifyRequest req;
+    whMessageCert_VerifyRequest req = {0};
     uint8_t                     buffer[WOLFHSM_CFG_COMM_DATA_LEN] = {0};
     uint16_t                    hdr_len                           = sizeof(req);
     uint8_t*                    payload = buffer + hdr_len;
@@ -507,7 +506,7 @@ int wh_Client_CertAddTrustedDmaRequest(whClientContext* c, whNvmId id,
                                        uint8_t* label, whNvmSize label_len,
                                        const void* cert, uint32_t cert_len)
 {
-    whMessageCert_AddTrustedDmaRequest req;
+    whMessageCert_AddTrustedDmaRequest req = {0};
 
     if (c == NULL || cert_len > WOLFHSM_CFG_MAX_CERT_SIZE) {
         return WH_ERROR_BADARGS;
@@ -589,7 +588,7 @@ int wh_Client_CertAddTrustedDma(whClientContext* c, whNvmId id,
 int wh_Client_CertReadTrustedDmaRequest(whClientContext* c, whNvmId id,
                                         void* cert, uint32_t cert_len)
 {
-    whMessageCert_ReadTrustedDmaRequest req;
+    whMessageCert_ReadTrustedDmaRequest req = {0};
 
     if (c == NULL) {
         return WH_ERROR_BADARGS;
@@ -660,7 +659,7 @@ static int _certVerifyDmaRequest(whClientContext* c, const void* cert,
                                  uint32_t cert_len, whNvmId trustedRootNvmId,
                                  uint16_t flags, whKeyId keyId)
 {
-    whMessageCert_VerifyDmaRequest req;
+    whMessageCert_VerifyDmaRequest req = {0};
 
     if (c == NULL) {
         return WH_ERROR_BADARGS;
@@ -797,7 +796,7 @@ int wh_Client_CertVerifyAcertRequest(whClientContext* c, const void* cert,
                                      uint32_t cert_len,
                                      whNvmId  trustedRootNvmId)
 {
-    whMessageCert_VerifyAcertRequest req;
+    whMessageCert_VerifyAcertRequest req = {0};
     uint8_t                          buffer[WOLFHSM_CFG_COMM_DATA_LEN];
     size_t                           hdr_len = sizeof(req);
     uint8_t*                         payload = buffer + hdr_len;
@@ -875,7 +874,7 @@ int wh_Client_CertVerifyAcertDmaRequest(whClientContext* c, const void* cert,
                                         uint32_t cert_len,
                                         whNvmId  trustedRootNvmId)
 {
-    whMessageCert_VerifyDmaRequest req;
+    whMessageCert_VerifyDmaRequest req = {0};
 
     if (c == NULL) {
         return WH_ERROR_BADARGS;
