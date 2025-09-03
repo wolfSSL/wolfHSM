@@ -3,17 +3,18 @@ CMD_ECHO =
 
 # Important directories
 BUILD_DIR = ./Build
-WOLFHSM_DIR = $(CURDIR)/../../../../
-WOLFSSL_DIR ?= $(CURDIR)/../../../../../wolfssl
+WOLFHSM_DIR = $(CURDIR)/../../../
+WOLFSSL_DIR ?= $(CURDIR)/../../../../wolfssl
 
 # Project name
-BIN = wh_server_tcp
+BIN = wh_client_posix
 
 # Includes
 USER_SETTINGS_DIR ?= ./
 INC = -I$(WOLFHSM_DIR) \
       -I$(USER_SETTINGS_DIR) \
       -I$(WOLFSSL_DIR) \
+      -I../ \
 
 # Defines
 DEF = -DWOLFSSL_USER_SETTINGS -D_GNUC_ -DWOLFHSM_CFG -D_POSIX_C_SOURCE=200809L
@@ -68,9 +69,11 @@ SRC_C += $(wildcard $(WOLFHSM_DIR)/src/*.c)
 
 # WolfHSM port\HAL code
 SRC_C +=    $(WOLFHSM_DIR)/port/posix/posix_transport_tcp.c
+SRC_C +=    $(WOLFHSM_DIR)/port/posix/posix_transport_shm.c
 
 # Server App
-SRC_C += ./src/wh_server_tcp.c
+SRC_C += ./wh_client_posix.c
+SRC_C += $(wildcard ../*.c)
 
 
 FILENAMES_C = $(notdir $(SRC_C))

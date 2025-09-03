@@ -25,6 +25,8 @@
 #include "wolfhsm/wh_nvm_flash.h"
 #include "wolfhsm/wh_flash_ramsim.h"
 
+#include "wolfssl/version.h"
+#include "wh_example_posix.h"
 #include "port/posix/posix_transport_tcp.h"
 
 /** Local declarations */
@@ -92,6 +94,7 @@ enum {
 #define WH_SERVER_TCP_IPSTRING "127.0.0.1"
 #define WH_SERVER_TCP_PORT 23456
 #define WH_SERVER_ID 57
+const char* type = "tcp"; /* default to tcp type */
 
 /* Creates a new entry in the linked list based on the provided parameters */
 static Entry* createEntry(uint8_t clientId, uint16_t id, uint16_t access,
@@ -505,6 +508,11 @@ static int wh_ServerTask(void* cf, const char* keyFilePath, int keyId,
 
     if (ret == 0) {
         printf("Waiting for connection...\n");
+        if (strcmp(type, "shm") == 0) {
+            /* Shared memory assumes connected once memory is setup */
+            wh_Server_SetConnected(server, WH_COMM_CONNECTED);
+        }
+
         while (1) {
             ret = wh_Server_HandleRequestMessage(server);
             if (ret == WH_ERROR_NOTREADY) {
@@ -539,6 +547,11 @@ static int wh_ServerTask(void* cf, const char* keyFilePath, int keyId,
                         if (ret != 0) {
                             printf("Failed to reinitialize server: %d\n", ret);
                             break;
+                        }
+
+                        if (ret == WH_ERROR_OK && strcmp(type, "shm") == 0) {
+                            /* Shared memory assumes connected once memory is setup */
+                            wh_Server_SetConnected(server, WH_COMM_CONNECTED);
                         }
 
                         /* Reload keys into cache if file path was provided */
@@ -581,10 +594,11 @@ static int _hardwareCryptoCb(int devId, struct wc_CryptoInfo* info,
 
             /* III Not random, just simple counter */
             static uint16_t my_counter = 1;
-            if(my_counter > 4096) {
+            if (my_counter > 4096) {
                 /* Only allow 4096 bytes to be generated */
                 ret= CRYPTOCB_UNAVAILABLE;
-            } else {
+            }
+            else {
                 uint32_t i = 0;
                 for (i = 0; i < size; i++) {
                     out[i] = (uint8_t)my_counter++;
@@ -600,6 +614,16 @@ static int _hardwareCryptoCb(int devId, struct wc_CryptoInfo* info,
     return ret;
 }
 
+void Usage(const char* exeName)
+{
+    printf("Usage: %s --key <key_file_path> --id <key_id> --client <client_id> "
+        "--nvminit <nvm_init_file_path> --type <type>\n", exeName);
+    printf("Example: %s --key key.bin --id 123 --client 456"
+        "--nvminit nvm_init.txt --type tcp\n", exeName);
+    printf("type: tcp (default), shm\n");
+}
+
+
 int main(int argc, char** argv)
 {
     int         rc              = 0;
@@ -608,7 +632,10 @@ int main(int argc, char** argv)
     int         keyId = WH_KEYID_ERASED; /* Default key ID if none provided */
     int         clientId = 12; /* Default client ID if none provided */
     uint8_t     memory[FLASH_RAM_SIZE] = {0};
+    whServerConfig s_conf[1];
 
+    printf("Example wolfHSM POSIX server built with wolfSSL version %s\n",
+        LIBWOLFSSL_VERSION_STRING);
 
     /* Parse command-line arguments */
     for (int i = 1; i < argc; i++) {
@@ -624,21 +651,29 @@ int main(int argc, char** argv)
         else if (strcmp(argv[i], "--nvminit") == 0 && i + 1 < argc) {
             nvmInitFilePath = argv[++i];
         }
+        else if (strcmp(argv[i], "--type") == 0 && i + 1 < argc) {
+            type = argv[++i];
+        }
+        else {
+            printf("Invalid argument: %s\n", argv[i]);
+            Usage(argv[0]);
+            return -1;
+        }
     }
 
     /* Server configuration/context */
-    whTransportServerCb            ptttcb[1]      = {PTT_SERVER_CB};
-    posixTransportTcpServerContext tsc[1]         = {};
-    posixTransportTcpConfig        mytcpconfig[1] = {{
-               .server_ip_string = WH_SERVER_TCP_IPSTRING,
-               .server_port      = WH_SERVER_TCP_PORT,
-    }};
-    whCommServerConfig             cs_conf[1]     = {{
-                        .transport_cb      = ptttcb,
-                        .transport_context = (void*)tsc,
-                        .transport_config  = (void*)mytcpconfig,
-                        .server_id         = WH_SERVER_ID,
-    }};
+    if (strcmp(type, "tcp") == 0) {
+        printf("Using TCP transport\n");
+        wh_Server_ExampleTCPConfig(s_conf);
+    }
+    else if (strcmp(type, "shm") == 0) {
+        printf("Using shared memory transport\n");
+        wh_Server_ExampleSHMConfig(s_conf);
+    }
+    else {
+        printf("Invalid server type: %s\n", type);
+        return -1;
+    }
 
     /* RamSim Flash state and configuration */
     whFlashRamsimCtx fc[1]      = {0};
@@ -676,15 +711,13 @@ int main(int argc, char** argv)
     whServerSheContext she[1] = {{0}};
 #endif
 
-    whServerConfig s_conf[1] = {{
-        .comm_config = cs_conf,
-        .nvm         = nvm,
-        .crypto      = crypto,
-        .devId       = INVALID_DEVID,
+
+    s_conf->nvm         = nvm;
+    s_conf->crypto      = crypto;
+    s_conf->devId       = INVALID_DEVID;
 #if defined(WOLFHSM_CFG_SHE_EXTENSION)
-        .she         = she,
+    s_conf->she         = she;
 #endif
-    }};
 
     rc = wh_Nvm_Init(nvm, n_conf);
     if (rc != 0) {
