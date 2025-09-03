@@ -373,16 +373,12 @@ int wh_Client_AesSetKeyId(Aes* key, whNvmId keyId);
 int wh_Client_AesGetKeyId(Aes* key, whNvmId* outId);
 
 #ifdef WOLFSSL_AES_COUNTER
-int wh_Client_AesCtr(whClientContext* ctx,
-        Aes* aes, int enc,
-        const uint8_t* in, uint32_t len,
-        uint8_t* out);
+int wh_Client_AesCtr(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
+                     uint32_t len, uint8_t* out);
 #endif /* WOLFSSL_AES_COUNTER */
 #ifdef HAVE_AES_ECB
-int wh_Client_AesEcb(whClientContext* ctx,
-        Aes* aes, int enc,
-        const uint8_t* in, uint32_t len,
-        uint8_t* out);
+int wh_Client_AesEcb(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
+                     uint32_t len, uint8_t* out);
 #endif /* HAVE_AES_ECB */
 #ifdef HAVE_AES_CBC
 int wh_Client_AesCbc(whClientContext* ctx,

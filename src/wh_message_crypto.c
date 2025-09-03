@@ -102,7 +102,6 @@ int wh_MessageCrypto_TranslateAesCtrResponse(
     }
     WH_T32(magic, dest, src, sz);
     WH_T32(magic, dest, src, left);
-    /* Padding is already handled by the structure definition */
     return 0;
 }
 /* AES Ecb Request translation */
