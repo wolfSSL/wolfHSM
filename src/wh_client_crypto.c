@@ -2531,8 +2531,8 @@ int wh_Client_Sha256Dma(whClientContext* ctx, wc_Sha256* sha, const uint8_t* in,
     uint16_t                           respSz  = 0;
     uint16_t                           group   = WH_MESSAGE_GROUP_CRYPTO_DMA;
     uint8_t*                           dataPtr = NULL;
-    whMessageCrypto_Sha2DmaRequest*  req     = NULL;
-    whMessageCrypto_Sha2DmaResponse* resp    = NULL;
+    whMessageCrypto_Sha2DmaRequest*    req     = NULL;
+    whMessageCrypto_Sha2DmaResponse*   resp    = NULL;
 
     /* Get data pointer from the context to use as request/response storage */
     dataPtr = (uint8_t*)wh_CommClient_GetDataPtr(ctx->comm);
@@ -2629,13 +2629,13 @@ static int _xferSha224BlockAndUpdateDigest(whClientContext* ctx,
                                            wc_Sha224*       sha224,
                                            uint32_t         isLastBlock)
 {
-    uint16_t                        group   = WH_MESSAGE_GROUP_CRYPTO;
-    uint16_t                        action  = WH_MESSAGE_ACTION_NONE;
-    int                             ret     = 0;
-    uint16_t                        dataSz  = 0;
-    whMessageCrypto_Sha256Request*  req     = NULL;
-    whMessageCrypto_Sha2Response*   res     = NULL;
-    uint8_t*                        dataPtr = NULL;
+    uint16_t                       group   = WH_MESSAGE_GROUP_CRYPTO;
+    uint16_t                       action  = WH_MESSAGE_ACTION_NONE;
+    int                            ret     = 0;
+    uint16_t                       dataSz  = 0;
+    whMessageCrypto_Sha256Request* req     = NULL;
+    whMessageCrypto_Sha2Response*  res     = NULL;
+    uint8_t*                       dataPtr = NULL;
 
     /* Get data buffer */
     dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
@@ -2660,7 +2660,7 @@ static int _xferSha224BlockAndUpdateDigest(whClientContext* ctx,
         req->isLastBlock = 0;
     }
     memcpy(req->inBlock, sha224->buffer,
-            (isLastBlock) ? sha224->buffLen : WC_SHA224_BLOCK_SIZE);
+           (isLastBlock) ? sha224->buffLen : WC_SHA224_BLOCK_SIZE);
 
     /* Send the hash state - this will be 0 on the first block on a properly
      * initialized sha224 struct */
@@ -2782,11 +2782,11 @@ int wh_Client_Sha224(whClientContext* ctx, wc_Sha224* sha224, const uint8_t* in,
 int wh_Client_Sha224Dma(whClientContext* ctx, wc_Sha224* sha, const uint8_t* in,
                         uint32_t inLen, uint8_t* out)
 {
-    int                                ret     = WH_ERROR_OK;
-    wc_Sha224*                         sha224  = sha;
-    uint16_t                           respSz  = 0;
-    uint16_t                           group   = WH_MESSAGE_GROUP_CRYPTO_DMA;
-    uint8_t*                           dataPtr = NULL;
+    int                              ret     = WH_ERROR_OK;
+    wc_Sha224*                       sha224  = sha;
+    uint16_t                         respSz  = 0;
+    uint16_t                         group   = WH_MESSAGE_GROUP_CRYPTO_DMA;
+    uint8_t*                         dataPtr = NULL;
     whMessageCrypto_Sha2DmaRequest*  req     = NULL;
     whMessageCrypto_Sha2DmaResponse* resp    = NULL;
 
@@ -2885,13 +2885,13 @@ static int _xferSha384BlockAndUpdateDigest(whClientContext* ctx,
                                            wc_Sha384*       sha384,
                                            uint32_t         isLastBlock)
 {
-    uint16_t                        group   = WH_MESSAGE_GROUP_CRYPTO;
-    uint16_t                        action  = WH_MESSAGE_ACTION_NONE;
-    int                             ret     = 0;
-    uint16_t                        dataSz  = 0;
-    whMessageCrypto_Sha512Request*  req     = NULL;
-    whMessageCrypto_Sha2Response*   res     = NULL;
-    uint8_t*                        dataPtr = NULL;
+    uint16_t                       group   = WH_MESSAGE_GROUP_CRYPTO;
+    uint16_t                       action  = WH_MESSAGE_ACTION_NONE;
+    int                            ret     = 0;
+    uint16_t                       dataSz  = 0;
+    whMessageCrypto_Sha512Request* req     = NULL;
+    whMessageCrypto_Sha2Response*  res     = NULL;
+    uint8_t*                       dataPtr = NULL;
 
     /* Get data buffer */
     dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
@@ -2916,7 +2916,7 @@ static int _xferSha384BlockAndUpdateDigest(whClientContext* ctx,
         req->isLastBlock = 0;
     }
     memcpy(req->inBlock, sha384->buffer,
-            (isLastBlock) ? sha384->buffLen : WC_SHA384_BLOCK_SIZE);
+           (isLastBlock) ? sha384->buffLen : WC_SHA384_BLOCK_SIZE);
 
     /* Send the hash state - this will be 0 on the first block on a properly
      * initialized sha384 struct */
@@ -3036,11 +3036,11 @@ int wh_Client_Sha384(whClientContext* ctx, wc_Sha384* sha384, const uint8_t* in,
 int wh_Client_Sha384Dma(whClientContext* ctx, wc_Sha384* sha, const uint8_t* in,
                         uint32_t inLen, uint8_t* out)
 {
-    int                                ret     = WH_ERROR_OK;
-    wc_Sha384*                         sha384  = sha;
-    uint16_t                           respSz  = 0;
-    uint16_t                           group   = WH_MESSAGE_GROUP_CRYPTO_DMA;
-    uint8_t*                           dataPtr = NULL;
+    int                              ret     = WH_ERROR_OK;
+    wc_Sha384*                       sha384  = sha;
+    uint16_t                         respSz  = 0;
+    uint16_t                         group   = WH_MESSAGE_GROUP_CRYPTO_DMA;
+    uint8_t*                         dataPtr = NULL;
     whMessageCrypto_Sha2DmaRequest*  req     = NULL;
     whMessageCrypto_Sha2DmaResponse* resp    = NULL;
 
@@ -3140,13 +3140,13 @@ static int _xferSha512BlockAndUpdateDigest(whClientContext* ctx,
                                            wc_Sha512*       sha512,
                                            uint32_t         isLastBlock)
 {
-    uint16_t                        group   = WH_MESSAGE_GROUP_CRYPTO;
-    uint16_t                        action  = WH_MESSAGE_ACTION_NONE;
-    int                             ret     = 0;
-    uint16_t                        dataSz  = 0;
-    whMessageCrypto_Sha512Request*  req     = NULL;
-    whMessageCrypto_Sha2Response*   res     = NULL;
-    uint8_t*                        dataPtr = NULL;
+    uint16_t                       group   = WH_MESSAGE_GROUP_CRYPTO;
+    uint16_t                       action  = WH_MESSAGE_ACTION_NONE;
+    int                            ret     = 0;
+    uint16_t                       dataSz  = 0;
+    whMessageCrypto_Sha512Request* req     = NULL;
+    whMessageCrypto_Sha2Response*  res     = NULL;
+    uint8_t*                       dataPtr = NULL;
 
     /* Get data buffer */
     dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
@@ -3171,13 +3171,13 @@ static int _xferSha512BlockAndUpdateDigest(whClientContext* ctx,
         req->isLastBlock = 0;
     }
     memcpy(req->inBlock, sha512->buffer,
-            (isLastBlock) ? sha512->buffLen : WC_SHA512_BLOCK_SIZE);
+           (isLastBlock) ? sha512->buffLen : WC_SHA512_BLOCK_SIZE);
 
     /* Send the hash state - this will be 0 on the first block on a properly
      * initialized sha512 struct */
     memcpy(req->resumeState.hash, sha512->digest, WC_SHA512_DIGEST_SIZE);
-    req->resumeState.hiLen = sha512->hiLen;
-    req->resumeState.loLen = sha512->loLen;
+    req->resumeState.hiLen    = sha512->hiLen;
+    req->resumeState.loLen    = sha512->loLen;
     req->resumeState.hashType = sha512->hashType;
     uint32_t req_len =
         sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
@@ -3284,7 +3284,7 @@ int wh_Client_Sha512(whClientContext* ctx, wc_Sha512* sha512, const uint8_t* in,
         /* reset the state of the sha context (without blowing away devId and
          *  hashType)
          */
-        switch(hashType) {
+        switch (hashType) {
             case WC_HASH_TYPE_SHA512_224:
                 ret = wc_InitSha512_224_ex(sha512, NULL, sha512->devId);
                 break;
@@ -3302,11 +3302,11 @@ int wh_Client_Sha512(whClientContext* ctx, wc_Sha512* sha512, const uint8_t* in,
 int wh_Client_Sha512Dma(whClientContext* ctx, wc_Sha512* sha, const uint8_t* in,
                         uint32_t inLen, uint8_t* out)
 {
-    int                                ret     = WH_ERROR_OK;
-    wc_Sha512*                         sha512  = sha;
-    uint16_t                           respSz  = 0;
-    uint16_t                           group   = WH_MESSAGE_GROUP_CRYPTO_DMA;
-    uint8_t*                           dataPtr = NULL;
+    int                              ret     = WH_ERROR_OK;
+    wc_Sha512*                       sha512  = sha;
+    uint16_t                         respSz  = 0;
+    uint16_t                         group   = WH_MESSAGE_GROUP_CRYPTO_DMA;
+    uint8_t*                         dataPtr = NULL;
     whMessageCrypto_Sha2DmaRequest*  req     = NULL;
     whMessageCrypto_Sha2DmaResponse* resp    = NULL;
 
