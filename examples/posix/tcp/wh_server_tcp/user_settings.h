@@ -165,6 +165,8 @@ extern "C" {
 /*
 #define XSTRCASECMP(s1,s2) strcmp((s1),(s2))
 */
+
+/* POSIX version of strcasecmp */
 #include <strings.h>
 
 /* ------------------------------------------------------------------------- */

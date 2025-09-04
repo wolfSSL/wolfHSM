@@ -1,90 +1,118 @@
-# Set to @ if you want to suppress command echo
-CMD_ECHO =
+## Makefile for wolfHSM Client example using POSIX port
 
-# Important directories
-BUILD_DIR = ./Build
-WOLFHSM_DIR = $(CURDIR)/../../../../
-WOLFHSM_CLIENT_DEMO_DIR = $(CURDIR)/../../../demo/client
-WOLFSSL_DIR ?= $(CURDIR)/../../../../../wolfssl
-
-
-# Project name
+## Project name
+# Sets output filenames
 BIN = wh_client_tcp
 
+## Important directories
+# Base directory for additional project files
+PROJECT_DIR				?= .
+CONFIG_DIR				?= $(PROJECT_DIR)/config
+# wolfSSL and wolfHSM directories
+WOLFSSL_DIR				?= ../../../../../wolfssl
+WOLFHSM_DIR				?= ../../../../../wolfHSM
+WOLFHSM_PORT_DIR		?= $(WOLFHSM_DIR)/port/posix
+WOLFHSM_DEMO_CLIENT_DIR	?= $(WOLFHSM_DIR)/examples/demo/client
+
+# Output directory for build files
+BUILD_DIR				?= $(PROJECT_DIR)/Build
+
 # Includes
-USER_SETTINGS_DIR ?= ./
-INC = -I$(WOLFHSM_DIR) \
-      -I$(USER_SETTINGS_DIR) \
-      -I$(WOLFSSL_DIR) \
-      -I$(WOLFHSM_CLIENT_DEMO_DIR)
+INC =   -I$(PROJECT_DIR) \
+		-I$(CONFIG_DIR) \
+		-I$(WOLFSSL_DIR) \
+		-I$(WOLFHSM_DIR) \
+		-I$(WOLFHSM_PORT_DIR) \
+		-I$(WOLFHSM_DEMO_CLIENT_DIR)
 
-# Defines
-DEF = -DWOLFSSL_USER_SETTINGS -D WOLFHSM_CFG -D_GNUC_
+# POSIX requires C source be defined before any header
+DEF += -D_POSIX_C_SOURCE=200809L
 
-# Architecture
+# Library configuration defines for user-supplied settings
+DEF += -DWOLFSSL_USER_SETTINGS -DWOLFHSM_CFG
+
+# Set the default device ID for wolfCrypt tests
+DEF += -DWC_USE_DEVID=0x5748534D
+
+# Architecture flags for assembler, C compiler and linker
 ARCHFLAGS ?=
 
-# Compiler and linker flags
-ASFLAGS ?= $(ARCHFLAGS)
-CFLAGS_EXTRA ?= -Wextra
-CFLAGS ?= $(ARCHFLAGS) -Wno-cpp -std=c99 -Wall -Werror $(CFLAGS_EXTRA)
-LDFLAGS ?= $(ARCHFLAGS)
+# Enable extra C compiler warnings
+CFLAGS_EXTRA = -Werror -Wall -Wextra
+# Place functions / data into separate sections to allow unused code removal
+CFLAGS_EXTRA += -ffunction-sections -fdata-sections
+
+# C standard to use (default to c90 if not specified)
+CSTD 		?= -std=c90
+
+ASFLAGS 	?= $(ARCHFLAGS)
+CFLAGS 		?= $(ARCHFLAGS) $(CSTD) $(CFLAGS_EXTRA)
+LDFLAGS 	?= $(ARCHFLAGS)
+
+# Enable garbage collection.  Inexact handling of dead_strip
+OS_NAME := $(shell uname -s | tr A-Z a-z)
+ifeq ($(OS_NAME),darwin)
+	LDFLAGS += -Wl,-dead_strip
+else
+	LDFLAGS += -Wl,--gc-sections
+endif
 
 # LD: generate map
+#LDFLAGS += -Wl,-map,$(BUILD_DIR)/$(BIN).map
 #LDFLAGS += -Wl,-Map=$(BUILD_DIR)/$(BIN).map
 
-# Libc for printf, libm for math
-LIBS = -lc -lm
+## Makefile options
 
-# Optimization level and place functions / data into separate sections to allow dead code removal
-CFLAGS += -O0 -ffunction-sections -fdata-sections
-#-fstrict-volatile-bitfields #-fno-builtin
+# Set to @ if you want to suppress command echo
+CMD_ECHO ?=
 
-# Remove unused sections and link time optimizations
-#LDFLAGS += -Wl,--cref -Wl,--gc-sections -static -u _printf_float -Wl,--start-group $(LIBS) -Wl,--end-group -flto
-#-nostartfiles #-nodefaultlibs # -nostdlib
+# Check if DEBUG is set to 1 and append debug flags
+ifeq ($(DEBUG),1)
+	DBGFLAGS = -ggdb -g3
+	CFLAGS += $(DBGFLAGS)
+	LDFLAGS += $(DBGFLAGS)
+endif
 
-# Debugging
-DBGFLAGS = -ggdb -g3
-CFLAGS += $(DBGFLAGS)
-LDFLAGS += $(DBGFLAGS)
-
+## Source files
 # Assembly source files
-#SRC_ASM +=
+SRC_ASM +=
 
-#wolfCrypt source files
+# wolfCrypt source files
 SRC_C += $(wildcard $(WOLFSSL_DIR)/wolfcrypt/src/*.c)
 
-DEF += -D_POSIX_C_SOURCE=200809L -DWC_USE_DEVID=0x5748534D
-
-#wolfCrypt test/benchmark source files
+# wolfCrypt test/benchmark source files
 SRC_C += $(wildcard $(WOLFSSL_DIR)/wolfcrypt/test/*.c)
 SRC_C += $(wildcard $(WOLFSSL_DIR)/wolfcrypt/benchmark/*.c)
 
-#wolfSSL source files
-#SRC_C += $(wildcard $(WOLFSSL_DIR)/src/*.c)
+# wolfSSL source files
+SRC_C += $(wildcard $(WOLFSSL_DIR)/src/*.c)
 
 # wolfHSM source files
-SRC_C += $(wildcard $(WOLFHSM_DIR)/src/*.c)
+SRC_C +=  $(wildcard $(WOLFHSM_DIR)/src/*.c)
 
-# WolfHSM port\HAL code
-SRC_C += $(WOLFHSM_DIR)/port/posix/posix_transport_tcp.c
+# wolfHSM port/HAL code
+SRC_C +=  $(wildcard $(WOLFHSM_PORT_DIR)/*.c)
+
+# Project
+SRC_C +=  $(wildcard $(PROJECT_DIR)/*.c)
 
 # Demo client code
-SRC_C += $(wildcard $(WOLFHSM_CLIENT_DEMO_DIR)/*.c) 
+SRC_C += $(wildcard $(WOLFHSM_DEMO_CLIENT_DIR)/*.c) 
 
-# APP
-SRC_C += ./src/wh_client_tcp.c
 
+## Automated processing below
 
 FILENAMES_C = $(notdir $(SRC_C))
-#FILENAMES_C := $(filter-out evp.c, $(FILENAMES_C))
 OBJS_C = $(addprefix $(BUILD_DIR)/, $(FILENAMES_C:.c=.o))
 vpath %.c $(dir $(SRC_C))
 
 OBJS_ASM = $(addprefix $(BUILD_DIR)/, $(notdir $(SRC_ASM:.s=.o)))
 vpath %.s $(dir $(SRC_ASM))
 
+
+## Makefile Targets
+
+.PHONY: build_app build_hex build_static clean
 
 build_app: $(BUILD_DIR) $(BUILD_DIR)/$(BIN).elf
 	@echo Build complete.
@@ -121,7 +149,13 @@ $(BUILD_DIR)/$(BIN).a: $(OBJS_ASM) $(OBJS_C)
 	$(CMD_ECHO) $(AR) -r $@ $^
 
 clean:
-	rm -f $(BUILD_DIR)/*.elf $(BUILD_DIR)/*.hex $(BUILD_DIR)/*.map
-	rm -f $(BUILD_DIR)/*.o $(BUILD_DIR)/*.a $(BUILD_DIR)/*.sym $(BUILD_DIR)/*.disasm
-
+	@echo "Cleaning build files"
+	@rm -f 	\
+			$(BUILD_DIR)/*.elf \
+			$(BUILD_DIR)/*.hex \
+			$(BUILD_DIR)/*.map \
+			$(BUILD_DIR)/*.o \
+			$(BUILD_DIR)/*.a \
+			$(BUILD_DIR)/*.sym \
+			$(BUILD_DIR)/*.disasm
 

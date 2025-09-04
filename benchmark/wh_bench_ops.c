@@ -345,31 +345,35 @@ int wh_Bench_PrintResults(whBenchOpContext* ctx)
                             (unsigned long long)ctx->ops[i].maxTimeUs);
 
             /* Print throughput - directly using printf with formatting */
+            char buffer[20] = {0};
             if (ctx->ops[i].throughputType == BENCH_THROUGHPUT_XBPS) {
                 double throughput = ctx->ops[i].throughput;
 
                 if (throughput < 1024.0) {
                     /* Bytes per second */
-                    WH_BENCH_PRINTF("%.2f B/s", throughput);
+                    WH_BENCH_SNPRINTF(buffer, sizeof(buffer), 
+                                "%.2f B/s", throughput);
                 }
                 else if (throughput < 1024.0 * 1024.0) {
                     /* Kilobytes per second */
-                    WH_BENCH_PRINTF("%.2f KB/s", throughput / 1024.0);
+                    WH_BENCH_SNPRINTF(buffer, sizeof(buffer), 
+                                "%.2f KB/s", throughput / 1024.0);
                 }
                 else {
                     /* Megabytes per second */
-                    WH_BENCH_PRINTF("%.2f MB/s",
-                                    throughput / (1024.0 * 1024.0));
+                    WH_BENCH_SNPRINTF(buffer, sizeof(buffer), 
+                                "%.2f MB/s", throughput / (1024.0 * 1024.0));
                 }
             }
             else if (ctx->ops[i].throughputType == BENCH_THROUGHPUT_OPS) {
-                WH_BENCH_PRINTF("%.2f ops/s", ctx->ops[i].throughput);
+                WH_BENCH_SNPRINTF(buffer, sizeof(buffer), 
+                                "%.2f ops/s", ctx->ops[i].throughput);
             }
             else {
                 /* No throughput */
-                WH_BENCH_PRINTF("N/A");
+                WH_BENCH_SNPRINTF(buffer, sizeof(buffer), "N/A");
             }
-            WH_BENCH_PRINTF("\n");
+            WH_BENCH_PRINTF("%-18s |\n", buffer);
         }
     }
 

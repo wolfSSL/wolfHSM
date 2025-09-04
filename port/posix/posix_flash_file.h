@@ -18,12 +18,6 @@
  */
 /*
  * port/posix/posix_flash_file.h
- */
-
-#ifndef PORT_POSIX_POSIX_FLASH_FILE_H_
-#define PORT_POSIX_POSIX_FLASH_FILE_H_
-
-/*
  * This POSIX NVM simulator uses a single file to provide flash-like reads and
  * writes on a backend that supports only "write-once" semantics (with a
  * unit program size of 64-bits) and a large erase sector size.  In this case,
@@ -31,6 +25,11 @@
  * require fully copying the "active" half NVM to the "inactive" half and
  * updating the initial flags to update the state.
  */
+
+#ifndef PORT_POSIX_POSIX_FLASH_FILE_H_
+#define PORT_POSIX_POSIX_FLASH_FILE_H_
+
+#include <stdint.h>
 
 #include "wolfhsm/wh_flash.h"
 
@@ -77,4 +76,4 @@ int posixFlashFile_BlankCheck(void* c, uint32_t offset, uint32_t size);
     .BlankCheck = posixFlashFile_BlankCheck,        \
 }
 
-#endif /* PORT_POSIX_POSIX_FLASH_FILE_H_ */
+#endif /* !PORT_POSIX_POSIX_FLASH_FILE_H_ */

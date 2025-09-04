@@ -643,6 +643,8 @@ int whTest_CertRamSim(void)
 #endif
     }};
 
+    printf("Testing Server Certificate with RAM sim...\n");
+ 
     /* Initialize NVM */
     WH_TEST_RETURN_ON_FAIL(wh_Nvm_Init(nvm, n_conf));
 #ifndef WOLFHSM_CFG_NO_CRYPTO
