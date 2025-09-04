@@ -510,7 +510,6 @@ int wh_Client_Sha256(whClientContext* ctx, wc_Sha256* sha, const uint8_t* in,
                      uint32_t inLen, uint8_t* out);
 
 
-
 /**
  * @brief Performs a SHA-256 hash operation on the input data using DMA.
  *

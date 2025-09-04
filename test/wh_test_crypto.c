@@ -686,44 +686,45 @@ static int whTest_CryptoSha256(whClientContext* ctx, int devId, WC_RNG* rng)
 #ifdef WOLFSSL_SHA224
 static int whTest_CryptoSha224(whClientContext* ctx, int devId, WC_RNG* rng)
 {
-    (void)ctx; (void)rng; /* Not currently used */
-    int ret = WH_ERROR_OK;
+    (void)ctx;
+    (void)rng; /* Not currently used */
+    int       ret = WH_ERROR_OK;
     wc_Sha224 sha224[1];
     uint8_t   out[WC_SHA224_DIGEST_SIZE];
     /* Vector exactly one block size in length */
     const char inOne[] =
         "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     const uint8_t expectedOutOne[WC_SHA224_DIGEST_SIZE] = {
-        0xa8, 0x8c, 0xd5, 0xcd, 0xe6, 0xd6, 0xfe, 0x91, 0x36, 0xa4, 0xe5,
-        0x8b, 0x49, 0x16, 0x74, 0x61, 0xea, 0x95, 0xd3, 0x88, 0xca, 0x2b,
-        0xdb, 0x7a, 0xfd, 0xc3, 0xcb, 0xf4};
+        0xa8, 0x8c, 0xd5, 0xcd, 0xe6, 0xd6, 0xfe, 0x91, 0x36, 0xa4,
+        0xe5, 0x8b, 0x49, 0x16, 0x74, 0x61, 0xea, 0x95, 0xd3, 0x88,
+        0xca, 0x2b, 0xdb, 0x7a, 0xfd, 0xc3, 0xcb, 0xf4};
     /* Vector long enough to span a SHA224 block */
-    const char inMulti[] =
-        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWX"
-        "YZ1234567890abcdefghi";
+    const char inMulti[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWX"
+                           "YZ1234567890abcdefghi";
     const uint8_t expectedOutMulti[WC_SHA224_DIGEST_SIZE] = {
-        0xb4, 0x22, 0xdc, 0xe8, 0xf9, 0x48, 0x8c, 0x4b, 0xc3, 0xef, 0x8e,
-        0x7d, 0xbe, 0x11, 0xc7, 0x21, 0xba, 0x38, 0xcb, 0x61, 0xf5, 0x6b,
-        0x7d, 0xc5, 0x30, 0xa7, 0x9c, 0xfd};
+        0xb4, 0x22, 0xdc, 0xe8, 0xf9, 0x48, 0x8c, 0x4b, 0xc3, 0xef,
+        0x8e, 0x7d, 0xbe, 0x11, 0xc7, 0x21, 0xba, 0x38, 0xcb, 0x61,
+        0xf5, 0x6b, 0x7d, 0xc5, 0x30, 0xa7, 0x9c, 0xfd};
     /* Initialize SHA224 structure */
     ret = wc_InitSha224_ex(sha224, NULL, devId);
     if (ret != 0) {
         WH_ERROR_PRINT("Failed to wc_InitSha224 on devId 0x%X: %d\n", devId,
-                ret);
-    } else {
+                       ret);
+    }
+    else {
         /* Test SHA224 on a single block worth of data. Should trigger a server
          * transaction */
-        ret = wc_Sha224Update(sha224,
-                (const byte*)inOne,
-                WC_SHA224_BLOCK_SIZE);
+        ret = wc_Sha224Update(sha224, (const byte*)inOne, WC_SHA224_BLOCK_SIZE);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed to wc_Sha224Update %d\n", ret);
-        } else {
+        }
+        else {
             /* Finalize should trigger a server transaction with empty buffer */
             ret = wc_Sha224Final(sha224, out);
             if (ret != 0) {
                 WH_ERROR_PRINT("Failed to wc_Sha224Final %d\n", ret);
-            } else {
+            }
+            else {
                 /* Compare the computed hash with the expected output */
                 if (memcmp(out, expectedOutOne, WC_SHA224_DIGEST_SIZE) != 0) {
                     WH_ERROR_PRINT("SHA224 hash does not match expected.\n");
@@ -740,46 +741,48 @@ static int whTest_CryptoSha224(whClientContext* ctx, int devId, WC_RNG* rng)
         ret = wc_InitSha224_ex(sha224, NULL, devId);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed to wc_InitSha224 for devId 0x%X: %d\n",
-                    devId, ret);
-        } else {
+                           devId, ret);
+        }
+        else {
             /* Update with a non-block aligned length. Will not trigger server
              * transaction */
-            ret = wc_Sha224Update(sha224,
-                    (const byte*)inMulti,
-                    1);
+            ret = wc_Sha224Update(sha224, (const byte*)inMulti, 1);
             if (ret != 0) {
                 WH_ERROR_PRINT("Failed to wc_Sha224Update (first) %d\n", ret);
-            } else {
+            }
+            else {
                 /* Update with a full block, will trigger block to be sent to
                  * server and one additional byte to be buffered */
-                ret = wc_Sha224Update(sha224,
-                        (const byte*)inMulti + 1,
-                        WC_SHA224_BLOCK_SIZE);
+                ret = wc_Sha224Update(sha224, (const byte*)inMulti + 1,
+                                      WC_SHA224_BLOCK_SIZE);
                 if (ret != 0) {
                     WH_ERROR_PRINT("Failed to wc_Sha224Update (mid) %d\n", ret);
-                } else {
+                }
+                else {
                     /* Update with the remaining data, should not trigger server
                      * transaction */
-                    ret = wc_Sha224Update(sha224,
-                            (const byte*)inMulti + 1 + WC_SHA224_BLOCK_SIZE,
-                           strlen(inMulti) - 1 - WC_SHA224_BLOCK_SIZE);
+                    ret = wc_Sha224Update(
+                        sha224, (const byte*)inMulti + 1 + WC_SHA224_BLOCK_SIZE,
+                        strlen(inMulti) - 1 - WC_SHA224_BLOCK_SIZE);
                     if (ret != 0) {
                         WH_ERROR_PRINT("Failed to wc_Sha224Update (last) %d\n",
-                                ret);
-                    } else {
+                                       ret);
+                    }
+                    else {
                         /* Finalize should trigger a server transaction on the
                          * remaining partial buffer */
                         ret = wc_Sha224Final(sha224, out);
                         if (ret != 0) {
                             WH_ERROR_PRINT("Failed to wc_Sha224Final %d\n",
-                                    ret);
-                        } else {
+                                           ret);
+                        }
+                        else {
                             /* Compare the computed hash with the expected
                              * output */
                             if (memcmp(out, expectedOutMulti,
                                        WC_SHA224_DIGEST_SIZE) != 0) {
                                 WH_ERROR_PRINT("SHA224 hash does not match the "
-                                        "expected output.\n");
+                                               "expected output.\n");
                                 ret = -1;
                             }
                         }
@@ -799,8 +802,9 @@ static int whTest_CryptoSha224(whClientContext* ctx, int devId, WC_RNG* rng)
 #ifdef WOLFSSL_SHA384
 static int whTest_CryptoSha384(whClientContext* ctx, int devId, WC_RNG* rng)
 {
-    (void)ctx; (void)rng; /* Not currently used */
-    int ret = WH_ERROR_OK;
+    (void)ctx;
+    (void)rng; /* Not currently used */
+    int       ret = WH_ERROR_OK;
     wc_Sha384 sha384[1];
     uint8_t   out[WC_SHA384_DIGEST_SIZE];
     /* Vector exactly one block size in length */
@@ -808,41 +812,40 @@ static int whTest_CryptoSha384(whClientContext* ctx, int devId, WC_RNG* rng)
         "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     const uint8_t expectedOutOne[WC_SHA384_DIGEST_SIZE] = {
-        0xed, 0xb1, 0x27, 0x30, 0xa3, 0x66, 0x09, 0x8b, 0x3b, 0x2b, 0xea,
-        0xc7, 0x5a, 0x3b, 0xef, 0x1b, 0x09, 0x69, 0xb1, 0x5c, 0x48, 0xe2,
-        0x16, 0x3c, 0x23, 0xd9, 0x69, 0x94, 0xf8, 0xd1, 0xbe, 0xf7, 0x60,
-        0xc7, 0xe2, 0x7f, 0x3c, 0x46, 0x4d, 0x38, 0x29, 0xf5, 0x6c, 0x0d,
-        0x53, 0x80, 0x8b, 0x0b};
+        0xed, 0xb1, 0x27, 0x30, 0xa3, 0x66, 0x09, 0x8b, 0x3b, 0x2b, 0xea, 0xc7,
+        0x5a, 0x3b, 0xef, 0x1b, 0x09, 0x69, 0xb1, 0x5c, 0x48, 0xe2, 0x16, 0x3c,
+        0x23, 0xd9, 0x69, 0x94, 0xf8, 0xd1, 0xbe, 0xf7, 0x60, 0xc7, 0xe2, 0x7f,
+        0x3c, 0x46, 0x4d, 0x38, 0x29, 0xf5, 0x6c, 0x0d, 0x53, 0x80, 0x8b, 0x0b};
     /* Vector long enough to span a SHA384 block */
     const char inMulti[] =
         "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWX"
         "YZ1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWX"
         "YZ1234567890abcdefghi";
     const uint8_t expectedOutMulti[WC_SHA384_DIGEST_SIZE] = {
-        0xe2, 0x56, 0x2a, 0x4b, 0xe2, 0x0a, 0x40, 0x34, 0xc1, 0x23, 0x8b,
-        0x1d, 0x68, 0x49, 0x17, 0xdb, 0x8d, 0x3a, 0x78, 0xab, 0x22, 0xf3,
-        0xa1, 0x51, 0x70, 0xae, 0x26, 0x80, 0x06, 0x25, 0x99, 0xa5, 0x3d,
-        0x0f, 0xc3, 0x7a, 0xbd, 0xe1, 0xe2, 0xc6, 0x07, 0xdf, 0xd9, 0x6a,
-        0x89, 0xa8, 0x2b, 0x99};
+        0xe2, 0x56, 0x2a, 0x4b, 0xe2, 0x0a, 0x40, 0x34, 0xc1, 0x23, 0x8b, 0x1d,
+        0x68, 0x49, 0x17, 0xdb, 0x8d, 0x3a, 0x78, 0xab, 0x22, 0xf3, 0xa1, 0x51,
+        0x70, 0xae, 0x26, 0x80, 0x06, 0x25, 0x99, 0xa5, 0x3d, 0x0f, 0xc3, 0x7a,
+        0xbd, 0xe1, 0xe2, 0xc6, 0x07, 0xdf, 0xd9, 0x6a, 0x89, 0xa8, 0x2b, 0x99};
     /* Initialize SHA384 structure */
     ret = wc_InitSha384_ex(sha384, NULL, devId);
     if (ret != 0) {
         WH_ERROR_PRINT("Failed to wc_InitSha384 on devId 0x%X: %d\n", devId,
-                ret);
-    } else {
+                       ret);
+    }
+    else {
         /* Test SHA384on a single block worth of data. Should trigger a server
          * transaction */
-        ret = wc_Sha384Update(sha384,
-                (const byte*)inOne,
-                WC_SHA384_BLOCK_SIZE);
+        ret = wc_Sha384Update(sha384, (const byte*)inOne, WC_SHA384_BLOCK_SIZE);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed to wc_Sha384Update %d\n", ret);
-        } else {
+        }
+        else {
             /* Finalize should trigger a server transaction with empty buffer */
             ret = wc_Sha384Final(sha384, out);
             if (ret != 0) {
                 WH_ERROR_PRINT("Failed to wc_Sha384Final %d\n", ret);
-            } else {
+            }
+            else {
                 /* Compare the computed hash with the expected output */
                 if (memcmp(out, expectedOutOne, WC_SHA384_DIGEST_SIZE) != 0) {
                     WH_ERROR_PRINT("SHA384 hash does not match expected.\n");
@@ -859,46 +862,48 @@ static int whTest_CryptoSha384(whClientContext* ctx, int devId, WC_RNG* rng)
         ret = wc_InitSha384_ex(sha384, NULL, devId);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed to wc_InitSha384 for devId 0x%X: %d\n",
-                    devId, ret);
-        } else {
+                           devId, ret);
+        }
+        else {
             /* Update with a non-block aligned length. Will not trigger server
              * transaction */
-            ret = wc_Sha384Update(sha384,
-                    (const byte*)inMulti,
-                    1);
+            ret = wc_Sha384Update(sha384, (const byte*)inMulti, 1);
             if (ret != 0) {
                 WH_ERROR_PRINT("Failed to wc_Sha384Update (first) %d\n", ret);
-            } else {
+            }
+            else {
                 /* Update with a full block, will trigger block to be sent to
                  * server and one additional byte to be buffered */
-                ret = wc_Sha384Update(sha384,
-                        (const byte*)inMulti + 1,
-                        WC_SHA384_BLOCK_SIZE);
+                ret = wc_Sha384Update(sha384, (const byte*)inMulti + 1,
+                                      WC_SHA384_BLOCK_SIZE);
                 if (ret != 0) {
                     WH_ERROR_PRINT("Failed to wc_Sha384Update (mid) %d\n", ret);
-                } else {
+                }
+                else {
                     /* Update with the remaining data, should not trigger server
                      * transaction */
-                    ret = wc_Sha384Update(sha384,
-                            (const byte*)inMulti + 1 + WC_SHA384_BLOCK_SIZE,
-                           strlen(inMulti) - 1 - WC_SHA384_BLOCK_SIZE);
+                    ret = wc_Sha384Update(
+                        sha384, (const byte*)inMulti + 1 + WC_SHA384_BLOCK_SIZE,
+                        strlen(inMulti) - 1 - WC_SHA384_BLOCK_SIZE);
                     if (ret != 0) {
                         WH_ERROR_PRINT("Failed to wc_Sha384Update (last) %d\n",
-                                ret);
-                    } else {
+                                       ret);
+                    }
+                    else {
                         /* Finalize should trigger a server transaction on the
                          * remaining partial buffer */
                         ret = wc_Sha384Final(sha384, out);
                         if (ret != 0) {
                             WH_ERROR_PRINT("Failed to wc_Sha384Final %d\n",
-                                    ret);
-                        } else {
+                                           ret);
+                        }
+                        else {
                             /* Compare the computed hash with the expected
                              * output */
                             if (memcmp(out, expectedOutMulti,
                                        WC_SHA384_DIGEST_SIZE) != 0) {
                                 WH_ERROR_PRINT("SHA384 hash does not match the "
-                                        "expected output.\n");
+                                               "expected output.\n");
                                 ret = -1;
                             }
                         }
@@ -918,8 +923,9 @@ static int whTest_CryptoSha384(whClientContext* ctx, int devId, WC_RNG* rng)
 #ifdef WOLFSSL_SHA512
 static int whTest_CryptoSha512(whClientContext* ctx, int devId, WC_RNG* rng)
 {
-    (void)ctx; (void)rng; /* Not currently used */
-    int ret = WH_ERROR_OK;
+    (void)ctx;
+    (void)rng; /* Not currently used */
+    int       ret = WH_ERROR_OK;
     wc_Sha512 sha512[1];
     uint8_t   out[WC_SHA512_DIGEST_SIZE];
     /* Vector exactly one block size in length */
@@ -949,21 +955,22 @@ static int whTest_CryptoSha512(whClientContext* ctx, int devId, WC_RNG* rng)
     ret = wc_InitSha512_ex(sha512, NULL, devId);
     if (ret != 0) {
         WH_ERROR_PRINT("Failed to wc_InitSha512 on devId 0x%X: %d\n", devId,
-                ret);
-    } else {
+                       ret);
+    }
+    else {
         /* Test SHA512 on a single block worth of data. Should trigger a server
          * transaction */
-        ret = wc_Sha512Update(sha512,
-                (const byte*)inOne,
-                WC_SHA512_BLOCK_SIZE);
+        ret = wc_Sha512Update(sha512, (const byte*)inOne, WC_SHA512_BLOCK_SIZE);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed to wc_Sha512Update %d\n", ret);
-        } else {
+        }
+        else {
             /* Finalize should trigger a server transaction with empty buffer */
             ret = wc_Sha512Final(sha512, out);
             if (ret != 0) {
                 WH_ERROR_PRINT("Failed to wc_Sha512Final %d\n", ret);
-            } else {
+            }
+            else {
                 /* Compare the computed hash with the expected output */
                 if (memcmp(out, expectedOutOne, WC_SHA512_DIGEST_SIZE) != 0) {
                     WH_ERROR_PRINT("SHA512 hash does not match expected.\n");
@@ -980,46 +987,48 @@ static int whTest_CryptoSha512(whClientContext* ctx, int devId, WC_RNG* rng)
         ret = wc_InitSha512_ex(sha512, NULL, devId);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed to wc_InitSha512 for devId 0x%X: %d\n",
-                    devId, ret);
-        } else {
+                           devId, ret);
+        }
+        else {
             /* Update with a non-block aligned length. Will not trigger server
              * transaction */
-            ret = wc_Sha512Update(sha512,
-                    (const byte*)inMulti,
-                    1);
+            ret = wc_Sha512Update(sha512, (const byte*)inMulti, 1);
             if (ret != 0) {
                 WH_ERROR_PRINT("Failed to wc_Sha512Update (first) %d\n", ret);
-            } else {
+            }
+            else {
                 /* Update with a full block, will trigger block to be sent to
                  * server and one additional byte to be buffered */
-                ret = wc_Sha512Update(sha512,
-                        (const byte*)inMulti + 1,
-                        WC_SHA512_BLOCK_SIZE);
+                ret = wc_Sha512Update(sha512, (const byte*)inMulti + 1,
+                                      WC_SHA512_BLOCK_SIZE);
                 if (ret != 0) {
                     WH_ERROR_PRINT("Failed to wc_Sha512Update (mid) %d\n", ret);
-                } else {
+                }
+                else {
                     /* Update with the remaining data, should not trigger server
                      * transaction */
-                    ret = wc_Sha512Update(sha512,
-                            (const byte*)inMulti + 1 + WC_SHA512_BLOCK_SIZE,
-                           strlen(inMulti) - 1 - WC_SHA512_BLOCK_SIZE);
+                    ret = wc_Sha512Update(
+                        sha512, (const byte*)inMulti + 1 + WC_SHA512_BLOCK_SIZE,
+                        strlen(inMulti) - 1 - WC_SHA512_BLOCK_SIZE);
                     if (ret != 0) {
                         WH_ERROR_PRINT("Failed to wc_Sha512Update (last) %d\n",
-                                ret);
-                    } else {
+                                       ret);
+                    }
+                    else {
                         /* Finalize should trigger a server transaction on the
                          * remaining partial buffer */
                         ret = wc_Sha512Final(sha512, out);
                         if (ret != 0) {
                             WH_ERROR_PRINT("Failed to wc_Sha512Final %d\n",
-                                    ret);
-                        } else {
+                                           ret);
+                        }
+                        else {
                             /* Compare the computed hash with the expected
                              * output */
                             if (memcmp(out, expectedOutMulti,
                                        WC_SHA512_DIGEST_SIZE) != 0) {
                                 WH_ERROR_PRINT("SHA512 hash does not match the "
-                                        "expected output.\n");
+                                               "expected output.\n");
                                 ret = -1;
                             }
                         }
