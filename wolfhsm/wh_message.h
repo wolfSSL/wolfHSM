@@ -30,26 +30,27 @@
 
 /* Message groups and kind */
 enum WH_MESSAGE_ENUM {
-    WH_MESSAGE_KIND_NONE            = 0x0000, /* No message kind. Invalid */
+    WH_MESSAGE_KIND_NONE = 0x0000, /* No message kind. Invalid */
 
-    WH_MESSAGE_GROUP_MASK           = 0xFF00, /* 255 groups */
-    WH_MESSAGE_GROUP_NONE           = 0x0000, /* No group.  Invalid. */
+    WH_MESSAGE_GROUP_MASK = 0xFF00, /* 255 groups */
+    WH_MESSAGE_GROUP_NONE = 0x0000, /* No group.  Invalid. */
 
-    WH_MESSAGE_GROUP_COMM           = 0x0100, /* Messages used for comms */
-    WH_MESSAGE_GROUP_NVM            = 0x0200, /* NVM functions */
-    WH_MESSAGE_GROUP_KEY            = 0x0300, /* Key/counter management */
-    WH_MESSAGE_GROUP_CRYPTO         = 0x0400, /* wolfCrypt CryptoCb */
-    WH_MESSAGE_GROUP_IMAGE          = 0x0500, /* Image/boot management */
-    WH_MESSAGE_GROUP_PKCS11         = 0x0600, /* PKCS11 protocol */
-    WH_MESSAGE_GROUP_SHE            = 0x0700, /* SHE protocol */
-    WH_MESSAGE_GROUP_COUNTER        = 0x0800, /* monotonic counters */
-    WH_MESSAGE_GROUP_CANCEL         = 0x0900, /* request cancellation */
-    WH_MESSAGE_GROUP_CUSTOM         = 0x0A00, /* User-specified features */
-    WH_MESSAGE_GROUP_CRYPTO_DMA     = 0x0B00, /* DMA crypto operations */
-    WH_MESSAGE_GROUP_CERT           = 0x0C00, /* Certificate operations */
+    WH_MESSAGE_GROUP_COMM       = 0x0100, /* Messages used for comms */
+    WH_MESSAGE_GROUP_NVM        = 0x0200, /* NVM functions */
+    WH_MESSAGE_GROUP_KEY        = 0x0300, /* Key/counter management */
+    WH_MESSAGE_GROUP_CRYPTO     = 0x0400, /* wolfCrypt CryptoCb */
+    WH_MESSAGE_GROUP_IMAGE      = 0x0500, /* Image/boot management */
+    WH_MESSAGE_GROUP_PKCS11     = 0x0600, /* PKCS11 protocol */
+    WH_MESSAGE_GROUP_SHE        = 0x0700, /* SHE protocol */
+    WH_MESSAGE_GROUP_COUNTER    = 0x0800, /* monotonic counters */
+    WH_MESSAGE_GROUP_CANCEL     = 0x0900, /* request cancellation */
+    WH_MESSAGE_GROUP_CUSTOM     = 0x0A00, /* User-specified features */
+    WH_MESSAGE_GROUP_CRYPTO_DMA = 0x0B00, /* DMA crypto operations */
+    WH_MESSAGE_GROUP_CERT       = 0x0C00, /* Certificate operations */
+    WH_MESSAGE_GROUP_WRAPKEY    = 0x0D00, /* Wrap Key operations */
 
-    WH_MESSAGE_ACTION_MASK          = 0x00FF,  /* 255 subtypes per group*/
-    WH_MESSAGE_ACTION_NONE          = 0x0000,  /* No action. Invalid. */
+    WH_MESSAGE_ACTION_MASK = 0x00FF, /* 255 subtypes per group*/
+    WH_MESSAGE_ACTION_NONE = 0x0000, /* No action. Invalid. */
 };
 
 /* keystore actions */
@@ -90,6 +91,13 @@ enum {
     WH_COUNTER_INCREMENT,
     WH_COUNTER_READ,
     WH_COUNTER_DESTROY,
+};
+
+/* Wrap Key actions */
+enum {
+    WH_WRAPKEY_WRAP,
+    WH_WRAPKEY_UNWRAP,
+    WH_WRAPKEY_CACHE,
 };
 
 /* Construct the message kind based on group and action */
