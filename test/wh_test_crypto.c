@@ -2141,8 +2141,8 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
                                 WH_ERROR_PRINT("Failed to wc_AesSetIV %d\n",
                                         ret);
                             } else {
-                                ret = wc_AesCbcDecrypt(aes, plainOut,
-                                        cipher, sizeof(plainIn));
+                                ret = wc_AesCbcDecrypt(aes, plainOut, cipher,
+                                                       sizeof(plainIn));
                                 if (ret != 0) {
                                     WH_ERROR_PRINT("Failed to decrypt %d\n",
                                             ret);

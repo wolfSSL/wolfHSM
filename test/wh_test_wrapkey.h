@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024 wolfSSL Inc.
+ * Copyright (C) 2025 wolfSSL Inc.
  *
  * This file is part of wolfHSM.
  *
@@ -16,20 +16,13 @@
  * You should have received a copy of the GNU General Public License
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
-/*
- * wolfhsm_cfg.h
- *
- * wolfHSM compile-time options.  Override here for your application
- */
+#ifndef WH_TEST_WRAPKEY_H_
+#define WH_TEST_WRAPKEY_H_
 
-#ifndef WOLFHSM_CFG_H_
-#define WOLFHSM_CFG_H_
+#include "wolfhsm/wh_server.h"
+#include "wolfhsm/wh_client.h"
 
-/** wolfHSM settings */
-#define WOLFHSM_CFG_ENABLE_CLIENT
-#define WOLFHSM_CFG_HEXDUMP
-#define WOLFHSM_CFG_COMM_DATA_LEN 1280
-#define WOLFHSM_CFG_WRAPKEY
+int whTest_WrapKeyClientConfig(whClientConfig* cf);
 
 
-#endif /* WOLFHSM_CFG_H_ */
+#endif /* WH_TEST_COMM_H_ */

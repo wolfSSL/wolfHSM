@@ -36,6 +36,9 @@
  *  WOLFHSM_CFG_SHE_EXTENSION - If defined, include AutoSAR SHE functionality
  *      Default: Not defined
  *
+ *  WOLFHSM_CFG_WRAPKEY - If defined, include wrap key functionality
+ *      Default: Not defined
+ *
  *  WOLFHSM_CFG_HEXDUMP - If defined, include wh_Utils_HexDump functionality
  *                          using stdio.h
  *      Default: Not defined
@@ -226,6 +229,12 @@
     !defined(WOLFSSL_AES_DIRECT) || \
     !defined(HAVE_AES_ECB)
 #error "WOLFHSM_CFG_SHE_EXTENSION requires AES, WOLFSSL_CMAC, WOLFSSL_AES_DIRECT, and HAVE_AES_ECB"
+#endif
+#endif
+
+#if defined WOLFHSM_CFG_WRAPKEY
+#if defined(WOLFHSM_CFG_NO_CRYPTO)
+#error "WOLFHSM_CFG_WRAPKEY requires WOLFHSM_CFG_NO_CRYPTO to be undefined"
 #endif
 #endif
 

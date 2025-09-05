@@ -4,6 +4,7 @@
 #include "wh_demo_client_keystore.h"
 #include "wh_demo_client_crypto.h"
 #include "wh_demo_client_secboot.h"
+#include "wh_demo_client_wrapkey.h"
 #include "wh_demo_client_all.h"
 
 int wh_DemoClient_All(whClientContext* clientContext)
@@ -40,6 +41,14 @@ int wh_DemoClient_All(whClientContext* clientContext)
     }
 #ifndef NO_AES
     rc = wh_DemoClient_KeystoreAes(clientContext);
+    if (rc != 0) {
+        return rc;
+    }
+#endif
+
+    /* Wrap key demos */
+#ifdef WOLFHSM_CFG_WRAPKEY
+    rc = wh_DemoClient_WrapKeyBasic(clientContext);
     if (rc != 0) {
         return rc;
     }
