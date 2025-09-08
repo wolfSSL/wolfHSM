@@ -102,6 +102,7 @@ int wh_CommClient_SendRequest(whCommClient* context, uint16_t magic,
     int rc = 0;
 
     if (    (context == NULL) ||
+            (context->hdr == NULL) ||
             (context->initialized == 0) ||
             (context->transport_cb == NULL) ||
             (context->transport_cb->Send == NULL)) {
@@ -146,6 +147,7 @@ int wh_CommClient_RecvResponse(whCommClient* context,
     uint16_t data_size = 0;
 
     if (    (context == NULL) ||
+            (context->hdr == NULL) ||
             (context->initialized == 0) ||
             (context->transport_cb == NULL) ||
             (context->transport_cb->Recv == NULL)){
@@ -257,6 +259,7 @@ int wh_CommServer_RecvRequest(whCommServer* context,
     uint16_t data_size = 0;
 
     if (    (context == NULL) ||
+            (context->hdr == NULL) ||
             (context->initialized == 0) ||
             (context->transport_cb == NULL) ||
             (context->transport_cb->Recv == NULL)) {
@@ -298,6 +301,7 @@ int wh_CommServer_SendResponse(whCommServer* context,
     int rc = 0;
 
     if (    (context == NULL) ||
+            (context->hdr == NULL) ||
             (context->initialized == 0) ||
             (context->transport_cb == NULL) ||
             (context->transport_cb->Send == NULL)){
