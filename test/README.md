@@ -2,7 +2,7 @@
 
 wolfHSM unit tests need to be portable and platform-agnostic (e.g. no system dependencies) such that they are able to run on a bare-metal system.
 One notable exception is for tests that use the POSIX API (sockets, pthreads, etc.), which must be conditionally compiled in with the `WOLFHSM_CFG_TEST_POSIX` preprocessor macro.
-wolfHSM unit tests are designed to provide test coverage of the wolfHSM library, rather than the underlying wolfCrypt library.  The wolfHSM Example within the `demo/client/wc_test.c` provides additional wolfCrypt test coverage.
+wolfHSM unit tests are designed to provide test coverage of the wolfHSM library, rather than the underlying wolfCrypt library. You can run the wolfCrypt test suite as a wolfHSM client (where all relevant crypto is offloaded to the server) as an extra step in the wolfHSM test suite when building the tests with the `TESTWOLFCRYPT=1` makefile option, or by defining the `WOLFHSM_CFG_TEST_WOLFCRYPTTEST` configuration macro.
 
 ##  Running Tests
 Tests for each module should be defined in their own source file and export their API in a corresponding header. Tests are run by the main test driver in `wh_test.c`.
