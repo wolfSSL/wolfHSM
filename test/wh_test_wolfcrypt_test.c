@@ -27,7 +27,7 @@
 
 #include "wolfhsm/wh_settings.h"
 
-#ifndef WOLFHSM_CFG_NO_CRYPTO
+#if !defined(WOLFHSM_CFG_NO_CRYPTO) && defined(WOLFHSM_CFG_TEST_WOLFCRYPTTEST)
 
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/types.h"
@@ -271,4 +271,4 @@ int whTest_WolfCryptTest(void)
 #endif /* WOLFHSM_CFG_TEST_POSIX && WOLFHSM_CFG_ENABLE_CLIENT && \
           WOLFHSM_CFG_ENABLE_SERVER */
 
-#endif /* !WOLFHSM_CFG_NO_CRYPTO */
+#endif /* !WOLFHSM_CFG_NO_CRYPTO  && WOLFHSM_CFG_TEST_WOLFCRYPTTEST */

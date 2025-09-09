@@ -1,21 +1,40 @@
 #ifndef USER_SETTINGS_H_
 #define USER_SETTINGS_H_
 
-/* Client wolfSSL settings */
+/** wolfHSM Client required settings */
 
-/* wolfHSM Required */
+/* CryptoCB support */
 #define WOLF_CRYPTO_CB
 #define HAVE_ANONYMOUS_INLINE_AGGREGATES 1
-#define WOLFCRYPT_ONLY
-
 /* Optional if debugging cryptocb's */
-/*#define DEBUG_CRYPTOCB */
-/*#define DEBUG_CRYPTOCB_VERBOSE */
+#if 0
+    #define DEBUG_CRYPTOCB
+    #define DEBUG_CRYPTOCB_VERBOSE
+#endif
 
-/* Temporarily set this to key export function  */
+/* Key DER export/import support */
 #define WOLFSSL_KEY_GEN
+#define WOLFSSL_ASN_TEMPLATE
+#define WOLFSSL_BASE64_ENCODE
 
-/* Crypto Options */
+/* C90 compatibility, which doesn't support inline keyword */
+#define NO_INLINE
+/* Suppresses warning in evp.c */
+#define WOLFSSL_IGNORE_FILE_WARN 
+
+/* Either NO_HARDEN or set resistance and blinding */
+#if 0
+#define WC_NO_HARDEN
+#else
+    #define TFM_TIMING_RESISTANT
+    #define ECC_TIMING_RESISTANT
+    #define WC_RSA_BLINDING
+#endif
+
+
+/** Application Settings */
+
+/* Crypto Algo Options */
 #define HAVE_CURVE25519
 #define HAVE_ECC
 #define HAVE_AES_CBC
@@ -31,7 +50,5 @@
 #include <time.h>
 /* Include to support strcasecmp with POSIX build */
 #include <strings.h>
-
-
 
 #endif /* USER_SETTINGS_H_ */

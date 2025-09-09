@@ -31,6 +31,7 @@
 #define WH_TEST_SUCCESS (0)
 
 /* Helper macro to print a message with caller source file info */
+#ifdef WOLFHSM_CFG_TEST_VERBOSE
 #if !defined(__CCRH__)
 #define WH_DEBUG_PRINT(fmt, ...) \
     printf("[%s:%d]: " fmt, __func__, __LINE__, ##__VA_ARGS__)
@@ -39,6 +40,10 @@
 #define WH_DEBUG_PRINT2(fmt, ...) \
     printf("[%s:%d]: " fmt, __func__, __LINE__, ##__VA_ARGS__)
 #endif
+#else
+#define WH_DEBUG_PRINT(...) do{} while(0)
+#endif
+
 /* Helper macro to print a message, prefixed by ERROR, along with caller source
  * file info */
  #if !defined(__CCRH__)

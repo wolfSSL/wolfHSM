@@ -48,7 +48,7 @@ jobs:
       run: |
         cd test
         make clean
-        make -j CLIENT_ONLY_TCP=1 SHE=1 ASAN=1 WOLFSSL_DIR=../wolfssl run
+        make -j CLIENT_ONLY_TCP=1 SHE=1 ASAN=1 WOLFSSL_DIR=../wolfssl && make run
 
      # Optional: Kill the server process if it doesn't exit on its own
     - name: Cleanup POSIX TCP server

@@ -31,4 +31,4 @@ jobs:
 
     # Benchmark with everything enabled
     - name: Benchmark All
-      run: cd benchmark && make clean && make WOLFSSL_DIR=../wolfssl DMA=1 run
+      run: cd benchmark && make clean && make WOLFSSL_DIR=../wolfssl DMA=1 && make run

@@ -161,4 +161,4 @@ int posixTransportTcp_GetListenFd(posixTransportTcpServerContext *context,
 int posixTransportTcp_GetAcceptFd(posixTransportTcpServerContext *context,
         int *out_fd);
 
-#endif /* WH_TRANSPORT_TCP_H_ */
+#endif /* !PORT_POSIX_POSIX_TRANSPORT_TCP_H_ */

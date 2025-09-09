@@ -50,7 +50,8 @@ int wh_DemoClient_Nvm(whClientContext* clientContext)
 
     /* Add multiple objects, reading back each one and comparing the data
      * against what we wrote */
-    for (int i = 0; i < NUM_OBJECTS; i++) {
+    int i;
+    for (i = 0; i < NUM_OBJECTS; i++) {
         /* Add an object */
         rc = wh_Client_NvmAddObject(
             clientContext, objectIds[i], WH_NVM_ACCESS_ANY, WH_NVM_FLAGS_NONE,
@@ -123,8 +124,7 @@ int wh_DemoClient_Nvm(whClientContext* clientContext)
     printf("Objects deleted successfully\n");
 
     /* Reclaim space */
-    rc =
-        wh_Client_NvmDestroyObjects(clientContext, 0, NULL, &serverRc);
+    rc = wh_Client_NvmDestroyObjects(clientContext, 0, NULL, &serverRc);
     if (rc != 0 || serverRc != 0) {
         printf("Reclaim Objects failed with error code: %d, server error code: "
                "%d\n",
