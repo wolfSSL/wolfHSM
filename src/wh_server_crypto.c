@@ -1733,7 +1733,7 @@ static int _HandleSha256(whServerContext* ctx, uint16_t magic,
     int                            ret    = 0;
     wc_Sha256*                     sha256 = ctx->crypto->algoCtx.sha256;
     whMessageCrypto_Sha256Request  req;
-    whMessageCrypto_Sha256Response res;
+    whMessageCrypto_Sha256Response res = {0};
 
     /* THe server SHA256 struct doesn't persist state (it is a union), meaning
      * the devId may get blown away between calls. We must restore the server
@@ -1744,6 +1744,11 @@ static int _HandleSha256(whServerContext* ctx, uint16_t magic,
     ret = wh_MessageCrypto_TranslateSha256Request(magic, cryptoDataIn, &req);
     if (ret != 0) {
         return ret;
+    }
+
+    /* Validate lastBlockLen to prevent potential buffer overread */
+    if (req.lastBlockLen > WC_SHA256_BLOCK_SIZE) {
+        return WH_ERROR_BADARGS;
     }
 
     /* Init the SHA256 context if this is the first time, otherwise restore the
