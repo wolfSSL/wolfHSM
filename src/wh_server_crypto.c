@@ -1746,16 +1746,34 @@ static int _HandleSha256(whServerContext* ctx, uint16_t magic,
     int                            ret    = 0;
     wc_Sha256                      sha256[1];
     whMessageCrypto_Sha256Request  req;
-    whMessageCrypto_Sha2Response   res;
+    whMessageCrypto_Sha256Response res = {0};
+
+    /* THe server SHA256 struct doesn't persist state (it is a union), meaning
+     * the devId may get blown away between calls. We must restore the server
+     * devId each time */
+    sha256->devId = ctx->crypto->devId;
+
     /* Translate the request */
     ret = wh_MessageCrypto_TranslateSha256Request(magic, cryptoDataIn, &req);
     if (ret != 0) {
         return ret;
     }
-    /* always init sha2 struct with the devid */
-    ret = wc_InitSha256_ex(sha256, NULL, ctx->crypto->devId);
-    if (ret != 0) {
-        return ret;
+
+    /* Validate lastBlockLen to prevent potential buffer overread */
+    if (req.lastBlockLen > WC_SHA256_BLOCK_SIZE) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Init the SHA256 context if this is the first time, otherwise restore the
+     * hash state from the client */
+    if (req.resumeState.hiLen == 0 && req.resumeState.loLen == 0) {
+        ret = wc_InitSha256_ex(sha256, NULL, ctx->crypto->devId);
+    }
+    else {
+        /* HAVE_DILITHIUM */
+        memcpy(sha256->digest, req.resumeState.hash, WC_SHA256_DIGEST_SIZE);
+        sha256->loLen = req.resumeState.loLen;
+        sha256->hiLen = req.resumeState.hiLen;
     }
     /* restore the hash state from the client */
     memcpy(sha256->digest, req.resumeState.hash, WC_SHA256_DIGEST_SIZE);
