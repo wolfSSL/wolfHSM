@@ -295,13 +295,7 @@ int wh_Client_AesCtr(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
            __func__, enc, key_len, iv_len, len, req_len, left);
 #endif
     if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
-        /* if we're using an HSM key return BAD_FUNC_ARG */
-        if (WH_KEYID_ISERASED(key_id)) {
-            return CRYPTOCB_UNAVAILABLE;
-        }
-        else {
-            return WH_ERROR_BADARGS;
-        }
+        return WH_ERROR_BADARGS;
     }
 
     /* setup request packet */
@@ -427,13 +421,7 @@ int wh_Client_AesEcb(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
 #endif
 
     if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
-        /* if we're using an HSM key return BAD_FUNC_ARG */
-        if (WH_KEYID_ISERASED(key_id)) {
-            return CRYPTOCB_UNAVAILABLE;
-        }
-        else {
-            return WH_ERROR_BADARGS;
-        }
+        return WH_ERROR_BADARGS;
     }
 
     /* setup request packet */
@@ -542,13 +530,7 @@ int wh_Client_AesCbc(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
 #endif
 
     if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
-        /* if we're using an HSM key return BAD_FUNC_ARG */
-        if (WH_KEYID_ISERASED(key_id)) {
-            return CRYPTOCB_UNAVAILABLE;
-        }
-        else {
-            return WH_ERROR_BADARGS;
-        }
+        return WH_ERROR_BADARGS;
     }
 
     /* setup request packet */
@@ -668,16 +650,8 @@ int wh_Client_AesGcm(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
     printf("[client] AESGCM: req:%p in:%p key:%p iv:%p authin:%p tag:%p\n", req,
            req_in, req_key, req_iv, req_authin, req_tag);
 #endif
-
-    /* TODO get rid of this logic, we should always fail */
     if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
-        /* if we're using an HSM key return BAD_FUNC_ARG */
-        if (WH_KEYID_ISERASED(key_id)) {
-            return CRYPTOCB_UNAVAILABLE;
-        }
-        else {
-            return WH_ERROR_BADARGS;
-        }
+        return WH_ERROR_BADARGS;
     }
 
     /* setup request packet */
