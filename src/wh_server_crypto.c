@@ -1759,11 +1759,6 @@ static int _HandleSha256(whServerContext* ctx, uint16_t magic,
         return ret;
     }
 
-    /* Validate lastBlockLen to prevent potential buffer overread */
-    if (req.lastBlockLen > WC_SHA256_BLOCK_SIZE) {
-        return WH_ERROR_BADARGS;
-    }
-
     /* Init the SHA256 context if this is the first time, otherwise restore the
      * hash state from the client */
     if (req.resumeState.hiLen == 0 && req.resumeState.loLen == 0) {
