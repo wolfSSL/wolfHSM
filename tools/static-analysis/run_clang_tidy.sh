@@ -1,184 +1,154 @@
 #!/bin/bash
 
-# Script to run clang-tidy on wolfHSM source code
-# Analyzes src/* and wolfhsm/* directories (excludes test and benchmarks)
-#
-# Environment variables:
-#   CLANG_TIDY_ARGS - Override default clang-tidy arguments
-#   Example: CLANG_TIDY_ARGS="-checks=-readability-*" ./run_clang_tidy.sh
+# Simple clang-tidy script for wolfHSM static analysis
 
-# Exit on error
-set -e
+# Don't exit on error immediately since we want to handle clang-tidy exit codes
+set +e
 
 # Script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
-# Colors for output
-RED='\033[0;31m'
-YELLOW='\033[1;33m'
-GREEN='\033[0;32m'
-NC='\033[0m' # No Color
+# Output directory
+OUTPUT_DIR="$SCRIPT_DIR/reports"
+mkdir -p "$OUTPUT_DIR"
 
-# Create reports directory
-REPORTS_DIR="$PROJECT_ROOT/reports"
-mkdir -p "$REPORTS_DIR"
+# Function to check if clang-tidy is installed
+check_clang_tidy() {
+    if ! command -v clang-tidy &> /dev/null; then
+        echo "Error: clang-tidy is not installed or not in PATH"
+        return 1
+    fi
+    echo "Using clang-tidy version: $(clang-tidy --version | head -n 1)"
+    return 0
+}
 
-echo "Running clang-tidy static analysis on wolfHSM..."
-echo "Project root: $PROJECT_ROOT"
-echo "Reports will be saved to: $REPORTS_DIR"
-echo ""
-
-# Change to project root
-cd "$PROJECT_ROOT"
-
-# Check if clang-tidy is installed
-if ! command -v clang-tidy &> /dev/null; then
-    echo -e "${RED}Error: clang-tidy not found. Please install clang-tidy.${NC}"
-    exit 1
-fi
-
-# Check if run-clang-tidy is available (comes with clang-tidy)
-RUN_CLANG_TIDY=""
-if command -v run-clang-tidy &> /dev/null; then
-    RUN_CLANG_TIDY="run-clang-tidy"
-elif command -v run-clang-tidy.py &> /dev/null; then
-    RUN_CLANG_TIDY="run-clang-tidy.py"
-else
-    echo -e "${YELLOW}Warning: run-clang-tidy not found. Using fallback method.${NC}"
-fi
-
-# Find all C source and header files in src/ and wolfhsm/
-echo "Finding source files to analyze..."
-SOURCE_FILES=$(find src wolfhsm -name "*.c" -o -name "*.h" | grep -v -E "(test|benchmark)" | sort)
-NUM_FILES=$(echo "$SOURCE_FILES" | wc -l)
-echo "Found $NUM_FILES files to analyze"
-echo ""
-
-# Copy .clang-tidy configuration to project root (clang-tidy looks for it there)
-cp "$SCRIPT_DIR/.clang-tidy" "$PROJECT_ROOT/.clang-tidy"
-
-# Generate compilation database if it doesn't exist
-# This is a simple compilation database for C files
-if [ ! -f "$PROJECT_ROOT/compile_commands.json" ]; then
-    echo "Generating compilation database..."
-    cat > "$PROJECT_ROOT/compile_commands.json" << EOF
-[
-EOF
-
-    FIRST=1
-    for file in $SOURCE_FILES; do
-        if [[ "$file" == *.c ]]; then
-            if [ $FIRST -eq 0 ]; then
-                echo "," >> "$PROJECT_ROOT/compile_commands.json"
-            fi
-            FIRST=0
-            cat >> "$PROJECT_ROOT/compile_commands.json" << EOF
+# Function to generate compile_commands.json if it doesn't exist
+generate_compile_commands() {
+    if [ ! -f "$PROJECT_ROOT/compile_commands.json" ]; then
+        echo "No compile_commands.json found. Generating one..."
+        
+        # Change to project root
+        cd "$PROJECT_ROOT"
+        
+        # Try to generate using bear if available
+        if command -v bear &> /dev/null; then
+            echo "Using bear to generate compile_commands.json..."
+            make clean > /dev/null 2>&1 || true
+            bear -- make
+        else
+            echo "Warning: bear is not installed. Creating a basic compile_commands.json..."
+            # Create a basic compile_commands.json for all .c files
+            echo "[" > compile_commands.json
+            first=true
+            find src wolfhsm -name "*.c" | while read -r file; do
+                if [ "$first" = true ]; then
+                    first=false
+                else
+                    echo "," >> compile_commands.json
+                fi
+                cat >> compile_commands.json << EOF
   {
     "directory": "$PROJECT_ROOT",
-    "command": "gcc -c -std=c99 -Wall -I$PROJECT_ROOT -I$PROJECT_ROOT/wolfhsm -I$PROJECT_ROOT/../wolfssl -DWOLFHSM_CFG_NO_CRYPTO $file -o ${file%.c}.o",
+    "command": "gcc -std=c99 -Wall -I$PROJECT_ROOT/wolfhsm -I$PROJECT_ROOT/src -c $file",
     "file": "$file"
   }
 EOF
+            done
+            echo "]" >> compile_commands.json
         fi
-    done
+        
+        # Return to script directory
+        cd "$SCRIPT_DIR"
+    else
+        echo "Using existing compile_commands.json"
+    fi
+}
 
-    echo "" >> "$PROJECT_ROOT/compile_commands.json"
-    echo "]" >> "$PROJECT_ROOT/compile_commands.json"
+# Check if clang-tidy is installed
+if ! check_clang_tidy; then
+    exit 1
 fi
 
-# Allow override of clang-tidy arguments via environment variable
-if [ -z "$CLANG_TIDY_ARGS" ]; then
-    CLANG_TIDY_ARGS="-header-filter=^(src/|wolfhsm/).*\.(h)$"
+# Generate or use existing compile_commands.json
+generate_compile_commands
+
+# Copy the .clang-tidy config to project root if it doesn't exist
+if [ -f "$SCRIPT_DIR/.clang-tidy" ] && [ ! -f "$PROJECT_ROOT/.clang-tidy" ]; then
+    cp "$SCRIPT_DIR/.clang-tidy" "$PROJECT_ROOT/.clang-tidy"
 fi
+
+echo "Running clang-tidy static analysis on wolfHSM..."
+
+# Find all source files
+SOURCE_FILES=$(find "$PROJECT_ROOT/src" "$PROJECT_ROOT/wolfhsm" -name "*.c" -o -name "*.h" | grep -v "/Build/" | sort)
 
 # Run clang-tidy and capture output
-echo "Running clang-tidy analysis..."
-CLANG_TIDY_OUTPUT="$REPORTS_DIR/clang_tidy_output.txt"
-CLANG_TIDY_SUMMARY="$REPORTS_DIR/clang_tidy_summary.txt"
+CLANG_TIDY_OUTPUT="$OUTPUT_DIR/clang_tidy_output.txt"
+CLANG_TIDY_SUMMARY="$OUTPUT_DIR/clang_tidy_summary.txt"
 
-if [ -n "$RUN_CLANG_TIDY" ]; then
-    # Use run-clang-tidy for parallel execution
-    $RUN_CLANG_TIDY -p "$PROJECT_ROOT" $CLANG_TIDY_ARGS -quiet \
-        $SOURCE_FILES 2>&1 | tee "$CLANG_TIDY_OUTPUT"
-else
-    # Fallback: run clang-tidy on each file
-    > "$CLANG_TIDY_OUTPUT"
-    for file in $SOURCE_FILES; do
-        if [[ "$file" == *.c ]]; then
-            echo "Analyzing $file..." >> "$CLANG_TIDY_OUTPUT"
-            clang-tidy -p "$PROJECT_ROOT" $CLANG_TIDY_ARGS "$file" 2>&1 >> "$CLANG_TIDY_OUTPUT" || true
-        fi
-    done
-fi
+# Clear previous outputs
+> "$CLANG_TIDY_OUTPUT"
+> "$CLANG_TIDY_SUMMARY"
 
-# Parse output and create summary
-echo ""
-echo "Generating summary report..."
+# Run clang-tidy on all files
+echo "Analyzing $(echo "$SOURCE_FILES" | wc -l) files..."
+TOTAL_ISSUES=0
+ERROR_COUNT=0
+WARNING_COUNT=0
+NOTE_COUNT=0
 
-# Count different types of issues
-ERRORS=0
-WARNINGS=0
-NOTES=0
-
-while IFS= read -r line; do
-    if [[ "$line" =~ error: ]]; then
-        ((ERRORS++))
-    elif [[ "$line" =~ warning: ]]; then
-        ((WARNINGS++))
-    elif [[ "$line" =~ note: ]]; then
-        ((NOTES++))
+for file in $SOURCE_FILES; do
+    echo -n "Analyzing $file... "
+    
+    # Run clang-tidy on the file
+    output=$(clang-tidy "$file" -p "$PROJECT_ROOT" 2>&1)
+    
+    # Check if there were any issues
+    if echo "$output" | grep -q "warning:\|error:\|note:"; then
+        echo "found issues"
+        echo "=== $file ===" >> "$CLANG_TIDY_OUTPUT"
+        echo "$output" >> "$CLANG_TIDY_OUTPUT"
+        echo "" >> "$CLANG_TIDY_OUTPUT"
+        
+        # Count issues
+        file_errors=$(echo "$output" | grep -c "error:" || true)
+        file_warnings=$(echo "$output" | grep -c "warning:" || true)
+        file_notes=$(echo "$output" | grep -c "note:" || true)
+        
+        ERROR_COUNT=$((ERROR_COUNT + file_errors))
+        WARNING_COUNT=$((WARNING_COUNT + file_warnings))
+        NOTE_COUNT=$((NOTE_COUNT + file_notes))
+        
+        # Add to summary (excluding notes)
+        echo "$output" | grep -E "(error:|warning:)" | while IFS= read -r line; do
+            echo "$file: $line" >> "$CLANG_TIDY_SUMMARY"
+        done
+    else
+        echo "clean"
     fi
-done < "$CLANG_TIDY_OUTPUT"
+done
 
-# Generate summary report
-cat > "$CLANG_TIDY_SUMMARY" << EOF
-clang-tidy Static Analysis Summary
-==================================
-Date: $(date)
-Files analyzed: $NUM_FILES
+TOTAL_ISSUES=$((ERROR_COUNT + WARNING_COUNT))
 
-Results:
---------
-Errors:   $ERRORS
-Warnings: $WARNINGS
-Notes:    $NOTES
-
-Total issues: $((ERRORS + WARNINGS))
-
-Detailed output: $CLANG_TIDY_OUTPUT
-EOF
-
-# Display summary
 echo ""
-cat "$CLANG_TIDY_SUMMARY"
+echo "Static analysis complete!"
+echo "Full output: $CLANG_TIDY_OUTPUT"
+echo "Summary: $CLANG_TIDY_SUMMARY"
+echo ""
+echo "Results:"
+echo "  Errors: $ERROR_COUNT"
+echo "  Warnings: $WARNING_COUNT"
+echo "  Notes: $NOTE_COUNT (informational only)"
+echo "  Total issues: $TOTAL_ISSUES"
 
-# Generate YAML report for CI integration (if clang-tidy supports it)
-if clang-tidy --version | grep -q "version 1[0-9]"; then
+# Exit with error if we have errors or warnings
+if [ $TOTAL_ISSUES -gt 0 ]; then
     echo ""
-    echo "Generating YAML report..."
-    YAML_OUTPUT="$REPORTS_DIR/clang_tidy.yaml"
-    > "$YAML_OUTPUT"
-    for file in $SOURCE_FILES; do
-        if [[ "$file" == *.c ]]; then
-            clang-tidy -p "$PROJECT_ROOT" --export-fixes=- "$file" 2>/dev/null >> "$YAML_OUTPUT" || true
-        fi
-    done
-fi
-
-# Clean up temporary files
-rm -f "$PROJECT_ROOT/.clang-tidy"
-if [ -f "$PROJECT_ROOT/compile_commands.json.generated" ]; then
-    rm -f "$PROJECT_ROOT/compile_commands.json"
-fi
-
-# Exit with error if issues found
-echo ""
-if [ $ERRORS -gt 0 ] || [ $WARNINGS -gt 0 ]; then
-    echo -e "${RED}Static analysis found $((ERRORS + WARNINGS)) issue(s)!${NC}"
-    echo -e "${RED}Errors: $ERRORS, Warnings: $WARNINGS${NC}"
+    echo "❌ clang-tidy found $TOTAL_ISSUES issue(s) that need to be addressed"
     exit 1
 else
-    echo -e "${GREEN}Static analysis completed successfully with no issues!${NC}"
+    echo ""
+    echo "✅ clang-tidy analysis passed - no issues found"
     exit 0
 fi
