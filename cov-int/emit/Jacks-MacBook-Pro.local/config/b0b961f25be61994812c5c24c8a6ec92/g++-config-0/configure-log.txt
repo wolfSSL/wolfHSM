@@ -1,0 +1,65 @@
+Getting compiler identification output with: /usr/bin/cc -std=c90 --version /var/folders/br/wxmxwj554j9chb8y8w7hmwk00000gn/T/cov-jacktjaden/3f3e462f62b13aa2e7139ff913623fb3/cov-jacktjaden/ad2abe55f87cbd98479d8a2f4344b518/test.cpp
+**** BEGIN FILE source file: /var/folders/br/wxmxwj554j9chb8y8w7hmwk00000gn/T/cov-jacktjaden/3f3e462f62b13aa2e7139ff913623fb3/cov-jacktjaden/ad2abe55f87cbd98479d8a2f4344b518/test.cpp
+int main() {} 
+
+**** END source file ***
+pipe_command: /usr/bin/cc -std=c90 --version /var/folders/br/wxmxwj554j9chb8y8w7hmwk00000gn/T/cov-jacktjaden/3f3e462f62b13aa2e7139ff913623fb3/cov-jacktjaden/ad2abe55f87cbd98479d8a2f4344b518/test.cpp 
+pipe_commands starting: /usr/bin/cc -std=c90 --version /var/folders/br/wxmxwj554j9chb8y8w7hmwk00000gn/T/cov-jacktjaden/3f3e462f62b13aa2e7139ff913623fb3/cov-jacktjaden/ad2abe55f87cbd98479d8a2f4344b518/test.cpp 
+**** BEGIN FILE output: /var/folders/br/wxmxwj554j9chb8y8w7hmwk00000gn/T/cov-jacktjaden/3f3e462f62b13aa2e7139ff913623fb3/cov-jacktjaden/ad2abe55f87cbd98479d8a2f4344b518/test.output
+Apple clang version 17.0.0 (clang-1700.0.13.5)
+Target: x86_64-apple-darwin24.6.0
+Thread model: posix
+InstalledDir: /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin
+
+**** END FILE output ***
+**** BEGIN FILE error: 
+
+**** END FILE error ***
+**** Compiler identification output begin ****
+Apple clang version 17.0.0 (clang-1700.0.13.5)
+Target: x86_64-apple-darwin24.6.0
+Thread model: posix
+InstalledDir: /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin
+
+**** Compiler identification output end ****
+**** BEGIN PROBE run_test_sanity ****
+[STATUS] g++-config-0: Running sanity tests on native compiler
+**** BEGIN FILE source file: /var/folders/br/wxmxwj554j9chb8y8w7hmwk00000gn/T/cov-jacktjaden/3f3e462f62b13aa2e7139ff913623fb3/cov-jacktjaden/ad2abe55f87cbd98479d8a2f4344b518/simple.cpp
+int x;
+
+**** END FILE source file ***
+pipe_command: /usr/bin/cc -std=c90 -c /var/folders/br/wxmxwj554j9chb8y8w7hmwk00000gn/T/cov-jacktjaden/3f3e462f62b13aa2e7139ff913623fb3/cov-jacktjaden/ad2abe55f87cbd98479d8a2f4344b518/simple.cpp 
+pipe_commands starting: /usr/bin/cc -std=c90 -c /var/folders/br/wxmxwj554j9chb8y8w7hmwk00000gn/T/cov-jacktjaden/3f3e462f62b13aa2e7139ff913623fb3/cov-jacktjaden/ad2abe55f87cbd98479d8a2f4344b518/simple.cpp 
+**** BEGIN FILE stdout: 
+
+**** END FILE stdout ***
+**** BEGIN FILE stderr: 
+error: invalid argument '-std=c90' not allowed with 'C++'
+
+**** END FILE stderr ***
+Test failed
+**** END PROBE run_test_sanity ****
+Failed to find header /Applications/Coverity/config/templates/gnu/cpp.h
+Failed to find header /Applications/Coverity/config/templates/gnu/cpp.h
+A default config has been generated.[STATUS] g++-config-0: Running config probes
+**** BEGIN PROBE run_linker_config_probe ****
+Running command "/usr/bin/cc -std=c90 -print-search-dirs".
+pipe_command: /usr/bin/cc -std=c90 -print-search-dirs 
+pipe_commands starting: /usr/bin/cc -std=c90 -print-search-dirs 
+**** BEGIN OUTPUT run_linker_config_probe ****
+programs: =/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin
+libraries: =/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/17
+**** END OUTPUT run_linker_config_probe ****
+**** Found library search path '/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/17'.
+**** END PROBE run_linker_config_probe ****
+**** BEGIN PROBE run_linker_config_probe ****
+**** BEGIN FILE source file: /var/folders/br/wxmxwj554j9chb8y8w7hmwk00000gn/T/cov-jacktjaden/3f3e462f62b13aa2e7139ff913623fb3/cov-jacktjaden/ad2abe55f87cbd98479d8a2f4344b518/test.c
+int main() {}
+**** END FILE source file ***
+Running command "/usr/bin/cc -std=c90 -Wl,--trace test.c".
+pipe_command: /usr/bin/cc -std=c90 -Wl,--trace test.c 
+pipe_commands starting: /usr/bin/cc -std=c90 -Wl,--trace test.c 
+Failed command "/usr/bin/cc -std=c90 -Wl,--trace test.c" : code 1.
+**** BEGIN OUTPUT run_linker_config_probe ****
+**** END OUTPUT run_linker_config_probe ****
+**** END PROBE run_linker_config_probe ****

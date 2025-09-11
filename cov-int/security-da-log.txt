@@ -1,0 +1,4 @@
+/Applications/Coverity/bin/cov-security-da --dir /Users/jacktjaden/work/wolfHSM-jack/cov-int 
+cov-security-da version 2024.12.1 on Darwin 24.6.0 arm64
+Internal version numbers: 3c60fc625b p-2024.12-push-36
+
