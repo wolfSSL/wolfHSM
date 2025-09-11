@@ -1746,7 +1746,7 @@ static int _HandleSha256(whServerContext* ctx, uint16_t magic,
     int                            ret    = 0;
     wc_Sha256                      sha256[1];
     whMessageCrypto_Sha256Request  req;
-    whMessageCrypto_Sha256Response res = {0};
+    whMessageCrypto_Sha2Response res = {0};
 
     /* THe server SHA256 struct doesn't persist state (it is a union), meaning
      * the devId may get blown away between calls. We must restore the server
