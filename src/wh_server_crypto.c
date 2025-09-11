@@ -291,14 +291,18 @@ static int _HandleRsaKeyGen(whServerContext* ctx, uint16_t magic,
 #endif
                 }
 
-                ret = wh_Server_CacheImportRsaKey(ctx, rsa, key_id, flags,
-                                                  label_size, label);
+                if (ret == 0) {
+                    ret = wh_Server_CacheImportRsaKey(ctx, rsa, key_id, flags,
+                                                      label_size, label);
+                }
 #ifdef DEBUG_CRYPTOCB_VERBOSE
                 printf("[server] RsaKeyGen CacheKeyRsa: keyId:%u, ret:%d\n",
                        key_id, ret);
 #endif
-                res.keyId = WH_KEYID_ID(key_id);
-                res.len   = 0;
+                if (ret == 0) {
+                    res.keyId = WH_KEYID_ID(key_id);
+                    res.len   = 0;
+                }
             }
         }
         wc_FreeRsaKey(rsa);
@@ -730,8 +734,10 @@ static int _HandleEccKeyGen(whServerContext* ctx, uint16_t magic,
                            key_id, ret);
 #endif
                 }
-                ret = wh_Server_EccKeyCacheImport(ctx, key, key_id, flags,
-                                                  label_size, label);
+                if (ret == 0) {
+                    ret = wh_Server_EccKeyCacheImport(ctx, key, key_id, flags,
+                                                      label_size, label);
+                }
 #ifdef DEBUG_CRYPTOCB
                 printf("[server] %s CacheImport: keyId:%u, ret:%d\n", __func__,
                        key_id, ret);
@@ -1148,8 +1154,10 @@ static int _HandleCurve25519KeyGen(whServerContext* ctx, uint16_t magic,
 #endif
                 }
 
-                ret = wh_Server_CacheImportCurve25519Key(
-                    ctx, key, key_id, flags, label_size, label);
+                if (ret == 0) {
+                    ret = wh_Server_CacheImportCurve25519Key(
+                        ctx, key, key_id, flags, label_size, label);
+                }
 #ifdef DEBUG_CRYPTOCB
                 printf("[server] %s CacheImport: keyId:%u, ret:%d\n", __func__,
                        key_id, ret);
@@ -1693,12 +1701,16 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
                 if (moveToBigCache == 1) {
                     ret = wh_Server_KeystoreEvictKey(ctx, keyId);
                 }
-                meta->id = keyId;
-                meta->len = sizeof(ctx->crypto->algoCtx.cmac);
-                ret       = wh_Server_KeystoreCacheKey(
-                          ctx, meta, (uint8_t*)ctx->crypto->algoCtx.cmac);
-                res.keyId = WH_KEYID_ID(keyId);
-                res.outSz = 0;
+                if (ret == 0) {
+                    meta->id = keyId;
+                    meta->len = sizeof(ctx->crypto->algoCtx.cmac);
+                    ret       = wh_Server_KeystoreCacheKey(
+                              ctx, meta, (uint8_t*)ctx->crypto->algoCtx.cmac);
+                    if (ret == 0) {
+                        res.keyId = WH_KEYID_ID(keyId);
+                        res.outSz = 0;
+                    }
+                }
 #ifdef DEBUG_CRYPTOCB_VERBOSE
                 printf("[server] cmac saved state in keyid:%x %x len:%u ret:%d type:%d\n",
                         keyId, WH_KEYID_ID(keyId), meta->len, ret, ctx->crypto->algoCtx.cmac->type);
@@ -1734,7 +1746,13 @@ static int _HandleSha256(whServerContext* ctx, uint16_t magic,
     int                            ret    = 0;
     wc_Sha256                      sha256[1];
     whMessageCrypto_Sha256Request  req;
-    whMessageCrypto_Sha2Response   res;
+    whMessageCrypto_Sha2Response res = {0};
+
+    /* THe server SHA256 struct doesn't persist state (it is a union), meaning
+     * the devId may get blown away between calls. We must restore the server
+     * devId each time */
+    sha256->devId = ctx->crypto->devId;
+
     /* Translate the request */
     ret = wh_MessageCrypto_TranslateSha256Request(magic, cryptoDataIn, &req);
     if (ret != 0) {
@@ -1751,8 +1769,16 @@ static int _HandleSha256(whServerContext* ctx, uint16_t magic,
     sha256->hiLen = req.resumeState.hiLen;
 
     if (req.isLastBlock) {
+        /* Validate lastBlockLen to prevent potential buffer overread.
+         * Note: req.lastBlockLen is tainted (client-controlled) data. Length 0
+         * is valid when the total message size is block-aligned. */
+        if (req.lastBlockLen > WC_SHA256_BLOCK_SIZE) {
+            return WH_ERROR_BADARGS;
+        }
         /* wolfCrypt (or cryptoCb) is responsible for last block padding */
         if (ret == 0) {
+            /* Safe: lastBlockLen is validated to be within bounds [0, WC_SHA256_BLOCK_SIZE]
+             * This is an "untrusted loop bound" but it's properly validated above. */
             ret = wc_Sha256Update(sha256, req.inBlock, req.lastBlockLen);
         }
         if (ret == 0) {
@@ -2114,8 +2140,10 @@ static int _HandleMlDsaKeyGen(whServerContext* ctx, uint16_t magic,
                                    __func__, key_id, ret);
 #endif
                         }
-                        ret = wh_Server_MlDsaKeyCacheImport(
-                            ctx, key, key_id, flags, label_size, label);
+                        if (ret == 0) {
+                            ret = wh_Server_MlDsaKeyCacheImport(
+                                ctx, key, key_id, flags, label_size, label);
+                        }
 #ifdef DEBUG_CRYPTOCB
                         printf("[server] %s CacheImport: keyId:%u, ret:%d\n",
                                __func__, key_id, ret);

@@ -1,0 +1,8 @@
+Native Compiler invocation: /usr/bin/cc -Wno-cpp -std=c99 -Wall -Werror -Wextra -D_POSIX_C_SOURCE=200809L -DWOLFSSL_USER_SETTINGS -DWOLFHSM_CFG -I. -I./config -I../../../../../wolfssl -I../../../../../wolfHSM -I../../../../../wolfHSM/port/posix -c -o Build/aes.o ../../../../../wolfssl/wolfcrypt/src/aes.c
+Working directory: /Users/jacktjaden/work/wolfHSM-jack/examples/posix/tcp/wh_server_tcp
+Comptype: gcc
+* Configuring /usr/bin/cc as a C compiler
+* Configuring /usr/bin/cc as a C++ compiler
+* Configuring /usr/bin/cc as a C compiler
+* Configuring /usr/bin/ld as a C++ linker
+* Configuring /usr/bin/ar as a C++ linker
