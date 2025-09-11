@@ -72,6 +72,9 @@
  * operation in DMA requests.
  *     Default: Not defined
  *
+ *  WOLFHSM_CFG_IS_TEST_SERVER - If defined, the server is a test server
+ *      Default: Not defined
+ *
  *  Overridable porting functions:
  *
  *  XMEMFENCE() - Create a sequential memory consistency sync point.  Note this
