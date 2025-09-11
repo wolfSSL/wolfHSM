@@ -10,7 +10,7 @@ PROJECT_DIR				?= .
 CONFIG_DIR				?= $(PROJECT_DIR)/config
 # wolfSSL and wolfHSM directories
 WOLFSSL_DIR				?= ../../../../../wolfssl
-WOLFHSM_DIR				?= ../../../../../wolfHSM
+WOLFHSM_DIR				?= ../../../../
 WOLFHSM_PORT_DIR		?= $(WOLFHSM_DIR)/port/posix
 WOLFHSM_DEMO_CLIENT_DIR	?= $(WOLFHSM_DIR)/examples/demo/client
 

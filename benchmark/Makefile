@@ -11,7 +11,7 @@ MODULES_DIR			?= $(PROJECT_DIR)/bench_modules
 CONFIG_DIR			?= $(PROJECT_DIR)/config
 # wolfSSL and wolfHSM directories
 WOLFSSL_DIR			?= ../../wolfssl
-WOLFHSM_DIR			?= ../../wolfHSM
+WOLFHSM_DIR			?= ../
 WOLFHSM_PORT_DIR	?= $(WOLFHSM_DIR)/port/posix
 
 # Output directory for build files
