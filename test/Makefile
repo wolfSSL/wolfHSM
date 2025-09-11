@@ -30,7 +30,7 @@ DEF += -D_POSIX_C_SOURCE=200809L
 DEF += -DWOLFSSL_USER_SETTINGS -DWOLFHSM_CFG
 
 # Ensure this build uses POSIX test features
-DEF += -DWOLFHSM_CFG_TEST_POSIX 
+DEF += -DWOLFHSM_CFG_TEST_POSIX
 
 # Architecture flags for assembler, C compiler and linker
 ARCHFLAGS ?=
@@ -45,7 +45,7 @@ CSTD 		?= -std=c90
 
 ASFLAGS		?= $(ARCHFLAGS)
 CFLAGS		?= $(ARCHFLAGS) $(CSTD) $(CFLAGS_EXTRA)
-LDFLAGS		?= $(ARCHFLAGS) 
+LDFLAGS		?= $(ARCHFLAGS)
 
 # Enable garbage collection.  Inexact handling of dead_strip
 OS_NAME := $(shell uname -s | tr A-Z a-z)
@@ -114,12 +114,12 @@ endif
 
 ifeq ($(CLIENT_ONLY_TCP),1)
 # Build a client-only test driver to connect to a remote server over TCP
-    DEF += -DWOLFHSM_CFG_ENABLE_CLIENT 
-	DEF += -DWOLFHSM_CFG_TEST_CLIENT_ONLY_TCP 
+    DEF += -DWOLFHSM_CFG_ENABLE_CLIENT
+	DEF += -DWOLFHSM_CFG_TEST_CLIENT_ONLY_TCP
 	DEF += -DWOLFHSM_CFG_TEST_NO_CUSTOM_SERVERS
 else
 # Build both and client server
-    DEF += -DWOLFHSM_CFG_ENABLE_CLIENT 
+    DEF += -DWOLFHSM_CFG_ENABLE_CLIENT
 	DEF += -DWOLFHSM_CFG_ENABLE_SERVER
 endif
 

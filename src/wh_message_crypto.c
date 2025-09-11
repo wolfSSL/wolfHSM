@@ -440,22 +440,51 @@ int wh_MessageCrypto_TranslateSha256Request(
     return 0;
 }
 
-/* SHA256 Response translation */
-int wh_MessageCrypto_TranslateSha256Response(
-    uint16_t magic, const whMessageCrypto_Sha256Response* src,
-    whMessageCrypto_Sha256Response* dest)
+#if defined(WOLFSSL_SHA512) || defined(WOLFSSL_SHA384)
+/* SHA512 Request translation */
+int wh_MessageCrypto_TranslateSha512Request(
+    uint16_t magic, const whMessageCrypto_Sha512Request* src,
+    whMessageCrypto_Sha512Request* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, resumeState.hiLen);
+    WH_T32(magic, dest, src, resumeState.loLen);
+    WH_T32(magic, dest, src, resumeState.hashType);
+    /* Hash value is just a byte array, no translation needed */
+    if (src != dest) {
+        memcpy(dest->resumeState.hash, src->resumeState.hash,
+               sizeof(src->resumeState.hash));
+    }
+    WH_T32(magic, dest, src, isLastBlock);
+    WH_T32(magic, dest, src, lastBlockLen);
+    /* Input block is just a byte array, no translation needed */
+    if (src != dest) {
+        memcpy(dest->inBlock, src->inBlock, sizeof(src->inBlock));
+    }
+    return 0;
+}
+#endif /* WOLFSSL_SHA512 || WOLFSSL_SHA384 */
+
+/* SHA2 Response translation */
+int wh_MessageCrypto_TranslateSha2Response(
+    uint16_t magic, const whMessageCrypto_Sha2Response* src,
+    whMessageCrypto_Sha2Response* dest)
 {
     if ((src == NULL) || (dest == NULL)) {
         return WH_ERROR_BADARGS;
     }
     WH_T32(magic, dest, src, hiLen);
     WH_T32(magic, dest, src, loLen);
+    WH_T32(magic, dest, src, hashType);
     /* Hash value is just a byte array, no translation needed */
     if (src != dest) {
         memcpy(dest->hash, src->hash, sizeof(src->hash));
     }
     return 0;
 }
+
 
 /* CMAC Request translation */
 int wh_MessageCrypto_TranslateCmacRequest(
@@ -599,11 +628,10 @@ int wh_MessageCrypto_TranslateDmaAddrStatus(
     return wh_MessageCrypto_TranslateDmaBuffer(magic, &src->badAddr,
                                                &dest->badAddr);
 }
-
-/* SHA256 DMA Request translation */
-int wh_MessageCrypto_TranslateSha256DmaRequest(
-    uint16_t magic, const whMessageCrypto_Sha256DmaRequest* src,
-    whMessageCrypto_Sha256DmaRequest* dest)
+/* SHA224 DMA Request translation */
+int wh_MessageCrypto_TranslateSha2DmaRequest(
+    uint16_t magic, const whMessageCrypto_Sha2DmaRequest* src,
+    whMessageCrypto_Sha2DmaRequest* dest)
 {
     int ret;
 
@@ -632,10 +660,10 @@ int wh_MessageCrypto_TranslateSha256DmaRequest(
     return 0;
 }
 
-/* SHA256 DMA Response translation */
-int wh_MessageCrypto_TranslateSha256DmaResponse(
-    uint16_t magic, const whMessageCrypto_Sha256DmaResponse* src,
-    whMessageCrypto_Sha256DmaResponse* dest)
+/* SHA2 DMA Response translation */
+int wh_MessageCrypto_TranslateSha2DmaResponse(
+    uint16_t magic, const whMessageCrypto_Sha2DmaResponse* src,
+    whMessageCrypto_Sha2DmaResponse* dest)
 {
     if ((src == NULL) || (dest == NULL)) {
         return WH_ERROR_BADARGS;
