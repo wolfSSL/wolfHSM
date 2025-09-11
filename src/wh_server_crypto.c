@@ -1758,17 +1758,10 @@ static int _HandleSha256(whServerContext* ctx, uint16_t magic,
     if (ret != 0) {
         return ret;
     }
-
-    /* Init the SHA256 context if this is the first time, otherwise restore the
-     * hash state from the client */
-    if (req.resumeState.hiLen == 0 && req.resumeState.loLen == 0) {
-        ret = wc_InitSha256_ex(sha256, NULL, ctx->crypto->devId);
-    }
-    else {
-        /* HAVE_DILITHIUM */
-        memcpy(sha256->digest, req.resumeState.hash, WC_SHA256_DIGEST_SIZE);
-        sha256->loLen = req.resumeState.loLen;
-        sha256->hiLen = req.resumeState.hiLen;
+    /* always init sha2 struct with the devid */
+    ret = wc_InitSha256_ex(sha256, NULL, ctx->crypto->devId);
+    if (ret != 0) {
+        return ret;
     }
     /* restore the hash state from the client */
     memcpy(sha256->digest, req.resumeState.hash, WC_SHA256_DIGEST_SIZE);
