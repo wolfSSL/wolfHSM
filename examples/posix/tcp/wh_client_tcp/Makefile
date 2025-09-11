@@ -27,7 +27,7 @@ ARCHFLAGS ?=
 # Compiler and linker flags
 ASFLAGS ?= $(ARCHFLAGS)
 CFLAGS_EXTRA ?= -Wextra
-CFLAGS ?= $(ARCHFLAGS) -Wno-cpp -std=c99 -Wall -Werror $(CFLAGS_EXTRA)
+CFLAGS ?= $(ARCHFLAGS) -Wno-cpp -std=c99 -Wall -Werror $(CFLAGS_EXTRA) -Wno-unterminated-string-initialization
 LDFLAGS ?= $(ARCHFLAGS)
 
 # LD: generate map

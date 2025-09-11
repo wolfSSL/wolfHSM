@@ -13,9 +13,9 @@
 #include <wolfssl/wolfcrypt/settings.h>
 #include <wolfssl/wolfcrypt/types.h>
 
-int wh_Client_AesGcmWrapKeyRequest(whClientContext* ctx, uint16_t serverKeyId,
-                                   void* key, uint16_t keySz,
-                                   whNvmMetadata* metadata)
+int wh_Client_WrapKeyRequest(whClientContext* ctx, enum wc_CipherType cipherType,
+                             uint16_t serverKeyId, void* key, uint16_t keySz,
+                             whNvmMetadata* metadata)
 {
     uint16_t                      group  = WH_MESSAGE_GROUP_WRAPKEY;
     uint16_t                      action = WH_WRAPKEY_WRAP;
@@ -35,7 +35,7 @@ int wh_Client_AesGcmWrapKeyRequest(whClientContext* ctx, uint16_t serverKeyId,
     /* Initialize the request */
     req->keySz       = keySz;
     req->serverKeyId = serverKeyId;
-    req->cipherType  = WC_CIPHER_AES_GCM;
+    req->cipherType  = cipherType;
 
     /* Place the metadata + key right after the request */
     reqData = (uint8_t*)(req + 1);
@@ -47,8 +47,8 @@ int wh_Client_AesGcmWrapKeyRequest(whClientContext* ctx, uint16_t serverKeyId,
                                  (uint8_t*)req);
 }
 
-int wh_Client_AesGcmWrapKeyResponse(whClientContext* ctx, void* wrappedKeyOut,
-                                    uint16_t wrappedKeySz)
+int wh_Client_WrapKeyResponse(whClientContext* ctx, enum wc_CipherType cipherType,
+                              void* wrappedKeyOut, uint16_t wrappedKeySz)
 {
     int                            ret;
     uint16_t                       group;
@@ -76,7 +76,8 @@ int wh_Client_AesGcmWrapKeyResponse(whClientContext* ctx, void* wrappedKeyOut,
         return resp->rc;
     }
 
-    if (resp->wrappedKeySz > wrappedKeySz) {
+    if (resp->wrappedKeySz != wrappedKeySz ||
+        resp->cipherType != cipherType) {
         return WH_ERROR_ABORTED;
     }
 
@@ -87,10 +88,11 @@ int wh_Client_AesGcmWrapKeyResponse(whClientContext* ctx, void* wrappedKeyOut,
     return WH_ERROR_OK;
 }
 
-int wh_Client_AesGcmWrapKey(whClientContext* ctx, uint16_t serverKeyId,
-                            void* keyIn, uint16_t keySz,
-                            whNvmMetadata* metadataIn, void* wrappedKeyOut,
-                            uint16_t wrappedKeySz)
+int wh_Client_WrapKey(whClientContext* ctx, enum wc_CipherType cipherType, 
+                      uint16_t serverKeyId,
+                      void* keyIn, uint16_t keySz,
+                      whNvmMetadata* metadataIn, void* wrappedKeyOut,
+                      uint16_t wrappedKeySz)
 {
     int ret = WH_ERROR_OK;
 
@@ -98,21 +100,22 @@ int wh_Client_AesGcmWrapKey(whClientContext* ctx, uint16_t serverKeyId,
         wrappedKeyOut == NULL)
         return WH_ERROR_BADARGS;
 
-    ret = wh_Client_AesGcmWrapKeyRequest(ctx, serverKeyId, keyIn, keySz,
-                                         metadataIn);
+    ret = wh_Client_WrapKeyRequest(ctx, cipherType, serverKeyId, keyIn, keySz,
+                                   metadataIn);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
 
     do {
-        ret = wh_Client_AesGcmWrapKeyResponse(ctx, wrappedKeyOut, wrappedKeySz);
+        ret = wh_Client_WrapKeyResponse(ctx, cipherType, wrappedKeyOut, wrappedKeySz);
     } while (ret == WH_ERROR_NOTREADY);
 
     return ret;
 }
 
-int wh_Client_AesGcmUnwrapKeyRequest(whClientContext* ctx, uint16_t serverKeyId,
-                                     void* wrappedKeyIn, uint16_t wrappedKeySz)
+int wh_Client_UnwrapKeyRequest(whClientContext* ctx, enum wc_CipherType cipherType,
+                               uint16_t serverKeyId,
+                               void* wrappedKeyIn, uint16_t wrappedKeySz)
 
 {
     uint16_t                        group  = WH_MESSAGE_GROUP_WRAPKEY;
@@ -132,7 +135,7 @@ int wh_Client_AesGcmUnwrapKeyRequest(whClientContext* ctx, uint16_t serverKeyId,
     /* Initialize the request */
     req->wrappedKeySz = wrappedKeySz;
     req->serverKeyId  = serverKeyId;
-    req->cipherType   = WC_CIPHER_AES_GCM;
+    req->cipherType   = cipherType;
 
     /* Place the wrapped key right after the request */
     reqData = (uint8_t*)(req + 1);
@@ -142,7 +145,7 @@ int wh_Client_AesGcmUnwrapKeyRequest(whClientContext* ctx, uint16_t serverKeyId,
                                  sizeof(*req) + wrappedKeySz, (uint8_t*)req);
 }
 
-int wh_Client_AesGcmUnwrapKeyResponse(whClientContext* ctx,
+int wh_Client_UnwrapKeyResponse(whClientContext* ctx, enum wc_CipherType cipherType,
                                       whNvmMetadata* metadataOut, void* keyOut,
                                       uint16_t keySz)
 {
@@ -173,7 +176,8 @@ int wh_Client_AesGcmUnwrapKeyResponse(whClientContext* ctx,
         return resp->rc;
     }
 
-    if (resp->keySz != keySz)
+    if (resp->keySz != keySz ||
+        resp->cipherType != cipherType)
         return WH_ERROR_ABORTED;
 
     /* Copy the metadata and key from the response data into metadataOut and
@@ -185,10 +189,11 @@ int wh_Client_AesGcmUnwrapKeyResponse(whClientContext* ctx,
     return WH_ERROR_OK;
 }
 
-int wh_Client_AesGcmUnwrapKey(whClientContext* ctx, uint16_t serverKeyId,
-                              void* wrappedKeyIn, uint16_t wrappedKeySz,
-                              whNvmMetadata* metadataOut, void* keyOut,
-                              uint16_t keySz)
+int wh_Client_UnwrapKey(whClientContext* ctx, enum wc_CipherType cipherType,
+                        uint16_t serverKeyId,
+                        void* wrappedKeyIn, uint16_t wrappedKeySz,
+                        whNvmMetadata* metadataOut, void* keyOut,
+                        uint16_t keySz)
 {
     int ret = WH_ERROR_OK;
 
@@ -196,24 +201,25 @@ int wh_Client_AesGcmUnwrapKey(whClientContext* ctx, uint16_t serverKeyId,
         keyOut == NULL)
         return WH_ERROR_BADARGS;
 
-    ret = wh_Client_AesGcmUnwrapKeyRequest(ctx, serverKeyId, wrappedKeyIn,
-                                           wrappedKeySz);
+    ret = wh_Client_UnwrapKeyRequest(ctx, cipherType, serverKeyId, wrappedKeyIn,
+                                     wrappedKeySz);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
 
     do {
         ret =
-            wh_Client_AesGcmUnwrapKeyResponse(ctx, metadataOut, keyOut, keySz);
+            wh_Client_UnwrapKeyResponse(ctx, cipherType, metadataOut, keyOut, keySz);
     } while (ret == WH_ERROR_NOTREADY);
 
     return ret;
 }
 
-int wh_Client_AesGcmWrapKeyCacheRequest(whClientContext* ctx,
-                                        uint16_t         serverKeyId,
-                                        void*            wrappedKeyIn,
-                                        uint16_t         wrappedKeySz)
+int wh_Client_WrapKeyCacheRequest(whClientContext* ctx,
+                                  enum wc_CipherType cipherType,
+                                  uint16_t         serverKeyId,
+                                  void*            wrappedKeyIn,
+                                  uint16_t         wrappedKeySz)
 {
     uint16_t group  = WH_MESSAGE_GROUP_WRAPKEY;
     uint16_t action = WH_WRAPKEY_CACHE;
@@ -233,7 +239,7 @@ int wh_Client_AesGcmWrapKeyCacheRequest(whClientContext* ctx,
     /* Initialize the request */
     req->wrappedKeySz = wrappedKeySz;
     req->serverKeyId  = serverKeyId;
-    req->cipherType   = WC_CIPHER_AES_GCM;
+    req->cipherType   = cipherType;
 
     /* Place the wrapped key right after the request */
     reqData = (uint8_t*)(req + 1);
@@ -243,8 +249,9 @@ int wh_Client_AesGcmWrapKeyCacheRequest(whClientContext* ctx,
                                  sizeof(*req) + wrappedKeySz, (uint8_t*)req);
 }
 
-int wh_Client_AesGcmWrapKeyCacheResponse(whClientContext* ctx,
-                                         uint16_t*        keyIdOut)
+int wh_Client_WrapKeyCacheResponse(whClientContext* ctx,
+                                   enum wc_CipherType cipherType,
+                                   uint16_t*        keyIdOut)
 {
     int                             ret;
     uint16_t                        group;
@@ -271,31 +278,37 @@ int wh_Client_AesGcmWrapKeyCacheResponse(whClientContext* ctx,
         return resp->rc;
     }
 
+    if (resp->cipherType != cipherType) {
+        return WH_ERROR_ABORTED;
+    }
+
     *keyIdOut = resp->keyId;
 
     return WH_ERROR_OK;
 }
 
-int wh_Client_AesGcmWrapKeyCache(whClientContext* ctx, uint16_t serverKeyId,
-                                 void* wrappedKeyIn, uint16_t wrappedKeySz,
-                                 uint16_t* keyIdOut)
+int wh_Client_WrapKeyCache(whClientContext* ctx, enum wc_CipherType cipherType, 
+                           uint16_t serverKeyId,
+                           void* wrappedKeyIn, uint16_t wrappedKeySz,
+                           uint16_t* keyIdOut)
 {
     int ret = WH_ERROR_OK;
 
     if (ctx == NULL || wrappedKeyIn == NULL || keyIdOut == NULL)
         return WH_ERROR_BADARGS;
 
-    ret = wh_Client_AesGcmWrapKeyCacheRequest(ctx, serverKeyId, wrappedKeyIn,
+    ret = wh_Client_WrapKeyCacheRequest(ctx, cipherType, serverKeyId, wrappedKeyIn,
                                               wrappedKeySz);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
 
     do {
-        ret = wh_Client_AesGcmWrapKeyCacheResponse(ctx, keyIdOut);
+        ret = wh_Client_WrapKeyCacheResponse(ctx, cipherType, keyIdOut);
     } while (ret == WH_ERROR_NOTREADY);
 
     return ret;
 }
+
 #endif /* WOLFHSM_CFG_ENABLE_CLIENT */
 #endif /* WOLFHSM_CFG_WRAPKEY */

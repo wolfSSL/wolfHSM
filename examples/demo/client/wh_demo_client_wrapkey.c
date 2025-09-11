@@ -90,25 +90,25 @@ int wh_DemoClient_AesGcmWrapKeyBasic(whClientContext* ctx, WC_RNG* rng)
         return ret;
     }
 
-    ret = wh_Client_AesGcmWrapKey(ctx, serverKeyId, plainKey, sizeof(plainKey),
-                                  &metadata, wrappedKey, sizeof(wrappedKey));
+    ret = wh_Client_WrapKey(ctx, WC_CIPHER_AES_GCM, serverKeyId, plainKey, sizeof(plainKey),
+                            &metadata, wrappedKey, sizeof(wrappedKey));
     if (ret != 0) {
-        printf("Failed to wh_Client_AesGcmWrapKey %d\n", ret);
+        printf("Failed to wh_Client_WrapKey %d\n", ret);
         return ret;
     }
 
-    ret = wh_Client_AesGcmWrapKeyCache(ctx, serverKeyId, wrappedKey,
-                                       sizeof(wrappedKey), &wrappedKeyId);
+    ret = wh_Client_WrapKeyCache(ctx, WC_CIPHER_AES_GCM, serverKeyId, wrappedKey,
+                                 sizeof(wrappedKey), &wrappedKeyId);
     if (ret != 0) {
-        printf("Failed to wh_Client_AesGcmWrapKeyCache %d\n", ret);
+        printf("Failed to wh_Client_WrapKeyCache %d\n", ret);
         return ret;
     }
 
-    ret = wh_Client_AesGcmUnwrapKey(ctx, serverKeyId, wrappedKey,
-                                    sizeof(wrappedKey), &tmpMetadata,
-                                    tmpPlainKey, sizeof(tmpPlainKey));
+    ret = wh_Client_UnwrapKey(ctx, WC_CIPHER_AES_GCM, serverKeyId, wrappedKey,
+                              sizeof(wrappedKey), &tmpMetadata,
+                              tmpPlainKey, sizeof(tmpPlainKey));
     if (ret != 0) {
-        printf("Failed to wh_Client_AesGcmUnwrapKeyCache %d\n", ret);
+        printf("Failed to wh_Client_UnwrapKeyCache %d\n", ret);
         return ret;
     }
 

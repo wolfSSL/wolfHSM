@@ -49,6 +49,7 @@ int wh_MessageWrapKey_TranslateWrapResponse(
     }
     WH_T32(magic, dest, src, rc);
     WH_T16(magic, dest, src, wrappedKeySz);
+    WH_T16(magic, dest, src, cipherType);
     return 0;
 }
 
@@ -76,6 +77,7 @@ int wh_MessageWrapKey_TranslateUnwrapResponse(
     }
     WH_T32(magic, dest, src, rc);
     WH_T16(magic, dest, src, keySz);
+    WH_T16(magic, dest, src, cipherType);
     return 0;
 }
 
@@ -103,6 +105,7 @@ int wh_MessageWrapKey_TranslateCacheResponse(
     }
     WH_T32(magic, dest, src, rc);
     WH_T16(magic, dest, src, keyId);
+    WH_T16(magic, dest, src, cipherType);
     return 0;
 }
 

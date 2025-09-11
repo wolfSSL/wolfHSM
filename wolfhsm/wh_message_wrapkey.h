@@ -42,7 +42,7 @@ typedef struct {
 typedef struct {
     uint32_t rc;
     uint16_t wrappedKeySz;
-    uint8_t  WH_PAD[2];
+    uint16_t cipherType;
     /* Data follows:
      * uint8_t wrappedKey[wrappedKeySz]
      */
@@ -72,6 +72,7 @@ typedef struct {
 typedef struct {
     uint32_t rc;
     uint16_t keySz;
+    uint16_t cipherType;
     /* Data follows:
      * whNvmMetadata metadata
      * uint8_t key[keySz]
@@ -103,7 +104,7 @@ typedef struct {
 typedef struct {
     uint32_t rc;
     uint16_t keyId;
-    uint8_t  WH_PAD[2];
+    uint16_t cipherType;
 } whMessageWrapKey_CacheResponse;
 
 /* Wrap Key Cache translation functions */
