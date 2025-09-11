@@ -36,7 +36,7 @@ Checks: >
   -readability-avoid-const-params-in-decls,
 
 # Don't generate warnings in system headers
-HeaderFilterRegex: '^(src/|wolfhsm/).*\.(c|h)$'
+HeaderFilterRegex: '^(src[\\\/]|wolfhsm[\\\/]).*\.(c|h)$'
 
 # C-specific settings for wolfHSM
 CheckOptions:

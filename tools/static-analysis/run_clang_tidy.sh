@@ -41,7 +41,7 @@ generate_compile_commands() {
             # Create a basic compile_commands.json for all .c files
             echo "[" > compile_commands.json
             first=true
-            find src wolfhsm -name "*.c" | while read -r file; do
+            find src wolfhsm -name "*.c" 2>/dev/null | while read -r file; do
                 if [ "$first" = true ]; then
                     first=false
                 else
@@ -121,9 +121,9 @@ for file in $SOURCE_FILES; do
         NOTE_COUNT=$((NOTE_COUNT + file_notes))
         
         # Add to summary (excluding notes)
-        echo "$output" | grep -E "(error:|warning:)" | while IFS= read -r line; do
+        while IFS= read -r line; do
             echo "$file: $line" >> "$CLANG_TIDY_SUMMARY"
-        done
+        done < <(echo "$output" | grep -E "(error:|warning:)")
     else
         echo "clean"
     fi
