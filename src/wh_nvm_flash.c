@@ -1190,9 +1190,12 @@ int wh_NvmFlash_DestroyObjects(void* c, whNvmId list_count,
     /* Write each used object to new partition */
     for (entry = 0; entry < WOLFHSM_CFG_NVM_OBJECT_COUNT; entry++) {
         if (d->objects[entry].state.status == NF_STATUS_USED) {
-            /* TODO: Handle errors here better. Break out of loop? */
             ret = nfObject_Copy(context, entry,
                     dest_part, &dest_object, &dest_data);
+            if (ret != WH_ERROR_OK) {
+                /* Abort reclaim to avoid activating a partially copied partition */
+                return ret;
+            }
         }
     }
 
