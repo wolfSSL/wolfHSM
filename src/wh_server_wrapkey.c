@@ -235,6 +235,7 @@ static int _HandleWrapKeyRequest(whServerContext*              server,
 
             /* Tell the client how big the wrapped key is */
             resp->wrappedKeySz = wrappedKeySz;
+            resp->cipherType = WC_CIPHER_AES_GCM;
 
         } break;
         default:
@@ -289,6 +290,7 @@ static int _HandleUnwrapKeyRequest(whServerContext*                server,
 
             /* Tell the client how big the key is */
             resp->keySz = keySz;
+            resp->cipherType = WC_CIPHER_AES_GCM;
 
         } break;
         default:
@@ -370,6 +372,8 @@ static int _HandleCacheKeyRequest(whServerContext*               server,
             }
 
             resp->keyId = keyId;
+            resp->cipherType = WC_CIPHER_AES_GCM;
+
         } break;
         default:
             return WH_ERROR_BADARGS;
