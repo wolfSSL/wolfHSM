@@ -47,7 +47,6 @@ enum WH_MESSAGE_ENUM {
     WH_MESSAGE_GROUP_CUSTOM     = 0x0A00, /* User-specified features */
     WH_MESSAGE_GROUP_CRYPTO_DMA = 0x0B00, /* DMA crypto operations */
     WH_MESSAGE_GROUP_CERT       = 0x0C00, /* Certificate operations */
-    WH_MESSAGE_GROUP_WRAPKEY    = 0x0D00, /* Wrap Key operations */
 
     WH_MESSAGE_ACTION_MASK = 0x00FF, /* 255 subtypes per group*/
     WH_MESSAGE_ACTION_NONE = 0x0000, /* No action. Invalid. */
@@ -62,6 +61,9 @@ enum WH_KEY_ENUM {
     WH_KEY_ERASE,
     WH_KEY_CACHE_DMA,
     WH_KEY_EXPORT_DMA,
+    WH_KEY_WRAP,
+    WH_KEY_UNWRAPEXPORT,
+    WH_KEY_UNWRAPCACHE
 };
 
 /* SHE actions */
@@ -91,13 +93,6 @@ enum {
     WH_COUNTER_INCREMENT,
     WH_COUNTER_READ,
     WH_COUNTER_DESTROY,
-};
-
-/* Wrap Key actions */
-enum {
-    WH_WRAPKEY_WRAP,
-    WH_WRAPKEY_UNWRAP,
-    WH_WRAPKEY_CACHE,
 };
 
 /* Construct the message kind based on group and action */

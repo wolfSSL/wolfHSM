@@ -38,8 +38,6 @@
 #ifndef NO_AES
 #define HAVE_AESGCM
 #ifdef HAVE_AESGCM
-int wh_DemoClient_AesGcmWrapKeyBasic(whClientContext* ctx, WC_RNG* rng)
-{
 
 #define WH_TEST_AES_KEYSIZE 16
 #define WH_TEST_AES_TEXTSIZE 16
@@ -48,6 +46,10 @@ int wh_DemoClient_AesGcmWrapKeyBasic(whClientContext* ctx, WC_RNG* rng)
 #define WH_TEST_AES_WRAPPED_KEYSIZE                                     \
     (WH_TEST_AES_AUTHSIZE + WH_TEST_AES_TAGSIZE + WH_TEST_AES_KEYSIZE + \
      sizeof(whNvmMetadata))
+
+int wh_DemoClient_AesGcmWrapKeyBasic(whClientContext* ctx, WC_RNG* rng)
+{
+
 
     int           ret = 0;
     uint8_t       iv[AES_BLOCK_SIZE];
@@ -97,16 +99,16 @@ int wh_DemoClient_AesGcmWrapKeyBasic(whClientContext* ctx, WC_RNG* rng)
         return ret;
     }
 
-    ret = wh_Client_WrapKeyCache(ctx, WC_CIPHER_AES_GCM, serverKeyId, wrappedKey,
-                                 sizeof(wrappedKey), &wrappedKeyId);
+    ret = wh_Client_UnwrapKeyCache(ctx, WC_CIPHER_AES_GCM, serverKeyId, wrappedKey,
+                                   sizeof(wrappedKey), &wrappedKeyId);
     if (ret != 0) {
-        printf("Failed to wh_Client_WrapKeyCache %d\n", ret);
+        printf("Failed to wh_Client_UnwrapKeyCache %d\n", ret);
         return ret;
     }
 
-    ret = wh_Client_UnwrapKey(ctx, WC_CIPHER_AES_GCM, serverKeyId, wrappedKey,
-                              sizeof(wrappedKey), &tmpMetadata,
-                              tmpPlainKey, sizeof(tmpPlainKey));
+    ret = wh_Client_UnwrapKeyExport(ctx, WC_CIPHER_AES_GCM, serverKeyId, wrappedKey,
+                                    sizeof(wrappedKey), &tmpMetadata,
+                                    tmpPlainKey, sizeof(tmpPlainKey));
     if (ret != 0) {
         printf("Failed to wh_Client_UnwrapKeyCache %d\n", ret);
         return ret;
