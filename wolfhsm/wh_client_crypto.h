@@ -509,6 +509,7 @@ int wh_Client_CmacDma(whClientContext* ctx, Cmac* cmac, CmacType type,
 int wh_Client_Sha256(whClientContext* ctx, wc_Sha256* sha, const uint8_t* in,
                      uint32_t inLen, uint8_t* out);
 
+
 /**
  * @brief Performs a SHA-256 hash operation on the input data using DMA.
  *
@@ -526,6 +527,106 @@ int wh_Client_Sha256Dma(whClientContext* ctx, wc_Sha256* sha, const uint8_t* in,
                         uint32_t inLen, uint8_t* out);
 
 #endif /* !NO_SHA256 */
+
+#if defined(WOLFSSL_SHA224)
+/**
+ * @brief Performs a SHA-224 hash operation on the input data.
+ *
+ * This function performs a SHA-224 hash operation on the input data and stores
+ * the result in the output buffer.
+ *
+ * @param[in] ctx Pointer to the client context structure.
+ * @param[in] sha Pointer to the SHA-224 context structure.
+ * @param[in] in Pointer to the input data.
+ * @param[in] inLen Length of the input data in bytes.
+ * @param[out] out Pointer to the output buffer.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_Sha224(whClientContext* ctx, wc_Sha224* sha, const uint8_t* in,
+                     uint32_t inLen, uint8_t* out);
+/**
+ * @brief Performs a SHA-224 hash operation on the input data using DMA.
+ *
+ * This function performs a SHA-224 hash operation on the input data and stores
+ * the result in the output buffer using DMA.
+ *
+ * @param[in] ctx Pointer to the client context structure.
+ * @param[in] sha Pointer to the SHA-224 context structure.
+ * @param[in] in Pointer to the input data.
+ * @param[in] inLen Length of the input data in bytes.
+ * @param[out] out Pointer to the output buffer.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_Sha224Dma(whClientContext* ctx, wc_Sha224* sha, const uint8_t* in,
+                        uint32_t inLen, uint8_t* out);
+#endif /* WOLFSSL_SHA224 */
+
+#if defined(WOLFSSL_SHA384)
+/**
+ * @brief Performs a SHA-384 hash operation on the input data.
+ *
+ * This function performs a SHA-384 hash operation on the input data and stores
+ * the result in the output buffer.
+ *
+ * @param[in] ctx Pointer to the client context structure.
+ * @param[in] sha Pointer to the SHA-384 context structure.
+ * @param[in] in Pointer to the input data.
+ * @param[in] inLen Length of the input data in bytes.
+ * @param[out] out Pointer to the output buffer.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_Sha384(whClientContext* ctx, wc_Sha384* sha, const uint8_t* in,
+                     uint32_t inLen, uint8_t* out);
+/**
+ * @brief Performs a SHA-384 hash operation on the input data using DMA.
+ *
+ * This function performs a SHA-384 hash operation on the input data and stores
+ * the result in the output buffer using DMA.
+ *
+ * @param[in] ctx Pointer to the client context structure.
+ * @param[in] sha Pointer to the SHA-384 context structure.
+ * @param[in] in Pointer to the input data.
+ * @param[in] inLen Length of the input data in bytes.
+ * @param[out] out Pointer to the output buffer.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_Sha384Dma(whClientContext* ctx, wc_Sha384* sha, const uint8_t* in,
+                        uint32_t inLen, uint8_t* out);
+
+#endif /* WOLFSSL_SHA384 */
+
+#if defined(WOLFSSL_SHA512)
+/**
+ * @brief Performs a SHA-512 hash operation on the input data.
+ *
+ * This function performs a SHA-512 hash operation on the input data and stores
+ * the result in the output buffer.
+ *
+ * @param[in] ctx Pointer to the client context structure.
+ * @param[in] sha Pointer to the SHA-512 context structure.
+ * @param[in] in Pointer to the input data.
+ * @param[in] inLen Length of the input data in bytes.
+ * @param[out] out Pointer to the output buffer.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_Sha512(whClientContext* ctx, wc_Sha512* sha, const uint8_t* in,
+                     uint32_t inLen, uint8_t* out);
+/**
+ * @brief Performs a SHA-512 hash operation on the input data using DMA.
+ *
+ * This function performs a SHA-512 hash operation on the input data and stores
+ * the result in the output buffer using DMA.
+ *
+ * @param[in] ctx Pointer to the client context structure.
+ * @param[in] sha Pointer to the SHA-512 context structure.
+ * @param[in] in Pointer to the input data.
+ * @param[in] inLen Length of the input data in bytes.
+ * @param[out] out Pointer to the output buffer.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_Sha512Dma(whClientContext* ctx, wc_Sha512* sha, const uint8_t* in,
+                        uint32_t inLen, uint8_t* out);
+#endif /* WOLFSSL_SHA512 */
 
 #ifdef HAVE_DILITHIUM
 

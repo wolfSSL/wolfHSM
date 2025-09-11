@@ -55,6 +55,7 @@
 #include "wolfssl/wolfcrypt/curve25519.h"
 #include "wolfssl/wolfcrypt/dilithium.h"
 #include "wolfssl/wolfcrypt/sha256.h"
+#include "wolfssl/wolfcrypt/sha512.h"
 
 /* Message definitions */
 #include "wolfhsm/wh_message.h"
@@ -107,6 +108,13 @@ static int _xferSha256BlockAndUpdateDigest(whClientContext* ctx,
                                            wc_Sha256*       sha256,
                                            uint32_t         isLastBlock);
 #endif /* !NO_SHA256 */
+
+#if defined(WOLFSSL_SHA224)
+/* Helper function to transfer SHA224 block and update digest */
+static int _xferSha224BlockAndUpdateDigest(whClientContext* ctx,
+                                           wc_Sha224*       sha224,
+                                           uint32_t         isLastBlock);
+#endif /* WOLFSSL_SHA224 */
 
 static uint8_t* _createCryptoRequest(uint8_t* reqBuf, uint16_t type);
 static uint8_t* _createCryptoRequestWithSubtype(uint8_t* reqBuf, uint16_t type,
@@ -2375,7 +2383,7 @@ static int _xferSha256BlockAndUpdateDigest(whClientContext* ctx,
     int                             ret     = 0;
     uint16_t                        dataSz  = 0;
     whMessageCrypto_Sha256Request*  req     = NULL;
-    whMessageCrypto_Sha256Response* res     = NULL;
+    whMessageCrypto_Sha2Response*   res     = NULL;
     uint8_t*                        dataPtr = NULL;
 
     /* Get data buffer */
@@ -2509,13 +2517,7 @@ int wh_Client_Sha256(whClientContext* ctx, wc_Sha256* sha256, const uint8_t* in,
         }
 
         /* reset the state of the sha context (without blowing away devId) */
-        sha256->buffLen = 0;
-        sha256->hiLen   = 0;
-        sha256->loLen   = 0;
-#ifdef WOLFSSL_HASH_FLAGS
-        sha256->flags   = 0;
-#endif
-        memset(sha256->digest, 0, sizeof(sha256->digest));
+        wc_InitSha256_ex(sha256, NULL, sha256->devId);
     }
 
     return ret;
@@ -2529,8 +2531,8 @@ int wh_Client_Sha256Dma(whClientContext* ctx, wc_Sha256* sha, const uint8_t* in,
     uint16_t                           respSz  = 0;
     uint16_t                           group   = WH_MESSAGE_GROUP_CRYPTO_DMA;
     uint8_t*                           dataPtr = NULL;
-    whMessageCrypto_Sha256DmaRequest*  req     = NULL;
-    whMessageCrypto_Sha256DmaResponse* resp    = NULL;
+    whMessageCrypto_Sha2DmaRequest*    req     = NULL;
+    whMessageCrypto_Sha2DmaResponse*   resp    = NULL;
 
     /* Get data pointer from the context to use as request/response storage */
     dataPtr = (uint8_t*)wh_CommClient_GetDataPtr(ctx->comm);
@@ -2539,7 +2541,7 @@ int wh_Client_Sha256Dma(whClientContext* ctx, wc_Sha256* sha, const uint8_t* in,
     }
 
     /* Setup generic header and get pointer to request data */
-    req = (whMessageCrypto_Sha256DmaRequest*)_createCryptoRequest(
+    req = (whMessageCrypto_Sha2DmaRequest*)_createCryptoRequest(
         dataPtr, WC_HASH_TYPE_SHA256);
 
 
@@ -2620,6 +2622,782 @@ int wh_Client_Sha256Dma(whClientContext* ctx, wc_Sha256* sha, const uint8_t* in,
     return ret;
 }
 #endif /* !NO_SHA256 */
+
+#ifdef WOLFSSL_SHA224
+
+static int _xferSha224BlockAndUpdateDigest(whClientContext* ctx,
+                                           wc_Sha224*       sha224,
+                                           uint32_t         isLastBlock)
+{
+    uint16_t                       group   = WH_MESSAGE_GROUP_CRYPTO;
+    uint16_t                       action  = WH_MESSAGE_ACTION_NONE;
+    int                            ret     = 0;
+    uint16_t                       dataSz  = 0;
+    whMessageCrypto_Sha256Request* req     = NULL;
+    whMessageCrypto_Sha2Response*  res     = NULL;
+    uint8_t*                       dataPtr = NULL;
+
+    /* Get data buffer */
+    dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
+    if (dataPtr == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Setup generic header and get pointer to request data */
+    req = (whMessageCrypto_Sha256Request*)_createCryptoRequest(
+        dataPtr, WC_HASH_TYPE_SHA224);
+
+
+    /* Send the full block to the server, along with the
+     * current hash state if needed. Finalization/padding of last block is up to
+     * the server, we just need to let it know we are done and sending an
+     * incomplete last block */
+    if (isLastBlock) {
+        req->isLastBlock  = 1;
+        req->lastBlockLen = sha224->buffLen;
+    }
+    else {
+        req->isLastBlock = 0;
+    }
+    memcpy(req->inBlock, sha224->buffer,
+           (isLastBlock) ? sha224->buffLen : WC_SHA224_BLOCK_SIZE);
+
+    /* Send the hash state - this will be 0 on the first block on a properly
+     * initialized sha224 struct */
+    memcpy(req->resumeState.hash, sha224->digest, WC_SHA256_DIGEST_SIZE);
+    req->resumeState.hiLen = sha224->hiLen;
+    req->resumeState.loLen = sha224->loLen;
+
+    uint32_t req_len =
+        sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
+
+    ret = wh_Client_SendRequest(ctx, group, WC_ALGO_TYPE_HASH, req_len,
+                                (uint8_t*)dataPtr);
+
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+    printf("[client] send SHA224 Req:\n");
+    wh_Utils_Hexdump("[client] inBlock: ", req->inBlock, WC_SHA224_BLOCK_SIZE);
+    if (req->resumeState.hiLen != 0 || req->resumeState.loLen != 0) {
+        wh_Utils_Hexdump("  [client] resumeHash: ", req->resumeState.hash,
+                         (isLastBlock) ? req->lastBlockLen
+                                       : WC_SHA224_BLOCK_SIZE);
+        printf("  [client] hiLen: %u, loLen: %u\n", req->resumeState.hiLen,
+               req->resumeState.loLen);
+    }
+    printf("  [client] ret = %d\n", ret);
+#endif /* DEBUG_CRYPTOCB_VERBOSE */
+
+    if (ret == 0) {
+        do {
+            ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
+                                         (uint8_t*)dataPtr);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+    if (ret == 0) {
+        /* Get response */
+        ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA224, (uint8_t**)&res);
+        /* wolfCrypt allows positive error codes on success in some scenarios */
+        if (ret >= 0) {
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+            printf("[client] ERROR Client SHA224 Res recv: ret=%d", ret);
+#endif /* DEBUG_CRYPTOCB_VERBOSE */
+            /* Store the received intermediate hash in the sha224
+             * context and indicate the field is now valid and
+             * should be passed back and forth to the server.
+             * The digest length is the same as sha256
+             * for intermediate operation. Final output will be
+             * truncated to WC_SHA224_DIGEST_SIZE.
+             */
+            memcpy(sha224->digest, res->hash, WC_SHA256_DIGEST_SIZE);
+            sha224->hiLen = res->hiLen;
+            sha224->loLen = res->loLen;
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+            printf("[client] Client SHA224 Res recv:\n");
+            wh_Utils_Hexdump("[client] hash: ", (uint8_t*)sha224->digest,
+                             WC_SHA224_DIGEST_SIZE);
+#endif /* DEBUG_CRYPTOCB_VERBOSE */
+        }
+    }
+
+    return ret;
+}
+
+int wh_Client_Sha224(whClientContext* ctx, wc_Sha224* sha224, const uint8_t* in,
+                     uint32_t inLen, uint8_t* out)
+{
+    int      ret               = 0;
+    uint8_t* sha224BufferBytes = (uint8_t*)sha224->buffer;
+
+    /* Caller invoked SHA Update:
+     * wc_CryptoCb_Sha224Hash(sha224, data, len, NULL) */
+    if (in != NULL) {
+        size_t i = 0;
+
+        /* Process the partial blocks directly from the input data. If there
+         * is enough input data to fill a full block, transfer it to the
+         * server */
+        if (sha224->buffLen > 0) {
+            while (i < inLen && sha224->buffLen < WC_SHA224_BLOCK_SIZE) {
+                sha224BufferBytes[sha224->buffLen++] = in[i++];
+            }
+            if (sha224->buffLen == WC_SHA224_BLOCK_SIZE) {
+                ret = _xferSha224BlockAndUpdateDigest(ctx, sha224, 0);
+                sha224->buffLen = 0;
+            }
+        }
+
+        /* Process as many full blocks from the input data as we can */
+        while ((inLen - i) >= WC_SHA224_BLOCK_SIZE) {
+            memcpy(sha224BufferBytes, in + i, WC_SHA224_BLOCK_SIZE);
+            ret = _xferSha224BlockAndUpdateDigest(ctx, sha224, 0);
+            i += WC_SHA224_BLOCK_SIZE;
+        }
+
+        /* Copy any remaining data into the buffer to be sent in a
+         * subsequent call when we have enough input data to send a full
+         * block */
+        while (i < inLen) {
+            sha224BufferBytes[sha224->buffLen++] = in[i++];
+        }
+    }
+
+    /* Caller invoked SHA finalize:
+     * wc_CryptoCb_Sha224Hash(sha224, NULL, 0, * hash) */
+    if (out != NULL) {
+        ret = _xferSha224BlockAndUpdateDigest(ctx, sha224, 1);
+
+        /* Copy out the final hash value */
+        if (ret == 0) {
+            memcpy(out, sha224->digest, WC_SHA224_DIGEST_SIZE);
+        }
+
+        /* reset the state of the sha context (without blowing away devId) */
+        wc_InitSha224_ex(sha224, NULL, sha224->devId);
+    }
+
+    return ret;
+}
+
+
+int wh_Client_Sha224Dma(whClientContext* ctx, wc_Sha224* sha, const uint8_t* in,
+                        uint32_t inLen, uint8_t* out)
+{
+    int                              ret     = WH_ERROR_OK;
+    wc_Sha224*                       sha224  = sha;
+    uint16_t                         respSz  = 0;
+    uint16_t                         group   = WH_MESSAGE_GROUP_CRYPTO_DMA;
+    uint8_t*                         dataPtr = NULL;
+    whMessageCrypto_Sha2DmaRequest*  req     = NULL;
+    whMessageCrypto_Sha2DmaResponse* resp    = NULL;
+
+    /* Get data pointer from the context to use as request/response storage */
+    dataPtr = (uint8_t*)wh_CommClient_GetDataPtr(ctx->comm);
+    if (dataPtr == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Setup generic header and get pointer to request data */
+    req = (whMessageCrypto_Sha2DmaRequest*)_createCryptoRequest(
+        dataPtr, WC_HASH_TYPE_SHA224);
+
+
+    /* Caller invoked SHA Update:
+     * wc_CryptoCb_Sha224Hash(sha224, data, len, NULL) */
+    if (in != NULL) {
+        req->finalize    = 0;
+        req->state.addr  = (uint64_t)(uintptr_t)sha224;
+        req->state.sz    = sizeof(*sha224);
+        req->input.addr  = (uint64_t)(uintptr_t)in;
+        req->input.sz    = inLen;
+        req->output.addr = (uint64_t)(uintptr_t)out;
+        req->output.sz   = WC_SHA224_DIGEST_SIZE; /* not needed, but YOLO */
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+        printf("[client] SHA224 DMA UPDATE: inAddr=%p, inSz=%u\n", in, inLen);
+#endif
+        ret = wh_Client_SendRequest(
+            ctx, group, WC_ALGO_TYPE_HASH,
+            sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req),
+            (uint8_t*)dataPtr);
+
+        if (ret == WH_ERROR_OK) {
+            do {
+                ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
+                                             (uint8_t*)dataPtr);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+
+        if (ret == WH_ERROR_OK) {
+            /* Get response structure pointer, validates generic header
+             * rc */
+            ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA224,
+                                     (uint8_t**)&resp);
+            /* Nothing to do on success, as server will have updated the context
+             * in client memory */
+        }
+    }
+
+    /* Caller invoked SHA finalize:
+     * wc_CryptoCb_Sha224Hash(sha224, NULL, 0, * hash) */
+    if ((ret == WH_ERROR_OK) && (out != NULL)) {
+        /* Packet will have been trashed, so re-populate all fields */
+        req->finalize    = 1;
+        req->state.addr  = (uint64_t)(uintptr_t)sha224;
+        req->state.sz    = sizeof(*sha224);
+        req->input.addr  = (uint64_t)(uintptr_t)in;
+        req->input.sz    = inLen;
+        req->output.addr = (uint64_t)(uintptr_t)out;
+        req->output.sz   = WC_SHA224_DIGEST_SIZE; /* not needed, but YOLO */
+
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+        printf("[client] SHA224 DMA FINAL: outAddr=%p\n", out);
+#endif
+        /* send the request to the server */
+        ret = wh_Client_SendRequest(
+            ctx, group, WC_ALGO_TYPE_HASH,
+            sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req),
+            (uint8_t*)dataPtr);
+
+        if (ret == WH_ERROR_OK) {
+            do {
+                ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
+                                             (uint8_t*)dataPtr);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+
+        /* Copy out the final hash value */
+        if (ret == WH_ERROR_OK) {
+            /* Get response structure pointer, validates generic header
+             * rc */
+            ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA224,
+                                     (uint8_t**)&resp);
+            /* Nothing to do on success, as server will have updated the output
+             * hash in client memory */
+        }
+    }
+
+    return ret;
+}
+#endif /* WOLFSSL_SHA224 */
+
+#ifdef WOLFSSL_SHA384
+
+static int _xferSha384BlockAndUpdateDigest(whClientContext* ctx,
+                                           wc_Sha384*       sha384,
+                                           uint32_t         isLastBlock)
+{
+    uint16_t                       group   = WH_MESSAGE_GROUP_CRYPTO;
+    uint16_t                       action  = WH_MESSAGE_ACTION_NONE;
+    int                            ret     = 0;
+    uint16_t                       dataSz  = 0;
+    whMessageCrypto_Sha512Request* req     = NULL;
+    whMessageCrypto_Sha2Response*  res     = NULL;
+    uint8_t*                       dataPtr = NULL;
+
+    /* Get data buffer */
+    dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
+    if (dataPtr == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Setup generic header and get pointer to request data */
+    req = (whMessageCrypto_Sha512Request*)_createCryptoRequest(
+        dataPtr, WC_HASH_TYPE_SHA384);
+
+
+    /* Send the full block to the server, along with the
+     * current hash state if needed. Finalization/padding of last block is up to
+     * the server, we just need to let it know we are done and sending an
+     * incomplete last block */
+    if (isLastBlock) {
+        req->isLastBlock  = 1;
+        req->lastBlockLen = sha384->buffLen;
+    }
+    else {
+        req->isLastBlock = 0;
+    }
+    memcpy(req->inBlock, sha384->buffer,
+           (isLastBlock) ? sha384->buffLen : WC_SHA384_BLOCK_SIZE);
+
+    /* Send the hash state - this will be 0 on the first block on a properly
+     * initialized sha384 struct */
+    memcpy(req->resumeState.hash, sha384->digest, WC_SHA512_DIGEST_SIZE);
+    req->resumeState.hiLen = sha384->hiLen;
+    req->resumeState.loLen = sha384->loLen;
+
+    uint32_t req_len =
+        sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
+
+    ret = wh_Client_SendRequest(ctx, group, WC_ALGO_TYPE_HASH, req_len,
+                                (uint8_t*)dataPtr);
+
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+    printf("[client] send SHA384 Req:\n");
+    wh_Utils_Hexdump("[client] inBlock: ", req->inBlock, WC_SHA384_BLOCK_SIZE);
+    if (req->resumeState.hiLen != 0 || req->resumeState.loLen != 0) {
+        wh_Utils_Hexdump("  [client] resumeHash: ", req->resumeState.hash,
+                         (isLastBlock) ? req->lastBlockLen
+                                       : WC_SHA384_BLOCK_SIZE);
+        printf("  [client] hiLen: %u, loLen: %u\n", req->resumeState.hiLen,
+               req->resumeState.loLen);
+    }
+    printf("  [client] ret = %d\n", ret);
+#endif /* DEBUG_CRYPTOCB_VERBOSE */
+
+    if (ret == 0) {
+        do {
+            ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
+                                         (uint8_t*)dataPtr);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+    if (ret == 0) {
+        /* Get response */
+        ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA384, (uint8_t**)&res);
+        /* wolfCrypt allows positive error codes on success in some scenarios */
+        if (ret >= 0) {
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+            printf("[client] ERROR Client SHA384 Res recv: ret=%d", ret);
+#endif /* DEBUG_CRYPTOCB_VERBOSE */
+            /* Store the received intermediate hash in the sha384
+             * context and indicate the field is now valid and
+             * should be passed back and forth to the server
+             * The digest length is the same as sha512
+             * for intermediate operation. Final output will be
+             * truncated to WC_SHA384_DIGEST_SIZE.
+             */
+            memcpy(sha384->digest, res->hash, WC_SHA512_DIGEST_SIZE);
+            sha384->hiLen = res->hiLen;
+            sha384->loLen = res->loLen;
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+            printf("[client] Client SHA384 Res recv:\n");
+            wh_Utils_Hexdump("[client] hash: ", (uint8_t*)sha384->digest,
+                             WC_SHA384_DIGEST_SIZE);
+#endif /* DEBUG_CRYPTOCB_VERBOSE */
+        }
+    }
+
+    return ret;
+}
+
+int wh_Client_Sha384(whClientContext* ctx, wc_Sha384* sha384, const uint8_t* in,
+                     uint32_t inLen, uint8_t* out)
+{
+    int      ret               = 0;
+    uint8_t* sha384BufferBytes = (uint8_t*)sha384->buffer;
+
+    /* Caller invoked SHA Update:
+     * wc_CryptoCb_Sha384Hash(sha384, data, len, NULL) */
+    if (in != NULL) {
+        size_t i = 0;
+
+        /* Process the partial blocks directly from the input data. If there
+         * is enough input data to fill a full block, transfer it to the
+         * server */
+        if (sha384->buffLen > 0) {
+            while (i < inLen && sha384->buffLen < WC_SHA384_BLOCK_SIZE) {
+                sha384BufferBytes[sha384->buffLen++] = in[i++];
+            }
+            if (sha384->buffLen == WC_SHA384_BLOCK_SIZE) {
+                ret = _xferSha384BlockAndUpdateDigest(ctx, sha384, 0);
+                sha384->buffLen = 0;
+            }
+        }
+
+        /* Process as many full blocks from the input data as we can */
+        while ((inLen - i) >= WC_SHA384_BLOCK_SIZE) {
+            memcpy(sha384BufferBytes, in + i, WC_SHA384_BLOCK_SIZE);
+            ret = _xferSha384BlockAndUpdateDigest(ctx, sha384, 0);
+            i += WC_SHA384_BLOCK_SIZE;
+        }
+
+        /* Copy any remaining data into the buffer to be sent in a
+         * subsequent call when we have enough input data to send a full
+         * block */
+        while (i < inLen) {
+            sha384BufferBytes[sha384->buffLen++] = in[i++];
+        }
+    }
+
+    /* Caller invoked SHA finalize:
+     * wc_CryptoCb_Sha384Hash(sha384, NULL, 0, * hash) */
+    if (out != NULL) {
+        ret = _xferSha384BlockAndUpdateDigest(ctx, sha384, 1);
+
+        /* Copy out the final hash value */
+        if (ret == 0) {
+            memcpy(out, sha384->digest, WC_SHA384_DIGEST_SIZE);
+        }
+
+        /* reset the state of the sha context (without blowing away devId) */
+        wc_InitSha384_ex(sha384, NULL, sha384->devId);
+    }
+
+    return ret;
+}
+int wh_Client_Sha384Dma(whClientContext* ctx, wc_Sha384* sha, const uint8_t* in,
+                        uint32_t inLen, uint8_t* out)
+{
+    int                              ret     = WH_ERROR_OK;
+    wc_Sha384*                       sha384  = sha;
+    uint16_t                         respSz  = 0;
+    uint16_t                         group   = WH_MESSAGE_GROUP_CRYPTO_DMA;
+    uint8_t*                         dataPtr = NULL;
+    whMessageCrypto_Sha2DmaRequest*  req     = NULL;
+    whMessageCrypto_Sha2DmaResponse* resp    = NULL;
+
+    /* Get data pointer from the context to use as request/response storage */
+    dataPtr = (uint8_t*)wh_CommClient_GetDataPtr(ctx->comm);
+    if (dataPtr == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Setup generic header and get pointer to request data */
+    req = (whMessageCrypto_Sha2DmaRequest*)_createCryptoRequest(
+        dataPtr, WC_HASH_TYPE_SHA384);
+
+
+    /* Caller invoked SHA Update:
+     * wc_CryptoCb_Sha384Hash(sha384, data, len, NULL) */
+    if (in != NULL) {
+        req->finalize    = 0;
+        req->state.addr  = (uint64_t)(uintptr_t)sha384;
+        req->state.sz    = sizeof(*sha384);
+        req->input.addr  = (uint64_t)(uintptr_t)in;
+        req->input.sz    = inLen;
+        req->output.addr = (uint64_t)(uintptr_t)out;
+        req->output.sz   = WC_SHA384_DIGEST_SIZE; /* not needed, but YOLO */
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+        printf("[client] SHA384 DMA UPDATE: inAddr=%p, inSz=%u\n", in, inLen);
+#endif
+        ret = wh_Client_SendRequest(
+            ctx, group, WC_ALGO_TYPE_HASH,
+            sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req),
+            (uint8_t*)dataPtr);
+
+        if (ret == WH_ERROR_OK) {
+            do {
+                ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
+                                             (uint8_t*)dataPtr);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+
+        if (ret == WH_ERROR_OK) {
+            /* Get response structure pointer, validates generic header
+             * rc */
+            ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA384,
+                                     (uint8_t**)&resp);
+            /* Nothing to do on success, as server will have updated the context
+             * in client memory */
+        }
+    }
+
+    /* Caller invoked SHA finalize:
+     * wc_CryptoCb_Sha384Hash(sha384, NULL, 0, * hash) */
+    if ((ret == WH_ERROR_OK) && (out != NULL)) {
+        /* Packet will have been trashed, so re-populate all fields */
+        req->finalize    = 1;
+        req->state.addr  = (uint64_t)(uintptr_t)sha384;
+        req->state.sz    = sizeof(*sha384);
+        req->input.addr  = (uint64_t)(uintptr_t)in;
+        req->input.sz    = inLen;
+        req->output.addr = (uint64_t)(uintptr_t)out;
+        req->output.sz   = WC_SHA384_DIGEST_SIZE; /* not needed, but YOLO */
+
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+        printf("[client] SHA384 DMA FINAL: outAddr=%p\n", out);
+#endif
+        /* send the request to the server */
+        ret = wh_Client_SendRequest(
+            ctx, group, WC_ALGO_TYPE_HASH,
+            sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req),
+            (uint8_t*)dataPtr);
+
+        if (ret == WH_ERROR_OK) {
+            do {
+                ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
+                                             (uint8_t*)dataPtr);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+
+        /* Copy out the final hash value */
+        if (ret == WH_ERROR_OK) {
+            /* Get response structure pointer, validates generic header
+             * rc */
+            ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA384,
+                                     (uint8_t**)&resp);
+            /* Nothing to do on success, as server will have updated the output
+             * hash in client memory */
+        }
+    }
+
+    return ret;
+}
+#endif /* WOLFSSL_SHA384 */
+
+
+#ifdef WOLFSSL_SHA512
+
+static int _xferSha512BlockAndUpdateDigest(whClientContext* ctx,
+                                           wc_Sha512*       sha512,
+                                           uint32_t         isLastBlock)
+{
+    uint16_t                       group   = WH_MESSAGE_GROUP_CRYPTO;
+    uint16_t                       action  = WH_MESSAGE_ACTION_NONE;
+    int                            ret     = 0;
+    uint16_t                       dataSz  = 0;
+    whMessageCrypto_Sha512Request* req     = NULL;
+    whMessageCrypto_Sha2Response*  res     = NULL;
+    uint8_t*                       dataPtr = NULL;
+
+    /* Get data buffer */
+    dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
+    if (dataPtr == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Setup generic header and get pointer to request data */
+    req = (whMessageCrypto_Sha512Request*)_createCryptoRequest(
+        dataPtr, WC_HASH_TYPE_SHA512);
+
+
+    /* Send the full block to the server, along with the
+     * current hash state if needed. Finalization/padding of last block is up to
+     * the server, we just need to let it know we are done and sending an
+     * incomplete last block */
+    if (isLastBlock) {
+        req->isLastBlock  = 1;
+        req->lastBlockLen = sha512->buffLen;
+    }
+    else {
+        req->isLastBlock = 0;
+    }
+    memcpy(req->inBlock, sha512->buffer,
+           (isLastBlock) ? sha512->buffLen : WC_SHA512_BLOCK_SIZE);
+
+    /* Send the hash state - this will be 0 on the first block on a properly
+     * initialized sha512 struct */
+    memcpy(req->resumeState.hash, sha512->digest, WC_SHA512_DIGEST_SIZE);
+    req->resumeState.hiLen    = sha512->hiLen;
+    req->resumeState.loLen    = sha512->loLen;
+    req->resumeState.hashType = sha512->hashType;
+    uint32_t req_len =
+        sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
+
+    ret = wh_Client_SendRequest(ctx, group, WC_ALGO_TYPE_HASH, req_len,
+                                (uint8_t*)dataPtr);
+
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+    printf("[client] send SHA512 Req:\n");
+    wh_Utils_Hexdump("[client] inBlock: ", req->inBlock, WC_SHA512_BLOCK_SIZE);
+    if (req->resumeState.hiLen != 0 || req->resumeState.loLen != 0) {
+        wh_Utils_Hexdump("  [client] resumeHash: ", req->resumeState.hash,
+                         (isLastBlock) ? req->lastBlockLen
+                                       : WC_SHA512_BLOCK_SIZE);
+        printf("  [client] hiLen: %u, loLen: %u\n", req->resumeState.hiLen,
+               req->resumeState.loLen);
+    }
+    printf("  [client] ret = %d\n", ret);
+#endif /* DEBUG_CRYPTOCB_VERBOSE */
+
+    if (ret == 0) {
+        do {
+            ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
+                                         (uint8_t*)dataPtr);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+    if (ret == 0) {
+        /* Get response */
+        ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA512, (uint8_t**)&res);
+        /* wolfCrypt allows positive error codes on success in some scenarios */
+        if (ret >= 0) {
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+            printf("[client] ERROR Client SHA512 Res recv: ret=%d", ret);
+            printf("[client] hashType: %d\n", sha512->hashType);
+#endif /* DEBUG_CRYPTOCB_VERBOSE */
+            /* Store the received intermediate hash in the sha512
+             * context and indicate the field is now valid and
+             * should be passed back and forth to the server */
+            memcpy(sha512->digest, res->hash, WC_SHA512_DIGEST_SIZE);
+            sha512->hiLen = res->hiLen;
+            sha512->loLen = res->loLen;
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+            printf("[client] Client SHA512 Res recv:\n");
+            wh_Utils_Hexdump("[client] hash: ", (uint8_t*)sha512->digest,
+                             WC_SHA512_DIGEST_SIZE);
+#endif /* DEBUG_CRYPTOCB_VERBOSE */
+        }
+    }
+
+    return ret;
+}
+
+int wh_Client_Sha512(whClientContext* ctx, wc_Sha512* sha512, const uint8_t* in,
+                     uint32_t inLen, uint8_t* out)
+{
+    int      ret               = 0;
+    uint8_t* sha512BufferBytes = (uint8_t*)sha512->buffer;
+    int      hashType          = WC_HASH_TYPE_SHA512;
+
+    /* Caller invoked SHA Update:
+     * wc_CryptoCb_Sha512Hash(sha512, data, len, NULL) */
+    if (in != NULL) {
+        size_t i = 0;
+
+        /* Process the partial blocks directly from the input data. If there
+         * is enough input data to fill a full block, transfer it to the
+         * server */
+        if (sha512->buffLen > 0) {
+            while (i < inLen && sha512->buffLen < WC_SHA512_BLOCK_SIZE) {
+                sha512BufferBytes[sha512->buffLen++] = in[i++];
+            }
+            if (sha512->buffLen == WC_SHA512_BLOCK_SIZE) {
+                ret = _xferSha512BlockAndUpdateDigest(ctx, sha512, 0);
+                sha512->buffLen = 0;
+            }
+        }
+
+        /* Process as many full blocks from the input data as we can */
+        while ((inLen - i) >= WC_SHA512_BLOCK_SIZE) {
+            memcpy(sha512BufferBytes, in + i, WC_SHA512_BLOCK_SIZE);
+            ret = _xferSha512BlockAndUpdateDigest(ctx, sha512, 0);
+            i += WC_SHA512_BLOCK_SIZE;
+        }
+
+        /* Copy any remaining data into the buffer to be sent in a
+         * subsequent call when we have enough input data to send a full
+         * block */
+        while (i < inLen) {
+            sha512BufferBytes[sha512->buffLen++] = in[i++];
+        }
+    }
+
+    /* Caller invoked SHA finalize:
+     * wc_CryptoCb_Sha512Hash(sha512, NULL, 0, * hash) */
+    if (out != NULL) {
+        ret = _xferSha512BlockAndUpdateDigest(ctx, sha512, 1);
+
+        /* Copy out the final hash value */
+        if (ret == 0) {
+            memcpy(out, sha512->digest, WC_SHA512_DIGEST_SIZE);
+        }
+        /* keep hashtype before initialization */
+        hashType = sha512->hashType;
+        /* reset the state of the sha context (without blowing away devId and
+         *  hashType)
+         */
+        switch (hashType) {
+            case WC_HASH_TYPE_SHA512_224:
+                ret = wc_InitSha512_224_ex(sha512, NULL, sha512->devId);
+                break;
+            case WC_HASH_TYPE_SHA512_256:
+                ret = wc_InitSha512_256_ex(sha512, NULL, sha512->devId);
+                break;
+            default:
+                ret = wc_InitSha512_ex(sha512, NULL, sha512->devId);
+                break;
+        }
+    }
+
+    return ret;
+}
+int wh_Client_Sha512Dma(whClientContext* ctx, wc_Sha512* sha, const uint8_t* in,
+                        uint32_t inLen, uint8_t* out)
+{
+    int                              ret     = WH_ERROR_OK;
+    wc_Sha512*                       sha512  = sha;
+    uint16_t                         respSz  = 0;
+    uint16_t                         group   = WH_MESSAGE_GROUP_CRYPTO_DMA;
+    uint8_t*                         dataPtr = NULL;
+    whMessageCrypto_Sha2DmaRequest*  req     = NULL;
+    whMessageCrypto_Sha2DmaResponse* resp    = NULL;
+
+    /* Get data pointer from the context to use as request/response storage */
+    dataPtr = (uint8_t*)wh_CommClient_GetDataPtr(ctx->comm);
+    if (dataPtr == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Setup generic header and get pointer to request data */
+    req = (whMessageCrypto_Sha2DmaRequest*)_createCryptoRequest(
+        dataPtr, WC_HASH_TYPE_SHA512);
+
+
+    /* Caller invoked SHA Update:
+     * wc_CryptoCb_Sha512Hash(sha512, data, len, NULL) */
+    if (in != NULL) {
+        req->finalize    = 0;
+        req->state.addr  = (uint64_t)(uintptr_t)sha512;
+        req->state.sz    = sizeof(*sha512);
+        req->input.addr  = (uint64_t)(uintptr_t)in;
+        req->input.sz    = inLen;
+        req->output.addr = (uint64_t)(uintptr_t)out;
+        req->output.sz   = WC_SHA512_DIGEST_SIZE; /* not needed, but YOLO */
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+        printf("[client] SHA512 DMA UPDATE: inAddr=%p, inSz=%u\n", in, inLen);
+#endif
+        ret = wh_Client_SendRequest(
+            ctx, group, WC_ALGO_TYPE_HASH,
+            sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req),
+            (uint8_t*)dataPtr);
+
+        if (ret == WH_ERROR_OK) {
+            do {
+                ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
+                                             (uint8_t*)dataPtr);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+
+        if (ret == WH_ERROR_OK) {
+            /* Get response structure pointer, validates generic header
+             * rc */
+            ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA512,
+                                     (uint8_t**)&resp);
+            /* Nothing to do on success, as server will have updated the context
+             * in client memory */
+        }
+    }
+
+    /* Caller invoked SHA finalize:
+     * wc_CryptoCb_Sha512Hash(sha512, NULL, 0, * hash) */
+    if ((ret == WH_ERROR_OK) && (out != NULL)) {
+        /* Packet will have been trashed, so re-populate all fields */
+        req->finalize    = 1;
+        req->state.addr  = (uint64_t)(uintptr_t)sha512;
+        req->state.sz    = sizeof(*sha512);
+        req->input.addr  = (uint64_t)(uintptr_t)in;
+        req->input.sz    = inLen;
+        req->output.addr = (uint64_t)(uintptr_t)out;
+        req->output.sz   = WC_SHA512_DIGEST_SIZE; /* not needed, but YOLO */
+
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+        printf("[client] SHA512 DMA FINAL: outAddr=%p\n", out);
+#endif
+        /* send the request to the server */
+        ret = wh_Client_SendRequest(
+            ctx, group, WC_ALGO_TYPE_HASH,
+            sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req),
+            (uint8_t*)dataPtr);
+
+        if (ret == WH_ERROR_OK) {
+            do {
+                ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
+                                             (uint8_t*)dataPtr);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+
+        /* Copy out the final hash value */
+        if (ret == WH_ERROR_OK) {
+            /* Get response structure pointer, validates generic header
+             * rc */
+            ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA512,
+                                     (uint8_t**)&resp);
+            /* Nothing to do on success, as server will have updated the output
+             * hash in client memory */
+        }
+    }
+
+    return ret;
+}
+#endif /* WOLFSSL_SHA512 */
 
 #ifdef HAVE_DILITHIUM
 

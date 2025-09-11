@@ -110,6 +110,21 @@ typedef enum BenchModuleIdx {
     BENCH_MODULE_IDX_SHA2_256_DMA,
 #endif /* !(NO_SHA256) */
 
+#if defined(WOLFSSL_SHA224)
+    BENCH_MODULE_IDX_SHA2_224,
+    BENCH_MODULE_IDX_SHA2_224_DMA,
+#endif /* WOLFSSL_SHA224 */
+
+#if defined(WOLFSSL_SHA384)
+    BENCH_MODULE_IDX_SHA2_384,
+    BENCH_MODULE_IDX_SHA2_384_DMA,
+#endif /* WOLFSSL_SHA384 */
+
+#if defined(WOLFSSL_SHA512)
+    BENCH_MODULE_IDX_SHA2_512,
+    BENCH_MODULE_IDX_SHA2_512_DMA,
+#endif /* WOLFSSL_SHA512 */
+
 /* SHA3 */
 #if defined(WOLFSSL_SHA3)
     BENCH_MODULE_IDX_SHA3_256,
@@ -251,7 +266,18 @@ static BenchModule g_benchModules[] = {
     [BENCH_MODULE_IDX_SHA2_256]                = {"SHA2-256",                     wh_Bench_Mod_Sha256,               BENCH_THROUGHPUT_XBPS, 0, NULL},
     [BENCH_MODULE_IDX_SHA2_256_DMA]            = {"SHA2-256-DMA",                 wh_Bench_Mod_Sha256Dma,            BENCH_THROUGHPUT_XBPS, 0, NULL},
 #endif /* !(NO_SHA256) */
-
+#if defined(WOLFSSL_SHA224)
+    [BENCH_MODULE_IDX_SHA2_224]                = {"SHA2-224",                     wh_Bench_Mod_Sha224,               BENCH_THROUGHPUT_XBPS, 0, NULL},
+    [BENCH_MODULE_IDX_SHA2_224_DMA]            = {"SHA2-224-DMA",                 wh_Bench_Mod_Sha224Dma,            BENCH_THROUGHPUT_XBPS, 0, NULL},
+#endif /* WOLFSSL_SHA224 */
+#if defined(WOLFSSL_SHA384)
+    [BENCH_MODULE_IDX_SHA2_384]                = {"SHA2-384",                     wh_Bench_Mod_Sha384,               BENCH_THROUGHPUT_XBPS, 0, NULL},
+    [BENCH_MODULE_IDX_SHA2_384_DMA]            = {"SHA2-384-DMA",                 wh_Bench_Mod_Sha384Dma,            BENCH_THROUGHPUT_XBPS, 0, NULL},
+#endif /* WOLFSSL_SHA384 */
+#if defined(WOLFSSL_SHA512)
+    [BENCH_MODULE_IDX_SHA2_512]                = {"SHA2-512",                     wh_Bench_Mod_Sha512,               BENCH_THROUGHPUT_XBPS, 0, NULL},
+    [BENCH_MODULE_IDX_SHA2_512_DMA]            = {"SHA2-512-DMA",                 wh_Bench_Mod_Sha512Dma,            BENCH_THROUGHPUT_XBPS, 0, NULL},
+#endif /* WOLFSSL_SHA512 */
     /* SHA3 */
 #if defined(WOLFSSL_SHA3)
     [BENCH_MODULE_IDX_SHA3_256]                = {"SHA3-256",                     wh_Bench_Mod_Sha3256,               BENCH_THROUGHPUT_NONE, 0, NULL},

@@ -496,7 +496,7 @@ int wh_MessageCrypto_TranslateCurve25519Response(
  * SHA
  */
 
-/* SHA256 Request */
+/* SHA256 and SHA224 Request */
 typedef struct {
     struct {
         uint32_t hiLen;
@@ -514,21 +514,46 @@ typedef struct {
     uint8_t WH_PAD[4];
 } whMessageCrypto_Sha256Request;
 
-/* SHA256 Response */
-typedef struct {
-    /* Resulting hash value */
-    uint32_t hiLen;
-    uint32_t loLen;
-    uint8_t  hash[32]; /* TODO WC_SHA256_DIGEST_SIZE */
-} whMessageCrypto_Sha256Response;
-
 int wh_MessageCrypto_TranslateSha256Request(
     uint16_t magic, const whMessageCrypto_Sha256Request* src,
     whMessageCrypto_Sha256Request* dest);
 
-int wh_MessageCrypto_TranslateSha256Response(
-    uint16_t magic, const whMessageCrypto_Sha256Response* src,
-    whMessageCrypto_Sha256Response* dest);
+
+/* SHA512 and SHA384 Request */
+typedef struct {
+    struct {
+        uint32_t hiLen;
+        uint32_t loLen;
+        /* intermediate hash value */
+        uint8_t hash[64]; /* TODO (HM) WC_SHA512_DIGEST_SIZE */
+        int     hashType;
+    } resumeState;
+    /* Flag indicating to the server that this is the last block and it should
+     * finalize the hash. If set, inBlock may be only partially full*/
+    uint32_t isLastBlock;
+    /* Length of the last input block of data. Only valid if isLastBlock=1 */
+    uint32_t lastBlockLen;
+    /* Full sha512 input block to hash */
+    uint8_t inBlock[128]; /* TODO (HM) WC_SHA512_BLOCK_SIZE 128*/
+    uint8_t WH_PAD[4];
+} whMessageCrypto_Sha512Request;
+
+/* SHA2 Response */
+typedef struct {
+    /* Resulting hash value */
+    uint32_t hiLen;
+    uint32_t loLen;
+    uint8_t  hash[64]; /* TODO WC_SHA512_DIGEST_SIZE */
+    int      hashType;
+} whMessageCrypto_Sha2Response;
+
+int wh_MessageCrypto_TranslateSha512Request(
+    uint16_t magic, const whMessageCrypto_Sha512Request* src,
+    whMessageCrypto_Sha512Request* dest);
+
+int wh_MessageCrypto_TranslateSha2Response(
+    uint16_t magic, const whMessageCrypto_Sha2Response* src,
+    whMessageCrypto_Sha2Response* dest);
 
 /*
  * CMAC
@@ -676,31 +701,31 @@ typedef struct {
     whMessageCrypto_DmaBuffer badAddr;
 } whMessageCrypto_DmaAddrStatus;
 
-/* SHA256 DMA Request */
+
+/* SHA2 DMA Request */
 typedef struct {
     /* Since client addresses are subject to DMA checking, we can't use them to
      * determine the requested operation (update/final). Therefore we need to
-     * indicate to the server which SHA256 operation to perform */
+     * indicate to the server which SHA224 operation to perform */
     uint64_t                  finalize;
     whMessageCrypto_DmaBuffer input;
     whMessageCrypto_DmaBuffer state;
     whMessageCrypto_DmaBuffer output;
-} whMessageCrypto_Sha256DmaRequest;
+} whMessageCrypto_Sha2DmaRequest;
 
-/* SHA256 DMA Response */
+/* SHA224 DMA Response */
 typedef struct {
     whMessageCrypto_DmaAddrStatus dmaAddrStatus;
-} whMessageCrypto_Sha256DmaResponse;
+} whMessageCrypto_Sha2DmaResponse;
 
-/* SHA256 DMA translation functions */
-int wh_MessageCrypto_TranslateSha256DmaRequest(
-    uint16_t magic, const whMessageCrypto_Sha256DmaRequest* src,
-    whMessageCrypto_Sha256DmaRequest* dest);
+/* SHA2 DMA translation functions */
+int wh_MessageCrypto_TranslateSha2DmaRequest(
+    uint16_t magic, const whMessageCrypto_Sha2DmaRequest* src,
+    whMessageCrypto_Sha2DmaRequest* dest);
 
-int wh_MessageCrypto_TranslateSha256DmaResponse(
-    uint16_t magic, const whMessageCrypto_Sha256DmaResponse* src,
-    whMessageCrypto_Sha256DmaResponse* dest);
-
+int wh_MessageCrypto_TranslateSha2DmaResponse(
+    uint16_t magic, const whMessageCrypto_Sha2DmaResponse* src,
+    whMessageCrypto_Sha2DmaResponse* dest);
 /* CMAC DMA Request */
 typedef struct {
     uint32_t                  type;     /* enum wc_CmacType */
