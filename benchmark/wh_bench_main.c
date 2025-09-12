@@ -41,7 +41,7 @@ int main(int argc, char** argv)
     int moduleIndex = -1;
     int i;
 
-    WH_BENCH_PRINTF("wolfHSM POSIX benchmrak built with wolfSSL version %s\n",
+    WH_BENCH_PRINTF("wolfHSM POSIX benchmark built with wolfSSL version %s\n",
         LIBWOLFSSL_VERSION_STRING);
 
     /* Parse command-line arguments */

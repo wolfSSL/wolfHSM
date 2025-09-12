@@ -121,17 +121,17 @@ int wh_Client_PosixStaticMemoryDMA(whClientContext* client, uintptr_t clientAddr
     if (ret != WH_ERROR_OK) {
         return ret;
     }
-    
-    if (dmaPtr != NULL && dmaSize > 0 && 
-            clientAddr >= (uintptr_t)dmaPtr &&
-            (clientAddr + len) < (uintptr_t)(dmaPtr + dmaSize)) {
+
+    if ((dmaPtr != NULL) && (dmaSize > 0) && (len < dmaSize) &&
+            (clientAddr >= (uintptr_t)dmaPtr) &&
+            (clientAddr < (uintptr_t)(dmaPtr + dmaSize - len))) {
         dmaBuffer = clientAddr;
         isInDma = 1;
     }
     else {
         posixTransportShm_GetHeapHint(client->comm->transport_context, &heap);
     }
-    
+
     if (oper == WH_DMA_OPER_SERVER_READ_PRE
         || oper == WH_DMA_OPER_SERVER_WRITE_PRE) {
             if (isInDma == 0) {
@@ -199,7 +199,7 @@ int wh_Server_PosixStaticMemoryDMA(whServerContext* server, uintptr_t clientAddr
         return WH_ERROR_NOTREADY;
     }
 
-    if (len + clientAddr > dma_size) {
+    if (len > dma_size || clientAddr > dma_size - len) {
         return WH_ERROR_BADARGS;
     }
 
