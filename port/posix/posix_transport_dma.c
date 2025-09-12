@@ -107,7 +107,7 @@ int wh_Client_PosixStaticMemoryDMA(whClientContext* client, uintptr_t clientAddr
     size_t dmaSize;
     uintptr_t dmaBuffer; /* buffer in DMA space */
     uintptr_t dmaOffset;
-    void* heap;
+    void* heap = NULL;
 
     /* NULL pointer maps to NULL, short circuit here */
     if (clientAddr == 0 || len == 0) {
