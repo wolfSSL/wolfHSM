@@ -50,7 +50,7 @@ generate_compile_commands() {
                 cat >> compile_commands.json << EOF
   {
     "directory": "$PROJECT_ROOT",
-    "command": "gcc -std=c99 -Wall -I$PROJECT_ROOT/wolfhsm -I$PROJECT_ROOT/src -c $file",
+    "command": "gcc -std=c99 -Wall -I$PROJECT_ROOT/wolfhsm -I$PROJECT_ROOT/src -I$PROJECT_ROOT/../wolfssl -c $file",
     "file": "$file"
   }
 EOF
