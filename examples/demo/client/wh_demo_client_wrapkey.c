@@ -46,11 +46,10 @@
 #define WH_TEST_AES_WRAPPED_KEYSIZE                                     \
     (WH_TEST_AES_AUTHSIZE + WH_TEST_AES_TAGSIZE + WH_TEST_AES_KEYSIZE + \
      sizeof(whNvmMetadata))
+#define WH_TEST_WRAPKEY_ID 8
 
 int wh_DemoClient_AesGcmWrapKeyBasic(whClientContext* ctx, WC_RNG* rng)
 {
-
-
     int           ret = 0;
     uint8_t       iv[AES_BLOCK_SIZE];
     uint8_t       key[WH_TEST_AES_KEYSIZE];
@@ -60,7 +59,8 @@ int wh_DemoClient_AesGcmWrapKeyBasic(whClientContext* ctx, WC_RNG* rng)
     uint8_t       label[WH_NVM_LABEL_LEN] = "Server AES Key Label";
     whKeyId       serverKeyId;
     whKeyId       wrappedKeyId;
-    whNvmMetadata metadata = {.label  = "AES Key Label",
+    whNvmMetadata metadata = {.id = WH_TEST_WRAPKEY_ID,
+                              .label  = "AES Key Label",
                               .access = WH_NVM_ACCESS_ANY,
                               .len    = WH_TEST_AES_KEYSIZE};
     whNvmMetadata tmpMetadata;
