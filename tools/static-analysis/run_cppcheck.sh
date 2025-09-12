@@ -31,6 +31,7 @@ cppcheck \
     --xml-version=2 \
     -I "$PROJECT_ROOT/wolfhsm/" \
     -I "$PROJECT_ROOT/src/" \
+    -I "$PROJECT_ROOT/wolfssl/" \
     "$PROJECT_ROOT/src/" \
     "$PROJECT_ROOT/wolfhsm/" \
     2> "$OUTPUT_DIR/cppcheck.xml"
@@ -57,6 +58,7 @@ cppcheck \
     --template='{file}:{line}: {severity}: {message} [{id}]' \
     -I "$PROJECT_ROOT/wolfhsm/" \
     -I "$PROJECT_ROOT/src/" \
+    -I "$PROJECT_ROOT/wolfssl/" \
     "$PROJECT_ROOT/src/" \
     "$PROJECT_ROOT/wolfhsm/" \
     > "$OUTPUT_DIR/cppcheck_summary.txt" 2>&1 || true

@@ -8,9 +8,9 @@ tools/testcertgen/ca/
 tools/testcertgen/*.der
 *.code-workspace
 .vscode
+compile_commands.json
 
-# Static analysis reports
+# Static analysis
 tools/static-analysis/reports/
 *.xml
 *.html
-

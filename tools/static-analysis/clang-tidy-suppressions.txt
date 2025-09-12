@@ -1,0 +1,33 @@
+# clang-tidy suppressions for wolfHSM
+#
+# This file documents common suppressions that may be needed.
+# Unlike cppcheck, clang-tidy uses inline comments for suppressions:
+#
+# To suppress a specific check on a line:
+#   // NOLINT(check-name)
+#
+# To suppress all checks on a line:
+#   // NOLINT
+#
+# To suppress for the next line:
+#   // NOLINTNEXTLINE(check-name)
+#
+# Common suppressions for wolfHSM:
+#
+# 1. Function-like macros (cert-dcl37-c):
+#    Some macros need to be function-like for compatibility
+#    // NOLINT(cert-dcl37-c)
+#
+# 2. Reserved identifiers (bugprone-reserved-identifier):
+#    Some platform code may require __ prefixed identifiers
+#    // NOLINT(bugprone-reserved-identifier)
+#
+# 3. Magic numbers (readability-magic-numbers):
+#    Crypto code often has algorithm-specific constants
+#    // NOLINT(readability-magic-numbers)
+#
+# 4. Non-const parameters (readability-non-const-parameter):
+#    API compatibility may require non-const parameters
+#    // NOLINT(readability-non-const-parameter)
+#
+# Note: Prefer fixing issues over suppressing them when possible
