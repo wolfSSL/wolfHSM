@@ -35,7 +35,7 @@ generate_compile_commands() {
         if command -v bear &> /dev/null; then
             echo "Using bear to generate compile_commands.json..."
             make clean > /dev/null 2>&1 || true
-            bear -- make WOLFSSL_DIR="$PROJECT_ROOT/wolfssl"
+            bear -- make WOLFSSL_DIR="$PROJECT_ROOT/wolfssl" USER_SETTINGS_DIR="$PROJECT_ROOT/test/config"
         else
             echo "Warning: bear is not installed. Creating a basic compile_commands.json..."
             # Create a basic compile_commands.json for all .c files
@@ -50,7 +50,7 @@ generate_compile_commands() {
                 cat >> compile_commands.json << EOF
   {
     "directory": "$PROJECT_ROOT",
-    "command": "gcc -std=c99 -Wall -I$PROJECT_ROOT/wolfhsm -I$PROJECT_ROOT/src -I$PROJECT_ROOT/wolfssl -c $file",
+    "command": "gcc -std=c99 -Wall -DWOLFSSL_USER_SETTINGS -DWOLFHSM_CFG -I$PROJECT_ROOT/wolfhsm -I$PROJECT_ROOT/src -I$PROJECT_ROOT/wolfssl -I$PROJECT_ROOT/test/config -c $file",
     "file": "$file"
   }
 EOF
