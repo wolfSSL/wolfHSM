@@ -1842,6 +1842,231 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
             WH_ERROR_PRINT("Failed to wc_RNG_GenerateBlock %d\n", ret);
         }
     }
+#ifdef WOLFSSL_AES_COUNTER
+    if (ret == 0) {
+        /* test aes CTR with client side key */
+        ret = wc_AesInit(aes, NULL, devId);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wc_AesInit %d\n", ret);
+        }
+        else {
+            ret = wc_AesSetKeyDirect(aes, key, sizeof(key), iv, AES_ENCRYPTION);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to wc_AesSetKeyDirect %d\n", ret);
+            }
+            else {
+                ret = wc_AesCtrEncrypt(aes, cipher, plainIn, sizeof(plainIn));
+                if (ret != 0) {
+                    WH_ERROR_PRINT("Failed to wc_AesCtrEncrypt %d\n", ret);
+                }
+                else {
+                    ret = wc_AesSetKeyDirect(aes, key, sizeof(key), iv,
+                                             AES_DECRYPTION);
+                    if (ret != 0) {
+                        WH_ERROR_PRINT("Failed to wc_AesSetKeyDirect %d\n",
+                                       ret);
+                    }
+                    else {
+                        ret = wc_AesCtrEncrypt(aes, plainOut, cipher,
+                                               sizeof(cipher));
+                        if (ret != 0) {
+                            WH_ERROR_PRINT("Failed to wc_AesCtrEncrypt %d\n",
+                                           ret);
+                        }
+                        else {
+                            if (memcmp(plainIn, plainOut, sizeof(plainIn)) !=
+                                0) {
+                                WH_ERROR_PRINT("Failed to match AES-CTR\n");
+                                ret = -1;
+                            }
+                        }
+                    }
+                }
+            }
+            (void)wc_AesFree(aes);
+            memset(cipher, 0, sizeof(cipher));
+            memset(plainOut, 0, sizeof(plainOut));
+        }
+    }
+    if (ret == 0) {
+        /* test aes CTR with HSM side key */
+        ret = wc_AesInit(aes, NULL, devId);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wc_AesInit %d\n", ret);
+        }
+        else {
+            keyId = WH_KEYID_ERASED;
+            ret   = wh_Client_KeyCache(ctx, 0, labelIn, sizeof(labelIn), key,
+                                       sizeof(key), &keyId);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to wh_Client_KeyCache %d\n", ret);
+            }
+            else {
+                ret = wh_Client_AesSetKeyId(aes, keyId);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("Failed to wh_Client_SetKeyIdAes %d\n", ret);
+                }
+                else {
+                    ret = wc_AesSetIV(aes, iv);
+                    if (ret != 0) {
+                        WH_ERROR_PRINT("Failed to wc_AesSetIV %d\n", ret);
+                    }
+                    else {
+                        ret = wc_AesCtrEncrypt(aes, cipher, plainIn,
+                                               sizeof(plainIn));
+                        if (ret != 0) {
+                            WH_ERROR_PRINT("Failed to wc_AesCtrEncrypt %d\n",
+                                           ret);
+                        }
+                        else {
+                            /* Reset the IV to support decryption */
+                            ret = wc_AesSetIV(aes, iv);
+                            if (ret != 0) {
+                                WH_ERROR_PRINT("Failed to wc_AesSetIV %d\n",
+                                               ret);
+                            }
+                            else {
+                                ret = wc_AesCtrEncrypt(aes, plainOut, cipher,
+                                                       sizeof(plainIn));
+                                if (ret != 0) {
+                                    WH_ERROR_PRINT("Failed to decrypt %d\n",
+                                                   ret);
+                                }
+                                else {
+                                    if (memcmp(plainIn, plainOut,
+                                               sizeof(plainIn)) != 0) {
+                                        WH_ERROR_PRINT("Failed to match\n");
+                                        ret = -1;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                (void)wh_Client_KeyEvict(ctx, keyId);
+            }
+            (void)wc_AesFree(aes);
+            memset(cipher, 0, sizeof(cipher));
+            memset(plainOut, 0, sizeof(plainOut));
+        }
+        if (ret == 0) {
+            printf("AES CTR SUCCESS\n");
+        }
+    }
+#endif
+
+
+#ifdef HAVE_AES_ECB
+    if (ret == 0) {
+        /* test aes ECB with client side key */
+        ret = wc_AesInit(aes, NULL, devId);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wc_AesInit %d\n", ret);
+        }
+        else {
+            ret = wc_AesSetKey(aes, key, sizeof(key), iv, AES_ENCRYPTION);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to wc_AesSetKey %d\n", ret);
+            }
+            else {
+                ret = wc_AesEcbEncrypt(aes, cipher, plainIn, sizeof(plainIn));
+                if (ret != 0) {
+                    WH_ERROR_PRINT("Failed to wc_AesEcbEncrypt %d\n", ret);
+                }
+                else {
+                    ret =
+                        wc_AesSetKey(aes, key, sizeof(key), iv, AES_DECRYPTION);
+                    if (ret != 0) {
+                        WH_ERROR_PRINT("Failed to wc_AesSetKey %d\n", ret);
+                    }
+                    else {
+                        ret = wc_AesEcbDecrypt(aes, plainOut, cipher,
+                                               sizeof(cipher));
+                        if (ret != 0) {
+                            WH_ERROR_PRINT("Failed to wc_AesEcbDecrypt %d\n",
+                                           ret);
+                        }
+                        else {
+                            if (memcmp(plainIn, plainOut, sizeof(plainIn)) !=
+                                0) {
+                                WH_ERROR_PRINT("Failed to match AES-ECB\n");
+                                ret = -1;
+                            }
+                        }
+                    }
+                }
+            }
+            (void)wc_AesFree(aes);
+            memset(cipher, 0, sizeof(cipher));
+            memset(plainOut, 0, sizeof(plainOut));
+        }
+    }
+    if (ret == 0) {
+        /* test aes ECB with HSM side key */
+        ret = wc_AesInit(aes, NULL, devId);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wc_AesInit %d\n", ret);
+        }
+        else {
+            keyId = WH_KEYID_ERASED;
+            ret   = wh_Client_KeyCache(ctx, 0, labelIn, sizeof(labelIn), key,
+                                       sizeof(key), &keyId);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to wh_Client_KeyCache %d\n", ret);
+            }
+            else {
+                ret = wh_Client_AesSetKeyId(aes, keyId);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("Failed to wh_Client_SetKeyIdAes %d\n", ret);
+                }
+                else {
+                    ret = wc_AesSetIV(aes, iv);
+                    if (ret != 0) {
+                        WH_ERROR_PRINT("Failed to wc_AesSetIV %d\n", ret);
+                    }
+                    else {
+                        ret = wc_AesEcbEncrypt(aes, cipher, plainIn,
+                                               sizeof(plainIn));
+                        if (ret != 0) {
+                            WH_ERROR_PRINT("Failed to wc_AesEcbEncrypt %d\n",
+                                           ret);
+                        }
+                        else {
+                            /* Reset the IV to support decryption */
+                            ret = wc_AesSetIV(aes, iv);
+                            if (ret != 0) {
+                                WH_ERROR_PRINT("Failed to wc_AesSetIV %d\n",
+                                               ret);
+                            }
+                            else {
+                                ret = wc_AesEcbDecrypt(aes, plainOut, cipher,
+                                                       sizeof(plainIn));
+                                if (ret != 0) {
+                                    WH_ERROR_PRINT("Failed to decrypt %d\n",
+                                                   ret);
+                                }
+                                else {
+                                    if (memcmp(plainIn, plainOut,
+                                               sizeof(plainIn)) != 0) {
+                                        WH_ERROR_PRINT("Failed to match\n");
+                                        ret = -1;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                (void)wh_Client_KeyEvict(ctx, keyId);
+            }
+            (void)wc_AesFree(aes);
+            memset(cipher, 0, sizeof(cipher));
+            memset(plainOut, 0, sizeof(plainOut));
+        }
+        if (ret == 0) {
+            printf("AES ECB SUCCESS\n");
+        }
+    }
+#endif /* HAVE_AES_ECB */
 
 #ifdef HAVE_AES_CBC
     if (ret == 0) {

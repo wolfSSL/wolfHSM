@@ -116,6 +116,7 @@
 /** AES Options */
 /* #define NO_AES */
 #define HAVE_AESGCM
+#define WOLFSSL_AES_COUNTER
 #define GCM_TABLE_4BIT
 
 #define WOLFSSL_AES_DIRECT

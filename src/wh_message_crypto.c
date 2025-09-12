@@ -77,6 +77,59 @@ int wh_MessageCrypto_TranslateRngResponse(
     return 0;
 }
 
+/* AES CTR Request translation */
+int wh_MessageCrypto_TranslateAesCtrRequest(
+    uint16_t magic, const whMessageCrypto_AesCtrRequest* src,
+    whMessageCrypto_AesCtrRequest* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, enc);
+    WH_T32(magic, dest, src, keyLen);
+    WH_T32(magic, dest, src, sz);
+    WH_T16(magic, dest, src, keyId);
+    WH_T32(magic, dest, src, left);
+    return 0;
+}
+/* AES CTR Response translation */
+int wh_MessageCrypto_TranslateAesCtrResponse(
+    uint16_t magic, const whMessageCrypto_AesCtrResponse* src,
+    whMessageCrypto_AesCtrResponse* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, sz);
+    WH_T32(magic, dest, src, left);
+    return 0;
+}
+/* AES Ecb Request translation */
+int wh_MessageCrypto_TranslateAesEcbRequest(
+    uint16_t magic, const whMessageCrypto_AesEcbRequest* src,
+    whMessageCrypto_AesEcbRequest* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, enc);
+    WH_T32(magic, dest, src, keyLen);
+    WH_T32(magic, dest, src, sz);
+    WH_T16(magic, dest, src, keyId);
+    return 0;
+}
+
+/* AES ECB Response translation */
+int wh_MessageCrypto_TranslateAesEcbResponse(
+    uint16_t magic, const whMessageCrypto_AesEcbResponse* src,
+    whMessageCrypto_AesEcbResponse* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, sz);
+    return 0;
+}
 
 /* AES CBC Request translation */
 int wh_MessageCrypto_TranslateAesCbcRequest(
