@@ -1249,10 +1249,16 @@ int whTest_ServerImgMgr(void)
         .devId = INVALID_DEVID,
     }};
 
+    whServerDmaConfig dma_config = {
+        .cb = NULL,  /* Disable DMA callback for test */
+        .dmaAddrAllowList = NULL
+    };
+
     whServerConfig s_conf[1] = {{
         .comm_config = cs_conf,
         .nvm         = nvm,
         .crypto      = crypto,
+        .dmaConfig   = &dma_config,
     }};
 
     /* Initialize NVM */
