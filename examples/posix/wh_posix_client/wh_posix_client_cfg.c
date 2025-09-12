@@ -56,9 +56,9 @@ int Client_ExampleDMAConfig(void* conf)
 
     c_comm.transport_cb      = &dmaCb;
     c_comm.transport_context = (void*)&tccShm;
-    c_comm.transport_config  = (void*)&shmConfig,
-    c_comm.client_id         = WH_POSIX_CLIENT_ID,
-    c_conf->comm              = &c_comm;
+    c_comm.transport_config  = (void*)&shmConfig;
+    c_comm.client_id         = WH_POSIX_CLIENT_ID;
+    c_conf->comm             = &c_comm;
 
     return WH_ERROR_OK;
 }
@@ -99,8 +99,8 @@ int Client_ExampleSHMConfig(void* conf)
 
     c_comm.transport_cb      = &shmCb;
     c_comm.transport_context = (void*)&tccShm;
-    c_comm.transport_config  = (void*)&shmConfig,
-    c_comm.client_id         = WH_POSIX_CLIENT_ID,
+    c_comm.transport_config  = (void*)&shmConfig;
+    c_comm.client_id         = WH_POSIX_CLIENT_ID;
     c_conf->comm             = &c_comm;
 
     return WH_ERROR_OK;
