@@ -2777,23 +2777,23 @@ int wh_Client_Sha256Dma(whClientContext* ctx, wc_Sha256* sha, const uint8_t* in,
         req->output.sz   = WC_SHA256_DIGEST_SIZE; /* not needed, but YOLO */
 
         /* Perform address translations */
-        req->state.addr = stateAddr;
         ret = wh_Client_DmaProcessClientAddress(ctx, (uintptr_t)sha256,
             (void**)&stateAddr, req->state.sz, WH_DMA_OPER_SERVER_WRITE_PRE,
             (whClientDmaFlags){0});
+        req->state.addr = stateAddr;
 
         if (ret == WH_ERROR_OK) {
-            req->input.addr = inAddr;
             ret = wh_Client_DmaProcessClientAddress(ctx, (uintptr_t)in,
                 (void**)&inAddr, req->input.sz, WH_DMA_OPER_SERVER_READ_PRE,
                 (whClientDmaFlags){0});
+            req->input.addr = inAddr;
         }
 
         if (ret == WH_ERROR_OK) {
-            req->output.addr = outAddr;
             ret = wh_Client_DmaProcessClientAddress(ctx, (uintptr_t)out,
                 (void**)&outAddr, req->output.sz, WH_DMA_OPER_SERVER_WRITE_PRE,
                 (whClientDmaFlags){0});
+            req->output.addr = outAddr;
         }
     }
 
