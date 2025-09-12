@@ -107,6 +107,7 @@ static int posixTransportShm_Map(int fd, size_t size, ptshmMapping* map)
         map->req = (uint8_t*)(map->header + 1);
         map->resp = map->req + map->header->req_size;
         map->dma = map->resp + map->header->resp_size;
+        map->dma_size = size - (map->header->req_size + map->header->resp_size);
     } else {
         ret = WH_ERROR_ABORTED;
     }
