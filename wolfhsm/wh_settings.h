@@ -72,6 +72,13 @@
  * operation in DMA requests.
  *     Default: Not defined
  *
+ *  WOLFHSM_CFG_IS_TEST_SERVER - If defined, the client-side unit tests assume
+ * the server will be running custom server-side test instrumentation meant to
+ * test additional edge cases that could otherwise not be triggered when running
+ * against a standard server. Not relevant outside of the wolfHSM POSIX port
+ * test harness.
+ *     Default: Not defined
+ *
  *  Overridable porting functions:
  *
  *  XMEMFENCE() - Create a sequential memory consistency sync point.  Note this

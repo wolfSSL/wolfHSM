@@ -3347,7 +3347,7 @@ int wh_Client_Sha384Dma(whClientContext* ctx, wc_Sha384* sha, const uint8_t* in,
 #endif /* WOLFSSL_SHA384 */
 
 
-#ifdef WOLFSSL_SHA512
+#if defined(WOLFSSL_SHA512) && defined(WOLFSSL_SHA512_HASHTYPE)
 
 static int _xferSha512BlockAndUpdateDigest(whClientContext* ctx,
                                            wc_Sha512*       sha512,

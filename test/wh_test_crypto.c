@@ -81,7 +81,7 @@ enum {
 
 #define PLAINTEXT "mytextisbigplain"
 
-#ifndef WOLFHSM_CFG_TEST_NO_CUSTOM_SERVERS
+#ifdef WOLFHSM_CFG_IS_TEST_SERVER
 /* Flag causing the server loop to sleep(1) */
 int serverDelay = 0;
 #endif
@@ -1141,8 +1141,8 @@ static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
             printf("KEY CACHE/EXPORT SUCCESS\n");
         }
     }
-#ifndef WOLFHSM_CFG_TEST_NO_CUSTOM_SERVERS
-    /* WOLFHSM_CFG_TEST_NO_CUSTOM_SERVERS protects the client test code that
+#ifdef WOLFHSM_CFG_IS_TEST_SERVER
+    /* WOLFHSM_CFG_IS_TEST_SERVER protects the client test code that
      * expects to interop with the custom server (also defined in this
      * file), so that this test can be run against a standard server app
      *
@@ -1205,7 +1205,7 @@ static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
             }
         }
     }
-#endif /* !WOLFHSM_CFG_TEST_NO_CUSTOM_SERVERS */
+#endif /* WOLFHSM_CFG_IS_TEST_SERVER */
     if (ret == 0) {
         /* test evict for original client */
         ret = wh_Client_KeyEvict(ctx, keyId);
@@ -2467,14 +2467,16 @@ static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
         && devId != WH_DEV_ID_DMA
 #endif
     ) {
-#define WH_TEST_CMAC_TEXTSIZE 1000
+#ifdef WOLFHSM_CFG_IS_TEST_SERVER
+        #define WH_TEST_CMAC_TEXTSIZE 1000
         char cmacFodder[WH_TEST_CMAC_TEXTSIZE] = {0};
-
+#endif
         ret = wh_Client_EnableCancel(ctx);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed to wh_Client_EnableCancel %d\n", ret);
         }
-        else {
+#ifdef WOLFHSM_CFG_IS_TEST_SERVER
+        if (ret == 0) {
             ret = wc_InitCmac_ex(cmac, knownCmacKey, sizeof(knownCmacKey),
                                  WC_CMAC_AES, NULL, NULL, devId);
             if (ret != 0) {
@@ -2487,13 +2489,13 @@ static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
                         "Failed to wh_Client_CmacCancelableResponse %d\n", ret);
                 }
                 else {
-#ifndef WOLFHSM_CFG_TEST_NO_CUSTOM_SERVERS
+
                     /* TODO: use hsm pause/resume functionality on real hardware
                      */
                     /* delay the server so scheduling doesn't interfere with the
                      * timing */
                     serverDelay = 1;
-#endif
+
                     ret = wc_CmacUpdate(cmac, (byte*)cmacFodder,
                                         sizeof(cmacFodder));
                     if (ret != 0) {
@@ -2506,17 +2508,12 @@ static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
                                 "Failed to wh_Client_CancelRequest %d\n", ret);
                         }
                         else {
-#ifndef WOLFHSM_CFG_TEST_NO_CUSTOM_SERVERS
                             serverDelay = 0;
-#endif
                             do {
                                 ret = wh_Client_CancelResponse(ctx);
                             } while (ret == WH_ERROR_NOTREADY);
                             if ((ret != 0) &&
-#if defined(WOLFHSM_CFG_TEST_NO_CUSTOM_SERVERS)
-                                (ret != WH_ERROR_CANCEL_LATE) &&
-#endif
-                                (!0)) {
+                                (ret != WH_ERROR_CANCEL_LATE)) {
                                 WH_ERROR_PRINT(
                                     "Failed to wh_Client_CancelResponse %d\n",
                                     ret);
@@ -2525,70 +2522,70 @@ static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
                     }
                 }
             }
-
-            if (ret == 0) {
-                /* test cancelable request and response work for standard CMAC
-                 * request with no cancellation */
-                ret = wc_InitCmac_ex(cmac, knownCmacKey, sizeof(knownCmacKey),
-                                     WC_CMAC_AES, NULL, NULL, devId);
+        }
+#endif /* WOLFHSM_CFG_IS_TEST_SERVER */
+        if (ret == 0) {
+            /* test cancelable request and response work for standard CMAC
+                * request with no cancellation */
+            ret = wc_InitCmac_ex(cmac, knownCmacKey, sizeof(knownCmacKey),
+                                    WC_CMAC_AES, NULL, NULL, devId);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to wc_InitCmac_ex %d\n", ret);
+            }
+            else {
+                ret = wh_Client_CmacCancelableResponse(ctx, cmac, NULL, 0);
                 if (ret != 0) {
-                    WH_ERROR_PRINT("Failed to wc_InitCmac_ex %d\n", ret);
+                    WH_ERROR_PRINT(
+                        "Failed to wh_Client_CmacCancelableResponse %d\n",
+                        ret);
                 }
                 else {
-                    ret = wh_Client_CmacCancelableResponse(ctx, cmac, NULL, 0);
+                    ret = wc_CmacUpdate(cmac, (byte*)knownCmacMessage,
+                                        sizeof(knownCmacMessage));
                     if (ret != 0) {
-                        WH_ERROR_PRINT(
-                            "Failed to wh_Client_CmacCancelableResponse %d\n",
-                            ret);
+                        WH_ERROR_PRINT("Failed to wc_CmacUpdate %d\n", ret);
                     }
                     else {
-                        ret = wc_CmacUpdate(cmac, (byte*)knownCmacMessage,
-                                            sizeof(knownCmacMessage));
+                        ret = wh_Client_CmacCancelableResponse(ctx, cmac,
+                                                                NULL, 0);
                         if (ret != 0) {
-                            WH_ERROR_PRINT("Failed to wc_CmacUpdate %d\n", ret);
+                            WH_ERROR_PRINT(
+                                "Failed to "
+                                "wh_Client_CmacCancelableResponse %d\n",
+                                ret);
                         }
                         else {
-                            ret = wh_Client_CmacCancelableResponse(ctx, cmac,
-                                                                   NULL, 0);
+                            macLen = sizeof(knownCmacTag);
+                            ret    = wc_CmacFinal(cmac, macOut, &macLen);
                             if (ret != 0) {
                                 WH_ERROR_PRINT(
-                                    "Failed to "
-                                    "wh_Client_CmacCancelableResponse %d\n",
-                                    ret);
+                                    "Failed to wc_CmacFinal %d\n", ret);
                             }
                             else {
-                                macLen = sizeof(knownCmacTag);
-                                ret    = wc_CmacFinal(cmac, macOut, &macLen);
+                                ret = wh_Client_CmacCancelableResponse(
+                                    ctx, cmac, macOut, &outLen);
                                 if (ret != 0) {
                                     WH_ERROR_PRINT(
-                                        "Failed to wc_CmacFinal %d\n", ret);
+                                        "Failed to "
+                                        "wh_Client_CmacCancelableResponse "
+                                        "%d\n",
+                                        ret);
                                 }
                                 else {
-                                    ret = wh_Client_CmacCancelableResponse(
-                                        ctx, cmac, macOut, &outLen);
-                                    if (ret != 0) {
-                                        WH_ERROR_PRINT(
-                                            "Failed to "
-                                            "wh_Client_CmacCancelableResponse "
-                                            "%d\n",
-                                            ret);
+                                    if (memcmp(knownCmacTag, macOut,
+                                                sizeof(knownCmacTag)) != 0) {
+                                        WH_ERROR_PRINT("CMAC FAILED KNOWN "
+                                                        "ANSWER TEST\n");
+                                        ret = -1;
                                     }
                                     else {
-                                        if (memcmp(knownCmacTag, macOut,
-                                                   sizeof(knownCmacTag)) != 0) {
-                                            WH_ERROR_PRINT("CMAC FAILED KNOWN "
-                                                           "ANSWER TEST\n");
-                                            ret = -1;
-                                        }
-                                        else {
-                                            ret = wh_Client_DisableCancel(ctx);
-                                            if (ret != 0) {
-                                                WH_ERROR_PRINT(
-                                                    "Failed to "
-                                                    "wh_Client_DisableCancel "
-                                                    "%d\n",
-                                                    ret);
-                                            }
+                                        ret = wh_Client_DisableCancel(ctx);
+                                        if (ret != 0) {
+                                            WH_ERROR_PRINT(
+                                                "Failed to "
+                                                "wh_Client_DisableCancel "
+                                                "%d\n",
+                                                ret);
                                         }
                                     }
                                 }
@@ -3503,7 +3500,7 @@ int whTest_CryptoServerConfig(whServerConfig* config)
     whServerContext server[1] = {0};
     whCommConnected am_connected = WH_COMM_CONNECTED;
     int ret = 0;
-#ifndef WOLFHSM_CFG_TEST_NO_CUSTOM_SERVERS
+#ifdef WOLFHSM_CFG_IS_TEST_SERVER
     int userChange = 0;
 #endif
 
@@ -3521,7 +3518,7 @@ int whTest_CryptoServerConfig(whServerConfig* config)
     server->comm->client_id = 1;
 
     while(am_connected == WH_COMM_CONNECTED) {
-#ifndef WOLFHSM_CFG_TEST_NO_CUSTOM_SERVERS
+#ifdef WOLFHSM_CFG_IS_TEST_SERVER
         while (serverDelay == 1) {
 #ifdef WOLFHSM_CFG_TEST_POSIX
             sleep(1);
@@ -3536,7 +3533,7 @@ int whTest_CryptoServerConfig(whServerConfig* config)
         }
         wh_Server_GetConnected(server, &am_connected);
 
-#ifndef WOLFHSM_CFG_TEST_NO_CUSTOM_SERVERS
+#ifdef WOLFHSM_CFG_IS_TEST_SERVER
         /* keep alive for 2 user changes */
         if (am_connected != WH_COMM_CONNECTED && userChange < 2) {
             if (userChange == 0)
@@ -3547,7 +3544,7 @@ int whTest_CryptoServerConfig(whServerConfig* config)
             am_connected = WH_COMM_CONNECTED;
             WH_TEST_RETURN_ON_FAIL(wh_Server_SetConnected(server, am_connected));
         }
-#endif /* !WOLFHSM_CFG_TEST_NO_CUSTOM_SERVERS */
+#endif /* WOLFHSM_CFG_IS_TEST_SERVER */
     }
 
     if ((ret == 0) || (ret == WH_ERROR_NOTREADY)) {
