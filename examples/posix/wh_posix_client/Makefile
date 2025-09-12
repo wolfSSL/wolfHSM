@@ -55,6 +55,9 @@ else
 	LDFLAGS += -Wl,--gc-sections
 endif
 
+# Libc for printf, libm for math (used with DH)
+LIBS = -lc -lm
+
 # LD: generate map
 #LDFLAGS += -Wl,-map,$(BUILD_DIR)/$(BIN).map
 #LDFLAGS += -Wl,-Map=$(BUILD_DIR)/$(BIN).map
