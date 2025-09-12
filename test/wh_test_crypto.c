@@ -3275,7 +3275,7 @@ int whTest_CryptoServerConfig(whServerConfig* config)
     whServerContext server[1] = {0};
     whCommConnected am_connected = WH_COMM_CONNECTED;
     int ret = 0;
-#ifndef WOLFHSM_CFG_IS_TEST_SERVER
+#ifdef WOLFHSM_CFG_IS_TEST_SERVER
     int userChange = 0;
 #endif
 
@@ -3293,7 +3293,7 @@ int whTest_CryptoServerConfig(whServerConfig* config)
     server->comm->client_id = 1;
 
     while(am_connected == WH_COMM_CONNECTED) {
-#ifndef WOLFHSM_CFG_IS_TEST_SERVER
+#ifdef WOLFHSM_CFG_IS_TEST_SERVER
         while (serverDelay == 1) {
 #ifdef WOLFHSM_CFG_TEST_POSIX
             sleep(1);
@@ -3308,7 +3308,7 @@ int whTest_CryptoServerConfig(whServerConfig* config)
         }
         wh_Server_GetConnected(server, &am_connected);
 
-#ifndef WOLFHSM_CFG_IS_TEST_SERVER
+#ifdef WOLFHSM_CFG_IS_TEST_SERVER
         /* keep alive for 2 user changes */
         if (am_connected != WH_COMM_CONNECTED && userChange < 2) {
             if (userChange == 0)
