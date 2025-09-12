@@ -194,18 +194,13 @@ int wh_Server_PosixStaticMemoryDMA(whServerContext* server, uintptr_t clientAddr
     if (ret != WH_ERROR_OK) {
         return ret;
     }
-    
+
     if (dma_ptr == NULL || dma_size == 0) {
         return WH_ERROR_NOTREADY;
     }
 
     if (len + clientAddr > dma_size) {
         return WH_ERROR_BADARGS;
-    }
-
-    /* Convert client address to offset within DMA section */
-    if (clientAddr < (uintptr_t)0 || clientAddr > (uintptr_t)(dma_size)) {
-        return WH_ERROR_OK;
     }
 
     /* Return the transformed address (DMA pointer + offset) */
@@ -248,7 +243,7 @@ int posixTransportShm_ServerInitReference(void* c, const void* cf,
                                  void*                connectcb_arg)
 {
     int ret;
-    
+
     ret = posixTransportShm_ServerInit(c, cf, connectcb, connectcb_arg);
 
 #ifdef WOLFSSL_STATIC_MEMORY
@@ -270,8 +265,9 @@ int posixTransportShm_ClientInitReference(void* c, const void* cf,
     int attempt = 0;
 
     /* Retry connecting to the shared memory object until server is ready.
-     * This fixes a race condition where the client tries to connect before
-     * the server has finished creating and initializing the shared memory object. */
+     * This helps mitigate a race condition where the client tries to connect
+     * before the server has finished creating and initializing the shared
+     * memory object. */
     for (attempt = 0; attempt < max_attempts; attempt++) {
         ret = posixTransportShm_ClientInit(c, cf, connectcb, connectcb_arg);
         if (ret == WH_ERROR_OK) {
@@ -281,21 +277,10 @@ int posixTransportShm_ClientInitReference(void* c, const void* cf,
             if (ret == WH_ERROR_OK) {
                 /* Everything successful */
                 break;
-            } else if (ret == WH_ERROR_NOTIMPL) {
-                /* Static memory not implemented, but connection is OK */
-                ret = WH_ERROR_OK;
-                break;
-            } else {
-                /* Static memory setup failed, retry connection */
-                ret = WH_ERROR_NOTREADY;
             }
         }
-        
-        if (ret == WH_ERROR_NOTREADY || ret == WH_ERROR_NOTFOUND) {
-            /* Server not ready yet, wait a bit and retry with exponential backoff */
-            usleep(10000 * (1 << attempt)); /* 10ms, 20ms, 40ms, 80ms, etc. */
-            ret = WH_ERROR_OK; /* Will retry on next iteration */
-        } else {
+
+        if (ret != WH_ERROR_NOTREADY && ret != WH_ERROR_NOTFOUND) {
             /* Other error, don't retry */
             break;
         }
