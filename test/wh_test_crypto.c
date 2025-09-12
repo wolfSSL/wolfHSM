@@ -3631,9 +3631,16 @@ static int wh_ClientServer_MemThreadTest(void)
                  .transport_config  = (void*)tmcf,
                  .client_id         = 1,
     }};
+
+#ifdef WOLFHSM_CFG_DMA
+    whClientDmaConfig clientDmaConfig = {0};
+#endif
     whClientConfig c_conf[1] = {{
        .comm = cc_conf,
        .cancelCb = _cancelCb,
+    #ifdef WOLFHSM_CFG_DMA
+       .dmaConfig = &clientDmaConfig,
+    #endif
     }};
     /* Server configuration/contexts */
     whTransportServerCb         tscb[1]   = {WH_TRANSPORT_MEM_SERVER_CB};
@@ -3678,11 +3685,17 @@ static int wh_ClientServer_MemThreadTest(void)
             .devId = INVALID_DEVID,
     }};
 
+    whServerDmaConfig dma_config = {
+        .cb = NULL,  /* Disable DMA callback for test */
+        .dmaAddrAllowList = NULL
+    };
+
     whServerConfig                  s_conf[1] = {{
        .comm_config = cs_conf,
        .nvm = nvm,
        .crypto = crypto,
        .devId = INVALID_DEVID,
+       .dmaConfig   = &dma_config,
     }};
 
     WH_TEST_RETURN_ON_FAIL(wh_Nvm_Init(nvm, n_conf));
