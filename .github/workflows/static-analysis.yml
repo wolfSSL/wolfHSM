@@ -14,6 +14,12 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v3
 
+    - name: Checkout wolfssl
+      uses: actions/checkout@v3
+      with:
+        repository: wolfssl/wolfssl
+        path: wolfssl
+
     - name: Install cppcheck
       run: |
         sudo apt-get update
@@ -62,6 +68,12 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v3
+
+    - name: Checkout wolfssl
+      uses: actions/checkout@v3
+      with:
+        repository: wolfssl/wolfssl
+        path: wolfssl
 
     - name: Install dependencies
       run: |

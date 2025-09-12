@@ -35,13 +35,13 @@ generate_compile_commands() {
         if command -v bear &> /dev/null; then
             echo "Using bear to generate compile_commands.json..."
             make clean > /dev/null 2>&1 || true
-            bear -- make
+            bear -- make WOLFSSL_DIR="$PROJECT_ROOT/wolfssl"
         else
             echo "Warning: bear is not installed. Creating a basic compile_commands.json..."
             # Create a basic compile_commands.json for all .c files
             echo "[" > compile_commands.json
             first=true
-            find src wolfhsm -name "*.c" 2>/dev/null | while read -r file; do
+            find src wolfhsm -name "*.c" | while read -r file; do
                 if [ "$first" = true ]; then
                     first=false
                 else
@@ -50,7 +50,7 @@ generate_compile_commands() {
                 cat >> compile_commands.json << EOF
   {
     "directory": "$PROJECT_ROOT",
-    "command": "gcc -std=c99 -Wall -I$PROJECT_ROOT/wolfhsm -I$PROJECT_ROOT/src -I$PROJECT_ROOT/../wolfssl -c $file",
+    "command": "gcc -std=c99 -Wall -I$PROJECT_ROOT/wolfhsm -I$PROJECT_ROOT/src -I$PROJECT_ROOT/wolfssl -c $file",
     "file": "$file"
   }
 EOF
@@ -121,9 +121,9 @@ for file in $SOURCE_FILES; do
         NOTE_COUNT=$((NOTE_COUNT + file_notes))
         
         # Add to summary (excluding notes)
-        while IFS= read -r line; do
+        echo "$output" | grep -E "(error:|warning:)" | while IFS= read -r line; do
             echo "$file: $line" >> "$CLANG_TIDY_SUMMARY"
-        done < <(echo "$output" | grep -E "(error:|warning:)")
+        done
     else
         echo "clean"
     fi
