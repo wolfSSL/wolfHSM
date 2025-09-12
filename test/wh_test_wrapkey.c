@@ -46,9 +46,6 @@
 
 #ifdef HAVE_AESGCM
 
-static int whTest_Client_AesGcmWrapKey(whClientContext* ctx, int devId,
-                                       WC_RNG* rng)
-{
 #define WH_TEST_AES_KEYSIZE 16
 #define WH_TEST_AES_TEXTSIZE 16
 #define WH_TEST_AES_AUTHSIZE 16
@@ -56,6 +53,10 @@ static int whTest_Client_AesGcmWrapKey(whClientContext* ctx, int devId,
 #define WH_TEST_AES_WRAPPED_KEYSIZE                                     \
     (WH_TEST_AES_AUTHSIZE + WH_TEST_AES_TAGSIZE + WH_TEST_AES_KEYSIZE + \
      sizeof(whNvmMetadata))
+
+static int whTest_Client_AesGcmWrapKey(whClientContext* ctx, int devId,
+                                       WC_RNG* rng)
+{
 
     int           ret = 0;
     uint8_t       iv[AES_BLOCK_SIZE];
@@ -66,7 +67,8 @@ static int whTest_Client_AesGcmWrapKey(whClientContext* ctx, int devId,
     uint8_t       label[WH_NVM_LABEL_LEN] = "Server AES Key Label";
     whKeyId       serverKeyId;
     whKeyId       wrappedKeyId;
-    whNvmMetadata metadata = {.label = "AES Key Label",
+    whNvmMetadata metadata = {.id = 8,
+                              .label = "AES Key Label",
                               .len   = WH_TEST_AES_KEYSIZE};
     whNvmMetadata tmpMetadata;
 
@@ -104,21 +106,20 @@ static int whTest_Client_AesGcmWrapKey(whClientContext* ctx, int devId,
         return ret;
     }
 
-    ret = wh_Client_WrapKeyCache(ctx, WC_CIPHER_AES_GCM, serverKeyId, wrappedKey,
-                                 sizeof(wrappedKey), &wrappedKeyId);
+    ret = wh_Client_UnwrapKeyCache(ctx, WC_CIPHER_AES_GCM, serverKeyId, wrappedKey,
+                                   sizeof(wrappedKey), &wrappedKeyId);
     if (ret != 0) {
         printf("Failed to wh_Client_AesGcmWrapKeyCache %d\n", ret);
         return ret;
     }
 
-    ret = wh_Client_UnwrapKey(ctx, WC_CIPHER_AES_GCM, serverKeyId, wrappedKey,
-                              sizeof(wrappedKey), &tmpMetadata,
-                              tmpPlainKey, sizeof(tmpPlainKey));
+    ret = wh_Client_UnwrapKeyExport(ctx, WC_CIPHER_AES_GCM, serverKeyId, wrappedKey,
+                                    sizeof(wrappedKey), &tmpMetadata,
+                                    tmpPlainKey, sizeof(tmpPlainKey));
     if (ret != 0) {
         printf("Failed to wh_Client_AesGcmUnwrapKeyCache %d\n", ret);
         return ret;
     }
-
 
     if (memcmp(plainKey, tmpPlainKey, sizeof(plainKey)) != 0) {
         printf("AES GCM wrap/unwrap key failed to match\n");
@@ -151,13 +152,22 @@ static int whTest_Client_AesWrapKey(whClientContext* ctx, int devId,
 
 #endif /* !NO_AES */
 
-static int whTest_Client_WrapKey(whClientContext* ctx, int devId, WC_RNG* rng)
+static int whTest_Client_WrapKey(whClientContext* ctx, int devId)
 {
     int ret = 0;
+    WC_RNG rng[1];
+
+    ret = wc_InitRng_ex(rng, NULL, devId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wc_InitRng_ex %d\n", ret);
+        return ret;
+    }
+
 #ifndef NO_AES
     ret = whTest_Client_AesWrapKey(ctx, devId, rng);
 #endif
 
+    (void)wc_FreeRng(rng);
     return ret;
 }
 
@@ -165,7 +175,6 @@ int whTest_WrapKeyClientConfig(whClientConfig* config)
 {
     int             ret       = 0;
     whClientContext client[1] = {0};
-    WC_RNG          rng[1];
 
     if (config == NULL) {
         return WH_ERROR_BADARGS;
@@ -175,28 +184,17 @@ int whTest_WrapKeyClientConfig(whClientConfig* config)
 
     ret = wh_Client_CommInit(client, NULL, NULL);
     if (ret != 0) {
-        WH_ERROR_PRINT("Failed to comm init:%d\n", ret);
+        WH_ERROR_PRINT("Failed to wh_Client_Init %d\n", ret);
         (void)wh_Client_Cleanup(client);
         return ret;
     }
 
-    ret = wc_InitRng_ex(rng, NULL, WH_DEV_ID);
-    if (ret != 0) {
-        WH_ERROR_PRINT("Failed to wc_InitRng_ex %d\n", ret);
-        (void)wh_Client_CommClose(client);
-        (void)wh_Client_Cleanup(client);
-        return ret;
-    }
-
-    ret = whTest_Client_WrapKey(client, WH_DEV_ID, rng);
+    ret = whTest_Client_WrapKey(client, WH_DEV_ID);
     if (ret != 0) {
         WH_ERROR_PRINT("Failed to whTest_Client_WrapKey %d\n", ret);
-        goto cleanup_and_exit;
     }
 
-cleanup_and_exit:
     /* Clean up used resources */
-    (void)wc_FreeRng(rng);
     (void)wh_Client_CommClose(client);
     (void)wh_Client_Cleanup(client);
 

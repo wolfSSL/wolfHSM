@@ -344,6 +344,26 @@ static int _FindInCache(whServerContext* server, whKeyId keyId, int* out_index,
     return ret;
 }
 
+static bool _ExistsInCache(whServerContext* server, whKeyId keyId)
+{
+    int           ret           = 0;
+    int           foundIndex    = -1;
+    int           foundBigIndex = -1;
+    whNvmMetadata* tmpMeta;
+    uint8_t* tmpBuf;
+
+    ret = _FindInCache(server, keyId, &foundIndex, 
+                       &foundBigIndex, &tmpBuf, &tmpMeta);
+    
+    if (ret != WH_ERROR_OK) {
+        /* Key doesn't exist in the cache */
+        return false;
+    }
+
+    /* Key exists in the cache */
+    return true;
+}
+
 /* try to put the specified key into cache if it isn't already, return pointers
  * to meta and the cached data*/
 int wh_Server_KeystoreFreshenKey(whServerContext* server, whKeyId keyId,
@@ -532,9 +552,6 @@ int wh_Server_KeystoreEraseKey(whServerContext* server, whNvmId keyId)
 }
 
 
-#define WOLFHSM_WRAPKEY_AES_GCM_TAG_SIZE 16
-#define WOLFHSM_WRAPKEY_AES_GCM_IV_SIZE 16
-#define WOLFHSM_WRAPKEY_MAX_KEY_SIZE 4096
 
 static int _AesGcmWrapKey(whServerContext* server, whKeyId serverKeyId,
                           uint8_t* keyIn, uint16_t keySz,
@@ -543,9 +560,8 @@ static int _AesGcmWrapKey(whServerContext* server, whKeyId serverKeyId,
 {
     int      ret = 0;
     Aes      aes[1];
-    WC_RNG   rng[1];
-    uint8_t  authTag[WOLFHSM_WRAPKEY_AES_GCM_TAG_SIZE];
-    uint8_t  iv[WOLFHSM_WRAPKEY_AES_GCM_IV_SIZE];
+    uint8_t  authTag[WOLFHSM_CFG_WRAPKEY_AES_GCM_TAG_SIZE];
+    uint8_t  iv[WOLFHSM_CFG_WRAPKEY_AES_GCM_IV_SIZE];
     uint8_t  serverKey[AES_MAX_KEY_SIZE];
     uint32_t serverKeySz = sizeof(serverKey);
 
@@ -557,12 +573,6 @@ static int _AesGcmWrapKey(whServerContext* server, whKeyId serverKeyId,
     if (wrappedKeySz <
         sizeof(iv) + sizeof(authTag) + sizeof(*metadataIn) + keySz)
         return WH_ERROR_BUFFER_SIZE;
-
-    /* Initialize RNG context */
-    ret = wc_InitRng_ex(rng, NULL, server->crypto->devId);
-    if (ret != 0) {
-        return ret;
-    }
 
     /* Get the server side key */
     ret = wh_Server_KeystoreReadKey(
@@ -576,20 +586,18 @@ static int _AesGcmWrapKey(whServerContext* server, whKeyId serverKeyId,
     /* Initialize AES context and set it to use the server side key */
     ret = wc_AesInit(aes, NULL, server->crypto->devId);
     if (ret != 0) {
-        wc_FreeRng(rng);
         return ret;
     }
 
     ret = wc_AesGcmSetKey(aes, serverKey, serverKeySz);
     if (ret != 0) {
-        wc_FreeRng(rng);
+        wc_AesFree(aes);
         return ret;
     }
 
     /* Generate the IV */
-    ret = wc_RNG_GenerateBlock(rng, iv, sizeof(iv));
+    ret = wc_RNG_GenerateBlock(server->crypto->rng, iv, sizeof(iv));
     if (ret != 0) {
-        wc_FreeRng(rng);
         wc_AesFree(aes);
         return ret;
     }
@@ -604,7 +612,6 @@ static int _AesGcmWrapKey(whServerContext* server, whKeyId serverKeyId,
     ret = wc_AesGcmEncrypt(aes, encBlob, plainBlob, sizeof(plainBlob), iv,
                            sizeof(iv), authTag, sizeof(authTag), NULL, 0);
     if (ret != 0) {
-        wc_FreeRng(rng);
         wc_AesFree(aes);
         return ret;
     }
@@ -613,7 +620,6 @@ static int _AesGcmWrapKey(whServerContext* server, whKeyId serverKeyId,
     memcpy(wrappedKeyOut, iv, sizeof(iv));
     memcpy(wrappedKeyOut + sizeof(iv), authTag, sizeof(authTag));
 
-    wc_FreeRng(rng);
     wc_AesFree(aes);
 
     return WH_ERROR_OK;
@@ -626,8 +632,8 @@ static int _AesGcmUnwrapKey(whServerContext* server, uint16_t serverKeyId,
 {
     int      ret = 0;
     Aes      aes[1];
-    uint8_t  authTag[WOLFHSM_WRAPKEY_AES_GCM_TAG_SIZE];
-    uint8_t  iv[WOLFHSM_WRAPKEY_AES_GCM_IV_SIZE];
+    uint8_t  authTag[WOLFHSM_CFG_WRAPKEY_AES_GCM_TAG_SIZE];
+    uint8_t  iv[WOLFHSM_CFG_WRAPKEY_AES_GCM_IV_SIZE];
     uint8_t  serverKey[AES_MAX_KEY_SIZE];
     uint32_t serverKeySz = sizeof(serverKey);
     uint8_t* encBlob   = (uint8_t*)wrappedKeyIn + sizeof(iv) + sizeof(authTag);
@@ -685,17 +691,15 @@ static int _HandleWrapKeyRequest(whServerContext*              server,
                                  whMessageKeystore_WrapResponse* resp,
                                  uint8_t* respData, uint32_t respDataSz)
 {
-    if (server == NULL || req == NULL || reqData == NULL || resp == NULL ||
-        respData == NULL)
-        return WH_ERROR_BADARGS;
-
-    if (req->keySz > WOLFHSM_WRAPKEY_MAX_KEY_SIZE)
-        return WH_ERROR_BADARGS;
 
     int           ret;
     uint8_t*      wrappedKey;
     whNvmMetadata metadata;
-    uint8_t       key[WOLFHSM_WRAPKEY_MAX_KEY_SIZE];
+    uint8_t       key[WOLFHSM_CFG_WRAPKEY_MAX_KEY_SIZE];
+
+    if (server == NULL || req == NULL || reqData == NULL || resp == NULL ||
+        respData == NULL || req->keySz > WOLFHSM_CFG_WRAPKEY_MAX_KEY_SIZE)
+        return WH_ERROR_BADARGS;
 
     /* Check if the reqData is big enough to hold the metadata and key */
     if (reqDataSz < sizeof(metadata) + req->keySz)
@@ -710,8 +714,8 @@ static int _HandleWrapKeyRequest(whServerContext*              server,
 
     switch (req->cipherType) {
         case WC_CIPHER_AES_GCM: {
-            uint16_t wrappedKeySz = WOLFHSM_WRAPKEY_AES_GCM_IV_SIZE +
-                                    WOLFHSM_WRAPKEY_AES_GCM_TAG_SIZE +
+            uint16_t wrappedKeySz = WOLFHSM_CFG_WRAPKEY_AES_GCM_IV_SIZE +
+                                    WOLFHSM_CFG_WRAPKEY_AES_GCM_TAG_SIZE +
                                     sizeof(metadata) + req->keySz;
 
             /* Check if the response data can fit the wrapped key */
@@ -766,8 +770,8 @@ static int _HandleUnwrapExportKeyRequest(whServerContext*                server,
     switch (req->cipherType) {
         case WC_CIPHER_AES_GCM: {
             uint16_t keySz =
-                req->wrappedKeySz - WOLFHSM_WRAPKEY_AES_GCM_IV_SIZE -
-                WOLFHSM_WRAPKEY_AES_GCM_TAG_SIZE - sizeof(*metadata);
+                req->wrappedKeySz - WOLFHSM_CFG_WRAPKEY_AES_GCM_IV_SIZE -
+                WOLFHSM_CFG_WRAPKEY_AES_GCM_TAG_SIZE - sizeof(*metadata);
 
             /* Check if the response data can fit the metadata + key  */
             if (respDataSz < sizeof(*metadata) + keySz)
@@ -778,6 +782,11 @@ static int _HandleUnwrapExportKeyRequest(whServerContext*                server,
                                    req->wrappedKeySz, metadata, key, keySz);
             if (ret != WH_ERROR_OK) {
                 return ret;
+            }
+
+            /* Check if the key is exportable */
+            if (metadata->flags & WH_NVM_FLAGS_NONEXPORTABLE) {
+                return WH_ERROR_ACCESS;
             }
 
             /* Tell the client how big the key is */
@@ -811,7 +820,7 @@ static int _HandleUnwrapCacheKeyRequest(whServerContext*               server,
     uint8_t*      wrappedKey;
     whNvmMetadata metadata;
     uint16_t keySz;
-    uint8_t key[WOLFHSM_WRAPKEY_MAX_KEY_SIZE];
+    uint8_t key[WOLFHSM_CFG_WRAPKEY_MAX_KEY_SIZE];
 
     /* Check if the reqData is big enough to hold the wrapped key */
     if (reqDataSz < req->wrappedKeySz)
@@ -824,8 +833,8 @@ static int _HandleUnwrapCacheKeyRequest(whServerContext*               server,
     switch (req->cipherType) {
         case WC_CIPHER_AES_GCM: {
             keySz =
-                req->wrappedKeySz - WOLFHSM_WRAPKEY_AES_GCM_IV_SIZE -
-                WOLFHSM_WRAPKEY_AES_GCM_TAG_SIZE - sizeof(metadata);
+                req->wrappedKeySz - WOLFHSM_CFG_WRAPKEY_AES_GCM_IV_SIZE -
+                WOLFHSM_CFG_WRAPKEY_AES_GCM_TAG_SIZE - sizeof(metadata);
 
             ret = _AesGcmUnwrapKey(server, req->serverKeyId, wrappedKey,
                                    req->wrappedKeySz, &metadata, key, keySz);
@@ -834,6 +843,7 @@ static int _HandleUnwrapCacheKeyRequest(whServerContext*               server,
             }
 
             resp->cipherType = WC_CIPHER_AES_GCM;
+            resp->keyId = metadata.id;
 
         } break;
         default:
@@ -845,17 +855,12 @@ static int _HandleUnwrapCacheKeyRequest(whServerContext*               server,
         return WH_ERROR_BADARGS;
     }
 
-    /* Get a new id if one wasn't provided */
-    if (WH_KEYID_ISERASED(metadata.id)) {
-        ret = wh_Server_KeystoreGetUniqueId(server, &metadata.id);
-        if (ret != WH_ERROR_OK) {
-            return ret;
-        }
+    /* Check if this key already exists in the cache */
+    if (_ExistsInCache(server, metadata.id)) {
+        return WH_ERROR_ABORTED;
     }
 
-    resp->keyId = metadata.id;
-
-    /* Write the key */
+    /* Cache the key */
     return wh_Server_KeystoreCacheKey(server, &metadata, key);
 }
 
@@ -1230,7 +1235,7 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
             cacheResp.rc = ret;
 
             (void)wh_MessageKeystore_TranslateUnwrapCacheResponse(magic, &cacheResp,
-                                                           resp_packet);
+                                                                  resp_packet);
             *out_resp_size = sizeof(cacheResp);
 
         } break;
