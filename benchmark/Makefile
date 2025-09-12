@@ -73,6 +73,11 @@ CFLAGS += $(DBGFLAGS)
 LDFLAGS += $(DBGFLAGS)
 endif
 
+ifneq ($(DEBUG),1)
+CFLAGS += -O2
+endif
+
+
 # Add address sanitizer option
 ifeq ($(ASAN),1)
 	CFLAGS += -fsanitize=address
@@ -133,7 +138,6 @@ SRC_C +=  $(wildcard $(PROJECT_DIR)/*.c)
 SRC_C +=  $(wildcard $(MODULES_DIR)/*.c)
 
 ## Automated processing below
-
 FILENAMES_C = $(notdir $(SRC_C))
 OBJS_C = $(addprefix $(BUILD_DIR)/, $(FILENAMES_C:.c=.o))
 vpath %.c $(dir $(SRC_C))

@@ -1,5 +1,5 @@
 /*
- * Example server app using POSIX TCP transport
+ * Example server app using POSIX transport
  */
 
 #include <stdint.h>
@@ -25,9 +25,13 @@
 #include "wolfhsm/wh_nvm_flash.h"
 #include "wolfhsm/wh_flash_ramsim.h"
 
-#include "wolfssl/version.h"
-#include "wh_example_posix.h"
-#include "port/posix/posix_transport_tcp.h"
+#ifndef WOLFHSM_CFG_NO_CRYPTO
+    /* included to print out the version of wolfSSL linked with */
+    #include "wolfssl/version.h"
+#endif
+
+#include "wh_posix_cfg.h"
+#include "wh_posix_server_cfg.h"
 
 /** Local declarations */
 static int wh_ServerTask(void* cf, const char* keyFilePath, int keyId,
@@ -505,10 +509,9 @@ static int wh_ServerTask(void* cf, const char* keyFilePath, int keyId,
         }
     }
 
-
     if (ret == 0) {
         printf("Waiting for connection...\n");
-        if (strcmp(type, "shm") == 0) {
+        if (strcmp(type, "shm") == 0 || strcmp(type, "dma") == 0) {
             /* Shared memory assumes connected once memory is setup */
             wh_Server_SetConnected(server, WH_COMM_CONNECTED);
         }
@@ -549,7 +552,8 @@ static int wh_ServerTask(void* cf, const char* keyFilePath, int keyId,
                             break;
                         }
 
-                        if (ret == WH_ERROR_OK && strcmp(type, "shm") == 0) {
+                        if (ret == WH_ERROR_OK && (strcmp(type, "shm") == 0 ||
+                                strcmp(type, "dma") == 0)) {
                             /* Shared memory assumes connected once memory is setup */
                             wh_Server_SetConnected(server, WH_COMM_CONNECTED);
                         }
@@ -614,13 +618,13 @@ static int _hardwareCryptoCb(int devId, struct wc_CryptoInfo* info,
     return ret;
 }
 
-void Usage(const char* exeName)
+static void Usage(const char* exeName)
 {
     printf("Usage: %s --key <key_file_path> --id <key_id> --client <client_id> "
         "--nvminit <nvm_init_file_path> --type <type>\n", exeName);
-    printf("Example: %s --key key.bin --id 123 --client 456"
+    printf("Example: %s --key key.bin --id 123 --client 456 "
         "--nvminit nvm_init.txt --type tcp\n", exeName);
-    printf("type: tcp (default), shm\n");
+    printf("type: tcp (default), shm, dma\n");
 }
 
 
@@ -634,8 +638,12 @@ int main(int argc, char** argv)
     uint8_t     memory[FLASH_RAM_SIZE] = {0};
     whServerConfig s_conf[1];
 
-    printf("Example wolfHSM POSIX server built with wolfSSL version %s\n",
-        LIBWOLFSSL_VERSION_STRING);
+    printf("Example wolfHSM POSIX server ");
+#ifndef WOLFHSM_CFG_NO_CRYPTO
+    printf("built with wolfSSL version %s\n", LIBWOLFSSL_VERSION_STRING);
+#else
+    printf("built with WOLFHSM_CFG_NO_CRYPTO\n");
+#endif
 
     /* Parse command-line arguments */
     for (int i = 1; i < argc; i++) {
@@ -662,14 +670,21 @@ int main(int argc, char** argv)
     }
 
     /* Server configuration/context */
+    memset(s_conf, 0, sizeof(whServerConfig));
     if (strcmp(type, "tcp") == 0) {
         printf("Using TCP transport\n");
-        wh_Server_ExampleTCPConfig(s_conf);
+        Server_ExampleTCPConfig(s_conf);
     }
     else if (strcmp(type, "shm") == 0) {
         printf("Using shared memory transport\n");
-        wh_Server_ExampleSHMConfig(s_conf);
+        Server_ExampleSHMConfig(s_conf);
     }
+#ifdef WOLFSSL_STATIC_MEMORY
+    else if (strcmp(type, "dma") == 0) {
+        printf("Using DMA with shared memory transport\n");
+        Server_ExampleDMAConfig(s_conf);
+    }
+#endif
     else {
         printf("Invalid server type: %s\n", type);
         return -1;

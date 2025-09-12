@@ -47,6 +47,12 @@
 #define NO_MAIN_DRIVER
 #define BENCH_EMBEDDED
 
+#ifdef WOLFHSM_CFG_DMA
+    #undef  WOLFSSL_STATIC_MEMORY
+    #define WOLFSSL_STATIC_MEMORY
+    #define WOLFSSL_STATIC_MEMORY_TEST_SZ 100000
+#endif
+
 /* Include to ensure clock_gettime is declared for benchmark.c */
 #include <time.h>
 /* Include to support strcasecmp with POSIX build */

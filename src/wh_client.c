@@ -59,6 +59,10 @@
 #include "wolfhsm/wh_message_counter.h"
 #include "wolfhsm/wh_client.h"
 
+#ifdef WOLFHSM_CFG_DMA
+/* included for default callback */
+#include "port/posix/posix_transport_dma.h"
+#endif /* WOLFHSM_CFG_DMA */
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
 const int WH_DEV_IDS_ARRAY[WH_NUM_DEVIDS] = {
@@ -98,6 +102,18 @@ int wh_Client_Init(whClientContext* c, const whClientConfig* config)
 
 #ifdef WOLFHSM_CFG_DMA
             if (rc == 0) {
+                /* Check if this is a DMA transport and set up callbacks if needed */
+                if (wh_Client_IsDmaTransport(c->comm)) {
+                    /* This is a DMA transport - set up DMA callback if not already set */
+                    c->dma.cb = wh_Client_PosixStaticMemoryDMA;
+                }
+
+                /* Initialize DMA configuration and callbacks, if provided */
+                if (NULL != config->dmaConfig) {
+                    c->dma.dmaAddrAllowList = config->dmaConfig->dmaAddrAllowList;
+                    c->dma.cb               = config->dmaConfig->cb;
+                }
+
                 rc = wc_CryptoCb_RegisterDevice(WH_DEV_ID_DMA,
                                                 wh_Client_CryptoCbDma, c);
                 if (rc != 0) {
@@ -743,10 +759,12 @@ int wh_Client_KeyCacheRequest_ex(whClientContext* c, uint32_t flags,
     else {
         req->labelSz = labelSz;
         /* write label */
-        if (labelSz > WH_NVM_LABEL_LEN)
+        if (labelSz > WH_NVM_LABEL_LEN) {
             memcpy(req->label, label, WH_NVM_LABEL_LEN);
-        else
+        }
+        else {
             memcpy(req->label, label, labelSz);
+        }
     }
 
     /* write in */
@@ -1496,6 +1514,29 @@ int wh_Client_KeyExportDma(whClientContext* c, uint16_t keyId,
         } while (ret == WH_ERROR_NOTREADY);
     }
     return ret;
+}
+
+int wh_Client_IsDmaTransport(whCommClient* comm)
+{
+    if (comm == NULL || comm->transport_context == NULL) {
+        return 0;
+    }
+
+#ifdef WOLFHSM_CFG_DMA
+    /* Check if this is a DMA transport by looking for heap hint */
+    void* heap_hint = NULL;
+    posixTransportShm_GetHeapHint(comm->transport_context, &heap_hint);
+    return (heap_hint != NULL) ? 1 : 0;
+#else
+    return 0;
+#endif /* WOLFHSM_CFG_DMA */
+}
+
+void* wh_Client_GetHeap(whClientContext* c)
+{
+    void* heap = NULL;
+    posixTransportShm_GetHeapHint(c->comm->transport_context, &heap);
+    return heap;
 }
 
 #endif /* WOLFHSM_CFG_DMA */

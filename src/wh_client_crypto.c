@@ -63,6 +63,10 @@
 #include "wolfhsm/wh_message_customcb.h"
 #include "wolfhsm/wh_message_crypto.h"
 
+#ifdef WOLFHSM_CFG_DMA
+#include "port/posix/posix_transport_dma.h"
+#endif /* WOLFHSM_CFG_DMA */
+
 #include "wolfhsm/wh_client.h"
 #include "wolfhsm/wh_client_crypto.h"
 
@@ -2737,6 +2741,7 @@ int wh_Client_Sha256(whClientContext* ctx, wc_Sha256* sha256, const uint8_t* in,
     return ret;
 }
 
+#ifdef WOLFHSM_CFG_DMA
 int wh_Client_Sha256Dma(whClientContext* ctx, wc_Sha256* sha, const uint8_t* in,
                         uint32_t inLen, uint8_t* out)
 {
@@ -2747,6 +2752,12 @@ int wh_Client_Sha256Dma(whClientContext* ctx, wc_Sha256* sha, const uint8_t* in,
     uint8_t*                           dataPtr = NULL;
     whMessageCrypto_Sha2DmaRequest*    req     = NULL;
     whMessageCrypto_Sha2DmaResponse*   resp    = NULL;
+    uintptr_t inAddr    = 0; /* The req->input.addr is reused elsewhere, this
+                                local variable is to keep track of the resulting
+                                DMA translation to pass back to the callback on
+                                POST operations. */
+    uintptr_t outAddr   = 0;
+    uintptr_t stateAddr = 0;
 
     /* Get data pointer from the context to use as request/response storage */
     dataPtr = (uint8_t*)wh_CommClient_GetDataPtr(ctx->comm);
@@ -2758,20 +2769,50 @@ int wh_Client_Sha256Dma(whClientContext* ctx, wc_Sha256* sha, const uint8_t* in,
     req = (whMessageCrypto_Sha2DmaRequest*)_createCryptoRequest(
         dataPtr, WC_HASH_TYPE_SHA256);
 
+    /* map addresses and setup default request structure */
+    if (in != NULL || out != NULL) {
+        req->finalize    = 0;
+        req->state.sz    = sizeof(*sha256);
+        req->input.sz    = inLen;
+        req->output.sz   = WC_SHA256_DIGEST_SIZE; /* not needed, but YOLO */
+
+        /* Perform address translations */
+        ret = wh_Client_DmaProcessClientAddress(ctx, (uintptr_t)sha256,
+            (void**)&stateAddr, req->state.sz, WH_DMA_OPER_SERVER_WRITE_PRE,
+            (whClientDmaFlags){0});
+        if (ret != WH_ERROR_OK) {
+            printf("Failed to translate state address\n");
+        }
+        req->state.addr = stateAddr;
+
+        if (ret == WH_ERROR_OK) {
+            ret = wh_Client_DmaProcessClientAddress(ctx, (uintptr_t)in,
+                (void**)&inAddr, req->input.sz, WH_DMA_OPER_SERVER_READ_PRE,
+                (whClientDmaFlags){0});
+            if (ret != WH_ERROR_OK) {
+                printf("Failed to translate input address, size: %llu\n", req->input.sz);
+            }
+            req->input.addr = inAddr;
+        }
+
+        if (ret == WH_ERROR_OK) {
+            ret = wh_Client_DmaProcessClientAddress(ctx, (uintptr_t)out,
+                (void**)&outAddr, req->output.sz, WH_DMA_OPER_SERVER_WRITE_PRE,
+                (whClientDmaFlags){0});
+            if (ret != WH_ERROR_OK) {
+                printf("Failed to translate output address\n");
+            }
+            req->output.addr = outAddr;
+        }
+    }
 
     /* Caller invoked SHA Update:
      * wc_CryptoCb_Sha256Hash(sha256, data, len, NULL) */
-    if (in != NULL) {
-        req->finalize    = 0;
-        req->state.addr  = (uint64_t)(uintptr_t)sha256;
-        req->state.sz    = sizeof(*sha256);
-        req->input.addr  = (uint64_t)(uintptr_t)in;
-        req->input.sz    = inLen;
-        req->output.addr = (uint64_t)(uintptr_t)out;
-        req->output.sz   = WC_SHA256_DIGEST_SIZE; /* not needed, but YOLO */
+    if ((ret == WH_ERROR_OK) && (in != NULL)) {
 #ifdef DEBUG_CRYPTOCB_VERBOSE
         printf("[client] SHA256 DMA UPDATE: inAddr=%p, inSz=%u\n", in, inLen);
 #endif
+
         ret = wh_Client_SendRequest(
             ctx, group, WC_ALGO_TYPE_HASH,
             sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req),
@@ -2799,13 +2840,6 @@ int wh_Client_Sha256Dma(whClientContext* ctx, wc_Sha256* sha, const uint8_t* in,
     if ((ret == WH_ERROR_OK) && (out != NULL)) {
         /* Packet will have been trashed, so re-populate all fields */
         req->finalize    = 1;
-        req->state.addr  = (uint64_t)(uintptr_t)sha256;
-        req->state.sz    = sizeof(*sha256);
-        req->input.addr  = (uint64_t)(uintptr_t)in;
-        req->input.sz    = inLen;
-        req->output.addr = (uint64_t)(uintptr_t)out;
-        req->output.sz   = WC_SHA256_DIGEST_SIZE; /* not needed, but YOLO */
-
 #ifdef DEBUG_CRYPTOCB_VERBOSE
         printf("[client] SHA256 DMA FINAL: outAddr=%p\n", out);
 #endif
@@ -2833,8 +2867,20 @@ int wh_Client_Sha256Dma(whClientContext* ctx, wc_Sha256* sha, const uint8_t* in,
         }
     }
 
+    if (in != NULL || out != NULL) {
+        /* post operation address translations */
+        wh_Client_DmaProcessClientAddress(ctx, (uintptr_t)sha256,
+            (void**)&stateAddr, req->state.sz, WH_DMA_OPER_SERVER_WRITE_POST,
+            (whClientDmaFlags){0});
+        wh_Client_DmaProcessClientAddress(ctx, (uintptr_t)in, (void**)&inAddr,
+            req->input.sz, WH_DMA_OPER_SERVER_READ_POST, (whClientDmaFlags){0});
+        wh_Client_DmaProcessClientAddress(ctx, (uintptr_t)out, (void**)&outAddr,
+            req->output.sz, WH_DMA_OPER_SERVER_WRITE_POST, (whClientDmaFlags){0});
+    }
+
     return ret;
 }
+#endif /* WOLFHSM_CFG_DMA */
 #endif /* !NO_SHA256 */
 
 #ifdef WOLFSSL_SHA224

@@ -341,6 +341,18 @@ int wh_Server_HandleRequestMessage(whServerContext* server);
  */
 int wh_Server_Cleanup(whServerContext* server);
 
+/**
+ * @brief Checks if the communication transport is a DMA transport.
+ *
+ * This function determines whether the communication server is using a DMA
+ * transport by checking for the presence of a heap hint, which is specific
+ * to DMA-enabled transports.
+ *
+ * @param[in] comm Pointer to the communication server context.
+ * @return int Returns 1 if this is a DMA transport, 0 otherwise.
+ */
+int wh_Server_IsDmaTransport(whCommServer* comm);
+
 /** Server custom callback functions */
 
 /**

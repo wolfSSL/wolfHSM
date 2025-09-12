@@ -40,6 +40,18 @@ Run `examples/posix/tcp/wh_server_tcp/Build/wh_server_tcp.elf` to launch the ser
 ### Initializing server NVM
 The server example supports two methods for initializing its Non-Volatile Memory (NVM) with cryptographic keys and objects.
 
+#### Choosing a specific transport to use
+With POSIX builds there is multiple transport types available. They can be used with the --type flag.
+The types of transports are:
+
+- shm : Using shared memory
+- tcp : Using TCP connections
+- dma : Builds off of shm and adds in a common buffer that is accessed by offsets passed between the client and server
+
+```
+./wh_server_posix.elf --type shm
+```
+
 #### Loading a single key
 To load a single key with a specific keyId, use the `--key` and `--id` arguments:
 

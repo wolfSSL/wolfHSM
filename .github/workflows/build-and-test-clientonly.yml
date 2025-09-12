@@ -32,14 +32,14 @@ jobs:
     # Build example server
     - name: Build POSIX server
       run: |
-        cd examples/posix/wh_server_posix
+        cd examples/posix/wh_posix_server
         make -j SHE=1 WOLFSSL_DIR=../../../wolfssl
 
     # Start the server in the background
     - name: Run POSIX server
       run: |
-        cd examples/posix/wh_server_posix
-        ./Build/wh_server_posix.elf &
+        cd examples/posix/wh_posix_server
+        ./Build/wh_posix_server.elf &
         TCP_SERVER_PID=$!
         echo "TCP_SERVER_PID=$TCP_SERVER_PID" >> $GITHUB_ENV
 

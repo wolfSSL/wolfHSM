@@ -1,27 +1,30 @@
-## Makefile for wolfHSM Server example using POSIX port
+## Makefile for wolfHSM Client example using POSIX port
 
 ## Project name
 # Sets output filenames
-BIN = wh_server_posix
+BIN = wh_posix_client
 
 ## Important directories
 # Base directory for additional project files
-PROJECT_DIR			?= .
-CONFIG_DIR			?= $(PROJECT_DIR)/config
+PROJECT_DIR				?= .
+CONFIG_DIR				?= $(PROJECT_DIR)/config
 # wolfSSL and wolfHSM directories
-WOLFSSL_DIR			?= ../../../../wolfssl
-WOLFHSM_DIR			?= ../../../
-WOLFHSM_PORT_DIR	?= $(WOLFHSM_DIR)/port/posix
+WOLFSSL_DIR				?= ../../../../wolfssl
+WOLFHSM_DIR				?= ../../../
+WOLFHSM_PORT_DIR		?= $(WOLFHSM_DIR)/port/posix
+WOLFHSM_DEMO_CLIENT_DIR	?= $(WOLFHSM_DIR)/examples/demo/client
 
 # Output directory for build files
-BUILD_DIR			?= $(PROJECT_DIR)/Build
+BUILD_DIR				?= $(PROJECT_DIR)/Build
 
 # Includes
 INC =   -I$(PROJECT_DIR) \
 		-I$(CONFIG_DIR) \
 		-I$(WOLFSSL_DIR) \
 		-I$(WOLFHSM_DIR) \
-		-I$(WOLFHSM_PORT_DIR)
+		-I$(WOLFHSM_PORT_DIR) \
+		-I$(WOLFHSM_DEMO_CLIENT_DIR) \
+        -I../
 
 # POSIX requires C source be defined before any header
 DEF += -D_POSIX_C_SOURCE=200809L
@@ -29,16 +32,20 @@ DEF += -D_POSIX_C_SOURCE=200809L
 # Library configuration defines for user-supplied settings
 DEF += -DWOLFSSL_USER_SETTINGS -DWOLFHSM_CFG
 
-
 # Architecture flags for assembler, C compiler and linker
-
 ARCHFLAGS ?=
 
-# Compiler and linker flags
-ASFLAGS ?= $(ARCHFLAGS)
-CFLAGS_EXTRA ?= -Wextra
-CFLAGS ?= $(ARCHFLAGS) -Wno-cpp -std=c99 -Wall -Werror $(CFLAGS_EXTRA)
-LDFLAGS ?= $(ARCHFLAGS)
+# Enable extra C compiler warnings
+CFLAGS_EXTRA = -Werror -Wall -Wextra
+# Place functions / data into separate sections to allow unused code removal
+CFLAGS_EXTRA += -ffunction-sections -fdata-sections
+
+# C standard to use (default to c90 if not specified)
+CSTD 		?= -std=c90
+
+ASFLAGS 	?= $(ARCHFLAGS)
+CFLAGS 		?= $(ARCHFLAGS) $(CSTD) $(CFLAGS_EXTRA)
+LDFLAGS 	?= $(ARCHFLAGS)
 
 # Enable garbage collection.  Inexact handling of dead_strip
 OS_NAME := $(shell uname -s | tr A-Z a-z)
@@ -64,28 +71,44 @@ ifeq ($(DEBUG),1)
 	LDFLAGS += $(DBGFLAGS)
 endif
 
-# Support a SHE-capable build
-ifeq ($(SHE),1)
-CFLAGS += -DWOLFHSM_CFG_SHE_EXTENSION
-endif
-
 ## Source files
 # Assembly source files
 SRC_ASM +=
 
 # wolfCrypt source files
 SRC_C += $(wildcard $(WOLFSSL_DIR)/wolfcrypt/src/*.c)
+
+# wolfCrypt test/benchmark source files
+SRC_C += $(wildcard $(WOLFSSL_DIR)/wolfcrypt/test/*.c)
+SRC_C += $(wildcard $(WOLFSSL_DIR)/wolfcrypt/benchmark/*.c)
+
 # wolfSSL source files
 SRC_C += $(wildcard $(WOLFSSL_DIR)/src/*.c)
 
+# Set the default device ID for wolfCrypt tests
+ifeq ($(DMA),1)
+DEF += -D_POSIX_C_SOURCE=200809L -DWC_USE_DEVID=0x57444D41 -DWC_NO_DEFAULT_DEVID
+CFLAGS += -DWOLFHSM_CFG_DMA
+else
+DEF += -DWC_USE_DEVID=0x5748534D
+
+endif
+
+#wolfCrypt test/benchmark source files
+SRC_C += $(wildcard $(WOLFSSL_DIR)/wolfcrypt/test/*.c)
+SRC_C += $(wildcard $(WOLFSSL_DIR)/wolfcrypt/benchmark/*.c)
+
 # wolfHSM source files
-SRC_C += $(wildcard $(WOLFHSM_DIR)/src/*.c)
+SRC_C +=  $(wildcard $(WOLFHSM_DIR)/src/*.c)
 
 # wolfHSM port/HAL code
 SRC_C +=  $(wildcard $(WOLFHSM_PORT_DIR)/*.c)
 
 # Project
 SRC_C +=  $(wildcard $(PROJECT_DIR)/*.c)
+
+# Demo client code
+SRC_C += $(wildcard $(WOLFHSM_DEMO_CLIENT_DIR)/*.c)
 
 
 ## Automated processing below

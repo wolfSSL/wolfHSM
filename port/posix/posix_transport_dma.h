@@ -18,7 +18,7 @@
  */
 
 /*
- * port/posix_transport_shm.h
+ * port/posix_transport_dma.h
  *
  * wolfHSM Transport Mem binding using POSIX shared memory functionality
  *
@@ -50,93 +50,64 @@
  *
  */
 
-#ifndef PORT_POSIX_POSIX_TRANSPORT_SHM_H_
-#define PORT_POSIX_POSIX_TRANSPORT_SHM_H_
+#ifndef PORT_POSIX_POSIX_TRANSPORT_SHM_REFERENCE_H_
+#define PORT_POSIX_POSIX_TRANSPORT_SHM_REFERENCE_H_
+
+/* Pick up compile-time configuration */
+#include "wolfhsm/wh_settings.h"
 
 #include <stdint.h>
 #include <limits.h>
 
 #include "wolfhsm/wh_comm.h"
 #include "wolfhsm/wh_transport_mem.h"
-
-/** POSIX SHM configuration structure */
-typedef struct {
-    char*       name; /* Null terminated, up to NAME_MAX */
-    size_t      dma_size;
-    uint16_t    req_size;
-    uint16_t    resp_size;
-    unsigned int dmaStaticMemListSz;
-    const uint32_t* dmaStaticMemList;
-    const uint32_t* dmaStaticMemDist;
-} posixTransportShmConfig;
-
-
-/** POSIX SHM context */
-typedef enum {
-    PTSHM_STATE_NONE = 0,       /* Not opened, not mapped */
-    PTSHM_STATE_MAPPED,         /* Opened and mapped, no client */
-    PTSHM_STATE_INITIALIZED,    /* Fully initialized */
-    PTSHM_STATE_DONE,           /* Closed and complete */
-} posixTransportShmState;
-
-typedef struct {
-    char                    name[NAME_MAX];
-    posixTransportShmState  state;
-    void*                   ptr;
-    size_t                  size;
-    uint8_t*                dma;
-    size_t                  dma_size;
-    whTransportMemContext   transportMemCtx[1];
-    whCommSetConnectedCb    connectcb;
-    void*                   connectcb_arg;
-    void*                   heap; /* heap hint used in pass by reference */
-} posixTransportShmContext;
+#include "port/posix/posix_transport_shm.h"
 
 /* Naming conveniences. Reuses the same types. */
-typedef posixTransportShmContext posixTransportShmClientContext;
-typedef posixTransportShmContext posixTransportShmServerContext;
+typedef posixTransportShmContext posixTransportRefClientContext;
+typedef posixTransportShmContext posixTransportRefServerContext;
+typedef posixTransportShmConfig posixTransportRefConfig;
 
 /** Custom functions */
-int posixTransportShm_IsConnected(posixTransportShmContext* ctx,
-        whCommConnected *out_connected);
+int posixTransportShm_GetHeapHint(posixTransportShmContext* ctx,
+    void** out_hint);
 
-int posixTransportShm_GetCreatorPid(posixTransportShmContext* ctx,
-        pid_t *out_pid);
-int posixTransportShm_GetUserPid(posixTransportShmContext* ctx,
-        pid_t *out_pid);
+#include "wolfhsm/wh_server.h"
+int wh_Server_PosixStaticMemoryDMA(whServerContext* server, uintptr_t clientAddr,
+        void** xformedCliAddr, size_t len, whServerDmaOper oper,
+        whServerDmaFlags flags);
 
-int posixTransportShm_GetDma(posixTransportShmContext* ctx,
-        void* *out_dma, size_t *out_size);
-
+#include "wolfhsm/wh_client.h"
+int wh_Client_PosixStaticMemoryDMA(whClientContext* client, uintptr_t clientAddr,
+    void** xformedCliAddr, size_t len, whClientDmaOper oper,
+    whClientDmaFlags flags);
 
 /** Callback function declarations */
-int posixTransportShm_ClientInit(void* c, const void* cf,
+int posixTransportShm_ClientInitReference(void* c, const void* cf,
                                  whCommSetConnectedCb connectcb,
                                  void*                connectcb_arg);
-int posixTransportShm_ServerInit(void* c, const void* cf,
+int posixTransportShm_ServerInitReference(void* c, const void* cf,
                                  whCommSetConnectedCb connectcb,
                                  void*                connectcb_arg);
 
-int posixTransportShm_Cleanup(void* c);
-int posixTransportShm_SendRequest(void* c, uint16_t len, const void* data);
-int posixTransportShm_RecvRequest(void* c, uint16_t* out_len, void* data);
-int posixTransportShm_SendResponse(void* c, uint16_t len, const void* data);
-int posixTransportShm_RecvResponse(void* c, uint16_t* out_len, void* data);
+int posixTransportShm_CleanupReference(void* c);
 
-#define POSIX_TRANSPORT_SHM_CLIENT_CB              \
+#ifdef WOLFSSL_STATIC_MEMORY
+#define POSIX_TRANSPORT_DMA_CLIENT_CB       \
     {                                              \
-        .Init    = posixTransportShm_ClientInit,   \
+        .Init    = posixTransportShm_ClientInitReference,   \
         .Send    = posixTransportShm_SendRequest,  \
         .Recv    = posixTransportShm_RecvResponse, \
-        .Cleanup = posixTransportShm_Cleanup,      \
+        .Cleanup = posixTransportShm_CleanupReference,      \
     }
 
-#define POSIX_TRANSPORT_SHM_SERVER_CB              \
+#define POSIX_TRANSPORT_DMA_SERVER_CB      \
     {                                              \
-        .Init    = posixTransportShm_ServerInit,   \
+        .Init    = posixTransportShm_ServerInitReference, \
         .Recv    = posixTransportShm_RecvRequest,  \
         .Send    = posixTransportShm_SendResponse, \
         .Cleanup = posixTransportShm_Cleanup,      \
     }
+#endif
 
-#endif /* !PORT_POSIX_POSIX_TRANSPORT_SHM_H_ */
+#endif /* !PORT_POSIX_POSIX_TRANSPORT_SHM_REFERENCE_H_ */
