@@ -36,7 +36,8 @@
 /* TODO: if the Address allowlist ever gets large, we should consider a more
  * efficient representation (requiring sorted array and binary search, or
  * building a binary tree, etc.) */
-
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wtype-limits"
 static int _checkOperValid(whServerDmaOper oper)
 {
     if (oper < WH_DMA_OPER_CLIENT_READ_PRE ||
@@ -46,6 +47,7 @@ static int _checkOperValid(whServerDmaOper oper)
 
     return WH_ERROR_OK;
 }
+#pragma GCC diagnostic pop
 
 static int _checkAddrAgainstAllowList(const whServerDmaAddrList allowList, void* addr,
                                       size_t size)
@@ -224,7 +226,7 @@ int whServerDma_CopyFromClient(struct whServerContext_t* server,
             return rc;
         }
     }
-    else 
+    else
 #endif /* WOLFHSM_CFG_DMA_CUSTOM_CLIENT_COPY */
     {
 
