@@ -37,6 +37,14 @@ typedef enum {
     BENCH_THROUGHPUT_OPS   /* Operations per second */
 } whBenchOpThroughputType;
 
+/* Transport type enumeration for benchmark testing */
+typedef enum {
+    WH_BENCH_TRANSPORT_MEM = 0,  /* Memory transport (WH_TRANSPORT_MEM_CLIENT_CB) */
+    WH_BENCH_TRANSPORT_SHM,      /* Shared memory transport (POSIX_TRANSPORT_SHM_CLIENT_CB) */
+    WH_BENCH_TRANSPORT_TCP,      /* TCP transport (PTT_CLIENT_CB) */
+    WH_BENCH_TRANSPORT_DMA,      /* DMA transport (POSIX_TRANSPORT_REF_CLIENT_CB) */
+} whBenchTransportType;
+
 typedef struct whBenchOp {
     /* Name of the operation being timed */
     char name[MAX_OP_NAME];
@@ -65,6 +73,7 @@ typedef struct whBenchOp {
 typedef struct whBenchOpContext {
     whBenchOp ops[MAX_BENCH_OPS]; /* Array of operations */
     int       opCount;            /* Number of registered operations */
+    whBenchTransportType transportType; /* Type of transport */
 } whBenchOpContext;
 
 /*

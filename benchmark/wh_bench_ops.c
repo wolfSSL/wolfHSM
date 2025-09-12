@@ -306,7 +306,21 @@ int wh_Bench_PrintResults(whBenchOpContext* ctx)
         return WH_ERROR_BADARGS;
     }
 
-    WH_BENCH_PRINTF("\nBenchmark Results:\n");
+    WH_BENCH_PRINTF("\nBenchmark Results ");
+    switch (ctx->transportType) {
+        case WH_BENCH_TRANSPORT_MEM:
+            WH_BENCH_PRINTF("(Memory):\n");
+            break;
+        case WH_BENCH_TRANSPORT_SHM:
+            WH_BENCH_PRINTF("(Shared Memory):\n");
+            break;
+        case WH_BENCH_TRANSPORT_TCP:
+            WH_BENCH_PRINTF("(TCP):\n");
+            break;
+        case WH_BENCH_TRANSPORT_DMA:
+            WH_BENCH_PRINTF("(DMA):\n");
+            break;
+    }
     WH_BENCH_PRINTF(
         "|--------------------------------|------------|------------|----------"
         "--|------------|------------|--------------------|\n");

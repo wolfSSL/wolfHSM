@@ -65,6 +65,11 @@ static int _wh_Server_HandlePkcs11Request(whServerContext* server,
         uint16_t req_size, const void* req_packet,
         uint16_t *out_resp_size, void* resp_packet);
 
+#ifdef WOLFHSM_CFG_DMA
+/* included for DMA callback */
+#include "port/posix/posix_transport_dma.h"
+#endif
+
 int wh_Server_Init(whServerContext* server, whServerConfig* config)
 {
     int rc = 0;
@@ -98,6 +103,12 @@ int wh_Server_Init(whServerContext* server, whServerConfig* config)
     }
 
 #ifdef WOLFHSM_CFG_DMA
+    /* Check if this is a DMA transport and set up callbacks if needed */
+    if (wh_Server_IsDmaTransport(server->comm)) {
+        /* This is a DMA transport - set up DMA callback if not already set */
+        server->dma.cb = wh_Server_PosixStaticMemoryDMA;
+    }
+
     /* Initialize DMA configuration and callbacks, if provided */
     if (NULL != config->dmaConfig) {
         server->dma.dmaAddrAllowList = config->dmaConfig->dmaAddrAllowList;
@@ -119,6 +130,23 @@ int wh_Server_Cleanup(whServerContext* server)
     memset(server, 0, sizeof(*server));
 
     return WH_ERROR_OK;
+}
+
+
+int wh_Server_IsDmaTransport(whCommServer* comm)
+{
+    if (comm == NULL || comm->transport_context == NULL) {
+        return 0;
+    }
+
+#ifdef WOLFHSM_CFG_DMA
+    /* Check if this is a DMA transport by looking for heap hint */
+    void* heap_hint = NULL;
+    posixTransportShm_GetHeapHint(comm->transport_context, &heap_hint);
+    return (heap_hint != NULL) ? 1 : 0;
+#else
+    return 0;
+#endif /* WOLFHSM_CFG_DMA */
 }
 
 int wh_Server_SetConnected(whServerContext *server, whCommConnected connected)
