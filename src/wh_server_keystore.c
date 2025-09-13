@@ -49,8 +49,8 @@
 #include "wolfhsm/wh_server_keystore.h"
 
 static int _FindInCache(whServerContext* server, whKeyId keyId,
-        int *out_index, int *out_big, uint8_t* *out_buffer,
-        whNvmMetadata* *out_meta);
+                        int *out_index, int *out_big, uint8_t* *out_buffer,
+                        whNvmMetadata* *out_meta);
 
 
 int wh_Server_KeystoreGetUniqueId(whServerContext* server, whNvmId* inout_id)
@@ -158,7 +158,7 @@ int wh_Server_KeystoreGetCacheSlot(whServerContext* server, uint16_t keySz,
         }
         if (foundIndex >= 0) {
             memset(&server->bigCache[foundIndex], 0,
-                    sizeof(whServerBigCacheSlot));
+                   sizeof(whServerBigCacheSlot));
             *outBuf  = server->bigCache[foundIndex].buffer;
             *outMeta = server->bigCache[foundIndex].meta;
         }
@@ -230,7 +230,7 @@ int wh_Server_KeystoreCacheKey(whServerContext* server, whNvmMetadata* meta,
         if (foundIndex != -1) {
             memcpy((uint8_t*)server->cache[foundIndex].buffer, in, meta->len);
             memcpy((uint8_t*)server->cache[foundIndex].meta, (uint8_t*)meta,
-                    sizeof(whNvmMetadata));
+                   sizeof(whNvmMetadata));
             /* check if the key is already commited */
             if (wh_Nvm_GetMetadata(server->nvm, meta->id, meta) ==
                 WH_ERROR_NOTFOUND) {
@@ -269,9 +269,9 @@ int wh_Server_KeystoreCacheKey(whServerContext* server, whNvmMetadata* meta,
         /* write key if slot found */
         if (foundIndex != -1) {
             memcpy((uint8_t*)server->bigCache[foundIndex].buffer, in,
-                    meta->len);
+                   meta->len);
             memcpy((uint8_t*)server->bigCache[foundIndex].meta, (uint8_t*)meta,
-                    sizeof(whNvmMetadata));
+                   sizeof(whNvmMetadata));
             /* check if the key is already commited */
             if (wh_Nvm_GetMetadata(server->nvm, meta->id, meta) ==
                 WH_ERROR_NOTFOUND) {
@@ -354,7 +354,7 @@ static bool _ExistsInCache(whServerContext* server, whKeyId keyId)
 
     ret = _FindInCache(server, keyId, &foundIndex, 
                        &foundBigIndex, &tmpBuf, &tmpMeta);
-    
+
     if (ret != WH_ERROR_OK) {
         /* Key doesn't exist in the cache */
         return false;
@@ -394,7 +394,7 @@ int wh_Server_KeystoreFreshenKey(whServerContext* server, whKeyId keyId,
                     /* Copy the metadata to the cache slot if key read is
                      * successful*/
                     memcpy((uint8_t*)*outMeta, (uint8_t*)tmpMeta,
-                            sizeof(whNvmMetadata));
+                           sizeof(whNvmMetadata));
                 }
             }
         }
@@ -425,11 +425,11 @@ int wh_Server_KeystoreReadKey(whServerContext* server, whKeyId keyId,
                 return WH_ERROR_NOSPACE;
             if (outMeta != NULL) {
                 memcpy((uint8_t*)outMeta, (uint8_t*)server->cache[i].meta,
-                        sizeof(whNvmMetadata));
+                       sizeof(whNvmMetadata));
             }
             if (out != NULL) {
                 memcpy(out, server->cache[i].buffer,
-                        server->cache[i].meta->len);
+                       server->cache[i].meta->len);
             }
             *outSz = server->cache[i].meta->len;
             return 0;
@@ -444,11 +444,11 @@ int wh_Server_KeystoreReadKey(whServerContext* server, whKeyId keyId,
                 return WH_ERROR_NOSPACE;
             if (outMeta != NULL) {
                 memcpy((uint8_t*)outMeta, (uint8_t*)server->bigCache[i].meta,
-                        sizeof(whNvmMetadata));
+                       sizeof(whNvmMetadata));
             }
             if (out != NULL) {
                 memcpy(out, server->bigCache[i].buffer,
-                        server->bigCache[i].meta->len);
+                       server->bigCache[i].meta->len);
             }
             *outSz = server->bigCache[i].meta->len;
             return 0;
@@ -551,7 +551,8 @@ int wh_Server_KeystoreEraseKey(whServerContext* server, whNvmId keyId)
     return wh_Nvm_DestroyObjects(server->nvm, 1, &keyId);
 }
 
-
+#ifndef NO_AES
+#ifdef HAVE_AESGCM
 
 static int _AesGcmWrapKey(whServerContext* server, whKeyId serverKeyId,
                           uint8_t* keyIn, uint16_t keySz,
@@ -560,8 +561,8 @@ static int _AesGcmWrapKey(whServerContext* server, whKeyId serverKeyId,
 {
     int      ret = 0;
     Aes      aes[1];
-    uint8_t  authTag[WOLFHSM_CFG_WRAPKEY_AES_GCM_TAG_SIZE];
-    uint8_t  iv[WOLFHSM_CFG_WRAPKEY_AES_GCM_IV_SIZE];
+    uint8_t  authTag[WOLFHSM_CFG_KEYWRAP_AES_GCM_TAG_SIZE];
+    uint8_t  iv[WOLFHSM_CFG_KEYWRAP_AES_GCM_IV_SIZE];
     uint8_t  serverKey[AES_MAX_KEY_SIZE];
     uint32_t serverKeySz = sizeof(serverKey);
 
@@ -576,9 +577,9 @@ static int _AesGcmWrapKey(whServerContext* server, whKeyId serverKeyId,
 
     /* Get the server side key */
     ret = wh_Server_KeystoreReadKey(
-        server,
-        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, server->comm->client_id, serverKeyId),
-        NULL, serverKey, &serverKeySz);
+                                    server,
+                                    WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, server->comm->client_id, serverKeyId),
+                                    NULL, serverKey, &serverKeySz);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
@@ -632,8 +633,8 @@ static int _AesGcmUnwrapKey(whServerContext* server, uint16_t serverKeyId,
 {
     int      ret = 0;
     Aes      aes[1];
-    uint8_t  authTag[WOLFHSM_CFG_WRAPKEY_AES_GCM_TAG_SIZE];
-    uint8_t  iv[WOLFHSM_CFG_WRAPKEY_AES_GCM_IV_SIZE];
+    uint8_t  authTag[WOLFHSM_CFG_KEYWRAP_AES_GCM_TAG_SIZE];
+    uint8_t  iv[WOLFHSM_CFG_KEYWRAP_AES_GCM_IV_SIZE];
     uint8_t  serverKey[AES_MAX_KEY_SIZE];
     uint32_t serverKeySz = sizeof(serverKey);
     uint8_t* encBlob   = (uint8_t*)wrappedKeyIn + sizeof(iv) + sizeof(authTag);
@@ -647,9 +648,9 @@ static int _AesGcmUnwrapKey(whServerContext* server, uint16_t serverKeyId,
 
     /* Get the server side key */
     ret = wh_Server_KeystoreReadKey(
-        server,
-        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, server->comm->client_id, serverKeyId),
-        NULL, serverKey, &serverKeySz);
+                                    server,
+                                    WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, server->comm->client_id, serverKeyId),
+                                    NULL, serverKey, &serverKeySz);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
@@ -685,6 +686,9 @@ static int _AesGcmUnwrapKey(whServerContext* server, uint16_t serverKeyId,
     return WH_ERROR_OK;
 }
 
+#endif /* HAVE_AESGCM */
+#endif /* !NO_AES */
+
 static int _HandleWrapKeyRequest(whServerContext*              server,
                                  whMessageKeystore_WrapRequest* req,
                                  uint8_t* reqData, uint32_t reqDataSz,
@@ -695,10 +699,10 @@ static int _HandleWrapKeyRequest(whServerContext*              server,
     int           ret;
     uint8_t*      wrappedKey;
     whNvmMetadata metadata;
-    uint8_t       key[WOLFHSM_CFG_WRAPKEY_MAX_KEY_SIZE];
+    uint8_t       key[WOLFHSM_CFG_KEYWRAP_MAX_KEY_SIZE];
 
     if (server == NULL || req == NULL || reqData == NULL || resp == NULL ||
-        respData == NULL || req->keySz > WOLFHSM_CFG_WRAPKEY_MAX_KEY_SIZE)
+        respData == NULL || req->keySz > WOLFHSM_CFG_KEYWRAP_MAX_KEY_SIZE)
         return WH_ERROR_BADARGS;
 
     /* Check if the reqData is big enough to hold the metadata and key */
@@ -713,39 +717,45 @@ static int _HandleWrapKeyRequest(whServerContext*              server,
     wrappedKey = respData;
 
     switch (req->cipherType) {
-        case WC_CIPHER_AES_GCM: {
-            uint16_t wrappedKeySz = WOLFHSM_CFG_WRAPKEY_AES_GCM_IV_SIZE +
-                                    WOLFHSM_CFG_WRAPKEY_AES_GCM_TAG_SIZE +
-                                    sizeof(metadata) + req->keySz;
 
-            /* Check if the response data can fit the wrapped key */
-            if (respDataSz < wrappedKeySz)
-                return WH_ERROR_BUFFER_SIZE;
+#ifndef NO_AES
+#ifdef HAVE_AESGCM
+    case WC_CIPHER_AES_GCM: {
+        uint16_t wrappedKeySz = WOLFHSM_CFG_KEYWRAP_AES_GCM_IV_SIZE +
+            WOLFHSM_CFG_KEYWRAP_AES_GCM_TAG_SIZE +
+            sizeof(metadata) + req->keySz;
 
-            /* Wrap the key */
-            ret = _AesGcmWrapKey(server, req->serverKeyId, key, req->keySz,
-                                 &metadata, wrappedKey, wrappedKeySz);
-            if (ret != WH_ERROR_OK) {
-                return ret;
-            }
+        /* Check if the response data can fit the wrapped key */
+        if (respDataSz < wrappedKeySz)
+            return WH_ERROR_BUFFER_SIZE;
 
-            /* Tell the client how big the wrapped key is */
-            resp->wrappedKeySz = wrappedKeySz;
-            resp->cipherType = WC_CIPHER_AES_GCM;
+        /* Wrap the key */
+        ret = _AesGcmWrapKey(server, req->serverKeyId, key, req->keySz,
+                             &metadata, wrappedKey, wrappedKeySz);
+        if (ret != WH_ERROR_OK) {
+            return ret;
+        }
 
-        } break;
-        default:
-            return WH_ERROR_BADARGS;
+        /* Tell the client how big the wrapped key is */
+        resp->wrappedKeySz = wrappedKeySz;
+        resp->cipherType = WC_CIPHER_AES_GCM;
+
+    } break;
+#endif /* HAVE_AESGCM */
+#endif /* !NO_AES */
+
+    default:
+        return WH_ERROR_BADARGS;
     }
 
     return WH_ERROR_OK;
 }
 
-static int _HandleUnwrapExportKeyRequest(whServerContext*                server,
-                                         whMessageKeystore_UnwrapExportRequest* req,
-                                         uint8_t* reqData, uint32_t reqDataSz,
-                                         whMessageKeystore_UnwrapExportResponse* resp,
-                                         uint8_t* respData, uint32_t respDataSz)
+static int _HandleUnwrapAndExportKeyRequest(whServerContext*                server,
+                                            whMessageKeystore_UnwrapAndExportRequest* req,
+                                            uint8_t* reqData, uint32_t reqDataSz,
+                                            whMessageKeystore_UnwrapAndExportResponse* resp,
+                                            uint8_t* respData, uint32_t respDataSz)
 {
     if (server == NULL || req == NULL || reqData == NULL || resp == NULL ||
         respData == NULL)
@@ -768,44 +778,50 @@ static int _HandleUnwrapExportKeyRequest(whServerContext*                server,
     key      = respData + sizeof(*metadata);
 
     switch (req->cipherType) {
-        case WC_CIPHER_AES_GCM: {
-            uint16_t keySz =
-                req->wrappedKeySz - WOLFHSM_CFG_WRAPKEY_AES_GCM_IV_SIZE -
-                WOLFHSM_CFG_WRAPKEY_AES_GCM_TAG_SIZE - sizeof(*metadata);
 
-            /* Check if the response data can fit the metadata + key  */
-            if (respDataSz < sizeof(*metadata) + keySz)
-                return WH_ERROR_BUFFER_SIZE;
+#ifndef NO_AES
+#ifdef HAVE_AESGCM
+    case WC_CIPHER_AES_GCM: {
+        uint16_t keySz =
+            req->wrappedKeySz - WOLFHSM_CFG_KEYWRAP_AES_GCM_IV_SIZE -
+            WOLFHSM_CFG_KEYWRAP_AES_GCM_TAG_SIZE - sizeof(*metadata);
 
-            /* Unwrap the key */
-            ret = _AesGcmUnwrapKey(server, req->serverKeyId, wrappedKey,
-                                   req->wrappedKeySz, metadata, key, keySz);
-            if (ret != WH_ERROR_OK) {
-                return ret;
-            }
+        /* Check if the response data can fit the metadata + key  */
+        if (respDataSz < sizeof(*metadata) + keySz)
+            return WH_ERROR_BUFFER_SIZE;
 
-            /* Check if the key is exportable */
-            if (metadata->flags & WH_NVM_FLAGS_NONEXPORTABLE) {
-                return WH_ERROR_ACCESS;
-            }
+        /* Unwrap the key */
+        ret = _AesGcmUnwrapKey(server, req->serverKeyId, wrappedKey,
+                               req->wrappedKeySz, metadata, key, keySz);
+        if (ret != WH_ERROR_OK) {
+            return ret;
+        }
 
-            /* Tell the client how big the key is */
-            resp->keySz = keySz;
-            resp->cipherType = WC_CIPHER_AES_GCM;
+        /* Check if the key is exportable */
+        if (metadata->flags & WH_NVM_FLAGS_NONEXPORTABLE) {
+            return WH_ERROR_ACCESS;
+        }
 
-        } break;
-        default:
-            return WH_ERROR_BADARGS;
+        /* Tell the client how big the key is */
+        resp->keySz = keySz;
+        resp->cipherType = WC_CIPHER_AES_GCM;
+
+    } break;
+#endif /* HAVE_AESGCM */
+#endif /* !NO_AES */
+
+    default:
+        return WH_ERROR_BADARGS;
     }
 
     return ret;
 }
 
-static int _HandleUnwrapCacheKeyRequest(whServerContext*               server,
-                                        whMessageKeystore_UnwrapCacheRequest* req,
-                                        uint8_t* reqData, uint32_t reqDataSz,
-                                        whMessageKeystore_UnwrapCacheResponse* resp,
-                                        uint8_t* respData, uint32_t respDataSz)
+static int _HandleUnwrapAndCacheKeyRequest(whServerContext*               server,
+                                           whMessageKeystore_UnwrapAndCacheRequest* req,
+                                           uint8_t* reqData, uint32_t reqDataSz,
+                                           whMessageKeystore_UnwrapAndCacheResponse* resp,
+                                           uint8_t* respData, uint32_t respDataSz)
 {
     /* The server doesn't have any extra response data to send back to the
      * client */
@@ -820,7 +836,7 @@ static int _HandleUnwrapCacheKeyRequest(whServerContext*               server,
     uint8_t*      wrappedKey;
     whNvmMetadata metadata;
     uint16_t keySz;
-    uint8_t key[WOLFHSM_CFG_WRAPKEY_MAX_KEY_SIZE];
+    uint8_t key[WOLFHSM_CFG_KEYWRAP_MAX_KEY_SIZE];
 
     /* Check if the reqData is big enough to hold the wrapped key */
     if (reqDataSz < req->wrappedKeySz)
@@ -831,23 +847,27 @@ static int _HandleUnwrapCacheKeyRequest(whServerContext*               server,
 
     /* Unwrap the key based on the cipher type */
     switch (req->cipherType) {
-        case WC_CIPHER_AES_GCM: {
-            keySz =
-                req->wrappedKeySz - WOLFHSM_CFG_WRAPKEY_AES_GCM_IV_SIZE -
-                WOLFHSM_CFG_WRAPKEY_AES_GCM_TAG_SIZE - sizeof(metadata);
+#ifndef NO_AES
+#ifdef HAVE_AESGCM
+    case WC_CIPHER_AES_GCM: {
+        keySz =
+            req->wrappedKeySz - WOLFHSM_CFG_KEYWRAP_AES_GCM_IV_SIZE -
+            WOLFHSM_CFG_KEYWRAP_AES_GCM_TAG_SIZE - sizeof(metadata);
 
-            ret = _AesGcmUnwrapKey(server, req->serverKeyId, wrappedKey,
-                                   req->wrappedKeySz, &metadata, key, keySz);
-            if (ret != WH_ERROR_OK) {
-                return ret;
-            }
+        ret = _AesGcmUnwrapKey(server, req->serverKeyId, wrappedKey,
+                               req->wrappedKeySz, &metadata, key, keySz);
+        if (ret != WH_ERROR_OK) {
+            return ret;
+        }
 
-            resp->cipherType = WC_CIPHER_AES_GCM;
-            resp->keyId = metadata.id;
+        resp->cipherType = WC_CIPHER_AES_GCM;
+        resp->keyId = metadata.id;
 
-        } break;
-        default:
-            return WH_ERROR_BADARGS;
+    } break;
+#endif /* HAVE_AESGCM */
+#endif /* !NO_AES */
+    default:
+        return WH_ERROR_BADARGS;
     }
 
     /* Verify the key size argument and key size from the the metadata match */
@@ -883,122 +903,90 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
     }
 
     switch (action) {
-        case WH_KEY_CACHE: {
-            whMessageKeystore_CacheRequest  req;
-            whMessageKeystore_CacheResponse resp;
+    case WH_KEY_CACHE: {
+        whMessageKeystore_CacheRequest  req;
+        whMessageKeystore_CacheResponse resp;
 
-            /* translate request */
-            (void)wh_MessageKeystore_TranslateCacheRequest(
-                magic, (whMessageKeystore_CacheRequest*)req_packet, &req);
+        /* translate request */
+        (void)wh_MessageKeystore_TranslateCacheRequest(
+                                                       magic, (whMessageKeystore_CacheRequest*)req_packet, &req);
 
-            /* in is after fixed size fields */
-            in = (uint8_t*)req_packet + sizeof(req);
+        /* in is after fixed size fields */
+        in = (uint8_t*)req_packet + sizeof(req);
 
-            /* set the metadata fields */
-            meta->id = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, server->comm->client_id,
-                                     req.id);
-            meta->access = WH_NVM_ACCESS_ANY;
-            meta->flags  = req.flags;
-            meta->len    = req.sz;
-            /* validate label sz */
-            if (req.labelSz > WH_NVM_LABEL_LEN) {
-                ret = WH_ERROR_BADARGS;
-            }
-            else {
-                memcpy(meta->label, req.label, req.labelSz);
-            }
-            /* get a new id if one wasn't provided */
-            if (WH_KEYID_ISERASED(meta->id)) {
-                ret     = wh_Server_KeystoreGetUniqueId(server, &meta->id);
-                resp.rc = ret;
-                /* TODO: Are there any fatal server errors? */
-                ret = WH_ERROR_OK;
-            }
-            /* write the key */
-            if (ret == WH_ERROR_OK) {
-                ret     = wh_Server_KeystoreCacheKey(server, meta, in);
-                resp.rc = ret;
-                /* TODO: Are there any fatal server errors? */
-                ret = WH_ERROR_OK;
-            }
-            if (ret == WH_ERROR_OK) {
-                /* remove the client_id, client may set type */
-                resp.id = WH_KEYID_ID(meta->id);
-
-                (void)wh_MessageKeystore_TranslateCacheResponse(
-                    magic, &resp,
-                    (whMessageKeystore_CacheResponse*)resp_packet);
-
-                *out_resp_size = sizeof(resp);
-            }
-        } break;
-
-#ifdef WOLFHSM_CFG_DMA
-
-        case WH_KEY_CACHE_DMA: {
-            whMessageKeystore_CacheDmaRequest  req;
-            whMessageKeystore_CacheDmaResponse resp;
-
-            /* translate request */
-            (void)wh_MessageKeystore_TranslateCacheDmaRequest(
-                magic, (whMessageKeystore_CacheDmaRequest*)req_packet, &req);
-
-            /* set the metadata fields */
-            meta->id = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, server->comm->client_id,
-                                     req.id);
-            meta->access = WH_NVM_ACCESS_ANY;
-            meta->flags  = req.flags;
-            meta->len    = req.key.sz;
-
-            /* validate label sz */
-            if (req.labelSz > WH_NVM_LABEL_LEN) {
-                ret = WH_ERROR_BADARGS;
-            }
-            else {
-                memcpy(meta->label, req.label, req.labelSz);
-            }
-
-            /* get a new id if one wasn't provided */
-            if (WH_KEYID_ISERASED(meta->id)) {
-                ret     = wh_Server_KeystoreGetUniqueId(server, &meta->id);
-                resp.rc = ret;
-            }
-
-            /* write the key using DMA */
-            if (ret == WH_ERROR_OK) {
-                ret = wh_Server_KeystoreCacheKeyDma(server, meta, req.key.addr);
-                resp.rc = ret;
-                /* propagate bad address to client if DMA operation failed */
-                if (ret != WH_ERROR_OK) {
-                    resp.dmaAddrStatus.badAddr.addr = req.key.addr;
-                    resp.dmaAddrStatus.badAddr.sz   = req.key.sz;
-                }
-                /* TODO: Are there any fatal server errors? */
-                ret = WH_ERROR_OK;
-            }
-
+        /* set the metadata fields */
+        meta->id = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, server->comm->client_id,
+                                 req.id);
+        meta->access = WH_NVM_ACCESS_ANY;
+        meta->flags  = req.flags;
+        meta->len    = req.sz;
+        /* validate label sz */
+        if (req.labelSz > WH_NVM_LABEL_LEN) {
+            ret = WH_ERROR_BADARGS;
+        }
+        else {
+            memcpy(meta->label, req.label, req.labelSz);
+        }
+        /* get a new id if one wasn't provided */
+        if (WH_KEYID_ISERASED(meta->id)) {
+            ret     = wh_Server_KeystoreGetUniqueId(server, &meta->id);
+            resp.rc = ret;
+            /* TODO: Are there any fatal server errors? */
+            ret = WH_ERROR_OK;
+        }
+        /* write the key */
+        if (ret == WH_ERROR_OK) {
+            ret     = wh_Server_KeystoreCacheKey(server, meta, in);
+            resp.rc = ret;
+            /* TODO: Are there any fatal server errors? */
+            ret = WH_ERROR_OK;
+        }
+        if (ret == WH_ERROR_OK) {
             /* remove the client_id, client may set type */
             resp.id = WH_KEYID_ID(meta->id);
 
-            (void)wh_MessageKeystore_TranslateCacheDmaResponse(
-                magic, &resp, (whMessageKeystore_CacheDmaResponse*)resp_packet);
+            (void)wh_MessageKeystore_TranslateCacheResponse(
+                                                            magic, &resp,
+                                                            (whMessageKeystore_CacheResponse*)resp_packet);
 
             *out_resp_size = sizeof(resp);
-        } break;
+        }
+    } break;
 
-        case WH_KEY_EXPORT_DMA: {
-            whMessageKeystore_ExportDmaRequest  req;
-            whMessageKeystore_ExportDmaResponse resp;
+#ifdef WOLFHSM_CFG_DMA
 
-            /* translate request */
-            (void)wh_MessageKeystore_TranslateExportDmaRequest(
-                magic, (whMessageKeystore_ExportDmaRequest*)req_packet, &req);
+    case WH_KEY_CACHE_DMA: {
+        whMessageKeystore_CacheDmaRequest  req;
+        whMessageKeystore_CacheDmaResponse resp;
 
-            ret = wh_Server_KeystoreExportKeyDma(
-                server,
-                WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, server->comm->client_id,
-                              req.id),
-                req.key.addr, req.key.sz, meta);
+        /* translate request */
+        (void)wh_MessageKeystore_TranslateCacheDmaRequest(
+                                                          magic, (whMessageKeystore_CacheDmaRequest*)req_packet, &req);
+
+        /* set the metadata fields */
+        meta->id = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, server->comm->client_id,
+                                 req.id);
+        meta->access = WH_NVM_ACCESS_ANY;
+        meta->flags  = req.flags;
+        meta->len    = req.key.sz;
+
+        /* validate label sz */
+        if (req.labelSz > WH_NVM_LABEL_LEN) {
+            ret = WH_ERROR_BADARGS;
+        }
+        else {
+            memcpy(meta->label, req.label, req.labelSz);
+        }
+
+        /* get a new id if one wasn't provided */
+        if (WH_KEYID_ISERASED(meta->id)) {
+            ret     = wh_Server_KeystoreGetUniqueId(server, &meta->id);
+            resp.rc = ret;
+        }
+
+        /* write the key using DMA */
+        if (ret == WH_ERROR_OK) {
+            ret = wh_Server_KeystoreCacheKeyDma(server, meta, req.key.addr);
             resp.rc = ret;
             /* propagate bad address to client if DMA operation failed */
             if (ret != WH_ERROR_OK) {
@@ -1007,243 +995,273 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
             }
             /* TODO: Are there any fatal server errors? */
             ret = WH_ERROR_OK;
+        }
 
-            if (ret == WH_ERROR_OK) {
-                resp.len = req.key.sz;
-                memcpy(resp.label, meta->label, sizeof(meta->label));
-            }
+        /* remove the client_id, client may set type */
+        resp.id = WH_KEYID_ID(meta->id);
 
-            (void)wh_MessageKeystore_TranslateExportDmaResponse(
-                magic, &resp,
-                (whMessageKeystore_ExportDmaResponse*)resp_packet);
+        (void)wh_MessageKeystore_TranslateCacheDmaResponse(
+                                                           magic, &resp, (whMessageKeystore_CacheDmaResponse*)resp_packet);
 
-            *out_resp_size = sizeof(resp);
-        } break;
+        *out_resp_size = sizeof(resp);
+    } break;
+
+    case WH_KEY_EXPORT_DMA: {
+        whMessageKeystore_ExportDmaRequest  req;
+        whMessageKeystore_ExportDmaResponse resp;
+
+        /* translate request */
+        (void)wh_MessageKeystore_TranslateExportDmaRequest(
+                                                           magic, (whMessageKeystore_ExportDmaRequest*)req_packet, &req);
+
+        ret = wh_Server_KeystoreExportKeyDma(
+                                             server,
+                                             WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, server->comm->client_id,
+                                                           req.id),
+                                             req.key.addr, req.key.sz, meta);
+        resp.rc = ret;
+        /* propagate bad address to client if DMA operation failed */
+        if (ret != WH_ERROR_OK) {
+            resp.dmaAddrStatus.badAddr.addr = req.key.addr;
+            resp.dmaAddrStatus.badAddr.sz   = req.key.sz;
+        }
+        /* TODO: Are there any fatal server errors? */
+        ret = WH_ERROR_OK;
+
+        if (ret == WH_ERROR_OK) {
+            resp.len = req.key.sz;
+            memcpy(resp.label, meta->label, sizeof(meta->label));
+        }
+
+        (void)wh_MessageKeystore_TranslateExportDmaResponse(
+                                                            magic, &resp,
+                                                            (whMessageKeystore_ExportDmaResponse*)resp_packet);
+
+        *out_resp_size = sizeof(resp);
+    } break;
 #endif /* WOLFHSM_CFG_DMA */
 
-        case WH_KEY_EVICT: {
-            whMessageKeystore_EvictRequest  req;
-            whMessageKeystore_EvictResponse resp;
+    case WH_KEY_EVICT: {
+        whMessageKeystore_EvictRequest  req;
+        whMessageKeystore_EvictResponse resp;
 
-            (void)wh_MessageKeystore_TranslateEvictRequest(
-                magic, (whMessageKeystore_EvictRequest*)req_packet, &req);
+        (void)wh_MessageKeystore_TranslateEvictRequest(
+                                                       magic, (whMessageKeystore_EvictRequest*)req_packet, &req);
 
-            ret = wh_Server_KeystoreEvictKey(
-                server, WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
-                                      server->comm->client_id, req.id));
-            resp.rc = ret;
-            /* TODO: Are there any fatal server errors? */
-            ret = WH_ERROR_OK;
+        ret = wh_Server_KeystoreEvictKey(
+                                         server, WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
+                                                               server->comm->client_id, req.id));
+        resp.rc = ret;
+        /* TODO: Are there any fatal server errors? */
+        ret = WH_ERROR_OK;
 
-            (void)wh_MessageKeystore_TranslateEvictResponse(
-                magic, &resp, (whMessageKeystore_EvictResponse*)resp_packet);
+        (void)wh_MessageKeystore_TranslateEvictResponse(
+                                                        magic, &resp, (whMessageKeystore_EvictResponse*)resp_packet);
+        *out_resp_size = sizeof(resp);
+    } break;
+
+    case WH_KEY_EXPORT: {
+        whMessageKeystore_ExportRequest  req;
+        whMessageKeystore_ExportResponse resp;
+        uint32_t                         keySz;
+
+        /* translate request */
+        (void)wh_MessageKeystore_TranslateExportRequest(
+                                                        magic, (whMessageKeystore_ExportRequest*)req_packet, &req);
+
+        /* out is after fixed size fields */
+        out   = (uint8_t*)resp_packet + sizeof(resp);
+        keySz = WOLFHSM_CFG_COMM_DATA_LEN - sizeof(resp);
+
+        /* read the key */
+        ret = wh_Server_KeystoreReadKey(
+                                        server,
+                                        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, server->comm->client_id,
+                                                      req.id),
+                                        meta, out, &keySz);
+
+        /* Check if key is non-exportable */
+        if (ret == WH_ERROR_OK &&
+            (meta->flags & WH_NVM_FLAGS_NONEXPORTABLE)) {
+            ret = WH_ERROR_ACCESS;
+            /* Clear any key data that may have been read */
+            memset(out, 0, keySz);
+        }
+
+        resp.rc = ret;
+        /* TODO: Are there any fatal server errors? */
+        ret = WH_ERROR_OK;
+
+        if (ret == WH_ERROR_OK) {
+            /* Only provide key output if no error */
+            if (resp.rc == WH_ERROR_OK) {
+                resp.len = keySz;
+            } else {
+                resp.len = 0;
+            }
+            memcpy(resp.label, meta->label, sizeof(meta->label));
+
+            (void)wh_MessageKeystore_TranslateExportResponse(
+                                                             magic, &resp,
+                                                             (whMessageKeystore_ExportResponse*)resp_packet);
+
+            *out_resp_size = sizeof(resp) + resp.len;
+        }
+    } break;
+
+    case WH_KEY_COMMIT: {
+        whMessageKeystore_CommitRequest  req;
+        whMessageKeystore_CommitResponse resp;
+
+        /* translate request */
+        (void)wh_MessageKeystore_TranslateCommitRequest(
+                                                        magic, (whMessageKeystore_CommitRequest*)req_packet, &req);
+
+        ret = wh_Server_KeystoreCommitKey(
+                                          server, WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
+                                                                server->comm->client_id, req.id));
+        resp.rc = ret;
+        /* TODO: Are there any fatal server errors? */
+        ret = WH_ERROR_OK;
+
+        if (ret == WH_ERROR_OK) {
+            resp.ok = 0;
+
+            (void)wh_MessageKeystore_TranslateCommitResponse(
+                                                             magic, &resp,
+                                                             (whMessageKeystore_CommitResponse*)resp_packet);
+
             *out_resp_size = sizeof(resp);
-        } break;
+        }
+    } break;
 
-        case WH_KEY_EXPORT: {
-            whMessageKeystore_ExportRequest  req;
-            whMessageKeystore_ExportResponse resp;
-            uint32_t                         keySz;
+    case WH_KEY_ERASE: {
+        whMessageKeystore_EraseRequest  req;
+        whMessageKeystore_EraseResponse resp;
 
-            /* translate request */
-            (void)wh_MessageKeystore_TranslateExportRequest(
-                magic, (whMessageKeystore_ExportRequest*)req_packet, &req);
+        /* translate request */
+        (void)wh_MessageKeystore_TranslateEraseRequest(
+                                                       magic, (whMessageKeystore_EraseRequest*)req_packet, &req);
 
-            /* out is after fixed size fields */
-            out   = (uint8_t*)resp_packet + sizeof(resp);
-            keySz = WOLFHSM_CFG_COMM_DATA_LEN - sizeof(resp);
+        ret = wh_Server_KeystoreEraseKey(
+                                         server, WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
+                                                               server->comm->client_id, req.id));
+        resp.rc = ret;
+        /* TODO: Are there any fatal server errors? */
+        ret = WH_ERROR_OK;
 
-            /* read the key */
-            ret = wh_Server_KeystoreReadKey(
-                server,
-                WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, server->comm->client_id,
-                              req.id),
-                meta, out, &keySz);
+        if (ret == WH_ERROR_OK) {
+            resp.ok = 0;
 
-            /* Check if key is non-exportable */
-            if (ret == WH_ERROR_OK &&
-                (meta->flags & WH_NVM_FLAGS_NONEXPORTABLE)) {
-                ret = WH_ERROR_ACCESS;
-                /* Clear any key data that may have been read */
-                memset(out, 0, keySz);
-            }
+            (void)wh_MessageKeystore_TranslateEraseResponse(
+                                                            magic, &resp,
+                                                            (whMessageKeystore_EraseResponse*)resp_packet);
 
-            resp.rc = ret;
-            /* TODO: Are there any fatal server errors? */
-            ret = WH_ERROR_OK;
+            *out_resp_size = sizeof(resp);
+        }
+    } break;
+    case WH_KEY_WRAP: {
+        whMessageKeystore_WrapRequest  wrapReq;
+        whMessageKeystore_WrapResponse wrapResp;
+        uint8_t*                      reqData;
+        uint8_t*                      respData;
+        uint32_t reqDataSz  = WOLFHSM_CFG_COMM_DATA_LEN - sizeof(wrapReq);
+        uint32_t respDataSz = WOLFHSM_CFG_COMM_DATA_LEN - sizeof(wrapResp);
 
-            if (ret == WH_ERROR_OK) {
-                /* Only provide key output if no error */
-                if (resp.rc == WH_ERROR_OK) {
-                    resp.len = keySz;
-                } else {
-                    resp.len = 0;
-                }
-                memcpy(resp.label, meta->label, sizeof(meta->label));
+        /* Validate the bounds of the request data */
+        if (reqDataSz < req_size)
+            return WH_ERROR_BUFFER_SIZE;
 
-                (void)wh_MessageKeystore_TranslateExportResponse(
-                    magic, &resp,
-                    (whMessageKeystore_ExportResponse*)resp_packet);
-
-                *out_resp_size = sizeof(resp) + resp.len;
-            }
-        } break;
-
-        case WH_KEY_COMMIT: {
-            whMessageKeystore_CommitRequest  req;
-            whMessageKeystore_CommitResponse resp;
-
-            /* translate request */
-            (void)wh_MessageKeystore_TranslateCommitRequest(
-                magic, (whMessageKeystore_CommitRequest*)req_packet, &req);
-
-            ret = wh_Server_KeystoreCommitKey(
-                server, WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
-                                      server->comm->client_id, req.id));
-            resp.rc = ret;
-            /* TODO: Are there any fatal server errors? */
-            ret = WH_ERROR_OK;
-
-            if (ret == WH_ERROR_OK) {
-                resp.ok = 0;
-
-                (void)wh_MessageKeystore_TranslateCommitResponse(
-                    magic, &resp,
-                    (whMessageKeystore_CommitResponse*)resp_packet);
-
-                *out_resp_size = sizeof(resp);
-            }
-        } break;
-
-        case WH_KEY_ERASE: {
-            whMessageKeystore_EraseRequest  req;
-            whMessageKeystore_EraseResponse resp;
-
-            /* translate request */
-            (void)wh_MessageKeystore_TranslateEraseRequest(
-                magic, (whMessageKeystore_EraseRequest*)req_packet, &req);
-
-            ret = wh_Server_KeystoreEraseKey(
-                server, WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
-                                      server->comm->client_id, req.id));
-            resp.rc = ret;
-            /* TODO: Are there any fatal server errors? */
-            ret = WH_ERROR_OK;
-
-            if (ret == WH_ERROR_OK) {
-                resp.ok = 0;
-
-                (void)wh_MessageKeystore_TranslateEraseResponse(
-                    magic, &resp,
-                    (whMessageKeystore_EraseResponse*)resp_packet);
-
-                *out_resp_size = sizeof(resp);
-            }
-        } break;
-#ifdef WOLFHSM_CFG_WRAPKEY
-        case WH_KEY_WRAP: {
-            whMessageKeystore_WrapRequest  wrapReq;
-            whMessageKeystore_WrapResponse wrapResp;
-            uint8_t*                      reqData;
-            uint8_t*                      respData;
-            uint32_t reqDataSz  = WOLFHSM_CFG_COMM_DATA_LEN - sizeof(wrapReq);
-            uint32_t respDataSz = WOLFHSM_CFG_COMM_DATA_LEN - sizeof(wrapResp);
-
-            /* Validate the bounds of the request data */
-            if (reqDataSz < req_size)
-                return WH_ERROR_BUFFER_SIZE;
-
-            /* Translate request */
-            (void)wh_MessageKeystore_TranslateWrapRequest(magic, req_packet, &wrapReq);
+        /* Translate request */
+        (void)wh_MessageKeystore_TranslateWrapRequest(magic, req_packet, &wrapReq);
 
 
-            /* Set the request data pointer directly after the request */
-            reqData = (uint8_t*)req_packet + sizeof(whMessageKeystore_WrapRequest);
+        /* Set the request data pointer directly after the request */
+        reqData = (uint8_t*)req_packet + sizeof(whMessageKeystore_WrapRequest);
 
-            /* Set the response data pointer directly after the response */
-            respData = (uint8_t*)resp_packet + sizeof(whMessageKeystore_WrapResponse);
+        /* Set the response data pointer directly after the response */
+        respData = (uint8_t*)resp_packet + sizeof(whMessageKeystore_WrapResponse);
 
-            ret = _HandleWrapKeyRequest(server, &wrapReq, reqData, reqDataSz,
-                                        &wrapResp, respData, respDataSz);
-            wrapResp.rc = ret;
+        ret = _HandleWrapKeyRequest(server, &wrapReq, reqData, reqDataSz,
+                                    &wrapResp, respData, respDataSz);
+        wrapResp.rc = ret;
 
-            (void)wh_MessageKeystore_TranslateWrapResponse(magic, &wrapResp,
-                                                          resp_packet);
-            *out_resp_size = sizeof(wrapResp) + wrapResp.wrappedKeySz;
+        (void)wh_MessageKeystore_TranslateWrapResponse(magic, &wrapResp,
+                                                       resp_packet);
+        *out_resp_size = sizeof(wrapResp) + wrapResp.wrappedKeySz;
 
-        } break;
+    } break;
 
-        case WH_KEY_UNWRAPEXPORT: {
-            whMessageKeystore_UnwrapExportRequest  unwrapReq;
-            whMessageKeystore_UnwrapExportResponse unwrapResp;
-            uint8_t*                        reqData;
-            uint8_t*                        respData;
-            uint32_t reqDataSz = WOLFHSM_CFG_COMM_DATA_LEN - sizeof(unwrapReq);
-            uint32_t respDataSz =
-                WOLFHSM_CFG_COMM_DATA_LEN - sizeof(unwrapResp);
+    case WH_KEY_UNWRAPEXPORT: {
+        whMessageKeystore_UnwrapAndExportRequest  unwrapReq;
+        whMessageKeystore_UnwrapAndExportResponse unwrapResp;
+        uint8_t*                        reqData;
+        uint8_t*                        respData;
+        uint32_t reqDataSz = WOLFHSM_CFG_COMM_DATA_LEN - sizeof(unwrapReq);
+        uint32_t respDataSz =
+            WOLFHSM_CFG_COMM_DATA_LEN - sizeof(unwrapResp);
 
-            /* Validate the bounds of the request data */
-            if (reqDataSz < req_size)
-                return WH_ERROR_BUFFER_SIZE;
+        /* Validate the bounds of the request data */
+        if (reqDataSz < req_size)
+            return WH_ERROR_BUFFER_SIZE;
 
-            /* Translate request */
-            (void)wh_MessageKeystore_TranslateUnwrapExportRequest(magic, req_packet,
-                                                                  &unwrapReq);
+        /* Translate request */
+        (void)wh_MessageKeystore_TranslateUnwrapAndExportRequest(magic, req_packet,
+                                                                 &unwrapReq);
 
-            /* Set the request data pointer directly after the request */
-            reqData = (uint8_t*)req_packet + sizeof(whMessageKeystore_UnwrapExportRequest);
+        /* Set the request data pointer directly after the request */
+        reqData = (uint8_t*)req_packet + sizeof(whMessageKeystore_UnwrapAndExportRequest);
 
-            /* Set the response data pointer directly after the response */
-            respData = (uint8_t*)resp_packet + sizeof(whMessageKeystore_UnwrapExportResponse);
+        /* Set the response data pointer directly after the response */
+        respData = (uint8_t*)resp_packet + sizeof(whMessageKeystore_UnwrapAndExportResponse);
 
-            ret =
-                _HandleUnwrapExportKeyRequest(server, &unwrapReq, reqData, reqDataSz,
-                                              &unwrapResp, respData, respDataSz);
-            unwrapResp.rc = ret;
+        ret =
+            _HandleUnwrapAndExportKeyRequest(server, &unwrapReq, reqData, reqDataSz,
+                                             &unwrapResp, respData, respDataSz);
+        unwrapResp.rc = ret;
 
-            (void)wh_MessageKeystore_TranslateUnwrapExportResponse(magic, &unwrapResp,
-                                                                   resp_packet);
-            *out_resp_size =
-                sizeof(unwrapResp) + sizeof(whNvmMetadata) + unwrapResp.keySz;
-
-        } break;
-
-        case WH_KEY_UNWRAPCACHE: {
-            whMessageKeystore_UnwrapCacheRequest  cacheReq;
-            whMessageKeystore_UnwrapCacheResponse cacheResp;
-            uint8_t*                       reqData;
-            uint8_t*                       respData;
-            uint32_t reqDataSz  = WOLFHSM_CFG_COMM_DATA_LEN - sizeof(cacheReq);
-            uint32_t respDataSz = WOLFHSM_CFG_COMM_DATA_LEN - sizeof(cacheResp);
-
-            /* Validate the bounds of the request data */
-            if (reqDataSz < req_size)
-                return WH_ERROR_BUFFER_SIZE;
-
-            /* Translate request */
-            (void)wh_MessageKeystore_TranslateUnwrapCacheRequest(magic, req_packet,
-                                                                 &cacheReq);
-
-            /* Set the request data pointer directly after the request */
-            reqData = (uint8_t*)req_packet + sizeof(whMessageKeystore_UnwrapCacheRequest);
-
-            /* Set the response data pointer directly after the response */
-            respData = (uint8_t*)resp_packet + sizeof(whMessageKeystore_UnwrapCacheResponse);
-
-            ret = _HandleUnwrapCacheKeyRequest(server, &cacheReq, reqData, reqDataSz,
-                                               &cacheResp, respData, respDataSz);
-            cacheResp.rc = ret;
-
-            (void)wh_MessageKeystore_TranslateUnwrapCacheResponse(magic, &cacheResp,
+        (void)wh_MessageKeystore_TranslateUnwrapAndExportResponse(magic, &unwrapResp,
                                                                   resp_packet);
-            *out_resp_size = sizeof(cacheResp);
+        *out_resp_size =
+            sizeof(unwrapResp) + sizeof(whNvmMetadata) + unwrapResp.keySz;
 
-        } break;
-#endif /* WOLFHSM_CFG_WRAPKEY */
+    } break;
 
-        default:
-            ret = WH_ERROR_BADARGS;
-            break;
+    case WH_KEY_UNWRAPCACHE: {
+        whMessageKeystore_UnwrapAndCacheRequest  cacheReq;
+        whMessageKeystore_UnwrapAndCacheResponse cacheResp;
+        uint8_t*                       reqData;
+        uint8_t*                       respData;
+        uint32_t reqDataSz  = WOLFHSM_CFG_COMM_DATA_LEN - sizeof(cacheReq);
+        uint32_t respDataSz = WOLFHSM_CFG_COMM_DATA_LEN - sizeof(cacheResp);
+
+        /* Validate the bounds of the request data */
+        if (reqDataSz < req_size)
+            return WH_ERROR_BUFFER_SIZE;
+
+        /* Translate request */
+        (void)wh_MessageKeystore_TranslateUnwrapAndCacheRequest(magic, req_packet,
+                                                                &cacheReq);
+
+        /* Set the request data pointer directly after the request */
+        reqData = (uint8_t*)req_packet + sizeof(whMessageKeystore_UnwrapAndCacheRequest);
+
+        /* Set the response data pointer directly after the response */
+        respData = (uint8_t*)resp_packet + sizeof(whMessageKeystore_UnwrapAndCacheResponse);
+
+        ret = _HandleUnwrapAndCacheKeyRequest(server, &cacheReq, reqData, reqDataSz,
+                                              &cacheResp, respData, respDataSz);
+        cacheResp.rc = ret;
+
+        (void)wh_MessageKeystore_TranslateUnwrapAndCacheResponse(magic, &cacheResp,
+                                                                 resp_packet);
+        *out_resp_size = sizeof(cacheResp);
+
+    } break;
+
+    default:
+        ret = WH_ERROR_BADARGS;
+        break;
     }
 
     return ret;

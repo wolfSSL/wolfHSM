@@ -36,7 +36,7 @@
 #include "wh_test_crypto.h"
 #include "wh_test_she.h"
 #include "wh_test_clientserver.h"
-#include "wh_test_wrapkey.h"
+#include "wh_test_keywrap.h"
 
 #if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER)
 #include "wh_test_cert.h"

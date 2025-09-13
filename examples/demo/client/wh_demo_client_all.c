@@ -4,7 +4,7 @@
 #include "wh_demo_client_keystore.h"
 #include "wh_demo_client_crypto.h"
 #include "wh_demo_client_secboot.h"
-#include "wh_demo_client_wrapkey.h"
+#include "wh_demo_client_keywrap.h"
 #include "wh_demo_client_all.h"
 
 int wh_DemoClient_All(whClientContext* clientContext)
@@ -46,13 +46,10 @@ int wh_DemoClient_All(whClientContext* clientContext)
     }
 #endif
 
-    /* Wrap key demos */
-#ifdef WOLFHSM_CFG_WRAPKEY
-    rc = wh_DemoClient_WrapKeyBasic(clientContext);
+    rc = wh_DemoClient_KeyWrapBasic(clientContext);
     if (rc != 0) {
         return rc;
     }
-#endif
 
     /**Crypto demos */
 #ifndef NO_RSA

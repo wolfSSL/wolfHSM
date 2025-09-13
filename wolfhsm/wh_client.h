@@ -50,6 +50,8 @@
 #include "wolfhsm/wh_comm.h"
 #include "wolfhsm/wh_message_customcb.h"
 
+/* WolfCrypt types and defines */
+#include "wolfssl/wolfcrypt/types.h"
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
 
@@ -820,6 +822,51 @@ int wh_Client_KeyExportDma(whClientContext* c, uint16_t keyId,
                            uint16_t labelSz, uint16_t* outSz);
 #endif /* WOLFHSM_CFG_DMA */
 
+int wh_Client_KeyWrap(whClientContext* ctx, enum wc_CipherType cipherType,
+                      uint16_t serverKeyId,
+                      void* keyIn, uint16_t keySz,
+                      whNvmMetadata* metadataIn, void* wrappedKeyOut,
+                      uint16_t wrappedKeySz);
+
+int wh_Client_KeyWrapRequest(whClientContext* ctx, enum wc_CipherType cipherType,
+                             uint16_t serverKeyId,
+                             void* key, uint16_t keySz,
+                             whNvmMetadata* metadata);
+
+int wh_Client_KeyWrapResponse(whClientContext* ctx, enum wc_CipherType cipherType,
+                              void* wrappedKeyOut,
+                              uint16_t wrappedKeySz);
+
+
+int wh_Client_KeyUnwrapAndExport(whClientContext* ctx, enum wc_CipherType cipherType,
+                                 uint16_t serverKeyId,
+                                 void* wrappedKeyIn, uint16_t wrappedKeySz,
+                                 whNvmMetadata* metadataOut, void* keyOut,
+                                 uint16_t keySz);
+
+int wh_Client_KeyUnwrapAndExportRequest(whClientContext* ctx, enum wc_CipherType cipherType,
+                                        uint16_t serverKeyId,
+                                        void* wrappedKeyIn, uint16_t wrappedKeySz);
+
+int wh_Client_KeyUnwrapAndExportResponse(whClientContext* ctx,
+                                         enum wc_CipherType cipherType,
+                                         whNvmMetadata* metadataOut, void* keyOut,
+                                         uint16_t keySz);
+
+int wh_Client_KeyUnwrapAndCache(whClientContext* ctx, enum wc_CipherType cipherType,
+                                uint16_t serverKeyId,
+                                void* wrappedKeyIn, uint16_t wrappedKeySz,
+                                uint16_t* keyIdOut);
+
+int wh_Client_KeyUnwrapAndCacheRequest(whClientContext* ctx,
+                                       enum wc_CipherType cipherType,
+                                       uint16_t         serverKeyId,
+                                       void*            wrappedKeyIn,
+                                       uint16_t         wrappedKeySz);
+
+int wh_Client_UnrapKeyAndCacheResponse(whClientContext* ctx,
+                                       enum wc_CipherType cipherType,
+                                       uint16_t*        keyIdOut);
 
 /* Counter functions */
 int wh_Client_CounterInitRequest(whClientContext* c, whNvmId counterId,
