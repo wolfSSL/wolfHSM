@@ -1,15 +1,15 @@
 
-.PHONY: all posix_tcp_wh_client_tcp posix_tcp_wh_server_tcp clean
+.PHONY: all posix_wh_client_posix posix_wh_server_posix clean
 
-all: posix_tcp_wh_client_tcp posix_tcp_wh_server_tcp
+all: posix_wh_client_posix posix_wh_server_posix
 
-posix_tcp_wh_client_tcp:
-	make -C posix/tcp/wh_client_tcp
+posix_wh_client_posix:
+	make -C posix/wh_client_posix
 
-posix_tcp_wh_server_tcp:
-	make -C posix/tcp/wh_server_tcp
+posix_wh_server_posix:
+	make -C posix/wh_server_posix
 
 clean:
-	make -C posix/tcp/wh_client_tcp clean
-	make -C posix/tcp/wh_server_tcp clean
+	make -C posix/wh_client_posix clean
+	make -C posix/wh_server_posix clean
 

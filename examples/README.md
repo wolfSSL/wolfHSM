@@ -11,6 +11,9 @@ Currently, the only public example for wolfHSM uses the POSIX simulator. If you 
 ### Posix TCP server and client
 This example spawns a wolfHSM client and server, both in their own thread, and runs the client-side unit tests against the server.
 
+### Posix SHM server and client
+This example spawns a wolfHSM client and server, both in their own thread, and runs the client-side unit tests against the server.
+
 ### Building
 To build the client and the server examples, wolfHSM must be configured and built along side wolfSSL.
 
@@ -36,6 +39,18 @@ Run `examples/posix/tcp/wh_server_tcp/Build/wh_server_tcp.elf` to launch the ser
 
 ### Initializing server NVM
 The server example supports two methods for initializing its Non-Volatile Memory (NVM) with cryptographic keys and objects.
+
+#### Choosing a specific transport to use
+With POSIX builds there is multiple transport types available. They can be used with the --type flag.
+The types of transports are:
+
+- shm : Using shared memory
+- tcp : Using TCP connections
+- dma : Builds off of shm and adds in a common buffer that is accessed by offsets passed between the client and server
+
+```
+./wh_server_posix.elf --type shm
+```
 
 #### Loading a single key
 To load a single key with a specific keyId, use the `--key` and `--id` arguments:
