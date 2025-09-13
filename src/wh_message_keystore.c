@@ -268,9 +268,9 @@ int wh_MessageKeystore_TranslateWrapResponse(
 }
 
 /* Key Unwrap Request translation */
-int wh_MessageKeystore_TranslateUnwrapExportRequest(
-    uint16_t magic, const whMessageKeystore_UnwrapExportRequest* src,
-    whMessageKeystore_UnwrapExportRequest* dest)
+int wh_MessageKeystore_TranslateUnwrapAndExportRequest(
+    uint16_t magic, const whMessageKeystore_UnwrapAndExportRequest* src,
+    whMessageKeystore_UnwrapAndExportRequest* dest)
 {
     if ((src == NULL) || (dest == NULL)) {
         return WH_ERROR_BADARGS;
@@ -282,9 +282,9 @@ int wh_MessageKeystore_TranslateUnwrapExportRequest(
 }
 
 /* Key Unwrap Response translation */
-int wh_MessageKeystore_TranslateUnwrapExportResponse(
-    uint16_t magic, const whMessageKeystore_UnwrapExportResponse* src,
-    whMessageKeystore_UnwrapExportResponse* dest)
+int wh_MessageKeystore_TranslateUnwrapAndExportResponse(
+    uint16_t magic, const whMessageKeystore_UnwrapAndExportResponse* src,
+    whMessageKeystore_UnwrapAndExportResponse* dest)
 {
     if ((src == NULL) || (dest == NULL)) {
         return WH_ERROR_BADARGS;
@@ -296,9 +296,9 @@ int wh_MessageKeystore_TranslateUnwrapExportResponse(
 }
 
 /* Wrapped Key Cache Request translation */
-int wh_MessageKeystore_TranslateUnwrapCacheRequest(
-    uint16_t magic, const whMessageKeystore_UnwrapCacheRequest* src,
-    whMessageKeystore_UnwrapCacheRequest* dest)
+int wh_MessageKeystore_TranslateUnwrapAndCacheRequest(
+    uint16_t magic, const whMessageKeystore_UnwrapAndCacheRequest* src,
+    whMessageKeystore_UnwrapAndCacheRequest* dest)
 {
     if ((src == NULL) || (dest == NULL)) {
         return WH_ERROR_BADARGS;
@@ -310,9 +310,9 @@ int wh_MessageKeystore_TranslateUnwrapCacheRequest(
 }
 
 /* Key Cache Response translation */
-int wh_MessageKeystore_TranslateUnwrapCacheResponse(
-    uint16_t magic, const whMessageKeystore_UnwrapCacheResponse* src,
-    whMessageKeystore_UnwrapCacheResponse* dest)
+int wh_MessageKeystore_TranslateUnwrapAndCacheResponse(
+    uint16_t magic, const whMessageKeystore_UnwrapAndCacheResponse* src,
+    whMessageKeystore_UnwrapAndCacheResponse* dest)
 {
     if ((src == NULL) || (dest == NULL)) {
         return WH_ERROR_BADARGS;

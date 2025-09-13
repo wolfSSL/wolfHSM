@@ -262,7 +262,7 @@ typedef struct {
     /* Data follows:
      * uint8_t wrappedKey[wrappedKeySz]
      */
-} whMessageKeystore_UnwrapExportRequest;
+} whMessageKeystore_UnwrapAndExportRequest;
 
 /* Unwrap Key export Response*/
 typedef struct {
@@ -273,17 +273,17 @@ typedef struct {
      * whNvmMetadata metadata
      * uint8_t key[keySz]
      */
-} whMessageKeystore_UnwrapExportResponse;
+} whMessageKeystore_UnwrapAndExportResponse;
 
 
 /* Unwrap Key export translation functions */
-int wh_MessageKeystore_TranslateUnwrapExportRequest(
-    uint16_t magic, const whMessageKeystore_UnwrapExportRequest* src,
-    whMessageKeystore_UnwrapExportRequest* dest);
+int wh_MessageKeystore_TranslateUnwrapAndExportRequest(
+    uint16_t magic, const whMessageKeystore_UnwrapAndExportRequest* src,
+    whMessageKeystore_UnwrapAndExportRequest* dest);
 
-int wh_MessageKeystore_TranslateUnwrapExportResponse(
-    uint16_t magic, const whMessageKeystore_UnwrapExportResponse* src,
-    whMessageKeystore_UnwrapExportResponse* dest);
+int wh_MessageKeystore_TranslateUnwrapAndExportResponse(
+    uint16_t magic, const whMessageKeystore_UnwrapAndExportResponse* src,
+    whMessageKeystore_UnwrapAndExportResponse* dest);
 
 /* Unwrap Key Cache Request */
 typedef struct {
@@ -294,23 +294,23 @@ typedef struct {
     /* Data follows:
      * uint8_t wrappedKey[wrappedKeySz]
      */
-} whMessageKeystore_UnwrapCacheRequest;
+} whMessageKeystore_UnwrapAndCacheRequest;
 
 /* Unwrap Key Cache Response*/
 typedef struct {
     uint32_t rc;
     uint16_t keyId;
     uint16_t cipherType;
-} whMessageKeystore_UnwrapCacheResponse;
+} whMessageKeystore_UnwrapAndCacheResponse;
 
 /* Unwrap Key Cache translation functions */
-int wh_MessageKeystore_TranslateUnwrapCacheRequest(
-    uint16_t magic, const whMessageKeystore_UnwrapCacheRequest* src,
-    whMessageKeystore_UnwrapCacheRequest* dest);
+int wh_MessageKeystore_TranslateUnwrapAndCacheRequest(
+    uint16_t magic, const whMessageKeystore_UnwrapAndCacheRequest* src,
+    whMessageKeystore_UnwrapAndCacheRequest* dest);
 
-int wh_MessageKeystore_TranslateUnwrapCacheResponse(
-    uint16_t magic, const whMessageKeystore_UnwrapCacheResponse* src,
-    whMessageKeystore_UnwrapCacheResponse* dest);
+int wh_MessageKeystore_TranslateUnwrapAndCacheResponse(
+    uint16_t magic, const whMessageKeystore_UnwrapAndCacheResponse* src,
+    whMessageKeystore_UnwrapAndCacheResponse* dest);
 
 
 #endif /* !WOLFHSM_WH_MESSAGE_KEYSTORE_H_ */
