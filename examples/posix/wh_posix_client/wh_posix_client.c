@@ -71,6 +71,7 @@ static int wh_ClientTask(void* cf, const char* type, int test)
     ret = wh_Client_Init(client, config);
 
     if (strcmp(type, "dma") == 0) {
+#ifdef WOLFSSL_STATIC_MEMORY
         printf("Setting up DMA heap with static memory buckets\n");
 
         ret = Client_ExampleSetupDmaMemory(client, config);
@@ -78,6 +79,9 @@ static int wh_ClientTask(void* cf, const char* type, int test)
             printf("Failed to setup DMA heap\n");
             return -1;
         }
+#else
+        return -1;
+#endif
     }
 
     printf("Client connecting to server...\n");
