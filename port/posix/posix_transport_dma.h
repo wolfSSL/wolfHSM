@@ -50,8 +50,8 @@
  *
  */
 
-#ifndef PORT_POSIX_POSIX_TRANSPORT_SHM_REFERENCE_H_
-#define PORT_POSIX_POSIX_TRANSPORT_SHM_REFERENCE_H_
+#ifndef PORT_POSIX_POSIX_TRANSPORT_DMA_REFERENCE_H_
+#define PORT_POSIX_POSIX_TRANSPORT_DMA_REFERENCE_H_
 
 /* Pick up compile-time configuration */
 #include "wolfhsm/wh_settings.h"
@@ -63,15 +63,7 @@
 #include "wolfhsm/wh_transport_mem.h"
 #include "port/posix/posix_transport_shm.h"
 
-/* Naming conveniences. Reuses the same types. */
-typedef posixTransportShmContext posixTransportRefClientContext;
-typedef posixTransportShmContext posixTransportRefServerContext;
-typedef posixTransportShmConfig posixTransportRefConfig;
-
 /** Custom functions */
-int posixTransportShm_GetHeapHint(posixTransportShmContext* ctx,
-    void** out_hint);
-
 #include "wolfhsm/wh_server.h"
 int wh_Server_PosixStaticMemoryDMA(whServerContext* server, uintptr_t clientAddr,
         void** xformedCliAddr, size_t len, whServerDmaOper oper,
@@ -82,32 +74,4 @@ int wh_Client_PosixStaticMemoryDMA(whClientContext* client, uintptr_t clientAddr
     void** xformedCliAddr, size_t len, whClientDmaOper oper,
     whClientDmaFlags flags);
 
-/** Callback function declarations */
-int posixTransportShm_ClientInitReference(void* c, const void* cf,
-                                 whCommSetConnectedCb connectcb,
-                                 void*                connectcb_arg);
-int posixTransportShm_ServerInitReference(void* c, const void* cf,
-                                 whCommSetConnectedCb connectcb,
-                                 void*                connectcb_arg);
-
-int posixTransportShm_CleanupReference(void* c);
-
-#ifdef WOLFSSL_STATIC_MEMORY
-#define POSIX_TRANSPORT_DMA_CLIENT_CB       \
-    {                                              \
-        .Init    = posixTransportShm_ClientInitReference,   \
-        .Send    = posixTransportShm_SendRequest,  \
-        .Recv    = posixTransportShm_RecvResponse, \
-        .Cleanup = posixTransportShm_CleanupReference,      \
-    }
-
-#define POSIX_TRANSPORT_DMA_SERVER_CB      \
-    {                                              \
-        .Init    = posixTransportShm_ServerInitReference, \
-        .Recv    = posixTransportShm_RecvRequest,  \
-        .Send    = posixTransportShm_SendResponse, \
-        .Cleanup = posixTransportShm_Cleanup,      \
-    }
-#endif
-
-#endif /* !PORT_POSIX_POSIX_TRANSPORT_SHM_REFERENCE_H_ */
+#endif /* !PORT_POSIX_POSIX_TRANSPORT_DMA_REFERENCE_H_ */

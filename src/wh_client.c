@@ -102,12 +102,6 @@ int wh_Client_Init(whClientContext* c, const whClientConfig* config)
 
 #ifdef WOLFHSM_CFG_DMA
             if (rc == 0) {
-                /* Check if this is a DMA transport and set up callbacks if needed */
-                if (wh_Client_IsDmaTransport(c->comm)) {
-                    /* This is a DMA transport - set up DMA callback if not already set */
-                    c->dma.cb = wh_Client_PosixStaticMemoryDMA;
-                }
-
                 /* Initialize DMA configuration and callbacks, if provided */
                 if (NULL != config->dmaConfig) {
                     c->dma.dmaAddrAllowList = config->dmaConfig->dmaAddrAllowList;
@@ -1516,27 +1510,23 @@ int wh_Client_KeyExportDma(whClientContext* c, uint16_t keyId,
     return ret;
 }
 
-int wh_Client_IsDmaTransport(whCommClient* comm)
-{
-    if (comm == NULL || comm->transport_context == NULL) {
-        return 0;
-    }
-
-#ifdef WOLFHSM_CFG_DMA
-    /* Check if this is a DMA transport by looking for heap hint */
-    void* heap_hint = NULL;
-    posixTransportShm_GetHeapHint(comm->transport_context, &heap_hint);
-    return (heap_hint != NULL) ? 1 : 0;
-#else
-    return 0;
-#endif /* WOLFHSM_CFG_DMA */
-}
 
 void* wh_Client_GetHeap(whClientContext* c)
 {
     void* heap = NULL;
-    posixTransportShm_GetHeapHint(c->comm->transport_context, &heap);
+    if (c != NULL) {
+        heap = c->dma.heap;
+    }
     return heap;
+}
+
+int wh_Client_SetHeap(whClientContext* c, void* heap)
+{
+    if (c == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    c->dma.heap = heap;
+    return WH_ERROR_OK;
 }
 
 #endif /* WOLFHSM_CFG_DMA */

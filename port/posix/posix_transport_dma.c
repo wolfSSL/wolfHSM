@@ -36,7 +36,6 @@
 
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_utils.h"
-#include "wolfhsm/wh_server.h"
 
 #include "port/posix/posix_transport_shm.h"
 #include "port/posix/posix_transport_dma.h"
@@ -46,56 +45,9 @@
 #include "wolfssl/wolfcrypt/types.h"
 #include "wolfssl/wolfcrypt/memory.h"
 
-
-/* Shared memory creation flags */
-#define PTSHM_CREATEMODE 0666
-
-/* Pad header to reasonable alignment */
-#define PTSHM_HEADER_SIZE 64
-typedef union {
-    struct {
-        uint32_t initialized;   /* Set non-zero when setup */
-        uint16_t req_size;      /* Size of request buffer */
-        uint16_t resp_size;     /* Size of response buffer */
-        size_t dma_size;        /* Size of shared DMA space */
-        pid_t creator_pid;      /* Process ID of the creator */
-        pid_t user_pid;         /* Process ID of user */
-    };
-    uint8_t WH_PAD[PTSHM_HEADER_SIZE];
-} ptshmHeader;
-
-typedef struct {
-    void* ptr;
-    size_t size;
-    ptshmHeader* header;
-    uint8_t* req;
-    uint8_t* resp;
-    uint8_t* dma;
-    size_t dma_size;
-    uint16_t req_size;
-    uint16_t resp_size;
-} ptshmMapping;
-
-enum {
-    PTSHM_INITIALIZED_NONE      = 0,
-    PTSHM_INITIALIZED_CLEANUP   = 1,
-    PTSHM_INITIALIZED_CREATOR   = 2,
-    PTSHM_INITIALIZED_USER      = 3,
-};
 /** Local declarations */
 
 /** Custom functions */
-int posixTransportShm_GetHeapHint(posixTransportShmContext* ctx,
-        void* *out_hint)
-{
-    if (ctx == NULL) {
-        return WH_ERROR_BADARGS;
-    }
-    if (out_hint != NULL) {
-        *out_hint = ctx->heap;
-    }
-    return WH_ERROR_OK;
-}
 
 int wh_Client_PosixStaticMemoryDMA(whClientContext* client, uintptr_t clientAddr,
     void** xformedCliAddr, size_t len, whClientDmaOper oper,
@@ -129,7 +81,10 @@ int wh_Client_PosixStaticMemoryDMA(whClientContext* client, uintptr_t clientAddr
         isInDma = 1;
     }
     else {
-        posixTransportShm_GetHeapHint(client->comm->transport_context, &heap);
+        heap = client->dma.heap;
+        if (heap == NULL) {
+            return WH_ERROR_NOTREADY;
+        }
     }
 
     if (oper == WH_DMA_OPER_SERVER_READ_PRE
@@ -206,176 +161,4 @@ int wh_Server_PosixStaticMemoryDMA(whServerContext* server, uintptr_t clientAddr
     /* Return the transformed address (DMA pointer + offset) */
     *xformedCliAddr = (void*)((uintptr_t)dma_ptr + clientAddr);
     return WH_ERROR_OK;
-}
-
-/* Set the static memory for the shared memory transport
- * Devides up the shared memory into buffers to be used and passed by reference
- */
-int posixTransportShm_SetStaticMemory(posixTransportShmContext* ctx,
-    posixTransportShmConfig* cfg)
-{
-#ifdef WOLFSSL_STATIC_MEMORY
-    WOLFSSL_HEAP_HINT* hint = NULL;
-    int ret = WH_ERROR_OK;
-
-    ret = wc_LoadStaticMemory_ex(&hint, cfg->dmaStaticMemListSz,
-        cfg->dmaStaticMemList,  cfg->dmaStaticMemDist, ctx->dma, ctx->dma_size,
-        0, 0);
-    if (ret == 0) {
-        ctx->heap = (void*)hint;
-        ret = WH_ERROR_OK;
-    } else {
-        ret = WH_ERROR_ABORTED;
-    }
-    return ret;
-#else
-    (void)ctx;
-    (void)cfg;
-    return WH_ERROR_NOTIMPL;
- #endif
-}
-
-/** Callback function definitions */
-
-/* Does the same as ServerInit, but also sets up the static memory */
-int posixTransportShm_ServerInitReference(void* c, const void* cf,
-                                 whCommSetConnectedCb connectcb,
-                                 void*                connectcb_arg)
-{
-    int ret;
-
-    ret = posixTransportShm_ServerInit(c, cf, connectcb, connectcb_arg);
-
-#ifdef WOLFSSL_STATIC_MEMORY
-    posixTransportShmContext* ctx = (posixTransportShmContext*)c;
-    ctx->heap = (void*)ctx->dma + sizeof(WOLFSSL_HEAP);
-#else
-    ret = WH_ERROR_NOTIMPL;
-#endif
-    return ret;
-}
-
-
-int posixTransportShm_ClientInitReference(void* c, const void* cf,
-                                 whCommSetConnectedCb connectcb,
-                                 void*                connectcb_arg)
-{
-    int ret = WH_ERROR_OK;
-    int max_attempts = 10;
-    int attempt = 0;
-
-    /* Retry connecting to the shared memory object until server is ready.
-     * This helps mitigate a race condition where the client tries to connect
-     * before the server has finished creating and initializing the shared
-     * memory object. */
-    for (attempt = 0; attempt < max_attempts; attempt++) {
-        ret = posixTransportShm_ClientInit(c, cf, connectcb, connectcb_arg);
-        if (ret == WH_ERROR_OK) {
-            /* Successfully connected, now set up static memory */
-            ret = posixTransportShm_SetStaticMemory(c,
-                (posixTransportShmConfig*)cf);
-            if (ret == WH_ERROR_OK) {
-                /* Everything successful */
-                break;
-            }
-        }
-
-        if (ret != WH_ERROR_NOTREADY && ret != WH_ERROR_NOTFOUND) {
-            /* Other error, don't retry */
-            break;
-        }
-    }
-
-    return ret;
-}
-
-
-/* Only the server should call this to clean up the static memory pool
- * The client can call the posixTransportShm_Cleanup function instead. */
-int posixTransportShm_CleanupReference(void* c)
-{
-    int ret;
-
-#ifdef WOLFSSL_STATIC_MEMORY
-    posixTransportShmContext* ctx = (posixTransportShmContext*)c;
-    /* Unload of static memory is used to free up mutexes */
-    wc_UnloadStaticMemory(ctx->heap);
-#endif
-
-    ret = posixTransportShm_Cleanup(c);
-    if (ret == WH_ERROR_OK) {
-    }
-    return 0;
-}
-
-
-int posixTransportShm_SendRequestReference(void* c, uint16_t len, const void* data)
-{
-    int ret = WH_ERROR_OK;
-
-    /* TODO: translate data into an offset and length to be sent in request */
-    ret = posixTransportShm_SendRequest(c, len, data);
-
-    return ret;
-}
-
-
-int TranslateRequestReference(void* c, uint16_t* outSz, void** outPtr,
-    void* data, int dataSz)
-{
-    int ret = WH_ERROR_OK;
-    posixTransportShmContext* ctx = (posixTransportShmContext*)c;
-
-    if (dataSz != (sizeof(uintptr_t) * 2)) {
-        return WH_ERROR_BADARGS;
-    }
-
-    *outPtr = (void*)(((uintptr_t*)data)[0] + ctx->dma);
-    *outSz  = (uint16_t)((uintptr_t*)data)[1];
-
-    return ret;
-}
-
-
-int posixTransportShm_RecvRequestReference(void* c, uint16_t* out_len, void* data)
-{
-    int ret = WH_ERROR_OK;
-
-    ret = posixTransportShm_RecvRequest(c, out_len, data);
-    if (ret == WH_ERROR_OK) {
-         /* TODO: translate data into an offset and length to be sent in request */
-    }
-    return ret;
-}
-
-int posixTransportShm_SendResponseReference(void* c, uint16_t len, const void* data)
-{
-    int ret;
-    posixTransportShmContext* ctx = (posixTransportShmContext*)c;
-
-    /* Only need to check NULL, mem transport checks other state info */
-    if (ctx == NULL) {
-        return WH_ERROR_BADARGS;
-    }
-
-    /* trasnlate and sanity checks on pointer to send in response */
-    
-    /* TODO: check that address is in the correct range, after heap hint and before
-       end */
-
-
-    ret = posixTransportShm_SendResponse(c, len, data);
-    return ret;
-}
-
-
-int posixTransportShm_RecvResponseReference(void* c, uint16_t* out_len, void* data)
-{
-    int ret;
-
-    ret = posixTransportShm_RecvResponse(c, out_len, data);
-    if (ret == WH_ERROR_OK) {
-        /* TODO: translate data into an offset and length to be sent in response */
-    }
-    return ret;
 }

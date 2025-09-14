@@ -21,9 +21,6 @@
 #include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_server.h"
 #include "wolfhsm/wh_server_keystore.h"
-#include "wolfhsm/wh_nvm.h"
-#include "wolfhsm/wh_nvm_flash.h"
-#include "wolfhsm/wh_flash_ramsim.h"
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     /* included to print out the version of wolfSSL linked with */
@@ -40,48 +37,6 @@ static int wh_ServerTask(void* cf, const char* keyFilePath, int keyId,
 static void _sleepMs(long milliseconds);
 static int _hardwareCryptoCb(int devId, struct wc_CryptoInfo* info, void* ctx);
 
-/* Macros for maximum client ID and key ID */
-#define MAX_CLIENT_ID 255
-#define MAX_KEY_ID UINT16_MAX
-
-/* Macros for maximum file path length (Linux PATH_MAX is a good reference) */
-#ifndef PATH_MAX
-#define PATH_MAX 4096
-#endif
-
-/* Parameterize MAX_LINE_LENGTH by 512 bytes + MAX_FILE_PATH_LENGTH */
-#define MAX_LINE_LENGTH (512 + PATH_MAX)
-
-/* Structure representing an entry in the linked list */
-typedef struct Entry {
-    uint8_t       clientId; /* Used only for keys */
-    uint16_t      id;       /* Object ID for NVM, keyId for keys */
-    uint16_t      access;   /* Access permissions */
-    uint16_t      flags;    /* Flags for the object */
-    char*         label;    /* Label for the object */
-    char*         filePath; /* File path for the object */
-    struct Entry* next;     /* Pointer to the next entry */
-} Entry;
-
-/* Head of the linked list for entries */
-static Entry* entryHead = NULL;
-
-/* Function prototypes for NVM init */
-static Entry* createEntry(uint8_t clientId, uint16_t id, uint16_t access,
-                          uint16_t flags, const char* label,
-                          const char* filePath);
-static void   appendEntry(Entry** head, uint8_t clientId, uint16_t id,
-                          uint16_t access, uint16_t flags, const char* label,
-                          const char* filePath);
-static void   processEntry(Entry* entry, int isKey, whNvmContext* nvmContext);
-static void   processEntries(whNvmContext* nvmContext);
-static void   freeEntries(void);
-static void   stripComment(char* line);
-static void   trimWhitespace(char* str);
-static int  parseInteger(const char* str, uint32_t maxValue, uint32_t* result);
-static void parseNvmInitFile(const char* filePath);
-static int initializeNvm(whNvmContext* nvmContext, const char* nvmInitFilePath);
-
 static void _sleepMs(long milliseconds)
 {
     struct timespec req;
@@ -92,331 +47,12 @@ static void _sleepMs(long milliseconds)
 
 enum {
     ONE_MS         = 1,
-    FLASH_RAM_SIZE = 1024 * 1024,
 };
 
 #define WH_SERVER_TCP_IPSTRING "127.0.0.1"
 #define WH_SERVER_TCP_PORT 23456
 #define WH_SERVER_ID 57
 const char* type = "tcp"; /* default to tcp type */
-
-/* Creates a new entry in the linked list based on the provided parameters */
-static Entry* createEntry(uint8_t clientId, uint16_t id, uint16_t access,
-                          uint16_t flags, const char* label,
-                          const char* filePath)
-{
-    Entry* newEntry = (Entry*)malloc(sizeof(Entry));
-    if (!newEntry) {
-        fprintf(stderr, "Memory allocation error\n");
-        exit(EXIT_FAILURE);
-    }
-    newEntry->clientId = clientId;
-    newEntry->id       = id;
-    newEntry->access   = access;
-    newEntry->flags    = flags;
-    newEntry->label    = strdup(label);
-    newEntry->filePath = strdup(filePath);
-    newEntry->next     = NULL;
-    return newEntry;
-}
-
-/* Appends a new entry to the linked list */
-static void appendEntry(Entry** head, uint8_t clientId, uint16_t id,
-                        uint16_t access, uint16_t flags, const char* label,
-                        const char* filePath)
-{
-    Entry* newEntry = createEntry(clientId, id, access, flags, label, filePath);
-    if (*head == NULL) {
-        *head = newEntry;
-    }
-    else {
-        Entry* current = *head;
-        while (current->next != NULL) {
-            current = current->next;
-        }
-        current->next = newEntry;
-    }
-}
-
-/* Function to remove comments from a line */
-static void stripComment(char* line)
-{
-    char* commentStart = strchr(line, '#');
-    if (commentStart) {
-        /* Null-terminate the line at the start of the comment */
-        *commentStart = '\0';
-    }
-}
-
-/* Function to trim leading and trailing whitespace */
-static void trimWhitespace(char* str)
-{
-    /* Trim leading whitespace */
-    char* start = str;
-    while (*start != '\0' && isspace((unsigned char)*start)) {
-        start++;
-    }
-
-    /* Trim trailing whitespace */
-    char* end = start + strlen(start) - 1;
-    while (end > start && isspace((unsigned char)*end)) {
-        *end = '\0';
-        end--;
-    }
-
-    /* Copy the trimmed string back into the original buffer */
-    memmove(str, start, strlen(start) + 1);
-}
-
-/* Function to parse a uint16_t or uint8_t from a string (handles hex or
- * decimal) */
-static int parseInteger(const char* str, uint32_t maxValue, uint32_t* result)
-{
-    char*         endPtr;
-    unsigned long value;
-
-    value = strtoul(str, &endPtr, 0);
-
-    if (*endPtr != '\0' || value > maxValue) {
-        return 0; /* Error: invalid number */
-    }
-
-    *result = (uint32_t)value;
-    return 1; /* Success */
-}
-
-/* Function to parse the NVM init file and build the linked list */
-static void parseNvmInitFile(const char* filePath)
-{
-    FILE* file = fopen(filePath, "r");
-    if (!file) {
-        perror("Error opening NVM init file");
-        exit(EXIT_FAILURE);
-    }
-
-    char line[MAX_LINE_LENGTH];
-    int  lineNumber = 0;
-
-    while (fgets(line, sizeof(line), file)) {
-        lineNumber++;
-        stripComment(line);
-        trimWhitespace(line);
-
-        /* Skip empty lines after removing comments and whitespace */
-        if (strlen(line) == 0) {
-            continue;
-        }
-
-        char*    token;
-        char     label[256], filePath[PATH_MAX];
-        uint32_t clientId = 0, id, access, flags;
-
-        /* Check if the line defines a key or an object */
-        if (strncmp(line, "key", 3) == 0) {
-            /* Parse client ID for key entries */
-            token = strtok(line + 3, " ");
-            if (!token || !parseInteger(token, MAX_CLIENT_ID, &clientId)) {
-                fprintf(stderr,
-                        "Error on line %d: Malformed key entry - invalid "
-                        "clientId\n",
-                        lineNumber);
-                fclose(file);
-                exit(EXIT_FAILURE);
-            }
-
-            /* Parse key ID for key entries */
-            token = strtok(NULL, " ");
-            if (!token || !parseInteger(token, MAX_KEY_ID, &id)) {
-                fprintf(
-                    stderr,
-                    "Error on line %d: Malformed key entry - invalid keyId\n",
-                    lineNumber);
-                fclose(file);
-                exit(EXIT_FAILURE);
-            }
-        }
-        else if (strncmp(line, "obj", 3) == 0) {
-            /* Parse object ID for object entries */
-            token = strtok(line + 3, " ");
-            if (!token || !parseInteger(token, MAX_KEY_ID, &id)) {
-                fprintf(
-                    stderr,
-                    "Error on line %d: Malformed object entry - invalid id\n",
-                    lineNumber);
-                fclose(file);
-                exit(EXIT_FAILURE);
-            }
-        }
-        else {
-            /* Report error for unknown entry types */
-            fprintf(stderr,
-                    "Error on line %d: Malformed line or unknown entry type\n",
-                    lineNumber);
-            fclose(file);
-            exit(EXIT_FAILURE);
-        }
-
-        /* Parse access field */
-        token = strtok(NULL, " ");
-        if (!token || !parseInteger(token, UINT16_MAX, &access)) {
-            fprintf(stderr,
-                    "Error on line %d: Malformed entry - invalid access\n",
-                    lineNumber);
-            fclose(file);
-            exit(EXIT_FAILURE);
-        }
-
-        /* Parse flags */
-        token = strtok(NULL, " ");
-        if (!token || !parseInteger(token, UINT16_MAX, &flags)) {
-            fprintf(stderr,
-                    "Error on line %d: Malformed entry - invalid flags\n",
-                    lineNumber);
-            fclose(file);
-            exit(EXIT_FAILURE);
-        }
-
-        /* Parse the label (enclosed in quotes) */
-        token = strtok(NULL, "\"");
-        if (!token) {
-            fprintf(stderr,
-                    "Error on line %d: Malformed entry - missing or incorrect "
-                    "label format\n",
-                    lineNumber);
-            fclose(file);
-            exit(EXIT_FAILURE);
-        }
-        snprintf(label, sizeof(label), "%s", token);
-
-        /* Parse the file path */
-        token = strtok(NULL, " ");
-        if (!token || sscanf(token, "%s", filePath) != 1) {
-            fprintf(stderr,
-                    "Error on line %d: Malformed entry - missing file path\n",
-                    lineNumber);
-            fclose(file);
-            exit(EXIT_FAILURE);
-        }
-
-        /* Add the parsed entry to the linked list */
-        appendEntry(&entryHead, (uint8_t)clientId, (uint16_t)id,
-                    (uint16_t)access, (uint16_t)flags, label, filePath);
-    }
-
-    fclose(file);
-}
-
-/* Process an entry by reading the file and adding it to NVM */
-static void processEntry(Entry* entry, int isKey, whNvmContext* nvmContext)
-{
-    FILE* file = fopen(entry->filePath, "rb");
-    if (file == NULL) {
-        fprintf(stderr, "Error processing entry: Unable to open file %s\n",
-                entry->filePath);
-        return;
-    }
-
-    /* Get the file size */
-    fseek(file, 0, SEEK_END);
-    long fileSize = ftell(file);
-    fseek(file, 0, SEEK_SET);
-
-    /* Allocate memory for the file data */
-    uint8_t* buffer = (uint8_t*)malloc(fileSize);
-    if (buffer == NULL) {
-        fprintf(stderr, "Error: Memory allocation failed for file %s\n",
-                entry->filePath);
-        fclose(file);
-        return;
-    }
-
-    /* Read the file data into the buffer */
-    size_t bytesRead = fread(buffer, 1, fileSize, file);
-    fclose(file);
-
-    if (bytesRead != (size_t)fileSize) {
-        fprintf(stderr, "Error: Failed to read entire file %s\n",
-                entry->filePath);
-        free(buffer);
-        return;
-    }
-
-    /* Create metadata for the new entry */
-    whNvmMetadata meta = {0};
-    if (isKey) {
-        /* Keys have special ID format */
-        meta.id = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, entry->clientId, entry->id);
-        printf("Processing Key Entry - ClientID: 0x%X, KeyID: 0x%X, Meta ID: "
-               "0x%X, "
-               "Access: 0x%X, Flags: 0x%X, Label: %s, File: %s, Size: %ld\n",
-               entry->clientId, entry->id, meta.id, entry->access, entry->flags,
-               entry->label, entry->filePath, fileSize);
-    }
-    else {
-        meta.id = entry->id;
-        printf("Processing Object Entry - ID: 0x%X, Access: 0x%X, Flags: 0x%X, "
-               "Label: %s, File: %s, Size: %ld\n",
-               entry->id, entry->access, entry->flags, entry->label,
-               entry->filePath, fileSize);
-    }
-    meta.access = entry->access;
-    meta.flags  = entry->flags;
-    meta.len    = fileSize;
-    snprintf((char*)meta.label, WH_NVM_LABEL_LEN, "%s", entry->label);
-
-    int rc = wh_Nvm_AddObject(nvmContext, &meta, fileSize, buffer);
-    if (rc != 0) {
-        fprintf(stderr, "Error: Failed to add entry ID %u to NVM, ret = %d\n",
-                meta.id, rc);
-    }
-
-    free(buffer);
-}
-
-/* Process all entries in the linked list */
-static void processEntries(whNvmContext* nvmContext)
-{
-    Entry* current = entryHead;
-    while (current != NULL) {
-        /* Determine if it's a key based on clientId */
-        int isKey = (current->clientId != 0);
-        processEntry(current, isKey, nvmContext);
-        current = current->next;
-    }
-}
-
-/* Free the memory allocated for the linked list */
-static void freeEntries(void)
-{
-    Entry* current = entryHead;
-    while (current != NULL) {
-        Entry* next = current->next;
-        free(current->label);
-        free(current->filePath);
-        free(current);
-        current = next;
-    }
-    entryHead = NULL;
-}
-
-/* Initialize NVM with contents from the NVM init file */
-static int initializeNvm(whNvmContext* nvmContext, const char* nvmInitFilePath)
-{
-    if (nvmContext == NULL || nvmInitFilePath == NULL) {
-        return -1;
-    }
-
-    /* Parse the NVM init file */
-    parseNvmInitFile(nvmInitFilePath);
-
-    /* Process the entries */
-    processEntries(nvmContext);
-
-    /* Free the allocated memory */
-    freeEntries();
-
-    return 0;
-}
 
 static int loadAndStoreKeys(whServerContext* server, whKeyId* outKeyId,
                             const char* keyFilePath, int keyId, int clientId)
@@ -635,7 +271,7 @@ int main(int argc, char** argv)
     const char* nvmInitFilePath = NULL;
     int         keyId = WH_KEYID_ERASED; /* Default key ID if none provided */
     int         clientId = 12; /* Default client ID if none provided */
-    uint8_t     memory[FLASH_RAM_SIZE] = {0};
+    uint8_t     memory[WH_POSIX_FLASH_RAM_SIZE] = {0};
     whServerConfig s_conf[1];
 
     printf("Example wolfHSM POSIX server ");
@@ -691,31 +327,18 @@ int main(int argc, char** argv)
     }
 
     /* RamSim Flash state and configuration */
-    whFlashRamsimCtx fc[1]      = {0};
-    whFlashRamsimCfg fc_conf[1] = {{
-        .size       = FLASH_RAM_SIZE,
-        .sectorSize = FLASH_RAM_SIZE / 2,
-        .pageSize   = 8,
-        .erasedByte = (uint8_t)0,
-        .memory     = memory,
-    }};
-    const whFlashCb  fcb[1]     = {WH_FLASH_RAMSIM_CB};
+    rc = Server_ExampleRAMSimConfig(s_conf, memory);
+    if (rc != WH_ERROR_OK) {
+        printf("Failed to initialize RAMSim: %d\n", rc);
+        return rc;
+    }
 
     /* NVM Flash Configuration using RamSim HAL Flash */
-    whNvmFlashConfig  nf_conf[1] = {{
-         .cb      = fcb,
-         .context = fc,
-         .config  = fc_conf,
-    }};
-    whNvmFlashContext nfc[1]     = {0};
-    whNvmCb           nfcb[1]    = {WH_NVM_FLASH_CB};
-
-    whNvmConfig  n_conf[1] = {{
-         .cb      = nfcb,
-         .context = nfc,
-         .config  = nf_conf,
-    }};
-    whNvmContext nvm[1]    = {{0}};
+    rc = Server_ExampleNVMConfig(s_conf, nvmInitFilePath);
+    if (rc != WH_ERROR_OK) {
+        printf("Failed to initialize NVM: %d\n", rc);
+        return rc;
+    }
 
     /* Crypto context */
     whServerCryptoContext crypto[1] = {{
@@ -727,29 +350,11 @@ int main(int argc, char** argv)
 #endif
 
 
-    s_conf->nvm         = nvm;
     s_conf->crypto      = crypto;
     s_conf->devId       = INVALID_DEVID;
 #if defined(WOLFHSM_CFG_SHE_EXTENSION)
     s_conf->she         = she;
 #endif
-
-    rc = wh_Nvm_Init(nvm, n_conf);
-    if (rc != 0) {
-        printf("Failed to initialize NVM: %d\n", rc);
-        return rc;
-    }
-
-    /* Initialize NVM with contents from the NVM init file if provided */
-    if (nvmInitFilePath != NULL) {
-        printf("Initializing NVM with contents from %s\n", nvmInitFilePath);
-        rc = initializeNvm(nvm, nvmInitFilePath);
-        if (rc != 0) {
-            printf("Failed to initialize NVM from file: %d\n", rc);
-            return rc;
-        }
-        printf("NVM initialization completed successfully\n");
-    }
 
     /* Initialize crypto library and hardware */
     wolfCrypt_Init();

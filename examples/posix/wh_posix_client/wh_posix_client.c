@@ -1,5 +1,5 @@
 /*
- * wolfHSM Client TCP Example
+ * wolfHSM Client POSIX Example
  */
 
 #include <stdint.h>
@@ -29,7 +29,7 @@
 
 /** Local declarations */
 static void _sleepMs(long milliseconds);
-static int wh_ClientTask(void* cf, int test);
+static int wh_ClientTask(void* cf, const char* type, int test);
 
 
 static void _sleepMs(long milliseconds)
@@ -51,7 +51,7 @@ enum {
 #define WH_SERVER_TCP_PORT 23456
 #define WH_CLIENT_ID 12
 
-static int wh_ClientTask(void* cf, int test)
+static int wh_ClientTask(void* cf, const char* type, int test)
 {
     whClientConfig* config = (whClientConfig*)cf;
     int ret = 0;
@@ -70,8 +70,17 @@ static int wh_ClientTask(void* cf, int test)
 
     ret = wh_Client_Init(client, config);
 
-    printf("Client connecting to server...\n");
+    if (strcmp(type, "dma") == 0) {
+        printf("Setting up DMA heap with static memory buckets\n");
 
+        ret = Client_ExampleSetupDmaMemory(client, config);
+        if (ret != 0) {
+            printf("Failed to setup DMA heap\n");
+            return -1;
+        }
+    }
+
+    printf("Client connecting to server...\n");
     if (test) {
         return wh_DemoClient_wcTest(client);
     }
@@ -196,5 +205,5 @@ int main(int argc, char** argv)
         return -1;
     }
 
-    return wh_ClientTask(c_conf, test);
+    return wh_ClientTask(c_conf, type, test);
 }
