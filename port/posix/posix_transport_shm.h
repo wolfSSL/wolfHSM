@@ -65,9 +65,6 @@ typedef struct {
     size_t      dma_size;
     uint16_t    req_size;
     uint16_t    resp_size;
-    unsigned int dmaStaticMemListSz;
-    const uint32_t* dmaStaticMemList;
-    const uint32_t* dmaStaticMemDist;
 } posixTransportShmConfig;
 
 

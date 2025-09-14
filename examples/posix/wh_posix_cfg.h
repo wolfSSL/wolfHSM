@@ -18,12 +18,6 @@
 
 /* Shared Memory Configuration */
 #define WH_POSIX_SHARED_MEMORY_NAME "wh_example_shm"
-#define WH_POSIX_SHM_CREATEMODE 0666
-#define WH_POSIX_SHM_HEADER_SIZE 64
-
-#define WH_POSIX_TEST_BUFFER_SIZE 4096
-#define WH_POSIX_TEST_REQ_SIZE 32
-#define WH_POSIX_TEST_RESP_SIZE 64
 
 /* ===========================================
  * DMA AND BUFFER SIZES
@@ -32,7 +26,7 @@
 /* Request and Response Buffer Sizes */
 #define WH_POSIX_REQ_SIZE 1024
 #define WH_POSIX_RESP_SIZE 1024
-#define WH_POSIX_DMA_SIZE 10000
+#define WH_POSIX_DMA_SIZE 8000
 
 /* Data Buffer Sizes */
 #define WH_POSIX_DATA_BUFFER_SIZE 0x400  /* 1024 bytes */
@@ -82,6 +76,19 @@
 
 /* NVM Object Count */
 #define WH_POSIX_NVM_OBJECT_COUNT 30
+
+
+/* Macros for maximum client ID and key ID */
+#define MAX_CLIENT_ID 255
+#define MAX_KEY_ID UINT16_MAX
+
+/* Macros for maximum file path length (Linux PATH_MAX is a good reference) */
+#ifndef PATH_MAX
+#define PATH_MAX 4096
+#endif
+
+/* Parameterize MAX_LINE_LENGTH by 512 bytes + MAX_FILE_PATH_LENGTH */
+#define MAX_LINE_LENGTH (512 + PATH_MAX)
 
 
 /* ===========================================

@@ -142,6 +142,7 @@ typedef struct {
     whClientDmaMemCopyCb            memCopyCb;       /* DMA memory copy callback */
 #endif /* WOLFHSM_CFG_DMA_CUSTOM_CLIENT_COPY */
     const whClientDmaAddrAllowList* dmaAddrAllowList; /* allowed addresses */
+    void* heap;
 } whClientDmaContext;
 
 /**
@@ -196,19 +197,6 @@ int wh_Client_Init(whClientContext* c, const whClientConfig* config);
  * @return Returns 0 on success, or a negative value on failure.
  */
 int wh_Client_Cleanup(whClientContext* c);
-
-
-/**
- * @brief Checks if the communication transport is a DMA transport.
- *
- * This function determines whether the communication server is using a DMA
- * transport by checking for the presence of a heap hint, which is specific
- * to DMA-enabled transports.
- *
- * @param[in] comm Pointer to the communication server context.
- * @return int Returns 1 if this is a DMA transport, 0 otherwise.
- */
-int wh_Client_IsDmaTransport(whCommClient* comm);
 
 /** Generic request/response functions */
 
@@ -2485,11 +2473,23 @@ int wh_Client_CertVerifyAcertDmaResponse(whClientContext* c, int32_t* out_rc);
  * This function is used to get the current heap hint set for use with the
  * transport context.
  *
- * @param[in] client Pointer to the client context.
+ * @param[in] c Pointer to the client context.
  * @return a pointer to the heap hint
  */
 void* wh_Client_GetHeap(whClientContext* c);
 
+/**
+ * @brief Setter function for the current heap hint set
+ *
+ * This function is used to set the current heap hint set for use with the
+ * transport context.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] heap Pointer to the heap hint
+ * @return int Returns WH_ERROR_OK on success, or WH_ERROR_BADARGS if the
+ * arguments are invalid.
+ */
+int wh_Client_SetHeap(whClientContext* c, void* heap);
 
 /**
  * @brief Registers a custom client DMA callback

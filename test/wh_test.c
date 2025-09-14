@@ -138,7 +138,7 @@ int whTest_ClientTcp(void)
 {
     /* Client configuration/contexts */
     whTransportClientCb            pttccb[1]      = {PTT_CLIENT_CB};
-    posixTransportTcpClientContext tcc[1]         = {};
+    posixTransportTcpClientContext tcc[1]         = {0};
     posixTransportTcpConfig        mytcpconfig[1] = {{
                .server_ip_string = "127.0.0.1",
                .server_port      = 23456,
