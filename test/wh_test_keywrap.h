@@ -16,13 +16,13 @@
  * You should have received a copy of the GNU General Public License
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef WH_TEST_WRAPKEY_H_
-#define WH_TEST_WRAPKEY_H_
+#ifndef WH_TEST_KEYWRAP_H_
+#define WH_TEST_KEYWRAP_H_
 
 #include "wolfhsm/wh_server.h"
 #include "wolfhsm/wh_client.h"
 
-int whTest_WrapKeyClientConfig(whClientConfig* cf);
+int whTest_KeyWrapClientConfig(whClientConfig* cf);
 
 
 #endif /* WH_TEST_COMM_H_ */

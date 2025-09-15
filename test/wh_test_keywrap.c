@@ -42,6 +42,8 @@
 
 #ifdef WOLFHSM_CFG_ENABLE_CLIENT
 
+#ifndef WOLFHSM_CFG_NO_CRYPTO
+
 #ifdef HAVE_AESGCM
 
 #define WH_TEST_AES_KEYSIZE 16
@@ -197,3 +199,5 @@ int whTest_KeyWrapClientConfig(whClientConfig* config)
     return ret;
 }
 #endif /* WOLFHSM_CFG_ENABLE_CLIENT */
+
+#endif /* !WOLFHSM_CFG_NO_CRYPTO */
