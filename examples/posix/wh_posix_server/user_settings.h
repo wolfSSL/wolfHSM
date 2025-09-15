@@ -180,7 +180,7 @@ extern "C" {
     #define WOLFSSL_STATIC_MEMORY
 
     /* Disable fallback malloc/free */
-    //#define WOLFSSL_NO_MALLOC
+    #define WOLFSSL_NO_MALLOC
     #if 1
         #define WOLFSSL_MALLOC_CHECK /* trap malloc failure */
     #endif
