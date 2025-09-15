@@ -47,6 +47,8 @@
 #include <time.h>    /* For nanosleep */
 #include "port/posix/posix_transport_tcp.h"
 #include "port/posix/posix_transport_shm.h"
+
+const struct timespec ONE_MS = { .tv_sec = 0, .tv_nsec = 1000000 };
 #endif
 
 #include "wh_test_comm.h"
@@ -56,7 +58,6 @@
 #define RESP_SIZE 64
 #define REPEAT_COUNT 10
 
-const struct timespec ONE_MS = { .tv_sec = 0, .tv_nsec = 1000000 };
 
 #if defined(WOLFHSM_CFG_ENABLE_CLIENT) && defined(WOLFHSM_CFG_ENABLE_SERVER)
 int whTest_CommMem(void)
