@@ -36,6 +36,18 @@
  *  WOLFHSM_CFG_SHE_EXTENSION - If defined, include AutoSAR SHE functionality
  *      Default: Not defined
  *
+ *  WOLFHSM_CFG_KEYWRAP_MAX_KEY_SIZE - The maximum size (in bytes) of a key that 
+ *  can be wrapped
+ *      Default: 512
+ *
+ *  WOLFHSM_CFG_KEYWRAP_AES_GCM_TAG_SIZE - The size (in bytes) of the auth 
+ *  tag attached to an AES GCM wrapped key
+ *      Default: 16
+ *
+ *  WOLFHSM_CFG_KEYWRAP_AES_GCM_IV_SIZE - The size (in bytes) of the IV
+ *  attached to an AES GCM wrapped key
+ *      Default: 16
+ *
  *  WOLFHSM_CFG_HEXDUMP - If defined, include wh_Utils_HexDump functionality
  *                          using stdio.h
  *      Default: Not defined
@@ -228,6 +240,33 @@
 #error "WOLFHSM_CFG_SHE_EXTENSION requires AES, WOLFSSL_CMAC, WOLFSSL_AES_DIRECT, and HAVE_AES_ECB"
 #endif
 #endif
+
+#if !defined(NO_AES)
+  #if defined(HAVE_AESGCM)
+
+    #ifndef WOLFHSM_CFG_KEYWRAP_MAX_KEY_SIZE
+      #define WOLFHSM_CFG_KEYWRAP_MAX_KEY_SIZE 512
+    #endif
+
+    #ifndef WOLFHSM_CFG_KEYWRAP_AES_GCM_TAG_SIZE
+      #define WOLFHSM_CFG_KEYWRAP_AES_GCM_TAG_SIZE 16
+    #endif
+
+    #ifndef WOLFHSM_CFG_KEYWRAP_AES_GCM_IV_SIZE
+      #define WOLFHSM_CFG_KEYWRAP_AES_GCM_IV_SIZE 16
+    #endif
+
+  #endif
+#endif
+
+#if defined(WOLFHSM_CFG_NO_CRYPTO)
+  #error "WOLFHSM_CFG_KEYWRAP requires WOLFHSM_CFG_NO_CRYPTO to be undefined"
+#endif
+
+#if defined(NO_AES) || !defined(HAVE_AESGCM)
+  #error "WOLFHSM_CFG_KEYWRAP requires NO_AES to be undefined and HAVE_AESGCM to be defined"
+#endif
+
 
 #if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT)
 #if !defined(WOLFSSL_ACERT) || !defined(WOLFSSL_ASN_TEMPLATE)

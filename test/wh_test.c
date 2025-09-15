@@ -36,6 +36,7 @@
 #include "wh_test_crypto.h"
 #include "wh_test_she.h"
 #include "wh_test_clientserver.h"
+#include "wh_test_keywrap.h"
 
 #if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER)
 #include "wh_test_cert.h"
@@ -110,6 +111,7 @@ int whTest_ClientConfig(whClientConfig* clientCfg)
 
 #if !defined(WOLFHSM_CFG_NO_CRYPTO)
     WH_TEST_RETURN_ON_FAIL(whTest_CryptoClientConfig(clientCfg));
+    WH_TEST_RETURN_ON_FAIL(whTest_KeyWrapClientConfig(clientCfg));
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
 #if defined(WOLFHSM_CFG_SHE_EXTENSION)

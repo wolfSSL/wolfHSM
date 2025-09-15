@@ -223,4 +223,94 @@ int wh_MessageKeystore_TranslateExportDmaResponse(
     uint16_t magic, const whMessageKeystore_ExportDmaResponse* src,
     whMessageKeystore_ExportDmaResponse* dest);
 
+/* Wrap Key Request */
+typedef struct {
+    uint16_t keySz;
+    uint16_t serverKeyId;
+    uint16_t cipherType;
+    /* Data follows:
+     * whNvmMetadata metadata
+     * uint8_t key[keySz]
+     */
+} whMessageKeystore_WrapRequest;
+
+/* Wrap Key Response */
+typedef struct {
+    uint32_t rc;
+    uint16_t wrappedKeySz;
+    uint16_t cipherType;
+    /* Data follows:
+     * uint8_t wrappedKey[wrappedKeySz]
+     */
+} whMessageKeystore_WrapResponse;
+
+/* Wrap key translation functions */
+int wh_MessageKeystore_TranslateWrapRequest(
+    uint16_t magic, const whMessageKeystore_WrapRequest* src,
+    whMessageKeystore_WrapRequest* dest);
+
+int wh_MessageKeystore_TranslateWrapResponse(
+    uint16_t magic, const whMessageKeystore_WrapResponse* src,
+    whMessageKeystore_WrapResponse* dest);
+
+/* Unwrap Key export Request */
+typedef struct {
+    uint16_t wrappedKeySz;
+    uint16_t serverKeyId;
+    uint16_t cipherType;
+    uint8_t  WH_PAD[2];
+    /* Data follows:
+     * uint8_t wrappedKey[wrappedKeySz]
+     */
+} whMessageKeystore_UnwrapAndExportRequest;
+
+/* Unwrap Key export Response*/
+typedef struct {
+    uint32_t rc;
+    uint16_t keySz;
+    uint16_t cipherType;
+    /* Data follows:
+     * whNvmMetadata metadata
+     * uint8_t key[keySz]
+     */
+} whMessageKeystore_UnwrapAndExportResponse;
+
+
+/* Unwrap Key export translation functions */
+int wh_MessageKeystore_TranslateUnwrapAndExportRequest(
+    uint16_t magic, const whMessageKeystore_UnwrapAndExportRequest* src,
+    whMessageKeystore_UnwrapAndExportRequest* dest);
+
+int wh_MessageKeystore_TranslateUnwrapAndExportResponse(
+    uint16_t magic, const whMessageKeystore_UnwrapAndExportResponse* src,
+    whMessageKeystore_UnwrapAndExportResponse* dest);
+
+/* Unwrap Key Cache Request */
+typedef struct {
+    uint16_t wrappedKeySz;
+    uint16_t serverKeyId;
+    uint16_t cipherType;
+    uint8_t  WH_PAD[2];
+    /* Data follows:
+     * uint8_t wrappedKey[wrappedKeySz]
+     */
+} whMessageKeystore_UnwrapAndCacheRequest;
+
+/* Unwrap Key Cache Response*/
+typedef struct {
+    uint32_t rc;
+    uint16_t keyId;
+    uint16_t cipherType;
+} whMessageKeystore_UnwrapAndCacheResponse;
+
+/* Unwrap Key Cache translation functions */
+int wh_MessageKeystore_TranslateUnwrapAndCacheRequest(
+    uint16_t magic, const whMessageKeystore_UnwrapAndCacheRequest* src,
+    whMessageKeystore_UnwrapAndCacheRequest* dest);
+
+int wh_MessageKeystore_TranslateUnwrapAndCacheResponse(
+    uint16_t magic, const whMessageKeystore_UnwrapAndCacheResponse* src,
+    whMessageKeystore_UnwrapAndCacheResponse* dest);
+
+
 #endif /* !WOLFHSM_WH_MESSAGE_KEYSTORE_H_ */
