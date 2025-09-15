@@ -415,7 +415,7 @@ void wh_Bench_ListModules(void)
 
 /* Placeholder for the benchmarking function */
 static int _runClientBenchmarks(whClientContext* client, int transport,
-    int moduleIndex)
+                                int moduleIndex)
 {
     int              ret = 0;
     whBenchOpContext benchCtx;
@@ -451,35 +451,45 @@ static int _runClientBenchmarks(whClientContext* client, int transport,
             if (ret == WH_ERROR_NOTIMPL) {
                 WH_BENCH_PRINTF(" -> SKIPPED \"%s\"\n", g_benchModules[i].name);
                 ret = 0;
-            } else {
-                WH_BENCH_PRINTF("Benchmark module \"%s\" failed with error: %d\n",
-                                g_benchModules[i].name, ret);
+            }
+            else {
+                WH_BENCH_PRINTF(
+                    "Benchmark module \"%s\" failed with error: %d\n",
+                    g_benchModules[i].name, ret);
                 return ret;
             }
-        } else {
+        }
+        else {
             /* Print results for this module */
             wh_Bench_PrintIntermediateResult(&benchCtx, g_benchModules[i].id);
         }
-    } else {
+    }
+    else {
         /* Run all modules */
         for (i = 0; i < BENCH_MODULE_IDX_COUNT; i++) {
             WH_BENCH_PRINTF("Benchmarking \"%s\"...\n", g_benchModules[i].name);
-            ret = g_benchModules[i].func(client, &benchCtx, g_benchModules[i].id,
-                                         g_benchModules[i].params);
+            ret =
+                g_benchModules[i].func(client, &benchCtx, g_benchModules[i].id,
+                                       g_benchModules[i].params);
             /* Allow skipping not implemented modules. Return code could be
              * wolfCrypt or wolfSSL error */
             if (ret != 0) {
                 if (ret == WH_ERROR_NOTIMPL) {
-                    WH_BENCH_PRINTF(" -> SKIPPED \"%s\"\n", g_benchModules[i].name);
+                    WH_BENCH_PRINTF(" -> SKIPPED \"%s\"\n",
+                                    g_benchModules[i].name);
                     ret = 0;
-                } else {
-                    WH_BENCH_PRINTF("Benchmark module \"%s\" failed with error: %d\n",
-                                    g_benchModules[i].name, ret);
+                }
+                else {
+                    WH_BENCH_PRINTF(
+                        "Benchmark module \"%s\" failed with error: %d\n",
+                        g_benchModules[i].name, ret);
                     return ret;
                 }
-            } else {
+            }
+            else {
                 /* Print results for this module */
-                wh_Bench_PrintIntermediateResult(&benchCtx, g_benchModules[i].id);
+                wh_Bench_PrintIntermediateResult(&benchCtx,
+                                                 g_benchModules[i].id);
             }
         }
     }
@@ -519,23 +529,23 @@ int wh_Bench_ClientCfg(whClientConfig* clientCfg, int transport)
 
 #ifdef WOLFSSL_STATIC_MEMORY
     if (transport == WH_BENCH_TRANSPORT_DMA) {
-            static const unsigned int listSz = 9;
-            static const uint32_t sizeList[] = {176,256,288,704,1056,1712,2112,
-                2368,33800};
-            static const uint32_t distList[] = {3,1,1,1,1,1,1,3,1};
-            WOLFSSL_HEAP_HINT* heap = NULL;
+        static const unsigned int listSz     = 9;
+        static const uint32_t     sizeList[] = {176,  256,  288,  704,  1056,
+                                                1712, 2112, 2368, 33800};
+        static const uint32_t     distList[] = {3, 1, 1, 1, 1, 1, 1, 3, 1};
+        WOLFSSL_HEAP_HINT*        heap       = NULL;
 
-            ret = wc_LoadStaticMemory_ex(&heap, listSz, sizeList, distList,
-                NULL, 0, 0, 0);
-            if (ret != 0) {
-                WH_BENCH_PRINTF("Failed to load static memory: %d\n", ret);
-                return ret;
-            }
-            ret = wh_Client_SetHeap(client, (void*)heap);
-            if (ret != 0) {
-                WH_BENCH_PRINTF("Failed to set heap: %d\n", ret);
-                return ret;
-            }
+        ret = wc_LoadStaticMemory_ex(&heap, listSz, sizeList, distList, NULL, 0,
+                                     0, 0);
+        if (ret != 0) {
+            WH_BENCH_PRINTF("Failed to load static memory: %d\n", ret);
+            return ret;
+        }
+        ret = wh_Client_SetHeap(client, (void*)heap);
+        if (ret != 0) {
+            WH_BENCH_PRINTF("Failed to set heap: %d\n", ret);
+            return ret;
+        }
     }
 #endif
 
@@ -549,7 +559,8 @@ int wh_Bench_ClientCfg(whClientConfig* clientCfg, int transport)
     }
 
     /* Run the benchmarks */
-    ret = _runClientBenchmarks(client, transport, -1); /* -1 means run all modules */
+    ret = _runClientBenchmarks(client, transport,
+                               -1); /* -1 means run all modules */
 
     /* Clean up */
     wh_Client_CommClose(client);
@@ -565,7 +576,8 @@ int wh_Bench_ClientCtx(whClientContext* client, int transport)
         return WH_ERROR_BADARGS;
     }
 
-    return _runClientBenchmarks(client, transport, -1); /* -1 means run all modules */
+    return _runClientBenchmarks(client, transport,
+                                -1); /* -1 means run all modules */
 }
 
 
@@ -617,17 +629,17 @@ int wh_Bench_ServerCfgLoop(whServerConfig* serverCfg)
 #if defined(WOLFHSM_CFG_TEST_POSIX)
 typedef struct {
     whClientConfig* config;
-    int moduleIndex;
-    int transport;
+    int             moduleIndex;
+    int             transport;
 } whBenchClientTaskData;
 
 static void* _whBenchClientTask(void* data)
 {
-    whBenchClientTaskData* taskData = (whBenchClientTaskData*)data;
-    whClientContext client[1] = {0};
-    uint32_t client_id = 0;
-    uint32_t server_id = 0;
-    int ret = 0;
+    whBenchClientTaskData* taskData  = (whBenchClientTaskData*)data;
+    whClientContext        client[1] = {0};
+    uint32_t               client_id = 0;
+    uint32_t               server_id = 0;
+    int                    ret       = 0;
 
     /* Initialize the client */
     sleep(0.5); /* Give the server a chance to setup DMA */
@@ -639,46 +651,49 @@ static void* _whBenchClientTask(void* data)
 
 #ifdef WOLFSSL_STATIC_MEMORY
     if (taskData->transport == WH_BENCH_TRANSPORT_DMA) {
-            static const unsigned int listSz = 9;
-            static const uint32_t sizeList[] = {176,256,288,704,1056,1712,2112,
-                2368,33800};
-            static const uint32_t distList[] = {3,1,1,1,1,1,1,3,1};
-            WOLFSSL_HEAP_HINT* heap = NULL;
-            posixTransportShmContext* shmCtx;
-            void*  dma;
-            size_t dmaSz;
+        static const unsigned int listSz     = 9;
+        static const uint32_t     sizeList[] = {176,  256,  288,  704,  1056,
+                                                1712, 2112, 2368, 33800};
+        static const uint32_t     distList[] = {3, 1, 1, 1, 1, 1, 1, 3, 1};
+        WOLFSSL_HEAP_HINT*        heap       = NULL;
+        posixTransportShmContext* shmCtx;
+        void*                     dma;
+        size_t                    dmaSz;
 
-            shmCtx = (posixTransportShmContext*)taskData->config->comm->transport_context;
-            ret = posixTransportShm_GetDma(shmCtx, &dma, &dmaSz);
-            if (ret != 0) {
-                printf("Failed to get DMA\n");
-                return NULL;
-            }
+        shmCtx = (posixTransportShmContext*)
+                     taskData->config->comm->transport_context;
+        ret = posixTransportShm_GetDma(shmCtx, &dma, &dmaSz);
+        if (ret != 0) {
+            printf("Failed to get DMA\n");
+            return NULL;
+        }
 
-            ret = wc_LoadStaticMemory_ex(&heap, listSz, sizeList, distList, dma,
-                dmaSz, 0, 0);
-            if (ret != 0) {
-                WH_BENCH_PRINTF("Failed to load static memory: %d\n", ret);
-                return NULL;
-            }
-            ret = wh_Client_SetHeap(client, (void*)heap);
-            if (ret != 0) {
-                WH_BENCH_PRINTF("Failed to set heap: %d\n", ret);
-                return NULL;
-            }
+        ret = wc_LoadStaticMemory_ex(&heap, listSz, sizeList, distList, dma,
+                                     dmaSz, 0, 0);
+        if (ret != 0) {
+            WH_BENCH_PRINTF("Failed to load static memory: %d\n", ret);
+            return NULL;
+        }
+        ret = wh_Client_SetHeap(client, (void*)heap);
+        if (ret != 0) {
+            WH_BENCH_PRINTF("Failed to set heap: %d\n", ret);
+            return NULL;
+        }
     }
 #endif
 
     /* Establish communication with the server */
     ret = wh_Client_CommInit(client, &client_id, &server_id);
     if (ret != 0) {
-        WH_BENCH_PRINTF("Failed to establish communication with server: %d\n", ret);
+        WH_BENCH_PRINTF("Failed to establish communication with server: %d\n",
+                        ret);
         wh_Client_Cleanup(client);
         return NULL;
     }
 
     /* Run the benchmarks */
-    ret = _runClientBenchmarks(client, taskData->transport, taskData->moduleIndex);
+    ret = _runClientBenchmarks(client, taskData->transport,
+                               taskData->moduleIndex);
     if (ret != 0) {
         WH_BENCH_PRINTF("Client benchmark failed: %d\n", ret);
     }
@@ -699,8 +714,7 @@ static void* _whBenchServerTask(void* cf)
 
 static void _whBenchClientServerThreadTest(whClientConfig* c_conf,
                                            whServerConfig* s_conf,
-                                           int moduleIndex,
-                                           int transport)
+                                           int moduleIndex, int transport)
 {
     pthread_t cthread = {0};
     pthread_t sthread = {0};
@@ -728,35 +742,35 @@ static void _whBenchClientServerThreadTest(whClientConfig* c_conf,
 }
 
 /* Global static variables for transport configurations */
-static uint8_t g_mem_req[BUFFER_SIZE] = {0};
-static uint8_t g_mem_resp[BUFFER_SIZE] = {0};
-static whTransportMemConfig g_mem_tmcf = {
-    .req       = (whTransportMemCsr*)g_mem_req,
-    .req_size  = sizeof(g_mem_req),
-    .resp      = (whTransportMemCsr*)g_mem_resp,
-    .resp_size = sizeof(g_mem_resp),
+static uint8_t              g_mem_req[BUFFER_SIZE]  = {0};
+static uint8_t              g_mem_resp[BUFFER_SIZE] = {0};
+static whTransportMemConfig g_mem_tmcf              = {
+                 .req       = (whTransportMemCsr*)g_mem_req,
+                 .req_size  = sizeof(g_mem_req),
+                 .resp      = (whTransportMemCsr*)g_mem_resp,
+                 .resp_size = sizeof(g_mem_resp),
 };
-static whTransportClientCb         g_mem_tccb = WH_TRANSPORT_MEM_CLIENT_CB;
-static whTransportMemClientContext g_mem_tmcc = {0};
+static whTransportClientCb         g_mem_tccb    = WH_TRANSPORT_MEM_CLIENT_CB;
+static whTransportMemClientContext g_mem_tmcc    = {0};
 static whCommClientConfig          g_mem_cc_conf = {
-    .transport_cb      = &g_mem_tccb,
-    .transport_context = (void*)&g_mem_tmcc,
-    .transport_config  = (void*)&g_mem_tmcf,
-    .client_id         = 123,
+             .transport_cb      = &g_mem_tccb,
+             .transport_context = (void*)&g_mem_tmcc,
+             .transport_config  = (void*)&g_mem_tmcf,
+             .client_id         = 123,
 };
 
-static whTransportServerCb         g_mem_tscb = WH_TRANSPORT_MEM_SERVER_CB;
-static whTransportMemServerContext g_mem_tmsc = {0};
+static whTransportServerCb         g_mem_tscb    = WH_TRANSPORT_MEM_SERVER_CB;
+static whTransportMemServerContext g_mem_tmsc    = {0};
 static whCommServerConfig          g_mem_cs_conf = {
-    .transport_cb      = &g_mem_tscb,
-    .transport_context = (void*)&g_mem_tmsc,
-    .transport_config  = (void*)&g_mem_tmcf,
-    .server_id         = 124,
+             .transport_cb      = &g_mem_tscb,
+             .transport_context = (void*)&g_mem_tmsc,
+             .transport_config  = (void*)&g_mem_tmcf,
+             .server_id         = 124,
 };
 
 /* Helper function to configure client transport based on type */
 static int _configureClientTransport(whBenchTransportType transport,
-    whClientConfig* c_conf)
+                                     whClientConfig*      c_conf)
 {
     int ret = WH_ERROR_OK;
 
@@ -767,30 +781,30 @@ static int _configureClientTransport(whBenchTransportType transport,
             break;
         }
 
-     #ifdef WOLFSSL_STATIC_MEMORY
+#ifdef WOLFSSL_STATIC_MEMORY
         case WH_BENCH_TRANSPORT_DMA: {
             static whClientDmaConfig dmaConfig;
 
-            dmaConfig.cb = wh_Client_PosixStaticMemoryDMA;
+            dmaConfig.cb               = wh_Client_PosixStaticMemoryDMA;
             dmaConfig.dmaAddrAllowList = NULL;
-            c_conf->dmaConfig = &dmaConfig;
-        }
-        ; __attribute__ ((fallthrough));
-        /* Fall through */
-    #endif
+            c_conf->dmaConfig          = &dmaConfig;
+        };
+            __attribute__((fallthrough));
+            /* Fall through */
+#endif
 
         case WH_BENCH_TRANSPORT_SHM: {
             /* Shared memory transport configuration */
-            static whTransportClientCb            pttcClientShmCb[1] =
-                {POSIX_TRANSPORT_SHM_CLIENT_CB};
+            static whTransportClientCb pttcClientShmCb[1] = {
+                POSIX_TRANSPORT_SHM_CLIENT_CB};
             static posixTransportShmClientContext tccShm;
             static posixTransportShmConfig        myshmconfig = {
-                .name = "wh_bench_shm",
-                .req_size  = 1024,
-                .resp_size = 1024,
-                .dma_size  = 80000,
+                       .name      = "wh_bench_shm",
+                       .req_size  = 1024,
+                       .resp_size = 1024,
+                       .dma_size  = 80000,
             };
-            static whCommClientConfig             ccShmConf = {
+            static whCommClientConfig ccShmConf = {
                 .transport_cb      = pttcClientShmCb,
                 .transport_context = (void*)&tccShm,
                 .transport_config  = (void*)&myshmconfig,
@@ -804,14 +818,13 @@ static int _configureClientTransport(whBenchTransportType transport,
 
         case WH_BENCH_TRANSPORT_TCP: {
             /* TCP transport configuration */
-            static whTransportClientCb            pttcClientTcpCb =
-                PTT_CLIENT_CB;
+            static whTransportClientCb pttcClientTcpCb = PTT_CLIENT_CB;
             static posixTransportTcpClientContext tccTcp;
             static posixTransportTcpConfig        mytcpconfig = {
-                .server_ip_string = "127.0.0.1",
-                .server_port      = 23456,
+                       .server_ip_string = "127.0.0.1",
+                       .server_port      = 23456,
             };
-            static whCommClientConfig             ccTcpConf = {
+            static whCommClientConfig ccTcpConf = {
                 .transport_cb      = &pttcClientTcpCb,
                 .transport_context = (void*)&tccTcp,
                 .transport_config  = (void*)&mytcpconfig,
@@ -832,7 +845,7 @@ static int _configureClientTransport(whBenchTransportType transport,
 
 /* Helper function to configure server transport based on type */
 static int _configureServerTransport(whBenchTransportType transport,
-    whServerConfig* s_conf)
+                                     whServerConfig*      s_conf)
 {
     int ret = WH_ERROR_OK;
 
@@ -843,30 +856,30 @@ static int _configureServerTransport(whBenchTransportType transport,
             break;
         }
 
-    #ifdef WOLFSSL_STATIC_MEMORY
+#ifdef WOLFSSL_STATIC_MEMORY
         case WH_BENCH_TRANSPORT_DMA: {
             static whServerDmaConfig dmaConfig;
 
-            dmaConfig.cb = wh_Server_PosixStaticMemoryDMA;
+            dmaConfig.cb               = wh_Server_PosixStaticMemoryDMA;
             dmaConfig.dmaAddrAllowList = NULL;
-            s_conf->dmaConfig = &dmaConfig;
-        }
-        ; __attribute__ ((fallthrough));
-        /* Fall through */
-    #endif
+            s_conf->dmaConfig          = &dmaConfig;
+        };
+            __attribute__((fallthrough));
+            /* Fall through */
+#endif
 
         case WH_BENCH_TRANSPORT_SHM: {
             /* Shared memory transport configuration */
-            static whTransportServerCb            pttServerShmCb[1] =
-                {POSIX_TRANSPORT_SHM_SERVER_CB};
+            static whTransportServerCb pttServerShmCb[1] = {
+                POSIX_TRANSPORT_SHM_SERVER_CB};
             static posixTransportShmServerContext tscShm;
             static posixTransportShmConfig        myshmconfig = {
-                .name = "wh_bench_shm",
-                .req_size  = 1024,
-                .resp_size = 1024,
-                .dma_size  = 80000,
+                       .name      = "wh_bench_shm",
+                       .req_size  = 1024,
+                       .resp_size = 1024,
+                       .dma_size  = 80000,
             };
-            static whCommServerConfig             csShmConf = {
+            static whCommServerConfig csShmConf = {
                 .transport_cb      = pttServerShmCb,
                 .transport_context = (void*)&tscShm,
                 .transport_config  = (void*)&myshmconfig,
@@ -880,13 +893,13 @@ static int _configureServerTransport(whBenchTransportType transport,
 
         case WH_BENCH_TRANSPORT_TCP: {
             /* TCP transport configuration */
-            static whTransportServerCb            pttServerTcpCb = PTT_SERVER_CB;
+            static whTransportServerCb pttServerTcpCb = PTT_SERVER_CB;
             static posixTransportTcpServerContext tscTcp;
             static posixTransportTcpConfig        mytcpconfig = {
-                .server_ip_string = "127.0.0.1",
-                .server_port      = 23456,
+                       .server_ip_string = "127.0.0.1",
+                       .server_port      = 23456,
             };
-            static whCommServerConfig             csTcpConf = {
+            static whCommServerConfig csTcpConf = {
                 .transport_cb      = &pttServerTcpCb,
                 .transport_context = (void*)&tscTcp,
                 .transport_config  = (void*)&mytcpconfig,
@@ -911,7 +924,7 @@ static int _configureServerTransport(whBenchTransportType transport,
 int wh_Bench_ClientServer_Posix(int transport, int moduleIndex)
 {
     static uint8_t memory[FLASH_RAM_SIZE] = {0};
-    int ret = WH_ERROR_OK;
+    int            ret                    = WH_ERROR_OK;
 
     /* Client configuration/contexts */
     whClientConfig c_conf[1] = {{0}};
@@ -970,7 +983,7 @@ int wh_Bench_ClientServer_Posix(int transport, int moduleIndex)
     s_conf[0].nvm = nvm;
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     s_conf[0].crypto = crypto;
-    s_conf[0].devId = INVALID_DEVID;
+    s_conf[0].devId  = INVALID_DEVID;
 #endif
 
     /* Initialize Flash first */

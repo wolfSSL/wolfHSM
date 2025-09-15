@@ -20,15 +20,15 @@ posixTransportTcpConfig tcpConfig;
 
 whCommServerConfig s_comm;
 
-whTransportServerCb tcpCb = PTT_SERVER_CB;
-whTransportServerCb shmCb = POSIX_TRANSPORT_SHM_SERVER_CB;
+whTransportServerCb            tcpCb = PTT_SERVER_CB;
+whTransportServerCb            shmCb = POSIX_TRANSPORT_SHM_SERVER_CB;
 posixTransportShmServerContext tscShm;
 posixTransportTcpServerContext tscTcp;
 
 #ifdef WOLFSSL_STATIC_MEMORY
-whTransportServerCb dmaCb = POSIX_TRANSPORT_SHM_SERVER_CB;
+whTransportServerCb            dmaCb = POSIX_TRANSPORT_SHM_SERVER_CB;
 posixTransportShmServerContext tscDma;
-whServerDmaConfig dmaConfig;
+whServerDmaConfig              dmaConfig;
 
 /* Server configuration setup example for transport
  * Does not setup flash, nvm, crypto, she, etc. */
@@ -44,7 +44,7 @@ int Server_ExampleDMAConfig(void* conf)
     shmConfig.resp_size = WH_POSIX_RESP_SIZE;
     shmConfig.dma_size  = WH_POSIX_DMA_SIZE;
 
-    dmaConfig.cb = wh_Server_PosixStaticMemoryDMA;
+    dmaConfig.cb               = wh_Server_PosixStaticMemoryDMA;
     dmaConfig.dmaAddrAllowList = NULL;
 
     s_comm.transport_cb      = &dmaCb;
@@ -113,10 +113,9 @@ static whFlashRamsimCfg fc_conf;
 int Server_ExampleRAMSimConfig(void* conf, uint8_t* memory)
 {
     whServerConfig* s_conf = (whServerConfig*)conf;
-    
+
     fc_conf.size       = WH_POSIX_FLASH_RAM_SIZE,
-    fc_conf.sectorSize = WH_POSIX_FLASH_RAM_SIZE / 2,
-    fc_conf.pageSize   = 8;
+    fc_conf.sectorSize = WH_POSIX_FLASH_RAM_SIZE / 2, fc_conf.pageSize = 8;
     fc_conf.erasedByte = (uint8_t)0;
     fc_conf.memory     = memory;
 
@@ -145,11 +144,11 @@ static Entry* entryHead = NULL;
 
 /* Function prototypes for NVM init */
 static Entry* createEntry(uint8_t clientId, uint16_t id, uint16_t access,
-    uint16_t flags, const char* label,
-    const char* filePath);
+                          uint16_t flags, const char* label,
+                          const char* filePath);
 static void   appendEntry(Entry** head, uint8_t clientId, uint16_t id,
-    uint16_t access, uint16_t flags, const char* label,
-    const char* filePath);
+                          uint16_t access, uint16_t flags, const char* label,
+                          const char* filePath);
 static void   processEntry(Entry* entry, int isKey, whNvmContext* nvmContext);
 static void   processEntries(whNvmContext* nvmContext);
 static void   freeEntries(void);
@@ -481,14 +480,14 @@ static int initializeNvm(whNvmContext* nvmContext, const char* nvmInitFilePath)
 
 int Server_ExampleNVMConfig(void* conf, const char* nvmInitFilePath)
 {
-    int rc;
-    whServerConfig* s_conf = (whServerConfig*)conf;
-    static whNvmConfig n_conf = {0};
+    int                      rc;
+    whServerConfig*          s_conf = (whServerConfig*)conf;
+    static whNvmConfig       n_conf = {0};
     static whNvmFlashConfig  nf_conf;
-    static whNvmFlashContext nfc[1]     = {0};
-    static whNvmCb           nfcb[1]    = {WH_NVM_FLASH_CB};
-    static whNvmContext nvm[1] = {{0}};
-    static whFlashRamsimCtx fc = {0};
+    static whNvmFlashContext nfc[1]  = {0};
+    static whNvmCb           nfcb[1] = {WH_NVM_FLASH_CB};
+    static whNvmContext      nvm[1]  = {{0}};
+    static whFlashRamsimCtx  fc      = {0};
 
 
     nf_conf.cb      = &fcb;
@@ -500,14 +499,14 @@ int Server_ExampleNVMConfig(void* conf, const char* nvmInitFilePath)
     n_conf.config  = &nf_conf;
 
     s_conf->nvm = nvm;
-    rc = wh_Nvm_Init(nvm, &n_conf);
+    rc          = wh_Nvm_Init(nvm, &n_conf);
     if (rc != 0) {
         printf("Failed to initialize NVM: %d\n", rc);
         return rc;
     }
 
-       /* Initialize NVM with contents from the NVM init file if provided */
-       if (nvmInitFilePath != NULL) {
+    /* Initialize NVM with contents from the NVM init file if provided */
+    if (nvmInitFilePath != NULL) {
         printf("Initializing NVM with contents from %s\n", nvmInitFilePath);
         rc = initializeNvm(nvm, nvmInitFilePath);
         if (rc != 0) {

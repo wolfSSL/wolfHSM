@@ -198,9 +198,9 @@ extern "C" {
 #endif
 
 #ifdef WOLFHSM_CFG_DMA
-    /* use static memory to divide up DMA shared buffer */
-    #undef  WOLFSSL_STATIC_MEMORY
-    #define WOLFSSL_STATIC_MEMORY
+/* use static memory to divide up DMA shared buffer */
+#undef WOLFSSL_STATIC_MEMORY
+#define WOLFSSL_STATIC_MEMORY
 #endif
 
 #ifdef __cplusplus

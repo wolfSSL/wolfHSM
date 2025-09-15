@@ -8,8 +8,8 @@
 #define HAVE_ANONYMOUS_INLINE_AGGREGATES 1
 /* Optional if debugging cryptocb's */
 #if 0
-    #define DEBUG_CRYPTOCB
-    #define DEBUG_CRYPTOCB_VERBOSE
+#define DEBUG_CRYPTOCB
+#define DEBUG_CRYPTOCB_VERBOSE
 #endif
 
 /* Key DER export/import support */
@@ -20,15 +20,15 @@
 /* C90 compatibility, which doesn't support inline keyword */
 #define NO_INLINE
 /* Suppresses warning in evp.c */
-#define WOLFSSL_IGNORE_FILE_WARN 
+#define WOLFSSL_IGNORE_FILE_WARN
 
 /* Either NO_HARDEN or set resistance and blinding */
 #if 0
 #define WC_NO_HARDEN
 #else
-    #define TFM_TIMING_RESISTANT
-    #define ECC_TIMING_RESISTANT
-    #define WC_RSA_BLINDING
+#define TFM_TIMING_RESISTANT
+#define ECC_TIMING_RESISTANT
+#define WC_RSA_BLINDING
 #endif
 
 
@@ -48,9 +48,9 @@
 #define BENCH_EMBEDDED
 
 #ifdef WOLFHSM_CFG_DMA
-    #undef  WOLFSSL_STATIC_MEMORY
-    #define WOLFSSL_STATIC_MEMORY
-    #define WOLFSSL_STATIC_MEMORY_TEST_SZ 100000
+#undef WOLFSSL_STATIC_MEMORY
+#define WOLFSSL_STATIC_MEMORY
+#define WOLFSSL_STATIC_MEMORY_TEST_SZ 100000
 #endif
 
 /* Include to ensure clock_gettime is declared for benchmark.c */

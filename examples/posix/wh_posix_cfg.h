@@ -29,9 +29,9 @@
 #define WH_POSIX_DMA_SIZE 8000
 
 /* Data Buffer Sizes */
-#define WH_POSIX_DATA_BUFFER_SIZE 0x400  /* 1024 bytes */
+#define WH_POSIX_DATA_BUFFER_SIZE 0x400 /* 1024 bytes */
 #define WH_POSIX_KEY_BUFFER_SIZE 4096
-#define WH_POSIX_MAX_LINE_LENGTH 4608    /* 512 + PATH_MAX */
+#define WH_POSIX_MAX_LINE_LENGTH 4608 /* 512 + PATH_MAX */
 
 /* ===========================================
  * FILE SYSTEM CONSTANTS
@@ -71,7 +71,7 @@
  * =========================================== */
 
 /* Flash and RAM Sizes */
-#define WH_POSIX_FLASH_RAM_SIZE (1024 * 1024)  /* 1MB */
+#define WH_POSIX_FLASH_RAM_SIZE (1024 * 1024) /* 1MB */
 #define WH_POSIX_STATIC_MEMORY_TEST_SZ 120000
 
 /* NVM Object Count */

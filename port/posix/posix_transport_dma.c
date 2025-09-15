@@ -24,13 +24,13 @@
  * use and passing shared memory locations from the client <-> server by
  * reference. Avoiding memcpy calls where possible for increased performance. */
 
-#include <fcntl.h>     /* For O_* constants */
-#include <sys/mman.h>  /* For shm_open, mmap */
-#include <sys/stat.h>  /* For mode constants */
-#include <unistd.h>    /* For ftruncate, getpid, sleep */
-#include <errno.h>     /* For errno */
-#include <stdlib.h>    /* For exit */
-#include <string.h>    /* For memset */
+#include <fcntl.h>    /* For O_* constants */
+#include <sys/mman.h> /* For shm_open, mmap */
+#include <sys/stat.h> /* For mode constants */
+#include <unistd.h>   /* For ftruncate, getpid, sleep */
+#include <errno.h>    /* For errno */
+#include <stdlib.h>   /* For exit */
+#include <string.h>   /* For memset */
 #include <stdint.h>
 #include <stdio.h>
 
@@ -49,17 +49,18 @@
 
 /** Custom functions */
 
-int wh_Client_PosixStaticMemoryDMA(whClientContext* client, uintptr_t clientAddr,
-    void** xformedCliAddr, size_t len, whClientDmaOper oper,
-    whClientDmaFlags flags)
+int wh_Client_PosixStaticMemoryDMA(whClientContext* client,
+                                   uintptr_t clientAddr, void** xformedCliAddr,
+                                   size_t len, whClientDmaOper oper,
+                                   whClientDmaFlags flags)
 {
-    int ret = WH_ERROR_OK;
-    int isInDma = 0;
-    void* dmaPtr;
-    size_t dmaSize;
+    int       ret     = WH_ERROR_OK;
+    int       isInDma = 0;
+    void*     dmaPtr;
+    size_t    dmaSize;
     uintptr_t dmaBuffer; /* buffer in DMA space */
     uintptr_t dmaOffset;
-    void* heap = NULL;
+    void*     heap = NULL;
 
     /* NULL pointer maps to NULL, short circuit here */
     if (clientAddr == 0 || len == 0) {
@@ -68,17 +69,17 @@ int wh_Client_PosixStaticMemoryDMA(whClientContext* client, uintptr_t clientAddr
     }
 
     /* First check if the address is in the expected DMA area */
-    ret = posixTransportShm_GetDma(client->comm->transport_context,
-        &dmaPtr, &dmaSize);
+    ret = posixTransportShm_GetDma(client->comm->transport_context, &dmaPtr,
+                                   &dmaSize);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
 
     if ((dmaPtr != NULL) && (dmaSize > 0) && (len < dmaSize) &&
-            (clientAddr >= (uintptr_t)dmaPtr) &&
-            (clientAddr < (uintptr_t)(dmaPtr + dmaSize - len))) {
+        (clientAddr >= (uintptr_t)dmaPtr) &&
+        (clientAddr < (uintptr_t)(dmaPtr + dmaSize - len))) {
         dmaBuffer = clientAddr;
-        isInDma = 1;
+        isInDma   = 1;
     }
     else {
         heap = client->dma.heap;
@@ -87,21 +88,21 @@ int wh_Client_PosixStaticMemoryDMA(whClientContext* client, uintptr_t clientAddr
         }
     }
 
-    if (oper == WH_DMA_OPER_SERVER_READ_PRE
-        || oper == WH_DMA_OPER_SERVER_WRITE_PRE) {
-            if (isInDma == 0) {
-                dmaBuffer = (uintptr_t)XMALLOC(len, heap, DYNAMIC_TYPE_TMP_BUFFER);
-                if (dmaBuffer == 0) {
-                    return WH_ERROR_NOSPACE;
-                }
-                dmaOffset = dmaBuffer - (uintptr_t)dmaPtr;
-                memcpy((void*)dmaBuffer, (void*)clientAddr, len);
+    if (oper == WH_DMA_OPER_SERVER_READ_PRE ||
+        oper == WH_DMA_OPER_SERVER_WRITE_PRE) {
+        if (isInDma == 0) {
+            dmaBuffer = (uintptr_t)XMALLOC(len, heap, DYNAMIC_TYPE_TMP_BUFFER);
+            if (dmaBuffer == 0) {
+                return WH_ERROR_NOSPACE;
             }
-            else {
-                dmaOffset = clientAddr - (uintptr_t)dmaPtr;
-            }
-            /* return an offset into the DMA area */
-            *xformedCliAddr = (void*)dmaOffset;
+            dmaOffset = dmaBuffer - (uintptr_t)dmaPtr;
+            memcpy((void*)dmaBuffer, (void*)clientAddr, len);
+        }
+        else {
+            dmaOffset = clientAddr - (uintptr_t)dmaPtr;
+        }
+        /* return an offset into the DMA area */
+        *xformedCliAddr = (void*)dmaOffset;
     }
     else if (oper == WH_DMA_OPER_SERVER_READ_POST) {
         if (isInDma == 0) {
@@ -112,7 +113,8 @@ int wh_Client_PosixStaticMemoryDMA(whClientContext* client, uintptr_t clientAddr
     else if (oper == WH_DMA_OPER_SERVER_WRITE_POST) {
         if (isInDma == 0) {
             uint8_t* ptr = (uint8_t*)dmaPtr + (uintptr_t)*xformedCliAddr;
-            memcpy((void*)clientAddr, ptr, len); /* copy results of what server wrote */
+            memcpy((void*)clientAddr, ptr,
+                   len); /* copy results of what server wrote */
             XFREE(ptr, heap, DYNAMIC_TYPE_TMP_BUFFER);
         }
     }
@@ -122,14 +124,15 @@ int wh_Client_PosixStaticMemoryDMA(whClientContext* client, uintptr_t clientAddr
 }
 
 
-int wh_Server_PosixStaticMemoryDMA(whServerContext* server, uintptr_t clientAddr,
-    void** xformedCliAddr, size_t len, whServerDmaOper oper,
-    whServerDmaFlags flags)
+int wh_Server_PosixStaticMemoryDMA(whServerContext* server,
+                                   uintptr_t clientAddr, void** xformedCliAddr,
+                                   size_t len, whServerDmaOper oper,
+                                   whServerDmaFlags flags)
 {
     posixTransportShmContext* ctx;
-    void* dma_ptr;
-    size_t dma_size;
-    int ret;
+    void*                     dma_ptr;
+    size_t                    dma_size;
+    int                       ret;
 
     (void)oper;
     (void)flags;

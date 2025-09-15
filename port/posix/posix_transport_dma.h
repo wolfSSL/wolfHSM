@@ -65,13 +65,15 @@
 
 /** Custom functions */
 #include "wolfhsm/wh_server.h"
-int wh_Server_PosixStaticMemoryDMA(whServerContext* server, uintptr_t clientAddr,
-        void** xformedCliAddr, size_t len, whServerDmaOper oper,
-        whServerDmaFlags flags);
+int wh_Server_PosixStaticMemoryDMA(whServerContext* server,
+                                   uintptr_t clientAddr, void** xformedCliAddr,
+                                   size_t len, whServerDmaOper oper,
+                                   whServerDmaFlags flags);
 
 #include "wolfhsm/wh_client.h"
-int wh_Client_PosixStaticMemoryDMA(whClientContext* client, uintptr_t clientAddr,
-    void** xformedCliAddr, size_t len, whClientDmaOper oper,
-    whClientDmaFlags flags);
+int wh_Client_PosixStaticMemoryDMA(whClientContext* client,
+                                   uintptr_t clientAddr, void** xformedCliAddr,
+                                   size_t len, whClientDmaOper oper,
+                                   whClientDmaFlags flags);
 
 #endif /* !PORT_POSIX_POSIX_TRANSPORT_DMA_REFERENCE_H_ */

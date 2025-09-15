@@ -52,7 +52,7 @@ int _benchSha256(whClientContext* client, whBenchOpContext* ctx, int id,
         if (ctx->transportType == WH_BENCH_TRANSPORT_DMA) {
             /* if static memory was used with DMA then use XMALLOC */
             void* heap = wh_Client_GetHeap(client);
-            in = XMALLOC(inLen, heap, DYNAMIC_TYPE_TMP_BUFFER);
+            in         = XMALLOC(inLen, heap, DYNAMIC_TYPE_TMP_BUFFER);
             if (in == NULL) {
                 WH_BENCH_PRINTF("Failed to allocate memory for DMA\n");
                 return WH_ERROR_NOSPACE;
@@ -64,7 +64,7 @@ int _benchSha256(whClientContext* client, whBenchOpContext* ctx, int id,
             }
         }
         else {
-            in    = WH_BENCH_DMA_BUFFER;
+            in = WH_BENCH_DMA_BUFFER;
         }
     }
     else
@@ -133,14 +133,15 @@ int _benchSha256(whClientContext* client, whBenchOpContext* ctx, int id,
         (void)wc_Sha256Free(sha256);
     }
 
-    #if defined(WOLFHSM_CFG_DMA)
-    if (devId == WH_DEV_ID_DMA && ctx->transportType == WH_BENCH_TRANSPORT_DMA) {
-            /* if static memory was used with DMA then use XFREE */
-            void* heap = wh_Client_GetHeap(client);
-            XFREE((uint8_t*)in, heap, DYNAMIC_TYPE_TMP_BUFFER);
-            XFREE(out, heap, DYNAMIC_TYPE_TMP_BUFFER);
-        }
-    #endif
+#if defined(WOLFHSM_CFG_DMA)
+    if (devId == WH_DEV_ID_DMA &&
+        ctx->transportType == WH_BENCH_TRANSPORT_DMA) {
+        /* if static memory was used with DMA then use XFREE */
+        void* heap = wh_Client_GetHeap(client);
+        XFREE((uint8_t*)in, heap, DYNAMIC_TYPE_TMP_BUFFER);
+        XFREE(out, heap, DYNAMIC_TYPE_TMP_BUFFER);
+    }
+#endif
     return ret;
 }
 
