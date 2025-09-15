@@ -44,11 +44,11 @@
 #if defined(WOLFHSM_CFG_TEST_POSIX)
 #include <pthread.h> /* For pthread_create/cancel/join/_t */
 #include <unistd.h>
-#include <time.h>    /* For nanosleep */
+#include <time.h> /* For nanosleep */
 #include "port/posix/posix_transport_tcp.h"
 #include "port/posix/posix_transport_shm.h"
 
-const struct timespec ONE_MS = { .tv_sec = 0, .tv_nsec = 1000000 };
+const struct timespec ONE_MS = {.tv_sec = 0, .tv_nsec = 1000000};
 #endif
 
 #include "wh_test_comm.h"
@@ -400,7 +400,7 @@ void wh_CommClientServer_MemThreadTest(void)
 
     /* Client configuration/contexts */
     whTransportClientCb         tmccb[1]  = {WH_TRANSPORT_MEM_CLIENT_CB};
-    whTransportMemClientContext csc[1]    = {};
+    whTransportMemClientContext csc[1]    = {0};
     whCommClientConfig          c_conf[1] = {{
                  .transport_cb      = tmccb,
                  .transport_context = (void*)csc,
@@ -410,7 +410,7 @@ void wh_CommClientServer_MemThreadTest(void)
 
     /* Server configuration/contexts */
     whTransportServerCb         tmscb[1]  = {WH_TRANSPORT_MEM_SERVER_CB};
-    whTransportMemServerContext css[1]    = {};
+    whTransportMemServerContext css[1]    = {0};
     whCommServerConfig          s_conf[1] = {{
                  .transport_cb      = tmscb,
                  .transport_context = (void*)css,
@@ -439,7 +439,7 @@ void wh_CommClientServer_ShMemThreadTest(void)
 
     /* Client configuration/contexts */
     whTransportClientCb            tmccb[1]  = {POSIX_TRANSPORT_SHM_CLIENT_CB};
-    posixTransportShmClientContext csc[1]    = {};
+    posixTransportShmClientContext csc[1]    = {0};
     whCommClientConfig             c_conf[1] = {{
                     .transport_cb      = tmccb,
                     .transport_context = (void*)csc,
@@ -449,7 +449,7 @@ void wh_CommClientServer_ShMemThreadTest(void)
 
     /* Server configuration/contexts */
     whTransportServerCb            tmscb[1]  = {POSIX_TRANSPORT_SHM_SERVER_CB};
-    posixTransportShmServerContext css[1]    = {};
+    posixTransportShmServerContext css[1]    = {0};
     whCommServerConfig             s_conf[1] = {{
                     .transport_cb      = tmscb,
                     .transport_context = (void*)css,
@@ -470,7 +470,7 @@ void wh_CommClientServer_TcpThreadTest(void)
 
     /* Client configuration/contexts */
     whTransportClientCb            pttccb[1] = {PTT_CLIENT_CB};
-    posixTransportTcpClientContext tcc[1]    = {};
+    posixTransportTcpClientContext tcc[1]    = {0};
     whCommClientConfig             c_conf[1] = {{
                     .transport_cb      = pttccb,
                     .transport_context = (void*)tcc,
@@ -481,7 +481,7 @@ void wh_CommClientServer_TcpThreadTest(void)
     /* Server configuration/contexts */
     whTransportServerCb pttscb[1] = {PTT_SERVER_CB};
 
-    posixTransportTcpServerContext tss[1]    = {};
+    posixTransportTcpServerContext tss[1]    = {0};
     whCommServerConfig             s_conf[1] = {{
                     .transport_cb      = pttscb,
                     .transport_context = (void*)tss,

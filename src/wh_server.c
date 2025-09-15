@@ -65,6 +65,11 @@ static int _wh_Server_HandlePkcs11Request(whServerContext* server,
         uint16_t req_size, const void* req_packet,
         uint16_t *out_resp_size, void* resp_packet);
 
+#ifdef WOLFHSM_CFG_DMA
+/* included for DMA callback */
+#include "port/posix/posix_transport_dma.h"
+#endif
+
 int wh_Server_Init(whServerContext* server, whServerConfig* config)
 {
     int rc = 0;
@@ -120,6 +125,7 @@ int wh_Server_Cleanup(whServerContext* server)
 
     return WH_ERROR_OK;
 }
+
 
 int wh_Server_SetConnected(whServerContext *server, whCommConnected connected)
 {

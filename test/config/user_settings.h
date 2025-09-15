@@ -45,7 +45,6 @@
 #define WOLFSSL_IGNORE_FILE_WARN
 
 
-
 /* For cert manager */
 #define NO_TLS
 /* Eliminates need for IO layer since we only use CM */

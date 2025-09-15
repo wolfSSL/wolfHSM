@@ -86,6 +86,7 @@ typedef struct {
     whTransportMemContext   transportMemCtx[1];
     whCommSetConnectedCb    connectcb;
     void*                   connectcb_arg;
+    void*                   heap; /* heap hint used in pass by reference */
 } posixTransportShmContext;
 
 /* Naming conveniences. Reuses the same types. */

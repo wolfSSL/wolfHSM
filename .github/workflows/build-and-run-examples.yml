@@ -8,8 +8,11 @@ on:
 
 jobs:
   build:
-
+    strategy:
+        matrix:
+            transport: [ 'tcp', 'shm', 'dma' ]
     runs-on: ubuntu-latest
+    timeout-minutes: 5
 
     steps:
     - uses: actions/checkout@master
@@ -22,28 +25,38 @@ jobs:
         path: wolfssl
 
     # Build examples
-    - name: Build POSIX TCP server
-      run: cd examples/posix/tcp/wh_server_tcp && make -j WOLFSSL_DIR=../../../../wolfssl
-    - name: Build POSIX TCP client
-      run: cd examples/posix/tcp/wh_client_tcp && make -j WOLFSSL_DIR=../../../../wolfssl
+    - name: Build POSIX server
+      run: |
+        if [ "${{ matrix.transport }}" = "dma" ]; then
+          cd examples/posix/wh_posix_server && DMA=1 make -j WOLFSSL_DIR=../../../wolfssl
+        else
+          cd examples/posix/wh_posix_server && make -j WOLFSSL_DIR=../../../wolfssl
+        fi
+    - name: Build POSIX client
+      run: |
+        if [ "${{ matrix.transport }}" = "dma" ]; then
+          cd examples/posix/wh_posix_client && DMA=1 make -j WOLFSSL_DIR=../../../wolfssl
+        else
+          cd examples/posix/wh_posix_client && make -j WOLFSSL_DIR=../../../wolfssl
+        fi
 
     # Start the server in the background
-    - name: Run POSIX TCP server
+    - name: Run POSIX server
       run: |
-        cd examples/posix/tcp/wh_server_tcp
-        ./Build/wh_server_tcp.elf &
-        TCP_SERVER_PID=$!
-        echo "TCP_SERVER_PID=$TCP_SERVER_PID" >> $GITHUB_ENV
+        cd examples/posix/wh_posix_server
+        ./Build/wh_posix_server.elf --type ${{ matrix.transport }} &
+        POSIX_SERVER_PID=$!
+        echo "POSIX_SERVER_PID=$POSIX_SERVER_PID" >> $GITHUB_ENV
 
     # Run the client that connects to the server
-    - name: Run POSIX TCP client
+    - name: Run POSIX client
       run: |
-        cd examples/posix/tcp/wh_client_tcp
-        ./Build/wh_client_tcp.elf
+        cd examples/posix/wh_posix_client
+        ./Build/wh_posix_client.elf --type ${{ matrix.transport }}
 
     # Optional: Kill the server process if it doesn't exit on its own
-    - name: Cleanup POSIX TCP server
+    - name: Cleanup POSIX server
       if: always()
-      run: kill $TCP_SERVER_PID || true
+      run: kill $POSIX_SERVER_PID || true
 
 

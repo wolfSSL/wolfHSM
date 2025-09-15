@@ -59,6 +59,10 @@
 #include "wolfhsm/wh_message_counter.h"
 #include "wolfhsm/wh_client.h"
 
+#ifdef WOLFHSM_CFG_DMA
+/* included for default callback */
+#include "port/posix/posix_transport_dma.h"
+#endif /* WOLFHSM_CFG_DMA */
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
 const int WH_DEV_IDS_ARRAY[WH_NUM_DEVIDS] = {
@@ -98,6 +102,13 @@ int wh_Client_Init(whClientContext* c, const whClientConfig* config)
 
 #ifdef WOLFHSM_CFG_DMA
             if (rc == 0) {
+                /* Initialize DMA configuration and callbacks, if provided */
+                if (NULL != config->dmaConfig) {
+                    c->dma.dmaAddrAllowList =
+                        config->dmaConfig->dmaAddrAllowList;
+                    c->dma.cb = config->dmaConfig->cb;
+                }
+
                 rc = wc_CryptoCb_RegisterDevice(WH_DEV_ID_DMA,
                                                 wh_Client_CryptoCbDma, c);
                 if (rc != 0) {
@@ -743,10 +754,12 @@ int wh_Client_KeyCacheRequest_ex(whClientContext* c, uint32_t flags,
     else {
         req->labelSz = labelSz;
         /* write label */
-        if (labelSz > WH_NVM_LABEL_LEN)
+        if (labelSz > WH_NVM_LABEL_LEN) {
             memcpy(req->label, label, WH_NVM_LABEL_LEN);
-        else
+        }
+        else {
             memcpy(req->label, label, labelSz);
+        }
     }
 
     /* write in */
@@ -1496,6 +1509,25 @@ int wh_Client_KeyExportDma(whClientContext* c, uint16_t keyId,
         } while (ret == WH_ERROR_NOTREADY);
     }
     return ret;
+}
+
+
+void* wh_Client_GetHeap(whClientContext* c)
+{
+    void* heap = NULL;
+    if (c != NULL) {
+        heap = c->dma.heap;
+    }
+    return heap;
+}
+
+int wh_Client_SetHeap(whClientContext* c, void* heap)
+{
+    if (c == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    c->dma.heap = heap;
+    return WH_ERROR_OK;
 }
 
 #endif /* WOLFHSM_CFG_DMA */
