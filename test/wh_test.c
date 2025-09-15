@@ -111,6 +111,7 @@ int whTest_ClientConfig(whClientConfig* clientCfg)
 
 #if !defined(WOLFHSM_CFG_NO_CRYPTO)
     WH_TEST_RETURN_ON_FAIL(whTest_CryptoClientConfig(clientCfg));
+    WH_TEST_RETURN_ON_FAIL(whTest_WrapKeyClientConfig(clientCfg));
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
 #if defined(WOLFHSM_CFG_SHE_EXTENSION)
@@ -120,10 +121,6 @@ int whTest_ClientConfig(whClientConfig* clientCfg)
 #if defined(WOLFHSM_CFG_TEST_WOLFCRYPTTEST)
     WH_TEST_RETURN_ON_FAIL(whTest_WolfCryptTestCfg(clientCfg));
 #endif /* WOLFHSM_CFG_TEST_WOLFCRYPTTEST */
-
-#if defined(WOLFHSM_CFG_WRAPKEY) && !defined(WOLFHSM_CFG_NO_CRYPTO)
-    WH_TEST_RETURN_ON_FAIL(whTest_WrapKeyClientConfig(clientCfg));
-#endif
 
     return WH_ERROR_OK;
 }

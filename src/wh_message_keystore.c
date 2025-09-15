@@ -238,7 +238,6 @@ int wh_MessageKeystore_TranslateExportDmaResponse(
 
 #endif /* WOLFHSM_CFG_DMA */
 
-#ifdef WOLFHSM_CFG_WRAPKEY
 /* Key Wrap Request translation */
 int wh_MessageKeystore_TranslateWrapRequest(
     uint16_t magic, const whMessageKeystore_WrapRequest* src,
@@ -322,4 +321,3 @@ int wh_MessageKeystore_TranslateUnwrapAndCacheResponse(
     WH_T16(magic, dest, src, cipherType);
     return 0;
 }
-#endif /* WOLFHSM_CFG_WRAPKEY */
