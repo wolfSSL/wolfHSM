@@ -104,8 +104,9 @@ int wh_Client_Init(whClientContext* c, const whClientConfig* config)
             if (rc == 0) {
                 /* Initialize DMA configuration and callbacks, if provided */
                 if (NULL != config->dmaConfig) {
-                    c->dma.dmaAddrAllowList = config->dmaConfig->dmaAddrAllowList;
-                    c->dma.cb               = config->dmaConfig->cb;
+                    c->dma.dmaAddrAllowList =
+                        config->dmaConfig->dmaAddrAllowList;
+                    c->dma.cb = config->dmaConfig->cb;
                 }
 
                 rc = wc_CryptoCb_RegisterDevice(WH_DEV_ID_DMA,

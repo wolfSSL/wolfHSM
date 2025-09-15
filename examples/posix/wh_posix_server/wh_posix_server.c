@@ -23,8 +23,8 @@
 #include "wolfhsm/wh_server_keystore.h"
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
-    /* included to print out the version of wolfSSL linked with */
-    #include "wolfssl/version.h"
+/* included to print out the version of wolfSSL linked with */
+#include "wolfssl/version.h"
 #endif
 
 #include "wh_posix_cfg.h"
@@ -35,7 +35,7 @@ static int wh_ServerTask(void* cf, const char* keyFilePath, int keyId,
                          int clientId);
 
 static void _sleepMs(long milliseconds);
-static int _hardwareCryptoCb(int devId, struct wc_CryptoInfo* info, void* ctx);
+static int  _hardwareCryptoCb(int devId, struct wc_CryptoInfo* info, void* ctx);
 
 static void _sleepMs(long milliseconds)
 {
@@ -46,7 +46,7 @@ static void _sleepMs(long milliseconds)
 }
 
 enum {
-    ONE_MS         = 1,
+    ONE_MS = 1,
 };
 
 #define WH_SERVER_TCP_IPSTRING "127.0.0.1"
@@ -189,8 +189,9 @@ static int wh_ServerTask(void* cf, const char* keyFilePath, int keyId,
                         }
 
                         if (ret == WH_ERROR_OK && (strcmp(type, "shm") == 0 ||
-                                strcmp(type, "dma") == 0)) {
-                            /* Shared memory assumes connected once memory is setup */
+                                                   strcmp(type, "dma") == 0)) {
+                            /* Shared memory assumes connected once memory is
+                             * setup */
                             wh_Server_SetConnected(server, WH_COMM_CONNECTED);
                         }
 
@@ -217,26 +218,25 @@ static int wh_ServerTask(void* cf, const char* keyFilePath, int keyId,
     return ret;
 }
 
-static int _hardwareCryptoCb(int devId, struct wc_CryptoInfo* info,
-                                   void* ctx)
+static int _hardwareCryptoCb(int devId, struct wc_CryptoInfo* info, void* ctx)
 {
     (void)devId;
     (void)ctx;
 
     /* Default response */
     int ret = CRYPTOCB_UNAVAILABLE;
-    switch(info->algo_type) {
+    switch (info->algo_type) {
         case WC_ALGO_TYPE_RNG: {
             /*printf("Hardware Crypto Callback: RNG operation requested\n");*/
             /* Extract info parameters */
-            uint8_t* out = info->rng.out;
+            uint8_t* out  = info->rng.out;
             uint32_t size = info->rng.sz;
 
             /* III Not random, just simple counter */
             static uint16_t my_counter = 1;
             if (my_counter > 4096) {
                 /* Only allow 4096 bytes to be generated */
-                ret= CRYPTOCB_UNAVAILABLE;
+                ret = CRYPTOCB_UNAVAILABLE;
             }
             else {
                 uint32_t i = 0;
@@ -248,7 +248,8 @@ static int _hardwareCryptoCb(int devId, struct wc_CryptoInfo* info,
             break;
         }
         default:
-            /*printf("Hardware Crypto Callback: Unsupported algorithm type\n"); */
+            /*printf("Hardware Crypto Callback: Unsupported algorithm type\n");
+             */
             ret = CRYPTOCB_UNAVAILABLE;
     }
     return ret;
@@ -257,9 +258,11 @@ static int _hardwareCryptoCb(int devId, struct wc_CryptoInfo* info,
 static void Usage(const char* exeName)
 {
     printf("Usage: %s --key <key_file_path> --id <key_id> --client <client_id> "
-        "--nvminit <nvm_init_file_path> --type <type>\n", exeName);
+           "--nvminit <nvm_init_file_path> --type <type>\n",
+           exeName);
     printf("Example: %s --key key.bin --id 123 --client 456 "
-        "--nvminit nvm_init.txt --type tcp\n", exeName);
+           "--nvminit nvm_init.txt --type tcp\n",
+           exeName);
     printf("type: tcp (default), shm, dma\n");
 }
 
@@ -350,25 +353,25 @@ int main(int argc, char** argv)
 #endif
 
 
-    s_conf->crypto      = crypto;
-    s_conf->devId       = INVALID_DEVID;
+    s_conf->crypto = crypto;
+    s_conf->devId  = INVALID_DEVID;
 #if defined(WOLFHSM_CFG_SHE_EXTENSION)
-    s_conf->she         = she;
+    s_conf->she = she;
 #endif
 
     /* Initialize crypto library and hardware */
     wolfCrypt_Init();
 
     /* Context 3: Server Software Crypto */
-    WC_RNG rng[1];
+    WC_RNG  rng[1];
     uint8_t buffer[128] = {0};
     wc_InitRng_ex(rng, NULL, INVALID_DEVID);
     wc_RNG_GenerateBlock(rng, buffer, sizeof(buffer));
     wc_FreeRng(rng);
     wh_Utils_Hexdump("Context 3: Server SW RNG:\n", buffer, sizeof(buffer));
 
-    /* Context 4: Server Hardware Crypto */
-    #define HW_DEV_ID 100
+/* Context 4: Server Hardware Crypto */
+#define HW_DEV_ID 100
     memset(buffer, 0, sizeof(buffer));
     wc_CryptoCb_RegisterDevice(HW_DEV_ID, _hardwareCryptoCb, NULL);
     wc_InitRng_ex(rng, NULL, HW_DEV_ID);
@@ -379,7 +382,7 @@ int main(int argc, char** argv)
     /* Context 5: Set default server crypto to use cryptocb */
     crypto->devId = HW_DEV_ID;
     printf("Context 5: Setting up default server crypto with devId=%d\n",
-                crypto->devId);
+           crypto->devId);
 
     rc = wc_InitRng_ex(crypto->rng, NULL, crypto->devId);
     if (rc != 0) {

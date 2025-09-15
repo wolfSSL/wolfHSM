@@ -2752,10 +2752,10 @@ int wh_Client_Sha256Dma(whClientContext* ctx, wc_Sha256* sha, const uint8_t* in,
     uint8_t*                           dataPtr = NULL;
     whMessageCrypto_Sha2DmaRequest*    req     = NULL;
     whMessageCrypto_Sha2DmaResponse*   resp    = NULL;
-    uintptr_t inAddr    = 0; /* The req->input.addr is reused elsewhere, this
-                                local variable is to keep track of the resulting
-                                DMA translation to pass back to the callback on
-                                POST operations. */
+    uintptr_t inAddr = 0; /* The req->input.addr is reused elsewhere, this
+                             local variable is to keep track of the resulting
+                             DMA translation to pass back to the callback on
+                             POST operations. */
     uintptr_t outAddr   = 0;
     uintptr_t stateAddr = 0;
 
@@ -2777,22 +2777,22 @@ int wh_Client_Sha256Dma(whClientContext* ctx, wc_Sha256* sha, const uint8_t* in,
         req->output.sz   = WC_SHA256_DIGEST_SIZE; /* not needed, but YOLO */
 
         /* Perform address translations */
-        ret = wh_Client_DmaProcessClientAddress(ctx, (uintptr_t)sha256,
-            (void**)&stateAddr, req->state.sz, WH_DMA_OPER_SERVER_WRITE_PRE,
-            (whClientDmaFlags){0});
+        ret = wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)sha256, (void**)&stateAddr, req->state.sz,
+            WH_DMA_OPER_SERVER_WRITE_PRE, (whClientDmaFlags){0});
         req->state.addr = stateAddr;
 
         if (ret == WH_ERROR_OK) {
-            ret = wh_Client_DmaProcessClientAddress(ctx, (uintptr_t)in,
-                (void**)&inAddr, req->input.sz, WH_DMA_OPER_SERVER_READ_PRE,
-                (whClientDmaFlags){0});
+            ret = wh_Client_DmaProcessClientAddress(
+                ctx, (uintptr_t)in, (void**)&inAddr, req->input.sz,
+                WH_DMA_OPER_SERVER_READ_PRE, (whClientDmaFlags){0});
             req->input.addr = inAddr;
         }
 
         if (ret == WH_ERROR_OK) {
-            ret = wh_Client_DmaProcessClientAddress(ctx, (uintptr_t)out,
-                (void**)&outAddr, req->output.sz, WH_DMA_OPER_SERVER_WRITE_PRE,
-                (whClientDmaFlags){0});
+            ret = wh_Client_DmaProcessClientAddress(
+                ctx, (uintptr_t)out, (void**)&outAddr, req->output.sz,
+                WH_DMA_OPER_SERVER_WRITE_PRE, (whClientDmaFlags){0});
             req->output.addr = outAddr;
         }
     }
@@ -2830,7 +2830,7 @@ int wh_Client_Sha256Dma(whClientContext* ctx, wc_Sha256* sha, const uint8_t* in,
      * wc_CryptoCb_Sha256Hash(sha256, NULL, 0, * hash) */
     if ((ret == WH_ERROR_OK) && (out != NULL)) {
         /* Packet will have been trashed, so re-populate all fields */
-        req->finalize    = 1;
+        req->finalize = 1;
 #ifdef DEBUG_CRYPTOCB_VERBOSE
         printf("[client] SHA256 DMA FINAL: outAddr=%p\n", out);
 #endif
@@ -2860,13 +2860,15 @@ int wh_Client_Sha256Dma(whClientContext* ctx, wc_Sha256* sha, const uint8_t* in,
 
     if (in != NULL || out != NULL) {
         /* post operation address translations */
-        wh_Client_DmaProcessClientAddress(ctx, (uintptr_t)sha256,
-            (void**)&stateAddr, req->state.sz, WH_DMA_OPER_SERVER_WRITE_POST,
-            (whClientDmaFlags){0});
-        wh_Client_DmaProcessClientAddress(ctx, (uintptr_t)in, (void**)&inAddr,
-            req->input.sz, WH_DMA_OPER_SERVER_READ_POST, (whClientDmaFlags){0});
-        wh_Client_DmaProcessClientAddress(ctx, (uintptr_t)out, (void**)&outAddr,
-            req->output.sz, WH_DMA_OPER_SERVER_WRITE_POST, (whClientDmaFlags){0});
+        wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)sha256, (void**)&stateAddr, req->state.sz,
+            WH_DMA_OPER_SERVER_WRITE_POST, (whClientDmaFlags){0});
+        wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)in, (void**)&inAddr, req->input.sz,
+            WH_DMA_OPER_SERVER_READ_POST, (whClientDmaFlags){0});
+        wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)out, (void**)&outAddr, req->output.sz,
+            WH_DMA_OPER_SERVER_WRITE_POST, (whClientDmaFlags){0});
     }
 
     return ret;

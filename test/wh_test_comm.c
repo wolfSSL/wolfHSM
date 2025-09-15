@@ -44,11 +44,11 @@
 #if defined(WOLFHSM_CFG_TEST_POSIX)
 #include <pthread.h> /* For pthread_create/cancel/join/_t */
 #include <unistd.h>
-#include <time.h>    /* For nanosleep */
+#include <time.h> /* For nanosleep */
 #include "port/posix/posix_transport_tcp.h"
 #include "port/posix/posix_transport_shm.h"
 
-const struct timespec ONE_MS = { .tv_sec = 0, .tv_nsec = 1000000 };
+const struct timespec ONE_MS = {.tv_sec = 0, .tv_nsec = 1000000};
 #endif
 
 #include "wh_test_comm.h"

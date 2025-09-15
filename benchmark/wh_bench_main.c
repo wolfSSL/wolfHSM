@@ -37,12 +37,12 @@ void Usage(const char* exeName)
 
 int main(int argc, char** argv)
 {
-    int transport = WH_BENCH_TRANSPORT_MEM;
+    int transport   = WH_BENCH_TRANSPORT_MEM;
     int moduleIndex = -1;
     int i;
 
     WH_BENCH_PRINTF("wolfHSM POSIX benchmark built with wolfSSL version %s\n",
-        LIBWOLFSSL_VERSION_STRING);
+                    LIBWOLFSSL_VERSION_STRING);
 
     /* Parse command-line arguments */
     for (i = 1; i < argc; i++) {

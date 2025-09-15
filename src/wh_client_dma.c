@@ -43,11 +43,11 @@ static int _checkOperValid(whClientDmaOper oper)
 }
 
 static int _checkAddrAgainstAllowList(const whClientDmaAddrList allowList,
-    void* addr, size_t size)
+                                      void* addr, size_t size)
 {
     uintptr_t startAddr = (uintptr_t)addr;
     uintptr_t endAddr   = startAddr + size;
-    int i = 0;
+    int       i         = 0;
 
     if (0 == size) {
         return WH_ERROR_BADARGS;
@@ -95,11 +95,11 @@ static int _checkMemOperAgainstAllowList(const whClientContext* client,
      */
     if (oper == WH_DMA_OPER_SERVER_READ_PRE) {
         rc = _checkAddrAgainstAllowList(client->dma.dmaAddrAllowList->readList,
-            addr, size);
+                                        addr, size);
     }
     else if (oper == WH_DMA_OPER_SERVER_WRITE_PRE) {
         rc = _checkAddrAgainstAllowList(client->dma.dmaAddrAllowList->writeList,
-            addr, size);
+                                        addr, size);
     }
 
     return rc;

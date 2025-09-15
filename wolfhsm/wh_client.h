@@ -86,7 +86,7 @@ typedef enum {
 
 #ifdef WOLFHSM_CFG_DMA_CUSTOM_CLIENT_COPY
 typedef enum {
-    WH_DMA_COPY_OPER_CLIENT_READ = 0,
+    WH_DMA_COPY_OPER_CLIENT_READ  = 0,
     WH_DMA_COPY_OPER_CLIENT_WRITE = 1,
 } whClientDmaCopyOper;
 #endif /* WOLFHSM_CFG_DMA_CUSTOM_CLIENT_COPY */
@@ -107,9 +107,9 @@ typedef int (*whClientDmaClientMemCb)(struct whClientContext_t* client,
 #ifdef WOLFHSM_CFG_DMA_CUSTOM_CLIENT_COPY
 /* DMA callback invoked to copy from the client */
 typedef int (*whClientDmaMemCopyCb)(struct whClientContext_t* client,
-                                      uintptr_t clientAddr, uintptr_t serverPtr,
-                                      size_t len, whClientDmaCopyOper oper,
-                                      whClientDmaFlags flags);
+                                    uintptr_t clientAddr, uintptr_t serverPtr,
+                                    size_t len, whClientDmaCopyOper oper,
+                                    whClientDmaFlags flags);
 #endif /* WOLFHSM_CFG_DMA_CUSTOM_CLIENT_COPY */
 
 /* DMA address entry within the allowed tables. */
@@ -129,20 +129,20 @@ typedef struct {
 
 /* Server DMA configuration struct for initializing a server */
 typedef struct {
-    whClientDmaClientMemCb          cb;               /* DMA callback */
+    whClientDmaClientMemCb cb; /* DMA callback */
 #ifdef WOLFHSM_CFG_DMA_CUSTOM_CLIENT_COPY
-    whClientDmaMemCopyCb            memCopyCb;       /* DMA memory copy callback */
-#endif /* WOLFHSM_CFG_DMA_CUSTOM_CLIENT_COPY */
+    whClientDmaMemCopyCb memCopyCb; /* DMA memory copy callback */
+#endif                              /* WOLFHSM_CFG_DMA_CUSTOM_CLIENT_COPY */
     const whClientDmaAddrAllowList* dmaAddrAllowList; /* allowed addresses */
 } whClientDmaConfig;
 
 typedef struct {
-    whClientDmaClientMemCb          cb;               /* DMA callback */
+    whClientDmaClientMemCb cb; /* DMA callback */
 #ifdef WOLFHSM_CFG_DMA_CUSTOM_CLIENT_COPY
-    whClientDmaMemCopyCb            memCopyCb;       /* DMA memory copy callback */
-#endif /* WOLFHSM_CFG_DMA_CUSTOM_CLIENT_COPY */
+    whClientDmaMemCopyCb memCopyCb; /* DMA memory copy callback */
+#endif                              /* WOLFHSM_CFG_DMA_CUSTOM_CLIENT_COPY */
     const whClientDmaAddrAllowList* dmaAddrAllowList; /* allowed addresses */
-    void* heap;
+    void*                           heap;
 } whClientDmaContext;
 
 /**

@@ -41,7 +41,9 @@
     printf("[%s:%d]: " fmt, __func__, __LINE__, ##__VA_ARGS__)
 #endif
 #else
-#define WH_DEBUG_PRINT(...) do{} while(0)
+#define WH_DEBUG_PRINT(...) \
+    do {                    \
+    } while (0)
 #endif
 
 /* Helper macro to print a message, prefixed by ERROR, along with caller source
