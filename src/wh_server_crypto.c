@@ -289,6 +289,11 @@ static int _HandleRsaKeyGen(whServerContext* ctx, uint16_t magic,
                     printf("[server] RsaKeyGen UniqueId: keyId:%u, ret:%d\n",
                            key_id, ret);
 #endif
+                    if (ret != 0) {
+                        /* Early return on unique ID generation failure */
+                        wc_FreeRsaKey(rsa);
+                        return ret;
+                    }
                 }
 
                 if (ret == 0) {
@@ -733,6 +738,11 @@ static int _HandleEccKeyGen(whServerContext* ctx, uint16_t magic,
                     printf("[server] %s UniqueId: keyId:%u, ret:%d\n", __func__,
                            key_id, ret);
 #endif
+                    if (ret != 0) {
+                        /* Early return on unique ID generation failure */
+                        wc_ecc_free(key);
+                        return ret;
+                    }
                 }
                 if (ret == 0) {
                     ret = wh_Server_EccKeyCacheImport(ctx, key, key_id, flags,
@@ -1152,6 +1162,11 @@ static int _HandleCurve25519KeyGen(whServerContext* ctx, uint16_t magic,
                     printf("[server] %s UniqueId: keyId:%u, ret:%d\n", __func__,
                            key_id, ret);
 #endif
+                    if (ret != 0) {
+                        /* Early return on unique ID generation failure */
+                        wc_curve25519_free(key);
+                        return ret;
+                    }
                 }
 
                 if (ret == 0) {
@@ -2139,6 +2154,11 @@ static int _HandleMlDsaKeyGen(whServerContext* ctx, uint16_t magic,
                             printf("[server] %s UniqueId: keyId:%u, ret:%d\n",
                                    __func__, key_id, ret);
 #endif
+                            if (ret != 0) {
+                                /* Early return on unique ID generation failure */
+                                wc_MlDsaKey_Free(key);
+                                return ret;
+                            }
                         }
                         if (ret == 0) {
                             ret = wh_Server_MlDsaKeyCacheImport(
@@ -3258,6 +3278,11 @@ static int _HandleMlDsaKeyGenDma(whServerContext* ctx, uint16_t magic,
                             printf("[server] %s UniqueId: keyId:%u, ret:%d\n",
                                    __func__, keyId, ret);
 #endif
+                            if (ret != 0) {
+                                /* Early return on unique ID generation failure */
+                                wc_MlDsaKey_Free(key);
+                                return ret;
+                            }
                         }
 
                         if (ret == 0) {
