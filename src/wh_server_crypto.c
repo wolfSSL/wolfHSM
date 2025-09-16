@@ -2203,6 +2203,12 @@ static int _HandleMlDsaSign(whServerContext* ctx, uint16_t magic,
     uint32_t options = req.options;
     int      evict   = !!(options & WH_MESSAGE_CRYPTO_MLDSA_SIGN_OPTIONS_EVICT);
 
+    /* Validate input length against available data to prevent buffer overread */
+    word32 available_data = inSize - sizeof(whMessageCrypto_MlDsaSignRequest);
+    if (in_len > available_data) {
+        return WH_ERROR_BADARGS;
+    }
+
     /* Response message */
     byte* res_out =
         (uint8_t*)(cryptoDataOut) + sizeof(whMessageCrypto_MlDsaSignResponse);
