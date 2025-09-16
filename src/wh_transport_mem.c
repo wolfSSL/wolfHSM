@@ -92,7 +92,7 @@ int wh_TransportMem_Cleanup(void* c)
 
     return 0;
 }
-
+#if defined(WOLFHSM_CFG_ENABLE_CLIENT)
 int wh_TransportMem_SendRequest(void* c, uint16_t len, const void* data)
 {
     whTransportMemContext* context = c;
@@ -178,7 +178,9 @@ int wh_TransportMem_RecvRequest(void* c, uint16_t *out_len, void* data)
 
     return 0;
 }
+#endif
 
+#if defined(WOLFHSM_CFG_ENABLE_SERVER)
 int wh_TransportMem_SendResponse(void* c, uint16_t len, const void* data)
 {
     whTransportMemContext* context = c;
@@ -260,3 +262,4 @@ int wh_TransportMem_RecvResponse(void* c, uint16_t *out_len, void* data)
 
     return 0;
 }
+#endif

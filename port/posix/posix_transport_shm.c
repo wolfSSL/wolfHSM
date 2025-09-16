@@ -473,7 +473,7 @@ int posixTransportShm_Cleanup(void* c)
     return 0;
 }
 
-
+#if defined(WOLFHSM_CFG_ENABLE_CLIENT)
 int posixTransportShm_SendRequest(void* c, uint16_t len, const void* data)
 {
     posixTransportShmContext* ctx = (posixTransportShmContext*)c;
@@ -565,8 +565,9 @@ int posixTransportShm_RecvRequest(void* c, uint16_t* out_len, void* data)
     }
     return ret;
 }
+#endif /* WOLFHSM_CFG_ENABLE_CLIENT */
 
-
+#if defined(WOLFHSM_CFG_ENABLE_SERVER)
 int posixTransportShm_SendResponse(void* c, uint16_t len, const void* data)
 {
     posixTransportShmContext* ctx = (posixTransportShmContext*)c;
@@ -591,3 +592,4 @@ int posixTransportShm_RecvResponse(void* c, uint16_t* out_len, void* data)
 
     return wh_TransportMem_RecvResponse(ctx->transportMemCtx, out_len, data);
 }
+#endif
