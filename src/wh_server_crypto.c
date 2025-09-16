@@ -2278,6 +2278,14 @@ static int _HandleMlDsaVerify(whServerContext* ctx, uint16_t magic,
     uint32_t sig_len  = req.sigSz;
     byte*    req_sig =
         (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_MlDsaVerifyRequest);
+
+    /* Validate lengths against available payload (overflow-safe) */
+    uint32_t available = inSize - sizeof(whMessageCrypto_MlDsaVerifyRequest);
+    if (sig_len > available || hash_len > available ||
+        sig_len > (available - hash_len)) {
+        return WH_ERROR_BADARGS;
+    }
+
     byte*    req_hash = req_sig + sig_len;
     int      evict = !!(options & WH_MESSAGE_CRYPTO_MLDSA_VERIFY_OPTIONS_EVICT);
 
