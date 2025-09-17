@@ -314,8 +314,8 @@ static int _HandleRsaKeyGen(whServerContext* ctx, uint16_t magic,
                                                       label_size, label);
                 }
 #ifdef DEBUG_CRYPTOCB_VERBOSE
-                printf("[server] RsaKeyGen CacheKeyRsa: keyId:%u, ret:%d\n",
-                       key_id, ret);
+                    printf("[server] RsaKeyGen CacheKeyRsa: keyId:%u, ret:%d\n",
+                           key_id, ret);
 #endif
                 if (ret == 0) {
                     res.keyId = WH_KEYID_ID(key_id);
@@ -763,7 +763,7 @@ static int _HandleEccKeyGen(whServerContext* ctx, uint16_t magic,
                 }
 #ifdef DEBUG_CRYPTOCB
                 printf("[server] %s CacheImport: keyId:%u, ret:%d\n", __func__,
-                       key_id, ret);
+                        key_id, ret);
 #endif
                 /* TODO: RSA has the following, should we do the same? */
                 /*
@@ -1187,8 +1187,8 @@ static int _HandleCurve25519KeyGen(whServerContext* ctx, uint16_t magic,
                         ctx, key, key_id, flags, label_size, label);
                 }
 #ifdef DEBUG_CRYPTOCB
-                printf("[server] %s CacheImport: keyId:%u, ret:%d\n", __func__,
-                       key_id, ret);
+                printf("[server] %s CacheImport: keyId:%u, ret:%d\n",
+                        __func__, key_id, ret);
 #endif
             }
         }
@@ -1941,6 +1941,8 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
                                             ctx->comm->client_id,
                                             WH_KEYID_ERASED);
                     ret   = wh_Server_KeystoreGetUniqueId(ctx, &keyId);
+                    if (ret != 0)
+                        return ret;
                 }
                 else {
                     keyId = WH_MAKE_KEYID(  WH_KEYTYPE_CRYPTO,
@@ -1949,7 +1951,7 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
                 }
                 /* evict the aes sized key in the normal cache */
                 if (moveToBigCache == 1) {
-                    ret = wh_Server_KeystoreEvictKey(ctx, keyId);
+                    (void)wh_Server_KeystoreEvictKey(ctx, keyId);
                 }
                 if (ret == 0) {
                     meta->id  = keyId;
@@ -2393,7 +2395,7 @@ static int _HandleMlDsaKeyGen(whServerContext* ctx, uint16_t magic,
                         }
 #ifdef DEBUG_CRYPTOCB
                         printf("[server] %s CacheImport: keyId:%u, ret:%d\n",
-                               __func__, key_id, ret);
+                             __func__, key_id, ret);
 #endif
                     }
                 }

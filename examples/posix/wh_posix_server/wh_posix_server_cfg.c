@@ -515,5 +515,52 @@ int wh_PosixServer_ExampleNvmConfig(void* conf, const char* nvmInitFilePath)
         printf("NVM initialization completed successfully\n");
     }
 
-    return WH_ERROR_OK;
+    /* Initialize crypto library and hardware */
+    wolfCrypt_Init();
+
+    /* Context 3: Server Software Crypto */
+    WC_RNG rng[1];
+    uint8_t buffer[128] = {0};
+    wc_InitRng_ex(rng, NULL, INVALID_DEVID);
+    wc_RNG_GenerateBlock(rng, buffer, sizeof(buffer));
+    wc_FreeRng(rng);
+    wh_Utils_Hexdump("Context 3: Server SW RNG:\n", buffer, sizeof(buffer));
+
+    /* Context 4: Server Hardware Crypto */
+    #define HW_DEV_ID 100
+    memset(buffer, 0, sizeof(buffer));
+    wc_CryptoCb_RegisterDevice(HW_DEV_ID, _hardwareCryptoCb, NULL);
+    wc_InitRng_ex(rng, NULL, HW_DEV_ID);
+    wc_RNG_GenerateBlock(rng, buffer, sizeof(buffer));
+    wc_FreeRng(rng);
+    wh_Utils_Hexdump("Context 4: Server HW RNG:\n", buffer, sizeof(buffer));
+
+    /* Context 5: Set default server crypto to use cryptocb */
+    crypto->devId = HW_DEV_ID;
+    printf("Context 5: Setting up default server crypto with devId=%d\n",
+                crypto->devId);
+
+    rc = wc_InitRng_ex(crypto->rng, NULL, crypto->devId);
+    if (rc != 0) {
+        printf("Failed to wc_InitRng_ex: %d\n", rc);
+        return rc;
+    }
+
+    rc = wh_ServerTask(s_conf, keyFilePath, keyId, clientId);
+    if (rc != 0) {
+        printf("Failed to wh_ServerTask: %d\n", rc);
+        return rc;
+    }
+    rc = wc_FreeRng(crypto->rng);
+    if (rc != 0) {
+        printf("Failed to wc_FreeRng: %d\n", rc);
+        return rc;
+    }
+    rc = wolfCrypt_Cleanup();
+    if (rc != 0) {
+        printf("Failed to wolfCrypt_Cleanup: %d\n", rc);
+        return rc;
+    }
+
+    return rc;
 }

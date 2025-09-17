@@ -22,19 +22,19 @@
 
 /* Provisioning process:
  * 1. Generate a server keypair into key cache as keyId 27
- * 2. Commit the server keypair to server NVM 
+ * 2. Commit the server keypair to server NVM
  * 3. Map a file into memory and ask server to hash it using SHA256
  * 4. Sign the hash using the server keypair
- * 5. Store the signature to server NVM as object 29 
+ * 5. Store the signature to server NVM as object 29
  * 6. Hexdump hash, public key, and signature
  * Note: Provisioning can also be done offline using the whnvmtool
- * 
+ *
  * SecBoot process:
  * 1. Load the signature from server NVM as object 29
  * 2. Map a file into memory and ask server to hash it using SHA256
  * 3. Verify the signature using server keyId 27
  * 4. Hexdump hash, public key, and signature
- * 
+ *
  * Zeroization process:
  * 1. Destroy keyId 27
  * 2. Destroy nvmId 29
@@ -52,13 +52,13 @@ static int _showNvm(whClientContext* clientContext);
 
 static int _provisionMakeCommitKey(whClientContext* clientContext);
 static int _sha256File(const char* file_to_measure, uint8_t* hash);
-static int _signHash(   const uint8_t* hash, size_t hash_len, 
+static int _signHash(   const uint8_t* hash, size_t hash_len,
                         uint8_t* sig, uint16_t* sig_len);
-static int _verifyHash( const uint8_t* hash, size_t hash_len, 
+static int _verifyHash( const uint8_t* hash, size_t hash_len,
                         const uint8_t* sig, uint16_t sig_len,
                         int32_t* rc);
 
-static int _showNvm(whClientContext* clientContext)   
+static int _showNvm(whClientContext* clientContext)
 {
     int ret = 0;
     whNvmAccess access = WH_NVM_ACCESS_ANY;
@@ -68,33 +68,33 @@ static int _showNvm(whClientContext* clientContext)
 
     printf("NVM Contents:\n");
     do {
-        ret = wh_Client_NvmList(    clientContext, 
-                                    access, flags, 
-                                    id, NULL, 
+        ret = wh_Client_NvmList(    clientContext,
+                                    access, flags,
+                                    id, NULL,
                                     &count, &id);
         if (ret != WH_ERROR_OK) {
             printf("wh_Client_NvmList failed with ret:%d\n", ret);
             break;
         }
-        printf( "NVM List: count=%u, id=%u\n", 
+        printf( "NVM List: count=%u, id=%u\n",
                 (unsigned int)count, (unsigned int)id);
 
         if (count > 0) {
             whNvmSize data_len = 0;
             uint8_t label[WH_NVM_LABEL_LEN] = {0};
-            ret = wh_Client_NvmGetMetadata( clientContext, id, 
-                                            NULL, NULL, 
-                                            NULL, NULL, 
-                                            &data_len, 
+            ret = wh_Client_NvmGetMetadata( clientContext, id,
+                                            NULL, NULL,
+                                            NULL, NULL,
+                                            &data_len,
                                             sizeof(label), label);
             if (ret != WH_ERROR_OK) {
                 printf("wh_Client_NvmGetMetadata failed with ret:%d\n", ret);
                 break;
             }
 
-            printf( "NVM Object ID %u has label '%-*s' and size:%u\n", 
-                    (unsigned int)id, 
-                    (int)sizeof(label), label, 
+            printf( "NVM Object ID %u has label '%-*s' and size:%u\n",
+                    (unsigned int)id,
+                    (int)sizeof(label), label,
                     (unsigned int)data_len);
         }
     } while (count > 0);
@@ -102,17 +102,17 @@ static int _showNvm(whClientContext* clientContext)
     return ret;
 }
 
-static int _provisionMakeCommitKey(whClientContext* clientContext) 
+static int _provisionMakeCommitKey(whClientContext* clientContext)
 {
     int ret;
-    
+
     /* Use the default ECC curve for 32 byte key, likely P256r1 */
     whKeyId keyId = prov_keyId;
     uint8_t keyLabel[WH_NVM_LABEL_LEN] = {0};
     memcpy(keyLabel, prov_keyLabel, sizeof(prov_keyLabel));
 
-    ret = wh_Client_EccMakeCacheKey(clientContext, 32, ECC_CURVE_DEF, 
-                                    &keyId, WH_NVM_FLAGS_NONE, 
+    ret = wh_Client_EccMakeCacheKey(clientContext, 32, ECC_CURVE_DEF,
+                                    &keyId, WH_NVM_FLAGS_NONE,
                                     sizeof(prov_keyLabel), keyLabel);
     if (ret == WH_ERROR_OK) {
         ret = wh_Client_KeyCommit(clientContext, prov_keyId);
@@ -132,7 +132,7 @@ static int _sha256File(const char* file_to_measure, uint8_t* hash)
         close(fd);
 
         if (ptr != (void*)-1) {
-            printf("Generating SHA256 of %s over %u bytes at %p\n", 
+            printf("Generating SHA256 of %s over %u bytes at %p\n",
                 file_to_measure, (unsigned int)size, ptr);
             wc_Sha256 sha256[1];
             ret = wc_InitSha256_ex(sha256, NULL, WH_DEV_ID);
@@ -157,7 +157,7 @@ static int _sha256File(const char* file_to_measure, uint8_t* hash)
     return ret;
 }
 
-static int _signHash(   const uint8_t* hash, size_t hash_len, 
+static int _signHash(   const uint8_t* hash, size_t hash_len,
                         uint8_t* sig, uint16_t* sig_len)
 {
     ecc_key key[1];
@@ -177,7 +177,7 @@ static int _signHash(   const uint8_t* hash, size_t hash_len,
     return ret;
 }
 
-static int _verifyHash( const uint8_t* hash, size_t hash_len, 
+static int _verifyHash( const uint8_t* hash, size_t hash_len,
                         const uint8_t* sig, uint16_t sig_len,
                         int32_t* rc)
 {
@@ -187,8 +187,8 @@ static int _verifyHash( const uint8_t* hash, size_t hash_len,
         ret = wh_Client_EccSetKeyId(key, prov_keyId);
         if (ret == 0) {
             int res = 0;
-            ret = wc_ecc_verify_hash(   sig, (word32)sig_len, 
-                                        hash, (word32)hash_len, 
+            ret = wc_ecc_verify_hash(   sig, (word32)sig_len,
+                                        hash, (word32)hash_len,
                                         &res, key);
             if (ret == 0) {
                 *rc = res;
@@ -208,7 +208,7 @@ int wh_DemoClient_SecBoot_Provision(whClientContext* clientContext)
     if (clientContext == NULL) {
         return WH_ERROR_BADARGS;
     }
-    
+
     ret = wh_Client_CommInit(clientContext, &client_id, &server_id);
     if (ret == WH_ERROR_OK) {
         printf("Provision client connected to server id %u with client id %u\n",
@@ -227,7 +227,7 @@ int wh_DemoClient_SecBoot_Provision(whClientContext* clientContext)
                 uint16_t siglen = sizeof(sig);
 
                 printf("Signing hash...\n");
-                ret = _signHash(    hash, sizeof(hash), 
+                ret = _signHash(    hash, sizeof(hash),
                                     sig, &siglen);
                 if (ret == WH_ERROR_OK) {
                     int32_t rc = 0;
@@ -238,9 +238,9 @@ int wh_DemoClient_SecBoot_Provision(whClientContext* clientContext)
                     printf("Storing the signature in NVM as nvmId %u\n",
                             sig_nvmId);
                     ret = wh_Client_NvmAddObject(clientContext, sig_nvmId,
-                                        WH_NVM_ACCESS_NONE, WH_NVM_FLAGS_NONE, 
+                                        WH_NVM_ACCESS_NONE, WH_NVM_FLAGS_NONE,
                                         sizeof(sig_nvmLabel), sigLabel,
-                                        siglen, sig, 
+                                        siglen, sig,
                                         &rc);
                     printf("Stored signature with ret:%d and rc:%d\n", ret, rc);
                 }
@@ -266,7 +266,7 @@ int wh_DemoClient_SecBoot_Boot(whClientContext* clientContext)
     if (ret == WH_ERROR_OK) {
         printf("SecBoot Client connected to server id %u with client id %u\n",
                 server_id, client_id);
-        
+
         _showNvm(clientContext);
 
         uint8_t sig[ECC_MAX_SIG_SIZE] = {0};
@@ -276,10 +276,20 @@ int wh_DemoClient_SecBoot_Boot(whClientContext* clientContext)
                 sig_nvmId);
         ret = wh_Client_NvmGetMetadata(clientContext,
             sig_nvmId, &rc, NULL, NULL, NULL, &siglen, 0, NULL);
+        if (ret != WH_ERROR_OK) {
+            printf("wh_Client_NvmGetMetadata failed with ret:%d\n", ret);
+            return ret;
+        }
         printf("SecBoot got siglen %d with ret:%d rc:%d\n", siglen, ret, rc);
-        ret = wh_Client_NvmRead(clientContext, sig_nvmId, 
-                                0, siglen, &rc, 
+        ret = wh_Client_NvmRead(clientContext, sig_nvmId,
+                                0, siglen, &rc,
                                 NULL, sig);
+        if (ret != WH_ERROR_OK || rc != 0) {
+            printf("Read Object %d failed with error code: %d, server error "
+                   "code: %d\n",
+                   sig_nvmId, ret, rc);
+            return (ret != 0) ? ret : rc;
+        }
         wh_Utils_Hexdump("Signature:\n", sig, siglen);
 
 
@@ -289,8 +299,8 @@ int wh_DemoClient_SecBoot_Boot(whClientContext* clientContext)
         if (ret == WH_ERROR_OK) {
 
             printf("SecBoot Client Verifying signature using keyId %u\n", prov_keyId);
-            ret = _verifyHash(  hash, sizeof(hash), 
-                                sig, siglen, 
+            ret = _verifyHash(  hash, sizeof(hash),
+                                sig, siglen,
                                 &rc);
             printf("ecc_verify:%d rc:%d\n", ret, rc);
 
@@ -326,7 +336,7 @@ int wh_DemoClient_SecBoot_Zeroize(whClientContext* clientContext)
         printf("Zeroize Client erased keyId:%u ret:%d\n", prov_keyId, ret);
 
         ret = wh_Client_NvmDestroyObjects(clientContext, 1, &sig_nvmId, &rc);
-        printf("Zeroize Client destroyed NVM object:%u ret:%d with rc:%d\n", 
+        printf("Zeroize Client destroyed NVM object:%u ret:%d with rc:%d\n",
             sig_nvmId, ret, rc);
 
         _showNvm(clientContext);

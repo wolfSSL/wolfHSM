@@ -91,7 +91,6 @@ int wh_DemoClient_CryptoRsa(whClientContext* clientContext)
         printf("Failed to wc_RsaPublicEncrypt %d\n", ret);
         goto exit;
     }
-    ret = 0;
 
     /* decrypt the ciphertext */
     ret = wc_RsaPrivateDecrypt(cipherText, encSz, plainText, sizeof(plainText),
@@ -194,7 +193,6 @@ int wh_DemoClient_CryptoRsaImport(whClientContext* clientContext)
         printf("Failed to wc_RsaPublicEncrypt %d\n", ret);
         goto exit;
     }
-    ret = 0;
 
     /* decrypt the ciphertext */
     ret = wc_RsaPrivateDecrypt(cipherText, encSz, plainText, sizeof(plainText),

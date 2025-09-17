@@ -25,7 +25,7 @@
 
 /* Pick up compile-time configuration */
 #include "wolfhsm/wh_settings.h"
-
+#include <stdio.h>
 #include <stdint.h>
 #include <stddef.h>     /* For NULL */
 #include <string.h>     /* For memset, memcpy */
@@ -361,7 +361,7 @@ static int nfPartition_ReadMemDirectory(whNvmFlashContext* context, int partitio
 
     for(index = 0; (index < WOLFHSM_CFG_NVM_OBJECT_COUNT) && (ret == 0); index++) {
         /* TODO: Handle errors better here.  Break out of loop? */
-        ret = nfMemObject_Read(
+        nfMemObject_Read(
                 context,
                 offset + NF_DIRECTORY_OBJECT_OFFSET(index),
                 &directory->objects[index]);
@@ -1087,8 +1087,8 @@ int wh_NvmFlash_AddObject(void* c, whNvmMetadata *meta,
     }
 
     /* Find existing object so we can increment the epoch */
-    (void)nfMemDirectory_FindObjectIndexById(d, meta->id, &oldentry);
-    if (oldentry >= 0) {
+    ret = nfMemDirectory_FindObjectIndexById(d, meta->id, &oldentry);
+    if (oldentry >= 0 && ret != WH_ERROR_NOTFOUND) {
         epoch = d->objects[oldentry].state.epoch + 1;
     }
 
