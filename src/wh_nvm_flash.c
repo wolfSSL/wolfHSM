@@ -25,7 +25,7 @@
 
 /* Pick up compile-time configuration */
 #include "wolfhsm/wh_settings.h"
-
+#include <stdio.h>
 #include <stdint.h>
 #include <stddef.h>     /* For NULL */
 #include <string.h>     /* For memset, memcpy */
@@ -367,10 +367,8 @@ static int nfPartition_ReadMemDirectory(whNvmFlashContext* context, int partitio
 
     for(index = 0; (index < WOLFHSM_CFG_NVM_OBJECT_COUNT) && (ret == 0); index++) {
         /* TODO: Handle errors better here.  Break out of loop? */
-        ret = nfMemObject_Read(
-                context,
-                offset + NF_DIRECTORY_OBJECT_OFFSET(index),
-                &directory->objects[index]);
+        nfMemObject_Read(context, offset + NF_DIRECTORY_OBJECT_OFFSET(index),
+                         &directory->objects[index]);
     }
     return ret;
 }
@@ -913,8 +911,15 @@ int wh_NvmFlash_Init(void* c, const void* cf)
                 context,
                 context->active,
                 &context->directory);
+        if (ret != 0) {
+            return ret;
+            /*printf("nfPartition_ReadMemDirectory failed: %d\n", ret);*/
+        }
         ret = nfMemDirectory_Parse(&context->directory);
-
+        if (ret != 0) {
+            return ret;
+            /*printf("nfMemDirectory_Parse failed: %d\n", ret);*/
+        }
         context->initialized = 1;
         return 0;
     }
@@ -1084,7 +1089,7 @@ int wh_NvmFlash_AddObject(void* c, whNvmMetadata *meta,
 
     /* Find existing object so we can increment the epoch */
     ret = nfMemDirectory_FindObjectIndexById(d, meta->id, &oldentry);
-    if (oldentry >= 0) {
+    if (oldentry >= 0 && ret != WH_ERROR_NOTFOUND) {
         epoch = d->objects[oldentry].state.epoch + 1;
     }
 
@@ -1191,8 +1196,7 @@ int wh_NvmFlash_DestroyObjects(void* c, whNvmId list_count,
     for (entry = 0; entry < WOLFHSM_CFG_NVM_OBJECT_COUNT; entry++) {
         if (d->objects[entry].state.status == NF_STATUS_USED) {
             /* TODO: Handle errors here better. Break out of loop? */
-            ret = nfObject_Copy(context, entry,
-                    dest_part, &dest_object, &dest_data);
+            nfObject_Copy(context, entry, dest_part, &dest_object, &dest_data);
         }
     }
 

@@ -303,15 +303,16 @@ static int _HandleRsaKeyGen(whServerContext* ctx, uint16_t magic,
                            key_id, ret);
 #endif
                 }
-
-                ret = wh_Server_CacheImportRsaKey(ctx, rsa, key_id, flags,
-                                                  label_size, label);
+                if (ret == 0) {
+                    ret = wh_Server_CacheImportRsaKey(ctx, rsa, key_id, flags,
+                                                      label_size, label);
 #ifdef DEBUG_CRYPTOCB_VERBOSE
-                printf("[server] RsaKeyGen CacheKeyRsa: keyId:%u, ret:%d\n",
-                       key_id, ret);
+                    printf("[server] RsaKeyGen CacheKeyRsa: keyId:%u, ret:%d\n",
+                           key_id, ret);
 #endif
-                res.keyId = WH_KEYID_ID(key_id);
-                res.len   = 0;
+                    res.keyId = WH_KEYID_ID(key_id);
+                    res.len   = 0;
+                }
             }
         }
         wc_FreeRsaKey(rsa);
@@ -743,17 +744,19 @@ static int _HandleEccKeyGen(whServerContext* ctx, uint16_t magic,
                            key_id, ret);
 #endif
                 }
-                ret = wh_Server_EccKeyCacheImport(ctx, key, key_id, flags,
-                                                  label_size, label);
+                if (ret == 0) {
+                    ret = wh_Server_EccKeyCacheImport(ctx, key, key_id, flags,
+                                                      label_size, label);
 #ifdef DEBUG_CRYPTOCB
-                printf("[server] %s CacheImport: keyId:%u, ret:%d\n", __func__,
-                       key_id, ret);
+                    printf("[server] %s CacheImport: keyId:%u, ret:%d\n",
+                           __func__, key_id, ret);
 #endif
-                /* TODO: RSA has the following, should we do the same? */
-                /*
-                res.keyId = WH_KEYID_ID(key_id);
-                res.len = 0;
-                */
+                    /* TODO: RSA has the following, should we do the same? */
+                    /*
+                    res.keyId = WH_KEYID_ID(key_id);
+                    res.len = 0;
+                    */
+                }
             }
         }
         wc_ecc_free(key);
@@ -1160,13 +1163,14 @@ static int _HandleCurve25519KeyGen(whServerContext* ctx, uint16_t magic,
                            key_id, ret);
 #endif
                 }
-
-                ret = wh_Server_CacheImportCurve25519Key(
-                    ctx, key, key_id, flags, label_size, label);
+                if (ret == 0) {
+                    ret = wh_Server_CacheImportCurve25519Key(
+                        ctx, key, key_id, flags, label_size, label);
 #ifdef DEBUG_CRYPTOCB
-                printf("[server] %s CacheImport: keyId:%u, ret:%d\n", __func__,
-                       key_id, ret);
+                    printf("[server] %s CacheImport: keyId:%u, ret:%d\n",
+                           __func__, key_id, ret);
 #endif
+                }
             }
         }
         wc_curve25519_free(key);
@@ -1918,6 +1922,8 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
                                             ctx->comm->client_id,
                                             WH_KEYID_ERASED);
                     ret   = wh_Server_KeystoreGetUniqueId(ctx, &keyId);
+                    if (ret != 0)
+                        return ret;
                 }
                 else {
                     keyId = WH_MAKE_KEYID(  WH_KEYTYPE_CRYPTO,
@@ -1926,7 +1932,7 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
                 }
                 /* evict the aes sized key in the normal cache */
                 if (moveToBigCache == 1) {
-                    ret = wh_Server_KeystoreEvictKey(ctx, keyId);
+                    (void)wh_Server_KeystoreEvictKey(ctx, keyId);
                 }
                 meta->id = keyId;
                 meta->len = sizeof(ctx->crypto->algoCtx.cmac);
@@ -2349,12 +2355,15 @@ static int _HandleMlDsaKeyGen(whServerContext* ctx, uint16_t magic,
                                    __func__, key_id, ret);
 #endif
                         }
-                        ret = wh_Server_MlDsaKeyCacheImport(
-                            ctx, key, key_id, flags, label_size, label);
+                        if (ret == 0) {
+                            ret = wh_Server_MlDsaKeyCacheImport(
+                                ctx, key, key_id, flags, label_size, label);
 #ifdef DEBUG_CRYPTOCB
-                        printf("[server] %s CacheImport: keyId:%u, ret:%d\n",
-                               __func__, key_id, ret);
+                            printf(
+                                "[server] %s CacheImport: keyId:%u, ret:%d\n",
+                                __func__, key_id, ret);
 #endif
+                        }
                     }
                 }
             }
