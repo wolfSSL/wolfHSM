@@ -78,14 +78,15 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y clang-tidy bear build-essential
+        sudo apt-get install -y clang clang-tidy build-essential
 
     - name: Run clang-tidy
       id: clang-tidy
       continue-on-error: true
       run: |
-        chmod +x tools/static-analysis/run_clang_tidy.sh
-        tools/static-analysis/run_clang_tidy.sh
+        chmod +x tools/static-analysis/run_clang_tidy_make.sh
+        chmod +x tools/static-analysis/clang-tidy-builder.sh
+        tools/static-analysis/run_clang_tidy_make.sh
 
     - name: Display errors and warnings
       if: always()
