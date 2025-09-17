@@ -579,14 +579,14 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
             /* get a new id if one wasn't provided */
             if (WH_KEYID_ISERASED(meta->id)) {
                 ret     = wh_Server_KeystoreGetUniqueId(server, &meta->id);
-                resp.rc = ret;
+                resp.rc = (uint32_t)ret;
                 /* TODO: Are there any fatal server errors? */
                 ret = WH_ERROR_OK;
             }
             /* write the key */
             if (ret == WH_ERROR_OK) {
                 ret     = wh_Server_KeystoreCacheKey(server, meta, in);
-                resp.rc = ret;
+                resp.rc = (uint32_t)ret;
                 /* TODO: Are there any fatal server errors? */
                 ret = WH_ERROR_OK;
             }
@@ -631,13 +631,13 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
             /* get a new id if one wasn't provided */
             if (WH_KEYID_ISERASED(meta->id)) {
                 ret     = wh_Server_KeystoreGetUniqueId(server, &meta->id);
-                resp.rc = ret;
+                resp.rc = (uint32_t)ret;
             }
 
             /* write the key using DMA */
             if (ret == WH_ERROR_OK) {
                 ret = wh_Server_KeystoreCacheKeyDma(server, meta, req.key.addr);
-                resp.rc = ret;
+                resp.rc = (uint32_t)ret;
                 /* propagate bad address to client if DMA operation failed */
                 if (ret != WH_ERROR_OK) {
                     resp.dmaAddrStatus.badAddr.addr = req.key.addr;
@@ -670,7 +670,7 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
                               (uint16_t)server->comm->client_id,
                               (uint16_t)req.id),
                 req.key.addr, req.key.sz, meta);
-            resp.rc = ret;
+            resp.rc = (uint32_t)ret;
             /* propagate bad address to client if DMA operation failed */
             if (ret != WH_ERROR_OK) {
                 resp.dmaAddrStatus.badAddr.addr = req.key.addr;
@@ -703,7 +703,7 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
                 server, WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
                                       (uint16_t)server->comm->client_id,
                                       (uint16_t)req.id));
-            resp.rc = ret;
+            resp.rc = (uint32_t)ret;
             /* TODO: Are there any fatal server errors? */
             ret = WH_ERROR_OK;
 
@@ -741,7 +741,7 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
                 memset(out, 0, keySz);
             }
 
-            resp.rc = ret;
+            resp.rc = (uint32_t)ret;
             /* TODO: Are there any fatal server errors? */
             ret = WH_ERROR_OK;
 
@@ -774,7 +774,7 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
                 server, WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
                                       (uint16_t)server->comm->client_id,
                                       (uint16_t)req.id));
-            resp.rc = ret;
+            resp.rc = (uint32_t)ret;
             /* TODO: Are there any fatal server errors? */
             ret = WH_ERROR_OK;
 
@@ -801,7 +801,7 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
                 server, WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
                                       (uint16_t)server->comm->client_id,
                                       (uint16_t)req.id));
-            resp.rc = ret;
+            resp.rc = (uint32_t)ret;
             /* TODO: Are there any fatal server errors? */
             ret = WH_ERROR_OK;
 
