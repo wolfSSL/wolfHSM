@@ -59,11 +59,6 @@
 #include "wolfhsm/wh_message_counter.h"
 #include "wolfhsm/wh_client.h"
 
-#ifdef WOLFHSM_CFG_DMA
-/* included for default callback */
-#include "port/posix/posix_transport_dma.h"
-#endif /* WOLFHSM_CFG_DMA */
-
 #ifndef WOLFHSM_CFG_NO_CRYPTO
 const int WH_DEV_IDS_ARRAY[WH_NUM_DEVIDS] = {
         WH_DEV_ID,

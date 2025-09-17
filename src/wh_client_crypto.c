@@ -63,10 +63,6 @@
 #include "wolfhsm/wh_message_customcb.h"
 #include "wolfhsm/wh_message_crypto.h"
 
-#ifdef WOLFHSM_CFG_DMA
-#include "port/posix/posix_transport_dma.h"
-#endif /* WOLFHSM_CFG_DMA */
-
 #include "wolfhsm/wh_client.h"
 #include "wolfhsm/wh_client_crypto.h"
 
