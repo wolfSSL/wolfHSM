@@ -119,7 +119,7 @@ typedef struct {
     size_t size;
 } whClientDmaAddr;
 
-typedef whClientDmaAddr whClientDmaAddrList[WOLFHSM_CFG_SERVER_DMAADDR_COUNT];
+typedef whClientDmaAddr whClientDmaAddrList[WOLFHSM_CFG_DMAADDR_COUNT];
 
 /* Holds allowable client read/write addresses */
 typedef struct {

@@ -65,7 +65,7 @@
  *  WOLFHSM_CFG_SERVER_CUSTOMCB_COUNT - Number of additional callbacks
  *      Default: 8
  *
- *  WOLFHSM_CFG_SERVER_DMAADDR_COUNT - Number of DMA address regions
+ *  WOLFHSM_CFG_DMAADDR_COUNT - Number of DMA address regions
  *      Default: 10
  *
  *  WOLFHSM_CFG_SERVER_IMG_MGR_MAX_IMG_COUNT - Maximum number of images that can
@@ -179,8 +179,8 @@
 #endif
 
 /* DMA translation allow entries */
-#ifndef WOLFHSM_CFG_SERVER_DMAADDR_COUNT
-#define WOLFHSM_CFG_SERVER_DMAADDR_COUNT 10
+#ifndef WOLFHSM_CFG_DMAADDR_COUNT
+#define WOLFHSM_CFG_DMAADDR_COUNT 10
 #endif
 
 /* Image manager maximum number of images */

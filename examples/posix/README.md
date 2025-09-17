@@ -6,7 +6,7 @@ There are a couple of different ways POSIX can be used for transport.
 - shm (Shared memory)
 - dma (Shared memory pass by reference)
 
-Each of these methods has its own source file wh_posix_<type>.c that contains
+Each of these methods has its own source file wh_posix_transport_<type>.c that contains
 the unique example configuration for setting each up. This is a function for
 configuration of server and a function for configuration for use with a client.
 

@@ -54,7 +54,7 @@ static int _checkAddrAgainstAllowList(const whClientDmaAddrList allowList,
     }
 
     /* Check if the address range is fully within a allowlist entry */
-    for (i = 0; i < WOLFHSM_CFG_SERVER_DMAADDR_COUNT; i++) {
+    for (i = 0; i < WOLFHSM_CFG_DMAADDR_COUNT; i++) {
         uintptr_t allowListStartAddr = (uintptr_t)allowList[i].addr;
         uintptr_t allowListEndAddr   = allowListStartAddr + allowList[i].size;
 
