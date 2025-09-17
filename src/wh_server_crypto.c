@@ -748,8 +748,8 @@ static int _HandleEccKeyGen(whServerContext* ctx, uint16_t magic,
                     ret = wh_Server_EccKeyCacheImport(ctx, key, key_id, flags,
                                                       label_size, label);
 #ifdef DEBUG_CRYPTOCB
-                    printf("[server] %s CacheImport: keyId:%u, ret:%d\n", __func__,
-                           key_id, ret);
+                    printf("[server] %s CacheImport: keyId:%u, ret:%d\n",
+                           __func__, key_id, ret);
 #endif
                     /* TODO: RSA has the following, should we do the same? */
                     /*
@@ -1165,10 +1165,10 @@ static int _HandleCurve25519KeyGen(whServerContext* ctx, uint16_t magic,
                 }
                 if (ret == 0) {
                     ret = wh_Server_CacheImportCurve25519Key(
-                            ctx, key, key_id, flags, label_size, label);
+                        ctx, key, key_id, flags, label_size, label);
 #ifdef DEBUG_CRYPTOCB
                     printf("[server] %s CacheImport: keyId:%u, ret:%d\n",
-                            __func__, key_id, ret);
+                           __func__, key_id, ret);
 #endif
                 }
             }
@@ -2359,8 +2359,9 @@ static int _HandleMlDsaKeyGen(whServerContext* ctx, uint16_t magic,
                             ret = wh_Server_MlDsaKeyCacheImport(
                                 ctx, key, key_id, flags, label_size, label);
 #ifdef DEBUG_CRYPTOCB
-                            printf("[server] %s CacheImport: keyId:%u, ret:%d\n",
-                                 __func__, key_id, ret);
+                            printf(
+                                "[server] %s CacheImport: keyId:%u, ret:%d\n",
+                                __func__, key_id, ret);
 #endif
                         }
                     }
