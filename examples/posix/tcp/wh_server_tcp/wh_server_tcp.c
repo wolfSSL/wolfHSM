@@ -1,137 +1,51 @@
 /*
- * Example server app using POSIX transport
+ * Example server app using POSIX TCP transport
  */
-#if defined(WOLFHSM_CFG_NO_CRYPTO)
+
+#include <stdint.h>
 #include <stdio.h>  /* For printf */
 #include <stdlib.h> /* For atoi */
 #include <string.h> /* For memset, memcpy, strcmp */
 #include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h> /* for read/close */
+#include <time.h>   /* For nanosleep */
+#include <errno.h>
 #include <ctype.h>
-#endif
-#include "wh_posix_cfg.h"
-#include "wh_posix_server_cfg.h"
 
-#include "wolfhsm/wh_server.h"
 #include "wolfhsm/wh_error.h"
+#include "wolfhsm/wh_comm.h"
+#include "wolfhsm/wh_common.h"
+#include "wolfhsm/wh_utils.h"
+#include "wolfhsm/wh_message.h"
+#include "wolfhsm/wh_server.h"
+#include "wolfhsm/wh_server_keystore.h"
 #include "wolfhsm/wh_nvm.h"
 #include "wolfhsm/wh_nvm_flash.h"
 #include "wolfhsm/wh_flash_ramsim.h"
 
-#include "port/posix/posix_transport_shm.h"
 #include "port/posix/posix_transport_tcp.h"
 
-posixTransportShmConfig shmConfig;
-posixTransportTcpConfig tcpConfig;
+/** Local declarations */
+static int wh_ServerTask(void* cf, const char* keyFilePath, int keyId,
+                         int clientId);
 
-whCommServerConfig s_comm;
+static void _sleepMs(long milliseconds);
+#ifndef WOLFHSM_CFG_NO_CRYPTO
+static int _hardwareCryptoCb(int devId, struct wc_CryptoInfo* info, void* ctx);
+#endif
+/* Macros for maximum client ID and key ID */
+#define MAX_CLIENT_ID 255
+#define MAX_KEY_ID UINT16_MAX
 
-whTransportServerCb            tcpCb = PTT_SERVER_CB;
-whTransportServerCb            shmCb = POSIX_TRANSPORT_SHM_SERVER_CB;
-posixTransportShmServerContext tscShm;
-posixTransportTcpServerContext tscTcp;
-
-#ifdef WOLFSSL_STATIC_MEMORY
-whTransportServerCb            dmaCb = POSIX_TRANSPORT_SHM_SERVER_CB;
-posixTransportShmServerContext tscDma;
-whServerDmaConfig              dmaConfig;
-
-/* Server configuration setup example for transport
- * Does not setup flash, nvm, crypto, she, etc. */
-int wh_PosixServer_ExampleShmDmaConfig(void* conf)
-{
-    whServerConfig* s_conf = (whServerConfig*)conf;
-
-    memset(&tscDma, 0, sizeof(posixTransportShmServerContext));
-    memset(&s_comm, 0, sizeof(whCommServerConfig));
-
-    shmConfig.name      = WH_POSIX_SHARED_MEMORY_NAME;
-    shmConfig.req_size  = WH_POSIX_REQ_SIZE;
-    shmConfig.resp_size = WH_POSIX_RESP_SIZE;
-    shmConfig.dma_size  = WH_POSIX_DMA_SIZE;
-
-    dmaConfig.cb               = posixTransportShm_ServerStaticMemDmaCallback;
-    dmaConfig.dmaAddrAllowList = NULL;
-
-    s_comm.transport_cb      = &dmaCb;
-    s_comm.transport_context = (void*)&tscDma;
-    s_comm.transport_config  = (void*)&shmConfig;
-    s_comm.server_id         = WH_POSIX_SERVER_ID;
-
-    s_conf->dmaConfig   = &dmaConfig;
-    s_conf->comm_config = &s_comm;
-
-    return WH_ERROR_OK;
-}
+/* Macros for maximum file path length (Linux PATH_MAX is a good reference) */
+#ifndef PATH_MAX
+#define PATH_MAX 4096
 #endif
 
-
-/* Server configuration setup example for transport
- * Does not setup flash, nvm, crypto, she, etc. */
-int wh_PosixServer_ExampleShmConfig(void* conf)
-{
-    whServerConfig* s_conf = (whServerConfig*)conf;
-
-    memset(&tscShm, 0, sizeof(posixTransportShmServerContext));
-    memset(&s_comm, 0, sizeof(whCommServerConfig));
-
-    shmConfig.name      = WH_POSIX_SHARED_MEMORY_NAME;
-    shmConfig.req_size  = WH_POSIX_REQ_SIZE;
-    shmConfig.resp_size = WH_POSIX_RESP_SIZE;
-    shmConfig.dma_size  = WH_POSIX_DMA_SIZE;
-
-    s_comm.transport_cb      = &shmCb;
-    s_comm.transport_context = (void*)&tscShm;
-    s_comm.transport_config  = (void*)&shmConfig;
-    s_comm.server_id         = WH_POSIX_SERVER_ID;
-
-    s_conf->comm_config = &s_comm;
-
-    return WH_ERROR_OK;
-}
-
-
-/* Server configuration setup example for transport
- * Does not setup flash, nvm, crypto, she, etc. */
-int wh_PosixServer_ExampleTcpConfig(void* conf)
-{
-    whServerConfig* s_conf = (whServerConfig*)conf;
-
-    /* Server configuration/context */
-    memset(&tscTcp, 0, sizeof(posixTransportTcpServerContext));
-
-    tcpConfig.server_ip_string = WH_POSIX_SERVER_TCP_IPSTRING;
-    tcpConfig.server_port      = WH_POSIX_SERVER_TCP_PORT;
-
-    s_comm.transport_cb      = &tcpCb;
-    s_comm.transport_context = (void*)&tscTcp;
-    s_comm.transport_config  = (void*)&tcpConfig;
-    s_comm.server_id         = WH_POSIX_SERVER_ID;
-
-    s_conf->comm_config = &s_comm;
-
-    return WH_ERROR_OK;
-}
-
-static const whFlashCb  fcb = WH_FLASH_RAMSIM_CB;
-static whFlashRamsimCfg fc_conf;
-
-int wh_PosixServer_ExampleRamSimConfig(void* conf, uint8_t* memory)
-{
-    whServerConfig* s_conf = (whServerConfig*)conf;
-
-    fc_conf.size       = WH_POSIX_FLASH_RAM_SIZE,
-    fc_conf.sectorSize = WH_POSIX_FLASH_RAM_SIZE / 2, fc_conf.pageSize = 8;
-    fc_conf.erasedByte = (uint8_t)0;
-    fc_conf.memory     = memory;
-
-    (void)s_conf;
-    return WH_ERROR_OK;
-}
-
-
-/*******************************************************/
-/* NVM related functions */
-/*******************************************************/
+/* Parameterize MAX_LINE_LENGTH by 512 bytes + MAX_FILE_PATH_LENGTH */
+#define MAX_LINE_LENGTH (512 + PATH_MAX)
 
 /* Structure representing an entry in the linked list */
 typedef struct Entry {
@@ -163,6 +77,22 @@ static int  parseInteger(const char* str, uint32_t maxValue, uint32_t* result);
 static void parseNvmInitFile(const char* filePath);
 static int initializeNvm(whNvmContext* nvmContext, const char* nvmInitFilePath);
 
+static void _sleepMs(long milliseconds)
+{
+    struct timespec req;
+    req.tv_sec  = milliseconds / 1000;
+    req.tv_nsec = (milliseconds % 1000) * 1000000;
+    nanosleep(&req, NULL);
+}
+
+enum {
+    ONE_MS         = 1,
+    FLASH_RAM_SIZE = 1024 * 1024,
+};
+
+#define WH_SERVER_TCP_IPSTRING "127.0.0.1"
+#define WH_SERVER_TCP_PORT 23456
+#define WH_SERVER_ID 57
 
 /* Creates a new entry in the linked list based on the provided parameters */
 static Entry* createEntry(uint8_t clientId, uint16_t id, uint16_t access,
@@ -482,29 +412,286 @@ static int initializeNvm(whNvmContext* nvmContext, const char* nvmInitFilePath)
     return 0;
 }
 
-
-int wh_PosixServer_ExampleNvmConfig(void* conf, const char* nvmInitFilePath)
+static int loadAndStoreKeys(whServerContext* server, whKeyId* outKeyId,
+                            const char* keyFilePath, int keyId, int clientId)
 {
-    int                      rc;
-    whServerConfig*          s_conf = (whServerConfig*)conf;
-    static whNvmConfig       n_conf = {0};
-    static whNvmFlashConfig  nf_conf;
-    static whNvmFlashContext nfc[1]  = {0};
-    static whNvmCb           nfcb[1] = {WH_NVM_FLASH_CB};
-    static whNvmContext      nvm[1]  = {{0}};
-    static whFlashRamsimCtx  fc      = {0};
+    int           ret;
+    int           keyFd;
+    int           keySz;
+    char          keyLabel[] = "baby's first key";
+    uint8_t       keyBuf[4096];
+    whNvmMetadata meta = {0};
+
+    /* open the key file */
+    ret = keyFd = open(keyFilePath, O_RDONLY, 0);
+    if (ret < 0) {
+        printf("Failed to open %s %d\n", keyFilePath, ret);
+        return ret;
+    }
+
+    /* read the key to local buffer */
+    ret = keySz = read(keyFd, keyBuf, sizeof(keyBuf));
+    if (ret < 0) {
+        printf("Failed to read %s %d\n", keyFilePath, ret);
+        close(keyFd);
+        return ret;
+    }
+    ret = 0;
+    close(keyFd);
+
+    printf(
+        "Loading key from %s (size=%d) with keyId=0x%02X and clientId=0x%01X\n",
+        keyFilePath, keySz, keyId, clientId);
+
+    /* cache the key in the HSM, get HSM assigned keyId */
+    /* set the metadata fields */
+    meta.id    = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, clientId, keyId);
+    meta.flags = 0;
+    meta.len   = keySz;
+    memcpy(meta.label, keyLabel, strlen(keyLabel));
+
+    /* Get HSM assigned keyId if not set */
+    if (keyId == WH_KEYID_ERASED) {
+        ret = wh_Server_KeystoreGetUniqueId(server, &meta.id);
+        printf("got unique ID = 0x%02X\n", meta.id & WH_KEYID_MASK);
+    }
+    printf(
+        "key NVM ID = 0x%04X\n\ttype=0x%01X\n\tuser=0x%01X\n\tkeyId=0x%02X\n",
+        meta.id, WH_KEYID_TYPE(meta.id), WH_KEYID_USER(meta.id),
+        WH_KEYID_ID(meta.id));
+
+    if (ret == 0) {
+        ret = wh_Server_KeystoreCacheKey(server, &meta, keyBuf);
+        if (ret != 0) {
+            printf("Failed to wh_Server_KeystoreCacheKey, ret=%d\n", ret);
+            return ret;
+        }
+    }
+    else {
+        printf("Failed to wh_Server_KeystoreGetUniqueId, ret=%d\n", ret);
+        return ret;
+    }
+
+    *outKeyId = meta.id;
+    return ret;
+}
 
 
-    nf_conf.cb      = &fcb;
-    nf_conf.context = &fc;
-    nf_conf.config  = &fc_conf;
+static int wh_ServerTask(void* cf, const char* keyFilePath, int keyId,
+                         int clientId)
+{
+    whServerContext server[1];
+    whServerConfig* config     = (whServerConfig*)cf;
+    int             ret        = 0;
+    whCommConnected last_state = WH_COMM_DISCONNECTED;
+    whKeyId         loadedKeyId;
 
-    n_conf.cb      = nfcb;
-    n_conf.context = nfc;
-    n_conf.config  = &nf_conf;
+    if (config == NULL) {
+        return -1;
+    }
 
-    s_conf->nvm = nvm;
-    rc          = wh_Nvm_Init(nvm, &n_conf);
+    ret = wh_Server_Init(server, config);
+
+    /* Load keys into cache if file path is provided */
+    if (keyFilePath != NULL) {
+        ret = loadAndStoreKeys(server, &loadedKeyId, keyFilePath, keyId,
+                               clientId);
+        if (ret != 0) {
+            printf("server failed to load key, ret=%d\n", ret);
+            (void)wh_Server_Cleanup(server);
+            return ret;
+        }
+    }
+
+
+    if (ret == 0) {
+        printf("Waiting for connection...\n");
+        while (1) {
+            ret = wh_Server_HandleRequestMessage(server);
+            if (ret == WH_ERROR_NOTREADY) {
+                _sleepMs(ONE_MS);
+            }
+            else if (ret != WH_ERROR_OK) {
+                printf("Failed to wh_Server_HandleRequestMessage: %d\n", ret);
+                break;
+            }
+            else {
+                whCommConnected current_state;
+                int             get_conn_result =
+                    wh_Server_GetConnected(server, &current_state);
+                if (get_conn_result == WH_ERROR_OK) {
+                    if (current_state == WH_COMM_CONNECTED &&
+                        last_state == WH_COMM_DISCONNECTED) {
+                        printf("Server connected\n");
+                        last_state = WH_COMM_CONNECTED;
+                    }
+                    else if (current_state == WH_COMM_DISCONNECTED &&
+                             last_state == WH_COMM_CONNECTED) {
+                        printf("Server disconnected\n");
+                        last_state = WH_COMM_DISCONNECTED;
+
+                        /* POSIX TCP transport requires server to be
+                         * re-initialized in order to reconnect */
+
+                        (void)wh_Server_Cleanup(server);
+
+                        /* Reinitialize the server */
+                        ret = wh_Server_Init(server, config);
+                        if (ret != 0) {
+                            printf("Failed to reinitialize server: %d\n", ret);
+                            break;
+                        }
+
+                        /* Reload keys into cache if file path was provided */
+                        if (keyFilePath != NULL) {
+                            ret =
+                                loadAndStoreKeys(server, &loadedKeyId,
+                                                 keyFilePath, keyId, clientId);
+                            if (ret != 0) {
+                                printf("server failed to load key, ret=%d\n",
+                                       ret);
+                                break;
+                            }
+                        }
+                    }
+                }
+                else {
+                    printf("Failed to get connection state: %d\n",
+                           get_conn_result);
+                }
+            }
+        }
+    }
+    return ret;
+}
+#ifndef WOLFHSM_CFG_NO_CRYPTO
+static int _hardwareCryptoCb(int devId, struct wc_CryptoInfo* info, void* ctx)
+{
+    (void)devId;
+    (void)ctx;
+
+    /* Default response */
+    int ret = CRYPTOCB_UNAVAILABLE;
+    switch (info->algo_type) {
+        case WC_ALGO_TYPE_RNG: {
+            /*printf("Hardware Crypto Callback: RNG operation requested\n");*/
+            /* Extract info parameters */
+            uint8_t* out  = info->rng.out;
+            uint32_t size = info->rng.sz;
+
+            /* III Not random, just simple counter */
+            static uint16_t my_counter = 1;
+            if (my_counter > 4096) {
+                /* Only allow 4096 bytes to be generated */
+                ret = CRYPTOCB_UNAVAILABLE;
+            }
+            else {
+                uint32_t i = 0;
+                for (i = 0; i < size; i++) {
+                    out[i] = (uint8_t)my_counter++;
+                }
+                ret = 0;
+            }
+            break;
+        }
+        default:
+            /*printf("Hardware Crypto Callback: Unsupported algorithm type\n");
+             */
+            ret = CRYPTOCB_UNAVAILABLE;
+    }
+    return ret;
+}
+#endif
+int main(int argc, char** argv)
+{
+    int         rc              = 0;
+    const char* keyFilePath     = NULL;
+    const char* nvmInitFilePath = NULL;
+    int         keyId = WH_KEYID_ERASED; /* Default key ID if none provided */
+    int         clientId = 12; /* Default client ID if none provided */
+    uint8_t     memory[FLASH_RAM_SIZE] = {0};
+
+
+    /* Parse command-line arguments */
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--key") == 0 && i + 1 < argc) {
+            keyFilePath = argv[++i];
+        }
+        else if (strcmp(argv[i], "--id") == 0 && i + 1 < argc) {
+            keyId = atoi(argv[++i]);
+        }
+        else if (strcmp(argv[i], "--client") == 0 && i + 1 < argc) {
+            clientId = atoi(argv[++i]);
+        }
+        else if (strcmp(argv[i], "--nvminit") == 0 && i + 1 < argc) {
+            nvmInitFilePath = argv[++i];
+        }
+    }
+
+    /* Server configuration/context */
+    whTransportServerCb            ptttcb[1]      = {PTT_SERVER_CB};
+    posixTransportTcpServerContext tsc[1]         = {};
+    posixTransportTcpConfig        mytcpconfig[1] = {{
+               .server_ip_string = WH_SERVER_TCP_IPSTRING,
+               .server_port      = WH_SERVER_TCP_PORT,
+    }};
+    whCommServerConfig             cs_conf[1]     = {{
+                        .transport_cb      = ptttcb,
+                        .transport_context = (void*)tsc,
+                        .transport_config  = (void*)mytcpconfig,
+                        .server_id         = WH_SERVER_ID,
+    }};
+
+    /* RamSim Flash state and configuration */
+    whFlashRamsimCtx fc[1]      = {0};
+    whFlashRamsimCfg fc_conf[1] = {{
+        .size       = FLASH_RAM_SIZE,
+        .sectorSize = FLASH_RAM_SIZE / 2,
+        .pageSize   = 8,
+        .erasedByte = (uint8_t)0,
+        .memory     = memory,
+    }};
+    const whFlashCb  fcb[1]     = {WH_FLASH_RAMSIM_CB};
+
+    /* NVM Flash Configuration using RamSim HAL Flash */
+    whNvmFlashConfig  nf_conf[1] = {{
+         .cb      = fcb,
+         .context = fc,
+         .config  = fc_conf,
+    }};
+    whNvmFlashContext nfc[1]     = {0};
+    whNvmCb           nfcb[1]    = {WH_NVM_FLASH_CB};
+
+    whNvmConfig  n_conf[1] = {{
+         .cb      = nfcb,
+         .context = nfc,
+         .config  = nf_conf,
+    }};
+    whNvmContext nvm[1]    = {{0}};
+
+    /* Crypto context */
+#ifndef WOLFHSM_CFG_NO_CRYPTO
+    whServerCryptoContext crypto[1] = {{
+        .devId = INVALID_DEVID,
+    }};
+#endif
+#if defined(WOLFHSM_CFG_SHE_EXTENSION)
+    whServerSheContext she[1] = {{0}};
+#endif
+
+    whServerConfig s_conf[1] = {{
+        .comm_config = cs_conf,
+        .nvm         = nvm,
+#ifndef WOLFHSM_CFG_NO_CRYPTO
+        .crypto = crypto,
+        .devId  = INVALID_DEVID,
+#endif
+#if defined(WOLFHSM_CFG_SHE_EXTENSION)
+        .she = she,
+#endif
+    }};
+
+    rc = wh_Nvm_Init(nvm, n_conf);
     if (rc != 0) {
         printf("Failed to initialize NVM: %d\n", rc);
         return rc;
@@ -520,6 +707,50 @@ int wh_PosixServer_ExampleNvmConfig(void* conf, const char* nvmInitFilePath)
         }
         printf("NVM initialization completed successfully\n");
     }
+#ifndef WOLFHSM_CFG_NO_CRYPTO
+    /* Initialize crypto library and hardware */
+    wolfCrypt_Init();
 
-    return WH_ERROR_OK;
+    /* Context 3: Server Software Crypto */
+    WC_RNG  rng[1];
+    uint8_t buffer[128] = {0};
+    wc_InitRng_ex(rng, NULL, INVALID_DEVID);
+    wc_RNG_GenerateBlock(rng, buffer, sizeof(buffer));
+    wc_FreeRng(rng);
+    wh_Utils_Hexdump("Context 3: Server SW RNG:\n", buffer, sizeof(buffer));
+
+/* Context 4: Server Hardware Crypto */
+#define HW_DEV_ID 100
+    memset(buffer, 0, sizeof(buffer));
+    wc_CryptoCb_RegisterDevice(HW_DEV_ID, _hardwareCryptoCb, NULL);
+    wc_InitRng_ex(rng, NULL, HW_DEV_ID);
+    wc_RNG_GenerateBlock(rng, buffer, sizeof(buffer));
+    wc_FreeRng(rng);
+    wh_Utils_Hexdump("Context 4: Server HW RNG:\n", buffer, sizeof(buffer));
+
+    /* Context 5: Set default server crypto to use cryptocb */
+    crypto->devId = HW_DEV_ID;
+    printf("Context 5: Setting up default server crypto with devId=%d\n",
+           crypto->devId);
+
+    rc = wc_InitRng_ex(crypto->rng, NULL, crypto->devId);
+    if (rc != 0) {
+        printf("Failed to wc_InitRng_ex: %d\n", rc);
+        return rc;
+    }
+#endif
+    rc = wh_ServerTask(s_conf, keyFilePath, keyId, clientId);
+#ifndef WOLFHSM_CFG_NO_CRYPTO
+    rc = wc_FreeRng(crypto->rng);
+    if (rc != 0) {
+        printf("Failed to wc_FreeRng: %d\n", rc);
+        return rc;
+    }
+    rc = wolfCrypt_Cleanup();
+    if (rc != 0) {
+        printf("Failed to wolfCrypt_Cleanup: %d\n", rc);
+        return rc;
+    }
+#endif
+    return rc;
 }

@@ -40,6 +40,8 @@
 
 #include "wh_demo_client_crypto.h"
 
+#ifndef WOLFHSM_CFG_NO_CRYPTO
+
 #if !defined(NO_RSA)
 
 /*
@@ -1359,3 +1361,4 @@ exit:
     return ret;
 }
 #endif /* WOLFSSL_CMAC && !NO_AES */
+#endif /* WOLFHSM_CFG_NO_CRYPTO */

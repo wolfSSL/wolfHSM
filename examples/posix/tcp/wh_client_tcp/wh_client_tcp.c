@@ -1,5 +1,5 @@
 /*
- * wolfHSM Client POSIX Example
+ * wolfHSM Client TCP Example
  */
 
 #include <stdint.h>
@@ -15,20 +15,12 @@
 #include "wolfhsm/wh_client.h"
 #include "wolfhsm/wh_client_crypto.h"
 #include "port/posix/posix_transport_tcp.h"
-#include "port/posix/posix_transport_shm.h"
 
-#include "examples/demo/client/wh_demo_client_all.h"
-#include "wh_posix_cfg.h"
-#include "wh_posix_client_cfg.h"
-
-#ifndef WOLFHSM_CFG_NO_CRYPTO
-/* included to print out the version of wolfSSL linked with */
-#include "wolfssl/version.h"
-#endif
+#include "wh_demo_client_all.h"
 
 /** Local declarations */
 static void _sleepMs(long milliseconds);
-static int  wh_ClientTask(void* cf, const char* type, int test);
+static int  wh_ClientTask(void* cf);
 
 
 static void _sleepMs(long milliseconds)
@@ -40,7 +32,7 @@ static void _sleepMs(long milliseconds)
 }
 
 enum {
-    REPEAT_COUNT = 20,
+    REPEAT_COUNT = 10,
     REQ_SIZE     = 32,
     RESP_SIZE    = 64,
     ONE_MS       = 1,
@@ -50,7 +42,7 @@ enum {
 #define WH_SERVER_TCP_PORT 23456
 #define WH_CLIENT_ID 12
 
-static int wh_ClientTask(void* cf, const char* type, int test)
+static int wh_ClientTask(void* cf)
 {
     whClientConfig* config = (whClientConfig*)cf;
     int             ret    = 0;
@@ -69,38 +61,23 @@ static int wh_ClientTask(void* cf, const char* type, int test)
 
     ret = wh_Client_Init(client, config);
 
-    if (strcmp(type, "dma") == 0) {
-#ifdef WOLFSSL_STATIC_MEMORY
-        printf("Setting up DMA heap with static memory buckets\n");
-
-        ret = wh_PosixClient_ExampleSetupDmaMemory(client, config);
-        if (ret != 0) {
-            printf("Failed to setup DMA heap\n");
-            return -1;
-        }
-#else
-        return -1;
-#endif
-    }
-
     printf("Client connecting to server...\n");
-    if (test) {
-        return wh_DemoClient_All(client);
-    }
 
     if (ret != 0) {
         perror("Init error:");
         return -1;
     }
-
     for (counter = 0; counter < REPEAT_COUNT; counter++) {
         sprintf((char*)tx_req, "Request:%u", counter);
         tx_req_len = strlen((char*)tx_req);
         do {
             ret = wh_Client_EchoRequest(client, tx_req_len, tx_req);
             if (ret != WH_ERROR_NOTREADY) {
-                if (ret != 0) {
-                    printf("wh_Client_EchoRequest failed with ret=%d\n", ret);
+                if (ret == 0) {
+                    printf("Client sent request successfully\n");
+                }
+                else {
+                    printf("wh_CLient_EchoRequest failed with ret=%d\n", ret);
                 }
             }
             _sleepMs(ONE_MS);
@@ -124,7 +101,7 @@ static int wh_ClientTask(void* cf, const char* type, int test)
             break;
         }
     }
-#if defined(DWOLFHSM_CFG_NO_CRYPTO)
+#ifndef WOLFHSM_CFG_NO_CRYPTO
     /* Context 1: Client Local Crypto */
     WC_RNG  rng[1];
     uint8_t buffer[128] = {0};
@@ -141,71 +118,41 @@ static int wh_ClientTask(void* cf, const char* type, int test)
     wh_Utils_Hexdump("Context 2: Client Remote RNG:\n", buffer, sizeof(buffer));
 #endif
 
+    /* run the client demos */
+    ret = wh_DemoClient_All(client);
+    if (ret != 0) {
+        printf("Client demo failed: ret=%d\n", ret);
+    }
+
+
     (void)wh_Client_CommClose(client);
     (void)wh_Client_Cleanup(client);
     printf("Client disconnected\n");
     return ret;
 }
 
-void Usage(const char* exeName)
-{
-    printf("Usage: %s --type <type> --test\n", exeName);
-    printf("Example: %s --type tcp\n", exeName);
-    printf("type: tcp (default), shm\n");
-}
-
 int main(int argc, char** argv)
 {
-    const char*    type = "tcp";
-    int            test = 0; /* flag if running wolfcrypt test */
-    whClientConfig c_conf[1];
-    int            i;
-
     (void)argc;
     (void)argv;
 
-    memset(c_conf, 0, sizeof(whClientConfig));
-    printf("Example wolfHSM POSIX client ");
-#ifndef WOLFHSM_CFG_NO_CRYPTO
-    printf("built with wolfSSL version %s\n", LIBWOLFSSL_VERSION_STRING);
-#else
-    printf("built with WOLFHSM_CFG_NO_CRYPTO\n");
-#endif
+    /* Client configuration/contexts */
+    whTransportClientCb            pttccb[1]      = {PTT_CLIENT_CB};
+    posixTransportTcpClientContext tcc[1]         = {};
+    posixTransportTcpConfig        mytcpconfig[1] = {{
+               .server_ip_string = WH_SERVER_TCP_IPSTRING,
+               .server_port      = WH_SERVER_TCP_PORT,
+    }};
 
-    /* Parse command-line arguments */
-    for (i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "--type") == 0 && i + 1 < argc) {
-            type = argv[++i];
-        }
-        else if (strcmp(argv[i], "--test") == 0) {
-            test = 1;
-        }
-        else {
-            printf("Invalid argument: %s\n", argv[i]);
-            Usage(argv[0]);
-            return -1;
-        }
-    }
+    whCommClientConfig cc_conf[1] = {{
+        .transport_cb      = pttccb,
+        .transport_context = (void*)tcc,
+        .transport_config  = (void*)mytcpconfig,
+        .client_id         = WH_CLIENT_ID,
+    }};
+    whClientConfig     c_conf[1]  = {{
+             .comm = cc_conf,
+    }};
 
-    if (strcmp(type, "tcp") == 0) {
-        printf("Using TCP transport\n");
-        wh_PosixClient_ExampleTcpConfig(c_conf);
-    }
-    else if (strcmp(type, "shm") == 0) {
-        printf("Using shared memory transport\n");
-        wh_PosixClient_ExampleShmConfig(c_conf);
-    }
-#ifdef WOLFSSL_STATIC_MEMORY
-    else if (strcmp(type, "dma") == 0) {
-        printf("Using DMA with shared memory transport\n");
-        wh_PosixClient_ExampleShmDmaConfig(c_conf);
-    }
-#endif
-    else {
-        printf("Invalid client type: %s\n", type);
-        Usage(argv[0]);
-        return -1;
-    }
-
-    return wh_ClientTask(c_conf, type, test);
+    return wh_ClientTask(c_conf);
 }

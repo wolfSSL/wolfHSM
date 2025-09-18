@@ -12,4 +12,3 @@ wh_posix_server:
 clean:
 	make -C posix/wh_posix_client clean
 	make -C posix/wh_posix_server clean
-
