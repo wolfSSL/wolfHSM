@@ -56,7 +56,7 @@ int wh_Server_HandleCounter(whServerContext* server, uint16_t magic,
 
     switch (action) {
         case WH_COUNTER_INIT: {
-            whMessageCounter_InitRequest  req = {0};
+            whMessageCounter_InitRequest  req  = {0};
             whMessageCounter_InitResponse resp = {0};
 
             /* translate request */
@@ -84,7 +84,7 @@ int wh_Server_HandleCounter(whServerContext* server, uint16_t magic,
         } break;
 
         case WH_COUNTER_INCREMENT: {
-            whMessageCounter_IncrementRequest  req = {0};
+            whMessageCounter_IncrementRequest  req  = {0};
             whMessageCounter_IncrementResponse resp = {0};
 
             /* translate request */
@@ -92,11 +92,12 @@ int wh_Server_HandleCounter(whServerContext* server, uint16_t magic,
                 magic, (whMessageCounter_IncrementRequest*)req_packet, &req);
 
             /* read the counter, stored in the metadata label */
-            ret     = wh_Nvm_GetMetadata(server->nvm,
-                                         WH_MAKE_KEYID(WH_KEYTYPE_COUNTER,
-                                                       (uint16_t)server->comm->client_id,
-                                                       (uint16_t)req.counterId),
-                                         meta);
+            ret = wh_Nvm_GetMetadata(
+                server->nvm,
+                WH_MAKE_KEYID(WH_KEYTYPE_COUNTER,
+                              (uint16_t)server->comm->client_id,
+                              (uint16_t)req.counterId),
+                meta);
             resp.rc = ret;
 
             /* increment and write the counter back */
@@ -129,7 +130,7 @@ int wh_Server_HandleCounter(whServerContext* server, uint16_t magic,
         } break;
 
         case WH_COUNTER_READ: {
-            whMessageCounter_ReadRequest  req = {0};
+            whMessageCounter_ReadRequest  req  = {0};
             whMessageCounter_ReadResponse resp = {0};
 
             /* translate request */
@@ -137,11 +138,12 @@ int wh_Server_HandleCounter(whServerContext* server, uint16_t magic,
                 magic, (whMessageCounter_ReadRequest*)req_packet, &req);
 
             /* read the counter, stored in the metadata label */
-            ret     = wh_Nvm_GetMetadata(server->nvm,
-                                         WH_MAKE_KEYID(WH_KEYTYPE_COUNTER,
-                                                       (uint16_t)server->comm->client_id,
-                                                       (uint16_t)req.counterId),
-                                         meta);
+            ret = wh_Nvm_GetMetadata(
+                server->nvm,
+                WH_MAKE_KEYID(WH_KEYTYPE_COUNTER,
+                              (uint16_t)server->comm->client_id,
+                              (uint16_t)req.counterId),
+                meta);
             resp.rc = ret;
 
             /* return counter to the caller */
@@ -159,7 +161,7 @@ int wh_Server_HandleCounter(whServerContext* server, uint16_t magic,
         } break;
 
         case WH_COUNTER_DESTROY: {
-            whMessageCounter_DestroyRequest  req = {0};
+            whMessageCounter_DestroyRequest  req  = {0};
             whMessageCounter_DestroyResponse resp = {0};
 
             /* translate request */

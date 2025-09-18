@@ -552,7 +552,7 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
 
     switch (action) {
         case WH_KEY_CACHE: {
-            whMessageKeystore_CacheRequest  req = {0};
+            whMessageKeystore_CacheRequest  req  = {0};
             whMessageKeystore_CacheResponse resp = {0};
 
             /* translate request */
@@ -563,9 +563,9 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
             in = (uint8_t*)req_packet + sizeof(req);
 
             /* set the metadata fields */
-            meta->id = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
-                                     (uint16_t)server->comm->client_id,
-                                     (uint16_t)req.id);
+            meta->id     = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
+                                         (uint16_t)server->comm->client_id,
+                                         (uint16_t)req.id);
             meta->access = WH_NVM_ACCESS_ANY;
             meta->flags  = req.flags;
             meta->len    = req.sz;
@@ -605,7 +605,7 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
 #ifdef WOLFHSM_CFG_DMA
 
         case WH_KEY_CACHE_DMA: {
-            whMessageKeystore_CacheDmaRequest  req = {0};
+            whMessageKeystore_CacheDmaRequest  req  = {0};
             whMessageKeystore_CacheDmaResponse resp = {0};
 
             /* translate request */
@@ -613,9 +613,9 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
                 magic, (whMessageKeystore_CacheDmaRequest*)req_packet, &req);
 
             /* set the metadata fields */
-            meta->id = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
-                                     (uint16_t)server->comm->client_id,
-                                     (uint16_t)req.id);
+            meta->id     = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
+                                         (uint16_t)server->comm->client_id,
+                                         (uint16_t)req.id);
             meta->access = WH_NVM_ACCESS_ANY;
             meta->flags  = req.flags;
             meta->len    = req.key.sz;
@@ -657,7 +657,7 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
         } break;
 
         case WH_KEY_EXPORT_DMA: {
-            whMessageKeystore_ExportDmaRequest  req = {0};
+            whMessageKeystore_ExportDmaRequest  req  = {0};
             whMessageKeystore_ExportDmaResponse resp = {0};
 
             /* translate request */
@@ -693,7 +693,7 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
 #endif /* WOLFHSM_CFG_DMA */
 
         case WH_KEY_EVICT: {
-            whMessageKeystore_EvictRequest  req = {0};
+            whMessageKeystore_EvictRequest  req  = {0};
             whMessageKeystore_EvictResponse resp = {0};
 
             (void)wh_MessageKeystore_TranslateEvictRequest(
@@ -713,7 +713,7 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
         } break;
 
         case WH_KEY_EXPORT: {
-            whMessageKeystore_ExportRequest  req = {0};
+            whMessageKeystore_ExportRequest  req  = {0};
             whMessageKeystore_ExportResponse resp = {0};
             uint32_t                         keySz;
 
@@ -763,7 +763,7 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
         } break;
 
         case WH_KEY_COMMIT: {
-            whMessageKeystore_CommitRequest  req = {0};
+            whMessageKeystore_CommitRequest  req  = {0};
             whMessageKeystore_CommitResponse resp = {0};
 
             /* translate request */
@@ -790,7 +790,7 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
         } break;
 
         case WH_KEY_ERASE: {
-            whMessageKeystore_EraseRequest  req = {0};
+            whMessageKeystore_EraseRequest  req  = {0};
             whMessageKeystore_EraseResponse resp = {0};
 
             /* translate request */

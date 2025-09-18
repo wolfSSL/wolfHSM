@@ -289,7 +289,7 @@ static int _HandleRsaKeyGen(whServerContext* ctx, uint16_t magic,
                     printf("[server] RsaKeyGen UniqueId: keyId:%u, ret:%d\n",
                            key_id, ret);
 #endif
-                    if (ret != 0) {
+                    if (ret != WH_ERROR_OK) {
                         /* Early return on unique ID generation failure */
                         wc_FreeRsaKey(rsa);
                         return ret;
@@ -738,7 +738,7 @@ static int _HandleEccKeyGen(whServerContext* ctx, uint16_t magic,
                     printf("[server] %s UniqueId: keyId:%u, ret:%d\n", __func__,
                            key_id, ret);
 #endif
-                    if (ret != 0) {
+                    if (ret != WH_ERROR_OK) {
                         /* Early return on unique ID generation failure */
                         wc_ecc_free(key);
                         return ret;
@@ -1162,7 +1162,7 @@ static int _HandleCurve25519KeyGen(whServerContext* ctx, uint16_t magic,
                     printf("[server] %s UniqueId: keyId:%u, ret:%d\n", __func__,
                            key_id, ret);
 #endif
-                    if (ret != 0) {
+                    if (ret != WH_ERROR_OK) {
                         /* Early return on unique ID generation failure */
                         wc_curve25519_free(key);
                         return ret;
@@ -1717,10 +1717,10 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
                     ret = wh_Server_KeystoreEvictKey(ctx, keyId);
                 }
                 if (ret == 0) {
-                    meta->id = keyId;
+                    meta->id  = keyId;
                     meta->len = sizeof(ctx->crypto->algoCtx.cmac);
                     ret       = wh_Server_KeystoreCacheKey(
-                              ctx, meta, (uint8_t*)ctx->crypto->algoCtx.cmac);
+                        ctx, meta, (uint8_t*)ctx->crypto->algoCtx.cmac);
                     if (ret == 0) {
                         res.keyId = WH_KEYID_ID(keyId);
                         res.outSz = 0;
@@ -1761,12 +1761,7 @@ static int _HandleSha256(whServerContext* ctx, uint16_t magic,
     int                            ret    = 0;
     wc_Sha256                      sha256[1];
     whMessageCrypto_Sha256Request  req;
-    whMessageCrypto_Sha2Response res = {0};
-
-    /* THe server SHA256 struct doesn't persist state (it is a union), meaning
-     * the devId may get blown away between calls. We must restore the server
-     * devId each time */
-    sha256->devId = ctx->crypto->devId;
+    whMessageCrypto_Sha2Response   res = {0};
 
     /* Translate the request */
     ret = wh_MessageCrypto_TranslateSha256Request(magic, cryptoDataIn, &req);
@@ -1792,8 +1787,9 @@ static int _HandleSha256(whServerContext* ctx, uint16_t magic,
         }
         /* wolfCrypt (or cryptoCb) is responsible for last block padding */
         if (ret == 0) {
-            /* Safe: lastBlockLen is validated to be within bounds [0, WC_SHA256_BLOCK_SIZE]
-             * This is an "untrusted loop bound" but it's properly validated above. */
+            /* Safe: lastBlockLen is validated to be within bounds [0,
+             * WC_SHA256_BLOCK_SIZE] This is an "untrusted loop bound" but it's
+             * properly validated above. */
             ret = wc_Sha256Update(sha256, req.inBlock, req.lastBlockLen);
         }
         if (ret == 0) {
@@ -2154,8 +2150,9 @@ static int _HandleMlDsaKeyGen(whServerContext* ctx, uint16_t magic,
                             printf("[server] %s UniqueId: keyId:%u, ret:%d\n",
                                    __func__, key_id, ret);
 #endif
-                            if (ret != 0) {
-                                /* Early return on unique ID generation failure */
+                            if (ret != WH_ERROR_OK) {
+                                /* Early return on unique ID generation failure
+                                 */
                                 wc_MlDsaKey_Free(key);
                                 return ret;
                             }
@@ -2223,7 +2220,8 @@ static int _HandleMlDsaSign(whServerContext* ctx, uint16_t magic,
     uint32_t options = req.options;
     int      evict   = !!(options & WH_MESSAGE_CRYPTO_MLDSA_SIGN_OPTIONS_EVICT);
 
-    /* Validate input length against available data to prevent buffer overread */
+    /* Validate input length against available data to prevent buffer overread
+     */
     word32 available_data = inSize - sizeof(whMessageCrypto_MlDsaSignRequest);
     if (in_len > available_data) {
         return WH_ERROR_BADARGS;
@@ -3278,8 +3276,9 @@ static int _HandleMlDsaKeyGenDma(whServerContext* ctx, uint16_t magic,
                             printf("[server] %s UniqueId: keyId:%u, ret:%d\n",
                                    __func__, keyId, ret);
 #endif
-                            if (ret != 0) {
-                                /* Early return on unique ID generation failure */
+                            if (ret != WH_ERROR_OK) {
+                                /* Early return on unique ID generation failure
+                                 */
                                 wc_MlDsaKey_Free(key);
                                 return ret;
                             }
