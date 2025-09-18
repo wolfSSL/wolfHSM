@@ -448,8 +448,7 @@ int wh_Server_KeystoreReadKey(whServerContext* server, whKeyId keyId,
     }
     /* cache key if free slot, will only kick out other commited keys */
     if (ret == 0 && out != NULL) {
-        /* Best-effort caching: failure does not affect read result */
-        (void)wh_Server_KeystoreCacheKey(server, meta, out);
+        wh_Server_KeystoreCacheKey(server, meta, out);
     }
 #ifdef WOLFHSM_CFG_SHE_EXTENSION
     /* use empty key of zeros if we couldn't find the master ecu key */

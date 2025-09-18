@@ -1779,17 +1779,12 @@ static int _HandleSha256(whServerContext* ctx, uint16_t magic,
     sha256->hiLen = req.resumeState.hiLen;
 
     if (req.isLastBlock) {
-        /* Validate lastBlockLen to prevent potential buffer overread.
-         * Note: req.lastBlockLen is tainted (client-controlled) data. Length 0
-         * is valid when the total message size is block-aligned. */
+        /* Validate lastBlockLen to prevent potential buffer overread */
         if (req.lastBlockLen > WC_SHA256_BLOCK_SIZE) {
             return WH_ERROR_BADARGS;
         }
         /* wolfCrypt (or cryptoCb) is responsible for last block padding */
         if (ret == 0) {
-            /* Safe: lastBlockLen is validated to be within bounds [0,
-             * WC_SHA256_BLOCK_SIZE] This is an "untrusted loop bound" but it's
-             * properly validated above. */
             ret = wc_Sha256Update(sha256, req.inBlock, req.lastBlockLen);
         }
         if (ret == 0) {
@@ -2299,8 +2294,8 @@ static int _HandleMlDsaVerify(whServerContext* ctx, uint16_t magic,
 
     /* Validate lengths against available payload (overflow-safe) */
     uint32_t available = inSize - sizeof(whMessageCrypto_MlDsaVerifyRequest);
-    if (sig_len > available || hash_len > available ||
-        sig_len > (available - hash_len)) {
+    if ((sig_len > available) || (hash_len > available) ||
+        (sig_len > (available - hash_len))) {
         return WH_ERROR_BADARGS;
     }
 
