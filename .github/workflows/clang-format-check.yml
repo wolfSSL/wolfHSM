@@ -1,0 +1,49 @@
+name: Clang Format Check
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  clang-format-check:
+    name: Check PR formatting with clang-format-15
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Need full history to compare with main branch
+
+    - name: Install clang-format-15
+      run: |
+        sudo apt-get install -y clang-format-15
+
+    - name: Fetch main branch
+      run: |
+        git fetch origin main:main
+
+    - name: Check formatting
+      run: |
+        echo "Running git-clang-format-15 to check for formatting issues..."
+        echo "Comparing against main branch..."
+
+        # Run git-clang-format and capture the output
+        OUTPUT=$(git-clang-format-15 --diff main --binary clang-format-15)
+
+        # Check if there are any formatting changes
+        if [ "$OUTPUT" = "no modified files to format" ] || [ "$OUTPUT" = "clang-format did not modify any files" ] || [ -z "$OUTPUT" ]; then
+          echo "✅ Code is properly formatted!"
+          exit 0
+        else
+          echo "❌ Code formatting issues detected!"
+          echo ""
+          echo "The following changes would be made by clang-format-15:"
+          echo "=================================================="
+          echo "$OUTPUT"
+          echo "=================================================="
+          echo ""
+          echo "Please run the following command locally on your feature branch and commit the changes:"
+          echo "  git-clang-format-15 main --binary clang-format-15"
+          exit 1
+        fi
