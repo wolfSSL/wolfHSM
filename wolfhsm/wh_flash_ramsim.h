@@ -42,7 +42,8 @@ typedef struct {
     uint32_t pageSize;
     int      writeLocked;
     uint8_t  erasedByte;
-    uint8_t WH_PAD[7];
+    uint32_t failAfter; /* Counter for simulating failures */
+    uint8_t  WH_PAD[3];
 } whFlashRamsimCtx;
 
 
