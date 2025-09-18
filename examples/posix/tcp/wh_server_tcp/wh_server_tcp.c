@@ -32,8 +32,9 @@ static int wh_ServerTask(void* cf, const char* keyFilePath, int keyId,
                          int clientId);
 
 static void _sleepMs(long milliseconds);
+#ifndef WOLFHSM_CFG_NO_CRYPTO
 static int _hardwareCryptoCb(int devId, struct wc_CryptoInfo* info, void* ctx);
-
+#endif
 /* Macros for maximum client ID and key ID */
 #define MAX_CLIENT_ID 255
 #define MAX_KEY_ID UINT16_MAX
@@ -563,7 +564,7 @@ static int wh_ServerTask(void* cf, const char* keyFilePath, int keyId,
     }
     return ret;
 }
-
+#ifndef WOLFHSM_CFG_NO_CRYPTO
 static int _hardwareCryptoCb(int devId, struct wc_CryptoInfo* info,
                                    void* ctx)
 {
@@ -599,7 +600,7 @@ static int _hardwareCryptoCb(int devId, struct wc_CryptoInfo* info,
     }
     return ret;
 }
-
+#endif
 int main(int argc, char** argv)
 {
     int         rc              = 0;
@@ -668,10 +669,11 @@ int main(int argc, char** argv)
     whNvmContext nvm[1]    = {{0}};
 
     /* Crypto context */
+#ifndef WOLFHSM_CFG_NO_CRYPTO
     whServerCryptoContext crypto[1] = {{
         .devId = INVALID_DEVID,
     }};
-
+#endif
 #if defined(WOLFHSM_CFG_SHE_EXTENSION)
     whServerSheContext she[1] = {{0}};
 #endif
@@ -679,8 +681,10 @@ int main(int argc, char** argv)
     whServerConfig s_conf[1] = {{
         .comm_config = cs_conf,
         .nvm         = nvm,
+#ifndef WOLFHSM_CFG_NO_CRYPTO
         .crypto      = crypto,
         .devId       = INVALID_DEVID,
+#endif
 #if defined(WOLFHSM_CFG_SHE_EXTENSION)
         .she         = she,
 #endif
@@ -702,7 +706,7 @@ int main(int argc, char** argv)
         }
         printf("NVM initialization completed successfully\n");
     }
-
+#ifndef WOLFHSM_CFG_NO_CRYPTO
     /* Initialize crypto library and hardware */
     wolfCrypt_Init();
 
@@ -733,9 +737,9 @@ int main(int argc, char** argv)
         printf("Failed to wc_InitRng_ex: %d\n", rc);
         return rc;
     }
-
+#endif
     rc = wh_ServerTask(s_conf, keyFilePath, keyId, clientId);
-
+#ifndef WOLFHSM_CFG_NO_CRYPTO
     rc = wc_FreeRng(crypto->rng);
     if (rc != 0) {
         printf("Failed to wc_FreeRng: %d\n", rc);
@@ -746,6 +750,6 @@ int main(int argc, char** argv)
         printf("Failed to wolfCrypt_Cleanup: %d\n", rc);
         return rc;
     }
-
+#endif
     return rc;
 }
