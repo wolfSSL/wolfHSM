@@ -473,7 +473,7 @@ int posixTransportShm_Cleanup(void* c)
     return 0;
 }
 
-
+#if defined(WOLFHSM_CFG_ENABLE_CLIENT)
 int posixTransportShm_SendRequest(void* c, uint16_t len, const void* data)
 {
     posixTransportShmContext* ctx = (posixTransportShmContext*)c;
@@ -520,6 +520,31 @@ int posixTransportShm_SendRequest(void* c, uint16_t len, const void* data)
     return ret;
 }
 
+int posixTransportShm_RecvResponse(void* c, uint16_t* out_len, void* data)
+{
+    posixTransportShmContext* ctx = (posixTransportShmContext*)c;
+
+    /* Only need to check NULL, mem transport checks other state info */
+    if (ctx == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    return wh_TransportMem_RecvResponse(ctx->transportMemCtx, out_len, data);
+}
+#endif /* WOLFHSM_CFG_ENABLE_CLIENT */
+
+#if defined(WOLFHSM_CFG_ENABLE_SERVER)
+int posixTransportShm_SendResponse(void* c, uint16_t len, const void* data)
+{
+    posixTransportShmContext* ctx = (posixTransportShmContext*)c;
+
+    /* Only need to check NULL, mem transport checks other state info */
+    if (ctx == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    return wh_TransportMem_SendResponse(ctx->transportMemCtx, len, data);
+}
 
 int posixTransportShm_RecvRequest(void* c, uint16_t* out_len, void* data)
 {
@@ -565,29 +590,4 @@ int posixTransportShm_RecvRequest(void* c, uint16_t* out_len, void* data)
     }
     return ret;
 }
-
-
-int posixTransportShm_SendResponse(void* c, uint16_t len, const void* data)
-{
-    posixTransportShmContext* ctx = (posixTransportShmContext*)c;
-
-    /* Only need to check NULL, mem transport checks other state info */
-    if (ctx == NULL) {
-        return WH_ERROR_BADARGS;
-    }
-
-    return wh_TransportMem_SendResponse(ctx->transportMemCtx, len, data);
-}
-
-
-int posixTransportShm_RecvResponse(void* c, uint16_t* out_len, void* data)
-{
-    posixTransportShmContext* ctx = (posixTransportShmContext*)c;
-
-    /* Only need to check NULL, mem transport checks other state info */
-    if (ctx == NULL) {
-        return WH_ERROR_BADARGS;
-    }
-
-    return wh_TransportMem_RecvResponse(ctx->transportMemCtx, out_len, data);
-}
+#endif
