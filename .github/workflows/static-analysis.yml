@@ -83,7 +83,6 @@ jobs:
 
     - name: Run clang-tidy
       id: clang-tidy
-      continue-on-error: true
       run: |
         chmod +x tools/static-analysis/run_clang_tidy_make.sh
         chmod +x tools/static-analysis/clang-tidy-builder.sh

@@ -61,7 +61,7 @@ set +e  # Don't exit on error
 # Run make and capture output
 make -C test 2>&1 | tee "$OUTPUT_DIR/clang_tidy_output.txt"
 
-BUILD_RESULT=$?
+BUILD_RESULT=${PIPESTATUS[0]}
 set -e
 
 # Process the output to create a summary
@@ -85,9 +85,12 @@ echo "  Errors: $ERROR_COUNT"
 echo "  Warnings: $WARNING_COUNT"
 echo "  Total issues: $TOTAL_ISSUES"
 
-# Exit with error if we have errors or warnings (configurable threshold)
-# For now, we'll only fail on errors, not warnings
-if [ $ERROR_COUNT -gt 0 ]; then
+# Exit with error if we have errors or build failed
+if [ $BUILD_RESULT -ne 0 ]; then
+    echo ""
+    echo "❌ clang-tidy build/analysis failed (make exit: $BUILD_RESULT)"
+    exit $BUILD_RESULT
+elif [ $ERROR_COUNT -gt 0 ]; then
     echo ""
     echo "❌ clang-tidy found $ERROR_COUNT error(s) that must be fixed"
     exit 1

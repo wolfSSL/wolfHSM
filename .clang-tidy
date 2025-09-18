@@ -31,7 +31,6 @@ WarningsAsErrors: ''
 
 HeaderFilterRegex: '^(src[\\/]|wolfhsm[\\/]).*\\.(c|h)$'
 
-AnalyzeTemporaryDtors: false
 
 FormatStyle: none
 

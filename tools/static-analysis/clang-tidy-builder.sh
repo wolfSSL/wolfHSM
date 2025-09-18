@@ -29,6 +29,12 @@ if [[ -n "${CLANG_TIDY:-}" ]]; then
 	    break
 	fi
 
+    # Only analyze wolfHSM sources: src/ and wolfhsm/ (skip others, e.g., test/, tools/, wolfssl/)
+    if [[ ! "$source_file" == */src/* && ! "$source_file" == */wolfhsm/* ]]; then
+        retval=0
+        break
+    fi
+
     # Always declare the array (avoid unbound errors under set -u)
     declare -a clang_tidy_args_array=()
     # Build argument array only if CLANG_TIDY_ARGS is present
@@ -87,12 +93,14 @@ if [[ -n "${CLANG_TIDY:-}" ]]; then
 	    clang_tidy_args_array+=("${clang_tidy_extra_args[@]}")
 	fi
 
-    for arg in "${clang_tidy_args_array[@]}"; do
+    if [[ ${#clang_tidy_args_array[@]} -gt 0 ]]; then
+        for arg in "${clang_tidy_args_array[@]}"; do
 	    case "$arg" in
 		--use-color) use_color=
 			     ;;
 	    esac
-	done
+        done
+    fi
 	unset arg
 
 	if [[ -n "${use_color:-}" ]]; then
