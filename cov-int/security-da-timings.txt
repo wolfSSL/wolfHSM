@@ -1,9 +1,0 @@
-# Version: 3c60fc625b p-2024.12-push-36
-# Command Line: /Applications/Coverity/bin/cov-security-da --dir /Users/jacktjaden/work/wolfHSM-jack/cov-int
-timer                         ms      calls
--------------------------------------------
-cov_security_da::run           4          1
-
-activity                      ms      calls
--------------------------------------------
-cov_security_da::run           4          1
