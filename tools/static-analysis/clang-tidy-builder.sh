@@ -29,7 +29,12 @@ if [[ -n "${CLANG_TIDY:-}" ]]; then
 	    break
 	fi
 
-	read -r -a clang_tidy_args_array < <(echo "$CLANG_TIDY_ARGS") || exit $?
+    # Always declare the array (avoid unbound errors under set -u)
+    declare -a clang_tidy_args_array=()
+    # Build argument array only if CLANG_TIDY_ARGS is present
+    if [[ -n "${CLANG_TIDY_ARGS:-}" ]]; then
+        read -r -a clang_tidy_args_array < <(echo "${CLANG_TIDY_ARGS}") || exit $?
+    fi
 
 	if [[ -n "${CLANG_TIDY_PER_FILE_CHECKS:-}" ]]; then
 	    per_file_checks=()
@@ -82,7 +87,7 @@ if [[ -n "${CLANG_TIDY:-}" ]]; then
 	    clang_tidy_args_array+=("${clang_tidy_extra_args[@]}")
 	fi
 
-	for arg in "${clang_tidy_args_array[@]}"; do
+    for arg in "${clang_tidy_args_array[@]}"; do
 	    case "$arg" in
 		--use-color) use_color=
 			     ;;
@@ -216,7 +221,7 @@ if [[ -n "${CLANG_TIDY:-}" ]]; then
 
             esac
 
-        done < <("$CLANG_TIDY" "${clang_tidy_args_array[@]}" "$source_file" -- "$@" 2>&1)
+        done < <("$CLANG_TIDY" ${clang_tidy_args_array+"${clang_tidy_args_array[@]}"} "$source_file" -- "$@" 2>&1)
 
 	if [[ "$retval" != '0' && -n "${do_style_restore:-}" ]]; then
 	    echo -n "$text_normal_start" >&2
@@ -229,7 +234,7 @@ if [[ "$retval" != '0' ]]; then
     exit "$retval"
 fi
 
-# shellcheck disable=SC2162 # we want backslashes to be interpreted here.
+# shellcheck disable=SC2162 # intentional use of read with process substitution; -r flag is present and safe.
 if [[ -n "${CLANG_OVERRIDE_CFLAGS:-}" ]]; then
     read -r -a CLANG_OVERRIDE_CFLAGS_a < <(echo "${CLANG_OVERRIDE_CFLAGS}")
     exec "$CLANG" "$@" "${CLANG_OVERRIDE_CFLAGS_a[@]}"

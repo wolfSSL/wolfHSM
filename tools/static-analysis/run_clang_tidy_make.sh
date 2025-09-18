@@ -27,25 +27,12 @@ if ! command -v clang &> /dev/null; then
     exit 1
 fi
 
-# Set up environment variables for clang-tidy
+# Set up environment variables for clang/clang-tidy binaries
 export CLANG_TIDY="$(command -v clang-tidy)"
 export CLANG="$(command -v clang)"
 
-# Configure clang-tidy checks for wolfHSM
-# This is a more targeted set of checks appropriate for embedded/security code
-export CLANG_TIDY_ARGS='-header-filter=^(src/|wolfhsm/).*\.(c|h)$ -checks=bugprone-*,cert-*,clang-analyzer-security.*,readability-inconsistent-declaration-parameter-name,readability-redundant-preprocessor,misc-no-recursion,misc-misplaced-const,misc-redundant-expression,misc-unused-parameters,-bugprone-easily-swappable-parameters,-bugprone-reserved-identifier,-bugprone-branch-clone,-bugprone-macro-parentheses,-cert-err33-c,-cert-err34-c,-clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling'
-
-# Per-file check overrides
-export CLANG_TIDY_PER_FILE_CHECKS=''
-
-# Configuration for specific checks
-export CLANG_TIDY_CONFIG='{CheckOptions: [{key: bugprone-unused-return-value.AllowCastToVoid, value: true}, {key: bugprone-unused-return-value.CheckedFunctions, value: "memset;memcpy;memmove;strcpy;strncpy;sprintf;snprintf;vsnprintf"}]}'
-
-# Additional arguments for clang-tidy
-export CLANG_TIDY_EXTRA_ARGS='--quiet'
-
-# Additional CPPFLAGS for clang-tidy
-export CLANG_TIDY_CPPFLAGS='-DWOLFSSL_CLANG_TIDY'
+# Rely on repo-root .clang-tidy for checks/config and header filter.
+# No inline -config/-checks here to keep maintenance simple and IDEs consistent.
 
 # Clear output files
 > "$OUTPUT_DIR/clang_tidy_output.txt"

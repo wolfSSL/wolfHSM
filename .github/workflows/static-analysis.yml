@@ -18,6 +18,7 @@ jobs:
       uses: actions/checkout@v3
       with:
         repository: wolfssl/wolfssl
+        ref: v5.6.4-stable
         path: wolfssl
 
     - name: Install cppcheck

@@ -1,4 +1,50 @@
 ---
+# Central clang-tidy configuration for wolfHSM
+
+Checks: >
+  bugprone-*,
+  cert-*,
+  clang-analyzer-security.*,
+  readability-inconsistent-declaration-parameter-name,
+  readability-redundant-preprocessor,
+  misc-no-recursion,
+  misc-misplaced-const,
+  misc-redundant-expression,
+  misc-unused-parameters,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-reserved-identifier,
+  -bugprone-branch-clone,
+  -bugprone-macro-parentheses,
+  -cert-err33-c,
+  -cert-err34-c,
+  -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling,
+  -clang-diagnostic-language-extension-token,
+  -readability-braces-around-statements,
+  -readability-function-size,
+  -readability-function-cognitive-complexity,
+  -readability-isolate-declaration,
+  -readability-magic-numbers,
+  -readability-else-after-return,
+  -misc-include-cleaner
+
+WarningsAsErrors: ''
+
+HeaderFilterRegex: '^(src[\\/]|wolfhsm[\\/]).*\\.(c|h)$'
+
+AnalyzeTemporaryDtors: false
+
+FormatStyle: none
+
+CheckOptions:
+  - key: bugprone-unused-return-value.AllowCastToVoid
+    value: true
+  - key: bugprone-unused-return-value.CheckedFunctions
+    value: 'memset;memcpy;memmove;strcpy;strncpy;sprintf;snprintf;vsnprintf;pthread_mutex_lock;pthread_mutex_unlock'
+  - key: readability-inconsistent-declaration-parameter-name.Strict
+    value: false
+  - key: misc-unused-parameters.StrictMode
+    value: false
+---
 # wolfHSM clang-tidy configuration
 # Focused on security, correctness, and portability for embedded HSM framework
 
