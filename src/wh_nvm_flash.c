@@ -792,10 +792,10 @@ static int nfMemDirectory_Parse(nfMemDirectory* d)
             /* Data is incomplete, but we must advance the pointer */
             d->reclaimable_entries++;
             d->reclaimable_data +=
-                d->objects[d->next_free_object].state.count;
+                WHFU_BYTES2UNITS(d->objects[d->next_free_object].metadata.len);
             d->next_free_data =
                 d->objects[d->next_free_object].state.start +
-                d->objects[d->next_free_object].state.count;
+                WHFU_BYTES2UNITS(d->objects[d->next_free_object].metadata.len);
             break;
         default:
             /* Unknown state.  Better barf */
