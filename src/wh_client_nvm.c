@@ -651,8 +651,7 @@ int wh_Client_NvmReadResponse(whClientContext* c, int32_t *out_rc,
             (resp_size - hdr_len > WH_MESSAGE_NVM_MAX_READ_LEN)) {
             /* Invalid message */
             rc = WH_ERROR_ABORTED;
-        }
-        else {
+        } else {
             /* Valid message */
             if (out_rc != NULL) {
                 *out_rc = msg->rc;
@@ -730,8 +729,7 @@ int wh_Client_NvmAddObjectDmaResponse(whClientContext* c, int32_t* out_rc)
             (resp_size != sizeof(msg))) {
             /* Invalid message */
             rc = WH_ERROR_ABORTED;
-        }
-        else {
+        } else {
             /* Valid message */
             if (out_rc != NULL) {
                 *out_rc = msg.rc;
@@ -801,8 +799,7 @@ int wh_Client_NvmReadDmaResponse(whClientContext* c, int32_t* out_rc)
             (resp_size != sizeof(msg))) {
             /* Invalid message */
             rc = WH_ERROR_ABORTED;
-        }
-        else {
+        } else {
             /* Valid message */
             if (out_rc != NULL) {
                 *out_rc = msg.rc;

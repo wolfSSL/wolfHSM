@@ -1780,7 +1780,7 @@ static int _HandleSha256(whServerContext* ctx, uint16_t magic,
 
     if (req.isLastBlock) {
         /* Validate lastBlockLen to prevent potential buffer overread */
-        if (req.lastBlockLen > WC_SHA256_BLOCK_SIZE) {
+        if ((unsigned int)req.lastBlockLen > WC_SHA256_BLOCK_SIZE) {
             return WH_ERROR_BADARGS;
         }
         /* wolfCrypt (or cryptoCb) is responsible for last block padding */
@@ -2217,6 +2217,9 @@ static int _HandleMlDsaSign(whServerContext* ctx, uint16_t magic,
 
     /* Validate input length against available data to prevent buffer overread
      */
+    if (inSize < sizeof(whMessageCrypto_MlDsaSignRequest)) {
+        return WH_ERROR_BADARGS;
+    }
     word32 available_data = inSize - sizeof(whMessageCrypto_MlDsaSignRequest);
     if (in_len > available_data) {
         return WH_ERROR_BADARGS;
@@ -2293,6 +2296,9 @@ static int _HandleMlDsaVerify(whServerContext* ctx, uint16_t magic,
         (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_MlDsaVerifyRequest);
 
     /* Validate lengths against available payload (overflow-safe) */
+    if (inSize < sizeof(whMessageCrypto_MlDsaVerifyRequest)) {
+        return WH_ERROR_BADARGS;
+    }
     uint32_t available = inSize - sizeof(whMessageCrypto_MlDsaVerifyRequest);
     if ((sig_len > available) || (hash_len > available) ||
         (sig_len > (available - hash_len))) {
