@@ -16,7 +16,6 @@
  * You should have received a copy of the GNU General Public License
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
-#include <bits/stdint-uintn.h>
 #include <stdio.h>
 #include <string.h>
 #include <stddef.h>
@@ -36,6 +35,9 @@
 
 /* NVM simulator backends to use for testing NVM module */
 #include "wolfhsm/wh_flash_ramsim.h"
+/* Fault injection layer to simulate power failures */
+#include "wh_test_flash_fault_inject.h"
+
 #if defined(WOLFHSM_CFG_TEST_POSIX)
 #include <unistd.h>  /* For unlink */
 #include "port/posix/posix_transport_tcp.h"
@@ -498,7 +500,6 @@ int whTest_NvmFlash_RamSim(void)
     return whTest_NvmFlashCfg(&myNvmCfg);
 }
 
-
 static int
 simulateFailureAndRecover(int failAfter, int* dataSize,
                           uint32_t* bytesAvalBefore, whNvmId* objsAvailBefore,
@@ -519,12 +520,19 @@ simulateFailureAndRecover(int failAfter, int* dataSize,
          .erasedByte = (uint8_t)0,
          .memory     = memory,
     }};
+    const whFlashCb   flashFaultInjCb[1] = {WH_FLASH_FAULTINJECT_CB};
+    whFlashFaultInjectCtx  faultInjCtx[1] = {0};
+    whFlashFaultInjectCfg  faultInjCfg[1] = {{
+        .realCb = flashCb,
+        .realCtx = flashCtx,
+        .realCfg = flashCfg,
+    }};
     const whNvmCb     cb[1]       = {WH_NVM_FLASH_CB};
     whNvmFlashContext context[1]  = {0};
     whNvmFlashConfig  cfg         = {
-                 .cb      = flashCb,
-                 .context = flashCtx,
-                 .config  = flashCfg,
+                 .cb      = flashFaultInjCb,
+                 .context = faultInjCtx,
+                 .config  = faultInjCfg,
     };
     whNvmMetadata checkMeta = {0};
     int           ret       = 0;
@@ -533,7 +541,7 @@ simulateFailureAndRecover(int failAfter, int* dataSize,
     WH_TEST_RETURN_ON_FAIL(cb->GetAvailable(context, bytesAvalBefore,
                                             objsAvailBefore, bytesReclBefore,
                                             objsReclBefore));
-    flashCtx->failAfter = failAfter;
+    faultInjCtx->failAfterPrograms = failAfter;
     ret = cb->AddObject(context, (whNvmMetadata*)&meta, (whNvmSize)sizeof(data),
                         data);
     WH_TEST_ASSERT_RETURN(ret == WH_ERROR_ABORTED);
@@ -591,9 +599,8 @@ int whTest_NvmFlash_Recovery(void)
      * WHFU_BYTES_PER_UNIT */
     WH_TEST_ASSERT_RETURN(bytesAfter <= bytesBefore - test_data_len);
     WH_TEST_ASSERT_RETURN(bytesReclAfter >= bytesReclBefore);
-    ;
     WH_TEST_ASSERT_RETURN(bytesReclAfter == bytesBefore - bytesAfter);
-    ;
+
     /* available object should be decremented */
     WH_TEST_ASSERT_RETURN(objsAfter == objsBefore - 1);
 
@@ -637,7 +644,7 @@ int whTest_NvmFlash(void)
 {
     printf("Testing NVM flash with RAM sim...\n");
     WH_TEST_ASSERT(0 == whTest_NvmFlash_RamSim());
-    
+
     printf("Testing NVM flash recovery mechanism...\n");
     WH_TEST_ASSERT(0 == whTest_NvmFlash_Recovery());
 
