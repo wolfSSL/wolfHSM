@@ -302,16 +302,25 @@ static int _HandleRsaKeyGen(whServerContext* ctx, uint16_t magic,
                     printf("[server] RsaKeyGen UniqueId: keyId:%u, ret:%d\n",
                            key_id, ret);
 #endif
+                    if (ret != WH_ERROR_OK) {
+                        /* Early return on unique ID generation failure */
+                        wc_FreeRsaKey(rsa);
+                        return ret;
+                    }
                 }
 
-                ret = wh_Server_CacheImportRsaKey(ctx, rsa, key_id, flags,
-                                                  label_size, label);
+                if (ret == 0) {
+                    ret = wh_Server_CacheImportRsaKey(ctx, rsa, key_id, flags,
+                                                      label_size, label);
+                }
 #ifdef DEBUG_CRYPTOCB_VERBOSE
                 printf("[server] RsaKeyGen CacheKeyRsa: keyId:%u, ret:%d\n",
                        key_id, ret);
 #endif
-                res.keyId = WH_KEYID_ID(key_id);
-                res.len   = 0;
+                if (ret == 0) {
+                    res.keyId = WH_KEYID_ID(key_id);
+                    res.len   = 0;
+                }
             }
         }
         wc_FreeRsaKey(rsa);
@@ -742,9 +751,16 @@ static int _HandleEccKeyGen(whServerContext* ctx, uint16_t magic,
                     printf("[server] %s UniqueId: keyId:%u, ret:%d\n", __func__,
                            key_id, ret);
 #endif
+                    if (ret != WH_ERROR_OK) {
+                        /* Early return on unique ID generation failure */
+                        wc_ecc_free(key);
+                        return ret;
+                    }
                 }
-                ret = wh_Server_EccKeyCacheImport(ctx, key, key_id, flags,
-                                                  label_size, label);
+                if (ret == 0) {
+                    ret = wh_Server_EccKeyCacheImport(ctx, key, key_id, flags,
+                                                      label_size, label);
+                }
 #ifdef DEBUG_CRYPTOCB
                 printf("[server] %s CacheImport: keyId:%u, ret:%d\n", __func__,
                        key_id, ret);
@@ -1159,10 +1175,17 @@ static int _HandleCurve25519KeyGen(whServerContext* ctx, uint16_t magic,
                     printf("[server] %s UniqueId: keyId:%u, ret:%d\n", __func__,
                            key_id, ret);
 #endif
+                    if (ret != WH_ERROR_OK) {
+                        /* Early return on unique ID generation failure */
+                        wc_curve25519_free(key);
+                        return ret;
+                    }
                 }
 
-                ret = wh_Server_CacheImportCurve25519Key(
-                    ctx, key, key_id, flags, label_size, label);
+                if (ret == 0) {
+                    ret = wh_Server_CacheImportCurve25519Key(
+                        ctx, key, key_id, flags, label_size, label);
+                }
 #ifdef DEBUG_CRYPTOCB
                 printf("[server] %s CacheImport: keyId:%u, ret:%d\n", __func__,
                        key_id, ret);
@@ -1928,12 +1951,16 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
                 if (moveToBigCache == 1) {
                     ret = wh_Server_KeystoreEvictKey(ctx, keyId);
                 }
-                meta->id = keyId;
-                meta->len = sizeof(ctx->crypto->algoCtx.cmac);
-                ret       = wh_Server_KeystoreCacheKey(
-                          ctx, meta, (uint8_t*)ctx->crypto->algoCtx.cmac);
-                res.keyId = WH_KEYID_ID(keyId);
-                res.outSz = 0;
+                if (ret == 0) {
+                    meta->id  = keyId;
+                    meta->len = sizeof(ctx->crypto->algoCtx.cmac);
+                    ret       = wh_Server_KeystoreCacheKey(
+                        ctx, meta, (uint8_t*)ctx->crypto->algoCtx.cmac);
+                    if (ret == 0) {
+                        res.keyId = WH_KEYID_ID(keyId);
+                        res.outSz = 0;
+                    }
+                }
 #ifdef DEBUG_CRYPTOCB_VERBOSE
                 printf("[server] cmac saved state in keyid:%x %x len:%u ret:%d type:%d\n",
                         keyId, WH_KEYID_ID(keyId), meta->len, ret, ctx->crypto->algoCtx.cmac->type);
@@ -1969,7 +1996,8 @@ static int _HandleSha256(whServerContext* ctx, uint16_t magic,
     int                            ret    = 0;
     wc_Sha256                      sha256[1];
     whMessageCrypto_Sha256Request  req;
-    whMessageCrypto_Sha2Response   res;
+    whMessageCrypto_Sha2Response   res = {0};
+
     /* Translate the request */
     ret = wh_MessageCrypto_TranslateSha256Request(magic, cryptoDataIn, &req);
     if (ret != 0) {
@@ -1986,6 +2014,10 @@ static int _HandleSha256(whServerContext* ctx, uint16_t magic,
     sha256->hiLen = req.resumeState.hiLen;
 
     if (req.isLastBlock) {
+        /* Validate lastBlockLen to prevent potential buffer overread */
+        if ((unsigned int)req.lastBlockLen > WC_SHA256_BLOCK_SIZE) {
+            return WH_ERROR_BADARGS;
+        }
         /* wolfCrypt (or cryptoCb) is responsible for last block padding */
         if (ret == 0) {
             ret = wc_Sha256Update(sha256, req.inBlock, req.lastBlockLen);
@@ -2348,9 +2380,17 @@ static int _HandleMlDsaKeyGen(whServerContext* ctx, uint16_t magic,
                             printf("[server] %s UniqueId: keyId:%u, ret:%d\n",
                                    __func__, key_id, ret);
 #endif
+                            if (ret != WH_ERROR_OK) {
+                                /* Early return on unique ID generation failure
+                                 */
+                                wc_MlDsaKey_Free(key);
+                                return ret;
+                            }
                         }
-                        ret = wh_Server_MlDsaKeyCacheImport(
-                            ctx, key, key_id, flags, label_size, label);
+                        if (ret == 0) {
+                            ret = wh_Server_MlDsaKeyCacheImport(
+                                ctx, key, key_id, flags, label_size, label);
+                        }
 #ifdef DEBUG_CRYPTOCB
                         printf("[server] %s CacheImport: keyId:%u, ret:%d\n",
                                __func__, key_id, ret);
@@ -2409,6 +2449,16 @@ static int _HandleMlDsaSign(whServerContext* ctx, uint16_t magic,
     word32   in_len  = req.sz;
     uint32_t options = req.options;
     int      evict   = !!(options & WH_MESSAGE_CRYPTO_MLDSA_SIGN_OPTIONS_EVICT);
+
+    /* Validate input length against available data to prevent buffer overread
+     */
+    if (inSize < sizeof(whMessageCrypto_MlDsaSignRequest)) {
+        return WH_ERROR_BADARGS;
+    }
+    word32 available_data = inSize - sizeof(whMessageCrypto_MlDsaSignRequest);
+    if (in_len > available_data) {
+        return WH_ERROR_BADARGS;
+    }
 
     /* Response message */
     byte* res_out =
@@ -2479,6 +2529,17 @@ static int _HandleMlDsaVerify(whServerContext* ctx, uint16_t magic,
     uint32_t sig_len  = req.sigSz;
     byte*    req_sig =
         (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_MlDsaVerifyRequest);
+
+    /* Validate lengths against available payload (overflow-safe) */
+    if (inSize < sizeof(whMessageCrypto_MlDsaVerifyRequest)) {
+        return WH_ERROR_BADARGS;
+    }
+    uint32_t available = inSize - sizeof(whMessageCrypto_MlDsaVerifyRequest);
+    if ((sig_len > available) || (hash_len > available) ||
+        (sig_len > (available - hash_len))) {
+        return WH_ERROR_BADARGS;
+    }
+
     byte*    req_hash = req_sig + sig_len;
     int      evict = !!(options & WH_MESSAGE_CRYPTO_MLDSA_VERIFY_OPTIONS_EVICT);
 
@@ -3463,6 +3524,12 @@ static int _HandleMlDsaKeyGenDma(whServerContext* ctx, uint16_t magic,
                             printf("[server] %s UniqueId: keyId:%u, ret:%d\n",
                                    __func__, keyId, ret);
 #endif
+                            if (ret != WH_ERROR_OK) {
+                                /* Early return on unique ID generation failure
+                                 */
+                                wc_MlDsaKey_Free(key);
+                                return ret;
+                            }
                         }
 
                         if (ret == 0) {

@@ -626,7 +626,7 @@ int wh_Client_NvmReadRequest(whClientContext* c,
 int wh_Client_NvmReadResponse(whClientContext* c, int32_t *out_rc,
         whNvmSize *out_len, uint8_t* data)
 {
-    uint8_t buffer[WH_MESSAGE_NVM_MAX_READ_LEN] = {0};
+    uint8_t                    buffer[WOLFHSM_CFG_COMM_DATA_LEN] = {0};
     whMessageNvm_ReadResponse* msg = (whMessageNvm_ReadResponse*)buffer;
     uint16_t hdr_len = sizeof(*msg);
     uint8_t* payload = buffer + hdr_len;
@@ -645,10 +645,10 @@ int wh_Client_NvmReadResponse(whClientContext* c, int32_t *out_rc,
             &resp_size, buffer);
     if (rc == 0) {
         /* Validate response */
-        if (    (resp_group != WH_MESSAGE_GROUP_NVM) ||
-                (resp_action != WH_MESSAGE_NVM_ACTION_READ) ||
-                (resp_size < hdr_len) ||
-                (resp_size - hdr_len > WH_MESSAGE_NVM_MAX_READ_LEN) ){
+        if ((resp_group != WH_MESSAGE_GROUP_NVM) ||
+            (resp_action != WH_MESSAGE_NVM_ACTION_READ) ||
+            (resp_size < hdr_len) || (resp_size > sizeof(buffer)) ||
+            (resp_size - hdr_len > WH_MESSAGE_NVM_MAX_READ_LEN)) {
             /* Invalid message */
             rc = WH_ERROR_ABORTED;
         } else {
@@ -729,8 +729,7 @@ int wh_Client_NvmAddObjectDmaResponse(whClientContext* c, int32_t* out_rc)
             (resp_size != sizeof(msg))) {
             /* Invalid message */
             rc = WH_ERROR_ABORTED;
-        }
-        else {
+        } else {
             /* Valid message */
             if (out_rc != NULL) {
                 *out_rc = msg.rc;
@@ -800,8 +799,7 @@ int wh_Client_NvmReadDmaResponse(whClientContext* c, int32_t* out_rc)
             (resp_size != sizeof(msg))) {
             /* Invalid message */
             rc = WH_ERROR_ABORTED;
-        }
-        else {
+        } else {
             /* Valid message */
             if (out_rc != NULL) {
                 *out_rc = msg.rc;

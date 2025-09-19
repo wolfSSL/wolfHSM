@@ -41,7 +41,7 @@ typedef struct {
 
 /* Counter Init Response */
 typedef struct {
-    uint32_t rc;
+    int32_t  rc;
     uint32_t counter;
 } whMessageCounter_InitResponse;
 
@@ -62,7 +62,7 @@ typedef struct {
 
 /* Counter Increment Response */
 typedef struct {
-    uint32_t rc;
+    int32_t  rc;
     uint32_t counter;
 } whMessageCounter_IncrementResponse;
 
@@ -83,7 +83,7 @@ typedef struct {
 
 /* Counter Read Response */
 typedef struct {
-    uint32_t rc;
+    int32_t  rc;
     uint32_t counter;
 } whMessageCounter_ReadResponse;
 
@@ -104,7 +104,7 @@ typedef struct {
 
 /* Counter Destroy Response */
 typedef struct {
-    uint32_t rc;
+    int32_t  rc;
     uint8_t  WH_PAD[4];
 } whMessageCounter_DestroyResponse;
 
