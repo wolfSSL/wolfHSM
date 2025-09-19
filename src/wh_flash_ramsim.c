@@ -65,7 +65,6 @@ int whFlashRamsim_Init(void* context, const void* config)
     }
 
     memset(ctx, 0, sizeof(*ctx));
-    ctx->failAfter   = -1;
     ctx->size        = cfg->size;
     ctx->sectorSize  = cfg->sectorSize;
     ctx->pageSize    = cfg->pageSize;
@@ -104,13 +103,6 @@ int whFlashRamsim_Program(void* context, uint32_t offset, uint32_t size,
             (ctx->pageSize == 0) ||
             ((data == NULL) && (size != 0))) {
         return WH_ERROR_BADARGS;
-    }
-
-    /* Check if we need to simulate a failure */
-    if (ctx->failAfter > 0) {
-        ctx->failAfter--;
-        if (ctx->failAfter == 0)
-            return WH_ERROR_ABORTED;
     }
 
     /* Ensure offset and size are within bounds and size is a multiple of page
