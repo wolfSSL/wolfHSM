@@ -2464,7 +2464,7 @@ int wh_Client_DmaRegisterCb(struct whClientContext_t* client,
  *
  * This function transforms a client address for DMA operations. It performs
  * user-supplied address transformations, cache manipulations, and checks the
- * transformed address against the server's allowlist if registered.
+ * transformed address against the client's allowlist if registered.
  *
  * @param[in] client Pointer to the client context.
  * @param[in] clientAddr The client address to be processed.
