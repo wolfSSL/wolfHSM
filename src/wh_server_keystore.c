@@ -690,7 +690,7 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
 
         case WH_KEY_EVICT: {
             whMessageKeystore_EvictRequest  req;
-            whMessageKeystore_EvictResponse resp;
+            whMessageKeystore_EvictResponse resp = {0};
 
             (void)wh_MessageKeystore_TranslateEvictRequest(
                 magic, (whMessageKeystore_EvictRequest*)req_packet, &req);
@@ -702,9 +702,13 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
             /* TODO: Are there any fatal server errors? */
             ret = WH_ERROR_OK;
 
-            (void)wh_MessageKeystore_TranslateEvictResponse(
-                magic, &resp, (whMessageKeystore_EvictResponse*)resp_packet);
-            *out_resp_size = sizeof(resp);
+            if (ret == WH_ERROR_OK) {
+                resp.ok = 0;
+
+                (void)wh_MessageKeystore_TranslateEvictResponse(
+                    magic, &resp, (whMessageKeystore_EvictResponse*)resp_packet);
+                *out_resp_size = sizeof(resp);
+            }
         } break;
 
         case WH_KEY_EXPORT: {
