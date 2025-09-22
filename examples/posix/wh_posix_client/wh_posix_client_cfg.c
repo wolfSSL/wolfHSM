@@ -41,7 +41,7 @@ const word32 distList[] = {
     WH_POSIX_STATIC_MEM_DIST_9};
 
 
-int Client_ExampleSetupDmaMemory(void* ctx, void* conf)
+int wh_PosixClient_ExampleSetupDmaMemory(void* ctx, void* conf)
 {
     void*                     dma;
     size_t                    dmaSz;
@@ -78,7 +78,7 @@ int Client_ExampleSetupDmaMemory(void* ctx, void* conf)
 
 
 /* client configuration setup example for transport */
-int Client_ExampleDMAConfig(void* conf)
+int wh_PosixClient_ExampleDMAConfig(void* conf)
 {
     whClientConfig* c_conf = (whClientConfig*)conf;
 
@@ -106,7 +106,7 @@ int Client_ExampleDMAConfig(void* conf)
 #endif
 
 /* client configuration setup example for transport */
-int Client_ExampleTCPConfig(void* conf)
+int wh_PosixClient_ExampleTCPConfig(void* conf)
 {
     whClientConfig* c_conf = (whClientConfig*)conf;
 
@@ -126,7 +126,7 @@ int Client_ExampleTCPConfig(void* conf)
 
 
 /* client configuration setup example for transport */
-int Client_ExampleSHMConfig(void* conf)
+int wh_PosixClient_ExampleSHMConfig(void* conf)
 {
     whClientConfig* c_conf = (whClientConfig*)conf;
 

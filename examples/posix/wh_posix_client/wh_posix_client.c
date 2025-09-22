@@ -17,7 +17,7 @@
 #include "port/posix/posix_transport_tcp.h"
 #include "port/posix/posix_transport_shm.h"
 
-#include "examples/demo/client/wh_demo_client_wctest.h"
+#include "examples/demo/client/wh_demo_client_all.h"
 #include "wh_posix_cfg.h"
 #include "wh_posix_client_cfg.h"
 
@@ -73,7 +73,7 @@ static int wh_ClientTask(void* cf, const char* type, int test)
 #ifdef WOLFSSL_STATIC_MEMORY
         printf("Setting up DMA heap with static memory buckets\n");
 
-        ret = Client_ExampleSetupDmaMemory(client, config);
+        ret = wh_PosixClient_ExampleSetupDmaMemory(client, config);
         if (ret != 0) {
             printf("Failed to setup DMA heap\n");
             return -1;
@@ -85,7 +85,7 @@ static int wh_ClientTask(void* cf, const char* type, int test)
 
     printf("Client connecting to server...\n");
     if (test) {
-        return wh_DemoClient_wcTest(client);
+        return wh_DemoClient_All(client);
     }
 
     if (ret != 0) {
@@ -189,16 +189,16 @@ int main(int argc, char** argv)
 
     if (strcmp(type, "tcp") == 0) {
         printf("Using TCP transport\n");
-        Client_ExampleTCPConfig(c_conf);
+        wh_PosixClient_ExampleTCPConfig(c_conf);
     }
     else if (strcmp(type, "shm") == 0) {
         printf("Using shared memory transport\n");
-        Client_ExampleSHMConfig(c_conf);
+        wh_PosixClient_ExampleSHMConfig(c_conf);
     }
 #ifdef WOLFSSL_STATIC_MEMORY
     else if (strcmp(type, "dma") == 0) {
         printf("Using DMA with shared memory transport\n");
-        Client_ExampleDMAConfig(c_conf);
+        wh_PosixClient_ExampleDMAConfig(c_conf);
     }
 #endif
     else {

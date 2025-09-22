@@ -31,7 +31,7 @@ whServerDmaConfig              dmaConfig;
 
 /* Server configuration setup example for transport
  * Does not setup flash, nvm, crypto, she, etc. */
-int Server_ExampleDMAConfig(void* conf)
+int wh_PosixServer_ExampleDMAConfig(void* conf)
 {
     whServerConfig* s_conf = (whServerConfig*)conf;
 
@@ -61,7 +61,7 @@ int Server_ExampleDMAConfig(void* conf)
 
 /* Server configuration setup example for transport
  * Does not setup flash, nvm, crypto, she, etc. */
-int Server_ExampleSHMConfig(void* conf)
+int wh_PosixServer_ExampleSHMConfig(void* conf)
 {
     whServerConfig* s_conf = (whServerConfig*)conf;
 
@@ -86,7 +86,7 @@ int Server_ExampleSHMConfig(void* conf)
 
 /* Server configuration setup example for transport
  * Does not setup flash, nvm, crypto, she, etc. */
-int Server_ExampleTCPConfig(void* conf)
+int wh_PosixServer_ExampleTCPConfig(void* conf)
 {
     whServerConfig* s_conf = (whServerConfig*)conf;
 
@@ -109,7 +109,7 @@ int Server_ExampleTCPConfig(void* conf)
 static const whFlashCb  fcb = WH_FLASH_RAMSIM_CB;
 static whFlashRamsimCfg fc_conf;
 
-int Server_ExampleRAMSimConfig(void* conf, uint8_t* memory)
+int wh_PosixServer_ExampleRAMSimConfig(void* conf, uint8_t* memory)
 {
     whServerConfig* s_conf = (whServerConfig*)conf;
 
@@ -477,7 +477,7 @@ static int initializeNvm(whNvmContext* nvmContext, const char* nvmInitFilePath)
 }
 
 
-int Server_ExampleNVMConfig(void* conf, const char* nvmInitFilePath)
+int wh_PosixServer_ExampleNVMConfig(void* conf, const char* nvmInitFilePath)
 {
     int                      rc;
     whServerConfig*          s_conf = (whServerConfig*)conf;
