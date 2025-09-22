@@ -11,6 +11,7 @@
 #include "port/posix/posix_transport_shm.h"
 #include "port/posix/posix_transport_tcp.h"
 
+#include <string.h>
 
 posixTransportShmClientContext tccShm;
 posixTransportTcpClientContext tccTcp;

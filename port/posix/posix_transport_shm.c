@@ -75,16 +75,19 @@ enum {
 /* Memory map and interpret the header block */
 static int posixTransportShm_Map(int fd, size_t size, ptshmMapping* map);
 
-/* Use and map a shared object for transport */
-static int posixTransportShm_UseMap(char* name, ptshmMapping* map);
-
+#if defined(WOLFHSM_CFG_ENABLE_SERVER)
 /* Create and map a shared object for transport */
 static int posixTransportShm_CreateMap(char* name, uint16_t req_size,
         uint16_t resp_size, size_t dma_size, ptshmMapping* map);
+#endif
+
+#if defined(WOLFHSM_CFG_ENABLE_CLIENT)
+/* Use and map a shared object for transport */
+static int posixTransportShm_UseMap(char* name, ptshmMapping* map);
 
 /* Map the shared object if not already mapped */
 static int posixTransportShm_HandleMap(posixTransportShmContext *ctx);
-
+#endif
 
 /** Local Definitions */
 static int posixTransportShm_Map(int fd, size_t size, ptshmMapping* map)
@@ -114,7 +117,7 @@ static int posixTransportShm_Map(int fd, size_t size, ptshmMapping* map)
     return ret;
 }
 
-
+#if defined(WOLFHSM_CFG_ENABLE_CLIENT)
 static int posixTransportShm_UseMap(char* name, ptshmMapping* map)
 {
     int ret = WH_ERROR_OK;
@@ -184,8 +187,9 @@ static int posixTransportShm_UseMap(char* name, ptshmMapping* map)
     }
     return ret;
 }
+#endif
 
-
+#if defined(WOLFHSM_CFG_ENABLE_SERVER)
 static int posixTransportShm_CreateMap(char* name, uint16_t req_size,
         uint16_t resp_size, size_t dma_size, ptshmMapping* map)
 {
@@ -235,8 +239,10 @@ static int posixTransportShm_CreateMap(char* name, uint16_t req_size,
     }
     return ret;
 }
+#endif
 
 
+#if defined(WOLFHSM_CFG_ENABLE_CLIENT)
 /* Map the shared object if not already mapped */
 static int posixTransportShm_HandleMap(posixTransportShmContext *ctx)
 {
@@ -288,6 +294,7 @@ static int posixTransportShm_HandleMap(posixTransportShmContext *ctx)
 
     return ret;
 }
+#endif
 
 
 /** Custom functions */
@@ -537,7 +544,7 @@ int posixTransportShm_RecvResponse(void* c, uint16_t* out_len, void* data)
     return wh_TransportMem_RecvResponse(ctx->transportMemCtx, out_len, data);
 }
 
-
+#ifdef WOLFHSM_CFG_DMA
 /** DMA function callbacks that can make use of WOLFSSL_STATIC_MEMORY using
  * the POSIX shared memory transport.
 */
@@ -615,8 +622,7 @@ int wh_Client_PosixStaticMemoryDMA(struct whClientContext_t* client,
     (void)flags;
     return ret;
 }
-
-
+#endif /* WOLFHSM_CFG_DMA */
 #endif /* WOLFHSM_CFG_ENABLE_CLIENT */
 
 #if defined(WOLFHSM_CFG_ENABLE_SERVER)
@@ -677,6 +683,7 @@ int posixTransportShm_RecvRequest(void* c, uint16_t* out_len, void* data)
     return ret;
 }
 
+#ifdef WOLFHSM_CFG_DMA
 /* Generic offset into the DMA area. This function can operate with no knowledge
  * of what structures the DMA area is. It takes in an offset, validates it, and
  * returns the pointer into the DMA area based off of the offset.  */
@@ -721,4 +728,5 @@ int wh_Server_PosixStaticMemoryDMA(whServerContext* server,
     *xformedCliAddr = (void*)((uintptr_t)dma_ptr + clientAddr);
     return WH_ERROR_OK;
 }
-#endif
+#endif /* WOLFHSM_CFG_DMA */
+#endif /* WOLFHSM_CFG_ENABLE_SERVER */

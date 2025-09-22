@@ -176,7 +176,9 @@ typedef struct whServerConfig_t {
     int devId;
 #endif /* WOLF_CRYPTO_CB */
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
+#ifdef WOLFHSM_CFG_DMA
     whServerDmaConfig* dmaConfig;
+#endif /* WOLFHSM_CFG_DMA */
 } whServerConfig;
 
 
