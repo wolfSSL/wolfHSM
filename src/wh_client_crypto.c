@@ -2855,15 +2855,18 @@ int wh_Client_Sha256Dma(whClientContext* ctx, wc_Sha256* sha, const uint8_t* in,
         }
     }
 
+    /* This is called regardless of successful operation to give the callback a
+     * chance for cleanup. i.e if XMALLOC had been used and XFREE call is
+     * needed. Don't override return value with closing process address calls.*/
     if (in != NULL || out != NULL) {
         /* post operation address translations */
-        wh_Client_DmaProcessClientAddress(
+        (void)wh_Client_DmaProcessClientAddress(
             ctx, (uintptr_t)sha256, (void**)&stateAddr, req->state.sz,
             WH_DMA_OPER_CLIENT_WRITE_POST, (whDmaFlags){0});
-        wh_Client_DmaProcessClientAddress(
+        (void)wh_Client_DmaProcessClientAddress(
             ctx, (uintptr_t)in, (void**)&inAddr, req->input.sz,
             WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
-        wh_Client_DmaProcessClientAddress(
+        (void)wh_Client_DmaProcessClientAddress(
             ctx, (uintptr_t)out, (void**)&outAddr, req->output.sz,
             WH_DMA_OPER_CLIENT_WRITE_POST, (whDmaFlags){0});
     }

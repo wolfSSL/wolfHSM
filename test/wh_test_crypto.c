@@ -3685,16 +3685,12 @@ static int wh_ClientServer_MemThreadTest(void)
             .devId = INVALID_DEVID,
     }};
 
-    whServerDmaConfig dma_config = {
-        .cb               = NULL, /* Disable DMA callback for test */
-        .dmaAddrAllowList = NULL};
 
     whServerConfig s_conf[1] = {{
         .comm_config = cs_conf,
         .nvm         = nvm,
         .crypto      = crypto,
         .devId       = INVALID_DEVID,
-        .dmaConfig   = &dma_config,
     }};
 
     WH_TEST_RETURN_ON_FAIL(wh_Nvm_Init(nvm, n_conf));

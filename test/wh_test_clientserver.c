@@ -742,17 +742,12 @@ int whTest_ClientServerSequential(void)
     }};
 #endif
 
-    whServerDmaConfig dma_config = {
-        .cb               = NULL, /* Disable DMA callback for test */
-        .dmaAddrAllowList = NULL};
-
     whServerConfig s_conf[1] = {{
         .comm_config = cs_conf,
         .nvm         = nvm,
 #ifndef WOLFHSM_CFG_NO_CRYPTO
         .crypto = crypto,
 #endif
-        .dmaConfig = &dma_config,
     }};
     whServerContext server[1] = {0};
 
@@ -1777,9 +1772,6 @@ static int wh_ClientServer_MemThreadTest(void)
     }};
 #endif
 
-    whServerDmaConfig dma_config = {
-        .cb               = NULL, /* Disable DMA callback for test */
-        .dmaAddrAllowList = NULL};
 
     whServerConfig s_conf[1] = {{
         .comm_config = cs_conf,
@@ -1788,7 +1780,6 @@ static int wh_ClientServer_MemThreadTest(void)
         .crypto = crypto,
         .devId  = INVALID_DEVID,
 #endif
-        .dmaConfig = &dma_config,
     }};
 
     WH_TEST_RETURN_ON_FAIL(wh_Nvm_Init(nvm, n_conf));
@@ -1875,17 +1866,12 @@ static int wh_ClientServer_PosixMemMapThreadTest(void)
     }};
 #endif
 
-    whServerDmaConfig dma_config = {
-        .cb               = NULL, /* Disable DMA callback for test */
-        .dmaAddrAllowList = NULL};
-
     whServerConfig s_conf[1] = {{
         .comm_config = cs_conf,
         .nvm         = nvm,
 #ifndef WOLFHSM_CFG_NO_CRYPTO
         .crypto = crypto,
 #endif
-        .dmaConfig = &dma_config,
     }};
 
     WH_TEST_RETURN_ON_FAIL(wh_Nvm_Init(nvm, n_conf));
