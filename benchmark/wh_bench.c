@@ -42,7 +42,6 @@
 /* Include transport-specific headers */
 #include "port/posix/posix_transport_shm.h"
 #include "port/posix/posix_transport_tcp.h"
-#include "port/posix/posix_transport_dma.h"
 
 #include "wh_bench.h"
 #include "wh_bench_mod_all.h"
@@ -507,6 +506,37 @@ static int _runClientBenchmarks(whClientContext* client, int transport,
     return ret;
 }
 
+
+/* additional sanity check in case main() is not used for if the transport
+ * requested has been enabled */
+static int wh_Bench_CheckTransport(int transport)
+{
+    switch (transport) {
+        case WH_BENCH_TRANSPORT_DMA:
+        #if !defined(WOLFSSL_STATIC_MEMORY) || !defined(WOLFHSM_CFG_TEST_POSIX)
+            return WH_ERROR_BADARGS;
+        #else
+            break;
+        #endif
+        case WH_BENCH_TRANSPORT_TCP:
+        #if !defined(WOLFHSM_CFG_TEST_POSIX)
+            return WH_ERROR_BADARGS;
+        #else
+            break;
+        #endif
+        case WH_BENCH_TRANSPORT_SHM:
+        #if !defined(WOLFHSM_CFG_TEST_POSIX)
+            return WH_ERROR_BADARGS;
+        #else
+            break;
+        #endif
+        default:
+            return WH_ERROR_BADARGS;
+    }
+    return WH_ERROR_OK;
+}
+
+
 /* Initializes a client context based on the provided config, runs the
  * benchmarks, then cleans up the context */
 int wh_Bench_ClientCfg(whClientConfig* clientCfg, int transport)
@@ -520,6 +550,12 @@ int wh_Bench_ClientCfg(whClientConfig* clientCfg, int transport)
         return WH_ERROR_BADARGS;
     }
 
+    ret = wh_Bench_CheckTransport(transport);
+    if (ret != WH_ERROR_OK) {
+        WH_BENCH_PRINTF("Transport not supported: %d\n", ret);
+        return ret;
+    }
+
     /* Initialize the client */
     ret = wh_Client_Init(client, clientCfg);
     if (ret != 0) {
@@ -527,7 +563,7 @@ int wh_Bench_ClientCfg(whClientConfig* clientCfg, int transport)
         return ret;
     }
 
-#ifdef WOLFSSL_STATIC_MEMORY
+#if defined(WOLFSSL_STATIC_MEMORY) && defined(WOLFHSM_CFG_TEST_POSIX)
     if (transport == WH_BENCH_TRANSPORT_DMA) {
         static const unsigned int listSz     = 9;
         static const uint32_t     sizeList[] = {176,  256,  288,  704,  1056,
@@ -642,14 +678,14 @@ static void* _whBenchClientTask(void* data)
     int                    ret       = 0;
 
     /* Initialize the client */
-    sleep(0.5); /* Give the server a chance to setup DMA */
+    sleep(1); /* Give the server a chance to setup DMA */
     ret = wh_Client_Init(client, taskData->config);
     if (ret != WH_ERROR_OK) {
         WH_BENCH_PRINTF("Failed to initialize client: %d\n", ret);
         return NULL;
     }
 
-#ifdef WOLFSSL_STATIC_MEMORY
+#if defined(WOLFSSL_STATIC_MEMORY) && defined(WOLFHSM_CFG_TEST_POSIX)
     if (taskData->transport == WH_BENCH_TRANSPORT_DMA) {
         static const unsigned int listSz     = 9;
         static const uint32_t     sizeList[] = {176,  256,  288,  704,  1056,
@@ -781,7 +817,7 @@ static int _configureClientTransport(whBenchTransportType transport,
             break;
         }
 
-#ifdef WOLFSSL_STATIC_MEMORY
+#if defined(WOLFSSL_STATIC_MEMORY) && defined(WOLFHSM_CFG_TEST_POSIX)
         case WH_BENCH_TRANSPORT_DMA: {
             static whClientDmaConfig dmaConfig;
 
@@ -800,8 +836,8 @@ static int _configureClientTransport(whBenchTransportType transport,
             static posixTransportShmClientContext tccShm;
             static posixTransportShmConfig        myshmconfig = {
                        .name      = "wh_bench_shm",
-                       .req_size  = 1024,
-                       .resp_size = 1024,
+                       .req_size  = 7000,
+                       .resp_size = 7000,
                        .dma_size  = 80000,
             };
             static whCommClientConfig ccShmConf = {
@@ -856,7 +892,7 @@ static int _configureServerTransport(whBenchTransportType transport,
             break;
         }
 
-#ifdef WOLFSSL_STATIC_MEMORY
+#if defined(WOLFSSL_STATIC_MEMORY) && defined(WOLFHSM_CFG_TEST_POSIX)
         case WH_BENCH_TRANSPORT_DMA: {
             static whServerDmaConfig dmaConfig;
 
@@ -875,8 +911,8 @@ static int _configureServerTransport(whBenchTransportType transport,
             static posixTransportShmServerContext tscShm;
             static posixTransportShmConfig        myshmconfig = {
                        .name      = "wh_bench_shm",
-                       .req_size  = 1024,
-                       .resp_size = 1024,
+                       .req_size  = 7000,
+                       .resp_size = 7000,
                        .dma_size  = 80000,
             };
             static whCommServerConfig csShmConf = {
