@@ -92,7 +92,7 @@ int wh_TransportMem_Cleanup(void* c)
 
     return 0;
 }
-
+#if defined(WOLFHSM_CFG_ENABLE_CLIENT)
 int wh_TransportMem_SendRequest(void* c, uint16_t len, const void* data)
 {
     whTransportMemContext* context = c;
@@ -142,7 +142,7 @@ int wh_TransportMem_SendRequest(void* c, uint16_t len, const void* data)
     return 0;
 }
 
-int wh_TransportMem_RecvRequest(void* c, uint16_t *out_len, void* data)
+int wh_TransportMem_RecvResponse(void* c, uint16_t *out_len, void* data)
 {
     whTransportMemContext* context = c;
     volatile whTransportMemCsr* ctx_req;
@@ -158,27 +158,30 @@ int wh_TransportMem_RecvRequest(void* c, uint16_t *out_len, void* data)
     ctx_req  = context->req;
     ctx_resp = context->resp;
 
-    /* Read current request CSR's. ctx_resp does not need to be invalidated */
+    /* Read both CSR's. ctx_req does not need to be invalidated */
     XMEMFENCE();
-    XCACHEINVLD(ctx_req);
+    XCACHEINVLD(ctx_resp);
     req.u64 = ctx_req->u64;
     resp.u64 = ctx_resp->u64;
 
-    /* Check to see if a new request has arrived */
-    if(req.s.notify == resp.s.notify) {
+    /* Check to see if the current response is the different than the request */
+    if(resp.s.notify != req.s.notify) {
         return WH_ERROR_NOTREADY;
     }
 
-    if ((data != NULL) && (req.s.len != 0)) {
-        wh_Utils_memcpy_invalidate(data, context->req_data, req.s.len);
+    if ((data != NULL) && (resp.s.len != 0)) {
+        wh_Utils_memcpy_invalidate(data, context->resp_data, resp.s.len);
     }
+
     if (out_len != NULL) {
-        *out_len = req.s.len;
+        *out_len = resp.s.len;
     }
 
     return 0;
 }
+#endif /* WOLFHSM_CFG_ENABLE_CLIENT */
 
+#if defined(WOLFHSM_CFG_ENABLE_SERVER)
 int wh_TransportMem_SendResponse(void* c, uint16_t len, const void* data)
 {
     whTransportMemContext* context = c;
@@ -223,7 +226,7 @@ int wh_TransportMem_SendResponse(void* c, uint16_t len, const void* data)
     return 0;
 }
 
-int wh_TransportMem_RecvResponse(void* c, uint16_t *out_len, void* data)
+int wh_TransportMem_RecvRequest(void* c, uint16_t *out_len, void* data)
 {
     whTransportMemContext* context = c;
     volatile whTransportMemCsr* ctx_req;
@@ -239,24 +242,24 @@ int wh_TransportMem_RecvResponse(void* c, uint16_t *out_len, void* data)
     ctx_req  = context->req;
     ctx_resp = context->resp;
 
-    /* Read both CSR's. ctx_req does not need to be invalidated */
+    /* Read current request CSR's. ctx_resp does not need to be invalidated */
     XMEMFENCE();
-    XCACHEINVLD(ctx_resp);
+    XCACHEINVLD(ctx_req);
     req.u64 = ctx_req->u64;
     resp.u64 = ctx_resp->u64;
 
-    /* Check to see if the current response is the different than the request */
-    if(resp.s.notify != req.s.notify) {
+    /* Check to see if a new request has arrived */
+    if(req.s.notify == resp.s.notify) {
         return WH_ERROR_NOTREADY;
     }
 
-    if ((data != NULL) && (resp.s.len != 0)) {
-        wh_Utils_memcpy_invalidate(data, context->resp_data, resp.s.len);
+    if ((data != NULL) && (req.s.len != 0)) {
+        wh_Utils_memcpy_invalidate(data, context->req_data, req.s.len);
     }
-
     if (out_len != NULL) {
-        *out_len = resp.s.len;
+        *out_len = req.s.len;
     }
 
     return 0;
 }
+#endif /* WOLFHSM_CFG_ENABLE_SERVER */

@@ -142,9 +142,9 @@ int wh_TransportMem_InitClear(void* c, const void* cf,
         whCommSetConnectedCb connectcb, void* connectcb_arg);
 int wh_TransportMem_Cleanup(void* c);
 int wh_TransportMem_SendRequest(void* c, uint16_t len, const void* data);
-int wh_TransportMem_RecvRequest(void* c, uint16_t *out_len, void* data);
+int wh_TransportMem_RecvRequest(void* c, uint16_t* out_len, void* data);
 int wh_TransportMem_SendResponse(void* c, uint16_t len, const void* data);
-int wh_TransportMem_RecvResponse(void* c, uint16_t *out_len, void* data);
+int wh_TransportMem_RecvResponse(void* c, uint16_t* out_len, void* data);
 
 #define WH_TRANSPORT_MEM_CLIENT_CB              \
 {                                               \
@@ -161,6 +161,5 @@ int wh_TransportMem_RecvResponse(void* c, uint16_t *out_len, void* data);
     .Send =     wh_TransportMem_SendResponse,   \
     .Cleanup =  wh_TransportMem_Cleanup,        \
 }
-
 
 #endif /* !WOLFHSM_WH_TRANSPORT_MEM_H_ */
