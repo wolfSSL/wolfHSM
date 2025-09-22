@@ -368,6 +368,7 @@ int posixTransportShm_GetDma(posixTransportShmContext* ctx,
 }
 
 
+#if defined(WOLFHSM_CFG_ENABLE_SERVER)
 /** Callback function definitions */
 int posixTransportShm_ServerInit(void* c, const void* cf,
                                  whCommSetConnectedCb connectcb,
@@ -422,8 +423,10 @@ int posixTransportShm_ServerInit(void* c, const void* cf,
     }
     return ret;
 }
+#endif
 
 
+#if defined(WOLFHSM_CFG_ENABLE_CLIENT)
 int posixTransportShm_ClientInit(void* c, const void* cf,
                                  whCommSetConnectedCb connectcb,
                                  void*                connectcb_arg)
@@ -452,6 +455,7 @@ int posixTransportShm_ClientInit(void* c, const void* cf,
 
     return ret;
 }
+#endif
 
 
 int posixTransportShm_Cleanup(void* c)
@@ -532,6 +536,87 @@ int posixTransportShm_RecvResponse(void* c, uint16_t* out_len, void* data)
 
     return wh_TransportMem_RecvResponse(ctx->transportMemCtx, out_len, data);
 }
+
+
+/** DMA function callbacks that can make use of WOLFSSL_STATIC_MEMORY using
+ * the POSIX shared memory transport.
+*/
+
+int wh_Client_PosixStaticMemoryDMA(struct whClientContext_t* client,
+                                   uintptr_t clientAddr, void** xformedCliAddr,
+                                   size_t len, whDmaOper oper,
+                                   whDmaFlags flags)
+{
+    int       ret     = WH_ERROR_OK;
+    int       isInDma = 0;
+    void*     dmaPtr;
+    size_t    dmaSize;
+    uintptr_t dmaBuffer; /* buffer in DMA space */
+    uintptr_t dmaOffset;
+    void*     heap = NULL;
+
+    /* NULL pointer maps to NULL, short circuit here */
+    if (clientAddr == 0 || len == 0) {
+        *xformedCliAddr = NULL;
+        return WH_ERROR_OK;
+    }
+
+    /* First check if the address is in the expected DMA area */
+    ret = posixTransportShm_GetDma(client->comm->transport_context, &dmaPtr,
+                                   &dmaSize);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    if ((dmaPtr != NULL) && (dmaSize > 0) && (len < dmaSize) &&
+        (clientAddr >= (uintptr_t)dmaPtr) &&
+        (clientAddr < (uintptr_t)(dmaPtr + dmaSize - len))) {
+        dmaBuffer = clientAddr;
+        isInDma   = 1;
+    }
+    else {
+        heap = client->dma.heap;
+        if (heap == NULL) {
+            return WH_ERROR_NOTREADY;
+        }
+    }
+
+    if (oper == WH_DMA_OPER_CLIENT_READ_PRE ||
+        oper == WH_DMA_OPER_CLIENT_WRITE_PRE) {
+        if (isInDma == 0) {
+            dmaBuffer = (uintptr_t)XMALLOC(len, heap, DYNAMIC_TYPE_TMP_BUFFER);
+            if (dmaBuffer == 0) {
+                return WH_ERROR_NOSPACE;
+            }
+            dmaOffset = dmaBuffer - (uintptr_t)dmaPtr;
+            memcpy((void*)dmaBuffer, (void*)clientAddr, len);
+        }
+        else {
+            dmaOffset = clientAddr - (uintptr_t)dmaPtr;
+        }
+        /* return an offset into the DMA area */
+        *xformedCliAddr = (void*)dmaOffset;
+    }
+    else if (oper == WH_DMA_OPER_CLIENT_READ_POST) {
+        if (isInDma == 0) {
+            uint8_t* ptr = (uint8_t*)dmaPtr + (uintptr_t)*xformedCliAddr;
+            XFREE(ptr, heap, DYNAMIC_TYPE_TMP_BUFFER);
+        }
+    }
+    else if (oper == WH_DMA_OPER_CLIENT_WRITE_POST) {
+        if (isInDma == 0) {
+            uint8_t* ptr = (uint8_t*)dmaPtr + (uintptr_t)*xformedCliAddr;
+            memcpy((void*)clientAddr, ptr,
+                   len); /* copy results of what server wrote */
+            XFREE(ptr, heap, DYNAMIC_TYPE_TMP_BUFFER);
+        }
+    }
+
+    (void)flags;
+    return ret;
+}
+
+
 #endif /* WOLFHSM_CFG_ENABLE_CLIENT */
 
 #if defined(WOLFHSM_CFG_ENABLE_SERVER)
@@ -590,5 +675,50 @@ int posixTransportShm_RecvRequest(void* c, uint16_t* out_len, void* data)
         ret = wh_TransportMem_RecvRequest(ctx->transportMemCtx, out_len, data);
     }
     return ret;
+}
+
+/* Generic offset into the DMA area. This function can operate with no knowledge
+ * of what structures the DMA area is. It takes in an offset, validates it, and
+ * returns the pointer into the DMA area based off of the offset.  */
+int wh_Server_PosixStaticMemoryDMA(whServerContext* server,
+                                   uintptr_t clientAddr, void** xformedCliAddr,
+                                   size_t len, whServerDmaOper oper,
+                                   whServerDmaFlags flags)
+{
+    posixTransportShmContext* ctx;
+    void*                     dma_ptr;
+    size_t                    dma_size;
+    int                       ret;
+
+    (void)oper;
+    (void)flags;
+
+    if (server == NULL || xformedCliAddr == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Get the transport context from the server's communication context */
+    ctx = (posixTransportShmContext*)server->comm->transport_context;
+    if (ctx == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Get the DMA section pointer and size */
+    ret = posixTransportShm_GetDma(ctx, &dma_ptr, &dma_size);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    if (dma_ptr == NULL || dma_size == 0) {
+        return WH_ERROR_NOTREADY;
+    }
+
+    if (len > dma_size || clientAddr > dma_size - len) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Return the transformed address (DMA pointer + offset) */
+    *xformedCliAddr = (void*)((uintptr_t)dma_ptr + clientAddr);
+    return WH_ERROR_OK;
 }
 #endif

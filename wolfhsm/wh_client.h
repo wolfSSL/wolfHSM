@@ -49,6 +49,9 @@
 /* Component includes */
 #include "wolfhsm/wh_comm.h"
 #include "wolfhsm/wh_message_customcb.h"
+#ifdef WOLFHSM_CFG_DMA
+#include "wolfhsm/wh_common_dma.h"
+#endif /* WOLFHSM_CFG_DMA */
 
 /* WolfCrypt types and defines */
 #include "wolfssl/wolfcrypt/types.h"
@@ -72,78 +75,24 @@ enum WH_CLIENT_DEVID_ENUM {
 extern const int WH_DEV_IDS_ARRAY[WH_NUM_DEVIDS];
 #endif
 
-
-typedef enum {
-    /* Indicates server is about to read from client memory */
-    WH_DMA_OPER_SERVER_READ_PRE = 0,
-    /* Indicates server has just read from client memory */
-    WH_DMA_OPER_SERVER_READ_POST = 1,
-    /* Indicates server is about to write to client memory */
-    WH_DMA_OPER_SERVER_WRITE_PRE = 2,
-    /* Indicates server has just written to client memory */
-    WH_DMA_OPER_SERVER_WRITE_POST = 3,
-} whClientDmaOper;
-
-#ifdef WOLFHSM_CFG_DMA_CUSTOM_CLIENT_COPY
-typedef enum {
-    WH_DMA_COPY_OPER_CLIENT_READ  = 0,
-    WH_DMA_COPY_OPER_CLIENT_WRITE = 1,
-} whClientDmaCopyOper;
-#endif /* WOLFHSM_CFG_DMA_CUSTOM_CLIENT_COPY */
-
-/* Flags embedded in request/response structs provided by client */
-typedef struct {
-    uint8_t cacheForceInvalidate : 1;
-    uint8_t : 7;
-} whClientDmaFlags;
-
-/* DMA callbacks invoked internally by wolfHSM before and after every client
- * memory operation. */
+/** Client DMA address translation and validation */
+#ifdef WOLFHSM_CFG_DMA
 typedef int (*whClientDmaClientMemCb)(struct whClientContext_t* client,
-                                      uintptr_t clientAddr, void** clientPtr,
-                                      size_t len, whClientDmaOper oper,
-                                      whClientDmaFlags flags);
+    uintptr_t clientAddr, void** ptr, size_t len, whDmaOper oper,
+    whDmaFlags flags);
 
-#ifdef WOLFHSM_CFG_DMA_CUSTOM_CLIENT_COPY
-/* DMA callback invoked to copy from the client */
-typedef int (*whClientDmaMemCopyCb)(struct whClientContext_t* client,
-                                    uintptr_t clientAddr, uintptr_t serverPtr,
-                                    size_t len, whClientDmaCopyOper oper,
-                                    whClientDmaFlags flags);
-#endif /* WOLFHSM_CFG_DMA_CUSTOM_CLIENT_COPY */
-
-/* DMA address entry within the allowed tables. */
-/* Note: These are translated addresses from the Server's perspective*/
+/* Common DMA callback types and structures */
 typedef struct {
-    void*  addr;
-    size_t size;
-} whClientDmaAddr;
-
-typedef whClientDmaAddr whClientDmaAddrList[WOLFHSM_CFG_DMAADDR_COUNT];
-
-/* Holds allowable client read/write addresses */
-typedef struct {
-    whClientDmaAddrList readList;  /* Allowed client read addresses */
-    whClientDmaAddrList writeList; /* Allowed client write addresses */
-} whClientDmaAddrAllowList;
-
-/* Server DMA configuration struct for initializing a server */
-typedef struct {
-    whClientDmaClientMemCb cb; /* DMA callback */
-#ifdef WOLFHSM_CFG_DMA_CUSTOM_CLIENT_COPY
-    whClientDmaMemCopyCb memCopyCb; /* DMA memory copy callback */
-#endif                              /* WOLFHSM_CFG_DMA_CUSTOM_CLIENT_COPY */
-    const whClientDmaAddrAllowList* dmaAddrAllowList; /* allowed addresses */
+    whClientDmaClientMemCb cb;
+    const whDmaAddrAllowList* dmaAddrAllowList; /* allowed addresses */
 } whClientDmaConfig;
 
 typedef struct {
-    whClientDmaClientMemCb cb; /* DMA callback */
-#ifdef WOLFHSM_CFG_DMA_CUSTOM_CLIENT_COPY
-    whClientDmaMemCopyCb memCopyCb; /* DMA memory copy callback */
-#endif                              /* WOLFHSM_CFG_DMA_CUSTOM_CLIENT_COPY */
-    const whClientDmaAddrAllowList* dmaAddrAllowList; /* allowed addresses */
-    void*                           heap;
+    whClientDmaClientMemCb cb;
+    const whDmaAddrAllowList* dmaAddrAllowList; /* allowed addresses */
+    void* heap; /* heap hint for using static memory (or other allocator) */
 } whClientDmaContext;
+#endif /* WOLFHSM_CFG_DMA */
 
 /**
  * Out of band callback function to inform the server to cancel a request,
@@ -161,7 +110,9 @@ struct whClientContext_t {
     uint8_t      cancelable;
     whCommClient comm[1];
     whClientCancelCb cancelCb;
+#ifdef WOLFHSM_CFG_DMA
     whClientDmaContext dma;
+#endif /* WOLFHSM_CFG_DMA */
 };
 
 struct whClientConfig_t {
@@ -2494,8 +2445,8 @@ int wh_Client_SetHeap(whClientContext* c, void* heap);
 /**
  * @brief Registers a custom client DMA callback
  *
- * This function allows the server to register a custom callback handler
- * for processing client memory operations. The callback will be invoked during
+ * This function allows the client to register a custom callback handler
+ * for processing memory operations. The callback will be invoked during
  * DMA operations to transform client addresses, manipulate caches, etc.
  *
  * @param[in] client Pointer to the client context.
@@ -2526,8 +2477,8 @@ int wh_Client_DmaRegisterCb(struct whClientContext_t* client,
  */
 int wh_Client_DmaProcessClientAddress(struct whClientContext_t* client,
                                       uintptr_t clientAddr, void** serverPtr,
-                                      size_t len, whClientDmaOper oper,
-                                      whClientDmaFlags flags);
+                                      size_t len, whDmaOper oper,
+                                      whDmaFlags flags);
 
 
 /**

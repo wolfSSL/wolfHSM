@@ -136,4 +136,21 @@ int posixTransportShm_RecvResponse(void* c, uint16_t* out_len, void* data);
         .Cleanup = posixTransportShm_Cleanup,      \
     }
 
+
+#ifdef WOLFHSM_CFG_DMA
+#include "wolfhsm/wh_common_dma.h"
+
+#include "wolfhsm/wh_server.h"
+int wh_Server_PosixStaticMemoryDMA(whServerContext* server,
+                                   uintptr_t clientAddr, void** xformedCliAddr,
+                                   size_t len, whServerDmaOper oper,
+                                   whServerDmaFlags flags);
+
+#include "wolfhsm/wh_client.h"
+int wh_Client_PosixStaticMemoryDMA(whClientContext* client,
+                                   uintptr_t clientAddr, void** xformedCliAddr,
+                                   size_t len, whDmaOper oper,
+                                   whDmaFlags flags);
+
+#endif
 #endif /* !PORT_POSIX_POSIX_TRANSPORT_SHM_H_ */

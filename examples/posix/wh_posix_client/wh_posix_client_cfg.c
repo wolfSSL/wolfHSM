@@ -8,7 +8,6 @@
 #include "wolfhsm/wh_client.h"
 #include "wolfhsm/wh_error.h"
 
-#include "port/posix/posix_transport_dma.h"
 #include "port/posix/posix_transport_shm.h"
 #include "port/posix/posix_transport_tcp.h"
 

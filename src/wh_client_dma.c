@@ -30,79 +30,20 @@
 #include <stddef.h>
 
 #include "wolfhsm/wh_error.h"
+#include "wolfhsm/wh_common_dma.h"
 #include "wolfhsm/wh_client.h"
 
-static int _checkOperValid(whClientDmaOper oper)
+
+int wh_Client_DmaRegisterAllowList(whClientContext* client,
+                                   const whDmaAddrAllowList* allowlist)
 {
-    if (oper < WH_DMA_OPER_SERVER_READ_PRE ||
-        oper > WH_DMA_OPER_SERVER_WRITE_POST) {
+    if (NULL == client || NULL == allowlist) {
         return WH_ERROR_BADARGS;
     }
+
+    client->dma.dmaAddrAllowList = allowlist;
 
     return WH_ERROR_OK;
-}
-
-static int _checkAddrAgainstAllowList(const whClientDmaAddrList allowList,
-                                      void* addr, size_t size)
-{
-    uintptr_t startAddr = (uintptr_t)addr;
-    uintptr_t endAddr   = startAddr + size;
-    int       i         = 0;
-
-    if (0 == size) {
-        return WH_ERROR_BADARGS;
-    }
-
-    /* Check if the address range is fully within a allowlist entry */
-    for (i = 0; i < WOLFHSM_CFG_DMAADDR_COUNT; i++) {
-        uintptr_t allowListStartAddr = (uintptr_t)allowList[i].addr;
-        uintptr_t allowListEndAddr   = allowListStartAddr + allowList[i].size;
-
-        if (0 == allowList[i].size) {
-            continue;
-        }
-
-        if (startAddr >= allowListStartAddr && endAddr <= allowListEndAddr) {
-            return WH_ERROR_OK;
-        }
-    }
-
-    return WH_ERROR_ACCESS;
-}
-
-
-static int _checkMemOperAgainstAllowList(const whClientContext* client,
-                                         whClientDmaOper oper, void* addr,
-                                         size_t size)
-{
-    int rc = WH_ERROR_OK;
-
-    rc = _checkOperValid(oper);
-    if (rc != WH_ERROR_OK) {
-        return rc;
-    }
-
-    /* If no allowlist is registered, anything goes */
-    if (client->dma.dmaAddrAllowList == NULL) {
-        return WH_ERROR_OK;
-    }
-
-    /* If a read/write operation is requested, check the transformed address
-     * against the appropriate allowlist
-     *
-     * TODO: do we need to allowlist check on POST in case there are subsequent
-     * memory operations for some reason?
-     */
-    if (oper == WH_DMA_OPER_SERVER_READ_PRE) {
-        rc = _checkAddrAgainstAllowList(client->dma.dmaAddrAllowList->readList,
-                                        addr, size);
-    }
-    else if (oper == WH_DMA_OPER_SERVER_WRITE_PRE) {
-        rc = _checkAddrAgainstAllowList(client->dma.dmaAddrAllowList->writeList,
-                                        addr, size);
-    }
-
-    return rc;
 }
 
 int wh_Client_DmaRegisterCb(whClientContext* client, whClientDmaClientMemCb cb)
@@ -121,16 +62,17 @@ int wh_Client_DmaRegisterCb(whClientContext* client, whClientDmaClientMemCb cb)
 
 /* Processes the given client address and translates it into a value that the
  * server will understand. This can be used to map the address into a known
- * location of shared memory. */
+ * location of shared memory. This also handles post translate operations
+ * given the whDmaOper passed in. */
 int wh_Client_DmaProcessClientAddress(whClientContext* client,
                                       uintptr_t        clientAddr,
                                       void** xformedCliAddr, size_t len,
-                                      whClientDmaOper  oper,
-                                      whClientDmaFlags flags)
+                                      whDmaOper  oper,
+                                      whDmaFlags flags)
 {
     int rc = WH_ERROR_OK;
 
-    if (NULL == client || NULL == xformedCliAddr) {
+    if (NULL == xformedCliAddr) {
         return WH_ERROR_BADARGS;
     }
 
@@ -147,8 +89,11 @@ int wh_Client_DmaProcessClientAddress(whClientContext* client,
         *xformedCliAddr = (void*)((uintptr_t)clientAddr);
     }
 
-    /* if the server has a allowlist registered, check address against it */
-    return _checkMemOperAgainstAllowList(client, oper, *xformedCliAddr, len);
+    /* if the client has a allowlist registered, check address against it */
+    if (rc == WH_ERROR_OK && len > 0) {
+        rc = wh_CheckMemOperAgainstAllowList(client->dma.dmaAddrAllowList, oper,
+            *xformedCliAddr, len);
+    }
+    return rc;
 }
-
 #endif /* WOLFHSM_CFG_DMA */

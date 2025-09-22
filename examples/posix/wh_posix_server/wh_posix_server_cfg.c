@@ -13,7 +13,6 @@
 
 #include "port/posix/posix_transport_shm.h"
 #include "port/posix/posix_transport_tcp.h"
-#include "port/posix/posix_transport_dma.h"
 
 posixTransportShmConfig shmConfig;
 posixTransportTcpConfig tcpConfig;

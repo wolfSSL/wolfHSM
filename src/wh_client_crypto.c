@@ -65,6 +65,7 @@
 
 #include "wolfhsm/wh_client.h"
 #include "wolfhsm/wh_client_crypto.h"
+#include "wolfhsm/wh_common_dma.h"
 
 /** Forward declarations */
 #ifdef HAVE_ECC
@@ -2775,20 +2776,20 @@ int wh_Client_Sha256Dma(whClientContext* ctx, wc_Sha256* sha, const uint8_t* in,
         /* Perform address translations */
         ret = wh_Client_DmaProcessClientAddress(
             ctx, (uintptr_t)sha256, (void**)&stateAddr, req->state.sz,
-            WH_DMA_OPER_SERVER_WRITE_PRE, (whClientDmaFlags){0});
+            WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
         req->state.addr = stateAddr;
 
         if (ret == WH_ERROR_OK) {
             ret = wh_Client_DmaProcessClientAddress(
                 ctx, (uintptr_t)in, (void**)&inAddr, req->input.sz,
-                WH_DMA_OPER_SERVER_READ_PRE, (whClientDmaFlags){0});
+                WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
             req->input.addr = inAddr;
         }
 
         if (ret == WH_ERROR_OK) {
             ret = wh_Client_DmaProcessClientAddress(
                 ctx, (uintptr_t)out, (void**)&outAddr, req->output.sz,
-                WH_DMA_OPER_SERVER_WRITE_PRE, (whClientDmaFlags){0});
+                WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
             req->output.addr = outAddr;
         }
     }
@@ -2858,13 +2859,13 @@ int wh_Client_Sha256Dma(whClientContext* ctx, wc_Sha256* sha, const uint8_t* in,
         /* post operation address translations */
         wh_Client_DmaProcessClientAddress(
             ctx, (uintptr_t)sha256, (void**)&stateAddr, req->state.sz,
-            WH_DMA_OPER_SERVER_WRITE_POST, (whClientDmaFlags){0});
+            WH_DMA_OPER_CLIENT_WRITE_POST, (whDmaFlags){0});
         wh_Client_DmaProcessClientAddress(
             ctx, (uintptr_t)in, (void**)&inAddr, req->input.sz,
-            WH_DMA_OPER_SERVER_READ_POST, (whClientDmaFlags){0});
+            WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
         wh_Client_DmaProcessClientAddress(
             ctx, (uintptr_t)out, (void**)&outAddr, req->output.sz,
-            WH_DMA_OPER_SERVER_WRITE_POST, (whClientDmaFlags){0});
+            WH_DMA_OPER_CLIENT_WRITE_POST, (whDmaFlags){0});
     }
 
     return ret;

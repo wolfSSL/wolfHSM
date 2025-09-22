@@ -16,7 +16,6 @@
 #include "wolfhsm/wh_client_crypto.h"
 #include "port/posix/posix_transport_tcp.h"
 #include "port/posix/posix_transport_shm.h"
-#include "port/posix/posix_transport_dma.h"
 
 #include "examples/demo/client/wh_demo_client_wctest.h"
 #include "wh_posix_cfg.h"
