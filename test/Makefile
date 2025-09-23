@@ -123,6 +123,9 @@ else
 	DEF += -DWOLFHSM_CFG_IS_TEST_SERVER
 endif
 
+# Test NVM Flash Log implementation
+DEF += -DWOLFHSM_CFG_SERVER_NVM_FLASH_LOG
+
 ## Source files
 # Assembly source files
 SRC_ASM +=
