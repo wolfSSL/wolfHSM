@@ -153,7 +153,7 @@ static void _ShowList(const whNvmCb* cb, void* context)
 
 
 static int addObjectWithReadBackCheck(const whNvmCb*     cb,
-                                      whNvmFlashContext* context,
+                                      void* context,
                                       whNvmMetadata* meta, whNvmSize data_len,
                                       const uint8_t* data)
 
@@ -313,10 +313,8 @@ int whTest_Flash(const whFlashCb* fcb, void* fctx, const void* cfg)
     return 0;
 }
 
-int whTest_NvmFlashCfg(whNvmFlashConfig* cfg)
+int whTest_NvmFlashCfg(void* cfg, void* context, const whNvmCb *cb)
 {
-    const whNvmCb     cb[1]      = {WH_NVM_FLASH_CB};
-    whNvmFlashContext context[1] = {0};
     int               ret        = 0;
 
     WH_TEST_RETURN_ON_FAIL(cb->Init(context, cfg));
@@ -492,9 +490,10 @@ int whTest_NvmFlash_RamSim(void)
         .context = myHalFlashCtx,
         .config  = myHalFlashCfg,
     };
+    whNvmFlashContext nvmFlashCtx[1] = {0};
+    const whNvmCb    nvmFlashCb[1]     = {WH_NVM_FLASH_CB};
 
-
-    return whTest_NvmFlashCfg(&myNvmCfg);
+    return whTest_NvmFlashCfg(&myNvmCfg, nvmFlashCtx, nvmFlashCb);
 }
 
 
@@ -520,8 +519,10 @@ int whTest_NvmFlash_PosixFileSim(void)
         .context = myHalFlashContext,
         .config  = myHalFlashConfig,
     };
+    whNvmFlashContext nvmFlashCtx[1] = {0};
+    const whNvmCb    nvmFlashCb[1]     = {WH_NVM_FLASH_CB};
 
-    WH_TEST_ASSERT(0 == whTest_NvmFlashCfg(&myNvmCfg));
+    WH_TEST_ASSERT(0 == whTest_NvmFlashCfg(&myNvmCfg, nvmFlashCtx, nvmFlashCb));
 
     /* Remove the configured file on success*/
     unlink(myHalFlashConfig[0].filename);
