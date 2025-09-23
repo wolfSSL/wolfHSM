@@ -344,7 +344,7 @@ static int _FindInCache(whServerContext* server, whKeyId keyId, int* out_index,
     return ret;
 }
 
-static bool _ExistsInCache(whServerContext* server, whKeyId keyId)
+static int _ExistsInCache(whServerContext* server, whKeyId keyId)
 {
     int           ret           = 0;
     int           foundIndex    = -1;
@@ -357,11 +357,11 @@ static bool _ExistsInCache(whServerContext* server, whKeyId keyId)
 
     if (ret != WH_ERROR_OK) {
         /* Key doesn't exist in the cache */
-        return false;
+        return 0;
     }
 
     /* Key exists in the cache */
-    return true;
+    return 1;
 }
 
 /* try to put the specified key into cache if it isn't already, return pointers
@@ -567,13 +567,15 @@ static int _AesGcmWrapKey(whServerContext* server, whKeyId serverKeyId,
     uint32_t serverKeySz = sizeof(serverKey);
 
     if (server == NULL || keyIn == NULL || metadataIn == NULL ||
-        wrappedKeyOut == NULL)
+        wrappedKeyOut == NULL) {
         return WH_ERROR_BADARGS;
+    }
 
     /* Check if the buffer is big enough to hold the wrapped key */
     if (wrappedKeySz <
-        sizeof(iv) + sizeof(authTag) + sizeof(*metadataIn) + keySz)
+        sizeof(iv) + sizeof(authTag) + sizeof(*metadataIn) + keySz) {
         return WH_ERROR_BUFFER_SIZE;
+    }
 
     /* Get the server side key */
     ret = wh_Server_KeystoreReadKey(
@@ -604,10 +606,12 @@ static int _AesGcmWrapKey(whServerContext* server, whKeyId serverKeyId,
     }
 
     /* Combine key and metadata into one blob */
-    uint8_t* encBlob = (uint8_t*)wrappedKeyOut + sizeof(iv) + sizeof(authTag);
     uint8_t  plainBlob[sizeof(*metadataIn) + keySz];
     memcpy(plainBlob, metadataIn, sizeof(*metadataIn));
     memcpy(plainBlob + sizeof(*metadataIn), keyIn, keySz);
+
+    /* Place the encrypted blob after the IV and Auth Tag*/
+    uint8_t* encBlob = (uint8_t*)wrappedKeyOut + sizeof(iv) + sizeof(authTag);
 
     /* Encrypt the blob */
     ret = wc_AesGcmEncrypt(aes, encBlob, plainBlob, sizeof(plainBlob), iv,
@@ -702,12 +706,14 @@ static int _HandleWrapKeyRequest(whServerContext*              server,
     uint8_t       key[WOLFHSM_CFG_KEYWRAP_MAX_KEY_SIZE];
 
     if (server == NULL || req == NULL || reqData == NULL || resp == NULL ||
-        respData == NULL || req->keySz > WOLFHSM_CFG_KEYWRAP_MAX_KEY_SIZE)
+        respData == NULL || req->keySz > WOLFHSM_CFG_KEYWRAP_MAX_KEY_SIZE) {
         return WH_ERROR_BADARGS;
+    }
 
     /* Check if the reqData is big enough to hold the metadata and key */
-    if (reqDataSz < sizeof(metadata) + req->keySz)
+    if (reqDataSz < sizeof(metadata) + req->keySz) {
         return WH_ERROR_BUFFER_SIZE;
+    }
 
     /* Extract the metadata and key from reqData */
     memcpy(&metadata, reqData, sizeof(metadata));
@@ -726,8 +732,9 @@ static int _HandleWrapKeyRequest(whServerContext*              server,
             sizeof(metadata) + req->keySz;
 
         /* Check if the response data can fit the wrapped key */
-        if (respDataSz < wrappedKeySz)
+        if (respDataSz < wrappedKeySz) {
             return WH_ERROR_BUFFER_SIZE;
+        }
 
         /* Wrap the key */
         ret = _AesGcmWrapKey(server, req->serverKeyId, key, req->keySz,
@@ -758,8 +765,9 @@ static int _HandleUnwrapAndExportKeyRequest(whServerContext*                serv
                                             uint8_t* respData, uint32_t respDataSz)
 {
     if (server == NULL || req == NULL || reqData == NULL || resp == NULL ||
-        respData == NULL)
+        respData == NULL) {
         return WH_ERROR_BADARGS;
+    }
 
     int            ret;
     uint8_t*       wrappedKey;
@@ -767,8 +775,9 @@ static int _HandleUnwrapAndExportKeyRequest(whServerContext*                serv
     uint8_t*       key;
 
     /* Check if the reqData is big enough to hold the wrapped key */
-    if (reqDataSz < req->wrappedKeySz)
+    if (reqDataSz < req->wrappedKeySz) {
         return WH_ERROR_BUFFER_SIZE;
+    }
 
     /* Set the wrapped key to the request data */
     wrappedKey = reqData;
@@ -787,8 +796,9 @@ static int _HandleUnwrapAndExportKeyRequest(whServerContext*                serv
             WOLFHSM_CFG_KEYWRAP_AES_GCM_TAG_SIZE - sizeof(*metadata);
 
         /* Check if the response data can fit the metadata + key  */
-        if (respDataSz < sizeof(*metadata) + keySz)
+        if (respDataSz < sizeof(*metadata) + keySz) {
             return WH_ERROR_BUFFER_SIZE;
+        }
 
         /* Unwrap the key */
         ret = _AesGcmUnwrapKey(server, req->serverKeyId, wrappedKey,
@@ -835,12 +845,13 @@ static int _HandleUnwrapAndCacheKeyRequest(whServerContext*               server
     int           ret;
     uint8_t*      wrappedKey;
     whNvmMetadata metadata;
-    uint16_t keySz;
+    uint16_t keySz = 0;
     uint8_t key[WOLFHSM_CFG_KEYWRAP_MAX_KEY_SIZE];
 
     /* Check if the reqData is big enough to hold the wrapped key */
-    if (reqDataSz < req->wrappedKeySz)
+    if (reqDataSz < req->wrappedKeySz) {
         return WH_ERROR_BUFFER_SIZE;
+    }
 
     /* Set the wrapped key to the request data */
     wrappedKey = reqData;
@@ -1169,8 +1180,9 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
         uint32_t respDataSz = WOLFHSM_CFG_COMM_DATA_LEN - sizeof(wrapResp);
 
         /* Validate the bounds of the request data */
-        if (reqDataSz < req_size)
+        if (reqDataSz < req_size) {
             return WH_ERROR_BUFFER_SIZE;
+        }
 
         /* Translate request */
         (void)wh_MessageKeystore_TranslateWrapRequest(magic, req_packet, &wrapReq);
@@ -1202,8 +1214,9 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
             WOLFHSM_CFG_COMM_DATA_LEN - sizeof(unwrapResp);
 
         /* Validate the bounds of the request data */
-        if (reqDataSz < req_size)
+        if (reqDataSz < req_size) {
             return WH_ERROR_BUFFER_SIZE;
+        }
 
         /* Translate request */
         (void)wh_MessageKeystore_TranslateUnwrapAndExportRequest(magic, req_packet,
@@ -1236,8 +1249,9 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
         uint32_t respDataSz = WOLFHSM_CFG_COMM_DATA_LEN - sizeof(cacheResp);
 
         /* Validate the bounds of the request data */
-        if (reqDataSz < req_size)
+        if (reqDataSz < req_size) {
             return WH_ERROR_BUFFER_SIZE;
+        }
 
         /* Translate request */
         (void)wh_MessageKeystore_TranslateUnwrapAndCacheRequest(magic, req_packet,

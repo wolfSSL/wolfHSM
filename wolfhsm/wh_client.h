@@ -832,10 +832,10 @@ int wh_Client_KeyExportDma(whClientContext* c, uint16_t keyId,
  * completes or an error occurs.
  *
  * @param[in] ctx Pointer to the client context.
- * @param[in] cipherType Cipher used when for wrapping the key.
- * @param[in] serverKeyId Key ID to be used for wrapping the key.
- * @param[in] keyIn Pointer to the key data that is being wrapped.
- * @param[in] keySz The size in bytes of the key data that is being wrapped.
+ * @param[in] cipherType Cipher used to wrap the key.
+ * @param[in] serverKeyId Key ID of the key encryption key on the server.
+ * @param[in] keyIn Pointer to the key material to wrap.
+ * @param[in] keySz The size in bytes of the key material to wrap.
  * @param[in] metadataIn Pointer to the metadata for the wrapped key.
  * @param[out] wrappedKeyOut Pointer to store the wrapped key.
  * @param[in] wrappedKeySz Size of the wrappedKeyOut buffer.
@@ -856,10 +856,10 @@ int wh_Client_KeyWrap(whClientContext* ctx, enum wc_CipherType cipherType,
  * the request.
  *
  * @param[in] ctx Pointer to the client context.
- * @param[in] cipherType Cipher used when for wrapping the key.
- * @param[in] serverKeyId Key ID to be used for wrapping the key.
- * @param[in] key Pointer to the key data that is being wrapped.
- * @param[in] keySz The size in bytes of the key data that is being wrapped.
+ * @param[in] cipherType Cipher used to wrap the key.
+ * @param[in] serverKeyId Key ID of the key encryption key on the server.
+ * @param[in] key Pointer to the key material to wrap.
+ * @param[in] keySz The size in bytes of the key material to wrap.
  * @param[in] metadataIn Pointer to the metadata for the wrapped key.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
@@ -877,7 +877,7 @@ int wh_Client_KeyWrapRequest(whClientContext* ctx, enum wc_CipherType cipherType
  * if a response has not been received.
  *
  * @param[in] ctx Pointer to the client context.
- * @param[in] cipherType Cipher used when for wrapping the key.
+ * @param[in] cipherType Cipher used to wrap the key.
  * @param[out] wrappedKeyOut Pointer to store the wrapped key.
  * @param[in] wrappedKeySz Size of the wrappedKeyOut buffer.
  * @return int Returns 0 on success, or a negative error code on failure.

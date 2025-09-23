@@ -48,17 +48,17 @@
 
 #define WH_TEST_AES_KEYSIZE 16
 #define WH_TEST_AES_TEXTSIZE 16
-#define WH_TEST_AES_AUTHSIZE 16
+#define WH_TEST_AES_IVSIZE 12
 #define WH_TEST_AES_TAGSIZE 16
 #define WH_TEST_AES_WRAPPED_KEYSIZE                                     \
-    (WH_TEST_AES_AUTHSIZE + WH_TEST_AES_TAGSIZE + WH_TEST_AES_KEYSIZE + \
+    (WH_TEST_AES_IVSIZE + WH_TEST_AES_TAGSIZE + WH_TEST_AES_KEYSIZE + \
      sizeof(whNvmMetadata))
 
 static int whTest_Client_AesGcmKeyWrap(whClientContext* ctx, WC_RNG* rng)
 {
 
     int           ret = 0;
-    uint8_t       iv[AES_BLOCK_SIZE];
+    uint8_t       iv[WH_TEST_AES_IVSIZE];
     uint8_t       key[WH_TEST_AES_KEYSIZE];
     uint8_t       plainKey[WH_TEST_AES_KEYSIZE];
     uint8_t       tmpPlainKey[WH_TEST_AES_KEYSIZE];

@@ -46,7 +46,7 @@
  *
  *  WOLFHSM_CFG_KEYWRAP_AES_GCM_IV_SIZE - The size (in bytes) of the IV
  *  attached to an AES GCM wrapped key
- *      Default: 16
+ *      Default: 12
  *
  *  WOLFHSM_CFG_HEXDUMP - If defined, include wh_Utils_HexDump functionality
  *                          using stdio.h
@@ -253,14 +253,14 @@
     #endif
 
     #ifndef WOLFHSM_CFG_KEYWRAP_AES_GCM_IV_SIZE
-      #define WOLFHSM_CFG_KEYWRAP_AES_GCM_IV_SIZE 16
+      #define WOLFHSM_CFG_KEYWRAP_AES_GCM_IV_SIZE 12
     #endif
 
   #endif
 #endif
 
 #if defined(WOLFHSM_CFG_NO_CRYPTO)
-  #error "WOLFHSM_CFG_KEYWRAP requires WOLFHSM_CFG_NO_CRYPTO to be undefined"
+  #error "WOLFHSM_CFG_KEYWRAP is incompatible with WOLFHSM_CFG_NO_CRYPTO"
 #endif
 
 #if defined(NO_AES) || !defined(HAVE_AESGCM)
