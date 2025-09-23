@@ -75,11 +75,11 @@ int wh_Server_EccKeyCacheExport(whServerContext* ctx, whKeyId keyId,
 #ifdef HAVE_CURVE25519
 
 /* Store a curve25519_key into a server key cache with optional metadata */
-int wh_Server_CacheImportCurve25519Key(whServerContext* ctx,
+int wh_Server_CacheImportCurve25519Key(whServerContext* server,
         curve25519_key* key,
         whKeyId keyId, whNvmFlags flags, uint16_t label_len, uint8_t* label);
 /* Restore a curve25519_key from a server key cache */
-int wh_Server_CacheExportCurve25519Key(whServerContext* ctx, whKeyId keyId,
+int wh_Server_CacheExportCurve25519Key(whServerContext* server, whKeyId keyId,
         curve25519_key* key);
 #endif /* HAVE_CURVE25519 */
 
