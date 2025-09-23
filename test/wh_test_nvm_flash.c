@@ -31,6 +31,7 @@
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_nvm.h"
 #include "wolfhsm/wh_nvm_flash.h"
+#include "wolfhsm/wh_nvm_flash_log.h"
 #include "wolfhsm/wh_flash_unit.h"
 
 /* NVM simulator backends to use for testing NVM module */
@@ -496,7 +497,21 @@ int whTest_NvmFlash_RamSim(void)
     whNvmFlashContext nvmFlashCtx[1] = {0};
     const whNvmCb    nvmFlashCb[1]     = {WH_NVM_FLASH_CB};
 
-    return whTest_NvmFlashCfg(&myNvmCfg, nvmFlashCtx, nvmFlashCb);
+    WH_TEST_RETURN_ON_FAIL(whTest_NvmFlashCfg(&myNvmCfg, nvmFlashCtx, nvmFlashCb));
+
+#if defined(WOLFHSM_CFG_SERVER_NVM_FLASH_LOG)
+    whNvmFlashLogConfig myLogCfg = {
+        .flash_cb  = myCb,
+        .flash_ctx = myHalFlashCtx,
+        .flash_cfg = myHalFlashCfg,
+    };
+    whNvmFlashLogContext nvmLogCtx[1] = {0};
+    const whNvmCb        nvmLogCb[1]     = {WH_NVM_FLASH_LOG_CB};
+    WH_TEST_RETURN_ON_FAIL(whTest_NvmFlashCfg(&myLogCfg, nvmLogCtx, nvmLogCb));
+#endif /* WOLFHSM_CFG_SERVER_NVM_FLASH_LOG */
+
+    return 0;
+
 }
 
 static int
