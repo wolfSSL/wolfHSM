@@ -35,7 +35,7 @@
 /* internal DMA function declarations */
 static int _checkOperValid(whDmaOper oper);
 static int _checkAddrAgainstAllowList(const whDmaAddrList allowList, void* addr,
-    size_t size);
+                                      size_t size);
 
 static int _checkOperValid(whDmaOper oper)
 {
@@ -47,8 +47,8 @@ static int _checkOperValid(whDmaOper oper)
     return WH_ERROR_OK;
 }
 
-static int _checkAddrAgainstAllowList(const whDmaAddrList allowList,
-                                      void* addr, size_t size)
+static int _checkAddrAgainstAllowList(const whDmaAddrList allowList, void* addr,
+                                      size_t size)
 {
     uintptr_t startAddr = (uintptr_t)addr;
     uintptr_t endAddr   = startAddr + size;
@@ -77,7 +77,8 @@ static int _checkAddrAgainstAllowList(const whDmaAddrList allowList,
 
 
 static int _checkMemOperAgainstAllowList(const whDmaAddrAllowList* allowlist,
-    whDmaOper oper, void* addr, size_t size)
+                                         whDmaOper oper, void* addr,
+                                         size_t size)
 {
     int rc = WH_ERROR_OK;
 
@@ -109,7 +110,7 @@ static int _checkMemOperAgainstAllowList(const whDmaAddrAllowList* allowlist,
 
 
 int wh_CheckMemOperAgainstAllowList(const whDmaAddrAllowList* allowlist,
-                                  whDmaOper oper, void* addr, size_t size)
+                                    whDmaOper oper, void* addr, size_t size)
 {
     if (0 == size) {
         return WH_ERROR_BADARGS;

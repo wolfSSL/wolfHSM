@@ -213,7 +213,7 @@ static int _wh_Server_HandleCommRequest(whServerContext* server,
         resp.cfg_comm_data_len = WOLFHSM_CFG_COMM_DATA_LEN;
         resp.cfg_nvm_object_count = WOLFHSM_CFG_NVM_OBJECT_COUNT;
         resp.cfg_server_customcb_count = WOLFHSM_CFG_SERVER_CUSTOMCB_COUNT;
-        resp.cfg_server_dmaaddr_count = WOLFHSM_CFG_DMAADDR_COUNT;
+        resp.cfg_server_dmaaddr_count    = WOLFHSM_CFG_DMAADDR_COUNT;
         resp.cfg_server_keycache_bufsize = WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE;
         resp.cfg_server_keycache_count = WOLFHSM_CFG_SERVER_KEYCACHE_COUNT;
         resp.cfg_server_keycache_bigbufsize = WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE;

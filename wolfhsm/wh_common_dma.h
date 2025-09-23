@@ -47,7 +47,7 @@ typedef enum {
 
 #ifdef WOLFHSM_CFG_DMA_CUSTOM_CLIENT_COPY
 typedef enum {
-    WH_DMA_COPY_OPER_CLIENT_READ = 0,
+    WH_DMA_COPY_OPER_CLIENT_READ  = 0,
     WH_DMA_COPY_OPER_CLIENT_WRITE = 1,
 } whDmaCopyOper;
 #endif /* WOLFHSM_CFG_DMA_CUSTOM_CLIENT_COPY */
@@ -72,6 +72,6 @@ typedef struct {
 } whDmaAddrAllowList;
 
 int wh_CheckMemOperAgainstAllowList(const whDmaAddrAllowList* allowlist,
-    whDmaOper oper, void* addr, size_t len);
+                                    whDmaOper oper, void* addr, size_t len);
 
 #endif /* WOLFHSM_WH_COMMON_DMA_H_ */

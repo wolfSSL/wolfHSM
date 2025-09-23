@@ -547,12 +547,11 @@ int posixTransportShm_RecvResponse(void* c, uint16_t* out_len, void* data)
 #ifdef WOLFHSM_CFG_DMA
 /** DMA function callbacks that can make use of WOLFSSL_STATIC_MEMORY using
  * the POSIX shared memory transport.
-*/
+ */
 
 int wh_Client_PosixStaticMemoryDMA(struct whClientContext_t* client,
                                    uintptr_t clientAddr, void** xformedCliAddr,
-                                   size_t len, whDmaOper oper,
-                                   whDmaFlags flags)
+                                   size_t len, whDmaOper oper, whDmaFlags flags)
 {
     int       ret     = WH_ERROR_OK;
     int       isInDma = 0;

@@ -513,23 +513,23 @@ static int wh_Bench_CheckTransport(int transport)
 {
     switch (transport) {
         case WH_BENCH_TRANSPORT_DMA:
-        #if !defined(WOLFSSL_STATIC_MEMORY) || !defined(WOLFHSM_CFG_TEST_POSIX)
+#if !defined(WOLFSSL_STATIC_MEMORY) || !defined(WOLFHSM_CFG_TEST_POSIX)
             return WH_ERROR_BADARGS;
-        #else
+#else
             break;
-        #endif
+#endif
         case WH_BENCH_TRANSPORT_TCP:
-        #if !defined(WOLFHSM_CFG_TEST_POSIX)
+#if !defined(WOLFHSM_CFG_TEST_POSIX)
             return WH_ERROR_BADARGS;
-        #else
+#else
             break;
-        #endif
+#endif
         case WH_BENCH_TRANSPORT_SHM:
-        #if !defined(WOLFHSM_CFG_TEST_POSIX)
+#if !defined(WOLFHSM_CFG_TEST_POSIX)
             return WH_ERROR_BADARGS;
-        #else
+#else
             break;
-        #endif
+#endif
         default:
             return WH_ERROR_BADARGS;
     }

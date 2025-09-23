@@ -78,17 +78,18 @@ extern const int WH_DEV_IDS_ARRAY[WH_NUM_DEVIDS];
 /** Client DMA address translation and validation */
 #ifdef WOLFHSM_CFG_DMA
 typedef int (*whClientDmaClientMemCb)(struct whClientContext_t* client,
-    uintptr_t clientAddr, void** ptr, size_t len, whDmaOper oper,
-    whDmaFlags flags);
+                                      uintptr_t clientAddr, void** ptr,
+                                      size_t len, whDmaOper oper,
+                                      whDmaFlags flags);
 
 /* Common DMA callback types and structures */
 typedef struct {
-    whClientDmaClientMemCb cb;
+    whClientDmaClientMemCb    cb;
     const whDmaAddrAllowList* dmaAddrAllowList; /* allowed addresses */
 } whClientDmaConfig;
 
 typedef struct {
-    whClientDmaClientMemCb cb;
+    whClientDmaClientMemCb    cb;
     const whDmaAddrAllowList* dmaAddrAllowList; /* allowed addresses */
     void* heap; /* heap hint for using static memory (or other allocator) */
 } whClientDmaContext;

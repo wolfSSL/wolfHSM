@@ -34,7 +34,7 @@
 #include "wolfhsm/wh_client.h"
 
 
-int wh_Client_DmaRegisterAllowList(whClientContext* client,
+int wh_Client_DmaRegisterAllowList(whClientContext*          client,
                                    const whDmaAddrAllowList* allowlist)
 {
     if (NULL == client || NULL == allowlist) {
@@ -67,8 +67,7 @@ int wh_Client_DmaRegisterCb(whClientContext* client, whClientDmaClientMemCb cb)
 int wh_Client_DmaProcessClientAddress(whClientContext* client,
                                       uintptr_t        clientAddr,
                                       void** xformedCliAddr, size_t len,
-                                      whDmaOper  oper,
-                                      whDmaFlags flags)
+                                      whDmaOper oper, whDmaFlags flags)
 {
     int rc = WH_ERROR_OK;
 
@@ -92,7 +91,7 @@ int wh_Client_DmaProcessClientAddress(whClientContext* client,
     /* if the client has a allowlist registered, check address against it */
     if (rc == WH_ERROR_OK && len > 0) {
         rc = wh_CheckMemOperAgainstAllowList(client->dma.dmaAddrAllowList, oper,
-            *xformedCliAddr, len);
+                                             *xformedCliAddr, len);
     }
     return rc;
 }
