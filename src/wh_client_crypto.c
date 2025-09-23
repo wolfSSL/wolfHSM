@@ -2114,7 +2114,8 @@ int wh_Client_RsaFunction(whClientContext* ctx, RsaKey* key, int rsa_type,
             if ((in != NULL) && (in_len > 0)) {
                 memcpy(req_in, in, in_len);
             }
-            req->outLen = *inout_out_len;
+            /* Set output length only when provided to avoid NULL dereference */
+            req->outLen = (inout_out_len != NULL) ? *inout_out_len : 0;
 
             /* Send Request */
             ret = wh_Client_SendRequest(ctx, group, action, req_len,
