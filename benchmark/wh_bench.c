@@ -39,9 +39,11 @@
 #include "wolfhsm/wh_client.h"
 #include "wolfhsm/wh_utils.h"
 
+#if defined(WOLFHSM_CFG_TEST_POSIX)
 /* Include transport-specific headers */
 #include "port/posix/posix_transport_shm.h"
 #include "port/posix/posix_transport_tcp.h"
+#endif /* WOLFHSM_CFG_TEST_POSIX */
 
 #include "wh_bench.h"
 #include "wh_bench_mod_all.h"
@@ -512,19 +514,21 @@ static int _runClientBenchmarks(whClientContext* client, int transport,
 static int wh_Bench_CheckTransport(int transport)
 {
     switch (transport) {
-        case WH_BENCH_TRANSPORT_DMA:
+        case WH_BENCH_TRANSPORT_MEM:
+            break;
+        case WH_BENCH_TRANSPORT_POSIX_DMA:
 #if !defined(WOLFSSL_STATIC_MEMORY) || !defined(WOLFHSM_CFG_TEST_POSIX)
             return WH_ERROR_BADARGS;
 #else
             break;
 #endif
-        case WH_BENCH_TRANSPORT_TCP:
+        case WH_BENCH_TRANSPORT_POSIX_TCP:
 #if !defined(WOLFHSM_CFG_TEST_POSIX)
             return WH_ERROR_BADARGS;
 #else
             break;
 #endif
-        case WH_BENCH_TRANSPORT_SHM:
+        case WH_BENCH_TRANSPORT_POSIX_SHM:
 #if !defined(WOLFHSM_CFG_TEST_POSIX)
             return WH_ERROR_BADARGS;
 #else
@@ -564,7 +568,7 @@ int wh_Bench_ClientCfg(whClientConfig* clientCfg, int transport)
     }
 
 #if defined(WOLFSSL_STATIC_MEMORY) && defined(WOLFHSM_CFG_TEST_POSIX)
-    if (transport == WH_BENCH_TRANSPORT_DMA) {
+    if (transport == WH_BENCH_TRANSPORT_POSIX_DMA) {
         static const unsigned int listSz     = 9;
         static const uint32_t     sizeList[] = {176,  256,  288,  704,  1056,
                                                 1712, 2112, 2368, 33800};
@@ -686,7 +690,7 @@ static void* _whBenchClientTask(void* data)
     }
 
 #if defined(WOLFSSL_STATIC_MEMORY) && defined(WOLFHSM_CFG_TEST_POSIX)
-    if (taskData->transport == WH_BENCH_TRANSPORT_DMA) {
+    if (taskData->transport == WH_BENCH_TRANSPORT_POSIX_DMA) {
         static const unsigned int listSz     = 9;
         static const uint32_t     sizeList[] = {176,  256,  288,  704,  1056,
                                                 1712, 2112, 2368, 33800};
@@ -818,10 +822,11 @@ static int _configureClientTransport(whBenchTransportType transport,
         }
 
 #if defined(WOLFSSL_STATIC_MEMORY) && defined(WOLFHSM_CFG_TEST_POSIX)
-        case WH_BENCH_TRANSPORT_DMA: {
+        case WH_BENCH_TRANSPORT_POSIX_DMA: {
             static whClientDmaConfig dmaConfig;
 
-            dmaConfig.cb               = wh_Client_PosixStaticMemoryDMA;
+            dmaConfig.cb               =
+                posixTransportShm_ClientStaticMemDmaCallback;
             dmaConfig.dmaAddrAllowList = NULL;
             c_conf->dmaConfig          = &dmaConfig;
         };
@@ -829,7 +834,7 @@ static int _configureClientTransport(whBenchTransportType transport,
             /* Fall through */
 #endif
 
-        case WH_BENCH_TRANSPORT_SHM: {
+        case WH_BENCH_TRANSPORT_POSIX_SHM: {
             /* Shared memory transport configuration */
             static whTransportClientCb pttcClientShmCb[1] = {
                 POSIX_TRANSPORT_SHM_CLIENT_CB};
@@ -852,7 +857,7 @@ static int _configureClientTransport(whBenchTransportType transport,
             break;
         }
 
-        case WH_BENCH_TRANSPORT_TCP: {
+        case WH_BENCH_TRANSPORT_POSIX_TCP: {
             /* TCP transport configuration */
             static whTransportClientCb pttcClientTcpCb = PTT_CLIENT_CB;
             static posixTransportTcpClientContext tccTcp;
@@ -893,10 +898,11 @@ static int _configureServerTransport(whBenchTransportType transport,
         }
 
 #if defined(WOLFSSL_STATIC_MEMORY) && defined(WOLFHSM_CFG_TEST_POSIX)
-        case WH_BENCH_TRANSPORT_DMA: {
+        case WH_BENCH_TRANSPORT_POSIX_DMA: {
             static whServerDmaConfig dmaConfig;
 
-            dmaConfig.cb               = wh_Server_PosixStaticMemoryDMA;
+            dmaConfig.cb               =
+                    posixTransportShm_ServerStaticMemDmaCallback;
             dmaConfig.dmaAddrAllowList = NULL;
             s_conf->dmaConfig          = &dmaConfig;
         };
@@ -904,7 +910,7 @@ static int _configureServerTransport(whBenchTransportType transport,
             /* Fall through */
 #endif
 
-        case WH_BENCH_TRANSPORT_SHM: {
+        case WH_BENCH_TRANSPORT_POSIX_SHM: {
             /* Shared memory transport configuration */
             static whTransportServerCb pttServerShmCb[1] = {
                 POSIX_TRANSPORT_SHM_SERVER_CB};
@@ -927,7 +933,7 @@ static int _configureServerTransport(whBenchTransportType transport,
             break;
         }
 
-        case WH_BENCH_TRANSPORT_TCP: {
+        case WH_BENCH_TRANSPORT_POSIX_TCP: {
             /* TCP transport configuration */
             static whTransportServerCb pttServerTcpCb = PTT_SERVER_CB;
             static posixTransportTcpServerContext tscTcp;

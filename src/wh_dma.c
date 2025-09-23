@@ -17,7 +17,7 @@
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
 /*
- * src/wh_common_dma.c
+ * src/wh_dma.c
  */
 
 /* Pick up compile-time configuration */
@@ -30,7 +30,7 @@
 #include <stddef.h>
 
 #include "wolfhsm/wh_error.h"
-#include "wolfhsm/wh_common_dma.h"
+#include "wolfhsm/wh_dma.h"
 
 /* internal DMA function declarations */
 static int _checkOperValid(whDmaOper oper);
@@ -109,7 +109,7 @@ static int _checkMemOperAgainstAllowList(const whDmaAddrAllowList* allowlist,
 }
 
 
-int wh_CheckMemOperAgainstAllowList(const whDmaAddrAllowList* allowlist,
+int wh_Dma_CheckMemOperAgainstAllowList(const whDmaAddrAllowList* allowlist,
                                     whDmaOper oper, void* addr, size_t size)
 {
     if (0 == size) {

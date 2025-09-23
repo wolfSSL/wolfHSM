@@ -65,7 +65,6 @@
 
 #include "wolfhsm/wh_client.h"
 #include "wolfhsm/wh_client_crypto.h"
-#include "wolfhsm/wh_common_dma.h"
 
 /** Forward declarations */
 #ifdef HAVE_ECC

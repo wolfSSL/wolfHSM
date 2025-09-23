@@ -43,7 +43,7 @@ int wh_PosixServer_ExampleDMAConfig(void* conf)
     shmConfig.resp_size = WH_POSIX_RESP_SIZE;
     shmConfig.dma_size  = WH_POSIX_DMA_SIZE;
 
-    dmaConfig.cb               = wh_Server_PosixStaticMemoryDMA;
+    dmaConfig.cb               = posixTransportShm_ServerStaticMemDmaCallback;
     dmaConfig.dmaAddrAllowList = NULL;
 
     s_comm.transport_cb      = &dmaCb;

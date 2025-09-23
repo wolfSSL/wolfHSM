@@ -52,13 +52,13 @@ int main(int argc, char** argv)
                 transport = WH_BENCH_TRANSPORT_MEM;
             }
             else if (strcmp(type, "shm") == 0) {
-                transport = WH_BENCH_TRANSPORT_SHM;
+                transport = WH_BENCH_TRANSPORT_POSIX_SHM;
             }
             else if (strcmp(type, "tcp") == 0) {
-                transport = WH_BENCH_TRANSPORT_TCP;
+                transport = WH_BENCH_TRANSPORT_POSIX_TCP;
             }
             else if (strcmp(type, "dma") == 0) {
-                transport = WH_BENCH_TRANSPORT_DMA;
+                transport = WH_BENCH_TRANSPORT_POSIX_DMA;
             }
             else {
                 printf("Invalid transport type: %s\n", type);

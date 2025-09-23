@@ -138,16 +138,16 @@ int posixTransportShm_RecvResponse(void* c, uint16_t* out_len, void* data);
 
 
 #ifdef WOLFHSM_CFG_DMA
-#include "wolfhsm/wh_common_dma.h"
+#include "wolfhsm/wh_dma.h"
 
 #include "wolfhsm/wh_server.h"
-int wh_Server_PosixStaticMemoryDMA(whServerContext* server,
+int posixTransportShm_ServerStaticMemDmaCallback(whServerContext* server,
                                    uintptr_t clientAddr, void** xformedCliAddr,
                                    size_t len, whServerDmaOper oper,
                                    whServerDmaFlags flags);
 
 #include "wolfhsm/wh_client.h"
-int wh_Client_PosixStaticMemoryDMA(whClientContext* client,
+int posixTransportShm_ClientStaticMemDmaCallback(whClientContext* client,
                                    uintptr_t clientAddr, void** xformedCliAddr,
                                    size_t len, whDmaOper oper,
                                    whDmaFlags flags);

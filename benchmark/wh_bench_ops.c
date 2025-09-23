@@ -311,13 +311,13 @@ int wh_Bench_PrintResults(whBenchOpContext* ctx)
         case WH_BENCH_TRANSPORT_MEM:
             WH_BENCH_PRINTF("(Memory):\n");
             break;
-        case WH_BENCH_TRANSPORT_SHM:
+        case WH_BENCH_TRANSPORT_POSIX_SHM:
             WH_BENCH_PRINTF("(Shared Memory):\n");
             break;
-        case WH_BENCH_TRANSPORT_TCP:
+        case WH_BENCH_TRANSPORT_POSIX_TCP:
             WH_BENCH_PRINTF("(TCP):\n");
             break;
-        case WH_BENCH_TRANSPORT_DMA:
+        case WH_BENCH_TRANSPORT_POSIX_DMA:
             WH_BENCH_PRINTF("(DMA):\n");
             break;
     }

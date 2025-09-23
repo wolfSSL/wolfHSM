@@ -41,7 +41,7 @@ typedef struct whServerContext_t whServerContext;
 #include "wolfhsm/wh_nvm.h"
 #include "wolfhsm/wh_message_customcb.h"
 #ifdef WOLFHSM_CFG_DMA
-#include "wolfhsm/wh_common_dma.h"
+#include "wolfhsm/wh_dma.h"
 #endif /* WOLFHSM_CFG_DMA */
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO

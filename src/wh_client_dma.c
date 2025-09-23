@@ -30,7 +30,6 @@
 #include <stddef.h>
 
 #include "wolfhsm/wh_error.h"
-#include "wolfhsm/wh_common_dma.h"
 #include "wolfhsm/wh_client.h"
 
 
@@ -90,7 +89,7 @@ int wh_Client_DmaProcessClientAddress(whClientContext* client,
 
     /* if the client has a allowlist registered, check address against it */
     if (rc == WH_ERROR_OK && len > 0) {
-        rc = wh_CheckMemOperAgainstAllowList(client->dma.dmaAddrAllowList, oper,
+        rc = wh_Dma_CheckMemOperAgainstAllowList(client->dma.dmaAddrAllowList, oper,
                                              *xformedCliAddr, len);
     }
     return rc;

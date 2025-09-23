@@ -187,7 +187,7 @@ static int posixTransportShm_UseMap(char* name, ptshmMapping* map)
     }
     return ret;
 }
-#endif
+#endif /* WOLFHSM_CFG_ENABLE_CLIENT */
 
 #if defined(WOLFHSM_CFG_ENABLE_SERVER)
 static int posixTransportShm_CreateMap(char* name, uint16_t req_size,
@@ -239,7 +239,7 @@ static int posixTransportShm_CreateMap(char* name, uint16_t req_size,
     }
     return ret;
 }
-#endif
+#endif /* WOLFHSM_CFG_ENABLE_SERVER */
 
 
 #if defined(WOLFHSM_CFG_ENABLE_CLIENT)
@@ -294,7 +294,7 @@ static int posixTransportShm_HandleMap(posixTransportShmContext *ctx)
 
     return ret;
 }
-#endif
+#endif /* WOLFHSM_CFG_ENABLE_CLIENT */
 
 
 /** Custom functions */
@@ -430,7 +430,7 @@ int posixTransportShm_ServerInit(void* c, const void* cf,
     }
     return ret;
 }
-#endif
+#endif /* WOLFHSM_CFG_ENABLE_SERVER */
 
 
 #if defined(WOLFHSM_CFG_ENABLE_CLIENT)
@@ -462,7 +462,7 @@ int posixTransportShm_ClientInit(void* c, const void* cf,
 
     return ret;
 }
-#endif
+#endif /* WOLFHSM_CFG_ENABLE_CLIENT */
 
 
 int posixTransportShm_Cleanup(void* c)
@@ -549,7 +549,7 @@ int posixTransportShm_RecvResponse(void* c, uint16_t* out_len, void* data)
  * the POSIX shared memory transport.
  */
 
-int wh_Client_PosixStaticMemoryDMA(struct whClientContext_t* client,
+int posixTransportShm_ClientStaticMemDmaCallback(struct whClientContext_t* client,
                                    uintptr_t clientAddr, void** xformedCliAddr,
                                    size_t len, whDmaOper oper, whDmaFlags flags)
 {
@@ -686,7 +686,7 @@ int posixTransportShm_RecvRequest(void* c, uint16_t* out_len, void* data)
 /* Generic offset into the DMA area. This function can operate with no knowledge
  * of what structures the DMA area is. It takes in an offset, validates it, and
  * returns the pointer into the DMA area based off of the offset.  */
-int wh_Server_PosixStaticMemoryDMA(whServerContext* server,
+int posixTransportShm_ServerStaticMemDmaCallback(whServerContext* server,
                                    uintptr_t clientAddr, void** xformedCliAddr,
                                    size_t len, whServerDmaOper oper,
                                    whServerDmaFlags flags)

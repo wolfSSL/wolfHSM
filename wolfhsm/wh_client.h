@@ -50,7 +50,7 @@
 #include "wolfhsm/wh_comm.h"
 #include "wolfhsm/wh_message_customcb.h"
 #ifdef WOLFHSM_CFG_DMA
-#include "wolfhsm/wh_common_dma.h"
+#include "wolfhsm/wh_dma.h"
 #endif /* WOLFHSM_CFG_DMA */
 
 /* WolfCrypt types and defines */

@@ -17,7 +17,7 @@
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
 /*
- * wolfhsm/wh_common_dma.h
+ * wolfhsm/wh_dma.h
  *
  * Common DMA API for client and server
  */
@@ -71,7 +71,7 @@ typedef struct {
     whDmaAddrList writeList; /* Allowed client write addresses */
 } whDmaAddrAllowList;
 
-int wh_CheckMemOperAgainstAllowList(const whDmaAddrAllowList* allowlist,
+int wh_Dma_CheckMemOperAgainstAllowList(const whDmaAddrAllowList* allowlist,
                                     whDmaOper oper, void* addr, size_t len);
 
 #endif /* WOLFHSM_WH_COMMON_DMA_H_ */
