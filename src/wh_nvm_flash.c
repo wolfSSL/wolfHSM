@@ -189,27 +189,21 @@ static int nfMemState_Read(whNvmFlashContext* context, uint32_t offset,
         return blank_count;
     }
 
-    /* No errors blank checking.  Read all the nfState from flash */
-    ret = wh_FlashUnit_Read(
-                context->cb,
-                context->flash,
-                offset,
-                NF_UNITS_PER_STATE,
-                (whFlashUnit*) &buffer);
-    if (ret != 0) {
-        /* Error reading state*/
-        return ret;
-    }
-
-    /* Ok to copy all data members into memState, even if blank */
-    state->epoch = buffer.epoch;
-    state->start = buffer.start;
-    state->count = buffer.count;
-
     /* Compute status based on which state members are blank */
     if (    (blank_epoch == WH_ERROR_NOTBLANK) &&
             (blank_start == WH_ERROR_NOTBLANK) &&
             (blank_count == WH_ERROR_NOTBLANK)) {
+        ret = wh_FlashUnit_Read(context->cb, context->flash, offset,
+                                NF_UNITS_PER_STATE, (whFlashUnit*)&buffer);
+        if (ret != 0) {
+            /* Error reading state*/
+            return ret;
+        }
+
+        state->epoch = buffer.epoch;
+        state->start = buffer.start;
+        state->count = buffer.count;
+
         /* Used */
         state->status = NF_STATUS_USED;
     } else  if (    (blank_epoch == WH_ERROR_NOTBLANK) &&
@@ -852,7 +846,7 @@ int wh_NvmFlash_Init(void* c, const void* cf)
 {
     whNvmFlashContext* context = c;
     const whNvmFlashConfig* config = cf;
-    int ret = 0;
+    int                     ret     = WH_ERROR_OK;
 
     if (    (context == NULL) ||
             (config == NULL) ||
@@ -863,7 +857,7 @@ int wh_NvmFlash_Init(void* c, const void* cf)
     if (config->cb->Init != NULL) {
         ret = config->cb->Init(config->context, config->config);
     }
-    if(ret == 0) {
+    if (ret == WH_ERROR_OK) {
         /* Initialize and setup context */
         memset(context, 0, sizeof(*context));
         context->cb = config->cb;
@@ -877,14 +871,16 @@ int wh_NvmFlash_Init(void* c, const void* cf)
         }
 
         /* Unlock the both partitions */
-        nfPartition_WriteUnlock(context, 0);
-        nfPartition_WriteUnlock(context, 1);
+        (void)nfPartition_WriteUnlock(context, 0);
+        (void)nfPartition_WriteUnlock(context, 1);
 
         nfMemState part_states[2];
 
-        /* Recover the partition states to determine which should be active */
-        nfPartition_ReadMemState(context, 0 , &part_states[0]);
-        nfPartition_ReadMemState(context, 1 , &part_states[1]);
+        /* Recover the partition states to determine which should be active.
+         * No need to check error returns, since output state is initialized
+         * to unknown */
+        (void)nfPartition_ReadMemState(context, 0, &part_states[0]);
+        (void)nfPartition_ReadMemState(context, 1, &part_states[1]);
 
         /* Decide which directory should be active */
         if (        (part_states[0].status == NF_STATUS_USED) &&
@@ -905,24 +901,26 @@ int wh_NvmFlash_Init(void* c, const void* cf)
                     (part_states[1].status == NF_STATUS_FREE)) {
             /* Both are blank.  Set active to 0 and initialize */
             context->active = 0;
-            nfPartition_ProgramInit(context,
-                    context->active);
+            ret             = nfPartition_ProgramInit(context, context->active);
+        }
+        else {
+            /* Both are corrupted or one partition is corrupted and another is
+             * free. Attempt to reinitialize and set active. Same behavior as
+             * blank for now */
+            context->active = 0;
+            ret             = nfPartition_ProgramInit(context, context->active);
         }
 
-        ret = nfPartition_ReadMemDirectory(
-                context,
-                context->active,
-                &context->directory);
-        if (ret != 0) {
-            return ret;
+        if (ret == WH_ERROR_OK) {
+            ret = nfPartition_ReadMemDirectory(context, context->active,
+                                               &context->directory);
+            if (ret == WH_ERROR_OK) {
+                ret = nfMemDirectory_Parse(&context->directory);
+                if (ret == WH_ERROR_OK) {
+                    context->initialized = 1;
+                }
+            }
         }
-        ret = nfMemDirectory_Parse(&context->directory);
-        if (ret != 0) {
-            return ret;
-        }
-
-        context->initialized = 1;
-        return 0;
     }
     return ret;
 }
@@ -1196,10 +1194,11 @@ int wh_NvmFlash_DestroyObjects(void* c, whNvmId list_count,
     /* Write each used object to new partition */
     for (entry = 0; entry < WOLFHSM_CFG_NVM_OBJECT_COUNT; entry++) {
         if (d->objects[entry].state.status == NF_STATUS_USED) {
-            /* Handle errors by breaking out of loop on failure */
             ret = nfObject_Copy(context, entry,
                     dest_part, &dest_object, &dest_data);
-            if (ret != 0) {
+            if (ret != WH_ERROR_OK) {
+                /* Abort reclaim to avoid activating a partially copied
+                 * partition */
                 return ret;
             }
         }
