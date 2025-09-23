@@ -50,7 +50,6 @@ enum WH_INFO_ENUM {
 };
 
 
-
 /* Generic error response message. */
 typedef struct {
     int return_code;

@@ -554,6 +554,9 @@ int wh_Server_KeystoreEraseKey(whServerContext* server, whNvmId keyId)
 #ifndef NO_AES
 #ifdef HAVE_AESGCM
 
+#define WOLFHSM_KEYWRAP_AES_GCM_TAG_SIZE 16
+#define WOLFHSM_KEYWRAP_AES_GCM_IV_SIZE 12
+
 static int _AesGcmWrapKey(whServerContext* server, whKeyId serverKeyId,
                           uint8_t* keyIn, uint16_t keySz,
                           whNvmMetadata* metadataIn, uint8_t* wrappedKeyOut,
@@ -561,8 +564,8 @@ static int _AesGcmWrapKey(whServerContext* server, whKeyId serverKeyId,
 {
     int      ret = 0;
     Aes      aes[1];
-    uint8_t  authTag[WOLFHSM_CFG_KEYWRAP_AES_GCM_TAG_SIZE];
-    uint8_t  iv[WOLFHSM_CFG_KEYWRAP_AES_GCM_IV_SIZE];
+    uint8_t  authTag[WOLFHSM_KEYWRAP_AES_GCM_TAG_SIZE];
+    uint8_t  iv[WOLFHSM_KEYWRAP_AES_GCM_IV_SIZE];
     uint8_t  serverKey[AES_MAX_KEY_SIZE];
     uint32_t serverKeySz = sizeof(serverKey);
 
@@ -637,8 +640,8 @@ static int _AesGcmUnwrapKey(whServerContext* server, uint16_t serverKeyId,
 {
     int      ret = 0;
     Aes      aes[1];
-    uint8_t  authTag[WOLFHSM_CFG_KEYWRAP_AES_GCM_TAG_SIZE];
-    uint8_t  iv[WOLFHSM_CFG_KEYWRAP_AES_GCM_IV_SIZE];
+    uint8_t  authTag[WOLFHSM_KEYWRAP_AES_GCM_TAG_SIZE];
+    uint8_t  iv[WOLFHSM_KEYWRAP_AES_GCM_IV_SIZE];
     uint8_t  serverKey[AES_MAX_KEY_SIZE];
     uint32_t serverKeySz = sizeof(serverKey);
     uint8_t* encBlob   = (uint8_t*)wrappedKeyIn + sizeof(iv) + sizeof(authTag);
@@ -727,8 +730,8 @@ static int _HandleWrapKeyRequest(whServerContext*               server,
 #ifndef NO_AES
 #ifdef HAVE_AESGCM
         case WC_CIPHER_AES_GCM: {
-            uint16_t wrappedKeySz = WOLFHSM_CFG_KEYWRAP_AES_GCM_IV_SIZE +
-                                    WOLFHSM_CFG_KEYWRAP_AES_GCM_TAG_SIZE +
+            uint16_t wrappedKeySz = WOLFHSM_KEYWRAP_AES_GCM_IV_SIZE +
+                                    WOLFHSM_KEYWRAP_AES_GCM_TAG_SIZE +
                                     sizeof(metadata) + req->keySz;
 
             /* Check if the response data can fit the wrapped key */
@@ -792,8 +795,8 @@ static int _HandleUnwrapAndExportKeyRequest(
 #ifdef HAVE_AESGCM
         case WC_CIPHER_AES_GCM: {
             uint16_t keySz =
-                req->wrappedKeySz - WOLFHSM_CFG_KEYWRAP_AES_GCM_IV_SIZE -
-                WOLFHSM_CFG_KEYWRAP_AES_GCM_TAG_SIZE - sizeof(*metadata);
+                req->wrappedKeySz - WOLFHSM_KEYWRAP_AES_GCM_IV_SIZE -
+                WOLFHSM_KEYWRAP_AES_GCM_TAG_SIZE - sizeof(*metadata);
 
             /* Check if the response data can fit the metadata + key  */
             if (respDataSz < sizeof(*metadata) + keySz) {
@@ -862,8 +865,8 @@ _HandleUnwrapAndCacheKeyRequest(whServerContext*                         server,
 #ifndef NO_AES
 #ifdef HAVE_AESGCM
         case WC_CIPHER_AES_GCM: {
-            keySz = req->wrappedKeySz - WOLFHSM_CFG_KEYWRAP_AES_GCM_IV_SIZE -
-                    WOLFHSM_CFG_KEYWRAP_AES_GCM_TAG_SIZE - sizeof(metadata);
+            keySz = req->wrappedKeySz - WOLFHSM_KEYWRAP_AES_GCM_IV_SIZE -
+                    WOLFHSM_KEYWRAP_AES_GCM_TAG_SIZE - sizeof(metadata);
 
             ret = _AesGcmUnwrapKey(server, req->serverKeyId, wrappedKey,
                                    req->wrappedKeySz, &metadata, key, keySz);

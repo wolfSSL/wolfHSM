@@ -50,7 +50,7 @@
 #define WH_TEST_AES_TEXTSIZE 16
 #define WH_TEST_AES_IVSIZE 12
 #define WH_TEST_AES_TAGSIZE 16
-#define WH_TEST_AES_WRAPPED_KEYSIZE                                     \
+#define WH_TEST_AES_WRAPPED_KEYSIZE                                   \
     (WH_TEST_AES_IVSIZE + WH_TEST_AES_TAGSIZE + WH_TEST_AES_KEYSIZE + \
      sizeof(whNvmMetadata))
 

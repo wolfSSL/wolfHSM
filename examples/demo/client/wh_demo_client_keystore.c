@@ -126,10 +126,10 @@ int wh_DemoClient_KeystoreAes(whClientContext* clientContext)
 {
     int      ret;
     Aes      aes = {0};
-    uint8_t  key[AES_128_KEY_SIZE] = {'0','1','2','3','4','5','6','7',
-                                      '8','9','a','b','c','d','e','f'};
-    uint8_t  iv[AES_IV_SIZE]       = {'1','2','3','4','5','6','7','8',
-                                      '9','0','a','b','c','d','e','f'};
+    uint8_t  key[AES_128_KEY_SIZE] = {'0', '1', '2', '3', '4', '5', '6', '7',
+                                      '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
+    uint8_t  iv[AES_IV_SIZE]       = {'1', '2', '3', '4', '5', '6', '7', '8',
+                                      '9', '0', 'a', 'b', 'c', 'd', 'e', 'f'};
     uint8_t  label[]               = "my secret AES key";
     uint8_t  plainText[]           = "This is a test.";
     uint8_t  cipherText[sizeof(plainText)];
