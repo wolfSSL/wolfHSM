@@ -3,6 +3,6 @@
 
 #include "wolfhsm/wh_client.h"
 
-int wh_DemoClient_KeyWrapBasic(whClientContext* clientContext);
+int wh_DemoClient_KeyWrap(whClientContext* clientContext);
 
 #endif /* !DEMO_CLIENT_KEYWRAP_H_ */

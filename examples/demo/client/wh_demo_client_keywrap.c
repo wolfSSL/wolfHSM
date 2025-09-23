@@ -25,140 +25,64 @@
 #include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_client.h"
-#include "wolfhsm/wh_client_crypto.h"
+#include "wolfhsm/wh_nvm_flash.h"
 
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/aes.h"
 #include "wolfssl/wolfcrypt/random.h"
 
+#include "port/posix/posix_flash_file.h"
+
 #include "wh_demo_client_keywrap.h"
+#include "test/wh_test_keywrap.h"
 
 #ifdef WOLFHSM_CFG_KEYWRAP
 
-#ifndef NO_AES
-#ifdef HAVE_AESGCM
-
-#define WH_TEST_AES_KEYSIZE 16
-#define WH_TEST_AES_TEXTSIZE 16
-#define WH_TEST_AES_IVSIZE 12
-#define WH_TEST_AES_TAGSIZE 16
-#define WH_TEST_AES_WRAPPED_KEYSIZE                                   \
-    (WH_TEST_AES_IVSIZE + WH_TEST_AES_TAGSIZE + WH_TEST_AES_KEYSIZE + \
-     sizeof(whNvmMetadata))
-#define WH_TEST_WRAPKEY_ID 8
-
-int wh_DemoClient_AesGcmKeyWrapBasic(whClientContext* ctx, WC_RNG* rng)
+int wh_DemoClient_KeyWrap(whClientContext* client)
 {
-    int           ret = 0;
-    uint8_t       kek[WH_TEST_AES_KEYSIZE];
-    uint8_t       clientKey[WH_TEST_AES_KEYSIZE];
-    uint8_t       tmpClientKey[WH_TEST_AES_KEYSIZE];
-    uint8_t       wrappedKey[WH_TEST_AES_WRAPPED_KEYSIZE];
-    uint8_t       label[WH_NVM_LABEL_LEN] = "Server AES Key Label";
-    whKeyId       serverKeyId;
-    whKeyId       wrappedKeyId;
-    whNvmMetadata metadata = {.id     = WH_TEST_WRAPKEY_ID,
-                              .label  = "AES Key Label",
-                              .access = WH_NVM_ACCESS_ANY,
-                              .len    = WH_TEST_AES_KEYSIZE};
-    whNvmMetadata tmpMetadata;
+    int ret;
 
-    /* Generate a random KEK to encrypt the client key */
-    ret = wc_RNG_GenerateBlock(rng, kek, sizeof(kek));
-    if (ret != 0) {
-        printf("Failed to wc_RNG_GenerateBlock for key %d\n", ret);
+    /* file-based flash state and configuration */
+    posixFlashFileContext flashFileCtx;
+    posixFlashFileConfig  flashFileCfg   = {.filename       = "flashFile",
+                                            .partition_size = 1024 * 1024,
+                                            .erased_byte    = 0xff};
+    whFlashCb             flashFileCb[1] = {POSIX_FLASH_FILE_CB};
+
+    ret = flashFileCb->Init(&flashFileCtx, &flashFileCfg);
+    if (ret != WH_ERROR_OK) {
+        printf("Failed to flashCb->Init %d\n", ret);
         return ret;
     }
 
-    /* Generate a random client key */
-    ret = wc_RNG_GenerateBlock(rng, clientKey, sizeof(clientKey));
-    if (ret != 0) {
-        printf("Failed to wc_RNG_GenerateBlock for key data %d\n", ret);
+    ret =
+        flashFileCb->WriteUnlock(&flashFileCtx, 0, flashFileCfg.partition_size);
+    if (ret != WH_ERROR_OK) {
+        printf("Failed to flashCb->WriteUnlock %d\n", ret);
+        return ret;
+    }
+    ret = whTest_Client_KeyWrap(client);
+    if (ret != WH_ERROR_OK) {
+        printf("Failed to whTest_Client_KeyWrap %d\n", ret);
         return ret;
     }
 
-    /* Request the server to cache the KEK and give us back a key ID*/
-    ret = wh_Client_KeyCache(ctx, 0, label, sizeof(label), kek, sizeof(kek),
-                             &serverKeyId);
-    if (ret != 0) {
-        printf("Failed to wh_Client_KeyCache %d\n", ret);
+    ret =
+        whTest_Client_WriteWrappedKeysToNvm(client, &flashFileCtx, flashFileCb);
+    if (ret != WH_ERROR_OK) {
+        printf("Failed to whTest_Client_WriteWrappedKeysToNvm %d\n", ret);
         return ret;
     }
 
-    /* Request the server to wrap the client key using the KEK we just cached */
-    ret = wh_Client_KeyWrap(ctx, WC_CIPHER_AES_GCM, serverKeyId, clientKey,
-                            sizeof(clientKey), &metadata, wrappedKey,
-                            sizeof(wrappedKey));
-    if (ret != 0) {
-        printf("Failed to wh_Client_KeyWrap %d\n", ret);
+    ret =
+        whTest_Client_UseWrappedKeysFromNvm(client, &flashFileCtx, flashFileCb);
+    if (ret != WH_ERROR_OK) {
+        printf("Failed to whTest_Client_UseWrappedKeysFromNvm %d\n", ret);
         return ret;
     }
 
-    /* Request the server to unwrap and cache the wrapped key we just created */
-    ret = wh_Client_KeyUnwrapAndCache(ctx, WC_CIPHER_AES_GCM, serverKeyId,
-                                      wrappedKey, sizeof(wrappedKey),
-                                      &wrappedKeyId);
-    if (ret != 0) {
-        printf("Failed to wh_Client_KeyUnwrapAndCache %d\n", ret);
-        return ret;
-    }
+    flashFileCb->Cleanup(&flashFileCtx);
 
-    /* Request the server to unwrap and export the wrapped key we created */
-    ret = wh_Client_KeyUnwrapAndExport(
-        ctx, WC_CIPHER_AES_GCM, serverKeyId, wrappedKey, sizeof(wrappedKey),
-        &tmpMetadata, tmpClientKey, sizeof(tmpClientKey));
-    if (ret != 0) {
-        printf("Failed to wh_Client_KeyUnwrapAndCache %d\n", ret);
-        return ret;
-    }
-
-
-    /* Compare the exported key to the client key we requested to wrap */
-    if (memcmp(clientKey, tmpClientKey, sizeof(clientKey)) != 0) {
-        printf("AES GCM wrap/unwrap key failed to match\n");
-        return ret;
-    }
-
-    /* Compare the exported metadata to the metadata we requested to wrap */
-    if (memcmp(&metadata, &tmpMetadata, sizeof(metadata)) != 0) {
-        printf("AES GCM wrap/unwrap metadata failed to match\n");
-        return ret;
-    }
-
-    return ret;
-}
-
-#endif /* HAVE_AESGCM */
-
-int wh_DemoClient_AesKeyWrapBasic(whClientContext* clientContext, WC_RNG* rng)
-{
-    int ret = WH_ERROR_OK;
-
-#ifdef HAVE_AESGCM
-    ret = wh_DemoClient_AesGcmKeyWrapBasic(clientContext, rng);
-#endif
-
-    return ret;
-}
-
-#endif /* !NO_AES */
-int wh_DemoClient_KeyWrapBasic(whClientContext* clientContext)
-{
-
-    int    ret;
-    WC_RNG rng[1];
-
-    ret = wc_InitRng_ex(rng, NULL, WH_DEV_ID);
-    if (ret != 0) {
-        printf("Failed to wc_InitRng_ex %d\n", ret);
-        return ret;
-    }
-
-#ifndef NO_AES
-    ret = wh_DemoClient_AesKeyWrapBasic(clientContext, rng);
-#endif
-
-    wc_FreeRng(rng);
     return ret;
 }
 #endif /* WOLFHSM_CFG_KEYWRAP */
