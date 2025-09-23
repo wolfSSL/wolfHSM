@@ -706,7 +706,8 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
                 resp.ok = 0;
 
                 (void)wh_MessageKeystore_TranslateEvictResponse(
-                    magic, &resp, (whMessageKeystore_EvictResponse*)resp_packet);
+                    magic, &resp,
+                    (whMessageKeystore_EvictResponse*)resp_packet);
                 *out_resp_size = sizeof(resp);
             }
         } break;

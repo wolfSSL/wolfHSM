@@ -1193,7 +1193,8 @@ int wh_NvmFlash_DestroyObjects(void* c, whNvmId list_count,
             ret = nfObject_Copy(context, entry,
                     dest_part, &dest_object, &dest_data);
             if (ret != WH_ERROR_OK) {
-                /* Abort reclaim to avoid activating a partially copied partition */
+                /* Abort reclaim to avoid activating a partially copied
+                 * partition */
                 return ret;
             }
         }
