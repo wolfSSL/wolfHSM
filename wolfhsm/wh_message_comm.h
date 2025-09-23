@@ -45,8 +45,8 @@ enum WH_MESSAGE_COMM_ACTION_ENUM {
 
 /* Info request/response data sizes*/
 enum WH_INFO_ENUM {
-    WH_INFO_VERSION_LEN = 8,
-    WH_INFO_BUILD_LEN   = 8,
+    WH_INFO_VERSION_LEN = 9,
+    WH_INFO_BUILD_LEN   = 9,
 };
 
 
@@ -94,6 +94,7 @@ typedef struct {
     uint32_t nvm_state;
     uint8_t version[WH_INFO_VERSION_LEN];
     uint8_t build[WH_INFO_BUILD_LEN];
+    uint8_t WH_PAD[6];
 } whMessageCommInfoResponse;
 
 int wh_MessageComm_TranslateInfoResponse(uint16_t magic,
