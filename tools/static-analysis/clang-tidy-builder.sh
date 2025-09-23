@@ -22,6 +22,17 @@ if [[ -v CLANG_TIDY ]]; then
 	    break
 	fi
 
+	# Skip clang-tidy analysis for wolfSSL dependency files
+	if [[ "$source_file" == */wolfssl/* ]]; then
+	    # Just compile without analysis
+	    if [[ -v CLANG_OVERRIDE_CFLAGS ]]; then
+		read -a CLANG_OVERRIDE_CFLAGS_a < <(echo "${CLANG_OVERRIDE_CFLAGS-}")
+	    else
+		CLANG_OVERRIDE_CFLAGS_a=()
+	    fi
+	    exec "$CLANG" "$@" "${CLANG_OVERRIDE_CFLAGS_a[@]}"
+	fi
+
 	if [[ -v CLANG_TIDY_ARGS ]]; then
 	    read -r -a clang_tidy_args_array < <(echo "$CLANG_TIDY_ARGS") || exit $?
 	else
