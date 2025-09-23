@@ -66,9 +66,8 @@ static int whTest_Client_AesGcmKeyWrap(whClientContext* ctx, WC_RNG* rng)
     uint8_t       label[WH_NVM_LABEL_LEN] = "Server AES Key Label";
     whKeyId       serverKeyId;
     whKeyId       wrappedKeyId;
-    whNvmMetadata metadata = {.id = 8,
-                              .label = "AES Key Label",
-                              .len   = WH_TEST_AES_KEYSIZE};
+    whNvmMetadata metadata = {
+        .id = 8, .label = "AES Key Label", .len = WH_TEST_AES_KEYSIZE};
     whNvmMetadata tmpMetadata;
 
     /* Randomize inputs */
@@ -98,23 +97,25 @@ static int whTest_Client_AesGcmKeyWrap(whClientContext* ctx, WC_RNG* rng)
         return ret;
     }
 
-    ret = wh_Client_KeyWrap(ctx, WC_CIPHER_AES_GCM, serverKeyId, plainKey, sizeof(plainKey),
-                            &metadata, wrappedKey, sizeof(wrappedKey));
+    ret = wh_Client_KeyWrap(ctx, WC_CIPHER_AES_GCM, serverKeyId, plainKey,
+                            sizeof(plainKey), &metadata, wrappedKey,
+                            sizeof(wrappedKey));
     if (ret != 0) {
         printf("Failed to wh_Client_AesGcmKeyWrap %d\n", ret);
         return ret;
     }
 
-    ret = wh_Client_KeyUnwrapAndCache(ctx, WC_CIPHER_AES_GCM, serverKeyId, wrappedKey,
-                                   sizeof(wrappedKey), &wrappedKeyId);
+    ret = wh_Client_KeyUnwrapAndCache(ctx, WC_CIPHER_AES_GCM, serverKeyId,
+                                      wrappedKey, sizeof(wrappedKey),
+                                      &wrappedKeyId);
     if (ret != 0) {
         printf("Failed to wh_Client_AesGcmKeyWrapCache %d\n", ret);
         return ret;
     }
 
-    ret = wh_Client_KeyUnwrapAndExport(ctx, WC_CIPHER_AES_GCM, serverKeyId, wrappedKey,
-                                    sizeof(wrappedKey), &tmpMetadata,
-                                    tmpPlainKey, sizeof(tmpPlainKey));
+    ret = wh_Client_KeyUnwrapAndExport(
+        ctx, WC_CIPHER_AES_GCM, serverKeyId, wrappedKey, sizeof(wrappedKey),
+        &tmpMetadata, tmpPlainKey, sizeof(tmpPlainKey));
     if (ret != 0) {
         printf("Failed to wh_Client_AesGcmKeyUnwrapAndCache %d\n", ret);
         return ret;
@@ -152,7 +153,7 @@ static int whTest_Client_AesKeyWrap(whClientContext* ctx, WC_RNG* rng)
 
 static int whTest_Client_KeyWrap(whClientContext* ctx, int devId)
 {
-    int ret = 0;
+    int    ret = 0;
     WC_RNG rng[1];
 
     ret = wc_InitRng_ex(rng, NULL, devId);

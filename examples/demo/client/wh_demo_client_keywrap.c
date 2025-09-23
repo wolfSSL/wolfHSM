@@ -56,7 +56,7 @@ int wh_DemoClient_AesGcmKeyWrapBasic(whClientContext* ctx, WC_RNG* rng)
     uint8_t       label[WH_NVM_LABEL_LEN] = "Server AES Key Label";
     whKeyId       serverKeyId;
     whKeyId       wrappedKeyId;
-    whNvmMetadata metadata = {.id = WH_TEST_WRAPKEY_ID,
+    whNvmMetadata metadata = {.id     = WH_TEST_WRAPKEY_ID,
                               .label  = "AES Key Label",
                               .access = WH_NVM_ACCESS_ANY,
                               .len    = WH_TEST_AES_KEYSIZE};
@@ -68,7 +68,7 @@ int wh_DemoClient_AesGcmKeyWrapBasic(whClientContext* ctx, WC_RNG* rng)
         printf("Failed to wc_RNG_GenerateBlock for key %d\n", ret);
         return ret;
     }
-    
+
     /* Generate a random client key */
     ret = wc_RNG_GenerateBlock(rng, clientKey, sizeof(clientKey));
     if (ret != 0) {
@@ -85,25 +85,27 @@ int wh_DemoClient_AesGcmKeyWrapBasic(whClientContext* ctx, WC_RNG* rng)
     }
 
     /* Request the server to wrap the client key using the KEK we just cached */
-    ret = wh_Client_KeyWrap(ctx, WC_CIPHER_AES_GCM, serverKeyId, clientKey, sizeof(clientKey),
-                            &metadata, wrappedKey, sizeof(wrappedKey));
+    ret = wh_Client_KeyWrap(ctx, WC_CIPHER_AES_GCM, serverKeyId, clientKey,
+                            sizeof(clientKey), &metadata, wrappedKey,
+                            sizeof(wrappedKey));
     if (ret != 0) {
         printf("Failed to wh_Client_KeyWrap %d\n", ret);
         return ret;
     }
 
     /* Request the server to unwrap and cache the wrapped key we just created */
-    ret = wh_Client_KeyUnwrapAndCache(ctx, WC_CIPHER_AES_GCM, serverKeyId, wrappedKey,
-                                   sizeof(wrappedKey), &wrappedKeyId);
+    ret = wh_Client_KeyUnwrapAndCache(ctx, WC_CIPHER_AES_GCM, serverKeyId,
+                                      wrappedKey, sizeof(wrappedKey),
+                                      &wrappedKeyId);
     if (ret != 0) {
         printf("Failed to wh_Client_KeyUnwrapAndCache %d\n", ret);
         return ret;
     }
 
     /* Request the server to unwrap and export the wrapped key we created */
-    ret = wh_Client_KeyUnwrapAndExport(ctx, WC_CIPHER_AES_GCM, serverKeyId, wrappedKey,
-                                    sizeof(wrappedKey), &tmpMetadata,
-                                    tmpClientKey, sizeof(tmpClientKey));
+    ret = wh_Client_KeyUnwrapAndExport(
+        ctx, WC_CIPHER_AES_GCM, serverKeyId, wrappedKey, sizeof(wrappedKey),
+        &tmpMetadata, tmpClientKey, sizeof(tmpClientKey));
     if (ret != 0) {
         printf("Failed to wh_Client_KeyUnwrapAndCache %d\n", ret);
         return ret;
