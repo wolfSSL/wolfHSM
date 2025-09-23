@@ -312,16 +312,16 @@ int main(int argc, char** argv)
     memset(s_conf, 0, sizeof(whServerConfig));
     if (strcmp(type, "tcp") == 0) {
         printf("Using TCP transport\n");
-        wh_PosixServer_ExampleTCPConfig(s_conf);
+        wh_PosixServer_ExampleTcpConfig(s_conf);
     }
     else if (strcmp(type, "shm") == 0) {
         printf("Using shared memory transport\n");
-        wh_PosixServer_ExampleSHMConfig(s_conf);
+        wh_PosixServer_ExampleShmConfig(s_conf);
     }
 #ifdef WOLFSSL_STATIC_MEMORY
     else if (strcmp(type, "dma") == 0) {
         printf("Using DMA with shared memory transport\n");
-        wh_PosixServer_ExampleDMAConfig(s_conf);
+        wh_PosixServer_ExampleShmDmaConfig(s_conf);
     }
 #endif
     else {
@@ -330,14 +330,14 @@ int main(int argc, char** argv)
     }
 
     /* RamSim Flash state and configuration */
-    rc = wh_PosixServer_ExampleRAMSimConfig(s_conf, memory);
+    rc = wh_PosixServer_ExampleRamSimConfig(s_conf, memory);
     if (rc != WH_ERROR_OK) {
         printf("Failed to initialize RAMSim: %d\n", rc);
         return rc;
     }
 
     /* NVM Flash Configuration using RamSim HAL Flash */
-    rc = wh_PosixServer_ExampleNVMConfig(s_conf, nvmInitFilePath);
+    rc = wh_PosixServer_ExampleNvmConfig(s_conf, nvmInitFilePath);
     if (rc != WH_ERROR_OK) {
         printf("Failed to initialize NVM: %d\n", rc);
         return rc;

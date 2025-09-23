@@ -79,7 +79,7 @@ int wh_PosixClient_ExampleSetupDmaMemory(void* ctx, void* conf)
 
 
 /* client configuration setup example for transport */
-int wh_PosixClient_ExampleDMAConfig(void* conf)
+int wh_PosixClient_ExampleShmDmaConfig(void* conf)
 {
     whClientConfig* c_conf = (whClientConfig*)conf;
 
@@ -107,7 +107,7 @@ int wh_PosixClient_ExampleDMAConfig(void* conf)
 #endif
 
 /* client configuration setup example for transport */
-int wh_PosixClient_ExampleTCPConfig(void* conf)
+int wh_PosixClient_ExampleTcpConfig(void* conf)
 {
     whClientConfig* c_conf = (whClientConfig*)conf;
 
@@ -127,7 +127,7 @@ int wh_PosixClient_ExampleTCPConfig(void* conf)
 
 
 /* client configuration setup example for transport */
-int wh_PosixClient_ExampleSHMConfig(void* conf)
+int wh_PosixClient_ExampleShmConfig(void* conf)
 {
     whClientConfig* c_conf = (whClientConfig*)conf;
 

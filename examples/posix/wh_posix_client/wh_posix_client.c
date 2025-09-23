@@ -189,16 +189,16 @@ int main(int argc, char** argv)
 
     if (strcmp(type, "tcp") == 0) {
         printf("Using TCP transport\n");
-        wh_PosixClient_ExampleTCPConfig(c_conf);
+        wh_PosixClient_ExampleTcpConfig(c_conf);
     }
     else if (strcmp(type, "shm") == 0) {
         printf("Using shared memory transport\n");
-        wh_PosixClient_ExampleSHMConfig(c_conf);
+        wh_PosixClient_ExampleShmConfig(c_conf);
     }
 #ifdef WOLFSSL_STATIC_MEMORY
     else if (strcmp(type, "dma") == 0) {
         printf("Using DMA with shared memory transport\n");
-        wh_PosixClient_ExampleDMAConfig(c_conf);
+        wh_PosixClient_ExampleShmDmaConfig(c_conf);
     }
 #endif
     else {
