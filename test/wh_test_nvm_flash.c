@@ -581,7 +581,7 @@ int whTest_NvmFlash_Recovery(void)
         &objsBefore, &bytesReclBefore, &objsReclBefore, &bytesAfter, &objsAfter,
         &bytesReclAfter, &objsReclAfter));
     /* object should be marked as reclaimable */
-    WH_TEST_ASSERT_RETURN(objsReclAfter = objsReclBefore + 1);
+    WH_TEST_ASSERT_RETURN(objsReclAfter == objsReclBefore + 1);
     /* data should not be marked as reclaimable */
     WH_TEST_ASSERT_RETURN(bytesAfter == bytesBefore);
     WH_TEST_ASSERT_RETURN(bytesReclAfter == bytesReclBefore);
@@ -594,7 +594,7 @@ int whTest_NvmFlash_Recovery(void)
         &bytesBefore, &objsBefore, &bytesReclBefore, &objsReclBefore,
         &bytesAfter, &objsAfter, &bytesReclAfter, &objsReclAfter));
     /* object should be marked as reclaimable */
-    WH_TEST_ASSERT_RETURN(objsReclAfter = objsReclBefore + 1);
+    WH_TEST_ASSERT_RETURN(objsReclAfter == objsReclBefore + 1);
     /* data should be marked as reclaimable by test_data_len rounded up to
      * WHFU_BYTES_PER_UNIT */
     WH_TEST_ASSERT_RETURN(bytesAfter <= bytesBefore - test_data_len);
