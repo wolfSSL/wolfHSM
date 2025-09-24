@@ -721,7 +721,7 @@ int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
                 ret = wh_Client_Sha384Dma(ctx, sha, in, inLen, out);
             } break;
 #endif /* WOLFSSL_SHA384 */
-#ifdef WOLFSSL_SHA512
+#if defined(WOLFSSL_SHA512) && defined(WOLFSSL_SHA512_HASHTYPE)
             case WC_HASH_TYPE_SHA512: {
                 wc_Sha512*     sha   = info->hash.sha512;
                 const uint8_t* in    = info->hash.in;
@@ -730,7 +730,7 @@ int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
 
                 ret = wh_Client_Sha512Dma(ctx, sha, in, inLen, out);
             } break;
-#endif /* WOLFSSL_SHA512 */
+#endif /* WOLFSSL_SHA512 && defined(WOLFSSL_SHA512_HASHTYPE) */
             default:
                 ret = CRYPTOCB_UNAVAILABLE;
                 break;
