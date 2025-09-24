@@ -1371,7 +1371,7 @@ static int _HandleAesCtr(whServerContext* ctx, uint16_t magic,
             /* do the crypto operation */
             /* restore previous left */
             aes->left = left;
-            memcpy(aes->tmp, tmp, AES_MAX_KEY_SIZE);
+            memcpy(aes->tmp, tmp, sizeof(aes->tmp));
             if (enc != 0) {
                 ret = wc_AesCtrEncrypt(aes, (byte*)out, (byte*)in, (word32)len);
                 if (ret == 0) {
@@ -1392,7 +1392,7 @@ static int _HandleAesCtr(whServerContext* ctx, uint16_t magic,
         }
         left = aes->left;
         memcpy(out_reg, aes->reg, AES_BLOCK_SIZE);
-        memcpy(out_tmp, aes->tmp, AES_MAX_KEY_SIZE);
+        memcpy(out_tmp, aes->tmp, sizeof(aes->tmp));
         wc_AesFree(aes);
     }
     /* encode the return sz */
