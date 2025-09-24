@@ -277,7 +277,7 @@ int wh_DemoClient_SecBoot_Boot(whClientContext* clientContext)
             printf("Read Object %d failed with error code: %d, server error "
                    "code: %d\n",
                    sig_nvmId, ret, rc);
-            return (ret != 0) ? ret : rc;
+            return (ret != WH_ERROR_OK) ? ret : rc;
         }
         wh_Utils_Hexdump("Signature:\n", sig, siglen);
 
