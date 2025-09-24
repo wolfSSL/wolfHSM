@@ -200,5 +200,4 @@ int whTest_KeyWrapClientConfig(whClientConfig* config)
     return ret;
 }
 #endif /* WOLFHSM_CFG_ENABLE_CLIENT */
-
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
