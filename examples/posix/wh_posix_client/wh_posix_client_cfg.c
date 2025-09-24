@@ -48,7 +48,6 @@ int wh_PosixClient_ExampleSetupDmaMemory(void* ctx, void* conf)
     size_t                    dmaSz;
     WOLFSSL_HEAP_HINT*        hint = NULL;
     int                       ret;
-    whClientContext*          client = (whClientContext*)ctx;
     whClientConfig*           c_conf = (whClientConfig*)conf;
     posixTransportShmContext* shmCtx;
 
@@ -65,15 +64,14 @@ int wh_PosixClient_ExampleSetupDmaMemory(void* ctx, void* conf)
         printf("Failed to load static memory\n");
         return -1;
     }
-    void* test = XMALLOC(1, hint, DYNAMIC_TYPE_TMP_BUFFER);
-    XFREE(test, hint, DYNAMIC_TYPE_TMP_BUFFER);
 
-    ret = wh_Client_SetHeap(client, (void*)hint);
+    ret = posixTransportShm_SetDmaHeap(shmCtx, (void*)hint);
     if (ret != 0) {
         printf("Failed to set heap\n");
         return -1;
     }
 
+    (void)ctx;
     return 0;
 }
 

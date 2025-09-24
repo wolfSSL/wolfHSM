@@ -2418,31 +2418,6 @@ int wh_Client_CertVerifyAcertDmaRequest(whClientContext* c, const void* cert,
 int wh_Client_CertVerifyAcertDmaResponse(whClientContext* c, int32_t* out_rc);
 
 #if defined(WOLFHSM_CFG_DMA)
-
-/**
- * @brief Getter function for the current heap hint set
- *
- * This function is used to get the current heap hint set for use with the
- * transport context.
- *
- * @param[in] c Pointer to the client context.
- * @return a pointer to the heap hint
- */
-void* wh_Client_GetHeap(whClientContext* c);
-
-/**
- * @brief Setter function for the current heap hint set
- *
- * This function is used to set the current heap hint set for use with the
- * transport context.
- *
- * @param[in] c Pointer to the client context.
- * @param[in] heap Pointer to the heap hint
- * @return int Returns WH_ERROR_OK on success, or WH_ERROR_BADARGS if the
- * arguments are invalid.
- */
-int wh_Client_SetHeap(whClientContext* c, void* heap);
-
 /**
  * @brief Registers a custom client DMA callback
  *

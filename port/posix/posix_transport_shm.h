@@ -106,6 +106,32 @@ int posixTransportShm_GetDma(posixTransportShmContext* ctx,
         void* *out_dma, size_t *out_size);
 
 
+/**
+ * @brief Setter function for the current heap hint
+ *
+ * This function is used to set the current heap hint set for use with the
+ * transport context.
+ *
+ * @param[in] ctx Pointer to the transport context.
+ * @param[in] heap Pointer to the heap hint
+ * @return int Returns WH_ERROR_OK on success, or WH_ERROR_BADARGS if the
+ * arguments are invalid.
+ */
+int posixTransportShm_SetDmaHeap(posixTransportShmContext* ctx,
+            void* heap);
+
+/**
+ * @brief Getter function for the current heap hint
+ *
+ * This function is used to get the current heap hint set for use with the
+ * transport context.
+ *
+ * @param[in] ctx Pointer to the transport context.
+ * @return a pointer to the heap hint
+*/
+void* posixTransportShm_GetDmaHeap(posixTransportShmContext* ctx);
+
+
 /** Callback function declarations */
 int posixTransportShm_ClientInit(void* c, const void* cf,
                                  whCommSetConnectedCb connectcb,

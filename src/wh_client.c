@@ -1505,26 +1505,6 @@ int wh_Client_KeyExportDma(whClientContext* c, uint16_t keyId,
     }
     return ret;
 }
-
-
-void* wh_Client_GetHeap(whClientContext* c)
-{
-    void* heap = NULL;
-    if (c != NULL) {
-        heap = c->dma.heap;
-    }
-    return heap;
-}
-
-int wh_Client_SetHeap(whClientContext* c, void* heap)
-{
-    if (c == NULL) {
-        return WH_ERROR_BADARGS;
-    }
-    c->dma.heap = heap;
-    return WH_ERROR_OK;
-}
-
 #endif /* WOLFHSM_CFG_DMA */
 
 #endif /* WOLFHSM_CFG_ENABLE_CLIENT */

@@ -581,7 +581,8 @@ int wh_Bench_ClientCfg(whClientConfig* clientCfg, int transport)
             WH_BENCH_PRINTF("Failed to load static memory: %d\n", ret);
             return ret;
         }
-        ret = wh_Client_SetHeap(client, (void*)heap);
+        ret = posixTransportShm_SetDmaHeap(clientCfg->comm->transport_context,
+            (void*)heap);
         if (ret != 0) {
             WH_BENCH_PRINTF("Failed to set heap: %d\n", ret);
             return ret;
@@ -714,7 +715,7 @@ static void* _whBenchClientTask(void* data)
             WH_BENCH_PRINTF("Failed to load static memory: %d\n", ret);
             return NULL;
         }
-        ret = wh_Client_SetHeap(client, (void*)heap);
+        ret = posixTransportShm_SetDmaHeap(shmCtx, (void*)heap);
         if (ret != 0) {
             WH_BENCH_PRINTF("Failed to set heap: %d\n", ret);
             return NULL;

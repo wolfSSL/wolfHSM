@@ -729,3 +729,26 @@ int posixTransportShm_ServerStaticMemDmaCallback(whServerContext* server,
 }
 #endif /* WOLFHSM_CFG_DMA */
 #endif /* WOLFHSM_CFG_ENABLE_SERVER */
+
+#if defined(WOLFHSM_CFG_DMA)
+int posixTransportShm_SetDmaHeap(posixTransportShmContext* ctx,
+    void* heap)
+{
+    if (ctx == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    ctx->heap = heap;
+    return WH_ERROR_OK;
+}
+
+
+void* posixTransportShm_GetDmaHeap(posixTransportShmContext* ctx)
+{
+    void* ret = NULL;
+
+    if (ctx != NULL) {
+        ret = ctx->heap;
+    }
+    return ret;
+}
+#endif /* WOLFHSM_CFG_DMA */
