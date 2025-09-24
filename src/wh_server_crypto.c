@@ -54,6 +54,25 @@
 
 #include "wolfhsm/wh_message_crypto.h"
 
+/** Helper functions */
+#ifdef WOLFHSM_CFG_CANCEL_API
+/**
+ * Check if the current operation should be canceled
+ * @param ctx Server context
+ * @param seq Sequence number to check against
+ * @return WH_ERROR_CANCEL if canceled, 0 if not canceled, or error code
+ */
+static int _CheckCancellation(whServerContext* ctx, uint16_t seq)
+{
+    uint16_t cancelSeq;
+    int      ret = wh_Server_GetCanceledSequence(ctx, &cancelSeq);
+    if (ret == 0 && cancelSeq == seq) {
+        return WH_ERROR_CANCEL;
+    }
+    return ret;
+}
+#endif
+
 /** Forward declarations */
 #ifndef NO_RSA
 #ifdef WOLFSSL_KEY_GEN
@@ -1798,8 +1817,7 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
     }
 
     uint32_t i;
-    word32 len;
-    uint16_t cancelSeq;
+    word32   len;
     whKeyId keyId = WH_KEYID_ERASED;
 
     /* Setup fixed size fields */
@@ -1890,49 +1908,60 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
             }
             /* Handle CMAC update, checking for cancellation */
             if (ret == 0 && req.inSz != 0) {
+#ifndef WOLFHSM_CFG_CANCEL_API
+                (void)seq;
+#endif
                 for (i = 0; ret == 0 && i < req.inSz; i += AES_BLOCK_SIZE) {
                     if (i + AES_BLOCK_SIZE > req.inSz) {
                         blockSz = req.inSz - i;
                     }
                     ret = wc_CmacUpdate(ctx->crypto->algoCtx.cmac, in + i,
                         blockSz);
+#ifdef WOLFHSM_CFG_CANCEL_API
                     if (ret == 0) {
-                        ret = wh_Server_GetCanceledSequence(ctx, &cancelSeq);
-                        if (ret == 0 && cancelSeq == seq) {
-                            ret = WH_ERROR_CANCEL;
-                        }
+                        ret = _CheckCancellation(ctx, seq);
                     }
+#endif
                 }
 #ifdef DEBUG_CRYPTOCB_VERBOSE
                 printf("[server] cmac update done. ret:%d\n", ret);
 #endif
             }
-            /* do final and evict the struct if outSz is set, otherwise cache the
-             * struct for a future call */
-            if ((ret == 0 && req.outSz != 0) || ret == WH_ERROR_CANCEL) {
-                if (ret != WH_ERROR_CANCEL) {
-                    keyId = req.keyId;
-                    len = req.outSz;
+
+            /* Check if we should finalize and evict, or cache for future calls
+             */
+            if (ret == 0 && req.outSz != 0) {
+                /* Finalize CMAC operation */
+                keyId = req.keyId;
+                len   = req.outSz;
 #ifdef DEBUG_CRYPTOCB_VERBOSE
-                    printf("[server] cmac final keyId:%x len:%d\n",keyId, len);
+                printf("[server] cmac final keyId:%x len:%d\n", keyId, len);
 #endif
-                    ret = wc_CmacFinal(ctx->crypto->algoCtx.cmac, out, &len);
-                    res.outSz = len;
-                    res.keyId = WH_KEYID_ERASED;
-                }
-                /* evict the key, canceling means abandoning the current state */
-                if (ret == 0 || ret == WH_ERROR_CANCEL) {
-                    if (!WH_KEYID_ISERASED(keyId)) {
-                        /* Don't override return value except on failure */
-                        int tmpRet = wh_Server_KeystoreEvictKey(
-                            ctx, WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
-                                               ctx->comm->client_id, keyId));
-                        if (tmpRet != 0) {
-                            ret = tmpRet;
-                        }
+                ret       = wc_CmacFinal(ctx->crypto->algoCtx.cmac, out, &len);
+                res.outSz = len;
+                res.keyId = WH_KEYID_ERASED;
+
+                /* Evict the key from cache */
+                if (!WH_KEYID_ISERASED(keyId)) {
+                    /* Don't override return value except on failure */
+                    int tmpRet = wh_Server_KeystoreEvictKey(
+                        ctx, WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
+                                           ctx->comm->client_id, keyId));
+                    if (tmpRet != 0) {
+                        ret = tmpRet;
                     }
                 }
             }
+#ifdef WOLFHSM_CFG_CANCEL_API
+            else if (ret == WH_ERROR_CANCEL) {
+                /* Handle cancellation - evict key and abandon state */
+                if (!WH_KEYID_ISERASED(req.keyId)) {
+                    wh_Server_KeystoreEvictKey(
+                        ctx, WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
+                                           ctx->comm->client_id, req.keyId));
+                }
+            }
+#endif
             /* Cache the CMAC struct for a future update call */
             else if (ret == 0) {
                 /* cache/re-cache updated struct */
@@ -2930,9 +2959,13 @@ int wh_Server_HandleCryptoRequest(whServerContext* ctx, uint16_t magic,
     /* Since crypto error codes are propagated to the client in the response
      * packet, return success to the caller unless a cancellation has occurred
      */
+#ifdef WOLFHSM_CFG_CANCEL_API
     if (ret != WH_ERROR_CANCEL) {
         ret = WH_ERROR_OK;
     }
+#else
+    ret = WH_ERROR_OK;
+#endif
     return ret;
 }
 
@@ -4303,9 +4336,13 @@ int wh_Server_HandleCryptoDmaRequest(whServerContext* ctx, uint16_t magic,
     /* Since crypto error codes are propagated to the client in the response
      * packet, return success to the caller unless a cancellation has occurred
      */
+#ifdef WOLFHSM_CFG_CANCEL_API
     if (ret != WH_ERROR_CANCEL) {
         ret = WH_ERROR_OK;
     }
+#else
+    ret = WH_ERROR_OK;
+#endif
     return ret;
 }
 #endif /* WOLFHSM_CFG_DMA */

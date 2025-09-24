@@ -150,6 +150,7 @@ int wh_Server_GetConnected(whServerContext *server,
     return WH_ERROR_OK;
 }
 
+#ifdef WOLFHSM_CFG_CANCEL_API
 int wh_Server_GetCanceledSequence(whServerContext* server, uint16_t* outSeq)
 {
     if (server == NULL || outSeq == NULL)
@@ -167,6 +168,7 @@ int wh_Server_SetCanceledSequence(whServerContext* server, uint16_t cancelSeq)
     server->cancelSeq = cancelSeq;
     return WH_ERROR_OK;
 }
+#endif /* WOLFHSM_CFG_CANCEL_API */
 
 static int _wh_Server_HandleCommRequest(whServerContext* server,
         uint16_t magic, uint16_t action, uint16_t seq,
@@ -376,13 +378,17 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
 
         /* Send a response */
         /* TODO: Respond with ErrorResponse if handler returns an error */
-        if (rc == 0 || rc == WH_ERROR_CANCEL) {
+#ifdef WOLFHSM_CFG_CANCEL_API
+        if (rc == WH_ERROR_CANCEL) {
             /* notify the client that their request was canceled */
-            if (rc == WH_ERROR_CANCEL) {
-                kind = WH_MESSAGE_KIND(WH_MESSAGE_GROUP_CANCEL, 0);
-                size = 0;
-                data = NULL;
-            }
+            kind = WH_MESSAGE_KIND(WH_MESSAGE_GROUP_CANCEL, 0);
+            size = 0;
+            data = NULL;
+            /* reset RC so the cancellation response is sent */
+            rc = 0;
+        }
+#endif
+        if (rc == 0) {
             do {
                 rc = wh_CommServer_SendResponse(server->comm, magic, kind, seq,
                     size, data);
