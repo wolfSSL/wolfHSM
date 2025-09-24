@@ -41,8 +41,8 @@ int wh_Server_DmaCheckMemOperAllowed(const whServerContext* server,
         return WH_ERROR_BADARGS;
     }
 
-    return wh_Dma_CheckMemOperAgainstAllowList(server->dma.dmaAddrAllowList, oper,
-                                           addr, size);
+    return wh_Dma_CheckMemOperAgainstAllowList(server->dma.dmaAddrAllowList,
+                                               oper, addr, size);
 }
 
 int wh_Server_DmaRegisterCb(whServerContext* server, whServerDmaClientMemCb cb)
@@ -112,8 +112,8 @@ int wh_Server_DmaProcessClientAddress(whServerContext* server,
 
     /* if the server has a allowlist registered, check address against it */
     if (rc == WH_ERROR_OK && len > 0) {
-        rc = wh_Dma_CheckMemOperAgainstAllowList(server->dma.dmaAddrAllowList, oper,
-                                             *xformedCliAddr, len);
+        rc = wh_Dma_CheckMemOperAgainstAllowList(server->dma.dmaAddrAllowList,
+                                                 oper, *xformedCliAddr, len);
     }
     return rc;
 }
@@ -132,8 +132,8 @@ int whServerDma_CopyFromClient(struct whServerContext_t* server,
 
     /* Check the server address against the allow list */
     rc = wh_Dma_CheckMemOperAgainstAllowList(server->dma.dmaAddrAllowList,
-                                         WH_DMA_OPER_CLIENT_READ_PRE, serverPtr,
-                                         len);
+                                             WH_DMA_OPER_CLIENT_READ_PRE,
+                                             serverPtr, len);
     if (rc != WH_ERROR_OK) {
         return rc;
     }
@@ -186,8 +186,8 @@ int whServerDma_CopyToClient(struct whServerContext_t* server,
 
     /* Check the server address against the allow list */
     rc = wh_Dma_CheckMemOperAgainstAllowList(server->dma.dmaAddrAllowList,
-                                         WH_DMA_OPER_CLIENT_WRITE_PRE,
-                                         serverPtr, len);
+                                             WH_DMA_OPER_CLIENT_WRITE_PRE,
+                                             serverPtr, len);
     if (rc != WH_ERROR_OK) {
         return rc;
     }

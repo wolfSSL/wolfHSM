@@ -549,9 +549,9 @@ int posixTransportShm_RecvResponse(void* c, uint16_t* out_len, void* data)
  * the POSIX shared memory transport.
  */
 
-int posixTransportShm_ClientStaticMemDmaCallback(struct whClientContext_t* client,
-                                   uintptr_t clientAddr, void** xformedCliAddr,
-                                   size_t len, whDmaOper oper, whDmaFlags flags)
+int posixTransportShm_ClientStaticMemDmaCallback(
+    struct whClientContext_t* client, uintptr_t clientAddr,
+    void** xformedCliAddr, size_t len, whDmaOper oper, whDmaFlags flags)
 {
     int       ret     = WH_ERROR_OK;
     int       isInDma = 0;
@@ -686,10 +686,9 @@ int posixTransportShm_RecvRequest(void* c, uint16_t* out_len, void* data)
 /* Generic offset into the DMA area. This function can operate with no knowledge
  * of what structures the DMA area is. It takes in an offset, validates it, and
  * returns the pointer into the DMA area based off of the offset.  */
-int posixTransportShm_ServerStaticMemDmaCallback(whServerContext* server,
-                                   uintptr_t clientAddr, void** xformedCliAddr,
-                                   size_t len, whServerDmaOper oper,
-                                   whServerDmaFlags flags)
+int posixTransportShm_ServerStaticMemDmaCallback(
+    whServerContext* server, uintptr_t clientAddr, void** xformedCliAddr,
+    size_t len, whServerDmaOper oper, whServerDmaFlags flags)
 {
     posixTransportShmContext* ctx;
     void*                     dma_ptr;
@@ -731,8 +730,7 @@ int posixTransportShm_ServerStaticMemDmaCallback(whServerContext* server,
 #endif /* WOLFHSM_CFG_ENABLE_SERVER */
 
 #if defined(WOLFHSM_CFG_DMA)
-int posixTransportShm_SetDmaHeap(posixTransportShmContext* ctx,
-    void* heap)
+int posixTransportShm_SetDmaHeap(posixTransportShmContext* ctx, void* heap)
 {
     if (ctx == NULL) {
         return WH_ERROR_BADARGS;

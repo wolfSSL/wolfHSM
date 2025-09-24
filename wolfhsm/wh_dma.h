@@ -72,6 +72,6 @@ typedef struct {
 } whDmaAddrAllowList;
 
 int wh_Dma_CheckMemOperAgainstAllowList(const whDmaAddrAllowList* allowlist,
-                                    whDmaOper oper, void* addr, size_t len);
+                                        whDmaOper oper, void* addr, size_t len);
 
 #endif /* WOLFHSM_WH_COMMON_DMA_H_ */

@@ -100,7 +100,7 @@ static int wh_ClientTask(void* cf, const char* type, int test)
             ret = wh_Client_EchoRequest(client, tx_req_len, tx_req);
             if (ret != WH_ERROR_NOTREADY) {
                 if (ret != 0) {
-                    printf("wh_CLient_EchoRequest failed with ret=%d\n", ret);
+                    printf("wh_Client_EchoRequest failed with ret=%d\n", ret);
                 }
             }
             _sleepMs(ONE_MS);

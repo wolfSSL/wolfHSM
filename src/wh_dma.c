@@ -110,7 +110,7 @@ static int _checkMemOperAgainstAllowList(const whDmaAddrAllowList* allowlist,
 
 
 int wh_Dma_CheckMemOperAgainstAllowList(const whDmaAddrAllowList* allowlist,
-                                    whDmaOper oper, void* addr, size_t size)
+                                        whDmaOper oper, void* addr, size_t size)
 {
     if (0 == size) {
         return WH_ERROR_BADARGS;

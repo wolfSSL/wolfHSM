@@ -582,7 +582,7 @@ int wh_Bench_ClientCfg(whClientConfig* clientCfg, int transport)
             return ret;
         }
         ret = posixTransportShm_SetDmaHeap(clientCfg->comm->transport_context,
-            (void*)heap);
+                                           (void*)heap);
         if (ret != 0) {
             WH_BENCH_PRINTF("Failed to set heap: %d\n", ret);
             return ret;
@@ -826,8 +826,7 @@ static int _configureClientTransport(whBenchTransportType transport,
         case WH_BENCH_TRANSPORT_POSIX_DMA: {
             static whClientDmaConfig dmaConfig;
 
-            dmaConfig.cb               =
-                posixTransportShm_ClientStaticMemDmaCallback;
+            dmaConfig.cb = posixTransportShm_ClientStaticMemDmaCallback;
             dmaConfig.dmaAddrAllowList = NULL;
             c_conf->dmaConfig          = &dmaConfig;
         };
@@ -902,8 +901,7 @@ static int _configureServerTransport(whBenchTransportType transport,
         case WH_BENCH_TRANSPORT_POSIX_DMA: {
             static whServerDmaConfig dmaConfig;
 
-            dmaConfig.cb               =
-                    posixTransportShm_ServerStaticMemDmaCallback;
+            dmaConfig.cb = posixTransportShm_ServerStaticMemDmaCallback;
             dmaConfig.dmaAddrAllowList = NULL;
             s_conf->dmaConfig          = &dmaConfig;
         };

@@ -117,8 +117,7 @@ int posixTransportShm_GetDma(posixTransportShmContext* ctx,
  * @return int Returns WH_ERROR_OK on success, or WH_ERROR_BADARGS if the
  * arguments are invalid.
  */
-int posixTransportShm_SetDmaHeap(posixTransportShmContext* ctx,
-            void* heap);
+int posixTransportShm_SetDmaHeap(posixTransportShmContext* ctx, void* heap);
 
 /**
  * @brief Getter function for the current heap hint
@@ -128,7 +127,7 @@ int posixTransportShm_SetDmaHeap(posixTransportShmContext* ctx,
  *
  * @param[in] ctx Pointer to the transport context.
  * @return a pointer to the heap hint
-*/
+ */
 void* posixTransportShm_GetDmaHeap(posixTransportShmContext* ctx);
 
 
@@ -167,16 +166,16 @@ int posixTransportShm_RecvResponse(void* c, uint16_t* out_len, void* data);
 #include "wolfhsm/wh_dma.h"
 
 #include "wolfhsm/wh_server.h"
-int posixTransportShm_ServerStaticMemDmaCallback(whServerContext* server,
-                                   uintptr_t clientAddr, void** xformedCliAddr,
-                                   size_t len, whServerDmaOper oper,
-                                   whServerDmaFlags flags);
+int posixTransportShm_ServerStaticMemDmaCallback(
+    whServerContext* server, uintptr_t clientAddr, void** xformedCliAddr,
+    size_t len, whServerDmaOper oper, whServerDmaFlags flags);
 
 #include "wolfhsm/wh_client.h"
 int posixTransportShm_ClientStaticMemDmaCallback(whClientContext* client,
-                                   uintptr_t clientAddr, void** xformedCliAddr,
-                                   size_t len, whDmaOper oper,
-                                   whDmaFlags flags);
+                                                 uintptr_t        clientAddr,
+                                                 void** xformedCliAddr,
+                                                 size_t len, whDmaOper oper,
+                                                 whDmaFlags flags);
 
 #endif
 #endif /* !PORT_POSIX_POSIX_TRANSPORT_SHM_H_ */

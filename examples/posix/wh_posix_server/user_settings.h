@@ -183,8 +183,8 @@ extern "C" {
 #define WOLFSSL_NO_MALLOC
 #if 1
 #define WOLFSSL_MALLOC_CHECK /* trap malloc failure */
-#endif /* optional malloc check */
-#endif /* optional static memory */
+#endif                       /* optional malloc check */
+#endif                       /* optional static memory */
 
 #ifdef WOLFHSM_CFG_DMA
 #undef WOLFSSL_STATIC_MEMORY

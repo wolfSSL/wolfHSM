@@ -40,11 +40,12 @@ typedef enum {
 /* Transport type enumeration for benchmark testing */
 typedef enum {
     WH_BENCH_TRANSPORT_MEM =
-        0,                  /* Memory transport (WH_TRANSPORT_MEM_CLIENT_CB) */
+        0, /* Memory transport (WH_TRANSPORT_MEM_CLIENT_CB) */
     WH_BENCH_TRANSPORT_POSIX_SHM, /* Shared memory transport
                                (POSIX_TRANSPORT_SHM_CLIENT_CB) */
     WH_BENCH_TRANSPORT_POSIX_TCP, /* TCP transport (PTT_CLIENT_CB) */
-    WH_BENCH_TRANSPORT_POSIX_DMA, /* DMA transport (POSIX_TRANSPORT_REF_CLIENT_CB) */
+    WH_BENCH_TRANSPORT_POSIX_DMA, /* DMA transport
+                                     (POSIX_TRANSPORT_REF_CLIENT_CB) */
 } whBenchTransportType;
 
 typedef struct whBenchOp {
