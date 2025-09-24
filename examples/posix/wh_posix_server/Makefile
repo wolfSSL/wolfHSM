@@ -8,6 +8,7 @@ BIN = wh_posix_server
 # Base directory for additional project files
 PROJECT_DIR			?= .
 CONFIG_DIR			?= $(PROJECT_DIR)/config
+SHARED_CONFIG_DIR   ?= $(PROJECT_DIR)/../
 # wolfSSL and wolfHSM directories
 WOLFSSL_DIR			?= ../../../../wolfssl
 WOLFHSM_DIR			?= ../../../
@@ -19,10 +20,10 @@ BUILD_DIR			?= $(PROJECT_DIR)/Build
 # Includes
 INC =   -I$(PROJECT_DIR) \
 		-I$(CONFIG_DIR) \
+		-I$(SHARED_CONFIG_DIR) \
 		-I$(WOLFSSL_DIR) \
 		-I$(WOLFHSM_DIR) \
-		-I$(WOLFHSM_PORT_DIR) \
-		-I../
+		-I$(WOLFHSM_PORT_DIR)
 
 # POSIX requires C source be defined before any header
 DEF += -D_POSIX_C_SOURCE=200809L

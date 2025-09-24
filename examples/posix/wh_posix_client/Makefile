@@ -8,6 +8,7 @@ BIN = wh_posix_client
 # Base directory for additional project files
 PROJECT_DIR				?= .
 CONFIG_DIR				?= $(PROJECT_DIR)/config
+SHARED_CONFIG_DIR       ?= $(PROJECT_DIR)/../
 # wolfSSL and wolfHSM directories
 WOLFSSL_DIR				?= ../../../../wolfssl
 WOLFHSM_DIR				?= ../../../
@@ -20,11 +21,11 @@ BUILD_DIR				?= $(PROJECT_DIR)/Build
 # Includes
 INC =   -I$(PROJECT_DIR) \
 		-I$(CONFIG_DIR) \
+		-I$(SHARED_CONFIG_DIR) \
 		-I$(WOLFSSL_DIR) \
 		-I$(WOLFHSM_DIR) \
 		-I$(WOLFHSM_PORT_DIR) \
-		-I$(WOLFHSM_DEMO_CLIENT_DIR) \
-        -I../
+		-I$(WOLFHSM_DEMO_CLIENT_DIR)
 
 # POSIX requires C source be defined before any header
 DEF += -D_POSIX_C_SOURCE=200809L
@@ -90,7 +91,7 @@ SRC_C += $(wildcard $(WOLFSSL_DIR)/src/*.c)
 
 # Set the default device ID for wolfCrypt tests
 ifeq ($(DMA),1)
-DEF += -D_POSIX_C_SOURCE=200809L -DWC_USE_DEVID=0x57444D41 -DWC_NO_DEFAULT_DEVID
+DEF += -DWC_USE_DEVID=0x57444D41 -DWC_NO_DEFAULT_DEVID
 CFLAGS += -DWOLFHSM_CFG_DMA
 else
 DEF += -DWC_USE_DEVID=0x5748534D
