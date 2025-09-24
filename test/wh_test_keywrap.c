@@ -542,7 +542,7 @@ static int _Rsa_UseWrappedKeyFromNvm(whClientContext* client, void* flashCtx,
     whKeyId serverKekId = WH_TEST_KEKID;
 
     RsaKey  rsa[1];
-    whKeyId rsaKeyId = 2;
+    whKeyId rsaKeyId = WH_TEST_RSA_KEYID;
     uint8_t rsaWrappedKey[WH_TEST_RSA_WRAPPED_KEYSIZE];
 
     const uint8_t ciphertext[] = {
@@ -658,7 +658,7 @@ int whTest_Client_WriteWrappedKeysToNvm(whClientContext* client, void* flashCtx,
 #ifndef NO_RSA
     ret = _Rsa_WriteWrappedKeyToNvm(client, flashCtx, flashCb);
     if (ret != WH_ERROR_OK) {
-        WH_ERROR_PRINT("Failed to _WriteWrappedAesGcmKeyToFlash %d\n", ret);
+        WH_ERROR_PRINT("Failed to _Rsa_WriteWrappedKeyToNvm %d\n", ret);
         return ret;
     }
 #endif /* !NO_RSA */
@@ -686,7 +686,7 @@ int whTest_Client_UseWrappedKeysFromNvm(whClientContext* client, void* flashCtx,
 #ifndef NO_RSA
     ret = _Rsa_UseWrappedKeyFromNvm(client, flashCtx, flashCb);
     if (ret != WH_ERROR_OK) {
-        WH_ERROR_PRINT("Failed to _UseWrappedAesGcmKeyToFlash %d\n", ret);
+        WH_ERROR_PRINT("Failed to _Rsa_UseWrappedKeyFromNvm %d\n", ret);
         return ret;
     }
 #endif /* !NO_RSA */
