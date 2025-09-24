@@ -43,6 +43,46 @@
 #include "wolfhsm/wh_server.h"
 #include "wolfhsm/wh_server_nvm.h"
 
+/* Handle NVM read, do access checking and clamping */
+static int _HandleNvmRead(whServerContext* server, uint8_t* out_data,
+                          whNvmSize offset, whNvmSize len, whNvmSize* out_len,
+                          whNvmId id)
+{
+    whNvmMetadata meta;
+    int32_t       rc;
+
+    if ((server == NULL) || (out_data == NULL) || (out_len == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    if (len > WH_MESSAGE_NVM_MAX_READ_LEN) {
+        return WH_ERROR_ABORTED;
+    }
+
+    rc = wh_Nvm_GetMetadata(server->nvm, id, &meta);
+    if (rc != WH_ERROR_OK) {
+        return rc;
+    }
+
+    if (meta.flags & WH_NVM_FLAGS_NONEXPORTABLE) {
+        return WH_ERROR_ACCESS;
+    }
+
+    if (offset >= meta.len)
+        return WH_ERROR_BADARGS;
+
+    /* Clamp length to object size */
+    if ((offset + len) > meta.len) {
+        len = meta.len - offset;
+    }
+
+    rc = wh_Nvm_Read(server->nvm, id, offset, len, out_data);
+    if (rc != WH_ERROR_OK)
+        return rc;
+    *out_len = len;
+    return WH_ERROR_OK;
+}
+
 int wh_Server_HandleNvmRequest(whServerContext* server,
         uint16_t magic, uint16_t action, uint16_t seq,
         uint16_t req_size, const void* req_packet,
@@ -240,44 +280,30 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
 
     case WH_MESSAGE_NVM_ACTION_READ:
     {
-        whMessageNvm_ReadRequest req = {0};
-        whMessageNvm_ReadResponse resp = {0};
-        uint16_t hdr_len = sizeof(resp);
-        uint8_t* data = (uint8_t*)resp_packet + hdr_len;
-        uint16_t data_len = 0;
-        whNvmMetadata             meta     = {0};
+        whMessageNvm_ReadRequest  req      = {0};
+        whMessageNvm_ReadResponse resp     = {0};
+        uint16_t                  hdr_len  = sizeof(resp);
+        uint8_t*                  data     = (uint8_t*)resp_packet + hdr_len;
+        whNvmSize                 data_len = 0;
 
         if (req_size != sizeof(req)) {
             /* Request is malformed */
             resp.rc = WH_ERROR_ABORTED;
-        } else {
+        }
+        else {
             /* Convert request struct */
-            wh_MessageNvm_TranslateReadRequest(magic,
-                    (whMessageNvm_ReadRequest*)req_packet, &req);
+            wh_MessageNvm_TranslateReadRequest(
+                magic, (whMessageNvm_ReadRequest*)req_packet, &req);
 
-            if (req.data_len > WH_MESSAGE_NVM_MAX_READ_LEN) {
-                resp.rc = WH_ERROR_ABORTED;
-            } else {
-                /* Check metadata for non-exportable flag */
-                resp.rc = wh_Nvm_GetMetadata(server->nvm, req.id, &meta);
-                if (resp.rc == 0) {
-                    if (meta.flags & WH_NVM_FLAGS_NONEXPORTABLE) {
-                        resp.rc = WH_ERROR_ACCESS;
-                    }
-                    else {
-                        /* Process the Read action */
-                        resp.rc = wh_Nvm_Read(server->nvm, req.id, req.offset,
-                                              req.data_len, data);
-                        if (resp.rc == 0) {
-                            data_len = req.data_len;
-                        }
-                    }
-                }
+            resp.rc = _HandleNvmRead(server, data, req.offset, req.data_len,
+                                     &req.data_len, req.id);
+            if (resp.rc == WH_ERROR_OK) {
+                data_len = req.data_len;
             }
         }
         /* Convert the response struct */
-        wh_MessageNvm_TranslateReadResponse(magic,
-                &resp, (whMessageNvm_ReadResponse*)resp_packet);
+        wh_MessageNvm_TranslateReadResponse(
+            magic, &resp, (whMessageNvm_ReadResponse*)resp_packet);
         *out_resp_size = sizeof(resp) + data_len;
     }; break;
 
@@ -338,6 +364,7 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
         whMessageNvm_ReadDmaRequest req  = {0};
         whMessageNvm_SimpleResponse resp = {0};
         whNvmMetadata               meta = {0};
+        whNvmSize                   read_len;
         void*                       data = NULL;
 
         if (req_size != sizeof(req)) {
@@ -355,6 +382,23 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
                 resp.rc = WH_ERROR_ACCESS;
             }
         }
+
+        if (resp.rc == 0) {
+            if (req.offset >= meta.len) {
+                resp.rc = WH_ERROR_BADARGS;
+            }
+        }
+
+        if (resp.rc == 0) {
+            read_len = req.data_len;
+            /* Clamp length to object size */
+            if ((req.offset + read_len) > meta.len) {
+                read_len = meta.len - req.offset;
+            }
+        }
+
+        /* use unclamped length for DMA address processing in case DMA callbacks
+         * are sensible to alignment and/or size */
         if (resp.rc == 0) {
             /* perform platform-specific host address processing */
             resp.rc = wh_Server_DmaProcessClientAddress(
@@ -363,8 +407,8 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
         }
         if (resp.rc == 0) {
             /* Process the Read action */
-            resp.rc = wh_Nvm_Read(server->nvm, req.id, req.offset, req.data_len,
-                    (uint8_t*)data);
+            resp.rc = wh_Nvm_Read(server->nvm, req.id, req.offset, read_len,
+                                  (uint8_t*)data);
         }
         if (resp.rc == 0) {
             /* perform platform-specific host address processing */
