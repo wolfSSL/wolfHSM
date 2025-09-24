@@ -668,6 +668,64 @@ static int _clientServerSequentialTestConnectCb(void*           context,
                                   connected);
 }
 
+static int _testOutOfBoundsNvmReads(whClientContext* client,
+                                    whServerContext* server, whNvmId id)
+{
+    uint8_t       buffer[WOLFHSM_CFG_COMM_DATA_LEN];
+    whNvmMetadata meta;
+    whNvmSize     off, len;
+    int32_t       server_rc;
+
+    /* Get object metadata */
+    WH_TEST_RETURN_ON_FAIL(wh_Client_NvmGetMetadataRequest(client, id));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_NvmGetMetadataResponse(
+        client, &server_rc, &meta.id, &meta.access, &meta.flags, &meta.len,
+        sizeof(meta.label), meta.label));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+
+    /* Try to read len + 1 bytes, should clamp to len */
+    off = 0;
+    len = meta.len + 1;
+    WH_TEST_RETURN_ON_FAIL(wh_Client_NvmReadRequest(client, id, off, len));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Client_NvmReadResponse(client, &server_rc, &len, buffer));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(len == meta.len);
+
+    /* Try to read len bytes starting at 1 should clamp to len - 1 */
+    off = 1;
+    len = meta.len;
+    WH_TEST_RETURN_ON_FAIL(wh_Client_NvmReadRequest(client, id, off, len));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Client_NvmReadResponse(client, &server_rc, &len, buffer));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(len == meta.len - 1);
+
+    /* Try to read starting at len - 1 len bytes, should clamp to 1 */
+    off = meta.len - 1;
+    len = meta.len;
+    WH_TEST_RETURN_ON_FAIL(wh_Client_NvmReadRequest(client, id, off, len));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Client_NvmReadResponse(client, &server_rc, &len, buffer));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(len == 1);
+
+    /* Try to read starting at len, should fail */
+    off = meta.len;
+    len = 0;
+    WH_TEST_RETURN_ON_FAIL(wh_Client_NvmReadRequest(client, id, off, len));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Client_NvmReadResponse(client, &server_rc, &len, buffer));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_BADARGS);
+
+    return WH_ERROR_OK;
+}
+
 int whTest_ClientServerSequential(void)
 {
     int ret = 0;
@@ -1014,6 +1072,9 @@ int whTest_ClientServerSequential(void)
         WH_TEST_ASSERT_RETURN(rlen == len);
         WH_TEST_ASSERT_RETURN(0 == memcmp(send_buffer, recv_buffer, len));
     }
+
+    /* Perform out-of-bounds read tests on first object written */
+    WH_TEST_RETURN_ON_FAIL(_testOutOfBoundsNvmReads(client, server, 20));
 
     whNvmAccess list_access = WH_NVM_ACCESS_ANY;
     whNvmFlags  list_flags  = WH_NVM_FLAGS_NONE;
