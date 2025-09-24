@@ -300,7 +300,9 @@ int wh_Server_CertVerify(whServerContext* server, const uint8_t* cert,
             }
         }
         else {
+#ifdef DEBUG_CRYPTOCB_VERBOSE
             printf("Failed to load trusted root certificate: %d\n", rc);
+#endif
         }
     }
 
