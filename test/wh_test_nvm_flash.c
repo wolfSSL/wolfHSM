@@ -35,6 +35,9 @@
 
 /* NVM simulator backends to use for testing NVM module */
 #include "wolfhsm/wh_flash_ramsim.h"
+/* Fault injection layer to simulate power failures */
+#include "wh_test_flash_fault_inject.h"
+
 #if defined(WOLFHSM_CFG_TEST_POSIX)
 #include <unistd.h>  /* For unlink */
 #include "port/posix/posix_transport_tcp.h"
@@ -497,6 +500,112 @@ int whTest_NvmFlash_RamSim(void)
     return whTest_NvmFlashCfg(&myNvmCfg);
 }
 
+static int
+simulateFailureAndRecover(int failAfter, int* dataSize,
+                          uint32_t* bytesAvalBefore, whNvmId* objsAvailBefore,
+                          uint32_t* bytesReclBefore, whNvmId* objsReclBefore,
+                          uint32_t* bytesAvalAfter, whNvmId* objsAvailAfter,
+                          uint32_t* bytesReclAfter, whNvmId* objsReclAfter)
+{
+    uint8_t           memory[FLASH_RAM_SIZE]       = {0};
+    uint8_t           backupMemory[FLASH_RAM_SIZE] = {0};
+    unsigned char     data[]      = "This is test data for recovery test";
+    whNvmMetadata     meta        = {.id = 42, .label = "RecoveryTest"};
+    const whFlashCb   flashCb[1]  = {WH_FLASH_RAMSIM_CB};
+    whFlashRamsimCtx  flashCtx[1] = {0};
+    whFlashRamsimCfg  flashCfg[1] = {{
+         .size       = FLASH_RAM_SIZE,    /* 1MB  Flash */
+         .sectorSize = FLASH_SECTOR_SIZE, /* 4KB  Sector Size */
+         .pageSize   = FLASH_PAGE_SIZE,   /* 8B   Page Size */
+         .erasedByte = (uint8_t)0,
+         .memory     = memory,
+    }};
+    const whFlashCb   flashFaultInjCb[1] = {WH_FLASH_FAULTINJECT_CB};
+    whFlashFaultInjectCtx  faultInjCtx[1] = {0};
+    whFlashFaultInjectCfg  faultInjCfg[1] = {{
+        .realCb = flashCb,
+        .realCtx = flashCtx,
+        .realCfg = flashCfg,
+    }};
+    const whNvmCb     cb[1]       = {WH_NVM_FLASH_CB};
+    whNvmFlashContext context[1]  = {0};
+    whNvmFlashConfig  cfg         = {
+                 .cb      = flashFaultInjCb,
+                 .context = faultInjCtx,
+                 .config  = faultInjCfg,
+    };
+    whNvmMetadata checkMeta = {0};
+    int           ret       = 0;
+
+    WH_TEST_RETURN_ON_FAIL(cb->Init(context, &cfg));
+    WH_TEST_RETURN_ON_FAIL(cb->GetAvailable(context, bytesAvalBefore,
+                                            objsAvailBefore, bytesReclBefore,
+                                            objsReclBefore));
+    faultInjCtx->failAfterPrograms = failAfter;
+    ret = cb->AddObject(context, (whNvmMetadata*)&meta, (whNvmSize)sizeof(data),
+                        data);
+    WH_TEST_ASSERT_RETURN(ret == WH_ERROR_ABORTED);
+
+    /* Save the memory state for recovery testing */
+    memcpy(backupMemory, memory, FLASH_RAM_SIZE);
+
+    WH_TEST_RETURN_ON_FAIL(cb->Cleanup(context));
+    /* clean-up the memory */
+    memset(memory, 0, FLASH_RAM_SIZE);
+
+    flashCfg->initData = backupMemory;
+    WH_TEST_RETURN_ON_FAIL(cb->Init(context, &cfg));
+    WH_TEST_ASSERT_RETURN(cb->GetMetadata(context, meta.id, &checkMeta) ==
+                          WH_ERROR_NOTFOUND);
+
+    /* Return available and reclaimable stats after recovery */
+    WH_TEST_RETURN_ON_FAIL(cb->GetAvailable(context, bytesAvalAfter,
+                                            objsAvailAfter, bytesReclAfter,
+                                            objsReclAfter));
+    WH_TEST_RETURN_ON_FAIL(cb->Cleanup(context));
+    *dataSize = sizeof(data);
+    return 0;
+}
+
+int whTest_NvmFlash_Recovery(void)
+{
+    int      test_data_len;
+    uint32_t bytesBefore, bytesAfter;
+    whNvmId  objsBefore, objsAfter;
+    uint32_t bytesReclBefore, bytesReclAfter;
+    whNvmId  objsReclBefore, objsReclAfter;
+
+    printf("--simulate failure when writing object start\n");
+    WH_TEST_RETURN_ON_FAIL(simulateFailureAndRecover(
+        2 /* program epoch, metadata and fail */, &test_data_len, &bytesBefore,
+        &objsBefore, &bytesReclBefore, &objsReclBefore, &bytesAfter, &objsAfter,
+        &bytesReclAfter, &objsReclAfter));
+    /* object should be marked as reclaimable */
+    WH_TEST_ASSERT_RETURN(objsReclAfter == objsReclBefore + 1);
+    /* data should not be marked as reclaimable */
+    WH_TEST_ASSERT_RETURN(bytesAfter == bytesBefore);
+    WH_TEST_ASSERT_RETURN(bytesReclAfter == bytesReclBefore);
+    /* available object should be decremented */
+    WH_TEST_ASSERT_RETURN(objsAfter == objsBefore - 1);
+
+    printf("--simulate failure when writing object count\n");
+    WH_TEST_RETURN_ON_FAIL(simulateFailureAndRecover(
+        4 /* program epoch, metadata, start, data and fail */, &test_data_len,
+        &bytesBefore, &objsBefore, &bytesReclBefore, &objsReclBefore,
+        &bytesAfter, &objsAfter, &bytesReclAfter, &objsReclAfter));
+    /* object should be marked as reclaimable */
+    WH_TEST_ASSERT_RETURN(objsReclAfter == objsReclBefore + 1);
+    /* data should be marked as reclaimable by test_data_len rounded up to
+     * WHFU_BYTES_PER_UNIT */
+    WH_TEST_ASSERT_RETURN(bytesAfter <= bytesBefore - test_data_len);
+    WH_TEST_ASSERT_RETURN(bytesReclAfter >= bytesReclBefore);
+    WH_TEST_ASSERT_RETURN(bytesReclAfter == bytesBefore - bytesAfter);
+
+    /* available object should be decremented */
+    WH_TEST_ASSERT_RETURN(objsAfter == objsBefore - 1);
+
+    return 0;
+}
 
 #if defined(WOLFHSM_CFG_TEST_POSIX)
 
@@ -535,6 +644,9 @@ int whTest_NvmFlash(void)
 {
     printf("Testing NVM flash with RAM sim...\n");
     WH_TEST_ASSERT(0 == whTest_NvmFlash_RamSim());
+
+    printf("Testing NVM flash recovery mechanism...\n");
+    WH_TEST_ASSERT(0 == whTest_NvmFlash_Recovery());
 
 #if defined(WOLFHSM_CFG_TEST_POSIX)
     printf("Testing NVM flash with POSIX file sim...\n");
