@@ -361,8 +361,8 @@ static int nfPartition_ReadMemDirectory(whNvmFlashContext* context, int partitio
 
     for(index = 0; (index < WOLFHSM_CFG_NVM_OBJECT_COUNT) && (ret == 0); index++) {
         ret = nfMemObject_Read(context,
-                    offset + NF_DIRECTORY_OBJECT_OFFSET(index),
-                    &directory->objects[index]);
+                               offset + NF_DIRECTORY_OBJECT_OFFSET(index),
+                               &directory->objects[index]);
     }
     return ret;
 }
