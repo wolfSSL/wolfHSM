@@ -28,7 +28,7 @@ int wh_DemoClient_Nvm(whClientContext* clientContext)
     whNvmId  reclaimObjects;
 
     whNvmId   objectIds[] = {1, 2, 3};
-    uint8_t   labels[][6] = {"label1", "label2", "label3"};
+    uint8_t   labels[][7] = {"label1", "label2", "label3"};
     uint8_t   data[][6]   = {"data1", "data2", "data3"};
     uint8_t   readData[6];
     whNvmSize dataLen = 6;

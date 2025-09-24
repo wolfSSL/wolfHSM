@@ -237,3 +237,87 @@ int wh_MessageKeystore_TranslateExportDmaResponse(
 }
 
 #endif /* WOLFHSM_CFG_DMA */
+
+/* Key Wrap Request translation */
+int wh_MessageKeystore_TranslateWrapRequest(
+    uint16_t magic, const whMessageKeystore_WrapRequest* src,
+    whMessageKeystore_WrapRequest* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T16(magic, dest, src, keySz);
+    WH_T16(magic, dest, src, serverKeyId);
+    WH_T16(magic, dest, src, cipherType);
+    return 0;
+}
+
+/* Key Wrap Response translation */
+int wh_MessageKeystore_TranslateWrapResponse(
+    uint16_t magic, const whMessageKeystore_WrapResponse* src,
+    whMessageKeystore_WrapResponse* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, rc);
+    WH_T16(magic, dest, src, wrappedKeySz);
+    WH_T16(magic, dest, src, cipherType);
+    return 0;
+}
+
+/* Key Unwrap Request translation */
+int wh_MessageKeystore_TranslateUnwrapAndExportRequest(
+    uint16_t magic, const whMessageKeystore_UnwrapAndExportRequest* src,
+    whMessageKeystore_UnwrapAndExportRequest* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T16(magic, dest, src, wrappedKeySz);
+    WH_T16(magic, dest, src, serverKeyId);
+    WH_T16(magic, dest, src, cipherType);
+    return 0;
+}
+
+/* Key Unwrap Response translation */
+int wh_MessageKeystore_TranslateUnwrapAndExportResponse(
+    uint16_t magic, const whMessageKeystore_UnwrapAndExportResponse* src,
+    whMessageKeystore_UnwrapAndExportResponse* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, rc);
+    WH_T16(magic, dest, src, keySz);
+    WH_T16(magic, dest, src, cipherType);
+    return 0;
+}
+
+/* Wrapped Key Cache Request translation */
+int wh_MessageKeystore_TranslateUnwrapAndCacheRequest(
+    uint16_t magic, const whMessageKeystore_UnwrapAndCacheRequest* src,
+    whMessageKeystore_UnwrapAndCacheRequest* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T16(magic, dest, src, wrappedKeySz);
+    WH_T16(magic, dest, src, serverKeyId);
+    WH_T16(magic, dest, src, cipherType);
+    return 0;
+}
+
+/* Key Cache Response translation */
+int wh_MessageKeystore_TranslateUnwrapAndCacheResponse(
+    uint16_t magic, const whMessageKeystore_UnwrapAndCacheResponse* src,
+    whMessageKeystore_UnwrapAndCacheResponse* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, rc);
+    WH_T16(magic, dest, src, keyId);
+    WH_T16(magic, dest, src, cipherType);
+    return 0;
+}

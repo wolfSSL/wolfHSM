@@ -4,6 +4,7 @@
 #include "wh_demo_client_keystore.h"
 #include "wh_demo_client_crypto.h"
 #include "wh_demo_client_secboot.h"
+#include "wh_demo_client_keywrap.h"
 #include "wh_demo_client_all.h"
 
 int wh_DemoClient_All(whClientContext* clientContext)
@@ -44,6 +45,11 @@ int wh_DemoClient_All(whClientContext* clientContext)
         return rc;
     }
 #endif
+
+    rc = wh_DemoClient_KeyWrapBasic(clientContext);
+    if (rc != 0) {
+        return rc;
+    }
 
     /**Crypto demos */
 #ifndef NO_RSA
