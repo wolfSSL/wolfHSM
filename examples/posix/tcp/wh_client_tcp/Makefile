@@ -77,6 +77,7 @@ endif
 # Assembly source files
 SRC_ASM +=
 
+ifneq ($(NOCRYPTO),1)
 # wolfCrypt source files
 SRC_C += $(wildcard $(WOLFSSL_DIR)/wolfcrypt/src/*.c)
 
@@ -86,6 +87,16 @@ SRC_C += $(wildcard $(WOLFSSL_DIR)/wolfcrypt/benchmark/*.c)
 
 # wolfSSL source files
 SRC_C += $(wildcard $(WOLFSSL_DIR)/src/*.c)
+
+else
+DEF += -DWOLFHSM_CFG_NO_CRYPTO
+endif
+
+ifeq ($(SCAN),1)
+SCAN_LOG = scan_client_tcp.log
+# Default target
+.DEFAULT_GOAL := scan
+endif
 
 # wolfHSM source files
 SRC_C +=  $(wildcard $(WOLFHSM_DIR)/src/*.c)
@@ -97,7 +108,7 @@ SRC_C +=  $(wildcard $(WOLFHSM_PORT_DIR)/*.c)
 SRC_C +=  $(wildcard $(PROJECT_DIR)/*.c)
 
 # Demo client code
-SRC_C += $(wildcard $(WOLFHSM_DEMO_CLIENT_DIR)/*.c) 
+SRC_C += $(wildcard $(WOLFHSM_DEMO_CLIENT_DIR)/*.c)
 
 
 ## Automated processing below
@@ -147,6 +158,13 @@ $(BUILD_DIR)/$(BIN).elf: $(OBJS_ASM) $(OBJS_C)
 $(BUILD_DIR)/$(BIN).a: $(OBJS_ASM) $(OBJS_C)
 	@echo "Building static library: $(notdir $@)"
 	$(CMD_ECHO) $(AR) -r $@ $^
+
+analyze: $(OBJS_ASM) $(OBJS_C)
+
+scan:$(BUILD_DIR)
+	@echo "Running scan-build static analysis"
+	@mkdir -p $(WOLFHSM_DIR)/scan_out/
+	@scan-build --status-bugs $(MAKE) analyze 2> $(WOLFHSM_DIR)/scan_out/$(SCAN_LOG)
 
 clean:
 	@echo "Cleaning build files"
