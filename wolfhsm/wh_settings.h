@@ -36,7 +36,7 @@
  *  WOLFHSM_CFG_SHE_EXTENSION - If defined, include AutoSAR SHE functionality
  *      Default: Not defined
  *
- *  WOLFHSM_CFG_KEYWRAP - If defined, inclued the key wrap functionality
+ *  WOLFHSM_CFG_KEYWRAP - If defined, include the key wrap functionality
  *      Default: Not defined
  *
  *  WOLFHSM_CFG_KEYWRAP_MAX_KEY_SIZE - The maximum size (in bytes) of a key that
