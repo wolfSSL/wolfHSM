@@ -820,7 +820,7 @@ static int _HandleEccSharedSecret(whServerContext* ctx, uint16_t magic,
         (byte*)cryptoDataOut + sizeof(whMessageCrypto_EcdhResponse);
     word32 max_len = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
                               (res_out - (uint8_t*)cryptoDataOut));
-    word32 res_len;
+    word32 res_len = 0;
 
     /* init ecc keys */
     ret = wc_ecc_init_ex(pub_key, NULL, ctx->crypto->devId);
@@ -974,7 +974,7 @@ static int _HandleEccVerify(whServerContext* ctx, uint16_t magic,
     word32   max_size = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
                                (res_pub - (uint8_t*)cryptoDataOut));
     uint32_t pub_size = 0;
-    int      result;
+    int      result = 0;
 
     /* init public key */
     ret = wc_ecc_init_ex(key, NULL, ctx->crypto->devId);
@@ -2546,7 +2546,7 @@ static int _HandleMlDsaVerify(whServerContext* ctx, uint16_t magic,
     int      evict = !!(options & WH_MESSAGE_CRYPTO_MLDSA_VERIFY_OPTIONS_EVICT);
 
     /* Response message */
-    int result;
+    int result = 0;
 
     /* init public key */
     ret = wc_MlDsaKey_Init(key, NULL, ctx->crypto->devId);
