@@ -46,4 +46,6 @@
 /* Enable Image Manager feature */
 #define WOLFHSM_CFG_SERVER_IMG_MGR
 
+#define WOLFHSM_CFG_KEYWRAP
+
 #endif /* WOLFHSM_CFG_H_ */
