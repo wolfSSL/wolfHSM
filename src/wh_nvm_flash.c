@@ -1086,7 +1086,7 @@ int wh_NvmFlash_AddObject(void* c, whNvmMetadata *meta,
 
     /* Find existing object so we can increment the epoch */
     ret = nfMemDirectory_FindObjectIndexById(d, meta->id, &oldentry);
-    if (ret != WH_ERROR_NOTFOUND && oldentry >= 0) {
+    if (ret == WH_ERROR_OK && oldentry >= 0) {
         epoch = d->objects[oldentry].state.epoch + 1;
     }
 

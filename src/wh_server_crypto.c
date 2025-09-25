@@ -409,7 +409,7 @@ static int _HandleRsaFunction( whServerContext* ctx, uint16_t magic,
         wc_FreeRsaKey(rsa);
     }
     if (evict != 0) {
-        (void)wh_Server_KeystoreEvictKey(ctx, key_id);
+        ret = wh_Server_KeystoreEvictKey(ctx, key_id);
     }
     if (ret == 0) {
         whMessageCrypto_RsaResponse res;
@@ -468,7 +468,7 @@ static int _HandleRsaGetSize(whServerContext* ctx, uint16_t magic,
         printf("[server] %s evicting temp key:%x options:%u evict:%u\n",
                __func__, key_id, options, evict);
 #endif
-        (void)wh_Server_KeystoreEvictKey(ctx, key_id);
+        ret = wh_Server_KeystoreEvictKey(ctx, key_id);
     }
     if (ret == 0) {
         res.keySize = key_size;
@@ -847,10 +847,10 @@ static int _HandleEccSharedSecret(whServerContext* ctx, uint16_t magic,
         wc_ecc_free(pub_key);
     }
     if (evict_pub) {
-        (void)wh_Server_KeystoreEvictKey(ctx, pub_key_id);
+        ret = wh_Server_KeystoreEvictKey(ctx, pub_key_id);
     }
-    if (evict_prv) {
-        (void)wh_Server_KeystoreEvictKey(ctx, prv_key_id);
+    if (ret == WH_ERROR_OK && evict_prv) {
+        ret = wh_Server_KeystoreEvictKey(ctx, prv_key_id);
     }
     if (ret == 0) {
         whMessageCrypto_EcdhResponse res;
@@ -921,7 +921,7 @@ static int _HandleEccSign(whServerContext* ctx, uint16_t magic,
         wc_ecc_free(key);
     }
     if (evict != 0) {
-        (void)wh_Server_KeystoreEvictKey(ctx, key_id);
+        ret = wh_Server_KeystoreEvictKey(ctx, key_id);
     }
     if (ret == 0) {
         whMessageCrypto_EccSignResponse res;
@@ -1011,7 +1011,7 @@ static int _HandleEccVerify(whServerContext* ctx, uint16_t magic,
     }
     if (evict != 0) {
         /* User requested to evict from cache, even if the call failed */
-        (void)wh_Server_KeystoreEvictKey(ctx, key_id);
+        ret = wh_Server_KeystoreEvictKey(ctx, key_id);
     }
     if (ret == 0) {
         res.pubSz = pub_size;
@@ -1276,10 +1276,10 @@ static int _HandleCurve25519SharedSecret(whServerContext* ctx, uint16_t magic,
         wc_curve25519_free(priv);
     }
     if (evict_pub) {
-        (void)wh_Server_KeystoreEvictKey(ctx, pub_key_id);
+        ret = wh_Server_KeystoreEvictKey(ctx, pub_key_id);
     }
-    if (evict_prv) {
-        (void)wh_Server_KeystoreEvictKey(ctx, prv_key_id);
+    if (ret == WH_ERROR_OK && evict_prv) {
+        ret = wh_Server_KeystoreEvictKey(ctx, prv_key_id);
     }
     if (ret == 0) {
         res.sz = res_len;
@@ -1951,7 +1951,7 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
                 }
                 /* evict the aes sized key in the normal cache */
                 if (moveToBigCache == 1) {
-                    (void)wh_Server_KeystoreEvictKey(ctx, keyId);
+                    ret = wh_Server_KeystoreEvictKey(ctx, keyId);
                 }
                 if (ret == 0) {
                     meta->id  = keyId;
@@ -2482,7 +2482,7 @@ static int _HandleMlDsaSign(whServerContext* ctx, uint16_t magic,
         wc_MlDsaKey_Free(key);
     }
     if (evict != 0) {
-        (void)wh_Server_KeystoreEvictKey(ctx, key_id);
+        ret = wh_Server_KeystoreEvictKey(ctx, key_id);
     }
     if (ret == 0) {
         res.sz   = res_len;
@@ -2562,7 +2562,7 @@ static int _HandleMlDsaVerify(whServerContext* ctx, uint16_t magic,
     }
     if (evict != 0) {
         /* User requested to evict from cache, even if the call failed */
-        (void)wh_Server_KeystoreEvictKey(ctx, key_id);
+        ret = wh_Server_KeystoreEvictKey(ctx, key_id);
     }
     if (ret == 0) {
         res.res  = result;
@@ -3656,7 +3656,7 @@ static int _HandleMlDsaSignDma(whServerContext* ctx, uint16_t magic,
 
             /* Evict key if requested */
             if (evict) {
-                (void)wh_Server_KeystoreEvictKey(ctx, key_id);
+                ret = wh_Server_KeystoreEvictKey(ctx, key_id);
             }
         }
         wc_MlDsaKey_Free(key);
@@ -3763,7 +3763,7 @@ static int _HandleMlDsaVerifyDma(whServerContext* ctx, uint16_t magic,
 
         /* Evict key if requested */
         if (evict) {
-            (void)wh_Server_KeystoreEvictKey(ctx, key_id);
+            ret = wh_Server_KeystoreEvictKey(ctx, key_id);
         }
     }
 
