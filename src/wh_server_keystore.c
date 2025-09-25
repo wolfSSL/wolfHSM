@@ -344,6 +344,7 @@ static int _FindInCache(whServerContext* server, whKeyId keyId, int* out_index,
     return ret;
 }
 
+#ifdef WOLFHSM_CFG_KEYWRAP
 static int _ExistsInCache(whServerContext* server, whKeyId keyId)
 {
     int            ret           = 0;
@@ -363,6 +364,8 @@ static int _ExistsInCache(whServerContext* server, whKeyId keyId)
     /* Key exists in the cache */
     return 1;
 }
+
+#endif /* WOLFHSM_CFG_KEYWRAP */
 
 /* try to put the specified key into cache if it isn't already, return pointers
  * to meta and the cached data*/
@@ -551,6 +554,7 @@ int wh_Server_KeystoreEraseKey(whServerContext* server, whNvmId keyId)
     return wh_Nvm_DestroyObjects(server->nvm, 1, &keyId);
 }
 
+#ifdef WOLFHSM_CFG_KEYWRAP
 #ifndef NO_AES
 #ifdef HAVE_AESGCM
 
@@ -898,6 +902,8 @@ _HandleUnwrapAndCacheKeyRequest(whServerContext*                         server,
     return wh_Server_KeystoreCacheKey(server, &metadata, key);
 }
 
+#endif /* WOLFHSM_CFG_KEYWRAP */
+
 int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
                                uint16_t action, uint16_t req_size,
                                const void* req_packet, uint16_t* out_resp_size,
@@ -1180,6 +1186,8 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
                 *out_resp_size = sizeof(resp);
             }
         } break;
+
+#ifdef WOLFHSM_CFG_KEYWRAP
         case WH_KEY_WRAP: {
             whMessageKeystore_WrapRequest  wrapReq  = {0};
             whMessageKeystore_WrapResponse wrapResp = {0};
@@ -1289,6 +1297,8 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
             *out_resp_size = sizeof(cacheResp);
 
         } break;
+
+#endif /* WOLFHSM_CFG_KEYWRAP */
 
         default:
             ret = WH_ERROR_BADARGS;

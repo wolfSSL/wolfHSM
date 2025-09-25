@@ -111,7 +111,11 @@ int whTest_ClientConfig(whClientConfig* clientCfg)
 
 #if !defined(WOLFHSM_CFG_NO_CRYPTO)
     WH_TEST_RETURN_ON_FAIL(whTest_CryptoClientConfig(clientCfg));
+
+#if defined(WOLFHSM_CFG_KEYWRAP)
     WH_TEST_RETURN_ON_FAIL(whTest_KeyWrapClientConfig(clientCfg));
+#endif /*WOLFHSM_CFG_KEYWRAP */
+
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
 #if defined(WOLFHSM_CFG_SHE_EXTENSION)
