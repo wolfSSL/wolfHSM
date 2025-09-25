@@ -121,7 +121,7 @@ int wh_DemoClient_KeystoreCommitKey(whClientContext* clientContext)
     return WH_ERROR_OK;
 }
 
-#if  !defined(NO_AES) && !defined(WOLFHSM_CFG_NO_CRYPTO)
+#if !defined(NO_AES) && !defined(WOLFHSM_CFG_NO_CRYPTO)
 int wh_DemoClient_KeystoreAes(whClientContext* clientContext)
 {
     int      ret;

@@ -682,11 +682,11 @@ int main(int argc, char** argv)
         .comm_config = cs_conf,
         .nvm         = nvm,
 #ifndef WOLFHSM_CFG_NO_CRYPTO
-        .crypto      = crypto,
-        .devId       = INVALID_DEVID,
+        .crypto = crypto,
+        .devId  = INVALID_DEVID,
 #endif
 #if defined(WOLFHSM_CFG_SHE_EXTENSION)
-        .she         = she,
+        .she = she,
 #endif
     }};
 
