@@ -45,5 +45,6 @@
 #define WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT
 
 #define XMEMFENCE() __atomic_thread_fence(__ATOMIC_SEQ_CST)
+#define WOLFHSM_CFG_KEYWRAP
 
 #endif /* WOLFHSM_CFG_H_ */

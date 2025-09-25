@@ -29,6 +29,8 @@
 
 #include "wolfhsm/wh_error.h"
 
+#ifdef WOLFHSM_CFG_KEYWRAP
+
 #ifdef WOLFHSM_CFG_ENABLE_CLIENT
 #include "wolfhsm/wh_client.h"
 #include "wolfhsm/wh_client_crypto.h"
@@ -199,5 +201,6 @@ int whTest_KeyWrapClientConfig(whClientConfig* config)
 
     return ret;
 }
-#endif /* WOLFHSM_CFG_ENABLE_CLIENT */
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
+#endif /* WOLFHSM_CFG_ENABLE_CLIENT */
+#endif /* WOLFHSM_CFG_KEYWRAP */

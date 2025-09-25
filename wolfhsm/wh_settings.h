@@ -36,6 +36,9 @@
  *  WOLFHSM_CFG_SHE_EXTENSION - If defined, include AutoSAR SHE functionality
  *      Default: Not defined
  *
+ *  WOLFHSM_CFG_KEYWRAP - If defined, inclued the key wrap functionality
+ *      Default: Not defined
+ *
  *  WOLFHSM_CFG_KEYWRAP_MAX_KEY_SIZE - The maximum size (in bytes) of a key that
  *  can be wrapped
  *      Default: 512
@@ -233,15 +236,12 @@
 #endif
 #endif
 
-#if !defined(NO_AES)
-#if defined(HAVE_AESGCM)
+#if defined(WOLFHSM_CFG_KEYWRAP)
 
 #ifndef WOLFHSM_CFG_KEYWRAP_MAX_KEY_SIZE
 #define WOLFHSM_CFG_KEYWRAP_MAX_KEY_SIZE 2000
 #endif
 
-#endif
-#endif
 
 #if defined(WOLFHSM_CFG_NO_CRYPTO)
 #error "WOLFHSM_CFG_KEYWRAP is incompatible with WOLFHSM_CFG_NO_CRYPTO"
@@ -252,6 +252,7 @@
     "WOLFHSM_CFG_KEYWRAP requires NO_AES to be undefined and HAVE_AESGCM to be defined"
 #endif
 
+#endif /* WOLFHSM_CFG_KEYWRAP */
 
 #if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT)
 #if !defined(WOLFSSL_ACERT) || !defined(WOLFSSL_ASN_TEMPLATE)

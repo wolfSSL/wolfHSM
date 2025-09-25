@@ -46,10 +46,12 @@ int wh_DemoClient_All(whClientContext* clientContext)
     }
 #endif
 
+#ifdef WOLFHSM_CFG_KEYWRAP
     rc = wh_DemoClient_KeyWrapBasic(clientContext);
     if (rc != 0) {
         return rc;
     }
+#endif /* WOLFHSM_CFG_KEYWRAP */
 
     /**Crypto demos */
 #ifndef NO_RSA

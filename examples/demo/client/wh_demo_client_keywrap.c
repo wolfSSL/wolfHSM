@@ -33,8 +33,9 @@
 
 #include "wh_demo_client_keywrap.h"
 
+#ifdef WOLFHSM_CFG_KEYWRAP
+
 #ifndef NO_AES
-#define HAVE_AESGCM
 #ifdef HAVE_AESGCM
 
 #define WH_TEST_AES_KEYSIZE 16
@@ -160,3 +161,4 @@ int wh_DemoClient_KeyWrapBasic(whClientContext* clientContext)
     wc_FreeRng(rng);
     return ret;
 }
+#endif /* WOLFHSM_CFG_KEYWRAP */
