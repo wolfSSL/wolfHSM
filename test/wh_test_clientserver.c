@@ -116,7 +116,7 @@ static int _customServerCb(whServerContext*                 server,
         resp->data.dma32.client_sz = req->data.dma32.server_sz;
         copySz                     = req->data.dma32.server_sz;
     }
-    if (clientPtr != NULL && serverPtr != NULL && copySz > 0) {
+    if ((clientPtr != NULL) && (serverPtr != NULL) && (copySz > 0)) {
         memcpy(clientPtr, serverPtr, copySz);
     }
 

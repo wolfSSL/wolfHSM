@@ -1941,7 +1941,7 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
                                             ctx->comm->client_id,
                                             WH_KEYID_ERASED);
                     ret   = wh_Server_KeystoreGetUniqueId(ctx, &keyId);
-                    if (ret != 0)
+                    if (ret != WH_ERROR_OK)
                         return ret;
                 }
                 else {

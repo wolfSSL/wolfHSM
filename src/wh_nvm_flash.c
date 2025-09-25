@@ -25,7 +25,7 @@
 
 /* Pick up compile-time configuration */
 #include "wolfhsm/wh_settings.h"
-#include <stdio.h>
+
 #include <stdint.h>
 #include <stddef.h>     /* For NULL */
 #include <string.h>     /* For memset, memcpy */
@@ -1086,7 +1086,7 @@ int wh_NvmFlash_AddObject(void* c, whNvmMetadata *meta,
 
     /* Find existing object so we can increment the epoch */
     ret = nfMemDirectory_FindObjectIndexById(d, meta->id, &oldentry);
-    if (oldentry >= 0 && ret != WH_ERROR_NOTFOUND) {
+    if (ret != WH_ERROR_NOTFOUND && oldentry >= 0) {
         epoch = d->objects[oldentry].state.epoch + 1;
     }
 
