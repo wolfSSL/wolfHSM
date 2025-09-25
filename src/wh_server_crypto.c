@@ -974,7 +974,7 @@ static int _HandleEccVerify(whServerContext* ctx, uint16_t magic,
     word32   max_size = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
                                (res_pub - (uint8_t*)cryptoDataOut));
     uint32_t pub_size = 0;
-    int      result = 0;
+    int      result   = 0;
 
     /* init public key */
     ret = wc_ecc_init_ex(key, NULL, ctx->crypto->devId);
