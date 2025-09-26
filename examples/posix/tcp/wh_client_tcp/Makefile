@@ -90,8 +90,12 @@ SRC_C += $(wildcard $(WOLFSSL_DIR)/src/*.c)
 # wolfHSM source files
 SRC_C +=  $(wildcard $(WOLFHSM_DIR)/src/*.c)
 
+# wolfHSM test code
+SRC_C += $(wildcard $(WOLFHSM_DIR)/test/wh_test_keywrap.c)
+
 # wolfHSM port/HAL code
 SRC_C +=  $(wildcard $(WOLFHSM_PORT_DIR)/*.c)
+
 
 # Project
 SRC_C +=  $(wildcard $(PROJECT_DIR)/*.c)
