@@ -2394,11 +2394,13 @@ int wh_Client_Cmac(whClientContext* ctx, Cmac* cmac, CmacType type,
     if (ret == WH_ERROR_OK) {
         /* Update the local type since call succeeded */
         cmac->type = type;
+#ifdef WOLFHSM_CFG_CANCEL_API
         /* if the client marked they may want to cancel, handle the
          * response in a separate call */
         if (ctx->cancelable) {
             return ret;
         }
+#endif
 
         uint16_t res_len = 0;
         do {
@@ -2434,6 +2436,7 @@ int wh_Client_Cmac(whClientContext* ctx, Cmac* cmac, CmacType type,
 
 #endif /* !NO_AES */
 
+#ifdef WOLFHSM_CFG_CANCEL_API
 int wh_Client_CmacCancelableResponse(whClientContext* c, Cmac* cmac,
                                      uint8_t* out, uint16_t* outSz)
 {
@@ -2485,6 +2488,7 @@ int wh_Client_CmacCancelableResponse(whClientContext* c, Cmac* cmac,
     }
     return ret;
 }
+#endif /* WOLFHSM_CFG_CANCEL_API */
 
 #ifdef WOLFHSM_CFG_DMA
 int wh_Client_CmacDma(whClientContext* ctx, Cmac* cmac, CmacType type,

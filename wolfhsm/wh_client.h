@@ -81,15 +81,19 @@ typedef int (*whClientCancelCb)(uint16_t cancelSeq);
 struct whClientContext_t {
     uint16_t     last_req_id;
     uint16_t     last_req_kind;
-    uint8_t      cancelable;
-    whCommClient comm[1];
+#ifdef WOLFHSM_CFG_CANCEL_API
+    uint8_t          cancelable;
     whClientCancelCb cancelCb;
+#endif
+    whCommClient comm[1];
 };
 typedef struct whClientContext_t whClientContext;
 
 struct whClientConfig_t {
     whCommClientConfig* comm;
+#ifdef WOLFHSM_CFG_CANCEL_API
     whClientCancelCb cancelCb;
+#endif
 };
 typedef struct whClientConfig_t whClientConfig;
 
@@ -320,6 +324,7 @@ int wh_Client_CommInfo(whClientContext* c,
  */
 int wh_Client_CommCloseRequest(whClientContext* c);
 
+#ifdef WOLFHSM_CFG_CANCEL_API
 /**
  * @brief Enables request cancellation.
  *
@@ -378,6 +383,7 @@ int wh_Client_CancelResponse(whClientContext* c);
  *    error code on failure.
  */
 int wh_Client_Cancel(whClientContext* c);
+#endif /* WOLFHSM_CFG_CANCEL_API */
 
 /**
  * @brief Receives a communication close response from the server.

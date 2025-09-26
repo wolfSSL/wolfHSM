@@ -86,14 +86,16 @@ enum {
 int serverDelay = 0;
 #endif
 
-#if defined(WOLFHSM_CFG_TEST_POSIX) && defined(WOLFHSM_CFG_ENABLE_CLIENT) && \
-    defined(WOLFHSM_CFG_ENABLE_SERVER)
+#if defined(WOLFHSM_CFG_IS_TEST_SERVER) && defined(WOLFHSM_CFG_TEST_POSIX) && \
+    defined(WOLFHSM_CFG_ENABLE_CLIENT) &&                                     \
+    defined(WOLFHSM_CFG_ENABLE_SERVER) && defined(WOLFHSM_CFG_CANCEL_API)
 /* pointer to expose server context cancel sequence to the client cancel
  * callback */
 static uint16_t* cancelSeqP;
 
-#endif /* WOLFHSM_CFG_TEST_POSIX && WOLFHSM_CFG_ENABLE_CLIENT && \
-          WOLFHSM_CFG_ENABLE_SERVER */
+#endif /* WOLFHSM_CFG_IS_TEST_SERVER && WOLFHSM_CFG_TEST_POSIX &&   \
+          WOLFHSM_CFG_ENABLE_CLIENT && WOLFHSM_CFG_ENABLE_SERVER && \
+          WOLFHSM_CFG_CANCEL_API */
 
 #if defined(WOLFHSM_CFG_TEST_VERBOSE) && defined(WOLFHSM_CFG_ENABLE_CLIENT)
 static int whTest_ShowNvmAvailable(whClientContext* ctx)
@@ -2460,17 +2462,16 @@ static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
         }
     }
 
-#if !defined(WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP)
+#ifdef WOLFHSM_CFG_CANCEL_API
     /* test CMAC cancellation for supported devIds */
     if (ret == 0
 #ifdef WOLFHSM_CFG_DMA
         && devId != WH_DEV_ID_DMA
 #endif
     ) {
-#ifdef WOLFHSM_CFG_IS_TEST_SERVER
-        #define WH_TEST_CMAC_TEXTSIZE 1000
+#define WH_TEST_CMAC_TEXTSIZE 1000
         char cmacFodder[WH_TEST_CMAC_TEXTSIZE] = {0};
-#endif
+
         ret = wh_Client_EnableCancel(ctx);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed to wh_Client_EnableCancel %d\n", ret);
@@ -2494,7 +2495,10 @@ static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
                      */
                     /* delay the server so scheduling doesn't interfere with the
                      * timing */
+#if 0 /* Temporarily disable server delay for this deliverable - see PR #168 \
+       */
                     serverDelay = 1;
+#endif
 
                     ret = wc_CmacUpdate(cmac, (byte*)cmacFodder,
                                         sizeof(cmacFodder));
@@ -2508,7 +2512,10 @@ static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
                                 "Failed to wh_Client_CancelRequest %d\n", ret);
                         }
                         else {
+#if 0 /* Temporarily disable server delay for this deliverable - see PR #168 \
+       */
                             serverDelay = 0;
+#endif
                             do {
                                 ret = wh_Client_CancelResponse(ctx);
                             } while (ret == WH_ERROR_NOTREADY);
@@ -2596,7 +2603,7 @@ static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
             }
         }
     }
-#endif /* !defined(WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP) */
+#endif /* WOLFHSM_CFG_CANCEL_API */
     if (ret == 0) {
         printf("CMAC DEVID=0x%X SUCCESS\n", devId);
     }
@@ -3508,7 +3515,8 @@ int whTest_CryptoServerConfig(whServerConfig* config)
         return WH_ERROR_BADARGS;
     }
 
-#if defined(WOLFHSM_CFG_TEST_POSIX)
+#if defined(WOLFHSM_CFG_IS_TEST_SERVER) && defined(WOLFHSM_CFG_TEST_POSIX) && \
+    defined(WOLFHSM_CFG_CANCEL_API)
     /* expose server ctx to client cancel callback */
     cancelSeqP = &server->cancelSeq;
 #endif
@@ -3578,6 +3586,7 @@ static void* _whServerTask(void* cf)
 #if defined(WOLFHSM_CFG_TEST_POSIX) && defined(WOLFHSM_CFG_ENABLE_CLIENT) && \
     defined(WOLFHSM_CFG_ENABLE_SERVER)
 
+#if defined(WOLFHSM_CFG_IS_TEST_SERVER) && defined(WOLFHSM_CFG_CANCEL_API)
 /* Test client cancel callback that directly sets the sequence to cancel in the
  * server context */
 static int _cancelCb(uint16_t seq)
@@ -3585,6 +3594,7 @@ static int _cancelCb(uint16_t seq)
     *cancelSeqP = seq;
     return 0;
 }
+#endif
 
 static void _whClientServerThreadTest(whClientConfig* c_conf,
                                 whServerConfig* s_conf)
@@ -3631,9 +3641,15 @@ static int wh_ClientServer_MemThreadTest(void)
                  .transport_config  = (void*)tmcf,
                  .client_id         = 1,
     }};
-    whClientConfig c_conf[1] = {{
-       .comm = cc_conf,
-       .cancelCb = _cancelCb,
+    whClientConfig              c_conf[1]  = {{
+                      .comm = cc_conf,
+#ifdef WOLFHSM_CFG_CANCEL_API
+#ifdef WOLFHSM_CFG_IS_TEST_SERVER
+        .cancelCb = _cancelCb,
+#else
+        .cancelCb = NULL,
+#endif
+#endif
     }};
     /* Server configuration/contexts */
     whTransportServerCb         tscb[1]   = {WH_TRANSPORT_MEM_SERVER_CB};
