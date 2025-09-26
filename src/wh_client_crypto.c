@@ -749,6 +749,209 @@ int wh_Client_AesGcm(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
 
     return ret;
 }
+
+#ifdef WOLFHSM_CFG_DMA
+int wh_Client_AesGcmDma(whClientContext* ctx, Aes* aes, int enc,
+                        const uint8_t* in, uint32_t len, const uint8_t* iv,
+                        uint32_t iv_len, const uint8_t* authin,
+                        uint32_t authin_len, const uint8_t* dec_tag,
+                        uint8_t* enc_tag, uint32_t tag_len, uint8_t* out)
+{
+    int                            ret         = WH_ERROR_OK;
+    whMessageCrypto_AesDmaRequest* req         = NULL;
+    uint8_t*                       dataPtr     = NULL;
+    uintptr_t                      inAddr      = 0;
+    uintptr_t                      outAddr     = 0;
+    uintptr_t                      keyAddr     = 0;
+    uintptr_t                      ivAddr      = 0;
+    uintptr_t                      aadAddr     = 0;
+    uintptr_t                      authTagAddr = 0;
+
+    uint16_t group  = WH_MESSAGE_GROUP_CRYPTO_DMA;
+    uint16_t action = WC_ALGO_TYPE_CIPHER;
+    uint16_t type =
+        WC_CIPHER_AES_GCM; /* Algorithm type for response validation */
+    const uint8_t* key    = NULL;
+    uint32_t       keyLen = 0;
+    uint16_t       reqLen;
+
+    if (ctx == NULL || aes == NULL || out == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    if ((in == NULL) && (len > 0)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    if ((iv == NULL) && (iv_len > 0)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    if ((authin == NULL) && (authin_len > 0)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    if ((enc == 0) && (dec_tag == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Get data buffer */
+    dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
+    if (dataPtr == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Setup generic header and get pointer to request data */
+    req = (whMessageCrypto_AesDmaRequest*)_createCryptoRequest(
+        dataPtr, WC_CIPHER_AES_GCM);
+    memset(req, 0, sizeof(*req));
+    req->enc  = enc;
+    req->type = type;
+
+    req->keyId = WH_DEVCTX_TO_KEYID(aes->devCtx);
+    if (req->keyId != WH_KEYID_ERASED) {
+        /* Using keyId-based key, server will load it from keystore */
+        key    = NULL;
+        keyLen = 0;
+    }
+    else {
+        /* Using direct key */
+        key    = (const uint8_t*)(aes->devKey);
+        keyLen = aes->keylen;
+    }
+
+    /* Handle key operations */
+    if (ret == WH_ERROR_OK && key != NULL && keyLen > 0) {
+        req->key.addr = (uintptr_t)key;
+        req->key.sz   = keyLen;
+        ret           = wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)key, (void**)&keyAddr, req->key.sz,
+            WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
+        req->key.addr = keyAddr;
+    }
+
+    if (ret == WH_ERROR_OK && in != NULL) {
+        req->input.sz = len;
+        ret           = wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)in, (void**)&inAddr, req->input.sz,
+            WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
+        req->input.addr = inAddr;
+    }
+
+    if (ret == WH_ERROR_OK && out != NULL) {
+        req->output.sz = len;
+        ret            = wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)out, (void**)&outAddr, req->output.sz,
+            WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
+        req->output.addr = outAddr;
+    }
+
+    if (ret == WH_ERROR_OK && iv != NULL) {
+        req->iv.sz = iv_len;
+        ret        = wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)iv, (void**)&ivAddr, req->iv.sz,
+            WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
+        req->iv.addr = ivAddr;
+    }
+
+    if (ret == WH_ERROR_OK && authin != NULL) {
+        req->aad.sz = authin_len;
+        ret         = wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)authin, (void**)&aadAddr, req->aad.sz,
+            WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
+        req->aad.addr = aadAddr;
+    }
+
+    /* set auth tag by direction */
+    if (enc == 0 && dec_tag != NULL && tag_len > 0) {
+        /* Decryption: use provided auth tag for verification */
+        req->authTag.sz = tag_len;
+        ret             = wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)dec_tag, (void**)&authTagAddr, req->authTag.sz,
+            WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
+        req->authTag.addr = authTagAddr;
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+        wh_Utils_Hexdump("[client] dec tag: \n", dec_tag, tag_len);
+#endif
+    }
+    else if (enc == 1 && enc_tag != NULL && tag_len > 0) {
+        /* Encryption: set up auth tag buffer to receive generated tag */
+        req->authTag.sz = tag_len;
+        ret             = wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)enc_tag, (void**)&authTagAddr, req->authTag.sz,
+            WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
+        req->authTag.addr = authTagAddr;
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+        wh_Utils_Hexdump("[client] enc tag buffer: \n", enc_tag, tag_len);
+#endif
+    }
+
+    /* Send request and receive response */
+    reqLen = sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+    wh_Utils_Hexdump("[client] AESGCM DMA req packet: \n", dataPtr, reqLen);
+#endif
+    ret = wh_Client_SendRequest(ctx, group, action, reqLen, dataPtr);
+    if (ret == 0) {
+        uint16_t resLen = 0;
+        do {
+            ret =
+                wh_Client_RecvResponse(ctx, &group, &action, &resLen, dataPtr);
+        } while (ret == WH_ERROR_NOTREADY);
+
+        if (ret == WH_ERROR_OK) {
+            /* Get response */
+            whMessageCrypto_AesDmaResponse* res;
+            ret = _getCryptoResponse(dataPtr, type, (uint8_t**)&res);
+            /* wolfCrypt allows positive error codes on success in some
+             * scenarios */
+            if (ret >= 0) {
+                /* For DMA operations, data is already in client memory,
+                 * no need to copy it back */
+                ret = 0; /* Success */
+            }
+        }
+    }
+
+    /* post address translation callbacks (for cleanup) */
+    if (key != NULL) {
+        (void)wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)key, (void**)&keyAddr, req->key.sz,
+            WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
+    }
+    if (iv != NULL) {
+        (void)wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)iv, (void**)&ivAddr, iv_len,
+            WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
+    }
+    if (in != NULL) {
+        (void)wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)in, (void**)&inAddr, req->input.sz,
+            WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
+    }
+    if (out != NULL) {
+        (void)wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)out, (void**)&outAddr, req->output.sz,
+            WH_DMA_OPER_CLIENT_WRITE_POST, (whDmaFlags){0});
+    }
+    if (authin != NULL) {
+        (void)wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)authin, (void**)&aadAddr, authin_len,
+            WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
+    }
+    if (enc == 0 && dec_tag != NULL && tag_len > 0) {
+        (void)wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)dec_tag, (void**)&authTagAddr, req->authTag.sz,
+            WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
+    }
+    else if (enc == 1 && enc_tag != NULL && tag_len > 0) {
+        (void)wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)enc_tag, (void**)&authTagAddr, req->authTag.sz,
+            WH_DMA_OPER_CLIENT_WRITE_POST, (whDmaFlags){0});
+    }
+    return ret;
+}
+#endif /* WOLFHSM_CFG_DMA */
 #endif /* HAVE_AESGCM */
 
 #endif /* !NO_AES */
