@@ -1777,6 +1777,199 @@ static int _HandleAesGcm(whServerContext* ctx, uint16_t magic,
     }
     return ret;
 }
+
+#ifdef WOLFHSM_CFG_DMA
+static int _HandleAesGcmDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
+                         const void* cryptoDataIn, uint16_t inSize,
+                         void* cryptoDataOut, uint16_t* outSize)
+{
+    int ret = 0;
+    whMessageCrypto_AesDmaRequest req;
+    whMessageCrypto_AesDmaResponse res;
+    Aes*     aes        = NULL;
+    int      clientDevId = 0;
+    byte     tmpKey[AES_256_KEY_SIZE];
+    int ctxHoldsLocalKey = 0;
+
+    void*  inAddr     = NULL;
+    void*  outAddr    = NULL;
+    void*  authTagAddr = NULL;
+    void*  ivAddr     = NULL;
+    void*  aadAddr    = NULL;
+    word32 outSz      = 0;
+    
+    whKeyId keyId;
+    uint32_t keyLen;
+
+    (void)inSize;
+    (void)seq;
+
+    ret = wh_MessageCrypto_TranslateAesDmaRequest(
+        magic, (whMessageCrypto_AesDmaRequest*)cryptoDataIn, &req);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    aes = NULL;
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Server_DmaProcessClientAddress(ctx, req.state.addr, (void**)&aes,
+                                                req.state.sz, WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
+        if (ret != WH_ERROR_OK) {
+            res.dmaAddrStatus.badAddr = req.state;
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        /* Save the client devId to be restored later */
+        clientDevId = aes->devId;
+        /* overwrite the devId to that of the server for local crypto */
+        aes->devId = ctx->crypto->devId;
+    }
+
+    /* Handle key operations */
+    if (ret == WH_ERROR_OK && req.key.sz > 0) {
+        /* Copy key from client if provided */
+        ret = whServerDma_CopyFromClient(ctx, tmpKey, req.key.addr,
+                                         req.key.sz, (whServerDmaFlags){0});
+        if (ret != WH_ERROR_OK) {
+            res.dmaAddrStatus.badAddr = req.key;
+        }
+    }
+
+    /* Handle input data */
+    if (ret == WH_ERROR_OK && req.input.sz > 0) {
+        /* Process client address for input data */
+        ret = wh_Server_DmaProcessClientAddress(ctx, req.input.addr, &inAddr,
+                                               req.input.sz, WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
+        if (ret != WH_ERROR_OK) {
+            res.dmaAddrStatus.badAddr = req.input;
+        }
+    }
+
+    /* Handle IV */
+    if (ret == WH_ERROR_OK && req.iv.sz > 0) {
+        /* Process client address for IV */
+        ret = wh_Server_DmaProcessClientAddress(ctx, req.iv.addr, &ivAddr,
+                                               req.iv.sz, WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
+        if (ret != WH_ERROR_OK) {
+            res.dmaAddrStatus.badAddr = req.iv;
+        }
+    }
+
+    /* Handle AAD */
+    if (ret == WH_ERROR_OK && req.aad.sz > 0) {
+        /* Process client address for AAD */
+        ret = wh_Server_DmaProcessClientAddress(ctx, req.aad.addr, &aadAddr,
+                                               req.aad.sz, WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
+        if (ret != WH_ERROR_OK) {
+            res.dmaAddrStatus.badAddr = req.aad;
+        }
+    }
+
+    /* Handle auth tag for decryption */
+    if (ret == WH_ERROR_OK && req.authTag.sz > 0) {
+        /* Process client address for auth tag */
+        ret = wh_Server_DmaProcessClientAddress(ctx, req.authTag.addr, &authTagAddr,
+                                               req.authTag.sz, WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
+        if (ret != WH_ERROR_OK) {
+            res.dmaAddrStatus.badAddr = req.authTag;
+        }
+    }
+
+    /* Handle output buffer */
+    if (ret == WH_ERROR_OK && req.output.sz > 0) {
+        /* Process client address for output buffer */
+        ret = wh_Server_DmaProcessClientAddress(ctx, req.output.addr, &outAddr,
+                                               req.output.sz, WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
+        if (ret != WH_ERROR_OK) {
+            res.dmaAddrStatus.badAddr = req.output;
+        }
+    }
+
+    /* Handle keyId-based keys if no direct key was provided */
+    if (ret == WH_ERROR_OK && req.key.sz == 0) {
+        /* Check if there's a keyID in the context that we need to load */
+        whKeyId clientKeyId = WH_DEVCTX_TO_KEYID(aes->devCtx);
+        if (clientKeyId != WH_KEYID_ERASED) {
+            /* Load key from cache */
+            keyId = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, clientKeyId);
+            keyLen = sizeof(tmpKey);
+            ret = wh_Server_KeystoreReadKey(ctx, keyId, NULL, tmpKey, &keyLen);
+            if (ret == WH_ERROR_OK) {
+                /* Verify key size is valid for AES */
+                if (keyLen != AES_128_KEY_SIZE && keyLen != AES_192_KEY_SIZE && keyLen != AES_256_KEY_SIZE) {
+                    ret = WH_ERROR_ABORTED;
+                }
+                else {
+                    /* Initialize AES with loaded key */
+                    ctxHoldsLocalKey = 1;
+                    ret = wc_AesInit(aes, NULL, ctx->crypto->devId);
+                    if (ret == WH_ERROR_OK) {
+                        ret = wc_AesSetKey(aes, tmpKey, keyLen, NULL, AES_ENCRYPTION);
+                    }
+                }
+            }
+        }
+        else {
+            ret = WH_ERROR_BADARGS;
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        if (req.enc) {
+            ret = wc_AesGcmEncrypt(aes, (byte*)outAddr, (byte*)inAddr,
+                                   (word32)req.input.sz, (byte*)ivAddr,
+                                   (word32)req.iv.sz, (byte*)authTagAddr,
+                                   (word32)req.authTag.sz, (byte*)aadAddr,
+                                   (word32)req.aad.sz);
+            if (ret == 0) {
+                outSz = req.input.sz;
+            }
+        }
+        else {
+            ret = wc_AesGcmDecrypt(aes, (byte*)outAddr, (byte*)inAddr,
+                                   (word32)req.input.sz, (byte*)ivAddr,
+                                   (word32)req.iv.sz, (byte*)authTagAddr,
+                                   (word32)req.authTag.sz, (byte*)aadAddr,
+                                   (word32)req.aad.sz);
+            if (ret == 0) {
+                outSz = req.input.sz;
+            }
+        }
+    }
+
+    /* Restore client devId */
+    aes->devId = clientDevId;
+
+    /* If we are using HSM-local keys, sanitize the key material from the AES
+     * state before returning it to the client */
+    if (ctxHoldsLocalKey) {
+        wc_AesFree(aes);
+    }
+
+
+    if (ret == WH_ERROR_OK) {
+        void* stateAddr = NULL;
+        ret = wh_Server_DmaProcessClientAddress(ctx, req.state.addr, &stateAddr,
+                                               req.state.sz, WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
+        if (ret == WH_ERROR_OK) {
+            memcpy(stateAddr, aes, req.state.sz);
+            (void)wh_Server_DmaProcessClientAddress(ctx, req.state.addr, &stateAddr,
+                                                   req.state.sz, WH_DMA_OPER_CLIENT_WRITE_POST, (whServerDmaFlags){0});
+        }
+        if (ret != WH_ERROR_OK) {
+            res.dmaAddrStatus.badAddr = req.state;
+        }
+    }
+    res.outSz = outSz;
+
+    (void)wh_MessageCrypto_TranslateAesDmaResponse(
+        magic, &res, (whMessageCrypto_AesDmaResponse*)cryptoDataOut);
+    *outSize = sizeof(res);
+
+    return ret;
+}
+#endif /* WOLFHSM_CFG_DMA */
 #endif /* HAVE_AESGCM */
 #endif /* !NO_AES */
 
@@ -4249,6 +4442,18 @@ int wh_Server_HandleCryptoDmaRequest(whServerContext* ctx, uint16_t magic,
 #endif /* WOLFSSL_SHA512 */
             }
             break; /* WC_ALGO_TYPE_HASH */
+
+        case WC_ALGO_TYPE_CIPHER:
+            switch (rqstHeader.algoType) {
+#ifdef HAVE_AESGCM
+                case WC_CIPHER_AES_GCM:
+                    ret = _HandleAesGcmDma(ctx, magic, seq, cryptoDataIn,
+                                           cryptoInSize, cryptoDataOut,
+                                           &cryptoOutSize);
+                    break;
+#endif /* HAVE_AESGCM */
+            }
+            break; /* WC_ALGO_TYPE_CIPHER */
 
         case WC_ALGO_TYPE_PK:
             switch (rqstHeader.algoType) {

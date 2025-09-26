@@ -102,8 +102,12 @@ typedef enum BenchModuleIdx {
 #if defined(HAVE_AESGCM)
     BENCH_MODULE_IDX_AES_128_GCM_ENCRYPT,
     BENCH_MODULE_IDX_AES_128_GCM_DECRYPT,
+    BENCH_MODULE_IDX_AES_128_GCM_ENCRYPT_DMA,
+    BENCH_MODULE_IDX_AES_128_GCM_DECRYPT_DMA,
     BENCH_MODULE_IDX_AES_256_GCM_ENCRYPT,
     BENCH_MODULE_IDX_AES_256_GCM_DECRYPT,
+    BENCH_MODULE_IDX_AES_256_GCM_ENCRYPT_DMA,
+    BENCH_MODULE_IDX_AES_256_GCM_DECRYPT_DMA,
 #endif /* HAVE_AESGCM */
 #endif /* !(NO_AES) */
 
@@ -266,8 +270,12 @@ static BenchModule g_benchModules[] = {
 #if defined(HAVE_AESGCM)
     [BENCH_MODULE_IDX_AES_128_GCM_ENCRYPT]     = {"AES-128-GCM-Encrypt",          wh_Bench_Mod_Aes128GCMEncrypt,     BENCH_THROUGHPUT_XBPS, 0, NULL},
     [BENCH_MODULE_IDX_AES_128_GCM_DECRYPT]     = {"AES-128-GCM-Decrypt",          wh_Bench_Mod_Aes128GCMDecrypt,     BENCH_THROUGHPUT_XBPS, 0, NULL},
+    [BENCH_MODULE_IDX_AES_128_GCM_ENCRYPT_DMA] = {"AES-128-GCM-Encrypt-DMA",      wh_Bench_Mod_Aes128GCMEncryptDma,  BENCH_THROUGHPUT_XBPS, 0, NULL},
+    [BENCH_MODULE_IDX_AES_128_GCM_DECRYPT_DMA] = {"AES-128-GCM-Decrypt-DMA",      wh_Bench_Mod_Aes128GCMDecryptDma,  BENCH_THROUGHPUT_XBPS, 0, NULL},
     [BENCH_MODULE_IDX_AES_256_GCM_ENCRYPT]     = {"AES-256-GCM-Encrypt",          wh_Bench_Mod_Aes256GCMEncrypt,     BENCH_THROUGHPUT_XBPS, 0, NULL},
     [BENCH_MODULE_IDX_AES_256_GCM_DECRYPT]     = {"AES-256-GCM-Decrypt",          wh_Bench_Mod_Aes256GCMDecrypt,     BENCH_THROUGHPUT_XBPS, 0, NULL},
+    [BENCH_MODULE_IDX_AES_256_GCM_ENCRYPT_DMA] = {"AES-256-GCM-Encrypt-DMA",      wh_Bench_Mod_Aes256GCMEncryptDma,  BENCH_THROUGHPUT_XBPS, 0, NULL},
+    [BENCH_MODULE_IDX_AES_256_GCM_DECRYPT_DMA] = {"AES-256-GCM-Decrypt-DMA",      wh_Bench_Mod_Aes256GCMDecryptDma,  BENCH_THROUGHPUT_XBPS, 0, NULL},
 #endif /* HAVE_AESGCM */
 #endif /* !(NO_AES) */
 
@@ -540,6 +548,39 @@ static int wh_Bench_CheckTransport(int transport)
     return WH_ERROR_OK;
 }
 
+#if defined(WOLFSSL_STATIC_MEMORY) && defined(WOLFHSM_CFG_TEST_POSIX)
+static int _whBench_ClientCfg_PosixDmaHeap(posixTransportShmContext* shmCtx)
+{
+    static const unsigned int listSz     = 9;
+    static const uint32_t     sizeList[] = {176,  256,  288,  704,  1056,
+                                            1712, 2112, 2368, 33800};
+    static const uint32_t     distList[] = {3, 1, 1, 1, 1, 1, 1, 3, 2};
+    WOLFSSL_HEAP_HINT*        heap       = NULL;
+    void*                     dma;
+    size_t                    dmaSz;
+    int ret = 0;
+
+    ret = posixTransportShm_GetDma(shmCtx, &dma, &dmaSz);
+    if (ret != 0) {
+        printf("Failed to get DMA\n");
+        return ret;
+    }
+
+    ret = wc_LoadStaticMemory_ex(&heap, listSz, sizeList, distList, dma,
+                                 dmaSz, 0, 0);
+    if (ret != 0) {
+        WH_BENCH_PRINTF("Failed to load static memory: %d\n", ret);
+        return ret;
+    }
+    ret = posixTransportShm_SetDmaHeap(shmCtx, (void*)heap);
+    if (ret != 0) {
+        WH_BENCH_PRINTF("Failed to set heap: %d\n", ret);
+        return ret;
+    }
+
+    return ret;
+}
+#endif
 
 /* Initializes a client context based on the provided config, runs the
  * benchmarks, then cleans up the context */
@@ -569,22 +610,10 @@ int wh_Bench_ClientCfg(whClientConfig* clientCfg, int transport)
 
 #if defined(WOLFSSL_STATIC_MEMORY) && defined(WOLFHSM_CFG_TEST_POSIX)
     if (transport == WH_BENCH_TRANSPORT_POSIX_DMA) {
-        static const unsigned int listSz     = 9;
-        static const uint32_t     sizeList[] = {176,  256,  288,  704,  1056,
-                                                1712, 2112, 2368, 33800};
-        static const uint32_t     distList[] = {3, 1, 1, 1, 1, 1, 1, 3, 1};
-        WOLFSSL_HEAP_HINT*        heap       = NULL;
-
-        ret = wc_LoadStaticMemory_ex(&heap, listSz, sizeList, distList, NULL, 0,
-                                     0, 0);
+        ret = _whBench_ClientCfg_PosixDmaHeap((posixTransportShmContext*)
+                                    clientCfg->comm->transport_context);
         if (ret != 0) {
             WH_BENCH_PRINTF("Failed to load static memory: %d\n", ret);
-            return ret;
-        }
-        ret = posixTransportShm_SetDmaHeap(clientCfg->comm->transport_context,
-                                           (void*)heap);
-        if (ret != 0) {
-            WH_BENCH_PRINTF("Failed to set heap: %d\n", ret);
             return ret;
         }
     }
@@ -692,32 +721,10 @@ static void* _whBenchClientTask(void* data)
 
 #if defined(WOLFSSL_STATIC_MEMORY) && defined(WOLFHSM_CFG_TEST_POSIX)
     if (taskData->transport == WH_BENCH_TRANSPORT_POSIX_DMA) {
-        static const unsigned int listSz     = 9;
-        static const uint32_t     sizeList[] = {176,  256,  288,  704,  1056,
-                                                1712, 2112, 2368, 33800};
-        static const uint32_t     distList[] = {3, 1, 1, 1, 1, 1, 1, 3, 1};
-        WOLFSSL_HEAP_HINT*        heap       = NULL;
-        posixTransportShmContext* shmCtx;
-        void*                     dma;
-        size_t                    dmaSz;
-
-        shmCtx = (posixTransportShmContext*)
-                     taskData->config->comm->transport_context;
-        ret = posixTransportShm_GetDma(shmCtx, &dma, &dmaSz);
-        if (ret != 0) {
-            printf("Failed to get DMA\n");
-            return NULL;
-        }
-
-        ret = wc_LoadStaticMemory_ex(&heap, listSz, sizeList, distList, dma,
-                                     dmaSz, 0, 0);
+        ret = _whBench_ClientCfg_PosixDmaHeap((posixTransportShmContext*)
+                                    taskData->config->comm->transport_context);
         if (ret != 0) {
             WH_BENCH_PRINTF("Failed to load static memory: %d\n", ret);
-            return NULL;
-        }
-        ret = posixTransportShm_SetDmaHeap(shmCtx, (void*)heap);
-        if (ret != 0) {
-            WH_BENCH_PRINTF("Failed to set heap: %d\n", ret);
             return NULL;
         }
     }
