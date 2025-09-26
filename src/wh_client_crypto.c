@@ -2496,6 +2496,13 @@ int wh_Client_CmacDma(whClientContext* ctx, Cmac* cmac, CmacType type,
     whMessageCrypto_CmacDmaResponse* res      = NULL;
     uint8_t*                         dataPtr  = NULL;
     int                              finalize = 0;
+    uintptr_t inAddr = 0; /* The req->input.addr is reused elsewhere, this
+                             local variable is to keep track of the resulting
+                             DMA translation to pass back to the callback on
+                             POST operations. */
+    uintptr_t outAddr   = 0;
+    uintptr_t keyAddr   = 0;
+    uintptr_t stateAddr = 0;
 
     if (ctx == NULL || cmac == NULL) {
         return WH_ERROR_BADARGS;
@@ -2518,26 +2525,38 @@ int wh_Client_CmacDma(whClientContext* ctx, Cmac* cmac, CmacType type,
     void* devCtx = cmac->devCtx;
 
     /* Set up DMA state buffer in client address space */
-    req->state.addr = (uintptr_t)cmac;
     req->state.sz   = sizeof(*cmac);
+    ret             = wh_Client_DmaProcessClientAddress(
+        ctx, (uintptr_t)cmac, (void**)&stateAddr, req->state.sz,
+        WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
+    req->state.addr = stateAddr;
 
     /* Handle different CMAC operations based on input parameters */
-    if (key != NULL) {
+    if (ret == WH_ERROR_OK && key != NULL) {
         /* Initialize with provided key */
-        req->key.addr = (uintptr_t)key;
-        req->key.sz   = keyLen;
+        req->key.sz = keyLen;
+        ret         = wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)key, (void**)&keyAddr, req->key.sz,
+            WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
+        req->key.addr = keyAddr;
     }
 
-    if (in != NULL) {
+    if (ret == WH_ERROR_OK && in != NULL) {
         /* Update operation */
-        req->input.addr = (uintptr_t)in;
         req->input.sz   = inLen;
+        ret             = wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)in, (void**)&inAddr, req->input.sz,
+            WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
+        req->input.addr = inAddr;
     }
 
-    if (outMac != NULL) {
+    if (ret == WH_ERROR_OK && outMac != NULL) {
         /* Finalize operation */
-        req->output.addr = (uintptr_t)outMac;
         req->output.sz   = (size_t)*outMacLen;
+        ret              = wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)outMac, (void**)&outAddr, req->output.sz,
+            WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
+        req->output.addr = outAddr;
         req->finalize    = 1;
         /* Also set local flag, as request will be trashed after a response
          * is received */
@@ -2580,6 +2599,25 @@ int wh_Client_CmacDma(whClientContext* ctx, Cmac* cmac, CmacType type,
     cmac->devCtx = devCtx;
     cmac->type   = type;
 
+    /* post address translation callbacks (for cleanup) */
+    if (key != NULL) {
+        (void)wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)key, (void**)&keyAddr, req->key.sz,
+            WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
+    }
+    if (in != NULL) {
+        (void)wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)in, (void**)&inAddr, req->input.sz,
+            WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
+    }
+    if (outMac != NULL) {
+        (void)wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)outMac, (void**)&outAddr, req->output.sz,
+            WH_DMA_OPER_CLIENT_WRITE_POST, (whDmaFlags){0});
+    }
+    (void)wh_Client_DmaProcessClientAddress(
+        ctx, (uintptr_t)cmac, (void**)&stateAddr, req->state.sz,
+        WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
     return ret;
 }
 #endif /* WOLFHSM_CFG_DMA */
@@ -3030,7 +3068,7 @@ int wh_Client_Sha224(whClientContext* ctx, wc_Sha224* sha224, const uint8_t* in,
     return ret;
 }
 
-
+#ifdef WOLFHSM_CFG_DMA
 int wh_Client_Sha224Dma(whClientContext* ctx, wc_Sha224* sha, const uint8_t* in,
                         uint32_t inLen, uint8_t* out)
 {
@@ -3041,6 +3079,9 @@ int wh_Client_Sha224Dma(whClientContext* ctx, wc_Sha224* sha, const uint8_t* in,
     uint8_t*                         dataPtr = NULL;
     whMessageCrypto_Sha2DmaRequest*  req     = NULL;
     whMessageCrypto_Sha2DmaResponse* resp    = NULL;
+    uintptr_t                        inAddr    = 0;
+    uintptr_t                        outAddr   = 0;
+    uintptr_t                        stateAddr = 0;
 
     /* Get data pointer from the context to use as request/response storage */
     dataPtr = (uint8_t*)wh_CommClient_GetDataPtr(ctx->comm);
@@ -3052,17 +3093,37 @@ int wh_Client_Sha224Dma(whClientContext* ctx, wc_Sha224* sha, const uint8_t* in,
     req = (whMessageCrypto_Sha2DmaRequest*)_createCryptoRequest(
         dataPtr, WC_HASH_TYPE_SHA224);
 
+    if (in != NULL || out != NULL) {
+        req->state.sz  = sizeof(*sha224);
+        req->input.sz  = inLen;
+        req->output.sz = WC_SHA224_DIGEST_SIZE; /* not needed, but YOLO */
+
+        /* Perform address translations */
+        ret = wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)sha224, (void**)&stateAddr, req->state.sz,
+            WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
+        req->state.addr = stateAddr;
+
+        if (ret == WH_ERROR_OK) {
+            ret = wh_Client_DmaProcessClientAddress(
+                ctx, (uintptr_t)in, (void**)&inAddr, req->input.sz,
+                WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
+            req->input.addr = inAddr;
+        }
+
+        if (ret == WH_ERROR_OK) {
+            ret = wh_Client_DmaProcessClientAddress(
+                ctx, (uintptr_t)out, (void**)&outAddr, req->output.sz,
+                WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
+            req->output.addr = outAddr;
+        }
+    }
 
     /* Caller invoked SHA Update:
      * wc_CryptoCb_Sha224Hash(sha224, data, len, NULL) */
     if (in != NULL) {
         req->finalize    = 0;
-        req->state.addr  = (uint64_t)(uintptr_t)sha224;
-        req->state.sz    = sizeof(*sha224);
-        req->input.addr  = (uint64_t)(uintptr_t)in;
-        req->input.sz    = inLen;
-        req->output.addr = (uint64_t)(uintptr_t)out;
-        req->output.sz   = WC_SHA224_DIGEST_SIZE; /* not needed, but YOLO */
+
 #ifdef DEBUG_CRYPTOCB_VERBOSE
         printf("[client] SHA224 DMA UPDATE: inAddr=%p, inSz=%u\n", in, inLen);
 #endif
@@ -3092,13 +3153,7 @@ int wh_Client_Sha224Dma(whClientContext* ctx, wc_Sha224* sha, const uint8_t* in,
      * wc_CryptoCb_Sha224Hash(sha224, NULL, 0, * hash) */
     if ((ret == WH_ERROR_OK) && (out != NULL)) {
         /* Packet will have been trashed, so re-populate all fields */
-        req->finalize    = 1;
-        req->state.addr  = (uint64_t)(uintptr_t)sha224;
-        req->state.sz    = sizeof(*sha224);
-        req->input.addr  = (uint64_t)(uintptr_t)in;
-        req->input.sz    = inLen;
-        req->output.addr = (uint64_t)(uintptr_t)out;
-        req->output.sz   = WC_SHA224_DIGEST_SIZE; /* not needed, but YOLO */
+        req->finalize = 1;
 
 #ifdef DEBUG_CRYPTOCB_VERBOSE
         printf("[client] SHA224 DMA FINAL: outAddr=%p\n", out);
@@ -3127,8 +3182,20 @@ int wh_Client_Sha224Dma(whClientContext* ctx, wc_Sha224* sha, const uint8_t* in,
         }
     }
 
+    if (in != NULL || out != NULL) {
+        (void)wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)sha224, (void**)&stateAddr, req->state.sz,
+            WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
+        (void)wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)in, (void**)&inAddr, req->input.sz,
+            WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
+        (void)wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)out, (void**)&outAddr, req->output.sz,
+            WH_DMA_OPER_CLIENT_WRITE_POST, (whDmaFlags){0});
+    }
     return ret;
 }
+#endif /* WOLFHSM_CFG_DMA */
 #endif /* WOLFSSL_SHA224 */
 
 #ifdef WOLFSSL_SHA384
@@ -3285,6 +3352,8 @@ int wh_Client_Sha384(whClientContext* ctx, wc_Sha384* sha384, const uint8_t* in,
 
     return ret;
 }
+
+#ifdef WOLFHSM_CFG_DMA
 int wh_Client_Sha384Dma(whClientContext* ctx, wc_Sha384* sha, const uint8_t* in,
                         uint32_t inLen, uint8_t* out)
 {
@@ -3295,6 +3364,9 @@ int wh_Client_Sha384Dma(whClientContext* ctx, wc_Sha384* sha, const uint8_t* in,
     uint8_t*                         dataPtr = NULL;
     whMessageCrypto_Sha2DmaRequest*  req     = NULL;
     whMessageCrypto_Sha2DmaResponse* resp    = NULL;
+    uintptr_t                        inAddr    = 0;
+    uintptr_t                        outAddr   = 0;
+    uintptr_t                        stateAddr = 0;
 
     /* Get data pointer from the context to use as request/response storage */
     dataPtr = (uint8_t*)wh_CommClient_GetDataPtr(ctx->comm);
@@ -3306,17 +3378,36 @@ int wh_Client_Sha384Dma(whClientContext* ctx, wc_Sha384* sha, const uint8_t* in,
     req = (whMessageCrypto_Sha2DmaRequest*)_createCryptoRequest(
         dataPtr, WC_HASH_TYPE_SHA384);
 
+    if (in != NULL || out != NULL) {
+        req->state.sz  = sizeof(*sha384);
+        req->input.sz  = inLen;
+        req->output.sz = WC_SHA384_DIGEST_SIZE; /* not needed, but YOLO */
+
+        /* Perform address translations */
+        ret = wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)sha384, (void**)&stateAddr, req->state.sz,
+            WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
+        req->state.addr = stateAddr;
+
+        if (ret == WH_ERROR_OK) {
+            ret = wh_Client_DmaProcessClientAddress(
+                ctx, (uintptr_t)in, (void**)&inAddr, req->input.sz,
+                WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
+            req->input.addr = inAddr;
+        }
+
+        if (ret == WH_ERROR_OK) {
+            ret = wh_Client_DmaProcessClientAddress(
+                ctx, (uintptr_t)out, (void**)&outAddr, req->output.sz,
+                WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
+            req->output.addr = outAddr;
+        }
+    }
 
     /* Caller invoked SHA Update:
      * wc_CryptoCb_Sha384Hash(sha384, data, len, NULL) */
     if (in != NULL) {
-        req->finalize    = 0;
-        req->state.addr  = (uint64_t)(uintptr_t)sha384;
-        req->state.sz    = sizeof(*sha384);
-        req->input.addr  = (uint64_t)(uintptr_t)in;
-        req->input.sz    = inLen;
-        req->output.addr = (uint64_t)(uintptr_t)out;
-        req->output.sz   = WC_SHA384_DIGEST_SIZE; /* not needed, but YOLO */
+        req->finalize = 0;
 #ifdef DEBUG_CRYPTOCB_VERBOSE
         printf("[client] SHA384 DMA UPDATE: inAddr=%p, inSz=%u\n", in, inLen);
 #endif
@@ -3346,13 +3437,7 @@ int wh_Client_Sha384Dma(whClientContext* ctx, wc_Sha384* sha, const uint8_t* in,
      * wc_CryptoCb_Sha384Hash(sha384, NULL, 0, * hash) */
     if ((ret == WH_ERROR_OK) && (out != NULL)) {
         /* Packet will have been trashed, so re-populate all fields */
-        req->finalize    = 1;
-        req->state.addr  = (uint64_t)(uintptr_t)sha384;
-        req->state.sz    = sizeof(*sha384);
-        req->input.addr  = (uint64_t)(uintptr_t)in;
-        req->input.sz    = inLen;
-        req->output.addr = (uint64_t)(uintptr_t)out;
-        req->output.sz   = WC_SHA384_DIGEST_SIZE; /* not needed, but YOLO */
+        req->finalize = 1;
 
 #ifdef DEBUG_CRYPTOCB_VERBOSE
         printf("[client] SHA384 DMA FINAL: outAddr=%p\n", out);
@@ -3381,8 +3466,20 @@ int wh_Client_Sha384Dma(whClientContext* ctx, wc_Sha384* sha, const uint8_t* in,
         }
     }
 
+    if (in != NULL || out != NULL) {
+        (void)wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)sha384, (void**)&stateAddr, req->state.sz,
+            WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
+        (void)wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)in, (void**)&inAddr, req->input.sz,
+            WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
+        (void)wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)out, (void**)&outAddr, req->output.sz,
+            WH_DMA_OPER_CLIENT_WRITE_POST, (whDmaFlags){0});
+    }
     return ret;
 }
+#endif /* WOLHSM_CFG_DMA */
 #endif /* WOLFSSL_SHA384 */
 
 
@@ -3551,6 +3648,8 @@ int wh_Client_Sha512(whClientContext* ctx, wc_Sha512* sha512, const uint8_t* in,
 
     return ret;
 }
+
+#ifdef WOLFHSM_CFG_DMA
 int wh_Client_Sha512Dma(whClientContext* ctx, wc_Sha512* sha, const uint8_t* in,
                         uint32_t inLen, uint8_t* out)
 {
@@ -3561,6 +3660,9 @@ int wh_Client_Sha512Dma(whClientContext* ctx, wc_Sha512* sha, const uint8_t* in,
     uint8_t*                         dataPtr = NULL;
     whMessageCrypto_Sha2DmaRequest*  req     = NULL;
     whMessageCrypto_Sha2DmaResponse* resp    = NULL;
+    uintptr_t                        inAddr    = 0;
+    uintptr_t                        outAddr   = 0;
+    uintptr_t                        stateAddr = 0;
 
     /* Get data pointer from the context to use as request/response storage */
     dataPtr = (uint8_t*)wh_CommClient_GetDataPtr(ctx->comm);
@@ -3572,17 +3674,37 @@ int wh_Client_Sha512Dma(whClientContext* ctx, wc_Sha512* sha, const uint8_t* in,
     req = (whMessageCrypto_Sha2DmaRequest*)_createCryptoRequest(
         dataPtr, WC_HASH_TYPE_SHA512);
 
+    if (in != NULL || out != NULL) {
+        req->state.sz  = sizeof(*sha512);
+        req->input.sz  = inLen;
+        req->output.sz = WC_SHA512_DIGEST_SIZE; /* not needed, but YOLO */
+
+        /* Perform address translations */
+        ret = wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)sha512, (void**)&stateAddr, req->state.sz,
+            WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
+        req->state.addr = stateAddr;
+
+        if (ret == WH_ERROR_OK) {
+            ret = wh_Client_DmaProcessClientAddress(
+                ctx, (uintptr_t)in, (void**)&inAddr, req->input.sz,
+                WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
+            req->input.addr = inAddr;
+        }
+
+        if (ret == WH_ERROR_OK) {
+            ret = wh_Client_DmaProcessClientAddress(
+                ctx, (uintptr_t)out, (void**)&outAddr, req->output.sz,
+                WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
+            req->output.addr = outAddr;
+        }
+    }
 
     /* Caller invoked SHA Update:
      * wc_CryptoCb_Sha512Hash(sha512, data, len, NULL) */
     if (in != NULL) {
         req->finalize    = 0;
-        req->state.addr  = (uint64_t)(uintptr_t)sha512;
-        req->state.sz    = sizeof(*sha512);
-        req->input.addr  = (uint64_t)(uintptr_t)in;
-        req->input.sz    = inLen;
-        req->output.addr = (uint64_t)(uintptr_t)out;
-        req->output.sz   = WC_SHA512_DIGEST_SIZE; /* not needed, but YOLO */
+
 #ifdef DEBUG_CRYPTOCB_VERBOSE
         printf("[client] SHA512 DMA UPDATE: inAddr=%p, inSz=%u\n", in, inLen);
 #endif
@@ -3612,13 +3734,7 @@ int wh_Client_Sha512Dma(whClientContext* ctx, wc_Sha512* sha, const uint8_t* in,
      * wc_CryptoCb_Sha512Hash(sha512, NULL, 0, * hash) */
     if ((ret == WH_ERROR_OK) && (out != NULL)) {
         /* Packet will have been trashed, so re-populate all fields */
-        req->finalize    = 1;
-        req->state.addr  = (uint64_t)(uintptr_t)sha512;
-        req->state.sz    = sizeof(*sha512);
-        req->input.addr  = (uint64_t)(uintptr_t)in;
-        req->input.sz    = inLen;
-        req->output.addr = (uint64_t)(uintptr_t)out;
-        req->output.sz   = WC_SHA512_DIGEST_SIZE; /* not needed, but YOLO */
+        req->finalize = 1;
 
 #ifdef DEBUG_CRYPTOCB_VERBOSE
         printf("[client] SHA512 DMA FINAL: outAddr=%p\n", out);
@@ -3647,8 +3763,20 @@ int wh_Client_Sha512Dma(whClientContext* ctx, wc_Sha512* sha, const uint8_t* in,
         }
     }
 
+    if (in != NULL || out != NULL) {
+        (void)wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)sha512, (void**)&stateAddr, req->state.sz,
+            WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
+        (void)wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)in, (void**)&inAddr, req->input.sz,
+            WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
+        (void)wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)out, (void**)&outAddr, req->output.sz,
+            WH_DMA_OPER_CLIENT_WRITE_POST, (whDmaFlags){0});
+    }
     return ret;
 }
+#endif /* WOLFHSM_CFG_DMA  */
 #endif /* WOLFSSL_SHA512 */
 
 #ifdef HAVE_DILITHIUM
@@ -4222,6 +4350,8 @@ static int _MlDsaMakeKeyDma(whClientContext* ctx, int level,
     uint8_t*                                dataPtr = NULL;
     whMessageCrypto_MlDsaKeyGenDmaRequest*  req     = NULL;
     whMessageCrypto_MlDsaKeyGenDmaResponse* res     = NULL;
+    uintptr_t                               keyAddr   = 0;
+    uint64_t                                keyAddrSz = 0;
 
     if (ctx == NULL) {
         return WH_ERROR_BADARGS;
@@ -4255,8 +4385,12 @@ static int _MlDsaMakeKeyDma(whClientContext* ctx, int level,
         req->level    = level;
         req->flags    = flags;
         req->keyId    = key_id;
-        req->key.addr = (uint64_t)(uintptr_t)buffer;
-        req->key.sz   = sizeof(buffer);
+        req->key.sz = keyAddrSz = sizeof(buffer);
+
+        ret = wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)buffer, (void**)&keyAddr, keyAddrSz,
+            WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
+        req->key.addr = (uint64_t)(uintptr_t)keyAddr;
 
         if ((label != NULL) && (label_len > 0)) {
             if (label_len > WH_NVM_LABEL_LEN) {
@@ -4274,33 +4408,37 @@ static int _MlDsaMakeKeyDma(whClientContext* ctx, int level,
                 ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
                                              (uint8_t*)dataPtr);
             } while (ret == WH_ERROR_NOTREADY);
+        }
 
-            if (ret == WH_ERROR_OK) {
-                /* Get response structure pointer, validates generic header
-                 * rc */
-                ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_PQC_SIG_KEYGEN,
-                                         (uint8_t**)&res);
-                /* wolfCrypt allows positive error codes on success in some
-                 * scenarios */
-                if (ret >= 0) {
-                    /* Key is cached on server or is ephemeral */
-                    key_id = (whKeyId)(res->keyId);
+        (void)wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)buffer, (void**)&keyAddr, keyAddrSz,
+            WH_DMA_OPER_CLIENT_WRITE_POST, (whDmaFlags){0});
 
-                    /* Update output variable if requested */
-                    if (inout_key_id != NULL) {
-                        *inout_key_id = key_id;
-                    }
+        if (ret == WH_ERROR_OK) {
+            /* Get response structure pointer, validates generic header
+             * rc */
+            ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_PQC_SIG_KEYGEN,
+                                     (uint8_t**)&res);
+            /* wolfCrypt allows positive error codes on success in some
+             * scenarios */
+            if (ret >= 0) {
+                /* Key is cached on server or is ephemeral */
+                key_id = (whKeyId)(res->keyId);
 
-                    /* Update the context if provided */
-                    if (key != NULL) {
-                        /* Set the key_id. Should be ERASED if EPHEMERAL */
-                        wh_Client_MlDsaSetKeyId(key, key_id);
+                /* Update output variable if requested */
+                if (inout_key_id != NULL) {
+                    *inout_key_id = key_id;
+                }
 
-                        if (flags & WH_NVM_FLAGS_EPHEMERAL) {
-                            /* Response has the exported key */
-                            ret = wh_Crypto_MlDsaDeserializeKeyDer(
-                                buffer, res->keySize, key);
-                        }
+                /* Update the context if provided */
+                if (key != NULL) {
+                    /* Set the key_id. Should be ERASED if EPHEMERAL */
+                    wh_Client_MlDsaSetKeyId(key, key_id);
+
+                    if (flags & WH_NVM_FLAGS_EPHEMERAL) {
+                        /* Response has the exported key */
+                        ret = wh_Crypto_MlDsaDeserializeKeyDer(
+                            buffer, res->keySize, key);
                     }
                 }
             }
@@ -4332,6 +4470,8 @@ int wh_Client_MlDsaSignDma(whClientContext* ctx, const byte* in, word32 in_len,
     whMessageCrypto_MlDsaSignDmaRequest*  req     = NULL;
     whMessageCrypto_MlDsaSignDmaResponse* res     = NULL;
     uint8_t*                              dataPtr = NULL;
+    uintptr_t                             inAddr  = 0;
+    uintptr_t                             outAddr = 0;
 
     /* Transaction state */
     whKeyId key_id;
@@ -4394,10 +4534,17 @@ int wh_Client_MlDsaSignDma(whClientContext* ctx, const byte* in, word32 in_len,
             req->keyId   = key_id;
 
             /* Set up DMA buffers */
-            req->msg.addr = (uint64_t)(uintptr_t)in;
             req->msg.sz   = in_len;
-            req->sig.addr = (uint64_t)(uintptr_t)out;
+            ret           = wh_Client_DmaProcessClientAddress(
+                ctx, (uintptr_t)in, (void**)&inAddr, req->msg.sz,
+                WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
+            req->msg.addr = inAddr;
+
             req->sig.sz   = *out_len;
+            ret           = wh_Client_DmaProcessClientAddress(
+                ctx, (uintptr_t)out, (void**)&outAddr, req->sig.sz,
+                WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
+            req->sig.addr = outAddr;
 
             /* Send Request */
             ret = wh_Client_SendRequest(ctx, group, action, req_len,
@@ -4428,6 +4575,13 @@ int wh_Client_MlDsaSignDma(whClientContext* ctx, const byte* in, word32 in_len,
                     }
                 }
             }
+
+            (void)wh_Client_DmaProcessClientAddress(
+                ctx, (uintptr_t)out, (void**)&outAddr, req->sig.sz,
+                WH_DMA_OPER_CLIENT_WRITE_POST, (whDmaFlags){0});
+            (void)wh_Client_DmaProcessClientAddress(
+                ctx, (uintptr_t)in, (void**)&inAddr, req->msg.sz,
+                WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
         }
         else {
             ret = WH_ERROR_BADARGS;
@@ -4479,6 +4633,8 @@ int wh_Client_MlDsaVerifyDma(whClientContext* ctx, const byte* sig,
         uint16_t group   = WH_MESSAGE_GROUP_CRYPTO_DMA;
         uint16_t action  = WC_ALGO_TYPE_PK;
         uint32_t options = 0;
+        uintptr_t sigAddr = 0;
+        uintptr_t msgAddr = 0;
 
         uint16_t req_len =
             sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
@@ -4506,10 +4662,16 @@ int wh_Client_MlDsaVerifyDma(whClientContext* ctx, const byte* sig,
             req->keyId   = key_id;
 
             /* Set up DMA buffers */
-            req->sig.addr = (uint64_t)(uintptr_t)sig;
             req->sig.sz   = sig_len;
-            req->msg.addr = (uint64_t)(uintptr_t)msg;
+            ret           = wh_Client_DmaProcessClientAddress(
+                ctx, (uintptr_t)sig, (void**)&sigAddr, sig_len,
+                WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
+            req->sig.addr = sigAddr;
             req->msg.sz   = msg_len;
+            ret           = wh_Client_DmaProcessClientAddress(
+                ctx, (uintptr_t)msg, (void**)&msgAddr, msg_len,
+                WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
+            req->msg.addr = msgAddr;
 
             /* Send Request */
             ret = wh_Client_SendRequest(ctx, group, action, req_len,
@@ -4540,6 +4702,13 @@ int wh_Client_MlDsaVerifyDma(whClientContext* ctx, const byte* sig,
                     }
                 }
             }
+
+            (void)wh_Client_DmaProcessClientAddress(
+                ctx, (uintptr_t)msg, (void**)&msgAddr, msg_len,
+                WH_DMA_OPER_CLIENT_WRITE_POST, (whDmaFlags){0});
+            (void)wh_Client_DmaProcessClientAddress(
+                ctx, (uintptr_t)sig, (void**)&sigAddr, sig_len,
+                WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
         }
         else {
             ret = WH_ERROR_BADARGS;
