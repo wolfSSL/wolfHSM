@@ -306,7 +306,21 @@ int wh_Bench_PrintResults(whBenchOpContext* ctx)
         return WH_ERROR_BADARGS;
     }
 
-    WH_BENCH_PRINTF("\nBenchmark Results:\n");
+    WH_BENCH_PRINTF("\nBenchmark Results ");
+    switch (ctx->transportType) {
+        case WH_BENCH_TRANSPORT_MEM:
+            WH_BENCH_PRINTF("(Memory):\n");
+            break;
+        case WH_BENCH_TRANSPORT_POSIX_SHM:
+            WH_BENCH_PRINTF("(Shared Memory):\n");
+            break;
+        case WH_BENCH_TRANSPORT_POSIX_TCP:
+            WH_BENCH_PRINTF("(TCP):\n");
+            break;
+        case WH_BENCH_TRANSPORT_POSIX_DMA:
+            WH_BENCH_PRINTF("(DMA):\n");
+            break;
+    }
     WH_BENCH_PRINTF(
         "|--------------------------------|------------|------------|----------"
         "--|------------|------------|--------------------|\n");
@@ -351,23 +365,23 @@ int wh_Bench_PrintResults(whBenchOpContext* ctx)
 
                 if (throughput < 1024.0) {
                     /* Bytes per second */
-                    WH_BENCH_SNPRINTF(buffer, sizeof(buffer), 
-                                "%.2f B/s", throughput);
+                    WH_BENCH_SNPRINTF(buffer, sizeof(buffer), "%.2f B/s",
+                                      throughput);
                 }
                 else if (throughput < 1024.0 * 1024.0) {
                     /* Kilobytes per second */
-                    WH_BENCH_SNPRINTF(buffer, sizeof(buffer), 
-                                "%.2f KB/s", throughput / 1024.0);
+                    WH_BENCH_SNPRINTF(buffer, sizeof(buffer), "%.2f KB/s",
+                                      throughput / 1024.0);
                 }
                 else {
                     /* Megabytes per second */
-                    WH_BENCH_SNPRINTF(buffer, sizeof(buffer), 
-                                "%.2f MB/s", throughput / (1024.0 * 1024.0));
+                    WH_BENCH_SNPRINTF(buffer, sizeof(buffer), "%.2f MB/s",
+                                      throughput / (1024.0 * 1024.0));
                 }
             }
             else if (ctx->ops[i].throughputType == BENCH_THROUGHPUT_OPS) {
-                WH_BENCH_SNPRINTF(buffer, sizeof(buffer), 
-                                "%.2f ops/s", ctx->ops[i].throughput);
+                WH_BENCH_SNPRINTF(buffer, sizeof(buffer), "%.2f ops/s",
+                                  ctx->ops[i].throughput);
             }
             else {
                 /* No throughput */

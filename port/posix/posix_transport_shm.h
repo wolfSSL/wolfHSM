@@ -86,6 +86,7 @@ typedef struct {
     whTransportMemContext   transportMemCtx[1];
     whCommSetConnectedCb    connectcb;
     void*                   connectcb_arg;
+    void*                   heap; /* heap hint used in pass by reference */
 } posixTransportShmContext;
 
 /* Naming conveniences. Reuses the same types. */
@@ -103,6 +104,31 @@ int posixTransportShm_GetUserPid(posixTransportShmContext* ctx,
 
 int posixTransportShm_GetDma(posixTransportShmContext* ctx,
         void* *out_dma, size_t *out_size);
+
+
+/**
+ * @brief Setter function for the current heap hint
+ *
+ * This function is used to set the current heap hint set for use with the
+ * transport context.
+ *
+ * @param[in] ctx Pointer to the transport context.
+ * @param[in] heap Pointer to the heap hint
+ * @return int Returns WH_ERROR_OK on success, or WH_ERROR_BADARGS if the
+ * arguments are invalid.
+ */
+int posixTransportShm_SetDmaHeap(posixTransportShmContext* ctx, void* heap);
+
+/**
+ * @brief Getter function for the current heap hint
+ *
+ * This function is used to get the current heap hint set for use with the
+ * transport context.
+ *
+ * @param[in] ctx Pointer to the transport context.
+ * @return a pointer to the heap hint
+ */
+void* posixTransportShm_GetDmaHeap(posixTransportShmContext* ctx);
 
 
 /** Callback function declarations */
@@ -135,4 +161,21 @@ int posixTransportShm_RecvResponse(void* c, uint16_t* out_len, void* data);
         .Cleanup = posixTransportShm_Cleanup,      \
     }
 
+
+#ifdef WOLFHSM_CFG_DMA
+#include "wolfhsm/wh_dma.h"
+
+#include "wolfhsm/wh_server.h"
+int posixTransportShm_ServerStaticMemDmaCallback(
+    whServerContext* server, uintptr_t clientAddr, void** xformedCliAddr,
+    size_t len, whServerDmaOper oper, whServerDmaFlags flags);
+
+#include "wolfhsm/wh_client.h"
+int posixTransportShm_ClientStaticMemDmaCallback(whClientContext* client,
+                                                 uintptr_t        clientAddr,
+                                                 void** xformedCliAddr,
+                                                 size_t len, whDmaOper oper,
+                                                 whDmaFlags flags);
+
+#endif
 #endif /* !PORT_POSIX_POSIX_TRANSPORT_SHM_H_ */

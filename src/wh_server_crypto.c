@@ -2908,7 +2908,7 @@ int wh_Server_HandleCryptoRequest(whServerContext* ctx, uint16_t magic,
 
     /* Propagate error code to client in response packet header. Crypto handlers
      * have already populated the response packet with the output data. */
-    respHeader.rc = ret;
+    respHeader.rc       = ret;
     respHeader.algoType = rqstHeader.algoType;
     wh_MessageCrypto_TranslateGenericResponseHeader(
         magic, &respHeader,
@@ -2946,11 +2946,11 @@ static int _HandleSha256Dma(whServerContext* ctx, uint16_t magic, uint16_t seq,
     (void)seq;
     (void)inSize;
 
-    int                               ret = 0;
-    whMessageCrypto_Sha2DmaRequest    req;
-    whMessageCrypto_Sha2DmaResponse   res;
-    wc_Sha256                         sha256[1];
-    int                               clientDevId;
+    int                             ret = 0;
+    whMessageCrypto_Sha2DmaRequest  req;
+    whMessageCrypto_Sha2DmaResponse res;
+    wc_Sha256                       sha256[1];
+    int                             clientDevId;
 
     /* Translate the request */
     ret = wh_MessageCrypto_TranslateSha2DmaRequest(

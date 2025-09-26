@@ -565,7 +565,9 @@ int main(int argc, char* argv[])
         .she = NULL,
 #endif /* WOLFHSM_CFG_SHE_EXTENSION */
 #endif /* WOLFHSM_CFG_NO_CRYPTO */
+#ifdef WOLFHSM_CFG_DMA
         .dmaConfig = NULL,
+#endif /* WOLFHSM_CFG_DMA */
     };
 
     whServerContext gServerContext = {0};

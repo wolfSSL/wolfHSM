@@ -742,11 +742,11 @@ int whTest_ClientServerSequential(void)
     }};
 #endif
 
-    whServerConfig  s_conf[1] = {{
-         .comm_config = cs_conf,
-         .nvm         = nvm,
+    whServerConfig s_conf[1] = {{
+        .comm_config = cs_conf,
+        .nvm         = nvm,
 #ifndef WOLFHSM_CFG_NO_CRYPTO
-         .crypto      = crypto,
+        .crypto = crypto,
 #endif
     }};
     whServerContext server[1] = {0};
@@ -1772,12 +1772,13 @@ static int wh_ClientServer_MemThreadTest(void)
     }};
 #endif
 
+
     whServerConfig s_conf[1] = {{
         .comm_config = cs_conf,
         .nvm         = nvm,
 #ifndef WOLFHSM_CFG_NO_CRYPTO
         .crypto = crypto,
-        .devId = INVALID_DEVID,
+        .devId  = INVALID_DEVID,
 #endif
     }};
 
@@ -1865,11 +1866,11 @@ static int wh_ClientServer_PosixMemMapThreadTest(void)
     }};
 #endif
 
-    whServerConfig                  s_conf[1] = {{
-       .comm_config = cs_conf,
-       .nvm = nvm,
+    whServerConfig s_conf[1] = {{
+        .comm_config = cs_conf,
+        .nvm         = nvm,
 #ifndef WOLFHSM_CFG_NO_CRYPTO
-       .crypto = crypto,
+        .crypto = crypto,
 #endif
     }};
 

@@ -20,13 +20,13 @@
  * port/posix/posix_transport_shm.c
  */
 
-#include <fcntl.h>     /* For O_* constants */
-#include <sys/mman.h>  /* For shm_open, mmap */
-#include <sys/stat.h>  /* For mode constants */
-#include <unistd.h>    /* For ftruncate, getpid, sleep */
-#include <errno.h>     /* For errno */
-#include <stdlib.h>    /* For exit */
-#include <string.h>    /* For memset */
+#include <fcntl.h>    /* For O_* constants */
+#include <sys/mman.h> /* For shm_open, mmap */
+#include <sys/stat.h> /* For mode constants */
+#include <unistd.h>   /* For ftruncate, getpid, sleep */
+#include <errno.h>    /* For errno */
+#include <stdlib.h>   /* For exit */
+#include <string.h>   /* For memset */
 #include <stdint.h>
 #include <stdio.h>
 
@@ -42,58 +42,61 @@
 #define PTSHM_HEADER_SIZE 64
 typedef union {
     struct {
-        uint32_t initialized;   /* Set non-zero when setup */
-        uint16_t req_size;      /* Size of request buffer */
-        uint16_t resp_size;     /* Size of response buffer */
-        size_t dma_size;        /* Size of shared DMA space */
-        pid_t creator_pid;      /* Process ID of the creator */
-        pid_t user_pid;         /* Process ID of user */
+        uint32_t initialized; /* Set non-zero when setup */
+        uint16_t req_size;    /* Size of request buffer */
+        uint16_t resp_size;   /* Size of response buffer */
+        size_t   dma_size;    /* Size of shared DMA space */
+        pid_t    creator_pid; /* Process ID of the creator */
+        pid_t    user_pid;    /* Process ID of user */
     };
     uint8_t WH_PAD[PTSHM_HEADER_SIZE];
 } ptshmHeader;
 
 typedef struct {
-    void* ptr;
-    size_t size;
+    void*        ptr;
+    size_t       size;
     ptshmHeader* header;
-    uint8_t* req;
-    uint8_t* resp;
-    uint8_t* dma;
-    size_t dma_size;
-    uint16_t req_size;
-    uint16_t resp_size;
+    uint8_t*     req;
+    uint8_t*     resp;
+    uint8_t*     dma;
+    size_t       dma_size;
+    uint16_t     req_size;
+    uint16_t     resp_size;
 } ptshmMapping;
 
 enum {
-    PTSHM_INITIALIZED_NONE      = 0,
-    PTSHM_INITIALIZED_CLEANUP   = 1,
-    PTSHM_INITIALIZED_CREATOR   = 2,
-    PTSHM_INITIALIZED_USER      = 3,
+    PTSHM_INITIALIZED_NONE    = 0,
+    PTSHM_INITIALIZED_CLEANUP = 1,
+    PTSHM_INITIALIZED_CREATOR = 2,
+    PTSHM_INITIALIZED_USER    = 3,
 };
 /** Local declarations */
 
 /* Memory map and interpret the header block */
 static int posixTransportShm_Map(int fd, size_t size, ptshmMapping* map);
 
+#if defined(WOLFHSM_CFG_ENABLE_SERVER)
+/* Create and map a shared object for transport */
+static int posixTransportShm_CreateMap(char* name, uint16_t req_size,
+                                       uint16_t resp_size, size_t dma_size,
+                                       ptshmMapping* map);
+#endif
+
+#if defined(WOLFHSM_CFG_ENABLE_CLIENT)
 /* Use and map a shared object for transport */
 static int posixTransportShm_UseMap(char* name, ptshmMapping* map);
 
-/* Create and map a shared object for transport */
-static int posixTransportShm_CreateMap(char* name, uint16_t req_size,
-        uint16_t resp_size, size_t dma_size, ptshmMapping* map);
-
 /* Map the shared object if not already mapped */
-static int posixTransportShm_HandleMap(posixTransportShmContext *ctx);
-
+static int posixTransportShm_HandleMap(posixTransportShmContext* ctx);
+#endif
 
 /** Local Definitions */
 static int posixTransportShm_Map(int fd, size_t size, ptshmMapping* map)
 {
-    int ret = WH_ERROR_OK;
+    int   ret = WH_ERROR_OK;
     void* ptr = NULL;
 
-    if (    (fd < 0) ||
-            (map == NULL) ) {
+    if ((fd < 0) || (map == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
@@ -101,47 +104,48 @@ static int posixTransportShm_Map(int fd, size_t size, ptshmMapping* map)
     ptr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     if (ptr != MAP_FAILED) {
         memset(map, 0, sizeof(*map));
-        map->ptr = ptr;
-        map->size = size;
-        map->header = (ptshmHeader*)ptr;
-        map->req = (uint8_t*)(map->header + 1);
-        map->resp = map->req + map->header->req_size;
-        map->dma = map->resp + map->header->resp_size;
-    } else {
+        map->ptr      = ptr;
+        map->size     = size;
+        map->header   = (ptshmHeader*)ptr;
+        map->req      = (uint8_t*)(map->header + 1);
+        map->resp     = map->req + map->header->req_size;
+        map->dma      = map->resp + map->header->resp_size;
+        map->dma_size = map->header->dma_size;
+    }
+    else {
         ret = WH_ERROR_ABORTED;
     }
     return ret;
 }
 
-
+#if defined(WOLFHSM_CFG_ENABLE_CLIENT)
 static int posixTransportShm_UseMap(char* name, ptshmMapping* map)
 {
     int ret = WH_ERROR_OK;
-    int fd = -1;
+    int fd  = -1;
 
-    if( (name == NULL) || (map == NULL)) {
+    if ((name == NULL) || (map == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
     fd = shm_open(name, O_RDWR, 0);
     if (fd >= 0) {
         /* Check the size */
-        struct stat st[1] = { 0 };
-        ret = fstat(fd, st);
+        struct stat st[1] = {0};
+        ret               = fstat(fd, st);
         if (ret == 0) {
             if (st->st_size != 0) {
                 /* Map the header and get configuration */
-                ptshmHeader* header = (ptshmHeader*)mmap(NULL, sizeof(*header),
-                        PROT_READ, MAP_SHARED, fd, 0);
+                ptshmHeader* header = (ptshmHeader*)mmap(
+                    NULL, sizeof(*header), PROT_READ, MAP_SHARED, fd, 0);
                 if (header != MAP_FAILED) {
                     size_t size = 0;
                     if (header->initialized == PTSHM_INITIALIZED_CREATOR) {
                         /* Read provided sizes */
-                        size = sizeof(*header) +
-                                    header->req_size +
-                                    header->resp_size +
-                                    header->dma_size;
-                    } else {
+                        size = sizeof(*header) + header->req_size +
+                               header->resp_size + header->dma_size;
+                    }
+                    else {
                         /* Header not configured */
                         ret = WH_ERROR_NOTREADY;
                     }
@@ -159,40 +163,46 @@ static int posixTransportShm_UseMap(char* name, ptshmMapping* map)
                             map->header->initialized = PTSHM_INITIALIZED_USER;
                         }
                     }
-                } else {
+                }
+                else {
                     /* Mapping the header failed */
                     ret = WH_ERROR_ABORTED;
                 }
-            } else {
+            }
+            else {
                 /* ftruncate has not completed */
                 ret = WH_ERROR_NOTREADY;
             }
             (void)close(fd);
-        } else {
+        }
+        else {
             /* Problem getting file stat */
             ret = WH_ERROR_ABORTED;
         }
-    } else {
+    }
+    else {
         if (errno == ENOENT) {
             /* File does not exist */
             ret = WH_ERROR_NOTFOUND;
-        } else {
+        }
+        else {
             /* Some other error */
             ret = WH_ERROR_ABORTED;
         }
     }
     return ret;
 }
+#endif /* WOLFHSM_CFG_ENABLE_CLIENT */
 
-
+#if defined(WOLFHSM_CFG_ENABLE_SERVER)
 static int posixTransportShm_CreateMap(char* name, uint16_t req_size,
-        uint16_t resp_size, size_t dma_size, ptshmMapping* map)
+                                       uint16_t resp_size, size_t dma_size,
+                                       ptshmMapping* map)
 {
     int ret = WH_ERROR_OK;
-    int fd = -1;
+    int fd  = -1;
 
-    if (    (name == NULL) ||
-            (map == NULL) ) {
+    if ((name == NULL) || (map == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
@@ -206,12 +216,13 @@ static int posixTransportShm_CreateMap(char* name, uint16_t req_size,
         size_t size = sizeof(*(map->header)) + req_size + resp_size + dma_size;
         if (ftruncate(fd, size) == 0) {
             /* Map the header and set the configuration */
-            ptshmHeader* header = (ptshmHeader*)mmap(NULL, sizeof(*header),
-                    PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+            ptshmHeader* header =
+                (ptshmHeader*)mmap(NULL, sizeof(*header),
+                                   PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
             if (header != MAP_FAILED) {
-                header->req_size = req_size;
-                header->resp_size = resp_size;
-                header->dma_size = dma_size;
+                header->req_size    = req_size;
+                header->resp_size   = resp_size;
+                header->dma_size    = dma_size;
                 header->creator_pid = getpid();
                 XMEMFENCE();
                 header->initialized = PTSHM_INITIALIZED_CREATOR;
@@ -219,36 +230,40 @@ static int posixTransportShm_CreateMap(char* name, uint16_t req_size,
                 /* Unmap the header and remap the full area */
                 (void)munmap((void*)header, sizeof(*header));
                 ret = posixTransportShm_Map(fd, size, map);
-            } else {
+            }
+            else {
                 /* Problem mapping the header */
                 ret = WH_ERROR_ABORTED;
             }
-        } else {
+        }
+        else {
             /* Problem setting the size. */
             ret = WH_ERROR_ABORTED;
         }
         close(fd);
-    } else {
+    }
+    else {
         /* Problem creating the shared memory */
         ret = WH_ERROR_ABORTED;
     }
     return ret;
 }
+#endif /* WOLFHSM_CFG_ENABLE_SERVER */
 
 
+#if defined(WOLFHSM_CFG_ENABLE_CLIENT)
 /* Map the shared object if not already mapped */
-static int posixTransportShm_HandleMap(posixTransportShmContext *ctx)
+static int posixTransportShm_HandleMap(posixTransportShmContext* ctx)
 {
-    int ret = WH_ERROR_OK;
-    ptshmMapping                map[1]      = { 0 };
-    whTransportMemConfig        tMemCfg[1]  = { 0 };
+    int                  ret        = WH_ERROR_OK;
+    ptshmMapping         map[1]     = {0};
+    whTransportMemConfig tMemCfg[1] = {0};
 
     if (ctx == NULL) {
         return WH_ERROR_BADARGS;
     }
 
-    if (    (ret == WH_ERROR_OK) &&
-            (ctx->state == PTSHM_STATE_NONE) ) {
+    if ((ret == WH_ERROR_OK) && (ctx->state == PTSHM_STATE_NONE)) {
         /* Attempt to map */
         ret = posixTransportShm_UseMap(ctx->name, map);
         if (ret == WH_ERROR_OK) {
@@ -260,40 +275,41 @@ static int posixTransportShm_HandleMap(posixTransportShmContext *ctx)
 
             /* Initialize the shared memory transport */
             ret = wh_TransportMem_InitClear(ctx->transportMemCtx, tMemCfg, NULL,
-                    NULL);
+                                            NULL);
 
             if (ret == WH_ERROR_OK) {
-                ctx->ptr = map->ptr;
-                ctx->size = map->size;
-                ctx->dma = map->dma;
+                ctx->ptr      = map->ptr;
+                ctx->size     = map->size;
+                ctx->dma      = map->dma;
                 ctx->dma_size = map->dma_size;
-                ctx->state = PTSHM_STATE_INITIALIZED;
+                ctx->state    = PTSHM_STATE_INITIALIZED;
 
                 if (ctx->connectcb != NULL) {
                     ctx->connectcb(ctx->connectcb_arg, WH_COMM_CONNECTED);
                 }
-            } else {
+            }
+            else {
                 /* Problem initializing the transport */
                 (void)munmap(map->ptr, map->size);
             }
         }
     }
-    if (    (ret == WH_ERROR_OK) &&
-            ((ctx->state == PTSHM_STATE_MAPPED) ||
-             (ctx->state == PTSHM_STATE_DONE) ) ) {
+    if ((ret == WH_ERROR_OK) && ((ctx->state == PTSHM_STATE_MAPPED) ||
+                                 (ctx->state == PTSHM_STATE_DONE))) {
         /* Mapped is invalid for a client */
         ret = WH_ERROR_ABORTED;
     };
 
     return ret;
 }
+#endif /* WOLFHSM_CFG_ENABLE_CLIENT */
 
 
 /** Custom functions */
 int posixTransportShm_IsConnected(posixTransportShmContext* ctx,
-        whCommConnected *out_connected)
+                                  whCommConnected*          out_connected)
 {
-    ptshmHeader* header = NULL;
+    ptshmHeader*    header    = NULL;
     whCommConnected connected = WH_COMM_DISCONNECTED;
     if (ctx == NULL) {
         return WH_ERROR_BADARGS;
@@ -313,15 +329,14 @@ int posixTransportShm_IsConnected(posixTransportShmContext* ctx,
 
 
 int posixTransportShm_GetCreatorPid(posixTransportShmContext* ctx,
-        pid_t *out_pid)
+                                    pid_t*                    out_pid)
 {
     ptshmHeader* header = NULL;
     if (ctx == NULL) {
         return WH_ERROR_BADARGS;
     }
     header = (ptshmHeader*)ctx->ptr;
-    if (    (header == NULL) ||
-            (header->initialized < PTSHM_INITIALIZED_CREATOR) ) {
+    if ((header == NULL) || (header->initialized < PTSHM_INITIALIZED_CREATOR)) {
         return WH_ERROR_NOTREADY;
     }
     if (out_pid != NULL) {
@@ -331,28 +346,25 @@ int posixTransportShm_GetCreatorPid(posixTransportShmContext* ctx,
 }
 
 
-int posixTransportShm_GetUserPid(posixTransportShmContext* ctx,
-        pid_t *out_pid)
+int posixTransportShm_GetUserPid(posixTransportShmContext* ctx, pid_t* out_pid)
 {
     ptshmHeader* header = NULL;
     if (ctx == NULL) {
         return WH_ERROR_BADARGS;
     }
     header = (ptshmHeader*)ctx->ptr;
-    if (    (header == NULL) ||
-            (header->initialized < PTSHM_INITIALIZED_USER) ) {
+    if ((header == NULL) || (header->initialized < PTSHM_INITIALIZED_USER)) {
         return WH_ERROR_NOTREADY;
     }
     if (out_pid != NULL) {
         *out_pid = header->user_pid;
     }
     return WH_ERROR_OK;
-
 }
 
 
-int posixTransportShm_GetDma(posixTransportShmContext* ctx,
-        void* *out_dma, size_t *out_size)
+int posixTransportShm_GetDma(posixTransportShmContext* ctx, void** out_dma,
+                             size_t* out_size)
 {
     if (ctx == NULL) {
         return WH_ERROR_BADARGS;
@@ -367,33 +379,29 @@ int posixTransportShm_GetDma(posixTransportShmContext* ctx,
 }
 
 
+#if defined(WOLFHSM_CFG_ENABLE_SERVER)
 /** Callback function definitions */
 int posixTransportShm_ServerInit(void* c, const void* cf,
                                  whCommSetConnectedCb connectcb,
                                  void*                connectcb_arg)
 {
-    posixTransportShmContext*   ctx         = (posixTransportShmContext*)c;
-    posixTransportShmConfig*    config      = (posixTransportShmConfig*)cf;
-    int                         ret         = WH_ERROR_OK;
-    ptshmMapping                map[1]      = { 0 };
-    whTransportMemConfig        tMemCfg[1]  = { 0 };
+    posixTransportShmContext* ctx        = (posixTransportShmContext*)c;
+    posixTransportShmConfig*  config     = (posixTransportShmConfig*)cf;
+    int                       ret        = WH_ERROR_OK;
+    ptshmMapping              map[1]     = {0};
+    whTransportMemConfig      tMemCfg[1] = {0};
 
-    if (    (ctx == NULL) ||
-            (config == NULL) ||
-            (config->name == NULL) ) {
+    if ((ctx == NULL) || (config == NULL) || (config->name == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
-    ret = posixTransportShm_CreateMap( config->name,
-                            config->req_size,
-                            config->resp_size,
-                            config->dma_size,
-                            map);
+    ret = posixTransportShm_CreateMap(config->name, config->req_size,
+                                      config->resp_size, config->dma_size, map);
 
     if (ret == WH_ERROR_OK) {
         memset(ctx, 0, sizeof(*ctx));
         snprintf(ctx->name, sizeof(ctx->name), "%s", config->name);
-        ctx->connectcb = connectcb;
+        ctx->connectcb     = connectcb;
         ctx->connectcb_arg = connectcb_arg;
 
         /* Configure the underlying transport context */
@@ -406,14 +414,14 @@ int posixTransportShm_ServerInit(void* c, const void* cf,
         ret = wh_TransportMem_Init(ctx->transportMemCtx, tMemCfg, NULL, NULL);
 
         if (ret == WH_ERROR_OK) {
-            ctx->ptr = map->ptr;
-            ctx->size = map->size;
-            ctx->dma = map->dma;
+            ctx->ptr      = map->ptr;
+            ctx->size     = map->size;
+            ctx->dma      = map->dma;
             ctx->dma_size = map->dma_size;
 
             ctx->state = PTSHM_STATE_MAPPED;
-
-        } else {
+        }
+        else {
             /* Problem initializing the transport */
             (void)munmap(map->ptr, map->size);
             (void)shm_unlink(config->name);
@@ -421,36 +429,36 @@ int posixTransportShm_ServerInit(void* c, const void* cf,
     }
     return ret;
 }
+#endif /* WOLFHSM_CFG_ENABLE_SERVER */
 
 
+#if defined(WOLFHSM_CFG_ENABLE_CLIENT)
 int posixTransportShm_ClientInit(void* c, const void* cf,
                                  whCommSetConnectedCb connectcb,
                                  void*                connectcb_arg)
 {
-    posixTransportShmContext*   ctx         = (posixTransportShmContext*)c;
-    posixTransportShmConfig*    config      = (posixTransportShmConfig*)cf;
-    int                         ret         = WH_ERROR_OK;
+    posixTransportShmContext* ctx    = (posixTransportShmContext*)c;
+    posixTransportShmConfig*  config = (posixTransportShmConfig*)cf;
+    int                       ret    = WH_ERROR_OK;
 
-    if (    (ctx == NULL) ||
-            (config == NULL) ||
-            (config->name == NULL)) {
+    if ((ctx == NULL) || (config == NULL) || (config->name == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
     memset(ctx, 0, sizeof(*ctx));
     snprintf(ctx->name, sizeof(ctx->name), "%s", config->name);
-    ctx->connectcb = connectcb;
+    ctx->connectcb     = connectcb;
     ctx->connectcb_arg = connectcb_arg;
 
     ret = posixTransportShm_HandleMap(ctx);
-    if (    (ret == WH_ERROR_NOTFOUND) ||
-            (ret == WH_ERROR_NOTREADY) ) {
+    if ((ret == WH_ERROR_NOTFOUND) || (ret == WH_ERROR_NOTREADY)) {
         /* Good enough for now.  Set to ok. */
         ret = WH_ERROR_OK;
     }
 
     return ret;
 }
+#endif /* WOLFHSM_CFG_ENABLE_CLIENT */
 
 
 int posixTransportShm_Cleanup(void* c)
@@ -477,7 +485,7 @@ int posixTransportShm_Cleanup(void* c)
 int posixTransportShm_SendRequest(void* c, uint16_t len, const void* data)
 {
     posixTransportShmContext* ctx = (posixTransportShmContext*)c;
-    int ret = WH_ERROR_OK;
+    int                       ret = WH_ERROR_OK;
 
     /* Only need to check NULL, mem transport checks other state info */
     if (ctx == NULL) {
@@ -485,33 +493,34 @@ int posixTransportShm_SendRequest(void* c, uint16_t len, const void* data)
     }
 
     /* Check connected status */
-    switch(ctx->state) {
-    case PTSHM_STATE_NONE:
-        ret = posixTransportShm_HandleMap(ctx);
-        if (ret == WH_ERROR_OK) {
-            if(ctx->connectcb != NULL) {
-                ctx->connectcb(ctx->connectcb_arg, WH_COMM_CONNECTED);
+    switch (ctx->state) {
+        case PTSHM_STATE_NONE:
+            ret = posixTransportShm_HandleMap(ctx);
+            if (ret == WH_ERROR_OK) {
+                if (ctx->connectcb != NULL) {
+                    ctx->connectcb(ctx->connectcb_arg, WH_COMM_CONNECTED);
+                }
             }
-        } else {
-            if (ret == WH_ERROR_NOTFOUND) {
-                /* Server hasn't created the object yet */
-                ret = WH_ERROR_NOTREADY;
+            else {
+                if (ret == WH_ERROR_NOTFOUND) {
+                    /* Server hasn't created the object yet */
+                    ret = WH_ERROR_NOTREADY;
+                }
             }
-        }
-        break;
+            break;
 
-    case PTSHM_STATE_MAPPED:
-        /* Invalid state for a client */
-        ret = WH_ERROR_BADARGS;
-        break;
+        case PTSHM_STATE_MAPPED:
+            /* Invalid state for a client */
+            ret = WH_ERROR_BADARGS;
+            break;
 
-    case PTSHM_STATE_INITIALIZED:
-        ret = WH_ERROR_OK;
-        break;
+        case PTSHM_STATE_INITIALIZED:
+            ret = WH_ERROR_OK;
+            break;
 
-    case PTSHM_STATE_DONE:
-    default:
-        ret = WH_ERROR_ABORTED;
+        case PTSHM_STATE_DONE:
+        default:
+            ret = WH_ERROR_ABORTED;
     }
 
     if (ret == WH_ERROR_OK) {
@@ -531,6 +540,85 @@ int posixTransportShm_RecvResponse(void* c, uint16_t* out_len, void* data)
 
     return wh_TransportMem_RecvResponse(ctx->transportMemCtx, out_len, data);
 }
+
+#ifdef WOLFHSM_CFG_DMA
+/** DMA function callbacks that can make use of WOLFSSL_STATIC_MEMORY using
+ * the POSIX shared memory transport.
+ */
+
+int posixTransportShm_ClientStaticMemDmaCallback(
+    struct whClientContext_t* client, uintptr_t clientAddr,
+    void** xformedCliAddr, size_t len, whDmaOper oper, whDmaFlags flags)
+{
+    int       ret     = WH_ERROR_OK;
+    int       isInDma = 0;
+    void*     dmaPtr;
+    size_t    dmaSize;
+    uintptr_t dmaBuffer; /* buffer in DMA space */
+    uintptr_t dmaOffset;
+    void*     heap = NULL;
+
+    /* NULL pointer maps to NULL, short circuit here */
+    if (clientAddr == 0 || len == 0) {
+        *xformedCliAddr = NULL;
+        return WH_ERROR_OK;
+    }
+
+    /* First check if the address is in the expected DMA area */
+    ret = posixTransportShm_GetDma(client->comm->transport_context, &dmaPtr,
+                                   &dmaSize);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    if ((dmaPtr != NULL) && (dmaSize > 0) && (len < dmaSize) &&
+        (clientAddr >= (uintptr_t)dmaPtr) &&
+        (clientAddr < (uintptr_t)(dmaPtr + dmaSize - len))) {
+        dmaBuffer = clientAddr;
+        isInDma   = 1;
+    }
+    else {
+        heap = client->dma.heap;
+        if (heap == NULL) {
+            return WH_ERROR_NOTREADY;
+        }
+    }
+
+    if (oper == WH_DMA_OPER_CLIENT_READ_PRE ||
+        oper == WH_DMA_OPER_CLIENT_WRITE_PRE) {
+        if (isInDma == 0) {
+            dmaBuffer = (uintptr_t)XMALLOC(len, heap, DYNAMIC_TYPE_TMP_BUFFER);
+            if (dmaBuffer == 0) {
+                return WH_ERROR_NOSPACE;
+            }
+            dmaOffset = dmaBuffer - (uintptr_t)dmaPtr;
+            memcpy((void*)dmaBuffer, (void*)clientAddr, len);
+        }
+        else {
+            dmaOffset = clientAddr - (uintptr_t)dmaPtr;
+        }
+        /* return an offset into the DMA area */
+        *xformedCliAddr = (void*)dmaOffset;
+    }
+    else if (oper == WH_DMA_OPER_CLIENT_READ_POST) {
+        if (isInDma == 0) {
+            uint8_t* ptr = (uint8_t*)dmaPtr + (uintptr_t)*xformedCliAddr;
+            XFREE(ptr, heap, DYNAMIC_TYPE_TMP_BUFFER);
+        }
+    }
+    else if (oper == WH_DMA_OPER_CLIENT_WRITE_POST) {
+        if (isInDma == 0) {
+            uint8_t* ptr = (uint8_t*)dmaPtr + (uintptr_t)*xformedCliAddr;
+            memcpy((void*)clientAddr, ptr,
+                   len); /* copy results of what server wrote */
+            XFREE(ptr, heap, DYNAMIC_TYPE_TMP_BUFFER);
+        }
+    }
+
+    (void)flags;
+    return ret;
+}
+#endif /* WOLFHSM_CFG_DMA */
 #endif /* WOLFHSM_CFG_ENABLE_CLIENT */
 
 #if defined(WOLFHSM_CFG_ENABLE_SERVER)
@@ -549,40 +637,39 @@ int posixTransportShm_SendResponse(void* c, uint16_t len, const void* data)
 int posixTransportShm_RecvRequest(void* c, uint16_t* out_len, void* data)
 {
     posixTransportShmContext* ctx = (posixTransportShmContext*)c;
-    int ret = WH_ERROR_OK;
+    int                       ret = WH_ERROR_OK;
 
     if (ctx == NULL) {
         return WH_ERROR_BADARGS;
     }
 
     /* Check connected status */
-    switch(ctx->state) {
-    case PTSHM_STATE_NONE:
-        /* Server should not get this state */
-        ret = WH_ERROR_BADARGS;
-        break;
+    switch (ctx->state) {
+        case PTSHM_STATE_NONE:
+            /* Server should not get this state */
+            ret = WH_ERROR_BADARGS;
+            break;
 
-    case PTSHM_STATE_MAPPED:
-    {
-        /* Check to see if client connected */
-        whCommConnected connected = WH_COMM_DISCONNECTED;
-        posixTransportShm_IsConnected(ctx, &connected);
-        if (connected == WH_COMM_CONNECTED) {
-            ctx->state = PTSHM_STATE_INITIALIZED;
-            if (ctx->connectcb != NULL) {
-                ctx->connectcb(ctx->connectcb_arg, connected);
+        case PTSHM_STATE_MAPPED: {
+            /* Check to see if client connected */
+            whCommConnected connected = WH_COMM_DISCONNECTED;
+            posixTransportShm_IsConnected(ctx, &connected);
+            if (connected == WH_COMM_CONNECTED) {
+                ctx->state = PTSHM_STATE_INITIALIZED;
+                if (ctx->connectcb != NULL) {
+                    ctx->connectcb(ctx->connectcb_arg, connected);
+                }
+                ret = WH_ERROR_OK;
             }
+        } break;
+
+        case PTSHM_STATE_INITIALIZED:
             ret = WH_ERROR_OK;
-        }
-    } break;
+            break;
 
-    case PTSHM_STATE_INITIALIZED:
-        ret = WH_ERROR_OK;
-        break;
-
-    case PTSHM_STATE_DONE:
-    default:
-        ret = WH_ERROR_ABORTED;
+        case PTSHM_STATE_DONE:
+        default:
+            ret = WH_ERROR_ABORTED;
     }
 
     if (ret == WH_ERROR_OK) {
@@ -590,4 +677,72 @@ int posixTransportShm_RecvRequest(void* c, uint16_t* out_len, void* data)
     }
     return ret;
 }
-#endif
+
+#ifdef WOLFHSM_CFG_DMA
+/* Generic offset into the DMA area. This function can operate with no knowledge
+ * of what structures the DMA area is. It takes in an offset, validates it, and
+ * returns the pointer into the DMA area based off of the offset.  */
+int posixTransportShm_ServerStaticMemDmaCallback(
+    whServerContext* server, uintptr_t clientAddr, void** xformedCliAddr,
+    size_t len, whServerDmaOper oper, whServerDmaFlags flags)
+{
+    posixTransportShmContext* ctx;
+    void*                     dma_ptr;
+    size_t                    dma_size;
+    int                       ret;
+
+    (void)oper;
+    (void)flags;
+
+    if (server == NULL || xformedCliAddr == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Get the transport context from the server's communication context */
+    ctx = (posixTransportShmContext*)server->comm->transport_context;
+    if (ctx == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Get the DMA section pointer and size */
+    ret = posixTransportShm_GetDma(ctx, &dma_ptr, &dma_size);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    if (dma_ptr == NULL || dma_size == 0) {
+        return WH_ERROR_NOTREADY;
+    }
+
+    if (len > dma_size || clientAddr > dma_size - len) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Return the transformed address (DMA pointer + offset) */
+    *xformedCliAddr = (void*)((uintptr_t)dma_ptr + clientAddr);
+    return WH_ERROR_OK;
+}
+#endif /* WOLFHSM_CFG_DMA */
+#endif /* WOLFHSM_CFG_ENABLE_SERVER */
+
+#if defined(WOLFHSM_CFG_DMA)
+int posixTransportShm_SetDmaHeap(posixTransportShmContext* ctx, void* heap)
+{
+    if (ctx == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    ctx->heap = heap;
+    return WH_ERROR_OK;
+}
+
+
+void* posixTransportShm_GetDmaHeap(posixTransportShmContext* ctx)
+{
+    void* ret = NULL;
+
+    if (ctx != NULL) {
+        ret = ctx->heap;
+    }
+    return ret;
+}
+#endif /* WOLFHSM_CFG_DMA */

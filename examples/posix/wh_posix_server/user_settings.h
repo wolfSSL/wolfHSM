@@ -177,15 +177,19 @@ extern "C" {
 /* ------------------------------------------------------------------------- */
 #if 0
     /* Static memory requires fast math or SP math with no malloc */
-    #define WOLFSSL_STATIC_MEMORY
+#define WOLFSSL_STATIC_MEMORY
 
     /* Disable fallback malloc/free */
-    #define WOLFSSL_NO_MALLOC
-    #if 1
-        #define WOLFSSL_MALLOC_CHECK /* trap malloc failure */
-    #endif
-#endif
+#define WOLFSSL_NO_MALLOC
+#if 1
+#define WOLFSSL_MALLOC_CHECK /* trap malloc failure */
+#endif                       /* optional malloc check */
+#endif                       /* optional static memory */
 
+#ifdef WOLFHSM_CFG_DMA
+#undef WOLFSSL_STATIC_MEMORY
+#define WOLFSSL_STATIC_MEMORY
+#endif
 
 #ifdef __cplusplus
 }

@@ -142,7 +142,7 @@ int wh_TransportMem_SendRequest(void* c, uint16_t len, const void* data)
     return 0;
 }
 
-int wh_TransportMem_RecvResponse(void* c, uint16_t *out_len, void* data)
+int wh_TransportMem_RecvResponse(void* c, uint16_t* out_len, void* data)
 {
     whTransportMemContext* context = c;
     volatile whTransportMemCsr* ctx_req;
@@ -165,7 +165,7 @@ int wh_TransportMem_RecvResponse(void* c, uint16_t *out_len, void* data)
     resp.u64 = ctx_resp->u64;
 
     /* Check to see if the current response is the different than the request */
-    if(resp.s.notify != req.s.notify) {
+    if (resp.s.notify != req.s.notify) {
         return WH_ERROR_NOTREADY;
     }
 
@@ -226,7 +226,7 @@ int wh_TransportMem_SendResponse(void* c, uint16_t len, const void* data)
     return 0;
 }
 
-int wh_TransportMem_RecvRequest(void* c, uint16_t *out_len, void* data)
+int wh_TransportMem_RecvRequest(void* c, uint16_t* out_len, void* data)
 {
     whTransportMemContext* context = c;
     volatile whTransportMemCsr* ctx_req;
@@ -249,7 +249,7 @@ int wh_TransportMem_RecvRequest(void* c, uint16_t *out_len, void* data)
     resp.u64 = ctx_resp->u64;
 
     /* Check to see if a new request has arrived */
-    if(req.s.notify == resp.s.notify) {
+    if (req.s.notify == resp.s.notify) {
         return WH_ERROR_NOTREADY;
     }
 

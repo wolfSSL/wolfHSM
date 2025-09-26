@@ -2,15 +2,16 @@
 
 ## Project name
 # Sets output filenames
-BIN = wh_server_tcp
+BIN = wh_posix_server
 
 ## Important directories
 # Base directory for additional project files
 PROJECT_DIR			?= .
 CONFIG_DIR			?= $(PROJECT_DIR)/config
+SHARED_CONFIG_DIR   ?= $(PROJECT_DIR)/../
 # wolfSSL and wolfHSM directories
-WOLFSSL_DIR			?= ../../../../../wolfssl
-WOLFHSM_DIR			?= ../../../../
+WOLFSSL_DIR			?= ../../../../wolfssl
+WOLFHSM_DIR			?= ../../../
 WOLFHSM_PORT_DIR	?= $(WOLFHSM_DIR)/port/posix
 
 # Output directory for build files
@@ -19,6 +20,7 @@ BUILD_DIR			?= $(PROJECT_DIR)/Build
 # Includes
 INC =   -I$(PROJECT_DIR) \
 		-I$(CONFIG_DIR) \
+		-I$(SHARED_CONFIG_DIR) \
 		-I$(WOLFSSL_DIR) \
 		-I$(WOLFHSM_DIR) \
 		-I$(WOLFHSM_PORT_DIR)
@@ -69,6 +71,10 @@ ifeq ($(SHE),1)
 CFLAGS += -DWOLFHSM_CFG_SHE_EXTENSION
 endif
 
+ifeq ($(DMA),1)
+CFLAGS += -DWOLFHSM_CFG_DMA
+endif
+
 ## Source files
 # Assembly source files
 SRC_ASM +=
@@ -86,7 +92,6 @@ SRC_C +=  $(wildcard $(WOLFHSM_PORT_DIR)/*.c)
 
 # Project
 SRC_C +=  $(wildcard $(PROJECT_DIR)/*.c)
-
 
 ## Automated processing below
 

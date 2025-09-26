@@ -59,7 +59,6 @@
 #include "wolfhsm/wh_message_counter.h"
 #include "wolfhsm/wh_client.h"
 
-
 #ifndef WOLFHSM_CFG_NO_CRYPTO
 const int WH_DEV_IDS_ARRAY[WH_NUM_DEVIDS] = {
         WH_DEV_ID,
@@ -98,6 +97,13 @@ int wh_Client_Init(whClientContext* c, const whClientConfig* config)
 
 #ifdef WOLFHSM_CFG_DMA
             if (rc == 0) {
+                /* Initialize DMA configuration and callbacks, if provided */
+                if (NULL != config->dmaConfig) {
+                    c->dma.dmaAddrAllowList =
+                        config->dmaConfig->dmaAddrAllowList;
+                    c->dma.cb = config->dmaConfig->cb;
+                }
+
                 rc = wc_CryptoCb_RegisterDevice(WH_DEV_ID_DMA,
                                                 wh_Client_CryptoCbDma, c);
                 if (rc != 0) {
@@ -743,10 +749,12 @@ int wh_Client_KeyCacheRequest_ex(whClientContext* c, uint32_t flags,
     else {
         req->labelSz = labelSz;
         /* write label */
-        if (labelSz > WH_NVM_LABEL_LEN)
+        if (labelSz > WH_NVM_LABEL_LEN) {
             memcpy(req->label, label, WH_NVM_LABEL_LEN);
-        else
+        }
+        else {
             memcpy(req->label, label, labelSz);
+        }
     }
 
     /* write in */
@@ -1497,7 +1505,6 @@ int wh_Client_KeyExportDma(whClientContext* c, uint16_t keyId,
     }
     return ret;
 }
-
 #endif /* WOLFHSM_CFG_DMA */
 
 #endif /* WOLFHSM_CFG_ENABLE_CLIENT */

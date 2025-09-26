@@ -2,15 +2,16 @@
 
 ## Project name
 # Sets output filenames
-BIN = wh_client_tcp
+BIN = wh_posix_client
 
 ## Important directories
 # Base directory for additional project files
 PROJECT_DIR				?= .
 CONFIG_DIR				?= $(PROJECT_DIR)/config
+SHARED_CONFIG_DIR       ?= $(PROJECT_DIR)/../
 # wolfSSL and wolfHSM directories
-WOLFSSL_DIR				?= ../../../../../wolfssl
-WOLFHSM_DIR				?= ../../../../
+WOLFSSL_DIR				?= ../../../../wolfssl
+WOLFHSM_DIR				?= ../../../
 WOLFHSM_PORT_DIR		?= $(WOLFHSM_DIR)/port/posix
 WOLFHSM_DEMO_CLIENT_DIR	?= $(WOLFHSM_DIR)/examples/demo/client
 
@@ -20,6 +21,7 @@ BUILD_DIR				?= $(PROJECT_DIR)/Build
 # Includes
 INC =   -I$(PROJECT_DIR) \
 		-I$(CONFIG_DIR) \
+		-I$(SHARED_CONFIG_DIR) \
 		-I$(WOLFSSL_DIR) \
 		-I$(WOLFHSM_DIR) \
 		-I$(WOLFHSM_PORT_DIR) \
@@ -30,9 +32,6 @@ DEF += -D_POSIX_C_SOURCE=200809L
 
 # Library configuration defines for user-supplied settings
 DEF += -DWOLFSSL_USER_SETTINGS -DWOLFHSM_CFG
-
-# Set the default device ID for wolfCrypt tests
-DEF += -DWC_USE_DEVID=0x5748534D
 
 # Architecture flags for assembler, C compiler and linker
 ARCHFLAGS ?=
@@ -56,6 +55,9 @@ ifeq ($(OS_NAME),darwin)
 else
 	LDFLAGS += -Wl,--gc-sections
 endif
+
+# Libc for printf, libm for math (used with DH)
+LIBS = -lc -lm
 
 # LD: generate map
 #LDFLAGS += -Wl,-map,$(BUILD_DIR)/$(BIN).map
@@ -87,6 +89,19 @@ SRC_C += $(wildcard $(WOLFSSL_DIR)/wolfcrypt/benchmark/*.c)
 # wolfSSL source files
 SRC_C += $(wildcard $(WOLFSSL_DIR)/src/*.c)
 
+# Set the default device ID for wolfCrypt tests
+ifeq ($(DMA),1)
+DEF += -DWC_USE_DEVID=0x57444D41 -DWC_NO_DEFAULT_DEVID
+CFLAGS += -DWOLFHSM_CFG_DMA
+else
+DEF += -DWC_USE_DEVID=0x5748534D
+
+endif
+
+#wolfCrypt test/benchmark source files
+SRC_C += $(wildcard $(WOLFSSL_DIR)/wolfcrypt/test/*.c)
+SRC_C += $(wildcard $(WOLFSSL_DIR)/wolfcrypt/benchmark/*.c)
+
 # wolfHSM source files
 SRC_C +=  $(wildcard $(WOLFHSM_DIR)/src/*.c)
 
@@ -97,7 +112,7 @@ SRC_C +=  $(wildcard $(WOLFHSM_PORT_DIR)/*.c)
 SRC_C +=  $(wildcard $(PROJECT_DIR)/*.c)
 
 # Demo client code
-SRC_C += $(wildcard $(WOLFHSM_DEMO_CLIENT_DIR)/*.c) 
+SRC_C += $(wildcard $(WOLFHSM_DEMO_CLIENT_DIR)/*.c)
 
 
 ## Automated processing below
