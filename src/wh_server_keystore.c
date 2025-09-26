@@ -1189,7 +1189,7 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
 
 #ifdef WOLFHSM_CFG_KEYWRAP
         case WH_KEY_WRAP: {
-            whMessageKeystore_WrapRequest  wrapReq = {0};
+            whMessageKeystore_WrapRequest  wrapReq  = {0};
             whMessageKeystore_WrapResponse wrapResp = {0};
             uint8_t*                       reqData;
             uint8_t*                       respData;
@@ -1225,7 +1225,7 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
         } break;
 
         case WH_KEY_UNWRAPEXPORT: {
-            whMessageKeystore_UnwrapAndExportRequest  unwrapReq = {0};
+            whMessageKeystore_UnwrapAndExportRequest  unwrapReq  = {0};
             whMessageKeystore_UnwrapAndExportResponse unwrapResp = {0};
             uint8_t*                                  reqData;
             uint8_t*                                  respData;
@@ -1263,7 +1263,7 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
         } break;
 
         case WH_KEY_UNWRAPCACHE: {
-            whMessageKeystore_UnwrapAndCacheRequest  cacheReq = {0};
+            whMessageKeystore_UnwrapAndCacheRequest  cacheReq  = {0};
             whMessageKeystore_UnwrapAndCacheResponse cacheResp = {0};
             uint8_t*                                 reqData;
             uint8_t*                                 respData;
