@@ -578,7 +578,7 @@ int posixTransportShm_ClientStaticMemDmaCallback(
         isInDma   = 1;
     }
     else {
-        heap = client->dma.heap;
+        heap = posixTransportShm_GetDmaHeap(client->comm->transport_context);
         if (heap == NULL) {
             return WH_ERROR_NOTREADY;
         }
