@@ -391,7 +391,10 @@ int main(int argc, char** argv)
     }
 
     rc = wh_ServerTask(s_conf, keyFilePath, keyId, clientId);
-
+    if (rc != WH_ERROR_OK) {
+        printf("Server task failed: %d\n", rc);
+        return rc;
+    }
     rc = wc_FreeRng(crypto->rng);
     if (rc != 0) {
         printf("Failed to wc_FreeRng: %d\n", rc);
