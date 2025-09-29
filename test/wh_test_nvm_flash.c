@@ -156,8 +156,7 @@ static void _ShowList(const whNvmCb* cb, void* context)
 #endif
 
 
-static int addObjectWithReadBackCheck(const whNvmCb*     cb,
-                                      void* context,
+static int addObjectWithReadBackCheck(const whNvmCb* cb, void* context,
                                       whNvmMetadata* meta, whNvmSize data_len,
                                       const uint8_t* data)
 
@@ -317,7 +316,7 @@ int whTest_Flash(const whFlashCb* fcb, void* fctx, const void* cfg)
     return 0;
 }
 
-int whTest_NvmFlashCfg(void* cfg, void* context, const whNvmCb *cb)
+int whTest_NvmFlashCfg(void* cfg, void* context, const whNvmCb* cb)
 {
     int               ret        = 0;
 
@@ -425,7 +424,8 @@ int whTest_NvmFlashCfg(void* cfg, void* context, const whNvmCb *cb)
                 goto cleanup;
             }
 
-            if ((ret = cb->Read(context, ids[i], 0, metaBuf.len, dataBuf)) != 0) {
+            if ((ret = cb->Read(context, ids[i], 0, metaBuf.len, dataBuf)) !=
+                0) {
                 WH_ERROR_PRINT("Read after reclaim returned %d\n", ret);
                 goto cleanup;
             }
@@ -495,9 +495,10 @@ int whTest_NvmFlash_RamSim(void)
         .config  = myHalFlashCfg,
     };
     whNvmFlashContext nvmFlashCtx[1] = {0};
-    const whNvmCb    nvmFlashCb[1]     = {WH_NVM_FLASH_CB};
+    const whNvmCb     nvmFlashCb[1]  = {WH_NVM_FLASH_CB};
 
-    WH_TEST_RETURN_ON_FAIL(whTest_NvmFlashCfg(&myNvmCfg, nvmFlashCtx, nvmFlashCb));
+    WH_TEST_RETURN_ON_FAIL(
+        whTest_NvmFlashCfg(&myNvmCfg, nvmFlashCtx, nvmFlashCb));
 
 #if defined(WOLFHSM_CFG_SERVER_NVM_FLASH_LOG)
     whNvmFlashLogConfig myLogCfg = {
@@ -506,12 +507,11 @@ int whTest_NvmFlash_RamSim(void)
         .flash_cfg = myHalFlashCfg,
     };
     whNvmFlashLogContext nvmLogCtx[1] = {0};
-    const whNvmCb        nvmLogCb[1]     = {WH_NVM_FLASH_LOG_CB};
+    const whNvmCb        nvmLogCb[1]  = {WH_NVM_FLASH_LOG_CB};
     WH_TEST_RETURN_ON_FAIL(whTest_NvmFlashCfg(&myLogCfg, nvmLogCtx, nvmLogCb));
 #endif /* WOLFHSM_CFG_SERVER_NVM_FLASH_LOG */
 
     return 0;
-
 }
 
 static int
@@ -644,7 +644,7 @@ int whTest_NvmFlash_PosixFileSim(void)
         .config  = myHalFlashConfig,
     };
     whNvmFlashContext nvmFlashCtx[1] = {0};
-    const whNvmCb    nvmFlashCb[1]     = {WH_NVM_FLASH_CB};
+    const whNvmCb     nvmFlashCb[1]  = {WH_NVM_FLASH_CB};
 
     WH_TEST_ASSERT(0 == whTest_NvmFlashCfg(&myNvmCfg, nvmFlashCtx, nvmFlashCb));
 
@@ -662,7 +662,7 @@ int whTest_NvmFlash_PosixFileSim(void)
         .flash_cfg = myHalFlashConfig,
     };
     whNvmFlashLogContext nvmLogCtx[1] = {0};
-    const whNvmCb        nvmLogCb[1]     = {WH_NVM_FLASH_LOG_CB};
+    const whNvmCb        nvmLogCb[1]  = {WH_NVM_FLASH_LOG_CB};
     WH_TEST_RETURN_ON_FAIL(whTest_NvmFlashCfg(&myLogCfg, nvmLogCtx, nvmLogCb));
 #endif /* WOLFHSM_CFG_SERVER_NVM_FLASH_LOG */
 
