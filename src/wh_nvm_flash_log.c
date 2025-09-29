@@ -506,7 +506,7 @@ int wh_NvmFlashLog_GetMetadata(void* c, whNvmId id, whNvmMetadata* meta)
     whNvmFlashLogContext*  ctx = (whNvmFlashLogContext*)c;
     whNvmFlashLogMetadata* obj;
 
-    if (ctx == NULL || !ctx->is_initialized || meta == NULL)
+    if (ctx == NULL || !ctx->is_initialized)
         return WH_ERROR_BADARGS;
 
     obj = nfl_ObjectFindById(ctx, id);
@@ -514,7 +514,8 @@ int wh_NvmFlashLog_GetMetadata(void* c, whNvmId id, whNvmMetadata* meta)
         return WH_ERROR_NOTFOUND;
     }
 
-    memcpy(meta, &obj->meta, sizeof(*meta));
+    if (meta != NULL)
+        memcpy(meta, &obj->meta, sizeof(*meta));
     return WH_ERROR_OK;
 }
 
