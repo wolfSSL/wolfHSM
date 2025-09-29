@@ -182,7 +182,7 @@ static int nfl_PartitionWrite(whNvmFlashLogContext* ctx, uint32_t partition)
 
 static int nfl_PartitionCommit(whNvmFlashLogContext* ctx, uint32_t partition)
 {
-    const whFlashCb* f_cb = ctx->flash_cb;
+    const whFlashCb* f_cb;
     uint32_t         off;
     int              ret;
 
@@ -190,7 +190,7 @@ static int nfl_PartitionCommit(whNvmFlashLogContext* ctx, uint32_t partition)
         return WH_ERROR_BADARGS;
 
     off = partition * ctx->partition_size;
-
+    f_cb = ctx->flash_cb;
     ret = f_cb->BlankCheck(ctx->flash_ctx, off,
                            sizeof(whNvmFlashLogPartitionHeader));
     if (ret != 0)
@@ -207,7 +207,7 @@ static int nfl_PartitionCommit(whNvmFlashLogContext* ctx, uint32_t partition)
 static int nfl_PartitionChoose(whNvmFlashLogContext* ctx)
 {
     whNvmFlashLogPartitionHeader header0, header1;
-    const whFlashCb*             f_cb = ctx->flash_cb;
+    const whFlashCb*             f_cb;
     uint32_t                     part1_offset;
     int                          part0_blank, part1_blank;
     int                          ret;
@@ -216,7 +216,7 @@ static int nfl_PartitionChoose(whNvmFlashLogContext* ctx)
         return WH_ERROR_BADARGS;
 
     part1_offset = ctx->partition_size;
-
+    f_cb = ctx->flash_cb;
     ret = f_cb->BlankCheck(ctx->flash_ctx, 0, sizeof(header0));
     if (ret != 0 && ret != WH_ERROR_NOTBLANK) {
         return ret;
