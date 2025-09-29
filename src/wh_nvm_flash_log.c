@@ -388,6 +388,7 @@ int wh_NvmFlashLog_Init(void* c, const void* cf)
     if (ret != 0)
         return ret;
 
+    context->is_initialized = 1;
     return WH_ERROR_OK;
 }
 
@@ -395,7 +396,7 @@ int wh_NvmFlashLog_Cleanup(void* c)
 {
     int ret;
     whNvmFlashLogContext* context = (whNvmFlashLogContext*)c;
-    if (context == NULL)
+    if (context == NULL || !context->is_initialized)
         return WH_ERROR_BADARGS;
 
     /* lock partitions */
@@ -408,6 +409,7 @@ int wh_NvmFlashLog_Cleanup(void* c)
     if (ret != 0)
         return ret;
 
+    context->is_initialized = 0;
     return WH_ERROR_OK;
 }
 
@@ -422,7 +424,7 @@ int wh_NvmFlashLog_List(void* c, whNvmAccess access, whNvmFlags flags,
     whNvmFlashLogMetadata* next_obj = NULL, *start_obj = NULL;
     uint32_t               count = 0;
 
-    if (ctx == NULL)
+    if (ctx == NULL || !ctx->is_initialized)
         return WH_ERROR_BADARGS;
 
     /* list all obects if start_id is WH_NVM_ID_INVALID */
@@ -460,7 +462,7 @@ int wh_NvmFlashLog_GetAvailable(void* c, uint32_t* out_avail_size,
     whNvmFlashLogContext* ctx = (whNvmFlashLogContext*)c;
     uint8_t               count;
 
-    if (ctx == NULL)
+    if (ctx == NULL || !ctx->is_initialized)
         return WH_ERROR_BADARGS;
     if (out_avail_size != NULL) {
         *out_avail_size = ctx->partition_size -
@@ -490,7 +492,7 @@ int wh_NvmFlashLog_GetMetadata(void* c, whNvmId id, whNvmMetadata* meta)
     whNvmFlashLogContext*  ctx = (whNvmFlashLogContext*)c;
     whNvmFlashLogMetadata* obj;
 
-    if (ctx == NULL || meta == NULL)
+    if (ctx == NULL || !ctx->is_initialized || meta == NULL)
         return WH_ERROR_BADARGS;
 
     obj = nfl_ObjectFindById(ctx, id);
@@ -511,7 +513,7 @@ int wh_NvmFlashLog_AddObject(void* c, whNvmMetadata* meta, whNvmSize data_len,
     uint32_t               ret;
     uint32_t               count;
 
-    if (ctx == NULL || meta == NULL || (data_len > 0 && data == NULL))
+    if (ctx == NULL || !ctx->is_initialized || meta == NULL || (data_len > 0 && data == NULL))
         return WH_ERROR_BADARGS;
 
     count = nfl_ObjectCount(ctx, NULL);
@@ -556,7 +558,7 @@ int wh_NvmFlashLog_DestroyObjects(void* c, whNvmId list_count,
     int                   i;
     int                   ret;
 
-    if (ctx == NULL || (list_count > 0 && id_list == NULL))
+    if (ctx == NULL || !ctx->is_initialized || (list_count > 0 && id_list == NULL))
         return WH_ERROR_BADARGS;
 
     if (list_count == 0)
@@ -579,7 +581,7 @@ int wh_NvmFlashLog_Read(void* c, whNvmId id, whNvmSize offset,
     whNvmFlashLogMetadata* obj;
     uint8_t*               obj_data;
 
-    if (ctx == NULL || (data_len > 0 && data == NULL))
+    if (ctx == NULL || !ctx->is_initialized || (data_len > 0 && data == NULL))
         return WH_ERROR_BADARGS;
 
     obj = nfl_ObjectFindById(ctx, id);

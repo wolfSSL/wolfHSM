@@ -55,6 +55,7 @@ typedef struct {
     void*                     flash_ctx; /* Flash context */
     uint32_t                  partition_size;
     uint32_t                  active_partition; /* 0 or 1 */
+    int                       is_initialized;
     whNvmFlashLogMemPartition directory;
 } whNvmFlashLogContext;
 
