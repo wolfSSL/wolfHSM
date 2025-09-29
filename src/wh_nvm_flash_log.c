@@ -42,6 +42,31 @@
  * Flash backend:
  * This layer relies on the same flash backend as wh_Flash, using the whFlashCb
  * interface.
+ *
+ * Limitations and performance considerations:
+ *
+ * The implementation favors simplicity over both speed and space.
+ *
+ * Regarding space:
+ * - An area of RAM as big as one partition is allocated to cache the
+ * partition.
+ *
+ * Regarding speed:
+ * - Each updates to the NVM (create, write, delete) requires copying all the
+ * objects from one partition of the flash to the other + erase operations.
+ *
+ * Possible future improvements:
+ *
+ * - cache only the metadata in RAM, access data on the FLASH as needed
+ * - use a true append log format to avoid copying all objects on each update
+ *
+ * Right now the implementation works well for read-heavy workloads with few
+ * updates.
+ *
+ * Alignment consideration:
+ *
+ * The implementation assure that writes are aligned to WRITE_GRANULARITY in FLASH memory space.
+ * The source data passed on the flash layer might not be aligned.
  */
 
 #include "wolfhsm/wh_settings.h"
