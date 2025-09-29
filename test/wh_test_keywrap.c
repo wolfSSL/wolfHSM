@@ -60,10 +60,13 @@
 
 #define WH_TEST_RSA_KEY_OFFSET 0x2000
 #define WH_TEST_RSA_KEYID 3
-#define WH_TEST_RSA_DER_SIZE 1766
-#define WH_TEST_RSA_WRAPPED_KEYSIZE                                    \
-    (WH_TEST_AES_IVSIZE + WH_TEST_AES_TAGSIZE + WH_TEST_RSA_DER_SIZE + \
-     sizeof(whNvmMetadata))
+#define WH_TEST_RSA_MAX_DER_SIZE 2000
+
+/* We need the extra 4 bytes at the start to store the actual wrapped key size
+ */
+#define WH_TEST_RSA_MAX_WRAPPED_KEYSIZE                            \
+    (sizeof(uint32_t) + WH_TEST_AES_IVSIZE + WH_TEST_AES_TAGSIZE + \
+     WH_TEST_RSA_MAX_DER_SIZE + sizeof(whNvmMetadata))
 #endif /* !NO_RSA */
 
 static int _InitServerKek(whClientContext* ctx)
@@ -356,59 +359,64 @@ static int _AesGcm_UseWrappedKeyFromNvm(whClientContext* client, void* flashCtx,
 #ifndef NO_RSA
 
 static int _Rsa_WriteWrappedKeyToNvm(whClientContext* client, void* flashCtx,
-                                     whFlashCb* flashCb, WC_RNG* rng)
+                                     whFlashCb* flashCb)
 {
     int           ret;
     whKeyId       rsaKeyId = WH_TEST_RSA_KEYID;
     RsaKey        rsaKey[1];
-    uint8_t       rsaKeyDer[WH_TEST_RSA_DER_SIZE];
+    uint8_t       rsaKeyDer[WH_TEST_RSA_MAX_DER_SIZE];
     int           rsaKeyDerSz;
-    uint8_t       rsaWrappedKey[WH_TEST_RSA_WRAPPED_KEYSIZE];
+    uint8_t       rsaWrappedKey[WH_TEST_RSA_MAX_WRAPPED_KEYSIZE];
+    uint32_t      rsaWrappedKeySz;
     whNvmMetadata rsaKeyMetadata = {
         .label  = "RSA 3072 Key",
         .access = WH_NVM_ACCESS_ANY,
         .flags  = WH_NVM_FLAGS_NONE,
         .id     = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, 0, rsaKeyId),
-        .len    = WH_TEST_RSA_DER_SIZE};
+        .len    = 0};
 
     /* Initialize the RSA key */
-    ret = wc_InitRsaKey(rsaKey, NULL);
+    ret = wc_InitRsaKey_ex(rsaKey, NULL, WH_DEV_ID);
     if (ret != WH_ERROR_OK) {
         WH_ERROR_PRINT("Failed to wc_InitRsaKey %d\n", ret);
         return ret;
     }
 
     /* Generate the RSA key */
-    ret = wc_MakeRsaKey(rsaKey, 3072, 65537, rng);
+    ret = wh_Client_RsaMakeExportKey(client, 3072, 65537, rsaKey);
     if (ret != WH_ERROR_OK) {
-        WH_ERROR_PRINT("Failed to wc_MakeRsaKey %d\n", ret);
+        WH_ERROR_PRINT("Failed to wh_Client_RsaMakeExportKey %d\n", ret);
         return ret;
     }
 
     /* Convert the RSA key to DER format so it can be stored in flash */
-    rsaKeyDerSz = wc_RsaKeyToDer(rsaKey, rsaKeyDer, WH_TEST_RSA_DER_SIZE);
+    rsaKeyDerSz = wc_RsaKeyToDer(rsaKey, rsaKeyDer, WH_TEST_RSA_MAX_DER_SIZE);
     if (rsaKeyDerSz < 0) {
         ret = rsaKeyDerSz;
         WH_ERROR_PRINT("Failed to wc_RsaKeyToDer %d\n", ret);
         return ret;
     }
 
-    /* Validate the DER size */
-    if (rsaKeyDerSz != WH_TEST_RSA_DER_SIZE) {
-        WH_ERROR_PRINT("Unexpected RSA DER size\n");
-        return WH_ERROR_ABORTED;
-    }
+    rsaKeyMetadata.len = rsaKeyDerSz;
 
-    /* Request the server to wrap the RSA key using the server KEK */
+    /* Since the size of the DER can change depending on the server
+     * configuration we need to store the size of the wrapped key in flash as
+     * well */
+    rsaWrappedKeySz = WH_TEST_AES_IVSIZE + WH_TEST_AES_TAGSIZE +
+                      sizeof(whNvmMetadata) + rsaKeyDerSz;
+    memcpy(rsaWrappedKey, &rsaWrappedKeySz, sizeof(rsaWrappedKeySz));
+
+    /* Request the server to wrap the RSA key using the server KEK.
+     * Leave the beginning 4 bytes to hold the wrapped key size. */
     ret = wh_Client_KeyWrap(client, WC_CIPHER_AES_GCM, WH_TEST_KEKID, rsaKeyDer,
-                            rsaKeyDerSz, &rsaKeyMetadata, rsaWrappedKey,
-                            sizeof(rsaWrappedKey));
+                            rsaKeyDerSz, &rsaKeyMetadata, &rsaWrappedKey[4],
+                            rsaWrappedKeySz);
     if (ret != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_KeyWrap %d\n", ret);
         return ret;
     }
 
-    /* Write the wrapped RSA key to a specified location in flash */
+    /* Write the wrapped RSA key to a specified location in flash. */
     ret = flashCb->Program(flashCtx, WH_TEST_RSA_KEY_OFFSET,
                            sizeof(rsaWrappedKey), rsaWrappedKey);
     if (ret != 0) {
@@ -433,9 +441,10 @@ static int _Rsa_UseWrappedKeyFromNvm(whClientContext* client, void* flashCtx,
     int     ret;
     whKeyId serverKekId = WH_TEST_KEKID;
 
-    RsaKey  rsa[1];
-    whKeyId rsaKeyId = WH_TEST_RSA_KEYID;
-    uint8_t rsaWrappedKey[WH_TEST_RSA_WRAPPED_KEYSIZE];
+    RsaKey   rsa[1];
+    whKeyId  rsaKeyId = WH_TEST_RSA_KEYID;
+    uint8_t  rsaWrappedKey[WH_TEST_RSA_MAX_WRAPPED_KEYSIZE];
+    uint32_t rsaWrappedKeySz;
 
     const uint8_t plaintext[] = "Hello with RSA-3072!";
     uint8_t       ciphertext[384];
@@ -449,9 +458,13 @@ static int _Rsa_UseWrappedKeyFromNvm(whClientContext* client, void* flashCtx,
         return ret;
     }
 
+    /* Get the size of the wrapped key by reading the first 4 bytes of the
+     * wrapped key */
+    memcpy(&rsaWrappedKeySz, rsaWrappedKey, sizeof(rsaWrappedKeySz));
+
     /* Request the server to unwrap and cache the key for us */
     ret = wh_Client_KeyUnwrapAndCache(client, WC_CIPHER_AES_GCM, serverKekId,
-                                      rsaWrappedKey, sizeof(rsaWrappedKey),
+                                      &rsaWrappedKey[4], rsaWrappedKeySz,
                                       &rsaKeyId);
     if (ret != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_KeyUnwrapAndCache %d\n", ret);
@@ -532,7 +545,7 @@ int whTest_Client_WriteWrappedKeysToNvm(whClientContext* client, void* flashCtx,
 #endif /* HAVE_AESGCM */
 
 #ifndef NO_RSA
-    ret = _Rsa_WriteWrappedKeyToNvm(client, flashCtx, flashCb, rng);
+    ret = _Rsa_WriteWrappedKeyToNvm(client, flashCtx, flashCb);
     if (ret != WH_ERROR_OK) {
         WH_ERROR_PRINT("Failed to _Rsa_WriteWrappedKeyToNvm %d\n", ret);
         goto cleanup_and_exit;
