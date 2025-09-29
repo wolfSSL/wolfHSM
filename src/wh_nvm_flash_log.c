@@ -340,6 +340,23 @@ static int nfl_PartitionNewEpoch(whNvmFlashLogContext* ctx)
     return WH_ERROR_OK;
 }
 
+static int nfl_PartitionNewEpochOrFallback(whNvmFlashLogContext* ctx)
+{
+    int ret;
+
+    if (ctx == NULL)
+        return WH_ERROR_BADARGS;
+    ret = nfl_PartitionNewEpoch(ctx);
+
+    if (ret != WH_ERROR_OK) {
+        /*  swtiching  to new partition failed for a reason, try to restore
+         *  back active partition. */
+        nfl_PartitionRead(ctx);
+    }
+
+    return ret;
+}
+
 /* Initialization function */
 int wh_NvmFlashLog_Init(void* c, const void* cf)
 {
@@ -525,7 +542,7 @@ int wh_NvmFlashLog_AddObject(void* c, whNvmMetadata* meta, whNvmSize data_len,
     whNvmFlashLogContext*  ctx = (whNvmFlashLogContext*)c;
     whNvmFlashLogMetadata *obj, *old_obj;
     uint32_t               available_space;
-    uint32_t               ret;
+    int                    ret;
     uint32_t               count;
 
     if (ctx == NULL || !ctx->is_initialized || meta == NULL || (data_len > 0 && data == NULL))
@@ -562,7 +579,7 @@ int wh_NvmFlashLog_AddObject(void* c, whNvmMetadata* meta, whNvmSize data_len,
     ctx->directory.header.size +=
         sizeof(whNvmFlashLogMetadata) + PAD_SIZE(data_len);
 
-    return nfl_PartitionNewEpoch(ctx);
+    return nfl_PartitionNewEpochOrFallback(ctx);
 }
 
 /* Destroy objects by id list */
@@ -585,7 +602,7 @@ int wh_NvmFlashLog_DestroyObjects(void* c, whNvmId list_count,
             return ret;
     }
 
-    return nfl_PartitionNewEpoch(ctx);
+    return nfl_PartitionNewEpochOrFallback(ctx);
 }
 
 /* Read object data */
