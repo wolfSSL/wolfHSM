@@ -40,7 +40,7 @@
 typedef struct {
     uint32_t partition_epoch;
     uint32_t size;
-    uint8_t  _pad[WH_NVM_FLASH_LOG_WRITE_GRANULARITY - sizeof(uint32_t) * 2];
+    uint8_t  WH_PAD[WH_NVM_FLASH_LOG_WRITE_GRANULARITY - sizeof(uint32_t) * 2];
 } whNvmFlashLogPartitionHeader;
 
 /* In-memory representation of a partition */
