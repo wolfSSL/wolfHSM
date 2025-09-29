@@ -31,9 +31,11 @@
 /**
  * Helper function to configure and select an NVM backend for testing.
  *
- * @param type      The type of NVM backend to configure (see NvmTestBackendType).
+ * @param type      The type of NVM backend to configure (see
+ * NvmTestBackendType).
  * @param nvmSetup  Pointer to a union of NVM backend setup structures (output).
- * @param nvmCfg    Pointer to the NVM configuration structure to populate (output).
+ * @param nvmCfg    Pointer to the NVM configuration structure to populate
+ * (output).
  * @param fCfg      Pointer to the RamSim flash configuration structure.
  * @param fCtx      Pointer to the RamSim flash context structure.
  * @param fCb       Pointer to the RamSim flash callback structure.

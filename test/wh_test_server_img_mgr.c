@@ -1229,7 +1229,7 @@ int whTest_ServerImgMgr(NvmTestBackendType nvmType)
     }};
     const whFlashCb  fcb[1]     = {WH_FLASH_RAMSIM_CB};
 
-    whNvmUnion nvm_setup;
+    whNvmUnion   nvm_setup;
     whNvmConfig  n_conf[1];
     whNvmContext nvm[1]    = {{0}};
 

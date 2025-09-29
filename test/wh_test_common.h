@@ -26,10 +26,10 @@
 #include <assert.h>
 #endif
 
-#include<wolfhsm/wh_nvm.h>
-#include<wolfhsm/wh_flash_ramsim.h>
-#include<wolfhsm/wh_nvm_flash.h>
-#include<wolfhsm/wh_nvm_flash_log.h>
+#include <wolfhsm/wh_nvm.h>
+#include <wolfhsm/wh_flash_ramsim.h>
+#include <wolfhsm/wh_nvm_flash.h>
+#include <wolfhsm/wh_nvm_flash_log.h>
 
 #define WH_TEST_FAIL (-1)
 #define WH_TEST_SUCCESS (0)
@@ -108,7 +108,6 @@
             WH_TEST_ASSERT(condition);                                             \
         }                                                                  \
     } while (0)
-
 
 
 typedef enum {

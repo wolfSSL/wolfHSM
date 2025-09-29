@@ -100,8 +100,8 @@ int wh_NvmFlash_AddObject(void* c, whNvmMetadata* meta,
         whNvmSize data_len, const uint8_t* data);
 int wh_NvmFlash_DestroyObjects(void* c, whNvmId list_count,
         const whNvmId* id_list);
-int wh_NvmFlash_Read(void* c, whNvmId id, whNvmSize offset,
-        whNvmSize data_len, uint8_t* data);
+int wh_NvmFlash_Read(void* c, whNvmId id, whNvmSize offset, whNvmSize data_len,
+                     uint8_t* data);
 
 #define WH_NVM_FLASH_CB                             \
 {                                                   \

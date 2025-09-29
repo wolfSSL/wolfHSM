@@ -779,7 +779,7 @@ int whTest_ClientServerSequential(NvmTestBackendType nvmType)
     }};
     const whFlashCb  fcb[1]     = {WH_FLASH_RAMSIM_CB};
 
-    whNvmUnion nvm_setup;
+    whNvmUnion   nvm_setup;
     whNvmConfig  n_conf[1];
     whNvmContext nvm[1]    = {{0}};
 
@@ -1802,11 +1802,12 @@ static int wh_ClientServer_MemThreadTest(NvmTestBackendType nvmType)
     }};
     const whFlashCb  fcb[1]          = {WH_FLASH_RAMSIM_CB};
 
-    whNvmUnion nvm_setup;
+    whNvmUnion   nvm_setup;
     whNvmConfig  n_conf[1] = {0};
     whNvmContext nvm[1]    = {{0}};
 
-    WH_TEST_RETURN_ON_FAIL(whTest_NvmSetup(nvmType, &nvm_setup, n_conf, fc_conf, fc, fcb));
+    WH_TEST_RETURN_ON_FAIL(
+        whTest_NvmSetup(nvmType, &nvm_setup, n_conf, fc_conf, fc, fcb));
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     /* Crypto context */
@@ -1886,9 +1887,9 @@ static int wh_ClientServer_PosixMemMapThreadTest(NvmTestBackendType nvmType)
     }};
     const whFlashCb  fcb[1]     = {WH_FLASH_RAMSIM_CB};
 
-    whNvmUnion nvm_setup;
+    whNvmUnion   nvm_setup;
     whNvmConfig  n_conf[1];
-    whNvmContext nvm[1]    = {{0}};
+    whNvmContext nvm[1] = {{0}};
 
     WH_TEST_RETURN_ON_FAIL(
         whTest_NvmSetup(nvmType, &nvm_setup, n_conf, fc_conf, fc, fcb));
@@ -1936,7 +1937,8 @@ int whTest_ClientServer(void)
 
 #if defined(WOLFHSM_CFG_SERVER_NVM_FLASH_LOG)
     printf("Testing client/server sequential: mem + flash log...\n");
-    WH_TEST_ASSERT(0 == whTest_ClientServerSequential(NVM_TEST_BACKEND_FLASH_LOG));
+    WH_TEST_ASSERT(0 ==
+                   whTest_ClientServerSequential(NVM_TEST_BACKEND_FLASH_LOG));
 #endif /* defined(WOLFHSM_CFG_SERVER_NVM_FLASH_LOG) */
 
 #if defined(WOLFHSM_CFG_TEST_POSIX)
@@ -1944,15 +1946,18 @@ int whTest_ClientServer(void)
     WH_TEST_ASSERT(0 == wh_ClientServer_MemThreadTest(NVM_TEST_BACKEND_FLASH));
 
     printf("Testing client/server: (pthread) POSIX shared memory ...\n");
-    WH_TEST_ASSERT(0 == wh_ClientServer_PosixMemMapThreadTest(NVM_TEST_BACKEND_FLASH));
+    WH_TEST_ASSERT(
+        0 == wh_ClientServer_PosixMemMapThreadTest(NVM_TEST_BACKEND_FLASH));
 
 #if defined(WOLFHSM_CFG_SERVER_NVM_FLASH_LOG)
     printf("Testing client/server: (pthread) mem + flash log...\n");
     WH_TEST_ASSERT(0 ==
                    wh_ClientServer_MemThreadTest(NVM_TEST_BACKEND_FLASH_LOG));
 
-    printf("Testing client/server: (pthread) POSIX shared memory + flash log...\n");
-    WH_TEST_ASSERT(0 == wh_ClientServer_PosixMemMapThreadTest(NVM_TEST_BACKEND_FLASH_LOG));
+    printf("Testing client/server: (pthread) POSIX shared memory + flash "
+           "log...\n");
+    WH_TEST_ASSERT(
+        0 == wh_ClientServer_PosixMemMapThreadTest(NVM_TEST_BACKEND_FLASH_LOG));
 #endif /* defined(WOLFHSM_CFG_SERVER_NVM_FLASH_LOG) */
 
 #endif /* defined(WOLFHSM_CFG_TEST_POSIX) */

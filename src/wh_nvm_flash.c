@@ -133,8 +133,8 @@ static int nfObject_Program(whNvmFlashContext* context, int partition,
         int object_index, uint32_t epoch, whNvmMetadata* meta, uint32_t start,
         const uint8_t* data);
 static int nfObject_ReadDataBytes(whNvmFlashContext* context, int partition,
-        int object_index, uint32_t byte_offset, uint32_t byte_count,
-        uint8_t* out_data);
+                                  int object_index, uint32_t byte_offset,
+                                  uint32_t byte_count, uint8_t* out_data);
 static int nfObject_Copy(whNvmFlashContext* context, int object_index,
         int partition, uint32_t *inout_next_object, uint32_t *inout_next_data);
 
@@ -652,8 +652,8 @@ static int nfObject_Program(whNvmFlashContext* context, int partition,
 }
 
 static int nfObject_ReadDataBytes(whNvmFlashContext* context, int partition,
-        int object_index,
-        uint32_t byte_offset, uint32_t byte_count, uint8_t* out_data)
+                                  int object_index, uint32_t byte_offset,
+                                  uint32_t byte_count, uint8_t* out_data)
 {
     int start = 0;
     uint32_t startOffset = 0;
@@ -676,18 +676,16 @@ static int nfObject_ReadDataBytes(whNvmFlashContext* context, int partition,
     }
 
     /* Ensure we don't read off the end of the active partition */
-    if (WH_ERROR_OK != nfPartition_CheckDataRange(context, partition,
-                                    startOffset * WHFU_BYTES_PER_UNIT + byte_offset,
-                                   byte_count)) {
+    if (WH_ERROR_OK != nfPartition_CheckDataRange(
+                           context, partition,
+                           startOffset * WHFU_BYTES_PER_UNIT + byte_offset,
+                           byte_count)) {
         return WH_ERROR_BADARGS;
     }
 
     return wh_FlashUnit_ReadBytes(
-            context->cb,
-            context->flash,
-            startOffset * WHFU_BYTES_PER_UNIT + byte_offset,
-            byte_count,
-            out_data);
+        context->cb, context->flash,
+        startOffset * WHFU_BYTES_PER_UNIT + byte_offset, byte_count, out_data);
 }
 
 static int nfObject_Copy(whNvmFlashContext* context, int object_index,
@@ -728,13 +726,8 @@ static int nfObject_Copy(whNvmFlashContext* context, int object_index,
         }
 
         /* Read the data from the old object. */
-        ret = nfObject_ReadDataBytes(
-                context,
-                context->active,
-                object_index,
-                data_offset,
-                this_len,
-                buffer);
+        ret = nfObject_ReadDataBytes(context, context->active, object_index,
+                                     data_offset, this_len, buffer);
         if (ret != 0) return ret;
 
         /* Write the data to the new object. */
@@ -1243,30 +1236,23 @@ int wh_NvmFlash_DestroyObjects(void* c, whNvmId list_count,
 }
 
 /* Read the data of the object starting at the byte offset */
-int wh_NvmFlash_Read(void* c, whNvmId id, whNvmSize offset,
-        whNvmSize data_len, uint8_t* data)
+int wh_NvmFlash_Read(void* c, whNvmId id, whNvmSize offset, whNvmSize data_len,
+                     uint8_t* data)
 {
     whNvmFlashContext* context = c;
     int ret = 0;
-    int object_index = -1;
+    int                object_index = -1;
 
     if (    (context == NULL) ||
             ((data_len > 0) && (data == NULL)) ){
         return WH_ERROR_BADARGS;
     }
 
-    ret = nfMemDirectory_FindObjectIndexById(
-            &context->directory,
-            id,
-            &object_index);
+    ret = nfMemDirectory_FindObjectIndexById(&context->directory, id,
+                                             &object_index);
     if (ret == 0) {
-        ret = nfObject_ReadDataBytes(
-                context,
-                context->active,
-                object_index,
-                offset,
-                data_len,
-                data);
+        ret = nfObject_ReadDataBytes(context, context->active, object_index,
+                                     offset, data_len, data);
     }
     return ret;
 }
