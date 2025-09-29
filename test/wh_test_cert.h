@@ -26,8 +26,10 @@
 #include "wolfhsm/wh_server.h"
 #include "wolfhsm/wh_client.h"
 
+#include "wh_test_common.h"
+
 /* Run certificate configuration tests */
-int whTest_CertRamSim(void);
+int whTest_CertRamSim(NvmTestBackendType nvmType);
 int whTest_CertServerCfg(whServerConfig* serverCfg);
 int whTest_CertClient(whClientContext* client);
 #if defined(WOLFHSM_CFG_DMA)
