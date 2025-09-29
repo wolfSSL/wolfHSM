@@ -94,6 +94,45 @@ typedef struct {
     };
 } whNvmFlashLogMetadata;
 
+/* do a blank check + program + verify */
+static int nfl_FlashProgramHelper(whNvmFlashLogContext* ctx, uint32_t off,
+                                  const uint8_t* data, uint32_t len)
+{
+    int ret;
+
+    if (ctx == NULL || (data == NULL && len > 0))
+        return WH_ERROR_BADARGS;
+
+    ret = ctx->flash_cb->BlankCheck(ctx->flash_ctx, off, len);
+    if (ret != 0)
+        return ret;
+    ret = ctx->flash_cb->Program(ctx->flash_ctx, off, len, data);
+    if (ret != 0)
+        return ret;
+    ret = ctx->flash_cb->Verify(ctx->flash_ctx, off, len, data);
+    if (ret != 0)
+        return ret;
+    return WH_ERROR_OK;
+}
+
+/* do a erase + blank check */
+static int nfl_FlashEraseHelper(whNvmFlashLogContext* ctx, uint32_t off,
+                                uint32_t len)
+{
+    int ret;
+
+    if (ctx == NULL)
+        return WH_ERROR_BADARGS;
+    ret = ctx->flash_cb->Erase(ctx->flash_ctx, off, len);
+    if (ret != 0)
+        return ret;
+    ret = ctx->flash_cb->BlankCheck(ctx->flash_ctx, off, len);
+    if (ret != 0)
+        return ret;
+
+    return WH_ERROR_OK;
+}
+
 static whNvmFlashLogMetadata* nfl_ObjNext(whNvmFlashLogContext*  ctx,
                                           whNvmFlashLogMetadata* obj)
 {
@@ -108,25 +147,19 @@ static whNvmFlashLogMetadata* nfl_ObjNext(whNvmFlashLogContext*  ctx,
 
 static int nfl_PartitionErase(whNvmFlashLogContext* ctx, uint32_t partition)
 {
-    const whFlashCb* f_cb = ctx->flash_cb;
-    uint32_t         off;
-    int              ret;
+    uint32_t off;
 
     if (ctx == NULL || partition > 1)
         return WH_ERROR_BADARGS;
 
     off = partition * ctx->partition_size;
-    ret = f_cb->Erase(ctx->flash_ctx, off, ctx->partition_size);
-    if (ret != 0)
-        return ret;
-    return WH_ERROR_OK;
+    return nfl_FlashEraseHelper(ctx, off, ctx->partition_size);
 }
 
 static int nfl_PartitionWrite(whNvmFlashLogContext* ctx, uint32_t partition)
 {
-    const whFlashCb* f_cb = ctx->flash_cb;
-    uint32_t         off;
-    int              ret;
+    uint32_t off;
+    int      ret;
 
     if (ctx == NULL || partition > 1)
         return WH_ERROR_BADARGS;
@@ -137,9 +170,9 @@ static int nfl_PartitionWrite(whNvmFlashLogContext* ctx, uint32_t partition)
         return WH_ERROR_ABORTED;
 
     if (ctx->directory.header.size > 0) {
-        ret = f_cb->Program(ctx->flash_ctx,
-                            off + sizeof(whNvmFlashLogPartitionHeader),
-                            ctx->directory.header.size, ctx->directory.data);
+        ret = nfl_FlashProgramHelper(
+            ctx, off + sizeof(whNvmFlashLogPartitionHeader),
+            ctx->directory.data, ctx->directory.header.size);
         if (ret != 0)
             return ret;
     }
@@ -162,9 +195,9 @@ static int nfl_PartitionCommit(whNvmFlashLogContext* ctx, uint32_t partition)
                            sizeof(whNvmFlashLogPartitionHeader));
     if (ret != 0)
         return ret;
-    ret = f_cb->Program(ctx->flash_ctx, off,
-                        sizeof(whNvmFlashLogPartitionHeader),
-                        (uint8_t*)&ctx->directory.header);
+
+    ret = nfl_FlashProgramHelper(ctx, off, (uint8_t*)&ctx->directory.header,
+                                 sizeof(whNvmFlashLogPartitionHeader));
     if (ret != 0)
         return ret;
 
