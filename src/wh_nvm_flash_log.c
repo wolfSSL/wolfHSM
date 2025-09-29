@@ -69,6 +69,18 @@ typedef struct {
     };
 } whNvmFlashLogMetadata;
 
+static whNvmFlashLogMetadata* wh_NvmFlashLog_GetNextObj(whNvmFlashLogContext* ctx,
+                                                         whNvmFlashLogMetadata*  obj)
+{
+    if (obj == NULL || ctx == NULL)
+        return NULL;
+    uint8_t* next = (uint8_t*)obj + sizeof(whNvmFlashLogMetadata) +
+                    PAD_SIZE(obj->meta.len);
+    if (next >= ctx->directory.data + ctx->directory.header.size)
+        return NULL;
+    return (whNvmFlashLogMetadata*)next;
+}
+
 static int wh_NvmFlashLog_ErasePartition(whNvmFlashLogContext* ctx,
                                          uint32_t              partition)
 {
@@ -196,18 +208,16 @@ static whNvmFlashLogMetadata*
 wh_NvmFlashLog_FindObjectById(whNvmFlashLogContext* ctx, whNvmId id)
 {
     whNvmFlashLogMetadata* obj;
-    uint8_t*               idx;
 
     if (ctx == NULL)
         return NULL;
 
-    idx = ctx->directory.data;
-    while (idx < ctx->directory.data + ctx->directory.header.size) {
-        obj = (whNvmFlashLogMetadata*)idx;
+    obj = (whNvmFlashLogMetadata*)ctx->directory.data;
+    while (obj != NULL) {
         if (obj->meta.id == id) {
             return obj;
         }
-        idx += sizeof(whNvmFlashLogMetadata) + PAD_SIZE(obj->meta.len);
+        obj = wh_NvmFlashLog_GetNextObj(ctx, obj);
     }
     return NULL;
 }
@@ -236,26 +246,25 @@ static int wh_NvmFlashLog_CountObjects(whNvmFlashLogContext*  ctx,
                                        whNvmFlashLogMetadata* start_obj)
 {
     whNvmFlashLogMetadata* obj;
-    uint8_t*               idx;
     int                    count = 0;
 
     if (ctx == NULL)
         return 0;
 
-    idx = (start_obj != NULL) ? (uint8_t*)start_obj : ctx->directory.data;
-    if (idx < ctx->directory.data ||
-        idx >= ctx->directory.data + ctx->directory.header.size) {
+    obj = (start_obj != NULL) ? start_obj : (whNvmFlashLogMetadata*)ctx->directory.data;
+    if ((uint8_t*)obj < ctx->directory.data ||
+        (uint8_t*)obj >= ctx->directory.data + ctx->directory.header.size) {
         return 0;
     }
 
-    while (idx < ctx->directory.data + ctx->directory.header.size) {
-        obj = (whNvmFlashLogMetadata*)idx;
+    while (obj != NULL) {
         if (obj->meta.id == WH_NVM_ID_INVALID) {
             break;
         }
         count++;
-        idx += sizeof(whNvmFlashLogMetadata) + PAD_SIZE(obj->meta.len);
+        obj = wh_NvmFlashLog_GetNextObj(ctx, obj);
     }
+
     return count;
 }
 
@@ -389,14 +398,22 @@ int wh_NvmFlashLog_List(void* c, whNvmAccess access, whNvmFlags flags,
     (void)access;
     (void)flags;
     whNvmFlashLogContext*  ctx = (whNvmFlashLogContext*)c;
-    whNvmFlashLogMetadata* obj;
-    uint32_t               count;
+    whNvmFlashLogMetadata* next_obj = NULL, *start_obj = NULL;
+    uint32_t               count = 0;
 
     if (ctx == NULL)
         return WH_ERROR_BADARGS;
 
-    obj = wh_NvmFlashLog_FindObjectById(ctx, start_id);
-    if (obj == NULL) {
+    /* list all obects if start_id is WH_NVM_ID_INVALID */
+    if (start_id == WH_NVM_ID_INVALID) {
+        next_obj = (whNvmFlashLogMetadata*)ctx->directory.data;
+    } else {
+        start_obj = wh_NvmFlashLog_FindObjectById(ctx, start_id);
+        if (start_obj != NULL && start_obj->meta.id != WH_NVM_ID_INVALID)
+            next_obj = wh_NvmFlashLog_GetNextObj(ctx, start_obj);
+    }
+
+    if (next_obj == NULL || next_obj->meta.id == WH_NVM_ID_INVALID) {
         if (out_count != NULL)
             *out_count = 0;
         if (out_id != NULL)
@@ -404,24 +421,11 @@ int wh_NvmFlashLog_List(void* c, whNvmAccess access, whNvmFlags flags,
         return WH_ERROR_OK;
     }
 
-    /* check next object */
-    obj =
-        (whNvmFlashLogMetadata*)((uint8_t*)obj + sizeof(whNvmFlashLogMetadata) +
-                                 PAD_SIZE(obj->meta.len));
-    if (obj >= (whNvmFlashLogMetadata*)(ctx->directory.data +
-                                        ctx->directory.header.size) ||
-        obj->meta.id == WH_NVM_ID_INVALID) {
-        if (out_count != NULL)
-            *out_count = 0;
-        if (out_id != NULL)
-            *out_id = WH_NVM_ID_INVALID;
-        return WH_ERROR_OK;
-    }
-    count = wh_NvmFlashLog_CountObjects(ctx, obj);
+    count = wh_NvmFlashLog_CountObjects(ctx, next_obj);
     if (out_count != NULL)
         *out_count = count;
     if (out_id != NULL)
-        *out_id = obj->meta.id;
+        *out_id = next_obj->meta.id;
 
     return WH_ERROR_OK;
 }
