@@ -10,7 +10,8 @@
  *
  * wolfHSM is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+ * Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
@@ -68,31 +69,31 @@ typedef struct {
 
 int wh_NvmFlashLog_Init(void* c, const void* cf);
 int wh_NvmFlashLog_Cleanup(void* c);
-int wh_NvmFlashLog_List(void* c,
-        whNvmAccess access, whNvmFlags flags, whNvmId start_id,
-        whNvmId *out_avail_objects, whNvmId *out_id);
-int wh_NvmFlashLog_GetAvailable(void* c,
-        uint32_t *out_avail_size, whNvmId *out_avail_objects,
-        uint32_t *out_reclaim_size, whNvmId *out_reclaim_objects);
+int wh_NvmFlashLog_List(void* c, whNvmAccess access, whNvmFlags flags,
+                        whNvmId start_id, whNvmId* out_avail_objects,
+                        whNvmId* out_id);
+int wh_NvmFlashLog_GetAvailable(void* c, uint32_t* out_avail_size,
+                                whNvmId*  out_avail_objects,
+                                uint32_t* out_reclaim_size,
+                                whNvmId*  out_reclaim_objects);
 int wh_NvmFlashLog_GetMetadata(void* c, whNvmId id, whNvmMetadata* meta);
-int wh_NvmFlashLog_AddObject(void* c, whNvmMetadata* meta,
-        whNvmSize data_len, const uint8_t* data);
+int wh_NvmFlashLog_AddObject(void* c, whNvmMetadata* meta, whNvmSize data_len,
+                             const uint8_t* data);
 int wh_NvmFlashLog_DestroyObjects(void* c, whNvmId list_count,
-        const whNvmId* id_list);
+                                  const whNvmId* id_list);
 int wh_NvmFlashLog_Read(void* c, whNvmId id, whNvmSize offset,
-        whNvmSize data_len, uint8_t* data);
+                        whNvmSize data_len, uint8_t* data);
 
-#define WH_NVM_FLASH_LOG_CB                          \
-{                                                    \
-    .Init = wh_NvmFlashLog_Init,                     \
-    .Cleanup = wh_NvmFlashLog_Cleanup,               \
-    .List = wh_NvmFlashLog_List,                     \
-    .GetAvailable = wh_NvmFlashLog_GetAvailable,     \
-    .GetMetadata = wh_NvmFlashLog_GetMetadata,       \
-    .AddObject = wh_NvmFlashLog_AddObject,           \
-    .DestroyObjects = wh_NvmFlashLog_DestroyObjects, \
-    .Read = wh_NvmFlashLog_Read,                     \
-}
+#define WH_NVM_FLASH_LOG_CB                                             \
+    {                                                                   \
+        .Init = wh_NvmFlashLog_Init, .Cleanup = wh_NvmFlashLog_Cleanup, \
+        .List           = wh_NvmFlashLog_List,                          \
+        .GetAvailable   = wh_NvmFlashLog_GetAvailable,                  \
+        .GetMetadata    = wh_NvmFlashLog_GetMetadata,                   \
+        .AddObject      = wh_NvmFlashLog_AddObject,                     \
+        .DestroyObjects = wh_NvmFlashLog_DestroyObjects,                \
+        .Read           = wh_NvmFlashLog_Read,                          \
+    }
 
 #endif /* WOLFHSM_CFG_SERVER_NVM_FLASH_LOG */
 

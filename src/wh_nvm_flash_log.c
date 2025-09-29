@@ -65,8 +65,9 @@
  *
  * Alignment consideration:
  *
- * The implementation assure that writes are aligned to WRITE_GRANULARITY in FLASH memory space.
- * The source data passed on the flash layer might not be aligned.
+ * The implementation assure that writes are aligned to WRITE_GRANULARITY in
+ * FLASH memory space. The source data passed on the flash layer might not be
+ * aligned.
  */
 
 #include "wolfhsm/wh_settings.h"
@@ -138,8 +139,8 @@ static whNvmFlashLogMetadata* nfl_ObjNext(whNvmFlashLogContext*  ctx,
 {
     if (obj == NULL || ctx == NULL)
         return NULL;
-    uint8_t* next = (uint8_t*)obj + sizeof(whNvmFlashLogMetadata) +
-                    PAD_SIZE(obj->meta.len);
+    uint8_t* next =
+        (uint8_t*)obj + sizeof(whNvmFlashLogMetadata) + PAD_SIZE(obj->meta.len);
     if (next >= ctx->directory.data + ctx->directory.header.size)
         return NULL;
     return (whNvmFlashLogMetadata*)next;
@@ -189,10 +190,10 @@ static int nfl_PartitionCommit(whNvmFlashLogContext* ctx, uint32_t partition)
     if (ctx == NULL || partition > 1)
         return WH_ERROR_BADARGS;
 
-    off = partition * ctx->partition_size;
+    off  = partition * ctx->partition_size;
     f_cb = ctx->flash_cb;
-    ret = f_cb->BlankCheck(ctx->flash_ctx, off,
-                           sizeof(whNvmFlashLogPartitionHeader));
+    ret  = f_cb->BlankCheck(ctx->flash_ctx, off,
+                            sizeof(whNvmFlashLogPartitionHeader));
     if (ret != 0)
         return ret;
 
@@ -216,8 +217,8 @@ static int nfl_PartitionChoose(whNvmFlashLogContext* ctx)
         return WH_ERROR_BADARGS;
 
     part1_offset = ctx->partition_size;
-    f_cb = ctx->flash_cb;
-    ret = f_cb->BlankCheck(ctx->flash_ctx, 0, sizeof(header0));
+    f_cb         = ctx->flash_cb;
+    ret          = f_cb->BlankCheck(ctx->flash_ctx, 0, sizeof(header0));
     if (ret != 0 && ret != WH_ERROR_NOTBLANK) {
         return ret;
     }
@@ -326,7 +327,8 @@ static int nfl_ObjectCount(whNvmFlashLogContext*  ctx,
     }
 
     if ((uint8_t*)startObj < ctx->directory.data ||
-        (uint8_t*)startObj >= ctx->directory.data + ctx->directory.header.size) {
+        (uint8_t*)startObj >=
+            ctx->directory.data + ctx->directory.header.size) {
         return 0;
     }
 
@@ -351,10 +353,9 @@ static int nfl_PartitionRead(whNvmFlashLogContext* ctx)
         return WH_ERROR_BADARGS;
 
     f_cb = ctx->flash_cb;
-    off = ctx->active_partition * ctx->partition_size;
+    off  = ctx->active_partition * ctx->partition_size;
 
-    ret = f_cb->Read(ctx->flash_ctx, off,
-                     sizeof(whNvmFlashLogPartitionHeader),
+    ret = f_cb->Read(ctx->flash_ctx, off, sizeof(whNvmFlashLogPartitionHeader),
                      (uint8_t*)&ctx->directory.header);
     if (ret != 0)
         return ret;
@@ -519,7 +520,8 @@ int wh_NvmFlashLog_List(void* c, whNvmAccess access, whNvmFlags flags,
     /* list all obects if start_id is WH_NVM_ID_INVALID */
     if (start_id == WH_NVM_ID_INVALID) {
         next_obj = (whNvmFlashLogMetadata*)ctx->directory.data;
-    } else {
+    }
+    else {
         start_obj = nfl_ObjectFindById(ctx, start_id);
         if (start_obj != NULL && start_obj->meta.id != WH_NVM_ID_INVALID)
             next_obj = nfl_ObjNext(ctx, start_obj);
@@ -603,7 +605,8 @@ int wh_NvmFlashLog_AddObject(void* c, whNvmMetadata* meta, whNvmSize data_len,
     int                    ret;
     uint32_t               count;
 
-    if (ctx == NULL || !ctx->is_initialized || meta == NULL || (data_len > 0 && data == NULL))
+    if (ctx == NULL || !ctx->is_initialized || meta == NULL ||
+        (data_len > 0 && data == NULL))
         return WH_ERROR_BADARGS;
 
     count = nfl_ObjectCount(ctx, NULL);
@@ -648,7 +651,8 @@ int wh_NvmFlashLog_DestroyObjects(void* c, whNvmId list_count,
     int                   i;
     int                   ret;
 
-    if (ctx == NULL || !ctx->is_initialized || (list_count > 0 && id_list == NULL))
+    if (ctx == NULL || !ctx->is_initialized ||
+        (list_count > 0 && id_list == NULL))
         return WH_ERROR_BADARGS;
 
     if (list_count == 0)
