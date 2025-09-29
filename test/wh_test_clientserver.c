@@ -34,6 +34,9 @@
 #include "wolfhsm/wh_flash_ramsim.h"
 
 #include "wolfhsm/wh_server.h"
+#ifdef WOLFHSM_CFG_SERVER_NVM_FLASH_LOG
+#include "wolfhsm/wh_nvm_flash_log.h"
+#endif /* WOLFHSM_CFG_SERVER_NVM_FLASH_LOG */
 #endif
 
 #include "wolfhsm/wh_message.h"
@@ -87,6 +90,21 @@ typedef struct {
 static int _testNonExportableNvmAccess(whClientContext* client);
 #endif
 
+/* union helper struct to be able to test alternative NVM implementation */
+typedef struct {
+    union {
+        struct {
+            whNvmFlashContext nvmFlashCtx;
+            whNvmFlashConfig  nvmFlashCfg;
+        };
+#if defined(WOLFHSM_CFG_SERVER_NVM_FLASH_LOG)
+        struct {
+            whNvmFlashLogContext nvmFlashLogCtx;
+            whNvmFlashLogConfig  nvmFlashLogCfg;
+        };
+#endif /* WOLFHSM_CFG_SERVER_NVM_FLASH_LOG */
+    };
+} whNvmUnion;
 
 #ifdef WOLFHSM_CFG_ENABLE_SERVER
 /* Pointer to a local server context so a connect callback can access it. Should
@@ -780,21 +798,42 @@ int whTest_ClientServerSequential(void)
     }};
     const whFlashCb  fcb[1]     = {WH_FLASH_RAMSIM_CB};
 
+    whNvmUnion nvm_setup;
+    whNvmConfig  n_conf[1];
+    whNvmContext nvm[1]    = {{0}};
+
+#if defined(WOLFHSM_CFG_SERVER_NVM_FLASH_LOG)
+    nvm_setup.nvmFlashLogCfg.flash_cb = fcb;
+
+    /* restrict simulated flash partition to nvm_flash_log_partition */
+    WH_TEST_ASSERT(FLASH_RAM_SIZE >= WH_NVM_FLASH_LOG_PARTITION_SIZE * 2);
+    fc_conf->sectorSize = WH_NVM_FLASH_LOG_PARTITION_SIZE;
+    fc_conf->size       = WH_NVM_FLASH_LOG_PARTITION_SIZE * 2;
+    nvm_setup.nvmFlashLogCfg.flash_cfg = fc_conf;
+    nvm_setup.nvmFlashLogCfg.flash_ctx = fc;
+
+    memset(&nvm_setup.nvmFlashCtx, 0, sizeof(nvm_setup.nvmFlashCtx));
+    whNvmCb           nfcb[1]    = {WH_NVM_FLASH_LOG_CB};
+    /* setup nvm */
+    n_conf[0].cb      = nfcb;
+    n_conf[0].context = &nvm_setup.nvmFlashLogCtx;
+    n_conf[0].config  = &nvm_setup.nvmFlashLogCfg;
+
+#else
     /* NVM Flash Configuration using RamSim HAL Flash */
-    whNvmFlashConfig  nf_conf[1] = {{
-         .cb      = fcb,
-         .context = fc,
-         .config  = fc_conf,
-    }};
-    whNvmFlashContext nfc[1]     = {0};
+    nvm_setup.nvmFlashCfg.cb = fcb;
+    nvm_setup.nvmFlashCfg.context = fc;
+    nvm_setup.nvmFlashCfg.config = fc_conf;
+
+    memset(&nvm_setup.nvmFlashCtx, 0, sizeof(nvm_setup.nvmFlashCtx));
     whNvmCb           nfcb[1]    = {WH_NVM_FLASH_CB};
 
-    whNvmConfig  n_conf[1] = {{
-         .cb      = nfcb,
-         .context = nfc,
-         .config  = nf_conf,
-    }};
-    whNvmContext nvm[1]    = {{0}};
+    /* setup nvm */
+    n_conf[0].cb      = nfcb;
+    n_conf[0].context = &nvm_setup.nvmFlashCtx;
+    n_conf[0].config  = &nvm_setup.nvmFlashCfg;
+#endif
+
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     whServerCryptoContext crypto[1] = {{
         .devId = INVALID_DEVID,
