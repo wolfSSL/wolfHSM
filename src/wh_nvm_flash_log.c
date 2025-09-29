@@ -65,7 +65,7 @@
 typedef struct {
     union {
         whNvmMetadata meta;
-        uint8_t       _pad[PAD_SIZE(sizeof(whNvmMetadata))];
+        uint8_t       WH_PAD[PAD_SIZE(sizeof(whNvmMetadata))];
     };
 } whNvmFlashLogMetadata;
 
@@ -172,7 +172,7 @@ static int nfl_PartitionChoose(whNvmFlashLogContext* ctx)
     part1_blank = (ret == 0);
 
     if (part0_blank && part1_blank) {
-        /* Both partitions are blank, start with partition 0 */
+        /* Both partitions headers are blank, start with partition 0 */
         ret = nfl_PartitionErase(ctx, 0);
         if (ret != 0)
             return ret;
@@ -236,6 +236,7 @@ static int nfl_ObjectDestroy(whNvmFlashLogContext* ctx, whNvmId id)
     whNvmFlashLogMetadata* obj;
     uint32_t               len;
     uint32_t               off;
+    uint32_t               tail;
 
     if (ctx == NULL || id == WH_NVM_ID_INVALID)
         return WH_ERROR_BADARGS;
@@ -244,12 +245,12 @@ static int nfl_ObjectDestroy(whNvmFlashLogContext* ctx, whNvmId id)
     if (obj == NULL)
         return WH_ERROR_OK;
 
-    len = sizeof(whNvmFlashLogMetadata) + PAD_SIZE(obj->meta.len);
-    off = (uint8_t*)obj - ctx->directory.data;
-    /* zero out the object to prevent leaking */
-    memset(obj, 0, len);
-    memmove(obj, (uint8_t*)obj + len,
-            ctx->directory.header.size - (off + len));
+    len  = sizeof(whNvmFlashLogMetadata) + PAD_SIZE(obj->meta.len);
+    off  = (uint8_t*)obj - ctx->directory.data;
+    tail = ctx->directory.header.size - (off + len);
+    memmove(obj, (uint8_t*)obj + len, tail);
+    /* be sure to clean-up moved objects from memory */
+    memset((uint8_t*)obj + tail, 0, len);
     ctx->directory.header.size -= len;
     return WH_ERROR_OK;
 }
@@ -372,19 +373,25 @@ int wh_NvmFlashLog_Init(void* c, const void* cf)
     }
 
     /* unlock partitions */
-    ret = context->flash_cb->WriteUnlock(context->flash_ctx, 0,
-                                         context->partition_size);
-    if (ret != 0)
-        return ret;
-    ret = context->flash_cb->WriteUnlock(
-        context->flash_ctx, context->partition_size, context->partition_size);
-    if (ret != 0)
-        return ret;
+    if (context->flash_cb->WriteUnlock != NULL) {
+        ret = context->flash_cb->WriteUnlock(context->flash_ctx, 0,
+                                             context->partition_size);
+        if (ret != 0)
+            return ret;
+        ret = context->flash_cb->WriteUnlock(context->flash_ctx,
+                                             context->partition_size,
+                                             context->partition_size);
+        if (ret != 0)
+            return ret;
+    }
 
     ret = nfl_PartitionChoose(context);
     if (ret != 0)
         return ret;
     ret = nfl_PartitionRead(context);
+    if (ret != 0)
+        return ret;
+    ret = nfl_PartitionErase(context, (context->active_partition == 0) ? 1 : 0);
     if (ret != 0)
         return ret;
 
@@ -394,22 +401,28 @@ int wh_NvmFlashLog_Init(void* c, const void* cf)
 
 int wh_NvmFlashLog_Cleanup(void* c)
 {
-    int ret;
     whNvmFlashLogContext* context = (whNvmFlashLogContext*)c;
+    int                   ret0, ret1;
+
     if (context == NULL || !context->is_initialized)
         return WH_ERROR_BADARGS;
 
-    /* lock partitions */
-    ret = context->flash_cb->WriteLock(context->flash_ctx, 0,
-                                       context->partition_size);
-    if (ret != 0)
-        return ret;
-    ret = context->flash_cb->WriteLock(
-        context->flash_ctx, context->partition_size, context->partition_size);
-    if (ret != 0)
-        return ret;
-
     context->is_initialized = 0;
+
+    /* lock partitions */
+    if (context->flash_cb->WriteLock == NULL)
+        return WH_ERROR_OK;
+
+    ret0 = context->flash_cb->WriteLock(context->flash_ctx, 0,
+                                        context->partition_size);
+    ret1 = context->flash_cb->WriteLock(
+        context->flash_ctx, context->partition_size, context->partition_size);
+
+    if (ret0 != WH_ERROR_OK)
+        return ret0;
+    if (ret1 != WH_ERROR_OK)
+        return ret1;
+
     return WH_ERROR_OK;
 }
 
@@ -417,12 +430,13 @@ int wh_NvmFlashLog_Cleanup(void* c)
 int wh_NvmFlashLog_List(void* c, whNvmAccess access, whNvmFlags flags,
                         whNvmId start_id, whNvmId* out_count, whNvmId* out_id)
 {
+    whNvmFlashLogContext*  ctx      = (whNvmFlashLogContext*)c;
+    whNvmFlashLogMetadata *next_obj = NULL, *start_obj = NULL;
+    uint32_t               count = 0;
+
     /* TODO: Implement access and flag matching */
     (void)access;
     (void)flags;
-    whNvmFlashLogContext*  ctx = (whNvmFlashLogContext*)c;
-    whNvmFlashLogMetadata* next_obj = NULL, *start_obj = NULL;
-    uint32_t               count = 0;
 
     if (ctx == NULL || !ctx->is_initialized)
         return WH_ERROR_BADARGS;
