@@ -242,11 +242,6 @@
 #define WOLFHSM_CFG_KEYWRAP_MAX_KEY_SIZE 2000
 #endif
 
-
-#if defined(WOLFHSM_CFG_NO_CRYPTO)
-#error "WOLFHSM_CFG_KEYWRAP is incompatible with WOLFHSM_CFG_NO_CRYPTO"
-#endif
-
 #if defined(NO_AES) || !defined(HAVE_AESGCM)
 #error \
     "WOLFHSM_CFG_KEYWRAP requires NO_AES to be undefined and HAVE_AESGCM to be defined"
@@ -262,6 +257,10 @@
 #endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT */
 
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
+
+#if defined(WOLFHSM_CFG_NO_CRYPTO) && defined(WOLFHSM_CFG_KEYWRAP)
+#error "WOLFHSM_CFG_KEYWRAP is incompatible with WOLFHSM_CFG_NO_CRYPTO"
+#endif
 
 /** Cache flushing and memory fencing synchronization primitives */
 /* Create a full sequential memory fence to ensure compiler memory ordering */
