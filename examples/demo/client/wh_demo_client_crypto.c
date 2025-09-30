@@ -40,6 +40,8 @@
 
 #include "wh_demo_client_crypto.h"
 
+#ifndef WOLFHSM_CFG_NO_CRYPTO
+
 #if !defined(NO_RSA)
 
 /*
@@ -1501,3 +1503,4 @@ int wh_DemoClient_CryptoHkdfCacheInputKey(whClientContext* clientContext)
     return ret;
 }
 #endif /* HAVE_HKDF */
+#endif /* WOLFHSM_CFG_NO_CRYPTO */
