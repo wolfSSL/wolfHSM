@@ -63,6 +63,37 @@ jobs:
         echo "❌ Static analysis failed - errors or warnings were found"
         exit 1
 
+  scan-build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout wolfHSM
+      uses: actions/checkout@v4
+      with:
+        path: wolfHSM
+
+    - name: Checkout wolfssl
+      uses: actions/checkout@v4
+      with:
+        repository: wolfssl/wolfssl
+        path: wolfssl
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y clang build-essential clang-tools
+
+    - name: Run scan-build
+      id: scan-build
+      run:
+        cd wolfHSM && make scan
+
+    - name: Fail if scan-build issues found
+      if: steps.scan-build.outcome == 'failure'
+      run: |
+        echo "❌ scan-build analysis failed - errors or warnings were found"
+        exit 1
+
   clang-tidy:
     runs-on: ubuntu-latest
 
@@ -106,7 +137,6 @@ jobs:
             echo ""
             # Show first 50 issues to avoid overwhelming output
             head -50 tools/static-analysis/reports/clang_tidy_summary.txt
-            
             TOTAL_ISSUES=$((ERROR_COUNT + WARNING_COUNT))
             if [ "$TOTAL_ISSUES" -gt 50 ]; then
               echo ""

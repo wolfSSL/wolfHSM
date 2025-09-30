@@ -73,6 +73,8 @@ enum WH_CLIENT_DEVID_ENUM {
 #endif
 };
 extern const int WH_DEV_IDS_ARRAY[WH_NUM_DEVIDS];
+#else
+#define WH_DEV_ID -2 /* invalid ID for compile purpose */
 #endif
 
 /** Client DMA address translation and validation */
