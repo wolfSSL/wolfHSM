@@ -76,6 +76,7 @@
 #if defined(WOLFHSM_CFG_ENABLE_CLIENT) && !defined(NO_CRYPT_TEST)
 int whTest_WolfCryptTestCfg(whClientConfig* config)
 {
+    int ret = 0;
     whClientContext client[1] = {0};
 
     if (config == NULL) {
@@ -83,16 +84,20 @@ int whTest_WolfCryptTestCfg(whClientConfig* config)
     }
 
     WH_TEST_RETURN_ON_FAIL(wh_Client_Init(client, config));
-    WH_TEST_RETURN_ON_FAIL(wh_Client_CommInit(client, NULL, NULL));
 
-    /* assumes wolfCrypt has been initialized before this function */
-    WH_TEST_RETURN_ON_FAIL(wolfcrypt_test(NULL));
+    ret = wh_Client_CommInit(client, NULL, NULL);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_CommInit: %d\n", ret);
+    } else {
+        /* assumes wolfCrypt has been initialized before this function */
+        ret = wolfcrypt_test(NULL);
+    }
 
     /* Tell server to close */
-    WH_TEST_RETURN_ON_FAIL(wh_Client_CommClose(client));
-    WH_TEST_RETURN_ON_FAIL(wh_Client_Cleanup(client));
+    wh_Client_CommClose(client);
+    wh_Client_Cleanup(client);
 
-    return WH_ERROR_OK;
+    return ret;
 }
 #endif /* WOLFHSM_CFG_ENABLE_CLIENT */
 
@@ -173,6 +178,7 @@ static void _whClientServerThreadTest(whClientConfig* c_conf,
 
 static int wh_ClientServer_MemThreadTest(void)
 {
+    int ret = 0;
     uint8_t req[BUFFER_SIZE]  = {0};
     uint8_t resp[BUFFER_SIZE] = {0};
 
@@ -245,13 +251,19 @@ static int wh_ClientServer_MemThreadTest(void)
 
     WH_TEST_RETURN_ON_FAIL(wh_Nvm_Init(nvm, n_conf));
 
-    WH_TEST_RETURN_ON_FAIL(wolfCrypt_Init());
-    WH_TEST_RETURN_ON_FAIL(wc_InitRng_ex(crypto->rng, NULL, crypto->devId));
-
-    _whClientServerThreadTest(c_conf, s_conf);
+    ret = wolfCrypt_Init();
+    if (ret == 0) {
+        ret = wc_InitRng_ex(crypto->rng, NULL, crypto->devId);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to initialize wolfCrypt rng: %d\n", ret);
+        } else {
+            _whClientServerThreadTest(c_conf, s_conf);
+        }
+    } else {
+        WH_ERROR_PRINT("Failed to initialize wolfCrypt: %d\n", ret);
+    }
 
     wh_Nvm_Cleanup(nvm);
-
     wc_FreeRng(crypto->rng);
     wolfCrypt_Cleanup();
 
