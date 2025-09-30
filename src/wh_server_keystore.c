@@ -41,6 +41,7 @@
 #include "wolfhsm/wh_message_keystore.h"
 #include "wolfhsm/wh_utils.h"
 #include "wolfhsm/wh_server.h"
+#include "wolfhsm/wh_log.h"
 
 #ifdef WOLFHSM_CFG_SHE_EXTENSION
 #include "wolfhsm/wh_server_she.h"
@@ -1007,8 +1008,15 @@ static int _HandleKeyWrapRequest(whServerContext*                  server,
     memcpy(&metadata, reqData, sizeof(metadata));
     memcpy(key, reqData + sizeof(metadata), req->keySz);
 
+    /* Ensure the cipher type in the response matches the request */
+    resp->cipherType = req->cipherType;
+    /* Wrapped key size is only passed back to the client on success */
+    resp->wrappedKeySz = 0;
+
     /* Ensure the keyId in the wrapped metadata has the wrapped flag set */
     if (!WH_KEYID_ISWRAPPED(metadata.id)) {
+        WH_LOG_F(&server->log, WH_LOG_LEVEL_ERROR,
+                 "KeyWrapRequest: keyId:0x%08X is not wrapped", metadata.id);
         return WH_ERROR_BADARGS;
     }
 
@@ -1016,11 +1024,6 @@ static int _HandleKeyWrapRequest(whServerContext*                  server,
     serverKeyId = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO, 
                                                server->comm->client_id, 
                                                req->serverKeyId);
-
-    /* Ensure the cipher type in the response matches the request */
-    resp->cipherType = req->cipherType;
-    /* Wrapped key size is only passed back to the client on success */
-    resp->wrappedKeySz = 0;
 
     /* Store the wrapped key in the response data */
     wrappedKey = respData;
@@ -1461,13 +1464,12 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
             meta->access = WH_NVM_ACCESS_ANY;
             meta->flags  = req.flags;
             meta->len    = req.sz;
-            /* validate label sz */
+            /* truncate label if it's too large */
             if (req.labelSz > WH_NVM_LABEL_LEN) {
-                ret = WH_ERROR_BADARGS;
+                req.labelSz = WH_NVM_LABEL_LEN;
             }
-            else {
-                memcpy(meta->label, req.label, req.labelSz);
-            }
+            memcpy(meta->label, req.label, req.labelSz);
+
             /* get a new id if one wasn't provided */
             if (WH_KEYID_ISERASED(meta->id)) {
                 ret     = wh_Server_KeystoreGetUniqueId(server, &meta->id);
@@ -1510,14 +1512,11 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
             meta->access = WH_NVM_ACCESS_ANY;
             meta->flags  = req.flags;
             meta->len    = req.key.sz;
-
-            /* validate label sz */
+            /* truncate label if it's too large */
             if (req.labelSz > WH_NVM_LABEL_LEN) {
-                ret = WH_ERROR_BADARGS;
+                req.labelSz = WH_NVM_LABEL_LEN;
             }
-            else {
-                memcpy(meta->label, req.label, req.labelSz);
-            }
+            memcpy(meta->label, req.label, req.labelSz);
 
             /* get a new id if one wasn't provided */
             if (WH_KEYID_ISERASED(meta->id)) {
@@ -1633,6 +1632,9 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
                 ret = WH_ERROR_ACCESS;
                 /* Clear any key data that may have been read */
                 memset(out, 0, keySz);
+                WH_LOG_F(&server->log, WH_LOG_LEVEL_SECEVENT,
+                         "Export attempt for non-exportable keyId 0x%08X",
+                         meta->id);
             }
 
             resp.rc = ret;

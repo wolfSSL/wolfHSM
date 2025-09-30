@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024 wolfSSL Inc.
+ * Copyright (C) 2025 wolfSSL Inc.
  *
  * This file is part of wolfHSM.
  *
@@ -17,25 +17,16 @@
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
 /*
- * wolfhsm_cfg.h
+ * port/posix/posix_time.h
  *
- * wolfHSM compile-time options.  Override here for your application
+ * POSIX time helper returning the current time in microseconds.
  */
 
-#ifndef WOLFHSM_CFG_H_
-#define WOLFHSM_CFG_H_
+#ifndef PORT_POSIX_POSIX_TIME_H_
+#define PORT_POSIX_POSIX_TIME_H_
 
-#include "port/posix/posix_time.h"
+#include <stdint.h>
 
-#define WOLFHSM_CFG_PORT_GETTIME posixGetTime
+uint64_t posixGetTime(void);
 
-/** wolfHSM settings */
-#define WOLFHSM_CFG_ENABLE_CLIENT
-#define WOLFHSM_CFG_HEXDUMP
-#define WOLFHSM_CFG_COMM_DATA_LEN 5000
-#ifndef WOLFHSM_CFG_NO_CRYPTO
-#define WOLFHSM_CFG_KEYWRAP
-#define WOLFHSM_CFG_GLOBAL_KEYS
-#endif
-
-#endif /* WOLFHSM_CFG_H_ */
+#endif /* PORT_POSIX_POSIX_TIME_H_ */

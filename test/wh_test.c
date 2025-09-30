@@ -38,6 +38,7 @@
 #include "wh_test_clientserver.h"
 #include "wh_test_keywrap.h"
 #include "wh_test_multiclient.h"
+#include "wh_test_log.h"
 
 #if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER)
 #include "wh_test_cert.h"
@@ -66,6 +67,9 @@ int whTest_Unit(void)
     /* Component Tests */
     WH_TEST_ASSERT(0 == whTest_Flash_RamSim());
     WH_TEST_ASSERT(0 == whTest_NvmFlash());
+#ifdef WOLFHSM_CFG_LOGGING
+    WH_TEST_ASSERT(0 == whTest_Log());
+#endif
 #if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER) && !defined(WOLFHSM_CFG_NO_CRYPTO)
     WH_TEST_ASSERT(0 == whTest_CertRamSim(WH_NVM_TEST_BACKEND_FLASH));
 

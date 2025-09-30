@@ -108,6 +108,17 @@
  *      Example custom definition:
  *          #define WOLFHSM_CFG_PRINTF my_custom_printf
  *
+ *  WOLFHSM_CFG_NO_SYS_TIME - If defined, all internal calls to obtain the
+ system
+ *      time will return 0, removing the need to provide
+ WOLFHSM_CFG_PORT_GETTIME
+ *      for the active port. Note that this will result in nonsensical benchmark
+ *      results and log timestamps.
+ *
+ *  WOLFHSM_CFG_PORT_GETTIME - Function-like macro returning the current system
+ *      time in microseconds as a uint64_t. Must be defined in wolfhsm_cfg.h for
+ *      the active port UNLESS WOLFHSM_CFG_NO_SYS_TIME is defined
+
  *  Overridable porting functions:
  *
  *  XMEMFENCE() - Create a sequential memory consistency sync point.  Note this
@@ -119,19 +130,21 @@
  *  XCACHELINE - Size in bytes of a cache line
  *      Default: 32
  *
- *  #ifndef XCACHEFLUSH(ptr) - Flush the cache line including ptr
+ *  XCACHEFLUSH(ptr) - Flush the cache line including ptr
  *      DefaultL (void)(ptr)
  *
- *  #ifndef XCACHEFLUSHBLK(ptr, n) - Flush the cache lines starting at ptr for
+ *  XCACHEFLUSHBLK(ptr, n) - Flush the cache lines starting at ptr for
  *                                   at least n bytes
  *      DefaultL wh_Utils_CacheFlush(ptr, n)
  *
- *  #ifndef XCACHEINVLD(ptr) - Invalidate the cache line including ptr
+ *  XCACHEINVLD(ptr) - Invalidate the cache line including ptr
  *      DefaultL (void)(ptr)
  *
- *  #ifndef XCACHEINVLDBLK(ptr, n) - Invalidate the cache lines starting at ptr
+ *  XCACHEINVLDBLK(ptr, n) - Invalidate the cache lines starting at ptr
  *                                   for at least n bytes
  *      DefaultL wh_Utils_CacheInvalidate(ptr, n)
+ *
+ *
  *
  *
  */
@@ -143,6 +156,8 @@
 #include "wolfhsm_cfg.h"
 #endif
 
+#include <stdint.h>
+
 #ifndef WOLFHSM_CFG_NO_CRYPTO
 #ifdef WOLFSSL_USER_SETTINGS
 #include "user_settings.h"
@@ -152,6 +167,18 @@
 #define WOLFHSM_CFG_HEXDUMP
 #endif
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
+
+/* Platform system time access */
+#if !defined WOLFHSM_CFG_NO_SYS_TIME && !defined(WOLFHSM_CFG_PORT_GETTIME)
+#error \
+    "WOLFHSM_CFG_PORT_GETTIME must be defined to a function returning current time in microseconds"
+#endif
+
+#if defined(WOLFHSM_CFG_NO_SYS_TIME)
+#define WH_GETTIME_US() ((uint64_t)0)
+#else
+#define WH_GETTIME_US() ((uint64_t)(WOLFHSM_CFG_PORT_GETTIME)())
+#endif
 
 /** Default shares configurations */
 /* Maximum length of the data portion of a request/reply message */
@@ -219,6 +246,13 @@
  *      Default: 256 */
 #ifndef WOLFHSM_CFG_CUSTOMCB_LEN
 #define WOLFHSM_CFG_CUSTOMCB_LEN 256
+#endif
+
+/*  WOLFHSM_CFG_LOG_MSG_MAX - Maximum size of a log message including null
+ *  terminator.
+ *      Default: 256 */
+#ifndef WOLFHSM_CFG_LOG_MSG_MAX
+#define WOLFHSM_CFG_LOG_MSG_MAX 256
 #endif
 
 /* Maximum size of a certificate */
