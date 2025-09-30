@@ -361,22 +361,26 @@ static int whTest_CryptoEcc(whClientContext* ctx, int devId, WC_RNG* rng)
                         memcpy(hash, shared_ba, sizeof(hash));
                         word32 sigLen = sizeof(sig);
                         ret = wc_ecc_sign_hash((void*)hash, sizeof(hash),
-                                (void*)sig, &sigLen, rng, eccPrivate);
+                                               (void*)sig, &sigLen, rng,
+                                               eccPrivate);
                         if (ret != 0) {
                             WH_ERROR_PRINT("Failed to wc_ecc_sign_hash %d\n",
-                                                                        ret);
+                                           ret);
                         } else {
                             int res = 0;
-                            ret = wc_ecc_verify_hash((void*)sig, sigLen,
-                                    (void*)hash, sizeof(hash), &res,
-                                    eccPrivate);
+                            ret     = wc_ecc_verify_hash((void*)sig, sigLen,
+                                                         (void*)hash, sizeof(hash),
+                                                         &res, eccPrivate);
                             if (ret != 0) {
                                 WH_ERROR_PRINT("Failed to wc_ecc_verify_hash"
-                                                                " %d\n", ret);
-                            } else {
+                                               " %d\n",
+                                               ret);
+                            }
+                            else {
                                 if (res == 1) {
                                     printf("ECC SIGN/VERIFY SUCCESS\n");
-                                } else {
+                                }
+                                else {
                                     WH_ERROR_PRINT("ECC SIGN/VERIFY FAIL\n");
                                     ret = -1;
                                 }
@@ -413,15 +417,15 @@ static int whTest_CryptoCurve25519(whClientContext* ctx, int devId, WC_RNG* rng)
     ret = wc_curve25519_init_ex(key_a, NULL, devId);
     if (ret != 0) {
         WH_ERROR_PRINT("Failed to wc_curve25519_init_ex %d\n", ret);
-    } else {
+    }
+    else {
         ret = wc_curve25519_init_ex(key_b, NULL, devId);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed to wc_curve25519_init_ex %d\n", ret);
         } else {
             ret = wc_curve25519_make_key(rng, key_size, key_a);
             if (ret != 0) {
-                WH_ERROR_PRINT("Failed to wc_curve25519_make_key %d\n",
-                        ret);
+                WH_ERROR_PRINT("Failed to wc_curve25519_make_key %d\n", ret);
             }
             if (ret == 0) {
                 ret = wc_curve25519_make_key(rng, key_size, key_b);
@@ -432,20 +436,18 @@ static int whTest_CryptoCurve25519(whClientContext* ctx, int devId, WC_RNG* rng)
             }
             if (ret == 0) {
                 len = sizeof(shared_ab);
-                ret = wc_curve25519_shared_secret(
-                        key_a, key_b, shared_ab, &len);
+                ret =
+                    wc_curve25519_shared_secret(key_a, key_b, shared_ab, &len);
                 if (ret != 0) {
-                    WH_ERROR_PRINT("Failed to compute shared secret %d\n",
-                            ret);
+                    WH_ERROR_PRINT("Failed to compute shared secret %d\n", ret);
                 }
             }
             if (ret == 0) {
                 len = sizeof(shared_ba);
-                ret = wc_curve25519_shared_secret(
-                        key_b, key_a, shared_ba, &len);
+                ret =
+                    wc_curve25519_shared_secret(key_b, key_a, shared_ba, &len);
                 if (ret != 0) {
-                    WH_ERROR_PRINT("Failed to compute shared secret %d\n",
-                            ret);
+                    WH_ERROR_PRINT("Failed to compute shared secret %d\n", ret);
                 }
             }
             if (ret == 0) {
@@ -2226,8 +2228,8 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
             WH_ERROR_PRINT("Failed to wc_AesInit %d\n", ret);
         } else {
             keyId = WH_KEYID_ERASED;
-            ret = wh_Client_KeyCache(ctx, 0, labelIn, sizeof(labelIn),
-                                                    key, sizeof(key), &keyId);
+            ret   = wh_Client_KeyCache(ctx, 0, labelIn, sizeof(labelIn), key,
+                                       sizeof(key), &keyId);
             if (ret != 0) {
                 WH_ERROR_PRINT("Failed to wh_Client_KeyCache %d\n", ret);
             } else {
@@ -2236,18 +2238,19 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
                     WH_ERROR_PRINT("Failed to set key id:%d\n", ret);
                 } else {
                     ret = wc_AesGcmEncrypt(aes, (byte*)cipher, (byte*)plainIn,
-                                    sizeof(plainIn), iv, sizeof(iv), authTag,
-                                    sizeof(authTag), authIn, sizeof(authIn));
+                                           sizeof(plainIn), iv, sizeof(iv),
+                                           authTag, sizeof(authTag), authIn,
+                                           sizeof(authIn));
                     if (ret != 0) {
                         WH_ERROR_PRINT("Failed to wc_AesGcmEncrypt %d\n", ret);
                     } else {
-                        ret = wc_AesGcmDecrypt(aes, (byte*)plainOut,
-                                (byte*)cipher, sizeof(plainIn), iv,
-                                sizeof(iv), authTag, sizeof(authTag),
-                                authIn, sizeof(authIn));
+                        ret = wc_AesGcmDecrypt(
+                            aes, (byte*)plainOut, (byte*)cipher,
+                            sizeof(plainIn), iv, sizeof(iv), authTag,
+                            sizeof(authTag), authIn, sizeof(authIn));
                         if (ret != 0) {
                             WH_ERROR_PRINT("Failed to wc_AesGcmDecrypt %d\n",
-                                                                        ret);
+                                           ret);
                         } else {
                             if (memcmp(plainIn, plainOut, sizeof(plainIn)) !=
                                 0) {
@@ -2391,8 +2394,7 @@ static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
                             /* verify the key was evicted after oneshot */
                             outLen = sizeof(keyEnd);
                             ret    = wh_Client_KeyExport(ctx, keyId, labelEnd,
-                                                         sizeof(labelEnd),
-                                                         keyEnd,
+                                                         sizeof(labelEnd), keyEnd,
                                                          &outLen);
                             if (ret != WH_ERROR_NOTFOUND) {
                                 WH_ERROR_PRINT(
@@ -2690,12 +2692,12 @@ static int whTestCrypto_MlDsaWolfCrypt(whClientContext* ctx, int devId,
         ret = wc_MlDsaKey_Verify(&key, sig, sigSz, msg, sizeof(msg), &verified);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed to verify modified ML DSA signature: %d\n",
-                                                                         ret);
+                           ret);
         }
 
         if (verified) {
             WH_ERROR_PRINT("ML DSA signature verification succeeded when it"
-                        " should have failed\n");
+                           " should have failed\n");
             ret = -1;
         }
         if (ret == 0) {
@@ -3540,7 +3542,7 @@ int whTest_CryptoServerConfig(whServerConfig* config)
         if ((ret != WH_ERROR_NOTREADY) &&
                 (ret != WH_ERROR_OK)) {
             WH_ERROR_PRINT("Failed to wh_Server_HandleRequestMessage: %d\n",
-                                                                        ret);
+                           ret);
             break;
         }
         wh_Server_GetConnected(server, &am_connected);
@@ -3627,7 +3629,7 @@ static void _whClientServerThreadTest(whClientConfig* c_conf,
 
 static int wh_ClientServer_MemThreadTest(void)
 {
-    int ret = 0;
+    int     ret               = 0;
     uint8_t req[BUFFER_SIZE] = {0};
     uint8_t resp[BUFFER_SIZE] = {0};
 
@@ -3719,10 +3721,12 @@ static int wh_ClientServer_MemThreadTest(void)
         ret = wc_InitRng_ex(crypto->rng, NULL, crypto->devId);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed to initialize wolfCrypt rng: %d\n", ret);
-        } else {
+        }
+        else {
             _whClientServerThreadTest(c_conf, s_conf);
         }
-    } else {
+    }
+    else {
         WH_ERROR_PRINT("Failed to initialize wolfCrypt: %d\n", ret);
     }
 
