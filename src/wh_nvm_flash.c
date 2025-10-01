@@ -359,8 +359,11 @@ static int nfPartition_ReadMemDirectory(whNvmFlashContext* context, int partitio
                 NF_PARTITION_DIRECTORY_OFFSET;
     memset(directory, 0, sizeof(*directory));
 
-    for(index = 0; (index < WOLFHSM_CFG_NVM_OBJECT_COUNT) && (ret == 0); index++) {
-        ret = nfMemObject_Read(context,
+    for (index = 0; (index < WOLFHSM_CFG_NVM_OBJECT_COUNT); index++) {
+        /* Read all objects from the Partition Directory.
+         * Don't break on an error.
+         */
+        (void)nfMemObject_Read(context,
                                offset + NF_DIRECTORY_OBJECT_OFFSET(index),
                                &directory->objects[index]);
     }
