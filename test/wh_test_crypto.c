@@ -3642,7 +3642,7 @@ static int wh_ClientServer_MemThreadTest(void)
     whClientDmaConfig clientDmaConfig = {0};
 #endif
     whClientConfig c_conf[1] = {{
-        .comm     = cc_conf,
+        .comm = cc_conf,
 #ifdef WOLFHSM_CFG_DMA
         .dmaConfig = &clientDmaConfig,
 #endif
