@@ -420,11 +420,11 @@ int wh_Client_AesGcm(whClientContext* ctx,
  * @param[out] out Pointer to the output data.
  * @return int Returns 0 on success or a negative error code on failure.
  */
-int wh_Client_AesGcmDma(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
-                     uint32_t len, const uint8_t* iv, uint32_t iv_len,
-                     const uint8_t* authin, uint32_t authin_len,
-                     const uint8_t* dec_tag, uint8_t* enc_tag, uint32_t tag_len,
-                     uint8_t* out);
+int wh_Client_AesGcmDma(whClientContext* ctx, Aes* aes, int enc,
+                        const uint8_t* in, uint32_t len, const uint8_t* iv,
+                        uint32_t iv_len, const uint8_t* authin,
+                        uint32_t authin_len, const uint8_t* dec_tag,
+                        uint8_t* enc_tag, uint32_t tag_len, uint8_t* out);
 #endif /* WOLFHSM_CFG_DMA */
 #endif /* HAVE_AESGCM */
 

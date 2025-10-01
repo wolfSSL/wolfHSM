@@ -751,31 +751,32 @@ int wh_Client_AesGcm(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
 }
 
 #ifdef WOLFHSM_CFG_DMA
-int wh_Client_AesGcmDma(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
-                     uint32_t len, const uint8_t* iv, uint32_t iv_len,
-                     const uint8_t* authin, uint32_t authin_len,
-                     const uint8_t* dec_tag, uint8_t* enc_tag, uint32_t tag_len,
-                     uint8_t* out)
+int wh_Client_AesGcmDma(whClientContext* ctx, Aes* aes, int enc,
+                        const uint8_t* in, uint32_t len, const uint8_t* iv,
+                        uint32_t iv_len, const uint8_t* authin,
+                        uint32_t authin_len, const uint8_t* dec_tag,
+                        uint8_t* enc_tag, uint32_t tag_len, uint8_t* out)
 {
-    int                             ret      = WH_ERROR_OK;
-    whMessageCrypto_AesDmaRequest*  req      = NULL;
-    uint8_t*                        dataPtr  = NULL;
-    uintptr_t inAddr = 0;
-    uintptr_t outAddr   = 0;
-    uintptr_t keyAddr   = 0;
-    uintptr_t stateAddr = 0;
-    uintptr_t ivAddr = 0;
-    uintptr_t aadAddr = 0;
-    uintptr_t authTagAddr = 0;
+    int                            ret         = WH_ERROR_OK;
+    whMessageCrypto_AesDmaRequest* req         = NULL;
+    uint8_t*                       dataPtr     = NULL;
+    uintptr_t                      inAddr      = 0;
+    uintptr_t                      outAddr     = 0;
+    uintptr_t                      keyAddr     = 0;
+    uintptr_t                      stateAddr   = 0;
+    uintptr_t                      ivAddr      = 0;
+    uintptr_t                      aadAddr     = 0;
+    uintptr_t                      authTagAddr = 0;
 
     uint16_t group  = WH_MESSAGE_GROUP_CRYPTO_DMA;
     uint16_t action = WC_ALGO_TYPE_CIPHER;
-    uint16_t type   = WC_CIPHER_AES_GCM; /* Algorithm type for response validation */
+    uint16_t type =
+        WC_CIPHER_AES_GCM; /* Algorithm type for response validation */
 
     /* Check if we have a keyId-based key or a direct key */
-    whKeyId keyId;
-    const uint8_t* key = NULL;
-    uint32_t keyLen = 0;
+    whKeyId        keyId;
+    const uint8_t* key    = NULL;
+    uint32_t       keyLen = 0;
 
 
     if (ctx == NULL || aes == NULL || out == NULL) {
@@ -801,12 +802,12 @@ int wh_Client_AesGcmDma(whClientContext* ctx, Aes* aes, int enc, const uint8_t* 
     keyId = WH_DEVCTX_TO_KEYID(aes->devCtx);
     if (keyId != WH_KEYID_ERASED) {
         /* Using keyId-based key, server will load it from keystore */
-        key = NULL;
+        key    = NULL;
         keyLen = 0;
     }
     else {
         /* Using direct key */
-        key = (const uint8_t*)(aes->devKey);
+        key    = (const uint8_t*)(aes->devKey);
         keyLen = aes->keylen;
     }
 
@@ -818,14 +819,14 @@ int wh_Client_AesGcmDma(whClientContext* ctx, Aes* aes, int enc, const uint8_t* 
 
     /* Setup generic header and get pointer to request data */
     req = (whMessageCrypto_AesDmaRequest*)_createCryptoRequest(
-            dataPtr, WC_CIPHER_AES_GCM);
+        dataPtr, WC_CIPHER_AES_GCM);
     memset(req, 0, sizeof(*req));
     req->enc  = enc;
     req->type = type;
 
     /* Set up DMA state buffer in client address space */
-    req->state.sz   = sizeof(*aes);
-    ret = wh_Client_DmaProcessClientAddress(
+    req->state.sz = sizeof(*aes);
+    ret           = wh_Client_DmaProcessClientAddress(
         ctx, (uintptr_t)aes, (void**)&stateAddr, req->state.sz,
         WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
     req->state.addr = stateAddr;
@@ -835,7 +836,7 @@ int wh_Client_AesGcmDma(whClientContext* ctx, Aes* aes, int enc, const uint8_t* 
         /* Initialize with provided key */
         req->key.addr = (uintptr_t)key;
         req->key.sz   = keyLen;
-        ret = wh_Client_DmaProcessClientAddress(
+        ret           = wh_Client_DmaProcessClientAddress(
             ctx, (uintptr_t)key, (void**)&keyAddr, req->key.sz,
             WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
         req->key.addr = keyAddr;
@@ -843,8 +844,8 @@ int wh_Client_AesGcmDma(whClientContext* ctx, Aes* aes, int enc, const uint8_t* 
 
     if (ret == WH_ERROR_OK && in != NULL) {
         /* Update operation */
-        req->input.sz   = len;
-        ret = wh_Client_DmaProcessClientAddress(
+        req->input.sz = len;
+        ret           = wh_Client_DmaProcessClientAddress(
             ctx, (uintptr_t)in, (void**)&inAddr, req->input.sz,
             WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
         req->input.addr = inAddr;
@@ -852,24 +853,24 @@ int wh_Client_AesGcmDma(whClientContext* ctx, Aes* aes, int enc, const uint8_t* 
 
     if (ret == WH_ERROR_OK && out != NULL) {
         /* Update operation */
-        req->output.sz   = len;
-        ret = wh_Client_DmaProcessClientAddress(
+        req->output.sz = len;
+        ret            = wh_Client_DmaProcessClientAddress(
             ctx, (uintptr_t)out, (void**)&outAddr, req->output.sz,
             WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
         req->output.addr = outAddr;
     }
 
     if (ret == WH_ERROR_OK && iv != NULL) {
-        req->iv.sz   = iv_len;
-        ret = wh_Client_DmaProcessClientAddress(
+        req->iv.sz = iv_len;
+        ret        = wh_Client_DmaProcessClientAddress(
             ctx, (uintptr_t)iv, (void**)&ivAddr, req->iv.sz,
             WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
         req->iv.addr = ivAddr;
     }
 
     if (ret == WH_ERROR_OK && authin != NULL) {
-        req->aad.sz   = authin_len;
-        ret = wh_Client_DmaProcessClientAddress(
+        req->aad.sz = authin_len;
+        ret         = wh_Client_DmaProcessClientAddress(
             ctx, (uintptr_t)authin, (void**)&aadAddr, req->aad.sz,
             WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
         req->aad.addr = aadAddr;
@@ -878,8 +879,8 @@ int wh_Client_AesGcmDma(whClientContext* ctx, Aes* aes, int enc, const uint8_t* 
     /* set auth tag by direction */
     if (enc == 0 && dec_tag != NULL && tag_len > 0) {
         /* Decryption: use provided auth tag for verification */
-        req->authTag.sz   = tag_len;
-        ret = wh_Client_DmaProcessClientAddress(
+        req->authTag.sz = tag_len;
+        ret             = wh_Client_DmaProcessClientAddress(
             ctx, (uintptr_t)dec_tag, (void**)&authTagAddr, req->authTag.sz,
             WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
         req->authTag.addr = authTagAddr;
@@ -889,8 +890,8 @@ int wh_Client_AesGcmDma(whClientContext* ctx, Aes* aes, int enc, const uint8_t* 
     }
     else if (enc == 1 && enc_tag != NULL && tag_len > 0) {
         /* Encryption: set up auth tag buffer to receive generated tag */
-        req->authTag.sz   = tag_len;
-        ret = wh_Client_DmaProcessClientAddress(
+        req->authTag.sz = tag_len;
+        ret             = wh_Client_DmaProcessClientAddress(
             ctx, (uintptr_t)enc_tag, (void**)&authTagAddr, req->authTag.sz,
             WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
         req->authTag.addr = authTagAddr;
@@ -905,7 +906,8 @@ int wh_Client_AesGcmDma(whClientContext* ctx, Aes* aes, int enc, const uint8_t* 
 #endif
 
     /* Send request and receive response */
-    uint16_t req_len = sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
+    uint16_t req_len =
+        sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
     ret = wh_Client_SendRequest(ctx, group, action, req_len, dataPtr);
     if (ret == 0) {
         uint16_t res_len = 0;

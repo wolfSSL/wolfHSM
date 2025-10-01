@@ -963,12 +963,14 @@ int wh_MessageCrypto_TranslateAesDmaRequest(
         return ret;
     }
 
-    ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->output, &dest->output);
+    ret =
+        wh_MessageCrypto_TranslateDmaBuffer(magic, &src->output, &dest->output);
     if (ret != 0) {
         return ret;
     }
 
-    ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->authTag, &dest->authTag);
+    ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->authTag,
+                                              &dest->authTag);
     if (ret != 0) {
         return ret;
     }
@@ -998,7 +1000,7 @@ int wh_MessageCrypto_TranslateAesDmaResponse(
     }
 
     ret = wh_MessageCrypto_TranslateDmaAddrStatus(magic, &src->dmaAddrStatus,
-                                                &dest->dmaAddrStatus);
+                                                  &dest->dmaAddrStatus);
     if (ret != 0) {
         return ret;
     }

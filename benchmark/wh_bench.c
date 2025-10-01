@@ -558,7 +558,7 @@ static int _whBench_ClientCfg_PosixDmaHeap(posixTransportShmContext* shmCtx)
     WOLFSSL_HEAP_HINT*        heap       = NULL;
     void*                     dma;
     size_t                    dmaSz;
-    int ret = 0;
+    int                       ret = 0;
 
     ret = posixTransportShm_GetDma(shmCtx, &dma, &dmaSz);
     if (ret != 0) {
@@ -566,8 +566,8 @@ static int _whBench_ClientCfg_PosixDmaHeap(posixTransportShmContext* shmCtx)
         return ret;
     }
 
-    ret = wc_LoadStaticMemory_ex(&heap, listSz, sizeList, distList, dma,
-                                 dmaSz, 0, 0);
+    ret = wc_LoadStaticMemory_ex(&heap, listSz, sizeList, distList, dma, dmaSz,
+                                 0, 0);
     if (ret != 0) {
         WH_BENCH_PRINTF("Failed to load static memory: %d\n", ret);
         return ret;
@@ -610,8 +610,8 @@ int wh_Bench_ClientCfg(whClientConfig* clientCfg, int transport)
 
 #if defined(WOLFSSL_STATIC_MEMORY) && defined(WOLFHSM_CFG_TEST_POSIX)
     if (transport == WH_BENCH_TRANSPORT_POSIX_DMA) {
-        ret = _whBench_ClientCfg_PosixDmaHeap((posixTransportShmContext*)
-                                    clientCfg->comm->transport_context);
+        ret = _whBench_ClientCfg_PosixDmaHeap(
+            (posixTransportShmContext*)clientCfg->comm->transport_context);
         if (ret != 0) {
             WH_BENCH_PRINTF("Failed to load static memory: %d\n", ret);
             return ret;
@@ -721,8 +721,9 @@ static void* _whBenchClientTask(void* data)
 
 #if defined(WOLFSSL_STATIC_MEMORY) && defined(WOLFHSM_CFG_TEST_POSIX)
     if (taskData->transport == WH_BENCH_TRANSPORT_POSIX_DMA) {
-        ret = _whBench_ClientCfg_PosixDmaHeap((posixTransportShmContext*)
-                                    taskData->config->comm->transport_context);
+        ret = _whBench_ClientCfg_PosixDmaHeap(
+            (posixTransportShmContext*)
+                taskData->config->comm->transport_context);
         if (ret != 0) {
             WH_BENCH_PRINTF("Failed to load static memory: %d\n", ret);
             return NULL;

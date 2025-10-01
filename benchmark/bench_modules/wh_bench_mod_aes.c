@@ -445,8 +445,9 @@ int wh_Bench_Mod_Aes256CBCDecrypt(whClientContext*  client,
 
 #if defined(HAVE_AESGCM)
 #ifdef WOLFHSM_CFG_DMA
-static int _benchAesGcmDma(whClientContext* client, whBenchOpContext* ctx, int id,
-                           const uint8_t* key, size_t keyLen, int encrypt)
+static int _benchAesGcmDma(whClientContext* client, whBenchOpContext* ctx,
+                           int id, const uint8_t* key, size_t keyLen,
+                           int encrypt)
 {
     int     ret       = 0;
     int     needEvict = 0;
@@ -459,21 +460,23 @@ static int _benchAesGcmDma(whClientContext* client, whBenchOpContext* ctx, int i
                                            8, 9, 10, 11, 12, 13, 14, 15};
     byte    authTag[WC_AES_BLOCK_SIZE]  = {0, 1, 2,  3,  4,  5,  6,  7,
                                            8, 9, 10, 11, 12, 13, 14, 15};
-    /* Input size is largest multiple of AES block size that fits in DMA buffer */
+    /* Input size is largest multiple of AES block size that fits in DMA buffer
+     */
     const size_t inLen =
         (WOLFHSM_CFG_BENCH_DMA_BUFFER_SIZE / WC_AES_BLOCK_SIZE) *
         WC_AES_BLOCK_SIZE;
     int i;
 
     /* Buffer pointers for DMA operations */
-    const uint8_t* in = NULL;
-    uint8_t* out      = NULL;
+    const uint8_t* in  = NULL;
+    uint8_t*       out = NULL;
 
 #if defined(WOLFHSM_CFG_TEST_POSIX)
     /* Allocate buffers using XMALLOC with heap hints for DMA */
     if (ctx->transportType == WH_BENCH_TRANSPORT_POSIX_DMA) {
         /* if static memory was used with DMA then use XMALLOC for input */
-        void* heap = posixTransportShm_GetDmaHeap(client->comm->transport_context);
+        void* heap =
+            posixTransportShm_GetDmaHeap(client->comm->transport_context);
         in = XMALLOC(inLen, heap, DYNAMIC_TYPE_TMP_BUFFER);
         if (in == NULL) {
             WH_BENCH_PRINTF("Failed to allocate memory for DMA input\n");
@@ -491,8 +494,9 @@ static int _benchAesGcmDma(whClientContext* client, whBenchOpContext* ctx, int i
 #endif /* WOLFHSM_CFG_TEST_POSIX */
     {
         /* Use static DMA buffers */
-        in = WH_BENCH_DMA_BUFFER;
-        out = (uint8_t*)WH_BENCH_DMA_BUFFER + inLen; /* Use different part of DMA buffer */
+        in  = WH_BENCH_DMA_BUFFER;
+        out = (uint8_t*)WH_BENCH_DMA_BUFFER +
+              inLen; /* Use different part of DMA buffer */
     }
 
 #if defined(WOLFHSM_CFG_BENCH_INIT_DATA_BUFFERS)
@@ -545,20 +549,18 @@ static int _benchAesGcmDma(whClientContext* client, whBenchOpContext* ctx, int i
         if (encrypt) {
             benchStartRet = wh_Bench_StartOp(ctx, id);
 
-            ret = wh_Client_AesGcmDma(client, aes, ENCRYPT, in, inLen,
-                                      iv, sizeof(iv), authData, sizeof(authData),
-                                      NULL, authTag, sizeof(authTag),
-                                      out);
+            ret = wh_Client_AesGcmDma(client, aes, ENCRYPT, in, inLen, iv,
+                                      sizeof(iv), authData, sizeof(authData),
+                                      NULL, authTag, sizeof(authTag), out);
 
             benchStopRet = wh_Bench_StopOp(ctx, id);
         }
         else {
             benchStartRet = wh_Bench_StartOp(ctx, id);
 
-            ret = wh_Client_AesGcmDma(client, aes, DECRYPT, in, inLen,
-                                      iv, sizeof(iv), authData, sizeof(authData),
-                                      authTag, NULL, sizeof(authTag),
-                                      out);
+            ret = wh_Client_AesGcmDma(client, aes, DECRYPT, in, inLen, iv,
+                                      sizeof(iv), authData, sizeof(authData),
+                                      authTag, NULL, sizeof(authTag), out);
 
             benchStopRet = wh_Bench_StopOp(ctx, id);
 
@@ -598,7 +600,8 @@ exit:
 #if defined(WOLFHSM_CFG_TEST_POSIX)
     if (ctx->transportType == WH_BENCH_TRANSPORT_POSIX_DMA) {
         /* if static memory was used with DMA then use XFREE */
-        void* heap = posixTransportShm_GetDmaHeap(client->comm->transport_context);
+        void* heap =
+            posixTransportShm_GetDmaHeap(client->comm->transport_context);
         XFREE((uint8_t*)in, heap, DYNAMIC_TYPE_TMP_BUFFER);
         XFREE(out, heap, DYNAMIC_TYPE_TMP_BUFFER);
     }
@@ -769,7 +772,8 @@ int wh_Bench_Mod_Aes256GCMDecrypt(whClientContext*  client,
 
 #ifdef WOLFHSM_CFG_DMA
 int wh_Bench_Mod_Aes128GCMEncryptDma(whClientContext*  client,
-                                     whBenchOpContext* ctx, int id, void* params)
+                                     whBenchOpContext* ctx, int id,
+                                     void* params)
 {
     (void)params;
     return _benchAesGcmDma(client, ctx, id, (uint8_t*)key128, sizeof(key128),
@@ -777,7 +781,8 @@ int wh_Bench_Mod_Aes128GCMEncryptDma(whClientContext*  client,
 }
 
 int wh_Bench_Mod_Aes128GCMDecryptDma(whClientContext*  client,
-                                     whBenchOpContext* ctx, int id, void* params)
+                                     whBenchOpContext* ctx, int id,
+                                     void* params)
 {
     (void)params;
     return _benchAesGcmDma(client, ctx, id, (uint8_t*)key128, sizeof(key128),
@@ -785,7 +790,8 @@ int wh_Bench_Mod_Aes128GCMDecryptDma(whClientContext*  client,
 }
 
 int wh_Bench_Mod_Aes256GCMEncryptDma(whClientContext*  client,
-                                     whBenchOpContext* ctx, int id, void* params)
+                                     whBenchOpContext* ctx, int id,
+                                     void* params)
 {
     (void)params;
     return _benchAesGcmDma(client, ctx, id, (uint8_t*)key256, sizeof(key256),
@@ -793,7 +799,8 @@ int wh_Bench_Mod_Aes256GCMEncryptDma(whClientContext*  client,
 }
 
 int wh_Bench_Mod_Aes256GCMDecryptDma(whClientContext*  client,
-                                     whBenchOpContext* ctx, int id, void* params)
+                                     whBenchOpContext* ctx, int id,
+                                     void* params)
 {
     (void)params;
     return _benchAesGcmDma(client, ctx, id, (uint8_t*)key256, sizeof(key256),

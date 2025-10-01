@@ -52,10 +52,12 @@ int wh_Bench_Mod_Aes128GCMDecrypt(whClientContext*  client,
                                   whBenchOpContext* ctx, int id, void* params);
 
 int wh_Bench_Mod_Aes128GCMEncryptDma(whClientContext*  client,
-                                     whBenchOpContext* ctx, int id, void* params);
+                                     whBenchOpContext* ctx, int id,
+                                     void* params);
 
 int wh_Bench_Mod_Aes128GCMDecryptDma(whClientContext*  client,
-                                     whBenchOpContext* ctx, int id, void* params);
+                                     whBenchOpContext* ctx, int id,
+                                     void* params);
 
 int wh_Bench_Mod_Aes256CTREncrypt(whClientContext*  client,
                                   whBenchOpContext* ctx, int id, void* params);
@@ -82,10 +84,12 @@ int wh_Bench_Mod_Aes256GCMDecrypt(whClientContext*  client,
                                   whBenchOpContext* ctx, int id, void* params);
 
 int wh_Bench_Mod_Aes256GCMEncryptDma(whClientContext*  client,
-                                     whBenchOpContext* ctx, int id, void* params);
+                                     whBenchOpContext* ctx, int id,
+                                     void* params);
 
 int wh_Bench_Mod_Aes256GCMDecryptDma(whClientContext*  client,
-                                     whBenchOpContext* ctx, int id, void* params);
+                                     whBenchOpContext* ctx, int id,
+                                     void* params);
 
 /*
  * CMAC benchmark module prototypes (wh_bench_mod_cmac.c)
