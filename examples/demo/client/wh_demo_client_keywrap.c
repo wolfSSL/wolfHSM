@@ -31,10 +31,12 @@
 #include "wolfssl/wolfcrypt/aes.h"
 #include "wolfssl/wolfcrypt/random.h"
 
-#include "port/posix/posix_flash_file.h"
 
 #include "wh_demo_client_keywrap.h"
 #include "test/wh_test_keywrap.h"
+
+#ifdef WOLFHSM_CFG_TEST_POSIX
+#include "port/posix/posix_flash_file.h"
 
 #ifdef WOLFHSM_CFG_KEYWRAP
 
@@ -44,8 +46,7 @@ int wh_DemoClient_KeyWrap(whClientContext* client)
 
     /* file-based flash state and configuration */
     posixFlashFileContext flashFileCtx;
-    posixFlashFileConfig  flashFileCfg   = {.filename       = "flashFile",
-                                            .partition_size = 1024 * 1024,
+    posixFlashFileConfig  flashFileCfg   = {.partition_size = 1024 * 1024,
                                             .erased_byte    = 0xff};
     whFlashCb             flashFileCb[1] = {POSIX_FLASH_FILE_CB};
 
@@ -86,3 +87,4 @@ int wh_DemoClient_KeyWrap(whClientContext* client)
     return ret;
 }
 #endif /* WOLFHSM_CFG_KEYWRAP */
+#endif /* WOLFHSM_CFG_TEST_POSIX */

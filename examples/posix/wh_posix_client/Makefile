@@ -106,7 +106,7 @@ SRC_C += $(wildcard $(WOLFSSL_DIR)/wolfcrypt/benchmark/*.c)
 SRC_C +=  $(wildcard $(WOLFHSM_DIR)/src/*.c)
 
 # wolfHSM test code
-SRC_C += $(wildcard $(WOLFHSM_DIR)/test/wh_test_keywrap.c)
+SRC_C += $(WOLFHSM_DIR)/test/wh_test_keywrap.c
 
 # wolfHSM port/HAL code
 SRC_C +=  $(wildcard $(WOLFHSM_PORT_DIR)/*.c)
