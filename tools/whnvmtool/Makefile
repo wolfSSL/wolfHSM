@@ -27,15 +27,13 @@ WOLFCRYPT_SRC = \
 	$(WOLFSSL_DIR)/wolfcrypt/src/ecc.c \
 	$(WOLFSSL_DIR)/wolfcrypt/src/cmac.c
 
+SRC = \
+	$(WOLFHSM_SRC) \
+	$(TARGET).c
+
 ifneq ($(NOCRYPTO),1)
-SRC = \
-	$(WOLFHSM_SRC) \
-	$(WOLFCRYPT_SRC) \
-	$(TARGET).c
-else
-SRC = \
-	$(WOLFHSM_SRC) \
-	$(TARGET).c
+SRC += \
+	$(WOLFCRYPT_SRC)
 endif
 
 ifeq ($(SCAN),1)
