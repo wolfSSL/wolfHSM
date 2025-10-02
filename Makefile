@@ -18,13 +18,19 @@ examples:
 SCAN_DIR = ./scan_out
 
 scan_result_check:
-	@num=$$(grep -h -o '^[0-9]\+ warnings\? generated' ./$(SCAN_DIR)/*.log | grep -o '^[0-9]\+' | awk '{s+=$$1} END {print s}');\
-	if [ -z "$$num" ]; then \
-		echo "no warnings found";\
-		exit 0; \
+	@err=$$(grep -h -o 'error: .*' ./$(SCAN_DIR)/*.log | wc -l); \
+	if [ -z "$$err" ]; then \
+		err=0; \
 	fi; \
-	if [ $$num -ne 0 ]; then \
-		echo "scan-build found $$num warnings";\
+	wrn=$$(grep -h -o '^[0-9]\+ warnings\? generated' ./$(SCAN_DIR)/*.log | grep -o '^[0-9]\+' | awk '{s+=$$1} END {print s}');\
+	if [ -z "$$wrn" ]; then \
+		wrn=0; \
+	fi; \
+	if [ $$err -eq 0 -a $$wrn -eq 0 ]; then \
+		echo "no errors or warnings found";\
+		exit 0; \
+	else\
+		echo "scan-build detected $$err errors and $$wrn warnings";\
 		for f in $(SCAN_DIR)/*.log; do \
 			echo "---- $$f ----"; \
 			cat $$f; \
