@@ -102,12 +102,9 @@ IMG_MGR RSA2048 Test completed successfully!
 
 The test suite supports code coverage analysis using gcovr. To generate coverage reports:
 
-### Prerequisites
-Install gcovr if not already installed:
+**Note**: The coverage directory must exist before generating reports. The `make coverage` target creates this automatically, but if running gcovr manually, create it first with:
 ```bash
-pip install gcovr
-# or
-pip3 install gcovr
+mkdir -p ../coverage
 ```
 
 ### Running Coverage
@@ -137,8 +134,9 @@ make COVERAGE=1 DEBUG=1
 # Run tests
 make run
 
-# Generate coverage report (from repository root)
+# Create coverage directory and generate report (from repository root)
 cd ..
+mkdir -p coverage
 gcovr --root . \
       --filter 'src/.*' \
       --filter 'wolfhsm/.*' \

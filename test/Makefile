@@ -262,9 +262,13 @@ coverage:
 	$(MAKE) clean
 	$(MAKE) COVERAGE=1 DEBUG=1
 	@echo "Running tests..."
+	@if [ ! -f $(BUILD_DIR)/$(BIN).elf ]; then \
+		echo "Error: $(BUILD_DIR)/$(BIN).elf not found. Build failed."; \
+		exit 1; \
+	fi
 	$(BUILD_DIR)/$(BIN).elf
 	@echo "Generating coverage report..."
-	cd .. && gcovr --root . \
+	cd .. && mkdir -p coverage && gcovr --root . \
 		--filter 'src/.*' \
 		--filter 'wolfhsm/.*' \
 		--html-details coverage/index.html \
