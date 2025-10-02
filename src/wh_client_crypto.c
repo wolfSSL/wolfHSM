@@ -367,6 +367,155 @@ int wh_Client_AesCtr(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
     }
     return ret;
 }
+
+#ifdef WOLFHSM_CFG_DMA
+int wh_Client_AesCtrDma(whClientContext* ctx, Aes* aes, int enc,
+                        const uint8_t* in, uint32_t len, uint8_t* out)
+{
+    int                            ret         = WH_ERROR_OK;
+    whMessageCrypto_AesDmaRequest* req         = NULL;
+    uint8_t*                       dataPtr     = NULL;
+    uintptr_t                      inAddr      = 0;
+    uintptr_t                      outAddr     = 0;
+    uintptr_t                      keyAddr     = 0;
+    uintptr_t                      stateAddr   = 0;
+    uintptr_t                      ivAddr      = 0;
+
+    uint16_t group  = WH_MESSAGE_GROUP_CRYPTO_DMA;
+    uint16_t action = WC_ALGO_TYPE_CIPHER;
+    uint16_t type   = WC_CIPHER_AES_CTR;
+
+    /* Check if we have a keyId-based key or a direct key */
+    whKeyId        keyId;
+    const uint8_t* key    = NULL;
+    uint32_t       keyLen = 0;
+
+    if (ctx == NULL || aes == NULL || out == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    if ((in == NULL) && (len > 0)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    keyId = WH_DEVCTX_TO_KEYID(aes->devCtx);
+    if (keyId != WH_KEYID_ERASED) {
+        /* Using keyId-based key, server will load it from keystore */
+        key    = NULL;
+        keyLen = 0;
+    }
+    else {
+        /* Using direct key */
+        key    = (const uint8_t*)(aes->devKey);
+        keyLen = aes->keylen;
+    }
+
+    /* Get data buffer */
+    dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
+    if (dataPtr == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Setup generic header and get pointer to request data */
+    req = (whMessageCrypto_AesDmaRequest*)_createCryptoRequest(dataPtr, type);
+    memset(req, 0, sizeof(*req));
+    req->enc  = enc;
+    req->type = type;
+
+    /* Set up DMA state buffer in client address space */
+    req->state.sz = sizeof(*aes);
+    ret           = wh_Client_DmaProcessClientAddress(
+        ctx, (uintptr_t)aes, (void**)&stateAddr, req->state.sz,
+        WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
+    req->state.addr = stateAddr;
+
+    /* Handle key operations */
+    if (ret == WH_ERROR_OK && key != NULL && keyLen > 0) {
+        /* Initialize with provided key */
+        req->key.addr = (uintptr_t)key;
+        req->key.sz   = keyLen;
+        ret           = wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)key, (void**)&keyAddr, req->key.sz,
+            WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
+        req->key.addr = keyAddr;
+    }
+
+    if (ret == WH_ERROR_OK && in != NULL) {
+        /* Update operation */
+        req->input.sz = len;
+        ret           = wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)in, (void**)&inAddr, req->input.sz,
+            WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
+        req->input.addr = inAddr;
+    }
+
+    if (ret == WH_ERROR_OK && out != NULL) {
+        /* Update operation */
+        req->output.sz = len;
+        ret            = wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)out, (void**)&outAddr, req->output.sz,
+            WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
+        req->output.addr = outAddr;
+    }
+
+    if (ret == WH_ERROR_OK) {
+        req->iv.sz = WC_AES_BLOCK_SIZE;
+        ret        = wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)aes->reg, (void**)&ivAddr, req->iv.sz,
+            WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
+        req->iv.addr = ivAddr;
+    }
+
+    /* Send request and receive response */
+    uint16_t req_len =
+        sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
+    ret = wh_Client_SendRequest(ctx, group, action, req_len, dataPtr);
+    if (ret == 0) {
+        uint16_t res_len = 0;
+        do {
+            ret =
+                wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
+        } while (ret == WH_ERROR_NOTREADY);
+
+        if (ret == WH_ERROR_OK) {
+            /* Get response */
+            whMessageCrypto_AesDmaResponse* res;
+            ret = _getCryptoResponse(dataPtr, type, (uint8_t**)&res);
+            /* wolfCrypt allows positive error codes on success in some
+             * scenarios */
+            if (ret >= 0) {
+                /* For DMA operations, data is already in client memory,
+                 * no need to copy it back */
+                ret = 0; /* Success */
+            }
+        }
+    }
+
+    /* post address translation callbacks (for cleanup) */
+    if (key != NULL) {
+        (void)wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)key, (void**)&keyAddr, req->key.sz,
+            WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
+    }
+    if (in != NULL) {
+        (void)wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)in, (void**)&inAddr, req->input.sz,
+            WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
+    }
+    if (out != NULL) {
+        (void)wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)out, (void**)&outAddr, req->output.sz,
+            WH_DMA_OPER_CLIENT_WRITE_POST, (whDmaFlags){0});
+    }
+    (void)wh_Client_DmaProcessClientAddress(
+        ctx, (uintptr_t)aes->reg, (void**)&ivAddr, req->iv.sz,
+        WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
+    (void)wh_Client_DmaProcessClientAddress(
+        ctx, (uintptr_t)aes, (void**)&stateAddr, req->state.sz,
+        WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
+    return ret;
+}
+#endif /* WOLFHSM_CFG_DMA */
 #endif /* WOLFSSL_AES_COUNTER */
 
 #ifdef HAVE_AES_ECB
@@ -474,6 +623,142 @@ int wh_Client_AesEcb(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
     }
     return ret;
 }
+#ifdef WOLFHSM_CFG_DMA
+int wh_Client_AesEcbDma(whClientContext* ctx, Aes* aes, int enc,
+                        const uint8_t* in, uint32_t len, uint8_t* out)
+{
+    int                            ret         = WH_ERROR_OK;
+    whMessageCrypto_AesDmaRequest* req         = NULL;
+    uint8_t*                       dataPtr     = NULL;
+    uintptr_t                      inAddr      = 0;
+    uintptr_t                      outAddr     = 0;
+    uintptr_t                      keyAddr     = 0;
+    uintptr_t                      stateAddr   = 0;
+
+    uint16_t group  = WH_MESSAGE_GROUP_CRYPTO_DMA;
+    uint16_t action = WC_ALGO_TYPE_CIPHER;
+    uint16_t type   = WC_CIPHER_AES_ECB;
+
+    /* Check if we have a keyId-based key or a direct key */
+    whKeyId        keyId;
+    const uint8_t* key    = NULL;
+    uint32_t       keyLen = 0;
+
+    if (ctx == NULL || aes == NULL || out == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    if ((in == NULL) && (len > 0)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    keyId = WH_DEVCTX_TO_KEYID(aes->devCtx);
+    if (keyId != WH_KEYID_ERASED) {
+        /* Using keyId-based key, server will load it from keystore */
+        key    = NULL;
+        keyLen = 0;
+    }
+    else {
+        /* Using direct key */
+        key    = (const uint8_t*)(aes->devKey);
+        keyLen = aes->keylen;
+    }
+
+    /* Get data buffer */
+    dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
+    if (dataPtr == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Setup generic header and get pointer to request data */
+    req = (whMessageCrypto_AesDmaRequest*)_createCryptoRequest(dataPtr, type);
+    memset(req, 0, sizeof(*req));
+    req->enc  = enc;
+    req->type = type;
+
+    /* Set up DMA state buffer in client address space */
+    req->state.sz = sizeof(*aes);
+    ret           = wh_Client_DmaProcessClientAddress(
+        ctx, (uintptr_t)aes, (void**)&stateAddr, req->state.sz,
+        WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
+    req->state.addr = stateAddr;
+
+    /* Handle key operations */
+    if (ret == WH_ERROR_OK && key != NULL && keyLen > 0) {
+        /* Initialize with provided key */
+        req->key.addr = (uintptr_t)key;
+        req->key.sz   = keyLen;
+        ret           = wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)key, (void**)&keyAddr, req->key.sz,
+            WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
+        req->key.addr = keyAddr;
+    }
+
+    if (ret == WH_ERROR_OK && in != NULL) {
+        /* Update operation */
+        req->input.sz = len;
+        ret           = wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)in, (void**)&inAddr, req->input.sz,
+            WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
+        req->input.addr = inAddr;
+    }
+
+    if (ret == WH_ERROR_OK && out != NULL) {
+        /* Update operation */
+        req->output.sz = len;
+        ret            = wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)out, (void**)&outAddr, req->output.sz,
+            WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
+        req->output.addr = outAddr;
+    }
+
+    /* Send request and receive response */
+    uint16_t req_len =
+        sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
+    ret = wh_Client_SendRequest(ctx, group, action, req_len, dataPtr);
+    if (ret == 0) {
+        uint16_t res_len = 0;
+        do {
+            ret =
+                wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
+        } while (ret == WH_ERROR_NOTREADY);
+
+        if (ret == WH_ERROR_OK) {
+            /* Get response */
+            whMessageCrypto_AesDmaResponse* res;
+            ret = _getCryptoResponse(dataPtr, type, (uint8_t**)&res);
+            /* wolfCrypt allows positive error codes on success in some
+             * scenarios */
+            if (ret >= 0) {
+                /* For DMA operations, data is already in client memory,
+                 * no need to copy it back */
+                ret = 0; /* Success */
+            }
+        }
+    }
+
+    /* post address translation callbacks (for cleanup) */
+    if (key != NULL) {
+        (void)wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)key, (void**)&keyAddr, req->key.sz,
+            WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
+    }
+    if (in != NULL) {
+        (void)wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)in, (void**)&inAddr, req->input.sz,
+            WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
+    }
+    if (out != NULL) {
+        (void)wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)out, (void**)&outAddr, req->output.sz,
+            WH_DMA_OPER_CLIENT_WRITE_POST, (whDmaFlags){0});
+    }
+    (void)wh_Client_DmaProcessClientAddress(
+        ctx, (uintptr_t)aes, (void**)&stateAddr, req->state.sz,
+        WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
+    return ret;
+}
+#endif /* WOLFHSM_CFG_DMA */
 #endif /* HAVE_AES_ECB */
 
 #ifdef HAVE_AES_CBC
@@ -595,6 +880,155 @@ int wh_Client_AesCbc(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
     }
     return ret;
 }
+
+#ifdef WOLFHSM_CFG_DMA
+int wh_Client_AesCbcDma(whClientContext* ctx, Aes* aes, int enc,
+                        const uint8_t* in, uint32_t len, uint8_t* out)
+{
+    int                            ret         = WH_ERROR_OK;
+    whMessageCrypto_AesDmaRequest* req         = NULL;
+    uint8_t*                       dataPtr     = NULL;
+    uintptr_t                      inAddr      = 0;
+    uintptr_t                      outAddr     = 0;
+    uintptr_t                      keyAddr     = 0;
+    uintptr_t                      stateAddr   = 0;
+    uintptr_t                      ivAddr      = 0;
+
+    uint16_t group  = WH_MESSAGE_GROUP_CRYPTO_DMA;
+    uint16_t action = WC_ALGO_TYPE_CIPHER;
+    uint16_t type   = WC_CIPHER_AES_CBC;
+
+    /* Check if we have a keyId-based key or a direct key */
+    whKeyId        keyId;
+    const uint8_t* key    = NULL;
+    uint32_t       keyLen = 0;
+
+    if (ctx == NULL || aes == NULL || out == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    if ((in == NULL) && (len > 0)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    keyId = WH_DEVCTX_TO_KEYID(aes->devCtx);
+    if (keyId != WH_KEYID_ERASED) {
+        /* Using keyId-based key, server will load it from keystore */
+        key    = NULL;
+        keyLen = 0;
+    }
+    else {
+        /* Using direct key */
+        key    = (const uint8_t*)(aes->devKey);
+        keyLen = aes->keylen;
+    }
+
+    /* Get data buffer */
+    dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
+    if (dataPtr == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Setup generic header and get pointer to request data */
+    req = (whMessageCrypto_AesDmaRequest*)_createCryptoRequest(dataPtr, type);
+    memset(req, 0, sizeof(*req));
+    req->enc  = enc;
+    req->type = type;
+
+    /* Set up DMA state buffer in client address space */
+    req->state.sz = sizeof(*aes);
+    ret           = wh_Client_DmaProcessClientAddress(
+        ctx, (uintptr_t)aes, (void**)&stateAddr, req->state.sz,
+        WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
+    req->state.addr = stateAddr;
+
+    /* Handle key operations */
+    if (ret == WH_ERROR_OK && key != NULL && keyLen > 0) {
+        /* Initialize with provided key */
+        req->key.addr = (uintptr_t)key;
+        req->key.sz   = keyLen;
+        ret           = wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)key, (void**)&keyAddr, req->key.sz,
+            WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
+        req->key.addr = keyAddr;
+    }
+
+    if (ret == WH_ERROR_OK && in != NULL) {
+        /* Update operation */
+        req->input.sz = len;
+        ret           = wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)in, (void**)&inAddr, req->input.sz,
+            WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
+        req->input.addr = inAddr;
+    }
+
+    if (ret == WH_ERROR_OK && out != NULL) {
+        /* Update operation */
+        req->output.sz = len;
+        ret            = wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)out, (void**)&outAddr, req->output.sz,
+            WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
+        req->output.addr = outAddr;
+    }
+
+    if (ret == WH_ERROR_OK) {
+        req->iv.sz = WC_AES_BLOCK_SIZE;
+        ret        = wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)aes->reg, (void**)&ivAddr, req->iv.sz,
+            WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
+        req->iv.addr = ivAddr;
+    }
+
+    /* Send request and receive response */
+    uint16_t req_len =
+        sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
+    ret = wh_Client_SendRequest(ctx, group, action, req_len, dataPtr);
+    if (ret == 0) {
+        uint16_t res_len = 0;
+        do {
+            ret =
+                wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
+        } while (ret == WH_ERROR_NOTREADY);
+
+        if (ret == WH_ERROR_OK) {
+            /* Get response */
+            whMessageCrypto_AesDmaResponse* res;
+            ret = _getCryptoResponse(dataPtr, type, (uint8_t**)&res);
+            /* wolfCrypt allows positive error codes on success in some
+             * scenarios */
+            if (ret >= 0) {
+                /* For DMA operations, data is already in client memory,
+                 * no need to copy it back */
+                ret = 0; /* Success */
+            }
+        }
+    }
+
+    /* post address translation callbacks (for cleanup) */
+    if (key != NULL) {
+        (void)wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)key, (void**)&keyAddr, req->key.sz,
+            WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
+    }
+    if (in != NULL) {
+        (void)wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)in, (void**)&inAddr, req->input.sz,
+            WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
+    }
+    if (out != NULL) {
+        (void)wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)out, (void**)&outAddr, req->output.sz,
+            WH_DMA_OPER_CLIENT_WRITE_POST, (whDmaFlags){0});
+    }
+    (void)wh_Client_DmaProcessClientAddress(
+        ctx, (uintptr_t)aes->reg, (void**)&ivAddr, req->iv.sz,
+        WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
+    (void)wh_Client_DmaProcessClientAddress(
+        ctx, (uintptr_t)aes, (void**)&stateAddr, req->state.sz,
+        WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
+    return ret;
+}
+#endif /* WOLFHSM_CFG_DMA */
 #endif /* HAVE_AES_CBC */
 
 #ifdef HAVE_AESGCM
@@ -973,7 +1407,6 @@ int wh_Client_AesGcmDma(whClientContext* ctx, Aes* aes, int enc,
 }
 #endif /* WOLFHSM_CFG_DMA */
 #endif /* HAVE_AESGCM */
-
 #endif /* !NO_AES */
 
 #ifdef HAVE_ECC

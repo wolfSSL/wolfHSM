@@ -91,6 +91,54 @@ int wh_Bench_Mod_Aes256GCMDecryptDma(whClientContext*  client,
                                      whBenchOpContext* ctx, int id,
                                      void* params);
 
+int wh_Bench_Mod_Aes128CTREncryptDma(whClientContext*  client,
+                                     whBenchOpContext* ctx, int id,
+                                     void* params);
+
+int wh_Bench_Mod_Aes128CTRDecryptDma(whClientContext*  client,
+                                     whBenchOpContext* ctx, int id,
+                                     void* params);
+
+int wh_Bench_Mod_Aes256CTREncryptDma(whClientContext*  client,
+                                     whBenchOpContext* ctx, int id,
+                                     void* params);
+
+int wh_Bench_Mod_Aes256CTRDecryptDma(whClientContext*  client,
+                                     whBenchOpContext* ctx, int id,
+                                     void* params);
+
+int wh_Bench_Mod_Aes128ECBEncryptDma(whClientContext*  client,
+                                     whBenchOpContext* ctx, int id,
+                                     void* params);
+
+int wh_Bench_Mod_Aes128ECBDecryptDma(whClientContext*  client,
+                                     whBenchOpContext* ctx, int id,
+                                     void* params);
+
+int wh_Bench_Mod_Aes256ECBEncryptDma(whClientContext*  client,
+                                     whBenchOpContext* ctx, int id,
+                                     void* params);
+
+int wh_Bench_Mod_Aes256ECBDecryptDma(whClientContext*  client,
+                                     whBenchOpContext* ctx, int id,
+                                     void* params);
+
+int wh_Bench_Mod_Aes128CBCEncryptDma(whClientContext*  client,
+                                     whBenchOpContext* ctx, int id,
+                                     void* params);
+
+int wh_Bench_Mod_Aes128CBCDecryptDma(whClientContext*  client,
+                                     whBenchOpContext* ctx, int id,
+                                     void* params);
+
+int wh_Bench_Mod_Aes256CBCEncryptDma(whClientContext*  client,
+                                     whBenchOpContext* ctx, int id,
+                                     void* params);
+
+int wh_Bench_Mod_Aes256CBCDecryptDma(whClientContext*  client,
+                                     whBenchOpContext* ctx, int id,
+                                     void* params);
+
 /*
  * CMAC benchmark module prototypes (wh_bench_mod_cmac.c)
  */

@@ -428,6 +428,60 @@ int wh_Client_AesGcmDma(whClientContext* ctx, Aes* aes, int enc,
 #endif /* WOLFHSM_CFG_DMA */
 #endif /* HAVE_AESGCM */
 
+/**
+ * @brief Performs an AES-CTR operation using DMA.
+ *
+ * This function performs an AES-CTR encryption or decryption operation using
+ * DMA for efficient data transfer. The operation is performed on the HSM
+ * server using the provided AES context and parameters.
+ *
+ * @param[in] ctx Pointer to the wolfHSM client context.
+ * @param[in,out] aes Pointer to the AES context structure.
+ * @param[in] enc 1 for encryption, 0 for decryption.
+ * @param[in] in Pointer to the input data buffer.
+ * @param[in] len Length of the input data in bytes.
+ * @param[out] out Pointer to the output data.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_AesCtrDma(whClientContext* ctx, Aes* aes, int enc,
+                        const uint8_t* in, uint32_t len, uint8_t* out);
+
+/**
+ * @brief Performs an AES-ECB operation using DMA.
+ *
+ * This function performs an AES-ECB encryption or decryption operation using
+ * DMA for efficient data transfer. The operation is performed on the HSM
+ * server using the provided AES context and parameters.
+ *
+ * @param[in] ctx Pointer to the wolfHSM client context.
+ * @param[in,out] aes Pointer to the AES context structure.
+ * @param[in] enc 1 for encryption, 0 for decryption.
+ * @param[in] in Pointer to the input data buffer.
+ * @param[in] len Length of the input data in bytes.
+ * @param[out] out Pointer to the output data.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_AesEcbDma(whClientContext* ctx, Aes* aes, int enc,
+                        const uint8_t* in, uint32_t len, uint8_t* out);
+
+/**
+ * @brief Performs an AES-CBC operation using DMA.
+ *
+ * This function performs an AES-CBC encryption or decryption operation using
+ * DMA for efficient data transfer. The operation is performed on the HSM
+ * server using the provided AES context and parameters.
+ *
+ * @param[in] ctx Pointer to the wolfHSM client context.
+ * @param[in,out] aes Pointer to the AES context structure.
+ * @param[in] enc 1 for encryption, 0 for decryption.
+ * @param[in] in Pointer to the input data buffer.
+ * @param[in] len Length of the input data in bytes.
+ * @param[out] out Pointer to the output data.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_AesCbcDma(whClientContext* ctx, Aes* aes, int enc,
+                        const uint8_t* in, uint32_t len, uint8_t* out);
+
 #endif /* !NO_AES */
 
 
