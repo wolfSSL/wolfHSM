@@ -1047,9 +1047,9 @@ int wh_Client_KeyUnwrapAndCacheRequest(whClientContext*   ctx,
  * key.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
-int wh_Client_UnrapKeyAndCacheResponse(whClientContext*   ctx,
-                                       enum wc_CipherType cipherType,
-                                       uint16_t*          keyIdOut);
+int wh_Client_KeyUnwrapAndCacheResponse(whClientContext*   ctx,
+                                        enum wc_CipherType cipherType,
+                                        uint16_t*          keyIdOut);
 
 /* Counter functions */
 int wh_Client_CounterInitRequest(whClientContext* c, whNvmId counterId,

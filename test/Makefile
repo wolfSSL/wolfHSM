@@ -77,6 +77,12 @@ ifeq ($(ASAN),1)
 	LDFLAGS += -fsanitize=address
 endif
 
+# Add code coverage option
+ifeq ($(COVERAGE),1)
+	CFLAGS += --coverage
+	LDFLAGS += --coverage
+endif
+
 ## wolfSSL defines
 ifeq ($(DEBUG_WOLFSSL),1)
 	DEF += -DDEBUG_WOLFSSL
@@ -190,7 +196,7 @@ vpath %.s $(dir $(SRC_ASM))
 
 ## Makefile Targets
 
-.PHONY: build_app build_hex build_static clean run
+.PHONY: build_app build_hex build_static clean run coverage
 
 build_app: $(BUILD_DIR) $(BUILD_DIR)/$(BIN).elf
 	@echo Build complete.
@@ -238,7 +244,9 @@ clean:
 			$(BUILD_DIR)/*.o \
 			$(BUILD_DIR)/*.a \
 			$(BUILD_DIR)/*.sym \
-			$(BUILD_DIR)/*.disasm
+			$(BUILD_DIR)/*.disasm \
+			$(BUILD_DIR)/*.gcda \
+			$(BUILD_DIR)/*.gcno
 
 # No prereq's here to stop from rebuilding with different options
 run:
@@ -247,3 +255,22 @@ ifeq (,$(wildcard $(BUILD_DIR)/$(BIN).elf))
 else
 	$(BUILD_DIR)/$(BIN).elf
 endif
+
+# Coverage target: build with coverage, run tests, and generate report
+coverage:
+	@echo "Building with coverage enabled..."
+	$(MAKE) clean
+	$(MAKE) COVERAGE=1 DEBUG=1
+	@echo "Running tests..."
+	@if [ ! -f $(BUILD_DIR)/$(BIN).elf ]; then \
+		echo "Error: $(BUILD_DIR)/$(BIN).elf not found. Build failed."; \
+		exit 1; \
+	fi
+	$(BUILD_DIR)/$(BIN).elf
+	@echo "Generating coverage report..."
+	gcovr --root .. \
+		--filter 'src/.*' \
+		--filter 'wolfhsm/.*' \
+		--html-details $(BUILD_DIR)/coverage.html \
+		--print-summary
+	@echo "Coverage report generated at $(BUILD_DIR)/coverage.html"
