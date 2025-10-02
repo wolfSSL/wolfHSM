@@ -3356,38 +3356,34 @@ static int _HandleSha512Dma(whServerContext* ctx, uint16_t magic, uint16_t seq,
     /* If finalize requested, finalize the SHA512 operation, wrapping client
      * address accesses with the associated DMA address processing */
     if (ret == WH_ERROR_OK && req.finalize) {
-        void* outAddr;
-        ret = wh_Server_DmaProcessClientAddress(
-            ctx, req.output.addr, &outAddr, req.output.sz,
-            WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
+        uint8_t localBuf[WC_SHA512_BLOCK_SIZE];
+        int     digestSz;
 
-        /* Finalize the SHA512 operation */
-        if (ret == WH_ERROR_OK) {
 #ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("[server]   wc_Sha512Final: outAddr=%p\n", outAddr);
-            printf("[server]   hashTpe: %d\n", hashType);
+        printf("[server]   wc_Sha512Final: outAddr=%p\n", req.output.addr);
+        printf("[server]   hashTpe: %d\n", hashType);
 #endif
-            switch (hashType) {
-                case WC_HASH_TYPE_SHA512_224:
-                    ret = wc_Sha512_224Final(sha512, outAddr);
-                    break;
-                case WC_HASH_TYPE_SHA512_256:
-                    ret = wc_Sha512_256Final(sha512, outAddr);
-                    break;
-                default:
-                    ret = wc_Sha512Final(sha512, outAddr);
-                    break;
-            }
+        switch (hashType) {
+            case WC_HASH_TYPE_SHA512_224:
+                ret      = wc_Sha512_224Final(sha512, localBuf);
+                digestSz = WC_SHA512_224_DIGEST_SIZE;
+                break;
+            case WC_HASH_TYPE_SHA512_256:
+                ret      = wc_Sha512_256Final(sha512, localBuf);
+                digestSz = WC_SHA512_256_DIGEST_SIZE;
+                break;
+            default:
+                ret      = wc_Sha512Final(sha512, localBuf);
+                digestSz = WC_SHA512_DIGEST_SIZE;
+                break;
         }
 
         if (ret == WH_ERROR_OK) {
-            ret = wh_Server_DmaProcessClientAddress(
-                ctx, req.output.addr, &outAddr, req.output.sz,
-                WH_DMA_OPER_CLIENT_WRITE_POST, (whServerDmaFlags){0});
-        }
-
-        if (ret == WH_ERROR_ACCESS) {
-            res.dmaAddrStatus.badAddr = req.output;
+            ret = whServerDma_CopyToClient(ctx, req.output.addr, localBuf,
+                                           digestSz, (whServerDmaFlags){0});
+            if (ret == WH_ERROR_ACCESS) {
+                res.dmaAddrStatus.badAddr = req.output;
+            }
         }
     }
     else if (ret == WH_ERROR_OK) {
