@@ -359,12 +359,13 @@ static int nfPartition_ReadMemDirectory(whNvmFlashContext* context, int partitio
                 NF_PARTITION_DIRECTORY_OFFSET;
     memset(directory, 0, sizeof(*directory));
 
-    for(index = 0; (index < WOLFHSM_CFG_NVM_OBJECT_COUNT) && (ret == 0); index++) {
-        /* TODO: Handle errors better here.  Break out of loop? */
-        ret = nfMemObject_Read(
-                context,
-                offset + NF_DIRECTORY_OBJECT_OFFSET(index),
-                &directory->objects[index]);
+    for (index = 0; (index < WOLFHSM_CFG_NVM_OBJECT_COUNT); index++) {
+        /* Read all objects from the Partition Directory.
+         * Don't break on an error.
+         */
+        (void)nfMemObject_Read(context,
+                               offset + NF_DIRECTORY_OBJECT_OFFSET(index),
+                               &directory->objects[index]);
     }
     return ret;
 }
@@ -1087,8 +1088,8 @@ int wh_NvmFlash_AddObject(void* c, whNvmMetadata *meta,
     }
 
     /* Find existing object so we can increment the epoch */
-    (void)nfMemDirectory_FindObjectIndexById(d, meta->id, &oldentry);
-    if (oldentry >= 0) {
+    ret = nfMemDirectory_FindObjectIndexById(d, meta->id, &oldentry);
+    if (ret == WH_ERROR_OK && oldentry >= 0) {
         epoch = d->objects[oldentry].state.epoch + 1;
     }
 

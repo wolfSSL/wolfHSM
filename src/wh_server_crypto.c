@@ -428,6 +428,7 @@ static int _HandleRsaFunction( whServerContext* ctx, uint16_t magic,
         wc_FreeRsaKey(rsa);
     }
     if (evict != 0) {
+        /* User requested to evict from cache, even if the call failed */
         (void)wh_Server_KeystoreEvictKey(ctx, key_id);
     }
     if (ret == 0) {
@@ -487,6 +488,7 @@ static int _HandleRsaGetSize(whServerContext* ctx, uint16_t magic,
         printf("[server] %s evicting temp key:%x options:%u evict:%u\n",
                __func__, key_id, options, evict);
 #endif
+        /* User requested to evict from cache, even if the call failed */
         (void)wh_Server_KeystoreEvictKey(ctx, key_id);
     }
     if (ret == 0) {
@@ -839,7 +841,7 @@ static int _HandleEccSharedSecret(whServerContext* ctx, uint16_t magic,
         (byte*)cryptoDataOut + sizeof(whMessageCrypto_EcdhResponse);
     word32 max_len = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
                               (res_out - (uint8_t*)cryptoDataOut));
-    word32 res_len;
+    word32 res_len = 0;
 
     /* init ecc keys */
     ret = wc_ecc_init_ex(pub_key, NULL, ctx->crypto->devId);
@@ -866,9 +868,11 @@ static int _HandleEccSharedSecret(whServerContext* ctx, uint16_t magic,
         wc_ecc_free(pub_key);
     }
     if (evict_pub) {
+        /* User requested to evict from cache, even if the call failed */
         (void)wh_Server_KeystoreEvictKey(ctx, pub_key_id);
     }
     if (evict_prv) {
+        /* User requested to evict from cache, even if the call failed */
         (void)wh_Server_KeystoreEvictKey(ctx, prv_key_id);
     }
     if (ret == 0) {
@@ -940,6 +944,7 @@ static int _HandleEccSign(whServerContext* ctx, uint16_t magic,
         wc_ecc_free(key);
     }
     if (evict != 0) {
+        /* typecasting to void so that not overwrite ret */
         (void)wh_Server_KeystoreEvictKey(ctx, key_id);
     }
     if (ret == 0) {
@@ -993,7 +998,7 @@ static int _HandleEccVerify(whServerContext* ctx, uint16_t magic,
     word32   max_size = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
                                (res_pub - (uint8_t*)cryptoDataOut));
     uint32_t pub_size = 0;
-    int      result;
+    int      result   = 0;
 
     /* init public key */
     ret = wc_ecc_init_ex(key, NULL, ctx->crypto->devId);
@@ -1295,9 +1300,11 @@ static int _HandleCurve25519SharedSecret(whServerContext* ctx, uint16_t magic,
         wc_curve25519_free(priv);
     }
     if (evict_pub) {
+        /* User requested to evict from cache, even if the call failed */
         (void)wh_Server_KeystoreEvictKey(ctx, pub_key_id);
     }
     if (evict_prv) {
+        /* User requested to evict from cache, even if the call failed */
         (void)wh_Server_KeystoreEvictKey(ctx, prv_key_id);
     }
     if (ret == 0) {
@@ -1970,6 +1977,8 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
                                             ctx->comm->client_id,
                                             WH_KEYID_ERASED);
                     ret   = wh_Server_KeystoreGetUniqueId(ctx, &keyId);
+                    if (ret != WH_ERROR_OK)
+                        return ret;
                 }
                 else {
                     keyId = WH_MAKE_KEYID(  WH_KEYTYPE_CRYPTO,
@@ -2509,6 +2518,7 @@ static int _HandleMlDsaSign(whServerContext* ctx, uint16_t magic,
         wc_MlDsaKey_Free(key);
     }
     if (evict != 0) {
+        /* User requested to evict from cache, even if the call failed */
         (void)wh_Server_KeystoreEvictKey(ctx, key_id);
     }
     if (ret == 0) {
@@ -2573,7 +2583,7 @@ static int _HandleMlDsaVerify(whServerContext* ctx, uint16_t magic,
     int      evict = !!(options & WH_MESSAGE_CRYPTO_MLDSA_VERIFY_OPTIONS_EVICT);
 
     /* Response message */
-    int result;
+    int result = 0;
 
     /* init public key */
     ret = wc_MlDsaKey_Init(key, NULL, ctx->crypto->devId);
@@ -3687,6 +3697,8 @@ static int _HandleMlDsaSignDma(whServerContext* ctx, uint16_t magic,
 
             /* Evict key if requested */
             if (evict) {
+                /* User requested to evict from cache, even if the call failed
+                 */
                 (void)wh_Server_KeystoreEvictKey(ctx, key_id);
             }
         }
@@ -3794,6 +3806,7 @@ static int _HandleMlDsaVerifyDma(whServerContext* ctx, uint16_t magic,
 
         /* Evict key if requested */
         if (evict) {
+            /* User requested to evict from cache, even if the call failed */
             (void)wh_Server_KeystoreEvictKey(ctx, key_id);
         }
     }

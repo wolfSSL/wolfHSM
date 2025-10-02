@@ -394,9 +394,6 @@ int _benchRsaCrypt(whClientContext* client, whBenchOpContext* ctx, int id,
         WH_BENCH_PRINTF("Failed to wc_RsaPublicEncrypt %d\n", ret);
         goto exit;
     }
-    else {
-        ret = 0;
-    }
 
     /* Set the data size for the benchmark */
     ret = wh_Bench_SetDataSize(ctx, id, encSz);
