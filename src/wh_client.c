@@ -76,8 +76,10 @@ int wh_Client_Init(whClientContext* c, const whClientConfig* config)
     }
 
     memset(c, 0, sizeof(*c));
+#ifdef WOLFHSM_CFG_CANCEL_API
     /* register the cancel callback */
     c->cancelCb = config->cancelCb;
+#endif
 
     rc = wh_CommClient_Init(c->comm, config->comm);
 
@@ -470,6 +472,7 @@ int wh_Client_CommClose(whClientContext* c)
     return rc;
 }
 
+#ifdef WOLFHSM_CFG_CANCEL_API
 int wh_Client_EnableCancel(whClientContext* c)
 {
     if (c == NULL)
@@ -535,6 +538,7 @@ int wh_Client_Cancel(whClientContext* c)
     }
     return ret;
 }
+#endif /* WOLFHSM_CFG_CANCEL_API */
 
 int wh_Client_EchoRequest(whClientContext* c, uint16_t size, const void* data)
 {

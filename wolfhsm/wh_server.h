@@ -199,7 +199,9 @@ struct whServerContext_t {
     whServerDmaContext dma;
 #endif /* WOLFHSM_CFG_DMA */
     int                connected;
+#ifdef WOLFHSM_CFG_CANCEL_API
     uint16_t           cancelSeq;
+#endif
 };
 
 
@@ -262,6 +264,7 @@ int wh_Server_SetConnectedCb(void* s, whCommConnected connected);
 int wh_Server_GetConnected(whServerContext* server,
                            whCommConnected* out_connected);
 
+#ifdef WOLFHSM_CFG_CANCEL_API
 /**
  * @brief Gets the canceled sequence number of the server.
  *
@@ -289,6 +292,7 @@ int wh_Server_GetCanceledSequence(whServerContext* server, uint16_t* outSeq);
  *
  */
 int wh_Server_SetCanceledSequence(whServerContext* server, uint16_t cancelSeq);
+#endif /* WOLFHSM_CFG_CANCEL_API */
 
 /**
  * @brief Handles incoming request messages and dispatches them to the
