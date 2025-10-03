@@ -1,6 +1,7 @@
 /* Pick up compile-time configuration */
 #include "wolfhsm/wh_settings.h"
 
+#if defined(WOLFHSM_CFG_KEYWRAP)
 #if defined(WOLFHSM_CFG_ENABLE_CLIENT)
 #include <stdint.h>
 #include <wolfhsm/wh_client.h>
@@ -326,3 +327,4 @@ int wh_Client_KeyUnwrapAndCache(whClientContext*   ctx,
 }
 
 #endif /* WOLFHSM_CFG_ENABLE_CLIENT */
+#endif /* WOLFHSM_CFG_KEYWRAP */
