@@ -932,3 +932,80 @@ int wh_MessageCrypto_TranslateMlDsaVerifyDmaResponse(
     WH_T32(magic, dest, src, verifyResult);
     return 0;
 }
+
+/* AES DMA Request translation */
+int wh_MessageCrypto_TranslateAesDmaRequest(
+    uint16_t magic, const whMessageCrypto_AesDmaRequest* src,
+    whMessageCrypto_AesDmaRequest* dest)
+{
+    int ret;
+
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    WH_T32(magic, dest, src, enc);
+    WH_T32(magic, dest, src, type);
+    WH_T32(magic, dest, src, finalize);
+    WH_T32(magic, dest, src, keyId);
+
+    ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->state, &dest->state);
+    if (ret != 0) {
+        return ret;
+    }
+
+    ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->key, &dest->key);
+    if (ret != 0) {
+        return ret;
+    }
+
+    ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->input, &dest->input);
+    if (ret != 0) {
+        return ret;
+    }
+
+    ret =
+        wh_MessageCrypto_TranslateDmaBuffer(magic, &src->output, &dest->output);
+    if (ret != 0) {
+        return ret;
+    }
+
+    ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->authTag,
+                                              &dest->authTag);
+    if (ret != 0) {
+        return ret;
+    }
+
+    ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->iv, &dest->iv);
+    if (ret != 0) {
+        return ret;
+    }
+
+    ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->aad, &dest->aad);
+    if (ret != 0) {
+        return ret;
+    }
+
+    return 0;
+}
+
+/* AES DMA Response translation */
+int wh_MessageCrypto_TranslateAesDmaResponse(
+    uint16_t magic, const whMessageCrypto_AesDmaResponse* src,
+    whMessageCrypto_AesDmaResponse* dest)
+{
+    int ret;
+
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateDmaAddrStatus(magic, &src->dmaAddrStatus,
+                                                  &dest->dmaAddrStatus);
+    if (ret != 0) {
+        return ret;
+    }
+
+    WH_T32(magic, dest, src, outSz);
+    return 0;
+}
