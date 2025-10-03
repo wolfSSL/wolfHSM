@@ -651,6 +651,61 @@ static int _testNonExportableNvmAccess(whClientContext* client)
 }
 #endif /* WOLFHSM_CFG_ENABLE_CLIENT */
 
+#if defined(WOLFHSM_CFG_KEYWRAP)
+/* Test key wrapping functionality using Request/Response pattern for sequential mode */
+static int _testKeyWrapSequential(whServerContext* server, whClientContext* client)
+{
+    uint8_t       key[16];        /* Wrap key */
+    uint8_t       plainKey[16];   /* Key to be wrapped */
+    uint8_t       tmpPlainKey[16];
+    uint8_t       wrappedKey[16 + 12 + 16 + sizeof(whNvmMetadata)]; /* key + IV + tag + metadata */
+    uint8_t       label[] = "Server AES Key Label";
+    whKeyId       serverKeyId = 0;
+    whKeyId       wrappedKeyId = 0;
+    whNvmMetadata metadata = {
+        .id = 8, .label = "AES Key Label", .len = sizeof(plainKey)};
+    whNvmMetadata tmpMetadata;
+    WC_RNG        rng[1];
+
+    /* Initialize RNG with INVALID_DEVID to use local wolfCrypt (not HSM) */
+    WH_TEST_RETURN_ON_FAIL(wc_InitRng_ex(rng, NULL, INVALID_DEVID));
+
+    /* Generate random keys */
+    WH_TEST_RETURN_ON_FAIL(wc_RNG_GenerateBlock(rng, key, sizeof(key)));
+    WH_TEST_RETURN_ON_FAIL(wc_RNG_GenerateBlock(rng, plainKey, sizeof(plainKey)));
+
+    /* Cache the wrap key using Request/Response pattern */
+    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyCacheRequest(client, 0, label, sizeof(label), key, sizeof(key)));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyCacheResponse(client, &serverKeyId));
+    printf("  Wrap key cached with ID: %d\n", serverKeyId);
+
+    /* Wrap the key using Request/Response pattern */
+    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyWrapRequest(client, WC_CIPHER_AES_GCM, serverKeyId, plainKey, sizeof(plainKey), &metadata));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyWrapResponse(client, WC_CIPHER_AES_GCM, wrappedKey, sizeof(wrappedKey)));
+
+    /* Unwrap and cache using Request/Response pattern */
+    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyUnwrapAndCacheRequest(client, WC_CIPHER_AES_GCM, serverKeyId, wrappedKey, sizeof(wrappedKey)));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyUnwrapAndCacheResponse(client, WC_CIPHER_AES_GCM, &wrappedKeyId));
+    printf("  Unwrapped and cached with ID: %d\n", wrappedKeyId);
+
+    /* Unwrap and export using Request/Response pattern */
+    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyUnwrapAndExportRequest(client, WC_CIPHER_AES_GCM, serverKeyId, wrappedKey, sizeof(wrappedKey)));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyUnwrapAndExportResponse(client, WC_CIPHER_AES_GCM, &tmpMetadata, tmpPlainKey, sizeof(tmpPlainKey)));
+
+    /* Verify the keys match */
+    WH_TEST_ASSERT_RETURN(memcmp(plainKey, tmpPlainKey, sizeof(plainKey)) == 0);
+    WH_TEST_ASSERT_RETURN(memcmp(&metadata, &tmpMetadata, sizeof(metadata)) == 0);
+
+    wc_FreeRng(rng);
+    printf("KeyWrap sequential test passed\n");
+    return WH_ERROR_OK;
+}
+#endif /* WOLFHSM_CFG_KEYWRAP */
+
 #if defined(WOLFHSM_CFG_ENABLE_CLIENT) && defined(WOLFHSM_CFG_ENABLE_SERVER)
 static int _clientServerSequentialTestConnectCb(void*           context,
                                                 whCommConnected connected)
@@ -1239,6 +1294,12 @@ int whTest_ClientServerSequential(void)
     /* Test DMA callbacks and address allowlisting */
     WH_TEST_RETURN_ON_FAIL(_testDma(server, client));
 #endif /* WOLFHSM_CFG_DMA */
+
+#if defined(WOLFHSM_CFG_KEYWRAP) && !defined(WOLFHSM_CFG_NO_CRYPTO)
+    /* Test key wrapping functionality */
+    printf("Testing KeyWrap...\n");
+    WH_TEST_RETURN_ON_FAIL(_testKeyWrapSequential(server, client));
+#endif
 
     /* Check that we are still connected */
     WH_TEST_RETURN_ON_FAIL(wh_Server_GetConnected(server, &server_connected));
