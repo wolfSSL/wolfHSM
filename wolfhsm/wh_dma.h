@@ -45,6 +45,13 @@ typedef enum {
     WH_DMA_OPER_CLIENT_WRITE_POST = 3,
 } whDmaOper;
 
+#ifdef WOLFHSM_CFG_DMA_CUSTOM_CLIENT_COPY
+typedef enum {
+    WH_DMA_COPY_OPER_CLIENT_READ  = 0,
+    WH_DMA_COPY_OPER_CLIENT_WRITE = 1,
+} whDmaCopyOper;
+#endif /* WOLFHSM_CFG_DMA_CUSTOM_CLIENT_COPY */
+
 /* Flags embedded in request/response structs provided by client */
 typedef struct {
     uint8_t cacheForceInvalidate : 1;

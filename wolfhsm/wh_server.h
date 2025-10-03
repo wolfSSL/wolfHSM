@@ -120,12 +120,8 @@ typedef whDmaOper          whServerDmaOper;
 typedef whDmaFlags         whServerDmaFlags;
 typedef whDmaAddr          whServerDmaAddr;
 typedef whDmaAddrList      whServerDmaAddrList;
-
 #ifdef WOLFHSM_CFG_DMA_CUSTOM_CLIENT_COPY
-typedef enum {
-    WH_DMA_COPY_OPER_CLIENT_READ = 0,
-    WH_DMA_COPY_OPER_CLIENT_WRITE = 1,
-} whServerDmaCopyOper;
+typedef whDmaCopyOper whServerDmaCopyOper;
 #endif /* WOLFHSM_CFG_DMA_CUSTOM_CLIENT_COPY */
 
 /* DMA callbacks invoked internally by wolfHSM before and after every client
