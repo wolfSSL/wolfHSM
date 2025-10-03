@@ -82,8 +82,8 @@ typedef struct {
             const whNvmId* id_list);
 
     /* Read the data of the object starting at the byte offset */
-    int (*Read)(void* context, whNvmId id, whNvmSize offset,
-            whNvmSize data_len, uint8_t* data);
+    int (*Read)(void* context, whNvmId id, whNvmSize offset, whNvmSize data_len,
+                uint8_t* data);
 } whNvmCb;
 
 
@@ -126,6 +126,6 @@ int wh_Nvm_DestroyObjects(whNvmContext* context, whNvmId list_count,
         const whNvmId* id_list);
 
 int wh_Nvm_Read(whNvmContext* context, whNvmId id, whNvmSize offset,
-        whNvmSize data_len, uint8_t* data);
+                whNvmSize data_len, uint8_t* data);
 
 #endif /* !WOLFHSM_WH_NVM_H_ */
