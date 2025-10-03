@@ -651,7 +651,8 @@ static int _testNonExportableNvmAccess(whClientContext* client)
 }
 #endif /* WOLFHSM_CFG_ENABLE_CLIENT */
 
-#if defined(WOLFHSM_CFG_KEYWRAP) && !defined(WOLFHSM_CFG_NO_CRYPTO)
+#if defined(WOLFHSM_CFG_KEYWRAP) && !defined(WOLFHSM_CFG_NO_CRYPTO) && \
+    defined(WOLFHSM_CFG_ENABLE_CLIENT) && defined(WOLFHSM_CFG_ENABLE_SERVER)
 /* Test key wrapping functionality using Request/Response pattern for sequential mode */
 static int _testKeyWrapSequential(whServerContext* server, whClientContext* client)
 {
@@ -704,7 +705,7 @@ static int _testKeyWrapSequential(whServerContext* server, whClientContext* clie
     printf("KeyWrap sequential test passed\n");
     return WH_ERROR_OK;
 }
-#endif /* WOLFHSM_CFG_KEYWRAP && !WOLFHSM_CFG_NO_CRYPTO */
+#endif /* WOLFHSM_CFG_KEYWRAP && !WOLFHSM_CFG_NO_CRYPTO && WOLFHSM_CFG_ENABLE_CLIENT && WOLFHSM_CFG_ENABLE_SERVER */
 
 #if defined(WOLFHSM_CFG_ENABLE_CLIENT) && defined(WOLFHSM_CFG_ENABLE_SERVER)
 static int _clientServerSequentialTestConnectCb(void*           context,
