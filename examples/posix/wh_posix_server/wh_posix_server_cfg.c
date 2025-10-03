@@ -1,7 +1,13 @@
 /*
  * Example server app using POSIX transport
  */
-
+#if defined(WOLFHSM_CFG_NO_CRYPTO)
+#include <stdio.h>  /* For printf */
+#include <stdlib.h> /* For atoi */
+#include <string.h> /* For memset, memcpy, strcmp */
+#include <sys/types.h>
+#include <ctype.h>
+#endif
 #include "wh_posix_cfg.h"
 #include "wh_posix_server_cfg.h"
 
