@@ -27,7 +27,6 @@
 #include "wolfssl/wolfcrypt/types.h"
 
 #include "wolfhsm/wh_error.h"
-#include "wolfhsm/wh_flash.h"
 
 #ifdef WOLFHSM_CFG_KEYWRAP
 
