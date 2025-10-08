@@ -159,6 +159,12 @@ int wh_Bench_Mod_HmacSha3256(whClientContext* client, whBenchOpContext* ctx,
 int wh_Bench_Mod_HmacSha3256Dma(whClientContext* client, whBenchOpContext* ctx,
                                 int id, void* params);
 
+/* HKDF benchmark module prototypes (wh_bench_mod_hkdf.c) */
+#if defined(HAVE_HKDF)
+int wh_Bench_Mod_HkdfSha256(whClientContext* client, whBenchOpContext* ctx,
+                            int id, void* params);
+#endif /* HAVE_HKDF */
+
 /*
  * ECC benchmark module prototypes (wh_bench_mod_ecc.c)
  */

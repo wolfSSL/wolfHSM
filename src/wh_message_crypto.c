@@ -273,6 +273,41 @@ int wh_MessageCrypto_TranslateRsaGetSizeResponse(
     return 0;
 }
 
+/* HKDF Request translation */
+int wh_MessageCrypto_TranslateHkdfRequest(
+    uint16_t magic, const whMessageCrypto_HkdfRequest* src,
+    whMessageCrypto_HkdfRequest* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, flags);
+    WH_T32(magic, dest, src, keyId);
+    WH_T32(magic, dest, src, hashType);
+    WH_T32(magic, dest, src, inKeySz);
+    WH_T32(magic, dest, src, saltSz);
+    WH_T32(magic, dest, src, infoSz);
+    WH_T32(magic, dest, src, outSz);
+    /* Label is just a byte array, no translation needed */
+    if (src != dest) {
+        memcpy(dest->label, src->label, WH_NVM_LABEL_LEN);
+    }
+    return 0;
+}
+
+/* HKDF Response translation */
+int wh_MessageCrypto_TranslateHkdfResponse(
+    uint16_t magic, const whMessageCrypto_HkdfResponse* src,
+    whMessageCrypto_HkdfResponse* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, keyId);
+    WH_T32(magic, dest, src, outSz);
+    return 0;
+}
+
 /* ECC Key Generation Request translation */
 int wh_MessageCrypto_TranslateEccKeyGenRequest(
     uint16_t magic, const whMessageCrypto_EccKeyGenRequest* src,

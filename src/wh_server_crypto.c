@@ -43,6 +43,7 @@
 #include "wolfssl/wolfcrypt/sha512.h"
 #include "wolfssl/wolfcrypt/cmac.h"
 #include "wolfssl/wolfcrypt/dilithium.h"
+#include "wolfssl/wolfcrypt/hmac.h"
 
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_crypto.h"
@@ -97,6 +98,13 @@ static int _HandleRsaGetSize(whServerContext* ctx, uint16_t magic,
                              const void* cryptoDataIn, uint16_t inSize,
                              void* cryptoDataOut, uint16_t* outSize);
 #endif /* !NO_RSA */
+
+#ifdef HAVE_HKDF
+/* Process an HKDF request packet and produce a response packet */
+static int _HandleHkdf(whServerContext* ctx, uint16_t magic,
+                       const void* cryptoDataIn, uint16_t inSize,
+                       void* cryptoDataOut, uint16_t* outSize);
+#endif /* HAVE_HKDF */
 
 #ifndef NO_AES
 
@@ -1141,6 +1149,147 @@ static int _HandleRng(whServerContext* ctx, uint16_t magic,
     return ret;
 }
 #endif /* WC_NO_RNG */
+
+#ifdef HAVE_HKDF
+int wh_Server_HkdfKeyCacheImport(whServerContext* ctx, const uint8_t* keyData,
+                                 uint32_t keySize, whKeyId keyId,
+                                 whNvmFlags flags, uint16_t label_len,
+                                 uint8_t* label)
+{
+    int            ret = WH_ERROR_OK;
+    uint8_t*       cacheBuf;
+    whNvmMetadata* cacheMeta;
+
+    if ((ctx == NULL) || (keyData == NULL) || (WH_KEYID_ISERASED(keyId)) ||
+        ((label != NULL) && (label_len > sizeof(cacheMeta->label)))) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Get a free slot */
+    ret = wh_Server_KeystoreGetCacheSlot(ctx, keySize, &cacheBuf, &cacheMeta);
+    if (ret == WH_ERROR_OK) {
+        /* Copy the key data to cache buffer */
+        memcpy(cacheBuf, keyData, keySize);
+    }
+
+    if (ret == WH_ERROR_OK) {
+        /* Set metadata */
+        cacheMeta->id     = keyId;
+        cacheMeta->len    = keySize;
+        cacheMeta->flags  = flags;
+        cacheMeta->access = WH_NVM_ACCESS_ANY;
+
+        if ((label != NULL) && (label_len > 0)) {
+            memcpy(cacheMeta->label, label, label_len);
+        }
+    }
+
+    return ret;
+}
+
+static int _HandleHkdf(whServerContext* ctx, uint16_t magic,
+                       const void* cryptoDataIn, uint16_t inSize,
+                       void* cryptoDataOut, uint16_t* outSize)
+{
+    (void)inSize;
+
+    int                          ret = WH_ERROR_OK;
+    whMessageCrypto_HkdfRequest  req;
+    whMessageCrypto_HkdfResponse res;
+
+    /* Translate request */
+    ret = wh_MessageCrypto_TranslateHkdfRequest(
+        magic, (const whMessageCrypto_HkdfRequest*)cryptoDataIn, &req);
+    if (ret != 0) {
+        return ret;
+    }
+
+    /* Extract parameters from translated request */
+    int      hashType = req.hashType;
+    uint32_t inKeySz  = req.inKeySz;
+    uint32_t saltSz   = req.saltSz;
+    uint32_t infoSz   = req.infoSz;
+    uint32_t outSz    = req.outSz;
+    whKeyId  key_id =
+        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+    whNvmFlags flags      = req.flags;
+    uint8_t*   label      = req.label;
+    uint16_t   label_size = WH_NVM_LABEL_LEN;
+
+    /* Get pointers to variable-length input data */
+    const uint8_t* inKey =
+        (const uint8_t*)cryptoDataIn + sizeof(whMessageCrypto_HkdfRequest);
+    const uint8_t* salt = inKey + inKeySz;
+    const uint8_t* info = salt + saltSz;
+
+    /* Get pointer to where output data would be stored (after response struct)
+     */
+    uint8_t* out =
+        (uint8_t*)cryptoDataOut + sizeof(whMessageCrypto_HkdfResponse);
+    uint16_t max_size = (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN -
+                                   ((uint8_t*)out - (uint8_t*)cryptoDataOut));
+
+    /* Check if output size is valid */
+    if (outSz > max_size) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Generate the key into the output buffer */
+    ret = wc_HKDF(hashType, inKey, inKeySz, (saltSz > 0) ? salt : NULL, saltSz,
+                  (infoSz > 0) ? info : NULL, infoSz, out, outSz);
+    if (ret == 0) {
+        /* Check incoming flags */
+        if (flags & WH_NVM_FLAGS_EPHEMERAL) {
+            /* Key should not be cached/stored on the server */
+            key_id    = WH_KEYID_ERASED;
+            res.keyId = WH_KEYID_ERASED;
+            res.outSz = outSz;
+        }
+        else {
+            /* Must import the key into the cache and return keyid */
+            if (WH_KEYID_ISERASED(key_id)) {
+                /* Generate a new id */
+                ret = wh_Server_KeystoreGetUniqueId(ctx, &key_id);
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+                printf("[server] HkdfKeyGen UniqueId: keyId:%u, ret:%d\n",
+                       key_id, ret);
+#endif
+                if (ret != WH_ERROR_OK) {
+                    /* Early return on unique ID generation failure */
+                    return ret;
+                }
+            }
+
+            if (ret == 0) {
+                ret = wh_Server_HkdfKeyCacheImport(ctx, out, outSz, key_id,
+                                                   flags, label_size, label);
+            }
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+            printf("[server] HkdfKeyGen CacheImport: keyId:%u, ret:%d\n",
+                   key_id, ret);
+#endif
+            if (ret == WH_ERROR_OK) {
+                res.keyId = WH_KEYID_ID(key_id);
+                res.outSz = 0;
+                /* clear the output buffer */
+                memset(out, 0, outSz);
+            }
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        /* Translate response */
+        ret = wh_MessageCrypto_TranslateHkdfResponse(
+            magic, &res, (whMessageCrypto_HkdfResponse*)cryptoDataOut);
+        if (ret == 0) {
+            /* Set the output size (response header + output data) */
+            *outSize = sizeof(whMessageCrypto_HkdfResponse) + res.outSz;
+        }
+    }
+
+    return ret;
+}
+#endif /* HAVE_HKDF */
 
 #ifdef HAVE_CURVE25519
 static int _HandleCurve25519KeyGen(whServerContext* ctx, uint16_t magic,
@@ -3014,6 +3163,13 @@ int wh_Server_HandleCryptoRequest(whServerContext* ctx, uint16_t magic,
                              cryptoDataOut, &cryptoOutSize);
             break;
 #endif /* !WC_NO_RNG */
+
+#ifdef HAVE_HKDF
+        case WC_ALGO_TYPE_KDF:
+            ret = _HandleHkdf(ctx, magic, cryptoDataIn, cryptoInSize,
+                              cryptoDataOut, &cryptoOutSize);
+            break;
+#endif /* HAVE_HKDF */
 
 #ifdef WOLFSSL_CMAC
         case WC_ALGO_TYPE_CMAC:
