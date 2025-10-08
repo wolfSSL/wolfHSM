@@ -1357,3 +1357,96 @@ exit:
     return ret;
 }
 #endif /* WOLFSSL_CMAC && !NO_AES */
+
+#if defined(HAVE_HKDF)
+/*
+ * Demonstrates deriving key material using HKDF and exporting it directly to
+ * the client with the wolfCrypt API. This example provides the HKDF operation
+ * with input keying material (IKM), optional salt, and info. The derived output
+ * key material (OKM) is produced on the HSM and returned to the client buffer.
+ *
+ * After deriving the OKM, you can use it as a symmetric key (for example as an
+ * AES key) or application-specific secret.
+ */
+int wh_DemoClient_CryptoHkdfExport(whClientContext* clientContext)
+{
+    int ret   = 0;
+    int devId = WH_DEV_ID;
+    /* Example inputs for HKDF. The data mirrors sizes from RFC 5869 test case 1
+     */
+    const byte ikm[]  = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+                         0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F};
+    const byte salt[] = {0xA0, 0xA1, 0xA2, 0xA3};
+    const byte info[] = {0xB0, 0xB1, 0xB2, 0xB3, 0xB4};
+    byte       okm[32]; /* 32 bytes for WC_SHA256-based HKDF */
+
+    (void)clientContext; /* Unused in the export form */
+
+    /* Derive 32 bytes using HKDF with SHA-256. The OKM is exported directly
+     * back to the client buffer 'okm'. */
+    ret = wc_HKDF_ex(WC_SHA256, ikm, sizeof(ikm), salt, sizeof(salt), info,
+                     sizeof(info), okm, (word32)sizeof(okm), NULL, devId);
+    if (ret != 0) {
+        printf("Failed to wc_HKDF_ex %d\n", ret);
+    }
+
+    /* At this point 'okm' holds the derived key material.
+     * Now you can use the key for your application. */
+
+    return ret;
+}
+
+/*
+ * Demonstrates deriving key material using HKDF and storing it in the HSM
+ * key cache. The client does not receive the key material; instead, it gets a
+ * keyId that can be used with compatible operations (for example, attaching
+ * the keyId to an AES context).
+ *
+ * After the key is cached, you can reference it by keyId for relevant
+ * operations. This example optionally evicts the cached key at the end.
+ */
+int wh_DemoClient_CryptoHkdfCache(whClientContext* clientContext)
+{
+    int     ret       = 0;
+    int     needEvict = 0;
+    whKeyId keyId     = WH_KEYID_ERASED;
+    /* Example inputs for HKDF. */
+    const byte     ikm[]  = {0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
+                             0x18, 0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F};
+    const byte     salt[] = {0xC0, 0xC1, 0xC2, 0xC3};
+    const byte     info[] = {0xD0, 0xD1, 0xD2};
+    const uint32_t outSz  = 32; /* arbitrary output size */
+    /* Metadata flags/label for the cached key. Adjust to your requirements. */
+    whNvmFlags flags   = WH_NVM_FLAGS_NONE;
+    char       label[] = "hkdf-derived key";
+
+    /* Request the HSM to derive HKDF output and store it in the key cache.
+     * On success, 'keyId' is assigned by the HSM (unless pre-set) and can be
+     * used to reference the cached key material. */
+    ret = wh_Client_HkdfMakeCacheKey(
+        clientContext, WC_SHA256, ikm, (uint32_t)sizeof(ikm), salt,
+        (uint32_t)sizeof(salt), info, (uint32_t)sizeof(info), &keyId, flags,
+        (const uint8_t*)label, (uint32_t)strlen(label), outSz);
+    if (ret != WH_ERROR_OK) {
+        printf("Failed to wh_Client_HkdfMakeCacheKey %d\n", ret);
+        goto exit;
+    }
+
+    needEvict = 1;
+
+    /* Now you can use the cached key, referring to it by ID for relevant
+     * operations. */
+
+exit:
+    if (needEvict) {
+        int evictRet = wh_Client_KeyEvict(clientContext, keyId);
+        if (evictRet != 0) {
+            printf("Failed to wh_Client_KeyEvict %d\n", evictRet);
+            if (ret == 0) {
+                ret = evictRet;
+            }
+        }
+    }
+    return ret;
+}
+#endif /* HAVE_HKDF */

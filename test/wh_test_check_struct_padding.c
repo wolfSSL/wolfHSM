@@ -57,16 +57,16 @@ whMessageNvm_ReadDmaRequest      whMessageNvm_ReadDmaRequest_test;
 
 /* Include keystore message header for new keystore message structures */
 #include "wolfhsm/wh_message_keystore.h"
-whMessageKeystore_CacheRequest     keyCacheReq;
-whMessageKeystore_EvictRequest     keyEvictReq;
-whMessageKeystore_CommitRequest    keyCommitReq;
-whMessageKeystore_ExportRequest    keyExportReq;
-whMessageKeystore_EraseRequest     keyEraseReq;
-whMessageKeystore_CacheResponse    keyCacheRes;
-whMessageKeystore_EvictResponse    keyEvictRes;
-whMessageKeystore_CommitResponse   keyCommitRes;
-whMessageKeystore_ExportResponse   keyExportRes;
-whMessageKeystore_EraseResponse    keyEraseRes;
+whMessageKeystore_CacheRequest   keyCacheReq;
+whMessageKeystore_EvictRequest   keyEvictReq;
+whMessageKeystore_CommitRequest  keyCommitReq;
+whMessageKeystore_ExportRequest  keyExportReq;
+whMessageKeystore_EraseRequest   keyEraseReq;
+whMessageKeystore_CacheResponse  keyCacheRes;
+whMessageKeystore_EvictResponse  keyEvictRes;
+whMessageKeystore_CommitResponse keyCommitRes;
+whMessageKeystore_ExportResponse keyExportRes;
+whMessageKeystore_EraseResponse  keyEraseRes;
 
 /* Include counter message header for new counter message structures */
 #include "wolfhsm/wh_message_counter.h"
@@ -90,46 +90,48 @@ whMessageKeystore_ExportDmaResponse keyExportDmaRes;
 #include "wolfhsm/wh_message_crypto.h"
 whMessageCrypto_GenericRequestHeader  cryptoGenericReqHeader;
 whMessageCrypto_GenericResponseHeader cryptoGenericResHeader;
-whMessageCrypto_AesCbcRequest        cipherAesCbcReq;
-whMessageCrypto_AesGcmRequest        cipherAesGcmReq;
-whMessageCrypto_RsaKeyGenRequest     pkRsakgReq;
-whMessageCrypto_RsaRequest           pkRsaReq;
-whMessageCrypto_RsaGetSizeRequest    pkRsaGetSizeReq;
-whMessageCrypto_EccKeyGenRequest     pkEckgReq;
-whMessageCrypto_EcdhRequest          pkEcdhReq;
-whMessageCrypto_EccSignRequest       pkEccSignReq;
-whMessageCrypto_EccVerifyRequest     pkEccVerifyReq;
-whMessageCrypto_EccCheckRequest      pkEccCheckReq;
-whMessageCrypto_RngRequest           rngReq;
-whMessageCrypto_CmacRequest          cmacReq;
-whMessageCrypto_AesCbcResponse       cipherAesCbcRes;
-whMessageCrypto_AesGcmResponse       cipherAesGcmRes;
-whMessageCrypto_RsaKeyGenResponse    pkRsakgRes;
-whMessageCrypto_RsaResponse          pkRsaRes;
-whMessageCrypto_RsaGetSizeResponse   pkRsaGetSizeRes;
-whMessageCrypto_EccKeyGenResponse    pkEckgRes;
-whMessageCrypto_EcdhResponse         pkEcdhRes;
-whMessageCrypto_EccSignResponse      pkEccSignRes;
-whMessageCrypto_EccVerifyResponse    pkEccVerifyRes;
-whMessageCrypto_EccCheckResponse     pkEccCheckRes;
-whMessageCrypto_RngResponse          rngRes;
-whMessageCrypto_CmacResponse         cmacRes;
-whMessageCrypto_Sha256Request        hashSha256Req;
+whMessageCrypto_AesCbcRequest         cipherAesCbcReq;
+whMessageCrypto_AesGcmRequest         cipherAesGcmReq;
+whMessageCrypto_RsaKeyGenRequest      pkRsakgReq;
+whMessageCrypto_RsaRequest            pkRsaReq;
+whMessageCrypto_RsaGetSizeRequest     pkRsaGetSizeReq;
+whMessageCrypto_EccKeyGenRequest      pkEckgReq;
+whMessageCrypto_EcdhRequest           pkEcdhReq;
+whMessageCrypto_EccSignRequest        pkEccSignReq;
+whMessageCrypto_EccVerifyRequest      pkEccVerifyReq;
+whMessageCrypto_EccCheckRequest       pkEccCheckReq;
+whMessageCrypto_RngRequest            rngReq;
+whMessageCrypto_CmacRequest           cmacReq;
+whMessageCrypto_AesCbcResponse        cipherAesCbcRes;
+whMessageCrypto_AesGcmResponse        cipherAesGcmRes;
+whMessageCrypto_RsaKeyGenResponse     pkRsakgRes;
+whMessageCrypto_RsaResponse           pkRsaRes;
+whMessageCrypto_RsaGetSizeResponse    pkRsaGetSizeRes;
+whMessageCrypto_EccKeyGenResponse     pkEckgRes;
+whMessageCrypto_EcdhResponse          pkEcdhRes;
+whMessageCrypto_EccSignResponse       pkEccSignRes;
+whMessageCrypto_EccVerifyResponse     pkEccVerifyRes;
+whMessageCrypto_EccCheckResponse      pkEccCheckRes;
+whMessageCrypto_RngResponse           rngRes;
+whMessageCrypto_CmacResponse          cmacRes;
+whMessageCrypto_Sha256Request         hashSha256Req;
 whMessageCrypto_Sha512Request         hashSha512Req;
 whMessageCrypto_Sha2Response          hashSha2Res;
+whMessageCrypto_HkdfRequest           hkdfReq;
+whMessageCrypto_HkdfResponse          hkdfRes;
 
 /* DMA crypto messages */
 #if defined(WOLFHSM_CFG_DMA)
-whMessageCrypto_Sha2DmaRequest          hashSha2DmaReq;
-whMessageCrypto_Sha2DmaResponse         hashSha2DmaRes;
-whMessageCrypto_MlDsaKeyGenDmaRequest   pqMldsaKeygenDmaReq;
-whMessageCrypto_MlDsaKeyGenDmaResponse  pqMldsaKeygenDmaRes;
-whMessageCrypto_MlDsaSignDmaRequest     pqMldsaSignDmaReq;
-whMessageCrypto_MlDsaSignDmaResponse    pqMldsaSignDmaRes;
-whMessageCrypto_MlDsaVerifyDmaRequest   pqMldsaVerifyDmaReq;
-whMessageCrypto_MlDsaVerifyDmaResponse  pqMldsaVerifyDmaRes;
-whMessageCrypto_CmacDmaRequest          cmacDmaReq;
-whMessageCrypto_CmacDmaResponse         cmacDmaRes;
+whMessageCrypto_Sha2DmaRequest         hashSha2DmaReq;
+whMessageCrypto_Sha2DmaResponse        hashSha2DmaRes;
+whMessageCrypto_MlDsaKeyGenDmaRequest  pqMldsaKeygenDmaReq;
+whMessageCrypto_MlDsaKeyGenDmaResponse pqMldsaKeygenDmaRes;
+whMessageCrypto_MlDsaSignDmaRequest    pqMldsaSignDmaReq;
+whMessageCrypto_MlDsaSignDmaResponse   pqMldsaSignDmaRes;
+whMessageCrypto_MlDsaVerifyDmaRequest  pqMldsaVerifyDmaReq;
+whMessageCrypto_MlDsaVerifyDmaResponse pqMldsaVerifyDmaRes;
+whMessageCrypto_CmacDmaRequest         cmacDmaReq;
+whMessageCrypto_CmacDmaResponse        cmacDmaRes;
 #endif /* WOLFHSM_CFG_DMA */
 
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */

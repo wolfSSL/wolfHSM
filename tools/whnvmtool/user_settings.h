@@ -112,9 +112,6 @@ extern "C" {
 /* #define WOLFSSL_SHA384 */
 /* #define WOLFSSL_SHA512 */
 
-/** Composite features */
-#define HAVE_HKDF
-
 /* Remove unneeded crypto */
 #define NO_DSA
 #define NO_RC4
