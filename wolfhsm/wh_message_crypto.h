@@ -383,7 +383,8 @@ int wh_MessageCrypto_TranslateRsaGetSizeResponse(
 /* HKDF Request */
 typedef struct {
     uint32_t flags;    /* NVM flags */
-    uint32_t keyId;    /* Key ID if caching */
+    uint32_t keyIdIn;  /* Key ID for input key material (from cache) */
+    uint32_t keyIdOut; /* Key ID if caching output */
     uint32_t hashType; /* WC_SHA256, etc. */
     uint32_t inKeySz;  /* Input key material size */
     uint32_t saltSz;   /* Salt size (0 if none) */
@@ -400,7 +401,7 @@ typedef struct {
 
 /* HKDF Response */
 typedef struct {
-    uint32_t keyId; /* Assigned key ID */
+    uint32_t keyIdOut; /* Assigned key ID */
     uint32_t outSz; /* Output size */
     /* Data follows:
      * uint8_t out[outSz]

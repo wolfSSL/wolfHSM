@@ -480,9 +480,9 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
                 byte*       out      = info->kdf.hkdf.out;
                 word32      outSz    = info->kdf.hkdf.outSz;
 
-                ret = wh_Client_HkdfMakeExportKey(ctx, hashType, inKey, inKeySz,
-                                                  salt, saltSz, kdf_info,
-                                                  infoSz, out, outSz);
+                ret = wh_Client_HkdfMakeExportKey(
+                    ctx, hashType, WH_KEYID_ERASED, inKey, inKeySz, salt,
+                    saltSz, kdf_info, infoSz, out, outSz);
             } break;
             default:
                 ret = CRYPTOCB_UNAVAILABLE;

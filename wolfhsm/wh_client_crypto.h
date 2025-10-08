@@ -357,8 +357,10 @@ int wh_Client_RsaGetSize(whClientContext* ctx,
  *
  * @param[in] ctx Pointer to the client context
  * @param[in] hashType Hash type (WC_SHA256, WC_SHA384, WC_SHA512, etc.)
- * @param[in] inKey Input keying material
- * @param[in] inKeySz Size of input keying material
+ * @param[in] keyIdIn Key ID of input key material from cache. Set to
+ *                    WH_KEYID_ERASED to use inKey/inKeySz instead.
+ * @param[in] inKey Input keying material (can be NULL if keyIdIn is set)
+ * @param[in] inKeySz Size of input keying material (must be 0 if using keyIdIn)
  * @param[in] salt Optional salt (can be NULL)
  * @param[in] saltSz Size of salt (0 if NULL)
  * @param[in] info Optional info (can be NULL)
@@ -373,12 +375,12 @@ int wh_Client_RsaGetSize(whClientContext* ctx,
  * @return int Returns 0 on success or a negative error code on failure.
  */
 int wh_Client_HkdfMakeCacheKey(whClientContext* ctx, int hashType,
-                               const uint8_t* inKey, uint32_t inKeySz,
-                               const uint8_t* salt, uint32_t saltSz,
-                               const uint8_t* info, uint32_t infoSz,
-                               whKeyId* inout_key_id, whNvmFlags flags,
-                               const uint8_t* label, uint32_t label_len,
-                               uint32_t outSz);
+                               whKeyId keyIdIn, const uint8_t* inKey,
+                               uint32_t inKeySz, const uint8_t* salt,
+                               uint32_t saltSz, const uint8_t* info,
+                               uint32_t infoSz, whKeyId* inout_key_id,
+                               whNvmFlags flags, const uint8_t* label,
+                               uint32_t label_len, uint32_t outSz);
 
 /**
  * @brief Generate HKDF output and export to the client
@@ -388,8 +390,10 @@ int wh_Client_HkdfMakeCacheKey(whClientContext* ctx, int hashType,
  *
  * @param[in] ctx Pointer to the client context
  * @param[in] hashType Hash type (WC_SHA256, WC_SHA384, WC_SHA512, etc.)
- * @param[in] inKey Input keying material
- * @param[in] inKeySz Size of input keying material
+ * @param[in] keyIdIn Key ID of input key material from cache. Set to
+ *                    WH_KEYID_ERASED to use inKey/inKeySz instead.
+ * @param[in] inKey Input keying material (can be NULL if keyIdIn is set)
+ * @param[in] inKeySz Size of input keying material (must be 0 if using keyIdIn)
  * @param[in] salt Optional salt (can be NULL)
  * @param[in] saltSz Size of salt (0 if NULL)
  * @param[in] info Optional info (can be NULL)
@@ -399,10 +403,10 @@ int wh_Client_HkdfMakeCacheKey(whClientContext* ctx, int hashType,
  * @return int Returns 0 on success or a negative error code on failure.
  */
 int wh_Client_HkdfMakeExportKey(whClientContext* ctx, int hashType,
-                                const uint8_t* inKey, uint32_t inKeySz,
-                                const uint8_t* salt, uint32_t saltSz,
-                                const uint8_t* info, uint32_t infoSz,
-                                uint8_t* out, uint32_t outSz);
+                                whKeyId keyIdIn, const uint8_t* inKey,
+                                uint32_t inKeySz, const uint8_t* salt,
+                                uint32_t saltSz, const uint8_t* info,
+                                uint32_t infoSz, uint8_t* out, uint32_t outSz);
 
 #endif /* HAVE_HKDF */
 

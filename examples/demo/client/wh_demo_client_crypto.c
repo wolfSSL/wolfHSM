@@ -1426,9 +1426,9 @@ int wh_DemoClient_CryptoHkdfCache(whClientContext* clientContext)
      * On success, 'keyId' is assigned by the HSM (unless pre-set) and can be
      * used to reference the cached key material. */
     ret = wh_Client_HkdfMakeCacheKey(
-        clientContext, WC_SHA256, ikm, (uint32_t)sizeof(ikm), salt,
-        (uint32_t)sizeof(salt), info, (uint32_t)sizeof(info), &keyId, flags,
-        (const uint8_t*)label, (uint32_t)strlen(label), outSz);
+        clientContext, WC_SHA256, WH_KEYID_ERASED, ikm, (uint32_t)sizeof(ikm),
+        salt, (uint32_t)sizeof(salt), info, (uint32_t)sizeof(info), &keyId,
+        flags, (const uint8_t*)label, (uint32_t)strlen(label), outSz);
     if (ret != WH_ERROR_OK) {
         printf("Failed to wh_Client_HkdfMakeCacheKey %d\n", ret);
         return ret;
@@ -1442,6 +1442,66 @@ int wh_DemoClient_CryptoHkdfCache(whClientContext* clientContext)
     if (ret != 0) {
         printf("Failed to wh_Client_KeyEvict %d\n", ret);
     }
+
+    return ret;
+}
+
+/*
+ * Demonstrates deriving key material using HKDF with a cached input key.
+ * This example shows how to use a key already stored in the HSM key cache
+ * as the input keying material for HKDF, instead of passing the key data
+ * directly from the client. The derived output is exported to the client.
+ */
+int wh_DemoClient_CryptoHkdfCacheInputKey(whClientContext* clientContext)
+{
+    int     ret        = 0;
+    whKeyId keyIdIn    = WH_KEYID_ERASED;
+    char    keyLabel[] = "hkdf-input-key";
+
+    /* Input key material to cache */
+    const byte ikm[]  = {0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27,
+                         0x28, 0x29, 0x2A, 0x2B, 0x2C, 0x2D, 0x2E, 0x2F};
+    const byte salt[] = {0xE0, 0xE1, 0xE2, 0xE3};
+    const byte info[] = {0xF0, 0xF1, 0xF2};
+    byte       okm[32]; /* Output key material */
+
+    /* First, cache the input key material in the HSM */
+    ret = wh_Client_KeyCache(clientContext, 0, (uint8_t*)keyLabel,
+                             (uint32_t)strlen(keyLabel), ikm,
+                             (uint32_t)sizeof(ikm), &keyIdIn);
+    if (ret != WH_ERROR_OK) {
+        printf("Failed to wh_Client_KeyCache %d\n", ret);
+        return ret;
+    }
+
+    /* The input key material is now cached on the HSM. You can, at a later
+     * time, use the cached keyId as the keyIdIn parameter to use the
+     * cached key material as input for HKDF operations. */
+
+    /* Now derive additional key material using the cached key as input.
+     * Set inKey to NULL and inKeySz to 0 to indicate we want to use
+     * the key from cache identified by keyIdIn. */
+    ret = wh_Client_HkdfMakeCacheKey(
+        clientContext, WC_SHA256, keyIdIn, NULL, 0, salt,
+        (uint32_t)sizeof(salt), info, (uint32_t)sizeof(info), &keyIdOut,
+        WH_NVM_FLAGS_NONE, NULL, 0, (uint32_t)sizeof(okm));
+    if (ret != WH_ERROR_OK) {
+        printf("Failed to wh_Client_HkdfMakeCacheKey with cached input %d\n",
+               ret);
+        (void)wh_Client_KeyEvict(clientContext, keyIdIn);
+        return ret;
+    }
+
+    /* Now you can use the cached key, referring to it by ID for relevant
+     * operations. */
+
+    /* Optionally evict the input key from the cache. Failure checking omitted
+     * for readability */
+    (void)wh_Client_KeyEvict(clientContext, keyIdIn);
+
+    /* Optionally evict the output key from the cache. Failure checking omitted
+     * for readability */
+    (void)wh_Client_KeyEvict(clientContext, keyIdOut);
 
     return ret;
 }
