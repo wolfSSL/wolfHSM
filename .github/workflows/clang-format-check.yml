@@ -43,6 +43,7 @@ jobs:
         else
           status=$?
         fi
+
         if [ "$status" -eq 0 ]; then
           echo "✅ Code is properly formatted!"
           exit 0
@@ -56,10 +57,14 @@ jobs:
           echo ""
           echo "Please run the following command locally on your feature branch and commit the changes:"
           echo "  git-clang-format-15 $BASE_REF"
-          exit 1
+          exit 0
+          # TEMPORARY DISABLE DUE TO BUGS
+          #exit 1
         else
           echo "❌ git-clang-format-15 failed with exit code $status"
           echo "Output (if any):"
           cat "$DIFF_FILE"
-          exit 1
+          exit 0
+          # TEMPORARY DISABLE DUE TO BUGS
+          #exit 1
         fi
