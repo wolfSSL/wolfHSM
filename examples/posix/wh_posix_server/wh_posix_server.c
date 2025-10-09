@@ -4,7 +4,7 @@
 
 #include <stdint.h>
 #include <stdio.h>  /* For printf */
-#include <stdlib.h> /* For atoi */
+#include <stdlib.h> /* For strtoul */
 #include <string.h> /* For memset, memcpy, strcmp */
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -273,6 +273,12 @@ static int _hardwareCryptoCb_Rand(int devId, struct wc_CryptoInfo* info,
             uint8_t* out  = info->rng.out;
             uint32_t size = info->rng.sz;
 
+            /* WARNING: This implementation uses rand() for random number generation,
+             * which is NOT cryptographically secure. This is intended for testing or
+             * demonstration purposes only and MUST NOT be used in production
+             * cryptographic operations.
+             */
+
             for (uint32_t i = 0; i < size; i++) {
                 out[i] = (uint8_t)(rand() & 0xFF);
             }
@@ -338,7 +344,15 @@ int main(int argc, char** argv)
             s_rngMode = argv[++i];
         }
         else if (strcmp(argv[i], "--rng-seed") == 0 && i + 1 < argc) {
-            s_rngSeed = (unsigned)atoi(argv[++i]);
+            char *endptr = NULL;
+            errno = 0;
+            unsigned long seed = strtoul(argv[++i], &endptr, 10);
+            if (errno != 0 || endptr == argv[i] || *endptr != '\0' || seed > UINT32_MAX) {
+                printf("Invalid RNG seed: %s\n", argv[i]);
+                Usage(argv[0]);
+                return -1;
+            }
+            s_rngSeed = (unsigned)seed;
         }
         else {
             printf("Invalid argument: %s\n", argv[i]);
