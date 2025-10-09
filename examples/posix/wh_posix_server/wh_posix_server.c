@@ -36,7 +36,8 @@ static int wh_ServerTask(void* cf, const char* keyFilePath, int keyId,
 
 static void _sleepMs(long milliseconds);
 static int  _hardwareCryptoCb(int devId, struct wc_CryptoInfo* info, void* ctx);
-static int  _hardwareCryptoCb_Rand(int devId, struct wc_CryptoInfo* info, void* ctx);
+static int  _hardwareCryptoCb_Rand(int devId, struct wc_CryptoInfo* info,
+                                   void* ctx);
 
 static void _sleepMs(long milliseconds)
 {
@@ -260,7 +261,8 @@ static int _hardwareCryptoCb(int devId, struct wc_CryptoInfo* info, void* ctx)
     return ret;
 }
 
-static int _hardwareCryptoCb_Rand(int devId, struct wc_CryptoInfo* info, void* ctx)
+static int _hardwareCryptoCb_Rand(int devId, struct wc_CryptoInfo* info,
+                                  void* ctx)
 {
     (void)devId;
     (void)ctx;
@@ -286,7 +288,8 @@ static int _hardwareCryptoCb_Rand(int devId, struct wc_CryptoInfo* info, void* c
 static void Usage(const char* exeName)
 {
     printf("Usage: %s --key <key_file_path> --id <key_id> --client <client_id> "
-           "--nvminit <nvm_init_file_path> --type <type> --rng <counter|rand> [--rng-seed <n>]\n",
+           "--nvminit <nvm_init_file_path> --type <type> --rng <counter|rand> "
+           "[--rng-seed <n>]\n",
            exeName);
     printf("Example: %s --key key.bin --id 123 --client 456 "
            "--nvminit nvm_init.txt --type tcp --rng rand --rng-seed 12345\n",
@@ -405,7 +408,8 @@ int main(int argc, char** argv)
         }
         srand(s_rngSeed);
         printf("RNG mode: rand(), seed=%u\n", s_rngSeed);
-    } else {
+    }
+    else {
         printf("RNG mode: counter\n");
     }
 
@@ -419,7 +423,7 @@ int main(int argc, char** argv)
 
 /* Context 4: Server Hardware Crypto - Register both callbacks */
 #define HW_DEV_ID_COUNTER 100
-#define HW_DEV_ID_RAND    101
+#define HW_DEV_ID_RAND 101
 
     /* Register counter-based RNG callback */
     memset(buffer, 0, sizeof(buffer));
@@ -427,7 +431,8 @@ int main(int argc, char** argv)
     wc_InitRng_ex(rng, NULL, HW_DEV_ID_COUNTER);
     wc_RNG_GenerateBlock(rng, buffer, sizeof(buffer));
     wc_FreeRng(rng);
-    wh_Utils_Hexdump("Context 4a: Server HW RNG (counter):\n", buffer, sizeof(buffer));
+    wh_Utils_Hexdump("Context 4a: Server HW RNG (counter):\n", buffer,
+                     sizeof(buffer));
 
     /* Register rand()-based RNG callback */
     memset(buffer, 0, sizeof(buffer));
@@ -435,12 +440,14 @@ int main(int argc, char** argv)
     wc_InitRng_ex(rng, NULL, HW_DEV_ID_RAND);
     wc_RNG_GenerateBlock(rng, buffer, sizeof(buffer));
     wc_FreeRng(rng);
-    wh_Utils_Hexdump("Context 4b: Server HW RNG (rand):\n", buffer, sizeof(buffer));
+    wh_Utils_Hexdump("Context 4b: Server HW RNG (rand):\n", buffer,
+                     sizeof(buffer));
 
     /* Context 5: Set default server crypto to use selected RNG mode */
     if (strcmp(s_rngMode, "rand") == 0) {
         crypto->devId = HW_DEV_ID_RAND;
-    } else {
+    }
+    else {
         crypto->devId = HW_DEV_ID_COUNTER;
     }
     printf("Context 5: Setting default server crypto devId=%d (%s)\n",
