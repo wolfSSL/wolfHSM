@@ -108,6 +108,7 @@ SRC_C +=  $(wildcard $(WOLFHSM_DIR)/src/*.c)
 # wolfHSM port/HAL code
 SRC_C +=  $(wildcard $(WOLFHSM_PORT_DIR)/*.c)
 
+
 # Project
 SRC_C +=  $(wildcard $(PROJECT_DIR)/*.c)
 
