@@ -44,9 +44,11 @@ typedef struct whServerContext_t whServerContext;
 #include "wolfhsm/wh_dma.h"
 #endif /* WOLFHSM_CFG_DMA */
 
+/* WolfCrypt types and defines */
+#include "wolfssl/wolfcrypt/types.h"
+
 #ifndef WOLFHSM_CFG_NO_CRYPTO
 #include "wolfssl/wolfcrypt/settings.h"
-#include "wolfssl/wolfcrypt/types.h"
 #include "wolfssl/wolfcrypt/random.h"
 #include "wolfssl/wolfcrypt/rsa.h"
 #include "wolfssl/wolfcrypt/ecc.h"
