@@ -253,11 +253,14 @@ static int posixTransportTcp_HandleConnect(posixTransportTcpClientContext* c)
     case PTT_STATE_UNCONNECTED:
         /* Create a non-block socket and start async connect */
         ret = socket(AF_INET, SOCK_STREAM, 0);
-        if (ret <= 2) {
-            /* fd conflicts with stdin/stdout/stderr or error */
-            if (ret > 0) {
-                close(ret);
-            }
+        if (ret < 0) {
+            /* Problem creating a socket */
+            c->state = PTT_STATE_DONE;
+            ret      = WH_ERROR_ABORTED;
+        }
+        else if (ret <= 2) {
+            /* fd conflicts with stdin/stdout/stderr */
+            close(ret);
             /* Problem creating a socket */
             c->state = PTT_STATE_DONE;
             ret      = WH_ERROR_ABORTED;
@@ -637,7 +640,7 @@ int posixTransportTcp_InitListen(void* context, const void* config,
         return WH_ERROR_ABORTED;
     }
     else if (rc <= 2) {
-        /* fd conflices with stdin/stdout/stderr */
+        /* fd conflicts with stdin/stdout/stderr */
         close(rc);
         return WH_ERROR_ABORTED;
     }
