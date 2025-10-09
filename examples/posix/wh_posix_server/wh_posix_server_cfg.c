@@ -1,7 +1,7 @@
 /*
  * Example server app using POSIX transport
  */
-
+/*#if defined(WOLFHSM_CFG_NO_CRYPTO)*/
 #include "wh_posix_cfg.h"
 #include "wh_posix_server_cfg.h"
 
