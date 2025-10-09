@@ -123,6 +123,7 @@ extern "C" {
 
 #define WOLFSSL_AES_DIRECT
 #define HAVE_AES_ECB
+#define HAVE_AES_CBC
 #define WOLFSSL_CMAC
 
 /** SHA Options */

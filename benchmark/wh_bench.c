@@ -84,26 +84,42 @@ typedef enum BenchModuleIdx {
 #if defined(WOLFSSL_AES_COUNTER)
     BENCH_MODULE_IDX_AES_128_CTR_ENCRYPT,
     BENCH_MODULE_IDX_AES_128_CTR_DECRYPT,
+    BENCH_MODULE_IDX_AES_128_CTR_ENCRYPT_DMA,
+    BENCH_MODULE_IDX_AES_128_CTR_DECRYPT_DMA,
     BENCH_MODULE_IDX_AES_256_CTR_ENCRYPT,
     BENCH_MODULE_IDX_AES_256_CTR_DECRYPT,
+    BENCH_MODULE_IDX_AES_256_CTR_ENCRYPT_DMA,
+    BENCH_MODULE_IDX_AES_256_CTR_DECRYPT_DMA,
 #endif /* WOLFSSL_AES_COUNTER */
 #if defined(HAVE_AES_ECB)
     BENCH_MODULE_IDX_AES_128_ECB_ENCRYPT,
     BENCH_MODULE_IDX_AES_128_ECB_DECRYPT,
+    BENCH_MODULE_IDX_AES_128_ECB_ENCRYPT_DMA,
+    BENCH_MODULE_IDX_AES_128_ECB_DECRYPT_DMA,
     BENCH_MODULE_IDX_AES_256_ECB_ENCRYPT,
     BENCH_MODULE_IDX_AES_256_ECB_DECRYPT,
+    BENCH_MODULE_IDX_AES_256_ECB_ENCRYPT_DMA,
+    BENCH_MODULE_IDX_AES_256_ECB_DECRYPT_DMA,
 #endif /* HAVE_AES_ECB */
 #if defined(HAVE_AES_CBC)
     BENCH_MODULE_IDX_AES_128_CBC_ENCRYPT,
     BENCH_MODULE_IDX_AES_128_CBC_DECRYPT,
+    BENCH_MODULE_IDX_AES_128_CBC_ENCRYPT_DMA,
+    BENCH_MODULE_IDX_AES_128_CBC_DECRYPT_DMA,
     BENCH_MODULE_IDX_AES_256_CBC_ENCRYPT,
     BENCH_MODULE_IDX_AES_256_CBC_DECRYPT,
+    BENCH_MODULE_IDX_AES_256_CBC_ENCRYPT_DMA,
+    BENCH_MODULE_IDX_AES_256_CBC_DECRYPT_DMA,
 #endif /* HAVE_AES_CBC */
 #if defined(HAVE_AESGCM)
     BENCH_MODULE_IDX_AES_128_GCM_ENCRYPT,
     BENCH_MODULE_IDX_AES_128_GCM_DECRYPT,
+    BENCH_MODULE_IDX_AES_128_GCM_ENCRYPT_DMA,
+    BENCH_MODULE_IDX_AES_128_GCM_DECRYPT_DMA,
     BENCH_MODULE_IDX_AES_256_GCM_ENCRYPT,
     BENCH_MODULE_IDX_AES_256_GCM_DECRYPT,
+    BENCH_MODULE_IDX_AES_256_GCM_ENCRYPT_DMA,
+    BENCH_MODULE_IDX_AES_256_GCM_DECRYPT_DMA,
 #endif /* HAVE_AESGCM */
 #endif /* !(NO_AES) */
 
@@ -248,26 +264,42 @@ static BenchModule g_benchModules[] = {
 #if defined(WOLFSSL_AES_COUNTER)
     [BENCH_MODULE_IDX_AES_128_CTR_ENCRYPT]     = {"AES-128-CTR-Encrypt",          wh_Bench_Mod_Aes128CTREncrypt,     BENCH_THROUGHPUT_XBPS, 0, NULL},
     [BENCH_MODULE_IDX_AES_128_CTR_DECRYPT]     = {"AES-128-CTR-Decrypt",          wh_Bench_Mod_Aes128CTRDecrypt,     BENCH_THROUGHPUT_XBPS, 0, NULL},
+    [BENCH_MODULE_IDX_AES_128_CTR_ENCRYPT_DMA]  = {"AES-128-CTR-Encrypt-DMA",      wh_Bench_Mod_Aes128CTREncryptDma,  BENCH_THROUGHPUT_XBPS, 0, NULL},
+    [BENCH_MODULE_IDX_AES_128_CTR_DECRYPT_DMA]  = {"AES-128-CTR-Decrypt-DMA",      wh_Bench_Mod_Aes128CTRDecryptDma,  BENCH_THROUGHPUT_XBPS, 0, NULL},
     [BENCH_MODULE_IDX_AES_256_CTR_ENCRYPT]     = {"AES-256-CTR-Encrypt",          wh_Bench_Mod_Aes256CTREncrypt,     BENCH_THROUGHPUT_XBPS, 0, NULL},
     [BENCH_MODULE_IDX_AES_256_CTR_DECRYPT]     = {"AES-256-CTR-Decrypt",          wh_Bench_Mod_Aes256CTRDecrypt,     BENCH_THROUGHPUT_XBPS, 0, NULL},
+    [BENCH_MODULE_IDX_AES_256_CTR_ENCRYPT_DMA]  = {"AES-256-CTR-Encrypt-DMA",      wh_Bench_Mod_Aes256CTREncryptDma,  BENCH_THROUGHPUT_XBPS, 0, NULL},
+    [BENCH_MODULE_IDX_AES_256_CTR_DECRYPT_DMA]  = {"AES-256-CTR-Decrypt-DMA",      wh_Bench_Mod_Aes256CTRDecryptDma,  BENCH_THROUGHPUT_XBPS, 0, NULL},
 #endif /* WOLFSSL_AES_COUNTER */
 #if defined(HAVE_AES_ECB)
     [BENCH_MODULE_IDX_AES_128_ECB_ENCRYPT]     = {"AES-128-ECB-Encrypt",          wh_Bench_Mod_Aes128ECBEncrypt,     BENCH_THROUGHPUT_XBPS, 0, NULL},
     [BENCH_MODULE_IDX_AES_128_ECB_DECRYPT]     = {"AES-128-ECB-Decrypt",          wh_Bench_Mod_Aes128ECBDecrypt,     BENCH_THROUGHPUT_XBPS, 0, NULL},
+    [BENCH_MODULE_IDX_AES_128_ECB_ENCRYPT_DMA]  = {"AES-128-ECB-Encrypt-DMA",      wh_Bench_Mod_Aes128ECBEncryptDma,  BENCH_THROUGHPUT_XBPS, 0, NULL},
+    [BENCH_MODULE_IDX_AES_128_ECB_DECRYPT_DMA]  = {"AES-128-ECB-Decrypt-DMA",      wh_Bench_Mod_Aes128ECBDecryptDma,  BENCH_THROUGHPUT_XBPS, 0, NULL},
     [BENCH_MODULE_IDX_AES_256_ECB_ENCRYPT]     = {"AES-256-ECB-Encrypt",          wh_Bench_Mod_Aes256ECBEncrypt,     BENCH_THROUGHPUT_XBPS, 0, NULL},
     [BENCH_MODULE_IDX_AES_256_ECB_DECRYPT]     = {"AES-256-ECB-Decrypt",          wh_Bench_Mod_Aes256ECBDecrypt,     BENCH_THROUGHPUT_XBPS, 0, NULL},
+    [BENCH_MODULE_IDX_AES_256_ECB_ENCRYPT_DMA]  = {"AES-256-ECB-Encrypt-DMA",      wh_Bench_Mod_Aes256ECBEncryptDma,  BENCH_THROUGHPUT_XBPS, 0, NULL},
+    [BENCH_MODULE_IDX_AES_256_ECB_DECRYPT_DMA]  = {"AES-256-ECB-Decrypt-DMA",      wh_Bench_Mod_Aes256ECBDecryptDma,  BENCH_THROUGHPUT_XBPS, 0, NULL},
 #endif /* HAVE_AES_ECB */
 #if defined(HAVE_AES_CBC)
     [BENCH_MODULE_IDX_AES_128_CBC_ENCRYPT]     = {"AES-128-CBC-Encrypt",          wh_Bench_Mod_Aes128CBCEncrypt,     BENCH_THROUGHPUT_XBPS, 0, NULL},
     [BENCH_MODULE_IDX_AES_128_CBC_DECRYPT]     = {"AES-128-CBC-Decrypt",          wh_Bench_Mod_Aes128CBCDecrypt,     BENCH_THROUGHPUT_XBPS, 0, NULL},
+    [BENCH_MODULE_IDX_AES_128_CBC_ENCRYPT_DMA]  = {"AES-128-CBC-Encrypt-DMA",      wh_Bench_Mod_Aes128CBCEncryptDma,  BENCH_THROUGHPUT_XBPS, 0, NULL},
+    [BENCH_MODULE_IDX_AES_128_CBC_DECRYPT_DMA]  = {"AES-128-CBC-Decrypt-DMA",      wh_Bench_Mod_Aes128CBCDecryptDma,  BENCH_THROUGHPUT_XBPS, 0, NULL},
     [BENCH_MODULE_IDX_AES_256_CBC_ENCRYPT]     = {"AES-256-CBC-Encrypt",          wh_Bench_Mod_Aes256CBCEncrypt,     BENCH_THROUGHPUT_XBPS, 0, NULL},
     [BENCH_MODULE_IDX_AES_256_CBC_DECRYPT]     = {"AES-256-CBC-Decrypt",          wh_Bench_Mod_Aes256CBCDecrypt,     BENCH_THROUGHPUT_XBPS, 0, NULL},
+    [BENCH_MODULE_IDX_AES_256_CBC_ENCRYPT_DMA]  = {"AES-256-CBC-Encrypt-DMA",      wh_Bench_Mod_Aes256CBCEncryptDma,  BENCH_THROUGHPUT_XBPS, 0, NULL},
+    [BENCH_MODULE_IDX_AES_256_CBC_DECRYPT_DMA]  = {"AES-256-CBC-Decrypt-DMA",      wh_Bench_Mod_Aes256CBCDecryptDma,  BENCH_THROUGHPUT_XBPS, 0, NULL},
 #endif /* HAVE_AES_CBC */
 #if defined(HAVE_AESGCM)
     [BENCH_MODULE_IDX_AES_128_GCM_ENCRYPT]     = {"AES-128-GCM-Encrypt",          wh_Bench_Mod_Aes128GCMEncrypt,     BENCH_THROUGHPUT_XBPS, 0, NULL},
     [BENCH_MODULE_IDX_AES_128_GCM_DECRYPT]     = {"AES-128-GCM-Decrypt",          wh_Bench_Mod_Aes128GCMDecrypt,     BENCH_THROUGHPUT_XBPS, 0, NULL},
+    [BENCH_MODULE_IDX_AES_128_GCM_ENCRYPT_DMA] = {"AES-128-GCM-Encrypt-DMA",      wh_Bench_Mod_Aes128GCMEncryptDma,  BENCH_THROUGHPUT_XBPS, 0, NULL},
+    [BENCH_MODULE_IDX_AES_128_GCM_DECRYPT_DMA] = {"AES-128-GCM-Decrypt-DMA",      wh_Bench_Mod_Aes128GCMDecryptDma,  BENCH_THROUGHPUT_XBPS, 0, NULL},
     [BENCH_MODULE_IDX_AES_256_GCM_ENCRYPT]     = {"AES-256-GCM-Encrypt",          wh_Bench_Mod_Aes256GCMEncrypt,     BENCH_THROUGHPUT_XBPS, 0, NULL},
     [BENCH_MODULE_IDX_AES_256_GCM_DECRYPT]     = {"AES-256-GCM-Decrypt",          wh_Bench_Mod_Aes256GCMDecrypt,     BENCH_THROUGHPUT_XBPS, 0, NULL},
+    [BENCH_MODULE_IDX_AES_256_GCM_ENCRYPT_DMA] = {"AES-256-GCM-Encrypt-DMA",      wh_Bench_Mod_Aes256GCMEncryptDma,  BENCH_THROUGHPUT_XBPS, 0, NULL},
+    [BENCH_MODULE_IDX_AES_256_GCM_DECRYPT_DMA] = {"AES-256-GCM-Decrypt-DMA",      wh_Bench_Mod_Aes256GCMDecryptDma,  BENCH_THROUGHPUT_XBPS, 0, NULL},
 #endif /* HAVE_AESGCM */
 #endif /* !(NO_AES) */
 
@@ -540,6 +572,39 @@ static int wh_Bench_CheckTransport(int transport)
     return WH_ERROR_OK;
 }
 
+#if defined(WOLFSSL_STATIC_MEMORY) && defined(WOLFHSM_CFG_TEST_POSIX)
+static int _whBench_ClientCfg_PosixDmaHeap(posixTransportShmContext* shmCtx)
+{
+    static const unsigned int listSz     = 9;
+    static const uint32_t     sizeList[] = {176,  256,  288,  704,  1056,
+                                            1712, 2112, 2368, 33800};
+    static const uint32_t     distList[] = {3, 1, 1, 1, 1, 1, 1, 3, 2};
+    WOLFSSL_HEAP_HINT*        heap       = NULL;
+    void*                     dma;
+    size_t                    dmaSz;
+    int                       ret = 0;
+
+    ret = posixTransportShm_GetDma(shmCtx, &dma, &dmaSz);
+    if (ret != 0) {
+        printf("Failed to get DMA\n");
+        return ret;
+    }
+
+    ret = wc_LoadStaticMemory_ex(&heap, listSz, sizeList, distList, dma, dmaSz,
+                                 0, 0);
+    if (ret != 0) {
+        WH_BENCH_PRINTF("Failed to load static memory: %d\n", ret);
+        return ret;
+    }
+    ret = posixTransportShm_SetDmaHeap(shmCtx, (void*)heap);
+    if (ret != 0) {
+        WH_BENCH_PRINTF("Failed to set heap: %d\n", ret);
+        return ret;
+    }
+
+    return ret;
+}
+#endif
 
 /* Initializes a client context based on the provided config, runs the
  * benchmarks, then cleans up the context */
@@ -569,22 +634,10 @@ int wh_Bench_ClientCfg(whClientConfig* clientCfg, int transport)
 
 #if defined(WOLFSSL_STATIC_MEMORY) && defined(WOLFHSM_CFG_TEST_POSIX)
     if (transport == WH_BENCH_TRANSPORT_POSIX_DMA) {
-        static const unsigned int listSz     = 9;
-        static const uint32_t     sizeList[] = {176,  256,  288,  704,  1056,
-                                                1712, 2112, 2368, 33800};
-        static const uint32_t     distList[] = {3, 1, 1, 1, 1, 1, 1, 3, 1};
-        WOLFSSL_HEAP_HINT*        heap       = NULL;
-
-        ret = wc_LoadStaticMemory_ex(&heap, listSz, sizeList, distList, NULL, 0,
-                                     0, 0);
+        ret = _whBench_ClientCfg_PosixDmaHeap(
+            (posixTransportShmContext*)clientCfg->comm->transport_context);
         if (ret != 0) {
             WH_BENCH_PRINTF("Failed to load static memory: %d\n", ret);
-            return ret;
-        }
-        ret = posixTransportShm_SetDmaHeap(clientCfg->comm->transport_context,
-                                           (void*)heap);
-        if (ret != 0) {
-            WH_BENCH_PRINTF("Failed to set heap: %d\n", ret);
             return ret;
         }
     }
@@ -692,32 +745,11 @@ static void* _whBenchClientTask(void* data)
 
 #if defined(WOLFSSL_STATIC_MEMORY) && defined(WOLFHSM_CFG_TEST_POSIX)
     if (taskData->transport == WH_BENCH_TRANSPORT_POSIX_DMA) {
-        static const unsigned int listSz     = 9;
-        static const uint32_t     sizeList[] = {176,  256,  288,  704,  1056,
-                                                1712, 2112, 2368, 33800};
-        static const uint32_t     distList[] = {3, 1, 1, 1, 1, 1, 1, 3, 1};
-        WOLFSSL_HEAP_HINT*        heap       = NULL;
-        posixTransportShmContext* shmCtx;
-        void*                     dma;
-        size_t                    dmaSz;
-
-        shmCtx = (posixTransportShmContext*)
-                     taskData->config->comm->transport_context;
-        ret = posixTransportShm_GetDma(shmCtx, &dma, &dmaSz);
-        if (ret != 0) {
-            printf("Failed to get DMA\n");
-            return NULL;
-        }
-
-        ret = wc_LoadStaticMemory_ex(&heap, listSz, sizeList, distList, dma,
-                                     dmaSz, 0, 0);
+        ret = _whBench_ClientCfg_PosixDmaHeap(
+            (posixTransportShmContext*)
+                taskData->config->comm->transport_context);
         if (ret != 0) {
             WH_BENCH_PRINTF("Failed to load static memory: %d\n", ret);
-            return NULL;
-        }
-        ret = posixTransportShm_SetDmaHeap(shmCtx, (void*)heap);
-        if (ret != 0) {
-            WH_BENCH_PRINTF("Failed to set heap: %d\n", ret);
             return NULL;
         }
     }
