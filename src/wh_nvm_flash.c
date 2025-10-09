@@ -665,6 +665,16 @@ static int nfObject_ReadDataBytes(whNvmFlashContext* context, int partition,
     start = context->directory.objects[object_index].state.start;
     startOffset = nfPartition_DataOffset(context, partition) + start;
 
+    /* object bounds checks, do both to avoid integer overflow checks */
+    if (byte_offset >=
+        (context->directory.objects[object_index].metadata.len)) {
+        return WH_ERROR_BADARGS;
+    }
+    if ((byte_offset + byte_count) >
+        (context->directory.objects[object_index].metadata.len)) {
+        return WH_ERROR_BADARGS;
+    }
+
     /* Ensure we don't read off the end of the active partition */
     if (WH_ERROR_OK != nfPartition_CheckDataRange(context, partition,
                                     startOffset * WHFU_BYTES_PER_UNIT + byte_offset,
