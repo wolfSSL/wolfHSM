@@ -47,6 +47,7 @@
 #define WOLFHSM_CFG_KEYWRAP_MAX_KEY_SIZE 5000
 
 #define XMEMFENCE() __atomic_thread_fence(__ATOMIC_SEQ_CST)
+#ifndef WOLFHSM_CFG_NO_CRYPTO
 #define WOLFHSM_CFG_KEYWRAP
-
+#endif
 #endif /* WOLFHSM_CFG_H_ */
