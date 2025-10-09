@@ -2694,13 +2694,12 @@ static int whTestCrypto_MlDsaWolfCrypt(whClientContext* ctx, int devId,
             WH_ERROR_PRINT("Failed to verify modified ML DSA signature: %d\n",
                            ret);
         }
-
-        if (verified) {
+        else if (verified) {
             WH_ERROR_PRINT("ML DSA signature verification succeeded when it"
                            " should have failed\n");
             ret = -1;
         }
-        if (ret == 0) {
+        else {
             printf("ML-DSA DEVID=0x%X SUCCESS\n", devId);
         }
     }

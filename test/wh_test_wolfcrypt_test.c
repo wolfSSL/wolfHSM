@@ -95,8 +95,8 @@ int whTest_WolfCryptTestCfg(whClientConfig* config)
     }
 
     /* Tell server to close */
-    wh_Client_CommClose(client);
-    wh_Client_Cleanup(client);
+    (void)wh_Client_CommClose(client);
+    (void)wh_Client_Cleanup(client);
 
     return ret;
 }
