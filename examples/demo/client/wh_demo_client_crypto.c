@@ -1372,15 +1372,15 @@ int wh_DemoClient_CryptoHkdfExport(whClientContext* clientContext)
 {
     int ret   = 0;
     int devId = WH_DEV_ID;
-    /* Example inputs for HKDF. The data mirrors sizes from RFC 5869 test case 1
-     */
+
+    /* Example inputs for HKDF. Data is from RFC 5869 test case 1 */
     const byte ikm[]  = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
                          0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F};
     const byte salt[] = {0xA0, 0xA1, 0xA2, 0xA3};
     const byte info[] = {0xB0, 0xB1, 0xB2, 0xB3, 0xB4};
     byte       okm[32]; /* 32 bytes for WC_SHA256-based HKDF */
 
-    (void)clientContext; /* Unused in the export form */
+    (void)clientContext; /* Unused */
 
     /* Derive 32 bytes using HKDF with SHA-256. The OKM is exported directly
      * back to the client buffer 'okm'. */
@@ -1410,14 +1410,16 @@ int wh_DemoClient_CryptoHkdfCache(whClientContext* clientContext)
     int     ret       = 0;
     int     needEvict = 0;
     whKeyId keyId     = WH_KEYID_ERASED;
+
     /* Example inputs for HKDF. */
     const byte     ikm[]  = {0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
                              0x18, 0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F};
     const byte     salt[] = {0xC0, 0xC1, 0xC2, 0xC3};
     const byte     info[] = {0xD0, 0xD1, 0xD2};
     const uint32_t outSz  = 32; /* arbitrary output size */
+
     /* Metadata flags/label for the cached key. Adjust to your requirements. */
-    whNvmFlags flags   = WH_NVM_FLAGS_NONE;
+    whNvmFlags flags   = WH_NVM_FLAGS_NONEXPORTABLE;
     char       label[] = "hkdf-derived key";
 
     /* Request the HSM to derive HKDF output and store it in the key cache.
@@ -1429,24 +1431,18 @@ int wh_DemoClient_CryptoHkdfCache(whClientContext* clientContext)
         (const uint8_t*)label, (uint32_t)strlen(label), outSz);
     if (ret != WH_ERROR_OK) {
         printf("Failed to wh_Client_HkdfMakeCacheKey %d\n", ret);
-        goto exit;
+        return ret;
     }
-
-    needEvict = 1;
 
     /* Now you can use the cached key, referring to it by ID for relevant
      * operations. */
 
-exit:
-    if (needEvict) {
-        int evictRet = wh_Client_KeyEvict(clientContext, keyId);
-        if (evictRet != 0) {
-            printf("Failed to wh_Client_KeyEvict %d\n", evictRet);
-            if (ret == 0) {
-                ret = evictRet;
-            }
-        }
+    /* Optionally evict the key from the cache once we are done using it */
+    ret = wh_Client_KeyEvict(clientContext, keyId);
+    if (ret != 0) {
+        printf("Failed to wh_Client_KeyEvict %d\n", ret);
     }
+
     return ret;
 }
 #endif /* HAVE_HKDF */
