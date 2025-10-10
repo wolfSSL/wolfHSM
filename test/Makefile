@@ -260,7 +260,8 @@ endif
 coverage:
 	@echo "Building with coverage enabled..."
 	$(MAKE) clean
-	$(MAKE) COVERAGE=1 build_app
+	$(eval COVERAGE_TARGETS := $(filter-out coverage,$(MAKECMDGOALS)))
+	$(MAKE) COVERAGE=1 $(if $(COVERAGE_TARGETS),$(COVERAGE_TARGETS),build_app)
 	@echo "Running tests..."
 	@if [ ! -f $(BUILD_DIR)/$(BIN).elf ]; then \
 		echo "Error: $(BUILD_DIR)/$(BIN).elf not found. Build failed."; \
