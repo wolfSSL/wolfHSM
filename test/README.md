@@ -97,3 +97,67 @@ IMG_MGR ECC P256 Test completed successfully!
 IMG_MGR AES128 CMAC Test completed successfully!
 IMG_MGR RSA2048 Test completed successfully!
 ```
+
+## Code Coverage
+
+The test suite supports code coverage analysis using gcovr. To generate coverage reports:
+
+**Note**: The coverage directory must exist before generating reports. The `make coverage` target creates this automatically, but if running gcovr manually, create it first with:
+```bash
+mkdir -p ../coverage
+```
+
+### Running Coverage
+
+Use the convenient coverage target:
+```bash
+make coverage
+```
+
+This will:
+1. Clean previous build artifacts
+2. Rebuild with coverage instrumentation enabled
+3. Run the test suite
+4. Generate an HTML coverage report
+
+The coverage report will be generated at `../coverage/index.html`.
+
+### Manual Coverage Workflow
+
+Alternatively, you can run coverage manually:
+
+```bash
+# Build with coverage enabled
+make clean
+make COVERAGE=1 DEBUG=1
+
+# Run tests
+make run
+
+# Create coverage directory and generate report (from repository root)
+cd ..
+mkdir -p coverage
+gcovr --root . \
+      --filter 'src/.*' \
+      --filter 'wolfhsm/.*' \
+      --html-details coverage/index.html \
+      --print-summary
+```
+
+### Coverage Options
+
+You can customize the coverage report generation:
+
+```bash
+# Generate XML format (for CI/CD)
+gcovr --root . --filter 'src/.*' --filter 'wolfhsm/.*' --xml coverage.xml
+
+# Generate JSON format
+gcovr --root . --filter 'src/.*' --filter 'wolfhsm/.*' --json coverage.json
+
+# Include branch coverage
+gcovr --root . --filter 'src/.*' --filter 'wolfhsm/.*' --branches --print-summary
+
+# Set minimum coverage threshold (fails if below 80%)
+gcovr --root . --filter 'src/.*' --filter 'wolfhsm/.*' --fail-under-line 80
+```
