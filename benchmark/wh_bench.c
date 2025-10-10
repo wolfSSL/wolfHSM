@@ -604,8 +604,8 @@ int wh_Bench_ClientCfg(whClientConfig* clientCfg, int transport)
                                -1); /* -1 means run all modules */
 
     /* Clean up */
-    wh_Client_CommClose(client);
-    wh_Client_Cleanup(client);
+    (void)wh_Client_CommClose(client);
+    (void)wh_Client_Cleanup(client);
 
     return ret;
 }
@@ -740,8 +740,8 @@ static void* _whBenchClientTask(void* data)
     }
 
     /* Clean up */
-    wh_Client_CommClose(client);
-    wh_Client_Cleanup(client);
+    (void)wh_Client_CommClose(client);
+    (void)wh_Client_Cleanup(client);
     return NULL;
 }
 
