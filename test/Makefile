@@ -260,7 +260,7 @@ endif
 coverage:
 	@echo "Building with coverage enabled..."
 	$(MAKE) clean
-	$(MAKE) COVERAGE=1 $(filter-out coverage,$(MAKECMDGOALS))
+	$(MAKE) COVERAGE=1 build_app
 	@echo "Running tests..."
 	@if [ ! -f $(BUILD_DIR)/$(BIN).elf ]; then \
 		echo "Error: $(BUILD_DIR)/$(BIN).elf not found. Build failed."; \
@@ -268,10 +268,12 @@ coverage:
 	fi
 	$(BUILD_DIR)/$(BIN).elf
 	@echo "Generating coverage report..."
-	cd .. && mkdir -p coverage && gcovr --root . \
-		--filter 'src/.*' \
-		--filter 'wolfhsm/.*' \
-		--html-details coverage/index.html \
+	mkdir -p ../coverage && gcovr Build \
+		--root .. \
+		--gcov-executable gcov \
+		--filter '\.\./src/.*' \
+		--filter '\.\./wolfhsm/.*' \
+		--html-details ../coverage/index.html \
 		--print-summary
 	@echo "Coverage report generated at ../coverage/index.html"
 
