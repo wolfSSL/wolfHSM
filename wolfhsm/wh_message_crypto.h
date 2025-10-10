@@ -377,6 +377,45 @@ int wh_MessageCrypto_TranslateRsaGetSizeResponse(
     whMessageCrypto_RsaGetSizeResponse* dest);
 
 /*
+ * HKDF
+ */
+
+/* HKDF Request */
+typedef struct {
+    uint32_t flags;    /* NVM flags */
+    uint32_t keyId;    /* Key ID if caching */
+    uint32_t hashType; /* WC_SHA256, etc. */
+    uint32_t inKeySz;  /* Input key material size */
+    uint32_t saltSz;   /* Salt size (0 if none) */
+    uint32_t infoSz;   /* Info size (0 if none) */
+    uint32_t outSz;    /* Output size */
+    uint8_t  label[WH_NVM_LABEL_LEN];
+    uint8_t  WH_PAD[4];
+    /* Data follows:
+     * uint8_t inKey[inKeySz]
+     * uint8_t salt[saltSz]
+     * uint8_t info[infoSz]
+     */
+} whMessageCrypto_HkdfRequest;
+
+/* HKDF Response */
+typedef struct {
+    uint32_t keyId; /* Assigned key ID */
+    uint32_t outSz; /* Output size */
+    /* Data follows:
+     * uint8_t out[outSz]
+     */
+} whMessageCrypto_HkdfResponse;
+
+int wh_MessageCrypto_TranslateHkdfRequest(
+    uint16_t magic, const whMessageCrypto_HkdfRequest* src,
+    whMessageCrypto_HkdfRequest* dest);
+
+int wh_MessageCrypto_TranslateHkdfResponse(
+    uint16_t magic, const whMessageCrypto_HkdfResponse* src,
+    whMessageCrypto_HkdfResponse* dest);
+
+/*
  * ECC
  */
 
