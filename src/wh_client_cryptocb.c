@@ -777,55 +777,6 @@ int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
     case WC_ALGO_TYPE_CIPHER:
         switch (info->cipher.type) {
 #ifndef NO_AES
-#if 0
-#ifdef HAVE_AES_CBC
-        case WC_CIPHER_AES_CBC:
-        {
-            /* Extract info parameters */
-            uint32_t enc        = info->cipher.enc;
-            Aes* aes            = info->cipher.aescbc.aes;
-            const uint8_t* in   = info->cipher.aescbc.in;
-            uint32_t len        = info->cipher.aescbc.sz;
-            uint8_t* out        = info->cipher.aescbc.out;
-
-            ret = wh_Client_AesCbcDma(ctx, aes, enc, in, len, out);
-
-        } break;
-#endif /* HAVE_AES_CBC */
-#endif
-
-#if 0
-#ifdef WOLFSSL_AES_COUNTER
-        case WC_CIPHER_AES_CTR: {
-            /* Extract info parameters */
-            uint32_t       enc = info->cipher.enc;
-            Aes*           aes = info->cipher.aesctr.aes;
-            const uint8_t* in  = info->cipher.aesctr.in;
-            uint32_t       len = info->cipher.aesctr.sz;
-            uint8_t*       out = info->cipher.aesctr.out;
-
-            ret = wh_Client_AesCtrDma(ctx, aes, enc, in, len, out);
-
-        } break;
-#endif /* WOLFSSL_AES_COUNTER */
-#endif
-
-#if 0
-#ifdef HAVE_AES_ECB
-        case WC_CIPHER_AES_ECB: {
-            /* Extract info parameters */
-            uint32_t       enc = info->cipher.enc;
-            Aes*           aes = info->cipher.aesecb.aes;
-            const uint8_t* in  = info->cipher.aesecb.in;
-            uint32_t       len = info->cipher.aesecb.sz;
-            uint8_t*       out = info->cipher.aesecb.out;
-
-            ret = wh_Client_AesEcbDma(ctx, aes, enc, in, len, out);
-
-        } break;
-#endif /* HAVE_AES_ECB */
-#endif
-
 #ifdef HAVE_AESGCM
             case WC_CIPHER_AES_GCM: {
                 /* Extract info parameters */

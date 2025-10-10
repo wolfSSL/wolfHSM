@@ -27,7 +27,7 @@
 
 #if defined(WOLFHSM_CFG_DMA) && defined(WOLFHSM_CFG_TEST_POSIX)
 #include "port/posix/posix_transport_shm.h"
-#endif /* WOLFHSM_CFG_DMA && WOLFHSM_CFG_POSIX_TRANSPORT */
+#endif /* WOLFHSM_CFG_DMA && WOLFHSM_CFG_TEST_POSIX */
 
 #if !defined(NO_AES)
 
@@ -537,7 +537,7 @@ static int _benchAesGcmDma(whClientContext* client, whBenchOpContext* ctx,
         int benchStartRet;
         int benchStopRet;
 
-        if (encrypt) {
+        if (encrypt == ENCRYPT) {
             benchStartRet = wh_Bench_StartOp(ctx, id);
 
             ret = wh_Client_AesGcmDma(client, aes, ENCRYPT, in, inLen, iv,
