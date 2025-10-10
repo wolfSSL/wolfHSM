@@ -115,6 +115,7 @@ int wh_Server_DmaProcessClientAddress(whServerContext* server,
         rc = wh_Dma_CheckMemOperAgainstAllowList(server->dma.dmaAddrAllowList,
                                                  oper, *xformedCliAddr, len);
     }
+
     return rc;
 }
 
