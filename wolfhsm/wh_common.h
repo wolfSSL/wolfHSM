@@ -63,6 +63,35 @@ typedef uint16_t whKeyId;
 
 #define WH_KEYID_ISERASED(_kid) (WH_KEYID_ID(_kid) == WH_KEYID_ERASED)
 
+#ifdef WOLFHSM_CFG_GLOBAL_KEYS
+/* Global key flag - client-to-server signal only, NOT stored in keyId */
+/* This flag is stripped before storage and translated to USER=0 encoding */
+#define WH_KEYID_GLOBAL 0x0100 /* Bit 8: temporary flag for client requests */
+
+/* Reserve USER=0 for global keys */
+#define WH_KEYUSER_GLOBAL 0
+
+/**
+ * @brief Translate client keyId to server keyId
+ *
+ * Checks if client's reqId has WH_KEYID_GLOBAL flag set:
+ *   - If set: Build keyId with USER=0 (global), strip flag from ID
+ *   - If not: Build keyId with USER=clientId (local)
+ *
+ * @param _type Key type (e.g., WH_KEYTYPE_CRYPTO)
+ * @param _clientId Client ID
+ * @param _reqId Client's requested ID (may include WH_KEYID_GLOBAL flag)
+ */
+#define WH_TRANSLATE_CLIENT_KEYID(_type, _clientId, _reqId)                    \
+    (((_reqId)&WH_KEYID_GLOBAL)                                                \
+         ? WH_MAKE_KEYID((_type), WH_KEYUSER_GLOBAL, ((_reqId)&WH_KEYID_MASK)) \
+         : WH_MAKE_KEYID((_type), (_clientId), (_reqId)))
+#else
+/* When global keys disabled, build keyId normally with client ID */
+#define WH_TRANSLATE_CLIENT_KEYID(_type, _clientId, _reqId) \
+    WH_MAKE_KEYID((_type), (_clientId), (_reqId))
+#endif /* WOLFHSM_CFG_GLOBAL_KEYS */
+
 /* Key Types */
 #define WH_KEYTYPE_NVM      0x0     /* Ordinary NvmId.  Not a key */
 #define WH_KEYTYPE_CRYPTO   0x1     /* Key for Crypto operations */

@@ -37,6 +37,7 @@
 #include "wh_test_she.h"
 #include "wh_test_clientserver.h"
 #include "wh_test_keywrap.h"
+#include "wh_test_global_keys.h"
 
 #if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER)
 #include "wh_test_cert.h"
@@ -80,6 +81,11 @@ int whTest_Unit(void)
     WH_TEST_ASSERT(0 == whTest_ClientServer());
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
+    /* Global Keys Tests */
+#if defined(WOLFHSM_CFG_GLOBAL_KEYS)
+    WH_TEST_ASSERT(0 == whTest_GlobalKeys());
+#endif /* WOLFHSM_CFG_GLOBAL_KEYS */
+
     /* Crypto Tests */
     WH_TEST_ASSERT(0 == whTest_Crypto());
 

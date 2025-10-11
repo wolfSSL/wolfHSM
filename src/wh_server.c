@@ -190,6 +190,15 @@ static int _wh_Server_HandleCommRequest(whServerContext* server,
 
         /* Process the init action */
         server->comm->client_id = req.client_id;
+
+#ifdef WOLFHSM_CFG_GLOBAL_KEYS
+        /* USER=0 is reserved for global keys, client_id must be non-zero */
+        if (server->comm->client_id == 0) {
+            *out_resp_size = 0;
+            return WH_ERROR_BADARGS;
+        }
+#endif
+
         resp.client_id = server->comm->client_id;
         resp.server_id = server->comm->server_id;
 
