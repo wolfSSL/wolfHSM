@@ -33,6 +33,7 @@
 
 #define WH_TEST_FAIL (-1)
 #define WH_TEST_SUCCESS (0)
+#define WH_TEST_DEFAULT_CLIENT_ID (1)
 
 /* Helper macro to print a message with caller source file info */
 #ifdef WOLFHSM_CFG_TEST_VERBOSE

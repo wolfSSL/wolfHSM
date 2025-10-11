@@ -52,6 +52,9 @@
 
 #if defined(WOLFHSM_CFG_BENCH_ENABLE)
 
+/* Default client ID for benchmarks */
+#define WH_BENCH_CLIENT_ID (1)
+
 /* Buffer sizes for transport */
 /* Large enough to handle an RSA 4096 key */
 #define BUFFER_SIZE \
@@ -815,7 +818,7 @@ static whCommClientConfig          g_mem_cc_conf = {
              .transport_cb      = &g_mem_tccb,
              .transport_context = (void*)&g_mem_tmcc,
              .transport_config  = (void*)&g_mem_tmcf,
-             .client_id         = 123,
+             .client_id         = WH_BENCH_CLIENT_ID,
 };
 
 static whTransportServerCb         g_mem_tscb    = WH_TRANSPORT_MEM_SERVER_CB;
@@ -867,7 +870,7 @@ static int _configureClientTransport(whBenchTransportType transport,
                 .transport_cb      = pttcClientShmCb,
                 .transport_context = (void*)&tccShm,
                 .transport_config  = (void*)&myshmconfig,
-                .client_id         = 12,
+                .client_id         = WH_BENCH_CLIENT_ID,
             };
 
             memset(&tccShm, 0, sizeof(posixTransportShmClientContext));
@@ -887,7 +890,7 @@ static int _configureClientTransport(whBenchTransportType transport,
                 .transport_cb      = &pttcClientTcpCb,
                 .transport_context = (void*)&tccTcp,
                 .transport_config  = (void*)&mytcpconfig,
-                .client_id         = 12,
+                .client_id         = WH_BENCH_CLIENT_ID,
             };
 
             memset(&tccTcp, 0, sizeof(posixTransportTcpClientContext));

@@ -35,13 +35,13 @@
 
 #ifdef WOLFHSM_CFG_KEYWRAP
 
-#define WH_TEST_KEKID 1
+#define WH_DEMO_KEYWRAP_KEKID 1
 static int _InitServerKek(whClientContext* ctx)
 {
     /* IMPORTANT NOTE: Server KEK is typically intrinsic or set during
      * provisioning. Uploading the KEK via the client is for testing purposes
      * only and not intended as a recommendation */
-    whKeyId    serverKeyId             = WH_TEST_KEKID;
+    whKeyId    serverKeyId             = WH_DEMO_KEYWRAP_KEKID;
     whNvmFlags flags                   = WH_NVM_FLAGS_NONEXPORTABLE;
     uint8_t    label[WH_NVM_LABEL_LEN] = "Server KEK key";
     uint8_t    kek[] = {0x03, 0x03, 0x0d, 0xd9, 0xeb, 0x18, 0x17, 0x2e,
@@ -55,43 +55,44 @@ static int _InitServerKek(whClientContext* ctx)
 
 static int _CleanupServerKek(whClientContext* ctx)
 {
-    return wh_Client_KeyErase(ctx, WH_TEST_KEKID);
+    return wh_Client_KeyErase(ctx, WH_DEMO_KEYWRAP_KEKID);
 }
 
 #ifndef NO_AES
 #ifdef HAVE_AESGCM
 
-#define WH_TEST_AES_KEYSIZE 16
-#define WH_TEST_AES_TEXTSIZE 16
-#define WH_TEST_AES_IVSIZE 12
-#define WH_TEST_AES_TAGSIZE 16
-#define WH_TEST_AES_WRAPPED_KEYSIZE                                   \
-    (WH_TEST_AES_IVSIZE + WH_TEST_AES_TAGSIZE + WH_TEST_AES_KEYSIZE + \
-     sizeof(whNvmMetadata))
-#define WH_TEST_AESGCM_WRAPKEY_ID 8
+#define WH_DEMO_KEYWRAP_AES_KEYSIZE 16
+#define WH_DEMO_KEYWRAP_AES_TEXTSIZE 16
+#define WH_DEMO_KEYWRAP_AES_IVSIZE 12
+#define WH_DEMO_KEYWRAP_AES_TAGSIZE 16
+#define WH_DEMO_KEYWRAP_AES_WRAPPED_KEYSIZE                     \
+    (WH_DEMO_KEYWRAP_AES_IVSIZE + WH_DEMO_KEYWRAP_AES_TAGSIZE + \
+     WH_DEMO_KEYWRAP_AES_KEYSIZE + sizeof(whNvmMetadata))
+#define WH_DEMO_KEYWRAP_AESGCM_WRAPKEY_ID 8
 
 int wh_DemoClient_AesGcmKeyWrap(whClientContext* client)
 {
     int           ret = 0;
     Aes           aes[1];
     WC_RNG        rng[1];
-    uint8_t       key[WH_TEST_AES_KEYSIZE];
-    uint8_t       exportedKey[WH_TEST_AES_KEYSIZE];
+    uint8_t       key[WH_DEMO_KEYWRAP_AES_KEYSIZE];
+    uint8_t       exportedKey[WH_DEMO_KEYWRAP_AES_KEYSIZE];
     whNvmMetadata metadata = {
-        .id    = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, 0, WH_TEST_AESGCM_WRAPKEY_ID),
-        .label = "AES Key Label",
+        .id = WH_CLIENT_KEYID_MAKE_WRAPPED_META(
+            client->comm->client_id, WH_DEMO_KEYWRAP_AESGCM_WRAPKEY_ID),
+        .label  = "AES Key Label",
         .access = WH_NVM_ACCESS_ANY,
-        .len    = WH_TEST_AES_KEYSIZE};
+        .len    = WH_DEMO_KEYWRAP_AES_KEYSIZE};
     whNvmMetadata exportedMetadata;
-    uint8_t       wrappedKey[WH_TEST_AES_WRAPPED_KEYSIZE];
+    uint8_t       wrappedKey[WH_DEMO_KEYWRAP_AES_WRAPPED_KEYSIZE];
     whKeyId       wrappedKeyId;
 
     const uint8_t plaintext[] = "hello, wolfSSL AES-GCM!";
     uint8_t       ciphertext[sizeof(plaintext)];
     uint8_t       decrypted[sizeof(plaintext)];
 
-    uint8_t       tag[WH_TEST_AES_TAGSIZE];
-    uint8_t       iv[WH_TEST_AES_IVSIZE];
+    uint8_t       tag[WH_DEMO_KEYWRAP_AES_TAGSIZE];
+    uint8_t       iv[WH_DEMO_KEYWRAP_AES_IVSIZE];
     const uint8_t aad[] = {0xfe, 0xed, 0xfa, 0xce, 0xde, 0xad, 0xbe,
                            0xef, 0xfe, 0xed, 0xfa, 0xce, 0xde, 0xad,
                            0xbe, 0xef, 0xab, 0xad, 0xda, 0xd2};
@@ -127,8 +128,8 @@ int wh_DemoClient_AesGcmKeyWrap(whClientContext* client)
 
     /* Now we request the server to wrap the key using the KEK we
      * establish above in the first step. */
-    ret = wh_Client_KeyWrap(client, WC_CIPHER_AES_GCM, WH_TEST_KEKID, key,
-                            sizeof(key), &metadata, wrappedKey,
+    ret = wh_Client_KeyWrap(client, WC_CIPHER_AES_GCM, WH_DEMO_KEYWRAP_KEKID,
+                            key, sizeof(key), &metadata, wrappedKey,
                             sizeof(wrappedKey));
     if (ret != 0) {
         printf("Failed to wh_Client_KeyWrap %d\n", ret);
@@ -144,9 +145,9 @@ int wh_DemoClient_AesGcmKeyWrap(whClientContext* client)
     /* Request the server to unwrap and cache the wrapped key we just created.
      * This will provide us back a key ID that the client can use to do crypto
      * operations */
-    ret = wh_Client_KeyUnwrapAndCache(client, WC_CIPHER_AES_GCM, WH_TEST_KEKID,
-                                      wrappedKey, sizeof(wrappedKey),
-                                      &wrappedKeyId);
+    ret = wh_Client_KeyUnwrapAndCache(client, WC_CIPHER_AES_GCM,
+                                      WH_DEMO_KEYWRAP_KEKID, wrappedKey,
+                                      sizeof(wrappedKey), &wrappedKeyId);
     if (ret != 0) {
         printf("Failed to wh_Client_KeyUnwrapAndCache %d\n", ret);
         goto cleanup_rng;
@@ -161,7 +162,8 @@ int wh_DemoClient_AesGcmKeyWrap(whClientContext* client)
 
     /* Set the key id for this AES context to the wrapped key ID that the server
      * provided us */
-    ret = wh_Client_AesSetKeyId(aes, wrappedKeyId);
+    ret =
+        wh_Client_AesSetKeyId(aes, WH_CLIENT_KEYID_MAKE_WRAPPED(wrappedKeyId));
     if (ret != 0) {
         printf("Failed to wh_Client_AesSetKeyId %d\n", ret);
         goto cleanup_aes;
@@ -207,12 +209,12 @@ int wh_DemoClient_AesGcmKeyWrap(whClientContext* client)
     /* Exporting a wrapped key */
 
     /* Request the server to unwrap and export the wrapped key we created */
-    ret = wh_Client_KeyUnwrapAndExport(client, WC_CIPHER_AES_GCM, WH_TEST_KEKID,
-                                       wrappedKey, sizeof(wrappedKey),
-                                       &exportedMetadata, exportedKey,
-                                       sizeof(exportedKey));
+    ret = wh_Client_KeyUnwrapAndExport(client, WC_CIPHER_AES_GCM,
+                                       WH_DEMO_KEYWRAP_KEKID, wrappedKey,
+                                       sizeof(wrappedKey), &exportedMetadata,
+                                       exportedKey, sizeof(exportedKey));
     if (ret != 0) {
-        printf("Failed to wh_Client_KeyUnwrapAndCache %d\n", ret);
+        printf("Failed to wh_Client_KeyUnwrapAndExport %d\n", ret);
         goto cleanup_aes;
     }
 

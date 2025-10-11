@@ -2485,4 +2485,102 @@ int wh_Client_CertVerifyAcertDma(whClientContext* c, const void* cert,
 
 #endif /* WOLFHSM_CFG_DMA */
 
+/*
+ * @brief Client-side keyId manipulation API
+ *
+ * This section defines the client-facing API for working with key identifiers.
+ * Clients use simple numeric IDs (0-255) with optional flags to indicate
+ * global or wrapped keys. The server translates these to full internal
+ * representations with TYPE/USER/ID fields.
+ *
+ * Client keyId usage:
+ * - Regular keys: Simple numeric ID (e.g., 5)
+ * - Global keys: ID with WH_CLIENT_KEYID_GLOBAL_FLAG set
+ * - Wrapped keys: ID with WH_CLIENT_KEYID_WRAPPED_FLAG set
+ * - Wrapped metadata: Must use full WH_MAKE_KEYID() construction including type
+ *    and metadata when populating the ID field in metadata to be wrapped
+ */
+
+/* Client-facing key flags (temporary, stripped by server during translation) */
+
+/* Bit 8: Client-to-server signal for global key (shared across all clients) */
+#define WH_CLIENT_KEYID_GLOBAL_FLAG ((whKeyId)0x0100)
+
+/* Bit 9: Client-to-server signal for wrapped key */
+#define WH_CLIENT_KEYID_WRAPPED_FLAG ((whKeyId)0x0200)
+
+/* Combined mask of all client-facing flags */
+#define WH_CLIENT_KEYID_FLAGS_MASK \
+    (WH_CLIENT_KEYID_GLOBAL_FLAG | WH_CLIENT_KEYID_WRAPPED_FLAG)
+
+/**
+ * @brief Mark a key ID as global (shared across all clients)
+ *
+ * Sets the global flag in a client keyId to indicate to the server that this
+ * key should be stored/accessed as a global key. The server will translate this
+ * to USER=0 encoding.
+ *
+ * @param _id The key ID (0-255)
+ * @return keyId with global flag set
+ *
+ * Example:
+ *   whKeyId globalKey = WH_CLIENT_KEYID_MAKE_GLOBAL(5);
+ *   wh_Client_KeyCache(client, globalKey, ...);  // Stored as global key
+ */
+#define WH_CLIENT_KEYID_MAKE_GLOBAL(_id) ((_id) | WH_CLIENT_KEYID_GLOBAL_FLAG)
+
+/**
+ * @brief Mark a key ID as wrapped
+ *
+ * Sets the wrapped flag in a client keyId to indicate to the server that this
+ * is a wrapped key identifier. The server will translate this to
+ * KEYTYPE=WH_KEYTYPE_WRAPPED.
+ *
+ * @param _id The key ID (0-255)
+ * @return keyId with wrapped flag set
+ *
+ * Example:
+ *   whKeyId wrappedKey = WH_CLIENT_KEYID_MAKE_WRAPPED(2);
+ *   wh_Client_KeyExportRequest(client, wrappedKey, ...);
+ */
+#define WH_CLIENT_KEYID_MAKE_WRAPPED(_id) ((_id) | WH_CLIENT_KEYID_WRAPPED_FLAG)
+
+/**
+ * @brief Mark a key ID as both global and wrapped
+ *
+ * Convenience macro that sets both global and wrapped flags.
+ * The server will translate this to KEYTYPE=WH_KEYTYPE_WRAPPED, USER=0.
+ *
+ * @param _id The key ID (0-255)
+ * @return keyId with global and wrapped flags set
+ *
+ * Example:
+ *   whKeyId globalWrappedKey = WH_CLIENT_KEYID_MAKE_WRAPPED_GLOBAL(2);
+ *   wh_Client_AesSetKeyId(aes, globalWrappedKey);
+ */
+#define WH_CLIENT_KEYID_MAKE_WRAPPED_GLOBAL(_id) \
+    ((_id) | WH_CLIENT_KEYID_GLOBAL_FLAG | WH_CLIENT_KEYID_WRAPPED_FLAG)
+
+/**
+ * @brief Construct wrapped key metadata ID with explicit ownership
+ *
+ * Creates the full internal keyId representation for wrapped key metadata.
+ * This is used when constructing the metadata structure that will be
+ * encrypted in the wrapped key blob. The user field specifies which
+ * client(s) can unwrap the key.
+ *
+ * @param _clientId Client ID that can unwrap (or WH_KEYUSER_GLOBAL for global)
+ * @param _id The key ID (0-255)
+ * @return Full keyId with TYPE=WH_KEYTYPE_WRAPPED, USER=_clientId, ID=_id
+ *
+ * Example:
+ *   whNvmMetadata meta = {
+ *       .id = WH_CLIENT_KEYID_MAKE_WRAPPED_META(WH_KEYUSER_GLOBAL, 5),
+ *       .len = keySize,
+ *   };
+ *   wh_Client_KeyWrapRequest(client, ..., &meta, ...);
+ */
+#define WH_CLIENT_KEYID_MAKE_WRAPPED_META(_clientId, _id) \
+    WH_MAKE_KEYID(WH_KEYTYPE_WRAPPED, (_clientId), (_id))
+
 #endif /* !WOLFHSM_WH_CLIENT_H_ */

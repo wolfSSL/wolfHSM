@@ -188,8 +188,17 @@ static int _wh_Server_HandleCommRequest(whServerContext* server,
         wh_MessageComm_TranslateInitRequest(magic,
                 (whMessageCommInitRequest*)req_packet, &req);
 
+#ifdef WOLFHSM_CFG_GLOBAL_KEYS
+        /* USER=0 is reserved for global keys, client_id must be non-zero */
+        if (req.client_id == WH_KEYUSER_GLOBAL) {
+            *out_resp_size = 0;
+            return WH_ERROR_BADARGS;
+        }
+#endif
+
         /* Process the init action */
         server->comm->client_id = req.client_id;
+
         resp.client_id = server->comm->client_id;
         resp.server_id = server->comm->server_id;
 

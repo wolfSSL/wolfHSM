@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024 wolfSSL Inc.
+ * Copyright (C) 2025 wolfSSL Inc.
  *
  * This file is part of wolfHSM.
  *
@@ -17,19 +17,32 @@
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
 /*
- * wolfhsm_cfg.h
+ * src/wh_keyid.c
  *
- * wolfHSM compile-time options.  Override here for your application
+ * KeyId helper function implementations for wolfHSM
  */
 
-#ifndef WOLFHSM_CFG_H_
-#define WOLFHSM_CFG_H_
+#include "wolfhsm/wh_keyid.h"
 
-/** wolfHSM settings */
-#define WOLFHSM_CFG_ENABLE_CLIENT
-#define WOLFHSM_CFG_HEXDUMP
-#define WOLFHSM_CFG_COMM_DATA_LEN 5000
-#define WOLFHSM_CFG_KEYWRAP
-#define WOLFHSM_CFG_GLOBAL_KEYS
+whKeyId wh_KeyId_TranslateClient(uint16_t type, uint16_t clientId,
+                                 whKeyId reqId)
+{
+    uint16_t user = clientId;
+    whKeyId  id   = reqId & WH_KEYID_MASK;
 
-#endif /* WOLFHSM_CFG_H_ */
+#ifdef WOLFHSM_CFG_GLOBAL_KEYS
+    /* Check for global flag (bit 8: 0x0100) */
+    if ((reqId & 0x0100) != 0) {
+        user = WH_KEYUSER_GLOBAL;
+    }
+#endif
+
+#ifdef WOLFHSM_CFG_KEYWRAP
+    /* Check for wrapped flag (bit 9: 0x0200) */
+    if ((reqId & 0x0200) != 0) {
+        type = WH_KEYTYPE_WRAPPED;
+    }
+#endif
+
+    return WH_MAKE_KEYID(type, user, id);
+}

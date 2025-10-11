@@ -38,6 +38,7 @@ typedef struct whServerContext_t whServerContext;
 
 #include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_comm.h"
+#include "wolfhsm/wh_server_cache.h"
 #include "wolfhsm/wh_nvm.h"
 #include "wolfhsm/wh_message_customcb.h"
 #ifdef WOLFHSM_CFG_DMA
@@ -62,18 +63,6 @@ typedef struct whServerContext_t whServerContext;
 
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
-/** Server crypto context and resource allocation */
-typedef struct whServerCacheSlot {
-    uint8_t        commited;
-    whNvmMetadata   meta[1];
-    uint8_t         buffer[WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE];
-} whServerCacheSlot;
-
-typedef struct whServerBigCacheSlot {
-    uint8_t       commited;
-    whNvmMetadata meta[1];
-    uint8_t       buffer[WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE];
-} whServerBigCacheSlot;
 
 typedef struct whServerCryptoContext {
     int devId;
@@ -184,8 +173,7 @@ struct whServerContext_t {
     whCommServer  comm[1];
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     whServerCryptoContext* crypto;
-    whServerCacheSlot      cache[WOLFHSM_CFG_SERVER_KEYCACHE_COUNT];
-    whServerBigCacheSlot   bigCache[WOLFHSM_CFG_SERVER_KEYCACHE_BIG_COUNT];
+    whKeyCacheContext      localCache; /* Unified cache structure */
 #ifdef WOLFHSM_CFG_SHE_EXTENSION
     whServerSheContext* she;
 #endif

@@ -122,8 +122,9 @@ static int _verifyChainAgainstCmStore(whServerContext*      server,
 
                     /* Grab the cache slot and dump the public key from the cert
                      * into it */
-                    rc = wh_Server_KeystoreGetCacheSlot(server, cacheBufSize,
-                                                        &cacheBuf, &cacheMeta);
+                    rc = wh_Server_KeystoreGetCacheSlot(server, *inout_keyId,
+                                                        cacheBufSize, &cacheBuf,
+                                                        &cacheMeta);
                     if (rc == WH_ERROR_OK) {
                         rc = wc_GetSubjectPubKeyInfoDerFromCert(
                             cert_ptr, cert_len + idx, cacheBuf, &cacheBufSize);
@@ -488,7 +489,7 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
                 cert_data = (const uint8_t*)req_packet + sizeof(req);
 
                 /* Map client keyId to server keyId space */
-                whKeyId keyId = WH_MAKE_KEYID(
+                whKeyId keyId = wh_KeyId_TranslateClient(
                     WH_KEYTYPE_CRYPTO, server->comm->client_id, req.keyId);
 
                 /* Process the verify action */
@@ -617,7 +618,7 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
             }
             if (resp.rc == WH_ERROR_OK) {
                 /* Map client keyId to server keyId space */
-                whKeyId keyId = WH_MAKE_KEYID(
+                whKeyId keyId = wh_KeyId_TranslateClient(
                     WH_KEYTYPE_CRYPTO, server->comm->client_id, req.keyId);
 
                 /* Process the verify action */

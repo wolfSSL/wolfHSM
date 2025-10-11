@@ -118,7 +118,6 @@ static int loadAndStoreKeys(whServerContext* server, whKeyId* outKeyId,
     return ret;
 }
 
-
 static int wh_ServerTask(void* cf, const char* keyFilePath, int keyId,
                          int clientId)
 {

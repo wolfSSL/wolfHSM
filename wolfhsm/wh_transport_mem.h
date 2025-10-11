@@ -70,7 +70,7 @@
  *      .transport_cb = tmccb,
  *      .transport_context = tmcc,
  *      .transport_config = tmcfg,
- *      .client_id = 1234,
+ *      .client_id = 1
  * }};
  * whCommClient cc[1] = {0};
  * wh_CommClient_Init(cc, ccc);
@@ -81,7 +81,7 @@
  *      .transport_cb = tmscb,
  *      .transport_context = tmsc,
  *      .transport_config = tmcfg,
- *      .server_id = 5678,
+ *      .server_id = 2,
  * }};
  * whCommServer cs[1] = {0};
  * wh_CommServer_Init(cs, csc);
