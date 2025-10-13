@@ -413,6 +413,9 @@ static int nfl_PartitionNewEpochOrFallback(whNvmFlashLogContext* ctx)
         nfl_PartitionRead(ctx);
     }
 
+    /* erase in-active partition, this ensure objects are truly destroyed */
+    nfl_PartitionErase(ctx, ctx->active_partition == 0 ? 1 : 0);
+
     return ret;
 }
 
