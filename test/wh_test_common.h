@@ -116,7 +116,7 @@ typedef enum {
     NVM_TEST_BACKEND_FLASH_LOG,
 #endif
     NVM_TEST_BACKEND_COUNT
-} NvmTestBackendType;
+} whTestNvmBackendType;
 
 /* union helper struct to be able to test more than one NVM implementation */
 typedef struct {
@@ -132,9 +132,10 @@ typedef struct {
         };
 #endif /* WOLFHSM_CFG_SERVER_NVM_FLASH_LOG */
     };
-} whNvmUnion;
+} whTestNvmBackendUnion;
 
-int whTest_NvmSetup(NvmTestBackendType type, whNvmUnion* nvmSetup,
-                    whNvmConfig* nvmCfg, whFlashRamsimCfg* fCfg,
-                    whFlashRamsimCtx* fCtx, const whFlashCb* fCb);
+int whTest_NvmCfgBackend(whTestNvmBackendType   type,
+                         whTestNvmBackendUnion* nvmSetup, whNvmConfig* nvmCfg,
+                         whFlashRamsimCfg* fCfg, whFlashRamsimCtx* fCtx,
+                         const whFlashCb* fCb);
 #endif /* WH_TEST_COMMON_H_ */

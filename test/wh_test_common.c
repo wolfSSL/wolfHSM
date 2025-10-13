@@ -42,9 +42,10 @@
  *
  * @return WH_ERROR_OK on success, or WH_ERROR_BADARGS on failure.
  */
-int whTest_NvmSetup(NvmTestBackendType type, whNvmUnion* nvmSetup,
-                    whNvmConfig* nvmCfg, whFlashRamsimCfg* fCfg,
-                    whFlashRamsimCtx* fCtx, const whFlashCb* fCb)
+int whTest_NvmCfgBackend(whTestNvmBackendType   type,
+                         whTestNvmBackendUnion* nvmSetup, whNvmConfig* nvmCfg,
+                         whFlashRamsimCfg* fCfg, whFlashRamsimCtx* fCtx,
+                         const whFlashCb* fCb)
 {
 
     WH_TEST_ASSERT(nvmSetup != NULL);

@@ -726,7 +726,7 @@ static int _testOutOfBoundsNvmReads(whClientContext* client,
     return WH_ERROR_OK;
 }
 
-int whTest_ClientServerSequential(NvmTestBackendType nvmType)
+int whTest_ClientServerSequential(whTestNvmBackendType nvmType)
 {
     int ret = 0;
 
@@ -779,12 +779,12 @@ int whTest_ClientServerSequential(NvmTestBackendType nvmType)
     }};
     const whFlashCb  fcb[1]     = {WH_FLASH_RAMSIM_CB};
 
-    whNvmUnion   nvm_setup;
+    whTestNvmBackendUnion nvm_setup;
     whNvmConfig  n_conf[1];
     whNvmContext nvm[1]    = {{0}};
 
     WH_TEST_RETURN_ON_FAIL(
-        whTest_NvmSetup(nvmType, &nvm_setup, n_conf, fc_conf, fc, fcb));
+        whTest_NvmCfgBackend(nvmType, &nvm_setup, n_conf, fc_conf, fc, fcb));
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     whServerCryptoContext crypto[1] = {{
@@ -1757,7 +1757,7 @@ static void _whClientServerThreadTest(whClientConfig* c_conf,
     }
 }
 
-static int wh_ClientServer_MemThreadTest(NvmTestBackendType nvmType)
+static int wh_ClientServer_MemThreadTest(whTestNvmBackendType nvmType)
 {
     uint8_t req[BUFFER_SIZE] = {0};
     uint8_t resp[BUFFER_SIZE] = {0};
@@ -1802,12 +1802,12 @@ static int wh_ClientServer_MemThreadTest(NvmTestBackendType nvmType)
     }};
     const whFlashCb  fcb[1]          = {WH_FLASH_RAMSIM_CB};
 
-    whNvmUnion   nvm_setup;
+    whTestNvmBackendUnion nvm_setup;
     whNvmConfig  n_conf[1] = {0};
     whNvmContext nvm[1]    = {{0}};
 
     WH_TEST_RETURN_ON_FAIL(
-        whTest_NvmSetup(nvmType, &nvm_setup, n_conf, fc_conf, fc, fcb));
+        whTest_NvmCfgBackend(nvmType, &nvm_setup, n_conf, fc_conf, fc, fcb));
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     /* Crypto context */
@@ -1845,7 +1845,7 @@ static int wh_ClientServer_MemThreadTest(NvmTestBackendType nvmType)
 }
 
 
-static int wh_ClientServer_PosixMemMapThreadTest(NvmTestBackendType nvmType)
+static int wh_ClientServer_PosixMemMapThreadTest(whTestNvmBackendType nvmType)
 {
     posixTransportShmConfig tmcf[1] = {{
         .name       = "/wh_test_clientserver_shm",
@@ -1887,12 +1887,12 @@ static int wh_ClientServer_PosixMemMapThreadTest(NvmTestBackendType nvmType)
     }};
     const whFlashCb  fcb[1]     = {WH_FLASH_RAMSIM_CB};
 
-    whNvmUnion   nvm_setup;
+    whTestNvmBackendUnion nvm_setup;
     whNvmConfig  n_conf[1];
     whNvmContext nvm[1] = {{0}};
 
     WH_TEST_RETURN_ON_FAIL(
-        whTest_NvmSetup(nvmType, &nvm_setup, n_conf, fc_conf, fc, fcb));
+        whTest_NvmCfgBackend(nvmType, &nvm_setup, n_conf, fc_conf, fc, fcb));
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     /* Crypto context */

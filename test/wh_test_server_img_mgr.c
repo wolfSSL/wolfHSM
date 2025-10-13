@@ -1192,7 +1192,7 @@ static int whTest_ServerImgMgrServerCfgRsa2048(whServerConfig* serverCfg)
 }
 #endif /* !NO_RSA */
 
-int whTest_ServerImgMgr(NvmTestBackendType nvmType)
+int whTest_ServerImgMgr(whTestNvmBackendType nvmType)
 {
     int            rc          = 0;
     const uint32_t BUFFER_SIZE = 1024;
@@ -1229,12 +1229,12 @@ int whTest_ServerImgMgr(NvmTestBackendType nvmType)
     }};
     const whFlashCb  fcb[1]     = {WH_FLASH_RAMSIM_CB};
 
-    whNvmUnion   nvm_setup;
+    whTestNvmBackendUnion nvm_setup;
     whNvmConfig  n_conf[1];
     whNvmContext nvm[1]    = {{0}};
 
     WH_TEST_RETURN_ON_FAIL(
-        whTest_NvmSetup(nvmType, &nvm_setup, n_conf, fc_conf, fc, fcb));
+        whTest_NvmCfgBackend(nvmType, &nvm_setup, n_conf, fc_conf, fc, fcb));
 
     whServerCryptoContext crypto[1] = {{
         .devId = INVALID_DEVID,

@@ -3615,7 +3615,7 @@ static void _whClientServerThreadTest(whClientConfig* c_conf,
 }
 
 
-static int wh_ClientServer_MemThreadTest(NvmTestBackendType nvmType)
+static int wh_ClientServer_MemThreadTest(whTestNvmBackendType nvmType)
 {
     uint8_t req[BUFFER_SIZE] = {0};
     uint8_t resp[BUFFER_SIZE] = {0};
@@ -3672,12 +3672,12 @@ static int wh_ClientServer_MemThreadTest(NvmTestBackendType nvmType)
     }};
     const whFlashCb  fcb[1]          = {WH_FLASH_RAMSIM_CB};
 
-    whNvmUnion   nvm_setup;
+    whTestNvmBackendUnion nvm_setup;
     whNvmConfig  n_conf[1];
     whNvmContext nvm[1] = {{0}};
 
     WH_TEST_RETURN_ON_FAIL(
-        whTest_NvmSetup(nvmType, &nvm_setup, n_conf, fc_conf, fc, fcb));
+        whTest_NvmCfgBackend(nvmType, &nvm_setup, n_conf, fc_conf, fc, fcb));
 
     /* Crypto context */
     whServerCryptoContext crypto[1] = {{

@@ -29,7 +29,7 @@
 #include "wh_test_common.h"
 
 /* Run certificate configuration tests */
-int whTest_CertRamSim(NvmTestBackendType nvmType);
+int whTest_CertRamSim(whTestNvmBackendType nvmType);
 int whTest_CertServerCfg(whServerConfig* serverCfg);
 int whTest_CertClient(whClientContext* client);
 #if defined(WOLFHSM_CFG_DMA)
@@ -43,4 +43,4 @@ int whTest_CertClientAcertDma_ClientServerTestInternal(whClientContext* client);
 #endif /* WOLFHSM_CFG_DMA */
 #endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT */
 
-#endif /* !WOLFHSM_WH_TEST_CERT_H_ */ 
+#endif /* !WOLFHSM_WH_TEST_CERT_H_ */

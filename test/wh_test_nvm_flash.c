@@ -655,7 +655,9 @@ int whTest_NvmFlash_PosixFileSim(void)
     WH_TEST_ASSERT(myHalFlashConfig[0].partition_size >=
                    WH_NVM_FLASH_LOG_PARTITION_SIZE);
     myHalFlashConfig[0].partition_size = WH_NVM_FLASH_LOG_PARTITION_SIZE;
+
     memset(myHalFlashContext, 0, sizeof(myHalFlashContext));
+
     whNvmFlashLogConfig myLogCfg = {
         .flash_cb  = myCb,
         .flash_ctx = myHalFlashContext,
@@ -663,6 +665,7 @@ int whTest_NvmFlash_PosixFileSim(void)
     };
     whNvmFlashLogContext nvmLogCtx[1] = {0};
     const whNvmCb        nvmLogCb[1]  = {WH_NVM_FLASH_LOG_CB};
+
     WH_TEST_RETURN_ON_FAIL(whTest_NvmFlashCfg(&myLogCfg, nvmLogCtx, nvmLogCb));
 #endif /* WOLFHSM_CFG_SERVER_NVM_FLASH_LOG */
 

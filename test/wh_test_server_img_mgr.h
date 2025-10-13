@@ -22,6 +22,6 @@
 
 #include "wh_test_common.h"
 
-int whTest_ServerImgMgr(NvmTestBackendType nvmType);
+int whTest_ServerImgMgr(whTestNvmBackendType nvmType);
 
 #endif /* WH_TEST_SERVER_IMG_MGR_H */
