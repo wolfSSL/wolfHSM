@@ -613,9 +613,6 @@ int wh_NvmFlashLog_AddObject(void* c, whNvmMetadata* meta, whNvmSize data_len,
         return WH_ERROR_BADARGS;
 
     count = nfl_ObjectCount(ctx, NULL);
-    if (count >= WOLFHSM_CFG_NVM_OBJECT_COUNT)
-        return WH_ERROR_NOSPACE;
-
     available_space = ctx->partition_size -
                       sizeof(whNvmFlashLogPartitionHeader) -
                       ctx->directory.header.size;
@@ -624,9 +621,13 @@ int wh_NvmFlashLog_AddObject(void* c, whNvmMetadata* meta, whNvmSize data_len,
     if (old_obj != NULL) {
         available_space +=
             sizeof(whNvmFlashLogMetadata) + PAD_SIZE(old_obj->meta.len);
+        count -= 1;
     }
 
     if (PAD_SIZE(data_len) + sizeof(whNvmFlashLogMetadata) > available_space)
+        return WH_ERROR_NOSPACE;
+
+    if (count >= WOLFHSM_CFG_NVM_OBJECT_COUNT)
         return WH_ERROR_NOSPACE;
 
     if (old_obj) {
