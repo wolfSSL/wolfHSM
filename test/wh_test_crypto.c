@@ -3673,7 +3673,7 @@ static int wh_ClientServer_MemThreadTest(whTestNvmBackendType nvmType)
     const whFlashCb  fcb[1]          = {WH_FLASH_RAMSIM_CB};
 
     whTestNvmBackendUnion nvm_setup;
-    whNvmConfig  n_conf[1];
+    whNvmConfig           n_conf[1];
     whNvmContext nvm[1] = {{0}};
 
     WH_TEST_RETURN_ON_FAIL(

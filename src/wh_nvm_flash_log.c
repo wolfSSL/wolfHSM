@@ -612,7 +612,7 @@ int wh_NvmFlashLog_AddObject(void* c, whNvmMetadata* meta, whNvmSize data_len,
         (data_len > 0 && data == NULL))
         return WH_ERROR_BADARGS;
 
-    count = nfl_ObjectCount(ctx, NULL);
+    count           = nfl_ObjectCount(ctx, NULL);
     available_space = ctx->partition_size -
                       sizeof(whNvmFlashLogPartitionHeader) -
                       ctx->directory.header.size;
