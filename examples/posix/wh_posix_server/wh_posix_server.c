@@ -262,7 +262,8 @@ static int _hardwareCryptoCb(int devId, struct wc_CryptoInfo* info, void* ctx)
 static void Usage(const char* exeName)
 {
     printf("Usage: %s --key <key_file_path> --id <key_id> --client <client_id> "
-           "--nvminit <nvm_init_file_path> --type <type> --rng <counter|wolfcrypt>\n",
+           "--nvminit <nvm_init_file_path> --type <type> --rng "
+           "<counter|wolfcrypt>\n",
            exeName);
     printf("Example: %s --key key.bin --id 123 --client 456 "
            "--nvminit nvm_init.txt --type tcp --rng counter\n",
@@ -382,12 +383,13 @@ int main(int argc, char** argv)
     /* Demonstrate RNG implementations */
     WC_RNG  rng[1];
     uint8_t buffer[128] = {0};
-    
+
     /* Demonstration 1: wolfCrypt RNG (cryptographically secure) */
     wc_InitRng_ex(rng, NULL, INVALID_DEVID);
     wc_RNG_GenerateBlock(rng, buffer, sizeof(buffer));
     wc_FreeRng(rng);
-    wh_Utils_Hexdump("Demo 1: wolfCrypt RNG (secure):\n", buffer, sizeof(buffer));
+    wh_Utils_Hexdump("Demo 1: wolfCrypt RNG (secure):\n", buffer,
+                     sizeof(buffer));
 
     /* Demonstration 2: Counter RNG (for testing only) */
 #define HW_DEV_ID_COUNTER 100
