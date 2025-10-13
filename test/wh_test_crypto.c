@@ -1845,7 +1845,11 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
         }
     }
 #ifdef WOLFSSL_AES_COUNTER
-    if (ret == 0) {
+    if (ret == 0
+#ifdef WOLFHSM_CFG_DMA
+        && devId != WH_DEV_ID_DMA
+#endif
+    ) {
         /* test aes CTR with client side key */
         ret = wc_AesInit(aes, NULL, devId);
         if (ret != 0) {
@@ -1952,7 +1956,7 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
             memset(plainOut, 0, sizeof(plainOut));
         }
         if (ret == 0) {
-            printf("AES CTR SUCCESS\n");
+            printf("AES CTR DEVID=0x%X SUCCESS\n", devId);
         }
     }
 #endif
@@ -2065,13 +2069,17 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
             memset(plainOut, 0, sizeof(plainOut));
         }
         if (ret == 0) {
-            printf("AES ECB SUCCESS\n");
+            printf("AES ECB DEVID=0x%X SUCCESS\n", devId);
         }
     }
 #endif /* HAVE_AES_ECB */
 
 #ifdef HAVE_AES_CBC
-    if (ret == 0) {
+    if (ret == 0
+#ifdef WOLFHSM_CFG_DMA
+        && devId != WH_DEV_ID_DMA
+#endif
+    ) {
         /* test aes CBC with client side key */
         ret = wc_AesInit(aes, NULL, devId);
         if (ret != 0) {
@@ -2111,7 +2119,11 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
             memset(plainOut, 0, sizeof(plainOut));
         }
     }
-    if (ret == 0) {
+    if (ret == 0
+#ifdef WOLFHSM_CFG_DMA
+        && devId != WH_DEV_ID_DMA
+#endif
+    ) {
         /* test aes CBC with HSM side key */
         ret = wc_AesInit(aes, NULL, devId);
         if (ret != 0) {
@@ -2166,7 +2178,7 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
             memset(plainOut, 0, sizeof(plainOut));
         }
         if (ret == 0) {
-            printf("AES CBC SUCCESS\n");
+            printf("AES CBC DEVID=0x%X SUCCESS\n", devId);
         }
     }
 #endif /* HAVE_AES_CBC */
@@ -2268,7 +2280,7 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
             memset(authTag, 0, sizeof(authTag));
         }
         if (ret == 0) {
-            printf("AES GCM SUCCESS\n");
+            printf("AES GCM DEVID=0x%X SUCCESS\n", devId);
         }
     }
 #endif /* HAVE_AES_GCM */
@@ -3372,8 +3384,12 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     }
 
 #ifndef NO_AES
-    if (ret == 0) {
-        ret = whTestCrypto_Aes(client, WH_DEV_ID, rng);
+    i = 0;
+    while ((ret == WH_ERROR_OK) && (i < WH_NUM_DEVIDS)) {
+        ret = whTestCrypto_Aes(client, WH_DEV_IDS_ARRAY[i], rng);
+        if (ret == WH_ERROR_OK) {
+            i++;
+        }
     }
 #endif /* !NO_AES */
 
