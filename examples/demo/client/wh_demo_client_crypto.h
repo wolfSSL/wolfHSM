@@ -22,9 +22,7 @@ int wh_DemoClient_CryptoCmac(whClientContext* clientContext);
 int wh_DemoClient_CryptoCmacImport(whClientContext* clientContext);
 int wh_DemoClient_CryptoCmacOneshotImport(whClientContext* clientContext);
 
-#ifdef HAVE_HKDF
 int wh_DemoClient_CryptoHkdfExport(whClientContext* clientContext);
 int wh_DemoClient_CryptoHkdfCache(whClientContext* clientContext);
-#endif /* HAVE_HKDF */
 
 #endif /* !DEMO_CLIENT_CRYPTO_H_ */
