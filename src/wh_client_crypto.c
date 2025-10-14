@@ -89,6 +89,16 @@ static int _RsaMakeKey(whClientContext* ctx, uint32_t size, uint32_t e,
                        whKeyId* inout_key_id, RsaKey* rsa);
 #endif
 
+#ifdef HAVE_HKDF
+/* Generate HKDF output on the server based on the flags */
+static int _HkdfMakeKey(whClientContext* ctx, int hashType,
+                        const uint8_t* inKey, uint32_t inKeySz,
+                        const uint8_t* salt, uint32_t saltSz,
+                        const uint8_t* info, uint32_t infoSz, whNvmFlags flags,
+                        uint32_t label_len, const uint8_t* label,
+                        whKeyId* inout_key_id, uint8_t* out, uint32_t outSz);
+#endif
+
 #ifdef HAVE_DILITHIUM
 /* Make a ML-DSA key on the server based on the flags */
 static int _MlDsaMakeKey(whClientContext* ctx, int size, int level,
@@ -1161,7 +1171,6 @@ int wh_Client_EccMakeCacheKey(whClientContext* ctx, int size, int curveId,
                               whKeyId* inout_key_id, whNvmFlags flags,
                               uint16_t label_len, uint8_t* label)
 {
-    /* Valid keyid ptr is required in this form */
     if (inout_key_id == NULL) {
         return WH_ERROR_BADARGS;
     }
@@ -1173,7 +1182,6 @@ int wh_Client_EccMakeCacheKey(whClientContext* ctx, int size, int curveId,
 int wh_Client_EccMakeExportKey(whClientContext* ctx, int size, int curveId,
                                ecc_key* key)
 {
-    /* Valid key is required for this form */
     if (key == NULL) {
         return WH_ERROR_BADARGS;
     }
@@ -1864,7 +1872,6 @@ int wh_Client_Curve25519MakeCacheKey(whClientContext* ctx, uint16_t size,
                                      whKeyId* inout_key_id, whNvmFlags flags,
                                      const uint8_t* label, uint16_t label_len)
 {
-    /* Valid keyid ptr is required in this form */
     if (inout_key_id == NULL) {
         return WH_ERROR_BADARGS;
     }
@@ -1876,7 +1883,6 @@ int wh_Client_Curve25519MakeCacheKey(whClientContext* ctx, uint16_t size,
 int wh_Client_Curve25519MakeExportKey(whClientContext* ctx, uint16_t size,
                                       curve25519_key* key)
 {
-    /* Valid key is required for this form */
     if (key == NULL) {
         return WH_ERROR_BADARGS;
     }
@@ -2221,7 +2227,6 @@ int wh_Client_RsaMakeCacheKey(whClientContext* ctx, uint32_t size, uint32_t e,
                               whKeyId* inout_key_id, whNvmFlags flags,
                               uint32_t label_len, uint8_t* label)
 {
-    /* Valid keyid ptr is required in this form */
     if ((ctx == NULL) || (inout_key_id == NULL)) {
         return WH_ERROR_BADARGS;
     }
@@ -2233,7 +2238,6 @@ int wh_Client_RsaMakeCacheKey(whClientContext* ctx, uint32_t size, uint32_t e,
 int wh_Client_RsaMakeExportKey(whClientContext* ctx, uint32_t size, uint32_t e,
                                RsaKey* rsa)
 {
-    /* Valid ctx and rsa are required for this form */
     if ((ctx == NULL) || (rsa == NULL)) {
         return WH_ERROR_BADARGS;
     }
@@ -2484,6 +2488,173 @@ int wh_Client_RsaGetSize(whClientContext* ctx, const RsaKey* key, int* out_size)
 
 
 #endif /* !NO_RSA */
+
+#ifdef HAVE_HKDF
+/* Internal helper function to generate HKDF output on the server */
+static int _HkdfMakeKey(whClientContext* ctx, int hashType,
+                        const uint8_t* inKey, uint32_t inKeySz,
+                        const uint8_t* salt, uint32_t saltSz,
+                        const uint8_t* info, uint32_t infoSz, whNvmFlags flags,
+                        uint32_t label_len, const uint8_t* label,
+                        whKeyId* inout_key_id, uint8_t* out, uint32_t outSz)
+{
+    int                           ret     = WH_ERROR_OK;
+    uint8_t*                      dataPtr = NULL;
+    whMessageCrypto_HkdfRequest*  req     = NULL;
+    whMessageCrypto_HkdfResponse* res     = NULL;
+    uint16_t                      group   = WH_MESSAGE_GROUP_CRYPTO;
+    uint16_t                      action  = WC_ALGO_TYPE_KDF;
+    whKeyId                       key_id  = WH_KEYID_ERASED;
+
+    if ((ctx == NULL) || (inKey == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Get data pointer from the context to use as request/response storage */
+    dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
+    if (dataPtr == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Setup generic header and get pointer to request data */
+    req = (whMessageCrypto_HkdfRequest*)_createCryptoRequest(dataPtr,
+                                                             WC_ALGO_TYPE_KDF);
+
+    /* Calculate request length including variable-length data */
+    uint16_t req_len = sizeof(whMessageCrypto_GenericRequestHeader) +
+                       sizeof(*req) + inKeySz + saltSz + infoSz;
+
+    /* Use the supplied key id if provided */
+    if (inout_key_id != NULL) {
+        key_id = *inout_key_id;
+    }
+
+    /* Populate request body */
+    req->flags    = flags;
+    req->keyId    = key_id;
+    req->hashType = hashType;
+    req->inKeySz  = inKeySz;
+    req->saltSz   = saltSz;
+    req->infoSz   = infoSz;
+    req->outSz    = outSz;
+
+    /* Copy label if provided */
+    memset(req->label, 0, WH_NVM_LABEL_LEN);
+    if ((label != NULL) && (label_len > 0)) {
+        if (label_len > WH_NVM_LABEL_LEN) {
+            label_len = WH_NVM_LABEL_LEN;
+        }
+        memcpy(req->label, label, label_len);
+    }
+
+    /* Copy variable-length data after the request structure */
+    uint8_t* data_ptr = (uint8_t*)(req + 1);
+
+    /* Copy input key material */
+    memcpy(data_ptr, inKey, inKeySz);
+    data_ptr += inKeySz;
+
+    /* Copy salt if provided */
+    if (salt != NULL && saltSz > 0) {
+        memcpy(data_ptr, salt, saltSz);
+        data_ptr += saltSz;
+    }
+
+    /* Copy info if provided */
+    if (info != NULL && infoSz > 0) {
+        memcpy(data_ptr, info, infoSz);
+    }
+
+    /* Send Request */
+    ret = wh_Client_SendRequest(ctx, group, action, req_len, dataPtr);
+
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+    printf("HKDF Req sent: hashType:%d inKeySz:%u saltSz:%u infoSz:%u outSz:%u "
+           "ret:%d\n",
+           req->hashType, req->inKeySz, req->saltSz, req->infoSz, req->outSz,
+           ret);
+#endif
+
+    if (ret == 0) {
+        uint16_t res_len = 0;
+        do {
+            ret =
+                wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
+        } while (ret == WH_ERROR_NOTREADY);
+
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+        printf("HKDF Res recv: ret:%d, res_len: %u\n", ret, res_len);
+#endif
+
+        if (ret == WH_ERROR_OK) {
+            /* Get response structure pointer, validates generic header rc */
+            ret =
+                _getCryptoResponse(dataPtr, WC_ALGO_TYPE_KDF, (uint8_t**)&res);
+        }
+
+        if (ret == WH_ERROR_OK) {
+            /* Key is cached on server or is ephemeral */
+            key_id = (whKeyId)(res->keyId);
+
+            /* Update output variable if requested */
+            if (inout_key_id != NULL) {
+                *inout_key_id = key_id;
+            }
+
+            /* Copy output key material if output buffer provided */
+            if (out != NULL) {
+                if (res->outSz <= outSz) {
+                    uint8_t* hkdf_out = (uint8_t*)(res + 1);
+                    memcpy(out, hkdf_out, res->outSz);
+
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+                    printf("[client] %s Set key_id:%x with flags:%x outSz:%u\n",
+                           __func__, key_id, flags, res->outSz);
+#endif
+                }
+                else {
+                    /* Server returned more than we can handle - error */
+                    ret = WH_ERROR_ABORTED;
+                }
+            }
+        }
+    }
+    return ret;
+}
+
+int wh_Client_HkdfMakeCacheKey(whClientContext* ctx, int hashType,
+                               const uint8_t* inKey, uint32_t inKeySz,
+                               const uint8_t* salt, uint32_t saltSz,
+                               const uint8_t* info, uint32_t infoSz,
+                               whKeyId* inout_key_id, whNvmFlags flags,
+                               const uint8_t* label, uint32_t label_len,
+                               uint32_t outSz)
+{
+    if ((ctx == NULL) || (inout_key_id == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    return _HkdfMakeKey(ctx, hashType, inKey, inKeySz, salt, saltSz, info,
+                        infoSz, flags, label_len, label, inout_key_id, NULL,
+                        outSz);
+}
+
+int wh_Client_HkdfMakeExportKey(whClientContext* ctx, int hashType,
+                                const uint8_t* inKey, uint32_t inKeySz,
+                                const uint8_t* salt, uint32_t saltSz,
+                                const uint8_t* info, uint32_t infoSz,
+                                uint8_t* out, uint32_t outSz)
+{
+    if ((ctx == NULL) || (out == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    return _HkdfMakeKey(ctx, hashType, inKey, inKeySz, salt, saltSz, info,
+                        infoSz, WH_NVM_FLAGS_EPHEMERAL, 0, NULL, NULL, out,
+                        outSz);
+}
+
+#endif /* HAVE_HKDF */
 
 #ifndef NO_AES
 int wh_Client_AesSetKeyId(Aes* key, whNvmId keyId)

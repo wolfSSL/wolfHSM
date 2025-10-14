@@ -464,6 +464,33 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
         }
     } break; /* case WC_ALGO_TYPE_HASH */
 
+#ifdef HAVE_HKDF
+    case WC_ALGO_TYPE_KDF: {
+        /* Handle different KDF types */
+        switch (info->kdf.type) {
+            case WC_KDF_TYPE_HKDF: {
+                /* Extract HKDF-specific parameters */
+                int         hashType = info->kdf.hkdf.hashType;
+                const byte* inKey    = info->kdf.hkdf.inKey;
+                word32      inKeySz  = info->kdf.hkdf.inKeySz;
+                const byte* salt     = info->kdf.hkdf.salt;
+                word32      saltSz   = info->kdf.hkdf.saltSz;
+                const byte* kdf_info = info->kdf.hkdf.info;
+                word32      infoSz   = info->kdf.hkdf.infoSz;
+                byte*       out      = info->kdf.hkdf.out;
+                word32      outSz    = info->kdf.hkdf.outSz;
+
+                ret = wh_Client_HkdfMakeExportKey(ctx, hashType, inKey, inKeySz,
+                                                  salt, saltSz, kdf_info,
+                                                  infoSz, out, outSz);
+            } break;
+            default:
+                ret = CRYPTOCB_UNAVAILABLE;
+                break;
+        }
+    } break; /* case WC_ALGO_TYPE_KDF */
+#endif       /* HAVE_HKDF */
+
     case WC_ALGO_TYPE_NONE:
     default:
         ret = CRYPTOCB_UNAVAILABLE;

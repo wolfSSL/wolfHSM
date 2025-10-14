@@ -49,6 +49,7 @@
 #include "wolfssl/wolfcrypt/rsa.h"
 #include "wolfssl/wolfcrypt/ecc.h"
 #include "wolfssl/wolfcrypt/dilithium.h"
+#include "wolfssl/wolfcrypt/hmac.h"
 
 /**
  * @brief Generate random bytes
@@ -345,6 +346,65 @@ int wh_Client_RsaGetSize(whClientContext* ctx,
 
 
 #endif /* !NO_RSA */
+
+#ifdef HAVE_HKDF
+/**
+ * @brief Generate HKDF output and store in the server key cache
+ *
+ * This function requests the server to generate HKDF output and store it in
+ * the server's key cache. The generated key material is not returned to the
+ * client.
+ *
+ * @param[in] ctx Pointer to the client context
+ * @param[in] hashType Hash type (WC_SHA256, WC_SHA384, WC_SHA512, etc.)
+ * @param[in] inKey Input keying material
+ * @param[in] inKeySz Size of input keying material
+ * @param[in] salt Optional salt (can be NULL)
+ * @param[in] saltSz Size of salt (0 if NULL)
+ * @param[in] info Optional info (can be NULL)
+ * @param[in] infoSz Size of info (0 if NULL)
+ * @param[in,out] inout_key_id. Set to WH_KEYID_ERASED to have the server
+ *                select a unique id for this key.
+ * @param[in] flags NVM flags to be associated with the key metadata
+ * @param[in] label Label to be associated with the key metadata
+ * @param[in] label_len Size of the label up to WH_NVM_LABEL_SIZE. Set to 0 if
+ *                      not used.
+ * @param[in] outSz Size of key material to generate and cache
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_HkdfMakeCacheKey(whClientContext* ctx, int hashType,
+                               const uint8_t* inKey, uint32_t inKeySz,
+                               const uint8_t* salt, uint32_t saltSz,
+                               const uint8_t* info, uint32_t infoSz,
+                               whKeyId* inout_key_id, whNvmFlags flags,
+                               const uint8_t* label, uint32_t label_len,
+                               uint32_t outSz);
+
+/**
+ * @brief Generate HKDF output and export to the client
+ *
+ * This function requests the server to generate HKDF output and export it to
+ * the client, without using any key cache or additional resources
+ *
+ * @param[in] ctx Pointer to the client context
+ * @param[in] hashType Hash type (WC_SHA256, WC_SHA384, WC_SHA512, etc.)
+ * @param[in] inKey Input keying material
+ * @param[in] inKeySz Size of input keying material
+ * @param[in] salt Optional salt (can be NULL)
+ * @param[in] saltSz Size of salt (0 if NULL)
+ * @param[in] info Optional info (can be NULL)
+ * @param[in] infoSz Size of info (0 if NULL)
+ * @param[out] out Output buffer for key material
+ * @param[in] outSz Size of output buffer
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_HkdfMakeExportKey(whClientContext* ctx, int hashType,
+                                const uint8_t* inKey, uint32_t inKeySz,
+                                const uint8_t* salt, uint32_t saltSz,
+                                const uint8_t* info, uint32_t infoSz,
+                                uint8_t* out, uint32_t outSz);
+
+#endif /* HAVE_HKDF */
 
 #ifndef NO_AES
 /**

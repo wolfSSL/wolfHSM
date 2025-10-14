@@ -114,6 +114,18 @@ int wh_DemoClient_All(whClientContext* clientContext)
     }
 #endif /* !NO_AES && HAVE_AESGCM */
 
+#ifdef HAVE_HKDF
+    rc = wh_DemoClient_CryptoHkdfExport(clientContext);
+    if (rc != 0) {
+        return rc;
+    }
+
+    rc = wh_DemoClient_CryptoHkdfCache(clientContext);
+    if (rc != 0) {
+        return rc;
+    }
+#endif /* HAVE_HKDF */
+
 #if defined(WOLFSSL_CMAC)
     rc = wh_DemoClient_CryptoCmac(clientContext);
     if (rc != 0) {

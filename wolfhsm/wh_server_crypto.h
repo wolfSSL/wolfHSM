@@ -93,6 +93,14 @@ int wh_Server_MlDsaKeyCacheExport(whServerContext* ctx, whKeyId keyId,
                                   MlDsaKey* key);
 #endif /* HAVE_DILITHIUM */
 
+#ifdef HAVE_HKDF
+/* Store HKDF output into a server key cache with optional metadata */
+int wh_Server_HkdfKeyCacheImport(whServerContext* ctx, const uint8_t* keyData,
+                                 uint32_t keySize, whKeyId keyId,
+                                 whNvmFlags flags, uint16_t label_len,
+                                 uint8_t* label);
+#endif /* HAVE_HKDF */
+
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
 #endif /* !WOLFHSM_WH_SERVER_CRYPTO_H_ */

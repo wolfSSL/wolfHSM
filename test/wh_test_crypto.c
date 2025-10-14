@@ -1047,6 +1047,139 @@ static int whTest_CryptoSha512(whClientContext* ctx, int devId, WC_RNG* rng)
 }
 #endif /* WOLFSSL_SHA512 */
 
+#ifdef HAVE_HKDF
+static int whTest_CryptoHkdf(whClientContext* ctx, int devId, WC_RNG* rng)
+{
+    (void)rng; /* Not currently used */
+
+    int ret = WH_ERROR_OK;
+
+#define WH_TEST_HKDF_IKM_SIZE 22
+#define WH_TEST_HKDF_SALT_SIZE 13
+#define WH_TEST_HKDF_INFO_SIZE 10
+#define WH_TEST_HKDF_OKM_SIZE 42
+
+    /* Test vectors from RFC 5869 Test Case 1 */
+    const uint8_t ikm[WH_TEST_HKDF_IKM_SIZE] = {
+        0x0b, 0x0b, 0x0b, 0x0b, 0x0b, 0x0b, 0x0b, 0x0b, 0x0b, 0x0b, 0x0b,
+        0x0b, 0x0b, 0x0b, 0x0b, 0x0b, 0x0b, 0x0b, 0x0b, 0x0b, 0x0b, 0x0b};
+    const uint8_t salt[WH_TEST_HKDF_SALT_SIZE] = {0x00, 0x01, 0x02, 0x03, 0x04,
+                                                  0x05, 0x06, 0x07, 0x08, 0x09,
+                                                  0x0a, 0x0b, 0x0c};
+    const uint8_t info[WH_TEST_HKDF_INFO_SIZE] = {0xf0, 0xf1, 0xf2, 0xf3, 0xf4,
+                                                  0xf5, 0xf6, 0xf7, 0xf8, 0xf9};
+    const uint8_t expected[WH_TEST_HKDF_OKM_SIZE] = {
+        0x3c, 0xb2, 0x5f, 0x25, 0xfa, 0xac, 0xd5, 0x7a, 0x90, 0x43, 0x4f,
+        0x64, 0xd0, 0x36, 0x2f, 0x2a, 0x2d, 0x2d, 0x0a, 0x90, 0xcf, 0x1a,
+        0x5a, 0x4c, 0x5d, 0xb0, 0x2d, 0x56, 0xec, 0xc4, 0xc5, 0xbf, 0x34,
+        0x00, 0x72, 0x08, 0xd5, 0xb8, 0x87, 0x18, 0x58, 0x65};
+
+    uint8_t okm[WH_TEST_HKDF_OKM_SIZE];
+    uint8_t okm2[WH_TEST_HKDF_OKM_SIZE];
+    whKeyId key_id  = WH_KEYID_ERASED;
+    uint8_t label[] = "HKDF Test Label";
+
+    /* Test 1: Direct wc_HKDF call (uses crypto callback) */
+    memset(okm, 0, sizeof(okm));
+    ret = wc_HKDF_ex(WC_SHA256, ikm, WH_TEST_HKDF_IKM_SIZE, salt,
+                     WH_TEST_HKDF_SALT_SIZE, info, WH_TEST_HKDF_INFO_SIZE, okm,
+                     WH_TEST_HKDF_OKM_SIZE, NULL, devId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wc_HKDF: %d\n", ret);
+        return ret;
+    }
+
+    /* Verify output matches expected */
+    if (memcmp(okm, expected, WH_TEST_HKDF_OKM_SIZE) != 0) {
+        WH_ERROR_PRINT("HKDF output does not match expected (wc_HKDF)\n");
+        return -1;
+    }
+
+    /* Test 2: HKDF without salt. Just ensure no errors */
+    memset(okm, 0, sizeof(okm));
+    ret = wc_HKDF_ex(
+        WC_SHA256, ikm, WH_TEST_HKDF_IKM_SIZE, NULL, 0, /* No salt */
+        info, WH_TEST_HKDF_INFO_SIZE, okm, WH_TEST_HKDF_OKM_SIZE, NULL, devId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wc_HKDF (no salt): %d\n", ret);
+        return ret;
+    }
+
+    /* Test 3: HKDF without info. Just ensure no errors */
+    memset(okm, 0, sizeof(okm));
+    ret = wc_HKDF_ex(WC_SHA256, ikm, WH_TEST_HKDF_IKM_SIZE, salt,
+                     WH_TEST_HKDF_SALT_SIZE, NULL, 0, /* No info */
+                     okm, WH_TEST_HKDF_OKM_SIZE, NULL, devId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wc_HKDF (no info): %d\n", ret);
+        return ret;
+    }
+
+    /* Test 4: wh_Client_HkdfMakeExportKey */
+    memset(okm, 0, sizeof(okm));
+    ret = wh_Client_HkdfMakeExportKey(
+        ctx, WC_SHA256, ikm, WH_TEST_HKDF_IKM_SIZE, salt,
+        WH_TEST_HKDF_SALT_SIZE, info, WH_TEST_HKDF_INFO_SIZE, okm,
+        WH_TEST_HKDF_OKM_SIZE);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_HkdfMakeExportKey: %d\n", ret);
+        return ret;
+    }
+
+    /* Verify output matches expected vector, should be same as wolfCrypt API */
+    if (memcmp(okm, expected, WH_TEST_HKDF_OKM_SIZE) != 0) {
+        WH_ERROR_PRINT("HKDF output does not match expected (MakeExportKey)\n");
+        return -1;
+    }
+
+    /* Test 5: wh_Client_HkdfMakeCacheKey */
+    key_id = WH_KEYID_ERASED;
+    ret    = wh_Client_HkdfMakeCacheKey(
+           ctx, WC_SHA256, ikm, WH_TEST_HKDF_IKM_SIZE, salt,
+           WH_TEST_HKDF_SALT_SIZE, info, WH_TEST_HKDF_INFO_SIZE, &key_id,
+           WH_NVM_FLAGS_NONE, label, sizeof(label), WH_TEST_HKDF_OKM_SIZE);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_HkdfMakeCacheKey: %d\n", ret);
+        return ret;
+    }
+
+    /* Verify key was cached */
+    if (key_id == WH_KEYID_ERASED) {
+        WH_ERROR_PRINT("Key ID was not assigned\n");
+        return -1;
+    }
+
+    /* Export the cached key to verify its contents */
+    memset(okm2, 0, sizeof(okm2));
+    {
+        uint8_t  export_label[sizeof(label)] = {0};
+        uint16_t export_len                  = WH_TEST_HKDF_OKM_SIZE;
+        ret = wh_Client_KeyExport(ctx, key_id, export_label,
+                                  sizeof(export_label), okm2, &export_len);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wh_Client_KeyExport: %d\n", ret);
+            return ret;
+        }
+
+        /* Verify exported length matches expected */
+        if (export_len != WH_TEST_HKDF_OKM_SIZE) {
+            WH_ERROR_PRINT("Exported key length mismatch: %u != %u\n",
+                           export_len, WH_TEST_HKDF_OKM_SIZE);
+            return -1;
+        }
+
+        /* Verify output matches expected */
+        if (memcmp(okm2, expected, WH_TEST_HKDF_OKM_SIZE) != 0) {
+            WH_ERROR_PRINT(
+                "HKDF output does not match expected (MakeCacheKey)\n");
+            return -1;
+        }
+    }
+    printf("HKDF SUCCESS\n");
+    return 0;
+}
+#endif /* HAVE_HKDF */
+
 static int whTest_CacheExportKey(whClientContext* ctx, whKeyId* inout_key_id,
         uint8_t* label_in,  uint8_t* label_out, uint16_t label_len,
         uint8_t* key_in, uint8_t* key_out, uint16_t key_len)
@@ -3461,6 +3594,12 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         }
     }
 #endif /* WOLFSSL_SHA512 */
+
+#ifdef HAVE_HKDF
+    if (ret == WH_ERROR_OK) {
+        ret = whTest_CryptoHkdf(client, WH_DEV_ID, rng);
+    }
+#endif /* HAVE_HKDF */
 
 #ifdef HAVE_DILITHIUM
 
