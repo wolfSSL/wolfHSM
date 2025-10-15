@@ -3713,12 +3713,12 @@ int whTest_Crypto(void)
 {
     printf("Testing crypto: (pthread) mem...\n");
     WH_TEST_RETURN_ON_FAIL(
-        wh_ClientServer_MemThreadTest(NVM_TEST_BACKEND_FLASH));
+        wh_ClientServer_MemThreadTest(WH_NVM_TEST_BACKEND_FLASH));
 
 #if defined(WOLFHSM_CFG_SERVER_NVM_FLASH_LOG)
     printf("Testing crypto: (pthread) mem (flash log)...\n");
     WH_TEST_RETURN_ON_FAIL(
-        wh_ClientServer_MemThreadTest(NVM_TEST_BACKEND_FLASH_LOG));
+        wh_ClientServer_MemThreadTest(WH_NVM_TEST_BACKEND_FLASH_LOG));
 #endif
 
     return 0;

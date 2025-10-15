@@ -111,11 +111,11 @@
 
 
 typedef enum {
-    NVM_TEST_BACKEND_FLASH = 0,
+    WH_NVM_TEST_BACKEND_FLASH = 0,
 #if defined(WOLFHSM_CFG_SERVER_NVM_FLASH_LOG)
-    NVM_TEST_BACKEND_FLASH_LOG,
+    WH_NVM_TEST_BACKEND_FLASH_LOG,
 #endif
-    NVM_TEST_BACKEND_COUNT
+    WH_NVM_TEST_BACKEND_COUNT
 } whTestNvmBackendType;
 
 /* union helper struct to be able to test more than one NVM implementation */

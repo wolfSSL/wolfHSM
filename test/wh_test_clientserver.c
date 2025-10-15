@@ -1933,31 +1933,31 @@ static int wh_ClientServer_PosixMemMapThreadTest(whTestNvmBackendType nvmType)
 int whTest_ClientServer(void)
 {
     printf("Testing client/server sequential: mem...\n");
-    WH_TEST_ASSERT(0 == whTest_ClientServerSequential(NVM_TEST_BACKEND_FLASH));
+    WH_TEST_ASSERT(0 == whTest_ClientServerSequential(WH_NVM_TEST_BACKEND_FLASH));
 
 #if defined(WOLFHSM_CFG_SERVER_NVM_FLASH_LOG)
     printf("Testing client/server sequential: mem + flash log...\n");
     WH_TEST_ASSERT(0 ==
-                   whTest_ClientServerSequential(NVM_TEST_BACKEND_FLASH_LOG));
+                   whTest_ClientServerSequential(WH_NVM_TEST_BACKEND_FLASH_LOG));
 #endif /* defined(WOLFHSM_CFG_SERVER_NVM_FLASH_LOG) */
 
 #if defined(WOLFHSM_CFG_TEST_POSIX)
     printf("Testing client/server: (pthread) mem...\n");
-    WH_TEST_ASSERT(0 == wh_ClientServer_MemThreadTest(NVM_TEST_BACKEND_FLASH));
+    WH_TEST_ASSERT(0 == wh_ClientServer_MemThreadTest(WH_NVM_TEST_BACKEND_FLASH));
 
     printf("Testing client/server: (pthread) POSIX shared memory ...\n");
     WH_TEST_ASSERT(
-        0 == wh_ClientServer_PosixMemMapThreadTest(NVM_TEST_BACKEND_FLASH));
+        0 == wh_ClientServer_PosixMemMapThreadTest(WH_NVM_TEST_BACKEND_FLASH));
 
 #if defined(WOLFHSM_CFG_SERVER_NVM_FLASH_LOG)
     printf("Testing client/server: (pthread) mem + flash log...\n");
     WH_TEST_ASSERT(0 ==
-                   wh_ClientServer_MemThreadTest(NVM_TEST_BACKEND_FLASH_LOG));
+                   wh_ClientServer_MemThreadTest(WH_NVM_TEST_BACKEND_FLASH_LOG));
 
     printf("Testing client/server: (pthread) POSIX shared memory + flash "
            "log...\n");
     WH_TEST_ASSERT(
-        0 == wh_ClientServer_PosixMemMapThreadTest(NVM_TEST_BACKEND_FLASH_LOG));
+        0 == wh_ClientServer_PosixMemMapThreadTest(WH_NVM_TEST_BACKEND_FLASH_LOG));
 #endif /* defined(WOLFHSM_CFG_SERVER_NVM_FLASH_LOG) */
 
 #endif /* defined(WOLFHSM_CFG_TEST_POSIX) */

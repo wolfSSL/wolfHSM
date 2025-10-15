@@ -54,7 +54,7 @@ int whTest_NvmCfgBackend(whTestNvmBackendType   type,
 
     switch (type) {
 #if defined(WOLFHSM_CFG_SERVER_NVM_FLASH_LOG)
-        case NVM_TEST_BACKEND_FLASH_LOG:
+        case WH_NVM_TEST_BACKEND_FLASH_LOG:
             nvmSetup->nvmFlashLogCfg.flash_cb = fCb;
             /* restrict simulated flash partition to nvm_flash_log_partition */
             WH_TEST_ASSERT(fCfg->size >= WH_NVM_FLASH_LOG_PARTITION_SIZE * 2);
@@ -70,7 +70,7 @@ int whTest_NvmCfgBackend(whTestNvmBackendType   type,
             nvmCfg->config  = &nvmSetup->nvmFlashLogCfg;
             break;
 #endif
-        case NVM_TEST_BACKEND_FLASH:
+        case WH_NVM_TEST_BACKEND_FLASH:
             /* NVM Flash Configuration using RamSim HAL Flash */
             nvmSetup->nvmFlashCfg.cb      = fCb;
             nvmSetup->nvmFlashCfg.context = fCtx;
