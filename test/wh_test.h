@@ -19,6 +19,9 @@
 #ifndef WH_TEST_H_
 #define WH_TEST_H_
 
+#include "wolfhsm/wh_client.h"
+
 int whTest_Unit(void);
+int whTest_ClientConfig(whClientConfig* clientCfg);
 
 #endif /* WH_TEST_H_ */
