@@ -511,7 +511,7 @@ static int _testNonExportableNvmAccess(whClientContext* client)
     if (ret != 0 || out_rc != 0) {
         WH_ERROR_PRINT(
             "Failed to add non-exportable NVM object: ret=%d, out_rc=%d\n", ret,
-            out_rc);
+            (int)out_rc);
         return ret != 0 ? ret : out_rc;
     }
 
@@ -522,7 +522,7 @@ static int _testNonExportableNvmAccess(whClientContext* client)
     if (ret != 0 || out_rc != WH_ERROR_ACCESS) {
         WH_ERROR_PRINT("Non-exportable NVM object was read unexpectedly: "
                        "ret=%d, out_rc=%d\n",
-                       ret, out_rc);
+                       ret, (int)out_rc);
         return -1;
     }
 
@@ -542,7 +542,7 @@ static int _testNonExportableNvmAccess(whClientContext* client)
     if (ret != 0 || out_rc != 0) {
         WH_ERROR_PRINT(
             "Failed to add exportable NVM object: ret=%d, out_rc=%d\n", ret,
-            out_rc);
+            (int)out_rc);
         return ret != 0 ? ret : out_rc;
     }
 
@@ -555,7 +555,7 @@ static int _testNonExportableNvmAccess(whClientContext* client)
     if (ret != 0 || out_rc != 0) {
         WH_ERROR_PRINT(
             "Failed to read exportable NVM object: ret=%d, out_rc=%d\n", ret,
-            out_rc);
+            (int)out_rc);
         return ret != 0 ? ret : out_rc;
     }
 
@@ -585,7 +585,7 @@ static int _testNonExportableNvmAccess(whClientContext* client)
     if (ret != 0 || out_rc != 0) {
         WH_ERROR_PRINT("Failed to add non-exportable NVM object for DMA: "
                        "ret=%d, out_rc=%d\n",
-                       ret, out_rc);
+                       ret, (int)out_rc);
         return ret != 0 ? ret : out_rc;
     }
 
@@ -597,7 +597,7 @@ static int _testNonExportableNvmAccess(whClientContext* client)
     if (ret != 0 || out_rc != WH_ERROR_ACCESS) {
         WH_ERROR_PRINT("Non-exportable NVM object was read via DMA "
                        "unexpectedly: ret=%d, out_rc=%d\n",
-                       ret, out_rc);
+                       ret, (int)out_rc);
         return -1;
     }
 
@@ -616,7 +616,7 @@ static int _testNonExportableNvmAccess(whClientContext* client)
     if (ret != 0 || out_rc != 0) {
         WH_ERROR_PRINT(
             "Failed to add exportable NVM object for DMA: ret=%d, out_rc=%d\n",
-            ret, out_rc);
+            ret, (int)out_rc);
         return ret != 0 ? ret : out_rc;
     }
 
@@ -628,7 +628,7 @@ static int _testNonExportableNvmAccess(whClientContext* client)
     if (ret != 0 || out_rc != 0) {
         WH_ERROR_PRINT(
             "Failed to read exportable NVM object via DMA: ret=%d, out_rc=%d\n",
-            ret, out_rc);
+            ret, (int)out_rc);
         return ret != 0 ? ret : out_rc;
     }
 
