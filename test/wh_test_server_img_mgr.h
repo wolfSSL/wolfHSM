@@ -20,6 +20,8 @@
 #ifndef WH_TEST_SERVER_IMG_MGR_H
 #define WH_TEST_SERVER_IMG_MGR_H
 
-int whTest_ServerImgMgr(void);
+#include "wh_test_common.h"
+
+int whTest_ServerImgMgr(whTestNvmBackendType nvmType);
 
 #endif /* WH_TEST_SERVER_IMG_MGR_H */

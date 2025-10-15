@@ -26,6 +26,10 @@
 #include <assert.h>
 #endif
 
+#include <wolfhsm/wh_nvm.h>
+#include <wolfhsm/wh_flash_ramsim.h>
+#include <wolfhsm/wh_nvm_flash.h>
+#include <wolfhsm/wh_nvm_flash_log.h>
 
 #define WH_TEST_FAIL (-1)
 #define WH_TEST_SUCCESS (0)
@@ -106,4 +110,32 @@
     } while (0)
 
 
+typedef enum {
+    WH_NVM_TEST_BACKEND_FLASH = 0,
+#if defined(WOLFHSM_CFG_SERVER_NVM_FLASH_LOG)
+    WH_NVM_TEST_BACKEND_FLASH_LOG,
+#endif
+    WH_NVM_TEST_BACKEND_COUNT
+} whTestNvmBackendType;
+
+/* union helper struct to be able to test more than one NVM implementation */
+typedef struct {
+    union {
+        struct {
+            whNvmFlashContext nvmFlashCtx;
+            whNvmFlashConfig  nvmFlashCfg;
+        };
+#if defined(WOLFHSM_CFG_SERVER_NVM_FLASH_LOG)
+        struct {
+            whNvmFlashLogContext nvmFlashLogCtx;
+            whNvmFlashLogConfig  nvmFlashLogCfg;
+        };
+#endif /* WOLFHSM_CFG_SERVER_NVM_FLASH_LOG */
+    };
+} whTestNvmBackendUnion;
+
+int whTest_NvmCfgBackend(whTestNvmBackendType   type,
+                         whTestNvmBackendUnion* nvmSetup, whNvmConfig* nvmCfg,
+                         whFlashRamsimCfg* fCfg, whFlashRamsimCtx* fCtx,
+                         const whFlashCb* fCb);
 #endif /* WH_TEST_COMMON_H_ */

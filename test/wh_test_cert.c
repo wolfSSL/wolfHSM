@@ -578,7 +578,7 @@ static int whTest_CertNonExportable(whClientContext* client)
 #endif /* WOLFHSM_CFG_ENABLE_CLIENT */
 
 #ifdef WOLFHSM_CFG_ENABLE_SERVER
-int whTest_CertRamSim(void)
+int whTest_CertRamSim(whTestNvmBackendType nvmType)
 {
     int            rc          = WH_ERROR_OK;
     const uint32_t BUFFER_SIZE = 1024;
@@ -614,21 +614,13 @@ int whTest_CertRamSim(void)
     }};
     const whFlashCb  fcb[1]     = {WH_FLASH_RAMSIM_CB};
 
-    /* NVM Flash Configuration using RamSim HAL Flash */
-    whNvmFlashConfig  nf_conf[1] = {{
-         .cb      = fcb,
-         .context = fc,
-         .config  = fc_conf,
-    }};
-    whNvmFlashContext nfc[1]     = {0};
-    whNvmCb           nfcb[1]    = {WH_NVM_FLASH_CB};
-
-    whNvmConfig  n_conf[1] = {{
-         .cb      = nfcb,
-         .context = nfc,
-         .config  = nf_conf,
-    }};
+    whTestNvmBackendUnion nvm_setup;
+    whNvmConfig           n_conf[1];
     whNvmContext nvm[1]    = {{0}};
+
+    WH_TEST_RETURN_ON_FAIL(
+        whTest_NvmCfgBackend(nvmType, &nvm_setup, n_conf, fc_conf, fc, fcb));
+
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     whServerCryptoContext crypto[1] = {{
         .devId = INVALID_DEVID,

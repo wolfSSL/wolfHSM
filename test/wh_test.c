@@ -66,7 +66,12 @@ int whTest_Unit(void)
     WH_TEST_ASSERT(0 == whTest_Flash_RamSim());
     WH_TEST_ASSERT(0 == whTest_NvmFlash());
 #if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER) && !defined(WOLFHSM_CFG_NO_CRYPTO)
-    WH_TEST_ASSERT(0 == whTest_CertRamSim());
+    WH_TEST_ASSERT(0 == whTest_CertRamSim(WH_NVM_TEST_BACKEND_FLASH));
+
+#if defined(WOLFHSM_CFG_SERVER_NVM_FLASH_LOG)
+    WH_TEST_ASSERT(0 == whTest_CertRamSim(WH_NVM_TEST_BACKEND_FLASH_LOG));
+#endif /* WOLFHSM_CFG_SERVER_NVM_FLASH_LOG */
+
 #endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER && !WOLFHSM_CFG_NO_CRYPTO */
 
 
@@ -80,7 +85,12 @@ int whTest_Unit(void)
 
 #if defined(WOLFHSM_CFG_SERVER_IMG_MGR) && !defined(WOLFHSM_CFG_NO_CRYPTO)
     /* Image Manager Tests */
-    WH_TEST_ASSERT(0 == whTest_ServerImgMgr());
+    WH_TEST_ASSERT(0 == whTest_ServerImgMgr(WH_NVM_TEST_BACKEND_FLASH));
+
+#if defined(WOLFHSM_CFG_SERVER_NVM_FLASH_LOG)
+    WH_TEST_ASSERT(0 == whTest_ServerImgMgr(WH_NVM_TEST_BACKEND_FLASH_LOG));
+#endif
+
 #endif /* WOLFHSM_CFG_SERVER_IMG_MGR && !WOLFHSM_CFG_NO_CRYPTO */
 
 #if defined(WOLFHSM_CFG_SHE_EXTENSION)

@@ -3781,7 +3781,8 @@ static void _whClientServerThreadTest(whClientConfig* c_conf,
     }
 }
 
-static int wh_ClientServer_MemThreadTest(void)
+
+static int wh_ClientServer_MemThreadTest(whTestNvmBackendType nvmType)
 {
     int     ret               = 0;
     uint8_t req[BUFFER_SIZE] = {0};
@@ -3839,21 +3840,12 @@ static int wh_ClientServer_MemThreadTest(void)
     }};
     const whFlashCb  fcb[1]          = {WH_FLASH_RAMSIM_CB};
 
-    /* NVM Flash Configuration using RamSim HAL Flash */
-    whNvmFlashConfig nf_conf[1] = {{
-        .cb      = fcb,
-        .context = fc,
-        .config  = fc_conf,
-    }};
-    whNvmFlashContext nfc[1] = {0};
-    whNvmCb nfcb[1] = {WH_NVM_FLASH_CB};
-
-    whNvmConfig n_conf[1] = {{
-            .cb = nfcb,
-            .context = nfc,
-            .config = nf_conf,
-    }};
+    whTestNvmBackendUnion nvm_setup;
+    whNvmConfig           n_conf[1];
     whNvmContext nvm[1] = {{0}};
+
+    WH_TEST_RETURN_ON_FAIL(
+        whTest_NvmCfgBackend(nvmType, &nvm_setup, n_conf, fc_conf, fc, fcb));
 
     /* Crypto context */
     whServerCryptoContext crypto[1] = {{
@@ -3897,7 +3889,15 @@ static int wh_ClientServer_MemThreadTest(void)
 int whTest_Crypto(void)
 {
     printf("Testing crypto: (pthread) mem...\n");
-    WH_TEST_RETURN_ON_FAIL(wh_ClientServer_MemThreadTest());
+    WH_TEST_RETURN_ON_FAIL(
+        wh_ClientServer_MemThreadTest(WH_NVM_TEST_BACKEND_FLASH));
+
+#if defined(WOLFHSM_CFG_SERVER_NVM_FLASH_LOG)
+    printf("Testing crypto: (pthread) mem (flash log)...\n");
+    WH_TEST_RETURN_ON_FAIL(
+        wh_ClientServer_MemThreadTest(WH_NVM_TEST_BACKEND_FLASH_LOG));
+#endif
+
     return 0;
 }
 #endif /* WOLFHSM_CFG_TEST_POSIX && WOLFHSM_CFG_ENABLE_CLIENT && \

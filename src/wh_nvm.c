@@ -192,7 +192,7 @@ int wh_Nvm_DestroyObjects(whNvmContext* context, whNvmId list_count,
 
 
 int wh_Nvm_Read(whNvmContext* context, whNvmId id, whNvmSize offset,
-        whNvmSize data_len, uint8_t* data)
+                whNvmSize data_len, uint8_t* data)
 {
     if (    (context == NULL) ||
             (context->cb == NULL) ) {

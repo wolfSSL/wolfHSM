@@ -56,4 +56,6 @@
 #define WOLFHSM_CFG_CANCEL_API
 #endif
 
+#define WOLFHSM_CFG_SERVER_NVM_FLASH_LOG
+
 #endif /* WOLFHSM_CFG_H_ */
