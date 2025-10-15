@@ -53,6 +53,8 @@ int _benchSha256(whClientContext* client, whBenchOpContext* ctx, int id,
 #if defined(WOLFHSM_CFG_DMA)
     if (devId == WH_DEV_ID_DMA) {
         inLen = WOLFHSM_CFG_BENCH_DMA_BUFFER_SIZE;
+
+#if defined(WOLFHSM_CFG_TEST_POSIX)
         if (ctx->transportType == WH_BENCH_TRANSPORT_POSIX_DMA) {
             /* if static memory was used with DMA then use XMALLOC */
             void* heap =
@@ -68,7 +70,9 @@ int _benchSha256(whClientContext* client, whBenchOpContext* ctx, int id,
                 return WH_ERROR_NOSPACE;
             }
         }
-        else {
+        else
+#endif /* WOLFHSM_CFG_TEST_POSIX */
+        {
             in = WH_BENCH_DMA_BUFFER;
         }
     }
@@ -138,7 +142,7 @@ int _benchSha256(whClientContext* client, whBenchOpContext* ctx, int id,
         (void)wc_Sha256Free(sha256);
     }
 
-#if defined(WOLFHSM_CFG_DMA)
+#if defined(WOLFHSM_CFG_DMA) && defined(WOLFHSM_CFG_TEST_POSIX)
     if (devId == WH_DEV_ID_DMA &&
         ctx->transportType == WH_BENCH_TRANSPORT_POSIX_DMA) {
         /* if static memory was used with DMA then use XFREE */

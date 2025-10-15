@@ -21,7 +21,7 @@
 #include "wh_bench_ops.h"
 #include "wh_bench_utils.h"
 
-#if defined(WOLFHSM_CFG_BENCH_ENABLE)
+#if defined(WOLFHSM_CFG_BENCH_ENABLE) && defined(WOLFHSM_CFG_BENCH_MAIN)
 
 #include <wolfssl/version.h>
 #include <string.h>
@@ -95,4 +95,4 @@ int main(int argc, char** argv)
     return 0;
 }
 
-#endif /* WOLFHSM_CFG_BENCH_ENABLE */
+#endif /* WOLFHSM_CFG_BENCH_ENABLE && WOLFHSM_CFG_BENCH_MAIN */
