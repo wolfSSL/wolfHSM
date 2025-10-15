@@ -14,3 +14,8 @@ compile_commands.json
 tools/static-analysis/reports/
 *.xml
 *.html
+
+# Code coverage
+*.gcda
+*.gcno
+coverage/

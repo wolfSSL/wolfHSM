@@ -1,0 +1,53 @@
+name: Code Coverage
+
+on:
+  push:
+    branches: [ 'master', 'main', 'release/**' ]
+  pull_request:
+    branches: [ '*' ]
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    # List compiler version
+    - name: List compiler and gcov version
+      run: |
+        gcc --version
+        gcov --version
+
+    # Install gcovr for coverage report generation
+    - name: Install gcovr
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y gcovr
+
+    # Checkout wolfssl
+    - name: Checkout wolfssl
+      uses: actions/checkout@v4
+      with:
+        repository: wolfssl/wolfssl
+        path: wolfssl
+
+    # Run coverage
+    - name: Build and run tests with coverage
+      run: cd test && make coverage WOLFSSL_DIR=../wolfssl
+
+    # Display coverage summary in the action log
+    - name: Display coverage summary
+      run: |
+        echo "=== Coverage Summary ==="
+        cd test
+        gcovr Build --root .. --filter '\.\./src/.*' --filter '\.\./wolfhsm/.*' --print-summary
+
+    # Upload coverage report as artifact
+    - name: Upload coverage report
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-report
+        path: coverage/
+        retention-days: 30
+
