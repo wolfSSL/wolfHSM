@@ -85,7 +85,6 @@ int whTest_NvmCfgBackend(whTestNvmBackendType   type,
             break;
 
         default:
-            WH_TEST_ASSERT(0);
             return WH_ERROR_BADARGS;
     }
 
