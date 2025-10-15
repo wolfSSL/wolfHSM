@@ -43,4 +43,5 @@
 
 /* Benchmark configs */
 #define WOLFHSM_CFG_BENCH_ENABLE
+#define WOLFHSM_CFG_BENCH_MAIN
 #endif /* WOLFHSM_CFG_H_ */
