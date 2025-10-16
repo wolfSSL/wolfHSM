@@ -101,7 +101,7 @@ static int _AesGcm_KeyWrap(whClientContext* client, WC_RNG* rng)
     uint8_t       wrappedKey[WH_TEST_AES_WRAPPED_KEYSIZE];
     whKeyId       wrappedKeyId;
     whNvmMetadata metadata = {
-        .id    = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, 0, 8),
+        .id    = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, 0, WH_TEST_AESGCM_KEYID),
         .label = "AES Key Label",
         .len   = WH_TEST_AES_KEYSIZE,
         .flags = WH_NVM_FLAGS_NONE,
@@ -222,7 +222,11 @@ int whTest_Client_KeyWrap(whClientContext* client)
     int    ret = 0;
     WC_RNG rng[1];
 
-    _InitServerKek(client);
+    ret = _InitServerKek(client);
+    if (ret != WH_ERROR_OK) {
+        WH_ERROR_PRINT("Failed to _InitServerKek %d\n", ret);
+        return ret;
+    }
 
     ret = wc_InitRng_ex(rng, NULL, WH_DEV_ID);
     if (ret != 0) {
@@ -233,7 +237,7 @@ int whTest_Client_KeyWrap(whClientContext* client)
 #ifdef HAVE_AESGCM
     ret = _AesGcm_KeyWrap(client, rng);
     if (ret != WH_ERROR_OK) {
-        WH_ERROR_PRINT("Failed to wc_InitRng_ex %d\n", ret);
+        WH_ERROR_PRINT("Failed to _AesGcm_KeyWrap %d\n", ret);
     }
 #endif
 
