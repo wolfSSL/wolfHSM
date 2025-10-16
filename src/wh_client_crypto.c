@@ -2552,8 +2552,10 @@ static int _HkdfMakeKey(whClientContext* ctx, int hashType, whKeyId keyIdIn,
     uint8_t* data_ptr = (uint8_t*)(req + 1);
 
     /* Copy input key material */
-    memcpy(data_ptr, inKey, inKeySz);
-    data_ptr += inKeySz;
+    if ((inKey != NULL) && (inKeySz > 0)) {
+        memcpy(data_ptr, inKey, inKeySz);
+        data_ptr += inKeySz;
+    }
 
     /* Copy salt if provided */
     if (salt != NULL && saltSz > 0) {
