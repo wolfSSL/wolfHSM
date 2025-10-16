@@ -1211,7 +1211,9 @@ static int _HandleHkdf(whServerContext* ctx, uint16_t magic,
     uint32_t infoSz   = req.infoSz;
     uint32_t outSz    = req.outSz;
     whKeyId  key_id =
-        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyIdOut);
+    whKeyId keyIdIn =
+        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyIdIn);
     whNvmFlags flags      = req.flags;
     uint8_t*   label      = req.label;
     uint16_t   label_size = WH_NVM_LABEL_LEN;
@@ -1221,6 +1223,23 @@ static int _HandleHkdf(whServerContext* ctx, uint16_t magic,
         (const uint8_t*)cryptoDataIn + sizeof(whMessageCrypto_HkdfRequest);
     const uint8_t* salt = inKey + inKeySz;
     const uint8_t* info = salt + saltSz;
+
+    /* Buffer for cached key if needed */
+    uint8_t*       cachedKeyBuf  = NULL;
+    whNvmMetadata* cachedKeyMeta = NULL;
+
+    /* Check if we should use cached key as input */
+    if (inKeySz == 0 && !WH_KEYID_ISERASED(keyIdIn)) {
+        /* Grab references to key in the cache */
+        ret = wh_Server_KeystoreFreshenKey(ctx, keyIdIn, &cachedKeyBuf,
+                                           &cachedKeyMeta);
+        if (ret != WH_ERROR_OK) {
+            return ret;
+        }
+        /* Update inKey pointer and size to use cached key */
+        inKey   = cachedKeyBuf;
+        inKeySz = cachedKeyMeta->len;
+    }
 
     /* Get pointer to where output data would be stored (after response struct)
      */
@@ -1242,7 +1261,7 @@ static int _HandleHkdf(whServerContext* ctx, uint16_t magic,
         if (flags & WH_NVM_FLAGS_EPHEMERAL) {
             /* Key should not be cached/stored on the server */
             key_id    = WH_KEYID_ERASED;
-            res.keyId = WH_KEYID_ERASED;
+            res.keyIdOut = WH_KEYID_ERASED;
             res.outSz = outSz;
         }
         else {
@@ -1269,7 +1288,7 @@ static int _HandleHkdf(whServerContext* ctx, uint16_t magic,
                    key_id, ret);
 #endif
             if (ret == WH_ERROR_OK) {
-                res.keyId = WH_KEYID_ID(key_id);
+                res.keyIdOut = WH_KEYID_ID(key_id);
                 res.outSz = 0;
                 /* clear the output buffer */
                 memset(out, 0, outSz);

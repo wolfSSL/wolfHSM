@@ -91,7 +91,7 @@ static int _RsaMakeKey(whClientContext* ctx, uint32_t size, uint32_t e,
 
 #ifdef HAVE_HKDF
 /* Generate HKDF output on the server based on the flags */
-static int _HkdfMakeKey(whClientContext* ctx, int hashType,
+static int _HkdfMakeKey(whClientContext* ctx, int hashType, whKeyId keyIdIn,
                         const uint8_t* inKey, uint32_t inKeySz,
                         const uint8_t* salt, uint32_t saltSz,
                         const uint8_t* info, uint32_t infoSz, whNvmFlags flags,
@@ -2491,7 +2491,7 @@ int wh_Client_RsaGetSize(whClientContext* ctx, const RsaKey* key, int* out_size)
 
 #ifdef HAVE_HKDF
 /* Internal helper function to generate HKDF output on the server */
-static int _HkdfMakeKey(whClientContext* ctx, int hashType,
+static int _HkdfMakeKey(whClientContext* ctx, int hashType, whKeyId keyIdIn,
                         const uint8_t* inKey, uint32_t inKeySz,
                         const uint8_t* salt, uint32_t saltSz,
                         const uint8_t* info, uint32_t infoSz, whNvmFlags flags,
@@ -2506,7 +2506,7 @@ static int _HkdfMakeKey(whClientContext* ctx, int hashType,
     uint16_t                      action  = WC_ALGO_TYPE_KDF;
     whKeyId                       key_id  = WH_KEYID_ERASED;
 
-    if ((ctx == NULL) || (inKey == NULL)) {
+    if ((ctx == NULL) || ((inKey == NULL) && (inKeySz != 0))) {
         return WH_ERROR_BADARGS;
     }
 
@@ -2531,7 +2531,8 @@ static int _HkdfMakeKey(whClientContext* ctx, int hashType,
 
     /* Populate request body */
     req->flags    = flags;
-    req->keyId    = key_id;
+    req->keyIdIn  = keyIdIn;
+    req->keyIdOut = key_id;
     req->hashType = hashType;
     req->inKeySz  = inKeySz;
     req->saltSz   = saltSz;
@@ -2551,8 +2552,10 @@ static int _HkdfMakeKey(whClientContext* ctx, int hashType,
     uint8_t* data_ptr = (uint8_t*)(req + 1);
 
     /* Copy input key material */
-    memcpy(data_ptr, inKey, inKeySz);
-    data_ptr += inKeySz;
+    if ((inKey != NULL) && (inKeySz > 0)) {
+        memcpy(data_ptr, inKey, inKeySz);
+        data_ptr += inKeySz;
+    }
 
     /* Copy salt if provided */
     if (salt != NULL && saltSz > 0) {
@@ -2594,7 +2597,7 @@ static int _HkdfMakeKey(whClientContext* ctx, int hashType,
 
         if (ret == WH_ERROR_OK) {
             /* Key is cached on server or is ephemeral */
-            key_id = (whKeyId)(res->keyId);
+            key_id = (whKeyId)(res->keyIdOut);
 
             /* Update output variable if requested */
             if (inout_key_id != NULL) {
@@ -2623,35 +2626,35 @@ static int _HkdfMakeKey(whClientContext* ctx, int hashType,
 }
 
 int wh_Client_HkdfMakeCacheKey(whClientContext* ctx, int hashType,
-                               const uint8_t* inKey, uint32_t inKeySz,
-                               const uint8_t* salt, uint32_t saltSz,
-                               const uint8_t* info, uint32_t infoSz,
-                               whKeyId* inout_key_id, whNvmFlags flags,
-                               const uint8_t* label, uint32_t label_len,
-                               uint32_t outSz)
+                               whKeyId keyIdIn, const uint8_t* inKey,
+                               uint32_t inKeySz, const uint8_t* salt,
+                               uint32_t saltSz, const uint8_t* info,
+                               uint32_t infoSz, whKeyId* inout_key_id,
+                               whNvmFlags flags, const uint8_t* label,
+                               uint32_t label_len, uint32_t outSz)
 {
     if ((ctx == NULL) || (inout_key_id == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
-    return _HkdfMakeKey(ctx, hashType, inKey, inKeySz, salt, saltSz, info,
-                        infoSz, flags, label_len, label, inout_key_id, NULL,
-                        outSz);
+    return _HkdfMakeKey(ctx, hashType, keyIdIn, inKey, inKeySz, salt, saltSz,
+                        info, infoSz, flags, label_len, label, inout_key_id,
+                        NULL, outSz);
 }
 
 int wh_Client_HkdfMakeExportKey(whClientContext* ctx, int hashType,
-                                const uint8_t* inKey, uint32_t inKeySz,
-                                const uint8_t* salt, uint32_t saltSz,
-                                const uint8_t* info, uint32_t infoSz,
-                                uint8_t* out, uint32_t outSz)
+                                whKeyId keyIdIn, const uint8_t* inKey,
+                                uint32_t inKeySz, const uint8_t* salt,
+                                uint32_t saltSz, const uint8_t* info,
+                                uint32_t infoSz, uint8_t* out, uint32_t outSz)
 {
     if ((ctx == NULL) || (out == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
-    return _HkdfMakeKey(ctx, hashType, inKey, inKeySz, salt, saltSz, info,
-                        infoSz, WH_NVM_FLAGS_EPHEMERAL, 0, NULL, NULL, out,
-                        outSz);
+    return _HkdfMakeKey(ctx, hashType, keyIdIn, inKey, inKeySz, salt, saltSz,
+                        info, infoSz, WH_NVM_FLAGS_EPHEMERAL, 0, NULL, NULL,
+                        out, outSz);
 }
 
 #endif /* HAVE_HKDF */

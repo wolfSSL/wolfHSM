@@ -282,7 +282,8 @@ int wh_MessageCrypto_TranslateHkdfRequest(
         return WH_ERROR_BADARGS;
     }
     WH_T32(magic, dest, src, flags);
-    WH_T32(magic, dest, src, keyId);
+    WH_T32(magic, dest, src, keyIdOut);
+    WH_T32(magic, dest, src, keyIdIn);
     WH_T32(magic, dest, src, hashType);
     WH_T32(magic, dest, src, inKeySz);
     WH_T32(magic, dest, src, saltSz);
@@ -303,7 +304,7 @@ int wh_MessageCrypto_TranslateHkdfResponse(
     if ((src == NULL) || (dest == NULL)) {
         return WH_ERROR_BADARGS;
     }
-    WH_T32(magic, dest, src, keyId);
+    WH_T32(magic, dest, src, keyIdOut);
     WH_T32(magic, dest, src, outSz);
     return 0;
 }
