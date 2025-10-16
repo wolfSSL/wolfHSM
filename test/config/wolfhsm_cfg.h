@@ -68,4 +68,11 @@
 /* Test log-based NVM flash backend */
 #define WOLFHSM_CFG_SERVER_NVM_FLASH_LOG
 
+/* Enable client crypto timeout feature for testing */
+#if defined(WOLFHSM_CFG_ENABLE_CLIENT_CRYPTIMEOUT) && \
+    defined(WOLFHSM_CFG_TEST_POSIX)
+#define WOLFHSM_CFG_CLIENT_CRYPTIMEOUT_SEC (2)
+#define WOLFHSM_CFG_TEST_CLIENT_CRYPTIMEOUT
+#endif /* WOLFHSM_CFG_TEST_CLIENT_CRYPTIMEOUT */
+
 #endif /* WOLFHSM_CFG_H_ */
