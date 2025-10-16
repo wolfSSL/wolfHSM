@@ -391,7 +391,6 @@ typedef struct {
     uint32_t infoSz;   /* Info size (0 if none) */
     uint32_t outSz;    /* Output size */
     uint8_t  label[WH_NVM_LABEL_LEN];
-    uint8_t  WH_PAD[4];
     /* Data follows:
      * uint8_t inKey[inKeySz]
      * uint8_t salt[saltSz]
