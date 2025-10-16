@@ -1225,20 +1225,20 @@ static int _HandleHkdf(whServerContext* ctx, uint16_t magic,
     const uint8_t* info = salt + saltSz;
 
     /* Buffer for cached key if needed */
-    uint8_t  cachedKeyBuf[WOLFHSM_CFG_COMM_DATA_LEN];
-    uint32_t cachedKeyLen = sizeof(cachedKeyBuf);
+    uint8_t*       cachedKeyBuf  = NULL;
+    whNvmMetadata* cachedKeyMeta = NULL;
 
     /* Check if we should use cached key as input */
     if (inKeySz == 0 && !WH_KEYID_ISERASED(keyIdIn)) {
-        /* Load key from cache */
-        ret = wh_Server_KeystoreReadKey(ctx, keyIdIn, NULL, cachedKeyBuf,
-                                        &cachedKeyLen);
+        /* Grab references to key in the cache */
+        ret = wh_Server_KeystoreFreshenKey(ctx, keyIdIn, &cachedKeyBuf,
+                                           &cachedKeyMeta);
         if (ret != WH_ERROR_OK) {
             return ret;
         }
         /* Update inKey pointer and size to use cached key */
         inKey   = cachedKeyBuf;
-        inKeySz = cachedKeyLen;
+        inKeySz = cachedKeyMeta->len;
     }
 
     /* Get pointer to where output data would be stored (after response struct)
