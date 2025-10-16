@@ -7,9 +7,11 @@
 #include "wolfhsm/wh_client.h"
 #include "wolfhsm/wh_client_crypto.h"
 
+#if !defined(WOLFHSM_CFG_NO_CRYPTO)
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/aes.h"
 #include "wolfssl/wolfcrypt/random.h"
+#endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
 #include "wh_demo_client_keystore.h"
 

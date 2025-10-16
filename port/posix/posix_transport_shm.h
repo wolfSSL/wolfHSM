@@ -58,6 +58,8 @@
 
 #include "wolfhsm/wh_comm.h"
 #include "wolfhsm/wh_transport_mem.h"
+#include <stddef.h>    /* For size_t */
+#include <sys/types.h> /* For pid_t */
 
 /** POSIX SHM configuration structure */
 typedef struct {

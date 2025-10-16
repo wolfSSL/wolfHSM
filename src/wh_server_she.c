@@ -24,7 +24,7 @@
 /* Pick up compile-time configuration */
 #include "wolfhsm/wh_settings.h"
 
-#if !defined(WOLFHSM_CFG_NO_CRYPTO) && defined(WOLFHSM_CFG_ENABLE_SERVER)
+#if defined(WOLFHSM_CFG_ENABLE_SERVER)
 
 /* System libraries */
 #include <stdint.h>
@@ -36,6 +36,7 @@
 #include "wolfhsm/wh_utils.h"
 #include "wolfhsm/wh_server.h"
 
+#if !defined(WOLFHSM_CFG_NO_CRYPTO)
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/types.h"
 #include "wolfssl/wolfcrypt/error-crypt.h"
@@ -43,6 +44,7 @@
 #include "wolfssl/wolfcrypt/aes.h"
 #include "wolfssl/wolfcrypt/cmac.h"
 #include "wolfhsm/wh_server_keystore.h"
+#endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
 #ifdef WOLFHSM_CFG_SHE_EXTENSION
 #include "wolfhsm/wh_she_common.h"

@@ -21,11 +21,11 @@
 #include "wolfhsm/wh_client.h"
 #include "wolfhsm/wh_client_crypto.h"
 
+
+#if !defined(WOLFHSM_CFG_NO_CRYPTO) && defined(WOLFHSM_CFG_BENCH_ENABLE)
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/random.h"
 #include "wolfssl/wolfcrypt/curve25519.h"
-
-#if defined(WOLFHSM_CFG_BENCH_ENABLE)
 
 #if defined(HAVE_CURVE25519)
 

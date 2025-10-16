@@ -19,7 +19,7 @@
 #include "wh_bench_mod.h"
 #include "wolfhsm/wh_error.h"
 
-#if defined(WOLFHSM_CFG_BENCH_ENABLE)
+#if !defined(WOLFHSM_CFG_NO_CRYPTO) && defined(WOLFHSM_CFG_BENCH_ENABLE)
 
 #if defined(WOLFSSL_SHA3)
 

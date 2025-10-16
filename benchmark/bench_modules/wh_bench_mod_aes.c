@@ -21,9 +21,8 @@
 #include "wolfhsm/wh_client.h"
 #include "wolfhsm/wh_client_crypto.h"
 
+#if !defined(WOLFHSM_CFG_NO_CRYPTO) && defined(WOLFHSM_CFG_BENCH_ENABLE)
 #include "wolfssl/wolfcrypt/aes.h"
-
-#if defined(WOLFHSM_CFG_BENCH_ENABLE)
 
 #if defined(WOLFHSM_CFG_DMA) && defined(WOLFHSM_CFG_TEST_POSIX)
 #include "port/posix/posix_transport_shm.h"
