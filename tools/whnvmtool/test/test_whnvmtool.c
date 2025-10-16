@@ -258,7 +258,7 @@ static int checkNvmDataValid(whNvmId id, const uint8_t* nvmData,
         fprintf(stderr, "\n");
     }
     else {
-        printf("Data verification successful for ID %u\n", id);
+        WOLFHSM_CFG_PRINTF("Data verification successful for ID %u\n", id);
     }
 
     free(fileData);
@@ -284,7 +284,7 @@ int _checkNvm(whServerContext* server)
             return rc;
         }
 
-        printf("NVM List: Count=%u\n", count);
+        WOLFHSM_CFG_PRINTF("NVM List: Count=%u\n", count);
 
         if (count > 0) {
             whNvmMetadata meta;
@@ -296,11 +296,11 @@ int _checkNvm(whServerContext* server)
                 return rc;
             }
 
-            printf("Object ID: %u\n", meta.id);
-            printf("Access: 0x%04x\n", meta.access);
-            printf("Flags: 0x%04x\n", meta.flags);
-            printf("Length: %u\n", meta.len);
-            printf("Label: %s\n", meta.label);
+            WOLFHSM_CFG_PRINTF("Object ID: %u\n", meta.id);
+            WOLFHSM_CFG_PRINTF("Access: 0x%04x\n", meta.access);
+            WOLFHSM_CFG_PRINTF("Flags: 0x%04x\n", meta.flags);
+            WOLFHSM_CFG_PRINTF("Length: %u\n", meta.len);
+            WOLFHSM_CFG_PRINTF("Label: %s\n", meta.label);
 
             uint8_t* data = malloc(meta.len);
             if (data == NULL) {
@@ -346,7 +346,7 @@ int _initAndCheckNvmFlashCfg(whNvmFlashConfig* nvmFlashCfg)
     /* If this is the RamSim configuration, set the initData config field to the
      * contents of the NVM image */
     if (nvmFlashCfg->cb == gFlashRamsimCb) {
-        printf("Initializing RamSim NVM Flash\n");
+        WOLFHSM_CFG_PRINTF("Initializing RamSim NVM Flash\n");
 
         FILE* file = fopen(FLASH_IMAGE_FILENAME, "rb");
         if (file == NULL) {
@@ -438,7 +438,7 @@ int main(void)
     }
 
     for (size_t i = 0; i < NVM_FLASH_CONFIGS_TO_TEST_COUNT; i++) {
-        printf("Testing NVM Flash config %zu\n", i);
+        WOLFHSM_CFG_PRINTF("Testing NVM Flash config %zu\n", i);
         rc = _initAndCheckNvmFlashCfg(
             (whNvmFlashConfig*)&gNvmFlashConfigsToTest[i]);
         if (rc != WH_ERROR_OK) {
