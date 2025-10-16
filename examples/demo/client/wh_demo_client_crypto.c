@@ -1408,7 +1408,6 @@ int wh_DemoClient_CryptoHkdfExport(whClientContext* clientContext)
 int wh_DemoClient_CryptoHkdfCache(whClientContext* clientContext)
 {
     int     ret       = 0;
-    int     needEvict = 0;
     whKeyId keyId     = WH_KEYID_ERASED;
 
     /* Example inputs for HKDF. */
@@ -1456,6 +1455,7 @@ int wh_DemoClient_CryptoHkdfCacheInputKey(whClientContext* clientContext)
 {
     int     ret        = 0;
     whKeyId keyIdIn    = WH_KEYID_ERASED;
+    whKeyId keyIdOut   = WH_KEYID_ERASED;
     char    keyLabel[] = "hkdf-input-key";
 
     /* Input key material to cache */
