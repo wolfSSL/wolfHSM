@@ -570,47 +570,37 @@ int wh_MessageCrypto_TranslateCurve25519Response(
  * SHA
  */
 
-/* SHA256 and SHA224 Request */
+enum { WH_SHA_OP_UPDATE, WH_SHA_OP_FINALIZE };
+
+/* SHA2 Request */
 typedef struct {
     struct {
         uint32_t hiLen;
         uint32_t loLen;
         /* intermediate hash value */
-        uint8_t hash[32]; /* TODO (BRN) WC_SHA256_DIGEST_SIZE */
+        uint8_t hash[64]; /* TODO (BRN) WC_SHA256_DIGEST_SIZE */
     } resumeState;
-    /* Flag indicating to the server that this is the last block and it should
-     * finalize the hash. If set, inBlock may be only partially full*/
-    uint32_t isLastBlock;
-    /* Length of the last input block of data. Only valid if isLastBlock=1 */
-    uint32_t lastBlockLen;
-    /* Full sha256 input block to hash */
-    uint8_t inBlock[64]; /* TODO (BRN) WC_SHA256_BLOCK_SIZE */
+
+    uint32_t hashType;
+
+    /* Field indicating to the server what kind of operation the request is
+     * WH_SHA_OP_UPDATE - request the server to take in a block of data
+     * and update the hash
+     * WH_SHA_OP_FINALIZE - request the server to update (optional) and finalize
+     * the hash data and finalize the hash */
+    uint32_t op;
+
+    /* Size of the input data */
+    uint32_t inSz;
+
     uint8_t WH_PAD[4];
-} whMessageCrypto_Sha256Request;
+    /* data follows:
+     * uint8_t in[inSz]; */
+} whMessageCrypto_Sha2Request;
 
-int wh_MessageCrypto_TranslateSha256Request(
-    uint16_t magic, const whMessageCrypto_Sha256Request* src,
-    whMessageCrypto_Sha256Request* dest);
-
-
-/* SHA512 and SHA384 Request */
-typedef struct {
-    struct {
-        uint32_t hiLen;
-        uint32_t loLen;
-        /* intermediate hash value */
-        uint8_t hash[64]; /* TODO (HM) WC_SHA512_DIGEST_SIZE */
-        int     hashType;
-    } resumeState;
-    /* Flag indicating to the server that this is the last block and it should
-     * finalize the hash. If set, inBlock may be only partially full*/
-    uint32_t isLastBlock;
-    /* Length of the last input block of data. Only valid if isLastBlock=1 */
-    uint32_t lastBlockLen;
-    /* Full sha512 input block to hash */
-    uint8_t inBlock[128]; /* TODO (HM) WC_SHA512_BLOCK_SIZE 128*/
-    uint8_t WH_PAD[4];
-} whMessageCrypto_Sha512Request;
+int wh_MessageCrypto_TranslateSha2Request(
+    uint16_t magic, const whMessageCrypto_Sha2Request* src,
+    whMessageCrypto_Sha2Request* dest);
 
 /* SHA2 Response */
 typedef struct {
@@ -620,10 +610,6 @@ typedef struct {
     uint8_t  hash[64]; /* TODO WC_SHA512_DIGEST_SIZE */
     int      hashType;
 } whMessageCrypto_Sha2Response;
-
-int wh_MessageCrypto_TranslateSha512Request(
-    uint16_t magic, const whMessageCrypto_Sha512Request* src,
-    whMessageCrypto_Sha512Request* dest);
 
 int wh_MessageCrypto_TranslateSha2Response(
     uint16_t magic, const whMessageCrypto_Sha2Response* src,

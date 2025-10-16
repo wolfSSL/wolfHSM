@@ -2033,14 +2033,24 @@ static int _HandleSha256(whServerContext* ctx, uint16_t magic,
 
     int                            ret    = 0;
     wc_Sha256                      sha256[1];
-    whMessageCrypto_Sha256Request  req;
+    whMessageCrypto_Sha2Request    req;
     whMessageCrypto_Sha2Response   res = {0};
+    uint8_t*                       reqData;
 
     /* Translate the request */
-    ret = wh_MessageCrypto_TranslateSha256Request(magic, cryptoDataIn, &req);
+    ret = wh_MessageCrypto_TranslateSha2Request(magic, cryptoDataIn, &req);
     if (ret != 0) {
         return ret;
     }
+
+    /* Get the input data */
+    reqData = (uint8_t*)cryptoDataIn + sizeof(whMessageCrypto_Sha2Request);
+
+    /* Validate the inSz */
+    if (inSize != sizeof(whMessageCrypto_Sha2Request) + req.inSz) {
+        return WH_ERROR_BADARGS;
+    }
+
     /* always init sha2 struct with the devid */
     ret = wc_InitSha256_ex(sha256, NULL, ctx->crypto->devId);
     if (ret != 0) {
@@ -2051,23 +2061,27 @@ static int _HandleSha256(whServerContext* ctx, uint16_t magic,
     sha256->loLen = req.resumeState.loLen;
     sha256->hiLen = req.resumeState.hiLen;
 
-    if (req.isLastBlock) {
-        /* Validate lastBlockLen to prevent potential buffer overread */
-        if ((unsigned int)req.lastBlockLen > WC_SHA256_BLOCK_SIZE) {
-            return WH_ERROR_BADARGS;
-        }
+    /* Handle oneshot SHA request */
+    if (req.op == WH_SHA_OP_FINALIZE && sha256->loLen == 0 &&
+        sha256->hiLen == 0 && sha256->buffLen == 0) {
+        ret = wc_Sha256Hash_ex(reqData, req.inSz, res.hash, NULL,
+                               ctx->crypto->devId);
+    }
+    /* Handle finalize SHA request */
+    else if (req.op == WH_SHA_OP_FINALIZE) {
         /* wolfCrypt (or cryptoCb) is responsible for last block padding */
         if (ret == 0) {
-            ret = wc_Sha256Update(sha256, req.inBlock, req.lastBlockLen);
+            ret = wc_Sha256Update(sha256, reqData, req.inSz);
         }
         if (ret == 0) {
             ret = wc_Sha256Final(sha256, res.hash);
         }
     }
+    /* Handle update SHA request */
     else {
         /* Client always sends full blocks, unless it's the last block */
         if (ret == 0) {
-            ret = wc_Sha256Update(sha256, req.inBlock, WC_SHA256_BLOCK_SIZE);
+            ret = wc_Sha256Update(sha256, reqData, req.inSz);
         }
         /* Send the hash state back to the client */
         if (ret == 0) {
@@ -2097,15 +2111,24 @@ static int _HandleSha224(whServerContext* ctx, uint16_t magic,
 {
     int                           ret = 0;
     wc_Sha224                     sha224[1];
-    whMessageCrypto_Sha256Request req;
+    whMessageCrypto_Sha2Request   req;
     whMessageCrypto_Sha2Response  res;
-    (void)inSize;
+    uint8_t*                      reqData;
 
     /* Translate the request */
-    ret = wh_MessageCrypto_TranslateSha256Request(magic, cryptoDataIn, &req);
+    ret = wh_MessageCrypto_TranslateSha2Request(magic, cryptoDataIn, &req);
     if (ret != 0) {
         return ret;
     }
+
+    /* Get the input data */
+    reqData = (uint8_t*)cryptoDataIn + sizeof(whMessageCrypto_Sha2Request);
+
+    /* Validate the inSz */
+    if (inSize != sizeof(whMessageCrypto_Sha2Request) + req.inSz) {
+        return WH_ERROR_BADARGS;
+    }
+
     ret = wc_InitSha224_ex(sha224, NULL, ctx->crypto->devId);
     if (ret != 0) {
         return ret;
@@ -2117,19 +2140,27 @@ static int _HandleSha224(whServerContext* ctx, uint16_t magic,
     sha224->loLen = req.resumeState.loLen;
     sha224->hiLen = req.resumeState.hiLen;
 
-    if (req.isLastBlock) {
+    /* Handle oneshot SHA request */
+    if (req.op == WH_SHA_OP_FINALIZE && sha224->loLen == 0 &&
+        sha224->hiLen == 0 && sha224->buffLen == 0) {
+        ret = wc_Sha224Hash_ex(reqData, req.inSz, res.hash, NULL,
+                               ctx->crypto->devId);
+    }
+    /* Handle finalize SHA request */
+    else if (req.op == WH_SHA_OP_FINALIZE) {
         /* wolfCrypt (or cryptoCb) is responsible for last block padding */
         if (ret == 0) {
-            ret = wc_Sha224Update(sha224, req.inBlock, req.lastBlockLen);
+            ret = wc_Sha224Update(sha224, reqData, req.inSz);
         }
         if (ret == 0) {
             ret = wc_Sha224Final(sha224, res.hash);
         }
     }
+    /* Handle update SHA request */
     else {
         /* Client always sends full blocks, unless it's the last block */
         if (ret == 0) {
-            ret = wc_Sha224Update(sha224, req.inBlock, WC_SHA224_BLOCK_SIZE);
+            ret = wc_Sha224Update(sha224, reqData, req.inSz);
         }
         /* Send the hash state back to the client */
         if (ret == 0) {
@@ -2162,14 +2193,22 @@ static int _HandleSha384(whServerContext* ctx, uint16_t magic,
 {
     int                           ret = 0;
     wc_Sha384                     sha384[1];
-    whMessageCrypto_Sha512Request req;
+    whMessageCrypto_Sha2Request   req;
     whMessageCrypto_Sha2Response  res;
-    (void)inSize;
+    uint8_t*                      reqData;
 
     /* Translate the request */
-    ret = wh_MessageCrypto_TranslateSha512Request(magic, cryptoDataIn, &req);
+    ret = wh_MessageCrypto_TranslateSha2Request(magic, cryptoDataIn, &req);
     if (ret != 0) {
         return ret;
+    }
+
+    /* Get the input data */
+    reqData = (uint8_t*)cryptoDataIn + sizeof(whMessageCrypto_Sha2Request);
+
+    /* Validate the inSz */
+    if (inSize != sizeof(whMessageCrypto_Sha2Request) + req.inSz) {
+        return WH_ERROR_BADARGS;
     }
 
     /* init sha2 struct with the devid */
@@ -2186,19 +2225,27 @@ static int _HandleSha384(whServerContext* ctx, uint16_t magic,
     sha384->loLen = req.resumeState.loLen;
     sha384->hiLen = req.resumeState.hiLen;
 
-    if (req.isLastBlock) {
+    /* Handle oneshot SHA request */
+    if (req.op == WH_SHA_OP_FINALIZE && sha384->loLen == 0 &&
+        sha384->hiLen == 0 && sha384->buffLen == 0) {
+        ret = wc_Sha384Hash_ex(reqData, req.inSz, res.hash, NULL,
+                               ctx->crypto->devId);
+    }
+    /* Handle finalize SHA request */
+    else if (req.op == WH_SHA_OP_FINALIZE) {
         /* wolfCrypt (or cryptoCb) is responsible for last block padding */
         if (ret == 0) {
-            ret = wc_Sha384Update(sha384, req.inBlock, req.lastBlockLen);
+            ret = wc_Sha384Update(sha384, reqData, req.inSz);
         }
         if (ret == 0) {
             ret = wc_Sha384Final(sha384, res.hash);
         }
     }
+    /* Handle update SHA request */
     else {
         /* Client always sends full blocks, unless it's the last block */
         if (ret == 0) {
-            ret = wc_Sha384Update(sha384, req.inBlock, WC_SHA384_BLOCK_SIZE);
+            ret = wc_Sha384Update(sha384, reqData, req.inSz);
         }
         /* Send the hash state back to the client */
         if (ret == 0) {
@@ -2230,18 +2277,27 @@ static int _HandleSha512(whServerContext* ctx, uint16_t magic,
 {
     int                           ret = 0;
     wc_Sha512                     sha512[1];
-    whMessageCrypto_Sha512Request req;
+    whMessageCrypto_Sha2Request   req;
     whMessageCrypto_Sha2Response  res;
     int                           hashType = WC_HASH_TYPE_SHA512;
-    (void)inSize;
+    uint8_t*                      reqData;
 
     /* Translate the request */
-    ret = wh_MessageCrypto_TranslateSha512Request(magic, cryptoDataIn, &req);
+    ret = wh_MessageCrypto_TranslateSha2Request(magic, cryptoDataIn, &req);
     if (ret != 0) {
         return ret;
     }
+
+    /* Get the input data */
+    reqData = (uint8_t*)cryptoDataIn + sizeof(whMessageCrypto_Sha2Request);
+
+    /* Validate the inSz */
+    if (inSize != sizeof(whMessageCrypto_Sha2Request) + req.inSz) {
+        return WH_ERROR_BADARGS;
+    }
+
     /* init sha2 struct with devid */
-    hashType = req.resumeState.hashType;
+    hashType = req.hashType;
     switch (hashType) {
         case WC_HASH_TYPE_SHA512_224:
             ret = wc_InitSha512_224_ex(sha512, NULL, ctx->crypto->devId);
@@ -2261,10 +2317,29 @@ static int _HandleSha512(whServerContext* ctx, uint16_t magic,
     sha512->loLen = req.resumeState.loLen;
     sha512->hiLen = req.resumeState.hiLen;
 
-    if (req.isLastBlock) {
+    /* Handle oneshot SHA request */
+    if (req.op == WH_SHA_OP_FINALIZE && sha512->loLen == 0 &&
+        sha512->hiLen == 0 && sha512->buffLen == 0) {
+        switch (hashType) {
+            case WC_HASH_TYPE_SHA512_224:
+                ret = wc_Sha512_224Hash_ex(reqData, req.inSz, res.hash, NULL,
+                                           ctx->crypto->devId);
+                break;
+            case WC_HASH_TYPE_SHA512_256:
+                ret = wc_Sha512_256Hash_ex(reqData, req.inSz, res.hash, NULL,
+                                           ctx->crypto->devId);
+                break;
+            default:
+                ret = wc_Sha512Hash_ex(reqData, req.inSz, res.hash, NULL,
+                                       ctx->crypto->devId);
+                break;
+        }
+    }
+    /* Handle finalize SHA request */
+    else if (req.op == WH_SHA_OP_FINALIZE) {
         /* wolfCrypt (or cryptoCb) is responsible for last block padding */
         if (ret == 0) {
-            ret = wc_Sha512Update(sha512, req.inBlock, req.lastBlockLen);
+            ret = wc_Sha512Update(sha512, reqData, req.inSz);
         }
         if (ret == 0) {
             switch (hashType) {
@@ -2280,10 +2355,11 @@ static int _HandleSha512(whServerContext* ctx, uint16_t magic,
             }
         }
     }
+    /* Handle update SHA request */
     else {
         /* Client always sends full blocks, unless it's the last block */
         if (ret == 0) {
-            ret = wc_Sha512Update(sha512, req.inBlock, WC_SHA512_BLOCK_SIZE);
+            ret = wc_Sha512Update(sha512, reqData, req.inSz);
         }
         /* Send the hash state back to the client */
         if (ret == 0) {
