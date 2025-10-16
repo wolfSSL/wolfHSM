@@ -155,7 +155,7 @@ static int whTest_CryptoRng(whClientContext* ctx, int devId, WC_RNG* rng)
         }
     }
     if (ret == 0) {
-        printf("RNG SUCCESS\n");
+        printf("RNG DEVID=0x%X SUCCESS\n", devId);
     }
     return ret;
 }
@@ -3561,8 +3561,13 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     }
 #endif /* WOLFHSM_CFG_TEST_VERBOSE */
 
-    if (ret == 0) {
-        ret = whTest_CryptoRng(client, WH_DEV_ID, rng);
+    i = 0;
+    while ((ret == WH_ERROR_OK) && (i < WH_NUM_DEVIDS)) {
+        ret = whTest_CryptoRng(client, WH_DEV_IDS_ARRAY[i], rng);
+        if (ret == WH_ERROR_OK) {
+            wc_FreeRng(rng);
+            i++;
+        }
     }
 
     if (ret == 0) {

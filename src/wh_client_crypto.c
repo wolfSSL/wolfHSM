@@ -257,6 +257,73 @@ int wh_Client_RngGenerate(whClientContext* ctx, uint8_t* out, uint32_t size)
     return ret;
 }
 
+#ifdef WOLFHSM_CFG_DMA
+int wh_Client_RngGenerateDma(whClientContext* ctx, uint8_t* out, uint32_t size)
+{
+    int                             ret     = WH_ERROR_OK;
+    uint8_t*                        dataPtr = NULL;
+    whMessageCrypto_RngDmaRequest*  req     = NULL;
+    whMessageCrypto_RngDmaResponse* resp    = NULL;
+    uint16_t                        respSz  = 0;
+    uintptr_t                       outAddr = 0;
+
+    if ((ctx == NULL) || (out == NULL) || (size == 0)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Get data pointer from the context to use as request/response storage */
+    dataPtr = (uint8_t*)wh_CommClient_GetDataPtr(ctx->comm);
+    if (dataPtr == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Setup generic header and get pointer to request data */
+    req = (whMessageCrypto_RngDmaRequest*)_createCryptoRequest(
+        dataPtr, WC_ALGO_TYPE_RNG);
+
+    /* Set up output buffer address and size */
+    req->output.sz = size;
+
+    /* Perform address translation for output buffer (PRE operation) */
+    ret = wh_Client_DmaProcessClientAddress(
+        ctx, (uintptr_t)out, (void**)&outAddr, req->output.sz,
+        WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
+    req->output.addr = outAddr;
+
+    if (ret == WH_ERROR_OK) {
+        /* Send the request to the server */
+        ret = wh_Client_SendRequest(
+            ctx, WH_MESSAGE_GROUP_CRYPTO_DMA, WC_ALGO_TYPE_RNG,
+            sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req),
+            (uint8_t*)dataPtr);
+    }
+
+    if (ret == WH_ERROR_OK) {
+        /* Wait for and receive the response */
+        do {
+            ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
+                                         (uint8_t*)dataPtr);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+
+    if (ret == WH_ERROR_OK) {
+        /* Get response structure pointer, validates generic header rc */
+        ret = _getCryptoResponse(dataPtr, WC_ALGO_TYPE_RNG, (uint8_t**)&resp);
+        /* Nothing more to do on success, as server will have written random
+         * bytes directly to client memory */
+    }
+
+    /* Perform address translation cleanup (POST operation)
+     * This is called regardless of successful operation to give the callback a
+     * chance for cleanup */
+    (void)wh_Client_DmaProcessClientAddress(
+        ctx, (uintptr_t)out, (void**)&outAddr, size,
+        WH_DMA_OPER_CLIENT_WRITE_POST, (whDmaFlags){0});
+
+    return ret;
+}
+#endif /* WOLFHSM_CFG_DMA */
+
 #ifndef NO_AES
 
 #ifdef WOLFSSL_AES_COUNTER
