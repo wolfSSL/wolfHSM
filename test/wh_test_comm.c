@@ -138,7 +138,7 @@ int whTest_CommMem(void)
             wh_CommClient_SendRequest(client, tx_req_flags, tx_req_type,
                 &tx_req_seq, tx_req_len, tx_req));
 #if defined(WOLFHSM_CFG_TEST_VERBOSE)
-        printf("Client SendRequest:%d, flags %x, type:%x, seq:%d, len:%d, %s\n",
+        WH_TEST_DEBUG_PRINT("Client SendRequest:%d, flags %x, type:%x, seq:%d, len:%d, %s\n",
                ret, tx_req_flags, tx_req_type, tx_req_seq, tx_req_len, tx_req);
 #endif
 
@@ -159,7 +159,7 @@ int whTest_CommMem(void)
                                       &rx_req_seq, &rx_req_len, rx_req));
 
 #if defined(WOLFHSM_CFG_TEST_VERBOSE)
-        printf("Server RecvRequest:%d, flags %x, type:%x, seq:%d, len:%d, %s\n",
+        WH_TEST_DEBUG_PRINT("Server RecvRequest:%d, flags %x, type:%x, seq:%d, len:%d, %s\n",
                ret, rx_req_flags, rx_req_type, rx_req_seq, rx_req_len, rx_req);
 #endif
 
@@ -173,7 +173,7 @@ int whTest_CommMem(void)
         }
 
 #if defined(WOLFHSM_CFG_TEST_VERBOSE)
-        printf(
+        WH_TEST_DEBUG_PRINT(
             "Server SendResponse:%d, flags %x, type:%x, seq:%d, len:%d, %s\n",
             ret, rx_req_flags, rx_req_type, rx_req_seq, tx_resp_len, tx_resp);
 #endif
@@ -183,7 +183,7 @@ int whTest_CommMem(void)
                                        &rx_resp_seq, &rx_resp_len, rx_resp));
 
 #if defined(WOLFHSM_CFG_TEST_VERBOSE)
-        printf(
+        WH_TEST_DEBUG_PRINT(
             "Client RecvResponse:%d, flags %x, type:%x, seq:%d, len:%d, %s\n",
             ret, rx_resp_flags, rx_resp_type, rx_resp_seq, rx_resp_len,
             rx_resp);
@@ -236,7 +236,7 @@ static void* _whCommClientTask(void* cf)
                                "Client SendRequest: ret=%d", ret);
 #if defined(WOLFHSM_CFG_TEST_VERBOSE)
             if(ret != WH_ERROR_NOTREADY) {
-	            printf("Client SendRequest:%d, flags %x, type:%x, seq:%d, len:%d, "
+	            WH_TEST_DEBUG_PRINT("Client SendRequest:%d, flags %x, type:%x, seq:%d, len:%d, "
                    "%s\n",
                    ret, tx_req_flags, tx_req_type, tx_req_seq, tx_req_len,
                    tx_req);
@@ -245,7 +245,7 @@ static void* _whCommClientTask(void* cf)
         } while ((ret == WH_ERROR_NOTREADY) && (nanosleep(&ONE_MS, NULL) == 0));
 
         if (ret != 0) {
-            printf("Client had failure. Exiting\n");
+            WH_TEST_DEBUG_PRINT("Client had failure. Exiting\n");
             break;
         }
 
@@ -257,7 +257,7 @@ static void* _whCommClientTask(void* cf)
                                "Client RecvResponse: ret=%d", ret);
 #if defined(WOLFHSM_CFG_TEST_VERBOSE)
             if(ret != WH_ERROR_NOTREADY) {
-                printf("Client RecvResponse:%d, flags %x, type:%x, seq:%d, len:%d, "
+                WH_TEST_DEBUG_PRINT("Client RecvResponse:%d, flags %x, type:%x, seq:%d, len:%d, "
                    "%s\n",
                    ret, rx_resp_flags, rx_resp_type, rx_resp_seq, rx_resp_len,
                    rx_resp);
@@ -266,7 +266,7 @@ static void* _whCommClientTask(void* cf)
         } while ((ret == WH_ERROR_NOTREADY) && (nanosleep(&ONE_MS, NULL) == 0));
 
         if (ret != 0) {
-            printf("Client had failure. Exiting\n");
+            WH_TEST_DEBUG_PRINT("Client had failure. Exiting\n");
             break;
         }
     }
@@ -306,7 +306,7 @@ static void* _whCommServerTask(void* cf)
 
 #if defined(WOLFHSM_CFG_TEST_VERBOSE)
            if(ret != WH_ERROR_NOTREADY) {
-               printf("Server RecvRequest:%d, flags %x, type:%x, seq:%d, len:%d, "
+               WH_TEST_DEBUG_PRINT("Server RecvRequest:%d, flags %x, type:%x, seq:%d, len:%d, "
                    "%s\n",
                    ret, rx_req_flags, rx_req_type, rx_req_seq, rx_req_len,
                    rx_req);
@@ -315,7 +315,7 @@ static void* _whCommServerTask(void* cf)
         } while ((ret == WH_ERROR_NOTREADY) && (nanosleep(&ONE_MS, NULL) == 0));
 
         if (ret != 0) {
-            printf("Server had failure. Exiting\n");
+            WH_TEST_DEBUG_PRINT("Server had failure. Exiting\n");
             break;
         }
 
@@ -330,7 +330,7 @@ static void* _whCommServerTask(void* cf)
 
 #if defined(WOLFHSM_CFG_TEST_VERBOSE)
             if(ret != WH_ERROR_NOTREADY) {
-                printf("Server SendResponse:%d, flags %x, type:%x, seq:%d, len:%d, "
+                WH_TEST_DEBUG_PRINT("Server SendResponse:%d, flags %x, type:%x, seq:%d, len:%d, "
                    "%s\n",
                    ret, rx_req_flags, rx_req_type, rx_req_seq, tx_resp_len,
                    tx_resp);
@@ -339,7 +339,7 @@ static void* _whCommServerTask(void* cf)
         } while ((ret == WH_ERROR_NOTREADY) && (nanosleep(&ONE_MS, NULL) == 0));
 
         if (ret != 0) {
-            printf("Server had failure. Exiting\n");
+            WH_TEST_DEBUG_PRINT("Server had failure. Exiting\n");
             break;
         }
     }
@@ -364,13 +364,13 @@ static void _whCommClientServerThreadTest(whCommClientConfig* c_conf,
 
     rc = pthread_create(&sthread, NULL, _whCommServerTask, s_conf);
 #if defined(WOLFHSM_CFG_TEST_VERBOSE)
-    printf("Server thread create:%d\n", rc);
+	            WH_TEST_DEBUG_PRINT("Server thread create:%d\n", rc);
 #endif
 
     if (rc == 0) {
         rc = pthread_create(&cthread, NULL, _whCommClientTask, c_conf);
 #if defined(WOLFHSM_CFG_TEST_VERBOSE)
-        printf("Client thread create:%d\n", rc);
+        WH_TEST_DEBUG_PRINT("Client thread create:%d\n", rc);
 #endif
         if (rc == 0) {
             /* All good. Block on joining */
@@ -497,17 +497,17 @@ void wh_CommClientServer_TcpThreadTest(void)
 #if defined(WOLFHSM_CFG_ENABLE_CLIENT) && defined(WOLFHSM_CFG_ENABLE_SERVER)
 int whTest_Comm(void)
 {
-    printf("Testing comms: mem...\n");
+    WOLFHSM_CFG_PRINTF("Testing comms: mem...\n");
     WH_TEST_ASSERT(0 == whTest_CommMem());
 
 #if defined(WOLFHSM_CFG_TEST_POSIX)
-    printf("Testing comms: (pthread) mem...\n");
+    WOLFHSM_CFG_PRINTF("Testing comms: (pthread) mem...\n");
     wh_CommClientServer_MemThreadTest();
 
-    printf("Testing comms: (pthread) tcp...\n");
+    WOLFHSM_CFG_PRINTF("Testing comms: (pthread) tcp...\n");
     wh_CommClientServer_TcpThreadTest();
 
-    printf("Testing comms: (pthread) posix mem...\n");
+    WOLFHSM_CFG_PRINTF("Testing comms: (pthread) posix mem...\n");
     wh_CommClientServer_ShMemThreadTest();
 #endif /* defined(WOLFHSM_CFG_TEST_POSIX) */
 
