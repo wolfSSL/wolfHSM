@@ -58,6 +58,7 @@ const char* type = "tcp"; /* default to tcp type */
 static int loadAndStoreKeys(whServerContext* server, whKeyId* outKeyId,
                             const char* keyFilePath, int keyId, int clientId)
 {
+#if !defined(WOLFHSM_CFG_NO_CRYPTO)
     int           ret;
     int           keyFd;
     int           keySz;
@@ -117,6 +118,14 @@ static int loadAndStoreKeys(whServerContext* server, whKeyId* outKeyId,
 
     *outKeyId = meta.id;
     return ret;
+#else
+    (void)server;
+    (void)outKeyId;
+    (void)keyFilePath;
+    (void)keyId;
+    (void)clientId;
+    return WH_ERROR_NOTIMPL;
+#endif /* !WOLFHSM_CFG_NO_CRYPTO */
 }
 
 
@@ -410,7 +419,11 @@ int main(int argc, char** argv)
     (void)keyFilePath;
     (void)keyId;
     (void)clientId;
-    (void)wh_ServerTask;
+    rc = wh_ServerTask(s_conf, keyFilePath, keyId, clientId);
+    if (rc != WH_ERROR_OK) {
+        printf("Server task failed: %d\n", rc);
+        return rc;
+    }
 #endif
     return rc;
 }

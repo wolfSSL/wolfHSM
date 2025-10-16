@@ -11,8 +11,10 @@
 #include "wolfhsm/wh_client.h"
 #include "wolfhsm/wh_client_crypto.h"
 
+#if !defined(WOLFHSM_CFG_NO_CRYPTO)
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/types.h"
+
 
 #if !defined(WC_NO_RNG)
 #include "wolfssl/wolfcrypt/random.h"
@@ -39,8 +41,6 @@
 #endif
 
 #include "wh_demo_client_crypto.h"
-
-#ifndef WOLFHSM_CFG_NO_CRYPTO
 
 #if !defined(NO_RSA)
 

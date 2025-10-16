@@ -31,10 +31,6 @@ SRC = \
 	$(WOLFHSM_SRC) \
 	$(TARGET).c
 
-ifneq ($(NOCRYPTO),1)
-SRC += \
-	$(WOLFCRYPT_SRC)
-endif
 
 ifeq ($(SCAN),1)
 SCAN_LOG = scan_whnvmtool.log
@@ -56,6 +52,13 @@ LIB_DIRS =
 CFLAGS = -Wall $(INCLUDE_DIRS)
 CFLAGS += -DWOLFSSL_USER_SETTINGS -DWOLFHSM_CFG_ENABLE_SERVER
 CFLAGS += -std=c90 -D_GNU_SOURCE -Wno-cpp
+
+ifneq ($(NOCRYPTO),1)
+SRC += \
+	$(WOLFCRYPT_SRC)
+else
+CFLAGS += -DWOLFHSM_CFG_NO_CRYPTO
+endif
 
 CFLAGS_EXTRA =  # Additional CFLAGS from the command line
 LDFLAGS = $(LIB_DIRS) $(LIBS)

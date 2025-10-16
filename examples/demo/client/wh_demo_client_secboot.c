@@ -13,12 +13,13 @@
 #include "wolfhsm/wh_client.h"
 #include "wolfhsm/wh_client_crypto.h"
 
+#if !defined(WOLFHSM_CFG_NO_CRYPTO)
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/ecc.h"
 #include "wolfssl/wolfcrypt/sha256.h"
 #include "wolfssl/wolfcrypt/error-crypt.h"
 #include "wh_demo_client_secboot.h"
-
+#endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
 /* Provisioning process:
  * 1. Generate a server keypair into key cache as keyId 27
@@ -221,6 +222,7 @@ static int _verifyHash(const uint8_t* hash, size_t hash_len, const uint8_t* sig,
 
 int wh_DemoClient_SecBoot_Provision(whClientContext* clientContext)
 {
+#if !defined(WOLFHSM_CFG_NO_CRYPTO)
     int ret = 0;
     uint32_t client_id = 0;
     uint32_t server_id = 0;
@@ -268,10 +270,17 @@ int wh_DemoClient_SecBoot_Provision(whClientContext* clientContext)
     }
     printf("Provision Client completed with ret:%d\n", ret);
     return ret;
+#else
+    (void)clientContext;
+    (void)_signHash;
+    (void)_provisionMakeCommitKey;
+    return WH_ERROR_NOTIMPL;
+#endif /* !WOLFHSM_CFG_NO_CRYPTO */
 }
 
 int wh_DemoClient_SecBoot_Boot(whClientContext* clientContext)
 {
+#if !defined(WOLFHSM_CFG_NO_CRYPTO)
     int ret = 0;
     uint32_t client_id = 0;
     uint32_t server_id = 0;
@@ -328,6 +337,12 @@ int wh_DemoClient_SecBoot_Boot(whClientContext* clientContext)
     }
     printf("SecBoot Client completed with ret:%d\n", ret);
     return ret;
+#else
+    (void)clientContext;
+    (void)_verifyHash;
+    (void)_sha256File;
+    return WH_ERROR_NOTIMPL;
+#endif /* !WOLFHSM_CFG_NO_CRYPTO */
 }
 
 int wh_DemoClient_SecBoot_Zeroize(whClientContext* clientContext)
