@@ -24,7 +24,7 @@
 /* Pick up compile-time configuration */
 #include "wolfhsm/wh_settings.h"
 
-#include <stdint.h>   /* For sized ints */
+#include <stdint.h> /* For sized ints */
 #include <stddef.h>
 #include <string.h>
 
