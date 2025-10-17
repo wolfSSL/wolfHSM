@@ -2983,20 +2983,18 @@ static int _xferSha256BlockAndUpdateDigest(whClientContext* ctx,
     }
 
     /* Setup generic header and get pointer to request data */
-    req = (whMessageCrypto_Sha256Request*)_createCryptoRequest(
-        dataPtr, WC_HASH_TYPE_SHA256);
+    req = (whMessageCrypto_Sha256Request*)_createCryptoRequest(dataPtr,WC_HASH_TYPE_SHA256);
 
 
     /* Send the full block to the server, along with the
      * current hash state if needed. Finalization/padding of last block is up to
      * the server, we just need to let it know we are done and sending an
      * incomplete last block */
-    if (isLastBlock) {
-        req->isLastBlock  = 1;
-        req->lastBlockLen = sha256->buffLen;
-    }
-    else {
-        req->isLastBlock = 0;
+    if(isLastBlock){
+        req->isLastBlock=1;
+        req->lastBlockLen=sha256->buffLen;
+    }else{
+        req->isLastBlock=0;
     }
     memcpy(req->inBlock, sha256->buffer,
             (isLastBlock) ? sha256->buffLen : WC_SHA256_BLOCK_SIZE);
