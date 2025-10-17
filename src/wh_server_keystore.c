@@ -572,9 +572,12 @@ static int _AesGcmWrapKey(whServerContext* server, whKeyId serverKeyId,
     uint8_t  iv[WOLFHSM_KEYWRAP_AES_GCM_IV_SIZE];
     uint8_t  serverKey[AES_MAX_KEY_SIZE];
     uint32_t serverKeySz = sizeof(serverKey);
+    uint8_t  plainBlob[sizeof(*metadataIn) + WOLFHSM_CFG_KEYWRAP_MAX_KEY_SIZE];
+    uint32_t plainBlobSz = sizeof(*metadataIn) + keySz;
+    uint8_t* encBlob;
 
     if (server == NULL || keyIn == NULL || metadataIn == NULL ||
-        wrappedKeyOut == NULL) {
+        wrappedKeyOut == NULL || plainBlobSz > sizeof(plainBlob)) {
         return WH_ERROR_BADARGS;
     }
 
@@ -613,15 +616,14 @@ static int _AesGcmWrapKey(whServerContext* server, whKeyId serverKeyId,
     }
 
     /* Combine key and metadata into one blob */
-    uint8_t plainBlob[sizeof(*metadataIn) + keySz];
     memcpy(plainBlob, metadataIn, sizeof(*metadataIn));
     memcpy(plainBlob + sizeof(*metadataIn), keyIn, keySz);
 
-    /* Place the encrypted blob after the IV and Auth Tag*/
-    uint8_t* encBlob = (uint8_t*)wrappedKeyOut + sizeof(iv) + sizeof(authTag);
+    /* Place the encrypted blob after the IV and Auth Tag */
+    encBlob = (uint8_t*)wrappedKeyOut + sizeof(iv) + sizeof(authTag);
 
     /* Encrypt the blob */
-    ret = wc_AesGcmEncrypt(aes, encBlob, plainBlob, sizeof(plainBlob), iv,
+    ret = wc_AesGcmEncrypt(aes, encBlob, plainBlob, plainBlobSz, iv,
                            sizeof(iv), authTag, sizeof(authTag), NULL, 0);
     if (ret != 0) {
         wc_AesFree(aes);
@@ -650,10 +652,10 @@ static int _AesGcmUnwrapKey(whServerContext* server, uint16_t serverKeyId,
     uint32_t serverKeySz = sizeof(serverKey);
     uint8_t* encBlob   = (uint8_t*)wrappedKeyIn + sizeof(iv) + sizeof(authTag);
     uint16_t encBlobSz = wrappedKeySz - sizeof(iv) - sizeof(authTag);
-    uint8_t  plainBlob[sizeof(*metadataOut) + keySz];
+    uint8_t  plainBlob[sizeof(*metadataOut) + WOLFHSM_CFG_KEYWRAP_MAX_KEY_SIZE];
 
     if (server == NULL || wrappedKeyIn == NULL || metadataOut == NULL ||
-        keyOut == NULL) {
+        keyOut == NULL || keySz > WOLFHSM_CFG_KEYWRAP_MAX_KEY_SIZE) {
         return WH_ERROR_BADARGS;
     }
 
