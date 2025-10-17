@@ -4563,7 +4563,66 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
     /* return value populates rc in response message */
     return ret;
 }
-#endif /* WOLFHSM_CFG_DMA */
+#endif /* WOLFSSL_CMAC */
+
+#ifndef WC_NO_RNG
+static int _HandleRngDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
+                         const void* cryptoDataIn, uint16_t inSize,
+                         void* cryptoDataOut, uint16_t* outSize)
+{
+    (void)seq;
+    (void)inSize;
+
+    int                            ret = 0;
+    whMessageCrypto_RngDmaRequest  req;
+    whMessageCrypto_RngDmaResponse res;
+    void*                          outAddr = NULL;
+
+    /* Translate the request */
+    ret = wh_MessageCrypto_TranslateRngDmaRequest(
+        magic, (whMessageCrypto_RngDmaRequest*)cryptoDataIn, &req);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    /* Process the output address (PRE operation) */
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Server_DmaProcessClientAddress(
+            ctx, req.output.addr, &outAddr, req.output.sz,
+            WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
+        if (ret == WH_ERROR_ACCESS) {
+            res.dmaAddrStatus.badAddr = req.output;
+        }
+    }
+
+    /* Generate random bytes directly into client memory */
+    if (ret == WH_ERROR_OK) {
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+        printf("[server] RNG DMA: generating %llu bytes to addr=%p\n",
+               (long long unsigned int)req.output.sz, outAddr);
+#endif
+        ret = wc_RNG_GenerateBlock(ctx->crypto->rng, outAddr, req.output.sz);
+    }
+
+    /* Process the output address (POST operation) */
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Server_DmaProcessClientAddress(
+            ctx, req.output.addr, &outAddr, req.output.sz,
+            WH_DMA_OPER_CLIENT_WRITE_POST, (whServerDmaFlags){0});
+        if (ret == WH_ERROR_ACCESS) {
+            res.dmaAddrStatus.badAddr = req.output;
+        }
+    }
+
+    /* Translate the response */
+    (void)wh_MessageCrypto_TranslateRngDmaResponse(
+        magic, &res, (whMessageCrypto_RngDmaResponse*)cryptoDataOut);
+    *outSize = sizeof(res);
+
+    /* return value populates rc in response message */
+    return ret;
+}
+#endif /* !WC_NO_RNG */
 
 int wh_Server_HandleCryptoDmaRequest(whServerContext* ctx, uint16_t magic,
                                      uint16_t action, uint16_t seq,
@@ -4683,6 +4742,13 @@ int wh_Server_HandleCryptoDmaRequest(whServerContext* ctx, uint16_t magic,
                                  cryptoDataOut, &cryptoOutSize);
             break;
 #endif /* WOLFSSL_CMAC */
+
+#ifndef WC_NO_RNG
+        case WC_ALGO_TYPE_RNG:
+            ret = _HandleRngDma(ctx, magic, seq, cryptoDataIn, cryptoInSize,
+                                cryptoDataOut, &cryptoOutSize);
+            break;
+#endif /* !WC_NO_RNG */
 
         case WC_ALGO_TYPE_NONE:
         default:

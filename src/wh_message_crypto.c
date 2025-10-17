@@ -1045,3 +1045,29 @@ int wh_MessageCrypto_TranslateAesDmaResponse(
     WH_T32(magic, dest, src, outSz);
     return 0;
 }
+
+/* RNG DMA Request translation */
+int wh_MessageCrypto_TranslateRngDmaRequest(
+    uint16_t magic, const whMessageCrypto_RngDmaRequest* src,
+    whMessageCrypto_RngDmaRequest* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    return wh_MessageCrypto_TranslateDmaBuffer(magic, &src->output,
+                                               &dest->output);
+}
+
+/* RNG DMA Response translation */
+int wh_MessageCrypto_TranslateRngDmaResponse(
+    uint16_t magic, const whMessageCrypto_RngDmaResponse* src,
+    whMessageCrypto_RngDmaResponse* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    return wh_MessageCrypto_TranslateDmaAddrStatus(magic, &src->dmaAddrStatus,
+                                                   &dest->dmaAddrStatus);
+}
