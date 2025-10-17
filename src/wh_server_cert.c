@@ -42,7 +42,6 @@
 #include "wolfssl/ssl.h"
 #include "wolfssl/wolfcrypt/asn.h"
 
-
 static int _verifyChainAgainstCmStore(whServerContext*      server,
                                       WOLFSSL_CERT_MANAGER* cm,
                                       const uint8_t* chain, uint32_t chain_len,

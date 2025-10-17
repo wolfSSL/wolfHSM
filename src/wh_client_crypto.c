@@ -28,16 +28,14 @@
 
 /* System libraries */
 #include <stdint.h>
-#include <stddef.h> /* For NULL */
-#include <string.h> /* For memset, memcpy */
-
+#include <stddef.h>  /* For NULL */
+#include <string.h>  /* For memset, memcpy */
 
 /* Common WolfHSM types and defines shared with the server */
 #include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_crypto.h"
 #include "wolfhsm/wh_utils.h"
-
 
 /* Components */
 #include "wolfhsm/wh_comm.h"

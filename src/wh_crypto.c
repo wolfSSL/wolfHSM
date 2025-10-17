@@ -30,7 +30,7 @@
 
 /* System libraries */
 #include <stdint.h>
-#include <stddef.h>  /* For NULL */
+#include <stddef.h>   /* For NULL */
 
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/types.h"

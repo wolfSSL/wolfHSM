@@ -25,8 +25,8 @@
 #include "wolfhsm/wh_settings.h"
 
 #include <stdint.h>
-#include <stddef.h> /* For size_t */
-#include <string.h> /* For memset/cpy */
+#include <stddef.h>  /* For size_t */
+#include <string.h>  /* For memset/cpy */
 
 #if defined(WOLFHSM_CFG_HEXDUMP)
 #include <stdio.h>

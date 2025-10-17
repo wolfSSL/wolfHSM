@@ -208,11 +208,11 @@ static int whTest_CryptoRsa(whClientContext* ctx, int devId, WC_RNG* rng)
 
     if (ret == 0) {
         /* Using client export key */
-        memset(cipherText, 0, sizeof(cipherText));
-        memset(finalText, 0, sizeof(finalText));
-        ret = wc_InitRsaKey_ex(rsa, NULL, WH_DEV_ID);
-        if (ret!= 0) {
-            WH_ERROR_PRINT("Failed to wc_InitRsaKey_ex %d\n", ret);
+        memset(cipherText,  0,  sizeof(cipherText));
+        memset(finalText,  0,  sizeof(finalText));
+        ret = wc_InitRsaKey_ex(rsa,  NULL,  WH_DEV_ID);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wc_InitRsaKey_ex %d\n",  ret);
         } else {
             ret = wh_Client_RsaMakeExportKey(ctx, RSA_KEY_BITS, RSA_EXPONENT,
                     rsa);

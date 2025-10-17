@@ -101,9 +101,9 @@ static int _HandleRsaGetSize(whServerContext* ctx, uint16_t magic,
 
 #ifdef HAVE_HKDF
 /* Process an HKDF request packet and produce a response packet */
-static int _HandleHkdf(whServerContext* ctx, uint16_t magic,
-                       const void* cryptoDataIn, uint16_t inSize,
-                       void* cryptoDataOut, uint16_t* outSize);
+static int _HandleHkdf(whServerContext* ctx,  uint16_t magic,
+                       const void* cryptoDataIn,  uint16_t inSize,
+                       void* cryptoDataOut,  uint16_t* outSize);
 #endif /* HAVE_HKDF */
 
 #ifndef NO_AES
