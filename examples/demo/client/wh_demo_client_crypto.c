@@ -128,7 +128,7 @@ int wh_DemoClient_CryptoRsaImport(whClientContext* clientContext)
     int        keySz;
     int        needEvict     = 0;
     whKeyId    keyId         = WH_KEYID_ERASED;
-    char       keyFile[]     = "../../../demo/certs/rsa-2048-key.der";
+    char       keyFile[]     = "../../demo/certs/rsa-2048-key.der";
     const char plainString[] = "The quick brown fox jumps over the lazy dog.";
     char       keyLabel[]    = "baby's first key";
     uint8_t    keyBuf[2048];
@@ -330,11 +330,11 @@ int wh_DemoClient_CryptoCurve25519Import(whClientContext* clientContext)
     whKeyId keyIdBob           = WH_KEYID_ERASED;
     whKeyId keyIdAlice         = WH_KEYID_ERASED;
     #if 0
-    char    keyPairFileBob[]   = "../../../demo/certs/curve25519_keyBob.der";
-    char    keyPairFileAlice[] = "../../../demo/certs/curve25519_keyAlice.der";
+    char    keyPairFileBob[]   = "../../demo/certs/curve25519_keyBob.der";
+    char    keyPairFileAlice[] = "../../demo/certs/curve25519_keyAlice.der";
     #else
-    char    keyPairFileBob[]   = "../../../demo/certs/curve25519_keyBob.der";
-    char    keyPairFileAlice[] = "../../../demo/certs/curve25519_keyAlice.der";
+    char    keyPairFileBob[]   = "../../demo/certs/curve25519_keyBob.der";
+    char    keyPairFileAlice[] = "../../demo/certs/curve25519_keyAlice.der";
     #endif
     char    keyLabel[]         = "baby's first key";
     uint8_t keyBuf[256];
@@ -609,8 +609,8 @@ int wh_DemoClient_CryptoEccImport(whClientContext* clientContext)
     whKeyId    keyIdBob   = WH_KEYID_ERASED;
     word32     outLen;
     word32     sigLen;
-    char       keyFileAlice[] = "../../../demo/certs/alice-ecc256-key.der";
-    char       keyFileBob[]   = "../../../demo/certs/bob-ecc256-key.der";
+    char       keyFileAlice[] = "../../demo/certs/alice-ecc256-key.der";
+    char       keyFileBob[]   = "../../demo/certs/bob-ecc256-key.der";
     char       keyLabel[]     = "baby's first key";
     ecc_key    aliceKey[1];
     ecc_key    bobKey[1];

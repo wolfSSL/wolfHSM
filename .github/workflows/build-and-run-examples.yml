@@ -54,6 +54,12 @@ jobs:
         cd examples/posix/wh_posix_client
         ./Build/wh_posix_client.elf --type ${{ matrix.transport }}
 
+    - name: Run POSIX demo test
+      if: matrix.transport == 'tcp'
+      run: |
+        cd examples/posix/wh_posix_client
+        ./Build/wh_posix_client.elf --type ${{ matrix.transport }} --test
+
     # Optional: Kill the server process if it doesn't exit on its own
     - name: Cleanup POSIX server
       if: always()
