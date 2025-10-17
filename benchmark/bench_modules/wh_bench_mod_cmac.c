@@ -66,6 +66,7 @@ int _benchCmacAes(whClientContext* client, whBenchOpContext* ctx, int id,
 #if defined(WOLFHSM_CFG_DMA)
     if (devId == WH_DEV_ID_DMA) {
         inLen = WOLFHSM_CFG_BENCH_DMA_BUFFER_SIZE;
+#if defined(WOLFHSM_CFG_TEST_POSIX)
         if (ctx->transportType == WH_BENCH_TRANSPORT_POSIX_DMA) {
             /* if static memory was used with DMA then use XMALLOC */
             void* heap =
@@ -79,12 +80,14 @@ int _benchCmacAes(whClientContext* client, whBenchOpContext* ctx, int id,
                                     DYNAMIC_TYPE_TMP_BUFFER);
             if (out == NULL) {
                 WH_BENCH_PRINTF("Failed to allocate memory for DMA\n");
+                XFREE(in, heap, DYNAMIC_TYPE_TMP_BUFFER);
                 return WH_ERROR_NOSPACE;
             }
         }
         else {
             in = WH_BENCH_DMA_BUFFER;
         }
+#endif /* WOLFHSM_CFG_TEST_POSIX */
     }
     else
 #endif
@@ -156,6 +159,7 @@ exit:
         }
     }
 #if defined(WOLFHSM_CFG_DMA)
+#if defined(WOLFHSM_CFG_TEST_POSIX)
     if (devId == WH_DEV_ID_DMA &&
         ctx->transportType == WH_BENCH_TRANSPORT_POSIX_DMA) {
         /* if static memory was used with DMA then use XFREE */
@@ -164,6 +168,7 @@ exit:
         XFREE(in, heap, DYNAMIC_TYPE_TMP_BUFFER);
         XFREE(out, heap, DYNAMIC_TYPE_TMP_BUFFER);
     }
+#endif /* WOLFHSM_CFG_TEST_POSIX */
 #endif
     (void)wc_CmacFree(cmac);
     return ret;

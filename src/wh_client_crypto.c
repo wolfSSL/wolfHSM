@@ -2992,7 +2992,9 @@ int wh_Client_CmacDma(whClientContext* ctx, Cmac* cmac, CmacType type,
     ret             = wh_Client_DmaProcessClientAddress(
         ctx, (uintptr_t)cmac, (void**)&stateAddr, req->state.sz,
         WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
-    req->state.addr = stateAddr;
+    if (ret == WH_ERROR_OK) {
+        req->state.addr = stateAddr;
+    }
 
     /* Handle different CMAC operations based on input parameters */
     if (ret == WH_ERROR_OK && key != NULL) {
@@ -3001,7 +3003,9 @@ int wh_Client_CmacDma(whClientContext* ctx, Cmac* cmac, CmacType type,
         ret         = wh_Client_DmaProcessClientAddress(
             ctx, (uintptr_t)key, (void**)&keyAddr, req->key.sz,
             WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
-        req->key.addr = keyAddr;
+        if (ret == WH_ERROR_OK) {
+            req->key.addr = keyAddr;
+        }
     }
 
     if (ret == WH_ERROR_OK && in != NULL) {
@@ -3278,20 +3282,26 @@ int wh_Client_Sha256Dma(whClientContext* ctx, wc_Sha256* sha, const uint8_t* in,
         ret = wh_Client_DmaProcessClientAddress(
             ctx, (uintptr_t)sha256, (void**)&stateAddr, req->state.sz,
             WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
-        req->state.addr = stateAddr;
+        if (ret == WH_ERROR_OK) {
+            req->state.addr = stateAddr;
+        }
 
         if (ret == WH_ERROR_OK) {
             ret = wh_Client_DmaProcessClientAddress(
                 ctx, (uintptr_t)in, (void**)&inAddr, req->input.sz,
                 WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
-            req->input.addr = inAddr;
+            if (ret == WH_ERROR_OK) {
+                req->input.addr = inAddr;
+            }
         }
 
         if (ret == WH_ERROR_OK) {
             ret = wh_Client_DmaProcessClientAddress(
                 ctx, (uintptr_t)out, (void**)&outAddr, req->output.sz,
                 WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
-            req->output.addr = outAddr;
+            if (ret == WH_ERROR_OK) {
+                req->output.addr = outAddr;
+            }
         }
     }
 
@@ -3567,26 +3577,32 @@ int wh_Client_Sha224Dma(whClientContext* ctx, wc_Sha224* sha, const uint8_t* in,
         ret = wh_Client_DmaProcessClientAddress(
             ctx, (uintptr_t)sha224, (void**)&stateAddr, req->state.sz,
             WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
-        req->state.addr = stateAddr;
+        if (ret == WH_ERROR_OK) {
+            req->state.addr = stateAddr;
+        }
 
         if (ret == WH_ERROR_OK) {
             ret = wh_Client_DmaProcessClientAddress(
                 ctx, (uintptr_t)in, (void**)&inAddr, req->input.sz,
                 WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
-            req->input.addr = inAddr;
+            if (ret == WH_ERROR_OK) {
+                req->input.addr = inAddr;
+            }
         }
 
         if (ret == WH_ERROR_OK) {
             ret = wh_Client_DmaProcessClientAddress(
                 ctx, (uintptr_t)out, (void**)&outAddr, req->output.sz,
                 WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
-            req->output.addr = outAddr;
+            if (ret == WH_ERROR_OK) {
+                req->output.addr = outAddr;
+            }
         }
     }
 
     /* Caller invoked SHA Update:
      * wc_CryptoCb_Sha224Hash(sha224, data, len, NULL) */
-    if (in != NULL) {
+    if (in != NULL && ret == WH_ERROR_OK) {
         req->finalize    = 0;
 
 #ifdef DEBUG_CRYPTOCB_VERBOSE
@@ -3853,26 +3869,32 @@ int wh_Client_Sha384Dma(whClientContext* ctx, wc_Sha384* sha, const uint8_t* in,
         ret = wh_Client_DmaProcessClientAddress(
             ctx, (uintptr_t)sha384, (void**)&stateAddr, req->state.sz,
             WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
-        req->state.addr = stateAddr;
+        if (ret == WH_ERROR_OK) {
+            req->state.addr = stateAddr;
+        }
 
         if (ret == WH_ERROR_OK) {
             ret = wh_Client_DmaProcessClientAddress(
                 ctx, (uintptr_t)in, (void**)&inAddr, req->input.sz,
                 WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
-            req->input.addr = inAddr;
+            if (ret == WH_ERROR_OK) {
+                req->input.addr = inAddr;
+            }
         }
 
         if (ret == WH_ERROR_OK) {
             ret = wh_Client_DmaProcessClientAddress(
                 ctx, (uintptr_t)out, (void**)&outAddr, req->output.sz,
                 WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
-            req->output.addr = outAddr;
+            if (ret == WH_ERROR_OK) {
+                req->output.addr = outAddr;
+            }
         }
     }
 
     /* Caller invoked SHA Update:
      * wc_CryptoCb_Sha384Hash(sha384, data, len, NULL) */
-    if (in != NULL) {
+    if (in != NULL && ret == WH_ERROR_OK) {
         req->finalize = 0;
 #ifdef DEBUG_CRYPTOCB_VERBOSE
         printf("[client] SHA384 DMA UPDATE: inAddr=%p, inSz=%u\n", in,
@@ -3946,7 +3968,7 @@ int wh_Client_Sha384Dma(whClientContext* ctx, wc_Sha384* sha, const uint8_t* in,
     }
     return ret;
 }
-#endif /* WOLHSM_CFG_DMA */
+#endif /* WOLFHSM_CFG_DMA */
 #endif /* WOLFSSL_SHA384 */
 
 
@@ -4150,26 +4172,32 @@ int wh_Client_Sha512Dma(whClientContext* ctx, wc_Sha512* sha, const uint8_t* in,
         ret = wh_Client_DmaProcessClientAddress(
             ctx, (uintptr_t)sha512, (void**)&stateAddr, req->state.sz,
             WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
-        req->state.addr = stateAddr;
+        if (ret == WH_ERROR_OK) {
+            req->state.addr = stateAddr;
+        }
 
         if (ret == WH_ERROR_OK) {
             ret = wh_Client_DmaProcessClientAddress(
                 ctx, (uintptr_t)in, (void**)&inAddr, req->input.sz,
                 WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
-            req->input.addr = inAddr;
+            if (ret == WH_ERROR_OK) {
+                req->input.addr = inAddr;
+            }
         }
 
         if (ret == WH_ERROR_OK) {
             ret = wh_Client_DmaProcessClientAddress(
                 ctx, (uintptr_t)out, (void**)&outAddr, req->output.sz,
                 WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
-            req->output.addr = outAddr;
+            if (ret == WH_ERROR_OK) {
+                req->output.addr = outAddr;
+            }
         }
     }
 
     /* Caller invoked SHA Update:
      * wc_CryptoCb_Sha512Hash(sha512, data, len, NULL) */
-    if (in != NULL) {
+    if (in != NULL && ret == WH_ERROR_OK) {
         req->finalize    = 0;
 
 #ifdef DEBUG_CRYPTOCB_VERBOSE

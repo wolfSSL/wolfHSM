@@ -52,7 +52,6 @@ int _benchSha256(whClientContext* client, whBenchOpContext* ctx, int id,
 #if defined(WOLFHSM_CFG_DMA)
     if (devId == WH_DEV_ID_DMA) {
         inLen = WOLFHSM_CFG_BENCH_DMA_BUFFER_SIZE;
-
 #if defined(WOLFHSM_CFG_TEST_POSIX)
         if (ctx->transportType == WH_BENCH_TRANSPORT_POSIX_DMA) {
             /* if static memory was used with DMA then use XMALLOC */
@@ -66,6 +65,7 @@ int _benchSha256(whClientContext* client, whBenchOpContext* ctx, int id,
             out = XMALLOC(WC_SHA256_DIGEST_SIZE, heap, DYNAMIC_TYPE_TMP_BUFFER);
             if (out == NULL) {
                 WH_BENCH_PRINTF("Failed to allocate memory for DMA\n");
+                XFREE((uint8_t*)in, heap, DYNAMIC_TYPE_TMP_BUFFER);
                 return WH_ERROR_NOSPACE;
             }
         }
