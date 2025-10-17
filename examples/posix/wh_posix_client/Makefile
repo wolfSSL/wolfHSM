@@ -75,6 +75,12 @@ ifeq ($(DEBUG),1)
 	LDFLAGS += $(DBGFLAGS)
 endif
 
+# Add address sanitizer option
+ifeq ($(ASAN),1)
+    CFLAGS += -fsanitize=address
+    LDFLAGS += -fsanitize=address
+endif
+
 ## Source files
 # Assembly source files
 SRC_ASM +=
