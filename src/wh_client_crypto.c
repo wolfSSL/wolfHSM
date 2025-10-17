@@ -134,7 +134,8 @@ static int      _getCryptoResponse(uint8_t* respBuf, uint16_t type,
 /* Helper function to prepare a crypto request buffer with generic header */
 static uint8_t* _createCryptoRequest(uint8_t* reqBuf, uint16_t type)
 {
-    return _createCryptoRequestWithSubtype(reqBuf, type, WH_MESSAGE_CRYPTO_ALGO_SUBTYPE_NONE);
+    return _createCryptoRequestWithSubtype(reqBuf, type,
+                                           WH_MESSAGE_CRYPTO_ALGO_SUBTYPE_NONE);
 }
 
 /* Helper function to prepare a crypto request buffer with generic header and
@@ -2968,13 +2969,13 @@ static int _xferSha256BlockAndUpdateDigest(whClientContext* ctx,
                                            wc_Sha256*       sha256,
                                            uint32_t         isLastBlock)
 {
-    uint16_t                        group   = WH_MESSAGE_GROUP_CRYPTO;
-    uint16_t                        action  = WH_MESSAGE_ACTION_NONE;
-    int                             ret     = 0;
-    uint16_t                        dataSz  = 0;
-    whMessageCrypto_Sha256Request*  req     = NULL;
-    whMessageCrypto_Sha2Response*   res     = NULL;
-    uint8_t*                        dataPtr = NULL;
+    uint16_t                       group   = WH_MESSAGE_GROUP_CRYPTO;
+    uint16_t                       action  = WH_MESSAGE_ACTION_NONE;
+    int                            ret     = 0;
+    uint16_t                       dataSz  = 0;
+    whMessageCrypto_Sha256Request* req     = NULL;
+    whMessageCrypto_Sha2Response*  res     = NULL;
+    uint8_t*                       dataPtr = NULL;
 
     /* Get data buffer */
     dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
@@ -2983,21 +2984,23 @@ static int _xferSha256BlockAndUpdateDigest(whClientContext* ctx,
     }
 
     /* Setup generic header and get pointer to request data */
-    req = (whMessageCrypto_Sha256Request*)_createCryptoRequest(dataPtr,WC_HASH_TYPE_SHA256);
+    req = (whMessageCrypto_Sha256Request*)_createCryptoRequest(
+        dataPtr, WC_HASH_TYPE_SHA256);
 
 
     /* Send the full block to the server, along with the
      * current hash state if needed. Finalization/padding of last block is up to
      * the server, we just need to let it know we are done and sending an
      * incomplete last block */
-    if(isLastBlock){
-        req->isLastBlock=1;
-        req->lastBlockLen=sha256->buffLen;
-    }else{
-        req->isLastBlock=0;
+    if (isLastBlock) {
+        req->isLastBlock  = 1;
+        req->lastBlockLen = sha256->buffLen;
+    }
+    else {
+        req->isLastBlock = 0;
     }
     memcpy(req->inBlock, sha256->buffer,
-            (isLastBlock) ? sha256->buffLen : WC_SHA256_BLOCK_SIZE);
+           (isLastBlock) ? sha256->buffLen : WC_SHA256_BLOCK_SIZE);
 
     /* Send the hash state - this will be 0 on the first block on a properly
      * initialized sha256 struct */
@@ -3115,13 +3118,13 @@ int wh_Client_Sha256(whClientContext* ctx, wc_Sha256* sha256, const uint8_t* in,
 int wh_Client_Sha256Dma(whClientContext* ctx, wc_Sha256* sha, const uint8_t* in,
                         uint32_t inLen, uint8_t* out)
 {
-    int                                ret     = WH_ERROR_OK;
-    wc_Sha256*                         sha256  = sha;
-    uint16_t                           respSz  = 0;
-    uint16_t                           group   = WH_MESSAGE_GROUP_CRYPTO_DMA;
-    uint8_t*                           dataPtr = NULL;
-    whMessageCrypto_Sha2DmaRequest*    req     = NULL;
-    whMessageCrypto_Sha2DmaResponse*   resp    = NULL;
+    int                              ret     = WH_ERROR_OK;
+    wc_Sha256*                       sha256  = sha;
+    uint16_t                         respSz  = 0;
+    uint16_t                         group   = WH_MESSAGE_GROUP_CRYPTO_DMA;
+    uint8_t*                         dataPtr = NULL;
+    whMessageCrypto_Sha2DmaRequest*  req     = NULL;
+    whMessageCrypto_Sha2DmaResponse* resp    = NULL;
     uintptr_t inAddr = 0; /* The req->input.addr is reused elsewhere, this
                              local variable is to keep track of the resulting
                              DMA translation to pass back to the callback on
@@ -3141,10 +3144,10 @@ int wh_Client_Sha256Dma(whClientContext* ctx, wc_Sha256* sha, const uint8_t* in,
 
     /* map addresses and setup default request structure */
     if (in != NULL || out != NULL) {
-        req->finalize    = 0;
-        req->state.sz    = sizeof(*sha256);
-        req->input.sz    = inLen;
-        req->output.sz   = WC_SHA256_DIGEST_SIZE; /* not needed, but YOLO */
+        req->finalize  = 0;
+        req->state.sz  = sizeof(*sha256);
+        req->input.sz  = inLen;
+        req->output.sz = WC_SHA256_DIGEST_SIZE; /* not needed, but YOLO */
 
         /* Perform address translations */
         ret = wh_Client_DmaProcessClientAddress(
