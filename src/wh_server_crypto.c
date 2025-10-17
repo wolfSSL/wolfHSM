@@ -2112,6 +2112,33 @@ static int _HandleAesGcmDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
         }
     }
 
+    /* Post-write DMA address processing for output/authTag (on success) */
+    if (ret == WH_ERROR_OK) {
+        if (req.output.sz > 0) {
+            int rc2 = wh_Server_DmaProcessClientAddress(
+                ctx, req.output.addr, &outAddr, req.output.sz,
+                WH_DMA_OPER_CLIENT_WRITE_POST, (whServerDmaFlags){0});
+            if (rc2 != WH_ERROR_OK) {
+                if (rc2 == WH_ERROR_ACCESS) {
+                    res.dmaAddrStatus.badAddr = req.output;
+                }
+                ret = rc2;
+            }
+        }
+        /* During encryption, the auth tag is written to client memory */
+        if (ret == WH_ERROR_OK && req.enc && req.authTag.sz > 0) {
+            int rc2 = wh_Server_DmaProcessClientAddress(
+                ctx, req.authTag.addr, &authTagAddr, req.authTag.sz,
+                WH_DMA_OPER_CLIENT_WRITE_POST, (whServerDmaFlags){0});
+            if (rc2 != WH_ERROR_OK) {
+                if (rc2 == WH_ERROR_ACCESS) {
+                    res.dmaAddrStatus.badAddr = req.authTag;
+                }
+                ret = rc2;
+            }
+        }
+    }
+
     wc_AesFree(aes);
     res.outSz = outSz;
 
