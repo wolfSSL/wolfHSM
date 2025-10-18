@@ -26,7 +26,9 @@
 #include <wolfhsm/wh_error.h>
 
 #include "wh_test_common.h"
-
+#if defined(WOLFHSM_CFG_TEST_CLIENT_CRYPTIMEOUT)
+#include <sys/time.h> /* For gettimeofday */
+#endif
 
 /**
  * Helper function to configure and select an NVM backend for testing.
@@ -90,3 +92,34 @@ int whTest_NvmCfgBackend(whTestNvmBackendType   type,
 
     return 0;
 }
+
+#if defined(WOLFHSM_CFG_TEST_CLIENT_CRYPTIMEOUT)
+uint32_t whTest_GetCurrentTime(int reset)
+{
+    struct timeval tv;
+    (void)reset;
+    if (gettimeofday(&tv, 0) < 0)
+        return 0;
+    /* Convert to milliseconds number. */
+    return (uint32_t)(tv.tv_sec * 1000 + tv.tv_usec / 1000);
+}
+/* start_time stores the time (in milliseconds) returned by the GetCurrentTime()
+ * callback when the operation started.
+ * The actual unit depends on the GetCurrentTime() implementation.
+ * timeout_ms represents the timeout in milliseconds, which is derived from
+ * the crypt_timeout value in whCommClientConfig.
+ */
+int whTest_CheckCryptoTimeout(uint32_t* start_time, uint32_t timeout_ms)
+{
+    uint32_t current_time = whTest_GetCurrentTime(0);
+    uint32_t elapsed_time = current_time - *start_time;
+
+    if (timeout_ms == 0) {
+        return WH_ERROR_OK;
+    }
+    if (elapsed_time > timeout_ms) {
+        return WH_ERROR_CRYPTIMEOUT;
+    }
+    return WH_ERROR_OK;
+}
+#endif /* WOLFHSM_CFG_TEST_CLIENT_CRYPTIMEOUT */
