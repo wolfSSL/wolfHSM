@@ -18,9 +18,10 @@
  */
 #include "wh_bench_mod.h"
 #include "wolfhsm/wh_error.h"
-#include "wolfssl/wolfcrypt/random.h"
 
-#if defined(WOLFHSM_CFG_BENCH_ENABLE)
+
+#if !defined(WOLFHSM_CFG_NO_CRYPTO) && defined(WOLFHSM_CFG_BENCH_ENABLE)
+#include "wolfssl/wolfcrypt/random.h"
 
 #if !defined(WC_NO_RNG)
 

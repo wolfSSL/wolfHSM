@@ -35,8 +35,9 @@ static int wh_ServerTask(void* cf, const char* keyFilePath, int keyId,
                          int clientId);
 
 static void _sleepMs(long milliseconds);
+#if !defined(WOLFHSM_CFG_NO_CRYPTO)
 static int  _hardwareCryptoCb(int devId, struct wc_CryptoInfo* info, void* ctx);
-
+#endif
 static void _sleepMs(long milliseconds)
 {
     struct timespec req;
@@ -57,6 +58,7 @@ const char* type = "tcp"; /* default to tcp type */
 static int loadAndStoreKeys(whServerContext* server, whKeyId* outKeyId,
                             const char* keyFilePath, int keyId, int clientId)
 {
+#if !defined(WOLFHSM_CFG_NO_CRYPTO)
     int           ret;
     int           keyFd;
     int           keySz;
@@ -116,6 +118,14 @@ static int loadAndStoreKeys(whServerContext* server, whKeyId* outKeyId,
 
     *outKeyId = meta.id;
     return ret;
+#else
+    (void)server;
+    (void)outKeyId;
+    (void)keyFilePath;
+    (void)keyId;
+    (void)clientId;
+    return WH_ERROR_NOTIMPL;
+#endif /* !WOLFHSM_CFG_NO_CRYPTO */
 }
 
 
@@ -217,7 +227,7 @@ static int wh_ServerTask(void* cf, const char* keyFilePath, int keyId,
     }
     return ret;
 }
-
+#if !defined(WOLFHSM_CFG_NO_CRYPTO)
 static int _hardwareCryptoCb(int devId, struct wc_CryptoInfo* info, void* ctx)
 {
     (void)devId;
@@ -254,7 +264,7 @@ static int _hardwareCryptoCb(int devId, struct wc_CryptoInfo* info, void* ctx)
     }
     return ret;
 }
-
+#endif
 static void Usage(const char* exeName)
 {
     printf("Usage: %s --key <key_file_path> --id <key_id> --client <client_id> "
@@ -342,7 +352,7 @@ int main(int argc, char** argv)
         printf("Failed to initialize NVM: %d\n", rc);
         return rc;
     }
-
+#if !defined(WOLFHSM_CFG_NO_CRYPTO)
     /* Crypto context */
     whServerCryptoContext crypto[1] = {{
         .devId = INVALID_DEVID,
@@ -405,6 +415,15 @@ int main(int argc, char** argv)
         printf("Failed to wolfCrypt_Cleanup: %d\n", rc);
         return rc;
     }
-
+#else
+    (void)keyFilePath;
+    (void)keyId;
+    (void)clientId;
+    rc = wh_ServerTask(s_conf, keyFilePath, keyId, clientId);
+    if (rc != WH_ERROR_OK) {
+        printf("Server task failed: %d\n", rc);
+        return rc;
+    }
+#endif
     return rc;
 }

@@ -41,7 +41,7 @@
 
 /* Components */
 #include "wolfhsm/wh_comm.h"
-
+#if !defined(WOLFHSM_CFG_NO_CRYPTO)
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/types.h"
 #include "wolfssl/wolfcrypt/error-crypt.h"
@@ -56,6 +56,7 @@
 #include "wolfssl/wolfcrypt/dilithium.h"
 #include "wolfssl/wolfcrypt/sha256.h"
 #include "wolfssl/wolfcrypt/sha512.h"
+#endif
 
 /* Message definitions */
 #include "wolfhsm/wh_message.h"
