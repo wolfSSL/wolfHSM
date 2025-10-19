@@ -134,7 +134,6 @@ static int whTest_CryptoRng(whClientContext* ctx, int devId, WC_RNG* rng)
     uint8_t med[WH_TEST_RNG_MED];
     uint8_t big[WH_TEST_RNG_BIG];
 
-    /* test rng.  Note this rng is used for many tests so is left inited */
     ret = wc_InitRng_ex(rng, NULL, devId);
     if (ret != 0) {
         WH_ERROR_PRINT("Failed to wc_InitRng_ex %d\n", ret);
@@ -152,10 +151,14 @@ static int whTest_CryptoRng(whClientContext* ctx, int devId, WC_RNG* rng)
                     WH_ERROR_PRINT("Failed to wc_RNG_GenerateBlock %d\n", ret);
                 }
             }
+            ret = wc_FreeRng(rng);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to wc_FreeRng %d\n", ret);
+            }
         }
     }
     if (ret == 0) {
-        printf("RNG SUCCESS\n");
+        printf("RNG DEVID=0x%X SUCCESS\n", devId);
     }
     return ret;
 }
@@ -3561,8 +3564,25 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     }
 #endif /* WOLFHSM_CFG_TEST_VERBOSE */
 
+    /* First crypto test should be of RNG so we can iterate over and test all
+     * devIds before choosing one to run the rest of the tests on */
+    i = 0;
+    while ((ret == WH_ERROR_OK) && (i < WH_NUM_DEVIDS)) {
+        ret = whTest_CryptoRng(client, WH_DEV_IDS_ARRAY[i], rng);
+        if (ret == WH_ERROR_OK) {
+            wc_FreeRng(rng);
+            i++;
+        }
+    }
+
+    /* Now that we have tested all RNG devIds, reinitialize the default RNG
+     * devId (non-DMA) that will be used by the remainder of the tests for
+     * random input generation */
     if (ret == 0) {
-        ret = whTest_CryptoRng(client, WH_DEV_ID, rng);
+        ret = wc_InitRng_ex(rng, NULL, WH_DEV_ID);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to reinitialize RNG %d\n", ret);
+        }
     }
 
     if (ret == 0) {

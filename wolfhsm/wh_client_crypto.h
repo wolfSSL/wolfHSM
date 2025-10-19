@@ -64,6 +64,22 @@
  */
 int wh_Client_RngGenerate(whClientContext* ctx, uint8_t* out, uint32_t size);
 
+#ifdef WOLFHSM_CFG_DMA
+/**
+ * @brief Generate random bytes using DMA
+ *
+ * This function requests the server to generate random bytes directly into
+ * client memory using DMA, eliminating the need for chunking and copying
+ * through the communication buffer.
+ *
+ * @param[in] ctx Pointer to the client context
+ * @param[out] out Pointer to where the bytes are to be placed
+ * @param[in] size Number of bytes to generate
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_RngGenerateDma(whClientContext* ctx, uint8_t* out, uint32_t size);
+#endif /* WOLFHSM_CFG_DMA */
+
 #ifdef HAVE_CURVE25519
 /**
  * @brief Associates a Curve25519 key with a specific key ID.

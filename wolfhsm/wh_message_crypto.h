@@ -974,4 +974,23 @@ int wh_MessageCrypto_TranslateMlDsaVerifyDmaResponse(
     uint16_t magic, const whMessageCrypto_MlDsaVerifyDmaResponse* src,
     whMessageCrypto_MlDsaVerifyDmaResponse* dest);
 
+/* RNG DMA Request */
+typedef struct {
+    whMessageCrypto_DmaBuffer output; /* Output buffer for random bytes */
+} whMessageCrypto_RngDmaRequest;
+
+/* RNG DMA Response */
+typedef struct {
+    whMessageCrypto_DmaAddrStatus dmaAddrStatus;
+} whMessageCrypto_RngDmaResponse;
+
+/* RNG DMA translation functions */
+int wh_MessageCrypto_TranslateRngDmaRequest(
+    uint16_t magic, const whMessageCrypto_RngDmaRequest* src,
+    whMessageCrypto_RngDmaRequest* dest);
+
+int wh_MessageCrypto_TranslateRngDmaResponse(
+    uint16_t magic, const whMessageCrypto_RngDmaResponse* src,
+    whMessageCrypto_RngDmaResponse* dest);
+
 #endif /* !WOLFHSM_WH_MESSAGE_CRYPTO_H_ */
