@@ -692,7 +692,7 @@ int wh_Client_AesGcm(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
     if ((ctx == NULL) || (aes == NULL) || ((in == NULL) && (len > 0)) ||
         ((iv == NULL) && (iv_len > 0)) ||
         ((authin == NULL) && (authin_len > 0)) ||
-        ((enc == 0) && (dec_tag == NULL)) || (out == NULL)) {
+        ((enc == 0) && (dec_tag == NULL))) {
         return WH_ERROR_BADARGS;
     }
 
@@ -811,7 +811,7 @@ int wh_Client_AesGcm(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
                                      res->authTagSz);
                 }
 #endif
-                /* copy the response result */
+                /* copy the response result if present */
                 if (out != NULL && res->sz == len) {
                     memcpy(out, res_out, res->sz);
                 }
@@ -859,7 +859,7 @@ int wh_Client_AesGcmDma(whClientContext* ctx, Aes* aes, int enc,
     uint32_t       keyLen = 0;
     uint16_t       reqLen;
 
-    if (ctx == NULL || aes == NULL || out == NULL) {
+    if (ctx == NULL || aes == NULL) {
         return WH_ERROR_BADARGS;
     }
 
