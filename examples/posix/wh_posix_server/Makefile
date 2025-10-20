@@ -66,6 +66,12 @@ ifeq ($(DEBUG),1)
 	LDFLAGS += $(DBGFLAGS)
 endif
 
+# Add address sanitizer option
+ifeq ($(ASAN),1)
+    CFLAGS += -fsanitize=address
+    LDFLAGS += -fsanitize=address
+endif
+
 # Support a SHE-capable build
 ifeq ($(SHE),1)
 CFLAGS += -DWOLFHSM_CFG_SHE_EXTENSION
