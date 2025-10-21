@@ -18,15 +18,19 @@
  */
 
 /*
- * test/wh_test_global_keys.c
+ * test/wh_test_multiclient.c
  *
- * Multi-client testing for global keys feature
+ * Multi-client test framework and test suites
+ *
+ * Provides reusable setup/teardown infrastructure for testing features that
+ * require multiple clients. Each client connects to its own server instance,
+ * but both servers share a common NVM context to enable testing of shared
+ * resources (global keys, shared counters, etc.).
  */
 
 #include "wolfhsm/wh_settings.h"
 
-#if defined(WOLFHSM_CFG_GLOBAL_KEYS) && defined(WOLFHSM_CFG_ENABLE_CLIENT) && \
-    defined(WOLFHSM_CFG_ENABLE_SERVER)
+#if defined(WOLFHSM_CFG_ENABLE_CLIENT) && defined(WOLFHSM_CFG_ENABLE_SERVER)
 
 #include <stdint.h>
 #include <stdio.h>
@@ -61,6 +65,10 @@ static const uint8_t TEST_KEY_DATA_1[] = "TestGlobalKey1Data";
 static const uint8_t TEST_KEY_DATA_2[] = "TestLocalKey2Data";
 static const uint8_t TEST_KEY_DATA_3[] = "TestGlobalKey3DataLonger";
 
+/* ============================================================================
+ * MULTI-CLIENT TEST FRAMEWORK INFRASTRUCTURE
+ * ========================================================================== */
+
 /* Server contexts for connect callbacks */
 static whServerContext* testServer1 = NULL;
 static whServerContext* testServer2 = NULL;
@@ -84,6 +92,12 @@ static int _connectCb2(void* context, whCommConnected connected)
     }
     return wh_Server_SetConnected(testServer2, connected);
 }
+
+/* ============================================================================
+ * GLOBAL KEYS TEST SUITE
+ * ========================================================================== */
+
+#ifdef WOLFHSM_CFG_GLOBAL_KEYS
 
 /* Test 1: Basic global key operations */
 static int _testGlobalKeyBasic(whClientContext* client1,
@@ -699,14 +713,85 @@ static int _testGlobalKeyUnwrapCache(whClientContext* client1,
 }
 #endif /* WOLFHSM_CFG_KEYWRAP */
 
-/* Main test function */
-int whTest_GlobalKeys(void)
+/* Helper function to run all global keys tests */
+static int _runGlobalKeysTests(whClientContext* client1,
+                               whServerContext* server1,
+                               whClientContext* client2,
+                               whServerContext* server2)
+{
+    printf("=== Running Global Keys Test Suite ===\n\n");
+
+    printf("Running test 1: Global key basic operations...\n");
+    fflush(stdout);
+    WH_TEST_RETURN_ON_FAIL(
+        _testGlobalKeyBasic(client1, server1, client2, server2));
+
+    printf("Running test 2: Local key isolation...\n");
+    fflush(stdout);
+    WH_TEST_RETURN_ON_FAIL(
+        _testLocalKeyIsolation(client1, server1, client2, server2));
+
+    printf("Running test 3: Mixed global and local keys...\n");
+    fflush(stdout);
+    WH_TEST_RETURN_ON_FAIL(
+        _testMixedGlobalLocal(client1, server1, client2, server2));
+
+    printf("Running test 4: NVM persistence...\n");
+    fflush(stdout);
+    WH_TEST_RETURN_ON_FAIL(
+        _testGlobalKeyNvmPersistence(client1, server1, client2, server2));
+
+    printf("Running test 5: Export protection...\n");
+    fflush(stdout);
+    WH_TEST_RETURN_ON_FAIL(
+        _testGlobalKeyExportProtection(client1, server1, client2, server2));
+
+    printf("Running test 6: No cross-cache interference...\n");
+    fflush(stdout);
+    WH_TEST_RETURN_ON_FAIL(
+        _testNoCrossCacheInterference(client1, server1, client2, server2));
+
+#ifdef WOLFHSM_CFG_DMA
+    printf("Running test 7: DMA cache with global keys...\n");
+    fflush(stdout);
+    WH_TEST_RETURN_ON_FAIL(
+        _testGlobalKeyDmaCache(client1, server1, client2, server2));
+
+    printf("Running test 8: DMA export with global keys...\n");
+    fflush(stdout);
+    WH_TEST_RETURN_ON_FAIL(
+        _testGlobalKeyDmaExport(client1, server1, client2, server2));
+#endif
+
+#ifdef WOLFHSM_CFG_KEYWRAP
+    printf("Running test 9: Key wrap with global server key...\n");
+    fflush(stdout);
+    WH_TEST_RETURN_ON_FAIL(
+        _testGlobalKeyWrap(client1, server1, client2, server2));
+
+    printf("Running test 10: Key unwrap and cache with global server key...\n");
+    fflush(stdout);
+    WH_TEST_RETURN_ON_FAIL(
+        _testGlobalKeyUnwrapCache(client1, server1, client2, server2));
+#endif
+
+    printf("=== All Global Keys Tests PASSED ===\n\n");
+    return 0;
+}
+
+#endif /* WOLFHSM_CFG_GLOBAL_KEYS */
+
+/* ============================================================================
+ * MULTI-CLIENT SEQUENTIAL TEST FRAMEWORK
+ * ========================================================================== */
+
+/* Generic setup/teardown for multi-client sequential tests using shared memory
+ */
+static int whTest_MultiClientSequential(void)
 {
     int ret = 0;
 
-    printf("DEBUG: whTest_GlobalKeys() called\n");
-    fflush(stdout);
-    printf("=== Global Keys Multi-Client Tests ===\n\n");
+    printf("=== Multi-Client Sequential Test Setup ===\n\n");
 
     /* Transport memory configurations for both clients */
     static uint8_t       req1[BUFFER_SIZE];
@@ -803,10 +888,10 @@ int whTest_GlobalKeys(void)
                       .comm_config = cs_conf1,
                       .nvm         = nvm, /* Shared NVM */
 #if !defined(WOLFHSM_CFG_NO_CRYPTO)
-                      .crypto      = crypto1,
+        .crypto = crypto1,
 #endif
     }};
-    whServerContext             server1[1]  = {0};
+    whServerContext server1[1] = {0};
 
     /* Server 2 configuration */
     whTransportServerCb         tscb2[1]    = {WH_TRANSPORT_MEM_SERVER_CB};
@@ -822,10 +907,10 @@ int whTest_GlobalKeys(void)
                       .nvm         = nvm, /* Shared NVM */
 
 #if !defined(WOLFHSM_CFG_NO_CRYPTO)
-                      .crypto      = crypto2,
+        .crypto = crypto2,
 #endif
     }};
-    whServerContext             server2[1]  = {0};
+    whServerContext server2[1] = {0};
 
     /* Expose server contexts to connect callbacks */
     testServer1 = server1;
@@ -940,72 +1025,19 @@ int whTest_GlobalKeys(void)
     if (ret != 0)
         return ret;
 
-    printf("About to run test suite...\n");
-    fflush(stdout);
+    printf("Multi-client setup complete. Ready to run test suites.\n\n");
 
-    printf("Running test 1: Global key basic operations...\n");
-    fflush(stdout);
-    ret = _testGlobalKeyBasic(client1, server1, client2, server2);
-    printf("_testGlobalKeyBasic returned: %d\n", ret);
-    fflush(stdout);
-    if (ret != 0) {
-        printf("Test 1 failed, returning %d\n", ret);
-        return ret;
-    }
-
-    printf("Running test 2: Local key isolation...\n");
-    fflush(stdout);
-    ret = _testLocalKeyIsolation(client1, server1, client2, server2);
-    printf("_testLocalKeyIsolation returned: %d\n", ret);
-    fflush(stdout);
-    if (ret != 0) {
-        printf("Test 2 failed, returning %d\n", ret);
-        return ret;
-    }
-
-    printf("Running test 3: Mixed global and local keys...\n");
-    fflush(stdout);
+    /* Run test suites that require multiple clients */
+#ifdef WOLFHSM_CFG_GLOBAL_KEYS
     WH_TEST_RETURN_ON_FAIL(
-        _testMixedGlobalLocal(client1, server1, client2, server2));
-
-    printf("Running test 4: NVM persistence...\n");
-    fflush(stdout);
-    WH_TEST_RETURN_ON_FAIL(
-        _testGlobalKeyNvmPersistence(client1, server1, client2, server2));
-
-    printf("Running test 5: Export protection...\n");
-    fflush(stdout);
-    WH_TEST_RETURN_ON_FAIL(
-        _testGlobalKeyExportProtection(client1, server1, client2, server2));
-
-    printf("Running test 6: No cross-cache interference...\n");
-    fflush(stdout);
-    WH_TEST_RETURN_ON_FAIL(
-        _testNoCrossCacheInterference(client1, server1, client2, server2));
-
-#ifdef WOLFHSM_CFG_DMA
-    printf("Running test 7: DMA cache with global keys...\n");
-    fflush(stdout);
-    WH_TEST_RETURN_ON_FAIL(
-        _testGlobalKeyDmaCache(client1, server1, client2, server2));
-
-    printf("Running test 8: DMA export with global keys...\n");
-    fflush(stdout);
-    WH_TEST_RETURN_ON_FAIL(
-        _testGlobalKeyDmaExport(client1, server1, client2, server2));
+        _runGlobalKeysTests(client1, server1, client2, server2));
 #endif
 
-#ifdef WOLFHSM_CFG_KEYWRAP
-    printf("Running test 9: Key wrap with global server key...\n");
-    fflush(stdout);
-    WH_TEST_RETURN_ON_FAIL(
-        _testGlobalKeyWrap(client1, server1, client2, server2));
-
-    printf("Running test 10: Key unwrap and cache with global server key...\n");
-    fflush(stdout);
-    WH_TEST_RETURN_ON_FAIL(
-        _testGlobalKeyUnwrapCache(client1, server1, client2, server2));
-#endif
+    /* Future test suites can be added here:
+     * - Access control tests
+     * - Shared counter tests
+     * - Cross-client operations tests
+     */
 
     /* Cleanup */
     wh_Client_Cleanup(client1);
@@ -1019,11 +1051,19 @@ int whTest_GlobalKeys(void)
 #endif
     wh_Nvm_Cleanup(nvm);
 
-    printf("=== All Global Keys Tests PASSED ===\n\n");
+    printf("=== Multi-Client Sequential Tests Complete ===\n\n");
 
     return 0;
 }
 
+/* ============================================================================
+ * PUBLIC API
+ * ========================================================================== */
 
-#endif /* WOLFHSM_CFG_GLOBAL_KEYS && WOLFHSM_CFG_ENABLE_CLIENT && \
-          WOLFHSM_CFG_ENABLE_SERVER */
+/* Main entry point for multi-client tests */
+int whTest_MultiClient(void)
+{
+    return whTest_MultiClientSequential();
+}
+
+#endif /* WOLFHSM_CFG_ENABLE_CLIENT && WOLFHSM_CFG_ENABLE_SERVER */
