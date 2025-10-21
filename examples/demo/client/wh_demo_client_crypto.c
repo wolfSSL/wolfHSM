@@ -329,13 +329,8 @@ int wh_DemoClient_CryptoCurve25519Import(whClientContext* clientContext)
     word32  outLen;
     whKeyId keyIdBob           = WH_KEYID_ERASED;
     whKeyId keyIdAlice         = WH_KEYID_ERASED;
-    #if 0
     char    keyPairFileBob[]   = "../../demo/certs/curve25519_keyBob.der";
     char    keyPairFileAlice[] = "../../demo/certs/curve25519_keyAlice.der";
-    #else
-    char    keyPairFileBob[]   = "../../demo/certs/curve25519_keyBob.der";
-    char    keyPairFileAlice[] = "../../demo/certs/curve25519_keyAlice.der";
-    #endif
     char    keyLabel[]         = "baby's first key";
     uint8_t keyBuf[256];
     uint8_t sharedOne[CURVE25519_KEYSIZE];
