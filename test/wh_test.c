@@ -162,7 +162,7 @@ int whTest_ClientTcp(void)
         .transport_cb      = pttccb,
         .transport_context = (void*)tcc,
         .transport_config  = (void*)mytcpconfig,
-        .client_id         = 0,
+        .client_id         = WH_TEST_DEFAULT_CLIENT_ID,
     }};
     whClientConfig     c_conf[1]  = {{
              .comm = cc_conf,

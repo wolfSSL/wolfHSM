@@ -747,7 +747,7 @@ int whTest_ClientServerSequential(whTestNvmBackendType nvmType)
                  .transport_cb      = tccb,
                  .transport_context = (void*)tmcc,
                  .transport_config  = (void*)tmcf,
-                 .client_id         = 123,
+                 .client_id         = WH_TEST_DEFAULT_CLIENT_ID,
                  .connect_cb        = _clientServerSequentialTestConnectCb,
     }};
 
@@ -1324,6 +1324,7 @@ int whTest_ClientServerClientConfig(whClientConfig* clientCfg)
 {
     int ret = 0;
     whClientContext client[1] = {0};
+    printf("pre-init\n");
 
     WH_TEST_RETURN_ON_FAIL(wh_Client_Init(client, clientCfg));
 
@@ -1717,6 +1718,7 @@ int whTest_ServerCfgLoop(whServerConfig* serverCfg)
     !defined(WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP)
 static void* _whClientTask(void *cf)
 {
+    fflush(stdout);
     WH_TEST_ASSERT(0 == whTest_ClientServerClientConfig(cf));
     return NULL;
 }
@@ -1775,7 +1777,7 @@ static int wh_ClientServer_MemThreadTest(whTestNvmBackendType nvmType)
                  .transport_cb      = tccb,
                  .transport_context = (void*)tmcc,
                  .transport_config  = (void*)tmcf,
-                 .client_id         = 123,
+                 .client_id         = WH_TEST_DEFAULT_CLIENT_ID,
     }};
     whClientConfig c_conf[1] = {{
        .comm = cc_conf,
@@ -1860,7 +1862,7 @@ static int wh_ClientServer_PosixMemMapThreadTest(whTestNvmBackendType nvmType)
                     .transport_cb      = tccb,
                     .transport_context = (void*)tmcc,
                     .transport_config  = (void*)tmcf,
-                    .client_id         = 123,
+                    .client_id         = WH_TEST_DEFAULT_CLIENT_ID,
     }};
     whClientConfig                 c_conf[1]  = {{
                          .comm = cc_conf,

@@ -819,7 +819,7 @@ static int whTest_MultiClientSequential(void)
                  .transport_cb      = tccb1,
                  .transport_context = (void*)tmcc1,
                  .transport_config  = (void*)tmcf1,
-                 .client_id         = 1,
+                 .client_id         = WH_TEST_DEFAULT_CLIENT_ID,
                  .connect_cb        = _connectCb1,
     }};
     whClientContext             client1[1]  = {0};
@@ -834,7 +834,7 @@ static int whTest_MultiClientSequential(void)
                  .transport_cb      = tccb2,
                  .transport_context = (void*)tmcc2,
                  .transport_config  = (void*)tmcf2,
-                 .client_id         = 2,
+                 .client_id         = WH_TEST_DEFAULT_CLIENT_ID + 1,
                  .connect_cb        = _connectCb2,
     }};
     whClientContext             client2[1]  = {0};

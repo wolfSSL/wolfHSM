@@ -523,7 +523,7 @@ static int wh_ClientServer_MemThreadTest(void)
                  .transport_cb      = tccb,
                  .transport_context = (void*)tmcc,
                  .transport_config  = (void*)tmcf,
-                 .client_id         = 1,
+                 .client_id         = WH_TEST_DEFAULT_CLIENT_ID,
     }};
     whClientConfig c_conf[1] = {{
        .comm = cc_conf,

@@ -68,6 +68,8 @@
 #define FLASH_SECTOR_SIZE (128 * 1024) /* 128KB */
 #define FLASH_PAGE_SIZE (8) /* 8B */
 
+#define ALT_CLIENT_ID (2)
+
 enum {
     /* Total size needs to fit:
      * - Transport CSR (whTransportMemCsr)
@@ -1352,7 +1354,7 @@ static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
         if (ret != 0) {
             WH_ERROR_PRINT("Failed to CommClose:%d\n",ret);
         } else {
-            ctx->comm->client_id = 2;
+            ctx->comm->client_id = ALT_CLIENT_ID;
             ret = wh_Client_CommInit(ctx, NULL, NULL);
             if (ret != 0) {
                 WH_ERROR_PRINT("Failed to CommInit:%d\n", ret);
@@ -1376,7 +1378,7 @@ static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
                 }
                 /* switch back and verify original key */
                 (void)wh_Client_CommClose(ctx);
-                ctx->comm->client_id = 1;
+                ctx->comm->client_id = WH_TEST_DEFAULT_CLIENT_ID;
                 ret = wh_Client_CommInit(ctx, NULL, NULL);
                 if (ret != 0) {
                     WH_ERROR_PRINT("Failed to reconnect: %d\n", ret);
@@ -3761,7 +3763,7 @@ int whTest_CryptoServerConfig(whServerConfig* config)
 
     WH_TEST_RETURN_ON_FAIL(wh_Server_Init(server, config));
     WH_TEST_RETURN_ON_FAIL(wh_Server_SetConnected(server, am_connected));
-    server->comm->client_id = 1;
+    server->comm->client_id = WH_TEST_DEFAULT_CLIENT_ID;
 
     while(am_connected == WH_COMM_CONNECTED) {
 #ifdef WOLFHSM_CFG_IS_TEST_SERVER
@@ -3784,9 +3786,9 @@ int whTest_CryptoServerConfig(whServerConfig* config)
         /* keep alive for 2 user changes */
         if (am_connected != WH_COMM_CONNECTED && userChange < 2) {
             if (userChange == 0)
-                server->comm->client_id = 2;
+                server->comm->client_id = ALT_CLIENT_ID;
             else if (userChange == 1)
-                server->comm->client_id = 1;
+                server->comm->client_id = WH_TEST_DEFAULT_CLIENT_ID;
             userChange++;
             am_connected = WH_COMM_CONNECTED;
             WH_TEST_RETURN_ON_FAIL(wh_Server_SetConnected(server, am_connected));
@@ -3881,7 +3883,7 @@ static int wh_ClientServer_MemThreadTest(whTestNvmBackendType nvmType)
                  .transport_cb      = tccb,
                  .transport_context = (void*)tmcc,
                  .transport_config  = (void*)tmcf,
-                 .client_id         = 1,
+                 .client_id         = WH_TEST_DEFAULT_CLIENT_ID,
     }};
 
 #ifdef WOLFHSM_CFG_DMA
