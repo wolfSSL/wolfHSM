@@ -489,7 +489,7 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
                 cert_data = (const uint8_t*)req_packet + sizeof(req);
 
                 /* Map client keyId to server keyId space */
-                whKeyId keyId = WH_MAKE_KEYID(
+                whKeyId keyId = WH_TRANSLATE_CLIENT_KEYID(
                     WH_KEYTYPE_CRYPTO, server->comm->client_id, req.keyId);
 
                 /* Process the verify action */
@@ -618,7 +618,7 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
             }
             if (resp.rc == WH_ERROR_OK) {
                 /* Map client keyId to server keyId space */
-                whKeyId keyId = WH_MAKE_KEYID(
+                whKeyId keyId = WH_TRANSLATE_CLIENT_KEYID(
                     WH_KEYTYPE_CRYPTO, server->comm->client_id, req.keyId);
 
                 /* Process the verify action */

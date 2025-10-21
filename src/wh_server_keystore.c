@@ -998,12 +998,11 @@ _HandleUnwrapAndCacheKeyRequest(whServerContext*                         server,
      * Case 1 is common when a client wraps a key for transport/storage without
      * caring about the specific ID it will have when unwrapped. The server
      * must generate a unique ID to prevent collision with existing cached keys.
+     * Unwrapping to an auto-generated global keyslot is not supported.
      *
      * Case 2 is used when clients need coordinated IDs (e.g., multiple clients
      * unwrapping the same wrapped key and expecting the same resulting ID).
      *
-     * In both cases, we must apply global flag translation if the client
-     * requested a global key via the WH_KEYID_GLOBAL flag.
      */
     if (!WH_KEYID_ISERASED(metadata.id)) {
         /* Client specified an ID in the wrapped metadata - honor it and apply

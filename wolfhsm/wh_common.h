@@ -64,8 +64,8 @@ typedef uint16_t whKeyId;
 #define WH_KEYID_ISERASED(_kid) (WH_KEYID_ID(_kid) == WH_KEYID_ERASED)
 
 #ifdef WOLFHSM_CFG_GLOBAL_KEYS
-/* Global key flag - client-to-server signal only, NOT stored in keyId */
-/* This flag is stripped before storage and translated to USER=0 encoding */
+/* Global key flag - client-to-server signal only, NOT stored in keyId.
+ * This flag is stripped before storage and translated to USER=0 encoding */
 #define WH_KEYID_GLOBAL 0x0100 /* Bit 8: temporary flag for client requests */
 
 /* Reserve USER=0 for global keys */

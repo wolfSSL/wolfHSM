@@ -1429,12 +1429,10 @@ static int _HandleCurve25519SharedSecret(whServerContext* ctx, uint16_t magic,
     uint32_t options    = req.options;
     int evict_pub = !!(options & WH_MESSAGE_CRYPTO_CURVE25519_OPTIONS_EVICTPUB);
     int evict_prv = !!(options & WH_MESSAGE_CRYPTO_CURVE25519_OPTIONS_EVICTPRV);
-    whKeyId pub_key_id  = WH_MAKE_KEYID(    WH_KEYTYPE_CRYPTO,
-                                            ctx->comm->client_id,
-                                            req.publicKeyId);
-    whKeyId prv_key_id  = WH_MAKE_KEYID(    WH_KEYTYPE_CRYPTO,
-                                            ctx->comm->client_id,
-                                            req.privateKeyId);
+    whKeyId pub_key_id = WH_TRANSLATE_CLIENT_KEYID(
+        WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.publicKeyId);
+    whKeyId prv_key_id = WH_TRANSLATE_CLIENT_KEYID(
+        WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.privateKeyId);
     int endian          = req.endian;
 
     /* Response message */
@@ -2332,9 +2330,8 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
                         return ret;
                 }
                 else {
-                    keyId = WH_MAKE_KEYID(  WH_KEYTYPE_CRYPTO,
-                                            ctx->comm->client_id,
-                                            req.keyId);
+                    keyId = WH_TRANSLATE_CLIENT_KEYID(
+                        WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
                 }
                 /* evict the aes sized key in the normal cache */
                 if (moveToBigCache == 1) {
