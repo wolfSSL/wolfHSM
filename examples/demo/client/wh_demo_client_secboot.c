@@ -13,12 +13,13 @@
 #include "wolfhsm/wh_client.h"
 #include "wolfhsm/wh_client_crypto.h"
 
+#if !defined(WOLFHSM_CFG_NO_CRYPTO)
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/ecc.h"
 #include "wolfssl/wolfcrypt/sha256.h"
 #include "wolfssl/wolfcrypt/error-crypt.h"
 #include "wh_demo_client_secboot.h"
-
+#endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
 /* Provisioning process:
  * 1. Generate a server keypair into key cache as keyId 27
@@ -98,6 +99,7 @@ static int _showNvm(whClientContext* clientContext)
 
 static int _provisionMakeCommitKey(whClientContext* clientContext)
 {
+#ifndef WOLFHSM_CFG_NO_CRYPTO
     int ret;
 
     /* Use the default ECC curve for 32 byte key, likely P256r1 */
@@ -112,10 +114,15 @@ static int _provisionMakeCommitKey(whClientContext* clientContext)
         ret = wh_Client_KeyCommit(clientContext, prov_keyId);
     }
     return ret;
+#else
+    (void)clientContext;
+    return WH_ERROR_NOTIMPL;
+#endif
 }
 
 static int _sha256File(const char* file_to_measure, uint8_t* hash)
 {
+#ifndef WOLFHSM_CFG_NO_CRYPTO
     int ret = 0;
     int fd = open(file_to_measure, O_RDONLY);
     if (fd >= 0) {
@@ -149,11 +156,17 @@ static int _sha256File(const char* file_to_measure, uint8_t* hash)
         ret = WH_ERROR_BADARGS;
     }
     return ret;
+#else
+    (void)file_to_measure;
+    (void)hash;
+    return WH_ERROR_NOTIMPL;
+#endif
 }
 
 static int _signHash(const uint8_t* hash, size_t hash_len, uint8_t* sig,
                      uint16_t* sig_len)
 {
+#ifndef WOLFHSM_CFG_NO_CRYPTO
     ecc_key key[1];
     int ret = wc_ecc_init_ex(key, NULL, WH_DEV_ID);
     if (ret == 0) {
@@ -169,11 +182,19 @@ static int _signHash(const uint8_t* hash, size_t hash_len, uint8_t* sig,
         (void)wc_ecc_free(key);
     }
     return ret;
+#else
+    (void)hash;
+    (void)hash_len;
+    (void)sig;
+    (void)sig_len;
+    return WH_ERROR_NOTIMPL;
+#endif
 }
 
 static int _verifyHash(const uint8_t* hash, size_t hash_len, const uint8_t* sig,
                        uint16_t sig_len, int32_t* rc)
 {
+#ifndef WOLFHSM_CFG_NO_CRYPTO
     ecc_key key[1];
     int ret = wc_ecc_init_ex(key, NULL, WH_DEV_ID);
     if (ret == 0) {
@@ -189,10 +210,19 @@ static int _verifyHash(const uint8_t* hash, size_t hash_len, const uint8_t* sig,
         (void)wc_ecc_free(key);
     }
     return ret;
+#else
+    (void)hash;
+    (void)hash_len;
+    (void)sig;
+    (void)sig_len;
+    (void)rc;
+    return WH_ERROR_NOTIMPL;
+#endif
 }
 
 int wh_DemoClient_SecBoot_Provision(whClientContext* clientContext)
 {
+#if !defined(WOLFHSM_CFG_NO_CRYPTO)
     int ret = 0;
     uint32_t client_id = 0;
     uint32_t server_id = 0;
@@ -240,10 +270,17 @@ int wh_DemoClient_SecBoot_Provision(whClientContext* clientContext)
     }
     printf("Provision Client completed with ret:%d\n", ret);
     return ret;
+#else
+    (void)clientContext;
+    (void)_signHash;
+    (void)_provisionMakeCommitKey;
+    return WH_ERROR_NOTIMPL;
+#endif /* !WOLFHSM_CFG_NO_CRYPTO */
 }
 
 int wh_DemoClient_SecBoot_Boot(whClientContext* clientContext)
 {
+#if !defined(WOLFHSM_CFG_NO_CRYPTO)
     int ret = 0;
     uint32_t client_id = 0;
     uint32_t server_id = 0;
@@ -300,6 +337,12 @@ int wh_DemoClient_SecBoot_Boot(whClientContext* clientContext)
     }
     printf("SecBoot Client completed with ret:%d\n", ret);
     return ret;
+#else
+    (void)clientContext;
+    (void)_verifyHash;
+    (void)_sha256File;
+    return WH_ERROR_NOTIMPL;
+#endif /* !WOLFHSM_CFG_NO_CRYPTO */
 }
 
 int wh_DemoClient_SecBoot_Zeroize(whClientContext* clientContext)

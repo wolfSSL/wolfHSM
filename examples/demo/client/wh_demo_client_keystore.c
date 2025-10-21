@@ -7,9 +7,11 @@
 #include "wolfhsm/wh_client.h"
 #include "wolfhsm/wh_client_crypto.h"
 
+#if !defined(WOLFHSM_CFG_NO_CRYPTO)
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/aes.h"
 #include "wolfssl/wolfcrypt/random.h"
+#endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
 #include "wh_demo_client_keystore.h"
 
@@ -121,7 +123,7 @@ int wh_DemoClient_KeystoreCommitKey(whClientContext* clientContext)
     return WH_ERROR_OK;
 }
 
-#ifndef NO_AES
+#if !defined(NO_AES) && !defined(WOLFHSM_CFG_NO_CRYPTO)
 int wh_DemoClient_KeystoreAes(whClientContext* clientContext)
 {
     int      ret;

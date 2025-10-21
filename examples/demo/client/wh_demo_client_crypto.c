@@ -11,8 +11,10 @@
 #include "wolfhsm/wh_client.h"
 #include "wolfhsm/wh_client_crypto.h"
 
+#if !defined(WOLFHSM_CFG_NO_CRYPTO)
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/types.h"
+
 
 #if !defined(WC_NO_RNG)
 #include "wolfssl/wolfcrypt/random.h"
@@ -1501,3 +1503,4 @@ int wh_DemoClient_CryptoHkdfCacheInputKey(whClientContext* clientContext)
     return ret;
 }
 #endif /* HAVE_HKDF */
+#endif /* WOLFHSM_CFG_NO_CRYPTO */

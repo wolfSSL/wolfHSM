@@ -27,12 +27,16 @@ WOLFCRYPT_SRC = \
 	$(WOLFSSL_DIR)/wolfcrypt/src/ecc.c \
 	$(WOLFSSL_DIR)/wolfcrypt/src/cmac.c
 
-
 SRC = \
 	$(WOLFHSM_SRC) \
-	$(WOLFCRYPT_SRC) \
 	$(TARGET).c
 
+
+ifeq ($(SCAN),1)
+SCAN_LOG = scan_whnvmtool.log
+# Default target
+.DEFAULT_GOAL := scan
+endif
 
 INCLUDE_DIRS = \
 	-I$(WOLFHSM_DIR) \
@@ -48,6 +52,13 @@ LIB_DIRS =
 CFLAGS = -Wall $(INCLUDE_DIRS)
 CFLAGS += -DWOLFSSL_USER_SETTINGS -DWOLFHSM_CFG_ENABLE_SERVER
 CFLAGS += -std=c90 -D_GNU_SOURCE -Wno-cpp
+
+ifneq ($(NOCRYPTO),1)
+SRC += \
+	$(WOLFCRYPT_SRC)
+else
+CFLAGS += -DWOLFHSM_CFG_NO_CRYPTO
+endif
 
 CFLAGS_EXTRA =  # Additional CFLAGS from the command line
 LDFLAGS = $(LIB_DIRS) $(LIBS)
@@ -80,6 +91,20 @@ check: test
 test: $(OUT) test-gen
 	$(MAKE) -C test/ CFLAGS_EXTRA="-DFLASH_ERASED_BYTE=0x00 $(CFLAGS_EXTRA)" WOLFSSL_DIR=$$(realpath $(WOLFSSL_DIR))
 	cd test && ./test_whnvmtool
+
+analyze: $(SRC)
+	@set -e; \
+	for f in $(SRC); do \
+		base=$(basename $$f .c); \
+		obj=$$base.o; \
+		echo "Analyzing $$f..."; \
+		$(CC) $(CFLAGS) -c $$f -o $$obj;\
+	done
+
+scan:
+	@echo "Running scan-build static analysis"
+	@mkdir -p $(WOLFHSM_DIR)/scan_out/
+	@scan-build --status-bugs $(MAKE) analyze 2> $(WOLFHSM_DIR)/scan_out/$(SCAN_LOG)
 
 clean: clean-test
 	rm -f whNvmImage.bin whNvmImage.hex

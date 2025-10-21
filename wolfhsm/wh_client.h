@@ -53,14 +53,15 @@
 #include "wolfhsm/wh_dma.h"
 #endif /* WOLFHSM_CFG_DMA */
 
-/* WolfCrypt types and defines */
-#include "wolfssl/wolfcrypt/types.h"
 
 /* Forward declaration of the client structure so its elements can reference
  * itself  (e.g. server argument to custom callback) */
 typedef struct whClientContext_t whClientContext;
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
+
+/* WolfCrypt types and defines */
+#include "wolfssl/wolfcrypt/types.h"
 
 /* Device Id to be registered and passed to wolfCrypt functions */
 enum WH_CLIENT_DEVID_ENUM {
@@ -73,6 +74,13 @@ enum WH_CLIENT_DEVID_ENUM {
 #endif
 };
 extern const int WH_DEV_IDS_ARRAY[WH_NUM_DEVIDS];
+#else
+/*  for compile purpose */
+#define WH_DEV_ID -2 /* invalid ID */
+/* cipher types */
+enum wc_CipherType {
+    WC_CIPHER_NONE = 0,
+};
 #endif
 
 /** Client DMA address translation and validation */

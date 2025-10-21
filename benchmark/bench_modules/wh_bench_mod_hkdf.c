@@ -20,11 +20,10 @@
 #include "wh_bench_mod.h"
 #include "wolfhsm/wh_error.h"
 
+#if !defined(WOLFHSM_CFG_NO_CRYPTO) && defined(WOLFHSM_CFG_BENCH_ENABLE)
 #include "wolfssl/wolfcrypt/hmac.h"
 #include "wolfssl/wolfcrypt/kdf.h"
 #include "wolfssl/wolfcrypt/sha256.h"
-
-#if defined(WOLFHSM_CFG_BENCH_ENABLE)
 
 #if defined(HAVE_HKDF)
 
@@ -93,4 +92,4 @@ int wh_Bench_Mod_HkdfSha256(whClientContext* client, whBenchOpContext* ctx,
 
 #endif /* defined(HAVE_HKDF) */
 
-#endif /* WOLFHSM_CFG_BENCH_ENABLE */
+#endif /* !WOLFHSM_CFG_NO_CRYPTO && WOLFHSM_CFG_BENCH_ENABLE */

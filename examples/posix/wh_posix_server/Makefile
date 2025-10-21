@@ -86,9 +86,19 @@ endif
 SRC_ASM +=
 
 # wolfCrypt source files
+ifneq ($(NOCRYPTO),1)
 SRC_C += $(wildcard $(WOLFSSL_DIR)/wolfcrypt/src/*.c)
 # wolfSSL source files
 SRC_C += $(wildcard $(WOLFSSL_DIR)/src/*.c)
+else
+DEF += -DWOLFHSM_CFG_NO_CRYPTO
+endif
+
+ifeq ($(SCAN),1)
+SCAN_LOG = scan_posix_server.log
+# Default target
+.DEFAULT_GOAL := scan
+endif
 
 # wolfHSM source files
 SRC_C += $(wildcard $(WOLFHSM_DIR)/src/*.c)
@@ -123,6 +133,13 @@ build_hex: $(BUILD_DIR) $(BUILD_DIR)/$(BIN).hex
 build_static: $(BUILD_DIR) $(BUILD_DIR)/$(BIN).a
 	@echo ""
 	$(CMD_ECHO) $(SIZE) $(BUILD_DIR)/$(BIN).a
+
+analyze: $(OBJS_ASM) $(OBJS_C)
+
+scan:$(BUILD_DIR)
+	@echo "Running scan-build static analysis"
+	@mkdir -p $(WOLFHSM_DIR)/scan_out/
+	@scan-build --status-bugs $(MAKE) analyze 2> $(WOLFHSM_DIR)/scan_out/$(SCAN_LOG)
 
 $(BUILD_DIR):
 	$(CMD_ECHO) mkdir -p $(BUILD_DIR)

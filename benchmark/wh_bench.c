@@ -73,7 +73,7 @@ typedef struct BenchModule {
  * of the array will be BENCH_MODULE_IDX_COUNT */
 typedef enum BenchModuleIdx {
     BENCH_MODULE_IDX_ECHO = 0,
-
+#if !defined(WOLFHSM_CFG_NO_CRYPTO)
 /* RNG */
 #if !defined(WC_NO_RNG)
     BENCH_MODULE_IDX_RNG,
@@ -233,7 +233,7 @@ typedef enum BenchModuleIdx {
     BENCH_MODULE_IDX_ML_DSA_87_KEY_GEN_DMA,
 #endif /* !(WOLFSSL_NO_ML_DSA_87) */
 #endif /* HAVE_DILITHIUM */
-
+#endif /* !(WOLFHSM_CFG_NO_CRYPTO) */
     /* number of modules. This must be the last entry and will be used as the
      * size of the global modules array */
     BENCH_MODULE_IDX_COUNT
@@ -246,7 +246,7 @@ WH_UTILS_STATIC_ASSERT(MAX_BENCH_OPS > BENCH_MODULE_IDX_COUNT,
 /* clang-format off */
 static BenchModule g_benchModules[] = {
     [BENCH_MODULE_IDX_ECHO]                    = {"ECHO",                         wh_Bench_Mod_Echo,                 BENCH_THROUGHPUT_XBPS, 0, NULL},
-
+#if !defined(WOLFHSM_CFG_NO_CRYPTO)
     /* RNG */
 #if !defined(WC_NO_RNG)
     [BENCH_MODULE_IDX_RNG]                     = {"RNG",                          wh_Bench_Mod_Rng,                  BENCH_THROUGHPUT_XBPS, 0, NULL},
@@ -402,6 +402,7 @@ static BenchModule g_benchModules[] = {
     [BENCH_MODULE_IDX_ML_DSA_87_KEY_GEN_DMA]   = {"ML-DSA-87-KEY-GEN-DMA",        wh_Bench_Mod_MlDsa87KeyGenDma,        BENCH_THROUGHPUT_OPS, 0, NULL},
 #endif /* !(WOLFSSL_NO_ML_DSA_87) */
 #endif /* HAVE_DILITHIUM */
+#endif /* !(WOLFHSM_CFG_NO_CRYPTO) */
 };
 /* clang-format on */
 

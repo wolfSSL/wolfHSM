@@ -25,6 +25,7 @@
 
 #include <wolfssl/version.h>
 #include <string.h>
+#include <stdlib.h>
 
 void Usage(const char* exeName)
 {
