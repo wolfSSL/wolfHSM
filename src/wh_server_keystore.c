@@ -947,7 +947,7 @@ _HandleUnwrapAndCacheKeyRequest(whServerContext*                         server,
 
     int           ret;
     uint8_t*      wrappedKey;
-    whNvmMetadata metadata;
+    whNvmMetadata metadata = {0};
     uint16_t      keySz = 0;
     uint8_t       key[WOLFHSM_CFG_KEYWRAP_MAX_KEY_SIZE];
 
@@ -974,7 +974,6 @@ _HandleUnwrapAndCacheKeyRequest(whServerContext*                         server,
             }
 
             resp->cipherType = WC_CIPHER_AES_GCM;
-            resp->keyId      = metadata.id;
 
         } break;
 #endif /* HAVE_AESGCM */
@@ -988,7 +987,7 @@ _HandleUnwrapAndCacheKeyRequest(whServerContext*                         server,
         return WH_ERROR_BADARGS;
     }
 
-    /**
+    /*
      * Key ID Assignment Strategy:
      *
      * The unwrapped metadata may contain one of:
@@ -1000,13 +999,16 @@ _HandleUnwrapAndCacheKeyRequest(whServerContext*                         server,
      * must generate a unique ID to prevent collision with existing cached keys.
      * Unwrapping to an auto-generated global keyslot is not supported.
      *
-     * Case 2 is used when clients need coordinated IDs (e.g., multiple clients
-     * unwrapping the same wrapped key and expecting the same resulting ID).
+     * Case 2 is used when a client needs a fixed ID, either client-specific or
+     * global (e.g., multiple clients unwrapping the same wrapped key and
+     * expecting the same resulting ID).
      *
      */
     if (!WH_KEYID_ISERASED(metadata.id)) {
         /* Client specified an ID in the wrapped metadata - honor it and apply
-         * global flag translation if the WH_KEYID_GLOBAL flag is set */
+         * global flag translation if the WH_KEYID_GLOBAL flag is set. This
+         * means the key will be associated with the specified ID in either the
+         * local or global cache */
         metadata.id = WH_TRANSLATE_CLIENT_KEYID(
             WH_KEYTYPE_CRYPTO, server->comm->client_id, metadata.id);
     }
@@ -1024,20 +1026,14 @@ _HandleUnwrapAndCacheKeyRequest(whServerContext*                         server,
         }
     }
 
-    /**
-     * CRITICAL: Check for duplicate AFTER ID generation.
-     *
-     * Before the ID is assigned, metadata.id may be WH_KEYID_ERASED. We cannot
-     * check _ExistsInCache(server, WH_KEYID_ERASED) because empty cache slots
-     * also have id=ERASED, causing false positives. We must generate/assign
-     * the final ID first, then check for duplicates.
-     */
+    /* Check for duplicates AFTER ID generation */
     if (_ExistsInCache(server, metadata.id)) {
         return WH_ERROR_ABORTED;
     }
 
-    /* Store the assigned key ID in the response */
-    resp->keyId = metadata.id;
+    /* Store the assigned key ID in the response (ID portion only). We should
+     * NOT return the upper bits back to the client */
+    resp->keyId = WH_KEYID_ID(metadata.id);
 
     /* Cache the key */
     return wh_Server_KeystoreCacheKey(server, &metadata, key);

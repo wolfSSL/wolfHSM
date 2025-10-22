@@ -85,14 +85,14 @@ static int _AesGcm_KeyWrap(whClientContext* client, WC_RNG* rng)
     uint8_t       plainKey[WH_TEST_AES_KEYSIZE];
     uint8_t       tmpPlainKey[WH_TEST_AES_KEYSIZE];
     uint8_t       wrappedKey[WH_TEST_AES_WRAPPED_KEYSIZE];
-    whKeyId       wrappedKeyId;
-    whNvmMetadata metadata = {
-        .id    = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, client->comm->client_id, WH_TEST_AESGCM_KEYID),
-        .label = "AES Key Label",
-        .len   = WH_TEST_AES_KEYSIZE,
-        .flags = WH_NVM_FLAGS_NONE,
+    whKeyId       wrappedKeyId = WH_KEYID_ERASED;
+    whNvmMetadata metadata     = {
+            .id    = WH_TEST_AESGCM_KEYID,
+            .label = "AES Key Label",
+            .len   = WH_TEST_AES_KEYSIZE,
+            .flags = WH_NVM_FLAGS_NONE,
     };
-    whNvmMetadata tmpMetadata;
+    whNvmMetadata tmpMetadata = {0};
 
     Aes           aes[1];
     const uint8_t plaintext[] = "hello, wolfSSL AES-GCM!";
