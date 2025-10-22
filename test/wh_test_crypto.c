@@ -2270,11 +2270,7 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
 #endif /* HAVE_AES_ECB */
 
 #ifdef HAVE_AES_CBC
-    if (ret == 0
-#ifdef WOLFHSM_CFG_DMA
-        && devId != WH_DEV_ID_DMA
-#endif
-    ) {
+    if (ret == 0) {
         /* test aes CBC with client side key */
         ret = wc_AesInit(aes, NULL, devId);
         if (ret != 0) {

@@ -844,6 +844,18 @@ int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
                                           tag_len, out);
             } break;
 #endif /* HAVE_AESGCM */
+#ifdef HAVE_AES_CBC
+            case WC_CIPHER_AES_CBC: {
+                /* Extract info parameters */
+                uint32_t       enc = info->cipher.enc;
+                Aes*           aes = info->cipher.aescbc.aes;
+                const uint8_t* in  = info->cipher.aescbc.in;
+                uint32_t       len = info->cipher.aescbc.sz;
+                uint8_t*       out = info->cipher.aescbc.out;
+
+                ret = wh_Client_AesCbcDma(ctx, aes, enc, in, len, out);
+            } break;
+#endif /* HAVE_AES_CBC */
 #endif /* !NO_AES */
 
             default:
