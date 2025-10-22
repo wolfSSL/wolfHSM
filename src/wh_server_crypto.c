@@ -2150,6 +2150,150 @@ static int _HandleAesGcmDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
 }
 #endif /* WOLFHSM_CFG_DMA */
 #endif /* HAVE_AESGCM */
+
+#ifdef HAVE_AES_CBC
+#ifdef WOLFHSM_CFG_DMA
+static int _HandleAesCbcDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
+                            const void* cryptoDataIn, uint16_t inSize,
+                            void* cryptoDataOut, uint16_t* outSize)
+{
+    int                            ret = 0;
+    whMessageCrypto_AesDmaRequest  req;
+    whMessageCrypto_AesDmaResponse res;
+    byte                           tmpKey[AES_256_KEY_SIZE];
+    Aes                            aes[1] = {0};
+
+    void*  inAddr  = NULL;
+    void*  outAddr = NULL;
+    void*  ivAddr  = NULL;
+    word32 outSz   = 0;
+
+    whKeyId  keyId;
+    uint32_t keyLen;
+
+    (void)inSize;
+    (void)seq;
+
+    ret = wh_MessageCrypto_TranslateAesDmaRequest(
+        magic, (whMessageCrypto_AesDmaRequest*)cryptoDataIn, &req);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    if (ret == WH_ERROR_OK) {
+        ret = wc_AesInit(aes, NULL, ctx->crypto->devId);
+    }
+
+    /* Handle key operations */
+    if (ret == WH_ERROR_OK && req.key.sz > 0) {
+        /* Copy key from client if provided */
+        ret = whServerDma_CopyFromClient(ctx, tmpKey, req.key.addr, req.key.sz,
+                                         (whServerDmaFlags){0});
+        if (ret != WH_ERROR_OK) {
+            res.dmaAddrStatus.badAddr = req.key;
+        }
+        keyLen = req.key.sz;
+    }
+
+    /* Handle input data */
+    if (ret == WH_ERROR_OK && req.input.sz > 0) {
+        ret = wh_Server_DmaProcessClientAddress(
+            ctx, req.input.addr, &inAddr, req.input.sz,
+            WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
+        if (ret != WH_ERROR_OK) {
+            res.dmaAddrStatus.badAddr = req.input;
+        }
+    }
+
+    /* Handle output data */
+    if (ret == WH_ERROR_OK && req.output.sz > 0) {
+        ret = wh_Server_DmaProcessClientAddress(
+            ctx, req.output.addr, &outAddr, req.output.sz,
+            WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
+        if (ret != WH_ERROR_OK) {
+            res.dmaAddrStatus.badAddr = req.output;
+        }
+    }
+
+    /* Handle IV */
+    if (ret == WH_ERROR_OK && req.iv.sz > 0) {
+        /* Process client address for IV data */
+        ret = wh_Server_DmaProcessClientAddress(
+            ctx, req.iv.addr, &ivAddr, req.iv.sz, WH_DMA_OPER_CLIENT_WRITE_PRE,
+            (whServerDmaFlags){0});
+        if (ret != WH_ERROR_OK) {
+            res.dmaAddrStatus.badAddr = req.iv;
+        }
+    }
+
+    /* Handle keyId-based keys if no direct key was provided */
+    if (ret == WH_ERROR_OK && req.key.sz == 0) {
+        keyId =
+            WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+        keyLen = sizeof(tmpKey);
+        ret    = wh_Server_KeystoreReadKey(ctx, keyId, NULL, tmpKey, &keyLen);
+        if (ret == WH_ERROR_OK) {
+            /* Verify key size is valid for AES */
+            if (keyLen != AES_128_KEY_SIZE && keyLen != AES_192_KEY_SIZE &&
+                keyLen != AES_256_KEY_SIZE) {
+                ret = WH_ERROR_ABORTED;
+            }
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        ret = wc_AesSetKey(aes, tmpKey, keyLen, (byte*)ivAddr,
+                           req.enc != 0 ? AES_ENCRYPTION : AES_DECRYPTION);
+    }
+
+    if (ret == WH_ERROR_OK) {
+        if (req.enc) {
+            ret = wc_AesCbcEncrypt(aes, (byte*)outAddr, (byte*)inAddr,
+                                   (word32)req.input.sz);
+            if (ret == 0) {
+                outSz = req.input.sz;
+            }
+        }
+        else {
+            ret = wc_AesCbcDecrypt(aes, (byte*)outAddr, (byte*)inAddr,
+                                   (word32)req.input.sz);
+            if (ret == 0) {
+                outSz = req.input.sz;
+            }
+        }
+    }
+
+    /* Post-write DMA address processing for output (on success) */
+    if (ret == WH_ERROR_OK) {
+        if (req.output.sz > 0) {
+            (void)wh_Server_DmaProcessClientAddress(
+                ctx, req.output.addr, &outAddr, req.output.sz,
+                WH_DMA_OPER_CLIENT_WRITE_POST, (whServerDmaFlags){0});
+        }
+    }
+
+    /* Write out uptdated IV */
+    if (req.iv.sz > 0) {
+        (void)wh_Server_DmaProcessClientAddress(
+            ctx, req.iv.addr, &ivAddr, req.iv.sz, WH_DMA_OPER_CLIENT_WRITE_POST,
+            (whServerDmaFlags){0});
+    }
+
+    wc_AesFree(aes);
+
+    /* Set response */
+    res.outSz = outSz;
+    *outSize  = sizeof(whMessageCrypto_AesDmaResponse);
+
+    /* Translate response back */
+    ret = wh_MessageCrypto_TranslateAesDmaResponse(
+        magic, &res, (whMessageCrypto_AesDmaResponse*)cryptoDataOut);
+
+    return ret;
+}
+#endif /* WOLFHSM_CFG_DMA */
+#endif /* HAVE_AES_CBC */
+
 #endif /* !NO_AES */
 
 #ifdef WOLFSSL_CMAC
@@ -4717,6 +4861,13 @@ int wh_Server_HandleCryptoDmaRequest(whServerContext* ctx, uint16_t magic,
                                            &cryptoOutSize);
                     break;
 #endif /* HAVE_AESGCM */
+#ifdef HAVE_AES_CBC
+                case WC_CIPHER_AES_CBC:
+                    ret = _HandleAesCbcDma(ctx, magic, seq, cryptoDataIn,
+                                           cryptoInSize, cryptoDataOut,
+                                           &cryptoOutSize);
+                    break;
+#endif /* HAVE_AES_CBC */
             }
             break; /* WC_ALGO_TYPE_CIPHER */
 
