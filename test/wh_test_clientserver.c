@@ -1324,7 +1324,6 @@ int whTest_ClientServerClientConfig(whClientConfig* clientCfg)
 {
     int ret = 0;
     whClientContext client[1] = {0};
-    printf("pre-init\n");
 
     WH_TEST_RETURN_ON_FAIL(wh_Client_Init(client, clientCfg));
 
@@ -1718,7 +1717,6 @@ int whTest_ServerCfgLoop(whServerConfig* serverCfg)
     !defined(WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP)
 static void* _whClientTask(void *cf)
 {
-    fflush(stdout);
     WH_TEST_ASSERT(0 == whTest_ClientServerClientConfig(cf));
     return NULL;
 }

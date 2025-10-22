@@ -162,7 +162,7 @@ static int _GetKeyCacheSlot(whKeyCacheContext* ctx, uint16_t keySz,
         /* If no empty slots, find committed key to evict */
         if (foundIndex == -1) {
             for (i = 0; i < WOLFHSM_CFG_SERVER_KEYCACHE_COUNT; i++) {
-                if (ctx->cache[i].commited == 1) {
+                if (ctx->cache[i].committed == 1) {
                     foundIndex = i;
                     break;
                 }
@@ -188,7 +188,7 @@ static int _GetKeyCacheSlot(whKeyCacheContext* ctx, uint16_t keySz,
         /* If no empty slots, find committed key to evict */
         if (foundIndex == -1) {
             for (i = 0; i < WOLFHSM_CFG_SERVER_KEYCACHE_BIG_COUNT; i++) {
-                if (ctx->bigCache[i].commited == 1) {
+                if (ctx->bigCache[i].committed == 1) {
                     foundIndex = i;
                     break;
                 }
@@ -237,10 +237,10 @@ static int _MarkKeyCommitted(whKeyCacheContext* ctx, whKeyId keyId,
 
     if (ret == WH_ERROR_OK) {
         if (big == 0) {
-            ctx->cache[index].commited = committed;
+            ctx->cache[index].committed = committed;
         }
         else {
-            ctx->bigCache[index].commited = committed;
+            ctx->bigCache[index].committed = committed;
         }
     }
 
@@ -361,10 +361,10 @@ int wh_Server_KeystoreCacheKey(whServerContext* server, whNvmMetadata* meta,
             }
         }
 
-        /* if no empty slots, check for a commited key we can evict */
+        /* if no empty slots, check for a committed key we can evict */
         if (foundIndex == -1) {
             for (i = 0; i < WOLFHSM_CFG_SERVER_KEYCACHE_COUNT; i++) {
-                if (ctx->cache[i].commited == 1) {
+                if (ctx->cache[i].committed == 1) {
                     foundIndex = i;
                     break;
                 }
@@ -376,13 +376,13 @@ int wh_Server_KeystoreCacheKey(whServerContext* server, whNvmMetadata* meta,
             memcpy((uint8_t*)ctx->cache[foundIndex].buffer, in, meta->len);
             memcpy((uint8_t*)ctx->cache[foundIndex].meta, (uint8_t*)meta,
                    sizeof(whNvmMetadata));
-            /* check if the key is already commited */
+            /* check if the key is already committed */
             if (wh_Nvm_GetMetadata(server->nvm, meta->id, meta) ==
                 WH_ERROR_NOTFOUND) {
-                ctx->cache[foundIndex].commited = 0;
+                ctx->cache[foundIndex].committed = 0;
             }
             else {
-                ctx->cache[foundIndex].commited = 1;
+                ctx->cache[foundIndex].committed = 1;
             }
 #if defined(DEBUG_CRYPTOCB) && defined(DEBUG_CRYPTOCB_VERBOSE)
             printf("[server] cacheKey: caching keyid=%u\n", meta->id);
@@ -401,10 +401,10 @@ int wh_Server_KeystoreCacheKey(whServerContext* server, whNvmMetadata* meta,
             }
         }
 
-        /* if no empty slots, check for a commited key we can evict */
+        /* if no empty slots, check for a committed key we can evict */
         if (foundIndex == -1) {
             for (i = 0; i < WOLFHSM_CFG_SERVER_KEYCACHE_BIG_COUNT; i++) {
-                if (ctx->bigCache[i].commited == 1) {
+                if (ctx->bigCache[i].committed == 1) {
                     foundIndex = i;
                     break;
                 }
@@ -416,13 +416,13 @@ int wh_Server_KeystoreCacheKey(whServerContext* server, whNvmMetadata* meta,
             memcpy((uint8_t*)ctx->bigCache[foundIndex].buffer, in, meta->len);
             memcpy((uint8_t*)ctx->bigCache[foundIndex].meta, (uint8_t*)meta,
                    sizeof(whNvmMetadata));
-            /* check if the key is already commited */
+            /* check if the key is already committed */
             if (wh_Nvm_GetMetadata(server->nvm, meta->id, meta) ==
                 WH_ERROR_NOTFOUND) {
-                ctx->bigCache[foundIndex].commited = 0;
+                ctx->bigCache[foundIndex].committed = 0;
             }
             else {
-                ctx->bigCache[foundIndex].commited = 1;
+                ctx->bigCache[foundIndex].committed = 1;
             }
         }
     }
@@ -553,7 +553,7 @@ int wh_Server_KeystoreReadKey(whServerContext* server, whKeyId keyId,
         if (out != NULL)
             ret = wh_Nvm_Read(server->nvm, keyId, 0, *outSz, out);
     }
-    /* cache key if free slot, will only kick out other commited keys */
+    /* cache key if free slot, will only kick out other committed keys */
     if (ret == 0 && out != NULL) {
         (void)wh_Server_KeystoreCacheKey(server, meta, out);
     }
@@ -616,10 +616,7 @@ int wh_Server_KeystoreCommitKey(whServerContext* server, whNvmId keyId)
     /* Get the appropriate cache context for this key */
     ctx = _GetCacheContext(server, keyId);
 
-    /* Find the key in cache.
-     * Note: We call _FindInKeyCache() directly (not _FindInCache wrapper)
-     * because we already obtained the correct cache context above. Using
-     * the wrapper would redundantly call _GetCacheContext() again. */
+    /* Find the key in the appropriate cache context obtained above. */
     ret = _FindInKeyCache(ctx, keyId, NULL, NULL, &slotBuf, &slotMeta);
     if (ret == WH_ERROR_OK) {
         size = slotMeta->len;

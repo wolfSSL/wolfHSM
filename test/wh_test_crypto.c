@@ -2622,7 +2622,7 @@ static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
     }
 
     if (ret == 0) {
-        /* test oneshot verify with commited key */
+        /* test oneshot verify with committed key */
         keyId = WH_KEYID_ERASED;
         ret = wh_Client_KeyCache(ctx, 0, labelIn, sizeof(labelIn), knownCmacKey,
                                  sizeof(knownCmacKey), &keyId);

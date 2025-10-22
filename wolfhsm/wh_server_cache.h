@@ -35,13 +35,13 @@
 
 /** Server cache slot structures */
 typedef struct whServerCacheSlot {
-    uint8_t       commited;
+    uint8_t       committed;
     whNvmMetadata meta[1];
     uint8_t       buffer[WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE];
 } whServerCacheSlot;
 
 typedef struct whServerBigCacheSlot {
-    uint8_t       commited;
+    uint8_t       committed;
     whNvmMetadata meta[1];
     uint8_t       buffer[WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE];
 } whServerBigCacheSlot;
