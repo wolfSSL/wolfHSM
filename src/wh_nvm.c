@@ -69,6 +69,11 @@ int wh_Nvm_Cleanup(whNvmContext* context)
         return WH_ERROR_BADARGS;
     }
 
+#if !defined(WOLFHSM_CFG_NO_CRYPTO) && defined(WOLFHSM_CFG_GLOBAL_KEYS)
+    /* Initialize the global key cache */
+    memset(&context->globalCache, 0, sizeof(context->globalCache));
+#endif
+
     /* No callback? Return ABORTED */
     if (context->cb->Cleanup == NULL) {
         return WH_ERROR_ABORTED;
