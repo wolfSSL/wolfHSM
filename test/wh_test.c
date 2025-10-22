@@ -81,9 +81,6 @@ int whTest_Unit(void)
     WH_TEST_ASSERT(0 == whTest_ClientServer());
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
-    /* Multi-Client Tests (includes Global Keys when enabled) */
-    WH_TEST_ASSERT(0 == whTest_MultiClient());
-
     /* Crypto Tests */
     WH_TEST_ASSERT(0 == whTest_Crypto());
 
@@ -96,6 +93,9 @@ int whTest_Unit(void)
 #endif
 
 #endif /* WOLFHSM_CFG_SERVER_IMG_MGR && !WOLFHSM_CFG_NO_CRYPTO */
+
+    /* Multi-Client Tests (includes Global Keys when enabled) */
+    WH_TEST_ASSERT(0 == whTest_MultiClient());
 
 #if defined(WOLFHSM_CFG_SHE_EXTENSION)
     WH_TEST_ASSERT(0 == whTest_She());
