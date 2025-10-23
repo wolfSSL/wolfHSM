@@ -690,9 +690,6 @@ int wh_Server_KeystoreEraseKey(whServerContext* server, whNvmId keyId)
 #ifndef NO_AES
 #ifdef HAVE_AESGCM
 
-#define WOLFHSM_KEYWRAP_AES_GCM_TAG_SIZE 16
-#define WOLFHSM_KEYWRAP_AES_GCM_IV_SIZE 12
-
 static int _AesGcmWrapKey(whServerContext* server, whKeyId serverKeyId,
                           uint8_t* keyIn, uint16_t keySz,
                           whNvmMetadata* metadataIn, uint8_t* wrappedKeyOut,
