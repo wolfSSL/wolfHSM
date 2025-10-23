@@ -47,6 +47,17 @@ typedef struct whServerBigCacheSlot {
 } whServerBigCacheSlot;
 
 /**
+ * @brief Registry of reserved wrapped-key identifiers associated with a cache
+ *
+ * Tracks identifiers that are permanently reserved for wrapped key blobs so the
+ * keystore can avoid reusing them for dynamically generated keys.
+ */
+typedef struct whWrappedKeyRegistry_t {
+    whKeyId  ids[WOLFHSM_CFG_SERVER_WRAPPED_KEY_COUNT];
+    uint16_t count;
+} whWrappedKeyRegistry;
+
+/**
  * @brief Unified key cache context
  *
  * Holds both regular and big cache arrays. Used for client-local caches
@@ -56,6 +67,7 @@ typedef struct whServerBigCacheSlot {
 typedef struct whKeyCacheContext_t {
     whServerCacheSlot    cache[WOLFHSM_CFG_SERVER_KEYCACHE_COUNT];
     whServerBigCacheSlot bigCache[WOLFHSM_CFG_SERVER_KEYCACHE_BIG_COUNT];
+    whWrappedKeyRegistry wrappedKeys;
 } whKeyCacheContext;
 
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */

@@ -189,4 +189,47 @@ int wh_Server_KeystoreCacheKeyDma(whServerContext* server, whNvmMetadata* meta,
 int wh_Server_KeystoreExportKeyDma(whServerContext* server, whKeyId keyId,
                                    uint64_t keyAddr, uint64_t keySz,
                                    whNvmMetadata* outMeta);
+
+/**
+ * @brief Register wrapped-key identifiers reserved for key wrap blobs
+ *
+ * Registers one or more key identifiers that correspond to wrapped key blobs.
+ * The keystore will avoid allocating these IDs for dynamically generated keys
+ * and will require wrapped-key operations to reference registered IDs.
+ *
+ * Only the client-relative ID portion (0-255) is stored in the registry,
+ * allowing registration before knowing which client will connect. For local
+ * (per-client) wrapped keys, pass simple client-relative IDs (e.g., {2, 8}).
+ * For global wrapped keys, pass keyIds with USER=0 encoding
+ * (e.g., WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, WH_KEYUSER_GLOBAL, 2)).
+ *
+ * @param[in] server  Server context
+ * @param[in] keyIds  Array of key identifiers to register. Can be:
+ *                    - Client-relative IDs (0-255) for local wrapped keys
+ *                    - Full keyIds with USER=0 for global wrapped keys
+ *                    Only the ID portion (0-255) is actually stored.
+ * @param[in] count   Number of entries in keyIds
+ * @return 0 on success, error code on failure
+ */
+int wh_Server_KeystoreRegisterWrappedKeys(whServerContext* server,
+                                          const whKeyId* keyIds, size_t count);
+
+/**
+ * @brief Register a single wrapped-key identifier
+ *
+ * Convenience wrapper around wh_Server_KeystoreRegisterWrappedKeys().
+ */
+int wh_Server_KeystoreRegisterWrappedKey(whServerContext* server,
+                                         whKeyId          keyId);
+
+/**
+ * @brief Query whether a key identifier is registered as a wrapped key
+ *
+ * @param[in]  server       Server context
+ * @param[in]  keyId        Key identifier to lookup
+ * @param[out] outIsWrapped Optional pointer receiving 1 if wrapped, 0 otherwise
+ * @return 0 on success, error code on failure
+ */
+int wh_Server_KeystoreIsWrappedKey(whServerContext* server, whKeyId keyId,
+                                   int* outIsWrapped);
 #endif /* !WOLFHSM_WH_SERVER_KEYSTORE_H_ */

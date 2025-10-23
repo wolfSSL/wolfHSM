@@ -254,6 +254,10 @@ int whTest_KeyWrapClientConfig(whClientConfig* clientCfg)
     if (ret != 0) {
         WH_ERROR_PRINT("Failed to whTest_Client_KeyWrap %d\n", ret);
     }
+    else {
+        printf("***************************************************************"
+               "***************KEYWRAP TESTS SUCCESS\n");
+    }
 
     /* Clean up used resources */
 cleanup_and_exit:

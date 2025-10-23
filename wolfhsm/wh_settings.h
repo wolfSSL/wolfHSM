@@ -183,6 +183,11 @@
 #define WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE 1200
 #endif
 
+/* Maximum number of wrapped-key identifiers tracked per cache context */
+#ifndef WOLFHSM_CFG_SERVER_WRAPPED_KEY_COUNT
+#define WOLFHSM_CFG_SERVER_WRAPPED_KEY_COUNT 16
+#endif
+
 /* Custom request shared defs */
 #ifndef WOLFHSM_CFG_SERVER_CUSTOMCB_COUNT
 #define WOLFHSM_CFG_SERVER_CUSTOMCB_COUNT 8
