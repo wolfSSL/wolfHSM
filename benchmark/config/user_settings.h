@@ -157,6 +157,7 @@ extern "C" {
 
 /** Composite features */
 #define HAVE_HKDF
+#define HAVE_CMAC_KDF
 
 /* Remove unneeded crypto */
 #define NO_DSA

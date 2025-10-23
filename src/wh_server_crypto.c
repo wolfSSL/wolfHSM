@@ -44,6 +44,7 @@
 #include "wolfssl/wolfcrypt/cmac.h"
 #include "wolfssl/wolfcrypt/dilithium.h"
 #include "wolfssl/wolfcrypt/hmac.h"
+#include "wolfssl/wolfcrypt/kdf.h"
 
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_crypto.h"
@@ -1190,6 +1191,44 @@ int wh_Server_HkdfKeyCacheImport(whServerContext* ctx, const uint8_t* keyData,
     return ret;
 }
 
+#endif /* HAVE_HKDF */
+
+#ifdef HAVE_CMAC_KDF
+int wh_Server_CmacKdfKeyCacheImport(whServerContext* ctx,
+                                    const uint8_t* keyData, uint32_t keySize,
+                                    whKeyId keyId, whNvmFlags flags,
+                                    uint16_t label_len, uint8_t* label)
+{
+    int            ret = WH_ERROR_OK;
+    uint8_t*       cacheBuf;
+    whNvmMetadata* cacheMeta;
+
+    if ((ctx == NULL) || (keyData == NULL) || WH_KEYID_ISERASED(keyId) ||
+        ((label != NULL) && (label_len > sizeof(cacheMeta->label)))) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_Server_KeystoreGetCacheSlot(ctx, keySize, &cacheBuf, &cacheMeta);
+    if (ret == WH_ERROR_OK) {
+        memcpy(cacheBuf, keyData, keySize);
+    }
+
+    if (ret == WH_ERROR_OK) {
+        cacheMeta->id     = keyId;
+        cacheMeta->len    = keySize;
+        cacheMeta->flags  = flags;
+        cacheMeta->access = WH_NVM_ACCESS_ANY;
+
+        if ((label != NULL) && (label_len > 0)) {
+            memcpy(cacheMeta->label, label, label_len);
+        }
+    }
+
+    return ret;
+}
+#endif /* HAVE_CMAC_KDF */
+
+#ifdef HAVE_HKDF
 static int _HandleHkdf(whServerContext* ctx, uint16_t magic,
                        const void* cryptoDataIn, uint16_t inSize,
                        void* cryptoDataOut, uint16_t* outSize)
@@ -1312,6 +1351,127 @@ static int _HandleHkdf(whServerContext* ctx, uint16_t magic,
     return ret;
 }
 #endif /* HAVE_HKDF */
+
+#ifdef HAVE_CMAC_KDF
+static int _HandleCmacKdf(whServerContext* ctx, uint16_t magic,
+                          const void* cryptoDataIn, uint16_t inSize,
+                          void* cryptoDataOut, uint16_t* outSize)
+{
+    (void)inSize;
+
+    int                             ret = WH_ERROR_OK;
+    whMessageCrypto_CmacKdfRequest  req;
+    whMessageCrypto_CmacKdfResponse res;
+
+    memset(&res, 0, sizeof(res));
+
+    ret = wh_MessageCrypto_TranslateCmacKdfRequest(
+        magic, (const whMessageCrypto_CmacKdfRequest*)cryptoDataIn, &req);
+    if (ret != 0) {
+        return ret;
+    }
+
+    uint32_t saltSz      = req.saltSz;
+    uint32_t zSz         = req.zSz;
+    uint32_t fixedInfoSz = req.fixedInfoSz;
+    uint32_t outSz       = req.outSz;
+    whKeyId  keyIdOut =
+        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyIdOut);
+    whKeyId saltKeyId =
+        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyIdSalt);
+    whKeyId zKeyId =
+        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyIdZ);
+    whNvmFlags flags      = (whNvmFlags)req.flags;
+    uint8_t*   label      = req.label;
+    uint16_t   label_size = WH_NVM_LABEL_LEN;
+
+    const uint8_t* salt =
+        (const uint8_t*)cryptoDataIn + sizeof(whMessageCrypto_CmacKdfRequest);
+    const uint8_t* z         = salt + saltSz;
+    const uint8_t* fixedInfo = z + zSz;
+
+    uint8_t*       cachedSaltBuf  = NULL;
+    whNvmMetadata* cachedSaltMeta = NULL;
+    uint8_t*       cachedZBuf     = NULL;
+    whNvmMetadata* cachedZMeta    = NULL;
+
+    if (saltSz == 0) {
+        if (WH_KEYID_ISERASED(saltKeyId)) {
+            return WH_ERROR_BADARGS;
+        }
+        ret = wh_Server_KeystoreFreshenKey(ctx, saltKeyId, &cachedSaltBuf,
+                                           &cachedSaltMeta);
+        if (ret != WH_ERROR_OK) {
+            return ret;
+        }
+        salt   = cachedSaltBuf;
+        saltSz = cachedSaltMeta->len;
+    }
+
+    if (zSz == 0) {
+        if (WH_KEYID_ISERASED(zKeyId)) {
+            return WH_ERROR_BADARGS;
+        }
+        ret = wh_Server_KeystoreFreshenKey(ctx, zKeyId, &cachedZBuf,
+                                           &cachedZMeta);
+        if (ret != WH_ERROR_OK) {
+            return ret;
+        }
+        z   = cachedZBuf;
+        zSz = cachedZMeta->len;
+    }
+
+    if ((salt == NULL) || (z == NULL) || (outSz == 0)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    uint8_t* out =
+        (uint8_t*)cryptoDataOut + sizeof(whMessageCrypto_CmacKdfResponse);
+    uint16_t max_size = (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN -
+                                   ((uint8_t*)out - (uint8_t*)cryptoDataOut));
+
+    if (outSz > max_size) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wc_KDA_KDF_twostep_cmac(
+        salt, saltSz, z, zSz, (fixedInfoSz > 0) ? fixedInfo : NULL, fixedInfoSz,
+        out, outSz, NULL, ctx->crypto->devId);
+    if (ret == 0) {
+        if (flags & WH_NVM_FLAGS_EPHEMERAL) {
+            keyIdOut     = WH_KEYID_ERASED;
+            res.keyIdOut = WH_KEYID_ERASED;
+            res.outSz    = outSz;
+        }
+        else {
+            if (WH_KEYID_ISERASED(keyIdOut)) {
+                ret = wh_Server_KeystoreGetUniqueId(ctx, &keyIdOut);
+                if (ret != WH_ERROR_OK) {
+                    return ret;
+                }
+            }
+
+            ret = wh_Server_CmacKdfKeyCacheImport(ctx, out, outSz, keyIdOut,
+                                                  flags, label_size, label);
+            if (ret == WH_ERROR_OK) {
+                res.keyIdOut = WH_KEYID_ID(keyIdOut);
+                res.outSz    = 0;
+                memset(out, 0, outSz);
+            }
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        ret = wh_MessageCrypto_TranslateCmacKdfResponse(
+            magic, &res, (whMessageCrypto_CmacKdfResponse*)cryptoDataOut);
+        if (ret == 0) {
+            *outSize = sizeof(whMessageCrypto_CmacKdfResponse) + res.outSz;
+        }
+    }
+
+    return ret;
+}
+#endif /* HAVE_CMAC_KDF */
 
 #ifdef HAVE_CURVE25519
 static int _HandleCurve25519KeyGen(whServerContext* ctx, uint16_t magic,
@@ -3212,12 +3372,27 @@ int wh_Server_HandleCryptoRequest(whServerContext* ctx, uint16_t magic,
             break;
 #endif /* !WC_NO_RNG */
 
-#ifdef HAVE_HKDF
+#if defined(HAVE_HKDF) || defined(HAVE_CMAC_KDF)
         case WC_ALGO_TYPE_KDF:
-            ret = _HandleHkdf(ctx, magic, cryptoDataIn, cryptoInSize,
-                              cryptoDataOut, &cryptoOutSize);
-            break;
+            switch (rqstHeader.algoSubType) {
+#ifdef HAVE_HKDF
+                case WC_KDF_TYPE_HKDF:
+                    ret = _HandleHkdf(ctx, magic, cryptoDataIn, cryptoInSize,
+                                      cryptoDataOut, &cryptoOutSize);
+                    break;
 #endif /* HAVE_HKDF */
+#ifdef HAVE_CMAC_KDF
+                case WC_KDF_TYPE_TWOSTEP_CMAC:
+                    ret = _HandleCmacKdf(ctx, magic, cryptoDataIn, cryptoInSize,
+                                         cryptoDataOut, &cryptoOutSize);
+                    break;
+#endif /* HAVE_CMAC_KDF */
+                default:
+                    ret = NOT_COMPILED_IN;
+                    break;
+            }
+            break;
+#endif /* HAVE_HKDF || HAVE_CMAC_KDF */
 
 #ifdef WOLFSSL_CMAC
         case WC_ALGO_TYPE_CMAC:

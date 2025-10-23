@@ -167,6 +167,11 @@ typedef enum BenchModuleIdx {
     BENCH_MODULE_IDX_HKDF_SHA2_256,
 #endif /* HAVE_HKDF */
 
+/* CMAC KDF */
+#if defined(HAVE_CMAC_KDF) && defined(WOLFSSL_CMAC)
+    BENCH_MODULE_IDX_CMAC_KDF,
+#endif /* HAVE_CMAC_KDF && WOLFSSL_CMAC */
+
 /* ECC */
 #if defined(HAVE_ECC)
     BENCH_MODULE_IDX_ECC_P256_SIGN,
@@ -334,6 +339,11 @@ static BenchModule g_benchModules[] = {
 #if defined(HAVE_HKDF)
     [BENCH_MODULE_IDX_HKDF_SHA2_256]           = {"HKDF-SHA2-256",               wh_Bench_Mod_HkdfSha256,            BENCH_THROUGHPUT_OPS, 0, NULL},
 #endif /* HAVE_HKDF */
+
+    /* CMAC KDF */
+#if defined(HAVE_CMAC_KDF) && defined(WOLFSSL_CMAC)
+    [BENCH_MODULE_IDX_CMAC_KDF]                = {"CMAC-KDF-AES",                wh_Bench_Mod_CmacKdf,               BENCH_THROUGHPUT_OPS, 0, NULL},
+#endif /* HAVE_CMAC_KDF && WOLFSSL_CMAC */
 
     /* ECC */
 #if defined(HAVE_ECC)

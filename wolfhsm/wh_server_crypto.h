@@ -101,6 +101,14 @@ int wh_Server_HkdfKeyCacheImport(whServerContext* ctx, const uint8_t* keyData,
                                  uint8_t* label);
 #endif /* HAVE_HKDF */
 
+#ifdef HAVE_CMAC_KDF
+/* Store CMAC KDF output into a server key cache with optional metadata */
+int wh_Server_CmacKdfKeyCacheImport(whServerContext* ctx,
+                                    const uint8_t* keyData, uint32_t keySize,
+                                    whKeyId keyId, whNvmFlags flags,
+                                    uint16_t label_len, uint8_t* label);
+#endif /* HAVE_CMAC_KDF */
+
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
 #endif /* !WOLFHSM_WH_SERVER_CRYPTO_H_ */
