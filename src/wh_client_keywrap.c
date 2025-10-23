@@ -331,5 +331,160 @@ int wh_Client_KeyUnwrapAndCache(whClientContext*   ctx,
     return ret;
 }
 
+int wh_Client_AesGcmDataWrap(whClientContext* ctx, uint16_t serverKeyId,
+                             void* dataIn, uint32_t dataInSz,
+                             void* wrappedDataOut, uint32_t wrappedDataOutSz)
+{
+    int      ret = 0;
+    Aes      aes[1];
+    uint8_t  authTag[WOLFHSM_KEYWRAP_AES_GCM_TAG_SIZE];
+    uint8_t  iv[WOLFHSM_KEYWRAP_AES_GCM_IV_SIZE];
+    uint8_t* encDataPtr;
+
+    if (ctx == NULL || dataIn == NULL || dataInSz == 0 ||
+        wrappedDataOut == NULL || wrappedDataOutSz == 0) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Check if the buffer is big enough to hold the wrapped key */
+    if (wrappedDataOutSz < sizeof(iv) + sizeof(authTag) + dataInSz) {
+        return WH_ERROR_BUFFER_SIZE;
+    }
+
+    /* Initialize AES context and set it to use the server side key */
+    ret = wc_AesInit(aes, NULL, WH_DEV_ID);
+    if (ret != 0) {
+        return ret;
+    }
+
+    ret = wh_Client_AesSetKeyId(aes, serverKeyId);
+    if (ret != 0) {
+        wc_AesFree(aes);
+        return ret;
+    }
+
+    /* Generate the IV */
+    ret = wh_Client_RngGenerate(ctx, iv, sizeof(iv));
+    if (ret != 0) {
+        wc_AesFree(aes);
+        return ret;
+    }
+
+    /* Place the encrypted data after the IV and tag in the wrapped data buffer
+     */
+    encDataPtr = wrappedDataOut + sizeof(iv) + sizeof(authTag);
+
+    /* Encrypt the blob */
+    ret = wc_AesGcmEncrypt(aes, encDataPtr, dataIn, dataInSz, iv, sizeof(iv),
+                           authTag, sizeof(authTag), NULL, 0);
+    if (ret != 0) {
+        wc_AesFree(aes);
+        return ret;
+    }
+
+    /* Prepend IV + authTag to the wrapped data buffer */
+    memcpy(wrappedDataOut, iv, sizeof(iv));
+    memcpy(wrappedDataOut + sizeof(iv), authTag, sizeof(authTag));
+
+    wc_AesFree(aes);
+
+    return WH_ERROR_OK;
+}
+
+int wh_Client_AesGcmDataUnwrap(whClientContext* ctx, uint16_t serverKeyId,
+                               void* wrappedDataIn, uint32_t wrappedDataInSz,
+                               void* dataOut, uint32_t dataOutSz)
+{
+    int      ret = 0;
+    Aes      aes[1];
+    uint8_t* authTag;
+    uint8_t* iv;
+    uint8_t* encDataPtr;
+
+    if (ctx == NULL || wrappedDataIn == NULL || wrappedDataInSz == 0 ||
+        dataOut == NULL || dataOutSz == 0) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Check if the buffer is big enough to hold the unwrapped data */
+    if (dataOutSz < wrappedDataInSz - (WOLFHSM_KEYWRAP_AES_GCM_IV_SIZE +
+                                       WOLFHSM_KEYWRAP_AES_GCM_TAG_SIZE)) {
+        return WH_ERROR_BUFFER_SIZE;
+    }
+
+    /* Initialize AES context and set it to use the server side key */
+    ret = wc_AesInit(aes, NULL, WH_DEV_ID);
+    if (ret != 0) {
+        return ret;
+    }
+
+    ret = wh_Client_AesSetKeyId(aes, serverKeyId);
+    if (ret != 0) {
+        wc_AesFree(aes);
+        return ret;
+    }
+
+    /* extract the IV, Tag, and encrypted data */
+    iv         = wrappedDataIn;
+    authTag    = wrappedDataIn + WOLFHSM_KEYWRAP_AES_GCM_IV_SIZE;
+    encDataPtr = wrappedDataIn + WOLFHSM_KEYWRAP_AES_GCM_IV_SIZE +
+                 WOLFHSM_KEYWRAP_AES_GCM_TAG_SIZE;
+
+    /* Encrypt the blob */
+    ret = wc_AesGcmDecrypt(aes, dataOut, encDataPtr, dataOutSz, iv,
+                           WOLFHSM_KEYWRAP_AES_GCM_IV_SIZE, authTag,
+                           WOLFHSM_KEYWRAP_AES_GCM_TAG_SIZE, NULL, 0);
+    if (ret != 0) {
+        wc_AesFree(aes);
+        return ret;
+    }
+
+    wc_AesFree(aes);
+
+    return WH_ERROR_OK;
+}
+
+int wh_Client_DataWrap(whClientContext* ctx, enum wc_CipherType cipherType,
+                       uint16_t serverKeyId, void* dataIn, uint32_t dataInSz,
+                       void* wrappedDataOut, uint32_t wrappedDataOutSz)
+{
+    int ret;
+
+    switch (cipherType) {
+        case WC_CIPHER_AES_GCM:
+            ret = wh_Client_AesGcmDataWrap(ctx, serverKeyId, dataIn, dataInSz,
+                                           wrappedDataOut, wrappedDataOutSz);
+            break;
+
+        default:
+            ret = WH_ERROR_BADARGS;
+            break;
+    }
+
+    return ret;
+}
+
+int wh_Client_DataUnwrap(whClientContext* ctx, enum wc_CipherType cipherType,
+                         uint16_t serverKeyId, void* wrappedDataIn,
+                         uint32_t wrappedDataInSz, void* dataOut,
+                         uint32_t dataOutSz)
+{
+    int ret;
+
+    switch (cipherType) {
+        case WC_CIPHER_AES_GCM:
+            ret =
+                wh_Client_AesGcmDataUnwrap(ctx, serverKeyId, wrappedDataIn,
+                                           wrappedDataInSz, dataOut, dataOutSz);
+            break;
+
+        default:
+            ret = WH_ERROR_BADARGS;
+            break;
+    }
+
+    return ret;
+}
+
 #endif /* WOLFHSM_CFG_ENABLE_CLIENT */
 #endif /* WOLFHSM_CFG_KEYWRAP */

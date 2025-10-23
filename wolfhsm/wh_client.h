@@ -1060,6 +1060,48 @@ int wh_Client_KeyUnwrapAndCacheResponse(whClientContext*   ctx,
                                         enum wc_CipherType cipherType,
                                         uint16_t*          keyIdOut);
 
+/**
+ * @brief Helper function to wrap a data object using a specified key
+ *
+ * This helper function uses existing calls in wolfHSM and wolfCrypt to
+ * construct a wrapped data object using a specified cipher and key id
+ *
+ * @param[in] ctx Pointer to the client context.
+ * @param[in] cipherType Cipher used when unwrapping the key.
+ * @param[in] serverKeyId Key ID to be used for wrapping the data.
+ * @param[in] dataIn Pointer to the plaintext data you want to wrap.
+ * @param[in] dataInSz The size in bytes of the plaintext data.
+ * @param[out] wrappedDataOut The pointer to the buffer that stores the
+ * resulting wrapped data.
+ * @param[out] wrappedDataOutSz The size in bytes of the wrapped data buffer.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_DataWrap(whClientContext* ctx, enum wc_CipherType cipherType,
+                       uint16_t serverKeyId, void* dataIn, uint32_t dataInSz,
+                       void* wrappedDataOut, uint32_t wrappedDataOutSz);
+
+/**
+ * @brief Helper function to unwrap a wrapped data object using a specified key
+ *
+ * This helper function uses existing calls in wolfHSM and wolfCrypt to
+ * unwrap a wrapped data object using a specified cipher and key id
+ *
+ * @param[in] ctx Pointer to the client context.
+ * @param[in] cipherType Cipher used when unwrapping the key.
+ * @param[in] serverKeyId Key ID to be used for wrapping the data.
+ * @param[in] wrappedDataIn Pointer to the wrapped data object you want to
+ * unwrap.
+ * @param[in] wrappedDataInSz The size in bytes of the wrapped data object.
+ * @param[out] dataOut The pointer to the buffer that stores the
+ * resulting unwrapped data.
+ * @param[out] dataOutSz The size in bytes of the unwrapped data buffer.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_DataUnwrap(whClientContext* ctx, enum wc_CipherType cipherType,
+                         uint16_t serverKeyId, void* wrappedDataIn,
+                         uint32_t wrappedDataInSz, void* dataOut,
+                         uint32_t dataOutSz);
+
 /* Counter functions */
 int wh_Client_CounterInitRequest(whClientContext* c, whNvmId counterId,
     uint32_t counter);
