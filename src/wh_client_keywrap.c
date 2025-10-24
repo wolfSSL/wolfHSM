@@ -331,9 +331,10 @@ int wh_Client_KeyUnwrapAndCache(whClientContext*   ctx,
     return ret;
 }
 
-int wh_Client_AesGcmDataWrap(whClientContext* ctx, uint16_t serverKeyId,
-                             void* dataIn, uint32_t dataInSz,
-                             void* wrappedDataOut, uint32_t wrappedDataOutSz)
+static int wh_Client_AesGcmDataWrap(whClientContext* ctx, uint16_t serverKeyId,
+                                    void* dataIn, uint32_t dataInSz,
+                                    void*    wrappedDataOut,
+                                    uint32_t wrappedDataOutSz)
 {
     int      ret = 0;
     Aes      aes[1];
@@ -391,9 +392,10 @@ int wh_Client_AesGcmDataWrap(whClientContext* ctx, uint16_t serverKeyId,
     return WH_ERROR_OK;
 }
 
-int wh_Client_AesGcmDataUnwrap(whClientContext* ctx, uint16_t serverKeyId,
-                               void* wrappedDataIn, uint32_t wrappedDataInSz,
-                               void* dataOut, uint32_t dataOutSz)
+static int wh_Client_AesGcmDataUnwrap(whClientContext* ctx,
+                                      uint16_t serverKeyId, void* wrappedDataIn,
+                                      uint32_t wrappedDataInSz, void* dataOut,
+                                      uint32_t dataOutSz)
 {
     int      ret = 0;
     Aes      aes[1];
@@ -430,7 +432,7 @@ int wh_Client_AesGcmDataUnwrap(whClientContext* ctx, uint16_t serverKeyId,
     encDataPtr = wrappedDataIn + WOLFHSM_KEYWRAP_AES_GCM_IV_SIZE +
                  WOLFHSM_KEYWRAP_AES_GCM_TAG_SIZE;
 
-    /* Encrypt the blob */
+    /* Decrypt the blob */
     ret = wc_AesGcmDecrypt(aes, dataOut, encDataPtr, dataOutSz, iv,
                            WOLFHSM_KEYWRAP_AES_GCM_IV_SIZE, authTag,
                            WOLFHSM_KEYWRAP_AES_GCM_TAG_SIZE, NULL, 0);
