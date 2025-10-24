@@ -765,9 +765,11 @@ int wh_Server_KeystoreEraseKey(whServerContext* server, whNvmId keyId)
         return WH_ERROR_BADARGS;
     }
 
+#ifdef WOLFHSM_CFG_KEYWRAP
     if (_IsKnownWrappedKey(server, keyId)) {
         return WH_ERROR_ABORTED;
     }
+#endif
 
     /* remove the key from the cache if present */
     (void)wh_Server_KeystoreEvictKey(server, keyId);
