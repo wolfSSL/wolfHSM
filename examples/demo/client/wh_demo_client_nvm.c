@@ -35,18 +35,18 @@ int wh_DemoClient_Nvm(whClientContext* clientContext)
     whNvmSize readLen;
 
     if (clientContext == NULL) {
-        printf("Client context is NULL\n");
+        WOLFHSM_CFG_PRINTF("Client context is NULL\n");
         return WH_ERROR_BADARGS;
     }
 
     /* Initialize NVM */
     rc = wh_Client_NvmInit(clientContext, &serverRc, NULL, NULL);
     if (rc != 0 || serverRc != 0) {
-        printf("NVM Init failed with error code: %d, server error code: %d\n",
+        WOLFHSM_CFG_PRINTF("NVM Init failed with error code: %d, server error code: %d\n",
                rc, serverRc);
         return (rc != 0) ? rc : serverRc;
     }
-    printf("NVM Initialized successfully\n");
+    WOLFHSM_CFG_PRINTF("NVM Initialized successfully\n");
 
     /* Add multiple objects, reading back each one and comparing the data
      * against what we wrote */
@@ -57,33 +57,33 @@ int wh_DemoClient_Nvm(whClientContext* clientContext)
             clientContext, objectIds[i], WH_NVM_ACCESS_ANY, WH_NVM_FLAGS_NONE,
             sizeof(labels[i]), labels[i], dataLen, data[i], &serverRc);
         if (rc != 0 || serverRc != 0) {
-            printf("Add Object %d failed with error code: %d, server error "
+            WOLFHSM_CFG_PRINTF("Add Object %d failed with error code: %d, server error "
                    "code: %d\n",
                    objectIds[i], rc, serverRc);
             return (rc != 0) ? rc : serverRc;
         }
-        printf("Object %d added successfully\n", objectIds[i]);
+        WOLFHSM_CFG_PRINTF("Object %d added successfully\n", objectIds[i]);
 
         /* Read the object data */
         rc = wh_Client_NvmRead(clientContext, objectIds[i], 0, dataLen,
                                &serverRc, &readLen, readData);
         if (rc != 0 || serverRc != 0) {
-            printf("Read Object %d failed with error code: %d, server error "
+            WOLFHSM_CFG_PRINTF("Read Object %d failed with error code: %d, server error "
                    "code: %d\n",
                    objectIds[i], rc, serverRc);
             return (rc != 0) ? rc : serverRc;
         }
-        printf("Object %d read successfully: Data=%s\n", objectIds[i],
+        WOLFHSM_CFG_PRINTF("Object %d read successfully: Data=%s\n", objectIds[i],
                readData);
 
         /* Ensure data we read matches data we wrote */
         if (memcmp(data[i], readData, dataLen) != 0) {
-            printf("Readback check failed for Object %d: Data read does not "
+            WOLFHSM_CFG_PRINTF("Readback check failed for Object %d: Data read does not "
                    "match data written\n",
                    objectIds[i]);
             return WH_ERROR_ABORTED;
         }
-        printf("Readback check passed for Object %d: Data read matches data "
+        WOLFHSM_CFG_PRINTF("Readback check passed for Object %d: Data read matches data "
                "written\n",
                objectIds[i]);
     }
@@ -93,55 +93,55 @@ int wh_DemoClient_Nvm(whClientContext* clientContext)
         wh_Client_NvmGetAvailable(clientContext, &serverRc, &availSize,
                                   &availObjects, &reclaimSize, &reclaimObjects);
     if (rc != 0 || serverRc != 0) {
-        printf("Get Available Objects failed with error code: %d, server error "
+        WOLFHSM_CFG_PRINTF("Get Available Objects failed with error code: %d, server error "
                "code: %d\n",
                rc, serverRc);
         return (rc != 0) ? rc : serverRc;
     }
-    printf("Available Objects retrieved successfully: Available Size=%d, "
+    WOLFHSM_CFG_PRINTF("Available Objects retrieved successfully: Available Size=%d, "
            "Available Objects=%d, Reclaim Size=%d, Reclaim Objects=%d\n",
            availSize, availObjects, reclaimSize, reclaimObjects);
 
     /* Delete one object */
     rc = wh_Client_NvmDestroyObjects(clientContext, 1, objectIds, &serverRc);
     if (rc != 0 || serverRc != 0) {
-        printf("Delete Objects failed with error code: %d, server error code: "
+        WOLFHSM_CFG_PRINTF("Delete Objects failed with error code: %d, server error code: "
                "%d\n",
                rc, serverRc);
         return (rc != 0) ? rc : serverRc;
     }
-    printf("Objects deleted successfully\n");
+    WOLFHSM_CFG_PRINTF("Objects deleted successfully\n");
 
     /* Delete multiple objects */
     rc = wh_Client_NvmDestroyObjects(clientContext, NUM_OBJECTS - 1,
                                      &objectIds[1], &serverRc);
     if (rc != 0 || serverRc != 0) {
-        printf("Delete Objects failed with error code: %d, server error code: "
+        WOLFHSM_CFG_PRINTF("Delete Objects failed with error code: %d, server error code: "
                "%d\n",
                rc, serverRc);
         return (rc != 0) ? rc : serverRc;
     }
-    printf("Objects deleted successfully\n");
+    WOLFHSM_CFG_PRINTF("Objects deleted successfully\n");
 
     /* Reclaim space */
     rc = wh_Client_NvmDestroyObjects(clientContext, 0, NULL, &serverRc);
     if (rc != 0 || serverRc != 0) {
-        printf("Reclaim Objects failed with error code: %d, server error code: "
+        WOLFHSM_CFG_PRINTF("Reclaim Objects failed with error code: %d, server error code: "
                "%d\n",
                rc, serverRc);
         return (rc != 0) ? rc : serverRc;
     }
-    printf("Reclaimed space successfully\n");
+    WOLFHSM_CFG_PRINTF("Reclaimed space successfully\n");
 
     /* Cleanup NVM */
     rc = wh_Client_NvmCleanup(clientContext, &serverRc);
     if (rc != 0 || serverRc != 0) {
-        printf(
+        WOLFHSM_CFG_PRINTF(
             "NVM Cleanup failed with error code: %d, server error code: %d\n",
             rc, serverRc);
         return (rc != 0) ? rc : serverRc;
     }
-    printf("NVM Cleaned up successfully\n");
+    WOLFHSM_CFG_PRINTF("NVM Cleaned up successfully\n");
 
     return 0;
 }
