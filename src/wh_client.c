@@ -726,7 +726,7 @@ int wh_Client_CustomCbCheckRegistered(whClientContext* c, uint16_t id, int* resp
 
 
 int wh_Client_KeyCacheRequest_ex(whClientContext* c, uint32_t flags,
-                                 uint8_t* label, uint16_t labelSz, uint8_t* in,
+                                 uint8_t* label, uint16_t labelSz, const uint8_t* in,
                                  uint16_t inSz, uint16_t keyId)
 {
     whMessageKeystore_CacheRequest* req = NULL;
@@ -770,7 +770,7 @@ int wh_Client_KeyCacheRequest_ex(whClientContext* c, uint32_t flags,
 }
 
 int wh_Client_KeyCacheRequest(whClientContext* c, uint32_t flags,
-                              uint8_t* label, uint16_t labelSz, uint8_t* in,
+                              uint8_t* label, uint16_t labelSz, const uint8_t* in,
                               uint16_t inSz)
 {
     return wh_Client_KeyCacheRequest_ex(c, flags, label, labelSz, in, inSz,
@@ -808,7 +808,7 @@ int wh_Client_KeyCacheResponse(whClientContext* c, uint16_t* keyId)
 }
 
 int wh_Client_KeyCache(whClientContext* c, uint32_t flags, uint8_t* label,
-                       uint16_t labelSz, uint8_t* in, uint16_t inSz,
+                       uint16_t labelSz, const uint8_t* in, uint16_t inSz,
                        uint16_t* keyId)
 {
     int ret = WH_ERROR_OK;

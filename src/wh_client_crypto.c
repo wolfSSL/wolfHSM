@@ -91,7 +91,7 @@ static int _RsaMakeKey(whClientContext* ctx, uint32_t size, uint32_t e,
 
 #ifdef HAVE_HKDF
 /* Generate HKDF output on the server based on the flags */
-static int _HkdfMakeKey(whClientContext* ctx, int hashType,
+static int _HkdfMakeKey(whClientContext* ctx, int hashType, whKeyId keyIdIn,
                         const uint8_t* inKey, uint32_t inKeySz,
                         const uint8_t* salt, uint32_t saltSz,
                         const uint8_t* info, uint32_t infoSz, whNvmFlags flags,
@@ -213,7 +213,9 @@ int wh_Client_RngGenerate(whClientContext* ctx, uint8_t* out, uint32_t size)
         uint32_t chunk_size = (size < client_max_data) ? size : client_max_data;
         req->sz             = chunk_size;
 
-        WH_DEBUG_CLIENT_VERBOSE("RNG: size:%u reqsz:%u remaining:%u\n", chunk_size, req_len, size);
+        WH_DEBUG_CLIENT_VERBOSE("RNG: size:%u reqsz:%u remaining:%u\n",
+               (unsigned int)chunk_size, (unsigned int)req_len,
+               (unsigned int)size);
         WH_DEBUG_CLIENT_VERBOSE("RNG: req:%p\n", req);
 
         /* Send request and get response */
@@ -237,7 +239,8 @@ int wh_Client_RngGenerate(whClientContext* ctx, uint8_t* out, uint32_t size)
                         out += res->sz;
                     }
                     size -= res->sz;
-                    WH_DEBUG_CLIENT_VERBOSE("out size:%u remaining:%u\n", res->sz, size);
+                    WH_DEBUG_CLIENT_VERBOSE("out size:%u remaining:%u\n",
+                           (unsigned int)res->sz, (unsigned int)size);
 #ifdef WOLFHSM_CFG_HEXDUMP
                     wh_Utils_Hexdump("[client] res_out: \n", out - res->sz,
                                      res->sz);
@@ -252,6 +255,73 @@ int wh_Client_RngGenerate(whClientContext* ctx, uint8_t* out, uint32_t size)
     }
     return ret;
 }
+
+#ifdef WOLFHSM_CFG_DMA
+int wh_Client_RngGenerateDma(whClientContext* ctx, uint8_t* out, uint32_t size)
+{
+    int                             ret     = WH_ERROR_OK;
+    uint8_t*                        dataPtr = NULL;
+    whMessageCrypto_RngDmaRequest*  req     = NULL;
+    whMessageCrypto_RngDmaResponse* resp    = NULL;
+    uint16_t                        respSz  = 0;
+    uintptr_t                       outAddr = 0;
+
+    if ((ctx == NULL) || (out == NULL) || (size == 0)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Get data pointer from the context to use as request/response storage */
+    dataPtr = (uint8_t*)wh_CommClient_GetDataPtr(ctx->comm);
+    if (dataPtr == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Setup generic header and get pointer to request data */
+    req = (whMessageCrypto_RngDmaRequest*)_createCryptoRequest(
+        dataPtr, WC_ALGO_TYPE_RNG);
+
+    /* Set up output buffer address and size */
+    req->output.sz = size;
+
+    /* Perform address translation for output buffer (PRE operation) */
+    ret = wh_Client_DmaProcessClientAddress(
+        ctx, (uintptr_t)out, (void**)&outAddr, req->output.sz,
+        WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
+    req->output.addr = outAddr;
+
+    if (ret == WH_ERROR_OK) {
+        /* Send the request to the server */
+        ret = wh_Client_SendRequest(
+            ctx, WH_MESSAGE_GROUP_CRYPTO_DMA, WC_ALGO_TYPE_RNG,
+            sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req),
+            (uint8_t*)dataPtr);
+    }
+
+    if (ret == WH_ERROR_OK) {
+        /* Wait for and receive the response */
+        do {
+            ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
+                                         (uint8_t*)dataPtr);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+
+    if (ret == WH_ERROR_OK) {
+        /* Get response structure pointer, validates generic header rc */
+        ret = _getCryptoResponse(dataPtr, WC_ALGO_TYPE_RNG, (uint8_t**)&resp);
+        /* Nothing more to do on success, as server will have written random
+         * bytes directly to client memory */
+    }
+
+    /* Perform address translation cleanup (POST operation)
+     * This is called regardless of successful operation to give the callback a
+     * chance for cleanup */
+    (void)wh_Client_DmaProcessClientAddress(
+        ctx, (uintptr_t)out, (void**)&outAddr, size,
+        WH_DMA_OPER_CLIENT_WRITE_POST, (whDmaFlags){0});
+
+    return ret;
+}
+#endif /* WOLFHSM_CFG_DMA */
 
 #ifndef NO_AES
 
@@ -417,7 +487,8 @@ int wh_Client_AesEcb(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
 
     WH_DEBUG_CLIENT_VERBOSE("%s: enc:%d keylen:%d ivsz:%d insz:%d reqsz:%u "
            "blocks:%u \n",
-           __func__, enc, key_len, iv_len, len, req_len, blocks);
+           __func__, enc, (int)key_len, (int)iv_len, (int)len,
+           (unsigned int)req_len, (unsigned int)blocks);
 
     if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
         return WH_ERROR_BADARGS;
@@ -458,7 +529,8 @@ int wh_Client_AesEcb(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
             if (ret == WH_ERROR_OK) {
                 /* Response packet */
                 uint8_t* res_out = (uint8_t*)(res + 1);
-                WH_DEBUG_CLIENT_VERBOSE("out size:%d res_len:%d\n", res->sz, res_len);
+                WH_DEBUG_CLIENT_VERBOSE("out size:%d res_len:%d\n", (int)res->sz,
+                       (int)res_len);
 #ifdef WOLFHSM_CFG_HEXDUMP
                 wh_Utils_Hexdump("[client] res_out: \n", out, res->sz);
 #endif
@@ -520,7 +592,9 @@ int wh_Client_AesCbc(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
 
     WH_DEBUG_CLIENT_VERBOSE("%s: enc:%d keylen:%d ivsz:%d insz:%d reqsz:%u "
            "blocks:%u lastoffset:%u\n",
-           __func__, enc, key_len, iv_len, len, req_len, blocks, last_offset);
+            __func__, enc, (int)key_len, (int)iv_len, (int)len,
+           (unsigned int)req_len, (unsigned int)blocks,
+           (unsigned int)last_offset);
 
     if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
         return WH_ERROR_BADARGS;
@@ -568,7 +642,8 @@ int wh_Client_AesCbc(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
             if (ret == WH_ERROR_OK) {
                 /* Response packet */
                 uint8_t* res_out = (uint8_t*)(res + 1);
-                WH_DEBUG_CLIENT_VERBOSE("out size:%d res_len:%d\n", res->sz, res_len);
+                WH_DEBUG_CLIENT_VERBOSE("out size:%d res_len:%d\n", (int)res->sz,
+                       (int)res_len);
 #ifdef WOLFHSM_CFG_HEXDUMP
                 wh_Utils_Hexdump("[client] res_out: \n", out, res->sz);
 #endif
@@ -598,7 +673,7 @@ int wh_Client_AesGcm(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
     if ((ctx == NULL) || (aes == NULL) || ((in == NULL) && (len > 0)) ||
         ((iv == NULL) && (iv_len > 0)) ||
         ((authin == NULL) && (authin_len > 0)) ||
-        ((enc == 0) && (dec_tag == NULL)) || (out == NULL)) {
+        ((enc == 0) && (dec_tag == NULL))) {
         return WH_ERROR_BADARGS;
     }
 
@@ -634,7 +709,8 @@ int wh_Client_AesGcm(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
 
     WH_DEBUG_CLIENT_VERBOSE("AESGCM: enc:%d keylen:%d ivsz:%d insz:%d authinsz:%d "
            "authtagsz:%d reqsz:%u\n",
-           enc, key_len, iv_len, len, authin_len, tag_len, req_len);
+           enc, (int)key_len, (int)iv_len, (int)len, (int)authin_len,
+           (int)tag_len, (unsigned int)req_len);
     WH_DEBUG_CLIENT_VERBOSE("AESGCM: req:%p in:%p key:%p iv:%p authin:%p tag:%p\n", req,
            req_in, req_key, req_iv, req_authin, req_tag);
     if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
@@ -704,8 +780,8 @@ int wh_Client_AesGcm(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
                 /* The auth tag follows after the output data */
                 uint8_t* res_tag = res_out + res->sz;
 
-                WH_DEBUG_CLIENT_VERBOSE("out size:%d datasz:%d tag_len:%d\n", res->sz,
-                       res_len, res->authTagSz);
+                WH_DEBUG_CLIENT_VERBOSE("out size:%d datasz:%d tag_len:%d\n",
+                       (int)res->sz, (int)res_len, (int)res->authTagSz);
 #ifdef WOLFHSM_CFG_HEXDUMP
                 wh_Utils_Hexdump("[client] res_out: \n", res_out, res->sz);
                 if (enc != 0 && res->authTagSz > 0) {
@@ -713,7 +789,7 @@ int wh_Client_AesGcm(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
                                      res->authTagSz);
                 }
 #endif
-                /* copy the response result */
+                /* copy the response result if present */
                 if (out != NULL && res->sz == len) {
                     memcpy(out, res_out, res->sz);
                 }
@@ -723,7 +799,7 @@ int wh_Client_AesGcm(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
                     res->authTagSz <= tag_len) {
                     memcpy(enc_tag, res_tag, res->authTagSz);
                     WH_DEBUG_CLIENT_VERBOSE("res tag_len:%d exp tag_len:%u",
-                           res->authTagSz, tag_len);
+                           (int)res->authTagSz, (unsigned int)tag_len);
 #ifdef WOLFHSM_CFG_HEXDUMP
                     wh_Utils_Hexdump("[client] enc authtag: ", enc_tag,
                                      res->authTagSz);
@@ -761,7 +837,7 @@ int wh_Client_AesGcmDma(whClientContext* ctx, Aes* aes, int enc,
     uint32_t       keyLen = 0;
     uint16_t       reqLen;
 
-    if (ctx == NULL || aes == NULL || out == NULL) {
+    if (ctx == NULL || aes == NULL) {
         return WH_ERROR_BADARGS;
     }
 
@@ -1077,7 +1153,14 @@ static int _EccMakeKey(whClientContext* ctx, int size, int curveId,
 
             ret = wh_Client_SendRequest(ctx, group, action, req_len,
                                         (uint8_t*)dataPtr);
+<<<<<<< HEAD
             WH_DEBUG_CLIENT_VERBOSE("%s Req sent:size:%u, ret:%d\n", __func__, req->sz, ret);
+=======
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+            printf("[client] %s Req sent:size:%u, ret:%d\n", __func__,
+                   (unsigned int)req->sz, ret);
+#endif
+>>>>>>> main
             if (ret == WH_ERROR_OK) {
                 /* Response Message */
                 uint16_t res_len;
@@ -1091,8 +1174,16 @@ static int _EccMakeKey(whClientContext* ctx, int size, int curveId,
                      * rc */
                     ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_EC_KEYGEN,
                                              (uint8_t**)&res);
+<<<<<<< HEAD
                     WH_DEBUG_CLIENT_VERBOSE("%s Res recv:keyid:%u, len:%u, ret:%d\n",
                            __func__, res->keyId, res->len, ret);
+=======
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+                    printf("[client] %s Res recv:keyid:%u, len:%u, ret:%d\n",
+                           __func__, (unsigned int)res->keyId,
+                           (unsigned int)res->len, ret);
+#endif
+>>>>>>> main
                     /* wolfCrypt allows positive error codes on success in some
                      * scenarios */
                     if (ret >= 0) {
@@ -1235,8 +1326,16 @@ int wh_Client_EccSharedSecret(whClientContext* ctx, ecc_key* priv_key,
             /* Send Request */
             ret = wh_Client_SendRequest(ctx, group, action, req_len,
                                         (uint8_t*)dataPtr);
+<<<<<<< HEAD
             WH_DEBUG_CLIENT_VERBOSE("%s req sent. priv:%u pub:%u\n", __func__,
                    req->privateKeyId, req->publicKeyId);
+=======
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+            printf("[client] %s req sent. priv:%u pub:%u\n", __func__,
+                   (unsigned int)req->privateKeyId,
+                   (unsigned int)req->publicKeyId);
+#endif
+>>>>>>> main
             if (ret == WH_ERROR_OK) {
                 /* Server will evict.  Reset our flags */
                 pub_evict = prv_evict = 0;
@@ -1520,8 +1619,13 @@ int wh_Client_EccVerify(whClientContext* ctx, ecc_key* key, const uint8_t* sig,
 
             WH_DEBUG_CLIENT_VERBOSE("EccVerify req: key_id=%x, sig_len=%u, "
                    "hash_len=%u, options=%u\n",
+<<<<<<< HEAD
                    key_id, sig_len, hash_len, options);
 #ifdef WOLFHSM_CFG_HEXDUMP
+=======
+                   key_id, (unsigned int)sig_len, (unsigned int)hash_len,
+                   (unsigned int)options);
+>>>>>>> main
             wh_Utils_Hexdump("[client] EccVerify req:", (uint8_t*)req, req_len);
             if ((sig != NULL) && (sig_len > 0)) {
                 wh_Utils_Hexdump("[client] EccVerify sig:", sig, sig_len);
@@ -1764,8 +1868,15 @@ static int _Curve25519MakeKey(whClientContext* ctx, uint16_t size,
 
     ret =
         wh_Client_SendRequest(ctx, group, action, data_len, (uint8_t*)dataPtr);
+<<<<<<< HEAD
     WH_DEBUG_CLIENT_VERBOSE("Curve25519 KeyGen Req sent:size:%u, ret:%d\n", req->sz,
            ret);
+=======
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+    printf("[client] Curve25519 KeyGen Req sent:size:%u, ret:%d\n",
+           (unsigned int)req->sz, ret);
+#endif
+>>>>>>> main
     if (ret == 0) {
         do {
             ret = wh_Client_RecvResponse(ctx, &group, &action, &data_len,
@@ -1782,7 +1893,12 @@ static int _Curve25519MakeKey(whClientContext* ctx, uint16_t size,
         if (ret >= 0) {
             WH_DEBUG_CLIENT_VERBOSE("Curve25519 KeyGen Res recv:keyid:%u, len:%u, "
                    "ret:%d\n",
+<<<<<<< HEAD
                    res->keyId, res->len, ret);
+=======
+                   (unsigned int)res->keyId, (unsigned int)res->len, ret);
+#endif
+>>>>>>> main
             /* Key is cached on server or is ephemeral */
             key_id = (whKeyId)(res->keyId);
 
@@ -1918,8 +2034,16 @@ int wh_Client_Curve25519SharedSecret(whClientContext* ctx,
             /* Send Request */
             ret = wh_Client_SendRequest(ctx, group, action, req_len,
                                         (uint8_t*)dataPtr);
+<<<<<<< HEAD
             WH_DEBUG_CLIENT_VERBOSE("%s req sent. priv:%u pub:%u\n", __func__,
                    req->privateKeyId, req->publicKeyId);
+=======
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+            printf("[client] %s req sent. priv:%u pub:%u\n", __func__,
+                   (unsigned int)req->privateKeyId,
+                   (unsigned int)req->publicKeyId);
+#endif
+>>>>>>> main
             if (ret == WH_ERROR_OK) {
                 whMessageCrypto_Curve25519Response* res = NULL;
                 uint16_t                            res_len;
@@ -2109,8 +2233,15 @@ static int _RsaMakeKey(whClientContext* ctx, uint32_t size, uint32_t e,
 
     /* Send Request */
     ret = wh_Client_SendRequest(ctx, group, action, req_len, dataPtr);
+<<<<<<< HEAD
     WH_DEBUG_CLIENT_VERBOSE("RSA KeyGen Req sent:size:%u, e:%u, ret:%d\n", req->size, req->e,
            ret);
+=======
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+    printf("RSA KeyGen Req sent:size:%u, e:%u, ret:%d\n",
+           (unsigned int)req->size, (unsigned int)req->e, ret);
+#endif
+>>>>>>> main
     if (ret == 0) {
         uint16_t res_len = 0;
         do {
@@ -2118,7 +2249,14 @@ static int _RsaMakeKey(whClientContext* ctx, uint32_t size, uint32_t e,
                 wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
         } while (ret == WH_ERROR_NOTREADY);
 
+<<<<<<< HEAD
         WH_DEBUG_CLIENT_VERBOSE("RSA KeyGen Res recv: ret:%d, res_len: %u\n", ret, res_len);
+=======
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+        printf("RSA KeyGen Res recv: ret:%d, res_len: %u\n", ret,
+               (unsigned int)res_len);
+#endif
+>>>>>>> main
 
         if (ret == WH_ERROR_OK) {
             /* Get response structure pointer, validates generic header rc */
@@ -2410,7 +2548,7 @@ int wh_Client_RsaGetSize(whClientContext* ctx, const RsaKey* key, int* out_size)
 
 #ifdef HAVE_HKDF
 /* Internal helper function to generate HKDF output on the server */
-static int _HkdfMakeKey(whClientContext* ctx, int hashType,
+static int _HkdfMakeKey(whClientContext* ctx, int hashType, whKeyId keyIdIn,
                         const uint8_t* inKey, uint32_t inKeySz,
                         const uint8_t* salt, uint32_t saltSz,
                         const uint8_t* info, uint32_t infoSz, whNvmFlags flags,
@@ -2425,7 +2563,7 @@ static int _HkdfMakeKey(whClientContext* ctx, int hashType,
     uint16_t                      action  = WC_ALGO_TYPE_KDF;
     whKeyId                       key_id  = WH_KEYID_ERASED;
 
-    if ((ctx == NULL) || (inKey == NULL)) {
+    if ((ctx == NULL) || ((inKey == NULL) && (inKeySz != 0))) {
         return WH_ERROR_BADARGS;
     }
 
@@ -2450,7 +2588,8 @@ static int _HkdfMakeKey(whClientContext* ctx, int hashType,
 
     /* Populate request body */
     req->flags    = flags;
-    req->keyId    = key_id;
+    req->keyIdIn  = keyIdIn;
+    req->keyIdOut = key_id;
     req->hashType = hashType;
     req->inKeySz  = inKeySz;
     req->saltSz   = saltSz;
@@ -2470,8 +2609,10 @@ static int _HkdfMakeKey(whClientContext* ctx, int hashType,
     uint8_t* data_ptr = (uint8_t*)(req + 1);
 
     /* Copy input key material */
-    memcpy(data_ptr, inKey, inKeySz);
-    data_ptr += inKeySz;
+    if ((inKey != NULL) && (inKeySz > 0)) {
+        memcpy(data_ptr, inKey, inKeySz);
+        data_ptr += inKeySz;
+    }
 
     /* Copy salt if provided */
     if (salt != NULL && saltSz > 0) {
@@ -2489,8 +2630,15 @@ static int _HkdfMakeKey(whClientContext* ctx, int hashType,
 
     WH_DEBUG_CLIENT_VERBOSE("HKDF Req sent: hashType:%d inKeySz:%u saltSz:%u infoSz:%u outSz:%u "
            "ret:%d\n",
+<<<<<<< HEAD
            req->hashType, req->inKeySz, req->saltSz, req->infoSz, req->outSz,
            ret);
+=======
+           (int)req->hashType, (unsigned int)req->inKeySz,
+           (unsigned int)req->saltSz, (unsigned int)req->infoSz,
+           (unsigned int)req->outSz, ret);
+#endif
+>>>>>>> main
 
     if (ret == 0) {
         uint16_t res_len = 0;
@@ -2499,7 +2647,14 @@ static int _HkdfMakeKey(whClientContext* ctx, int hashType,
                 wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
         } while (ret == WH_ERROR_NOTREADY);
 
+<<<<<<< HEAD
         WH_DEBUG_CLIENT_VERBOSE("HKDF Res recv: ret:%d, res_len: %u\n", ret, res_len);
+=======
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+        printf("HKDF Res recv: ret:%d, res_len: %u\n", ret,
+               (unsigned int)res_len);
+#endif
+>>>>>>> main
 
         if (ret == WH_ERROR_OK) {
             /* Get response structure pointer, validates generic header rc */
@@ -2509,7 +2664,7 @@ static int _HkdfMakeKey(whClientContext* ctx, int hashType,
 
         if (ret == WH_ERROR_OK) {
             /* Key is cached on server or is ephemeral */
-            key_id = (whKeyId)(res->keyId);
+            key_id = (whKeyId)(res->keyIdOut);
 
             /* Update output variable if requested */
             if (inout_key_id != NULL) {
@@ -2522,8 +2677,15 @@ static int _HkdfMakeKey(whClientContext* ctx, int hashType,
                     uint8_t* hkdf_out = (uint8_t*)(res + 1);
                     memcpy(out, hkdf_out, res->outSz);
 
+<<<<<<< HEAD
                 WH_DEBUG_CLIENT_VERBOSE("%s Set key_id:%x with flags:%x outSz:%u\n",
                            __func__, key_id, flags, res->outSz);
+=======
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+                    printf("[client] %s Set key_id:%x with flags:%x outSz:%u\n",
+                           __func__, key_id, flags, (unsigned int)res->outSz);
+#endif
+>>>>>>> main
                 }
                 else {
                     /* Server returned more than we can handle - error */
@@ -2536,35 +2698,35 @@ static int _HkdfMakeKey(whClientContext* ctx, int hashType,
 }
 
 int wh_Client_HkdfMakeCacheKey(whClientContext* ctx, int hashType,
-                               const uint8_t* inKey, uint32_t inKeySz,
-                               const uint8_t* salt, uint32_t saltSz,
-                               const uint8_t* info, uint32_t infoSz,
-                               whKeyId* inout_key_id, whNvmFlags flags,
-                               const uint8_t* label, uint32_t label_len,
-                               uint32_t outSz)
+                               whKeyId keyIdIn, const uint8_t* inKey,
+                               uint32_t inKeySz, const uint8_t* salt,
+                               uint32_t saltSz, const uint8_t* info,
+                               uint32_t infoSz, whKeyId* inout_key_id,
+                               whNvmFlags flags, const uint8_t* label,
+                               uint32_t label_len, uint32_t outSz)
 {
     if ((ctx == NULL) || (inout_key_id == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
-    return _HkdfMakeKey(ctx, hashType, inKey, inKeySz, salt, saltSz, info,
-                        infoSz, flags, label_len, label, inout_key_id, NULL,
-                        outSz);
+    return _HkdfMakeKey(ctx, hashType, keyIdIn, inKey, inKeySz, salt, saltSz,
+                        info, infoSz, flags, label_len, label, inout_key_id,
+                        NULL, outSz);
 }
 
 int wh_Client_HkdfMakeExportKey(whClientContext* ctx, int hashType,
-                                const uint8_t* inKey, uint32_t inKeySz,
-                                const uint8_t* salt, uint32_t saltSz,
-                                const uint8_t* info, uint32_t infoSz,
-                                uint8_t* out, uint32_t outSz)
+                                whKeyId keyIdIn, const uint8_t* inKey,
+                                uint32_t inKeySz, const uint8_t* salt,
+                                uint32_t saltSz, const uint8_t* info,
+                                uint32_t infoSz, uint8_t* out, uint32_t outSz)
 {
     if ((ctx == NULL) || (out == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
-    return _HkdfMakeKey(ctx, hashType, inKey, inKeySz, salt, saltSz, info,
-                        infoSz, WH_NVM_FLAGS_EPHEMERAL, 0, NULL, NULL, out,
-                        outSz);
+    return _HkdfMakeKey(ctx, hashType, keyIdIn, inKey, inKeySz, salt, saltSz,
+                        info, infoSz, WH_NVM_FLAGS_EPHEMERAL, 0, NULL, NULL,
+                        out, outSz);
 }
 
 #endif /* HAVE_HKDF */
@@ -2629,7 +2791,7 @@ int wh_Client_Cmac(whClientContext* ctx, Cmac* cmac, CmacType type,
 
     WH_DEBUG_CLIENT_VERBOSE("cmac key:%p key_len:%d in:%p in_len:%d out:%p out_len:%d "
            "keyId:%x\n",
-           key, keyLen, in, inLen, outMac, mac_len, key_id);
+           key, (int)keyLen, in, (int)inLen, outMac, (int)mac_len, key_id);
 #endif
 
 
@@ -2931,10 +3093,16 @@ static int _xferSha256BlockAndUpdateDigest(whClientContext* ctx,
         wh_Utils_Hexdump("  [client] resumeHash: ", req->resumeState.hash,
                          (isLastBlock) ? req->lastBlockLen
                                        : WC_SHA256_BLOCK_SIZE);
+<<<<<<< HEAD
 #endif
         WH_DEBUG_CLIENT_VERBOSE("  hiLen: %u, loLen: %u\n", req->resumeState.hiLen,
                req->resumeState.loLen);
 #ifdef WOLFHSM_CFG_HEXDUMP
+=======
+        printf("  [client] hiLen: %u, loLen: %u\n",
+               (unsigned int)req->resumeState.hiLen,
+               (unsigned int)req->resumeState.loLen);
+>>>>>>> main
     }
 #endif
     WH_DEBUG_CLIENT_VERBOSE("  ret = %d\n", ret);
@@ -2950,7 +3118,13 @@ static int _xferSha256BlockAndUpdateDigest(whClientContext* ctx,
         ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA256, (uint8_t**)&res);
         /* wolfCrypt allows positive error codes on success in some scenarios */
         if (ret >= 0) {
+<<<<<<< HEAD
             WH_DEBUG_CLIENT_VERBOSE("ERROR Client SHA256 Res recv: ret=%d", ret);
+=======
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+            printf("[client] Client SHA256 Res recv: ret=%d", ret);
+#endif /* DEBUG_CRYPTOCB_VERBOSE */
+>>>>>>> main
             /* Store the received intermediate hash in the sha256
              * context and indicate the field is now valid and
              * should be passed back and forth to the server */
@@ -3083,7 +3257,14 @@ int wh_Client_Sha256Dma(whClientContext* ctx, wc_Sha256* sha, const uint8_t* in,
     /* Caller invoked SHA Update:
      * wc_CryptoCb_Sha256Hash(sha256, data, len, NULL) */
     if ((ret == WH_ERROR_OK) && (in != NULL)) {
+<<<<<<< HEAD
         WH_DEBUG_CLIENT_VERBOSE("SHA256 DMA UPDATE: inAddr=%p, inSz=%u\n", in, inLen);
+=======
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+        printf("[client] SHA256 DMA UPDATE: inAddr=%p, inSz=%u\n", in,
+               (unsigned int)inLen);
+#endif
+>>>>>>> main
 
         ret = wh_Client_SendRequest(
             ctx, group, WC_ALGO_TYPE_HASH,
@@ -3235,7 +3416,13 @@ static int _xferSha224BlockAndUpdateDigest(whClientContext* ctx,
         ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA224, (uint8_t**)&res);
         /* wolfCrypt allows positive error codes on success in some scenarios */
         if (ret >= 0) {
+<<<<<<< HEAD
             WH_DEBUG_CLIENT_VERBOSE("ERROR Client SHA224 Res recv: ret=%d", ret);
+=======
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+            printf("[client] Client SHA224 Res recv: ret=%d", ret);
+#endif /* DEBUG_CRYPTOCB_VERBOSE */
+>>>>>>> main
             /* Store the received intermediate hash in the sha224
              * context and indicate the field is now valid and
              * should be passed back and forth to the server.
@@ -3346,7 +3533,14 @@ int wh_Client_Sha224Dma(whClientContext* ctx, wc_Sha224* sha, const uint8_t* in,
         req->input.sz    = inLen;
         req->output.addr = (uint64_t)(uintptr_t)out;
         req->output.sz   = WC_SHA224_DIGEST_SIZE; /* not needed, but YOLO */
+<<<<<<< HEAD
         WH_DEBUG_CLIENT_VERBOSE("SHA224 DMA UPDATE: inAddr=%p, inSz=%u\n", in, inLen);
+=======
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+        printf("[client] SHA224 DMA UPDATE: inAddr=%p, inSz=%u\n", in,
+               (unsigned int)inLen);
+#endif
+>>>>>>> main
         ret = wh_Client_SendRequest(
             ctx, group, WC_ALGO_TYPE_HASH,
             sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req),
@@ -3487,7 +3681,13 @@ static int _xferSha384BlockAndUpdateDigest(whClientContext* ctx,
         ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA384, (uint8_t**)&res);
         /* wolfCrypt allows positive error codes on success in some scenarios */
         if (ret >= 0) {
+<<<<<<< HEAD
             WH_DEBUG_CLIENT_VERBOSE("ERROR Client SHA384 Res recv: ret=%d", ret);
+=======
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+            printf("[client] Client SHA384 Res recv: ret=%d", ret);
+#endif /* DEBUG_CRYPTOCB_VERBOSE */
+>>>>>>> main
             /* Store the received intermediate hash in the sha384
              * context and indicate the field is now valid and
              * should be passed back and forth to the server
@@ -3596,7 +3796,14 @@ int wh_Client_Sha384Dma(whClientContext* ctx, wc_Sha384* sha, const uint8_t* in,
         req->input.sz    = inLen;
         req->output.addr = (uint64_t)(uintptr_t)out;
         req->output.sz   = WC_SHA384_DIGEST_SIZE; /* not needed, but YOLO */
+<<<<<<< HEAD
         WH_DEBUG_CLIENT_VERBOSE("SHA384 DMA UPDATE: inAddr=%p, inSz=%u\n", in, inLen);
+=======
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+        printf("[client] SHA384 DMA UPDATE: inAddr=%p, inSz=%u\n", in,
+               (unsigned int)inLen);
+#endif
+>>>>>>> main
         ret = wh_Client_SendRequest(
             ctx, group, WC_ALGO_TYPE_HASH,
             sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req),
@@ -3738,8 +3945,15 @@ static int _xferSha512BlockAndUpdateDigest(whClientContext* ctx,
         ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA512, (uint8_t**)&res);
         /* wolfCrypt allows positive error codes on success in some scenarios */
         if (ret >= 0) {
+<<<<<<< HEAD
             WH_DEBUG_CLIENT_VERBOSE("ERROR Client SHA512 Res recv: ret=%d", ret);
             WH_DEBUG_CLIENT_VERBOSE("hashType: %d\n", sha512->hashType);
+=======
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+            printf("[client] Client SHA512 Res recv: ret=%d", ret);
+            printf("[client] hashType: %d\n", sha512->hashType);
+#endif /* DEBUG_CRYPTOCB_VERBOSE */
+>>>>>>> main
             /* Store the received intermediate hash in the sha512
              * context and indicate the field is now valid and
              * should be passed back and forth to the server */
@@ -3858,7 +4072,14 @@ int wh_Client_Sha512Dma(whClientContext* ctx, wc_Sha512* sha, const uint8_t* in,
         req->input.sz    = inLen;
         req->output.addr = (uint64_t)(uintptr_t)out;
         req->output.sz   = WC_SHA512_DIGEST_SIZE; /* not needed, but YOLO */
+<<<<<<< HEAD
         WH_DEBUG_CLIENT_VERBOSE("SHA512 DMA UPDATE: inAddr=%p, inSz=%u\n", in, inLen);
+=======
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+        printf("[client] SHA512 DMA UPDATE: inAddr=%p, inSz=%u\n", in,
+               (unsigned int)inLen);
+#endif
+>>>>>>> main
         ret = wh_Client_SendRequest(
             ctx, group, WC_ALGO_TYPE_HASH,
             sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req),
@@ -4062,8 +4283,15 @@ static int _MlDsaMakeKey(whClientContext* ctx, int size, int level,
 
             ret = wh_Client_SendRequest(ctx, group, action, req_len,
                                         (uint8_t*)dataPtr);
+<<<<<<< HEAD
             WH_DEBUG_CLIENT_VERBOSE("%s Req sent:size:%u, ret:%d\n", __func__, req->sz,
                    ret);
+=======
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+            printf("[client] %s Req sent:size:%u, ret:%d\n", __func__,
+                   (unsigned int)req->sz, ret);
+#endif
+>>>>>>> main
             if (ret == 0) {
                 uint16_t res_len;
                 do {
@@ -4079,9 +4307,18 @@ static int _MlDsaMakeKey(whClientContext* ctx, int size, int level,
                     /* wolfCrypt allows positive error codes on success in some
                      * scenarios */
                     if (ret >= 0) {
+<<<<<<< HEAD
                         WH_DEBUG_CLIENT_VERBOSE(
                             "%s Res recv:keyid:%u, len:%u, ret:%d\n",
                             __func__, res->keyId, res->len, ret);
+=======
+#ifdef DEBUG_CRYPTOCB_VERBOSE
+                        printf(
+                            "[client] %s Res recv:keyid:%u, len:%u, ret:%d\n",
+                            __func__, (unsigned int)res->keyId,
+                            (unsigned int)res->len, ret);
+#endif
+>>>>>>> main
                         /* Key is cached on server or is ephemeral */
                         key_id = (whKeyId)(res->keyId);
 

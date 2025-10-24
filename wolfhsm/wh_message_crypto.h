@@ -383,14 +383,14 @@ int wh_MessageCrypto_TranslateRsaGetSizeResponse(
 /* HKDF Request */
 typedef struct {
     uint32_t flags;    /* NVM flags */
-    uint32_t keyId;    /* Key ID if caching */
+    uint32_t keyIdIn;  /* Key ID for input key material (from cache) */
+    uint32_t keyIdOut; /* Key ID if caching output */
     uint32_t hashType; /* WC_SHA256, etc. */
     uint32_t inKeySz;  /* Input key material size */
     uint32_t saltSz;   /* Salt size (0 if none) */
     uint32_t infoSz;   /* Info size (0 if none) */
     uint32_t outSz;    /* Output size */
     uint8_t  label[WH_NVM_LABEL_LEN];
-    uint8_t  WH_PAD[4];
     /* Data follows:
      * uint8_t inKey[inKeySz]
      * uint8_t salt[saltSz]
@@ -400,7 +400,7 @@ typedef struct {
 
 /* HKDF Response */
 typedef struct {
-    uint32_t keyId; /* Assigned key ID */
+    uint32_t keyIdOut; /* Assigned key ID */
     uint32_t outSz; /* Output size */
     /* Data follows:
      * uint8_t out[outSz]
@@ -973,5 +973,24 @@ int wh_MessageCrypto_TranslateMlDsaVerifyDmaRequest(
 int wh_MessageCrypto_TranslateMlDsaVerifyDmaResponse(
     uint16_t magic, const whMessageCrypto_MlDsaVerifyDmaResponse* src,
     whMessageCrypto_MlDsaVerifyDmaResponse* dest);
+
+/* RNG DMA Request */
+typedef struct {
+    whMessageCrypto_DmaBuffer output; /* Output buffer for random bytes */
+} whMessageCrypto_RngDmaRequest;
+
+/* RNG DMA Response */
+typedef struct {
+    whMessageCrypto_DmaAddrStatus dmaAddrStatus;
+} whMessageCrypto_RngDmaResponse;
+
+/* RNG DMA translation functions */
+int wh_MessageCrypto_TranslateRngDmaRequest(
+    uint16_t magic, const whMessageCrypto_RngDmaRequest* src,
+    whMessageCrypto_RngDmaRequest* dest);
+
+int wh_MessageCrypto_TranslateRngDmaResponse(
+    uint16_t magic, const whMessageCrypto_RngDmaResponse* src,
+    whMessageCrypto_RngDmaResponse* dest);
 
 #endif /* !WOLFHSM_WH_MESSAGE_CRYPTO_H_ */

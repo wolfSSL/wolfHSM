@@ -11,6 +11,7 @@ jobs:
     strategy:
         matrix:
             transport: [ 'tcp', 'shm', 'dma' ]
+            asan: [ 'ASAN=1', 'ASAN=0' ]
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
@@ -28,16 +29,16 @@ jobs:
     - name: Build POSIX server
       run: |
         if [ "${{ matrix.transport }}" = "dma" ]; then
-          cd examples/posix/wh_posix_server && DMA=1 make -j WOLFSSL_DIR=../../../wolfssl
+          cd examples/posix/wh_posix_server && ${{ matrix.asan }} DMA=1 make -j WOLFSSL_DIR=../../../wolfssl
         else
-          cd examples/posix/wh_posix_server && make -j WOLFSSL_DIR=../../../wolfssl
+          cd examples/posix/wh_posix_server && ${{ matrix.asan }} make -j WOLFSSL_DIR=../../../wolfssl
         fi
     - name: Build POSIX client
       run: |
         if [ "${{ matrix.transport }}" = "dma" ]; then
-          cd examples/posix/wh_posix_client && DMA=1 make -j WOLFSSL_DIR=../../../wolfssl
+          cd examples/posix/wh_posix_client && ${{ matrix.asan }} DMA=1 make -j WOLFSSL_DIR=../../../wolfssl
         else
-          cd examples/posix/wh_posix_client && make -j WOLFSSL_DIR=../../../wolfssl
+          cd examples/posix/wh_posix_client && ${{ matrix.asan }} make -j WOLFSSL_DIR=../../../wolfssl
         fi
 
     # Start the server in the background
@@ -53,6 +54,12 @@ jobs:
       run: |
         cd examples/posix/wh_posix_client
         ./Build/wh_posix_client.elf --type ${{ matrix.transport }}
+
+    - name: Run POSIX demo test
+      if: matrix.transport == 'tcp'
+      run: |
+        cd examples/posix/wh_posix_client
+        ./Build/wh_posix_client.elf --type ${{ matrix.transport }} --test
 
     # Optional: Kill the server process if it doesn't exit on its own
     - name: Cleanup POSIX server

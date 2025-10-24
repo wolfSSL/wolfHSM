@@ -134,7 +134,6 @@ static int whTest_CryptoRng(whClientContext* ctx, int devId, WC_RNG* rng)
     uint8_t med[WH_TEST_RNG_MED];
     uint8_t big[WH_TEST_RNG_BIG];
 
-    /* test rng.  Note this rng is used for many tests so is left inited */
     ret = wc_InitRng_ex(rng, NULL, devId);
     if (ret != 0) {
         WH_ERROR_PRINT("Failed to wc_InitRng_ex %d\n", ret);
@@ -152,10 +151,14 @@ static int whTest_CryptoRng(whClientContext* ctx, int devId, WC_RNG* rng)
                     WH_ERROR_PRINT("Failed to wc_RNG_GenerateBlock %d\n", ret);
                 }
             }
+            ret = wc_FreeRng(rng);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to wc_FreeRng %d\n", ret);
+            }
         }
     }
     if (ret == 0) {
-        WOLFHSM_CFG_PRINTF("RNG SUCCESS\n");
+        WOLFHSM_CFG_PRINTF("RNG DEVID=0x%X SUCCESS\n", devId);
     }
     return ret;
 }
@@ -1118,7 +1121,7 @@ static int whTest_CryptoHkdf(whClientContext* ctx, int devId, WC_RNG* rng)
     /* Test 4: wh_Client_HkdfMakeExportKey */
     memset(okm, 0, sizeof(okm));
     ret = wh_Client_HkdfMakeExportKey(
-        ctx, WC_SHA256, ikm, WH_TEST_HKDF_IKM_SIZE, salt,
+        ctx, WC_SHA256, WH_KEYID_ERASED, ikm, WH_TEST_HKDF_IKM_SIZE, salt,
         WH_TEST_HKDF_SALT_SIZE, info, WH_TEST_HKDF_INFO_SIZE, okm,
         WH_TEST_HKDF_OKM_SIZE);
     if (ret != 0) {
@@ -1135,7 +1138,7 @@ static int whTest_CryptoHkdf(whClientContext* ctx, int devId, WC_RNG* rng)
     /* Test 5: wh_Client_HkdfMakeCacheKey */
     key_id = WH_KEYID_ERASED;
     ret    = wh_Client_HkdfMakeCacheKey(
-           ctx, WC_SHA256, ikm, WH_TEST_HKDF_IKM_SIZE, salt,
+           ctx, WC_SHA256, WH_KEYID_ERASED, ikm, WH_TEST_HKDF_IKM_SIZE, salt,
            WH_TEST_HKDF_SALT_SIZE, info, WH_TEST_HKDF_INFO_SIZE, &key_id,
            WH_NVM_FLAGS_NONE, label, sizeof(label), WH_TEST_HKDF_OKM_SIZE);
     if (ret != 0) {
@@ -1175,6 +1178,65 @@ static int whTest_CryptoHkdf(whClientContext* ctx, int devId, WC_RNG* rng)
             return -1;
         }
     }
+
+    /* Test 6: HKDF with cached input key */
+    {
+        whKeyId keyIdIn    = WH_KEYID_ERASED;
+        uint8_t label_in[] = "input-key";
+        byte    ikm2[]     = {0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37,
+                              0x38, 0x39, 0x3A, 0x3B, 0x3C, 0x3D, 0x3E, 0x3F};
+        byte    salt2[]    = {0xB0, 0xB1, 0xB2, 0xB3};
+        byte    info2[]    = {0xC0, 0xC1, 0xC2};
+        byte    okm_cache[WH_TEST_HKDF_OKM_SIZE];
+        byte    okm_direct[WH_TEST_HKDF_OKM_SIZE];
+
+        /* First, cache the input key */
+        ret = wh_Client_KeyCache(ctx, 0, label_in, sizeof(label_in), ikm2,
+                                 sizeof(ikm2), &keyIdIn);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to cache input key: %d\n", ret);
+            return ret;
+        }
+
+        /* Derive using cached input key (inKey=NULL, inKeySz=0) */
+        memset(okm_cache, 0, sizeof(okm_cache));
+        ret = wh_Client_HkdfMakeExportKey(
+            ctx, WC_SHA256, keyIdIn, NULL, 0, salt2, sizeof(salt2), info2,
+            sizeof(info2), okm_cache, sizeof(okm_cache));
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed HKDF with cached input key: %d\n", ret);
+            (void)wh_Client_KeyEvict(ctx, keyIdIn);
+            return ret;
+        }
+
+        /* Derive the same way but with direct key input for comparison */
+        memset(okm_direct, 0, sizeof(okm_direct));
+        ret = wh_Client_HkdfMakeExportKey(ctx, WC_SHA256, WH_KEYID_ERASED, ikm2,
+                                          sizeof(ikm2), salt2, sizeof(salt2),
+                                          info2, sizeof(info2), okm_direct,
+                                          sizeof(okm_direct));
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed HKDF with direct input key: %d\n", ret);
+            (void)wh_Client_KeyEvict(ctx, keyIdIn);
+            return ret;
+        }
+
+        /* Verify both methods produce the same output */
+        if (memcmp(okm_cache, okm_direct, sizeof(okm_cache)) != 0) {
+            WH_ERROR_PRINT(
+                "HKDF output mismatch (cached vs direct input key)\n");
+            (void)wh_Client_KeyEvict(ctx, keyIdIn);
+            return -1;
+        }
+
+        /* Clean up - evict the cached input key */
+        ret = wh_Client_KeyEvict(ctx, keyIdIn);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to evict input key: %d\n", ret);
+            return ret;
+        }
+    }
+
     WOLFHSM_CFG_PRINTF("HKDF SUCCESS\n");
     return 0;
 }
@@ -3502,8 +3564,25 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     }
 #endif /* WOLFHSM_CFG_TEST_VERBOSE */
 
+    /* First crypto test should be of RNG so we can iterate over and test all
+     * devIds before choosing one to run the rest of the tests on */
+    i = 0;
+    while ((ret == WH_ERROR_OK) && (i < WH_NUM_DEVIDS)) {
+        ret = whTest_CryptoRng(client, WH_DEV_IDS_ARRAY[i], rng);
+        if (ret == WH_ERROR_OK) {
+            wc_FreeRng(rng);
+            i++;
+        }
+    }
+
+    /* Now that we have tested all RNG devIds, reinitialize the default RNG
+     * devId (non-DMA) that will be used by the remainder of the tests for
+     * random input generation */
     if (ret == 0) {
-        ret = whTest_CryptoRng(client, WH_DEV_ID, rng);
+        ret = wc_InitRng_ex(rng, NULL, WH_DEV_ID);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to reinitialize RNG %d\n", ret);
+        }
     }
 
     if (ret == 0) {

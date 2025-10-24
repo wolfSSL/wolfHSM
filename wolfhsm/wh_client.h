@@ -520,7 +520,7 @@ int wh_Client_Echo(whClientContext* c, uint16_t snd_len, const void* snd_data,
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_Client_KeyCacheRequest_ex(whClientContext* c, uint32_t flags,
-                                 uint8_t* label, uint16_t labelSz, uint8_t* in,
+                                 uint8_t* label, uint16_t labelSz, const uint8_t* in,
                                  uint16_t inSz, uint16_t keyId);
 
 /**
@@ -539,7 +539,7 @@ int wh_Client_KeyCacheRequest_ex(whClientContext* c, uint32_t flags,
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_Client_KeyCacheRequest(whClientContext* c, uint32_t flags,
-                              uint8_t* label, uint16_t labelSz, uint8_t* in,
+                              uint8_t* label, uint16_t labelSz, const uint8_t* in,
                               uint16_t inSz);
 
 /**
@@ -575,7 +575,7 @@ int wh_Client_KeyCacheResponse(whClientContext* c, uint16_t* keyId);
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_Client_KeyCache(whClientContext* c, uint32_t flags, uint8_t* label,
-                       uint16_t labelSz, uint8_t* in, uint16_t inSz,
+                       uint16_t labelSz, const uint8_t* in, uint16_t inSz,
                        uint16_t* keyId);
 
 /**

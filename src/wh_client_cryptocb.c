@@ -395,6 +395,13 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
 
         ret = wh_Client_RngGenerate(ctx, out, size);
     } break;
+    case WC_ALGO_TYPE_SEED: {
+        /* Extract info parameters */
+        uint8_t* seed = info->seed.seed;
+        uint32_t size = info->seed.sz;
+
+        ret = wh_Client_RngGenerate(ctx, seed, size);
+    } break;
 #endif /* !WC_NO_RNG */
 
 #ifdef WOLFSSL_CMAC
@@ -480,9 +487,9 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
                 byte*       out      = info->kdf.hkdf.out;
                 word32      outSz    = info->kdf.hkdf.outSz;
 
-                ret = wh_Client_HkdfMakeExportKey(ctx, hashType, inKey, inKeySz,
-                                                  salt, saltSz, kdf_info,
-                                                  infoSz, out, outSz);
+                ret = wh_Client_HkdfMakeExportKey(
+                    ctx, hashType, WH_KEYID_ERASED, inKey, inKeySz, salt,
+                    saltSz, kdf_info, infoSz, out, outSz);
             } break;
             default:
                 ret = CRYPTOCB_UNAVAILABLE;
@@ -843,6 +850,23 @@ int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
         }
         break;
 #endif /* !NO_AES || !NO_DES */
+
+#ifndef WC_NO_RNG
+    case WC_ALGO_TYPE_RNG: {
+        /* Extract info parameters */
+        uint8_t* out  = info->rng.out;
+        uint32_t size = info->rng.sz;
+
+        ret = wh_Client_RngGenerateDma(ctx, out, size);
+    } break;
+    case WC_ALGO_TYPE_SEED: {
+        /* Extract info parameters */
+        uint8_t* seed = info->seed.seed;
+        uint32_t size = info->seed.sz;
+
+        ret = wh_Client_RngGenerateDma(ctx, seed, size);
+    } break;
+#endif /* !WC_NO_RNG */
 
     case WC_ALGO_TYPE_NONE:
     default:

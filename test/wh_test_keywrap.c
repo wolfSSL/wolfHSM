@@ -54,20 +54,6 @@
 
 #endif /* HAVE_AESGCM */
 
-/* RSA Specific defines */
-#ifndef NO_RSA
-
-#define WH_TEST_RSA_KEY_OFFSET 0x2000
-#define WH_TEST_RSA_KEYID 3
-#define WH_TEST_RSA_MAX_DER_SIZE 2000
-
-/* We need the extra 4 bytes at the start to store the actual wrapped key size
- */
-#define WH_TEST_RSA_MAX_WRAPPED_KEYSIZE                            \
-    (sizeof(uint32_t) + WH_TEST_AES_IVSIZE + WH_TEST_AES_TAGSIZE + \
-     WH_TEST_RSA_MAX_DER_SIZE + sizeof(whNvmMetadata))
-#endif /* !NO_RSA */
-
 static int _InitServerKek(whClientContext* client)
 {
     /* IMPORTANT NOTE: Server KEK is typically intrinsic or set during
@@ -101,7 +87,7 @@ static int _AesGcm_KeyWrap(whClientContext* client, WC_RNG* rng)
     uint8_t       wrappedKey[WH_TEST_AES_WRAPPED_KEYSIZE];
     whKeyId       wrappedKeyId;
     whNvmMetadata metadata = {
-        .id    = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, 0, 8),
+        .id    = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, client->comm->client_id, WH_TEST_AESGCM_KEYID),
         .label = "AES Key Label",
         .len   = WH_TEST_AES_KEYSIZE,
         .flags = WH_NVM_FLAGS_NONE,
@@ -222,7 +208,11 @@ int whTest_Client_KeyWrap(whClientContext* client)
     int    ret = 0;
     WC_RNG rng[1];
 
-    _InitServerKek(client);
+    ret = _InitServerKek(client);
+    if (ret != WH_ERROR_OK) {
+        WH_ERROR_PRINT("Failed to _InitServerKek %d\n", ret);
+        return ret;
+    }
 
     ret = wc_InitRng_ex(rng, NULL, WH_DEV_ID);
     if (ret != 0) {
@@ -233,7 +223,7 @@ int whTest_Client_KeyWrap(whClientContext* client)
 #ifdef HAVE_AESGCM
     ret = _AesGcm_KeyWrap(client, rng);
     if (ret != WH_ERROR_OK) {
-        WH_ERROR_PRINT("Failed to wc_InitRng_ex %d\n", ret);
+        WH_ERROR_PRINT("Failed to _AesGcm_KeyWrap %d\n", ret);
     }
 #endif
 

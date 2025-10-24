@@ -1219,7 +1219,9 @@ static int _HandleHkdf(whServerContext* ctx, uint16_t magic,
     uint32_t infoSz   = req.infoSz;
     uint32_t outSz    = req.outSz;
     whKeyId  key_id =
-        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyIdOut);
+    whKeyId keyIdIn =
+        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyIdIn);
     whNvmFlags flags      = req.flags;
     uint8_t*   label      = req.label;
     uint16_t   label_size = WH_NVM_LABEL_LEN;
@@ -1229,6 +1231,23 @@ static int _HandleHkdf(whServerContext* ctx, uint16_t magic,
         (const uint8_t*)cryptoDataIn + sizeof(whMessageCrypto_HkdfRequest);
     const uint8_t* salt = inKey + inKeySz;
     const uint8_t* info = salt + saltSz;
+
+    /* Buffer for cached key if needed */
+    uint8_t*       cachedKeyBuf  = NULL;
+    whNvmMetadata* cachedKeyMeta = NULL;
+
+    /* Check if we should use cached key as input */
+    if (inKeySz == 0 && !WH_KEYID_ISERASED(keyIdIn)) {
+        /* Grab references to key in the cache */
+        ret = wh_Server_KeystoreFreshenKey(ctx, keyIdIn, &cachedKeyBuf,
+                                           &cachedKeyMeta);
+        if (ret != WH_ERROR_OK) {
+            return ret;
+        }
+        /* Update inKey pointer and size to use cached key */
+        inKey   = cachedKeyBuf;
+        inKeySz = cachedKeyMeta->len;
+    }
 
     /* Get pointer to where output data would be stored (after response struct)
      */
@@ -1250,7 +1269,7 @@ static int _HandleHkdf(whServerContext* ctx, uint16_t magic,
         if (flags & WH_NVM_FLAGS_EPHEMERAL) {
             /* Key should not be cached/stored on the server */
             key_id    = WH_KEYID_ERASED;
-            res.keyId = WH_KEYID_ERASED;
+            res.keyIdOut = WH_KEYID_ERASED;
             res.outSz = outSz;
         }
         else {
@@ -1271,7 +1290,7 @@ static int _HandleHkdf(whServerContext* ctx, uint16_t magic,
             }
             WH_DEBUG_SERVER_VERBOSE("HkdfKeyGen CacheImport: keyId:%u, ret:%d\n", key_id, ret);
             if (ret == WH_ERROR_OK) {
-                res.keyId = WH_KEYID_ID(key_id);
+                res.keyIdOut = WH_KEYID_ID(key_id);
                 res.outSz = 0;
                 /* clear the output buffer */
                 memset(out, 0, outSz);
@@ -2084,6 +2103,33 @@ static int _HandleAesGcmDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
                 (word32)req.authTag.sz, (byte*)aadAddr, (word32)req.aad.sz);
             if (ret == 0) {
                 outSz = req.input.sz;
+            }
+        }
+    }
+
+    /* Post-write DMA address processing for output/authTag (on success) */
+    if (ret == WH_ERROR_OK) {
+        if (req.output.sz > 0) {
+            int rc2 = wh_Server_DmaProcessClientAddress(
+                ctx, req.output.addr, &outAddr, req.output.sz,
+                WH_DMA_OPER_CLIENT_WRITE_POST, (whServerDmaFlags){0});
+            if (rc2 != WH_ERROR_OK) {
+                if (rc2 == WH_ERROR_ACCESS) {
+                    res.dmaAddrStatus.badAddr = req.output;
+                }
+                ret = rc2;
+            }
+        }
+        /* During encryption, the auth tag is written to client memory */
+        if (ret == WH_ERROR_OK && req.enc && req.authTag.sz > 0) {
+            int rc2 = wh_Server_DmaProcessClientAddress(
+                ctx, req.authTag.addr, &authTagAddr, req.authTag.sz,
+                WH_DMA_OPER_CLIENT_WRITE_POST, (whServerDmaFlags){0});
+            if (rc2 != WH_ERROR_OK) {
+                if (rc2 == WH_ERROR_ACCESS) {
+                    res.dmaAddrStatus.badAddr = req.authTag;
+                }
+                ret = rc2;
             }
         }
     }
@@ -4506,6 +4552,63 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
 #endif /* WOLFSSL_CMAC */
 #endif /* WOLFHSM_CFG_DMA */
 
+#ifndef WC_NO_RNG
+static int _HandleRngDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
+                         const void* cryptoDataIn, uint16_t inSize,
+                         void* cryptoDataOut, uint16_t* outSize)
+{
+    (void)seq;
+    (void)inSize;
+
+    int                            ret = 0;
+    whMessageCrypto_RngDmaRequest  req;
+    whMessageCrypto_RngDmaResponse res;
+    void*                          outAddr = NULL;
+
+    /* Translate the request */
+    ret = wh_MessageCrypto_TranslateRngDmaRequest(
+        magic, (whMessageCrypto_RngDmaRequest*)cryptoDataIn, &req);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    /* Process the output address (PRE operation) */
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Server_DmaProcessClientAddress(
+            ctx, req.output.addr, &outAddr, req.output.sz,
+            WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
+        if (ret == WH_ERROR_ACCESS) {
+            res.dmaAddrStatus.badAddr = req.output;
+        }
+    }
+
+    /* Generate random bytes directly into client memory */
+    if (ret == WH_ERROR_OK) {
+        WH_DEBUG_SERVER_VERBOSE("RNG DMA: generating %llu bytes to addr=%p\n",
+               (long long unsigned int)req.output.sz, outAddr);
+        ret = wc_RNG_GenerateBlock(ctx->crypto->rng, outAddr, req.output.sz);
+    }
+
+    /* Process the output address (POST operation) */
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Server_DmaProcessClientAddress(
+            ctx, req.output.addr, &outAddr, req.output.sz,
+            WH_DMA_OPER_CLIENT_WRITE_POST, (whServerDmaFlags){0});
+        if (ret == WH_ERROR_ACCESS) {
+            res.dmaAddrStatus.badAddr = req.output;
+        }
+    }
+
+    /* Translate the response */
+    (void)wh_MessageCrypto_TranslateRngDmaResponse(
+        magic, &res, (whMessageCrypto_RngDmaResponse*)cryptoDataOut);
+    *outSize = sizeof(res);
+
+    /* return value populates rc in response message */
+    return ret;
+}
+#endif /* !WC_NO_RNG */
+
 #ifdef WOLFHSM_CFG_DMA
 int wh_Server_HandleCryptoDmaRequest(whServerContext* ctx, uint16_t magic,
                                      uint16_t action, uint16_t seq,
@@ -4625,6 +4728,13 @@ int wh_Server_HandleCryptoDmaRequest(whServerContext* ctx, uint16_t magic,
                                  cryptoDataOut, &cryptoOutSize);
             break;
 #endif /* WOLFSSL_CMAC */
+
+#ifndef WC_NO_RNG
+        case WC_ALGO_TYPE_RNG:
+            ret = _HandleRngDma(ctx, magic, seq, cryptoDataIn, cryptoInSize,
+                                cryptoDataOut, &cryptoOutSize);
+            break;
+#endif /* !WC_NO_RNG */
 
         case WC_ALGO_TYPE_NONE:
         default:

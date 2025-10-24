@@ -42,6 +42,7 @@
 #define HAVE_AESGCM
 #define WOLFSSL_AES_DIRECT
 #define WOLFSSL_CMAC
+#define HAVE_HKDF
 
 /* wolfCrypt benchmark settings */
 #define NO_MAIN_DRIVER

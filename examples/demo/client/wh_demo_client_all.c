@@ -124,6 +124,11 @@ int wh_DemoClient_All(whClientContext* clientContext)
     if (rc != 0) {
         return rc;
     }
+
+    rc = wh_DemoClient_CryptoHkdfCacheInputKey(clientContext);
+    if (rc != 0) {
+        return rc;
+    }
 #endif /* HAVE_HKDF */
 
 #if defined(WOLFSSL_CMAC)
