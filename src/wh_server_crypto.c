@@ -4550,7 +4550,6 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
     return ret;
 }
 #endif /* WOLFSSL_CMAC */
-#endif /* WOLFHSM_CFG_DMA */
 
 #ifndef WC_NO_RNG
 static int _HandleRngDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
@@ -4608,6 +4607,7 @@ static int _HandleRngDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
     return ret;
 }
 #endif /* !WC_NO_RNG */
+#endif /* WOLFHSM_CFG_DMA */
 
 #ifdef WOLFHSM_CFG_DMA
 int wh_Server_HandleCryptoDmaRequest(whServerContext* ctx, uint16_t magic,
