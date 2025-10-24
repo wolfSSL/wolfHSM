@@ -87,7 +87,7 @@ static int _AesGcm_KeyWrap(whClientContext* client, WC_RNG* rng)
     uint8_t       wrappedKey[WH_TEST_AES_WRAPPED_KEYSIZE];
     whKeyId       wrappedKeyId = WH_KEYID_ERASED;
     whNvmMetadata metadata     = {
-            .id    = WH_TEST_AESGCM_KEYID,
+            .id    = WH_MAKE_KEYID_WRAPPED(WH_TEST_AESGCM_KEYID),
             .label = "AES Key Label",
             .len   = WH_TEST_AES_KEYSIZE,
             .flags = WH_NVM_FLAGS_NONE,
@@ -193,6 +193,28 @@ static int _AesGcm_KeyWrap(whClientContext* client, WC_RNG* rng)
     if (memcmp(&metadata, &tmpMetadata, sizeof(metadata)) != 0) {
         WH_ERROR_PRINT("AES GCM wrap/unwrap metadata failed to match\n");
         return ret;
+    }
+
+    /* Cache a local key using the same numeric ID to confirm coexistence */
+    {
+        whKeyId       localKeyId = WH_TEST_AESGCM_KEYID;
+        uint8_t       localLabel[WH_NVM_LABEL_LEN] = "LocalKeySameId";
+        const uint8_t localKey[WH_TEST_AES_KEYSIZE] = {0};
+
+        ret = wh_Client_KeyCache(client, WH_NVM_FLAGS_NONE, localLabel,
+                                 (uint16_t)sizeof("LocalKeySameId"),
+                                 (uint8_t*)localKey, sizeof(localKey),
+                                 &localKeyId);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to cache local key with shared ID %d\n", ret);
+            return ret;
+        }
+        if (localKeyId != WH_TEST_AESGCM_KEYID) {
+            WH_ERROR_PRINT("Local key ID mismatch (expected %u, got %u)\n",
+                           WH_TEST_AESGCM_KEYID, localKeyId);
+            return WH_ERROR_ABORTED;
+        }
+        WH_TEST_RETURN_ON_FAIL(wh_Client_KeyErase(client, localKeyId));
     }
 
     wh_Client_KeyErase(client, wrappedKeyId);

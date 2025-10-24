@@ -2511,4 +2511,14 @@ int wh_Client_CertVerifyAcertDma(whClientContext* c, const void* cert,
 
 #endif /* WOLFHSM_CFG_GLOBAL_KEYS */
 
+#ifdef WOLFHSM_CFG_KEYWRAP
+/**
+ * @brief Mark a keyId as referencing wrapped-key material
+ *
+ * Sets the WH_KEYID_WRAPPED flag so the server treats the identifier as a
+ * wrapped key blob rather than a regular crypto key.
+ */
+#define WH_MAKE_KEYID_WRAPPED(_id) ((_id) | WH_KEYID_WRAPPED)
+#endif /* WOLFHSM_CFG_KEYWRAP */
+
 #endif /* !WOLFHSM_WH_CLIENT_H_ */

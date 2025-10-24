@@ -82,98 +82,6 @@ static whKeyCacheContext* _GetCacheContext(whServerContext* server,
     return &server->localCache;
 }
 
-#ifdef WOLFHSM_CFG_KEYWRAP
-/*
- * @brief Retrieve the wrapped-key registry associated with keyId
- */
-static whWrappedKeyRegistry* _GetWrappedRegistry(whServerContext* server,
-                                                 whKeyId          keyId)
-{
-    whKeyCacheContext* ctx = _GetCacheContext(server, keyId);
-    return (ctx != NULL) ? &ctx->wrappedKeys : NULL;
-}
-
-/**
- * @brief Check if keyId is present in a wrapped-key registry
- *
- * Note: Registry stores client-relative IDs (0-255), so keyId parameter
- * should be the extracted client-relative ID, not a full server-encoded keyId.
- */
-static int _WrappedRegistryContains(const whWrappedKeyRegistry* registry,
-                                    whKeyId                     keyId)
-{
-    uint16_t i;
-
-    if (registry == NULL) {
-        return 0;
-    }
-
-    for (i = 0; i < registry->count; i++) {
-        if (registry->ids[i] == keyId) {
-            return 1;
-        }
-    }
-    return 0;
-}
-
-/**
- * @brief Add keyId to a wrapped-key registry if not already present
- *
- * Extracts and stores only the client-relative ID portion (0-255) from keyId.
- * This allows registration before knowing which client will connect.
- */
-static int _WrappedRegistryAdd(whWrappedKeyRegistry* registry, whKeyId keyId)
-{
-    uint8_t clientRelativeId;
-
-    if (registry == NULL) {
-        return WH_ERROR_BADARGS;
-    }
-
-    /* Extract client-relative ID portion (0-255) from keyId */
-    clientRelativeId = WH_KEYID_ID(keyId);
-
-    if (clientRelativeId == WH_KEYID_ERASED) {
-        return WH_ERROR_BADARGS;
-    }
-
-    /* Check if already registered (using client-relative ID) */
-    if (_WrappedRegistryContains(registry, (whKeyId)clientRelativeId)) {
-        return WH_ERROR_OK;
-    }
-
-    if (registry->count >= WOLFHSM_CFG_SERVER_WRAPPED_KEY_COUNT) {
-        return WH_ERROR_NOSPACE;
-    }
-
-    /* Store only the client-relative ID portion */
-    registry->ids[registry->count++] = (whKeyId)clientRelativeId;
-    return WH_ERROR_OK;
-}
-
-/**
- * @brief Determine if a keyId is registered as a wrapped key
- *
- * Extracts the client-relative ID portion from keyId before checking registry.
- * This allows the registry to match regardless of the client ID encoded in
- * keyId.
- */
-static int _IsKnownWrappedKey(whServerContext* server, whKeyId keyId)
-{
-    whWrappedKeyRegistry* registry;
-    uint8_t               clientRelativeId;
-
-    /* Get the appropriate registry (local or global) based on keyId encoding */
-    registry = _GetWrappedRegistry(server, keyId);
-
-    /* Extract client-relative ID (0-255) for comparison */
-    clientRelativeId = WH_KEYID_ID(keyId);
-
-    /* Registry stores client-relative IDs, so pass extracted ID */
-    return _WrappedRegistryContains(registry, (whKeyId)clientRelativeId);
-}
-#endif /* WOLFHSM_CFG_KEYWRAP */
-
 /**
  * @brief Find a key in the specified cache context
  */
@@ -354,18 +262,16 @@ int wh_Server_KeystoreGetUniqueId(whServerContext* server, whNvmId* inout_id)
 
     whKeyCacheContext* ctx = _GetCacheContext(server, key_id);
 
+    /* Wrapped keys must be provisioned with explicit identifiers */
+    if (type == WH_KEYTYPE_WRAPPED) {
+        return WH_ERROR_BADARGS;
+    }
+
     /* try every index until we find a unique one, don't worry about capacity */
     for (id = WH_KEYID_IDMAX; id > WH_KEYID_ERASED; id--) {
         /* id loop var is not an input client ID so we don't need to handle the
          * global case */
         buildId = WH_MAKE_KEYID(type, user, id);
-
-#ifdef WOLFHSM_CFG_KEYWRAP
-        /* Skip over known wrapped keys */
-        if (_IsKnownWrappedKey(server, buildId)) {
-            continue;
-        }
-#endif
 
         /* Check against cache keys using unified cache functions */
         ret = _FindInKeyCache(ctx, buildId, NULL, NULL, NULL, NULL);
@@ -579,6 +485,26 @@ static int _ExistsInCache(whServerContext* server, whKeyId keyId)
 }
 #endif /* WOLFHSM_CFG_KEYWRAP */
 
+#ifdef WOLFHSM_CFG_KEYWRAP
+int wh_Server_KeystoreIsWrappedKey(whServerContext* server, whKeyId keyId,
+                                   int* outIsWrapped)
+{
+    int isWrapped;
+
+    if (server == NULL || WH_KEYID_ISERASED(keyId)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    (void)server;
+    isWrapped = (WH_KEYID_TYPE(keyId) == WH_KEYTYPE_WRAPPED);
+    if (outIsWrapped != NULL) {
+        *outIsWrapped = isWrapped;
+    }
+
+    return WH_ERROR_OK;
+}
+#endif /* WOLFHSM_CFG_KEYWRAP */
+
 /* try to put the specified key into cache if it isn't already, return pointers
  * to meta and the cached data*/
 int wh_Server_KeystoreFreshenKey(whServerContext* server, whKeyId keyId,
@@ -593,12 +519,10 @@ int wh_Server_KeystoreFreshenKey(whServerContext* server, whKeyId keyId,
         return WH_ERROR_BADARGS;
     }
 
-#ifdef WOLFHSM_CFG_KEYWRAP
-    /* Reject attempts to freshen a known wrapped key */
-    if (_IsKnownWrappedKey(server, keyId)) {
+    /* Reject attempts to freshen wrapped keys from NVM */
+    if (WH_KEYID_TYPE(keyId) == WH_KEYTYPE_WRAPPED) {
         return WH_ERROR_ABORTED;
     }
-#endif
 
     ret = _FindInCache(server, keyId, &foundIndex, &foundBigIndex, outBuf,
                        outMeta);
@@ -658,12 +582,10 @@ int wh_Server_KeystoreReadKey(whServerContext* server, whKeyId keyId,
         return 0;
     }
 
-#ifdef WOLFHSM_CFG_KEYWRAP
     /* Prevent exposing wrapped blobs through the unwrapped read path */
-    if (_IsKnownWrappedKey(server, keyId)) {
+    if (WH_KEYID_TYPE(keyId) == WH_KEYTYPE_WRAPPED) {
         return WH_ERROR_NOTFOUND;
     }
-#endif
 
     /* Not in cache, try to read the metadata from NVM */
     ret = wh_Nvm_GetMetadata(server->nvm, keyId, meta);
@@ -737,11 +659,9 @@ int wh_Server_KeystoreCommitKey(whServerContext* server, whNvmId keyId)
         return WH_ERROR_BADARGS;
     }
 
-#ifdef WOLFHSM_CFG_KEYWRAP
-    if (_IsKnownWrappedKey(server, keyId)) {
+    if (WH_KEYID_TYPE(keyId) == WH_KEYTYPE_WRAPPED) {
         return WH_ERROR_ABORTED;
     }
-#endif
 
     /* Get the appropriate cache context for this key */
     ctx = _GetCacheContext(server, keyId);
@@ -765,11 +685,9 @@ int wh_Server_KeystoreEraseKey(whServerContext* server, whNvmId keyId)
         return WH_ERROR_BADARGS;
     }
 
-#ifdef WOLFHSM_CFG_KEYWRAP
-    if (_IsKnownWrappedKey(server, keyId)) {
+    if (WH_KEYID_TYPE(keyId) == WH_KEYTYPE_WRAPPED) {
         return WH_ERROR_ABORTED;
     }
-#endif
 
     /* remove the key from the cache if present */
     (void)wh_Server_KeystoreEvictKey(server, keyId);
@@ -779,52 +697,6 @@ int wh_Server_KeystoreEraseKey(whServerContext* server, whNvmId keyId)
 }
 
 #ifdef WOLFHSM_CFG_KEYWRAP
-int wh_Server_KeystoreRegisterWrappedKeys(whServerContext* server,
-                                          const whKeyId* keyIds, size_t count)
-{
-    uint16_t i;
-    int      ret;
-
-    if (server == NULL || keyIds == NULL || count == 0) {
-        return WH_ERROR_BADARGS;
-    }
-
-    if (count > WOLFHSM_CFG_SERVER_WRAPPED_KEY_COUNT) {
-        return WH_ERROR_BADARGS;
-    }
-
-    for (i = 0; i < count; i++) {
-        whWrappedKeyRegistry* registry = _GetWrappedRegistry(server, keyIds[i]);
-        ret = _WrappedRegistryAdd(registry, keyIds[i]);
-        if (ret != WH_ERROR_OK) {
-            return ret;
-        }
-    }
-
-    return WH_ERROR_OK;
-}
-
-int wh_Server_KeystoreRegisterWrappedKey(whServerContext* server, whKeyId keyId)
-{
-    return wh_Server_KeystoreRegisterWrappedKeys(server, &keyId, 1);
-}
-
-int wh_Server_KeystoreIsWrappedKey(whServerContext* server, whKeyId keyId,
-                                   int* outIsWrapped)
-{
-    int isWrapped;
-
-    if (server == NULL || WH_KEYID_ISERASED(keyId)) {
-        return WH_ERROR_BADARGS;
-    }
-
-    isWrapped = _IsKnownWrappedKey(server, keyId);
-    if (outIsWrapped != NULL) {
-        *outIsWrapped = isWrapped;
-    }
-
-    return WH_ERROR_OK;
-}
 
 #ifndef NO_AES
 #ifdef HAVE_AESGCM
@@ -1001,6 +873,10 @@ static int _HandleWrapKeyRequest(whServerContext*               server,
     memcpy(&metadata, reqData, sizeof(metadata));
     memcpy(key, reqData + sizeof(metadata), req->keySz);
 
+    if (!WH_KEYID_ISWRAPPED(metadata.id)) {
+        return WH_ERROR_CONFIG;
+    }
+
     /* Store the wrapped key in the response data */
     wrappedKey = respData;
 
@@ -1087,6 +963,10 @@ static int _HandleUnwrapAndExportKeyRequest(
                                    req->wrappedKeySz, metadata, key, keySz);
             if (ret != WH_ERROR_OK) {
                 return ret;
+            }
+
+            if (!WH_KEYID_ISWRAPPED(metadata->id)) {
+                return WH_ERROR_CONFIG;
             }
 
             /* Check if the key is exportable */
@@ -1177,9 +1057,8 @@ _HandleUnwrapAndCacheKeyRequest(whServerContext*                         server,
     metadata.id = WH_TRANSLATE_CLIENT_KEYID(
         WH_KEYTYPE_CRYPTO, server->comm->client_id, metadata.id);
 
-    /* If not a known wrapped key then there is a configuration error, we can't
-     * handle unknown wrapped keys in the system */
-    if (!_IsKnownWrappedKey(server, metadata.id)) {
+    /* Require explicit wrapped-key encoding */
+    if (WH_KEYID_TYPE(metadata.id) != WH_KEYTYPE_WRAPPED) {
         return WH_ERROR_CONFIG;
     }
 
@@ -1191,12 +1070,11 @@ _HandleUnwrapAndCacheKeyRequest(whServerContext*                         server,
     /* Store the assigned key ID in the response (ID portion only). We should
      * NOT return the upper bits back to the client */
     /* TODO: should we not return the global bit? */
-    resp->keyId = WH_KEYID_ID(metadata.id);
+    resp->keyId = WH_KEYID_TO_CLIENT(metadata.id);
 
     /* Cache the key */
     return wh_Server_KeystoreCacheKey(server, &metadata, key);
 }
-
 #endif /* WOLFHSM_CFG_KEYWRAP */
 
 int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,

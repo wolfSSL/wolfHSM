@@ -77,10 +77,11 @@ int wh_DemoClient_AesGcmKeyWrap(whClientContext* client)
     WC_RNG        rng[1];
     uint8_t       key[WH_DEMO_KEYWRAP_AES_KEYSIZE];
     uint8_t       exportedKey[WH_DEMO_KEYWRAP_AES_KEYSIZE];
-    whNvmMetadata metadata = {.id     = WH_DEMO_KEYWRAP_AESGCM_WRAPKEY_ID,
-                              .label  = "AES Key Label",
-                              .access = WH_NVM_ACCESS_ANY,
-                              .len    = WH_DEMO_KEYWRAP_AES_KEYSIZE};
+    whNvmMetadata metadata = {
+        .id     = WH_MAKE_KEYID_WRAPPED(WH_DEMO_KEYWRAP_AESGCM_WRAPKEY_ID),
+        .label  = "AES Key Label",
+        .access = WH_NVM_ACCESS_ANY,
+        .len    = WH_DEMO_KEYWRAP_AES_KEYSIZE};
     whNvmMetadata exportedMetadata;
     uint8_t       wrappedKey[WH_DEMO_KEYWRAP_AES_WRAPPED_KEYSIZE];
     whKeyId       wrappedKeyId;

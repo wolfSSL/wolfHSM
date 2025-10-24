@@ -105,6 +105,7 @@ static const uint8_t TEST_KEY_DATA_3[] = "TestGlobalKey3DataLonger";
 /* Test 9 & 10: Key wrap/unwrap with global server keys */
 #define TEST_SERVER_GLOBAL_KEYID WH_MAKE_KEYID_GLOBAL(45)
 #define TEST_SERVER_UNWRAP_KEYID WH_MAKE_KEYID_GLOBAL(50)
+#define TEST_WRAPPED_KEYID WH_MAKE_KEYID_WRAPPED(2)
 
 /* ============================================================================
  * MULTI-CLIENT TEST FRAMEWORK INFRASTRUCTURE
@@ -202,8 +203,7 @@ static int _testLocalKeyIsolation(whClientContext* client1,
 {
     int      ret;
     whKeyId  keyId1 = TEST_LOCAL_KEY_ISOLATION; /* Local key for client 1 */
-    whKeyId  keyId2 = TEST_LOCAL_KEY_ISOLATION; /* Same ID for client 2 - should
-                                                   be different key */
+    whKeyId  keyId2 = TEST_LOCAL_KEY_ISOLATION; /* Same ID for client 2 - should be different key */
     uint8_t  label[WH_NVM_LABEL_LEN];
     uint16_t labelSz    = sizeof(label);
     uint8_t  outBuf[32] = {0};
@@ -602,9 +602,9 @@ static int _testGlobalKeyDmaExport(whClientContext* client1,
 #ifdef WOLFHSM_CFG_KEYWRAP
 /* Test 9: Key wrap with global server key */
 static int _testGlobalKeyWrapExport(whClientContext* client1,
-                                    whServerContext* server1,
-                                    whClientContext* client2,
-                                    whServerContext* server2)
+                              whServerContext* server1,
+                              whClientContext* client2,
+                              whServerContext* server2)
 {
     int     ret;
     whKeyId serverKeyId                = TEST_SERVER_GLOBAL_KEYID;
@@ -628,8 +628,8 @@ static int _testGlobalKeyWrapExport(whClientContext* client1,
     printf("  Client 1 cached global wrapping key\n");
 
     /* Client 2 wraps a key using the global server key */
-    serverKeyId = TEST_SERVER_GLOBAL_KEYID;
-    meta.id     = WH_KEYID_ERASED;
+    serverKeyId   = TEST_SERVER_GLOBAL_KEYID;
+    meta.id       = TEST_WRAPPED_KEYID;
     meta.len    = sizeof(plainKey);
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyWrapRequest(client2, WC_CIPHER_AES_GCM,
                                                     serverKeyId, plainKey,
@@ -687,17 +687,6 @@ static int _testGlobalKeyUnwrapCache(whClientContext* client1,
 
     printf("ENTERED _testGlobalKeyUnwrapCache function\n");
 
-    /* Register the known wrapped key ID with the server global cache */
-    whKeyId wrappedKeyId = WH_MAKE_KEYID_GLOBAL(2);
-    WH_TEST_RETURN_ON_FAIL(
-        wh_Server_KeystoreRegisterWrappedKey(server1, wrappedKeyId));
-    WH_TEST_RETURN_ON_FAIL(
-        wh_Server_KeystoreRegisterWrappedKey(server2, wrappedKeyId));
-
-    printf("  Registered wrapped key ID %u with server global cache\n",
-           WH_KEYID_ID(wrappedKeyId));
-
-
     printf("Test: Key unwrap and cache with global server key\n");
 
     /* Client 1 caches a global wrapping key */
@@ -711,7 +700,7 @@ static int _testGlobalKeyUnwrapCache(whClientContext* client1,
 
     /* Client 1 wraps a key */
     serverKeyId = TEST_SERVER_UNWRAP_KEYID;
-    meta.id     = WH_MAKE_KEYID_GLOBAL(2);
+    meta.id     = WH_MAKE_KEYID_GLOBAL(TEST_WRAPPED_KEYID);
     meta.len    = sizeof(plainKey);
 
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyWrapRequest(client1, WC_CIPHER_AES_GCM,
@@ -726,12 +715,10 @@ static int _testGlobalKeyUnwrapCache(whClientContext* client1,
     /* Client 2 unwraps and caches the key using the global server key */
     serverKeyId = TEST_SERVER_UNWRAP_KEYID;
 
-    printf(
-        "  DEBUG: About to call KeyUnwrapAndCacheRequest with serverKeyId=%u\n",
-        serverKeyId);
-    ret = wh_Client_KeyUnwrapAndCacheRequest(client2, WC_CIPHER_AES_GCM,
-                                             serverKeyId, wrappedKey,
-                                             sizeof(wrappedKey));
+    printf("  DEBUG: About to call KeyUnwrapAndCacheRequest with serverKeyId=%u\n", serverKeyId);
+    ret = wh_Client_KeyUnwrapAndCacheRequest(
+        client2, WC_CIPHER_AES_GCM, serverKeyId, wrappedKey,
+        sizeof(wrappedKey));
     printf("  DEBUG: KeyUnwrapAndCacheRequest returned: %d\n", ret);
     WH_TEST_ASSERT_RETURN(ret == WH_ERROR_OK);
 
@@ -741,17 +728,15 @@ static int _testGlobalKeyUnwrapCache(whClientContext* client1,
     WH_TEST_ASSERT_RETURN(ret == WH_ERROR_OK);
 
     printf("  DEBUG: About to call KeyUnwrapAndCacheResponse\n");
-    ret = wh_Client_KeyUnwrapAndCacheResponse(client2, WC_CIPHER_AES_GCM,
-                                              &cachedKeyId);
-    printf("  DEBUG: KeyUnwrapAndCacheResponse returned: %d (cachedKeyId=%u)\n",
-           ret, cachedKeyId);
+    ret = wh_Client_KeyUnwrapAndCacheResponse(
+        client2, WC_CIPHER_AES_GCM, &cachedKeyId);
+    printf("  DEBUG: KeyUnwrapAndCacheResponse returned: %d (cachedKeyId=%u)\n", ret, cachedKeyId);
     WH_TEST_ASSERT_RETURN(ret == WH_ERROR_OK);
 
     printf("  Client 2 unwrapped and cached key\n");
 
     /* Verify the cached key by exporting it */
-    WH_TEST_RETURN_ON_FAIL(
-        wh_Client_KeyExportRequest(client2, WH_MAKE_KEYID_GLOBAL(cachedKeyId)));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyExportRequest(client2, WH_MAKE_KEYID_GLOBAL(cachedKeyId)));
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server2));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyExportResponse(client2, label, labelSz,
                                                        verifyBuf, &verifySz));
@@ -762,8 +747,7 @@ static int _testGlobalKeyUnwrapCache(whClientContext* client1,
     printf("  Client 2 verified cached key matches original\n");
 
     /* Clean up */
-    WH_TEST_RETURN_ON_FAIL(
-        wh_Client_KeyEvictRequest(client2, WH_MAKE_KEYID_GLOBAL(cachedKeyId)));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvictRequest(client2, WH_MAKE_KEYID_GLOBAL(cachedKeyId)));
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server2));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvictResponse(client2));
 
@@ -787,25 +771,6 @@ static int _runGlobalKeysTests(whClientContext* client1,
                                whServerContext* server2)
 {
     printf("=== Running Global Keys Test Suite ===\n\n");
-
-#ifdef WOLFHSM_CFG_KEYWRAP
-    /* Register reserved wrapped key IDs for each server using client-relative
-     * IDs (0-255). These work regardless of the actual client_id assigned. */
-    {
-        int     regRet;
-        whKeyId wrappedIds[] = {2, 8};
-
-        regRet = wh_Server_KeystoreRegisterWrappedKeys(
-            server1, wrappedIds,
-            (uint16_t)(sizeof(wrappedIds) / sizeof(wrappedIds[0])));
-        WH_TEST_RETURN_ON_FAIL(regRet);
-
-        regRet = wh_Server_KeystoreRegisterWrappedKeys(
-            server2, wrappedIds,
-            (uint16_t)(sizeof(wrappedIds) / sizeof(wrappedIds[0])));
-        WH_TEST_RETURN_ON_FAIL(regRet);
-    }
-#endif
 
     printf("Running test 1: Global key basic operations...\n");
     fflush(stdout);
@@ -850,8 +815,6 @@ static int _runGlobalKeysTests(whClientContext* client1,
 #endif
 
 #ifdef WOLFHSM_CFG_KEYWRAP
-
-
     printf("Running test 9: Key wrap with global server key...\n");
     fflush(stdout);
     WH_TEST_RETURN_ON_FAIL(

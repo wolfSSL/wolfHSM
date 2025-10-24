@@ -29,8 +29,6 @@
 
 #include "wh_posix_cfg.h"
 #include "wh_posix_server_cfg.h"
-/* For demo wrapped key ID registration */
-#include "../../demo/client/wh_demo_client_keywrap.h"
 
 /** Local declarations */
 static int wh_ServerTask(void* cf, const char* keyFilePath, int keyId,
@@ -125,20 +123,6 @@ static int _InitDemoServer(whServerContext* server, whServerConfig* config)
     int ret;
 
     ret = wh_Server_Init(server, config);
-
-#ifdef WOLFHSM_CFG_KEYWRAP
-    if (ret == WH_ERROR_OK) {
-        /* Register wrapped keys from demo client (wh_demo_client_keywrap.h) */
-        const whKeyId wrappedIds[] = {WH_DEMO_KEYWRAP_AESGCM_WRAPKEY_ID};
-        ret                        = wh_Server_KeystoreRegisterWrappedKeys(
-                                   server, wrappedIds,
-                                   (uint16_t)(sizeof(wrappedIds) / sizeof(wrappedIds[0])));
-        if (ret != WH_ERROR_OK) {
-            printf("Failed to register wrapped key IDs: %d\n", ret);
-            (void)wh_Server_Cleanup(server);
-        }
-    }
-#endif
 
     return ret;
 }

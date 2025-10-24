@@ -298,7 +298,7 @@ int wh_Client_KeyUnwrapAndCacheResponse(whClientContext*   ctx,
         return resp->rc;
     }
 
-    *keyIdOut = resp->keyId;
+    *keyIdOut = WH_MAKE_KEYID_WRAPPED(resp->keyId);
 
     return WH_ERROR_OK;
 }

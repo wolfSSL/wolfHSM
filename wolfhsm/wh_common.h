@@ -51,6 +51,20 @@ typedef uint16_t whKeyId;
 #define WH_KEYTYPE_MASK 0xF000
 #define WH_KEYTYPE_SHIFT 12
 
+/* Client-facing key flags (removed during server translation) */
+#define WH_KEYID_WRAPPED ((whKeyId)0x0200) /* Bit 9: wrapped-key hint */
+
+/* Provide a portable inline macro for headers consumed under C90 */
+#ifndef WH_INLINE
+#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 199901L
+#define WH_INLINE static inline
+#elif defined(__GNUC__) || defined(__clang__)
+#define WH_INLINE static __inline__
+#else
+#define WH_INLINE static
+#endif
+#endif
+
 /* Macro to construct a keyid */
 #define WH_MAKE_KEYID(_type, _user, _id)                    \
     ((whKeyId)(                                             \
@@ -62,34 +76,20 @@ typedef uint16_t whKeyId;
 #define WH_KEYID_ID(_kid)   (((_kid) & WH_KEYID_MASK) >> WH_KEYID_SHIFT)
 
 #define WH_KEYID_ISERASED(_kid) (WH_KEYID_ID(_kid) == WH_KEYID_ERASED)
+#define WH_KEYID_ISWRAPPED(_kid) (((_kid) & WH_KEYID_WRAPPED) != 0)
 
 #ifdef WOLFHSM_CFG_GLOBAL_KEYS
 /* Global key flag - client-to-server signal only, NOT stored in keyId.
  * This flag is stripped before storage and translated to USER=0 encoding */
-#define WH_KEYID_GLOBAL 0x0100 /* Bit 8: temporary flag for client requests */
+#define WH_KEYID_GLOBAL ((whKeyId)0x0100) /* Bit 8: temporary flag for client requests */
+#define WH_KEYID_CLIENTFLAG_MASK (WH_KEYID_GLOBAL | WH_KEYID_WRAPPED)
 
 /* Reserve USER=0 for global keys */
 #define WH_KEYUSER_GLOBAL 0
 
-/**
- * @brief Translate client keyId to server keyId
- *
- * Checks if client's reqId has WH_KEYID_GLOBAL flag set:
- *   - If set: Build keyId with USER=0 (global), strip flag from ID
- *   - If not: Build keyId with USER=clientId (local)
- *
- * @param _type Key type (e.g., WH_KEYTYPE_CRYPTO)
- * @param _clientId Client ID
- * @param _reqId Client's requested ID (may include WH_KEYID_GLOBAL flag)
- */
-#define WH_TRANSLATE_CLIENT_KEYID(_type, _clientId, _reqId)                    \
-    (((_reqId)&WH_KEYID_GLOBAL)                                                \
-         ? WH_MAKE_KEYID((_type), WH_KEYUSER_GLOBAL, ((_reqId)&WH_KEYID_MASK)) \
-         : WH_MAKE_KEYID((_type), (_clientId), (_reqId)))
 #else
 /* When global keys disabled, build keyId normally with client ID */
-#define WH_TRANSLATE_CLIENT_KEYID(_type, _clientId, _reqId) \
-    WH_MAKE_KEYID((_type), (_clientId), (_reqId))
+#define WH_KEYID_CLIENTFLAG_MASK (WH_KEYID_WRAPPED)
 #endif /* WOLFHSM_CFG_GLOBAL_KEYS */
 
 /* Key Types */
@@ -97,6 +97,33 @@ typedef uint16_t whKeyId;
 #define WH_KEYTYPE_CRYPTO   0x1     /* Key for Crypto operations */
 #define WH_KEYTYPE_SHE      0x2     /* SKE keys are AES or CMAC binary arrays */
 #define WH_KEYTYPE_COUNTER  0x3     /* Monotonic counter */
+#define WH_KEYTYPE_WRAPPED  0x4     /* Wrapped key metadata */
+
+/** Translate client keyId (with flags) to server keyId encoding */
+WH_INLINE whKeyId WH_TRANSLATE_CLIENT_KEYID(uint16_t type, uint16_t clientId,
+                                            whKeyId reqId)
+{
+    uint16_t user = clientId;
+    whKeyId id   = reqId & WH_KEYID_MASK;
+
+#ifdef WOLFHSM_CFG_GLOBAL_KEYS
+    if ((reqId & WH_KEYID_GLOBAL) != 0) {
+        user = WH_KEYUSER_GLOBAL;
+    }
+#endif
+
+    if ((reqId & WH_KEYID_WRAPPED) != 0) {
+        type = WH_KEYTYPE_WRAPPED;
+    }
+
+    return WH_MAKE_KEYID(type, user, id);
+}
+
+/** Reduce a server keyId to the client-visible identifier */
+WH_INLINE whKeyId WH_KEYID_TO_CLIENT(whKeyId keyId)
+{
+    return WH_KEYID_ID(keyId);
+}
 
 /* Convert a keyId to a pointer to be stored in wolfcrypt devctx */
 #define WH_KEYID_TO_DEVCTX(_k) ((void*)((intptr_t)(_k)))

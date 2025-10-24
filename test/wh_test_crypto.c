@@ -46,6 +46,8 @@
 #ifdef WOLFHSM_CFG_ENABLE_CLIENT
 #include "wolfhsm/wh_client.h"
 #include "wolfhsm/wh_client_crypto.h"
+/* Pull in client keywrap tests to run against server */
+#include "wh_test_keywrap.h"
 #endif
 
 #ifdef WOLFHSM_CFG_ENABLE_SERVER
@@ -3595,6 +3597,11 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     if (ret == 0) {
         /* Test Non-Exportable Flag enforcement on keystore */
         ret = whTest_NonExportableKeystore(client, WH_DEV_ID, rng);
+    }
+
+    if (ret == 0) {
+        /* Test keywrap functionality */
+        ret = whTest_Client_KeyWrap(client);
     }
 
 #ifndef NO_AES
