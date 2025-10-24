@@ -381,7 +381,6 @@ int wh_Server_KeystoreGetUniqueId(whServerContext* server, whNvmId* inout_id)
         if (ret == WH_ERROR_NOTFOUND || nvmId != buildId) {
             /* key doesn't exist in NVM, we found a candidate ID */
             found = 1;
-            ret   = WH_ERROR_OK;
             break;
         }
 
