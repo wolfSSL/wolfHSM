@@ -21,7 +21,6 @@
 
 #include "wolfhsm/wh_server.h"
 #include "wolfhsm/wh_client.h"
-#include "wolfhsm/wh_flash.h"
 
 int whTest_Client_KeyWrap(whClientContext* ctx);
 int whTest_KeyWrapClientConfig(whClientConfig* cf);

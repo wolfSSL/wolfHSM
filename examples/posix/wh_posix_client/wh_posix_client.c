@@ -85,6 +85,7 @@ static int wh_ClientTask(void* cf, const char* type, int test)
 
     printf("Client connecting to server...\n");
     if (ret == 0 && test) {
+        printf("Running client demos...\n");
         return wh_DemoClient_All(client);
     }
 

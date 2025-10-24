@@ -36,6 +36,10 @@
  *  WOLFHSM_CFG_SHE_EXTENSION - If defined, include AutoSAR SHE functionality
  *      Default: Not defined
  *
+ *  WOLFHSM_CFG_GLOBAL_KEYS - If defined, enable global key support allowing
+ *  keys to be shared across multiple clients
+ *      Default: Not defined
+ *
  *  WOLFHSM_CFG_KEYWRAP - If defined, include the key wrap functionality
  *      Default: Not defined
  *

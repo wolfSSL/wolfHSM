@@ -37,6 +37,7 @@
 #include "wh_test_she.h"
 #include "wh_test_clientserver.h"
 #include "wh_test_keywrap.h"
+#include "wh_test_multiclient.h"
 
 #if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER)
 #include "wh_test_cert.h"
@@ -92,6 +93,9 @@ int whTest_Unit(void)
 #endif
 
 #endif /* WOLFHSM_CFG_SERVER_IMG_MGR && !WOLFHSM_CFG_NO_CRYPTO */
+
+    /* Multi-Client Tests (includes Global Keys when enabled) */
+    WH_TEST_ASSERT(0 == whTest_MultiClient());
 
 #if defined(WOLFHSM_CFG_SHE_EXTENSION)
     WH_TEST_ASSERT(0 == whTest_She());
@@ -158,7 +162,7 @@ int whTest_ClientTcp(void)
         .transport_cb      = pttccb,
         .transport_context = (void*)tcc,
         .transport_config  = (void*)mytcpconfig,
-        .client_id         = 0,
+        .client_id         = WH_TEST_DEFAULT_CLIENT_ID,
     }};
     whClientConfig     c_conf[1]  = {{
              .comm = cc_conf,

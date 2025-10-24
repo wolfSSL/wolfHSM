@@ -118,6 +118,15 @@ static int loadAndStoreKeys(whServerContext* server, whKeyId* outKeyId,
     return ret;
 }
 
+static int _InitDemoServer(whServerContext* server, whServerConfig* config)
+{
+    int ret;
+
+    ret = wh_Server_Init(server, config);
+
+    return ret;
+}
+
 
 static int wh_ServerTask(void* cf, const char* keyFilePath, int keyId,
                          int clientId)
@@ -132,7 +141,7 @@ static int wh_ServerTask(void* cf, const char* keyFilePath, int keyId,
         return -1;
     }
 
-    ret = wh_Server_Init(server, config);
+    ret = _InitDemoServer(server, config);
 
     /* Load keys into cache if file path is provided */
     if (keyFilePath != NULL) {
@@ -182,7 +191,7 @@ static int wh_ServerTask(void* cf, const char* keyFilePath, int keyId,
                         (void)wh_Server_Cleanup(server);
 
                         /* Reinitialize the server */
-                        ret = wh_Server_Init(server, config);
+                        ret = _InitDemoServer(server, config);
                         if (ret != 0) {
                             printf("Failed to reinitialize server: %d\n", ret);
                             break;

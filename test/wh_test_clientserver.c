@@ -747,7 +747,7 @@ int whTest_ClientServerSequential(whTestNvmBackendType nvmType)
                  .transport_cb      = tccb,
                  .transport_context = (void*)tmcc,
                  .transport_config  = (void*)tmcf,
-                 .client_id         = 123,
+                 .client_id         = WH_TEST_DEFAULT_CLIENT_ID,
                  .connect_cb        = _clientServerSequentialTestConnectCb,
     }};
 
@@ -1775,7 +1775,7 @@ static int wh_ClientServer_MemThreadTest(whTestNvmBackendType nvmType)
                  .transport_cb      = tccb,
                  .transport_context = (void*)tmcc,
                  .transport_config  = (void*)tmcf,
-                 .client_id         = 123,
+                 .client_id         = WH_TEST_DEFAULT_CLIENT_ID,
     }};
     whClientConfig c_conf[1] = {{
        .comm = cc_conf,
@@ -1860,7 +1860,7 @@ static int wh_ClientServer_PosixMemMapThreadTest(whTestNvmBackendType nvmType)
                     .transport_cb      = tccb,
                     .transport_context = (void*)tmcc,
                     .transport_config  = (void*)tmcf,
-                    .client_id         = 123,
+                    .client_id         = WH_TEST_DEFAULT_CLIENT_ID,
     }};
     whClientConfig                 c_conf[1]  = {{
                          .comm = cc_conf,

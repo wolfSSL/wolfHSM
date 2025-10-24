@@ -2485,4 +2485,40 @@ int wh_Client_CertVerifyAcertDma(whClientContext* c, const void* cert,
 
 #endif /* WOLFHSM_CFG_DMA */
 
+#ifdef WOLFHSM_CFG_GLOBAL_KEYS
+/**
+ * @brief Client-side helper macros for global keys
+ *
+ * These macros help clients mark keys as global when caching or referencing
+ * them. Global keys are shared across all clients and are identified by setting
+ * the WH_KEYID_GLOBAL flag in the keyId.
+ */
+
+/**
+ * @brief Mark a keyId as global
+ *
+ * Sets the WH_KEYID_GLOBAL flag to indicate this key should be stored/accessed
+ * as a global key shared across all clients.
+ *
+ * @param _id The key ID (0-255)
+ * @return keyId with global flag set
+ *
+ * Example:
+ *   whKeyId keyId = WH_MAKE_KEYID_GLOBAL(5);  // Create global key ID 5
+ *   wh_Client_KeyCache(client, keyId, ...);    // Server will store as global
+ */
+#define WH_MAKE_KEYID_GLOBAL(_id) ((_id) | WH_KEYID_GLOBAL)
+
+#endif /* WOLFHSM_CFG_GLOBAL_KEYS */
+
+#ifdef WOLFHSM_CFG_KEYWRAP
+/**
+ * @brief Mark a keyId as referencing wrapped-key material
+ *
+ * Sets the WH_KEYID_WRAPPED flag so the server treats the identifier as a
+ * wrapped key blob rather than a regular crypto key.
+ */
+#define WH_MAKE_KEYID_WRAPPED(_id) ((_id) | WH_KEYID_WRAPPED)
+#endif /* WOLFHSM_CFG_KEYWRAP */
+
 #endif /* !WOLFHSM_WH_CLIENT_H_ */
