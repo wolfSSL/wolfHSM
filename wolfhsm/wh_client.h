@@ -1067,7 +1067,7 @@ int wh_Client_KeyUnwrapAndCacheResponse(whClientContext*   ctx,
  * construct a wrapped data object using a specified cipher and key id
  *
  * @param[in] ctx Pointer to the client context.
- * @param[in] cipherType Cipher used when unwrapping the key.
+ * @param[in] cipherType Cipher used when wrapping the data.
  * @param[in] serverKeyId Key ID to be used for wrapping the data.
  * @param[in] dataIn Pointer to the plaintext data you want to wrap.
  * @param[in] dataInSz The size in bytes of the plaintext data.
@@ -1087,7 +1087,7 @@ int wh_Client_DataWrap(whClientContext* ctx, enum wc_CipherType cipherType,
  * unwrap a wrapped data object using a specified cipher and key id
  *
  * @param[in] ctx Pointer to the client context.
- * @param[in] cipherType Cipher used when unwrapping the key.
+ * @param[in] cipherType Cipher used when unwrapping the data.
  * @param[in] serverKeyId Key ID to be used for wrapping the data.
  * @param[in] wrappedDataIn Pointer to the wrapped data object you want to
  * unwrap.
