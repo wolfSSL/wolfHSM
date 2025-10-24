@@ -53,7 +53,7 @@ static int _FindInCache(whServerContext* server, whKeyId keyId, int* out_index,
                         whNvmMetadata** out_meta);
 
 #ifdef WOLFHSM_CFG_GLOBAL_KEYS
-/**
+/*
  * @brief Check if keyId represents a global key (USER == 0)
  */
 static int _IsGlobalKey(whKeyId keyId)
@@ -62,7 +62,7 @@ static int _IsGlobalKey(whKeyId keyId)
 }
 #endif /* WOLFHSM_CFG_GLOBAL_KEYS */
 
-/**
+/*
  * @brief Get the appropriate cache context based on keyId
  *
  * When WOLFHSM_CFG_GLOBAL_KEYS is enabled, routes to global cache if keyId
@@ -82,7 +82,8 @@ static whKeyCacheContext* _GetCacheContext(whServerContext* server,
     return &server->localCache;
 }
 
-/**
+#ifdef WOLFHSM_CFG_KEYWRAP
+/*
  * @brief Retrieve the wrapped-key registry associated with keyId
  */
 static whWrappedKeyRegistry* _GetWrappedRegistry(whServerContext* server,
@@ -171,6 +172,7 @@ static int _IsKnownWrappedKey(whServerContext* server, whKeyId keyId)
     /* Registry stores client-relative IDs, so pass extracted ID */
     return _WrappedRegistryContains(registry, (whKeyId)clientRelativeId);
 }
+#endif /* WOLFHSM_CFG_KEYWRAP */
 
 /**
  * @brief Find a key in the specified cache context
