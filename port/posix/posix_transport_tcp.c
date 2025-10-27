@@ -57,7 +57,7 @@ static int posixTransportTcp_Recv(int fd, uint16_t* buffer_offset,
         uint8_t* buffer, uint16_t *out_size, void* data);
 
 /* Start a non-blocking connect */
-static int posixTransportTcp_HandleConnect(posixTransportTcpClientContext* c);
+int posixTransportTcp_HandleConnect(posixTransportTcpClientContext* c);
 
 /* CLose connection and reset state */
 static int posixTransportTcp_Close(posixTransportTcpClientContext* c);
@@ -240,8 +240,7 @@ static int posixTransportTcp_Recv(int fd, uint16_t* buffer_offset,
 }
 
 /** Client functions */
-
-static int posixTransportTcp_HandleConnect(posixTransportTcpClientContext* c)
+int posixTransportTcp_HandleConnect(posixTransportTcpClientContext* c)
 {
     int ret = WH_ERROR_OK;
 

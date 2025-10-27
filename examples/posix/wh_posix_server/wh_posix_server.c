@@ -276,7 +276,17 @@ static void Usage(const char* exeName)
     WOLFHSM_CFG_PRINTF("Example: %s --key key.bin --id 123 --client 456 "
                        "--nvminit nvm_init.txt --type tcp --flags 0\n",
                        exeName);
-    WOLFHSM_CFG_PRINTF("type: tcp (default), shm, dma\n");
+    WOLFHSM_CFG_PRINTF("type: tcp (default), shm");
+#ifndef WOLFHSM_CFG_NO_CRYPTO
+    WOLFHSM_CFG_PRINTF(", tls");
+#endif
+#ifndef NO_PSK
+    WOLFHSM_CFG_PRINTF(", psk");
+#endif
+#ifdef WOLFSSL_STATIC_MEMORY
+    WOLFHSM_CFG_PRINTF(", dma");
+#endif
+    WOLFHSM_CFG_PRINTF("\n");
 }
 
 
@@ -340,16 +350,48 @@ int main(int argc, char** argv)
     memset(s_conf, 0, sizeof(whServerConfig));
     if (strcmp(type, "tcp") == 0) {
         WOLFHSM_CFG_PRINTF("Using TCP transport\n");
-        wh_PosixServer_ExampleTcpConfig(s_conf);
+        rc = wh_PosixServer_ExampleTcpConfig(s_conf);
+        if (rc != WH_ERROR_OK) {
+            WOLFHSM_CFG_PRINTF("Failed to initialize TCP transport\n");
+            return -1;
+        }
     }
     else if (strcmp(type, "shm") == 0) {
         WOLFHSM_CFG_PRINTF("Using shared memory transport\n");
-        wh_PosixServer_ExampleShmConfig(s_conf);
+        rc = wh_PosixServer_ExampleShmConfig(s_conf);
+        if (rc != WH_ERROR_OK) {
+            WOLFHSM_CFG_PRINTF("Failed to initialize shared memory transport\n");
+            return -1;
+        }
     }
+#ifndef WOLFHSM_CFG_NO_CRYPTO
+    else if (strcmp(type, "tls") == 0) {
+        WOLFHSM_CFG_PRINTF("Using TLS transport\n");
+        rc = wh_PosixServer_ExampleTlsConfig(s_conf);
+        if (rc != WH_ERROR_OK) {
+            WOLFHSM_CFG_PRINTF("Failed to initialize TLS transport\n");
+            return -1;
+        }
+    }
+#if !defined(WOLFHSM_CFG_NO_CRYPTO) && !defined(NO_PSK)
+    else if (strcmp(type, "psk") == 0) {
+        WOLFHSM_CFG_PRINTF("Using TLS PSK transport\n");
+        rc = wh_PosixServer_ExamplePskConfig(s_conf);
+        if (rc != WH_ERROR_OK) {
+            WOLFHSM_CFG_PRINTF("Failed to initialize TLS PSK transport\n");
+            return -1;
+        }
+    }
+#endif
+#endif
 #ifdef WOLFSSL_STATIC_MEMORY
     else if (strcmp(type, "dma") == 0) {
         WOLFHSM_CFG_PRINTF("Using DMA with shared memory transport\n");
-        wh_PosixServer_ExampleShmDmaConfig(s_conf);
+        rc = wh_PosixServer_ExampleShmDmaConfig(s_conf);
+        if (rc != WH_ERROR_OK) {
+            WOLFHSM_CFG_PRINTF("Failed to initialize DMA with shared memory transport\n");
+            return -1;
+        }
     }
 #endif
     else {
