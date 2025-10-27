@@ -273,7 +273,17 @@ static void Usage(const char* exeName)
     printf("Example: %s --key key.bin --id 123 --client 456 "
            "--nvminit nvm_init.txt --type tcp\n",
            exeName);
-    printf("type: tcp (default), shm, dma\n");
+    printf("type: tcp (default), shm");
+#ifndef WOLFHSM_CFG_NO_CRYPTO
+    printf(", tls");
+#endif
+#ifndef NO_PSK
+    printf(", psk");
+#endif
+#ifdef WOLFSSL_STATIC_MEMORY
+    printf(", dma");
+#endif
+    printf("\n");
 }
 
 
@@ -322,16 +332,48 @@ int main(int argc, char** argv)
     memset(s_conf, 0, sizeof(whServerConfig));
     if (strcmp(type, "tcp") == 0) {
         printf("Using TCP transport\n");
-        wh_PosixServer_ExampleTcpConfig(s_conf);
+        rc = wh_PosixServer_ExampleTcpConfig(s_conf);
+        if (rc != WH_ERROR_OK) {
+            printf("Failed to initialize TCP transport\n");
+            return -1;
+        }
     }
     else if (strcmp(type, "shm") == 0) {
         printf("Using shared memory transport\n");
-        wh_PosixServer_ExampleShmConfig(s_conf);
+        rc = wh_PosixServer_ExampleShmConfig(s_conf);
+        if (rc != WH_ERROR_OK) {
+            printf("Failed to initialize shared memory transport\n");
+            return -1;
+        }
     }
+#ifndef WOLFHSM_CFG_NO_CRYPTO
+    else if (strcmp(type, "tls") == 0) {
+        printf("Using TLS transport\n");
+        rc = wh_PosixServer_ExampleTlsConfig(s_conf);
+        if (rc != WH_ERROR_OK) {
+            printf("Failed to initialize TLS transport\n");
+            return -1;
+        }
+    }
+#if !defined(WOLFHSM_CFG_NO_CRYPTO) && !defined(NO_PSK)
+    else if (strcmp(type, "psk") == 0) {
+        printf("Using TLS PSK transport\n");
+        rc = wh_PosixServer_ExamplePskConfig(s_conf);
+        if (rc != WH_ERROR_OK) {
+            printf("Failed to initialize TLS PSK transport\n");
+            return -1;
+        }
+    }
+#endif
+#endif
 #ifdef WOLFSSL_STATIC_MEMORY
     else if (strcmp(type, "dma") == 0) {
         printf("Using DMA with shared memory transport\n");
-        wh_PosixServer_ExampleShmDmaConfig(s_conf);
+        rc = wh_PosixServer_ExampleShmDmaConfig(s_conf);
+        if (rc != WH_ERROR_OK) {
+            printf("Failed to initialize DMA with shared memory transport\n");
+            return -1;
+        }
     }
 #endif
     else {

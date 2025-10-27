@@ -151,7 +151,17 @@ void Usage(const char* exeName)
 {
     printf("Usage: %s --type <type> --test\n", exeName);
     printf("Example: %s --type tcp\n", exeName);
-    printf("type: tcp (default), shm\n");
+    printf("type: tcp (default), shm");
+#ifndef WOLFHSM_CFG_NO_CRYPTO
+    printf(", tls");
+#endif
+#ifndef NO_PSK
+    printf(", psk");
+#endif
+#ifdef WOLFSSL_STATIC_MEMORY
+    printf(", dma");
+#endif
+    printf("\n");
 }
 
 int main(int argc, char** argv)
@@ -195,6 +205,18 @@ int main(int argc, char** argv)
         printf("Using shared memory transport\n");
         wh_PosixClient_ExampleShmConfig(c_conf);
     }
+#ifndef WOLFHSM_CFG_NO_CRYPTO
+    else if (strcmp(type, "tls") == 0) {
+        printf("Using TLS transport\n");
+        wh_PosixClient_ExampleTlsConfig(c_conf);
+    }
+#endif
+#if !defined(WOLFHSM_CFG_NO_CRYPTO) && !defined(NO_PSK)
+    else if (strcmp(type, "psk") == 0) {
+        printf("Using TLS PSK transport\n");
+        wh_PosixClient_ExamplePskConfig(c_conf);
+    }
+#endif
 #ifdef WOLFSSL_STATIC_MEMORY
     else if (strcmp(type, "dma") == 0) {
         printf("Using DMA with shared memory transport\n");
