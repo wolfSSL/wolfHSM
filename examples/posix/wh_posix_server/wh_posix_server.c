@@ -4,7 +4,7 @@
 
 #include <stdint.h>
 #include <stdio.h>  /* For printf */
-#include <stdlib.h> /* For atoi */
+#include <stdlib.h> /* For strtoul */
 #include <string.h> /* For memset, memcpy, strcmp */
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -53,6 +53,9 @@ enum {
 #define WH_SERVER_TCP_PORT 23456
 #define WH_SERVER_ID 57
 const char* type = "tcp"; /* default to tcp type */
+
+/* RNG mode configuration */
+static const char* s_rngMode = "wolfcrypt"; /* counter | wolfcrypt */
 
 static int loadAndStoreKeys(whServerContext* server, whKeyId* outKeyId,
                             const char* keyFilePath, int keyId, int clientId)
@@ -255,15 +258,19 @@ static int _hardwareCryptoCb(int devId, struct wc_CryptoInfo* info, void* ctx)
     return ret;
 }
 
+
 static void Usage(const char* exeName)
 {
     printf("Usage: %s --key <key_file_path> --id <key_id> --client <client_id> "
-           "--nvminit <nvm_init_file_path> --type <type>\n",
+           "--nvminit <nvm_init_file_path> --type <type> --rng "
+           "<counter|wolfcrypt>\n",
            exeName);
     printf("Example: %s --key key.bin --id 123 --client 456 "
-           "--nvminit nvm_init.txt --type tcp\n",
+           "--nvminit nvm_init.txt --type tcp --rng counter\n",
            exeName);
     printf("type: tcp (default), shm, dma\n");
+    printf("rng: wolfcrypt (default) - uses cryptographically secure RNG\n");
+    printf("     counter - deterministic counter for testing only\n");
 }
 
 
@@ -300,6 +307,9 @@ int main(int argc, char** argv)
         }
         else if (strcmp(argv[i], "--type") == 0 && i + 1 < argc) {
             type = argv[++i];
+        }
+        else if (strcmp(argv[i], "--rng") == 0 && i + 1 < argc) {
+            s_rngMode = argv[++i];
         }
         else {
             printf("Invalid argument: %s\n", argv[i]);
@@ -362,27 +372,44 @@ int main(int argc, char** argv)
     /* Initialize crypto library and hardware */
     wolfCrypt_Init();
 
-    /* Context 3: Server Software Crypto */
+    /* Display selected RNG mode */
+    if (strcmp(s_rngMode, "counter") == 0) {
+        printf("RNG mode: counter (deterministic, for testing only)\n");
+    }
+    else {
+        printf("RNG mode: wolfCrypt (cryptographically secure)\n");
+    }
+
+    /* Demonstrate RNG implementations */
     WC_RNG  rng[1];
     uint8_t buffer[128] = {0};
+
+    /* Demonstration 1: wolfCrypt RNG (cryptographically secure) */
     wc_InitRng_ex(rng, NULL, INVALID_DEVID);
     wc_RNG_GenerateBlock(rng, buffer, sizeof(buffer));
     wc_FreeRng(rng);
-    wh_Utils_Hexdump("Context 3: Server SW RNG:\n", buffer, sizeof(buffer));
+    wh_Utils_Hexdump("Demo 1: wolfCrypt RNG (secure):\n", buffer,
+                     sizeof(buffer));
 
-/* Context 4: Server Hardware Crypto */
-#define HW_DEV_ID 100
+    /* Demonstration 2: Counter RNG (for testing only) */
+#define HW_DEV_ID_COUNTER 100
     memset(buffer, 0, sizeof(buffer));
-    wc_CryptoCb_RegisterDevice(HW_DEV_ID, _hardwareCryptoCb, NULL);
-    wc_InitRng_ex(rng, NULL, HW_DEV_ID);
+    wc_CryptoCb_RegisterDevice(HW_DEV_ID_COUNTER, _hardwareCryptoCb, NULL);
+    wc_InitRng_ex(rng, NULL, HW_DEV_ID_COUNTER);
     wc_RNG_GenerateBlock(rng, buffer, sizeof(buffer));
     wc_FreeRng(rng);
-    wh_Utils_Hexdump("Context 4: Server HW RNG:\n", buffer, sizeof(buffer));
+    wh_Utils_Hexdump("Demo 2: Counter RNG (deterministic):\n", buffer,
+                     sizeof(buffer));
 
-    /* Context 5: Set default server crypto to use cryptocb */
-    crypto->devId = HW_DEV_ID;
-    printf("Context 5: Setting up default server crypto with devId=%d\n",
-           crypto->devId);
+    /* Set default server crypto to use selected RNG mode */
+    if (strcmp(s_rngMode, "counter") == 0) {
+        crypto->devId = HW_DEV_ID_COUNTER;
+        printf("Server will use: Counter RNG (testing only)\n");
+    }
+    else {
+        crypto->devId = INVALID_DEVID;
+        printf("Server will use: wolfCrypt RNG (secure)\n");
+    }
 
     rc = wc_InitRng_ex(crypto->rng, NULL, crypto->devId);
     if (rc != 0) {
