@@ -423,6 +423,19 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
 
 #endif /* WOLFSSL_CMAC */
 
+#if !defined(NO_HMAC)
+    case WC_ALGO_TYPE_HMAC:
+    {
+        const uint8_t* in     = info->hmac.in;
+        uint32_t       in_len = info->hmac.inSz;
+        uint8_t*       out    = info->hmac.digest;
+        Hmac*          hmac   = info->hmac.hmac;
+        int            type   = info->hmac.macType;
+
+        ret = wh_Client_Hmac(ctx, hmac, type, in, in_len, out);
+    } break;
+#endif /* !NO_HMAC */
+
     case WC_ALGO_TYPE_HASH: {
         switch (info->hash.type) {
 #ifndef NO_SHA256

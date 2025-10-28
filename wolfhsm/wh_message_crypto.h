@@ -704,6 +704,52 @@ int wh_MessageCrypto_TranslateCmacResponse(
     uint16_t magic, const whMessageCrypto_CmacResponse* src,
     whMessageCrypto_CmacResponse* dest);
 
+#if !defined(NO_HMAC)
+/*
+ * HMAC
+ */
+typedef enum {
+    WH_MESSAGE_CRYPTO_HMAC_OP_UPDATE = 1,
+    WH_MESSAGE_CRYPTO_HMAC_OP_FINAL,
+    WH_MESSAGE_CRYPTO_HMAC_OP_ONESHOT
+} whMessageCrypto_hmacOperation;
+
+typedef struct {
+    uint32_t hashType; /* enum wc_HashType */
+    uint32_t keySz;    /* Length of inline key material */
+    uint32_t inSz;     /* Length of the input data */
+    uint16_t keyId;    /* Hold the keyId*/
+    uint16_t stateId;  /* Hold the stateId */
+    uint16_t hmacOp;   /* whMessageCrypto_hmacOperation */
+    uint16_t flags;   /* Reserved for future use */
+    uint8_t  WH_PAD[4];
+    /* Data follows:
+     * uint8_t key[keySz]
+     * uint8_t in[inSz]
+     */
+} whMessageCrypto_HmacRequest;
+
+typedef struct {
+    uint16_t stateId; /* Echoed HMAC state identifier */
+    uint16_t flags;   /* Reserved for future use */
+    uint32_t outSz;   /* Length of output data */
+    uint8_t  WH_PAD[4];
+    /* Data follows:
+     * uint8_t out[outSz]
+     */
+} whMessageCrypto_HmacResponse;
+
+
+int wh_MessageCrypto_TranslateHmacRequest(
+    uint16_t magic, const whMessageCrypto_HmacRequest* src,
+    whMessageCrypto_HmacRequest* dest);
+
+int wh_MessageCrypto_TranslateHmacResponse(
+    uint16_t magic, const whMessageCrypto_HmacResponse* src,
+    whMessageCrypto_HmacResponse* dest);
+
+#endif /* !NO_HMAC */
+
 
 /*
  * ML-DSA
