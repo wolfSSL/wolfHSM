@@ -527,6 +527,13 @@ int wh_Server_KeystoreFreshenKey(whServerContext* server, whKeyId keyId,
     ret = _FindInCache(server, keyId, &foundIndex, &foundBigIndex, outBuf,
                        outMeta);
     if (ret != WH_ERROR_OK) {
+        /* For wrapped keys, just probe the cache and error if not found. We
+         * don't support automatically unwrapping and caching outside of the
+         * keywrap API */
+        if (WH_KEYID_TYPE(keyId) == WH_KEYTYPE_WRAPPED) {
+            return WH_ERROR_NOTFOUND;
+        }
+
         /* Not in cache. Check if it is in NVM */
         ret = wh_Nvm_GetMetadata(server->nvm, keyId, tmpMeta);
         if (ret == WH_ERROR_OK) {
@@ -582,7 +589,9 @@ int wh_Server_KeystoreReadKey(whServerContext* server, whKeyId keyId,
         return 0;
     }
 
-    /* Prevent exposing wrapped blobs through the unwrapped read path */
+    /* For wrapped keys, just probe the cache and error if not found. We
+     * don't support automatically unwrapping and caching outside of the
+     * keywrap API */
     if (WH_KEYID_TYPE(keyId) == WH_KEYTYPE_WRAPPED) {
         return WH_ERROR_NOTFOUND;
     }
