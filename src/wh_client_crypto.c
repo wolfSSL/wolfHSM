@@ -4807,8 +4807,8 @@ int wh_Client_MlDsaVerifyDma(whClientContext* ctx, const byte* sig,
         uint8_t    keyLabel[] = "TempMlDsaVerify";
         whNvmFlags flags      = WH_NVM_FLAGS_NONE;
 
-        ret = wh_Client_MlDsaImportKey(ctx, key, &key_id, flags,
-                                       sizeof(keyLabel), keyLabel);
+        ret = wh_Client_MlDsaImportKeyDma(ctx, key, &key_id, flags,
+                                          sizeof(keyLabel), keyLabel);
         if (ret == 0) {
             evict = 1;
         }
