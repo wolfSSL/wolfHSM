@@ -1114,9 +1114,8 @@ _HandleUnwrapAndCacheKeyRequest(whServerContext*                         server,
         return WH_ERROR_ABORTED;
     }
 
-    /* Store the assigned key ID in the response (ID portion only). We should
-     * NOT return the upper bits back to the client */
-    resp->keyId = WH_KEYID_ID(metadata.id);
+    /* Store the assigned key ID in the response, preserving client flags */
+    resp->keyId = wh_KeyId_ToClient(metadata.id);
 
     /* Cache the key */
     return wh_Server_KeystoreCacheKey(server, &metadata, key);
@@ -1181,8 +1180,8 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
                 ret = WH_ERROR_OK;
             }
             if (ret == WH_ERROR_OK) {
-                /* remove the client_id, client may set type */
-                resp.id = WH_KEYID_ID(meta->id);
+                /* Translate server keyId back to client format with flags */
+                resp.id = wh_KeyId_ToClient(meta->id);
 
                 (void)wh_MessageKeystore_TranslateCacheResponse(
                     magic, &resp,
@@ -1236,8 +1235,8 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
                 ret = WH_ERROR_OK;
             }
 
-            /* remove the client_id, client may set type */
-            resp.id = WH_KEYID_ID(meta->id);
+            /* Translate server keyId back to client format with flags */
+            resp.id = wh_KeyId_ToClient(meta->id);
 
             (void)wh_MessageKeystore_TranslateCacheDmaResponse(
                 magic, &resp, (whMessageKeystore_CacheDmaResponse*)resp_packet);

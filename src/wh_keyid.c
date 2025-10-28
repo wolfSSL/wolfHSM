@@ -46,3 +46,24 @@ whKeyId wh_KeyId_TranslateClient(uint16_t type, uint16_t clientId,
 
     return WH_MAKE_KEYID(type, user, id);
 }
+
+whKeyId wh_KeyId_ToClient(whKeyId serverId)
+{
+    whKeyId clientId = WH_KEYID_ID(serverId);
+
+#ifdef WOLFHSM_CFG_GLOBAL_KEYS
+    /* Convert USER=0 to global flag (bit 8: 0x0100) */
+    if (WH_KEYID_USER(serverId) == WH_KEYUSER_GLOBAL) {
+        clientId |= 0x0100; /* WH_CLIENT_KEYID_GLOBAL_FLAG */
+    }
+#endif
+
+#ifdef WOLFHSM_CFG_KEYWRAP
+    /* Convert TYPE=WRAPPED to wrapped flag (bit 9: 0x0200) */
+    if (WH_KEYID_TYPE(serverId) == WH_KEYTYPE_WRAPPED) {
+        clientId |= 0x0200; /* WH_CLIENT_KEYID_WRAPPED_FLAG */
+    }
+#endif
+
+    return clientId;
+}

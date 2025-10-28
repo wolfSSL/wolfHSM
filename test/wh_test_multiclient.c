@@ -1227,12 +1227,123 @@ static int _testWrappedKey_LocalWrap_GlobalKey_NonOwnerNoWrapKey(
 }
 #endif /* WOLFHSM_CFG_KEYWRAP */
 
+/*
+ * Test: KeyId flag preservation
+ * - Tests that global and wrapped flags are preserved in server responses
+ * - Verifies keyCache operations return correct flags
+ */
+static int _testKeyIdFlagPreservation(whClientContext* client1,
+                                      whServerContext* server1,
+                                      whClientContext* client2,
+                                      whServerContext* server2)
+{
+    (void)client2;
+    (void)server2;
+
+    printf("Test: KeyId flag preservation\n");
+
+    /* Test 1: Global key cache preserves global flag */
+    {
+        whKeyId keyId         = WH_CLIENT_KEYID_MAKE_GLOBAL(DUMMY_KEYID_1);
+        whKeyId returnedKeyId = 0;
+
+        WH_TEST_RETURN_ON_FAIL(wh_Client_KeyCacheRequest_ex(
+            client1, 0, (uint8_t*)"GlobalKeyFlags", sizeof("GlobalKeyFlags"),
+            (uint8_t*)TEST_KEY_DATA_1, sizeof(TEST_KEY_DATA_1), keyId));
+        WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
+        WH_TEST_RETURN_ON_FAIL(
+            wh_Client_KeyCacheResponse(client1, &returnedKeyId));
+
+        /* Verify global flag is preserved */
+        WH_TEST_ASSERT_RETURN((returnedKeyId & WH_CLIENT_KEYID_GLOBAL_FLAG) !=
+                              0);
+        WH_TEST_ASSERT_RETURN((returnedKeyId & WH_KEYID_MASK) == DUMMY_KEYID_1);
+
+        /* Clean up */
+        WH_TEST_RETURN_ON_FAIL(
+            wh_Client_KeyEvictRequest(client1, returnedKeyId));
+        WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
+        WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvictResponse(client1));
+
+        printf("  PASS: Global key cache preserves global flag\n");
+    }
+
+    /* Test 2: Local key cache does not have global flag */
+    {
+        whKeyId keyId         = DUMMY_KEYID_2; /* Local key - no flags */
+        whKeyId returnedKeyId = 0;
+
+        WH_TEST_RETURN_ON_FAIL(wh_Client_KeyCacheRequest_ex(
+            client1, 0, (uint8_t*)"LocalKeyFlags", sizeof("LocalKeyFlags"),
+            (uint8_t*)TEST_KEY_DATA_2, sizeof(TEST_KEY_DATA_2), keyId));
+        WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
+        WH_TEST_RETURN_ON_FAIL(
+            wh_Client_KeyCacheResponse(client1, &returnedKeyId));
+
+        /* Verify no global flag */
+        WH_TEST_ASSERT_RETURN((returnedKeyId & WH_CLIENT_KEYID_GLOBAL_FLAG) ==
+                              0);
+        WH_TEST_ASSERT_RETURN((returnedKeyId & WH_KEYID_MASK) == DUMMY_KEYID_2);
+
+        /* Clean up */
+        WH_TEST_RETURN_ON_FAIL(
+            wh_Client_KeyEvictRequest(client1, returnedKeyId));
+        WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
+        WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvictResponse(client1));
+
+        printf("  PASS: Local key cache has no global flag\n");
+    }
+
+    /* Test 3: Reusing returned keyId works correctly */
+    {
+        whKeyId  requestKeyId  = WH_CLIENT_KEYID_MAKE_GLOBAL(DUMMY_KEYID_1);
+        whKeyId  returnedKeyId = 0;
+        uint8_t  outBuf[sizeof(TEST_KEY_DATA_1)] = {0};
+        uint16_t outSz                           = sizeof(outBuf);
+        uint8_t  label[WH_NVM_LABEL_LEN];
+        uint16_t labelSz = sizeof(label);
+
+        /* Cache a global key and get keyId back */
+        WH_TEST_RETURN_ON_FAIL(wh_Client_KeyCacheRequest_ex(
+            client1, 0, (uint8_t*)"ReuseTest", sizeof("ReuseTest"),
+            (uint8_t*)TEST_KEY_DATA_1, sizeof(TEST_KEY_DATA_1), requestKeyId));
+        WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
+        WH_TEST_RETURN_ON_FAIL(
+            wh_Client_KeyCacheResponse(client1, &returnedKeyId));
+
+        /* Use the returned keyId to export the key (common pattern) */
+        WH_TEST_RETURN_ON_FAIL(
+            wh_Client_KeyExportRequest(client1, returnedKeyId));
+        WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
+        WH_TEST_RETURN_ON_FAIL(wh_Client_KeyExportResponse(
+            client1, label, labelSz, outBuf, &outSz));
+
+        /* Verify data matches */
+        WH_TEST_ASSERT_RETURN(outSz == sizeof(TEST_KEY_DATA_1));
+        WH_TEST_ASSERT_RETURN(
+            0 == memcmp(outBuf, TEST_KEY_DATA_1, sizeof(TEST_KEY_DATA_1)));
+
+        /* Clean up using returned keyId */
+        WH_TEST_RETURN_ON_FAIL(
+            wh_Client_KeyEvictRequest(client1, returnedKeyId));
+        WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
+        WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvictResponse(client1));
+
+        printf("  PASS: Reusing returned keyId works correctly\n");
+    }
+
+    return 0;
+}
+
 /* Helper function to run all global keys tests */
 static int _runGlobalKeysTests(whClientContext* client1,
                                whServerContext* server1,
                                whClientContext* client2,
                                whServerContext* server2)
 {
+    WH_TEST_RETURN_ON_FAIL(
+        _testKeyIdFlagPreservation(client1, server1, client2, server2));
+
     WH_TEST_RETURN_ON_FAIL(
         _testGlobalKeyBasic(client1, server1, client2, server2));
 

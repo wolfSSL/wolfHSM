@@ -346,7 +346,7 @@ static int _HandleRsaKeyGen(whServerContext* ctx, uint16_t magic,
                        key_id, ret);
 #endif
                 if (ret == 0) {
-                    res.keyId = WH_KEYID_ID(key_id);
+                    res.keyId = wh_KeyId_ToClient(key_id);
                     res.len   = 0;
                 }
             }
@@ -807,7 +807,7 @@ static int _HandleEccKeyGen(whServerContext* ctx, uint16_t magic,
     }
 
     if (ret == WH_ERROR_OK) {
-        res.keyId = WH_KEYID_ID(key_id);
+        res.keyId = wh_KeyId_ToClient(key_id);
         res.len   = res_size;
 
         wh_MessageCrypto_TranslateEccKeyGenResponse(
@@ -1291,7 +1291,7 @@ static int _HandleHkdf(whServerContext* ctx, uint16_t magic,
                    key_id, ret);
 #endif
             if (ret == WH_ERROR_OK) {
-                res.keyIdOut = WH_KEYID_ID(key_id);
+                res.keyIdOut = wh_KeyId_ToClient(key_id);
                 res.outSz = 0;
                 /* clear the output buffer */
                 memset(out, 0, outSz);
@@ -1391,7 +1391,7 @@ static int _HandleCurve25519KeyGen(whServerContext* ctx, uint16_t magic,
     }
 
     if (ret == 0) {
-        res.keyId = WH_KEYID_ID(key_id);
+        res.keyId = wh_KeyId_ToClient(key_id);
         res.len   = ser_size;
 
         /* Translate response */
@@ -2343,7 +2343,7 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
                     ret       = wh_Server_KeystoreCacheKey(
                         ctx, meta, (uint8_t*)ctx->crypto->algoCtx.cmac);
                     if (ret == 0) {
-                        res.keyId = WH_KEYID_ID(keyId);
+                        res.keyId = wh_KeyId_ToClient(keyId);
                         res.outSz = 0;
                     }
                 }
@@ -2788,7 +2788,7 @@ static int _HandleMlDsaKeyGen(whServerContext* ctx, uint16_t magic,
         }
 
         if (ret == WH_ERROR_OK) {
-            res.keyId = WH_KEYID_ID(key_id);
+            res.keyId = wh_KeyId_ToClient(key_id);
             res.len   = res_size;
 
             wh_MessageCrypto_TranslateMlDsaKeyGenResponse(magic, &res,
@@ -3939,7 +3939,7 @@ static int _HandleMlDsaKeyGenDma(whServerContext* ctx, uint16_t magic,
                                 __func__, keyId, ret);
 #endif
                             if (ret == 0) {
-                                res.keyId   = WH_KEYID_ID(keyId);
+                                res.keyId   = wh_KeyId_ToClient(keyId);
                                 res.keySize = keySize;
                             }
                         }

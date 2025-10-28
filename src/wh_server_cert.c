@@ -497,8 +497,9 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
                                                req.trustedRootNvmId, req.flags,
                                                &keyId);
 
-                /* Propagate the keyId back to the client */
-                resp.keyId = WH_KEYID_ID(keyId);
+                /* Propagate the keyId back to the client with flags preserved
+                 */
+                resp.keyId = wh_KeyId_ToClient(keyId);
             }
 
             /* Convert the response struct */
@@ -626,8 +627,9 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
                                                req.trustedRootNvmId, req.flags,
                                                &keyId);
 
-                /* Propagate the keyId back to the client */
-                resp.keyId = WH_KEYID_ID(keyId);
+                /* Propagate the keyId back to the client with flags preserved
+                 */
+                resp.keyId = wh_KeyId_ToClient(keyId);
             }
             if (resp.rc == WH_ERROR_OK) {
                 /* Post-process client address */
