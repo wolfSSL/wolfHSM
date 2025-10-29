@@ -252,6 +252,10 @@
 #define WOLFHSM_CFG_KEYWRAP_MAX_KEY_SIZE 2000
 #endif
 
+#ifndef WOLFHSM_CFG_KEYWRAP_MAX_DATA_SIZE
+#define WOLFHSM_CFG_KEYWRAP_MAX_DATA_SIZE 2000
+#endif
+
 #if defined(NO_AES) || !defined(HAVE_AESGCM)
 #error \
     "WOLFHSM_CFG_KEYWRAP requires NO_AES to be undefined and HAVE_AESGCM to be defined"
