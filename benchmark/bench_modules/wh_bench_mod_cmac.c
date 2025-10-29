@@ -21,9 +21,8 @@
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_client_crypto.h"
 
+#if !defined(WOLFHSM_CFG_NO_CRYPTO) && defined(WOLFHSM_CFG_BENCH_ENABLE)
 #include "wolfssl/wolfcrypt/cmac.h"
-
-#if defined(WOLFHSM_CFG_BENCH_ENABLE)
 
 #if defined(WOLFSSL_CMAC) && !defined(NO_AES) && defined(WOLFSSL_AES_DIRECT)
 
@@ -184,4 +183,4 @@ int wh_Bench_Mod_CmacAes256Dma(whClientContext* client, whBenchOpContext* ctx,
 
 #endif /* WOLFSSL_CMAC && !defined(NO_AES) && defined(WOLFSSL_AES_DIRECT) */
 
-#endif /* WOLFHSM_CFG_BENCH_ENABLE */
+#endif /* !WOLFHSM_CFG_NO_CRYPTO && WOLFHSM_CFG_BENCH_ENABLE */

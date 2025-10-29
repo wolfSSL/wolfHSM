@@ -13,12 +13,13 @@
 #include "wolfhsm/wh_client.h"
 #include "wolfhsm/wh_client_crypto.h"
 
+#if !defined(WOLFHSM_CFG_NO_CRYPTO)
+
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/ecc.h"
 #include "wolfssl/wolfcrypt/sha256.h"
 #include "wolfssl/wolfcrypt/error-crypt.h"
 #include "wh_demo_client_secboot.h"
-
 
 /* Provisioning process:
  * 1. Generate a server keypair into key cache as keyId 27
@@ -331,3 +332,5 @@ int wh_DemoClient_SecBoot_Zeroize(whClientContext* clientContext)
     printf("SecBoot Zeroize Client completed with ret:%d\n", ret);
     return ret;
 }
+
+#endif /* !WOLFHSM_CFG_NO_CRYPTO */

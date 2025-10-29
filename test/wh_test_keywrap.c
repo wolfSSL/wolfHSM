@@ -23,8 +23,10 @@
 #include <stdint.h>
 #include <string.h> /* For memset, memcpy */
 
+#if !defined(WOLFHSM_CFG_NO_CRYPTO)
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/types.h"
+#endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
 #include "wolfhsm/wh_error.h"
 

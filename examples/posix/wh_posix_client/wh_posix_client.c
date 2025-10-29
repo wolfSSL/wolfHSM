@@ -133,7 +133,7 @@ static int wh_ClientTask(void* cf, const char* type, int test)
             break;
         }
     }
-
+#if defined(DWOLFHSM_CFG_NO_CRYPTO)
     /* Context 1: Client Local Crypto */
     WC_RNG  rng[1];
     uint8_t buffer[128] = {0};
@@ -148,7 +148,7 @@ static int wh_ClientTask(void* cf, const char* type, int test)
     wc_RNG_GenerateBlock(rng, buffer, sizeof(buffer));
     wc_FreeRng(rng);
     wh_Utils_Hexdump("Context 2: Client Remote RNG:\n", buffer, sizeof(buffer));
-
+#endif
 
     (void)wh_Client_CommClose(client);
     (void)wh_Client_Cleanup(client);

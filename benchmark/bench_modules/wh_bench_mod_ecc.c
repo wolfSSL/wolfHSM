@@ -21,10 +21,11 @@
 #include "wolfhsm/wh_client.h"
 #include "wolfhsm/wh_client_crypto.h"
 
+
+#if !defined(WOLFHSM_CFG_NO_CRYPTO) && defined(WOLFHSM_CFG_BENCH_ENABLE)
+
 #include "wolfssl/wolfcrypt/ecc.h"
 #include "wolfssl/wolfcrypt/random.h"
-
-#if defined(WOLFHSM_CFG_BENCH_ENABLE)
 
 #if defined(HAVE_ECC)
 
@@ -566,4 +567,4 @@ int wh_Bench_Mod_EccP256Ecdh(whClientContext* client, whBenchOpContext* ctx,
 
 #endif /* HAVE_ECC */
 
-#endif /* WOLFHSM_CFG_BENCH_ENABLE */
+#endif /* !WOLFHSM_CFG_NO_CRYPTO && WOLFHSM_CFG_BENCH_ENABLE */
