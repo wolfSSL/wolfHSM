@@ -76,7 +76,7 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
         return BAD_FUNC_ARG;
     }
 
-    WH_DEBUG_CLIENT("%s info:%p algo_type:%d\n", __func__, info,
+    WH_DEBUG_CLIENT("info:%p algo_type:%d\n", info,
             (info!=NULL)?info->algo_type:-1);
 #ifdef WOLFHSM_CFG_DEBUG
     wc_CryptoCb_InfoString(info);
@@ -510,9 +510,9 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
     }
 
     if (ret == CRYPTOCB_UNAVAILABLE) {
-        WH_DEBUG_CLIENT("%s X not implemented: algo->type:%d\n", __func__, info->algo_type);
+        WH_DEBUG_CLIENT("X not implemented: algo->type:%d\n", info->algo_type);
     } else {
-        WH_DEBUG_CLIENT("%s - ret:%d algo->type:%d\n", __func__, ret, info->algo_type);
+        WH_DEBUG_CLIENT("ret:%d algo->type:%d\n", ret, info->algo_type);
     }
     return ret;
 }
@@ -713,7 +713,7 @@ int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
         return BAD_FUNC_ARG;
     }
 
-    WH_DEBUG_CLIENT("%s ", __func__);
+    WH_DEBUG_CLIENT("CryptoCb invoked\n");
 #ifdef WOLFHSM_CFG_DEBUG
     wc_CryptoCb_InfoString(info);
 #endif
@@ -875,9 +875,9 @@ int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
     }
 
     if (ret == CRYPTOCB_UNAVAILABLE) {
-        WH_DEBUG_CLIENT("%s X not implemented: algo->type:%d\n", __func__, info->algo_type);
+        WH_DEBUG_CLIENT("X not implemented: algo->type:%d\n", info->algo_type);
     } else {
-        WH_DEBUG_CLIENT("%s - ret:%d algo->type:%d\n", __func__, ret, info->algo_type);
+        WH_DEBUG_CLIENT("ret:%d algo->type:%d\n", ret, info->algo_type);
     }
     return ret;
 }

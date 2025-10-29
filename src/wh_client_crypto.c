@@ -1168,8 +1168,8 @@ static int _EccMakeKey(whClientContext* ctx, int size, int curveId,
                      * rc */
                     ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_EC_KEYGEN,
                                              (uint8_t**)&res);
-                    WH_DEBUG_CLIENT_VERBOSE("%s Res recv:keyid:%u, len:%u, ret:%d\n",
-                           __func__, (unsigned int)res->keyId,
+                    WH_DEBUG_CLIENT_VERBOSE("Res recv:keyid:%u, len:%u, ret:%d\n",
+                           (unsigned int)res->keyId,
                            (unsigned int)res->len, ret);
                     /* wolfCrypt allows positive error codes on success in some
                      * scenarios */
@@ -1381,8 +1381,8 @@ int wh_Client_EccSign(whClientContext* ctx, ecc_key* key, const uint8_t* hash,
     whKeyId key_id;
     int     evict = 0;
 
-    WH_DEBUG_CLIENT_VERBOSE("%s ctx:%p key:%p, in:%p in_len:%u, out:%p inout_len:%p\n",
-           __func__, ctx, key, hash, (unsigned)hash_len, sig, inout_sig_len);
+    WH_DEBUG_CLIENT_VERBOSE("ctx:%p key:%p, in:%p in_len:%u, out:%p inout_len:%p\n",
+           ctx, key, hash, (unsigned)hash_len, sig, inout_sig_len);
 
     if ((ctx == NULL) || (key == NULL) || ((hash == NULL) && (hash_len > 0)) ||
         ((sig != NULL) && (inout_sig_len == NULL))) {
@@ -1526,9 +1526,9 @@ int wh_Client_EccVerify(whClientContext* ctx, ecc_key* key, const uint8_t* sig,
     int     export_pub_key = 0;
 
 
-    WH_DEBUG_CLIENT_VERBOSE("%s ctx:%p key:%p, sig:%p sig_len:%u, hash:%p hash_len:%u "
+    WH_DEBUG_CLIENT_VERBOSE("ctx:%p key:%p, sig:%p sig_len:%u, hash:%p hash_len:%u "
            "out_res:%p\n",
-           __func__, ctx, key, sig, sig_len, hash, hash_len, out_res);
+           ctx, key, sig, sig_len, hash, hash_len, out_res);
 
     if ((ctx == NULL) || (key == NULL) || ((sig == NULL) && (sig_len > 0)) ||
         ((hash == NULL) && (hash_len > 0))) {
@@ -2012,8 +2012,8 @@ int wh_Client_Curve25519SharedSecret(whClientContext* ctx,
                     ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
                                                  (uint8_t*)dataPtr);
                 } while (ret == WH_ERROR_NOTREADY);
-                WH_DEBUG_CLIENT_VERBOSE("%s resp packet recv. ret:%d ret:%d\n",
-                       __func__, ret, ret);
+                WH_DEBUG_CLIENT_VERBOSE("resp packet recv. ret:%d\n",
+                       ret);
                 if (ret == WH_ERROR_OK) {
                     /* Get response structure pointer, validates generic header
                      * rc */
@@ -2274,9 +2274,9 @@ int wh_Client_RsaFunction(whClientContext* ctx, RsaKey* key, int rsa_type,
     whKeyId key_id;
     int     evict = 0;
 
-    WH_DEBUG_CLIENT_VERBOSE("%s ctx:%p key:%p, rsa_type:%d in:%p in_len:%u, out:%p "
+    WH_DEBUG_CLIENT_VERBOSE("ctx:%p key:%p, rsa_type:%d in:%p in_len:%u, out:%p "
            "inout_out_len:%p\n",
-           __func__, ctx, key, rsa_type, in, (unsigned)in_len, out,
+           ctx, key, rsa_type, in, (unsigned)in_len, out,
            inout_out_len);
 
     if ((ctx == NULL) || (key == NULL) || ((in == NULL) && (in_len > 0)) ||
@@ -2609,8 +2609,8 @@ static int _HkdfMakeKey(whClientContext* ctx, int hashType, whKeyId keyIdIn,
                     uint8_t* hkdf_out = (uint8_t*)(res + 1);
                     memcpy(out, hkdf_out, res->outSz);
 
-                    WH_DEBUG_CLIENT_VERBOSE("%s Set key_id:%x with flags:%x outSz:%u\n",
-                           __func__, key_id, flags, (unsigned int)res->outSz);
+                    WH_DEBUG_CLIENT_VERBOSE("Set key_id:%x with flags:%x outSz:%u\n",
+                           key_id, flags, (unsigned int)res->outSz);
                 }
                 else {
                     /* Server returned more than we can handle - error */
@@ -4056,9 +4056,9 @@ int wh_Client_MlDsaImportKey(whClientContext* ctx, MlDsaKey* key,
 
     ret = wh_Crypto_MlDsaSerializeKeyDer(key, sizeof(buffer), buffer,
                                          &buffer_len);
-    WH_DEBUG_CLIENT_VERBOSE("%s serialize ret:%d, key:%p, max_size:%u, buffer:%p, "
+    WH_DEBUG_CLIENT_VERBOSE("serialize ret:%d, key:%p, max_size:%u, buffer:%p, "
            "outlen:%u\n",
-           __func__, ret, key, (unsigned int)sizeof(buffer), buffer,
+           ret, key, (unsigned int)sizeof(buffer), buffer,
            buffer_len);
     if (ret == WH_ERROR_OK) {
         /* Cache the key and get the keyID */
@@ -4246,8 +4246,8 @@ int wh_Client_MlDsaSign(whClientContext* ctx, const byte* in, word32 in_len,
     whKeyId key_id;
     int     evict = 0;
 
-    WH_DEBUG_CLIENT_VERBOSE("%s ctx:%p key:%p, in:%p in_len:%u, out:%p inout_len:%p\n",
-           __func__, ctx, key, in, (unsigned)in_len, out, inout_len);
+    WH_DEBUG_CLIENT_VERBOSE("ctx:%p key:%p, in:%p in_len:%u, out:%p inout_len:%p\n",
+           ctx, key, in, (unsigned)in_len, out, inout_len);
 
     if ((ctx == NULL) || (key == NULL) || ((in == NULL) && (in_len > 0)) ||
         (out == NULL) || (inout_len == NULL)) {
@@ -4375,9 +4375,9 @@ int wh_Client_MlDsaVerify(whClientContext* ctx, const byte* sig, word32 sig_len,
     int     evict = 0;
 
 
-    WH_DEBUG_CLIENT_VERBOSE("%s ctx:%p key:%p, sig:%p sig_len:%u, msg:%p msg_len:%u "
+    WH_DEBUG_CLIENT_VERBOSE("ctx:%p key:%p, sig:%p sig_len:%u, msg:%p msg_len:%u "
            "out_res:%p\n",
-           __func__, ctx, key, sig, sig_len, msg, msg_len, out_res);
+           ctx, key, sig, sig_len, msg, msg_len, out_res);
 
     if ((ctx == NULL) || (key == NULL) || ((sig == NULL) && (sig_len > 0)) ||
         ((msg == NULL) && (msg_len > 0))) {

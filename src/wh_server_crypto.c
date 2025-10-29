@@ -515,8 +515,8 @@ static int _HandleRsaGetSize(whServerContext* ctx, uint16_t magic,
         wc_FreeRsaKey(rsa);
     }
     if (evict != 0) {
-        WH_DEBUG_SERVER_VERBOSE("%s evicting temp key:%x options:%u evict:%u\n",
-               __func__, key_id, options, evict);
+        WH_DEBUG_SERVER_VERBOSE("evicting temp key:%x options:%u evict:%u\n",
+               key_id, options, evict);
         /* User requested to evict from cache, even if the call failed */
         (void)wh_Server_KeystoreEvictKey(ctx, key_id);
     }
@@ -792,7 +792,7 @@ static int _HandleEccKeyGen(whServerContext* ctx, uint16_t magic,
                 if (WH_KEYID_ISERASED(key_id)) {
                     /* Generate a new id */
                     ret = wh_Server_KeystoreGetUniqueId(ctx, &key_id);
-                    WH_DEBUG_SERVER("%s UniqueId: keyId:%u, ret:%d\n", __func__, key_id, ret);
+                    WH_DEBUG_SERVER("UniqueId: keyId:%u, ret:%d\n", key_id, ret);
                     if (ret != WH_ERROR_OK) {
                         /* Early return on unique ID generation failure */
                         wc_ecc_free(key);
@@ -803,7 +803,7 @@ static int _HandleEccKeyGen(whServerContext* ctx, uint16_t magic,
                     ret = wh_Server_EccKeyCacheImport(ctx, key, key_id, flags,
                                                       label_size, label);
                 }
-                WH_DEBUG_SERVER("%s CacheImport: keyId:%u, ret:%d\n", __func__, key_id, ret);
+                WH_DEBUG_SERVER("CacheImport: keyId:%u, ret:%d\n", key_id, ret);
                 /* TODO: RSA has the following, should we do the same? */
                 /*
                 res.keyId = WH_KEYID_ID(key_id);
@@ -1365,7 +1365,7 @@ static int _HandleCurve25519KeyGen(whServerContext* ctx, uint16_t magic,
                 if (WH_KEYID_ISERASED(key_id)) {
                     /* Generate a new id */
                     ret = wh_Server_KeystoreGetUniqueId(ctx, &key_id);
-                    WH_DEBUG_SERVER("%s UniqueId: keyId:%u, ret:%d\n", __func__,
+                    WH_DEBUG_SERVER("UniqueId: keyId:%u, ret:%d\n",
                            key_id, ret);
                     if (ret != WH_ERROR_OK) {
                         /* Early return on unique ID generation failure */
@@ -2753,8 +2753,8 @@ static int _HandleMlDsaKeyGen(whServerContext* ctx, uint16_t magic,
                         if (WH_KEYID_ISERASED(key_id)) {
                             /* Generate a new id */
                             ret = wh_Server_KeystoreGetUniqueId(ctx, &key_id);
-                            WH_DEBUG_SERVER("%s UniqueId: keyId:%u, ret:%d\n",
-                                   __func__, key_id, ret);
+                            WH_DEBUG_SERVER("UniqueId: keyId:%u, ret:%d\n",
+                                   key_id, ret);
                             if (ret != WH_ERROR_OK) {
                                 /* Early return on unique ID generation failure
                                  */
@@ -2767,8 +2767,8 @@ static int _HandleMlDsaKeyGen(whServerContext* ctx, uint16_t magic,
                                 ctx, key, key_id, flags, label_size, label);
                         }
 #ifdef WOLFHSM_CFG_DEBUG
-                        WH_DEBUG_SERVER("%s CacheImport: keyId:%u, ret:%d\n",
-                               __func__, key_id, ret);
+                        WH_DEBUG_SERVER("CacheImport: keyId:%u, ret:%d\n",
+                               key_id, ret);
 #endif
                     }
                 }
@@ -3923,8 +3923,8 @@ static int _HandleMlDsaKeyGenDma(whServerContext* ctx, uint16_t magic,
                             ret = wh_Server_MlDsaKeyCacheImport(
                                 ctx, key, keyId, req.flags, req.labelSize,
                                 req.label);
-                            WH_DEBUG_SERVER("%s CacheImport: keyId:%u, ret:%d\n",
-                                __func__, keyId, ret);
+                            WH_DEBUG_SERVER("CacheImport: keyId:%u, ret:%d\n",
+                                keyId, ret);
                             if (ret == 0) {
                                 res.keyId   = WH_KEYID_ID(keyId);
                                 res.keySize = keySize;
