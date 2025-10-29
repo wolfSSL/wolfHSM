@@ -21,10 +21,10 @@
 #include "wolfhsm/wh_client.h"
 #include "wolfhsm/wh_client_crypto.h"
 
+
+#if !defined(WOLFHSM_CFG_NO_CRYPTO) && defined(WOLFHSM_CFG_BENCH_ENABLE)
 #include "wolfssl/wolfcrypt/dilithium.h"
 #include "wolfssl/wolfcrypt/random.h"
-
-#if defined(WOLFHSM_CFG_BENCH_ENABLE)
 
 #if defined(HAVE_DILITHIUM)
 
@@ -1193,4 +1193,4 @@ int wh_Bench_Mod_MlDsa87KeyGenDma(whClientContext*  client,
 
 #endif /* HAVE_DILITHIUM */
 
-#endif /* WOLFHSM_CFG_BENCH_ENABLE */
+#endif /* !WOLFHSM_CFG_NO_CRYPTO && WOLFHSM_CFG_BENCH_ENABLE */

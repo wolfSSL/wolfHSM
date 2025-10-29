@@ -19,7 +19,7 @@
 #include "wh_bench_mod.h"
 #include "wolfhsm/wh_error.h"
 
-#if defined(WOLFHSM_CFG_BENCH_ENABLE)
+#if !defined(WOLFHSM_CFG_NO_CRYPTO) && defined(WOLFHSM_CFG_BENCH_ENABLE)
 
 #if defined(WOLFSSL_SHA3)
 
@@ -45,4 +45,4 @@ int wh_Bench_Mod_Sha3256Dma(whClientContext* client, whBenchOpContext* ctx,
 
 #endif /* WOLFSSL_SHA3 */
 
-#endif /* WOLFHSM_CFG_BENCH_ENABLE */
+#endif /* !WOLFHSM_CFG_NO_CRYPTO && WOLFHSM_CFG_BENCH_ENABLE */

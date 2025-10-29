@@ -19,10 +19,9 @@
 #include "wh_bench_mod.h"
 #include "wolfhsm/wh_error.h"
 
+#if !defined(WOLFHSM_CFG_NO_CRYPTO) && defined(WOLFHSM_CFG_BENCH_ENABLE)
 #include "wolfssl/wolfcrypt/hmac.h"
 #include "wolfssl/wolfcrypt/sha256.h"
-
-#if defined(WOLFHSM_CFG_BENCH_ENABLE)
 
 #if !defined(NO_HMAC)
 
@@ -176,4 +175,4 @@ int wh_Bench_Mod_HmacSha3256Dma(whClientContext* client, whBenchOpContext* ctx,
 
 #endif /* !defined(NO_HMAC) */
 
-#endif /* WOLFHSM_CFG_BENCH_ENABLE */
+#endif /* !WOLFHSM_CFG_NO_CRYPTO && WOLFHSM_CFG_BENCH_ENABLE */

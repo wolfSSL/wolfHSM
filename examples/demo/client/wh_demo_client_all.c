@@ -39,7 +39,8 @@ int wh_DemoClient_All(whClientContext* clientContext)
     if (rc != 0) {
         return rc;
     }
-#ifndef NO_AES
+
+#if !defined(WOLFHSM_CFG_NO_CRYPTO) && !defined(NO_AES)
     rc = wh_DemoClient_KeystoreAes(clientContext);
     if (rc != 0) {
         return rc;
@@ -54,7 +55,7 @@ int wh_DemoClient_All(whClientContext* clientContext)
 #endif /* WOLFHSM_CFG_KEYWRAP */
 
     /**Crypto demos */
-#ifndef NO_RSA
+#if !defined(WOLFHSM_CFG_NO_CRYPTO) && !defined(NO_RSA)
     rc = wh_DemoClient_CryptoRsa(clientContext);
     if (rc != 0) {
         return rc;

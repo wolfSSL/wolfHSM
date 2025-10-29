@@ -1,6 +1,10 @@
 /*
  * Example server app using POSIX transport
  */
+#include <stdio.h>  /* For printf */
+#include <stdlib.h> /* For atoi */
+#include <string.h> /* For memset, memcpy, strcmp */
+#include <ctype.h>  /* For isspace */
 
 #include "wh_posix_cfg.h"
 #include "wh_posix_server_cfg.h"
