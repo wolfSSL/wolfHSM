@@ -104,7 +104,9 @@ analyze: $(SRC)
 scan:
 	@echo "Running scan-build static analysis"
 	@mkdir -p $(WOLFHSM_DIR)/scan_out/
-	@scan-build --status-bugs $(MAKE) analyze 2> $(WOLFHSM_DIR)/scan_out/$(SCAN_LOG)
+	@scan-build --exclude $(WOLFSSL_DIR)/wolfcrypt \
+	            --exclude $(WOLFSSL_DIR)/src \
+	            --status-bugs $(MAKE) analyze 2> $(WOLFHSM_DIR)/scan_out/$(SCAN_LOG)
 
 clean: clean-test
 	rm -f whNvmImage.bin whNvmImage.hex
