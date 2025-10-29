@@ -36,12 +36,6 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "wolfssl/wolfcrypt/settings.h"
-#include "wolfssl/wolfcrypt/types.h"
-#include "wolfssl/wolfcrypt/rsa.h"
-#include "wolfssl/wolfcrypt/ecc.h"
-#include "wolfssl/wolfcrypt/asn.h"
-
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_comm.h"
 #include "wolfhsm/wh_message.h"
