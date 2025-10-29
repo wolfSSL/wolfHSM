@@ -183,4 +183,4 @@ int wh_Bench_Mod_CmacAes256Dma(whClientContext* client, whBenchOpContext* ctx,
 
 #endif /* WOLFSSL_CMAC && !defined(NO_AES) && defined(WOLFSSL_AES_DIRECT) */
 
-#endif /* WOLFHSM_CFG_BENCH_ENABLE */
+#endif /* !WOLFHSM_CFG_NO_CRYPTO && WOLFHSM_CFG_BENCH_ENABLE */

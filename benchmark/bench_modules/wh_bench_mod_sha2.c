@@ -549,4 +549,4 @@ int wh_Bench_Mod_Sha512Dma(whClientContext* client, whBenchOpContext* ctx,
 
 #endif /* WOLFSSL_SHA512 */
 
-#endif /* WOLFHSM_CFG_BENCH_ENABLE */
+#endif /* !WOLFHSM_CFG_NO_CRYPTO && WOLFHSM_CFG_BENCH_ENABLE */

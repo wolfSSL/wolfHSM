@@ -94,4 +94,4 @@ int wh_Bench_Mod_Rng(whClientContext* client, whBenchOpContext* ctx, int id,
 
 #endif /* !defined(WC_NO_RNG) */
 
-#endif /* WOLFHSM_CFG_BENCH_ENABLE */
+#endif /* !WOLFHSM_CFG_NO_CRYPTO && WOLFHSM_CFG_BENCH_ENABLE */

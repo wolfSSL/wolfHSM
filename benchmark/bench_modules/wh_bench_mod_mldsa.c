@@ -1193,4 +1193,4 @@ int wh_Bench_Mod_MlDsa87KeyGenDma(whClientContext*  client,
 
 #endif /* HAVE_DILITHIUM */
 
-#endif /* WOLFHSM_CFG_BENCH_ENABLE */
+#endif /* !WOLFHSM_CFG_NO_CRYPTO && WOLFHSM_CFG_BENCH_ENABLE */

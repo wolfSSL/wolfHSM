@@ -831,4 +831,4 @@ int wh_Bench_Mod_Aes256GCMDecryptDma(whClientContext*  client,
 
 #endif /* !defined(NO_AES) */
 
-#endif /* WOLFHSM_CFG_BENCH_ENABLE */
+#endif /* !WOLFHSM_CFG_NO_CRYPTO && WOLFHSM_CFG_BENCH_ENABLE */

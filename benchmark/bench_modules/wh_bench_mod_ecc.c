@@ -567,4 +567,4 @@ int wh_Bench_Mod_EccP256Ecdh(whClientContext* client, whBenchOpContext* ctx,
 
 #endif /* HAVE_ECC */
 
-#endif /* WOLFHSM_CFG_BENCH_ENABLE */
+#endif /* !WOLFHSM_CFG_NO_CRYPTO && WOLFHSM_CFG_BENCH_ENABLE */

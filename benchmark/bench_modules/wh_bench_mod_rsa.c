@@ -1115,4 +1115,4 @@ int wh_Bench_Mod_Rsa4096KeyGenDma(whClientContext*  client,
 
 #endif /* !(NO_RSA) */
 
-#endif /* WOLFHSM_CFG_BENCH_ENABLE */
+#endif /* !WOLFHSM_CFG_NO_CRYPTO && WOLFHSM_CFG_BENCH_ENABLE */

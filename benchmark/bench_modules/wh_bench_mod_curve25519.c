@@ -252,4 +252,4 @@ exit:
 
 #endif /* HAVE_CURVE25519 */
 
-#endif /* WOLFHSM_CFG_BENCH_ENABLE */
+#endif /* !WOLFHSM_CFG_NO_CRYPTO && WOLFHSM_CFG_BENCH_ENABLE */
