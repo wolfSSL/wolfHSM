@@ -437,7 +437,7 @@ static int _HandleRsaFunction( whServerContext* ctx, uint16_t magic,
         break;
     default:
         /* Invalid opType */
-        WH_DEBUG_SERVER_VERBOSE("%s Unknown opType:%d\n", __func__, op_type);
+        WH_DEBUG_SERVER_VERBOSE("Unknown opType:%d\n", op_type);
 
         return BAD_FUNC_ARG;
     }
@@ -528,7 +528,7 @@ static int _HandleRsaGetSize(whServerContext* ctx, uint16_t magic,
 
         *outSize = sizeof(whMessageCrypto_RsaGetSizeResponse);
     }
-    WH_DEBUG_SERVER_VERBOSE("%s keyId:%d, key_size:%d, ret:%d\n", __func__, key_id,
+    WH_DEBUG_SERVER_VERBOSE("keyId:%d, key_size:%d, ret:%d\n", key_id,
            key_size, ret);
     return ret;
 }
@@ -689,7 +689,7 @@ int wh_Server_MlDsaKeyCacheImport(whServerContext* ctx, MlDsaKey* key,
     if (ret == WH_ERROR_OK) {
         ret = wh_Crypto_MlDsaSerializeKeyDer(key, MAX_MLDSA_DER_SIZE, cacheBuf,
                                              &der_size);
-        WH_DEBUG_SERVER_VERBOSE("%s keyId:%u, ret:%d\n", __func__, keyId, ret);
+        WH_DEBUG_SERVER_VERBOSE("keyId:%u, ret:%d\n", keyId, ret);
     }
 
     if (ret == WH_ERROR_OK) {
@@ -721,7 +721,7 @@ int wh_Server_MlDsaKeyCacheExport(whServerContext* ctx, whKeyId keyId,
 
     if (ret == WH_ERROR_OK) {
         ret = wh_Crypto_MlDsaDeserializeKeyDer(cacheBuf, cacheMeta->len, key);
-        WH_DEBUG_SERVER_VERBOSE("%s keyId:%u, ret:%d\n", __func__, keyId, ret);
+        WH_DEBUG_SERVER_VERBOSE("keyId:%u, ret:%d\n", keyId, ret);
     }
     return ret;
 }
@@ -1378,7 +1378,7 @@ static int _HandleCurve25519KeyGen(whServerContext* ctx, uint16_t magic,
                     ret = wh_Server_CacheImportCurve25519Key(
                         ctx, key, key_id, flags, label_size, label);
                 }
-                WH_DEBUG_SERVER_VERBOSE("%s CacheImport: keyId:%u, ret:%d\n", __func__,
+                WH_DEBUG_SERVER_VERBOSE("CacheImport: keyId:%u, ret:%d\n",
                        key_id, ret);
             }
         }
@@ -3307,7 +3307,7 @@ int wh_Server_HandleCryptoRequest(whServerContext* ctx, uint16_t magic,
     }
 
 #ifdef WOLFHSM_CFG_DEBUG
-    WH_DEBUG_SERVER_VERBOSE("%s End ret:%d\n", __func__, ret);
+    WH_DEBUG_SERVER_VERBOSE("End ret:%d\n", ret);
 #endif
 
     /* Since crypto error codes are propagated to the client in the response

@@ -313,29 +313,29 @@
     #define WH_DEBUG_SERVER(...) do { } while (0)
 #endif
 
-/* Verbose client-side debug print */
+/* Verbose client-side debug print with function and line context */
 #ifdef WOLFHSM_CFG_DEBUG_VERBOSE
     #if !defined(__CCRH__)
         #define WH_DEBUG_CLIENT_VERBOSE(fmt, ...) \
-            WOLFHSM_CFG_PRINTF("[client] " fmt, ##__VA_ARGS__)
+            WOLFHSM_CFG_PRINTF("[client:%s:%d] " fmt, __func__, __LINE__, ##__VA_ARGS__)
     #else
         #define WH_DEBUG_CLIENT_VERBOSE(...) WH_DEBUG_CLIENT_VERBOSE2(__VA_ARGS__, "")
         #define WH_DEBUG_CLIENT_VERBOSE2(fmt, ...) \
-            WOLFHSM_CFG_PRINTF("[client] " fmt, ##__VA_ARGS__)
+            WOLFHSM_CFG_PRINTF("[client:%s:%d] " fmt, __func__, __LINE__, ##__VA_ARGS__)
     #endif
 #else
     #define WH_DEBUG_CLIENT_VERBOSE(...) do { } while (0)
 #endif
 
-/* Verbose server-side debug print */
+/* Verbose server-side debug print with function and line context */
 #ifdef WOLFHSM_CFG_DEBUG_VERBOSE
     #if !defined(__CCRH__)
         #define WH_DEBUG_SERVER_VERBOSE(fmt, ...) \
-            WOLFHSM_CFG_PRINTF("[server] " fmt, ##__VA_ARGS__)
+            WOLFHSM_CFG_PRINTF("[server:%s:%d] " fmt, __func__, __LINE__, ##__VA_ARGS__)
     #else
         #define WH_DEBUG_SERVER_VERBOSE(...) WH_DEBUG_SERVER_VERBOSE2(__VA_ARGS__, "")
         #define WH_DEBUG_SERVER_VERBOSE2(fmt, ...) \
-            WOLFHSM_CFG_PRINTF("[server] " fmt, ##__VA_ARGS__)
+            WOLFHSM_CFG_PRINTF("[server:%s:%d] " fmt, __func__, __LINE__, ##__VA_ARGS__)
     #endif
 #else
     #define WH_DEBUG_SERVER_VERBOSE(...) do { } while (0)

@@ -365,9 +365,9 @@ int wh_Client_AesCtr(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
     uint32_t req_len = sizeof(whMessageCrypto_GenericRequestHeader) +
                        sizeof(*req) + len + key_len + iv_len +
                        (AES_BLOCK_SIZE * 2);
-    WH_DEBUG_CLIENT_VERBOSE("%s: enc:%d keylen:%d ivsz:%d insz:%d reqsz:%u "
+    WH_DEBUG_CLIENT_VERBOSE("enc:%d keylen:%d ivsz:%d insz:%d reqsz:%u "
            "left:%d\n",
-           __func__, enc, key_len, iv_len, len, req_len, left);
+           enc, key_len, iv_len, len, req_len, left);
     if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
         return WH_ERROR_BADARGS;
     }
@@ -485,9 +485,9 @@ int wh_Client_AesEcb(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
                        sizeof(*req) + len + key_len + iv_len;
 
 
-    WH_DEBUG_CLIENT_VERBOSE("%s: enc:%d keylen:%d ivsz:%d insz:%d reqsz:%u "
+    WH_DEBUG_CLIENT_VERBOSE("enc:%d keylen:%d ivsz:%d insz:%d reqsz:%u "
            "blocks:%u \n",
-           __func__, enc, (int)key_len, (int)iv_len, (int)len,
+           enc, (int)key_len, (int)iv_len, (int)len,
            (unsigned int)req_len, (unsigned int)blocks);
 
     if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
@@ -590,9 +590,9 @@ int wh_Client_AesCbc(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
                        sizeof(*req) + len + key_len + iv_len;
 
 
-    WH_DEBUG_CLIENT_VERBOSE("%s: enc:%d keylen:%d ivsz:%d insz:%d reqsz:%u "
+    WH_DEBUG_CLIENT_VERBOSE("enc:%d keylen:%d ivsz:%d insz:%d reqsz:%u "
            "blocks:%u lastoffset:%u\n",
-            __func__, enc, (int)key_len, (int)iv_len, (int)len,
+           enc, (int)key_len, (int)iv_len, (int)len,
            (unsigned int)req_len, (unsigned int)blocks,
            (unsigned int)last_offset);
 
@@ -1057,9 +1057,9 @@ int wh_Client_EccImportKey(whClientContext* ctx, ecc_key* key,
 
     ret =
         wh_Crypto_EccSerializeKeyDer(key, sizeof(buffer), buffer, &buffer_len);
-    WH_DEBUG_CLIENT_VERBOSE("%s serialize ret:%d, key:%p, max_size:%u, buffer:%p, "
+    WH_DEBUG_CLIENT_VERBOSE("serialize ret:%d, key:%p, max_size:%u, buffer:%p, "
            "outlen:%u\n",
-           __func__, ret, key, (unsigned int)sizeof(buffer), buffer,
+           ret, key, (unsigned int)sizeof(buffer), buffer,
            buffer_len);
     if (ret == WH_ERROR_OK) {
         /* Cache the key and get the keyID */
@@ -1070,7 +1070,7 @@ int wh_Client_EccImportKey(whClientContext* ctx, ecc_key* key,
         }
     }
 
-    WH_DEBUG_CLIENT_VERBOSE("%s label:%.*s ret:%d keyid:%u\n", __func__, label_len,
+    WH_DEBUG_CLIENT_VERBOSE("label:%.*s ret:%d keyid:%u\n", label_len,
            label, ret, key_id);
     return ret;
 }
@@ -1095,7 +1095,7 @@ int wh_Client_EccExportKey(whClientContext* ctx, whKeyId keyId, ecc_key* key,
         ret = wh_Crypto_EccDeserializeKeyDer(buffer, buffer_len, key);
     }
 
-    WH_DEBUG_CLIENT_VERBOSE("%s keyid:%x key:%p ret:%d label:%.*s\n", __func__, keyId,
+    WH_DEBUG_CLIENT_VERBOSE("keyid:%x key:%p ret:%d label:%.*s\n", keyId,
            key, ret, (int)label_len, label);
     return ret;
 }
@@ -1153,7 +1153,7 @@ static int _EccMakeKey(whClientContext* ctx, int size, int curveId,
 
             ret = wh_Client_SendRequest(ctx, group, action, req_len,
                                         (uint8_t*)dataPtr);
-            WH_DEBUG_CLIENT_VERBOSE("%s Req sent:size:%u, ret:%d\n", __func__,
+            WH_DEBUG_CLIENT_VERBOSE("Req sent:size:%u, ret:%d\n",
                    (unsigned int)req->sz, ret);
             if (ret == WH_ERROR_OK) {
                 /* Response Message */
@@ -1313,7 +1313,7 @@ int wh_Client_EccSharedSecret(whClientContext* ctx, ecc_key* priv_key,
             /* Send Request */
             ret = wh_Client_SendRequest(ctx, group, action, req_len,
                                         (uint8_t*)dataPtr);
-            WH_DEBUG_CLIENT_VERBOSE("%s req sent. priv:%u pub:%u\n", __func__,
+            WH_DEBUG_CLIENT_VERBOSE("req sent. priv:%u pub:%u\n",
                    (unsigned int)req->privateKeyId,
                    (unsigned int)req->publicKeyId);
             if (ret == WH_ERROR_OK) {
@@ -1328,7 +1328,7 @@ int wh_Client_EccSharedSecret(whClientContext* ctx, ecc_key* priv_key,
                     ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
                                                  (uint8_t*)dataPtr);
                 } while (ret == WH_ERROR_NOTREADY);
-                WH_DEBUG_CLIENT_VERBOSE("%s resp packet recv. ret:%d\n", __func__, ret);
+                WH_DEBUG_CLIENT_VERBOSE("resp packet recv. ret:%d\n", ret);
                 if (ret == WH_ERROR_OK) {
                     /* Get response structure pointer, validates generic header
                      * rc */
@@ -1364,7 +1364,7 @@ int wh_Client_EccSharedSecret(whClientContext* ctx, ecc_key* priv_key,
     if (prv_evict != 0) {
         (void)wh_Client_KeyEvict(ctx, prv_key_id);
     }
-    WH_DEBUG_CLIENT_VERBOSE("%s ret:%d\n", __func__, ret);
+    WH_DEBUG_CLIENT_VERBOSE("ret:%d\n", ret);
     return ret;
 }
 
@@ -1391,7 +1391,7 @@ int wh_Client_EccSign(whClientContext* ctx, ecc_key* key, const uint8_t* hash,
 
     key_id = WH_DEVCTX_TO_KEYID(key->devCtx);
 
-    WH_DEBUG_CLIENT_VERBOSE("%s keyid:%x, in_len:%u, inout_len:%p\n", __func__, key_id,
+    WH_DEBUG_CLIENT_VERBOSE("keyid:%x, in_len:%u, inout_len:%p\n", key_id,
            hash_len, inout_sig_len);
 
     /* Import key if necessary */
@@ -1507,7 +1507,7 @@ int wh_Client_EccSign(whClientContext* ctx, ecc_key* key, const uint8_t* hash,
     if (evict != 0) {
         (void)wh_Client_KeyEvict(ctx, key_id);
     }
-    WH_DEBUG_CLIENT_VERBOSE("%s ret:%d\n", __func__, ret);
+    WH_DEBUG_CLIENT_VERBOSE("ret:%d\n", ret);
     return ret;
 }
 
@@ -1656,7 +1656,7 @@ int wh_Client_EccVerify(whClientContext* ctx, ecc_key* key, const uint8_t* sig,
     if (evict != 0) {
         (void)wh_Client_KeyEvict(ctx, key_id);
     }
-    WH_DEBUG_CLIENT_VERBOSE("%s ret:%d\n", __func__, ret);
+    WH_DEBUG_CLIENT_VERBOSE("ret:%d\n", ret);
     return ret;
 }
 
@@ -1998,7 +1998,7 @@ int wh_Client_Curve25519SharedSecret(whClientContext* ctx,
             /* Send Request */
             ret = wh_Client_SendRequest(ctx, group, action, req_len,
                                         (uint8_t*)dataPtr);
-            WH_DEBUG_CLIENT_VERBOSE("%s req sent. priv:%u pub:%u\n", __func__,
+            WH_DEBUG_CLIENT_VERBOSE("req sent. priv:%u pub:%u\n",
                    (unsigned int)req->privateKeyId,
                    (unsigned int)req->publicKeyId);
             if (ret == WH_ERROR_OK) {
@@ -2049,7 +2049,7 @@ int wh_Client_Curve25519SharedSecret(whClientContext* ctx,
     if (prv_evict != 0) {
         (void)wh_Client_KeyEvict(ctx, prv_key_id);
     }
-    WH_DEBUG_CLIENT_VERBOSE("%s ret:%d\n", __func__, ret);
+    WH_DEBUG_CLIENT_VERBOSE("ret:%d\n", ret);
     return ret;
 }
 #endif /* HAVE_CURVE25519 */
@@ -2225,7 +2225,7 @@ static int _RsaMakeKey(whClientContext* ctx, uint32_t size, uint32_t e,
                 /* Set the rsa key_id.  Should be ERASED if EPHEMERAL */
                 wh_Client_RsaSetKeyId(rsa, key_id);
 
-                WH_DEBUG_CLIENT_VERBOSE("%s Set key_id:%x with flags:%x\n", __func__,
+                WH_DEBUG_CLIENT_VERBOSE("Set key_id:%x with flags:%x\n",
                        key_id, flags);
                 if (flags & WH_NVM_FLAGS_EPHEMERAL) {
                     /* Response has the exported key */
@@ -2286,7 +2286,7 @@ int wh_Client_RsaFunction(whClientContext* ctx, RsaKey* key, int rsa_type,
 
     key_id = WH_DEVCTX_TO_KEYID(key->devCtx);
 
-    WH_DEBUG_CLIENT_VERBOSE("%s key_id:%x\n", __func__, key_id);
+    WH_DEBUG_CLIENT_VERBOSE("key_id:%x\n", key_id);
 
     /* Import key if necessary */
     if (WH_KEYID_ISERASED(key_id)) {
@@ -2383,7 +2383,7 @@ int wh_Client_RsaFunction(whClientContext* ctx, RsaKey* key, int rsa_type,
     if (evict != 0) {
         (void)wh_Client_KeyEvict(ctx, key_id);
     }
-    WH_DEBUG_CLIENT_VERBOSE("%s ret:%d\n", __func__, ret);
+    WH_DEBUG_CLIENT_VERBOSE("ret:%d\n", ret);
     return ret;
 }
 
@@ -2395,7 +2395,7 @@ int wh_Client_RsaGetSize(whClientContext* ctx, const RsaKey* key, int* out_size)
     whKeyId key_id;
     int     evict = 0;
 
-    WH_DEBUG_CLIENT_VERBOSE("%s ctx:%p key:%p, out_size:%p \n", __func__, ctx, key,
+    WH_DEBUG_CLIENT_VERBOSE("ctx:%p key:%p, out_size:%p \n", ctx, key,
            out_size);
 
     if ((ctx == NULL) || (key == NULL) || (out_size == NULL)) {
@@ -2410,7 +2410,7 @@ int wh_Client_RsaGetSize(whClientContext* ctx, const RsaKey* key, int* out_size)
         uint8_t    keyLabel[] = "TempRsaGetSize";
         whNvmFlags flags      = WH_NVM_FLAGS_NONE;
 
-        WH_DEBUG_CLIENT_VERBOSE("%s Importing temp key\n", __func__);
+        WH_DEBUG_CLIENT_VERBOSE("Importing temp key\n");
         ret = wh_Client_RsaImportKey(ctx, key, &key_id, flags, sizeof(keyLabel),
                                      keyLabel);
         if (ret == WH_ERROR_OK) {
@@ -2480,10 +2480,10 @@ int wh_Client_RsaGetSize(whClientContext* ctx, const RsaKey* key, int* out_size)
     }
     /* Evict the key manually on error */
     if (evict != 0) {
-        WH_DEBUG_CLIENT_VERBOSE("%s Evicting temp key %x\n", __func__, key_id);
+        WH_DEBUG_CLIENT_VERBOSE("Evicting temp key %x\n", key_id);
         (void)wh_Client_KeyEvict(ctx, key_id);
     }
-    WH_DEBUG_CLIENT_VERBOSE("%s ret:%d\n", __func__, ret);
+    WH_DEBUG_CLIENT_VERBOSE("ret:%d\n", ret);
     return ret;
 }
 
@@ -4069,7 +4069,7 @@ int wh_Client_MlDsaImportKey(whClientContext* ctx, MlDsaKey* key,
         }
     }
 
-    WH_DEBUG_CLIENT_VERBOSE("%s label:%.*s ret:%d keyid:%u\n", __func__, label_len,
+    WH_DEBUG_CLIENT_VERBOSE("label:%.*s ret:%d keyid:%u\n", label_len,
            label, ret, key_id);
     return ret;
 }
@@ -4094,7 +4094,7 @@ int wh_Client_MlDsaExportKey(whClientContext* ctx, whKeyId keyId, MlDsaKey* key,
         ret = wh_Crypto_MlDsaDeserializeKeyDer(buffer, buffer_len, key);
     }
 
-    WH_DEBUG_CLIENT_VERBOSE("%s keyid:%x key:%p ret:%d label:%.*s\n", __func__, keyId,
+    WH_DEBUG_CLIENT_VERBOSE("keyid:%x key:%p ret:%d label:%.*s\n", keyId,
            key, ret, (int)label_len, label);
     return ret;
 }
@@ -4152,7 +4152,7 @@ static int _MlDsaMakeKey(whClientContext* ctx, int size, int level,
 
             ret = wh_Client_SendRequest(ctx, group, action, req_len,
                                         (uint8_t*)dataPtr);
-            WH_DEBUG_CLIENT_VERBOSE("%s Req sent:size:%u, ret:%d\n", __func__,
+            WH_DEBUG_CLIENT_VERBOSE("Req sent:size:%u, ret:%d\n",
                    (unsigned int)req->sz, ret);
             if (ret == 0) {
                 uint16_t res_len;
@@ -4256,7 +4256,7 @@ int wh_Client_MlDsaSign(whClientContext* ctx, const byte* in, word32 in_len,
 
     key_id = WH_DEVCTX_TO_KEYID(key->devCtx);
 
-    WH_DEBUG_CLIENT_VERBOSE("%s keyid:%x, in_len:%u, inout_len:%p\n", __func__, key_id,
+    WH_DEBUG_CLIENT_VERBOSE("keyid:%x, in_len:%u, inout_len:%p\n", key_id,
            in_len, inout_len);
 
     /* Import key if necessary */
@@ -4357,7 +4357,7 @@ int wh_Client_MlDsaSign(whClientContext* ctx, const byte* in, word32 in_len,
     if (evict != 0) {
         (void)wh_Client_KeyEvict(ctx, key_id);
     }
-    WH_DEBUG_CLIENT_VERBOSE("%s ret:%d\n", __func__, ret);
+    WH_DEBUG_CLIENT_VERBOSE("ret:%d\n", ret);
     return ret;
 }
 
@@ -4480,7 +4480,7 @@ int wh_Client_MlDsaVerify(whClientContext* ctx, const byte* sig, word32 sig_len,
     if (evict != 0) {
         (void)wh_Client_KeyEvict(ctx, key_id);
     }
-    WH_DEBUG_CLIENT_VERBOSE("%s ret:%d\n", __func__, ret);
+    WH_DEBUG_CLIENT_VERBOSE("ret:%d\n", ret);
     return ret;
 }
 
@@ -4699,7 +4699,7 @@ int wh_Client_MlDsaSignDma(whClientContext* ctx, const byte* in, word32 in_len,
         }
     }
 
-    WH_DEBUG_CLIENT_VERBOSE("%s keyid:%x, in_len:%u, inout_len:%p\n", __func__, key_id,
+    WH_DEBUG_CLIENT_VERBOSE("keyid:%x, in_len:%u, inout_len:%p\n", key_id,
            in_len, out_len);
 
     if (ret == WH_ERROR_OK) {
