@@ -223,10 +223,25 @@ int wh_Client_RngGenerate(whClientContext* ctx, uint8_t* out, uint32_t size)
 
         /* Send request and get response */
         ret = wh_Client_SendRequest(ctx, group, action, req_len, dataPtr);
+#if defined(WOLFHSM_CFG_ENABLE_CLIENT_CRYPTIMEOUT)
+        if (ret == WH_ERROR_OK) {
+            ret = wh_CommClient_InitCryptTimeout(ctx->comm);
+        }
+#endif
         if (ret == 0) {
             do {
                 ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
                                              dataPtr);
+#if defined(WOLFHSM_CFG_ENABLE_CLIENT_CRYPTIMEOUT)
+                if (ret == WH_ERROR_NOTREADY) {
+                    /* Check for crypto timeout */
+                    if (wh_CommClient_CheckTimeout(ctx->comm)
+                                        == WH_ERROR_CRYPTIMEOUT) {
+                        ret = WH_ERROR_CRYPTIMEOUT;
+                        break;
+                    }
+                }
+#endif
             } while (ret == WH_ERROR_NOTREADY);
         }
         if (ret == WH_ERROR_OK) {
@@ -408,6 +423,11 @@ int wh_Client_AesCtr(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
     wh_Utils_Hexdump("[client] req packet: \n", (uint8_t*)req, req_len);
 #endif
     ret = wh_Client_SendRequest(ctx, group, action, req_len, dataPtr);
+#if defined(WOLFHSM_CFG_ENABLE_CLIENT_CRYPTIMEOUT)
+    if (ret == WH_ERROR_OK) {
+        ret = wh_CommClient_InitCryptTimeout(ctx->comm);
+    }
+#endif
     /* read response */
     if (ret == WH_ERROR_OK) {
         /* Response packet */
@@ -415,7 +435,18 @@ int wh_Client_AesCtr(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
         do {
             ret =
                 wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
+#if defined(WOLFHSM_CFG_ENABLE_CLIENT_CRYPTIMEOUT)
+                if (ret == WH_ERROR_NOTREADY) {
+                    /* Check for crypto timeout */
+                    if (wh_CommClient_CheckTimeout(ctx->comm)
+                                        == WH_ERROR_CRYPTIMEOUT) {
+                        ret = WH_ERROR_CRYPTIMEOUT;
+                        break;
+                    }
+                }
+#endif
         } while (ret == WH_ERROR_NOTREADY);
+
         if (ret == WH_ERROR_OK) {
             ret = _getCryptoResponse(dataPtr, type, (uint8_t**)&res);
             if (ret == WH_ERROR_OK) {
@@ -530,6 +561,11 @@ int wh_Client_AesEcb(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
     wh_Utils_Hexdump("[client] req packet: \n", (uint8_t*)req, req_len);
 #endif
     ret = wh_Client_SendRequest(ctx, group, action, req_len, dataPtr);
+#if defined(WOLFHSM_CFG_ENABLE_CLIENT_CRYPTIMEOUT)
+    if (ret == WH_ERROR_OK) {
+        ret = wh_CommClient_InitCryptTimeout(ctx->comm);
+    }
+#endif
     /* read response */
     if (ret == WH_ERROR_OK) {
         /* Response packet */
@@ -537,7 +573,18 @@ int wh_Client_AesEcb(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
         do {
             ret =
                 wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
+#if defined(WOLFHSM_CFG_ENABLE_CLIENT_CRYPTIMEOUT)
+                if (ret == WH_ERROR_NOTREADY) {
+                    /* Check for crypto timeout */
+                    if (wh_CommClient_CheckTimeout(ctx->comm)
+                                        == WH_ERROR_CRYPTIMEOUT) {
+                        ret = WH_ERROR_CRYPTIMEOUT;
+                        break;
+                    }
+                }
+#endif
         } while (ret == WH_ERROR_NOTREADY);
+
         if (ret == WH_ERROR_OK) {
             ret = _getCryptoResponse(dataPtr, type, (uint8_t**)&res);
             if (ret == WH_ERROR_OK) {
@@ -649,6 +696,11 @@ int wh_Client_AesCbc(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
     wh_Utils_Hexdump("[client] req packet: \n", (uint8_t*)req, req_len);
 #endif
     ret = wh_Client_SendRequest(ctx, group, action, req_len, dataPtr);
+#if defined(WOLFHSM_CFG_ENABLE_CLIENT_CRYPTIMEOUT)
+    if (ret == WH_ERROR_OK) {
+        ret = wh_CommClient_InitCryptTimeout(ctx->comm);
+    }
+#endif
     /* read response */
     if (ret == WH_ERROR_OK) {
         /* Response packet */
@@ -656,7 +708,18 @@ int wh_Client_AesCbc(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
         do {
             ret =
                 wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
+#if defined(WOLFHSM_CFG_ENABLE_CLIENT_CRYPTIMEOUT)
+                if (ret == WH_ERROR_NOTREADY) {
+                    /* Check for crypto timeout */
+                    if (wh_CommClient_CheckTimeout(ctx->comm)
+                                        == WH_ERROR_CRYPTIMEOUT) {
+                        ret = WH_ERROR_CRYPTIMEOUT;
+                        break;
+                    }
+                }
+#endif
         } while (ret == WH_ERROR_NOTREADY);
+
         if (ret == WH_ERROR_OK) {
             ret = _getCryptoResponse(dataPtr, type, (uint8_t**)&res);
             if (ret == WH_ERROR_OK) {
@@ -783,11 +846,26 @@ int wh_Client_AesGcm(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
 
     /* Send request and receive response */
     ret = wh_Client_SendRequest(ctx, group, action, req_len, dataPtr);
+#if defined(WOLFHSM_CFG_ENABLE_CLIENT_CRYPTIMEOUT)
+    if (ret == WH_ERROR_OK) {
+        ret = wh_CommClient_InitCryptTimeout(ctx->comm);
+    }
+#endif
     if (ret == 0) {
         uint16_t res_len = 0;
         do {
             ret =
                 wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
+#if defined(WOLFHSM_CFG_ENABLE_CLIENT_CRYPTIMEOUT)
+                if (ret == WH_ERROR_NOTREADY) {
+                    /* Check for crypto timeout */
+                    if (wh_CommClient_CheckTimeout(ctx->comm)
+                                        == WH_ERROR_CRYPTIMEOUT) {
+                        ret = WH_ERROR_CRYPTIMEOUT;
+                        break;
+                    }
+                }
+#endif
         } while (ret == WH_ERROR_NOTREADY);
 
         if (ret == WH_ERROR_OK) {
@@ -977,11 +1055,26 @@ int wh_Client_AesGcmDma(whClientContext* ctx, Aes* aes, int enc,
     wh_Utils_Hexdump("[client] AESGCM DMA req packet: \n", dataPtr, reqLen);
 #endif
     ret = wh_Client_SendRequest(ctx, group, action, reqLen, dataPtr);
+#if defined(WOLFHSM_CFG_ENABLE_CLIENT_CRYPTIMEOUT)
+    if (ret == WH_ERROR_OK) {
+        ret = wh_CommClient_InitCryptTimeout(ctx->comm);
+    }
+#endif
     if (ret == 0) {
         uint16_t resLen = 0;
         do {
             ret =
                 wh_Client_RecvResponse(ctx, &group, &action, &resLen, dataPtr);
+#if defined(WOLFHSM_CFG_ENABLE_CLIENT_CRYPTIMEOUT)
+                if (ret == WH_ERROR_NOTREADY) {
+                    /* Check for crypto timeout */
+                    if (wh_CommClient_CheckTimeout(ctx->comm)
+                                        == WH_ERROR_CRYPTIMEOUT) {
+                        ret = WH_ERROR_CRYPTIMEOUT;
+                        break;
+                    }
+                }
+#endif
         } while (ret == WH_ERROR_NOTREADY);
 
         if (ret == WH_ERROR_OK) {
