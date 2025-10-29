@@ -290,7 +290,9 @@ int wh_Client_RngGenerateDma(whClientContext* ctx, uint8_t* out, uint32_t size)
     ret = wh_Client_DmaProcessClientAddress(
         ctx, (uintptr_t)out, (void**)&outAddr, req->output.sz,
         WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
-    req->output.addr = outAddr;
+    if (ret == WH_ERROR_OK) {
+        req->output.addr = outAddr;
+    }
 
     if (ret == WH_ERROR_OK) {
         /* Send the request to the server */
@@ -912,7 +914,9 @@ int wh_Client_AesGcmDma(whClientContext* ctx, Aes* aes, int enc,
         ret           = wh_Client_DmaProcessClientAddress(
             ctx, (uintptr_t)key, (void**)&keyAddr, req->key.sz,
             WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
-        req->key.addr = keyAddr;
+        if (ret == WH_ERROR_OK) {
+            req->key.addr = keyAddr;
+        }
     }
 
     if (ret == WH_ERROR_OK && in != NULL) {
@@ -920,7 +924,9 @@ int wh_Client_AesGcmDma(whClientContext* ctx, Aes* aes, int enc,
         ret           = wh_Client_DmaProcessClientAddress(
             ctx, (uintptr_t)in, (void**)&inAddr, req->input.sz,
             WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
-        req->input.addr = inAddr;
+        if (ret == WH_ERROR_OK) {
+            req->input.addr = inAddr;
+        }
     }
 
     if (ret == WH_ERROR_OK && out != NULL) {
@@ -928,7 +934,9 @@ int wh_Client_AesGcmDma(whClientContext* ctx, Aes* aes, int enc,
         ret            = wh_Client_DmaProcessClientAddress(
             ctx, (uintptr_t)out, (void**)&outAddr, req->output.sz,
             WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
-        req->output.addr = outAddr;
+        if (ret == WH_ERROR_OK) {
+            req->output.addr = outAddr;
+        }
     }
 
     if (ret == WH_ERROR_OK && iv != NULL) {
@@ -936,7 +944,9 @@ int wh_Client_AesGcmDma(whClientContext* ctx, Aes* aes, int enc,
         ret        = wh_Client_DmaProcessClientAddress(
             ctx, (uintptr_t)iv, (void**)&ivAddr, req->iv.sz,
             WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
-        req->iv.addr = ivAddr;
+        if (ret == WH_ERROR_OK) {
+            req->iv.addr = ivAddr;
+        }
     }
 
     if (ret == WH_ERROR_OK && authin != NULL) {
@@ -944,7 +954,9 @@ int wh_Client_AesGcmDma(whClientContext* ctx, Aes* aes, int enc,
         ret         = wh_Client_DmaProcessClientAddress(
             ctx, (uintptr_t)authin, (void**)&aadAddr, req->aad.sz,
             WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
-        req->aad.addr = aadAddr;
+        if (ret == WH_ERROR_OK) {
+            req->aad.addr = aadAddr;
+        }
     }
 
     /* set auth tag by direction */
@@ -954,7 +966,9 @@ int wh_Client_AesGcmDma(whClientContext* ctx, Aes* aes, int enc,
         ret             = wh_Client_DmaProcessClientAddress(
             ctx, (uintptr_t)dec_tag, (void**)&authTagAddr, req->authTag.sz,
             WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
-        req->authTag.addr = authTagAddr;
+        if (ret == WH_ERROR_OK) {
+            req->authTag.addr = authTagAddr;
+        }
 #ifdef DEBUG_CRYPTOCB_VERBOSE
         wh_Utils_Hexdump("[client] dec tag: \n", dec_tag, tag_len);
 #endif
@@ -965,7 +979,9 @@ int wh_Client_AesGcmDma(whClientContext* ctx, Aes* aes, int enc,
         ret             = wh_Client_DmaProcessClientAddress(
             ctx, (uintptr_t)enc_tag, (void**)&authTagAddr, req->authTag.sz,
             WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
-        req->authTag.addr = authTagAddr;
+        if (ret == WH_ERROR_OK) {
+            req->authTag.addr = authTagAddr;
+        }
 #ifdef DEBUG_CRYPTOCB_VERBOSE
         wh_Utils_Hexdump("[client] enc tag buffer: \n", enc_tag, tag_len);
 #endif
@@ -976,7 +992,9 @@ int wh_Client_AesGcmDma(whClientContext* ctx, Aes* aes, int enc,
 #ifdef DEBUG_CRYPTOCB_VERBOSE
     wh_Utils_Hexdump("[client] AESGCM DMA req packet: \n", dataPtr, reqLen);
 #endif
-    ret = wh_Client_SendRequest(ctx, group, action, reqLen, dataPtr);
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Client_SendRequest(ctx, group, action, reqLen, dataPtr);
+    }
     if (ret == 0) {
         uint16_t resLen = 0;
         do {
@@ -3014,7 +3032,9 @@ int wh_Client_CmacDma(whClientContext* ctx, Cmac* cmac, CmacType type,
         ret             = wh_Client_DmaProcessClientAddress(
             ctx, (uintptr_t)in, (void**)&inAddr, req->input.sz,
             WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
-        req->input.addr = inAddr;
+        if (ret == WH_ERROR_OK) {
+            req->input.addr = inAddr;
+        }
     }
 
     if (ret == WH_ERROR_OK && outMac != NULL) {
@@ -3023,11 +3043,13 @@ int wh_Client_CmacDma(whClientContext* ctx, Cmac* cmac, CmacType type,
         ret              = wh_Client_DmaProcessClientAddress(
             ctx, (uintptr_t)outMac, (void**)&outAddr, req->output.sz,
             WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
-        req->output.addr = outAddr;
-        req->finalize    = 1;
-        /* Also set local flag, as request will be trashed after a response
-         * is received */
-        finalize = 1;
+        if (ret == WH_ERROR_OK) {
+            req->output.addr = outAddr;
+            req->finalize    = 1;
+            /* Also set local flag, as request will be trashed after a response
+             * is received */
+            finalize = 1;
+        }
     }
 
     /* If this is just a deferred initialization (NULL key, but keyId set),
@@ -3037,11 +3059,13 @@ int wh_Client_CmacDma(whClientContext* ctx, Cmac* cmac, CmacType type,
         return 0;
     }
 
-    /* Send the request */
-    ret = wh_Client_SendRequest(
-        ctx, WH_MESSAGE_GROUP_CRYPTO_DMA, WC_ALGO_TYPE_CMAC,
-        sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req),
-        (uint8_t*)dataPtr);
+    if (ret == WH_ERROR_OK) {
+        /* Send the request */
+        ret = wh_Client_SendRequest(
+            ctx, WH_MESSAGE_GROUP_CRYPTO_DMA, WC_ALGO_TYPE_CMAC,
+            sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req),
+            (uint8_t*)dataPtr);
+    }
 
     if (ret == WH_ERROR_OK) {
         uint16_t respSz = 0;
@@ -4887,7 +4911,9 @@ static int _MlDsaMakeKeyDma(whClientContext* ctx, int level,
         ret = wh_Client_DmaProcessClientAddress(
             ctx, (uintptr_t)buffer, (void**)&keyAddr, keyAddrSz,
             WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
-        req->key.addr = (uint64_t)(uintptr_t)keyAddr;
+        if (ret == WH_ERROR_OK) {
+            req->key.addr = (uint64_t)(uintptr_t)keyAddr;
+        }
 
         if ((label != NULL) && (label_len > 0)) {
             if (label_len > WH_NVM_LABEL_LEN) {
@@ -4897,8 +4923,10 @@ static int _MlDsaMakeKeyDma(whClientContext* ctx, int level,
             req->labelSize = label_len;
         }
 
-        ret = wh_Client_SendRequest(ctx, group, action, req_len,
-                                    (uint8_t*)dataPtr);
+        if (ret == WH_ERROR_OK) {
+            ret = wh_Client_SendRequest(ctx, group, action, req_len,
+                                        (uint8_t*)dataPtr);
+        }
         if (ret == WH_ERROR_OK) {
             uint16_t res_len;
             do {
@@ -5035,17 +5063,25 @@ int wh_Client_MlDsaSignDma(whClientContext* ctx, const byte* in, word32 in_len,
             ret           = wh_Client_DmaProcessClientAddress(
                 ctx, (uintptr_t)in, (void**)&inAddr, req->msg.sz,
                 WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
-            req->msg.addr = inAddr;
+            if (ret == WH_ERROR_OK) {
+                req->msg.addr = inAddr;
+            }
 
-            req->sig.sz   = *out_len;
-            ret           = wh_Client_DmaProcessClientAddress(
-                ctx, (uintptr_t)out, (void**)&outAddr, req->sig.sz,
-                WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
-            req->sig.addr = outAddr;
+            if (ret == WH_ERROR_OK) {
+                req->sig.sz = *out_len;
+                ret         = wh_Client_DmaProcessClientAddress(
+                    ctx, (uintptr_t)out, (void**)&outAddr, req->sig.sz,
+                    WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
+                if (ret == WH_ERROR_OK) {
+                    req->sig.addr = outAddr;
+                }
+            }
 
             /* Send Request */
-            ret = wh_Client_SendRequest(ctx, group, action, req_len,
-                                        (uint8_t*)dataPtr);
+            if (ret == WH_ERROR_OK) {
+                ret = wh_Client_SendRequest(ctx, group, action, req_len,
+                                            (uint8_t*)dataPtr);
+            }
             if (ret == WH_ERROR_OK) {
                 /* Server will evict at this point if requested */
                 evict = 0;
@@ -5163,16 +5199,24 @@ int wh_Client_MlDsaVerifyDma(whClientContext* ctx, const byte* sig,
             ret           = wh_Client_DmaProcessClientAddress(
                 ctx, (uintptr_t)sig, (void**)&sigAddr, sig_len,
                 WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
-            req->sig.addr = sigAddr;
-            req->msg.sz   = msg_len;
-            ret           = wh_Client_DmaProcessClientAddress(
-                ctx, (uintptr_t)msg, (void**)&msgAddr, msg_len,
-                WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
-            req->msg.addr = msgAddr;
+            if (ret == WH_ERROR_OK) {
+                req->sig.addr = sigAddr;
+            }
+            if (ret == WH_ERROR_OK) {
+                req->msg.sz = msg_len;
+                ret         = wh_Client_DmaProcessClientAddress(
+                    ctx, (uintptr_t)msg, (void**)&msgAddr, msg_len,
+                    WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
+                if (ret == WH_ERROR_OK) {
+                    req->msg.addr = msgAddr;
+                }
+            }
 
             /* Send Request */
-            ret = wh_Client_SendRequest(ctx, group, action, req_len,
-                                        (uint8_t*)dataPtr);
+            if (ret == WH_ERROR_OK) {
+                ret = wh_Client_SendRequest(ctx, group, action, req_len,
+                                            (uint8_t*)dataPtr);
+            }
             if (ret == WH_ERROR_OK) {
                 /* Server will evict at this point if requested */
                 evict = 0;
