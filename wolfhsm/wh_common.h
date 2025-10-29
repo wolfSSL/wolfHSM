@@ -70,7 +70,7 @@ typedef uint16_t whNvmFlags;
 #define WH_NVM_FLAGS_ANY   ((whNvmFlags)-1)
 
 #define WH_NVM_FLAGS_IMMUTABLE      ((whNvmFlags)1 << 0) /* Cannot be overwritten */
-#define WH_NVM_FLAGS_SENSITIVE      ((whNvmFlags)1 << 1) /* Holds private/secret data */
+#define WH_NVM_FLAGS_SENSITIVE      ((whNvmFlags)1 << 1) /* Cannot be exported in unwrapped form */
 #define WH_NVM_FLAGS_NONEXPORTABLE  ((whNvmFlags)1 << 2) /* Cannot be exported */
 #define WH_NVM_FLAGS_LOCAL          ((whNvmFlags)1 << 3) /* Was generated locally */
 #define WH_NVM_FLAGS_EPHEMERAL      ((whNvmFlags)1 << 4) /* Cannot be cached nor committed */

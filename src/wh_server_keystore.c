@@ -969,6 +969,11 @@ static int _HandleUnwrapAndExportKeyRequest(
                 return WH_ERROR_ACCESS;
             }
 
+            /* Check if the key is sensitive */
+            if (metadata->flags & WH_NVM_FLAGS_SENSITIVE) {
+                return WH_ERROR_ACCESS;
+            }
+
             /* Validate client ownership.
              * The USER field in wrapped key metadata specifies the owner.
              * Only the owning client can export wrapped keys. */
@@ -1304,34 +1309,40 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
                                              server->comm->client_id, req.id),
                 meta, out, &keySz);
 
-            /* Check if key is non-exportable */
-            if (ret == WH_ERROR_OK &&
-                (meta->flags & WH_NVM_FLAGS_NONEXPORTABLE)) {
-                ret = WH_ERROR_ACCESS;
-                /* Clear any key data that may have been read */
-                memset(out, 0, keySz);
+            if (ret == WH_ERROR_OK) {
+                /* Check if key is non-exportable */
+                if (meta->flags & WH_NVM_FLAGS_NONEXPORTABLE) {
+                    ret = WH_ERROR_ACCESS;
+                }
+
+                /* Check if key is sensitive */
+                if (meta->flags & WH_NVM_FLAGS_SENSITIVE) {
+                    ret = WH_ERROR_ACCESS;
+                }
+
+                if (ret != WH_ERROR_OK) {
+                    /* Clear any key data that may have been read */
+                    memset(out, 0, keySz);
+                }
             }
 
+            /* propagate any failures back to client */
             resp.rc = ret;
-            /* TODO: Are there any fatal server errors? */
             ret = WH_ERROR_OK;
 
-            if (ret == WH_ERROR_OK) {
-                /* Only provide key output if no error */
-                if (resp.rc == WH_ERROR_OK) {
-                    resp.len = keySz;
-                }
-                else {
-                    resp.len = 0;
-                }
-                memcpy(resp.label, meta->label, sizeof(meta->label));
-
-                (void)wh_MessageKeystore_TranslateExportResponse(
-                    magic, &resp,
-                    (whMessageKeystore_ExportResponse*)resp_packet);
-
-                *out_resp_size = sizeof(resp) + resp.len;
+            /* Only provide key output if no error */
+            if (resp.rc == WH_ERROR_OK) {
+                resp.len = keySz;
             }
+            else {
+                resp.len = 0;
+            }
+            memcpy(resp.label, meta->label, sizeof(meta->label));
+
+            (void)wh_MessageKeystore_TranslateExportResponse(
+                magic, &resp, (whMessageKeystore_ExportResponse*)resp_packet);
+
+            *out_resp_size = sizeof(resp) + resp.len;
         } break;
 
         case WH_KEY_COMMIT: {
@@ -1580,6 +1591,11 @@ int wh_Server_KeystoreExportKeyDma(whServerContext* server, whKeyId keyId,
 
     /* Check if key is non-exportable */
     if (cacheMeta->flags & WH_NVM_FLAGS_NONEXPORTABLE) {
+        return WH_ERROR_ACCESS;
+    }
+
+    /* Check if key is sensitive */
+    if (cacheMeta->flags & WH_NVM_FLAGS_SENSITIVE) {
         return WH_ERROR_ACCESS;
     }
 

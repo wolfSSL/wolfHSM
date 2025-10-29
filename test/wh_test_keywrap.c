@@ -227,6 +227,100 @@ static int _AesGcm_KeyWrap(whClientContext* client, WC_RNG* rng)
     return ret;
 }
 
+static int _TestKeyWrapSensitive(whClientContext* client, int cipher)
+{
+    int           ret = 0;
+    uint8_t       tmpPlainKey[WH_TEST_AES_KEYSIZE];
+    uint8_t       wrappedKey[WH_TEST_AES_WRAPPED_KEYSIZE];
+    whKeyId       wrappedKeyId = WH_KEYID_ERASED;
+    uint16_t      tmpOutSz     = 0;
+    whNvmMetadata metadata     = {
+            .id    = WH_CLIENT_KEYID_MAKE_WRAPPED_META(WH_TEST_DEFAULT_CLIENT_ID,
+                                                       WH_TEST_AESGCM_KEYID + 1),
+            .label = "Sensitive AES Key",
+            .len   = WH_TEST_AES_KEYSIZE,
+            .flags = WH_NVM_FLAGS_SENSITIVE,
+    };
+    whNvmMetadata tmpMetadata = {0};
+
+    const uint8_t hardcodedKey[WH_TEST_AES_KEYSIZE] = {
+        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a,
+        0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15,
+        0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f};
+
+    /* Wrap the key with SENSITIVE flag */
+    ret =
+        wh_Client_KeyWrap(client, cipher, WH_TEST_KEKID, (uint8_t*)hardcodedKey,
+                          (uint16_t)sizeof(hardcodedKey), &metadata, wrappedKey,
+                          (uint16_t)sizeof(wrappedKey));
+    if (ret != WH_ERROR_OK) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyWrap with SENSITIVE flag %d\n",
+                       ret);
+        return ret;
+    }
+
+    /* Unwrap and cache the sensitive key - should succeed */
+    ret = wh_Client_KeyUnwrapAndCache(client, cipher, WH_TEST_KEKID, wrappedKey,
+                                      (uint16_t)sizeof(wrappedKey),
+                                      &wrappedKeyId);
+    if (ret != WH_ERROR_OK) {
+        WH_ERROR_PRINT(
+            "Failed to wh_Client_KeyUnwrapAndCache for sensitive key %d\n",
+            ret);
+        return ret;
+    }
+
+    /* Now test that all export paths back to client are blocked */
+
+    /* Attempts to directly export should fail with WH_ERROR_ACCESS */
+    tmpOutSz = (uint16_t)sizeof(tmpPlainKey);
+    ret      = wh_Client_KeyExport(client, wrappedKeyId, NULL, 0, tmpPlainKey,
+                                   &tmpOutSz);
+    if (ret != WH_ERROR_ACCESS) {
+        WH_ERROR_PRINT("wh_Client_KeyExport should return WH_ERROR_ACCESS for "
+                       "sensitive key, got %d\n",
+                       ret);
+        (void)wh_Client_KeyEvict(client, wrappedKeyId);
+        return ret;
+    }
+
+#ifdef WOLFHSM_CFG_DMA
+    /* Attempts to directly export via DMA should fail with WH_ERROR_ACCESS */
+    tmpOutSz = (uint16_t)sizeof(tmpPlainKey);
+    ret = wh_Client_KeyExportDma(client, wrappedKeyId, (const void*)tmpPlainKey,
+                                 (uint16_t)sizeof(tmpPlainKey), NULL, 0,
+                                 &tmpOutSz);
+    if (ret != WH_ERROR_ACCESS) {
+        WH_ERROR_PRINT("wh_Client_KeyExportDma should return WH_ERROR_ACCESS "
+                       "for sensitive key, got %d\n",
+                       ret);
+        (void)wh_Client_KeyEvict(client, wrappedKeyId);
+        return ret;
+    }
+#endif
+
+    /* Attempts to unwrap and export via the keywrap API should fail with
+     * WH_ERROR_ACCESS */
+    ret = wh_Client_KeyUnwrapAndExport(
+        client, cipher, WH_TEST_KEKID, wrappedKey, (uint16_t)sizeof(wrappedKey),
+        &tmpMetadata, tmpPlainKey, (uint16_t)sizeof(tmpPlainKey));
+    if (ret != WH_ERROR_ACCESS) {
+        WH_ERROR_PRINT("wh_Client_KeyUnwrapAndExport should return "
+                       "WH_ERROR_ACCESS for sensitive key, got %d\n",
+                       ret);
+        (void)wh_Client_KeyEvict(client, wrappedKeyId);
+        return ret;
+    }
+
+    /* Success */
+    ret = WH_ERROR_OK;
+
+    /* Cleanup */
+    (void)wh_Client_KeyEvict(client, wrappedKeyId);
+
+    return ret;
+}
+
 #endif /* HAVE_AESGCM */
 
 int whTest_Client_KeyWrap(whClientContext* client)
@@ -252,6 +346,14 @@ int whTest_Client_KeyWrap(whClientContext* client)
         WH_ERROR_PRINT("Failed to _AesGcm_KeyWrap %d\n", ret);
     }
 #endif
+
+    /* Test sensitive key attribute */
+    if (ret == WH_ERROR_OK) {
+        ret = _TestKeyWrapSensitive(client, WC_CIPHER_AES_GCM);
+        if (ret != WH_ERROR_OK) {
+            WH_ERROR_PRINT("Failed to _TestKeyWrapSensitive %d\n", ret);
+        }
+    }
 
     _CleanupServerKek(client);
 
