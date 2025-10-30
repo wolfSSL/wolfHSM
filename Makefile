@@ -44,10 +44,7 @@ scan:
 	@rm -rf $(SCAN_DIR)
 	@mkdir -p $(SCAN_DIR)
 	@make clean
-	-@make SCAN=1 -C test scan
-	-@make SCAN=1 -C benchmark scan
-	-@make NOCRYPTO=1 SCAN=1 -C tools/whnvmtool scan
-	-@make NOCRYPTO=1 SCAN=1 -C examples
+	-@make -j SCAN=1 -C test scan
 	@$(MAKE) scan_result_check
 
 clean:
