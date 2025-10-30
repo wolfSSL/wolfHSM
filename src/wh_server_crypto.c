@@ -221,7 +221,8 @@ int wh_Server_CacheImportRsaKey(whServerContext* ctx, RsaKey* key,
     }
 
     /* get a free slot */
-    ret = wh_Server_KeystoreGetCacheSlot(ctx, max_size, &cacheBuf, &cacheMeta);
+    ret = wh_Server_KeystoreGetCacheSlot(ctx, keyId, max_size, &cacheBuf,
+                                         &cacheMeta);
     if (ret == 0) {
         ret = wh_Crypto_RsaSerializeKeyDer(key, max_size, cacheBuf, &der_size);
     }
@@ -286,8 +287,8 @@ static int _HandleRsaKeyGen(whServerContext* ctx, uint16_t magic,
     long e        = req.e;
 
     /* Force incoming key_id to have current user/type */
-    whKeyId key_id =
-        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+    whKeyId key_id = wh_KeyId_TranslateFromClient(
+        WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
     whNvmFlags flags      = req.flags;
     uint8_t*   label      = req.label;
     uint32_t   label_size = WH_NVM_LABEL_LEN;
@@ -345,7 +346,7 @@ static int _HandleRsaKeyGen(whServerContext* ctx, uint16_t magic,
                        key_id, ret);
 #endif
                 if (ret == 0) {
-                    res.keyId = WH_KEYID_ID(key_id);
+                    res.keyId = wh_KeyId_TranslateToClient(key_id);
                     res.len   = 0;
                 }
             }
@@ -385,8 +386,8 @@ static int _HandleRsaFunction( whServerContext* ctx, uint16_t magic,
     int      op_type = (int)(req.opType);
     uint32_t options = req.options;
     int      evict   = !!(options & WH_MESSAGE_CRYPTO_RSA_OPTIONS_EVICT);
-    whKeyId  key_id =
-        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+    whKeyId  key_id  = wh_KeyId_TranslateFromClient(
+          WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
     word32 in_len  = (word32)(req.inLen);
     word32 out_len = (word32)(req.outLen);
     /* in and out are after the fixed size fields */
@@ -470,8 +471,8 @@ static int _HandleRsaGetSize(whServerContext* ctx, uint16_t magic,
     }
 
     /* Extract parameters from translated request */
-    whKeyId key_id =
-        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+    whKeyId key_id = wh_KeyId_TranslateFromClient(
+        WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
     uint32_t options = req.options;
     int      evict = !!(options & WH_MESSAGE_CRYPTO_RSA_GET_SIZE_OPTIONS_EVICT);
 
@@ -533,7 +534,8 @@ int wh_Server_EccKeyCacheImport(whServerContext* ctx, ecc_key* key,
         return WH_ERROR_BADARGS;
     }
     /* get a free slot */
-    ret = wh_Server_KeystoreGetCacheSlot(ctx, max_size, &cacheBuf, &cacheMeta);
+    ret = wh_Server_KeystoreGetCacheSlot(ctx, keyId, max_size, &cacheBuf,
+                                         &cacheMeta);
     if (ret == WH_ERROR_OK) {
         ret = wh_Crypto_EccSerializeKeyDer(key, max_size, cacheBuf, &der_size);
     }
@@ -597,7 +599,7 @@ int wh_Server_CacheImportCurve25519Key(whServerContext* server,
 
     /* if successful, find a free cache slot and copy in the key data */
     if (ret == 0) {
-        ret = wh_Server_KeystoreGetCacheSlot(server, keySz, &cacheBuf,
+        ret = wh_Server_KeystoreGetCacheSlot(server, keyId, keySz, &cacheBuf,
                                              &cacheMeta);
         if (ret == 0) {
             memcpy(cacheBuf, der_buf, keySz);
@@ -664,8 +666,8 @@ int wh_Server_MlDsaKeyCacheImport(whServerContext* ctx, MlDsaKey* key,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Server_KeystoreGetCacheSlot(ctx, MAX_MLDSA_DER_SIZE, &cacheBuf,
-                                         &cacheMeta);
+    ret = wh_Server_KeystoreGetCacheSlot(ctx, keyId, MAX_MLDSA_DER_SIZE,
+                                         &cacheBuf, &cacheMeta);
     if (ret == WH_ERROR_OK) {
         ret = wh_Crypto_MlDsaSerializeKeyDer(key, MAX_MLDSA_DER_SIZE, cacheBuf,
                                              &der_size);
@@ -736,8 +738,8 @@ static int _HandleEccKeyGen(whServerContext* ctx, uint16_t magic,
     /* Extract parameters from translated request */
     int     key_size = req.sz;
     int     curve_id = req.curveId;
-    whKeyId key_id =
-        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+    whKeyId key_id   = wh_KeyId_TranslateFromClient(
+          WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
     whNvmFlags flags      = req.flags;
     uint8_t*   label      = req.label;
     uint16_t   label_size = WH_NVM_LABEL_LEN;
@@ -805,7 +807,7 @@ static int _HandleEccKeyGen(whServerContext* ctx, uint16_t magic,
     }
 
     if (ret == WH_ERROR_OK) {
-        res.keyId = WH_KEYID_ID(key_id);
+        res.keyId = wh_KeyId_TranslateToClient(key_id);
         res.len   = res_size;
 
         wh_MessageCrypto_TranslateEccKeyGenResponse(
@@ -839,10 +841,10 @@ static int _HandleEccSharedSecret(whServerContext* ctx, uint16_t magic,
     uint32_t options   = req.options;
     int      evict_pub = !!(options & WH_MESSAGE_CRYPTO_ECDH_OPTIONS_EVICTPUB);
     int      evict_prv = !!(options & WH_MESSAGE_CRYPTO_ECDH_OPTIONS_EVICTPRV);
-    whKeyId  pub_key_id =
-        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.publicKeyId);
-    whKeyId prv_key_id = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id,
-                                       req.privateKeyId);
+    whKeyId  pub_key_id = wh_KeyId_TranslateFromClient(
+         WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.publicKeyId);
+    whKeyId prv_key_id = wh_KeyId_TranslateFromClient(
+        WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.privateKeyId);
 
     /* Response message */
     byte* res_out =
@@ -917,8 +919,8 @@ static int _HandleEccSign(whServerContext* ctx, uint16_t magic,
     /* Extract parameters from translated request */
     uint8_t* in =
         (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_EccSignRequest);
-    whKeyId key_id =
-        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+    whKeyId key_id = wh_KeyId_TranslateFromClient(
+        WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
     word32   in_len  = req.sz;
     uint32_t options = req.options;
     int      evict   = !!(options & WH_MESSAGE_CRYPTO_ECCSIGN_OPTIONS_EVICT);
@@ -989,8 +991,8 @@ static int _HandleEccVerify(whServerContext* ctx, uint16_t magic,
 
     /* Extract parameters from translated request */
     uint32_t options = req.options;
-    whKeyId  key_id =
-        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+    whKeyId  key_id  = wh_KeyId_TranslateFromClient(
+          WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
     uint32_t hash_len = req.hashSz;
     uint32_t sig_len  = req.sigSz;
     uint8_t* req_sig =
@@ -1166,7 +1168,8 @@ int wh_Server_HkdfKeyCacheImport(whServerContext* ctx, const uint8_t* keyData,
     }
 
     /* Get a free slot */
-    ret = wh_Server_KeystoreGetCacheSlot(ctx, keySize, &cacheBuf, &cacheMeta);
+    ret = wh_Server_KeystoreGetCacheSlot(ctx, keyId, keySize, &cacheBuf,
+                                         &cacheMeta);
     if (ret == WH_ERROR_OK) {
         /* Copy the key data to cache buffer */
         memcpy(cacheBuf, keyData, keySize);
@@ -1210,10 +1213,10 @@ static int _HandleHkdf(whServerContext* ctx, uint16_t magic,
     uint32_t saltSz   = req.saltSz;
     uint32_t infoSz   = req.infoSz;
     uint32_t outSz    = req.outSz;
-    whKeyId  key_id =
-        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyIdOut);
-    whKeyId keyIdIn =
-        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyIdIn);
+    whKeyId  key_id   = wh_KeyId_TranslateFromClient(
+           WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyIdOut);
+    whKeyId keyIdIn = wh_KeyId_TranslateFromClient(
+        WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyIdIn);
     whNvmFlags flags      = req.flags;
     uint8_t*   label      = req.label;
     uint16_t   label_size = WH_NVM_LABEL_LEN;
@@ -1288,7 +1291,7 @@ static int _HandleHkdf(whServerContext* ctx, uint16_t magic,
                    key_id, ret);
 #endif
             if (ret == WH_ERROR_OK) {
-                res.keyIdOut = WH_KEYID_ID(key_id);
+                res.keyIdOut = wh_KeyId_TranslateToClient(key_id);
                 res.outSz = 0;
                 /* clear the output buffer */
                 memset(out, 0, outSz);
@@ -1332,8 +1335,8 @@ static int _HandleCurve25519KeyGen(whServerContext* ctx, uint16_t magic,
 
     /* Extract parameters from translated request */
     int     key_size = req.sz;
-    whKeyId key_id =
-        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+    whKeyId key_id   = wh_KeyId_TranslateFromClient(
+          WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
     whNvmFlags flags      = req.flags;
     uint8_t*   label      = req.label;
     uint16_t   label_size = WH_NVM_LABEL_LEN;
@@ -1388,7 +1391,7 @@ static int _HandleCurve25519KeyGen(whServerContext* ctx, uint16_t magic,
     }
 
     if (ret == 0) {
-        res.keyId = WH_KEYID_ID(key_id);
+        res.keyId = wh_KeyId_TranslateToClient(key_id);
         res.len   = ser_size;
 
         /* Translate response */
@@ -1426,12 +1429,10 @@ static int _HandleCurve25519SharedSecret(whServerContext* ctx, uint16_t magic,
     uint32_t options    = req.options;
     int evict_pub = !!(options & WH_MESSAGE_CRYPTO_CURVE25519_OPTIONS_EVICTPUB);
     int evict_prv = !!(options & WH_MESSAGE_CRYPTO_CURVE25519_OPTIONS_EVICTPRV);
-    whKeyId pub_key_id  = WH_MAKE_KEYID(    WH_KEYTYPE_CRYPTO,
-                                            ctx->comm->client_id,
-                                            req.publicKeyId);
-    whKeyId prv_key_id  = WH_MAKE_KEYID(    WH_KEYTYPE_CRYPTO,
-                                            ctx->comm->client_id,
-                                            req.privateKeyId);
+    whKeyId pub_key_id = wh_KeyId_TranslateFromClient(
+        WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.publicKeyId);
+    whKeyId prv_key_id = wh_KeyId_TranslateFromClient(
+        WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.privateKeyId);
     int endian          = req.endian;
 
     /* Response message */
@@ -1516,8 +1517,8 @@ static int _HandleAesCtr(whServerContext* ctx, uint16_t magic,
     if (needed_size > inSize) {
         return WH_ERROR_BADARGS;
     }
-    whKeyId key_id =
-        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+    whKeyId key_id = wh_KeyId_TranslateFromClient(
+        WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
     /* in, key, iv, and out are after fixed size fields */
     uint8_t* in =
         (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_AesCtrRequest);
@@ -1633,8 +1634,8 @@ static int _HandleAesEcb(whServerContext* ctx, uint16_t magic,
         return WH_ERROR_BADARGS;
     }
 
-    whKeyId key_id =
-        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+    whKeyId key_id = wh_KeyId_TranslateFromClient(
+        WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
 
     /* in, key, iv, and out are after fixed size fields */
     uint8_t* in =
@@ -1741,8 +1742,8 @@ static int _HandleAesCbc(whServerContext* ctx, uint16_t magic, const void* crypt
         return WH_ERROR_BADARGS;
     }
 
-    whKeyId  key_id =
-        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+    whKeyId key_id = wh_KeyId_TranslateFromClient(
+        WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
 
     /* in, key, iv, and out are after fixed size fields */
     uint8_t* in =
@@ -1850,8 +1851,8 @@ static int _HandleAesGcm(whServerContext* ctx, uint16_t magic,
     uint32_t iv_len     = req.ivSz;
     uint32_t authin_len = req.authInSz;
     uint32_t tag_len    = req.authTagSz;
-    whKeyId  key_id =
-        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+    whKeyId  key_id     = wh_KeyId_TranslateFromClient(
+             WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
 
     /* in, key, iv, authin, tag, and out are after fixed size fields */
     uint8_t* in = (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_AesGcmRequest);
@@ -2074,8 +2075,8 @@ static int _HandleAesGcmDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
 
     /* Handle keyId-based keys if no direct key was provided */
     if (ret == WH_ERROR_OK && req.key.sz == 0) {
-        keyId =
-            WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+        keyId  = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                              ctx->comm->client_id, req.keyId);
         keyLen = sizeof(tmpKey);
         ret    = wh_Server_KeystoreReadKey(ctx, keyId, NULL, tmpKey, &keyLen);
         if (ret == WH_ERROR_OK) {
@@ -2221,8 +2222,8 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
                  * cache slot until CmacFinal() is called, at which point we evict the
                  * struct from the cache. TODO: client should hold CMAC state */
                 len   = sizeof(ctx->crypto->algoCtx.cmac);
-                keyId = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id,
-                                      req.keyId);
+                keyId = wh_KeyId_TranslateFromClient(
+                    WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
                 ret   = wh_Server_KeystoreReadKey(
                       ctx, keyId, NULL, (uint8_t*)ctx->crypto->algoCtx.cmac,
                       (uint32_t*)&len);
@@ -2298,8 +2299,9 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
                 if (!WH_KEYID_ISERASED(keyId)) {
                     /* Don't override return value except on failure */
                     int tmpRet = wh_Server_KeystoreEvictKey(
-                        ctx, WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
-                                           ctx->comm->client_id, keyId));
+                        ctx, wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                                          ctx->comm->client_id,
+                                                          keyId));
                     if (tmpRet != 0) {
                         ret = tmpRet;
                     }
@@ -2310,8 +2312,9 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
                 /* Handle cancellation - evict key and abandon state */
                 if (!WH_KEYID_ISERASED(req.keyId)) {
                     wh_Server_KeystoreEvictKey(
-                        ctx, WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
-                                           ctx->comm->client_id, req.keyId));
+                        ctx, wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                                          ctx->comm->client_id,
+                                                          req.keyId));
                 }
             }
 #endif
@@ -2327,9 +2330,8 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
                         return ret;
                 }
                 else {
-                    keyId = WH_MAKE_KEYID(  WH_KEYTYPE_CRYPTO,
-                                            ctx->comm->client_id,
-                                            req.keyId);
+                    keyId = wh_KeyId_TranslateFromClient(
+                        WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
                 }
                 /* evict the aes sized key in the normal cache */
                 if (moveToBigCache == 1) {
@@ -2341,7 +2343,7 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
                     ret       = wh_Server_KeystoreCacheKey(
                         ctx, meta, (uint8_t*)ctx->crypto->algoCtx.cmac);
                     if (ret == 0) {
-                        res.keyId = WH_KEYID_ID(keyId);
+                        res.keyId = wh_KeyId_TranslateToClient(keyId);
                         res.outSz = 0;
                     }
                 }
@@ -2714,8 +2716,8 @@ static int _HandleMlDsaKeyGen(whServerContext* ctx, uint16_t magic,
 
     /* Extract parameters from translated request */
     int     key_size = req.sz;
-    whKeyId key_id =
-        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+    whKeyId key_id   = wh_KeyId_TranslateFromClient(
+          WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
     int        level      = req.level;
     whNvmFlags flags      = req.flags;
     uint8_t*   label      = req.label;
@@ -2786,7 +2788,7 @@ static int _HandleMlDsaKeyGen(whServerContext* ctx, uint16_t magic,
         }
 
         if (ret == WH_ERROR_OK) {
-            res.keyId = WH_KEYID_ID(key_id);
+            res.keyId = wh_KeyId_TranslateToClient(key_id);
             res.len   = res_size;
 
             wh_MessageCrypto_TranslateMlDsaKeyGenResponse(magic, &res,
@@ -2828,8 +2830,8 @@ static int _HandleMlDsaSign(whServerContext* ctx, uint16_t magic,
 
     /* Extract parameters from translated request */
     byte*   in = (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_MlDsaSignRequest);
-    whKeyId key_id =
-        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+    whKeyId key_id = wh_KeyId_TranslateFromClient(
+        WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
     word32   in_len  = req.sz;
     uint32_t options = req.options;
     int      evict   = !!(options & WH_MESSAGE_CRYPTO_MLDSA_SIGN_OPTIONS_EVICT);
@@ -2908,8 +2910,8 @@ static int _HandleMlDsaVerify(whServerContext* ctx, uint16_t magic,
 
     /* Extract parameters from translated request */
     uint32_t options = req.options;
-    whKeyId  key_id =
-        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+    whKeyId  key_id  = wh_KeyId_TranslateFromClient(
+          WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
     uint32_t hash_len = req.hashSz;
     uint32_t sig_len  = req.sigSz;
     byte*    req_sig =
@@ -3909,9 +3911,8 @@ static int _HandleMlDsaKeyGenDma(whServerContext* ctx, uint16_t magic,
                     else {
                         /* Must import the key into the cache and return keyid
                          */
-                        whKeyId keyId =
-                            WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
-                                          ctx->comm->client_id, req.keyId);
+                        whKeyId keyId = wh_KeyId_TranslateFromClient(
+                            WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
 
                         if (WH_KEYID_ISERASED(keyId)) {
                             /* Generate a new id */
@@ -3938,7 +3939,7 @@ static int _HandleMlDsaKeyGenDma(whServerContext* ctx, uint16_t magic,
                                 __func__, keyId, ret);
 #endif
                             if (ret == 0) {
-                                res.keyId   = WH_KEYID_ID(keyId);
+                                res.keyId   = wh_KeyId_TranslateToClient(keyId);
                                 res.keySize = keySize;
                             }
                         }
@@ -3999,7 +4000,8 @@ static int _HandleMlDsaSignDma(whServerContext* ctx, uint16_t magic,
 
 
     /* Get key ID and evict flag */
-    key_id = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+    key_id = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                          ctx->comm->client_id, req.keyId);
     evict  = !!(req.options & WH_MESSAGE_CRYPTO_MLDSA_SIGN_OPTIONS_EVICT);
 
     /* Initialize key */
@@ -4107,7 +4109,8 @@ static int _HandleMlDsaVerifyDma(whServerContext* ctx, uint16_t magic,
     int     evict = 0;
 
     /* Get key ID and evict flag */
-    key_id = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+    key_id = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                          ctx->comm->client_id, req.keyId);
     evict  = !!(req.options & WH_MESSAGE_CRYPTO_MLDSA_VERIFY_OPTIONS_EVICT);
 
     /* Initialize key */
@@ -4376,9 +4379,9 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
                          * that has been initialized to use a keyId by
                          * reference. We need to load the key from cache and
                          * initialize a new context with it */
-                        keyId =
-                            WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
-                                          ctx->comm->client_id, clientKeyId);
+                        keyId = wh_KeyId_TranslateFromClient(
+                            WH_KEYTYPE_CRYPTO, ctx->comm->client_id,
+                            clientKeyId);
                         keyLen = sizeof(tmpKey);
 
                         /* Load key from cache */
@@ -4441,8 +4444,8 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
                     whNvmId nvmId = WH_DEVCTX_TO_KEYID(cmac->devCtx);
                     if (nvmId != WH_KEYID_ERASED) {
                         /* Get key ID from CMAC context */
-                        keyId  = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
-                                               ctx->comm->client_id, nvmId);
+                        keyId = wh_KeyId_TranslateFromClient(
+                            WH_KEYTYPE_CRYPTO, ctx->comm->client_id, nvmId);
                         keyLen = sizeof(tmpKey);
 
                         /* Load key from cache */

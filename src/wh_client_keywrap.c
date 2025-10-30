@@ -185,12 +185,15 @@ int wh_Client_KeyUnwrapAndExportResponse(whClientContext*   ctx,
     if (group != WH_MESSAGE_GROUP_KEY || action != WH_KEY_UNWRAPEXPORT ||
         size < sizeof(*resp) ||
         size > sizeof(*resp) + sizeof(*metadataOut) + keySz ||
-        resp->keySz != keySz || resp->cipherType != cipherType) {
+        resp->cipherType != cipherType) {
         return WH_ERROR_ABORTED;
     }
 
-    if (resp->rc != 0) {
+    if (resp->rc != WH_ERROR_OK) {
         return resp->rc;
+    }
+    else if (resp->keySz != keySz) {
+        return WH_ERROR_BUFFER_SIZE;
     }
 
     /* Copy the metadata and key from the response data into metadataOut and
@@ -298,6 +301,8 @@ int wh_Client_KeyUnwrapAndCacheResponse(whClientContext*   ctx,
         return resp->rc;
     }
 
+    /* Server returns ID portion only. Client must track ownership
+     * and specify appropriate flags when later using the key. */
     *keyIdOut = resp->keyId;
 
     return WH_ERROR_OK;

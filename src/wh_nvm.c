@@ -46,6 +46,11 @@ int wh_Nvm_Init(whNvmContext* context, const whNvmConfig *config)
     context->cb = config->cb;
     context->context = config->context;
 
+#if !defined(WOLFHSM_CFG_NO_CRYPTO) && defined(WOLFHSM_CFG_GLOBAL_KEYS)
+    /* Initialize the global key cache */
+    memset(&context->globalCache, 0, sizeof(context->globalCache));
+#endif
+
     if (context->cb->Init != NULL) {
         rc = context->cb->Init(context->context, config->config);
         if (rc != 0) {
@@ -63,6 +68,11 @@ int wh_Nvm_Cleanup(whNvmContext* context)
             (context->cb == NULL) ) {
         return WH_ERROR_BADARGS;
     }
+
+#if !defined(WOLFHSM_CFG_NO_CRYPTO) && defined(WOLFHSM_CFG_GLOBAL_KEYS)
+    /* Clear the global key cache */
+    memset(&context->globalCache, 0, sizeof(context->globalCache));
+#endif
 
     /* No callback? Return ABORTED */
     if (context->cb->Cleanup == NULL) {

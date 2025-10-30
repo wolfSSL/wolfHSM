@@ -29,49 +29,8 @@
 
 #include <stdint.h>
 
-/** Non-volatile counters */
-/* HSM Counter identifier type. */
-typedef uint16_t whCounterId;
-#define WH_COUNTER_ID_INVALID ((whCounterId)0)
-
-
-/** Key Management */
-/* HSM key identifier type.  Top nibble identifies key type/location */
-typedef uint16_t whKeyId;
-
-/* KeyId Constants */
-#define WH_KEYID_ERASED 0x0000
-#define WH_KEYID_IDMAX 0xFF
-
-/* Key Masks */
-#define WH_KEYID_MASK   0x00FF
-#define WH_KEYID_SHIFT  0
-#define WH_KEYUSER_MASK 0x0F00
-#define WH_KEYUSER_SHIFT 8
-#define WH_KEYTYPE_MASK 0xF000
-#define WH_KEYTYPE_SHIFT 12
-
-/* Macro to construct a keyid */
-#define WH_MAKE_KEYID(_type, _user, _id)                    \
-    ((whKeyId)(                                             \
-     (((_type) << WH_KEYTYPE_SHIFT) & WH_KEYTYPE_MASK) |    \
-     (((_user) << WH_KEYUSER_SHIFT) & WH_KEYUSER_MASK) |    \
-     (((_id) << WH_KEYID_SHIFT) & WH_KEYID_MASK)))
-#define WH_KEYID_TYPE(_kid) (((_kid) & WH_KEYTYPE_MASK) >> WH_KEYTYPE_SHIFT)
-#define WH_KEYID_USER(_kid) (((_kid) & WH_KEYUSER_MASK) >> WH_KEYUSER_SHIFT)
-#define WH_KEYID_ID(_kid)   (((_kid) & WH_KEYID_MASK) >> WH_KEYID_SHIFT)
-
-#define WH_KEYID_ISERASED(_kid) (WH_KEYID_ID(_kid) == WH_KEYID_ERASED)
-
-/* Key Types */
-#define WH_KEYTYPE_NVM      0x0     /* Ordinary NvmId.  Not a key */
-#define WH_KEYTYPE_CRYPTO   0x1     /* Key for Crypto operations */
-#define WH_KEYTYPE_SHE      0x2     /* SKE keys are AES or CMAC binary arrays */
-#define WH_KEYTYPE_COUNTER  0x3     /* Monotonic counter */
-
-/* Convert a keyId to a pointer to be stored in wolfcrypt devctx */
-#define WH_KEYID_TO_DEVCTX(_k) ((void*)((intptr_t)(_k)))
-#define WH_DEVCTX_TO_KEYID(_d) ((whKeyId)((intptr_t)(_d)))
+/* Key management types and helpers */
+#include "wolfhsm/wh_keyid.h"
 
 /** NVM Management */
 /* HSM NVM object identifier type. */

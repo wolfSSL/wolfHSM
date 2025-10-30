@@ -128,7 +128,6 @@ static int loadAndStoreKeys(whServerContext* server, whKeyId* outKeyId,
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
 }
 
-
 static int wh_ServerTask(void* cf, const char* keyFilePath, int keyId,
                          int clientId)
 {

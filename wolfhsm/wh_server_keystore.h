@@ -49,16 +49,19 @@ int wh_Server_KeystoreGetUniqueId(whServerContext* server, whNvmId* inout_id);
  * @brief Find an available cache slot for the specified key size
  *
  * Searches for an empty slot or a slot with a committed key that can be
- * evicted. Returns the slot's buffer (zeroed) and metadata.
+ * evicted. Returns the slot's buffer (zeroed) and metadata. Routes to the
+ * appropriate cache (global or local) based on keyId.
  *
  * @param[in]  server   Server context
+ * @param[in]  keyId    Key ID (used to route to correct cache)
  * @param[in]  keySz    Size of the key in bytes
  * @param[out] outBuf   Pointer to the cache buffer
  * @param[out] outMeta  Pointer to the metadata structure
  * @return 0 on success, error code on failure
  */
-int wh_Server_KeystoreGetCacheSlot(whServerContext* server, uint16_t keySz,
-                                   uint8_t** outBuf, whNvmMetadata** outMeta);
+int wh_Server_KeystoreGetCacheSlot(whServerContext* server, whKeyId keyId,
+                                   uint16_t keySz, uint8_t** outBuf,
+                                   whNvmMetadata** outMeta);
 
 /**
  * @brief Cache a key in server memory
@@ -186,4 +189,5 @@ int wh_Server_KeystoreCacheKeyDma(whServerContext* server, whNvmMetadata* meta,
 int wh_Server_KeystoreExportKeyDma(whServerContext* server, whKeyId keyId,
                                    uint64_t keyAddr, uint64_t keySz,
                                    whNvmMetadata* outMeta);
+
 #endif /* !WOLFHSM_WH_SERVER_KEYSTORE_H_ */
