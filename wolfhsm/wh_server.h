@@ -38,7 +38,7 @@ typedef struct whServerContext_t whServerContext;
 
 #include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_comm.h"
-#include "wolfhsm/wh_server_cache.h"
+#include "wolfhsm/wh_keycache.h"
 #include "wolfhsm/wh_nvm.h"
 #include "wolfhsm/wh_message_customcb.h"
 #ifdef WOLFHSM_CFG_DMA

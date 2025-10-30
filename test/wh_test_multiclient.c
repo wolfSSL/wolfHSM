@@ -1249,7 +1249,7 @@ static int _testKeyIdFlagPreservation(whClientContext* client1,
             wh_Client_KeyCacheResponse(client1, &returnedKeyId));
 
         /* Verify global flag is preserved */
-        WH_TEST_ASSERT_RETURN((returnedKeyId & WH_CLIENT_KEYID_GLOBAL_FLAG) !=
+        WH_TEST_ASSERT_RETURN((returnedKeyId & WH_KEYID_CLIENT_GLOBAL_FLAG) !=
                               0);
         WH_TEST_ASSERT_RETURN((returnedKeyId & WH_KEYID_MASK) == DUMMY_KEYID_1);
 
@@ -1275,7 +1275,7 @@ static int _testKeyIdFlagPreservation(whClientContext* client1,
             wh_Client_KeyCacheResponse(client1, &returnedKeyId));
 
         /* Verify no global flag */
-        WH_TEST_ASSERT_RETURN((returnedKeyId & WH_CLIENT_KEYID_GLOBAL_FLAG) ==
+        WH_TEST_ASSERT_RETURN((returnedKeyId & WH_KEYID_CLIENT_GLOBAL_FLAG) ==
                               0);
         WH_TEST_ASSERT_RETURN((returnedKeyId & WH_KEYID_MASK) == DUMMY_KEYID_2);
 

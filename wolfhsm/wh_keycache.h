@@ -18,10 +18,10 @@
  */
 
 /*
- * wolfhsm/wh_server_cache.h
+ * wolfhsm/wh_keycache.h
  *
- * Exists as a separate header so it can be consumed by server, server keystore, and NVM
- * layer without creating circular dependencies
+ * Exists as a separate header so it can be consumed by server, server keystore,
+ * and NVM layer without creating circular dependencies
  */
 
 #ifndef WOLFHSM_WH_SERVER_CACHE_H_
@@ -34,17 +34,17 @@
 #ifndef WOLFHSM_CFG_NO_CRYPTO
 
 /** Server cache slot structures */
-typedef struct whServerCacheSlot {
+typedef struct whCacheSlot {
     uint8_t       committed;
     whNvmMetadata meta[1];
     uint8_t       buffer[WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE];
-} whServerCacheSlot;
+} whCacheSlot;
 
-typedef struct whServerBigCacheSlot {
+typedef struct whBigCacheSlot {
     uint8_t       committed;
     whNvmMetadata meta[1];
     uint8_t       buffer[WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE];
-} whServerBigCacheSlot;
+} whBigCacheSlot;
 
 /**
  * @brief Unified key cache context
@@ -54,8 +54,8 @@ typedef struct whServerBigCacheSlot {
  * when WOLFHSM_CFG_GLOBAL_KEYS is enabled).
  */
 typedef struct whKeyCacheContext_t {
-    whServerCacheSlot    cache[WOLFHSM_CFG_SERVER_KEYCACHE_COUNT];
-    whServerBigCacheSlot bigCache[WOLFHSM_CFG_SERVER_KEYCACHE_BIG_COUNT];
+    whCacheSlot    cache[WOLFHSM_CFG_SERVER_KEYCACHE_COUNT];
+    whBigCacheSlot bigCache[WOLFHSM_CFG_SERVER_KEYCACHE_BIG_COUNT];
 } whKeyCacheContext;
 
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */

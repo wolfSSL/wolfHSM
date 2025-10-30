@@ -190,15 +190,4 @@ int wh_Server_KeystoreExportKeyDma(whServerContext* server, whKeyId keyId,
                                    uint64_t keyAddr, uint64_t keySz,
                                    whNvmMetadata* outMeta);
 
-/**
- * @brief Query whether a key identifier refers to wrapped material
- *
- * @param[in]  server       Server context (unused, reserved for parity)
- * @param[in]  keyId        Key identifier to inspect
- * @param[out] outIsWrapped Optional pointer receiving 1 if wrapped, 0 otherwise
- * @return 0 on success, error code on failure
- */
-int wh_Server_KeystoreIsWrappedKey(whServerContext* server, whKeyId keyId,
-                                   int* outIsWrapped);
-
 #endif /* !WOLFHSM_WH_SERVER_KEYSTORE_H_ */

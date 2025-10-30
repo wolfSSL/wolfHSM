@@ -46,10 +46,30 @@ typedef uint16_t whKeyId;
 #define WH_KEYTYPE_MASK 0xF000
 #define WH_KEYTYPE_SHIFT 12
 
-/* Client-facing key flags are defined in wh_client.h:
- * - WH_CLIENT_KEYID_GLOBAL_FLAG
- * - WH_CLIENT_KEYID_WRAPPED_FLAG
+/*
+ * Client-facing key flags (temporary, stripped by server during translation)
+ *
+ * Clients use simple numeric IDs (0-255) with optional flags to indicate
+ * global or wrapped keys. The server translates these to full internal
+ * representations with TYPE/USER/ID fields.
+
+ * Client keyId usage:
+ * - Regular keys: Simple numeric ID (e.g., 5)
+ * - Global keys: ID with WH_KEYID_CLIENT_GLOBAL_FLAG set
+ * - Wrapped keys: ID with WH_KEYID_CLIENT_WRAPPED_FLAG set
+ * - Wrapped metadata: Must use full WH_MAKE_KEYID() construction including type
+ *    and metadata when populating the ID field in metadata to be wrapped
+ *
  */
+/* Bit 8: Client-to-server signal for global key (shared across all clients) */
+#define WH_KEYID_CLIENT_GLOBAL_FLAG ((whKeyId)0x0100)
+
+/* Bit 9: Client-to-server signal for wrapped key */
+#define WH_KEYID_CLIENT_WRAPPED_FLAG ((whKeyId)0x0200)
+
+/* Combined mask of all client-facing flags */
+#define WH_CLIENT_KEYID_FLAGS_MASK \
+    (WH_KEYID_CLIENT_GLOBAL_FLAG | WH_KEYID_CLIENT_WRAPPED_FLAG)
 
 /* Macro to construct a server-unique keyid */
 #define WH_MAKE_KEYID(_type, _user, _id)                           \
@@ -64,7 +84,7 @@ typedef uint16_t whKeyId;
 #define WH_KEYID_ISWRAPPED(_kid) (WH_KEYID_TYPE(_kid) == WH_KEYTYPE_WRAPPED)
 
 /* Reserve USER=0 for global keys in the internal keyId encoding.
- * This is server-internal; clients use WH_CLIENT_KEYID_GLOBAL_FLAG from
+ * This is server-internal; clients use WH_KEYID_CLIENT_GLOBAL_FLAG from
  * wh_client.h */
 #define WH_KEYUSER_GLOBAL 0
 
@@ -84,8 +104,8 @@ typedef uint16_t whKeyId;
  *
  * Translates client-facing keyId format (ID + flags) to server-internal format
  * (TYPE + USER + ID). Client flags are:
- * - 0x0100 (bit 8): WH_CLIENT_KEYID_GLOBAL_FLAG  → USER = 0
- * - 0x0200 (bit 9): WH_CLIENT_KEYID_WRAPPED_FLAG → TYPE = WH_KEYTYPE_WRAPPED
+ * - 0x0100 (bit 8): WH_KEYID_CLIENT_GLOBAL_FLAG  → USER = 0
+ * - 0x0200 (bit 9): WH_KEYID_CLIENT_WRAPPED_FLAG → TYPE = WH_KEYTYPE_WRAPPED
  *
  * @param type Key type to use as the TYPE field. Input value is ignored and
  *  WH_KEYTYPE_WRAPPED is used if the input clientId has the
@@ -94,16 +114,16 @@ typedef uint16_t whKeyId;
  * @param reqId Requested keyId from client (may include flags)
  * @return Server-internal keyId with TYPE, USER, and ID fields properly set.
  */
-whKeyId wh_KeyId_TranslateClient(uint16_t type, uint16_t clientId,
-                                 whKeyId reqId);
+whKeyId wh_KeyId_TranslateFromClient(uint16_t type, uint16_t clientId,
+                                     whKeyId reqId);
 
 /**
  * @brief Translate server keyId to client keyId format (with flags)
  *
  * Translates server-internal keyId format (TYPE + USER + ID) back to
  * client-facing format (ID + flags). Server encoding is converted to flags:
- * - USER = 0 (WH_KEYUSER_GLOBAL)  → 0x0100 (WH_CLIENT_KEYID_GLOBAL_FLAG)
- * - TYPE = WH_KEYTYPE_WRAPPED     → 0x0200 (WH_CLIENT_KEYID_WRAPPED_FLAG)
+ * - USER = 0 (WH_KEYUSER_GLOBAL)  → 0x0100 (WH_KEYID_CLIENT_GLOBAL_FLAG)
+ * - TYPE = WH_KEYTYPE_WRAPPED     → 0x0200 (WH_KEYID_CLIENT_WRAPPED_FLAG)
  *
  * This ensures clients can identify global and wrapped keys after they are
  * returned from server operations (cache, key generation, etc.).
@@ -111,6 +131,6 @@ whKeyId wh_KeyId_TranslateClient(uint16_t type, uint16_t clientId,
  * @param serverId Server-internal keyId with TYPE, USER, and ID fields
  * @return Client-facing keyId with ID portion and appropriate flag bits set
  */
-whKeyId wh_KeyId_ToClient(whKeyId serverId);
+whKeyId wh_KeyId_TranslateToClient(whKeyId serverId);
 
 #endif /* !WOLFHSM_WH_KEYID_H_ */

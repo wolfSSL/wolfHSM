@@ -171,7 +171,7 @@ static int _GetKeyCacheSlot(whKeyCacheContext* ctx, uint16_t keySz,
 
         /* Zero slot and return pointers */
         if (foundIndex >= 0) {
-            memset(&ctx->cache[foundIndex], 0, sizeof(whServerCacheSlot));
+            memset(&ctx->cache[foundIndex], 0, sizeof(whCacheSlot));
             *outBuf  = ctx->cache[foundIndex].buffer;
             *outMeta = ctx->cache[foundIndex].meta;
         }
@@ -197,7 +197,7 @@ static int _GetKeyCacheSlot(whKeyCacheContext* ctx, uint16_t keySz,
 
         /* Zero slot and return pointers */
         if (foundIndex >= 0) {
-            memset(&ctx->bigCache[foundIndex], 0, sizeof(whServerBigCacheSlot));
+            memset(&ctx->bigCache[foundIndex], 0, sizeof(whBigCacheSlot));
             *outBuf  = ctx->bigCache[foundIndex].buffer;
             *outMeta = ctx->bigCache[foundIndex].meta;
         }
@@ -485,26 +485,6 @@ static int _ExistsInCache(whServerContext* server, whKeyId keyId)
 }
 #endif /* WOLFHSM_CFG_KEYWRAP */
 
-#ifdef WOLFHSM_CFG_KEYWRAP
-int wh_Server_KeystoreIsWrappedKey(whServerContext* server, whKeyId keyId,
-                                   int* outIsWrapped)
-{
-    int isWrapped;
-
-    if (server == NULL || WH_KEYID_ISERASED(keyId)) {
-        return WH_ERROR_BADARGS;
-    }
-
-    (void)server;
-    isWrapped = (WH_KEYID_TYPE(keyId) == WH_KEYTYPE_WRAPPED);
-    if (outIsWrapped != NULL) {
-        *outIsWrapped = isWrapped;
-    }
-
-    return WH_ERROR_OK;
-}
-#endif /* WOLFHSM_CFG_KEYWRAP */
-
 /* try to put the specified key into cache if it isn't already, return pointers
  * to meta and the cached data*/
 int wh_Server_KeystoreFreshenKey(whServerContext* server, whKeyId keyId,
@@ -742,8 +722,8 @@ static int _AesGcmWrapKey(whServerContext* server, whKeyId serverKeyId,
     /* Get the server side key */
     ret = wh_Server_KeystoreReadKey(
         server,
-        wh_KeyId_TranslateClient(WH_KEYTYPE_CRYPTO, server->comm->client_id,
-                                 serverKeyId),
+        wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO, server->comm->client_id,
+                                     serverKeyId),
         NULL, serverKey, &serverKeySz);
     if (ret != WH_ERROR_OK) {
         return ret;
@@ -815,8 +795,8 @@ static int _AesGcmUnwrapKey(whServerContext* server, uint16_t serverKeyId,
     /* Get the server side key */
     ret = wh_Server_KeystoreReadKey(
         server,
-        wh_KeyId_TranslateClient(WH_KEYTYPE_CRYPTO, server->comm->client_id,
-                                 serverKeyId),
+        wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO, server->comm->client_id,
+                                     serverKeyId),
         NULL, serverKey, &serverKeySz);
     if (ret != WH_ERROR_OK) {
         return ret;
@@ -1115,7 +1095,7 @@ _HandleUnwrapAndCacheKeyRequest(whServerContext*                         server,
     }
 
     /* Store the assigned key ID in the response, preserving client flags */
-    resp->keyId = wh_KeyId_ToClient(metadata.id);
+    resp->keyId = wh_KeyId_TranslateToClient(metadata.id);
 
     /* Cache the key */
     return wh_Server_KeystoreCacheKey(server, &metadata, key);
@@ -1153,7 +1133,7 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
             in = (uint8_t*)req_packet + sizeof(req);
 
             /* set the metadata fields */
-            meta->id = wh_KeyId_TranslateClient(
+            meta->id = wh_KeyId_TranslateFromClient(
                 WH_KEYTYPE_CRYPTO, server->comm->client_id, req.id);
             meta->access = WH_NVM_ACCESS_ANY;
             meta->flags  = req.flags;
@@ -1181,7 +1161,7 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
             }
             if (ret == WH_ERROR_OK) {
                 /* Translate server keyId back to client format with flags */
-                resp.id = wh_KeyId_ToClient(meta->id);
+                resp.id = wh_KeyId_TranslateToClient(meta->id);
 
                 (void)wh_MessageKeystore_TranslateCacheResponse(
                     magic, &resp,
@@ -1202,7 +1182,7 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
                 magic, (whMessageKeystore_CacheDmaRequest*)req_packet, &req);
 
             /* set the metadata fields */
-            meta->id = wh_KeyId_TranslateClient(
+            meta->id = wh_KeyId_TranslateFromClient(
                 WH_KEYTYPE_CRYPTO, server->comm->client_id, req.id);
             meta->access = WH_NVM_ACCESS_ANY;
             meta->flags  = req.flags;
@@ -1236,7 +1216,7 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
             }
 
             /* Translate server keyId back to client format with flags */
-            resp.id = wh_KeyId_ToClient(meta->id);
+            resp.id = wh_KeyId_TranslateToClient(meta->id);
 
             (void)wh_MessageKeystore_TranslateCacheDmaResponse(
                 magic, &resp, (whMessageKeystore_CacheDmaResponse*)resp_packet);
@@ -1254,8 +1234,8 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
 
             ret = wh_Server_KeystoreExportKeyDma(
                 server,
-                wh_KeyId_TranslateClient(WH_KEYTYPE_CRYPTO,
-                                         server->comm->client_id, req.id),
+                wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                             server->comm->client_id, req.id),
                 req.key.addr, req.key.sz, meta);
             resp.rc = ret;
             /* propagate bad address to client if DMA operation failed */
@@ -1288,8 +1268,8 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
 
             ret = wh_Server_KeystoreEvictKey(
                 server,
-                wh_KeyId_TranslateClient(WH_KEYTYPE_CRYPTO,
-                                         server->comm->client_id, req.id));
+                wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                             server->comm->client_id, req.id));
             resp.rc = ret;
             /* TODO: Are there any fatal server errors? */
             ret = WH_ERROR_OK;
@@ -1320,8 +1300,8 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
             /* read the key */
             ret = wh_Server_KeystoreReadKey(
                 server,
-                wh_KeyId_TranslateClient(WH_KEYTYPE_CRYPTO,
-                                         server->comm->client_id, req.id),
+                wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                             server->comm->client_id, req.id),
                 meta, out, &keySz);
 
             /* Check if key is non-exportable */
@@ -1364,8 +1344,8 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
 
             ret = wh_Server_KeystoreCommitKey(
                 server,
-                wh_KeyId_TranslateClient(WH_KEYTYPE_CRYPTO,
-                                         server->comm->client_id, req.id));
+                wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                             server->comm->client_id, req.id));
             resp.rc = ret;
             /* TODO: Are there any fatal server errors? */
             ret = WH_ERROR_OK;
@@ -1391,8 +1371,8 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
 
             ret = wh_Server_KeystoreEraseKey(
                 server,
-                wh_KeyId_TranslateClient(WH_KEYTYPE_CRYPTO,
-                                         server->comm->client_id, req.id));
+                wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                             server->comm->client_id, req.id));
             resp.rc = ret;
             /* TODO: Are there any fatal server errors? */
             ret = WH_ERROR_OK;

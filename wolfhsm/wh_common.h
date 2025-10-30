@@ -24,10 +24,10 @@
 #ifndef WOLFHSM_WH_COMMON_H_
 #define WOLFHSM_WH_COMMON_H_
 
-#include <stdint.h>
-
 /* Pick up compile-time configuration */
 #include "wolfhsm/wh_settings.h"
+
+#include <stdint.h>
 
 /* Key management types and helpers */
 #include "wolfhsm/wh_keyid.h"

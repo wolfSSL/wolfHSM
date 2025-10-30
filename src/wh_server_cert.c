@@ -489,7 +489,7 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
                 cert_data = (const uint8_t*)req_packet + sizeof(req);
 
                 /* Map client keyId to server keyId space */
-                whKeyId keyId = wh_KeyId_TranslateClient(
+                whKeyId keyId = wh_KeyId_TranslateFromClient(
                     WH_KEYTYPE_CRYPTO, server->comm->client_id, req.keyId);
 
                 /* Process the verify action */
@@ -499,7 +499,7 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
 
                 /* Propagate the keyId back to the client with flags preserved
                  */
-                resp.keyId = wh_KeyId_ToClient(keyId);
+                resp.keyId = wh_KeyId_TranslateToClient(keyId);
             }
 
             /* Convert the response struct */
@@ -619,7 +619,7 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
             }
             if (resp.rc == WH_ERROR_OK) {
                 /* Map client keyId to server keyId space */
-                whKeyId keyId = wh_KeyId_TranslateClient(
+                whKeyId keyId = wh_KeyId_TranslateFromClient(
                     WH_KEYTYPE_CRYPTO, server->comm->client_id, req.keyId);
 
                 /* Process the verify action */
@@ -629,7 +629,7 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
 
                 /* Propagate the keyId back to the client with flags preserved
                  */
-                resp.keyId = wh_KeyId_ToClient(keyId);
+                resp.keyId = wh_KeyId_TranslateToClient(keyId);
             }
             if (resp.rc == WH_ERROR_OK) {
                 /* Post-process client address */

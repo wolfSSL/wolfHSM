@@ -52,6 +52,7 @@
 #ifdef WOLFHSM_CFG_DMA
 #include "wolfhsm/wh_dma.h"
 #endif /* WOLFHSM_CFG_DMA */
+#include "wolfhsm/wh_keyid.h"
 
 
 /* Forward declaration of the client structure so its elements can reference
@@ -2493,33 +2494,6 @@ int wh_Client_CertVerifyAcertDma(whClientContext* c, const void* cert,
 
 #endif /* WOLFHSM_CFG_DMA */
 
-/*
- * @brief Client-side keyId manipulation API
- *
- * This section defines the client-facing API for working with key identifiers.
- * Clients use simple numeric IDs (0-255) with optional flags to indicate
- * global or wrapped keys. The server translates these to full internal
- * representations with TYPE/USER/ID fields.
- *
- * Client keyId usage:
- * - Regular keys: Simple numeric ID (e.g., 5)
- * - Global keys: ID with WH_CLIENT_KEYID_GLOBAL_FLAG set
- * - Wrapped keys: ID with WH_CLIENT_KEYID_WRAPPED_FLAG set
- * - Wrapped metadata: Must use full WH_MAKE_KEYID() construction including type
- *    and metadata when populating the ID field in metadata to be wrapped
- */
-
-/* Client-facing key flags (temporary, stripped by server during translation) */
-
-/* Bit 8: Client-to-server signal for global key (shared across all clients) */
-#define WH_CLIENT_KEYID_GLOBAL_FLAG ((whKeyId)0x0100)
-
-/* Bit 9: Client-to-server signal for wrapped key */
-#define WH_CLIENT_KEYID_WRAPPED_FLAG ((whKeyId)0x0200)
-
-/* Combined mask of all client-facing flags */
-#define WH_CLIENT_KEYID_FLAGS_MASK \
-    (WH_CLIENT_KEYID_GLOBAL_FLAG | WH_CLIENT_KEYID_WRAPPED_FLAG)
 
 /**
  * @brief Mark a key ID as global (shared across all clients)
@@ -2535,7 +2509,7 @@ int wh_Client_CertVerifyAcertDma(whClientContext* c, const void* cert,
  *   whKeyId globalKey = WH_CLIENT_KEYID_MAKE_GLOBAL(5);
  *   wh_Client_KeyCache(client, globalKey, ...);  // Stored as global key
  */
-#define WH_CLIENT_KEYID_MAKE_GLOBAL(_id) ((_id) | WH_CLIENT_KEYID_GLOBAL_FLAG)
+#define WH_CLIENT_KEYID_MAKE_GLOBAL(_id) ((_id) | WH_KEYID_CLIENT_GLOBAL_FLAG)
 
 /**
  * @brief Mark a key ID as wrapped
@@ -2551,7 +2525,7 @@ int wh_Client_CertVerifyAcertDma(whClientContext* c, const void* cert,
  *   whKeyId wrappedKey = WH_CLIENT_KEYID_MAKE_WRAPPED(2);
  *   wh_Client_KeyExportRequest(client, wrappedKey, ...);
  */
-#define WH_CLIENT_KEYID_MAKE_WRAPPED(_id) ((_id) | WH_CLIENT_KEYID_WRAPPED_FLAG)
+#define WH_CLIENT_KEYID_MAKE_WRAPPED(_id) ((_id) | WH_KEYID_CLIENT_WRAPPED_FLAG)
 
 /**
  * @brief Mark a key ID as both global and wrapped
@@ -2567,7 +2541,7 @@ int wh_Client_CertVerifyAcertDma(whClientContext* c, const void* cert,
  *   wh_Client_AesSetKeyId(aes, globalWrappedKey);
  */
 #define WH_CLIENT_KEYID_MAKE_WRAPPED_GLOBAL(_id) \
-    ((_id) | WH_CLIENT_KEYID_GLOBAL_FLAG | WH_CLIENT_KEYID_WRAPPED_FLAG)
+    ((_id) | WH_KEYID_CLIENT_GLOBAL_FLAG | WH_KEYID_CLIENT_WRAPPED_FLAG)
 
 /**
  * @brief Construct wrapped key metadata ID with explicit ownership

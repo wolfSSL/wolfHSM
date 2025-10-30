@@ -43,7 +43,7 @@
 #include <stdint.h>
 
 #include "wolfhsm/wh_common.h"       /* For whNvm types */
-#include "wolfhsm/wh_server_cache.h" /* For whKeyCacheContext */
+#include "wolfhsm/wh_keycache.h"     /* For whKeyCacheContext */
 
 typedef struct {
     int (*Init)(void* context, const void *config);

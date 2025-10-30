@@ -24,22 +24,22 @@
 
 #include "wolfhsm/wh_keyid.h"
 
-whKeyId wh_KeyId_TranslateClient(uint16_t type, uint16_t clientId,
-                                 whKeyId reqId)
+whKeyId wh_KeyId_TranslateFromClient(uint16_t type, uint16_t clientId,
+                                     whKeyId reqId)
 {
     uint16_t user = clientId;
     whKeyId  id   = reqId & WH_KEYID_MASK;
 
 #ifdef WOLFHSM_CFG_GLOBAL_KEYS
-    /* Check for global flag (bit 8: 0x0100) */
-    if ((reqId & 0x0100) != 0) {
+    /* Convert global flag to USER=0 */
+    if ((reqId & WH_KEYID_CLIENT_GLOBAL_FLAG) != 0) {
         user = WH_KEYUSER_GLOBAL;
     }
 #endif
 
 #ifdef WOLFHSM_CFG_KEYWRAP
-    /* Check for wrapped flag (bit 9: 0x0200) */
-    if ((reqId & 0x0200) != 0) {
+    /* Convert wrapped flag to TYPE=WH_KETYPE_WRAPPED */
+    if ((reqId & WH_KEYID_CLIENT_WRAPPED_FLAG) != 0) {
         type = WH_KEYTYPE_WRAPPED;
     }
 #endif
@@ -47,21 +47,21 @@ whKeyId wh_KeyId_TranslateClient(uint16_t type, uint16_t clientId,
     return WH_MAKE_KEYID(type, user, id);
 }
 
-whKeyId wh_KeyId_ToClient(whKeyId serverId)
+whKeyId wh_KeyId_TranslateToClient(whKeyId serverId)
 {
     whKeyId clientId = WH_KEYID_ID(serverId);
 
 #ifdef WOLFHSM_CFG_GLOBAL_KEYS
-    /* Convert USER=0 to global flag (bit 8: 0x0100) */
+    /* Convert USER=0 to global flag */
     if (WH_KEYID_USER(serverId) == WH_KEYUSER_GLOBAL) {
-        clientId |= 0x0100; /* WH_CLIENT_KEYID_GLOBAL_FLAG */
+        clientId |= WH_KEYID_CLIENT_GLOBAL_FLAG;
     }
 #endif
 
 #ifdef WOLFHSM_CFG_KEYWRAP
-    /* Convert TYPE=WRAPPED to wrapped flag (bit 9: 0x0200) */
+    /* Convert TYPE=WRAPPED to wrapped flag */
     if (WH_KEYID_TYPE(serverId) == WH_KEYTYPE_WRAPPED) {
-        clientId |= 0x0200; /* WH_CLIENT_KEYID_WRAPPED_FLAG */
+        clientId |= WH_KEYID_CLIENT_WRAPPED_FLAG;
     }
 #endif
 
