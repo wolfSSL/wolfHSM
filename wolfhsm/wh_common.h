@@ -68,6 +68,7 @@ typedef uint16_t whKeyId;
 #define WH_KEYTYPE_CRYPTO   0x1     /* Key for Crypto operations */
 #define WH_KEYTYPE_SHE      0x2     /* SKE keys are AES or CMAC binary arrays */
 #define WH_KEYTYPE_COUNTER  0x3     /* Monotonic counter */
+#define WH_KEYTYPE_HMAC_STATE 0x4   /* Ephemeral cached HMAC state */
 
 /* Convert a keyId to a pointer to be stored in wolfcrypt devctx */
 #define WH_KEYID_TO_DEVCTX(_k) ((void*)((intptr_t)(_k)))

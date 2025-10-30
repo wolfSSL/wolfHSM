@@ -52,7 +52,6 @@ static int _FindInCache(whServerContext* server, whKeyId keyId, int* out_index,
                         int* out_big, uint8_t** out_buffer,
                         whNvmMetadata** out_meta);
 
-
 int wh_Server_KeystoreGetUniqueId(whServerContext* server, whNvmId* inout_id)
 {
     int     i;
@@ -377,7 +376,9 @@ int wh_Server_KeystoreFreshenKey(whServerContext* server, whKeyId keyId,
     int           foundBigIndex = -1;
     whNvmMetadata tmpMeta[1];
 
-    if ((server == NULL) || WH_KEYID_ISERASED(keyId)) {
+    /* HMAC STATEs are never stored in NVM, fresh op is meaningless */
+    if ((server == NULL) || WH_KEYID_ISERASED(keyId) ||
+        WH_KEYID_TYPE(keyId) == WH_KEYTYPE_HMAC_STATE) {
         return WH_ERROR_BADARGS;
     }
 
@@ -523,6 +524,11 @@ int wh_Server_KeystoreCommitKey(whServerContext* server, whNvmId keyId)
 
     if ((server == NULL) || WH_KEYID_ISERASED(keyId)) {
         return WH_ERROR_BADARGS;
+    }
+
+    /* HMAC STATEs are never stored in NVM, this should never happen */
+    if (WH_KEYID_TYPE(keyId) == WH_KEYTYPE_HMAC_STATE) {
+        return WH_ERROR_ACCESS;
     }
 
     ret = _FindInCache(server, keyId, &index, &big, &slotBuf, &slotMeta);
