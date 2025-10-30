@@ -60,7 +60,7 @@
 #if defined(WOLFHSM_CFG_ENABLE_CLIENT) && defined(WOLFHSM_CFG_ENABLE_SERVER)
 int whTest_Unit(void)
 {
-    printf("Enter unit tests\n");
+    WOLFHSM_CFG_PRINTF("Enter unit tests\n");
 
     /* Component Tests */
     WH_TEST_ASSERT(0 == whTest_Flash_RamSim());

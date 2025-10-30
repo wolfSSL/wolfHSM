@@ -92,6 +92,18 @@
  * all cancellation code is compiled out.
  *     Default: Not defined
  *
+ *  WOLFHSM_CFG_DEBUG - If defined, enable basic debug output from wolfHSM
+ *      Default: Not defined
+ *
+ *  WOLFHSM_CFG_DEBUG_VERBOSE - If defined, enable verbose debug output
+ *      Default: Not defined
+ *
+ *  WOLFHSM_CFG_PRINTF - Function or macro for printf redirection. Must have
+ *      signature: int func(const char* fmt, ...)
+ *      Default: stdlib printf
+ *      Example custom definition:
+ *          #define WOLFHSM_CFG_PRINTF my_custom_printf
+ *
  *  Overridable porting functions:
  *
  *  XMEMFENCE() - Create a sequential memory consistency sync point.  Note this
@@ -132,9 +144,10 @@
 #include "user_settings.h"
 #endif /* WOLFSSL_USER_SETTINGS */
 
-#if defined(DEBUG_CRYPTOCB) || defined(DEBUG_CRYPTOCB_VERBOSE)
+#if defined(WOLFHSM_CFG_DEBUG) || defined(WOLFHSM_CFG_DEBUG_VERBOSE) || \
+    defined(DEBUG_CRYPTOCB) || defined(DEBUG_CRYPTOCB_VERBOSE)
 #define WOLFHSM_CFG_HEXDUMP
-#endif /* DEBUG_CRYPTOCB || DEBUG_CRYPTOCB_VERBOSE */
+#endif /* WOLFHSM_CFG_DEBUG || WOLFHSM_CFG_DEBUG_VERBOSE || DEBUG_CRYPTOCB || DEBUG_CRYPTOCB_VERBOSE */
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
 /** Default shares configurations */
@@ -212,6 +225,120 @@
 #else
 #define WOLFHSM_CFG_MAX_CERT_SIZE 4096
 #endif
+#endif
+
+/*-----------------------------------------------------------------------------
+ * Debug and Print Configuration
+ *---------------------------------------------------------------------------*/
+
+/* Legacy compatibility: Map DEBUG_CRYPTOCB to WOLFHSM_CFG_DEBUG for transition */
+#if defined(DEBUG_CRYPTOCB) && !defined(WOLFHSM_CFG_DEBUG)
+    #define WOLFHSM_CFG_DEBUG
+#endif
+
+#if defined(DEBUG_CRYPTOCB_VERBOSE) && !defined(WOLFHSM_CFG_DEBUG_VERBOSE)
+    #define WOLFHSM_CFG_DEBUG_VERBOSE
+#endif
+
+/* User can define WOLFHSM_CFG_PRINTF to override the default printf function.
+ * This should be a function-like macro or function pointer that matches:
+ * int func(const char* format, ...)
+ */
+#ifndef WOLFHSM_CFG_PRINTF
+    #include <stdio.h>
+    #define WOLFHSM_CFG_PRINTF printf
+#endif
+
+/* Debug levels can be enabled by defining WOLFHSM_CFG_DEBUG and/or 
+ * WOLFHSM_CFG_DEBUG_VERBOSE in wolfhsm_cfg.h or via compiler flags.
+ * 
+ * WOLFHSM_CFG_DEBUG - Enable basic debug output
+ * WOLFHSM_CFG_DEBUG_VERBOSE - Enable verbose debug output (includes basic)
+ */
+
+/* Internal print macros - do not use directly */
+#ifdef WOLFHSM_CFG_DEBUG
+    #if !defined(__CCRH__)
+        #define WH_PRINT(fmt, ...) \
+            WOLFHSM_CFG_PRINTF(fmt, ##__VA_ARGS__)
+    #else
+        /* CCRH workaround for ##__VA_ARGS__ */
+        #define WH_PRINT(...) WH_PRINT2(__VA_ARGS__, "")
+        #define WH_PRINT2(fmt, ...) \
+            WOLFHSM_CFG_PRINTF(fmt, ##__VA_ARGS__)
+    #endif
+#else
+    #define WH_PRINT(...) do { } while (0)
+#endif
+
+#ifdef WOLFHSM_CFG_DEBUG_VERBOSE
+    #if !defined(__CCRH__)
+        #define WH_PRINT_VERBOSE(fmt, ...) \
+            WOLFHSM_CFG_PRINTF(fmt, ##__VA_ARGS__)
+    #else
+        /* CCRH workaround for ##__VA_ARGS__ */
+        #define WH_PRINT_VERBOSE(...) WH_PRINT_VERBOSE2(__VA_ARGS__, "")
+        #define WH_PRINT_VERBOSE2(fmt, ...) \
+            WOLFHSM_CFG_PRINTF(fmt, ##__VA_ARGS__)
+    #endif
+#else
+    #define WH_PRINT_VERBOSE(...) do { } while (0)
+#endif
+
+/* Client-side debug print with [client] prefix */
+#ifdef WOLFHSM_CFG_DEBUG
+    #if !defined(__CCRH__)
+        #define WH_DEBUG_CLIENT(fmt, ...) \
+            WOLFHSM_CFG_PRINTF("[client] " fmt, ##__VA_ARGS__)
+    #else
+        #define WH_DEBUG_CLIENT(...) WH_DEBUG_CLIENT2(__VA_ARGS__, "")
+        #define WH_DEBUG_CLIENT2(fmt, ...) \
+            WOLFHSM_CFG_PRINTF("[client] " fmt, ##__VA_ARGS__)
+    #endif
+#else
+    #define WH_DEBUG_CLIENT(...) do { } while (0)
+#endif
+
+/* Server-side debug print with [server] prefix */
+#ifdef WOLFHSM_CFG_DEBUG
+    #if !defined(__CCRH__)
+        #define WH_DEBUG_SERVER(fmt, ...) \
+            WOLFHSM_CFG_PRINTF("[server] " fmt, ##__VA_ARGS__)
+    #else
+        #define WH_DEBUG_SERVER(...) WH_DEBUG_SERVER2(__VA_ARGS__, "")
+        #define WH_DEBUG_SERVER2(fmt, ...) \
+            WOLFHSM_CFG_PRINTF("[server] " fmt, ##__VA_ARGS__)
+    #endif
+#else
+    #define WH_DEBUG_SERVER(...) do { } while (0)
+#endif
+
+/* Verbose client-side debug print with function and line context */
+#ifdef WOLFHSM_CFG_DEBUG_VERBOSE
+    #if !defined(__CCRH__)
+        #define WH_DEBUG_CLIENT_VERBOSE(fmt, ...) \
+            WOLFHSM_CFG_PRINTF("[client:%s:%d] " fmt, __func__, __LINE__, ##__VA_ARGS__)
+    #else
+        #define WH_DEBUG_CLIENT_VERBOSE(...) WH_DEBUG_CLIENT_VERBOSE2(__VA_ARGS__, "")
+        #define WH_DEBUG_CLIENT_VERBOSE2(fmt, ...) \
+            WOLFHSM_CFG_PRINTF("[client:%s:%d] " fmt, __func__, __LINE__, ##__VA_ARGS__)
+    #endif
+#else
+    #define WH_DEBUG_CLIENT_VERBOSE(...) do { } while (0)
+#endif
+
+/* Verbose server-side debug print with function and line context */
+#ifdef WOLFHSM_CFG_DEBUG_VERBOSE
+    #if !defined(__CCRH__)
+        #define WH_DEBUG_SERVER_VERBOSE(fmt, ...) \
+            WOLFHSM_CFG_PRINTF("[server:%s:%d] " fmt, __func__, __LINE__, ##__VA_ARGS__)
+    #else
+        #define WH_DEBUG_SERVER_VERBOSE(...) WH_DEBUG_SERVER_VERBOSE2(__VA_ARGS__, "")
+        #define WH_DEBUG_SERVER_VERBOSE2(fmt, ...) \
+            WOLFHSM_CFG_PRINTF("[server:%s:%d] " fmt, __func__, __LINE__, ##__VA_ARGS__)
+    #endif
+#else
+    #define WH_DEBUG_SERVER_VERBOSE(...) do { } while (0)
 #endif
 
 /** Configuration checks */

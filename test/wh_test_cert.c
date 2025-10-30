@@ -635,7 +635,7 @@ int whTest_CertRamSim(whTestNvmBackendType nvmType)
 #endif
     }};
 
-    printf("Testing Server Certificate with RAM sim...\n");
+    WOLFHSM_CFG_PRINTF("Testing Server Certificate with RAM sim...\n");
 
     /* Initialize NVM */
     WH_TEST_RETURN_ON_FAIL(wh_Nvm_Init(nvm, n_conf));
@@ -647,7 +647,7 @@ int whTest_CertRamSim(whTestNvmBackendType nvmType)
     /* Run certificate configuration tests */
     rc = whTest_CertServerCfg(s_conf);
     if (rc != WH_ERROR_OK) {
-        printf("Certificate server config tests failed: %d\n", rc);
+        WH_ERROR_PRINT("Certificate server config tests failed: %d\n", rc);
     }
 
     /* Cleanup NVM */

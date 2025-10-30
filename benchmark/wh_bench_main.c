@@ -29,10 +29,10 @@
 
 void Usage(const char* exeName)
 {
-    printf("Usage: %s --type <type> --module <module> --list\n", exeName);
-    printf("Type: mem, shm, tcp, dma\n");
-    printf("Module: index of the module to run\n");
-    printf("List: list all modules\n");
+    WOLFHSM_CFG_PRINTF("Usage: %s --type <type> --module <module> --list\n", exeName);
+    WOLFHSM_CFG_PRINTF("Type: mem, shm, tcp, dma\n");
+    WOLFHSM_CFG_PRINTF("Module: index of the module to run\n");
+    WOLFHSM_CFG_PRINTF("List: list all modules\n");
     exit(1);
 }
 
@@ -62,7 +62,7 @@ int main(int argc, char** argv)
                 transport = WH_BENCH_TRANSPORT_POSIX_DMA;
             }
             else {
-                printf("Invalid transport type: %s\n", type);
+                WOLFHSM_CFG_PRINTF("Invalid transport type: %s\n", type);
                 Usage(argv[0]);
                 return -1;
             }
@@ -75,7 +75,7 @@ int main(int argc, char** argv)
             return 0;
         }
         else {
-            printf("Invalid argument: %s\n", argv[i]);
+            WOLFHSM_CFG_PRINTF("Invalid argument: %s\n", argv[i]);
             Usage(argv[0]);
             return -1;
         }

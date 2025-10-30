@@ -214,12 +214,10 @@ int wh_Client_RngGenerate(whClientContext* ctx, uint8_t* out, uint32_t size)
         uint32_t chunk_size = (size < client_max_data) ? size : client_max_data;
         req->sz             = chunk_size;
 
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-        printf("[client] RNG: size:%u reqsz:%u remaining:%u\n",
+        WH_DEBUG_CLIENT_VERBOSE("RNG: size:%u reqsz:%u remaining:%u\n",
                (unsigned int)chunk_size, (unsigned int)req_len,
                (unsigned int)size);
-        printf("[client] RNG: req:%p\n", req);
-#endif
+        WH_DEBUG_CLIENT_VERBOSE("RNG: req:%p\n", req);
 
         /* Send request and get response */
         ret = wh_Client_SendRequest(ctx, group, action, req_len, dataPtr);
@@ -242,9 +240,9 @@ int wh_Client_RngGenerate(whClientContext* ctx, uint8_t* out, uint32_t size)
                         out += res->sz;
                     }
                     size -= res->sz;
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-                    printf("[client] out size:%u remaining:%u\n",
+                    WH_DEBUG_CLIENT_VERBOSE("out size:%u remaining:%u\n",
                            (unsigned int)res->sz, (unsigned int)size);
+#ifdef WOLFHSM_CFG_HEXDUMP
                     wh_Utils_Hexdump("[client] res_out: \n", out - res->sz,
                                      res->sz);
 #endif
@@ -368,11 +366,9 @@ int wh_Client_AesCtr(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
     uint32_t req_len = sizeof(whMessageCrypto_GenericRequestHeader) +
                        sizeof(*req) + len + key_len + iv_len +
                        (AES_BLOCK_SIZE * 2);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-    printf("[client] %s: enc:%d keylen:%d ivsz:%d insz:%d reqsz:%u "
+    WH_DEBUG_CLIENT_VERBOSE("enc:%d keylen:%d ivsz:%d insz:%d reqsz:%u "
            "left:%d\n",
-           __func__, enc, key_len, iv_len, len, req_len, left);
-#endif
+           enc, key_len, iv_len, len, req_len, left);
     if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
         return WH_ERROR_BADARGS;
     }
@@ -397,14 +393,11 @@ int wh_Client_AesCtr(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
         memcpy(req_tmp, tmp, AES_BLOCK_SIZE);
     }
 
-#ifdef DEBUG_CRYPTOCB_VERBOSE
+#ifdef WOLFHSM_CFG_HEXDUMP
     wh_Utils_Hexdump("[client] in: \n", req_in, len);
     wh_Utils_Hexdump("[client] key: \n", req_key, key_len);
     wh_Utils_Hexdump("[client] iv: \n", req_iv, iv_len);
     wh_Utils_Hexdump("[client] tmp: \n", req_tmp, AES_BLOCK_SIZE);
-#endif
-    /* write request */
-#ifdef DEBUG_CRYPTOCB_VERBOSE
     wh_Utils_Hexdump("[client] req packet: \n", (uint8_t*)req, req_len);
 #endif
     ret = wh_Client_SendRequest(ctx, group, action, req_len, dataPtr);
@@ -425,8 +418,8 @@ int wh_Client_AesCtr(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
                 uint8_t* res_reg = res_out + res->sz;
                 uint8_t* res_tmp = res_reg + AES_BLOCK_SIZE;
 
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-                printf("[client] out size:%d res_len:%d\n", res->sz, res_len);
+                WH_DEBUG_CLIENT_VERBOSE("out size:%d res_len:%d\n", res->sz, res_len);
+#ifdef WOLFHSM_CFG_HEXDUMP
                 wh_Utils_Hexdump("[client] res_out: \n", res_out, res->sz);
                 wh_Utils_Hexdump("[client] res_tmp: \n", res_tmp,
                                  AES_BLOCK_SIZE);
@@ -493,12 +486,10 @@ int wh_Client_AesEcb(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
                        sizeof(*req) + len + key_len + iv_len;
 
 
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-    printf("[client] %s: enc:%d keylen:%d ivsz:%d insz:%d reqsz:%u "
+    WH_DEBUG_CLIENT_VERBOSE("enc:%d keylen:%d ivsz:%d insz:%d reqsz:%u "
            "blocks:%u \n",
-           __func__, enc, (int)key_len, (int)iv_len, (int)len,
+           enc, (int)key_len, (int)iv_len, (int)len,
            (unsigned int)req_len, (unsigned int)blocks);
-#endif
 
     if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
         return WH_ERROR_BADARGS;
@@ -519,14 +510,10 @@ int wh_Client_AesEcb(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
         memcpy(req_iv, iv, iv_len);
     }
 
-#ifdef DEBUG_CRYPTOCB_VERBOSE
+#ifdef WOLFHSM_CFG_HEXDUMP
     wh_Utils_Hexdump("[client] in: \n", req_in, len);
     wh_Utils_Hexdump("[client] key: \n", req_key, key_len);
     wh_Utils_Hexdump("[client] iv: \n", req_iv, iv_len);
-#endif
-
-    /* write request */
-#ifdef DEBUG_CRYPTOCB_VERBOSE
     wh_Utils_Hexdump("[client] req packet: \n", (uint8_t*)req, req_len);
 #endif
     ret = wh_Client_SendRequest(ctx, group, action, req_len, dataPtr);
@@ -543,9 +530,9 @@ int wh_Client_AesEcb(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
             if (ret == WH_ERROR_OK) {
                 /* Response packet */
                 uint8_t* res_out = (uint8_t*)(res + 1);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-                printf("[client] out size:%d res_len:%d\n", (int)res->sz,
+                WH_DEBUG_CLIENT_VERBOSE("out size:%d res_len:%d\n", (int)res->sz,
                        (int)res_len);
+#ifdef WOLFHSM_CFG_HEXDUMP
                 wh_Utils_Hexdump("[client] res_out: \n", out, res->sz);
 #endif
                 /* copy the response res_out */
@@ -604,13 +591,11 @@ int wh_Client_AesCbc(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
                        sizeof(*req) + len + key_len + iv_len;
 
 
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-    printf("[client] %s: enc:%d keylen:%d ivsz:%d insz:%d reqsz:%u "
+    WH_DEBUG_CLIENT_VERBOSE("enc:%d keylen:%d ivsz:%d insz:%d reqsz:%u "
            "blocks:%u lastoffset:%u\n",
-           __func__, enc, (int)key_len, (int)iv_len, (int)len,
+           enc, (int)key_len, (int)iv_len, (int)len,
            (unsigned int)req_len, (unsigned int)blocks,
            (unsigned int)last_offset);
-#endif
 
     if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
         return WH_ERROR_BADARGS;
@@ -638,14 +623,10 @@ int wh_Client_AesCbc(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
         memcpy(iv, in + last_offset, iv_len);
     }
 
-#ifdef DEBUG_CRYPTOCB_VERBOSE
+#ifdef WOLFHSM_CFG_HEXDUMP
     wh_Utils_Hexdump("[client] in: \n", req_in, len);
     wh_Utils_Hexdump("[client] key: \n", req_key, key_len);
     wh_Utils_Hexdump("[client] iv: \n", req_iv, iv_len);
-#endif
-
-    /* write request */
-#ifdef DEBUG_CRYPTOCB_VERBOSE
     wh_Utils_Hexdump("[client] req packet: \n", (uint8_t*)req, req_len);
 #endif
     ret = wh_Client_SendRequest(ctx, group, action, req_len, dataPtr);
@@ -662,9 +643,9 @@ int wh_Client_AesCbc(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
             if (ret == WH_ERROR_OK) {
                 /* Response packet */
                 uint8_t* res_out = (uint8_t*)(res + 1);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-                printf("[client] out size:%d res_len:%d\n", (int)res->sz,
+                WH_DEBUG_CLIENT_VERBOSE("out size:%d res_len:%d\n", (int)res->sz,
                        (int)res_len);
+#ifdef WOLFHSM_CFG_HEXDUMP
                 wh_Utils_Hexdump("[client] res_out: \n", out, res->sz);
 #endif
                 /* copy the response res_out */
@@ -727,14 +708,12 @@ int wh_Client_AesGcm(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
                        sizeof(*req) + len + key_len + iv_len + authin_len +
                        ((enc == 0) ? tag_len : 0);
 
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-    printf("[client] AESGCM: enc:%d keylen:%d ivsz:%d insz:%d authinsz:%d "
+    WH_DEBUG_CLIENT_VERBOSE("AESGCM: enc:%d keylen:%d ivsz:%d insz:%d authinsz:%d "
            "authtagsz:%d reqsz:%u\n",
            enc, (int)key_len, (int)iv_len, (int)len, (int)authin_len,
            (int)tag_len, (unsigned int)req_len);
-    printf("[client] AESGCM: req:%p in:%p key:%p iv:%p authin:%p tag:%p\n", req,
+    WH_DEBUG_CLIENT_VERBOSE("AESGCM: req:%p in:%p key:%p iv:%p authin:%p tag:%p\n", req,
            req_in, req_key, req_iv, req_authin, req_tag);
-#endif
     if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
         return WH_ERROR_BADARGS;
     }
@@ -761,7 +740,7 @@ int wh_Client_AesGcm(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
         memcpy(req_authin, authin, authin_len);
     }
 
-#ifdef DEBUG_CRYPTOCB_VERBOSE
+#ifdef WOLFHSM_CFG_HEXDUMP
     wh_Utils_Hexdump("[client] in: \n", req_in, len);
     wh_Utils_Hexdump("[client] key: \n", req_key, key_len);
     wh_Utils_Hexdump("[client] iv: \n", req_iv, iv_len);
@@ -771,13 +750,12 @@ int wh_Client_AesGcm(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
     /* set auth tag by direction */
     if (enc == 0 && dec_tag != NULL && tag_len > 0) {
         memcpy(req_tag, dec_tag, tag_len);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
+#ifdef WOLFHSM_CFG_HEXDUMP
         wh_Utils_Hexdump("[client] dec tag: \n", req_tag, tag_len);
 #endif
     }
 
-    /* write request */
-#ifdef DEBUG_CRYPTOCB_VERBOSE
+#ifdef WOLFHSM_CFG_HEXDUMP
     wh_Utils_Hexdump("[client] AESGCM req packet: \n", dataPtr, req_len);
 #endif
 
@@ -803,9 +781,9 @@ int wh_Client_AesGcm(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
                 /* The auth tag follows after the output data */
                 uint8_t* res_tag = res_out + res->sz;
 
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-                printf("[client] out size:%d datasz:%d tag_len:%d\n",
+                WH_DEBUG_CLIENT_VERBOSE("out size:%d datasz:%d tag_len:%d\n",
                        (int)res->sz, (int)res_len, (int)res->authTagSz);
+#ifdef WOLFHSM_CFG_HEXDUMP
                 wh_Utils_Hexdump("[client] res_out: \n", res_out, res->sz);
                 if (enc != 0 && res->authTagSz > 0) {
                     wh_Utils_Hexdump("[client] res_tag: \n", res_tag,
@@ -821,9 +799,9 @@ int wh_Client_AesGcm(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
                 if (enc != 0 && enc_tag != NULL && res->authTagSz > 0 &&
                     res->authTagSz <= tag_len) {
                     memcpy(enc_tag, res_tag, res->authTagSz);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-                    printf("[client] res tag_len:%d exp tag_len:%u",
+                    WH_DEBUG_CLIENT_VERBOSE("res tag_len:%d exp tag_len:%u",
                            (int)res->authTagSz, (unsigned int)tag_len);
+#ifdef WOLFHSM_CFG_HEXDUMP
                     wh_Utils_Hexdump("[client] enc authtag: ", enc_tag,
                                      res->authTagSz);
 #endif
@@ -955,7 +933,7 @@ int wh_Client_AesGcmDma(whClientContext* ctx, Aes* aes, int enc,
             ctx, (uintptr_t)dec_tag, (void**)&authTagAddr, req->authTag.sz,
             WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
         req->authTag.addr = authTagAddr;
-#ifdef DEBUG_CRYPTOCB_VERBOSE
+#ifdef WOLFHSM_CFG_HEXDUMP
         wh_Utils_Hexdump("[client] dec tag: \n", dec_tag, tag_len);
 #endif
     }
@@ -966,14 +944,14 @@ int wh_Client_AesGcmDma(whClientContext* ctx, Aes* aes, int enc,
             ctx, (uintptr_t)enc_tag, (void**)&authTagAddr, req->authTag.sz,
             WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
         req->authTag.addr = authTagAddr;
-#ifdef DEBUG_CRYPTOCB_VERBOSE
+#ifdef WOLFHSM_CFG_HEXDUMP
         wh_Utils_Hexdump("[client] enc tag buffer: \n", enc_tag, tag_len);
 #endif
     }
 
     /* Send request and receive response */
     reqLen = sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
+#ifdef WOLFHSM_CFG_HEXDUMP
     wh_Utils_Hexdump("[client] AESGCM DMA req packet: \n", dataPtr, reqLen);
 #endif
     ret = wh_Client_SendRequest(ctx, group, action, reqLen, dataPtr);
@@ -1080,12 +1058,10 @@ int wh_Client_EccImportKey(whClientContext* ctx, ecc_key* key,
 
     ret =
         wh_Crypto_EccSerializeKeyDer(key, sizeof(buffer), buffer, &buffer_len);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-    printf("[client] %s serialize ret:%d, key:%p, max_size:%u, buffer:%p, "
+    WH_DEBUG_CLIENT_VERBOSE("serialize ret:%d, key:%p, max_size:%u, buffer:%p, "
            "outlen:%u\n",
-           __func__, ret, key, (unsigned int)sizeof(buffer), buffer,
+           ret, key, (unsigned int)sizeof(buffer), buffer,
            buffer_len);
-#endif
     if (ret == WH_ERROR_OK) {
         /* Cache the key and get the keyID */
         ret = wh_Client_KeyCache(ctx, flags, label, label_len, buffer,
@@ -1095,10 +1071,8 @@ int wh_Client_EccImportKey(whClientContext* ctx, ecc_key* key,
         }
     }
 
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-    printf("[client] %s label:%.*s ret:%d keyid:%u\n", __func__, label_len,
+    WH_DEBUG_CLIENT_VERBOSE("label:%.*s ret:%d keyid:%u\n", label_len,
            label, ret, key_id);
-#endif
     return ret;
 }
 
@@ -1122,10 +1096,8 @@ int wh_Client_EccExportKey(whClientContext* ctx, whKeyId keyId, ecc_key* key,
         ret = wh_Crypto_EccDeserializeKeyDer(buffer, buffer_len, key);
     }
 
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-    printf("[client] %s keyid:%x key:%p ret:%d label:%.*s\n", __func__, keyId,
+    WH_DEBUG_CLIENT_VERBOSE("keyid:%x key:%p ret:%d label:%.*s\n", keyId,
            key, ret, (int)label_len, label);
-#endif
     return ret;
 }
 
@@ -1182,10 +1154,8 @@ static int _EccMakeKey(whClientContext* ctx, int size, int curveId,
 
             ret = wh_Client_SendRequest(ctx, group, action, req_len,
                                         (uint8_t*)dataPtr);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("[client] %s Req sent:size:%u, ret:%d\n", __func__,
+            WH_DEBUG_CLIENT_VERBOSE("Req sent:size:%u, ret:%d\n",
                    (unsigned int)req->sz, ret);
-#endif
             if (ret == WH_ERROR_OK) {
                 /* Response Message */
                 uint16_t res_len;
@@ -1199,11 +1169,9 @@ static int _EccMakeKey(whClientContext* ctx, int size, int curveId,
                      * rc */
                     ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_EC_KEYGEN,
                                              (uint8_t**)&res);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-                    printf("[client] %s Res recv:keyid:%u, len:%u, ret:%d\n",
-                           __func__, (unsigned int)res->keyId,
+                    WH_DEBUG_CLIENT_VERBOSE("Res recv:keyid:%u, len:%u, ret:%d\n",
+                           (unsigned int)res->keyId,
                            (unsigned int)res->len, ret);
-#endif
                     /* wolfCrypt allows positive error codes on success in some
                      * scenarios */
                     if (ret >= 0) {
@@ -1226,7 +1194,7 @@ static int _EccMakeKey(whClientContext* ctx, int size, int curveId,
                                 /* Response has the exported key */
                                 ret = wh_Crypto_EccDeserializeKeyDer(
                                     key_der, der_size, key);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
+#ifdef WOLFHSM_CFG_HEXDUMP
                                 wh_Utils_Hexdump("[client] KeyGen export:",
                                                  key_der, der_size);
 #endif
@@ -1346,11 +1314,9 @@ int wh_Client_EccSharedSecret(whClientContext* ctx, ecc_key* priv_key,
             /* Send Request */
             ret = wh_Client_SendRequest(ctx, group, action, req_len,
                                         (uint8_t*)dataPtr);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("[client] %s req sent. priv:%u pub:%u\n", __func__,
+            WH_DEBUG_CLIENT_VERBOSE("req sent. priv:%u pub:%u\n",
                    (unsigned int)req->privateKeyId,
                    (unsigned int)req->publicKeyId);
-#endif
             if (ret == WH_ERROR_OK) {
                 /* Server will evict.  Reset our flags */
                 pub_evict = prv_evict = 0;
@@ -1363,9 +1329,7 @@ int wh_Client_EccSharedSecret(whClientContext* ctx, ecc_key* priv_key,
                     ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
                                                  (uint8_t*)dataPtr);
                 } while (ret == WH_ERROR_NOTREADY);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-                printf("[client] %s resp packet recv. ret:%d\n", __func__, ret);
-#endif
+                WH_DEBUG_CLIENT_VERBOSE("resp packet recv. ret:%d\n", ret);
                 if (ret == WH_ERROR_OK) {
                     /* Get response structure pointer, validates generic header
                      * rc */
@@ -1382,7 +1346,7 @@ int wh_Client_EccSharedSecret(whClientContext* ctx, ecc_key* priv_key,
                         if (out != NULL) {
                             memcpy(out, res_out, res->sz);
                         }
-#ifdef DEBUG_CRYPTOCB_VERBOSE
+#ifdef WOLFHSM_CFG_HEXDUMP
                         wh_Utils_Hexdump("[client] Eccdh:", res_out, res->sz);
 #endif
                     }
@@ -1401,9 +1365,7 @@ int wh_Client_EccSharedSecret(whClientContext* ctx, ecc_key* priv_key,
     if (prv_evict != 0) {
         (void)wh_Client_KeyEvict(ctx, prv_key_id);
     }
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-    printf("[client] %s ret:%d\n", __func__, ret);
-#endif
+    WH_DEBUG_CLIENT_VERBOSE("ret:%d\n", ret);
     return ret;
 }
 
@@ -1420,10 +1382,8 @@ int wh_Client_EccSign(whClientContext* ctx, ecc_key* key, const uint8_t* hash,
     whKeyId key_id;
     int     evict = 0;
 
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-    printf("[client] %s ctx:%p key:%p, in:%p in_len:%u, out:%p inout_len:%p\n",
-           __func__, ctx, key, hash, (unsigned)hash_len, sig, inout_sig_len);
-#endif
+    WH_DEBUG_CLIENT_VERBOSE("ctx:%p key:%p, in:%p in_len:%u, out:%p inout_len:%p\n",
+           ctx, key, hash, (unsigned)hash_len, sig, inout_sig_len);
 
     if ((ctx == NULL) || (key == NULL) || ((hash == NULL) && (hash_len > 0)) ||
         ((sig != NULL) && (inout_sig_len == NULL))) {
@@ -1432,10 +1392,8 @@ int wh_Client_EccSign(whClientContext* ctx, ecc_key* key, const uint8_t* hash,
 
     key_id = WH_DEVCTX_TO_KEYID(key->devCtx);
 
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-    printf("[client] %s keyid:%x, in_len:%u, inout_len:%p\n", __func__, key_id,
+    WH_DEBUG_CLIENT_VERBOSE("keyid:%x, in_len:%u, inout_len:%p\n", key_id,
            hash_len, inout_sig_len);
-#endif
 
     /* Import key if necessary */
     if (WH_KEYID_ISERASED(key_id)) {
@@ -1485,9 +1443,9 @@ int wh_Client_EccSign(whClientContext* ctx, ecc_key* key, const uint8_t* hash,
                 memcpy(req_hash, hash, hash_len);
             }
             /* Dump the request and hash for debugging */
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("[client] EccSign: key_id=%x, hash_len=%u, options=%u\n",
+            WH_DEBUG_CLIENT_VERBOSE("EccSign: key_id=%x, hash_len=%u, options=%u\n",
                    key_id, (unsigned)hash_len, (unsigned)options);
+#ifdef WOLFHSM_CFG_HEXDUMP
             wh_Utils_Hexdump("[client] EccSign req:", (uint8_t*)req,
                              sizeof(*req));
             if ((hash != NULL) && (hash_len > 0)) {
@@ -1532,7 +1490,7 @@ int wh_Client_EccSign(whClientContext* ctx, ecc_key* key, const uint8_t* hash,
                             if ((sig != NULL) && (sig_len > 0)) {
                                 memcpy(sig, res_sig, sig_len);
                             }
-#ifdef DEBUG_CRYPTOCB_VERBOSE
+#ifdef WOLFHSM_CFG_HEXDUMP
                             wh_Utils_Hexdump("[client] EccSign:", res_sig,
                                              sig_len);
 #endif
@@ -1550,9 +1508,7 @@ int wh_Client_EccSign(whClientContext* ctx, ecc_key* key, const uint8_t* hash,
     if (evict != 0) {
         (void)wh_Client_KeyEvict(ctx, key_id);
     }
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-    printf("[client] %s ret:%d\n", __func__, ret);
-#endif
+    WH_DEBUG_CLIENT_VERBOSE("ret:%d\n", ret);
     return ret;
 }
 
@@ -1571,11 +1527,9 @@ int wh_Client_EccVerify(whClientContext* ctx, ecc_key* key, const uint8_t* sig,
     int     export_pub_key = 0;
 
 
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-    printf("[client] %s ctx:%p key:%p, sig:%p sig_len:%u, hash:%p hash_len:%u "
+    WH_DEBUG_CLIENT_VERBOSE("ctx:%p key:%p, sig:%p sig_len:%u, hash:%p hash_len:%u "
            "out_res:%p\n",
-           __func__, ctx, key, sig, sig_len, hash, hash_len, out_res);
-#endif
+           ctx, key, sig, sig_len, hash, hash_len, out_res);
 
     if ((ctx == NULL) || (key == NULL) || ((sig == NULL) && (sig_len > 0)) ||
         ((hash == NULL) && (hash_len > 0))) {
@@ -1644,11 +1598,11 @@ int wh_Client_EccVerify(whClientContext* ctx, ecc_key* key, const uint8_t* sig,
                 memcpy(req_hash, hash, hash_len);
             }
 
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("[client] EccVerify req: key_id=%x, sig_len=%u, "
+            WH_DEBUG_CLIENT_VERBOSE("EccVerify req: key_id=%x, sig_len=%u, "
                    "hash_len=%u, options=%u\n",
                    key_id, (unsigned int)sig_len, (unsigned int)hash_len,
                    (unsigned int)options);
+#ifdef WOLFHSM_CFG_HEXDUMP
             wh_Utils_Hexdump("[client] EccVerify req:", (uint8_t*)req, req_len);
             if ((sig != NULL) && (sig_len > 0)) {
                 wh_Utils_Hexdump("[client] EccVerify sig:", sig, sig_len);
@@ -1703,9 +1657,7 @@ int wh_Client_EccVerify(whClientContext* ctx, ecc_key* key, const uint8_t* sig,
     if (evict != 0) {
         (void)wh_Client_KeyEvict(ctx, key_id);
     }
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-    printf("[client] %s ret:%d\n", __func__, ret);
-#endif
+    WH_DEBUG_CLIENT_VERBOSE("ret:%d\n", ret);
     return ret;
 }
 
@@ -1813,8 +1765,8 @@ int wh_Client_Curve25519ImportKey(whClientContext* ctx, curve25519_key* key,
         if (inout_keyId != NULL) {
             *inout_keyId = key_id;
         }
-#if defined(DEBUG_CRYPTOCB) && defined(DEBUG_CRYPTOCB_VERBOSE)
-        printf("[client] importKey: cached keyid=%u\n", key_id);
+        WH_DEBUG_CLIENT_VERBOSE("importKey: cached keyid=%u\n", key_id);
+#ifdef WOLFHSM_CFG_HEXDUMP
         wh_Utils_Hexdump("[client] importKey: key=", buffer, buffer_len);
 #endif
     }
@@ -1893,10 +1845,8 @@ static int _Curve25519MakeKey(whClientContext* ctx, uint16_t size,
 
     ret =
         wh_Client_SendRequest(ctx, group, action, data_len, (uint8_t*)dataPtr);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-    printf("[client] Curve25519 KeyGen Req sent:size:%u, ret:%d\n",
+    WH_DEBUG_CLIENT_VERBOSE("Curve25519 KeyGen Req sent:size:%u, ret:%d\n",
            (unsigned int)req->sz, ret);
-#endif
     if (ret == 0) {
         do {
             ret = wh_Client_RecvResponse(ctx, &group, &action, &data_len,
@@ -1911,11 +1861,9 @@ static int _Curve25519MakeKey(whClientContext* ctx, uint16_t size,
                                  (uint8_t**)&res);
         /* wolfCrypt allows positive error codes on success in some scenarios */
         if (ret >= 0) {
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("[client] Curve25519 KeyGen Res recv:keyid:%u, len:%u, "
+            WH_DEBUG_CLIENT_VERBOSE("Curve25519 KeyGen Res recv:keyid:%u, len:%u, "
                    "ret:%d\n",
                    (unsigned int)res->keyId, (unsigned int)res->len, ret);
-#endif
             /* Key is cached on server or is ephemeral */
             key_id = (whKeyId)(res->keyId);
 
@@ -1935,7 +1883,7 @@ static int _Curve25519MakeKey(whClientContext* ctx, uint16_t size,
                     /* Response has the exported key */
                     ret = wh_Crypto_Curve25519DeserializeKey(key_der, der_size,
                                                              key);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
+#ifdef WOLFHSM_CFG_HEXDUMP
                     wh_Utils_Hexdump("[client] KeyGen export:", key_der,
                                      der_size);
 #endif
@@ -2051,11 +1999,9 @@ int wh_Client_Curve25519SharedSecret(whClientContext* ctx,
             /* Send Request */
             ret = wh_Client_SendRequest(ctx, group, action, req_len,
                                         (uint8_t*)dataPtr);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("[client] %s req sent. priv:%u pub:%u\n", __func__,
+            WH_DEBUG_CLIENT_VERBOSE("req sent. priv:%u pub:%u\n",
                    (unsigned int)req->privateKeyId,
                    (unsigned int)req->publicKeyId);
-#endif
             if (ret == WH_ERROR_OK) {
                 whMessageCrypto_Curve25519Response* res = NULL;
                 uint16_t                            res_len;
@@ -2067,10 +2013,8 @@ int wh_Client_Curve25519SharedSecret(whClientContext* ctx,
                     ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
                                                  (uint8_t*)dataPtr);
                 } while (ret == WH_ERROR_NOTREADY);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-                printf("[client] %s resp packet recv. ret:%d ret:%d\n",
-                       __func__, ret, ret);
-#endif
+                WH_DEBUG_CLIENT_VERBOSE("resp packet recv. ret:%d\n",
+                       ret);
                 if (ret == WH_ERROR_OK) {
                     /* Get response structure pointer, validates generic header
                      * rc */
@@ -2085,7 +2029,7 @@ int wh_Client_Curve25519SharedSecret(whClientContext* ctx,
                         if (out != NULL) {
                             uint8_t* res_out = (uint8_t*)(res + 1);
                             memcpy(out, res_out, res->sz);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
+#ifdef WOLFHSM_CFG_HEXDUMP
                             wh_Utils_Hexdump("[client] X25519:", res_out,
                                              res->sz);
 #endif
@@ -2106,9 +2050,7 @@ int wh_Client_Curve25519SharedSecret(whClientContext* ctx,
     if (prv_evict != 0) {
         (void)wh_Client_KeyEvict(ctx, prv_key_id);
     }
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-    printf("[client] %s ret:%d\n", __func__, ret);
-#endif
+    WH_DEBUG_CLIENT_VERBOSE("ret:%d\n", ret);
     return ret;
 }
 #endif /* HAVE_CURVE25519 */
@@ -2249,10 +2191,8 @@ static int _RsaMakeKey(whClientContext* ctx, uint32_t size, uint32_t e,
 
     /* Send Request */
     ret = wh_Client_SendRequest(ctx, group, action, req_len, dataPtr);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-    printf("RSA KeyGen Req sent:size:%u, e:%u, ret:%d\n",
+    WH_DEBUG_CLIENT_VERBOSE("RSA KeyGen Req sent:size:%u, e:%u, ret:%d\n",
            (unsigned int)req->size, (unsigned int)req->e, ret);
-#endif
     if (ret == 0) {
         uint16_t res_len = 0;
         do {
@@ -2260,10 +2200,8 @@ static int _RsaMakeKey(whClientContext* ctx, uint32_t size, uint32_t e,
                 wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
         } while (ret == WH_ERROR_NOTREADY);
 
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-        printf("RSA KeyGen Res recv: ret:%d, res_len: %u\n", ret,
+        WH_DEBUG_CLIENT_VERBOSE("RSA KeyGen Res recv: ret:%d, res_len: %u\n", ret,
                (unsigned int)res_len);
-#endif
 
         if (ret == WH_ERROR_OK) {
             /* Get response structure pointer, validates generic header rc */
@@ -2288,10 +2226,8 @@ static int _RsaMakeKey(whClientContext* ctx, uint32_t size, uint32_t e,
                 /* Set the rsa key_id.  Should be ERASED if EPHEMERAL */
                 wh_Client_RsaSetKeyId(rsa, key_id);
 
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-                printf("[client] %s Set key_id:%x with flags:%x\n", __func__,
+                WH_DEBUG_CLIENT_VERBOSE("Set key_id:%x with flags:%x\n",
                        key_id, flags);
-#endif
                 if (flags & WH_NVM_FLAGS_EPHEMERAL) {
                     /* Response has the exported key */
                     ret =
@@ -2339,12 +2275,10 @@ int wh_Client_RsaFunction(whClientContext* ctx, RsaKey* key, int rsa_type,
     whKeyId key_id;
     int     evict = 0;
 
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-    printf("[client] %s ctx:%p key:%p, rsa_type:%d in:%p in_len:%u, out:%p "
+    WH_DEBUG_CLIENT_VERBOSE("ctx:%p key:%p, rsa_type:%d in:%p in_len:%u, out:%p "
            "inout_out_len:%p\n",
-           __func__, ctx, key, rsa_type, in, (unsigned)in_len, out,
+           ctx, key, rsa_type, in, (unsigned)in_len, out,
            inout_out_len);
-#endif
 
     if ((ctx == NULL) || (key == NULL) || ((in == NULL) && (in_len > 0)) ||
         ((out != NULL) && (inout_out_len == NULL))) {
@@ -2353,9 +2287,7 @@ int wh_Client_RsaFunction(whClientContext* ctx, RsaKey* key, int rsa_type,
 
     key_id = WH_DEVCTX_TO_KEYID(key->devCtx);
 
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-    printf("[client] %s key_id:%x\n", __func__, key_id);
-#endif
+    WH_DEBUG_CLIENT_VERBOSE("key_id:%x\n", key_id);
 
     /* Import key if necessary */
     if (WH_KEYID_ISERASED(key_id)) {
@@ -2452,9 +2384,7 @@ int wh_Client_RsaFunction(whClientContext* ctx, RsaKey* key, int rsa_type,
     if (evict != 0) {
         (void)wh_Client_KeyEvict(ctx, key_id);
     }
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-    printf("[client] %s ret:%d\n", __func__, ret);
-#endif
+    WH_DEBUG_CLIENT_VERBOSE("ret:%d\n", ret);
     return ret;
 }
 
@@ -2466,10 +2396,8 @@ int wh_Client_RsaGetSize(whClientContext* ctx, const RsaKey* key, int* out_size)
     whKeyId key_id;
     int     evict = 0;
 
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-    printf("[client] %s ctx:%p key:%p, out_size:%p \n", __func__, ctx, key,
+    WH_DEBUG_CLIENT_VERBOSE("ctx:%p key:%p, out_size:%p \n", ctx, key,
            out_size);
-#endif
 
     if ((ctx == NULL) || (key == NULL) || (out_size == NULL)) {
         return WH_ERROR_BADARGS;
@@ -2483,9 +2411,7 @@ int wh_Client_RsaGetSize(whClientContext* ctx, const RsaKey* key, int* out_size)
         uint8_t    keyLabel[] = "TempRsaGetSize";
         whNvmFlags flags      = WH_NVM_FLAGS_NONE;
 
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-        printf("[client] %s Importing temp key\n", __func__);
-#endif
+        WH_DEBUG_CLIENT_VERBOSE("Importing temp key\n");
         ret = wh_Client_RsaImportKey(ctx, key, &key_id, flags, sizeof(keyLabel),
                                      keyLabel);
         if (ret == WH_ERROR_OK) {
@@ -2555,14 +2481,10 @@ int wh_Client_RsaGetSize(whClientContext* ctx, const RsaKey* key, int* out_size)
     }
     /* Evict the key manually on error */
     if (evict != 0) {
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-        printf("[client] %s Evicting temp key %x\n", __func__, key_id);
-#endif
+        WH_DEBUG_CLIENT_VERBOSE("Evicting temp key %x\n", key_id);
         (void)wh_Client_KeyEvict(ctx, key_id);
     }
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-    printf("[client] %s ret:%d\n", __func__, ret);
-#endif
+    WH_DEBUG_CLIENT_VERBOSE("ret:%d\n", ret);
     return ret;
 }
 
@@ -2651,13 +2573,11 @@ static int _HkdfMakeKey(whClientContext* ctx, int hashType, whKeyId keyIdIn,
     /* Send Request */
     ret = wh_Client_SendRequest(ctx, group, action, req_len, dataPtr);
 
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-    printf("HKDF Req sent: hashType:%d inKeySz:%u saltSz:%u infoSz:%u outSz:%u "
+    WH_DEBUG_CLIENT_VERBOSE("HKDF Req sent: hashType:%d inKeySz:%u saltSz:%u infoSz:%u outSz:%u "
            "ret:%d\n",
            (int)req->hashType, (unsigned int)req->inKeySz,
            (unsigned int)req->saltSz, (unsigned int)req->infoSz,
            (unsigned int)req->outSz, ret);
-#endif
 
     if (ret == 0) {
         uint16_t res_len = 0;
@@ -2666,10 +2586,8 @@ static int _HkdfMakeKey(whClientContext* ctx, int hashType, whKeyId keyIdIn,
                 wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
         } while (ret == WH_ERROR_NOTREADY);
 
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-        printf("HKDF Res recv: ret:%d, res_len: %u\n", ret,
+        WH_DEBUG_CLIENT_VERBOSE("HKDF Res recv: ret:%d, res_len: %u\n", ret,
                (unsigned int)res_len);
-#endif
 
         if (ret == WH_ERROR_OK) {
             /* Get response structure pointer, validates generic header rc */
@@ -2692,10 +2610,8 @@ static int _HkdfMakeKey(whClientContext* ctx, int hashType, whKeyId keyIdIn,
                     uint8_t* hkdf_out = (uint8_t*)(res + 1);
                     memcpy(out, hkdf_out, res->outSz);
 
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-                    printf("[client] %s Set key_id:%x with flags:%x outSz:%u\n",
-                           __func__, key_id, flags, (unsigned int)res->outSz);
-#endif
+                    WH_DEBUG_CLIENT_VERBOSE("Set key_id:%x with flags:%x outSz:%u\n",
+                           key_id, flags, (unsigned int)res->outSz);
                 }
                 else {
                     /* Server returned more than we can handle - error */
@@ -2757,7 +2673,6 @@ int wh_Client_AesGetKeyId(Aes* key, whNvmId* outId)
     *outId = WH_DEVCTX_TO_KEYID(key->devCtx);
     return WH_ERROR_OK;
 }
-#endif
 
 #ifdef WOLFSSL_CMAC
 int wh_Client_CmacSetKeyId(Cmac* key, whNvmId keyId)
@@ -2800,8 +2715,7 @@ int wh_Client_Cmac(whClientContext* ctx, Cmac* cmac, CmacType type,
         return WH_ERROR_OK;
     }
 
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-    printf("[client] cmac key:%p key_len:%d in:%p in_len:%d out:%p out_len:%d "
+    WH_DEBUG_CLIENT_VERBOSE("cmac key:%p key_len:%d in:%p in_len:%d out:%p out_len:%d "
            "keyId:%x\n",
            key, (int)keyLen, in, (int)inLen, outMac, (int)mac_len, key_id);
 #endif
@@ -2875,9 +2789,7 @@ int wh_Client_Cmac(whClientContext* ctx, Cmac* cmac, CmacType type,
             if (ret >= 0) {
                 /* read keyId and res_out */
                 if (key != NULL) {
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-                    printf("[client] got keyid %x\n", res->keyId);
-#endif
+                    WH_DEBUG_CLIENT_VERBOSE("got keyid %x\n", res->keyId);
                     cmac->devCtx = WH_KEYID_TO_DEVCTX(res->keyId);
                 }
                 if (outMac != NULL) {
@@ -3100,19 +3012,19 @@ static int _xferSha256BlockAndUpdateDigest(whClientContext* ctx,
     ret = wh_Client_SendRequest(ctx, group, WC_ALGO_TYPE_HASH, req_len,
                                 (uint8_t*)dataPtr);
 
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-    printf("[client] send SHA256 Req:\n");
+    WH_DEBUG_CLIENT_VERBOSE("send SHA256 Req:\n");
+#ifdef WOLFHSM_CFG_HEXDUMP
     wh_Utils_Hexdump("[client] inBlock: ", req->inBlock, WC_SHA256_BLOCK_SIZE);
     if (req->resumeState.hiLen != 0 || req->resumeState.loLen != 0) {
         wh_Utils_Hexdump("  [client] resumeHash: ", req->resumeState.hash,
                          (isLastBlock) ? req->lastBlockLen
                                        : WC_SHA256_BLOCK_SIZE);
-        printf("  [client] hiLen: %u, loLen: %u\n",
+        WH_DEBUG_CLIENT_VERBOSE("  hiLen: %u, loLen: %u\n",
                (unsigned int)req->resumeState.hiLen,
                (unsigned int)req->resumeState.loLen);
     }
-    printf("  [client] ret = %d\n", ret);
-#endif /* DEBUG_CRYPTOCB_VERBOSE */
+#endif
+    WH_DEBUG_CLIENT_VERBOSE("  ret = %d\n", ret);
 
     if (ret == 0) {
         do {
@@ -3125,20 +3037,18 @@ static int _xferSha256BlockAndUpdateDigest(whClientContext* ctx,
         ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA256, (uint8_t**)&res);
         /* wolfCrypt allows positive error codes on success in some scenarios */
         if (ret >= 0) {
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("[client] Client SHA256 Res recv: ret=%d", ret);
-#endif /* DEBUG_CRYPTOCB_VERBOSE */
+            WH_DEBUG_CLIENT_VERBOSE("Client SHA256 Res recv: ret=%d", ret);
             /* Store the received intermediate hash in the sha256
              * context and indicate the field is now valid and
              * should be passed back and forth to the server */
             memcpy(sha256->digest, res->hash, WC_SHA256_DIGEST_SIZE);
             sha256->hiLen = res->hiLen;
             sha256->loLen = res->loLen;
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("[client] Client SHA256 Res recv:\n");
+            WH_DEBUG_CLIENT_VERBOSE("Client SHA256 Res recv:\n");
+#ifdef WOLFHSM_CFG_HEXDUMP
             wh_Utils_Hexdump("[client] hash: ", (uint8_t*)sha256->digest,
                              WC_SHA256_DIGEST_SIZE);
-#endif /* DEBUG_CRYPTOCB_VERBOSE */
+#endif
         }
     }
 
@@ -3260,10 +3170,8 @@ int wh_Client_Sha256Dma(whClientContext* ctx, wc_Sha256* sha, const uint8_t* in,
     /* Caller invoked SHA Update:
      * wc_CryptoCb_Sha256Hash(sha256, data, len, NULL) */
     if ((ret == WH_ERROR_OK) && (in != NULL)) {
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-        printf("[client] SHA256 DMA UPDATE: inAddr=%p, inSz=%u\n", in,
+        WH_DEBUG_CLIENT_VERBOSE("SHA256 DMA UPDATE: inAddr=%p, inSz=%u\n", in,
                (unsigned int)inLen);
-#endif
 
         ret = wh_Client_SendRequest(
             ctx, group, WC_ALGO_TYPE_HASH,
@@ -3292,9 +3200,7 @@ int wh_Client_Sha256Dma(whClientContext* ctx, wc_Sha256* sha, const uint8_t* in,
     if ((ret == WH_ERROR_OK) && (out != NULL)) {
         /* Packet will have been trashed, so re-populate all fields */
         req->finalize = 1;
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-        printf("[client] SHA256 DMA FINAL: outAddr=%p\n", out);
-#endif
+        WH_DEBUG_CLIENT_VERBOSE("SHA256 DMA FINAL: outAddr=%p\n", out);
         /* send the request to the server */
         ret = wh_Client_SendRequest(
             ctx, group, WC_ALGO_TYPE_HASH,
@@ -3391,18 +3297,20 @@ static int _xferSha224BlockAndUpdateDigest(whClientContext* ctx,
     ret = wh_Client_SendRequest(ctx, group, WC_ALGO_TYPE_HASH, req_len,
                                 (uint8_t*)dataPtr);
 
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-    printf("[client] send SHA224 Req:\n");
+    WH_DEBUG_CLIENT_VERBOSE("send SHA224 Req:\n");
+#ifdef WOLFHSM_CFG_HEXDUMP
     wh_Utils_Hexdump("[client] inBlock: ", req->inBlock, WC_SHA224_BLOCK_SIZE);
     if (req->resumeState.hiLen != 0 || req->resumeState.loLen != 0) {
         wh_Utils_Hexdump("  [client] resumeHash: ", req->resumeState.hash,
                          (isLastBlock) ? req->lastBlockLen
                                        : WC_SHA224_BLOCK_SIZE);
-        printf("  [client] hiLen: %u, loLen: %u\n", req->resumeState.hiLen,
+#endif
+        WH_DEBUG_CLIENT_VERBOSE("  hiLen: %u, loLen: %u\n", req->resumeState.hiLen,
                req->resumeState.loLen);
+#ifdef WOLFHSM_CFG_HEXDUMP
     }
-    printf("  [client] ret = %d\n", ret);
-#endif /* DEBUG_CRYPTOCB_VERBOSE */
+#endif
+    WH_DEBUG_CLIENT_VERBOSE("  ret = %d\n", ret);
 
     if (ret == 0) {
         do {
@@ -3415,9 +3323,7 @@ static int _xferSha224BlockAndUpdateDigest(whClientContext* ctx,
         ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA224, (uint8_t**)&res);
         /* wolfCrypt allows positive error codes on success in some scenarios */
         if (ret >= 0) {
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("[client] Client SHA224 Res recv: ret=%d", ret);
-#endif /* DEBUG_CRYPTOCB_VERBOSE */
+            WH_DEBUG_CLIENT_VERBOSE("Client SHA224 Res recv: ret=%d", ret);
             /* Store the received intermediate hash in the sha224
              * context and indicate the field is now valid and
              * should be passed back and forth to the server.
@@ -3428,11 +3334,11 @@ static int _xferSha224BlockAndUpdateDigest(whClientContext* ctx,
             memcpy(sha224->digest, res->hash, WC_SHA256_DIGEST_SIZE);
             sha224->hiLen = res->hiLen;
             sha224->loLen = res->loLen;
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("[client] Client SHA224 Res recv:\n");
+            WH_DEBUG_CLIENT_VERBOSE("Client SHA224 Res recv:\n");
+#ifdef WOLFHSM_CFG_HEXDUMP
             wh_Utils_Hexdump("[client] hash: ", (uint8_t*)sha224->digest,
                              WC_SHA224_DIGEST_SIZE);
-#endif /* DEBUG_CRYPTOCB_VERBOSE */
+#endif
         }
     }
 
@@ -3528,10 +3434,8 @@ int wh_Client_Sha224Dma(whClientContext* ctx, wc_Sha224* sha, const uint8_t* in,
         req->input.sz    = inLen;
         req->output.addr = (uint64_t)(uintptr_t)out;
         req->output.sz   = WC_SHA224_DIGEST_SIZE; /* not needed, but YOLO */
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-        printf("[client] SHA224 DMA UPDATE: inAddr=%p, inSz=%u\n", in,
+        WH_DEBUG_CLIENT_VERBOSE("SHA224 DMA UPDATE: inAddr=%p, inSz=%u\n", in,
                (unsigned int)inLen);
-#endif
         ret = wh_Client_SendRequest(
             ctx, group, WC_ALGO_TYPE_HASH,
             sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req),
@@ -3566,9 +3470,7 @@ int wh_Client_Sha224Dma(whClientContext* ctx, wc_Sha224* sha, const uint8_t* in,
         req->output.addr = (uint64_t)(uintptr_t)out;
         req->output.sz   = WC_SHA224_DIGEST_SIZE; /* not needed, but YOLO */
 
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-        printf("[client] SHA224 DMA FINAL: outAddr=%p\n", out);
-#endif
+        WH_DEBUG_CLIENT_VERBOSE("SHA224 DMA FINAL: outAddr=%p\n", out);
         /* send the request to the server */
         ret = wh_Client_SendRequest(
             ctx, group, WC_ALGO_TYPE_HASH,
@@ -3648,18 +3550,20 @@ static int _xferSha384BlockAndUpdateDigest(whClientContext* ctx,
     ret = wh_Client_SendRequest(ctx, group, WC_ALGO_TYPE_HASH, req_len,
                                 (uint8_t*)dataPtr);
 
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-    printf("[client] send SHA384 Req:\n");
+    WH_DEBUG_CLIENT_VERBOSE("send SHA384 Req:\n");
+#ifdef WOLFHSM_CFG_HEXDUMP
     wh_Utils_Hexdump("[client] inBlock: ", req->inBlock, WC_SHA384_BLOCK_SIZE);
     if (req->resumeState.hiLen != 0 || req->resumeState.loLen != 0) {
         wh_Utils_Hexdump("  [client] resumeHash: ", req->resumeState.hash,
                          (isLastBlock) ? req->lastBlockLen
                                        : WC_SHA384_BLOCK_SIZE);
-        printf("  [client] hiLen: %u, loLen: %u\n", req->resumeState.hiLen,
+#endif
+        WH_DEBUG_CLIENT_VERBOSE("  hiLen: %u, loLen: %u\n", req->resumeState.hiLen,
                req->resumeState.loLen);
+#ifdef WOLFHSM_CFG_HEXDUMP
     }
-    printf("  [client] ret = %d\n", ret);
-#endif /* DEBUG_CRYPTOCB_VERBOSE */
+#endif
+    WH_DEBUG_CLIENT_VERBOSE("  ret = %d\n", ret);
 
     if (ret == 0) {
         do {
@@ -3672,9 +3576,7 @@ static int _xferSha384BlockAndUpdateDigest(whClientContext* ctx,
         ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA384, (uint8_t**)&res);
         /* wolfCrypt allows positive error codes on success in some scenarios */
         if (ret >= 0) {
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("[client] Client SHA384 Res recv: ret=%d", ret);
-#endif /* DEBUG_CRYPTOCB_VERBOSE */
+            WH_DEBUG_CLIENT_VERBOSE("Client SHA384 Res recv: ret=%d", ret);
             /* Store the received intermediate hash in the sha384
              * context and indicate the field is now valid and
              * should be passed back and forth to the server
@@ -3685,11 +3587,11 @@ static int _xferSha384BlockAndUpdateDigest(whClientContext* ctx,
             memcpy(sha384->digest, res->hash, WC_SHA512_DIGEST_SIZE);
             sha384->hiLen = res->hiLen;
             sha384->loLen = res->loLen;
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("[client] Client SHA384 Res recv:\n");
+            WH_DEBUG_CLIENT_VERBOSE("Client SHA384 Res recv:\n");
+#ifdef WOLFHSM_CFG_HEXDUMP
             wh_Utils_Hexdump("[client] hash: ", (uint8_t*)sha384->digest,
                              WC_SHA384_DIGEST_SIZE);
-#endif /* DEBUG_CRYPTOCB_VERBOSE */
+#endif
         }
     }
 
@@ -3783,10 +3685,8 @@ int wh_Client_Sha384Dma(whClientContext* ctx, wc_Sha384* sha, const uint8_t* in,
         req->input.sz    = inLen;
         req->output.addr = (uint64_t)(uintptr_t)out;
         req->output.sz   = WC_SHA384_DIGEST_SIZE; /* not needed, but YOLO */
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-        printf("[client] SHA384 DMA UPDATE: inAddr=%p, inSz=%u\n", in,
+        WH_DEBUG_CLIENT_VERBOSE("SHA384 DMA UPDATE: inAddr=%p, inSz=%u\n", in,
                (unsigned int)inLen);
-#endif
         ret = wh_Client_SendRequest(
             ctx, group, WC_ALGO_TYPE_HASH,
             sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req),
@@ -3821,9 +3721,7 @@ int wh_Client_Sha384Dma(whClientContext* ctx, wc_Sha384* sha, const uint8_t* in,
         req->output.addr = (uint64_t)(uintptr_t)out;
         req->output.sz   = WC_SHA384_DIGEST_SIZE; /* not needed, but YOLO */
 
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-        printf("[client] SHA384 DMA FINAL: outAddr=%p\n", out);
-#endif
+        WH_DEBUG_CLIENT_VERBOSE("SHA384 DMA FINAL: outAddr=%p\n", out);
         /* send the request to the server */
         ret = wh_Client_SendRequest(
             ctx, group, WC_ALGO_TYPE_HASH,
@@ -3904,18 +3802,20 @@ static int _xferSha512BlockAndUpdateDigest(whClientContext* ctx,
     ret = wh_Client_SendRequest(ctx, group, WC_ALGO_TYPE_HASH, req_len,
                                 (uint8_t*)dataPtr);
 
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-    printf("[client] send SHA512 Req:\n");
+    WH_DEBUG_CLIENT_VERBOSE("send SHA512 Req:\n");
+#ifdef WOLFHSM_CFG_HEXDUMP
     wh_Utils_Hexdump("[client] inBlock: ", req->inBlock, WC_SHA512_BLOCK_SIZE);
     if (req->resumeState.hiLen != 0 || req->resumeState.loLen != 0) {
         wh_Utils_Hexdump("  [client] resumeHash: ", req->resumeState.hash,
                          (isLastBlock) ? req->lastBlockLen
                                        : WC_SHA512_BLOCK_SIZE);
-        printf("  [client] hiLen: %u, loLen: %u\n", req->resumeState.hiLen,
+#endif
+        WH_DEBUG_CLIENT_VERBOSE("  hiLen: %u, loLen: %u\n", req->resumeState.hiLen,
                req->resumeState.loLen);
+#ifdef WOLFHSM_CFG_HEXDUMP
     }
-    printf("  [client] ret = %d\n", ret);
-#endif /* DEBUG_CRYPTOCB_VERBOSE */
+#endif
+    WH_DEBUG_CLIENT_VERBOSE("  ret = %d\n", ret);
 
     if (ret == 0) {
         do {
@@ -3928,21 +3828,19 @@ static int _xferSha512BlockAndUpdateDigest(whClientContext* ctx,
         ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA512, (uint8_t**)&res);
         /* wolfCrypt allows positive error codes on success in some scenarios */
         if (ret >= 0) {
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("[client] Client SHA512 Res recv: ret=%d", ret);
-            printf("[client] hashType: %d\n", sha512->hashType);
-#endif /* DEBUG_CRYPTOCB_VERBOSE */
+            WH_DEBUG_CLIENT_VERBOSE("Client SHA512 Res recv: ret=%d", ret);
+            WH_DEBUG_CLIENT_VERBOSE("hashType: %d\n", sha512->hashType);
             /* Store the received intermediate hash in the sha512
              * context and indicate the field is now valid and
              * should be passed back and forth to the server */
             memcpy(sha512->digest, res->hash, WC_SHA512_DIGEST_SIZE);
             sha512->hiLen = res->hiLen;
             sha512->loLen = res->loLen;
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("[client] Client SHA512 Res recv:\n");
+            WH_DEBUG_CLIENT_VERBOSE("Client SHA512 Res recv:\n");
+#ifdef WOLFHSM_CFG_HEXDUMP
             wh_Utils_Hexdump("[client] hash: ", (uint8_t*)sha512->digest,
                              WC_SHA512_DIGEST_SIZE);
-#endif /* DEBUG_CRYPTOCB_VERBOSE */
+#endif
         }
     }
 
@@ -4050,10 +3948,8 @@ int wh_Client_Sha512Dma(whClientContext* ctx, wc_Sha512* sha, const uint8_t* in,
         req->input.sz    = inLen;
         req->output.addr = (uint64_t)(uintptr_t)out;
         req->output.sz   = WC_SHA512_DIGEST_SIZE; /* not needed, but YOLO */
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-        printf("[client] SHA512 DMA UPDATE: inAddr=%p, inSz=%u\n", in,
+        WH_DEBUG_CLIENT_VERBOSE("SHA512 DMA UPDATE: inAddr=%p, inSz=%u\n", in,
                (unsigned int)inLen);
-#endif
         ret = wh_Client_SendRequest(
             ctx, group, WC_ALGO_TYPE_HASH,
             sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req),
@@ -4088,9 +3984,7 @@ int wh_Client_Sha512Dma(whClientContext* ctx, wc_Sha512* sha, const uint8_t* in,
         req->output.addr = (uint64_t)(uintptr_t)out;
         req->output.sz   = WC_SHA512_DIGEST_SIZE; /* not needed, but YOLO */
 
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-        printf("[client] SHA512 DMA FINAL: outAddr=%p\n", out);
-#endif
+        WH_DEBUG_CLIENT_VERBOSE("SHA512 DMA FINAL: outAddr=%p\n", out);
         /* send the request to the server */
         ret = wh_Client_SendRequest(
             ctx, group, WC_ALGO_TYPE_HASH,
@@ -4163,12 +4057,10 @@ int wh_Client_MlDsaImportKey(whClientContext* ctx, MlDsaKey* key,
 
     ret = wh_Crypto_MlDsaSerializeKeyDer(key, sizeof(buffer), buffer,
                                          &buffer_len);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-    printf("[client] %s serialize ret:%d, key:%p, max_size:%u, buffer:%p, "
+    WH_DEBUG_CLIENT_VERBOSE("serialize ret:%d, key:%p, max_size:%u, buffer:%p, "
            "outlen:%u\n",
-           __func__, ret, key, (unsigned int)sizeof(buffer), buffer,
+           ret, key, (unsigned int)sizeof(buffer), buffer,
            buffer_len);
-#endif
     if (ret == WH_ERROR_OK) {
         /* Cache the key and get the keyID */
         ret = wh_Client_KeyCache(ctx, flags, label, label_len, buffer,
@@ -4178,10 +4070,8 @@ int wh_Client_MlDsaImportKey(whClientContext* ctx, MlDsaKey* key,
         }
     }
 
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-    printf("[client] %s label:%.*s ret:%d keyid:%u\n", __func__, label_len,
+    WH_DEBUG_CLIENT_VERBOSE("label:%.*s ret:%d keyid:%u\n", label_len,
            label, ret, key_id);
-#endif
     return ret;
 }
 
@@ -4205,10 +4095,8 @@ int wh_Client_MlDsaExportKey(whClientContext* ctx, whKeyId keyId, MlDsaKey* key,
         ret = wh_Crypto_MlDsaDeserializeKeyDer(buffer, buffer_len, key);
     }
 
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-    printf("[client] %s keyid:%x key:%p ret:%d label:%.*s\n", __func__, keyId,
+    WH_DEBUG_CLIENT_VERBOSE("keyid:%x key:%p ret:%d label:%.*s\n", keyId,
            key, ret, (int)label_len, label);
-#endif
     return ret;
 }
 
@@ -4265,10 +4153,8 @@ static int _MlDsaMakeKey(whClientContext* ctx, int size, int level,
 
             ret = wh_Client_SendRequest(ctx, group, action, req_len,
                                         (uint8_t*)dataPtr);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("[client] %s Req sent:size:%u, ret:%d\n", __func__,
+            WH_DEBUG_CLIENT_VERBOSE("Req sent:size:%u, ret:%d\n",
                    (unsigned int)req->sz, ret);
-#endif
             if (ret == 0) {
                 uint16_t res_len;
                 do {
@@ -4284,12 +4170,10 @@ static int _MlDsaMakeKey(whClientContext* ctx, int size, int level,
                     /* wolfCrypt allows positive error codes on success in some
                      * scenarios */
                     if (ret >= 0) {
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-                        printf(
-                            "[client] %s Res recv:keyid:%u, len:%u, ret:%d\n",
+                        WH_DEBUG_CLIENT_VERBOSE(
+                            "%s Res recv:keyid:%u, len:%u, ret:%d\n",
                             __func__, (unsigned int)res->keyId,
                             (unsigned int)res->len, ret);
-#endif
                         /* Key is cached on server or is ephemeral */
                         key_id = (whKeyId)(res->keyId);
 
@@ -4309,8 +4193,8 @@ static int _MlDsaMakeKey(whClientContext* ctx, int size, int level,
                                 /* Response has the exported key */
                                 ret = wh_Crypto_MlDsaDeserializeKeyDer(
                                     key_der, der_size, key);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-                                wh_Utils_Hexdump(
+#ifdef WOLFHSM_CFG_HEXDUMP
+                    wh_Utils_Hexdump(
                                     "[client] ML-DSA KeyGen export:", key_der,
                                     der_size);
 #endif
@@ -4363,10 +4247,8 @@ int wh_Client_MlDsaSign(whClientContext* ctx, const byte* in, word32 in_len,
     whKeyId key_id;
     int     evict = 0;
 
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-    printf("[client] %s ctx:%p key:%p, in:%p in_len:%u, out:%p inout_len:%p\n",
-           __func__, ctx, key, in, (unsigned)in_len, out, inout_len);
-#endif
+    WH_DEBUG_CLIENT_VERBOSE("ctx:%p key:%p, in:%p in_len:%u, out:%p inout_len:%p\n",
+           ctx, key, in, (unsigned)in_len, out, inout_len);
 
     if ((ctx == NULL) || (key == NULL) || ((in == NULL) && (in_len > 0)) ||
         (out == NULL) || (inout_len == NULL)) {
@@ -4375,10 +4257,8 @@ int wh_Client_MlDsaSign(whClientContext* ctx, const byte* in, word32 in_len,
 
     key_id = WH_DEVCTX_TO_KEYID(key->devCtx);
 
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-    printf("[client] %s keyid:%x, in_len:%u, inout_len:%p\n", __func__, key_id,
+    WH_DEBUG_CLIENT_VERBOSE("keyid:%x, in_len:%u, inout_len:%p\n", key_id,
            in_len, inout_len);
-#endif
 
     /* Import key if necessary */
     if (WH_KEYID_ISERASED(key_id)) {
@@ -4478,9 +4358,7 @@ int wh_Client_MlDsaSign(whClientContext* ctx, const byte* in, word32 in_len,
     if (evict != 0) {
         (void)wh_Client_KeyEvict(ctx, key_id);
     }
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-    printf("[client] %s ret:%d\n", __func__, ret);
-#endif
+    WH_DEBUG_CLIENT_VERBOSE("ret:%d\n", ret);
     return ret;
 }
 
@@ -4498,11 +4376,9 @@ int wh_Client_MlDsaVerify(whClientContext* ctx, const byte* sig, word32 sig_len,
     int     evict = 0;
 
 
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-    printf("[client] %s ctx:%p key:%p, sig:%p sig_len:%u, msg:%p msg_len:%u "
+    WH_DEBUG_CLIENT_VERBOSE("ctx:%p key:%p, sig:%p sig_len:%u, msg:%p msg_len:%u "
            "out_res:%p\n",
-           __func__, ctx, key, sig, sig_len, msg, msg_len, out_res);
-#endif
+           ctx, key, sig, sig_len, msg, msg_len, out_res);
 
     if ((ctx == NULL) || (key == NULL) || ((sig == NULL) && (sig_len > 0)) ||
         ((msg == NULL) && (msg_len > 0))) {
@@ -4605,9 +4481,7 @@ int wh_Client_MlDsaVerify(whClientContext* ctx, const byte* sig, word32 sig_len,
     if (evict != 0) {
         (void)wh_Client_KeyEvict(ctx, key_id);
     }
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-    printf("[client] %s ret:%d\n", __func__, ret);
-#endif
+    WH_DEBUG_CLIENT_VERBOSE("ret:%d\n", ret);
     return ret;
 }
 
@@ -4826,10 +4700,8 @@ int wh_Client_MlDsaSignDma(whClientContext* ctx, const byte* in, word32 in_len,
         }
     }
 
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-    printf("[client] %s keyid:%x, in_len:%u, inout_len:%p\n", __func__, key_id,
+    WH_DEBUG_CLIENT_VERBOSE("keyid:%x, in_len:%u, inout_len:%p\n", key_id,
            in_len, out_len);
-#endif
 
     if (ret == WH_ERROR_OK) {
         /* Request Message */

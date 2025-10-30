@@ -408,7 +408,7 @@ static void processEntry(Entry* entry, int isKey, whNvmContext* nvmContext)
     if (isKey) {
         /* Keys have special ID format */
         meta.id = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, entry->clientId, entry->id);
-        printf("Processing Key Entry - ClientID: 0x%X, KeyID: 0x%X, Meta ID: "
+        WOLFHSM_CFG_PRINTF("Processing Key Entry - ClientID: 0x%X, KeyID: 0x%X, Meta ID: "
                "0x%X, "
                "Access: 0x%X, Flags: 0x%X, Label: %s, File: %s, Size: %ld\n",
                entry->clientId, entry->id, meta.id, entry->access, entry->flags,
@@ -416,7 +416,7 @@ static void processEntry(Entry* entry, int isKey, whNvmContext* nvmContext)
     }
     else {
         meta.id = entry->id;
-        printf("Processing Object Entry - ID: 0x%X, Access: 0x%X, Flags: 0x%X, "
+        WOLFHSM_CFG_PRINTF("Processing Object Entry - ID: 0x%X, Access: 0x%X, Flags: 0x%X, "
                "Label: %s, File: %s, Size: %ld\n",
                entry->id, entry->access, entry->flags, entry->label,
                entry->filePath, fileSize);
@@ -504,19 +504,19 @@ int wh_PosixServer_ExampleNvmConfig(void* conf, const char* nvmInitFilePath)
     s_conf->nvm = nvm;
     rc          = wh_Nvm_Init(nvm, &n_conf);
     if (rc != 0) {
-        printf("Failed to initialize NVM: %d\n", rc);
+        WOLFHSM_CFG_PRINTF("Failed to initialize NVM: %d\n", rc);
         return rc;
     }
 
     /* Initialize NVM with contents from the NVM init file if provided */
     if (nvmInitFilePath != NULL) {
-        printf("Initializing NVM with contents from %s\n", nvmInitFilePath);
+        WOLFHSM_CFG_PRINTF("Initializing NVM with contents from %s\n", nvmInitFilePath);
         rc = initializeNvm(nvm, nvmInitFilePath);
         if (rc != 0) {
-            printf("Failed to initialize NVM from file: %d\n", rc);
+            WOLFHSM_CFG_PRINTF("Failed to initialize NVM from file: %d\n", rc);
             return rc;
         }
-        printf("NVM initialization completed successfully\n");
+        WOLFHSM_CFG_PRINTF("NVM initialization completed successfully\n");
     }
 
     return WH_ERROR_OK;

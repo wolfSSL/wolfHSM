@@ -71,11 +71,11 @@ static int wh_ClientTask(void* cf, const char* type, int test)
 
     if (strcmp(type, "dma") == 0) {
 #ifdef WOLFSSL_STATIC_MEMORY
-        printf("Setting up DMA heap with static memory buckets\n");
+        WOLFHSM_CFG_PRINTF("Setting up DMA heap with static memory buckets\n");
 
         ret = wh_PosixClient_ExampleSetupDmaMemory(client, config);
         if (ret != 0) {
-            printf("Failed to setup DMA heap\n");
+            WOLFHSM_CFG_PRINTF("Failed to setup DMA heap\n");
             return -1;
         }
 #else
@@ -83,7 +83,7 @@ static int wh_ClientTask(void* cf, const char* type, int test)
 #endif
     }
 
-    printf("Client connecting to server...\n");
+    WOLFHSM_CFG_PRINTF("Client connecting to server...\n");
     if (ret == 0 && test) {
         return wh_DemoClient_All(client);
     }
@@ -100,14 +100,14 @@ static int wh_ClientTask(void* cf, const char* type, int test)
             ret = wh_Client_EchoRequest(client, tx_req_len, tx_req);
             if (ret != WH_ERROR_NOTREADY) {
                 if (ret != 0) {
-                    printf("wh_Client_EchoRequest failed with ret=%d\n", ret);
+                    WOLFHSM_CFG_PRINTF("wh_Client_EchoRequest failed with ret=%d\n", ret);
                 }
             }
             _sleepMs(ONE_MS);
         } while (ret == WH_ERROR_NOTREADY);
 
         if (ret != 0) {
-            printf("Client had failure. Exiting\n");
+            WOLFHSM_CFG_PRINTF("Client had failure. Exiting\n");
             break;
         }
 
@@ -120,7 +120,7 @@ static int wh_ClientTask(void* cf, const char* type, int test)
         } while (ret == WH_ERROR_NOTREADY);
 
         if (ret != 0) {
-            printf("Client had failure. Exiting\n");
+            WOLFHSM_CFG_PRINTF("Client had failure. Exiting\n");
             break;
         }
     }
@@ -143,15 +143,15 @@ static int wh_ClientTask(void* cf, const char* type, int test)
 
     (void)wh_Client_CommClose(client);
     (void)wh_Client_Cleanup(client);
-    printf("Client disconnected\n");
+    WOLFHSM_CFG_PRINTF("Client disconnected\n");
     return ret;
 }
 
 void Usage(const char* exeName)
 {
-    printf("Usage: %s --type <type> --test\n", exeName);
-    printf("Example: %s --type tcp\n", exeName);
-    printf("type: tcp (default), shm\n");
+    WOLFHSM_CFG_PRINTF("Usage: %s --type <type> --test\n", exeName);
+    WOLFHSM_CFG_PRINTF("Example: %s --type tcp\n", exeName);
+    WOLFHSM_CFG_PRINTF("type: tcp (default), shm\n");
 }
 
 int main(int argc, char** argv)
@@ -165,11 +165,11 @@ int main(int argc, char** argv)
     (void)argv;
 
     memset(c_conf, 0, sizeof(whClientConfig));
-    printf("Example wolfHSM POSIX client ");
+    WOLFHSM_CFG_PRINTF("Example wolfHSM POSIX client ");
 #ifndef WOLFHSM_CFG_NO_CRYPTO
-    printf("built with wolfSSL version %s\n", LIBWOLFSSL_VERSION_STRING);
+    WOLFHSM_CFG_PRINTF("built with wolfSSL version %s\n", LIBWOLFSSL_VERSION_STRING);
 #else
-    printf("built with WOLFHSM_CFG_NO_CRYPTO\n");
+    WOLFHSM_CFG_PRINTF("built with WOLFHSM_CFG_NO_CRYPTO\n");
 #endif
 
     /* Parse command-line arguments */
@@ -181,28 +181,28 @@ int main(int argc, char** argv)
             test = 1;
         }
         else {
-            printf("Invalid argument: %s\n", argv[i]);
+            WOLFHSM_CFG_PRINTF("Invalid argument: %s\n", argv[i]);
             Usage(argv[0]);
             return -1;
         }
     }
 
     if (strcmp(type, "tcp") == 0) {
-        printf("Using TCP transport\n");
+        WOLFHSM_CFG_PRINTF("Using TCP transport\n");
         wh_PosixClient_ExampleTcpConfig(c_conf);
     }
     else if (strcmp(type, "shm") == 0) {
-        printf("Using shared memory transport\n");
+        WOLFHSM_CFG_PRINTF("Using shared memory transport\n");
         wh_PosixClient_ExampleShmConfig(c_conf);
     }
 #ifdef WOLFSSL_STATIC_MEMORY
     else if (strcmp(type, "dma") == 0) {
-        printf("Using DMA with shared memory transport\n");
+        WOLFHSM_CFG_PRINTF("Using DMA with shared memory transport\n");
         wh_PosixClient_ExampleShmDmaConfig(c_conf);
     }
 #endif
     else {
-        printf("Invalid client type: %s\n", type);
+        WOLFHSM_CFG_PRINTF("Invalid client type: %s\n", type);
         Usage(argv[0]);
         return -1;
     }

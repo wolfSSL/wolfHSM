@@ -76,9 +76,9 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
         return BAD_FUNC_ARG;
     }
 
-#ifdef DEBUG_CRYPTOCB
-    printf("[client] %s info:%p algo_type:%d\n", __func__, info,
+    WH_DEBUG_CLIENT("info:%p algo_type:%d\n", info,
             (info!=NULL)?info->algo_type:-1);
+#ifdef WOLFHSM_CFG_DEBUG
     wc_CryptoCb_InfoString(info);
 #endif
     /* Based on the info type, process the request */
@@ -509,13 +509,11 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
         ret = BAD_FUNC_ARG;
     }
 
-#ifdef DEBUG_CRYPTOCB
     if (ret == CRYPTOCB_UNAVAILABLE) {
-        printf("[client] %s X not implemented: algo->type:%d\n", __func__, info->algo_type);
+        WH_DEBUG_CLIENT("X not implemented: algo->type:%d\n", info->algo_type);
     } else {
-        printf("[client] %s - ret:%d algo->type:%d\n", __func__, ret, info->algo_type);
+        WH_DEBUG_CLIENT("ret:%d algo->type:%d\n", ret, info->algo_type);
     }
-#endif /* DEBUG_CRYPTOCB */
     return ret;
 }
 
@@ -715,8 +713,8 @@ int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
         return BAD_FUNC_ARG;
     }
 
-#ifdef DEBUG_CRYPTOCB
-    printf("[client] %s ", __func__);
+    WH_DEBUG_CLIENT("CryptoCb invoked\n");
+#ifdef WOLFHSM_CFG_DEBUG
     wc_CryptoCb_InfoString(info);
 #endif
 
@@ -876,13 +874,11 @@ int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
         break;
     }
 
-#ifdef DEBUG_CRYPTOCB
     if (ret == CRYPTOCB_UNAVAILABLE) {
-        printf("[client] %s X not implemented: algo->type:%d\n", __func__, info->algo_type);
+        WH_DEBUG_CLIENT("X not implemented: algo->type:%d\n", info->algo_type);
     } else {
-        printf("[client] %s - ret:%d algo->type:%d\n", __func__, ret, info->algo_type);
+        WH_DEBUG_CLIENT("ret:%d algo->type:%d\n", ret, info->algo_type);
     }
-#endif /* DEBUG_CRYPTOCB */
     return ret;
 }
 #endif /* WOLFHSM_CFG_DMA */
