@@ -426,6 +426,74 @@ int wh_Client_HkdfMakeExportKey(whClientContext* ctx, int hashType,
 
 #endif /* HAVE_HKDF */
 
+#ifdef HAVE_CMAC_KDF
+/**
+ * @brief Generate CMAC two-step KDF output and store it in the server cache
+ *
+ * This function requests the server to run the NIST SP 800-56C two-step CMAC
+ * KDF. The derived key material is cached on the server and not returned to the
+ * client.
+ *
+ * @param[in] ctx Pointer to the client context.
+ * @param[in] saltKeyId Key ID of the salt material. Set to WH_KEYID_ERASED to
+ *                      use the salt buffer instead.
+ * @param[in] salt Pointer to the salt buffer. May be NULL when saltKeyId is
+ *                 provided.
+ * @param[in] saltSz Size of the salt buffer in bytes.
+ * @param[in] zKeyId Key ID of the Z shared secret. Set to WH_KEYID_ERASED to
+ *                   use the z buffer instead.
+ * @param[in] z Pointer to the shared secret buffer. May be NULL when zKeyId is
+ *              provided.
+ * @param[in] zSz Size of the shared secret buffer in bytes.
+ * @param[in] fixedInfo Optional fixed info buffer (may be NULL).
+ * @param[in] fixedInfoSz Size of the fixed info buffer in bytes.
+ * @param[in,out] inout_key_id Pointer to the key ID to use or update. Set to
+ *                             WH_KEYID_ERASED to have the server allocate one.
+ * @param[in] flags NVM flags to associate with the generated key.
+ * @param[in] label Optional label metadata to store alongside the key.
+ * @param[in] label_len Length of the optional label in bytes.
+ * @param[in] outSz Desired size of the derived key material.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_CmacKdfMakeCacheKey(whClientContext* ctx, whKeyId saltKeyId,
+                                  const uint8_t* salt, uint32_t saltSz,
+                                  whKeyId zKeyId, const uint8_t* z,
+                                  uint32_t zSz, const uint8_t* fixedInfo,
+                                  uint32_t fixedInfoSz, whKeyId* inout_key_id,
+                                  whNvmFlags flags, const uint8_t* label,
+                                  uint32_t label_len, uint32_t outSz);
+
+/**
+ * @brief Generate CMAC two-step KDF output and export to the client
+ *
+ * This function requests the server to run the NIST SP 800-56C two-step CMAC
+ * KDF and return the derived key material directly to the client.
+ *
+ * @param[in] ctx Pointer to the client context.
+ * @param[in] saltKeyId Key ID of the salt material. Set to WH_KEYID_ERASED to
+ *                      use the salt buffer instead.
+ * @param[in] salt Pointer to the salt buffer. May be NULL when saltKeyId is
+ *                 provided.
+ * @param[in] saltSz Size of the salt buffer in bytes.
+ * @param[in] zKeyId Key ID of the Z shared secret. Set to WH_KEYID_ERASED to
+ *                   use the z buffer instead.
+ * @param[in] z Pointer to the shared secret buffer. May be NULL when zKeyId is
+ *              provided.
+ * @param[in] zSz Size of the shared secret buffer in bytes.
+ * @param[in] fixedInfo Optional fixed info buffer (may be NULL).
+ * @param[in] fixedInfoSz Size of the fixed info buffer in bytes.
+ * @param[out] out Output buffer for the derived key material.
+ * @param[in] outSz Size of the output buffer in bytes.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_CmacKdfMakeExportKey(whClientContext* ctx, whKeyId saltKeyId,
+                                   const uint8_t* salt, uint32_t saltSz,
+                                   whKeyId zKeyId, const uint8_t* z,
+                                   uint32_t zSz, const uint8_t* fixedInfo,
+                                   uint32_t fixedInfoSz, uint8_t* out,
+                                   uint32_t outSz);
+#endif /* HAVE_CMAC_KDF */
+
 #ifndef NO_AES
 /**
  * @brief Associates an AES key with a specific key ID.

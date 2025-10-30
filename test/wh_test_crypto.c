@@ -31,6 +31,7 @@
 
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/types.h"
+#include "wolfssl/wolfcrypt/kdf.h"
 
 #include "wolfhsm/wh_error.h"
 
@@ -1245,6 +1246,193 @@ static int whTest_CryptoHkdf(whClientContext* ctx, int devId, WC_RNG* rng)
     return 0;
 }
 #endif /* HAVE_HKDF */
+
+#ifdef HAVE_CMAC_KDF
+#define WH_TEST_CMAC_KDF_SALT_SIZE 24
+#define WH_TEST_CMAC_KDF_Z_SIZE 32
+#define WH_TEST_CMAC_KDF_FIXED_INFO_SIZE 60
+#define WH_TEST_CMAC_KDF_OUT_SIZE 40
+
+static int whTest_CryptoCmacKdf(whClientContext* ctx, int devId, WC_RNG* rng)
+{
+    (void)rng;
+
+    int ret = WH_ERROR_OK;
+
+    /* Test vectors based on wolfSSL CMAC KDF implementation test vectors for
+     * NIST SP 800-108 KDF in Counter Mode using CMAC */
+    static const uint8_t salt[WH_TEST_CMAC_KDF_SALT_SIZE] = {
+        0x20, 0x51, 0xaf, 0x34, 0x76, 0x2e, 0xbe, 0x55, 0x6f, 0x72, 0xa5, 0xc6,
+        0xed, 0xc7, 0x77, 0x1e, 0xb9, 0x24, 0x5f, 0xad, 0x76, 0xf0, 0x34, 0xbe};
+    static const uint8_t z[WH_TEST_CMAC_KDF_Z_SIZE] = {
+        0xae, 0x8e, 0x93, 0xc9, 0xc9, 0x91, 0xcf, 0x89, 0x6a, 0x49, 0x1a,
+        0x89, 0x07, 0xdf, 0x4e, 0x4b, 0xe5, 0x18, 0x6a, 0xe4, 0x96, 0xcd,
+        0x34, 0x0d, 0xc1, 0x9b, 0x23, 0x78, 0x21, 0xdb, 0x7b, 0x60};
+    static const uint8_t fixedInfo[WH_TEST_CMAC_KDF_FIXED_INFO_SIZE] = {
+        0xa2, 0x59, 0xca, 0xe2, 0xc4, 0xa3, 0x6b, 0x89, 0x56, 0x3c, 0xb1, 0x48,
+        0xc7, 0x82, 0x51, 0x34, 0x3b, 0xbf, 0xab, 0xdc, 0x13, 0xca, 0x7a, 0xc2,
+        0x17, 0x1c, 0x2e, 0xb6, 0x02, 0x1f, 0x44, 0x77, 0xfe, 0xa3, 0x3b, 0x28,
+        0x72, 0x4d, 0xa7, 0x21, 0xee, 0x08, 0x7b, 0xff, 0xd7, 0x94, 0xa1, 0x56,
+        0x37, 0x54, 0xb4, 0x25, 0xa8, 0xd0, 0x9b, 0x3e, 0x0d, 0xa5, 0xff, 0xed};
+    static const uint8_t expected[WH_TEST_CMAC_KDF_OUT_SIZE] = {
+        0xb4, 0x0c, 0x32, 0xbe, 0x01, 0x27, 0x93, 0xba, 0xfd, 0xf7,
+        0x78, 0xc5, 0xf4, 0x54, 0x43, 0xf4, 0xc9, 0x71, 0x23, 0x93,
+        0x17, 0x63, 0xd8, 0x3a, 0x59, 0x27, 0x07, 0xbf, 0xf2, 0xd3,
+        0x60, 0x59, 0x50, 0x27, 0x29, 0xca, 0xb8, 0x8b, 0x29, 0x38};
+
+    uint8_t  out[WH_TEST_CMAC_KDF_OUT_SIZE];
+    uint8_t  out_direct[WH_TEST_CMAC_KDF_OUT_SIZE];
+    uint8_t  out_cached_input[WH_TEST_CMAC_KDF_OUT_SIZE];
+    uint8_t  exported[WH_TEST_CMAC_KDF_OUT_SIZE];
+    uint8_t  exportLabel[12] = {0};
+    uint16_t export_len      = WH_TEST_CMAC_KDF_OUT_SIZE;
+    whKeyId  key_id          = WH_KEYID_ERASED;
+    uint8_t  keyLabel[]      = "CMAC KDF Key";
+
+    /* 1. Direct wolfCrypt API call that routes through the callback */
+    memset(out, 0, sizeof(out));
+    ret = wc_KDA_KDF_twostep_cmac(salt, WH_TEST_CMAC_KDF_SALT_SIZE, z,
+                                  WH_TEST_CMAC_KDF_Z_SIZE, fixedInfo,
+                                  WH_TEST_CMAC_KDF_FIXED_INFO_SIZE, out,
+                                  WH_TEST_CMAC_KDF_OUT_SIZE, NULL, devId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed wc_KDA_KDF_twostep_cmac: %d\n", ret);
+        return ret;
+    }
+    if (memcmp(out, expected, sizeof(out)) != 0) {
+        WH_ERROR_PRINT("CMAC KDF output mismatch (direct wolfCrypt)\n");
+        return -1;
+    }
+
+    /* 2. Client export path using direct input buffers */
+    memset(out_direct, 0, sizeof(out_direct));
+    ret = wh_Client_CmacKdfMakeExportKey(
+        ctx, WH_KEYID_ERASED, salt, WH_TEST_CMAC_KDF_SALT_SIZE, WH_KEYID_ERASED,
+        z, WH_TEST_CMAC_KDF_Z_SIZE, fixedInfo, WH_TEST_CMAC_KDF_FIXED_INFO_SIZE,
+        out_direct, sizeof(out_direct));
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed wh_Client_CmacKdfMakeExportKey: %d\n", ret);
+        return ret;
+    }
+    if (memcmp(out_direct, expected, sizeof(out_direct)) != 0) {
+        WH_ERROR_PRINT("CMAC KDF output mismatch (export key)\n");
+        return -1;
+    }
+
+    /* 3. Client cache path with direct input buffers */
+    key_id = WH_KEYID_ERASED;
+    ret    = wh_Client_CmacKdfMakeCacheKey(
+           ctx, WH_KEYID_ERASED, salt, WH_TEST_CMAC_KDF_SALT_SIZE, WH_KEYID_ERASED,
+           z, WH_TEST_CMAC_KDF_Z_SIZE, fixedInfo, WH_TEST_CMAC_KDF_FIXED_INFO_SIZE,
+           &key_id, WH_NVM_FLAGS_NONE, keyLabel, sizeof(keyLabel),
+           WH_TEST_CMAC_KDF_OUT_SIZE);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed wh_Client_CmacKdfMakeCacheKey: %d\n", ret);
+        return ret;
+    }
+    if (key_id == WH_KEYID_ERASED) {
+        WH_ERROR_PRINT("CMAC KDF cache did not return a key id\n");
+        return -1;
+    }
+
+    memset(exported, 0, sizeof(exported));
+    export_len = (uint16_t)sizeof(exported);
+    memset(exportLabel, 0, sizeof(exportLabel));
+    ret = wh_Client_KeyExport(ctx, key_id, exportLabel, sizeof(exportLabel),
+                              exported, &export_len);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to export cached CMAC KDF key: %d\n", ret);
+        (void)wh_Client_KeyEvict(ctx, key_id);
+        return ret;
+    }
+    if ((export_len != WH_TEST_CMAC_KDF_OUT_SIZE) ||
+        (memcmp(exported, expected, sizeof(exported)) != 0)) {
+        WH_ERROR_PRINT("Exported CMAC KDF key mismatch\n");
+        (void)wh_Client_KeyEvict(ctx, key_id);
+        return -1;
+    }
+    ret = wh_Client_KeyEvict(ctx, key_id);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to evict cached CMAC KDF key: %d\n", ret);
+        return ret;
+    }
+
+    /* 4. Use cached salt and Z inputs */
+    whKeyId saltKeyId = WH_KEYID_ERASED;
+    whKeyId zKeyId    = WH_KEYID_ERASED;
+    ret = wh_Client_KeyCache(ctx, WH_NVM_FLAGS_NONE, NULL, 0, salt,
+                             WH_TEST_CMAC_KDF_SALT_SIZE, &saltKeyId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to cache CMAC KDF salt: %d\n", ret);
+        return ret;
+    }
+    ret = wh_Client_KeyCache(ctx, WH_NVM_FLAGS_NONE, NULL, 0, z,
+                             WH_TEST_CMAC_KDF_Z_SIZE, &zKeyId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to cache CMAC KDF Z input: %d\n", ret);
+        (void)wh_Client_KeyEvict(ctx, saltKeyId);
+        return ret;
+    }
+
+    memset(out_cached_input, 0, sizeof(out_cached_input));
+    ret = wh_Client_CmacKdfMakeExportKey(
+        ctx, saltKeyId, NULL, 0, zKeyId, NULL, 0, fixedInfo,
+        WH_TEST_CMAC_KDF_FIXED_INFO_SIZE, out_cached_input,
+        sizeof(out_cached_input));
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed CMAC KDF export with cached inputs: %d\n", ret);
+        goto cleanup_inputs;
+    }
+    if (memcmp(out_cached_input, expected, sizeof(out_cached_input)) != 0) {
+        WH_ERROR_PRINT("CMAC KDF mismatch (cached inputs export)\n");
+        ret = -1;
+        goto cleanup_inputs;
+    }
+
+    key_id = WH_KEYID_ERASED;
+    ret    = wh_Client_CmacKdfMakeCacheKey(
+           ctx, saltKeyId, NULL, 0, zKeyId, NULL, 0, fixedInfo,
+           WH_TEST_CMAC_KDF_FIXED_INFO_SIZE, &key_id, WH_NVM_FLAGS_NONE, keyLabel,
+           sizeof(keyLabel), WH_TEST_CMAC_KDF_OUT_SIZE);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed CMAC KDF cache with cached inputs: %d\n", ret);
+        goto cleanup_inputs;
+    }
+    if (key_id == WH_KEYID_ERASED) {
+        WH_ERROR_PRINT(
+            "CMAC KDF cache (cached inputs) did not return key id\n");
+        ret = -1;
+        goto cleanup_inputs;
+    }
+
+    memset(exported, 0, sizeof(exported));
+    export_len = (uint16_t)sizeof(exported);
+    memset(exportLabel, 0, sizeof(exportLabel));
+    ret = wh_Client_KeyExport(ctx, key_id, exportLabel, sizeof(exportLabel),
+                              exported, &export_len);
+    if ((ret != 0) || (export_len != WH_TEST_CMAC_KDF_OUT_SIZE) ||
+        (memcmp(exported, expected, sizeof(exported)) != 0)) {
+        WH_ERROR_PRINT("Export mismatch for CMAC KDF cached inputs (ret=%d)\n",
+                       ret);
+        if (ret == 0) {
+            ret = -1;
+        }
+    }
+
+    (void)wh_Client_KeyEvict(ctx, key_id);
+
+cleanup_inputs:
+    (void)wh_Client_KeyEvict(ctx, saltKeyId);
+    (void)wh_Client_KeyEvict(ctx, zKeyId);
+
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    printf("CMAC KDF SUCCESS\n");
+    return 0;
+}
+#endif /* HAVE_CMAC_KDF */
 
 static int whTest_CacheExportKey(whClientContext* ctx, whKeyId* inout_key_id,
         uint8_t* label_in,  uint8_t* label_out, uint16_t label_len,
@@ -3690,6 +3878,12 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         ret = whTest_CryptoHkdf(client, WH_DEV_ID, rng);
     }
 #endif /* HAVE_HKDF */
+
+#ifdef HAVE_CMAC_KDF
+    if (ret == WH_ERROR_OK) {
+        ret = whTest_CryptoCmacKdf(client, WH_DEV_ID, rng);
+    }
+#endif /* HAVE_CMAC_KDF */
 
 #ifdef HAVE_DILITHIUM
 

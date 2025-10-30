@@ -40,6 +40,10 @@
 #include "wolfssl/wolfcrypt/cmac.h"
 #endif
 
+#if defined(HAVE_HKDF) || defined(HAVE_CMAC_KDF)
+#include "wolfssl/wolfcrypt/kdf.h"
+#endif
+
 #include "wh_demo_client_crypto.h"
 
 #if !defined(NO_RSA)
@@ -1503,4 +1507,157 @@ int wh_DemoClient_CryptoHkdfCacheInputKey(whClientContext* clientContext)
     return ret;
 }
 #endif /* HAVE_HKDF */
+
+#if defined(HAVE_CMAC_KDF) && defined(WOLFSSL_CMAC)
+
+#define WH_DEMO_CMAC_KDF_OUT_SZ 40
+
+/* Test vectors based on wolfSSL CMAC KDF implementation test vectors for
+ * NIST SP 800-108 KDF in Counter Mode using CMAC */
+static const uint8_t demoCmacKdfSalt[] = {
+    0x20, 0x51, 0xAF, 0x34, 0x76, 0x2E, 0xBE, 0x55, 0x6F, 0x72, 0xA5, 0xC6,
+    0xED, 0xC7, 0x77, 0x1E, 0xB9, 0x24, 0x5F, 0xAD, 0x76, 0xF0, 0x34, 0xBE};
+static const uint8_t demoCmacKdfZ[] = {
+    0xAE, 0x8E, 0x93, 0xC9, 0xC9, 0x91, 0xCF, 0x89, 0x6A, 0x49, 0x1A,
+    0x89, 0x07, 0xDF, 0x4E, 0x4B, 0xE5, 0x18, 0x6A, 0xE4, 0x96, 0xCD,
+    0x34, 0x0D, 0xC1, 0x9B, 0x23, 0x78, 0x21, 0xDB, 0x7B, 0x60};
+static const uint8_t demoCmacKdfFixedInfo[] = {
+    0xA2, 0x59, 0xCA, 0xE2, 0xC4, 0xA3, 0x6B, 0x89, 0x56, 0x3C, 0xB1, 0x48,
+    0xC7, 0x82, 0x51, 0x34, 0x3B, 0xBF, 0xAB, 0xDC, 0x13, 0xCA, 0x7A, 0xC2,
+    0x17, 0x1C, 0x2E, 0xB6, 0x02, 0x1F, 0x44, 0x77, 0xFE, 0xA3, 0x3B, 0x28,
+    0x72, 0x4D, 0xA7, 0x21, 0xEE, 0x08, 0x7B, 0xFF, 0xD7, 0x94, 0xA1, 0x56,
+    0x37, 0x54, 0xB4, 0x25, 0xA8, 0xD0, 0x9B, 0x3E, 0x0D, 0xA5, 0xFF, 0xED};
+
+/*
+ * Demonstrates deriving key material using the two-step CMAC KDF through the
+ * wolfCrypt API. The HSM performs the derivation and returns the output
+ * directly to the client buffer.
+ */
+int wh_DemoClient_CryptoCmacKdfExport(whClientContext* clientContext)
+{
+    int     ret = 0;
+    uint8_t derived[WH_DEMO_CMAC_KDF_OUT_SZ];
+
+    (void)clientContext;
+
+    memset(derived, 0, sizeof(derived));
+
+    ret = wc_KDA_KDF_twostep_cmac(
+        demoCmacKdfSalt, (word32)sizeof(demoCmacKdfSalt), demoCmacKdfZ,
+        (word32)sizeof(demoCmacKdfZ), demoCmacKdfFixedInfo,
+        (word32)sizeof(demoCmacKdfFixedInfo), derived, (word32)sizeof(derived),
+        NULL, WH_DEV_ID);
+    if (ret != 0) {
+        printf("Failed to wc_KDA_KDF_twostep_cmac %d\n", ret);
+    }
+
+    /* The key has now been derived and is stored in the 'derived' array */
+
+    return ret;
+}
+
+/*
+ * Demonstrates deriving key material using the CMAC KDF and storing it in the
+ * HSM key cache. The derived key is kept non-exportable and referenced by its
+ * assigned keyId.
+ */
+int wh_DemoClient_CryptoCmacKdfCache(whClientContext* clientContext)
+{
+    int        ret     = 0;
+    whKeyId    keyId   = WH_KEYID_ERASED;
+    whNvmFlags flags   = WH_NVM_FLAGS_NONEXPORTABLE;
+    const char label[] = "cmac-kdf cache";
+
+    ret = wh_Client_CmacKdfMakeCacheKey(
+        clientContext, WH_KEYID_ERASED, demoCmacKdfSalt,
+        (uint32_t)sizeof(demoCmacKdfSalt), WH_KEYID_ERASED, demoCmacKdfZ,
+        (uint32_t)sizeof(demoCmacKdfZ), demoCmacKdfFixedInfo,
+        (uint32_t)sizeof(demoCmacKdfFixedInfo), &keyId, flags,
+        (const uint8_t*)label, (uint32_t)strlen(label),
+        WH_DEMO_CMAC_KDF_OUT_SZ);
+    if (ret != WH_ERROR_OK) {
+        printf("Failed to wh_Client_CmacKdfMakeCacheKey %d\n", ret);
+        return ret;
+    }
+
+    /* The key has now been derived and can be referenced by the client via its
+     * keyId in subsequent wolfCrypt or wolfHSM API calls */
+
+    /* Example: evict the key from cache once we are done with it */
+    ret = wh_Client_KeyEvict(clientContext, keyId);
+    if (ret != 0) {
+        printf("Failed to wh_Client_KeyEvict %d\n", evictRet);
+    }
+
+    return ret;
+}
+
+/*
+ * Demonstrates deriving CMAC KDF output using cached salt and shared secret
+ * inputs and caching the derived output for subsequent use by keyId
+ */
+int wh_DemoClient_CryptoCmacKdfCacheInputs(whClientContext* clientContext)
+{
+    int        ret       = 0;
+    whKeyId    saltKeyId = WH_KEYID_ERASED;
+    whKeyId    zKeyId    = WH_KEYID_ERASED;
+    whKeyId    outKeyId  = WH_KEYID_ERASED;
+    uint8_t    derived[WH_DEMO_CMAC_KDF_OUT_SZ];
+    const char label[] = "cmac-kdf inputs";
+
+    /* Cache the input to be used as salt. This is typically not necessary,
+     * as the salt is usually not sensitive information. If it is desired to use
+     * HSM-only information as salt, then this would likely be provisioned
+     * as an offline step */
+    ret = wh_Client_KeyCache(clientContext, WH_NVM_FLAGS_NONE, NULL, 0,
+                             demoCmacKdfSalt, (uint32_t)sizeof(demoCmacKdfSalt),
+                             &saltKeyId);
+    if (ret != WH_ERROR_OK) {
+        printf("Failed to cache CMAC KDF salt %d\n", ret);
+        return ret;
+    }
+
+    /* Cache the Z input. This would typically be done offline during the HSM
+     * provisioning step, but is shown here for completeness */
+    ret = wh_Client_KeyCache(clientContext, WH_NVM_FLAGS_NONE, NULL, 0,
+                             demoCmacKdfZ, (uint32_t)sizeof(demoCmacKdfZ),
+                             &zKeyId);
+    if (ret != WH_ERROR_OK) {
+        printf("Failed to cache CMAC KDF Z input %d\n", ret);
+        /* Optionally evict the salt key if not needed anymore */
+        (void)wh_Client_KeyEvict(clientContext, saltKeyId);
+        return ret;
+    }
+
+    /* Cached inputs are now present on the HSM. At a later time, they can be
+     * used to derive a key */
+
+
+    /* Derive and cache the new key based on the cached input */
+    memset(derived, 0, sizeof(derived));
+
+    ret = wh_Client_CmacKdfMakeCacheKey(
+        clientContext, saltKeyId, NULL, 0, zKeyId, NULL, 0,
+        demoCmacKdfFixedInfo, (uint32_t)sizeof(demoCmacKdfFixedInfo), &outKeyId,
+        WH_NVM_FLAGS_NONE, (const uint8_t*)label, (uint32_t)strlen(label),
+        WH_DEMO_CMAC_KDF_OUT_SZ);
+
+    if (ret != WH_ERROR_OK) {
+        printf("Failed to CMAC KDF with cached inputs %d\n", ret);
+    }
+
+
+    /* We can now refer to the generated key by its keyID from the client */
+
+    /* Optionally evict the keys from the cache if not needed anymore.
+     * Ignore failure checking for readability */
+    (void)wh_Client_KeyEvict(clientContext, outKeyId);
+    (void)wh_Client_KeyEvict(clientContext, zKeyId);
+    (void)wh_Client_KeyEvict(clientContext, saltKeyId);
+
+    return ret;
+}
+
+#endif /* HAVE_CMAC_KDF && WOLFSSL_CMAC */
+
 #endif /* WOLFHSM_CFG_NO_CRYPTO */

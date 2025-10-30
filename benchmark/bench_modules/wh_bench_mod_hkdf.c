@@ -19,6 +19,8 @@
 
 #include "wh_bench_mod.h"
 #include "wolfhsm/wh_error.h"
+#include "wolfhsm/wh_client.h"
+#include "wolfhsm/wh_client_crypto.h"
 
 #if !defined(WOLFHSM_CFG_NO_CRYPTO) && defined(WOLFHSM_CFG_BENCH_ENABLE)
 #include "wolfssl/wolfcrypt/hmac.h"
@@ -44,24 +46,26 @@ static int _benchHkdf(whClientContext* client, whBenchOpContext* ctx, int id,
                                         0x0a, 0x0b, 0x0c};
     static const uint8_t hkdf_info[] = {0xf0, 0xf1, 0xf2, 0xf3, 0xf4,
                                         0xf5, 0xf6, 0xf7, 0xf8, 0xf9};
-
+    static const uint8_t label[]     = "hkdf-bench";
 
     int     ret = 0;
-    uint8_t okm[WH_BENCH_HKDF_OKM_SIZE];
+    whKeyId keyId;
     int     i;
 
-    (void)client;
+    (void)devId;
 
     for (i = 0; i < WOLFHSM_CFG_BENCH_KG_ITERS && ret == 0; i++) {
         int benchStartRet;
         int benchStopRet;
 
+        keyId = WH_KEYID_ERASED;
+
         benchStartRet = wh_Bench_StartOp(ctx, id);
-        ret          = wc_HKDF_ex(WC_SHA256, hkdf_ikm, (word32)sizeof(hkdf_ikm),
-                                  hkdf_salt, (word32)sizeof(hkdf_salt), hkdf_info,
-                                  (word32)sizeof(hkdf_info), okm, (word32)sizeof(okm),
-                                  NULL, /* heap */
-                                  devId);
+        ret           = wh_Client_HkdfMakeCacheKey(
+                      client, WC_SHA256, WH_KEYID_ERASED, hkdf_ikm,
+                      (uint32_t)sizeof(hkdf_ikm), hkdf_salt, (uint32_t)sizeof(hkdf_salt),
+                      hkdf_info, (uint32_t)sizeof(hkdf_info), &keyId, WH_NVM_FLAGS_NONE,
+                      label, (uint32_t)sizeof(label), WH_BENCH_HKDF_OKM_SIZE);
         benchStopRet = wh_Bench_StopOp(ctx, id);
 
         if (benchStartRet != 0) {
@@ -70,12 +74,19 @@ static int _benchHkdf(whClientContext* client, whBenchOpContext* ctx, int id,
             break;
         }
         if (ret != 0) {
-            WH_BENCH_PRINTF("Failed to wc_HKDF_ex %d\n", ret);
+            WH_BENCH_PRINTF("Failed to wh_Client_HkdfMakeCacheKey %d\n", ret);
             break;
         }
         if (benchStopRet != 0) {
             WH_BENCH_PRINTF("Failed to wh_Bench_StopOp %d\n", benchStopRet);
             ret = benchStopRet;
+            break;
+        }
+
+        /* Evict the cached key to free resources for next iteration */
+        ret = wh_Client_KeyEvict(client, keyId);
+        if (ret != 0) {
+            WH_BENCH_PRINTF("Failed to wh_Client_KeyEvict %d\n", ret);
             break;
         }
     }

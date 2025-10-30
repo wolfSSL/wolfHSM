@@ -26,4 +26,8 @@ int wh_DemoClient_CryptoHkdfExport(whClientContext* clientContext);
 int wh_DemoClient_CryptoHkdfCache(whClientContext* clientContext);
 int wh_DemoClient_CryptoHkdfCacheInputKey(whClientContext* clientContext);
 
+int wh_DemoClient_CryptoCmacKdfExport(whClientContext* clientContext);
+int wh_DemoClient_CryptoCmacKdfCache(whClientContext* clientContext);
+int wh_DemoClient_CryptoCmacKdfCacheInputs(whClientContext* clientContext);
+
 #endif /* !DEMO_CLIENT_CRYPTO_H_ */

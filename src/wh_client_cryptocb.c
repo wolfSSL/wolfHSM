@@ -471,10 +471,11 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
         }
     } break; /* case WC_ALGO_TYPE_HASH */
 
-#ifdef HAVE_HKDF
+#if defined(HAVE_HKDF) || defined(HAVE_CMAC_KDF)
     case WC_ALGO_TYPE_KDF: {
         /* Handle different KDF types */
         switch (info->kdf.type) {
+#ifdef HAVE_HKDF
             case WC_KDF_TYPE_HKDF: {
                 /* Extract HKDF-specific parameters */
                 int         hashType = info->kdf.hkdf.hashType;
@@ -491,12 +492,29 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
                     ctx, hashType, WH_KEYID_ERASED, inKey, inKeySz, salt,
                     saltSz, kdf_info, infoSz, out, outSz);
             } break;
+#endif /* HAVE_HKDF */
+#ifdef HAVE_CMAC_KDF
+            case WC_KDF_TYPE_TWOSTEP_CMAC: {
+                const byte* salt        = info->kdf.twostep_cmac.salt;
+                word32      saltSz      = info->kdf.twostep_cmac.saltSz;
+                const byte* z           = info->kdf.twostep_cmac.z;
+                word32      zSz         = info->kdf.twostep_cmac.zSz;
+                const byte* fixedInfo   = info->kdf.twostep_cmac.fixedInfo;
+                word32      fixedInfoSz = info->kdf.twostep_cmac.fixedInfoSz;
+                byte*       out         = info->kdf.twostep_cmac.out;
+                word32      outSz       = info->kdf.twostep_cmac.outSz;
+
+                ret = wh_Client_CmacKdfMakeExportKey(
+                    ctx, WH_KEYID_ERASED, salt, saltSz, WH_KEYID_ERASED, z, zSz,
+                    fixedInfo, fixedInfoSz, out, outSz);
+            } break;
+#endif /* HAVE_CMAC_KDF */
             default:
                 ret = CRYPTOCB_UNAVAILABLE;
                 break;
         }
     } break; /* case WC_ALGO_TYPE_KDF */
-#endif       /* HAVE_HKDF */
+#endif       /* HAVE_HKDF || HAVE_CMAC_KDF */
 
     case WC_ALGO_TYPE_NONE:
     default:

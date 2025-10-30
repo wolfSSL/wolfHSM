@@ -100,6 +100,16 @@ static int _HkdfMakeKey(whClientContext* ctx, int hashType, whKeyId keyIdIn,
                         whKeyId* inout_key_id, uint8_t* out, uint32_t outSz);
 #endif
 
+#if defined(HAVE_CMAC_KDF)
+static int _CmacKdfMakeKey(whClientContext* ctx, whKeyId saltKeyId,
+                           const uint8_t* salt, uint32_t saltSz, whKeyId zKeyId,
+                           const uint8_t* z, uint32_t zSz,
+                           const uint8_t* fixedInfo, uint32_t fixedInfoSz,
+                           whNvmFlags flags, uint32_t label_len,
+                           const uint8_t* label, whKeyId* inout_key_id,
+                           uint8_t* out, uint32_t outSz);
+#endif
+
 #ifdef HAVE_DILITHIUM
 /* Make a ML-DSA key on the server based on the flags */
 static int _MlDsaMakeKey(whClientContext* ctx, int size, int level,
@@ -2597,8 +2607,8 @@ static int _HkdfMakeKey(whClientContext* ctx, int hashType, whKeyId keyIdIn,
     }
 
     /* Setup generic header and get pointer to request data */
-    req = (whMessageCrypto_HkdfRequest*)_createCryptoRequest(dataPtr,
-                                                             WC_ALGO_TYPE_KDF);
+    req = (whMessageCrypto_HkdfRequest*)_createCryptoRequestWithSubtype(
+        dataPtr, WC_ALGO_TYPE_KDF, WC_KDF_TYPE_HKDF);
 
     /* Calculate request length including variable-length data */
     uint16_t req_len = sizeof(whMessageCrypto_GenericRequestHeader) +
@@ -2740,6 +2750,160 @@ int wh_Client_HkdfMakeExportKey(whClientContext* ctx, int hashType,
 }
 
 #endif /* HAVE_HKDF */
+
+#ifdef HAVE_CMAC_KDF
+static int _CmacKdfMakeKey(whClientContext* ctx, whKeyId saltKeyId,
+                           const uint8_t* salt, uint32_t saltSz, whKeyId zKeyId,
+                           const uint8_t* z, uint32_t zSz,
+                           const uint8_t* fixedInfo, uint32_t fixedInfoSz,
+                           whNvmFlags flags, uint32_t label_len,
+                           const uint8_t* label, whKeyId* inout_key_id,
+                           uint8_t* out, uint32_t outSz)
+{
+    int                              ret     = WH_ERROR_OK;
+    uint8_t*                         dataPtr = NULL;
+    whMessageCrypto_CmacKdfRequest*  req     = NULL;
+    whMessageCrypto_CmacKdfResponse* res     = NULL;
+    uint16_t                         group   = WH_MESSAGE_GROUP_CRYPTO;
+    uint16_t                         action  = WC_ALGO_TYPE_KDF;
+    whKeyId                          key_id  = WH_KEYID_ERASED;
+
+    if ((ctx == NULL) || (outSz == 0)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    if ((saltSz > 0 && salt == NULL) || (zSz > 0 && z == NULL) ||
+        (fixedInfoSz > 0 && fixedInfo == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Retrieve the shared communication buffer */
+    dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
+    if (dataPtr == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Prepare request structure with subtype information */
+    req = (whMessageCrypto_CmacKdfRequest*)_createCryptoRequestWithSubtype(
+        dataPtr, WC_ALGO_TYPE_KDF, WC_KDF_TYPE_TWOSTEP_CMAC);
+
+    uint32_t total_len = sizeof(whMessageCrypto_GenericRequestHeader) +
+                         sizeof(*req) + saltSz + zSz + fixedInfoSz;
+
+    if (total_len > WOLFHSM_CFG_COMM_DATA_LEN) {
+        return WH_ERROR_BADARGS;
+    }
+    uint16_t req_len = (uint16_t)total_len;
+
+    if (inout_key_id != NULL) {
+        key_id = *inout_key_id;
+    }
+
+    req->flags       = flags;
+    req->keyIdSalt   = saltKeyId;
+    req->keyIdZ      = zKeyId;
+    req->keyIdOut    = key_id;
+    req->saltSz      = saltSz;
+    req->zSz         = zSz;
+    req->fixedInfoSz = fixedInfoSz;
+    req->outSz       = outSz;
+
+    memset(req->label, 0, WH_NVM_LABEL_LEN);
+    if ((label != NULL) && (label_len > 0)) {
+        if (label_len > WH_NVM_LABEL_LEN) {
+            label_len = WH_NVM_LABEL_LEN;
+        }
+        memcpy(req->label, label, label_len);
+    }
+
+    uint8_t* payload = (uint8_t*)(req + 1);
+
+    if (saltSz > 0 && salt != NULL) {
+        memcpy(payload, salt, saltSz);
+        payload += saltSz;
+    }
+
+    if (zSz > 0 && z != NULL) {
+        memcpy(payload, z, zSz);
+        payload += zSz;
+    }
+
+    if (fixedInfoSz > 0 && fixedInfo != NULL) {
+        memcpy(payload, fixedInfo, fixedInfoSz);
+        payload += fixedInfoSz;
+    }
+
+    /* squash unused warning */
+    (void)payload;
+
+    ret = wh_Client_SendRequest(ctx, group, action, req_len, dataPtr);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    uint16_t res_len = 0;
+    do {
+        ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
+    } while (ret == WH_ERROR_NOTREADY);
+
+    if (ret == WH_ERROR_OK) {
+        ret = _getCryptoResponse(dataPtr, WC_ALGO_TYPE_KDF, (uint8_t**)&res);
+    }
+
+    if (ret == WH_ERROR_OK) {
+        key_id = (whKeyId)(res->keyIdOut);
+
+        if (inout_key_id != NULL) {
+            *inout_key_id = key_id;
+        }
+
+        if (out != NULL) {
+            if (res->outSz <= outSz) {
+                uint8_t* out_data = (uint8_t*)(res + 1);
+                memcpy(out, out_data, res->outSz);
+            }
+            else {
+                ret = WH_ERROR_ABORTED;
+            }
+        }
+    }
+
+    return ret;
+}
+
+int wh_Client_CmacKdfMakeCacheKey(whClientContext* ctx, whKeyId saltKeyId,
+                                  const uint8_t* salt, uint32_t saltSz,
+                                  whKeyId zKeyId, const uint8_t* z,
+                                  uint32_t zSz, const uint8_t* fixedInfo,
+                                  uint32_t fixedInfoSz, whKeyId* inout_key_id,
+                                  whNvmFlags flags, const uint8_t* label,
+                                  uint32_t label_len, uint32_t outSz)
+{
+    if ((ctx == NULL) || (inout_key_id == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    return _CmacKdfMakeKey(ctx, saltKeyId, salt, saltSz, zKeyId, z, zSz,
+                           fixedInfo, fixedInfoSz, flags, label_len, label,
+                           inout_key_id, NULL, outSz);
+}
+
+int wh_Client_CmacKdfMakeExportKey(whClientContext* ctx, whKeyId saltKeyId,
+                                   const uint8_t* salt, uint32_t saltSz,
+                                   whKeyId zKeyId, const uint8_t* z,
+                                   uint32_t zSz, const uint8_t* fixedInfo,
+                                   uint32_t fixedInfoSz, uint8_t* out,
+                                   uint32_t outSz)
+{
+    if ((ctx == NULL) || (out == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    return _CmacKdfMakeKey(ctx, saltKeyId, salt, saltSz, zKeyId, z, zSz,
+                           fixedInfo, fixedInfoSz, WH_NVM_FLAGS_EPHEMERAL, 0,
+                           NULL, NULL, out, outSz);
+}
+#endif /* HAVE_CMAC_KDF */
 
 #ifndef NO_AES
 int wh_Client_AesSetKeyId(Aes* key, whNvmId keyId)

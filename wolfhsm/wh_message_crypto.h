@@ -416,6 +416,43 @@ int wh_MessageCrypto_TranslateHkdfResponse(
     whMessageCrypto_HkdfResponse* dest);
 
 /*
+ * CMAC KDF
+ */
+
+typedef struct {
+    uint32_t flags;       /* NVM flags */
+    uint32_t keyIdSalt;   /* Key ID for salt material (from cache) */
+    uint32_t keyIdZ;      /* Key ID for Z material (from cache) */
+    uint32_t keyIdOut;    /* Key ID if caching output */
+    uint32_t saltSz;      /* Salt size (0 if using keyIdSalt) */
+    uint32_t zSz;         /* Z input size (0 if using keyIdZ) */
+    uint32_t fixedInfoSz; /* Fixed info size (0 if none) */
+    uint32_t outSz;       /* Output size */
+    uint8_t  label[WH_NVM_LABEL_LEN];
+    /* Data follows:
+     * uint8_t salt[saltSz]
+     * uint8_t z[zSz]
+     * uint8_t fixedInfo[fixedInfoSz]
+     */
+} whMessageCrypto_CmacKdfRequest;
+
+typedef struct {
+    uint32_t keyIdOut; /* Assigned key ID */
+    uint32_t outSz;    /* Output size */
+    /* Data follows:
+     * uint8_t out[outSz]
+     */
+} whMessageCrypto_CmacKdfResponse;
+
+int wh_MessageCrypto_TranslateCmacKdfRequest(
+    uint16_t magic, const whMessageCrypto_CmacKdfRequest* src,
+    whMessageCrypto_CmacKdfRequest* dest);
+
+int wh_MessageCrypto_TranslateCmacKdfResponse(
+    uint16_t magic, const whMessageCrypto_CmacKdfResponse* src,
+    whMessageCrypto_CmacKdfResponse* dest);
+
+/*
  * ECC
  */
 

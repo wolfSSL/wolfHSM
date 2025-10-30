@@ -132,6 +132,23 @@ int wh_DemoClient_All(whClientContext* clientContext)
     }
 #endif /* HAVE_HKDF */
 
+#if defined(HAVE_CMAC_KDF) && defined(WOLFSSL_CMAC)
+    rc = wh_DemoClient_CryptoCmacKdfExport(clientContext);
+    if (rc != 0) {
+        return rc;
+    }
+
+    rc = wh_DemoClient_CryptoCmacKdfCache(clientContext);
+    if (rc != 0) {
+        return rc;
+    }
+
+    rc = wh_DemoClient_CryptoCmacKdfCacheInputs(clientContext);
+    if (rc != 0) {
+        return rc;
+    }
+#endif /* HAVE_CMAC_KDF && WOLFSSL_CMAC */
+
 #if defined(WOLFSSL_CMAC)
     rc = wh_DemoClient_CryptoCmac(clientContext);
     if (rc != 0) {
