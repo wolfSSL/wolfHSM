@@ -19,3 +19,4 @@ tools/static-analysis/reports/
 *.gcda
 *.gcno
 coverage/
+scan_out/*
