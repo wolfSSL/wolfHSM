@@ -1208,7 +1208,8 @@ int wh_Server_CmacKdfKeyCacheImport(whServerContext* ctx,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Server_KeystoreGetCacheSlot(ctx, keySize, &cacheBuf, &cacheMeta);
+    ret = wh_Server_KeystoreGetCacheSlot(ctx, keyId, keySize, &cacheBuf,
+                                         &cacheMeta);
     if (ret == WH_ERROR_OK) {
         memcpy(cacheBuf, keyData, keySize);
     }
@@ -1375,12 +1376,12 @@ static int _HandleCmacKdf(whServerContext* ctx, uint16_t magic,
     uint32_t zSz         = req.zSz;
     uint32_t fixedInfoSz = req.fixedInfoSz;
     uint32_t outSz       = req.outSz;
-    whKeyId  keyIdOut =
-        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyIdOut);
-    whKeyId saltKeyId =
-        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyIdSalt);
-    whKeyId zKeyId =
-        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyIdZ);
+    whKeyId  keyIdOut    = wh_KeyId_TranslateFromClient(
+            WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyIdOut);
+    whKeyId saltKeyId = wh_KeyId_TranslateFromClient(
+        WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyIdSalt);
+    whKeyId zKeyId = wh_KeyId_TranslateFromClient(
+        WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyIdZ);
     whNvmFlags flags      = (whNvmFlags)req.flags;
     uint8_t*   label      = req.label;
     uint16_t   label_size = WH_NVM_LABEL_LEN;
@@ -1454,7 +1455,7 @@ static int _HandleCmacKdf(whServerContext* ctx, uint16_t magic,
             ret = wh_Server_CmacKdfKeyCacheImport(ctx, out, outSz, keyIdOut,
                                                   flags, label_size, label);
             if (ret == WH_ERROR_OK) {
-                res.keyIdOut = WH_KEYID_ID(keyIdOut);
+                res.keyIdOut = wh_KeyId_TranslateToClient(keyIdOut);
                 res.outSz    = 0;
                 memset(out, 0, outSz);
             }

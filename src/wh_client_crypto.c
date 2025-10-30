@@ -2830,7 +2830,11 @@ static int _CmacKdfMakeKey(whClientContext* ctx, whKeyId saltKeyId,
 
     if (fixedInfoSz > 0 && fixedInfo != NULL) {
         memcpy(payload, fixedInfo, fixedInfoSz);
+        payload += fixedInfoSz;
     }
+
+    /* squash unused warning */
+    (void)payload;
 
     ret = wh_Client_SendRequest(ctx, group, action, req_len, dataPtr);
     if (ret != WH_ERROR_OK) {
