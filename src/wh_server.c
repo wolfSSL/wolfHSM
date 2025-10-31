@@ -404,6 +404,7 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
             } while (rc == WH_ERROR_NOTREADY);
         }
     }
+
     return rc;
 }
 

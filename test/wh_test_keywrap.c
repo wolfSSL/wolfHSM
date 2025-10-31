@@ -48,11 +48,9 @@
 #define WH_TEST_AESGCM_KEYID 2
 #define WH_TEST_AES_KEYSIZE 32
 #define WH_TEST_AES_TEXTSIZE 16
-#define WH_TEST_AES_IVSIZE 12
-#define WH_TEST_AES_TAGSIZE 16
-#define WH_TEST_AES_WRAPPED_KEYSIZE                                   \
-    (WH_TEST_AES_IVSIZE + WH_TEST_AES_TAGSIZE + WH_TEST_AES_KEYSIZE + \
-     sizeof(whNvmMetadata))
+#define WH_TEST_AES_WRAPPED_KEYSIZE                                       \
+    (WOLFHSM_KEYWRAP_AES_GCM_IV_SIZE + WOLFHSM_KEYWRAP_AES_GCM_TAG_SIZE + \
+     WH_TEST_AES_KEYSIZE + sizeof(whNvmMetadata))
 
 #endif /* HAVE_AESGCM */
 
@@ -75,12 +73,12 @@ static int _InitServerKek(whClientContext* client)
 
 static int _CleanupServerKek(whClientContext* client)
 {
-    return wh_Client_KeyErase(client, WH_TEST_KEKID);
+    return wh_Client_KeyEvict(client, WH_TEST_KEKID);
 }
 
 #ifdef HAVE_AESGCM
 
-static int _AesGcm_KeyWrap(whClientContext* client, WC_RNG* rng)
+static int _AesGcm_TestKeyWrap(whClientContext* client, WC_RNG* rng)
 {
 
     int           ret = 0;
@@ -89,7 +87,7 @@ static int _AesGcm_KeyWrap(whClientContext* client, WC_RNG* rng)
     uint8_t       wrappedKey[WH_TEST_AES_WRAPPED_KEYSIZE];
     whKeyId       wrappedKeyId = WH_KEYID_ERASED;
     whNvmMetadata metadata     = {
-            .id    = WH_CLIENT_KEYID_MAKE_WRAPPED_META(WH_TEST_DEFAULT_CLIENT_ID,
+            .id    = WH_CLIENT_KEYID_MAKE_WRAPPED_META(client->comm->client_id,
                                                        WH_TEST_AESGCM_KEYID),
             .label = "AES Key Label",
             .len   = WH_TEST_AES_KEYSIZE,
@@ -102,8 +100,8 @@ static int _AesGcm_KeyWrap(whClientContext* client, WC_RNG* rng)
     uint8_t       ciphertext[sizeof(plaintext)];
     uint8_t       decrypted[sizeof(plaintext)];
 
-    uint8_t       tag[WH_TEST_AES_TAGSIZE];
-    uint8_t       iv[WH_TEST_AES_IVSIZE];
+    uint8_t       tag[WOLFHSM_KEYWRAP_AES_GCM_TAG_SIZE];
+    uint8_t       iv[WOLFHSM_KEYWRAP_AES_GCM_IV_SIZE];
     const uint8_t aad[] = {0xfe, 0xed, 0xfa, 0xce, 0xde, 0xad, 0xbe,
                            0xef, 0xfe, 0xed, 0xfa, 0xce, 0xde, 0xad,
                            0xbe, 0xef, 0xab, 0xad, 0xda, 0xd2};
@@ -191,12 +189,12 @@ static int _AesGcm_KeyWrap(whClientContext* client, WC_RNG* rng)
 
     if (memcmp(plainKey, tmpPlainKey, sizeof(plainKey)) != 0) {
         WH_ERROR_PRINT("AES GCM wrap/unwrap key failed to match\n");
-        return ret;
+        return -1;
     }
 
     if (memcmp(&metadata, &tmpMetadata, sizeof(metadata)) != 0) {
         WH_ERROR_PRINT("AES GCM wrap/unwrap metadata failed to match\n");
-        return ret;
+        return -1;
     }
 
     /* Cache a local key using the same numeric ID to confirm coexistence */
@@ -218,11 +216,42 @@ static int _AesGcm_KeyWrap(whClientContext* client, WC_RNG* rng)
                            WH_TEST_AESGCM_KEYID, localKeyId);
             return WH_ERROR_ABORTED;
         }
-        WH_TEST_RETURN_ON_FAIL(wh_Client_KeyErase(client, localKeyId));
+        WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvict(client, localKeyId));
     }
 
-    wh_Client_KeyErase(client, wrappedKeyId);
+    wh_Client_KeyEvict(client, wrappedKeyId);
     wc_AesFree(aes);
+
+    return ret;
+}
+
+static int _AesGcm_TestDataWrap(whClientContext* client)
+{
+    int     ret                                           = 0;
+    uint8_t data[]                                        = "Example data!";
+    uint8_t unwrappedData[sizeof(data)]                   = {0};
+    uint8_t wrappedData[sizeof(data) + WOLFHSM_KEYWRAP_AES_GCM_IV_SIZE +
+                        WOLFHSM_KEYWRAP_AES_GCM_TAG_SIZE] = {0};
+
+    ret = wh_Client_DataWrap(client, WC_CIPHER_AES_GCM, WH_TEST_KEKID, data,
+                             sizeof(data), wrappedData, sizeof(wrappedData));
+    if (ret != WH_ERROR_OK) {
+        WH_ERROR_PRINT("Failed to wh_Client_DataWrap %d\n", ret);
+        return ret;
+    }
+
+    ret = wh_Client_DataUnwrap(client, WC_CIPHER_AES_GCM, WH_TEST_KEKID,
+                               wrappedData, sizeof(wrappedData), unwrappedData,
+                               sizeof(unwrappedData));
+    if (ret != WH_ERROR_OK) {
+        WH_ERROR_PRINT("Failed to wh_Client_DataUnwrap %d\n", ret);
+        return ret;
+    }
+
+    if (memcmp(data, unwrappedData, sizeof(data)) != 0) {
+        WH_ERROR_PRINT("Unwrapped data failed to match input data\n");
+        return -1;
+    }
 
     return ret;
 }
@@ -247,15 +276,37 @@ int whTest_Client_KeyWrap(whClientContext* client)
     }
 
 #ifdef HAVE_AESGCM
-    ret = _AesGcm_KeyWrap(client, rng);
+    ret = _AesGcm_TestKeyWrap(client, rng);
     if (ret != WH_ERROR_OK) {
-        WH_ERROR_PRINT("Failed to _AesGcm_KeyWrap %d\n", ret);
+        WH_ERROR_PRINT("Failed to _AesGcm_TestKeyWrap %d\n", ret);
     }
 #endif
 
     _CleanupServerKek(client);
 
     (void)wc_FreeRng(rng);
+    return ret;
+}
+
+int whTest_Client_DataWrap(whClientContext* client)
+{
+    int ret = 0;
+
+    ret = _InitServerKek(client);
+    if (ret != WH_ERROR_OK) {
+        WH_ERROR_PRINT("Failed to _InitServerKek %d\n", ret);
+        return ret;
+    }
+
+#ifdef HAVE_AESGCM
+    ret = _AesGcm_TestDataWrap(client);
+    if (ret != WH_ERROR_OK) {
+        WH_ERROR_PRINT("Failed to _AesGcm_TestDataWrap %d\n", ret);
+    }
+#endif
+
+    _CleanupServerKek(client);
+
     return ret;
 }
 
@@ -282,6 +333,14 @@ int whTest_KeyWrapClientConfig(whClientConfig* clientCfg)
     }
     else {
         printf("KEYWRAP TESTS SUCCESS\n");
+    }
+
+    ret = whTest_Client_DataWrap(client);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to whTest_Client_DataWrap %d\n", ret);
+    }
+    else {
+        printf("DATAWRAP TESTS SUCCESS\n");
     }
 
     /* Clean up used resources */

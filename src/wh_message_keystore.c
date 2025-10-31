@@ -239,9 +239,9 @@ int wh_MessageKeystore_TranslateExportDmaResponse(
 #endif /* WOLFHSM_CFG_DMA */
 
 /* Key Wrap Request translation */
-int wh_MessageKeystore_TranslateWrapRequest(
-    uint16_t magic, const whMessageKeystore_WrapRequest* src,
-    whMessageKeystore_WrapRequest* dest)
+int wh_MessageKeystore_TranslateKeyWrapRequest(
+    uint16_t magic, const whMessageKeystore_KeyWrapRequest* src,
+    whMessageKeystore_KeyWrapRequest* dest)
 {
     if ((src == NULL) || (dest == NULL)) {
         return WH_ERROR_BADARGS;
@@ -253,9 +253,9 @@ int wh_MessageKeystore_TranslateWrapRequest(
 }
 
 /* Key Wrap Response translation */
-int wh_MessageKeystore_TranslateWrapResponse(
-    uint16_t magic, const whMessageKeystore_WrapResponse* src,
-    whMessageKeystore_WrapResponse* dest)
+int wh_MessageKeystore_TranslateKeyWrapResponse(
+    uint16_t magic, const whMessageKeystore_KeyWrapResponse* src,
+    whMessageKeystore_KeyWrapResponse* dest)
 {
     if ((src == NULL) || (dest == NULL)) {
         return WH_ERROR_BADARGS;
@@ -267,9 +267,9 @@ int wh_MessageKeystore_TranslateWrapResponse(
 }
 
 /* Key Unwrap Request translation */
-int wh_MessageKeystore_TranslateUnwrapAndExportRequest(
-    uint16_t magic, const whMessageKeystore_UnwrapAndExportRequest* src,
-    whMessageKeystore_UnwrapAndExportRequest* dest)
+int wh_MessageKeystore_TranslateKeyUnwrapAndExportRequest(
+    uint16_t magic, const whMessageKeystore_KeyUnwrapAndExportRequest* src,
+    whMessageKeystore_KeyUnwrapAndExportRequest* dest)
 {
     if ((src == NULL) || (dest == NULL)) {
         return WH_ERROR_BADARGS;
@@ -281,9 +281,9 @@ int wh_MessageKeystore_TranslateUnwrapAndExportRequest(
 }
 
 /* Key Unwrap Response translation */
-int wh_MessageKeystore_TranslateUnwrapAndExportResponse(
-    uint16_t magic, const whMessageKeystore_UnwrapAndExportResponse* src,
-    whMessageKeystore_UnwrapAndExportResponse* dest)
+int wh_MessageKeystore_TranslateKeyUnwrapAndExportResponse(
+    uint16_t magic, const whMessageKeystore_KeyUnwrapAndExportResponse* src,
+    whMessageKeystore_KeyUnwrapAndExportResponse* dest)
 {
     if ((src == NULL) || (dest == NULL)) {
         return WH_ERROR_BADARGS;
@@ -295,9 +295,9 @@ int wh_MessageKeystore_TranslateUnwrapAndExportResponse(
 }
 
 /* Wrapped Key Cache Request translation */
-int wh_MessageKeystore_TranslateUnwrapAndCacheRequest(
-    uint16_t magic, const whMessageKeystore_UnwrapAndCacheRequest* src,
-    whMessageKeystore_UnwrapAndCacheRequest* dest)
+int wh_MessageKeystore_TranslateKeyUnwrapAndCacheRequest(
+    uint16_t magic, const whMessageKeystore_KeyUnwrapAndCacheRequest* src,
+    whMessageKeystore_KeyUnwrapAndCacheRequest* dest)
 {
     if ((src == NULL) || (dest == NULL)) {
         return WH_ERROR_BADARGS;
@@ -309,15 +309,71 @@ int wh_MessageKeystore_TranslateUnwrapAndCacheRequest(
 }
 
 /* Key Cache Response translation */
-int wh_MessageKeystore_TranslateUnwrapAndCacheResponse(
-    uint16_t magic, const whMessageKeystore_UnwrapAndCacheResponse* src,
-    whMessageKeystore_UnwrapAndCacheResponse* dest)
+int wh_MessageKeystore_TranslateKeyUnwrapAndCacheResponse(
+    uint16_t magic, const whMessageKeystore_KeyUnwrapAndCacheResponse* src,
+    whMessageKeystore_KeyUnwrapAndCacheResponse* dest)
 {
     if ((src == NULL) || (dest == NULL)) {
         return WH_ERROR_BADARGS;
     }
     WH_T32(magic, dest, src, rc);
     WH_T16(magic, dest, src, keyId);
+    WH_T16(magic, dest, src, cipherType);
+    return 0;
+}
+
+/* Data Wrap Request translation */
+int wh_MessageKeystore_TranslateDataWrapRequest(
+    uint16_t magic, const whMessageKeystore_DataWrapRequest* src,
+    whMessageKeystore_DataWrapRequest* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, dataSz);
+    WH_T16(magic, dest, src, serverKeyId);
+    WH_T16(magic, dest, src, cipherType);
+    return 0;
+}
+
+/* Data Wrap Response translation */
+int wh_MessageKeystore_TranslateDataWrapResponse(
+    uint16_t magic, const whMessageKeystore_DataWrapResponse* src,
+    whMessageKeystore_DataWrapResponse* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, rc);
+    WH_T32(magic, dest, src, wrappedDataSz);
+    WH_T16(magic, dest, src, cipherType);
+    return 0;
+}
+
+/* Data Unwrap Request translation */
+int wh_MessageKeystore_TranslateDataUnwrapRequest(
+    uint16_t magic, const whMessageKeystore_DataUnwrapRequest* src,
+    whMessageKeystore_DataUnwrapRequest* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, wrappedDataSz);
+    WH_T16(magic, dest, src, serverKeyId);
+    WH_T16(magic, dest, src, cipherType);
+    return 0;
+}
+
+/* Data Unwrap Response translation */
+int wh_MessageKeystore_TranslateDataUnwrapResponse(
+    uint16_t magic, const whMessageKeystore_DataUnwrapResponse* src,
+    whMessageKeystore_DataUnwrapResponse* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, rc);
+    WH_T32(magic, dest, src, dataSz);
     WH_T16(magic, dest, src, cipherType);
     return 0;
 }
