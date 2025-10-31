@@ -24,6 +24,10 @@
 #if !defined(WOLFHSM_CFG_NO_CRYPTO) && defined(WOLFHSM_CFG_BENCH_ENABLE)
 #include "wolfssl/wolfcrypt/cmac.h"
 
+#if defined(WOLFHSM_CFG_DMA) && defined(WOLFHSM_CFG_TEST_POSIX)
+#include "port/posix/posix_transport_shm.h"
+#endif /* WOLFHSM_CFG_DMA && WOLFHSM_CFG_TEST_POSIX */
+
 #if defined(WOLFSSL_CMAC) && !defined(NO_AES) && defined(WOLFSSL_AES_DIRECT)
 
 static const uint8_t key128[] = {0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae,
@@ -44,10 +48,11 @@ int _benchCmacAes(whClientContext* client, whBenchOpContext* ctx, int id,
     whKeyId  keyId = WH_KEYID_ERASED;
     Cmac     cmac[1];
     char     keyLabel[] = "baby's first key";
-    byte     tag[16];
+    byte     tag[WC_CMAC_TAG_MAX_SZ];
     int      i;
     uint8_t* in = NULL;
     size_t   inLen;
+    uint8_t* out = NULL;
 
     /* cache the key on the HSM */
     ret = wh_Client_KeyCache(client, 0, (uint8_t*)keyLabel, sizeof(keyLabel),
@@ -57,10 +62,32 @@ int _benchCmacAes(whClientContext* client, whBenchOpContext* ctx, int id,
         return ret;
     }
 
+    out = tag; /* default to using tag buffer on the stack */
 #if defined(WOLFHSM_CFG_DMA)
     if (devId == WH_DEV_ID_DMA) {
-        in    = WH_BENCH_DMA_BUFFER;
         inLen = WOLFHSM_CFG_BENCH_DMA_BUFFER_SIZE;
+#if defined(WOLFHSM_CFG_TEST_POSIX)
+        if (ctx->transportType == WH_BENCH_TRANSPORT_POSIX_DMA) {
+            /* if static memory was used with DMA then use XMALLOC */
+            void* heap =
+                posixTransportShm_GetDmaHeap(client->comm->transport_context);
+            in = (uint8_t*)XMALLOC(inLen, heap, DYNAMIC_TYPE_TMP_BUFFER);
+            if (in == NULL) {
+                WH_BENCH_PRINTF("Failed to allocate memory for DMA\n");
+                return WH_ERROR_NOSPACE;
+            }
+            out = (uint8_t*)XMALLOC(WC_CMAC_TAG_MAX_SZ, heap,
+                                    DYNAMIC_TYPE_TMP_BUFFER);
+            if (out == NULL) {
+                WH_BENCH_PRINTF("Failed to allocate memory for DMA\n");
+                XFREE(in, heap, DYNAMIC_TYPE_TMP_BUFFER);
+                return WH_ERROR_NOSPACE;
+            }
+        }
+        else {
+            in = WH_BENCH_DMA_BUFFER;
+        }
+#endif /* WOLFHSM_CFG_TEST_POSIX */
     }
     else
 #endif
@@ -101,7 +128,7 @@ int _benchCmacAes(whClientContext* client, whBenchOpContext* ctx, int id,
         benchStartRet = wh_Bench_StartOp(ctx, id);
         /* Oneshot CMAC through wolfCrypt API will always be most performant
          * implementation */
-        ret = wc_AesCmacGenerate_ex(cmac, tag, &outLen, in, inLen, key, keyLen,
+        ret = wc_AesCmacGenerate_ex(cmac, out, &outLen, in, inLen, key, keyLen,
                                     NULL, devId);
         benchStopRet = wh_Bench_StopOp(ctx, id);
 
@@ -131,6 +158,18 @@ exit:
             ret = evictRet;
         }
     }
+#if defined(WOLFHSM_CFG_DMA)
+#if defined(WOLFHSM_CFG_TEST_POSIX)
+    if (devId == WH_DEV_ID_DMA &&
+        ctx->transportType == WH_BENCH_TRANSPORT_POSIX_DMA) {
+        /* if static memory was used with DMA then use XFREE */
+        void* heap =
+            posixTransportShm_GetDmaHeap(client->comm->transport_context);
+        XFREE(in, heap, DYNAMIC_TYPE_TMP_BUFFER);
+        XFREE(out, heap, DYNAMIC_TYPE_TMP_BUFFER);
+    }
+#endif /* WOLFHSM_CFG_TEST_POSIX */
+#endif
     (void)wc_CmacFree(cmac);
     return ret;
 }

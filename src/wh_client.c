@@ -1340,7 +1340,9 @@ int wh_Client_KeyCacheDmaRequest(whClientContext* c, uint32_t flags,
                                  const void* keyAddr, uint16_t keySz,
                                  uint16_t keyId)
 {
+    int                                ret;
     whMessageKeystore_CacheDmaRequest* req = NULL;
+    uintptr_t                          keyAddrPtr = 0;
 
     if (c == NULL || (labelSz > 0 && label == NULL)) {
         return WH_ERROR_BADARGS;
@@ -1356,8 +1358,11 @@ int wh_Client_KeyCacheDmaRequest(whClientContext* c, uint32_t flags,
     req->labelSz = labelSz;
 
     /* Set up DMA buffer info */
-    req->key.addr = (uint64_t)((uintptr_t)keyAddr);
     req->key.sz   = keySz;
+    ret           = wh_Client_DmaProcessClientAddress(
+        c, (uintptr_t)keyAddr, (void**)&keyAddrPtr, keySz,
+        WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
+    req->key.addr = keyAddrPtr;
 
     /* Copy label if provided, truncate if necessary */
     if (labelSz > 0) {
@@ -1367,8 +1372,15 @@ int wh_Client_KeyCacheDmaRequest(whClientContext* c, uint32_t flags,
         memcpy(req->label, label, labelSz);
     }
 
-    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_KEY, WH_KEY_CACHE_DMA,
-                                 sizeof(*req), (uint8_t*)req);
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Client_SendRequest(c, WH_MESSAGE_GROUP_KEY, WH_KEY_CACHE_DMA,
+                                    sizeof(*req), (uint8_t*)req);
+    }
+
+    (void)wh_Client_DmaProcessClientAddress(
+        c, (uintptr_t)keyAddr, (void**)&keyAddrPtr, keySz,
+        WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
+    return ret;
 }
 
 int wh_Client_KeyCacheDmaResponse(whClientContext* c, uint16_t* keyId)
