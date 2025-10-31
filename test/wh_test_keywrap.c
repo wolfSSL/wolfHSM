@@ -73,7 +73,7 @@ static int _InitServerKek(whClientContext* client)
 
 static int _CleanupServerKek(whClientContext* client)
 {
-    return wh_Client_KeyErase(client, WH_TEST_KEKID);
+    return wh_Client_KeyEvict(client, WH_TEST_KEKID);
 }
 
 #ifdef HAVE_AESGCM
@@ -87,7 +87,7 @@ static int _AesGcm_TestKeyWrap(whClientContext* client, WC_RNG* rng)
     uint8_t       wrappedKey[WH_TEST_AES_WRAPPED_KEYSIZE];
     whKeyId       wrappedKeyId = WH_KEYID_ERASED;
     whNvmMetadata metadata     = {
-            .id    = WH_CLIENT_KEYID_MAKE_WRAPPED_META(WH_TEST_DEFAULT_CLIENT_ID,
+            .id    = WH_CLIENT_KEYID_MAKE_WRAPPED_META(client->comm->client_id,
                                                        WH_TEST_AESGCM_KEYID),
             .label = "AES Key Label",
             .len   = WH_TEST_AES_KEYSIZE,
@@ -216,10 +216,10 @@ static int _AesGcm_TestKeyWrap(whClientContext* client, WC_RNG* rng)
                            WH_TEST_AESGCM_KEYID, localKeyId);
             return WH_ERROR_ABORTED;
         }
-        WH_TEST_RETURN_ON_FAIL(wh_Client_KeyErase(client, localKeyId));
+        WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvict(client, localKeyId));
     }
 
-    wh_Client_KeyErase(client, wrappedKeyId);
+    wh_Client_KeyEvict(client, wrappedKeyId);
     wc_AesFree(aes);
 
     return ret;
@@ -338,6 +338,9 @@ int whTest_KeyWrapClientConfig(whClientConfig* clientCfg)
     ret = whTest_Client_DataWrap(client);
     if (ret != 0) {
         WH_ERROR_PRINT("Failed to whTest_Client_DataWrap %d\n", ret);
+    }
+    else {
+        printf("DATAWRAP TESTS SUCCESS\n");
     }
 
     /* Clean up used resources */

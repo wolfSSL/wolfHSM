@@ -51,7 +51,7 @@ int wh_Nvm_Init(whNvmContext* context, const whNvmConfig *config)
     memset(&context->globalCache, 0, sizeof(context->globalCache));
 #endif
 
-    if (context->cb->Init != NULL) {
+    if (context->cb != NULL && context->cb->Init != NULL) {
         rc = context->cb->Init(context->context, config->config);
         if (rc != 0) {
             context->cb = NULL;

@@ -499,11 +499,6 @@ int wh_Server_KeystoreFreshenKey(whServerContext* server, whKeyId keyId,
         return WH_ERROR_BADARGS;
     }
 
-    /* Reject attempts to freshen wrapped keys from NVM */
-    if (WH_KEYID_TYPE(keyId) == WH_KEYTYPE_WRAPPED) {
-        return WH_ERROR_ABORTED;
-    }
-
     ret = _FindInCache(server, keyId, &foundIndex, &foundBigIndex, outBuf,
                        outMeta);
     if (ret != WH_ERROR_OK) {
@@ -854,7 +849,7 @@ static int _AesGcmDataWrap(whServerContext* server, whKeyId serverKeyId,
     /* Get the server side key */
     ret = wh_Server_KeystoreReadKey(
         server,
-        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, server->comm->client_id, serverKeyId),
+        wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO, server->comm->client_id, serverKeyId),
         NULL, serverKey, &serverKeySz);
     if (ret != WH_ERROR_OK) {
         return ret;
@@ -920,7 +915,7 @@ static int _AesGcmDataUnwrap(whServerContext* server, uint16_t serverKeyId,
     /* Get the server side key */
     ret = wh_Server_KeystoreReadKey(
         server,
-        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, server->comm->client_id, serverKeyId),
+        wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO, server->comm->client_id, serverKeyId),
         NULL, serverKey, &serverKeySz);
     if (ret != WH_ERROR_OK) {
         return ret;
