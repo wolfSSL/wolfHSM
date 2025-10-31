@@ -1655,9 +1655,9 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
             respData = (uint8_t*)resp_packet +
                        sizeof(whMessageKeystore_KeyWrapResponse);
 
-            ret = _HandleKeyWrapRequest(server, &wrapReq, reqData, reqDataSz,
-                                        &wrapResp, respData, respDataSz);
-            wrapResp.rc = ret;
+            wrapResp.rc =
+                _HandleKeyWrapRequest(server, &wrapReq, reqData, reqDataSz,
+                                      &wrapResp, respData, respDataSz);
 
             (void)wh_MessageKeystore_TranslateKeyWrapResponse(magic, &wrapResp,
                                                               resp_packet);
@@ -1691,10 +1691,9 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
             respData = (uint8_t*)resp_packet +
                        sizeof(whMessageKeystore_KeyUnwrapAndExportResponse);
 
-            ret = _HandleKeyUnwrapAndExportRequest(server, &unwrapReq, reqData,
-                                                   reqDataSz, &unwrapResp,
-                                                   respData, respDataSz);
-            unwrapResp.rc = ret;
+            unwrapResp.rc = _HandleKeyUnwrapAndExportRequest(
+                server, &unwrapReq, reqData, reqDataSz, &unwrapResp, respData,
+                respDataSz);
 
             (void)wh_MessageKeystore_TranslateKeyUnwrapAndExportResponse(
                 magic, &unwrapResp, resp_packet);
@@ -1728,10 +1727,9 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
             respData = (uint8_t*)resp_packet +
                        sizeof(whMessageKeystore_KeyUnwrapAndCacheResponse);
 
-            ret = _HandleKeyUnwrapAndCacheRequest(server, &cacheReq, reqData,
-                                                  reqDataSz, &cacheResp,
-                                                  respData, respDataSz);
-            cacheResp.rc = ret;
+            cacheResp.rc = _HandleKeyUnwrapAndCacheRequest(
+                server, &cacheReq, reqData, reqDataSz, &cacheResp, respData,
+                respDataSz);
 
             (void)wh_MessageKeystore_TranslateKeyUnwrapAndCacheResponse(
                 magic, &cacheResp, resp_packet);
@@ -1765,9 +1763,9 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
             respData = (uint8_t*)resp_packet +
                        sizeof(whMessageKeystore_DataWrapResponse);
 
-            ret = _HandleDataWrapRequest(server, &wrapReq, reqData, reqDataSz,
-                                         &wrapResp, respData, respDataSz);
-            wrapResp.rc = ret;
+            wrapResp.rc =
+                _HandleDataWrapRequest(server, &wrapReq, reqData, reqDataSz,
+                                       &wrapResp, respData, respDataSz);
 
             (void)wh_MessageKeystore_TranslateDataWrapResponse(magic, &wrapResp,
                                                                resp_packet);
@@ -1802,10 +1800,9 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
             respData = (uint8_t*)resp_packet +
                        sizeof(whMessageKeystore_DataUnwrapResponse);
 
-            ret =
+            unwrapResp.rc =
                 _HandleDataUnwrapRequest(server, &unwrapReq, reqData, reqDataSz,
                                          &unwrapResp, respData, respDataSz);
-            unwrapResp.rc = ret;
 
             (void)wh_MessageKeystore_TranslateDataUnwrapResponse(
                 magic, &unwrapResp, resp_packet);
