@@ -227,9 +227,9 @@ static int _AesGcm_TestKeyWrap(whClientContext* client, WC_RNG* rng)
 
 static int _AesGcm_TestDataWrap(whClientContext* client)
 {
-    int     ret                              = 0;
-    uint8_t data[]                           = "Example data!";
-    uint8_t unwrappedData[sizeof(data)]      = {0};
+    int     ret                                           = 0;
+    uint8_t data[]                                        = "Example data!";
+    uint8_t unwrappedData[sizeof(data)]                   = {0};
     uint8_t wrappedData[sizeof(data) + WOLFHSM_KEYWRAP_AES_GCM_IV_SIZE +
                         WOLFHSM_KEYWRAP_AES_GCM_TAG_SIZE] = {0};
 
