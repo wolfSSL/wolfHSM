@@ -221,7 +221,7 @@ static int _AesGcm_KeyWrap(whClientContext* client, WC_RNG* rng)
         WH_TEST_RETURN_ON_FAIL(wh_Client_KeyErase(client, localKeyId));
     }
 
-    wh_Client_KeyErase(client, wrappedKeyId);
+    wh_Client_KeyEvict(client, wrappedKeyId);
     wc_AesFree(aes);
 
     return ret;
