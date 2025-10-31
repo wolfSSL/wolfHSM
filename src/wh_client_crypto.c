@@ -3009,7 +3009,7 @@ int wh_Client_CmacDma(whClientContext* ctx, Cmac* cmac, CmacType type,
     req->state.sz   = sizeof(*cmac);
     ret             = wh_Client_DmaProcessClientAddress(
         ctx, (uintptr_t)cmac, (void**)&stateAddr, req->state.sz,
-        WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
+        WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
     if (ret == WH_ERROR_OK) {
         req->state.addr = stateAddr;
     }
@@ -3108,7 +3108,7 @@ int wh_Client_CmacDma(whClientContext* ctx, Cmac* cmac, CmacType type,
     }
     (void)wh_Client_DmaProcessClientAddress(
         ctx, (uintptr_t)cmac, (void**)&stateAddr, req->state.sz,
-        WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
+        WH_DMA_OPER_CLIENT_WRITE_POST, (whDmaFlags){0});
     return ret;
 }
 #endif /* WOLFHSM_CFG_DMA */
@@ -3691,7 +3691,7 @@ int wh_Client_Sha224Dma(whClientContext* ctx, wc_Sha224* sha, const uint8_t* in,
     if (in != NULL || out != NULL) {
         (void)wh_Client_DmaProcessClientAddress(
             ctx, (uintptr_t)sha224, (void**)&stateAddr, req->state.sz,
-            WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
+            WH_DMA_OPER_CLIENT_WRITE_POST, (whDmaFlags){0});
         (void)wh_Client_DmaProcessClientAddress(
             ctx, (uintptr_t)in, (void**)&inAddr, req->input.sz,
             WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
@@ -3982,7 +3982,7 @@ int wh_Client_Sha384Dma(whClientContext* ctx, wc_Sha384* sha, const uint8_t* in,
     if (in != NULL || out != NULL) {
         (void)wh_Client_DmaProcessClientAddress(
             ctx, (uintptr_t)sha384, (void**)&stateAddr, req->state.sz,
-            WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
+            WH_DMA_OPER_CLIENT_WRITE_POST, (whDmaFlags){0});
         (void)wh_Client_DmaProcessClientAddress(
             ctx, (uintptr_t)in, (void**)&inAddr, req->input.sz,
             WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
@@ -4286,7 +4286,7 @@ int wh_Client_Sha512Dma(whClientContext* ctx, wc_Sha512* sha, const uint8_t* in,
     if (in != NULL || out != NULL) {
         (void)wh_Client_DmaProcessClientAddress(
             ctx, (uintptr_t)sha512, (void**)&stateAddr, req->state.sz,
-            WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
+            WH_DMA_OPER_CLIENT_WRITE_POST, (whDmaFlags){0});
         (void)wh_Client_DmaProcessClientAddress(
             ctx, (uintptr_t)in, (void**)&inAddr, req->input.sz,
             WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
@@ -5206,7 +5206,7 @@ int wh_Client_MlDsaVerifyDma(whClientContext* ctx, const byte* sig,
                 req->msg.sz = msg_len;
                 ret         = wh_Client_DmaProcessClientAddress(
                     ctx, (uintptr_t)msg, (void**)&msgAddr, msg_len,
-                    WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
+                    WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
                 if (ret == WH_ERROR_OK) {
                     req->msg.addr = msgAddr;
                 }
@@ -5246,7 +5246,7 @@ int wh_Client_MlDsaVerifyDma(whClientContext* ctx, const byte* sig,
 
             (void)wh_Client_DmaProcessClientAddress(
                 ctx, (uintptr_t)msg, (void**)&msgAddr, msg_len,
-                WH_DMA_OPER_CLIENT_WRITE_POST, (whDmaFlags){0});
+                WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
             (void)wh_Client_DmaProcessClientAddress(
                 ctx, (uintptr_t)sig, (void**)&sigAddr, sig_len,
                 WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
