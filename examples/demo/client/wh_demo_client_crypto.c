@@ -170,8 +170,9 @@ int wh_DemoClient_CryptoRsaImport(whClientContext* clientContext)
     close(keyFd);
 
     /* cache the key in the HSM, get HSM assigned keyId */
-    ret = wh_Client_KeyCache(clientContext, 0, (uint8_t*)keyLabel,
-                             strlen(keyLabel), keyBuf, keySz, &keyId);
+    ret = wh_Client_KeyCache(
+        clientContext, WH_NVM_FLAGS_USAGE_ENCRYPT | WH_NVM_FLAGS_USAGE_DECRYPT,
+        (uint8_t*)keyLabel, strlen(keyLabel), keyBuf, keySz, &keyId);
     if (ret != 0) {
         printf("Failed to wh_Client_KeyCache %d\n", ret);
         goto exit;
@@ -359,8 +360,9 @@ int wh_DemoClient_CryptoCurve25519Import(whClientContext* clientContext)
 
 
     /* cache the key in the HSM, get HSM assigned keyId */
-    ret = wh_Client_KeyCache(clientContext, 0, (uint8_t*)keyLabel,
-                             strlen(keyLabel), keyBuf, keySz, &keyIdBob);
+    ret = wh_Client_KeyCache(clientContext, WH_NVM_FLAGS_USAGE_DERIVE,
+                             (uint8_t*)keyLabel, strlen(keyLabel), keyBuf,
+                             keySz, &keyIdBob);
     if (ret != 0) {
         printf("Failed to wh_Client_KeyCache %d\n", ret);
         goto exit;
@@ -394,8 +396,9 @@ int wh_DemoClient_CryptoCurve25519Import(whClientContext* clientContext)
     close(keyFd);
 
     /* cache the key in the HSM, get HSM assigned keyId */
-    ret = wh_Client_KeyCache(clientContext, 0, (uint8_t*)keyLabel,
-                             strlen(keyLabel), keyBuf, keySz, &keyIdAlice);
+    ret = wh_Client_KeyCache(clientContext, WH_NVM_FLAGS_USAGE_DERIVE,
+                             (uint8_t*)keyLabel, strlen(keyLabel), keyBuf,
+                             keySz, &keyIdAlice);
     if (ret != 0) {
         printf("Failed to wh_Client_KeyCache %d\n", ret);
         goto exit;
@@ -649,8 +652,11 @@ int wh_DemoClient_CryptoEccImport(whClientContext* clientContext)
     close(keyFd);
     /* Cache the key in the HSM, get HSM assigned keyId. From here on out, the
      * keys are stored in the HSM and can be referred to by keyId */
-    ret = wh_Client_KeyCache(clientContext, 0, (uint8_t*)keyLabel,
-                             strlen(keyLabel), keyBuf, keySz, &keyIdAlice);
+    ret = wh_Client_KeyCache(
+        clientContext,
+        WH_NVM_FLAGS_USAGE_DERIVE | WH_NVM_FLAGS_USAGE_SIGN |
+            WH_NVM_FLAGS_USAGE_VERIFY,
+        (uint8_t*)keyLabel, strlen(keyLabel), keyBuf, keySz, &keyIdAlice);
     if (ret != 0) {
         printf("Failed to wh_Client_KeyCache %d\n", ret);
         goto exit;
@@ -694,8 +700,11 @@ int wh_DemoClient_CryptoEccImport(whClientContext* clientContext)
     }
     close(keyFd);
     /* Cache the key in the HSM, get HSM assigned keyId */
-    ret = wh_Client_KeyCache(clientContext, 0, (uint8_t*)keyLabel,
-                             strlen(keyLabel), keyBuf, keySz, &keyIdBob);
+    ret = wh_Client_KeyCache(
+        clientContext,
+        WH_NVM_FLAGS_USAGE_DERIVE | WH_NVM_FLAGS_USAGE_SIGN |
+            WH_NVM_FLAGS_USAGE_VERIFY,
+        (uint8_t*)keyLabel, strlen(keyLabel), keyBuf, keySz, &keyIdBob);
     if (ret != 0) {
         printf("Failed to wh_Client_KeyCache %d\n", ret);
         goto exit;
@@ -902,8 +911,9 @@ int wh_DemoClient_CryptoAesCbcImport(whClientContext* clientContext)
     }
 
     /* cache the key on the HSM */
-    ret = wh_Client_KeyCache(clientContext, 0, (uint8_t*)keyLabel,
-                             sizeof(keyLabel), key, sizeof(key), &keyId);
+    ret = wh_Client_KeyCache(
+        clientContext, WH_NVM_FLAGS_USAGE_ENCRYPT | WH_NVM_FLAGS_USAGE_DECRYPT,
+        (uint8_t*)keyLabel, sizeof(keyLabel), key, sizeof(key), &keyId);
     if (ret != 0) {
         printf("Failed to wh_Client_KeyCache %d\n", ret);
         goto exit;
@@ -1050,8 +1060,9 @@ int wh_DemoClient_CryptoAesGcmImport(whClientContext* clientContext)
     }
 
     /* cache the key on the HSM */
-    ret = wh_Client_KeyCache(clientContext, 0, (uint8_t*)keyLabel,
-                             sizeof(keyLabel), key, sizeof(key), &keyId);
+    ret = wh_Client_KeyCache(
+        clientContext, WH_NVM_FLAGS_USAGE_ENCRYPT | WH_NVM_FLAGS_USAGE_DECRYPT,
+        (uint8_t*)keyLabel, sizeof(keyLabel), key, sizeof(key), &keyId);
     if (ret != 0) {
         printf("Failed to wh_Client_KeyCache %d\n", ret);
         goto exit;
@@ -1193,8 +1204,9 @@ int wh_DemoClient_CryptoCmacImport(whClientContext* clientContext)
     }
 
     /* cache the key on the HSM */
-    ret = wh_Client_KeyCache(clientContext, 0, (uint8_t*)keyLabel,
-                             sizeof(keyLabel), key, sizeof(key), &keyId);
+    ret = wh_Client_KeyCache(
+        clientContext, WH_NVM_FLAGS_USAGE_SIGN | WH_NVM_FLAGS_USAGE_VERIFY,
+        (uint8_t*)keyLabel, sizeof(keyLabel), key, sizeof(key), &keyId);
     if (ret != 0) {
         printf("Failed to wh_Client_KeyCache %d\n", ret);
         goto exit;
@@ -1235,8 +1247,9 @@ int wh_DemoClient_CryptoCmacImport(whClientContext* clientContext)
 
     /* cache the key on the HSM. This is required because the key is evicted
      * after the non-DMA CMAC operation is finalized */
-    ret = wh_Client_KeyCache(clientContext, 0, (uint8_t*)keyLabel,
-                             sizeof(keyLabel), key, sizeof(key), &keyId);
+    ret = wh_Client_KeyCache(
+        clientContext, WH_NVM_FLAGS_USAGE_SIGN | WH_NVM_FLAGS_USAGE_VERIFY,
+        (uint8_t*)keyLabel, sizeof(keyLabel), key, sizeof(key), &keyId);
     if (ret != 0) {
         printf("Failed to wh_Client_KeyCache %d\n", ret);
         goto exit;
@@ -1289,8 +1302,9 @@ int wh_DemoClient_CryptoCmacOneshotImport(whClientContext* clientContext)
     }
 
     /* cache the key on the HSM */
-    ret = wh_Client_KeyCache(clientContext, 0, (uint8_t*)keyLabel,
-                             sizeof(keyLabel), key, sizeof(key), &keyId);
+    ret = wh_Client_KeyCache(
+        clientContext, WH_NVM_FLAGS_USAGE_SIGN | WH_NVM_FLAGS_USAGE_VERIFY,
+        (uint8_t*)keyLabel, sizeof(keyLabel), key, sizeof(key), &keyId);
     if (ret != 0) {
         printf("Failed to wh_Client_KeyCache %d\n", ret);
         goto exit;
@@ -1327,8 +1341,9 @@ int wh_DemoClient_CryptoCmacOneshotImport(whClientContext* clientContext)
 
     /* cache the key on the HSM again, cmac keys are evicted after non-DMA CMAC
      * operations are finalized is called */
-    ret = wh_Client_KeyCache(clientContext, 0, (uint8_t*)keyLabel,
-                             sizeof(keyLabel), key, sizeof(key), &keyId);
+    ret = wh_Client_KeyCache(
+        clientContext, WH_NVM_FLAGS_USAGE_SIGN | WH_NVM_FLAGS_USAGE_VERIFY,
+        (uint8_t*)keyLabel, sizeof(keyLabel), key, sizeof(key), &keyId);
     if (ret != 0) {
         printf("Failed to wh_Client_KeyCache %d\n", ret);
         goto exit;
@@ -1419,7 +1434,7 @@ int wh_DemoClient_CryptoHkdfCache(whClientContext* clientContext)
     const uint32_t outSz  = 32; /* arbitrary output size */
 
     /* Metadata flags/label for the cached key. Adjust to your requirements. */
-    whNvmFlags flags   = WH_NVM_FLAGS_NONEXPORTABLE;
+    whNvmFlags flags   = WH_NVM_FLAGS_NONEXPORTABLE | WH_NVM_FLAGS_USAGE_DERIVE;
     char       label[] = "hkdf-derived key";
 
     /* Request the HSM to derive HKDF output and store it in the key cache.
@@ -1467,9 +1482,9 @@ int wh_DemoClient_CryptoHkdfCacheInputKey(whClientContext* clientContext)
     byte       okm[32]; /* Output key material */
 
     /* First, cache the input key material in the HSM */
-    ret = wh_Client_KeyCache(clientContext, 0, (uint8_t*)keyLabel,
-                             (uint32_t)strlen(keyLabel), ikm,
-                             (uint32_t)sizeof(ikm), &keyIdIn);
+    ret = wh_Client_KeyCache(clientContext, WH_NVM_FLAGS_USAGE_DERIVE,
+                             (uint8_t*)keyLabel, (uint32_t)strlen(keyLabel),
+                             ikm, (uint32_t)sizeof(ikm), &keyIdIn);
     if (ret != WH_ERROR_OK) {
         printf("Failed to wh_Client_KeyCache %d\n", ret);
         return ret;
@@ -1565,7 +1580,7 @@ int wh_DemoClient_CryptoCmacKdfCache(whClientContext* clientContext)
 {
     int        ret     = 0;
     whKeyId    keyId   = WH_KEYID_ERASED;
-    whNvmFlags flags   = WH_NVM_FLAGS_NONEXPORTABLE;
+    whNvmFlags flags   = WH_NVM_FLAGS_NONEXPORTABLE | WH_NVM_FLAGS_USAGE_DERIVE;
     const char label[] = "cmac-kdf cache";
 
     ret = wh_Client_CmacKdfMakeCacheKey(
@@ -1609,7 +1624,7 @@ int wh_DemoClient_CryptoCmacKdfCacheInputs(whClientContext* clientContext)
      * as the salt is usually not sensitive information. If it is desired to use
      * HSM-only information as salt, then this would likely be provisioned
      * as an offline step */
-    ret = wh_Client_KeyCache(clientContext, WH_NVM_FLAGS_NONE, NULL, 0,
+    ret = wh_Client_KeyCache(clientContext, WH_NVM_FLAGS_USAGE_DERIVE, NULL, 0,
                              demoCmacKdfSalt, (uint32_t)sizeof(demoCmacKdfSalt),
                              &saltKeyId);
     if (ret != WH_ERROR_OK) {
@@ -1619,7 +1634,7 @@ int wh_DemoClient_CryptoCmacKdfCacheInputs(whClientContext* clientContext)
 
     /* Cache the Z input. This would typically be done offline during the HSM
      * provisioning step, but is shown here for completeness */
-    ret = wh_Client_KeyCache(clientContext, WH_NVM_FLAGS_NONE, NULL, 0,
+    ret = wh_Client_KeyCache(clientContext, WH_NVM_FLAGS_USAGE_DERIVE, NULL, 0,
                              demoCmacKdfZ, (uint32_t)sizeof(demoCmacKdfZ),
                              &zKeyId);
     if (ret != WH_ERROR_OK) {

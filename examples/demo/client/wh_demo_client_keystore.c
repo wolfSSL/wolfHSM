@@ -139,8 +139,9 @@ int wh_DemoClient_KeystoreAes(whClientContext* clientContext)
     uint16_t keyId = WH_KEYID_ERASED;
 
     /* Cache the AES key in the HSM */
-    ret = wh_Client_KeyCache(clientContext, 0, label, sizeof(label), key,
-                             sizeof(key), &keyId);
+    ret = wh_Client_KeyCache(
+        clientContext, WH_NVM_FLAGS_USAGE_ENCRYPT | WH_NVM_FLAGS_USAGE_DECRYPT,
+        label, sizeof(label), key, sizeof(key), &keyId);
     if (ret != 0) {
         printf("Failed to cache key: %d\n", ret);
         return ret;

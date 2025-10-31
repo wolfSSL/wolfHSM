@@ -86,8 +86,8 @@ int _benchEccSign(whClientContext* client, whBenchOpContext* ctx, int id,
     initialized_rng = 1;
 
     /* Cache key in the HSM */
-    ret = wh_Client_KeyCache(client, 0, (uint8_t*)keyLabel, strlen(keyLabel),
-                             (uint8_t*)key, keyLen, &keyId);
+    ret = wh_Client_KeyCache(client, WH_NVM_FLAGS_USAGE_ANY, (uint8_t*)keyLabel,
+                             strlen(keyLabel), (uint8_t*)key, keyLen, &keyId);
     if (ret != 0) {
         WH_BENCH_PRINTF("Failed to cache key %d\n", ret);
         goto exit;
@@ -197,8 +197,8 @@ int _benchEccVerify(whClientContext* client, whBenchOpContext* ctx, int id,
     initialized_rng = 1;
 
     /* Cache the key in the HSM */
-    ret = wh_Client_KeyCache(client, 0, (uint8_t*)keyLabel, strlen(keyLabel),
-                             (uint8_t*)key, keyLen, &keyId);
+    ret = wh_Client_KeyCache(client, WH_NVM_FLAGS_USAGE_ANY, (uint8_t*)keyLabel,
+                             strlen(keyLabel), (uint8_t*)key, keyLen, &keyId);
     if (ret != 0) {
         WH_BENCH_PRINTF("Failed to cache key %d\n", ret);
         goto exit;
@@ -392,16 +392,18 @@ int _benchEccEcdh(whClientContext* client, whBenchOpContext* ctx, int id,
     initialized_rng = 1;
 
     /* Cache Alice's key in the HSM */
-    ret = wh_Client_KeyCache(client, 0, (uint8_t*)keyLabel, strlen(keyLabel),
-                             (uint8_t*)aliceKeyData, aliceKeyLen, &keyIdAlice);
+    ret = wh_Client_KeyCache(client, WH_NVM_FLAGS_USAGE_ANY, (uint8_t*)keyLabel,
+                             strlen(keyLabel), (uint8_t*)aliceKeyData,
+                             aliceKeyLen, &keyIdAlice);
     if (ret != 0) {
         WH_BENCH_PRINTF("Failed to cache Alice's key %d\n", ret);
         goto exit;
     }
 
     /* Cache Bob's key in the HSM */
-    ret = wh_Client_KeyCache(client, 0, (uint8_t*)keyLabel, strlen(keyLabel),
-                             (uint8_t*)bobKeyData, bobKeyLen, &keyIdBob);
+    ret = wh_Client_KeyCache(client, WH_NVM_FLAGS_USAGE_ANY, (uint8_t*)keyLabel,
+                             strlen(keyLabel), (uint8_t*)bobKeyData, bobKeyLen,
+                             &keyIdBob);
     if (ret != 0) {
         WH_BENCH_PRINTF("Failed to cache Bob's key %d\n", ret);
         goto exit;

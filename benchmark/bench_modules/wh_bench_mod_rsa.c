@@ -361,8 +361,8 @@ int _benchRsaCrypt(whClientContext* client, whBenchOpContext* ctx, int id,
     initialized_rng = 1;
 
     /* Cache the RSA key in the HSM */
-    ret = wh_Client_KeyCache(client, 0, (uint8_t*)keyLabel, strlen(keyLabel),
-                             (uint8_t*)key, keyLen, &keyId);
+    ret = wh_Client_KeyCache(client, WH_NVM_FLAGS_USAGE_ANY, (uint8_t*)keyLabel,
+                             strlen(keyLabel), (uint8_t*)key, keyLen, &keyId);
     if (ret != 0) {
         WH_BENCH_PRINTF("Failed to cache RSA key %d\n", ret);
         goto exit;
@@ -493,8 +493,8 @@ int _benchRsaVerify(whClientContext* client, whBenchOpContext* ctx, int id,
     initialized_rng = 1;
 
     /* Cache the RSA key in the HSM */
-    ret = wh_Client_KeyCache(client, 0, (uint8_t*)keyLabel, strlen(keyLabel),
-                             (uint8_t*)key, keyLen, &keyId);
+    ret = wh_Client_KeyCache(client, WH_NVM_FLAGS_USAGE_ANY, (uint8_t*)keyLabel,
+                             strlen(keyLabel), (uint8_t*)key, keyLen, &keyId);
     if (ret != 0) {
         WH_BENCH_PRINTF("Failed to cache RSA key %d\n", ret);
         goto exit;
@@ -615,8 +615,8 @@ int _benchRsaSign(whClientContext* client, whBenchOpContext* ctx, int id,
     initialized_rng = 1;
 
     /* Cache the RSA key in the HSM */
-    ret = wh_Client_KeyCache(client, 0, (uint8_t*)keyLabel, strlen(keyLabel),
-                             (uint8_t*)key, keyLen, &keyId);
+    ret = wh_Client_KeyCache(client, WH_NVM_FLAGS_USAGE_ANY, (uint8_t*)keyLabel,
+                             strlen(keyLabel), (uint8_t*)key, keyLen, &keyId);
     if (ret != 0) {
         WH_BENCH_PRINTF("Failed to cache RSA key %d\n", ret);
         goto exit;

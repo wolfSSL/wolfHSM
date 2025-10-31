@@ -417,6 +417,46 @@ static int _HandleRsaFunction( whServerContext* ctx, uint16_t magic,
         return BAD_FUNC_ARG;
     }
 
+    /* Validate key usage policy based on RSA operation type */
+    if (!WH_KEYID_ISERASED(key_id)) {
+        whNvmFlags requiredUsage = WH_NVM_FLAGS_NONE;
+        switch (op_type) {
+            case RSA_PUBLIC_ENCRYPT:
+            case RSA_PRIVATE_ENCRYPT:
+                requiredUsage = WH_NVM_FLAGS_USAGE_ENCRYPT;
+                break;
+            case RSA_PUBLIC_DECRYPT:
+            case RSA_PRIVATE_DECRYPT:
+                requiredUsage = WH_NVM_FLAGS_USAGE_DECRYPT;
+                break;
+        }
+        ret = wh_Server_KeystoreFindEnforceKeyUsage(ctx, key_id, requiredUsage);
+        if (ret != WH_ERROR_OK) {
+            /* Currently wolfCrypt doesn't have a way for crypto callbacks to
+            distinguish if a low level RSA operation (like encrypt/decrypt) is
+            being performed as part of a higher level operation like
+            sign/verify. Until that information is propagated to the
+            callback, the usage flags are treated as equivalent. */
+            if (ret == WH_ERROR_USAGE) {
+                if (op_type == RSA_PUBLIC_DECRYPT) {
+                    /* Decrypt usage flag wasn't set so this might be a verify
+                     * operation. Attempt to enforce against the verify flag */
+                    ret = wh_Server_KeystoreFindEnforceKeyUsage(
+                        ctx, key_id, WH_NVM_FLAGS_USAGE_VERIFY);
+                }
+                else if (op_type == RSA_PRIVATE_ENCRYPT) {
+                    /* Encrypt usage flag wasn't set so this might be a sign
+                     * operation. Attempt to enforce against the sign flag */
+                    ret = wh_Server_KeystoreFindEnforceKeyUsage(
+                        ctx, key_id, WH_NVM_FLAGS_USAGE_SIGN);
+                }
+            }
+            if (ret != WH_ERROR_OK) {
+                return ret;
+            }
+        }
+    }
+
     /* init rsa key */
     ret = wc_InitRsaKey_ex(rsa, NULL, ctx->crypto->devId);
     /* load the key from the keystore */
@@ -847,6 +887,15 @@ static int _HandleEccSharedSecret(whServerContext* ctx, uint16_t magic,
     whKeyId prv_key_id = wh_KeyId_TranslateFromClient(
         WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.privateKeyId);
 
+    /* Validate key usage policy for key derivation (private key) */
+    if (!WH_KEYID_ISERASED(prv_key_id)) {
+        ret = wh_Server_KeystoreFindEnforceKeyUsage(ctx, prv_key_id,
+                                                    WH_NVM_FLAGS_USAGE_DERIVE);
+        if (ret != WH_ERROR_OK) {
+            return ret;
+        }
+    }
+
     /* Response message */
     byte* res_out =
         (byte*)cryptoDataOut + sizeof(whMessageCrypto_EcdhResponse);
@@ -926,6 +975,15 @@ static int _HandleEccSign(whServerContext* ctx, uint16_t magic,
     uint32_t options = req.options;
     int      evict   = !!(options & WH_MESSAGE_CRYPTO_ECCSIGN_OPTIONS_EVICT);
 
+    /* Validate key usage policy for signing */
+    if (!WH_KEYID_ISERASED(key_id)) {
+        ret = wh_Server_KeystoreFindEnforceKeyUsage(ctx, key_id,
+                                                    WH_NVM_FLAGS_USAGE_SIGN);
+        if (ret != WH_ERROR_OK) {
+            return ret;
+        }
+    }
+
     /* Response message */
     byte* res_out =
         (byte*)cryptoDataOut + sizeof(whMessageCrypto_EccSignResponse);
@@ -1002,6 +1060,15 @@ static int _HandleEccVerify(whServerContext* ctx, uint16_t magic,
     int      evict    = !!(options & WH_MESSAGE_CRYPTO_ECCVERIFY_OPTIONS_EVICT);
     int      export_pub_key =
         !!(options & WH_MESSAGE_CRYPTO_ECCVERIFY_OPTIONS_EXPORTPUB);
+
+    /* Validate key usage policy for verification */
+    if (!WH_KEYID_ISERASED(key_id)) {
+        ret = wh_Server_KeystoreFindEnforceKeyUsage(ctx, key_id,
+                                                    WH_NVM_FLAGS_USAGE_VERIFY);
+        if (ret != WH_ERROR_OK) {
+            return ret;
+        }
+    }
 
     /* Response message */
     byte* res_pub =
@@ -1279,6 +1346,12 @@ static int _HandleHkdf(whServerContext* ctx, uint16_t magic,
         if (ret != WH_ERROR_OK) {
             return ret;
         }
+        /* Validate key usage policy for key derivation (input key) */
+        ret = wh_Server_KeystoreEnforceKeyUsage(cachedKeyMeta,
+                                                WH_NVM_FLAGS_USAGE_DERIVE);
+        if (ret != WH_ERROR_OK) {
+            return ret;
+        }
         /* Update inKey pointer and size to use cached key */
         inKey   = cachedKeyBuf;
         inKeySz = cachedKeyMeta->len;
@@ -1405,6 +1478,12 @@ static int _HandleCmacKdf(whServerContext* ctx, uint16_t magic,
         if (ret != WH_ERROR_OK) {
             return ret;
         }
+        /* Validate key usage policy for cached salt */
+        ret = wh_Server_KeystoreEnforceKeyUsage(cachedSaltMeta,
+                                                WH_NVM_FLAGS_USAGE_DERIVE);
+        if (ret != WH_ERROR_OK) {
+            return ret;
+        }
         salt   = cachedSaltBuf;
         saltSz = cachedSaltMeta->len;
     }
@@ -1415,6 +1494,12 @@ static int _HandleCmacKdf(whServerContext* ctx, uint16_t magic,
         }
         ret = wh_Server_KeystoreFreshenKey(ctx, zKeyId, &cachedZBuf,
                                            &cachedZMeta);
+        if (ret != WH_ERROR_OK) {
+            return ret;
+        }
+        /* Validate key usage policy for key derivation (Z key) */
+        ret = wh_Server_KeystoreEnforceKeyUsage(cachedZMeta,
+                                                WH_NVM_FLAGS_USAGE_DERIVE);
         if (ret != WH_ERROR_OK) {
             return ret;
         }
@@ -1596,6 +1681,15 @@ static int _HandleCurve25519SharedSecret(whServerContext* ctx, uint16_t magic,
         WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.privateKeyId);
     int endian          = req.endian;
 
+    /* Validate key usage policy for key derivation (private key) */
+    if (!WH_KEYID_ISERASED(prv_key_id)) {
+        ret = wh_Server_KeystoreFindEnforceKeyUsage(ctx, prv_key_id,
+                                                    WH_NVM_FLAGS_USAGE_DERIVE);
+        if (ret != WH_ERROR_OK) {
+            return ret;
+        }
+    }
+
     /* Response message */
     uint8_t* res_out       = (uint8_t*)cryptoDataOut +
                              sizeof(whMessageCrypto_Curve25519Response);
@@ -1661,8 +1755,8 @@ static int _HandleAesCtr(whServerContext* ctx, uint16_t magic,
     Aes                            aes[1] = {0};
     whMessageCrypto_AesCtrRequest  req;
     whMessageCrypto_AesCtrResponse res;
-    uint8_t                        read_key[AES_MAX_KEY_SIZE];
-    uint32_t                       read_key_len = sizeof(read_key);
+    uint8_t*                       cachedKey = NULL;
+    whNvmMetadata*                 keyMeta   = NULL;
     /* Translate request */
     ret = wh_MessageCrypto_TranslateAesCtrRequest(
         magic, (const whMessageCrypto_AesCtrRequest*)cryptoDataIn, &req);
@@ -1680,6 +1774,7 @@ static int _HandleAesCtr(whServerContext* ctx, uint16_t magic,
     }
     whKeyId key_id = wh_KeyId_TranslateFromClient(
         WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+
     /* in, key, iv, and out are after fixed size fields */
     uint8_t* in =
         (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_AesCtrRequest);
@@ -1697,14 +1792,19 @@ static int _HandleAesCtr(whServerContext* ctx, uint16_t magic,
     wh_Utils_Hexdump("[AesCtr] IV ", iv, AES_BLOCK_SIZE);
     wh_Utils_Hexdump("[AesCtr] tmp ", tmp, AES_BLOCK_SIZE);
 #endif
-    /* Read the key if it is not erased */
+    /* Freshen key and validate usage policy if key is not erased */
     if (!WH_KEYID_ISERASED(key_id)) {
-        ret = wh_Server_KeystoreReadKey(ctx, key_id, NULL, read_key,
-                                        &read_key_len);
+        ret = wh_Server_KeystoreFreshenKey(ctx, key_id, &cachedKey, &keyMeta);
         if (ret == 0) {
-            /* override the incoming values */
-            key     = read_key;
-            key_len = read_key_len;
+            /* Validate key usage policy */
+            ret = wh_Server_KeystoreEnforceKeyUsage(
+                keyMeta, enc != 0 ? WH_NVM_FLAGS_USAGE_ENCRYPT
+                                  : WH_NVM_FLAGS_USAGE_DECRYPT);
+        }
+        if (ret == 0) {
+            /* override the incoming values with cached key */
+            key     = cachedKey;
+            key_len = keyMeta->len;
 #ifdef DEBUG_CRYPTOCB_VERBOSE
             wh_Utils_Hexdump("[AesCtr] Key from HSM", key, key_len);
 #endif
@@ -1776,8 +1876,8 @@ static int _HandleAesEcb(whServerContext* ctx, uint16_t magic,
     Aes                            aes[1] = {0};
     whMessageCrypto_AesEcbRequest  req;
     whMessageCrypto_AesEcbResponse res;
-    uint8_t                        read_key[AES_MAX_KEY_SIZE];
-    uint32_t                       read_key_len = sizeof(read_key);
+    uint8_t*                       cachedKey = NULL;
+    whNvmMetadata*                 keyMeta   = NULL;
 
     /* Translate request */
     ret = wh_MessageCrypto_TranslateAesEcbRequest(
@@ -1812,14 +1912,19 @@ static int _HandleAesEcb(whServerContext* ctx, uint16_t magic,
     wh_Utils_Hexdump("[AesEcb] Input data", in, len);
     wh_Utils_Hexdump("[AesEcb] IV", iv, AES_BLOCK_SIZE);
 #endif
-    /* Read the key if it is not erased */
+    /* Freshen key and validate usage policy if key is not erased */
     if (!WH_KEYID_ISERASED(key_id)) {
-        ret = wh_Server_KeystoreReadKey(ctx, key_id, NULL, read_key,
-                                        &read_key_len);
+        ret = wh_Server_KeystoreFreshenKey(ctx, key_id, &cachedKey, &keyMeta);
         if (ret == 0) {
-            /* override the incoming values */
-            key     = read_key;
-            key_len = read_key_len;
+            /* Validate key usage policy */
+            ret = wh_Server_KeystoreEnforceKeyUsage(
+                keyMeta, enc != 0 ? WH_NVM_FLAGS_USAGE_ENCRYPT
+                                  : WH_NVM_FLAGS_USAGE_DECRYPT);
+        }
+        if (ret == 0) {
+            /* override the incoming values with cached key */
+            key     = cachedKey;
+            key_len = keyMeta->len;
 #ifdef DEBUG_CRYPTOCB_VERBOSE
             wh_Utils_Hexdump("[AesEcb] Key from HSM", key, key_len);
 #endif
@@ -1884,8 +1989,8 @@ static int _HandleAesCbc(whServerContext* ctx, uint16_t magic, const void* crypt
     Aes                            aes[1] = {0};
     whMessageCrypto_AesCbcRequest  req;
     whMessageCrypto_AesCbcResponse res;
-    uint8_t                        read_key[AES_MAX_KEY_SIZE];
-    uint32_t                       read_key_len = sizeof(read_key);
+    uint8_t*                       cachedKey = NULL;
+    whNvmMetadata*                 keyMeta   = NULL;
 
     /* Translate request */
     ret = wh_MessageCrypto_TranslateAesCbcRequest(
@@ -1920,14 +2025,19 @@ static int _HandleAesCbc(whServerContext* ctx, uint16_t magic, const void* crypt
     wh_Utils_Hexdump("[AesCbc] Input data", in, len);
     wh_Utils_Hexdump("[AesCbc] IV", iv, AES_BLOCK_SIZE);
 #endif
-    /* Read the key if it is not erased */
+    /* Freshen key and validate usage policy if key is not erased */
     if (!WH_KEYID_ISERASED(key_id)) {
-        ret = wh_Server_KeystoreReadKey(ctx, key_id, NULL, read_key,
-                                        &read_key_len);
+        ret = wh_Server_KeystoreFreshenKey(ctx, key_id, &cachedKey, &keyMeta);
         if (ret == 0) {
-            /* override the incoming values */
-            key     = read_key;
-            key_len = read_key_len;
+            /* Validate key usage policy */
+            ret = wh_Server_KeystoreEnforceKeyUsage(
+                keyMeta, enc != 0 ? WH_NVM_FLAGS_USAGE_ENCRYPT
+                                  : WH_NVM_FLAGS_USAGE_DECRYPT);
+        }
+        if (ret == 0) {
+            /* override the incoming values with cached key */
+            key     = cachedKey;
+            key_len = keyMeta->len;
 #ifdef DEBUG_CRYPTOCB_VERBOSE
             wh_Utils_Hexdump("[AesCbc] Key from HSM", key, key_len);
 #endif
@@ -1988,10 +2098,10 @@ static int _HandleAesGcm(whServerContext* ctx, uint16_t magic,
 {
     (void)inSize;
 
-    int      ret    = 0;
-    Aes      aes[1] = {0};
-    uint8_t  read_key[AES_MAX_KEY_SIZE];
-    uint32_t read_key_len = sizeof(read_key);
+    int            ret       = 0;
+    Aes            aes[1]    = {0};
+    uint8_t*       cachedKey = NULL;
+    whNvmMetadata* keyMeta   = NULL;
 
     /* Translate request */
     whMessageCrypto_AesGcmRequest req;
@@ -2046,18 +2156,22 @@ static int _HandleAesGcm(whServerContext* ctx, uint16_t magic,
                      req_len);
 #endif
 
-    /* Read the key if it is not erased */
+    /* Freshen key and validate usage policy if key is not erased */
     if (!WH_KEYID_ISERASED(key_id)) {
-        ret = wh_Server_KeystoreReadKey(ctx, key_id, NULL, read_key,
-                                        &read_key_len);
+        ret = wh_Server_KeystoreFreshenKey(ctx, key_id, &cachedKey, &keyMeta);
 #ifdef DEBUG_CRYPTOCB_VERBOSE
-        printf("[server] AesGcm ReadKey key_id:%u, key_len:%d ret:%d\n", key_id,
-               read_key_len, ret);
+        printf("[server] AesGcm FreshenKey key_id:%u ret:%d\n", key_id, ret);
 #endif
         if (ret == 0) {
-            /* override the incoming values */
-            key     = read_key;
-            key_len = read_key_len;
+            /* Validate key usage policy */
+            ret = wh_Server_KeystoreEnforceKeyUsage(
+                keyMeta, enc != 0 ? WH_NVM_FLAGS_USAGE_ENCRYPT
+                                  : WH_NVM_FLAGS_USAGE_DECRYPT);
+        }
+        if (ret == 0) {
+            /* override the incoming values with cached key */
+            key     = cachedKey;
+            key_len = keyMeta->len;
         }
     }
     if (ret == 0) {
@@ -2385,9 +2499,24 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
                 len   = sizeof(ctx->crypto->algoCtx.cmac);
                 keyId = wh_KeyId_TranslateFromClient(
                     WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
-                ret   = wh_Server_KeystoreReadKey(
-                      ctx, keyId, NULL, (uint8_t*)ctx->crypto->algoCtx.cmac,
-                      (uint32_t*)&len);
+
+                /* Validate key usage policy - CMAC accepts sign or verify */
+                if (!WH_KEYID_ISERASED(keyId)) {
+                    ret = wh_Server_KeystoreFindEnforceKeyUsage(
+                        ctx, keyId, WH_NVM_FLAGS_USAGE_SIGN);
+                    if (ret == WH_ERROR_USAGE) {
+                        /* Sign not allowed, try verify */
+                        ret = wh_Server_KeystoreFindEnforceKeyUsage(
+                            ctx, keyId, WH_NVM_FLAGS_USAGE_VERIFY);
+                    }
+                    if (ret != WH_ERROR_OK) {
+                        return ret;
+                    }
+                }
+
+                ret = wh_Server_KeystoreReadKey(
+                    ctx, keyId, meta, (uint8_t*)ctx->crypto->algoCtx.cmac,
+                    (uint32_t*)&len);
                 if (ret == WH_ERROR_OK) {
                     /* if the key size is a multiple of aes, init the key and
                      * overwrite the existing key on exit */
@@ -2498,12 +2627,22 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
                 if (moveToBigCache == 1) {
                     ret = wh_Server_KeystoreEvictKey(ctx, keyId);
                 }
-                if (ret == 0) {
+                if (ret == WH_ERROR_OK) {
                     meta->id  = keyId;
                     meta->len = sizeof(ctx->crypto->algoCtx.cmac);
-                    ret       = wh_Server_KeystoreCacheKey(
+                    /* Nonzero key size means the client provided the key and
+                     * wasn't able to provide flags, therefore we tag the key as
+                     * useable for sign/verify operations. If the client instead
+                     * wants to refer to the key by ID, meta->flags should
+                     * already hold the flags set on the original AES key from
+                     * the earlier read operation */
+                    if (req.keySz != 0) {
+                        meta->flags =
+                            WH_NVM_FLAGS_USAGE_SIGN | WH_NVM_FLAGS_USAGE_VERIFY;
+                    }
+                    ret = wh_Server_KeystoreCacheKey(
                         ctx, meta, (uint8_t*)ctx->crypto->algoCtx.cmac);
-                    if (ret == 0) {
+                    if (ret == WH_ERROR_OK) {
                         res.keyId = wh_KeyId_TranslateToClient(keyId);
                         res.outSz = 0;
                     }
@@ -2997,6 +3136,15 @@ static int _HandleMlDsaSign(whServerContext* ctx, uint16_t magic,
     uint32_t options = req.options;
     int      evict   = !!(options & WH_MESSAGE_CRYPTO_MLDSA_SIGN_OPTIONS_EVICT);
 
+    /* Validate key usage policy for signing */
+    if (!WH_KEYID_ISERASED(key_id)) {
+        ret = wh_Server_KeystoreFindEnforceKeyUsage(ctx, key_id,
+                                                    WH_NVM_FLAGS_USAGE_SIGN);
+        if (ret != WH_ERROR_OK) {
+            return ret;
+        }
+    }
+
     /* Validate input length against available data to prevent buffer overread
      */
     if (inSize < sizeof(whMessageCrypto_MlDsaSignRequest)) {
@@ -3077,6 +3225,15 @@ static int _HandleMlDsaVerify(whServerContext* ctx, uint16_t magic,
     uint32_t sig_len  = req.sigSz;
     byte*    req_sig =
         (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_MlDsaVerifyRequest);
+
+    /* Validate key usage policy for verification */
+    if (!WH_KEYID_ISERASED(key_id)) {
+        ret = wh_Server_KeystoreFindEnforceKeyUsage(ctx, key_id,
+                                                    WH_NVM_FLAGS_USAGE_VERIFY);
+        if (ret != WH_ERROR_OK) {
+            return ret;
+        }
+    }
 
     /* Validate lengths against available payload (overflow-safe) */
     if (inSize < sizeof(whMessageCrypto_MlDsaVerifyRequest)) {
@@ -4560,6 +4717,22 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
                         keyId = wh_KeyId_TranslateFromClient(
                             WH_KEYTYPE_CRYPTO, ctx->comm->client_id,
                             clientKeyId);
+
+                        /* Validate key usage policy - CMAC accepts sign or
+                         * verify */
+                        if (!WH_KEYID_ISERASED(keyId)) {
+                            ret = wh_Server_KeystoreFindEnforceKeyUsage(
+                                ctx, keyId, WH_NVM_FLAGS_USAGE_SIGN);
+                            if (ret == WH_ERROR_USAGE) {
+                                /* Sign not allowed, try verify */
+                                ret = wh_Server_KeystoreFindEnforceKeyUsage(
+                                    ctx, keyId, WH_NVM_FLAGS_USAGE_VERIFY);
+                            }
+                            if (ret != WH_ERROR_OK) {
+                                return ret;
+                            }
+                        }
+
                         keyLen = sizeof(tmpKey);
 
                         /* Load key from cache */
@@ -4624,6 +4797,22 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
                         /* Get key ID from CMAC context */
                         keyId = wh_KeyId_TranslateFromClient(
                             WH_KEYTYPE_CRYPTO, ctx->comm->client_id, nvmId);
+
+                        /* Validate key usage policy - CMAC accepts sign or
+                         * verify */
+                        if (!WH_KEYID_ISERASED(keyId)) {
+                            ret = wh_Server_KeystoreFindEnforceKeyUsage(
+                                ctx, keyId, WH_NVM_FLAGS_USAGE_SIGN);
+                            if (ret == WH_ERROR_USAGE) {
+                                /* Sign not allowed, try verify */
+                                ret = wh_Server_KeystoreFindEnforceKeyUsage(
+                                    ctx, keyId, WH_NVM_FLAGS_USAGE_VERIFY);
+                            }
+                            if (ret != WH_ERROR_OK) {
+                                return ret;
+                            }
+                        }
+
                         keyLen = sizeof(tmpKey);
 
                         /* Load key from cache */

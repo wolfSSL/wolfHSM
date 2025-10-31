@@ -60,7 +60,7 @@ static int _InitServerKek(whClientContext* client)
      * provisioning. Uploading the KEK via the client is for testing purposes
      * only and not intended as a recommendation */
     whKeyId    serverKeyId             = WH_TEST_KEKID;
-    whNvmFlags flags                   = WH_NVM_FLAGS_NONEXPORTABLE;
+    whNvmFlags flags = WH_NVM_FLAGS_NONEXPORTABLE | WH_NVM_FLAGS_USAGE_WRAP;
     uint8_t    label[WH_NVM_LABEL_LEN] = "Server KEK key";
     uint8_t    kek[] = {0x03, 0x03, 0x0d, 0xd9, 0xeb, 0x18, 0x17, 0x2e,
                         0x06, 0x6e, 0x19, 0xce, 0x98, 0x44, 0x54, 0x0d,
@@ -91,7 +91,7 @@ static int _AesGcm_TestKeyWrap(whClientContext* client, WC_RNG* rng)
                                                        WH_TEST_AESGCM_KEYID),
             .label = "AES Key Label",
             .len   = WH_TEST_AES_KEYSIZE,
-            .flags = WH_NVM_FLAGS_NONE,
+            .flags = WH_NVM_FLAGS_USAGE_ANY,
     };
     whNvmMetadata tmpMetadata = {0};
 

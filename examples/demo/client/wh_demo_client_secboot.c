@@ -107,8 +107,9 @@ static int _provisionMakeCommitKey(whClientContext* clientContext)
     memcpy(keyLabel, prov_keyLabel, sizeof(prov_keyLabel));
 
     ret = wh_Client_EccMakeCacheKey(clientContext, 32, ECC_CURVE_DEF, &keyId,
-                                    WH_NVM_FLAGS_NONE, sizeof(prov_keyLabel),
-                                    keyLabel);
+                                    WH_NVM_FLAGS_USAGE_SIGN |
+                                        WH_NVM_FLAGS_USAGE_VERIFY,
+                                    sizeof(prov_keyLabel), keyLabel);
     if (ret == WH_ERROR_OK) {
         ret = wh_Client_KeyCommit(clientContext, prov_keyId);
     }

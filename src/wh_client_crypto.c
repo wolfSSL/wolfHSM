@@ -1317,7 +1317,7 @@ int wh_Client_EccSharedSecret(whClientContext* ctx, ecc_key* priv_key,
     if ((ret == WH_ERROR_OK) && WH_KEYID_ISERASED(pub_key_id)) {
         /* Must import the key to the server and evict it afterwards */
         uint8_t    keyLabel[] = "TempEccDh-pub";
-        whNvmFlags flags      = WH_NVM_FLAGS_NONE;
+        whNvmFlags flags      = WH_NVM_FLAGS_USAGE_DERIVE;
 
         ret = wh_Client_EccImportKey(ctx, pub_key, &pub_key_id, flags,
                                      sizeof(keyLabel), keyLabel);
@@ -1330,7 +1330,7 @@ int wh_Client_EccSharedSecret(whClientContext* ctx, ecc_key* priv_key,
     if ((ret == WH_ERROR_OK) && WH_KEYID_ISERASED(prv_key_id)) {
         /* Must import the key to the server and evict it afterwards */
         uint8_t    keyLabel[] = "TempEccDh-prv";
-        whNvmFlags flags      = WH_NVM_FLAGS_NONE;
+        whNvmFlags flags      = WH_NVM_FLAGS_USAGE_DERIVE;
 
         ret = wh_Client_EccImportKey(ctx, priv_key, &prv_key_id, flags,
                                      sizeof(keyLabel), keyLabel);
@@ -1469,7 +1469,7 @@ int wh_Client_EccSign(whClientContext* ctx, ecc_key* key, const uint8_t* hash,
     if (WH_KEYID_ISERASED(key_id)) {
         /* Must import the key to the server and evict it afterwards */
         uint8_t    keyLabel[] = "TempEccSign";
-        whNvmFlags flags      = WH_NVM_FLAGS_NONE;
+        whNvmFlags flags      = WH_NVM_FLAGS_USAGE_SIGN;
 
         ret = wh_Client_EccImportKey(ctx, key, &key_id, flags, sizeof(keyLabel),
                                      keyLabel);
@@ -1618,7 +1618,7 @@ int wh_Client_EccVerify(whClientContext* ctx, ecc_key* key, const uint8_t* sig,
     if (WH_KEYID_ISERASED(key_id)) {
         /* Must import the key to the server and evict it afterwards */
         uint8_t    keyLabel[] = "TempEccVerify";
-        whNvmFlags flags      = WH_NVM_FLAGS_NONE;
+        whNvmFlags flags      = WH_NVM_FLAGS_USAGE_VERIFY;
 
         ret = wh_Client_EccImportKey(ctx, key, &key_id, flags, sizeof(keyLabel),
                                      keyLabel);
@@ -2018,7 +2018,7 @@ int wh_Client_Curve25519SharedSecret(whClientContext* ctx,
     if ((ret == WH_ERROR_OK) && WH_KEYID_ISERASED(pub_key_id)) {
         /* Must import the key to the server and evict it afterwards */
         uint8_t    keyLabel[] = "TempX25519-pub";
-        whNvmFlags flags      = WH_NVM_FLAGS_NONE;
+        whNvmFlags flags      = WH_NVM_FLAGS_USAGE_DERIVE;
 
         ret = wh_Client_Curve25519ImportKey(ctx, pub_key, &pub_key_id, flags,
                                             sizeof(keyLabel), keyLabel);
@@ -2031,7 +2031,7 @@ int wh_Client_Curve25519SharedSecret(whClientContext* ctx,
     if ((ret == WH_ERROR_OK) && WH_KEYID_ISERASED(prv_key_id)) {
         /* Must import the key to the server and evict it afterwards */
         uint8_t    keyLabel[] = "TempX25519-prv";
-        whNvmFlags flags      = WH_NVM_FLAGS_NONE;
+        whNvmFlags flags      = WH_NVM_FLAGS_USAGE_DERIVE;
 
         ret = wh_Client_Curve25519ImportKey(ctx, priv_key, &prv_key_id, flags,
                                             sizeof(keyLabel), keyLabel);
@@ -2389,7 +2389,21 @@ int wh_Client_RsaFunction(whClientContext* ctx, RsaKey* key, int rsa_type,
     if (WH_KEYID_ISERASED(key_id)) {
         /* Must import the key to the server and evict it afterwards */
         uint8_t    keyLabel[] = "TempRsaFunction";
-        whNvmFlags flags      = WH_NVM_FLAGS_NONE;
+        /* Set usage flags based on requested RSA operation */
+        whNvmFlags flags = WH_NVM_FLAGS_NONE;
+        switch (rsa_type) {
+            case RSA_PUBLIC_ENCRYPT:
+            case RSA_PRIVATE_ENCRYPT:
+                flags = WH_NVM_FLAGS_USAGE_ENCRYPT;
+                break;
+            case RSA_PUBLIC_DECRYPT:
+            case RSA_PRIVATE_DECRYPT:
+                flags = WH_NVM_FLAGS_USAGE_DECRYPT;
+                break;
+            default:
+                flags = WH_NVM_FLAGS_ANY;
+                break;
+        }
 
         ret = wh_Client_RsaImportKey(ctx, key, &key_id, flags, sizeof(keyLabel),
                                      keyLabel);
@@ -4728,7 +4742,7 @@ int wh_Client_MlDsaSign(whClientContext* ctx, const byte* in, word32 in_len,
     if (WH_KEYID_ISERASED(key_id)) {
         /* Must import the key to the server and evict it afterwards */
         uint8_t    keyLabel[] = "TempMlDsaSign";
-        whNvmFlags flags      = WH_NVM_FLAGS_NONE;
+        whNvmFlags flags      = WH_NVM_FLAGS_USAGE_SIGN;
 
         ret = wh_Client_MlDsaImportKey(ctx, key, &key_id, flags,
                                        sizeof(keyLabel), keyLabel);
@@ -4859,7 +4873,7 @@ int wh_Client_MlDsaVerify(whClientContext* ctx, const byte* sig, word32 sig_len,
     if (WH_KEYID_ISERASED(key_id)) {
         /* Must import the key to the server and evict it afterwards */
         uint8_t    keyLabel[] = "TempMlDsaVerify";
-        whNvmFlags flags      = WH_NVM_FLAGS_NONE;
+        whNvmFlags flags      = WH_NVM_FLAGS_USAGE_VERIFY;
 
         ret = wh_Client_MlDsaImportKey(ctx, key, &key_id, flags,
                                        sizeof(keyLabel), keyLabel);
@@ -5177,7 +5191,7 @@ int wh_Client_MlDsaSignDma(whClientContext* ctx, const byte* in, word32 in_len,
     if (WH_KEYID_ISERASED(key_id)) {
         /* Must import the key to the server and evict it afterwards */
         uint8_t    keyLabel[] = "TempMlDsaSign";
-        whNvmFlags flags      = WH_NVM_FLAGS_NONE;
+        whNvmFlags flags      = WH_NVM_FLAGS_USAGE_SIGN;
 
         ret = wh_Client_MlDsaImportKeyDma(ctx, key, &key_id, flags,
                                           sizeof(keyLabel), keyLabel);
@@ -5316,7 +5330,7 @@ int wh_Client_MlDsaVerifyDma(whClientContext* ctx, const byte* sig,
     if (WH_KEYID_ISERASED(key_id)) {
         /* Must import the key to the server and evict it afterwards */
         uint8_t    keyLabel[] = "TempMlDsaVerify";
-        whNvmFlags flags      = WH_NVM_FLAGS_NONE;
+        whNvmFlags flags      = WH_NVM_FLAGS_USAGE_VERIFY;
 
         ret = wh_Client_MlDsaImportKeyDma(ctx, key, &key_id, flags,
                                           sizeof(keyLabel), keyLabel);

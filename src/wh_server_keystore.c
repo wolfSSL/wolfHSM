@@ -720,6 +720,13 @@ static int _AesGcmKeyWrap(whServerContext* server, whKeyId serverKeyId,
     }
     serverKeySz = serverKeyMetadata->len;
 
+    /* Validate key usage policy for wrapping (KEK) */
+    ret = wh_Server_KeystoreEnforceKeyUsage(serverKeyMetadata,
+                                            WH_NVM_FLAGS_USAGE_WRAP);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
     /* Initialize AES context and set it to use the server side key */
     ret = wc_AesInit(aes, NULL, server->crypto->devId);
     if (ret != 0) {
@@ -784,6 +791,7 @@ static int _AesGcmKeyUnwrap(whServerContext* server, uint16_t serverKeyId,
         return WH_ERROR_BADARGS;
     }
 
+
     /* Get the server side key */
     ret = wh_Server_KeystoreFreshenKey(server, serverKeyId,
                                        &serverKey, &serverKeyMetadata);
@@ -791,6 +799,13 @@ static int _AesGcmKeyUnwrap(whServerContext* server, uint16_t serverKeyId,
         return ret;
     }
     serverKeySz = serverKeyMetadata->len;
+
+    /* Validate key usage policy for unwrapping (KEK) */
+    ret = wh_Server_KeystoreEnforceKeyUsage(serverKeyMetadata,
+                                            WH_NVM_FLAGS_USAGE_WRAP);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
 
     /* Initialize AES context and set it to use the server side key */
     ret = wc_AesInit(aes, NULL, server->crypto->devId);
@@ -988,6 +1003,10 @@ static int _HandleKeyWrapRequest(whServerContext*                  server,
                                                server->comm->client_id, 
                                                req->serverKeyId);
 
+    /* Ensure the cipher type in the response matches the request */
+    resp->cipherType = req->cipherType;
+    /* Wrapped key size is only passed back to the client on success */
+    resp->wrappedKeySz = 0;
 
     /* Store the wrapped key in the response data */
     wrappedKey = respData;
@@ -1015,7 +1034,6 @@ static int _HandleKeyWrapRequest(whServerContext*                  server,
 
             /* Tell the client how big the wrapped key is */
             resp->wrappedKeySz = wrappedKeySz;
-            resp->cipherType   = WC_CIPHER_AES_GCM;
 
         } break;
 #endif /* HAVE_AESGCM */
@@ -1058,6 +1076,11 @@ static int _HandleKeyUnwrapAndExportRequest(
                                                server->comm->client_id, 
                                                req->serverKeyId);
 
+    /* Ensure the cipher type in the response matches the request */
+    resp->cipherType = req->cipherType;
+    /* Key size is only passed back to the client on success */
+    resp->keySz = 0;
+
     /* Store the metadata and key in the respData */
     metadata = (whNvmMetadata*)respData;
     key      = respData + sizeof(*metadata);
@@ -1070,10 +1093,6 @@ static int _HandleKeyUnwrapAndExportRequest(
             uint16_t keySz =
                 req->wrappedKeySz - WOLFHSM_KEYWRAP_AES_GCM_IV_SIZE -
                 WOLFHSM_KEYWRAP_AES_GCM_TAG_SIZE - sizeof(*metadata);
-
-            resp->cipherType = WC_CIPHER_AES_GCM;
-            /* Key size is only passed back to the client on success */
-            resp->keySz = 0;
 
             /* Check if the response data can fit the metadata + key  */
             if (respDataSz < sizeof(*metadata) + keySz) {
@@ -1162,6 +1181,11 @@ static int _HandleKeyUnwrapAndCacheRequest(
     serverKeyId = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO, 
                                                server->comm->client_id, 
                                                req->serverKeyId);
+
+    /* Ensure the cipher type in the response matches the request */
+    resp->cipherType = req->cipherType;
+    /* Key ID is only passed back to the client on success */
+    resp->keyId = WH_KEYID_ERASED;
 
     /* Unwrap the key based on the cipher type */
     switch (req->cipherType) {
@@ -1264,6 +1288,11 @@ static int _HandleDataWrapRequest(whServerContext*                   server,
                                                server->comm->client_id, 
                                                req->serverKeyId);
 
+    /* Ensure the cipher type in the response matches the request */
+    resp->cipherType = req->cipherType;
+    /* Wrapped data size is only passed back to the client on success */
+    resp->wrappedDataSz = 0;
+
     /* Store the wrapped data in the response data */
     wrappedData = respData;
 
@@ -1332,6 +1361,11 @@ static int _HandleDataUnwrapRequest(whServerContext*                     server,
     serverKeyId = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO, 
                                                server->comm->client_id, 
                                                req->serverKeyId);
+
+    /* Ensure the cipher type in the response matches the request */
+    resp->cipherType = req->cipherType;
+    /* Data size is only passed back to the client on success */
+    resp->dataSz = 0;
 
     /* Store the unwrapped data in the respData */
     data = respData;
@@ -1941,5 +1975,50 @@ int wh_Server_KeystoreExportKeyDma(whServerContext* server, whKeyId keyId,
     return ret;
 }
 #endif /* WOLFHSM_CFG_DMA */
+
+int wh_Server_KeystoreEnforceKeyUsage(const whNvmMetadata* meta,
+                                      whNvmFlags           requiredUsage)
+{
+    whNvmFlags actualFlags;
+
+    /* Validate input parameters */
+    if (meta == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* We only care about the usage flags */
+    requiredUsage &= WH_NVM_FLAGS_USAGE_ANY;
+
+    /* Check if the key has ALL the required usage flags set */
+    actualFlags = meta->flags & WH_NVM_FLAGS_USAGE_ANY;
+    if ((actualFlags & requiredUsage) == requiredUsage) {
+        return WH_ERROR_OK;
+    }
+
+    /* Key does not have ALL the required usage flags */
+    return WH_ERROR_USAGE;
+}
+
+int wh_Server_KeystoreFindEnforceKeyUsage(whServerContext* server,
+                                          whKeyId          keyId,
+                                          whNvmFlags       requiredUsage)
+{
+    int            ret;
+    whNvmMetadata* meta = NULL;
+
+    /* Validate input parameters */
+    if (server == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Freshen the key to obtain the metadata */
+    ret = wh_Server_KeystoreFreshenKey(server, keyId, NULL, &meta);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    /* Enforce the usage policy with the obtained metadata */
+    return wh_Server_KeystoreEnforceKeyUsage(meta, requiredUsage);
+}
 
 #endif /* !WOLFHSM_CFG_NO_CRYPTO && WOLFHSM_CFG_ENABLE_SERVER */

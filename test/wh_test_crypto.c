@@ -254,8 +254,9 @@ static int whTest_CryptoRsa(whClientContext* ctx, int devId, WC_RNG* rng)
         /* Using keyCache key */
         memset(cipherText, 0, sizeof(cipherText));
         memset(finalText, 0, sizeof(finalText));
-        ret = wh_Client_RsaMakeCacheKey(ctx, RSA_KEY_BITS, RSA_EXPONENT,
-                &keyId, WH_NVM_FLAGS_NONE, 0, NULL);
+        ret = wh_Client_RsaMakeCacheKey(
+            ctx, RSA_KEY_BITS, RSA_EXPONENT, &keyId,
+            WH_NVM_FLAGS_USAGE_ENCRYPT | WH_NVM_FLAGS_USAGE_DECRYPT, 0, NULL);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed to make cached key %d\n", ret);
         } else {
@@ -319,14 +320,6 @@ static int whTest_CryptoEcc(whClientContext* ctx, int devId, WC_RNG* rng)
     uint8_t shared_ba[TEST_ECC_KEYSIZE] = {0};
     uint8_t hash[TEST_ECC_KEYSIZE] = {0};
     uint8_t sig[ECC_MAX_SIG_SIZE] = {0};
-
-#if 0
-    whNvmFlags flags = WH_NVM_FLAGS_NONE;
-    whKeyId key_id_a = WH_KEYID_ERASED;
-    uint8_t* label_a = (uint8_t*)("Ecc Label A");
-    whKeyId key_id_b = 24;
-    uint8_t* label_b = (uint8_t*)("Ecc Label B");
-#endif
 
     ret = wc_ecc_init_ex(eccPrivate, NULL, devId);
     if (ret != 0) {
@@ -414,7 +407,7 @@ static int whTest_CryptoCurve25519(whClientContext* ctx, int devId, WC_RNG* rng)
     uint8_t shared_ab[CURVE25519_KEYSIZE] = {0};
     uint8_t shared_ba[CURVE25519_KEYSIZE] = {0};
     int key_size = CURVE25519_KEYSIZE;
-    whNvmFlags flags = WH_NVM_FLAGS_NONE;
+    whNvmFlags     flags                         = WH_NVM_FLAGS_USAGE_DERIVE;
     whKeyId key_id_a = WH_KEYID_ERASED;
     uint8_t label_a[WH_NVM_LABEL_LEN] = "Curve25519 Label A";
     whKeyId key_id_b = 42;
@@ -1196,8 +1189,9 @@ static int whTest_CryptoHkdf(whClientContext* ctx, int devId, WC_RNG* rng)
         byte    okm_direct[WH_TEST_HKDF_OKM_SIZE];
 
         /* First, cache the input key */
-        ret = wh_Client_KeyCache(ctx, 0, label_in, sizeof(label_in), ikm2,
-                                 sizeof(ikm2), &keyIdIn);
+        ret =
+            wh_Client_KeyCache(ctx, WH_NVM_FLAGS_USAGE_DERIVE, label_in,
+                               sizeof(label_in), ikm2, sizeof(ikm2), &keyIdIn);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed to cache input key: %d\n", ret);
             return ret;
@@ -1360,13 +1354,13 @@ static int whTest_CryptoCmacKdf(whClientContext* ctx, int devId, WC_RNG* rng)
     /* 4. Use cached salt and Z inputs */
     whKeyId saltKeyId = WH_KEYID_ERASED;
     whKeyId zKeyId    = WH_KEYID_ERASED;
-    ret = wh_Client_KeyCache(ctx, WH_NVM_FLAGS_NONE, NULL, 0, salt,
+    ret = wh_Client_KeyCache(ctx, WH_NVM_FLAGS_USAGE_DERIVE, NULL, 0, salt,
                              WH_TEST_CMAC_KDF_SALT_SIZE, &saltKeyId);
     if (ret != 0) {
         WH_ERROR_PRINT("Failed to cache CMAC KDF salt: %d\n", ret);
         return ret;
     }
-    ret = wh_Client_KeyCache(ctx, WH_NVM_FLAGS_NONE, NULL, 0, z,
+    ret = wh_Client_KeyCache(ctx, WH_NVM_FLAGS_USAGE_DERIVE, NULL, 0, z,
                              WH_TEST_CMAC_KDF_Z_SIZE, &zKeyId);
     if (ret != 0) {
         WH_ERROR_PRINT("Failed to cache CMAC KDF Z input: %d\n", ret);
@@ -2289,8 +2283,9 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
         }
         else {
             keyId = WH_KEYID_ERASED;
-            ret   = wh_Client_KeyCache(ctx, 0, labelIn, sizeof(labelIn), key,
-                                       sizeof(key), &keyId);
+            ret   = wh_Client_KeyCache(
+                  ctx, WH_NVM_FLAGS_USAGE_ENCRYPT | WH_NVM_FLAGS_USAGE_DECRYPT,
+                  labelIn, sizeof(labelIn), key, sizeof(key), &keyId);
             if (ret != 0) {
                 WH_ERROR_PRINT("Failed to wh_Client_KeyCache %d\n", ret);
             }
@@ -2402,8 +2397,9 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
         }
         else {
             keyId = WH_KEYID_ERASED;
-            ret   = wh_Client_KeyCache(ctx, 0, labelIn, sizeof(labelIn), key,
-                                       sizeof(key), &keyId);
+            ret   = wh_Client_KeyCache(
+                  ctx, WH_NVM_FLAGS_USAGE_ENCRYPT | WH_NVM_FLAGS_USAGE_DECRYPT,
+                  labelIn, sizeof(labelIn), key, sizeof(key), &keyId);
             if (ret != 0) {
                 WH_ERROR_PRINT("Failed to wh_Client_KeyCache %d\n", ret);
             }
@@ -2517,8 +2513,9 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
             WH_ERROR_PRINT("Failed to wc_AesInit %d\n", ret);
         } else {
             keyId = WH_KEYID_ERASED;
-            ret = wh_Client_KeyCache(ctx, 0, labelIn, sizeof(labelIn),
-                    key, sizeof(key), &keyId);
+            ret   = wh_Client_KeyCache(
+                  ctx, WH_NVM_FLAGS_USAGE_ENCRYPT | WH_NVM_FLAGS_USAGE_DECRYPT,
+                  labelIn, sizeof(labelIn), key, sizeof(key), &keyId);
             if (ret != 0) {
                 WH_ERROR_PRINT("Failed to wh_Client_KeyCache %d\n", ret);
             } else {
@@ -2627,8 +2624,9 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
             WH_ERROR_PRINT("Failed to wc_AesInit %d\n", ret);
         } else {
             keyId = WH_KEYID_ERASED;
-            ret   = wh_Client_KeyCache(ctx, 0, labelIn, sizeof(labelIn), key,
-                                       sizeof(key), &keyId);
+            ret   = wh_Client_KeyCache(
+                  ctx, WH_NVM_FLAGS_USAGE_ENCRYPT | WH_NVM_FLAGS_USAGE_DECRYPT,
+                  labelIn, sizeof(labelIn), key, sizeof(key), &keyId);
             if (ret != 0) {
                 WH_ERROR_PRINT("Failed to wh_Client_KeyCache %d\n", ret);
             } else {
@@ -2747,8 +2745,9 @@ static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
     if (ret == 0) {
         /* test oneshot generate with pre-cached key */
         keyId = WH_KEYID_ERASED;
-        ret = wh_Client_KeyCache(ctx, 0, labelIn, sizeof(labelIn), knownCmacKey,
-                                 sizeof(knownCmacKey), &keyId);
+        ret   = wh_Client_KeyCache(ctx, WH_NVM_FLAGS_USAGE_SIGN, labelIn,
+                                   sizeof(labelIn), knownCmacKey,
+                                   sizeof(knownCmacKey), &keyId);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed to wh_Client_KeyCache %d\n", ret);
         }
@@ -2814,8 +2813,9 @@ static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
     if (ret == 0) {
         /* test oneshot verify with committed key */
         keyId = WH_KEYID_ERASED;
-        ret = wh_Client_KeyCache(ctx, 0, labelIn, sizeof(labelIn), knownCmacKey,
-                                 sizeof(knownCmacKey), &keyId);
+        ret   = wh_Client_KeyCache(ctx, WH_NVM_FLAGS_USAGE_VERIFY, labelIn,
+                                   sizeof(labelIn), knownCmacKey,
+                                   sizeof(knownCmacKey), &keyId);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed to wh_Client_KeyCache %d\n", ret);
         }
@@ -3730,6 +3730,460 @@ int whTestCrypto_MlDsaVerifyOnlyDma(whClientContext* ctx, int devId,
 
 #endif /* HAVE_DILITHIUM */
 
+/* Test key usage policy enforcement for various crypto operations */
+int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
+{
+    int      ret            = 0;
+    uint8_t  plaintext[16]  = {0};
+    uint8_t  ciphertext[16] = {0};
+    uint8_t  key[32]        = {0};
+    uint32_t keyLen         = sizeof(key);
+    whKeyId  keyId          = WH_KEYID_ERASED;
+
+    printf("Testing Key Usage Policies...\n");
+
+    /* Generate random test data */
+    ret = wc_RNG_GenerateBlock(rng, plaintext, sizeof(plaintext));
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to generate random data: %d\n", ret);
+        return ret;
+    }
+
+    ret = wc_RNG_GenerateBlock(rng, key, sizeof(key));
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to generate random key: %d\n", ret);
+        return ret;
+    }
+
+#ifndef NO_AES
+#ifdef HAVE_AES_CBC
+    /* AES encrypt without ENCRYPT flag */
+    printf("  Testing AES CBC encrypt without ENCRYPT flag...\n");
+    {
+        Aes     aes[1];
+        uint8_t iv[AES_BLOCK_SIZE] = {0};
+
+        /* Cache key WITHOUT encrypt flag */
+        keyId = WH_KEYID_ERASED;
+        ret   = wh_Client_KeyCache(client, WH_NVM_FLAGS_NONE,
+                                   (uint8_t*)"aes-no-enc", strlen("aes-no-enc"),
+                                   key, keyLen, &keyId);
+        if (ret == 0) {
+            /* Initialize AES with HSM device ID */
+            ret = wc_AesInit(aes, NULL, WH_DEV_ID);
+            if (ret == 0) {
+                /* Set the cached keyId (not raw key material) */
+                ret = wh_Client_AesSetKeyId(aes, keyId);
+                if (ret == 0) {
+                    /* Set IV */
+                    ret = wc_AesSetIV(aes, iv);
+                    if (ret == 0) {
+                        /* Try to encrypt - should fail with WH_ERROR_USAGE */
+                        ret = wc_AesCbcEncrypt(aes, ciphertext, plaintext,
+                                               sizeof(plaintext));
+                        if (ret == WH_ERROR_USAGE) {
+                            printf("    PASS: Correctly denied encryption\n");
+                            ret = 0; /* Test passed */
+                        }
+                        else {
+                            WH_ERROR_PRINT(
+                                "    FAIL: Expected WH_ERROR_USAGE, got %d\n",
+                                ret);
+                            ret = WH_ERROR_ABORTED;
+                        }
+                    }
+                }
+                wc_AesFree(aes);
+            }
+            wh_Client_KeyEvict(client, keyId);
+        }
+    }
+    if (ret != 0)
+        return ret;
+
+    /* AES decrypt without DECRYPT flag */
+    printf("  Testing AES CBC decrypt without DECRYPT flag...\n");
+    {
+        Aes     aes[1];
+        uint8_t iv[AES_BLOCK_SIZE] = {0};
+        uint8_t decrypted[16]      = {0};
+        uint8_t tempCipher[16]     = {0};
+
+        /* First, create some ciphertext using a key with ENCRYPT flag */
+        keyId = WH_KEYID_ERASED;
+        ret   = wh_Client_KeyCache(client, WH_NVM_FLAGS_USAGE_ENCRYPT,
+                                   (uint8_t*)"aes-enc-only",
+                                   strlen("aes-enc-only"), key, keyLen, &keyId);
+        if (ret == 0) {
+            ret = wc_AesInit(aes, NULL, WH_DEV_ID);
+            if (ret == 0) {
+                ret = wh_Client_AesSetKeyId(aes, keyId);
+                if (ret == 0) {
+                    ret = wc_AesSetIV(aes, iv);
+                    if (ret == 0) {
+                        /* Encrypt to create ciphertext */
+                        ret = wc_AesCbcEncrypt(aes, tempCipher, plaintext,
+                                               sizeof(plaintext));
+                    }
+                }
+                wc_AesFree(aes);
+            }
+            wh_Client_KeyEvict(client, keyId);
+        }
+
+        if (ret == 0) {
+            /* Now cache same key WITHOUT decrypt flag */
+            keyId = WH_KEYID_ERASED;
+            ret   = wh_Client_KeyCache(
+                  client,
+                  WH_NVM_FLAGS_USAGE_ENCRYPT, /* Only ENCRYPT, no DECRYPT */
+                  (uint8_t*)"aes-no-dec", strlen("aes-no-dec"), key, keyLen,
+                  &keyId);
+            if (ret == 0) {
+                /* Initialize AES with HSM device ID */
+                ret = wc_AesInit(aes, NULL, WH_DEV_ID);
+                if (ret == 0) {
+                    /* Set the cached keyId */
+                    ret = wh_Client_AesSetKeyId(aes, keyId);
+                    if (ret == 0) {
+                        /* Set IV */
+                        ret = wc_AesSetIV(aes, iv);
+                        if (ret == 0) {
+                            /* Try to decrypt - should fail with WH_ERROR_USAGE
+                             */
+                            ret = wc_AesCbcDecrypt(aes, decrypted, tempCipher,
+                                                   sizeof(tempCipher));
+                            if (ret == WH_ERROR_USAGE) {
+                                printf(
+                                    "    PASS: Correctly denied decryption\n");
+                                ret = 0; /* Test passed */
+                            }
+                            else {
+                                WH_ERROR_PRINT("    FAIL: Expected "
+                                               "WH_ERROR_USAGE, got %d\n",
+                                               ret);
+                                ret = WH_ERROR_ABORTED;
+                            }
+                        }
+                    }
+                    wc_AesFree(aes);
+                }
+                wh_Client_KeyEvict(client, keyId);
+            }
+        }
+    }
+    if (ret != 0)
+        return ret;
+#endif /* HAVE_AES_CBC */
+#endif /* !NO_AES */
+
+#ifdef HAVE_ECC
+#ifdef HAVE_ECC_SIGN
+    /* ECDSA sign without SIGN flag */
+    printf("  Testing ECDSA sign without SIGN flag...\n");
+    {
+        ecc_key eccKey[1];
+        uint8_t sig[ECC_MAX_SIG_SIZE]       = {0};
+        word32  sigLen                      = sizeof(sig);
+        uint8_t hash[WC_SHA256_DIGEST_SIZE] = {0};
+
+        /* Generate key on server and cache it WITHOUT sign flag */
+        keyId = WH_KEYID_ERASED;
+        ret   = wh_Client_EccMakeCacheKey(
+              client, 32, ECC_SECP256R1, &keyId, WH_NVM_FLAGS_NONE,
+              strlen("ecc-no-sign"), (uint8_t*)"ecc-no-sign");
+        if (ret == 0) {
+            /* Initialize ecc_key with HSM device ID and set curve */
+            ret = wc_ecc_init_ex(eccKey, NULL, WH_DEV_ID);
+            if (ret == 0) {
+                ret = wc_ecc_set_curve(eccKey, 32, ECC_SECP256R1);
+                if (ret == 0) {
+                    /* Associate the cached keyId with this ecc_key */
+                    ret = wh_Client_EccSetKeyId(eccKey, keyId);
+                    if (ret == 0) {
+                        /* Generate a hash to sign */
+                        ret = wc_RNG_GenerateBlock(rng, hash, sizeof(hash));
+                        if (ret == 0) {
+                            /* Try to sign - should fail with WH_ERROR_USAGE */
+                            ret = wc_ecc_sign_hash(hash, sizeof(hash), sig,
+                                                   &sigLen, rng, eccKey);
+                            if (ret == WH_ERROR_USAGE) {
+                                printf("    PASS: Correctly denied signing\n");
+                                ret = 0; /* Test passed */
+                            }
+                            else {
+                                WH_ERROR_PRINT("    FAIL: Expected "
+                                               "WH_ERROR_USAGE, got %d\n",
+                                               ret);
+                                ret = WH_ERROR_ABORTED;
+                            }
+                        }
+                    }
+                }
+                wc_ecc_free(eccKey);
+            }
+            wh_Client_KeyEvict(client, keyId);
+        }
+    }
+    if (ret != 0)
+        return ret;
+#endif /* HAVE_ECC_SIGN */
+
+#ifdef HAVE_ECC_DHE
+    /* ECDH without DERIVE flag */
+    printf("  Testing ECDH without DERIVE flag...\n");
+    {
+        ecc_key privKey[1];
+        ecc_key pubKey[1];
+        uint8_t sharedSecret[ECC_MAXSIZE] = {0};
+        word32  secretLen                 = sizeof(sharedSecret);
+
+        /* Generate private key on server WITHOUT derive flag */
+        keyId = WH_KEYID_ERASED;
+        ret   = wh_Client_EccMakeCacheKey(
+              client, 32, ECC_SECP256R1, &keyId, WH_NVM_FLAGS_NONE,
+              strlen("ecc-no-derive"), (uint8_t*)"ecc-no-derive");
+        if (ret == 0) {
+            /* Initialize private key with HSM device ID and set curve */
+            ret = wc_ecc_init_ex(privKey, NULL, WH_DEV_ID);
+            if (ret == 0) {
+                ret = wc_ecc_set_curve(privKey, 32, ECC_SECP256R1);
+                if (ret == 0) {
+                    /* Associate the cached keyId with private key */
+                    ret = wh_Client_EccSetKeyId(privKey, keyId);
+                }
+                if (ret == 0) {
+                    /* Generate a public key locally for ECDH */
+                    ret = wc_ecc_init_ex(pubKey, NULL, INVALID_DEVID);
+                    if (ret == 0) {
+                        ret = wc_ecc_make_key(rng, 32, pubKey);
+                        if (ret == 0) {
+                            /* Try ECDH - should fail with WH_ERROR_USAGE */
+                            ret = wc_ecc_shared_secret(
+                                privKey, pubKey, sharedSecret, &secretLen);
+                            if (ret == WH_ERROR_USAGE) {
+                                printf("    PASS: Correctly denied key "
+                                       "derivation\n");
+                                ret = 0; /* Test passed */
+                            }
+                            else {
+                                WH_ERROR_PRINT("    FAIL: Expected "
+                                               "WH_ERROR_USAGE, got %d\n",
+                                               ret);
+                                ret = WH_ERROR_ABORTED;
+                            }
+                        }
+                        wc_ecc_free(pubKey);
+                    }
+                }
+                wc_ecc_free(privKey);
+            }
+            wh_Client_KeyEvict(client, keyId);
+        }
+    }
+    if (ret != 0)
+        return ret;
+#endif /* HAVE_ECC_DHE */
+#endif /* HAVE_ECC */
+
+#ifdef HAVE_HKDF
+    /* HKDF without DERIVE flag */
+    printf("  Testing HKDF without DERIVE flag...\n");
+    {
+        uint8_t ikm[32]  = {0};
+        whKeyId outKeyId = WH_KEYID_ERASED;
+
+        ret = wc_RNG_GenerateBlock(rng, ikm, sizeof(ikm));
+        if (ret == 0) {
+            /* Cache IKM without DERIVE flag */
+            keyId = WH_KEYID_ERASED;
+            ret   = wh_Client_KeyCache(
+                  client, WH_NVM_FLAGS_NONE, (uint8_t*)"hkdf-no-derive",
+                  strlen("hkdf-no-derive"), ikm, sizeof(ikm), &keyId);
+            if (ret == 0) {
+                /* Try HKDF using cached key - should fail */
+                ret = wh_Client_HkdfMakeCacheKey(
+                    client, WC_SHA256, keyId, NULL, 0, /* Use cached key */
+                    NULL, 0,                           /* salt */
+                    NULL, 0,                           /* info */
+                    &outKeyId,                         /* output key ID */
+                    WH_NVM_FLAGS_EPHEMERAL, (uint8_t*)"hkdf-out",
+                    strlen("hkdf-out"), 32); /* output size */
+                if (ret == WH_ERROR_USAGE) {
+                    printf("    PASS: Correctly denied HKDF derivation\n");
+                    ret = 0; /* Test passed */
+                }
+                else {
+                    WH_ERROR_PRINT(
+                        "    FAIL: Expected WH_ERROR_USAGE, got %d\n", ret);
+                    ret = WH_ERROR_ABORTED;
+                }
+                wh_Client_KeyEvict(client, keyId);
+                if (!WH_KEYID_ISERASED(outKeyId)) {
+                    wh_Client_KeyEvict(client, outKeyId);
+                }
+            }
+        }
+    }
+    if (ret != 0)
+        return ret;
+#endif /* HAVE_HKDF */
+
+#if defined(WOLFSSL_CMAC) && !defined(NO_AES) && defined(WOLFSSL_AES_DIRECT)
+    /* CMAC Generate without SIGN flag */
+    printf("  Testing CMAC generate without SIGN flag...\n");
+    {
+        Cmac    cmac;
+        whKeyId keyId = WH_KEYID_ERASED;
+        uint8_t message[64];
+        uint8_t tag[AES_BLOCK_SIZE];
+        word32  tagLen = sizeof(tag);
+
+        /* Generate random message */
+        ret = wc_RNG_GenerateBlock(rng, message, sizeof(message));
+        if (ret == 0) {
+            /* Cache AES key without SIGN flag */
+            ret = wh_Client_KeyCache(
+                client, WH_NVM_FLAGS_NONE, (uint8_t*)"cmac-no-sign",
+                strlen("cmac-no-sign"), key, AES_128_KEY_SIZE, &keyId);
+        }
+
+        if (ret == 0) {
+            /* Initialize CMAC with HSM device ID */
+            ret = wc_InitCmac_ex(&cmac, NULL, 0, WC_CMAC_AES, NULL, NULL,
+                                 WH_DEV_ID);
+            if (ret == 0) {
+                /* Associate cached key */
+                ret = wh_Client_CmacSetKeyId(&cmac, keyId);
+                if (ret == 0) {
+                    /* Try to generate CMAC - should fail */
+                    ret = wc_AesCmacGenerate_ex(&cmac, tag, &tagLen, message,
+                                                sizeof(message), NULL, 0, NULL,
+                                                WH_DEV_ID);
+                    if (ret == WH_ERROR_USAGE) {
+                        printf("    PASS: Correctly denied CMAC generate\n");
+                        ret = 0; /* Test passed */
+                    }
+                    else {
+                        WH_ERROR_PRINT(
+                            "    FAIL: Expected WH_ERROR_USAGE, got %d\n", ret);
+                        ret = WH_ERROR_ABORTED;
+                    }
+                }
+                wc_CmacFree(&cmac);
+            }
+            wh_Client_KeyEvict(client, keyId);
+        }
+    }
+    if (ret != 0)
+        return ret;
+
+    /* CMAC Verify without VERIFY flag */
+    printf("  Testing CMAC verify without VERIFY flag...\n");
+    {
+        Cmac    cmac;
+        whKeyId keyId = WH_KEYID_ERASED;
+        uint8_t message[64];
+        uint8_t tag[AES_BLOCK_SIZE];
+        word32  tagLen = sizeof(tag);
+
+        /* Generate random message and tag */
+        ret = wc_RNG_GenerateBlock(rng, message, sizeof(message));
+        if (ret == 0) {
+            ret = wc_RNG_GenerateBlock(rng, tag, sizeof(tag));
+        }
+
+        if (ret == 0) {
+            /* Cache AES key without VERIFY flag */
+            ret = wh_Client_KeyCache(
+                client, WH_NVM_FLAGS_NONE, (uint8_t*)"cmac-no-verify",
+                strlen("cmac-no-verify"), key, AES_128_KEY_SIZE, &keyId);
+        }
+
+        if (ret == 0) {
+            /* Initialize CMAC with HSM device ID */
+            ret = wc_InitCmac_ex(&cmac, NULL, 0, WC_CMAC_AES, NULL, NULL,
+                                 WH_DEV_ID);
+            if (ret == 0) {
+                /* Associate cached key */
+                ret = wh_Client_CmacSetKeyId(&cmac, keyId);
+                if (ret == 0) {
+                    /* Try to verify CMAC - should fail */
+                    ret = wc_AesCmacVerify_ex(&cmac, tag, tagLen, message,
+                                              sizeof(message), NULL, 0, NULL,
+                                              WH_DEV_ID);
+                    if (ret == WH_ERROR_USAGE) {
+                        printf("    PASS: Correctly denied CMAC verify\n");
+                        ret = 0; /* Test passed */
+                    }
+                    else {
+                        WH_ERROR_PRINT(
+                            "    FAIL: Expected WH_ERROR_USAGE, got %d\n", ret);
+                        ret = WH_ERROR_ABORTED;
+                    }
+                }
+                wc_CmacFree(&cmac);
+            }
+            wh_Client_KeyEvict(client, keyId);
+        }
+    }
+    if (ret != 0)
+        return ret;
+#endif /* WOLFSSL_CMAC && !NO_AES && WOLFSSL_AES_DIRECT */
+
+#ifdef WOLFHSM_CFG_KEYWRAP
+    /* Key wrap without WRAP flag */
+    printf("  Testing key wrap without WRAP flag...\n");
+    {
+        uint8_t       kek[32]         = {0};
+        uint8_t       dataKey[32]     = {0};
+        uint8_t       wrappedKey[256] = {0};
+        whKeyId       kekId           = WH_KEYID_ERASED;
+        const whKeyId wrappedId       = 1;
+        whNvmMetadata meta            = {0};
+
+        ret = wc_RNG_GenerateBlock(rng, kek, sizeof(kek));
+        if (ret == 0) {
+            ret = wc_RNG_GenerateBlock(rng, dataKey, sizeof(dataKey));
+        }
+
+        if (ret == 0) {
+            /* Cache KEK without WRAP flag */
+            ret = wh_Client_KeyCache(
+                client, WH_NVM_FLAGS_NONE, (uint8_t*)"kek-no-wrap",
+                strlen("kek-no-wrap"), kek, sizeof(kek), &kekId);
+            if (ret == 0) {
+                /* Setup metadata for data key */
+                meta.id = WH_CLIENT_KEYID_MAKE_WRAPPED_META(
+                    client->comm->client_id, wrappedId);
+                meta.flags = WH_NVM_FLAGS_NONE;
+                meta.len   = sizeof(dataKey);
+
+                /* Try to wrap - should fail */
+                ret = wh_Client_KeyWrap(client, WC_CIPHER_AES_GCM, kekId,
+                                        dataKey, sizeof(dataKey), &meta,
+                                        wrappedKey, sizeof(wrappedKey));
+                if (ret == WH_ERROR_USAGE) {
+                    printf("    PASS: Correctly denied key wrapping\n");
+                    ret = 0; /* Test passed */
+                }
+                else {
+                    WH_ERROR_PRINT(
+                        "    FAIL: Expected WH_ERROR_USAGE, got %d\n", ret);
+                    ret = WH_ERROR_ABORTED;
+                }
+                wh_Client_KeyEvict(client, kekId);
+            }
+        }
+    }
+    if (ret != 0)
+        return ret;
+#endif /* WOLFHSM_CFG_KEYWRAP */
+
+    printf("Key Usage Policy Tests PASSED\n");
+    return 0;
+}
+
 
 int whTest_CryptoClientConfig(whClientConfig* config)
 {
@@ -3789,6 +4243,11 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     if (ret == 0) {
         /* Test Non-Exportable Flag enforcement on keystore */
         ret = whTest_NonExportableKeystore(client, WH_DEV_ID, rng);
+    }
+
+    if (ret == 0) {
+        /* Test Key Usage Policy enforcement */
+        ret = whTest_CryptoKeyUsagePolicies(client, rng);
     }
 
 #ifdef WOLFHSM_CFG_KEYWRAP
