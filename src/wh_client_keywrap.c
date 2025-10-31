@@ -17,10 +17,10 @@ int wh_Client_KeyWrapRequest(whClientContext*   ctx,
                              uint16_t serverKeyId, void* key, uint16_t keySz,
                              whNvmMetadata* metadata)
 {
-    uint16_t                       group  = WH_MESSAGE_GROUP_KEY;
+    uint16_t                          group  = WH_MESSAGE_GROUP_KEY;
     uint16_t                          action = WH_KEY_KEYWRAP;
     whMessageKeystore_KeyWrapRequest* req    = NULL;
-    uint8_t*                       reqData;
+    uint8_t*                          reqData;
 
     if (ctx == NULL || key == NULL || metadata == NULL) {
         return WH_ERROR_BADARGS;
@@ -52,12 +52,12 @@ int wh_Client_KeyWrapResponse(whClientContext*   ctx,
                               enum wc_CipherType cipherType,
                               void* wrappedKeyOut, uint16_t wrappedKeySz)
 {
-    int                             ret;
-    uint16_t                        group;
-    uint16_t                        action;
-    uint16_t                        size;
+    int                                ret;
+    uint16_t                           group;
+    uint16_t                           action;
+    uint16_t                           size;
     whMessageKeystore_KeyWrapResponse* resp = NULL;
-    uint8_t*                        respData;
+    uint8_t*                           respData;
 
     if (ctx == NULL || wrappedKeyOut == NULL) {
         return WH_ERROR_BADARGS;
@@ -126,10 +126,10 @@ int wh_Client_KeyUnwrapAndExportRequest(whClientContext*   ctx,
                                         uint16_t           wrappedKeySz)
 
 {
-    uint16_t                                  group  = WH_MESSAGE_GROUP_KEY;
-    uint16_t                                  action = WH_KEY_KEYUNWRAPEXPORT;
+    uint16_t group                                   = WH_MESSAGE_GROUP_KEY;
+    uint16_t action                                  = WH_KEY_KEYUNWRAPEXPORT;
     whMessageKeystore_KeyUnwrapAndExportRequest* req = NULL;
-    uint8_t*                                  reqData;
+    uint8_t*                                     reqData;
 
     if (ctx == NULL || wrappedKeyIn == NULL) {
         return WH_ERROR_BADARGS;
@@ -161,12 +161,12 @@ int wh_Client_KeyUnwrapAndExportResponse(whClientContext*   ctx,
                                          whNvmMetadata*     metadataOut,
                                          void* keyOut, uint16_t keySz)
 {
-    int                                        ret;
-    uint16_t                                   group;
-    uint16_t                                   action;
-    uint16_t                                   size;
+    int                                           ret;
+    uint16_t                                      group;
+    uint16_t                                      action;
+    uint16_t                                      size;
     whMessageKeystore_KeyUnwrapAndExportResponse* resp = NULL;
-    uint8_t*                                   respData;
+    uint8_t*                                      respData;
 
     if (ctx == NULL || metadataOut == NULL || keyOut == NULL) {
         return WH_ERROR_BADARGS;
@@ -245,7 +245,7 @@ int wh_Client_KeyUnwrapAndCacheRequest(whClientContext*   ctx,
     uint16_t action = WH_KEY_KEYUNWRAPCACHE;
 
     whMessageKeystore_KeyUnwrapAndCacheRequest* req = NULL;
-    uint8_t*                                 reqData;
+    uint8_t*                                    reqData;
 
     if (ctx == NULL || wrappedKeyIn == NULL)
         return WH_ERROR_BADARGS;
@@ -274,10 +274,10 @@ int wh_Client_KeyUnwrapAndCacheResponse(whClientContext*   ctx,
                                         enum wc_CipherType cipherType,
                                         uint16_t*          keyIdOut)
 {
-    int                                       ret;
-    uint16_t                                  group;
-    uint16_t                                  action;
-    uint16_t                                  size;
+    int                                          ret;
+    uint16_t                                     group;
+    uint16_t                                     action;
+    uint16_t                                     size;
     whMessageKeystore_KeyUnwrapAndCacheResponse* resp = NULL;
 
     if (ctx == NULL || keyIdOut == NULL)
