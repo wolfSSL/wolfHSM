@@ -236,7 +236,7 @@ static int _TestKeyWrapSensitive(whClientContext* client, int cipher)
     uint16_t      tmpOutSz     = 0;
     whNvmMetadata metadata     = {
             .id    = WH_CLIENT_KEYID_MAKE_WRAPPED_META(WH_TEST_DEFAULT_CLIENT_ID,
-                                                       WH_TEST_AESGCM_KEYID + 1),
+                                                       WH_TEST_AESGCM_KEYID),
             .label = "Sensitive AES Key",
             .len   = WH_TEST_AES_KEYSIZE,
             .flags = WH_NVM_FLAGS_SENSITIVE,
