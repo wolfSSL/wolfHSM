@@ -849,7 +849,8 @@ static int _AesGcmDataWrap(whServerContext* server, whKeyId serverKeyId,
     /* Get the server side key */
     ret = wh_Server_KeystoreReadKey(
         server,
-        wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO, server->comm->client_id, serverKeyId),
+        wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO, server->comm->client_id,
+                                     serverKeyId),
         NULL, serverKey, &serverKeySz);
     if (ret != WH_ERROR_OK) {
         return ret;
@@ -915,7 +916,8 @@ static int _AesGcmDataUnwrap(whServerContext* server, uint16_t serverKeyId,
     /* Get the server side key */
     ret = wh_Server_KeystoreReadKey(
         server,
-        wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO, server->comm->client_id, serverKeyId),
+        wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO, server->comm->client_id,
+                                     serverKeyId),
         NULL, serverKey, &serverKeySz);
     if (ret != WH_ERROR_OK) {
         return ret;
