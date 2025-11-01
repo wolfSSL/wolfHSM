@@ -53,7 +53,7 @@
 /** TLS configuration structure */
 typedef struct {
     char*     server_ip_string;
-    short int server_port;
+    int       server_port;
     bool      verify_peer; /* Whether to verify certificates */
 } posixTransportTlsConfig;
 
