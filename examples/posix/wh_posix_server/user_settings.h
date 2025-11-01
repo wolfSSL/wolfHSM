@@ -48,9 +48,6 @@ extern "C" {
 #define HAVE_ANONYMOUS_INLINE_AGGREGATES 1
 
 /* For cert manager */
-#define NO_TLS
-/* Eliminates need for IO layer since we only use CM */
-#define WOLFSSL_USER_IO
 /* For ACert support (also requires WOLFSSL_ASN_TEMPLATE) */
 #define WOLFSSL_ACERT
 
@@ -67,11 +64,9 @@ extern "C" {
 
 /** Remove unneeded features*/
 #define NO_MAIN_DRIVER
-#define NO_ERROR_STRINGS
 #define NO_ERROR_QUEUE
 #define NO_INLINE
 #define NO_OLD_TLS
-#define WOLFSSL_NO_TLS12
 #define NO_DO178
 /* Prevents certain functions (SHA, hash.c) on server from falling back to
  * client cryptoCb when using non-devId APIs */
@@ -151,7 +146,6 @@ extern "C" {
 /* Remove unneeded crypto */
 #define NO_DSA
 #define NO_RC4
-#define NO_PSK
 #define NO_MD4
 #define NO_MD5
 #define NO_DES3
@@ -192,6 +186,11 @@ extern "C" {
 #define WOLFSSL_STATIC_MEMORY
 #endif
 
+/* additional memory debugging macros, prints out each alloc and free */
+/* #define WOLFSSL_DEBUG_MEMORY */
+/* #define WOLFSSL_DEBUG_MEMORY_PRINT */
+
+/* #define DEBUG_WOLFSSL */
 #ifdef __cplusplus
 }
 #endif
