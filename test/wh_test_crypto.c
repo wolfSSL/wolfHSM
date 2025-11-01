@@ -3527,7 +3527,8 @@ static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
     }
 
 #if defined(WOLFHSM_CFG_CANCEL_API) && \
-    !defined(WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP)
+    !defined(WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP) && \
+    !defined(WOLFHSM_CFG_TEST_CLIENT_ONLY_TLS)
     /* test CMAC cancellation for supported devIds */
     if (ret == 0
 #ifdef WOLFHSM_CFG_DMA
@@ -5376,7 +5377,8 @@ int whTest_CryptoServerConfig(whServerConfig* config)
 #endif /* WOLFHSM_CFG_ENABLE_SERVER */
 
 #if defined(WOLFHSM_CFG_TEST_POSIX) && defined(WOLFHSM_CFG_ENABLE_CLIENT) && \
-    !defined(WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP)
+    !defined(WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP) && \
+    !defined(WOLFHSM_CFG_TEST_CLIENT_ONLY_TLS)
 static void* _whClientTask(void *cf)
 {
     int rc = whTest_CryptoClientConfig(cf);

@@ -54,6 +54,9 @@
 
 #if defined(WOLFHSM_CFG_TEST_POSIX) && defined(WOLFHSM_CFG_ENABLE_CLIENT)
 #include "port/posix/posix_transport_tcp.h"
+#ifndef WOLFHSM_CFG_NO_CRYPTO
+#include "port/posix/posix_transport_tls.h"
+#endif /* WOLFHSM_CFG_NO_CRYPTO */
 #endif
 
 #include "wolfhsm/wh_client.h"
@@ -174,6 +177,128 @@ int whTest_ClientTcp(void)
     return whTest_ClientConfig(c_conf);
 }
 #endif /* WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP && WOLFHSM_CFG_TEST_POSIX */
+#if defined(WOLFHSM_CFG_TEST_CLIENT_ONLY_TLS) && defined(WOLFHSM_CFG_TEST_POSIX)
+/* client configuration setup example for TLS transport */
+
+#define WH_POSIX_SERVER_TCP_PORT 23456
+#define WH_POSIX_SERVER_TCP_IPSTRING "127.0.0.1"
+#define WH_POSIX_CLIENT_ID 12
+
+#undef USE_CERT_BUFFERS_2048
+#define USE_CERT_BUFFERS_2048
+#include "wolfssl/certs_test.h"
+
+posixTransportTlsClientContext tccTls;
+posixTransportTlsConfig tlsConfig;
+whCommClientConfig c_comm;
+whTransportClientCb tlsCb = PTTLS_CLIENT_CB;
+
+static int
+whPosixClient_ExampleTlsContextSetup(posixTransportTlsClientContext* ctx)
+{
+    int rc;
+
+    /* uncomment and compile with DEBUG_WOLFSSL for debugging  */
+    /* wolfSSL_Debugging_ON(); */
+
+    /* Create a new wolfSSL context to use with this connection */
+    ctx->ssl_ctx = wolfSSL_CTX_new(wolfSSLv23_client_method());
+    if (!ctx->ssl_ctx) {
+        return WH_ERROR_ABORTED;
+    }
+
+    /* don't use wolfHSM for TLS crypto when communicating with wolfHSM */
+    wolfSSL_CTX_SetDevId(ctx->ssl_ctx, INVALID_DEVID);
+
+    /* Load CA certificate for server verification */
+    rc = wolfSSL_CTX_load_verify_buffer(ctx->ssl_ctx, ca_cert_der_2048,
+                                        sizeof_ca_cert_der_2048,
+                                        CTC_FILETYPE_ASN1);
+    if (rc != WOLFSSL_SUCCESS) {
+        wolfSSL_CTX_free(ctx->ssl_ctx);
+        ctx->ssl_ctx = NULL;
+        return WH_ERROR_ABORTED;
+    }
+
+    rc = wolfSSL_CTX_use_certificate_buffer(ctx->ssl_ctx, client_cert_der_2048,
+                                            sizeof(client_cert_der_2048),
+                                            CTC_FILETYPE_ASN1);
+    if (rc != WOLFSSL_SUCCESS) {
+        wolfSSL_CTX_free(ctx->ssl_ctx);
+        ctx->ssl_ctx = NULL;
+        return WH_ERROR_ABORTED;
+    }
+
+    /* load private key for TLS connection */
+    rc = wolfSSL_CTX_use_PrivateKey_buffer(ctx->ssl_ctx, client_key_der_2048,
+                                           sizeof(client_key_der_2048),
+                                           CTC_FILETYPE_ASN1);
+    if (rc != WOLFSSL_SUCCESS) {
+        wolfSSL_CTX_free(ctx->ssl_ctx);
+        ctx->ssl_ctx = NULL;
+        return WH_ERROR_ABORTED;
+    }
+    /* Set verification mode */
+    wolfSSL_CTX_set_verify(ctx->ssl_ctx, WOLFSSL_VERIFY_PEER, NULL);
+
+    return WH_ERROR_OK;
+}
+
+static int whPosixClient_ExampleTlsCommonConfig(void* conf)
+{
+    whClientConfig* c_conf = (whClientConfig*)conf;
+
+    memset(&tccTls, 0, sizeof(posixTransportTlsClientContext));
+
+    /* Initialize TCP context fields that need specific values */
+    tccTls.state         = 0;
+    tccTls.connect_fd_p1 = 0; /* Invalid fd */
+    tccTls.request_sent  = 0;
+    tccTls.buffer_offset = 0;
+
+    tlsConfig.server_ip_string = WH_POSIX_SERVER_TCP_IPSTRING;
+    tlsConfig.server_port      = WH_POSIX_SERVER_TCP_PORT;
+    tlsConfig.verify_peer      = true;
+
+    c_comm.transport_cb      = &tlsCb;
+    c_comm.transport_context = (void*)&tccTls;
+    c_comm.transport_config  = (void*)&tlsConfig;
+    c_comm.client_id         = WH_POSIX_CLIENT_ID;
+    c_conf->comm             = &c_comm;
+
+    return WH_ERROR_OK;
+}
+
+int whPosixClient_ExampleTlsConfig(void* conf)
+{
+    if (whPosixClient_ExampleTlsCommonConfig(conf) != WH_ERROR_OK) {
+        return WH_ERROR_ABORTED;
+    }
+
+    if (whPosixClient_ExampleTlsContextSetup(&tccTls) != WH_ERROR_OK) {
+        return WH_ERROR_ABORTED;
+    }
+    return WH_ERROR_OK;
+}
+
+/*
+ * Run all the client-only tests on a default client configuration matching the
+ * example server TLS configuration.
+ */
+int whTest_ClientTls(void)
+{
+    int ret;
+    whClientConfig c_conf[1];
+
+    if (whPosixClient_ExampleTlsConfig(c_conf) != WH_ERROR_OK) {
+       ret = -1;
+    }
+    else {
+        ret = whTest_ClientConfig(c_conf);
+    }
+    return ret;
+}
+#endif /* WOLFHSM_CFG_TEST_CLIENT_ONLY_TLS && WOLFHSM_CFG_TEST_POSIX */
 #endif /* WOLFHSM_CFG_ENABLE_CLIENT */
 
 #if !defined(WOLFHSM_CFG_TEST_UNIT_NO_MAIN)
@@ -186,6 +311,10 @@ int main(void)
     defined(WOLFHSM_CFG_ENABLE_CLIENT) && defined(WOLFHSM_CFG_TEST_POSIX)
     /* Test driver should run TCP client tests against the example server */
     ret = whTest_ClientTcp();
+#elif defined(WOLFHSM_CFG_TEST_CLIENT_ONLY_TLS) && \
+    defined(WOLFHSM_CFG_ENABLE_CLIENT) && defined(WOLFHSM_CFG_TEST_POSIX)
+    /* Test driver should run TLS client tests against the example server */
+    ret = whTest_ClientTls();
 #elif defined(WOLFHSM_CFG_ENABLE_CLIENT) && defined(WOLFHSM_CFG_ENABLE_SERVER)
     /* Default case: Test driver should run all the unit tests locally */
     ret = whTest_Unit();

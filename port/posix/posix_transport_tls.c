@@ -84,8 +84,6 @@ int posixTransportTls_InitConnect(void* context, const void* config,
 
         ctx->ssl = wolfSSL_new(ctx->ssl_ctx);
         if (!ctx->ssl) {
-            wolfSSL_CTX_free(ctx->ssl_ctx);
-            ctx->ssl_ctx = NULL;
             posixTransportTcp_CleanupConnect((void*)&ctx->tcpCtx);
             return WH_ERROR_ABORTED;
         }
@@ -95,8 +93,6 @@ int posixTransportTls_InitConnect(void* context, const void* config,
         if (rc != WOLFSSL_SUCCESS) {
             wolfSSL_free(ctx->ssl);
             ctx->ssl = NULL;
-            wolfSSL_CTX_free(ctx->ssl_ctx);
-            ctx->ssl_ctx = NULL;
             posixTransportTcp_CleanupConnect((void*)&ctx->tcpCtx);
             return WH_ERROR_ABORTED;
         }
@@ -222,8 +218,6 @@ int posixTransportTls_CleanupConnect(void* context)
         wolfSSL_free(ctx->ssl);
     }
     ctx->ssl = NULL;
-    wolfSSL_CTX_free(ctx->ssl_ctx);
-    ctx->ssl_ctx = NULL;
     posixTransportTcp_CleanupConnect((void*)&ctx->tcpCtx);
     return WH_ERROR_OK;
 #else
@@ -413,16 +407,11 @@ int posixTransportTls_CleanupListen(void* context)
     if (!ctx) {
         return WH_ERROR_BADARGS;
     }
-    /* Clean up SSL objects */
+
     if (ctx->ssl) {
         (void)wolfSSL_shutdown(ctx->ssl);
         wolfSSL_free(ctx->ssl);
         ctx->ssl = NULL;
-    }
-
-    if (ctx->ssl_ctx) {
-        wolfSSL_CTX_free(ctx->ssl_ctx);
-        ctx->ssl_ctx = NULL;
     }
 
     /* Clean up TCP context */

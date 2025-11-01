@@ -10,7 +10,7 @@ jobs:
   build:
     strategy:
         matrix:
-            transport: [ 'tcp', 'shm', 'dma' ]
+            transport: [ 'tcp', 'shm', 'dma', 'tls', 'psk' ]
             asan: [ 'ASAN=1', 'ASAN=0' ]
             debug: [ '', 'DEBUG_VERBOSE=1' ]
             test: [ '', '--test' ]
@@ -47,7 +47,11 @@ jobs:
     - name: Run POSIX server
       run: |
         cd examples/posix/wh_posix_server
-        ./Build/wh_posix_server.elf --type ${{ matrix.transport }} &
+        if [ "${{ matrix.transport }}" = "psk" ]; then
+          echo "test_password" | ./Build/wh_posix_server.elf --type ${{ matrix.transport }} &
+        else
+          ./Build/wh_posix_server.elf --type ${{ matrix.transport }} &
+        fi
         POSIX_SERVER_PID=$!
         echo "POSIX_SERVER_PID=$POSIX_SERVER_PID" >> $GITHUB_ENV
 
@@ -55,7 +59,11 @@ jobs:
     - name: Run POSIX client
       run: |
         cd examples/posix/wh_posix_client
-        ./Build/wh_posix_client.elf --type ${{ matrix.transport }} ${{ matrix.test }}
+        if [ "${{ matrix.transport }}" = "psk" ]; then
+          echo "test_password" | ./Build/wh_posix_client.elf --type ${{ matrix.transport }} ${{ matrix.test }}
+        else
+          ./Build/wh_posix_client.elf --type ${{ matrix.transport }} ${{ matrix.test }}
+        fi
 
     # Optional: Kill the server process if it doesn't exit on its own
     - name: Cleanup POSIX server

@@ -129,6 +129,10 @@ ifeq ($(CLIENT_ONLY_TCP),1)
 # Build a client-only test driver to connect to a remote server over TCP
     DEF += -DWOLFHSM_CFG_ENABLE_CLIENT
 	DEF += -DWOLFHSM_CFG_TEST_CLIENT_ONLY_TCP
+else ifeq ($(CLIENT_ONLY_TLS),1)
+# Build a client-only test driver to connect to a remote server over TLS
+	DEF += -DWOLFHSM_CFG_ENABLE_CLIENT
+	DEF += -DWOLFHSM_CFG_TEST_CLIENT_ONLY_TLS
 else
 # Build both and client server
     DEF += -DWOLFHSM_CFG_ENABLE_CLIENT
