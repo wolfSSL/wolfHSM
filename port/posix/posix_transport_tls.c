@@ -127,6 +127,7 @@ int posixTransportTls_SendRequest(void* context, uint16_t size,
                     (void*)&ctx->tcpCtx, &ctx->connect_fd_p1) != WH_ERROR_OK) {
                 return WH_ERROR_NOTREADY;
             }
+            ctx->connect_fd_p1++;
 
             ctx->ssl = wolfSSL_new(ctx->ssl_ctx);
             if (!ctx->ssl) {
@@ -135,7 +136,7 @@ int posixTransportTls_SendRequest(void* context, uint16_t size,
             }
 
             /* Set the current socket file descriptor */
-            rc = wolfSSL_set_fd(ctx->ssl, ctx->connect_fd_p1);
+            rc = wolfSSL_set_fd(ctx->ssl, ctx->connect_fd_p1 - 1);
             if (rc != WOLFSSL_SUCCESS) {
                 wolfSSL_free(ctx->ssl);
                 ctx->ssl = NULL;
@@ -157,16 +158,16 @@ int posixTransportTls_SendRequest(void* context, uint16_t size,
                      * send was in the TCP backlog waiting on the server. But
                      * if the server closes down the listen port then RST gets
                      * returned. Retry the TCP connect() */
-                     wolfSSL_free(ctx->ssl);
-                     ctx->ssl = NULL;
+                    wolfSSL_free(ctx->ssl);
+                    ctx->ssl = NULL;
 
-                     /* Close the failed socket fd and set state for retry */
-                     if (ctx->tcpCtx.connect_fd_p1 != 0) {
-                        close(ctx->tcpCtx.connect_fd_p1 - 1);
+                    /* Close the failed socket fd and set state for retry */
+                    if (ctx->tcpCtx.connect_fd_p1 != 0) {
                         ctx->tcpCtx.connect_fd_p1 = 0;
                     }
-                     ctx->tcpCtx.state = PTT_STATE_UNCONNECTED;
-                     return WH_ERROR_NOTREADY;
+                    ctx->connect_fd_p1 = 0;
+                    ctx->tcpCtx.state = PTT_STATE_UNCONNECTED;
+                    return WH_ERROR_NOTREADY;
 
                 }
 
@@ -347,7 +348,9 @@ int posixTransportTls_RecvRequest(void* context, uint16_t* out_size, void* data)
         ctx->client_addr  = client_addr;
 
         /* Make accepted socket non-blocking */
-        fcntl(ctx->accept_fd_p1 - 1, F_SETFL, O_NONBLOCK);
+        if (fcntl(ctx->accept_fd_p1 - 1, F_SETFL, O_NONBLOCK) != 0) {
+            return WH_ERROR_ABORTED;
+        }
 
         /* Create SSL object for this connection */
         ctx->ssl = wolfSSL_new(ctx->ssl_ctx);
@@ -378,7 +381,8 @@ int posixTransportTls_RecvRequest(void* context, uint16_t* out_size, void* data)
         }
     }
 
-    /* Read data from SSL connection */
+    /* Read data from SSL connection (also handles continuing on with
+     * handshake if not complete yet) */
     rc  = wolfSSL_read(ctx->ssl, data, PTTLS_PACKET_MAX_SIZE);
     err = wolfSSL_get_error(ctx->ssl, rc);
     if (rc > 0) {
@@ -423,7 +427,7 @@ int posixTransportTls_SendResponse(void* context, uint16_t size,
     }
     else {
         int err = wolfSSL_get_error(ctx->ssl, rc);
-        if (err == WOLFSSL_ERROR_WANT_READ || err == WOLFSSL_ERROR_WANT_WRITE) {
+        if ((NonBlockingError(err))) {
             return WH_ERROR_NOTREADY;
         }
         return WH_ERROR_ABORTED;
