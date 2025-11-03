@@ -3734,6 +3734,7 @@ int whTestCrypto_MlDsaVerifyOnlyDma(whClientContext* ctx, int devId,
 int whTest_CryptoClientConfig(whClientConfig* config)
 {
     int i;
+    int rngInited = 0;
     whClientContext client[1] = {0};
     int ret = 0;
     /* wolfcrypt */
@@ -3774,6 +3775,9 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         ret = wc_InitRng_ex(rng, NULL, WH_DEV_ID);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed to reinitialize RNG %d\n", ret);
+        }
+        else {
+            rngInited = 1;
         }
     }
 
@@ -3935,7 +3939,9 @@ int whTest_CryptoClientConfig(whClientConfig* config)
 #endif /* WOLFHSM_CFG_TEST_VERBOSE */
 
     /* Clean up used resources */
-    (void)wc_FreeRng(rng);
+    if (rngInited) {
+        (void)wc_FreeRng(rng);
+    }
     (void)wh_Client_CommClose(client);
     (void)wh_Client_Cleanup(client);
 
