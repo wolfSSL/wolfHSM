@@ -454,7 +454,7 @@ int posixTransportTcp_GetConnectFd(posixTransportTcpClientContext *context,
     case PTT_STATE_CONNECT_WAIT:
     case PTT_STATE_CONNECTED:
         ret = WH_ERROR_OK;
-        if (*out_fd) {
+        if (out_fd) {
             *out_fd = context->connect_fd_p1 - 1;
         }
         break;
