@@ -304,9 +304,9 @@ wh_PosixServer_ExampleTlsContextSetup(posixTransportTlsServerContext* ctx)
         return WH_ERROR_ABORTED;
     }
 
-    /* Setup server for mutual authentication. It will try to verify the clients
-     * certificate so both the client and server authenticate the peer
-     * connecting with. */
+    /* Setup server for mutual authentication. It will try to verify the
+     * client's certificate so both the client and server authenticate the peer
+     * they are connecting to. */
     wolfSSL_CTX_set_verify(ctx->ssl_ctx, WOLFSSL_VERIFY_PEER, NULL);
 
     return WH_ERROR_OK;

@@ -72,9 +72,6 @@ typedef struct {
     struct sockaddr_in   server_addr;
     pttlsClientState     state;
     int                  connect_fd_p1; /* fd plus 1 so 0 is invalid */
-    int                  request_sent;
-    uint16_t             buffer_offset;
-    uint8_t              buffer[PTTLS_BUFFER_SIZE];
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     WOLFSSL_CTX* ssl_ctx;
     WOLFSSL*     ssl;
