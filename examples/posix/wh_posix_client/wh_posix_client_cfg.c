@@ -249,11 +249,9 @@ static int wh_PosixClient_ExampleTlsCommonConfig(void* conf)
 
     memset(&tccTls, 0, sizeof(posixTransportTlsClientContext));
 
-    /* Initialize TCP context fields that need specific values */
+    /* Initialize TLS context fields that need specific values */
     tccTls.state         = 0;
     tccTls.connect_fd_p1 = 0; /* Invalid fd */
-    tccTls.request_sent  = 0;
-    tccTls.buffer_offset = 0;
 
     tlsConfig.server_ip_string = WH_POSIX_SERVER_TCP_IPSTRING;
     tlsConfig.server_port      = WH_POSIX_SERVER_TCP_PORT;
