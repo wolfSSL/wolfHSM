@@ -4497,6 +4497,7 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
                 res.dmaAddrStatus.badAddr = req.input;
             }
         }
+
         if (ret == WH_ERROR_OK && req.output.sz != 0) {
             ret = wh_Server_DmaProcessClientAddress(
                 ctx, req.output.addr, &outAddr, req.output.sz,
@@ -4505,6 +4506,7 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
                 res.dmaAddrStatus.badAddr = req.output;
             }
         }
+
         if (ret == WH_ERROR_OK && req.key.sz != 0) {
             ret = wh_Server_DmaProcessClientAddress(
                 ctx, req.key.addr, &keyAddr, req.key.sz,
