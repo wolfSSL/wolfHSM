@@ -59,7 +59,7 @@ static int posixTransportTcp_Recv(int fd, uint16_t* buffer_offset,
 /* Start a non-blocking connect */
 int posixTransportTcp_HandleConnect(posixTransportTcpClientContext* c);
 
-/* CLose connection and reset state */
+/* Close connection and reset state */
 static int posixTransportTcp_Close(posixTransportTcpClientContext* c);
 
 

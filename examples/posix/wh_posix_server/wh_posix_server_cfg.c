@@ -259,7 +259,7 @@ wh_PosixServer_ExampleTlsContextSetup(posixTransportTlsServerContext* ctx)
     /* Load server certificate */
     rc = wolfSSL_CTX_use_certificate_buffer(ctx->ssl_ctx, server_cert_der_2048,
                                             sizeof(server_cert_der_2048),
-                                            CTC_FILETYPE_ASN1);
+                                            WOLFSSL_FILETYPE_ASN1);
     if (rc != WOLFSSL_SUCCESS) {
         wolfSSL_CTX_free(ctx->ssl_ctx);
         ctx->ssl_ctx = NULL;
@@ -291,7 +291,7 @@ wh_PosixServer_ExampleTlsContextSetup(posixTransportTlsServerContext* ctx)
     /* load private key for TLS connection */
     rc = wolfSSL_CTX_use_PrivateKey_buffer(ctx->ssl_ctx, server_key_der_2048,
                                            sizeof(server_key_der_2048),
-                                           CTC_FILETYPE_ASN1);
+                                           WOLFSSL_FILETYPE_ASN1);
     if (rc != WOLFSSL_SUCCESS) {
         wolfSSL_CTX_free(ctx->ssl_ctx);
         ctx->ssl_ctx = NULL;
