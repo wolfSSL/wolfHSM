@@ -43,6 +43,7 @@
 
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
+
 /* returns 1 (true) if the error passed in is a notice for non blocking
  * 0 if the error is a fatal error */
 static int NonBlockingError(int err)
@@ -63,10 +64,16 @@ int posixTransportTls_InitConnect(void* context, const void* config,
         (posixTransportTlsClientContext*)context;
     posixTransportTlsConfig* cfg = (posixTransportTlsConfig*)config;
     int                      rc;
+    WOLFSSL_CTX* ssl_ctx;
 
     if (!ctx || !cfg) {
         return WH_ERROR_BADARGS;
     }
+
+    /* Save configured WOLFSSL_CTX and clear rest of the context struct */
+    ssl_ctx = ctx->ssl_ctx;
+    memset(ctx, 0, sizeof(posixTransportTlsClientContext));
+    ctx->ssl_ctx = ssl_ctx;
 
     /* Setup underlying TCP transport */
     rc = posixTransportTcp_InitConnect((void*)&ctx->tcpCtx, cfg, connectcb,
@@ -75,28 +82,8 @@ int posixTransportTls_InitConnect(void* context, const void* config,
         return rc;
     }
 
-    /* Create SSL object if not already created */
-    if (ctx->ssl == NULL) {
-        if (posixTransportTcp_GetConnectFd(
-                (void*)&ctx->tcpCtx, &ctx->connect_fd_p1) != WH_ERROR_OK) {
-            return WH_ERROR_NOTREADY;
-        }
-
-        ctx->ssl = wolfSSL_new(ctx->ssl_ctx);
-        if (!ctx->ssl) {
-            posixTransportTcp_CleanupConnect((void*)&ctx->tcpCtx);
-            return WH_ERROR_ABORTED;
-        }
-
-        /* Set the socket file descriptor */
-        rc = wolfSSL_set_fd(ctx->ssl, ctx->connect_fd_p1);
-        if (rc != WOLFSSL_SUCCESS) {
-            wolfSSL_free(ctx->ssl);
-            ctx->ssl = NULL;
-            posixTransportTcp_CleanupConnect((void*)&ctx->tcpCtx);
-            return WH_ERROR_ABORTED;
-        }
-    }
+    /* At the point of the TCP claiming to be connected, the TLS handshake will
+     * happen during send/recv calls */
     if (ctx->connectcb != NULL) {
         ctx->connectcb(ctx->connectcb_arg, WH_COMM_CONNECTED);
     }
@@ -119,7 +106,7 @@ int posixTransportTls_SendRequest(void* context, uint16_t size,
     posixTransportTlsClientContext* ctx =
         (posixTransportTlsClientContext*)context;
     int err;
-    int rc;
+    int rc = 0;
 
     if (!ctx || !data || size == 0) {
         return WH_ERROR_BADARGS;
@@ -131,6 +118,32 @@ int posixTransportTls_SendRequest(void* context, uint16_t size,
             return WH_ERROR_NOTREADY;
         }
 
+        /* Create SSL object if not already created
+         * (posixTransportTcp_HandleConnect can change the socket used if server
+         * is not listening yet, thats why we need to wait to set the fd in
+         * wolfSSL until after the connect() has completed) */
+        if (ctx->ssl == NULL) {
+            if (posixTransportTcp_GetConnectFd(
+                    (void*)&ctx->tcpCtx, &ctx->connect_fd_p1) != WH_ERROR_OK) {
+                return WH_ERROR_NOTREADY;
+            }
+
+            ctx->ssl = wolfSSL_new(ctx->ssl_ctx);
+            if (!ctx->ssl) {
+                posixTransportTcp_CleanupConnect((void*)&ctx->tcpCtx);
+                return WH_ERROR_ABORTED;
+            }
+
+            /* Set the current socket file descriptor */
+            rc = wolfSSL_set_fd(ctx->ssl, ctx->connect_fd_p1);
+            if (rc != WOLFSSL_SUCCESS) {
+                wolfSSL_free(ctx->ssl);
+                ctx->ssl = NULL;
+                posixTransportTcp_CleanupConnect((void*)&ctx->tcpCtx);
+                return WH_ERROR_ABORTED;
+            }
+        }
+
         rc  = wolfSSL_connect(ctx->ssl);
         err = wolfSSL_get_error(ctx->ssl, rc);
         if (rc != WOLFSSL_SUCCESS) {
@@ -138,6 +151,28 @@ int posixTransportTls_SendRequest(void* context, uint16_t size,
                 return WH_ERROR_NOTREADY;
             }
             else {
+                if (err == SOCKET_ERROR_E) {
+                    /* There is a case where TCP connect() returned successfully
+                     * but the server has not called accept() and the pending
+                     * send was in the TCP backlog waiting on the server. But
+                     * if the server closes down the listen port then RST gets
+                     * returned. Retry the TCP connect() */
+                     wolfSSL_free(ctx->ssl);
+                     ctx->ssl = NULL;
+
+                     /* Close the failed socket fd and set state for retry */
+                     if (ctx->tcpCtx.connect_fd_p1 != 0) {
+                        close(ctx->tcpCtx.connect_fd_p1 - 1);
+                        ctx->tcpCtx.connect_fd_p1 = 0;
+                    }
+                     ctx->tcpCtx.state = PTT_STATE_UNCONNECTED;
+                     return WH_ERROR_NOTREADY;
+
+                }
+
+                if (ctx->connectcb != NULL) {
+                    ctx->connectcb(ctx->connectcb_arg, WH_COMM_DISCONNECTED);
+                }
                 return WH_ERROR_ABORTED;
             }
         }
@@ -218,6 +253,8 @@ int posixTransportTls_CleanupConnect(void* context)
         wolfSSL_free(ctx->ssl);
     }
     ctx->ssl = NULL;
+    ctx->state = PTTLS_STATE_UNCONNECTED;
+    ctx->connect_fd_p1 = 0;
     posixTransportTcp_CleanupConnect((void*)&ctx->tcpCtx);
     return WH_ERROR_OK;
 #else
@@ -237,10 +274,16 @@ int posixTransportTls_InitListen(void* context, const void* config,
         (posixTransportTlsServerContext*)context;
     posixTransportTlsConfig* cfg = (posixTransportTlsConfig*)config;
     int                      rc;
+    WOLFSSL_CTX* ssl_ctx;
 
     if (!ctx || !cfg) {
         return WH_ERROR_BADARGS;
     }
+
+    /* Save configured WOLFSSL_CTX and clear rest of the context struct */
+    ssl_ctx = ctx->ssl_ctx;
+    memset(ctx, 0, sizeof(posixTransportTlsServerContext));
+    ctx->ssl_ctx = ssl_ctx;
 
     /* Initialize TCP server context */
     rc = posixTransportTcp_InitListen(&ctx->tcpCtx, cfg, connectcb,
@@ -249,16 +292,11 @@ int posixTransportTls_InitListen(void* context, const void* config,
         return rc;
     }
 
-    /* Copy TCP context fields to TLS context for compatibility */
     ctx->connectcb     = connectcb;
     ctx->connectcb_arg = connectcb_arg;
     ctx->server_addr   = ctx->tcpCtx.server_addr;
     ctx->listen_fd_p1  = ctx->tcpCtx.listen_fd_p1;
 
-
-    /* Load private key and certificate */
-
-    /* Connecting is handled internally so we need server to call recv */
     if (ctx->connectcb != NULL) {
         ctx->connectcb(ctx->connectcb_arg, WH_COMM_CONNECTED);
     }
@@ -409,6 +447,8 @@ int posixTransportTls_CleanupListen(void* context)
     }
 
     if (ctx->ssl) {
+        /* Give a quick shutdown signal to the client but do not wait for a
+         * response from the client before tearing down the transport. */
         (void)wolfSSL_shutdown(ctx->ssl);
         wolfSSL_free(ctx->ssl);
         ctx->ssl = NULL;
