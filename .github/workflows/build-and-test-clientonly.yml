@@ -35,11 +35,7 @@ jobs:
     - name: Build POSIX server
       run: |
         cd examples/posix/wh_posix_server
-        if [ "${{ matrix.transport }}" = "tcp" ]; then
-            make -j SHE=1 WOLFSSL_DIR=../../../wolfssl
-        else
-            make -j WOLFSSL_DIR=../../../wolfssl
-        fi
+        make -j SHE=1 WOLFSSL_DIR=../../../wolfssl
 
     # Start the server in the background
     - name: Run POSIX server
@@ -57,7 +53,7 @@ jobs:
         if [ "${{ matrix.transport }}" = "tcp" ]; then
             make -j CLIENT_ONLY_TCP=1 SHE=1 ASAN=1 WOLFSSL_DIR=../wolfssl && make run
         else
-            make -j CLIENT_ONLY_TLS=1 ASAN=1 WOLFSSL_DIR=../wolfssl && make run
+            make -j CLIENT_ONLY_TLS=1 SHE=1 ASAN=1 WOLFSSL_DIR=../wolfssl && make run
         fi
 
     # Restart server with fresh state for second test run
