@@ -144,8 +144,10 @@ static int _GetKeyCacheSlot(whKeyCacheContext* ctx, uint16_t keySz,
 {
     int foundIndex = -1;
     int i;
+    uint8_t*       slotBuf  = NULL;
+    whNvmMetadata* slotMeta = NULL;
 
-    if (ctx == NULL || outBuf == NULL || outMeta == NULL) {
+    if (ctx == NULL) {
         return WH_ERROR_BADARGS;
     }
 
@@ -169,11 +171,11 @@ static int _GetKeyCacheSlot(whKeyCacheContext* ctx, uint16_t keySz,
             }
         }
 
-        /* Zero slot and return pointers */
+        /* Zero slot and capture pointers */
         if (foundIndex >= 0) {
             memset(&ctx->cache[foundIndex], 0, sizeof(whCacheSlot));
-            *outBuf  = ctx->cache[foundIndex].buffer;
-            *outMeta = ctx->cache[foundIndex].meta;
+            slotBuf  = ctx->cache[foundIndex].buffer;
+            slotMeta = ctx->cache[foundIndex].meta;
         }
     }
     else {
@@ -195,16 +197,24 @@ static int _GetKeyCacheSlot(whKeyCacheContext* ctx, uint16_t keySz,
             }
         }
 
-        /* Zero slot and return pointers */
+        /* Zero slot and capture pointers */
         if (foundIndex >= 0) {
             memset(&ctx->bigCache[foundIndex], 0, sizeof(whBigCacheSlot));
-            *outBuf  = ctx->bigCache[foundIndex].buffer;
-            *outMeta = ctx->bigCache[foundIndex].meta;
+            slotBuf  = ctx->bigCache[foundIndex].buffer;
+            slotMeta = ctx->bigCache[foundIndex].meta;
         }
     }
 
     if (foundIndex == -1) {
         return WH_ERROR_NOSPACE;
+    }
+
+    /* Copy out pointers only if caller provided non-NULL output parameters */
+    if (outBuf != NULL) {
+        *outBuf = slotBuf;
+    }
+    if (outMeta != NULL) {
+        *outMeta = slotMeta;
     }
 
     return WH_ERROR_OK;
@@ -490,17 +500,25 @@ static int _ExistsInCache(whServerContext* server, whKeyId keyId)
 int wh_Server_KeystoreFreshenKey(whServerContext* server, whKeyId keyId,
                                  uint8_t** outBuf, whNvmMetadata** outMeta)
 {
-    int           ret           = 0;
-    int           foundIndex    = -1;
-    int           foundBigIndex = -1;
-    whNvmMetadata tmpMeta[1];
+    int             ret            = 0;
+    int             foundIndex     = -1;
+    int             foundBigIndex  = -1;
+    uint8_t*        cacheBufLocal  = NULL;
+    whNvmMetadata*  cacheMetaLocal = NULL;
+    uint8_t**       cacheBufOut;
+    whNvmMetadata** cacheMetaOut;
+    whNvmMetadata   tmpMeta[1];
 
     if ((server == NULL) || WH_KEYID_ISERASED(keyId)) {
         return WH_ERROR_BADARGS;
     }
 
-    ret = _FindInCache(server, keyId, &foundIndex, &foundBigIndex, outBuf,
-                       outMeta);
+    /* Use local buffers to allow for optional (NULL) output parameters */
+    cacheBufOut  = (outBuf != NULL) ? outBuf : (uint8_t**)&cacheBufLocal;
+    cacheMetaOut = (outMeta != NULL) ? outMeta : &cacheMetaLocal;
+
+    ret = _FindInCache(server, keyId, &foundIndex, &foundBigIndex, cacheBufOut,
+                       cacheMetaOut);
     if (ret != WH_ERROR_OK) {
         /* For wrapped keys, just probe the cache and error if not found. We
          * don't support automatically unwrapping and caching outside of the
@@ -514,19 +532,21 @@ int wh_Server_KeystoreFreshenKey(whServerContext* server, whKeyId keyId,
         if (ret == WH_ERROR_OK) {
             /* Key found in NVM, get a free cache slot */
             ret = wh_Server_KeystoreGetCacheSlot(server, keyId, tmpMeta->len,
-                                                 outBuf, outMeta);
+                                                 cacheBufOut, cacheMetaOut);
             if (ret == WH_ERROR_OK) {
                 /* Read the key from NVM into the cache slot */
-                ret = wh_Nvm_Read(server->nvm, keyId, 0, tmpMeta->len, *outBuf);
+                ret = wh_Nvm_Read(server->nvm, keyId, 0, tmpMeta->len,
+                                  *cacheBufOut);
                 if (ret == WH_ERROR_OK) {
                     /* Copy the metadata to the cache slot if key read is
                      * successful*/
-                    memcpy((uint8_t*)*outMeta, (uint8_t*)tmpMeta,
+                    memcpy((uint8_t*)*cacheMetaOut, (uint8_t*)tmpMeta,
                            sizeof(whNvmMetadata));
                 }
             }
         }
     }
+
     return ret;
 }
 
