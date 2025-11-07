@@ -80,7 +80,13 @@ int wh_Client_Init(whClientContext* c, const whClientConfig* config)
     /* register the cancel callback */
     c->cancelCb = config->cancelCb;
 #endif
-
+#if defined(WOLFHSM_CFG_CLIENT_TIMEOUT)
+    if (NULL != config->timeoutConfig) {
+        c->timeout.timeout_val = config->timeoutConfig->timeout_val;
+        c->timeout.timeout_enabled = config->timeoutConfig->timeout_enabled;
+        c->timeout.start_time = 0;
+    }
+#endif
     rc = wh_CommClient_Init(c->comm, config->comm);
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
@@ -1516,4 +1522,104 @@ int wh_Client_KeyExportDma(whClientContext* c, uint16_t keyId,
 }
 #endif /* WOLFHSM_CFG_DMA */
 
+#if defined(WOLFHSM_CFG_CLIENT_TIMEOUT)
+static uint64_t wh_timeval_to_64(const wh_timeval* tv)
+{
+    if (tv == NULL) return 0;
+    return (uint64_t)tv->tv_sec * WH_BASE_TIMEOUT_UNIT
+                + (uint64_t)((tv->tv_usec) / WH_BASE_TIMEOUT_UNIT);
+}
+/* Set Time Out if needed */
+int wh_Client_InitCryptTimeout(whClientContext* c)
+{
+    if (c == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* if feature not enabled, nothing to do */
+    if (c->timeout.timeout_enabled != 1) {
+        return WH_ERROR_OK;
+    }
+    if (c->timeout.cb.GetCurrentTime == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    /* initialize start time */
+    c->timeout.start_time = c->timeout.cb.GetCurrentTime(1);
+
+    return WH_ERROR_OK;
+}
+
+/* Check Crypto Timeout */
+int wh_Client_CheckTimeout(whClientContext* c)
+{
+    uint64_t current_ = 0;
+    uint64_t elapsed_ = 0;
+    uint64_t timeout_ = 0;
+
+    if (c == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    if (c->timeout.timeout_enabled != 1) {
+        return WH_ERROR_OK;
+    }
+
+    if (c->timeout.cb.GetCurrentTime == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    timeout_ = wh_timeval_to_64(&c->timeout.timeout_val);
+    if (timeout_ == 0) {
+        return WH_ERROR_OK;
+    }
+
+    /* check timeout by user cb if defined */
+    if (c->timeout.cb.CheckTimeout != NULL) {
+            return c->timeout.cb.CheckTimeout(
+                &c->timeout.start_time, timeout_);
+    }
+
+    /* Otherwise compute elapsed using user-provided GetCurrentTime */
+    current_ = c->timeout.cb.GetCurrentTime(0);
+    elapsed_ = current_ - c->timeout.start_time;
+    if (elapsed_ > timeout_) {
+        return WH_ERROR_TIMEOUT;
+    }
+
+    return WH_ERROR_OK;
+}
+
+int wh_Client_timeoutRegisterCb(whClientContext* client,
+                                            whClientTimeOutCb* cb)
+{
+    /* No NULL check for cb, since it is optional and always NULL checked before
+     * it is called */
+    if (NULL == client) {
+        return WH_ERROR_BADARGS;
+    }
+
+    client->timeout.cb.GetCurrentTime = cb->GetCurrentTime;
+    client->timeout.cb.CheckTimeout  = cb->CheckTimeout;
+
+    return WH_ERROR_OK;
+}
+
+int wh_Client_timeoutEnable(whClientContext* client,
+                                            wh_timeval* timeout_val)
+{
+    if (NULL == client) {
+        return WH_ERROR_BADARGS;
+    }
+
+    if (timeout_val != NULL) {
+        client->timeout.timeout_enabled = 1;
+        memcpy(&client->timeout.timeout_val, timeout_val,
+               sizeof(wh_timeval));
+    } else {
+        client->timeout.timeout_enabled = 0;
+        memset(&client->timeout.timeout_val, 0, sizeof(wh_timeval));
+    }
+    return WH_ERROR_OK;
+}
+#endif /* WOLFHSM_CFG_CLIENT_TIMEOUT */
 #endif /* WOLFHSM_CFG_ENABLE_CLIENT */

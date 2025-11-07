@@ -74,11 +74,7 @@ int wh_CommClient_Init(whCommClient* context, const whCommClientConfig* config)
     context->transport_context  = config->transport_context;
     context->client_id          = config->client_id;
     context->connect_cb         = config->connect_cb;
-#if defined(WOLFHSM_CFG_ENABLE_CLIENT_CRYPTIMEOUT)
-    context->crypt_timeout_cb    = config->crypt_timeout_cb;
-    context->crypt_timeout_enabled = config->crypt_timeout_enabled;
-    context->crypt_timeout       = config->crypt_timeout;
-#endif
+
     if (context->transport_cb->Init != NULL) {
         rc = context->transport_cb->Init(context->transport_context,
                 config->transport_config, NULL, NULL);
@@ -215,69 +211,7 @@ int wh_CommClient_Cleanup(whCommClient* context)
     return rc;
 }
 
-#if defined(WOLFHSM_CFG_ENABLE_CLIENT_CRYPTIMEOUT)
-static uint64_t wh_timeval_to_ms64(const WOLFHSM_TIMEVAL* tv)
-{
-    if (tv == NULL) return 0;
-    return (uint64_t)tv->tv_sec * 1000ULL + (uint64_t)((tv->tv_usec) / 1000ULL);
-}
-/* Set Crypto Time Out if needed */
-int wh_CommClient_InitCryptTimeout(whCommClient* context)
-{
-    if (context == NULL)
-        return WH_ERROR_BADARGS;
-    /* if feature not enabled, nothing to do */
-    if (context->crypt_timeout_enabled != 1)
-        return WH_ERROR_OK;
-    if (context->crypt_timeout_cb == NULL ||
-        context->crypt_timeout_cb->GetCurrentTime == NULL)
-        return WH_ERROR_BADARGS;
 
-    /* cache conversion of crypt_timeout to milliseconds */
-    context->crypt_timeout_ms = wh_timeval_to_ms64(&context->crypt_timeout);
-    /* initialize start time */
-    context->crypt_start_time =
-            context->crypt_timeout_cb->GetCurrentTime(1);
-
-    return WH_ERROR_OK;
-}
-
-/* Check Crypto Timeout */
-int wh_CommClient_CheckTimeout(whCommClient* context)
-{
-    uint64_t current_ms = 0;
-    uint64_t elapsed_ms = 0;
-    uint64_t timeout_ms = 0;
-
-    if (context == NULL) return WH_ERROR_BADARGS;
-
-    if (context->crypt_timeout_enabled != 1)
-        return WH_ERROR_OK;
-
-    if (context->crypt_timeout_cb == NULL ||
-        context->crypt_timeout_cb->GetCurrentTime == NULL)
-        return WH_ERROR_BADARGS;
-
-    timeout_ms = context->crypt_timeout_ms;
-    if (timeout_ms == 0)
-        return WH_ERROR_OK;
-
-    /* check timeout by user cb if defined */
-    if (context->crypt_timeout_cb->CheckTimeout != NULL) {
-            return context->crypt_timeout_cb->CheckTimeout(
-                &context->crypt_start_time, timeout_ms);
-    }
-
-    /* Otherwise compute elapsed using user-provided GetCurrentTime */
-    current_ms = context->crypt_timeout_cb->GetCurrentTime(0);
-    elapsed_ms = current_ms - context->crypt_start_time;
-    if (elapsed_ms > timeout_ms) {
-        return WH_ERROR_CRYPTIMEOUT;
-    }
-
-    return WH_ERROR_OK;
-}
-#endif /* WOLFHSM_CFG_ENABLE_CLIENT_CRYPTIMEOUT */
 #endif /* WOLFHSM_CFG_ENABLE_CLIENT */
 
 /** Server Functions */

@@ -89,8 +89,36 @@ enum {
 #define PLAINTEXT "mytextisbigplain"
 
 #ifdef WOLFHSM_CFG_IS_TEST_SERVER
-/* Flag causing the server loop to sleep(1) */
-int serverDelay = 0;
+int             server_pause = 0;
+
+#if defined(WOLFHSM_CFG_TEST_POSIX)
+pthread_mutex_t lock;
+pthread_cond_t  cond;
+
+static void pause_server()
+{
+    pthread_mutex_lock(&lock);
+    server_pause = 1;
+    pthread_mutex_unlock(&lock);
+}
+
+static void resume_server()
+{
+    pthread_mutex_lock(&lock);
+    server_pause = 0;
+    pthread_cond_signal(&cond);
+    pthread_mutex_unlock(&lock);
+}
+#else
+static void pause_server()
+{
+    server_pause = 1;
+}
+static void resume_server()
+{
+    server_pause = 0;
+}
+#endif /* WOLFHSM_CFG_TEST_POSIX */
 
 #if defined(WOLFHSM_CFG_TEST_POSIX) && defined(WOLFHSM_CFG_ENABLE_CLIENT) && \
     defined(WOLFHSM_CFG_ENABLE_SERVER) && defined(WOLFHSM_CFG_CANCEL_API)
@@ -150,25 +178,31 @@ static int whTest_CryptoRng(whClientContext* ctx, int devId, WC_RNG* rng)
         if (ret != 0) {
             WH_ERROR_PRINT("Failed to wc_RNG_GenerateBlock %d\n", ret);
         } else {
-#if defined(WOLFHSM_CFG_TEST_CLIENT_CRYPTIMEOUT)
+#if defined(WOLFHSM_CFG_TEST_CLIENT_TIMEOUT)
             /* delay the server so scheduling doesn't interfere with the
              * timing */
-            if (ctx->comm->crypt_timeout_enabled == 1)
-                serverDelay = 2;
+            if (ctx->timeout.timeout_enabled == 1) {
+                pause_server();
+            }
 #endif
             ret = wc_RNG_GenerateBlock(rng, med, sizeof(med));
-#if defined(WOLFHSM_CFG_TEST_CLIENT_CRYPTIMEOUT)
-            if (ctx->comm->crypt_timeout_enabled == 1)
-                serverDelay = 0;
+#if defined(WOLFHSM_CFG_TEST_CLIENT_TIMEOUT)
+            if (ctx->timeout.timeout_enabled == 1) {
+                resume_server();
+            }
 #endif
             if (ret != 0) {
-#if defined(WOLFHSM_CFG_TEST_CLIENT_CRYPTIMEOUT)
-            if (ctx->comm->crypt_timeout_enabled == 1 &&
-                ret == WH_ERROR_CRYPTIMEOUT) {
+#if defined(WOLFHSM_CFG_TEST_CLIENT_TIMEOUT)
+            if (ctx->timeout.timeout_enabled == 1 &&
+                ret == WH_ERROR_TIMEOUT) {
                 printf("RNG DEVID=0x%X TIMEOUT TEST SUCCESS\n", devId);
                 ret = wc_FreeRng(rng);
                 if (ret != 0) {
                     WH_ERROR_PRINT("Failed to wc_FreeRng %d\n", ret);
+                }
+                ret = wh_Client_CommInit(ctx, NULL, NULL);
+                if (ret != WH_ERROR_OK) {
+                    WH_ERROR_PRINT("Failed to re-init comms %d\n", ret);
                 }
                 return ret;
             } else
@@ -2873,19 +2907,20 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
                 WH_ERROR_PRINT("Failed to wc_AesSetKeyDirect %d\n", ret);
             }
             else {
-#if defined(WOLFHSM_CFG_TEST_CLIENT_CRYPTIMEOUT)
-                /* delay the server so scheduling doesn't interfere with the
-                 * timing */
-                if (ctx->comm->crypt_timeout_enabled == 1)
-                    serverDelay = 1;
+#if defined(WOLFHSM_CFG_TEST_CLIENT_TIMEOUT)
+                if (ctx->timeout.timeout_enabled == 1) {
+                    pause_server();
+                }
 #endif
                 ret = wc_AesCtrEncrypt(aes, cipher, plainIn, sizeof(plainIn));
-#if defined(WOLFHSM_CFG_TEST_CLIENT_CRYPTIMEOUT)
-                serverDelay = 0;
+#if defined(WOLFHSM_CFG_TEST_CLIENT_TIMEOUT)
+                if (ctx->timeout.timeout_enabled == 1) {
+                    resume_server();
+                }
 #endif
                 if (ret != 0) {
-#if defined(WOLFHSM_CFG_TEST_CLIENT_CRYPTIMEOUT)
-                    if (ctx->comm->crypt_timeout_enabled != 1)
+#if defined(WOLFHSM_CFG_TEST_CLIENT_TIMEOUT)
+                    if (ctx->timeout.timeout_enabled != 1)
 #endif
                         WH_ERROR_PRINT("Failed to wc_AesCtrEncrypt %d\n", ret);
                 }
@@ -2984,10 +3019,10 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
             WH_TEST_PRINT("AES CTR DEVID=0x%X SUCCESS\n", devId);
         }
     }
-#if defined(WOLFHSM_CFG_TEST_CLIENT_CRYPTIMEOUT)
+#if defined(WOLFHSM_CFG_TEST_CLIENT_TIMEOUT)
     else {
-        if (ctx->comm->crypt_timeout_enabled == 1 &&
-            ret == WH_ERROR_CRYPTIMEOUT) {
+        if (ctx->timeout.timeout_enabled == 1 &&
+            ret == WH_ERROR_TIMEOUT) {
             printf("AES CTR DEVID=0x%X TIMEOUT TEST SUCCESS\n", devId);
             ret = wh_Client_CommInit(ctx, NULL, NULL);
         }
@@ -3008,19 +3043,20 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
                 WH_ERROR_PRINT("Failed to wc_AesSetKey %d\n", ret);
             }
             else {
-#if defined(WOLFHSM_CFG_TEST_CLIENT_CRYPTIMEOUT)
-                /* delay the server so scheduling doesn't interfere with the
-                 * timing */
-                if (ctx->comm->crypt_timeout_enabled == 1)
-                    serverDelay = 1;
+#if defined(WOLFHSM_CFG_TEST_CLIENT_TIMEOUT)
+                if (ctx->timeout.timeout_enabled == 1) {
+                    pause_server();
+                }
 #endif
                 ret = wc_AesEcbEncrypt(aes, cipher, plainIn, sizeof(plainIn));
-#if defined(WOLFHSM_CFG_TEST_CLIENT_CRYPTIMEOUT)
-                serverDelay = 0;
+#if defined(WOLFHSM_CFG_TEST_CLIENT_TIMEOUT)
+                if (ctx->timeout.timeout_enabled == 1) {
+                    resume_server();
+                }
 #endif
                 if (ret != 0) {
-#if defined(WOLFHSM_CFG_TEST_CLIENT_CRYPTIMEOUT)
-                    if (ctx->comm->crypt_timeout_enabled != 1)
+#if defined(WOLFHSM_CFG_TEST_CLIENT_TIMEOUT)
+                    if (ctx->timeout.timeout_enabled != 1)
 #endif
                         WH_ERROR_PRINT("Failed to wc_AesEcbEncrypt %d\n", ret);
                 }
@@ -3118,10 +3154,10 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
             WH_TEST_PRINT("AES ECB DEVID=0x%X SUCCESS\n", devId);
         }
     }
-#if defined(WOLFHSM_CFG_TEST_CLIENT_CRYPTIMEOUT)
+#if defined(WOLFHSM_CFG_TEST_CLIENT_TIMEOUT)
     else {
-        if (ctx->comm->crypt_timeout_enabled == 1 &&
-            ret == WH_ERROR_CRYPTIMEOUT) {
+        if (ctx->timeout.timeout_enabled == 1 &&
+            ret == WH_ERROR_TIMEOUT) {
             printf("AES ECB DEVID=0x%X TIMEOUT TEST SUCCESS\n", devId);
             ret = wh_Client_CommInit(ctx, NULL, NULL);
         }
@@ -3144,20 +3180,21 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
             if (ret != 0) {
                 WH_ERROR_PRINT("Failed to wc_AesSetKey %d\n", ret);
             } else {
-#if defined(WOLFHSM_CFG_TEST_CLIENT_CRYPTIMEOUT)
-                /* delay the server so scheduling doesn't interfere with the
-                 * timing */
-                if (ctx->comm->crypt_timeout_enabled == 1)
-                    serverDelay = 1;
+#if defined(WOLFHSM_CFG_TEST_CLIENT_TIMEOUT)
+                if (ctx->timeout.timeout_enabled == 1) {
+                    pause_server();
+                }
 #endif
                 ret = wc_AesCbcEncrypt(aes, cipher, plainIn,
                         sizeof(plainIn));
-#if defined(WOLFHSM_CFG_TEST_CLIENT_CRYPTIMEOUT)
-                serverDelay = 0;
+#if defined(WOLFHSM_CFG_TEST_CLIENT_TIMEOUT)
+                if (ctx->timeout.timeout_enabled == 1) {
+                    resume_server();
+                }
 #endif
                 if (ret != 0) {
-#if defined(WOLFHSM_CFG_TEST_CLIENT_CRYPTIMEOUT)
-                    if (ctx->comm->crypt_timeout_enabled != 1)
+#if defined(WOLFHSM_CFG_TEST_CLIENT_TIMEOUT)
+                    if (ctx->timeout.timeout_enabled != 1)
 #endif
                         WH_ERROR_PRINT("Failed to wc_AesCbcEncrypt %d\n", ret);
                 } else {
@@ -3249,10 +3286,10 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
             WH_TEST_PRINT("AES CBC DEVID=0x%X SUCCESS\n", devId);
         }
     }
-#if defined(WOLFHSM_CFG_TEST_CLIENT_CRYPTIMEOUT)
+#if defined(WOLFHSM_CFG_TEST_CLIENT_TIMEOUT)
     else {
-        if (ctx->comm->crypt_timeout_enabled == 1 &&
-            ret == WH_ERROR_CRYPTIMEOUT) {
+        if (ctx->timeout.timeout_enabled == 1 &&
+            ret == WH_ERROR_TIMEOUT) {
             printf("AES CBC DEVID=0x%X TIMEOUT TEST SUCCESS\n", devId);
             ret = wh_Client_CommInit(ctx, NULL, NULL);
         }
@@ -3284,21 +3321,22 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
             if (ret != 0) {
                 WH_ERROR_PRINT("Failed to wc_AesGcmSetKey %d\n", ret);
             } else {
-#if defined(WOLFHSM_CFG_TEST_CLIENT_CRYPTIMEOUT)
-                /* delay the server so scheduling doesn't interfere with the
-                 * timing */
-                if (ctx->comm->crypt_timeout_enabled == 1)
-                    serverDelay = 1;
+#if defined(WOLFHSM_CFG_TEST_CLIENT_TIMEOUT)
+                if (ctx->timeout.timeout_enabled == 1) {
+                    pause_server();
+                }
 #endif
                 ret = wc_AesGcmEncrypt(aes, cipher, plainIn,
                         sizeof(plainIn), iv, sizeof(iv), authTag,
                         sizeof(authTag), authIn, sizeof(authIn));
-#if defined(WOLFHSM_CFG_TEST_CLIENT_CRYPTIMEOUT)
-                serverDelay = 0;
+#if defined(WOLFHSM_CFG_TEST_CLIENT_TIMEOUT)
+                if (ctx->timeout.timeout_enabled == 1) {
+                    resume_server();
+                }
 #endif
                 if (ret != 0) {
-#if defined(WOLFHSM_CFG_TEST_CLIENT_CRYPTIMEOUT)
-                    if (ctx->comm->crypt_timeout_enabled != 1)
+#if defined(WOLFHSM_CFG_TEST_CLIENT_TIMEOUT)
+                    if (ctx->timeout.timeout_enabled != 1)
 #endif
                         WH_ERROR_PRINT("Failed to wc_AesGcmEncrypt %d\n", ret);
                 } else {
@@ -3373,10 +3411,10 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
             WH_TEST_PRINT("AES GCM DEVID=0x%X SUCCESS\n", devId);
         }
     }
-#if defined(WOLFHSM_CFG_TEST_CLIENT_CRYPTIMEOUT)
+#if defined(WOLFHSM_CFG_TEST_CLIENT_TIMEOUT)
     else {
-        if (ctx->comm->crypt_timeout_enabled == 1 &&
-            ret == WH_ERROR_CRYPTIMEOUT) {
+        if (ctx->timeout.timeout_enabled == 1 &&
+            ret == WH_ERROR_TIMEOUT) {
             printf("AES GCM DEVID=0x%X TIMEOUT TEST SUCCESS\n", devId);
             ret = wh_Client_CommInit(ctx, NULL, NULL);
         }
@@ -3617,7 +3655,7 @@ static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
                      */
                     /* delay the server so scheduling doesn't interfere with the
                      * timing */
-                    serverDelay = 1;
+                    pause_server();
 #endif
 
                     ret = wc_CmacUpdate(cmac, (byte*)cmacFodder,
@@ -3633,7 +3671,7 @@ static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
                         }
                         else {
 #if WOLFHSM_CFG_IS_TEST_SERVER
-                            serverDelay = 0;
+                            resume_server();
 #endif
                             do {
                                 ret = wh_Client_CancelResponse(ctx);
@@ -4914,72 +4952,32 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
     return 0;
 }
 
-#if defined(WOLFHSM_CFG_TEST_CLIENT_CRYPTIMEOUT)
-pthread_mutex_t lock;
-pthread_cond_t  cond;
-int             ready = 0;
-static int      _ConnectCb(void* context, whCommConnected connected)
+#if defined(WOLFHSM_CFG_TEST_CLIENT_TIMEOUT)
+static int EnableTimeout(whClientContext* client, wh_timeval* timeout_val)
 {
-    (void)context;
-    (void)connected;
+    int             ret = 0;
 
-    /* signal server thread to continue */
-    pthread_mutex_lock(&lock);
-    ready = 1;
-    pthread_cond_signal(&cond);
-    pthread_mutex_unlock(&lock);
-    return 0;
-}
-
-int whTest_CryptoClientConfig_Timeout(whClientConfig* config)
-{
-    whClientContext client[1] = {0};
-    int             ret       = 0;
-    int             i;
-    /* wolfcrypt */
-    WC_RNG rng[1];
-
-    if (config == NULL) {
-        return WH_ERROR_BADARGS;
-    }
-    config->comm->connect_cb = _ConnectCb;
-    /* configure time out */
-    config->comm->crypt_timeout_enabled   = 1;
-    config->comm->crypt_timeout.tv_sec  = 0;
-    config->comm->crypt_timeout.tv_usec = 500000; /* 500 milliseconds */
-
-    WH_TEST_RETURN_ON_FAIL(wh_Client_Init(client, config));
-    client->comm->client_id = ALT_CLIENT_ID_2;
-    ret                     = wh_Client_CommInit(client, NULL, NULL);
+    /* configure timeout */
+    ret = wh_Client_timeoutEnable(client, timeout_val);
     if (ret != 0) {
-        WH_ERROR_PRINT("Failed to comm init:%d\n", ret);
+        WH_ERROR_PRINT("Failed to enable timeout:%d\n", ret);
     }
-
-    if (ret == 0) {
-        /* expect to have TIMEOUT */
-        ret = whTest_CryptoRng(client, WH_DEV_ID, rng);
-    }
-
-#ifndef NO_AES
-    i = 0;
-    WH_TEST_RETURN_ON_FAIL(wh_Client_Init(client, config));
-    ret = wh_Client_CommInit(client, NULL, NULL);
-    while ((ret == WH_ERROR_OK) && (i < WH_NUM_DEVIDS)) {
-        ret = whTestCrypto_Aes(client, WH_DEV_IDS_ARRAY[i], rng);
-        if (ret == WH_ERROR_OK) {
-            i++;
-        }
-    }
-
-#endif /* !NO_AES */
-    /* Clean up used resources */
-    (void)wc_FreeRng(rng);
-    (void)wh_Client_CommClose(client);
-    (void)wh_Client_Cleanup(client);
-
     return ret;
 }
-#endif /* WOLFHSM_CFG_TEST_CLIENT_CRYPTIMEOUT */
+
+static int DisableTimeout(whClientContext* client)
+{
+    int             ret = 0;
+
+    /* disable timeout */
+    ret = wh_Client_timeoutEnable(client, NULL);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to disable timeout:%d\n", ret);
+    }
+    return ret;
+}
+
+#endif /* WOLFHSM_CFG_TEST_CLIENT_TIMEOUT */
 
 int whTest_CryptoClientConfig(whClientConfig* config)
 {
@@ -4989,6 +4987,10 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     int ret = 0;
     /* wolfcrypt */
     WC_RNG rng[1];
+#if defined(WOLFHSM_CFG_TEST_CLIENT_TIMEOUT)
+    whClientTimeOutCb timeOutCb[1] = {WH_CLIENT_TIMEOUT_CB};
+    wh_timeval timeout_val = {0, WOLFHSM_CFG_CLIENT_TIMEOUT_USEC}; /* 500 ms */
+#endif
 
     if (config == NULL) {
         return WH_ERROR_BADARGS;
@@ -5000,6 +5002,13 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     if (ret != 0) {
         WH_ERROR_PRINT("Failed to comm init:%d\n", ret);
     }
+#if defined(WOLFHSM_CFG_TEST_CLIENT_TIMEOUT)
+    /* configure timeout */
+    ret = wh_Client_timeoutRegisterCb(client, timeOutCb);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to register timeout cb:%d\n", ret);
+    }
+#endif /* WOLFHSM_CFG_TEST_CLIENT_TIMEOUT */
 
 #ifdef WOLFHSM_CFG_DEBUG_VERBOSE
     if (ret == 0) {
@@ -5017,6 +5026,17 @@ int whTest_CryptoClientConfig(whClientConfig* config)
             i++;
         }
     }
+#if defined(WOLFHSM_CFG_TEST_CLIENT_TIMEOUT)
+    ret = EnableTimeout(client, &timeout_val);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to enable timeout:%d\n", ret);
+    }
+    if (ret == 0) {
+        /* expect to have TIMEOUT */
+        ret = whTest_CryptoRng(client, WH_DEV_ID, rng);
+    }
+    DisableTimeout(client);
+#endif /* WOLFHSM_CFG_TEST_CLIENT_TIMEOUT */
 
     /* Now that we have tested all RNG devIds, reinitialize the default RNG
      * devId (non-DMA) that will be used by the remainder of the tests for
@@ -5061,6 +5081,20 @@ int whTest_CryptoClientConfig(whClientConfig* config)
             i++;
         }
     }
+#if defined(WOLFHSM_CFG_TEST_CLIENT_TIMEOUT)
+    ret = EnableTimeout(client, &timeout_val);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to enable timeout:%d\n", ret);
+    }
+    i = 0;
+    while ((ret == WH_ERROR_OK) && (i < WH_NUM_DEVIDS)) {
+        ret = whTestCrypto_Aes(client, WH_DEV_IDS_ARRAY[i], rng);
+        if (ret == WH_ERROR_OK) {
+            i++;
+        }
+    }
+    DisableTimeout(client);
+#endif /* WOLFHSM_CFG_TEST_CLIENT_TIMEOUT */
 #endif /* !NO_AES */
 
 #if defined(WOLFSSL_CMAC) && !defined(NO_AES) && defined(WOLFSSL_AES_DIRECT)
@@ -5247,9 +5281,6 @@ int whTest_CryptoServerConfig(whServerConfig* config)
     int numofChanges = 2;
 #endif
 
-#if defined(WOLFHSM_CFG_TEST_CLIENT_CRYPTIMEOUT)
-    numofChanges = 3;
-#endif
     if (config == NULL) {
         return WH_ERROR_BADARGS;
     }
@@ -5266,11 +5297,18 @@ int whTest_CryptoServerConfig(whServerConfig* config)
 
     while(am_connected == WH_COMM_CONNECTED) {
 #ifdef WOLFHSM_CFG_IS_TEST_SERVER
-        while (serverDelay > 0) {
-#ifdef WOLFHSM_CFG_TEST_POSIX
-            sleep(serverDelay);
-#endif
+    #ifdef WOLFHSM_CFG_TEST_POSIX
+        pthread_mutex_lock(&lock);
+    #endif
+        while (server_pause) {
+    #ifdef WOLFHSM_CFG_TEST_POSIX
+            pthread_cond_wait(&cond, &lock);
+    #endif
         }
+        server_pause = 0;
+    #ifdef WOLFHSM_CFG_TEST_POSIX
+        pthread_mutex_unlock(&lock);
+    #endif
 #endif
         ret = wh_Server_HandleRequestMessage(server);
         if ((ret != WH_ERROR_NOTREADY) &&
@@ -5288,17 +5326,6 @@ int whTest_CryptoServerConfig(whServerConfig* config)
                 server->comm->client_id = ALT_CLIENT_ID;
             else if (userChange == 1)
                 server->comm->client_id = WH_TEST_DEFAULT_CLIENT_ID;
-#if defined(WOLFHSM_CFG_TEST_CLIENT_CRYPTIMEOUT)
-            else if (userChange >= 2) {
-                server->comm->client_id = ALT_CLIENT_ID_2;
-                pthread_mutex_lock(&lock);
-                while (!ready) {
-                    pthread_cond_wait(&cond, &lock);
-                }
-                ready = 0;
-                pthread_mutex_unlock(&lock);
-            }
-#endif
             userChange++;
             am_connected = WH_COMM_CONNECTED;
             WH_TEST_RETURN_ON_FAIL(wh_Server_SetConnected(server, am_connected));
@@ -5363,10 +5390,9 @@ static void _whClientServerThreadTest(whClientConfig* c_conf,
     void* retval;
     int rc = 0;
 
-#if defined(WOLFHSM_CFG_TEST_CLIENT_CRYPTIMEOUT)
+#if defined(WOLFHSM_CFG_TEST_POSIX)
     pthread_mutex_init(&lock, NULL);
     pthread_cond_init(&cond, NULL);
-    ready = 0;
 #endif
 
     rc = pthread_create(&sthread, NULL, _whServerTask, s_conf);
@@ -5402,21 +5428,19 @@ static int wh_ClientServer_MemThreadTest(whTestNvmBackendType nvmType)
     /* Client configuration/contexts */
     whTransportClientCb         tccb[1]   = {WH_TRANSPORT_MEM_CLIENT_CB};
     whTransportMemClientContext tmcc[1]   = {0};
-#if defined(WOLFHSM_CFG_TEST_CLIENT_CRYPTIMEOUT)
-    whCryptoClientTimeOutCb tc_timeoutcb[1] = {WH_CLIENT_CRYPTO_TIMEOUT_CB};
-#endif
+
     whCommClientConfig cc_conf[1] = {{
         .transport_cb      = tccb,
         .transport_context = (void*)tmcc,
         .transport_config  = (void*)tmcf,
-#if defined(WOLFHSM_CFG_TEST_CLIENT_CRYPTIMEOUT)
-        .crypt_timeout_cb = (void*)tc_timeoutcb,
-#endif
         .client_id = WH_TEST_DEFAULT_CLIENT_ID,
     }};
 
 #ifdef WOLFHSM_CFG_DMA
     whClientDmaConfig clientDmaConfig = {0};
+#endif
+#if defined(WOLFHSM_CFG_TEST_CLIENT_TIMEOUT)
+    whClientTimeOutConfig timeoutcfg[1] = {0};
 #endif
     whClientConfig c_conf[1] = {{
         .comm = cc_conf,
@@ -5425,6 +5449,9 @@ static int wh_ClientServer_MemThreadTest(whTestNvmBackendType nvmType)
 #endif
 #ifdef WOLFHSM_CFG_CANCEL_API
         .cancelCb = _cancelCb,
+#endif
+#if defined(WOLFHSM_CFG_CLIENT_TIMEOUT)
+        .timeoutConfig = &timeoutcfg[0],
 #endif
     }};
 

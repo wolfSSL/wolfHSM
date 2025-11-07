@@ -527,4 +527,12 @@
 
 #endif /* WOLFHSM_CFG_DMA */
 
+/* CLIENT TIMEOUT CONFIGURATION */
+#ifdef WOLFHSM_CFG_CLIENT_TIMEOUT
+ #if !defined(WH_BASE_TIMEOUT_UNIT)
+ /* Default time unit is milliseconds */
+ #define WH_BASE_TIMEOUT_UNIT 1000ULL
+#endif
+#endif /* !WOLFHSM_CFG_CLIENT_TIMEOUT */
+
 #endif /* !WOLFHSM_WH_SETTINGS_H_ */

@@ -113,6 +113,59 @@ typedef struct {
  */
 typedef int (*whClientCancelCb)(uint16_t cancelSeq);
 
+
+typedef struct {
+    uint64_t tv_sec;  /* Seconds. */
+    uint64_t tv_usec; /* Microseconds. */
+} wh_timeval;
+typedef struct {
+    /* Get current time callback.
+     * This callback is mandatory when using the timeout feature.
+     *
+     * Parameters:
+     *  reset - If non-zero, reset internal time tracking to zero.
+     *
+     * Returns:
+     *  Current time. Time units are user-defined.
+     */
+    uint64_t (*GetCurrentTime)(int reset);
+    /* Timeout check callback (Optional).
+     * If not defined, an internal implementation is used for timeout checking.
+     * The internal implementation assumes that time units returned by
+     * GetCurrentTime() are consistent with those used in timeout value.
+     * For example, if timeout_value is specified in milliseconds, it expects
+     * GetCurrentTime() to return time in milliseconds as well.
+     *
+     * Parameters:
+     *  start_time - Pointer to the start time value as returned by GetCurrentTime().
+     *  timeout_value - Timeout value conversion in defined time units.
+     *            The default is in milliseconds, but it can be customized
+     *            by WH_BASE_TIMEOUT_UNIT.
+     *
+     * Returns:
+     *  WH_ERROR_OK      - Not timed out,
+     *  WH_ERROR_TIMEOUT - Timed out.
+     */
+    int (*CheckTimeout)(uint64_t* start_time, uint64_t timeout_val);
+} whClientTimeOutCb;
+typedef struct {
+    whClientTimeOutCb cb;
+    wh_timeval timeout_val;
+    /* start_time stores the time returned by the GetCurrentTime()
+     * callback when the operation started.
+     * The actual unit depends on the GetCurrentTime() implementation.
+     */
+    uint64_t start_time;
+    uint8_t timeout_enabled;
+    uint8_t  WH_PAD[7];
+} whClientTimeOutContext;
+
+typedef struct {
+    whClientTimeOutCb cb;
+    wh_timeval timeout_val;
+    uint8_t timeout_enabled;
+} whClientTimeOutConfig;
+
 /* Client context */
 struct whClientContext_t {
     uint16_t     last_req_id;
@@ -124,6 +177,9 @@ struct whClientContext_t {
 #ifdef WOLFHSM_CFG_DMA
     whClientDmaContext dma;
 #endif /* WOLFHSM_CFG_DMA */
+#if defined(WOLFHSM_CFG_CLIENT_TIMEOUT)
+    whClientTimeOutContext timeout;
+#endif
     whCommClient comm[1];
 };
 
@@ -135,6 +191,9 @@ struct whClientConfig_t {
 #ifdef WOLFHSM_CFG_DMA
     whClientDmaConfig* dmaConfig;
 #endif /* WOLFHSM_CFG_DMA */
+#if defined(WOLFHSM_CFG_CLIENT_TIMEOUT)
+    whClientTimeOutConfig* timeoutConfig;
+#endif
 };
 typedef struct whClientConfig_t whClientConfig;
 
@@ -2639,5 +2698,18 @@ int wh_Client_CertVerifyAcertDma(whClientContext* c, const void* cert,
  */
 #define WH_CLIENT_KEYID_MAKE_WRAPPED_META(_clientId, _id) \
     WH_MAKE_KEYID(WH_KEYTYPE_WRAPPED, (_clientId), (_id))
+
+#if defined(WOLFHSM_CFG_CLIENT_TIMEOUT)
+/* Init Client Timeout */
+int wh_Client_InitCryptTimeout(whClientContext* context);
+/* Check Client Timeout */
+int wh_Client_CheckTimeout(whClientContext* context);
+/* Register Client Timeout Callback */
+int wh_Client_timeoutRegisterCb(whClientContext* client,
+                                            whClientTimeOutCb* cb);
+/* Enable Client Timeout */
+int wh_Client_timeoutEnable(whClientContext* client,
+                                            wh_timeval* timeout_val);
+#endif /* WOLFHSM_CFG_CLIENT_TIMEOUT */
 
 #endif /* !WOLFHSM_WH_CLIENT_H_ */

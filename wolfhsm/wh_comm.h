@@ -152,46 +152,16 @@ typedef struct {
      */
     int (*Cleanup)(void* context);
 } whTransportClientCb;
-typedef struct {
-    /* Get current time callback.
-     * This callback is mandatory when using the crypt-timeout feature.
-     * reset: If non-zero, reset internal time tracking to zero.
-     * Returns: Current time
-     */
-    uint64_t (*GetCurrentTime)(int reset);
-    /* Timeout check callback. Optional.
-     * If not defined, an internal implementation is used for timeout checking.
-     * Returns:  WH_ERROR_OK if not timed out,
-     *           WH_ERROR_CRYPTIMEOUT if timed out.
-     */
-    int (*CheckTimeout)(uint64_t* start_time, uint64_t timeout_ms);
-    uint8_t  WH_PAD[8];
-} whCryptoClientTimeOutCb;
 
-#ifdef WOLFSSL_TIMEVAL
-    typedef WOLFSSL_TIMEVAL WOLFHSM_TIMEVAL;
-#else
-    typedef struct {
-        uint64_t tv_sec;  /* Seconds. */
-        uint64_t tv_usec; /* Microseconds. */
-    } WOLFHSM_TIMEVAL;
-#endif
+
+
 typedef struct {
     const whTransportClientCb* transport_cb;
-#if defined(WOLFHSM_CFG_ENABLE_CLIENT_CRYPTIMEOUT)
-    whCryptoClientTimeOutCb* crypt_timeout_cb;
-    WOLFHSM_TIMEVAL          crypt_timeout;
-#endif
     void* transport_context;
     const void* transport_config;
     whCommSetConnectedCb connect_cb;
     uint8_t client_id;
-#if defined(WOLFHSM_CFG_ENABLE_CLIENT_CRYPTIMEOUT)
-    uint8_t crypt_timeout_enabled;
-    uint8_t WH_PAD[6];
-#else
     uint8_t WH_PAD[7];
-#endif
 } whCommClientConfig;
 
 /* Context structure for a client.  Note the client context will track the
@@ -202,34 +172,16 @@ typedef struct {
     uint64_t packet[WH_COMM_MTU_U64_COUNT];
     void* transport_context;
     const whTransportClientCb* transport_cb;
-#if defined(WOLFHSM_CFG_ENABLE_CLIENT_CRYPTIMEOUT)
-    whCryptoClientTimeOutCb* crypt_timeout_cb;
-    WOLFHSM_TIMEVAL          crypt_timeout;
-#endif
     whCommSetConnectedCb connect_cb;
     whCommHeader* hdr;
     uint8_t* data;
-#if defined(WOLFHSM_CFG_ENABLE_CLIENT_CRYPTIMEOUT)
-    /* start_time stores the time returned by the GetCurrentTime()
-     * callback when the operation started.
-     * The actual unit depends on the GetCurrentTime() implementation.
-     */
-    uint64_t crypt_start_time;
-    /* cached conversion of crypt_timeout */
-    uint64_t crypt_timeout_ms;
-#endif
     int initialized;
     uint16_t reqid;
     uint16_t seq;
     uint16_t size;
     uint8_t client_id;
     uint8_t server_id;
-#if defined(WOLFHSM_CFG_ENABLE_CLIENT_CRYPTIMEOUT)
-    uint8_t crypt_timeout_enabled;
-    uint8_t WH_PAD[11];
-#else
     uint8_t WH_PAD[4];
-#endif
 } whCommClient;
 
 
@@ -261,15 +213,6 @@ uint8_t* wh_CommClient_GetDataPtr(whCommClient* context);
  * unfinished requests can be ignored.
  */
 int wh_CommClient_Cleanup(whCommClient* context);
-
-#if defined(WOLFHSM_CFG_ENABLE_CLIENT_CRYPTIMEOUT)
-/* Set Crypt Timeout */
-int wh_CommClient_InitCryptTimeout(whCommClient* context);
-/* Check Crypt Timeout */
-int wh_CommClient_CheckTimeout(whCommClient* context);
-
-#endif /* WOLFHSM_CFG_ENABLE_CLIENT_CRYPTIMEOUT */
-
 /** CommServer component types */
 
 /* Server transport interface */
