@@ -2314,6 +2314,446 @@ static int _HandleAesGcmDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
 #endif /* HAVE_AESGCM */
 #endif /* !NO_AES */
 
+#if !defined(NO_HMAC)
+static void _HmacResetForReuse(Hmac* hmac)
+{
+    if (hmac != NULL) {
+        memset(hmac, 0, sizeof(*hmac));
+    }
+}
+
+static void _HmacPrepareMetadata(whNvmMetadata* meta, whKeyId keyId,
+                                 whNvmSize len)
+{
+    if (meta == NULL) {
+        return;
+    }
+    memset(meta, 0, sizeof(*meta));
+    meta->id    = keyId;
+    meta->len   = len;
+    meta->flags = WH_NVM_FLAGS_SENSITIVE | WH_NVM_FLAGS_NONEXPORTABLE |
+                  WH_NVM_FLAGS_EPHEMERAL;
+    meta->access = WH_NVM_ACCESS_NONE;
+}
+
+static int _HmacInitWithKey(whServerContext* ctx, Hmac* hmac, int hashType,
+                            const uint8_t* inlineKey, uint32_t inlineKeyLen,
+                            whKeyId serverKeyId)
+{
+    int            ret    = 0;
+    byte*          keyPtr = (byte*)inlineKey;
+    word32         keySz  = (word32)inlineKeyLen;
+    whNvmMetadata* keyMeta;
+
+    if ((ctx == NULL) || (hmac == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    _HmacResetForReuse(hmac);
+    ret = wc_HmacInit(hmac, NULL, ctx->crypto->devId);
+    if (ret != 0) {
+        return ret;
+    }
+
+    if ((keyPtr == NULL) || (keySz == 0U)) {
+        if (WH_KEYID_ISERASED(serverKeyId)) {
+            return WH_ERROR_BADARGS;
+        }
+
+        ret = wh_Server_KeystoreFreshenKey(ctx, serverKeyId, &keyPtr, &keyMeta);
+        if (ret != WH_ERROR_OK) {
+            return ret;
+        }
+        keySz = keyMeta->len;
+        /* set devCtx so that _HmacCacheState doesn't try to cache a stored key
+         * and _HmacLoadState can load it
+         */
+        hmac->devCtx = WH_KEYID_TO_DEVCTX(WH_KEYID_ID(serverKeyId));
+    }
+
+    return wc_HmacSetKey(hmac, hashType, keyPtr, keySz);
+}
+
+static int _HmacLoadState(whServerContext* ctx, whKeyId stateId, Hmac* hmac)
+{
+    uint32_t       stateLen = (uint32_t)sizeof(*hmac);
+    whNvmMetadata  meta[1];
+    uint8_t*       serverKey;
+    whNvmMetadata* keyMeta;
+    whKeyId        keyId;
+    int            ret;
+
+    ret = wh_Server_KeystoreReadKey(ctx, stateId, meta, (uint8_t*)hmac,
+                                    &stateLen);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+    if ((meta->len != sizeof(*hmac)) ||
+        (WH_KEYID_TYPE(meta->id) != WH_KEYTYPE_HMAC_STATE)) {
+        return WH_ERROR_ABORTED;
+    }
+
+    keyId = WH_DEVCTX_TO_KEYID(hmac->devCtx);
+    /* TODO: find a better way to restore the key between updates ? */
+    if (WH_KEYID_ISERASED(keyId)) {
+        return WH_ERROR_ABORTED;
+    }
+    keyId = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, keyId);
+    ret   = wh_Server_KeystoreFreshenKey(ctx, keyId, &serverKey, &keyMeta);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    /* TOFIX: we are using wolfcrypt internal here */
+    hmac->keyRaw = serverKey;
+    hmac->keyLen = keyMeta->len;
+
+    return WH_ERROR_OK;
+}
+
+static int _HmacCacheKey(whServerContext* ctx, Hmac* hmac)
+{
+    whNvmMetadata meta[1];
+    whKeyId       keyId;
+
+    int ret;
+
+    if ((ctx == NULL) || (hmac == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Here the keys is known to the client, so we can use WH_KEYTYPE_CRYPTO
+     * even if this means that the client can export the key or use it in other
+     * opertion */
+    keyId =
+        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, WH_KEYID_ERASED);
+    ret = wh_Server_KeystoreGetUniqueId(ctx, &keyId);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+    _HmacPrepareMetadata(meta, keyId, hmac->keyLen);
+    ret = wh_Server_KeystoreCacheKey(ctx, meta, (uint8_t*)hmac->keyRaw);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+    hmac->devCtx = WH_KEYID_TO_DEVCTX(WH_KEYID_ID(meta->id));
+    return WH_ERROR_OK;
+}
+
+static int _HmacCacheState(whServerContext* ctx, whKeyId stateId, Hmac* hmac)
+{
+    whNvmMetadata meta[1];
+    whKeyId       keyId;
+    int           ret;
+
+    if ((ctx == NULL) || (hmac == NULL) || WH_KEYID_ISERASED(stateId)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    keyId = WH_DEVCTX_TO_KEYID(hmac->devCtx);
+    /* cache the inlined key as well */
+    if (WH_KEYID_ISERASED(keyId)) {
+        ret = _HmacCacheKey(ctx, hmac);
+        if (ret != WH_ERROR_OK) {
+            return ret;
+        }
+    }
+
+    _HmacPrepareMetadata(meta, stateId, (whNvmSize)sizeof(*hmac));
+    ret = wh_Server_KeystoreCacheKey(ctx, meta, (uint8_t*)hmac);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+    return WH_ERROR_OK;
+}
+
+static int _HmacEvictInlineKey(whServerContext* ctx, const Hmac* hmac)
+{
+    whKeyId cachedId;
+    whKeyId fullId;
+
+    if ((ctx == NULL) || (hmac == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    cachedId = WH_DEVCTX_TO_KEYID(hmac->devCtx);
+    if (WH_KEYID_ISERASED(cachedId)) {
+        return WH_ERROR_OK;
+    }
+
+    fullId = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, cachedId);
+    return wh_Server_KeystoreEvictKey(ctx, fullId);
+}
+
+static int __HandleHmac(whServerContext* ctx, const uint8_t* in, uint32_t inSz,
+                        const uint8_t* keyPtr, uint32_t keySz, uint8_t* out,
+                        uint32_t* outSz, uint16_t* keyIdp, uint16_t* stateIdp,
+                        whMessageCrypto_hmacOperation hmacOp, byte hashType)
+{
+
+    int      ret = WH_ERROR_OK;
+    Hmac*    hmac;
+    uint32_t digestSz  = 0;
+    int      keyInline = 0;
+
+    uint16_t keyId   = WH_KEYID_ERASED;
+    uint16_t stateId = WH_KEYID_ERASED;
+
+    if ((ctx == NULL) || (outSz == NULL) || stateIdp == NULL ||
+        keyIdp == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    hmac    = ctx->crypto->algoCtx.hmac;
+    stateId = *stateIdp;
+    keyId   = *keyIdp;
+
+    if (!WH_KEYID_ISERASED(stateId)) {
+        stateId =
+            WH_MAKE_KEYID(WH_KEYTYPE_HMAC_STATE, ctx->comm->client_id, stateId);
+    }
+
+    if (!WH_KEYID_ISERASED(keyId)) {
+        keyId = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, ctx->comm->client_id, keyId);
+    }
+    else {
+        keyInline = 1;
+    }
+
+    /*
+     * Validate request parameters that depend on the operation type.
+     */
+    switch (hmacOp) {
+        /* For one-shot, stateId must be erased, as no state is kept */
+        /* Both input and output are needed, key can be inline or stored */
+        case WH_MESSAGE_CRYPTO_HMAC_OP_ONESHOT:
+            if (!WH_KEYID_ISERASED(stateId)) {
+                return WH_ERROR_BADARGS;
+            }
+            if ((out == NULL) || (outSz == NULL)) {
+                return WH_ERROR_BADARGS;
+            }
+            if ((in == NULL) && (inSz > 0U)) {
+                return WH_ERROR_BADARGS;
+            }
+            if (keyInline && ((keyPtr == NULL) || (keySz == 0U))) {
+                return WH_ERROR_BADARGS;
+            }
+            break;
+        case WH_MESSAGE_CRYPTO_HMAC_OP_UPDATE:
+            /* Update operation, if stateId is valid, then the key must be
+             * cached: if the operation uses an inline key, then it was cached
+             * at the first update operation */
+            if (!WH_KEYID_ISERASED(stateId) && ((keySz != 0U))) {
+                return WH_ERROR_BADARGS;
+            }
+            if (WH_KEYID_ISERASED(stateId) && keyInline &&
+                ((keyPtr == NULL) || (keySz == 0U))) {
+                return WH_ERROR_BADARGS;
+            }
+            if ((in == NULL) && (inSz > 0U)) {
+                return WH_ERROR_BADARGS;
+            }
+            break;
+        case WH_MESSAGE_CRYPTO_HMAC_OP_FINAL:
+            if (WH_KEYID_ISERASED(stateId)) {
+                return WH_ERROR_BADARGS;
+            }
+            if ((out == NULL) || (outSz == NULL)) {
+                return WH_ERROR_BADARGS;
+            }
+            break;
+        default:
+            return WH_ERROR_BADARGS;
+    }
+
+    switch (hmacOp) {
+        case WH_MESSAGE_CRYPTO_HMAC_OP_ONESHOT: {
+            ret = _HmacInitWithKey(ctx, hmac, hashType, keyPtr, keySz, keyId);
+            if (ret != WH_ERROR_OK) {
+                break;
+            }
+
+            if (inSz > 0U) {
+                ret = wc_HmacUpdate(hmac, in, inSz);
+                if (ret != 0) {
+                    break;
+                }
+            }
+
+            ret = wc_HmacSizeByType(hashType);
+            if (ret <= 0) {
+                break;
+            }
+            digestSz = (uint32_t)ret;
+            if (digestSz > *outSz) {
+                ret = WH_ERROR_NOSPACE;
+                break;
+            }
+            ret = wc_HmacFinal(hmac, out);
+            if (ret == 0) {
+                *outSz  = digestSz;
+                stateId = WH_KEYID_ERASED;
+            }
+            break;
+        }
+
+        case WH_MESSAGE_CRYPTO_HMAC_OP_UPDATE: {
+            /* Load existing state or create a new one. */
+            if (WH_KEYID_ISERASED(stateId)) {
+                whKeyId newKeyId =
+                    WH_MAKE_KEYID(WH_KEYTYPE_HMAC_STATE, ctx->comm->client_id,
+                                  WH_KEYID_ERASED);
+                ret =
+                    _HmacInitWithKey(ctx, hmac, hashType, keyPtr, keySz, keyId);
+                if (ret != WH_ERROR_OK) {
+                    break;
+                }
+                ret = wh_Server_KeystoreGetUniqueId(ctx, &newKeyId);
+                if (ret != WH_ERROR_OK) {
+                    break;
+                }
+                stateId = newKeyId;
+            }
+            else {
+                ret = _HmacLoadState(ctx, stateId, hmac);
+                if (ret != WH_ERROR_OK) {
+                    break;
+                }
+                if (hmac->macType != hashType) {
+                    ret = WH_ERROR_BADARGS;
+                    break;
+                }
+            }
+
+            if (inSz > 0U) {
+                ret = wc_HmacUpdate(hmac, in, inSz);
+                if (ret != 0) {
+                    break;
+                }
+            }
+
+            ret = _HmacCacheState(ctx, stateId, hmac);
+            if (ret == WH_ERROR_OK) {
+                stateId   = WH_KEYID_ID(stateId);
+                *stateIdp = stateId;
+                *outSz    = 0;
+            }
+            break;
+        }
+
+        case WH_MESSAGE_CRYPTO_HMAC_OP_FINAL: {
+            if (WH_KEYID_ISERASED(stateId)) {
+                ret = WH_ERROR_BADARGS;
+                break;
+            }
+
+            ret = _HmacLoadState(ctx, stateId, hmac);
+            if (ret != WH_ERROR_OK) {
+                break;
+            }
+
+            if (hmac->macType != hashType) {
+                ret = WH_ERROR_BADARGS;
+                break;
+            }
+
+            ret = wc_HmacSizeByType(hashType);
+            if (ret <= 0) {
+                break;
+            }
+            digestSz = (uint32_t)ret;
+            if (digestSz > *outSz) {
+                ret = WH_ERROR_NOSPACE;
+                break;
+            }
+
+            ret = wc_HmacFinal(hmac, out);
+            if (ret != 0) {
+                break;
+            }
+
+            *outSz = digestSz;
+            break;
+        }
+
+        default:
+            ret = WH_ERROR_BADARGS;
+            break;
+    }
+
+    if (ret != WH_ERROR_OK || hmacOp == WH_MESSAGE_CRYPTO_HMAC_OP_FINAL) {
+        if (!WH_KEYID_ISERASED(stateId)) {
+            int evictStateRet = wh_Server_KeystoreEvictKey(ctx, stateId);
+            if ((ret == WH_ERROR_OK) && (evictStateRet != WH_ERROR_OK) &&
+                (evictStateRet != WH_ERROR_NOTFOUND)) {
+                ret = evictStateRet;
+            }
+            *stateIdp = WH_KEYID_ERASED;
+        }
+        if (keyInline) {
+            int evictInlineRet = _HmacEvictInlineKey(ctx, hmac);
+            if ((ret == WH_ERROR_OK) && (evictInlineRet != WH_ERROR_OK) &&
+                (evictInlineRet != WH_ERROR_NOTFOUND)) {
+                ret = evictInlineRet;
+            }
+        }
+    }
+
+    _HmacResetForReuse(hmac);
+    return ret;
+}
+
+static int _HandleHmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
+                       const void* cryptoDataIn, uint16_t inSize,
+                       void* cryptoDataOut, uint16_t* outSize)
+{
+    (void)seq;
+    (void)inSize;
+
+    int                          ret = WH_ERROR_OK;
+    whMessageCrypto_HmacRequest  req;
+    whMessageCrypto_HmacResponse res = {0};
+    uint8_t*                     payload;
+    const uint8_t*               keyPtr;
+    const uint8_t*               inPtr;
+    uint8_t*                     outPtr;
+    whKeyId                      stateId;
+    whKeyId                      keyId;
+    uint32_t                     outSz = 0;
+
+    ret = wh_MessageCrypto_TranslateHmacRequest(magic, cryptoDataIn, &req);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    payload = (uint8_t*)cryptoDataIn + sizeof(req);
+    keyPtr  = payload;
+    inPtr   = payload + req.keySz;
+    outPtr  = (uint8_t*)cryptoDataOut + sizeof(res);
+    outSz   = WOLFHSM_CFG_COMM_DATA_LEN - sizeof(res) -
+            sizeof(whMessageCrypto_GenericResponseHeader);
+    keyId   = req.keyId;
+    stateId = req.stateId;
+
+    ret = __HandleHmac(ctx, inPtr, req.inSz, keyPtr, req.keySz, outPtr, &outSz,
+                       &keyId, &stateId, req.hmacOp, req.hashType);
+
+
+    if (ret == WH_ERROR_OK) {
+        res.stateId = stateId;
+        res.outSz   = outSz;
+        ret         = wh_MessageCrypto_TranslateHmacResponse(
+            magic, &res, (whMessageCrypto_HmacResponse*)cryptoDataOut);
+        if (ret == WH_ERROR_OK) {
+            *outSize = (uint16_t)(sizeof(res) + res.outSz);
+        }
+    }
+
+    return ret;
+}
+#endif /* !NO_HMAC */
+
 #ifdef WOLFSSL_CMAC
 static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
                        const void* cryptoDataIn, uint16_t inSize,
@@ -3395,6 +3835,13 @@ int wh_Server_HandleCryptoRequest(whServerContext* ctx, uint16_t magic,
             break;
 #endif /* HAVE_HKDF || HAVE_CMAC_KDF */
 
+#if !defined(NO_HMAC)
+        case WC_ALGO_TYPE_HMAC:
+            ret = _HandleHmac(ctx, magic, seq, cryptoDataIn, cryptoInSize,
+                              cryptoDataOut, &cryptoOutSize);
+            break;
+#endif
+
 #ifdef WOLFSSL_CMAC
         case WC_ALGO_TYPE_CMAC:
             ret = _HandleCmac(ctx, magic, seq, cryptoDataIn, cryptoInSize,
@@ -4422,6 +4869,110 @@ static int _HandlePqcSigAlgorithmDma(whServerContext* ctx, uint16_t magic,
 }
 #endif /* HAVE_DILITHIUM || HAVE_FALCON */
 
+#if !defined(NO_HMAC)
+static int _HandleHmacDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
+                          const void* cryptoDataIn, uint16_t inSize,
+                          void* cryptoDataOut, uint16_t* outSize)
+{
+    int                             ret = WH_ERROR_OK;
+    whMessageCrypto_HmacDmaRequest  req;
+    whMessageCrypto_HmacDmaResponse res;
+    const uint8_t*                  in  = NULL;
+    const uint8_t*                  key = NULL;
+    uint8_t*                        out = NULL;
+    uint32_t                        outSz;
+    whKeyId                         keyId, stateId;
+    (void)ctx;
+    (void)seq;
+
+    memset(&req, 0, sizeof(req));
+    memset(&res, 0, sizeof(res));
+
+    if (inSize < sizeof(whMessageCrypto_HmacDmaRequest)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateHmacDmaRequest(
+        magic, (whMessageCrypto_HmacDmaRequest*)cryptoDataIn, &req);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    if (req.input.sz != 0) {
+        ret = wh_Server_DmaProcessClientAddress(
+            ctx, req.input.addr, (void**)&in, req.input.sz,
+            WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
+        if (ret != WH_ERROR_OK) {
+            if (ret == WH_ERROR_ACCESS) {
+                res.dmaAddrStatus.badAddr = req.input;
+            }
+            res.outSz = 0;
+            return ret;
+        }
+    }
+    if (req.key.sz != 0) {
+        ret = wh_Server_DmaProcessClientAddress(
+            ctx, req.key.addr, (void**)&key, req.key.sz,
+            WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
+        if (ret != WH_ERROR_OK) {
+            if (ret == WH_ERROR_ACCESS) {
+                res.dmaAddrStatus.badAddr = req.key;
+            }
+            res.outSz = 0;
+            return ret;
+        }
+    }
+    if (req.output.sz != 0) {
+        ret = wh_Server_DmaProcessClientAddress(
+            ctx, req.output.addr, (void**)&out, req.output.sz,
+            WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
+        if (ret != WH_ERROR_OK) {
+            if (ret == WH_ERROR_ACCESS) {
+                res.dmaAddrStatus.badAddr = req.output;
+            }
+            res.outSz = 0;
+            return ret;
+        }
+    }
+
+    keyId   = req.keyId;
+    stateId = req.stateId;
+    outSz   = req.output.sz;
+    ret     = __HandleHmac(ctx, in, req.input.sz, key, req.key.sz, out, &outSz,
+                           &keyId, &stateId, req.hmacOp, req.hashType);
+
+    if (in != NULL) {
+        wh_Server_DmaProcessClientAddress(
+            ctx, req.input.addr, (void**)&in, req.input.sz,
+            WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
+    }
+    if (key != NULL) {
+        wh_Server_DmaProcessClientAddress(
+            ctx, req.key.addr, (void**)&key, req.key.sz,
+            WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
+    }
+    if (out != NULL) {
+        wh_Server_DmaProcessClientAddress(
+            ctx, req.output.addr, (void**)&out, req.output.sz,
+            WH_DMA_OPER_CLIENT_WRITE_POST, (whServerDmaFlags){0});
+    }
+
+    if (ret == WH_ERROR_OK) {
+        res.stateId = stateId;
+        if (outSz != 0) {
+            res.outSz = outSz;
+        }
+    }
+
+    (void)wh_MessageCrypto_TranslateHmacDmaResponse(
+        magic, &res, (whMessageCrypto_HmacDmaResponse*)cryptoDataOut);
+    *outSize = sizeof(res);
+
+    return ret;
+}
+
+#endif /* !NO_HMAC */
+
 #ifdef WOLFSSL_CMAC
 static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
                           const void* cryptoDataIn, uint16_t inSize,
@@ -4916,6 +5467,13 @@ int wh_Server_HandleCryptoDmaRequest(whServerContext* ctx, uint16_t magic,
 #endif /* HAVE_DILITHIUM || HAVE_FALCON */
             }
             break; /* WC_ALGO_TYPE_PK */
+
+#if !defined(NO_HMAC)
+        case WC_ALGO_TYPE_HMAC:
+            ret = _HandleHmacDma(ctx, magic, seq, cryptoDataIn, cryptoInSize,
+                                 cryptoDataOut, &cryptoOutSize);
+            break;
+#endif /* !NO_HMAC */
 
 #ifdef WOLFSSL_CMAC
         case WC_ALGO_TYPE_CMAC:

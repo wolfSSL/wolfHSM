@@ -423,6 +423,18 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
 
 #endif /* WOLFSSL_CMAC */
 
+#if !defined(NO_HMAC)
+    case WC_ALGO_TYPE_HMAC: {
+        const uint8_t* in     = info->hmac.in;
+        uint32_t       in_len = info->hmac.inSz;
+        uint8_t*       out    = info->hmac.digest;
+        Hmac*          hmac   = info->hmac.hmac;
+        int            type   = info->hmac.macType;
+
+        ret = wh_Client_Hmac(ctx, hmac, type, in, in_len, out);
+    } break;
+#endif /* !NO_HMAC */
+
     case WC_ALGO_TYPE_HASH: {
         switch (info->hash.type) {
 #ifndef NO_SHA256
@@ -808,6 +820,18 @@ int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
 #endif /* HAVE_DILITHIUM || HAVE_FALCON */
         }
     } break; /* case WC_ALGO_TYPE_PK */
+
+#if !defined(NO_HMAC)
+    case WC_ALGO_TYPE_HMAC: {
+        Hmac*          hmac   = info->hmac.hmac;
+        int            type   = info->hmac.macType;
+        const uint8_t* in     = info->hmac.in;
+        uint32_t       inLen  = info->hmac.inSz;
+        uint8_t*       digest = info->hmac.digest;
+
+        ret = wh_Client_HmacDma(ctx, hmac, type, in, inLen, digest);
+    } break;
+#endif /* !NO_HMAC */
 
 #ifdef WOLFSSL_CMAC
     case WC_ALGO_TYPE_CMAC: {

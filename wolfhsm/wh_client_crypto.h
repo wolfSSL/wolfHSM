@@ -578,6 +578,58 @@ int wh_Client_AesGcmDma(whClientContext* ctx, Aes* aes, int enc,
 
 #endif /* !NO_AES */
 
+#if !defined(NO_HMAC)
+/**
+ * @brief Associates an HMAC context with a server-side key ID.
+ *
+ * This function configures the HMAC context to use a key stored on the wolfHSM
+ * server.
+ *
+ * @param[in] hmac Pointer to the HMAC structure.
+ * @param[in] keyId Key ID referencing the server-side key material.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_HmacSetKeyId(Hmac* hmac, whKeyId keyId);
+
+/**
+ * @brief Marshal an HMAC operation to the wolfHSM server. Uses DMA buffer for
+ * input and output.
+ *
+ * Depending on the combination of @p in, @p inLen, and @p digest this helper
+ * performs streaming update, finalization or one-shot requests.
+ *
+ * @param[in] ctx    Active client context.
+ * @param[in,out] hmac HMAC context bound to a wolfHSM device.
+ * @param[in] macType Hash type (e.g. WC_SHA256).
+ * @param[in] in     Input data for update calls (may be NULL when finalizing).
+ * @param[in] inLen  Length of @p in in bytes.
+ * @param[out] digest Output buffer that receives the HMAC tag during final.
+ *
+ * @return WH_ERROR_OK on success or a negative wolfHSM error code.
+ */
+int wh_Client_Hmac(whClientContext* ctx, Hmac* hmac, int macType,
+                   const uint8_t* in, uint32_t inLen, uint8_t* digest);
+
+#ifdef WOLFHSM_CFG_DMA
+/**
+ * @brief DMA-enabled HMAC helper (stub implementation).
+ *
+ * Marshals HMAC DMA operations to the wolfHSM server.
+ *
+ * @param[in] ctx Active client context.
+ * @param[in,out] hmac HMAC context bound to a wolfHSM device.
+ * @param[in] macType Hash type (e.g. WC_SHA256).
+ * @param[in] in Input buffer for update calls (may be NULL).
+ * @param[in] inLen Length of @p in in bytes.
+ * @param[out] digest Output buffer for final/one-shot calls (may be NULL).
+ *
+ * @return WH_ERROR_OK on success or a negative wolfHSM error code.
+ */
+int wh_Client_HmacDma(whClientContext* ctx, Hmac* hmac, int macType,
+                      const uint8_t* in, uint32_t inLen, uint8_t* digest);
+#endif
+#endif /* !NO_HMAC */
+
 
 #ifdef WOLFSSL_CMAC
 
