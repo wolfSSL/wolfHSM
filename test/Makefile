@@ -137,7 +137,7 @@ else
 endif
 
 ifeq ($(CRYPTIMEOUT),1)
-	DEF += -DWOLFHSM_CFG_ENABLE_CLIENT_CRYPTIMEOUT
+	DEF += -DWOLFHSM_CFG_CLIENT_TIMEOUT
 endif
 
 ## Source files

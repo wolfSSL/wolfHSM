@@ -145,12 +145,12 @@ int whTest_NvmCfgBackend(whTestNvmBackendType   type,
                          whFlashRamsimCfg* fCfg, whFlashRamsimCtx* fCtx,
                          const whFlashCb* fCb);
 uint64_t whTest_GetCurrentTime(int reset);
-int      whTest_CheckCryptoTimeout(uint64_t* start_time, uint64_t timeout_ms);
+int      whTest_CheckTimeout(uint64_t* start_time, uint64_t timeout_val);
 
-#define WH_CLIENT_CRYPTO_TIMEOUT_CB                  \
+#define WH_CLIENT_TIMEOUT_CB                  \
     {                                                \
         .GetCurrentTime = whTest_GetCurrentTime,     \
-        .CheckTimeout   = whTest_CheckCryptoTimeout, \
+        .CheckTimeout   = whTest_CheckTimeout, \
     }
 
 #endif /* WH_TEST_COMMON_H_ */

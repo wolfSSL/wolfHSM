@@ -26,7 +26,7 @@
 #include <wolfhsm/wh_error.h>
 
 #include "wh_test_common.h"
-#if defined(WOLFHSM_CFG_TEST_CLIENT_CRYPTIMEOUT)
+#if defined(WOLFHSM_CFG_TEST_CLIENT_TIMEOUT)
 #include <sys/time.h> /* For gettimeofday */
 #endif
 
@@ -93,7 +93,7 @@ int whTest_NvmCfgBackend(whTestNvmBackendType   type,
     return 0;
 }
 
-#if defined(WOLFHSM_CFG_TEST_CLIENT_CRYPTIMEOUT)
+#if defined(WOLFHSM_CFG_TEST_CLIENT_TIMEOUT)
 #include <time.h>
 #include <sys/time.h> /* For gettimeofday */
 
@@ -120,24 +120,29 @@ uint64_t whTest_GetCurrentTime(int reset)
 /* start_time stores the time (in milliseconds) returned by the GetCurrentTime()
  * callback when the operation started.
  * The actual unit depends on the GetCurrentTime() implementation.
- * timeout_ms represents the timeout in milliseconds, which is derived from
- * the crypt_timeout value in whCommClientConfig.
+ * timeout_val represents the timeout in milliseconds(default),
+ * which is derived from the timeout value in whCommClientConfig.
  */
-int whTest_CheckCryptoTimeout(uint64_t* start_time, uint64_t timeout_ms)
+int whTest_CheckTimeout(uint64_t* start_time, uint64_t timeout_val)
 {
     uint64_t current_time;
     uint64_t elapsed_time;
 
-    if (start_time == NULL) return WH_ERROR_BADARGS;
-    if (timeout_ms == 0) return WH_ERROR_OK;
+    if (start_time == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    if (timeout_val == 0) {
+        return WH_ERROR_OK;
+    }
 
     current_time = whTest_GetCurrentTime(0);
     elapsed_time = current_time - *start_time;
 
-    if (elapsed_time > timeout_ms) {
-        return WH_ERROR_CRYPTIMEOUT;
+    if (elapsed_time > timeout_val) {
+        return WH_ERROR_TIMEOUT;
     }
 
     return WH_ERROR_OK;
 }
-#endif /* WOLFHSM_CFG_TEST_CLIENT_CRYPTIMEOUT */
+#endif /* WOLFHSM_CFG_TEST_CLIENT_TIMEOUT */
