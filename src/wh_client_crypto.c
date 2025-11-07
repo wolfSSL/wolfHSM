@@ -181,6 +181,35 @@ static int _getCryptoResponse(uint8_t* respBuf, uint16_t type,
     return header->rc;
 }
 
+#if !defined(NO_HMAC)
+#define WH_CLIENT_HMAC_PACK_IDS(_keyId, _stateId)            \
+    ((uintptr_t)((((uintptr_t)(_stateId) & 0xFFFFu) << 16) | \
+                 ((uintptr_t)(_keyId) & 0xFFFFu)))
+
+static uint16_t _wh_Client_HmacGetKeyId(const Hmac* hmac)
+{
+    return (uint16_t)(((uintptr_t)hmac->devCtx) & 0xFFFFu);
+}
+
+static uint16_t _wh_Client_HmacGetStateId(const Hmac* hmac)
+{
+    return (uint16_t)((((uintptr_t)hmac->devCtx) >> 16) & 0xFFFFu);
+}
+
+static void _wh_Client_HmacSetIds(Hmac* hmac, uint16_t keyId, uint16_t stateId)
+{
+    hmac->devCtx = (void*)WH_CLIENT_HMAC_PACK_IDS(keyId, stateId);
+}
+
+static int _wh_Client_HmacSend(whClientContext*              ctx,
+                               whMessageCrypto_hmacOperation op, int hashType,
+                               uint16_t keyId, uint16_t stateId,
+                               const uint8_t* key, uint32_t keyLen,
+                               const uint8_t* in, uint32_t inLen, uint8_t* out,
+                               uint32_t outCapacity, uint16_t* outStateId,
+                               uint32_t* outSz);
+#endif /* !NO_HMAC */
+
 /** Implementations */
 int wh_Client_RngGenerate(whClientContext* ctx, uint8_t* out, uint32_t size)
 {
@@ -2940,6 +2969,278 @@ int wh_Client_AesGetKeyId(Aes* key, whNvmId* outId)
     return WH_ERROR_OK;
 }
 #endif
+
+#if !defined(NO_HMAC)
+int wh_Client_HmacSetKeyId(Hmac* hmac, whKeyId keyId)
+{
+    if ((hmac == NULL) || WH_KEYID_ISERASED(keyId)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    _wh_Client_HmacSetIds(hmac, keyId, 0);
+    return WH_ERROR_OK;
+}
+
+static int _wh_Client_HmacSend(whClientContext*              ctx,
+                               whMessageCrypto_hmacOperation op, int hashType,
+                               uint16_t keyId, uint16_t stateId,
+                               const uint8_t* key, uint32_t keyLen,
+                               const uint8_t* in, uint32_t inLen, uint8_t* out,
+                               uint32_t outCapacity, uint16_t* outStateId,
+                               uint32_t* outSz)
+{
+    if (ctx == NULL || (keyLen > 0 && key == NULL) ||
+        (inLen > 0 && in == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    uint8_t* dataPtr = (uint8_t*)wh_CommClient_GetDataPtr(ctx->comm);
+    if (dataPtr == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    uint32_t payloadLen = sizeof(whMessageCrypto_GenericRequestHeader) +
+                          sizeof(whMessageCrypto_HmacRequest) + keyLen + inLen;
+    if (payloadLen > WOLFHSM_CFG_COMM_DATA_LEN) {
+        return WH_ERROR_BADARGS;
+    }
+
+    whMessageCrypto_HmacRequest* req =
+        (whMessageCrypto_HmacRequest*)_createCryptoRequest(dataPtr,
+                                                           WC_ALGO_TYPE_HMAC);
+
+    req->hashType = (uint32_t)hashType;
+    req->keySz    = keyLen;
+    req->inSz     = inLen;
+    req->keyId    = keyId;
+    req->stateId  = stateId;
+    req->hmacOp   = (uint16_t)op;
+    req->flags    = 0;
+
+    uint8_t* idx = (uint8_t*)(req + 1);
+    if (keyLen > 0U) {
+        if (key == NULL) {
+            return WH_ERROR_BADARGS;
+        }
+        memcpy(idx, key, keyLen);
+        idx += keyLen;
+    }
+    if (inLen > 0U) {
+        if (in == NULL) {
+            return WH_ERROR_BADARGS;
+        }
+        memcpy(idx, in, inLen);
+    }
+
+    int ret =
+        wh_Client_SendRequest(ctx, WH_MESSAGE_GROUP_CRYPTO, WC_ALGO_TYPE_HMAC,
+                              (uint16_t)payloadLen, dataPtr);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    uint16_t respGroup;
+    uint16_t respAction;
+    uint16_t respSize;
+    do {
+        ret = wh_Client_RecvResponse(ctx, &respGroup, &respAction, &respSize,
+                                     dataPtr);
+    } while (ret == WH_ERROR_NOTREADY);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+    if ((respGroup != WH_MESSAGE_GROUP_CRYPTO) ||
+        (respAction != WC_ALGO_TYPE_HMAC)) {
+        return WH_ERROR_ABORTED;
+    }
+
+    whMessageCrypto_HmacResponse* resp = NULL;
+    ret = _getCryptoResponse(dataPtr, WC_ALGO_TYPE_HMAC, (uint8_t**)&resp);
+    if (ret < 0) {
+        return ret;
+    }
+
+    if (outStateId != NULL) {
+        *outStateId = resp->stateId;
+    }
+    if (outSz != NULL) {
+        *outSz = resp->outSz;
+    }
+
+    if (resp->outSz > 0U) {
+        uint8_t* respData = (uint8_t*)(resp + 1);
+        if ((out == NULL) || (resp->outSz > outCapacity)) {
+            return WH_ERROR_NOSPACE;
+        }
+        memcpy(out, respData, resp->outSz);
+    }
+
+    return ret;
+}
+
+int wh_Client_Hmac(whClientContext* ctx, Hmac* hmac, int macType,
+                   const uint8_t* in, uint32_t inLen, uint8_t* digest)
+{
+    if ((ctx == NULL) || (hmac == NULL) || (in == NULL && inLen > 0)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    uint16_t       keyId   = _wh_Client_HmacGetKeyId(hmac);
+    uint16_t       stateId = _wh_Client_HmacGetStateId(hmac);
+    uint32_t       digestSz;
+    const uint8_t* keyBuf = NULL;
+    uint32_t       keyLen = 0;
+    int            ret    = WH_ERROR_OK;
+
+    /* send inline key only on on first use */
+    if (stateId == 0U && keyId == WH_KEYID_ERASED) {
+        if (hmac->keyLen == 0U || hmac->keyRaw == NULL) {
+            return WH_ERROR_BADARGS;
+        }
+        keyBuf = hmac->keyRaw;
+        keyLen = hmac->keyLen;
+    }
+
+    /* get digest size */
+    if (digest != NULL) {
+        ret = wc_HmacSizeByType(macType);
+        if (ret < 0) {
+            return ret;
+        }
+        digestSz = ret;
+    }
+
+    /* one shot operation */
+    if (digest != NULL && stateId == 0) {
+        /* stateId must be 0 for one shot */
+        if (stateId != 0U) {
+            return WH_ERROR_BADARGS;
+        }
+
+        ret = _wh_Client_HmacSend(ctx, WH_MESSAGE_CRYPTO_HMAC_OP_ONESHOT,
+                                  macType, keyId, stateId, keyBuf, keyLen, in,
+                                  inLen, digest, digestSz, NULL, &digestSz);
+        if (ret < 0) {
+            return ret;
+        }
+    }
+    /* update only operation */
+    else if (digest == NULL) {
+        ret = _wh_Client_HmacSend(ctx, WH_MESSAGE_CRYPTO_HMAC_OP_UPDATE,
+                                  macType, keyId, stateId, keyBuf, keyLen, in,
+                                  inLen, NULL, 0, &stateId, NULL);
+        if (ret < 0) {
+            return ret;
+        }
+        _wh_Client_HmacSetIds(hmac, keyId, stateId);
+    }
+    /* final only operation */
+    else {
+        ret = _wh_Client_HmacSend(ctx, WH_MESSAGE_CRYPTO_HMAC_OP_FINAL, macType,
+                                  keyId, stateId, keyBuf, keyLen, NULL, 0,
+                                  digest, digestSz, NULL, &digestSz);
+        _wh_Client_HmacSetIds(hmac, keyId, 0);
+        if (ret < 0) {
+            return ret;
+        }
+    }
+
+    return ret;
+}
+
+#ifdef WOLFHSM_CFG_DMA
+int wh_Client_HmacDma(whClientContext* ctx, Hmac* hmac, int macType,
+                      const uint8_t* in, uint32_t inLen, uint8_t* digest)
+{
+    whMessageCrypto_HmacDmaRequest*  req     = NULL;
+    whMessageCrypto_HmacDmaResponse* res     = NULL;
+    uint8_t*                         dataPtr = NULL;
+    uint16_t                         keyId;
+    uint16_t                         stateId;
+    uint32_t                         digestSz;
+    whMessageCrypto_hmacOperation    hmacOp;
+    int                              ret = WH_ERROR_OK;
+
+    if ((ctx == NULL) || (hmac == NULL) || (in == NULL && inLen > 0U)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    keyId   = _wh_Client_HmacGetKeyId(hmac);
+    stateId = _wh_Client_HmacGetStateId(hmac);
+
+    /* Determine expected output size when caller provides a buffer. */
+    ret = wc_HmacSizeByType(macType);
+    if (ret < 0) {
+        return ret;
+    }
+    digestSz = (uint32_t)ret;
+
+    /* Get data pointer from the context to use as request/response storage */
+    dataPtr = (uint8_t*)wh_CommClient_GetDataPtr(ctx->comm);
+    if (dataPtr == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Setup generic header and get pointer to request data */
+    req = (whMessageCrypto_HmacDmaRequest*)_createCryptoRequest(
+        dataPtr, WC_ALGO_TYPE_HMAC);
+    memset(req, 0, sizeof(*req));
+
+    req->hashType = (uint32_t)macType;
+    req->keyId    = keyId;
+    req->stateId  = stateId;
+
+    if (digest != NULL) {
+        req->output.addr = (uintptr_t)digest;
+        req->output.sz   = digestSz;
+        hmacOp           = (stateId == 0U) ? WH_MESSAGE_CRYPTO_HMAC_OP_ONESHOT
+                                           : WH_MESSAGE_CRYPTO_HMAC_OP_FINAL;
+    }
+    else {
+        hmacOp = WH_MESSAGE_CRYPTO_HMAC_OP_UPDATE;
+    }
+    req->hmacOp = (uint16_t)hmacOp;
+
+    if (in != NULL) {
+        req->input.addr = (uintptr_t)in;
+        req->input.sz   = inLen;
+    }
+
+    if ((stateId == 0U) && (keyId == WH_KEYID_ERASED) &&
+        (hmac->keyRaw != NULL) && (hmac->keyLen != 0U)) {
+        req->key.addr = (uintptr_t)hmac->keyRaw;
+        req->key.sz   = hmac->keyLen;
+    }
+
+    ret = wh_Client_SendRequest(
+        ctx, WH_MESSAGE_GROUP_CRYPTO_DMA, WC_ALGO_TYPE_HMAC,
+        sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req), dataPtr);
+
+    if (ret == WH_ERROR_OK) {
+        uint16_t respSz = 0;
+        do {
+            ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz, dataPtr);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+
+    if (ret == WH_ERROR_OK) {
+        ret = _getCryptoResponse(dataPtr, WC_ALGO_TYPE_HMAC, (uint8_t**)&res);
+        if (ret == WH_ERROR_OK && res != NULL) {
+            if (hmacOp == WH_MESSAGE_CRYPTO_HMAC_OP_UPDATE) {
+                _wh_Client_HmacSetIds(hmac, keyId, res->stateId);
+            }
+            else if (hmacOp == WH_MESSAGE_CRYPTO_HMAC_OP_FINAL ||
+                     hmacOp == WH_MESSAGE_CRYPTO_HMAC_OP_ONESHOT) {
+                _wh_Client_HmacSetIds(hmac, keyId, 0);
+            }
+        }
+    }
+
+    return ret;
+}
+#endif /* WOLFHSM_CFG_DMA */
+
+#endif /* !NO_HMAC */
 
 #ifdef WOLFSSL_CMAC
 int wh_Client_CmacSetKeyId(Cmac* key, whNvmId keyId)

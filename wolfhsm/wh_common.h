@@ -31,7 +31,6 @@
 
 /* Key management types and helpers */
 #include "wolfhsm/wh_keyid.h"
-
 /** NVM Management */
 /* HSM NVM object identifier type. */
 typedef uint16_t whNvmId;

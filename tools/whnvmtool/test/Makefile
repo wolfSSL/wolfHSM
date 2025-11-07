@@ -25,7 +25,8 @@ WOLFCRYPT_SRC = \
 	$(WOLFSSL_DIR)/wolfcrypt/src/sha256.c \
 	$(WOLFSSL_DIR)/wolfcrypt/src/aes.c \
 	$(WOLFSSL_DIR)/wolfcrypt/src/ecc.c \
-	$(WOLFSSL_DIR)/wolfcrypt/src/cmac.c
+	$(WOLFSSL_DIR)/wolfcrypt/src/cmac.c \
+	$(WOLFSSL_DIR)/wolfcrypt/src/hmac.c
 
 SRC = \
 	$(WOLFHSM_SRC) \

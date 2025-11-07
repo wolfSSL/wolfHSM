@@ -637,6 +637,39 @@ int wh_MessageCrypto_TranslateCmacResponse(
     return 0;
 }
 
+#if !defined(NO_HMAC)
+int wh_MessageCrypto_TranslateHmacRequest(
+    uint16_t magic, const whMessageCrypto_HmacRequest* src,
+    whMessageCrypto_HmacRequest* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, hashType);
+    WH_T32(magic, dest, src, keySz);
+    WH_T32(magic, dest, src, inSz);
+    WH_T16(magic, dest, src, keyId);
+    WH_T16(magic, dest, src, stateId);
+    WH_T16(magic, dest, src, hmacOp);
+    WH_T16(magic, dest, src, flags);
+
+    return 0;
+}
+
+int wh_MessageCrypto_TranslateHmacResponse(
+    uint16_t magic, const whMessageCrypto_HmacResponse* src,
+    whMessageCrypto_HmacResponse* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T16(magic, dest, src, stateId);
+    WH_T16(magic, dest, src, flags);
+    WH_T32(magic, dest, src, outSz);
+    return 0;
+}
+#endif /* !NO_HMAC */
+
 /* ML-DSA Key Generation Request translation */
 int wh_MessageCrypto_TranslateMlDsaKeyGenRequest(
     uint16_t magic, const whMessageCrypto_MlDsaKeyGenRequest* src,
@@ -852,6 +885,66 @@ int wh_MessageCrypto_TranslateCmacDmaResponse(
     WH_T32(magic, dest, src, outSz);
     return 0;
 }
+
+#if !defined(NO_HMAC)
+/* HMAC DMA Request translation */
+int wh_MessageCrypto_TranslateHmacDmaRequest(
+    uint16_t magic, const whMessageCrypto_HmacDmaRequest* src,
+    whMessageCrypto_HmacDmaRequest* dest)
+{
+    int ret;
+
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    WH_T32(magic, dest, src, hashType);
+    WH_T16(magic, dest, src, keyId);
+    WH_T16(magic, dest, src, stateId);
+    WH_T16(magic, dest, src, hmacOp);
+
+    ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->key, &dest->key);
+    if (ret != 0) {
+        return ret;
+    }
+
+    ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->input, &dest->input);
+    if (ret != 0) {
+        return ret;
+    }
+
+    ret =
+        wh_MessageCrypto_TranslateDmaBuffer(magic, &src->output, &dest->output);
+    if (ret != 0) {
+        return ret;
+    }
+
+    return 0;
+}
+
+/* HMAC DMA Response translation */
+int wh_MessageCrypto_TranslateHmacDmaResponse(
+    uint16_t magic, const whMessageCrypto_HmacDmaResponse* src,
+    whMessageCrypto_HmacDmaResponse* dest)
+{
+    int ret;
+
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateDmaAddrStatus(magic, &src->dmaAddrStatus,
+                                                  &dest->dmaAddrStatus);
+    if (ret != 0) {
+        return ret;
+    }
+
+    WH_T16(magic, dest, src, stateId);
+    WH_T32(magic, dest, src, outSz);
+
+    return 0;
+}
+#endif /* !NO_HMAC */
 
 /* ML-DSA DMA Key Generation Request translation */
 int wh_MessageCrypto_TranslateMlDsaKeyGenDmaRequest(
