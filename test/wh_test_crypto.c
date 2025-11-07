@@ -32,6 +32,8 @@
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/types.h"
 #include "wolfssl/wolfcrypt/kdf.h"
+#include "wolfssl/wolfcrypt/hmac.h"
+#include "wolfssl/wolfcrypt/sha256.h"
 
 #include "wolfhsm/wh_error.h"
 
@@ -2675,6 +2677,512 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
 }
 #endif /* !NO_AES */
 
+#if !defined(NO_HMAC) && !defined(NO_SHA256)
+static int whTestCrypto_Hmac(whClientContext* ctx, int devId, WC_RNG* rng)
+{
+    enum {
+        WH_TEST_HMAC_KEY_SIZE  = 32,
+        WH_TEST_HMAC_DATA_SIZE = (WC_SHA256_BLOCK_SIZE * 2) + 7
+    };
+    int            ret = 0;
+    Hmac           hmac[1];
+    Hmac           hmacVerify[1];
+    Hmac           hmacInterleaveA[1];
+    Hmac           hmacInterleaveB[1];
+    int            hmacInitialized            = 0;
+    int            hmacInterleaveAInitialized = 0;
+    int            hmacInterleaveBInitialized = 0;
+    int            verifyInitialized          = 0;
+    whKeyId        keyId                      = WH_KEYID_ERASED;
+    uint8_t        key[WH_TEST_HMAC_KEY_SIZE];
+    uint8_t        data[WH_TEST_HMAC_DATA_SIZE];
+    uint8_t        macOut[WC_SHA256_DIGEST_SIZE];
+    uint8_t        macExpected[WC_SHA256_DIGEST_SIZE];
+    const uint32_t updateLen1 = 13U;
+    const uint32_t updateLen2 = WC_SHA256_BLOCK_SIZE - updateLen1;
+    const uint32_t updateLen3 = WC_SHA256_BLOCK_SIZE;
+    const uint32_t updateLen4 =
+        WH_TEST_HMAC_DATA_SIZE - (updateLen1 + updateLen2 + updateLen3);
+    uint8_t labelIn[WH_NVM_LABEL_LEN] = "HMAC Key Label";
+
+    /* Randomize key and message input */
+    ret = wc_RNG_GenerateBlock(rng, key, sizeof(key));
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wc_RNG_GenerateBlock %d\n", ret);
+    }
+    else {
+        ret = wc_RNG_GenerateBlock(rng, data, sizeof(data));
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wc_RNG_GenerateBlock %d\n", ret);
+        }
+    }
+
+    /* Compute expected value using software */
+    if (ret == 0) {
+        ret = wc_HmacInit(hmacVerify, NULL, INVALID_DEVID);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wc_HmacInit %d\n", ret);
+        }
+        else {
+            verifyInitialized = 1;
+            ret = wc_HmacSetKey(hmacVerify, WC_SHA256, key, sizeof(key));
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to wc_HmacSetKey %d\n", ret);
+            }
+            else {
+                ret = wc_HmacUpdate(hmacVerify, data, updateLen1);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("Failed to wc_HmacUpdate %d\n", ret);
+                }
+                else {
+                    ret = wc_HmacUpdate(hmacVerify, data + updateLen1,
+                                        updateLen2);
+                    if (ret != 0) {
+                        WH_ERROR_PRINT("Failed to wc_HmacUpdate %d\n", ret);
+                    }
+                    else {
+                        ret = wc_HmacUpdate(hmacVerify,
+                                            data + updateLen1 + updateLen2,
+                                            updateLen3);
+                        if (ret != 0) {
+                            WH_ERROR_PRINT("Failed to wc_HmacUpdate %d\n", ret);
+                        }
+                        else {
+                            ret = wc_HmacUpdate(hmacVerify,
+                                                data + updateLen1 + updateLen2 +
+                                                    updateLen3,
+                                                updateLen4);
+                            if (ret != 0) {
+                                WH_ERROR_PRINT("Failed to wc_HmacUpdate %d\n",
+                                               ret);
+                            }
+                            else {
+                                ret = wc_HmacFinal(hmacVerify, macExpected);
+                                if (ret != 0) {
+                                    WH_ERROR_PRINT(
+                                        "Failed to wc_HmacFinal %d\n", ret);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if (verifyInitialized != 0) {
+            (void)wc_HmacFree(hmacVerify);
+        }
+    }
+
+    /* Test HMAC with client-side key */
+    if (ret == 0) {
+        ret = wc_HmacInit(hmac, NULL, devId);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wc_HmacInit %d\n", ret);
+        }
+        else {
+            hmacInitialized = 1;
+            ret             = wc_HmacSetKey(hmac, WC_SHA256, key, sizeof(key));
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to wc_HmacSetKey %d\n", ret);
+            }
+            else {
+                ret = wc_HmacUpdate(hmac, data, updateLen1);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("Failed to wc_HmacUpdate %d\n", ret);
+                }
+                else {
+                    ret = wc_HmacUpdate(hmac, data + updateLen1, updateLen2);
+                    if (ret != 0) {
+                        WH_ERROR_PRINT("Failed to wc_HmacUpdate %d\n", ret);
+                    }
+                    else {
+                        ret = wc_HmacUpdate(
+                            hmac, data + updateLen1 + updateLen2, updateLen3);
+                        if (ret != 0) {
+                            WH_ERROR_PRINT("Failed to wc_HmacUpdate %d\n", ret);
+                        }
+                        else {
+                            ret = wc_HmacUpdate(hmac,
+                                                data + updateLen1 + updateLen2 +
+                                                    updateLen3,
+                                                updateLen4);
+                            if (ret != 0) {
+                                WH_ERROR_PRINT("Failed to wc_HmacUpdate %d\n",
+                                               ret);
+                            }
+                            else {
+                                ret = wc_HmacFinal(hmac, macOut);
+                                if (ret != 0) {
+                                    WH_ERROR_PRINT(
+                                        "Failed to wc_HmacFinal %d\n", ret);
+                                }
+                                else if (memcmp(macExpected, macOut,
+                                                sizeof(macOut)) != 0) {
+                                    WH_ERROR_PRINT(
+                                        "HMAC CLIENT KEY FAILED TO MATCH\n");
+                                    ret = -1;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if (hmacInitialized != 0) {
+            (void)wc_HmacFree(hmac);
+            memset(macOut, 0, sizeof(macOut));
+        }
+    }
+
+    if (ret == 0) {
+        ret = wc_HmacInit(hmacInterleaveA, NULL, devId);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wc_HmacInit %d\n", ret);
+        }
+        else {
+            hmacInterleaveAInitialized = 1;
+        }
+    }
+    if (ret == 0) {
+        ret = wc_HmacInit(hmacInterleaveB, NULL, devId);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wc_HmacInit %d\n", ret);
+        }
+        else {
+            hmacInterleaveBInitialized = 1;
+        }
+    }
+    if (ret == 0) {
+        ret = wc_HmacSetKey(hmacInterleaveA, WC_SHA256, key, sizeof(key));
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wc_HmacSetKey %d\n", ret);
+        }
+    }
+    if (ret == 0) {
+        ret = wc_HmacSetKey(hmacInterleaveB, WC_SHA256, key, sizeof(key));
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wc_HmacSetKey %d\n", ret);
+        }
+    }
+    if (ret == 0) {
+        ret = wc_HmacUpdate(hmacInterleaveA, data, updateLen1);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wc_HmacUpdate %d\n", ret);
+        }
+    }
+    if (ret == 0) {
+        ret = wc_HmacUpdate(hmacInterleaveB, data, updateLen1);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wc_HmacUpdate %d\n", ret);
+        }
+    }
+    if (ret == 0) {
+        ret = wc_HmacUpdate(hmacInterleaveA, data + updateLen1, updateLen2);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wc_HmacUpdate %d\n", ret);
+        }
+    }
+    if (ret == 0) {
+        ret = wc_HmacUpdate(hmacInterleaveB, data + updateLen1, updateLen2);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wc_HmacUpdate %d\n", ret);
+        }
+    }
+    if (ret == 0) {
+        ret = wc_HmacUpdate(hmacInterleaveA, data + updateLen1 + updateLen2,
+                            updateLen3);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wc_HmacUpdate %d\n", ret);
+        }
+    }
+    if (ret == 0) {
+        ret = wc_HmacUpdate(hmacInterleaveB, data + updateLen1 + updateLen2,
+                            updateLen3);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wc_HmacUpdate %d\n", ret);
+        }
+    }
+    if (ret == 0) {
+        ret = wc_HmacUpdate(hmacInterleaveA,
+                            data + updateLen1 + updateLen2 + updateLen3,
+                            updateLen4);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wc_HmacUpdate %d\n", ret);
+        }
+    }
+    if (ret == 0) {
+        ret = wc_HmacUpdate(hmacInterleaveB,
+                            data + updateLen1 + updateLen2 + updateLen3,
+                            updateLen4);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wc_HmacUpdate %d\n", ret);
+        }
+    }
+    if (ret == 0) {
+        ret = wc_HmacFinal(hmacInterleaveA, macOut);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wc_HmacFinal %d\n", ret);
+        }
+        else if (memcmp(macExpected, macOut, sizeof(macOut)) != 0) {
+            WH_ERROR_PRINT("HMAC CLIENT INTERLEAVE FAILED TO MATCH\n");
+            ret = -1;
+        }
+    }
+    if (ret == 0) {
+        ret = wc_HmacFinal(hmacInterleaveB, macOut);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wc_HmacFinal %d\n", ret);
+        }
+        else if (memcmp(macExpected, macOut, sizeof(macOut)) != 0) {
+            WH_ERROR_PRINT("HMAC CLIENT INTERLEAVE FAILED TO MATCH\n");
+            ret = -1;
+        }
+    }
+    if (hmacInterleaveAInitialized != 0) {
+        (void)wc_HmacFree(hmacInterleaveA);
+        hmacInterleaveAInitialized = 0;
+    }
+    if (hmacInterleaveBInitialized != 0) {
+        (void)wc_HmacFree(hmacInterleaveB);
+        hmacInterleaveBInitialized = 0;
+    }
+    memset(macOut, 0, sizeof(macOut));
+    /* Test HMAC with server-side key */
+    if (ret == 0) {
+        ret = wc_HmacInit(hmac, NULL, devId);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wc_HmacInit %d\n", ret);
+        }
+        else {
+            hmacInitialized = 1;
+            keyId           = WH_KEYID_ERASED;
+            ret = wh_Client_KeyCache(ctx, 0, labelIn, sizeof(labelIn), key,
+                                     sizeof(key), &keyId);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to wh_Client_KeyCache %d\n", ret);
+            }
+            else {
+                ret = wc_HmacSetKey(hmac, WC_SHA256, NULL, 0);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("Failed to wc_HmacSetKey %d\n", ret);
+                }
+                else {
+                    ret = wh_Client_HmacSetKeyId(hmac, keyId);
+                }
+                if (ret != 0) {
+                    WH_ERROR_PRINT("Failed to wh_Client_HmacSetKeyId %d\n",
+                                   ret);
+                }
+                else {
+                    ret = wc_HmacUpdate(hmac, data, updateLen1);
+                    if (ret != 0) {
+                        WH_ERROR_PRINT("Failed to wc_HmacUpdate %d\n", ret);
+                    }
+                    else {
+                        ret =
+                            wc_HmacUpdate(hmac, data + updateLen1, updateLen2);
+                        if (ret != 0) {
+                            WH_ERROR_PRINT("Failed to wc_HmacUpdate %d\n", ret);
+                        }
+                        else {
+                            ret = wc_HmacUpdate(hmac,
+                                                data + updateLen1 + updateLen2,
+                                                updateLen3);
+                            if (ret != 0) {
+                                WH_ERROR_PRINT("Failed to wc_HmacUpdate %d\n",
+                                               ret);
+                            }
+                            else {
+                                ret = wc_HmacUpdate(hmac,
+                                                    data + updateLen1 +
+                                                        updateLen2 + updateLen3,
+                                                    updateLen4);
+                                if (ret != 0) {
+                                    WH_ERROR_PRINT(
+                                        "Failed to wc_HmacUpdate %d\n", ret);
+                                }
+                                else {
+                                    ret = wc_HmacFinal(hmac, macOut);
+                                    if (ret != 0) {
+                                        WH_ERROR_PRINT(
+                                            "Failed to wc_HmacFinal %d\n", ret);
+                                    }
+                                    else if (memcmp(macExpected, macOut,
+                                                    sizeof(macOut)) != 0) {
+                                        WH_ERROR_PRINT("HMAC SERVER KEY FAILED "
+                                                       "TO MATCH\n");
+                                        ret = -1;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if (hmacInitialized != 0) {
+            (void)wc_HmacFree(hmac);
+        }
+        if ((ret == 0) && (keyId != WH_KEYID_ERASED)) {
+            ret = wc_HmacInit(hmacInterleaveA, NULL, devId);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to wc_HmacInit %d\n", ret);
+            }
+            else {
+                hmacInterleaveAInitialized = 1;
+            }
+        }
+        if ((ret == 0) && (keyId != WH_KEYID_ERASED)) {
+            ret = wc_HmacInit(hmacInterleaveB, NULL, devId);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to wc_HmacInit %d\n", ret);
+            }
+            else {
+                hmacInterleaveBInitialized = 1;
+            }
+        }
+        if ((ret == 0) && (keyId != WH_KEYID_ERASED)) {
+            ret = wc_HmacSetKey(hmacInterleaveA, WC_SHA256, NULL, 0);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to wc_HmacSetKey %d\n", ret);
+            }
+            else {
+                ret = wh_Client_HmacSetKeyId(hmacInterleaveA, keyId);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("Failed to wh_Client_HmacSetKeyId %d\n",
+                                   ret);
+                }
+            }
+        }
+        if ((ret == 0) && (keyId != WH_KEYID_ERASED)) {
+            ret = wc_HmacSetKey(hmacInterleaveB, WC_SHA256, NULL, 0);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to wc_HmacSetKey %d\n", ret);
+            }
+            else {
+                ret = wh_Client_HmacSetKeyId(hmacInterleaveB, keyId);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("Failed to wh_Client_HmacSetKeyId %d\n",
+                                   ret);
+                }
+            }
+        }
+        if ((ret == 0) && (keyId != WH_KEYID_ERASED)) {
+            ret = wc_HmacUpdate(hmacInterleaveA, data, updateLen1);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to wc_HmacUpdate %d\n", ret);
+            }
+        }
+        if ((ret == 0) && (keyId != WH_KEYID_ERASED)) {
+            ret = wc_HmacUpdate(hmacInterleaveB, data, updateLen1);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to wc_HmacUpdate %d\n", ret);
+            }
+        }
+        if ((ret == 0) && (keyId != WH_KEYID_ERASED)) {
+            ret = wc_HmacUpdate(hmacInterleaveA, data + updateLen1, updateLen2);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to wc_HmacUpdate %d\n", ret);
+            }
+        }
+        if ((ret == 0) && (keyId != WH_KEYID_ERASED)) {
+            ret = wc_HmacUpdate(hmacInterleaveB, data + updateLen1, updateLen2);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to wc_HmacUpdate %d\n", ret);
+            }
+        }
+        if ((ret == 0) && (keyId != WH_KEYID_ERASED)) {
+            ret = wc_HmacUpdate(hmacInterleaveA, data + updateLen1 + updateLen2,
+                                updateLen3);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to wc_HmacUpdate %d\n", ret);
+            }
+        }
+        if ((ret == 0) && (keyId != WH_KEYID_ERASED)) {
+            ret = wc_HmacUpdate(hmacInterleaveB, data + updateLen1 + updateLen2,
+                                updateLen3);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to wc_HmacUpdate %d\n", ret);
+            }
+        }
+        if ((ret == 0) && (keyId != WH_KEYID_ERASED)) {
+            ret = wc_HmacUpdate(hmacInterleaveA,
+                                data + updateLen1 + updateLen2 + updateLen3,
+                                updateLen4);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to wc_HmacUpdate %d\n", ret);
+            }
+        }
+        if ((ret == 0) && (keyId != WH_KEYID_ERASED)) {
+            ret = wc_HmacUpdate(hmacInterleaveB,
+                                data + updateLen1 + updateLen2 + updateLen3,
+                                updateLen4);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to wc_HmacUpdate %d\n", ret);
+            }
+        }
+        if ((ret == 0) && (keyId != WH_KEYID_ERASED)) {
+            ret = wc_HmacFinal(hmacInterleaveA, macOut);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to wc_HmacFinal %d\n", ret);
+            }
+            else if (memcmp(macExpected, macOut, sizeof(macOut)) != 0) {
+                WH_ERROR_PRINT(
+                    "HMAC SERVER INTERLEAVE FAILED TO MATCH (CTX A)\n");
+                ret = -1;
+            }
+        }
+        if ((ret == 0) && (keyId != WH_KEYID_ERASED)) {
+            ret = wc_HmacFinal(hmacInterleaveB, macOut);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to wc_HmacFinal %d\n", ret);
+            }
+            else if (memcmp(macExpected, macOut, sizeof(macOut)) != 0) {
+                WH_ERROR_PRINT(
+                    "HMAC SERVER INTERLEAVE FAILED TO MATCH (CTX B)\n");
+                ret = -1;
+            }
+        }
+        if (hmacInterleaveAInitialized != 0) {
+            (void)wc_HmacFree(hmacInterleaveA);
+            hmacInterleaveAInitialized = 0;
+        }
+        if (hmacInterleaveBInitialized != 0) {
+            (void)wc_HmacFree(hmacInterleaveB);
+            hmacInterleaveBInitialized = 0;
+        }
+        if (keyId != WH_KEYID_ERASED) {
+            memset(macOut, 0, sizeof(macOut));
+        }
+        if (keyId != WH_KEYID_ERASED) {
+            int evictRet = wh_Client_KeyEvict(ctx, keyId);
+            if ((ret == 0) && (evictRet != 0)) {
+                WH_ERROR_PRINT("Failed to wh_Client_KeyEvict %d\n", evictRet);
+                ret = evictRet;
+            }
+        }
+        memset(macOut, 0, sizeof(macOut));
+    }
+    if (hmacInterleaveAInitialized != 0) {
+        (void)wc_HmacFree(hmacInterleaveA);
+    }
+    if (hmacInterleaveBInitialized != 0) {
+        (void)wc_HmacFree(hmacInterleaveB);
+    }
+    memset(macOut, 0, sizeof(macOut));
+
+    if (ret == 0) {
+        printf("HMAC SHA256 DEVID=0x%X SUCCESS\n", devId);
+    }
+
+    memset(key, 0, sizeof(key));
+    memset(data, 0, sizeof(data));
+    memset(macExpected, 0, sizeof(macExpected));
+
+    return ret;
+}
+#endif /* !defined(NO_HMAC) && !defined(NO_SHA256) */
+
 #if defined(WOLFSSL_CMAC) && !defined(NO_AES) && defined(WOLFSSL_AES_DIRECT)
 static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
 {
@@ -3807,6 +4315,16 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         }
     }
 #endif /* !NO_AES */
+
+#if !defined(NO_HMAC) && !defined(NO_SHA256)
+    i = 0;
+    while ((ret == WH_ERROR_OK) && (i < WH_NUM_DEVIDS)) {
+        ret = whTestCrypto_Hmac(client, WH_DEV_IDS_ARRAY[i], rng);
+        if (ret == WH_ERROR_OK) {
+            i++;
+        }
+    }
+#endif /* !NO_HMAC && !NO_SHA256 */
 
 #if defined(WOLFSSL_CMAC) && !defined(NO_AES) && defined(WOLFSSL_AES_DIRECT)
     i = 0;
