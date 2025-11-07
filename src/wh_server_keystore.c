@@ -495,7 +495,9 @@ int wh_Server_KeystoreFreshenKey(whServerContext* server, whKeyId keyId,
     int           foundBigIndex = -1;
     whNvmMetadata tmpMeta[1];
 
-    if ((server == NULL) || WH_KEYID_ISERASED(keyId)) {
+    /* HMAC STATEs are never stored in NVM, fresh op is meaningless */
+    if ((server == NULL) || WH_KEYID_ISERASED(keyId) ||
+        WH_KEYID_TYPE(keyId) == WH_KEYTYPE_HMAC_STATE) {
         return WH_ERROR_BADARGS;
     }
 
@@ -647,11 +649,17 @@ int wh_Server_KeystoreCommitKey(whServerContext* server, whNvmId keyId)
         return WH_ERROR_ABORTED;
     }
 
+    /* HMAC STATEs are never stored in NVM, this should never happen */
+    if (WH_KEYID_TYPE(keyId) == WH_KEYTYPE_HMAC_STATE) {
+        return WH_ERROR_ACCESS;
+    }
+
     /* Get the appropriate cache context for this key */
     ctx = _GetCacheContext(server, keyId);
 
     /* Find the key in the appropriate cache context obtained above. */
     ret = _FindInKeyCache(ctx, keyId, NULL, NULL, &slotBuf, &slotMeta);
+
     if (ret == WH_ERROR_OK) {
         size = slotMeta->len;
         ret = wh_Nvm_AddObjectWithReclaim(server->nvm, slotMeta, size, slotBuf);
