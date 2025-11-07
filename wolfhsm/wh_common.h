@@ -66,14 +66,49 @@ typedef uint16_t whNvmAccess;
 
 /* HSM NVM Flags type */
 typedef uint16_t whNvmFlags;
-#define WH_NVM_FLAGS_NONE  ((whNvmFlags)0)
-#define WH_NVM_FLAGS_ANY   ((whNvmFlags)-1)
 
-#define WH_NVM_FLAGS_IMMUTABLE      ((whNvmFlags)1 << 0) /* Cannot be overwritten */
-#define WH_NVM_FLAGS_SENSITIVE      ((whNvmFlags)1 << 1) /* Holds private/secret data */
-#define WH_NVM_FLAGS_NONEXPORTABLE  ((whNvmFlags)1 << 2) /* Cannot be exported */
-#define WH_NVM_FLAGS_LOCAL          ((whNvmFlags)1 << 3) /* Was generated locally */
-#define WH_NVM_FLAGS_EPHEMERAL      ((whNvmFlags)1 << 4) /* Cannot be cached nor committed */
+/* Generic NVM flags */
+/* Cannot be overwritten */
+#define WH_NVM_FLAGS_IMMUTABLE      ((whNvmFlags)1 << 0)
+/* Holds private/secret data */
+#define WH_NVM_FLAGS_SENSITIVE      ((whNvmFlags)1 << 1)
+/* Cannot be exported */
+#define WH_NVM_FLAGS_NONEXPORTABLE  ((whNvmFlags)1 << 2)
+/* Was generated locally */
+#define WH_NVM_FLAGS_LOCAL          ((whNvmFlags)1 << 3)
+/* Cannot be cached nor committed */
+#define WH_NVM_FLAGS_EPHEMERAL      ((whNvmFlags)1 << 4)
+
+/* Key usage policy flags
+ *
+ * Key usage flags control which cryptographic operations are permitted.
+ * Multiple usage flags can be combined. If no usage flags are set, the key
+ * cannot be used for any operation. Use WH_NVM_FLAGS_USAGE_ANY to allow all
+ * operations.
+ */
+/* Key can be used for encryption */
+#define WH_NVM_FLAGS_USAGE_ENCRYPT ((whNvmFlags)1 << 5)
+/* Key can be used for decryption */
+#define WH_NVM_FLAGS_USAGE_DECRYPT ((whNvmFlags)1 << 6)
+/* Key can be used for signing */
+#define WH_NVM_FLAGS_USAGE_SIGN    ((whNvmFlags)1 << 7)
+/* Key can be used for verification */
+#define WH_NVM_FLAGS_USAGE_VERIFY  ((whNvmFlags)1 << 8)
+/* Key can be used for key wrapping */
+#define WH_NVM_FLAGS_USAGE_WRAP    ((whNvmFlags)1 << 9)
+/* Key can be used for key derivation */
+#define WH_NVM_FLAGS_USAGE_DERIVE  ((whNvmFlags)1 << 10)
+
+/* No flags set */
+#define WH_NVM_FLAGS_NONE ((whNvmFlags)0)
+/* All flags set */
+#define WH_NVM_FLAGS_ANY ((whNvmFlags)-1)
+/* All usage flags set */
+#define WH_NVM_FLAGS_USAGE_ANY                                              \
+    ((whNvmFlags)(WH_NVM_FLAGS_USAGE_ENCRYPT | WH_NVM_FLAGS_USAGE_DECRYPT | \
+                  WH_NVM_FLAGS_USAGE_SIGN | WH_NVM_FLAGS_USAGE_VERIFY |     \
+                  WH_NVM_FLAGS_USAGE_WRAP |                                 \
+                  WH_NVM_FLAGS_USAGE_DERIVE))
 
 /* HSM NVM metadata structure */
 enum WH_NVM_ENUM {

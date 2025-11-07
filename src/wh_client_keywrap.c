@@ -78,7 +78,7 @@ int wh_Client_KeyWrapResponse(whClientContext*   ctx,
 
     if (group != WH_MESSAGE_GROUP_KEY || action != WH_KEY_KEYWRAP ||
         size < sizeof(*resp) || size > sizeof(*resp) + wrappedKeySz ||
-        resp->wrappedKeySz != wrappedKeySz || resp->cipherType != cipherType) {
+        resp->cipherType != cipherType) {
         return WH_ERROR_ABORTED;
     }
 

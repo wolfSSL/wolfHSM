@@ -55,8 +55,8 @@ int _benchCmacAes(whClientContext* client, whBenchOpContext* ctx, int id,
     uint8_t* out = NULL;
 
     /* cache the key on the HSM */
-    ret = wh_Client_KeyCache(client, 0, (uint8_t*)keyLabel, sizeof(keyLabel),
-                             (uint8_t*)key, keyLen, &keyId);
+    ret = wh_Client_KeyCache(client, WH_NVM_FLAGS_USAGE_ANY, (uint8_t*)keyLabel,
+                             sizeof(keyLabel), (uint8_t*)key, keyLen, &keyId);
     if (ret != 0) {
         WH_BENCH_PRINTF("Failed to wh_Client_KeyCache %d\n", ret);
         return ret;

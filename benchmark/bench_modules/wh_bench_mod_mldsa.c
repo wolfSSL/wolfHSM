@@ -664,14 +664,16 @@ static int _benchMlDsaSign(whClientContext* client, whBenchOpContext* ctx,
     /* Import key to the HSM */
 #if defined(WOLFHSM_CFG_DMA)
     if (devId == WH_DEV_ID_DMA) {
-        ret = wh_Client_MlDsaImportKeyDma(client, &key, &keyId, 0,
+        ret = wh_Client_MlDsaImportKeyDma(client, &key, &keyId,
+                                          WH_NVM_FLAGS_USAGE_ANY,
                                           strlen(keyLabel), (uint8_t*)keyLabel);
     }
     else
 #endif /* !(WOLFHSM_CFG_DMA) */
     {
-        ret = wh_Client_MlDsaImportKey(client, &key, &keyId, 0,
-                                       strlen(keyLabel), (uint8_t*)keyLabel);
+        ret = wh_Client_MlDsaImportKey(client, &key, &keyId,
+                                       WH_NVM_FLAGS_USAGE_ANY, strlen(keyLabel),
+                                       (uint8_t*)keyLabel);
     }
     if (ret != 0) {
         WH_BENCH_PRINTF("Failed to cache key %d\n", ret);
@@ -812,14 +814,16 @@ static int _benchMlDsaVerify(whClientContext* client, whBenchOpContext* ctx,
 /* Import key to the HSM */
 #if defined(WOLFHSM_CFG_DMA)
     if (devId == WH_DEV_ID_DMA) {
-        ret = wh_Client_MlDsaImportKeyDma(client, &key, &keyId, 0,
+        ret = wh_Client_MlDsaImportKeyDma(client, &key, &keyId,
+                                          WH_NVM_FLAGS_USAGE_ANY,
                                           strlen(keyLabel), (uint8_t*)keyLabel);
     }
     else
 #endif /* !(WOLFHSM_CFG_DMA) */
     {
-        ret = wh_Client_MlDsaImportKey(client, &key, &keyId, 0,
-                                       strlen(keyLabel), (uint8_t*)keyLabel);
+        ret = wh_Client_MlDsaImportKey(client, &key, &keyId,
+                                       WH_NVM_FLAGS_USAGE_ANY, strlen(keyLabel),
+                                       (uint8_t*)keyLabel);
     }
     if (ret != 0) {
         WH_BENCH_PRINTF("Failed to cache key %d\n", ret);

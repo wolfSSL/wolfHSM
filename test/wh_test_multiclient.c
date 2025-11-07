@@ -538,8 +538,8 @@ static int _testGlobalKeyWrapExport(whClientContext* client1,
 
     /* Client 1 caches a global wrapping key */
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyCacheRequest_ex(
-        client1, 0, (uint8_t*)"WrapKey45", sizeof("WrapKey45"), wrapKey,
-        sizeof(wrapKey), serverKeyId));
+        client1, WH_NVM_FLAGS_USAGE_WRAP, (uint8_t*)"WrapKey45",
+        sizeof("WrapKey45"), wrapKey, sizeof(wrapKey), serverKeyId));
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyCacheResponse(client1, &serverKeyId));
 
@@ -607,16 +607,15 @@ static int _testGlobalKeyUnwrapCache(whClientContext* client1,
 
     /* Client 1 caches a global wrapping key */
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyCacheRequest_ex(
-        client1, 0, (uint8_t*)"UnwrapKey50", sizeof("UnwrapKey50"), wrapKey,
-        sizeof(wrapKey), serverKeyId));
+        client1, WH_NVM_FLAGS_USAGE_WRAP, (uint8_t*)"UnwrapKey50",
+        sizeof("UnwrapKey50"), wrapKey, sizeof(wrapKey), serverKeyId));
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyCacheResponse(client1, &serverKeyId));
 
     /* Client 1 wraps a global key */
     serverKeyId = WH_CLIENT_KEYID_MAKE_GLOBAL(DUMMY_KEYID_1);
-    /* key-TODO: client-facing helper macro? */
     meta.id =
-        WH_MAKE_KEYID(WH_KEYTYPE_WRAPPED, WH_KEYUSER_GLOBAL, DUMMY_KEYID_2);
+        WH_CLIENT_KEYID_MAKE_WRAPPED_META(WH_KEYUSER_GLOBAL, DUMMY_KEYID_2);
     meta.len    = sizeof(plainKey);
 
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyWrapRequest(client1, WC_CIPHER_AES_GCM,
@@ -691,8 +690,8 @@ static int _testWrappedKey_GlobalWrap_GlobalKey_Positive(
 
     /* Client 1 caches a global wrapping key */
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyCacheRequest_ex(
-        client1, 0, (uint8_t*)"WrapKey_7a", sizeof("WrapKey_7a"), wrapKey,
-        sizeof(wrapKey), serverKeyId));
+        client1, WH_NVM_FLAGS_USAGE_WRAP, (uint8_t*)"WrapKey_7a",
+        sizeof("WrapKey_7a"), wrapKey, sizeof(wrapKey), serverKeyId));
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyCacheResponse(client1, &serverKeyId));
 
@@ -755,8 +754,8 @@ static int _testWrappedKey_GlobalWrap_GlobalKey_NonExportable(
 
     /* Client 1 caches a global wrapping key */
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyCacheRequest_ex(
-        client1, 0, (uint8_t*)"WrapKey_7b", sizeof("WrapKey_7b"), wrapKey,
-        sizeof(wrapKey), serverKeyId));
+        client1, WH_NVM_FLAGS_USAGE_WRAP, (uint8_t*)"WrapKey_7b",
+        sizeof("WrapKey_7b"), wrapKey, sizeof(wrapKey), serverKeyId));
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyCacheResponse(client1, &serverKeyId));
 
@@ -820,8 +819,8 @@ static int _testWrappedKey_GlobalWrap_LocalKey_OwnerExport(
 
     /* Client 1 caches a global wrapping key */
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyCacheRequest_ex(
-        client1, 0, (uint8_t*)"WrapKey_8a", sizeof("WrapKey_8a"), wrapKey,
-        sizeof(wrapKey), serverKeyId));
+        client1, WH_NVM_FLAGS_USAGE_WRAP, (uint8_t*)"WrapKey_8a",
+        sizeof("WrapKey_8a"), wrapKey, sizeof(wrapKey), serverKeyId));
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyCacheResponse(client1, &serverKeyId));
 
@@ -887,8 +886,8 @@ static int _testWrappedKey_GlobalWrap_LocalKey_NonOwnerFails(
 
     /* Client 1 caches a global wrapping key */
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyCacheRequest_ex(
-        client1, 0, (uint8_t*)"WrapKey_8b", sizeof("WrapKey_8b"), wrapKey,
-        sizeof(wrapKey), serverKeyId));
+        client1, WH_NVM_FLAGS_USAGE_WRAP, (uint8_t*)"WrapKey_8b",
+        sizeof("WrapKey_8b"), wrapKey, sizeof(wrapKey), serverKeyId));
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyCacheResponse(client1, &serverKeyId));
 
@@ -961,8 +960,8 @@ static int _testWrappedKey_LocalWrap_LocalKey_SameOwner(
 
     /* Client 1 caches a LOCAL wrapping key */
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyCacheRequest_ex(
-        client1, 0, (uint8_t*)"WrapKey_9a", sizeof("WrapKey_9a"), wrapKey,
-        sizeof(wrapKey), serverKeyId));
+        client1, WH_NVM_FLAGS_USAGE_WRAP, (uint8_t*)"WrapKey_9a",
+        sizeof("WrapKey_9a"), wrapKey, sizeof(wrapKey), serverKeyId));
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyCacheResponse(client1, &serverKeyId));
 
@@ -1030,8 +1029,8 @@ static int _testWrappedKey_LocalWrap_LocalKey_NoAccessWithoutWrapKey(
 
     /* Client 1 caches a LOCAL wrapping key */
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyCacheRequest_ex(
-        client1, 0, (uint8_t*)"WrapKey_9b", sizeof("WrapKey_9b"), wrapKey,
-        sizeof(wrapKey), serverKeyId));
+        client1, WH_NVM_FLAGS_USAGE_WRAP, (uint8_t*)"WrapKey_9b",
+        sizeof("WrapKey_9b"), wrapKey, sizeof(wrapKey), serverKeyId));
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyCacheResponse(client1, &serverKeyId));
 
@@ -1101,8 +1100,8 @@ static int _testWrappedKey_LocalWrap_GlobalKey_AnyCacheGlobal(
 
     /* Client 1 caches a LOCAL wrapping key */
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyCacheRequest_ex(
-        client1, 0, (uint8_t*)"WrapKey_10a", sizeof("WrapKey_10a"), wrapKey,
-        sizeof(wrapKey), serverKeyId));
+        client1, WH_NVM_FLAGS_USAGE_WRAP, (uint8_t*)"WrapKey_10a",
+        sizeof("WrapKey_10a"), wrapKey, sizeof(wrapKey), serverKeyId));
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyCacheResponse(client1, &serverKeyId));
 
@@ -1177,8 +1176,8 @@ static int _testWrappedKey_LocalWrap_GlobalKey_NonOwnerNoWrapKey(
 
     /* Client 1 caches a LOCAL wrapping key */
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyCacheRequest_ex(
-        client1, 0, (uint8_t*)"WrapKey_10b", sizeof("WrapKey_10b"), wrapKey,
-        sizeof(wrapKey), serverKeyId));
+        client1, WH_NVM_FLAGS_USAGE_WRAP, (uint8_t*)"WrapKey_10b",
+        sizeof("WrapKey_10b"), wrapKey, sizeof(wrapKey), serverKeyId));
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyCacheResponse(client1, &serverKeyId));
 

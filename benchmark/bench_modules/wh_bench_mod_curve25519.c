@@ -141,16 +141,18 @@ int wh_Bench_Mod_Curve25519SharedSecret(whClientContext*  client,
     char           keyLabel[]        = "bench-key";
 
     /* Cache Alice's key in the HSM */
-    ret = wh_Client_KeyCache(client, 0, (uint8_t*)keyLabel, strlen(keyLabel),
-                             key1_der, sizeof(key1_der), &keyIdAlice);
+    ret = wh_Client_KeyCache(client, WH_NVM_FLAGS_USAGE_ANY, (uint8_t*)keyLabel,
+                             strlen(keyLabel), key1_der, sizeof(key1_der),
+                             &keyIdAlice);
     if (ret != 0) {
         WH_BENCH_PRINTF("Failed to cache Alice's key %d\n", ret);
         return ret;
     }
 
     /* Cache Bob's key in the HSM */
-    ret = wh_Client_KeyCache(client, 0, (uint8_t*)keyLabel, strlen(keyLabel),
-                             key2_der, sizeof(key2_der), &keyIdBob);
+    ret = wh_Client_KeyCache(client, WH_NVM_FLAGS_USAGE_ANY, (uint8_t*)keyLabel,
+                             strlen(keyLabel), key2_der, sizeof(key2_der),
+                             &keyIdBob);
     if (ret != 0) {
         WH_BENCH_PRINTF("Failed to cache Bob's key %d\n", ret);
         wh_Client_KeyEvict(client, keyIdAlice);
