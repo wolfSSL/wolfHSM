@@ -730,7 +730,7 @@ int wh_MessageCrypto_TranslateMlDsaVerifyResponse(
  */
 
 /* DMA Buffer translation */
-int wh_MessageCrypto_TranslateDmaBuffer(uint16_t                         magic,
+static int wh_MessageCrypto_TranslateDmaBuffer(uint16_t                         magic,
                                         const whMessageCrypto_DmaBuffer* src,
                                         whMessageCrypto_DmaBuffer*       dest)
 {
@@ -743,13 +743,17 @@ int wh_MessageCrypto_TranslateDmaBuffer(uint16_t                         magic,
 }
 
 /* DMA Address status translation */
-int wh_MessageCrypto_TranslateDmaAddrStatus(
+static int wh_MessageCrypto_TranslateDmaAddrStatus(
     uint16_t magic, const whMessageCrypto_DmaAddrStatus* src,
     whMessageCrypto_DmaAddrStatus* dest)
 {
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
     return wh_MessageCrypto_TranslateDmaBuffer(magic, &src->badAddr,
                                                &dest->badAddr);
 }
+
 /* SHA224 DMA Request translation */
 int wh_MessageCrypto_TranslateSha2DmaRequest(
     uint16_t magic, const whMessageCrypto_Sha2DmaRequest* src,

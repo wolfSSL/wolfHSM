@@ -41,7 +41,7 @@ int wh_MessageComm_TranslateInitRequest(uint16_t magic,
             (dest == NULL)  ) {
         return WH_ERROR_BADARGS;
     }
-    dest->client_id = wh_Translate32(magic, src->client_id);
+    WH_T32(magic, dest, src, client_id);
     return 0;
 }
 
@@ -53,8 +53,8 @@ int wh_MessageComm_TranslateInitResponse(uint16_t magic,
             (dest == NULL)  ) {
         return WH_ERROR_BADARGS;
     }
-    dest->client_id = wh_Translate32(magic, src->client_id);
-    dest->server_id = wh_Translate32(magic, src->server_id);
+    WH_T32(magic, dest, src, client_id);
+    WH_T32(magic, dest, src, server_id);
     return 0;
 }
 
@@ -68,18 +68,18 @@ int wh_MessageComm_TranslateInfoResponse(uint16_t magic,
     }
     memcpy(dest->version, src->version, sizeof(dest->version));
     memcpy(dest->build, src->build, sizeof(dest->build));
-    dest->cfg_comm_data_len = wh_Translate32(magic, src->cfg_comm_data_len);
-    dest->cfg_nvm_object_count = wh_Translate32(magic, src->cfg_nvm_object_count);
-    dest->cfg_server_keycache_count = wh_Translate32(magic, src->cfg_server_keycache_count);
-    dest->cfg_server_keycache_bufsize = wh_Translate32(magic, src->cfg_server_keycache_bufsize);
-    dest->cfg_server_keycache_bigcount = wh_Translate32(magic, src->cfg_server_keycache_bigcount);
-    dest->cfg_server_keycache_bigbufsize = wh_Translate32(magic, src->cfg_server_keycache_bigbufsize);
-    dest->cfg_server_customcb_count = wh_Translate32(magic, src->cfg_server_customcb_count);
-    dest->cfg_server_dmaaddr_count = wh_Translate32(magic, src->cfg_server_dmaaddr_count);
-    dest->debug_state = wh_Translate32(magic, src->debug_state);
-    dest->boot_state = wh_Translate32(magic, src->boot_state);
-    dest->lifecycle_state = wh_Translate32(magic, src->lifecycle_state);
-    dest->nvm_state = wh_Translate32(magic, src->nvm_state);
+    WH_T32(magic, dest, src, cfg_comm_data_len);
+    WH_T32(magic, dest, src, cfg_nvm_object_count);
+    WH_T32(magic, dest, src, cfg_server_keycache_count);
+    WH_T32(magic, dest, src, cfg_server_keycache_bufsize);
+    WH_T32(magic, dest, src, cfg_server_keycache_bigcount);
+    WH_T32(magic, dest, src, cfg_server_keycache_bigbufsize);
+    WH_T32(magic, dest, src, cfg_server_customcb_count);
+    WH_T32(magic, dest, src, cfg_server_dmaaddr_count);
+    WH_T32(magic, dest, src, debug_state);
+    WH_T32(magic, dest, src, boot_state);
+    WH_T32(magic, dest, src, lifecycle_state);
+    WH_T32(magic, dest, src, nvm_state);
     return 0;
 }
 
