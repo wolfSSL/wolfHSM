@@ -74,6 +74,11 @@ int wh_Server_Init(whServerContext* server, whServerConfig* config)
     }
 
     memset(server, 0, sizeof(*server));
+    if (config->comm == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    server->comm = config->comm;
+
     server->nvm = config->nvm;
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
