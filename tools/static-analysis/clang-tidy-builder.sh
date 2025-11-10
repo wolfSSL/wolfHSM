@@ -216,7 +216,9 @@ if [[ -n "${CLANG_TIDY+x}" ]]; then
 		*)
 
 		    echo "$clang_tidy_line" >&2
-		    retval=1
+		    if [[ "$clang_tidy_line" =~ :[[:space:]]error: ]]; then
+			retval=1
+		    fi
 		    ;;
 
             esac

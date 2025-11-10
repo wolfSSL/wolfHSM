@@ -155,6 +155,7 @@ echo ""
 echo "Processing results..."
 
 # Extract errors and warnings (excluding notes)
+rm -f "$OUTPUT_DIR/clang_tidy_summary.txt"
 grep -E "^[^:]+\.(c|h):[0-9]+:[0-9]+: (error|warning):" "$OUTPUT_DIR/clang_tidy_output.txt" > "$OUTPUT_DIR/clang_tidy_summary.txt" 2>/dev/null || true
 
 # Count issues
