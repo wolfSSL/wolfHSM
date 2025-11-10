@@ -980,8 +980,7 @@ static int _HandleEccSign(whServerContext* ctx, uint16_t magic,
     }
 
     /* Validate variable-length fields fit within inSize */
-    uint32_t required_size = sizeof(whMessageCrypto_EccSignRequest) + req.sz;
-    if (inSize < required_size) {
+    if (req.sz > inSize - sizeof(whMessageCrypto_EccSignRequest)) {
         return WH_ERROR_BADARGS;
     }
 
@@ -1071,9 +1070,12 @@ static int _HandleEccVerify(whServerContext* ctx, uint16_t magic,
     }
 
     /* Validate variable-length fields fit within inSize */
-    uint32_t required_size =
-        sizeof(whMessageCrypto_EccVerifyRequest) + req.sigSz + req.hashSz;
-    if (inSize < required_size) {
+    uint32_t available = inSize - sizeof(whMessageCrypto_EccVerifyRequest);
+    if (req.sigSz > available) {
+        return WH_ERROR_BADARGS;
+    }
+    available -= req.sigSz;
+    if (req.hashSz > available) {
         return WH_ERROR_BADARGS;
     }
 
@@ -2065,9 +2067,16 @@ static int _HandleAesCbc(whServerContext* ctx, uint16_t magic, const void* crypt
     uint32_t enc     = req.enc;
     uint32_t key_len = req.keyLen;
     uint32_t len     = req.sz;
-    uint32_t required_size =
-        sizeof(whMessageCrypto_AesCbcRequest) + len + key_len + AES_BLOCK_SIZE;
-    if (inSize < required_size) {
+    uint32_t available = inSize - sizeof(whMessageCrypto_AesCbcRequest);
+    if (len > available) {
+        return WH_ERROR_BADARGS;
+    }
+    available -= len;
+    if (key_len > available) {
+        return WH_ERROR_BADARGS;
+    }
+    available -= key_len;
+    if (AES_BLOCK_SIZE > available) {
         return WH_ERROR_BADARGS;
     }
 
@@ -2178,10 +2187,24 @@ static int _HandleAesGcm(whServerContext* ctx, uint16_t magic,
     }
 
     /* Validate variable-length fields fit within inSize */
-    uint32_t required_size = sizeof(whMessageCrypto_AesGcmRequest) + req.sz +
-                             req.keyLen + req.ivSz + req.authInSz +
-                             ((req.enc == 0) ? req.authTagSz : 0);
-    if (inSize < required_size) {
+    uint32_t available = inSize - sizeof(whMessageCrypto_AesGcmRequest);
+    if (req.sz > available) {
+        return WH_ERROR_BADARGS;
+    }
+    available -= req.sz;
+    if (req.keyLen > available) {
+        return WH_ERROR_BADARGS;
+    }
+    available -= req.keyLen;
+    if (req.ivSz > available) {
+        return WH_ERROR_BADARGS;
+    }
+    available -= req.ivSz;
+    if (req.authInSz > available) {
+        return WH_ERROR_BADARGS;
+    }
+    available -= req.authInSz;
+    if (req.enc == 0 && req.authTagSz > available) {
         return WH_ERROR_BADARGS;
     }
 
@@ -2523,9 +2546,12 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
     }
 
     /* Validate variable-length fields fit within inSize */
-    uint32_t required_size =
-        sizeof(whMessageCrypto_CmacRequest) + req.inSz + req.keySz;
-    if (inSize < required_size) {
+    uint32_t available = inSize - sizeof(whMessageCrypto_CmacRequest);
+    if (req.inSz > available) {
+        return WH_ERROR_BADARGS;
+    }
+    available -= req.inSz;
+    if (req.keySz > available) {
         return WH_ERROR_BADARGS;
     }
 

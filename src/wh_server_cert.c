@@ -401,7 +401,7 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
                 magic, (whMessageCert_AddTrustedRequest*)req_packet, &req);
 
             /* Validate certificate data fits within request */
-            if (req_size < sizeof(req) + req.cert_len) {
+            if (req.cert_len > req_size - sizeof(req)) {
                 resp.rc = WH_ERROR_BADARGS;
                 wh_MessageCert_TranslateSimpleResponse(
                     magic, &resp, (whMessageCert_SimpleResponse*)resp_packet);
