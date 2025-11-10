@@ -370,11 +370,14 @@ static int _HandleRsaFunction( whServerContext* ctx, uint16_t magic,
                       const void* cryptoDataIn, uint16_t inSize,
                       void* cryptoDataOut, uint16_t* outSize)
 {
-    (void)inSize;
-
     int                        ret;
     RsaKey                     rsa[1];
     whMessageCrypto_RsaRequest req;
+
+    /* Validate minimum size */
+    if (inSize < sizeof(whMessageCrypto_RsaRequest)) {
+        return WH_ERROR_BADARGS;
+    }
 
     /* Translate request */
     ret = wh_MessageCrypto_TranslateRsaRequest(
@@ -391,6 +394,13 @@ static int _HandleRsaFunction( whServerContext* ctx, uint16_t magic,
           WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
     word32 in_len  = (word32)(req.inLen);
     word32 out_len = (word32)(req.outLen);
+
+    /* Ensure input data fits within request payload */
+    uint32_t available = inSize - sizeof(whMessageCrypto_RsaRequest);
+    if (in_len > available) {
+        return WH_ERROR_BADARGS;
+    }
+
     /* in and out are after the fixed size fields */
     byte* in  = (uint8_t*)(cryptoDataIn + sizeof(whMessageCrypto_RsaRequest));
     byte* out = (uint8_t*)(cryptoDataOut + sizeof(whMessageCrypto_RsaResponse));
@@ -953,17 +963,26 @@ static int _HandleEccSign(whServerContext* ctx, uint16_t magic,
                           const void* cryptoDataIn, uint16_t inSize,
                           void* cryptoDataOut, uint16_t* outSize)
 {
-    (void)inSize;
-
     int                            ret;
     ecc_key                        key[1];
     whMessageCrypto_EccSignRequest req;
+
+    /* Validate minimum size */
+    if (inSize < sizeof(whMessageCrypto_EccSignRequest)) {
+        return WH_ERROR_BADARGS;
+    }
 
     /* Translate request */
     ret = wh_MessageCrypto_TranslateEccSignRequest(
         magic, (const whMessageCrypto_EccSignRequest*)cryptoDataIn, &req);
     if (ret != 0) {
         return ret;
+    }
+
+    /* Validate variable-length fields fit within inSize */
+    uint32_t required_size = sizeof(whMessageCrypto_EccSignRequest) + req.sz;
+    if (inSize < required_size) {
+        return WH_ERROR_BADARGS;
     }
 
     /* Extract parameters from translated request */
@@ -1034,18 +1053,28 @@ static int _HandleEccVerify(whServerContext* ctx, uint16_t magic,
                             const void* cryptoDataIn, uint16_t inSize,
                             void* cryptoDataOut, uint16_t* outSize)
 {
-    (void)inSize;
-
     int                               ret;
     ecc_key                           key[1];
     whMessageCrypto_EccVerifyRequest  req;
     whMessageCrypto_EccVerifyResponse res;
+
+    /* Validate minimum size */
+    if (inSize < sizeof(whMessageCrypto_EccVerifyRequest)) {
+        return WH_ERROR_BADARGS;
+    }
 
     /* Translate request */
     ret = wh_MessageCrypto_TranslateEccVerifyRequest(
         magic, (const whMessageCrypto_EccVerifyRequest*)cryptoDataIn, &req);
     if (ret != 0) {
         return ret;
+    }
+
+    /* Validate variable-length fields fit within inSize */
+    uint32_t required_size =
+        sizeof(whMessageCrypto_EccVerifyRequest) + req.sigSz + req.hashSz;
+    if (inSize < required_size) {
+        return WH_ERROR_BADARGS;
     }
 
     /* Extract parameters from translated request */
@@ -1301,11 +1330,14 @@ static int _HandleHkdf(whServerContext* ctx, uint16_t magic,
                        const void* cryptoDataIn, uint16_t inSize,
                        void* cryptoDataOut, uint16_t* outSize)
 {
-    (void)inSize;
-
     int                          ret = WH_ERROR_OK;
     whMessageCrypto_HkdfRequest  req;
     whMessageCrypto_HkdfResponse res;
+
+    /* Validate minimum size */
+    if (inSize < sizeof(whMessageCrypto_HkdfRequest)) {
+        return WH_ERROR_BADARGS;
+    }
 
     /* Translate request */
     ret = wh_MessageCrypto_TranslateHkdfRequest(
@@ -1327,6 +1359,18 @@ static int _HandleHkdf(whServerContext* ctx, uint16_t magic,
     whNvmFlags flags      = req.flags;
     uint8_t*   label      = req.label;
     uint16_t   label_size = WH_NVM_LABEL_LEN;
+
+    /* Validate variable-length fields fit within input buffer */
+    uint32_t available = inSize - sizeof(whMessageCrypto_HkdfRequest);
+    if (inKeySz > available) {
+        return WH_ERROR_BADARGS;
+    }
+    if (saltSz > (available - inKeySz)) {
+        return WH_ERROR_BADARGS;
+    }
+    if (infoSz > (available - inKeySz - saltSz)) {
+        return WH_ERROR_BADARGS;
+    }
 
     /* Get pointers to variable-length input data */
     const uint8_t* inKey =
@@ -1431,13 +1475,16 @@ static int _HandleCmacKdf(whServerContext* ctx, uint16_t magic,
                           const void* cryptoDataIn, uint16_t inSize,
                           void* cryptoDataOut, uint16_t* outSize)
 {
-    (void)inSize;
-
     int                             ret = WH_ERROR_OK;
     whMessageCrypto_CmacKdfRequest  req;
     whMessageCrypto_CmacKdfResponse res;
 
     memset(&res, 0, sizeof(res));
+
+    /* Validate minimum size */
+    if (inSize < sizeof(whMessageCrypto_CmacKdfRequest)) {
+        return WH_ERROR_BADARGS;
+    }
 
     ret = wh_MessageCrypto_TranslateCmacKdfRequest(
         magic, (const whMessageCrypto_CmacKdfRequest*)cryptoDataIn, &req);
@@ -1458,6 +1505,18 @@ static int _HandleCmacKdf(whServerContext* ctx, uint16_t magic,
     whNvmFlags flags      = (whNvmFlags)req.flags;
     uint8_t*   label      = req.label;
     uint16_t   label_size = WH_NVM_LABEL_LEN;
+
+    /* Validate variable-length fields fit within input buffer */
+    uint32_t available = inSize - sizeof(whMessageCrypto_CmacKdfRequest);
+    if (saltSz > available) {
+        return WH_ERROR_BADARGS;
+    }
+    if (zSz > (available - saltSz)) {
+        return WH_ERROR_BADARGS;
+    }
+    if (fixedInfoSz > (available - saltSz - zSz)) {
+        return WH_ERROR_BADARGS;
+    }
 
     const uint8_t* salt =
         (const uint8_t*)cryptoDataIn + sizeof(whMessageCrypto_CmacKdfRequest);
@@ -1983,14 +2042,17 @@ static int _HandleAesCbc(whServerContext* ctx, uint16_t magic, const void* crypt
                          uint16_t inSize, void* cryptoDataOut,
                          uint16_t* outSize)
 {
-    (void)inSize;
-
     int                            ret    = 0;
     Aes                            aes[1] = {0};
     whMessageCrypto_AesCbcRequest  req;
     whMessageCrypto_AesCbcResponse res;
     uint8_t*                       cachedKey = NULL;
     whNvmMetadata*                 keyMeta   = NULL;
+
+    /* Validate minimum size */
+    if (inSize < sizeof(whMessageCrypto_AesCbcRequest)) {
+        return WH_ERROR_BADARGS;
+    }
 
     /* Translate request */
     ret = wh_MessageCrypto_TranslateAesCbcRequest(
@@ -1999,12 +2061,13 @@ static int _HandleAesCbc(whServerContext* ctx, uint16_t magic, const void* crypt
         return ret;
     }
 
+    /* Validate variable-length fields fit within inSize */
     uint32_t enc     = req.enc;
     uint32_t key_len = req.keyLen;
     uint32_t len     = req.sz;
-    uint64_t needed_size = sizeof(whMessageCrypto_AesCbcResponse) + len +
-                          key_len + AES_BLOCK_SIZE;
-    if (needed_size > inSize) {
+    uint32_t required_size =
+        sizeof(whMessageCrypto_AesCbcRequest) + len + key_len + AES_BLOCK_SIZE;
+    if (inSize < required_size) {
         return WH_ERROR_BADARGS;
     }
 
@@ -2096,12 +2159,15 @@ static int _HandleAesGcm(whServerContext* ctx, uint16_t magic,
                          const void* cryptoDataIn, uint16_t inSize,
                          void* cryptoDataOut, uint16_t* outSize)
 {
-    (void)inSize;
-
     int            ret       = 0;
     Aes            aes[1]    = {0};
     uint8_t*       cachedKey = NULL;
     whNvmMetadata* keyMeta   = NULL;
+
+    /* Validate minimum size */
+    if (inSize < sizeof(whMessageCrypto_AesGcmRequest)) {
+        return WH_ERROR_BADARGS;
+    }
 
     /* Translate request */
     whMessageCrypto_AesGcmRequest req;
@@ -2109,6 +2175,14 @@ static int _HandleAesGcm(whServerContext* ctx, uint16_t magic,
         magic, (const whMessageCrypto_AesGcmRequest*)cryptoDataIn, &req);
     if (ret != 0) {
         return ret;
+    }
+
+    /* Validate variable-length fields fit within inSize */
+    uint32_t required_size = sizeof(whMessageCrypto_AesGcmRequest) + req.sz +
+                             req.keyLen + req.ivSz + req.authInSz +
+                             ((req.enc == 0) ? req.authTagSz : 0);
+    if (inSize < required_size) {
+        return WH_ERROR_BADARGS;
     }
 
     /* Translate response */
@@ -2433,16 +2507,26 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
                        const void* cryptoDataIn, uint16_t inSize,
                        void* cryptoDataOut, uint16_t* outSize)
 {
-    (void)inSize;
-
     int ret;
     whMessageCrypto_CmacRequest req;
     whMessageCrypto_CmacResponse res;
+
+    /* Validate minimum size */
+    if (inSize < sizeof(whMessageCrypto_CmacRequest)) {
+        return WH_ERROR_BADARGS;
+    }
 
     /* Translate request */
     ret = wh_MessageCrypto_TranslateCmacRequest(magic, cryptoDataIn, &req);
     if (ret != 0) {
         return ret;
+    }
+
+    /* Validate variable-length fields fit within inSize */
+    uint32_t required_size =
+        sizeof(whMessageCrypto_CmacRequest) + req.inSz + req.keySz;
+    if (inSize < required_size) {
+        return WH_ERROR_BADARGS;
     }
 
     uint32_t i;
@@ -2677,12 +2761,15 @@ static int _HandleSha256(whServerContext* ctx, uint16_t magic,
                          const void* cryptoDataIn, uint16_t inSize,
                          void* cryptoDataOut, uint16_t* outSize)
 {
-    (void)inSize;
-
     int                            ret    = 0;
     wc_Sha256                      sha256[1];
     whMessageCrypto_Sha256Request  req;
     whMessageCrypto_Sha2Response   res = {0};
+
+    /* Validate minimum size */
+    if (inSize < sizeof(whMessageCrypto_Sha256Request)) {
+        return WH_ERROR_BADARGS;
+    }
 
     /* Translate the request */
     ret = wh_MessageCrypto_TranslateSha256Request(magic, cryptoDataIn, &req);
@@ -2747,12 +2834,21 @@ static int _HandleSha224(whServerContext* ctx, uint16_t magic,
     wc_Sha224                     sha224[1];
     whMessageCrypto_Sha256Request req;
     whMessageCrypto_Sha2Response  res;
-    (void)inSize;
+
+    /* Validate minimum size */
+    if (inSize < sizeof(whMessageCrypto_Sha256Request)) {
+        return WH_ERROR_BADARGS;
+    }
 
     /* Translate the request */
     ret = wh_MessageCrypto_TranslateSha256Request(magic, cryptoDataIn, &req);
     if (ret != 0) {
         return ret;
+    }
+
+    /* Validate lastBlockLen is reasonable */
+    if (req.isLastBlock && req.lastBlockLen > WC_SHA224_BLOCK_SIZE) {
+        return WH_ERROR_BADARGS;
     }
     ret = wc_InitSha224_ex(sha224, NULL, ctx->crypto->devId);
     if (ret != 0) {
@@ -2812,12 +2908,21 @@ static int _HandleSha384(whServerContext* ctx, uint16_t magic,
     wc_Sha384                     sha384[1];
     whMessageCrypto_Sha512Request req;
     whMessageCrypto_Sha2Response  res;
-    (void)inSize;
+
+    /* Validate minimum size */
+    if (inSize < sizeof(whMessageCrypto_Sha512Request)) {
+        return WH_ERROR_BADARGS;
+    }
 
     /* Translate the request */
     ret = wh_MessageCrypto_TranslateSha512Request(magic, cryptoDataIn, &req);
     if (ret != 0) {
         return ret;
+    }
+
+    /* Validate lastBlockLen is reasonable */
+    if (req.isLastBlock && req.lastBlockLen > WC_SHA384_BLOCK_SIZE) {
+        return WH_ERROR_BADARGS;
     }
 
     /* init sha2 struct with the devid */
@@ -2881,12 +2986,21 @@ static int _HandleSha512(whServerContext* ctx, uint16_t magic,
     whMessageCrypto_Sha512Request req;
     whMessageCrypto_Sha2Response  res;
     int                           hashType = WC_HASH_TYPE_SHA512;
-    (void)inSize;
+
+    /* Validate minimum size */
+    if (inSize < sizeof(whMessageCrypto_Sha512Request)) {
+        return WH_ERROR_BADARGS;
+    }
 
     /* Translate the request */
     ret = wh_MessageCrypto_TranslateSha512Request(magic, cryptoDataIn, &req);
     if (ret != 0) {
         return ret;
+    }
+
+    /* Validate lastBlockLen is reasonable */
+    if (req.isLastBlock && req.lastBlockLen > WC_SHA512_BLOCK_SIZE) {
+        return WH_ERROR_BADARGS;
     }
     /* init sha2 struct with devid */
     hashType = req.resumeState.hashType;
@@ -3374,6 +3488,11 @@ int wh_Server_HandleCryptoRequest(whServerContext* ctx, uint16_t magic,
 
     if ((ctx == NULL) || (ctx->crypto == NULL) || (req_packet == NULL) ||
         (resp_packet == NULL) || (out_resp_size == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Validate req_size to prevent integer underflow */
+    if (req_size < sizeof(whMessageCrypto_GenericResponseHeader)) {
         return WH_ERROR_BADARGS;
     }
 
@@ -5016,6 +5135,11 @@ int wh_Server_HandleCryptoDmaRequest(whServerContext* ctx, uint16_t magic,
 
     if ((ctx == NULL) || (ctx->crypto == NULL) || (req_packet == NULL) ||
         (resp_packet == NULL) || (out_resp_size == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Validate req_size to prevent integer underflow */
+    if (req_size < sizeof(whMessageCrypto_GenericResponseHeader)) {
         return WH_ERROR_BADARGS;
     }
 
