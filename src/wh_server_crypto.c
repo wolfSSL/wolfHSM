@@ -269,12 +269,13 @@ static int _HandleRsaKeyGen(whServerContext* ctx, uint16_t magic,
                          const void* cryptoDataIn, uint16_t inSize,
                          void* cryptoDataOut, uint16_t* outSize)
 {
-    (void)inSize;
-
     int    ret    = 0;
     RsaKey rsa[1] = {0};
     whMessageCrypto_RsaKeyGenRequest req;
     whMessageCrypto_RsaKeyGenResponse res;
+    if (inSize < sizeof(whMessageCrypto_RsaKeyGenRequest)) {
+        return WH_ERROR_BADARGS;
+    }
 
     /* Translate request */
     ret = wh_MessageCrypto_TranslateRsaKeyGenRequest(
@@ -507,12 +508,15 @@ static int _HandleRsaGetSize(whServerContext* ctx, uint16_t magic,
                              const void* cryptoDataIn, uint16_t inSize,
                              void* cryptoDataOut, uint16_t* outSize)
 {
-    (void)inSize;
-
     int                                ret;
     RsaKey                             rsa[1];
     whMessageCrypto_RsaGetSizeRequest  req;
     whMessageCrypto_RsaGetSizeResponse res;
+    int                                key_size = 0;
+
+    if (inSize < sizeof(whMessageCrypto_RsaGetSizeRequest)) {
+        return WH_ERROR_BADARGS;
+    }
 
     /* Translate request */
     ret = wh_MessageCrypto_TranslateRsaGetSizeRequest(
@@ -526,8 +530,6 @@ static int _HandleRsaGetSize(whServerContext* ctx, uint16_t magic,
         WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
     uint32_t options = req.options;
     int      evict = !!(options & WH_MESSAGE_CRYPTO_RSA_GET_SIZE_OPTIONS_EVICT);
-
-    int key_size = 0;
 
     /* init rsa key */
     ret = wc_InitRsaKey_ex(rsa, NULL, ctx->crypto->devId);
@@ -1205,11 +1207,13 @@ static int _HandleRng(whServerContext* ctx, uint16_t magic,
                       const void* cryptoDataIn, uint16_t inSize,
                       void* cryptoDataOut, uint16_t* outSize)
 {
-    (void)inSize;
-
     int                         ret = WH_ERROR_OK;
     whMessageCrypto_RngRequest  req;
     whMessageCrypto_RngResponse res;
+
+    if (inSize < sizeof(whMessageCrypto_RngRequest)) {
+        return WH_ERROR_BADARGS;
+    }
 
     /* Translate request */
     ret = wh_MessageCrypto_TranslateRngRequest(
@@ -1811,13 +1815,17 @@ static int _HandleAesCtr(whServerContext* ctx, uint16_t magic,
                          const void* cryptoDataIn, uint16_t inSize,
                          void* cryptoDataOut, uint16_t* outSize)
 {
-    (void)inSize;
     int                            ret    = 0;
     Aes                            aes[1] = {0};
     whMessageCrypto_AesCtrRequest  req;
     whMessageCrypto_AesCtrResponse res;
     uint8_t*                       cachedKey = NULL;
     whNvmMetadata*                 keyMeta   = NULL;
+
+    if (inSize < sizeof(whMessageCrypto_AesCtrRequest)) {
+        return WH_ERROR_BADARGS;
+    }
+
     /* Translate request */
     ret = wh_MessageCrypto_TranslateAesCtrRequest(
         magic, (const whMessageCrypto_AesCtrRequest*)cryptoDataIn, &req);
@@ -1931,14 +1939,16 @@ static int _HandleAesEcb(whServerContext* ctx, uint16_t magic,
                          const void* cryptoDataIn, uint16_t inSize,
                          void* cryptoDataOut, uint16_t* outSize)
 {
-    (void)inSize;
-
     int                            ret    = 0;
     Aes                            aes[1] = {0};
     whMessageCrypto_AesEcbRequest  req;
     whMessageCrypto_AesEcbResponse res;
     uint8_t*                       cachedKey = NULL;
     whNvmMetadata*                 keyMeta   = NULL;
+
+    if (inSize < sizeof(whMessageCrypto_AesEcbRequest)) {
+        return WH_ERROR_BADARGS;
+    }
 
     /* Translate request */
     ret = wh_MessageCrypto_TranslateAesEcbRequest(
@@ -2366,8 +2376,11 @@ static int _HandleAesGcmDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
     whKeyId  keyId;
     uint32_t keyLen;
 
-    (void)inSize;
     (void)seq;
+
+    if (inSize < sizeof(whMessageCrypto_AesDmaRequest)) {
+        return WH_ERROR_BADARGS;
+    }
 
     ret = wh_MessageCrypto_TranslateAesDmaRequest(
         magic, (whMessageCrypto_AesDmaRequest*)cryptoDataIn, &req);
@@ -3820,13 +3833,16 @@ static int _HandleSha256Dma(whServerContext* ctx, uint16_t magic, uint16_t seq,
                             void* cryptoDataOut, uint16_t* outSize)
 {
     (void)seq;
-    (void)inSize;
 
     int                             ret = 0;
     whMessageCrypto_Sha2DmaRequest  req;
     whMessageCrypto_Sha2DmaResponse res;
     wc_Sha256                       sha256[1];
     int                             clientDevId;
+
+    if (inSize < sizeof(whMessageCrypto_Sha2DmaRequest)) {
+        return WH_ERROR_BADARGS;
+    }
 
     /* Translate the request */
     ret = wh_MessageCrypto_TranslateSha2DmaRequest(
@@ -3943,12 +3959,15 @@ static int _HandleSha224Dma(whServerContext* ctx, uint16_t magic, uint16_t seq,
                             void* cryptoDataOut, uint16_t* outSize)
 {
     (void)seq;
-    (void)inSize;
     int                             ret = 0;
     whMessageCrypto_Sha2DmaRequest  req;
     whMessageCrypto_Sha2DmaResponse res;
     wc_Sha224                       sha224[1];
     int                             clientDevId;
+
+    if (inSize < sizeof(whMessageCrypto_Sha2DmaRequest)) {
+        return WH_ERROR_BADARGS;
+    }
 
     /* Translate the request */
     ret = wh_MessageCrypto_TranslateSha2DmaRequest(
@@ -4065,12 +4084,15 @@ static int _HandleSha384Dma(whServerContext* ctx, uint16_t magic, uint16_t seq,
                             void* cryptoDataOut, uint16_t* outSize)
 {
     (void)seq;
-    (void)inSize;
     int                             ret = 0;
     whMessageCrypto_Sha2DmaRequest  req;
     whMessageCrypto_Sha2DmaResponse res;
     wc_Sha384                       sha384[1];
     int                             clientDevId;
+
+    if (inSize < sizeof(whMessageCrypto_Sha2DmaRequest)) {
+        return WH_ERROR_BADARGS;
+    }
 
     /* Translate the request */
     ret = wh_MessageCrypto_TranslateSha2DmaRequest(
@@ -4187,13 +4209,16 @@ static int _HandleSha512Dma(whServerContext* ctx, uint16_t magic, uint16_t seq,
                             void* cryptoDataOut, uint16_t* outSize)
 {
     (void)seq;
-    (void)inSize;
     int                             ret = 0;
     whMessageCrypto_Sha2DmaRequest  req;
     whMessageCrypto_Sha2DmaResponse res;
     wc_Sha512                       sha512[1];
     int                             clientDevId;
     int                             hashType = WC_HASH_TYPE_SHA512;
+
+    if (inSize < sizeof(whMessageCrypto_Sha2DmaRequest)) {
+        return WH_ERROR_BADARGS;
+    }
 
     /* Translate the request */
     ret = wh_MessageCrypto_TranslateSha2DmaRequest(
@@ -4331,8 +4356,6 @@ static int _HandleMlDsaKeyGenDma(whServerContext* ctx, uint16_t magic,
     (void)outSize;
     return WH_ERROR_NOHANDLER;
 #else
-    (void)inSize;
-
     int      ret = WH_ERROR_OK;
     MlDsaKey key[1];
     void*    clientOutAddr = NULL;
@@ -4340,6 +4363,10 @@ static int _HandleMlDsaKeyGenDma(whServerContext* ctx, uint16_t magic,
 
     whMessageCrypto_MlDsaKeyGenDmaRequest req;
     whMessageCrypto_MlDsaKeyGenDmaResponse res;
+
+    if (inSize < sizeof(whMessageCrypto_MlDsaKeyGenDmaRequest)) {
+        return WH_ERROR_BADARGS;
+    }
 
     /* Translate the request */
     ret = wh_MessageCrypto_TranslateMlDsaKeyGenDmaRequest(
@@ -4455,8 +4482,6 @@ static int _HandleMlDsaSignDma(whServerContext* ctx, uint16_t magic,
     (void)outSize;
     return WH_ERROR_NOHANDLER;
 #else
-    (void)inSize;
-
     int      ret = 0;
     MlDsaKey key[1];
     void*    msgAddr = NULL;
@@ -4464,6 +4489,10 @@ static int _HandleMlDsaSignDma(whServerContext* ctx, uint16_t magic,
 
     whMessageCrypto_MlDsaSignDmaRequest req;
     whMessageCrypto_MlDsaSignDmaResponse res;
+
+    if (inSize < sizeof(whMessageCrypto_MlDsaSignDmaRequest)) {
+        return WH_ERROR_BADARGS;
+    }
 
     /* Translate the request */
     ret = wh_MessageCrypto_TranslateMlDsaSignDmaRequest(
@@ -4564,8 +4593,6 @@ static int _HandleMlDsaVerifyDma(whServerContext* ctx, uint16_t magic,
     (void)outSize;
     return WH_ERROR_NOHANDLER;
 #else
-    (void)inSize;
-
     int      ret = 0;
     MlDsaKey key[1];
     void*    msgAddr  = NULL;
@@ -4574,6 +4601,10 @@ static int _HandleMlDsaVerifyDma(whServerContext* ctx, uint16_t magic,
 
     whMessageCrypto_MlDsaVerifyDmaRequest req;
     whMessageCrypto_MlDsaVerifyDmaResponse res;
+
+    if (inSize < sizeof(whMessageCrypto_MlDsaVerifyDmaRequest)) {
+        return WH_ERROR_BADARGS;
+    }
 
     /* Translate the request */
     ret = wh_MessageCrypto_TranslateMlDsaVerifyDmaRequest(
@@ -4730,11 +4761,14 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
                           void* cryptoDataOut, uint16_t* outSize)
 {
     (void)seq;
-    (void)inSize;
 
     int ret = 0;
     whMessageCrypto_CmacDmaRequest req;
     whMessageCrypto_CmacDmaResponse res;
+
+    if (inSize < sizeof(whMessageCrypto_CmacDmaRequest)) {
+        return WH_ERROR_BADARGS;
+    }
 
     /* Translate request */
     ret = wh_MessageCrypto_TranslateCmacDmaRequest(
@@ -5086,12 +5120,15 @@ static int _HandleRngDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
                          void* cryptoDataOut, uint16_t* outSize)
 {
     (void)seq;
-    (void)inSize;
 
     int                            ret = 0;
     whMessageCrypto_RngDmaRequest  req;
     whMessageCrypto_RngDmaResponse res;
     void*                          outAddr = NULL;
+
+    if (inSize < sizeof(whMessageCrypto_RngDmaRequest)) {
+        return WH_ERROR_BADARGS;
+    }
 
     /* Translate the request */
     ret = wh_MessageCrypto_TranslateRngDmaRequest(
