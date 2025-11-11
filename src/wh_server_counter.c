@@ -42,8 +42,6 @@ int wh_Server_HandleCounter(whServerContext* server, uint16_t magic,
                             const void* req_packet, uint16_t* out_resp_size,
                             void* resp_packet)
 {
-    (void)req_size;
-
     whKeyId       counterId = 0;
     int           ret       = 0;
     whNvmMetadata meta[1]   = {{0}};
@@ -58,6 +56,14 @@ int wh_Server_HandleCounter(whServerContext* server, uint16_t magic,
         case WH_COUNTER_INIT: {
             whMessageCounter_InitRequest  req  = {0};
             whMessageCounter_InitResponse resp = {0};
+
+            if (req_size < sizeof(whMessageCounter_InitRequest)) {
+                resp.rc = WH_ERROR_BADARGS;
+                (void)wh_MessageCounter_TranslateInitResponse(
+                    magic, &resp, (whMessageCounter_InitResponse*)resp_packet);
+                *out_resp_size = sizeof(resp);
+                return WH_ERROR_OK;
+            }
 
             /* translate request */
             (void)wh_MessageCounter_TranslateInitRequest(
@@ -86,6 +92,15 @@ int wh_Server_HandleCounter(whServerContext* server, uint16_t magic,
         case WH_COUNTER_INCREMENT: {
             whMessageCounter_IncrementRequest  req  = {0};
             whMessageCounter_IncrementResponse resp = {0};
+
+            if (req_size < sizeof(whMessageCounter_IncrementRequest)) {
+                resp.rc = WH_ERROR_BADARGS;
+                (void)wh_MessageCounter_TranslateIncrementResponse(
+                    magic, &resp,
+                    (whMessageCounter_IncrementResponse*)resp_packet);
+                *out_resp_size = sizeof(resp);
+                return WH_ERROR_OK;
+            }
 
             /* translate request */
             (void)wh_MessageCounter_TranslateIncrementRequest(
@@ -133,6 +148,14 @@ int wh_Server_HandleCounter(whServerContext* server, uint16_t magic,
             whMessageCounter_ReadRequest  req  = {0};
             whMessageCounter_ReadResponse resp = {0};
 
+            if (req_size < sizeof(whMessageCounter_ReadRequest)) {
+                resp.rc = WH_ERROR_BADARGS;
+                (void)wh_MessageCounter_TranslateReadResponse(
+                    magic, &resp, (whMessageCounter_ReadResponse*)resp_packet);
+                *out_resp_size = sizeof(resp);
+                return WH_ERROR_OK;
+            }
+
             /* translate request */
             (void)wh_MessageCounter_TranslateReadRequest(
                 magic, (whMessageCounter_ReadRequest*)req_packet, &req);
@@ -163,6 +186,15 @@ int wh_Server_HandleCounter(whServerContext* server, uint16_t magic,
         case WH_COUNTER_DESTROY: {
             whMessageCounter_DestroyRequest  req  = {0};
             whMessageCounter_DestroyResponse resp = {0};
+
+            if (req_size < sizeof(whMessageCounter_DestroyRequest)) {
+                resp.rc = WH_ERROR_BADARGS;
+                (void)wh_MessageCounter_TranslateDestroyResponse(
+                    magic, &resp,
+                    (whMessageCounter_DestroyResponse*)resp_packet);
+                *out_resp_size = sizeof(resp);
+                return WH_ERROR_OK;
+            }
 
             /* translate request */
             (void)wh_MessageCounter_TranslateDestroyRequest(

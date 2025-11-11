@@ -387,9 +387,27 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
             whMessageCert_SimpleResponse    resp = {0};
             const uint8_t*                  cert_data;
 
+            /* Validate minimum size */
+            if (req_size < sizeof(whMessageCert_AddTrustedRequest)) {
+                resp.rc = WH_ERROR_BADARGS;
+                wh_MessageCert_TranslateSimpleResponse(
+                    magic, &resp, (whMessageCert_SimpleResponse*)resp_packet);
+                *out_resp_size = sizeof(resp);
+                break;
+            }
+
             /* Convert request struct */
             wh_MessageCert_TranslateAddTrustedRequest(
                 magic, (whMessageCert_AddTrustedRequest*)req_packet, &req);
+
+            /* Validate certificate data fits within request */
+            if (req.cert_len > req_size - sizeof(req)) {
+                resp.rc = WH_ERROR_BADARGS;
+                wh_MessageCert_TranslateSimpleResponse(
+                    magic, &resp, (whMessageCert_SimpleResponse*)resp_packet);
+                *out_resp_size = sizeof(resp);
+                break;
+            }
 
             /* Get pointer to certificate data */
             cert_data = (const uint8_t*)req_packet + sizeof(req);
