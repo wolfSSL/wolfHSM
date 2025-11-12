@@ -35,8 +35,8 @@ extern "C" {
 /* #define WC_NO_ASYNC_THREADING */
 
 /*
-#define DEBUG_CRYPTOCB
-#define DEBUG_CRYPTOCB_VERBOSE
+#define WOLFHSM_CFG_DEBUG
+#define WOLFHSM_CFG_DEBUG_VERBOSE
 */
 
 /** wolfHSM required settings for wolfCrypt */

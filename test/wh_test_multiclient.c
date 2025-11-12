@@ -124,7 +124,7 @@ static int _testGlobalKeyBasic(whClientContext* client1,
     uint8_t  outBuf[sizeof(TEST_KEY_DATA_1)] = {0};
     uint16_t outSz                           = sizeof(outBuf);
 
-    printf("Test: Global key basic operations\n");
+    WH_TEST_PRINT("Test: Global key basic operations\n");
 
     /* Client 1 caches a global key */
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyCacheRequest_ex(
@@ -144,7 +144,7 @@ static int _testGlobalKeyBasic(whClientContext* client1,
     WH_TEST_ASSERT_RETURN(outSz == sizeof(TEST_KEY_DATA_1));
     WH_TEST_ASSERT_RETURN(0 == memcmp(outBuf, TEST_KEY_DATA_1, outSz));
 
-    printf("  PASS: Basic global key operations\n");
+    WH_TEST_PRINT("  PASS: Basic global key operations\n");
 
     (void)ret;
     return 0;
@@ -170,7 +170,7 @@ static int _testLocalKeyIsolation(whClientContext* client1,
     uint8_t  outBuf[32] = {0};
     uint16_t outSz;
 
-    printf("Test: Local key isolation\n");
+    WH_TEST_PRINT("Test: Local key isolation\n");
 
     /* Client 1 caches a local key */
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyCacheRequest_ex(
@@ -206,7 +206,7 @@ static int _testLocalKeyIsolation(whClientContext* client1,
     WH_TEST_ASSERT_RETURN(
         0 == memcmp(outBuf, TEST_KEY_DATA_2, sizeof(TEST_KEY_DATA_2)));
 
-    printf("  PASS: Local key isolation\n");
+    WH_TEST_PRINT("  PASS: Local key isolation\n");
 
     (void)ret;
     return 0;
@@ -234,7 +234,7 @@ static int _testMixedGlobalLocal(whClientContext* client1,
     uint8_t  outBuf[32] = {0};
     uint16_t outSz;
 
-    printf(
+    WH_TEST_DEBUG_PRINT(
         "Test: Mixed global and local keys with no cross-cache interference\n");
 
     /* Client 1 caches global key */
@@ -311,7 +311,7 @@ static int _testMixedGlobalLocal(whClientContext* client1,
     WH_TEST_ASSERT_RETURN(
         0 == memcmp(outBuf, TEST_KEY_DATA_1, sizeof(TEST_KEY_DATA_1)));
 
-    printf("  PASS: Mixed global and local keys with no cross-cache "
+    WH_TEST_PRINT("  PASS: Mixed global and local keys with no cross-cache "
            "interference\n");
 
     (void)ret;
@@ -336,7 +336,7 @@ static int _testGlobalKeyNvmPersistence(whClientContext* client1,
     uint8_t  outBuf[sizeof(TEST_KEY_DATA_1)] = {0};
     uint16_t outSz;
 
-    printf("Test: NVM persistence of global keys\n");
+    WH_TEST_PRINT("Test: NVM persistence of global keys\n");
 
     /* Client 1 caches and commits a global key to NVM */
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyCacheRequest_ex(
@@ -374,7 +374,7 @@ static int _testGlobalKeyNvmPersistence(whClientContext* client1,
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEraseResponse(client1));
 
-    printf("  PASS: NVM persistence of global keys\n");
+    WH_TEST_PRINT("  PASS: NVM persistence of global keys\n");
 
     (void)ret;
     return 0;
@@ -397,7 +397,7 @@ static int _testGlobalKeyExportProtection(whClientContext* client1,
     uint8_t  outBuf[sizeof(TEST_KEY_DATA_1)] = {0};
     uint16_t outSz;
 
-    printf("Test: Export protection on global keys\n");
+    WH_TEST_PRINT("Test: Export protection on global keys\n");
 
     /* Client 1 caches a non-exportable global key */
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyCacheRequest_ex(
@@ -423,7 +423,7 @@ static int _testGlobalKeyExportProtection(whClientContext* client1,
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvictResponse(client1));
 
-    printf("  PASS: Export protection on global keys\n");
+    WH_TEST_PRINT("  PASS: Export protection on global keys\n");
 
     return 0;
 }
@@ -449,7 +449,7 @@ static int _testGlobalKeyDma(whClientContext* client1, whServerContext* server1,
     uint16_t labelSz = sizeof(label);
     uint16_t outSz;
 
-    printf("Test: DMA operations with global keys\n");
+    WH_TEST_PRINT("Test: DMA operations with global keys\n");
 
     /* Part 1: Cache via DMA, export via regular */
     /* Client 1 caches a global key using DMA */
@@ -505,7 +505,7 @@ static int _testGlobalKeyDma(whClientContext* client1, whServerContext* server1,
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvictResponse(client1));
 
-    printf("  PASS: DMA operations with global keys\n");
+    WH_TEST_PRINT("  PASS: DMA operations with global keys\n");
 
     (void)ret;
     return 0;
@@ -534,7 +534,7 @@ static int _testGlobalKeyWrapExport(whClientContext* client1,
     uint8_t       unwrappedKey[AES_256_KEY_SIZE] = {0};
     whNvmMetadata meta                           = {0};
 
-    printf("Test: Key wrap with global server key\n");
+    WH_TEST_PRINT("Test: Key wrap with global server key\n");
 
     /* Client 1 caches a global wrapping key */
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyCacheRequest_ex(
@@ -572,7 +572,7 @@ static int _testGlobalKeyWrapExport(whClientContext* client1,
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvictResponse(client1));
 
-    printf("  PASS: Key wrap with global server key\n");
+    WH_TEST_PRINT("  PASS: Key wrap with global server key\n");
 
     (void)ret;
     return 0;
@@ -603,7 +603,7 @@ static int _testGlobalKeyUnwrapCache(whClientContext* client1,
     uint16_t      verifySz = sizeof(verifyBuf);
     whNvmMetadata meta     = {0};
 
-    printf("Test: Key unwrap and cache with global server key\n");
+    WH_TEST_PRINT("Test: Key unwrap and cache with global server key\n");
 
     /* Client 1 caches a global wrapping key */
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyCacheRequest_ex(
@@ -660,7 +660,7 @@ static int _testGlobalKeyUnwrapCache(whClientContext* client1,
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvictResponse(client1));
 
-    printf("  PASS: Key unwrap and cache with global server key\n");
+    WH_TEST_PRINT("  PASS: Key unwrap and cache with global server key\n");
 
     (void)ret;
     return 0;
@@ -686,7 +686,7 @@ static int _testWrappedKey_GlobalWrap_GlobalKey_Positive(
     uint8_t       unwrappedKey[AES_256_KEY_SIZE] = {0};
     whNvmMetadata meta                           = {0};
 
-    printf("Test 7a: Global wrap key + Global wrapped key (Positive)\n");
+    WH_TEST_DEBUG_PRINT("Test 7a: Global wrap key + Global wrapped key (Positive)\n");
 
     /* Client 1 caches a global wrapping key */
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyCacheRequest_ex(
@@ -724,7 +724,7 @@ static int _testWrappedKey_GlobalWrap_GlobalKey_Positive(
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvictResponse(client1));
 
-    printf("  PASS: Global wrap key + Global wrapped key (Positive)\n");
+    WH_TEST_PRINT("  PASS: Global wrap key + Global wrapped key (Positive)\n");
 
     (void)ret;
     return 0;
@@ -750,7 +750,7 @@ static int _testWrappedKey_GlobalWrap_GlobalKey_NonExportable(
     uint8_t       unwrappedKey[AES_256_KEY_SIZE] = {0};
     whNvmMetadata meta                           = {0};
 
-    printf("Test 7b: Global wrap key + Global wrapped key (Non-exportable)\n");
+    WH_TEST_DEBUG_PRINT("Test 7b: Global wrap key + Global wrapped key (Non-exportable)\n");
 
     /* Client 1 caches a global wrapping key */
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyCacheRequest_ex(
@@ -789,7 +789,7 @@ static int _testWrappedKey_GlobalWrap_GlobalKey_NonExportable(
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvictResponse(client1));
 
-    printf("  PASS: Global wrap key + Global wrapped key (Non-exportable)\n");
+    WH_TEST_PRINT("  PASS: Global wrap key + Global wrapped key (Non-exportable)\n");
 
     return 0;
 #undef WRAPPED_KEY_SIZE
@@ -815,7 +815,7 @@ static int _testWrappedKey_GlobalWrap_LocalKey_OwnerExport(
     uint8_t       unwrappedKey[AES_256_KEY_SIZE] = {0};
     whNvmMetadata meta                           = {0};
 
-    printf("Test 8a: Global wrap key + Local wrapped key (Owner export)\n");
+    WH_TEST_DEBUG_PRINT("Test 8a: Global wrap key + Local wrapped key (Owner export)\n");
 
     /* Client 1 caches a global wrapping key */
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyCacheRequest_ex(
@@ -853,7 +853,7 @@ static int _testWrappedKey_GlobalWrap_LocalKey_OwnerExport(
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvictResponse(client1));
 
-    printf("  PASS: Global wrap key + Local wrapped key (Owner export)\n");
+    WH_TEST_PRINT("  PASS: Global wrap key + Local wrapped key (Owner export)\n");
 
     (void)ret;
     return 0;
@@ -882,7 +882,7 @@ static int _testWrappedKey_GlobalWrap_LocalKey_NonOwnerFails(
     whNvmMetadata meta                           = {0};
     whKeyId       cachedKeyId                    = 0;
 
-    printf("Test 8b: Global wrap key + Local wrapped key (Non-owner fails)\n");
+    WH_TEST_DEBUG_PRINT("Test 8b: Global wrap key + Local wrapped key (Non-owner fails)\n");
 
     /* Client 1 caches a global wrapping key */
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyCacheRequest_ex(
@@ -930,7 +930,7 @@ static int _testWrappedKey_GlobalWrap_LocalKey_NonOwnerFails(
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvictResponse(client1));
 
-    printf("  PASS: Global wrap key + Local wrapped key (Non-owner fails)\n");
+    WH_TEST_PRINT("  PASS: Global wrap key + Local wrapped key (Non-owner fails)\n");
 
     return WH_ERROR_OK;
 #undef WRAPPED_KEY_SIZE
@@ -956,7 +956,7 @@ static int _testWrappedKey_LocalWrap_LocalKey_SameOwner(
     uint8_t       unwrappedKey[AES_256_KEY_SIZE] = {0};
     whNvmMetadata meta                           = {0};
 
-    printf("Test 9a: Local wrap key + Local wrapped key (Same owner)\n");
+    WH_TEST_DEBUG_PRINT("Test 9a: Local wrap key + Local wrapped key (Same owner)\n");
 
     /* Client 1 caches a LOCAL wrapping key */
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyCacheRequest_ex(
@@ -994,7 +994,7 @@ static int _testWrappedKey_LocalWrap_LocalKey_SameOwner(
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvictResponse(client1));
 
-    printf("  PASS: Local wrap key + Local wrapped key (Same owner)\n");
+    WH_TEST_PRINT("  PASS: Local wrap key + Local wrapped key (Same owner)\n");
 
     (void)ret;
     (void)client2;
@@ -1024,7 +1024,7 @@ static int _testWrappedKey_LocalWrap_LocalKey_NoAccessWithoutWrapKey(
     uint8_t       unwrappedKey[AES_256_KEY_SIZE] = {0};
     whNvmMetadata meta                           = {0};
 
-    printf(
+    WH_TEST_DEBUG_PRINT(
         "Test 9b: Local wrap key + Local wrapped key (No wrap key access)\n");
 
     /* Client 1 caches a LOCAL wrapping key */
@@ -1065,7 +1065,7 @@ static int _testWrappedKey_LocalWrap_LocalKey_NoAccessWithoutWrapKey(
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvictResponse(client1));
 
-    printf("  PASS: Local wrap key + Local wrapped key (No wrap key access)\n");
+    WH_TEST_PRINT("  PASS: Local wrap key + Local wrapped key (No wrap key access)\n");
 
     return 0;
 #undef WRAPPED_KEY_SIZE
@@ -1096,7 +1096,7 @@ static int _testWrappedKey_LocalWrap_GlobalKey_AnyCacheGlobal(
     whNvmMetadata meta        = {0};
     whKeyId       cachedKeyId = 0;
 
-    printf("Test 10a: Local wrap key + Global wrapped key (Cache global)\n");
+    WH_TEST_DEBUG_PRINT("Test 10a: Local wrap key + Global wrapped key (Cache global)\n");
 
     /* Client 1 caches a LOCAL wrapping key */
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyCacheRequest_ex(
@@ -1146,7 +1146,7 @@ static int _testWrappedKey_LocalWrap_GlobalKey_AnyCacheGlobal(
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvictResponse(client1));
 
-    printf("  PASS: Local wrap key + Global wrapped key (Cache global)\n");
+    WH_TEST_PRINT("  PASS: Local wrap key + Global wrapped key (Cache global)\n");
 
     (void)ret;
     return 0;
@@ -1172,7 +1172,7 @@ static int _testWrappedKey_LocalWrap_GlobalKey_NonOwnerNoWrapKey(
     uint8_t       unwrappedKey[AES_256_KEY_SIZE] = {0};
     whNvmMetadata meta                           = {0};
 
-    printf("Test 10b: Local wrap key + Global wrapped key (No wrap key)\n");
+    WH_TEST_DEBUG_PRINT("Test 10b: Local wrap key + Global wrapped key (No wrap key)\n");
 
     /* Client 1 caches a LOCAL wrapping key */
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyCacheRequest_ex(
@@ -1213,7 +1213,7 @@ static int _testWrappedKey_LocalWrap_GlobalKey_NonOwnerNoWrapKey(
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvictResponse(client1));
 
-    printf("  PASS: Local wrap key + Global wrapped key (No wrap key)\n");
+    WH_TEST_PRINT("  PASS: Local wrap key + Global wrapped key (No wrap key)\n");
 
     return 0;
 #undef WRAPPED_KEY_SIZE
@@ -1233,7 +1233,7 @@ static int _testKeyIdFlagPreservation(whClientContext* client1,
     (void)client2;
     (void)server2;
 
-    printf("Test: KeyId flag preservation\n");
+    WH_TEST_PRINT("Test: KeyId flag preservation\n");
 
     /* Test 1: Global key cache preserves global flag */
     {
@@ -1258,7 +1258,7 @@ static int _testKeyIdFlagPreservation(whClientContext* client1,
         WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
         WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvictResponse(client1));
 
-        printf("  PASS: Global key cache preserves global flag\n");
+        WH_TEST_PRINT("  PASS: Global key cache preserves global flag\n");
     }
 
     /* Test 2: Local key cache does not have global flag */
@@ -1284,7 +1284,7 @@ static int _testKeyIdFlagPreservation(whClientContext* client1,
         WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
         WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvictResponse(client1));
 
-        printf("  PASS: Local key cache has no global flag\n");
+        WH_TEST_PRINT("  PASS: Local key cache has no global flag\n");
     }
 
     /* Test 3: Reusing returned keyId works correctly */
@@ -1322,7 +1322,7 @@ static int _testKeyIdFlagPreservation(whClientContext* client1,
         WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
         WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvictResponse(client1));
 
-        printf("  PASS: Reusing returned keyId works correctly\n");
+        WH_TEST_PRINT("  PASS: Reusing returned keyId works correctly\n");
     }
 
     return 0;
@@ -1392,7 +1392,7 @@ static int _runGlobalKeysTests(whClientContext* client1,
             client1, server1, client2, server2));
 #endif
 
-    printf("All Global Keys Tests PASSED ===\n");
+    WH_TEST_PRINT("All Global Keys Tests PASSED ===\n");
     return 0;
 }
 
@@ -1596,7 +1596,7 @@ static int whTest_MultiClientSequential(void)
     if (ret != 0)
         return ret;
 
-    printf("=== Multi-Client Sequential Tests Begin ===\n");
+    WH_TEST_PRINT("=== Multi-Client Sequential Tests Begin ===\n");
     /* Run test suites that require multiple clients */
 #ifdef WOLFHSM_CFG_GLOBAL_KEYS
     WH_TEST_RETURN_ON_FAIL(
@@ -1617,7 +1617,7 @@ static int whTest_MultiClientSequential(void)
 #endif
     wh_Nvm_Cleanup(nvm);
 
-    printf("=== Multi-Client Sequential Tests Complete ===\n");
+    WH_TEST_PRINT("=== Multi-Client Sequential Tests Complete ===\n");
 
     return 0;
 }

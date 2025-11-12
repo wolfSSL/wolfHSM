@@ -279,7 +279,7 @@ static int wh_ClientServer_MemThreadTest(void)
     defined(WOLFHSM_CFG_ENABLE_SERVER)
 int whTest_WolfCryptTest(void)
 {
-    printf("Testing wolfCrypt tests: (pthread) mem...\n");
+    WH_TEST_PRINT("Testing wolfCrypt tests: (pthread) mem...\n");
     WH_TEST_RETURN_ON_FAIL(wh_ClientServer_MemThreadTest());
     return 0;
 }

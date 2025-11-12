@@ -69,21 +69,21 @@ static int loadAndStoreKeys(whServerContext* server, whKeyId* outKeyId,
     /* open the key file */
     ret = keyFd = open(keyFilePath, O_RDONLY, 0);
     if (ret < 0) {
-        printf("Failed to open %s %d\n", keyFilePath, ret);
+        WOLFHSM_CFG_PRINTF("Failed to open %s %d\n", keyFilePath, ret);
         return ret;
     }
 
     /* read the key to local buffer */
     ret = keySz = read(keyFd, keyBuf, sizeof(keyBuf));
     if (ret < 0) {
-        printf("Failed to read %s %d\n", keyFilePath, ret);
+        WOLFHSM_CFG_PRINTF("Failed to read %s %d\n", keyFilePath, ret);
         close(keyFd);
         return ret;
     }
     ret = 0;
     close(keyFd);
 
-    printf(
+    WOLFHSM_CFG_PRINTF(
         "Loading key from %s (size=%d) with keyId=0x%02X and clientId=0x%01X\n",
         keyFilePath, keySz, keyId, clientId);
 
@@ -97,9 +97,9 @@ static int loadAndStoreKeys(whServerContext* server, whKeyId* outKeyId,
     /* Get HSM assigned keyId if not set */
     if (keyId == WH_KEYID_ERASED) {
         ret = wh_Server_KeystoreGetUniqueId(server, &meta.id);
-        printf("got unique ID = 0x%02X\n", meta.id & WH_KEYID_MASK);
+        WOLFHSM_CFG_PRINTF("got unique ID = 0x%02X\n", meta.id & WH_KEYID_MASK);
     }
-    printf(
+    WOLFHSM_CFG_PRINTF(
         "key NVM ID = 0x%04X\n\ttype=0x%01X\n\tuser=0x%01X\n\tkeyId=0x%02X\n",
         meta.id, WH_KEYID_TYPE(meta.id), WH_KEYID_USER(meta.id),
         WH_KEYID_ID(meta.id));
@@ -107,12 +107,12 @@ static int loadAndStoreKeys(whServerContext* server, whKeyId* outKeyId,
     if (ret == 0) {
         ret = wh_Server_KeystoreCacheKey(server, &meta, keyBuf);
         if (ret != 0) {
-            printf("Failed to wh_Server_KeystoreCacheKey, ret=%d\n", ret);
+            WOLFHSM_CFG_PRINTF("Failed to wh_Server_KeystoreCacheKey, ret=%d\n", ret);
             return ret;
         }
     }
     else {
-        printf("Failed to wh_Server_KeystoreGetUniqueId, ret=%d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wh_Server_KeystoreGetUniqueId, ret=%d\n", ret);
         return ret;
     }
 
@@ -148,14 +148,14 @@ static int wh_ServerTask(void* cf, const char* keyFilePath, int keyId,
         ret = loadAndStoreKeys(server, &loadedKeyId, keyFilePath, keyId,
                                clientId);
         if (ret != 0) {
-            printf("server failed to load key, ret=%d\n", ret);
+            WOLFHSM_CFG_PRINTF("server failed to load key, ret=%d\n", ret);
             (void)wh_Server_Cleanup(server);
             return ret;
         }
     }
 
     if (ret == 0) {
-        printf("Waiting for connection...\n");
+        WOLFHSM_CFG_PRINTF("Waiting for connection...\n");
         if (strcmp(type, "shm") == 0 || strcmp(type, "dma") == 0) {
             /* Shared memory assumes connected once memory is setup */
             wh_Server_SetConnected(server, WH_COMM_CONNECTED);
@@ -167,7 +167,7 @@ static int wh_ServerTask(void* cf, const char* keyFilePath, int keyId,
                 _sleepMs(ONE_MS);
             }
             else if (ret != WH_ERROR_OK) {
-                printf("Failed to wh_Server_HandleRequestMessage: %d\n", ret);
+                WOLFHSM_CFG_PRINTF("Failed to wh_Server_HandleRequestMessage: %d\n", ret);
                 break;
             }
             else {
@@ -177,12 +177,12 @@ static int wh_ServerTask(void* cf, const char* keyFilePath, int keyId,
                 if (get_conn_result == WH_ERROR_OK) {
                     if (current_state == WH_COMM_CONNECTED &&
                         last_state == WH_COMM_DISCONNECTED) {
-                        printf("Server connected\n");
+                        WOLFHSM_CFG_PRINTF("Server connected\n");
                         last_state = WH_COMM_CONNECTED;
                     }
                     else if (current_state == WH_COMM_DISCONNECTED &&
                              last_state == WH_COMM_CONNECTED) {
-                        printf("Server disconnected\n");
+                        WOLFHSM_CFG_PRINTF("Server disconnected\n");
                         last_state = WH_COMM_DISCONNECTED;
 
                         /* POSIX TCP transport requires server to be
@@ -193,7 +193,7 @@ static int wh_ServerTask(void* cf, const char* keyFilePath, int keyId,
                         /* Reinitialize the server */
                         ret = wh_Server_Init(server, config);
                         if (ret != 0) {
-                            printf("Failed to reinitialize server: %d\n", ret);
+                            WOLFHSM_CFG_PRINTF("Failed to reinitialize server: %d\n", ret);
                             break;
                         }
 
@@ -210,7 +210,7 @@ static int wh_ServerTask(void* cf, const char* keyFilePath, int keyId,
                                 loadAndStoreKeys(server, &loadedKeyId,
                                                  keyFilePath, keyId, clientId);
                             if (ret != 0) {
-                                printf("server failed to load key, ret=%d\n",
+                                WOLFHSM_CFG_PRINTF("server failed to load key, ret=%d\n",
                                        ret);
                                 break;
                             }
@@ -218,7 +218,7 @@ static int wh_ServerTask(void* cf, const char* keyFilePath, int keyId,
                     }
                 }
                 else {
-                    printf("Failed to get connection state: %d\n",
+                    WOLFHSM_CFG_PRINTF("Failed to get connection state: %d\n",
                            get_conn_result);
                 }
             }
@@ -236,7 +236,7 @@ static int _hardwareCryptoCb(int devId, struct wc_CryptoInfo* info, void* ctx)
     int ret = CRYPTOCB_UNAVAILABLE;
     switch (info->algo_type) {
         case WC_ALGO_TYPE_RNG: {
-            /*printf("Hardware Crypto Callback: RNG operation requested\n");*/
+            /*WOLFHSM_CFG_PRINTF("Hardware Crypto Callback: RNG operation requested\n");*/
             /* Extract info parameters */
             uint8_t* out  = info->rng.out;
             uint32_t size = info->rng.sz;
@@ -257,7 +257,7 @@ static int _hardwareCryptoCb(int devId, struct wc_CryptoInfo* info, void* ctx)
             break;
         }
         default:
-            /*printf("Hardware Crypto Callback: Unsupported algorithm type\n");
+            /*WOLFHSM_CFG_PRINTF("Hardware Crypto Callback: Unsupported algorithm type\n");
              */
             ret = CRYPTOCB_UNAVAILABLE;
     }
@@ -266,13 +266,13 @@ static int _hardwareCryptoCb(int devId, struct wc_CryptoInfo* info, void* ctx)
 #endif
 static void Usage(const char* exeName)
 {
-    printf("Usage: %s --key <key_file_path> --id <key_id> --client <client_id> "
+    WOLFHSM_CFG_PRINTF("Usage: %s --key <key_file_path> --id <key_id> --client <client_id> "
            "--nvminit <nvm_init_file_path> --type <type>\n",
            exeName);
-    printf("Example: %s --key key.bin --id 123 --client 456 "
+    WOLFHSM_CFG_PRINTF("Example: %s --key key.bin --id 123 --client 456 "
            "--nvminit nvm_init.txt --type tcp\n",
            exeName);
-    printf("type: tcp (default), shm, dma\n");
+    WOLFHSM_CFG_PRINTF("type: tcp (default), shm, dma\n");
 }
 
 
@@ -286,11 +286,11 @@ int main(int argc, char** argv)
     uint8_t     memory[WH_POSIX_FLASH_RAM_SIZE] = {0};
     whServerConfig s_conf[1];
 
-    printf("Example wolfHSM POSIX server ");
+    WOLFHSM_CFG_PRINTF("Example wolfHSM POSIX server ");
 #ifndef WOLFHSM_CFG_NO_CRYPTO
-    printf("built with wolfSSL version %s\n", LIBWOLFSSL_VERSION_STRING);
+    WOLFHSM_CFG_PRINTF("built with wolfSSL version %s\n", LIBWOLFSSL_VERSION_STRING);
 #else
-    printf("built with WOLFHSM_CFG_NO_CRYPTO\n");
+    WOLFHSM_CFG_PRINTF("built with WOLFHSM_CFG_NO_CRYPTO\n");
 #endif
 
     /* Parse command-line arguments */
@@ -311,7 +311,7 @@ int main(int argc, char** argv)
             type = argv[++i];
         }
         else {
-            printf("Invalid argument: %s\n", argv[i]);
+            WOLFHSM_CFG_PRINTF("Invalid argument: %s\n", argv[i]);
             Usage(argv[0]);
             return -1;
         }
@@ -320,35 +320,35 @@ int main(int argc, char** argv)
     /* Server configuration/context */
     memset(s_conf, 0, sizeof(whServerConfig));
     if (strcmp(type, "tcp") == 0) {
-        printf("Using TCP transport\n");
+        WOLFHSM_CFG_PRINTF("Using TCP transport\n");
         wh_PosixServer_ExampleTcpConfig(s_conf);
     }
     else if (strcmp(type, "shm") == 0) {
-        printf("Using shared memory transport\n");
+        WOLFHSM_CFG_PRINTF("Using shared memory transport\n");
         wh_PosixServer_ExampleShmConfig(s_conf);
     }
 #ifdef WOLFSSL_STATIC_MEMORY
     else if (strcmp(type, "dma") == 0) {
-        printf("Using DMA with shared memory transport\n");
+        WOLFHSM_CFG_PRINTF("Using DMA with shared memory transport\n");
         wh_PosixServer_ExampleShmDmaConfig(s_conf);
     }
 #endif
     else {
-        printf("Invalid server type: %s\n", type);
+        WOLFHSM_CFG_PRINTF("Invalid server type: %s\n", type);
         return -1;
     }
 
     /* RamSim Flash state and configuration */
     rc = wh_PosixServer_ExampleRamSimConfig(s_conf, memory);
     if (rc != WH_ERROR_OK) {
-        printf("Failed to initialize RAMSim: %d\n", rc);
+        WOLFHSM_CFG_PRINTF("Failed to initialize RAMSim: %d\n", rc);
         return rc;
     }
 
     /* NVM Flash Configuration using RamSim HAL Flash */
     rc = wh_PosixServer_ExampleNvmConfig(s_conf, nvmInitFilePath);
     if (rc != WH_ERROR_OK) {
-        printf("Failed to initialize NVM: %d\n", rc);
+        WOLFHSM_CFG_PRINTF("Failed to initialize NVM: %d\n", rc);
         return rc;
     }
 #if !defined(WOLFHSM_CFG_NO_CRYPTO)
@@ -390,28 +390,28 @@ int main(int argc, char** argv)
 
     /* Context 5: Set default server crypto to use cryptocb */
     crypto->devId = HW_DEV_ID;
-    printf("Context 5: Setting up default server crypto with devId=%d\n",
+    WOLFHSM_CFG_PRINTF("Context 5: Setting up default server crypto with devId=%d\n",
            crypto->devId);
 
     rc = wc_InitRng_ex(crypto->rng, NULL, crypto->devId);
     if (rc != 0) {
-        printf("Failed to wc_InitRng_ex: %d\n", rc);
+        WOLFHSM_CFG_PRINTF("Failed to wc_InitRng_ex: %d\n", rc);
         return rc;
     }
 
     rc = wh_ServerTask(s_conf, keyFilePath, keyId, clientId);
     if (rc != WH_ERROR_OK) {
-        printf("Server task failed: %d\n", rc);
+        WOLFHSM_CFG_PRINTF("Server task failed: %d\n", rc);
         return rc;
     }
     rc = wc_FreeRng(crypto->rng);
     if (rc != 0) {
-        printf("Failed to wc_FreeRng: %d\n", rc);
+        WOLFHSM_CFG_PRINTF("Failed to wc_FreeRng: %d\n", rc);
         return rc;
     }
     rc = wolfCrypt_Cleanup();
     if (rc != 0) {
-        printf("Failed to wolfCrypt_Cleanup: %d\n", rc);
+        WOLFHSM_CFG_PRINTF("Failed to wolfCrypt_Cleanup: %d\n", rc);
         return rc;
     }
 #else
@@ -420,7 +420,7 @@ int main(int argc, char** argv)
     (void)clientId;
     rc = wh_ServerTask(s_conf, keyFilePath, keyId, clientId);
     if (rc != WH_ERROR_OK) {
-        printf("Server task failed: %d\n", rc);
+        WOLFHSM_CFG_PRINTF("Server task failed: %d\n", rc);
         return rc;
     }
 #endif

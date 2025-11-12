@@ -227,13 +227,13 @@ static int whTest_ServerImgMgrServerCfgEcc256(whServerConfig* serverCfg)
     /* Initialize wolfCrypt */
     ret = wc_InitRng(&rng);
     if (ret != 0) {
-        printf("Failed to initialize RNG: %d\n", ret);
+        WH_ERROR_PRINT("Failed to initialize RNG: %d\n", ret);
         return ret;
     }
 
     ret = wc_ecc_init(&eccKey);
     if (ret != 0) {
-        printf("Failed to initialize ECC key: %d\n", ret);
+        WH_ERROR_PRINT("Failed to initialize ECC key: %d\n", ret);
         wc_FreeRng(&rng);
         return ret;
     }
@@ -243,7 +243,7 @@ static int whTest_ServerImgMgrServerCfgEcc256(whServerConfig* serverCfg)
     ret             = wc_EccPrivateKeyDecode(testEccPrivKey, &inOutIdx, &eccKey,
                                              sizeof(testEccPrivKey));
     if (ret != 0) {
-        printf("Failed to decode ECC private key: %d\n", ret);
+        WH_ERROR_PRINT("Failed to decode ECC private key: %d\n", ret);
         wc_ecc_free(&eccKey);
         wc_FreeRng(&rng);
         return ret;
@@ -252,7 +252,7 @@ static int whTest_ServerImgMgrServerCfgEcc256(whServerConfig* serverCfg)
     /* Export public key in DER format so we can store it in NVM */
     ret = wc_EccPublicKeyToDer(&eccKey, pubKeyDer, pubKeyDerLen, 1);
     if (ret <= 0) {
-        printf("Failed to export public key to DER: %d\n", ret);
+        WH_ERROR_PRINT("Failed to export public key to DER: %d\n", ret);
         wc_ecc_free(&eccKey);
         wc_FreeRng(&rng);
         return ret;
@@ -262,7 +262,7 @@ static int whTest_ServerImgMgrServerCfgEcc256(whServerConfig* serverCfg)
     /* Hash the test data */
     ret = wc_InitSha256(&sha);
     if (ret != 0) {
-        printf("Failed to initialize SHA256: %d\n", ret);
+        WH_ERROR_PRINT("Failed to initialize SHA256: %d\n", ret);
         wc_ecc_free(&eccKey);
         wc_FreeRng(&rng);
         return ret;
@@ -270,7 +270,7 @@ static int whTest_ServerImgMgrServerCfgEcc256(whServerConfig* serverCfg)
 
     ret = wc_Sha256Update(&sha, testData, sizeof(testData));
     if (ret != 0) {
-        printf("Failed to update SHA256: %d\n", ret);
+        WH_ERROR_PRINT("Failed to update SHA256: %d\n", ret);
         wc_Sha256Free(&sha);
         wc_ecc_free(&eccKey);
         wc_FreeRng(&rng);
@@ -279,7 +279,7 @@ static int whTest_ServerImgMgrServerCfgEcc256(whServerConfig* serverCfg)
 
     ret = wc_Sha256Final(&sha, hash);
     if (ret != 0) {
-        printf("Failed to finalize SHA256: %d\n", ret);
+        WH_ERROR_PRINT("Failed to finalize SHA256: %d\n", ret);
         wc_Sha256Free(&sha);
         wc_ecc_free(&eccKey);
         wc_FreeRng(&rng);
@@ -290,7 +290,7 @@ static int whTest_ServerImgMgrServerCfgEcc256(whServerConfig* serverCfg)
     ret =
         wc_ecc_sign_hash(hash, sizeof(hash), signature, &sigLen, &rng, &eccKey);
     if (ret != 0) {
-        printf("Failed to sign hash: %d\n", ret);
+        WH_ERROR_PRINT("Failed to sign hash: %d\n", ret);
         wc_Sha256Free(&sha);
         wc_ecc_free(&eccKey);
         wc_FreeRng(&rng);
@@ -302,7 +302,7 @@ static int whTest_ServerImgMgrServerCfgEcc256(whServerConfig* serverCfg)
     ret              = wc_ecc_verify_hash(signature, sigLen, hash, sizeof(hash),
                                           &verifyResult, &eccKey);
     if (ret != 0 || verifyResult != 1) {
-        printf("Direct signature verification failed: ret=%d, result=%d\n", ret,
+        WH_ERROR_PRINT("Direct signature verification failed: ret=%d, result=%d\n", ret,
                verifyResult);
         wc_Sha256Free(&sha);
         wc_ecc_free(&eccKey);
@@ -319,7 +319,7 @@ static int whTest_ServerImgMgrServerCfgEcc256(whServerConfig* serverCfg)
 
     ret = wh_Nvm_AddObject(serverCfg->nvm, &sigMeta, sigLen, signature);
     if (ret != WH_ERROR_OK) {
-        printf("Failed to add signature to NVM: %d\n", ret);
+        WH_ERROR_PRINT("Failed to add signature to NVM: %d\n", ret);
         wc_Sha256Free(&sha);
         wc_ecc_free(&eccKey);
         wc_FreeRng(&rng);
@@ -341,7 +341,7 @@ static int whTest_ServerImgMgrServerCfgEcc256(whServerConfig* serverCfg)
     /* Initialize server */
     ret = wh_Server_Init(server, serverCfg);
     if (ret != WH_ERROR_OK) {
-        printf("Failed to initialize server: %d\n", ret);
+        WH_ERROR_PRINT("Failed to initialize server: %d\n", ret);
         wc_Sha256Free(&sha);
         wc_ecc_free(&eccKey);
         wc_FreeRng(&rng);
@@ -351,7 +351,7 @@ static int whTest_ServerImgMgrServerCfgEcc256(whServerConfig* serverCfg)
     /* Initialize the image manager to work with the server */
     ret = wh_Server_ImgMgrInit(&imgMgr, &imgMgrConfig);
     if (ret != WH_ERROR_OK) {
-        printf("Failed to initialize image manager: %d\n", ret);
+        WH_ERROR_PRINT("Failed to initialize image manager: %d\n", ret);
         wc_Sha256Free(&sha);
         wc_ecc_free(&eccKey);
         wc_FreeRng(&rng);
@@ -369,7 +369,7 @@ static int whTest_ServerImgMgrServerCfgEcc256(whServerConfig* serverCfg)
 
     ret = wh_Server_KeystoreCacheKey(server, &keyMeta, pubKeyDer);
     if (ret != WH_ERROR_OK) {
-        printf("Failed to cache key in keystore: %d\n", ret);
+        WH_ERROR_PRINT("Failed to cache key in keystore: %d\n", ret);
         wh_Server_Cleanup(server);
         wc_Sha256Free(&sha);
         wc_ecc_free(&eccKey);
@@ -380,7 +380,7 @@ static int whTest_ServerImgMgrServerCfgEcc256(whServerConfig* serverCfg)
     /* Commit the key to NVM */
     ret = wh_Server_KeystoreCommitKey(server, testEccKeyId);
     if (ret != WH_ERROR_OK) {
-        printf("Failed to commit key to NVM: %d\n", ret);
+        WH_ERROR_PRINT("Failed to commit key to NVM: %d\n", ret);
         wh_Server_Cleanup(server);
         wc_Sha256Free(&sha);
         wc_ecc_free(&eccKey);
@@ -392,7 +392,7 @@ static int whTest_ServerImgMgrServerCfgEcc256(whServerConfig* serverCfg)
     whServerImgMgrVerifyResult result;
     ret = wh_Server_ImgMgrVerifyImg(&imgMgr, &testImage, &result);
     if (ret != WH_ERROR_OK) {
-        printf("Image verification failed: %d\n", ret);
+        WH_ERROR_PRINT("Image verification failed: %d\n", ret);
         wh_Server_Cleanup(server);
         wc_Sha256Free(&sha);
         wc_ecc_free(&eccKey);
@@ -402,7 +402,7 @@ static int whTest_ServerImgMgrServerCfgEcc256(whServerConfig* serverCfg)
 
     /* Check verify method result */
     if (result.verifyMethodResult != WH_ERROR_OK) {
-        printf("ECC verify method failed: %d\n", result.verifyMethodResult);
+        WH_ERROR_PRINT("ECC verify method failed: %d\n", result.verifyMethodResult);
         wh_Server_Cleanup(server);
         wc_Sha256Free(&sha);
         wc_ecc_free(&eccKey);
@@ -412,7 +412,7 @@ static int whTest_ServerImgMgrServerCfgEcc256(whServerConfig* serverCfg)
 
     /* Check verify action result */
     if (result.verifyActionResult != WH_ERROR_OK) {
-        printf("ECC verify action failed: %d\n", result.verifyActionResult);
+        WH_ERROR_PRINT("ECC verify action failed: %d\n", result.verifyActionResult);
         wh_Server_Cleanup(server);
         wc_Sha256Free(&sha);
         wc_ecc_free(&eccKey);
@@ -423,7 +423,7 @@ static int whTest_ServerImgMgrServerCfgEcc256(whServerConfig* serverCfg)
     /* Test verify by index */
     ret = wh_Server_ImgMgrVerifyImgIdx(&imgMgr, 0, &result);
     if (ret != WH_ERROR_OK) {
-        printf("Image verification by index failed: %d\n", ret);
+        WH_ERROR_PRINT("Image verification by index failed: %d\n", ret);
         wh_Server_Cleanup(server);
         wc_Sha256Free(&sha);
         wc_ecc_free(&eccKey);
@@ -433,7 +433,7 @@ static int whTest_ServerImgMgrServerCfgEcc256(whServerConfig* serverCfg)
 
     /* Check verify method result */
     if (result.verifyMethodResult != WH_ERROR_OK) {
-        printf("ECC verify method by index failed: %d\n",
+        WH_ERROR_PRINT("ECC verify method by index failed: %d\n",
                result.verifyMethodResult);
         wh_Server_Cleanup(server);
         wc_Sha256Free(&sha);
@@ -444,7 +444,7 @@ static int whTest_ServerImgMgrServerCfgEcc256(whServerConfig* serverCfg)
 
     /* Check verify action result */
     if (result.verifyActionResult != WH_ERROR_OK) {
-        printf("ECC verify action by index failed: %d\n",
+        WH_ERROR_PRINT("ECC verify action by index failed: %d\n",
                result.verifyActionResult);
         wh_Server_Cleanup(server);
         wc_Sha256Free(&sha);
@@ -457,7 +457,7 @@ static int whTest_ServerImgMgrServerCfgEcc256(whServerConfig* serverCfg)
     whServerImgMgrVerifyResult results[1];
     ret = wh_Server_ImgMgrVerifyAll(&imgMgr, results, 1, NULL);
     if (ret != WH_ERROR_OK) {
-        printf("Verify all images failed: %d\n", ret);
+        WH_ERROR_PRINT("Verify all images failed: %d\n", ret);
         wh_Server_Cleanup(server);
         wc_Sha256Free(&sha);
         wc_ecc_free(&eccKey);
@@ -467,7 +467,7 @@ static int whTest_ServerImgMgrServerCfgEcc256(whServerConfig* serverCfg)
 
     /* Check verify method result for all images */
     if (results[0].verifyMethodResult != WH_ERROR_OK) {
-        printf("ECC verify method for all images failed: %d\n",
+        WH_ERROR_PRINT("ECC verify method for all images failed: %d\n",
                results[0].verifyMethodResult);
         wh_Server_Cleanup(server);
         wc_Sha256Free(&sha);
@@ -478,7 +478,7 @@ static int whTest_ServerImgMgrServerCfgEcc256(whServerConfig* serverCfg)
 
     /* Check verify action result for all images */
     if (results[0].verifyActionResult != WH_ERROR_OK) {
-        printf("ECC verify action for all images failed: %d\n",
+        WH_ERROR_PRINT("ECC verify action for all images failed: %d\n",
                results[0].verifyActionResult);
         wh_Server_Cleanup(server);
         wc_Sha256Free(&sha);
@@ -493,7 +493,7 @@ static int whTest_ServerImgMgrServerCfgEcc256(whServerConfig* serverCfg)
     uint8_t corruptedSig[128];
     ret = wh_Nvm_Read(serverCfg->nvm, testEccSigNvmId, 0, sigLen, corruptedSig);
     if (ret != WH_ERROR_OK) {
-        printf("Failed to read signature for negative test: %d\n", ret);
+        WH_ERROR_PRINT("Failed to read signature for negative test: %d\n", ret);
         wh_Server_Cleanup(server);
         wc_Sha256Free(&sha);
         wc_ecc_free(&eccKey);
@@ -507,7 +507,7 @@ static int whTest_ServerImgMgrServerCfgEcc256(whServerConfig* serverCfg)
     /* Write corrupted signature back to NVM */
     ret = wh_Nvm_AddObject(serverCfg->nvm, &sigMeta, sigLen, corruptedSig);
     if (ret != WH_ERROR_OK) {
-        printf("Failed to write corrupted signature: %d\n", ret);
+        WH_ERROR_PRINT("Failed to write corrupted signature: %d\n", ret);
         wh_Server_Cleanup(server);
         wc_Sha256Free(&sha);
         wc_ecc_free(&eccKey);
@@ -518,7 +518,7 @@ static int whTest_ServerImgMgrServerCfgEcc256(whServerConfig* serverCfg)
     /* Test that the image does not verify with the corrupted signature */
     ret = wh_Server_ImgMgrVerifyImg(&imgMgr, &testImage, &result);
     if (ret != WH_ERROR_OK) {
-        printf("ERROR: ECC image verification with corrupted signature failed: "
+        WH_ERROR_PRINT("ERROR: ECC image verification with corrupted signature failed: "
                "%d\n",
                ret);
         wh_Server_Cleanup(server);
@@ -530,7 +530,7 @@ static int whTest_ServerImgMgrServerCfgEcc256(whServerConfig* serverCfg)
 
     /* Verify method result should not be OK */
     if (result.verifyMethodResult == WH_ERROR_OK) {
-        printf("ECC verify method with corrupted signature failed: %d\n",
+        WH_ERROR_PRINT("ECC verify method with corrupted signature failed: %d\n",
                result.verifyMethodResult);
         wh_Server_Cleanup(server);
         wc_Sha256Free(&sha);
@@ -541,7 +541,7 @@ static int whTest_ServerImgMgrServerCfgEcc256(whServerConfig* serverCfg)
 
     /* Verify action result should just be the verify method result */
     if (result.verifyActionResult != result.verifyMethodResult) {
-        printf("ECC verify action with corrupted signature failed: %d\n",
+        WH_ERROR_PRINT("ECC verify action with corrupted signature failed: %d\n",
                result.verifyActionResult);
         wh_Server_Cleanup(server);
         wc_Sha256Free(&sha);
@@ -553,7 +553,7 @@ static int whTest_ServerImgMgrServerCfgEcc256(whServerConfig* serverCfg)
     /* Delete the signature object to leave NVM in clean state */
     ret = wh_Nvm_DestroyObjects(serverCfg->nvm, 1, &testEccSigNvmId);
     if (ret != WH_ERROR_OK) {
-        printf("Failed to delete RSA signature object: %d\n", ret);
+        WH_ERROR_PRINT("Failed to delete RSA signature object: %d\n", ret);
         wh_Server_Cleanup(server);
         wc_Sha256Free(&sha);
         wc_ecc_free(&eccKey);
@@ -567,7 +567,7 @@ static int whTest_ServerImgMgrServerCfgEcc256(whServerConfig* serverCfg)
     wc_ecc_free(&eccKey);
     wc_FreeRng(&rng);
 
-    printf("IMG_MGR ECC P256 Test completed successfully!\n");
+    WH_TEST_PRINT("IMG_MGR ECC P256 Test completed successfully!\n");
     return 0;
 }
 #endif /* HAVE_ECC */
@@ -595,19 +595,19 @@ static int whTest_ServerImgMgrServerCfgAes128Cmac(whServerConfig* serverCfg)
     ret = wc_InitCmac(&cmac, testAes128Key, sizeof(testAes128Key), WC_CMAC_AES,
                       NULL);
     if (ret != 0) {
-        printf("Failed to initialize CMAC: %d\n", ret);
+        WH_ERROR_PRINT("Failed to initialize CMAC: %d\n", ret);
         return ret;
     }
 
     ret = wc_CmacUpdate(&cmac, testData, sizeof(testData));
     if (ret != 0) {
-        printf("Failed to update CMAC: %d\n", ret);
+        WH_ERROR_PRINT("Failed to update CMAC: %d\n", ret);
         return ret;
     }
 
     ret = wc_CmacFinal(&cmac, computed_cmac, &cmac_size);
     if (ret != 0) {
-        printf("Failed to finalize CMAC: %d\n", ret);
+        WH_ERROR_PRINT("Failed to finalize CMAC: %d\n", ret);
         return ret;
     }
 
@@ -620,7 +620,7 @@ static int whTest_ServerImgMgrServerCfgAes128Cmac(whServerConfig* serverCfg)
 
     ret = wh_Nvm_AddObject(serverCfg->nvm, &sigMeta, cmac_size, computed_cmac);
     if (ret != WH_ERROR_OK) {
-        printf("Failed to add CMAC signature to NVM: %d\n", ret);
+        WH_ERROR_PRINT("Failed to add CMAC signature to NVM: %d\n", ret);
         return ret;
     }
 
@@ -639,14 +639,14 @@ static int whTest_ServerImgMgrServerCfgAes128Cmac(whServerConfig* serverCfg)
     /* Initialize server */
     ret = wh_Server_Init(server, serverCfg);
     if (ret != WH_ERROR_OK) {
-        printf("Failed to initialize server: %d\n", ret);
+        WH_ERROR_PRINT("Failed to initialize server: %d\n", ret);
         return ret;
     }
 
     /* Initialize the image manager to work with the server */
     ret = wh_Server_ImgMgrInit(&imgMgr, &imgMgrConfig);
     if (ret != WH_ERROR_OK) {
-        printf("Failed to initialize image manager: %d\n", ret);
+        WH_ERROR_PRINT("Failed to initialize image manager: %d\n", ret);
         wh_Server_Cleanup(server);
         return ret;
     }
@@ -661,7 +661,7 @@ static int whTest_ServerImgMgrServerCfgAes128Cmac(whServerConfig* serverCfg)
 
     ret = wh_Server_KeystoreCacheKey(server, &keyMeta, (uint8_t*)testAes128Key);
     if (ret != WH_ERROR_OK) {
-        printf("Failed to cache AES128 key in keystore: %d\n", ret);
+        WH_ERROR_PRINT("Failed to cache AES128 key in keystore: %d\n", ret);
         wh_Server_Cleanup(server);
         return ret;
     }
@@ -669,7 +669,7 @@ static int whTest_ServerImgMgrServerCfgAes128Cmac(whServerConfig* serverCfg)
     /* Commit the key to NVM */
     ret = wh_Server_KeystoreCommitKey(server, testAesCmacKeyId);
     if (ret != WH_ERROR_OK) {
-        printf("Failed to commit AES128 key to NVM: %d\n", ret);
+        WH_ERROR_PRINT("Failed to commit AES128 key to NVM: %d\n", ret);
         wh_Server_Cleanup(server);
         return ret;
     }
@@ -678,21 +678,21 @@ static int whTest_ServerImgMgrServerCfgAes128Cmac(whServerConfig* serverCfg)
     whServerImgMgrVerifyResult result;
     ret = wh_Server_ImgMgrVerifyImg(&imgMgr, &testImage, &result);
     if (ret != WH_ERROR_OK) {
-        printf("CMAC image verification failed: %d\n", ret);
+        WH_ERROR_PRINT("CMAC image verification failed: %d\n", ret);
         wh_Server_Cleanup(server);
         return ret;
     }
 
     /* Check verify method result */
     if (result.verifyMethodResult != WH_ERROR_OK) {
-        printf("CMAC verify method failed: %d\n", result.verifyMethodResult);
+        WH_ERROR_PRINT("CMAC verify method failed: %d\n", result.verifyMethodResult);
         wh_Server_Cleanup(server);
         return result.verifyMethodResult;
     }
 
     /* Check verify action result */
     if (result.verifyActionResult != WH_ERROR_OK) {
-        printf("CMAC verify action failed: %d\n", result.verifyActionResult);
+        WH_ERROR_PRINT("CMAC verify action failed: %d\n", result.verifyActionResult);
         wh_Server_Cleanup(server);
         return result.verifyActionResult;
     }
@@ -700,14 +700,14 @@ static int whTest_ServerImgMgrServerCfgAes128Cmac(whServerConfig* serverCfg)
     /* Test verify by index */
     ret = wh_Server_ImgMgrVerifyImgIdx(&imgMgr, 0, &result);
     if (ret != WH_ERROR_OK) {
-        printf("CMAC image verification by index failed: %d\n", ret);
+        WH_ERROR_PRINT("CMAC image verification by index failed: %d\n", ret);
         wh_Server_Cleanup(server);
         return ret;
     }
 
     /* Check verify method result */
     if (result.verifyMethodResult != WH_ERROR_OK) {
-        printf("CMAC verify method by index failed: %d\n",
+        WH_ERROR_PRINT("CMAC verify method by index failed: %d\n",
                result.verifyMethodResult);
         wh_Server_Cleanup(server);
         return result.verifyMethodResult;
@@ -715,7 +715,7 @@ static int whTest_ServerImgMgrServerCfgAes128Cmac(whServerConfig* serverCfg)
 
     /* Check verify action result */
     if (result.verifyActionResult != WH_ERROR_OK) {
-        printf("CMAC verify action by index failed: %d\n",
+        WH_ERROR_PRINT("CMAC verify action by index failed: %d\n",
                result.verifyActionResult);
         wh_Server_Cleanup(server);
         return result.verifyActionResult;
@@ -725,14 +725,14 @@ static int whTest_ServerImgMgrServerCfgAes128Cmac(whServerConfig* serverCfg)
     whServerImgMgrVerifyResult results[1];
     ret = wh_Server_ImgMgrVerifyAll(&imgMgr, results, 1, NULL);
     if (ret != WH_ERROR_OK) {
-        printf("CMAC verify all images failed: %d\n", ret);
+        WH_ERROR_PRINT("CMAC verify all images failed: %d\n", ret);
         wh_Server_Cleanup(server);
         return ret;
     }
 
     /* Check verify method result for all images */
     if (results[0].verifyMethodResult != WH_ERROR_OK) {
-        printf("CMAC verify method for all images failed: %d\n",
+        WH_ERROR_PRINT("CMAC verify method for all images failed: %d\n",
                results[0].verifyMethodResult);
         wh_Server_Cleanup(server);
         return results[0].verifyMethodResult;
@@ -740,7 +740,7 @@ static int whTest_ServerImgMgrServerCfgAes128Cmac(whServerConfig* serverCfg)
 
     /* Check verify action result for all images */
     if (results[0].verifyActionResult != WH_ERROR_OK) {
-        printf("CMAC verify action for all images failed: %d\n",
+        WH_ERROR_PRINT("CMAC verify action for all images failed: %d\n",
                results[0].verifyActionResult);
         wh_Server_Cleanup(server);
         return results[0].verifyActionResult;
@@ -753,7 +753,7 @@ static int whTest_ServerImgMgrServerCfgAes128Cmac(whServerConfig* serverCfg)
     ret = wh_Nvm_Read(serverCfg->nvm, testAesCmacSigNvmId, 0, cmac_size,
                       corruptedCmac);
     if (ret != WH_ERROR_OK) {
-        printf("Failed to read CMAC signature for negative test: %d\n", ret);
+        WH_ERROR_PRINT("Failed to read CMAC signature for negative test: %d\n", ret);
         wh_Server_Cleanup(server);
         return ret;
     }
@@ -764,7 +764,7 @@ static int whTest_ServerImgMgrServerCfgAes128Cmac(whServerConfig* serverCfg)
     /* Write corrupted signature back to NVM */
     ret = wh_Nvm_AddObject(serverCfg->nvm, &sigMeta, cmac_size, corruptedCmac);
     if (ret != WH_ERROR_OK) {
-        printf("Failed to write corrupted CMAC signature: %d\n", ret);
+        WH_ERROR_PRINT("Failed to write corrupted CMAC signature: %d\n", ret);
         wh_Server_Cleanup(server);
         return ret;
     }
@@ -772,7 +772,7 @@ static int whTest_ServerImgMgrServerCfgAes128Cmac(whServerConfig* serverCfg)
     /* Test that the image does not verify with the corrupted signature */
     ret = wh_Server_ImgMgrVerifyImg(&imgMgr, &testImage, &result);
     if (ret != WH_ERROR_OK) {
-        printf("ERROR: CMAC image verification with corrupted signature "
+        WH_ERROR_PRINT("ERROR: CMAC image verification with corrupted signature "
                "failed: %d\n",
                ret);
         wh_Server_Cleanup(server);
@@ -781,7 +781,7 @@ static int whTest_ServerImgMgrServerCfgAes128Cmac(whServerConfig* serverCfg)
 
     /* Verify method result should not be OK */
     if (result.verifyMethodResult == WH_ERROR_OK) {
-        printf("CMAC verify method with corrupted signature failed: %d\n",
+        WH_ERROR_PRINT("CMAC verify method with corrupted signature failed: %d\n",
                result.verifyMethodResult);
         wh_Server_Cleanup(server);
         return WH_ERROR_ABORTED;
@@ -789,7 +789,7 @@ static int whTest_ServerImgMgrServerCfgAes128Cmac(whServerConfig* serverCfg)
 
     /* Verify action result should just be the verify method result */
     if (result.verifyActionResult != result.verifyMethodResult) {
-        printf("CMAC verify action with corrupted signature failed: %d\n",
+        WH_ERROR_PRINT("CMAC verify action with corrupted signature failed: %d\n",
                result.verifyActionResult);
         wh_Server_Cleanup(server);
         return WH_ERROR_ABORTED;
@@ -798,7 +798,7 @@ static int whTest_ServerImgMgrServerCfgAes128Cmac(whServerConfig* serverCfg)
     /* Delete the signature object to leave NVM in clean state */
     ret = wh_Nvm_DestroyObjects(serverCfg->nvm, 1, &testAesCmacSigNvmId);
     if (ret != WH_ERROR_OK) {
-        printf("Failed to delete CMAC signature object: %d\n", ret);
+        WH_ERROR_PRINT("Failed to delete CMAC signature object: %d\n", ret);
         wh_Server_Cleanup(server);
         return ret;
     }
@@ -806,7 +806,7 @@ static int whTest_ServerImgMgrServerCfgAes128Cmac(whServerConfig* serverCfg)
     /* Cleanup */
     wh_Server_Cleanup(server);
 
-    printf("IMG_MGR AES128 CMAC Test completed successfully!\n");
+    WH_TEST_PRINT("IMG_MGR AES128 CMAC Test completed successfully!\n");
     return 0;
 }
 #endif /* WOLFSSL_CMAC */
@@ -837,13 +837,13 @@ static int whTest_ServerImgMgrServerCfgRsa2048(whServerConfig* serverCfg)
 
     ret = wc_InitRng(&rng);
     if (ret != 0) {
-        printf("Failed to initialize RNG: %d\n", ret);
+        WH_ERROR_PRINT("Failed to initialize RNG: %d\n", ret);
         return ret;
     }
 
     ret = wc_InitRsaKey(&rsaKey, NULL);
     if (ret != 0) {
-        printf("Failed to initialize RSA key: %d\n", ret);
+        WH_ERROR_PRINT("Failed to initialize RSA key: %d\n", ret);
         wc_FreeRng(&rng);
         return ret;
     }
@@ -853,7 +853,7 @@ static int whTest_ServerImgMgrServerCfgRsa2048(whServerConfig* serverCfg)
     ret = wc_RsaPrivateKeyDecode(testRsa2048PrivKey, &inOutIdx, &rsaKey,
                                  sizeof(testRsa2048PrivKey));
     if (ret != 0) {
-        printf("Failed to decode RSA private key: %d\n", ret);
+        WH_ERROR_PRINT("Failed to decode RSA private key: %d\n", ret);
         wc_FreeRsaKey(&rsaKey);
         wc_FreeRng(&rng);
         return ret;
@@ -862,7 +862,7 @@ static int whTest_ServerImgMgrServerCfgRsa2048(whServerConfig* serverCfg)
     /* Export public key in DER format so we can store it in NVM */
     ret = wc_RsaKeyToPublicDer(&rsaKey, pubKeyDer, pubKeyDerLen);
     if (ret <= 0) {
-        printf("Failed to export public key to DER: %d\n", ret);
+        WH_ERROR_PRINT("Failed to export public key to DER: %d\n", ret);
         wc_FreeRsaKey(&rsaKey);
         wc_FreeRng(&rng);
         return ret;
@@ -872,7 +872,7 @@ static int whTest_ServerImgMgrServerCfgRsa2048(whServerConfig* serverCfg)
     /* Hash the test data */
     ret = wc_InitSha256(&sha);
     if (ret != 0) {
-        printf("Failed to initialize SHA256: %d\n", ret);
+        WH_ERROR_PRINT("Failed to initialize SHA256: %d\n", ret);
         wc_FreeRsaKey(&rsaKey);
         wc_FreeRng(&rng);
         return ret;
@@ -880,7 +880,7 @@ static int whTest_ServerImgMgrServerCfgRsa2048(whServerConfig* serverCfg)
 
     ret = wc_Sha256Update(&sha, testData, sizeof(testData));
     if (ret != 0) {
-        printf("Failed to update SHA256: %d\n", ret);
+        WH_ERROR_PRINT("Failed to update SHA256: %d\n", ret);
         wc_Sha256Free(&sha);
         wc_FreeRsaKey(&rsaKey);
         wc_FreeRng(&rng);
@@ -889,7 +889,7 @@ static int whTest_ServerImgMgrServerCfgRsa2048(whServerConfig* serverCfg)
 
     ret = wc_Sha256Final(&sha, hash);
     if (ret != 0) {
-        printf("Failed to finalize SHA256: %d\n", ret);
+        WH_ERROR_PRINT("Failed to finalize SHA256: %d\n", ret);
         wc_Sha256Free(&sha);
         wc_FreeRsaKey(&rsaKey);
         wc_FreeRng(&rng);
@@ -899,7 +899,7 @@ static int whTest_ServerImgMgrServerCfgRsa2048(whServerConfig* serverCfg)
     /* Sign the hash using RSA SSL */
     ret = wc_RsaSSL_Sign(hash, sizeof(hash), signature, sigLen, &rsaKey, &rng);
     if (ret <= 0) {
-        printf("Failed to sign hash: %d\n", ret);
+        WH_ERROR_PRINT("Failed to sign hash: %d\n", ret);
         wc_Sha256Free(&sha);
         wc_FreeRsaKey(&rsaKey);
         wc_FreeRng(&rng);
@@ -912,7 +912,7 @@ static int whTest_ServerImgMgrServerCfgRsa2048(whServerConfig* serverCfg)
     word32  decryptedLen = sizeof(decrypted);
     ret = wc_RsaSSL_Verify(signature, sigLen, decrypted, decryptedLen, &rsaKey);
     if (ret <= 0) {
-        printf("Direct signature verification failed: %d\n", ret);
+        WH_ERROR_PRINT("Direct signature verification failed: %d\n", ret);
         wc_Sha256Free(&sha);
         wc_FreeRsaKey(&rsaKey);
         wc_FreeRng(&rng);
@@ -922,7 +922,7 @@ static int whTest_ServerImgMgrServerCfgRsa2048(whServerConfig* serverCfg)
 
     if (decryptedLen != sizeof(hash) ||
         XMEMCMP(decrypted, hash, sizeof(hash)) != 0) {
-        printf("Direct signature verification failed: hash mismatch\n");
+        WH_ERROR_PRINT("Direct signature verification failed: hash mismatch\n");
         wc_Sha256Free(&sha);
         wc_FreeRsaKey(&rsaKey);
         wc_FreeRng(&rng);
@@ -938,7 +938,7 @@ static int whTest_ServerImgMgrServerCfgRsa2048(whServerConfig* serverCfg)
 
     ret = wh_Nvm_AddObject(serverCfg->nvm, &sigMeta, sigLen, signature);
     if (ret != WH_ERROR_OK) {
-        printf("Failed to add RSA signature to NVM: %d\n", ret);
+        WH_ERROR_PRINT("Failed to add RSA signature to NVM: %d\n", ret);
         wc_Sha256Free(&sha);
         wc_FreeRsaKey(&rsaKey);
         wc_FreeRng(&rng);
@@ -960,7 +960,7 @@ static int whTest_ServerImgMgrServerCfgRsa2048(whServerConfig* serverCfg)
     /* Initialize server */
     ret = wh_Server_Init(server, serverCfg);
     if (ret != WH_ERROR_OK) {
-        printf("Failed to initialize server: %d\n", ret);
+        WH_ERROR_PRINT("Failed to initialize server: %d\n", ret);
         wc_Sha256Free(&sha);
         wc_FreeRsaKey(&rsaKey);
         wc_FreeRng(&rng);
@@ -970,7 +970,7 @@ static int whTest_ServerImgMgrServerCfgRsa2048(whServerConfig* serverCfg)
     /* Initialize the image manager to work with the server */
     ret = wh_Server_ImgMgrInit(&imgMgr, &imgMgrConfig);
     if (ret != WH_ERROR_OK) {
-        printf("Failed to initialize image manager: %d\n", ret);
+        WH_ERROR_PRINT("Failed to initialize image manager: %d\n", ret);
         wc_Sha256Free(&sha);
         wc_FreeRsaKey(&rsaKey);
         wc_FreeRng(&rng);
@@ -988,7 +988,7 @@ static int whTest_ServerImgMgrServerCfgRsa2048(whServerConfig* serverCfg)
 
     ret = wh_Server_KeystoreCacheKey(server, &keyMeta, pubKeyDer);
     if (ret != WH_ERROR_OK) {
-        printf("Failed to cache RSA key in keystore: %d\n", ret);
+        WH_ERROR_PRINT("Failed to cache RSA key in keystore: %d\n", ret);
         wh_Server_Cleanup(server);
         wc_Sha256Free(&sha);
         wc_FreeRsaKey(&rsaKey);
@@ -999,7 +999,7 @@ static int whTest_ServerImgMgrServerCfgRsa2048(whServerConfig* serverCfg)
     /* Commit the key to NVM */
     ret = wh_Server_KeystoreCommitKey(server, testRsaKeyId);
     if (ret != WH_ERROR_OK) {
-        printf("Failed to commit RSA key to NVM: %d\n", ret);
+        WH_ERROR_PRINT("Failed to commit RSA key to NVM: %d\n", ret);
         wh_Server_Cleanup(server);
         wc_Sha256Free(&sha);
         wc_FreeRsaKey(&rsaKey);
@@ -1011,7 +1011,7 @@ static int whTest_ServerImgMgrServerCfgRsa2048(whServerConfig* serverCfg)
     whServerImgMgrVerifyResult result;
     ret = wh_Server_ImgMgrVerifyImg(&imgMgr, &testImage, &result);
     if (ret != WH_ERROR_OK) {
-        printf("RSA image verification failed: %d\n", ret);
+        WH_ERROR_PRINT("RSA image verification failed: %d\n", ret);
         wh_Server_Cleanup(server);
         wc_Sha256Free(&sha);
         wc_FreeRsaKey(&rsaKey);
@@ -1021,7 +1021,7 @@ static int whTest_ServerImgMgrServerCfgRsa2048(whServerConfig* serverCfg)
 
     /* Check verify method result */
     if (result.verifyMethodResult != WH_ERROR_OK) {
-        printf("RSA verify method failed: %d\n", result.verifyMethodResult);
+        WH_ERROR_PRINT("RSA verify method failed: %d\n", result.verifyMethodResult);
         wh_Server_Cleanup(server);
         wc_Sha256Free(&sha);
         wc_FreeRsaKey(&rsaKey);
@@ -1031,7 +1031,7 @@ static int whTest_ServerImgMgrServerCfgRsa2048(whServerConfig* serverCfg)
 
     /* Check verify action result */
     if (result.verifyActionResult != WH_ERROR_OK) {
-        printf("RSA verify action failed: %d\n", result.verifyActionResult);
+        WH_ERROR_PRINT("RSA verify action failed: %d\n", result.verifyActionResult);
         wh_Server_Cleanup(server);
         wc_Sha256Free(&sha);
         wc_FreeRsaKey(&rsaKey);
@@ -1042,7 +1042,7 @@ static int whTest_ServerImgMgrServerCfgRsa2048(whServerConfig* serverCfg)
     /* Test verify by index */
     ret = wh_Server_ImgMgrVerifyImgIdx(&imgMgr, 0, &result);
     if (ret != WH_ERROR_OK) {
-        printf("RSA image verification by index failed: %d\n", ret);
+        WH_ERROR_PRINT("RSA image verification by index failed: %d\n", ret);
         wh_Server_Cleanup(server);
         wc_Sha256Free(&sha);
         wc_FreeRsaKey(&rsaKey);
@@ -1052,7 +1052,7 @@ static int whTest_ServerImgMgrServerCfgRsa2048(whServerConfig* serverCfg)
 
     /* Check verify method result */
     if (result.verifyMethodResult != WH_ERROR_OK) {
-        printf("RSA verify method by index failed: %d\n",
+        WH_ERROR_PRINT("RSA verify method by index failed: %d\n",
                result.verifyMethodResult);
         wh_Server_Cleanup(server);
         wc_Sha256Free(&sha);
@@ -1063,7 +1063,7 @@ static int whTest_ServerImgMgrServerCfgRsa2048(whServerConfig* serverCfg)
 
     /* Check verify action result */
     if (result.verifyActionResult != WH_ERROR_OK) {
-        printf("RSA verify action by index failed: %d\n",
+        WH_ERROR_PRINT("RSA verify action by index failed: %d\n",
                result.verifyActionResult);
         wh_Server_Cleanup(server);
         wc_Sha256Free(&sha);
@@ -1076,7 +1076,7 @@ static int whTest_ServerImgMgrServerCfgRsa2048(whServerConfig* serverCfg)
     whServerImgMgrVerifyResult results[1];
     ret = wh_Server_ImgMgrVerifyAll(&imgMgr, results, 1, NULL);
     if (ret != WH_ERROR_OK) {
-        printf("RSA verify all images failed: %d\n", ret);
+        WH_ERROR_PRINT("RSA verify all images failed: %d\n", ret);
         wh_Server_Cleanup(server);
         wc_Sha256Free(&sha);
         wc_FreeRsaKey(&rsaKey);
@@ -1086,7 +1086,7 @@ static int whTest_ServerImgMgrServerCfgRsa2048(whServerConfig* serverCfg)
 
     /* Check verify method result for all images */
     if (results[0].verifyMethodResult != WH_ERROR_OK) {
-        printf("RSA verify method for all images failed: %d\n",
+        WH_ERROR_PRINT("RSA verify method for all images failed: %d\n",
                results[0].verifyMethodResult);
         wh_Server_Cleanup(server);
         wc_Sha256Free(&sha);
@@ -1097,7 +1097,7 @@ static int whTest_ServerImgMgrServerCfgRsa2048(whServerConfig* serverCfg)
 
     /* Check verify action result for all images */
     if (results[0].verifyActionResult != WH_ERROR_OK) {
-        printf("RSA verify action for all images failed: %d\n",
+        WH_ERROR_PRINT("RSA verify action for all images failed: %d\n",
                results[0].verifyActionResult);
         wh_Server_Cleanup(server);
         wc_Sha256Free(&sha);
@@ -1113,7 +1113,7 @@ static int whTest_ServerImgMgrServerCfgRsa2048(whServerConfig* serverCfg)
     ret = wh_Nvm_Read(serverCfg->nvm, testRsaSigNvmId, 0, sigLen,
                       corruptedRsaSig);
     if (ret != WH_ERROR_OK) {
-        printf("Failed to read RSA signature for negative test: %d\n", ret);
+        WH_ERROR_PRINT("Failed to read RSA signature for negative test: %d\n", ret);
         wh_Server_Cleanup(server);
         wc_Sha256Free(&sha);
         wc_FreeRsaKey(&rsaKey);
@@ -1127,7 +1127,7 @@ static int whTest_ServerImgMgrServerCfgRsa2048(whServerConfig* serverCfg)
     /* Write corrupted signature back to NVM */
     ret = wh_Nvm_AddObject(serverCfg->nvm, &sigMeta, sigLen, corruptedRsaSig);
     if (ret != WH_ERROR_OK) {
-        printf("Failed to write corrupted RSA signature: %d\n", ret);
+        WH_ERROR_PRINT("Failed to write corrupted RSA signature: %d\n", ret);
         wh_Server_Cleanup(server);
         wc_Sha256Free(&sha);
         wc_FreeRsaKey(&rsaKey);
@@ -1138,7 +1138,7 @@ static int whTest_ServerImgMgrServerCfgRsa2048(whServerConfig* serverCfg)
     /* Test that the image does not verify with the corrupted signature */
     ret = wh_Server_ImgMgrVerifyImg(&imgMgr, &testImage, &result);
     if (ret != WH_ERROR_OK) {
-        printf("ERROR: RSA image verification with corrupted signature failed: "
+        WH_ERROR_PRINT("ERROR: RSA image verification with corrupted signature failed: "
                "%d\n",
                ret);
         wh_Server_Cleanup(server);
@@ -1150,7 +1150,7 @@ static int whTest_ServerImgMgrServerCfgRsa2048(whServerConfig* serverCfg)
 
     /* Verify method result should not be OK */
     if (result.verifyMethodResult == WH_ERROR_OK) {
-        printf("RSA verify method with corrupted signature failed: %d\n",
+        WH_ERROR_PRINT("RSA verify method with corrupted signature failed: %d\n",
                result.verifyMethodResult);
         wh_Server_Cleanup(server);
         wc_Sha256Free(&sha);
@@ -1161,7 +1161,7 @@ static int whTest_ServerImgMgrServerCfgRsa2048(whServerConfig* serverCfg)
 
     /* Verify action result should just be the verify method result */
     if (result.verifyActionResult != result.verifyMethodResult) {
-        printf("RSA verify action with corrupted signature failed: %d\n",
+        WH_ERROR_PRINT("RSA verify action with corrupted signature failed: %d\n",
                result.verifyActionResult);
         wh_Server_Cleanup(server);
         wc_Sha256Free(&sha);
@@ -1173,7 +1173,7 @@ static int whTest_ServerImgMgrServerCfgRsa2048(whServerConfig* serverCfg)
     /* Delete the signature object to leave NVM in clean state */
     ret = wh_Nvm_DestroyObjects(serverCfg->nvm, 1, &testRsaSigNvmId);
     if (ret != WH_ERROR_OK) {
-        printf("Failed to delete RSA signature object: %d\n", ret);
+        WH_ERROR_PRINT("Failed to delete RSA signature object: %d\n", ret);
         wh_Server_Cleanup(server);
         wc_Sha256Free(&sha);
         wc_FreeRsaKey(&rsaKey);
@@ -1187,7 +1187,7 @@ static int whTest_ServerImgMgrServerCfgRsa2048(whServerConfig* serverCfg)
     wc_FreeRsaKey(&rsaKey);
     wc_FreeRng(&rng);
 
-    printf("IMG_MGR RSA2048 Test completed successfully!\n");
+    WH_TEST_PRINT("IMG_MGR RSA2048 Test completed successfully!\n");
     return 0;
 }
 #endif /* !NO_RSA */
@@ -1249,7 +1249,7 @@ int whTest_ServerImgMgr(whTestNvmBackendType nvmType)
     /* Initialize NVM */
     rc = wh_Nvm_Init(nvm, n_conf);
     if (rc != 0) {
-        printf("Failed to initialize NVM: %d\n", rc);
+        WH_ERROR_PRINT("Failed to initialize NVM: %d\n", rc);
         return rc;
     }
 
@@ -1259,7 +1259,7 @@ int whTest_ServerImgMgr(whTestNvmBackendType nvmType)
     /* ECC P256 verify method */
     rc = whTest_ServerImgMgrServerCfgEcc256(s_conf);
     if (rc != 0) {
-        printf("ECC P256 image manager server config tests failed: %d\n", rc);
+        WH_ERROR_PRINT("ECC P256 image manager server config tests failed: %d\n", rc);
         wh_Nvm_Cleanup(nvm);
         return rc;
     }
@@ -1269,7 +1269,7 @@ int whTest_ServerImgMgr(whTestNvmBackendType nvmType)
     /* AES128 CMAC verify method */
     rc = whTest_ServerImgMgrServerCfgAes128Cmac(s_conf);
     if (rc != 0) {
-        printf("AES128 CMAC image manager server config tests failed: %d\n",
+        WH_ERROR_PRINT("AES128 CMAC image manager server config tests failed: %d\n",
                rc);
         wh_Nvm_Cleanup(nvm);
         return rc;
@@ -1280,7 +1280,7 @@ int whTest_ServerImgMgr(whTestNvmBackendType nvmType)
     /* RSA2048 verify method */
     rc = whTest_ServerImgMgrServerCfgRsa2048(s_conf);
     if (rc != 0) {
-        printf("RSA2048 image manager server config tests failed: %d\n", rc);
+        WH_ERROR_PRINT("RSA2048 image manager server config tests failed: %d\n", rc);
         wh_Nvm_Cleanup(nvm);
         return rc;
     }

@@ -8,8 +8,8 @@
 #define HAVE_ANONYMOUS_INLINE_AGGREGATES 1
 /* Optional if debugging cryptocb's */
 #if 0
-#define DEBUG_CRYPTOCB
-#define DEBUG_CRYPTOCB_VERBOSE
+#define WOLFHSM_CFG_DEBUG
+#define WOLFHSM_CFG_DEBUG_VERBOSE
 #endif
 
 /* Key DER export/import support */

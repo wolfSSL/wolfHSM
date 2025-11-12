@@ -49,11 +49,11 @@ static void fillTestData(uint8_t* buffer, uint32_t size, uint32_t baseValue)
 #if defined(WH_TEST_FLASH_RAMSIM_DEBUG)
 static void printMemory(uint8_t* buffer, uint32_t size, uint32_t offset)
 {
-    printf("Memory at offset %u: ", offset);
+    WH_TEST_DEBUG_PRINT("Memory at offset %u: ", offset);
     for (size_t i = 0; i < size; i++) {
-        printf("%02X ", buffer[i]);
+        WH_TEST_DEBUG_PRINT("%02X ", buffer[i]);
     }
-    printf("\n");
+    WH_TEST_DEBUG_PRINT("\n");
 }
 #endif /* WH_TEST_FLASH_RAMSIM_DEBUG */
 
@@ -73,7 +73,7 @@ int whTest_Flash_RamSim(void)
     uint8_t testData[TEST_PAGE_SIZE] = {0};
     uint8_t readData[TEST_PAGE_SIZE] = {0};
 
-    printf("Testing RAM-based flash simulator...\n");
+    WH_TEST_PRINT("Testing RAM-based flash simulator...\n");
 
     WH_TEST_RETURN_ON_FAIL(whFlashRamsim_Init(&ctx, &cfg));
 
@@ -146,7 +146,7 @@ int whTest_Flash_RamSim(void)
             };
 
 #if WH_TEST_FLASH_RAMSIM_DEBUG
-            printf("Page %u in sector %u before programming:\n", (unsigned int)page, (unsigned int)sector);
+            WH_TEST_DEBUG_PRINT("Page %u in sector %u before programming:\n", (unsigned int)page, (unsigned int)sector);
             printMemory(readData, cfg.pageSize, pageOffset);
 #endif /* WH_TEST_FLASH_RAMSIM_DEBUG */
 
@@ -160,7 +160,7 @@ int whTest_Flash_RamSim(void)
             }
 
 #if WH_TEST_FLASH_RAMSIM_DEBUG
-            printf("Page %u in sector %u after programming:\n", (unsigned int)page, (unsigned int)sector);
+            WH_TEST_DEBUG_PRINT("Page %u in sector %u after programming:\n", (unsigned int)page, (unsigned int)sector);
             whFlashRamsim_Read(&ctx, pageOffset, cfg.pageSize, readData);
             printMemory(readData, cfg.pageSize, pageOffset);
 #endif /* WH_TEST_FLASH_RAMSIM_DEBUG */

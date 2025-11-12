@@ -307,10 +307,7 @@ static int _HandleRsaKeyGen(whServerContext* ctx, uint16_t magic,
     if (ret == 0) {
         /* make the rsa key with the given params */
         ret = wc_MakeRsaKey(rsa, key_size, e, ctx->crypto->rng);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-        printf("[server] MakeRsaKey: size:%d, e:%ld, ret:%d\n", key_size, e,
-               ret);
-#endif
+        WH_DEBUG_SERVER_VERBOSE("MakeRsaKey: size:%d, e:%ld, ret:%d\n", key_size, e, ret);
 
         if (ret == 0) {
             /* Check incoming flags */
@@ -328,10 +325,7 @@ static int _HandleRsaKeyGen(whServerContext* ctx, uint16_t magic,
                 if (WH_KEYID_ISERASED(key_id)) {
                     /* Generate a new id */
                     ret = wh_Server_KeystoreGetUniqueId(ctx, &key_id);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-                    printf("[server] RsaKeyGen UniqueId: keyId:%u, ret:%d\n",
-                           key_id, ret);
-#endif
+                    WH_DEBUG_SERVER_VERBOSE("RsaKeyGen UniqueId: keyId:%u, ret:%d\n", key_id, ret);
                     if (ret != WH_ERROR_OK) {
                         /* Early return on unique ID generation failure */
                         wc_FreeRsaKey(rsa);
@@ -343,10 +337,7 @@ static int _HandleRsaKeyGen(whServerContext* ctx, uint16_t magic,
                     ret = wh_Server_CacheImportRsaKey(ctx, rsa, key_id, flags,
                                                       label_size, label);
                 }
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-                printf("[server] RsaKeyGen CacheKeyRsa: keyId:%u, ret:%d\n",
-                       key_id, ret);
-#endif
+                WH_DEBUG_SERVER_VERBOSE("RsaKeyGen CacheKeyRsa: keyId:%u, ret:%d\n", key_id, ret);
                 if (ret == 0) {
                     res.keyId = wh_KeyId_TranslateToClient(key_id);
                     res.len   = 0;
@@ -406,10 +397,8 @@ static int _HandleRsaFunction( whServerContext* ctx, uint16_t magic,
     byte* in  = (uint8_t*)(cryptoDataIn + sizeof(whMessageCrypto_RsaRequest));
     byte* out = (uint8_t*)(cryptoDataOut + sizeof(whMessageCrypto_RsaResponse));
 
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-    printf("[server] HandleRsaFunction opType:%d inLen:%u keyId:%u outLen:%u\n",
+    WH_DEBUG_SERVER_VERBOSE("HandleRsaFunction opType:%d inLen:%u keyId:%u outLen:%u\n",
             op_type, in_len, key_id, out_len);
-#endif
     switch (op_type)
     {
     case RSA_PUBLIC_ENCRYPT:
@@ -420,10 +409,7 @@ static int _HandleRsaFunction( whServerContext* ctx, uint16_t magic,
         break;
     default:
         /* Invalid opType */
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-    printf("[server] %s Unknown opType:%d\n",
-            __func__, op_type);
-#endif
+        WH_DEBUG_SERVER_VERBOSE("Unknown opType:%d\n", op_type);
 
         return BAD_FUNC_ARG;
     }
@@ -473,17 +459,13 @@ static int _HandleRsaFunction( whServerContext* ctx, uint16_t magic,
     /* load the key from the keystore */
     if (ret == 0) {
         ret = wh_Server_CacheExportRsaKey(ctx, key_id, rsa);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-        printf("[server] CacheExportRsaKey keyid:%u, ret:%d\n", key_id, ret);
-#endif
+        WH_DEBUG_SERVER_VERBOSE("CacheExportRsaKey keyid:%u, ret:%d\n", key_id, ret);
         if (ret == 0) {
             /* do the rsa operation */
             ret = wc_RsaFunction(in, in_len, out, &out_len,
                 op_type, rsa, ctx->crypto->rng);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("[server] RsaFunction in:%p %u, out:%p, opType:%d, outLen:%d, ret:%d\n",
+            WH_DEBUG_SERVER_VERBOSE("RsaFunction in:%p %u, out:%p, opType:%d, outLen:%d, ret:%d\n",
                     in, in_len, out, op_type, out_len, ret);
-#endif
         }
         /* free the key */
         wc_FreeRsaKey(rsa);
@@ -546,10 +528,8 @@ static int _HandleRsaGetSize(whServerContext* ctx, uint16_t magic,
         wc_FreeRsaKey(rsa);
     }
     if (evict != 0) {
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-        printf("[server] %s evicting temp key:%x options:%u evict:%u\n",
-               __func__, key_id, options, evict);
-#endif
+        WH_DEBUG_SERVER_VERBOSE("evicting temp key:%x options:%u evict:%u\n",
+               key_id, options, evict);
         /* User requested to evict from cache, even if the call failed */
         (void)wh_Server_KeystoreEvictKey(ctx, key_id);
     }
@@ -561,10 +541,8 @@ static int _HandleRsaGetSize(whServerContext* ctx, uint16_t magic,
 
         *outSize = sizeof(whMessageCrypto_RsaGetSizeResponse);
     }
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-    printf("[server] %s keyId:%d, key_size:%d, ret:%d\n", __func__, key_id,
+    WH_DEBUG_SERVER_VERBOSE("keyId:%d, key_size:%d, ret:%d\n", key_id,
            key_size, ret);
-#endif
     return ret;
 }
 #endif /* !NO_RSA */
@@ -686,10 +664,9 @@ int wh_Server_CacheExportCurve25519Key(whServerContext* server, whKeyId keyId,
 
     if (ret == 0) {
         ret = wh_Crypto_Curve25519DeserializeKey(cacheBuf, cacheMeta->len, key);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-        printf("[server] Export25519Key id:%u ret:%d\n", keyId, ret);
-        wh_Utils_Hexdump("[server] export key:", cacheBuf, cacheMeta->len);
-#endif
+        WH_DEBUG_SERVER_VERBOSE("Export25519Key id:%u ret:%d\n", keyId, ret);
+        WH_DEBUG_SERVER_VERBOSE("export key:\n");
+        WH_DEBUG_VERBOSE_HEXDUMP("[server] export key:", cacheBuf, cacheMeta->len);
     }
     return ret;
 }
@@ -724,9 +701,7 @@ int wh_Server_MlDsaKeyCacheImport(whServerContext* ctx, MlDsaKey* key,
     if (ret == WH_ERROR_OK) {
         ret = wh_Crypto_MlDsaSerializeKeyDer(key, MAX_MLDSA_DER_SIZE, cacheBuf,
                                              &der_size);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-        printf("[server] %s keyId:%u, ret:%d\n", __func__, keyId, ret);
-#endif
+        WH_DEBUG_SERVER_VERBOSE("keyId:%u, ret:%d\n", keyId, ret);
     }
 
     if (ret == WH_ERROR_OK) {
@@ -758,9 +733,7 @@ int wh_Server_MlDsaKeyCacheExport(whServerContext* ctx, whKeyId keyId,
 
     if (ret == WH_ERROR_OK) {
         ret = wh_Crypto_MlDsaDeserializeKeyDer(cacheBuf, cacheMeta->len, key);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-        printf("[server] %s keyId:%u, ret:%d\n", __func__, keyId, ret);
-#endif
+        WH_DEBUG_SERVER_VERBOSE("keyId:%u, ret:%d\n", keyId, ret);
     }
     return ret;
 }
@@ -831,10 +804,7 @@ static int _HandleEccKeyGen(whServerContext* ctx, uint16_t magic,
                 if (WH_KEYID_ISERASED(key_id)) {
                     /* Generate a new id */
                     ret = wh_Server_KeystoreGetUniqueId(ctx, &key_id);
-#ifdef DEBUG_CRYPTOCB
-                    printf("[server] %s UniqueId: keyId:%u, ret:%d\n", __func__,
-                           key_id, ret);
-#endif
+                    WH_DEBUG_SERVER("UniqueId: keyId:%u, ret:%d\n", key_id, ret);
                     if (ret != WH_ERROR_OK) {
                         /* Early return on unique ID generation failure */
                         wc_ecc_free(key);
@@ -845,10 +815,7 @@ static int _HandleEccKeyGen(whServerContext* ctx, uint16_t magic,
                     ret = wh_Server_EccKeyCacheImport(ctx, key, key_id, flags,
                                                       label_size, label);
                 }
-#ifdef DEBUG_CRYPTOCB
-                printf("[server] %s CacheImport: keyId:%u, ret:%d\n", __func__,
-                       key_id, ret);
-#endif
+                WH_DEBUG_SERVER("CacheImport: keyId:%u, ret:%d\n", key_id, ret);
                 /* TODO: RSA has the following, should we do the same? */
                 /*
                 res.keyId = WH_KEYID_ID(key_id);
@@ -1017,18 +984,13 @@ static int _HandleEccSign(whServerContext* ctx, uint16_t magic,
         /* load the private key */
         ret = wh_Server_EccKeyCacheExport(ctx, key_id, key);
         if (ret == WH_ERROR_OK) {
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf(
-                "[server] EccSign: key_id=%x, in_len=%u, res_len=%u, ret=%d\n",
+            WH_DEBUG_SERVER_VERBOSE("EccSign: key_id=%x, in_len=%u, res_len=%u, ret=%d\n",
                 key_id, (unsigned)in_len, (unsigned)res_len, ret);
-            wh_Utils_Hexdump("[server] EccSign in:", in, in_len);
-#endif
+            WH_DEBUG_VERBOSE_HEXDUMP("[server] EccSign in:", in, in_len);
             /* sign the input */
             ret = wc_ecc_sign_hash(in, in_len, res_out, &res_len,
                                    ctx->crypto->rng, key);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-            wh_Utils_Hexdump("[server] EccSign res:", res_out, res_len);
-#endif
+            WH_DEBUG_VERBOSE_HEXDUMP("[server] EccSign res:", res_out, res_len);
         }
         wc_ecc_free(key);
     }
@@ -1120,14 +1082,11 @@ static int _HandleEccVerify(whServerContext* ctx, uint16_t magic,
             /* verify the signature */
             ret = wc_ecc_verify_hash(req_sig, sig_len, req_hash, hash_len,
                                      &result, key);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("[server] EccVerify: key_id=%x, sig_len=%u, hash_len=%u, "
+            WH_DEBUG_SERVER_VERBOSE("EccVerify: key_id=%x, sig_len=%u, hash_len=%u, "
                    "result=%d, ret=%d\n",
                    key_id, (unsigned)sig_len, (unsigned)hash_len, result, ret);
-
-            wh_Utils_Hexdump("[server] EccVerify hash:", req_hash, hash_len);
-            wh_Utils_Hexdump("[server] EccVerify sig:", req_sig, sig_len);
-#endif
+            WH_DEBUG_VERBOSE_HEXDUMP("[server] EccVerify hash:", req_hash, hash_len);
+            WH_DEBUG_VERBOSE_HEXDUMP("[server] EccVerify sig:", req_sig, sig_len);
 
             if ((ret == 0) && (export_pub_key != 0)) {
                 /* Export the public key to the result message*/
@@ -1435,10 +1394,7 @@ static int _HandleHkdf(whServerContext* ctx, uint16_t magic,
             if (WH_KEYID_ISERASED(key_id)) {
                 /* Generate a new id */
                 ret = wh_Server_KeystoreGetUniqueId(ctx, &key_id);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-                printf("[server] HkdfKeyGen UniqueId: keyId:%u, ret:%d\n",
-                       key_id, ret);
-#endif
+                WH_DEBUG_SERVER_VERBOSE("HkdfKeyGen UniqueId: keyId:%u, ret:%d\n", key_id, ret);
                 if (ret != WH_ERROR_OK) {
                     /* Early return on unique ID generation failure */
                     return ret;
@@ -1449,10 +1405,7 @@ static int _HandleHkdf(whServerContext* ctx, uint16_t magic,
                 ret = wh_Server_HkdfKeyCacheImport(ctx, out, outSz, key_id,
                                                    flags, label_size, label);
             }
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("[server] HkdfKeyGen CacheImport: keyId:%u, ret:%d\n",
-                   key_id, ret);
-#endif
+            WH_DEBUG_SERVER_VERBOSE("HkdfKeyGen CacheImport: keyId:%u, ret:%d\n", key_id, ret);
             if (ret == WH_ERROR_OK) {
                 res.keyIdOut = wh_KeyId_TranslateToClient(key_id);
                 res.outSz = 0;
@@ -1677,10 +1630,8 @@ static int _HandleCurve25519KeyGen(whServerContext* ctx, uint16_t magic,
                 if (WH_KEYID_ISERASED(key_id)) {
                     /* Generate a new id */
                     ret = wh_Server_KeystoreGetUniqueId(ctx, &key_id);
-#ifdef DEBUG_CRYPTOCB
-                    printf("[server] %s UniqueId: keyId:%u, ret:%d\n", __func__,
+                    WH_DEBUG_SERVER("UniqueId: keyId:%u, ret:%d\n",
                            key_id, ret);
-#endif
                     if (ret != WH_ERROR_OK) {
                         /* Early return on unique ID generation failure */
                         wc_curve25519_free(key);
@@ -1692,10 +1643,8 @@ static int _HandleCurve25519KeyGen(whServerContext* ctx, uint16_t magic,
                     ret = wh_Server_CacheImportCurve25519Key(
                         ctx, key, key_id, flags, label_size, label);
                 }
-#ifdef DEBUG_CRYPTOCB
-                printf("[server] %s CacheImport: keyId:%u, ret:%d\n", __func__,
+                WH_DEBUG_SERVER_VERBOSE("CacheImport: keyId:%u, ret:%d\n",
                        key_id, ret);
-#endif
             }
         }
         wc_curve25519_free(key);
@@ -1856,11 +1805,9 @@ static int _HandleAesCtr(whServerContext* ctx, uint16_t magic,
     uint8_t* out_tmp = out_reg + AES_BLOCK_SIZE;
 
     /* Debug printouts */
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-    wh_Utils_Hexdump("[AesCtr] Input data ", in, len);
-    wh_Utils_Hexdump("[AesCtr] IV ", iv, AES_BLOCK_SIZE);
-    wh_Utils_Hexdump("[AesCtr] tmp ", tmp, AES_BLOCK_SIZE);
-#endif
+    WH_DEBUG_VERBOSE_HEXDUMP("[AesCtr] Input data ", in, len);
+    WH_DEBUG_VERBOSE_HEXDUMP("[AesCtr] IV ", iv, AES_BLOCK_SIZE);
+    WH_DEBUG_VERBOSE_HEXDUMP("[AesCtr] tmp ", tmp, AES_BLOCK_SIZE);
     /* Freshen key and validate usage policy if key is not erased */
     if (!WH_KEYID_ISERASED(key_id)) {
         ret = wh_Server_KeystoreFreshenKey(ctx, key_id, &cachedKey, &keyMeta);
@@ -1874,15 +1821,11 @@ static int _HandleAesCtr(whServerContext* ctx, uint16_t magic,
             /* override the incoming values with cached key */
             key     = cachedKey;
             key_len = keyMeta->len;
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-            wh_Utils_Hexdump("[AesCtr] Key from HSM", key, key_len);
-#endif
+            WH_DEBUG_VERBOSE_HEXDUMP("[AesCtr] Key from HSM", key, key_len);
         }
     }
     else {
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-        wh_Utils_Hexdump("[AesCtr] Key ", key, key_len);
-#endif
+        WH_DEBUG_VERBOSE_HEXDUMP("[AesCtr] Key ", key, key_len);
     }
     if (ret == 0) {
         /* init key with possible hardware */
@@ -1900,18 +1843,14 @@ static int _HandleAesCtr(whServerContext* ctx, uint16_t magic,
             if (enc != 0) {
                 ret = wc_AesCtrEncrypt(aes, (byte*)out, (byte*)in, (word32)len);
                 if (ret == 0) {
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-                    wh_Utils_Hexdump("[AesCtr] Encrypted output", out, len);
-#endif
+                    WH_DEBUG_VERBOSE_HEXDUMP("[AesCtr] Encrypted output", out, len);
                 }
             }
             else {
                 /* CTR uses the same function for encrypt and decrypt */
                 ret = wc_AesCtrEncrypt(aes, (byte*)out, (byte*)in, (word32)len);
                 if (ret == 0) {
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-                    wh_Utils_Hexdump("[AesCtr] Decrypted output", out, len);
-#endif
+                    WH_DEBUG_VERBOSE_HEXDUMP("[AesCtr] Decrypted output", out, len);
                 }
             }
         }
@@ -1979,10 +1918,8 @@ static int _HandleAesEcb(whServerContext* ctx, uint16_t magic,
         (uint8_t*)(cryptoDataOut) + sizeof(whMessageCrypto_AesEcbResponse);
 
     /* Debug printouts */
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-    wh_Utils_Hexdump("[AesEcb] Input data", in, len);
-    wh_Utils_Hexdump("[AesEcb] IV", iv, AES_BLOCK_SIZE);
-#endif
+    WH_DEBUG_VERBOSE_HEXDUMP("[AesEcb] Input data", in, len);
+    WH_DEBUG_VERBOSE_HEXDUMP("[AesEcb] IV", iv, AES_BLOCK_SIZE);
     /* Freshen key and validate usage policy if key is not erased */
     if (!WH_KEYID_ISERASED(key_id)) {
         ret = wh_Server_KeystoreFreshenKey(ctx, key_id, &cachedKey, &keyMeta);
@@ -1996,15 +1933,11 @@ static int _HandleAesEcb(whServerContext* ctx, uint16_t magic,
             /* override the incoming values with cached key */
             key     = cachedKey;
             key_len = keyMeta->len;
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-            wh_Utils_Hexdump("[AesEcb] Key from HSM", key, key_len);
-#endif
+            WH_DEBUG_VERBOSE_HEXDUMP("[AesEcb] Key from HSM", key, key_len);
         }
     }
     else {
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-        wh_Utils_Hexdump("[AesEcb] Key ", key, key_len);
-#endif
+        WH_DEBUG_VERBOSE_HEXDUMP("[AesEcb] Key ", key, key_len);
     }
     if (ret == 0) {
         /* init key with possible hardware */
@@ -2019,17 +1952,13 @@ static int _HandleAesEcb(whServerContext* ctx, uint16_t magic,
             if (enc != 0) {
                 ret = wc_AesEcbEncrypt(aes, (byte*)out, (byte*)in, (word32)len);
                 if (ret == 0) {
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-                    wh_Utils_Hexdump("[AesEcb] Encrypted output", out, len);
-#endif
+                    WH_DEBUG_VERBOSE_HEXDUMP("[AesEcb] Encrypted output", out, len);
                 }
             }
             else {
                 ret = wc_AesEcbDecrypt(aes, (byte*)out, (byte*)in, (word32)len);
                 if (ret == 0) {
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-                    wh_Utils_Hexdump("[AesEcb] Decrypted output", out, len);
-#endif
+                    WH_DEBUG_VERBOSE_HEXDUMP("[AesEcb] Decrypted output", out, len);
                 }
             }
         }
@@ -2103,10 +2032,8 @@ static int _HandleAesCbc(whServerContext* ctx, uint16_t magic, const void* crypt
         (uint8_t*)(cryptoDataOut) + sizeof(whMessageCrypto_AesCbcResponse);
 
     /* Debug printouts */
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-    wh_Utils_Hexdump("[AesCbc] Input data", in, len);
-    wh_Utils_Hexdump("[AesCbc] IV", iv, AES_BLOCK_SIZE);
-#endif
+    WH_DEBUG_VERBOSE_HEXDUMP("[AesCbc] Input data", in, len);
+    WH_DEBUG_VERBOSE_HEXDUMP("[AesCbc] IV", iv, AES_BLOCK_SIZE);
     /* Freshen key and validate usage policy if key is not erased */
     if (!WH_KEYID_ISERASED(key_id)) {
         ret = wh_Server_KeystoreFreshenKey(ctx, key_id, &cachedKey, &keyMeta);
@@ -2120,15 +2047,11 @@ static int _HandleAesCbc(whServerContext* ctx, uint16_t magic, const void* crypt
             /* override the incoming values with cached key */
             key     = cachedKey;
             key_len = keyMeta->len;
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-            wh_Utils_Hexdump("[AesCbc] Key from HSM", key, key_len);
-#endif
+            WH_DEBUG_VERBOSE_HEXDUMP("[AesCbc] Key from HSM", key, key_len);
         }
     }
     else {
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-        wh_Utils_Hexdump("[AesCbc] Key ", key, key_len);
-#endif
+        WH_DEBUG_VERBOSE_HEXDUMP("[AesCbc] Key ", key, key_len);
     }
     if (ret == 0) {
         /* init key with possible hardware */
@@ -2143,17 +2066,13 @@ static int _HandleAesCbc(whServerContext* ctx, uint16_t magic, const void* crypt
             if (enc != 0) {
                 ret = wc_AesCbcEncrypt(aes, (byte*)out, (byte*)in, (word32)len);
                 if (ret == 0) {
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-                    wh_Utils_Hexdump("[AesCbc] Encrypted output", out, len);
-#endif
+                    WH_DEBUG_VERBOSE_HEXDUMP("[AesCbc] Encrypted output", out, len);
                 }
             }
             else {
                 ret = wc_AesCbcDecrypt(aes, (byte*)out, (byte*)in, (word32)len);
                 if (ret == 0) {
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-                    wh_Utils_Hexdump("[AesCbc] Decrypted output", out, len);
-#endif
+                    WH_DEBUG_VERBOSE_HEXDUMP("[AesCbc] Decrypted output", out, len);
                 }
             }
         }
@@ -2252,23 +2171,19 @@ static int _HandleAesGcm(whServerContext* ctx, uint16_t magic,
     uint32_t res_len = sizeof(whMessageCrypto_AesGcmResponse) + len +
                        ((enc == 0) ? 0 : tag_len);
 
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-    printf("[server] AESGCM: enc:%d keylen:%d ivsz:%d insz:%d authinsz:%d "
+    WH_DEBUG_SERVER_VERBOSE("AESGCM: enc:%d keylen:%d ivsz:%d insz:%d authinsz:%d "
            "authtagsz:%d reqsz:%u ressz:%u\n",
            enc, key_len, iv_len, len, authin_len, tag_len, req_len, res_len);
-    printf("[server] AESGCM: req:%p in:%p key:%p iv:%p authin:%p tag:%p res:%p "
+    WH_DEBUG_SERVER_VERBOSE("AESGCM: req:%p in:%p key:%p iv:%p authin:%p tag:%p res:%p "
            "out:%p out_tag:%p\n",
            &req, in, key, iv, authin, tag, &res, out, out_tag);
-    wh_Utils_Hexdump("[server] AESGCM req packet: \n", (uint8_t*)cryptoDataIn,
+    WH_DEBUG_VERBOSE_HEXDUMP("[server] AESGCM req packet: \n", (uint8_t*)cryptoDataIn,
                      req_len);
-#endif
 
     /* Freshen key and validate usage policy if key is not erased */
     if (!WH_KEYID_ISERASED(key_id)) {
         ret = wh_Server_KeystoreFreshenKey(ctx, key_id, &cachedKey, &keyMeta);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-        printf("[server] AesGcm FreshenKey key_id:%u ret:%d\n", key_id, ret);
-#endif
+        WH_DEBUG_SERVER_VERBOSE("AesGcm FreshenKey key_id:%u ret:%d\n", key_id, ret);
         if (ret == 0) {
             /* Validate key usage policy */
             ret = wh_Server_KeystoreEnforceKeyUsage(
@@ -2288,51 +2203,38 @@ static int _HandleAesGcm(whServerContext* ctx, uint16_t magic,
     if (ret == 0) {
         /* load the key */
         ret = wc_AesGcmSetKey(aes, (byte*)key, (word32)key_len);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-        printf("[server] AesGcmSetKey key_id:%u key_len:%u ret:%d\n", key_id,
+        WH_DEBUG_SERVER_VERBOSE("AesGcmSetKey key_id:%u key_len:%u ret:%d\n", key_id,
                key_len, ret);
-        wh_Utils_Hexdump("[server] key: ", key, key_len);
-#endif
+        WH_DEBUG_VERBOSE_HEXDUMP("[server] key: ", key, key_len);
         if (ret == 0) {
             /* do the crypto operation */
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf(
-                "[server] enc:%d len:%d, ivSz:%d authTagSz:%d, authInSz:%d\n",
+            WH_DEBUG_SERVER_VERBOSE("enc:%d len:%d, ivSz:%d authTagSz:%d, authInSz:%d\n",
                 enc, len, iv_len, tag_len, authin_len);
-            wh_Utils_Hexdump("[server] in: ", in, len);
-            wh_Utils_Hexdump("[server] iv: ", iv, iv_len);
-            wh_Utils_Hexdump("[server] authin: ", authin, authin_len);
-#endif
+            WH_DEBUG_VERBOSE_HEXDUMP("[server] in: ", in, len);
+            WH_DEBUG_VERBOSE_HEXDUMP("[server] iv: ", iv, iv_len);
+            WH_DEBUG_VERBOSE_HEXDUMP("[server] authin: ", authin, authin_len);
             if (enc != 0) {
                 /* For encryption, write tag to the response output tag area */
                 ret = wc_AesGcmEncrypt(aes, (byte*)out, (byte*)in, (word32)len,
                                        (byte*)iv, (word32)iv_len, (byte*)out_tag,
                                        (word32)tag_len, (byte*)authin,
                                        (word32)authin_len);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-                printf("[server] enc ret:%d\n", ret);
-                wh_Utils_Hexdump("[server] out: \n", out, len);
-                wh_Utils_Hexdump("[server] enc tag: ", out_tag, tag_len);
-#endif
+                WH_DEBUG_SERVER_VERBOSE("enc ret:%d\n", ret);
+                WH_DEBUG_VERBOSE_HEXDUMP("[server] out: \n", out, len);
+                WH_DEBUG_VERBOSE_HEXDUMP("[server] enc tag: ", out_tag, tag_len);
             }
             else {
                 /* set authTag as a packet input */
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-                wh_Utils_Hexdump("[server] dec tag: ", tag, tag_len);
-#endif
+                WH_DEBUG_VERBOSE_HEXDUMP("[server] dec tag: ", tag, tag_len);
                 ret = wc_AesGcmDecrypt(aes, (byte*)out, (byte*)in, (word32)len,
                                        (byte*)iv, (word32)iv_len, (byte*)tag,
                                        (word32)tag_len, (byte*)authin,
                                        (word32)authin_len);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-                printf("[server] dec ret:%d\n", ret);
-                wh_Utils_Hexdump("[server] out: \n", out, len);
-#endif
+                WH_DEBUG_SERVER_VERBOSE("dec ret:%d\n", ret);
+                WH_DEBUG_VERBOSE_HEXDUMP("[server] out: \n", out, len);
             }
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-            wh_Utils_Hexdump("[server] post iv: ", iv, iv_len);
-            wh_Utils_Hexdump("[server] post authin: ", authin, authin_len);
-#endif
+            WH_DEBUG_VERBOSE_HEXDUMP("[server] post iv: ", iv, iv_len);
+            WH_DEBUG_VERBOSE_HEXDUMP("[server] post authin: ", authin, authin_len);
         }
         wc_AesFree(aes);
     }
@@ -2342,11 +2244,9 @@ static int _HandleAesGcm(whServerContext* ctx, uint16_t magic,
         res.sz        = len;
         res.authTagSz = (enc == 0) ? 0 : tag_len;
         *outSize      = res_len;
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-        printf("[server] res out_size:%d\n", *outSize);
-        wh_Utils_Hexdump("[server] AESGCM res packet: \n",
+        WH_DEBUG_SERVER_VERBOSE("res out_size:%d\n", *outSize);
+        WH_DEBUG_VERBOSE_HEXDUMP("[server] AESGCM res packet: \n",
                          (uint8_t*)cryptoDataOut, res_len);
-#endif
 
         /* Translate response back */
         ret = wh_MessageCrypto_TranslateAesGcmResponse(
@@ -2591,27 +2491,21 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
         /* attempt oneshot if all fields are present */
         if (req.inSz != 0 && req.keySz != 0 && req.outSz != 0) {
             len = req.outSz;
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("[server] cmac generate oneshot\n");
-#endif
+            WH_DEBUG_SERVER_VERBOSE("cmac generate oneshot\n");
             ret = wc_AesCmacGenerate_ex(ctx->crypto->algoCtx.cmac, out, &len, in,
                                         req.inSz, key, req.keySz, NULL,
                                         ctx->crypto->devId);
             res.outSz = len;
         } else {
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("[server] cmac begin keySz:%d inSz:%d outSz:%d keyId:%x\n",
+            WH_DEBUG_SERVER_VERBOSE("cmac begin keySz:%d inSz:%d outSz:%d keyId:%x\n",
                     req.keySz, req.inSz, req.outSz, req.keyId);
-#endif
             /* do each operation based on which fields are set */
             if (req.keySz != 0) {
                 /* initialize cmac with key and type */
                 ret = wc_InitCmac_ex(ctx->crypto->algoCtx.cmac, key, req.keySz,
                                      req.type, NULL, NULL, ctx->crypto->devId);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-                printf("[server] cmac init with key:%p keylen:%d, type:%d ret:%d\n",
+                WH_DEBUG_SERVER_VERBOSE("cmac init with key:%p keylen:%d, type:%d ret:%d\n",
                         key, req.keySz, req.type, ret);
-#endif
             } else {
                 /* Key is not present, meaning client wants to use AES key from
                  * cache/nvm. In order to support multiple sequential CmacUpdate()
@@ -2645,9 +2539,7 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
                      * overwrite the existing key on exit */
                     if (len == AES_128_KEY_SIZE || len == AES_192_KEY_SIZE ||
                         len == AES_256_KEY_SIZE) {
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-                        printf("[server] cmac readkey got key len:%u\n", len);
-#endif
+                        WH_DEBUG_SERVER("cmac readkey got key len:%u\n", len);
                         moveToBigCache = 1;
                         memcpy(tmpKey, (uint8_t*)ctx->crypto->algoCtx.cmac,
                                len);
@@ -2655,10 +2547,8 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
                             WC_CMAC_AES, NULL, NULL, ctx->crypto->devId);
                     }
                     else if (len != sizeof(ctx->crypto->algoCtx.cmac)) {
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-                        printf("[server] cmac bad readkey len:%u. sizeof(cmac):%lu\n",
+                        WH_DEBUG_SERVER("cmac bad readkey len:%u. sizeof(cmac):%lu\n",
                                 len, sizeof(ctx->crypto->algoCtx.cmac));
-#endif
                         ret = BAD_FUNC_ARG;
                     }
                 }
@@ -2667,10 +2557,8 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
                     /* initialize cmac with key and type */
                     ret = wc_InitCmac_ex(ctx->crypto->algoCtx.cmac, NULL,
                         req.keySz, req.type, NULL, NULL, ctx->crypto->devId);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-                    printf("[server] cmac init with NULL type:%d ret:%d\n",
+                    WH_DEBUG_SERVER("cmac init with NULL type:%d ret:%d\n",
                             req.type, ret);
-#endif
                 }
             }
             /* Handle CMAC update, checking for cancellation */
@@ -2690,9 +2578,7 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
                     }
 #endif
                 }
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-                printf("[server] cmac update done. ret:%d\n", ret);
-#endif
+                WH_DEBUG_SERVER_VERBOSE("cmac update done. ret:%d\n", ret);
             }
 
             /* Check if we should finalize and evict, or cache for future calls
@@ -2701,9 +2587,7 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
                 /* Finalize CMAC operation */
                 keyId = req.keyId;
                 len   = req.outSz;
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-                printf("[server] cmac final keyId:%x len:%d\n", keyId, len);
-#endif
+                WH_DEBUG_SERVER_VERBOSE("cmac final keyId:%x len:%d\n", keyId, len);
                 ret       = wc_CmacFinal(ctx->crypto->algoCtx.cmac, out, &len);
                 res.outSz = len;
                 res.keyId = WH_KEYID_ERASED;
@@ -2770,10 +2654,8 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
                         res.outSz = 0;
                     }
                 }
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-                printf("[server] cmac saved state in keyid:%x %x len:%u ret:%d type:%d\n",
+                WH_DEBUG_SERVER_VERBOSE("cmac saved state in keyid:%x %x len:%u ret:%d type:%d\n",
                         keyId, WH_KEYID_ID(keyId), meta->len, ret, ctx->crypto->algoCtx.cmac->type);
-#endif
             }
         }
     } break;
@@ -2788,12 +2670,10 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
             *outSize = sizeof(res) + res.outSz;
         }
     }
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-    printf("[server] cmac end ret:%d\n", ret);
-#endif
+    WH_DEBUG_SERVER_VERBOSE("cmac end ret:%d\n", ret);
     return ret;
 }
-#endif
+#endif /* WOLFSSL_CMAC */
 
 #ifndef NO_SHA256
 static int _HandleSha256(whServerContext* ctx, uint16_t magic,
@@ -3215,10 +3095,8 @@ static int _HandleMlDsaKeyGen(whServerContext* ctx, uint16_t magic,
                         if (WH_KEYID_ISERASED(key_id)) {
                             /* Generate a new id */
                             ret = wh_Server_KeystoreGetUniqueId(ctx, &key_id);
-#ifdef DEBUG_CRYPTOCB
-                            printf("[server] %s UniqueId: keyId:%u, ret:%d\n",
-                                   __func__, key_id, ret);
-#endif
+                            WH_DEBUG_SERVER("UniqueId: keyId:%u, ret:%d\n",
+                                   key_id, ret);
                             if (ret != WH_ERROR_OK) {
                                 /* Early return on unique ID generation failure
                                  */
@@ -3230,10 +3108,8 @@ static int _HandleMlDsaKeyGen(whServerContext* ctx, uint16_t magic,
                             ret = wh_Server_MlDsaKeyCacheImport(
                                 ctx, key, key_id, flags, label_size, label);
                         }
-#ifdef DEBUG_CRYPTOCB
-                        printf("[server] %s CacheImport: keyId:%u, ret:%d\n",
-                               __func__, key_id, ret);
-#endif
+                        WH_DEBUG_SERVER("CacheImport: keyId:%u, ret:%d\n",
+                               key_id, ret);
                     }
                 }
             }
@@ -3540,13 +3416,9 @@ int wh_Server_HandleCryptoRequest(whServerContext* ctx, uint16_t magic,
         magic, (whMessageCrypto_GenericRequestHeader*)req_packet, &rqstHeader);
 
 
-#ifdef DEBUG_CRYPTOCB
-    printf("[server] HandleCryptoRequest. Action:%u\n", action);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-    wh_Utils_Hexdump("[server] Crypto Request:\n", (const uint8_t*)req_packet,
+    WH_DEBUG_SERVER_VERBOSE("HandleCryptoRequest. Action:%u\n", action);
+    WH_DEBUG_VERBOSE_HEXDUMP("[server] Crypto Request:\n", (const uint8_t*)req_packet,
                      req_size);
-#endif
-#endif
     switch (action) {
         case WC_ALGO_TYPE_CIPHER:
             switch (rqstHeader.algoType) {
@@ -3582,9 +3454,7 @@ int wh_Server_HandleCryptoRequest(whServerContext* ctx, uint16_t magic,
             }
             break;
         case WC_ALGO_TYPE_PK: {
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("[server] PK type:%d\n", rqstHeader.algoType);
-#endif
+            WH_DEBUG_SERVER_VERBOSE("PK type:%d\n", rqstHeader.algoType);
             switch (rqstHeader.algoType) {
 #ifndef NO_RSA
 #ifdef WOLFSSL_KEY_GEN
@@ -3721,62 +3591,46 @@ int wh_Server_HandleCryptoRequest(whServerContext* ctx, uint16_t magic,
             switch (rqstHeader.algoType) {
 #ifndef NO_SHA256
                 case WC_HASH_TYPE_SHA256:
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-                    printf("[server] SHA256 req recv. type:%u\n",
+                    WH_DEBUG_SERVER("SHA256 req recv. type:%u\n",
                            rqstHeader.algoType);
-#endif
                     ret = _HandleSha256(ctx, magic, cryptoDataIn, cryptoInSize,
                                         cryptoDataOut, &cryptoOutSize);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
                     if (ret != 0) {
-                        printf("[server] SHA256 ret = %d\n", ret);
+                        WH_DEBUG_SERVER("SHA256 ret = %d\n", ret);
                     }
-#endif
                     break;
 #endif /* !NO_SHA256 */
 #if defined(WOLFSSL_SHA224)
                 case WC_HASH_TYPE_SHA224:
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-                    printf("[server] SHA224 req recv. type:%u\n",
+                    WH_DEBUG_SERVER("SHA224 req recv. type:%u\n",
                            rqstHeader.algoType);
-#endif
                     ret = _HandleSha224(ctx, magic, cryptoDataIn, cryptoInSize,
                                         cryptoDataOut, &cryptoOutSize);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
                     if (ret != 0) {
-                        printf("[server] SHA224 ret = %d\n", ret);
+                        WH_DEBUG_SERVER("SHA224 ret = %d\n", ret);
                     }
-#endif
                     break;
 #endif /* WOLFSSL_SHA224 */
 #if defined(WOLFSSL_SHA384)
                 case WC_HASH_TYPE_SHA384:
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-                    printf("[server] SHA384 req recv. type:%u\n",
+                    WH_DEBUG_SERVER("SHA384 req recv. type:%u\n",
                            rqstHeader.algoType);
-#endif
                     ret = _HandleSha384(ctx, magic, cryptoDataIn, cryptoInSize,
                                         cryptoDataOut, &cryptoOutSize);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
                     if (ret != 0) {
-                        printf("[server] SHA384 ret = %d\n", ret);
+                        WH_DEBUG_SERVER("SHA384 ret = %d\n", ret);
                     }
-#endif
                     break;
 #endif /* WOLFSSL_SHA384 */
 #if defined(WOLFSSL_SHA512)
                 case WC_HASH_TYPE_SHA512:
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-                    printf("[server] SHA512 req recv. type:%u\n",
+                    WH_DEBUG_SERVER("SHA512 req recv. type:%u\n",
                            rqstHeader.algoType);
-#endif
                     ret = _HandleSha512(ctx, magic, cryptoDataIn, cryptoInSize,
                                         cryptoDataOut, &cryptoOutSize);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
                     if (ret != 0) {
-                        printf("[server] SHA512 ret = %d\n", ret);
+                        WH_DEBUG_SERVER("SHA512 ret = %d\n", ret);
                     }
-#endif
                     break;
 #endif /* WOLFSSL_SHA512 */
                 default:
@@ -3808,9 +3662,7 @@ int wh_Server_HandleCryptoRequest(whServerContext* ctx, uint16_t magic,
             sizeof(whMessageCrypto_GenericResponseHeader) + cryptoOutSize;
     }
 
-#ifdef DEBUG_CRYPTOCB
-    printf("[server] %s End ret:%d\n", __func__, ret);
-#endif
+    WH_DEBUG_SERVER_VERBOSE("End ret:%d\n", ret);
 
     /* Since crypto error codes are propagated to the client in the response
      * packet, return success to the caller unless a cancellation has occurred
@@ -3887,9 +3739,7 @@ static int _HandleSha256Dma(whServerContext* ctx, uint16_t magic, uint16_t seq,
 
         /* Finalize the SHA256 operation */
         if (ret == WH_ERROR_OK) {
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("[server]   wc_Sha256Final: outAddr=%p\n", outAddr);
-#endif
+            WH_DEBUG_SERVER_VERBOSE("  wc_Sha256Final: outAddr=%p\n", outAddr);
             ret = wc_Sha256Final(sha256, outAddr);
         }
 
@@ -3913,10 +3763,8 @@ static int _HandleSha256Dma(whServerContext* ctx, uint16_t magic, uint16_t seq,
 
         /* Update the SHA256 operation */
         if (ret == WH_ERROR_OK) {
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("[server]   wc_Sha256Update: inAddr=%p, sz=%llu\n", inAddr,
+            WH_DEBUG_SERVER_VERBOSE("  wc_Sha256Update: inAddr=%p, sz=%llu\n", inAddr,
                    (long long unsigned int)req.input.sz);
-#endif
             ret = wc_Sha256Update(sha256, inAddr, req.input.sz);
         }
 
@@ -4012,9 +3860,7 @@ static int _HandleSha224Dma(whServerContext* ctx, uint16_t magic, uint16_t seq,
 
         /* Finalize the SHA224 operation */
         if (ret == WH_ERROR_OK) {
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("[server]   wc_Sha224Final: outAddr=%p\n", outAddr);
-#endif
+            WH_DEBUG_SERVER_VERBOSE("  wc_Sha224Final: outAddr=%p\n", outAddr);
             ret = wc_Sha224Final(sha224, outAddr);
         }
 
@@ -4038,10 +3884,8 @@ static int _HandleSha224Dma(whServerContext* ctx, uint16_t magic, uint16_t seq,
 
         /* Update the SHA224 operation */
         if (ret == WH_ERROR_OK) {
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("[server]   wc_Sha224Update: inAddr=%p, sz=%llu\n", inAddr,
+            WH_DEBUG_SERVER_VERBOSE("  wc_Sha224Update: inAddr=%p, sz=%llu\n", inAddr,
                    (long long unsigned int)req.input.sz);
-#endif
             ret = wc_Sha224Update(sha224, inAddr, req.input.sz);
         }
 
@@ -4137,9 +3981,7 @@ static int _HandleSha384Dma(whServerContext* ctx, uint16_t magic, uint16_t seq,
 
         /* Finalize the SHA384 operation */
         if (ret == WH_ERROR_OK) {
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("[server]   wc_Sha384Final: outAddr=%p\n", outAddr);
-#endif
+            WH_DEBUG_SERVER_VERBOSE("  wc_Sha384Final: outAddr=%p\n", outAddr);
             ret = wc_Sha384Final(sha384, outAddr);
         }
 
@@ -4163,10 +4005,8 @@ static int _HandleSha384Dma(whServerContext* ctx, uint16_t magic, uint16_t seq,
 
         /* Update the SHA384 operation */
         if (ret == WH_ERROR_OK) {
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("[server]   wc_Sha384Update: inAddr=%p, sz=%llu\n", inAddr,
+            WH_DEBUG_SERVER_VERBOSE("  wc_Sha384Update: inAddr=%p, sz=%llu\n", inAddr,
                    (long long unsigned int)req.input.sz);
-#endif
             ret = wc_Sha384Update(sha384, inAddr, req.input.sz);
         }
 
@@ -4264,10 +4104,8 @@ static int _HandleSha512Dma(whServerContext* ctx, uint16_t magic, uint16_t seq,
 
         /* Finalize the SHA512 operation */
         if (ret == WH_ERROR_OK) {
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("[server]   wc_Sha512Final: outAddr=%p\n", outAddr);
-            printf("[server]   hashTpe: %d\n", hashType);
-#endif
+            WH_DEBUG_SERVER_VERBOSE("  wc_Sha512Final: outAddr=%p\n", outAddr);
+            WH_DEBUG_SERVER_VERBOSE("  hashTpe: %d\n", hashType);
             switch (hashType) {
                 case WC_HASH_TYPE_SHA512_224:
                     ret = wc_Sha512_224Final(sha512, outAddr);
@@ -4301,10 +4139,8 @@ static int _HandleSha512Dma(whServerContext* ctx, uint16_t magic, uint16_t seq,
 
         /* Update the SHA512 operation */
         if (ret == WH_ERROR_OK) {
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("[server]   wc_Sha512Update: inAddr=%p, sz=%llu\n", inAddr,
+            WH_DEBUG_SERVER_VERBOSE("  wc_Sha512Update: inAddr=%p, sz=%llu\n", inAddr,
                    (long long unsigned int)req.input.sz);
-#endif
             ret = wc_Sha512Update(sha512, inAddr, req.input.sz);
         }
 
@@ -4422,10 +4258,8 @@ static int _HandleMlDsaKeyGenDma(whServerContext* ctx, uint16_t magic,
                         if (WH_KEYID_ISERASED(keyId)) {
                             /* Generate a new id */
                             ret = wh_Server_KeystoreGetUniqueId(ctx, &keyId);
-#ifdef DEBUG_CRYPTOCB
-                            printf("[server] %s UniqueId: keyId:%u, ret:%d\n",
-                                   __func__, keyId, ret);
-#endif
+                            WH_DEBUG_SERVER("UniqueId: keyId:%u, ret:%d\n",
+                                   keyId, ret);
                             if (ret != WH_ERROR_OK) {
                                 /* Early return on unique ID generation failure
                                  */
@@ -4438,11 +4272,8 @@ static int _HandleMlDsaKeyGenDma(whServerContext* ctx, uint16_t magic,
                             ret = wh_Server_MlDsaKeyCacheImport(
                                 ctx, key, keyId, req.flags, req.labelSize,
                                 req.label);
-#ifdef DEBUG_CRYPTOCB
-                            printf(
-                                "[server] %s CacheImport: keyId:%u, ret:%d\n",
-                                __func__, keyId, ret);
-#endif
+                            WH_DEBUG_SERVER("CacheImport: keyId:%u, ret:%d\n",
+                                keyId, ret);
                             if (ret == 0) {
                                 res.keyId   = wh_KeyId_TranslateToClient(keyId);
                                 res.keySize = keySize;
@@ -4816,13 +4647,11 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
         cmac->devId = ctx->crypto->devId;
 
         /* Print out the state of req */
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-        printf("[server] DMA CMAC req recv. type:%u keySz:%u inSz:%u outSz:%u "
+        WH_DEBUG_SERVER_VERBOSE("DMA CMAC req recv. type:%u keySz:%u inSz:%u outSz:%u "
                "finalize:%u\n",
                (unsigned int)req.type, (unsigned int)req.key.sz,
                (unsigned int)req.input.sz, (unsigned int)req.output.sz,
                (unsigned int)req.finalize);
-#endif
 
         /* Translate all DMA addresses upfront */
         if (req.input.sz != 0) {
@@ -4862,9 +4691,7 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
              * 3. One-shot operation with context already initialized with a key
              */
             if (req.input.sz != 0 && req.output.sz != 0) {
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-                printf("[server] CMAC one-shot operation detected\n");
-#endif
+                WH_DEBUG_SERVER_VERBOSE("CMAC one-shot operation detected\n");
 
                 /* Case 1: Direct one-shot operation with key provided in
                  * request This is the simplest case - we have the key directly
@@ -5058,9 +4885,7 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
                 ctx, req.input.addr, &inAddr, req.input.sz,
                 WH_DMA_OPER_CLIENT_READ_POST,
                 (whServerDmaFlags){0}) != WH_ERROR_OK) {
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("[server] Error cleaning up input DMA address\n");
-#endif
+            WH_DEBUG_SERVER_VERBOSE("Error cleaning up input DMA address\n");
         }
     }
 
@@ -5069,9 +4894,7 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
                 ctx, req.output.addr, &outAddr, req.output.sz,
                 WH_DMA_OPER_CLIENT_WRITE_POST,
                 (whServerDmaFlags){0}) != WH_ERROR_OK) {
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("[server] Error cleaning up output DMA address\n");
-#endif
+            WH_DEBUG_SERVER_VERBOSE("Error cleaning up output DMA address\n");
         }
     }
 
@@ -5080,9 +4903,7 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
                 ctx, req.key.addr, &keyAddr, req.key.sz,
                 WH_DMA_OPER_CLIENT_READ_POST,
                 (whServerDmaFlags){0}) != WH_ERROR_OK) {
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-            printf("[server] Error cleaning up key DMA address\n");
-#endif
+            WH_DEBUG_SERVER_VERBOSE("Error cleaning up key DMA address\n");
         }
     }
 
@@ -5149,10 +4970,8 @@ static int _HandleRngDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
 
     /* Generate random bytes directly into client memory */
     if (ret == WH_ERROR_OK) {
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-        printf("[server] RNG DMA: generating %llu bytes to addr=%p\n",
+        WH_DEBUG_SERVER_VERBOSE("RNG DMA: generating %llu bytes to addr=%p\n",
                (long long unsigned int)req.output.sz, outAddr);
-#endif
         ret = wc_RNG_GenerateBlock(ctx->crypto->rng, outAddr, req.output.sz);
     }
 
@@ -5175,7 +4994,9 @@ static int _HandleRngDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
     return ret;
 }
 #endif /* !WC_NO_RNG */
+#endif /* WOLFHSM_CFG_DMA */
 
+#ifdef WOLFHSM_CFG_DMA
 int wh_Server_HandleCryptoDmaRequest(whServerContext* ctx, uint16_t magic,
                                      uint16_t action, uint16_t seq,
                                      uint16_t req_size, const void* req_packet,
@@ -5219,11 +5040,9 @@ int wh_Server_HandleCryptoDmaRequest(whServerContext* ctx, uint16_t magic,
                     ret = _HandleSha256Dma(ctx, magic, seq, cryptoDataIn,
                                            cryptoInSize, cryptoDataOut,
                                            &cryptoOutSize);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
                     if (ret != 0) {
-                        printf("[server] DMA SHA256 ret = %d\n", ret);
+                        WH_DEBUG_SERVER("DMA SHA256 ret = %d\n", ret);
                     }
-#endif
                     break;
 #endif /* !NO_SHA256 */
 #ifdef WOLFSSL_SHA224
@@ -5231,11 +5050,9 @@ int wh_Server_HandleCryptoDmaRequest(whServerContext* ctx, uint16_t magic,
                     ret = _HandleSha224Dma(ctx, magic, seq, cryptoDataIn,
                                            cryptoInSize, cryptoDataOut,
                                            &cryptoOutSize);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
                     if (ret != 0) {
-                        printf("[server] DMA SHA224 ret = %d\n", ret);
+                        WH_DEBUG_SERVER("DMA SHA224 ret = %d\n", ret);
                     }
-#endif
                     break;
 #endif /* WOLFSSL_SHA224 */
 #ifdef WOLFSSL_SHA384
@@ -5243,11 +5060,9 @@ int wh_Server_HandleCryptoDmaRequest(whServerContext* ctx, uint16_t magic,
                     ret = _HandleSha384Dma(ctx, magic, seq, cryptoDataIn,
                                            cryptoInSize, cryptoDataOut,
                                            &cryptoOutSize);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
                     if (ret != 0) {
-                        printf("[server] DMA SHA384 ret = %d\n", ret);
+                        WH_DEBUG_SERVER("DMA SHA384 ret = %d\n", ret);
                     }
-#endif
                     break;
 #endif /* WOLFSSL_SHA384 */
 #ifdef WOLFSSL_SHA512
@@ -5255,11 +5070,9 @@ int wh_Server_HandleCryptoDmaRequest(whServerContext* ctx, uint16_t magic,
                     ret = _HandleSha512Dma(ctx, magic, seq, cryptoDataIn,
                                            cryptoInSize, cryptoDataOut,
                                            &cryptoOutSize);
-#ifdef DEBUG_CRYPTOCB_VERBOSE
                     if (ret != 0) {
-                        printf("[server] DMA SHA512 ret = %d\n", ret);
+                        WH_DEBUG_SERVER("DMA SHA512 ret = %d\n", ret);
                     }
-#endif
                     break;
 #endif /* WOLFSSL_SHA512 */
             }
@@ -5331,9 +5144,7 @@ int wh_Server_HandleCryptoDmaRequest(whServerContext* ctx, uint16_t magic,
     }
 
 
-#ifdef DEBUG_CRYPTOCB_VERBOSE
-    printf("[server] Crypto DMA request. Action:%u\n", action);
-#endif
+    WH_DEBUG_SERVER_VERBOSE("Crypto DMA request. Action:%u\n", action);
     /* Since crypto error codes are propagated to the client in the response
      * packet, return success to the caller unless a cancellation has occurred
      */

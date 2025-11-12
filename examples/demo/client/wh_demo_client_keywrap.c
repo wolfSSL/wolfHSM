@@ -109,7 +109,7 @@ int wh_DemoClient_AesGcmKeyWrap(whClientContext* client)
      * and the KEK would be provisioned on the server prior to runtime */
     ret = _InitServerKek(client);
     if (ret != WH_ERROR_OK) {
-        printf("Failed to _InitServerKek %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to _InitServerKek %d\n", ret);
         return ret;
     }
 
@@ -118,14 +118,14 @@ int wh_DemoClient_AesGcmKeyWrap(whClientContext* client)
     /* Initialize the RNG so we can generate an AES GCM key to wrap */
     ret = wc_InitRng_ex(rng, NULL, WH_DEV_ID);
     if (ret != 0) {
-        printf("Failed to wc_InitRng_ex %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_InitRng_ex %d\n", ret);
         goto cleanup_kek;
     }
 
     /* Now we generate the AES GCM key using the RNG */
     ret = wc_RNG_GenerateBlock(rng, key, sizeof(key));
     if (ret != 0) {
-        printf("Failed to wc_RNG_GenerateBlock for key data %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_RNG_GenerateBlock for key data %d\n", ret);
         goto cleanup_rng;
     }
 
@@ -135,7 +135,7 @@ int wh_DemoClient_AesGcmKeyWrap(whClientContext* client)
                             key, sizeof(key), &metadata, wrappedKey,
                             sizeof(wrappedKey));
     if (ret != 0) {
-        printf("Failed to wh_Client_KeyWrap %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wh_Client_KeyWrap %d\n", ret);
         goto cleanup_rng;
     }
 
@@ -152,14 +152,14 @@ int wh_DemoClient_AesGcmKeyWrap(whClientContext* client)
                                       WH_DEMO_KEYWRAP_KEKID, wrappedKey,
                                       sizeof(wrappedKey), &wrappedKeyId);
     if (ret != 0) {
-        printf("Failed to wh_Client_KeyUnwrapAndCache %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wh_Client_KeyUnwrapAndCache %d\n", ret);
         goto cleanup_rng;
     }
 
     /* Initialize AES context */
     ret = wc_AesInit(aes, NULL, WH_DEV_ID);
     if (ret != 0) {
-        printf("Failed to wc_AesInit %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_AesInit %d\n", ret);
         goto cleanup_cached_key;
     }
 
@@ -168,7 +168,7 @@ int wh_DemoClient_AesGcmKeyWrap(whClientContext* client)
     ret =
         wh_Client_AesSetKeyId(aes, WH_CLIENT_KEYID_MAKE_WRAPPED(wrappedKeyId));
     if (ret != 0) {
-        printf("Failed to wh_Client_AesSetKeyId %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wh_Client_AesSetKeyId %d\n", ret);
         goto cleanup_aes;
     }
 
@@ -176,7 +176,7 @@ int wh_DemoClient_AesGcmKeyWrap(whClientContext* client)
      * do */
     ret = wc_RNG_GenerateBlock(rng, iv, sizeof(iv));
     if (ret != 0) {
-        printf("Failed to wc_RNG_GenerateBlock for AES-GCM key %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_RNG_GenerateBlock for AES-GCM key %d\n", ret);
         goto cleanup_aes;
     }
 
@@ -185,7 +185,7 @@ int wh_DemoClient_AesGcmKeyWrap(whClientContext* client)
     ret = wc_AesGcmEncrypt(aes, ciphertext, plaintext, sizeof(plaintext), iv,
                            sizeof(iv), tag, sizeof(tag), aad, sizeof(aad));
     if (ret != 0) {
-        printf("Failed to wc_AesGcmEncrypt %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_AesGcmEncrypt %d\n", ret);
         goto cleanup_aes;
     }
 
@@ -198,14 +198,14 @@ int wh_DemoClient_AesGcmKeyWrap(whClientContext* client)
                            aad, sizeof(aad)); /* authIn (AAD), authInSz */
     if (ret != 0) {
         ret = WH_ERROR_ABORTED;
-        printf("Failed to wc_AesGcmDecrypt %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_AesGcmDecrypt %d\n", ret);
         goto cleanup_aes;
     }
 
     /* Check if the decrypted data matches an expected value */
     if (memcmp(decrypted, plaintext, sizeof(decrypted)) != 0) {
         ret = WH_ERROR_ABORTED;
-        printf("Decrypted value does not match expected value\n");
+        WOLFHSM_CFG_PRINTF("Decrypted value does not match expected value\n");
         goto cleanup_aes;
     }
 
@@ -217,21 +217,21 @@ int wh_DemoClient_AesGcmKeyWrap(whClientContext* client)
                                        sizeof(wrappedKey), &exportedMetadata,
                                        exportedKey, sizeof(exportedKey));
     if (ret != 0) {
-        printf("Failed to wh_Client_KeyUnwrapAndExport %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wh_Client_KeyUnwrapAndCache %d\n", ret);
         goto cleanup_aes;
     }
 
     /* Compare the exported key to the client key we requested to wrap */
     if (memcmp(key, exportedKey, sizeof(key)) != 0) {
         ret = WH_ERROR_ABORTED;
-        printf("AES GCM wrap/unwrap key failed to match\n");
+        WOLFHSM_CFG_PRINTF("AES GCM wrap/unwrap key failed to match\n");
         goto cleanup_aes;
     }
 
     /* Compare the exported metadata to the metadata we requested to wrap */
     if (memcmp(&metadata, &exportedMetadata, sizeof(metadata)) != 0) {
         ret = WH_ERROR_ABORTED;
-        printf("AES GCM wrap/unwrap metadata failed to match\n");
+        WOLFHSM_CFG_PRINTF("AES GCM wrap/unwrap metadata failed to match\n");
         goto cleanup_aes;
     }
 
@@ -262,7 +262,7 @@ int wh_DemoClient_KeyWrap(whClientContext* client)
 
     ret = wh_DemoClient_AesGcmKeyWrap(client);
     if (ret != WH_ERROR_OK) {
-        printf("Failed to wh_DemoClient_AesGcmKeyWrap %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wh_DemoClient_AesGcmKeyWrap %d\n", ret);
         return ret;
     }
 

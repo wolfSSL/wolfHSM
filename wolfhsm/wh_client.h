@@ -2476,6 +2476,21 @@ int wh_Client_CertVerifyAcertDmaResponse(whClientContext* c, int32_t* out_rc);
 
 #if defined(WOLFHSM_CFG_DMA)
 /**
+ * @brief Registers a DMA address allowlist for client-side validation
+ *
+ * This function allows the client to register an allowlist of valid DMA
+ * addresses. The allowlist will be checked during DMA operations to ensure
+ * addresses are within allowed ranges.
+ *
+ * @param[in] client Pointer to the client context.
+ * @param[in] allowlist Pointer to the DMA address allowlist structure.
+ * @return int Returns WH_ERROR_OK on success, or WH_ERROR_BADARGS if the
+ * arguments are invalid.
+ */
+int wh_Client_DmaRegisterAllowList(struct whClientContext_t* client,
+                                   const whDmaAddrAllowList* allowlist);
+
+/**
  * @brief Registers a custom client DMA callback
  *
  * This function allows the client to register a custom callback handler

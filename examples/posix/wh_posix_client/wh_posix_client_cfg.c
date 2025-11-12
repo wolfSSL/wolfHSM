@@ -54,20 +54,20 @@ int wh_PosixClient_ExampleSetupDmaMemory(void* ctx, void* conf)
     shmCtx = (posixTransportShmContext*)c_conf->comm->transport_context;
     ret    = posixTransportShm_GetDma(shmCtx, &dma, &dmaSz);
     if (ret != 0) {
-        printf("Failed to get DMA\n");
+        WOLFHSM_CFG_PRINTF("Failed to get DMA\n");
         return -1;
     }
 
     ret = wc_LoadStaticMemory_ex(&hint, WH_POSIX_STATIC_MEM_LIST_SIZE, sizeList,
                                  distList, dma, dmaSz, 0, 0);
     if (ret != 0) {
-        printf("Failed to load static memory\n");
+        WOLFHSM_CFG_PRINTF("Failed to load static memory\n");
         return -1;
     }
 
     ret = posixTransportShm_SetDmaHeap(shmCtx, (void*)hint);
     if (ret != 0) {
-        printf("Failed to set heap\n");
+        WOLFHSM_CFG_PRINTF("Failed to set heap\n");
         return -1;
     }
 

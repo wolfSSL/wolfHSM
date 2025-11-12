@@ -72,21 +72,21 @@ int wh_DemoClient_CryptoRsa(whClientContext* clientContext)
     /* initialize rng to make the rsa key */
     ret = wc_InitRng_ex(rng, NULL, WH_DEV_ID);
     if (ret != 0) {
-        printf("Failed to wc_InitRng_ex %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_InitRng_ex %d\n", ret);
         goto exit;
     }
 
     /* initialize the rsa key */
     ret = wc_InitRsaKey_ex(rsa, NULL, WH_DEV_ID);
     if (ret != 0) {
-        printf("Failed to wc_InitRsaKey_ex %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_InitRsaKey_ex %d\n", ret);
         goto exit;
     }
 
     /* make the rsa key */
     ret = wc_MakeRsaKey(rsa, 2048, 65537, rng);
     if (ret != 0) {
-        printf("Failed to wc_MakeRsaKey %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_MakeRsaKey %d\n", ret);
         goto exit;
     }
 
@@ -94,7 +94,7 @@ int wh_DemoClient_CryptoRsa(whClientContext* clientContext)
     encSz = ret = wc_RsaPublicEncrypt(plainText, sizeof(plainString),
                                       cipherText, sizeof(cipherText), rsa, rng);
     if (ret < 0) {
-        printf("Failed to wc_RsaPublicEncrypt %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_RsaPublicEncrypt %d\n", ret);
         goto exit;
     }
 
@@ -102,18 +102,18 @@ int wh_DemoClient_CryptoRsa(whClientContext* clientContext)
     ret = wc_RsaPrivateDecrypt(cipherText, encSz, plainText, sizeof(plainText),
                                rsa);
     if (ret < 0) {
-        printf("Failed to wc_RsaPrivateDecrypt %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_RsaPrivateDecrypt %d\n", ret);
         goto exit;
     }
     ret = 0;
 
     /* verify the decryption output */
     if (memcmp(plainText, plainString, sizeof(plainString)) != 0) {
-        printf("Failed to verify RSA output\n");
+        WOLFHSM_CFG_PRINTF("Failed to verify RSA output\n");
         ret = -1;
     }
     else
-        printf("RSA Decryption matches original plaintext\n");
+        WOLFHSM_CFG_PRINTF("RSA Decryption matches original plaintext\n");
 
 exit:
     (void)wc_FreeRng(rng);
@@ -149,21 +149,21 @@ int wh_DemoClient_CryptoRsaImport(whClientContext* clientContext)
     /* initialize rng to encrypt with the rsa key */
     ret = wc_InitRng_ex(rng, NULL, WH_DEV_ID);
     if (ret != 0) {
-        printf("Failed to wc_InitRng_ex %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_InitRng_ex %d\n", ret);
         goto exit;
     }
 
     /* open the RSA key */
     ret = keyFd = open(keyFile, O_RDONLY, 0);
     if (ret < 0) {
-        printf("Failed to open %s %d\n", keyFile, ret);
+        WOLFHSM_CFG_PRINTF("Failed to open %s %d\n", keyFile, ret);
         goto exit;
     }
 
     /* read the RSA key to local buffer */
     ret = keySz = read(keyFd, keyBuf, sizeof(keyBuf));
     if (ret < 0) {
-        printf("Failed to read %s %d\n", keyFile, ret);
+        WOLFHSM_CFG_PRINTF("Failed to read %s %d\n", keyFile, ret);
         close(keyFd);
         goto exit;
     }
@@ -174,7 +174,7 @@ int wh_DemoClient_CryptoRsaImport(whClientContext* clientContext)
         clientContext, WH_NVM_FLAGS_USAGE_ENCRYPT | WH_NVM_FLAGS_USAGE_DECRYPT,
         (uint8_t*)keyLabel, strlen(keyLabel), keyBuf, keySz, &keyId);
     if (ret != 0) {
-        printf("Failed to wh_Client_KeyCache %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wh_Client_KeyCache %d\n", ret);
         goto exit;
     }
     needEvict = 1;
@@ -182,14 +182,14 @@ int wh_DemoClient_CryptoRsaImport(whClientContext* clientContext)
     /* initialize the rsa key */
     ret = wc_InitRsaKey_ex(rsa, NULL, WH_DEV_ID);
     if (ret != 0) {
-        printf("Failed to wc_InitRsaKey_ex %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_InitRsaKey_ex %d\n", ret);
         goto exit;
     }
 
     /* set the assigned keyId */
     ret = wh_Client_RsaSetKeyId(rsa, keyId);
     if (ret != 0) {
-        printf("Failed to wh_Client_SetKeyIdRsa %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wh_Client_SetKeyIdRsa %d\n", ret);
         goto exit;
     }
 
@@ -197,7 +197,7 @@ int wh_DemoClient_CryptoRsaImport(whClientContext* clientContext)
     encSz = ret = wc_RsaPublicEncrypt(plainText, sizeof(plainString),
                                       cipherText, sizeof(cipherText), rsa, rng);
     if (ret < 0) {
-        printf("Failed to wc_RsaPublicEncrypt %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_RsaPublicEncrypt %d\n", ret);
         goto exit;
     }
 
@@ -205,24 +205,24 @@ int wh_DemoClient_CryptoRsaImport(whClientContext* clientContext)
     ret = wc_RsaPrivateDecrypt(cipherText, encSz, plainText, sizeof(plainText),
                                rsa);
     if (ret < 0) {
-        printf("Failed to wc_RsaPrivateDecrypt %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_RsaPrivateDecrypt %d\n", ret);
         goto exit;
     }
     ret = 0;
 
     /* verify the decryption output */
     if (memcmp(plainText, plainString, sizeof(plainString)) != 0) {
-        printf("Failed to verify RSA output\n");
+        WOLFHSM_CFG_PRINTF("Failed to verify RSA output\n");
         ret = -1;
     }
     else
-        printf("RSA Decryption matches original plaintext with imported key\n");
+        WOLFHSM_CFG_PRINTF("RSA Decryption matches original plaintext with imported key\n");
 exit:
     (void)wc_FreeRng(rng);
     if (needEvict) {
         int evictRet = wh_Client_KeyEvict(clientContext, keyId);
         if (evictRet != 0) {
-            printf("Failed to wh_Client_KeyEvict %d\n", evictRet);
+            WOLFHSM_CFG_PRINTF("Failed to wh_Client_KeyEvict %d\n", evictRet);
             if (ret == 0) {
                 ret = evictRet;
             }
@@ -257,33 +257,33 @@ int wh_DemoClient_CryptoCurve25519(whClientContext* clientContext)
     /* initialize rng to make the curve25519 keys */
     ret = wc_InitRng_ex(rng, NULL, WH_DEV_ID);
     if (ret != 0) {
-        printf("Failed to wc_InitRng_ex %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_InitRng_ex %d\n", ret);
         goto exit;
     }
 
     /* initialize the keys */
     ret = wc_curve25519_init_ex(curve25519PrivateKey, NULL, WH_DEV_ID);
     if (ret != 0) {
-        printf("Failed to wc_curve25519_init_ex %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_curve25519_init_ex %d\n", ret);
         goto exit;
     }
 
     ret = wc_curve25519_init_ex(curve25519PublicKey, NULL, WH_DEV_ID);
     if (ret != 0) {
-        printf("Failed to wc_curve25519_init_ex %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_curve25519_init_ex %d\n", ret);
         goto exit;
     }
 
     /* generate the keys on the HSM */
     ret = wc_curve25519_make_key(rng, CURVE25519_KEYSIZE, curve25519PrivateKey);
     if (ret != 0) {
-        printf("Failed to wc_curve25519_make_key %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_curve25519_make_key %d\n", ret);
         goto exit;
     }
 
     ret = wc_curve25519_make_key(rng, CURVE25519_KEYSIZE, curve25519PublicKey);
     if (ret != 0) {
-        printf("Failed to wc_curve25519_make_key %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_curve25519_make_key %d\n", ret);
         goto exit;
     }
 
@@ -292,7 +292,7 @@ int wh_DemoClient_CryptoCurve25519(whClientContext* clientContext)
     ret = wc_curve25519_shared_secret(curve25519PrivateKey, curve25519PublicKey,
                                       sharedOne, (word32*)&outLen);
     if (ret != 0) {
-        printf("Failed to wc_curve25519_shared_secret %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_curve25519_shared_secret %d\n", ret);
         goto exit;
     }
 
@@ -300,18 +300,18 @@ int wh_DemoClient_CryptoCurve25519(whClientContext* clientContext)
     ret = wc_curve25519_shared_secret(curve25519PublicKey, curve25519PrivateKey,
                                       sharedTwo, (word32*)&outLen);
     if (ret != 0) {
-        printf("Failed to wc_curve25519_shared_secret %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_curve25519_shared_secret %d\n", ret);
         goto exit;
     }
 
     /* Compare the shared secrets, they should match */
     if (memcmp(sharedOne, sharedTwo, outLen) != 0) {
-        printf("CURVE25519 shared secrets don't match\n");
+        WOLFHSM_CFG_PRINTF("CURVE25519 shared secrets don't match\n");
         ret = -1;
         goto exit;
     }
     else {
-        printf("CURVE25519 shared secrets match\n");
+        WOLFHSM_CFG_PRINTF("CURVE25519 shared secrets match\n");
     }
 exit:
     /* free the key structs */
@@ -349,7 +349,7 @@ int wh_DemoClient_CryptoCurve25519Import(whClientContext* clientContext)
     /* open Bob's key pair file and read it into a local buffer */
     ret = keyFd = open(keyPairFileBob, O_RDONLY, 0);
     if (ret < 0) {
-        printf("Failed to open %s %d\n", keyPairFileBob, ret);
+        WOLFHSM_CFG_PRINTF("Failed to open %s %d\n", keyPairFileBob, ret);
         goto exit;
     }
     ret = keySz = read(keyFd, keyBuf, sizeof(keyBuf));
@@ -364,19 +364,19 @@ int wh_DemoClient_CryptoCurve25519Import(whClientContext* clientContext)
                              (uint8_t*)keyLabel, strlen(keyLabel), keyBuf,
                              keySz, &keyIdBob);
     if (ret != 0) {
-        printf("Failed to wh_Client_KeyCache %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wh_Client_KeyCache %d\n", ret);
         goto exit;
     }
 
     /* initialize the wolfCrypt struct to use the cached key */
     ret = wc_curve25519_init_ex(bobKey, NULL, WH_DEV_ID);
     if (ret != 0) {
-        printf("Failed to wc_curve25519_init_ex %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_curve25519_init_ex %d\n", ret);
         goto exit;
     }
     ret = wh_Client_Curve25519SetKeyId(bobKey, keyIdBob);
     if (ret != 0) {
-        printf("Failed to wh_Client_Curve25519SetKeyId %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wh_Client_Curve25519SetKeyId %d\n", ret);
         goto exit;
     }
 
@@ -384,12 +384,12 @@ int wh_DemoClient_CryptoCurve25519Import(whClientContext* clientContext)
     /* open Alice's key pair file and read it into a local buffer */
     ret = keyFd = open(keyPairFileAlice, O_RDONLY, 0);
     if (ret < 0) {
-        printf("Failed to open %s %d\n", keyPairFileAlice, ret);
+        WOLFHSM_CFG_PRINTF("Failed to open %s %d\n", keyPairFileAlice, ret);
         goto exit;
     }
     ret = keySz = read(keyFd, keyBuf, sizeof(keyBuf));
     if (ret < 0) {
-        printf("Failed to read %s %d\n", keyPairFileAlice, ret);
+        WOLFHSM_CFG_PRINTF("Failed to read %s %d\n", keyPairFileAlice, ret);
         close(keyFd);
         goto exit;
     }
@@ -400,19 +400,19 @@ int wh_DemoClient_CryptoCurve25519Import(whClientContext* clientContext)
                              (uint8_t*)keyLabel, strlen(keyLabel), keyBuf,
                              keySz, &keyIdAlice);
     if (ret != 0) {
-        printf("Failed to wh_Client_KeyCache %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wh_Client_KeyCache %d\n", ret);
         goto exit;
     }
 
     /* Initialize the wolfCrypt struct to use the cached key */
     ret = wc_curve25519_init_ex(aliceKey, NULL, WH_DEV_ID);
     if (ret != 0) {
-        printf("Failed to wc_curve25519_init_ex %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_curve25519_init_ex %d\n", ret);
         goto exit;
     }
     ret = wh_Client_Curve25519SetKeyId(aliceKey, keyIdAlice);
     if (ret != 0) {
-        printf("Failed to wh_Client_Curve25519SetKeyId %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wh_Client_Curve25519SetKeyId %d\n", ret);
         goto exit;
     }
 
@@ -421,7 +421,7 @@ int wh_DemoClient_CryptoCurve25519Import(whClientContext* clientContext)
     ret    = wc_curve25519_shared_secret(bobKey, aliceKey, sharedOne,
                                          (word32*)&outLen);
     if (ret != 0) {
-        printf("Failed to wc_curve25519_shared_secret %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_curve25519_shared_secret %d\n", ret);
         goto exit;
     }
 
@@ -430,18 +430,18 @@ int wh_DemoClient_CryptoCurve25519Import(whClientContext* clientContext)
     ret    = wc_curve25519_shared_secret(aliceKey, bobKey, sharedTwo,
                                          (word32*)&outLen);
     if (ret != 0) {
-        printf("Failed to wc_curve25519_shared_secret %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_curve25519_shared_secret %d\n", ret);
         goto exit;
     }
 
     /* Compare the shared secrets, they should match */
     if (memcmp(sharedOne, sharedTwo, outLen) != 0) {
-        printf("CURVE25519 import: shared secrets don't match\n");
+        WOLFHSM_CFG_PRINTF("CURVE25519 import: shared secrets don't match\n");
         ret = -1;
         goto exit;
     }
     else {
-        printf("CURVE25519 import: shared secrets match\n");
+        WOLFHSM_CFG_PRINTF("CURVE25519 import: shared secrets match\n");
     }
 
 exit:
@@ -452,7 +452,7 @@ exit:
     if (keyIdBob != WH_KEYID_ERASED) {
         int evictRet = wh_Client_KeyEvict(clientContext, keyIdBob);
         if (evictRet != 0) {
-            printf("Failed to wh_Client_KeyEvict %d\n", evictRet);
+            WOLFHSM_CFG_PRINTF("Failed to wh_Client_KeyEvict %d\n", evictRet);
             if (ret == 0) {
                 ret = evictRet;
             }
@@ -461,7 +461,7 @@ exit:
     if (keyIdAlice != WH_KEYID_ERASED) {
         int evictRet = wh_Client_KeyEvict(clientContext, keyIdAlice);
         if (evictRet != 0) {
-            printf("Failed to wh_Client_KeyEvict %d\n", evictRet);
+            WOLFHSM_CFG_PRINTF("Failed to wh_Client_KeyEvict %d\n", evictRet);
             if (ret == 0) {
                 ret = evictRet;
             }
@@ -502,19 +502,19 @@ int wh_DemoClient_CryptoEcc(whClientContext* clientContext)
     /* Initialize the rng to make the ecc keys */
     ret = wc_InitRng_ex(rng, NULL, WH_DEV_ID);
     if (ret != 0) {
-        printf("Failed to wc_InitRng_ex %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_InitRng_ex %d\n", ret);
         goto exit;
     }
 
     /* Initialize the local wolfCrypt structs */
     ret = wc_ecc_init_ex(aliceKey, NULL, WH_DEV_ID);
     if (ret != 0) {
-        printf("Failed to wc_ecc_init_ex %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_ecc_init_ex %d\n", ret);
         goto exit;
     }
     ret = wc_ecc_init_ex(bobKey, NULL, WH_DEV_ID);
     if (ret != 0) {
-        printf("Failed to wc_ecc_init_ex %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_ecc_init_ex %d\n", ret);
         goto exit;
     }
 
@@ -522,12 +522,12 @@ int wh_DemoClient_CryptoEcc(whClientContext* clientContext)
      * back to the client to store locally in the ecc_key structs */
     ret = wc_ecc_make_key(rng, 32, aliceKey);
     if (ret != 0) {
-        printf("Failed to wc_ecc_make_key %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_ecc_make_key %d\n", ret);
         goto exit;
     }
     ret = wc_ecc_make_key(rng, 32, bobKey);
     if (ret != 0) {
-        printf("Failed to wc_ecc_make_key %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_ecc_make_key %d\n", ret);
         goto exit;
     }
 
@@ -536,25 +536,25 @@ int wh_DemoClient_CryptoEcc(whClientContext* clientContext)
     ret    = wc_ecc_shared_secret(aliceKey, bobKey, (byte*)sharedOne,
                                   (word32*)&outLen);
     if (ret != 0) {
-        printf("Failed to wc_ecc_shared_secret %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_ecc_shared_secret %d\n", ret);
         goto exit;
     }
 
     ret = wc_ecc_shared_secret(bobKey, aliceKey, (byte*)sharedTwo,
                                (word32*)&outLen);
     if (ret != 0) {
-        printf("Failed to wc_ecc_shared_secret %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_ecc_shared_secret %d\n", ret);
         goto exit;
     }
 
     /* Compare the shared secrets, they should match */
     if (memcmp(sharedOne, sharedTwo, outLen) != 0) {
-        printf("ECC shared secrets don't match\n");
+        WOLFHSM_CFG_PRINTF("ECC shared secrets don't match\n");
         ret = -1;
         goto exit;
     }
     else {
-        printf("ECC shared secrets match\n");
+        WOLFHSM_CFG_PRINTF("ECC shared secrets match\n");
     }
 
     /* Sign the plaintext using the private component of Alice's key */
@@ -562,7 +562,7 @@ int wh_DemoClient_CryptoEcc(whClientContext* clientContext)
     ret    = wc_ecc_sign_hash(message, sizeof(message), (void*)signature,
                               (word32*)&outLen, rng, aliceKey);
     if (ret != 0) {
-        printf("Failed to wc_ecc_shared_secret %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_ecc_shared_secret %d\n", ret);
         goto exit;
     }
 
@@ -573,14 +573,14 @@ int wh_DemoClient_CryptoEcc(whClientContext* clientContext)
     ret = wc_ecc_verify_hash((void*)signature, outLen, (void*)message,
                              sizeof(message), &res, aliceKey);
     if (ret != 0) {
-        printf("Failed to wc_ecc_verify_hash %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_ecc_verify_hash %d\n", ret);
         goto exit;
     }
 
     if (res == 1)
-        printf("ECC sign/verify successful\n");
+        WOLFHSM_CFG_PRINTF("ECC sign/verify successful\n");
     else {
-        printf("ECC sign/verify failure\n");
+        WOLFHSM_CFG_PRINTF("ECC sign/verify failure\n");
         ret = -1;
         goto exit;
     }
@@ -632,20 +632,20 @@ int wh_DemoClient_CryptoEccImport(whClientContext* clientContext)
     /* Initialize the rng for signature signing */
     ret = wc_InitRng_ex(rng, NULL, WH_DEV_ID);
     if (ret != 0) {
-        printf("Failed to wc_InitRng_ex %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_InitRng_ex %d\n", ret);
         goto exit;
     }
 
     /* Open Alice's keypair file and read it into a local buffer */
     ret = keyFd = open(keyFileAlice, O_RDONLY, 0);
     if (ret < 0) {
-        printf("Failed to open %s %d\n", keyFileAlice, ret);
+        WOLFHSM_CFG_PRINTF("Failed to open %s %d\n", keyFileAlice, ret);
         goto exit;
     }
     /* Read the first private key to local buffer */
     ret = keySz = read(keyFd, keyBuf, sizeof(keyBuf));
     if (ret < 0) {
-        printf("Failed to read %s %d\n", keyFileAlice, ret);
+        WOLFHSM_CFG_PRINTF("Failed to read %s %d\n", keyFileAlice, ret);
         close(keyFd);
         goto exit;
     }
@@ -658,7 +658,7 @@ int wh_DemoClient_CryptoEccImport(whClientContext* clientContext)
             WH_NVM_FLAGS_USAGE_VERIFY,
         (uint8_t*)keyLabel, strlen(keyLabel), keyBuf, keySz, &keyIdAlice);
     if (ret != 0) {
-        printf("Failed to wh_Client_KeyCache %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wh_Client_KeyCache %d\n", ret);
         goto exit;
     }
 
@@ -668,18 +668,18 @@ int wh_DemoClient_CryptoEccImport(whClientContext* clientContext)
      * key */
     ret = wc_ecc_init_ex(aliceKey, NULL, WH_DEV_ID);
     if (ret != 0) {
-        printf("Failed to wc_ecc_init_ex %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_ecc_init_ex %d\n", ret);
         goto exit;
     }
     ret = wh_Client_EccSetKeyId(aliceKey, keyIdAlice);
     if (ret != 0) {
-        printf("Failed to wh_Client_EccSetKeyId %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wh_Client_EccSetKeyId %d\n", ret);
         goto exit;
     }
     /* Configure the local struct to expect the correct curve */
     ret = wc_ecc_set_curve(aliceKey, 32, -1);
     if (ret != 0) {
-        printf("Failed to wc_ecc_set_curve %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_ecc_set_curve %d\n", ret);
         goto exit;
     }
 
@@ -689,12 +689,12 @@ int wh_DemoClient_CryptoEccImport(whClientContext* clientContext)
     /* Open Bob's keypair file and read it into a local buffer */
     ret = keyFd = open(keyFileBob, O_RDONLY, 0);
     if (ret < 0) {
-        printf("Failed to open %s %d\n", keyFileBob, ret);
+        WOLFHSM_CFG_PRINTF("Failed to open %s %d\n", keyFileBob, ret);
         goto exit;
     }
     ret = keySz = read(keyFd, keyBuf, sizeof(keyBuf));
     if (ret < 0) {
-        printf("Failed to read %s %d\n", keyFileBob, ret);
+        WOLFHSM_CFG_PRINTF("Failed to read %s %d\n", keyFileBob, ret);
         close(keyFd);
         goto exit;
     }
@@ -706,7 +706,7 @@ int wh_DemoClient_CryptoEccImport(whClientContext* clientContext)
             WH_NVM_FLAGS_USAGE_VERIFY,
         (uint8_t*)keyLabel, strlen(keyLabel), keyBuf, keySz, &keyIdBob);
     if (ret != 0) {
-        printf("Failed to wh_Client_KeyCache %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wh_Client_KeyCache %d\n", ret);
         goto exit;
     }
 
@@ -714,18 +714,18 @@ int wh_DemoClient_CryptoEccImport(whClientContext* clientContext)
      * key */
     ret = wc_ecc_init_ex(bobKey, NULL, WH_DEV_ID);
     if (ret != 0) {
-        printf("Failed to wc_ecc_init_ex %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_ecc_init_ex %d\n", ret);
         goto exit;
     }
     ret = wh_Client_EccSetKeyId(bobKey, keyIdBob);
     if (ret != 0) {
-        printf("Failed to wh_Client_EccSetKeyId %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wh_Client_EccSetKeyId %d\n", ret);
         goto exit;
     }
     /* Configure the local struct to expect the correct curve */
     ret = wc_ecc_set_curve(bobKey, 32, -1);
     if (ret != 0) {
-        printf("Failed to wc_ecc_set_curve %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_ecc_set_curve %d\n", ret);
         goto exit;
     }
 
@@ -734,7 +734,7 @@ int wh_DemoClient_CryptoEccImport(whClientContext* clientContext)
     ret    = wc_ecc_shared_secret(aliceKey, bobKey, (byte*)sharedOne,
                                   (word32*)&outLen);
     if (ret != 0) {
-        printf("Failed to wc_ecc_shared_secret %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_ecc_shared_secret %d\n", ret);
         goto exit;
     }
 
@@ -743,18 +743,18 @@ int wh_DemoClient_CryptoEccImport(whClientContext* clientContext)
     ret    = wc_ecc_shared_secret(bobKey, aliceKey, (byte*)sharedTwo,
                                   (word32*)&outLen);
     if (ret != 0) {
-        printf("Failed to wc_ecc_shared_secret %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_ecc_shared_secret %d\n", ret);
         goto exit;
     }
 
     /* Compare the shared secrets, they should match */
     if (memcmp(sharedOne, sharedTwo, outLen) != 0) {
-        printf("ECC shared secrets don't match with imported keys\n");
+        WOLFHSM_CFG_PRINTF("ECC shared secrets don't match with imported keys\n");
         ret = -1;
         goto exit;
     }
     else {
-        printf("ECC shared secrets match with imported keys\n");
+        WOLFHSM_CFG_PRINTF("ECC shared secrets match with imported keys\n");
     }
 
     /* Sign the plaintext with Alice's private key */
@@ -762,7 +762,7 @@ int wh_DemoClient_CryptoEccImport(whClientContext* clientContext)
     ret    = wc_ecc_sign_hash(message, sizeof(message), (void*)signature,
                               (word32*)&sigLen, rng, aliceKey);
     if (ret != 0) {
-        printf("Failed to wc_ecc_sign_hash %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_ecc_sign_hash %d\n", ret);
         goto exit;
     }
 
@@ -773,14 +773,14 @@ int wh_DemoClient_CryptoEccImport(whClientContext* clientContext)
     ret = wc_ecc_verify_hash((void*)signature, sigLen, (void*)message,
                              sizeof(message), &res, aliceKey);
     if (ret != 0) {
-        printf("Failed to wc_ecc_verify_hash %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_ecc_verify_hash %d\n", ret);
         goto exit;
     }
 
     if (res == 1)
-        printf("ECC sign/verify successful with imported keys\n");
+        WOLFHSM_CFG_PRINTF("ECC sign/verify successful with imported keys\n");
     else {
-        printf("ECC sign/verify failure with imported keys\n");
+        WOLFHSM_CFG_PRINTF("ECC sign/verify failure with imported keys\n");
         ret = -1;
         goto exit;
     }
@@ -795,7 +795,7 @@ exit:
     if (keyIdBob != WH_KEYID_ERASED) {
         int evictRet = wh_Client_KeyEvict(clientContext, keyIdBob);
         if (evictRet != 0) {
-            printf("Failed to wh_Client_KeyEvict %d\n", evictRet);
+            WOLFHSM_CFG_PRINTF("Failed to wh_Client_KeyEvict %d\n", evictRet);
             if (ret == 0) {
                 ret = evictRet;
             }
@@ -804,7 +804,7 @@ exit:
     if (keyIdAlice != WH_KEYID_ERASED) {
         int evictRet = wh_Client_KeyEvict(clientContext, keyIdAlice);
         if (evictRet != 0) {
-            printf("Failed to wh_Client_KeyEvict %d\n", evictRet);
+            WOLFHSM_CFG_PRINTF("Failed to wh_Client_KeyEvict %d\n", evictRet);
             if (ret == 0) {
                 ret = evictRet;
             }
@@ -835,20 +835,20 @@ int wh_DemoClient_CryptoAesCbc(whClientContext* clientContext)
     /* Initialize the aes struct */
     ret = wc_AesInit(aes, NULL, WH_DEV_ID);
     if (ret != 0) {
-        printf("Failed to wc_AesInit %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_AesInit %d\n", ret);
     }
     else {
         /* set the key on the client side */
         ret = wc_AesSetKey(aes, key, sizeof(key), NULL, AES_ENCRYPTION);
         if (ret != 0) {
-            printf("Failed to wc_AesSetKey %d\n", ret);
+            WOLFHSM_CFG_PRINTF("Failed to wc_AesSetKey %d\n", ret);
         }
         if (ret == 0) {
             /* encrypt the plaintext */
             ret =
                 wc_AesCbcEncrypt(aes, cipherText, plainText, sizeof(plainText));
             if (ret != 0) {
-                printf("Failed to wc_AesCbcEncrypt %d\n", ret);
+                WOLFHSM_CFG_PRINTF("Failed to wc_AesCbcEncrypt %d\n", ret);
             }
         }
 
@@ -856,7 +856,7 @@ int wh_DemoClient_CryptoAesCbc(whClientContext* clientContext)
             /* Reset the IV so we can decrypt */
             ret = wc_AesSetIV(aes, NULL);
             if (ret != 0) {
-                printf("Failed to wc_AesSetIV %d\n", ret);
+                WOLFHSM_CFG_PRINTF("Failed to wc_AesSetIV %d\n", ret);
             }
         }
 
@@ -865,18 +865,18 @@ int wh_DemoClient_CryptoAesCbc(whClientContext* clientContext)
             ret =
                 wc_AesCbcDecrypt(aes, finalText, cipherText, sizeof(plainText));
             if (ret != 0) {
-                printf("Failed to wc_AesCbcDecrypt %d\n", ret);
+                WOLFHSM_CFG_PRINTF("Failed to wc_AesCbcDecrypt %d\n", ret);
             }
         }
 
         if (ret == 0) {
             /* compare final and plain */
             if (memcmp(plainText, finalText, sizeof(plainText)) != 0) {
-                printf("AES CBC doesn't match after decryption\n");
+                WOLFHSM_CFG_PRINTF("AES CBC doesn't match after decryption\n");
                 ret = -1;
             }
             else {
-                printf("AES CBC matches after decryption\n");
+                WOLFHSM_CFG_PRINTF("AES CBC matches after decryption\n");
             }
         }
 
@@ -906,7 +906,7 @@ int wh_DemoClient_CryptoAesCbcImport(whClientContext* clientContext)
     /* Initialize the aes struct */
     ret = wc_AesInit(aes, NULL, WH_DEV_ID);
     if (ret != 0) {
-        printf("Failed to wc_AesInit %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_AesInit %d\n", ret);
         goto exit;
     }
 
@@ -915,7 +915,7 @@ int wh_DemoClient_CryptoAesCbcImport(whClientContext* clientContext)
         clientContext, WH_NVM_FLAGS_USAGE_ENCRYPT | WH_NVM_FLAGS_USAGE_DECRYPT,
         (uint8_t*)keyLabel, sizeof(keyLabel), key, sizeof(key), &keyId);
     if (ret != 0) {
-        printf("Failed to wh_Client_KeyCache %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wh_Client_KeyCache %d\n", ret);
         goto exit;
     }
 
@@ -924,42 +924,42 @@ int wh_DemoClient_CryptoAesCbcImport(whClientContext* clientContext)
     /* set the keyId on the struct */
     ret = wh_Client_AesSetKeyId(aes, keyId);
     if (ret != 0) {
-        printf("Failed to wh_Client_SetKeyIdAes %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wh_Client_SetKeyIdAes %d\n", ret);
         goto exit;
     }
 
     /* encrypt the plaintext */
     ret = wc_AesCbcEncrypt(aes, cipherText, plainText, sizeof(plainText));
     if (ret != 0) {
-        printf("Failed to wc_AesCbcEncrypt %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_AesCbcEncrypt %d\n", ret);
         goto exit;
     }
 
     /* Reset the IV so we can decrypt */
     ret = wc_AesSetIV(aes, NULL);
     if (ret != 0) {
-        printf("Failed to wc_AesSetIV %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_AesSetIV %d\n", ret);
     }
 
     /* decrypt the ciphertext */
     ret = wc_AesCbcDecrypt(aes, finalText, cipherText, sizeof(plainText));
     if (ret != 0) {
-        printf("Failed to wc_AesCbcDecrypt %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_AesCbcDecrypt %d\n", ret);
         goto exit;
     }
 
     /* compare final and plain */
     if (memcmp(plainText, finalText, sizeof(plainText)) != 0) {
-        printf("AES CBC doesn't match after decryption with imported key\n");
+        WOLFHSM_CFG_PRINTF("AES CBC doesn't match after decryption with imported key\n");
         ret = -1;
         goto exit;
     }
-    printf("AES CBC matches after decryption with imported key\n");
+    WOLFHSM_CFG_PRINTF("AES CBC matches after decryption with imported key\n");
 exit:
     if (needEvict) {
         int evictRet = wh_Client_KeyEvict(clientContext, keyId);
         if (evictRet != 0) {
-            printf("Failed to wh_Client_KeyEvict %d\n", evictRet);
+            WOLFHSM_CFG_PRINTF("Failed to wh_Client_KeyEvict %d\n", evictRet);
             if (ret == 0) {
                 ret = evictRet;
             }
@@ -992,14 +992,14 @@ int wh_DemoClient_CryptoAesGcm(whClientContext* clientContext)
     /* initialize the aes struct */
     ret = wc_AesInit(aes, NULL, WH_DEV_ID);
     if (ret != 0) {
-        printf("Failed to wc_AesInit %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_AesInit %d\n", ret);
         goto exit;
     }
 
     /* set the key and iv on the client side */
     ret = wc_AesSetKey(aes, key, sizeof(key), iv, AES_ENCRYPTION);
     if (ret != 0) {
-        printf("Failed to wc_AesSetKey %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_AesSetKey %d\n", ret);
         goto exit;
     }
 
@@ -1008,7 +1008,7 @@ int wh_DemoClient_CryptoAesGcm(whClientContext* clientContext)
                            sizeof(iv), authTag, sizeof(authTag), authIn,
                            sizeof(authIn));
     if (ret != 0) {
-        printf("Failed to wc_AesGcmEncrypt %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_AesGcmEncrypt %d\n", ret);
         goto exit;
     }
 
@@ -1017,17 +1017,17 @@ int wh_DemoClient_CryptoAesGcm(whClientContext* clientContext)
                            sizeof(iv), authTag, sizeof(authTag), authIn,
                            sizeof(authIn));
     if (ret != 0) {
-        printf("Failed to wc_AesGcmDecrypt %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_AesGcmDecrypt %d\n", ret);
         goto exit;
     }
 
     /* compare the finaltext to the plaintext */
     if (memcmp(plainText, finalText, sizeof(plainText)) != 0) {
-        printf("AES GCM doesn't match after decryption\n");
+        WOLFHSM_CFG_PRINTF("AES GCM doesn't match after decryption\n");
         ret = -1;
         goto exit;
     }
-    printf("AES GCM matches after decryption\n");
+    WOLFHSM_CFG_PRINTF("AES GCM matches after decryption\n");
 exit:
     return ret;
 }
@@ -1055,7 +1055,7 @@ int wh_DemoClient_CryptoAesGcmImport(whClientContext* clientContext)
     /* initialize the aes struct */
     ret = wc_AesInit(aes, NULL, WH_DEV_ID);
     if (ret != 0) {
-        printf("Failed to wc_AesInit %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_AesInit %d\n", ret);
         goto exit;
     }
 
@@ -1064,7 +1064,7 @@ int wh_DemoClient_CryptoAesGcmImport(whClientContext* clientContext)
         clientContext, WH_NVM_FLAGS_USAGE_ENCRYPT | WH_NVM_FLAGS_USAGE_DECRYPT,
         (uint8_t*)keyLabel, sizeof(keyLabel), key, sizeof(key), &keyId);
     if (ret != 0) {
-        printf("Failed to wh_Client_KeyCache %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wh_Client_KeyCache %d\n", ret);
         goto exit;
     }
 
@@ -1073,14 +1073,14 @@ int wh_DemoClient_CryptoAesGcmImport(whClientContext* clientContext)
     /* set the keyId on the struct */
     ret = wh_Client_AesSetKeyId(aes, keyId);
     if (ret != 0) {
-        printf("Failed to wh_Client_SetKeyIdAes %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wh_Client_SetKeyIdAes %d\n", ret);
         goto exit;
     }
 
     /* set the iv */
     ret = wc_AesSetIV(aes, iv);
     if (ret != 0) {
-        printf("Failed to wh_Client_KeyCache %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wh_Client_KeyCache %d\n", ret);
         goto exit;
     }
 
@@ -1089,7 +1089,7 @@ int wh_DemoClient_CryptoAesGcmImport(whClientContext* clientContext)
                            sizeof(iv), authTag, sizeof(authTag), authIn,
                            sizeof(authIn));
     if (ret != 0) {
-        printf("Failed to wc_AesGcmEncrypt %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_AesGcmEncrypt %d\n", ret);
         goto exit;
     }
 
@@ -1098,24 +1098,24 @@ int wh_DemoClient_CryptoAesGcmImport(whClientContext* clientContext)
                            sizeof(iv), authTag, sizeof(authTag), authIn,
                            sizeof(authIn));
     if (ret != 0) {
-        printf("Failed to wc_AesGcmDecrypt %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_AesGcmDecrypt %d\n", ret);
         goto exit;
     }
 
     /* compare plaintext and finaltext */
     if (memcmp(plainText, finalText, sizeof(plainText)) != 0) {
-        printf("AES GCM doesn't match after decryption with imported keys\n");
+        WOLFHSM_CFG_PRINTF("AES GCM doesn't match after decryption with imported keys\n");
         ret = -1;
         goto exit;
     }
-    printf("AES GCM matches after decryption with imported keys\n");
+    WOLFHSM_CFG_PRINTF("AES GCM matches after decryption with imported keys\n");
 exit:
     wc_AesFree(aes);
     if (needEvict) {
         /* evict the key from the cache */
         int evictRet = wh_Client_KeyEvict(clientContext, keyId);
         if (evictRet != 0) {
-            printf("Failed to wh_Client_KeyEvict %d\n", evictRet);
+            WOLFHSM_CFG_PRINTF("Failed to wh_Client_KeyEvict %d\n", evictRet);
             if (ret == 0) {
                 ret = evictRet;
             }
@@ -1146,14 +1146,14 @@ int wh_DemoClient_CryptoCmac(whClientContext* clientContext)
     ret = wc_InitCmac_ex(cmac, key, sizeof(key), WC_CMAC_AES, NULL, NULL,
                          WH_DEV_ID);
     if (ret != 0) {
-        printf("Failed to wc_InitCmac_ex %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_InitCmac_ex %d\n", ret);
         goto exit;
     }
 
     /* hash the message */
     ret = wc_CmacUpdate(cmac, (byte*)message, strlen(message));
     if (ret != 0) {
-        printf("Failed to wc_CmacUpdate %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_CmacUpdate %d\n", ret);
         goto exit;
     }
 
@@ -1161,7 +1161,7 @@ int wh_DemoClient_CryptoCmac(whClientContext* clientContext)
     outLen = sizeof(tag);
     ret    = wc_CmacFinal(cmac, tag, &outLen);
     if (ret != 0) {
-        printf("Failed to wc_CmacFinal %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_CmacFinal %d\n", ret);
         goto exit;
     }
 
@@ -1170,11 +1170,11 @@ int wh_DemoClient_CryptoCmac(whClientContext* clientContext)
         wc_AesCmacVerify_ex(cmac, tag, sizeof(tag), (byte*)message,
                             strlen(message), key, sizeof(key), NULL, WH_DEV_ID);
     if (ret != 0) {
-        printf("CMAC hash and verify failed %d\n", ret);
+        WOLFHSM_CFG_PRINTF("CMAC hash and verify failed %d\n", ret);
         goto exit;
     }
 
-    printf("CMAC hash and verify succeeded\n");
+    WOLFHSM_CFG_PRINTF("CMAC hash and verify succeeded\n");
 exit:
     (void)wc_CmacFree(cmac);
     return ret;
@@ -1199,7 +1199,7 @@ int wh_DemoClient_CryptoCmacImport(whClientContext* clientContext)
     /* initialize the cmac struct */
     ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, NULL, WH_DEV_ID);
     if (ret != 0) {
-        printf("Failed to wc_InitCmac_ex %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_InitCmac_ex %d\n", ret);
         goto exit;
     }
 
@@ -1208,21 +1208,21 @@ int wh_DemoClient_CryptoCmacImport(whClientContext* clientContext)
         clientContext, WH_NVM_FLAGS_USAGE_SIGN | WH_NVM_FLAGS_USAGE_VERIFY,
         (uint8_t*)keyLabel, sizeof(keyLabel), key, sizeof(key), &keyId);
     if (ret != 0) {
-        printf("Failed to wh_Client_KeyCache %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wh_Client_KeyCache %d\n", ret);
         goto exit;
     }
 
     /* set the keyId on the struct */
     ret = wh_Client_CmacSetKeyId(cmac, keyId);
     if (ret != 0) {
-        printf("Failed to wh_Client_SetKeyIdAes %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wh_Client_SetKeyIdAes %d\n", ret);
         goto exit;
     }
 
     /* hash the message */
     ret = wc_CmacUpdate(cmac, (byte*)message, sizeof(message));
     if (ret != 0) {
-        printf("Failed to wc_CmacUpdate %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_CmacUpdate %d\n", ret);
         goto exit;
     }
 
@@ -1230,7 +1230,7 @@ int wh_DemoClient_CryptoCmacImport(whClientContext* clientContext)
     outLen = sizeof(tag);
     ret    = wc_CmacFinal(cmac, tag, &outLen);
     if (ret != 0) {
-        printf("Failed to wc_CmacFinal %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_CmacFinal %d\n", ret);
         goto exit;
     }
 
@@ -1241,7 +1241,7 @@ int wh_DemoClient_CryptoCmacImport(whClientContext* clientContext)
     /* initialize the cmac struct */
     ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, NULL, WH_DEV_ID);
     if (ret != 0) {
-        printf("Failed to wc_InitCmac_ex %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_InitCmac_ex %d\n", ret);
         goto exit;
     }
 
@@ -1251,14 +1251,14 @@ int wh_DemoClient_CryptoCmacImport(whClientContext* clientContext)
         clientContext, WH_NVM_FLAGS_USAGE_SIGN | WH_NVM_FLAGS_USAGE_VERIFY,
         (uint8_t*)keyLabel, sizeof(keyLabel), key, sizeof(key), &keyId);
     if (ret != 0) {
-        printf("Failed to wh_Client_KeyCache %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wh_Client_KeyCache %d\n", ret);
         goto exit;
     }
 
     /* set the keyId on the struct */
     ret = wh_Client_CmacSetKeyId(cmac, keyId);
     if (ret != 0) {
-        printf("Failed to wh_Client_SetKeyIdAes %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wh_Client_SetKeyIdAes %d\n", ret);
         goto exit;
     }
 
@@ -1268,11 +1268,11 @@ int wh_DemoClient_CryptoCmacImport(whClientContext* clientContext)
     ret = wc_AesCmacVerify_ex(cmac, tag, sizeof(tag), (byte*)message,
                               sizeof(message), NULL, 0, NULL, WH_DEV_ID);
     if (ret != 0) {
-        printf("CMAC hash and verify failed with imported key %d\n", ret);
+        WOLFHSM_CFG_PRINTF("CMAC hash and verify failed with imported key %d\n", ret);
         goto exit;
     }
 
-    printf("CMAC hash and verify succeeded with imported key\n");
+    WOLFHSM_CFG_PRINTF("CMAC hash and verify succeeded with imported key\n");
 exit:
     (void)wc_CmacFree(cmac);
     return ret;
@@ -1297,7 +1297,7 @@ int wh_DemoClient_CryptoCmacOneshotImport(whClientContext* clientContext)
     /* initialize the cmac struct */
     ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, NULL, WH_DEV_ID);
     if (ret != 0) {
-        printf("Failed to wc_InitCmac_ex %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_InitCmac_ex %d\n", ret);
         goto exit;
     }
 
@@ -1306,14 +1306,14 @@ int wh_DemoClient_CryptoCmacOneshotImport(whClientContext* clientContext)
         clientContext, WH_NVM_FLAGS_USAGE_SIGN | WH_NVM_FLAGS_USAGE_VERIFY,
         (uint8_t*)keyLabel, sizeof(keyLabel), key, sizeof(key), &keyId);
     if (ret != 0) {
-        printf("Failed to wh_Client_KeyCache %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wh_Client_KeyCache %d\n", ret);
         goto exit;
     }
 
     /* set the keyId on the struct */
     ret = wh_Client_CmacSetKeyId(cmac, keyId);
     if (ret != 0) {
-        printf("Failed to wh_Client_SetKeyIdAes %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wh_Client_SetKeyIdAes %d\n", ret);
         goto exit;
     }
 
@@ -1324,7 +1324,7 @@ int wh_DemoClient_CryptoCmacOneshotImport(whClientContext* clientContext)
     ret    = wc_AesCmacGenerate_ex(cmac, tag, &outLen, (byte*)message,
                                    sizeof(message), NULL, 0, NULL, WH_DEV_ID);
     if (ret != 0) {
-        printf("Failed to wh_Client_AesCmacGenerate %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wh_Client_AesCmacGenerate %d\n", ret);
         goto exit;
     }
 
@@ -1335,7 +1335,7 @@ int wh_DemoClient_CryptoCmacOneshotImport(whClientContext* clientContext)
     /* initialize the cmac struct */
     ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, NULL, WH_DEV_ID);
     if (ret != 0) {
-        printf("Failed to wc_InitCmac_ex %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_InitCmac_ex %d\n", ret);
         goto exit;
     }
 
@@ -1345,14 +1345,14 @@ int wh_DemoClient_CryptoCmacOneshotImport(whClientContext* clientContext)
         clientContext, WH_NVM_FLAGS_USAGE_SIGN | WH_NVM_FLAGS_USAGE_VERIFY,
         (uint8_t*)keyLabel, sizeof(keyLabel), key, sizeof(key), &keyId);
     if (ret != 0) {
-        printf("Failed to wh_Client_KeyCache %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wh_Client_KeyCache %d\n", ret);
         goto exit;
     }
 
     /* set the keyId on the struct */
     ret = wh_Client_CmacSetKeyId(cmac, keyId);
     if (ret != 0) {
-        printf("Failed to wh_Client_SetKeyIdAes %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wh_Client_SetKeyIdAes %d\n", ret);
         goto exit;
     }
 
@@ -1362,12 +1362,12 @@ int wh_DemoClient_CryptoCmacOneshotImport(whClientContext* clientContext)
     ret = wc_AesCmacVerify_ex(cmac, tag, sizeof(tag), (byte*)message,
                               sizeof(message), NULL, 0, NULL, WH_DEV_ID);
     if (ret != 0) {
-        printf("CMAC hash and verify oneshot failed with imported key %d\n",
+        WOLFHSM_CFG_PRINTF("CMAC hash and verify oneshot failed with imported key %d\n",
                ret);
         goto exit;
     }
 
-    printf("CMAC hash and verify oneshot succeeded with imported key\n");
+    WOLFHSM_CFG_PRINTF("CMAC hash and verify oneshot succeeded with imported key\n");
 exit:
     (void)wc_CmacFree(cmac);
     return ret;
@@ -1403,7 +1403,7 @@ int wh_DemoClient_CryptoHkdfExport(whClientContext* clientContext)
     ret = wc_HKDF_ex(WC_SHA256, ikm, sizeof(ikm), salt, sizeof(salt), info,
                      sizeof(info), okm, (word32)sizeof(okm), NULL, devId);
     if (ret != 0) {
-        printf("Failed to wc_HKDF_ex %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_HKDF_ex %d\n", ret);
     }
 
     /* At this point 'okm' holds the derived key material.
@@ -1445,7 +1445,7 @@ int wh_DemoClient_CryptoHkdfCache(whClientContext* clientContext)
         salt, (uint32_t)sizeof(salt), info, (uint32_t)sizeof(info), &keyId,
         flags, (const uint8_t*)label, (uint32_t)strlen(label), outSz);
     if (ret != WH_ERROR_OK) {
-        printf("Failed to wh_Client_HkdfMakeCacheKey %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wh_Client_HkdfMakeCacheKey %d\n", ret);
         return ret;
     }
 
@@ -1455,7 +1455,7 @@ int wh_DemoClient_CryptoHkdfCache(whClientContext* clientContext)
     /* Optionally evict the key from the cache once we are done using it */
     ret = wh_Client_KeyEvict(clientContext, keyId);
     if (ret != 0) {
-        printf("Failed to wh_Client_KeyEvict %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wh_Client_KeyEvict %d\n", ret);
     }
 
     return ret;
@@ -1486,7 +1486,7 @@ int wh_DemoClient_CryptoHkdfCacheInputKey(whClientContext* clientContext)
                              (uint8_t*)keyLabel, (uint32_t)strlen(keyLabel),
                              ikm, (uint32_t)sizeof(ikm), &keyIdIn);
     if (ret != WH_ERROR_OK) {
-        printf("Failed to wh_Client_KeyCache %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wh_Client_KeyCache %d\n", ret);
         return ret;
     }
 
@@ -1502,7 +1502,7 @@ int wh_DemoClient_CryptoHkdfCacheInputKey(whClientContext* clientContext)
         (uint32_t)sizeof(salt), info, (uint32_t)sizeof(info), &keyIdOut,
         WH_NVM_FLAGS_NONE, NULL, 0, (uint32_t)sizeof(okm));
     if (ret != WH_ERROR_OK) {
-        printf("Failed to wh_Client_HkdfMakeCacheKey with cached input %d\n",
+        WOLFHSM_CFG_PRINTF("Failed to wh_Client_HkdfMakeCacheKey with cached input %d\n",
                ret);
         (void)wh_Client_KeyEvict(clientContext, keyIdIn);
         return ret;
@@ -1563,7 +1563,7 @@ int wh_DemoClient_CryptoCmacKdfExport(whClientContext* clientContext)
         (word32)sizeof(demoCmacKdfFixedInfo), derived, (word32)sizeof(derived),
         NULL, WH_DEV_ID);
     if (ret != 0) {
-        printf("Failed to wc_KDA_KDF_twostep_cmac %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_KDA_KDF_twostep_cmac %d\n", ret);
     }
 
     /* The key has now been derived and is stored in the 'derived' array */
@@ -1591,7 +1591,7 @@ int wh_DemoClient_CryptoCmacKdfCache(whClientContext* clientContext)
         (const uint8_t*)label, (uint32_t)strlen(label),
         WH_DEMO_CMAC_KDF_OUT_SZ);
     if (ret != WH_ERROR_OK) {
-        printf("Failed to wh_Client_CmacKdfMakeCacheKey %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wh_Client_CmacKdfMakeCacheKey %d\n", ret);
         return ret;
     }
 
@@ -1601,7 +1601,7 @@ int wh_DemoClient_CryptoCmacKdfCache(whClientContext* clientContext)
     /* Example: evict the key from cache once we are done with it */
     ret = wh_Client_KeyEvict(clientContext, keyId);
     if (ret != 0) {
-        printf("Failed to wh_Client_KeyEvict %d\n", evictRet);
+        WOLFHSM_CFG_PRINTF("Failed to wh_Client_KeyEvict %d\n", evictRet);
     }
 
     return ret;
@@ -1628,7 +1628,7 @@ int wh_DemoClient_CryptoCmacKdfCacheInputs(whClientContext* clientContext)
                              demoCmacKdfSalt, (uint32_t)sizeof(demoCmacKdfSalt),
                              &saltKeyId);
     if (ret != WH_ERROR_OK) {
-        printf("Failed to cache CMAC KDF salt %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to cache CMAC KDF salt %d\n", ret);
         return ret;
     }
 
@@ -1638,7 +1638,7 @@ int wh_DemoClient_CryptoCmacKdfCacheInputs(whClientContext* clientContext)
                              demoCmacKdfZ, (uint32_t)sizeof(demoCmacKdfZ),
                              &zKeyId);
     if (ret != WH_ERROR_OK) {
-        printf("Failed to cache CMAC KDF Z input %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to cache CMAC KDF Z input %d\n", ret);
         /* Optionally evict the salt key if not needed anymore */
         (void)wh_Client_KeyEvict(clientContext, saltKeyId);
         return ret;
@@ -1658,7 +1658,7 @@ int wh_DemoClient_CryptoCmacKdfCacheInputs(whClientContext* clientContext)
         WH_DEMO_CMAC_KDF_OUT_SZ);
 
     if (ret != WH_ERROR_OK) {
-        printf("Failed to CMAC KDF with cached inputs %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to CMAC KDF with cached inputs %d\n", ret);
     }
 
 

@@ -177,7 +177,7 @@ int whTest_SheClientConfig(whClientConfig* config)
                                             &avail_objects, &reclaim_size,
                                             &reclaim_objects));
 
-        printf("PRE-SHE TEST: NvmGetAvailable:%d, server_rc:%d avail_size:%d "
+        WH_TEST_DEBUG_PRINT("PRE-SHE TEST: NvmGetAvailable:%d, server_rc:%d avail_size:%d "
                "avail_objects:%d, reclaim_size:%d reclaim_objects:%d\n",
                ret, (int)server_rc, (int)avail_size, (int)avail_objects,
                (int)reclaim_size, (int)reclaim_objects);
@@ -254,7 +254,7 @@ int whTest_SheClientConfig(whClientConfig* config)
         WH_ERROR_PRINT("Failed to secureBoot with SHE CMAC\n");
         goto exit;
     }
-    printf("SHE secure boot SUCCESS\n");
+    WH_TEST_PRINT("SHE secure boot SUCCESS\n");
     /* load the secret key using pre program */
     if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_SECRET_KEY_ID, 0, secretKey, sizeof(secretKey))) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_ShePreProgramKey %d\n", ret);
@@ -287,7 +287,7 @@ int whTest_SheClientConfig(whClientConfig* config)
         WH_ERROR_PRINT("Failed to generate a loadable key to match the vector\n");
         goto exit;
     }
-    printf("SHE wh_SheGenerateLoadableKey SUCCESS\n");
+    WH_TEST_PRINT("SHE wh_SheGenerateLoadableKey SUCCESS\n");
     /* test CMD_LOAD_KEY with test vector */
     if ((ret = wh_Client_SheLoadKey(client, vectorMessageOne, vectorMessageTwo, vectorMessageThree, outMessageFour, outMessageFive)) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_SheLoadKey %d\n", ret);
@@ -299,7 +299,7 @@ int whTest_SheClientConfig(whClientConfig* config)
         WH_ERROR_PRINT("wh_Client_SheLoadKey FAILED TO MATCH\n");
         goto exit;
     }
-    printf("SHE LOAD KEY SUCCESS\n");
+    WH_TEST_PRINT("SHE LOAD KEY SUCCESS\n");
     if ((ret = wh_Client_SheInitRnd(client)) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_SheInitRnd %d\n", ret);
         goto exit;
@@ -312,7 +312,7 @@ int whTest_SheClientConfig(whClientConfig* config)
         WH_ERROR_PRINT("Failed to wh_Client_SheExtendSeed %d\n", ret);
         goto exit;
     }
-    printf("SHE RND SUCCESS\n");
+    WH_TEST_PRINT("SHE RND SUCCESS\n");
     if ((ret = wh_Client_SheLoadPlainKey(client, key, sizeof(key))) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_SheLoadPlainKey %d\n", ret);
         goto exit;
@@ -337,7 +337,7 @@ int whTest_SheClientConfig(whClientConfig* config)
         WH_ERROR_PRINT("SHE ECB FAILED TO MATCH\n");
         goto exit;
     }
-    printf("SHE ECB SUCCESS\n");
+    WH_TEST_PRINT("SHE ECB SUCCESS\n");
     if ((ret = wh_Client_SheEncCbc(client, WH_SHE_RAM_KEY_ID, iv, sizeof(iv), plainText, cipherText, sizeof(plainText))) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_SheEncCbc %d\n", ret);
         goto exit;
@@ -350,7 +350,7 @@ int whTest_SheClientConfig(whClientConfig* config)
         WH_ERROR_PRINT("SHE CBC FAILED TO MATCH\n");
         goto exit;
     }
-    printf("SHE CBC SUCCESS\n");
+    WH_TEST_PRINT("SHE CBC SUCCESS\n");
     if ((ret = wh_Client_SheGenerateMac(client, WH_SHE_RAM_KEY_ID, plainText, sizeof(plainText), cipherText, sizeof(cipherText))) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_SheGenerateMac %d\n", ret);
         goto exit;
@@ -389,7 +389,7 @@ int whTest_SheClientConfig(whClientConfig* config)
         WH_ERROR_PRINT("Failed to _destroySheKey, ret=%d\n", ret);
         goto exit;
     }
-    printf("SHE CMAC SUCCESS\n");
+    WH_TEST_PRINT("SHE CMAC SUCCESS\n");
 
 #ifdef WOLFHSM_CFG_TEST_VERBOSE
     {
@@ -404,7 +404,7 @@ int whTest_SheClientConfig(whClientConfig* config)
                                             &avail_objects, &reclaim_size,
                                             &reclaim_objects));
 
-        printf("POST-SHE TEST: NvmGetAvailable:%d, server_rc:%d avail_size:%d "
+        WH_TEST_DEBUG_PRINT("POST-SHE TEST: NvmGetAvailable:%d, server_rc:%d avail_size:%d "
                "avail_objects:%d, reclaim_size:%d reclaim_objects:%d\n",
                ret, (int)server_rc, (int)avail_size, (int)avail_objects,
                (int)reclaim_size, (int)reclaim_objects);
@@ -602,7 +602,7 @@ static int wh_ClientServer_MemThreadTest(void)
     defined(WOLFHSM_CFG_ENABLE_SERVER)
 int whTest_She(void)
 {
-    printf("Testing SHE: (pthread) mem...\n");
+    WH_TEST_PRINT("Testing SHE: (pthread) mem...\n");
     WH_TEST_RETURN_ON_FAIL(wh_ClientServer_MemThreadTest());
     return 0;
 }

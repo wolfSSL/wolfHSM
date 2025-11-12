@@ -66,9 +66,15 @@ OUT = $(TARGET) # Output executable name
 
 # DEBUG flag
 ifeq ($(DEBUG), 1)
-	CFLAGS += -g -O0 -DDEBUG -ggdb3
+	CFLAGS += -g -O0 -DDEBUG -ggdb3 -DWOLFHSM_CFG_DEBUG
 else
 	CFLAGS += -O2
+endif
+
+# Check if DEBUG_VERBOSE is set to 1 and enable verbose WOLFHSM debug output
+# Note: DEBUG_VERBOSE implies DEBUG
+ifeq ($(DEBUG_VERBOSE),1)
+	CFLAGS += -g -O0 -DDEBUG -ggdb3 -DWOLFHSM_CFG_DEBUG -DWOLFHSM_CFG_DEBUG_VERBOSE
 endif
 
 ifeq ($(ASAN), 1)

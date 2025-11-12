@@ -116,7 +116,7 @@ static int whTest_ShowNvmAvailable(whClientContext* ctx)
     if (ret != 0) {
         WH_ERROR_PRINT("Failed to get available NVM status\n");
     } else {
-        printf("CRYPTO TEST NVM STATUS: NvmGetAvailable:%d, server_rc:%d "
+        WH_TEST_DEBUG_PRINT("CRYPTO TEST NVM STATUS: NvmGetAvailable:%d, server_rc:%d "
                 "avail_size:%d avail_objects:%d, reclaim_size:%d "
                 "reclaim_objects:%d\n",
                ret, (int)server_rc, (int)avail_size, (int)avail_objects,
@@ -163,7 +163,7 @@ static int whTest_CryptoRng(whClientContext* ctx, int devId, WC_RNG* rng)
         }
     }
     if (ret == 0) {
-        printf("RNG DEVID=0x%X SUCCESS\n", devId);
+        WH_TEST_PRINT("RNG DEVID=0x%X SUCCESS\n", devId);
     }
     return ret;
 }
@@ -301,7 +301,7 @@ static int whTest_CryptoRsa(whClientContext* ctx, int devId, WC_RNG* rng)
         (void)wh_Client_KeyEvict(ctx, keyId);
     }
     if (ret == 0) {
-        printf("RSA SUCCESS\n");
+        WH_TEST_PRINT("RSA SUCCESS\n");
     }
     return ret;
 }
@@ -350,7 +350,7 @@ static int whTest_CryptoEcc(whClientContext* ctx, int devId, WC_RNG* rng)
                                     ret);
                         } else {
                             if (memcmp(shared_ab, shared_ba, secLen) == 0) {
-                                printf("ECDH SUCCESS\n");
+                                WH_TEST_PRINT("ECDH SUCCESS\n");
                             }
                             else {
                                 WH_ERROR_PRINT("ECDH FAILED TO MATCH\n");
@@ -379,7 +379,7 @@ static int whTest_CryptoEcc(whClientContext* ctx, int devId, WC_RNG* rng)
                             }
                             else {
                                 if (res == 1) {
-                                    printf("ECC SIGN/VERIFY SUCCESS\n");
+                                    WH_TEST_PRINT("ECC SIGN/VERIFY SUCCESS\n");
                                 }
                                 else {
                                     WH_ERROR_PRINT("ECC SIGN/VERIFY FAIL\n");
@@ -566,7 +566,7 @@ static int whTest_CryptoCurve25519(whClientContext* ctx, int devId, WC_RNG* rng)
         }
     }
     if (ret == 0) {
-        printf("CURVE25519 SUCCESS\n");
+        WH_TEST_PRINT("CURVE25519 SUCCESS\n");
     }
     return ret;
 }
@@ -680,7 +680,7 @@ static int whTest_CryptoSha256(whClientContext* ctx, int devId, WC_RNG* rng)
         }
     }
     if (ret == 0) {
-        printf("SHA256 DEVID=0x%X SUCCESS\n", devId);
+        WH_TEST_PRINT("SHA256 DEVID=0x%X SUCCESS\n", devId);
     }
     return ret;
 }
@@ -796,7 +796,7 @@ static int whTest_CryptoSha224(whClientContext* ctx, int devId, WC_RNG* rng)
         }
     }
     if (ret == 0) {
-        printf("SHA224 DEVID=0x%X SUCCESS\n", devId);
+        WH_TEST_PRINT("SHA224 DEVID=0x%X SUCCESS\n", devId);
     }
     return ret;
 }
@@ -917,7 +917,7 @@ static int whTest_CryptoSha384(whClientContext* ctx, int devId, WC_RNG* rng)
         }
     }
     if (ret == 0) {
-        printf("SHA384 DEVID=0x%X SUCCESS\n", devId);
+        WH_TEST_PRINT("SHA384 DEVID=0x%X SUCCESS\n", devId);
     }
     return ret;
 }
@@ -1042,7 +1042,7 @@ static int whTest_CryptoSha512(whClientContext* ctx, int devId, WC_RNG* rng)
         }
     }
     if (ret == 0) {
-        printf("SHA512 DEVID=0x%X SUCCESS\n", devId);
+        WH_TEST_PRINT("SHA512 DEVID=0x%X SUCCESS\n", devId);
     }
     return ret;
 }
@@ -1236,7 +1236,7 @@ static int whTest_CryptoHkdf(whClientContext* ctx, int devId, WC_RNG* rng)
         }
     }
 
-    printf("HKDF SUCCESS\n");
+    WH_TEST_PRINT("HKDF SUCCESS\n");
     return 0;
 }
 #endif /* HAVE_HKDF */
@@ -1423,7 +1423,7 @@ cleanup_inputs:
         return ret;
     }
 
-    printf("CMAC KDF SUCCESS\n");
+    WH_TEST_PRINT("CMAC KDF SUCCESS\n");
     return 0;
 }
 #endif /* HAVE_CMAC_KDF */
@@ -1521,7 +1521,7 @@ static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
         if (ret != 0) {
             WH_ERROR_PRINT("Failed to Test CacheExportKey %d\n", ret);
         } else {
-            printf("KEY CACHE/EXPORT SUCCESS\n");
+            WH_TEST_PRINT("KEY CACHE/EXPORT SUCCESS\n");
         }
     }
 #ifdef WOLFHSM_CFG_IS_TEST_SERVER
@@ -1581,7 +1581,7 @@ static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
                             ret = -1;
                         }
                         else {
-                            printf("KEY CACHE USER EXCLUSION SUCCESS\n");
+                            WH_TEST_PRINT("KEY CACHE USER EXCLUSION SUCCESS\n");
                         }
                     }
                 }
@@ -1601,7 +1601,7 @@ static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
             if (ret != WH_ERROR_NOTFOUND) {
                 WH_ERROR_PRINT("Failed to not find evicted key %d\n", ret);
             } else {
-                printf("KEY CACHE EVICT SUCCESS\n");
+                WH_TEST_PRINT("KEY CACHE EVICT SUCCESS\n");
                 ret = 0;
             }
         }
@@ -1671,7 +1671,7 @@ static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
             }
         }
         if (ret == 0) {
-            printf("KEY COMMIT/ERASE SUCCESS\n");
+            WH_TEST_PRINT("KEY COMMIT/ERASE SUCCESS\n");
         }
     }
 
@@ -1846,7 +1846,7 @@ static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
         }
 
         if (ret == 0) {
-            printf("KEY CROSS-CACHE EVICTION AND REPLACEMENT SUCCESS\n");
+            WH_TEST_PRINT("KEY CROSS-CACHE EVICTION AND REPLACEMENT SUCCESS\n");
         }
     }
 
@@ -1866,7 +1866,7 @@ static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
                 WH_ERROR_PRINT("Failed to wh_Client_KeyEvict %d\n", ret);
             }
             else {
-                printf("KEY CACHE/EXPORT DMA SUCCESS\n");
+                WH_TEST_PRINT("KEY CACHE/EXPORT DMA SUCCESS\n");
             }
         }
     }
@@ -2046,7 +2046,7 @@ static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
         }
 
         if (ret == 0) {
-            printf("KEY CROSS-CACHE EVICTION AND REPLACEMENT DMA SUCCESS\n");
+            WH_TEST_PRINT("KEY CROSS-CACHE EVICTION AND REPLACEMENT DMA SUCCESS\n");
         }
     }
 #endif /* WOLFHSM_CFG_DMA */
@@ -2071,7 +2071,7 @@ static int whTest_NonExportableKeystore(whClientContext* ctx, int devId,
     uint8_t  exportedLabel[WH_NVM_LABEL_LEN] = {0};
     uint16_t exportedKeySize;
 
-    printf("Testing non-exportable keystore enforcement...\n");
+    WH_TEST_PRINT("Testing non-exportable keystore enforcement...\n");
 
     /* Test 1: Cache a key with non-exportable flag and try to export it */
     ret = wh_Client_KeyCache(ctx, WH_NVM_FLAGS_NONEXPORTABLE, label,
@@ -2091,7 +2091,7 @@ static int whTest_NonExportableKeystore(whClientContext* ctx, int devId,
         return -1;
     }
 
-    printf("Non-exportable key export correctly denied\n");
+    WH_TEST_DEBUG_PRINT("Non-exportable key export correctly denied\n");
 
     /* Clean up the key */
     wh_Client_KeyEvict(ctx, keyId);
@@ -2123,14 +2123,14 @@ static int whTest_NonExportableKeystore(whClientContext* ctx, int devId,
         return -1;
     }
 
-    printf("Exportable key export succeeded\n");
+    WH_TEST_DEBUG_PRINT("Exportable key export succeeded\n");
 
     /* Clean up */
     wh_Client_KeyEvict(ctx, keyId);
 
 #ifdef WOLFHSM_CFG_DMA
     /* Test 3: Test DMA export with non-exportable key */
-    printf("Testing DMA key export protection...\n");
+    WH_TEST_PRINT("Testing DMA key export protection...\n");
 
     /* Cache a key with non-exportable flag */
     keyId = WH_KEYID_ERASED;
@@ -2153,7 +2153,7 @@ static int whTest_NonExportableKeystore(whClientContext* ctx, int devId,
         return -1;
     }
 
-    printf("Non-exportable key DMA export correctly denied\n");
+    WH_TEST_DEBUG_PRINT("Non-exportable key DMA export correctly denied\n");
 
     /* Clean up the key */
     wh_Client_KeyEvict(ctx, keyId);
@@ -2188,13 +2188,13 @@ static int whTest_NonExportableKeystore(whClientContext* ctx, int devId,
         return -1;
     }
 
-    printf("Exportable key DMA export succeeded\n");
+    WH_TEST_DEBUG_PRINT("Exportable key DMA export succeeded\n");
 
     /* Clean up */
     wh_Client_KeyEvict(ctx, keyId);
 #endif /* WOLFHSM_CFG_DMA */
 
-    printf("NON-EXPORTABLE KEYSTORE TEST SUCCESS\n");
+    WH_TEST_PRINT("NON-EXPORTABLE KEYSTORE TEST SUCCESS\n");
     return 0;
 }
 
@@ -2338,7 +2338,7 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
             memset(plainOut, 0, sizeof(plainOut));
         }
         if (ret == 0) {
-            printf("AES CTR DEVID=0x%X SUCCESS\n", devId);
+            WH_TEST_PRINT("AES CTR DEVID=0x%X SUCCESS\n", devId);
         }
     }
 #endif
@@ -2452,7 +2452,7 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
             memset(plainOut, 0, sizeof(plainOut));
         }
         if (ret == 0) {
-            printf("AES ECB DEVID=0x%X SUCCESS\n", devId);
+            WH_TEST_PRINT("AES ECB DEVID=0x%X SUCCESS\n", devId);
         }
     }
 #endif /* HAVE_AES_ECB */
@@ -2562,7 +2562,7 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
             memset(plainOut, 0, sizeof(plainOut));
         }
         if (ret == 0) {
-            printf("AES CBC DEVID=0x%X SUCCESS\n", devId);
+            WH_TEST_PRINT("AES CBC DEVID=0x%X SUCCESS\n", devId);
         }
     }
 #endif /* HAVE_AES_CBC */
@@ -2665,7 +2665,7 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
             memset(authTag, 0, sizeof(authTag));
         }
         if (ret == 0) {
-            printf("AES GCM DEVID=0x%X SUCCESS\n", devId);
+            WH_TEST_PRINT("AES GCM DEVID=0x%X SUCCESS\n", devId);
         }
     }
 #endif /* HAVE_AES_GCM */
@@ -3009,7 +3009,7 @@ static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
     }
 #endif /* WOLFHSM_CFG_CANCEL_API */
     if (ret == 0) {
-        printf("CMAC DEVID=0x%X SUCCESS\n", devId);
+        WH_TEST_PRINT("CMAC DEVID=0x%X SUCCESS\n", devId);
     }
     return ret;
 }
@@ -3099,7 +3099,7 @@ static int whTestCrypto_MlDsaWolfCrypt(whClientContext* ctx, int devId,
             ret = -1;
         }
         else {
-            printf("ML-DSA DEVID=0x%X SUCCESS\n", devId);
+            WH_TEST_PRINT("ML-DSA DEVID=0x%X SUCCESS\n", devId);
         }
     }
 
@@ -3263,7 +3263,7 @@ static int whTestCrypto_MlDsaDmaClient(whClientContext* ctx, int devId,
 
 
     if (ret == 0) {
-        printf("ML-DSA Client DMA API SUCCESS\n");
+        WH_TEST_PRINT("ML-DSA Client DMA API SUCCESS\n");
     }
 
     wc_MlDsaKey_Free(key);
@@ -3718,7 +3718,7 @@ int whTestCrypto_MlDsaVerifyOnlyDma(whClientContext* ctx, int devId,
     wc_MlDsaKey_Free(key);
 
     if (ret == WH_ERROR_OK) {
-        printf("ML-DSA VERIFY ONLY: SUCCESS\n");
+        WH_TEST_PRINT("ML-DSA VERIFY ONLY: SUCCESS\n");
     }
 
     return ret;
@@ -3740,7 +3740,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
     uint32_t keyLen         = sizeof(key);
     whKeyId  keyId          = WH_KEYID_ERASED;
 
-    printf("Testing Key Usage Policies...\n");
+    WH_TEST_PRINT("Testing Key Usage Policies...\n");
 
     /* Generate random test data */
     ret = wc_RNG_GenerateBlock(rng, plaintext, sizeof(plaintext));
@@ -3758,7 +3758,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
 #ifndef NO_AES
 #ifdef HAVE_AES_CBC
     /* AES encrypt without ENCRYPT flag */
-    printf("  Testing AES CBC encrypt without ENCRYPT flag...\n");
+    WH_TEST_PRINT("  Testing AES CBC encrypt without ENCRYPT flag...\n");
     {
         Aes     aes[1];
         uint8_t iv[AES_BLOCK_SIZE] = {0};
@@ -3782,7 +3782,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
                         ret = wc_AesCbcEncrypt(aes, ciphertext, plaintext,
                                                sizeof(plaintext));
                         if (ret == WH_ERROR_USAGE) {
-                            printf("    PASS: Correctly denied encryption\n");
+                            WH_TEST_PRINT("    PASS: Correctly denied encryption\n");
                             ret = 0; /* Test passed */
                         }
                         else {
@@ -3802,7 +3802,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
         return ret;
 
     /* AES decrypt without DECRYPT flag */
-    printf("  Testing AES CBC decrypt without DECRYPT flag...\n");
+    WH_TEST_PRINT("  Testing AES CBC decrypt without DECRYPT flag...\n");
     {
         Aes     aes[1];
         uint8_t iv[AES_BLOCK_SIZE] = {0};
@@ -3854,7 +3854,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
                             ret = wc_AesCbcDecrypt(aes, decrypted, tempCipher,
                                                    sizeof(tempCipher));
                             if (ret == WH_ERROR_USAGE) {
-                                printf(
+                                WH_TEST_PRINT(
                                     "    PASS: Correctly denied decryption\n");
                                 ret = 0; /* Test passed */
                             }
@@ -3880,7 +3880,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
 #ifdef HAVE_ECC
 #ifdef HAVE_ECC_SIGN
     /* ECDSA sign without SIGN flag */
-    printf("  Testing ECDSA sign without SIGN flag...\n");
+    WH_TEST_PRINT("  Testing ECDSA sign without SIGN flag...\n");
     {
         ecc_key eccKey[1];
         uint8_t sig[ECC_MAX_SIG_SIZE]       = {0};
@@ -3908,7 +3908,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
                             ret = wc_ecc_sign_hash(hash, sizeof(hash), sig,
                                                    &sigLen, rng, eccKey);
                             if (ret == WH_ERROR_USAGE) {
-                                printf("    PASS: Correctly denied signing\n");
+                                WH_TEST_PRINT("    PASS: Correctly denied signing\n");
                                 ret = 0; /* Test passed */
                             }
                             else {
@@ -3931,7 +3931,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
 
 #ifdef HAVE_ECC_DHE
     /* ECDH without DERIVE flag */
-    printf("  Testing ECDH without DERIVE flag...\n");
+    WH_TEST_PRINT("  Testing ECDH without DERIVE flag...\n");
     {
         ecc_key privKey[1];
         ecc_key pubKey[1];
@@ -3962,7 +3962,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
                             ret = wc_ecc_shared_secret(
                                 privKey, pubKey, sharedSecret, &secretLen);
                             if (ret == WH_ERROR_USAGE) {
-                                printf("    PASS: Correctly denied key "
+                                WH_TEST_PRINT("    PASS: Correctly denied key "
                                        "derivation\n");
                                 ret = 0; /* Test passed */
                             }
@@ -3988,7 +3988,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
 
 #ifdef HAVE_HKDF
     /* HKDF without DERIVE flag */
-    printf("  Testing HKDF without DERIVE flag...\n");
+    WH_TEST_PRINT("  Testing HKDF without DERIVE flag...\n");
     {
         uint8_t ikm[32]  = {0};
         whKeyId outKeyId = WH_KEYID_ERASED;
@@ -4010,7 +4010,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
                     WH_NVM_FLAGS_EPHEMERAL, (uint8_t*)"hkdf-out",
                     strlen("hkdf-out"), 32); /* output size */
                 if (ret == WH_ERROR_USAGE) {
-                    printf("    PASS: Correctly denied HKDF derivation\n");
+                    WH_TEST_PRINT("    PASS: Correctly denied HKDF derivation\n");
                     ret = 0; /* Test passed */
                 }
                 else {
@@ -4031,7 +4031,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
 
 #if defined(WOLFSSL_CMAC) && !defined(NO_AES) && defined(WOLFSSL_AES_DIRECT)
     /* CMAC Generate without SIGN flag */
-    printf("  Testing CMAC generate without SIGN flag...\n");
+    WH_TEST_PRINT("  Testing CMAC generate without SIGN flag...\n");
     {
         Cmac    cmac;
         whKeyId keyId = WH_KEYID_ERASED;
@@ -4061,7 +4061,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
                                                 sizeof(message), NULL, 0, NULL,
                                                 WH_DEV_ID);
                     if (ret == WH_ERROR_USAGE) {
-                        printf("    PASS: Correctly denied CMAC generate\n");
+                        WH_TEST_PRINT("    PASS: Correctly denied CMAC generate\n");
                         ret = 0; /* Test passed */
                     }
                     else {
@@ -4079,7 +4079,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
         return ret;
 
     /* CMAC Verify without VERIFY flag */
-    printf("  Testing CMAC verify without VERIFY flag...\n");
+    WH_TEST_PRINT("  Testing CMAC verify without VERIFY flag...\n");
     {
         Cmac    cmac;
         whKeyId keyId = WH_KEYID_ERASED;
@@ -4113,7 +4113,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
                                               sizeof(message), NULL, 0, NULL,
                                               WH_DEV_ID);
                     if (ret == WH_ERROR_USAGE) {
-                        printf("    PASS: Correctly denied CMAC verify\n");
+                        WH_TEST_PRINT("    PASS: Correctly denied CMAC verify\n");
                         ret = 0; /* Test passed */
                     }
                     else {
@@ -4133,7 +4133,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
 
 #ifdef WOLFHSM_CFG_KEYWRAP
     /* Key wrap without WRAP flag */
-    printf("  Testing key wrap without WRAP flag...\n");
+    WH_TEST_PRINT("  Testing key wrap without WRAP flag...\n");
     {
         uint8_t       kek[32]         = {0};
         uint8_t       dataKey[32]     = {0};
@@ -4164,7 +4164,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
                                         dataKey, sizeof(dataKey), &meta,
                                         wrappedKey, sizeof(wrappedKey));
                 if (ret == WH_ERROR_USAGE) {
-                    printf("    PASS: Correctly denied key wrapping\n");
+                    WH_TEST_PRINT("    PASS: Correctly denied key wrapping\n");
                     ret = 0; /* Test passed */
                 }
                 else {
@@ -4180,7 +4180,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
         return ret;
 #endif /* WOLFHSM_CFG_KEYWRAP */
 
-    printf("Key Usage Policy Tests PASSED\n");
+    WH_TEST_PRINT("Key Usage Policy Tests PASSED\n");
     return 0;
 }
 
@@ -4637,12 +4637,12 @@ static int wh_ClientServer_MemThreadTest(whTestNvmBackendType nvmType)
     defined(WOLFHSM_CFG_ENABLE_SERVER)
 int whTest_Crypto(void)
 {
-    printf("Testing crypto: (pthread) mem...\n");
+    WH_TEST_PRINT("Testing crypto: (pthread) mem...\n");
     WH_TEST_RETURN_ON_FAIL(
         wh_ClientServer_MemThreadTest(WH_NVM_TEST_BACKEND_FLASH));
 
 #if defined(WOLFHSM_CFG_SERVER_NVM_FLASH_LOG)
-    printf("Testing crypto: (pthread) mem (flash log)...\n");
+    WH_TEST_PRINT("Testing crypto: (pthread) mem (flash log)...\n");
     WH_TEST_RETURN_ON_FAIL(
         wh_ClientServer_MemThreadTest(WH_NVM_TEST_BACKEND_FLASH_LOG));
 #endif

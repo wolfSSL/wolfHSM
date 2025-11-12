@@ -35,31 +35,36 @@
 #define WH_TEST_SUCCESS (0)
 #define WH_TEST_DEFAULT_CLIENT_ID (1)
 
-/* Helper macro to print a message with caller source file info */
+/* Test-specific print macro that always prints (replacement for printf in tests)
+ * This internally uses WOLFHSM_CFG_PRINTF for consistency */
+#define WH_TEST_PRINT WOLFHSM_CFG_PRINTF
+
+/* Test-specific debug print with function and line info
+ * This internally uses WOLFHSM_CFG_PRINTF for consistency */
 #ifdef WOLFHSM_CFG_TEST_VERBOSE
 #if !defined(__CCRH__)
-#define WH_DEBUG_PRINT(fmt, ...) \
-    printf("[%s:%d]: " fmt, __func__, __LINE__, ##__VA_ARGS__)
+#define WH_TEST_DEBUG_PRINT(fmt, ...) \
+    WOLFHSM_CFG_PRINTF("[%s:%d]: " fmt, __func__, __LINE__, ##__VA_ARGS__)
 #else
-#define WH_DEBUG_PRINT(...) WH_DEBUG_PRINT2(__VA_ARGS__, "")
-#define WH_DEBUG_PRINT2(fmt, ...) \
-    printf("[%s:%d]: " fmt, __func__, __LINE__, ##__VA_ARGS__)
+#define WH_TEST_DEBUG_PRINT(...) WH_TEST_DEBUG_PRINT2(__VA_ARGS__, "")
+#define WH_TEST_DEBUG_PRINT2(fmt, ...) \
+    WOLFHSM_CFG_PRINTF("[%s:%d]: " fmt, __func__, __LINE__, ##__VA_ARGS__)
 #endif
 #else
-#define WH_DEBUG_PRINT(...) \
+#define WH_TEST_DEBUG_PRINT(...) \
     do {                    \
     } while (0)
 #endif
 
 /* Helper macro to print a message, prefixed by ERROR, along with caller source
  * file info */
- #if !defined(__CCRH__)
+#if !defined(__CCRH__)
 #define WH_ERROR_PRINT(fmt, ...) \
-    printf("ERROR [%s:%d]: " fmt, __func__, __LINE__, ##__VA_ARGS__)
+    WOLFHSM_CFG_PRINTF("ERROR [%s:%d]: " fmt, __func__, __LINE__, ##__VA_ARGS__)
 #else
 #define WH_ERROR_PRINT(...) WH_ERROR_PRINT2(__VA_ARGS__, "")
 #define WH_ERROR_PRINT2(fmt, ...) \
-    printf("[%s:%d]: " fmt, __func__, __LINE__, ##__VA_ARGS__)
+    WOLFHSM_CFG_PRINTF("ERROR [%s:%d]: " fmt, __func__, __LINE__, ##__VA_ARGS__)
 #endif
 /*
  * Helper macro for test error propagation
@@ -104,7 +109,7 @@
 #define WH_TEST_ASSERT_MSG(condition, message, ...)                        \
     do {                                                                   \
         if (!(condition)) {                                                \
-            printf("\n\n***TEST FAILURE***\nin %s:%s():%d: " message "\n", \
+            WOLFHSM_CFG_PRINTF("\n\n***TEST FAILURE***\nin %s:%s():%d: " message "\n", \
                    __FILE__, __func__, __LINE__, ##__VA_ARGS__);           \
             WH_TEST_ASSERT(condition);                                             \
         }                                                                  \

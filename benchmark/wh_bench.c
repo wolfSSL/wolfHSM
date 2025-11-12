@@ -586,7 +586,7 @@ static int _whBench_ClientCfg_PosixDmaHeap(posixTransportShmContext* shmCtx)
 
     ret = posixTransportShm_GetDma(shmCtx, &dma, &dmaSz);
     if (ret != 0) {
-        printf("Failed to get DMA\n");
+        WOLFHSM_CFG_PRINTF("Failed to get DMA\n");
         return ret;
     }
 
