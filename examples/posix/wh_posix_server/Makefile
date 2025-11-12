@@ -64,6 +64,16 @@ ifeq ($(DEBUG),1)
 	DBGFLAGS = -ggdb -g3
 	CFLAGS += $(DBGFLAGS)
 	LDFLAGS += $(DBGFLAGS)
+	DEF += -DWOLFHSM_CFG_DEBUG
+endif
+
+# Check if DEBUG_VERBOSE is set to 1 and enable verbose WOLFHSM debug output
+# Note: DEBUG_VERBOSE implies DEBUG
+ifeq ($(DEBUG_VERBOSE),1)
+	DBGFLAGS = -ggdb -g3
+	CFLAGS += $(DBGFLAGS)
+	LDFLAGS += $(DBGFLAGS)
+	DEF += -DWOLFHSM_CFG_DEBUG -DWOLFHSM_CFG_DEBUG_VERBOSE
 endif
 
 # Add address sanitizer option

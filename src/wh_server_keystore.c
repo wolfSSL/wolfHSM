@@ -409,10 +409,8 @@ int wh_Server_KeystoreCacheKey(whServerContext* server, whNvmMetadata* meta,
             else {
                 ctx->cache[foundIndex].committed = 1;
             }
-#if defined(DEBUG_CRYPTOCB) && defined(DEBUG_CRYPTOCB_VERBOSE)
-            printf("[server] cacheKey: caching keyid=%u\n", meta->id);
-            wh_Utils_Hexdump("[server] cacheKey: key=", in, meta->len);
-#endif
+            WH_DEBUG_SERVER_VERBOSE("cacheKey: caching keyid=%u\n", meta->id);
+            WH_DEBUG_SERVER_VERBOSE_HEXDUMP("[server] cacheKey: key=", in, meta->len);
         }
     }
     else {
@@ -455,12 +453,10 @@ int wh_Server_KeystoreCacheKey(whServerContext* server, whNvmMetadata* meta,
     if (foundIndex == -1) {
         return WH_ERROR_NOSPACE;
     }
-#if defined(DEBUG_CRYPTOCB) && defined(DEBUG_CRYPTOCB_VERBOSE)
     else {
-        printf("[server] hsmCacheKey: cached keyid=0x%X in slot %d, len=%u\n",
+        WH_DEBUG_SERVER_VERBOSE("hsmCacheKey: cached keyid=0x%X in slot %d, len=%u\n",
                meta->id, foundIndex, meta->len);
     }
-#endif
     return 0;
 }
 
@@ -641,12 +637,10 @@ int wh_Server_KeystoreEvictKey(whServerContext* server, whNvmId keyId)
     /* Use the unified evict function */
     ret = _EvictKeyFromCache(ctx, keyId);
 
-#if defined(DEBUG_CRYPTOCB) && defined(DEBUG_CRYPTOCB_VERBOSE)
     if (ret == 0) {
-        printf("[server] wh_Server_KeystoreEvictKey: evicted keyid=0x%X\n",
+        WH_DEBUG_SERVER_VERBOSE("wh_Server_KeystoreEvictKey: evicted keyid=0x%X\n",
                keyId);
     }
-#endif
 
     return ret;
 }

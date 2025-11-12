@@ -169,7 +169,7 @@ static Entry* createEntry(uint8_t clientId, uint16_t id, uint16_t access,
 {
     Entry* newEntry = (Entry*)malloc(sizeof(Entry));
     if (!newEntry) {
-        fprintf(stderr, "Memory allocation error\n");
+        WOLFHSM_CFG_PRINTF("Memory allocation error\n");
         exit(EXIT_FAILURE);
     }
     newEntry->clientId = clientId;
@@ -278,8 +278,7 @@ static void parseNvmInitFile(const char* filePath)
             /* Parse client ID for key entries */
             token = strtok(line + 3, " ");
             if (!token || !parseInteger(token, MAX_CLIENT_ID, &clientId)) {
-                fprintf(stderr,
-                        "Error on line %d: Malformed key entry - invalid "
+                WOLFHSM_CFG_PRINTF("Error on line %d: Malformed key entry - invalid "
                         "clientId\n",
                         lineNumber);
                 fclose(file);
@@ -289,9 +288,7 @@ static void parseNvmInitFile(const char* filePath)
             /* Parse key ID for key entries */
             token = strtok(NULL, " ");
             if (!token || !parseInteger(token, MAX_KEY_ID, &id)) {
-                fprintf(
-                    stderr,
-                    "Error on line %d: Malformed key entry - invalid keyId\n",
+                WOLFHSM_CFG_PRINTF("Error on line %d: Malformed key entry - invalid keyId\n",
                     lineNumber);
                 fclose(file);
                 exit(EXIT_FAILURE);
@@ -301,9 +298,7 @@ static void parseNvmInitFile(const char* filePath)
             /* Parse object ID for object entries */
             token = strtok(line + 3, " ");
             if (!token || !parseInteger(token, MAX_KEY_ID, &id)) {
-                fprintf(
-                    stderr,
-                    "Error on line %d: Malformed object entry - invalid id\n",
+                WOLFHSM_CFG_PRINTF("Error on line %d: Malformed object entry - invalid id\n",
                     lineNumber);
                 fclose(file);
                 exit(EXIT_FAILURE);
@@ -311,8 +306,7 @@ static void parseNvmInitFile(const char* filePath)
         }
         else {
             /* Report error for unknown entry types */
-            fprintf(stderr,
-                    "Error on line %d: Malformed line or unknown entry type\n",
+            WOLFHSM_CFG_PRINTF("Error on line %d: Malformed line or unknown entry type\n",
                     lineNumber);
             fclose(file);
             exit(EXIT_FAILURE);
@@ -321,8 +315,7 @@ static void parseNvmInitFile(const char* filePath)
         /* Parse access field */
         token = strtok(NULL, " ");
         if (!token || !parseInteger(token, UINT16_MAX, &access)) {
-            fprintf(stderr,
-                    "Error on line %d: Malformed entry - invalid access\n",
+            WOLFHSM_CFG_PRINTF("Error on line %d: Malformed entry - invalid access\n",
                     lineNumber);
             fclose(file);
             exit(EXIT_FAILURE);
@@ -331,8 +324,7 @@ static void parseNvmInitFile(const char* filePath)
         /* Parse flags */
         token = strtok(NULL, " ");
         if (!token || !parseInteger(token, UINT16_MAX, &flags)) {
-            fprintf(stderr,
-                    "Error on line %d: Malformed entry - invalid flags\n",
+            WOLFHSM_CFG_PRINTF("Error on line %d: Malformed entry - invalid flags\n",
                     lineNumber);
             fclose(file);
             exit(EXIT_FAILURE);
@@ -341,8 +333,7 @@ static void parseNvmInitFile(const char* filePath)
         /* Parse the label (enclosed in quotes) */
         token = strtok(NULL, "\"");
         if (!token) {
-            fprintf(stderr,
-                    "Error on line %d: Malformed entry - missing or incorrect "
+            WOLFHSM_CFG_PRINTF("Error on line %d: Malformed entry - missing or incorrect "
                     "label format\n",
                     lineNumber);
             fclose(file);
@@ -353,8 +344,7 @@ static void parseNvmInitFile(const char* filePath)
         /* Parse the file path */
         token = strtok(NULL, " ");
         if (!token || sscanf(token, "%s", filePath) != 1) {
-            fprintf(stderr,
-                    "Error on line %d: Malformed entry - missing file path\n",
+            WOLFHSM_CFG_PRINTF("Error on line %d: Malformed entry - missing file path\n",
                     lineNumber);
             fclose(file);
             exit(EXIT_FAILURE);
@@ -373,7 +363,7 @@ static void processEntry(Entry* entry, int isKey, whNvmContext* nvmContext)
 {
     FILE* file = fopen(entry->filePath, "rb");
     if (file == NULL) {
-        fprintf(stderr, "Error processing entry: Unable to open file %s\n",
+        WOLFHSM_CFG_PRINTF("Error processing entry: Unable to open file %s\n",
                 entry->filePath);
         return;
     }
@@ -386,7 +376,7 @@ static void processEntry(Entry* entry, int isKey, whNvmContext* nvmContext)
     /* Allocate memory for the file data */
     uint8_t* buffer = (uint8_t*)malloc(fileSize);
     if (buffer == NULL) {
-        fprintf(stderr, "Error: Memory allocation failed for file %s\n",
+        WOLFHSM_CFG_PRINTF("Error: Memory allocation failed for file %s\n",
                 entry->filePath);
         fclose(file);
         return;
@@ -397,7 +387,7 @@ static void processEntry(Entry* entry, int isKey, whNvmContext* nvmContext)
     fclose(file);
 
     if (bytesRead != (size_t)fileSize) {
-        fprintf(stderr, "Error: Failed to read entire file %s\n",
+        WOLFHSM_CFG_PRINTF("Error: Failed to read entire file %s\n",
                 entry->filePath);
         free(buffer);
         return;
@@ -408,7 +398,7 @@ static void processEntry(Entry* entry, int isKey, whNvmContext* nvmContext)
     if (isKey) {
         /* Keys have special ID format */
         meta.id = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, entry->clientId, entry->id);
-        printf("Processing Key Entry - ClientID: 0x%X, KeyID: 0x%X, Meta ID: "
+        WOLFHSM_CFG_PRINTF("Processing Key Entry - ClientID: 0x%X, KeyID: 0x%X, Meta ID: "
                "0x%X, "
                "Access: 0x%X, Flags: 0x%X, Label: %s, File: %s, Size: %ld\n",
                entry->clientId, entry->id, meta.id, entry->access, entry->flags,
@@ -416,7 +406,7 @@ static void processEntry(Entry* entry, int isKey, whNvmContext* nvmContext)
     }
     else {
         meta.id = entry->id;
-        printf("Processing Object Entry - ID: 0x%X, Access: 0x%X, Flags: 0x%X, "
+        WOLFHSM_CFG_PRINTF("Processing Object Entry - ID: 0x%X, Access: 0x%X, Flags: 0x%X, "
                "Label: %s, File: %s, Size: %ld\n",
                entry->id, entry->access, entry->flags, entry->label,
                entry->filePath, fileSize);
@@ -428,7 +418,7 @@ static void processEntry(Entry* entry, int isKey, whNvmContext* nvmContext)
 
     int rc = wh_Nvm_AddObject(nvmContext, &meta, fileSize, buffer);
     if (rc != 0) {
-        fprintf(stderr, "Error: Failed to add entry ID %u to NVM, ret = %d\n",
+        WOLFHSM_CFG_PRINTF("Error: Failed to add entry ID %u to NVM, ret = %d\n",
                 meta.id, rc);
     }
 
@@ -504,19 +494,19 @@ int wh_PosixServer_ExampleNvmConfig(void* conf, const char* nvmInitFilePath)
     s_conf->nvm = nvm;
     rc          = wh_Nvm_Init(nvm, &n_conf);
     if (rc != 0) {
-        printf("Failed to initialize NVM: %d\n", rc);
+        WOLFHSM_CFG_PRINTF("Failed to initialize NVM: %d\n", rc);
         return rc;
     }
 
     /* Initialize NVM with contents from the NVM init file if provided */
     if (nvmInitFilePath != NULL) {
-        printf("Initializing NVM with contents from %s\n", nvmInitFilePath);
+        WOLFHSM_CFG_PRINTF("Initializing NVM with contents from %s\n", nvmInitFilePath);
         rc = initializeNvm(nvm, nvmInitFilePath);
         if (rc != 0) {
-            printf("Failed to initialize NVM from file: %d\n", rc);
+            WOLFHSM_CFG_PRINTF("Failed to initialize NVM from file: %d\n", rc);
             return rc;
         }
-        printf("NVM initialization completed successfully\n");
+        WOLFHSM_CFG_PRINTF("NVM initialization completed successfully\n");
     }
 
     return WH_ERROR_OK;

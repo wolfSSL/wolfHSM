@@ -1,6 +1,9 @@
 
 .PHONY: all test benchmark tools examples clean
 
+export DEBUG
+export DEBUG_VERBOSE
+
 all: test benchmark tools examples
 
 test:

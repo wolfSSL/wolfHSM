@@ -92,6 +92,24 @@ int wh_Server_CertVerify(whServerContext* server, const uint8_t* cert,
                          uint32_t cert_len, whNvmId trustedRootNvmId,
                          whCertFlags flags, whKeyId* inout_keyId);
 
+#if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT)
+/**
+ * @brief Verifies an attribute certificate against a trusted root certificate
+ *
+ * This function retrieves a trusted root certificate from NVM using the
+ * specified NVM ID and verifies the provided attribute certificate against it.
+ *
+ * @param[in] server Pointer to the server context
+ * @param[in] cert Pointer to the attribute certificate data to verify
+ * @param[in] cert_len Length of the certificate data in bytes
+ * @param[in] trustedRootNvmId NVM ID of the trusted root certificate to verify
+ * against
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Server_CertVerifyAcert(whServerContext* server, const uint8_t* cert,
+                              uint32_t cert_len, whNvmId trustedRootNvmId);
+#endif
+
 /**
  * @brief Handle a certificate request and generate a response
  * @param server The server context

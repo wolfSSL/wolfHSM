@@ -37,3 +37,11 @@ jobs:
     - name: Build and test NVM tool with ASAN
       run: cd tools/whnvmtool && make clean && make check WOLFSSL_DIR=../../wolfssl ASAN=1
 
+    # Build and test with DEBUG=1
+    - name: Build and test NVM tool with DEBUG
+      run: cd tools/whnvmtool && make clean && make check WOLFSSL_DIR=../../wolfssl DEBUG=1
+
+    # Build and test with DEBUG_VERBOSE=1 (includes DEBUG)
+    - name: Build and test NVM tool with DEBUG_VERBOSE
+      run: cd tools/whnvmtool && make clean && make check WOLFSSL_DIR=../../wolfssl DEBUG_VERBOSE=1
+

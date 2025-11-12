@@ -55,24 +55,24 @@ static void _HexDump(const char* p, size_t data_len)
     const size_t         bytesPerLine = 16;
     const unsigned char  two_digits   = 0x10;
     const unsigned char* u            = (const unsigned char*)p;
-    printf("    HD:%p for %lu bytes\n", p, data_len);
+    WH_TEST_DEBUG_PRINT("    HD:%p for %lu bytes\n", p, data_len);
     if ((p == NULL) || (data_len == 0))
         return;
     size_t off = 0;
     for (off = 0; off < data_len; off++) {
         if ((off % bytesPerLine) == 0)
-            printf("    ");
+            WH_TEST_DEBUG_PRINT("    ");
         if (u[off] < two_digits) {
-            printf("0%X ", u[off]);
+            WH_TEST_DEBUG_PRINT("0%X ", u[off]);
         }
         else {
-            printf("%X ", u[off]);
+            WH_TEST_DEBUG_PRINT("%X ", u[off]);
         }
         if ((off % bytesPerLine) == (bytesPerLine - 1))
-            printf("\n");
+            WH_TEST_DEBUG_PRINT("\n");
     }
     if ((off % bytesPerLine) != 0)
-        printf("\n");
+        WH_TEST_DEBUG_PRINT("\n");
 }
 
 static void _ShowAvailable(const whNvmCb* cb, void* context)
@@ -85,13 +85,13 @@ static void _ShowAvailable(const whNvmCb* cb, void* context)
     rc = cb->GetAvailable(context, &free_space, &free_objects, &reclaim_space,
                           &reclaim_objects);
     if (rc == 0) {
-        printf("NVM %p has %u bytes, and %u objects available \n"
+        WH_TEST_DEBUG_PRINT("NVM %p has %u bytes, and %u objects available \n"
                "           %u bytes, and %u objects reclaimable \n",
                context, (unsigned int)free_space, (unsigned int)free_objects,
                (unsigned int)reclaim_space, (unsigned int)reclaim_objects);
     }
     else {
-        printf("NVM %p failed to get available info: %d.\n", context, rc);
+        WH_TEST_DEBUG_PRINT("NVM %p failed to get available info: %d.\n", context, rc);
     }
 }
 
@@ -109,7 +109,7 @@ static void _ShowList(const whNvmCb* cb, void* context)
                       id, &listCount, &id);
 
         if ((rc == 0) && (listCount > 0)) {
-            printf("Found object id 0x%X (%d) with %d more objects\n", id, id,
+            WH_TEST_DEBUG_PRINT("Found object id 0x%X (%d) with %d more objects\n", id, id,
                    listCount - 1);
             whNvmMetadata myMetadata;
             memset(&myMetadata, 0, sizeof(myMetadata));
@@ -120,7 +120,7 @@ static void _ShowList(const whNvmCb* cb, void* context)
                 uint8_t data[16] = {0};
                 whNvmSize offset = 0;
 
-                printf("-Id:%04hX\n-Label:%.*s\n"
+                WH_TEST_DEBUG_PRINT("-Id:%04hX\n-Label:%.*s\n"
                        "-Access:%04hX\n-Flags:%04hX\n-Len:%d\n",
                        myMetadata.id, (int)sizeof(myMetadata.label),
                        myMetadata.label, myMetadata.access, myMetadata.flags,
@@ -323,7 +323,7 @@ int whTest_NvmFlashCfg(void* cfg, void* context, const whNvmCb* cb)
     WH_TEST_RETURN_ON_FAIL(cb->Init(context, cfg));
 
 #if defined(WOLFHSM_CFG_TEST_VERBOSE)
-    printf("--Initial NVM contents\n");
+    WH_TEST_DEBUG_PRINT("--Initial NVM contents\n");
     _ShowAvailable(cb, context);
     _ShowList(cb, context);
 #endif
@@ -348,7 +348,7 @@ int whTest_NvmFlashCfg(void* cfg, void* context, const whNvmCb* cb)
 
     /* Add 3 objects, checking for each object that we can read back what was
      * written */
-    printf("--Adding 3 new objects\n");
+    WH_TEST_PRINT("--Adding 3 new objects\n");
     ret = addObjectWithReadBackCheck(cb, context, &meta1, sizeof(data1), data1);
     if (ret != 0) {
         goto cleanup;
@@ -368,7 +368,7 @@ int whTest_NvmFlashCfg(void* cfg, void* context, const whNvmCb* cb)
 #endif
 
     /* Overwrite an existing Object */
-    printf("--Overwrite an existing object\n");
+    WH_TEST_PRINT("--Overwrite an existing object\n");
     ret = addObjectWithReadBackCheck(cb, context, &meta1, sizeof(update1),
                                      update1);
     if (ret != 0) {
@@ -381,14 +381,14 @@ int whTest_NvmFlashCfg(void* cfg, void* context, const whNvmCb* cb)
 #endif
 
     /* Overwrite an existing Object twice */
-    printf("--Overwrite an existing object again \n");
+    WH_TEST_PRINT("--Overwrite an existing object again \n");
     ret = addObjectWithReadBackCheck(cb, context, &meta2, sizeof(update2),
                                      update2);
     if (ret != 0) {
         goto cleanup;
     }
 
-    printf("--Overwrite an existing object with new data\n");
+    WH_TEST_PRINT("--Overwrite an existing object with new data\n");
     ret = addObjectWithReadBackCheck(cb, context, &meta2, sizeof(update3),
                                      update3);
     if (ret != 0) {
@@ -402,7 +402,7 @@ int whTest_NvmFlashCfg(void* cfg, void* context, const whNvmCb* cb)
 #endif
 
     /* Regenerate */
-    printf("--Reclaim space\n");
+    WH_TEST_PRINT("--Reclaim space\n");
     if ((ret = cb->DestroyObjects(context, 0, NULL)) != 0) {
         goto cleanup;
     }
@@ -417,7 +417,7 @@ int whTest_NvmFlashCfg(void* cfg, void* context, const whNvmCb* cb)
         whNvmMetadata metaBuf = {0};
         unsigned char dataBuf[256];
         size_t i = 0;
-        printf("--Read IDs after reclaim\n");
+        WH_TEST_PRINT("--Read IDs after reclaim\n");
         for (i=0; i<sizeof(ids)/sizeof(ids[0]); i++) {
             if ((ret = cb->GetMetadata(context, ids[i], &metaBuf)) != 0) {
                 WH_ERROR_PRINT("GetMetadata after reclaim returned %d\n", ret);
@@ -433,7 +433,7 @@ int whTest_NvmFlashCfg(void* cfg, void* context, const whNvmCb* cb)
     }
 
     /* Destroy 1 object */
-    printf("--Destroy 1 object\n");
+    WH_TEST_PRINT("--Destroy 1 object\n");
 
     if ((ret = destroyObjectWithReadBackCheck(cb, context, 1, ids)) != 0) {
         goto cleanup;
@@ -446,7 +446,7 @@ int whTest_NvmFlashCfg(void* cfg, void* context, const whNvmCb* cb)
 
     /* Attempt to destroy 3 objects, of which one has been already destroyed.
      * This should not cause an error */
-    printf("--Destroy 3 objects\n");
+    WH_TEST_PRINT("--Destroy 3 objects\n");
     if ((ret = destroyObjectWithReadBackCheck(
              cb, context, sizeof(ids) / sizeof(ids[0]), ids)) != 0) {
         goto cleanup;
@@ -457,7 +457,7 @@ int whTest_NvmFlashCfg(void* cfg, void* context, const whNvmCb* cb)
     _ShowList(cb, context);
 #endif
 
-    printf("--Done\n");
+    WH_TEST_PRINT("--Done\n");
 
 cleanup:
     /* Don't overwrite an already failed return code? */
@@ -589,7 +589,7 @@ int whTest_NvmFlash_Recovery(void)
     uint32_t bytesReclBefore, bytesReclAfter;
     whNvmId  objsReclBefore, objsReclAfter;
 
-    printf("--simulate failure when writing object start\n");
+    WH_TEST_PRINT("--simulate failure when writing object start\n");
     WH_TEST_RETURN_ON_FAIL(simulateFailureAndRecover(
         2 /* program epoch, metadata and fail */, &test_data_len, &bytesBefore,
         &objsBefore, &bytesReclBefore, &objsReclBefore, &bytesAfter, &objsAfter,
@@ -602,7 +602,7 @@ int whTest_NvmFlash_Recovery(void)
     /* available object should be decremented */
     WH_TEST_ASSERT_RETURN(objsAfter == objsBefore - 1);
 
-    printf("--simulate failure when writing object count\n");
+    WH_TEST_PRINT("--simulate failure when writing object count\n");
     WH_TEST_RETURN_ON_FAIL(simulateFailureAndRecover(
         4 /* program epoch, metadata, start, data and fail */, &test_data_len,
         &bytesBefore, &objsBefore, &bytesReclBefore, &objsReclBefore,
@@ -679,14 +679,14 @@ int whTest_NvmFlash_PosixFileSim(void)
 
 int whTest_NvmFlash(void)
 {
-    printf("Testing NVM flash with RAM sim...\n");
+    WH_TEST_PRINT("Testing NVM flash with RAM sim...\n");
     WH_TEST_ASSERT(0 == whTest_NvmFlash_RamSim());
 
-    printf("Testing NVM flash recovery mechanism...\n");
+    WH_TEST_PRINT("Testing NVM flash recovery mechanism...\n");
     WH_TEST_ASSERT(0 == whTest_NvmFlash_Recovery());
 
 #if defined(WOLFHSM_CFG_TEST_POSIX)
-    printf("Testing NVM flash with POSIX file sim...\n");
+    WH_TEST_PRINT("Testing NVM flash with POSIX file sim...\n");
     WH_TEST_ASSERT(0 == whTest_NvmFlash_PosixFileSim());
 #endif
 

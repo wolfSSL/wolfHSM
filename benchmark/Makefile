@@ -71,6 +71,16 @@ ifeq ($(DEBUG),1)
 DBGFLAGS = -ggdb -g3
 CFLAGS += $(DBGFLAGS)
 LDFLAGS += $(DBGFLAGS)
+DEF += -DWOLFHSM_CFG_DEBUG
+endif
+
+# Check if DEBUG_VERBOSE is set to 1 and enable verbose WOLFHSM debug output
+# Note: DEBUG_VERBOSE implies DEBUG
+ifeq ($(DEBUG_VERBOSE),1)
+DBGFLAGS = -ggdb -g3
+CFLAGS += $(DBGFLAGS)
+LDFLAGS += $(DBGFLAGS)
+DEF += -DWOLFHSM_CFG_DEBUG -DWOLFHSM_CFG_DEBUG_VERBOSE
 endif
 
 ifneq ($(DEBUG),1)
@@ -88,15 +98,6 @@ endif
 ifeq ($(DEBUG_WOLFSSL),1)
 	DEF += -DDEBUG_WOLFSSL
 endif
-
-ifeq ($(DEBUG_CRYPTOCB),1)
-	DEF += -DDEBUG_CRYPTOCB
-endif
-
-ifeq ($(DEBUG_CRYPTOCB_VERBOSE),1)
-	DEF += -DDEBUG_CRYPTOCB -DDEBUG_CRYPTOCB_VERBOSE
-endif
-
 
 ## wolfHSM defines
 ifeq ($(NOCRYPTO),1)

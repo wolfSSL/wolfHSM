@@ -332,7 +332,7 @@ int whTest_KeyWrapClientConfig(whClientConfig* clientCfg)
         WH_ERROR_PRINT("Failed to whTest_Client_KeyWrap %d\n", ret);
     }
     else {
-        printf("KEYWRAP TESTS SUCCESS\n");
+        WH_TEST_PRINT("KEYWRAP TESTS SUCCESS\n");
     }
 
     ret = whTest_Client_DataWrap(client);
@@ -340,7 +340,7 @@ int whTest_KeyWrapClientConfig(whClientConfig* clientCfg)
         WH_ERROR_PRINT("Failed to whTest_Client_DataWrap %d\n", ret);
     }
     else {
-        printf("DATAWRAP TESTS SUCCESS\n");
+        WH_TEST_PRINT("DATAWRAP TESTS SUCCESS\n");
     }
 
     /* Clean up used resources */

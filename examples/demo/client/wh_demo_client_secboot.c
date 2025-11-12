@@ -66,15 +66,15 @@ static int _showNvm(whClientContext* clientContext)
     whNvmId id = 0;
     whNvmId count = 0;
 
-    printf("NVM Contents:\n");
+    WOLFHSM_CFG_PRINTF("NVM Contents:\n");
     do {
         ret = wh_Client_NvmList(clientContext, access, flags, id, NULL, &count,
                                 &id);
         if (ret != WH_ERROR_OK) {
-            printf("wh_Client_NvmList failed with ret:%d\n", ret);
+            WOLFHSM_CFG_PRINTF("wh_Client_NvmList failed with ret:%d\n", ret);
             break;
         }
-        printf("NVM List: count=%u, id=%u\n", (unsigned int)count,
+        WOLFHSM_CFG_PRINTF("NVM List: count=%u, id=%u\n", (unsigned int)count,
                (unsigned int)id);
 
         if (count > 0) {
@@ -84,16 +84,16 @@ static int _showNvm(whClientContext* clientContext)
                 wh_Client_NvmGetMetadata(clientContext, id, NULL, NULL, NULL,
                                          NULL, &data_len, sizeof(label), label);
             if (ret != WH_ERROR_OK) {
-                printf("wh_Client_NvmGetMetadata failed with ret:%d\n", ret);
+                WOLFHSM_CFG_PRINTF("wh_Client_NvmGetMetadata failed with ret:%d\n", ret);
                 break;
             }
 
-            printf("NVM Object ID %u has label '%-*s' and size:%u\n",
+            WOLFHSM_CFG_PRINTF("NVM Object ID %u has label '%-*s' and size:%u\n",
                    (unsigned int)id, (int)sizeof(label), label,
                    (unsigned int)data_len);
         }
     } while (count > 0);
-    printf("End of NVM Contents\n");
+    WOLFHSM_CFG_PRINTF("End of NVM Contents\n");
     return ret;
 }
 
@@ -128,7 +128,7 @@ static int _sha256File(const char* file_to_measure, uint8_t* hash)
         close(fd);
 
         if (ptr != (void*)-1) {
-            printf("Generating SHA256 of %s over %u bytes at %p\n",
+            WOLFHSM_CFG_PRINTF("Generating SHA256 of %s over %u bytes at %p\n",
                    file_to_measure, (unsigned int)size, ptr);
             wc_Sha256 sha256[1];
             ret = wc_InitSha256_ex(sha256, NULL, WH_DEV_ID);
@@ -205,22 +205,22 @@ int wh_DemoClient_SecBoot_Provision(whClientContext* clientContext)
 
     ret = wh_Client_CommInit(clientContext, &client_id, &server_id);
     if (ret == WH_ERROR_OK) {
-        printf("Provision client connected to server id %u with client id %u\n",
+        WOLFHSM_CFG_PRINTF("Provision client connected to server id %u with client id %u\n",
                 server_id, client_id);
         _showNvm(clientContext);
 
-        printf("Server generating and committing keypair...\n");
+        WOLFHSM_CFG_PRINTF("Server generating and committing keypair...\n");
         ret = _provisionMakeCommitKey(clientContext);
         if (ret == WH_ERROR_OK) {
             uint8_t hash[WC_SHA256_DIGEST_SIZE] = {0};
 
-            printf("Measuring image %s...\n", file_to_measure);
+            WOLFHSM_CFG_PRINTF("Measuring image %s...\n", file_to_measure);
             ret = _sha256File(file_to_measure, hash);
             if (ret == WH_ERROR_OK) {
                 uint8_t sig[ECC_MAX_SIG_SIZE] = {0};
                 uint16_t siglen = sizeof(sig);
 
-                printf("Signing hash...\n");
+                WOLFHSM_CFG_PRINTF("Signing hash...\n");
                 ret = _signHash(hash, sizeof(hash), sig, &siglen);
                 if (ret == WH_ERROR_OK) {
                     int32_t rc = 0;
@@ -228,19 +228,19 @@ int wh_DemoClient_SecBoot_Provision(whClientContext* clientContext)
                     memcpy(sigLabel, sig_nvmLabel, sizeof(sig_nvmLabel));
 
                     wh_Utils_Hexdump("Signature:\n", sig, siglen);
-                    printf("Storing the signature in NVM as nvmId %u\n",
+                    WOLFHSM_CFG_PRINTF("Storing the signature in NVM as nvmId %u\n",
                             sig_nvmId);
                     ret = wh_Client_NvmAddObject(
                         clientContext, sig_nvmId, WH_NVM_ACCESS_NONE,
                         WH_NVM_FLAGS_NONE, sizeof(sig_nvmLabel), sigLabel,
                         siglen, sig, &rc);
-                    printf("Stored signature with ret:%d and rc:%d\n", ret, rc);
+                    WOLFHSM_CFG_PRINTF("Stored signature with ret:%d and rc:%d\n", ret, rc);
                 }
             }
             _showNvm(clientContext);
         }
     }
-    printf("Provision Client completed with ret:%d\n", ret);
+    WOLFHSM_CFG_PRINTF("Provision Client completed with ret:%d\n", ret);
     return ret;
 }
 
@@ -253,10 +253,10 @@ int wh_DemoClient_SecBoot_Boot(whClientContext* clientContext)
     if (clientContext == NULL) {
         return WH_ERROR_BADARGS;
     }
-    printf("SecBoot Client starting...\n");
+    WOLFHSM_CFG_PRINTF("SecBoot Client starting...\n");
     ret = wh_Client_CommInit(clientContext, &client_id, &server_id);
     if (ret == WH_ERROR_OK) {
-        printf("SecBoot Client connected to server id %u with client id %u\n",
+        WOLFHSM_CFG_PRINTF("SecBoot Client connected to server id %u with client id %u\n",
                 server_id, client_id);
 
         _showNvm(clientContext);
@@ -264,19 +264,19 @@ int wh_DemoClient_SecBoot_Boot(whClientContext* clientContext)
         uint8_t sig[ECC_MAX_SIG_SIZE] = {0};
         whNvmSize siglen = 0;
         int32_t rc = 0;
-        printf("SecBoot Client loading signature from NVM as nvmId %u\n",
+        WOLFHSM_CFG_PRINTF("SecBoot Client loading signature from NVM as nvmId %u\n",
                 sig_nvmId);
         ret = wh_Client_NvmGetMetadata(clientContext,
             sig_nvmId, &rc, NULL, NULL, NULL, &siglen, 0, NULL);
         if (ret != WH_ERROR_OK) {
-            printf("wh_Client_NvmGetMetadata failed with ret:%d\n", ret);
+            WOLFHSM_CFG_PRINTF("wh_Client_NvmGetMetadata failed with ret:%d\n", ret);
             return ret;
         }
-        printf("SecBoot got siglen %d with ret:%d rc:%d\n", siglen, ret, rc);
+        WOLFHSM_CFG_PRINTF("SecBoot got siglen %d with ret:%d rc:%d\n", siglen, ret, rc);
         ret = wh_Client_NvmRead(clientContext, sig_nvmId, 0, siglen, &rc, NULL,
                                 sig);
         if (ret != WH_ERROR_OK || rc != 0) {
-            printf("Read Object %d failed with error code: %d, server error "
+            WOLFHSM_CFG_PRINTF("Read Object %d failed with error code: %d, server error "
                    "code: %d\n",
                    sig_nvmId, ret, rc);
             return (ret != WH_ERROR_OK) ? ret : rc;
@@ -285,22 +285,22 @@ int wh_DemoClient_SecBoot_Boot(whClientContext* clientContext)
 
 
         uint8_t hash[WC_SHA256_DIGEST_SIZE] = {0};
-        printf("Measuring image %s...\n", file_to_measure);
+        WOLFHSM_CFG_PRINTF("Measuring image %s...\n", file_to_measure);
         ret = _sha256File(file_to_measure, hash);
         if (ret == WH_ERROR_OK) {
 
-            printf("SecBoot Client Verifying signature using keyId %u\n", prov_keyId);
+            WOLFHSM_CFG_PRINTF("SecBoot Client Verifying signature using keyId %u\n", prov_keyId);
             ret = _verifyHash(hash, sizeof(hash), sig, siglen, &rc);
-            printf("ecc_verify:%d rc:%d\n", ret, rc);
+            WOLFHSM_CFG_PRINTF("ecc_verify:%d rc:%d\n", ret, rc);
 
             if ((ret == 0) && (rc == 1)) {
-                printf("SecBoot Client signature verified successfully!!\n");
+                WOLFHSM_CFG_PRINTF("SecBoot Client signature verified successfully!!\n");
             } else {
-                printf("SecBoot Client failed with ret:%d and rc:%d\n", ret, rc);
+                WOLFHSM_CFG_PRINTF("SecBoot Client failed with ret:%d and rc:%d\n", ret, rc);
             }
         }
     }
-    printf("SecBoot Client completed with ret:%d\n", ret);
+    WOLFHSM_CFG_PRINTF("SecBoot Client completed with ret:%d\n", ret);
     return ret;
 }
 
@@ -315,22 +315,22 @@ int wh_DemoClient_SecBoot_Zeroize(whClientContext* clientContext)
     }
 
     ret = wh_Client_CommInit(clientContext, &client_id, &server_id);
-    printf("Connected to server id %u with client id %u: %d\n",
+    WOLFHSM_CFG_PRINTF("Connected to server id %u with client id %u: %d\n",
             server_id, client_id, ret);
     if (ret == WH_ERROR_OK) {
         int rc = 0;
         _showNvm(clientContext);
 
         ret = wh_Client_KeyErase(clientContext, prov_keyId);
-        printf("Zeroize Client erased keyId:%u ret:%d\n", prov_keyId, ret);
+        WOLFHSM_CFG_PRINTF("Zeroize Client erased keyId:%u ret:%d\n", prov_keyId, ret);
 
         ret = wh_Client_NvmDestroyObjects(clientContext, 1, &sig_nvmId, &rc);
-        printf("Zeroize Client destroyed NVM object:%u ret:%d with rc:%d\n",
+        WOLFHSM_CFG_PRINTF("Zeroize Client destroyed NVM object:%u ret:%d with rc:%d\n",
                sig_nvmId, ret, rc);
 
         _showNvm(clientContext);
     }
-    printf("SecBoot Zeroize Client completed with ret:%d\n", ret);
+    WOLFHSM_CFG_PRINTF("SecBoot Zeroize Client completed with ret:%d\n", ret);
     return ret;
 }
 

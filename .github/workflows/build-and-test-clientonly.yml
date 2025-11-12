@@ -50,7 +50,25 @@ jobs:
         make clean
         make -j CLIENT_ONLY_TCP=1 SHE=1 ASAN=1 WOLFSSL_DIR=../wolfssl && make run
 
-     # Optional: Kill the server process if it doesn't exit on its own
+    # Restart server with fresh state for second test run
+    - name: Restart POSIX server
+      run: |
+        kill $TCP_SERVER_PID || true
+        cd examples/posix/wh_posix_server
+        rm -f *.bin || true
+        ./Build/wh_posix_server.elf &
+        TCP_SERVER_PID=$!
+        echo "TCP_SERVER_PID=$TCP_SERVER_PID" >> $GITHUB_ENV
+        sleep 2
+
+    # Build and test client-only with DEBUG_VERBOSE=1 (includes DEBUG)
+    - name: Build client-only unit tests with DEBUG_VERBOSE
+      run: |
+        cd test
+        make clean
+        make -j CLIENT_ONLY_TCP=1 SHE=1 DEBUG_VERBOSE=1 WOLFSSL_DIR=../wolfssl && make run
+
+    # Optional: Kill the server process if it doesn't exit on its own
     - name: Cleanup POSIX TCP server
       if: always()
       run: kill $TCP_SERVER_PID || true
