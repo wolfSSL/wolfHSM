@@ -37,14 +37,7 @@
 
 /* Test-specific print macro that always prints (replacement for printf in tests)
  * This internally uses WOLFHSM_CFG_PRINTF for consistency */
-#if !defined(__CCRH__)
-#define WH_TEST_PRINT(fmt, ...) \
-    WOLFHSM_CFG_PRINTF(fmt, ##__VA_ARGS__)
-#else
-#define WH_TEST_PRINT(...) WH_TEST_PRINT2(__VA_ARGS__, "")
-#define WH_TEST_PRINT2(fmt, ...) \
-    WOLFHSM_CFG_PRINTF(fmt, ##__VA_ARGS__)
-#endif
+#define WH_TEST_PRINT WOLFHSM_CFG_PRINTF
 
 /* Test-specific debug print with function and line info
  * This internally uses WOLFHSM_CFG_PRINTF for consistency */

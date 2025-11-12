@@ -148,11 +148,9 @@
 #include "user_settings.h"
 #endif /* WOLFSSL_USER_SETTINGS */
 
-#if defined(WOLFHSM_CFG_DEBUG) || defined(WOLFHSM_CFG_DEBUG_VERBOSE) || \
-    (defined(DEBUG_CRYPTOCB) && (defined(DEBUG_WOLFSSL) || defined(WOLFHSM_CFG_DEBUG))) || \
-    (defined(DEBUG_CRYPTOCB_VERBOSE) && (defined(DEBUG_WOLFSSL) || defined(WOLFHSM_CFG_DEBUG_VERBOSE)))
+#if defined(WOLFHSM_CFG_DEBUG) || defined(WOLFHSM_CFG_DEBUG_VERBOSE)
 #define WOLFHSM_CFG_HEXDUMP
-#endif /* WOLFHSM_CFG_DEBUG || WOLFHSM_CFG_DEBUG_VERBOSE || (DEBUG_CRYPTOCB && (DEBUG_WOLFSSL || WOLFHSM_CFG_DEBUG)) || (DEBUG_CRYPTOCB_VERBOSE && (DEBUG_WOLFSSL || WOLFHSM_CFG_DEBUG_VERBOSE)) */
+#endif
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
 /** Default shares configurations */
@@ -324,15 +322,12 @@
     #define WH_DEBUG_SERVER_VERBOSE(...) do { } while (0)
 #endif
 
-/* Hexdump helper macros - only active in verbose mode */
+/* Hexdump helper macro - only active in verbose mode */
 #if defined(WOLFHSM_CFG_DEBUG_VERBOSE) && defined(WOLFHSM_CFG_HEXDUMP)
-    #define WH_DEBUG_CLIENT_VERBOSE_HEXDUMP(msg, data, len) \
-        wh_Utils_Hexdump(msg, data, len)
-    #define WH_DEBUG_SERVER_VERBOSE_HEXDUMP(msg, data, len) \
+    #define WH_DEBUG_VERBOSE_HEXDUMP(msg, data, len) \
         wh_Utils_Hexdump(msg, data, len)
 #else
-    #define WH_DEBUG_CLIENT_VERBOSE_HEXDUMP(msg, data, len) do { } while (0)
-    #define WH_DEBUG_SERVER_VERBOSE_HEXDUMP(msg, data, len) do { } while (0)
+    #define WH_DEBUG_VERBOSE_HEXDUMP(msg, data, len) do { } while (0)
 #endif
 
 /** Configuration checks */

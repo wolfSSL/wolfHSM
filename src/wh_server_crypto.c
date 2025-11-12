@@ -654,7 +654,7 @@ int wh_Server_CacheExportCurve25519Key(whServerContext* server, whKeyId keyId,
         ret = wh_Crypto_Curve25519DeserializeKey(cacheBuf, cacheMeta->len, key);
         WH_DEBUG_SERVER_VERBOSE("Export25519Key id:%u ret:%d\n", keyId, ret);
         WH_DEBUG_SERVER_VERBOSE("export key:\n");
-        WH_DEBUG_SERVER_VERBOSE_HEXDUMP("[server] export key:", cacheBuf, cacheMeta->len);
+        WH_DEBUG_VERBOSE_HEXDUMP("[server] export key:", cacheBuf, cacheMeta->len);
     }
     return ret;
 }
@@ -966,11 +966,11 @@ static int _HandleEccSign(whServerContext* ctx, uint16_t magic,
         if (ret == WH_ERROR_OK) {
             WH_DEBUG_SERVER_VERBOSE("EccSign: key_id=%x, in_len=%u, res_len=%u, ret=%d\n",
                 key_id, (unsigned)in_len, (unsigned)res_len, ret);
-            WH_DEBUG_SERVER_VERBOSE_HEXDUMP("[server] EccSign in:", in, in_len);
+            WH_DEBUG_VERBOSE_HEXDUMP("[server] EccSign in:", in, in_len);
             /* sign the input */
             ret = wc_ecc_sign_hash(in, in_len, res_out, &res_len,
                                    ctx->crypto->rng, key);
-            WH_DEBUG_SERVER_VERBOSE_HEXDUMP("[server] EccSign res:", res_out, res_len);
+            WH_DEBUG_VERBOSE_HEXDUMP("[server] EccSign res:", res_out, res_len);
         }
         wc_ecc_free(key);
     }
@@ -1052,8 +1052,8 @@ static int _HandleEccVerify(whServerContext* ctx, uint16_t magic,
             WH_DEBUG_SERVER_VERBOSE("EccVerify: key_id=%x, sig_len=%u, hash_len=%u, "
                    "result=%d, ret=%d\n",
                    key_id, (unsigned)sig_len, (unsigned)hash_len, result, ret);
-            WH_DEBUG_SERVER_VERBOSE_HEXDUMP("[server] EccVerify hash:", req_hash, hash_len);
-            WH_DEBUG_SERVER_VERBOSE_HEXDUMP("[server] EccVerify sig:", req_sig, sig_len);
+            WH_DEBUG_VERBOSE_HEXDUMP("[server] EccVerify hash:", req_hash, hash_len);
+            WH_DEBUG_VERBOSE_HEXDUMP("[server] EccVerify sig:", req_sig, sig_len);
 
             if ((ret == 0) && (export_pub_key != 0)) {
                 /* Export the public key to the result message*/
@@ -1736,9 +1736,9 @@ static int _HandleAesCtr(whServerContext* ctx, uint16_t magic,
     uint8_t* out_tmp = out_reg + AES_BLOCK_SIZE;
 
     /* Debug printouts */
-    WH_DEBUG_SERVER_VERBOSE_HEXDUMP("[AesCtr] Input data ", in, len);
-    WH_DEBUG_SERVER_VERBOSE_HEXDUMP("[AesCtr] IV ", iv, AES_BLOCK_SIZE);
-    WH_DEBUG_SERVER_VERBOSE_HEXDUMP("[AesCtr] tmp ", tmp, AES_BLOCK_SIZE);
+    WH_DEBUG_VERBOSE_HEXDUMP("[AesCtr] Input data ", in, len);
+    WH_DEBUG_VERBOSE_HEXDUMP("[AesCtr] IV ", iv, AES_BLOCK_SIZE);
+    WH_DEBUG_VERBOSE_HEXDUMP("[AesCtr] tmp ", tmp, AES_BLOCK_SIZE);
     /* Freshen key and validate usage policy if key is not erased */
     if (!WH_KEYID_ISERASED(key_id)) {
         ret = wh_Server_KeystoreFreshenKey(ctx, key_id, &cachedKey, &keyMeta);
@@ -1752,11 +1752,11 @@ static int _HandleAesCtr(whServerContext* ctx, uint16_t magic,
             /* override the incoming values with cached key */
             key     = cachedKey;
             key_len = keyMeta->len;
-            WH_DEBUG_SERVER_VERBOSE_HEXDUMP("[AesCtr] Key from HSM", key, key_len);
+            WH_DEBUG_VERBOSE_HEXDUMP("[AesCtr] Key from HSM", key, key_len);
         }
     }
     else {
-        WH_DEBUG_SERVER_VERBOSE_HEXDUMP("[AesCtr] Key ", key, key_len);
+        WH_DEBUG_VERBOSE_HEXDUMP("[AesCtr] Key ", key, key_len);
     }
     if (ret == 0) {
         /* init key with possible hardware */
@@ -1774,14 +1774,14 @@ static int _HandleAesCtr(whServerContext* ctx, uint16_t magic,
             if (enc != 0) {
                 ret = wc_AesCtrEncrypt(aes, (byte*)out, (byte*)in, (word32)len);
                 if (ret == 0) {
-                    WH_DEBUG_SERVER_VERBOSE_HEXDUMP("[AesCtr] Encrypted output", out, len);
+                    WH_DEBUG_VERBOSE_HEXDUMP("[AesCtr] Encrypted output", out, len);
                 }
             }
             else {
                 /* CTR uses the same function for encrypt and decrypt */
                 ret = wc_AesCtrEncrypt(aes, (byte*)out, (byte*)in, (word32)len);
                 if (ret == 0) {
-                    WH_DEBUG_SERVER_VERBOSE_HEXDUMP("[AesCtr] Decrypted output", out, len);
+                    WH_DEBUG_VERBOSE_HEXDUMP("[AesCtr] Decrypted output", out, len);
                 }
             }
         }
@@ -1847,8 +1847,8 @@ static int _HandleAesEcb(whServerContext* ctx, uint16_t magic,
         (uint8_t*)(cryptoDataOut) + sizeof(whMessageCrypto_AesEcbResponse);
 
     /* Debug printouts */
-    WH_DEBUG_SERVER_VERBOSE_HEXDUMP("[AesEcb] Input data", in, len);
-    WH_DEBUG_SERVER_VERBOSE_HEXDUMP("[AesEcb] IV", iv, AES_BLOCK_SIZE);
+    WH_DEBUG_VERBOSE_HEXDUMP("[AesEcb] Input data", in, len);
+    WH_DEBUG_VERBOSE_HEXDUMP("[AesEcb] IV", iv, AES_BLOCK_SIZE);
     /* Freshen key and validate usage policy if key is not erased */
     if (!WH_KEYID_ISERASED(key_id)) {
         ret = wh_Server_KeystoreFreshenKey(ctx, key_id, &cachedKey, &keyMeta);
@@ -1862,11 +1862,11 @@ static int _HandleAesEcb(whServerContext* ctx, uint16_t magic,
             /* override the incoming values with cached key */
             key     = cachedKey;
             key_len = keyMeta->len;
-            WH_DEBUG_SERVER_VERBOSE_HEXDUMP("[AesEcb] Key from HSM", key, key_len);
+            WH_DEBUG_VERBOSE_HEXDUMP("[AesEcb] Key from HSM", key, key_len);
         }
     }
     else {
-        WH_DEBUG_SERVER_VERBOSE_HEXDUMP("[AesEcb] Key ", key, key_len);
+        WH_DEBUG_VERBOSE_HEXDUMP("[AesEcb] Key ", key, key_len);
     }
     if (ret == 0) {
         /* init key with possible hardware */
@@ -1881,13 +1881,13 @@ static int _HandleAesEcb(whServerContext* ctx, uint16_t magic,
             if (enc != 0) {
                 ret = wc_AesEcbEncrypt(aes, (byte*)out, (byte*)in, (word32)len);
                 if (ret == 0) {
-                    WH_DEBUG_SERVER_VERBOSE_HEXDUMP("[AesEcb] Encrypted output", out, len);
+                    WH_DEBUG_VERBOSE_HEXDUMP("[AesEcb] Encrypted output", out, len);
                 }
             }
             else {
                 ret = wc_AesEcbDecrypt(aes, (byte*)out, (byte*)in, (word32)len);
                 if (ret == 0) {
-                    WH_DEBUG_SERVER_VERBOSE_HEXDUMP("[AesEcb] Decrypted output", out, len);
+                    WH_DEBUG_VERBOSE_HEXDUMP("[AesEcb] Decrypted output", out, len);
                 }
             }
         }
@@ -1950,8 +1950,8 @@ static int _HandleAesCbc(whServerContext* ctx, uint16_t magic, const void* crypt
         (uint8_t*)(cryptoDataOut) + sizeof(whMessageCrypto_AesCbcResponse);
 
     /* Debug printouts */
-    WH_DEBUG_SERVER_VERBOSE_HEXDUMP("[AesCbc] Input data", in, len);
-    WH_DEBUG_SERVER_VERBOSE_HEXDUMP("[AesCbc] IV", iv, AES_BLOCK_SIZE);
+    WH_DEBUG_VERBOSE_HEXDUMP("[AesCbc] Input data", in, len);
+    WH_DEBUG_VERBOSE_HEXDUMP("[AesCbc] IV", iv, AES_BLOCK_SIZE);
     /* Freshen key and validate usage policy if key is not erased */
     if (!WH_KEYID_ISERASED(key_id)) {
         ret = wh_Server_KeystoreFreshenKey(ctx, key_id, &cachedKey, &keyMeta);
@@ -1965,11 +1965,11 @@ static int _HandleAesCbc(whServerContext* ctx, uint16_t magic, const void* crypt
             /* override the incoming values with cached key */
             key     = cachedKey;
             key_len = keyMeta->len;
-            WH_DEBUG_SERVER_VERBOSE_HEXDUMP("[AesCbc] Key from HSM", key, key_len);
+            WH_DEBUG_VERBOSE_HEXDUMP("[AesCbc] Key from HSM", key, key_len);
         }
     }
     else {
-        WH_DEBUG_SERVER_VERBOSE_HEXDUMP("[AesCbc] Key ", key, key_len);
+        WH_DEBUG_VERBOSE_HEXDUMP("[AesCbc] Key ", key, key_len);
     }
     if (ret == 0) {
         /* init key with possible hardware */
@@ -1984,13 +1984,13 @@ static int _HandleAesCbc(whServerContext* ctx, uint16_t magic, const void* crypt
             if (enc != 0) {
                 ret = wc_AesCbcEncrypt(aes, (byte*)out, (byte*)in, (word32)len);
                 if (ret == 0) {
-                    WH_DEBUG_SERVER_VERBOSE_HEXDUMP("[AesCbc] Encrypted output", out, len);
+                    WH_DEBUG_VERBOSE_HEXDUMP("[AesCbc] Encrypted output", out, len);
                 }
             }
             else {
                 ret = wc_AesCbcDecrypt(aes, (byte*)out, (byte*)in, (word32)len);
                 if (ret == 0) {
-                    WH_DEBUG_SERVER_VERBOSE_HEXDUMP("[AesCbc] Decrypted output", out, len);
+                    WH_DEBUG_VERBOSE_HEXDUMP("[AesCbc] Decrypted output", out, len);
                 }
             }
         }
@@ -2070,7 +2070,7 @@ static int _HandleAesGcm(whServerContext* ctx, uint16_t magic,
     WH_DEBUG_SERVER_VERBOSE("AESGCM: req:%p in:%p key:%p iv:%p authin:%p tag:%p res:%p "
            "out:%p out_tag:%p\n",
            &req, in, key, iv, authin, tag, &res, out, out_tag);
-    WH_DEBUG_SERVER_VERBOSE_HEXDUMP("[server] AESGCM req packet: \n", (uint8_t*)cryptoDataIn,
+    WH_DEBUG_VERBOSE_HEXDUMP("[server] AESGCM req packet: \n", (uint8_t*)cryptoDataIn,
                      req_len);
 
     /* Freshen key and validate usage policy if key is not erased */
@@ -2098,14 +2098,14 @@ static int _HandleAesGcm(whServerContext* ctx, uint16_t magic,
         ret = wc_AesGcmSetKey(aes, (byte*)key, (word32)key_len);
         WH_DEBUG_SERVER_VERBOSE("AesGcmSetKey key_id:%u key_len:%u ret:%d\n", key_id,
                key_len, ret);
-        WH_DEBUG_SERVER_VERBOSE_HEXDUMP("[server] key: ", key, key_len);
+        WH_DEBUG_VERBOSE_HEXDUMP("[server] key: ", key, key_len);
         if (ret == 0) {
             /* do the crypto operation */
             WH_DEBUG_SERVER_VERBOSE("enc:%d len:%d, ivSz:%d authTagSz:%d, authInSz:%d\n",
                 enc, len, iv_len, tag_len, authin_len);
-            WH_DEBUG_SERVER_VERBOSE_HEXDUMP("[server] in: ", in, len);
-            WH_DEBUG_SERVER_VERBOSE_HEXDUMP("[server] iv: ", iv, iv_len);
-            WH_DEBUG_SERVER_VERBOSE_HEXDUMP("[server] authin: ", authin, authin_len);
+            WH_DEBUG_VERBOSE_HEXDUMP("[server] in: ", in, len);
+            WH_DEBUG_VERBOSE_HEXDUMP("[server] iv: ", iv, iv_len);
+            WH_DEBUG_VERBOSE_HEXDUMP("[server] authin: ", authin, authin_len);
             if (enc != 0) {
                 /* For encryption, write tag to the response output tag area */
                 ret = wc_AesGcmEncrypt(aes, (byte*)out, (byte*)in, (word32)len,
@@ -2113,21 +2113,21 @@ static int _HandleAesGcm(whServerContext* ctx, uint16_t magic,
                                        (word32)tag_len, (byte*)authin,
                                        (word32)authin_len);
                 WH_DEBUG_SERVER_VERBOSE("enc ret:%d\n", ret);
-                WH_DEBUG_SERVER_VERBOSE_HEXDUMP("[server] out: \n", out, len);
-                WH_DEBUG_SERVER_VERBOSE_HEXDUMP("[server] enc tag: ", out_tag, tag_len);
+                WH_DEBUG_VERBOSE_HEXDUMP("[server] out: \n", out, len);
+                WH_DEBUG_VERBOSE_HEXDUMP("[server] enc tag: ", out_tag, tag_len);
             }
             else {
                 /* set authTag as a packet input */
-                WH_DEBUG_SERVER_VERBOSE_HEXDUMP("[server] dec tag: ", tag, tag_len);
+                WH_DEBUG_VERBOSE_HEXDUMP("[server] dec tag: ", tag, tag_len);
                 ret = wc_AesGcmDecrypt(aes, (byte*)out, (byte*)in, (word32)len,
                                        (byte*)iv, (word32)iv_len, (byte*)tag,
                                        (word32)tag_len, (byte*)authin,
                                        (word32)authin_len);
                 WH_DEBUG_SERVER_VERBOSE("dec ret:%d\n", ret);
-                WH_DEBUG_SERVER_VERBOSE_HEXDUMP("[server] out: \n", out, len);
+                WH_DEBUG_VERBOSE_HEXDUMP("[server] out: \n", out, len);
             }
-            WH_DEBUG_SERVER_VERBOSE_HEXDUMP("[server] post iv: ", iv, iv_len);
-            WH_DEBUG_SERVER_VERBOSE_HEXDUMP("[server] post authin: ", authin, authin_len);
+            WH_DEBUG_VERBOSE_HEXDUMP("[server] post iv: ", iv, iv_len);
+            WH_DEBUG_VERBOSE_HEXDUMP("[server] post authin: ", authin, authin_len);
         }
         wc_AesFree(aes);
     }
@@ -2138,7 +2138,7 @@ static int _HandleAesGcm(whServerContext* ctx, uint16_t magic,
         res.authTagSz = (enc == 0) ? 0 : tag_len;
         *outSize      = res_len;
         WH_DEBUG_SERVER_VERBOSE("res out_size:%d\n", *outSize);
-        WH_DEBUG_SERVER_VERBOSE_HEXDUMP("[server] AESGCM res packet: \n",
+        WH_DEBUG_VERBOSE_HEXDUMP("[server] AESGCM res packet: \n",
                          (uint8_t*)cryptoDataOut, res_len);
 
         /* Translate response back */
@@ -3259,7 +3259,7 @@ int wh_Server_HandleCryptoRequest(whServerContext* ctx, uint16_t magic,
 
 
     WH_DEBUG_SERVER_VERBOSE("HandleCryptoRequest. Action:%u\n", action);
-    WH_DEBUG_SERVER_VERBOSE_HEXDUMP("[server] Crypto Request:\n", (const uint8_t*)req_packet,
+    WH_DEBUG_VERBOSE_HEXDUMP("[server] Crypto Request:\n", (const uint8_t*)req_packet,
                      req_size);
     switch (action) {
         case WC_ALGO_TYPE_CIPHER:

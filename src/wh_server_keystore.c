@@ -410,7 +410,7 @@ int wh_Server_KeystoreCacheKey(whServerContext* server, whNvmMetadata* meta,
                 ctx->cache[foundIndex].committed = 1;
             }
             WH_DEBUG_SERVER_VERBOSE("cacheKey: caching keyid=%u\n", meta->id);
-            WH_DEBUG_SERVER_VERBOSE_HEXDUMP("[server] cacheKey: key=", in, meta->len);
+            WH_DEBUG_VERBOSE_HEXDUMP("[server] cacheKey: key=", in, meta->len);
         }
     }
     else {

@@ -252,7 +252,7 @@ int wh_Client_RngGenerate(whClientContext* ctx, uint8_t* out, uint32_t size)
                     size -= res->sz;
                     WH_DEBUG_CLIENT_VERBOSE("out size:%u remaining:%u\n",
                            (unsigned int)res->sz, (unsigned int)size);
-                    WH_DEBUG_CLIENT_VERBOSE_HEXDUMP("[client] res_out: \n", out - res->sz,
+                    WH_DEBUG_VERBOSE_HEXDUMP("[client] res_out: \n", out - res->sz,
                                      res->sz);
                 }
                 else {
@@ -403,11 +403,11 @@ int wh_Client_AesCtr(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
         memcpy(req_tmp, tmp, AES_BLOCK_SIZE);
     }
 
-    WH_DEBUG_CLIENT_VERBOSE_HEXDUMP("[client] in: \n", req_in, len);
-    WH_DEBUG_CLIENT_VERBOSE_HEXDUMP("[client] key: \n", req_key, key_len);
-    WH_DEBUG_CLIENT_VERBOSE_HEXDUMP("[client] iv: \n", req_iv, iv_len);
-    WH_DEBUG_CLIENT_VERBOSE_HEXDUMP("[client] tmp: \n", req_tmp, AES_BLOCK_SIZE);
-    WH_DEBUG_CLIENT_VERBOSE_HEXDUMP("[client] req packet: \n", (uint8_t*)req, req_len);
+    WH_DEBUG_VERBOSE_HEXDUMP("[client] in: \n", req_in, len);
+    WH_DEBUG_VERBOSE_HEXDUMP("[client] key: \n", req_key, key_len);
+    WH_DEBUG_VERBOSE_HEXDUMP("[client] iv: \n", req_iv, iv_len);
+    WH_DEBUG_VERBOSE_HEXDUMP("[client] tmp: \n", req_tmp, AES_BLOCK_SIZE);
+    WH_DEBUG_VERBOSE_HEXDUMP("[client] req packet: \n", (uint8_t*)req, req_len);
     ret = wh_Client_SendRequest(ctx, group, action, req_len, dataPtr);
     /* read response */
     if (ret == WH_ERROR_OK) {
@@ -427,8 +427,8 @@ int wh_Client_AesCtr(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
                 uint8_t* res_tmp = res_reg + AES_BLOCK_SIZE;
 
                 WH_DEBUG_CLIENT_VERBOSE("out size:%d res_len:%d\n", res->sz, res_len);
-                WH_DEBUG_CLIENT_VERBOSE_HEXDUMP("[client] res_out: \n", res_out, res->sz);
-                WH_DEBUG_CLIENT_VERBOSE_HEXDUMP("[client] res_tmp: \n", res_tmp,
+                WH_DEBUG_VERBOSE_HEXDUMP("[client] res_out: \n", res_out, res->sz);
+                WH_DEBUG_VERBOSE_HEXDUMP("[client] res_tmp: \n", res_tmp,
                                  AES_BLOCK_SIZE);
                 /* copy the response res_out */
                 memcpy(out, res_out, res->sz);
@@ -516,10 +516,10 @@ int wh_Client_AesEcb(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
         memcpy(req_iv, iv, iv_len);
     }
 
-    WH_DEBUG_CLIENT_VERBOSE_HEXDUMP("[client] in: \n", req_in, len);
-    WH_DEBUG_CLIENT_VERBOSE_HEXDUMP("[client] key: \n", req_key, key_len);
-    WH_DEBUG_CLIENT_VERBOSE_HEXDUMP("[client] iv: \n", req_iv, iv_len);
-    WH_DEBUG_CLIENT_VERBOSE_HEXDUMP("[client] req packet: \n", (uint8_t*)req, req_len);
+    WH_DEBUG_VERBOSE_HEXDUMP("[client] in: \n", req_in, len);
+    WH_DEBUG_VERBOSE_HEXDUMP("[client] key: \n", req_key, key_len);
+    WH_DEBUG_VERBOSE_HEXDUMP("[client] iv: \n", req_iv, iv_len);
+    WH_DEBUG_VERBOSE_HEXDUMP("[client] req packet: \n", (uint8_t*)req, req_len);
     ret = wh_Client_SendRequest(ctx, group, action, req_len, dataPtr);
     /* read response */
     if (ret == WH_ERROR_OK) {
@@ -536,7 +536,7 @@ int wh_Client_AesEcb(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
                 uint8_t* res_out = (uint8_t*)(res + 1);
                 WH_DEBUG_CLIENT_VERBOSE("out size:%d res_len:%d\n", (int)res->sz,
                        (int)res_len);
-                WH_DEBUG_CLIENT_VERBOSE_HEXDUMP("[client] res_out: \n", out, res->sz);
+                WH_DEBUG_VERBOSE_HEXDUMP("[client] res_out: \n", out, res->sz);
                 /* copy the response res_out */
                 memcpy(out, res_out, res->sz);
             }
@@ -625,10 +625,10 @@ int wh_Client_AesCbc(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
         memcpy(iv, in + last_offset, iv_len);
     }
 
-    WH_DEBUG_CLIENT_VERBOSE_HEXDUMP("[client] in: \n", req_in, len);
-    WH_DEBUG_CLIENT_VERBOSE_HEXDUMP("[client] key: \n", req_key, key_len);
-    WH_DEBUG_CLIENT_VERBOSE_HEXDUMP("[client] iv: \n", req_iv, iv_len);
-    WH_DEBUG_CLIENT_VERBOSE_HEXDUMP("[client] req packet: \n", (uint8_t*)req, req_len);
+    WH_DEBUG_VERBOSE_HEXDUMP("[client] in: \n", req_in, len);
+    WH_DEBUG_VERBOSE_HEXDUMP("[client] key: \n", req_key, key_len);
+    WH_DEBUG_VERBOSE_HEXDUMP("[client] iv: \n", req_iv, iv_len);
+    WH_DEBUG_VERBOSE_HEXDUMP("[client] req packet: \n", (uint8_t*)req, req_len);
     ret = wh_Client_SendRequest(ctx, group, action, req_len, dataPtr);
     /* read response */
     if (ret == WH_ERROR_OK) {
@@ -645,7 +645,7 @@ int wh_Client_AesCbc(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
                 uint8_t* res_out = (uint8_t*)(res + 1);
                 WH_DEBUG_CLIENT_VERBOSE("out size:%d res_len:%d\n", (int)res->sz,
                        (int)res_len);
-                WH_DEBUG_CLIENT_VERBOSE_HEXDUMP("[client] res_out: \n", out, res->sz);
+                WH_DEBUG_VERBOSE_HEXDUMP("[client] res_out: \n", out, res->sz);
                 /* copy the response res_out */
                 memcpy(out, res_out, res->sz);
                 if (enc != 0) {
@@ -738,18 +738,18 @@ int wh_Client_AesGcm(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
         memcpy(req_authin, authin, authin_len);
     }
 
-    WH_DEBUG_CLIENT_VERBOSE_HEXDUMP("[client] in: \n", req_in, len);
-    WH_DEBUG_CLIENT_VERBOSE_HEXDUMP("[client] key: \n", req_key, key_len);
-    WH_DEBUG_CLIENT_VERBOSE_HEXDUMP("[client] iv: \n", req_iv, iv_len);
-    WH_DEBUG_CLIENT_VERBOSE_HEXDUMP("[client] authin: \n", req_authin, authin_len);
+    WH_DEBUG_VERBOSE_HEXDUMP("[client] in: \n", req_in, len);
+    WH_DEBUG_VERBOSE_HEXDUMP("[client] key: \n", req_key, key_len);
+    WH_DEBUG_VERBOSE_HEXDUMP("[client] iv: \n", req_iv, iv_len);
+    WH_DEBUG_VERBOSE_HEXDUMP("[client] authin: \n", req_authin, authin_len);
 
     /* set auth tag by direction */
     if (enc == 0 && dec_tag != NULL && tag_len > 0) {
         memcpy(req_tag, dec_tag, tag_len);
-        WH_DEBUG_CLIENT_VERBOSE_HEXDUMP("[client] dec tag: \n", req_tag, tag_len);
+        WH_DEBUG_VERBOSE_HEXDUMP("[client] dec tag: \n", req_tag, tag_len);
     }
 
-    WH_DEBUG_CLIENT_VERBOSE_HEXDUMP("[client] AESGCM req packet: \n", dataPtr, req_len);
+    WH_DEBUG_VERBOSE_HEXDUMP("[client] AESGCM req packet: \n", dataPtr, req_len);
 
     /* Send request and receive response */
     ret = wh_Client_SendRequest(ctx, group, action, req_len, dataPtr);
@@ -775,9 +775,9 @@ int wh_Client_AesGcm(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
 
                 WH_DEBUG_CLIENT_VERBOSE("out size:%d datasz:%d tag_len:%d\n",
                        (int)res->sz, (int)res_len, (int)res->authTagSz);
-                WH_DEBUG_CLIENT_VERBOSE_HEXDUMP("[client] res_out: \n", res_out, res->sz);
+                WH_DEBUG_VERBOSE_HEXDUMP("[client] res_out: \n", res_out, res->sz);
                 if (enc != 0 && res->authTagSz > 0) {
-                    WH_DEBUG_CLIENT_VERBOSE_HEXDUMP("[client] res_tag: \n", res_tag,
+                    WH_DEBUG_VERBOSE_HEXDUMP("[client] res_tag: \n", res_tag,
                                      res->authTagSz);
                 }
                 /* copy the response result if present */
@@ -791,7 +791,7 @@ int wh_Client_AesGcm(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
                     memcpy(enc_tag, res_tag, res->authTagSz);
                     WH_DEBUG_CLIENT_VERBOSE("res tag_len:%d exp tag_len:%u",
                            (int)res->authTagSz, (unsigned int)tag_len);
-                    WH_DEBUG_CLIENT_VERBOSE_HEXDUMP("[client] enc authtag: ", enc_tag,
+                    WH_DEBUG_VERBOSE_HEXDUMP("[client] enc authtag: ", enc_tag,
                                      res->authTagSz);
                 }
             }
@@ -933,7 +933,7 @@ int wh_Client_AesGcmDma(whClientContext* ctx, Aes* aes, int enc,
         if (ret == WH_ERROR_OK) {
             req->authTag.addr = authTagAddr;
         }
-        WH_DEBUG_CLIENT_VERBOSE_HEXDUMP("[client] dec tag: \n", dec_tag, tag_len);
+        WH_DEBUG_VERBOSE_HEXDUMP("[client] dec tag: \n", dec_tag, tag_len);
     }
     else if (enc == 1 && enc_tag != NULL && tag_len > 0) {
         /* Encryption: set up auth tag buffer to receive generated tag */
@@ -944,12 +944,12 @@ int wh_Client_AesGcmDma(whClientContext* ctx, Aes* aes, int enc,
         if (ret == WH_ERROR_OK) {
             req->authTag.addr = authTagAddr;
         }
-        WH_DEBUG_CLIENT_VERBOSE_HEXDUMP("[client] enc tag buffer: \n", enc_tag, tag_len);
+        WH_DEBUG_VERBOSE_HEXDUMP("[client] enc tag buffer: \n", enc_tag, tag_len);
     }
 
     /* Send request and receive response */
     reqLen = sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
-    WH_DEBUG_CLIENT_VERBOSE_HEXDUMP("[client] AESGCM DMA req packet: \n", dataPtr, reqLen);
+    WH_DEBUG_VERBOSE_HEXDUMP("[client] AESGCM DMA req packet: \n", dataPtr, reqLen);
     if (ret == WH_ERROR_OK) {
         ret = wh_Client_SendRequest(ctx, group, action, reqLen, dataPtr);
     }
@@ -1192,7 +1192,7 @@ static int _EccMakeKey(whClientContext* ctx, int size, int curveId,
                                 /* Response has the exported key */
                                 ret = wh_Crypto_EccDeserializeKeyDer(
                                     key_der, der_size, key);
-                                WH_DEBUG_CLIENT_VERBOSE_HEXDUMP("[client] KeyGen export:",
+                                WH_DEBUG_VERBOSE_HEXDUMP("[client] KeyGen export:",
                                                  key_der, der_size);
                             }
                         }
@@ -1342,7 +1342,7 @@ int wh_Client_EccSharedSecret(whClientContext* ctx, ecc_key* priv_key,
                         if (out != NULL) {
                             memcpy(out, res_out, res->sz);
                         }
-                        WH_DEBUG_CLIENT_VERBOSE_HEXDUMP("[client] Eccdh:", res_out, res->sz);
+                        WH_DEBUG_VERBOSE_HEXDUMP("[client] Eccdh:", res_out, res->sz);
                     }
                 }
             }
@@ -1439,10 +1439,10 @@ int wh_Client_EccSign(whClientContext* ctx, ecc_key* key, const uint8_t* hash,
             /* Dump the request and hash for debugging */
             WH_DEBUG_CLIENT_VERBOSE("EccSign: key_id=%x, hash_len=%u, options=%u\n",
                    key_id, (unsigned)hash_len, (unsigned)options);
-            WH_DEBUG_CLIENT_VERBOSE_HEXDUMP("[client] EccSign req:", (uint8_t*)req,
+            WH_DEBUG_VERBOSE_HEXDUMP("[client] EccSign req:", (uint8_t*)req,
                              sizeof(*req));
             if ((hash != NULL) && (hash_len > 0)) {
-                WH_DEBUG_CLIENT_VERBOSE_HEXDUMP("[client] EccSign hash:", (uint8_t*)hash,
+                WH_DEBUG_VERBOSE_HEXDUMP("[client] EccSign hash:", (uint8_t*)hash,
                                  hash_len);
             }
 
@@ -1482,7 +1482,7 @@ int wh_Client_EccSign(whClientContext* ctx, ecc_key* key, const uint8_t* hash,
                             if ((sig != NULL) && (sig_len > 0)) {
                                 memcpy(sig, res_sig, sig_len);
                             }
-                            WH_DEBUG_CLIENT_VERBOSE_HEXDUMP("[client] EccSign:", res_sig,
+                            WH_DEBUG_VERBOSE_HEXDUMP("[client] EccSign:", res_sig,
                                              sig_len);
                         }
                     }
@@ -1592,12 +1592,12 @@ int wh_Client_EccVerify(whClientContext* ctx, ecc_key* key, const uint8_t* sig,
                    "hash_len=%u, options=%u\n",
                    key_id, (unsigned int)sig_len, (unsigned int)hash_len,
                    (unsigned int)options);
-            WH_DEBUG_CLIENT_VERBOSE_HEXDUMP("[client] EccVerify req:", (uint8_t*)req, req_len);
+            WH_DEBUG_VERBOSE_HEXDUMP("[client] EccVerify req:", (uint8_t*)req, req_len);
             if ((sig != NULL) && (sig_len > 0)) {
-                WH_DEBUG_CLIENT_VERBOSE_HEXDUMP("[client] EccVerify sig:", sig, sig_len);
+                WH_DEBUG_VERBOSE_HEXDUMP("[client] EccVerify sig:", sig, sig_len);
             }
             if ((hash != NULL) && (hash_len > 0)) {
-                WH_DEBUG_CLIENT_VERBOSE_HEXDUMP("[client] EccVerify hash:", hash, hash_len);
+                WH_DEBUG_VERBOSE_HEXDUMP("[client] EccVerify hash:", hash, hash_len);
             }
 
             /* write request */
@@ -1754,7 +1754,7 @@ int wh_Client_Curve25519ImportKey(whClientContext* ctx, curve25519_key* key,
             *inout_keyId = key_id;
         }
         WH_DEBUG_CLIENT_VERBOSE("importKey: cached keyid=%u\n", key_id);
-        WH_DEBUG_CLIENT_VERBOSE_HEXDUMP("[client] importKey: key=", buffer, buffer_len);
+        WH_DEBUG_VERBOSE_HEXDUMP("[client] importKey: key=", buffer, buffer_len);
     }
     return ret;
 }
@@ -1869,7 +1869,7 @@ static int _Curve25519MakeKey(whClientContext* ctx, uint16_t size,
                     /* Response has the exported key */
                     ret = wh_Crypto_Curve25519DeserializeKey(key_der, der_size,
                                                              key);
-                    WH_DEBUG_CLIENT_VERBOSE_HEXDUMP("[client] KeyGen export:", key_der,
+                    WH_DEBUG_VERBOSE_HEXDUMP("[client] KeyGen export:", key_der,
                                      der_size);
                 }
             }
@@ -2013,7 +2013,7 @@ int wh_Client_Curve25519SharedSecret(whClientContext* ctx,
                         if (out != NULL) {
                             uint8_t* res_out = (uint8_t*)(res + 1);
                             memcpy(out, res_out, res->sz);
-                            WH_DEBUG_CLIENT_VERBOSE_HEXDUMP("[client] X25519:", res_out,
+                            WH_DEBUG_VERBOSE_HEXDUMP("[client] X25519:", res_out,
                                              res->sz);
                         }
                     }
@@ -3211,9 +3211,9 @@ static int _xferSha256BlockAndUpdateDigest(whClientContext* ctx,
                                 (uint8_t*)dataPtr);
 
     WH_DEBUG_CLIENT_VERBOSE("send SHA256 Req:\n");
-    WH_DEBUG_CLIENT_VERBOSE_HEXDUMP("[client] inBlock: ", req->inBlock, WC_SHA256_BLOCK_SIZE);
+    WH_DEBUG_VERBOSE_HEXDUMP("[client] inBlock: ", req->inBlock, WC_SHA256_BLOCK_SIZE);
     if (req->resumeState.hiLen != 0 || req->resumeState.loLen != 0) {
-        WH_DEBUG_CLIENT_VERBOSE_HEXDUMP("  [client] resumeHash: ", req->resumeState.hash,
+        WH_DEBUG_VERBOSE_HEXDUMP("  [client] resumeHash: ", req->resumeState.hash,
                          (isLastBlock) ? req->lastBlockLen
                                        : WC_SHA256_BLOCK_SIZE);
         WH_DEBUG_CLIENT_VERBOSE("  hiLen: %u, loLen: %u\n",
@@ -3241,7 +3241,7 @@ static int _xferSha256BlockAndUpdateDigest(whClientContext* ctx,
             sha256->hiLen = res->hiLen;
             sha256->loLen = res->loLen;
             WH_DEBUG_CLIENT_VERBOSE("Client SHA256 Res recv:\n");
-            WH_DEBUG_CLIENT_VERBOSE_HEXDUMP("[client] hash: ", (uint8_t*)sha256->digest,
+            WH_DEBUG_VERBOSE_HEXDUMP("[client] hash: ", (uint8_t*)sha256->digest,
                              WC_SHA256_DIGEST_SIZE);
         }
     }
@@ -3498,9 +3498,9 @@ static int _xferSha224BlockAndUpdateDigest(whClientContext* ctx,
                                 (uint8_t*)dataPtr);
 
     WH_DEBUG_CLIENT_VERBOSE("send SHA224 Req:\n");
-    WH_DEBUG_CLIENT_VERBOSE_HEXDUMP("[client] inBlock: ", req->inBlock, WC_SHA224_BLOCK_SIZE);
+    WH_DEBUG_VERBOSE_HEXDUMP("[client] inBlock: ", req->inBlock, WC_SHA224_BLOCK_SIZE);
     if (req->resumeState.hiLen != 0 || req->resumeState.loLen != 0) {
-        WH_DEBUG_CLIENT_VERBOSE_HEXDUMP("  [client] resumeHash: ", req->resumeState.hash,
+        WH_DEBUG_VERBOSE_HEXDUMP("  [client] resumeHash: ", req->resumeState.hash,
                          (isLastBlock) ? req->lastBlockLen
                                        : WC_SHA224_BLOCK_SIZE);
         WH_DEBUG_CLIENT_VERBOSE("  hiLen: %u, loLen: %u\n", req->resumeState.hiLen,
@@ -3531,7 +3531,7 @@ static int _xferSha224BlockAndUpdateDigest(whClientContext* ctx,
             sha224->hiLen = res->hiLen;
             sha224->loLen = res->loLen;
             WH_DEBUG_CLIENT_VERBOSE("Client SHA224 Res recv:\n");
-            WH_DEBUG_CLIENT_VERBOSE_HEXDUMP("[client] hash: ", (uint8_t*)sha224->digest,
+            WH_DEBUG_VERBOSE_HEXDUMP("[client] hash: ", (uint8_t*)sha224->digest,
                              WC_SHA224_DIGEST_SIZE);
         }
     }
@@ -3779,9 +3779,9 @@ static int _xferSha384BlockAndUpdateDigest(whClientContext* ctx,
                                 (uint8_t*)dataPtr);
 
     WH_DEBUG_CLIENT_VERBOSE("send SHA384 Req:\n");
-    WH_DEBUG_CLIENT_VERBOSE_HEXDUMP("[client] inBlock: ", req->inBlock, WC_SHA384_BLOCK_SIZE);
+    WH_DEBUG_VERBOSE_HEXDUMP("[client] inBlock: ", req->inBlock, WC_SHA384_BLOCK_SIZE);
     if (req->resumeState.hiLen != 0 || req->resumeState.loLen != 0) {
-        WH_DEBUG_CLIENT_VERBOSE_HEXDUMP("  [client] resumeHash: ", req->resumeState.hash,
+        WH_DEBUG_VERBOSE_HEXDUMP("  [client] resumeHash: ", req->resumeState.hash,
                          (isLastBlock) ? req->lastBlockLen
                                        : WC_SHA384_BLOCK_SIZE);
         WH_DEBUG_CLIENT_VERBOSE("  hiLen: %u, loLen: %u\n", req->resumeState.hiLen,
@@ -3812,7 +3812,7 @@ static int _xferSha384BlockAndUpdateDigest(whClientContext* ctx,
             sha384->hiLen = res->hiLen;
             sha384->loLen = res->loLen;
             WH_DEBUG_CLIENT_VERBOSE("Client SHA384 Res recv:\n");
-            WH_DEBUG_CLIENT_VERBOSE_HEXDUMP("[client] hash: ", (uint8_t*)sha384->digest,
+            WH_DEBUG_VERBOSE_HEXDUMP("[client] hash: ", (uint8_t*)sha384->digest,
                              WC_SHA384_DIGEST_SIZE);
         }
     }
@@ -4061,9 +4061,9 @@ static int _xferSha512BlockAndUpdateDigest(whClientContext* ctx,
                                 (uint8_t*)dataPtr);
 
     WH_DEBUG_CLIENT_VERBOSE("send SHA512 Req:\n");
-    WH_DEBUG_CLIENT_VERBOSE_HEXDUMP("[client] inBlock: ", req->inBlock, WC_SHA512_BLOCK_SIZE);
+    WH_DEBUG_VERBOSE_HEXDUMP("[client] inBlock: ", req->inBlock, WC_SHA512_BLOCK_SIZE);
     if (req->resumeState.hiLen != 0 || req->resumeState.loLen != 0) {
-        WH_DEBUG_CLIENT_VERBOSE_HEXDUMP("  [client] resumeHash: ", req->resumeState.hash,
+        WH_DEBUG_VERBOSE_HEXDUMP("  [client] resumeHash: ", req->resumeState.hash,
                          (isLastBlock) ? req->lastBlockLen
                                        : WC_SHA512_BLOCK_SIZE);
         WH_DEBUG_CLIENT_VERBOSE("  hiLen: %u, loLen: %u\n", req->resumeState.hiLen,
@@ -4091,7 +4091,7 @@ static int _xferSha512BlockAndUpdateDigest(whClientContext* ctx,
             sha512->hiLen = res->hiLen;
             sha512->loLen = res->loLen;
             WH_DEBUG_CLIENT_VERBOSE("Client SHA512 Res recv:\n");
-            WH_DEBUG_CLIENT_VERBOSE_HEXDUMP("[client] hash: ", (uint8_t*)sha512->digest,
+            WH_DEBUG_VERBOSE_HEXDUMP("[client] hash: ", (uint8_t*)sha512->digest,
                              WC_SHA512_DIGEST_SIZE);
         }
     }
@@ -4481,7 +4481,7 @@ static int _MlDsaMakeKey(whClientContext* ctx, int size, int level,
                                 /* Response has the exported key */
                                 ret = wh_Crypto_MlDsaDeserializeKeyDer(
                                     key_der, der_size, key);
-                    WH_DEBUG_CLIENT_VERBOSE_HEXDUMP(
+                    WH_DEBUG_VERBOSE_HEXDUMP(
                                     "[client] ML-DSA KeyGen export:", key_der,
                                     der_size);
                             }
