@@ -153,8 +153,6 @@ typedef struct {
     int (*Cleanup)(void* context);
 } whTransportClientCb;
 
-
-
 typedef struct {
     const whTransportClientCb* transport_cb;
     void* transport_context;
