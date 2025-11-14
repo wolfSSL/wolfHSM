@@ -706,8 +706,8 @@ static int _AesGcmKeyWrap(whServerContext* server, whKeyId serverKeyId,
 {
     int      ret = 0;
     Aes      aes[1];
-    uint8_t        authTag[WH_KEYWRAP_AES_GCM_TAG_SIZE];
-    uint8_t        iv[WH_KEYWRAP_AES_GCM_IV_SIZE];
+    uint8_t  authTag[WH_KEYWRAP_AES_GCM_TAG_SIZE];
+    uint8_t  iv[WH_KEYWRAP_AES_GCM_IV_SIZE];
     uint8_t* serverKey;
     uint32_t serverKeySz;
     whNvmMetadata* serverKeyMetadata;
@@ -791,8 +791,8 @@ static int _AesGcmKeyUnwrap(whServerContext* server, uint16_t serverKeyId,
 {
     int      ret = 0;
     Aes      aes[1];
-    uint8_t        authTag[WH_KEYWRAP_AES_GCM_TAG_SIZE];
-    uint8_t        iv[WH_KEYWRAP_AES_GCM_IV_SIZE];
+    uint8_t  authTag[WH_KEYWRAP_AES_GCM_TAG_SIZE];
+    uint8_t  iv[WH_KEYWRAP_AES_GCM_IV_SIZE];
     uint8_t* serverKey;
     uint32_t serverKeySz;
     whNvmMetadata* serverKeyMetadata;
@@ -858,8 +858,8 @@ static int _AesGcmDataWrap(whServerContext* server, whKeyId serverKeyId,
 {
     int      ret = 0;
     Aes      aes[1];
-    uint8_t        authTag[WH_KEYWRAP_AES_GCM_TAG_SIZE];
-    uint8_t        iv[WH_KEYWRAP_AES_GCM_IV_SIZE];
+    uint8_t  authTag[WH_KEYWRAP_AES_GCM_TAG_SIZE];
+    uint8_t  iv[WH_KEYWRAP_AES_GCM_IV_SIZE];
     uint8_t* serverKey;
     uint32_t serverKeySz;
     whNvmMetadata* serverKeyMetadata;
@@ -927,8 +927,8 @@ static int _AesGcmDataUnwrap(whServerContext* server, uint16_t serverKeyId,
 {
     int      ret = 0;
     Aes      aes[1];
-    uint8_t        authTag[WH_KEYWRAP_AES_GCM_TAG_SIZE];
-    uint8_t        iv[WH_KEYWRAP_AES_GCM_IV_SIZE];
+    uint8_t  authTag[WH_KEYWRAP_AES_GCM_TAG_SIZE];
+    uint8_t  iv[WH_KEYWRAP_AES_GCM_IV_SIZE];
     uint8_t*  serverKey;
     uint32_t serverKeySz;
     whNvmMetadata* serverKeyMetadata;
@@ -1131,7 +1131,6 @@ static int _HandleKeyUnwrapAndExportRequest(
 
             /* Require explicit wrapped-key encoding */
             if (wrappedKeyType != WH_KEYTYPE_WRAPPED) {
-                printf("wrappedKeyType %d\r\n", wrappedKeyType);
                 return WH_ERROR_ABORTED;
             }
 
