@@ -1527,10 +1527,10 @@ static uint64_t wh_timeval_to_64(const wh_timeval* tv)
 {
     if (tv == NULL) return 0;
     return (uint64_t)tv->tv_sec * WH_BASE_TIMEOUT_UNIT
-                + (uint64_t)((tv->tv_usec) / WH_BASE_TIMEOUT_UNIT);
+                + (uint64_t)((tv->tv_usec * WH_BASE_TIMEOUT_UNIT) / 1000000ULL);
 }
-/* Set Time Out if needed */
-int wh_Client_InitCryptTimeout(whClientContext* c)
+/* Start Timeout */
+int wh_Client_TimeoutStart(whClientContext* c)
 {
     if (c == NULL) {
         return WH_ERROR_BADARGS;
@@ -1549,8 +1549,8 @@ int wh_Client_InitCryptTimeout(whClientContext* c)
     return WH_ERROR_OK;
 }
 
-/* Check Crypto Timeout */
-int wh_Client_CheckTimeout(whClientContext* c)
+/* Check Timeout */
+int wh_Client_TimeoutCheck(whClientContext* c)
 {
     uint64_t current_ = 0;
     uint64_t elapsed_ = 0;
@@ -1589,7 +1589,7 @@ int wh_Client_CheckTimeout(whClientContext* c)
     return WH_ERROR_OK;
 }
 
-int wh_Client_timeoutRegisterCb(whClientContext* client,
+int wh_Client_TimeoutRegisterCb(whClientContext* client,
                                             whClientTimeOutCb* cb)
 {
     /* No NULL check for cb, since it is optional and always NULL checked before
@@ -1604,7 +1604,7 @@ int wh_Client_timeoutRegisterCb(whClientContext* client,
     return WH_ERROR_OK;
 }
 
-int wh_Client_timeoutEnable(whClientContext* client,
+int wh_Client_TimeoutSet(whClientContext* client,
                                             wh_timeval* timeout_val)
 {
     if (NULL == client) {

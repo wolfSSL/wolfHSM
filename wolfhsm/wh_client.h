@@ -118,6 +118,7 @@ typedef struct {
     uint64_t tv_sec;  /* Seconds. */
     uint64_t tv_usec; /* Microseconds. */
 } wh_timeval;
+
 typedef struct {
     /* Get current time callback.
      * This callback is mandatory when using the timeout feature.
@@ -148,6 +149,7 @@ typedef struct {
      */
     int (*CheckTimeout)(uint64_t* start_time, uint64_t timeout_val);
 } whClientTimeOutCb;
+
 typedef struct {
     whClientTimeOutCb cb;
     wh_timeval timeout_val;
@@ -2700,15 +2702,15 @@ int wh_Client_CertVerifyAcertDma(whClientContext* c, const void* cert,
     WH_MAKE_KEYID(WH_KEYTYPE_WRAPPED, (_clientId), (_id))
 
 #if defined(WOLFHSM_CFG_CLIENT_TIMEOUT)
-/* Init Client Timeout */
-int wh_Client_InitCryptTimeout(whClientContext* context);
+/* Start Client Timeout */
+int wh_Client_TimeoutStart(whClientContext* context);
 /* Check Client Timeout */
-int wh_Client_CheckTimeout(whClientContext* context);
+int wh_Client_TimeoutCheck(whClientContext* context);
 /* Register Client Timeout Callback */
-int wh_Client_timeoutRegisterCb(whClientContext* client,
+int wh_Client_TimeoutRegisterCb(whClientContext* client,
                                             whClientTimeOutCb* cb);
-/* Enable Client Timeout */
-int wh_Client_timeoutEnable(whClientContext* client,
+/* Set Client Timeout */
+int wh_Client_TimeoutSet(whClientContext* client,
                                             wh_timeval* timeout_val);
 #endif /* WOLFHSM_CFG_CLIENT_TIMEOUT */
 
