@@ -492,7 +492,7 @@ int wh_DemoClient_CryptoEcc(whClientContext* clientContext)
     WC_RNG     rng[1];
     byte       sharedOne[32];
     byte       sharedTwo[32];
-    const char plainMessage[] = "The quick brown fox jumps over the lazy dog.";
+    const char plainMessage[16] = "message example";
     byte       message[sizeof(plainMessage)];
     byte       signature[128];
 
@@ -562,7 +562,7 @@ int wh_DemoClient_CryptoEcc(whClientContext* clientContext)
     ret    = wc_ecc_sign_hash(message, sizeof(message), (void*)signature,
                               (word32*)&outLen, rng, aliceKey);
     if (ret != 0) {
-        WOLFHSM_CFG_PRINTF("Failed to wc_ecc_shared_secret %d\n", ret);
+        WOLFHSM_CFG_PRINTF("Failed to wc_ecc_sign_hash %d\n", ret);
         goto exit;
     }
 
@@ -621,7 +621,7 @@ int wh_DemoClient_CryptoEccImport(whClientContext* clientContext)
     WC_RNG     rng[1];
     byte       sharedOne[32];
     byte       sharedTwo[32];
-    const char plainMessage[] = "The quick brown fox jumps over the lazy dog.";
+    const char plainMessage[16] = "message example";
     byte       message[sizeof(plainMessage)];
     byte       signature[128];
     uint8_t    keyBuf[256];
