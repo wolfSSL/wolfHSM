@@ -50,7 +50,7 @@ int wh_Client_KeyWrapRequest(whClientContext*   ctx,
 
 int wh_Client_KeyWrapResponse(whClientContext*   ctx,
                               enum wc_CipherType cipherType,
-                              void* wrappedKeyOut, uint16_t wrappedKeySz)
+                              void* wrappedKeyOut, uint16_t* wrappedKeySz)
 {
     int                                ret;
     uint16_t                           group;
@@ -59,7 +59,7 @@ int wh_Client_KeyWrapResponse(whClientContext*   ctx,
     whMessageKeystore_KeyWrapResponse* resp = NULL;
     uint8_t*                           respData;
 
-    if (ctx == NULL || wrappedKeyOut == NULL) {
+    if (ctx == NULL || wrappedKeyOut == NULL || wrappedKeySz == NULL) {
         return WH_ERROR_BADARGS;
     }
 
@@ -77,7 +77,7 @@ int wh_Client_KeyWrapResponse(whClientContext*   ctx,
     }
 
     if (group != WH_MESSAGE_GROUP_KEY || action != WH_KEY_KEYWRAP ||
-        size < sizeof(*resp) || size > sizeof(*resp) + wrappedKeySz ||
+        size < sizeof(*resp) || size > sizeof(*resp) + resp->wrappedKeySz ||
         resp->cipherType != cipherType) {
         return WH_ERROR_ABORTED;
     }
@@ -85,10 +85,14 @@ int wh_Client_KeyWrapResponse(whClientContext*   ctx,
     if (resp->rc != 0) {
         return resp->rc;
     }
+    else if (resp->wrappedKeySz > *wrappedKeySz) {
+        return WH_ERROR_BUFFER_SIZE;
+    }
 
     /* Copy the wrapped key from the response data into wrappedKeyOut */
     respData = (uint8_t*)(resp + 1);
-    memcpy(wrappedKeyOut, respData, wrappedKeySz);
+    memcpy(wrappedKeyOut, respData, resp->wrappedKeySz);
+    *wrappedKeySz = resp->wrappedKeySz;
 
     return WH_ERROR_OK;
 }
@@ -96,12 +100,12 @@ int wh_Client_KeyWrapResponse(whClientContext*   ctx,
 int wh_Client_KeyWrap(whClientContext* ctx, enum wc_CipherType cipherType,
                       uint16_t serverKeyId, void* keyIn, uint16_t keySz,
                       whNvmMetadata* metadataIn, void* wrappedKeyOut,
-                      uint16_t wrappedKeySz)
+                      uint16_t* wrappedKeySz)
 {
     int ret = WH_ERROR_OK;
 
     if (ctx == NULL || keyIn == NULL || metadataIn == NULL ||
-        wrappedKeyOut == NULL) {
+        wrappedKeyOut == NULL || wrappedKeySz == NULL) {
         return WH_ERROR_BADARGS;
     }
 
@@ -159,7 +163,7 @@ int wh_Client_KeyUnwrapAndExportRequest(whClientContext*   ctx,
 int wh_Client_KeyUnwrapAndExportResponse(whClientContext*   ctx,
                                          enum wc_CipherType cipherType,
                                          whNvmMetadata*     metadataOut,
-                                         void* keyOut, uint16_t keySz)
+                                         void* keyOut, uint16_t* keySz)
 {
     int                                           ret;
     uint16_t                                      group;
@@ -168,7 +172,7 @@ int wh_Client_KeyUnwrapAndExportResponse(whClientContext*   ctx,
     whMessageKeystore_KeyUnwrapAndExportResponse* resp = NULL;
     uint8_t*                                      respData;
 
-    if (ctx == NULL || metadataOut == NULL || keyOut == NULL) {
+    if (ctx == NULL || metadataOut == NULL || keyOut == NULL || keySz == NULL) {
         return WH_ERROR_BADARGS;
     }
 
@@ -188,7 +192,7 @@ int wh_Client_KeyUnwrapAndExportResponse(whClientContext*   ctx,
 
     if (group != WH_MESSAGE_GROUP_KEY || action != WH_KEY_KEYUNWRAPEXPORT ||
         size < sizeof(*resp) ||
-        size > sizeof(*resp) + sizeof(*metadataOut) + keySz ||
+        size > sizeof(*resp) + sizeof(*metadataOut) + resp->keySz ||
         resp->cipherType != cipherType) {
         return WH_ERROR_ABORTED;
     }
@@ -196,7 +200,7 @@ int wh_Client_KeyUnwrapAndExportResponse(whClientContext*   ctx,
     if (resp->rc != WH_ERROR_OK) {
         return resp->rc;
     }
-    else if (resp->keySz != keySz) {
+    else if (resp->keySz > *keySz) {
         return WH_ERROR_BUFFER_SIZE;
     }
 
@@ -204,7 +208,8 @@ int wh_Client_KeyUnwrapAndExportResponse(whClientContext*   ctx,
      * keyOut */
     respData = (uint8_t*)(resp + 1);
     memcpy(metadataOut, respData, sizeof(*metadataOut));
-    memcpy(keyOut, respData + sizeof(*metadataOut), keySz);
+    memcpy(keyOut, respData + sizeof(*metadataOut), resp->keySz);
+    *keySz = resp->keySz;
 
     return WH_ERROR_OK;
 }
@@ -214,12 +219,12 @@ int wh_Client_KeyUnwrapAndExport(whClientContext*   ctx,
                                  uint16_t serverKeyId, void* wrappedKeyIn,
                                  uint16_t       wrappedKeySz,
                                  whNvmMetadata* metadataOut, void* keyOut,
-                                 uint16_t keySz)
+                                 uint16_t* keySz)
 {
     int ret = WH_ERROR_OK;
 
     if (ctx == NULL || wrappedKeyIn == NULL || metadataOut == NULL ||
-        keyOut == NULL)
+        keyOut == NULL || keySz == NULL)
         return WH_ERROR_BADARGS;
 
     ret = wh_Client_KeyUnwrapAndExportRequest(ctx, cipherType, serverKeyId,
@@ -372,7 +377,7 @@ int wh_Client_DataWrapRequest(whClientContext*   ctx,
 
 int wh_Client_DataWrapResponse(whClientContext*   ctx,
                                enum wc_CipherType cipherType,
-                               void* wrappedDataOut, uint32_t wrappedDataSz)
+                               void* wrappedDataOut, uint32_t* wrappedDataSz)
 {
     int                                 ret;
     uint16_t                            group;
@@ -381,7 +386,7 @@ int wh_Client_DataWrapResponse(whClientContext*   ctx,
     whMessageKeystore_DataWrapResponse* resp = NULL;
     uint8_t*                            respData;
 
-    if (ctx == NULL || wrappedDataOut == NULL) {
+    if (ctx == NULL || wrappedDataOut == NULL || wrappedDataSz == NULL) {
         return WH_ERROR_BADARGS;
     }
 
@@ -399,8 +404,7 @@ int wh_Client_DataWrapResponse(whClientContext*   ctx,
     }
 
     if (group != WH_MESSAGE_GROUP_KEY || action != WH_KEY_DATAWRAP ||
-        size < sizeof(*resp) || size > sizeof(*resp) + wrappedDataSz ||
-        resp->wrappedDataSz != wrappedDataSz ||
+        size < sizeof(*resp) || size > sizeof(*resp) + resp->wrappedDataSz ||
         resp->cipherType != cipherType) {
         return WH_ERROR_ABORTED;
     }
@@ -408,20 +412,25 @@ int wh_Client_DataWrapResponse(whClientContext*   ctx,
     if (resp->rc != 0) {
         return resp->rc;
     }
+    else if (resp->wrappedDataSz > *wrappedDataSz) {
+        return WH_ERROR_BUFFER_SIZE;
+    }
 
     /* Copy the wrapped key from the response data into wrappedKeyOut */
     respData = (uint8_t*)(resp + 1);
-    memcpy(wrappedDataOut, respData, wrappedDataSz);
+    memcpy(wrappedDataOut, respData, resp->wrappedDataSz);
+    *wrappedDataSz = resp->wrappedDataSz;
 
     return WH_ERROR_OK;
 }
 
 int wh_Client_DataWrap(whClientContext* ctx, enum wc_CipherType cipherType,
                        uint16_t serverKeyId, void* dataIn, uint32_t dataInSz,
-                       void* wrappedDataOut, uint32_t wrappedDataOutSz)
+                       void* wrappedDataOut, uint32_t* wrappedDataOutSz)
 {
     int ret;
-    if (ctx == NULL || wrappedDataOut == NULL || dataIn == NULL) {
+    if (ctx == NULL || wrappedDataOut == NULL || dataIn == NULL ||
+        wrappedDataOutSz == NULL) {
         return WH_ERROR_BADARGS;
     }
 
@@ -476,7 +485,7 @@ int wh_Client_DataUnwrapRequest(whClientContext*   ctx,
 
 int wh_Client_DataUnwrapResponse(whClientContext*   ctx,
                                  enum wc_CipherType cipherType, void* dataOut,
-                                 uint32_t dataSz)
+                                 uint32_t* dataSz)
 {
     int                                   ret;
     uint16_t                              group;
@@ -503,28 +512,33 @@ int wh_Client_DataUnwrapResponse(whClientContext*   ctx,
     }
 
     if (group != WH_MESSAGE_GROUP_KEY || action != WH_KEY_DATAUNWRAP ||
-        size < sizeof(*resp) || size > sizeof(*resp) + dataSz ||
-        resp->dataSz != dataSz || resp->cipherType != cipherType) {
+        size < sizeof(*resp) || size > sizeof(*resp) + resp->dataSz ||
+        resp->cipherType != cipherType) {
         return WH_ERROR_ABORTED;
     }
 
     if (resp->rc != 0) {
         return resp->rc;
     }
+    else if (resp->dataSz > *dataSz) {
+        return WH_ERROR_BUFFER_SIZE;
+    }
 
     /* Copy the wrapped key from the response data into wrappedKeyOut */
     respData = (uint8_t*)(resp + 1);
-    memcpy(dataOut, respData, dataSz);
+    memcpy(dataOut, respData, resp->dataSz);
+    *dataSz = resp->dataSz;
 
     return WH_ERROR_OK;
 }
 int wh_Client_DataUnwrap(whClientContext* ctx, enum wc_CipherType cipherType,
                          uint16_t serverKeyId, void* wrappedDataIn,
                          uint32_t wrappedDataInSz, void* dataOut,
-                         uint32_t dataOutSz)
+                         uint32_t* dataOutSz)
 {
     int ret;
-    if (ctx == NULL || wrappedDataIn == NULL || dataOut == NULL) {
+    if (ctx == NULL || wrappedDataIn == NULL || dataOut == NULL ||
+        dataOutSz == NULL) {
         return WH_ERROR_BADARGS;
     }
 

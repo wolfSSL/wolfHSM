@@ -133,7 +133,9 @@ typedef uint16_t whCertFlags;
 /* Cache public key belonging to the leaf certificate */
 #define WH_CERT_FLAGS_CACHE_LEAF_PUBKEY ((whCertFlags)1 << 0)
 
-#define WOLFHSM_KEYWRAP_AES_GCM_TAG_SIZE 16
-#define WOLFHSM_KEYWRAP_AES_GCM_IV_SIZE 12
+#define WH_KEYWRAP_AES_GCM_TAG_SIZE 16
+#define WH_KEYWRAP_AES_GCM_IV_SIZE 12
+#define WH_KEYWRAP_AES_GCM_HEADER_SIZE \
+    (WH_KEYWRAP_AES_GCM_IV_SIZE + WH_KEYWRAP_AES_GCM_TAG_SIZE)
 
 #endif /* !WOLFHSM_WH_COMMON_H_ */

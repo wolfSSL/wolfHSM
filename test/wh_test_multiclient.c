@@ -531,7 +531,9 @@ static int _testGlobalKeyWrapExport(whClientContext* client1,
     /* Wrapped key size = IV(12) + TAG(16) + KEYSIZE(32) + metadata */
 #define WRAPPED_KEY_SIZE (12 + 16 + AES_256_KEY_SIZE + sizeof(whNvmMetadata))
     uint8_t       wrappedKey[WRAPPED_KEY_SIZE]   = {0};
+    uint16_t      wrappedKeySz                   = sizeof(wrappedKey);
     uint8_t       unwrappedKey[AES_256_KEY_SIZE] = {0};
+    uint16_t      unwrappedKeySz                 = sizeof(unwrappedKey);
     whNvmMetadata meta                           = {0};
 
     WH_TEST_PRINT("Test: Key wrap with global server key\n");
@@ -553,7 +555,7 @@ static int _testGlobalKeyWrapExport(whClientContext* client1,
                                                     sizeof(plainKey), &meta));
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server2));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyWrapResponse(
-        client2, WC_CIPHER_AES_GCM, wrappedKey, sizeof(wrappedKey)));
+        client2, WC_CIPHER_AES_GCM, wrappedKey, &wrappedKeySz));
 
     /* Client 1 unwraps the key using the same global server key */
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyUnwrapAndExportRequest(
@@ -561,7 +563,7 @@ static int _testGlobalKeyWrapExport(whClientContext* client1,
         sizeof(wrappedKey)));
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyUnwrapAndExportResponse(
-        client1, WC_CIPHER_AES_GCM, &meta, unwrappedKey, sizeof(unwrappedKey)));
+        client1, WC_CIPHER_AES_GCM, &meta, unwrappedKey, &unwrappedKeySz));
 
     /* Verify the unwrapped key matches the original */
     WH_TEST_ASSERT_RETURN(0 ==
@@ -597,6 +599,7 @@ static int _testGlobalKeyUnwrapCache(whClientContext* client1,
     uint8_t plainKey[AES_256_KEY_SIZE] = "KeyToCacheViaUnwrap123456!!";
 #define WRAPPED_KEY_SIZE (12 + 16 + AES_256_KEY_SIZE + sizeof(whNvmMetadata))
     uint8_t       wrappedKey[WRAPPED_KEY_SIZE] = {0};
+    uint16_t      wrappedKeySz                 = sizeof(wrappedKey);
     uint8_t       verifyBuf[AES_256_KEY_SIZE]  = {0};
     uint8_t       label[WH_NVM_LABEL_LEN];
     uint16_t      labelSz  = sizeof(label);
@@ -623,7 +626,7 @@ static int _testGlobalKeyUnwrapCache(whClientContext* client1,
                                                     sizeof(plainKey), &meta));
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyWrapResponse(
-        client1, WC_CIPHER_AES_GCM, wrappedKey, sizeof(wrappedKey)));
+        client1, WC_CIPHER_AES_GCM, wrappedKey, &wrappedKeySz));
 
     /* Client 2 unwraps and caches the key using the global server key */
     serverKeyId = WH_CLIENT_KEYID_MAKE_GLOBAL(DUMMY_KEYID_1);
@@ -683,7 +686,9 @@ static int _testWrappedKey_GlobalWrap_GlobalKey_Positive(
     uint8_t plainKey[AES_256_KEY_SIZE] = "GlobalPlainKey2Test7aXXXXXXXX!";
 #define WRAPPED_KEY_SIZE (12 + 16 + AES_256_KEY_SIZE + sizeof(whNvmMetadata))
     uint8_t       wrappedKey[WRAPPED_KEY_SIZE]   = {0};
+    uint16_t      wrappedKeySz                   = sizeof(wrappedKey);
     uint8_t       unwrappedKey[AES_256_KEY_SIZE] = {0};
+    uint16_t      unwrappedKeySz                 = sizeof(unwrappedKey);
     whNvmMetadata meta                           = {0};
 
     WH_TEST_DEBUG_PRINT("Test 7a: Global wrap key + Global wrapped key (Positive)\n");
@@ -705,7 +710,7 @@ static int _testWrappedKey_GlobalWrap_GlobalKey_Positive(
                                                     sizeof(plainKey), &meta));
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server2));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyWrapResponse(
-        client2, WC_CIPHER_AES_GCM, wrappedKey, sizeof(wrappedKey)));
+        client2, WC_CIPHER_AES_GCM, wrappedKey, &wrappedKeySz));
 
     /* Client 1 unwraps and exports the global key */
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyUnwrapAndExportRequest(
@@ -713,7 +718,7 @@ static int _testWrappedKey_GlobalWrap_GlobalKey_Positive(
         sizeof(wrappedKey)));
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyUnwrapAndExportResponse(
-        client1, WC_CIPHER_AES_GCM, &meta, unwrappedKey, sizeof(unwrappedKey)));
+        client1, WC_CIPHER_AES_GCM, &meta, unwrappedKey, &unwrappedKeySz));
 
     /* Verify the unwrapped key matches the original */
     WH_TEST_ASSERT_RETURN(0 ==
@@ -747,7 +752,9 @@ static int _testWrappedKey_GlobalWrap_GlobalKey_NonExportable(
     uint8_t plainKey[AES_256_KEY_SIZE] = "GlobalPlainKey2Test7bXXXXXXXX!";
 #define WRAPPED_KEY_SIZE (12 + 16 + AES_256_KEY_SIZE + sizeof(whNvmMetadata))
     uint8_t       wrappedKey[WRAPPED_KEY_SIZE]   = {0};
+    uint16_t      wrappedKeySz                   = sizeof(wrappedKey);
     uint8_t       unwrappedKey[AES_256_KEY_SIZE] = {0};
+    uint16_t      unwrappedKeySz                 = sizeof(unwrappedKey);
     whNvmMetadata meta                           = {0};
 
     WH_TEST_DEBUG_PRINT("Test 7b: Global wrap key + Global wrapped key (Non-exportable)\n");
@@ -770,7 +777,7 @@ static int _testWrappedKey_GlobalWrap_GlobalKey_NonExportable(
                                                     sizeof(plainKey), &meta));
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server2));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyWrapResponse(
-        client2, WC_CIPHER_AES_GCM, wrappedKey, sizeof(wrappedKey)));
+        client2, WC_CIPHER_AES_GCM, wrappedKey, &wrappedKeySz));
 
     /* Client 1 tries to unwrap and export - should fail */
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyUnwrapAndExportRequest(
@@ -778,7 +785,7 @@ static int _testWrappedKey_GlobalWrap_GlobalKey_NonExportable(
         sizeof(wrappedKey)));
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
     ret = wh_Client_KeyUnwrapAndExportResponse(
-        client1, WC_CIPHER_AES_GCM, &meta, unwrappedKey, sizeof(unwrappedKey));
+        client1, WC_CIPHER_AES_GCM, &meta, unwrappedKey, &unwrappedKeySz);
 
     /* Should fail due to non-exportable flag */
     WH_TEST_ASSERT_RETURN(ret != 0);
@@ -812,7 +819,9 @@ static int _testWrappedKey_GlobalWrap_LocalKey_OwnerExport(
     uint8_t  plainKey[AES_256_KEY_SIZE] = "LocalPlainKey2Test8aXXXXXXXXX!";
 #define WRAPPED_KEY_SIZE (12 + 16 + AES_256_KEY_SIZE + sizeof(whNvmMetadata))
     uint8_t       wrappedKey[WRAPPED_KEY_SIZE]   = {0};
+    uint16_t      wrappedKeySz                   = sizeof(wrappedKey);
     uint8_t       unwrappedKey[AES_256_KEY_SIZE] = {0};
+    uint16_t      unwrappedKeySz                 = sizeof(unwrappedKey);
     whNvmMetadata meta                           = {0};
 
     WH_TEST_DEBUG_PRINT("Test 8a: Global wrap key + Local wrapped key (Owner export)\n");
@@ -833,7 +842,7 @@ static int _testWrappedKey_GlobalWrap_LocalKey_OwnerExport(
                                                     sizeof(plainKey), &meta));
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server2));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyWrapResponse(
-        client2, WC_CIPHER_AES_GCM, wrappedKey, sizeof(wrappedKey)));
+        client2, WC_CIPHER_AES_GCM, wrappedKey, &wrappedKeySz));
 
     /* Client 2 (owner) unwraps and exports the local key */
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyUnwrapAndExportRequest(
@@ -841,7 +850,7 @@ static int _testWrappedKey_GlobalWrap_LocalKey_OwnerExport(
         sizeof(wrappedKey)));
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server2));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyUnwrapAndExportResponse(
-        client2, WC_CIPHER_AES_GCM, &meta, unwrappedKey, sizeof(unwrappedKey)));
+        client2, WC_CIPHER_AES_GCM, &meta, unwrappedKey, &unwrappedKeySz));
 
     /* Verify the unwrapped key matches the original */
     WH_TEST_ASSERT_RETURN(0 ==
@@ -878,7 +887,9 @@ static int _testWrappedKey_GlobalWrap_LocalKey_NonOwnerFails(
     uint8_t  plainKey[AES_256_KEY_SIZE] = "LocalPlainKey2Test8bXXXXXXXXX!";
 #define WRAPPED_KEY_SIZE (12 + 16 + AES_256_KEY_SIZE + sizeof(whNvmMetadata))
     uint8_t       wrappedKey[WRAPPED_KEY_SIZE]   = {0};
+    uint16_t      wrappedKeySz                   = sizeof(wrappedKey);
     uint8_t       unwrappedKey[AES_256_KEY_SIZE] = {0};
+    uint16_t      unwrappedKeySz                 = sizeof(unwrappedKey);
     whNvmMetadata meta                           = {0};
     whKeyId       cachedKeyId                    = 0;
 
@@ -900,7 +911,7 @@ static int _testWrappedKey_GlobalWrap_LocalKey_NonOwnerFails(
                                                     sizeof(plainKey), &meta));
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server2));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyWrapResponse(
-        client2, WC_CIPHER_AES_GCM, wrappedKey, sizeof(wrappedKey)));
+        client2, WC_CIPHER_AES_GCM, wrappedKey, &wrappedKeySz));
 
     /* Client 1 (non-owner) tries to unwrap and export - should fail */
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyUnwrapAndExportRequest(
@@ -908,7 +919,7 @@ static int _testWrappedKey_GlobalWrap_LocalKey_NonOwnerFails(
         sizeof(wrappedKey)));
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
     ret = wh_Client_KeyUnwrapAndExportResponse(
-        client1, WC_CIPHER_AES_GCM, &meta, unwrappedKey, sizeof(unwrappedKey));
+        client1, WC_CIPHER_AES_GCM, &meta, unwrappedKey, &unwrappedKeySz);
 
     /* Should fail - Client 1 is not the owner */
     WH_TEST_ASSERT_RETURN(ret == WH_ERROR_ACCESS);
@@ -953,7 +964,9 @@ static int _testWrappedKey_LocalWrap_LocalKey_SameOwner(
     uint8_t  plainKey[AES_256_KEY_SIZE] = "LocalPlainKey2Test9aXXXXXXXXX!";
 #define WRAPPED_KEY_SIZE (12 + 16 + AES_256_KEY_SIZE + sizeof(whNvmMetadata))
     uint8_t       wrappedKey[WRAPPED_KEY_SIZE]   = {0};
+    uint16_t      wrappedKeySz                   = sizeof(wrappedKey);
     uint8_t       unwrappedKey[AES_256_KEY_SIZE] = {0};
+    uint16_t      unwrappedKeySz                 = sizeof(unwrappedKey);
     whNvmMetadata meta                           = {0};
 
     WH_TEST_DEBUG_PRINT("Test 9a: Local wrap key + Local wrapped key (Same owner)\n");
@@ -974,7 +987,7 @@ static int _testWrappedKey_LocalWrap_LocalKey_SameOwner(
                                                     sizeof(plainKey), &meta));
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyWrapResponse(
-        client1, WC_CIPHER_AES_GCM, wrappedKey, sizeof(wrappedKey)));
+        client1, WC_CIPHER_AES_GCM, wrappedKey, &wrappedKeySz));
 
     /* Client 1 (owner) unwraps and exports the local key */
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyUnwrapAndExportRequest(
@@ -982,7 +995,7 @@ static int _testWrappedKey_LocalWrap_LocalKey_SameOwner(
         sizeof(wrappedKey)));
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyUnwrapAndExportResponse(
-        client1, WC_CIPHER_AES_GCM, &meta, unwrappedKey, sizeof(unwrappedKey)));
+        client1, WC_CIPHER_AES_GCM, &meta, unwrappedKey, &unwrappedKeySz));
 
     /* Verify the unwrapped key matches the original */
     WH_TEST_ASSERT_RETURN(0 ==
@@ -1021,7 +1034,9 @@ static int _testWrappedKey_LocalWrap_LocalKey_NoAccessWithoutWrapKey(
     uint8_t  plainKey[AES_256_KEY_SIZE] = "LocalPlainKey2Test9bXXXXXXXXX!";
 #define WRAPPED_KEY_SIZE (12 + 16 + AES_256_KEY_SIZE + sizeof(whNvmMetadata))
     uint8_t       wrappedKey[WRAPPED_KEY_SIZE]   = {0};
+    uint16_t      wrappedKeySz                   = sizeof(wrappedKey);
     uint8_t       unwrappedKey[AES_256_KEY_SIZE] = {0};
+    uint16_t      unwrappedKeySz                 = sizeof(unwrappedKey);
     whNvmMetadata meta                           = {0};
 
     WH_TEST_DEBUG_PRINT(
@@ -1043,7 +1058,7 @@ static int _testWrappedKey_LocalWrap_LocalKey_NoAccessWithoutWrapKey(
                                                     sizeof(plainKey), &meta));
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyWrapResponse(
-        client1, WC_CIPHER_AES_GCM, wrappedKey, sizeof(wrappedKey)));
+        client1, WC_CIPHER_AES_GCM, wrappedKey, &wrappedKeySz));
 
     /* Client 2 tries to unwrap - should fail (no wrapping key) */
     ret = wh_Client_KeyUnwrapAndExportRequest(client2, WC_CIPHER_AES_GCM,
@@ -1051,9 +1066,8 @@ static int _testWrappedKey_LocalWrap_LocalKey_NoAccessWithoutWrapKey(
                                               sizeof(wrappedKey));
     if (ret == 0) {
         WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server2));
-        ret = wh_Client_KeyUnwrapAndExportResponse(client2, WC_CIPHER_AES_GCM,
-                                                   &meta, unwrappedKey,
-                                                   sizeof(unwrappedKey));
+        ret = wh_Client_KeyUnwrapAndExportResponse(
+            client2, WC_CIPHER_AES_GCM, &meta, unwrappedKey, &unwrappedKeySz);
     }
 
     /* Should fail - Client 2 doesn't have the wrapping key */
@@ -1089,6 +1103,7 @@ static int _testWrappedKey_LocalWrap_GlobalKey_AnyCacheGlobal(
     uint8_t plainKey[AES_256_KEY_SIZE] = "GlobalPlainKey2Test10aXXXXXXX!";
 #define WRAPPED_KEY_SIZE (12 + 16 + AES_256_KEY_SIZE + sizeof(whNvmMetadata))
     uint8_t       wrappedKey[WRAPPED_KEY_SIZE]  = {0};
+    uint16_t      wrappedKeySz                  = sizeof(wrappedKey);
     uint8_t       exportedKey[AES_256_KEY_SIZE] = {0};
     uint8_t       label[WH_NVM_LABEL_LEN];
     uint16_t      labelSz     = sizeof(label);
@@ -1115,7 +1130,7 @@ static int _testWrappedKey_LocalWrap_GlobalKey_AnyCacheGlobal(
                                                     sizeof(plainKey), &meta));
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyWrapResponse(
-        client1, WC_CIPHER_AES_GCM, wrappedKey, sizeof(wrappedKey)));
+        client1, WC_CIPHER_AES_GCM, wrappedKey, &wrappedKeySz));
 
     /* Client 1 unwraps and caches to global cache */
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyUnwrapAndCacheRequest(
@@ -1169,7 +1184,9 @@ static int _testWrappedKey_LocalWrap_GlobalKey_NonOwnerNoWrapKey(
     uint8_t plainKey[AES_256_KEY_SIZE] = "GlobalPlainKey2Test10bXXXXXXX!";
 #define WRAPPED_KEY_SIZE (12 + 16 + AES_256_KEY_SIZE + sizeof(whNvmMetadata))
     uint8_t       wrappedKey[WRAPPED_KEY_SIZE]   = {0};
+    uint16_t      wrappedKeySz                   = sizeof(wrappedKey);
     uint8_t       unwrappedKey[AES_256_KEY_SIZE] = {0};
+    uint16_t      unwrappedKeySz                 = sizeof(unwrappedKey);
     whNvmMetadata meta                           = {0};
 
     WH_TEST_DEBUG_PRINT("Test 10b: Local wrap key + Global wrapped key (No wrap key)\n");
@@ -1191,7 +1208,7 @@ static int _testWrappedKey_LocalWrap_GlobalKey_NonOwnerNoWrapKey(
                                                     sizeof(plainKey), &meta));
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyWrapResponse(
-        client1, WC_CIPHER_AES_GCM, wrappedKey, sizeof(wrappedKey)));
+        client1, WC_CIPHER_AES_GCM, wrappedKey, &wrappedKeySz));
 
     /* Client 2 tries to unwrap - should fail (no wrapping key) */
     ret = wh_Client_KeyUnwrapAndExportRequest(client2, WC_CIPHER_AES_GCM,
@@ -1199,9 +1216,8 @@ static int _testWrappedKey_LocalWrap_GlobalKey_NonOwnerNoWrapKey(
                                               sizeof(wrappedKey));
     if (ret == 0) {
         WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server2));
-        ret = wh_Client_KeyUnwrapAndExportResponse(client2, WC_CIPHER_AES_GCM,
-                                                   &meta, unwrappedKey,
-                                                   sizeof(unwrappedKey));
+        ret = wh_Client_KeyUnwrapAndExportResponse(
+            client2, WC_CIPHER_AES_GCM, &meta, unwrappedKey, &unwrappedKeySz);
     }
 
     /* Should fail - Client 2 doesn't have the wrapping key */

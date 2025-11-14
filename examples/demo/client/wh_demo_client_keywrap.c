@@ -79,6 +79,7 @@ int wh_DemoClient_AesGcmKeyWrap(whClientContext* client)
     WC_RNG        rng[1];
     uint8_t       key[WH_DEMO_KEYWRAP_AES_KEYSIZE];
     uint8_t       exportedKey[WH_DEMO_KEYWRAP_AES_KEYSIZE];
+    uint16_t      exportedKeySz = sizeof(exportedKey);
     whNvmMetadata metadata = {
         .id = WH_CLIENT_KEYID_MAKE_WRAPPED_META(
             client->comm->client_id, WH_DEMO_KEYWRAP_AESGCM_WRAPKEY_ID),
@@ -88,6 +89,7 @@ int wh_DemoClient_AesGcmKeyWrap(whClientContext* client)
         .len    = WH_DEMO_KEYWRAP_AES_KEYSIZE};
     whNvmMetadata exportedMetadata;
     uint8_t       wrappedKey[WH_DEMO_KEYWRAP_AES_WRAPPED_KEYSIZE];
+    uint16_t      wrappedKeySz = sizeof(wrappedKey);
     whKeyId       wrappedKeyId;
 
     const uint8_t plaintext[] = "hello, wolfSSL AES-GCM!";
@@ -131,9 +133,9 @@ int wh_DemoClient_AesGcmKeyWrap(whClientContext* client)
 
     /* Now we request the server to wrap the key using the KEK we
      * establish above in the first step. */
-    ret = wh_Client_KeyWrap(client, WC_CIPHER_AES_GCM, WH_DEMO_KEYWRAP_KEKID,
-                            key, sizeof(key), &metadata, wrappedKey,
-                            sizeof(wrappedKey));
+    ret =
+        wh_Client_KeyWrap(client, WC_CIPHER_AES_GCM, WH_DEMO_KEYWRAP_KEKID, key,
+                          sizeof(key), &metadata, wrappedKey, &wrappedKeySz);
     if (ret != 0) {
         WOLFHSM_CFG_PRINTF("Failed to wh_Client_KeyWrap %d\n", ret);
         goto cleanup_rng;
@@ -212,10 +214,9 @@ int wh_DemoClient_AesGcmKeyWrap(whClientContext* client)
     /* Exporting a wrapped key */
 
     /* Request the server to unwrap and export the wrapped key we created */
-    ret = wh_Client_KeyUnwrapAndExport(client, WC_CIPHER_AES_GCM,
-                                       WH_DEMO_KEYWRAP_KEKID, wrappedKey,
-                                       sizeof(wrappedKey), &exportedMetadata,
-                                       exportedKey, sizeof(exportedKey));
+    ret = wh_Client_KeyUnwrapAndExport(
+        client, WC_CIPHER_AES_GCM, WH_DEMO_KEYWRAP_KEKID, wrappedKey,
+        sizeof(wrappedKey), &exportedMetadata, exportedKey, &exportedKeySz);
     if (ret != 0) {
         WOLFHSM_CFG_PRINTF("Failed to wh_Client_KeyUnwrapAndCache %d\n", ret);
         goto cleanup_aes;

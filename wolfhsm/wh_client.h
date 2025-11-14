@@ -884,13 +884,15 @@ int wh_Client_KeyExportDma(whClientContext* c, uint16_t keyId,
  * @param[in] keySz The size in bytes of the key material to wrap.
  * @param[in] metadataIn Pointer to the metadata for the wrapped key.
  * @param[out] wrappedKeyOut Pointer to store the wrapped key.
- * @param[in] wrappedKeySz Size of the wrappedKeyOut buffer.
+ * @param[in/out] wrappedKeySz IN: Size of wrappedKeyOut in bytes.
+ *                             OUT: Size of the total wrapped key object.
+ *                             OUT may be less than IN.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_Client_KeyWrap(whClientContext* ctx, enum wc_CipherType cipherType,
                       uint16_t serverKeyId, void* keyIn, uint16_t keySz,
                       whNvmMetadata* metadataIn, void* wrappedKeyOut,
-                      uint16_t wrappedKeySz);
+                      uint16_t* wrappedKeySz);
 
 /**
  * @brief Sends a key wrap request to the server
@@ -924,12 +926,14 @@ int wh_Client_KeyWrapRequest(whClientContext*   ctx,
  * @param[in] ctx Pointer to the client context.
  * @param[in] cipherType Cipher used to wrap the key.
  * @param[out] wrappedKeyOut Pointer to store the wrapped key.
- * @param[in] wrappedKeySz Size of the wrappedKeyOut buffer.
+ * @param[in/out] wrappedKeySz IN: Size of the wrappedKeyOut buffer.
+ *                             OUT: Size of the wrapped key object.
+ *                             OUT may be less than IN
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_Client_KeyWrapResponse(whClientContext*   ctx,
                               enum wc_CipherType cipherType,
-                              void* wrappedKeyOut, uint16_t wrappedKeySz);
+                              void* wrappedKeyOut, uint16_t* wrappedKeySz);
 
 /**
  * @brief Requests the server to unwrap and export a wrapped key and receives
@@ -948,7 +952,9 @@ int wh_Client_KeyWrapResponse(whClientContext*   ctx,
  * @param[in] wrappedKeySz The size in bytes of the wrapped key data.
  * @param[out] metadataOut Pointer to store the unwrapped key metadata.
  * @param[out] keyOut Pointer to store the unwrapped key.
- * @param[in] keySz Size of the keyOut buffer.
+ * @param[in/out] keySz IN: Size of the keyOut buffer.
+ *                      OUT: Size of the exported key.
+ *                      OUT may be less than IN.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_Client_KeyUnwrapAndExport(whClientContext*   ctx,
@@ -956,7 +962,7 @@ int wh_Client_KeyUnwrapAndExport(whClientContext*   ctx,
                                  uint16_t serverKeyId, void* wrappedKeyIn,
                                  uint16_t       wrappedKeySz,
                                  whNvmMetadata* metadataOut, void* keyOut,
-                                 uint16_t keySz);
+                                 uint16_t* keySz);
 
 /**
  * @brief Requests the server to unwrap-and-export a wrapped key
@@ -992,13 +998,15 @@ int wh_Client_KeyUnwrapAndExportRequest(whClientContext*   ctx,
  * @param[in] cipherType Cipher used when for unwrapping the key.
  * @param[out] metadataOut Pointer to store the unwrapped key metadata.
  * @param[out] keyOut Pointer to store the unwrapped key.
- * @param[in] keySz Size of the keyOut buffer.
+ * @param[in/out] keySz IN: Size of the keyOut buffer.
+ *                      OUT: Size of the exported key.
+ *                      OUT may be less than IN.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_Client_KeyUnwrapAndExportResponse(whClientContext*   ctx,
                                          enum wc_CipherType cipherType,
                                          whNvmMetadata*     metadataOut,
-                                         void* keyOut, uint16_t keySz);
+                                         void* keyOut, uint16_t* keySz);
 
 /**
  * @brief Requests the server to unwrap and cache a wrapped key and receives the
@@ -1073,12 +1081,13 @@ int wh_Client_KeyUnwrapAndCacheResponse(whClientContext*   ctx,
  * @param[in] dataInSz The size in bytes of the plaintext data.
  * @param[out] wrappedDataOut The pointer to the buffer that stores the
  * resulting wrapped data.
- * @param[out] wrappedDataOutSz The size in bytes of the wrapped data buffer.
+ * @param[in/out] wrappedDataOutSz IN: The size in bytes of the wrapped data
+ * buffer. OUT: The size of the wrapped data object. OUT may be less than IN.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_Client_DataWrap(whClientContext* ctx, enum wc_CipherType cipherType,
                        uint16_t serverKeyId, void* dataIn, uint32_t dataInSz,
-                       void* wrappedDataOut, uint32_t wrappedDataOutSz);
+                       void* wrappedDataOut, uint32_t* wrappedDataOutSz);
 
 /**
  * @brief Helper function to unwrap a wrapped data object using a specified key
@@ -1094,13 +1103,15 @@ int wh_Client_DataWrap(whClientContext* ctx, enum wc_CipherType cipherType,
  * @param[in] wrappedDataInSz The size in bytes of the wrapped data object.
  * @param[out] dataOut The pointer to the buffer that stores the
  * resulting unwrapped data.
- * @param[out] dataOutSz The size in bytes of the unwrapped data buffer.
+ * @param[in/out] dataOutSz IN: The size in bytes of the unwrapped data buffer.
+ *                                OUT: The size of the unwrapped data object.
+ *                                OUT may be less than IN.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_Client_DataUnwrap(whClientContext* ctx, enum wc_CipherType cipherType,
                          uint16_t serverKeyId, void* wrappedDataIn,
                          uint32_t wrappedDataInSz, void* dataOut,
-                         uint32_t dataOutSz);
+                         uint32_t* dataOutSz);
 
 /* Counter functions */
 int wh_Client_CounterInitRequest(whClientContext* c, whNvmId counterId,
