@@ -194,22 +194,23 @@ static int _SendRecieveWithTimeout(whClientContext* ctx, uint16_t* group,
         ret = wh_Client_TimeoutStart(ctx);
     }
 #endif
-
-    do {
-        ret = wh_Client_RecvResponse(ctx, group, action, res_len, data);
-#if defined(WOLFHSM_CFG_CLIENT_TIMEOUT)
-        if (ret == WH_ERROR_NOTREADY) {
-            /* Check for crypto timeout */
-            int chk = wh_Client_TimeoutCheck(ctx);
-            if (chk == WH_ERROR_TIMEOUT) {
-                return WH_ERROR_TIMEOUT;
+    if (ret == WH_ERROR_OK) {
+        do {
+            ret = wh_Client_RecvResponse(ctx, group, action, res_len, data);
+    #if defined(WOLFHSM_CFG_CLIENT_TIMEOUT)
+            if (ret == WH_ERROR_NOTREADY) {
+                /* Check for crypto timeout */
+                int chk = wh_Client_TimeoutCheck(ctx);
+                if (chk == WH_ERROR_TIMEOUT) {
+                    return WH_ERROR_TIMEOUT;
+                }
+                else if (chk < 0 && chk != WH_ERROR_OK) {
+                    return chk;
+                }
             }
-            else if (chk < 0 && chk != WH_ERROR_OK) {
-                return chk;
-            }
-        }
-#endif
-    } while (ret == WH_ERROR_NOTREADY);
+    #endif
+        } while (ret == WH_ERROR_NOTREADY);
+    }
     return ret;
 }
 
