@@ -107,8 +107,7 @@ uint64_t whTest_GetCurrentTime(int reset)
         return 0;
 
     /* Convert to milliseconds number. */
-    return (uint64_t)ts.tv_sec * 1000ULL +
-           (uint64_t)ts.tv_nsec / 1000000ULL;
+    return (uint64_t)ts.tv_sec * 1000ULL + (uint64_t)ts.tv_nsec / 1000000ULL;
 #else
     struct timeval tv;
     if (gettimeofday(&tv, 0) < 0)

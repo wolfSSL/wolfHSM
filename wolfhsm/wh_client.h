@@ -138,10 +138,10 @@ typedef struct {
      * GetCurrentTime() to return time in milliseconds as well.
      *
      * Parameters:
-     *  start_time - Pointer to the start time value as returned by GetCurrentTime().
-     *  timeout_value - Timeout value conversion in defined time units.
-     *            The default is in milliseconds, but it can be customized
-     *            by WH_BASE_TIMEOUT_UNIT.
+     *  start_time - Pointer to the start time value as returned by
+     * GetCurrentTime(). timeout_value - Timeout value conversion in defined
+     * time units. The default is in milliseconds, but it can be customized by
+     * WH_BASE_TIMEOUT_UNIT.
      *
      * Returns:
      *  WH_ERROR_OK      - Not timed out,
@@ -152,20 +152,20 @@ typedef struct {
 
 typedef struct {
     whClientTimeOutCb cb;
-    wh_timeval timeout_val;
+    wh_timeval        timeout_val;
     /* start_time stores the time returned by the GetCurrentTime()
      * callback when the operation started.
      * The actual unit depends on the GetCurrentTime() implementation.
      */
     uint64_t start_time;
-    uint8_t timeout_enabled;
+    uint8_t  timeout_enabled;
     uint8_t  WH_PAD[7];
 } whClientTimeOutContext;
 
 typedef struct {
     whClientTimeOutCb cb;
-    wh_timeval timeout_val;
-    uint8_t timeout_enabled;
+    wh_timeval        timeout_val;
+    uint8_t           timeout_enabled;
 } whClientTimeOutConfig;
 
 /* Client context */
@@ -2707,11 +2707,9 @@ int wh_Client_TimeoutStart(whClientContext* context);
 /* Check Client Timeout */
 int wh_Client_TimeoutCheck(whClientContext* context);
 /* Register Client Timeout Callback */
-int wh_Client_TimeoutRegisterCb(whClientContext* client,
-                                            whClientTimeOutCb* cb);
+int wh_Client_TimeoutRegisterCb(whClientContext* client, whClientTimeOutCb* cb);
 /* Set Client Timeout */
-int wh_Client_TimeoutSet(whClientContext* client,
-                                            wh_timeval* timeout_val);
+int wh_Client_TimeoutSet(whClientContext* client, wh_timeval* timeout_val);
 #endif /* WOLFHSM_CFG_CLIENT_TIMEOUT */
 
 #endif /* !WOLFHSM_WH_CLIENT_H_ */

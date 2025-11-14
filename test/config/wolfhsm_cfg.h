@@ -69,8 +69,7 @@
 #define WOLFHSM_CFG_SERVER_NVM_FLASH_LOG
 
 /* Enable client crypto timeout feature for testing */
-#if defined(WOLFHSM_CFG_CLIENT_TIMEOUT) && \
-    defined(WOLFHSM_CFG_TEST_POSIX)
+#if defined(WOLFHSM_CFG_CLIENT_TIMEOUT) && defined(WOLFHSM_CFG_TEST_POSIX)
 #define WOLFHSM_CFG_CLIENT_TIMEOUT_USEC (500000) /* 500ms */
 #define WOLFHSM_CFG_TEST_CLIENT_TIMEOUT
 #endif /* WOLFHSM_CFG_TEST_CLIENT_TIMEOUT */
