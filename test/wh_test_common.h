@@ -147,10 +147,10 @@ int whTest_NvmCfgBackend(whTestNvmBackendType   type,
 uint64_t whTest_GetCurrentTime(int reset);
 int      whTest_CheckTimeout(uint64_t* start_time, uint64_t timeout_val);
 
-#define WH_CLIENT_TIMEOUT_CB                  \
-    {                                                \
-        .GetCurrentTime = whTest_GetCurrentTime,     \
-        .CheckTimeout   = whTest_CheckTimeout, \
+#define WH_CLIENT_TIMEOUT_CB                     \
+    {                                            \
+        .GetCurrentTime = whTest_GetCurrentTime, \
+        .CheckTimeout   = whTest_CheckTimeout,   \
     }
 
 #endif /* WH_TEST_COMMON_H_ */

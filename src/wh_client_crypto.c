@@ -181,9 +181,9 @@ static int _getCryptoResponse(uint8_t* respBuf, uint16_t type,
 
     return header->rc;
 }
-static int _SendRecieveWithTimeout(whClientContext *ctx,
-        uint16_t *group, uint16_t *action, uint16_t req_len,
-        uint16_t *res_len, void* data)
+static int _SendRecieveWithTimeout(whClientContext* ctx, uint16_t* group,
+                                   uint16_t* action, uint16_t req_len,
+                                   uint16_t* res_len, void* data)
 {
 
     int ret = WH_ERROR_OK;
@@ -203,7 +203,8 @@ static int _SendRecieveWithTimeout(whClientContext *ctx,
             int chk = wh_Client_TimeoutCheck(ctx);
             if (chk == WH_ERROR_TIMEOUT) {
                 return WH_ERROR_TIMEOUT;
-            } else if (chk < 0 && chk != WH_ERROR_OK) {
+            }
+            else if (chk < 0 && chk != WH_ERROR_OK) {
                 return chk;
             }
         }
@@ -263,8 +264,8 @@ int wh_Client_RngGenerate(whClientContext* ctx, uint8_t* out, uint32_t size)
         /* Send request and get response with Timeout */
         if (ret == 0) {
             do {
-                ret = _SendRecieveWithTimeout(ctx, &group, &action,
-                                                    req_len, &res_len, dataPtr);
+                ret = _SendRecieveWithTimeout(ctx, &group, &action, req_len,
+                                              &res_len, dataPtr);
             } while (ret == WH_ERROR_NOTREADY);
         }
         if (ret == WH_ERROR_OK) {
@@ -444,9 +445,8 @@ int wh_Client_AesCtr(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
         /* Response packet */
         uint16_t res_len = 0;
         do {
-            ret =
-                _SendRecieveWithTimeout(ctx, &group, &action,
-                                                    req_len, &res_len, dataPtr);
+            ret = _SendRecieveWithTimeout(ctx, &group, &action, req_len,
+                                          &res_len, dataPtr);
         } while (ret == WH_ERROR_NOTREADY);
 
         if (ret == WH_ERROR_OK) {
@@ -558,9 +558,8 @@ int wh_Client_AesEcb(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
         /* Response packet */
         uint16_t res_len = 0;
         do {
-            ret =
-                _SendRecieveWithTimeout(ctx, &group, &action,
-                                                req_len, &res_len, dataPtr);
+            ret = _SendRecieveWithTimeout(ctx, &group, &action, req_len,
+                                          &res_len, dataPtr);
         } while (ret == WH_ERROR_NOTREADY);
 
         if (ret == WH_ERROR_OK) {
@@ -668,9 +667,8 @@ int wh_Client_AesCbc(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
         /* Response packet */
         uint16_t res_len = 0;
         do {
-            ret =
-                _SendRecieveWithTimeout(ctx, &group, &action,
-                                                    req_len, &res_len, dataPtr);
+            ret = _SendRecieveWithTimeout(ctx, &group, &action, req_len,
+                                          &res_len, dataPtr);
         } while (ret == WH_ERROR_NOTREADY);
 
         if (ret == WH_ERROR_OK) {
@@ -790,9 +788,8 @@ int wh_Client_AesGcm(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
     if (ret == 0) {
         uint16_t res_len = 0;
         do {
-            ret =
-                _SendRecieveWithTimeout(ctx, &group, &action,
-                                                req_len, &res_len, dataPtr);
+            ret = _SendRecieveWithTimeout(ctx, &group, &action, req_len,
+                                          &res_len, dataPtr);
         } while (ret == WH_ERROR_NOTREADY);
 
         if (ret == WH_ERROR_OK) {
@@ -989,9 +986,8 @@ int wh_Client_AesGcmDma(whClientContext* ctx, Aes* aes, int enc,
     if (ret == 0) {
         uint16_t resLen = 0;
         do {
-            ret =
-                _SendRecieveWithTimeout(ctx, &group, &action,
-                                                reqLen, &resLen, dataPtr);
+            ret = _SendRecieveWithTimeout(ctx, &group, &action, reqLen, &resLen,
+                                          dataPtr);
         } while (ret == WH_ERROR_NOTREADY);
 
         if (ret == WH_ERROR_OK) {

@@ -82,9 +82,9 @@ int wh_Client_Init(whClientContext* c, const whClientConfig* config)
 #endif
 #if defined(WOLFHSM_CFG_CLIENT_TIMEOUT)
     if (NULL != config->timeoutConfig) {
-        c->timeout.timeout_val = config->timeoutConfig->timeout_val;
+        c->timeout.timeout_val     = config->timeoutConfig->timeout_val;
         c->timeout.timeout_enabled = config->timeoutConfig->timeout_enabled;
-        c->timeout.start_time = 0;
+        c->timeout.start_time      = 0;
     }
 #endif
     rc = wh_CommClient_Init(c->comm, config->comm);
@@ -1525,9 +1525,10 @@ int wh_Client_KeyExportDma(whClientContext* c, uint16_t keyId,
 #if defined(WOLFHSM_CFG_CLIENT_TIMEOUT)
 static uint64_t wh_timeval_to_64(const wh_timeval* tv)
 {
-    if (tv == NULL) return 0;
-    return (uint64_t)tv->tv_sec * WH_BASE_TIMEOUT_UNIT
-                + (uint64_t)((tv->tv_usec * WH_BASE_TIMEOUT_UNIT) / 1000000ULL);
+    if (tv == NULL)
+        return 0;
+    return (uint64_t)tv->tv_sec * WH_BASE_TIMEOUT_UNIT +
+           (uint64_t)((tv->tv_usec * WH_BASE_TIMEOUT_UNIT) / 1000000ULL);
 }
 /* Start Timeout */
 int wh_Client_TimeoutStart(whClientContext* c)
@@ -1575,8 +1576,7 @@ int wh_Client_TimeoutCheck(whClientContext* c)
 
     /* check timeout by user cb if defined */
     if (c->timeout.cb.CheckTimeout != NULL) {
-            return c->timeout.cb.CheckTimeout(
-                &c->timeout.start_time, timeout_);
+        return c->timeout.cb.CheckTimeout(&c->timeout.start_time, timeout_);
     }
 
     /* Otherwise compute elapsed using user-provided GetCurrentTime */
@@ -1589,8 +1589,7 @@ int wh_Client_TimeoutCheck(whClientContext* c)
     return WH_ERROR_OK;
 }
 
-int wh_Client_TimeoutRegisterCb(whClientContext* client,
-                                            whClientTimeOutCb* cb)
+int wh_Client_TimeoutRegisterCb(whClientContext* client, whClientTimeOutCb* cb)
 {
     /* No NULL check for cb, since it is optional and always NULL checked before
      * it is called */
@@ -1599,13 +1598,12 @@ int wh_Client_TimeoutRegisterCb(whClientContext* client,
     }
 
     client->timeout.cb.GetCurrentTime = cb->GetCurrentTime;
-    client->timeout.cb.CheckTimeout  = cb->CheckTimeout;
+    client->timeout.cb.CheckTimeout   = cb->CheckTimeout;
 
     return WH_ERROR_OK;
 }
 
-int wh_Client_TimeoutSet(whClientContext* client,
-                                            wh_timeval* timeout_val)
+int wh_Client_TimeoutSet(whClientContext* client, wh_timeval* timeout_val)
 {
     if (NULL == client) {
         return WH_ERROR_BADARGS;
@@ -1613,9 +1611,9 @@ int wh_Client_TimeoutSet(whClientContext* client,
 
     if (timeout_val != NULL) {
         client->timeout.timeout_enabled = 1;
-        memcpy(&client->timeout.timeout_val, timeout_val,
-               sizeof(wh_timeval));
-    } else {
+        memcpy(&client->timeout.timeout_val, timeout_val, sizeof(wh_timeval));
+    }
+    else {
         client->timeout.timeout_enabled = 0;
         memset(&client->timeout.timeout_val, 0, sizeof(wh_timeval));
     }
