@@ -706,8 +706,8 @@ static int _AesGcmKeyWrap(whServerContext* server, whKeyId serverKeyId,
 {
     int      ret = 0;
     Aes      aes[1];
-    uint8_t  authTag[WOLFHSM_KEYWRAP_AES_GCM_TAG_SIZE];
-    uint8_t  iv[WOLFHSM_KEYWRAP_AES_GCM_IV_SIZE];
+    uint8_t  authTag[WH_KEYWRAP_AES_GCM_TAG_SIZE];
+    uint8_t  iv[WH_KEYWRAP_AES_GCM_IV_SIZE];
     uint8_t* serverKey;
     uint32_t serverKeySz;
     whNvmMetadata* serverKeyMetadata;
@@ -791,8 +791,8 @@ static int _AesGcmKeyUnwrap(whServerContext* server, uint16_t serverKeyId,
 {
     int      ret = 0;
     Aes      aes[1];
-    uint8_t  authTag[WOLFHSM_KEYWRAP_AES_GCM_TAG_SIZE];
-    uint8_t  iv[WOLFHSM_KEYWRAP_AES_GCM_IV_SIZE];
+    uint8_t  authTag[WH_KEYWRAP_AES_GCM_TAG_SIZE];
+    uint8_t  iv[WH_KEYWRAP_AES_GCM_IV_SIZE];
     uint8_t* serverKey;
     uint32_t serverKeySz;
     whNvmMetadata* serverKeyMetadata;
@@ -858,8 +858,8 @@ static int _AesGcmDataWrap(whServerContext* server, whKeyId serverKeyId,
 {
     int      ret = 0;
     Aes      aes[1];
-    uint8_t  authTag[WOLFHSM_KEYWRAP_AES_GCM_TAG_SIZE];
-    uint8_t  iv[WOLFHSM_KEYWRAP_AES_GCM_IV_SIZE];
+    uint8_t  authTag[WH_KEYWRAP_AES_GCM_TAG_SIZE];
+    uint8_t  iv[WH_KEYWRAP_AES_GCM_IV_SIZE];
     uint8_t* serverKey;
     uint32_t serverKeySz;
     whNvmMetadata* serverKeyMetadata;
@@ -927,8 +927,8 @@ static int _AesGcmDataUnwrap(whServerContext* server, uint16_t serverKeyId,
 {
     int      ret = 0;
     Aes      aes[1];
-    uint8_t  authTag[WOLFHSM_KEYWRAP_AES_GCM_TAG_SIZE];
-    uint8_t  iv[WOLFHSM_KEYWRAP_AES_GCM_IV_SIZE];
+    uint8_t  authTag[WH_KEYWRAP_AES_GCM_TAG_SIZE];
+    uint8_t  iv[WH_KEYWRAP_AES_GCM_IV_SIZE];
     uint8_t*  serverKey;
     uint32_t serverKeySz;
     whNvmMetadata* serverKeyMetadata;
@@ -1030,9 +1030,8 @@ static int _HandleKeyWrapRequest(whServerContext*                  server,
 #ifndef NO_AES
 #ifdef HAVE_AESGCM
         case WC_CIPHER_AES_GCM: {
-            uint16_t wrappedKeySz = WOLFHSM_KEYWRAP_AES_GCM_IV_SIZE +
-                                    WOLFHSM_KEYWRAP_AES_GCM_TAG_SIZE +
-                                    sizeof(metadata) + req->keySz;
+            uint16_t wrappedKeySz =
+                WH_KEYWRAP_AES_GCM_HEADER_SIZE + sizeof(metadata) + req->keySz;
 
             /* Check if the response data can fit the wrapped key */
             if (respDataSz < wrappedKeySz) {
@@ -1104,9 +1103,8 @@ static int _HandleKeyUnwrapAndExportRequest(
 #ifndef NO_AES
 #ifdef HAVE_AESGCM
         case WC_CIPHER_AES_GCM: {
-            uint16_t keySz =
-                req->wrappedKeySz - WOLFHSM_KEYWRAP_AES_GCM_IV_SIZE -
-                WOLFHSM_KEYWRAP_AES_GCM_TAG_SIZE - sizeof(*metadata);
+            uint16_t keySz = req->wrappedKeySz -
+                             WH_KEYWRAP_AES_GCM_HEADER_SIZE - sizeof(*metadata);
 
             /* Check if the response data can fit the metadata + key  */
             if (respDataSz < sizeof(*metadata) + keySz) {
@@ -1120,8 +1118,19 @@ static int _HandleKeyUnwrapAndExportRequest(
                 return ret;
             }
 
-            /* Ensure unwrapped metadata has the wrapped flag set */
-            if (!WH_KEYID_ISWRAPPED(metadata->id)) {
+            /* Dynamic keyId generation for wrapped keys is not allowed */
+            if (WH_KEYID_ISERASED(metadata->id)) {
+                /* Wrapped keys must use explicit identifiers */
+                return WH_ERROR_BADARGS;
+            }
+
+            /* Extract ownership from unwrapped metadata (preserves original
+             * owner) */
+            uint16_t wrappedKeyUser = WH_KEYID_USER(metadata->id);
+            uint16_t wrappedKeyType = WH_KEYID_TYPE(metadata->id);
+
+            /* Require explicit wrapped-key encoding */
+            if (wrappedKeyType != WH_KEYTYPE_WRAPPED) {
                 return WH_ERROR_ABORTED;
             }
 
@@ -1130,20 +1139,17 @@ static int _HandleKeyUnwrapAndExportRequest(
                 return WH_ERROR_ACCESS;
             }
 
-            /* Validate client ownership.
-             * The USER field in wrapped key metadata specifies the owner.
-             * Only the owning client can export wrapped keys. */
-            uint16_t keyUser = WH_KEYID_USER(metadata->id);
-
+            /* Validate ownership: USER field must match requesting client.
+             * The USER field specifies who owns this wrapped key. */
 #ifdef WOLFHSM_CFG_GLOBAL_KEYS
             /* Global keys (USER=0) can be exported by any client */
-            if (keyUser != WH_KEYUSER_GLOBAL &&
-                keyUser != server->comm->client_id) {
+            if (wrappedKeyUser != WH_KEYUSER_GLOBAL &&
+                wrappedKeyUser != server->comm->client_id) {
                 return WH_ERROR_ACCESS;
             }
 #else
             /* Without global keys, USER must match requesting client */
-            if (keyUser != server->comm->client_id) {
+            if (wrappedKeyUser != server->comm->client_id) {
                 return WH_ERROR_ACCESS;
             }
 #endif /* WOLFHSM_CFG_GLOBAL_KEYS */
@@ -1206,8 +1212,8 @@ static int _HandleKeyUnwrapAndCacheRequest(
 #ifndef NO_AES
 #ifdef HAVE_AESGCM
         case WC_CIPHER_AES_GCM: {
-            keySz = req->wrappedKeySz - WOLFHSM_KEYWRAP_AES_GCM_IV_SIZE -
-                    WOLFHSM_KEYWRAP_AES_GCM_TAG_SIZE - sizeof(metadata);
+            keySz = req->wrappedKeySz - WH_KEYWRAP_AES_GCM_HEADER_SIZE -
+                    sizeof(metadata);
             resp->cipherType = WC_CIPHER_AES_GCM;
 
             ret = _AesGcmKeyUnwrap(server, serverKeyId, wrappedKey,
@@ -1315,9 +1321,8 @@ static int _HandleDataWrapRequest(whServerContext*                   server,
 #ifndef NO_AES
 #ifdef HAVE_AESGCM
         case WC_CIPHER_AES_GCM: {
-            uint16_t wrappedDataSz = WOLFHSM_KEYWRAP_AES_GCM_IV_SIZE +
-                                     WOLFHSM_KEYWRAP_AES_GCM_TAG_SIZE +
-                                     req->dataSz;
+            uint16_t wrappedDataSz =
+                WH_KEYWRAP_AES_GCM_HEADER_SIZE + req->dataSz;
 
             /* Check if the response data can fit the wrapped data */
             if (respDataSz < wrappedDataSz) {
@@ -1389,9 +1394,8 @@ static int _HandleDataUnwrapRequest(whServerContext*                     server,
 #ifndef NO_AES
 #ifdef HAVE_AESGCM
         case WC_CIPHER_AES_GCM: {
-            uint16_t dataSz = req->wrappedDataSz -
-                              WOLFHSM_KEYWRAP_AES_GCM_IV_SIZE -
-                              WOLFHSM_KEYWRAP_AES_GCM_TAG_SIZE;
+            uint16_t dataSz =
+                req->wrappedDataSz - WH_KEYWRAP_AES_GCM_HEADER_SIZE;
 
             /* Check if the response data can fit the unwrapped data */
             if (respDataSz < dataSz) {

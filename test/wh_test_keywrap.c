@@ -39,18 +39,18 @@
 #include "wolfhsm/wh_client_crypto.h"
 
 /* Common defines */
-#define WH_TEST_KEKID 1
+#define WH_TEST_KEKID 10
 
 /* AES GCM Specific defines */
 #ifdef HAVE_AESGCM
 
 #define WH_TEST_AESGCM_KEY_OFFSET 0x1000
-#define WH_TEST_AESGCM_KEYID 2
+#define WH_TEST_AESGCM_KEYID 20
 #define WH_TEST_AES_KEYSIZE 32
 #define WH_TEST_AES_TEXTSIZE 16
-#define WH_TEST_AES_WRAPPED_KEYSIZE                                       \
-    (WOLFHSM_KEYWRAP_AES_GCM_IV_SIZE + WOLFHSM_KEYWRAP_AES_GCM_TAG_SIZE + \
-     WH_TEST_AES_KEYSIZE + sizeof(whNvmMetadata))
+#define WH_TEST_AES_WRAPPED_KEYSIZE                         \
+    (WH_KEYWRAP_AES_GCM_HEADER_SIZE + WH_TEST_AES_KEYSIZE + \
+     sizeof(whNvmMetadata))
 
 #endif /* HAVE_AESGCM */
 
@@ -84,7 +84,9 @@ static int _AesGcm_TestKeyWrap(whClientContext* client, WC_RNG* rng)
     int           ret = 0;
     uint8_t       plainKey[WH_TEST_AES_KEYSIZE];
     uint8_t       tmpPlainKey[WH_TEST_AES_KEYSIZE];
+    uint16_t      tmpPlainKeySz = sizeof(tmpPlainKey);
     uint8_t       wrappedKey[WH_TEST_AES_WRAPPED_KEYSIZE];
+    uint16_t      wrappedKeySz = sizeof(wrappedKey);
     whKeyId       wrappedKeyId = WH_KEYID_ERASED;
     whNvmMetadata metadata     = {
             .id    = WH_CLIENT_KEYID_MAKE_WRAPPED_META(client->comm->client_id,
@@ -100,8 +102,8 @@ static int _AesGcm_TestKeyWrap(whClientContext* client, WC_RNG* rng)
     uint8_t       ciphertext[sizeof(plaintext)];
     uint8_t       decrypted[sizeof(plaintext)];
 
-    uint8_t       tag[WOLFHSM_KEYWRAP_AES_GCM_TAG_SIZE];
-    uint8_t       iv[WOLFHSM_KEYWRAP_AES_GCM_IV_SIZE];
+    uint8_t       tag[WH_KEYWRAP_AES_GCM_TAG_SIZE];
+    uint8_t       iv[WH_KEYWRAP_AES_GCM_IV_SIZE];
     const uint8_t aad[] = {0xfe, 0xed, 0xfa, 0xce, 0xde, 0xad, 0xbe,
                            0xef, 0xfe, 0xed, 0xfa, 0xce, 0xde, 0xad,
                            0xbe, 0xef, 0xab, 0xad, 0xda, 0xd2};
@@ -115,15 +117,14 @@ static int _AesGcm_TestKeyWrap(whClientContext* client, WC_RNG* rng)
 
     ret = wh_Client_KeyWrap(client, WC_CIPHER_AES_GCM, WH_TEST_KEKID, plainKey,
                             sizeof(plainKey), &metadata, wrappedKey,
-                            sizeof(wrappedKey));
+                            &wrappedKeySz);
     if (ret != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_AesGcmKeyWrap %d\n", ret);
         return ret;
     }
 
     ret = wh_Client_KeyUnwrapAndCache(client, WC_CIPHER_AES_GCM, WH_TEST_KEKID,
-                                      wrappedKey, sizeof(wrappedKey),
-                                      &wrappedKeyId);
+                                      wrappedKey, wrappedKeySz, &wrappedKeyId);
     if (ret != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_AesGcmKeyWrapCache %d\n", ret);
         return ret;
@@ -178,12 +179,11 @@ static int _AesGcm_TestKeyWrap(whClientContext* client, WC_RNG* rng)
         return -1;
     }
 
-    ret = wh_Client_KeyUnwrapAndExport(
-        client, WC_CIPHER_AES_GCM, WH_TEST_KEKID, wrappedKey,
-        sizeof(wrappedKey), &tmpMetadata, tmpPlainKey, sizeof(tmpPlainKey));
+    ret = wh_Client_KeyUnwrapAndExport(client, WC_CIPHER_AES_GCM, WH_TEST_KEKID,
+                                       wrappedKey, wrappedKeySz, &tmpMetadata,
+                                       tmpPlainKey, &tmpPlainKeySz);
     if (ret != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_AesGcmKeyUnwrapAndExport %d\n",
-                       ret);
+        WH_ERROR_PRINT("Failed to wh_Client_KeyUnwrapAndExport %d\n", ret);
         return ret;
     }
 
@@ -230,11 +230,12 @@ static int _AesGcm_TestDataWrap(whClientContext* client)
     int     ret                                           = 0;
     uint8_t data[]                                        = "Example data!";
     uint8_t unwrappedData[sizeof(data)]                   = {0};
-    uint8_t wrappedData[sizeof(data) + WOLFHSM_KEYWRAP_AES_GCM_IV_SIZE +
-                        WOLFHSM_KEYWRAP_AES_GCM_TAG_SIZE] = {0};
+    uint32_t unwrappedDataSz = sizeof(unwrappedData);
+    uint8_t  wrappedData[sizeof(data) + WH_KEYWRAP_AES_GCM_HEADER_SIZE] = {0};
+    uint32_t wrappedDataSz = sizeof(wrappedData);
 
     ret = wh_Client_DataWrap(client, WC_CIPHER_AES_GCM, WH_TEST_KEKID, data,
-                             sizeof(data), wrappedData, sizeof(wrappedData));
+                             sizeof(data), wrappedData, &wrappedDataSz);
     if (ret != WH_ERROR_OK) {
         WH_ERROR_PRINT("Failed to wh_Client_DataWrap %d\n", ret);
         return ret;
@@ -242,7 +243,7 @@ static int _AesGcm_TestDataWrap(whClientContext* client)
 
     ret = wh_Client_DataUnwrap(client, WC_CIPHER_AES_GCM, WH_TEST_KEKID,
                                wrappedData, sizeof(wrappedData), unwrappedData,
-                               sizeof(unwrappedData));
+                               &unwrappedDataSz);
     if (ret != WH_ERROR_OK) {
         WH_ERROR_PRINT("Failed to wh_Client_DataUnwrap %d\n", ret);
         return ret;

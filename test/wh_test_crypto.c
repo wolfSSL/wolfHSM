@@ -4138,6 +4138,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
         uint8_t       kek[32]         = {0};
         uint8_t       dataKey[32]     = {0};
         uint8_t       wrappedKey[256] = {0};
+        uint16_t      wrappedKeySz    = sizeof(wrappedKey);
         whKeyId       kekId           = WH_KEYID_ERASED;
         const whKeyId wrappedId       = 1;
         whNvmMetadata meta            = {0};
@@ -4162,7 +4163,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
                 /* Try to wrap - should fail */
                 ret = wh_Client_KeyWrap(client, WC_CIPHER_AES_GCM, kekId,
                                         dataKey, sizeof(dataKey), &meta,
-                                        wrappedKey, sizeof(wrappedKey));
+                                        wrappedKey, &wrappedKeySz);
                 if (ret == WH_ERROR_USAGE) {
                     WH_TEST_PRINT("    PASS: Correctly denied key wrapping\n");
                     ret = 0; /* Test passed */
