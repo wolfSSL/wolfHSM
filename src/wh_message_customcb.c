@@ -43,24 +43,16 @@ static void _translateCustomData(uint16_t magic, uint32_t translatedType,
                 /* right now, no further translations required */
             } break;
             case WH_MESSAGE_CUSTOM_CB_TYPE_DMA32: {
-                dst->dma32.client_addr =
-                    wh_Translate32(magic, src->dma32.client_addr);
-                dst->dma32.client_sz =
-                    wh_Translate32(magic, src->dma32.client_sz);
-                dst->dma32.server_addr =
-                    wh_Translate32(magic, src->dma32.server_addr);
-                dst->dma32.server_sz =
-                    wh_Translate32(magic, src->dma32.server_sz);
+                WH_T32(magic, dst, src, dma32.client_addr);
+                WH_T32(magic, dst, src, dma32.client_sz);
+                WH_T32(magic, dst, src, dma32.server_addr);
+                WH_T32(magic, dst, src, dma32.server_sz);
             } break;
             case WH_MESSAGE_CUSTOM_CB_TYPE_DMA64: {
-                dst->dma64.client_addr =
-                    wh_Translate64(magic, src->dma64.client_addr);
-                dst->dma64.client_sz =
-                    wh_Translate64(magic, src->dma64.client_sz);
-                dst->dma64.server_addr =
-                    wh_Translate64(magic, src->dma64.server_addr);
-                dst->dma64.server_sz =
-                    wh_Translate64(magic, src->dma64.server_sz);
+                WH_T64(magic, dst, src, dma64.client_addr);
+                WH_T64(magic, dst, src, dma64.client_sz);
+                WH_T64(magic, dst, src, dma64.server_addr);
+                WH_T64(magic, dst, src, dma64.server_sz);
             } break;
             default: {
                 /* reserved message types - no translation for now */
@@ -82,8 +74,8 @@ int wh_MessageCustomCb_TranslateRequest(uint16_t                         magic,
         return WH_ERROR_BADARGS;
     }
 
-    dst->id   = wh_Translate32(magic, src->id);
-    dst->type = wh_Translate32(magic, src->type);
+    WH_T32(magic, dst, src, id);
+    WH_T32(magic, dst, src, type);
     _translateCustomData(magic, dst->type, &src->data, &dst->data);
 
     return WH_ERROR_OK;
@@ -97,14 +89,13 @@ int wh_MessageCustomCb_TranslateResponse(uint16_t magic,
     if ((src == NULL) || (dst == NULL)) {
         return WH_ERROR_BADARGS;
     }
-
-    dst->rc  = wh_Translate32(magic, src->rc);
-    dst->err = wh_Translate32(magic, src->err);
+    WH_T32(magic, dst, src, rc);
+    WH_T32(magic, dst, src, err);
 
     /* TODO: should we continue to translate responses for err != 0?
      * Probably still should...*/
-    dst->id   = wh_Translate32(magic, src->id);
-    dst->type = wh_Translate32(magic, src->type);
+    WH_T32(magic, dst, src, id);
+    WH_T32(magic, dst, src, type);
     _translateCustomData(magic, dst->type, &src->data, &dst->data);
 
     return WH_ERROR_OK;
