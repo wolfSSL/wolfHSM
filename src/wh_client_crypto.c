@@ -2823,6 +2823,7 @@ int wh_Client_AesGetKeyId(Aes* key, whNvmId* outId)
     *outId = WH_DEVCTX_TO_KEYID(key->devCtx);
     return WH_ERROR_OK;
 }
+#endif /* !NO_AES */
 
 #ifdef WOLFSSL_CMAC
 int wh_Client_CmacSetKeyId(Cmac* key, whNvmId keyId)
@@ -2868,7 +2869,6 @@ int wh_Client_Cmac(whClientContext* ctx, Cmac* cmac, CmacType type,
     WH_DEBUG_CLIENT_VERBOSE("cmac key:%p key_len:%d in:%p in_len:%d out:%p out_len:%d "
            "keyId:%x\n",
            key, (int)keyLen, in, (int)inLen, outMac, (int)mac_len, key_id);
-#endif
 
 
     /* Get data pointer */

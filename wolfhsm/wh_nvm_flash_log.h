@@ -19,9 +19,9 @@
 #ifndef WOLFHSM_WH_NVM_FLASH_LOG_H_
 #define WOLFHSM_WH_NVM_FLASH_LOG_H_
 
-#if defined(WOLFHSM_CFG_SERVER_NVM_FLASH_LOG)
-
 #include "wolfhsm/wh_settings.h"
+
+#if defined(WOLFHSM_CFG_SERVER_NVM_FLASH_LOG)
 
 #include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_flash.h"
