@@ -137,7 +137,7 @@ static void _ShowList(const whNvmCb* cb, void* context)
                        myMetadata.len);
 
                 while ( (rc == 0) &&
-                        ((myMetadata.len - offset) > sizeof(data))) {
+                        ((myMetadata.len - offset) > (whNvmSize)sizeof(data))) {
                     /* Read the data from this object */
                     rc = cb->Read(context, id, offset, sizeof(data), data);
 
