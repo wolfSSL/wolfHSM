@@ -41,7 +41,7 @@
 
 /* Test-specific debug print with function and line info
  * This internally uses WOLFHSM_CFG_PRINTF for consistency */
-#ifdef WOLFHSM_CFG_TEST_VERBOSE
+#ifdef WOLFHSM_CFG_DEBUG_VERBOSE
 #if !defined(__CCRH__)
 #define WH_TEST_DEBUG_PRINT(fmt, ...) \
     WOLFHSM_CFG_PRINTF("[%s:%d]: " fmt, __func__, __LINE__, ##__VA_ARGS__)
