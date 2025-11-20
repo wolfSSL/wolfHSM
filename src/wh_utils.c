@@ -143,6 +143,7 @@ void wh_Utils_Hexdump(const char* initial, const uint8_t* ptr, size_t size)
     int count = 0;
     char line[80];  /* Buffer for a line of hex output */
     size_t linePos = 0;
+    const char hex[] = "0123456789ABCDEF";
     
     if(initial != NULL)
         WOLFHSM_CFG_PRINTF("%s",initial);
@@ -150,17 +151,21 @@ void wh_Utils_Hexdump(const char* initial, const uint8_t* ptr, size_t size)
         if ((count % HEXDUMP_BYTES_PER_LINE) == 0) {
             linePos = 0;
         }
-        linePos += snprintf(line + linePos, sizeof(line) - linePos, "%02X ", *ptr);
+        line[linePos++] = hex[*ptr >> 4];
+        line[linePos++] = hex[*ptr & 0x0F];
+        line[linePos++] = ' ';
         ptr++;
         size --;
         count++;
         if (count % HEXDUMP_BYTES_PER_LINE == 0) {
-            linePos += snprintf(line + linePos, sizeof(line) - linePos, "\n");
+            line[linePos++] = '\n';
+            line[linePos] = '\0';
             WOLFHSM_CFG_PRINTF("%s", line);
         }
     }
     if((count % HEXDUMP_BYTES_PER_LINE) != 0) {
-        linePos += snprintf(line + linePos, sizeof(line) - linePos, "\n");
+        line[linePos++] = '\n';
+        line[linePos] = '\0';
         WOLFHSM_CFG_PRINTF("%s", line);
     }
 }
