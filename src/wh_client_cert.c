@@ -49,7 +49,7 @@ static int _certVerifyResponse(whClientContext* c, whKeyId* out_keyId,
 /* Helper function to perform certificate verification */
 static int _certVerify(whClientContext* c, const uint8_t* cert,
                        uint32_t cert_len, whNvmId trustedRootNvmId,
-                       uint16_t flags, whNvmFlags cachedKeyFlags,
+                       uint16_t verifyFlags, whNvmFlags cachedKeyFlags,
                        whKeyId* inout_keyId, int32_t* out_rc);
 
 
@@ -431,7 +431,7 @@ static int _certVerifyResponse(whClientContext* c, whKeyId* out_keyId,
 
 static int _certVerify(whClientContext* c, const uint8_t* cert,
                        uint32_t cert_len, whNvmId trustedRootNvmId,
-                       uint16_t flags, whNvmFlags cachedKeyFlags,
+                       uint16_t verifyFlags, whNvmFlags cachedKeyFlags,
                        whKeyId* inout_keyId, int32_t* out_rc)
 {
     int     rc    = 0;
@@ -446,8 +446,8 @@ static int _certVerify(whClientContext* c, const uint8_t* cert,
     }
 
     do {
-        rc = _certVerifyRequest(c, cert, cert_len, trustedRootNvmId, flags,
-                                cachedKeyFlags, keyId);
+        rc = _certVerifyRequest(c, cert, cert_len, trustedRootNvmId,
+                                verifyFlags, cachedKeyFlags, keyId);
     } while (rc == WH_ERROR_NOTREADY);
 
     if (rc == 0) {
