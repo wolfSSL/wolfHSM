@@ -88,16 +88,16 @@ int whTest_CertServerCfg(whServerConfig* serverCfg)
         "Verifying valid single certificate...using intermediate cert\n");
     WH_TEST_RETURN_ON_FAIL(wh_Server_CertVerify(
         server, INTERMEDIATE_A_CERT, INTERMEDIATE_A_CERT_len, rootCertA,
-        WH_CERT_FLAGS_NONE, NULL));
+        WH_CERT_FLAGS_NONE, WH_NVM_FLAGS_USAGE_ANY, NULL));
 
     /* attempt to verify invalid cert (leaf w/o intermediate), should fail */
     WH_TEST_DEBUG_PRINT(
         "Attempting to verify invalid single certificate...using leaf cert "
         "without intermediate\n");
-    WH_TEST_ASSERT_RETURN(WH_ERROR_CERT_VERIFY ==
-                          wh_Server_CertVerify(server, LEAF_A_CERT,
-                                               LEAF_A_CERT_len, rootCertA,
-                                               WH_CERT_FLAGS_NONE, NULL));
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_CERT_VERIFY ==
+        wh_Server_CertVerify(server, LEAF_A_CERT, LEAF_A_CERT_len, rootCertA,
+                             WH_CERT_FLAGS_NONE, WH_NVM_FLAGS_USAGE_ANY, NULL));
 
     /* attempt to verify invalid cert (intermediate with different root),
      * should fail */
@@ -107,30 +107,32 @@ int whTest_CertServerCfg(whServerConfig* serverCfg)
                           wh_Server_CertVerify(server, INTERMEDIATE_B_CERT,
                                                INTERMEDIATE_B_CERT_len,
                                                rootCertA, WH_CERT_FLAGS_NONE,
-                                               NULL));
+                                               WH_NVM_FLAGS_USAGE_ANY, NULL));
 
     /* Verify valid chain */
     WH_TEST_DEBUG_PRINT("Verifying valid certificate chain...\n");
-    WH_TEST_RETURN_ON_FAIL(wh_Server_CertVerify(server, RAW_CERT_CHAIN_A,
-                                                RAW_CERT_CHAIN_A_len, rootCertA,
-                                                WH_CERT_FLAGS_NONE, NULL));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_CertVerify(
+        server, RAW_CERT_CHAIN_A, RAW_CERT_CHAIN_A_len, rootCertA,
+        WH_CERT_FLAGS_NONE, WH_NVM_FLAGS_USAGE_ANY, NULL));
 
     /* Verify valid chain B */
     WH_TEST_DEBUG_PRINT("Verifying valid certificate chain B...\n");
-    WH_TEST_RETURN_ON_FAIL(wh_Server_CertVerify(server, RAW_CERT_CHAIN_B,
-                                                RAW_CERT_CHAIN_B_len, rootCertB,
-                                                WH_CERT_FLAGS_NONE, NULL));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_CertVerify(
+        server, RAW_CERT_CHAIN_B, RAW_CERT_CHAIN_B_len, rootCertB,
+        WH_CERT_FLAGS_NONE, WH_NVM_FLAGS_USAGE_ANY, NULL));
 
     /* attempt to verify invalid chains, should fail */
     WH_TEST_DEBUG_PRINT("Attempting to verify invalid certificate chains...\n");
     WH_TEST_ASSERT_RETURN(WH_ERROR_CERT_VERIFY ==
                           wh_Server_CertVerify(server, RAW_CERT_CHAIN_A,
                                                RAW_CERT_CHAIN_A_len, rootCertB,
-                                               WH_CERT_FLAGS_NONE, NULL));
+                                               WH_CERT_FLAGS_NONE,
+                                               WH_NVM_FLAGS_USAGE_ANY, NULL));
     WH_TEST_ASSERT_RETURN(WH_ERROR_CERT_VERIFY ==
                           wh_Server_CertVerify(server, RAW_CERT_CHAIN_B,
                                                RAW_CERT_CHAIN_B_len, rootCertA,
-                                               WH_CERT_FLAGS_NONE, NULL));
+                                               WH_CERT_FLAGS_NONE,
+                                               WH_NVM_FLAGS_USAGE_ANY, NULL));
 
     /* remove trusted root certificate for chain A */
     WH_TEST_DEBUG_PRINT("Removing trusted root certificates...\n");
@@ -224,7 +226,7 @@ int whTest_CertClient(whClientContext* client)
     WH_TEST_PRINT("Testing verify with cached leaf public key...\n");
     WH_TEST_RETURN_ON_FAIL(wh_Client_CertVerifyAndCacheLeafPubKey(
         client, RAW_CERT_CHAIN_A, RAW_CERT_CHAIN_A_len, rootCertA_id,
-        &out_keyId, &out_rc));
+        WH_NVM_FLAGS_USAGE_ANY, &out_keyId, &out_rc));
     WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
 
     /* Export the cached public key so we can verify it matches the expected
@@ -409,7 +411,7 @@ int whTest_CertClientDma_ClientServerTestInternal(whClientContext* client)
     WH_TEST_PRINT("Testing verify with cached leaf public key using DMA...\n");
     WH_TEST_RETURN_ON_FAIL(wh_Client_CertVerifyDmaAndCacheLeafPubKey(
         client, RAW_CERT_CHAIN_A, RAW_CERT_CHAIN_A_len, rootCertA_id,
-        &out_keyId, &out_rc));
+        WH_NVM_FLAGS_USAGE_ANY, &out_keyId, &out_rc));
     WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
 
     /* Export the cached public key so we can verify it matches the expected
