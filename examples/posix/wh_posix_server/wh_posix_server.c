@@ -32,7 +32,7 @@
 
 /** Local declarations */
 static int wh_ServerTask(void* cf, const char* keyFilePath, int keyId,
-                         int clientId);
+                         int clientId, whNvmFlags flags);
 
 static void _sleepMs(long milliseconds);
 #if !defined(WOLFHSM_CFG_NO_CRYPTO)
@@ -56,7 +56,8 @@ enum {
 const char* type = "tcp"; /* default to tcp type */
 
 static int loadAndStoreKeys(whServerContext* server, whKeyId* outKeyId,
-                            const char* keyFilePath, int keyId, int clientId)
+                            const char* keyFilePath, int keyId, int clientId,
+                            whNvmFlags flags)
 {
 #if !defined(WOLFHSM_CFG_NO_CRYPTO)
     int           ret;
@@ -83,14 +84,14 @@ static int loadAndStoreKeys(whServerContext* server, whKeyId* outKeyId,
     ret = 0;
     close(keyFd);
 
-    WOLFHSM_CFG_PRINTF(
-        "Loading key from %s (size=%d) with keyId=0x%02X and clientId=0x%01X\n",
-        keyFilePath, keySz, keyId, clientId);
+    WOLFHSM_CFG_PRINTF("Loading key from %s (size=%d) with keyId=0x%02X and "
+                       "clientId=0x%01X and flags=0x%04X\n",
+                       keyFilePath, keySz, keyId, clientId, flags);
 
     /* cache the key in the HSM, get HSM assigned keyId */
     /* set the metadata fields */
     meta.id    = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, clientId, keyId);
-    meta.flags = 0;
+    meta.flags = (whNvmFlags)flags;
     meta.len   = keySz;
     memcpy(meta.label, keyLabel, strlen(keyLabel));
 
@@ -99,10 +100,11 @@ static int loadAndStoreKeys(whServerContext* server, whKeyId* outKeyId,
         ret = wh_Server_KeystoreGetUniqueId(server, &meta.id);
         WOLFHSM_CFG_PRINTF("got unique ID = 0x%02X\n", meta.id & WH_KEYID_MASK);
     }
-    WOLFHSM_CFG_PRINTF(
-        "key NVM ID = 0x%04X\n\ttype=0x%01X\n\tuser=0x%01X\n\tkeyId=0x%02X\n",
-        meta.id, WH_KEYID_TYPE(meta.id), WH_KEYID_USER(meta.id),
-        WH_KEYID_ID(meta.id));
+    WOLFHSM_CFG_PRINTF("key NVM ID = "
+                       "0x%04X\n\ttype=0x%01X\n\tuser=0x%01X\n\tkeyId=0x%"
+                       "02X\n\tflags=0x%04X\n",
+                       meta.id, WH_KEYID_TYPE(meta.id), WH_KEYID_USER(meta.id),
+                       WH_KEYID_ID(meta.id), meta.flags);
 
     if (ret == 0) {
         ret = wh_Server_KeystoreCacheKey(server, &meta, keyBuf);
@@ -124,12 +126,13 @@ static int loadAndStoreKeys(whServerContext* server, whKeyId* outKeyId,
     (void)keyFilePath;
     (void)keyId;
     (void)clientId;
+    (void)flags;
     return WH_ERROR_NOTIMPL;
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
 }
 
 static int wh_ServerTask(void* cf, const char* keyFilePath, int keyId,
-                         int clientId)
+                         int clientId, whNvmFlags flags)
 {
     whServerContext server[1];
     whServerConfig* config     = (whServerConfig*)cf;
@@ -146,7 +149,7 @@ static int wh_ServerTask(void* cf, const char* keyFilePath, int keyId,
     /* Load keys into cache if file path is provided */
     if (keyFilePath != NULL) {
         ret = loadAndStoreKeys(server, &loadedKeyId, keyFilePath, keyId,
-                               clientId);
+                               clientId, flags);
         if (ret != 0) {
             WOLFHSM_CFG_PRINTF("server failed to load key, ret=%d\n", ret);
             (void)wh_Server_Cleanup(server);
@@ -206,9 +209,9 @@ static int wh_ServerTask(void* cf, const char* keyFilePath, int keyId,
 
                         /* Reload keys into cache if file path was provided */
                         if (keyFilePath != NULL) {
-                            ret =
-                                loadAndStoreKeys(server, &loadedKeyId,
-                                                 keyFilePath, keyId, clientId);
+                            ret = loadAndStoreKeys(server, &loadedKeyId,
+                                                   keyFilePath, keyId, clientId,
+                                                   flags);
                             if (ret != 0) {
                                 WOLFHSM_CFG_PRINTF("server failed to load key, ret=%d\n",
                                        ret);
@@ -266,12 +269,13 @@ static int _hardwareCryptoCb(int devId, struct wc_CryptoInfo* info, void* ctx)
 #endif
 static void Usage(const char* exeName)
 {
-    WOLFHSM_CFG_PRINTF("Usage: %s --key <key_file_path> --id <key_id> --client <client_id> "
-           "--nvminit <nvm_init_file_path> --type <type>\n",
-           exeName);
+    WOLFHSM_CFG_PRINTF(
+        "Usage: %s --key <key_file_path> --id <key_id> --client <client_id> "
+        "--nvminit <nvm_init_file_path> --type <type> --flags <flags>\n",
+        exeName);
     WOLFHSM_CFG_PRINTF("Example: %s --key key.bin --id 123 --client 456 "
-           "--nvminit nvm_init.txt --type tcp\n",
-           exeName);
+                       "--nvminit nvm_init.txt --type tcp --flags 0\n",
+                       exeName);
     WOLFHSM_CFG_PRINTF("type: tcp (default), shm, dma\n");
 }
 
@@ -283,6 +287,8 @@ int main(int argc, char** argv)
     const char* nvmInitFilePath = NULL;
     int         keyId = WH_KEYID_ERASED; /* Default key ID if none provided */
     int         clientId = 12; /* Default client ID if none provided */
+    whNvmFlags  flags =
+        WH_NVM_FLAGS_USAGE_ANY; /* Default flags if none provided */
     uint8_t     memory[WH_POSIX_FLASH_RAM_SIZE] = {0};
     whServerConfig s_conf[1];
 
@@ -309,6 +315,19 @@ int main(int argc, char** argv)
         }
         else if (strcmp(argv[i], "--type") == 0 && i + 1 < argc) {
             type = argv[++i];
+        }
+        else if (strcmp(argv[i], "--flags") == 0 && i + 1 < argc) {
+            char* end;
+            errno             = 0;
+            unsigned long val = strtoul(argv[i + 1], &end, 0);
+
+            if (errno || *end || val > 0xFFFF) {
+                WOLFHSM_CFG_PRINTF("Invalid --flags value: %s\n", argv[i + 1]);
+                return -1;
+            }
+
+            flags = (whNvmFlags)val;
+            i++;
         }
         else {
             WOLFHSM_CFG_PRINTF("Invalid argument: %s\n", argv[i]);
@@ -399,7 +418,7 @@ int main(int argc, char** argv)
         return rc;
     }
 
-    rc = wh_ServerTask(s_conf, keyFilePath, keyId, clientId);
+    rc = wh_ServerTask(s_conf, keyFilePath, keyId, clientId, flags);
     if (rc != WH_ERROR_OK) {
         WOLFHSM_CFG_PRINTF("Server task failed: %d\n", rc);
         return rc;
@@ -418,7 +437,7 @@ int main(int argc, char** argv)
     (void)keyFilePath;
     (void)keyId;
     (void)clientId;
-    rc = wh_ServerTask(s_conf, keyFilePath, keyId, clientId);
+    rc = wh_ServerTask(s_conf, keyFilePath, keyId, clientId, flags);
     if (rc != WH_ERROR_OK) {
         WOLFHSM_CFG_PRINTF("Server task failed: %d\n", rc);
         return rc;
