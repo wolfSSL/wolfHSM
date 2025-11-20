@@ -3953,10 +3953,25 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
                     ret = wh_Client_EccSetKeyId(privKey, keyId);
                 }
                 if (ret == 0) {
+                    const byte qx[] = {
+                        0xbb, 0x33, 0xac, 0x4c, 0x27, 0x50, 0x4a, 0xc6,
+                        0x4a, 0xa5, 0x04, 0xc3, 0x3c, 0xde, 0x9f, 0x36,
+                        0xdb, 0x72, 0x2d, 0xce, 0x94, 0xea, 0x2b, 0xfa,
+                        0xcb, 0x20, 0x09, 0x39, 0x2c, 0x16, 0xe8, 0x61
+                    };
+                    const byte qy[] = {
+                        0x02, 0xe9, 0xaf, 0x4d, 0xd3, 0x02, 0x93, 0x9a,
+                        0x31, 0x5b, 0x97, 0x92, 0x21, 0x7f, 0xf0, 0xcf,
+                        0x18, 0xda, 0x91, 0x11, 0x02, 0x34, 0x86, 0xe8,
+                        0x20, 0x58, 0x33, 0x0b, 0x80, 0x34, 0x89, 0xd8
+                    };
+                    int curveId = ECC_SECP256R1;
+
                     /* Generate a public key locally for ECDH */
                     ret = wc_ecc_init_ex(pubKey, NULL, INVALID_DEVID);
                     if (ret == 0) {
-                        ret = wc_ecc_make_key(rng, 32, pubKey);
+                        /* Import public key */
+                        ret = wc_ecc_import_unsigned(pubKey, qx, qy, NULL, curveId);
                         if (ret == 0) {
                             /* Try ECDH - should fail with WH_ERROR_USAGE */
                             ret = wc_ecc_shared_secret(
