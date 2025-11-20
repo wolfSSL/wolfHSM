@@ -58,6 +58,7 @@ static void _HexDump(const char* p, size_t data_len)
     char                 line[80];  /* Buffer for a line of hex output */
     size_t               linePos     = 0;
     size_t               off         = 0;
+    const char           hex[]       = "0123456789ABCDEF";
     
     WH_TEST_DEBUG_PRINT("    HD:%p for %lu bytes\n", p, data_len);
     if ((p == NULL) || (data_len == 0))
@@ -66,21 +67,30 @@ static void _HexDump(const char* p, size_t data_len)
     for (off = 0; off < data_len; off++) {
         if ((off % bytesPerLine) == 0) {
             linePos = 0;
-            linePos += snprintf(line + linePos, sizeof(line) - linePos, "    ");
+            line[linePos++] = ' ';
+            line[linePos++] = ' ';
+            line[linePos++] = ' ';
+            line[linePos++] = ' ';
         }
         if (u[off] < two_digits) {
-            linePos += snprintf(line + linePos, sizeof(line) - linePos, "0%X ", u[off]);
+            line[linePos++] = '0';
+            line[linePos++] = hex[u[off]];
+            line[linePos++] = ' ';
         }
         else {
-            linePos += snprintf(line + linePos, sizeof(line) - linePos, "%X ", u[off]);
+            line[linePos++] = hex[u[off] >> 4];
+            line[linePos++] = hex[u[off] & 0x0F];
+            line[linePos++] = ' ';
         }
         if ((off % bytesPerLine) == (bytesPerLine - 1)) {
-            linePos += snprintf(line + linePos, sizeof(line) - linePos, "\n");
+            line[linePos++] = '\n';
+            line[linePos] = '\0';
             WOLFHSM_CFG_PRINTF("%s", line);
         }
     }
     if ((off % bytesPerLine) != 0) {
-        linePos += snprintf(line + linePos, sizeof(line) - linePos, "\n");
+        line[linePos++] = '\n';
+        line[linePos] = '\0';
         WOLFHSM_CFG_PRINTF("%s", line);
     }
 }
