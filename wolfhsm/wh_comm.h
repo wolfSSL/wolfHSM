@@ -211,8 +211,6 @@ uint8_t* wh_CommClient_GetDataPtr(whCommClient* context);
  * unfinished requests can be ignored.
  */
 int wh_CommClient_Cleanup(whCommClient* context);
-
-
 /** CommServer component types */
 
 /* Server transport interface */
