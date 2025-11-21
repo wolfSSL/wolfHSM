@@ -25,6 +25,9 @@
 #ifndef WOLFHSM_CFG_H_
 #define WOLFHSM_CFG_H_
 
+#include "port/posix/posix_time.h"
+#define WOLFHSM_CFG_PORT_GETTIME posixGetTime
+
 
 /** wolfHSM settings.  Simple overrides to show they work */
 /* #define WOLFHSM_CFG_NO_CRYPTO */
@@ -34,6 +37,9 @@
 
 /* Enable global keys feature for testing */
 #define WOLFHSM_CFG_GLOBAL_KEYS
+
+/* Enable logging feature for testing */
+#define WOLFHSM_CFG_LOGGING
 
 #define WOLFHSM_CFG_NVM_OBJECT_COUNT 30
 #define WOLFHSM_CFG_SERVER_KEYCACHE_COUNT 9
@@ -59,6 +65,7 @@
 #define WOLFHSM_CFG_CANCEL_API
 #endif
 
+/* Test log-based NVM flash backend */
 #define WOLFHSM_CFG_SERVER_NVM_FLASH_LOG
 
 #endif /* WOLFHSM_CFG_H_ */

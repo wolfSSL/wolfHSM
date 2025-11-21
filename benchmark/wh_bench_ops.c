@@ -19,10 +19,6 @@
 #include <stdint.h>
 #include <string.h> /* For memset, memcpy */
 
-#if defined(WOLFHSM_CFG_TEST_POSIX)
-#include <sys/time.h> /* For gettimeofday and struct timeval */
-#endif
-
 #include "wolfhsm/wh_settings.h"
 #include "wolfhsm/wh_error.h"
 #include "wh_bench_ops.h"
@@ -47,22 +43,7 @@ static uint64_t _benchGetTimeUsDefault(void);
 /* Default implementation for getting current time in microseconds */
 static uint64_t _benchGetTimeUsDefault(void)
 {
-    uint64_t timeUs = 0;
-
-#if defined(WOLFHSM_CFG_TEST_POSIX)
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    timeUs = (uint64_t)tv.tv_sec * 1000000 + (uint64_t)tv.tv_usec;
-#else
-    /* Default implementation - should be overridden for actual platform */
-    /* This is just a placeholder that returns a monotonically increasing value
-     */
-    static uint64_t fakeTime = 0;
-    fakeTime += 1000; /* Increment by a fake 1ms each call */
-    timeUs = fakeTime;
-#endif
-
-    return timeUs;
+    return WH_GETTIME_US();
 }
 #endif /* !(WOLFHSM_CFG_BENCH_CUSTOM_TIME_FUNC) */
 
