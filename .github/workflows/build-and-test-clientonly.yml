@@ -59,12 +59,12 @@ jobs:
     # Restart server with fresh state for second test run
     - name: Restart POSIX server
       run: |
-        kill $TCP_SERVER_PID || true
+        kill $SERVER_PID || true
         cd examples/posix/wh_posix_server
         rm -f *.bin || true
-        ./Build/wh_posix_server.elf &
-        TCP_SERVER_PID=$!
-        echo "TCP_SERVER_PID=$TCP_SERVER_PID" >> $GITHUB_ENV
+        ./Build/wh_posix_server.elf --type ${{ matrix.transport }} &
+        SERVER_PID=$!
+        echo "SERVER_PID=$SERVER_PID" >> $GITHUB_ENV
         sleep 2
 
     # Build and test client-only with DEBUG_VERBOSE=1 (includes DEBUG)
@@ -72,7 +72,11 @@ jobs:
       run: |
         cd test
         make clean
-        make -j CLIENT_ONLY_TCP=1 SHE=1 DEBUG_VERBOSE=1 WOLFSSL_DIR=../wolfssl && make run
+        if [ "${{ matrix.transport }}" = "tcp" ]; then
+            make -j CLIENT_ONLY_TCP=1 SHE=1 DEBUG_VERBOSE=1 WOLFSSL_DIR=../wolfssl && make run
+        else
+            make -j CLIENT_ONLY_TLS=1 SHE=1 DEBUG_VERBOSE=1 WOLFSSL_DIR=../wolfssl && make run
+        fi
 
     # Optional: Kill the server process if it doesn't exit on its own
     - name: Cleanup POSIX server
