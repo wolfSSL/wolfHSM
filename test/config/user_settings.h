@@ -45,10 +45,6 @@
 #define WOLFSSL_IGNORE_FILE_WARN
 
 
-/* For cert manager */
-#define NO_TLS
-/* Eliminates need for IO layer since we only use CM */
-#define WOLFSSL_USER_IO
 /* For ACert support (also requires WOLFSSL_ASN_TEMPLATE) */
 #define WOLFSSL_ACERT
 
@@ -78,7 +74,6 @@
 #define NO_ERROR_STRINGS
 #define NO_ERROR_QUEUE
 #define NO_OLD_TLS
-#define WOLFSSL_NO_TLS12
 #define NO_DO178
 
 /* Prevents certain functions (SHA, hash.c) on server from falling back to
