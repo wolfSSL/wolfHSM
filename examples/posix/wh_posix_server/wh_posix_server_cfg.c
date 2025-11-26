@@ -18,6 +18,17 @@
 #include "port/posix/posix_transport_shm.h"
 #include "port/posix/posix_transport_tcp.h"
 
+/* Safe bounded string copy with guaranteed NUL-termination */
+#define wh_strncpyz(dst, src, n) do { \
+    if ((n) > 0) { \
+        size_t i; \
+        for (i = 0; i < (n) - 1 && (src)[i] != '\0'; i++) { \
+            (dst)[i] = (src)[i]; \
+        } \
+        (dst)[i] = '\0'; \
+    } \
+} while (0)
+
 posixTransportShmConfig shmConfig;
 posixTransportTcpConfig tcpConfig;
 
@@ -339,7 +350,7 @@ static void parseNvmInitFile(const char* filePath)
             fclose(file);
             exit(EXIT_FAILURE);
         }
-        snprintf(label, sizeof(label), "%s", token);
+        wh_strncpyz(label, token, sizeof(label));
 
         /* Parse the file path */
         token = strtok(NULL, " ");
@@ -414,7 +425,7 @@ static void processEntry(Entry* entry, int isKey, whNvmContext* nvmContext)
     meta.access = entry->access;
     meta.flags  = entry->flags;
     meta.len    = fileSize;
-    snprintf((char*)meta.label, WH_NVM_LABEL_LEN, "%s", entry->label);
+    wh_strncpyz((char*)meta.label, entry->label, WH_NVM_LABEL_LEN);
 
     int rc = wh_Nvm_AddObject(nvmContext, &meta, fileSize, buffer);
     if (rc != 0) {

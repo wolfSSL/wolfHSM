@@ -243,6 +243,29 @@
     #define WOLFHSM_CFG_PRINTF printf
 #endif
 
+/* User can define WOLFHSM_CFG_FPRINTF to override the default fprintf function.
+ * This should be a function-like macro or function pointer that matches:
+ * int func(FILE* stream, const char* format, ...)
+ */
+#ifndef WOLFHSM_CFG_FPRINTF
+    #include <stdio.h>
+    #define WOLFHSM_CFG_FPRINTF fprintf
+#endif
+
+/* User can define WOLFHSM_CFG_SNPRINTF to override the default snprintf function.
+ * This should be a function-like macro or function pointer that matches:
+ * int func(char* str, size_t size, const char* format, ...)
+ */
+#ifndef WOLFHSM_CFG_SNPRINTF
+    #include <stdio.h>
+    #define WOLFHSM_CFG_SNPRINTF snprintf
+#endif
+
+/* Wrapper macro for snprintf - uses WOLFHSM_CFG_SNPRINTF */
+#ifndef WOLFHSM_SNPRINTF
+    #define WOLFHSM_SNPRINTF WOLFHSM_CFG_SNPRINTF
+#endif
+
 /* Debug levels can be enabled by defining WOLFHSM_CFG_DEBUG and/or 
  * WOLFHSM_CFG_DEBUG_VERBOSE in wolfhsm_cfg.h or via compiler flags.
  * 

@@ -28,7 +28,7 @@
 #else
 #include <stdio.h> /* use default printf */
 #define WH_BENCH_PRINTF printf
-#define WH_BENCH_SNPRINTF snprintf
+#define WH_BENCH_SNPRINTF WOLFHSM_SNPRINTF
 #endif
 
 #endif /* WH_BENCH_UTILS_H_ */

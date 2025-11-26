@@ -34,6 +34,7 @@
 #include "wolfhsm/wh_nvm_flash.h"
 #include "port/posix/posix_flash_file.h"
 #include "port/posix/posix_transport_tcp.h"
+#include "whnvmtool.h"
 
 /* Macros for maximum client ID and key ID */
 #define MAX_CLIENT_ID 255
@@ -99,7 +100,7 @@ Entry* createEntry(uint8_t clientId, uint16_t id, uint16_t access,
 {
     Entry* newEntry = (Entry*)malloc(sizeof(Entry));
     if (!newEntry) {
-        fprintf(stderr, "Memory allocation error\n");
+        WH_TOOL_ERROR("Memory allocation error\n");
         exit(EXIT_FAILURE);
     }
     newEntry->clientId = clientId;
@@ -135,7 +136,7 @@ static void processEntry(Entry* entry, int isKey, whNvmContext* nvmContext)
 {
     FILE* file = fopen(entry->filePath, "rb");
     if (file == NULL) {
-        fprintf(stderr, "Error: Unable to open file %s\n", entry->filePath);
+        WH_TOOL_ERROR("Unable to open file %s\n", entry->filePath);
         return;
     }
 
@@ -147,7 +148,7 @@ static void processEntry(Entry* entry, int isKey, whNvmContext* nvmContext)
     /* Allocate memory for the file data */
     uint8_t* buffer = (uint8_t*)malloc(fileSize);
     if (buffer == NULL) {
-        fprintf(stderr, "Error: Memory allocation failed for file %s\n",
+        WH_TOOL_ERROR("Memory allocation failed for file %s\n",
                 entry->filePath);
         fclose(file);
         return;
@@ -158,7 +159,7 @@ static void processEntry(Entry* entry, int isKey, whNvmContext* nvmContext)
     fclose(file);
 
     if (bytesRead != fileSize) {
-        fprintf(stderr, "Error: Failed to read entire file %s\n",
+        WH_TOOL_ERROR("Failed to read entire file %s\n",
                 entry->filePath);
         free(buffer);
         return;
@@ -185,11 +186,11 @@ static void processEntry(Entry* entry, int isKey, whNvmContext* nvmContext)
     meta.access = entry->access;
     meta.flags  = entry->flags;
     meta.len    = fileSize;
-    snprintf((char*)meta.label, WH_NVM_LABEL_LEN, "%s", entry->label);
+    wh_strncpyz((char*)meta.label, entry->label, WH_NVM_LABEL_LEN);
 
     int rc = wh_Nvm_AddObject(nvmContext, &meta, fileSize, buffer);
     if (rc != 0) {
-        fprintf(stderr, "Error: Failed to add entry ID %u to NVM, ret = %d\n",
+        WH_TOOL_ERROR("Failed to add entry ID %u to NVM, ret = %d\n",
                 meta.id, rc);
     }
 
@@ -310,8 +311,7 @@ void parseConfigFile(const char* filePath)
             /* Parse client ID for key entries */
             token = strtok(line + 3, " ");
             if (!token || !parseInteger(token, MAX_CLIENT_ID, &clientId)) {
-                fprintf(stderr,
-                        "Error on line %d: Malformed key entry - invalid "
+                WH_TOOL_ERROR("on line %d: Malformed key entry - invalid "
                         "clientId\n",
                         lineNumber);
                 fclose(file);
@@ -321,9 +321,7 @@ void parseConfigFile(const char* filePath)
             /* Parse key ID for key entries */
             token = strtok(NULL, " ");
             if (!token || !parseInteger(token, MAX_KEY_ID, &id)) {
-                fprintf(
-                    stderr,
-                    "Error on line %d: Malformed key entry - invalid keyId\n",
+                WH_TOOL_ERROR("on line %d: Malformed key entry - invalid keyId\n",
                     lineNumber);
                 fclose(file);
                 exit(EXIT_FAILURE);
@@ -333,9 +331,7 @@ void parseConfigFile(const char* filePath)
             /* Parse object ID for object entries */
             token = strtok(line + 3, " ");
             if (!token || !parseInteger(token, MAX_KEY_ID, &id)) {
-                fprintf(
-                    stderr,
-                    "Error on line %d: Malformed object entry - invalid id\n",
+                WH_TOOL_ERROR("on line %d: Malformed object entry - invalid id\n",
                     lineNumber);
                 fclose(file);
                 exit(EXIT_FAILURE);
@@ -343,8 +339,7 @@ void parseConfigFile(const char* filePath)
         }
         else {
             /* Report error for unknown entry types */
-            fprintf(stderr,
-                    "Error on line %d: Malformed line or unknown entry type\n",
+            WH_TOOL_ERROR("on line %d: Malformed line or unknown entry type\n",
                     lineNumber);
             fclose(file);
             exit(EXIT_FAILURE);
@@ -353,8 +348,7 @@ void parseConfigFile(const char* filePath)
         /* Parse access field */
         token = strtok(NULL, " ");
         if (!token || !parseInteger(token, UINT16_MAX, &access)) {
-            fprintf(stderr,
-                    "Error on line %d: Malformed entry - invalid access\n",
+            WH_TOOL_ERROR("on line %d: Malformed entry - invalid access\n",
                     lineNumber);
             fclose(file);
             exit(EXIT_FAILURE);
@@ -363,8 +357,7 @@ void parseConfigFile(const char* filePath)
         /* Parse flags */
         token = strtok(NULL, " ");
         if (!token || !parseInteger(token, UINT16_MAX, &flags)) {
-            fprintf(stderr,
-                    "Error on line %d: Malformed entry - invalid flags\n",
+            WH_TOOL_ERROR("on line %d: Malformed entry - invalid flags\n",
                     lineNumber);
             fclose(file);
             exit(EXIT_FAILURE);
@@ -373,20 +366,18 @@ void parseConfigFile(const char* filePath)
         /* Parse the label (enclosed in quotes) */
         token = strtok(NULL, "\"");
         if (!token) {
-            fprintf(stderr,
-                    "Error on line %d: Malformed entry - missing or incorrect "
+            WH_TOOL_ERROR("on line %d: Malformed entry - missing or incorrect "
                     "label format\n",
                     lineNumber);
             fclose(file);
             exit(EXIT_FAILURE);
         }
-        snprintf(label, sizeof(label), "%s", token);
+        wh_strncpyz(label, token, sizeof(label));
 
         /* Parse the file path */
         token = strtok(NULL, " ");
         if (!token || sscanf(token, "%s", filePath) != 1) {
-            fprintf(stderr,
-                    "Error on line %d: Malformed entry - missing file path\n",
+            WH_TOOL_ERROR("on line %d: Malformed entry - missing file path\n",
                     lineNumber);
             fclose(file);
             exit(EXIT_FAILURE);
@@ -407,19 +398,18 @@ static void writeMetadataToFile(uint32_t metadataId, const char* filePath)
 {
     FILE* file = fopen(INTERMEDIATE_FILE, "a");
     if (file == NULL) {
-        fprintf(stderr,
-                "Error: Unable to open intermediate file for writing\n");
+        WH_TOOL_ERROR("Unable to open intermediate file for writing\n");
         return;
     }
 
     char fullPath[PATH_MAX];
     if (realpath(filePath, fullPath) == NULL) {
-        fprintf(stderr, "Error: Unable to get full path for %s\n", filePath);
+        WH_TOOL_ERROR("Unable to get full path for %s\n", filePath);
         fclose(file);
         return;
     }
 
-    fprintf(file, "%u,%s\n", metadataId, fullPath);
+    WH_TOOL_FPRINT(file, "%u,%s\n", metadataId, fullPath);
     fclose(file);
 }
 
@@ -432,13 +422,13 @@ static int initializeServer(whServerContext*      serverContext,
     /* Initialize the NVM context */
     int rc = wh_Nvm_Init(nvmContext, nvmConfig);
     if (rc != 0) {
-        fprintf(stderr, "Error: Failed to initialize NVM, ret = %d\n", rc);
+        WH_TOOL_ERROR("Failed to initialize NVM, ret = %d\n", rc);
         return EXIT_FAILURE;
     }
 
     rc = wh_Server_Init(serverContext, (whServerConfig*)serverConfig);
     if (rc != 0) {
-        fprintf(stderr, "Failed to initialize wolfHSM server: ret = %d\n", rc);
+        WH_TOOL_ERROR("Failed to initialize wolfHSM server: ret = %d\n", rc);
         return rc;
     }
     return 0;
@@ -484,7 +474,7 @@ int main(int argc, char* argv[])
                     partition_size = (uint32_t)strtoul(optarg, NULL, 10);
                 }
                 if (partition_size == 0) {
-                    fprintf(stderr, "Error: Invalid partition size\n");
+                    WH_TOOL_ERROR("Invalid partition size\n");
                     return EXIT_FAILURE;
                 }
                 break;
@@ -492,8 +482,7 @@ int main(int argc, char* argv[])
                 invert_erased_byte = 1;
                 break;
             default:
-                fprintf(stderr,
-                        "Usage: %s [--test] [--image[=<file>]] [--size <size>] "
+                WH_TOOL_ERROR("Usage: %s [--test] [--image[=<file>]] [--size <size>] "
                         "[--invert-erased-byte] <config-file>\n",
                         argv[0]);
                 return EXIT_FAILURE;
@@ -501,9 +490,8 @@ int main(int argc, char* argv[])
     }
 
     if (optind >= argc) {
-        fprintf(stderr, "Error: Config file is mandatory\n");
-        fprintf(stderr,
-                "Usage: %s [--test] [--image[=<file>]] [--size <size>] "
+        WH_TOOL_ERROR("Config file is mandatory\n");
+        WH_TOOL_ERROR("Usage: %s [--test] [--image[=<file>]] [--size <size>] "
                 "[--invert-erased-byte] <config-file>\n",
                 argv[0]);
         return EXIT_FAILURE;
@@ -576,7 +564,7 @@ int main(int argc, char* argv[])
     rc = initializeServer(&gServerContext, &gNvmContext, &gServerConfig,
                           &gNvmConfig);
     if (rc != 0) {
-        fprintf(stderr, "Error: Failed to initialize server, ret = %d\n", rc);
+        WH_TOOL_ERROR("Failed to initialize server, ret = %d\n", rc);
         return EXIT_FAILURE;
     }
 
@@ -587,7 +575,7 @@ int main(int argc, char* argv[])
             fclose(file);
         }
         else {
-            fprintf(stderr, "Warning: Unable to clear intermediate file\n");
+            WH_TOOL_WARN("Unable to clear intermediate file\n");
         }
     }
 

@@ -103,7 +103,7 @@ static int wh_ClientTask(void* cf, const char* type, int test)
     }
 
     for (counter = 0; counter < REPEAT_COUNT; counter++) {
-        sprintf((char*)tx_req, "Request:%u", counter);
+        WOLFHSM_SNPRINTF((char*)tx_req, sizeof(tx_req), "Request:%u", counter);
         tx_req_len = strlen((char*)tx_req);
         do {
             ret = wh_Client_EchoRequest(client, tx_req_len, tx_req);

@@ -315,7 +315,7 @@ static int whTest_ServerImgMgrServerCfgEcc256(whServerConfig* serverCfg)
     sigMeta.access = WH_NVM_ACCESS_ANY;
     sigMeta.flags  = WH_NVM_FLAGS_NONE;
     sigMeta.len    = sigLen;
-    snprintf((char*)sigMeta.label, WH_NVM_LABEL_LEN, "TestSig");
+    wh_strncpyz((char*)sigMeta.label, "TestSig", WH_NVM_LABEL_LEN);
 
     ret = wh_Nvm_AddObject(serverCfg->nvm, &sigMeta, sigLen, signature);
     if (ret != WH_ERROR_OK) {
@@ -365,7 +365,7 @@ static int whTest_ServerImgMgrServerCfgEcc256(whServerConfig* serverCfg)
     keyMeta.access        = WH_NVM_ACCESS_ANY;
     keyMeta.flags         = WH_NVM_FLAGS_NONE;
     keyMeta.len           = pubKeyDerLen;
-    snprintf((char*)keyMeta.label, WH_NVM_LABEL_LEN, "TestKey");
+    wh_strncpyz((char*)keyMeta.label, "TestKey", WH_NVM_LABEL_LEN);
 
     ret = wh_Server_KeystoreCacheKey(server, &keyMeta, pubKeyDer);
     if (ret != WH_ERROR_OK) {
@@ -616,7 +616,7 @@ static int whTest_ServerImgMgrServerCfgAes128Cmac(whServerConfig* serverCfg)
     sigMeta.access = WH_NVM_ACCESS_ANY;
     sigMeta.flags  = WH_NVM_FLAGS_NONE;
     sigMeta.len    = cmac_size;
-    snprintf((char*)sigMeta.label, WH_NVM_LABEL_LEN, "TestCmacSig");
+    wh_strncpyz((char*)sigMeta.label, "TestCmacSig", WH_NVM_LABEL_LEN);
 
     ret = wh_Nvm_AddObject(serverCfg->nvm, &sigMeta, cmac_size, computed_cmac);
     if (ret != WH_ERROR_OK) {
@@ -657,7 +657,7 @@ static int whTest_ServerImgMgrServerCfgAes128Cmac(whServerConfig* serverCfg)
     keyMeta.access        = WH_NVM_ACCESS_ANY;
     keyMeta.flags         = WH_NVM_FLAGS_NONE;
     keyMeta.len           = sizeof(testAes128Key);
-    snprintf((char*)keyMeta.label, WH_NVM_LABEL_LEN, "TestAes128Key");
+    wh_strncpyz((char*)keyMeta.label, "TestAes128Key", WH_NVM_LABEL_LEN);
 
     ret = wh_Server_KeystoreCacheKey(server, &keyMeta, (uint8_t*)testAes128Key);
     if (ret != WH_ERROR_OK) {
@@ -934,7 +934,7 @@ static int whTest_ServerImgMgrServerCfgRsa2048(whServerConfig* serverCfg)
     sigMeta.access = WH_NVM_ACCESS_ANY;
     sigMeta.flags  = WH_NVM_FLAGS_NONE;
     sigMeta.len    = sigLen;
-    snprintf((char*)sigMeta.label, WH_NVM_LABEL_LEN, "TestRsaSig");
+    wh_strncpyz((char*)sigMeta.label, "TestRsaSig", WH_NVM_LABEL_LEN);
 
     ret = wh_Nvm_AddObject(serverCfg->nvm, &sigMeta, sigLen, signature);
     if (ret != WH_ERROR_OK) {
@@ -984,7 +984,7 @@ static int whTest_ServerImgMgrServerCfgRsa2048(whServerConfig* serverCfg)
     keyMeta.access        = WH_NVM_ACCESS_ANY;
     keyMeta.flags         = WH_NVM_FLAGS_NONE;
     keyMeta.len           = pubKeyDerLen;
-    snprintf((char*)keyMeta.label, WH_NVM_LABEL_LEN, "TestRsaKey");
+    wh_strncpyz((char*)keyMeta.label, "TestRsaKey", WH_NVM_LABEL_LEN);
 
     ret = wh_Server_KeystoreCacheKey(server, &keyMeta, pubKeyDer);
     if (ret != WH_ERROR_OK) {

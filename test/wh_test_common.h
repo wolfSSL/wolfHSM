@@ -41,7 +41,7 @@
 
 /* Test-specific debug print with function and line info
  * This internally uses WOLFHSM_CFG_PRINTF for consistency */
-#ifdef WOLFHSM_CFG_TEST_VERBOSE
+#ifdef WOLFHSM_CFG_DEBUG_VERBOSE
 #if !defined(__CCRH__)
 #define WH_TEST_DEBUG_PRINT(fmt, ...) \
     WOLFHSM_CFG_PRINTF("[%s:%d]: " fmt, __func__, __LINE__, ##__VA_ARGS__)
@@ -66,6 +66,18 @@
 #define WH_ERROR_PRINT2(fmt, ...) \
     WOLFHSM_CFG_PRINTF("ERROR [%s:%d]: " fmt, __func__, __LINE__, ##__VA_ARGS__)
 #endif
+
+/* Safe bounded string copy with guaranteed NUL-termination */
+#define wh_strncpyz(dst, src, n) do { \
+    if ((n) > 0) { \
+        size_t i; \
+        for (i = 0; i < (n) - 1 && (src)[i] != '\0'; i++) { \
+            (dst)[i] = (src)[i]; \
+        } \
+        (dst)[i] = '\0'; \
+    } \
+} while (0)
+
 /*
  * Helper macro for test error propagation
  * Evaluates the "call" argument, and if not equal to zero, displays the
