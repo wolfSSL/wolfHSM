@@ -914,8 +914,8 @@ int whTest_ClientServerSequential(whTestNvmBackendType nvmType)
 
         /* Prepare echo test */
         send_len =
-            snprintf(send_buffer, sizeof(send_buffer), "Request:%u", counter);
-        snprintf(recv_buffer, sizeof(recv_buffer), "NOTHING RECEIVED");
+            WOLFHSM_SNPRINTF(send_buffer, sizeof(send_buffer), "Request:%u", counter);
+        wh_strncpyz(recv_buffer, "NOTHING RECEIVED", sizeof(recv_buffer));
         recv_len = 0;
 
         WH_TEST_RETURN_ON_FAIL(
@@ -993,8 +993,8 @@ int whTest_ClientServerSequential(whTestNvmBackendType nvmType)
 
         whNvmId lastAvailObjects = 0;
 
-        label_len = snprintf(label, sizeof(label), "Label:%d", id);
-        len = snprintf(send_buffer, sizeof(send_buffer), "Data:%d Counter:%d",
+        label_len = WOLFHSM_SNPRINTF(label, sizeof(label), "Label:%d", id);
+        len = WOLFHSM_SNPRINTF(send_buffer, sizeof(send_buffer), "Data:%d Counter:%d",
                        id, counter);
 
 #if defined(WOLFHSM_CFG_DEBUG_VERBOSE)
@@ -1146,8 +1146,8 @@ int whTest_ClientServerSequential(whTestNvmBackendType nvmType)
 
         whNvmId lastAvailObjects = 0;
 
-        snprintf((char*)(meta.label), sizeof(meta.label), "Label:%d", meta.id);
-        len = snprintf(send_buffer, sizeof(send_buffer), "Data:%d Counter:%d",
+        WOLFHSM_SNPRINTF((char*)(meta.label), sizeof(meta.label), "Label:%d", meta.id);
+        len = WOLFHSM_SNPRINTF(send_buffer, sizeof(send_buffer), "Data:%d Counter:%d",
                        meta.id, counter);
 
 #if defined(WOLFHSM_CFG_DEBUG_VERBOSE)
@@ -1351,8 +1351,8 @@ int whTest_ClientServerClientConfig(whClientConfig* clientCfg)
 
         /* Prepare echo test */
         send_len =
-            snprintf(send_buffer, sizeof(send_buffer), "Request:%u", counter);
-        snprintf(recv_buffer, sizeof(recv_buffer), "NOTHING RECEIVED");
+            WOLFHSM_SNPRINTF(send_buffer, sizeof(send_buffer), "Request:%u", counter);
+        wh_strncpyz(recv_buffer, "NOTHING RECEIVED", sizeof(recv_buffer));
         recv_len = 0;
 
         WH_TEST_RETURN_ON_FAIL(ret = wh_Client_Echo(client, send_len, send_buffer, &recv_len, recv_buffer));
@@ -1401,8 +1401,8 @@ int whTest_ClientServerClientConfig(whClientConfig* clientCfg)
 
         whNvmId lastAvailObjects = 0;
 
-        label_len = snprintf(label, sizeof(label), "Label:%d", id);
-        len = snprintf(send_buffer, sizeof(send_buffer), "Data:%d Counter:%d",
+        label_len = WOLFHSM_SNPRINTF(label, sizeof(label), "Label:%d", id);
+        len = WOLFHSM_SNPRINTF(send_buffer, sizeof(send_buffer), "Data:%d Counter:%d",
                        id, counter);
 
         lastAvailObjects = avail_objects;
@@ -1532,8 +1532,8 @@ int whTest_ClientServerClientConfig(whClientConfig* clientCfg)
 
         whNvmId lastAvailObjects = 0;
 
-        snprintf((char*)(meta.label), sizeof(meta.label), "Label:%d", meta.id);
-        len = snprintf(send_buffer, sizeof(send_buffer), "Data:%d Counter:%d",
+        WOLFHSM_SNPRINTF((char*)(meta.label), sizeof(meta.label), "Label:%d", meta.id);
+        len = WOLFHSM_SNPRINTF(send_buffer, sizeof(send_buffer), "Data:%d Counter:%d",
                        meta.id, counter);
 
         lastAvailObjects = avail_objects;

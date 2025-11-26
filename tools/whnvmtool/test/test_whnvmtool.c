@@ -38,6 +38,7 @@
 /* Flash implementations to test */
 #include "wolfhsm/wh_flash_ramsim.h"
 #include "port/posix/posix_flash_file.h"
+#include "whnvmtool.h"
 
 
 /* Dummy Server comms config (unused) */
@@ -146,8 +147,7 @@ static int loadMetadataEntries()
 {
     FILE* file = fopen(TEST_DATA_OBJID_FILE_MAPPING, "r");
     if (file == NULL) {
-        fprintf(stderr,
-                "Error: Unable to open intermediate file for reading\n");
+        WH_TOOL_ERROR("Unable to open intermediate file for reading\n");
         return -1;
     }
 
@@ -155,15 +155,14 @@ static int loadMetadataEntries()
     while (fgets(line, sizeof(line), file)) {
         MetadataEntry* newEntry = (MetadataEntry*)malloc(sizeof(MetadataEntry));
         if (newEntry == NULL) {
-            fprintf(stderr, "Error: Memory allocation failed\n");
+            WH_TOOL_ERROR("Memory allocation failed\n");
             fclose(file);
             freeMetadataEntries();
             return -1;
         }
 
         if (sscanf(line, "%hu,%s", &newEntry->id, newEntry->filePath) != 2) {
-            fprintf(stderr,
-                    "Error: Invalid line format in intermediate file\n");
+            WH_TOOL_ERROR("Invalid line format in intermediate file\n");
             free(newEntry);
             fclose(file);
             freeMetadataEntries();
@@ -198,13 +197,13 @@ static int checkNvmDataValid(whNvmId id, const uint8_t* nvmData,
 {
     const char* filePath = getFilePathForId(id);
     if (filePath == NULL) {
-        fprintf(stderr, "Error: No file path found for ID %u\n", id);
+        WH_TOOL_ERROR("No file path found for ID %u\n", id);
         return -1;
     }
 
     FILE* file = fopen(filePath, "rb");
     if (file == NULL) {
-        fprintf(stderr, "Error: Unable to open file %s for comparison\n",
+        WH_TOOL_ERROR("Unable to open file %s for comparison\n",
                 filePath);
         return -1;
     }
@@ -214,17 +213,15 @@ static int checkNvmDataValid(whNvmId id, const uint8_t* nvmData,
     fseek(file, 0, SEEK_SET);
 
     if (fileSize != nvmDataLen) {
-        fprintf(stderr,
-                "Error: File size (%ld) doesn't match NVM data length (%u) for "
-                "ID %u\n",
-                fileSize, nvmDataLen, id);
+        WH_TOOL_ERROR("File size mismatch for ID %u. Expected %u, got %ld\n",
+                id, nvmDataLen, fileSize);
         fclose(file);
         return -1;
     }
 
     uint8_t* fileData = malloc(fileSize);
     if (fileData == NULL) {
-        fprintf(stderr, "Error: Memory allocation failed for ID %u\n", id);
+        WH_TOOL_ERROR("Memory allocation failed for ID %u\n", id);
         fclose(file);
         return -1;
     }
@@ -233,29 +230,29 @@ static int checkNvmDataValid(whNvmId id, const uint8_t* nvmData,
     fclose(file);
 
     if (bytesRead != fileSize) {
-        fprintf(stderr, "Error: Failed to read entire file for ID %u\n", id);
+        WH_TOOL_ERROR("Failed to read entire file for ID %u\n", id);
         free(fileData);
         return -1;
     }
 
     int result = memcmp(fileData, nvmData, nvmDataLen);
     if (result != 0) {
-        fprintf(stderr, "Error: Data mismatch for ID %u\n", id);
-        fprintf(stderr, "Expected (File) Data:\n");
+        WH_TOOL_ERROR("Data mismatch for ID %u\n", id);
+        WH_TOOL_ERROR("Expected (File) Data:\n");
         for (size_t i = 0; i < nvmDataLen; i++) {
-            fprintf(stderr, "%02X ", fileData[i]);
+            WH_TOOL_ERROR("%02X ", fileData[i]);
             if ((i + 1) % 16 == 0)
-                fprintf(stderr, "\n");
+                WH_TOOL_ERROR("\n");
         }
-        fprintf(stderr, "\n");
+        WH_TOOL_ERROR("\n");
 
-        fprintf(stderr, "Actual (NVM) Data:\n");
+        WH_TOOL_ERROR("Actual (NVM) Data:\n");
         for (size_t i = 0; i < nvmDataLen; i++) {
-            fprintf(stderr, "%02X ", nvmData[i]);
+            WH_TOOL_ERROR("%02X ", nvmData[i]);
             if ((i + 1) % 16 == 0)
-                fprintf(stderr, "\n");
+                WH_TOOL_ERROR("\n");
         }
-        fprintf(stderr, "\n");
+        WH_TOOL_ERROR("\n");
     }
     else {
         WOLFHSM_CFG_PRINTF("Data verification successful for ID %u\n", id);
@@ -280,7 +277,7 @@ int _checkNvm(whServerContext* server)
         rc = wh_Nvm_List(server->nvm, access, flags, startId, &count,
                          &currentId);
         if (rc != WH_ERROR_OK) {
-            fprintf(stderr, "Error listing NVM objects: %d\n", rc);
+            WH_TOOL_ERROR("Error listing NVM objects: %d\n", rc);
             return rc;
         }
 
@@ -291,7 +288,7 @@ int _checkNvm(whServerContext* server)
 
             rc = wh_Nvm_GetMetadata(server->nvm, currentId, &meta);
             if (rc != WH_ERROR_OK) {
-                fprintf(stderr, "Error getting metadata for object %u: %d\n",
+                WH_TOOL_ERROR("Error getting metadata for object %u: %d\n",
                         currentId, rc);
                 return rc;
             }
@@ -304,13 +301,13 @@ int _checkNvm(whServerContext* server)
 
             uint8_t* data = malloc(meta.len);
             if (data == NULL) {
-                fprintf(stderr, "Memory allocation failed\n");
+                WH_TOOL_ERROR("Memory allocation failed\n");
                 return WH_ERROR_ABORTED;
             }
 
             rc = wh_Nvm_Read(server->nvm, currentId, 0, meta.len, data);
             if (rc != WH_ERROR_OK) {
-                fprintf(stderr, "Error reading object %u: %d\n", currentId, rc);
+                WH_TOOL_ERROR("Error reading object %u: %d\n", currentId, rc);
                 free(data);
                 return rc;
             }
@@ -350,7 +347,7 @@ int _initAndCheckNvmFlashCfg(whNvmFlashConfig* nvmFlashCfg)
 
         FILE* file = fopen(FLASH_IMAGE_FILENAME, "rb");
         if (file == NULL) {
-            fprintf(stderr, "Error: Unable to open %s for reading\n",
+            WH_TOOL_ERROR("Unable to open %s for reading\n",
                     FLASH_IMAGE_FILENAME);
             return WH_ERROR_BADARGS;
         }
@@ -361,7 +358,7 @@ int _initAndCheckNvmFlashCfg(whNvmFlashConfig* nvmFlashCfg)
 
         initData = (uint8_t*)malloc(fileSize);
         if (initData == NULL) {
-            fprintf(stderr, "Error: Memory allocation failed for initData\n");
+            WH_TOOL_ERROR("Memory allocation failed for initData\n");
             fclose(file);
             return WH_ERROR_ABORTED;
         }
@@ -370,7 +367,7 @@ int _initAndCheckNvmFlashCfg(whNvmFlashConfig* nvmFlashCfg)
         fclose(file);
 
         if (bytesRead != fileSize) {
-            fprintf(stderr, "Error: Failed to read entire file %s\n",
+            WH_TOOL_ERROR("Failed to read entire file %s\n",
                     FLASH_IMAGE_FILENAME);
             free(initData);
             return WH_ERROR_ABORTED;
@@ -389,7 +386,7 @@ int _initAndCheckNvmFlashCfg(whNvmFlashConfig* nvmFlashCfg)
     /* Initialize the NVM context */
     rc = wh_Nvm_Init(nvmCtx, nvmCfg);
     if (rc != WH_ERROR_OK) {
-        fprintf(stderr, "Error: Failed to initialize NVM, ret = %d\n", rc);
+        WH_TOOL_ERROR("Failed to initialize NVM, ret = %d\n", rc);
         return rc;
     }
 
@@ -402,7 +399,7 @@ int _initAndCheckNvmFlashCfg(whNvmFlashConfig* nvmFlashCfg)
     /* Initialize the server */
     rc = wh_Server_Init(serverCtx, serverCfg);
     if (rc != WH_ERROR_OK) {
-        fprintf(stderr, "Failed to initialize wolfHSM server: ret = %d\n", rc);
+        WH_TOOL_ERROR("Failed to initialize wolfHSM server: ret = %d\n", rc);
         return rc;
     }
 
@@ -410,7 +407,7 @@ int _initAndCheckNvmFlashCfg(whNvmFlashConfig* nvmFlashCfg)
     if (rc == WH_ERROR_OK) {
         rc = _checkNvm(serverCtx);
         if (rc != WH_ERROR_OK) {
-            fprintf(stderr, "NVM check failed: ret = %d\n", rc);
+            WH_TOOL_ERROR("NVM check failed: ret = %d\n", rc);
         }
 
         (void)wh_Server_Cleanup(serverCtx);
@@ -433,7 +430,7 @@ int main(void)
     /* Load metadata entries from the intermediate file */
     rc = loadMetadataEntries();
     if (rc != 0) {
-        fprintf(stderr, "Failed to load metadata entries\n");
+        WH_TOOL_ERROR("Failed to load metadata entries\n");
         return rc;
     }
 
@@ -442,7 +439,7 @@ int main(void)
         rc = _initAndCheckNvmFlashCfg(
             (whNvmFlashConfig*)&gNvmFlashConfigsToTest[i]);
         if (rc != WH_ERROR_OK) {
-            fprintf(stderr, "NVM check failed for config %zu: ret = %d\n", i,
+            WH_TOOL_ERROR("NVM check failed for config %zu: ret = %d\n", i,
                     rc);
             break;
         }
