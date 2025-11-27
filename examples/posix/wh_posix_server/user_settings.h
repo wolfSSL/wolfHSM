@@ -99,6 +99,9 @@ extern "C" {
 /** Curve25519 Options */
 #define HAVE_CURVE25519
 
+/** Ed25519 Options */
+#define HAVE_ED25519
+
 /** DH and DHE Options */
 #define NO_DH
 #define HAVE_DH_DEFAULT_PARAMS
