@@ -357,6 +357,48 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
                 *out_len = len;
             }
         } break;
+
+#ifdef HAVE_ED25519
+        case WC_PK_TYPE_ED25519_KEYGEN: {
+            ed25519_key* key = info->pk.ed25519kg.key;
+            /* Only default Ed25519 supported */
+            ret = wh_Client_Ed25519MakeExportKey(ctx, key);
+        } break;
+
+        case WC_PK_TYPE_ED25519_SIGN: {
+            ed25519_key* key    = info->pk.ed25519sign.key;
+            const byte*  in     = info->pk.ed25519sign.in;
+            word32       inLen  = info->pk.ed25519sign.inLen;
+            byte*        out    = info->pk.ed25519sign.out;
+            word32*      outLen = info->pk.ed25519sign.outLen;
+            byte         type   = info->pk.ed25519sign.type;
+
+            if (type != (byte)Ed25519) {
+                ret = CRYPTOCB_UNAVAILABLE;
+                break;
+            }
+
+            ret = wh_Client_Ed25519Sign(ctx, key, in, inLen, out, outLen);
+        } break;
+
+        case WC_PK_TYPE_ED25519_VERIFY: {
+            ed25519_key* key    = info->pk.ed25519verify.key;
+            const byte*  sig    = info->pk.ed25519verify.sig;
+            word32       sigLen = info->pk.ed25519verify.sigLen;
+            const byte*  msg    = info->pk.ed25519verify.msg;
+            word32       msgLen = info->pk.ed25519verify.msgLen;
+            int*         res    = info->pk.ed25519verify.res;
+            byte         type   = info->pk.ed25519verify.type;
+
+            if (type != (byte)Ed25519) {
+                ret = CRYPTOCB_UNAVAILABLE;
+                break;
+            }
+
+            ret = wh_Client_Ed25519Verify(ctx, key, sig, sigLen, msg, msgLen,
+                                          res);
+        } break;
+#endif /* HAVE_ED25519 */
 #endif /* HAVE_CURVE25519 */
 
 #if defined(HAVE_DILITHIUM) || defined(HAVE_FALCON)
