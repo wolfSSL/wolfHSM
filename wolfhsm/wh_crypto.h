@@ -40,6 +40,7 @@
 #include "wolfssl/wolfcrypt/rsa.h"
 #include "wolfssl/wolfcrypt/curve25519.h"
 #include "wolfssl/wolfcrypt/ecc.h"
+#include "wolfssl/wolfcrypt/ed25519.h"
 #include "wolfssl/wolfcrypt/dilithium.h"
 
 #ifndef NO_AES
@@ -85,6 +86,14 @@ int wh_Crypto_Curve25519DeserializeKey(const uint8_t* derBuffer,
                                        uint16_t derSize, curve25519_key* key);
 #endif /* HAVE_CURVE25519 */
 
+#ifdef HAVE_ED25519
+int wh_Crypto_Ed25519SerializeKeyDer(ed25519_key* key, uint16_t max_size,
+                                     uint8_t* buffer, uint16_t* out_size);
+
+int wh_Crypto_Ed25519DeserializeKeyDer(const uint8_t* buffer, uint16_t size,
+                                       ed25519_key* key);
+#endif /* HAVE_ED25519 */
+
 #ifdef HAVE_DILITHIUM
 /* Store a MlDsaKey to a byte sequence */
 int wh_Crypto_MlDsaSerializeKeyDer(MlDsaKey* key, uint16_t max_size,
@@ -97,4 +106,3 @@ int wh_Crypto_MlDsaDeserializeKeyDer(const uint8_t* buffer, uint16_t size,
 #endif  /* !WOLFHSM_CFG_NO_CRYPTO */
 
 #endif /* WOLFHSM_WH_CRYPTO_H_ */
-

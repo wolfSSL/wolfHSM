@@ -39,6 +39,7 @@
 #include "wolfssl/wolfcrypt/rsa.h"
 #include "wolfssl/wolfcrypt/curve25519.h"
 #include "wolfssl/wolfcrypt/ecc.h"
+#include "wolfssl/wolfcrypt/ed25519.h"
 #include "wolfssl/wolfcrypt/dilithium.h"
 
 #include "wolfhsm/wh_error.h"
@@ -246,6 +247,55 @@ int wh_Crypto_Curve25519DeserializeKey(const uint8_t* derBuffer,
     return wc_Curve25519KeyDecode(derBuffer, &idx, key, derSize);
 }
 #endif /* HAVE_CURVE25519 */
+
+#ifdef HAVE_ED25519
+int wh_Crypto_Ed25519SerializeKeyDer(ed25519_key* key, uint16_t max_size,
+                                     uint8_t* buffer, uint16_t* out_size)
+{
+    int ret = 0;
+
+    if ((key == NULL) || (buffer == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    if (key->privKeySet) {
+        ret = wc_Ed25519KeyToDer(key, buffer, max_size);
+    }
+    else if (key->pubKeySet) {
+        ret = wc_Ed25519PublicKeyToDer(key, buffer, max_size, 1);
+    }
+    else {
+        ret = WH_ERROR_BADARGS;
+    }
+
+    if (ret > 0) {
+        if (out_size != NULL) {
+            *out_size = (uint16_t)ret;
+        }
+        ret = WH_ERROR_OK;
+    }
+    return ret;
+}
+
+int wh_Crypto_Ed25519DeserializeKeyDer(const uint8_t* buffer, uint16_t size,
+                                       ed25519_key* key)
+{
+    word32 idx = 0;
+    int    ret;
+
+    if ((buffer == NULL) || (key == NULL) || (size == 0)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Try private key first; fall back to public key */
+    ret = wc_Ed25519PrivateKeyDecode(buffer, &idx, key, size);
+    if (ret != 0) {
+        idx = 0;
+        ret = wc_Ed25519PublicKeyDecode(buffer, &idx, key, size);
+    }
+    return ret;
+}
+#endif /* HAVE_ED25519 */
 
 #ifdef HAVE_DILITHIUM
 int wh_Crypto_MlDsaSerializeKeyDer(MlDsaKey* key, uint16_t max_size,
