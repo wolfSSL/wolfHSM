@@ -277,13 +277,13 @@ static void Usage(const char* exeName)
                        "--nvminit nvm_init.txt --type tcp --flags 0\n",
                        exeName);
     WOLFHSM_CFG_PRINTF("type: tcp (default), shm");
-#ifndef WOLFHSM_CFG_NO_CRYPTO
+#if !defined(WOLFHSM_CFG_NO_CRYPTO) && defined(WOLFHSM_CFG_TLS)
     WOLFHSM_CFG_PRINTF(", tls");
-#endif
-#ifndef NO_PSK
+#if !defined(NO_PSK)
     WOLFHSM_CFG_PRINTF(", psk");
 #endif
-#ifdef WOLFSSL_STATIC_MEMORY
+#endif /* !defined(WOLFHSM_CFG_NO_CRYPTO) && defined(WOLFHSM_CFG_TLS) */
+#ifdef WOLFSSL_CFG_DMA
     WOLFHSM_CFG_PRINTF(", dma");
 #endif
     WOLFHSM_CFG_PRINTF("\n");
@@ -364,7 +364,7 @@ int main(int argc, char** argv)
             return -1;
         }
     }
-#ifndef WOLFHSM_CFG_NO_CRYPTO
+#if !defined(WOLFHSM_CFG_NO_CRYPTO) && defined(WOLFHSM_CFG_TLS)
     else if (strcmp(type, "tls") == 0) {
         WOLFHSM_CFG_PRINTF("Using TLS transport\n");
         rc = wh_PosixServer_ExampleTlsConfig(s_conf);
@@ -373,7 +373,7 @@ int main(int argc, char** argv)
             return -1;
         }
     }
-#if !defined(WOLFHSM_CFG_NO_CRYPTO) && !defined(NO_PSK)
+#if !defined(NO_PSK)
     else if (strcmp(type, "psk") == 0) {
         WOLFHSM_CFG_PRINTF("Using TLS PSK transport\n");
         rc = wh_PosixServer_ExamplePskConfig(s_conf);
@@ -382,9 +382,9 @@ int main(int argc, char** argv)
             return -1;
         }
     }
-#endif
-#endif
-#ifdef WOLFSSL_STATIC_MEMORY
+#endif /* !defined(NO_PSK) */
+#endif /* !defined(WOLFHSM_CFG_NO_CRYPTO) && defined(WOLFHSM_CFG_TLS) */
+#ifdef WOLFSSL_CFG_DMA
     else if (strcmp(type, "dma") == 0) {
         WOLFHSM_CFG_PRINTF("Using DMA with shared memory transport\n");
         rc = wh_PosixServer_ExampleShmDmaConfig(s_conf);
@@ -393,7 +393,7 @@ int main(int argc, char** argv)
             return -1;
         }
     }
-#endif
+#endif /* WOLFSSL_CFG_DMA */
     else {
         WOLFHSM_CFG_PRINTF("Invalid server type: %s\n", type);
         return -1;
