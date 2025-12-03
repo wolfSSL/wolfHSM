@@ -366,40 +366,40 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
         } break;
 
         case WC_PK_TYPE_ED25519_SIGN: {
-            ed25519_key* key    = info->pk.ed25519sign.key;
-            const byte*  in     = info->pk.ed25519sign.in;
-            word32       inLen  = info->pk.ed25519sign.inLen;
-            byte*        out    = info->pk.ed25519sign.out;
-            word32*      outLen = info->pk.ed25519sign.outLen;
-            byte         type   = info->pk.ed25519sign.type;
-            uint32_t     len;
+            ed25519_key*   key    = info->pk.ed25519sign.key;
+            const uint8_t* in     = (const uint8_t*)info->pk.ed25519sign.in;
+            uint32_t       inLen  = info->pk.ed25519sign.inLen;
+            uint8_t*       out    = info->pk.ed25519sign.out;
+            word32*        outLen = info->pk.ed25519sign.outLen;
+            uint8_t        type   = info->pk.ed25519sign.type;
+            uint32_t       len;
 
             if ((type != (byte)Ed25519) && (type != (byte)Ed25519ctx) &&
                 (type != (byte)Ed25519ph)) {
                 ret = BAD_FUNC_ARG;
                 break;
             }
+
+            len = 0;
             if (outLen != NULL) {
                 len = *outLen;
             }
-
             ret = wh_Client_Ed25519Sign(
                 ctx, key, in, inLen, type, info->pk.ed25519sign.context,
                 info->pk.ed25519sign.contextLen, out, &len);
-            if (ret == 0 && outLen != NULL) {
+            if (ret == WH_ERROR_OK && outLen != NULL) {
                 *outLen = len;
             }
-
         } break;
 
         case WC_PK_TYPE_ED25519_VERIFY: {
-            ed25519_key* key    = info->pk.ed25519verify.key;
-            const byte*  sig    = info->pk.ed25519verify.sig;
-            word32       sigLen = info->pk.ed25519verify.sigLen;
-            const byte*  msg    = info->pk.ed25519verify.msg;
-            word32       msgLen = info->pk.ed25519verify.msgLen;
-            int*         res    = info->pk.ed25519verify.res;
-            byte         type   = info->pk.ed25519verify.type;
+            ed25519_key*   key    = info->pk.ed25519verify.key;
+            const uint8_t* sig    = info->pk.ed25519verify.sig;
+            uint32_t       sigLen = info->pk.ed25519verify.sigLen;
+            const uint8_t* msg    = info->pk.ed25519verify.msg;
+            uint32_t       msgLen = info->pk.ed25519verify.msgLen;
+            int*           res    = info->pk.ed25519verify.res;
+            uint8_t        type   = info->pk.ed25519verify.type;
 
             if ((type != (byte)Ed25519) && (type != (byte)Ed25519ctx) &&
                 (type != (byte)Ed25519ph)) {
@@ -907,12 +907,13 @@ int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
                     break;
                 }
 
-                ret = wh_Client_Ed25519Verify(
+                ret = wh_Client_Ed25519VerifyDma(
                     ctx, key, sig, sigLen, msg, msgLen, type,
                     info->pk.ed25519verify.context,
                     info->pk.ed25519verify.contextLen, res);
             } break;
 #endif /* HAVE_ED25519 */
+
         }
     } break; /* case WC_ALGO_TYPE_PK */
 

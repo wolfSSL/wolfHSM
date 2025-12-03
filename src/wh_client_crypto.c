@@ -2621,6 +2621,11 @@ int wh_Client_Ed25519SignDma(whClientContext* ctx, ed25519_key* key,
     if (evict != 0) {
         (void)wh_Client_KeyEvict(ctx, key_id);
     }
+
+    /* map ASN key decoding errors to BAD_FUNC_ARG */
+    if (ret == ASN_PARSE_E)
+        ret = BAD_FUNC_ARG;
+
     return ret;
 }
 
@@ -2761,6 +2766,11 @@ int wh_Client_Ed25519VerifyDma(whClientContext* ctx, ed25519_key* key,
     if (evict != 0) {
         (void)wh_Client_KeyEvict(ctx, key_id);
     }
+
+    /* map ASN key decoding errors to BAD_FUNC_ARG */
+    if (ret == ASN_PARSE_E)
+        ret = BAD_FUNC_ARG;
+
     return ret;
 }
 #endif /* WOLFHSM_CFG_DMA */
