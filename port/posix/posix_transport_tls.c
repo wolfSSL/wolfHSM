@@ -28,7 +28,7 @@
 #include "posix_transport_tls.h"
 #include "wolfhsm/wh_error.h"
 
-#if !defined(NO_TLS) && !defined(WOLFCRYPT_ONLY)
+#if defined(WOLFHSM_CFG_TLS)
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -655,4 +655,5 @@ int posixTransportTls_GetAcceptFd(posixTransportTlsServerContext* context,
     }
     return ret;
 }
-#endif /* !defined(NO_TLS) && !defined(WOLFCRYPT_ONLY) */
+#endif /* WOLFHSM_CFG_TLS */
+
