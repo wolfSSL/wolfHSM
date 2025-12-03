@@ -49,30 +49,50 @@
 #define FLASH_SECTOR_SIZE (4096) /* 4KB */
 #define FLASH_PAGE_SIZE (8) /* 8B */
 
-#if defined(WOLFHSM_CFG_TEST_VERBOSE)
+#if defined(WOLFHSM_CFG_DEBUG_VERBOSE)
 static void _HexDump(const char* p, size_t data_len)
 {
     const size_t         bytesPerLine = 16;
     const unsigned char  two_digits   = 0x10;
     const unsigned char* u            = (const unsigned char*)p;
+    char                 line[80];  /* Buffer for a line of hex output */
+    size_t               linePos     = 0;
+    size_t               off         = 0;
+    const char           hex[]       = "0123456789ABCDEF";
+    
     WH_TEST_DEBUG_PRINT("    HD:%p for %lu bytes\n", p, data_len);
     if ((p == NULL) || (data_len == 0))
         return;
-    size_t off = 0;
+    
     for (off = 0; off < data_len; off++) {
-        if ((off % bytesPerLine) == 0)
-            WH_TEST_DEBUG_PRINT("    ");
+        if ((off % bytesPerLine) == 0) {
+            linePos = 0;
+            line[linePos++] = ' ';
+            line[linePos++] = ' ';
+            line[linePos++] = ' ';
+            line[linePos++] = ' ';
+        }
         if (u[off] < two_digits) {
-            WH_TEST_DEBUG_PRINT("0%X ", u[off]);
+            line[linePos++] = '0';
+            line[linePos++] = hex[u[off]];
+            line[linePos++] = ' ';
         }
         else {
-            WH_TEST_DEBUG_PRINT("%X ", u[off]);
+            line[linePos++] = hex[u[off] >> 4];
+            line[linePos++] = hex[u[off] & 0x0F];
+            line[linePos++] = ' ';
         }
-        if ((off % bytesPerLine) == (bytesPerLine - 1))
-            WH_TEST_DEBUG_PRINT("\n");
+        if ((off % bytesPerLine) == (bytesPerLine - 1)) {
+            line[linePos++] = '\n';
+            line[linePos] = '\0';
+            WOLFHSM_CFG_PRINTF("%s", line);
+        }
     }
-    if ((off % bytesPerLine) != 0)
-        WH_TEST_DEBUG_PRINT("\n");
+    if ((off % bytesPerLine) != 0) {
+        line[linePos++] = '\n';
+        line[linePos] = '\0';
+        WOLFHSM_CFG_PRINTF("%s", line);
+    }
 }
 
 static void _ShowAvailable(const whNvmCb* cb, void* context)
@@ -127,7 +147,7 @@ static void _ShowList(const whNvmCb* cb, void* context)
                        myMetadata.len);
 
                 while ( (rc == 0) &&
-                        ((myMetadata.len - offset) > sizeof(data))) {
+                        ((myMetadata.len - offset) > (whNvmSize)sizeof(data))) {
                     /* Read the data from this object */
                     rc = cb->Read(context, id, offset, sizeof(data), data);
 
@@ -322,7 +342,7 @@ int whTest_NvmFlashCfg(void* cfg, void* context, const whNvmCb* cb)
 
     WH_TEST_RETURN_ON_FAIL(cb->Init(context, cfg));
 
-#if defined(WOLFHSM_CFG_TEST_VERBOSE)
+#if defined(WOLFHSM_CFG_DEBUG_VERBOSE)
     WH_TEST_DEBUG_PRINT("--Initial NVM contents\n");
     _ShowAvailable(cb, context);
     _ShowList(cb, context);
@@ -362,7 +382,7 @@ int whTest_NvmFlashCfg(void* cfg, void* context, const whNvmCb* cb)
         goto cleanup;
     }
 
-#if defined(WOLFHSM_CFG_TEST_VERBOSE)
+#if defined(WOLFHSM_CFG_DEBUG_VERBOSE)
     _ShowAvailable(cb, context);
     _ShowList(cb, context);
 #endif
@@ -375,7 +395,7 @@ int whTest_NvmFlashCfg(void* cfg, void* context, const whNvmCb* cb)
         goto cleanup;
     }
 
-#if defined(WOLFHSM_CFG_TEST_VERBOSE)
+#if defined(WOLFHSM_CFG_DEBUG_VERBOSE)
     _ShowAvailable(cb, context);
     _ShowList(cb, context);
 #endif
@@ -396,7 +416,7 @@ int whTest_NvmFlashCfg(void* cfg, void* context, const whNvmCb* cb)
     }
 
 
-#if defined(WOLFHSM_CFG_TEST_VERBOSE)
+#if defined(WOLFHSM_CFG_DEBUG_VERBOSE)
     _ShowAvailable(cb, context);
     _ShowList(cb, context);
 #endif
@@ -407,7 +427,7 @@ int whTest_NvmFlashCfg(void* cfg, void* context, const whNvmCb* cb)
         goto cleanup;
     }
 
-#if defined(WOLFHSM_CFG_TEST_VERBOSE)
+#if defined(WOLFHSM_CFG_DEBUG_VERBOSE)
     _ShowAvailable(cb, context);
     _ShowList(cb, context);
 #endif
@@ -439,7 +459,7 @@ int whTest_NvmFlashCfg(void* cfg, void* context, const whNvmCb* cb)
         goto cleanup;
     }
 
-#if defined(WOLFHSM_CFG_TEST_VERBOSE)
+#if defined(WOLFHSM_CFG_DEBUG_VERBOSE)
     _ShowAvailable(cb, context);
     _ShowList(cb, context);
 #endif
@@ -452,7 +472,7 @@ int whTest_NvmFlashCfg(void* cfg, void* context, const whNvmCb* cb)
         goto cleanup;
     }
 
-#if defined(WOLFHSM_CFG_TEST_VERBOSE)
+#if defined(WOLFHSM_CFG_DEBUG_VERBOSE)
     _ShowAvailable(cb, context);
     _ShowList(cb, context);
 #endif
