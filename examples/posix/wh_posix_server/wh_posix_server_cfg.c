@@ -17,30 +17,26 @@
 
 #include "port/posix/posix_transport_shm.h"
 #include "port/posix/posix_transport_tcp.h"
-#ifndef WOLFHSM_CFG_NO_CRYPTO
+#ifdef WOLFHSM_CFG_TLS
 #include "port/posix/posix_transport_tls.h"
 #endif
 
 posixTransportShmConfig shmConfig;
 posixTransportTcpConfig tcpConfig;
-#ifndef WOLFHSM_CFG_NO_CRYPTO
-posixTransportTlsConfig tlsConfig;
-#endif
 
 whCommServerConfig s_comm;
 
 whTransportServerCb            tcpCb = PTT_SERVER_CB;
 whTransportServerCb            shmCb = POSIX_TRANSPORT_SHM_SERVER_CB;
-#ifndef WOLFHSM_CFG_NO_CRYPTO
-whTransportServerCb tlsCb = PTTLS_SERVER_CB;
-#endif
 posixTransportShmServerContext tscShm;
 posixTransportTcpServerContext tscTcp;
-#ifndef WOLFHSM_CFG_NO_CRYPTO
+#ifdef WOLFHSM_CFG_TLS
+posixTransportTlsConfig tlsConfig;
+whTransportServerCb tlsCb = PTTLS_SERVER_CB;
 posixTransportTlsServerContext tscTls;
 #endif
 
-#ifdef WOLFSSL_STATIC_MEMORY
+#ifdef WOLFSSL_CFG_DMA
 whTransportServerCb            dmaCb = POSIX_TRANSPORT_SHM_SERVER_CB;
 posixTransportShmServerContext tscDma;
 whServerDmaConfig              dmaConfig;
@@ -122,7 +118,7 @@ int wh_PosixServer_ExampleTcpConfig(void* conf)
     return WH_ERROR_OK;
 }
 
-#ifndef WOLFHSM_CFG_NO_CRYPTO
+#if !defined(WOLFHSM_CFG_NO_CRYPTO) && !defined(NO_TLS)
 /* Server configuration setup example for TLS transport
  * Does not setup flash, nvm, crypto, she, etc. */
 
@@ -132,33 +128,62 @@ int wh_PosixServer_ExampleTcpConfig(void* conf)
 
 #ifdef WOLFSSL_STATIC_MEMORY
 #define EXAMPLE_STATIC_MEMORY_SIZE 70000
-static unsigned char memoryBuffer[EXAMPLE_STATIC_MEMORY_SIZE];
 WOLFSSL_HEAP_HINT*   heap               = NULL;
+static unsigned char memoryBuffer[EXAMPLE_STATIC_MEMORY_SIZE];
 unsigned int         staticMemoryList[] = {176,  304,  384,  480, 1008,
                                            3328, 4560, 5152, 8928};
 unsigned int         staticMemoryDist[] = {14, 4, 3, 3, 4, 10, 2, 1, 1};
-#endif
+
+static void* GetHeapHint()
+{
+    /* Initialize static memory buffer */
+    if (wc_LoadStaticMemory_ex(&heap, WH_POSIX_STATIC_MEM_LIST_SIZE,
+                               staticMemoryList, staticMemoryDist, memoryBuffer,
+                               EXAMPLE_STATIC_MEMORY_SIZE, 0, 0) != 0) {
+        return NULL;
+    }
+    return (void*)heap;
+}
+#endif /* WOLFSSL_STATIC_MEMORY */
+
+int wh_PosixServer_ExampleTlsConfig(void* ctx)
+{
+    whServerConfig* s_conf = (whServerConfig*)ctx;
+
+    /* Server configuration/context */
+    memset(&tscTls, 0, sizeof(posixTransportTlsServerContext));
+
+    /* Initialize TCP context fields that need specific values */
+    tscTls.listen_fd_p1  = 0; /* Invalid fd */
+    tscTls.accept_fd_p1  = 0; /* Invalid fd */
+    tscTls.request_recv  = 0;
+    tscTls.buffer_offset = 0;
+
+    tlsConfig.server_ip_string = WH_POSIX_SERVER_TCP_IPSTRING;
+    tlsConfig.server_port      = WH_POSIX_SERVER_TCP_PORT;
+    tlsConfig.disable_peer_verification = false;
+    tlsConfig.ca_cert = client_cert_der_2048;
+    tlsConfig.ca_cert_len = sizeof_client_cert_der_2048;
+    tlsConfig.cert = server_cert_der_2048;
+    tlsConfig.cert_len = sizeof_server_cert_der_2048;
+    tlsConfig.key = server_key_der_2048;
+    tlsConfig.key_len = sizeof_server_key_der_2048;
+#ifdef WOLFSSL_STATIC_MEMORY
+    tlsConfig.heap_hint = GetHeapHint();
+#endif /* WOLFSSL_STATIC_MEMORY */
+
+    s_comm.transport_cb      = &tlsCb;
+    s_comm.transport_context = (void*)&tscTls;
+    s_comm.transport_config  = (void*)&tlsConfig;
+    s_comm.server_id         = WH_POSIX_SERVER_ID;
+
+    s_conf->comm_config = &s_comm;
+
+    return WH_ERROR_OK;
+}
+
 
 #ifndef NO_PSK
-static unsigned int psk_tls12_server_cb(WOLFSSL* ssl, const char* identity,
-                                        unsigned char* key,
-                                        unsigned int   key_max_len)
-{
-    size_t len;
-
-    memset(key, 0, key_max_len);
-    printf("PSK TLS12 server callback\n");
-    printf("PSK client identity: %s\n", identity);
-    printf("Enter PSK password to accept: ");
-    if (fgets((char*)key, key_max_len - 1, stdin) == NULL) {
-        memset(key, 0, key_max_len);
-        return 0U;
-    }
-    len = strcspn((char*)key, "\n");
-    ((char*)key)[len] = '\0';
-    (void)ssl;
-    return (unsigned int)len;
-}
 
 #ifdef WOLFSSL_TLS13
 static unsigned int psk_tls13_server_cb(WOLFSSL* ssl, const char* identity,
@@ -186,186 +211,43 @@ static unsigned int psk_tls13_server_cb(WOLFSSL* ssl, const char* identity,
 }
 #endif /* WOLFSSL_TLS13 */
 
-static int
-wh_PosixServer_ExamplePskContextSetup(posixTransportTlsServerContext* ctx)
+static unsigned int psk_tls12_server_cb(WOLFSSL* ssl, const char* identity,
+                                        unsigned char* key,
+                                        unsigned int   key_max_len)
 {
-    /* uncomment and compile with DEBUG_WOLFSSL for debugging  */
-    /* wolfSSL_Debugging_ON(); */
+    size_t len;
 
-#ifdef WOLFSSL_STATIC_MEMORY
-    /* Initialize static memory buffer */
-    if (wc_LoadStaticMemory_ex(&heap, WH_POSIX_STATIC_MEM_LIST_SIZE,
-                               staticMemoryList, staticMemoryDist, memoryBuffer,
-                               EXAMPLE_STATIC_MEMORY_SIZE, 0, 0) != 0) {
-        return WH_ERROR_ABORTED;
+    memset(key, 0, key_max_len);
+    printf("PSK TLS12 server callback\n");
+    printf("PSK client identity: %s\n", identity);
+    printf("Enter PSK password to accept: ");
+    if (fgets((char*)key, key_max_len - 1, stdin) == NULL) {
+        memset(key, 0, key_max_len);
+        return 0U;
     }
-
-    ctx->ssl_ctx = wolfSSL_CTX_new_ex(wolfSSLv23_server_method_ex(heap), heap);
-#else
-    ctx->ssl_ctx = wolfSSL_CTX_new(wolfSSLv23_server_method());
-#endif
-    if (ctx->ssl_ctx == NULL) {
-#ifdef WOLFSSL_STATIC_MEMORY
-        if (heap) {
-            wc_UnloadStaticMemory(heap);
-            heap = NULL;
-        }
-#endif
-        return WH_ERROR_ABORTED;
-    }
-
-    wolfSSL_CTX_set_psk_server_callback(ctx->ssl_ctx, psk_tls12_server_cb);
-#ifdef WOLFSSL_TLS13
-    wolfSSL_CTX_set_psk_server_tls13_callback(ctx->ssl_ctx,
-                                              psk_tls13_server_cb);
-#endif /* WOLFSSL_TLS13 */
-    wolfSSL_CTX_use_psk_identity_hint(ctx->ssl_ctx, "wolfHSM Example Server");
-    return WH_ERROR_OK;
-}
-#endif /* NO_PSK */
-
-static int
-wh_PosixServer_ExampleTlsContextSetup(posixTransportTlsServerContext* ctx)
-{
-    int rc;
-
-    /* uncomment and compile with DEBUG_WOLFSSL for debugging  */
-    /* wolfSSL_Debugging_ON(); */
-
-#ifdef WOLFSSL_STATIC_MEMORY
-    if (wc_LoadStaticMemory_ex(&heap, WH_POSIX_STATIC_MEM_LIST_SIZE,
-                               staticMemoryList, staticMemoryDist, memoryBuffer,
-                               EXAMPLE_STATIC_MEMORY_SIZE, 0, 0) != 0) {
-        return WH_ERROR_ABORTED;
-    }
-
-    ctx->ssl_ctx = wolfSSL_CTX_new_ex(wolfSSLv23_server_method_ex(heap), heap);
-#else
-    ctx->ssl_ctx = wolfSSL_CTX_new(wolfSSLv23_server_method());
-#endif
-
-    if (ctx->ssl_ctx == NULL) {
-#ifdef WOLFSSL_STATIC_MEMORY
-        if (heap) {
-            wc_UnloadStaticMemory(heap);
-            heap = NULL;
-        }
-#endif
-        return WH_ERROR_ABORTED;
-    }
-    /* don't use wolfHSM for local TLS crypto */
-    wolfSSL_CTX_SetDevId(ctx->ssl_ctx, INVALID_DEVID);
-
-    /* Load server certificate */
-    rc = wolfSSL_CTX_use_certificate_buffer(ctx->ssl_ctx, server_cert_der_2048,
-                                            sizeof(server_cert_der_2048),
-                                            WOLFSSL_FILETYPE_ASN1);
-    if (rc != WOLFSSL_SUCCESS) {
-        wolfSSL_CTX_free(ctx->ssl_ctx);
-        ctx->ssl_ctx = NULL;
-#ifdef WOLFSSL_STATIC_MEMORY
-        if (heap) {
-            wc_UnloadStaticMemory(heap);
-            heap = NULL;
-        }
-#endif
-        return WH_ERROR_ABORTED;
-    }
-
-    /* Load CA certificate for client verification if enabled */
-    rc = wolfSSL_CTX_load_verify_buffer(ctx->ssl_ctx, client_cert_der_2048,
-                                        sizeof(client_cert_der_2048),
-                                        WOLFSSL_FILETYPE_ASN1);
-    if (rc != WOLFSSL_SUCCESS) {
-        wolfSSL_CTX_free(ctx->ssl_ctx);
-        ctx->ssl_ctx = NULL;
-#ifdef WOLFSSL_STATIC_MEMORY
-        if (heap) {
-            wc_UnloadStaticMemory(heap);
-            heap = NULL;
-        }
-#endif
-        return WH_ERROR_ABORTED;
-    }
-
-    /* load private key for TLS connection */
-    rc = wolfSSL_CTX_use_PrivateKey_buffer(ctx->ssl_ctx, server_key_der_2048,
-                                           sizeof(server_key_der_2048),
-                                           WOLFSSL_FILETYPE_ASN1);
-    if (rc != WOLFSSL_SUCCESS) {
-        wolfSSL_CTX_free(ctx->ssl_ctx);
-        ctx->ssl_ctx = NULL;
-#ifdef WOLFSSL_STATIC_MEMORY
-        if (heap) {
-            wc_UnloadStaticMemory(heap);
-            heap = NULL;
-        }
-#endif
-        return WH_ERROR_ABORTED;
-    }
-
-    /* Setup server for mutual authentication. It will try to verify the
-     * client's certificate so both the client and server authenticate the peer
-     * they are connecting to. */
-    wolfSSL_CTX_set_verify(ctx->ssl_ctx, WOLFSSL_VERIFY_PEER, NULL);
-
-    return WH_ERROR_OK;
+    len = strcspn((char*)key, "\n");
+    ((char*)key)[len] = '\0';
+    (void)ssl;
+    return (unsigned int)len;
 }
 
 
-static int wh_PosixServer_ExampleTlsCommonContextSetup(void* ctx)
-{
-    whServerConfig* s_conf = (whServerConfig*)ctx;
-
-    /* Server configuration/context */
-    memset(&tscTls, 0, sizeof(posixTransportTlsServerContext));
-
-    /* Initialize TCP context fields that need specific values */
-    tscTls.listen_fd_p1  = 0; /* Invalid fd */
-    tscTls.accept_fd_p1  = 0; /* Invalid fd */
-    tscTls.request_recv  = 0;
-    tscTls.buffer_offset = 0;
-
-    tlsConfig.server_ip_string = WH_POSIX_SERVER_TCP_IPSTRING;
-    tlsConfig.server_port      = WH_POSIX_SERVER_TCP_PORT;
-    tlsConfig.verify_peer      = true;
-
-    s_comm.transport_cb      = &tlsCb;
-    s_comm.transport_context = (void*)&tscTls;
-    s_comm.transport_config  = (void*)&tlsConfig;
-    s_comm.server_id         = WH_POSIX_SERVER_ID;
-
-    s_conf->comm_config = &s_comm;
-
-    return WH_ERROR_OK;
-}
-
-int wh_PosixServer_ExampleTlsConfig(void* conf)
-{
-    if (wh_PosixServer_ExampleTlsCommonContextSetup(conf) != WH_ERROR_OK) {
-        return WH_ERROR_ABORTED;
-    }
-
-    if (wh_PosixServer_ExampleTlsContextSetup(&tscTls) != WH_ERROR_OK) {
-        return WH_ERROR_ABORTED;
-    }
-    return WH_ERROR_OK;
-}
-
-#ifndef NO_PSK
 int wh_PosixServer_ExamplePskConfig(void* conf)
 {
-    if (wh_PosixServer_ExampleTlsCommonContextSetup(conf) != WH_ERROR_OK) {
+    if (wh_PosixServer_ExampleTlsConfig(conf) != WH_ERROR_OK) {
         return WH_ERROR_ABORTED;
     }
 
-    if (wh_PosixServer_ExamplePskContextSetup(&tscTls) != WH_ERROR_OK) {
-        return WH_ERROR_ABORTED;
-    }
+    tlsConfig.psk_server_cb = psk_tls12_server_cb;
+#ifdef WOLFSSL_TLS13
+    tlsConfig.psk_server_tls13_cb = psk_tls13_server_cb;
+#endif /* WOLFSSL_TLS13 */
+    tlsConfig.psk_identity_hint = "wolfHSM Example Server";
+
     return WH_ERROR_OK;
 }
 #endif /* NO_PSK */
-#endif
+#endif /* WOLFHSM_CFG_NO_CRYPTO && !NO_TLS */
 
 static const whFlashCb  fcb = WH_FLASH_RAMSIM_CB;
 static whFlashRamsimCfg fc_conf;

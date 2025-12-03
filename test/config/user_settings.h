@@ -48,6 +48,13 @@
 /* For ACert support (also requires WOLFSSL_ASN_TEMPLATE) */
 #define WOLFSSL_ACERT
 
+/* The following settings reduce memory footprint when not using the TLS
+ * transport. If TLS is needed, these settings should be removed. */
+#ifndef WOLFHSM_CFG_TLS
+#define NO_TLS
+#define WOLFSSL_USER_IO
+#endif /* WOLFHSM_CFG_TLS */
+
 /** Math library selection for test */
 #define USE_FAST_MATH
 

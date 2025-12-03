@@ -32,6 +32,8 @@ jobs:
       run: |
         if [ "${{ matrix.transport }}" = "dma" ]; then
           cd examples/posix/wh_posix_server && ${{ matrix.asan }} ${{ matrix.debug }} DMA=1 make -j WOLFSSL_DIR=../../../wolfssl
+        elif [ "${{ matrix.transport }}" = "tls" ]; then
+          cd examples/posix/wh_posix_server && ${{ matrix.asan }} ${{ matrix.debug }} TLS=1 make -j WOLFSSL_DIR=../../../wolfssl
         else
           cd examples/posix/wh_posix_server && ${{ matrix.asan }} ${{ matrix.debug }} make -j WOLFSSL_DIR=../../../wolfssl
         fi

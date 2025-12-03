@@ -119,20 +119,21 @@ ifeq ($(SHE),1)
 	DEF += -DWOLFHSM_CFG_SHE_EXTENSION
 endif
 
+# Support a TLS-capable build
+ifeq ($(TLS),1)
+	DEF += -DWOLFHSM_CFG_TLS
+endif
+
 ## Project defines
 # Option to build wolfcrypt tests
 ifeq ($(TESTWOLFCRYPT),1)
 	DEF += -DWOLFHSM_CFG_TEST_WOLFCRYPTTEST
 endif
 
-ifeq ($(CLIENT_ONLY_TCP),1)
-# Build a client-only test driver to connect to a remote server over TCP
+ifeq ($(CLIENT_ONLY),1)
+# Build a client-only test driver to connect to a remote server
     DEF += -DWOLFHSM_CFG_ENABLE_CLIENT
-	DEF += -DWOLFHSM_CFG_TEST_CLIENT_ONLY_TCP
-else ifeq ($(CLIENT_ONLY_TLS),1)
-# Build a client-only test driver to connect to a remote server over TLS
-	DEF += -DWOLFHSM_CFG_ENABLE_CLIENT
-	DEF += -DWOLFHSM_CFG_TEST_CLIENT_ONLY_TLS
+	DEF += -DWOLFHSM_CFG_TEST_CLIENT_ONLY
 else
 # Build both and client server
     DEF += -DWOLFHSM_CFG_ENABLE_CLIENT

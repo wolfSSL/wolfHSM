@@ -461,8 +461,7 @@ int whTest_SheServerConfig(whServerConfig* config)
 #endif /* WOLFHSM_CFG_ENABLE_SERVER */
 
 #if defined(WOLFHSM_CFG_TEST_POSIX) && defined(WOLFHSM_CFG_ENABLE_CLIENT) && \
-    !defined(WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP) && \
-    !defined(WOLFHSM_CFG_TEST_CLIENT_ONLY_TLS)
+    !defined(WOLFHSM_CFG_TEST_CLIENT_ONLY)
 static void* _whClientTask(void* cf)
 {
     WH_TEST_ASSERT(0 == whTest_SheClientConfig(cf));

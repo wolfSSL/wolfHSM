@@ -135,61 +135,43 @@ int wh_PosixClient_ExampleTcpConfig(void* conf)
     return WH_ERROR_OK;
 }
 
-#ifndef WOLFHSM_CFG_NO_CRYPTO
+#if !defined(WOLFHSM_CFG_NO_CRYPTO) && !defined(NO_TLS)
 /* client configuration setup example for TLS transport */
 #undef USE_CERT_BUFFERS_2048
 #define USE_CERT_BUFFERS_2048
 #include "wolfssl/certs_test.h"
-static int
-wh_PosixClient_ExampleTlsContextSetup(posixTransportTlsClientContext* ctx)
+
+int wh_PosixClient_ExampleTlsConfig(void* conf)
 {
-    int rc;
+    whClientConfig* c_conf = (whClientConfig*)conf;
 
-    /* uncomment and compile with DEBUG_WOLFSSL for debugging  */
-    /* wolfSSL_Debugging_ON(); */
+    memset(&tccTls, 0, sizeof(posixTransportTlsClientContext));
 
-    /* Create a new wolfSSL context to use with this connection */
-    ctx->ssl_ctx = wolfSSL_CTX_new(wolfSSLv23_client_method());
-    if (!ctx->ssl_ctx) {
-        return WH_ERROR_ABORTED;
-    }
+    /* Initialize TLS context fields that need specific values */
+    tccTls.state         = 0;
+    tccTls.connect_fd_p1 = 0; /* Invalid fd */
 
-    /* don't use wolfHSM for TLS crypto when communicating with wolfHSM */
-    wolfSSL_CTX_SetDevId(ctx->ssl_ctx, INVALID_DEVID);
+    tlsConfig.server_ip_string = WH_POSIX_SERVER_TCP_IPSTRING;
+    tlsConfig.server_port      = WH_POSIX_SERVER_TCP_PORT;
+    tlsConfig.disable_peer_verification = false;
 
-    /* Load CA certificate for server verification */
-    rc = wolfSSL_CTX_load_verify_buffer(ctx->ssl_ctx, ca_cert_der_2048,
-                                        sizeof_ca_cert_der_2048,
-                                        WOLFSSL_FILETYPE_ASN1);
-    if (rc != WOLFSSL_SUCCESS) {
-        wolfSSL_CTX_free(ctx->ssl_ctx);
-        ctx->ssl_ctx = NULL;
-        return WH_ERROR_ABORTED;
-    }
+    tlsConfig.ca_cert = ca_cert_der_2048;
+    tlsConfig.ca_cert_len = sizeof_ca_cert_der_2048;
+    tlsConfig.cert = client_cert_der_2048;
+    tlsConfig.cert_len = sizeof_client_cert_der_2048;
+    tlsConfig.key = client_key_der_2048;
+    tlsConfig.key_len = sizeof_client_key_der_2048;
+    tlsConfig.heap_hint = NULL;
 
-    rc = wolfSSL_CTX_use_certificate_buffer(ctx->ssl_ctx, client_cert_der_2048,
-                                            sizeof(client_cert_der_2048),
-                                            WOLFSSL_FILETYPE_ASN1);
-    if (rc != WOLFSSL_SUCCESS) {
-        wolfSSL_CTX_free(ctx->ssl_ctx);
-        ctx->ssl_ctx = NULL;
-        return WH_ERROR_ABORTED;
-    }
-
-    /* load private key for TLS connection */
-    rc = wolfSSL_CTX_use_PrivateKey_buffer(ctx->ssl_ctx, client_key_der_2048,
-                                           sizeof(client_key_der_2048),
-                                           WOLFSSL_FILETYPE_ASN1);
-    if (rc != WOLFSSL_SUCCESS) {
-        wolfSSL_CTX_free(ctx->ssl_ctx);
-        ctx->ssl_ctx = NULL;
-        return WH_ERROR_ABORTED;
-    }
-    /* Set verification mode */
-    wolfSSL_CTX_set_verify(ctx->ssl_ctx, WOLFSSL_VERIFY_PEER, NULL);
+    c_comm.transport_cb      = &tlsCb;
+    c_comm.transport_context = (void*)&tccTls;
+    c_comm.transport_config  = (void*)&tlsConfig;
+    c_comm.client_id         = WH_POSIX_CLIENT_ID;
+    c_conf->comm             = &c_comm;
 
     return WH_ERROR_OK;
 }
+
 
 #ifndef NO_PSK
 /* Simple PSK example callback */
@@ -219,75 +201,14 @@ static unsigned int psk_tls12_client_cb(WOLFSSL* ssl, const char* hint,
     return (unsigned int)len;
 }
 
-/* Setup WOLFSSL_CTX for use with PSK */
-static int
-wh_PosixClient_ExamplePskContextSetup(posixTransportTlsClientContext* ctx)
-{
-    /* uncomment and compile with DEBUG_WOLFSSL for debugging  */
-    /* wolfSSL_Debugging_ON(); */
 
-    /* Create a new wolfSSL context to use with this connection */
-    ctx->ssl_ctx = wolfSSL_CTX_new(wolfSSLv23_client_method());
-    if (!ctx->ssl_ctx) {
-        return WH_ERROR_ABORTED;
-    }
-
-    /* don't use wolfHSM for TLS crypto when communicating with wolfHSM */
-    wolfSSL_CTX_SetDevId(ctx->ssl_ctx, INVALID_DEVID);
-
-    wolfSSL_CTX_set_psk_client_callback(ctx->ssl_ctx, psk_tls12_client_cb);
-    /* Set verification mode */
-    wolfSSL_CTX_set_verify(ctx->ssl_ctx, WOLFSSL_VERIFY_PEER, NULL);
-
-    return WH_ERROR_OK;
-}
-#endif /* NO_PSK */
-
-static int wh_PosixClient_ExampleTlsCommonConfig(void* conf)
-{
-    whClientConfig* c_conf = (whClientConfig*)conf;
-
-    memset(&tccTls, 0, sizeof(posixTransportTlsClientContext));
-
-    /* Initialize TLS context fields that need specific values */
-    tccTls.state         = 0;
-    tccTls.connect_fd_p1 = 0; /* Invalid fd */
-
-    tlsConfig.server_ip_string = WH_POSIX_SERVER_TCP_IPSTRING;
-    tlsConfig.server_port      = WH_POSIX_SERVER_TCP_PORT;
-    tlsConfig.verify_peer      = true;
-
-    c_comm.transport_cb      = &tlsCb;
-    c_comm.transport_context = (void*)&tccTls;
-    c_comm.transport_config  = (void*)&tlsConfig;
-    c_comm.client_id         = WH_POSIX_CLIENT_ID;
-    c_conf->comm             = &c_comm;
-
-    return WH_ERROR_OK;
-}
-
-int wh_PosixClient_ExampleTlsConfig(void* conf)
-{
-    if (wh_PosixClient_ExampleTlsCommonConfig(conf) != WH_ERROR_OK) {
-        return WH_ERROR_ABORTED;
-    }
-
-    if (wh_PosixClient_ExampleTlsContextSetup(&tccTls) != WH_ERROR_OK) {
-        return WH_ERROR_ABORTED;
-    }
-    return WH_ERROR_OK;
-}
-
-#ifndef NO_PSK
 int wh_PosixClient_ExamplePskConfig(void* conf)
 {
-    if (wh_PosixClient_ExampleTlsCommonConfig(conf) != WH_ERROR_OK) {
+    if (wh_PosixClient_ExampleTlsConfig(conf) != WH_ERROR_OK) {
         return WH_ERROR_ABORTED;
     }
+    tlsConfig.psk_client_cb = psk_tls12_client_cb;
 
-    if (wh_PosixClient_ExamplePskContextSetup(&tccTls) != WH_ERROR_OK) {
-        return WH_ERROR_ABORTED;
-    }
     return WH_ERROR_OK;
 }
 #endif /* NO_PSK */

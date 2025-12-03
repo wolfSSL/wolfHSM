@@ -35,7 +35,11 @@ jobs:
     - name: Build POSIX server
       run: |
         cd examples/posix/wh_posix_server
-        make -j SHE=1 WOLFSSL_DIR=../../../wolfssl
+        if [ "${{ matrix.transport }}" = "tcp" ]; then
+            make -j SHE=1 WOLFSSL_DIR=../../../wolfssl
+        else
+            make -j TLS=1 SHE=1 WOLFSSL_DIR=../../../wolfssl
+        fi
 
     # Start the server in the background
     - name: Run POSIX server
@@ -51,9 +55,9 @@ jobs:
         cd test
         make clean
         if [ "${{ matrix.transport }}" = "tcp" ]; then
-            make -j CLIENT_ONLY_TCP=1 SHE=1 ASAN=1 WOLFSSL_DIR=../wolfssl && make run
+            make -j CLIENT_ONLY=1 SHE=1 ASAN=1 WOLFSSL_DIR=../wolfssl && make run
         else
-            make -j CLIENT_ONLY_TLS=1 SHE=1 ASAN=1 WOLFSSL_DIR=../wolfssl && make run
+            make -j CLIENT_ONLY=1 TLS=1 SHE=1 ASAN=1 WOLFSSL_DIR=../wolfssl && make run
         fi
 
     # Restart server with fresh state for second test run
@@ -73,9 +77,9 @@ jobs:
         cd test
         make clean
         if [ "${{ matrix.transport }}" = "tcp" ]; then
-            make -j CLIENT_ONLY_TCP=1 SHE=1 DEBUG_VERBOSE=1 WOLFSSL_DIR=../wolfssl && make run
+            make -j CLIENT_ONLY=1 SHE=1 DEBUG_VERBOSE=1 WOLFSSL_DIR=../wolfssl && make run
         else
-            make -j CLIENT_ONLY_TLS=1 SHE=1 DEBUG_VERBOSE=1 WOLFSSL_DIR=../wolfssl && make run
+            make -j CLIENT_ONLY=1 TLS=1 SHE=1 DEBUG_VERBOSE=1 WOLFSSL_DIR=../wolfssl && make run
         fi
 
     # Optional: Kill the server process if it doesn't exit on its own
