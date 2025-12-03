@@ -38,13 +38,12 @@
 /* Adds TLS on top of the existing TCP transport */
 #include "port/posix/posix_transport_tcp.h"
 
-#ifndef WOLFHSM_CFG_NO_CRYPTO
+#ifdef WOLFHSM_CFG_TLS
 #ifndef WOLFSSL_USER_SETTINGS
 #include "wolfssl/options.h"
 #endif
 #include "wolfssl/ssl.h"
 #include "wolfssl/wolfcrypt/memory.h"
-#endif
 
 #define PTTLS_PACKET_MAX_SIZE WH_COMM_MTU
 #define PTTLS_BUFFER_SIZE (sizeof(uint32_t) + PTTLS_PACKET_MAX_SIZE)
@@ -180,4 +179,5 @@ int posixTransportTls_GetListenFd(posixTransportTlsServerContext* context,
 int posixTransportTls_GetAcceptFd(posixTransportTlsServerContext* context,
                                   int*                            out_fd);
 
+#endif /* WOLFHSM_CFG_TLS */
 #endif /* !PORT_POSIX_POSIX_TRANSPORT_TLS_H_ */
