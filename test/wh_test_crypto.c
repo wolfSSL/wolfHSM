@@ -32,6 +32,7 @@
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/types.h"
 #include "wolfssl/wolfcrypt/kdf.h"
+#include "wolfssl/wolfcrypt/ed25519.h"
 
 #include "wolfhsm/wh_error.h"
 
@@ -397,6 +398,368 @@ static int whTest_CryptoEcc(whClientContext* ctx, int devId, WC_RNG* rng)
     return ret;
 }
 #endif /* HAVE_ECC */
+
+#ifdef HAVE_ED25519
+
+static int whTest_Ed25519ImportToServer(whClientContext* ctx, int devId,
+                                        ed25519_key* key, ed25519_key* pubKey,
+                                        uint8_t* label, uint16_t labelLen,
+                                        whKeyId* outSignKeyId,
+                                        whKeyId* outVerifyKeyId)
+{
+    int     ret = 0;
+    byte    pubKeyRaw[ED25519_PUB_KEY_SIZE];
+    word32  pubKeySize  = sizeof(pubKeyRaw);
+    whKeyId signKeyId   = WH_KEYID_ERASED;
+    whKeyId verifyKeyId = WH_KEYID_ERASED;
+
+    ret = wc_ed25519_export_public(key, pubKeyRaw, &pubKeySize);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to export Ed25519 public key: %d\n", ret);
+    }
+    else {
+        ret = wc_ed25519_import_public(pubKeyRaw, pubKeySize, pubKey);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to import Ed25519 public key: %d\n", ret);
+        }
+    }
+
+    if (ret == 0) {
+        ret = wh_Client_Ed25519ImportKey(
+            ctx, key, &signKeyId, WH_NVM_FLAGS_USAGE_SIGN, labelLen, label);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to import Ed25519 key to server: %d\n", ret);
+        }
+        else {
+            /* remove key material from local key structure */
+            wc_ed25519_free(key);
+            ret = wc_ed25519_init_ex(key, NULL, devId);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to re-initialize Ed25519 key: %d\n",
+                               ret);
+            }
+            else {
+                wh_Client_Ed25519SetKeyId(key, signKeyId);
+            }
+        }
+    }
+
+    if (ret == 0) {
+        ret = wh_Client_Ed25519ImportKey(ctx, pubKey, &verifyKeyId,
+                                         WH_NVM_FLAGS_USAGE_VERIFY, labelLen,
+                                         label);
+        if (ret != 0) {
+            WH_ERROR_PRINT(
+                "Failed to import Ed25519 public key to server: %d\n", ret);
+        }
+        else {
+            /* remove key material from local key structure */
+            wc_ed25519_free(pubKey);
+            ret = wc_ed25519_init_ex(pubKey, NULL, devId);
+            if (ret != 0) {
+                WH_ERROR_PRINT(
+                    "Failed to re-initialize Ed25519 public key: %d\n", ret);
+            }
+            else {
+                wh_Client_Ed25519SetKeyId(pubKey, verifyKeyId);
+            }
+        }
+    }
+
+    if (ret == 0) {
+        if (outSignKeyId != NULL) {
+            *outSignKeyId = signKeyId;
+        }
+        if (outVerifyKeyId != NULL) {
+            *outVerifyKeyId = verifyKeyId;
+        }
+    }
+
+    return ret;
+}
+
+static int whTest_CryptoEd25519Inline(whClientContext* ctx, int devId,
+                                      WC_RNG* rng)
+{
+    (void)ctx;
+
+    int          ret       = 0;
+    ed25519_key  key[1]    = {0};
+    ed25519_key  pubKey[1] = {0};
+    byte         msg[]     = "Test message for Ed25519 signing";
+    byte         sig[ED25519_SIG_SIZE];
+    word32       sigSz    = sizeof(sig);
+    int          verified = 0;
+    const word32 msgSz    = (word32)sizeof(msg);
+    byte         pubKeyRaw[ED25519_PUB_KEY_SIZE];
+    word32       pubKeySize = sizeof(pubKeyRaw);
+
+    ret = wc_ed25519_init_ex(key, NULL, devId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to initialize Ed25519 key: %d\n", ret);
+        return ret;
+    }
+
+    ret = wc_ed25519_init_ex(pubKey, NULL, devId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to initialize Ed25519 public key: %d\n", ret);
+        wc_ed25519_free(key);
+        return ret;
+    }
+
+    ret = wc_ed25519_make_key(rng, ED25519_KEY_SIZE, key);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to generate Ed25519 key: %d\n", ret);
+    }
+    else {
+        ret = wc_ed25519_export_public(key, pubKeyRaw, &pubKeySize);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to export Ed25519 public key: %d\n", ret);
+        }
+        else {
+            ret = wc_ed25519_import_public(pubKeyRaw, pubKeySize, pubKey);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to import Ed25519 public key: %d\n",
+                               ret);
+            }
+        }
+    }
+
+    if (ret == 0) {
+        sigSz = sizeof(sig);
+        ret   = wc_ed25519_sign_msg(msg, msgSz, sig, &sigSz, key);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to sign message with Ed25519: %d\n", ret);
+        }
+        else {
+            ret = wc_ed25519_verify_msg(sig, sigSz, msg, msgSz, &verified,
+                                        pubKey);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to verify Ed25519 signature: %d\n", ret);
+            }
+            else if (verified != 1) {
+                WH_ERROR_PRINT("Ed25519 signature verification failed\n");
+                ret = -1;
+            }
+        }
+    }
+
+    if (ret == 0) {
+        /* Corrupt signature to ensure verification fails */
+        sig[0] ^= 0xFF;
+        verified = 0;
+        ret = wc_ed25519_verify_msg(sig, sigSz, msg, msgSz, &verified, pubKey);
+        if (ret == 0 && verified == 1) {
+            WH_ERROR_PRINT(
+                "Modified Ed25519 signature unexpectedly verified\n");
+            ret = -1;
+        }
+        else {
+            ret = 0;
+        }
+    }
+
+    if (ret == 0) {
+        WH_TEST_PRINT("Ed25519 INLINE DEVID=0x%X SUCCESS\n", devId);
+    }
+
+    wc_ed25519_free(pubKey);
+    wc_ed25519_free(key);
+    return ret;
+}
+
+static int whTest_CryptoEd25519ServerKey(whClientContext* ctx, int devId,
+                                         WC_RNG* rng)
+{
+    int         ret         = 0;
+    ed25519_key key[1]      = {0};
+    ed25519_key pubKey[1]   = {0};
+    whKeyId     signKeyId   = WH_KEYID_ERASED;
+    whKeyId     verifyKeyId = WH_KEYID_ERASED;
+    byte        msg[]       = "Ed25519 server key message";
+    byte        sig[ED25519_SIG_SIZE];
+    uint32_t    sigSz    = sizeof(sig);
+    int         verified = 0;
+    uint8_t     label[]  = "Ed25519 Server Key";
+
+    ret = wc_ed25519_init_ex(key, NULL, devId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to initialize Ed25519 key: %d\n", ret);
+        return ret;
+    }
+
+    ret = wc_ed25519_init_ex(pubKey, NULL, devId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to initialize Ed25519 public key: %d\n", ret);
+        wc_ed25519_free(key);
+        return ret;
+    }
+
+    ret = wc_ed25519_make_key(rng, ED25519_KEY_SIZE, key);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to generate Ed25519 key: %d\n", ret);
+    }
+    else {
+        ret = whTest_Ed25519ImportToServer(ctx, devId, key, pubKey, label,
+                                           sizeof(label), &signKeyId,
+                                           &verifyKeyId);
+    }
+
+    if (ret == 0) {
+        ret = wh_Client_Ed25519Sign(ctx, key, msg, (uint32_t)sizeof(msg),
+                                    (uint8_t)Ed25519, NULL, 0, sig, &sigSz);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to sign with server Ed25519 key: %d\n", ret);
+        }
+    }
+
+    if (ret == 0) {
+        ret = wh_Client_Ed25519Verify(ctx, pubKey, sig, sigSz, msg,
+                                      (uint32_t)sizeof(msg), (uint8_t)Ed25519,
+                                      NULL, 0, &verified);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to verify server Ed25519 signature: %d\n",
+                           ret);
+        }
+        else if (verified != 1) {
+            WH_ERROR_PRINT("Server Ed25519 signature verification failed\n");
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        /* Sign-only key should not be allowed to verify */
+        int negVerified = 0;
+        int negRet      = wh_Client_Ed25519Verify(
+            ctx, key, sig, sigSz, msg, (uint32_t)sizeof(msg), (uint8_t)Ed25519,
+            NULL, 0, &negVerified);
+        if (negRet == 0) {
+            WH_ERROR_PRINT("Sign-only Ed25519 key unexpectedly verified\n");
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        sig[0] ^= 0xAA;
+        verified = 0;
+        ret      = wh_Client_Ed25519Verify(ctx, pubKey, sig, sigSz, msg,
+                                           (uint32_t)sizeof(msg), (uint8_t)Ed25519,
+                                           NULL, 0, &verified);
+        if (ret == 0 && verified == 1) {
+            WH_ERROR_PRINT("Modified server Ed25519 signature unexpectedly "
+                           "verified\n");
+            ret = -1;
+        }
+        else {
+            ret = 0;
+        }
+    }
+
+    if (!WH_KEYID_ISERASED(signKeyId)) {
+        (void)wh_Client_KeyEvict(ctx, signKeyId);
+    }
+    if (!WH_KEYID_ISERASED(verifyKeyId)) {
+        (void)wh_Client_KeyEvict(ctx, verifyKeyId);
+    }
+
+    if (ret == 0) {
+        WH_TEST_PRINT("Ed25519 SERVER KEY DEVID=0x%X SUCCESS\n", devId);
+    }
+
+    wc_ed25519_free(pubKey);
+    wc_ed25519_free(key);
+    return ret;
+}
+
+#ifdef WOLFHSM_CFG_DMA
+static int whTest_CryptoEd25519Dma(whClientContext* ctx, int devId, WC_RNG* rng)
+{
+    int         ret         = 0;
+    ed25519_key key[1]      = {0};
+    ed25519_key pubKey[1]   = {0};
+    whKeyId     signKeyId   = WH_KEYID_ERASED;
+    whKeyId     verifyKeyId = WH_KEYID_ERASED;
+    byte        msg[]       = "Ed25519 DMA message";
+    byte        sig[ED25519_SIG_SIZE];
+    uint32_t    sigSz    = sizeof(sig);
+    int         verified = 0;
+    uint8_t     label[]  = "Ed25519 DMA Key";
+
+    ret = wc_ed25519_init_ex(key, NULL, devId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to initialize Ed25519 key (DMA): %d\n", ret);
+        return ret;
+    }
+
+    ret = wc_ed25519_init_ex(pubKey, NULL, devId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to initialize Ed25519 public key (DMA): %d\n",
+                       ret);
+        wc_ed25519_free(key);
+        return ret;
+    }
+
+    ret = wc_ed25519_make_key(rng, ED25519_KEY_SIZE, key);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to generate Ed25519 key (DMA): %d\n", ret);
+    }
+    else {
+        ret = whTest_Ed25519ImportToServer(ctx, devId, key, pubKey, label,
+                                           sizeof(label), &signKeyId,
+                                           &verifyKeyId);
+    }
+
+    if (ret == 0) {
+        ret = wh_Client_Ed25519SignDma(ctx, key, msg, (uint32_t)sizeof(msg),
+                                       (uint8_t)Ed25519, NULL, 0, sig, &sigSz);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to sign via DMA Ed25519 key: %d\n", ret);
+        }
+    }
+
+    if (ret == 0) {
+        ret = wh_Client_Ed25519VerifyDma(ctx, pubKey, sig, sigSz, msg,
+                                         (uint32_t)sizeof(msg),
+                                         (uint8_t)Ed25519, NULL, 0, &verified);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to verify DMA Ed25519 signature: %d\n", ret);
+        }
+        else if (verified != 1) {
+            WH_ERROR_PRINT("DMA Ed25519 signature verification failed\n");
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        /* Sign-only key should not be allowed to verify (DMA) */
+        int negVerified = 0;
+        int negRet      = wh_Client_Ed25519VerifyDma(
+            ctx, key, sig, sigSz, msg, (uint32_t)sizeof(msg), (uint8_t)Ed25519,
+            NULL, 0, &negVerified);
+        if (negRet == 0) {
+            WH_ERROR_PRINT(
+                "Sign-only Ed25519 key unexpectedly verified (DMA)\n");
+            ret = -1;
+        }
+    }
+
+    if (!WH_KEYID_ISERASED(signKeyId)) {
+        (void)wh_Client_KeyEvict(ctx, signKeyId);
+    }
+    if (!WH_KEYID_ISERASED(verifyKeyId)) {
+        (void)wh_Client_KeyEvict(ctx, verifyKeyId);
+    }
+
+    if (ret == 0) {
+        WH_TEST_PRINT("Ed25519 DMA DEVID=0x%X SUCCESS\n", devId);
+    }
+
+    wc_ed25519_free(pubKey);
+    wc_ed25519_free(key);
+    return ret;
+}
+#endif /* WOLFHSM_CFG_DMA */
+#endif /* HAVE_ED25519 */
 
 #ifdef HAVE_CURVE25519
 static int whTest_CryptoCurve25519(whClientContext* ctx, int devId, WC_RNG* rng)
@@ -4305,6 +4668,33 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     }
 #endif /* HAVE_ECC */
 
+#ifdef HAVE_ED25519
+    if (ret != 0) {
+        WH_ERROR_PRINT("Pre-Ed25519 tests ret=%d\n", ret);
+        return ret;
+    }
+    if (ret == 0) {
+        ret = whTest_CryptoEd25519Inline(client, WH_DEV_ID, rng);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Ed25519 inline test failed: %d\n", ret);
+        }
+    }
+    if (ret == 0) {
+        ret = whTest_CryptoEd25519ServerKey(client, WH_DEV_ID, rng);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Ed25519 server key test failed: %d\n", ret);
+        }
+    }
+#ifdef WOLFHSM_CFG_DMA
+    if (ret == 0) {
+        ret = whTest_CryptoEd25519Dma(client, WH_DEV_ID_DMA, rng);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Ed25519 DMA test failed: %d\n", ret);
+        }
+    }
+#endif /* WOLFHSM_CFG_DMA */
+#endif /* HAVE_ED25519 */
+
 #ifdef HAVE_CURVE25519
     /* test curve25519 */
     if (ret == 0) {
@@ -4420,6 +4810,10 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     (void)wh_Client_CommClose(client);
     (void)wh_Client_Cleanup(client);
 
+    if (ret != 0) {
+        WH_ERROR_PRINT("whTest_CryptoClientConfig returning error: %d\n", ret);
+    }
+
     return ret;
 }
 #endif /* WOLFHSM_CFG_ENABLE_CLIENT */
@@ -4495,7 +4889,11 @@ int whTest_CryptoServerConfig(whServerConfig* config)
     !defined(WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP)
 static void* _whClientTask(void *cf)
 {
-    WH_TEST_ASSERT(0 == whTest_CryptoClientConfig(cf));
+    int rc = whTest_CryptoClientConfig(cf);
+    if (rc != 0) {
+        WH_ERROR_PRINT("whTest_CryptoClientConfig returned %d\n", rc);
+    }
+    WH_TEST_ASSERT(0 == rc);
     return NULL;
 }
 #endif /* WOLFHSM_CFG_TEST_POSIX && WOLFHSM_CFG_ENABLE_CLIENT */

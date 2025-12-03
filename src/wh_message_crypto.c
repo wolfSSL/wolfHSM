@@ -538,6 +538,93 @@ int wh_MessageCrypto_TranslateCurve25519Response(
     return 0;
 }
 
+/* Ed25519 Key Generation Request translation */
+int wh_MessageCrypto_TranslateEd25519KeyGenRequest(
+    uint16_t magic, const whMessageCrypto_Ed25519KeyGenRequest* src,
+    whMessageCrypto_Ed25519KeyGenRequest* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, flags);
+    WH_T32(magic, dest, src, keyId);
+    WH_T32(magic, dest, src, access);
+    if (src != dest) {
+        memcpy(dest->label, src->label, sizeof(src->label));
+    }
+    return 0;
+}
+
+/* Ed25519 Key Generation Response translation */
+int wh_MessageCrypto_TranslateEd25519KeyGenResponse(
+    uint16_t magic, const whMessageCrypto_Ed25519KeyGenResponse* src,
+    whMessageCrypto_Ed25519KeyGenResponse* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, keyId);
+    WH_T32(magic, dest, src, outSz);
+    return 0;
+}
+
+/* Ed25519 Sign Request translation */
+int wh_MessageCrypto_TranslateEd25519SignRequest(
+    uint16_t magic, const whMessageCrypto_Ed25519SignRequest* src,
+    whMessageCrypto_Ed25519SignRequest* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, options);
+    WH_T32(magic, dest, src, keyId);
+    WH_T32(magic, dest, src, msgSz);
+    WH_T32(magic, dest, src, type);
+    WH_T32(magic, dest, src, ctxSz);
+    return 0;
+}
+
+/* Ed25519 Sign Response translation */
+int wh_MessageCrypto_TranslateEd25519SignResponse(
+    uint16_t magic, const whMessageCrypto_Ed25519SignResponse* src,
+    whMessageCrypto_Ed25519SignResponse* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, sigSz);
+    return 0;
+}
+
+/* Ed25519 Verify Request translation */
+int wh_MessageCrypto_TranslateEd25519VerifyRequest(
+    uint16_t magic, const whMessageCrypto_Ed25519VerifyRequest* src,
+    whMessageCrypto_Ed25519VerifyRequest* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, options);
+    WH_T32(magic, dest, src, keyId);
+    WH_T32(magic, dest, src, sigSz);
+    WH_T32(magic, dest, src, msgSz);
+    WH_T32(magic, dest, src, type);
+    WH_T32(magic, dest, src, ctxSz);
+    return 0;
+}
+
+/* Ed25519 Verify Response translation */
+int wh_MessageCrypto_TranslateEd25519VerifyResponse(
+    uint16_t magic, const whMessageCrypto_Ed25519VerifyResponse* src,
+    whMessageCrypto_Ed25519VerifyResponse* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, res);
+    return 0;
+}
+
 /* SHA256 Request translation */
 int wh_MessageCrypto_TranslateSha256Request(
     uint16_t magic, const whMessageCrypto_Sha256Request* src,
@@ -999,6 +1086,116 @@ int wh_MessageCrypto_TranslateMlDsaVerifyDmaResponse(
     }
 
     WH_T32(magic, dest, src, verifyResult);
+    return 0;
+}
+
+/* Ed25519 DMA Sign Request translation */
+int wh_MessageCrypto_TranslateEd25519SignDmaRequest(
+    uint16_t magic, const whMessageCrypto_Ed25519SignDmaRequest* src,
+    whMessageCrypto_Ed25519SignDmaRequest* dest)
+{
+    int ret;
+
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->msg, &dest->msg);
+    if (ret != 0) {
+        return ret;
+    }
+
+    ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->sig, &dest->sig);
+    if (ret != 0) {
+        return ret;
+    }
+
+    ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->pub, &dest->pub);
+    if (ret != 0) {
+        return ret;
+    }
+
+    WH_T32(magic, dest, src, options);
+    WH_T32(magic, dest, src, keyId);
+    WH_T32(magic, dest, src, type);
+    WH_T32(magic, dest, src, ctxSz);
+    return 0;
+}
+
+/* Ed25519 DMA Sign Response translation */
+int wh_MessageCrypto_TranslateEd25519SignDmaResponse(
+    uint16_t magic, const whMessageCrypto_Ed25519SignDmaResponse* src,
+    whMessageCrypto_Ed25519SignDmaResponse* dest)
+{
+    int ret;
+
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateDmaAddrStatus(magic, &src->dmaAddrStatus,
+                                                  &dest->dmaAddrStatus);
+    if (ret != 0) {
+        return ret;
+    }
+
+    WH_T32(magic, dest, src, sigSz);
+    WH_T32(magic, dest, src, pubSz);
+    return 0;
+}
+
+/* Ed25519 DMA Verify Request translation */
+int wh_MessageCrypto_TranslateEd25519VerifyDmaRequest(
+    uint16_t magic, const whMessageCrypto_Ed25519VerifyDmaRequest* src,
+    whMessageCrypto_Ed25519VerifyDmaRequest* dest)
+{
+    int ret;
+
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->sig, &dest->sig);
+    if (ret != 0) {
+        return ret;
+    }
+
+    ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->msg, &dest->msg);
+    if (ret != 0) {
+        return ret;
+    }
+
+    ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->pub, &dest->pub);
+    if (ret != 0) {
+        return ret;
+    }
+
+    WH_T32(magic, dest, src, options);
+    WH_T32(magic, dest, src, keyId);
+    WH_T32(magic, dest, src, type);
+    WH_T32(magic, dest, src, ctxSz);
+    return 0;
+}
+
+/* Ed25519 DMA Verify Response translation */
+int wh_MessageCrypto_TranslateEd25519VerifyDmaResponse(
+    uint16_t magic, const whMessageCrypto_Ed25519VerifyDmaResponse* src,
+    whMessageCrypto_Ed25519VerifyDmaResponse* dest)
+{
+    int ret;
+
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateDmaAddrStatus(magic, &src->dmaAddrStatus,
+                                                  &dest->dmaAddrStatus);
+    if (ret != 0) {
+        return ret;
+    }
+
+    WH_T32(magic, dest, src, verifyResult);
+    WH_T32(magic, dest, src, pubSz);
     return 0;
 }
 

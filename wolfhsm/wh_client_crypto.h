@@ -48,6 +48,7 @@
 #include "wolfssl/wolfcrypt/curve25519.h"
 #include "wolfssl/wolfcrypt/rsa.h"
 #include "wolfssl/wolfcrypt/ecc.h"
+#include "wolfssl/wolfcrypt/ed25519.h"
 #include "wolfssl/wolfcrypt/dilithium.h"
 #include "wolfssl/wolfcrypt/hmac.h"
 
@@ -273,6 +274,82 @@ int wh_Client_EccVerify(whClientContext* ctx, ecc_key* key,
         int *out_res);
 
 #endif /* HAVE_ECC */
+
+#ifdef HAVE_ED25519
+/**
+ * @brief Associates an Ed25519 key with a specific key ID.
+ *
+ * Sets the device context of an Ed25519 key to the provided key ID.
+ */
+int wh_Client_Ed25519SetKeyId(ed25519_key* key, whKeyId keyId);
+
+/**
+ * @brief Retrieves the key ID from an Ed25519 key device context.
+ */
+int wh_Client_Ed25519GetKeyId(ed25519_key* key, whKeyId* outId);
+
+/**
+ * @brief Import an Ed25519 key into the server keystore/cache.
+ */
+int wh_Client_Ed25519ImportKey(whClientContext* ctx, ed25519_key* key,
+                               whKeyId* inout_keyId, whNvmFlags flags,
+                               uint16_t label_len, uint8_t* label);
+
+/**
+ * @brief Export an Ed25519 key from the server to the client.
+ */
+int wh_Client_Ed25519ExportKey(whClientContext* ctx, whKeyId keyId,
+                               ed25519_key* key, uint16_t label_len,
+                               uint8_t* label);
+
+/**
+ * @brief Create a new Ed25519 key on the server and export it without caching.
+ */
+int wh_Client_Ed25519MakeExportKey(whClientContext* ctx, ed25519_key* key);
+
+/**
+ * @brief Create a new Ed25519 key on the server and store it in cache/NVM.
+ */
+int wh_Client_Ed25519MakeCacheKey(whClientContext* ctx, whKeyId* inout_key_id,
+                                  whNvmFlags flags, uint16_t label_len,
+                                  uint8_t* label);
+
+/**
+ * @brief Sign a message using an Ed25519 key on the server.
+ */
+int wh_Client_Ed25519Sign(whClientContext* ctx, ed25519_key* key,
+                          const uint8_t* msg, uint32_t msgLen, uint8_t type,
+                          const uint8_t* context, uint32_t contextLen,
+                          uint8_t* sig, uint32_t* inout_sig_len);
+
+/**
+ * @brief Verify a message signature using an Ed25519 key on the server.
+ */
+int wh_Client_Ed25519Verify(whClientContext* ctx, ed25519_key* key,
+                            const uint8_t* sig, uint32_t sigLen,
+                            const uint8_t* msg, uint32_t msgLen, uint8_t type,
+                            const uint8_t* context, uint32_t contextLen,
+                            int* out_res);
+
+#ifdef WOLFHSM_CFG_DMA
+/**
+ * @brief Sign a message using an Ed25519 key via DMA.
+ */
+int wh_Client_Ed25519SignDma(whClientContext* ctx, ed25519_key* key,
+                             const uint8_t* msg, uint32_t msgLen, uint8_t type,
+                             const uint8_t* context, uint32_t contextLen,
+                             uint8_t* sig, uint32_t* inout_sig_len);
+
+/**
+ * @brief Verify a signature using an Ed25519 key via DMA.
+ */
+int wh_Client_Ed25519VerifyDma(whClientContext* ctx, ed25519_key* key,
+                               const uint8_t* sig, uint32_t sigLen,
+                               const uint8_t* msg, uint32_t msgLen,
+                               uint8_t type, const uint8_t* context,
+                               uint32_t contextLen, int* out_res);
+#endif /* WOLFHSM_CFG_DMA */
+#endif /* HAVE_ED25519 */
 
 #ifndef NO_RSA
 /**

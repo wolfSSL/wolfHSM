@@ -38,6 +38,7 @@
 #include "wolfssl/wolfcrypt/rsa.h"
 #include "wolfssl/wolfcrypt/curve25519.h"
 #include "wolfssl/wolfcrypt/ecc.h"
+#include "wolfssl/wolfcrypt/ed25519.h"
 #include "wolfssl/wolfcrypt/aes.h"
 #include "wolfssl/wolfcrypt/sha256.h"
 #include "wolfssl/wolfcrypt/sha512.h"
@@ -172,6 +173,26 @@ static int _HandleCurve25519SharedSecret(whServerContext* ctx, uint16_t magic,
                                          uint16_t inSize, void* cryptoDataOut,
                                          uint16_t* outSize);
 #endif /* HAVE_CURVE25519 */
+
+#ifdef HAVE_ED25519
+static int _HandleEd25519KeyGen(whServerContext* ctx, uint16_t magic,
+                                const void* cryptoDataIn, uint16_t inSize,
+                                void* cryptoDataOut, uint16_t* outSize);
+static int _HandleEd25519Sign(whServerContext* ctx, uint16_t magic,
+                              const void* cryptoDataIn, uint16_t inSize,
+                              void* cryptoDataOut, uint16_t* outSize);
+static int _HandleEd25519Verify(whServerContext* ctx, uint16_t magic,
+                                const void* cryptoDataIn, uint16_t inSize,
+                                void* cryptoDataOut, uint16_t* outSize);
+#ifdef WOLFHSM_CFG_DMA
+static int _HandleEd25519SignDma(whServerContext* ctx, uint16_t magic,
+                                 const void* cryptoDataIn, uint16_t inSize,
+                                 void* cryptoDataOut, uint16_t* outSize);
+static int _HandleEd25519VerifyDma(whServerContext* ctx, uint16_t magic,
+                                   const void* cryptoDataIn, uint16_t inSize,
+                                   void* cryptoDataOut, uint16_t* outSize);
+#endif /* WOLFHSM_CFG_DMA */
+#endif /* HAVE_ED25519 */
 
 #ifdef HAVE_DILITHIUM
 /* Process a Dilithium KeyGen request packet and produce a response packet */
@@ -607,6 +628,63 @@ int wh_Server_EccKeyCacheExport(whServerContext* ctx, whKeyId keyId,
     return ret;
 }
 #endif /* HAVE_ECC */
+
+#ifdef HAVE_ED25519
+int wh_Server_Ed25519KeyCacheImport(whServerContext* ctx, ed25519_key* key,
+                                    whKeyId keyId, whNvmFlags flags,
+                                    uint16_t label_len, uint8_t* label)
+{
+    int            ret      = WH_ERROR_OK;
+    uint8_t*       cacheBuf = NULL;
+    whNvmMetadata* cacheMeta;
+    /* Ed25519 DER (private key) is small; 128 bytes is ample headroom */
+    uint16_t max_size = 128;
+    uint16_t der_size = 0;
+
+    if ((ctx == NULL) || (key == NULL) || WH_KEYID_ISERASED(keyId) ||
+        ((label != NULL) && (label_len > sizeof(cacheMeta->label)))) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_Server_KeystoreGetCacheSlot(ctx, keyId, max_size, &cacheBuf,
+                                         &cacheMeta);
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Crypto_Ed25519SerializeKeyDer(key, max_size, cacheBuf,
+                                               &der_size);
+    }
+
+    if (ret == WH_ERROR_OK) {
+        cacheMeta->id     = keyId;
+        cacheMeta->len    = der_size;
+        cacheMeta->flags  = flags;
+        cacheMeta->access = WH_NVM_ACCESS_ANY;
+
+        if ((label != NULL) && (label_len > 0)) {
+            memcpy(cacheMeta->label, label, label_len);
+        }
+    }
+
+    return ret;
+}
+
+int wh_Server_Ed25519KeyCacheExport(whServerContext* ctx, whKeyId keyId,
+                                    ed25519_key* key)
+{
+    uint8_t*       cacheBuf = NULL;
+    whNvmMetadata* cacheMeta;
+    int            ret = WH_ERROR_OK;
+
+    if ((ctx == NULL) || (key == NULL) || WH_KEYID_ISERASED(keyId)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_Server_KeystoreFreshenKey(ctx, keyId, &cacheBuf, &cacheMeta);
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Crypto_Ed25519DeserializeKeyDer(cacheBuf, cacheMeta->len, key);
+    }
+    return ret;
+}
+#endif /* HAVE_ED25519 */
 
 #ifdef HAVE_CURVE25519
 int wh_Server_CacheImportCurve25519Key(whServerContext* server,
@@ -1757,6 +1835,485 @@ static int _HandleCurve25519SharedSecret(whServerContext* ctx, uint16_t magic,
     return ret;
 }
 #endif /* HAVE_CURVE25519 */
+
+#ifdef HAVE_ED25519
+static int _HandleEd25519KeyGen(whServerContext* ctx, uint16_t magic,
+                                const void* cryptoDataIn, uint16_t inSize,
+                                void* cryptoDataOut, uint16_t* outSize)
+{
+    (void)inSize;
+
+    int                                   ret = WH_ERROR_OK;
+    ed25519_key                           key[1];
+    whMessageCrypto_Ed25519KeyGenRequest  req;
+    whMessageCrypto_Ed25519KeyGenResponse res;
+
+    ret = wh_MessageCrypto_TranslateEd25519KeyGenRequest(
+        magic, (const whMessageCrypto_Ed25519KeyGenRequest*)cryptoDataIn, &req);
+    if (ret != 0) {
+        return ret;
+    }
+
+    whKeyId key_id = wh_KeyId_TranslateFromClient(
+        WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+    whNvmFlags flags      = req.flags;
+    uint8_t*   label      = req.label;
+    uint16_t   label_size = WH_NVM_LABEL_LEN;
+
+    uint8_t* res_out =
+        (uint8_t*)cryptoDataOut + sizeof(whMessageCrypto_Ed25519KeyGenResponse);
+    uint16_t max_size = (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN -
+                                   (res_out - (uint8_t*)cryptoDataOut));
+    uint16_t ser_size = 0;
+
+    ret = wc_ed25519_init_ex(key, NULL, ctx->crypto->devId);
+    if (ret == 0) {
+        ret = wc_ed25519_make_key(ctx->crypto->rng, ED25519_KEY_SIZE, key);
+        if (ret == 0) {
+            if (flags & WH_NVM_FLAGS_EPHEMERAL) {
+                key_id = WH_KEYID_ERASED;
+                ret = wh_Crypto_Ed25519SerializeKeyDer(key, max_size, res_out,
+                                                       &ser_size);
+            }
+            else {
+                ser_size = 0;
+                if (WH_KEYID_ISERASED(key_id)) {
+                    ret = wh_Server_KeystoreGetUniqueId(ctx, &key_id);
+                    if (ret != WH_ERROR_OK) {
+                        wc_ed25519_free(key);
+                        return ret;
+                    }
+                }
+                if (ret == 0) {
+                    ret = wh_Server_Ed25519KeyCacheImport(
+                        ctx, key, key_id, flags, label_size, label);
+                }
+            }
+        }
+        wc_ed25519_free(key);
+    }
+
+    if (ret == WH_ERROR_OK) {
+        if (flags & WH_NVM_FLAGS_EPHEMERAL) {
+            res.keyId = WH_KEYID_ERASED;
+        }
+        else {
+            res.keyId = wh_KeyId_TranslateToClient(key_id);
+        }
+        res.outSz = ser_size;
+
+        wh_MessageCrypto_TranslateEd25519KeyGenResponse(
+            magic, &res, (whMessageCrypto_Ed25519KeyGenResponse*)cryptoDataOut);
+
+        *outSize = sizeof(whMessageCrypto_Ed25519KeyGenResponse) + ser_size;
+    }
+
+    return ret;
+}
+
+static int _HandleEd25519Sign(whServerContext* ctx, uint16_t magic,
+                              const void* cryptoDataIn, uint16_t inSize,
+                              void* cryptoDataOut, uint16_t* outSize)
+{
+    int                                ret;
+    ed25519_key                        key[1];
+    whMessageCrypto_Ed25519SignRequest req;
+    uint8_t                            sig[ED25519_SIG_SIZE];
+
+    if (inSize < sizeof(req)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateEd25519SignRequest(
+        magic, (const whMessageCrypto_Ed25519SignRequest*)cryptoDataIn, &req);
+    if (ret != 0) {
+        return ret;
+    }
+    WOLFHSM_CFG_PRINTF(
+        "[server] Ed25519Sign req: options=0x%08X key_id=0x%X msgSz=%u\n",
+        (unsigned int)req.options, (unsigned int)req.keyId,
+        (unsigned int)req.msgSz);
+
+    uint32_t available = inSize - sizeof(req);
+    if (req.msgSz > available) {
+        return WH_ERROR_BADARGS;
+    }
+    available -= req.msgSz;
+    if (req.ctxSz > 255U) {
+        return WH_ERROR_BADARGS;
+    }
+    if (req.ctxSz > available) {
+        return WH_ERROR_BADARGS;
+    }
+
+    if ((req.type != (byte)Ed25519) && (req.type != (byte)Ed25519ctx) &&
+        (req.type != (byte)Ed25519ph)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    if (req.type == (byte)Ed25519 && (req.ctxSz != 0U)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    whKeyId key_id = wh_KeyId_TranslateFromClient(
+        WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+    uint32_t msg_len = req.msgSz;
+    uint8_t* req_msg = (uint8_t*)cryptoDataIn + sizeof(req);
+    uint8_t* req_ctx = req_msg + msg_len;
+    int evict = !!(req.options & WH_MESSAGE_CRYPTO_ED25519_SIGN_OPTIONS_EVICT);
+
+    if (!WH_KEYID_ISERASED(key_id)) {
+        ret = wh_Server_KeystoreFindEnforceKeyUsage(ctx, key_id,
+                                                    WH_NVM_FLAGS_USAGE_SIGN);
+        if (ret != WH_ERROR_OK) {
+            return ret;
+        }
+    }
+
+    uint8_t* res_sig =
+        (uint8_t*)cryptoDataOut + sizeof(whMessageCrypto_Ed25519SignResponse);
+    word32 sig_len = sizeof(sig);
+
+    ret = wc_ed25519_init_ex(key, NULL, ctx->crypto->devId);
+    if (ret == 0) {
+        ret = wh_Server_Ed25519KeyCacheExport(ctx, key_id, key);
+        if (ret == WH_ERROR_OK) {
+            ret = wc_ed25519_sign_msg_ex(req_msg, msg_len, sig, &sig_len, key,
+                                         (byte)req.type, req_ctx,
+                                         (byte)req.ctxSz);
+        }
+        wc_ed25519_free(key);
+    }
+    if (sig_len > WOLFHSM_CFG_COMM_DATA_LEN -
+                      sizeof(whMessageCrypto_Ed25519SignResponse) -
+                      sizeof(whMessageCrypto_GenericResponseHeader)) {
+        ret = WH_ERROR_ABORTED;
+    }
+    if (ret == 0) {
+        memcpy(res_sig, sig, sig_len);
+    }
+
+    if (evict) {
+        /* User requested to evict from cache, even if the call failed */
+        (void)wh_Server_KeystoreEvictKey(ctx, key_id);
+    }
+
+    if (ret == 0) {
+        whMessageCrypto_Ed25519SignResponse res;
+        res.sigSz = sig_len;
+
+        wh_MessageCrypto_TranslateEd25519SignResponse(
+            magic, &res, (whMessageCrypto_Ed25519SignResponse*)cryptoDataOut);
+
+        *outSize = sizeof(whMessageCrypto_Ed25519SignResponse) + sig_len;
+    }
+
+    return ret;
+}
+
+static int _HandleEd25519Verify(whServerContext* ctx, uint16_t magic,
+                                const void* cryptoDataIn, uint16_t inSize,
+                                void* cryptoDataOut, uint16_t* outSize)
+{
+    int                                   ret;
+    ed25519_key                           key[1];
+    whMessageCrypto_Ed25519VerifyRequest  req;
+    whMessageCrypto_Ed25519VerifyResponse res;
+
+    if (inSize < sizeof(req)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateEd25519VerifyRequest(
+        magic, (const whMessageCrypto_Ed25519VerifyRequest*)cryptoDataIn, &req);
+    if (ret != 0) {
+        return ret;
+    }
+    WOLFHSM_CFG_PRINTF("[server] Ed25519Verify req: options=0x%08X key_id=0x%X "
+                       "sigSz=%u msgSz=%u\n",
+                       (unsigned int)req.options, (unsigned int)req.keyId,
+                       (unsigned int)req.sigSz, (unsigned int)req.msgSz);
+
+    uint32_t available = inSize - sizeof(req);
+    if (req.sigSz > available) {
+        return WH_ERROR_BADARGS;
+    }
+    available -= req.sigSz;
+    if (req.msgSz > available) {
+        return WH_ERROR_BADARGS;
+    }
+    available -= req.msgSz;
+    if (req.ctxSz > available) {
+        return WH_ERROR_BADARGS;
+    }
+    if (req.ctxSz > 255U) {
+        return WH_ERROR_BADARGS;
+    }
+
+    if ((req.type != (byte)Ed25519) && (req.type != (byte)Ed25519ctx) &&
+        (req.type != (byte)Ed25519ph)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    whKeyId key_id = wh_KeyId_TranslateFromClient(
+        WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+    uint32_t sig_len = req.sigSz;
+    uint32_t msg_len = req.msgSz;
+    uint8_t* req_sig =
+        (uint8_t*)cryptoDataIn + sizeof(whMessageCrypto_Ed25519VerifyRequest);
+    uint8_t* req_msg = req_sig + sig_len;
+    uint8_t* req_ctx = req_msg + msg_len;
+    int      evict =
+        !!(req.options & WH_MESSAGE_CRYPTO_ED25519_VERIFY_OPTIONS_EVICT);
+
+    if (!WH_KEYID_ISERASED(key_id)) {
+        ret = wh_Server_KeystoreFindEnforceKeyUsage(ctx, key_id,
+                                                    WH_NVM_FLAGS_USAGE_VERIFY);
+        if (ret != WH_ERROR_OK) {
+            return ret;
+        }
+    }
+
+    int result = 0;
+
+    ret = wc_ed25519_init_ex(key, NULL, ctx->crypto->devId);
+    if (ret == 0) {
+        ret = wh_Server_Ed25519KeyCacheExport(ctx, key_id, key);
+        if (ret == WH_ERROR_OK) {
+            ret = wc_ed25519_verify_msg_ex(req_sig, sig_len, req_msg, msg_len,
+                                           &result, key, (byte)req.type,
+                                           req_ctx, (byte)req.ctxSz);
+        }
+        wc_ed25519_free(key);
+    }
+
+    if (evict != 0) {
+        (void)wh_Server_KeystoreEvictKey(ctx, key_id);
+    }
+
+    if (ret == 0) {
+        res.res = result;
+
+        wh_MessageCrypto_TranslateEd25519VerifyResponse(
+            magic, &res, (whMessageCrypto_Ed25519VerifyResponse*)cryptoDataOut);
+
+        *outSize = sizeof(whMessageCrypto_Ed25519VerifyResponse);
+    }
+
+    return ret;
+}
+#ifdef WOLFHSM_CFG_DMA
+static int _HandleEd25519SignDma(whServerContext* ctx, uint16_t magic,
+                                 const void* cryptoDataIn, uint16_t inSize,
+                                 void* cryptoDataOut, uint16_t* outSize)
+{
+    int                                    ret = 0;
+    ed25519_key                            key[1];
+    void*                                  msgAddr = NULL;
+    void*                                  sigAddr = NULL;
+    whMessageCrypto_Ed25519SignDmaRequest  req;
+    whMessageCrypto_Ed25519SignDmaResponse res;
+    word32                                 sigLen = 0;
+
+    if (inSize < sizeof(req)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateEd25519SignDmaRequest(
+        magic, (const whMessageCrypto_Ed25519SignDmaRequest*)cryptoDataIn,
+        &req);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    uint32_t available = inSize - sizeof(req);
+    if (req.ctxSz > available) {
+        return WH_ERROR_BADARGS;
+    }
+    if (req.ctxSz > 255U) {
+        return WH_ERROR_BADARGS;
+    }
+    uint8_t* req_ctx = (uint8_t*)cryptoDataIn + sizeof(req);
+
+    if ((req.type != (byte)Ed25519) && (req.type != (byte)Ed25519ctx) &&
+        (req.type != (byte)Ed25519ph)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    whKeyId key_id = wh_KeyId_TranslateFromClient(
+        WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+    int evict = !!(req.options & WH_MESSAGE_CRYPTO_ED25519_SIGN_OPTIONS_EVICT);
+
+    if (!WH_KEYID_ISERASED(key_id)) {
+        ret = wh_Server_KeystoreFindEnforceKeyUsage(ctx, key_id,
+                                                    WH_NVM_FLAGS_USAGE_SIGN);
+        if (ret != WH_ERROR_OK) {
+            return ret;
+        }
+    }
+
+    memset(&res, 0, sizeof(res));
+
+    sigLen = req.sig.sz;
+    ret    = wh_Server_DmaProcessClientAddress(
+        ctx, (uintptr_t)req.msg.addr, &msgAddr, req.msg.sz,
+        WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
+    if (ret != WH_ERROR_OK) {
+        res.dmaAddrStatus.badAddr = req.msg;
+    }
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Server_DmaProcessClientAddress(
+            ctx, (uintptr_t)req.sig.addr, &sigAddr, req.sig.sz,
+            WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
+        if (ret != WH_ERROR_OK) {
+            res.dmaAddrStatus.badAddr = req.sig;
+        }
+    }
+    if (ret == WH_ERROR_OK) {
+        ret = wc_ed25519_init_ex(key, NULL, ctx->crypto->devId);
+        if (ret == 0) {
+            ret = wh_Server_Ed25519KeyCacheExport(ctx, key_id, key);
+            if (ret == WH_ERROR_OK) {
+                ret = wc_ed25519_sign_msg_ex(msgAddr, req.msg.sz, sigAddr,
+                                             &sigLen, key, (byte)req.type,
+                                             req_ctx, (byte)req.ctxSz);
+                if (ret == WH_ERROR_OK) {
+                    res.sigSz = sigLen;
+                }
+            }
+            if ((ret != WH_ERROR_OK) && (res.dmaAddrStatus.badAddr.sz == 0)) {
+                res.dmaAddrStatus.badAddr = req.sig;
+            }
+        }
+        wc_ed25519_free(key);
+    }
+
+    (void)wh_Server_DmaProcessClientAddress(
+        ctx, (uintptr_t)req.sig.addr, &sigAddr, sigLen,
+        WH_DMA_OPER_CLIENT_WRITE_POST, (whServerDmaFlags){0});
+    (void)wh_Server_DmaProcessClientAddress(
+        ctx, (uintptr_t)req.msg.addr, &msgAddr, req.msg.sz,
+        WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
+
+    if (evict != 0) {
+        (void)wh_Server_KeystoreEvictKey(ctx, key_id);
+    }
+
+    if (ret == WH_ERROR_OK) {
+        (void)wh_MessageCrypto_TranslateEd25519SignDmaResponse(
+            magic, &res,
+            (whMessageCrypto_Ed25519SignDmaResponse*)cryptoDataOut);
+        *outSize = sizeof(res);
+    }
+
+    return ret;
+}
+
+static int _HandleEd25519VerifyDma(whServerContext* ctx, uint16_t magic,
+                                   const void* cryptoDataIn, uint16_t inSize,
+                                   void* cryptoDataOut, uint16_t* outSize)
+{
+    int                                      ret = 0;
+    ed25519_key                              key[1];
+    void*                                    msgAddr = NULL;
+    void*                                    sigAddr = NULL;
+    whMessageCrypto_Ed25519VerifyDmaRequest  req;
+    whMessageCrypto_Ed25519VerifyDmaResponse res;
+
+    if (inSize < sizeof(req)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateEd25519VerifyDmaRequest(
+        magic, (const whMessageCrypto_Ed25519VerifyDmaRequest*)cryptoDataIn,
+        &req);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    uint32_t available = inSize - sizeof(req);
+    if (req.ctxSz > available) {
+        return WH_ERROR_BADARGS;
+    }
+    if (req.ctxSz > 255U) {
+        return WH_ERROR_BADARGS;
+    }
+    uint8_t* req_ctx = (uint8_t*)cryptoDataIn + sizeof(req);
+
+    if ((req.type != (byte)Ed25519) && (req.type != (byte)Ed25519ctx) &&
+        (req.type != (byte)Ed25519ph)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    whKeyId key_id = wh_KeyId_TranslateFromClient(
+        WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+    int evict =
+        !!(req.options & WH_MESSAGE_CRYPTO_ED25519_VERIFY_OPTIONS_EVICT);
+
+    if (!WH_KEYID_ISERASED(key_id)) {
+        ret = wh_Server_KeystoreFindEnforceKeyUsage(ctx, key_id,
+                                                    WH_NVM_FLAGS_USAGE_VERIFY);
+        if (ret != WH_ERROR_OK) {
+            return ret;
+        }
+    }
+
+    memset(&res, 0, sizeof(res));
+
+    ret = wh_Server_DmaProcessClientAddress(
+        ctx, (uintptr_t)req.sig.addr, &sigAddr, req.sig.sz,
+        WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
+    if (ret == WH_ERROR_ACCESS) {
+        res.dmaAddrStatus.badAddr = req.sig;
+    }
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Server_DmaProcessClientAddress(
+            ctx, (uintptr_t)req.msg.addr, &msgAddr, req.msg.sz,
+            WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
+        if (ret == WH_ERROR_ACCESS) {
+            res.dmaAddrStatus.badAddr = req.msg;
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        ret = wc_ed25519_init_ex(key, NULL, ctx->crypto->devId);
+        if (ret == 0) {
+            ret = wh_Server_Ed25519KeyCacheExport(ctx, key_id, key);
+            if (ret == WH_ERROR_OK) {
+                int verified = 0;
+                ret          = wc_ed25519_verify_msg_ex(
+                    sigAddr, req.sig.sz, msgAddr, req.msg.sz, &verified, key,
+                    (byte)req.type, req_ctx, (byte)req.ctxSz);
+                if (ret == WH_ERROR_OK) {
+                    res.verifyResult = verified;
+                }
+            }
+            wc_ed25519_free(key);
+        }
+    }
+
+    (void)wh_Server_DmaProcessClientAddress(
+        ctx, (uintptr_t)req.msg.addr, &msgAddr, req.msg.sz,
+        WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
+    (void)wh_Server_DmaProcessClientAddress(
+        ctx, (uintptr_t)req.sig.addr, &sigAddr, req.sig.sz,
+        WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
+
+    if (evict != 0) {
+        (void)wh_Server_KeystoreEvictKey(ctx, key_id);
+    }
+
+    if (ret == WH_ERROR_OK) {
+        (void)wh_MessageCrypto_TranslateEd25519VerifyDmaResponse(
+            magic, &res,
+            (whMessageCrypto_Ed25519VerifyDmaResponse*)cryptoDataOut);
+        *outSize = sizeof(res);
+    }
+
+    return ret;
+}
+#endif /* WOLFHSM_CFG_DMA */
+#endif /* HAVE_ED25519 */
 
 #ifndef NO_AES
 #ifdef WOLFSSL_AES_COUNTER
@@ -3523,6 +4080,24 @@ int wh_Server_HandleCryptoRequest(whServerContext* ctx, uint16_t magic,
                     break;
 #endif /* HAVE_CURVE25519 */
 
+#ifdef HAVE_ED25519
+                case WC_PK_TYPE_ED25519_KEYGEN:
+                    ret = _HandleEd25519KeyGen(ctx, magic, cryptoDataIn,
+                                               cryptoInSize, cryptoDataOut,
+                                               &cryptoOutSize);
+                    break;
+                case WC_PK_TYPE_ED25519_SIGN:
+                    ret = _HandleEd25519Sign(ctx, magic, cryptoDataIn,
+                                             cryptoInSize, cryptoDataOut,
+                                             &cryptoOutSize);
+                    break;
+                case WC_PK_TYPE_ED25519_VERIFY:
+                    ret = _HandleEd25519Verify(ctx, magic, cryptoDataIn,
+                                               cryptoInSize, cryptoDataOut,
+                                               &cryptoOutSize);
+                    break;
+#endif /* HAVE_ED25519 */
+
 #if defined(HAVE_DILITHIUM) || defined(HAVE_FALCON)
                 case WC_PK_TYPE_PQC_SIG_KEYGEN:
                 case WC_PK_TYPE_PQC_SIG_SIGN:
@@ -5103,6 +5678,18 @@ int wh_Server_HandleCryptoDmaRequest(whServerContext* ctx, uint16_t magic,
                         rqstHeader.algoSubType);
                     break;
 #endif /* HAVE_DILITHIUM || HAVE_FALCON */
+#ifdef HAVE_ED25519
+                case WC_PK_TYPE_ED25519_SIGN:
+                    ret = _HandleEd25519SignDma(ctx, magic, cryptoDataIn,
+                                                cryptoInSize, cryptoDataOut,
+                                                &cryptoOutSize);
+                    break;
+                case WC_PK_TYPE_ED25519_VERIFY:
+                    ret = _HandleEd25519VerifyDma(ctx, magic, cryptoDataIn,
+                                                  cryptoInSize, cryptoDataOut,
+                                                  &cryptoOutSize);
+                    break;
+#endif /* HAVE_ED25519 */
             }
             break; /* WC_ALGO_TYPE_PK */
 
