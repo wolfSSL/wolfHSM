@@ -372,16 +372,24 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             byte*        out    = info->pk.ed25519sign.out;
             word32*      outLen = info->pk.ed25519sign.outLen;
             byte         type   = info->pk.ed25519sign.type;
+            uint32_t     len;
 
             if ((type != (byte)Ed25519) && (type != (byte)Ed25519ctx) &&
                 (type != (byte)Ed25519ph)) {
                 ret = BAD_FUNC_ARG;
                 break;
             }
+            if (outLen != NULL) {
+                len = *outLen;
+            }
 
             ret = wh_Client_Ed25519Sign(
                 ctx, key, in, inLen, type, info->pk.ed25519sign.context,
-                info->pk.ed25519sign.contextLen, out, outLen);
+                info->pk.ed25519sign.contextLen, out, &len);
+            if (ret == 0 && outLen != NULL) {
+                *outLen = len;
+            }
+
         } break;
 
         case WC_PK_TYPE_ED25519_VERIFY: {

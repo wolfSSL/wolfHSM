@@ -578,7 +578,7 @@ static int whTest_CryptoEd25519ServerKey(whClientContext* ctx, int devId,
     whKeyId     verifyKeyId = WH_KEYID_ERASED;
     byte        msg[]       = "Ed25519 server key message";
     byte        sig[ED25519_SIG_SIZE];
-    word32      sigSz    = sizeof(sig);
+    uint32_t    sigSz    = sizeof(sig);
     int         verified = 0;
     uint8_t     label[]  = "Ed25519 Server Key";
 
@@ -681,7 +681,7 @@ static int whTest_CryptoEd25519Dma(whClientContext* ctx, int devId, WC_RNG* rng)
     whKeyId     verifyKeyId = WH_KEYID_ERASED;
     byte        msg[]       = "Ed25519 DMA message";
     byte        sig[ED25519_SIG_SIZE];
-    word32      sigSz    = sizeof(sig);
+    uint32_t    sigSz    = sizeof(sig);
     int         verified = 0;
     uint8_t     label[]  = "Ed25519 DMA Key";
 
