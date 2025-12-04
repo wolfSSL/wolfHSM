@@ -48,7 +48,7 @@ extern "C" {
 #define HAVE_ANONYMOUS_INLINE_AGGREGATES 1
 
 #ifndef WOLFHSM_CFG_TLS
-/* This macros reduce footprint size when TLS functionality is not needed */
+/* These macros reduce footprint size when TLS functionality is not needed */
 #define NO_TLS
 /* Eliminates need for IO layer since we only use CM */
 #define WOLFSSL_USER_IO
