@@ -3526,8 +3526,7 @@ static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
         }
     }
 
-#if defined(WOLFHSM_CFG_CANCEL_API) && \
-    !defined(WOLFHSM_CFG_TEST_CLIENT_ONLY)
+#if defined(WOLFHSM_CFG_CANCEL_API) && !defined(WOLFHSM_CFG_TEST_CLIENT_ONLY)
     /* test CMAC cancellation for supported devIds */
     if (ret == 0
 #ifdef WOLFHSM_CFG_DMA

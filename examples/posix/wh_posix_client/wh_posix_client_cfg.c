@@ -151,17 +151,17 @@ int wh_PosixClient_ExampleTlsConfig(void* conf)
     tccTls.state         = 0;
     tccTls.connect_fd_p1 = 0; /* Invalid fd */
 
-    tlsConfig.server_ip_string = WH_POSIX_SERVER_TCP_IPSTRING;
-    tlsConfig.server_port      = WH_POSIX_SERVER_TCP_PORT;
+    tlsConfig.server_ip_string          = WH_POSIX_SERVER_TCP_IPSTRING;
+    tlsConfig.server_port               = WH_POSIX_SERVER_TCP_PORT;
     tlsConfig.disable_peer_verification = false;
 
-    tlsConfig.ca_cert = ca_cert_der_2048;
+    tlsConfig.ca_cert     = ca_cert_der_2048;
     tlsConfig.ca_cert_len = sizeof_ca_cert_der_2048;
-    tlsConfig.cert = client_cert_der_2048;
-    tlsConfig.cert_len = sizeof_client_cert_der_2048;
-    tlsConfig.key = client_key_der_2048;
-    tlsConfig.key_len = sizeof_client_key_der_2048;
-    tlsConfig.heap_hint = NULL;
+    tlsConfig.cert        = client_cert_der_2048;
+    tlsConfig.cert_len    = sizeof_client_cert_der_2048;
+    tlsConfig.key         = client_key_der_2048;
+    tlsConfig.key_len     = sizeof_client_key_der_2048;
+    tlsConfig.heap_hint   = NULL;
 
     c_comm.transport_cb      = &tlsCb;
     c_comm.transport_context = (void*)&tccTls;
@@ -196,7 +196,7 @@ static unsigned int psk_tls12_client_cb(WOLFSSL* ssl, const char* hint,
     }
 
     (void)ssl;
-    len = strcspn((char*)key, "\n");
+    len               = strcspn((char*)key, "\n");
     ((char*)key)[len] = '\0';
     return (unsigned int)len;
 }

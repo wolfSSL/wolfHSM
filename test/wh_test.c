@@ -55,8 +55,7 @@
 
 #if defined(WOLFHSM_CFG_TEST_POSIX) && defined(WOLFHSM_CFG_ENABLE_CLIENT)
 #include "port/posix/posix_transport_tcp.h"
-#if defined(WOLFHSM_CFG_TEST_CLIENT_ONLY) && \
-    defined(WOLFHSM_CFG_TLS)
+#if defined(WOLFHSM_CFG_TEST_CLIENT_ONLY) && defined(WOLFHSM_CFG_TLS)
 #include "port/posix/posix_transport_tls.h"
 #endif /* WOLFHSM_CFG_TEST_CLIENT_ONLY && WOLFHSM_CFG_TLS */
 #endif
@@ -193,9 +192,9 @@ int whTest_ClientTcp(void)
 #include "wolfssl/certs_test.h"
 
 posixTransportTlsClientContext tccTls;
-posixTransportTlsConfig tlsConfig;
-whCommClientConfig c_comm;
-whTransportClientCb tlsCb = PTTLS_CLIENT_CB;
+posixTransportTlsConfig        tlsConfig;
+whCommClientConfig             c_comm;
+whTransportClientCb            tlsCb = PTTLS_CLIENT_CB;
 
 static int whPosixClient_ExampleTlsConfig(void* conf)
 {
@@ -207,17 +206,17 @@ static int whPosixClient_ExampleTlsConfig(void* conf)
     tccTls.state         = 0;
     tccTls.connect_fd_p1 = 0; /* Invalid fd */
 
-    tlsConfig.server_ip_string = WH_POSIX_SERVER_TCP_IPSTRING;
-    tlsConfig.server_port      = WH_POSIX_SERVER_TCP_PORT;
+    tlsConfig.server_ip_string          = WH_POSIX_SERVER_TCP_IPSTRING;
+    tlsConfig.server_port               = WH_POSIX_SERVER_TCP_PORT;
     tlsConfig.disable_peer_verification = false;
 
     /* Set certificate buffers in config structure */
-    tlsConfig.ca_cert = ca_cert_der_2048;
+    tlsConfig.ca_cert     = ca_cert_der_2048;
     tlsConfig.ca_cert_len = sizeof_ca_cert_der_2048;
-    tlsConfig.cert = client_cert_der_2048;
-    tlsConfig.cert_len = sizeof_client_cert_der_2048;
-    tlsConfig.key = client_key_der_2048;
-    tlsConfig.key_len = sizeof_client_key_der_2048;
+    tlsConfig.cert        = client_cert_der_2048;
+    tlsConfig.cert_len    = sizeof_client_cert_der_2048;
+    tlsConfig.key         = client_key_der_2048;
+    tlsConfig.key_len     = sizeof_client_key_der_2048;
 
     c_comm.transport_cb      = &tlsCb;
     c_comm.transport_context = (void*)&tccTls;
@@ -235,11 +234,11 @@ static int whPosixClient_ExampleTlsConfig(void* conf)
  */
 int whTest_ClientTls(void)
 {
-    int ret;
+    int            ret;
     whClientConfig c_conf[1];
 
     if (whPosixClient_ExampleTlsConfig(c_conf) != WH_ERROR_OK) {
-       ret = -1;
+        ret = -1;
     }
     else {
         ret = whTest_ClientConfig(c_conf);
