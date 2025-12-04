@@ -6,12 +6,12 @@
 int wh_PosixServer_ExampleShmDmaConfig(void* s_conf);
 int wh_PosixServer_ExampleShmConfig(void* s_conf);
 int wh_PosixServer_ExampleTcpConfig(void* s_conf);
-#ifndef WOLFHSM_CFG_NO_CRYPTO
+#ifdef WOLFHSM_CFG_TLS
 int wh_PosixServer_ExampleTlsConfig(void* s_conf);
-#endif
-#if !defined(WOLFHSM_CFG_NO_CRYPTO) && !defined(NO_PSK)
+#if !defined(NO_PSK)
 int wh_PosixServer_ExamplePskConfig(void* s_conf);
 #endif
+#endif /* WOLFHSM_CFG_TLS */
 int wh_PosixServer_ExampleNvmConfig(void* conf, const char* nvmInitFilePath);
 int wh_PosixServer_ExampleRamSimConfig(void* conf, uint8_t* memory);
 

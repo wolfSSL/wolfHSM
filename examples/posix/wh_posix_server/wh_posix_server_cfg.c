@@ -118,7 +118,7 @@ int wh_PosixServer_ExampleTcpConfig(void* conf)
     return WH_ERROR_OK;
 }
 
-#if !defined(WOLFHSM_CFG_NO_CRYPTO) && !defined(NO_TLS)
+#if defined(WOLFHSM_CFG_TLS)
 /* Server configuration setup example for TLS transport
  * Does not setup flash, nvm, crypto, she, etc. */
 
@@ -247,7 +247,7 @@ int wh_PosixServer_ExamplePskConfig(void* conf)
     return WH_ERROR_OK;
 }
 #endif /* NO_PSK */
-#endif /* WOLFHSM_CFG_NO_CRYPTO && !NO_TLS */
+#endif /* WOLFHSM_CFG_TLS */
 
 static const whFlashCb  fcb = WH_FLASH_RAMSIM_CB;
 static whFlashRamsimCfg fc_conf;
