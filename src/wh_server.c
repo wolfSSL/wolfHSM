@@ -90,6 +90,16 @@ int wh_Server_Init(whServerContext* server, whServerConfig* config)
 #endif
 #endif
 
+#ifdef WOLFHSM_CFG_LOGGING
+    if (config->logConfig != NULL) {
+        rc = wh_Log_Init(&server->log, config->logConfig);
+        if (rc != WH_ERROR_OK) {
+            (void)wh_Server_Cleanup(server);
+            return WH_ERROR_ABORTED;
+        }
+    }
+#endif /* WOLFHSM_CFG_LOGGING */
+
     rc = wh_CommServer_Init(server->comm, config->comm_config,
             wh_Server_SetConnectedCb, (void*)server);
     if (rc != 0) {
@@ -105,6 +115,9 @@ int wh_Server_Init(whServerContext* server, whServerConfig* config)
     }
 #endif /* WOLFHSM_CFG_DMA */
 
+    /* Log the server startup */
+    WH_LOG(&server->log, WH_LOG_LEVEL_INFO, "Server Initialized");
+
     return rc;
 }
 
@@ -115,6 +128,13 @@ int wh_Server_Cleanup(whServerContext* server)
     }
 
     (void)wh_CommServer_Cleanup(server->comm);
+
+    /* Log the server cleanup */
+    WH_LOG(&server->log, WH_LOG_LEVEL_INFO, "Server Cleanup");
+
+#ifdef WOLFHSM_CFG_LOGGING
+    (void)wh_Log_Cleanup(&server->log);
+#endif /* WOLFHSM_CFG_LOGGING */
 
     memset(server, 0, sizeof(*server));
 
@@ -202,6 +222,10 @@ static int _wh_Server_HandleCommRequest(whServerContext* server,
         resp.client_id = server->comm->client_id;
         resp.server_id = server->comm->server_id;
 
+        WH_LOG_F(&server->log, WH_LOG_LEVEL_INFO,
+                 "CommInit: client_id=0x%08X, server_id=0x%08X", req.client_id,
+                 resp.server_id);
+
         /* Convert the response struct */
         wh_MessageComm_TranslateInitResponse(magic,
                 &resp, (whMessageCommInitResponse*)resp_packet);
@@ -249,6 +273,9 @@ static int _wh_Server_HandleCommRequest(whServerContext* server,
         /* Process the close action */
         wh_Server_SetConnected(server, WH_COMM_DISCONNECTED);
         *out_resp_size = 0;
+
+        WH_LOG_F(&server->log, WH_LOG_LEVEL_INFO, "CommClose: client_id=0x%08X",
+                 server->comm->client_id);
     }; break;
 
     case WH_MESSAGE_COMM_ACTION_ECHO:
@@ -403,6 +430,10 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
                     size, data);
             } while (rc == WH_ERROR_NOTREADY);
         }
+        WH_LOG_ON_ERROR_F(
+            &server->log, WH_LOG_LEVEL_ERROR, rc,
+            "Request Handler for (group=%d, action=%d) Returned Error: %d",
+            group, action, rc);
     }
 
     return rc;

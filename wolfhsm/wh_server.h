@@ -41,6 +41,7 @@ typedef struct whServerContext_t whServerContext;
 #include "wolfhsm/wh_keycache.h"
 #include "wolfhsm/wh_nvm.h"
 #include "wolfhsm/wh_message_customcb.h"
+#include "wolfhsm/wh_log.h"
 #ifdef WOLFHSM_CFG_DMA
 #include "wolfhsm/wh_dma.h"
 #endif /* WOLFHSM_CFG_DMA */
@@ -164,6 +165,9 @@ typedef struct whServerConfig_t {
 #ifdef WOLFHSM_CFG_DMA
     whServerDmaConfig* dmaConfig;
 #endif /* WOLFHSM_CFG_DMA */
+#ifdef WOLFHSM_CFG_LOGGING
+    whLogConfig* logConfig;
+#endif /* WOLFHSM_CFG_LOGGING */
 } whServerConfig;
 
 
@@ -186,6 +190,9 @@ struct whServerContext_t {
 #ifdef WOLFHSM_CFG_CANCEL_API
     uint16_t           cancelSeq;
 #endif
+#ifdef WOLFHSM_CFG_LOGGING
+    whLogContext log;
+#endif /* WOLFHSM_CFG_LOGGING */
 };
 
 
