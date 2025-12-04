@@ -50,44 +50,45 @@
 
 /** TLS configuration structure */
 typedef struct {
-    char*     server_ip_string;
-    int       server_port;
-    bool      disable_peer_verification; /* Whether to verify certificates,
-                                      defaults to verifying peer certificates */
+    char* server_ip_string;
+    int   server_port;
+    bool  disable_peer_verification; /* Whether to verify certificates,
+                                  defaults to verifying peer certificates */
     /* Certificate configuration - can be provided as buffers or filenames */
-    const unsigned char* ca_cert;      /* CA certificate buffer (DER format) */
-    int                 ca_cert_len;   /* Length of CA certificate buffer */
-    const unsigned char* cert;   /* Certificate buffer (DER format) */
-    int                 cert_len; /* Length of certificate buffer */
-    const unsigned char* key;    /* Private key buffer (DER format) */
-    int                 key_len; /* Length of private key buffer */
+    const unsigned char* ca_cert;     /* CA certificate buffer (DER format) */
+    int                  ca_cert_len; /* Length of CA certificate buffer */
+    const unsigned char* cert;        /* Certificate buffer (DER format) */
+    int                  cert_len;    /* Length of certificate buffer */
+    const unsigned char* key;         /* Private key buffer (DER format) */
+    int                  key_len;     /* Length of private key buffer */
 #ifndef NO_PSK
     /* PSK configuration */
     /* Client PSK callback: unsigned int (*)(WOLFSSL* ssl, const char* hint,
-     *                                      char* identity, unsigned int id_max_len,
-     *                                      unsigned char* key, unsigned int key_max_len) */
+     *                                      char* identity, unsigned int
+     * id_max_len, unsigned char* key, unsigned int key_max_len) */
     unsigned int (*psk_client_cb)(WOLFSSL* ssl, const char* hint,
-                                   char* identity, unsigned int id_max_len,
-                                   unsigned char* key, unsigned int key_max_len);
+                                  char* identity, unsigned int id_max_len,
+                                  unsigned char* key, unsigned int key_max_len);
     /* Server PSK callback for TLS 1.2: unsigned int (*)(WOLFSSL* ssl,
      *                                                   const char* identity,
      *                                                   unsigned char* key,
-     *                                                   unsigned int key_max_len) */
+     *                                                   unsigned int
+     * key_max_len) */
     unsigned int (*psk_server_cb)(WOLFSSL* ssl, const char* identity,
-                                   unsigned char* key, unsigned int key_max_len);
+                                  unsigned char* key, unsigned int key_max_len);
 #ifdef WOLFSSL_TLS13
     /* Server PSK callback for TLS 1.3: unsigned int (*)(WOLFSSL* ssl,
      *                                                    const char* identity,
      *                                                    unsigned char* key,
-     *                                                    unsigned int key_max_len,
-     *                                                    const char** ciphersuite) */
+     *                                                    unsigned int
+     * key_max_len, const char** ciphersuite) */
     unsigned int (*psk_server_tls13_cb)(WOLFSSL* ssl, const char* identity,
-                                         unsigned char* key,
-                                         unsigned int key_max_len,
-                                         const char** ciphersuite);
-#endif /* WOLFSSL_TLS13 */
-    const char* psk_identity_hint;     /* Server PSK identity hint */
-#endif /* NO_PSK */
+                                        unsigned char* key,
+                                        unsigned int   key_max_len,
+                                        const char**   ciphersuite);
+#endif                             /* WOLFSSL_TLS13 */
+    const char* psk_identity_hint; /* Server PSK identity hint */
+#endif                             /* NO_PSK */
     void* heap_hint; /* A pointer to a WOLFSSL_HEAP_HINT structure for static
                       * memory allocation */
 } posixTransportTlsConfig;

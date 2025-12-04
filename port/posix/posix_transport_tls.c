@@ -53,7 +53,7 @@ static int NonBlockingError(int err)
 }
 
 /* Load certificates and keys from config structure into SSL context */
-static int LoadTlsCertificates(WOLFSSL_CTX* ssl_ctx,
+static int LoadTlsCertificates(WOLFSSL_CTX*                   ssl_ctx,
                                const posixTransportTlsConfig* cfg)
 {
     int rc;
@@ -64,9 +64,8 @@ static int LoadTlsCertificates(WOLFSSL_CTX* ssl_ctx,
 
     /* Load CA certificate for peer verification */
     if (cfg->ca_cert != NULL && cfg->ca_cert_len > 0) {
-        rc = wolfSSL_CTX_load_verify_buffer(ssl_ctx, cfg->ca_cert,
-                                            cfg->ca_cert_len,
-                                            WOLFSSL_FILETYPE_ASN1);
+        rc = wolfSSL_CTX_load_verify_buffer(
+            ssl_ctx, cfg->ca_cert, cfg->ca_cert_len, WOLFSSL_FILETYPE_ASN1);
         if (rc != WOLFSSL_SUCCESS) {
             return WH_ERROR_ABORTED;
         }
@@ -74,10 +73,8 @@ static int LoadTlsCertificates(WOLFSSL_CTX* ssl_ctx,
 
     /* Load certificate (client cert for client, server cert for server) */
     if (cfg->cert != NULL && cfg->cert_len > 0) {
-        rc = wolfSSL_CTX_use_certificate_buffer(ssl_ctx,
-                                                cfg->cert,
-                                                cfg->cert_len,
-                                                WOLFSSL_FILETYPE_ASN1);
+        rc = wolfSSL_CTX_use_certificate_buffer(
+            ssl_ctx, cfg->cert, cfg->cert_len, WOLFSSL_FILETYPE_ASN1);
         if (rc != WOLFSSL_SUCCESS) {
             return WH_ERROR_ABORTED;
         }
@@ -85,9 +82,7 @@ static int LoadTlsCertificates(WOLFSSL_CTX* ssl_ctx,
 
     /* Load private key (client key for client, server key for server) */
     if (cfg->key != NULL && cfg->key_len > 0) {
-        rc = wolfSSL_CTX_use_PrivateKey_buffer(ssl_ctx,
-                                               cfg->key,
-                                               cfg->key_len,
+        rc = wolfSSL_CTX_use_PrivateKey_buffer(ssl_ctx, cfg->key, cfg->key_len,
                                                WOLFSSL_FILETYPE_ASN1);
         if (rc != WOLFSSL_SUCCESS) {
             return WH_ERROR_ABORTED;
@@ -127,8 +122,8 @@ int posixTransportTls_InitConnect(void* context, const void* config,
     /* Create SSL context using static memory if heap_hint is provided */
 #ifdef WOLFSSL_STATIC_MEMORY
     if (cfg->heap_hint != NULL) {
-        ctx->ssl_ctx = wolfSSL_CTX_new_ex(wolfSSLv23_client_method_ex(cfg->heap_hint),
-                                          cfg->heap_hint);
+        ctx->ssl_ctx = wolfSSL_CTX_new_ex(
+            wolfSSLv23_client_method_ex(cfg->heap_hint), cfg->heap_hint);
     }
     else {
         ctx->ssl_ctx = wolfSSL_CTX_new(wolfSSLv23_client_method());
@@ -154,8 +149,7 @@ int posixTransportTls_InitConnect(void* context, const void* config,
 #ifndef NO_PSK
     /* Setup PSK callbacks if provided */
     if (cfg->psk_client_cb != NULL) {
-        wolfSSL_CTX_set_psk_client_callback(ctx->ssl_ctx,
-                                            cfg->psk_client_cb);
+        wolfSSL_CTX_set_psk_client_callback(ctx->ssl_ctx, cfg->psk_client_cb);
     }
 #endif /* NO_PSK */
 
@@ -254,9 +248,8 @@ int posixTransportTls_SendRequest(void* context, uint16_t size,
                         ctx->tcpCtx.connect_fd_p1 = 0;
                     }
                     ctx->connect_fd_p1 = 0;
-                    ctx->tcpCtx.state = PTT_STATE_UNCONNECTED;
+                    ctx->tcpCtx.state  = PTT_STATE_UNCONNECTED;
                     return WH_ERROR_NOTREADY;
-
                 }
 
                 if (ctx->connectcb != NULL) {
@@ -349,7 +342,7 @@ int posixTransportTls_CleanupConnect(void* context)
         ctx->ssl_ctx = NULL;
     }
 
-    ctx->state = PTTLS_STATE_UNCONNECTED;
+    ctx->state         = PTTLS_STATE_UNCONNECTED;
     ctx->connect_fd_p1 = 0;
     posixTransportTcp_CleanupConnect((void*)&ctx->tcpCtx);
     return WH_ERROR_OK;
@@ -392,8 +385,8 @@ int posixTransportTls_InitListen(void* context, const void* config,
     /* Create SSL context using static memory if heap_hint is provided */
 #ifdef WOLFSSL_STATIC_MEMORY
     if (cfg->heap_hint != NULL) {
-        ctx->ssl_ctx = wolfSSL_CTX_new_ex(wolfSSLv23_server_method_ex(cfg->heap_hint),
-                                          cfg->heap_hint);
+        ctx->ssl_ctx = wolfSSL_CTX_new_ex(
+            wolfSSLv23_server_method_ex(cfg->heap_hint), cfg->heap_hint);
     }
     else {
         ctx->ssl_ctx = wolfSSL_CTX_new(wolfSSLv23_server_method());
@@ -419,19 +412,17 @@ int posixTransportTls_InitListen(void* context, const void* config,
 #ifndef NO_PSK
     /* Setup PSK callbacks if provided */
     if (cfg->psk_server_cb != NULL) {
-        wolfSSL_CTX_set_psk_server_callback(ctx->ssl_ctx,
-                                            cfg->psk_server_cb);
+        wolfSSL_CTX_set_psk_server_callback(ctx->ssl_ctx, cfg->psk_server_cb);
     }
 #ifdef WOLFSSL_TLS13
     if (cfg->psk_server_tls13_cb != NULL) {
         wolfSSL_CTX_set_psk_server_tls13_callback(ctx->ssl_ctx,
-                                                    cfg->psk_server_tls13_cb);
+                                                  cfg->psk_server_tls13_cb);
     }
 #endif /* WOLFSSL_TLS13 */
     /* Set PSK identity hint if provided */
     if (cfg->psk_identity_hint != NULL) {
-        wolfSSL_CTX_use_psk_identity_hint(ctx->ssl_ctx,
-                                            cfg->psk_identity_hint);
+        wolfSSL_CTX_use_psk_identity_hint(ctx->ssl_ctx, cfg->psk_identity_hint);
     }
 #endif /* NO_PSK */
 
@@ -656,4 +647,3 @@ int posixTransportTls_GetAcceptFd(posixTransportTlsServerContext* context,
     return ret;
 }
 #endif /* WOLFHSM_CFG_TLS */
-

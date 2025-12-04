@@ -360,7 +360,8 @@ int main(int argc, char** argv)
         WOLFHSM_CFG_PRINTF("Using shared memory transport\n");
         rc = wh_PosixServer_ExampleShmConfig(s_conf);
         if (rc != WH_ERROR_OK) {
-            WOLFHSM_CFG_PRINTF("Failed to initialize shared memory transport\n");
+            WOLFHSM_CFG_PRINTF(
+                "Failed to initialize shared memory transport\n");
             return -1;
         }
     }
@@ -389,7 +390,8 @@ int main(int argc, char** argv)
         WOLFHSM_CFG_PRINTF("Using DMA with shared memory transport\n");
         rc = wh_PosixServer_ExampleShmDmaConfig(s_conf);
         if (rc != WH_ERROR_OK) {
-            WOLFHSM_CFG_PRINTF("Failed to initialize DMA with shared memory transport\n");
+            WOLFHSM_CFG_PRINTF(
+                "Failed to initialize DMA with shared memory transport\n");
             return -1;
         }
     }

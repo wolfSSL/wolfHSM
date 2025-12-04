@@ -31,8 +31,8 @@ whTransportServerCb            shmCb = POSIX_TRANSPORT_SHM_SERVER_CB;
 posixTransportShmServerContext tscShm;
 posixTransportTcpServerContext tscTcp;
 #ifdef WOLFHSM_CFG_TLS
-posixTransportTlsConfig tlsConfig;
-whTransportServerCb tlsCb = PTTLS_SERVER_CB;
+posixTransportTlsConfig        tlsConfig;
+whTransportServerCb            tlsCb = PTTLS_SERVER_CB;
 posixTransportTlsServerContext tscTls;
 #endif
 
@@ -128,7 +128,7 @@ int wh_PosixServer_ExampleTcpConfig(void* conf)
 
 #ifdef WOLFSSL_STATIC_MEMORY
 #define EXAMPLE_STATIC_MEMORY_SIZE 70000
-WOLFSSL_HEAP_HINT*   heap               = NULL;
+WOLFSSL_HEAP_HINT*   heap = NULL;
 static unsigned char memoryBuffer[EXAMPLE_STATIC_MEMORY_SIZE];
 unsigned int         staticMemoryList[] = {176,  304,  384,  480, 1008,
                                            3328, 4560, 5152, 8928};
@@ -159,15 +159,15 @@ int wh_PosixServer_ExampleTlsConfig(void* ctx)
     tscTls.request_recv  = 0;
     tscTls.buffer_offset = 0;
 
-    tlsConfig.server_ip_string = WH_POSIX_SERVER_TCP_IPSTRING;
-    tlsConfig.server_port      = WH_POSIX_SERVER_TCP_PORT;
+    tlsConfig.server_ip_string          = WH_POSIX_SERVER_TCP_IPSTRING;
+    tlsConfig.server_port               = WH_POSIX_SERVER_TCP_PORT;
     tlsConfig.disable_peer_verification = false;
-    tlsConfig.ca_cert = client_cert_der_2048;
-    tlsConfig.ca_cert_len = sizeof_client_cert_der_2048;
-    tlsConfig.cert = server_cert_der_2048;
-    tlsConfig.cert_len = sizeof_server_cert_der_2048;
-    tlsConfig.key = server_key_der_2048;
-    tlsConfig.key_len = sizeof_server_key_der_2048;
+    tlsConfig.ca_cert                   = client_cert_der_2048;
+    tlsConfig.ca_cert_len               = sizeof_client_cert_der_2048;
+    tlsConfig.cert                      = server_cert_der_2048;
+    tlsConfig.cert_len                  = sizeof_server_cert_der_2048;
+    tlsConfig.key                       = server_key_der_2048;
+    tlsConfig.key_len                   = sizeof_server_key_der_2048;
 #ifdef WOLFSSL_STATIC_MEMORY
     tlsConfig.heap_hint = GetHeapHint();
 #endif /* WOLFSSL_STATIC_MEMORY */
@@ -203,7 +203,7 @@ static unsigned int psk_tls13_server_cb(WOLFSSL* ssl, const char* identity,
         memset(key, 0, key_max_len);
         return 0U;
     }
-    len = strcspn((char*)key, "\n");
+    len               = strcspn((char*)key, "\n");
     ((char*)key)[len] = '\0';
 
     (void)ssl;
@@ -225,7 +225,7 @@ static unsigned int psk_tls12_server_cb(WOLFSSL* ssl, const char* identity,
         memset(key, 0, key_max_len);
         return 0U;
     }
-    len = strcspn((char*)key, "\n");
+    len               = strcspn((char*)key, "\n");
     ((char*)key)[len] = '\0';
     (void)ssl;
     return (unsigned int)len;
