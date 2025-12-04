@@ -396,6 +396,55 @@ static int whTest_CryptoEcc(whClientContext* ctx, int devId, WC_RNG* rng)
     }
     return ret;
 }
+
+static int whTest_CryptoEccCacheDuplicate(whClientContext* client)
+{
+    int      ret   = WH_ERROR_OK;
+    whKeyId  keyId = WH_KEYID_ERASED;
+    uint8_t  key1[ECC_BUFSIZE];
+    uint8_t  key2[ECC_BUFSIZE];
+    uint16_t key1Len = sizeof(key1);
+    uint16_t key2Len = sizeof(key2);
+
+    WH_TEST_PRINT("  Testing ECC cache duplicate returns latest key...\n");
+
+    /* Generate first cached key and export it */
+    ret = wh_Client_EccMakeCacheKey(client, 32, ECC_SECP256R1, &keyId,
+                                    WH_NVM_FLAGS_NONE, 0, NULL);
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Client_KeyExport(client, keyId, NULL, 0, key1, &key1Len);
+    }
+
+    /* Generate a second key using the same keyId to create a duplicate slot */
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Client_EccMakeCacheKey(client, 32, ECC_SECP256R1, &keyId,
+                                        WH_NVM_FLAGS_NONE, 0, NULL);
+    }
+
+    /* Export again; result should match the most recent key, not the first */
+    if (ret == WH_ERROR_OK) {
+        key2Len = sizeof(key2);
+        ret     = wh_Client_KeyExport(client, keyId, NULL, 0, key2, &key2Len);
+    }
+
+    if (ret == WH_ERROR_OK) {
+        if ((key1Len == key2Len) && (memcmp(key1, key2, key1Len) == 0)) {
+            WH_ERROR_PRINT("    FAIL: Export returned original ECC key after "
+                           "duplicate insert\n");
+            ret = WH_ERROR_ABORTED;
+        }
+        else {
+            WH_TEST_PRINT(
+                "    PASS: Export returned most recent cached ECC key\n");
+        }
+    }
+
+    if (!WH_KEYID_ISERASED(keyId)) {
+        wh_Client_KeyEvict(client, keyId);
+    }
+
+    return ret;
+}
 #endif /* HAVE_ECC */
 
 #ifdef HAVE_CURVE25519
@@ -4302,6 +4351,9 @@ int whTest_CryptoClientConfig(whClientConfig* config)
 #ifdef HAVE_ECC
     if (ret == 0) {
         ret = whTest_CryptoEcc(client, WH_DEV_ID, rng);
+    }
+    if (ret == 0) {
+        ret = whTest_CryptoEccCacheDuplicate(client);
     }
 #endif /* HAVE_ECC */
 

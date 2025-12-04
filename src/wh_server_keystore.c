@@ -322,6 +322,7 @@ int wh_Server_KeystoreGetCacheSlot(whServerContext* server, whKeyId keyId,
                                    whNvmMetadata** outMeta)
 {
     whKeyCacheContext* ctx;
+    int                ret;
 
     if (server == NULL || (keySz > WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE &&
                            keySz > WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE)) {
@@ -330,6 +331,11 @@ int wh_Server_KeystoreGetCacheSlot(whServerContext* server, whKeyId keyId,
 
     /* Get the appropriate cache context for this key */
     ctx = _GetCacheContext(server, keyId);
+
+    /* Evict keyId from cache to avoid duplicates */
+    ret = _EvictKeyFromCache(ctx, keyId);
+    if (ret != WH_ERROR_NOTFOUND && ret != WH_ERROR_OK)
+        return ret;
 
     /* Use the unified cache slot function */
     return _GetKeyCacheSlot(ctx, keySz, outBuf, outMeta);
