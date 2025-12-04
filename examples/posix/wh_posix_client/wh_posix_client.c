@@ -214,18 +214,18 @@ int main(int argc, char** argv)
         WOLFHSM_CFG_PRINTF("Using shared memory transport\n");
         wh_PosixClient_ExampleShmConfig(c_conf);
     }
-#ifndef WOLFHSM_CFG_NO_CRYPTO
+#ifdef WOLFHSM_CFG_TLS
     else if (strcmp(type, "tls") == 0) {
         WOLFHSM_CFG_PRINTF("Using TLS transport\n");
         wh_PosixClient_ExampleTlsConfig(c_conf);
     }
-#endif
-#if !defined(WOLFHSM_CFG_NO_CRYPTO) && !defined(NO_PSK)
+#if !defined(NO_PSK)
     else if (strcmp(type, "psk") == 0) {
         WOLFHSM_CFG_PRINTF("Using TLS PSK transport\n");
         wh_PosixClient_ExamplePskConfig(c_conf);
     }
-#endif
+#endif /* !NO_PSK */
+#endif /* WOLFHSM_CFG_TLS */
 #ifdef WOLFSSL_STATIC_MEMORY
     else if (strcmp(type, "dma") == 0) {
         WOLFHSM_CFG_PRINTF("Using DMA with shared memory transport\n");

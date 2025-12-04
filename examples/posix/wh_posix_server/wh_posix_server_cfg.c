@@ -36,7 +36,7 @@ whTransportServerCb tlsCb = PTTLS_SERVER_CB;
 posixTransportTlsServerContext tscTls;
 #endif
 
-#ifdef WOLFSSL_CFG_DMA
+#ifdef WOLFHSM_CFG_DMA
 whTransportServerCb            dmaCb = POSIX_TRANSPORT_SHM_SERVER_CB;
 posixTransportShmServerContext tscDma;
 whServerDmaConfig              dmaConfig;
