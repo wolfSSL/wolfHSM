@@ -10,7 +10,7 @@
 
 #include "port/posix/posix_transport_shm.h"
 #include "port/posix/posix_transport_tcp.h"
-#ifndef WOLFHSM_CFG_NO_CRYPTO
+#ifdef WOLFHSM_CFG_TLS
 #include "port/posix/posix_transport_tls.h"
 #endif
 
@@ -18,13 +18,13 @@
 
 posixTransportShmClientContext tccShm;
 posixTransportTcpClientContext tccTcp;
-#ifndef WOLFHSM_CFG_NO_CRYPTO
+#ifdef WOLFHSM_CFG_TLS
 posixTransportTlsClientContext tccTls;
 #endif
 
 posixTransportShmConfig shmConfig;
 posixTransportTcpConfig tcpConfig;
-#ifndef WOLFHSM_CFG_NO_CRYPTO
+#ifdef WOLFHSM_CFG_TLS
 posixTransportTlsConfig tlsConfig;
 #endif
 
@@ -32,7 +32,7 @@ whCommClientConfig c_comm;
 
 whTransportClientCb shmCb = POSIX_TRANSPORT_SHM_CLIENT_CB;
 whTransportClientCb tcpCb = PTT_CLIENT_CB;
-#ifndef WOLFHSM_CFG_NO_CRYPTO
+#ifdef WOLFHSM_CFG_TLS
 whTransportClientCb tlsCb = PTTLS_CLIENT_CB;
 #endif
 
@@ -135,7 +135,7 @@ int wh_PosixClient_ExampleTcpConfig(void* conf)
     return WH_ERROR_OK;
 }
 
-#if !defined(WOLFHSM_CFG_NO_CRYPTO) && !defined(NO_TLS)
+#if defined(WOLFHSM_CFG_TLS)
 /* client configuration setup example for TLS transport */
 #undef USE_CERT_BUFFERS_2048
 #define USE_CERT_BUFFERS_2048
@@ -212,7 +212,7 @@ int wh_PosixClient_ExamplePskConfig(void* conf)
     return WH_ERROR_OK;
 }
 #endif /* NO_PSK */
-#endif /* WOLFHSM_CFG_NO_CRYPTO */
+#endif /* WOLFHSM_CFG_TLS */
 
 
 /* client configuration setup example for transport */

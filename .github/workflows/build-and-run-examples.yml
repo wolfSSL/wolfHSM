@@ -27,22 +27,29 @@ jobs:
         repository: wolfssl/wolfssl
         path: wolfssl
 
+    - name: Set TLS Environment Variable
+      run: |
+        if [ "${{ matrix.transport }}" = "tls" ] || [ "${{ matrix.transport }}" = "psk" ]; then
+          echo "TLS=1" >> $GITHUB_ENV
+        else
+          echo "TLS=0" >> $GITHUB_ENV
+        fi
+
     # Build examples
     - name: Build POSIX server
       run: |
         if [ "${{ matrix.transport }}" = "dma" ]; then
           cd examples/posix/wh_posix_server && ${{ matrix.asan }} ${{ matrix.debug }} DMA=1 make -j WOLFSSL_DIR=../../../wolfssl
-        elif [ "${{ matrix.transport }}" = "tls" ]; then
-          cd examples/posix/wh_posix_server && ${{ matrix.asan }} ${{ matrix.debug }} TLS=1 make -j WOLFSSL_DIR=../../../wolfssl
         else
-          cd examples/posix/wh_posix_server && ${{ matrix.asan }} ${{ matrix.debug }} make -j WOLFSSL_DIR=../../../wolfssl
+          cd examples/posix/wh_posix_server && ${{ matrix.asan }} ${{ matrix.debug }} TLS=${{ env.TLS }} make -j WOLFSSL_DIR=../../../wolfssl
         fi
+
     - name: Build POSIX client
       run: |
         if [ "${{ matrix.transport }}" = "dma" ]; then
           cd examples/posix/wh_posix_client && ${{ matrix.asan }} ${{ matrix.debug }} DMA=1 make -j WOLFSSL_DIR=../../../wolfssl
         else
-          cd examples/posix/wh_posix_client && ${{ matrix.asan }} ${{ matrix.debug }} make -j WOLFSSL_DIR=../../../wolfssl
+          cd examples/posix/wh_posix_client && ${{ matrix.asan }} ${{ matrix.debug }} TLS=${{ env.TLS }} make -j WOLFSSL_DIR=../../../wolfssl
         fi
 
     # Start the server in the background

@@ -283,7 +283,7 @@ static void Usage(const char* exeName)
     WOLFHSM_CFG_PRINTF(", psk");
 #endif
 #endif /* !defined(WOLFHSM_CFG_NO_CRYPTO) && defined(WOLFHSM_CFG_TLS) */
-#ifdef WOLFSSL_CFG_DMA
+#ifdef WOLFHSM_CFG_DMA
     WOLFHSM_CFG_PRINTF(", dma");
 #endif
     WOLFHSM_CFG_PRINTF("\n");
@@ -384,7 +384,7 @@ int main(int argc, char** argv)
     }
 #endif /* !defined(NO_PSK) */
 #endif /* !defined(WOLFHSM_CFG_NO_CRYPTO) && defined(WOLFHSM_CFG_TLS) */
-#ifdef WOLFSSL_CFG_DMA
+#ifdef WOLFHSM_CFG_DMA
     else if (strcmp(type, "dma") == 0) {
         WOLFHSM_CFG_PRINTF("Using DMA with shared memory transport\n");
         rc = wh_PosixServer_ExampleShmDmaConfig(s_conf);
@@ -393,7 +393,7 @@ int main(int argc, char** argv)
             return -1;
         }
     }
-#endif /* WOLFSSL_CFG_DMA */
+#endif /* WOLFHSM_CFG_DMA */
     else {
         WOLFHSM_CFG_PRINTF("Invalid server type: %s\n", type);
         return -1;
