@@ -8,7 +8,9 @@ on:
 
 jobs:
   build:
-
+    strategy:
+        matrix:
+            transport: [ 'tcp', 'tls' ]
     runs-on: ubuntu-latest
 
     steps:
@@ -33,32 +35,40 @@ jobs:
     - name: Build POSIX server
       run: |
         cd examples/posix/wh_posix_server
-        make -j SHE=1 WOLFSSL_DIR=../../../wolfssl
+        if [ "${{ matrix.transport }}" = "tcp" ]; then
+            make -j SHE=1 WOLFSSL_DIR=../../../wolfssl
+        else
+            make -j TLS=1 SHE=1 WOLFSSL_DIR=../../../wolfssl
+        fi
 
     # Start the server in the background
     - name: Run POSIX server
       run: |
         cd examples/posix/wh_posix_server
-        ./Build/wh_posix_server.elf &
-        TCP_SERVER_PID=$!
-        echo "TCP_SERVER_PID=$TCP_SERVER_PID" >> $GITHUB_ENV
+        ./Build/wh_posix_server.elf --type ${{ matrix.transport }} &
+        SERVER_PID=$!
+        echo "SERVER_PID=$SERVER_PID" >> $GITHUB_ENV
 
     # Build and test client-only build with everything enabled and ASAN
     - name: Build client-only unit tests with ASAN
       run: |
         cd test
         make clean
-        make -j CLIENT_ONLY_TCP=1 SHE=1 ASAN=1 WOLFSSL_DIR=../wolfssl && make run
+        if [ "${{ matrix.transport }}" = "tcp" ]; then
+            make -j CLIENT_ONLY=1 SHE=1 ASAN=1 WOLFSSL_DIR=../wolfssl && make run
+        else
+            make -j CLIENT_ONLY=1 TLS=1 SHE=1 ASAN=1 WOLFSSL_DIR=../wolfssl && make run
+        fi
 
     # Restart server with fresh state for second test run
     - name: Restart POSIX server
       run: |
-        kill $TCP_SERVER_PID || true
+        kill $SERVER_PID || true
         cd examples/posix/wh_posix_server
         rm -f *.bin || true
-        ./Build/wh_posix_server.elf &
-        TCP_SERVER_PID=$!
-        echo "TCP_SERVER_PID=$TCP_SERVER_PID" >> $GITHUB_ENV
+        ./Build/wh_posix_server.elf --type ${{ matrix.transport }} &
+        SERVER_PID=$!
+        echo "SERVER_PID=$SERVER_PID" >> $GITHUB_ENV
         sleep 2
 
     # Build and test client-only with DEBUG_VERBOSE=1 (includes DEBUG)
@@ -66,10 +76,14 @@ jobs:
       run: |
         cd test
         make clean
-        make -j CLIENT_ONLY_TCP=1 SHE=1 DEBUG_VERBOSE=1 WOLFSSL_DIR=../wolfssl && make run
+        if [ "${{ matrix.transport }}" = "tcp" ]; then
+            make -j CLIENT_ONLY=1 SHE=1 DEBUG_VERBOSE=1 WOLFSSL_DIR=../wolfssl && make run
+        else
+            make -j CLIENT_ONLY=1 TLS=1 SHE=1 DEBUG_VERBOSE=1 WOLFSSL_DIR=../wolfssl && make run
+        fi
 
     # Optional: Kill the server process if it doesn't exit on its own
-    - name: Cleanup POSIX TCP server
+    - name: Cleanup POSIX server
       if: always()
-      run: kill $TCP_SERVER_PID || true
- 
+      run: kill $SERVER_PID || true
+
