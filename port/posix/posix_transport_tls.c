@@ -205,11 +205,13 @@ int posixTransportTls_SendRequest(void* context, uint16_t size,
          * is not listening yet, thats why we need to wait to set the fd in
          * wolfSSL until after the connect() has completed) */
         if (ctx->ssl == NULL) {
+            int fd;
+
             if (posixTransportTcp_GetConnectFd(
-                    (void*)&ctx->tcpCtx, &ctx->connect_fd_p1) != WH_ERROR_OK) {
+                    (void*)&ctx->tcpCtx, &fd) != WH_ERROR_OK) {
                 return WH_ERROR_NOTREADY;
             }
-            ctx->connect_fd_p1++;
+            ctx->connect_fd_p1 = fd + 1; /* follow +1 convetions, 0 is invalid */
 
             ctx->ssl = wolfSSL_new(ctx->ssl_ctx);
             if (!ctx->ssl) {
@@ -218,7 +220,7 @@ int posixTransportTls_SendRequest(void* context, uint16_t size,
             }
 
             /* Set the current socket file descriptor */
-            rc = wolfSSL_set_fd(ctx->ssl, ctx->connect_fd_p1 - 1);
+            rc = wolfSSL_set_fd(ctx->ssl, fd);
             if (rc != WOLFSSL_SUCCESS) {
                 wolfSSL_free(ctx->ssl);
                 ctx->ssl = NULL;

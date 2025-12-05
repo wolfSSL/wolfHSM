@@ -25,7 +25,7 @@
  * WOLFHSM_CFG_TEST_POSIX : Run tests using POSIX transport
  *
  * WOLFHSM_CFG_TEST_CLIENT_ONLY : Run client-only tests connecting to a running
- *                                server. The default is using a TCP trasnport
+ *                                server. The default is using a TCP transport
  *                                connection. When another specific transports
  *                                are enabled then they will be used instead i.e
  *                                WOLFHSM_CFG_TLS will use TLS transport.

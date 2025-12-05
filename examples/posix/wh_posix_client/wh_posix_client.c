@@ -161,12 +161,12 @@ void Usage(const char* exeName)
     WOLFHSM_CFG_PRINTF("Usage: %s --type <type> --test\n", exeName);
     WOLFHSM_CFG_PRINTF("Example: %s --type tcp\n", exeName);
     WOLFHSM_CFG_PRINTF("type: tcp (default), shm");
-#ifndef WOLFHSM_CFG_NO_CRYPTO
+#ifdef WOLFHSM_CFG_TLS
     WOLFHSM_CFG_PRINTF(", tls");
-#endif
-#ifndef NO_PSK
+#if !defined(NO_PSK)
     WOLFHSM_CFG_PRINTF(", psk");
 #endif
+#endif /* WOLFHSM_CFG_TLS */
 #ifdef WOLFSSL_STATIC_MEMORY
     WOLFHSM_CFG_PRINTF(", dma");
 #endif
