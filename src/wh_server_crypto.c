@@ -630,7 +630,7 @@ int wh_Server_EccKeyCacheExport(whServerContext* ctx, whKeyId keyId,
 #endif /* HAVE_ECC */
 
 #ifdef HAVE_ED25519
-int wh_Server_Ed25519KeyCacheImport(whServerContext* ctx, ed25519_key* key,
+int wh_Server_CacheImportEd25519Key(whServerContext* ctx, ed25519_key* key,
                                     whKeyId keyId, whNvmFlags flags,
                                     uint16_t label_len, uint8_t* label)
 {
@@ -667,7 +667,7 @@ int wh_Server_Ed25519KeyCacheImport(whServerContext* ctx, ed25519_key* key,
     return ret;
 }
 
-int wh_Server_Ed25519KeyCacheExport(whServerContext* ctx, whKeyId keyId,
+int wh_Server_CacheExportEd25519Key(whServerContext* ctx, whKeyId keyId,
                                     ed25519_key* key)
 {
     uint8_t*       cacheBuf = NULL;
@@ -1885,7 +1885,7 @@ static int _HandleEd25519KeyGen(whServerContext* ctx, uint16_t magic,
                     }
                 }
                 if (ret == 0) {
-                    ret = wh_Server_Ed25519KeyCacheImport(
+                    ret = wh_Server_CacheImportEd25519Key(
                         ctx, key, key_id, flags, label_size, label);
                 }
             }
@@ -1976,7 +1976,7 @@ static int _HandleEd25519Sign(whServerContext* ctx, uint16_t magic,
 
     ret = wc_ed25519_init_ex(key, NULL, ctx->crypto->devId);
     if (ret == 0) {
-        ret = wh_Server_Ed25519KeyCacheExport(ctx, key_id, key);
+        ret = wh_Server_CacheExportEd25519Key(ctx, key_id, key);
         if (ret == WH_ERROR_OK) {
             ret = wc_ed25519_sign_msg_ex(req_msg, msg_len, sig, &sig_len, key,
                                          (byte)req.type, req_ctx,
@@ -2078,7 +2078,7 @@ static int _HandleEd25519Verify(whServerContext* ctx, uint16_t magic,
 
     ret = wc_ed25519_init_ex(key, NULL, ctx->crypto->devId);
     if (ret == 0) {
-        ret = wh_Server_Ed25519KeyCacheExport(ctx, key_id, key);
+        ret = wh_Server_CacheExportEd25519Key(ctx, key_id, key);
         if (ret == WH_ERROR_OK) {
             ret = wc_ed25519_verify_msg_ex(req_sig, sig_len, req_msg, msg_len,
                                            &result, key, (byte)req.type,
@@ -2172,7 +2172,7 @@ static int _HandleEd25519SignDma(whServerContext* ctx, uint16_t magic,
     if (ret == WH_ERROR_OK) {
         ret = wc_ed25519_init_ex(key, NULL, ctx->crypto->devId);
         if (ret == 0) {
-            ret = wh_Server_Ed25519KeyCacheExport(ctx, key_id, key);
+            ret = wh_Server_CacheExportEd25519Key(ctx, key_id, key);
             if (ret == WH_ERROR_OK) {
                 ret = wc_ed25519_sign_msg_ex(msgAddr, req.msg.sz, sigAddr,
                                              &sigLen, key, (byte)req.type,
@@ -2278,7 +2278,7 @@ static int _HandleEd25519VerifyDma(whServerContext* ctx, uint16_t magic,
     if (ret == WH_ERROR_OK) {
         ret = wc_ed25519_init_ex(key, NULL, ctx->crypto->devId);
         if (ret == 0) {
-            ret = wh_Server_Ed25519KeyCacheExport(ctx, key_id, key);
+            ret = wh_Server_CacheExportEd25519Key(ctx, key_id, key);
             if (ret == WH_ERROR_OK) {
                 int verified = 0;
                 ret          = wc_ed25519_verify_msg_ex(

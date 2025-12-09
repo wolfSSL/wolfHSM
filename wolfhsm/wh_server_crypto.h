@@ -74,11 +74,11 @@ int wh_Server_EccKeyCacheExport(whServerContext* ctx, whKeyId keyId,
 #endif
 
 #ifdef HAVE_ED25519
-int wh_Server_Ed25519KeyCacheImport(whServerContext* ctx, ed25519_key* key,
+int wh_Server_CacheImportEd25519Key(whServerContext* ctx, ed25519_key* key,
                                     whKeyId keyId, whNvmFlags flags,
                                     uint16_t label_len, uint8_t* label);
 
-int wh_Server_Ed25519KeyCacheExport(whServerContext* ctx, whKeyId keyId,
+int wh_Server_CacheExportEd25519Key(whServerContext* ctx, whKeyId keyId,
                                     ed25519_key* key);
 #endif /* HAVE_ED25519 */
 
