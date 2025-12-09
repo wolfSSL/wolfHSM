@@ -2349,9 +2349,9 @@ int wh_Client_Ed25519Sign(whClientContext* ctx, ed25519_key* key,
         (void)wh_Client_KeyEvict(ctx, key_id);
     }
 
-    /* map ASN key decoding errors to BAD_FUNC_ARG */
+    /* map ASN key decoding errors to WH_ERROR_BADARGS */
     if (ret == ASN_PARSE_E)
-        ret = BAD_FUNC_ARG;
+        ret = WH_ERROR_BADARGS;
 
     return ret;
 }
@@ -2475,9 +2475,9 @@ int wh_Client_Ed25519Verify(whClientContext* ctx, ed25519_key* key,
         (void)wh_Client_KeyEvict(ctx, key_id);
     }
 
-    /* map ASN key decoding errors to BAD_FUNC_ARG */
+    /* map ASN key decoding errors to WH_ERROR_BADARGS */
     if (ret == ASN_PARSE_E)
-        ret = BAD_FUNC_ARG;
+        ret = WH_ERROR_BADARGS;
 
     return ret;
 }
@@ -2622,9 +2622,9 @@ int wh_Client_Ed25519SignDma(whClientContext* ctx, ed25519_key* key,
         (void)wh_Client_KeyEvict(ctx, key_id);
     }
 
-    /* map ASN key decoding errors to BAD_FUNC_ARG */
+    /* map ASN key decoding errors to WH_ERROR_BADARGS */
     if (ret == ASN_PARSE_E)
-        ret = BAD_FUNC_ARG;
+        ret = WH_ERROR_BADARGS;
 
     return ret;
 }
@@ -2767,9 +2767,9 @@ int wh_Client_Ed25519VerifyDma(whClientContext* ctx, ed25519_key* key,
         (void)wh_Client_KeyEvict(ctx, key_id);
     }
 
-    /* map ASN key decoding errors to BAD_FUNC_ARG */
+    /* map ASN key decoding errors to WH_ERROR_BADARGS */
     if (ret == ASN_PARSE_E)
-        ret = BAD_FUNC_ARG;
+        ret = WH_ERROR_BADARGS;
 
     return ret;
 }

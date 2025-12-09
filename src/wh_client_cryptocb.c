@@ -363,6 +363,9 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             ed25519_key* key = info->pk.ed25519kg.key;
             /* Only default Ed25519 supported */
             ret = wh_Client_Ed25519MakeExportKey(ctx, key);
+            if (ret == WH_ERROR_BADARGS) {
+                ret = BAD_FUNC_ARG;
+            }
         } break;
 
         case WC_PK_TYPE_ED25519_SIGN: {
@@ -374,12 +377,6 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             uint8_t        type   = info->pk.ed25519sign.type;
             uint32_t       len;
 
-            if ((type != (byte)Ed25519) && (type != (byte)Ed25519ctx) &&
-                (type != (byte)Ed25519ph)) {
-                ret = BAD_FUNC_ARG;
-                break;
-            }
-
             len = 0;
             if (outLen != NULL) {
                 len = *outLen;
@@ -389,6 +386,12 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
                 info->pk.ed25519sign.contextLen, out, &len);
             if (ret == WH_ERROR_OK && outLen != NULL) {
                 *outLen = len;
+            }
+            else if (ret == WH_ERROR_BADARGS) {
+                ret = BAD_FUNC_ARG;
+            }
+            else if (ret == WH_ERROR_NOTIMPL) {
+                ret = CRYPTOCB_UNAVAILABLE;
             }
         } break;
 
@@ -401,16 +404,16 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             int*           res    = info->pk.ed25519verify.res;
             uint8_t        type   = info->pk.ed25519verify.type;
 
-            if ((type != (byte)Ed25519) && (type != (byte)Ed25519ctx) &&
-                (type != (byte)Ed25519ph)) {
-                ret = CRYPTOCB_UNAVAILABLE;
-                break;
-            }
-
             ret =
                 wh_Client_Ed25519Verify(ctx, key, sig, sigLen, msg, msgLen,
                                         type, info->pk.ed25519verify.context,
                                         info->pk.ed25519verify.contextLen, res);
+            if (ret == WH_ERROR_BADARGS) {
+                ret = BAD_FUNC_ARG;
+            }
+            else if (ret == WH_ERROR_NOTIMPL) {
+                ret = CRYPTOCB_UNAVAILABLE;
+            }
         } break;
 #endif /* HAVE_ED25519 */
 #endif /* HAVE_CURVE25519 */
@@ -863,6 +866,9 @@ int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
                 ed25519_key* key = info->pk.ed25519kg.key;
                 /* Only default Ed25519 supported */
                 ret = wh_Client_Ed25519MakeExportKey(ctx, key);
+                if (ret == WH_ERROR_BADARGS) {
+                    ret = BAD_FUNC_ARG;
+                }
             } break;
 
             case WC_PK_TYPE_ED25519_SIGN: {
@@ -874,12 +880,6 @@ int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
                 uint8_t        type   = info->pk.ed25519sign.type;
                 uint32_t       len;
 
-                if ((type != (byte)Ed25519) && (type != (byte)Ed25519ctx) &&
-                    (type != (byte)Ed25519ph)) {
-                    ret = BAD_FUNC_ARG;
-                    break;
-                }
-
                 len = 0;
                 if (outLen != NULL) {
                     len = *outLen;
@@ -889,6 +889,12 @@ int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
                     info->pk.ed25519sign.contextLen, out, &len);
                 if (ret == WH_ERROR_OK && outLen != NULL) {
                     *outLen = len;
+                }
+                else if (ret == WH_ERROR_BADARGS) {
+                    ret = BAD_FUNC_ARG;
+                }
+                else if (ret == WH_ERROR_NOTIMPL) {
+                    ret = CRYPTOCB_UNAVAILABLE;
                 }
             } break;
 
@@ -901,16 +907,16 @@ int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
                 int*           res    = info->pk.ed25519verify.res;
                 uint8_t        type   = info->pk.ed25519verify.type;
 
-                if ((type != (byte)Ed25519) && (type != (byte)Ed25519ctx) &&
-                    (type != (byte)Ed25519ph)) {
-                    ret = CRYPTOCB_UNAVAILABLE;
-                    break;
-                }
-
                 ret = wh_Client_Ed25519VerifyDma(
                     ctx, key, sig, sigLen, msg, msgLen, type,
                     info->pk.ed25519verify.context,
                     info->pk.ed25519verify.contextLen, res);
+                if (ret == WH_ERROR_BADARGS) {
+                    ret = BAD_FUNC_ARG;
+                }
+                else if (ret == WH_ERROR_NOTIMPL) {
+                    ret = CRYPTOCB_UNAVAILABLE;
+                }
             } break;
 #endif /* HAVE_ED25519 */
 
