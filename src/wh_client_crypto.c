@@ -2247,7 +2247,7 @@ int wh_Client_Ed25519Sign(whClientContext* ctx, ed25519_key* key,
     if ((type == (byte)Ed25519) && (contextLen != 0 || context != NULL)) {
         return WH_ERROR_BADARGS;
     }
-    if (contextLen > 255U) {
+    if (contextLen > WH_CRYPTO_ED25519_MAX_CTX_LEN) {
         return WH_ERROR_BADARGS;
     }
 
@@ -2383,7 +2383,7 @@ int wh_Client_Ed25519Verify(whClientContext* ctx, ed25519_key* key,
     if ((type == (byte)Ed25519) && (contextLen != 0 || context != NULL)) {
         return WH_ERROR_BADARGS;
     }
-    if (contextLen > 255U) {
+    if (contextLen > WH_CRYPTO_ED25519_MAX_CTX_LEN) {
         return WH_ERROR_BADARGS;
     }
 
@@ -2511,7 +2511,7 @@ int wh_Client_Ed25519SignDma(whClientContext* ctx, ed25519_key* key,
     if ((type == (byte)Ed25519) && (contextLen != 0 || context != NULL)) {
         return WH_ERROR_BADARGS;
     }
-    if (contextLen > 255U) {
+    if (contextLen > WH_CRYPTO_ED25519_MAX_CTX_LEN) {
         return WH_ERROR_BADARGS;
     }
 
@@ -2658,7 +2658,7 @@ int wh_Client_Ed25519VerifyDma(whClientContext* ctx, ed25519_key* key,
     if ((type == (byte)Ed25519) && (contextLen != 0 || context != NULL)) {
         return WH_ERROR_BADARGS;
     }
-    if (contextLen > 255U) {
+    if (contextLen > WH_CRYPTO_ED25519_MAX_CTX_LEN) {
         return WH_ERROR_BADARGS;
     }
 

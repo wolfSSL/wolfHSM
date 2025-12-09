@@ -1939,7 +1939,7 @@ static int _HandleEd25519Sign(whServerContext* ctx, uint16_t magic,
         return WH_ERROR_BADARGS;
     }
     available -= req.msgSz;
-    if (req.ctxSz > 255U) {
+    if (req.ctxSz > WH_CRYPTO_ED25519_MAX_CTX_LEN) {
         return WH_ERROR_BADARGS;
     }
     if (req.ctxSz > available) {
@@ -2046,7 +2046,7 @@ static int _HandleEd25519Verify(whServerContext* ctx, uint16_t magic,
     if (req.ctxSz > available) {
         return WH_ERROR_BADARGS;
     }
-    if (req.ctxSz > 255U) {
+    if (req.ctxSz > WH_CRYPTO_ED25519_MAX_CTX_LEN) {
         return WH_ERROR_BADARGS;
     }
 
@@ -2130,7 +2130,7 @@ static int _HandleEd25519SignDma(whServerContext* ctx, uint16_t magic,
     if (req.ctxSz > available) {
         return WH_ERROR_BADARGS;
     }
-    if (req.ctxSz > 255U) {
+    if (req.ctxSz > WH_CRYPTO_ED25519_MAX_CTX_LEN) {
         return WH_ERROR_BADARGS;
     }
     uint8_t* req_ctx = (uint8_t*)cryptoDataIn + sizeof(req);
@@ -2235,7 +2235,7 @@ static int _HandleEd25519VerifyDma(whServerContext* ctx, uint16_t magic,
     if (req.ctxSz > available) {
         return WH_ERROR_BADARGS;
     }
-    if (req.ctxSz > 255U) {
+    if (req.ctxSz > WH_CRYPTO_ED25519_MAX_CTX_LEN) {
         return WH_ERROR_BADARGS;
     }
     uint8_t* req_ctx = (uint8_t*)cryptoDataIn + sizeof(req);
