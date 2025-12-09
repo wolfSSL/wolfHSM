@@ -1,6 +1,7 @@
 #include "wh_demo_client_wctest.h"
 #include "wh_demo_client_wcbench.h"
 #include "wh_demo_client_nvm.h"
+#include "wh_demo_client_auth.h"
 #include "wh_demo_client_keystore.h"
 #include "wh_demo_client_crypto.h"
 #include "wh_demo_client_secboot.h"
@@ -26,6 +27,12 @@ int wh_DemoClient_All(whClientContext* clientContext)
 #endif
     /* NVM demos */
     rc = wh_DemoClient_Nvm(clientContext);
+    if (rc != 0) {
+        return rc;
+    }
+
+    /* Auth demos */
+    rc = wh_DemoClient_Auth(clientContext);
     if (rc != 0) {
         return rc;
     }
