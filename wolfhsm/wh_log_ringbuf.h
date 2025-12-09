@@ -29,7 +29,7 @@
 #include "wolfhsm/wh_settings.h"
 #include "wolfhsm/wh_log.h"
 
-#include <stdint.h>
+#include <stddef.h>
 
 /* Ring buffer configuration structure */
 typedef struct whLogRingbufConfig_t {
