@@ -909,7 +909,6 @@ static int whTest_LogRingbuf(void)
     /* Test: Init with valid config */
     WH_TEST_RETURN_ON_FAIL(wh_Log_Init(&logCtx, &logConfig));
     WH_TEST_ASSERT_RETURN(ringbufCtx.initialized == 1);
-    WH_TEST_ASSERT_RETURN(ringbufCtx.head == 0);
     WH_TEST_ASSERT_RETURN(ringbufCtx.count == 0);
 
     /* Get capacity from initialized context */
@@ -922,11 +921,9 @@ static int whTest_LogRingbuf(void)
     }
 
     WH_TEST_ASSERT_RETURN(ringbufCtx.count == 5);
-    WH_TEST_ASSERT_RETURN(ringbufCtx.head == 5);
 
     /* Verify the entries are correct */
     WH_TEST_ASSERT_RETURN(ringbufCtx.count == 5);
-    WH_TEST_ASSERT_RETURN(ringbufCtx.head == 5);
     for (i = 0; i < 5; i++) {
         char expected[32];
         snprintf(expected, sizeof(expected), "Message %d", i);
@@ -937,7 +934,6 @@ static int whTest_LogRingbuf(void)
     /* Test: Clear buffer */
     WH_TEST_RETURN_ON_FAIL(wh_Log_Clear(&logCtx));
     WH_TEST_ASSERT_RETURN(ringbufCtx.count == 0);
-    WH_TEST_ASSERT_RETURN(ringbufCtx.head == 0);
 
     /* Test: Fill buffer to capacity */
     for (i = 0; i < (int)capacity; i++) {
@@ -945,16 +941,14 @@ static int whTest_LogRingbuf(void)
     }
 
     WH_TEST_ASSERT_RETURN(ringbufCtx.count == capacity);
-    WH_TEST_ASSERT_RETURN(ringbufCtx.head == 0); /* Wrapped around */
 
     /* Test: Wraparound - add more entries to overwrite oldest */
     for (i = 0; i < 5; i++) {
         WH_LOG_F(&logCtx, WH_LOG_LEVEL_INFO, "Wrapped %d", i);
     }
 
-    /* Count should still be at capacity */
-    WH_TEST_ASSERT_RETURN(ringbufCtx.count == capacity);
-    WH_TEST_ASSERT_RETURN(ringbufCtx.head == 5); /* 5 entries past wrap */
+    /* Count increments freely to track total messages ever written */
+    WH_TEST_ASSERT_RETURN(ringbufCtx.count == capacity + 5);
 
     /* Verify oldest entries were overwritten */
     WH_TEST_ASSERT_RETURN(strncmp(ringbufCtx.entries[0].msg, "Wrapped 0",

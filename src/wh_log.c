@@ -36,9 +36,9 @@
 
 #ifdef WOLFHSM_CFG_LOGGING
 
-void wh_Log_InternalSubmit(whLogContext* ctx, whLogLevel level,
-                           const char* file, const char* function,
-                           uint32_t line, const char* src, size_t src_len)
+void wh_Log_AddMsg(whLogContext* ctx, whLogLevel level, const char* file,
+                   const char* function, uint32_t line, const char* src,
+                   size_t src_len)
 {
     uint64_t timestamp = WH_GETTIME_US();
     size_t   max_len =
@@ -54,14 +54,14 @@ void wh_Log_InternalSubmit(whLogContext* ctx, whLogLevel level,
     if ((src != NULL) && (copy_len > 0)) {
         memcpy(entry.msg, src, copy_len);
     }
-    entry.msg[copy_len] = '\0';
+    /* Zero-pad remainder of message buffer to prevent information leakage */
+    memset(&entry.msg[copy_len], 0, WOLFHSM_CFG_LOG_MSG_MAX - copy_len);
 
     wh_Log_AddEntry(ctx, &entry);
 }
 
-void wh_Log_InternalFormat(whLogContext* ctx, whLogLevel level,
-                           const char* file, const char* function,
-                           uint32_t line, const char* fmt, ...)
+void wh_Log_AddMsgF(whLogContext* ctx, whLogLevel level, const char* file,
+                    const char* function, uint32_t line, const char* fmt, ...)
 {
     char    buf[WOLFHSM_CFG_LOG_MSG_MAX];
     va_list args;
@@ -87,7 +87,7 @@ void wh_Log_InternalFormat(whLogContext* ctx, whLogLevel level,
         formatted_len = (size_t)ret;
     }
 
-    wh_Log_InternalSubmit(ctx, level, file, function, line, buf, formatted_len);
+    wh_Log_AddMsg(ctx, level, file, function, line, buf, formatted_len);
 }
 
 int wh_Log_Init(whLogContext* ctx, const whLogConfig* config)

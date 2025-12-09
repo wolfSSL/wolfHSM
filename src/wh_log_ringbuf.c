@@ -49,7 +49,6 @@ int whLogRingbuf_Init(void* c, const void* cf)
     memset(context, 0, sizeof(*context));
     context->entries     = (whLogEntry*)config->buffer;
     context->capacity    = capacity;
-    context->head        = 0;
     context->count       = 0;
     context->initialized = 1;
 
@@ -75,7 +74,7 @@ int whLogRingbuf_Cleanup(void* c)
 int whLogRingbuf_AddEntry(void* c, const whLogEntry* entry)
 {
     whLogRingbufContext* context = (whLogRingbufContext*)c;
-    size_t               capacity;
+    size_t               head;
 
     if ((context == NULL) || (entry == NULL)) {
         return WH_ERROR_BADARGS;
@@ -85,18 +84,14 @@ int whLogRingbuf_AddEntry(void* c, const whLogEntry* entry)
         return WH_ERROR_ABORTED;
     }
 
-    capacity = context->capacity;
+    /* Calculate head position from count */
+    head = context->count % context->capacity;
 
     /* Copy entry to ring buffer at head position */
-    memcpy(&context->entries[context->head], entry, sizeof(whLogEntry));
+    memcpy(&context->entries[head], entry, sizeof(whLogEntry));
 
-    /* Advance head with wraparound */
-    context->head = (context->head + 1) % capacity;
-
-    /* Increment count, capped at capacity */
-    if (context->count < capacity) {
-        context->count++;
-    }
+    /* Increment count freely to track total messages written */
+    context->count++;
 
     return WH_ERROR_OK;
 }
@@ -112,6 +107,7 @@ int whLogRingbuf_Iterate(void* c, whLogIterateCb iterate_cb, void* iterate_arg)
 {
     whLogRingbufContext* context = (whLogRingbufContext*)c;
     size_t               capacity;
+    size_t               num_entries;
     size_t               start_idx;
     size_t               i;
     int                  ret = 0;
@@ -124,26 +120,30 @@ int whLogRingbuf_Iterate(void* c, whLogIterateCb iterate_cb, void* iterate_arg)
         return WH_ERROR_ABORTED;
     }
 
-    capacity = context->capacity;
-
     /* If buffer is empty, nothing to iterate */
     if (context->count == 0) {
         return WH_ERROR_OK;
     }
 
+    capacity = context->capacity;
+
+    /* Calculate actual number of entries in buffer (capped at capacity) */
+    num_entries = (context->count < capacity) ? context->count : capacity;
+
     /* Determine starting index for iteration:
      * - If not full: start at 0 (oldest entry)
      * - If full: start at head (oldest entry, about to be overwritten)
+     *   head = count % capacity
      */
     if (context->count < capacity) {
         start_idx = 0;
     }
     else {
-        start_idx = context->head;
+        start_idx = context->count % capacity;
     }
 
-    /* Iterate through entries in buffer order */
-    for (i = 0; i < context->count; i++) {
+    /* Iterate through entries in chronological order */
+    for (i = 0; i < num_entries; i++) {
         size_t idx = (start_idx + i) % capacity;
         ret        = iterate_cb(iterate_arg, &context->entries[idx]);
         if (ret != 0) {
@@ -164,7 +164,6 @@ int whLogRingbuf_Clear(void* c)
     }
 
     /* Reset ring buffer state */
-    context->head  = 0;
     context->count = 0;
 
     /* Zero the log entries */

@@ -41,8 +41,7 @@ typedef struct whLogRingbufConfig_t {
 typedef struct whLogRingbufContext_t {
     whLogEntry* entries;     /* Pointer to user-supplied buffer */
     size_t      capacity;    /* Number of entries buffer can hold */
-    size_t      head;        /* Next write position (0 to capacity-1) */
-    size_t      count;       /* Current entries (0 to capacity) */
+    size_t      count;       /* Total entries ever written (head = count % capacity) */
     int         initialized; /* Initialization flag */
 } whLogRingbufContext;
 
