@@ -14,6 +14,8 @@
 #include "wolfhsm/wh_nvm.h"
 #include "wolfhsm/wh_nvm_flash.h"
 #include "wolfhsm/wh_flash_ramsim.h"
+#include "wolfhsm/wh_auth.h"
+#include "wolfhsm/wh_auth_base.h"
 
 #include "port/posix/posix_transport_shm.h"
 #include "port/posix/posix_transport_tcp.h"
@@ -647,6 +649,54 @@ int wh_PosixServer_ExampleNvmConfig(void* conf, const char* nvmInitFilePath)
         }
         WOLFHSM_CFG_PRINTF("NVM initialization completed successfully\n");
     }
+
+    return WH_ERROR_OK;
+}
+
+
+/* Default auth callback structure */
+static whAuthCb default_auth_cb = {
+    .Init = wh_AuthBase_Init,
+    .Cleanup = wh_AuthBase_Cleanup,
+    .Login = wh_AuthBase_Login,
+    .Logout = wh_AuthBase_Logout,
+    .CheckRequestAuthorization = wh_AuthBase_CheckRequestAuthorization,
+    .CheckKeyAuthorization = wh_AuthBase_CheckKeyAuthorization,
+    .UserAdd = wh_AuthBase_UserAdd,
+    .UserDelete = wh_AuthBase_UserDelete,
+    .UserSetPermissions = wh_AuthBase_UserSetPermissions,
+    .UserGet = wh_AuthBase_UserGet,
+    .UserSetCredentials = wh_AuthBase_UserSetCredentials
+};
+
+/**
+ * @brief Configure a default auth context for the server
+ *
+ * This function sets up a basic auth context with stub implementations that
+ * allow all operations. This is suitable for development and testing.
+ * For production use, a proper auth backend should be implemented.
+ *
+ * @param[in] conf Pointer to the server configuration
+ * @return int Returns WH_ERROR_OK on success, or a negative error code on failure
+ */
+int wh_PosixServer_ExampleAuthConfig(void* conf)
+{
+    whServerConfig* s_conf = (whServerConfig*)conf;
+    static whAuthContext auth_ctx = {0};
+    static void* auth_backend_context = NULL; /* No backend context needed for stubs */
+
+    if (s_conf == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Set up the auth context with default stub callbacks */
+    auth_ctx.cb = &default_auth_cb;
+    auth_ctx.context = auth_backend_context;
+
+    /* Set the auth context in the server configuration */
+    s_conf->auth = &auth_ctx;
+
+    WOLFHSM_CFG_PRINTF("Default auth context configured (stub implementation)\n");
 
     return WH_ERROR_OK;
 }

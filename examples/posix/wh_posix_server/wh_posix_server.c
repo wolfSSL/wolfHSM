@@ -414,6 +414,14 @@ int main(int argc, char** argv)
         WOLFHSM_CFG_PRINTF("Failed to initialize NVM: %d\n", rc);
         return rc;
     }
+
+    /* Auth Manager Configuration */
+    rc = wh_PosixServer_ExampleAuthConfig(s_conf);
+    if (rc != WH_ERROR_OK) {
+        WOLFHSM_CFG_PRINTF("Failed to initialize Auth Manager: %d\n", rc);
+        return rc;
+    }
+
 #if !defined(WOLFHSM_CFG_NO_CRYPTO)
     /* Crypto context */
     whServerCryptoContext crypto[1] = {{
