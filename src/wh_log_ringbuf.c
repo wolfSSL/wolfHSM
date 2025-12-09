@@ -44,6 +44,11 @@ int whLogRingbuf_Init(void* c, const void* cf)
 
     /* Calculate capacity (number of complete entries that fit in buffer) */
     capacity = config->buffer_size / sizeof(whLogEntry);
+    /* Capacity must be able to hold at least one log entry, specifically to
+     * prevent divide-by-zeros in the rollover logic */
+    if (capacity == 0) {
+        return WH_ERROR_BADARGS;
+    }
 
     /* Initialize context */
     memset(context, 0, sizeof(*context));
