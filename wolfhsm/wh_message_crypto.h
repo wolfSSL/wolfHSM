@@ -1108,7 +1108,6 @@ typedef struct {
     uint32_t                  keyId;
     uint32_t                  type;      /* wolfCrypt Ed25519 mode */
     uint32_t                  ctxSz;     /* Optional context length */
-    uint8_t                   WH_PAD[0]; /* Pad to 8-byte alignment */
     /* Data follows:
      * uint8_t ctx[ctxSz];
      */
@@ -1119,7 +1118,6 @@ typedef struct {
     whMessageCrypto_DmaAddrStatus dmaAddrStatus;
     uint32_t                      sigSz;
     uint32_t                      pubSz;
-    uint8_t                       WH_PAD[0]; /* Pad to 8-byte alignment */
 } whMessageCrypto_Ed25519SignDmaResponse;
 
 /* Ed25519 DMA Verify Request */
@@ -1131,7 +1129,6 @@ typedef struct {
     uint32_t                  keyId;
     uint32_t                  type;      /* wolfCrypt Ed25519 mode */
     uint32_t                  ctxSz;     /* Optional context length */
-    uint8_t                   WH_PAD[0]; /* Pad to 8-byte alignment */
     /* Data follows:
      * uint8_t ctx[ctxSz];
      */
