@@ -278,7 +278,7 @@ int wh_Log_Clear(whLogContext* ctx);
                       sizeof(message) - 1);                                  \
     } while (0)
 
-/* Formatted logging macro (printf-style variadic arguments) */
+/* Formatted logging macro (printf-style variadic arguments) using vsnprintf */
 #if !defined(__CCRH__)
 #define WH_LOG_F(ctx, lvl, fmt, ...)                                      \
     do {                                                                  \
@@ -297,7 +297,7 @@ int wh_Log_Clear(whLogContext* ctx);
 
 /* Assertion logging helpers:
  * - Log only when (cond) is false, then return (retcode)
- * - Variants for literal message, C string, and formatted message
+ * - Variants for string literal message, and formatted C string message
  */
 #define WH_LOG_ASSERT(ctx, lvl, cond, message)                        \
     do {                                                              \
@@ -308,6 +308,7 @@ int wh_Log_Clear(whLogContext* ctx);
     } while (0)
 
 
+/* Supports printf-style formatting with vsnprintf */
 #define WH_LOG_ASSERT_F(ctx, lvl, cond, fmt, ...)         \
     do {                                                  \
         if (!(cond)) {                                    \
@@ -317,7 +318,7 @@ int wh_Log_Clear(whLogContext* ctx);
 
 /* Log on error helpers:
  * - Log only when (rc) is not equal to WH_ERROR_OK
- * - Variants for literal message, C string, and formatted message
+ * - Variants for string literal message, and formatted C string message
  */
 #define WH_LOG_ON_ERROR(ctx, lvl, rc, message)                        \
     do {                                                              \
