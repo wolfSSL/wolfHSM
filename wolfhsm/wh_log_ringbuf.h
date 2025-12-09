@@ -39,10 +39,10 @@ typedef struct whLogRingbufConfig_t {
 
 /* Ring buffer context structure */
 typedef struct whLogRingbufContext_t {
-    whLogEntry* entries;     /* Pointer to user-supplied buffer */
-    size_t      capacity;    /* Number of entries buffer can hold */
-    size_t      count;       /* Total entries ever written (head = count % capacity) */
-    int         initialized; /* Initialization flag */
+    whLogEntry* entries;  /* Pointer to user-supplied buffer */
+    size_t      capacity; /* Number of entries buffer can hold */
+    size_t count; /* Total entries ever written (head = count % capacity) */
+    int    initialized; /* Initialization flag */
 } whLogRingbufContext;
 
 /* Callback functions */

@@ -84,7 +84,7 @@ typedef struct {
 
 /* Frontend API */
 
-/** 
+/**
  * @brief Initialize the logging context with a backend configuration.
  *
  * This function initializes a logging context by setting up the callback
@@ -118,7 +118,7 @@ int wh_Log_Init(whLogContext* ctx, const whLogConfig* config);
  */
 int wh_Log_Cleanup(whLogContext* ctx);
 
-/** 
+/**
  * @brief Add a complete log entry to the logging system.
  *
  * This function adds a fully-formed log entry to the logging backend. The
@@ -143,7 +143,7 @@ int wh_Log_Cleanup(whLogContext* ctx);
  */
 int wh_Log_AddEntry(whLogContext* ctx, const whLogEntry* entry);
 
-/** 
+/**
  * @brief Add a log message with source location information.
  *
  * This function creates a log entry from a string message and automatically
@@ -152,8 +152,8 @@ int wh_Log_AddEntry(whLogContext* ctx, const whLogEntry* entry);
  * is zero-padded to prevent information leakage.
  *
  * @param ctx Pointer to the initialized logging context. Must not be NULL.
- * @param level Log level for the message (WH_LOG_LEVEL_INFO, WH_LOG_LEVEL_ERROR,
- *              or WH_LOG_LEVEL_SECEVENT).
+ * @param level Log level for the message (WH_LOG_LEVEL_INFO,
+ * WH_LOG_LEVEL_ERROR, or WH_LOG_LEVEL_SECEVENT).
  * @param file Source file name (typically __FILE__). May be NULL.
  * @param function Function name (typically __func__). May be NULL.
  * @param line Line number (typically __LINE__).
@@ -179,8 +179,8 @@ void wh_Log_AddMsg(whLogContext* ctx, whLogLevel level, const char* file,
  * construction with variable arguments.
  *
  * @param ctx Pointer to the initialized logging context. Must not be NULL.
- * @param level Log level for the message (WH_LOG_LEVEL_INFO, WH_LOG_LEVEL_ERROR,
- *              or WH_LOG_LEVEL_SECEVENT).
+ * @param level Log level for the message (WH_LOG_LEVEL_INFO,
+ * WH_LOG_LEVEL_ERROR, or WH_LOG_LEVEL_SECEVENT).
  * @param file Source file name (typically __FILE__). May be NULL.
  * @param function Function name (typically __func__). May be NULL.
  * @param line Line number (typically __LINE__).
@@ -214,11 +214,12 @@ void wh_Log_AddMsgF(whLogContext* ctx, whLogLevel level, const char* file,
  * @return Other error codes may be returned by the backend Export callback.
  *
  * @note The export operation is backend-specific. Consult the backend
- *       documentation for details on the export_arg parameter and export format.
+ *       documentation for details on the export_arg parameter and export
+ * format.
  */
 int wh_Log_Export(whLogContext* ctx, void* export_arg);
 
-/** 
+/**
  * @brief Iterate over log entries using a callback function.
  *
  * This function iterates through all log entries in the logging backend,
@@ -271,26 +272,26 @@ int wh_Log_Clear(whLogContext* ctx);
 #ifdef WOLFHSM_CFG_LOGGING
 
 /* String literal logging macro */
-#define WH_LOG(ctx, lvl, message)                                    \
-    do {                                                             \
-        wh_Log_AddMsg((ctx), (lvl), __FILE__, __func__, __LINE__,    \
-                      (message), sizeof(message) - 1);               \
+#define WH_LOG(ctx, lvl, message)                                            \
+    do {                                                                     \
+        wh_Log_AddMsg((ctx), (lvl), __FILE__, __func__, __LINE__, (message), \
+                      sizeof(message) - 1);                                  \
     } while (0)
 
 /* Formatted logging macro (printf-style variadic arguments) */
 #if !defined(__CCRH__)
-#define WH_LOG_F(ctx, lvl, fmt, ...)                                 \
-    do {                                                             \
-        wh_Log_AddMsgF((ctx), (lvl), __FILE__, __func__, __LINE__,   \
-                       (fmt), ##__VA_ARGS__);                        \
+#define WH_LOG_F(ctx, lvl, fmt, ...)                                      \
+    do {                                                                  \
+        wh_Log_AddMsgF((ctx), (lvl), __FILE__, __func__, __LINE__, (fmt), \
+                       ##__VA_ARGS__);                                    \
     } while (0)
 #else
 /* CCRH workaround for empty __VA_ARGS__ */
 #define WH_LOG_F(ctx, lvl, ...) WH_LOG_F2((ctx), (lvl), __VA_ARGS__, "")
-#define WH_LOG_F2(ctx, lvl, fmt, ...)                                \
-    do {                                                             \
-        wh_Log_AddMsgF((ctx), (lvl), __FILE__, __func__, __LINE__,   \
-                       (fmt), ##__VA_ARGS__);                        \
+#define WH_LOG_F2(ctx, lvl, fmt, ...)                                     \
+    do {                                                                  \
+        wh_Log_AddMsgF((ctx), (lvl), __FILE__, __func__, __LINE__, (fmt), \
+                       ##__VA_ARGS__);                                    \
     } while (0)
 #endif
 
@@ -298,12 +299,12 @@ int wh_Log_Clear(whLogContext* ctx);
  * - Log only when (cond) is false, then return (retcode)
  * - Variants for literal message, C string, and formatted message
  */
-#define WH_LOG_ASSERT(ctx, lvl, cond, message)                            \
-    do {                                                                  \
-        if (!(cond)) {                                                    \
-            wh_Log_AddMsg((ctx), (lvl), __FILE__, __func__, __LINE__,     \
-                          (message), sizeof(message) - 1);                \
-        }                                                                 \
+#define WH_LOG_ASSERT(ctx, lvl, cond, message)                        \
+    do {                                                              \
+        if (!(cond)) {                                                \
+            wh_Log_AddMsg((ctx), (lvl), __FILE__, __func__, __LINE__, \
+                          (message), sizeof(message) - 1);            \
+        }                                                             \
     } while (0)
 
 
@@ -318,12 +319,12 @@ int wh_Log_Clear(whLogContext* ctx);
  * - Log only when (rc) is not equal to WH_ERROR_OK
  * - Variants for literal message, C string, and formatted message
  */
-#define WH_LOG_ON_ERROR(ctx, lvl, rc, message)                            \
-    do {                                                                  \
-        if ((rc) != WH_ERROR_OK) {                                        \
-            wh_Log_AddMsg((ctx), (lvl), __FILE__, __func__, __LINE__,     \
-                          (message), sizeof(message) - 1);                \
-        }                                                                 \
+#define WH_LOG_ON_ERROR(ctx, lvl, rc, message)                        \
+    do {                                                              \
+        if ((rc) != WH_ERROR_OK) {                                    \
+            wh_Log_AddMsg((ctx), (lvl), __FILE__, __func__, __LINE__, \
+                          (message), sizeof(message) - 1);            \
+        }                                                             \
     } while (0)
 
 #define WH_LOG_ON_ERROR_F(ctx, lvl, rc, fmt, ...)         \

@@ -56,9 +56,9 @@ int posixLogFile_Export(void* context, void* export_arg);
  * @param iterate_cb User callback invoked for each parsed entry
  * @param iterate_arg User argument passed to callback
  * @return 0 on success, non-zero if callback stops iteration early */
-int      posixLogFile_Iterate(void* context, whLogIterateCb iterate_cb,
-                              void* iterate_arg);
-int      posixLogFile_Clear(void* context);
+int posixLogFile_Iterate(void* context, whLogIterateCb iterate_cb,
+                         void* iterate_arg);
+int posixLogFile_Clear(void* context);
 
 /* Convenience macro for callback table initialization */
 /* clang-format off */
