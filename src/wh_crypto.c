@@ -249,7 +249,7 @@ int wh_Crypto_Curve25519DeserializeKey(const uint8_t* derBuffer,
 #endif /* HAVE_CURVE25519 */
 
 #ifdef HAVE_ED25519
-int wh_Crypto_Ed25519SerializeKeyDer(ed25519_key* key, uint16_t max_size,
+int wh_Crypto_Ed25519SerializeKeyDer(const ed25519_key* key, uint16_t max_size,
                                      uint8_t* buffer, uint16_t* out_size)
 {
     int ret = 0;
