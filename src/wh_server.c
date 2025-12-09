@@ -42,10 +42,12 @@
 #include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_message_comm.h"
 #include "wolfhsm/wh_message_nvm.h"
+#include "wolfhsm/wh_message_auth.h"
 
 /* Server API's */
 #include "wolfhsm/wh_server.h"
 #include "wolfhsm/wh_server_nvm.h"
+#include "wolfhsm/wh_server_auth.h"
 #include "wolfhsm/wh_server_crypto.h"
 #include "wolfhsm/wh_server_keystore.h"
 #include "wolfhsm/wh_server_counter.h"
@@ -75,6 +77,7 @@ int wh_Server_Init(whServerContext* server, whServerConfig* config)
 
     memset(server, 0, sizeof(*server));
     server->nvm = config->nvm;
+    server->auth = config->auth;
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     server->crypto = config->crypto;
@@ -327,6 +330,11 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
 
         case WH_MESSAGE_GROUP_NVM:
             rc = wh_Server_HandleNvmRequest(server, magic, action, seq,
+                    size, data, &size, data);
+        break;
+
+        case WH_MESSAGE_GROUP_AUTH:
+            rc = wh_Server_HandleAuthRequest(server, magic, action, seq,
                     size, data, &size, data);
         break;
 

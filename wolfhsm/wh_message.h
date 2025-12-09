@@ -47,6 +47,7 @@ enum WH_MESSAGE_ENUM {
     WH_MESSAGE_GROUP_CUSTOM     = 0x0A00, /* User-specified features */
     WH_MESSAGE_GROUP_CRYPTO_DMA = 0x0B00, /* DMA crypto operations */
     WH_MESSAGE_GROUP_CERT       = 0x0C00, /* Certificate operations */
+    WH_MESSAGE_GROUP_AUTH       = 0x0D00, /* Authentication and authorization */
 
     WH_MESSAGE_ACTION_MASK = 0x00FF, /* 255 subtypes per group*/
     WH_MESSAGE_ACTION_NONE = 0x0000, /* No action. Invalid. */
