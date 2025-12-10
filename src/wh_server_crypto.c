@@ -1929,10 +1929,6 @@ static int _HandleEd25519Sign(whServerContext* ctx, uint16_t magic,
     if (ret != 0) {
         return ret;
     }
-    WOLFHSM_CFG_PRINTF(
-        "[server] Ed25519Sign req: options=0x%08X key_id=0x%X msgSz=%u\n",
-        (unsigned int)req.options, (unsigned int)req.keyId,
-        (unsigned int)req.msgSz);
 
     uint32_t available = inSize - sizeof(req);
     if (req.msgSz > available) {
@@ -2029,10 +2025,6 @@ static int _HandleEd25519Verify(whServerContext* ctx, uint16_t magic,
     if (ret != 0) {
         return ret;
     }
-    WOLFHSM_CFG_PRINTF("[server] Ed25519Verify req: options=0x%08X key_id=0x%X "
-                       "sigSz=%u msgSz=%u\n",
-                       (unsigned int)req.options, (unsigned int)req.keyId,
-                       (unsigned int)req.sigSz, (unsigned int)req.msgSz);
 
     uint32_t available = inSize - sizeof(req);
     if (req.sigSz > available) {
