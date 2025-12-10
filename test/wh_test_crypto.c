@@ -2417,6 +2417,7 @@ static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
     return ret;
 }
 
+#define WH_TEST_KEYSTORE_TEST_SZ (32)
 static int whTest_NonExportableKeystore(whClientContext* ctx, int devId,
                                         WC_RNG* rng)
 {
@@ -2425,11 +2426,11 @@ static int whTest_NonExportableKeystore(whClientContext* ctx, int devId,
 
     int     ret                   = 0;
     whKeyId keyId                 = WH_KEYID_ERASED;
-    uint8_t key[AES_256_KEY_SIZE] = {
+    uint8_t key[WH_TEST_KEYSTORE_TEST_SZ] = {
         0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x11, 0x22, 0x33, 0x44, 0x55,
         0x66, 0x77, 0x88, 0x99, 0x00, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF,
         0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0x00};
-    uint8_t  exportedKey[AES_256_KEY_SIZE]   = {0};
+    uint8_t  exportedKey[WH_TEST_KEYSTORE_TEST_SZ] = {0};
     uint8_t  label[WH_NVM_LABEL_LEN]         = "NonExportableTestKey";
     uint8_t  exportedLabel[WH_NVM_LABEL_LEN] = {0};
     uint16_t exportedKeySize;
