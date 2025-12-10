@@ -53,6 +53,7 @@
 #include "wolfssl/wolfcrypt/rsa.h"
 #include "wolfssl/wolfcrypt/ecc.h"
 #include "wolfssl/wolfcrypt/curve25519.h"
+#include "wolfssl/wolfcrypt/ed25519.h"
 #include "wolfssl/wolfcrypt/dilithium.h"
 #include "wolfssl/wolfcrypt/sha256.h"
 #include "wolfssl/wolfcrypt/sha512.h"
@@ -2036,6 +2037,744 @@ int wh_Client_Curve25519SharedSecret(whClientContext* ctx,
     return ret;
 }
 #endif /* HAVE_CURVE25519 */
+
+#ifdef HAVE_ED25519
+int wh_Client_Ed25519SetKeyId(ed25519_key* key, whKeyId keyId)
+{
+    if (key == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    key->devCtx = WH_KEYID_TO_DEVCTX(keyId);
+    return WH_ERROR_OK;
+}
+
+int wh_Client_Ed25519GetKeyId(ed25519_key* key, whKeyId* outId)
+{
+    if ((key == NULL) || (outId == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    *outId = WH_DEVCTX_TO_KEYID(key->devCtx);
+    return WH_ERROR_OK;
+}
+
+int wh_Client_Ed25519ImportKey(whClientContext* ctx, ed25519_key* key,
+                               whKeyId* inout_keyId, whNvmFlags flags,
+                               uint16_t label_len, uint8_t* label)
+{
+    int      ret         = WH_ERROR_OK;
+    whKeyId  key_id      = WH_KEYID_ERASED;
+    uint8_t  buffer[128] = {0};
+    uint16_t buffer_len  = sizeof(buffer);
+
+    if ((ctx == NULL) || (key == NULL) ||
+        ((label_len != 0) && (label == NULL))) {
+        return WH_ERROR_BADARGS;
+    }
+
+    if (inout_keyId != NULL) {
+        key_id = *inout_keyId;
+    }
+
+    ret =
+        wh_Crypto_Ed25519SerializeKeyDer(key, buffer_len, buffer, &buffer_len);
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Client_KeyCache(ctx, flags, label, label_len, buffer,
+                                 buffer_len, &key_id);
+        if ((ret == WH_ERROR_OK) && (inout_keyId != NULL)) {
+            *inout_keyId = key_id;
+        }
+    }
+
+    return ret;
+}
+
+int wh_Client_Ed25519ExportKey(whClientContext* ctx, whKeyId keyId,
+                               ed25519_key* key, uint16_t label_len,
+                               uint8_t* label)
+{
+    int      ret         = WH_ERROR_OK;
+    uint8_t  buffer[128] = {0};
+    uint16_t buffer_len  = sizeof(buffer);
+
+    if ((ctx == NULL) || WH_KEYID_ISERASED(keyId) || (key == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret =
+        wh_Client_KeyExport(ctx, keyId, label, label_len, buffer, &buffer_len);
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Crypto_Ed25519DeserializeKeyDer(buffer, buffer_len, key);
+        if (ret == 0) {
+            wh_Client_Ed25519SetKeyId(key, keyId);
+        }
+    }
+
+    return ret;
+}
+
+static int _Ed25519MakeKey(whClientContext* ctx, whKeyId* inout_key_id,
+                           whNvmFlags flags, uint16_t label_len, uint8_t* label,
+                           ed25519_key* key)
+{
+    int                                    ret     = WH_ERROR_OK;
+    whKeyId                                key_id  = WH_KEYID_ERASED;
+    uint8_t*                               dataPtr = NULL;
+    whMessageCrypto_Ed25519KeyGenRequest*  req     = NULL;
+    whMessageCrypto_Ed25519KeyGenResponse* res     = NULL;
+
+    if (ctx == NULL || ((label_len != 0) && (label == NULL))) {
+        return WH_ERROR_BADARGS;
+    }
+
+    if (inout_key_id != NULL) {
+        key_id = *inout_key_id;
+    }
+
+    dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
+    if (dataPtr == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    req = (whMessageCrypto_Ed25519KeyGenRequest*)_createCryptoRequest(
+        dataPtr, WC_PK_TYPE_ED25519_KEYGEN);
+
+    uint16_t group  = WH_MESSAGE_GROUP_CRYPTO;
+    uint16_t action = WC_ALGO_TYPE_PK;
+    uint16_t req_len =
+        sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
+
+    if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
+        return WH_ERROR_BADARGS;
+    }
+
+    memset(req, 0, sizeof(*req));
+    req->flags  = flags;
+    req->keyId  = key_id;
+    req->access = WH_NVM_ACCESS_ANY;
+    if ((label != NULL) && (label_len > 0)) {
+        if (label_len > WH_NVM_LABEL_LEN) {
+            label_len = WH_NVM_LABEL_LEN;
+        }
+        memcpy(req->label, label, label_len);
+    }
+
+    ret = wh_Client_SendRequest(ctx, group, action, req_len, (uint8_t*)dataPtr);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+    uint16_t res_len = 0;
+    do {
+        ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                     (uint8_t*)dataPtr);
+    } while (ret == WH_ERROR_NOTREADY);
+
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    if (group != WH_MESSAGE_GROUP_CRYPTO || action != WC_ALGO_TYPE_PK) {
+        return WH_ERROR_ABORTED;
+    }
+
+    ret =
+        _getCryptoResponse(dataPtr, WC_PK_TYPE_ED25519_KEYGEN, (uint8_t**)&res);
+    if (ret >= 0) {
+        key_id = (whKeyId)res->keyId;
+        if (inout_key_id != NULL) {
+            *inout_key_id = key_id;
+        }
+        if (key != NULL) {
+            wh_Client_Ed25519SetKeyId(key, key_id);
+            if (flags & WH_NVM_FLAGS_EPHEMERAL) {
+                uint8_t* out   = (uint8_t*)(res + 1);
+                uint16_t outSz = (uint16_t)res->outSz;
+                if (outSz + sizeof(whMessageCrypto_GenericResponseHeader) +
+                        sizeof(*res) >
+                    WOLFHSM_CFG_COMM_DATA_LEN) {
+                    return WH_ERROR_ABORTED;
+                }
+                ret = wh_Crypto_Ed25519DeserializeKeyDer(out, outSz, key);
+            }
+        }
+    }
+
+    return ret;
+}
+
+int wh_Client_Ed25519MakeExportKey(whClientContext* ctx, ed25519_key* key)
+{
+    if (key == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    return _Ed25519MakeKey(ctx, NULL, WH_NVM_FLAGS_EPHEMERAL, 0, NULL, key);
+}
+
+int wh_Client_Ed25519MakeCacheKey(whClientContext* ctx, whKeyId* inout_key_id,
+                                  whNvmFlags flags, uint16_t label_len,
+                                  uint8_t* label)
+{
+    if (inout_key_id == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    return _Ed25519MakeKey(ctx, inout_key_id, flags, label_len, label, NULL);
+}
+
+int wh_Client_Ed25519Sign(whClientContext* ctx, ed25519_key* key,
+                          const uint8_t* msg, uint32_t msgLen, uint8_t type,
+                          const uint8_t* context, uint32_t contextLen,
+                          uint8_t* sig, uint32_t* inout_sig_len)
+{
+    int                                  ret     = 0;
+    whMessageCrypto_Ed25519SignRequest*  req     = NULL;
+    whMessageCrypto_Ed25519SignResponse* res     = NULL;
+    uint8_t*                             dataPtr = NULL;
+
+    whKeyId key_id = WH_DEVCTX_TO_KEYID(key->devCtx);
+    int     evict  = 0;
+
+    if ((ctx == NULL) || (key == NULL) || ((msg == NULL) && (msgLen > 0)) ||
+        ((sig != NULL) && (inout_sig_len == NULL)) ||
+        ((context == NULL) && (contextLen > 0))) {
+        return WH_ERROR_BADARGS;
+    }
+
+    if ((type != (byte)Ed25519) && (type != (byte)Ed25519ctx) &&
+        (type != (byte)Ed25519ph)) {
+        return WH_ERROR_BADARGS;
+    }
+    if ((type == (byte)Ed25519) && (contextLen != 0 || context != NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    if (contextLen > WH_CRYPTO_ED25519_MAX_CTX_LEN) {
+        return WH_ERROR_BADARGS;
+    }
+
+    uint16_t req_len = sizeof(whMessageCrypto_GenericRequestHeader) +
+                       sizeof(*req) + msgLen + contextLen;
+    if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
+        return WH_ERROR_BADARGS;
+    }
+
+    if (WH_KEYID_ISERASED(key_id)) {
+        uint8_t    keyLabel[] = "TempEd25519Sign";
+        whNvmFlags flags      = WH_NVM_FLAGS_USAGE_SIGN;
+
+        ret = wh_Client_Ed25519ImportKey(ctx, key, &key_id, flags,
+                                         sizeof(keyLabel), keyLabel);
+        if (ret == WH_ERROR_OK) {
+            evict = 1;
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        uint16_t group   = WH_MESSAGE_GROUP_CRYPTO;
+        uint16_t action  = WC_ALGO_TYPE_PK;
+        uint32_t options = 0;
+
+        dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
+        if (dataPtr == NULL) {
+            return WH_ERROR_BADARGS;
+        }
+
+        req = (whMessageCrypto_Ed25519SignRequest*)_createCryptoRequest(
+            dataPtr, WC_PK_TYPE_ED25519_SIGN);
+
+        uint8_t* req_msg = (uint8_t*)(req + 1);
+        uint8_t* req_ctx = req_msg + msgLen;
+
+        if (evict != 0) {
+            options |= WH_MESSAGE_CRYPTO_ED25519_SIGN_OPTIONS_EVICT;
+        }
+
+        memset(req, 0, sizeof(*req));
+        req->options = options;
+        req->keyId   = key_id;
+        req->msgSz   = msgLen;
+        req->type    = type;
+        req->ctxSz   = contextLen;
+        if ((msg != NULL) && (msgLen > 0)) {
+            memcpy(req_msg, msg, msgLen);
+        }
+        if ((context != NULL) && (contextLen > 0)) {
+            memcpy(req_ctx, context, contextLen);
+        }
+
+        ret = wh_Client_SendRequest(ctx, group, action, req_len,
+                                    (uint8_t*)dataPtr);
+        if (ret == WH_ERROR_OK) {
+            /* Server will evict at this point. Reset evict */
+            evict = 0;
+
+            uint16_t res_len = 0;
+            do {
+                ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                             (uint8_t*)dataPtr);
+            } while (ret == WH_ERROR_NOTREADY);
+
+            if (group != WH_MESSAGE_GROUP_CRYPTO || action != WC_ALGO_TYPE_PK) {
+                ret = WH_ERROR_ABORTED;
+            }
+
+            if (ret == WH_ERROR_OK) {
+                ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_ED25519_SIGN,
+                                         (uint8_t**)&res);
+                if (ret >= 0) {
+                    uint32_t res_total =
+                        sizeof(whMessageCrypto_GenericResponseHeader) +
+                        sizeof(*res) + res->sigSz;
+                    if (res_total > res_len) {
+                        ret = WH_ERROR_ABORTED;
+                    }
+                }
+                if (ret >= 0) {
+                    uint8_t* res_sig = (uint8_t*)(res + 1);
+                    uint32_t sig_len = res->sigSz;
+                    if (inout_sig_len != NULL) {
+                        if (sig_len > *inout_sig_len) {
+                            sig_len = *inout_sig_len;
+                        }
+                        *inout_sig_len = sig_len;
+                    }
+                    if ((sig != NULL) && (sig_len > 0)) {
+                        memcpy(sig, res_sig, sig_len);
+                    }
+                }
+            }
+        }
+    }
+
+    if (evict != 0) {
+        (void)wh_Client_KeyEvict(ctx, key_id);
+    }
+
+    /* map ASN key decoding errors to WH_ERROR_BADARGS */
+    if (ret == ASN_PARSE_E)
+        ret = WH_ERROR_BADARGS;
+
+    return ret;
+}
+
+int wh_Client_Ed25519Verify(whClientContext* ctx, ed25519_key* key,
+                            const uint8_t* sig, uint32_t sigLen,
+                            const uint8_t* msg, uint32_t msgLen, uint8_t type,
+                            const uint8_t* context, uint32_t contextLen,
+                            int* out_res)
+{
+    int                                    ret     = 0;
+    whMessageCrypto_Ed25519VerifyRequest*  req     = NULL;
+    whMessageCrypto_Ed25519VerifyResponse* res     = NULL;
+    uint8_t*                               dataPtr = NULL;
+    whKeyId  key_id  = WH_DEVCTX_TO_KEYID(key->devCtx);
+    int      evict   = 0;
+    uint16_t req_len = sizeof(whMessageCrypto_GenericRequestHeader) +
+                       sizeof(*req) + sigLen + msgLen + contextLen;
+
+    if ((ctx == NULL) || (key == NULL) || (sig == NULL) || (msg == NULL) ||
+        (out_res == NULL) || ((context == NULL) && (contextLen > 0))) {
+        return WH_ERROR_BADARGS;
+    }
+
+    if ((type != (byte)Ed25519) && (type != (byte)Ed25519ctx) &&
+        (type != (byte)Ed25519ph)) {
+        return WH_ERROR_BADARGS;
+    }
+    if ((type == (byte)Ed25519) && (contextLen != 0 || context != NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    if (contextLen > WH_CRYPTO_ED25519_MAX_CTX_LEN) {
+        return WH_ERROR_BADARGS;
+    }
+
+    if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
+        return WH_ERROR_BADARGS;
+    }
+
+    *out_res = 0;
+
+    if (WH_KEYID_ISERASED(key_id)) {
+        uint8_t    keyLabel[] = "TempEd25519Verify";
+        whNvmFlags flags      = WH_NVM_FLAGS_USAGE_VERIFY;
+
+        ret = wh_Client_Ed25519ImportKey(ctx, key, &key_id, flags,
+                                         sizeof(keyLabel), keyLabel);
+        if (ret == WH_ERROR_OK) {
+            evict = 1;
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        uint16_t group   = WH_MESSAGE_GROUP_CRYPTO;
+        uint16_t action  = WC_ALGO_TYPE_PK;
+        uint32_t options = 0;
+
+        dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
+        if (dataPtr == NULL) {
+            return WH_ERROR_BADARGS;
+        }
+
+        req = (whMessageCrypto_Ed25519VerifyRequest*)_createCryptoRequest(
+            dataPtr, WC_PK_TYPE_ED25519_VERIFY);
+
+        uint8_t* req_sig = (uint8_t*)(req + 1);
+        uint8_t* req_msg = req_sig + sigLen;
+        uint8_t* req_ctx = req_msg + msgLen;
+
+        if (evict != 0) {
+            options |= WH_MESSAGE_CRYPTO_ED25519_VERIFY_OPTIONS_EVICT;
+        }
+
+        memset(req, 0, sizeof(*req));
+        req->options = options;
+        req->keyId   = key_id;
+        req->sigSz   = sigLen;
+        req->msgSz   = msgLen;
+        req->type    = type;
+        req->ctxSz   = contextLen;
+
+        memcpy(req_sig, sig, sigLen);
+        memcpy(req_msg, msg, msgLen);
+        if ((context != NULL) && (contextLen > 0)) {
+            memcpy(req_ctx, context, contextLen);
+        }
+
+        ret = wh_Client_SendRequest(ctx, group, action, req_len,
+                                    (uint8_t*)dataPtr);
+        if (ret == WH_ERROR_OK) {
+            /* Server will evict at this point. Reset evict */
+            evict = 0;
+
+            uint16_t res_len = 0;
+            do {
+                ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                             (uint8_t*)dataPtr);
+            } while (ret == WH_ERROR_NOTREADY);
+
+            if (group != WH_MESSAGE_GROUP_CRYPTO || action != WC_ALGO_TYPE_PK) {
+                ret = WH_ERROR_ABORTED;
+            }
+
+            if (ret == WH_ERROR_OK) {
+                ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_ED25519_VERIFY,
+                                         (uint8_t**)&res);
+                if (ret >= 0 && res != NULL) {
+                    uint32_t res_total =
+                        sizeof(whMessageCrypto_GenericResponseHeader) +
+                        sizeof(*res);
+                    if (res_total > res_len) {
+                        ret = WH_ERROR_ABORTED;
+                    }
+                    *out_res = res->res;
+                }
+            }
+        }
+    }
+
+    if (evict != 0) {
+        (void)wh_Client_KeyEvict(ctx, key_id);
+    }
+
+    /* map ASN key decoding errors to WH_ERROR_BADARGS */
+    if (ret == ASN_PARSE_E)
+        ret = WH_ERROR_BADARGS;
+
+    return ret;
+}
+
+#ifdef WOLFHSM_CFG_DMA
+int wh_Client_Ed25519SignDma(whClientContext* ctx, ed25519_key* key,
+                             const uint8_t* msg, uint32_t msgLen, uint8_t type,
+                             const uint8_t* context, uint32_t contextLen,
+                             uint8_t* sig, uint32_t* inout_sig_len)
+{
+    int                                     ret     = 0;
+    whMessageCrypto_Ed25519SignDmaRequest*  req     = NULL;
+    whMessageCrypto_Ed25519SignDmaResponse* res     = NULL;
+    uint8_t*                                dataPtr = NULL;
+    uintptr_t                               msgAddr = 0;
+    uintptr_t                               sigAddr = 0;
+
+    whKeyId key_id = WH_DEVCTX_TO_KEYID(key->devCtx);
+    int     evict  = 0;
+
+    if ((ctx == NULL) || (key == NULL) || ((msg == NULL) && (msgLen > 0)) ||
+        (sig == NULL) || (inout_sig_len == NULL) ||
+        ((context == NULL) && (contextLen > 0))) {
+        return WH_ERROR_BADARGS;
+    }
+
+    if ((type != (byte)Ed25519) && (type != (byte)Ed25519ctx) &&
+        (type != (byte)Ed25519ph)) {
+        return WH_ERROR_BADARGS;
+    }
+    if ((type == (byte)Ed25519) && (contextLen != 0 || context != NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    if (contextLen > WH_CRYPTO_ED25519_MAX_CTX_LEN) {
+        return WH_ERROR_BADARGS;
+    }
+
+    uint16_t req_len = sizeof(whMessageCrypto_GenericRequestHeader) +
+                       sizeof(*req) + contextLen;
+    if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
+        return WH_ERROR_BADARGS;
+    }
+
+    if (WH_KEYID_ISERASED(key_id)) {
+        uint8_t    keyLabel[] = "TempEd25519SignDma";
+        whNvmFlags flags = WH_NVM_FLAGS_USAGE_SIGN | WH_NVM_FLAGS_USAGE_VERIFY;
+
+        ret = wh_Client_Ed25519ImportKey(ctx, key, &key_id, flags,
+                                         sizeof(keyLabel), keyLabel);
+        if (ret == WH_ERROR_OK) {
+            evict = 1;
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        uint16_t group   = WH_MESSAGE_GROUP_CRYPTO_DMA;
+        uint16_t action  = WC_ALGO_TYPE_PK;
+        uint32_t options = 0;
+
+        dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
+        if (dataPtr == NULL) {
+            return WH_ERROR_BADARGS;
+        }
+
+        req = (whMessageCrypto_Ed25519SignDmaRequest*)_createCryptoRequest(
+            dataPtr, WC_PK_TYPE_ED25519_SIGN);
+
+        uint8_t* req_ctx = (uint8_t*)(req + 1);
+
+        if (evict != 0) {
+            options |= WH_MESSAGE_CRYPTO_ED25519_SIGN_OPTIONS_EVICT;
+        }
+
+        memset(req, 0, sizeof(*req));
+        req->options = options;
+        req->keyId   = key_id;
+        req->type    = type;
+        req->ctxSz   = contextLen;
+        req->msg.sz  = msgLen;
+        req->sig.sz  = (inout_sig_len != NULL) ? *inout_sig_len : 0;
+        if ((context != NULL) && (contextLen > 0)) {
+            memcpy(req_ctx, context, contextLen);
+        }
+
+        ret = wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)msg, (void**)&msgAddr, req->msg.sz,
+            WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
+        if (ret == WH_ERROR_OK) {
+            req->msg.addr = msgAddr;
+            ret           = wh_Client_DmaProcessClientAddress(
+                ctx, (uintptr_t)sig, (void**)&sigAddr, req->sig.sz,
+                WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
+        }
+        if (ret == WH_ERROR_OK) {
+            req->sig.addr = sigAddr;
+
+            ret = wh_Client_SendRequest(ctx, group, action, req_len,
+                                        (uint8_t*)dataPtr);
+        }
+        if (ret == WH_ERROR_OK) {
+            evict = 0;
+
+            uint16_t res_len = 0;
+            do {
+                ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                             (uint8_t*)dataPtr);
+            } while (ret == WH_ERROR_NOTREADY);
+
+            if (group != WH_MESSAGE_GROUP_CRYPTO_DMA ||
+                action != WC_ALGO_TYPE_PK) {
+                ret = WH_ERROR_ABORTED;
+            }
+
+            if (ret == WH_ERROR_OK) {
+                ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_ED25519_SIGN,
+                                         (uint8_t**)&res);
+                if (ret >= 0 && res != NULL) {
+                    uint32_t res_total =
+                        sizeof(whMessageCrypto_GenericResponseHeader) +
+                        sizeof(*res);
+                    if (res_total > res_len) {
+                        ret = WH_ERROR_ABORTED;
+                    }
+                }
+                if (ret >= 0) {
+                    if (inout_sig_len != NULL) {
+                        *inout_sig_len = res->sigSz;
+                    }
+                }
+            }
+        }
+
+        (void)wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)sig, (void**)&sigAddr, req->sig.sz,
+            WH_DMA_OPER_CLIENT_WRITE_POST, (whDmaFlags){0});
+        (void)wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)msg, (void**)&msgAddr, req->msg.sz,
+            WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
+    }
+
+    if (evict != 0) {
+        (void)wh_Client_KeyEvict(ctx, key_id);
+    }
+
+    /* map ASN key decoding errors to WH_ERROR_BADARGS */
+    if (ret == ASN_PARSE_E)
+        ret = WH_ERROR_BADARGS;
+
+    return ret;
+}
+
+int wh_Client_Ed25519VerifyDma(whClientContext* ctx, ed25519_key* key,
+                               const uint8_t* sig, uint32_t sigLen,
+                               const uint8_t* msg, uint32_t msgLen,
+                               uint8_t type, const uint8_t* context,
+                               uint32_t contextLen, int* out_res)
+{
+    int                                       ret     = 0;
+    whMessageCrypto_Ed25519VerifyDmaRequest*  req     = NULL;
+    whMessageCrypto_Ed25519VerifyDmaResponse* res     = NULL;
+    uint8_t*                                  dataPtr = NULL;
+    uintptr_t                                 sigAddr = 0;
+    uintptr_t                                 msgAddr = 0;
+    uint16_t req_len = sizeof(whMessageCrypto_GenericRequestHeader) +
+                       sizeof(*req) + contextLen;
+    whKeyId key_id = WH_DEVCTX_TO_KEYID(key->devCtx);
+    int     evict  = 0;
+
+    if ((ctx == NULL) || (key == NULL) || (sig == NULL) || (msg == NULL) ||
+        (out_res == NULL) || ((context == NULL) && (contextLen > 0))) {
+        return WH_ERROR_BADARGS;
+    }
+
+    if ((type != (byte)Ed25519) && (type != (byte)Ed25519ctx) &&
+        (type != (byte)Ed25519ph)) {
+        return WH_ERROR_BADARGS;
+    }
+    if ((type == (byte)Ed25519) && (contextLen != 0 || context != NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    if (contextLen > WH_CRYPTO_ED25519_MAX_CTX_LEN) {
+        return WH_ERROR_BADARGS;
+    }
+
+    if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
+        return WH_ERROR_BADARGS;
+    }
+
+    *out_res = 0;
+
+    if (WH_KEYID_ISERASED(key_id)) {
+        uint8_t    keyLabel[] = "TempEd25519VerifyDma";
+        whNvmFlags flags = WH_NVM_FLAGS_USAGE_SIGN | WH_NVM_FLAGS_USAGE_VERIFY;
+
+        ret = wh_Client_Ed25519ImportKey(ctx, key, &key_id, flags,
+                                         sizeof(keyLabel), keyLabel);
+        if (ret == WH_ERROR_OK) {
+            evict = 1;
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        uint16_t group   = WH_MESSAGE_GROUP_CRYPTO_DMA;
+        uint16_t action  = WC_ALGO_TYPE_PK;
+        uint32_t options = 0;
+
+        dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
+        if (dataPtr == NULL) {
+            return WH_ERROR_BADARGS;
+        }
+
+        req = (whMessageCrypto_Ed25519VerifyDmaRequest*)_createCryptoRequest(
+            dataPtr, WC_PK_TYPE_ED25519_VERIFY);
+
+        uint8_t* req_ctx = (uint8_t*)(req + 1);
+
+        if (evict != 0) {
+            options |= WH_MESSAGE_CRYPTO_ED25519_VERIFY_OPTIONS_EVICT;
+        }
+
+        memset(req, 0, sizeof(*req));
+        req->options = options;
+        req->keyId   = key_id;
+        req->type    = type;
+        req->ctxSz   = contextLen;
+        req->sig.sz  = sigLen;
+        req->msg.sz  = msgLen;
+        if ((context != NULL) && (contextLen > 0)) {
+            memcpy(req_ctx, context, contextLen);
+        }
+
+        ret = wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)sig, (void**)&sigAddr, req->sig.sz,
+            WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
+        if (ret == WH_ERROR_OK) {
+            req->sig.addr = sigAddr;
+            ret           = wh_Client_DmaProcessClientAddress(
+                ctx, (uintptr_t)msg, (void**)&msgAddr, req->msg.sz,
+                WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
+        }
+        if (ret == WH_ERROR_OK) {
+            req->msg.addr = msgAddr;
+
+            ret = wh_Client_SendRequest(ctx, group, action, req_len,
+                                        (uint8_t*)dataPtr);
+        }
+        if (ret == WH_ERROR_OK) {
+            evict = 0;
+
+            uint16_t res_len = 0;
+            do {
+                ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                             (uint8_t*)dataPtr);
+            } while (ret == WH_ERROR_NOTREADY);
+
+            if (group != WH_MESSAGE_GROUP_CRYPTO_DMA ||
+                action != WC_ALGO_TYPE_PK) {
+                ret = WH_ERROR_ABORTED;
+            }
+
+            if (ret == WH_ERROR_OK) {
+                ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_ED25519_VERIFY,
+                                         (uint8_t**)&res);
+                if (ret >= 0 && res != NULL) {
+                    uint32_t res_total =
+                        sizeof(whMessageCrypto_GenericResponseHeader) +
+                        sizeof(*res);
+                    if (res_total > res_len) {
+                        ret = WH_ERROR_ABORTED;
+                    }
+                }
+                if (ret >= 0) {
+                    *out_res = res->verifyResult;
+                }
+            }
+        }
+
+        (void)wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)msg, (void**)&msgAddr, req->msg.sz,
+            WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
+        (void)wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)sig, (void**)&sigAddr, req->sig.sz,
+            WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
+    }
+
+    if (evict != 0) {
+        (void)wh_Client_KeyEvict(ctx, key_id);
+    }
+
+    /* map ASN key decoding errors to WH_ERROR_BADARGS */
+    if (ret == ASN_PARSE_E)
+        ret = WH_ERROR_BADARGS;
+
+    return ret;
+}
+#endif /* WOLFHSM_CFG_DMA */
+#endif /* HAVE_ED25519 */
 
 #ifndef NO_RSA
 int wh_Client_RsaSetKeyId(RsaKey* key, whNvmId keyId)

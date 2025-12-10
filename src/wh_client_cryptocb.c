@@ -357,6 +357,65 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
                 *out_len = len;
             }
         } break;
+
+#ifdef HAVE_ED25519
+        case WC_PK_TYPE_ED25519_KEYGEN: {
+            ed25519_key* key = info->pk.ed25519kg.key;
+            /* Only default Ed25519 supported */
+            ret = wh_Client_Ed25519MakeExportKey(ctx, key);
+            if (ret == WH_ERROR_BADARGS) {
+                ret = BAD_FUNC_ARG;
+            }
+        } break;
+
+        case WC_PK_TYPE_ED25519_SIGN: {
+            ed25519_key*   key    = info->pk.ed25519sign.key;
+            const uint8_t* in     = (const uint8_t*)info->pk.ed25519sign.in;
+            uint32_t       inLen  = info->pk.ed25519sign.inLen;
+            uint8_t*       out    = info->pk.ed25519sign.out;
+            word32*        outLen = info->pk.ed25519sign.outLen;
+            uint8_t        type   = info->pk.ed25519sign.type;
+            uint32_t       len;
+
+            len = 0;
+            if (outLen != NULL) {
+                len = *outLen;
+            }
+            ret = wh_Client_Ed25519Sign(
+                ctx, key, in, inLen, type, info->pk.ed25519sign.context,
+                info->pk.ed25519sign.contextLen, out, &len);
+            if (ret == WH_ERROR_OK && outLen != NULL) {
+                *outLen = len;
+            }
+            else if (ret == WH_ERROR_BADARGS) {
+                ret = BAD_FUNC_ARG;
+            }
+            else if (ret == WH_ERROR_NOTIMPL) {
+                ret = CRYPTOCB_UNAVAILABLE;
+            }
+        } break;
+
+        case WC_PK_TYPE_ED25519_VERIFY: {
+            ed25519_key*   key    = info->pk.ed25519verify.key;
+            const uint8_t* sig    = info->pk.ed25519verify.sig;
+            uint32_t       sigLen = info->pk.ed25519verify.sigLen;
+            const uint8_t* msg    = info->pk.ed25519verify.msg;
+            uint32_t       msgLen = info->pk.ed25519verify.msgLen;
+            int*           res    = info->pk.ed25519verify.res;
+            uint8_t        type   = info->pk.ed25519verify.type;
+
+            ret =
+                wh_Client_Ed25519Verify(ctx, key, sig, sigLen, msg, msgLen,
+                                        type, info->pk.ed25519verify.context,
+                                        info->pk.ed25519verify.contextLen, res);
+            if (ret == WH_ERROR_BADARGS) {
+                ret = BAD_FUNC_ARG;
+            }
+            else if (ret == WH_ERROR_NOTIMPL) {
+                ret = CRYPTOCB_UNAVAILABLE;
+            }
+        } break;
+#endif /* HAVE_ED25519 */
 #endif /* HAVE_CURVE25519 */
 
 #if defined(HAVE_DILITHIUM) || defined(HAVE_FALCON)
@@ -802,6 +861,65 @@ int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
                 ret = _handlePqcSigCheckPrivKey(ctx, info, 1);
                 break;
 #endif /* HAVE_DILITHIUM || HAVE_FALCON */
+#ifdef HAVE_ED25519
+            case WC_PK_TYPE_ED25519_KEYGEN: {
+                ed25519_key* key = info->pk.ed25519kg.key;
+                /* Only default Ed25519 supported */
+                ret = wh_Client_Ed25519MakeExportKey(ctx, key);
+                if (ret == WH_ERROR_BADARGS) {
+                    ret = BAD_FUNC_ARG;
+                }
+            } break;
+
+            case WC_PK_TYPE_ED25519_SIGN: {
+                ed25519_key*   key    = info->pk.ed25519sign.key;
+                const uint8_t* in     = (const uint8_t*)info->pk.ed25519sign.in;
+                uint32_t       inLen  = info->pk.ed25519sign.inLen;
+                uint8_t*       out    = info->pk.ed25519sign.out;
+                word32*        outLen = info->pk.ed25519sign.outLen;
+                uint8_t        type   = info->pk.ed25519sign.type;
+                uint32_t       len;
+
+                len = 0;
+                if (outLen != NULL) {
+                    len = *outLen;
+                }
+                ret = wh_Client_Ed25519SignDma(
+                    ctx, key, in, inLen, type, info->pk.ed25519sign.context,
+                    info->pk.ed25519sign.contextLen, out, &len);
+                if (ret == WH_ERROR_OK && outLen != NULL) {
+                    *outLen = len;
+                }
+                else if (ret == WH_ERROR_BADARGS) {
+                    ret = BAD_FUNC_ARG;
+                }
+                else if (ret == WH_ERROR_NOTIMPL) {
+                    ret = CRYPTOCB_UNAVAILABLE;
+                }
+            } break;
+
+            case WC_PK_TYPE_ED25519_VERIFY: {
+                ed25519_key*   key    = info->pk.ed25519verify.key;
+                const uint8_t* sig    = info->pk.ed25519verify.sig;
+                uint32_t       sigLen = info->pk.ed25519verify.sigLen;
+                const uint8_t* msg    = info->pk.ed25519verify.msg;
+                uint32_t       msgLen = info->pk.ed25519verify.msgLen;
+                int*           res    = info->pk.ed25519verify.res;
+                uint8_t        type   = info->pk.ed25519verify.type;
+
+                ret = wh_Client_Ed25519VerifyDma(
+                    ctx, key, sig, sigLen, msg, msgLen, type,
+                    info->pk.ed25519verify.context,
+                    info->pk.ed25519verify.contextLen, res);
+                if (ret == WH_ERROR_BADARGS) {
+                    ret = BAD_FUNC_ARG;
+                }
+                else if (ret == WH_ERROR_NOTIMPL) {
+                    ret = CRYPTOCB_UNAVAILABLE;
+                }
+            } break;
+#endif /* HAVE_ED25519 */
+
         }
     } break; /* case WC_ALGO_TYPE_PK */
 

@@ -137,6 +137,9 @@
 #define WOLFSSL_SHAKE128
 #define WOLFSSL_SHAKE256
 
+/* Ed25519 Options */
+#define HAVE_ED25519
+
 /* The following options can be individually controlled to customize the
  * ML-DSA configuration */
 #if 0
