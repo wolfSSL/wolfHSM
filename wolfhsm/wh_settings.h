@@ -161,6 +161,8 @@
 #ifndef WOLFHSM_CFG_NO_CRYPTO
 #ifdef WOLFSSL_USER_SETTINGS
 #include "user_settings.h"
+#else
+#include <wolfssl/options.h>
 #endif /* WOLFSSL_USER_SETTINGS */
 
 #if defined(WOLFHSM_CFG_DEBUG) || defined(WOLFHSM_CFG_DEBUG_VERBOSE)
