@@ -101,7 +101,7 @@ static uint16_t* cancelSeqP;
           WOLFHSM_CFG_ENABLE_SERVER && WOLFHSM_CFG_CANCEL_API */
 #endif /* WOLFHSM_CFG_IS_TEST_SERVER */
 
-#if defined(WOLFHSM_CFG_TEST_VERBOSE) && defined(WOLFHSM_CFG_ENABLE_CLIENT)
+#if defined(WOLFHSM_CFG_DEBUG_VERBOSE) && defined(WOLFHSM_CFG_ENABLE_CLIENT)
 static int whTest_ShowNvmAvailable(whClientContext* ctx)
 {
     int ret = 0;
@@ -125,7 +125,7 @@ static int whTest_ShowNvmAvailable(whClientContext* ctx)
     }
     return ret;
 }
-#endif /* WOLFHSM_CFG_TEST_VERBOSE && WOLFHSM_CFG_ENABLE_CLIENT */
+#endif /* WOLFHSM_CFG_DEBUG_VERBOSE && WOLFHSM_CFG_ENABLE_CLIENT */
 
 #ifdef WOLFHSM_CFG_ENABLE_CLIENT
 static int whTest_CryptoRng(whClientContext* ctx, int devId, WC_RNG* rng)
@@ -4829,11 +4829,11 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         WH_ERROR_PRINT("Failed to comm init:%d\n", ret);
     }
 
-#ifdef WOLFHSM_CFG_TEST_VERBOSE
+#ifdef WOLFHSM_CFG_DEBUG_VERBOSE
     if (ret == 0) {
         (void)whTest_ShowNvmAvailable(client);
     }
-#endif /* WOLFHSM_CFG_TEST_VERBOSE */
+#endif /* WOLFHSM_CFG_DEBUG_VERBOSE */
 
     /* First crypto test should be of RNG so we can iterate over and test all
      * devIds before choosing one to run the rest of the tests on */
@@ -5042,11 +5042,11 @@ int whTest_CryptoClientConfig(whClientConfig* config)
 
 #endif /* HAVE_DILITHIUM */
 
-#ifdef WOLFHSM_CFG_TEST_VERBOSE
+#ifdef WOLFHSM_CFG_DEBUG_VERBOSE
     if (ret == 0) {
         (void)whTest_ShowNvmAvailable(client);
     }
-#endif /* WOLFHSM_CFG_TEST_VERBOSE */
+#endif /* WOLFHSM_CFG_DEBUG_VERBOSE */
 
     /* Clean up used resources */
     if (rngInited) {
