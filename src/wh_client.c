@@ -339,10 +339,10 @@ int wh_Client_CommInfoResponse(whClientContext* c,
             if (out_cfg_keycache_bufsize != NULL) {
                 *out_cfg_keycache_bufsize = msg.cfg_server_keycache_bufsize;
             }
-            if (out_cfg_keycache_count != NULL) {
+            if (out_cfg_keycache_bigcount != NULL) {
                 *out_cfg_keycache_bigcount = msg.cfg_server_keycache_bigcount;
             }
-            if (out_cfg_keycache_bufsize != NULL) {
+            if (out_cfg_keycache_bigbufsize != NULL) {
                 *out_cfg_keycache_bigbufsize = msg.cfg_server_keycache_bigbufsize;
             }
             if (out_cfg_customcb_count != NULL) {
@@ -731,6 +731,7 @@ int wh_Client_KeyCacheRequest_ex(whClientContext* c, uint32_t flags,
 {
     whMessageKeystore_CacheRequest* req = NULL;
     uint8_t*                        packIn;
+    uint16_t                        capSz;
 
     if (c == NULL || in == NULL || inSz == 0 ||
         sizeof(*req) + inSz > WOLFHSM_CFG_COMM_DATA_LEN) {
@@ -751,14 +752,10 @@ int wh_Client_KeyCacheRequest_ex(whClientContext* c, uint32_t flags,
         req->labelSz = 0;
     }
     else {
-        req->labelSz = labelSz;
         /* write label */
-        if (labelSz > WH_NVM_LABEL_LEN) {
-            memcpy(req->label, label, WH_NVM_LABEL_LEN);
-        }
-        else {
-            memcpy(req->label, label, labelSz);
-        }
+        capSz = (labelSz > WH_NVM_LABEL_LEN) ? WH_NVM_LABEL_LEN : labelSz;
+        req->labelSz = capSz;
+        memcpy(req->label, label, capSz);
     }
 
     /* write in */
@@ -1339,6 +1336,7 @@ int wh_Client_KeyCacheDmaRequest(whClientContext* c, uint32_t flags,
     int                                ret;
     whMessageKeystore_CacheDmaRequest* req = NULL;
     uintptr_t                          keyAddrPtr = 0;
+    uint16_t                           capSz = 0;
 
     if (c == NULL || (labelSz > 0 && label == NULL)) {
         return WH_ERROR_BADARGS;
@@ -1351,7 +1349,7 @@ int wh_Client_KeyCacheDmaRequest(whClientContext* c, uint32_t flags,
     memset(req, 0, sizeof(*req));
     req->id      = keyId;
     req->flags   = flags;
-    req->labelSz = labelSz;
+    req->labelSz = 0;
 
     /* Set up DMA buffer info */
     req->key.sz   = keySz;
@@ -1361,11 +1359,10 @@ int wh_Client_KeyCacheDmaRequest(whClientContext* c, uint32_t flags,
     req->key.addr = keyAddrPtr;
 
     /* Copy label if provided, truncate if necessary */
-    if (labelSz > 0) {
-        if (labelSz > WH_NVM_LABEL_LEN) {
-            labelSz = WH_NVM_LABEL_LEN;
-        }
-        memcpy(req->label, label, labelSz);
+    if (labelSz > 0 && label != NULL)  {
+        capSz = (labelSz > WH_NVM_LABEL_LEN) ? WH_NVM_LABEL_LEN : labelSz;
+        req->labelSz = capSz;
+        memcpy(req->label, label, capSz);
     }
 
     if (ret == WH_ERROR_OK) {
