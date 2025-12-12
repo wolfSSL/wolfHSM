@@ -435,17 +435,28 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
                                             size, data);
         } while (rc == WH_ERROR_NOTREADY);
 
-        /* Log any communication errors */
-        WH_LOG_ON_ERROR_F(&server->log, WH_LOG_LEVEL_ERROR, rc,
-                          "SendResponse failed for (group=%d, action=%d): %d",
-                          group, action, rc);
+        /* Log error code from request handler, if present */
+        WH_LOG_ON_ERROR_F(&server->log, WH_LOG_LEVEL_ERROR, handlerRc,
+                          "Handler (group=%d, action=%d, seq=%d) returned %d",
+                          group, action, seq, handlerRc);
+        (void)handlerRc; /* suppress unused var warning */
 
-        (void)handlerRc; /* Suppress unused variable warning until logging is
-                          * implemented */
+        /* Log error code from sending response, if present */
+        WH_LOG_ON_ERROR_F(
+            &server->log, WH_LOG_LEVEL_ERROR, rc,
+            "SendResponse failed for (group=%d, action=%d, seq=%d): %d", group,
+            action, seq, rc);
 
         /* Always return success when we processed a request, so no handler
          * error can terminate the server's request processing loop. */
         rc = WH_ERROR_OK;
+    }
+    else if (rc != WH_ERROR_NOTREADY) {
+        /* Log error code from processing request, if present */
+        WH_LOG_ON_ERROR_F(
+            &server->log, WH_LOG_LEVEL_ERROR, rc,
+            "RecvRequest failed for (group=%d, action=%d, seq=%d): %d", group,
+            action, seq, rc);
     }
 
     return rc;
