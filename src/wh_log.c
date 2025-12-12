@@ -36,6 +36,20 @@
 
 #ifdef WOLFHSM_CFG_LOGGING
 
+const char* wh_Log_LevelToString(whLogLevel level)
+{
+    switch (level) {
+        case WH_LOG_LEVEL_INFO:
+            return "INFO";
+        case WH_LOG_LEVEL_ERROR:
+            return "ERROR";
+        case WH_LOG_LEVEL_SECEVENT:
+            return "SECEVENT";
+        default:
+            return "UNKNOWN";
+    }
+}
+
 void wh_Log_AddMsg(whLogContext* ctx, whLogLevel level, const char* file,
                    const char* function, uint32_t line, const char* src,
                    size_t src_len)
