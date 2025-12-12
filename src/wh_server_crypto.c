@@ -4239,16 +4239,6 @@ int wh_Server_HandleCryptoRequest(whServerContext* ctx, uint16_t magic,
 
     WH_DEBUG_SERVER_VERBOSE("End ret:%d\n", ret);
 
-    /* Since crypto error codes are propagated to the client in the response
-     * packet, return success to the caller unless a cancellation has occurred
-     */
-#ifdef WOLFHSM_CFG_CANCEL_API
-    if (ret != WH_ERROR_CANCEL) {
-        ret = WH_ERROR_OK;
-    }
-#else
-    ret = WH_ERROR_OK;
-#endif
     return ret;
 }
 
@@ -5732,16 +5722,7 @@ int wh_Server_HandleCryptoDmaRequest(whServerContext* ctx, uint16_t magic,
 
 
     WH_DEBUG_SERVER_VERBOSE("Crypto DMA request. Action:%u\n", action);
-    /* Since crypto error codes are propagated to the client in the response
-     * packet, return success to the caller unless a cancellation has occurred
-     */
-#ifdef WOLFHSM_CFG_CANCEL_API
-    if (ret != WH_ERROR_CANCEL) {
-        ret = WH_ERROR_OK;
-    }
-#else
-    ret = WH_ERROR_OK;
-#endif
+
     return ret;
 }
 #endif /* WOLFHSM_CFG_DMA */

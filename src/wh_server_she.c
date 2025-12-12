@@ -1689,10 +1689,7 @@ int wh_Server_HandleSheRequest(whServerContext* server, uint16_t magic,
         server->she->cmacKeyFound   = 0;
     }
 
-    /* Unconditionally return success so response message is sent, propagating
-     * the error code to the client */
-    /* TODO: Are there any fatal server errors that should be handled here? */
-    return 0;
+    return ret;
 }
 
 #endif /* WOLFHSM_CFG_SHE_EXTENSION */

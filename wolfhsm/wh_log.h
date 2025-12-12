@@ -82,6 +82,17 @@ typedef struct {
     void*    config;  /* Backend-specific config */
 } whLogConfig;
 
+/* Utility functions */
+
+/**
+ * @brief Convert a log level to its string representation.
+ *
+ * @param level The log level to convert.
+ * @return Pointer to a static string representing the log level:
+ *         "INFO", "ERROR", "SECEVENT", or "UNKNOWN".
+ */
+const char* wh_Log_LevelToString(whLogLevel level);
+
 /* Frontend API */
 
 /**
