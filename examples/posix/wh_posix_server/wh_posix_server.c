@@ -266,12 +266,13 @@ static int _hardwareCryptoCb(int devId, struct wc_CryptoInfo* info, void* ctx)
 #endif
 static void Usage(const char* exeName)
 {
-    WOLFHSM_CFG_PRINTF("Usage: %s --key <key_file_path> --id <key_id> --client <client_id> "
-           "--nvminit <nvm_init_file_path> --type <type>\n",
-           exeName);
+    WOLFHSM_CFG_PRINTF(
+        "Usage: %s --key <key_file_path> --id <key_id> --client <client_id> "
+        "--nvminit <nvm_init_file_path> --type <type>\n",
+        exeName);
     WOLFHSM_CFG_PRINTF("Example: %s --key key.bin --id 123 --client 456 "
-           "--nvminit nvm_init.txt --type tcp\n",
-           exeName);
+                       "--nvminit nvm_init.txt --type tcp\n",
+                       exeName);
     WOLFHSM_CFG_PRINTF("type: tcp (default), shm, dma\n");
 }
 
@@ -282,7 +283,7 @@ int main(int argc, char** argv)
     const char* keyFilePath     = NULL;
     const char* nvmInitFilePath = NULL;
     int         keyId = WH_KEYID_ERASED; /* Default key ID if none provided */
-    int         clientId = 12; /* Default client ID if none provided */
+    int            clientId = 12; /* Default client ID if none provided */
     uint8_t     memory[WH_POSIX_FLASH_RAM_SIZE] = {0};
     whServerConfig s_conf[1];
 

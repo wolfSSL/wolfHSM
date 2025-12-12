@@ -56,14 +56,12 @@ static void _HexDump(const char* p, size_t data_len)
     const unsigned char  two_digits   = 0x10;
     const unsigned char* u            = (const unsigned char*)p;
 
-    /* Header line - use WH_TEST_DEBUG_PRINT for context */
     WH_TEST_DEBUG_PRINT("    HD:%p for %lu bytes\n", p, data_len);
     if ((p == NULL) || (data_len == 0))
         return;
 
     size_t off = 0;
     for (off = 0; off < data_len; off++) {
-        /* Use WH_TEST_PRINT for hex data - no prefix */
         if ((off % bytesPerLine) == 0)
             WH_TEST_PRINT("    ");
         if (u[off] < two_digits) {
@@ -130,8 +128,8 @@ static void _ShowList(const whNvmCb* cb, void* context)
                        myMetadata.label, myMetadata.access, myMetadata.flags,
                        myMetadata.len);
 
-                while ( (rc == 0) &&
-                        ((myMetadata.len - offset) > (whNvmSize)sizeof(data))) {
+                while ((rc == 0) &&
+                       ((myMetadata.len - offset) > (whNvmSize)sizeof(data))) {
                     /* Read the data from this object */
                     rc = cb->Read(context, id, offset, sizeof(data), data);
 
