@@ -325,6 +325,7 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
     uint16_t seq = 0;
     uint16_t size = 0;
     uint8_t* data = NULL;
+    int      handlerRc = 0;
 
     if (server == NULL) {
         return WH_ERROR_BADARGS;
@@ -342,7 +343,7 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
     int rc = wh_CommServer_RecvRequest(server->comm, &magic, &kind, &seq,
             &size, data);
     /* Got a packet? */
-    if (rc == 0) {
+    if (rc == WH_ERROR_OK) {
         group = WH_MESSAGE_GROUP(kind);
         action = WH_MESSAGE_ACTION(kind);
         switch (group) {
@@ -407,33 +408,44 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
 #endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER && !WOLFHSM_CFG_NO_CRYPTO */
 
         default:
-            /* Unknown group. Return empty packet*/
-            /* TODO: Respond with aux error flag */
+            /* Unknown group. Return empty packet */
+            rc   = WH_ERROR_NOTIMPL;
             size = 0;
         }
 
-        /* Send a response */
-        /* TODO: Respond with ErrorResponse if handler returns an error */
+        /* Capture handler result for logging. The response packet already
+         * contains the error code for the client in the resp.rc field. */
+        handlerRc = rc;
+
+        /* Handle cancellation by modifying response kind */
 #ifdef WOLFHSM_CFG_CANCEL_API
-        if (rc == WH_ERROR_CANCEL) {
+        if (handlerRc == WH_ERROR_CANCEL) {
             /* notify the client that their request was canceled */
             kind = WH_MESSAGE_KIND(WH_MESSAGE_GROUP_CANCEL, 0);
             size = 0;
             data = NULL;
-            /* reset RC so the cancellation response is sent */
-            rc = 0;
         }
 #endif
-        if (rc == 0) {
-            do {
-                rc = wh_CommServer_SendResponse(server->comm, magic, kind, seq,
-                    size, data);
-            } while (rc == WH_ERROR_NOTREADY);
-        }
-        WH_LOG_ON_ERROR_F(
-            &server->log, WH_LOG_LEVEL_ERROR, rc,
-            "Request Handler for (group=%d, action=%d) Returned Error: %d",
-            group, action, rc);
+
+        /* Always send the response to the client, regardless of handler error.
+         * The response packet contains the operational error code for the
+         * client in the resp.rc field. */
+        do {
+            rc = wh_CommServer_SendResponse(server->comm, magic, kind, seq,
+                                            size, data);
+        } while (rc == WH_ERROR_NOTREADY);
+
+        /* Log any communication errors */
+        WH_LOG_ON_ERROR_F(&server->log, WH_LOG_LEVEL_ERROR, rc,
+                          "SendResponse failed for (group=%d, action=%d): %d",
+                          group, action, rc);
+
+        (void)handlerRc; /* Suppress unused variable warning until logging is
+                          * implemented */
+
+        /* Always return success when we processed a request, so no handler
+         * error can terminate the server's request processing loop. */
+        rc = WH_ERROR_OK;
     }
 
     return rc;
