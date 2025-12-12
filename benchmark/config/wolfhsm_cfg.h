@@ -25,6 +25,10 @@
 #ifndef WOLFHSM_CFG_H_
 #define WOLFHSM_CFG_H_
 
+#include "port/posix/posix_time.h"
+
+#define WOLFHSM_CFG_PORT_GETTIME posixGetTime
+
 #define WOLFHSM_CFG_ENABLE_CLIENT
 #define WOLFHSM_CFG_ENABLE_SERVER
 

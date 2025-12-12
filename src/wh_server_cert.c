@@ -46,7 +46,9 @@
 static int _verifyChainAgainstCmStore(whServerContext*      server,
                                       WOLFSSL_CERT_MANAGER* cm,
                                       const uint8_t* chain, uint32_t chain_len,
-                                      whCertFlags flags, whKeyId* inout_keyId)
+                                      whCertFlags flags,
+                                      whNvmFlags  cachedKeyFlags,
+                                      whKeyId*    inout_keyId)
 {
     int            rc            = 0;
     const uint8_t* cert_ptr      = chain;
@@ -133,7 +135,7 @@ static int _verifyChainAgainstCmStore(whServerContext*      server,
                         if (rc == 0) {
                             const char label[] = "cert_pubkey";
                             cacheMeta->len     = (whNvmSize)cacheBufSize;
-                            cacheMeta->flags   = WH_NVM_FLAGS_NONE;
+                            cacheMeta->flags   = cachedKeyFlags;
                             cacheMeta->access  = WH_NVM_ACCESS_ANY;
                             cacheMeta->id      = *inout_keyId;
                             memset(cacheMeta->label, 0,
@@ -258,7 +260,8 @@ int wh_Server_CertReadTrusted(whServerContext* server, whNvmId id,
 /* Verify a certificate against trusted certificates */
 int wh_Server_CertVerify(whServerContext* server, const uint8_t* cert,
                          uint32_t cert_len, whNvmId trustedRootNvmId,
-                         whCertFlags flags, whKeyId* inout_keyId)
+                         whCertFlags flags, whNvmFlags cachedKeyFlags,
+                         whKeyId* inout_keyId)
 {
     WOLFSSL_CERT_MANAGER* cm = NULL;
 
@@ -293,7 +296,7 @@ int wh_Server_CertVerify(whServerContext* server, const uint8_t* cert,
         if (rc == WOLFSSL_SUCCESS) {
             /* Verify the certificate */
             rc = _verifyChainAgainstCmStore(server, cm, cert, cert_len, flags,
-                                            inout_keyId);
+                                            cachedKeyFlags, inout_keyId);
             if (rc != WH_ERROR_OK) {
                 rc = WH_ERROR_CERT_VERIFY;
             }
@@ -511,7 +514,7 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
                 /* Process the verify action */
                 resp.rc = wh_Server_CertVerify(server, cert_data, req.cert_len,
                                                req.trustedRootNvmId, req.flags,
-                                               &keyId);
+                                               req.cachedKeyFlags, &keyId);
 
                 /* Propagate the keyId back to the client with flags preserved
                  */
@@ -641,7 +644,7 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
                 /* Process the verify action */
                 resp.rc = wh_Server_CertVerify(server, cert_data, req.cert_len,
                                                req.trustedRootNvmId, req.flags,
-                                               &keyId);
+                                               req.cachedKeyFlags, &keyId);
 
                 /* Propagate the keyId back to the client with flags preserved
                  */

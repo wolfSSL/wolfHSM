@@ -32,6 +32,7 @@
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/types.h"
 #include "wolfssl/wolfcrypt/kdf.h"
+#include "wolfssl/wolfcrypt/ed25519.h"
 
 #include "wolfhsm/wh_error.h"
 
@@ -310,60 +311,67 @@ static int whTest_CryptoRsa(whClientContext* ctx, int devId, WC_RNG* rng)
 #ifdef HAVE_ECC
 static int whTest_CryptoEcc(whClientContext* ctx, int devId, WC_RNG* rng)
 {
-    (void)ctx;
-
     int ret = WH_ERROR_OK;
-    ecc_key eccPrivate[1];
-    ecc_key eccPublic[1];
+    ecc_key bobKey[1];
+    ecc_key aliceKey[1];
 #define TEST_ECC_KEYSIZE 32
+#define TEST_ECC_CURVE_ID ECC_SECP256R1
     uint8_t shared_ab[TEST_ECC_KEYSIZE] = {0};
     uint8_t shared_ba[TEST_ECC_KEYSIZE] = {0};
     uint8_t hash[TEST_ECC_KEYSIZE] = {0};
     uint8_t sig[ECC_MAX_SIG_SIZE] = {0};
+    whKeyId keyIdPrivate = WH_KEYID_ERASED;
+    whKeyId checkKeyId = WH_KEYID_ERASED;
+    whNvmFlags flags = WH_NVM_FLAGS_USAGE_SIGN | WH_NVM_FLAGS_USAGE_VERIFY |
+                       WH_NVM_FLAGS_USAGE_DERIVE;
+    uint8_t labelPrivate[WH_NVM_LABEL_LEN] = "ECC Private Key";
 
-    ret = wc_ecc_init_ex(eccPrivate, NULL, devId);
+    /* Test Case 1: Using ephemeral key (normal wolfCrypt flow) */
+    ret = wc_ecc_init_ex(bobKey, NULL, devId);
     if (ret != 0) {
         WH_ERROR_PRINT("Failed to wc_ecc_init_ex %d\n", ret);
     } else {
-        ret = wc_ecc_init_ex(eccPublic, NULL, devId);
+        ret = wc_ecc_init_ex(aliceKey, NULL, devId);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed to wc_ecc_init_ex %d\n", ret);
         } else {
-            ret = wc_ecc_make_key(rng, TEST_ECC_KEYSIZE, eccPrivate);
+            ret = wc_ecc_make_key(rng, TEST_ECC_KEYSIZE, bobKey);
             if (ret != 0) {
                 WH_ERROR_PRINT("Failed to wc_ecc_make_key %d\n", ret);
             } else {
-                ret = wc_ecc_make_key(rng, TEST_ECC_KEYSIZE, eccPublic);
+                ret = wc_ecc_make_key(rng, TEST_ECC_KEYSIZE, aliceKey);
                 if (ret != 0) {
                     WH_ERROR_PRINT("Failed to wc_ecc_make_key %d\n", ret);
                 } else {
                     word32 secLen = TEST_ECC_KEYSIZE;
-                    ret = wc_ecc_shared_secret(eccPrivate, eccPublic,
-                            (byte*)shared_ab, &secLen);
+                    ret           = wc_ecc_shared_secret(bobKey, aliceKey,
+                                                         (byte*)shared_ab, &secLen);
                     if (ret != 0) {
                         WH_ERROR_PRINT("Failed to compute secret %d\n", ret);
                     } else {
-                        ret = wc_ecc_shared_secret(eccPublic, eccPrivate,
-                                (byte*)shared_ba, &secLen);
+                        ret = wc_ecc_shared_secret(aliceKey, bobKey,
+                                                   (byte*)shared_ba, &secLen);
                         if (ret != 0) {
                             WH_ERROR_PRINT("Failed to compute secret %d\n",
                                     ret);
                         } else {
                             if (memcmp(shared_ab, shared_ba, secLen) == 0) {
-                                WH_TEST_PRINT("ECDH SUCCESS\n");
+                                WH_TEST_PRINT("ECC ephemeral ECDH SUCCESS\n");
                             }
                             else {
-                                WH_ERROR_PRINT("ECDH FAILED TO MATCH\n");
+                                WH_ERROR_PRINT(
+                                    "ECC ephemeral ECDH FAILED TO MATCH\n");
+                                ret = -1;
                             }
                         }
                     }
                     if (ret == 0) {
-                        /*Use the shared secret as a random hash */
+                        /* Use the shared secret as a random hash */
                         memcpy(hash, shared_ba, sizeof(hash));
                         word32 sigLen = sizeof(sig);
                         ret = wc_ecc_sign_hash((void*)hash, sizeof(hash),
                                                (void*)sig, &sigLen, rng,
-                                               eccPrivate);
+                                               bobKey);
                         if (ret != 0) {
                             WH_ERROR_PRINT("Failed to wc_ecc_sign_hash %d\n",
                                            ret);
@@ -371,7 +379,7 @@ static int whTest_CryptoEcc(whClientContext* ctx, int devId, WC_RNG* rng)
                             int res = 0;
                             ret     = wc_ecc_verify_hash((void*)sig, sigLen,
                                                          (void*)hash, sizeof(hash),
-                                                         &res, eccPrivate);
+                                                         &res, bobKey);
                             if (ret != 0) {
                                 WH_ERROR_PRINT("Failed to wc_ecc_verify_hash"
                                                " %d\n",
@@ -379,10 +387,12 @@ static int whTest_CryptoEcc(whClientContext* ctx, int devId, WC_RNG* rng)
                             }
                             else {
                                 if (res == 1) {
-                                    WH_TEST_PRINT("ECC SIGN/VERIFY SUCCESS\n");
+                                    WH_TEST_PRINT(
+                                        "ECC ephemeral SIGN/VERIFY SUCCESS\n");
                                 }
                                 else {
-                                    WH_ERROR_PRINT("ECC SIGN/VERIFY FAIL\n");
+                                    WH_ERROR_PRINT(
+                                        "ECC ephemeral SIGN/VERIFY FAIL\n");
                                     ret = -1;
                                 }
                             }
@@ -390,13 +400,610 @@ static int whTest_CryptoEcc(whClientContext* ctx, int devId, WC_RNG* rng)
                     }
                 }
             }
-            wc_ecc_free(eccPublic);
+            wc_ecc_free(aliceKey);
         }
-        wc_ecc_free(eccPrivate);
+        wc_ecc_free(bobKey);
+    }
+
+    /* Test Case 2: Using client export key */
+    if (ret == 0) {
+        memset(shared_ab, 0, sizeof(shared_ab));
+        memset(shared_ba, 0, sizeof(shared_ba));
+        memset(sig, 0, sizeof(sig));
+
+        ret = wc_ecc_init_ex(bobKey, NULL, WH_DEV_ID);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wc_ecc_init_ex for export key %d\n", ret);
+        }
+        else {
+            ret = wc_ecc_init_ex(aliceKey, NULL, WH_DEV_ID);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to wc_ecc_init_ex for export key %d\n",
+                               ret);
+            }
+            else {
+                /* Server creates keys and exports them to client */
+                ret = wh_Client_EccMakeExportKey(ctx, TEST_ECC_KEYSIZE,
+                                                 TEST_ECC_CURVE_ID, bobKey);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("Failed to wh_Client_EccMakeExportKey %d\n",
+                                   ret);
+                }
+                if (ret == 0) {
+                    ret = wh_Client_EccMakeExportKey(
+                        ctx, TEST_ECC_KEYSIZE, TEST_ECC_CURVE_ID, aliceKey);
+                    if (ret != 0) {
+                        WH_ERROR_PRINT(
+                            "Failed to wh_Client_EccMakeExportKey %d\n", ret);
+                    }
+                }
+                /* Test ECDH with exported keys */
+                if (ret == 0) {
+                    word32 secLen = TEST_ECC_KEYSIZE;
+                    ret           = wc_ecc_shared_secret(bobKey, aliceKey,
+                                                         (byte*)shared_ab, &secLen);
+                    if (ret != 0) {
+                        WH_ERROR_PRINT(
+                            "Failed to compute export key secret %d\n", ret);
+                    }
+                }
+                if (ret == 0) {
+                    word32 secLen = TEST_ECC_KEYSIZE;
+                    ret           = wc_ecc_shared_secret(aliceKey, bobKey,
+                                                         (byte*)shared_ba, &secLen);
+                    if (ret != 0) {
+                        WH_ERROR_PRINT(
+                            "Failed to compute export key secret %d\n", ret);
+                    }
+                }
+                if (ret == 0) {
+                    if (memcmp(shared_ab, shared_ba, TEST_ECC_KEYSIZE) != 0) {
+                        WH_ERROR_PRINT("ECC export key ECDH FAILED TO MATCH\n");
+                        ret = -1;
+                    }
+                    else {
+                        WH_TEST_PRINT("ECC export key ECDH SUCCESS\n");
+                    }
+                }
+                /* Test ECDSA sign/verify with exported keys */
+                if (ret == 0) {
+                    memcpy(hash, shared_ba, sizeof(hash));
+                    word32 sigLen = sizeof(sig);
+                    ret           = wc_ecc_sign_hash((void*)hash, sizeof(hash),
+                                                     (void*)sig, &sigLen, rng, bobKey);
+                    if (ret != 0) {
+                        WH_ERROR_PRINT("Failed to sign with export key %d\n",
+                                       ret);
+                    }
+                    else {
+                        int res = 0;
+                        ret =
+                            wc_ecc_verify_hash((void*)sig, sigLen, (void*)hash,
+                                               sizeof(hash), &res, bobKey);
+                        if (ret != 0) {
+                            WH_ERROR_PRINT(
+                                "Failed to verify with export key %d\n", ret);
+                        }
+                        else if (res != 1) {
+                            WH_ERROR_PRINT("ECC export key SIGN/VERIFY FAIL\n");
+                            ret = -1;
+                        }
+                        else {
+                            WH_TEST_PRINT(
+                                "ECC export key SIGN/VERIFY SUCCESS\n");
+                        }
+                    }
+                }
+                wc_ecc_free(aliceKey);
+            }
+            wc_ecc_free(bobKey);
+        }
+    }
+
+    /* Test Case 3: Using keyCache key (key stays on server)
+     * Use only ONE cached key to avoid key cache space issues.
+     * For ECDH, use an ephemeral peer key. */
+    if (ret == 0) {
+        memset(shared_ab, 0, sizeof(shared_ab));
+        memset(shared_ba, 0, sizeof(shared_ba));
+        memset(sig, 0, sizeof(sig));
+        keyIdPrivate = WH_KEYID_ERASED;
+
+        /* Server creates and caches one key */
+        ret = wh_Client_EccMakeCacheKey(ctx, TEST_ECC_KEYSIZE,
+                                        TEST_ECC_CURVE_ID, &keyIdPrivate, flags,
+                                        sizeof(labelPrivate), labelPrivate);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wh_Client_EccMakeCacheKey %d\n", ret);
+        }
+        if (ret == 0) {
+            /* Init the cached key struct and associate with server key ID */
+            ret = wc_ecc_init_ex(bobKey, NULL, WH_DEV_ID);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to wc_ecc_init_ex for cache key %d\n",
+                               ret);
+            }
+            else {
+                ret = wh_Client_EccSetKeyId(bobKey, keyIdPrivate);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("Failed to wh_Client_EccSetKeyId %d\n", ret);
+                }
+                /* Verify key ID was set correctly */
+                if (ret == 0) {
+                    ret = wh_Client_EccGetKeyId(bobKey, &checkKeyId);
+                    if (ret != 0) {
+                        WH_ERROR_PRINT("Failed to wh_Client_EccGetKeyId %d\n",
+                                       ret);
+                    }
+                    else if (checkKeyId != keyIdPrivate) {
+                        WH_ERROR_PRINT(
+                            "ECC key ID mismatch: got %u, expected %u\n",
+                            checkKeyId, keyIdPrivate);
+                        ret = -1;
+                    }
+                }
+                /* Set curve parameters (required since key data isn't exported)
+                 */
+                if (ret == 0) {
+                    ret = wc_ecc_set_curve(bobKey, TEST_ECC_KEYSIZE,
+                                           TEST_ECC_CURVE_ID);
+                    if (ret != 0) {
+                        WH_ERROR_PRINT("Failed to wc_ecc_set_curve %d\n", ret);
+                    }
+                }
+                /* Create ephemeral peer key for ECDH test */
+                if (ret == 0) {
+                    ret = wc_ecc_init_ex(aliceKey, NULL, WH_DEV_ID);
+                    if (ret != 0) {
+                        WH_ERROR_PRINT(
+                            "Failed to wc_ecc_init_ex for peer key %d\n", ret);
+                    }
+                    else {
+                        ret = wc_ecc_make_key(rng, TEST_ECC_KEYSIZE, aliceKey);
+                        if (ret != 0) {
+                            WH_ERROR_PRINT(
+                                "Failed to wc_ecc_make_key for peer %d\n", ret);
+                        }
+                        /* Test ECDH: cached key with ephemeral peer */
+                        if (ret == 0) {
+                            word32 secLen = TEST_ECC_KEYSIZE;
+                            ret           = wc_ecc_shared_secret(
+                                bobKey, aliceKey, (byte*)shared_ab, &secLen);
+                            if (ret != 0) {
+                                WH_ERROR_PRINT(
+                                    "Failed to compute cache key secret %d\n",
+                                    ret);
+                            }
+                        }
+                        if (ret == 0) {
+                            word32 secLen = TEST_ECC_KEYSIZE;
+                            ret           = wc_ecc_shared_secret(
+                                aliceKey, bobKey, (byte*)shared_ba, &secLen);
+                            if (ret != 0) {
+                                WH_ERROR_PRINT(
+                                    "Failed to compute peer secret %d\n", ret);
+                            }
+                        }
+                        if (ret == 0) {
+                            if (memcmp(shared_ab, shared_ba,
+                                       TEST_ECC_KEYSIZE) != 0) {
+                                WH_ERROR_PRINT(
+                                    "ECC cache key ECDH FAILED TO MATCH\n");
+                                ret = -1;
+                            }
+                            else {
+                                WH_TEST_PRINT("ECC cache key ECDH SUCCESS\n");
+                            }
+                        }
+                        wc_ecc_free(aliceKey);
+                    }
+                }
+                /* Test ECDSA sign/verify with cached key */
+                if (ret == 0) {
+                    memcpy(hash, shared_ba, sizeof(hash));
+                    word32 sigLen = sizeof(sig);
+                    ret           = wc_ecc_sign_hash((void*)hash, sizeof(hash),
+                                                     (void*)sig, &sigLen, rng, bobKey);
+                    if (ret != 0) {
+                        WH_ERROR_PRINT("Failed to sign with cache key %d\n",
+                                       ret);
+                    }
+                    else {
+                        int res = 0;
+                        ret =
+                            wc_ecc_verify_hash((void*)sig, sigLen, (void*)hash,
+                                               sizeof(hash), &res, bobKey);
+                        if (ret != 0) {
+                            WH_ERROR_PRINT(
+                                "Failed to verify with cache key %d\n", ret);
+                        }
+                        else if (res != 1) {
+                            WH_ERROR_PRINT("ECC cache key SIGN/VERIFY FAIL\n");
+                            ret = -1;
+                        }
+                        else {
+                            WH_TEST_PRINT(
+                                "ECC cache key SIGN/VERIFY SUCCESS\n");
+                        }
+                    }
+                }
+                wc_ecc_free(bobKey);
+            }
+        }
+        /* Evict server key regardless of test success */
+        if (!WH_KEYID_ISERASED(keyIdPrivate)) {
+            (void)wh_Client_KeyEvict(ctx, keyIdPrivate);
+        }
+    }
+
+    if (ret == 0) {
+        WH_TEST_PRINT("ECC SUCCESS\n");
     }
     return ret;
 }
 #endif /* HAVE_ECC */
+
+#ifdef HAVE_ED25519
+
+static int whTest_Ed25519ImportToServer(whClientContext* ctx, int devId,
+                                        ed25519_key* key, ed25519_key* pubKey,
+                                        uint8_t* label, uint16_t labelLen,
+                                        whKeyId* outSignKeyId,
+                                        whKeyId* outVerifyKeyId)
+{
+    int     ret = 0;
+    byte    pubKeyRaw[ED25519_PUB_KEY_SIZE];
+    word32  pubKeySize  = sizeof(pubKeyRaw);
+    whKeyId signKeyId   = WH_KEYID_ERASED;
+    whKeyId verifyKeyId = WH_KEYID_ERASED;
+
+    ret = wc_ed25519_export_public(key, pubKeyRaw, &pubKeySize);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to export Ed25519 public key: %d\n", ret);
+    }
+    else {
+        ret = wc_ed25519_import_public(pubKeyRaw, pubKeySize, pubKey);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to import Ed25519 public key: %d\n", ret);
+        }
+    }
+
+    if (ret == 0) {
+        ret = wh_Client_Ed25519ImportKey(
+            ctx, key, &signKeyId, WH_NVM_FLAGS_USAGE_SIGN, labelLen, label);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to import Ed25519 key to server: %d\n", ret);
+        }
+        else {
+            /* remove key material from local key structure */
+            wc_ed25519_free(key);
+            ret = wc_ed25519_init_ex(key, NULL, devId);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to re-initialize Ed25519 key: %d\n",
+                               ret);
+            }
+            else {
+                wh_Client_Ed25519SetKeyId(key, signKeyId);
+            }
+        }
+    }
+
+    if (ret == 0) {
+        ret = wh_Client_Ed25519ImportKey(ctx, pubKey, &verifyKeyId,
+                                         WH_NVM_FLAGS_USAGE_VERIFY, labelLen,
+                                         label);
+        if (ret != 0) {
+            WH_ERROR_PRINT(
+                "Failed to import Ed25519 public key to server: %d\n", ret);
+        }
+        else {
+            /* remove key material from local key structure */
+            wc_ed25519_free(pubKey);
+            ret = wc_ed25519_init_ex(pubKey, NULL, devId);
+            if (ret != 0) {
+                WH_ERROR_PRINT(
+                    "Failed to re-initialize Ed25519 public key: %d\n", ret);
+            }
+            else {
+                wh_Client_Ed25519SetKeyId(pubKey, verifyKeyId);
+            }
+        }
+    }
+
+    if (ret == 0) {
+        if (outSignKeyId != NULL) {
+            *outSignKeyId = signKeyId;
+        }
+        if (outVerifyKeyId != NULL) {
+            *outVerifyKeyId = verifyKeyId;
+        }
+    }
+
+    return ret;
+}
+
+static int whTest_CryptoEd25519Inline(whClientContext* ctx, int devId,
+                                      WC_RNG* rng)
+{
+    (void)ctx;
+
+    int          ret       = 0;
+    ed25519_key  key[1]    = {0};
+    ed25519_key  pubKey[1] = {0};
+    byte         msg[]     = "Test message for Ed25519 signing";
+    byte         sig[ED25519_SIG_SIZE];
+    word32       sigSz    = sizeof(sig);
+    int          verified = 0;
+    const word32 msgSz    = (word32)sizeof(msg);
+    byte         pubKeyRaw[ED25519_PUB_KEY_SIZE];
+    word32       pubKeySize = sizeof(pubKeyRaw);
+
+    ret = wc_ed25519_init_ex(key, NULL, devId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to initialize Ed25519 key: %d\n", ret);
+        return ret;
+    }
+
+    ret = wc_ed25519_init_ex(pubKey, NULL, devId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to initialize Ed25519 public key: %d\n", ret);
+        wc_ed25519_free(key);
+        return ret;
+    }
+
+    ret = wc_ed25519_make_key(rng, ED25519_KEY_SIZE, key);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to generate Ed25519 key: %d\n", ret);
+    }
+    else {
+        ret = wc_ed25519_export_public(key, pubKeyRaw, &pubKeySize);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to export Ed25519 public key: %d\n", ret);
+        }
+        else {
+            ret = wc_ed25519_import_public(pubKeyRaw, pubKeySize, pubKey);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to import Ed25519 public key: %d\n",
+                               ret);
+            }
+        }
+    }
+
+    if (ret == 0) {
+        sigSz = sizeof(sig);
+        ret   = wc_ed25519_sign_msg(msg, msgSz, sig, &sigSz, key);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to sign message with Ed25519: %d\n", ret);
+        }
+        else {
+            ret = wc_ed25519_verify_msg(sig, sigSz, msg, msgSz, &verified,
+                                        pubKey);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to verify Ed25519 signature: %d\n", ret);
+            }
+            else if (verified != 1) {
+                WH_ERROR_PRINT("Ed25519 signature verification failed\n");
+                ret = -1;
+            }
+        }
+    }
+
+    if (ret == 0) {
+        /* Corrupt signature to ensure verification fails */
+        sig[0] ^= 0xFF;
+        verified = 0;
+        ret = wc_ed25519_verify_msg(sig, sigSz, msg, msgSz, &verified, pubKey);
+        if (ret == 0 && verified == 1) {
+            WH_ERROR_PRINT(
+                "Modified Ed25519 signature unexpectedly verified\n");
+            ret = -1;
+        }
+        else {
+            ret = 0;
+        }
+    }
+
+    if (ret == 0) {
+        WH_TEST_PRINT("Ed25519 INLINE DEVID=0x%X SUCCESS\n", devId);
+    }
+
+    wc_ed25519_free(pubKey);
+    wc_ed25519_free(key);
+    return ret;
+}
+
+static int whTest_CryptoEd25519ServerKey(whClientContext* ctx, int devId,
+                                         WC_RNG* rng)
+{
+    int         ret         = 0;
+    ed25519_key key[1]      = {0};
+    ed25519_key pubKey[1]   = {0};
+    whKeyId     signKeyId   = WH_KEYID_ERASED;
+    whKeyId     verifyKeyId = WH_KEYID_ERASED;
+    byte        msg[]       = "Ed25519 server key message";
+    byte        sig[ED25519_SIG_SIZE];
+    uint32_t    sigSz    = sizeof(sig);
+    int         verified = 0;
+    uint8_t     label[]  = "Ed25519 Server Key";
+
+    ret = wc_ed25519_init_ex(key, NULL, devId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to initialize Ed25519 key: %d\n", ret);
+        return ret;
+    }
+
+    ret = wc_ed25519_init_ex(pubKey, NULL, devId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to initialize Ed25519 public key: %d\n", ret);
+        wc_ed25519_free(key);
+        return ret;
+    }
+
+    ret = wc_ed25519_make_key(rng, ED25519_KEY_SIZE, key);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to generate Ed25519 key: %d\n", ret);
+    }
+    else {
+        ret = whTest_Ed25519ImportToServer(ctx, devId, key, pubKey, label,
+                                           sizeof(label), &signKeyId,
+                                           &verifyKeyId);
+    }
+
+    if (ret == 0) {
+        ret = wh_Client_Ed25519Sign(ctx, key, msg, (uint32_t)sizeof(msg),
+                                    (uint8_t)Ed25519, NULL, 0, sig, &sigSz);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to sign with server Ed25519 key: %d\n", ret);
+        }
+    }
+
+    if (ret == 0) {
+        ret = wh_Client_Ed25519Verify(ctx, pubKey, sig, sigSz, msg,
+                                      (uint32_t)sizeof(msg), (uint8_t)Ed25519,
+                                      NULL, 0, &verified);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to verify server Ed25519 signature: %d\n",
+                           ret);
+        }
+        else if (verified != 1) {
+            WH_ERROR_PRINT("Server Ed25519 signature verification failed\n");
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        /* Sign-only key should not be allowed to verify */
+        int negVerified = 0;
+        int negRet      = wh_Client_Ed25519Verify(
+            ctx, key, sig, sigSz, msg, (uint32_t)sizeof(msg), (uint8_t)Ed25519,
+            NULL, 0, &negVerified);
+        if (negRet == 0) {
+            WH_ERROR_PRINT("Sign-only Ed25519 key unexpectedly verified\n");
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        sig[0] ^= 0xAA;
+        verified = 0;
+        ret      = wh_Client_Ed25519Verify(ctx, pubKey, sig, sigSz, msg,
+                                           (uint32_t)sizeof(msg), (uint8_t)Ed25519,
+                                           NULL, 0, &verified);
+        if (ret == 0 && verified == 1) {
+            WH_ERROR_PRINT("Modified server Ed25519 signature unexpectedly "
+                           "verified\n");
+            ret = -1;
+        }
+        else {
+            ret = 0;
+        }
+    }
+
+    if (!WH_KEYID_ISERASED(signKeyId)) {
+        (void)wh_Client_KeyEvict(ctx, signKeyId);
+    }
+    if (!WH_KEYID_ISERASED(verifyKeyId)) {
+        (void)wh_Client_KeyEvict(ctx, verifyKeyId);
+    }
+
+    if (ret == 0) {
+        WH_TEST_PRINT("Ed25519 SERVER KEY DEVID=0x%X SUCCESS\n", devId);
+    }
+
+    wc_ed25519_free(pubKey);
+    wc_ed25519_free(key);
+    return ret;
+}
+
+#ifdef WOLFHSM_CFG_DMA
+static int whTest_CryptoEd25519Dma(whClientContext* ctx, int devId, WC_RNG* rng)
+{
+    int         ret         = 0;
+    ed25519_key key[1]      = {0};
+    ed25519_key pubKey[1]   = {0};
+    whKeyId     signKeyId   = WH_KEYID_ERASED;
+    whKeyId     verifyKeyId = WH_KEYID_ERASED;
+    byte        msg[]       = "Ed25519 DMA message";
+    byte        sig[ED25519_SIG_SIZE];
+    uint32_t    sigSz    = sizeof(sig);
+    int         verified = 0;
+    uint8_t     label[]  = "Ed25519 DMA Key";
+
+    ret = wc_ed25519_init_ex(key, NULL, devId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to initialize Ed25519 key (DMA): %d\n", ret);
+        return ret;
+    }
+
+    ret = wc_ed25519_init_ex(pubKey, NULL, devId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to initialize Ed25519 public key (DMA): %d\n",
+                       ret);
+        wc_ed25519_free(key);
+        return ret;
+    }
+
+    ret = wc_ed25519_make_key(rng, ED25519_KEY_SIZE, key);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to generate Ed25519 key (DMA): %d\n", ret);
+    }
+    else {
+        ret = whTest_Ed25519ImportToServer(ctx, devId, key, pubKey, label,
+                                           sizeof(label), &signKeyId,
+                                           &verifyKeyId);
+    }
+
+    if (ret == 0) {
+        ret = wh_Client_Ed25519SignDma(ctx, key, msg, (uint32_t)sizeof(msg),
+                                       (uint8_t)Ed25519, NULL, 0, sig, &sigSz);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to sign via DMA Ed25519 key: %d\n", ret);
+        }
+    }
+
+    if (ret == 0) {
+        ret = wh_Client_Ed25519VerifyDma(ctx, pubKey, sig, sigSz, msg,
+                                         (uint32_t)sizeof(msg),
+                                         (uint8_t)Ed25519, NULL, 0, &verified);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to verify DMA Ed25519 signature: %d\n", ret);
+        }
+        else if (verified != 1) {
+            WH_ERROR_PRINT("DMA Ed25519 signature verification failed\n");
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        /* Sign-only key should not be allowed to verify (DMA) */
+        int negVerified = 0;
+        int negRet      = wh_Client_Ed25519VerifyDma(
+            ctx, key, sig, sigSz, msg, (uint32_t)sizeof(msg), (uint8_t)Ed25519,
+            NULL, 0, &negVerified);
+        if (negRet == 0) {
+            WH_ERROR_PRINT(
+                "Sign-only Ed25519 key unexpectedly verified (DMA)\n");
+            ret = -1;
+        }
+    }
+
+    if (!WH_KEYID_ISERASED(signKeyId)) {
+        (void)wh_Client_KeyEvict(ctx, signKeyId);
+    }
+    if (!WH_KEYID_ISERASED(verifyKeyId)) {
+        (void)wh_Client_KeyEvict(ctx, verifyKeyId);
+    }
+
+    if (ret == 0) {
+        WH_TEST_PRINT("Ed25519 DMA DEVID=0x%X SUCCESS\n", devId);
+    }
+
+    wc_ed25519_free(pubKey);
+    wc_ed25519_free(key);
+    return ret;
+}
+#endif /* WOLFHSM_CFG_DMA */
+#endif /* HAVE_ED25519 */
 
 #ifdef HAVE_CURVE25519
 static int whTest_CryptoCurve25519(whClientContext* ctx, int devId, WC_RNG* rng)
@@ -2054,6 +2661,7 @@ static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
     return ret;
 }
 
+#define WH_TEST_KEYSTORE_TEST_SZ (32)
 static int whTest_NonExportableKeystore(whClientContext* ctx, int devId,
                                         WC_RNG* rng)
 {
@@ -2062,11 +2670,11 @@ static int whTest_NonExportableKeystore(whClientContext* ctx, int devId,
 
     int     ret                   = 0;
     whKeyId keyId                 = WH_KEYID_ERASED;
-    uint8_t key[AES_256_KEY_SIZE] = {
+    uint8_t key[WH_TEST_KEYSTORE_TEST_SZ] = {
         0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x11, 0x22, 0x33, 0x44, 0x55,
         0x66, 0x77, 0x88, 0x99, 0x00, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF,
         0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0x00};
-    uint8_t  exportedKey[AES_256_KEY_SIZE]   = {0};
+    uint8_t  exportedKey[WH_TEST_KEYSTORE_TEST_SZ] = {0};
     uint8_t  label[WH_NVM_LABEL_LEN]         = "NonExportableTestKey";
     uint8_t  exportedLabel[WH_NVM_LABEL_LEN] = {0};
     uint16_t exportedKeySize;
@@ -3953,10 +4561,25 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
                     ret = wh_Client_EccSetKeyId(privKey, keyId);
                 }
                 if (ret == 0) {
+                    const byte qx[] = {
+                        0xbb, 0x33, 0xac, 0x4c, 0x27, 0x50, 0x4a, 0xc6,
+                        0x4a, 0xa5, 0x04, 0xc3, 0x3c, 0xde, 0x9f, 0x36,
+                        0xdb, 0x72, 0x2d, 0xce, 0x94, 0xea, 0x2b, 0xfa,
+                        0xcb, 0x20, 0x09, 0x39, 0x2c, 0x16, 0xe8, 0x61
+                    };
+                    const byte qy[] = {
+                        0x02, 0xe9, 0xaf, 0x4d, 0xd3, 0x02, 0x93, 0x9a,
+                        0x31, 0x5b, 0x97, 0x92, 0x21, 0x7f, 0xf0, 0xcf,
+                        0x18, 0xda, 0x91, 0x11, 0x02, 0x34, 0x86, 0xe8,
+                        0x20, 0x58, 0x33, 0x0b, 0x80, 0x34, 0x89, 0xd8
+                    };
+                    int curveId = ECC_SECP256R1;
+
                     /* Generate a public key locally for ECDH */
                     ret = wc_ecc_init_ex(pubKey, NULL, INVALID_DEVID);
                     if (ret == 0) {
-                        ret = wc_ecc_make_key(rng, 32, pubKey);
+                        /* Import public key */
+                        ret = wc_ecc_import_unsigned(pubKey, qx, qy, NULL, curveId);
                         if (ret == 0) {
                             /* Try ECDH - should fail with WH_ERROR_USAGE */
                             ret = wc_ecc_shared_secret(
@@ -4290,6 +4913,33 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     }
 #endif /* HAVE_ECC */
 
+#ifdef HAVE_ED25519
+    if (ret != 0) {
+        WH_ERROR_PRINT("Pre-Ed25519 tests ret=%d\n", ret);
+        return ret;
+    }
+    if (ret == 0) {
+        ret = whTest_CryptoEd25519Inline(client, WH_DEV_ID, rng);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Ed25519 inline test failed: %d\n", ret);
+        }
+    }
+    if (ret == 0) {
+        ret = whTest_CryptoEd25519ServerKey(client, WH_DEV_ID, rng);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Ed25519 server key test failed: %d\n", ret);
+        }
+    }
+#ifdef WOLFHSM_CFG_DMA
+    if (ret == 0) {
+        ret = whTest_CryptoEd25519Dma(client, WH_DEV_ID_DMA, rng);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Ed25519 DMA test failed: %d\n", ret);
+        }
+    }
+#endif /* WOLFHSM_CFG_DMA */
+#endif /* HAVE_ED25519 */
+
 #ifdef HAVE_CURVE25519
     /* test curve25519 */
     if (ret == 0) {
@@ -4405,6 +5055,10 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     (void)wh_Client_CommClose(client);
     (void)wh_Client_Cleanup(client);
 
+    if (ret != 0) {
+        WH_ERROR_PRINT("whTest_CryptoClientConfig returning error: %d\n", ret);
+    }
+
     return ret;
 }
 #endif /* WOLFHSM_CFG_ENABLE_CLIENT */
@@ -4480,7 +5134,11 @@ int whTest_CryptoServerConfig(whServerConfig* config)
     !defined(WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP)
 static void* _whClientTask(void *cf)
 {
-    WH_TEST_ASSERT(0 == whTest_CryptoClientConfig(cf));
+    int rc = whTest_CryptoClientConfig(cf);
+    if (rc != 0) {
+        WH_ERROR_PRINT("whTest_CryptoClientConfig returned %d\n", rc);
+    }
+    WH_TEST_ASSERT(0 == rc);
     return NULL;
 }
 #endif /* WOLFHSM_CFG_TEST_POSIX && WOLFHSM_CFG_ENABLE_CLIENT */

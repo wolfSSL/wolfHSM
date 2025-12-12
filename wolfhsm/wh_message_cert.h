@@ -114,11 +114,11 @@ int wh_MessageCert_TranslateReadTrustedResponse(
 
 /* Verify Request */
 typedef struct {
-    uint32_t cert_len;
-    whNvmId  trustedRootNvmId;
-    uint16_t flags;
-    whKeyId  keyId;
-    uint8_t  WH_PAD[2];
+    uint32_t   cert_len;
+    whNvmId    trustedRootNvmId;
+    uint16_t   flags;
+    whNvmFlags cachedKeyFlags;
+    whKeyId    keyId;
     /* Certificate data follows */
 } whMessageCert_VerifyRequest;
 
@@ -168,12 +168,13 @@ int wh_MessageCert_TranslateReadTrustedDmaRequest(
 
 /* Verify DMA Request */
 typedef struct {
-    uint64_t cert_addr;
-    uint32_t cert_len;
-    whNvmId  trustedRootNvmId;
-    uint16_t flags;
-    whKeyId  keyId;
-    uint8_t  WH_PAD[6];
+    uint64_t   cert_addr;
+    uint32_t   cert_len;
+    whNvmId    trustedRootNvmId;
+    uint16_t   flags;
+    whNvmFlags cachedKeyFlags;
+    whKeyId    keyId;
+    uint8_t    WH_PAD[4];
 } whMessageCert_VerifyDmaRequest;
 
 /* Verify DMA Response */

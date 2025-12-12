@@ -82,6 +82,8 @@ int wh_Server_CertReadTrusted(whServerContext* server, whNvmId id,
  * @param trustedRootNvmId NVM ID of the trusted root certificate
  * @param flags Flags for the certificate verification (see WH_CERT_FLAGS_* in
  * wh_common.h)
+ * @param cachedKeyFlags NVM usage flags to apply when caching the leaf public
+ * key (only used if WH_CERT_FLAGS_CACHE_LEAF_PUBKEY is set)
  * @param inout_keyId Only valid if WH_CERT_FLAGS_CACHE_LEAF_PUBKEY is set. On
  * input, set to the keyId to use when caching the leaf public key. If set to
  * WH_KEYID_ERASED then a new unique keyId will be generated. On output, holds
@@ -90,7 +92,8 @@ int wh_Server_CertReadTrusted(whServerContext* server, whNvmId id,
  */
 int wh_Server_CertVerify(whServerContext* server, const uint8_t* cert,
                          uint32_t cert_len, whNvmId trustedRootNvmId,
-                         whCertFlags flags, whKeyId* inout_keyId);
+                         whCertFlags flags, whNvmFlags cachedKeyFlags,
+                         whKeyId* inout_keyId);
 
 #if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT)
 /**

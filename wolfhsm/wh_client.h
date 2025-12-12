@@ -2118,15 +2118,15 @@ int wh_Client_CertVerify(whClientContext* c, const uint8_t* cert,
  * @param[in] cert_len Length of the certificate data.
  * @param[in] trustedRootNvmId NVM ID of the trusted root certificate to verify
  * against.
+ * @param[in] cachedKeyFlags NVM usage flags to apply when caching the leaf
+ * public key (e.g., WH_NVM_FLAGS_USAGE_VERIFY, WH_NVM_FLAGS_USAGE_SIGN).
  * @param[in] keyId The keyId to cache the leaf public key in. If set to
  * WH_KEYID_ERASED, the server will pick a keyId.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
-int wh_Client_CertVerifyAndCacheLeafPubKeyRequest(whClientContext* c,
-                                                  const uint8_t*   cert,
-                                                  uint32_t         cert_len,
-                                                  whNvmId trustedRootNvmId,
-                                                  whKeyId keyId);
+int wh_Client_CertVerifyAndCacheLeafPubKeyRequest(
+    whClientContext* c, const uint8_t* cert, uint32_t cert_len,
+    whNvmId trustedRootNvmId, whNvmFlags cachedKeyFlags, whKeyId keyId);
 
 /**
  * @brief Receives a response from the server after verifying a certificate and
@@ -2160,6 +2160,8 @@ int wh_Client_CertVerifyAndCacheLeafPubKeyResponse(whClientContext* c,
  * @param[in] cert_len Length of the certificate data.
  * @param[in] trustedRootNvmId NVM ID of the trusted root certificate to verify
  * against.
+ * @param[in] cachedKeyFlags NVM usage flags to apply when caching the leaf
+ * public key (e.g., WH_NVM_FLAGS_USAGE_VERIFY, WH_NVM_FLAGS_USAGE_SIGN).
  * @param[in,out] inout_keyId Pointer to the desired key ID of the cached leaf
  * public key. If set to WH_KEYID_ERASED, the server will pick a keyId. On
  * output, contains the keyId of the cached leaf public key.
@@ -2168,7 +2170,8 @@ int wh_Client_CertVerifyAndCacheLeafPubKeyResponse(whClientContext* c,
  */
 int wh_Client_CertVerifyAndCacheLeafPubKey(
     whClientContext* c, const uint8_t* cert, uint32_t cert_len,
-    whNvmId trustedRootNvmId, whKeyId* inout_keyId, int32_t* out_rc);
+    whNvmId trustedRootNvmId, whNvmFlags cachedKeyFlags, whKeyId* inout_keyId,
+    int32_t* out_rc);
 
 
 #ifdef WOLFHSM_CFG_DMA
@@ -2343,15 +2346,15 @@ int wh_Client_CertVerifyDma(whClientContext* c, const void* cert,
  * @param[in] cert_len Length of the certificate data.
  * @param[in] trustedRootNvmId NVM ID of the trusted root certificate to verify
  * against.
+ * @param[in] cachedKeyFlags NVM usage flags to apply when caching the leaf
+ * public key (e.g., WH_NVM_FLAGS_USAGE_VERIFY, WH_NVM_FLAGS_USAGE_SIGN).
  * @param[in] keyId The keyId to cache the leaf public key in. If set to
  * WH_KEYID_ERASED, the server will pick a keyId.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
-int wh_Client_CertVerifyDmaAndCacheLeafPubKeyRequest(whClientContext* c,
-                                                     const void*      cert,
-                                                     uint32_t         cert_len,
-                                                     whNvmId trustedRootNvmId,
-                                                     whKeyId keyId);
+int wh_Client_CertVerifyDmaAndCacheLeafPubKeyRequest(
+    whClientContext* c, const void* cert, uint32_t cert_len,
+    whNvmId trustedRootNvmId, whNvmFlags cachedKeyFlags, whKeyId keyId);
 
 /**
  * @brief Receives a response from the server after verifying a certificate
@@ -2387,6 +2390,8 @@ int wh_Client_CertVerifyDmaAndCacheLeafPubKeyResponse(whClientContext* c,
  * @param[in] cert_len Length of the certificate data.
  * @param[in] trustedRootNvmId NVM ID of the trusted root certificate to verify
  * against.
+ * @param[in] cachedKeyFlags NVM usage flags to apply when caching the leaf
+ * public key (e.g., WH_NVM_FLAGS_USAGE_VERIFY, WH_NVM_FLAGS_USAGE_SIGN).
  * @param[in,out] inout_keyId Pointer to the desired key ID of the cached leaf
  * public key. If set to WH_KEYID_ERASED, the server will pick a keyId. On
  * output, contains the keyId of the cached leaf public key.
@@ -2395,7 +2400,8 @@ int wh_Client_CertVerifyDmaAndCacheLeafPubKeyResponse(whClientContext* c,
  */
 int wh_Client_CertVerifyDmaAndCacheLeafPubKey(
     whClientContext* c, const void* cert, uint32_t cert_len,
-    whNvmId trustedRootNvmId, whKeyId* inout_keyId, int32_t* out_rc);
+    whNvmId trustedRootNvmId, whNvmFlags cachedKeyFlags, whKeyId* inout_keyId,
+    int32_t* out_rc);
 
 
 #endif /* WOLFHSM_CFG_DMA */

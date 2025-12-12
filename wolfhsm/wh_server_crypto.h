@@ -36,6 +36,7 @@
 #include "wolfssl/wolfcrypt/rsa.h"
 #include "wolfssl/wolfcrypt/curve25519.h"
 #include "wolfssl/wolfcrypt/ecc.h"
+#include "wolfssl/wolfcrypt/ed25519.h"
 #include "wolfssl/wolfcrypt/aes.h"
 #include "wolfssl/wolfcrypt/sha256.h"
 #include "wolfssl/wolfcrypt/cmac.h"
@@ -71,6 +72,15 @@ int wh_Server_EccKeyCacheImport(whServerContext* ctx, ecc_key* key,
 int wh_Server_EccKeyCacheExport(whServerContext* ctx, whKeyId keyId,
         ecc_key* key);
 #endif
+
+#ifdef HAVE_ED25519
+int wh_Server_CacheImportEd25519Key(whServerContext* ctx, ed25519_key* key,
+                                    whKeyId keyId, whNvmFlags flags,
+                                    uint16_t label_len, uint8_t* label);
+
+int wh_Server_CacheExportEd25519Key(whServerContext* ctx, whKeyId keyId,
+                                    ed25519_key* key);
+#endif /* HAVE_ED25519 */
 
 #ifdef HAVE_CURVE25519
 

@@ -643,6 +643,94 @@ int wh_MessageCrypto_TranslateCurve25519Response(
     whMessageCrypto_Curve25519Response* dest);
 
 /*
+ * Ed25519
+ */
+
+/* Ed25519 Key Generation Request */
+typedef struct {
+    uint32_t flags;
+    uint32_t keyId;
+    uint32_t access;
+    uint8_t  label[WH_NVM_LABEL_LEN];
+} whMessageCrypto_Ed25519KeyGenRequest;
+
+/* Ed25519 Key Generation Response */
+typedef struct {
+    uint32_t keyId;
+    uint32_t outSz;
+    /* Data follows:
+     * uint8_t out[outSz];
+     */
+} whMessageCrypto_Ed25519KeyGenResponse;
+
+int wh_MessageCrypto_TranslateEd25519KeyGenRequest(
+    uint16_t magic, const whMessageCrypto_Ed25519KeyGenRequest* src,
+    whMessageCrypto_Ed25519KeyGenRequest* dest);
+
+int wh_MessageCrypto_TranslateEd25519KeyGenResponse(
+    uint16_t magic, const whMessageCrypto_Ed25519KeyGenResponse* src,
+    whMessageCrypto_Ed25519KeyGenResponse* dest);
+
+/* Ed25519 Sign Request */
+typedef struct {
+    uint32_t options;
+#define WH_MESSAGE_CRYPTO_ED25519_SIGN_OPTIONS_EVICT (1 << 0)
+    uint32_t keyId;
+    uint32_t msgSz;
+    uint32_t type;  /* wolfCrypt Ed25519 mode */
+    uint32_t ctxSz; /* Optional context length */
+    /* Data follows:
+     * uint8_t msg[msgSz];
+     * uint8_t ctx[ctxSz];
+     */
+} whMessageCrypto_Ed25519SignRequest;
+
+/* Ed25519 Sign Response */
+typedef struct {
+    uint32_t sigSz;
+    /* Data follows:
+     * uint8_t sig[sigSz];
+     */
+} whMessageCrypto_Ed25519SignResponse;
+
+int wh_MessageCrypto_TranslateEd25519SignRequest(
+    uint16_t magic, const whMessageCrypto_Ed25519SignRequest* src,
+    whMessageCrypto_Ed25519SignRequest* dest);
+
+int wh_MessageCrypto_TranslateEd25519SignResponse(
+    uint16_t magic, const whMessageCrypto_Ed25519SignResponse* src,
+    whMessageCrypto_Ed25519SignResponse* dest);
+
+/* Ed25519 Verify Request */
+typedef struct {
+    uint32_t options;
+#define WH_MESSAGE_CRYPTO_ED25519_VERIFY_OPTIONS_EVICT (1 << 0)
+    uint32_t keyId;
+    uint32_t sigSz;
+    uint32_t msgSz;
+    uint32_t type;  /* wolfCrypt Ed25519 mode */
+    uint32_t ctxSz; /* Optional context length */
+    /* Data follows:
+     * uint8_t sig[sigSz];
+     * uint8_t msg[msgSz];
+     * uint8_t ctx[ctxSz];
+     */
+} whMessageCrypto_Ed25519VerifyRequest;
+
+/* Ed25519 Verify Response */
+typedef struct {
+    int32_t res;
+} whMessageCrypto_Ed25519VerifyResponse;
+
+int wh_MessageCrypto_TranslateEd25519VerifyRequest(
+    uint16_t magic, const whMessageCrypto_Ed25519VerifyRequest* src,
+    whMessageCrypto_Ed25519VerifyRequest* dest);
+
+int wh_MessageCrypto_TranslateEd25519VerifyResponse(
+    uint16_t magic, const whMessageCrypto_Ed25519VerifyResponse* src,
+    whMessageCrypto_Ed25519VerifyResponse* dest);
+
+/*
  * SHA
  */
 
@@ -1010,6 +1098,64 @@ int wh_MessageCrypto_TranslateMlDsaVerifyDmaRequest(
 int wh_MessageCrypto_TranslateMlDsaVerifyDmaResponse(
     uint16_t magic, const whMessageCrypto_MlDsaVerifyDmaResponse* src,
     whMessageCrypto_MlDsaVerifyDmaResponse* dest);
+
+/* Ed25519 DMA Sign Request */
+typedef struct {
+    whMessageCrypto_DmaBuffer msg; /* Message buffer */
+    whMessageCrypto_DmaBuffer sig; /* Signature buffer */
+    whMessageCrypto_DmaBuffer pub; /* Signature buffer */
+    uint32_t                  options;
+    uint32_t                  keyId;
+    uint32_t                  type;      /* wolfCrypt Ed25519 mode */
+    uint32_t                  ctxSz;     /* Optional context length */
+    /* Data follows:
+     * uint8_t ctx[ctxSz];
+     */
+} whMessageCrypto_Ed25519SignDmaRequest;
+
+/* Ed25519 DMA Sign Response */
+typedef struct {
+    whMessageCrypto_DmaAddrStatus dmaAddrStatus;
+    uint32_t                      sigSz;
+    uint32_t                      pubSz;
+} whMessageCrypto_Ed25519SignDmaResponse;
+
+/* Ed25519 DMA Verify Request */
+typedef struct {
+    whMessageCrypto_DmaBuffer sig; /* Signature buffer */
+    whMessageCrypto_DmaBuffer msg; /* Message buffer */
+    whMessageCrypto_DmaBuffer pub; /* Public key buffer if exported */
+    uint32_t                  options;
+    uint32_t                  keyId;
+    uint32_t                  type;      /* wolfCrypt Ed25519 mode */
+    uint32_t                  ctxSz;     /* Optional context length */
+    /* Data follows:
+     * uint8_t ctx[ctxSz];
+     */
+} whMessageCrypto_Ed25519VerifyDmaRequest;
+
+/* Ed25519 DMA Verify Response */
+typedef struct {
+    whMessageCrypto_DmaAddrStatus dmaAddrStatus;
+    int32_t                       verifyResult;
+    uint32_t                      pubSz;
+} whMessageCrypto_Ed25519VerifyDmaResponse;
+
+int wh_MessageCrypto_TranslateEd25519SignDmaRequest(
+    uint16_t magic, const whMessageCrypto_Ed25519SignDmaRequest* src,
+    whMessageCrypto_Ed25519SignDmaRequest* dest);
+
+int wh_MessageCrypto_TranslateEd25519SignDmaResponse(
+    uint16_t magic, const whMessageCrypto_Ed25519SignDmaResponse* src,
+    whMessageCrypto_Ed25519SignDmaResponse* dest);
+
+int wh_MessageCrypto_TranslateEd25519VerifyDmaRequest(
+    uint16_t magic, const whMessageCrypto_Ed25519VerifyDmaRequest* src,
+    whMessageCrypto_Ed25519VerifyDmaRequest* dest);
+
+int wh_MessageCrypto_TranslateEd25519VerifyDmaResponse(
+    uint16_t magic, const whMessageCrypto_Ed25519VerifyDmaResponse* src,
+    whMessageCrypto_Ed25519VerifyDmaResponse* dest);
 
 /* RNG DMA Request */
 typedef struct {
