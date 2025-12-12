@@ -3473,12 +3473,16 @@ static int _HandleSha512(whServerContext* ctx, uint16_t magic,
     /* init sha2 struct with devid */
     hashType = req.resumeState.hashType;
     switch (hashType) {
+#ifndef WOLFSSL_NOSHA512_224
         case WC_HASH_TYPE_SHA512_224:
             ret = wc_InitSha512_224_ex(sha512, NULL, ctx->crypto->devId);
             break;
+#endif
+#ifndef WOLFSSL_NOSHA512_256
         case WC_HASH_TYPE_SHA512_256:
             ret = wc_InitSha512_256_ex(sha512, NULL, ctx->crypto->devId);
             break;
+#endif
         default:
             ret = wc_InitSha512_ex(sha512, NULL, ctx->crypto->devId);
             break;
@@ -3498,12 +3502,16 @@ static int _HandleSha512(whServerContext* ctx, uint16_t magic,
         }
         if (ret == 0) {
             switch (hashType) {
+#ifndef WOLFSSL_NOSHA512_224
                 case WC_HASH_TYPE_SHA512_224:
                     ret = wc_Sha512_224Final(sha512, res.hash);
                     break;
+#endif
+#ifndef WOLFSSL_NOSHA512_256
                 case WC_HASH_TYPE_SHA512_256:
                     ret = wc_Sha512_256Final(sha512, res.hash);
                     break;
+#endif
                 default:
                     ret = wc_Sha512Final(sha512, res.hash);
                     break;
