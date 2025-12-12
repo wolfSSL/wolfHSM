@@ -630,7 +630,9 @@ static int whTest_CryptoEcc(whClientContext* ctx, int devId, WC_RNG* rng)
             }
         }
         /* Evict server key regardless of test success */
-        (void)wh_Client_KeyEvict(ctx, keyIdPrivate);
+        if (!WH_KEYID_ISERASED(keyIdPrivate)) {
+            (void)wh_Client_KeyEvict(ctx, keyIdPrivate);
+        }
     }
 
     if (ret == 0) {
