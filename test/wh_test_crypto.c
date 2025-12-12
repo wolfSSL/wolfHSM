@@ -311,60 +311,67 @@ static int whTest_CryptoRsa(whClientContext* ctx, int devId, WC_RNG* rng)
 #ifdef HAVE_ECC
 static int whTest_CryptoEcc(whClientContext* ctx, int devId, WC_RNG* rng)
 {
-    (void)ctx;
-
     int ret = WH_ERROR_OK;
-    ecc_key eccPrivate[1];
-    ecc_key eccPublic[1];
+    ecc_key bobKey[1];
+    ecc_key aliceKey[1];
 #define TEST_ECC_KEYSIZE 32
+#define TEST_ECC_CURVE_ID ECC_SECP256R1
     uint8_t shared_ab[TEST_ECC_KEYSIZE] = {0};
     uint8_t shared_ba[TEST_ECC_KEYSIZE] = {0};
     uint8_t hash[TEST_ECC_KEYSIZE] = {0};
     uint8_t sig[ECC_MAX_SIG_SIZE] = {0};
+    whKeyId keyIdPrivate = WH_KEYID_ERASED;
+    whKeyId checkKeyId = WH_KEYID_ERASED;
+    whNvmFlags flags = WH_NVM_FLAGS_USAGE_SIGN | WH_NVM_FLAGS_USAGE_VERIFY |
+                       WH_NVM_FLAGS_USAGE_DERIVE;
+    uint8_t labelPrivate[WH_NVM_LABEL_LEN] = "ECC Private Key";
 
-    ret = wc_ecc_init_ex(eccPrivate, NULL, devId);
+    /* Test Case 1: Using ephemeral key (normal wolfCrypt flow) */
+    ret = wc_ecc_init_ex(bobKey, NULL, devId);
     if (ret != 0) {
         WH_ERROR_PRINT("Failed to wc_ecc_init_ex %d\n", ret);
     } else {
-        ret = wc_ecc_init_ex(eccPublic, NULL, devId);
+        ret = wc_ecc_init_ex(aliceKey, NULL, devId);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed to wc_ecc_init_ex %d\n", ret);
         } else {
-            ret = wc_ecc_make_key(rng, TEST_ECC_KEYSIZE, eccPrivate);
+            ret = wc_ecc_make_key(rng, TEST_ECC_KEYSIZE, bobKey);
             if (ret != 0) {
                 WH_ERROR_PRINT("Failed to wc_ecc_make_key %d\n", ret);
             } else {
-                ret = wc_ecc_make_key(rng, TEST_ECC_KEYSIZE, eccPublic);
+                ret = wc_ecc_make_key(rng, TEST_ECC_KEYSIZE, aliceKey);
                 if (ret != 0) {
                     WH_ERROR_PRINT("Failed to wc_ecc_make_key %d\n", ret);
                 } else {
                     word32 secLen = TEST_ECC_KEYSIZE;
-                    ret = wc_ecc_shared_secret(eccPrivate, eccPublic,
-                            (byte*)shared_ab, &secLen);
+                    ret           = wc_ecc_shared_secret(bobKey, aliceKey,
+                                                         (byte*)shared_ab, &secLen);
                     if (ret != 0) {
                         WH_ERROR_PRINT("Failed to compute secret %d\n", ret);
                     } else {
-                        ret = wc_ecc_shared_secret(eccPublic, eccPrivate,
-                                (byte*)shared_ba, &secLen);
+                        ret = wc_ecc_shared_secret(aliceKey, bobKey,
+                                                   (byte*)shared_ba, &secLen);
                         if (ret != 0) {
                             WH_ERROR_PRINT("Failed to compute secret %d\n",
                                     ret);
                         } else {
                             if (memcmp(shared_ab, shared_ba, secLen) == 0) {
-                                WH_TEST_PRINT("ECDH SUCCESS\n");
+                                WH_TEST_PRINT("ECC ephemeral ECDH SUCCESS\n");
                             }
                             else {
-                                WH_ERROR_PRINT("ECDH FAILED TO MATCH\n");
+                                WH_ERROR_PRINT(
+                                    "ECC ephemeral ECDH FAILED TO MATCH\n");
+                                ret = -1;
                             }
                         }
                     }
                     if (ret == 0) {
-                        /*Use the shared secret as a random hash */
+                        /* Use the shared secret as a random hash */
                         memcpy(hash, shared_ba, sizeof(hash));
                         word32 sigLen = sizeof(sig);
                         ret = wc_ecc_sign_hash((void*)hash, sizeof(hash),
                                                (void*)sig, &sigLen, rng,
-                                               eccPrivate);
+                                               bobKey);
                         if (ret != 0) {
                             WH_ERROR_PRINT("Failed to wc_ecc_sign_hash %d\n",
                                            ret);
@@ -372,7 +379,7 @@ static int whTest_CryptoEcc(whClientContext* ctx, int devId, WC_RNG* rng)
                             int res = 0;
                             ret     = wc_ecc_verify_hash((void*)sig, sigLen,
                                                          (void*)hash, sizeof(hash),
-                                                         &res, eccPrivate);
+                                                         &res, bobKey);
                             if (ret != 0) {
                                 WH_ERROR_PRINT("Failed to wc_ecc_verify_hash"
                                                " %d\n",
@@ -380,10 +387,12 @@ static int whTest_CryptoEcc(whClientContext* ctx, int devId, WC_RNG* rng)
                             }
                             else {
                                 if (res == 1) {
-                                    WH_TEST_PRINT("ECC SIGN/VERIFY SUCCESS\n");
+                                    WH_TEST_PRINT(
+                                        "ECC ephemeral SIGN/VERIFY SUCCESS\n");
                                 }
                                 else {
-                                    WH_ERROR_PRINT("ECC SIGN/VERIFY FAIL\n");
+                                    WH_ERROR_PRINT(
+                                        "ECC ephemeral SIGN/VERIFY FAIL\n");
                                     ret = -1;
                                 }
                             }
@@ -391,9 +400,244 @@ static int whTest_CryptoEcc(whClientContext* ctx, int devId, WC_RNG* rng)
                     }
                 }
             }
-            wc_ecc_free(eccPublic);
+            wc_ecc_free(aliceKey);
         }
-        wc_ecc_free(eccPrivate);
+        wc_ecc_free(bobKey);
+    }
+
+    /* Test Case 2: Using client export key */
+    if (ret == 0) {
+        memset(shared_ab, 0, sizeof(shared_ab));
+        memset(shared_ba, 0, sizeof(shared_ba));
+        memset(sig, 0, sizeof(sig));
+
+        ret = wc_ecc_init_ex(bobKey, NULL, WH_DEV_ID);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wc_ecc_init_ex for export key %d\n", ret);
+        }
+        else {
+            ret = wc_ecc_init_ex(aliceKey, NULL, WH_DEV_ID);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to wc_ecc_init_ex for export key %d\n",
+                               ret);
+            }
+            else {
+                /* Server creates keys and exports them to client */
+                ret = wh_Client_EccMakeExportKey(ctx, TEST_ECC_KEYSIZE,
+                                                 TEST_ECC_CURVE_ID, bobKey);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("Failed to wh_Client_EccMakeExportKey %d\n",
+                                   ret);
+                }
+                if (ret == 0) {
+                    ret = wh_Client_EccMakeExportKey(
+                        ctx, TEST_ECC_KEYSIZE, TEST_ECC_CURVE_ID, aliceKey);
+                    if (ret != 0) {
+                        WH_ERROR_PRINT(
+                            "Failed to wh_Client_EccMakeExportKey %d\n", ret);
+                    }
+                }
+                /* Test ECDH with exported keys */
+                if (ret == 0) {
+                    word32 secLen = TEST_ECC_KEYSIZE;
+                    ret           = wc_ecc_shared_secret(bobKey, aliceKey,
+                                                         (byte*)shared_ab, &secLen);
+                    if (ret != 0) {
+                        WH_ERROR_PRINT(
+                            "Failed to compute export key secret %d\n", ret);
+                    }
+                }
+                if (ret == 0) {
+                    word32 secLen = TEST_ECC_KEYSIZE;
+                    ret           = wc_ecc_shared_secret(aliceKey, bobKey,
+                                                         (byte*)shared_ba, &secLen);
+                    if (ret != 0) {
+                        WH_ERROR_PRINT(
+                            "Failed to compute export key secret %d\n", ret);
+                    }
+                }
+                if (ret == 0) {
+                    if (memcmp(shared_ab, shared_ba, TEST_ECC_KEYSIZE) != 0) {
+                        WH_ERROR_PRINT("ECC export key ECDH FAILED TO MATCH\n");
+                        ret = -1;
+                    }
+                    else {
+                        WH_TEST_PRINT("ECC export key ECDH SUCCESS\n");
+                    }
+                }
+                /* Test ECDSA sign/verify with exported keys */
+                if (ret == 0) {
+                    memcpy(hash, shared_ba, sizeof(hash));
+                    word32 sigLen = sizeof(sig);
+                    ret           = wc_ecc_sign_hash((void*)hash, sizeof(hash),
+                                                     (void*)sig, &sigLen, rng, bobKey);
+                    if (ret != 0) {
+                        WH_ERROR_PRINT("Failed to sign with export key %d\n",
+                                       ret);
+                    }
+                    else {
+                        int res = 0;
+                        ret =
+                            wc_ecc_verify_hash((void*)sig, sigLen, (void*)hash,
+                                               sizeof(hash), &res, bobKey);
+                        if (ret != 0) {
+                            WH_ERROR_PRINT(
+                                "Failed to verify with export key %d\n", ret);
+                        }
+                        else if (res != 1) {
+                            WH_ERROR_PRINT("ECC export key SIGN/VERIFY FAIL\n");
+                            ret = -1;
+                        }
+                        else {
+                            WH_TEST_PRINT(
+                                "ECC export key SIGN/VERIFY SUCCESS\n");
+                        }
+                    }
+                }
+                wc_ecc_free(aliceKey);
+            }
+            wc_ecc_free(bobKey);
+        }
+    }
+
+    /* Test Case 3: Using keyCache key (key stays on server)
+     * Use only ONE cached key to avoid key cache space issues.
+     * For ECDH, use an ephemeral peer key. */
+    if (ret == 0) {
+        memset(shared_ab, 0, sizeof(shared_ab));
+        memset(shared_ba, 0, sizeof(shared_ba));
+        memset(sig, 0, sizeof(sig));
+        keyIdPrivate = WH_KEYID_ERASED;
+
+        /* Server creates and caches one key */
+        ret = wh_Client_EccMakeCacheKey(ctx, TEST_ECC_KEYSIZE,
+                                        TEST_ECC_CURVE_ID, &keyIdPrivate, flags,
+                                        sizeof(labelPrivate), labelPrivate);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wh_Client_EccMakeCacheKey %d\n", ret);
+        }
+        if (ret == 0) {
+            /* Init the cached key struct and associate with server key ID */
+            ret = wc_ecc_init_ex(bobKey, NULL, WH_DEV_ID);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to wc_ecc_init_ex for cache key %d\n",
+                               ret);
+            }
+            else {
+                ret = wh_Client_EccSetKeyId(bobKey, keyIdPrivate);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("Failed to wh_Client_EccSetKeyId %d\n", ret);
+                }
+                /* Verify key ID was set correctly */
+                if (ret == 0) {
+                    ret = wh_Client_EccGetKeyId(bobKey, &checkKeyId);
+                    if (ret != 0) {
+                        WH_ERROR_PRINT("Failed to wh_Client_EccGetKeyId %d\n",
+                                       ret);
+                    }
+                    else if (checkKeyId != keyIdPrivate) {
+                        WH_ERROR_PRINT(
+                            "ECC key ID mismatch: got %u, expected %u\n",
+                            checkKeyId, keyIdPrivate);
+                        ret = -1;
+                    }
+                }
+                /* Set curve parameters (required since key data isn't exported)
+                 */
+                if (ret == 0) {
+                    ret = wc_ecc_set_curve(bobKey, TEST_ECC_KEYSIZE,
+                                           TEST_ECC_CURVE_ID);
+                    if (ret != 0) {
+                        WH_ERROR_PRINT("Failed to wc_ecc_set_curve %d\n", ret);
+                    }
+                }
+                /* Create ephemeral peer key for ECDH test */
+                if (ret == 0) {
+                    ret = wc_ecc_init_ex(aliceKey, NULL, WH_DEV_ID);
+                    if (ret != 0) {
+                        WH_ERROR_PRINT(
+                            "Failed to wc_ecc_init_ex for peer key %d\n", ret);
+                    }
+                    else {
+                        ret = wc_ecc_make_key(rng, TEST_ECC_KEYSIZE, aliceKey);
+                        if (ret != 0) {
+                            WH_ERROR_PRINT(
+                                "Failed to wc_ecc_make_key for peer %d\n", ret);
+                        }
+                        /* Test ECDH: cached key with ephemeral peer */
+                        if (ret == 0) {
+                            word32 secLen = TEST_ECC_KEYSIZE;
+                            ret           = wc_ecc_shared_secret(
+                                bobKey, aliceKey, (byte*)shared_ab, &secLen);
+                            if (ret != 0) {
+                                WH_ERROR_PRINT(
+                                    "Failed to compute cache key secret %d\n",
+                                    ret);
+                            }
+                        }
+                        if (ret == 0) {
+                            word32 secLen = TEST_ECC_KEYSIZE;
+                            ret           = wc_ecc_shared_secret(
+                                aliceKey, bobKey, (byte*)shared_ba, &secLen);
+                            if (ret != 0) {
+                                WH_ERROR_PRINT(
+                                    "Failed to compute peer secret %d\n", ret);
+                            }
+                        }
+                        if (ret == 0) {
+                            if (memcmp(shared_ab, shared_ba,
+                                       TEST_ECC_KEYSIZE) != 0) {
+                                WH_ERROR_PRINT(
+                                    "ECC cache key ECDH FAILED TO MATCH\n");
+                                ret = -1;
+                            }
+                            else {
+                                WH_TEST_PRINT("ECC cache key ECDH SUCCESS\n");
+                            }
+                        }
+                        wc_ecc_free(aliceKey);
+                    }
+                }
+                /* Test ECDSA sign/verify with cached key */
+                if (ret == 0) {
+                    memcpy(hash, shared_ba, sizeof(hash));
+                    word32 sigLen = sizeof(sig);
+                    ret           = wc_ecc_sign_hash((void*)hash, sizeof(hash),
+                                                     (void*)sig, &sigLen, rng, bobKey);
+                    if (ret != 0) {
+                        WH_ERROR_PRINT("Failed to sign with cache key %d\n",
+                                       ret);
+                    }
+                    else {
+                        int res = 0;
+                        ret =
+                            wc_ecc_verify_hash((void*)sig, sigLen, (void*)hash,
+                                               sizeof(hash), &res, bobKey);
+                        if (ret != 0) {
+                            WH_ERROR_PRINT(
+                                "Failed to verify with cache key %d\n", ret);
+                        }
+                        else if (res != 1) {
+                            WH_ERROR_PRINT("ECC cache key SIGN/VERIFY FAIL\n");
+                            ret = -1;
+                        }
+                        else {
+                            WH_TEST_PRINT(
+                                "ECC cache key SIGN/VERIFY SUCCESS\n");
+                        }
+                    }
+                }
+                wc_ecc_free(bobKey);
+            }
+        }
+        /* Evict server key regardless of test success */
+        if (!WH_KEYID_ISERASED(keyIdPrivate)) {
+            (void)wh_Client_KeyEvict(ctx, keyIdPrivate);
+        }
+    }
+
+    if (ret == 0) {
+        WH_TEST_PRINT("ECC SUCCESS\n");
     }
     return ret;
 }
