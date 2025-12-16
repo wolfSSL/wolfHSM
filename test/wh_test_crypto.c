@@ -641,6 +641,55 @@ static int whTest_CryptoEcc(whClientContext* ctx, int devId, WC_RNG* rng)
     }
     return ret;
 }
+
+static int whTest_CryptoEccCacheDuplicate(whClientContext* client)
+{
+    int      ret   = WH_ERROR_OK;
+    whKeyId  keyId = WH_KEYID_ERASED;
+    uint8_t  key1[ECC_BUFSIZE];
+    uint8_t  key2[ECC_BUFSIZE];
+    uint16_t key1Len = sizeof(key1);
+    uint16_t key2Len = sizeof(key2);
+
+    WH_TEST_PRINT("  Testing ECC cache duplicate returns latest key...\n");
+
+    /* Generate first cached key and export it */
+    ret = wh_Client_EccMakeCacheKey(client, 32, ECC_SECP256R1, &keyId,
+                                    WH_NVM_FLAGS_NONE, 0, NULL);
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Client_KeyExport(client, keyId, NULL, 0, key1, &key1Len);
+    }
+
+    /* Generate a second key using the same keyId to create a duplicate slot */
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Client_EccMakeCacheKey(client, 32, ECC_SECP256R1, &keyId,
+                                        WH_NVM_FLAGS_NONE, 0, NULL);
+    }
+
+    /* Export again; result should match the most recent key, not the first */
+    if (ret == WH_ERROR_OK) {
+        key2Len = sizeof(key2);
+        ret     = wh_Client_KeyExport(client, keyId, NULL, 0, key2, &key2Len);
+    }
+
+    if (ret == WH_ERROR_OK) {
+        if ((key1Len == key2Len) && (memcmp(key1, key2, key1Len) == 0)) {
+            WH_ERROR_PRINT("    FAIL: Export returned original ECC key after "
+                           "duplicate insert\n");
+            ret = WH_ERROR_ABORTED;
+        }
+        else {
+            WH_TEST_PRINT(
+                "    PASS: Export returned most recent cached ECC key\n");
+        }
+    }
+
+    if (!WH_KEYID_ISERASED(keyId)) {
+        wh_Client_KeyEvict(client, keyId);
+    }
+
+    return ret;
+}
 #endif /* HAVE_ECC */
 
 #ifdef HAVE_ED25519
@@ -4808,6 +4857,190 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
     return 0;
 }
 
+#if !defined(NO_AES) && defined(HAVE_AES_CBC) && \
+    defined(WOLFHSM_CFG_TEST_ALLOW_PERSISTENT_NVM_ARTIFACTS)
+int _testRevocationTryAESEncrypt(whKeyId keyId, WC_RNG* rng, int* encryptRes)
+{
+    int     ret;
+    Aes     aes[1];
+    uint8_t iv[AES_BLOCK_SIZE];
+    uint8_t plaintext[16];
+    uint8_t ciphertext[16] = {0};
+    /* generate random iv and plaintext */
+    ret = wc_RNG_GenerateBlock(rng, iv, sizeof(iv));
+    if (ret == 0) {
+        ret = wc_RNG_GenerateBlock(rng, plaintext, sizeof(plaintext));
+    }
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to generate AES revocation test inputs: %d\n",
+                       ret);
+        return ret;
+    }
+    /* try to encrypt with the given keyId */
+    ret = wc_AesInit(aes, NULL, WH_DEV_ID);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to init AES for revoked key test: %d\n", ret);
+        return ret;
+    }
+    ret = wh_Client_AesSetKeyId(aes, keyId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to set AES keyId for revoked key test: %d\n",
+                       ret);
+        wc_AesFree(aes);
+        return ret;
+    }
+    ret = wc_AesSetIV(aes, iv);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to set AES IV for revoked key test: %d\n", ret);
+        wc_AesFree(aes);
+        return ret;
+    }
+    ret =
+        wc_AesCbcEncrypt(aes, ciphertext, plaintext, (word32)sizeof(plaintext));
+    wc_AesFree(aes);
+    *encryptRes = ret;
+    return WH_ERROR_OK;
+}
+
+int whTest_CryptoKeyRevocationAesCbc(whClientContext* client, WC_RNG* rng)
+{
+    int ret = 0;
+
+    WH_TEST_PRINT("Testing Key Revocation...\n");
+
+    {
+        /* AES-CBC: revoked keys should be unusable and non-erasable */
+        uint8_t       key[32]          = {0};
+        const uint8_t label[]          = "revocation-aes-cbc";
+        whKeyId       keyId            = WH_KEYID_ERASED;
+        const int     expectedEraseErr = WH_ERROR_ACCESS;
+        int           encryptRes       = 0;
+
+        ret = wc_RNG_GenerateBlock(rng, key, sizeof(key));
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to generate AES revocation inputs: %d\n",
+                           ret);
+            return ret;
+        }
+
+        WH_TEST_PRINT("  AES-CBC key revoke flow...\n");
+
+        ret =
+            wh_Client_KeyCache(client, WH_NVM_FLAGS_USAGE_ANY, (uint8_t*)label,
+                               sizeof(label), key, sizeof(key), &keyId);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to cache AES key: %d\n", ret);
+            return ret;
+        }
+
+        /* encrypt should work */
+        ret = _testRevocationTryAESEncrypt(keyId, rng, &encryptRes);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to encrypt with unrevoked AES key: %d\n",
+                           ret);
+            (void)wh_Client_KeyEvict(client, keyId);
+            return ret;
+        }
+
+        if (encryptRes != 0) {
+            WH_ERROR_PRINT("Encrypt with unrevoked AES key failed: %d\n",
+                           encryptRes);
+            return encryptRes;
+        }
+
+        /* revoke a key in the cache */
+        ret = wh_Client_KeyRevoke(client, keyId);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to revoke AES key: %d\n", ret);
+            return ret;
+        }
+
+        /* now encrypt should fail */
+        ret = _testRevocationTryAESEncrypt(keyId, rng, &encryptRes);
+        if (ret != 0 || encryptRes != WH_ERROR_USAGE) {
+            WH_ERROR_PRINT(
+                "Encrypt with revoked AES key should fail (%d), got %d\n",
+                WH_ERROR_USAGE, encryptRes);
+            return WH_ERROR_ABORTED;
+        }
+
+        /* commit the key */
+        ret = wh_Client_KeyCommit(client, keyId);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to commit revoked AES key: %d\n", ret);
+            return ret;
+        }
+
+        /* keep failing */
+        ret = _testRevocationTryAESEncrypt(keyId, rng, &encryptRes);
+        if (ret != 0 || encryptRes != WH_ERROR_USAGE) {
+            WH_ERROR_PRINT(
+                "Encrypt with revoked AES key should fail (%d), got %d\n",
+                WH_ERROR_USAGE, encryptRes);
+            return WH_ERROR_ABORTED;
+        }
+
+        ret = wh_Client_KeyErase(client, keyId);
+        if (ret != expectedEraseErr) {
+            WH_ERROR_PRINT("Revoked key erase should fail (%d), got %d\n",
+                           expectedEraseErr, ret);
+            return WH_ERROR_ABORTED;
+        }
+
+        /* try a slightly different flow */
+        keyId = WH_KEYID_ERASED;
+        ret =
+            wh_Client_KeyCache(client, WH_NVM_FLAGS_USAGE_ANY, (uint8_t*)label,
+                               sizeof(label), key, sizeof(key), &keyId);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to cache AES key (2nd time): %d\n", ret);
+            return ret;
+        }
+        /* commit the key */
+        ret = wh_Client_KeyCommit(client, keyId);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to commit AES key (2nd time): %d\n", ret);
+            return ret;
+        }
+        /* try encrypt first */
+        ret = _testRevocationTryAESEncrypt(keyId, rng, &encryptRes);
+        if (ret != 0 || encryptRes != 0) {
+            WH_ERROR_PRINT("Failed to encrypt with unrevoked AES key (2nd "
+                           "time): %d\n",
+                           ret);
+            (void)wh_Client_KeyEvict(client, keyId);
+            return ret != 0 ? ret : encryptRes;
+        }
+        /* evict the key */
+        ret = wh_Client_KeyEvict(client, keyId);
+        if (ret != 0 && ret != WH_ERROR_NOTFOUND) {
+            WH_ERROR_PRINT("Failed to evict AES key (2nd time): %d\n", ret);
+            return ret;
+        }
+        /* revoke with key in the NVM */
+        ret = wh_Client_KeyRevoke(client, keyId);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to revoke AES key (2nd time): %d\n", ret);
+            return ret;
+        }
+        /* this should still fail */
+        ret = _testRevocationTryAESEncrypt(keyId, rng, &encryptRes);
+        if (ret != 0 || encryptRes != WH_ERROR_USAGE) {
+            WH_ERROR_PRINT(
+                "Encrypt with revoked AES key should fail (%d), got %d\n",
+                WH_ERROR_USAGE, encryptRes);
+            (void)wh_Client_KeyEvict(client, keyId);
+            return WH_ERROR_ABORTED;
+        }
+
+
+        WH_TEST_PRINT("  AES-CBC revocation enforcement: PASS\n");
+    }
+
+    return ret;
+}
+#endif /* !NO_AES && HAVE_AES_CBC && \
+          WOLFHSM_CFG_TEST_ALLOW_PERSISTENT_NVM_ARTIFACTS */
 
 int whTest_CryptoClientConfig(whClientConfig* config)
 {
@@ -4910,6 +5143,9 @@ int whTest_CryptoClientConfig(whClientConfig* config)
 #ifdef HAVE_ECC
     if (ret == 0) {
         ret = whTest_CryptoEcc(client, WH_DEV_ID, rng);
+    }
+    if (ret == 0) {
+        ret = whTest_CryptoEccCacheDuplicate(client);
     }
 #endif /* HAVE_ECC */
 
@@ -5047,6 +5283,15 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         (void)whTest_ShowNvmAvailable(client);
     }
 #endif /* WOLFHSM_CFG_DEBUG_VERBOSE */
+
+#if !defined(NO_AES) && defined(HAVE_AES_CBC) && \
+    defined(WOLFHSM_CFG_TEST_ALLOW_PERSISTENT_NVM_ARTIFACTS)
+    /* keep last, leaves artifact in the NVM layer */
+    if (ret == 0) {
+        /* Test key revocation */
+        ret = whTest_CryptoKeyRevocationAesCbc(client, rng);
+    }
+#endif
 
     /* Clean up used resources */
     if (rngInited) {

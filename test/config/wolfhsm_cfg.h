@@ -68,4 +68,7 @@
 /* Test log-based NVM flash backend */
 #define WOLFHSM_CFG_SERVER_NVM_FLASH_LOG
 
+/* Allow persistent NVM artifacts in tests */
+#define WOLFHSM_CFG_TEST_ALLOW_PERSISTENT_NVM_ARTIFACTS
+
 #endif /* WOLFHSM_CFG_H_ */
