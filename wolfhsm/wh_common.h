@@ -68,8 +68,8 @@ typedef uint16_t whNvmAccess;
 typedef uint16_t whNvmFlags;
 
 /* Generic NVM flags */
-/* Cannot be overwritten */
-#define WH_NVM_FLAGS_IMMUTABLE      ((whNvmFlags)1 << 0)
+/* Cannot be modified */
+#define WH_NVM_FLAGS_NONMODIFIABLE ((whNvmFlags)1 << 0)
 /* Holds private/secret data */
 #define WH_NVM_FLAGS_SENSITIVE      ((whNvmFlags)1 << 1)
 /* Cannot be exported */
