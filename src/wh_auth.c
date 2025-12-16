@@ -114,15 +114,15 @@ int wh_Auth_SessionGet(whAuthContext* context, whSessionId session_id,
     return WH_ERROR_NOTIMPL;
 }
 
-int wh_Auth_CheckAuthorization(whAuthContext* context, whSessionId session_id,
-                                whAuthAction action, uint32_t object_id)
+int wh_Auth_CheckAuthorization(whAuthContext* context, uint8_t client_id,
+    uint16_t group, uint16_t action)
 {
-    /* TODO: Check if action is authorized for session */
+    /* TODO: Check if action is authorized for client */
+
+    printf("In authorization check: Client ID: %d, Group: %d, Action: %d\n",
+        client_id, group, action);
     (void)context;
-    (void)session_id;
-    (void)action;
-    (void)object_id;
-    return WH_ERROR_NOTIMPL;
+    return WH_ERROR_OK;
 }
 
 int wh_Auth_UserAdd(whAuthContext* context, const char* username,

@@ -321,6 +321,17 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
     if (rc == 0) {
         group = WH_MESSAGE_GROUP(kind);
         action = WH_MESSAGE_ACTION(kind);
+
+        /* If the authentication context is set then check if the action is
+         * allowed */
+        if (server->auth != NULL) {
+            rc = wh_Auth_CheckAuthorization(server->auth,
+                server->comm->client_id, group, action);
+            if (rc != WH_ERROR_OK) {
+                return rc;
+            }
+        }
+
         switch (group) {
 
         case WH_MESSAGE_GROUP_COMM:

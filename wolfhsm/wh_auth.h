@@ -40,7 +40,6 @@
 #include <stdbool.h>
 
 #include "wolfhsm/wh_common.h"
-#include "wolfhsm/wh_comm.h"  /* For whClientId */
 
 /** Auth Manager Types */
 
@@ -219,8 +218,8 @@ int wh_Auth_SessionGet(whAuthContext* context, whSessionId session_id,
                         whAuthSession* out_session);
 
 /* Check authorization for an action */
-int wh_Auth_CheckAuthorization(whAuthContext* context, whSessionId session_id,
-                                whAuthAction action, uint32_t object_id);
+int wh_Auth_CheckAuthorization(whAuthContext* context, uint8_t client_id,
+    uint16_t group, uint16_t action);
 
 /* Add a new user */
 int wh_Auth_UserAdd(whAuthContext* context, const char* username,
