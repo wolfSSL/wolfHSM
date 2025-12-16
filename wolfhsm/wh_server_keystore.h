@@ -62,6 +62,10 @@ int wh_Server_KeystoreGetUniqueId(whServerContext* server, whNvmId* inout_id);
 int wh_Server_KeystoreGetCacheSlot(whServerContext* server, whKeyId keyId,
                                    uint16_t keySz, uint8_t** outBuf,
                                    whNvmMetadata** outMeta);
+int wh_Server_KeystoreGetCacheSlotChecked(whServerContext* server,
+                                          whKeyId keyId, uint16_t keySz,
+                                          uint8_t**       outBuf,
+                                          whNvmMetadata** outMeta);
 
 /**
  * @brief Cache a key in server memory
@@ -76,6 +80,15 @@ int wh_Server_KeystoreGetCacheSlot(whServerContext* server, whKeyId keyId,
  */
 int wh_Server_KeystoreCacheKey(whServerContext* server, whNvmMetadata* meta,
                                uint8_t* in);
+
+/**
+ * @brief Cache a key after enforcing keystore policy
+ *
+ * Runs policy checks (access/usage/etc.) before calling
+ * wh_Server_KeystoreCacheKey.
+ */
+int wh_Server_KeystoreCacheKeyChecked(whServerContext* server,
+                                      whNvmMetadata* meta, uint8_t* in);
 
 /**
  * @brief Ensure a key is in cache, loading it from NVM if necessary
@@ -109,6 +122,15 @@ int wh_Server_KeystoreReadKey(whServerContext* server, whKeyId keyId,
                               uint32_t* outSz);
 
 /**
+ * @brief Read a key with policy enforcement
+ *
+ * Performs keystore policy checks before reading from cache/NVM.
+ */
+int wh_Server_KeystoreReadKeyChecked(whServerContext* server, whKeyId keyId,
+                                     whNvmMetadata* outMeta, uint8_t* out,
+                                     uint32_t* outSz);
+
+/**
  * @brief Remove a key from cache
  *
  * Marks the key as erased in the cache if present.
@@ -118,6 +140,13 @@ int wh_Server_KeystoreReadKey(whServerContext* server, whKeyId keyId,
  * @return 0 on success, error code on failure
  */
 int wh_Server_KeystoreEvictKey(whServerContext* server, whNvmId keyId);
+
+/**
+ * @brief Evict a key with policy enforcement
+ *
+ * Checks policy before removing the key from cache.
+ */
+int wh_Server_KeystoreEvictKeyChecked(whServerContext* server, whNvmId keyId);
 
 /**
  * @brief Commit a cached key to NVM storage
@@ -131,6 +160,13 @@ int wh_Server_KeystoreEvictKey(whServerContext* server, whNvmId keyId);
 int wh_Server_KeystoreCommitKey(whServerContext* server, whNvmId keyId);
 
 /**
+ * @brief Commit a cached key to NVM with policy enforcement
+ *
+ * Runs keystore policy checks before committing.
+ */
+int wh_Server_KeystoreCommitKeyChecked(whServerContext* server, whNvmId keyId);
+
+/**
  * @brief Erase a key from both cache and NVM
  *
  * Removes the key from cache if present and destroys it in NVM.
@@ -140,6 +176,13 @@ int wh_Server_KeystoreCommitKey(whServerContext* server, whNvmId keyId);
  * @return 0 on success, error code on failure
  */
 int wh_Server_KeystoreEraseKey(whServerContext* server, whNvmId keyId);
+
+/**
+ * @brief Erase a key with policy enforcement
+ *
+ * Runs keystore policy checks before evicting/destroying.
+ */
+int wh_Server_KeystoreEraseKeyChecked(whServerContext* server, whNvmId keyId);
 
 /**
  * @brief Handle key management requests from clients
@@ -175,6 +218,13 @@ int wh_Server_KeystoreCacheKeyDma(whServerContext* server, whNvmMetadata* meta,
                                   uint64_t keyAddr);
 
 /**
+ * @brief cache a key with DMA after policy enforcement
+ *
+ * Performs policy checks before exporting a key via DMA.
+ */
+int wh_Server_KeystoreCacheKeyDmaChecked(whServerContext* server,
+                                         whNvmMetadata* meta, uint64_t keyAddr);
+/**
  * @brief Export a key using DMA transfer
  *
  * Copies key data from server cache to client memory using DMA.
@@ -189,6 +239,16 @@ int wh_Server_KeystoreCacheKeyDma(whServerContext* server, whNvmMetadata* meta,
 int wh_Server_KeystoreExportKeyDma(whServerContext* server, whKeyId keyId,
                                    uint64_t keyAddr, uint64_t keySz,
                                    whNvmMetadata* outMeta);
+
+/**
+ * @brief Export a key with DMA after policy enforcement
+ *
+ * Performs policy checks before exporting a key via DMA.
+ */
+int wh_Server_KeystoreExportKeyDmaChecked(whServerContext* server,
+                                          whKeyId keyId, uint64_t keyAddr,
+                                          uint64_t       keySz,
+                                          whNvmMetadata* outMeta);
 
 
 /**

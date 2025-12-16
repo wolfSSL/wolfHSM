@@ -64,10 +64,6 @@ static int _HandleNvmRead(whServerContext* server, uint8_t* out_data,
         return rc;
     }
 
-    if (meta.flags & WH_NVM_FLAGS_NONEXPORTABLE) {
-        return WH_ERROR_ACCESS;
-    }
-
     if (offset >= meta.len)
         return WH_ERROR_BADARGS;
 
@@ -76,7 +72,7 @@ static int _HandleNvmRead(whServerContext* server, uint8_t* out_data,
         len = meta.len - offset;
     }
 
-    rc = wh_Nvm_Read(server->nvm, id, offset, len, out_data);
+    rc = wh_Nvm_ReadChecked(server->nvm, id, offset, len, out_data);
     if (rc != WH_ERROR_OK)
         return rc;
     *out_len = len;
@@ -241,7 +237,8 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
                 meta.flags = req.flags;
                 meta.len = req.len;
                 memcpy(meta.label, req.label, sizeof(meta.label));
-                resp.rc = wh_Nvm_AddObject(server->nvm, &meta, req.len, data);
+                resp.rc =
+                    wh_Nvm_AddObjectChecked(server->nvm, &meta, req.len, data);
             }
         }
         /* Convert the response struct */
@@ -265,9 +262,10 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
 
             if (req.list_count <= WH_MESSAGE_NVM_MAX_DESTROY_OBJECTS_COUNT) {
                 /* Process the DestroyObjects action */
-                resp.rc = wh_Nvm_DestroyObjects(server->nvm,
-                        req.list_count, req.list);
-            } else {
+                resp.rc = wh_Nvm_DestroyObjectsChecked(
+                    server->nvm, req.list_count, req.list);
+            }
+            else {
                 /* Problem in transport or request */
                 resp.rc = WH_ERROR_ABORTED;
             }
@@ -337,10 +335,9 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
         }
         if (resp.rc == 0) {
             /* Process the AddObject action */
-            resp.rc = wh_Nvm_AddObject(server->nvm,
-                    (whNvmMetadata*)metadata,
-                    req.data_len,
-                    (const uint8_t*)data);
+            resp.rc =
+                wh_Nvm_AddObjectChecked(server->nvm, (whNvmMetadata*)metadata,
+                                        req.data_len, (const uint8_t*)data);
         }
         if (resp.rc == 0) {
             /* perform platform-specific host address processing */
@@ -376,11 +373,7 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
             wh_MessageNvm_TranslateReadDmaRequest(magic,
                     (whMessageNvm_ReadDmaRequest*)req_packet, &req);
 
-            /* Check metadata for non-exportable flag */
             resp.rc = wh_Nvm_GetMetadata(server->nvm, req.id, &meta);
-            if (resp.rc == 0 && (meta.flags & WH_NVM_FLAGS_NONEXPORTABLE)) {
-                resp.rc = WH_ERROR_ACCESS;
-            }
         }
 
         if (resp.rc == 0) {
@@ -407,8 +400,8 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
         }
         if (resp.rc == 0) {
             /* Process the Read action */
-            resp.rc = wh_Nvm_Read(server->nvm, req.id, req.offset, read_len,
-                                  (uint8_t*)data);
+            resp.rc = wh_Nvm_ReadChecked(server->nvm, req.id, req.offset,
+                                         read_len, (uint8_t*)data);
         }
         if (resp.rc == 0) {
             /* perform platform-specific host address processing */

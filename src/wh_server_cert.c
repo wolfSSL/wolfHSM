@@ -124,9 +124,9 @@ static int _verifyChainAgainstCmStore(whServerContext*      server,
 
                     /* Grab the cache slot and dump the public key from the cert
                      * into it */
-                    rc = wh_Server_KeystoreGetCacheSlot(server, *inout_keyId,
-                                                        cacheBufSize, &cacheBuf,
-                                                        &cacheMeta);
+                    rc = wh_Server_KeystoreGetCacheSlotChecked(
+                        server, *inout_keyId, cacheBufSize, &cacheBuf,
+                        &cacheMeta);
                     if (rc == WH_ERROR_OK) {
                         rc = wc_GetSubjectPubKeyInfoDerFromCert(
                             cert_ptr, cert_len + idx, cacheBuf, &cacheBufSize);

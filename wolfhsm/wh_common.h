@@ -78,6 +78,8 @@ typedef uint16_t whNvmFlags;
 #define WH_NVM_FLAGS_LOCAL          ((whNvmFlags)1 << 3)
 /* Cannot be cached nor committed */
 #define WH_NVM_FLAGS_EPHEMERAL      ((whNvmFlags)1 << 4)
+/* Cannot be destroyed (but can be modified) */
+#define WH_NVM_FLAGS_NONDESTROYABLE ((whNvmFlags)1 << 11)
 
 /* Key usage policy flags
  *
