@@ -436,8 +436,6 @@ int wh_Server_KeystoreGetUniqueId(whServerContext* server, whNvmId* inout_id)
     int     type   = WH_KEYID_TYPE(key_id);
     int     user   = WH_KEYID_USER(key_id);
     whNvmId buildId;
-    whNvmId nvmId = 0;
-    whNvmId keyCount;
 
     whKeyCacheContext* ctx = _GetCacheContext(server, key_id);
 
@@ -463,9 +461,8 @@ int wh_Server_KeystoreGetUniqueId(whServerContext* server, whNvmId* inout_id)
         }
 
         /* Check if keyId exists in NVM */
-        ret = wh_Nvm_List(server->nvm, WH_NVM_ACCESS_ANY, WH_NVM_FLAGS_ANY,
-                          buildId, &keyCount, &nvmId);
-        if (ret == WH_ERROR_NOTFOUND || nvmId != buildId) {
+        ret = wh_Nvm_GetMetadata(server->nvm, buildId, NULL);
+        if (ret == WH_ERROR_NOTFOUND) {
             /* key doesn't exist in NVM, we found a candidate ID */
             found = 1;
             break;
