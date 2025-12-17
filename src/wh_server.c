@@ -410,6 +410,7 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
         default:
             /* Unknown group. Return empty packet */
             rc   = WH_ERROR_NOTIMPL;
+            data = NULL;
             size = 0;
         }
 
@@ -447,9 +448,9 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
             "SendResponse failed for (group=%d, action=%d, seq=%d): %d", group,
             action, seq, rc);
 
-        /* Always return success when we processed a request, so no handler
-         * error can terminate the server's request processing loop. */
-        rc = WH_ERROR_OK;
+        /* Handler errors are logged above via handlerRc but don't affect
+         * return code. Errors from SendResponse are propagated back to the
+         * caller in rc */
     }
     else if (rc != WH_ERROR_NOTREADY) {
         /* Log error code from processing request, if present */

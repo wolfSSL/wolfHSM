@@ -82,11 +82,15 @@ int whLogPrintf_AddEntry(void* c, const whLogEntry* entry)
 #endif
 
     /* Format: [TIMESTAMP] [LEVEL] [FILE:LINE FUNC] MESSAGE */
-    WOLFHSM_CFG_PRINTF(
+    (void)WOLFHSM_CFG_PRINTF(
         "[%llu] [%s] [%s:%u %s] %.*s\n", (unsigned long long)entry->timestamp,
-        wh_Log_LevelToString(entry->level), entry->file ? entry->file : "",
-        entry->line, entry->function ? entry->function : "",
-        (int)entry->msg_len, entry->msg);
+        wh_Log_LevelToString(entry->level),
+        (entry->file != NULL) ? entry->file : "", entry->line,
+        (entry->function != NULL) ? entry->function : "",
+        (entry->msg_len <= WOLFHSM_CFG_LOG_MSG_MAX)
+            ? (int)(entry->msg_len)
+            : (int)WOLFHSM_CFG_LOG_MSG_MAX,
+        entry->msg);
 
     return WH_ERROR_OK;
 }

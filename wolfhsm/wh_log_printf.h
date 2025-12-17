@@ -33,8 +33,10 @@
 
 /* Printf configuration structure */
 typedef struct whLogPrintfConfig_t {
-    int logIfNotDebug; /* When true, always log regardless of WOLFHSM_CFG_DEBUG
-                        */
+    int logIfNotDebug; /* When non-zero, log entries are printed even if
+                        * WOLFHSM_CFG_DEBUG is not defined. When zero, entries
+                        * are only printed if WOLFHSM_CFG_DEBUG is defined. This
+                        * flag applies to all log levels */
 } whLogPrintfConfig;
 
 /* Printf context structure */
