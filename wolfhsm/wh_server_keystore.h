@@ -225,7 +225,7 @@ int wh_Server_KeystoreCacheKeyDma(whServerContext* server, whNvmMetadata* meta,
                                   uint64_t keyAddr);
 
 /**
- * @brief cache a key with DMA after policy enforcement
+ * @brief Cache a key with DMA after policy enforcement
  *
  * Performs policy checks before exporting a key via DMA.
  */

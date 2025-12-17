@@ -100,11 +100,8 @@ static int _KeyIsCommitted(whServerContext* server, whKeyId keyId)
 
     whKeyCacheContext* ctx = _GetCacheContext(server, keyId);
     ret = _FindInCache(server, keyId, &index, &big, NULL, NULL);
-    if (ret == WH_ERROR_NOTFOUND) {
+    if (ret != WH_ERROR_OK) {
         return 0;
-    }
-    else if (ret != WH_ERROR_OK) {
-        return ret;
     }
 
     if (big == 0) {
@@ -394,7 +391,6 @@ static int _EvictKeyFromCache(whKeyCacheContext* ctx, whKeyId keyId)
     whNvmMetadata* meta      = NULL;
     uint8_t*       outBuffer = NULL;
 
-
     int ret = _FindInKeyCache(ctx, keyId, NULL, NULL, &outBuffer, &meta);
 
     if (ret == WH_ERROR_OK && meta != NULL) {
@@ -482,7 +478,7 @@ int wh_Server_KeystoreGetUniqueId(whServerContext* server, whNvmId* inout_id)
     return WH_ERROR_OK;
 }
 
-/* find a slot to cache a key. If key is already there, is evicetd first */
+/* find a slot to cache a key. If key is already there, is evicted first */
 int wh_Server_KeystoreGetCacheSlot(whServerContext* server, whKeyId keyId,
                                    uint16_t keySz, uint8_t** outBuf,
                                    whNvmMetadata** outMeta)
@@ -634,32 +630,36 @@ int wh_Server_KeystoreFreshenKey(whServerContext* server, whKeyId keyId,
 
     ret = _FindInCache(server, keyId, &foundIndex, &foundBigIndex, cacheBufOut,
                        cacheMetaOut);
-    if (ret == WH_ERROR_NOTFOUND) {
-        /* For wrapped keys, just probe the cache and error if not found. We
-         * don't support automatically unwrapping and caching outside of the
-         * keywrap API */
-        if (WH_KEYID_TYPE(keyId) == WH_KEYTYPE_WRAPPED) {
-            return WH_ERROR_NOTFOUND;
-        }
+    if (ret != WH_ERROR_NOTFOUND) {
+        return ret;
+    }
 
-        /* Not in cache. Check if it is in NVM */
-        ret = wh_Nvm_GetMetadata(server->nvm, keyId, tmpMeta);
+    /* key not in the cache */
+
+    /* For wrapped keys, just probe the cache and error if not found. We
+     * don't support automatically unwrapping and caching outside of the
+     * keywrap API */
+    if (WH_KEYID_TYPE(keyId) == WH_KEYTYPE_WRAPPED) {
+        return WH_ERROR_NOTFOUND;
+    }
+
+    /* Not in cache. Check if it is in NVM */
+    ret = wh_Nvm_GetMetadata(server->nvm, keyId, tmpMeta);
+    if (ret == WH_ERROR_OK) {
+        /* Key found in NVM, get a free cache slot */
+        ret = wh_Server_KeystoreGetCacheSlot(server, keyId, tmpMeta->len,
+                                             cacheBufOut, cacheMetaOut);
         if (ret == WH_ERROR_OK) {
-            /* Key found in NVM, get a free cache slot */
-            ret = wh_Server_KeystoreGetCacheSlot(server, keyId, tmpMeta->len,
-                                                 cacheBufOut, cacheMetaOut);
+            /* Read the key from NVM into the cache slot */
+            ret = wh_Nvm_Read(server->nvm, keyId, 0, tmpMeta->len,
+                              *cacheBufOut);
             if (ret == WH_ERROR_OK) {
-                /* Read the key from NVM into the cache slot */
-                ret = wh_Nvm_Read(server->nvm, keyId, 0, tmpMeta->len,
-                                  *cacheBufOut);
-                if (ret == WH_ERROR_OK) {
-                    /* Copy the metadata to the cache slot if key read is
-                     * successful*/
-                    memcpy((uint8_t*)*cacheMetaOut, (uint8_t*)tmpMeta,
-                           sizeof(whNvmMetadata));
-                    _MarkKeyCommitted(_GetCacheContext(server, keyId), keyId,
-                                      1);
-                }
+                /* Copy the metadata to the cache slot if key read is
+                 * successful*/
+                memcpy((uint8_t*)*cacheMetaOut, (uint8_t*)tmpMeta,
+                       sizeof(whNvmMetadata));
+                _MarkKeyCommitted(_GetCacheContext(server, keyId), keyId,
+                                  1);
             }
         }
     }
