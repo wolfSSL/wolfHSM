@@ -1070,6 +1070,62 @@ int wh_Client_KeyErase(whClientContext* c, whNvmId keyId)
     return ret;
 }
 
+int wh_Client_KeyRevokeRequest(whClientContext* c, whNvmId keyId)
+{
+    whMessageKeystore_RevokeRequest* req = NULL;
+
+    if (c == NULL || keyId == WH_KEYID_ERASED) {
+        return WH_ERROR_BADARGS;
+    }
+
+    req = (whMessageKeystore_RevokeRequest*)wh_CommClient_GetDataPtr(c->comm);
+    if (req == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    req->id = keyId;
+
+    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_KEY, WH_KEY_REVOKE,
+                                 sizeof(*req), (uint8_t*)req);
+}
+
+int wh_Client_KeyRevokeResponse(whClientContext* c)
+{
+    uint16_t                          group;
+    uint16_t                          action;
+    uint16_t                          size;
+    int                               ret;
+    whMessageKeystore_RevokeResponse* resp = NULL;
+
+    if (c == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    resp = (whMessageKeystore_RevokeResponse*)wh_CommClient_GetDataPtr(c->comm);
+    if (resp == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)resp);
+    if (ret == 0) {
+        if (resp->rc != 0) {
+            ret = resp->rc;
+        }
+    }
+    return ret;
+}
+
+int wh_Client_KeyRevoke(whClientContext* c, whNvmId keyId)
+{
+    int ret;
+    ret = wh_Client_KeyRevokeRequest(c, keyId);
+    if (ret == 0) {
+        do {
+            ret = wh_Client_KeyRevokeResponse(c);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+    return ret;
+}
+
 int wh_Client_CounterInitRequest(whClientContext* c, whNvmId counterId,
     uint32_t counter)
 {

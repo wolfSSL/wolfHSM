@@ -89,6 +89,7 @@ typedef enum {
     WH_KS_OP_ERASE,
     WH_KS_OP_EVICT,
     WH_KS_OP_EXPORT,
+    WH_KS_OP_REVOKE,
 } whKsOp;
 
 static int _KeyIsCommitted(whServerContext* server, whKeyId keyId)
@@ -170,6 +171,9 @@ static int _KeystoreCheckPolicy(whServerContext* server, whKsOp op,
                         return WH_ERROR_OK;
                     }
                     break;
+                case WH_KS_OP_REVOKE:
+                    /* revoke is allowed even if already NONMODIFIABLE */
+                    return WH_ERROR_OK;
             }
             meta = cacheMeta;
         }
@@ -210,6 +214,9 @@ static int _KeystoreCheckPolicy(whServerContext* server, whKsOp op,
                     return WH_ERROR_OK;
                 }
                 break;
+            case WH_KS_OP_REVOKE:
+                /* allow revoke even if already NONMODIFIABLE */
+                return WH_ERROR_OK;
             case WH_KS_OP_EVICT:
                 /* no-op */
                 return WH_ERROR_OK;
@@ -630,7 +637,7 @@ int wh_Server_KeystoreFreshenKey(whServerContext* server, whKeyId keyId,
 
     ret = _FindInCache(server, keyId, &foundIndex, &foundBigIndex, cacheBufOut,
                        cacheMetaOut);
-    if (ret != WH_ERROR_OK) {
+    if (ret == WH_ERROR_NOTFOUND) {
         /* For wrapped keys, just probe the cache and error if not found. We
          * don't support automatically unwrapping and caching outside of the
          * keywrap API */
@@ -653,6 +660,8 @@ int wh_Server_KeystoreFreshenKey(whServerContext* server, whKeyId keyId,
                      * successful*/
                     memcpy((uint8_t*)*cacheMetaOut, (uint8_t*)tmpMeta,
                            sizeof(whNvmMetadata));
+                    _MarkKeyCommitted(_GetCacheContext(server, keyId), keyId,
+                                      1);
                 }
             }
         }
@@ -859,6 +868,73 @@ int wh_Server_KeystoreEraseKeyChecked(whServerContext* server, whNvmId keyId)
 
     /* destroy the object */
     return wh_Nvm_DestroyObjectsChecked(server->nvm, 1, &keyId);
+}
+
+static void _revokeKey(whNvmMetadata* meta)
+{
+
+    /* Set NONMODIFIABLE flag and clear all usage flags */
+    meta->flags |= WH_NVM_FLAGS_NONMODIFIABLE;
+    meta->flags &= ~WH_NVM_FLAGS_USAGE_ANY;
+}
+
+static int _isKeyRevoked(whNvmMetadata* meta)
+{
+    if ((meta->flags & WH_NVM_FLAGS_NONMODIFIABLE) &&
+        ((meta->flags & WH_NVM_FLAGS_USAGE_ANY) == 0)) {
+        return 1;
+    }
+
+    return 0;
+}
+
+int wh_Server_KeystoreRevokeKey(whServerContext* server, whNvmId keyId)
+{
+    int            ret;
+    int            isInNvm   = 0;
+    uint8_t*       cacheBuf  = NULL;
+    whNvmMetadata* cacheMeta = NULL;
+
+    if ((server == NULL) || WH_KEYID_ISERASED(keyId)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = _KeystoreCheckPolicy(server, WH_KS_OP_REVOKE, keyId, NULL);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    ret = wh_Nvm_GetMetadata(server->nvm, keyId, NULL);
+    if (ret == WH_ERROR_OK) {
+        isInNvm = 1;
+    }
+    else if (ret != WH_ERROR_NOTFOUND) {
+        return ret;
+    }
+
+    /* be sure to have the key in the cache */
+    ret = wh_Server_KeystoreFreshenKey(server, keyId, &cacheBuf, &cacheMeta);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    /* if already revoked and committed, nothing to do */
+    if (_isKeyRevoked(cacheMeta) && _KeyIsCommitted(server, keyId)) {
+        return WH_ERROR_OK;
+    }
+
+    /* Revoke the key by updating its metadata */
+    _revokeKey(cacheMeta);
+    /* commit the changes */
+    if (isInNvm) {
+        ret = wh_Nvm_AddObjectWithReclaim(server->nvm, cacheMeta,
+                                          cacheMeta->len, cacheBuf);
+        if (ret == WH_ERROR_OK) {
+            _MarkKeyCommitted(_GetCacheContext(server, keyId), keyId, 1);
+        }
+    }
+
+    return ret;
 }
 
 #ifdef WOLFHSM_CFG_KEYWRAP
@@ -1832,6 +1908,26 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
 
             (void)wh_MessageKeystore_TranslateEraseResponse(
                 magic, &resp, (whMessageKeystore_EraseResponse*)resp_packet);
+
+            *out_resp_size = sizeof(resp);
+        } break;
+
+        case WH_KEY_REVOKE: {
+            whMessageKeystore_RevokeRequest  req;
+            whMessageKeystore_RevokeResponse resp;
+
+            (void)wh_MessageKeystore_TranslateRevokeRequest(
+                magic, (whMessageKeystore_RevokeRequest*)req_packet, &req);
+
+            ret = wh_Server_KeystoreRevokeKey(
+                server,
+                wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                             server->comm->client_id, req.id));
+            resp.rc = ret;
+            ret     = WH_ERROR_OK;
+
+            (void)wh_MessageKeystore_TranslateRevokeResponse(
+                magic, &resp, (whMessageKeystore_RevokeResponse*)resp_packet);
 
             *out_resp_size = sizeof(resp);
         } break;

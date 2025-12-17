@@ -185,6 +185,13 @@ int wh_Server_KeystoreEraseKey(whServerContext* server, whNvmId keyId);
 int wh_Server_KeystoreEraseKeyChecked(whServerContext* server, whNvmId keyId);
 
 /**
+ * @brief Revoke a key (clears usage and marks non-modifiable)
+ *
+ * Placeholder implementation for key revocation.
+ */
+int wh_Server_KeystoreRevokeKey(whServerContext* server, whNvmId keyId);
+
+/**
  * @brief Handle key management requests from clients
  *
  * Processes various key operations including cache, export, evict, commit, and
