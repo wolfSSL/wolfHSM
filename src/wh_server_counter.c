@@ -80,8 +80,6 @@ int wh_Server_HandleCounter(whServerContext* server, uint16_t magic,
                 resp.counter = *counter;
             }
             resp.rc = ret;
-            /* TODO: are there any fatal server errors? */
-            ret = WH_ERROR_OK;
 
             (void)wh_MessageCounter_TranslateInitResponse(
                 magic, &resp, (whMessageCounter_InitResponse*)resp_packet);
@@ -139,9 +137,6 @@ int wh_Server_HandleCounter(whServerContext* server, uint16_t magic,
                 magic, &resp, (whMessageCounter_IncrementResponse*)resp_packet);
 
             *out_resp_size = sizeof(resp);
-
-            /* TODO: are there any fatal server errors? */
-            ret = WH_ERROR_OK;
         } break;
 
         case WH_COUNTER_READ: {
@@ -178,9 +173,6 @@ int wh_Server_HandleCounter(whServerContext* server, uint16_t magic,
                 magic, &resp, (whMessageCounter_ReadResponse*)resp_packet);
 
             *out_resp_size = sizeof(resp);
-
-            /* TODO: are there any fatal server errors? */
-            ret = WH_ERROR_OK;
         } break;
 
         case WH_COUNTER_DESTROY: {
@@ -211,9 +203,6 @@ int wh_Server_HandleCounter(whServerContext* server, uint16_t magic,
                 magic, &resp, (whMessageCounter_DestroyResponse*)resp_packet);
 
             *out_resp_size = sizeof(resp);
-
-            /* TODO: are there any fatal server errors? */
-            ret = WH_ERROR_OK;
         } break;
 
         default:

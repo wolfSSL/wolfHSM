@@ -39,21 +39,6 @@
 
 #ifdef WOLFHSM_CFG_LOGGING
 
-/* Helper function to convert log level to string */
-static const char* posixLogFile_LevelToString(whLogLevel level)
-{
-    switch (level) {
-        case WH_LOG_LEVEL_INFO:
-            return "INFO";
-        case WH_LOG_LEVEL_ERROR:
-            return "ERROR";
-        case WH_LOG_LEVEL_SECEVENT:
-            return "SECEVENT";
-        default:
-            return "UNKNOWN";
-    }
-}
-
 /* Helper function to convert string to log level */
 static whLogLevel posixLogFile_StringToLevel(const char* str)
 {
@@ -146,7 +131,7 @@ int posixLogFile_AddEntry(void* c, const whLogEntry* entry)
     /* Format log entry: TIMESTAMP|LEVEL|FILE:LINE|FUNCTION|MESSAGE\n */
     len = snprintf(buffer, sizeof(buffer), "%llu|%s|%s:%u|%s|%.*s\n",
                    (unsigned long long)entry->timestamp,
-                   posixLogFile_LevelToString(entry->level),
+                   wh_Log_LevelToString(entry->level),
                    entry->file ? entry->file : "", entry->line,
                    entry->function ? entry->function : "", (int)entry->msg_len,
                    entry->msg);
