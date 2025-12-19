@@ -86,7 +86,6 @@ static whKeyCacheContext* _GetCacheContext(whServerContext* server,
 typedef enum {
     WH_KS_OP_CACHE = 0,
     WH_KS_OP_COMMIT,
-    WH_KS_OP_ERASE,
     WH_KS_OP_EVICT,
     WH_KS_OP_EXPORT,
     WH_KS_OP_REVOKE,
@@ -173,13 +172,6 @@ static int _KeystoreCheckPolicy(whServerContext* server, whKsOp op,
             }
             break;
 
-        case WH_KS_OP_ERASE:
-            if (flags &
-                (WH_NVM_FLAGS_NONMODIFIABLE | WH_NVM_FLAGS_NONDESTROYABLE)) {
-                return WH_ERROR_ACCESS;
-            }
-            break;
-
         case WH_KS_OP_EXPORT:
             if (flags & WH_NVM_FLAGS_NONEXPORTABLE) {
                 return WH_ERROR_ACCESS;
@@ -190,6 +182,9 @@ static int _KeystoreCheckPolicy(whServerContext* server, whKsOp op,
         case WH_KS_OP_REVOKE:
             /* Always allowed */
             break;
+        default:
+            /* unknown operation */
+            return WH_ERROR_BADARGS;
     }
 
     return WH_ERROR_OK;
