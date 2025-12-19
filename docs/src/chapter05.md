@@ -9,7 +9,9 @@ The client library API is the primary mechanism through which users will interac
 - [The Client Context](#the-client-context)
   - [Initializing the client context](#initializing-the-client-context)
 - [NVM Operations](#nvm-operations)
+- [NVM Access and Flags](#nvm-access-and-flags)
 - [Key Management](#key-management)
+- [Key Revocation](#key-revocation)
 - [Cryptography](#cryptography)
 - [AUTOSAR SHE API](#autosar-she-api)
 
@@ -250,6 +252,10 @@ int wh_Client_NvmList(whClientContext* c,
 
 For a full description of all the NVM API functions, please refer to the [API documentation](./appendix01.md).
 
+## NVM Flags
+
+NVM objects include flags in their metadata. Flags (such as `WH_NVM_FLAGS_NONMODIFIABLE`, `WH_NVM_FLAGS_NONDESTROYABLE`, and `WH_NVM_FLAGS_NONEXPORTABLE`) are enforced by the server NVM policy checks. Key usage flags (`WH_NVM_FLAGS_USAGE_*`) are enforced by the keystore during cryptographic operations.
+
 ## Key Management
 
 Keys meant for use with wolfCrypt can be loaded into the HSM's keystore and optionally saved to NVM with the following APIs:
@@ -280,6 +286,70 @@ wh_Client_KeyErase(clientCtx, keyId);
 `wh_Client_KeyEvict` will evict a key from the cache but will leave it in NVM if it's been commited.
 `wh_Client_KeyExport` will read the key contents out of the HSM back to the client.
 `wh_Client_KeyErase` will remove the indicated key from cache and erase it from NVM.
+
+## Key Revocation
+
+Key revocation updates key metadata to prevent further cryptographic use without destroying storage. Revocation clears all `WH_NVM_FLAGS_USAGE_*` bits and sets `WH_NVM_FLAGS_NONMODIFIABLE`. The revoked state is persisted when the key is already committed to NVM.
+
+Creating a key with NVM usage flags:
+
+```c
+int rc;
+uint16_t keyId = WH_KEYID_ERASED;
+byte label[WH_NVM_LABEL_LEN] = "app-signing";
+byte key[AES_128_KEY_SIZE] = { /* key bytes */ };
+whNvmFlags flags = WH_NVM_FLAGS_USAGE_SIGN | WH_NVM_FLAGS_NONEXPORTABLE;
+
+rc = wh_Client_KeyCache(&clientCtx, flags, label, sizeof(label),
+                        key, sizeof(key), &keyId);
+if (rc == WH_ERROR_OK) {
+    rc = wh_Client_KeyCommit(&clientCtx, keyId);
+}
+```
+
+Revoking a key:
+
+```c
+int rc;
+
+rc = wh_Client_KeyRevoke(&clientCtx, keyId);
+if (rc != WH_ERROR_OK) {
+    /* handle error */
+}
+```
+
+Attempting to use a revoked key and handling failure:
+
+```c
+int rc;
+Aes aes;
+byte iv[AES_BLOCK_SIZE] = {0};
+byte plain[AES_BLOCK_SIZE] = {0};
+byte cipher[AES_BLOCK_SIZE] = {0};
+
+wc_AesInit(&aes, NULL, WOLFHSM_DEV_ID);
+wh_Client_AesSetKeyId(&aes, keyId);
+wc_AesSetIV(&aes, iv);
+
+rc = wh_Client_AesCbc(&clientCtx, &aes, AES_ENCRYPTION,
+                      plain, sizeof(plain), cipher);
+if (rc == WH_ERROR_USAGE) {
+    /* key revoked or usage not permitted */
+}
+wc_AesFree(&aes);
+```
+
+Security notes:
+
+- Set explicit usage flags for each key; avoid `WH_NVM_FLAGS_USAGE_ANY` unless required.
+- Use `WH_NVM_FLAGS_NONEXPORTABLE` for private keys and long-lived secrets.
+- Revoke keys on compromise and rotate to new key IDs rather than reusing revoked IDs.
+
+Compatibility notes:
+
+- Keys stored with `WH_NVM_FLAGS_NONE` (no usage flags) are treated as not permitted for cryptographic use and will return `WH_ERROR_USAGE`.
+- Keys committed to NVM retain revocation state across resets; cached-only keys do not persist after reset or eviction.
+- Keys cached via `wh_Client_KeyCache` are stored with `WH_NVM_ACCESS_ANY` on the server side.
 
 ## Cryptography
 
@@ -366,5 +436,4 @@ For CMAC operations that need to use cached keys, seperate wolfHSM specific func
 
 
 ## AUTOSAR SHE API
-
 
