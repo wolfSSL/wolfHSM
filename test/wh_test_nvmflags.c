@@ -20,6 +20,8 @@
 #include "wolfhsm/wh_settings.h"
 
 #if defined(WOLFHSM_CFG_ENABLE_CLIENT)
+#include <string.h>
+
 #include "wh_test_common.h"
 #include "wolfhsm/wh_client.h"
 #include "wolfhsm/wh_error.h"
