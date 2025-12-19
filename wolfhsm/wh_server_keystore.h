@@ -189,7 +189,7 @@ int wh_Server_KeystoreEraseKeyChecked(whServerContext* server, whNvmId keyId);
  *
  * Placeholder implementation for key revocation.
  */
-int wh_Server_KeystoreRevokeKey(whServerContext* server, whNvmId keyId);
+int wh_Server_KeystoreRevokeKey(whServerContext* server, whKeyId keyId);
 
 /**
  * @brief Handle key management requests from clients

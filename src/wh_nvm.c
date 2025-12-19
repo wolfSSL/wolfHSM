@@ -52,38 +52,29 @@ static int wh_Nvm_CheckPolicy(whNvmContext* context, whNvmOp op, whNvmId id,
     }
 
     ret = wh_Nvm_GetMetadata(context, id, &meta);
-    if (existing_meta != NULL && ret == WH_ERROR_OK) {
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    if (existing_meta != NULL) {
         *existing_meta = meta;
     }
 
     switch (op) {
         case WH_NVM_OP_ADD:
-            if (ret == WH_ERROR_OK) {
-                if (meta.flags & WH_NVM_FLAGS_NONMODIFIABLE) {
-                    return WH_ERROR_ACCESS;
-                }
-            }
-            else if (ret != WH_ERROR_NOTFOUND) {
-                return ret;
+            if (meta.flags & WH_NVM_FLAGS_NONMODIFIABLE) {
+                return WH_ERROR_ACCESS;
             }
             break;
 
         case WH_NVM_OP_DESTROY:
-            if (ret == WH_ERROR_OK) {
-                if (meta.flags & (WH_NVM_FLAGS_NONMODIFIABLE |
-                                  WH_NVM_FLAGS_NONDESTROYABLE)) {
-                    return WH_ERROR_ACCESS;
-                }
-            }
-            else if (ret != WH_ERROR_NOTFOUND) {
-                return ret;
+            if (meta.flags &
+                (WH_NVM_FLAGS_NONMODIFIABLE | WH_NVM_FLAGS_NONDESTROYABLE)) {
+                return WH_ERROR_ACCESS;
             }
             break;
 
         case WH_NVM_OP_READ:
-            if (ret != WH_ERROR_OK) {
-                return ret;
-            }
             if (meta.flags & WH_NVM_FLAGS_NONEXPORTABLE) {
                 return WH_ERROR_ACCESS;
             }
@@ -97,16 +88,15 @@ static int wh_Nvm_CheckPolicy(whNvmContext* context, whNvmOp op, whNvmId id,
 }
 
 
-int wh_Nvm_Init(whNvmContext* context, const whNvmConfig *config)
+int wh_Nvm_Init(whNvmContext* context, const whNvmConfig* config)
 {
     int rc = 0;
 
-    if (    (context == NULL) ||
-            (config == NULL) ) {
+    if ((context == NULL) || (config == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
-    context->cb = config->cb;
+    context->cb      = config->cb;
     context->context = config->context;
 
 #if !defined(WOLFHSM_CFG_NO_CRYPTO) && defined(WOLFHSM_CFG_GLOBAL_KEYS)
@@ -221,7 +211,7 @@ int wh_Nvm_AddObjectChecked(whNvmContext* context, whNvmMetadata* meta,
     int ret;
 
     ret = wh_Nvm_CheckPolicy(context, WH_NVM_OP_ADD, meta->id, NULL);
-    if (ret != WH_ERROR_OK) {
+    if (ret != WH_ERROR_OK && ret != WH_ERROR_NOTFOUND) {
         return ret;
     }
 

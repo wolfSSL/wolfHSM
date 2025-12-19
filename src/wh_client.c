@@ -1114,7 +1114,7 @@ int wh_Client_KeyRevokeResponse(whClientContext* c)
     return ret;
 }
 
-int wh_Client_KeyRevoke(whClientContext* c, whNvmId keyId)
+int wh_Client_KeyRevoke(whClientContext* c, whKeyId keyId)
 {
     int ret;
     ret = wh_Client_KeyRevokeRequest(c, keyId);

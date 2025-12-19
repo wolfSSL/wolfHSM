@@ -773,7 +773,7 @@ int wh_Client_KeyErase(whClientContext* c, whNvmId keyId);
  * @param[in] keyId Key ID to be revoked.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
-int wh_Client_KeyRevokeRequest(whClientContext* c, whNvmId keyId);
+int wh_Client_KeyRevokeRequest(whClientContext* c, whKeyId keyId);
 
 /**
  * @brief Receives a key revoke response from the server.
@@ -800,7 +800,7 @@ int wh_Client_KeyRevokeResponse(whClientContext* c);
  * @param[in] keyId Key ID to be revoked.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
-int wh_Client_KeyRevoke(whClientContext* c, whNvmId keyId);
+int wh_Client_KeyRevoke(whClientContext* c, whKeyId keyId);
 
 #ifdef WOLFHSM_CFG_DMA
 

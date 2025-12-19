@@ -114,116 +114,82 @@ static int _KeyIsCommitted(whServerContext* server, whKeyId keyId)
 /* Centralized cache/NVM policy: enforce NONMODIFIABLE/NONEXPORTABLE at the
  * keystore layer. Usage enforcement remains separate. */
 static int _KeystoreCheckPolicy(whServerContext* server, whKsOp op,
-                                whKeyId keyId, const whNvmMetadata* metaOpt)
+                                whKeyId keyId)
 {
-    whNvmMetadata*       cacheMeta = NULL;
-    whNvmMetadata        nvmMeta;
-    const whNvmMetadata* meta = metaOpt;
-    int                  ret;
+    whNvmMetadata* cacheMeta = NULL;
+    whNvmMetadata  nvmMeta;
+    whNvmFlags     flags;
+    int            ret;
+    int            foundInCache = 0;
+    int            foundInNvm   = 0;
 
     if ((server == NULL) || WH_KEYID_ISERASED(keyId)) {
         return WH_ERROR_BADARGS;
     }
 
-    /* See if the key is already in cache to use its flags */
+    /* Check cache first */
     ret = _FindInCache(server, keyId, NULL, NULL, NULL, &cacheMeta);
-    if (ret == WH_ERROR_OK) {
-        if (cacheMeta != NULL) {
-            switch (op) {
-                case WH_KS_OP_CACHE:
-                    if (cacheMeta->flags & WH_NVM_FLAGS_NONMODIFIABLE) {
-                        return WH_ERROR_ACCESS;
-                    }
-                    else {
-                        return WH_ERROR_OK;
-                    }
-                case WH_KS_OP_ERASE:
-                    if (cacheMeta->flags & (WH_NVM_FLAGS_NONMODIFIABLE |
-                                            WH_NVM_FLAGS_NONDESTROYABLE)) {
-                        return WH_ERROR_ACCESS;
-                    }
-                    else {
-                        return WH_ERROR_OK;
-                    }
-                    break;
-                case WH_KS_OP_EVICT:
-                    /* committed key can be evicted */
-                    if (_KeyIsCommitted(server, keyId)) {
-                        return WH_ERROR_OK;
-                    }
-                    if (cacheMeta->flags & WH_NVM_FLAGS_NONMODIFIABLE) {
-                        return WH_ERROR_ACCESS;
-                    }
-                    else {
-                        return WH_ERROR_OK;
-                    }
-                    break;
-                case WH_KS_OP_COMMIT:
-                    return WH_ERROR_OK;
-                case WH_KS_OP_EXPORT:
-                    if (cacheMeta->flags & WH_NVM_FLAGS_NONEXPORTABLE) {
-                        return WH_ERROR_ACCESS;
-                    }
-                    else {
-                        return WH_ERROR_OK;
-                    }
-                    break;
-                case WH_KS_OP_REVOKE:
-                    /* revoke is allowed even if already NONMODIFIABLE */
-                    return WH_ERROR_OK;
-            }
-            meta = cacheMeta;
-        }
+    if (ret == WH_ERROR_OK && cacheMeta != NULL) {
+        foundInCache = 1;
     }
-    else if (ret != WH_ERROR_NOTFOUND) {
+    else if (ret != WH_ERROR_OK && ret != WH_ERROR_NOTFOUND) {
         return ret;
     }
 
-    /* Get NVM metadata if not found in cache */
-    ret = wh_Nvm_GetMetadata(server->nvm, keyId, &nvmMeta);
-    if (ret == WH_ERROR_OK) {
-        switch (op) {
-            /* should never happen */
-            case WH_KS_OP_COMMIT:
-                return WH_ERROR_ABORTED;
-            case WH_KS_OP_CACHE:
-                if (nvmMeta.flags & WH_NVM_FLAGS_NONMODIFIABLE) {
-                    return WH_ERROR_ACCESS;
-                }
-                else {
-                    return WH_ERROR_OK;
-                }
-                break;
-            case WH_KS_OP_ERASE:
-                if (nvmMeta.flags & (WH_NVM_FLAGS_NONMODIFIABLE |
-                                     WH_NVM_FLAGS_NONDESTROYABLE)) {
-                    return WH_ERROR_ACCESS;
-                }
-                else {
-                    return WH_ERROR_OK;
-                }
-                break;
-            case WH_KS_OP_EXPORT:
-                if (nvmMeta.flags & WH_NVM_FLAGS_NONEXPORTABLE) {
-                    return WH_ERROR_ACCESS;
-                }
-                else {
-                    return WH_ERROR_OK;
-                }
-                break;
-            case WH_KS_OP_REVOKE:
-                /* allow revoke even if already NONMODIFIABLE */
-                return WH_ERROR_OK;
-            case WH_KS_OP_EVICT:
-                /* no-op */
-                return WH_ERROR_OK;
+    /* Check NVM if not in cache */
+    if (!foundInCache) {
+        ret = wh_Nvm_GetMetadata(server->nvm, keyId, &nvmMeta);
+        if (ret == WH_ERROR_OK) {
+            foundInNvm = 1;
         }
-        if (meta == NULL) {
-            meta = &nvmMeta;
+        else if (ret != WH_ERROR_NOTFOUND) {
+            return ret;
         }
     }
-    else if (ret != WH_ERROR_NOTFOUND) {
-        return ret;
+
+    /* Key not found */
+    if (!foundInCache && !foundInNvm) {
+        return WH_ERROR_NOTFOUND;
+    }
+
+    /* Get flags from the appropriate source */
+    flags = (foundInCache) ? cacheMeta->flags : nvmMeta.flags;
+
+    switch (op) {
+        case WH_KS_OP_CACHE:
+            if (flags & WH_NVM_FLAGS_NONMODIFIABLE) {
+                return WH_ERROR_ACCESS;
+            }
+            break;
+
+        case WH_KS_OP_EVICT:
+            if (_KeyIsCommitted(server, keyId)) {
+                /* Committed keys can always be evicted */
+                break;
+            }
+            if (flags &
+                (WH_NVM_FLAGS_NONMODIFIABLE | WH_NVM_FLAGS_NONDESTROYABLE)) {
+                return WH_ERROR_ACCESS;
+            }
+            break;
+
+        case WH_KS_OP_ERASE:
+            if (flags &
+                (WH_NVM_FLAGS_NONMODIFIABLE | WH_NVM_FLAGS_NONDESTROYABLE)) {
+                return WH_ERROR_ACCESS;
+            }
+            break;
+
+        case WH_KS_OP_EXPORT:
+            if (flags & WH_NVM_FLAGS_NONEXPORTABLE) {
+                return WH_ERROR_ACCESS;
+            }
+            break;
+
+        case WH_KS_OP_COMMIT:
+        case WH_KS_OP_REVOKE:
+            /* Always allowed */
+            break;
     }
 
     return WH_ERROR_OK;
@@ -518,8 +484,8 @@ int wh_Server_KeystoreGetCacheSlotChecked(whServerContext* server,
                                           whNvmMetadata** outMeta)
 {
     int ret;
-    ret = _KeystoreCheckPolicy(server, WH_KS_OP_CACHE, keyId, NULL);
-    if (ret != WH_ERROR_OK) {
+    ret = _KeystoreCheckPolicy(server, WH_KS_OP_CACHE, keyId);
+    if (ret != WH_ERROR_OK && ret != WH_ERROR_NOTFOUND) {
         return ret;
     }
     return wh_Server_KeystoreGetCacheSlot(server, keyId, keySz, outBuf,
@@ -651,15 +617,14 @@ int wh_Server_KeystoreFreshenKey(whServerContext* server, whKeyId keyId,
                                              cacheBufOut, cacheMetaOut);
         if (ret == WH_ERROR_OK) {
             /* Read the key from NVM into the cache slot */
-            ret = wh_Nvm_Read(server->nvm, keyId, 0, tmpMeta->len,
-                              *cacheBufOut);
+            ret =
+                wh_Nvm_Read(server->nvm, keyId, 0, tmpMeta->len, *cacheBufOut);
             if (ret == WH_ERROR_OK) {
                 /* Copy the metadata to the cache slot if key read is
                  * successful*/
                 memcpy((uint8_t*)*cacheMetaOut, (uint8_t*)tmpMeta,
                        sizeof(whNvmMetadata));
-                _MarkKeyCommitted(_GetCacheContext(server, keyId), keyId,
-                                  1);
+                _MarkKeyCommitted(_GetCacheContext(server, keyId), keyId, 1);
             }
         }
     }
@@ -749,7 +714,7 @@ int wh_Server_KeystoreReadKeyChecked(whServerContext* server, whKeyId keyId,
 {
     int ret;
 
-    ret = _KeystoreCheckPolicy(server, WH_KS_OP_EXPORT, keyId, NULL);
+    ret = _KeystoreCheckPolicy(server, WH_KS_OP_EXPORT, keyId);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
@@ -783,7 +748,7 @@ int wh_Server_KeystoreEvictKeyChecked(whServerContext* server, whNvmId keyId)
 {
     int ret;
 
-    ret = _KeystoreCheckPolicy(server, WH_KS_OP_EVICT, keyId, NULL);
+    ret = _KeystoreCheckPolicy(server, WH_KS_OP_EVICT, keyId);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
@@ -826,7 +791,7 @@ int wh_Server_KeystoreCommitKeyChecked(whServerContext* server, whNvmId keyId)
 {
     int ret;
 
-    ret = _KeystoreCheckPolicy(server, WH_KS_OP_COMMIT, keyId, NULL);
+    ret = _KeystoreCheckPolicy(server, WH_KS_OP_COMMIT, keyId);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
@@ -896,7 +861,7 @@ int wh_Server_KeystoreRevokeKey(whServerContext* server, whNvmId keyId)
         return WH_ERROR_BADARGS;
     }
 
-    ret = _KeystoreCheckPolicy(server, WH_KS_OP_REVOKE, keyId, NULL);
+    ret = _KeystoreCheckPolicy(server, WH_KS_OP_REVOKE, keyId);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
@@ -2210,7 +2175,7 @@ int wh_Server_KeystoreExportKeyDmaChecked(whServerContext* server,
 {
     int ret;
 
-    ret = _KeystoreCheckPolicy(server, WH_KS_OP_EXPORT, keyId, NULL);
+    ret = _KeystoreCheckPolicy(server, WH_KS_OP_EXPORT, keyId);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
