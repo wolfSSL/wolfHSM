@@ -2185,9 +2185,9 @@ int wh_Server_KeystoreExportKeyDma(whServerContext* server, whKeyId keyId,
     uint8_t*       buffer;
     whNvmMetadata* cacheMeta;
 
-    /* Find key in cache */
-    ret = _FindInCache(server, keyId, NULL, NULL, &buffer, &cacheMeta);
-    if (ret != 0) {
+    /* bring key in cache */
+    ret = wh_Server_KeystoreFreshenKey(server, keyId, &buffer, &cacheMeta);
+    if (ret != WH_ERROR_OK) {
         return ret;
     }
 
