@@ -22,25 +22,12 @@ jobs:
     - name: List compiler version
       run: gcc --version
 
-    # get last release version fo wolfssl
-    - name: Get latest wolfssl release tag
-      uses: actions/github-script@v7
-      id: latest-release
-      with:
-        script: |
-          const release = await github.rest.repos.getLatestRelease({
-            owner: 'wolfssl',
-            repo: 'wolfssl'
-          });
-          return release.data.tag_name;
-        result-encoding: string
-
+    # pull and build wolfssl
     - name: Checkout wolfssl
       uses: actions/checkout@v4
       with:
         repository: wolfssl/wolfssl
-        ref: ${{ steps.latest-release.outputs.result }}
-        path: wolfssl    # pull and build wolfssl
+        path: wolfssl
 
     # Build and test standard build
     - name: Build and test
