@@ -163,6 +163,30 @@ int wh_MessageKeystore_TranslateEraseResponse(
     return 0;
 }
 
+/* Key Revoke Request translation */
+int wh_MessageKeystore_TranslateRevokeRequest(
+    uint16_t magic, const whMessageKeystore_RevokeRequest* src,
+    whMessageKeystore_RevokeRequest* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T16(magic, dest, src, id);
+    return 0;
+}
+
+/* Key Revoke Response translation */
+int wh_MessageKeystore_TranslateRevokeResponse(
+    uint16_t magic, const whMessageKeystore_RevokeResponse* src,
+    whMessageKeystore_RevokeResponse* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, rc);
+    return 0;
+}
+
 #ifdef WOLFHSM_CFG_DMA
 /*
  * DMA-based keystore operations

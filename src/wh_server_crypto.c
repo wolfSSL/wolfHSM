@@ -243,8 +243,8 @@ int wh_Server_CacheImportRsaKey(whServerContext* ctx, RsaKey* key,
     }
 
     /* get a free slot */
-    ret = wh_Server_KeystoreGetCacheSlot(ctx, keyId, max_size, &cacheBuf,
-                                         &cacheMeta);
+    ret = wh_Server_KeystoreGetCacheSlotChecked(ctx, keyId, max_size, &cacheBuf,
+                                                &cacheMeta);
     if (ret == 0) {
         ret = wh_Crypto_RsaSerializeKeyDer(key, max_size, cacheBuf, &der_size);
     }
@@ -586,8 +586,8 @@ int wh_Server_EccKeyCacheImport(whServerContext* ctx, ecc_key* key,
         return WH_ERROR_BADARGS;
     }
     /* get a free slot */
-    ret = wh_Server_KeystoreGetCacheSlot(ctx, keyId, max_size, &cacheBuf,
-                                         &cacheMeta);
+    ret = wh_Server_KeystoreGetCacheSlotChecked(ctx, keyId, max_size, &cacheBuf,
+                                                &cacheMeta);
     if (ret == WH_ERROR_OK) {
         ret = wh_Crypto_EccSerializeKeyDer(key, max_size, cacheBuf, &der_size);
     }
@@ -646,8 +646,8 @@ int wh_Server_CacheImportEd25519Key(whServerContext* ctx, ed25519_key* key,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Server_KeystoreGetCacheSlot(ctx, keyId, max_size, &cacheBuf,
-                                         &cacheMeta);
+    ret = wh_Server_KeystoreGetCacheSlotChecked(ctx, keyId, max_size, &cacheBuf,
+                                                &cacheMeta);
     if (ret == WH_ERROR_OK) {
         ret = wh_Crypto_Ed25519SerializeKeyDer(key, max_size, cacheBuf,
                                                &der_size);
@@ -708,8 +708,8 @@ int wh_Server_CacheImportCurve25519Key(whServerContext* server,
 
     /* if successful, find a free cache slot and copy in the key data */
     if (ret == 0) {
-        ret = wh_Server_KeystoreGetCacheSlot(server, keyId, keySz, &cacheBuf,
-                                             &cacheMeta);
+        ret = wh_Server_KeystoreGetCacheSlotChecked(server, keyId, keySz,
+                                                    &cacheBuf, &cacheMeta);
         if (ret == 0) {
             memcpy(cacheBuf, der_buf, keySz);
             /* Update metadata to cache the key */
@@ -774,8 +774,8 @@ int wh_Server_MlDsaKeyCacheImport(whServerContext* ctx, MlDsaKey* key,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Server_KeystoreGetCacheSlot(ctx, keyId, MAX_MLDSA_DER_SIZE,
-                                         &cacheBuf, &cacheMeta);
+    ret = wh_Server_KeystoreGetCacheSlotChecked(ctx, keyId, MAX_MLDSA_DER_SIZE,
+                                                &cacheBuf, &cacheMeta);
     if (ret == WH_ERROR_OK) {
         ret = wh_Crypto_MlDsaSerializeKeyDer(key, MAX_MLDSA_DER_SIZE, cacheBuf,
                                              &der_size);
@@ -1308,8 +1308,8 @@ int wh_Server_HkdfKeyCacheImport(whServerContext* ctx, const uint8_t* keyData,
     }
 
     /* Get a free slot */
-    ret = wh_Server_KeystoreGetCacheSlot(ctx, keyId, keySize, &cacheBuf,
-                                         &cacheMeta);
+    ret = wh_Server_KeystoreGetCacheSlotChecked(ctx, keyId, keySize, &cacheBuf,
+                                                &cacheMeta);
     if (ret == WH_ERROR_OK) {
         /* Copy the key data to cache buffer */
         memcpy(cacheBuf, keyData, keySize);
@@ -1347,8 +1347,8 @@ int wh_Server_CmacKdfKeyCacheImport(whServerContext* ctx,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Server_KeystoreGetCacheSlot(ctx, keyId, keySize, &cacheBuf,
-                                         &cacheMeta);
+    ret = wh_Server_KeystoreGetCacheSlotChecked(ctx, keyId, keySize, &cacheBuf,
+                                                &cacheMeta);
     if (ret == WH_ERROR_OK) {
         memcpy(cacheBuf, keyData, keySize);
     }

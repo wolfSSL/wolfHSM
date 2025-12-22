@@ -153,6 +153,27 @@ int wh_MessageKeystore_TranslateEraseResponse(
     uint16_t magic, const whMessageKeystore_EraseResponse* src,
     whMessageKeystore_EraseResponse* dest);
 
+/* Key Revoke Request */
+typedef struct {
+    uint16_t id;
+    uint8_t  WH_PAD[6];
+} whMessageKeystore_RevokeRequest;
+
+/* Key Revoke Response */
+typedef struct {
+    uint32_t rc;
+    uint8_t  WH_PAD[4];
+} whMessageKeystore_RevokeResponse;
+
+/* Key Revoke translation functions */
+int wh_MessageKeystore_TranslateRevokeRequest(
+    uint16_t magic, const whMessageKeystore_RevokeRequest* src,
+    whMessageKeystore_RevokeRequest* dest);
+
+int wh_MessageKeystore_TranslateRevokeResponse(
+    uint16_t magic, const whMessageKeystore_RevokeResponse* src,
+    whMessageKeystore_RevokeResponse* dest);
+
 /*
  * DMA-based keystore operations
  */

@@ -42,6 +42,7 @@
 
 #ifdef WOLFHSM_CFG_ENABLE_CLIENT
 #include "wolfhsm/wh_client.h"
+#include "wh_test_nvmflags.h"
 #endif
 
 #if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER) && !defined(WOLFHSM_CFG_NO_CRYPTO)
@@ -82,11 +83,6 @@ typedef struct {
 #define TEST_MEM_CLI_BYTE ((uint8_t)0xAA)
 #define TEST_MEM_UNMAPPED_BYTE ((uint8_t)0xBB)
 #endif /* WOLFHSM_CFG_DMA */
-
-
-#if defined(WOLFHSM_CFG_ENABLE_CLIENT)
-static int _testNonExportableNvmAccess(whClientContext* client);
-#endif
 
 #ifdef WOLFHSM_CFG_ENABLE_SERVER
 /* Pointer to a local server context so a connect callback can access it. Should
@@ -490,164 +486,6 @@ static int _testClientCounter(whClientContext* client)
     WH_TEST_ASSERT_RETURN(avail_objects == WOLFHSM_CFG_NVM_OBJECT_COUNT);
 
     return WH_ERROR_OK;
-}
-
-static int _testNonExportableNvmAccess(whClientContext* client)
-{
-    int       ret       = 0;
-    whNvmId   nvmId     = 2; /* Arbitrary NVM ID */
-    uint8_t   nvmData[] = {0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88};
-    uint8_t   exportedNvmData[sizeof(nvmData)] = {0};
-    uint8_t   nvmLabel[WH_NVM_LABEL_LEN]       = "NonExportableNvmObj";
-    int32_t   out_rc                           = 0;
-    whNvmSize out_len                          = 0;
-
-    WH_TEST_PRINT("Testing non-exportable NVM object access protection...\n");
-
-    /* Test 1: Regular NVM Read Protection */
-    /* Create NVM object with non-exportable flag */
-    ret = wh_Client_NvmAddObject(client, nvmId, WH_NVM_ACCESS_ANY,
-                                 WH_NVM_FLAGS_NONEXPORTABLE, sizeof(nvmLabel),
-                                 nvmLabel, sizeof(nvmData), nvmData, &out_rc);
-    if (ret != 0 || out_rc != 0) {
-        WH_ERROR_PRINT(
-            "Failed to add non-exportable NVM object: ret=%d, out_rc=%d\n", ret,
-            (int)out_rc);
-        return ret != 0 ? ret : out_rc;
-    }
-
-    /* Try to read the non-exportable NVM object - should fail */
-    out_rc = 0;
-    ret = wh_Client_NvmRead(client, nvmId, 0, sizeof(exportedNvmData), &out_rc,
-                            &out_len, exportedNvmData);
-    if (ret != 0 || out_rc != WH_ERROR_ACCESS) {
-        WH_ERROR_PRINT("Non-exportable NVM object was read unexpectedly: "
-                       "ret=%d, out_rc=%d\n",
-                       ret, (int)out_rc);
-        return -1;
-    }
-
-    WH_TEST_DEBUG_PRINT("Non-exportable NVM object read correctly denied\n");
-
-    /* Clean up NVM object */
-    whNvmId destroyList[] = {nvmId};
-    out_rc                = 0;
-    wh_Client_NvmDestroyObjects(client, 1, destroyList, &out_rc);
-
-    /* Test 2: Verify exportable NVM objects can still be read */
-    memcpy(nvmLabel, "ExportableNvmObject", sizeof("ExportableNvmObject"));
-
-    ret = wh_Client_NvmAddObject(client, nvmId, WH_NVM_ACCESS_ANY,
-                                 WH_NVM_FLAGS_NONE, sizeof(nvmLabel), nvmLabel,
-                                 sizeof(nvmData), nvmData, &out_rc);
-    if (ret != 0 || out_rc != 0) {
-        WH_ERROR_PRINT(
-            "Failed to add exportable NVM object: ret=%d, out_rc=%d\n", ret,
-            (int)out_rc);
-        return ret != 0 ? ret : out_rc;
-    }
-
-    /* Try to read the exportable NVM object - should succeed */
-    memset(exportedNvmData, 0, sizeof(exportedNvmData));
-    out_rc  = 0;
-    out_len = 0;
-    ret = wh_Client_NvmRead(client, nvmId, 0, sizeof(exportedNvmData), &out_rc,
-                            &out_len, exportedNvmData);
-    if (ret != 0 || out_rc != 0) {
-        WH_ERROR_PRINT(
-            "Failed to read exportable NVM object: ret=%d, out_rc=%d\n", ret,
-            (int)out_rc);
-        return ret != 0 ? ret : out_rc;
-    }
-
-    /* Verify data matches */
-    if (out_len != sizeof(nvmData) ||
-        memcmp(nvmData, exportedNvmData, out_len) != 0) {
-        WH_ERROR_PRINT("Exported NVM data doesn't match original\n");
-        return -1;
-    }
-
-    WH_TEST_DEBUG_PRINT("Exportable NVM object read succeeded\n");
-
-    /* Clean up */
-    out_rc = 0;
-    wh_Client_NvmDestroyObjects(client, 1, &nvmId, &out_rc);
-
-#ifdef WOLFHSM_CFG_DMA
-    /* Test 3: DMA NVM Read Protection */
-    WH_TEST_PRINT("Testing DMA NVM read protection...\n");
-
-    /* Create NVM object with non-exportable flag */
-    memcpy(nvmLabel, "NonExportDmaNvmObj", sizeof("NonExportDmaNvmObj"));
-
-    ret = wh_Client_NvmAddObject(client, nvmId, WH_NVM_ACCESS_ANY,
-                                 WH_NVM_FLAGS_NONEXPORTABLE, sizeof(nvmLabel),
-                                 nvmLabel, sizeof(nvmData), nvmData, &out_rc);
-    if (ret != 0 || out_rc != 0) {
-        WH_ERROR_PRINT("Failed to add non-exportable NVM object for DMA: "
-                       "ret=%d, out_rc=%d\n",
-                       ret, (int)out_rc);
-        return ret != 0 ? ret : out_rc;
-    }
-
-    /* Try to read the non-exportable NVM object via DMA - should fail */
-    memset(exportedNvmData, 0, sizeof(exportedNvmData));
-    out_rc = 0;
-    ret    = wh_Client_NvmReadDma(client, nvmId, 0, sizeof(exportedNvmData),
-                                  exportedNvmData, &out_rc);
-    if (ret != 0 || out_rc != WH_ERROR_ACCESS) {
-        WH_ERROR_PRINT("Non-exportable NVM object was read via DMA "
-                       "unexpectedly: ret=%d, out_rc=%d\n",
-                       ret, (int)out_rc);
-        return -1;
-    }
-
-    WH_TEST_DEBUG_PRINT("Non-exportable NVM object DMA read correctly denied\n");
-
-    /* Clean up */
-    out_rc = 0;
-    wh_Client_NvmDestroyObjects(client, 1, &nvmId, &out_rc);
-
-    /* Test 4: Verify exportable NVM objects can be read via DMA */
-    memcpy(nvmLabel, "ExportableDmaNvmObj", sizeof("ExportableDmaNvmObj"));
-
-    ret = wh_Client_NvmAddObject(client, nvmId, WH_NVM_ACCESS_ANY,
-                                 WH_NVM_FLAGS_NONE, sizeof(nvmLabel), nvmLabel,
-                                 sizeof(nvmData), nvmData, &out_rc);
-    if (ret != 0 || out_rc != 0) {
-        WH_ERROR_PRINT(
-            "Failed to add exportable NVM object for DMA: ret=%d, out_rc=%d\n",
-            ret, (int)out_rc);
-        return ret != 0 ? ret : out_rc;
-    }
-
-    /* Try to read the exportable NVM object via DMA - should succeed */
-    memset(exportedNvmData, 0, sizeof(exportedNvmData));
-    out_rc = 0;
-    ret    = wh_Client_NvmReadDma(client, nvmId, 0, sizeof(exportedNvmData),
-                                  exportedNvmData, &out_rc);
-    if (ret != 0 || out_rc != 0) {
-        WH_ERROR_PRINT(
-            "Failed to read exportable NVM object via DMA: ret=%d, out_rc=%d\n",
-            ret, (int)out_rc);
-        return ret != 0 ? ret : out_rc;
-    }
-
-    /* Verify data matches */
-    if (memcmp(nvmData, exportedNvmData, sizeof(nvmData)) != 0) {
-        WH_ERROR_PRINT("DMA exported NVM data doesn't match original\n");
-        return -1;
-    }
-
-    WH_TEST_DEBUG_PRINT("Exportable NVM object DMA read succeeded\n");
-
-    /* Clean up */
-    out_rc = 0;
-    wh_Client_NvmDestroyObjects(client, 1, &nvmId, &out_rc);
-#endif /* WOLFHSM_CFG_DMA */
-
-    WH_TEST_PRINT("NON-EXPORTABLE NVM ACCESS TEST SUCCESS\n");
-    return 0;
 }
 #endif /* WOLFHSM_CFG_ENABLE_CLIENT */
 
@@ -1383,6 +1221,18 @@ int whTest_ClientServerClientConfig(whClientConfig* clientCfg)
     WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
     WH_TEST_ASSERT_RETURN(avail_objects == WOLFHSM_CFG_NVM_OBJECT_COUNT);
 
+    /* Reset NVM state after flag tests */
+    WH_TEST_RETURN_ON_FAIL(ret = wh_Client_NvmCleanup(client, &server_rc));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+    WH_TEST_RETURN_ON_FAIL(
+        ret = wh_Client_NvmInit(client, &server_rc, &client_id, &server_id));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+    WH_TEST_RETURN_ON_FAIL(ret = wh_Client_NvmGetAvailable(
+                               client, &server_rc, &avail_size, &avail_objects,
+                               &reclaim_size, &reclaim_objects));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(avail_objects == WOLFHSM_CFG_NVM_OBJECT_COUNT);
+
 
     for (counter = 0; counter < 5; counter++) {
         whNvmId     id                          = counter + 20;
@@ -1641,10 +1491,6 @@ int whTest_ClientServerClientConfig(whClientConfig* clientCfg)
 
 #endif /* WOLFHSM_CFG_DMA */
 
-    /* Test non-exportable flag enforcement for NVM and certificate operations
-     */
-    WH_TEST_RETURN_ON_FAIL(_testNonExportableNvmAccess(client));
-
     /* Test client counter API */
     WH_TEST_RETURN_ON_FAIL(_testClientCounter(client));
 
@@ -1675,6 +1521,10 @@ int whTest_ClientServerClientConfig(whClientConfig* clientCfg)
 #endif /* WOLFHSM_CFG_DMA */
 
 #endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER && !WOLFHSM_CFG_NO_CRYPTO */
+
+    /* Test NVM flag enforcement, thest last as it may create non-destroyable
+     * artifacts */
+    WH_TEST_RETURN_ON_FAIL(ret = whTest_NvmFlags(client));
 
     WH_TEST_RETURN_ON_FAIL(wh_Client_CommClose(client));
     WH_TEST_RETURN_ON_FAIL(wh_Client_Cleanup(client));
