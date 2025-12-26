@@ -136,6 +136,9 @@ else
 	DEF += -DWOLFHSM_CFG_IS_TEST_SERVER
 endif
 
+ifeq ($(CRYPTIMEOUT),1)
+	DEF += -DWOLFHSM_CFG_CLIENT_TIMEOUT
+endif
 
 ## Source files
 # Assembly source files

@@ -211,6 +211,7 @@ int wh_CommClient_Cleanup(whCommClient* context)
     return rc;
 }
 
+
 #endif /* WOLFHSM_CFG_ENABLE_CLIENT */
 
 /** Server Functions */
