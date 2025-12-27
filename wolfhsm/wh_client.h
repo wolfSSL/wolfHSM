@@ -53,6 +53,7 @@
 #include "wolfhsm/wh_dma.h"
 #endif /* WOLFHSM_CFG_DMA */
 #include "wolfhsm/wh_keyid.h"
+#include "wolfhsm/wh_auth.h"
 
 
 /* Forward declaration of the client structure so its elements can reference
@@ -1865,6 +1866,67 @@ int wh_Client_CustomCbCheckRegisteredResponse(whClientContext* c,
  */
 int wh_Client_CustomCbCheckRegistered(whClientContext* c, uint16_t id,
                                       int* responseError);
+
+/* Auth Manager functions */
+
+/**
+ * @brief Sends an authentication request to the server.
+ *
+ * This function prepares and sends an authentication request message to the server.
+ * The request includes the authentication method and authentication data (e.g., PIN).
+ * This function does not block; it returns immediately after sending the request.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] method The authentication method to use (e.g., WH_AUTH_METHOD_PIN).
+ * @param[in] auth_data Pointer to the authentication data.
+ * @param[in] auth_data_len Length of the authentication data.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_AuthAuthenticateRequest(whClientContext* c,
+        whAuthMethod method, const void* auth_data, uint16_t auth_data_len);
+
+/**
+ * @brief Receives an authentication response from the server.
+ *
+ * This function attempts to process an authentication response message from the server.
+ * It validates the response and extracts the return code, user ID, session ID, and
+ * permissions. This function does not block; it returns WH_ERROR_NOTREADY if a
+ * response has not been received.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[out] out_rc Pointer to store the return code from the server.
+ * @param[out] out_user_id Pointer to store the authenticated user ID.
+ * @param[out] out_session_id Pointer to store the session ID.
+ * @param[out] out_permissions Pointer to store the user permissions.
+ * @return int Returns 0 on success, WH_ERROR_NOTREADY if no response is
+ * available, or a negative error code on failure.
+ */
+int wh_Client_AuthAuthenticateResponse(whClientContext* c, int32_t *out_rc,
+        whUserId* out_user_id, whSessionId* out_session_id,
+        whAuthPermissions* out_permissions);
+
+/**
+ * @brief Authenticates a user with the server (blocking convenience wrapper).
+ *
+ * This function handles the complete process of sending an authentication request
+ * to the server and receiving the response. It sends the request and repeatedly
+ * attempts to receive a valid response. This function blocks until the entire
+ * operation is complete or an error occurs.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] method The authentication method to use (e.g., WH_AUTH_METHOD_PIN).
+ * @param[in] auth_data Pointer to the authentication data.
+ * @param[in] auth_data_len Length of the authentication data.
+ * @param[out] out_rc Pointer to store the return code from the server.
+ * @param[out] out_user_id Pointer to store the authenticated user ID.
+ * @param[out] out_session_id Pointer to store the session ID.
+ * @param[out] out_permissions Pointer to store the user permissions.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_AuthAuthenticate(whClientContext* c, whAuthMethod method,
+        const void* auth_data, uint16_t auth_data_len,
+        int32_t* out_rc, whUserId* out_user_id, whSessionId* out_session_id,
+        whAuthPermissions* out_permissions);
 
 /* Certificate functions */
 
