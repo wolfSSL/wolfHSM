@@ -84,7 +84,8 @@ typedef struct {
 
     /* Authenticate a user using the specified method */
     int (*Login)(void* context, uint8_t client_id,
-                        whAuthMethod method, const void* auth_data,
+                        whAuthMethod method, const char* username,
+                        const void* auth_data,
                         uint16_t auth_data_len,
                         whUserId* out_user_id,
                         whAuthPermissions* out_permissions);
