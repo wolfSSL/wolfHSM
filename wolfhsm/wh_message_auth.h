@@ -63,7 +63,8 @@ int wh_MessageAuth_TranslateSimpleResponse(uint16_t magic,
 
 /** Login Request */
 typedef struct {
-    uint8_t method;  /* whAuthMethod */
+    uint16_t method;
+    char username[WH_MESSAGE_AUTH_MAX_USERNAME_LEN];
     uint16_t auth_data_len;
     uint8_t auth_data[WH_MESSAGE_AUTH_MAX_CREDENTIALS_LEN];
 } whMessageAuth_LoginRequest;

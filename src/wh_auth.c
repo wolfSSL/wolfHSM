@@ -90,7 +90,8 @@ int wh_Auth_Cleanup(whAuthContext* context)
 
 
 int wh_Auth_Login(whAuthContext* context, uint8_t client_id,
-                          whAuthMethod method, const void* auth_data,
+                          whAuthMethod method, const char* username,
+                          const void* auth_data,
                           uint16_t auth_data_len)
 {
     int rc;
@@ -109,7 +110,7 @@ int wh_Auth_Login(whAuthContext* context, uint8_t client_id,
     }
 
     rc = context->cb->Login(context->context, client_id, method,
-                              auth_data, auth_data_len, &out_user_id,
+                              username, auth_data, auth_data_len, &out_user_id,
                               &out_permissions);
     if (rc == WH_ERROR_OK) {
         context->user.user_id = out_user_id;
@@ -215,12 +216,12 @@ int wh_Auth_UserSetCredentials(whAuthContext* context, whUserId user_id,
                                  whAuthMethod method, const void* credentials,
                                  uint16_t credentials_len)
 {
-    /* TODO: Set user credentials */
-    (void)context;
-    (void)user_id;
-    (void)method;
-    (void)credentials;
-    (void)credentials_len;
-    return WH_ERROR_NOTIMPL;
+    if (    (context == NULL) ||
+            (context->cb == NULL) ||
+            (context->cb->UserAdd == NULL) ) {
+        return WH_ERROR_BADARGS;
+    }
+
+    return context->cb->UserSetCredentials(context->context, user_id, method, credentials, credentials_len);
 }
 

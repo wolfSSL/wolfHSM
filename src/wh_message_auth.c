@@ -39,10 +39,10 @@ int wh_MessageAuth_TranslateSimpleResponse(uint16_t magic,
         const whMessageAuth_SimpleResponse* src,
         whMessageAuth_SimpleResponse* dest)
 {
-    /* TODO: Translate simple response message */
-    (void)magic;
-    (void)src;
-    (void)dest;
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, rc);
     return 0;
 }
 
@@ -50,10 +50,16 @@ int wh_MessageAuth_TranslateLoginRequest(uint16_t magic,
         const whMessageAuth_LoginRequest* src,
         whMessageAuth_LoginRequest* dest)
 {
-    /* TODO: Translate login request message */
-    (void)magic;
-    (void)src;
-    (void)dest;
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    WH_T16(magic, dest, src, method);
+    if (src != dest) {
+        memcpy(dest->username, src->username, sizeof(dest->username));
+        memcpy(dest->auth_data, src->auth_data, src->auth_data_len);
+    }
+    WH_T16(magic, dest, src, auth_data_len);
     return 0;
 }
 
@@ -61,10 +67,13 @@ int wh_MessageAuth_TranslateLoginResponse(uint16_t magic,
         const whMessageAuth_LoginResponse* src,
         whMessageAuth_LoginResponse* dest)
 {
-    /* TODO: Translate login response message */
-    (void)magic;
-    (void)src;
-    (void)dest;
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    WH_T32(magic, dest, src, rc);
+    WH_T16(magic, dest, src, user_id);
+    WH_T32(magic, dest, src, permissions);
     return 0;
 }
 
@@ -88,7 +97,6 @@ int wh_MessageAuth_TranslateUserAddRequest(uint16_t magic,
         return WH_ERROR_BADARGS;
     }
 
-    memcpy(dest->username, src->username, sizeof(dest->username));
     if (src != dest) {
         memcpy(dest->username, src->username, sizeof(dest->username));
     }
@@ -156,12 +164,19 @@ int wh_MessageAuth_TranslateUserSetCredentialsRequest(uint16_t magic,
         const whMessageAuth_UserSetCredentialsRequest* src,
         whMessageAuth_UserSetCredentialsRequest* dest)
 {
-    /* TODO: Translate user set credentials request message */
-    (void)magic;
-    (void)src;
-    (void)dest;
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    WH_T16(magic, dest, src, user_id);
+    WH_T16(magic, dest, src, method);
+    WH_T16(magic, dest, src, credentials_len);
+    if (src != dest) {
+        memcpy(dest->credentials, src->credentials, src->credentials_len);
+    }
     return 0;
 }
+
 
 int wh_MessageAuth_TranslateCheckAuthorizationRequest(uint16_t magic,
         const whMessageAuth_CheckAuthorizationRequest* src,

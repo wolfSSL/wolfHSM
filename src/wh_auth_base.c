@@ -59,35 +59,52 @@ int wh_AuthBase_Cleanup(void* context)
     return WH_ERROR_NOTIMPL;
 }
 
-static int CheckPin(const void* auth_data, uint16_t auth_data_len)
+static int CheckPin(const char* username, const void* auth_data, uint16_t auth_data_len)
 {
-    /* TODO: Check if PIN is correct */
-    (void)auth_data;
-    (void)auth_data_len;
-    return WH_ERROR_NOTIMPL;
+    int i;
+
+    /* Simple check if the PIN is correct */
+    for (i = 0; i < WH_AUTH_BASE_MAX_USERS; i++) {
+        if (strcmp(users[i].user.username, username) == 0) {
+            break;
+        }
+    }
+    if (i >= WH_AUTH_BASE_MAX_USERS) {
+        return WH_ERROR_NOTFOUND;
+    }
+    if (users[i].credentials_len == auth_data_len &&
+        memcmp(users[i].credentials, auth_data, auth_data_len) == 0) {
+        return WH_ERROR_OK;
+    }
+    else {
+        return WH_ERROR_ACCESS;
+    }
 }
 
-static int CheckCertificate(const void* auth_data, uint16_t auth_data_len)
+static int CheckCertificate(const char* username, const void* auth_data, uint16_t auth_data_len)
 {
     /* TODO: Check if certificate is correct */
     (void)auth_data;
     (void)auth_data_len;
+    (void)username;
     return WH_ERROR_NOTIMPL;
 }
 
-static int CheckChallengeResponse(const void* auth_data, uint16_t auth_data_len)
+static int CheckChallengeResponse(const char* username, const void* auth_data, uint16_t auth_data_len)
 {
     /* TODO: Check if challenge response is correct */
     (void)auth_data;
     (void)auth_data_len;
+    (void)username;
     return WH_ERROR_NOTIMPL;
 }
 
-static int CheckPSK(const void* auth_data, uint16_t auth_data_len)
+static int CheckPSK(const char* username, const void* auth_data, uint16_t auth_data_len)
 {
     /* TODO: Check if PSK is correct */
     (void)auth_data;
     (void)auth_data_len;
+    (void)username;
     return WH_ERROR_NOTIMPL;
 }
 
@@ -109,16 +126,16 @@ int wh_AuthBase_Login(void* context, uint8_t client_id,
     (void)client_id;
     switch (method) {
         case WH_AUTH_METHOD_PIN:
-            rc = CheckPin(auth_data, auth_data_len);
+            rc = CheckPin(username, auth_data, auth_data_len);
             break;
         case WH_AUTH_METHOD_CERTIFICATE:
-            rc = CheckCertificate(auth_data, auth_data_len);
+            rc = CheckCertificate(username, auth_data, auth_data_len);
             break;
         case WH_AUTH_METHOD_CHALLENGE_RESPONSE:
-            rc = CheckChallengeResponse(auth_data, auth_data_len);
+            rc = CheckChallengeResponse(username, auth_data, auth_data_len);
             break;
         case WH_AUTH_METHOD_PSK:
-            rc = CheckPSK(auth_data, auth_data_len);
+            rc = CheckPSK(username, auth_data, auth_data_len);
             break;
         default:
             rc = WH_ERROR_BADARGS;
@@ -218,6 +235,7 @@ int wh_AuthBase_UserAdd(void* context, const char* username,
     whAuthContext* auth_context = (whAuthContext*)context;
     whAuthBase_User* new_user;
     int i;
+    int userId = WH_USER_ID_INVALID;
 
     for (i = 0; i < WH_AUTH_BASE_MAX_USERS; i++) {
         if (users[i].user.user_id == WH_USER_ID_INVALID) {
@@ -229,11 +247,12 @@ int wh_AuthBase_UserAdd(void* context, const char* username,
         printf("User list is full");
         return WH_ERROR_BUFFER_SIZE;
     }
+    userId = i + 1; /* save 0 fron WH_USER_ID_INVALID */
     new_user = &users[i];
     
     memset(new_user, 0, sizeof(whAuthBase_User));
-    new_user->user.user_id = i;
-    *out_user_id = i;
+    new_user->user.user_id = userId;
+    *out_user_id = userId;
     new_user->user.permissions = permissions;
     strcpy(new_user->user.username, username);
     new_user->user.is_active = true;
@@ -286,10 +305,12 @@ int wh_AuthBase_UserSetCredentials(void* context, uint16_t user_id,
     whAuthMethod method, const void* credentials, uint16_t credentials_len)
 {
     whAuthContext* auth_context = (whAuthContext*)context;
-    whAuthBase_User* user = &users[user_id];
-    if (user->user.user_id == WH_USER_ID_INVALID) {
-        return WH_ERROR_NOTFOUND;
+    whAuthBase_User* user;
+
+    if (user_id == WH_USER_ID_INVALID) {
+        return WH_ERROR_BADARGS;
     }
+    user = &users[user_id - 1]; /* subtract 1 to get the index */
     user->method = method;
     if (credentials_len > WH_AUTH_BASE_MAX_CREDENTIALS_LEN) {
         return WH_ERROR_BUFFER_SIZE;

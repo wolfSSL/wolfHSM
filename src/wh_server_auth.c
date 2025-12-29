@@ -81,7 +81,8 @@ int wh_Server_HandleAuthRequest(whServerContext* server,
         wh_MessageAuth_TranslateLoginRequest(magic, req_packet, &req);
 
         /* Login the user */
-        rc = wh_Auth_Login(server->auth, server->comm->client_id, req.method, req.auth_data, req.auth_data_len);
+        rc = wh_Auth_Login(server->auth, server->comm->client_id, req.method,
+            req.username, req.auth_data, req.auth_data_len);
         resp.rc = rc;
        }
        break;
@@ -219,7 +220,9 @@ int wh_Server_HandleAuthRequest(whServerContext* server,
         /* Set the user credentials */
         rc = wh_Auth_UserSetCredentials(server->auth, req.user_id, req.method, req.credentials, req.credentials_len);
         resp.rc = rc;
-       }
+        wh_MessageAuth_TranslateSimpleResponse(magic, &resp, (whMessageAuth_SimpleResponse*)resp_packet);
+        *out_resp_size = sizeof(resp);
+    }
        break;
 
        default:
