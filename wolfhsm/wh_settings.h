@@ -385,7 +385,7 @@
 #error "wolfHSM requires wolfCrypt built without NO_RNG"
 #endif
 
-#if defined WOLFHSM_CFG_SHE_EXTENSION
+#if defined(WOLFHSM_CFG_SHE_EXTENSION)
 #if defined(NO_AES) || \
     !defined(WOLFSSL_CMAC) || \
     !defined(WOLFSSL_AES_DIRECT) || \
