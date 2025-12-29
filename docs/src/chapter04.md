@@ -11,9 +11,11 @@ wolfHSM is a modular and extensible library designed to provide a secure and eff
     - [Comms Layer](#comms-layer)
 - [Non Volatile Memory](#non-volatile-memory)
   - [NVM Metadata](#nvm-metadata)
+  - [NVM Access and Flags](#nvm-access-and-flags)
   - [NVM Architecture](#nvm-architecture)
   - [NVM Back-Ends](#nvm-back-ends)
 - [Key Management](#key-management)
+  - [Key Revocation](#key-revocation)
 - [Cryptographic Operations](#cryptographic-operations)
   - [Hardware Cryptography Support](#hardware-cryptography-support)
 
@@ -222,6 +224,18 @@ typedef struct {
 Length (whNvmSize len): The length of the data associated with the object, in bytes.
 - Label (`uint8_t label[]`): A human-readable label or name for the object.
 
+### NVM Access and Flags
+
+NVM access controls are stored in the metadata for all objects and are returned by `wh_Nvm_GetMetadata()` and related client APIs. 
+
+NVM flags provide object and key policy hints that are enforced by the NVM library and keystore. Relevant flags include:
+
+- `WH_NVM_FLAGS_NONMODIFIABLE`: Object cannot be modified and/or destroyed.
+- `WH_NVM_FLAGS_NONDESTROYABLE`: Object cannot be destroyed.
+- `WH_NVM_FLAGS_NONEXPORTABLE`: Object data cannot be read/exported.
+- `WH_NVM_FLAGS_USAGE_*`: Key usage policy flags for encrypt/decrypt/sign/verify/wrap/derive.
+- `WH_NVM_FLAGS_USAGE_ANY`: Allow all usage flags.
+
 ### NVM Architecture
 
 The wolfHSM server follows the generic component architecture approach to handle Non-Volatile Memory (NVM) operations. The configuration is divided into generic and specific parts, allowing for flexibility and customization.
@@ -248,6 +262,21 @@ Currently, wolfHSM only supports one NVM back-end provider: the NVM flash module
 ## Key Management
 
 The wolfHSM library provides comprehensive key management capabilities, including storing, loading, and exporting keys from non-volatile memory, caching of frequently used keys in RAM for fast access, and interacting with hardware-exclusive device keys. Keys are stored in non-volatile memory along side other NVM objects with corresponding access protections. wolfHSM will automatically load keys into the necessary cryptographic hardware when the key is selected for use with a specific consumer. More information on the key management API can be found in the [client library](./chapter05.md) and [API documentation](./appendix01.md) sections.
+
+### Key Revocation
+
+Key revocation provides a lightweight mechanism to invalidate a key without destroying its storage. When a key is revoked on the server, its metadata is updated by setting `WH_NVM_FLAGS_NONMODIFIABLE` and clearing all `WH_NVM_FLAGS_USAGE_*` bits. The key remains present in cache/NVM, but is no longer eligible for cryptographic operations that enforce usage flags.
+
+Runtime behavior for revoked keys:
+
+- Cryptographic operations that enforce usage flags return `WH_ERROR_USAGE` when the required usage bit is no longer set.
+- The `WH_NVM_FLAGS_NONMODIFIABLE` setting prevents further key metadata changes and blocks NVM modification or destruction checks.
+- Revocation does not automatically set `WH_NVM_FLAGS_NONEXPORTABLE`; export behavior remains controlled by those flags.
+
+Persistence behavior:
+
+- Revocation is committed to NVM for keys that already exist in NVM, so the revoked state persists across resets or power cycles.
+- If a key exists only in cache and has not been committed, the revoked state is limited to the cache lifetime.
 
 ## Cryptographic Operations
 

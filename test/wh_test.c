@@ -79,7 +79,6 @@ int whTest_Unit(void)
 
 #endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER && !WOLFHSM_CFG_NO_CRYPTO */
 
-
     /* Comm tests */
     WH_TEST_ASSERT(0 == whTest_Comm());
     WH_TEST_ASSERT(0 == whTest_ClientServer());

@@ -118,6 +118,8 @@ int wh_Nvm_AddObjectWithReclaim(whNvmContext* context, whNvmMetadata *meta,
 
 int wh_Nvm_AddObject(whNvmContext* context, whNvmMetadata *meta,
         whNvmSize data_len, const uint8_t* data);
+int wh_Nvm_AddObjectChecked(whNvmContext* context, whNvmMetadata* meta,
+                            whNvmSize data_len, const uint8_t* data);
 
 int wh_Nvm_List(whNvmContext* context,
         whNvmAccess access, whNvmFlags flags, whNvmId start_id,
@@ -128,8 +130,12 @@ int wh_Nvm_GetMetadata(whNvmContext* context, whNvmId id,
 
 int wh_Nvm_DestroyObjects(whNvmContext* context, whNvmId list_count,
         const whNvmId* id_list);
+int wh_Nvm_DestroyObjectsChecked(whNvmContext* context, whNvmId list_count,
+                                 const whNvmId* id_list);
 
 int wh_Nvm_Read(whNvmContext* context, whNvmId id, whNvmSize offset,
                 whNvmSize data_len, uint8_t* data);
+int wh_Nvm_ReadChecked(whNvmContext* context, whNvmId id, whNvmSize offset,
+                       whNvmSize data_len, uint8_t* data);
 
 #endif /* !WOLFHSM_WH_NVM_H_ */
