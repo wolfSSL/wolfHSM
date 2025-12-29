@@ -309,41 +309,76 @@ int wh_Client_AuthUserSetCredentialsRequest(whClientContext* c,
         whUserId user_id, whAuthMethod method, const void* credentials,
         uint16_t credentials_len)
 {
-    /* TODO: Send user set credentials request (non-blocking).
-     * Builds and sends the user set credentials request message. Returns immediately.
-     * May return WH_ERROR_NOTREADY if send buffer is busy. */
-    (void)c;
-    (void)user_id;
-    (void)method;
-    (void)credentials;
-    (void)credentials_len;
-    return WH_ERROR_NOTIMPL;
+    whMessageAuth_UserSetCredentialsRequest msg = {0};
+
+    if (c == NULL){
+        return WH_ERROR_BADARGS;
+    }
+
+    msg.user_id = user_id;
+    msg.method = method;
+    msg.credentials_len = credentials_len;
+    memcpy(msg.credentials, credentials, credentials_len);
+    return wh_Client_SendRequest(c,
+            WH_MESSAGE_GROUP_AUTH, WH_MESSAGE_AUTH_ACTION_USER_SET_CREDENTIALS,
+            sizeof(msg), &msg);
 }
 
 int wh_Client_AuthUserSetCredentialsResponse(whClientContext* c, int32_t *out_rc)
 {
-    /* TODO: Receive user set credentials response (non-blocking).
-     * Polls for and processes the user set credentials response. Returns immediately.
-     * Returns WH_ERROR_NOTREADY if response not yet available. */
-    (void)c;
-    (void)out_rc;
-    return WH_ERROR_NOTIMPL;
+    uint8_t                    buffer[WOLFHSM_CFG_COMM_DATA_LEN] = {0};
+    whMessageAuth_SimpleResponse* msg = (whMessageAuth_SimpleResponse*)buffer;
+
+    int rc = 0;
+    uint16_t resp_group = 0;
+    uint16_t resp_action = 0;
+    uint16_t resp_size = 0;
+
+    if (c == NULL){
+        return WH_ERROR_BADARGS;
+    }
+
+    rc = wh_Client_RecvResponse(c,
+            &resp_group, &resp_action,
+            &resp_size, buffer);
+    if (rc == 0) {
+        /* Validate response */
+        if ((resp_group != WH_MESSAGE_GROUP_AUTH) ||
+            (resp_action != WH_MESSAGE_AUTH_ACTION_USER_SET_CREDENTIALS) ||
+            (resp_size != sizeof(whMessageAuth_SimpleResponse))) {
+            /* Invalid message */
+            rc = WH_ERROR_ABORTED;
+        }
+        else {
+            /* Valid message */
+            if (out_rc != NULL) {
+                *out_rc = msg->rc;
+            }
+        }
+    }
+    return rc;
 }
 
 int wh_Client_AuthUserSetCredentials(whClientContext* c, whUserId user_id,
         whAuthMethod method, const void* credentials, uint16_t credentials_len,
         int32_t* out_rc)
 {
-    /* TODO: Set user credentials (blocking convenience wrapper).
-     * Calls Request, then loops on Response until complete. Blocks until
-     * credentials are set or operation fails. */
-    (void)c;
-    (void)user_id;
-    (void)method;
-    (void)credentials;
-    (void)credentials_len;
-    (void)out_rc;
-    return WH_ERROR_NOTIMPL;
+    int rc;
+
+    do {
+        rc = wh_Client_AuthUserSetCredentialsRequest(c, user_id, method,
+            credentials, credentials_len);
+    } while (rc == WH_ERROR_NOTREADY);
+
+    if (rc != 0) {
+        return rc;
+    }
+
+    do {
+        rc = wh_Client_AuthUserSetCredentialsResponse(c, out_rc);
+    } while (rc == WH_ERROR_NOTREADY);
+
+    return rc;
 }
 
 #endif /* WOLFHSM_CFG_ENABLE_CLIENT */
