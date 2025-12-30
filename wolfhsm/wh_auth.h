@@ -88,7 +88,8 @@ typedef struct {
                         const void* auth_data,
                         uint16_t auth_data_len,
                         whUserId* out_user_id,
-                        whAuthPermissions* out_permissions);
+                        whAuthPermissions* out_permissions,
+                        int* loggedIn);
 
     /* Logout a user */
     int (*Logout)(void* context, whUserId user_id);
@@ -149,7 +150,7 @@ int wh_Auth_Cleanup(whAuthContext* context);
 /* Authenticate and login a user */
 int wh_Auth_Login(whAuthContext* context, uint8_t client_id,
     whAuthMethod method, const char* username, const void* auth_data,
-    uint16_t auth_data_len);
+    uint16_t auth_data_len, int* loggedIn);
 
 /* Logout a user */
 int wh_Auth_Logout(whAuthContext* context, whUserId user_id);

@@ -59,7 +59,7 @@ int wh_AuthBase_Cleanup(void* context)
     return WH_ERROR_NOTIMPL;
 }
 
-static int CheckPin(const char* username, const void* auth_data, uint16_t auth_data_len)
+static whAuthBase_User* CheckPin(const char* username, const void* auth_data, uint16_t auth_data_len)
 {
     int i;
 
@@ -70,14 +70,14 @@ static int CheckPin(const char* username, const void* auth_data, uint16_t auth_d
         }
     }
     if (i >= WH_AUTH_BASE_MAX_USERS) {
-        return WH_ERROR_NOTFOUND;
+        return NULL;
     }
     if (users[i].credentials_len == auth_data_len &&
         memcmp(users[i].credentials, auth_data, auth_data_len) == 0) {
-        return WH_ERROR_OK;
+        return &users[i];
     }
     else {
-        return WH_ERROR_ACCESS;
+        return NULL;
     }
 }
 
@@ -113,42 +113,65 @@ int wh_AuthBase_Login(void* context, uint8_t client_id,
                           const void* auth_data,
                           uint16_t auth_data_len,
                           uint16_t* out_user_id,
-                          whAuthPermissions* out_permissions)
+                          whAuthPermissions* out_permissions,
+                          int* loggedIn)
 {
-    int rc;
+    whAuthBase_User* current_user = NULL;
 
-    if (    (context == NULL) ||
-            (out_user_id == NULL) ||
-            (out_permissions == NULL) ) {
+    if ((out_user_id == NULL) ||
+        (out_permissions == NULL) ||
+        (loggedIn == NULL) ) {
         return WH_ERROR_BADARGS;
     }
+
+    *loggedIn = 0;
 
     (void)client_id;
     switch (method) {
         case WH_AUTH_METHOD_PIN:
-            rc = CheckPin(username, auth_data, auth_data_len);
+            current_user = CheckPin(username, auth_data, auth_data_len);
             break;
         case WH_AUTH_METHOD_CERTIFICATE:
-            rc = CheckCertificate(username, auth_data, auth_data_len);
+            if (CheckCertificate(username, auth_data, auth_data_len) == WH_ERROR_OK) {
+                *loggedIn = 1;
+            }
             break;
         case WH_AUTH_METHOD_CHALLENGE_RESPONSE:
-            rc = CheckChallengeResponse(username, auth_data, auth_data_len);
+            if (CheckChallengeResponse(username, auth_data, auth_data_len) == WH_ERROR_OK) {
+                *loggedIn = 1;
+            }
             break;
         case WH_AUTH_METHOD_PSK:
-            rc = CheckPSK(username, auth_data, auth_data_len);
+            if (CheckPSK(username, auth_data, auth_data_len) == WH_ERROR_OK) {
+                *loggedIn = 1;
+            }
             break;
         default:
-            rc = WH_ERROR_BADARGS;
+            return WH_ERROR_BADARGS;
     }
 
-    return rc;
+    if (current_user != NULL) {
+        *loggedIn = 1;
+        *out_user_id = current_user->user.user_id;
+    }
+
+    (void)context;
+    return WH_ERROR_OK;
 }
 
 int wh_AuthBase_Logout(void* context, uint16_t user_id)
 {
-    whAuthContext* auth_context = (whAuthContext*)context;
-    (void)user_id;
-    memset(&auth_context->user, 0, sizeof(whAuthUser));
+    (void)context;
+
+    if (user_id == WH_USER_ID_INVALID) {
+        return WH_ERROR_BADARGS;
+    }
+
+    if (user_id - 1 >= WH_AUTH_BASE_MAX_USERS) {
+        return WH_ERROR_NOTFOUND;
+    }
+
+    memset(&users[user_id - 1], 0, sizeof(whAuthBase_User));
     return WH_ERROR_OK;
 }
 

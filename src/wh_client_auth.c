@@ -43,30 +43,64 @@
 
 /** Authenticate */
 int wh_Client_AuthLoginRequest(whClientContext* c,
-        whAuthMethod method, const void* auth_data, uint16_t auth_data_len)
+        whAuthMethod method, const char* username, const void* auth_data,
+        uint16_t auth_data_len)
 {
-    /* TODO: Send authenticate request (non-blocking).
-     * Builds and sends the authentication request message. Returns immediately.
-     * May return WH_ERROR_NOTREADY if send buffer is busy. */
-    (void)c;
-    (void)method;
-    (void)auth_data;
-    (void)auth_data_len;
-    return WH_ERROR_NOTIMPL;
+    whMessageAuth_LoginRequest msg = {0};
+
+    if (c == NULL){
+        return WH_ERROR_BADARGS;
+    }
+
+    strncpy(msg.username, username, sizeof(msg.username));
+    msg.method = method;
+    msg.auth_data_len = auth_data_len;
+    memcpy(msg.auth_data, auth_data, auth_data_len);
+    return wh_Client_SendRequest(c,
+            WH_MESSAGE_GROUP_AUTH, WH_MESSAGE_AUTH_ACTION_LOGIN,
+            sizeof(msg), &msg);
 }
 
 int wh_Client_AuthLoginResponse(whClientContext* c, int32_t *out_rc,
         whUserId* out_user_id,
         whAuthPermissions* out_permissions)
 {
-    /* TODO: Receive authenticate response (non-blocking).
-     * Polls for and processes the authentication response. Returns immediately.
-     * Returns WH_ERROR_NOTREADY if response not yet available. */
-    (void)c;
-    (void)out_rc;
-    (void)out_user_id;
-    (void)out_permissions;
-    return WH_ERROR_NOTIMPL;
+    uint8_t                    buffer[WOLFHSM_CFG_COMM_DATA_LEN] = {0};
+    whMessageAuth_LoginResponse* msg = (whMessageAuth_LoginResponse*)buffer;
+
+    int rc = 0;
+    uint16_t resp_group = 0;
+    uint16_t resp_action = 0;
+    uint16_t resp_size = 0;
+
+    if (c == NULL){
+        return WH_ERROR_BADARGS;
+    }
+
+    rc = wh_Client_RecvResponse(c,
+            &resp_group, &resp_action,
+            &resp_size, buffer);
+    if (rc == 0) {
+        /* Validate response */
+        if ((resp_group != WH_MESSAGE_GROUP_AUTH) ||
+            (resp_action != WH_MESSAGE_AUTH_ACTION_LOGIN) ||
+            (resp_size != sizeof(whMessageAuth_LoginResponse))) {
+            /* Invalid message */
+            rc = WH_ERROR_ABORTED;
+        }
+        else {
+            /* Valid message */
+            if (out_rc != NULL) {
+                *out_rc = msg->rc;
+            }
+            if (out_user_id != NULL) {
+                *out_user_id = msg->user_id;
+            }
+            /* @TODO: Set permissions */
+            (void)out_permissions;
+        }
+    }
+    return rc;
 }
 
 int wh_Client_AuthLogin(whClientContext* c, whAuthMethod method,
@@ -74,18 +108,21 @@ int wh_Client_AuthLogin(whClientContext* c, whAuthMethod method,
         int32_t* out_rc, whUserId* out_user_id,
         whAuthPermissions* out_permissions)
 {
-    /* TODO: Authenticate (blocking convenience wrapper).
-     * Calls Request, then loops on Response until complete. Blocks until
-     * authentication succeeds or fails. */
-    (void)c;
-    (void)method;
-    (void)username;
-    (void)auth_data;
-    (void)auth_data_len;
-    (void)out_rc;
-    (void)out_user_id;
-    (void)out_permissions;
-    return WH_ERROR_NOTIMPL;
+    int rc;
+
+    do {
+        rc = wh_Client_AuthLoginRequest(c, method, username, auth_data, auth_data_len);
+    } while (rc == WH_ERROR_NOTREADY);
+
+    if (rc != 0) {
+        return rc;
+    }
+
+    do {
+        rc = wh_Client_AuthLoginResponse(c, out_rc, out_user_id, out_permissions);
+    } while (rc == WH_ERROR_NOTREADY);
+
+    return rc;
 }
 
 int wh_Client_AuthLogoutRequest(whClientContext* c, whUserId user_id)
