@@ -71,6 +71,7 @@ int wh_Server_HandleAuthRequest(whServerContext* server,
        {
         whMessageAuth_LoginRequest req = {0};
         whMessageAuth_LoginResponse resp = {0};
+        int loggedIn = 0;
 
         if (req_size != sizeof(req)) {
             /* Request is malformed */
@@ -82,8 +83,22 @@ int wh_Server_HandleAuthRequest(whServerContext* server,
 
         /* Login the user */
         rc = wh_Auth_Login(server->auth, server->comm->client_id, req.method,
-            req.username, req.auth_data, req.auth_data_len);
+            req.username, req.auth_data, req.auth_data_len, &loggedIn);
         resp.rc = rc;
+        if (rc == WH_ERROR_OK) {
+            if (loggedIn == 0) {
+            resp.rc = WH_AUTH_LOGIN_FAILED;
+            resp.user_id = WH_USER_ID_INVALID;
+            }
+            else {
+                /* return the current logged in user info */
+                resp.user_id = server->auth->user.user_id;
+            }
+        }
+        /* @TODO setting of permissions */
+
+        wh_MessageAuth_TranslateLoginResponse(magic, &resp, (whMessageAuth_LoginResponse*)resp_packet);
+        *out_resp_size = sizeof(resp);
        }
        break;
 
