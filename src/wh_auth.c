@@ -89,14 +89,23 @@ int wh_Auth_Cleanup(whAuthContext* context)
 }
 
 
+/* return value is if the login attempt happened or if a fatal error occurred.
+ * The result of the login attempt is stored in loggedIn -- 1 for success,
+ * 0 for failure */
 int wh_Auth_Login(whAuthContext* context, uint8_t client_id,
                           whAuthMethod method, const char* username,
                           const void* auth_data,
-                          uint16_t auth_data_len)
+                          uint16_t auth_data_len,
+                          int* loggedIn)
 {
     int rc;
     whUserId out_user_id;
     whAuthPermissions out_permissions;
+
+    if (loggedIn == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    *loggedIn = 0;
 
     if (    (context == NULL) ||
             (context->cb == NULL) ||
@@ -106,15 +115,17 @@ int wh_Auth_Login(whAuthContext* context, uint8_t client_id,
 
     /* allowing only one user logged in to an open connection at a time */
     if (context->user.user_id != WH_USER_ID_INVALID) {
-        return WH_ERROR_ACCESS;
+        *loggedIn = 0;
+        rc = WH_ERROR_OK; /* login attempt happened but failed */
     }
-
-    rc = context->cb->Login(context->context, client_id, method,
+    else {
+        rc = context->cb->Login(context->context, client_id, method,
                               username, auth_data, auth_data_len, &out_user_id,
-                              &out_permissions);
-    if (rc == WH_ERROR_OK) {
-        context->user.user_id = out_user_id;
-        context->user.permissions = out_permissions;
+                              &out_permissions, loggedIn);
+        if (rc == WH_ERROR_OK && *loggedIn) {
+            context->user.user_id = out_user_id;
+            context->user.permissions = out_permissions;
+        }
     }
 
     return rc;
@@ -131,7 +142,7 @@ int wh_Auth_Logout(whAuthContext* context, whUserId user_id)
         return WH_ERROR_BADARGS;
     }
 
-    if (context->user.user_id == WH_USER_ID_INVALID) {
+    if (context->user.user_id == WH_USER_ID_INVALID || user_id != context->user.user_id) {
         return WH_ERROR_ACCESS;
     }
 
