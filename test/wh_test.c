@@ -40,6 +40,8 @@
 #include "wh_test_keywrap.h"
 #include "wh_test_multiclient.h"
 #include "wh_test_log.h"
+#include "wh_test_lock.h"
+#include "wh_test_threadsafe_stress.h"
 
 #if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER)
 #include "wh_test_cert.h"
@@ -103,6 +105,10 @@ int whTest_Unit(void)
 
     /* Multi-Client Tests (includes Global Keys when enabled) */
     WH_TEST_ASSERT(0 == whTest_MultiClient());
+
+#if defined(WOLFHSM_CFG_TEST_POSIX) && defined(WOLFHSM_CFG_THREADSAFE)
+    WH_TEST_ASSERT(0 == whTest_LockPosix());
+#endif
 
 #if defined(WOLFHSM_CFG_SHE_EXTENSION)
     WH_TEST_ASSERT(0 == whTest_She());
@@ -255,8 +261,13 @@ int main(void)
 {
     int ret = 0;
 
-#if defined(WOLFHSM_CFG_TEST_CLIENT_ONLY) && \
+#if defined(WOLFHSM_CFG_THREADSAFE) && defined(WOLFHSM_CFG_TEST_STRESS)
+    /* Stress test mode: only run thread safety stress test */
+    ret = whTest_ThreadSafeStress();
+
+#elif defined(WOLFHSM_CFG_TEST_CLIENT_ONLY) && \
     defined(WOLFHSM_CFG_ENABLE_CLIENT) && defined(WOLFHSM_CFG_TEST_POSIX)
+
     /* Test driver should run client tests against the example server */
 #if defined(WOLFHSM_CFG_TLS)
     /* Run TLS client tests */
@@ -265,9 +276,12 @@ int main(void)
     /* Run TCP client tests (default) */
     ret = whTest_ClientTcp();
 #endif
+
 #elif defined(WOLFHSM_CFG_ENABLE_CLIENT) && defined(WOLFHSM_CFG_ENABLE_SERVER)
+
     /* Default case: Test driver should run all the unit tests locally */
     ret = whTest_Unit();
+
 #else
 #error "No client or server enabled in build, one or both must be enabled"
 #endif

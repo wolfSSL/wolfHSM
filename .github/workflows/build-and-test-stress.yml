@@ -1,0 +1,35 @@
+name: Build and Test Stress
+
+on:
+  push:
+    branches: [ 'master', 'main', 'release/**' ]
+  pull_request:
+    branches: [ '*' ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+    - uses: actions/checkout@v4
+
+    # List host CPU info
+    - name: Host CPU info
+      run: cat /proc/cpuinfo
+
+    # List compiler version
+    - name: List compiler version
+      run: gcc --version
+
+    # pull and build wolfssl
+    - name: Checkout wolfssl
+      uses: actions/checkout@v4
+      with:
+        repository: wolfssl/wolfssl
+        path: wolfssl
+
+    # Build and run stress tests with TSAN
+    - name: Build and run stress tests with TSAN
+      run: cd test && make clean && make -j THREADSAFE=1 TSAN=1 STRESS=1 DMA=1 SHE=1 WOLFSSL_DIR=../wolfssl && make TSAN=1 run

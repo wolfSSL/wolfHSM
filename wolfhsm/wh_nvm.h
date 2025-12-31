@@ -44,6 +44,7 @@
 
 #include "wolfhsm/wh_common.h"       /* For whNvm types */
 #include "wolfhsm/wh_keycache.h"     /* For whKeyCacheContext */
+#include "wolfhsm/wh_lock.h"
 
 typedef struct {
     int (*Init)(void* context, const void *config);
@@ -96,6 +97,9 @@ typedef struct whNvmContext_t {
 #if !defined(WOLFHSM_CFG_NO_CRYPTO) && defined(WOLFHSM_CFG_GLOBAL_KEYS)
     whKeyCacheContext globalCache; /* Global key cache */
 #endif
+#ifdef WOLFHSM_CFG_THREADSAFE
+    whLock lock; /* Lock for NVM and global cache operations */
+#endif
 } whNvmContext;
 
 /* Simple helper configuration structure associated with an NVM instance */
@@ -103,6 +107,9 @@ typedef struct whNvmConfig_t {
     whNvmCb *cb;
     void* context;
     void* config;
+#ifdef WOLFHSM_CFG_THREADSAFE
+    whLockConfig* lockConfig;
+#endif
 } whNvmConfig;
 
 
