@@ -52,8 +52,6 @@ typedef enum {
     WH_AUTH_METHOD_NONE = 0,
     WH_AUTH_METHOD_PIN,
     WH_AUTH_METHOD_CERTIFICATE,
-    WH_AUTH_METHOD_CHALLENGE_RESPONSE,
-    WH_AUTH_METHOD_PSK,
 } whAuthMethod;
 
 
@@ -133,6 +131,8 @@ typedef struct whAuthContext_t {
     whAuthUser user;
     void* context;
 } whAuthContext;
+
+#define WOLFHSM_MAX_CERTIFICATE_LEN 2048
 
 /* Simple helper configuration structure associated with an Auth Manager instance */
 typedef struct whAuthConfig_t {
