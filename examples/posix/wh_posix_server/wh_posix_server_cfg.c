@@ -681,17 +681,26 @@ static whAuthCb default_auth_cb = {
  */
 int wh_PosixServer_ExampleAuthConfig(void* conf)
 {
+    int rc;
     whServerConfig* s_conf = (whServerConfig*)conf;
     static whAuthContext auth_ctx = {0};
     static void* auth_backend_context = NULL; /* No backend context needed for stubs */
+    static whAuthConfig auth_config = {0};
 
     if (s_conf == NULL) {
         return WH_ERROR_BADARGS;
     }
 
-    /* Set up the auth context with default stub callbacks */
-    auth_ctx.cb = &default_auth_cb;
-    auth_ctx.context = auth_backend_context;
+    /* Set up the auth config with default callbacks */
+    auth_config.cb = &default_auth_cb;
+    auth_config.context = auth_backend_context;
+
+    /* Initialize the auth context */
+    rc = wh_Auth_Init(&auth_ctx, &auth_config);
+    if (rc != WH_ERROR_OK) {
+        WOLFHSM_CFG_PRINTF("Failed to initialize Auth Manager: %d\n", rc);
+        return rc;
+    }
 
     /* Set the auth context in the server configuration */
     s_conf->auth = &auth_ctx;
