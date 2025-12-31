@@ -44,12 +44,15 @@ typedef struct whAuthBase_User {
 } whAuthBase_User;
 static whAuthBase_User users[WH_AUTH_BASE_MAX_USERS];
 
+#include <wolfssl/ssl.h>
+#include <wolfssl/wolfcrypt/asn.h>
+
 int wh_AuthBase_Init(void* context, const void *config)
 {
     /* TODO: Initialize auth manager context */
     (void)context;
     (void)config;
-    return WH_ERROR_NOTIMPL;
+    return WH_ERROR_OK;
 }
 
 int wh_AuthBase_Cleanup(void* context)
@@ -59,53 +62,65 @@ int wh_AuthBase_Cleanup(void* context)
     return WH_ERROR_NOTIMPL;
 }
 
-static whAuthBase_User* CheckPin(const char* username, const void* auth_data, uint16_t auth_data_len)
+static whAuthBase_User* FindUser(const char* username)
 {
     int i;
-
-    /* Simple check if the PIN is correct */
     for (i = 0; i < WH_AUTH_BASE_MAX_USERS; i++) {
         if (strcmp(users[i].user.username, username) == 0) {
-            break;
+            return &users[i];
         }
     }
-    if (i >= WH_AUTH_BASE_MAX_USERS) {
-        return NULL;
-    }
-    if (users[i].credentials_len == auth_data_len &&
-        memcmp(users[i].credentials, auth_data, auth_data_len) == 0) {
-        return &users[i];
-    }
-    else {
-        return NULL;
-    }
+    return NULL;
 }
 
-static int CheckCertificate(const char* username, const void* auth_data, uint16_t auth_data_len)
+static whAuthBase_User* CheckPin(const char* username, const void* auth_data, uint16_t auth_data_len)
 {
-    /* TODO: Check if certificate is correct */
-    (void)auth_data;
-    (void)auth_data_len;
-    (void)username;
-    return WH_ERROR_NOTIMPL;
+    whAuthBase_User* found_user;
+    found_user = FindUser(username);
+    if (found_user != NULL &&
+        found_user->credentials_len == auth_data_len &&
+        memcmp(found_user->credentials, auth_data, auth_data_len) == 0) {
+        return found_user;
+    }
+    return NULL;
 }
 
-static int CheckChallengeResponse(const char* username, const void* auth_data, uint16_t auth_data_len)
+
+static int VerifyCertificate(whAuthBase_User* found_user, const uint8_t* certificate, uint16_t certificate_len)
 {
-    /* TODO: Check if challenge response is correct */
-    (void)auth_data;
-    (void)auth_data_len;
-    (void)username;
-    return WH_ERROR_NOTIMPL;
+    int rc = WH_ERROR_OK;
+    int err;
+    WOLFSSL_CERT_MANAGER* cm = NULL;
+    cm = wolfSSL_CertManagerNew();
+    if (cm == NULL) {
+        return WH_ERROR_ABORTED;
+    }
+    err = wolfSSL_CertManagerLoadCABuffer(cm, found_user->credentials,
+        found_user->credentials_len, WOLFSSL_FILETYPE_ASN1);
+    if (err != WOLFSSL_SUCCESS) {
+        rc = WH_ERROR_ABORTED;
+    }
+    err = wolfSSL_CertManagerVerifyBuffer(cm, certificate, certificate_len,
+                                         WOLFSSL_FILETYPE_ASN1);
+    if (err != WOLFSSL_SUCCESS) {
+        rc = WH_ERROR_ABORTED;
+    }
+    wolfSSL_CertManagerFree(cm);
+    return rc;
 }
 
-static int CheckPSK(const char* username, const void* auth_data, uint16_t auth_data_len)
+static whAuthBase_User* CheckCertificate(const char* username, const void* auth_data, uint16_t auth_data_len)
 {
-    /* TODO: Check if PSK is correct */
-    (void)auth_data;
-    (void)auth_data_len;
-    (void)username;
-    return WH_ERROR_NOTIMPL;
+    whAuthBase_User* found_user;
+    found_user = FindUser(username);
+    if (found_user != NULL &&
+        found_user->method == WH_AUTH_METHOD_CERTIFICATE &&
+        found_user->credentials_len > 0) {
+        if (VerifyCertificate(found_user, auth_data, auth_data_len) == WH_ERROR_OK) {
+            return found_user;
+        }
+    }
+    return NULL;
 }
 
 int wh_AuthBase_Login(void* context, uint8_t client_id,
@@ -132,19 +147,7 @@ int wh_AuthBase_Login(void* context, uint8_t client_id,
             current_user = CheckPin(username, auth_data, auth_data_len);
             break;
         case WH_AUTH_METHOD_CERTIFICATE:
-            if (CheckCertificate(username, auth_data, auth_data_len) == WH_ERROR_OK) {
-                *loggedIn = 1;
-            }
-            break;
-        case WH_AUTH_METHOD_CHALLENGE_RESPONSE:
-            if (CheckChallengeResponse(username, auth_data, auth_data_len) == WH_ERROR_OK) {
-                *loggedIn = 1;
-            }
-            break;
-        case WH_AUTH_METHOD_PSK:
-            if (CheckPSK(username, auth_data, auth_data_len) == WH_ERROR_OK) {
-                *loggedIn = 1;
-            }
+            current_user = CheckCertificate(username, auth_data, auth_data_len);
             break;
         default:
             return WH_ERROR_BADARGS;
@@ -272,6 +275,13 @@ int wh_AuthBase_UserAdd(void* context, const char* username,
     int i;
     int userId = WH_USER_ID_INVALID;
 
+    /* Validate method is supported if credentials are provided */
+    if (credentials != NULL && credentials_len > 0) {
+        if (method != WH_AUTH_METHOD_PIN && method != WH_AUTH_METHOD_CERTIFICATE) {
+            return WH_ERROR_BADARGS;
+        }
+    }
+
     for (i = 0; i < WH_AUTH_BASE_MAX_USERS; i++) {
         if (users[i].user.user_id == WH_USER_ID_INVALID) {
             break;
@@ -358,6 +368,12 @@ int wh_AuthBase_UserSetCredentials(void* context, uint16_t user_id,
     if (user_id == WH_USER_ID_INVALID) {
         return WH_ERROR_BADARGS;
     }
+
+    /* Validate method is supported */
+    if (method != WH_AUTH_METHOD_PIN && method != WH_AUTH_METHOD_CERTIFICATE) {
+        return WH_ERROR_BADARGS;
+    }
+
     user = &users[user_id - 1]; /* subtract 1 to get the index */
     
     if (user->user.user_id == WH_USER_ID_INVALID) {
