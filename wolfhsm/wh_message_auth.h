@@ -100,6 +100,9 @@ int wh_MessageAuth_TranslateLogoutRequest(uint16_t magic,
 typedef struct {
     char username[WH_MESSAGE_AUTH_MAX_USERNAME_LEN];
     uint32_t permissions;
+    uint16_t method;
+    uint16_t credentials_len;
+    uint8_t credentials[WH_MESSAGE_AUTH_MAX_CREDENTIALS_LEN];
 } whMessageAuth_UserAddRequest;
 
 int wh_MessageAuth_TranslateUserAddRequest(uint16_t magic,
@@ -172,16 +175,23 @@ int wh_MessageAuth_TranslateUserSetPermissionsRequest(uint16_t magic,
 /* Use SimpleResponse */
 
 /** User Set Credentials Request */
+/* Header structure - credentials follow as variable-length data */
 typedef struct {
     uint16_t user_id;
     uint8_t method;
-    uint16_t credentials_len;
-    uint8_t credentials[WH_MESSAGE_AUTH_MAX_CREDENTIALS_LEN];
+    uint8_t WH_PAD[1];  /* Padding for alignment */
+    uint16_t current_credentials_len;
+    uint16_t new_credentials_len;
+    /* Variable-length data follows:
+     *   current_credentials[current_credentials_len]
+     *   new_credentials[new_credentials_len]
+     */
 } whMessageAuth_UserSetCredentialsRequest;
 
 int wh_MessageAuth_TranslateUserSetCredentialsRequest(uint16_t magic,
-        const whMessageAuth_UserSetCredentialsRequest* src,
-        whMessageAuth_UserSetCredentialsRequest* dest);
+        const void* src_packet, uint16_t src_size,
+        whMessageAuth_UserSetCredentialsRequest* dest_header,
+        uint8_t* dest_current_creds, uint8_t* dest_new_creds);
 
 /** User Set Credentials Response */
 /* Use SimpleResponse */

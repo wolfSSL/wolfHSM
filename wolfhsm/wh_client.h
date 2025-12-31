@@ -1904,7 +1904,9 @@ int wh_Client_AuthLogout(whClientContext* c, whUserId user_id,
         int32_t* out_rc);
 
 int wh_Client_AuthUserAdd(whClientContext* c, const char* username,
-        whAuthPermissions permissions, int32_t* out_rc, whUserId* out_user_id);
+        whAuthPermissions permissions, whAuthMethod method,
+        const void* credentials, uint16_t credentials_len,
+        int32_t* out_rc, whUserId* out_user_id);
 
 int wh_Client_AuthUserDelete(whClientContext* c, whUserId user_id,
         int32_t* out_rc);
@@ -1913,7 +1915,9 @@ int wh_Client_AuthUserSetPermissions(whClientContext* c, whUserId user_id,
         whAuthPermissions permissions, int32_t* out_rc);
 
 int wh_Client_AuthUserSetCredentials(whClientContext* c, whUserId user_id,
-        whAuthMethod method, const void* credentials, uint16_t credentials_len,
+        whAuthMethod method,
+        const void* current_credentials, uint16_t current_credentials_len,
+        const void* new_credentials, uint16_t new_credentials_len,
         int32_t* out_rc);
 /* Certificate functions */
 

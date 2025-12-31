@@ -151,8 +151,15 @@ int wh_AuthBase_Login(void* context, uint8_t client_id,
     }
 
     if (current_user != NULL) {
-        *loggedIn = 1;
-        *out_user_id = current_user->user.user_id;
+        if (current_user->user.is_active) {
+            /* Can not be logged in if already logged in */
+            *loggedIn = 0;
+        }
+        else {
+            *loggedIn = 1;
+            *out_user_id = current_user->user.user_id;
+            current_user->user.is_active = true;
+        }
     }
 
     (void)context;
@@ -161,7 +168,7 @@ int wh_AuthBase_Login(void* context, uint8_t client_id,
 
 int wh_AuthBase_Logout(void* context, uint16_t user_id)
 {
-    (void)context;
+    whAuthBase_User* user;
 
     if (user_id == WH_USER_ID_INVALID) {
         return WH_ERROR_BADARGS;
@@ -171,7 +178,11 @@ int wh_AuthBase_Logout(void* context, uint16_t user_id)
         return WH_ERROR_NOTFOUND;
     }
 
-    memset(&users[user_id - 1], 0, sizeof(whAuthBase_User));
+    /* @TODO there likely should be restrictions here on who can logout who */
+
+    user = &users[user_id - 1];
+    user->user.is_active = false;
+    (void)context;
     return WH_ERROR_OK;
 }
 
@@ -187,7 +198,7 @@ int wh_AuthBase_CheckRequestAuthorization(void* context,
         client_id, group, action);
 
     if (auth_context == NULL) {
-        printf("This likely should be fail case when not autherization context is set\n");
+        printf("This likely should be fail case when no authorization context is set\n");
         return WH_ERROR_OK;
     }
 
@@ -253,7 +264,8 @@ int wh_AuthBase_CheckKeyAuthorization(void* context, uint8_t client_id,
 
 
 int wh_AuthBase_UserAdd(void* context, const char* username,
-    uint16_t* out_user_id, whAuthPermissions permissions)
+    uint16_t* out_user_id, whAuthPermissions permissions,
+    whAuthMethod method, const void* credentials, uint16_t credentials_len)
 {
     whAuthContext* auth_context = (whAuthContext*)context;
     whAuthBase_User* new_user;
@@ -278,9 +290,19 @@ int wh_AuthBase_UserAdd(void* context, const char* username,
     *out_user_id = userId;
     new_user->user.permissions = permissions;
     strcpy(new_user->user.username, username);
-    new_user->user.is_active = true;
+    new_user->user.is_active = false;
     new_user->user.failed_attempts = 0;
     new_user->user.lockout_until = 0;
+
+    /* Set credentials if provided */
+    if (credentials != NULL && credentials_len > 0) {
+        if (credentials_len > WH_AUTH_BASE_MAX_CREDENTIALS_LEN) {
+            return WH_ERROR_BUFFER_SIZE;
+        }
+        new_user->method = method;
+        memcpy(new_user->credentials, credentials, credentials_len);
+        new_user->credentials_len = credentials_len;
+    }
 
     (void)auth_context;
     return WH_ERROR_OK;
@@ -325,21 +347,53 @@ int wh_AuthBase_UserGet(void* context, uint16_t user_id,
 }
 
 int wh_AuthBase_UserSetCredentials(void* context, uint16_t user_id,
-    whAuthMethod method, const void* credentials, uint16_t credentials_len)
+    whAuthMethod method,
+    const void* current_credentials, uint16_t current_credentials_len,
+    const void* new_credentials, uint16_t new_credentials_len)
 {
     whAuthContext* auth_context = (whAuthContext*)context;
     whAuthBase_User* user;
+    int rc = WH_ERROR_OK;
 
     if (user_id == WH_USER_ID_INVALID) {
         return WH_ERROR_BADARGS;
     }
     user = &users[user_id - 1]; /* subtract 1 to get the index */
-    user->method = method;
-    if (credentials_len > WH_AUTH_BASE_MAX_CREDENTIALS_LEN) {
+    
+    if (user->user.user_id == WH_USER_ID_INVALID) {
+        return WH_ERROR_NOTFOUND;
+    }
+
+    /* Verify current credentials if user has existing credentials */
+    if (user->credentials_len > 0) {
+        /* User has existing credentials, so current_credentials must be provided and match */
+        if (current_credentials == NULL || current_credentials_len == 0) {
+            return WH_ERROR_ACCESS;
+        }
+        if (user->credentials_len != current_credentials_len ||
+            memcmp(user->credentials, current_credentials, current_credentials_len) != 0) {
+            return WH_ERROR_ACCESS;
+        }
+    } else {
+        /* User has no existing credentials, current_credentials should be NULL */
+        if (current_credentials != NULL && current_credentials_len > 0) {
+            return WH_ERROR_BADARGS;
+        }
+    }
+
+    /* Set new credentials */
+    if (new_credentials_len > WH_AUTH_BASE_MAX_CREDENTIALS_LEN) {
         return WH_ERROR_BUFFER_SIZE;
     }
-    memcpy(user->credentials, credentials, credentials_len);
-    user->credentials_len = credentials_len;
+    user->method = method;
+    if (new_credentials_len > 0) {
+        memcpy(user->credentials, new_credentials, new_credentials_len);
+        user->credentials_len = new_credentials_len;
+    } else {
+        /* Allow clearing credentials by setting length to 0 */
+        user->credentials_len = 0;
+    }
+
     (void)auth_context;
-    return WH_ERROR_OK;
+    return rc;
 }

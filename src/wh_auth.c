@@ -125,6 +125,7 @@ int wh_Auth_Login(whAuthContext* context, uint8_t client_id,
         if (rc == WH_ERROR_OK && *loggedIn) {
             context->user.user_id = out_user_id;
             context->user.permissions = out_permissions;
+            context->user.is_active = true;
         }
     }
 
@@ -140,10 +141,6 @@ int wh_Auth_Logout(whAuthContext* context, whUserId user_id)
             (context->cb == NULL) ||
             (context->cb->Logout == NULL) ) {
         return WH_ERROR_BADARGS;
-    }
-
-    if (context->user.user_id == WH_USER_ID_INVALID || user_id != context->user.user_id) {
-        return WH_ERROR_ACCESS;
     }
 
     rc = context->cb->Logout(context->context, user_id);
@@ -184,7 +181,9 @@ int wh_Auth_CheckKeyAuthorization(whAuthContext* context, uint8_t client_id,
 /********** API That Interact With User Database *******************************/
 
 int wh_Auth_UserAdd(whAuthContext* context, const char* username,
-                     whUserId* out_user_id, whAuthPermissions permissions)
+                     whUserId* out_user_id, whAuthPermissions permissions,
+                     whAuthMethod method, const void* credentials,
+                     uint16_t credentials_len)
 {
     if (    (context == NULL) ||
             (context->cb == NULL) ||
@@ -192,7 +191,8 @@ int wh_Auth_UserAdd(whAuthContext* context, const char* username,
         return WH_ERROR_BADARGS;
     }
 
-    return context->cb->UserAdd(context->context, username, out_user_id, permissions);
+    return context->cb->UserAdd(context->context, username, out_user_id, permissions,
+            method, credentials, credentials_len);
 }
 
 int wh_Auth_UserDelete(whAuthContext* context, whUserId user_id)
@@ -224,15 +224,18 @@ int wh_Auth_UserGet(whAuthContext* context, whUserId user_id,
 }
 
 int wh_Auth_UserSetCredentials(whAuthContext* context, whUserId user_id,
-                                 whAuthMethod method, const void* credentials,
-                                 uint16_t credentials_len)
+                                 whAuthMethod method,
+                                 const void* current_credentials, uint16_t current_credentials_len,
+                                 const void* new_credentials, uint16_t new_credentials_len)
 {
     if (    (context == NULL) ||
             (context->cb == NULL) ||
-            (context->cb->UserAdd == NULL) ) {
+            (context->cb->UserSetCredentials == NULL) ) {
         return WH_ERROR_BADARGS;
     }
 
-    return context->cb->UserSetCredentials(context->context, user_id, method, credentials, credentials_len);
+    return context->cb->UserSetCredentials(context->context, user_id, method,
+            current_credentials, current_credentials_len,
+            new_credentials, new_credentials_len);
 }
 

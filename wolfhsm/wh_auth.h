@@ -105,7 +105,8 @@ typedef struct {
 
     /* Add a new user */
     int (*UserAdd)(void* context, const char* username, whUserId* out_user_id,
-                   whAuthPermissions permissions);
+                   whAuthPermissions permissions, whAuthMethod method,
+                   const void* credentials, uint16_t credentials_len);
 
     /* Delete a user */
     int (*UserDelete)(void* context, whUserId user_id);
@@ -119,8 +120,9 @@ typedef struct {
 
     /* Set user credentials (PIN, etc.) */
     int (*UserSetCredentials)(void* context, whUserId user_id,
-                              whAuthMethod method, const void* credentials,
-                              uint16_t credentials_len);
+                              whAuthMethod method,
+                              const void* current_credentials, uint16_t current_credentials_len,
+                              const void* new_credentials, uint16_t new_credentials_len);
 } whAuthCb;
 
 /** Auth Manager Context and Config */
@@ -164,7 +166,9 @@ int wh_Auth_CheckKeyAuthorization(whAuthContext* context, uint8_t client_id,
 
 /* Add a new user */
 int wh_Auth_UserAdd(whAuthContext* context, const char* username,
-                     whUserId* out_user_id, whAuthPermissions permissions);
+                     whUserId* out_user_id, whAuthPermissions permissions,
+                     whAuthMethod method, const void* credentials,
+                     uint16_t credentials_len);
 
 /* Delete a user */
 int wh_Auth_UserDelete(whAuthContext* context, whUserId user_id);
@@ -179,6 +183,7 @@ int wh_Auth_UserGet(whAuthContext* context, whUserId user_id,
 
 /* Set user credentials */
 int wh_Auth_UserSetCredentials(whAuthContext* context, whUserId user_id,
-                                 whAuthMethod method, const void* credentials,
-                                 uint16_t credentials_len);
+                                 whAuthMethod method,
+                                 const void* current_credentials, uint16_t current_credentials_len,
+                                 const void* new_credentials, uint16_t new_credentials_len);
 #endif /* !WOLFHSM_WH_AUTH_H_ */

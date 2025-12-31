@@ -81,10 +81,11 @@ int wh_MessageAuth_TranslateLogoutRequest(uint16_t magic,
         const whMessageAuth_LogoutRequest* src,
         whMessageAuth_LogoutRequest* dest)
 {
-    /* TODO: Translate logout request message */
-    (void)magic;
-    (void)src;
-    (void)dest;
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    WH_T16(magic, dest, src, user_id);
     return 0;
 }
 
@@ -99,8 +100,14 @@ int wh_MessageAuth_TranslateUserAddRequest(uint16_t magic,
 
     if (src != dest) {
         memcpy(dest->username, src->username, sizeof(dest->username));
+        if (src->credentials_len > WH_MESSAGE_AUTH_MAX_CREDENTIALS_LEN) {
+            return WH_ERROR_BUFFER_SIZE;
+        }
+        memcpy(dest->credentials, src->credentials, src->credentials_len);
     }
     WH_T32(magic, dest, src, permissions);
+    WH_T16(magic, dest, src, method);
+    WH_T16(magic, dest, src, credentials_len);
     return 0;
 }
 
@@ -161,19 +168,54 @@ int wh_MessageAuth_TranslateUserSetPermissionsRequest(uint16_t magic,
 }
 
 int wh_MessageAuth_TranslateUserSetCredentialsRequest(uint16_t magic,
-        const whMessageAuth_UserSetCredentialsRequest* src,
-        whMessageAuth_UserSetCredentialsRequest* dest)
+        const void* src_packet, uint16_t src_size,
+        whMessageAuth_UserSetCredentialsRequest* dest_header,
+        uint8_t* dest_current_creds, uint8_t* dest_new_creds)
 {
-    if ((src == NULL) || (dest == NULL)) {
+    const whMessageAuth_UserSetCredentialsRequest* src_header;
+    const uint8_t* src_data;
+    uint16_t header_size = sizeof(whMessageAuth_UserSetCredentialsRequest);
+    uint16_t expected_size;
+
+    if ((src_packet == NULL) || (dest_header == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
-    WH_T16(magic, dest, src, user_id);
-    WH_T16(magic, dest, src, method);
-    WH_T16(magic, dest, src, credentials_len);
-    if (src != dest) {
-        memcpy(dest->credentials, src->credentials, src->credentials_len);
+    if (src_size < header_size) {
+        return WH_ERROR_BADARGS;
     }
+
+    src_header = (const whMessageAuth_UserSetCredentialsRequest*)src_packet;
+    src_data = (const uint8_t*)src_packet + header_size;
+
+    /* Translate header fields */
+    WH_T16(magic, dest_header, src_header, user_id);
+    WH_T16(magic, dest_header, src_header, method);
+    WH_T16(magic, dest_header, src_header, current_credentials_len);
+    WH_T16(magic, dest_header, src_header, new_credentials_len);
+
+    /* Validate lengths */
+    expected_size = header_size + src_header->current_credentials_len + src_header->new_credentials_len;
+    if (src_size < expected_size) {
+        return WH_ERROR_BADARGS;
+    }
+
+    if (src_header->current_credentials_len > WH_MESSAGE_AUTH_MAX_CREDENTIALS_LEN) {
+        return WH_ERROR_BUFFER_SIZE;
+    }
+    if (src_header->new_credentials_len > WH_MESSAGE_AUTH_MAX_CREDENTIALS_LEN) {
+        return WH_ERROR_BUFFER_SIZE;
+    }
+
+    /* Copy variable-length credential data */
+    if (dest_current_creds != NULL && src_header->current_credentials_len > 0) {
+        memcpy(dest_current_creds, src_data, src_header->current_credentials_len);
+    }
+    if (dest_new_creds != NULL && src_header->new_credentials_len > 0) {
+        memcpy(dest_new_creds, src_data + src_header->current_credentials_len,
+               src_header->new_credentials_len);
+    }
+
     return 0;
 }
 
