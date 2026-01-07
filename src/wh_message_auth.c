@@ -90,6 +90,44 @@ int wh_MessageAuth_TranslateLogoutRequest(uint16_t magic,
 }
 
 
+int wh_MessageAuth_FlattenPermissions(whAuthPermissions* permissions,
+    uint8_t* buffer, uint16_t buffer_len)
+{
+    int idx = 0, i;
+
+    if (permissions == NULL || buffer == NULL ||
+        buffer_len < WH_FLAT_PERRMISIONS_LEN) {
+        return WH_ERROR_BADARGS;
+    }
+    buffer[idx++] = permissions->groupPermissions;
+    for (i = 0; i < WH_NUMBER_OF_GROUPS && (idx + i) < buffer_len; i++) {
+        buffer[idx + i] = permissions->actionPermissions[i];
+        idx++;
+    }
+    buffer[idx] = permissions->keyId;
+    return 0;
+}
+
+
+int wh_MessageAuth_UnflattenPermissions(uint8_t* buffer, uint16_t buffer_len,
+    whAuthPermissions* permissions)
+{
+    int idx = 0, i;
+
+    if (buffer == NULL || permissions == NULL ||
+        buffer_len < WH_FLAT_PERRMISIONS_LEN) {
+        return WH_ERROR_BADARGS;
+    }
+    permissions->groupPermissions = buffer[idx++];
+    for (i = 0; i < WH_NUMBER_OF_GROUPS && (idx + i) < buffer_len; i++) {
+        permissions->actionPermissions[i] = buffer[idx + i];
+        idx++;
+    }
+    permissions->keyId = buffer[idx];
+    return 0;
+}
+
+
 int wh_MessageAuth_TranslateUserAddRequest(uint16_t magic,
         const whMessageAuth_UserAddRequest* src,
         whMessageAuth_UserAddRequest* dest)
@@ -104,8 +142,9 @@ int wh_MessageAuth_TranslateUserAddRequest(uint16_t magic,
             return WH_ERROR_BUFFER_SIZE;
         }
         memcpy(dest->credentials, src->credentials, src->credentials_len);
+        memcpy(dest->permissions, src->permissions, sizeof(dest->permissions));
     }
-    WH_T32(magic, dest, src, permissions);
+
     WH_T16(magic, dest, src, method);
     WH_T16(magic, dest, src, credentials_len);
     return 0;
@@ -138,10 +177,14 @@ int wh_MessageAuth_TranslateUserGetRequest(uint16_t magic,
         const whMessageAuth_UserGetRequest* src,
         whMessageAuth_UserGetRequest* dest)
 {
-    /* TODO: Translate user get request message */
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    if (src != dest) {
+        memcpy(dest->username, src->username, sizeof(dest->username));
+    }
     (void)magic;
-    (void)src;
-    (void)dest;
     return 0;
 }
 
@@ -149,10 +192,14 @@ int wh_MessageAuth_TranslateUserGetResponse(uint16_t magic,
         const whMessageAuth_UserGetResponse* src,
         whMessageAuth_UserGetResponse* dest)
 {
-    /* TODO: Translate user get response message */
-    (void)magic;
-    (void)src;
-    (void)dest;
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, rc);
+    WH_T16(magic, dest, src, user_id);
+    if (src != dest) {
+        memcpy(dest->permissions, src->permissions, sizeof(dest->permissions));
+    }
     return 0;
 }
 
