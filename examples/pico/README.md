@@ -24,8 +24,8 @@ Response Buffer      - 1KB, server to client
 ## Building
 
 ```bash
-cmake -S . -B build -G "Ninja" -DPICO_SDK_PATH=/path/to/pico-sdk -DBUILD_PICO2_DEMOS=ON
-ninja -C build pico2_demo_dual
+cd $WOLF_HSM_DIR
+mkdir -p build && cd build && cmake -GNinja -DBUILD_PICO2_DEMOS=ON -DPICO_SDK_PATH=/path/to/pico-sdk .. && ninja
 ```
 
 The UF2 file will be at `build/lib/pico2_demo_dual.uf2`.

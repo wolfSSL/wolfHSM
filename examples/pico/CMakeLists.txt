@@ -1,13 +1,12 @@
 add_executable(pico2_demo_dual
     pico2_demo_dual.c
-    ../../port/pico/pico2_transport_shm.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../port/pico/pico2_transport_shm.c
 )
 
 target_link_libraries(pico2_demo_dual
-    wolfssl
-    wolfhsm
     pico_stdlib
     pico_multicore
+    wolfhsm
 )
 
 target_compile_definitions(pico2_demo_dual PRIVATE
@@ -18,18 +17,15 @@ target_compile_definitions(pico2_demo_dual PRIVATE
 
 target_include_directories(pico2_demo_dual PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/config
-    ${CMAKE_SOURCE_DIR}/wolfHSM
-    ${CMAKE_SOURCE_DIR}/wolfHSM/wolfhsm
-    ${CMAKE_SOURCE_DIR}/wolfHSM/port/pico
+    ${CMAKE_CURRENT_SOURCE_DIR}/../..
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../wolfhsm
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../port/pico
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../wolfssl
 )
 
-if (USE_UART)
-pico_enable_stdio_usb(pico2_demo_dual 0)
-pico_enable_stdio_uart(pico2_demo_dual 1)
-else()
+# Enable stdio over USB only
 pico_enable_stdio_usb(pico2_demo_dual 1)
 pico_enable_stdio_uart(pico2_demo_dual 0)
-endif()
 
+# Generate UF2 file for Pico
 pico_add_extra_outputs(pico2_demo_dual)
