@@ -54,10 +54,10 @@ typedef enum {
     WH_AUTH_METHOD_CERTIFICATE,
 } whAuthMethod;
 
-
+#define WH_NUMBER_OF_GROUPS 14
 typedef struct {
     uint16_t groupPermissions; /* bit mask of if allowed for use in group */
-    uint16_t actionPermissions[14]; /* array of action permissions for each group */
+    uint16_t actionPermissions[WH_NUMBER_OF_GROUPS]; /* array of action permissions for each group */
     uint32_t keyId; /* key ID that user has access to */
 } whAuthPermissions;
 
@@ -90,15 +90,15 @@ typedef struct {
                         int* loggedIn);
 
     /* Logout a user */
-    int (*Logout)(void* context, whUserId user_id);
+    int (*Logout)(void* context, whUserId current_user_id, whUserId user_id);
     
 
     /* Check if an action is authorized for a session */
-    int (*CheckRequestAuthorization)(void* context, uint8_t client_id,
+    int (*CheckRequestAuthorization)(void* context, uint16_t user_id,
                               uint16_t group, uint16_t action);
 
     /* Check if a key is authorized for use */
-    int (*CheckKeyAuthorization)(void* context, uint8_t client_id,
+    int (*CheckKeyAuthorization)(void* context, uint16_t user_id,
                                  uint32_t key_id, uint16_t action);
 
     /* Add a new user */
@@ -113,8 +113,9 @@ typedef struct {
     int (*UserSetPermissions)(void* context, whUserId user_id,
                                whAuthPermissions permissions);
 
-    /* Get user information */
-    int (*UserGet)(void* context, whUserId user_id, whAuthUser* out_user);
+    /* Get user information by username */
+    int (*UserGet)(void* context, const char* username, whUserId* out_user_id,
+    whAuthPermissions* out_permissions);
 
     /* Set user credentials (PIN, etc.) */
     int (*UserSetCredentials)(void* context, whUserId user_id,
@@ -158,11 +159,11 @@ int wh_Auth_Login(whAuthContext* context, uint8_t client_id,
 int wh_Auth_Logout(whAuthContext* context, whUserId user_id);
 
 /* Check authorization for an action */
-int wh_Auth_CheckRequestAuthorization(whAuthContext* context, uint8_t client_id,
-    uint16_t group, uint16_t action);
+int wh_Auth_CheckRequestAuthorization(whAuthContext* context, uint16_t group,
+    uint16_t action);
 
-int wh_Auth_CheckKeyAuthorization(whAuthContext* context, uint8_t client_id,
-    uint32_t key_id, uint16_t action);
+int wh_Auth_CheckKeyAuthorization(whAuthContext* context, uint32_t key_id,
+    uint16_t action);
 
 /* Add a new user */
 int wh_Auth_UserAdd(whAuthContext* context, const char* username,
@@ -178,8 +179,8 @@ int wh_Auth_UserSetPermissions(whAuthContext* context, whUserId user_id,
                                  whAuthPermissions permissions);
 
 /* Get user information */
-int wh_Auth_UserGet(whAuthContext* context, whUserId user_id,
-                     whAuthUser* out_user);
+int wh_Auth_UserGet(whAuthContext* context, const char* username, whUserId* out_user_id,
+    whAuthPermissions* out_permissions);
 
 /* Set user credentials */
 int wh_Auth_UserSetCredentials(whAuthContext* context, whUserId user_id,
