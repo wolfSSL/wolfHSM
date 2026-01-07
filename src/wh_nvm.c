@@ -33,17 +33,70 @@
 
 #include "wolfhsm/wh_nvm.h"
 
+typedef enum {
+    WH_NVM_OP_ADD = 0,
+    WH_NVM_OP_READ,
+    WH_NVM_OP_DESTROY,
+} whNvmOp;
 
-int wh_Nvm_Init(whNvmContext* context, const whNvmConfig *config)
+/* Centralized policy check.
+ * existing_meta is optionally populated when the object is present. */
+static int wh_Nvm_CheckPolicy(whNvmContext* context, whNvmOp op, whNvmId id,
+                              whNvmMetadata* existing_meta)
 {
-    int rc = 0;
+    whNvmMetadata meta;
+    int           ret;
 
-    if (    (context == NULL) ||
-            (config == NULL) ) {
+    if ((context == NULL) || (context->cb == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
-    context->cb = config->cb;
+    ret = wh_Nvm_GetMetadata(context, id, &meta);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    if (existing_meta != NULL) {
+        *existing_meta = meta;
+    }
+
+    switch (op) {
+        case WH_NVM_OP_ADD:
+            if (meta.flags & WH_NVM_FLAGS_NONMODIFIABLE) {
+                return WH_ERROR_ACCESS;
+            }
+            break;
+
+        case WH_NVM_OP_DESTROY:
+            if (meta.flags &
+                (WH_NVM_FLAGS_NONMODIFIABLE | WH_NVM_FLAGS_NONDESTROYABLE)) {
+                return WH_ERROR_ACCESS;
+            }
+            break;
+
+        case WH_NVM_OP_READ:
+            if (meta.flags & WH_NVM_FLAGS_NONEXPORTABLE) {
+                return WH_ERROR_ACCESS;
+            }
+            break;
+
+        default:
+            return WH_ERROR_BADARGS;
+    }
+
+    return WH_ERROR_OK;
+}
+
+
+int wh_Nvm_Init(whNvmContext* context, const whNvmConfig* config)
+{
+    int rc = 0;
+
+    if ((context == NULL) || (config == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    context->cb      = config->cb;
     context->context = config->context;
 
 #if !defined(WOLFHSM_CFG_NO_CRYPTO) && defined(WOLFHSM_CFG_GLOBAL_KEYS)
@@ -152,6 +205,19 @@ int wh_Nvm_AddObject(whNvmContext* context, whNvmMetadata *meta,
     return context->cb->AddObject(context->context, meta, data_len, data);
 }
 
+int wh_Nvm_AddObjectChecked(whNvmContext* context, whNvmMetadata* meta,
+                            whNvmSize data_len, const uint8_t* data)
+{
+    int ret;
+
+    ret = wh_Nvm_CheckPolicy(context, WH_NVM_OP_ADD, meta->id, NULL);
+    if (ret != WH_ERROR_OK && ret != WH_ERROR_NOTFOUND) {
+        return ret;
+    }
+
+    return wh_Nvm_AddObject(context, meta, data_len, data);
+}
+
 int wh_Nvm_List(whNvmContext* context,
         whNvmAccess access, whNvmFlags flags, whNvmId start_id,
         whNvmId *out_count, whNvmId *out_id)
@@ -200,6 +266,26 @@ int wh_Nvm_DestroyObjects(whNvmContext* context, whNvmId list_count,
     return context->cb->DestroyObjects(context->context, list_count, id_list);
 }
 
+int wh_Nvm_DestroyObjectsChecked(whNvmContext* context, whNvmId list_count,
+                                 const whNvmId* id_list)
+{
+    whNvmId i;
+    int     ret;
+
+    if (id_list == NULL && list_count != 0) {
+        return WH_ERROR_BADARGS;
+    }
+
+    for (i = 0; i < list_count; i++) {
+        ret = wh_Nvm_CheckPolicy(context, WH_NVM_OP_DESTROY, id_list[i], NULL);
+        if (ret != WH_ERROR_OK) {
+            return ret;
+        }
+    }
+
+    return wh_Nvm_DestroyObjects(context, list_count, id_list);
+}
+
 
 int wh_Nvm_Read(whNvmContext* context, whNvmId id, whNvmSize offset,
                 whNvmSize data_len, uint8_t* data)
@@ -214,4 +300,17 @@ int wh_Nvm_Read(whNvmContext* context, whNvmId id, whNvmSize offset,
         return WH_ERROR_ABORTED;
     }
     return context->cb->Read(context->context, id, offset, data_len, data);
+}
+
+int wh_Nvm_ReadChecked(whNvmContext* context, whNvmId id, whNvmSize offset,
+                       whNvmSize data_len, uint8_t* data)
+{
+    int ret;
+
+    ret = wh_Nvm_CheckPolicy(context, WH_NVM_OP_READ, id, NULL);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    return wh_Nvm_Read(context, id, offset, data_len, data);
 }

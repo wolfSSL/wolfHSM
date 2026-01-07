@@ -762,6 +762,46 @@ int wh_Client_KeyEraseResponse(whClientContext* c);
  */
 int wh_Client_KeyErase(whClientContext* c, whNvmId keyId);
 
+/**
+ * @brief Sends a key revoke request to the server.
+ *
+ * This function prepares and sends a key revoke request message to the server.
+ * The message contains the specified key ID. This function does not block;
+ * it returns immediately after sending the request.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] keyId Key ID to be revoked.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_KeyRevokeRequest(whClientContext* c, whKeyId keyId);
+
+/**
+ * @brief Receives a key revoke response from the server.
+ *
+ * This function attempts to process a key revoke response message from the
+ * server. It validates the response. This function does not block; it returns
+ * WH_ERROR_NOTREADY if a response has not been received.
+ *
+ * @param[in] c Pointer to the client context.
+ * @return int Returns 0 on success, WH_ERROR_NOTREADY if no response is
+ * available, or a negative error code on failure.
+ */
+int wh_Client_KeyRevokeResponse(whClientContext* c);
+
+/**
+ * @brief Sends a key revoke request to the server and receives the response.
+ *
+ * This function handles the complete process of sending a key revoke request
+ * to the server and receiving the response. It sends the request and
+ * repeatedly attempts to receive a valid response. This function blocks until
+ * the entire operation is complete or an error occurs.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] keyId Key ID to be revoked.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_KeyRevoke(whClientContext* c, whKeyId keyId);
+
 #ifdef WOLFHSM_CFG_DMA
 
 /**
