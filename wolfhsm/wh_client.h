@@ -1903,16 +1903,48 @@ int wh_Client_AuthLogoutResponse(whClientContext* c, int32_t *out_rc);
 int wh_Client_AuthLogout(whClientContext* c, whUserId user_id,
         int32_t* out_rc);
 
+int wh_Client_AuthUserAddResponse(whClientContext* c, int32_t *out_rc,
+            whUserId* out_user_id);
+
+int wh_Client_AuthUserAddRequest(whClientContext* c, const char* username,
+            whAuthPermissions permissions, whAuthMethod method,
+            const void* credentials, uint16_t credentials_len);
+
 int wh_Client_AuthUserAdd(whClientContext* c, const char* username,
         whAuthPermissions permissions, whAuthMethod method,
         const void* credentials, uint16_t credentials_len,
         int32_t* out_rc, whUserId* out_user_id);
 
+int wh_Client_AuthUserGetRequest(whClientContext* c, const char* username);
+
+int wh_Client_AuthUserGetResponse(whClientContext* c, int32_t *out_rc,
+        whUserId* out_user_id, whAuthPermissions* out_permissions);
+
+int wh_Client_AuthUserGet(whClientContext* c, const char* username,
+        int32_t* out_rc, whUserId* out_user_id,
+        whAuthPermissions* out_permissions);
+
+int wh_Client_AuthUserDeleteRequest(whClientContext* c, whUserId user_id);
+
+int wh_Client_AuthUserDeleteResponse(whClientContext* c, int32_t *out_rc);
+
 int wh_Client_AuthUserDelete(whClientContext* c, whUserId user_id,
         int32_t* out_rc);
 
+int wh_Client_AuthUserSetPermissionsRequest(whClientContext* c, whUserId user_id,
+        whAuthPermissions permissions);
+
+int wh_Client_AuthUserSetPermissionsResponse(whClientContext* c, int32_t *out_rc);
+
 int wh_Client_AuthUserSetPermissions(whClientContext* c, whUserId user_id,
         whAuthPermissions permissions, int32_t* out_rc);
+
+int wh_Client_AuthUserSetCredentialsRequest(whClientContext* c, whUserId user_id,
+        whAuthMethod method,
+        const void* current_credentials, uint16_t current_credentials_len,
+        const void* new_credentials, uint16_t new_credentials_len);
+
+int wh_Client_AuthUserSetCredentialsResponse(whClientContext* c, int32_t *out_rc);
 
 int wh_Client_AuthUserSetCredentials(whClientContext* c, whUserId user_id,
         whAuthMethod method,

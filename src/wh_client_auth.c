@@ -207,8 +207,12 @@ int wh_Client_AuthUserAddRequest(whClientContext* c, const char* username,
     }
 
     strncpy(msg.username, username, sizeof(msg.username));
-    (void)permissions;
-    msg.permissions = 10; /* @TODO: Set permissions */
+
+    if (wh_MessageAuth_FlattenPermissions(&permissions, msg.permissions,
+        sizeof(msg.permissions)) != 0) {
+        return WH_ERROR_BUFFER_SIZE;
+    }
+
     msg.method = method;
     msg.credentials_len = credentials_len;
     if (credentials != NULL && credentials_len > 0) {
@@ -289,70 +293,150 @@ int wh_Client_AuthUserAdd(whClientContext* c, const char* username,
 /** User Delete */
 int wh_Client_AuthUserDeleteRequest(whClientContext* c, whUserId user_id)
 {
-    /* TODO: Send user delete request (non-blocking).
-     * Builds and sends the user delete request message. Returns immediately.
-     * May return WH_ERROR_NOTREADY if send buffer is busy. */
-    (void)c;
-    (void)user_id;
-    return WH_ERROR_NOTIMPL;
+    whMessageAuth_UserDeleteRequest msg = {0};
+
+    if (c == NULL){
+        return WH_ERROR_BADARGS;
+    }
+
+    msg.user_id = user_id;
+    return wh_Client_SendRequest(c,
+            WH_MESSAGE_GROUP_AUTH, WH_MESSAGE_AUTH_ACTION_USER_DELETE,
+            sizeof(msg), &msg);
 }
 
 int wh_Client_AuthUserDeleteResponse(whClientContext* c, int32_t *out_rc)
 {
-    /* TODO: Receive user delete response (non-blocking).
-     * Polls for and processes the user delete response. Returns immediately.
-     * Returns WH_ERROR_NOTREADY if response not yet available. */
-    (void)c;
-    (void)out_rc;
-    return WH_ERROR_NOTIMPL;
+    uint8_t                    buffer[WOLFHSM_CFG_COMM_DATA_LEN] = {0};
+    whMessageAuth_SimpleResponse* msg = (whMessageAuth_SimpleResponse*)buffer;
+
+    int rc = 0;
+    uint16_t resp_group = 0;
+    uint16_t resp_action = 0;
+    uint16_t resp_size = 0;
+
+    if (c == NULL){
+        return WH_ERROR_BADARGS;
+    }
+
+    rc = wh_Client_RecvResponse(c,
+            &resp_group, &resp_action,
+            &resp_size, buffer);
+    if (rc == 0) {
+        /* Validate response */
+        if ((resp_group != WH_MESSAGE_GROUP_AUTH) ||
+            (resp_action != WH_MESSAGE_AUTH_ACTION_USER_DELETE) ||
+            (resp_size != sizeof(whMessageAuth_SimpleResponse))) {
+            /* Invalid message */
+            rc = WH_ERROR_ABORTED;
+        }
+        else {
+            /* Valid message */
+            if (out_rc != NULL) {
+                *out_rc = msg->rc;
+            }
+        }
+    }
+    return rc;
 }
 
 int wh_Client_AuthUserDelete(whClientContext* c, whUserId user_id,
         int32_t* out_rc)
 {
-    /* TODO: Delete user (blocking convenience wrapper).
-     * Calls Request, then loops on Response until complete. Blocks until
-     * user is deleted or operation fails. */
-    (void)c;
-    (void)user_id;
-    (void)out_rc;
-    return WH_ERROR_NOTIMPL;
+    int rc;
+
+    do {
+        rc = wh_Client_AuthUserDeleteRequest(c, user_id);
+    } while (rc == WH_ERROR_NOTREADY);
+
+    if (rc != 0) {
+        return rc;
+    }
+
+    do {
+        rc = wh_Client_AuthUserDeleteResponse(c, out_rc);
+    } while (rc == WH_ERROR_NOTREADY);
+
+    return rc;
 }
 
 /** User Get */
-int wh_Client_AuthUserGetRequest(whClientContext* c, whUserId user_id)
+int wh_Client_AuthUserGetRequest(whClientContext* c, const char* username)
 {
-    /* TODO: Send user get request (non-blocking).
-     * Builds and sends the user get request message. Returns immediately.
-     * May return WH_ERROR_NOTREADY if send buffer is busy. */
-    (void)c;
-    (void)user_id;
-    return WH_ERROR_NOTIMPL;
+    whMessageAuth_UserGetRequest msg = {0};
+
+    if (c == NULL){
+        return WH_ERROR_BADARGS;
+    }
+
+    strncpy(msg.username, username, sizeof(msg.username));
+    return wh_Client_SendRequest(c,
+            WH_MESSAGE_GROUP_AUTH, WH_MESSAGE_AUTH_ACTION_USER_GET,
+            sizeof(msg), &msg);
 }
 
 int wh_Client_AuthUserGetResponse(whClientContext* c, int32_t *out_rc,
-        whAuthUser* out_user)
+        whUserId* out_user_id, whAuthPermissions* out_permissions)
 {
-    /* TODO: Receive user get response (non-blocking).
-     * Polls for and processes the user get response. Returns immediately.
-     * Returns WH_ERROR_NOTREADY if response not yet available. */
-    (void)c;
-    (void)out_rc;
-    (void)out_user;
-    return WH_ERROR_NOTIMPL;
+    uint8_t                    buffer[WOLFHSM_CFG_COMM_DATA_LEN] = {0};
+    whMessageAuth_UserGetResponse* msg = (whMessageAuth_UserGetResponse*)buffer;
+
+    int rc = 0;
+    uint16_t resp_group = 0;
+    uint16_t resp_action = 0;
+    uint16_t resp_size = 0;
+
+    if (c == NULL){
+        return WH_ERROR_BADARGS;
+    }
+
+    rc = wh_Client_RecvResponse(c,
+            &resp_group, &resp_action,
+            &resp_size, buffer);
+    if (rc == 0) {
+        /* Validate response */
+        if ((resp_group != WH_MESSAGE_GROUP_AUTH) ||
+            (resp_action != WH_MESSAGE_AUTH_ACTION_USER_GET) ||
+            (resp_size != sizeof(whMessageAuth_UserGetResponse))) {
+            /* Invalid message */
+            rc = WH_ERROR_ABORTED;
+        }
+        else {
+            /* Valid message */
+            if (out_rc != NULL) {
+                *out_rc = msg->rc;
+            }
+            if (out_user_id != NULL) {
+                *out_user_id = msg->user_id;
+            }
+            if (out_permissions != NULL) {
+                wh_MessageAuth_UnflattenPermissions(msg->permissions, sizeof(msg->permissions), out_permissions);
+            }
+        }
+    }
+    return rc;
 }
 
-int wh_Client_AuthUserGet(whClientContext* c, whUserId user_id,
-        int32_t* out_rc, whAuthUser* out_user)
+
+int wh_Client_AuthUserGet(whClientContext* c, const char* username,
+        int32_t* out_rc, whUserId* out_user_id,
+        whAuthPermissions* out_permissions)
 {
-    /* TODO: Get user (blocking convenience wrapper).
-     * Calls Request, then loops on Response until complete. Blocks until
-     * user information is retrieved or operation fails. */
-    (void)c;
-    (void)user_id;
-    (void)out_rc;
-    (void)out_user;
-    return WH_ERROR_NOTIMPL;
+    int rc;
+
+    do {
+        rc = wh_Client_AuthUserGetRequest(c, username);
+    } while (rc == WH_ERROR_NOTREADY);
+
+    if (rc != 0) {
+        return rc;
+    }
+
+    do {
+        rc = wh_Client_AuthUserGetResponse(c, out_rc, out_user_id, out_permissions);
+    } while (rc == WH_ERROR_NOTREADY);
+
+    return rc;
 }
 
 /** User Set Permissions */

@@ -143,7 +143,7 @@ int wh_Auth_Logout(whAuthContext* context, whUserId user_id)
         return WH_ERROR_BADARGS;
     }
 
-    rc = context->cb->Logout(context->context, user_id);
+    rc = context->cb->Logout(context->context, context->user.user_id, user_id);
     if (rc != WH_ERROR_OK) {
         return rc;
     }
@@ -156,25 +156,29 @@ int wh_Auth_Logout(whAuthContext* context, whUserId user_id)
 
 /* Check on request authorization and action permissions for current user
  * logged in */
-int wh_Auth_CheckRequestAuthorization(whAuthContext* context, uint8_t client_id,
-    uint16_t group, uint16_t action)
+int wh_Auth_CheckRequestAuthorization(whAuthContext* context, uint16_t group,
+    uint16_t action)
 {
-    printf("In authorization check: Client ID: %d, Group: %d, Action: %d\n",
-        client_id, group, action);
+    uint16_t user_id = context->user.user_id;
 
-    return context->cb->CheckRequestAuthorization(context->context, client_id,
+    printf("In authorization check: User ID: %d, Group: %d, Action: %d\n",
+        user_id, group, action);
+
+    return context->cb->CheckRequestAuthorization(context->context, user_id,
         group, action);
 }
 
 
 /* Check on key ID use after request has been parsed */
-int wh_Auth_CheckKeyAuthorization(whAuthContext* context, uint8_t client_id,
-    uint32_t key_id, uint16_t action)
+int wh_Auth_CheckKeyAuthorization(whAuthContext* context, uint32_t key_id,
+    uint16_t action)
 {
-    printf("In key authorization check: Client ID: %d, Key ID: %d, Action: %d\n",
-        client_id, key_id, action);
+    uint16_t user_id = context->user.user_id;
 
-    return context->cb->CheckKeyAuthorization(context->context, client_id, key_id,
+    printf("In key authorization check: User ID: %d, Key ID: %d, Action: %d\n",
+        user_id, key_id, action);
+
+    return context->cb->CheckKeyAuthorization(context->context, user_id, key_id,
         action);
 }
 
@@ -195,13 +199,18 @@ int wh_Auth_UserAdd(whAuthContext* context, const char* username,
             method, credentials, credentials_len);
 }
 
+
 int wh_Auth_UserDelete(whAuthContext* context, whUserId user_id)
 {
-    /* TODO: Delete user */
-    (void)context;
-    (void)user_id;
-    return WH_ERROR_NOTIMPL;
+    if (    (context == NULL) ||
+            (context->cb == NULL) ||
+            (context->cb->UserDelete == NULL) ) {
+        return WH_ERROR_BADARGS;
+    }
+
+    return context->cb->UserDelete(context->context, user_id);
 }
+
 
 int wh_Auth_UserSetPermissions(whAuthContext* context, whUserId user_id,
                                  whAuthPermissions permissions)
@@ -213,14 +222,16 @@ int wh_Auth_UserSetPermissions(whAuthContext* context, whUserId user_id,
     return WH_ERROR_NOTIMPL;
 }
 
-int wh_Auth_UserGet(whAuthContext* context, whUserId user_id,
-                     whAuthUser* out_user)
+int wh_Auth_UserGet(whAuthContext* context, const char* username, whUserId* out_user_id,
+    whAuthPermissions* out_permissions)
 {
-    /* TODO: Get user information */
-    (void)context;
-    (void)user_id;
-    (void)out_user;
-    return WH_ERROR_NOTIMPL;
+    if (    (context == NULL) ||
+            (context->cb == NULL) ||
+            (context->cb->UserGet == NULL) ) {
+        return WH_ERROR_BADARGS;
+    }
+
+    return context->cb->UserGet(context->context, username, out_user_id, out_permissions);
 }
 
 int wh_Auth_UserSetCredentials(whAuthContext* context, whUserId user_id,

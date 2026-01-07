@@ -141,10 +141,15 @@ int wh_Server_HandleAuthRequest(whServerContext* server,
             if (req.credentials_len > WH_MESSAGE_AUTH_MAX_CREDENTIALS_LEN) {
                 resp.rc = WH_ERROR_BADARGS;
             } else {
+                if (wh_MessageAuth_UnflattenPermissions(req.permissions,
+                    sizeof(req.permissions), &permissions) != 0) {
+                    resp.rc = WH_ERROR_BADARGS;
+                } else {
                 /* Add the user with credentials @TODO setting permissions */
-                rc = wh_Auth_UserAdd(server->auth, req.username, &resp.user_id, permissions,
-                        req.method, req.credentials, req.credentials_len);
-                resp.rc = rc;
+                    rc = wh_Auth_UserAdd(server->auth, req.username, &resp.user_id, permissions,
+                            req.method, req.credentials, req.credentials_len);
+                    resp.rc = rc;
+                }
             }
         }
 
@@ -169,12 +174,16 @@ int wh_Server_HandleAuthRequest(whServerContext* server,
         /* Delete the user */
         rc = wh_Auth_UserDelete(server->auth, req.user_id);
         resp.rc = rc;
+
+        wh_MessageAuth_TranslateSimpleResponse(magic, &resp, (whMessageAuth_SimpleResponse*)resp_packet);
+        *out_resp_size = sizeof(resp);
        }
        break;
        
        case WH_MESSAGE_AUTH_ACTION_USER_GET:
        {
-        whAuthUser out_user;
+        whUserId out_user_id = WH_USER_ID_INVALID;
+        whAuthPermissions out_permissions = {0};
         whMessageAuth_UserGetRequest req = {0};
         whMessageAuth_UserGetResponse resp = {0};
 
@@ -182,21 +191,20 @@ int wh_Server_HandleAuthRequest(whServerContext* server,
             /* Request is malformed */
             resp.rc = WH_ERROR_BADARGS;
        }
-       memset(&out_user, 0, sizeof(out_user));
 
         /* Parse the request */
         wh_MessageAuth_TranslateUserGetRequest(magic, req_packet, &req);
 
         /* Get the user */
-        rc = wh_Auth_UserGet(server->auth, req.user_id, &out_user);
+        rc = wh_Auth_UserGet(server->auth, req.username, &out_user_id, &out_permissions);
         resp.rc = rc;
         if (rc == WH_ERROR_OK) {
-            resp.user_id = out_user.user_id;
-            strncpy(resp.username, out_user.username, sizeof(resp.username));
-            resp.is_active = out_user.is_active;
-            resp.failed_attempts = out_user.failed_attempts;
-            resp.lockout_until = out_user.lockout_until;
+            resp.user_id = out_user_id;
+            wh_MessageAuth_FlattenPermissions(&out_permissions, resp.permissions, sizeof(resp.permissions));
         }
+
+        wh_MessageAuth_TranslateUserGetResponse(magic, &resp, (whMessageAuth_UserGetResponse*)resp_packet);
+        *out_resp_size = sizeof(resp);
        }
        break;
 

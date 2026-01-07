@@ -668,6 +668,7 @@ static whAuthCb default_auth_cb = {
     .UserGet = wh_AuthBase_UserGet,
     .UserSetCredentials = wh_AuthBase_UserSetCredentials
 };
+static whAuthContext auth_ctx = {0};
 
 /**
  * @brief Configure a default auth context for the server
@@ -683,7 +684,6 @@ int wh_PosixServer_ExampleAuthConfig(void* conf)
 {
     int rc;
     whServerConfig* s_conf = (whServerConfig*)conf;
-    static whAuthContext auth_ctx = {0};
     static void* auth_backend_context = NULL; /* No backend context needed for stubs */
     static whAuthConfig auth_config = {0};
 

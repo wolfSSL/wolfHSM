@@ -31,6 +31,7 @@
 #include "wolfhsm/wh_error.h"
 
 #include "wolfhsm/wh_message.h"
+#include "wolfhsm/wh_message_auth.h"
 #include "wolfhsm/wh_auth_base.h"
 
 /* simple base user list */
@@ -49,10 +50,20 @@ static whAuthBase_User users[WH_AUTH_BASE_MAX_USERS];
 
 int wh_AuthBase_Init(void* context, const void *config)
 {
+    whAuthPermissions permissions;
+    int rc;
+    uint16_t out_user_id;
+
     /* TODO: Initialize auth manager context */
     (void)context;
     (void)config;
-    return WH_ERROR_OK;
+
+    memset(&permissions, 0xFF, sizeof(whAuthPermissions));
+    /* add a demo user with admin permissions */
+    rc = wh_AuthBase_UserAdd(context, "admin", &out_user_id, permissions,
+        WH_AUTH_METHOD_PIN, "1234", 4);
+    printf("Admin user added with ID: %d\n", out_user_id);
+    return rc;
 }
 
 int wh_AuthBase_Cleanup(void* context)
@@ -169,7 +180,8 @@ int wh_AuthBase_Login(void* context, uint8_t client_id,
     return WH_ERROR_OK;
 }
 
-int wh_AuthBase_Logout(void* context, uint16_t user_id)
+int wh_AuthBase_Logout(void* context, uint16_t current_user_id,
+    uint16_t user_id)
 {
     whAuthBase_User* user;
 
@@ -182,6 +194,7 @@ int wh_AuthBase_Logout(void* context, uint16_t user_id)
     }
 
     /* @TODO there likely should be restrictions here on who can logout who */
+    (void)current_user_id;
 
     user = &users[user_id - 1];
     user->user.is_active = false;
@@ -191,37 +204,17 @@ int wh_AuthBase_Logout(void* context, uint16_t user_id)
 
 
 int wh_AuthBase_CheckRequestAuthorization(void* context,
-    uint8_t client_id, uint16_t group, uint16_t action)
+    uint16_t user_id, uint16_t group, uint16_t action)
 {
     int rc;
-    whAuthContext* auth_context = (whAuthContext*)context;
 
+    printf("In authorization check: User ID: %d, Group: %d, Action: %d\n",
+        user_id, group, action);
 
-    printf("In authorization check: Client ID: %d, Group: %d, Action: %d\n",
-        client_id, group, action);
-
-    if (auth_context == NULL) {
-        printf("This likely should be fail case when no authorization context is set\n");
-        return WH_ERROR_OK;
-    }
-
-    if (auth_context->user.user_id == WH_USER_ID_INVALID) {
+    if (user_id == WH_USER_ID_INVALID) {
         /* allow user login request attempt */
-        if (group == WH_MESSAGE_GROUP_AUTH &&
-            action == WH_AUTH_ACTION_LOGIN) {
-            rc = WH_ERROR_OK;
-        }
-        else {
-            printf("No user associated with session");
-            rc = WH_ERROR_ACCESS;
-        }
-    }
-    else {
-        int groupIndex = (group >> 8) & 0xFF;
-
-        /* check if user has permissions for the group and action */
-        if (auth_context->user.permissions.groupPermissions & group) {
-            if (auth_context->user.permissions.actionPermissions[groupIndex] & action) {
+        if (group == WH_MESSAGE_GROUP_AUTH) {
+            if (action == WH_MESSAGE_AUTH_ACTION_LOGIN) {
                 rc = WH_ERROR_OK;
             }
             else {
@@ -230,29 +223,60 @@ int wh_AuthBase_CheckRequestAuthorization(void* context,
             }
         }
         else {
-            printf("User does not have permissions for the group");
-            rc = WH_ERROR_ACCESS;
+            printf("No user associated with session");
+            rc = WH_ERROR_OK; /*rc = WH_ERROR_ACCESS;*/
+        }
+    }
+    else {
+        int groupIndex = (group >> 8) & 0xFF;
+        whAuthBase_User* user = &users[user_id - 1];
+
+        /* check if user has permissions for the group and action */
+
+        /* some operations a user logged in should by default have access to;
+         * - logging out
+         * - updating own credentials */
+        if (group == WH_MESSAGE_GROUP_AUTH &&
+            (action == WH_MESSAGE_AUTH_ACTION_LOGOUT ||
+            action == WH_MESSAGE_AUTH_ACTION_USER_SET_CREDENTIALS)) {
+            rc = WH_ERROR_OK;
+        }
+        else {
+            if (user->user.permissions.groupPermissions & group) {
+                if (user->user.permissions.actionPermissions[groupIndex] & action) {
+                    rc = WH_ERROR_OK;
+                }
+                else {
+                    printf("User does not have permissions for the action");
+                    rc = WH_ERROR_ACCESS;
+                }
+            }
+            else {
+                printf("User does not have permissions for the group");
+                rc = WH_ERROR_ACCESS;
+            }
         }
     }
 
+    (void)context;
     return rc;
 }
 
 /* authorization check on key usage after the request has been parsed and before
  * the action is done */
-int wh_AuthBase_CheckKeyAuthorization(void* context, uint8_t client_id,
+int wh_AuthBase_CheckKeyAuthorization(void* context, uint16_t user_id,
     uint32_t key_id, uint16_t action)
 {
-    int rc;
-    whAuthContext* auth_context = (whAuthContext*)context;
+    int rc = WH_ERROR_OK;
 
-    printf("In key authorization check: Client ID: %d, Key ID: %d, Action: %d\n",
-        client_id, key_id, action);
+    printf("In key authorization check: User ID: %d, Key ID: %d, Action: %d\n",
+        user_id, key_id, action);
 
-    if (auth_context->user.user_id == WH_USER_ID_INVALID) {
+    if (user_id == WH_USER_ID_INVALID) {
         rc = WH_ERROR_ACCESS;
     }
     else {
+        /*
         if (auth_context->user.permissions.keyId == key_id) {
             rc = WH_ERROR_OK;
         }
@@ -260,8 +284,10 @@ int wh_AuthBase_CheckKeyAuthorization(void* context, uint8_t client_id,
             printf("User does not have access to the key");
             rc = WH_ERROR_ACCESS;
         }
+        */
     }
 
+    (void)context;
     return rc;
 }
 
@@ -289,7 +315,6 @@ int wh_AuthBase_UserAdd(void* context, const char* username,
     }
 
     if (i >= WH_AUTH_BASE_MAX_USERS) {
-        printf("User list is full");
         return WH_ERROR_BUFFER_SIZE;
     }
     userId = i + 1; /* save 0 fron WH_USER_ID_INVALID */
@@ -320,41 +345,41 @@ int wh_AuthBase_UserAdd(void* context, const char* username,
 
 int wh_AuthBase_UserDelete(void* context, uint16_t user_id)
 {
-    whAuthContext* auth_context = (whAuthContext*)context;
     whAuthBase_User* user = &users[user_id];
     if (user->user.user_id == WH_USER_ID_INVALID) {
         return WH_ERROR_NOTFOUND;
     }
     memset(user, 0, sizeof(whAuthBase_User));
-    (void)auth_context;
+    (void)context;
     return WH_ERROR_OK;
 }
 
 int wh_AuthBase_UserSetPermissions(void* context, uint16_t user_id,
     whAuthPermissions permissions)
 {
-    whAuthContext* auth_context = (whAuthContext*)context;
     whAuthBase_User* user = &users[user_id];
     if (user->user.user_id == WH_USER_ID_INVALID) {
         return WH_ERROR_NOTFOUND;
     }
     user->user.permissions = permissions;
-    (void)auth_context;
+    (void)context;
     return WH_ERROR_OK;
 }
 
-int wh_AuthBase_UserGet(void* context, uint16_t user_id,
-    whAuthUser* out_user)
+
+int wh_AuthBase_UserGet(void* context, const char* username, uint16_t* out_user_id,
+    whAuthPermissions* out_permissions)
 {
-    whAuthContext* auth_context = (whAuthContext*)context;
-    whAuthBase_User* user = &users[user_id];
-    if (user->user.user_id == WH_USER_ID_INVALID) {
+    whAuthBase_User* user = FindUser(username);
+    if (user == NULL) {
         return WH_ERROR_NOTFOUND;
     }
-    memcpy(out_user, &user->user, sizeof(whAuthUser));
-    (void)auth_context;
+    *out_user_id = user->user.user_id;
+    *out_permissions = user->user.permissions;
+    (void)context;
     return WH_ERROR_OK;
 }
+
 
 int wh_AuthBase_UserSetCredentials(void* context, uint16_t user_id,
     whAuthMethod method,

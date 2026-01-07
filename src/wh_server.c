@@ -332,17 +332,30 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
         action = WH_MESSAGE_ACTION(kind);
 
 #ifndef WOLFHSM_CFG_NO_AUTHENTICATION
-        if (server->auth == NULL) {
-            return WH_ERROR_BADARGS;
-        }
-
         /* General authentication check for if user has permissions for the
          * group and action requested. When dealing with key ID's there should
          * be an additional authorization check after parsing the request and
          * translating the key ID and before it is used. */
-        rc = wh_Auth_CheckRequestAuthorization(server->auth, server->comm->client_id,
-            group, action);
+        rc = wh_Auth_CheckRequestAuthorization(server->auth, group, action);
         if (rc != WH_ERROR_OK) {
+            /* Authorization failed - send error response to client but keep server running */
+            int32_t error_response = (int32_t)WH_AUTH_PERMISSION_ERROR;
+            uint16_t resp_size = sizeof(error_response);
+
+            /* Translate the error response for endian conversion */
+            error_response = (int32_t)wh_Translate32(magic, (uint32_t)error_response);
+
+            /* Send error response to client */
+            do {
+                rc = wh_CommServer_SendResponse(server->comm, magic, kind, seq,
+                                                resp_size, &error_response);
+            } while (rc == WH_ERROR_NOTREADY);
+
+            /* Log the authorization failure */
+            WH_LOG_ON_ERROR_F(&server->log, WH_LOG_LEVEL_ERROR, WH_AUTH_PERMISSION_ERROR,
+                              "Authorization failed for (group=%d, action=%d, seq=%d)",
+                              group, action, seq);
+
             return rc;
         }
 #endif /* WOLFHSM_CFG_NO_AUTHENTICATION */
