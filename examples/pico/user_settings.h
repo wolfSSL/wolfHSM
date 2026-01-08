@@ -49,4 +49,19 @@
 /* Use custom IO for wolfSSL */
 #define WOLFSSL_USER_IO
 
+#define WOLFSSL_RPIPICO
+#define WOLFSSL_SP_ARM_CORTEX_M_ASM
+#define WC_NO_HASHDRBG
+#define CUSTOM_RAND_GENERATE_BLOCK wc_pico_rng_gen_block
+#define WC_RESEED_INTERVAL (1000000)
+
+/* Ensure the prototype is visible for the implementation check, but avoid conflicts if it's already in the header */
+#ifdef __cplusplus
+extern "C" {
+#endif
+int wc_pico_rng_gen_block(unsigned char *output, unsigned int sz);
+#ifdef __cplusplus
+}
+#endif
+
 #endif /* USER_SETTINGS_H */
