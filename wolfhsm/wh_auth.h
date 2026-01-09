@@ -55,10 +55,12 @@ typedef enum {
 } whAuthMethod;
 
 #define WH_NUMBER_OF_GROUPS 14
+#define WH_AUTH_MAX_KEY_IDS 2 /* Maximum number of key IDs a user can have access to */
 typedef struct {
     uint16_t groupPermissions; /* bit mask of if allowed for use in group */
     uint16_t actionPermissions[WH_NUMBER_OF_GROUPS]; /* array of action permissions for each group */
-    uint32_t keyId; /* key ID that user has access to */
+    uint16_t keyIdCount; /* Number of key IDs in the keyIds array (0 to WH_AUTH_MAX_KEY_IDS) */
+    uint32_t keyIds[WH_AUTH_MAX_KEY_IDS]; /* Array of key IDs that user has access to */
 } whAuthPermissions;
 
 /* User information */
@@ -107,11 +109,11 @@ typedef struct {
                    const void* credentials, uint16_t credentials_len);
 
     /* Delete a user */
-    int (*UserDelete)(void* context, whUserId user_id);
+    int (*UserDelete)(void* context, whUserId current_user_id, whUserId user_id);
 
     /* Set user permissions */
-    int (*UserSetPermissions)(void* context, whUserId user_id,
-                               whAuthPermissions permissions);
+    int (*UserSetPermissions)(void* context, whUserId current_user_id,
+        whUserId user_id, whAuthPermissions permissions);
 
     /* Get user information by username */
     int (*UserGet)(void* context, const char* username, whUserId* out_user_id,
@@ -176,7 +178,7 @@ int wh_Auth_UserDelete(whAuthContext* context, whUserId user_id);
 
 /* Set user permissions */
 int wh_Auth_UserSetPermissions(whAuthContext* context, whUserId user_id,
-                                 whAuthPermissions permissions);
+    whAuthPermissions permissions);
 
 /* Get user information */
 int wh_Auth_UserGet(whAuthContext* context, const char* username, whUserId* out_user_id,

@@ -98,8 +98,9 @@ int wh_MessageAuth_TranslateLogoutRequest(uint16_t magic,
 /** Logout Response (SimpleResponse) */
 
 /* whAuthPermissions struct
- * uint16_t + uint16_t[WH_NUMBER_OF_GROUPS] + uint32_t */
-#define WH_FLAT_PERRMISIONS_LEN 2 + (2*WH_NUMBER_OF_GROUPS) + 4
+ * uint16_t (groupPermissions) + uint16_t[WH_NUMBER_OF_GROUPS] (actionPermissions) + 
+ * uint16_t (keyIdCount) + uint32_t[WH_AUTH_MAX_KEY_IDS] (keyIds) */
+#define WH_FLAT_PERRMISIONS_LEN (2 + (2*WH_NUMBER_OF_GROUPS) + 2 + (4*WH_AUTH_MAX_KEY_IDS))
 
 int wh_MessageAuth_FlattenPermissions(whAuthPermissions* permissions,
     uint8_t* buffer, uint16_t buffer_len);
@@ -168,8 +169,7 @@ int wh_MessageAuth_TranslateUserGetResponse(uint16_t magic,
 /** User Set Permissions Request */
 typedef struct {
     uint16_t user_id;
-    uint8_t WH_PAD[2];
-    uint32_t permissions;
+    uint8_t permissions[WH_FLAT_PERRMISIONS_LEN];
 } whMessageAuth_UserSetPermissionsRequest;
 
 int wh_MessageAuth_TranslateUserSetPermissionsRequest(uint16_t magic,

@@ -212,22 +212,26 @@ int wh_Server_HandleAuthRequest(whServerContext* server,
        {
         whMessageAuth_UserSetPermissionsRequest req = {0};
         whMessageAuth_SimpleResponse resp = {0};
+        whAuthPermissions permissions = {0};
 
         if (req_size != sizeof(req)) {
             /* Request is malformed */
             resp.rc = WH_ERROR_BADARGS;
-       }
-
-        /* Parse the request */
-        wh_MessageAuth_TranslateUserSetPermissionsRequest(magic, req_packet, &req);
-
-        /* Set the user permissions */
-        /* TODO: Set the user permissions 
-        rc = wh_Auth_UserSetPermissions(server->auth, req.user_id, req.permissions);
-        resp.rc = rc;
-        */
-        resp.rc = WH_ERROR_NOTIMPL;
-        rc = WH_ERROR_NOTIMPL;
+       } else {
+            /* Parse the request */
+            wh_MessageAuth_TranslateUserSetPermissionsRequest(magic, req_packet, &req);
+            if (wh_MessageAuth_UnflattenPermissions(req.permissions,
+                    sizeof(req.permissions), &permissions) != 0) {
+                    resp.rc = WH_ERROR_BADARGS;
+                }
+                else { 
+                    rc = wh_Auth_UserSetPermissions(server->auth, req.user_id,
+                        permissions);
+                    resp.rc = rc;
+                }
+        }
+        wh_MessageAuth_TranslateSimpleResponse(magic, &resp, (whMessageAuth_SimpleResponse*)resp_packet);
+        *out_resp_size = sizeof(resp);
        }
        break;
        

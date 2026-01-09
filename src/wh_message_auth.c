@@ -94,17 +94,40 @@ int wh_MessageAuth_FlattenPermissions(whAuthPermissions* permissions,
     uint8_t* buffer, uint16_t buffer_len)
 {
     int idx = 0, i;
+    uint16_t keyIdCount;
+    uint32_t keyId;
 
     if (permissions == NULL || buffer == NULL ||
         buffer_len < WH_FLAT_PERRMISIONS_LEN) {
         return WH_ERROR_BADARGS;
     }
-    buffer[idx++] = permissions->groupPermissions;
-    for (i = 0; i < WH_NUMBER_OF_GROUPS && (idx + i) < buffer_len; i++) {
-        buffer[idx + i] = permissions->actionPermissions[i];
-        idx++;
+
+    /* Serialize groupPermissions (2 bytes) */
+    buffer[idx++] = (uint8_t)(permissions->groupPermissions & 0xFF);
+    buffer[idx++] = (uint8_t)((permissions->groupPermissions >> 8) & 0xFF);
+
+    /* Serialize actionPermissions array (2*WH_NUMBER_OF_GROUPS bytes) */
+    for (i = 0; i < WH_NUMBER_OF_GROUPS && (idx + (i*2) + 1) < buffer_len; i++) {
+        buffer[idx + (i*2)] = (uint8_t)(permissions->actionPermissions[i] & 0xFF);
+        buffer[idx + (i*2) + 1] = (uint8_t)((permissions->actionPermissions[i] >> 8) & 0xFF);
     }
-    buffer[idx] = permissions->keyId;
+    idx += (2 * WH_NUMBER_OF_GROUPS);
+
+    /* Serialize keyIdCount (2 bytes) */
+    keyIdCount = (permissions->keyIdCount > WH_AUTH_MAX_KEY_IDS) ? WH_AUTH_MAX_KEY_IDS : permissions->keyIdCount;
+    buffer[idx++] = (uint8_t)(keyIdCount & 0xFF);
+    buffer[idx++] = (uint8_t)((keyIdCount >> 8) & 0xFF);
+
+    /* Serialize keyIds array (4*WH_AUTH_MAX_KEY_IDS bytes) */
+    for (i = 0; i < WH_AUTH_MAX_KEY_IDS && (idx + (i*4) + 3) < buffer_len; i++) {
+        if (i < keyIdCount) {
+            keyId = permissions->keyIds[i];
+        } else {
+            keyId = 0; /* Pad with zeros */
+        }
+        memcpy(&buffer[idx + (i*4)], &keyId, sizeof(keyId));
+    }
+
     return 0;
 }
 
@@ -113,17 +136,38 @@ int wh_MessageAuth_UnflattenPermissions(uint8_t* buffer, uint16_t buffer_len,
     whAuthPermissions* permissions)
 {
     int idx = 0, i;
+    uint16_t keyIdCount;
+    uint32_t keyId;
 
     if (buffer == NULL || permissions == NULL ||
         buffer_len < WH_FLAT_PERRMISIONS_LEN) {
         return WH_ERROR_BADARGS;
     }
-    permissions->groupPermissions = buffer[idx++];
-    for (i = 0; i < WH_NUMBER_OF_GROUPS && (idx + i) < buffer_len; i++) {
-        permissions->actionPermissions[i] = buffer[idx + i];
-        idx++;
+
+    /* Deserialize groupPermissions (2 bytes) */
+    permissions->groupPermissions = buffer[idx] | (buffer[idx + 1] << 8);
+    idx += 2;
+
+    /* Deserialize actionPermissions array (2*WH_NUMBER_OF_GROUPS bytes) */
+    for (i = 0; i < WH_NUMBER_OF_GROUPS && (idx + (i*2) + 1) < buffer_len; i++) {
+        permissions->actionPermissions[i] = buffer[idx + (i*2)] | (buffer[idx + (i*2) + 1] << 8);
     }
-    permissions->keyId = buffer[idx];
+    idx += (2 * WH_NUMBER_OF_GROUPS);
+
+    /* Deserialize keyIdCount (2 bytes) */
+    keyIdCount = buffer[idx] | (buffer[idx + 1] << 8);
+    idx += 2;
+    if (keyIdCount > WH_AUTH_MAX_KEY_IDS) {
+        keyIdCount = WH_AUTH_MAX_KEY_IDS;
+    }
+    permissions->keyIdCount = keyIdCount;
+
+    /* Deserialize keyIds array (4*WH_AUTH_MAX_KEY_IDS bytes) */
+    for (i = 0; i < WH_AUTH_MAX_KEY_IDS && (idx + (i*4) + 3) < buffer_len; i++) {
+        memcpy(&keyId, &buffer[idx + (i*4)], sizeof(keyId));
+        permissions->keyIds[i] = keyId;
+    }
+
     return 0;
 }
 
@@ -166,10 +210,11 @@ int wh_MessageAuth_TranslateUserDeleteRequest(uint16_t magic,
         const whMessageAuth_UserDeleteRequest* src,
         whMessageAuth_UserDeleteRequest* dest)
 {
-    /* TODO: Translate user delete request message */
-    (void)magic;
-    (void)src;
-    (void)dest;
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    WH_T16(magic, dest, src, user_id);
     return 0;
 }
 
@@ -207,10 +252,13 @@ int wh_MessageAuth_TranslateUserSetPermissionsRequest(uint16_t magic,
         const whMessageAuth_UserSetPermissionsRequest* src,
         whMessageAuth_UserSetPermissionsRequest* dest)
 {
-    /* TODO: Translate user set permissions request message */
-    (void)magic;
-    (void)src;
-    (void)dest;
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T16(magic, dest, src, user_id);
+    if (src != dest) {
+        memcpy(dest->permissions, src->permissions, sizeof(dest->permissions));
+    }
     return 0;
 }
 
@@ -263,28 +311,5 @@ int wh_MessageAuth_TranslateUserSetCredentialsRequest(uint16_t magic,
                src_header->new_credentials_len);
     }
 
-    return 0;
-}
-
-
-int wh_MessageAuth_TranslateCheckAuthorizationRequest(uint16_t magic,
-        const whMessageAuth_CheckAuthorizationRequest* src,
-        whMessageAuth_CheckAuthorizationRequest* dest)
-{
-    /* TODO: Translate check authorization request message */
-    (void)magic;
-    (void)src;
-    (void)dest;
-    return 0;
-}
-
-int wh_MessageAuth_TranslateCheckAuthorizationResponse(uint16_t magic,
-        const whMessageAuth_CheckAuthorizationResponse* src,
-        whMessageAuth_CheckAuthorizationResponse* dest)
-{
-    /* TODO: Translate check authorization response message */
-    (void)magic;
-    (void)src;
-    (void)dest;
     return 0;
 }

@@ -443,36 +443,75 @@ int wh_Client_AuthUserGet(whClientContext* c, const char* username,
 int wh_Client_AuthUserSetPermissionsRequest(whClientContext* c,
         whUserId user_id, whAuthPermissions permissions)
 {
-    /* TODO: Send user set permissions request (non-blocking).
-     * Builds and sends the user set permissions request message. Returns immediately.
-     * May return WH_ERROR_NOTREADY if send buffer is busy. */
-    (void)c;
-    (void)user_id;
-    (void)permissions;
-    return WH_ERROR_NOTIMPL;
+    whMessageAuth_UserSetPermissionsRequest msg = {0};
+
+    if (c == NULL){
+        return WH_ERROR_BADARGS;
+    }
+
+    msg.user_id = user_id;
+    if (wh_MessageAuth_FlattenPermissions(&permissions, msg.permissions,
+        sizeof(msg.permissions)) != 0) {
+        return WH_ERROR_BUFFER_SIZE;
+    }
+    return wh_Client_SendRequest(c,
+            WH_MESSAGE_GROUP_AUTH, WH_MESSAGE_AUTH_ACTION_USER_SET_PERMISSIONS,
+            sizeof(msg), &msg);
 }
 
 int wh_Client_AuthUserSetPermissionsResponse(whClientContext* c, int32_t *out_rc)
 {
-    /* TODO: Receive user set permissions response (non-blocking).
-     * Polls for and processes the user set permissions response. Returns immediately.
-     * Returns WH_ERROR_NOTREADY if response not yet available. */
-    (void)c;
-    (void)out_rc;
-    return WH_ERROR_NOTIMPL;
+    uint8_t                    buffer[WOLFHSM_CFG_COMM_DATA_LEN] = {0};
+    whMessageAuth_SimpleResponse* msg = (whMessageAuth_SimpleResponse*)buffer;
+
+    int rc = 0;
+    uint16_t resp_group = 0;
+    uint16_t resp_action = 0;
+    uint16_t resp_size = 0;
+
+    if (c == NULL){
+        return WH_ERROR_BADARGS;
+    }
+
+    rc = wh_Client_RecvResponse(c,
+            &resp_group, &resp_action,
+            &resp_size, buffer);
+    if (rc == 0) {
+        /* Validate response */
+        if ((resp_group != WH_MESSAGE_GROUP_AUTH) ||
+            (resp_action != WH_MESSAGE_AUTH_ACTION_USER_SET_PERMISSIONS) ||
+            (resp_size != sizeof(whMessageAuth_SimpleResponse))) {
+            /* Invalid message */
+            rc = WH_ERROR_ABORTED;
+        }
+        else {
+            /* Valid message */
+            if (out_rc != NULL) {
+                *out_rc = msg->rc;
+            }
+        }
+    }
+    return rc;
 }
 
 int wh_Client_AuthUserSetPermissions(whClientContext* c, whUserId user_id,
         whAuthPermissions permissions, int32_t* out_rc)
 {
-    /* TODO: Set user permissions (blocking convenience wrapper).
-     * Calls Request, then loops on Response until complete. Blocks until
-     * permissions are set or operation fails. */
-    (void)c;
-    (void)user_id;
-    (void)permissions;
-    (void)out_rc;
-    return WH_ERROR_NOTIMPL;
+    int rc;
+
+    do {
+        rc = wh_Client_AuthUserSetPermissionsRequest(c, user_id, permissions);
+    } while (rc == WH_ERROR_NOTREADY);
+
+    if (rc != 0) {
+        return rc;
+    }
+
+    do {
+        rc = wh_Client_AuthUserSetPermissionsResponse(c, out_rc);
+    } while (rc == WH_ERROR_NOTREADY);
+
+    return rc;
 }
 
 /** User Set Credentials */
