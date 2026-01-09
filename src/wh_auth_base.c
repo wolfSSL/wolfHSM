@@ -173,6 +173,7 @@ int wh_AuthBase_Login(void* context, uint8_t client_id,
             *loggedIn = 1;
             *out_user_id = current_user->user.user_id;
             current_user->user.is_active = true;
+            *out_permissions = current_user->user.permissions;
         }
     }
 
@@ -267,27 +268,41 @@ int wh_AuthBase_CheckRequestAuthorization(void* context,
 int wh_AuthBase_CheckKeyAuthorization(void* context, uint16_t user_id,
     uint32_t key_id, uint16_t action)
 {
-    int rc = WH_ERROR_OK;
+    int rc = WH_ERROR_ACCESS;
+    int i;
+    whAuthBase_User* user;
 
     printf("In key authorization check: User ID: %d, Key ID: %d, Action: %d\n",
         user_id, key_id, action);
 
     if (user_id == WH_USER_ID_INVALID) {
-        rc = WH_ERROR_ACCESS;
+        return WH_ERROR_ACCESS;
     }
-    else {
-        /*
-        if (auth_context->user.permissions.keyId == key_id) {
+
+    if (user_id - 1 >= WH_AUTH_BASE_MAX_USERS) {
+        return WH_ERROR_NOTFOUND;
+    }
+
+    user = &users[user_id - 1];
+
+    if (user->user.user_id == WH_USER_ID_INVALID) {
+        return WH_ERROR_NOTFOUND;
+    }
+
+    /* Check if the requested key_id is in the user's keyIds array */
+    for (i = 0; i < user->user.permissions.keyIdCount && i < WH_AUTH_MAX_KEY_IDS; i++) {
+        if (user->user.permissions.keyIds[i] == key_id) {
             rc = WH_ERROR_OK;
+            break;
         }
-        else {
-            printf("User does not have access to the key");
-            rc = WH_ERROR_ACCESS;
-        }
-        */
+    }
+
+    if (rc != WH_ERROR_OK) {
+        printf("User does not have access to the key");
     }
 
     (void)context;
+    (void)action; /* Action could be used for future fine-grained key access control */
     return rc;
 }
 
@@ -324,6 +339,17 @@ int wh_AuthBase_UserAdd(void* context, const char* username,
     new_user->user.user_id = userId;
     *out_user_id = userId;
     new_user->user.permissions = permissions;
+    /* Clamp keyIdCount to valid range and zero out unused keyIds */
+    if (new_user->user.permissions.keyIdCount > WH_AUTH_MAX_KEY_IDS) {
+        new_user->user.permissions.keyIdCount = WH_AUTH_MAX_KEY_IDS;
+    }
+    /* Zero out unused keyIds beyond keyIdCount */
+    if (new_user->user.permissions.keyIdCount < WH_AUTH_MAX_KEY_IDS) {
+        int j;
+        for (j = new_user->user.permissions.keyIdCount; j < WH_AUTH_MAX_KEY_IDS; j++) {
+            new_user->user.permissions.keyIds[j] = 0;
+        }
+    }
     strcpy(new_user->user.username, username);
     new_user->user.is_active = false;
     new_user->user.failed_attempts = 0;
@@ -343,26 +369,39 @@ int wh_AuthBase_UserAdd(void* context, const char* username,
     return WH_ERROR_OK;
 }
 
-int wh_AuthBase_UserDelete(void* context, uint16_t user_id)
+int wh_AuthBase_UserDelete(void* context, uint16_t current_user_id, uint16_t user_id)
 {
-    whAuthBase_User* user = &users[user_id];
+    whAuthBase_User* user = &users[user_id - 1];
     if (user->user.user_id == WH_USER_ID_INVALID) {
         return WH_ERROR_NOTFOUND;
     }
     memset(user, 0, sizeof(whAuthBase_User));
     (void)context;
+    (void)current_user_id;
     return WH_ERROR_OK;
 }
 
-int wh_AuthBase_UserSetPermissions(void* context, uint16_t user_id,
-    whAuthPermissions permissions)
+int wh_AuthBase_UserSetPermissions(void* context, uint16_t current_user_id,
+    uint16_t user_id, whAuthPermissions permissions)
 {
-    whAuthBase_User* user = &users[user_id];
+    whAuthBase_User* user = &users[user_id - 1];
     if (user->user.user_id == WH_USER_ID_INVALID) {
         return WH_ERROR_NOTFOUND;
     }
     user->user.permissions = permissions;
+    /* Clamp keyIdCount to valid range and zero out unused keyIds */
+    if (user->user.permissions.keyIdCount > WH_AUTH_MAX_KEY_IDS) {
+        user->user.permissions.keyIdCount = WH_AUTH_MAX_KEY_IDS;
+    }
+    /* Zero out unused keyIds beyond keyIdCount */
+    if (user->user.permissions.keyIdCount < WH_AUTH_MAX_KEY_IDS) {
+        int j;
+        for (j = user->user.permissions.keyIdCount; j < WH_AUTH_MAX_KEY_IDS; j++) {
+            user->user.permissions.keyIds[j] = 0;
+        }
+    }
     (void)context;
+    (void)current_user_id;
     return WH_ERROR_OK;
 }
 
