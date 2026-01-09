@@ -53,12 +53,18 @@ int wh_AuthBase_Init(void* context, const void *config)
     whAuthPermissions permissions;
     int rc;
     uint16_t out_user_id;
+    int i;
 
     /* TODO: Initialize auth manager context */
     (void)context;
     (void)config;
 
     memset(&permissions, 0xFF, sizeof(whAuthPermissions));
+    permissions.keyIdCount = 0;
+    for (i = 0; i < WH_AUTH_MAX_KEY_IDS; i++) {
+        permissions.keyIds[i] = 0;
+    }
+
     /* add a demo user with admin permissions */
     rc = wh_AuthBase_UserAdd(context, "admin", &out_user_id, permissions,
         WH_AUTH_METHOD_PIN, "1234", 4);
