@@ -208,18 +208,21 @@ int wh_Auth_UserDelete(whAuthContext* context, whUserId user_id)
         return WH_ERROR_BADARGS;
     }
 
-    return context->cb->UserDelete(context->context, user_id);
+    return context->cb->UserDelete(context->context, context->user.user_id, user_id);
 }
 
 
 int wh_Auth_UserSetPermissions(whAuthContext* context, whUserId user_id,
                                  whAuthPermissions permissions)
 {
-    /* TODO: Set user permissions */
-    (void)context;
-    (void)user_id;
-    (void)permissions;
-    return WH_ERROR_NOTIMPL;
+    if (    (context == NULL) ||
+            (context->cb == NULL) ||
+            (context->cb->UserSetPermissions == NULL) ) {
+        return WH_ERROR_BADARGS;
+    }
+
+    return context->cb->UserSetPermissions(context->context,
+        context->user.user_id, user_id, permissions);
 }
 
 int wh_Auth_UserGet(whAuthContext* context, const char* username, whUserId* out_user_id,
