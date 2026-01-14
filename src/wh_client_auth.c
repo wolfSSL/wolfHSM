@@ -41,6 +41,18 @@
 #include "wolfhsm/wh_client.h"
 #include "wolfhsm/wh_auth.h"
 
+static int _wh_Client_AuthUserNameSanityCheck(const char* username)
+{
+    size_t len;
+
+    if (username == NULL) {
+        return 0;
+    }
+
+    len = strnlen(username, WH_MESSAGE_AUTH_MAX_USERNAME_LEN);
+    return (len < WH_MESSAGE_AUTH_MAX_USERNAME_LEN);
+}
+
 /** Authenticate */
 int wh_Client_AuthLoginRequest(whClientContext* c,
         whAuthMethod method, const char* username, const void* auth_data,
@@ -52,6 +64,10 @@ int wh_Client_AuthLoginRequest(whClientContext* c,
     int msg_size;
 
     if (c == NULL){
+        return WH_ERROR_BADARGS;
+    }
+
+    if (!_wh_Client_AuthUserNameSanityCheck(username)) {
         return WH_ERROR_BADARGS;
     }
 
@@ -224,6 +240,10 @@ int wh_Client_AuthUserAddRequest(whClientContext* c, const char* username,
         return WH_ERROR_BADARGS;
     }
 
+    if (!_wh_Client_AuthUserNameSanityCheck(username)) {
+        return WH_ERROR_BADARGS;
+    }
+
     strncpy(msg->username, username, sizeof(msg->username));
 
     if (wh_MessageAuth_FlattenPermissions(&permissions, msg->permissions,
@@ -389,6 +409,10 @@ int wh_Client_AuthUserGetRequest(whClientContext* c, const char* username)
     whMessageAuth_UserGetRequest msg = {0};
 
     if (c == NULL){
+        return WH_ERROR_BADARGS;
+    }
+
+    if (!_wh_Client_AuthUserNameSanityCheck(username)) {
         return WH_ERROR_BADARGS;
     }
 
