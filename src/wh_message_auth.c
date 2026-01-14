@@ -47,19 +47,41 @@ int wh_MessageAuth_TranslateSimpleResponse(uint16_t magic,
 }
 
 int wh_MessageAuth_TranslateLoginRequest(uint16_t magic,
-        const whMessageAuth_LoginRequest* src,
-        whMessageAuth_LoginRequest* dest)
+        const void* src_packet, uint16_t src_size,
+        whMessageAuth_LoginRequest* dest_header, uint8_t* dest_auth_data)
 {
-    if ((src == NULL) || (dest == NULL)) {
+    const whMessageAuth_LoginRequest* src_header;
+    const uint8_t* src_data;
+    uint16_t header_size = sizeof(whMessageAuth_LoginRequest);
+    uint16_t expected_size;
+
+    if ((src_packet == NULL) || (dest_header == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
-    WH_T16(magic, dest, src, method);
-    if (src != dest) {
-        memcpy(dest->username, src->username, sizeof(dest->username));
-        memcpy(dest->auth_data, src->auth_data, src->auth_data_len);
+    if (src_size < header_size) {
+        return WH_ERROR_BADARGS;
     }
-    WH_T16(magic, dest, src, auth_data_len);
+
+    src_header = (const whMessageAuth_LoginRequest*)src_packet;
+    src_data = (const uint8_t*)src_packet + header_size;
+
+    WH_T16(magic, dest_header, src_header, method);
+    if (src_header != dest_header) {
+        memcpy(dest_header->username, src_header->username,
+               sizeof(dest_header->username));
+    }
+    WH_T16(magic, dest_header, src_header, auth_data_len);
+
+    expected_size = (uint16_t)(header_size + dest_header->auth_data_len);
+    if (dest_header->auth_data_len > WH_MESSAGE_AUTH_MAX_CREDENTIALS_LEN ||
+        src_size < expected_size) {
+        return WH_ERROR_BADARGS;
+    }
+
+    if (dest_auth_data != NULL && dest_header->auth_data_len > 0) {
+        memcpy(dest_auth_data, src_data, dest_header->auth_data_len);
+    }
     return 0;
 }
 
@@ -173,24 +195,44 @@ int wh_MessageAuth_UnflattenPermissions(uint8_t* buffer, uint16_t buffer_len,
 
 
 int wh_MessageAuth_TranslateUserAddRequest(uint16_t magic,
-        const whMessageAuth_UserAddRequest* src,
-        whMessageAuth_UserAddRequest* dest)
+        const void* src_packet, uint16_t src_size,
+        whMessageAuth_UserAddRequest* dest_header, uint8_t* dest_credentials)
 {
-    if ((src == NULL) || (dest == NULL)) {
+    const whMessageAuth_UserAddRequest* src_header;
+    const uint8_t* src_data;
+    uint16_t header_size = sizeof(whMessageAuth_UserAddRequest);
+    uint16_t expected_size;
+
+    if ((src_packet == NULL) || (dest_header == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
-    if (src != dest) {
-        memcpy(dest->username, src->username, sizeof(dest->username));
-        if (src->credentials_len > WH_MESSAGE_AUTH_MAX_CREDENTIALS_LEN) {
-            return WH_ERROR_BUFFER_SIZE;
-        }
-        memcpy(dest->credentials, src->credentials, src->credentials_len);
-        memcpy(dest->permissions, src->permissions, sizeof(dest->permissions));
+    if (src_size < header_size) {
+        return WH_ERROR_BADARGS;
     }
 
-    WH_T16(magic, dest, src, method);
-    WH_T16(magic, dest, src, credentials_len);
+    src_header = (const whMessageAuth_UserAddRequest*)src_packet;
+    src_data = (const uint8_t*)src_packet + header_size;
+
+    if (src_header != dest_header) {
+        memcpy(dest_header->username, src_header->username,
+               sizeof(dest_header->username));
+        memcpy(dest_header->permissions, src_header->permissions,
+               sizeof(dest_header->permissions));
+    }
+
+    WH_T16(magic, dest_header, src_header, method);
+    WH_T16(magic, dest_header, src_header, credentials_len);
+
+    expected_size = (uint16_t)(header_size + dest_header->credentials_len);
+    if (dest_header->credentials_len > WH_MESSAGE_AUTH_MAX_CREDENTIALS_LEN ||
+        src_size < expected_size) {
+        return WH_ERROR_BUFFER_SIZE;
+    }
+
+    if (dest_credentials != NULL && dest_header->credentials_len > 0) {
+        memcpy(dest_credentials, src_data, dest_header->credentials_len);
+    }
     return 0;
 }
 

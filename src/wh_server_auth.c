@@ -72,27 +72,29 @@ int wh_Server_HandleAuthRequest(whServerContext* server,
         whMessageAuth_LoginRequest req = {0};
         whMessageAuth_LoginResponse resp = {0};
         int loggedIn = 0;
-
-        if (req_size != sizeof(req)) {
-            /* Request is malformed */
-            resp.rc = WH_ERROR_ABORTED;
-       }
+        uint8_t auth_data[WH_MESSAGE_AUTH_MAX_CREDENTIALS_LEN] = {0};
 
         /* Parse the request */
-        wh_MessageAuth_TranslateLoginRequest(magic, req_packet, &req);
+        rc = wh_MessageAuth_TranslateLoginRequest(magic, req_packet, req_size,
+                &req, auth_data);
+        if (rc != WH_ERROR_OK) {
+            resp.rc = rc;
+        }
 
         /* Login the user */
-        rc = wh_Auth_Login(server->auth, server->comm->client_id, req.method,
-            req.username, req.auth_data, req.auth_data_len, &loggedIn);
-        resp.rc = rc;
-        if (rc == WH_ERROR_OK) {
-            if (loggedIn == 0) {
-            resp.rc = WH_AUTH_LOGIN_FAILED;
-            resp.user_id = WH_USER_ID_INVALID;
-            }
-            else {
-                /* return the current logged in user info */
-                resp.user_id = server->auth->user.user_id;
+        if (resp.rc == WH_ERROR_OK) {
+            rc = wh_Auth_Login(server->auth, server->comm->client_id, req.method,
+                req.username, auth_data, req.auth_data_len, &loggedIn);
+            resp.rc = rc;
+            if (rc == WH_ERROR_OK) {
+                if (loggedIn == 0) {
+                resp.rc = WH_AUTH_LOGIN_FAILED;
+                resp.user_id = WH_USER_ID_INVALID;
+                }
+                else {
+                    /* return the current logged in user info */
+                    resp.user_id = server->auth->user.user_id;
+                }
             }
         }
         /* @TODO setting of permissions */
@@ -129,27 +131,22 @@ int wh_Server_HandleAuthRequest(whServerContext* server,
         whMessageAuth_UserAddRequest req = {0};
         whMessageAuth_UserAddResponse resp = {0};
         whAuthPermissions permissions = {0};
+        uint8_t credentials[WH_MESSAGE_AUTH_MAX_CREDENTIALS_LEN] = {0};
 
-        if (req_size != sizeof(whMessageAuth_UserAddRequest)) {
-            /* Request is malformed */
-            resp.rc = WH_ERROR_BADARGS;
-       } else {
-            /* Parse the request */
-            wh_MessageAuth_TranslateUserAddRequest(magic, req_packet, &req);
-
-            /* Validate credentials length */
-            if (req.credentials_len > WH_MESSAGE_AUTH_MAX_CREDENTIALS_LEN) {
+        /* Parse the request */
+        rc = wh_MessageAuth_TranslateUserAddRequest(magic, req_packet, req_size,
+                &req, credentials);
+        if (rc != WH_ERROR_OK) {
+            resp.rc = rc;
+        } else {
+            if (wh_MessageAuth_UnflattenPermissions(req.permissions,
+                sizeof(req.permissions), &permissions) != 0) {
                 resp.rc = WH_ERROR_BADARGS;
             } else {
-                if (wh_MessageAuth_UnflattenPermissions(req.permissions,
-                    sizeof(req.permissions), &permissions) != 0) {
-                    resp.rc = WH_ERROR_BADARGS;
-                } else {
-                /* Add the user with credentials @TODO setting permissions */
-                    rc = wh_Auth_UserAdd(server->auth, req.username, &resp.user_id, permissions,
-                            req.method, req.credentials, req.credentials_len);
-                    resp.rc = rc;
-                }
+            /* Add the user with credentials @TODO setting permissions */
+                rc = wh_Auth_UserAdd(server->auth, req.username, &resp.user_id, permissions,
+                        req.method, credentials, req.credentials_len);
+                resp.rc = rc;
             }
         }
 
