@@ -40,5 +40,7 @@ int whTest_AuthAddUser(whClientContext* client);
 int whTest_AuthDeleteUser(whClientContext* client);
 int whTest_AuthSetPermissions(whClientContext* client);
 int whTest_AuthSetCredentials(whClientContext* client);
+int whTest_AuthRequestAuthorization(whClientContext* client);
+int whTest_AuthKeyAuthorization(whClientContext* client);
 
 #endif /* WOLFHSM_WH_TEST_AUTH_H_ */

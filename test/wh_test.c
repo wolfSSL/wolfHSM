@@ -40,6 +40,7 @@
 #include "wh_test_keywrap.h"
 #include "wh_test_multiclient.h"
 #include "wh_test_log.h"
+#include "wh_test_auth.h"
 
 #if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER)
 #include "wh_test_cert.h"
@@ -87,6 +88,9 @@ int whTest_Unit(void)
     WH_TEST_ASSERT(0 == whTest_Comm());
     WH_TEST_ASSERT(0 == whTest_ClientServer());
 
+    /* Auth tests */
+    WH_TEST_ASSERT(0 == whTest_Auth());
+
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     /* Crypto Tests */
     WH_TEST_ASSERT(0 == whTest_Crypto());
@@ -113,7 +117,6 @@ int whTest_Unit(void)
 #endif
 
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
-
     return 0;
 }
 #endif /* WOLFHSM_CFG_ENABLE_CLIENT && WOLFHSM_CFG_ENABLE_SERVER */
