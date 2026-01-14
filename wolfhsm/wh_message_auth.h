@@ -67,12 +67,12 @@ typedef struct {
     uint16_t method;
     char username[WH_MESSAGE_AUTH_MAX_USERNAME_LEN];
     uint16_t auth_data_len;
-    uint8_t auth_data[WH_MESSAGE_AUTH_MAX_CREDENTIALS_LEN];
+    /* auth_data follows */
 } whMessageAuth_LoginRequest;
 
 int wh_MessageAuth_TranslateLoginRequest(uint16_t magic,
-        const whMessageAuth_LoginRequest* src,
-        whMessageAuth_LoginRequest* dest);
+        const void* src_packet, uint16_t src_size,
+        whMessageAuth_LoginRequest* dest_header, uint8_t* dest_auth_data);
 
 /** Login Response */
 typedef struct {
@@ -114,12 +114,12 @@ typedef struct {
     uint8_t permissions[WH_FLAT_PERRMISIONS_LEN];
     uint16_t method;
     uint16_t credentials_len;
-    uint8_t credentials[WH_MESSAGE_AUTH_MAX_CREDENTIALS_LEN];
+    /* credentials follow */
 } whMessageAuth_UserAddRequest;
 
 int wh_MessageAuth_TranslateUserAddRequest(uint16_t magic,
-        const whMessageAuth_UserAddRequest* src,
-        whMessageAuth_UserAddRequest* dest);
+        const void* src_packet, uint16_t src_size,
+        whMessageAuth_UserAddRequest* dest_header, uint8_t* dest_credentials);
 
 /** User Add Response */
 typedef struct {

@@ -46,19 +46,34 @@ int wh_Client_AuthLoginRequest(whClientContext* c,
         whAuthMethod method, const char* username, const void* auth_data,
         uint16_t auth_data_len)
 {
-    whMessageAuth_LoginRequest msg = {0};
+    uint8_t buffer[WOLFHSM_CFG_COMM_DATA_LEN] = {0};
+    whMessageAuth_LoginRequest* msg = (whMessageAuth_LoginRequest*)buffer;
+    uint8_t* msg_auth_data = buffer + sizeof(*msg);
+    int msg_size;
 
     if (c == NULL){
         return WH_ERROR_BADARGS;
     }
 
-    strncpy(msg.username, username, sizeof(msg.username));
-    msg.method = method;
-    msg.auth_data_len = auth_data_len;
-    memcpy(msg.auth_data, auth_data, auth_data_len);
+    if (auth_data_len > WH_MESSAGE_AUTH_MAX_CREDENTIALS_LEN) {
+        return WH_ERROR_BADARGS;
+    }
+
+    msg_size = (int)sizeof(*msg) + (int)auth_data_len;
+    if (msg_size > WOLFHSM_CFG_COMM_DATA_LEN) {
+        return WH_ERROR_BADARGS;
+    }
+
+    strncpy(msg->username, username, sizeof(msg->username));
+    msg->method = method;
+    msg->auth_data_len = auth_data_len;
+    if (auth_data_len > 0 && auth_data != NULL) {
+        memcpy(msg_auth_data, auth_data, auth_data_len);
+    }
+
     return wh_Client_SendRequest(c,
             WH_MESSAGE_GROUP_AUTH, WH_MESSAGE_AUTH_ACTION_LOGIN,
-            sizeof(msg), &msg);
+            (uint16_t)msg_size, buffer);
 }
 
 int wh_Client_AuthLoginResponse(whClientContext* c, int32_t *out_rc,
@@ -200,30 +215,38 @@ int wh_Client_AuthUserAddRequest(whClientContext* c, const char* username,
         whAuthPermissions permissions, whAuthMethod method,
         const void* credentials, uint16_t credentials_len)
 {
-    whMessageAuth_UserAddRequest msg = {0};
+    uint8_t buffer[WOLFHSM_CFG_COMM_DATA_LEN] = {0};
+    whMessageAuth_UserAddRequest* msg = (whMessageAuth_UserAddRequest*)buffer;
+    uint8_t* msg_credentials = buffer + sizeof(*msg);
+    int msg_size;
 
     if (c == NULL){
         return WH_ERROR_BADARGS;
     }
 
-    strncpy(msg.username, username, sizeof(msg.username));
+    strncpy(msg->username, username, sizeof(msg->username));
 
-    if (wh_MessageAuth_FlattenPermissions(&permissions, msg.permissions,
-        sizeof(msg.permissions)) != 0) {
+    if (wh_MessageAuth_FlattenPermissions(&permissions, msg->permissions,
+        sizeof(msg->permissions)) != 0) {
         return WH_ERROR_BUFFER_SIZE;
     }
 
-    msg.method = method;
-    msg.credentials_len = credentials_len;
+    msg->method = method;
+    msg->credentials_len = credentials_len;
     if (credentials != NULL && credentials_len > 0) {
         if (credentials_len > WH_MESSAGE_AUTH_MAX_CREDENTIALS_LEN) {
             return WH_ERROR_BUFFER_SIZE;
         }
-        memcpy(msg.credentials, credentials, credentials_len);
+        memcpy(msg_credentials, credentials, credentials_len);
+    }
+
+    msg_size = (int)sizeof(*msg) + (int)credentials_len;
+    if (msg_size > WOLFHSM_CFG_COMM_DATA_LEN) {
+        return WH_ERROR_BUFFER_SIZE;
     }
     return wh_Client_SendRequest(c,
             WH_MESSAGE_GROUP_AUTH, WH_MESSAGE_AUTH_ACTION_USER_ADD,
-            sizeof(msg), &msg);
+            (uint16_t)msg_size, buffer);
 }
 
 int wh_Client_AuthUserAddResponse(whClientContext* c, int32_t *out_rc,

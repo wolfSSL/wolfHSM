@@ -336,11 +336,13 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
          * group and action requested. When dealing with key ID's there should
          * be an additional authorization check after parsing the request and
          * translating the key ID and before it is used. */
-        rc = wh_Auth_CheckRequestAuthorization(server->auth, group, action);
-        if (rc != WH_ERROR_OK) {
-            /* Authorization failed - send error response to client but keep server running */
-            int32_t error_response = (int32_t)WH_AUTH_PERMISSION_ERROR;
-            uint16_t resp_size = sizeof(error_response);
+        /* Check authorization if auth context is configured */
+        if (server->auth != NULL) {
+            rc = wh_Auth_CheckRequestAuthorization(server->auth, group, action);
+            if (rc != WH_ERROR_OK) {
+                /* Authorization failed - send error response to client but keep server running */
+                int32_t error_response = (int32_t)WH_AUTH_PERMISSION_ERROR;
+                uint16_t resp_size = sizeof(error_response);
 
             /* Translate the error response for endian conversion */
             error_response = (int32_t)wh_Translate32(magic, (uint32_t)error_response);
@@ -356,7 +358,8 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
                               "Authorization failed for (group=%d, action=%d, seq=%d)",
                               group, action, seq);
 
-            return rc;
+                return rc;
+            }
         }
 #endif /* WOLFHSM_CFG_NO_AUTHENTICATION */
 
