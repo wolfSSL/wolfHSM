@@ -338,6 +338,149 @@ static void _whTest_Auth_DeleteUserByName(whClientContext* client,
     }
 }
 
+static int _whTest_Auth_BadArgs(void)
+{
+    int rc = 0;
+    int loggedIn = 1;
+    whAuthContext ctx;
+    whAuthConfig config;
+    whAuthPermissions perms;
+    whUserId user_id = WH_USER_ID_INVALID;
+
+    memset(&ctx, 0, sizeof(ctx));
+    memset(&config, 0, sizeof(config));
+    memset(&perms, 0, sizeof(perms));
+
+    WH_TEST_PRINT("  Test: Auth core bad args\n");
+    rc = wh_Auth_Init(NULL, &config);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
+    rc = wh_Auth_Init(&ctx, NULL);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
+
+    rc = wh_Auth_Cleanup(NULL);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
+    rc = wh_Auth_Cleanup(&ctx);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
+
+    rc = wh_Auth_Login(NULL, 0, WH_AUTH_METHOD_PIN, "user", "pin", 3, &loggedIn);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
+    rc = wh_Auth_Login(&ctx, 0, WH_AUTH_METHOD_PIN, "user", "pin", 3, NULL);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
+    rc = wh_Auth_LoginRequest(NULL, 0, WH_AUTH_METHOD_PIN, "user", "pin", 3, &loggedIn);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
+    rc = wh_Auth_LoginResponse(NULL, &loggedIn, &user_id, &perms);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
+
+    rc = wh_Auth_Logout(NULL, 1);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
+    rc = wh_Auth_Logout(&ctx, 1);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
+
+    rc = wh_Auth_UserAdd(&ctx, "user", &user_id, perms, WH_AUTH_METHOD_PIN,
+        "pin", 3);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
+    rc = wh_Auth_UserDelete(&ctx, 1);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
+    rc = wh_Auth_UserSetPermissions(&ctx, 1, perms);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
+    rc = wh_Auth_UserGet(&ctx, "user", &user_id, &perms);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
+    rc = wh_Auth_UserSetCredentials(&ctx, 1, WH_AUTH_METHOD_PIN,
+        "pin", 3, "new", 3);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
+
+    WH_TEST_PRINT("  Test: Auth base bad args\n");
+    rc = wh_AuthBase_Login(NULL, 0, WH_AUTH_METHOD_PIN,
+        TEST_ADMIN_USERNAME, TEST_ADMIN_PIN, 4, NULL, &perms, &loggedIn);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
+    rc = wh_AuthBase_Login(NULL, 0, WH_AUTH_METHOD_NONE, NULL, NULL, 0,
+        &user_id, &perms, &loggedIn);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
+
+    rc = wh_AuthBase_Logout(NULL, 0, WH_USER_ID_INVALID);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
+    rc = wh_AuthBase_Logout(NULL, 0, 999);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_NOTFOUND);
+
+    rc = wh_AuthBase_CheckRequestAuthorization(NULL, WH_USER_ID_INVALID,
+        WH_MESSAGE_GROUP_AUTH, WH_MESSAGE_AUTH_ACTION_LOGIN);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_OK);
+    rc = wh_AuthBase_CheckRequestAuthorization(NULL, WH_USER_ID_INVALID,
+        WH_MESSAGE_GROUP_AUTH, WH_MESSAGE_AUTH_ACTION_LOGOUT);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_ACCESS);
+    rc = wh_AuthBase_CheckRequestAuthorization(NULL, WH_USER_ID_INVALID,
+        WH_MESSAGE_GROUP_COMM, 0);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_OK);
+
+    rc = wh_AuthBase_CheckKeyAuthorization(NULL, WH_USER_ID_INVALID, 1, 0);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_ACCESS);
+
+    rc = wh_AuthBase_UserAdd(NULL, "baduser", &user_id, perms,
+        WH_AUTH_METHOD_NONE, "x", 1);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
+    rc = wh_AuthBase_UserDelete(NULL, 0, WH_USER_ID_INVALID);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_NOTFOUND);
+    rc = wh_AuthBase_UserSetPermissions(NULL, 0, WH_USER_ID_INVALID, perms);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_NOTFOUND);
+    rc = wh_AuthBase_UserSetCredentials(NULL, WH_USER_ID_INVALID,
+        WH_AUTH_METHOD_PIN, NULL, 0, "new", 3);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
+    rc = wh_AuthBase_UserGet(NULL, "missing", &user_id, &perms);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_NOTFOUND);
+
+    return WH_TEST_SUCCESS;
+}
+
+static int _whTest_Auth_MessageBadArgs(void)
+{
+    int rc = 0;
+    whMessageAuth_SimpleResponse simple = {0};
+    whMessageAuth_LoginRequest login_hdr = {0};
+    whMessageAuth_LoginRequest login_out = {0};
+    whMessageAuth_UserAddRequest add_hdr = {0};
+    whMessageAuth_UserAddRequest add_out = {0};
+    whMessageAuth_UserSetCredentialsRequest set_hdr = {0};
+
+    WH_TEST_PRINT("  Test: Auth message bad args\n");
+    rc = wh_MessageAuth_TranslateSimpleResponse(0, NULL, &simple);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
+    rc = wh_MessageAuth_TranslateSimpleResponse(0, &simple, NULL);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
+
+    rc = wh_MessageAuth_TranslateLoginRequest(0, NULL, 0, &login_out, NULL);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
+    rc = wh_MessageAuth_TranslateLoginRequest(0, &login_hdr, 0, &login_out, NULL);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
+
+    memset(&login_hdr, 0, sizeof(login_hdr));
+    login_hdr.auth_data_len = (uint16_t)(WH_MESSAGE_AUTH_MAX_CREDENTIALS_LEN + 1);
+    rc = wh_MessageAuth_TranslateLoginRequest(0, &login_hdr, sizeof(login_hdr),
+        &login_out, NULL);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
+
+    rc = wh_MessageAuth_TranslateUserAddRequest(0, NULL, 0, &add_out, NULL);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
+
+    memset(&add_hdr, 0, sizeof(add_hdr));
+    add_hdr.credentials_len = (uint16_t)(WH_MESSAGE_AUTH_MAX_CREDENTIALS_LEN + 1);
+    rc = wh_MessageAuth_TranslateUserAddRequest(0, &add_hdr, sizeof(add_hdr),
+        &add_out, NULL);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BUFFER_SIZE);
+
+    rc = wh_MessageAuth_TranslateUserSetCredentialsRequest(0, NULL, 0,
+        &set_hdr, NULL, NULL);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
+
+    memset(&set_hdr, 0, sizeof(set_hdr));
+    set_hdr.current_credentials_len = 4;
+    set_hdr.new_credentials_len = 4;
+    rc = wh_MessageAuth_TranslateUserSetCredentialsRequest(0, &set_hdr,
+        sizeof(set_hdr), &set_hdr, NULL, NULL);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
+
+    return WH_TEST_SUCCESS;
+}
+
 /* Logout Tests */
 int whTest_AuthLogout(whClientContext* client)
 {
@@ -1014,6 +1157,11 @@ int whTest_AuthRequestAuthorization(whClientContext* client)
 int whTest_AuthTest(whClientContext* client_ctx)
 {
     WH_TEST_PRINT("Testing authentication functionality...\n");
+
+    WH_TEST_PRINT("Running auth bad-args tests...\n");
+    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_BadArgs());
+    WH_TEST_PRINT("Running auth message bad-args tests...\n");
+    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_MessageBadArgs());
 
     /* Run authentication test groups */
     WH_TEST_PRINT("Running logout tests...\n");
