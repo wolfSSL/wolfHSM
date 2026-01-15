@@ -68,7 +68,6 @@ int wh_AuthBase_Init(void* context, const void *config)
     /* add a demo user with admin permissions */
     rc = wh_AuthBase_UserAdd(context, "admin", &out_user_id, permissions,
         WH_AUTH_METHOD_PIN, "1234", 4);
-    printf("Admin user added with ID: %d\n", out_user_id);
     return rc;
 }
 
@@ -215,9 +214,6 @@ int wh_AuthBase_CheckRequestAuthorization(void* context,
 {
     int rc;
 
-    printf("In authorization check: User ID: %d, Group: %d, Action: %d\n",
-        user_id, group, action);
-
     if (user_id == WH_USER_ID_INVALID) {
         /* allow user login request attempt */
         if (group == WH_MESSAGE_GROUP_AUTH) {
@@ -225,12 +221,10 @@ int wh_AuthBase_CheckRequestAuthorization(void* context,
                 rc = WH_ERROR_OK;
             }
             else {
-                printf("User does not have permissions for the action");
                 rc = WH_ERROR_ACCESS;
             }
         }
         else {
-            printf("No user associated with session");
             rc = WH_ERROR_OK; /*rc = WH_ERROR_ACCESS;*/
         }
     }
@@ -254,12 +248,10 @@ int wh_AuthBase_CheckRequestAuthorization(void* context,
                     rc = WH_ERROR_OK;
                 }
                 else {
-                    printf("User does not have permissions for the action");
                     rc = WH_ERROR_ACCESS;
                 }
             }
             else {
-                printf("User does not have permissions for the group");
                 rc = WH_ERROR_ACCESS;
             }
         }
@@ -277,9 +269,6 @@ int wh_AuthBase_CheckKeyAuthorization(void* context, uint16_t user_id,
     int rc = WH_ERROR_ACCESS;
     int i;
     whAuthBase_User* user;
-
-    printf("In key authorization check: User ID: %d, Key ID: %d, Action: %d\n",
-        user_id, key_id, action);
 
     if (user_id == WH_USER_ID_INVALID) {
         return WH_ERROR_ACCESS;
@@ -301,10 +290,6 @@ int wh_AuthBase_CheckKeyAuthorization(void* context, uint16_t user_id,
             rc = WH_ERROR_OK;
             break;
         }
-    }
-
-    if (rc != WH_ERROR_OK) {
-        printf("User does not have access to the key");
     }
 
     (void)context;
