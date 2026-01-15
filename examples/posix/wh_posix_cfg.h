@@ -24,8 +24,8 @@
  * =========================================== */
 
 /* Request and Response Buffer Sizes */
-#define WH_POSIX_REQ_SIZE 1024
-#define WH_POSIX_RESP_SIZE 1024
+#define WH_POSIX_REQ_SIZE 2048
+#define WH_POSIX_RESP_SIZE 2048
 #define WH_POSIX_DMA_SIZE 8000
 
 /* Data Buffer Sizes */
