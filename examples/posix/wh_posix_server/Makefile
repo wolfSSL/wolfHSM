@@ -59,6 +59,12 @@ endif
 # Set to @ if you want to suppress command echo
 CMD_ECHO ?=
 
+# Add code coverage option
+ifeq ($(COVERAGE),1)
+    CFLAGS += --coverage
+    LDFLAGS += --coverage
+endif
+
 # Check if DEBUG is set to 1 and append debug flags
 ifeq ($(DEBUG),1)
 	DBGFLAGS = -ggdb -g3
