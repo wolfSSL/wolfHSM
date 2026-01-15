@@ -91,7 +91,7 @@ int whTest_Unit(void)
     WH_TEST_ASSERT(0 == whTest_ClientServer());
 
     /* Auth tests */
-    WH_TEST_ASSERT(0 == whTest_Auth());
+    WH_TEST_ASSERT(0 == whTest_AuthMEM());
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     /* Crypto Tests */
@@ -155,6 +155,8 @@ int whTest_ClientConfig(whClientConfig* clientCfg)
 #if defined(WOLFHSM_CFG_TEST_WOLFCRYPTTEST)
     WH_TEST_RETURN_ON_FAIL(whTest_WolfCryptTestCfg(clientCfg));
 #endif /* WOLFHSM_CFG_TEST_WOLFCRYPTTEST */
+
+    WH_TEST_RETURN_ON_FAIL(whTest_AuthTCP(clientCfg));
 
     return WH_ERROR_OK;
 }

@@ -377,10 +377,17 @@ int wh_AuthBase_UserAdd(void* context, const char* username,
 
 int wh_AuthBase_UserDelete(void* context, uint16_t current_user_id, uint16_t user_id)
 {
-    whAuthBase_User* user = &users[user_id - 1];
+    whAuthBase_User* user;
+
+    if (user_id == WH_USER_ID_INVALID || user_id >= WH_AUTH_BASE_MAX_USERS) {
+        return WH_ERROR_NOTFOUND;
+    }
+
+    user = &users[user_id - 1];
     if (user->user.user_id == WH_USER_ID_INVALID) {
         return WH_ERROR_NOTFOUND;
     }
+
     memset(user, 0, sizeof(whAuthBase_User));
     (void)context;
     (void)current_user_id;
@@ -390,7 +397,13 @@ int wh_AuthBase_UserDelete(void* context, uint16_t current_user_id, uint16_t use
 int wh_AuthBase_UserSetPermissions(void* context, uint16_t current_user_id,
     uint16_t user_id, whAuthPermissions permissions)
 {
-    whAuthBase_User* user = &users[user_id - 1];
+    whAuthBase_User* user;
+
+    if (user_id == WH_USER_ID_INVALID || user_id >= WH_AUTH_BASE_MAX_USERS) {
+        return WH_ERROR_NOTFOUND;
+    }
+
+    user = &users[user_id - 1];
     if (user->user.user_id == WH_USER_ID_INVALID) {
         return WH_ERROR_NOTFOUND;
     }
@@ -435,7 +448,7 @@ int wh_AuthBase_UserSetCredentials(void* context, uint16_t user_id,
     whAuthBase_User* user;
     int rc = WH_ERROR_OK;
 
-    if (user_id == WH_USER_ID_INVALID) {
+    if (user_id == WH_USER_ID_INVALID || user_id >= WH_AUTH_BASE_MAX_USERS) {
         return WH_ERROR_BADARGS;
     }
 
@@ -445,7 +458,6 @@ int wh_AuthBase_UserSetCredentials(void* context, uint16_t user_id,
     }
 
     user = &users[user_id - 1]; /* subtract 1 to get the index */
-    
     if (user->user.user_id == WH_USER_ID_INVALID) {
         return WH_ERROR_NOTFOUND;
     }
