@@ -160,12 +160,13 @@ int wh_Auth_CheckRequestAuthorization(whAuthContext* context, uint16_t group,
     uint16_t action)
 {
     uint16_t user_id = context->user.user_id;
+    int rc;
 
-    printf("In authorization check: User ID: %d, Group: %d, Action: %d\n",
-        user_id, group, action);
+    /* @TODO add logging call here and with resulting return value  */
 
-    return context->cb->CheckRequestAuthorization(context->context, user_id,
+    rc = context->cb->CheckRequestAuthorization(context->context, user_id,
         group, action);
+    return rc;
 }
 
 
@@ -174,9 +175,6 @@ int wh_Auth_CheckKeyAuthorization(whAuthContext* context, uint32_t key_id,
     uint16_t action)
 {
     uint16_t user_id = context->user.user_id;
-
-    printf("In key authorization check: User ID: %d, Key ID: %d, Action: %d\n",
-        user_id, key_id, action);
 
     return context->cb->CheckKeyAuthorization(context->context, user_id, key_id,
         action);
