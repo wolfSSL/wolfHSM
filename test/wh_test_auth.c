@@ -346,6 +346,7 @@ static int _whTest_Auth_BadArgs(void)
     whAuthConfig config;
     whAuthPermissions perms;
     whUserId user_id = WH_USER_ID_INVALID;
+    int32_t server_rc = 0;
 
     memset(&ctx, 0, sizeof(ctx));
     memset(&config, 0, sizeof(config));
@@ -366,9 +367,9 @@ static int _whTest_Auth_BadArgs(void)
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
     rc = wh_Auth_Login(&ctx, 0, WH_AUTH_METHOD_PIN, "user", "pin", 3, NULL);
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
-    rc = wh_Auth_LoginRequest(NULL, 0, WH_AUTH_METHOD_PIN, "user", "pin", 3, &loggedIn);
+    rc = wh_Client_AuthLoginRequest(NULL, WH_AUTH_METHOD_PIN, "user", "pin", 3);
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
-    rc = wh_Auth_LoginResponse(NULL, &loggedIn, &user_id, &perms);
+    rc = wh_Client_AuthLoginResponse(NULL, &server_rc, &user_id, &perms);
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
 
     rc = wh_Auth_Logout(NULL, 1);
@@ -768,12 +769,7 @@ int whTest_AuthDeleteUser(whClientContext* client)
     server_rc = 0;
     _whTest_Auth_UserDeleteOp(client, 1, &server_rc);
     /* Should fail authorization - not logged in */
-    /* Note: This may fail if backend permission checks are not fully implemented */
-    if (server_rc == WH_ERROR_ACCESS) {
-        WH_TEST_PRINT("    Authorization check working (expected)\n");
-    } else {
-        WH_TEST_PRINT("    Note: Authorization check may not be fully implemented\n");
-    }
+    WH_TEST_ASSERT_RETURN(server_rc != WH_ERROR_OK);
 
     return WH_TEST_SUCCESS;
 }
@@ -878,12 +874,7 @@ int whTest_AuthSetPermissions(whClientContext* client)
     server_rc = 0;
     _whTest_Auth_UserSetPermsOp(client, user_id, new_perms, &server_rc);
     /* Should fail authorization - not logged in */
-    /* Note: This may fail if backend permission checks are not fully implemented */
-    if (server_rc == WH_ERROR_ACCESS) {
-        WH_TEST_PRINT("    Authorization check working (expected)\n");
-    } else {
-        WH_TEST_PRINT("    Note: Authorization check may not be fully implemented\n");
-    }
+    WH_TEST_ASSERT_RETURN(server_rc != WH_ERROR_OK);
 
     /* Cleanup */
     server_rc = 0;
@@ -1004,12 +995,7 @@ int whTest_AuthRequestAuthorization(whClientContext* client)
     _whTest_Auth_UserAddOp(client, "testuser5", perms, WH_AUTH_METHOD_PIN,
                            "test", 4, &server_rc, &temp_id);
     /* Should fail authorization - not logged in */
-    /* Note: This may fail if backend permission checks are not fully implemented */
-    if (server_rc == WH_ERROR_ACCESS) {
-        WH_TEST_PRINT("    Authorization check working (expected)\n");
-    } else {
-        WH_TEST_PRINT("    Note: Authorization check may not be fully implemented\n");
-    }
+    WH_TEST_ASSERT_RETURN(server_rc != WH_ERROR_OK);
 
     /* Test 2: Operation when logged in and allowed */
     WH_TEST_PRINT("  Test: Operation when logged in and allowed\n");
@@ -1063,12 +1049,7 @@ int whTest_AuthRequestAuthorization(whClientContext* client)
     _whTest_Auth_UserAddOp(client, "testuser7", perms, WH_AUTH_METHOD_PIN,
                            "test", 4, &server_rc, &temp_id2);
     /* Should fail authorization - user doesn't have permissions */
-    /* Note: This may fail if backend permission checks are not fully implemented */
-    if (server_rc == WH_ERROR_ACCESS) {
-        WH_TEST_PRINT("    Authorization check working (expected)\n");
-    } else {
-        WH_TEST_PRINT("    Note: Authorization check may not be fully implemented\n");
-    }
+    WH_TEST_ASSERT_RETURN(server_rc != WH_ERROR_OK);
 
     /* Test 4: Logged in as different user and allowed */
     WH_TEST_PRINT("  Test: Logged in as different user and allowed\n");
@@ -1106,11 +1087,7 @@ int whTest_AuthRequestAuthorization(whClientContext* client)
     temp_id3 = WH_USER_ID_INVALID;
     _whTest_Auth_UserAddOp(client, "testuser8", perms, WH_AUTH_METHOD_PIN,
                            "test", 4, &server_rc, &temp_id3);
-    if (server_rc == WH_ERROR_ACCESS) {
-        WH_TEST_PRINT("    Authorization check working (expected)\n");
-    } else {
-        WH_TEST_PRINT("    Note: Authorization check may not be fully implemented\n");
-    }
+    WH_TEST_ASSERT_RETURN(server_rc != WH_ERROR_OK);
 
     /* Test 5: Logged in as different user and not allowed */
     WH_TEST_PRINT("  Test: Logged in as different user and not allowed\n");
@@ -1129,11 +1106,7 @@ int whTest_AuthRequestAuthorization(whClientContext* client)
     temp_id3 = WH_USER_ID_INVALID;
     _whTest_Auth_UserAddOp(client, "testuser9", perms, WH_AUTH_METHOD_PIN,
                            "test", 4, &server_rc, &temp_id3);
-    if (server_rc == WH_ERROR_ACCESS) {
-        WH_TEST_PRINT("    Authorization check working (expected)\n");
-    } else {
-        WH_TEST_PRINT("    Note: Authorization check may not be fully implemented\n");
-    }
+    WH_TEST_ASSERT_RETURN(server_rc != WH_ERROR_OK);
 
     /* Cleanup */
     _whTest_Auth_LogoutOp(client, logged_in_id, &server_rc);
