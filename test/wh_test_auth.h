@@ -31,7 +31,8 @@
 
 
 /* Self-contained test that creates client and server with auth */
-int whTest_Auth(void);
+int whTest_AuthMEM(void);
+int whTest_AuthTCP(whClientConfig* clientCfg);
 
 /* Individual test functions that require a connected client */
 int whTest_AuthLogin(whClientContext* client);
