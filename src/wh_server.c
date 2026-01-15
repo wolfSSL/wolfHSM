@@ -43,6 +43,9 @@
 #include "wolfhsm/wh_message_comm.h"
 #include "wolfhsm/wh_message_nvm.h"
 #include "wolfhsm/wh_message_auth.h"
+#if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER) && !defined(WOLFHSM_CFG_NO_CRYPTO)
+#include "wolfhsm/wh_message_cert.h"
+#endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER && !WOLFHSM_CFG_NO_CRYPTO */
 
 /* Server API's */
 #include "wolfhsm/wh_server.h"
@@ -300,6 +303,171 @@ static int _wh_Server_HandlePkcs11Request(whServerContext* server,
     return rc;
 }
 
+/* Helper to format an authorization error response for any group/action.
+ * All response structures have int32_t rc as the first field.
+ * Returns the response size to send. */
+static uint16_t _wh_Server_FormatAuthErrorResponse(uint16_t magic, uint16_t group,
+        uint16_t action, int32_t error_code, void* resp_packet)
+{
+    uint16_t resp_size = sizeof(int32_t); /* Minimum: just the rc field */
+
+    if (resp_packet == NULL) {
+        return 0;
+    }
+
+    /* Write error code to first int32_t (rc field) - all responses start with this */
+    *(int32_t*)resp_packet = (int32_t)wh_Translate32(magic, (uint32_t)error_code);
+
+    switch (group) {
+    case WH_MESSAGE_GROUP_AUTH:
+        /* Auth group has some responses larger than SimpleResponse */
+        switch (action) {
+        case WH_MESSAGE_AUTH_ACTION_LOGIN:
+        {
+            whMessageAuth_LoginResponse resp = {0};
+            resp.rc = error_code;
+            resp.user_id = WH_USER_ID_INVALID;
+            resp.permissions = 0;
+            wh_MessageAuth_TranslateLoginResponse(magic, &resp,
+                    (whMessageAuth_LoginResponse*)resp_packet);
+            resp_size = sizeof(resp);
+            break;
+        }
+        case WH_MESSAGE_AUTH_ACTION_USER_ADD:
+        {
+            whMessageAuth_UserAddResponse resp = {0};
+            resp.rc = error_code;
+            resp.user_id = WH_USER_ID_INVALID;
+            wh_MessageAuth_TranslateUserAddResponse(magic, &resp,
+                    (whMessageAuth_UserAddResponse*)resp_packet);
+            resp_size = sizeof(resp);
+            break;
+        }
+        case WH_MESSAGE_AUTH_ACTION_USER_GET:
+        {
+            whMessageAuth_UserGetResponse resp = {0};
+            resp.rc = error_code;
+            resp.user_id = WH_USER_ID_INVALID;
+            memset(resp.permissions, 0, sizeof(resp.permissions));
+            wh_MessageAuth_TranslateUserGetResponse(magic, &resp,
+                    (whMessageAuth_UserGetResponse*)resp_packet);
+            resp_size = sizeof(resp);
+            break;
+        }
+        default:
+        {
+            /* Use SimpleResponse for other auth actions */
+            whMessageAuth_SimpleResponse resp = {0};
+            resp.rc = error_code;
+            wh_MessageAuth_TranslateSimpleResponse(magic, &resp,
+                    (whMessageAuth_SimpleResponse*)resp_packet);
+            resp_size = sizeof(resp);
+            break;
+        }
+        }
+        break;
+
+    case WH_MESSAGE_GROUP_NVM:
+        /* NVM group - some actions have larger responses than SimpleResponse */
+        switch (action) {
+        case WH_MESSAGE_NVM_ACTION_INIT:
+        {
+            whMessageNvm_InitResponse resp = {0};
+            resp.rc = error_code;
+            resp.servernvm_id = 0;
+            resp.clientnvm_id = 0;
+            wh_MessageNvm_TranslateInitResponse(magic, &resp,
+                    (whMessageNvm_InitResponse*)resp_packet);
+            resp_size = sizeof(resp);
+            break;
+        }
+        case WH_MESSAGE_NVM_ACTION_GETAVAILABLE:
+        {
+            whMessageNvm_GetAvailableResponse resp = {0};
+            resp.rc = error_code;
+            resp.avail_size = 0;
+            resp.reclaim_size = 0;
+            resp.avail_objects = 0;
+            resp.reclaim_objects = 0;
+            wh_MessageNvm_TranslateGetAvailableResponse(magic, &resp,
+                    (whMessageNvm_GetAvailableResponse*)resp_packet);
+            resp_size = sizeof(resp);
+            break;
+        }
+        case WH_MESSAGE_NVM_ACTION_LIST:
+        {
+            whMessageNvm_ListResponse resp = {0};
+            resp.rc = error_code;
+            resp.count = 0;
+            resp.id = 0;
+            wh_MessageNvm_TranslateListResponse(magic, &resp,
+                    (whMessageNvm_ListResponse*)resp_packet);
+            resp_size = sizeof(resp);
+            break;
+        }
+        case WH_MESSAGE_NVM_ACTION_GETMETADATA:
+        {
+            whMessageNvm_GetMetadataResponse resp = {0};
+            resp.rc = error_code;
+            resp.id = 0;
+            resp.access = 0;
+            resp.flags = 0;
+            resp.len = 0;
+            memset(resp.label, 0, sizeof(resp.label));
+            wh_MessageNvm_TranslateGetMetadataResponse(magic, &resp,
+                    (whMessageNvm_GetMetadataResponse*)resp_packet);
+            resp_size = sizeof(resp);
+            break;
+        }
+        case WH_MESSAGE_NVM_ACTION_READ:
+        {
+            whMessageNvm_ReadResponse resp = {0};
+            resp.rc = error_code;
+            wh_MessageNvm_TranslateReadResponse(magic, &resp,
+                    (whMessageNvm_ReadResponse*)resp_packet);
+            resp_size = sizeof(resp);
+            break;
+        }
+        default:
+        {
+            /* Use SimpleResponse for other NVM actions */
+            whMessageNvm_SimpleResponse resp = {0};
+            resp.rc = error_code;
+            wh_MessageNvm_TranslateSimpleResponse(magic, &resp,
+                    (whMessageNvm_SimpleResponse*)resp_packet);
+            resp_size = sizeof(resp);
+            break;
+        }
+        }
+        break;
+
+#if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER) && !defined(WOLFHSM_CFG_NO_CRYPTO)
+    case WH_MESSAGE_GROUP_CERT:
+        /* Cert group - use SimpleResponse for all actions */
+        {
+            whMessageCert_SimpleResponse resp = {0};
+            resp.rc = error_code;
+            wh_MessageCert_TranslateSimpleResponse(magic, &resp,
+                    (whMessageCert_SimpleResponse*)resp_packet);
+            resp_size = sizeof(resp);
+        }
+        break;
+#endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER && !WOLFHSM_CFG_NO_CRYPTO */
+
+    default:
+        /* For other groups, use minimum size (just rc field).
+         * Most response structures have int32_t rc as first field, so clients
+         * should be able to read at least the error code. If a group needs
+         * special handling, it can be added above. */
+        /* Error code already written above */
+        resp_size = sizeof(int32_t);
+        break;
+    }
+
+    return resp_size;
+}
+
+
 int wh_Server_HandleRequestMessage(whServerContext* server)
 {
     uint16_t magic = 0;
@@ -340,23 +508,21 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
         if (server->auth != NULL) {
             rc = wh_Auth_CheckRequestAuthorization(server->auth, group, action);
             if (rc != WH_ERROR_OK) {
-                /* Authorization failed - send error response to client but keep server running */
-                int32_t error_response = (int32_t)WH_AUTH_PERMISSION_ERROR;
-                uint16_t resp_size = sizeof(error_response);
+                /* Authorization failed - format and send error response to client */
+                int32_t error_code = (int32_t)WH_AUTH_PERMISSION_ERROR;
+                uint16_t resp_size = _wh_Server_FormatAuthErrorResponse(magic, group,
+                        action, error_code, data);
 
-            /* Translate the error response for endian conversion */
-            error_response = (int32_t)wh_Translate32(magic, (uint32_t)error_response);
+                /* Send error response to client */
+                do {
+                    rc = wh_CommServer_SendResponse(server->comm, magic, kind, seq,
+                                                    resp_size, data);
+                } while (rc == WH_ERROR_NOTREADY);
 
-            /* Send error response to client */
-            do {
-                rc = wh_CommServer_SendResponse(server->comm, magic, kind, seq,
-                                                resp_size, &error_response);
-            } while (rc == WH_ERROR_NOTREADY);
-
-            /* Log the authorization failure */
-            WH_LOG_ON_ERROR_F(&server->log, WH_LOG_LEVEL_ERROR, WH_AUTH_PERMISSION_ERROR,
-                              "Authorization failed for (group=%d, action=%d, seq=%d)",
-                              group, action, seq);
+                /* Log the authorization failure */
+                WH_LOG_ON_ERROR_F(&server->log, WH_LOG_LEVEL_ERROR, WH_AUTH_PERMISSION_ERROR,
+                                  "Authorization failed for (group=%d, action=%d, seq=%d)",
+                                  group, action, seq);
 
                 return rc;
             }
