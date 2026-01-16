@@ -57,9 +57,14 @@ typedef enum {
 #define WH_NUMBER_OF_GROUPS 14
 #define WH_AUTH_MAX_KEY_IDS \
     2 /* Maximum number of key IDs a user can have access to */
+
+/* Convert action enum value (0,1,2,3...) to bitmask (0x01,0x02,0x04,0x08...) */
+#define WH_AUTH_ACTION_TO_BITMASK(_action) \
+    (((_action) < 32) ? (1UL << (_action)) : 0)
+
 typedef struct {
     uint16_t groupPermissions; /* bit mask of if allowed for use in group */
-    uint16_t
+    uint32_t
         actionPermissions[WH_NUMBER_OF_GROUPS]; /* array of action permissions
                                                    for each group */
     uint16_t keyIdCount; /* Number of key IDs in the keyIds array (0 to
