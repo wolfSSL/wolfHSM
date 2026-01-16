@@ -656,18 +656,17 @@ int wh_PosixServer_ExampleNvmConfig(void* conf, const char* nvmInitFilePath)
 
 /* Default auth callback structure */
 static whAuthCb default_auth_cb = {
-    .Init = wh_AuthBase_Init,
-    .Cleanup = wh_AuthBase_Cleanup,
-    .Login = wh_AuthBase_Login,
-    .Logout = wh_AuthBase_Logout,
+    .Init                      = wh_AuthBase_Init,
+    .Cleanup                   = wh_AuthBase_Cleanup,
+    .Login                     = wh_AuthBase_Login,
+    .Logout                    = wh_AuthBase_Logout,
     .CheckRequestAuthorization = wh_AuthBase_CheckRequestAuthorization,
-    .CheckKeyAuthorization = wh_AuthBase_CheckKeyAuthorization,
-    .UserAdd = wh_AuthBase_UserAdd,
-    .UserDelete = wh_AuthBase_UserDelete,
-    .UserSetPermissions = wh_AuthBase_UserSetPermissions,
-    .UserGet = wh_AuthBase_UserGet,
-    .UserSetCredentials = wh_AuthBase_UserSetCredentials
-};
+    .CheckKeyAuthorization     = wh_AuthBase_CheckKeyAuthorization,
+    .UserAdd                   = wh_AuthBase_UserAdd,
+    .UserDelete                = wh_AuthBase_UserDelete,
+    .UserSetPermissions        = wh_AuthBase_UserSetPermissions,
+    .UserGet                   = wh_AuthBase_UserGet,
+    .UserSetCredentials        = wh_AuthBase_UserSetCredentials};
 static whAuthContext auth_ctx = {0};
 
 /**
@@ -678,13 +677,15 @@ static whAuthContext auth_ctx = {0};
  * For production use, a proper auth backend should be implemented.
  *
  * @param[in] conf Pointer to the server configuration
- * @return int Returns WH_ERROR_OK on success, or a negative error code on failure
+ * @return int Returns WH_ERROR_OK on success, or a negative error code on
+ * failure
  */
 int wh_PosixServer_ExampleAuthConfig(void* conf)
 {
-    int rc;
+    int             rc;
     whServerConfig* s_conf = (whServerConfig*)conf;
-    static void* auth_backend_context = NULL; /* No backend context needed for stubs */
+    static void*    auth_backend_context =
+        NULL; /* No backend context needed for stubs */
     static whAuthConfig auth_config = {0};
 
     if (s_conf == NULL) {
@@ -692,7 +693,7 @@ int wh_PosixServer_ExampleAuthConfig(void* conf)
     }
 
     /* Set up the auth config with default callbacks */
-    auth_config.cb = &default_auth_cb;
+    auth_config.cb      = &default_auth_cb;
     auth_config.context = auth_backend_context;
 
     /* Initialize the auth context */
@@ -705,7 +706,8 @@ int wh_PosixServer_ExampleAuthConfig(void* conf)
     /* Set the auth context in the server configuration */
     s_conf->auth = &auth_ctx;
 
-    WOLFHSM_CFG_PRINTF("Default auth context configured (stub implementation)\n");
+    WOLFHSM_CFG_PRINTF(
+        "Default auth context configured (stub implementation)\n");
 
     return WH_ERROR_OK;
 }
