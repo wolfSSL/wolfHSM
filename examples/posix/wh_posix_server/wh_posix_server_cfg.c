@@ -15,13 +15,13 @@
 #include "wolfhsm/wh_nvm_flash.h"
 #include "wolfhsm/wh_flash_ramsim.h"
 #include "wolfhsm/wh_auth.h"
-#include "wolfhsm/wh_auth_base.h"
 
 #include "port/posix/posix_transport_shm.h"
 #include "port/posix/posix_transport_tcp.h"
 #ifdef WOLFHSM_CFG_TLS
 #include "port/posix/posix_transport_tls.h"
 #endif
+#include "port/posix/posix_auth.h"
 
 posixTransportShmConfig shmConfig;
 posixTransportTcpConfig tcpConfig;
@@ -656,17 +656,17 @@ int wh_PosixServer_ExampleNvmConfig(void* conf, const char* nvmInitFilePath)
 
 /* Default auth callback structure */
 static whAuthCb default_auth_cb = {
-    .Init                      = wh_AuthBase_Init,
-    .Cleanup                   = wh_AuthBase_Cleanup,
-    .Login                     = wh_AuthBase_Login,
-    .Logout                    = wh_AuthBase_Logout,
-    .CheckRequestAuthorization = wh_AuthBase_CheckRequestAuthorization,
-    .CheckKeyAuthorization     = wh_AuthBase_CheckKeyAuthorization,
-    .UserAdd                   = wh_AuthBase_UserAdd,
-    .UserDelete                = wh_AuthBase_UserDelete,
-    .UserSetPermissions        = wh_AuthBase_UserSetPermissions,
-    .UserGet                   = wh_AuthBase_UserGet,
-    .UserSetCredentials        = wh_AuthBase_UserSetCredentials};
+    .Init                      = posixAuth_Init,
+    .Cleanup                   = posixAuth_Cleanup,
+    .Login                     = posixAuth_Login,
+    .Logout                    = posixAuth_Logout,
+    .CheckRequestAuthorization = posixAuth_CheckRequestAuthorization,
+    .CheckKeyAuthorization     = posixAuth_CheckKeyAuthorization,
+    .UserAdd                   = posixAuth_UserAdd,
+    .UserDelete                = posixAuth_UserDelete,
+    .UserSetPermissions        = posixAuth_UserSetPermissions,
+    .UserGet                   = posixAuth_UserGet,
+    .UserSetCredentials        = posixAuth_UserSetCredentials};
 static whAuthContext auth_ctx = {0};
 
 /**
@@ -687,6 +687,9 @@ int wh_PosixServer_ExampleAuthConfig(void* conf)
     static void*    auth_backend_context =
         NULL; /* No backend context needed for stubs */
     static whAuthConfig auth_config = {0};
+    whAuthPermissions permissions;
+    uint16_t out_user_id;
+    int i;
 
     if (s_conf == NULL) {
         return WH_ERROR_BADARGS;
@@ -708,6 +711,19 @@ int wh_PosixServer_ExampleAuthConfig(void* conf)
 
     WOLFHSM_CFG_PRINTF(
         "Default auth context configured (stub implementation)\n");
+
+    /* Add and admin user with permissions for everything */
+    memset(&permissions, 0xFF, sizeof(whAuthPermissions));
+    permissions.keyIdCount = 0;
+    for (i = 0; i < WH_AUTH_MAX_KEY_IDS; i++) {
+        permissions.keyIds[i] = 0;
+    }
+    rc = posixAuth_UserAdd(&auth_ctx, "admin", &out_user_id, permissions,
+                             WH_AUTH_METHOD_PIN, "1234", 4);
+    if (rc != WH_ERROR_OK) {
+        WOLFHSM_CFG_PRINTF("Failed to add admin user: %d\n", rc);
+        return rc;
+    }
 
     return WH_ERROR_OK;
 }
