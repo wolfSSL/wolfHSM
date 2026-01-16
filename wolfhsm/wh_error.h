@@ -67,6 +67,10 @@ enum WH_ERROR_ENUM {
     WH_SHE_ERC_BUSY              = -2209,
     WH_SHE_ERC_MEMORY_FAILURE    = -2210,
     WH_SHE_ERC_GENERAL_ERROR     = -2211,
+
+    /* Auth error codes */
+    WH_AUTH_LOGIN_FAILED     = -2300, /* user login attempt failed */
+    WH_AUTH_PERMISSION_ERROR = -2301, /* user attempted an action not allowed */
 };
 
 #define WH_SHE_ERC_NO_ERROR WH_ERROR_OK

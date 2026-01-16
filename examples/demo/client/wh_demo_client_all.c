@@ -1,6 +1,7 @@
 #include "wh_demo_client_wctest.h"
 #include "wh_demo_client_wcbench.h"
 #include "wh_demo_client_nvm.h"
+#include "wh_demo_client_auth.h"
 #include "wh_demo_client_keystore.h"
 #include "wh_demo_client_crypto.h"
 #include "wh_demo_client_secboot.h"
@@ -10,6 +11,23 @@
 int wh_DemoClient_All(whClientContext* clientContext)
 {
     int rc = 0;
+    whUserId userId = WH_USER_ID_INVALID;
+    whAuthPermissions permissions;
+
+    /* Auth demos */
+    rc = wh_DemoClient_Auth(clientContext);
+    if (rc != 0) {
+        return rc;
+    }
+
+    /* Log in as an admin user for the rest of the tests */
+    if (wh_Client_AuthLogin(clientContext, WH_AUTH_METHOD_PIN, "admin", "1234",
+        4, &rc, &userId, &permissions) != 0) {
+        return -1;
+    }
+    if (rc != 0) {
+        return rc;
+    }
 
     /* wolfCrypt test and benchmark */
 #ifdef WH_DEMO_WCTEST
