@@ -153,9 +153,15 @@ int wh_Auth_Logout(whAuthContext* context, whUserId user_id)
 int wh_Auth_CheckRequestAuthorization(whAuthContext* context, uint16_t group,
                                       uint16_t action)
 {
-    uint16_t user_id = context->user.user_id;
+    uint16_t user_id;
     int      rc;
 
+    if ((context == NULL) || (context->cb == NULL) ||
+        (context->cb->CheckRequestAuthorization == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    user_id = context->user.user_id;
     /* @TODO add logging call here and with resulting return value  */
 
     rc = context->cb->CheckRequestAuthorization(context->context, user_id,
@@ -168,10 +174,19 @@ int wh_Auth_CheckRequestAuthorization(whAuthContext* context, uint16_t group,
 int wh_Auth_CheckKeyAuthorization(whAuthContext* context, uint32_t key_id,
                                   uint16_t action)
 {
-    uint16_t user_id = context->user.user_id;
+    uint16_t user_id;
+    int      rc;
 
-    return context->cb->CheckKeyAuthorization(context->context, user_id, key_id,
+    if ((context == NULL) || (context->cb == NULL) ||
+        (context->cb->CheckKeyAuthorization == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    user_id = context->user.user_id;
+
+    rc = context->cb->CheckKeyAuthorization(context->context, user_id, key_id,
                                               action);
+    return rc;
 }
 
 /********** API That Interact With User Database
