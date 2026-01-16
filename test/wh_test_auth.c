@@ -850,8 +850,9 @@ int whTest_AuthSetPermissions(whClientContext* client)
     WH_TEST_PRINT("  Test: Set user permissions success\n");
     memset(&new_perms, 0, sizeof(new_perms));
     new_perms.groupPermissions = WH_MESSAGE_GROUP_AUTH;
+    /* Convert action enum value to bitmask: action 0x04 -> bit 4 -> 0x10 */
     new_perms.actionPermissions[(WH_MESSAGE_GROUP_AUTH >> 8) & 0xFF] =
-        WH_MESSAGE_AUTH_ACTION_USER_ADD;
+        WH_AUTH_ACTION_TO_BITMASK(WH_MESSAGE_AUTH_ACTION_USER_ADD);
     server_rc = 0;
     WH_TEST_RETURN_ON_FAIL(
         _whTest_Auth_UserSetPermsOp(client, user_id, new_perms, &server_rc));
@@ -1082,8 +1083,9 @@ int whTest_AuthRequestAuthorization(whClientContext* client)
 
     memset(&perms, 0, sizeof(perms));
     perms.groupPermissions = WH_MESSAGE_GROUP_AUTH;
+    /* Convert action enum value to bitmask: action 0x04 -> bit 4 -> 0x10 */
     perms.actionPermissions[(WH_MESSAGE_GROUP_AUTH >> 8) & 0xFF] =
-        WH_MESSAGE_AUTH_ACTION_USER_ADD;
+        WH_AUTH_ACTION_TO_BITMASK(WH_MESSAGE_AUTH_ACTION_USER_ADD);
     WH_TEST_RETURN_ON_FAIL(
         _whTest_Auth_UserAddOp(client, "alloweduser", perms, WH_AUTH_METHOD_PIN,
                                "pass", 4, &server_rc, &allowed_user_id));

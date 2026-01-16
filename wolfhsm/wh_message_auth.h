@@ -133,11 +133,11 @@ int wh_MessageAuth_TranslateLogoutRequest(
 /** Logout Response (SimpleResponse) */
 
 /* whAuthPermissions struct
- * uint16_t (groupPermissions) + uint16_t[WH_NUMBER_OF_GROUPS]
+ * uint16_t (groupPermissions) + uint32_t[WH_NUMBER_OF_GROUPS]
  * (actionPermissions) + uint16_t (keyIdCount) + uint32_t[WH_AUTH_MAX_KEY_IDS]
  * (keyIds) */
 #define WH_FLAT_PERMISSIONS_LEN \
-    (2 + (2 * WH_NUMBER_OF_GROUPS) + 2 + (4 * WH_AUTH_MAX_KEY_IDS))
+    (2 + (4 * WH_NUMBER_OF_GROUPS) + 2 + (4 * WH_AUTH_MAX_KEY_IDS))
 
 /**
  * @brief Flatten permissions structure into a byte buffer.
@@ -287,8 +287,7 @@ int wh_MessageAuth_TranslateUserSetPermissionsRequest(
 /* Header structure - credentials follow as variable-length data */
 typedef struct {
     uint16_t user_id;
-    uint8_t  method;
-    uint8_t  WH_PAD[1]; /* Padding for alignment */
+    uint16_t method;
     uint16_t current_credentials_len;
     uint16_t new_credentials_len;
     /* Variable-length data follows:
@@ -315,44 +314,4 @@ int wh_MessageAuth_TranslateUserSetCredentialsRequest(
 
 /** User Set Credentials Response */
 /* Use SimpleResponse */
-
-/** Check Authorization Request */
-typedef struct {
-    uint32_t session_id;
-    uint8_t  action; /* whAuthAction */
-    uint8_t  WH_PAD[3];
-    uint32_t object_id;
-} whMessageAuth_CheckAuthorizationRequest;
-
-/**
- * @brief Translate a check authorization request message between different magic numbers.
- *
- * @param[in] magic The magic number for translation.
- * @param[in] src Pointer to the source check authorization request message.
- * @param[out] dest Pointer to the destination check authorization request message.
- * @return int Returns 0 on success, or a negative error code on failure.
- */
-int wh_MessageAuth_TranslateCheckAuthorizationRequest(
-    uint16_t magic, const whMessageAuth_CheckAuthorizationRequest* src,
-    whMessageAuth_CheckAuthorizationRequest* dest);
-
-/** Check Authorization Response */
-typedef struct {
-    int32_t rc;
-    uint8_t authorized;
-    uint8_t WH_PAD[3];
-} whMessageAuth_CheckAuthorizationResponse;
-
-/**
- * @brief Translate a check authorization response message between different magic numbers.
- *
- * @param[in] magic The magic number for translation.
- * @param[in] src Pointer to the source check authorization response message.
- * @param[out] dest Pointer to the destination check authorization response message.
- * @return int Returns 0 on success, or a negative error code on failure.
- */
-int wh_MessageAuth_TranslateCheckAuthorizationResponse(
-    uint16_t magic, const whMessageAuth_CheckAuthorizationResponse* src,
-    whMessageAuth_CheckAuthorizationResponse* dest);
-
 #endif /* !WOLFHSM_WH_MESSAGE_AUTH_H_ */

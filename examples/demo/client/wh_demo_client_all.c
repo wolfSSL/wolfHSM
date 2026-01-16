@@ -11,6 +11,23 @@
 int wh_DemoClient_All(whClientContext* clientContext)
 {
     int rc = 0;
+    whUserId userId = WH_USER_ID_INVALID;
+    whAuthPermissions permissions;
+
+    /* Auth demos */
+    rc = wh_DemoClient_Auth(clientContext);
+    if (rc != 0) {
+        return rc;
+    }
+
+    /* Log in as an admin user for the rest of the tests */
+    if (wh_Client_AuthLogin(clientContext, WH_AUTH_METHOD_PIN, "admin", "1234",
+        4, &rc, &userId, &permissions) != 0) {
+        return -1;
+    }
+    if (rc != 0) {
+        return rc;
+    }
 
     /* wolfCrypt test and benchmark */
 #ifdef WH_DEMO_WCTEST
@@ -27,12 +44,6 @@ int wh_DemoClient_All(whClientContext* clientContext)
 #endif
     /* NVM demos */
     rc = wh_DemoClient_Nvm(clientContext);
-    if (rc != 0) {
-        return rc;
-    }
-
-    /* Auth demos */
-    rc = wh_DemoClient_Auth(clientContext);
     if (rc != 0) {
         return rc;
     }
