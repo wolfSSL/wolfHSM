@@ -94,7 +94,7 @@ static int wh_ClientTask(void* cf, const char* type, int test)
     WOLFHSM_CFG_PRINTF("Client connecting to server...\n");
     if (ret == 0 && test) {
         WOLFHSM_CFG_PRINTF("Running client demos...\n");
-        return wh_DemoClient_All(client);
+        ret = wh_DemoClient_All(client);
     }
 
     if (ret != 0) {
