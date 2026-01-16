@@ -32,7 +32,7 @@
 
 #include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_message_auth.h"
-#include "wolfhsm/wh_auth_base.h"
+#include "posix_auth.h"
 
 /* simple base user list */
 #define WH_AUTH_BASE_MAX_USERS 5
@@ -48,37 +48,21 @@ static whAuthBase_User users[WH_AUTH_BASE_MAX_USERS];
 #include <wolfssl/ssl.h>
 #include <wolfssl/wolfcrypt/asn.h>
 
-int wh_AuthBase_Init(void* context, const void* config)
+int posixAuth_Init(void* context, const void* config)
 {
-    whAuthPermissions permissions;
-    int               rc;
-    uint16_t          out_user_id;
-    int               i;
-
-    /* TODO: Initialize auth manager context */
     (void)context;
     (void)config;
 
-    memset(&permissions, 0xFF, sizeof(whAuthPermissions));
-    permissions.keyIdCount = 0;
-    for (i = 0; i < WH_AUTH_MAX_KEY_IDS; i++) {
-        permissions.keyIds[i] = 0;
-    }
-
-    /* add a demo user with admin permissions */
-    rc = wh_AuthBase_UserAdd(context, "admin", &out_user_id, permissions,
-                             WH_AUTH_METHOD_PIN, "1234", 4);
-    return rc;
+    return WH_ERROR_OK;
 }
 
-int wh_AuthBase_Cleanup(void* context)
+int posixAuth_Cleanup(void* context)
 {
-    /* TODO: Cleanup auth manager context */
     (void)context;
-    return WH_ERROR_NOTIMPL;
+    return WH_ERROR_OK;
 }
 
-static whAuthBase_User* FindUser(const char* username)
+static whAuthBase_User* posixAuth_FindUser(const char* username)
 {
     int i;
     for (i = 0; i < WH_AUTH_BASE_MAX_USERS; i++) {
@@ -89,11 +73,11 @@ static whAuthBase_User* FindUser(const char* username)
     return NULL;
 }
 
-static whAuthBase_User* CheckPin(const char* username, const void* auth_data,
+static whAuthBase_User* posixAuth_CheckPin(const char* username, const void* auth_data,
                                  uint16_t auth_data_len)
 {
     whAuthBase_User* found_user;
-    found_user = FindUser(username);
+    found_user = posixAuth_FindUser(username);
     if (found_user != NULL && found_user->credentials_len == auth_data_len &&
         memcmp(found_user->credentials, auth_data, auth_data_len) == 0) {
         return found_user;
@@ -102,7 +86,7 @@ static whAuthBase_User* CheckPin(const char* username, const void* auth_data,
 }
 
 
-static int VerifyCertificate(whAuthBase_User* found_user,
+static int posixAuth_VerifyCertificate(whAuthBase_User* found_user,
                              const uint8_t*   certificate,
                              uint16_t         certificate_len)
 {
@@ -128,16 +112,16 @@ static int VerifyCertificate(whAuthBase_User* found_user,
     return rc;
 }
 
-static whAuthBase_User* CheckCertificate(const char* username,
+static whAuthBase_User* posixAuth_CheckCertificate(const char* username,
                                          const void* auth_data,
                                          uint16_t    auth_data_len)
 {
     whAuthBase_User* found_user;
-    found_user = FindUser(username);
+    found_user = posixAuth_FindUser(username);
     if (found_user != NULL &&
         found_user->method == WH_AUTH_METHOD_CERTIFICATE &&
         found_user->credentials_len > 0) {
-        if (VerifyCertificate(found_user, auth_data, auth_data_len) ==
+        if (posixAuth_VerifyCertificate(found_user, auth_data, auth_data_len) ==
             WH_ERROR_OK) {
             return found_user;
         }
@@ -145,7 +129,7 @@ static whAuthBase_User* CheckCertificate(const char* username,
     return NULL;
 }
 
-int wh_AuthBase_Login(void* context, uint8_t client_id, whAuthMethod method,
+int posixAuth_Login(void* context, uint8_t client_id, whAuthMethod method,
                       const char* username, const void* auth_data,
                       uint16_t auth_data_len, uint16_t* out_user_id,
                       whAuthPermissions* out_permissions, int* loggedIn)
@@ -162,10 +146,10 @@ int wh_AuthBase_Login(void* context, uint8_t client_id, whAuthMethod method,
     (void)client_id;
     switch (method) {
         case WH_AUTH_METHOD_PIN:
-            current_user = CheckPin(username, auth_data, auth_data_len);
+            current_user = posixAuth_CheckPin(username, auth_data, auth_data_len);
             break;
         case WH_AUTH_METHOD_CERTIFICATE:
-            current_user = CheckCertificate(username, auth_data, auth_data_len);
+            current_user = posixAuth_CheckCertificate(username, auth_data, auth_data_len);
             break;
         default:
             return WH_ERROR_BADARGS;
@@ -188,7 +172,7 @@ int wh_AuthBase_Login(void* context, uint8_t client_id, whAuthMethod method,
     return WH_ERROR_OK;
 }
 
-int wh_AuthBase_Logout(void* context, uint16_t current_user_id,
+int posixAuth_Logout(void* context, uint16_t current_user_id,
                        uint16_t user_id)
 {
     whAuthBase_User* user;
@@ -211,7 +195,7 @@ int wh_AuthBase_Logout(void* context, uint16_t current_user_id,
 }
 
 
-int wh_AuthBase_CheckRequestAuthorization(void* context, uint16_t user_id,
+int posixAuth_CheckRequestAuthorization(void* context, uint16_t user_id,
                                           uint16_t group, uint16_t action)
 {
     int rc;
@@ -266,7 +250,7 @@ int wh_AuthBase_CheckRequestAuthorization(void* context, uint16_t user_id,
 
 /* authorization check on key usage after the request has been parsed and before
  * the action is done */
-int wh_AuthBase_CheckKeyAuthorization(void* context, uint16_t user_id,
+int posixAuth_CheckKeyAuthorization(void* context, uint16_t user_id,
                                       uint32_t key_id, uint16_t action)
 {
     int              rc = WH_ERROR_ACCESS;
@@ -304,7 +288,7 @@ int wh_AuthBase_CheckKeyAuthorization(void* context, uint16_t user_id,
 }
 
 
-int wh_AuthBase_UserAdd(void* context, const char* username,
+int posixAuth_UserAdd(void* context, const char* username,
                         uint16_t* out_user_id, whAuthPermissions permissions,
                         whAuthMethod method, const void* credentials,
                         uint16_t credentials_len)
@@ -369,7 +353,7 @@ int wh_AuthBase_UserAdd(void* context, const char* username,
     return WH_ERROR_OK;
 }
 
-int wh_AuthBase_UserDelete(void* context, uint16_t current_user_id,
+int posixAuth_UserDelete(void* context, uint16_t current_user_id,
                            uint16_t user_id)
 {
     whAuthBase_User* user;
@@ -389,7 +373,7 @@ int wh_AuthBase_UserDelete(void* context, uint16_t current_user_id,
     return WH_ERROR_OK;
 }
 
-int wh_AuthBase_UserSetPermissions(void* context, uint16_t current_user_id,
+int posixAuth_UserSetPermissions(void* context, uint16_t current_user_id,
                                    uint16_t          user_id,
                                    whAuthPermissions permissions)
 {
@@ -422,11 +406,11 @@ int wh_AuthBase_UserSetPermissions(void* context, uint16_t current_user_id,
 }
 
 
-int wh_AuthBase_UserGet(void* context, const char* username,
+int posixAuth_UserGet(void* context, const char* username,
                         uint16_t*          out_user_id,
                         whAuthPermissions* out_permissions)
 {
-    whAuthBase_User* user = FindUser(username);
+    whAuthBase_User* user = posixAuth_FindUser(username);
     if (user == NULL) {
         return WH_ERROR_NOTFOUND;
     }
@@ -437,7 +421,7 @@ int wh_AuthBase_UserGet(void* context, const char* username,
 }
 
 
-int wh_AuthBase_UserSetCredentials(void* context, uint16_t user_id,
+int posixAuth_UserSetCredentials(void* context, uint16_t user_id,
                                    whAuthMethod method,
                                    const void*  current_credentials,
                                    uint16_t     current_credentials_len,
