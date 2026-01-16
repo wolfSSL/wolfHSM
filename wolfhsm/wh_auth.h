@@ -152,45 +152,133 @@ typedef struct whAuthConfig_t {
 
 /** Public Auth Manager API Functions */
 
-/* Initialize the auth manager */
+/**
+ * @brief Initialize the auth manager.
+ *
+ * @param[in] context Pointer to the auth context.
+ * @param[in] config Pointer to the auth configuration.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
 int wh_Auth_Init(whAuthContext* context, const whAuthConfig* config);
 
-/* Cleanup the auth manager */
+/**
+ * @brief Cleanup the auth manager.
+ *
+ * @param[in] context Pointer to the auth context.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
 int wh_Auth_Cleanup(whAuthContext* context);
 
-/* Authenticate and login a user */
+/**
+ * @brief Authenticate and login a user.
+ *
+ * @param[in] context Pointer to the auth context.
+ * @param[in] client_id The client ID making the request.
+ * @param[in] method The authentication method to use.
+ * @param[in] username The username to authenticate.
+ * @param[in] auth_data Pointer to the authentication data.
+ * @param[in] auth_data_len Length of the authentication data.
+ * @param[out] loggedIn Pointer to store the login status.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
 int wh_Auth_Login(whAuthContext* context, uint8_t client_id,
                   whAuthMethod method, const char* username,
                   const void* auth_data, uint16_t auth_data_len, int* loggedIn);
 
-/* Logout a user */
+/**
+ * @brief Logout a user.
+ *
+ * @param[in] context Pointer to the auth context.
+ * @param[in] user_id The user ID to logout.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
 int wh_Auth_Logout(whAuthContext* context, whUserId user_id);
 
-/* Check authorization for an action */
+/**
+ * @brief Check authorization for an action.
+ *
+ * @param[in] context Pointer to the auth context.
+ * @param[in] group The group to check authorization for.
+ * @param[in] action The action to check authorization for.
+ * @return int Returns 0 if authorized, or a negative error code on failure.
+ */
 int wh_Auth_CheckRequestAuthorization(whAuthContext* context, uint16_t group,
                                       uint16_t action);
 
+/**
+ * @brief Check if a key is authorized for use. @TODO, this is a place holder
+ * for calls to check key use but wolfHSM currently does not call it before key
+ * use.
+ *
+ * @param[in] context Pointer to the auth context.
+ * @param[in] key_id The key ID to check authorization for.
+ * @param[in] action The action to check authorization for.
+ * @return int Returns 0 if authorized, or a negative error code on failure.
+ */
 int wh_Auth_CheckKeyAuthorization(whAuthContext* context, uint32_t key_id,
                                   uint16_t action);
 
-/* Add a new user */
+/**
+ * @brief Add a new user.
+ *
+ * @param[in] context Pointer to the auth context.
+ * @param[in] username The username for the new user.
+ * @param[out] out_user_id Pointer to store the new user ID.
+ * @param[in] permissions The permissions for the new user.
+ * @param[in] method The authentication method for the new user.
+ * @param[in] credentials Pointer to the credentials data.
+ * @param[in] credentials_len Length of the credentials data.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
 int wh_Auth_UserAdd(whAuthContext* context, const char* username,
                     whUserId* out_user_id, whAuthPermissions permissions,
                     whAuthMethod method, const void* credentials,
                     uint16_t credentials_len);
 
-/* Delete a user */
+/**
+ * @brief Delete a user.
+ *
+ * @param[in] context Pointer to the auth context.
+ * @param[in] user_id The user ID to delete.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
 int wh_Auth_UserDelete(whAuthContext* context, whUserId user_id);
 
-/* Set user permissions */
+/**
+ * @brief Set user permissions.
+ *
+ * @param[in] context Pointer to the auth context.
+ * @param[in] user_id The user ID to set permissions for.
+ * @param[in] permissions The new permissions to set.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
 int wh_Auth_UserSetPermissions(whAuthContext* context, whUserId user_id,
                                whAuthPermissions permissions);
 
-/* Get user information */
+/**
+ * @brief Get user information.
+ *
+ * @param[in] context Pointer to the auth context.
+ * @param[in] username The username to look up.
+ * @param[out] out_user_id Pointer to store the user ID.
+ * @param[out] out_permissions Pointer to store the user permissions.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
 int wh_Auth_UserGet(whAuthContext* context, const char* username,
                     whUserId* out_user_id, whAuthPermissions* out_permissions);
 
-/* Set user credentials */
+/**
+ * @brief Set user credentials.
+ *
+ * @param[in] context Pointer to the auth context.
+ * @param[in] user_id The user ID to set credentials for.
+ * @param[in] method The authentication method.
+ * @param[in] current_credentials Pointer to the current credentials data.
+ * @param[in] current_credentials_len Length of the current credentials data.
+ * @param[in] new_credentials Pointer to the new credentials data.
+ * @param[in] new_credentials_len Length of the new credentials data.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
 int wh_Auth_UserSetCredentials(whAuthContext* context, whUserId user_id,
                                whAuthMethod method,
                                const void*  current_credentials,
