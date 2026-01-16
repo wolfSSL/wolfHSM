@@ -17,7 +17,7 @@
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
 
- /* This contains a basic authentication implementation. */
+/* This contains a basic authentication implementation. */
 
 
 /* Pick up compile-time configuration */
@@ -38,22 +38,22 @@
 #define WH_AUTH_BASE_MAX_USERS 5
 #define WH_AUTH_BASE_MAX_CREDENTIALS_LEN 2048
 typedef struct whAuthBase_User {
-    whAuthUser user;
-    whAuthMethod method;
+    whAuthUser    user;
+    whAuthMethod  method;
     unsigned char credentials[WH_AUTH_BASE_MAX_CREDENTIALS_LEN];
-    uint16_t credentials_len;
+    uint16_t      credentials_len;
 } whAuthBase_User;
 static whAuthBase_User users[WH_AUTH_BASE_MAX_USERS];
 
 #include <wolfssl/ssl.h>
 #include <wolfssl/wolfcrypt/asn.h>
 
-int wh_AuthBase_Init(void* context, const void *config)
+int wh_AuthBase_Init(void* context, const void* config)
 {
     whAuthPermissions permissions;
-    int rc;
-    uint16_t out_user_id;
-    int i;
+    int               rc;
+    uint16_t          out_user_id;
+    int               i;
 
     /* TODO: Initialize auth manager context */
     (void)context;
@@ -67,7 +67,7 @@ int wh_AuthBase_Init(void* context, const void *config)
 
     /* add a demo user with admin permissions */
     rc = wh_AuthBase_UserAdd(context, "admin", &out_user_id, permissions,
-        WH_AUTH_METHOD_PIN, "1234", 4);
+                             WH_AUTH_METHOD_PIN, "1234", 4);
     return rc;
 }
 
@@ -89,12 +89,12 @@ static whAuthBase_User* FindUser(const char* username)
     return NULL;
 }
 
-static whAuthBase_User* CheckPin(const char* username, const void* auth_data, uint16_t auth_data_len)
+static whAuthBase_User* CheckPin(const char* username, const void* auth_data,
+                                 uint16_t auth_data_len)
 {
     whAuthBase_User* found_user;
     found_user = FindUser(username);
-    if (found_user != NULL &&
-        found_user->credentials_len == auth_data_len &&
+    if (found_user != NULL && found_user->credentials_len == auth_data_len &&
         memcmp(found_user->credentials, auth_data, auth_data_len) == 0) {
         return found_user;
     }
@@ -102,22 +102,25 @@ static whAuthBase_User* CheckPin(const char* username, const void* auth_data, ui
 }
 
 
-static int VerifyCertificate(whAuthBase_User* found_user, const uint8_t* certificate, uint16_t certificate_len)
+static int VerifyCertificate(whAuthBase_User* found_user,
+                             const uint8_t*   certificate,
+                             uint16_t         certificate_len)
 {
-    int rc = WH_ERROR_OK;
-    int err;
+    int                   rc = WH_ERROR_OK;
+    int                   err;
     WOLFSSL_CERT_MANAGER* cm = NULL;
-    cm = wolfSSL_CertManagerNew();
+    cm                       = wolfSSL_CertManagerNew();
     if (cm == NULL) {
         return WH_ERROR_ABORTED;
     }
     err = wolfSSL_CertManagerLoadCABuffer(cm, found_user->credentials,
-        found_user->credentials_len, WOLFSSL_FILETYPE_ASN1);
+                                          found_user->credentials_len,
+                                          WOLFSSL_FILETYPE_ASN1);
     if (err != WOLFSSL_SUCCESS) {
         rc = WH_ERROR_ABORTED;
     }
     err = wolfSSL_CertManagerVerifyBuffer(cm, certificate, certificate_len,
-                                         WOLFSSL_FILETYPE_ASN1);
+                                          WOLFSSL_FILETYPE_ASN1);
     if (err != WOLFSSL_SUCCESS) {
         rc = WH_ERROR_ABORTED;
     }
@@ -125,33 +128,32 @@ static int VerifyCertificate(whAuthBase_User* found_user, const uint8_t* certifi
     return rc;
 }
 
-static whAuthBase_User* CheckCertificate(const char* username, const void* auth_data, uint16_t auth_data_len)
+static whAuthBase_User* CheckCertificate(const char* username,
+                                         const void* auth_data,
+                                         uint16_t    auth_data_len)
 {
     whAuthBase_User* found_user;
     found_user = FindUser(username);
     if (found_user != NULL &&
         found_user->method == WH_AUTH_METHOD_CERTIFICATE &&
         found_user->credentials_len > 0) {
-        if (VerifyCertificate(found_user, auth_data, auth_data_len) == WH_ERROR_OK) {
+        if (VerifyCertificate(found_user, auth_data, auth_data_len) ==
+            WH_ERROR_OK) {
             return found_user;
         }
     }
     return NULL;
 }
 
-int wh_AuthBase_Login(void* context, uint8_t client_id,
-                          whAuthMethod method, const char* username,
-                          const void* auth_data,
-                          uint16_t auth_data_len,
-                          uint16_t* out_user_id,
-                          whAuthPermissions* out_permissions,
-                          int* loggedIn)
+int wh_AuthBase_Login(void* context, uint8_t client_id, whAuthMethod method,
+                      const char* username, const void* auth_data,
+                      uint16_t auth_data_len, uint16_t* out_user_id,
+                      whAuthPermissions* out_permissions, int* loggedIn)
 {
     whAuthBase_User* current_user = NULL;
 
-    if ((out_user_id == NULL) ||
-        (out_permissions == NULL) ||
-        (loggedIn == NULL) ) {
+    if ((out_user_id == NULL) || (out_permissions == NULL) ||
+        (loggedIn == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
@@ -175,10 +177,10 @@ int wh_AuthBase_Login(void* context, uint8_t client_id,
             *loggedIn = 0;
         }
         else {
-            *loggedIn = 1;
-            *out_user_id = current_user->user.user_id;
+            *loggedIn                    = 1;
+            *out_user_id                 = current_user->user.user_id;
             current_user->user.is_active = true;
-            *out_permissions = current_user->user.permissions;
+            *out_permissions             = current_user->user.permissions;
         }
     }
 
@@ -187,7 +189,7 @@ int wh_AuthBase_Login(void* context, uint8_t client_id,
 }
 
 int wh_AuthBase_Logout(void* context, uint16_t current_user_id,
-    uint16_t user_id)
+                       uint16_t user_id)
 {
     whAuthBase_User* user;
 
@@ -202,15 +204,15 @@ int wh_AuthBase_Logout(void* context, uint16_t current_user_id,
     /* @TODO there likely should be restrictions here on who can logout who */
     (void)current_user_id;
 
-    user = &users[user_id - 1];
+    user                 = &users[user_id - 1];
     user->user.is_active = false;
     (void)context;
     return WH_ERROR_OK;
 }
 
 
-int wh_AuthBase_CheckRequestAuthorization(void* context,
-    uint16_t user_id, uint16_t group, uint16_t action)
+int wh_AuthBase_CheckRequestAuthorization(void* context, uint16_t user_id,
+                                          uint16_t group, uint16_t action)
 {
     int rc;
 
@@ -229,8 +231,8 @@ int wh_AuthBase_CheckRequestAuthorization(void* context,
         }
     }
     else {
-        int groupIndex = (group >> 8) & 0xFF;
-        whAuthBase_User* user = &users[user_id - 1];
+        int              groupIndex = (group >> 8) & 0xFF;
+        whAuthBase_User* user       = &users[user_id - 1];
 
         /* check if user has permissions for the group and action */
 
@@ -239,12 +241,13 @@ int wh_AuthBase_CheckRequestAuthorization(void* context,
          * - updating own credentials */
         if (group == WH_MESSAGE_GROUP_AUTH &&
             (action == WH_MESSAGE_AUTH_ACTION_LOGOUT ||
-            action == WH_MESSAGE_AUTH_ACTION_USER_SET_CREDENTIALS)) {
+             action == WH_MESSAGE_AUTH_ACTION_USER_SET_CREDENTIALS)) {
             rc = WH_ERROR_OK;
         }
         else {
             if (user->user.permissions.groupPermissions & group) {
-                if (user->user.permissions.actionPermissions[groupIndex] & action) {
+                if (user->user.permissions.actionPermissions[groupIndex] &
+                    action) {
                     rc = WH_ERROR_OK;
                 }
                 else {
@@ -264,10 +267,10 @@ int wh_AuthBase_CheckRequestAuthorization(void* context,
 /* authorization check on key usage after the request has been parsed and before
  * the action is done */
 int wh_AuthBase_CheckKeyAuthorization(void* context, uint16_t user_id,
-    uint32_t key_id, uint16_t action)
+                                      uint32_t key_id, uint16_t action)
 {
-    int rc = WH_ERROR_ACCESS;
-    int i;
+    int              rc = WH_ERROR_ACCESS;
+    int              i;
     whAuthBase_User* user;
 
     if (user_id == WH_USER_ID_INVALID) {
@@ -285,7 +288,9 @@ int wh_AuthBase_CheckKeyAuthorization(void* context, uint16_t user_id,
     }
 
     /* Check if the requested key_id is in the user's keyIds array */
-    for (i = 0; i < user->user.permissions.keyIdCount && i < WH_AUTH_MAX_KEY_IDS; i++) {
+    for (i = 0;
+         i < user->user.permissions.keyIdCount && i < WH_AUTH_MAX_KEY_IDS;
+         i++) {
         if (user->user.permissions.keyIds[i] == key_id) {
             rc = WH_ERROR_OK;
             break;
@@ -293,23 +298,26 @@ int wh_AuthBase_CheckKeyAuthorization(void* context, uint16_t user_id,
     }
 
     (void)context;
-    (void)action; /* Action could be used for future fine-grained key access control */
+    (void)action; /* Action could be used for future fine-grained key access
+                     control */
     return rc;
 }
 
 
 int wh_AuthBase_UserAdd(void* context, const char* username,
-    uint16_t* out_user_id, whAuthPermissions permissions,
-    whAuthMethod method, const void* credentials, uint16_t credentials_len)
+                        uint16_t* out_user_id, whAuthPermissions permissions,
+                        whAuthMethod method, const void* credentials,
+                        uint16_t credentials_len)
 {
-    whAuthContext* auth_context = (whAuthContext*)context;
+    whAuthContext*   auth_context = (whAuthContext*)context;
     whAuthBase_User* new_user;
-    int i;
-    int userId = WH_USER_ID_INVALID;
+    int              i;
+    int              userId = WH_USER_ID_INVALID;
 
     /* Validate method is supported if credentials are provided */
     if (credentials != NULL && credentials_len > 0) {
-        if (method != WH_AUTH_METHOD_PIN && method != WH_AUTH_METHOD_CERTIFICATE) {
+        if (method != WH_AUTH_METHOD_PIN &&
+            method != WH_AUTH_METHOD_CERTIFICATE) {
             return WH_ERROR_BADARGS;
         }
     }
@@ -323,12 +331,12 @@ int wh_AuthBase_UserAdd(void* context, const char* username,
     if (i >= WH_AUTH_BASE_MAX_USERS) {
         return WH_ERROR_BUFFER_SIZE;
     }
-    userId = i + 1; /* save 0 fron WH_USER_ID_INVALID */
+    userId   = i + 1; /* save 0 fron WH_USER_ID_INVALID */
     new_user = &users[i];
-    
+
     memset(new_user, 0, sizeof(whAuthBase_User));
-    new_user->user.user_id = userId;
-    *out_user_id = userId;
+    new_user->user.user_id     = userId;
+    *out_user_id               = userId;
     new_user->user.permissions = permissions;
     /* Clamp keyIdCount to valid range and zero out unused keyIds */
     if (new_user->user.permissions.keyIdCount > WH_AUTH_MAX_KEY_IDS) {
@@ -337,14 +345,15 @@ int wh_AuthBase_UserAdd(void* context, const char* username,
     /* Zero out unused keyIds beyond keyIdCount */
     if (new_user->user.permissions.keyIdCount < WH_AUTH_MAX_KEY_IDS) {
         int j;
-        for (j = new_user->user.permissions.keyIdCount; j < WH_AUTH_MAX_KEY_IDS; j++) {
+        for (j = new_user->user.permissions.keyIdCount; j < WH_AUTH_MAX_KEY_IDS;
+             j++) {
             new_user->user.permissions.keyIds[j] = 0;
         }
     }
     strcpy(new_user->user.username, username);
-    new_user->user.is_active = false;
+    new_user->user.is_active       = false;
     new_user->user.failed_attempts = 0;
-    new_user->user.lockout_until = 0;
+    new_user->user.lockout_until   = 0;
 
     /* Set credentials if provided */
     if (credentials != NULL && credentials_len > 0) {
@@ -360,7 +369,8 @@ int wh_AuthBase_UserAdd(void* context, const char* username,
     return WH_ERROR_OK;
 }
 
-int wh_AuthBase_UserDelete(void* context, uint16_t current_user_id, uint16_t user_id)
+int wh_AuthBase_UserDelete(void* context, uint16_t current_user_id,
+                           uint16_t user_id)
 {
     whAuthBase_User* user;
 
@@ -380,7 +390,8 @@ int wh_AuthBase_UserDelete(void* context, uint16_t current_user_id, uint16_t use
 }
 
 int wh_AuthBase_UserSetPermissions(void* context, uint16_t current_user_id,
-    uint16_t user_id, whAuthPermissions permissions)
+                                   uint16_t          user_id,
+                                   whAuthPermissions permissions)
 {
     whAuthBase_User* user;
 
@@ -400,7 +411,8 @@ int wh_AuthBase_UserSetPermissions(void* context, uint16_t current_user_id,
     /* Zero out unused keyIds beyond keyIdCount */
     if (user->user.permissions.keyIdCount < WH_AUTH_MAX_KEY_IDS) {
         int j;
-        for (j = user->user.permissions.keyIdCount; j < WH_AUTH_MAX_KEY_IDS; j++) {
+        for (j = user->user.permissions.keyIdCount; j < WH_AUTH_MAX_KEY_IDS;
+             j++) {
             user->user.permissions.keyIds[j] = 0;
         }
     }
@@ -410,14 +422,15 @@ int wh_AuthBase_UserSetPermissions(void* context, uint16_t current_user_id,
 }
 
 
-int wh_AuthBase_UserGet(void* context, const char* username, uint16_t* out_user_id,
-    whAuthPermissions* out_permissions)
+int wh_AuthBase_UserGet(void* context, const char* username,
+                        uint16_t*          out_user_id,
+                        whAuthPermissions* out_permissions)
 {
     whAuthBase_User* user = FindUser(username);
     if (user == NULL) {
         return WH_ERROR_NOTFOUND;
     }
-    *out_user_id = user->user.user_id;
+    *out_user_id     = user->user.user_id;
     *out_permissions = user->user.permissions;
     (void)context;
     return WH_ERROR_OK;
@@ -425,13 +438,15 @@ int wh_AuthBase_UserGet(void* context, const char* username, uint16_t* out_user_
 
 
 int wh_AuthBase_UserSetCredentials(void* context, uint16_t user_id,
-    whAuthMethod method,
-    const void* current_credentials, uint16_t current_credentials_len,
-    const void* new_credentials, uint16_t new_credentials_len)
+                                   whAuthMethod method,
+                                   const void*  current_credentials,
+                                   uint16_t     current_credentials_len,
+                                   const void*  new_credentials,
+                                   uint16_t     new_credentials_len)
 {
-    whAuthContext* auth_context = (whAuthContext*)context;
+    whAuthContext*   auth_context = (whAuthContext*)context;
     whAuthBase_User* user;
-    int rc = WH_ERROR_OK;
+    int              rc = WH_ERROR_OK;
 
     if (user_id == WH_USER_ID_INVALID || user_id >= WH_AUTH_BASE_MAX_USERS) {
         return WH_ERROR_BADARGS;
@@ -449,16 +464,20 @@ int wh_AuthBase_UserSetCredentials(void* context, uint16_t user_id,
 
     /* Verify current credentials if user has existing credentials */
     if (user->credentials_len > 0) {
-        /* User has existing credentials, so current_credentials must be provided and match */
+        /* User has existing credentials, so current_credentials must be
+         * provided and match */
         if (current_credentials == NULL || current_credentials_len == 0) {
             return WH_ERROR_ACCESS;
         }
         if (user->credentials_len != current_credentials_len ||
-            memcmp(user->credentials, current_credentials, current_credentials_len) != 0) {
+            memcmp(user->credentials, current_credentials,
+                   current_credentials_len) != 0) {
             return WH_ERROR_ACCESS;
         }
-    } else {
-        /* User has no existing credentials, current_credentials should be NULL */
+    }
+    else {
+        /* User has no existing credentials, current_credentials should be NULL
+         */
         if (current_credentials != NULL && current_credentials_len > 0) {
             return WH_ERROR_BADARGS;
         }
@@ -472,7 +491,8 @@ int wh_AuthBase_UserSetCredentials(void* context, uint16_t user_id,
     if (new_credentials_len > 0) {
         memcpy(user->credentials, new_credentials, new_credentials_len);
         user->credentials_len = new_credentials_len;
-    } else {
+    }
+    else {
         /* Allow clearing credentials by setting length to 0 */
         user->credentials_len = 0;
     }

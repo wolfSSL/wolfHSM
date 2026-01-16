@@ -1839,27 +1839,30 @@ int wh_Client_CustomCbCheckRegistered(whClientContext* c, uint16_t id,
 /**
  * @brief Sends an authentication request to the server.
  *
- * This function prepares and sends an authentication request message to the server.
- * The request includes the authentication method and authentication data (e.g., PIN).
- * This function does not block; it returns immediately after sending the request.
+ * This function prepares and sends an authentication request message to the
+ * server. The request includes the authentication method and authentication
+ * data (e.g., PIN). This function does not block; it returns immediately after
+ * sending the request.
  *
  * @param[in] c Pointer to the client context.
- * @param[in] method The authentication method to use (e.g., WH_AUTH_METHOD_PIN).
+ * @param[in] method The authentication method to use (e.g.,
+ * WH_AUTH_METHOD_PIN).
  * @param[in] username The user name to login
  * @param[in] auth_data Pointer to the authentication data.
  * @param[in] auth_data_len Length of the authentication data.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
-int wh_Client_AuthLoginRequest(whClientContext* c,
-        whAuthMethod method, const char* username, const void* auth_data, uint16_t auth_data_len);
+int wh_Client_AuthLoginRequest(whClientContext* c, whAuthMethod method,
+                               const char* username, const void* auth_data,
+                               uint16_t auth_data_len);
 
 /**
  * @brief Receives an authentication response from the server.
  *
- * This function attempts to process an authentication response message from the server.
- * It validates the response and extracts the return code, user ID, session ID, and
- * permissions. This function does not block; it returns WH_ERROR_NOTREADY if a
- * response has not been received.
+ * This function attempts to process an authentication response message from the
+ * server. It validates the response and extracts the return code, user ID,
+ * session ID, and permissions. This function does not block; it returns
+ * WH_ERROR_NOTREADY if a response has not been received.
  *
  * @param[in] c Pointer to the client context.
  * @param[out] out_rc Pointer to store the return code from the server.
@@ -1869,19 +1872,21 @@ int wh_Client_AuthLoginRequest(whClientContext* c,
  * @return int Returns 0 on success, WH_ERROR_NOTREADY if no response is
  * available, or a negative error code on failure.
  */
-int wh_Client_AuthLoginResponse(whClientContext* c, int32_t *out_rc,
-        whUserId* out_user_id, whAuthPermissions* out_permissions);
+int wh_Client_AuthLoginResponse(whClientContext* c, int32_t* out_rc,
+                                whUserId*          out_user_id,
+                                whAuthPermissions* out_permissions);
 
 /**
  * @brief Authenticates a user with the server (blocking convenience wrapper).
  *
- * This function handles the complete process of sending an authentication request
- * to the server and receiving the response. It sends the request and repeatedly
- * attempts to receive a valid response. This function blocks until the entire
- * operation is complete or an error occurs.
+ * This function handles the complete process of sending an authentication
+ * request to the server and receiving the response. It sends the request and
+ * repeatedly attempts to receive a valid response. This function blocks until
+ * the entire operation is complete or an error occurs.
  *
  * @param[in] c Pointer to the client context.
- * @param[in] method The authentication method to use (e.g., WH_AUTH_METHOD_PIN).
+ * @param[in] method The authentication method to use (e.g.,
+ * WH_AUTH_METHOD_PIN).
  * @param[in] username The user name to login
  * @param[in] auth_data Pointer to the authentication data.
  * @param[in] auth_data_len Length of the authentication data.
@@ -1892,65 +1897,70 @@ int wh_Client_AuthLoginResponse(whClientContext* c, int32_t *out_rc,
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_Client_AuthLogin(whClientContext* c, whAuthMethod method,
-        const char* username, const void* auth_data, uint16_t auth_data_len,
-        int32_t* out_rc, whUserId* out_user_id,
-        whAuthPermissions* out_permissions);
+                        const char* username, const void* auth_data,
+                        uint16_t auth_data_len, int32_t* out_rc,
+                        whUserId*          out_user_id,
+                        whAuthPermissions* out_permissions);
 
 int wh_Client_AuthLogoutRequest(whClientContext* c, whUserId user_id);
 
-int wh_Client_AuthLogoutResponse(whClientContext* c, int32_t *out_rc);
+int wh_Client_AuthLogoutResponse(whClientContext* c, int32_t* out_rc);
 
-int wh_Client_AuthLogout(whClientContext* c, whUserId user_id,
-        int32_t* out_rc);
+int wh_Client_AuthLogout(whClientContext* c, whUserId user_id, int32_t* out_rc);
 
-int wh_Client_AuthUserAddResponse(whClientContext* c, int32_t *out_rc,
-            whUserId* out_user_id);
+int wh_Client_AuthUserAddResponse(whClientContext* c, int32_t* out_rc,
+                                  whUserId* out_user_id);
 
 int wh_Client_AuthUserAddRequest(whClientContext* c, const char* username,
-            whAuthPermissions permissions, whAuthMethod method,
-            const void* credentials, uint16_t credentials_len);
+                                 whAuthPermissions permissions,
+                                 whAuthMethod method, const void* credentials,
+                                 uint16_t credentials_len);
 
 int wh_Client_AuthUserAdd(whClientContext* c, const char* username,
-        whAuthPermissions permissions, whAuthMethod method,
-        const void* credentials, uint16_t credentials_len,
-        int32_t* out_rc, whUserId* out_user_id);
+                          whAuthPermissions permissions, whAuthMethod method,
+                          const void* credentials, uint16_t credentials_len,
+                          int32_t* out_rc, whUserId* out_user_id);
 
 int wh_Client_AuthUserGetRequest(whClientContext* c, const char* username);
 
-int wh_Client_AuthUserGetResponse(whClientContext* c, int32_t *out_rc,
-        whUserId* out_user_id, whAuthPermissions* out_permissions);
+int wh_Client_AuthUserGetResponse(whClientContext* c, int32_t* out_rc,
+                                  whUserId*          out_user_id,
+                                  whAuthPermissions* out_permissions);
 
 int wh_Client_AuthUserGet(whClientContext* c, const char* username,
-        int32_t* out_rc, whUserId* out_user_id,
-        whAuthPermissions* out_permissions);
+                          int32_t* out_rc, whUserId* out_user_id,
+                          whAuthPermissions* out_permissions);
 
 int wh_Client_AuthUserDeleteRequest(whClientContext* c, whUserId user_id);
 
-int wh_Client_AuthUserDeleteResponse(whClientContext* c, int32_t *out_rc);
+int wh_Client_AuthUserDeleteResponse(whClientContext* c, int32_t* out_rc);
 
 int wh_Client_AuthUserDelete(whClientContext* c, whUserId user_id,
-        int32_t* out_rc);
+                             int32_t* out_rc);
 
-int wh_Client_AuthUserSetPermissionsRequest(whClientContext* c, whUserId user_id,
-        whAuthPermissions permissions);
+int wh_Client_AuthUserSetPermissionsRequest(whClientContext*  c,
+                                            whUserId          user_id,
+                                            whAuthPermissions permissions);
 
-int wh_Client_AuthUserSetPermissionsResponse(whClientContext* c, int32_t *out_rc);
+int wh_Client_AuthUserSetPermissionsResponse(whClientContext* c,
+                                             int32_t*         out_rc);
 
 int wh_Client_AuthUserSetPermissions(whClientContext* c, whUserId user_id,
-        whAuthPermissions permissions, int32_t* out_rc);
+                                     whAuthPermissions permissions,
+                                     int32_t*          out_rc);
 
-int wh_Client_AuthUserSetCredentialsRequest(whClientContext* c, whUserId user_id,
-        whAuthMethod method,
-        const void* current_credentials, uint16_t current_credentials_len,
-        const void* new_credentials, uint16_t new_credentials_len);
+int wh_Client_AuthUserSetCredentialsRequest(
+    whClientContext* c, whUserId user_id, whAuthMethod method,
+    const void* current_credentials, uint16_t current_credentials_len,
+    const void* new_credentials, uint16_t new_credentials_len);
 
-int wh_Client_AuthUserSetCredentialsResponse(whClientContext* c, int32_t *out_rc);
+int wh_Client_AuthUserSetCredentialsResponse(whClientContext* c,
+                                             int32_t*         out_rc);
 
-int wh_Client_AuthUserSetCredentials(whClientContext* c, whUserId user_id,
-        whAuthMethod method,
-        const void* current_credentials, uint16_t current_credentials_len,
-        const void* new_credentials, uint16_t new_credentials_len,
-        int32_t* out_rc);
+int wh_Client_AuthUserSetCredentials(
+    whClientContext* c, whUserId user_id, whAuthMethod method,
+    const void* current_credentials, uint16_t current_credentials_len,
+    const void* new_credentials, uint16_t new_credentials_len, int32_t* out_rc);
 /* Certificate functions */
 
 /**

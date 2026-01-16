@@ -55,49 +55,51 @@ typedef enum {
 } whAuthMethod;
 
 #define WH_NUMBER_OF_GROUPS 14
-#define WH_AUTH_MAX_KEY_IDS 2 /* Maximum number of key IDs a user can have access to */
+#define WH_AUTH_MAX_KEY_IDS \
+    2 /* Maximum number of key IDs a user can have access to */
 typedef struct {
     uint16_t groupPermissions; /* bit mask of if allowed for use in group */
-    uint16_t actionPermissions[WH_NUMBER_OF_GROUPS]; /* array of action permissions for each group */
-    uint16_t keyIdCount; /* Number of key IDs in the keyIds array (0 to WH_AUTH_MAX_KEY_IDS) */
-    uint32_t keyIds[WH_AUTH_MAX_KEY_IDS]; /* Array of key IDs that user has access to */
+    uint16_t
+        actionPermissions[WH_NUMBER_OF_GROUPS]; /* array of action permissions
+                                                   for each group */
+    uint16_t keyIdCount; /* Number of key IDs in the keyIds array (0 to
+                            WH_AUTH_MAX_KEY_IDS) */
+    uint32_t keyIds[WH_AUTH_MAX_KEY_IDS]; /* Array of key IDs that user has
+                                             access to */
 } whAuthPermissions;
 
 /* User information */
 typedef struct {
-    whUserId user_id;
-    char username[32];  /* Max username length */
+    whUserId          user_id;
+    char              username[32]; /* Max username length */
     whAuthPermissions permissions;
-    bool is_active;
-    uint32_t failed_attempts;
-    uint32_t lockout_until;  /* Timestamp when lockout expires */
+    bool              is_active;
+    uint32_t          failed_attempts;
+    uint32_t          lockout_until; /* Timestamp when lockout expires */
 } whAuthUser;
 
 /** Auth Manager Callback Structure */
 
 typedef struct {
     /* Initialize the auth backend */
-    int (*Init)(void* context, const void *config);
+    int (*Init)(void* context, const void* config);
 
     /* Cleanup the auth backend */
     int (*Cleanup)(void* context);
 
     /* Authenticate a user using the specified method */
-    int (*Login)(void* context, uint8_t client_id,
-                        whAuthMethod method, const char* username,
-                        const void* auth_data,
-                        uint16_t auth_data_len,
-                        whUserId* out_user_id,
-                        whAuthPermissions* out_permissions,
-                        int* loggedIn);
+    int (*Login)(void* context, uint8_t client_id, whAuthMethod method,
+                 const char* username, const void* auth_data,
+                 uint16_t auth_data_len, whUserId* out_user_id,
+                 whAuthPermissions* out_permissions, int* loggedIn);
 
     /* Logout a user */
     int (*Logout)(void* context, whUserId current_user_id, whUserId user_id);
-    
+
 
     /* Check if an action is authorized for a session */
     int (*CheckRequestAuthorization)(void* context, uint16_t user_id,
-                              uint16_t group, uint16_t action);
+                                     uint16_t group, uint16_t action);
 
     /* Check if a key is authorized for use */
     int (*CheckKeyAuthorization)(void* context, uint16_t user_id,
@@ -109,84 +111,90 @@ typedef struct {
                    const void* credentials, uint16_t credentials_len);
 
     /* Delete a user */
-    int (*UserDelete)(void* context, whUserId current_user_id, whUserId user_id);
+    int (*UserDelete)(void* context, whUserId current_user_id,
+                      whUserId user_id);
 
     /* Set user permissions */
     int (*UserSetPermissions)(void* context, whUserId current_user_id,
-        whUserId user_id, whAuthPermissions permissions);
+                              whUserId user_id, whAuthPermissions permissions);
 
     /* Get user information by username */
     int (*UserGet)(void* context, const char* username, whUserId* out_user_id,
-    whAuthPermissions* out_permissions);
+                   whAuthPermissions* out_permissions);
 
     /* Set user credentials (PIN, etc.) */
     int (*UserSetCredentials)(void* context, whUserId user_id,
                               whAuthMethod method,
-                              const void* current_credentials, uint16_t current_credentials_len,
-                              const void* new_credentials, uint16_t new_credentials_len);
+                              const void*  current_credentials,
+                              uint16_t     current_credentials_len,
+                              const void*  new_credentials,
+                              uint16_t     new_credentials_len);
 } whAuthCb;
 
 /** Auth Manager Context and Config */
 
 /* Simple helper context structure associated with an Auth Manager instance */
 typedef struct whAuthContext_t {
-    whAuthCb *cb;
+    whAuthCb*  cb;
     whAuthUser user;
-    void* context;
+    void*      context;
 } whAuthContext;
 
 #define WOLFHSM_MAX_CERTIFICATE_LEN 2048
 
-/* Simple helper configuration structure associated with an Auth Manager instance */
+/* Simple helper configuration structure associated with an Auth Manager
+ * instance */
 typedef struct whAuthConfig_t {
-    whAuthCb *cb;
-    void* context;
-    void* config;
+    whAuthCb* cb;
+    void*     context;
+    void*     config;
 } whAuthConfig;
 
 /** Public Auth Manager API Functions */
 
 /* Initialize the auth manager */
-int wh_Auth_Init(whAuthContext* context, const whAuthConfig *config);
+int wh_Auth_Init(whAuthContext* context, const whAuthConfig* config);
 
 /* Cleanup the auth manager */
 int wh_Auth_Cleanup(whAuthContext* context);
 
 /* Authenticate and login a user */
 int wh_Auth_Login(whAuthContext* context, uint8_t client_id,
-    whAuthMethod method, const char* username, const void* auth_data,
-    uint16_t auth_data_len, int* loggedIn);
+                  whAuthMethod method, const char* username,
+                  const void* auth_data, uint16_t auth_data_len, int* loggedIn);
 
 /* Logout a user */
 int wh_Auth_Logout(whAuthContext* context, whUserId user_id);
 
 /* Check authorization for an action */
 int wh_Auth_CheckRequestAuthorization(whAuthContext* context, uint16_t group,
-    uint16_t action);
+                                      uint16_t action);
 
 int wh_Auth_CheckKeyAuthorization(whAuthContext* context, uint32_t key_id,
-    uint16_t action);
+                                  uint16_t action);
 
 /* Add a new user */
 int wh_Auth_UserAdd(whAuthContext* context, const char* username,
-                     whUserId* out_user_id, whAuthPermissions permissions,
-                     whAuthMethod method, const void* credentials,
-                     uint16_t credentials_len);
+                    whUserId* out_user_id, whAuthPermissions permissions,
+                    whAuthMethod method, const void* credentials,
+                    uint16_t credentials_len);
 
 /* Delete a user */
 int wh_Auth_UserDelete(whAuthContext* context, whUserId user_id);
 
 /* Set user permissions */
 int wh_Auth_UserSetPermissions(whAuthContext* context, whUserId user_id,
-    whAuthPermissions permissions);
+                               whAuthPermissions permissions);
 
 /* Get user information */
-int wh_Auth_UserGet(whAuthContext* context, const char* username, whUserId* out_user_id,
-    whAuthPermissions* out_permissions);
+int wh_Auth_UserGet(whAuthContext* context, const char* username,
+                    whUserId* out_user_id, whAuthPermissions* out_permissions);
 
 /* Set user credentials */
 int wh_Auth_UserSetCredentials(whAuthContext* context, whUserId user_id,
-                                 whAuthMethod method,
-                                 const void* current_credentials, uint16_t current_credentials_len,
-                                 const void* new_credentials, uint16_t new_credentials_len);
+                               whAuthMethod method,
+                               const void*  current_credentials,
+                               uint16_t     current_credentials_len,
+                               const void*  new_credentials,
+                               uint16_t     new_credentials_len);
 #endif /* !WOLFHSM_WH_AUTH_H_ */

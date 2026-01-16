@@ -36,21 +36,22 @@
 #include "wolfhsm/wh_auth.h"
 
 enum WH_MESSAGE_AUTH_ACTION_ENUM {
-    WH_MESSAGE_AUTH_ACTION_AUTHENTICATE      = 0x01,
-    WH_MESSAGE_AUTH_ACTION_LOGIN             = 0x02,
-    WH_MESSAGE_AUTH_ACTION_LOGOUT            = 0x03,
-    WH_MESSAGE_AUTH_ACTION_USER_ADD          = 0x04,
-    WH_MESSAGE_AUTH_ACTION_USER_DELETE       = 0x05,
-    WH_MESSAGE_AUTH_ACTION_USER_GET          = 0x06,
+    WH_MESSAGE_AUTH_ACTION_AUTHENTICATE         = 0x01,
+    WH_MESSAGE_AUTH_ACTION_LOGIN                = 0x02,
+    WH_MESSAGE_AUTH_ACTION_LOGOUT               = 0x03,
+    WH_MESSAGE_AUTH_ACTION_USER_ADD             = 0x04,
+    WH_MESSAGE_AUTH_ACTION_USER_DELETE          = 0x05,
+    WH_MESSAGE_AUTH_ACTION_USER_GET             = 0x06,
     WH_MESSAGE_AUTH_ACTION_USER_SET_PERMISSIONS = 0x07,
     WH_MESSAGE_AUTH_ACTION_USER_SET_CREDENTIALS = 0x08,
 };
 
 enum WH_MESSAGE_AUTH_MAX_ENUM {
     WH_MESSAGE_AUTH_MAX_USERNAME_LEN = 32,
-    /* Reserve space for UserAddRequest fixed fields (username + permissions + method + credentials_len = 70 bytes) */
+    /* Reserve space for UserAddRequest fixed fields (username + permissions +
+       method + credentials_len = 70 bytes) */
     WH_MESSAGE_AUTH_MAX_CREDENTIALS_LEN = WOLFHSM_CFG_COMM_DATA_LEN - 86,
-    WH_MESSAGE_AUTH_MAX_SESSIONS = 16,
+    WH_MESSAGE_AUTH_MAX_SESSIONS        = 16,
 };
 
 /* Simple reusable response message */
@@ -58,123 +59,125 @@ typedef struct {
     int32_t rc;
 } whMessageAuth_SimpleResponse;
 
-int wh_MessageAuth_TranslateSimpleResponse(uint16_t magic,
-        const whMessageAuth_SimpleResponse* src,
-        whMessageAuth_SimpleResponse* dest);
+int wh_MessageAuth_TranslateSimpleResponse(
+    uint16_t magic, const whMessageAuth_SimpleResponse* src,
+    whMessageAuth_SimpleResponse* dest);
 
 /** Login Request */
 typedef struct {
     uint16_t method;
-    char username[WH_MESSAGE_AUTH_MAX_USERNAME_LEN];
+    char     username[WH_MESSAGE_AUTH_MAX_USERNAME_LEN];
     uint16_t auth_data_len;
     /* auth_data follows */
 } whMessageAuth_LoginRequest;
 
-int wh_MessageAuth_TranslateLoginRequest(uint16_t magic,
-        const void* src_packet, uint16_t src_size,
-        whMessageAuth_LoginRequest* dest_header, uint8_t* dest_auth_data);
+int wh_MessageAuth_TranslateLoginRequest(
+    uint16_t magic, const void* src_packet, uint16_t src_size,
+    whMessageAuth_LoginRequest* dest_header, uint8_t* dest_auth_data);
 
 /** Login Response */
 typedef struct {
-    int32_t rc;
+    int32_t  rc;
     uint16_t user_id;
     uint32_t permissions;
 } whMessageAuth_LoginResponse;
 
-int wh_MessageAuth_TranslateLoginResponse(uint16_t magic,
-        const whMessageAuth_LoginResponse* src,
-        whMessageAuth_LoginResponse* dest);
+int wh_MessageAuth_TranslateLoginResponse(
+    uint16_t magic, const whMessageAuth_LoginResponse* src,
+    whMessageAuth_LoginResponse* dest);
 
 /** Logout Request */
 typedef struct {
     uint16_t user_id;
-    uint8_t WH_PAD[2];
+    uint8_t  WH_PAD[2];
 } whMessageAuth_LogoutRequest;
 
-int wh_MessageAuth_TranslateLogoutRequest(uint16_t magic,
-        const whMessageAuth_LogoutRequest* src,
-        whMessageAuth_LogoutRequest* dest);
+int wh_MessageAuth_TranslateLogoutRequest(
+    uint16_t magic, const whMessageAuth_LogoutRequest* src,
+    whMessageAuth_LogoutRequest* dest);
 
 /** Logout Response (SimpleResponse) */
 
 /* whAuthPermissions struct
- * uint16_t (groupPermissions) + uint16_t[WH_NUMBER_OF_GROUPS] (actionPermissions) + 
- * uint16_t (keyIdCount) + uint32_t[WH_AUTH_MAX_KEY_IDS] (keyIds) */
-#define WH_FLAT_PERRMISIONS_LEN (2 + (2*WH_NUMBER_OF_GROUPS) + 2 + (4*WH_AUTH_MAX_KEY_IDS))
+ * uint16_t (groupPermissions) + uint16_t[WH_NUMBER_OF_GROUPS]
+ * (actionPermissions) + uint16_t (keyIdCount) + uint32_t[WH_AUTH_MAX_KEY_IDS]
+ * (keyIds) */
+#define WH_FLAT_PERRMISIONS_LEN \
+    (2 + (2 * WH_NUMBER_OF_GROUPS) + 2 + (4 * WH_AUTH_MAX_KEY_IDS))
 
 int wh_MessageAuth_FlattenPermissions(whAuthPermissions* permissions,
-    uint8_t* buffer, uint16_t buffer_len);
+                                      uint8_t* buffer, uint16_t buffer_len);
 int wh_MessageAuth_UnflattenPermissions(uint8_t* buffer, uint16_t buffer_len,
-    whAuthPermissions* permissions);
+                                        whAuthPermissions* permissions);
 
 
 /** User Add Request */
 typedef struct {
-    char username[WH_MESSAGE_AUTH_MAX_USERNAME_LEN];
-    uint8_t permissions[WH_FLAT_PERRMISIONS_LEN];
+    char     username[WH_MESSAGE_AUTH_MAX_USERNAME_LEN];
+    uint8_t  permissions[WH_FLAT_PERRMISIONS_LEN];
     uint16_t method;
     uint16_t credentials_len;
     /* credentials follow */
 } whMessageAuth_UserAddRequest;
 
-int wh_MessageAuth_TranslateUserAddRequest(uint16_t magic,
-        const void* src_packet, uint16_t src_size,
-        whMessageAuth_UserAddRequest* dest_header, uint8_t* dest_credentials);
+int wh_MessageAuth_TranslateUserAddRequest(
+    uint16_t magic, const void* src_packet, uint16_t src_size,
+    whMessageAuth_UserAddRequest* dest_header, uint8_t* dest_credentials);
 
 /** User Add Response */
 typedef struct {
-    int32_t rc;
+    int32_t  rc;
     uint16_t user_id;
-    uint8_t WH_PAD[2];
+    uint8_t  WH_PAD[2];
 } whMessageAuth_UserAddResponse;
 
-int wh_MessageAuth_TranslateUserAddResponse(uint16_t magic,
-        const whMessageAuth_UserAddResponse* src,
-        whMessageAuth_UserAddResponse* dest);
+int wh_MessageAuth_TranslateUserAddResponse(
+    uint16_t magic, const whMessageAuth_UserAddResponse* src,
+    whMessageAuth_UserAddResponse* dest);
 
 /** User Delete Request */
 typedef struct {
     uint16_t user_id;
-    uint8_t WH_PAD[2];
+    uint8_t  WH_PAD[2];
 } whMessageAuth_UserDeleteRequest;
 
-int wh_MessageAuth_TranslateUserDeleteRequest(uint16_t magic,
-        const whMessageAuth_UserDeleteRequest* src,
-        whMessageAuth_UserDeleteRequest* dest);
+int wh_MessageAuth_TranslateUserDeleteRequest(
+    uint16_t magic, const whMessageAuth_UserDeleteRequest* src,
+    whMessageAuth_UserDeleteRequest* dest);
 
 /** User Delete Response */
 /* Use SimpleResponse */
 
 /** User Get Request */
 typedef struct {
-    char username[WH_MESSAGE_AUTH_MAX_USERNAME_LEN];
+    char    username[WH_MESSAGE_AUTH_MAX_USERNAME_LEN];
     uint8_t WH_PAD[2];
 } whMessageAuth_UserGetRequest;
 
-int wh_MessageAuth_TranslateUserGetRequest(uint16_t magic,
-        const whMessageAuth_UserGetRequest* src,
-        whMessageAuth_UserGetRequest* dest);
+int wh_MessageAuth_TranslateUserGetRequest(
+    uint16_t magic, const whMessageAuth_UserGetRequest* src,
+    whMessageAuth_UserGetRequest* dest);
 
 /** User Get Response */
 typedef struct {
-    int32_t rc;
+    int32_t  rc;
     uint16_t user_id;
-    uint8_t permissions[WH_FLAT_PERRMISIONS_LEN];
+    uint8_t  permissions[WH_FLAT_PERRMISIONS_LEN];
 } whMessageAuth_UserGetResponse;
 
-int wh_MessageAuth_TranslateUserGetResponse(uint16_t magic,
-        const whMessageAuth_UserGetResponse* src,
-        whMessageAuth_UserGetResponse* dest);
+int wh_MessageAuth_TranslateUserGetResponse(
+    uint16_t magic, const whMessageAuth_UserGetResponse* src,
+    whMessageAuth_UserGetResponse* dest);
 
 /** User Set Permissions Request */
 typedef struct {
     uint16_t user_id;
-    uint8_t permissions[WH_FLAT_PERRMISIONS_LEN];
+    uint8_t  permissions[WH_FLAT_PERRMISIONS_LEN];
 } whMessageAuth_UserSetPermissionsRequest;
 
-int wh_MessageAuth_TranslateUserSetPermissionsRequest(uint16_t magic,
-        const whMessageAuth_UserSetPermissionsRequest* src,
-        whMessageAuth_UserSetPermissionsRequest* dest);
+int wh_MessageAuth_TranslateUserSetPermissionsRequest(
+    uint16_t magic, const whMessageAuth_UserSetPermissionsRequest* src,
+    whMessageAuth_UserSetPermissionsRequest* dest);
 
 /** User Set Permissions Response */
 /* Use SimpleResponse */
@@ -183,8 +186,8 @@ int wh_MessageAuth_TranslateUserSetPermissionsRequest(uint16_t magic,
 /* Header structure - credentials follow as variable-length data */
 typedef struct {
     uint16_t user_id;
-    uint8_t method;
-    uint8_t WH_PAD[1];  /* Padding for alignment */
+    uint8_t  method;
+    uint8_t  WH_PAD[1]; /* Padding for alignment */
     uint16_t current_credentials_len;
     uint16_t new_credentials_len;
     /* Variable-length data follows:
@@ -193,10 +196,10 @@ typedef struct {
      */
 } whMessageAuth_UserSetCredentialsRequest;
 
-int wh_MessageAuth_TranslateUserSetCredentialsRequest(uint16_t magic,
-        const void* src_packet, uint16_t src_size,
-        whMessageAuth_UserSetCredentialsRequest* dest_header,
-        uint8_t* dest_current_creds, uint8_t* dest_new_creds);
+int wh_MessageAuth_TranslateUserSetCredentialsRequest(
+    uint16_t magic, const void* src_packet, uint16_t src_size,
+    whMessageAuth_UserSetCredentialsRequest* dest_header,
+    uint8_t* dest_current_creds, uint8_t* dest_new_creds);
 
 /** User Set Credentials Response */
 /* Use SimpleResponse */
@@ -204,14 +207,14 @@ int wh_MessageAuth_TranslateUserSetCredentialsRequest(uint16_t magic,
 /** Check Authorization Request */
 typedef struct {
     uint32_t session_id;
-    uint8_t action;  /* whAuthAction */
-    uint8_t WH_PAD[3];
+    uint8_t  action; /* whAuthAction */
+    uint8_t  WH_PAD[3];
     uint32_t object_id;
 } whMessageAuth_CheckAuthorizationRequest;
 
-int wh_MessageAuth_TranslateCheckAuthorizationRequest(uint16_t magic,
-        const whMessageAuth_CheckAuthorizationRequest* src,
-        whMessageAuth_CheckAuthorizationRequest* dest);
+int wh_MessageAuth_TranslateCheckAuthorizationRequest(
+    uint16_t magic, const whMessageAuth_CheckAuthorizationRequest* src,
+    whMessageAuth_CheckAuthorizationRequest* dest);
 
 /** Check Authorization Response */
 typedef struct {
@@ -220,8 +223,8 @@ typedef struct {
     uint8_t WH_PAD[3];
 } whMessageAuth_CheckAuthorizationResponse;
 
-int wh_MessageAuth_TranslateCheckAuthorizationResponse(uint16_t magic,
-        const whMessageAuth_CheckAuthorizationResponse* src,
-        whMessageAuth_CheckAuthorizationResponse* dest);
+int wh_MessageAuth_TranslateCheckAuthorizationResponse(
+    uint16_t magic, const whMessageAuth_CheckAuthorizationResponse* src,
+    whMessageAuth_CheckAuthorizationResponse* dest);
 
 #endif /* !WOLFHSM_WH_MESSAGE_AUTH_H_ */
