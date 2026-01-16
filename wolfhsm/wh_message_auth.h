@@ -59,6 +59,14 @@ typedef struct {
     int32_t rc;
 } whMessageAuth_SimpleResponse;
 
+/**
+ * @brief Translate a simple response message between different magic numbers.
+ *
+ * @param[in] magic The magic number for translation.
+ * @param[in] src Pointer to the source simple response message.
+ * @param[out] dest Pointer to the destination simple response message.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
 int wh_MessageAuth_TranslateSimpleResponse(
     uint16_t magic, const whMessageAuth_SimpleResponse* src,
     whMessageAuth_SimpleResponse* dest);
@@ -71,6 +79,16 @@ typedef struct {
     /* auth_data follows */
 } whMessageAuth_LoginRequest;
 
+/**
+ * @brief Translate a login request message between different magic numbers.
+ *
+ * @param[in] magic The magic number for translation.
+ * @param[in] src_packet Pointer to the source packet data.
+ * @param[in] src_size Size of the source packet.
+ * @param[out] dest_header Pointer to the destination login request header.
+ * @param[out] dest_auth_data Pointer to the destination buffer for auth data.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
 int wh_MessageAuth_TranslateLoginRequest(
     uint16_t magic, const void* src_packet, uint16_t src_size,
     whMessageAuth_LoginRequest* dest_header, uint8_t* dest_auth_data);
@@ -82,6 +100,14 @@ typedef struct {
     uint32_t permissions;
 } whMessageAuth_LoginResponse;
 
+/**
+ * @brief Translate a login response message between different magic numbers.
+ *
+ * @param[in] magic The magic number for translation.
+ * @param[in] src Pointer to the source login response message.
+ * @param[out] dest Pointer to the destination login response message.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
 int wh_MessageAuth_TranslateLoginResponse(
     uint16_t magic, const whMessageAuth_LoginResponse* src,
     whMessageAuth_LoginResponse* dest);
@@ -92,6 +118,14 @@ typedef struct {
     uint8_t  WH_PAD[2];
 } whMessageAuth_LogoutRequest;
 
+/**
+ * @brief Translate a logout request message between different magic numbers.
+ *
+ * @param[in] magic The magic number for translation.
+ * @param[in] src Pointer to the source logout request message.
+ * @param[out] dest Pointer to the destination logout request message.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
 int wh_MessageAuth_TranslateLogoutRequest(
     uint16_t magic, const whMessageAuth_LogoutRequest* src,
     whMessageAuth_LogoutRequest* dest);
@@ -105,8 +139,25 @@ int wh_MessageAuth_TranslateLogoutRequest(
 #define WH_FLAT_PERRMISIONS_LEN \
     (2 + (2 * WH_NUMBER_OF_GROUPS) + 2 + (4 * WH_AUTH_MAX_KEY_IDS))
 
+/**
+ * @brief Flatten permissions structure into a byte buffer.
+ *
+ * @param[in] permissions Pointer to the permissions structure to flatten.
+ * @param[out] buffer Pointer to the destination buffer.
+ * @param[in] buffer_len Length of the destination buffer.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
 int wh_MessageAuth_FlattenPermissions(whAuthPermissions* permissions,
                                       uint8_t* buffer, uint16_t buffer_len);
+
+/**
+ * @brief Unflatten a byte buffer into a permissions structure.
+ *
+ * @param[in] buffer Pointer to the source buffer.
+ * @param[in] buffer_len Length of the source buffer.
+ * @param[out] permissions Pointer to the destination permissions structure.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
 int wh_MessageAuth_UnflattenPermissions(uint8_t* buffer, uint16_t buffer_len,
                                         whAuthPermissions* permissions);
 
@@ -120,6 +171,16 @@ typedef struct {
     /* credentials follow */
 } whMessageAuth_UserAddRequest;
 
+/**
+ * @brief Translate a user add request message between different magic numbers.
+ *
+ * @param[in] magic The magic number for translation.
+ * @param[in] src_packet Pointer to the source packet data.
+ * @param[in] src_size Size of the source packet.
+ * @param[out] dest_header Pointer to the destination user add request header.
+ * @param[out] dest_credentials Pointer to the destination buffer for credentials.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
 int wh_MessageAuth_TranslateUserAddRequest(
     uint16_t magic, const void* src_packet, uint16_t src_size,
     whMessageAuth_UserAddRequest* dest_header, uint8_t* dest_credentials);
@@ -131,6 +192,14 @@ typedef struct {
     uint8_t  WH_PAD[2];
 } whMessageAuth_UserAddResponse;
 
+/**
+ * @brief Translate a user add response message between different magic numbers.
+ *
+ * @param[in] magic The magic number for translation.
+ * @param[in] src Pointer to the source user add response message.
+ * @param[out] dest Pointer to the destination user add response message.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
 int wh_MessageAuth_TranslateUserAddResponse(
     uint16_t magic, const whMessageAuth_UserAddResponse* src,
     whMessageAuth_UserAddResponse* dest);
@@ -141,6 +210,14 @@ typedef struct {
     uint8_t  WH_PAD[2];
 } whMessageAuth_UserDeleteRequest;
 
+/**
+ * @brief Translate a user delete request message between different magic numbers.
+ *
+ * @param[in] magic The magic number for translation.
+ * @param[in] src Pointer to the source user delete request message.
+ * @param[out] dest Pointer to the destination user delete request message.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
 int wh_MessageAuth_TranslateUserDeleteRequest(
     uint16_t magic, const whMessageAuth_UserDeleteRequest* src,
     whMessageAuth_UserDeleteRequest* dest);
@@ -154,6 +231,14 @@ typedef struct {
     uint8_t WH_PAD[2];
 } whMessageAuth_UserGetRequest;
 
+/**
+ * @brief Translate a user get request message between different magic numbers.
+ *
+ * @param[in] magic The magic number for translation.
+ * @param[in] src Pointer to the source user get request message.
+ * @param[out] dest Pointer to the destination user get request message.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
 int wh_MessageAuth_TranslateUserGetRequest(
     uint16_t magic, const whMessageAuth_UserGetRequest* src,
     whMessageAuth_UserGetRequest* dest);
@@ -165,6 +250,14 @@ typedef struct {
     uint8_t  permissions[WH_FLAT_PERRMISIONS_LEN];
 } whMessageAuth_UserGetResponse;
 
+/**
+ * @brief Translate a user get response message between different magic numbers.
+ *
+ * @param[in] magic The magic number for translation.
+ * @param[in] src Pointer to the source user get response message.
+ * @param[out] dest Pointer to the destination user get response message.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
 int wh_MessageAuth_TranslateUserGetResponse(
     uint16_t magic, const whMessageAuth_UserGetResponse* src,
     whMessageAuth_UserGetResponse* dest);
@@ -175,6 +268,14 @@ typedef struct {
     uint8_t  permissions[WH_FLAT_PERRMISIONS_LEN];
 } whMessageAuth_UserSetPermissionsRequest;
 
+/**
+ * @brief Translate a user set permissions request message between different magic numbers.
+ *
+ * @param[in] magic The magic number for translation.
+ * @param[in] src Pointer to the source user set permissions request message.
+ * @param[out] dest Pointer to the destination user set permissions request message.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
 int wh_MessageAuth_TranslateUserSetPermissionsRequest(
     uint16_t magic, const whMessageAuth_UserSetPermissionsRequest* src,
     whMessageAuth_UserSetPermissionsRequest* dest);
@@ -196,6 +297,17 @@ typedef struct {
      */
 } whMessageAuth_UserSetCredentialsRequest;
 
+/**
+ * @brief Translate a user set credentials request message between different magic numbers.
+ *
+ * @param[in] magic The magic number for translation.
+ * @param[in] src_packet Pointer to the source packet data.
+ * @param[in] src_size Size of the source packet.
+ * @param[out] dest_header Pointer to the destination user set credentials request header.
+ * @param[out] dest_current_creds Pointer to the destination buffer for current credentials.
+ * @param[out] dest_new_creds Pointer to the destination buffer for new credentials.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
 int wh_MessageAuth_TranslateUserSetCredentialsRequest(
     uint16_t magic, const void* src_packet, uint16_t src_size,
     whMessageAuth_UserSetCredentialsRequest* dest_header,
@@ -212,6 +324,14 @@ typedef struct {
     uint32_t object_id;
 } whMessageAuth_CheckAuthorizationRequest;
 
+/**
+ * @brief Translate a check authorization request message between different magic numbers.
+ *
+ * @param[in] magic The magic number for translation.
+ * @param[in] src Pointer to the source check authorization request message.
+ * @param[out] dest Pointer to the destination check authorization request message.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
 int wh_MessageAuth_TranslateCheckAuthorizationRequest(
     uint16_t magic, const whMessageAuth_CheckAuthorizationRequest* src,
     whMessageAuth_CheckAuthorizationRequest* dest);
@@ -223,6 +343,14 @@ typedef struct {
     uint8_t WH_PAD[3];
 } whMessageAuth_CheckAuthorizationResponse;
 
+/**
+ * @brief Translate a check authorization response message between different magic numbers.
+ *
+ * @param[in] magic The magic number for translation.
+ * @param[in] src Pointer to the source check authorization response message.
+ * @param[out] dest Pointer to the destination check authorization response message.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
 int wh_MessageAuth_TranslateCheckAuthorizationResponse(
     uint16_t magic, const whMessageAuth_CheckAuthorizationResponse* src,
     whMessageAuth_CheckAuthorizationResponse* dest);
