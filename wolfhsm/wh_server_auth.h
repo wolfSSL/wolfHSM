@@ -50,10 +50,10 @@
  * @param[out] resp_packet Pointer to store the response packet data.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
-int wh_Server_HandleAuthRequest(whServerContext* server,
-        uint16_t magic, uint16_t action, uint16_t seq,
-        uint16_t req_size, const void* req_packet,
-        uint16_t *out_resp_size, void* resp_packet);
+int wh_Server_HandleAuthRequest(whServerContext* server, uint16_t magic,
+                                uint16_t action, uint16_t seq,
+                                uint16_t req_size, const void* req_packet,
+                                uint16_t* out_resp_size, void* resp_packet);
 
 #endif /* WOLFHSM_CFG_ENABLE_SERVER */
 

@@ -53,42 +53,41 @@
 
 #ifndef WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP
 /* Memory transport mode - setup structures */
-static uint8_t req_buffer[BUFFER_SIZE] = {0};
-static uint8_t resp_buffer[BUFFER_SIZE] = {0};
-static whTransportMemConfig tmcf[1] = {0};
-static whTransportClientCb tccb[1] = {WH_TRANSPORT_MEM_CLIENT_CB};
-static whTransportMemClientContext tmcc[1] = {0};
-static whCommClientConfig cc_conf[1] = {0};
-static whClientConfig c_conf[1] = {0};
-static whTransportServerCb tscb[1] = {WH_TRANSPORT_MEM_SERVER_CB};
-static whTransportMemServerContext tmsc[1] = {0};
-static whCommServerConfig cs_conf[1] = {0};
-static whServerContext server[1] = {0};
-static whClientContext client[1] = {0};
+static uint8_t                     req_buffer[BUFFER_SIZE]  = {0};
+static uint8_t                     resp_buffer[BUFFER_SIZE] = {0};
+static whTransportMemConfig        tmcf[1]                  = {0};
+static whTransportClientCb         tccb[1]    = {WH_TRANSPORT_MEM_CLIENT_CB};
+static whTransportMemClientContext tmcc[1]    = {0};
+static whCommClientConfig          cc_conf[1] = {0};
+static whClientConfig              c_conf[1]  = {0};
+static whTransportServerCb         tscb[1]    = {WH_TRANSPORT_MEM_SERVER_CB};
+static whTransportMemServerContext tmsc[1]    = {0};
+static whCommServerConfig          cs_conf[1] = {0};
+static whServerContext             server[1]  = {0};
+static whClientContext             client[1]  = {0};
 
 /* NVM setup */
-static uint8_t memory[FLASH_RAM_SIZE] = {0};
-static whFlashRamsimCtx fc[1] = {0};
-static whFlashRamsimCfg fc_conf[1];
-static const whFlashCb fcb[1] = {WH_FLASH_RAMSIM_CB};
+static uint8_t               memory[FLASH_RAM_SIZE] = {0};
+static whFlashRamsimCtx      fc[1]                  = {0};
+static whFlashRamsimCfg      fc_conf[1];
+static const whFlashCb       fcb[1] = {WH_FLASH_RAMSIM_CB};
 static whTestNvmBackendUnion nvm_setup;
-static whNvmConfig n_conf[1] = {0};
-static whNvmContext nvm[1] = {{0}};
+static whNvmConfig           n_conf[1] = {0};
+static whNvmContext          nvm[1]    = {{0}};
 
 /* Auth setup following wh_posix_server pattern */
 static whAuthCb default_auth_cb = {
-    .Init = wh_AuthBase_Init,
-    .Cleanup = wh_AuthBase_Cleanup,
-    .Login = wh_AuthBase_Login,
-    .Logout = wh_AuthBase_Logout,
+    .Init                      = wh_AuthBase_Init,
+    .Cleanup                   = wh_AuthBase_Cleanup,
+    .Login                     = wh_AuthBase_Login,
+    .Logout                    = wh_AuthBase_Logout,
     .CheckRequestAuthorization = wh_AuthBase_CheckRequestAuthorization,
-    .CheckKeyAuthorization = wh_AuthBase_CheckKeyAuthorization,
-    .UserAdd = wh_AuthBase_UserAdd,
-    .UserDelete = wh_AuthBase_UserDelete,
-    .UserSetPermissions = wh_AuthBase_UserSetPermissions,
-    .UserGet = wh_AuthBase_UserGet,
-    .UserSetCredentials = wh_AuthBase_UserSetCredentials
-};
+    .CheckKeyAuthorization     = wh_AuthBase_CheckKeyAuthorization,
+    .UserAdd                   = wh_AuthBase_UserAdd,
+    .UserDelete                = wh_AuthBase_UserDelete,
+    .UserSetPermissions        = wh_AuthBase_UserSetPermissions,
+    .UserGet                   = wh_AuthBase_UserGet,
+    .UserSetCredentials        = wh_AuthBase_UserSetCredentials};
 static whAuthContext auth_ctx = {0};
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
@@ -101,34 +100,34 @@ static int _whTest_Auth_SetupMemory(whClientContext** out_client)
     int rc = WH_ERROR_OK;
 
     /* Initialize transport memory config - avoid compound literals for C90 */
-    tmcf->req = (whTransportMemCsr*)req_buffer;
-    tmcf->req_size = sizeof(req_buffer);
-    tmcf->resp = (whTransportMemCsr*)resp_buffer;
+    tmcf->req       = (whTransportMemCsr*)req_buffer;
+    tmcf->req_size  = sizeof(req_buffer);
+    tmcf->resp      = (whTransportMemCsr*)resp_buffer;
     tmcf->resp_size = sizeof(resp_buffer);
 
     /* Client configuration - avoid compound literals for C90 compatibility */
-    cc_conf->transport_cb = tccb;
+    cc_conf->transport_cb      = tccb;
     cc_conf->transport_context = (void*)tmcc;
-    cc_conf->transport_config = (void*)tmcf;
-    cc_conf->client_id = WH_TEST_DEFAULT_CLIENT_ID;
-    c_conf->comm = cc_conf;
+    cc_conf->transport_config  = (void*)tmcf;
+    cc_conf->client_id         = WH_TEST_DEFAULT_CLIENT_ID;
+    c_conf->comm               = cc_conf;
 
     /* Server configuration */
-    cs_conf->transport_cb = tscb;
+    cs_conf->transport_cb      = tscb;
     cs_conf->transport_context = (void*)tmsc;
-    cs_conf->transport_config = (void*)tmcf;
-    cs_conf->server_id = 124;
+    cs_conf->transport_config  = (void*)tmcf;
+    cs_conf->server_id         = 124;
 
     /* Flash RAM sim configuration */
-    fc_conf->size = FLASH_RAM_SIZE;
+    fc_conf->size       = FLASH_RAM_SIZE;
     fc_conf->sectorSize = FLASH_RAM_SIZE / 2;
-    fc_conf->pageSize = 8;
+    fc_conf->pageSize   = 8;
     fc_conf->erasedByte = (uint8_t)0;
-    fc_conf->memory = memory;
+    fc_conf->memory     = memory;
 
     /* Initialize NVM */
-    WH_TEST_RETURN_ON_FAIL(
-        whTest_NvmCfgBackend(WH_NVM_TEST_BACKEND_FLASH, &nvm_setup, n_conf, fc_conf, fc, fcb));
+    WH_TEST_RETURN_ON_FAIL(whTest_NvmCfgBackend(
+        WH_NVM_TEST_BACKEND_FLASH, &nvm_setup, n_conf, fc_conf, fc, fcb));
     WH_TEST_RETURN_ON_FAIL(wh_Nvm_Init(nvm, n_conf));
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
@@ -137,10 +136,10 @@ static int _whTest_Auth_SetupMemory(whClientContext** out_client)
 #endif
 
     /* Set up auth context following wh_posix_server pattern */
-    static void* auth_backend_context = NULL;
-    static whAuthConfig auth_config = {0};
+    static void*        auth_backend_context = NULL;
+    static whAuthConfig auth_config          = {0};
 
-    auth_config.cb = &default_auth_cb;
+    auth_config.cb      = &default_auth_cb;
     auth_config.context = auth_backend_context;
 
     rc = wh_Auth_Init(&auth_ctx, &auth_config);
@@ -151,9 +150,9 @@ static int _whTest_Auth_SetupMemory(whClientContext** out_client)
 
     /* Server config with auth - avoid compound literals for C90 */
     whServerConfig s_conf[1] = {{0}};
-    s_conf->comm_config = cs_conf;
-    s_conf->nvm = nvm;
-    s_conf->auth = &auth_ctx;
+    s_conf->comm_config      = cs_conf;
+    s_conf->nvm              = nvm;
+    s_conf->auth             = &auth_ctx;
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     s_conf->crypto = crypto;
 #if defined WOLF_CRYPTO_CB
@@ -166,34 +165,37 @@ static int _whTest_Auth_SetupMemory(whClientContext** out_client)
 
     /* Initialize client */
     WH_TEST_RETURN_ON_FAIL(wh_Client_Init(client, c_conf));
-    
+
     /* Verify client comm is initialized */
     WH_TEST_ASSERT_RETURN(client->comm != NULL);
     WH_TEST_ASSERT_RETURN(client->comm->initialized == 1);
 
-    /* For memory transport, set server as connected (connect callback should handle this,
-     * but we set it explicitly to ensure it's connected) */
+    /* For memory transport, set server as connected (connect callback should
+     * handle this, but we set it explicitly to ensure it's connected) */
     WH_TEST_RETURN_ON_FAIL(wh_Server_SetConnected(server, WH_COMM_CONNECTED));
-    
+
     /* Verify server is connected */
     whCommConnected server_connected;
     WH_TEST_RETURN_ON_FAIL(wh_Server_GetConnected(server, &server_connected));
     WH_TEST_ASSERT_RETURN(server_connected == WH_COMM_CONNECTED);
 
-    /* Connect client to server - use non-blocking approach for memory transport */
+    /* Connect client to server - use non-blocking approach for memory transport
+     */
     uint32_t client_id, server_id;
-    
+
     /* Verify server is ready (should return NOTREADY if no message) */
-    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTREADY == wh_Server_HandleRequestMessage(server));
-    
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTREADY ==
+                          wh_Server_HandleRequestMessage(server));
+
     /* Send comm init request */
     WH_TEST_RETURN_ON_FAIL(wh_Client_CommInitRequest(client));
-    
+
     /* Process server message */
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
-    
+
     /* Get comm init response */
-    WH_TEST_RETURN_ON_FAIL(wh_Client_CommInitResponse(client, &client_id, &server_id));
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Client_CommInitResponse(client, &client_id, &server_id));
     WH_TEST_ASSERT_RETURN(client_id == client->comm->client_id);
 
     *out_client = client;
@@ -218,26 +220,28 @@ static int _whTest_Auth_CleanupMemory(void)
 
 /* ============================================================================
  * Test Functions
- * ============================================================================ */
+ * ============================================================================
+ */
 
 static int _whTest_Auth_LoginOp(whClientContext* client, whAuthMethod method,
-    const char* username, const void* auth_data, uint16_t auth_data_len,
-    int32_t* out_rc, whUserId* out_user_id, whAuthPermissions* out_perms)
+                                const char* username, const void* auth_data,
+                                uint16_t auth_data_len, int32_t* out_rc,
+                                whUserId*          out_user_id,
+                                whAuthPermissions* out_perms)
 {
 #ifdef WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP
     return wh_Client_AuthLogin(client, method, username, auth_data,
                                auth_data_len, out_rc, out_user_id, out_perms);
 #else
-    WH_TEST_RETURN_ON_FAIL(
-        wh_Client_AuthLoginRequest(client, method, username, auth_data,
-                                auth_data_len));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_AuthLoginRequest(
+        client, method, username, auth_data, auth_data_len));
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
     return wh_Client_AuthLoginResponse(client, out_rc, out_user_id, out_perms);
 #endif
 }
 
 static int _whTest_Auth_LogoutOp(whClientContext* client, whUserId user_id,
-    int32_t* out_rc)
+                                 int32_t* out_rc)
 {
 #ifndef WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP
     WH_TEST_RETURN_ON_FAIL(wh_Client_AuthLogoutRequest(client, user_id));
@@ -249,13 +253,14 @@ static int _whTest_Auth_LogoutOp(whClientContext* client, whUserId user_id,
 }
 
 static int _whTest_Auth_UserAddOp(whClientContext* client, const char* username,
-    whAuthPermissions permissions, whAuthMethod method, const void* credentials,
-    uint16_t credentials_len, int32_t* out_rc, whUserId* out_user_id)
+                                  whAuthPermissions permissions,
+                                  whAuthMethod method, const void* credentials,
+                                  uint16_t credentials_len, int32_t* out_rc,
+                                  whUserId* out_user_id)
 {
 #ifndef WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP
-    WH_TEST_RETURN_ON_FAIL(
-        wh_Client_AuthUserAddRequest(client, username, permissions, method,
-                                    credentials, credentials_len));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_AuthUserAddRequest(
+        client, username, permissions, method, credentials, credentials_len));
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
     return wh_Client_AuthUserAddResponse(client, out_rc, out_user_id);
 #else
@@ -266,7 +271,7 @@ static int _whTest_Auth_UserAddOp(whClientContext* client, const char* username,
 }
 
 static int _whTest_Auth_UserDeleteOp(whClientContext* client, whUserId user_id,
-    int32_t* out_rc)
+                                     int32_t* out_rc)
 {
 #ifndef WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP
     WH_TEST_RETURN_ON_FAIL(wh_Client_AuthUserDeleteRequest(client, user_id));
@@ -277,8 +282,10 @@ static int _whTest_Auth_UserDeleteOp(whClientContext* client, whUserId user_id,
 #endif
 }
 
-static int _whTest_Auth_UserSetPermsOp(whClientContext* client, whUserId user_id,
-    whAuthPermissions permissions, int32_t* out_rc)
+static int _whTest_Auth_UserSetPermsOp(whClientContext*  client,
+                                       whUserId          user_id,
+                                       whAuthPermissions permissions,
+                                       int32_t*          out_rc)
 {
 #ifndef WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP
     WH_TEST_RETURN_ON_FAIL(
@@ -291,33 +298,33 @@ static int _whTest_Auth_UserSetPermsOp(whClientContext* client, whUserId user_id
 #endif
 }
 
-static int _whTest_Auth_UserSetCredsOp(whClientContext* client, whUserId user_id,
-    whAuthMethod method, const void* current_credentials,
-    uint16_t current_credentials_len, const void* new_credentials,
-    uint16_t new_credentials_len, int32_t* out_rc)
+static int _whTest_Auth_UserSetCredsOp(
+    whClientContext* client, whUserId user_id, whAuthMethod method,
+    const void* current_credentials, uint16_t current_credentials_len,
+    const void* new_credentials, uint16_t new_credentials_len, int32_t* out_rc)
 {
 #ifndef WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP
-    WH_TEST_RETURN_ON_FAIL(
-        wh_Client_AuthUserSetCredentialsRequest(client, user_id, method,
-            current_credentials, current_credentials_len,
-            new_credentials, new_credentials_len));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_AuthUserSetCredentialsRequest(
+        client, user_id, method, current_credentials, current_credentials_len,
+        new_credentials, new_credentials_len));
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
     return wh_Client_AuthUserSetCredentialsResponse(client, out_rc);
 #else
-    return wh_Client_AuthUserSetCredentials(client, user_id, method,
-        current_credentials, current_credentials_len,
+    return wh_Client_AuthUserSetCredentials(
+        client, user_id, method, current_credentials, current_credentials_len,
         new_credentials, new_credentials_len, out_rc);
 #endif
 }
 
 static int _whTest_Auth_UserGetOp(whClientContext* client, const char* username,
-    int32_t* out_rc, whUserId* out_user_id, whAuthPermissions* out_permissions)
+                                  int32_t* out_rc, whUserId* out_user_id,
+                                  whAuthPermissions* out_permissions)
 {
 #ifndef WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP
     WH_TEST_RETURN_ON_FAIL(wh_Client_AuthUserGetRequest(client, username));
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
     return wh_Client_AuthUserGetResponse(client, out_rc, out_user_id,
-                                            out_permissions);
+                                         out_permissions);
 #else
     return wh_Client_AuthUserGet(client, username, out_rc, out_user_id,
                                  out_permissions);
@@ -325,10 +332,10 @@ static int _whTest_Auth_UserGetOp(whClientContext* client, const char* username,
 }
 
 static void _whTest_Auth_DeleteUserByName(whClientContext* client,
-    const char* username)
+                                          const char*      username)
 {
-    int32_t server_rc = 0;
-    whUserId user_id = WH_USER_ID_INVALID;
+    int32_t           server_rc = 0;
+    whUserId          user_id   = WH_USER_ID_INVALID;
     whAuthPermissions perms;
 
     memset(&perms, 0, sizeof(perms));
@@ -340,13 +347,13 @@ static void _whTest_Auth_DeleteUserByName(whClientContext* client,
 
 static int _whTest_Auth_BadArgs(void)
 {
-    int rc = 0;
-    int loggedIn = 1;
-    whAuthContext ctx;
-    whAuthConfig config;
+    int               rc       = 0;
+    int               loggedIn = 1;
+    whAuthContext     ctx;
+    whAuthConfig      config;
     whAuthPermissions perms;
-    whUserId user_id = WH_USER_ID_INVALID;
-    int32_t server_rc = 0;
+    whUserId          user_id   = WH_USER_ID_INVALID;
+    int32_t           server_rc = 0;
 
     memset(&ctx, 0, sizeof(ctx));
     memset(&config, 0, sizeof(config));
@@ -363,7 +370,8 @@ static int _whTest_Auth_BadArgs(void)
     rc = wh_Auth_Cleanup(&ctx);
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
 
-    rc = wh_Auth_Login(NULL, 0, WH_AUTH_METHOD_PIN, "user", "pin", 3, &loggedIn);
+    rc =
+        wh_Auth_Login(NULL, 0, WH_AUTH_METHOD_PIN, "user", "pin", 3, &loggedIn);
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
     rc = wh_Auth_Login(&ctx, 0, WH_AUTH_METHOD_PIN, "user", "pin", 3, NULL);
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
@@ -378,7 +386,7 @@ static int _whTest_Auth_BadArgs(void)
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
 
     rc = wh_Auth_UserAdd(&ctx, "user", &user_id, perms, WH_AUTH_METHOD_PIN,
-        "pin", 3);
+                         "pin", 3);
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
     rc = wh_Auth_UserDelete(&ctx, 1);
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
@@ -386,16 +394,16 @@ static int _whTest_Auth_BadArgs(void)
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
     rc = wh_Auth_UserGet(&ctx, "user", &user_id, &perms);
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
-    rc = wh_Auth_UserSetCredentials(&ctx, 1, WH_AUTH_METHOD_PIN,
-        "pin", 3, "new", 3);
+    rc = wh_Auth_UserSetCredentials(&ctx, 1, WH_AUTH_METHOD_PIN, "pin", 3,
+                                    "new", 3);
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
 
     WH_TEST_PRINT("  Test: Auth base bad args\n");
-    rc = wh_AuthBase_Login(NULL, 0, WH_AUTH_METHOD_PIN,
-        TEST_ADMIN_USERNAME, TEST_ADMIN_PIN, 4, NULL, &perms, &loggedIn);
+    rc = wh_AuthBase_Login(NULL, 0, WH_AUTH_METHOD_PIN, TEST_ADMIN_USERNAME,
+                           TEST_ADMIN_PIN, 4, NULL, &perms, &loggedIn);
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
     rc = wh_AuthBase_Login(NULL, 0, WH_AUTH_METHOD_NONE, NULL, NULL, 0,
-        &user_id, &perms, &loggedIn);
+                           &user_id, &perms, &loggedIn);
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
 
     rc = wh_AuthBase_Logout(NULL, 0, WH_USER_ID_INVALID);
@@ -404,27 +412,29 @@ static int _whTest_Auth_BadArgs(void)
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_NOTFOUND);
 
     rc = wh_AuthBase_CheckRequestAuthorization(NULL, WH_USER_ID_INVALID,
-        WH_MESSAGE_GROUP_AUTH, WH_MESSAGE_AUTH_ACTION_LOGIN);
+                                               WH_MESSAGE_GROUP_AUTH,
+                                               WH_MESSAGE_AUTH_ACTION_LOGIN);
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_OK);
     rc = wh_AuthBase_CheckRequestAuthorization(NULL, WH_USER_ID_INVALID,
-        WH_MESSAGE_GROUP_AUTH, WH_MESSAGE_AUTH_ACTION_LOGOUT);
+                                               WH_MESSAGE_GROUP_AUTH,
+                                               WH_MESSAGE_AUTH_ACTION_LOGOUT);
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_ACCESS);
     rc = wh_AuthBase_CheckRequestAuthorization(NULL, WH_USER_ID_INVALID,
-        WH_MESSAGE_GROUP_COMM, 0);
+                                               WH_MESSAGE_GROUP_COMM, 0);
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_OK);
 
     rc = wh_AuthBase_CheckKeyAuthorization(NULL, WH_USER_ID_INVALID, 1, 0);
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_ACCESS);
 
     rc = wh_AuthBase_UserAdd(NULL, "baduser", &user_id, perms,
-        WH_AUTH_METHOD_NONE, "x", 1);
+                             WH_AUTH_METHOD_NONE, "x", 1);
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
     rc = wh_AuthBase_UserDelete(NULL, 0, WH_USER_ID_INVALID);
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_NOTFOUND);
     rc = wh_AuthBase_UserSetPermissions(NULL, 0, WH_USER_ID_INVALID, perms);
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_NOTFOUND);
     rc = wh_AuthBase_UserSetCredentials(NULL, WH_USER_ID_INVALID,
-        WH_AUTH_METHOD_PIN, NULL, 0, "new", 3);
+                                        WH_AUTH_METHOD_PIN, NULL, 0, "new", 3);
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
     rc = wh_AuthBase_UserGet(NULL, "missing", &user_id, &perms);
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_NOTFOUND);
@@ -434,13 +444,13 @@ static int _whTest_Auth_BadArgs(void)
 
 static int _whTest_Auth_MessageBadArgs(void)
 {
-    int rc = 0;
-    whMessageAuth_SimpleResponse simple = {0};
-    whMessageAuth_LoginRequest login_hdr = {0};
-    whMessageAuth_LoginRequest login_out = {0};
-    whMessageAuth_UserAddRequest add_hdr = {0};
-    whMessageAuth_UserAddRequest add_out = {0};
-    whMessageAuth_UserSetCredentialsRequest set_hdr = {0};
+    int                                     rc        = 0;
+    whMessageAuth_SimpleResponse            simple    = {0};
+    whMessageAuth_LoginRequest              login_hdr = {0};
+    whMessageAuth_LoginRequest              login_out = {0};
+    whMessageAuth_UserAddRequest            add_hdr   = {0};
+    whMessageAuth_UserAddRequest            add_out   = {0};
+    whMessageAuth_UserSetCredentialsRequest set_hdr   = {0};
 
     WH_TEST_PRINT("  Test: Auth message bad args\n");
     rc = wh_MessageAuth_TranslateSimpleResponse(0, NULL, &simple);
@@ -450,33 +460,36 @@ static int _whTest_Auth_MessageBadArgs(void)
 
     rc = wh_MessageAuth_TranslateLoginRequest(0, NULL, 0, &login_out, NULL);
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
-    rc = wh_MessageAuth_TranslateLoginRequest(0, &login_hdr, 0, &login_out, NULL);
+    rc = wh_MessageAuth_TranslateLoginRequest(0, &login_hdr, 0, &login_out,
+                                              NULL);
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
 
     memset(&login_hdr, 0, sizeof(login_hdr));
-    login_hdr.auth_data_len = (uint16_t)(WH_MESSAGE_AUTH_MAX_CREDENTIALS_LEN + 1);
+    login_hdr.auth_data_len =
+        (uint16_t)(WH_MESSAGE_AUTH_MAX_CREDENTIALS_LEN + 1);
     rc = wh_MessageAuth_TranslateLoginRequest(0, &login_hdr, sizeof(login_hdr),
-        &login_out, NULL);
+                                              &login_out, NULL);
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
 
     rc = wh_MessageAuth_TranslateUserAddRequest(0, NULL, 0, &add_out, NULL);
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
 
     memset(&add_hdr, 0, sizeof(add_hdr));
-    add_hdr.credentials_len = (uint16_t)(WH_MESSAGE_AUTH_MAX_CREDENTIALS_LEN + 1);
+    add_hdr.credentials_len =
+        (uint16_t)(WH_MESSAGE_AUTH_MAX_CREDENTIALS_LEN + 1);
     rc = wh_MessageAuth_TranslateUserAddRequest(0, &add_hdr, sizeof(add_hdr),
-        &add_out, NULL);
+                                                &add_out, NULL);
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BUFFER_SIZE);
 
-    rc = wh_MessageAuth_TranslateUserSetCredentialsRequest(0, NULL, 0,
-        &set_hdr, NULL, NULL);
+    rc = wh_MessageAuth_TranslateUserSetCredentialsRequest(0, NULL, 0, &set_hdr,
+                                                           NULL, NULL);
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
 
     memset(&set_hdr, 0, sizeof(set_hdr));
     set_hdr.current_credentials_len = 4;
-    set_hdr.new_credentials_len = 4;
-    rc = wh_MessageAuth_TranslateUserSetCredentialsRequest(0, &set_hdr,
-        sizeof(set_hdr), &set_hdr, NULL, NULL);
+    set_hdr.new_credentials_len     = 4;
+    rc = wh_MessageAuth_TranslateUserSetCredentialsRequest(
+        0, &set_hdr, sizeof(set_hdr), &set_hdr, NULL, NULL);
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
 
     return WH_TEST_SUCCESS;
@@ -485,9 +498,9 @@ static int _whTest_Auth_MessageBadArgs(void)
 /* Logout Tests */
 int whTest_AuthLogout(whClientContext* client)
 {
-    int32_t server_rc;
-    whUserId user_id;
-    int32_t login_rc;
+    int32_t           server_rc;
+    whUserId          user_id;
+    int32_t           login_rc;
     whAuthPermissions out_perms;
 
     if (client == NULL) {
@@ -499,16 +512,16 @@ int whTest_AuthLogout(whClientContext* client)
     /* First login */
     memset(&out_perms, 0, sizeof(out_perms));
     login_rc = 0;
-    user_id = WH_USER_ID_INVALID;
+    user_id  = WH_USER_ID_INVALID;
     /* Verify client is valid and comm is initialized */
     WH_TEST_ASSERT_RETURN(client != NULL);
     WH_TEST_ASSERT_RETURN(client->comm != NULL);
     WH_TEST_ASSERT_RETURN(client->comm->initialized == 1);
     WH_TEST_ASSERT_RETURN(client->comm->hdr != NULL);
     WH_TEST_ASSERT_RETURN(client->comm->transport_cb != NULL);
-    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_LoginOp(client, WH_AUTH_METHOD_PIN,
-                                                TEST_ADMIN_USERNAME, TEST_ADMIN_PIN, 4, &login_rc,
-                                                &user_id, &out_perms));
+    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_LoginOp(
+        client, WH_AUTH_METHOD_PIN, TEST_ADMIN_USERNAME, TEST_ADMIN_PIN, 4,
+        &login_rc, &user_id, &out_perms));
     WH_TEST_ASSERT_RETURN(login_rc == WH_ERROR_OK);
     WH_TEST_ASSERT_RETURN(user_id != WH_USER_ID_INVALID);
 
@@ -523,10 +536,11 @@ int whTest_AuthLogout(whClientContext* client)
     WH_TEST_ASSERT_RETURN(server_rc != WH_ERROR_OK);
 
     /* Test 3: Logout with invalid user id */
-    WH_TEST_PRINT("  Test: Logout attempt with invalid user ID (should fail)\n");
+    WH_TEST_PRINT(
+        "  Test: Logout attempt with invalid user ID (should fail)\n");
     server_rc = 0;
-    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_LogoutOp(client, WH_USER_ID_INVALID,
-                                                 &server_rc));
+    WH_TEST_RETURN_ON_FAIL(
+        _whTest_Auth_LogoutOp(client, WH_USER_ID_INVALID, &server_rc));
     /* Should return error for invalid user ID */
     WH_TEST_ASSERT_RETURN(server_rc != WH_ERROR_OK);
 
@@ -536,8 +550,8 @@ int whTest_AuthLogout(whClientContext* client)
 /* Login Tests */
 int whTest_AuthLogin(whClientContext* client)
 {
-    int32_t server_rc;
-    whUserId user_id;
+    int32_t           server_rc;
+    whUserId          user_id;
     whAuthPermissions out_perms;
 
     if (client == NULL) {
@@ -548,21 +562,22 @@ int whTest_AuthLogin(whClientContext* client)
     WH_TEST_PRINT("  Test: Login with invalid credentials\n");
     memset(&out_perms, 0, sizeof(out_perms));
     server_rc = 0;
-    user_id = WH_USER_ID_INVALID;
-    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_LoginOp(client, WH_AUTH_METHOD_PIN,
-                                                TEST_ADMIN_USERNAME, "wrong", 5, &server_rc,
-                                                &user_id, &out_perms));
-    WH_TEST_ASSERT_RETURN(server_rc == WH_AUTH_LOGIN_FAILED || server_rc != WH_ERROR_OK);
+    user_id   = WH_USER_ID_INVALID;
+    WH_TEST_RETURN_ON_FAIL(
+        _whTest_Auth_LoginOp(client, WH_AUTH_METHOD_PIN, TEST_ADMIN_USERNAME,
+                             "wrong", 5, &server_rc, &user_id, &out_perms));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_AUTH_LOGIN_FAILED ||
+                          server_rc != WH_ERROR_OK);
     WH_TEST_ASSERT_RETURN(user_id == WH_USER_ID_INVALID);
 
     /* Test 2: Login with valid credentials - use blocking version */
     WH_TEST_PRINT("  Test: Login with valid credentials\n");
     memset(&out_perms, 0, sizeof(out_perms));
     server_rc = 0;
-    user_id = WH_USER_ID_INVALID;
-    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_LoginOp(client, WH_AUTH_METHOD_PIN,
-                                                TEST_ADMIN_USERNAME, TEST_ADMIN_PIN, 4, &server_rc,
-                                                &user_id, &out_perms));
+    user_id   = WH_USER_ID_INVALID;
+    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_LoginOp(
+        client, WH_AUTH_METHOD_PIN, TEST_ADMIN_USERNAME, TEST_ADMIN_PIN, 4,
+        &server_rc, &user_id, &out_perms));
     WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
     WH_TEST_ASSERT_RETURN(user_id != WH_USER_ID_INVALID);
 
@@ -573,12 +588,12 @@ int whTest_AuthLogin(whClientContext* client)
     WH_TEST_PRINT("  Test: Login with invalid username\n");
     memset(&out_perms, 0, sizeof(out_perms));
     server_rc = 0;
-    user_id = WH_USER_ID_INVALID;
-    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_LoginOp(client, WH_AUTH_METHOD_PIN,
-                                                "nonexistent", TEST_ADMIN_PIN, 4,
-                                                &server_rc, &user_id,
-                                                &out_perms));
-    WH_TEST_ASSERT_RETURN(server_rc == WH_AUTH_LOGIN_FAILED || server_rc != WH_ERROR_OK);
+    user_id   = WH_USER_ID_INVALID;
+    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_LoginOp(
+        client, WH_AUTH_METHOD_PIN, "nonexistent", TEST_ADMIN_PIN, 4,
+        &server_rc, &user_id, &out_perms));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_AUTH_LOGIN_FAILED ||
+                          server_rc != WH_ERROR_OK);
     WH_TEST_ASSERT_RETURN(user_id == WH_USER_ID_INVALID);
 
     /* Test 4: Login if already logged in */
@@ -586,22 +601,23 @@ int whTest_AuthLogin(whClientContext* client)
     /* First login */
     memset(&out_perms, 0, sizeof(out_perms));
     server_rc = 0;
-    user_id = WH_USER_ID_INVALID;
-    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_LoginOp(client, WH_AUTH_METHOD_PIN,
-                                                TEST_ADMIN_USERNAME, TEST_ADMIN_PIN, 4, &server_rc,
-                                                &user_id, &out_perms));
+    user_id   = WH_USER_ID_INVALID;
+    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_LoginOp(
+        client, WH_AUTH_METHOD_PIN, TEST_ADMIN_USERNAME, TEST_ADMIN_PIN, 4,
+        &server_rc, &user_id, &out_perms));
     WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
     WH_TEST_ASSERT_RETURN(user_id != WH_USER_ID_INVALID);
 
     /* Try to login again without logout */
     memset(&out_perms, 0, sizeof(out_perms));
-    server_rc = 0;
+    server_rc         = 0;
     whUserId user_id2 = WH_USER_ID_INVALID;
-    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_LoginOp(client, WH_AUTH_METHOD_PIN,
-                                                TEST_ADMIN_USERNAME, TEST_ADMIN_PIN, 4, &server_rc,
-                                                &user_id2, &out_perms));
+    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_LoginOp(
+        client, WH_AUTH_METHOD_PIN, TEST_ADMIN_USERNAME, TEST_ADMIN_PIN, 4,
+        &server_rc, &user_id2, &out_perms));
     /* Second login should fail */
-    WH_TEST_ASSERT_RETURN(server_rc == WH_AUTH_LOGIN_FAILED || server_rc != WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(server_rc == WH_AUTH_LOGIN_FAILED ||
+                          server_rc != WH_ERROR_OK);
     WH_TEST_ASSERT_RETURN(user_id2 == WH_USER_ID_INVALID);
 
     /* Cleanup */
@@ -613,11 +629,11 @@ int whTest_AuthLogin(whClientContext* client)
 /* Add User Tests */
 int whTest_AuthAddUser(whClientContext* client)
 {
-    int32_t server_rc;
-    whUserId user_id;
+    int32_t           server_rc;
+    whUserId          user_id;
     whAuthPermissions perms;
-    char long_username[34]; /* 33 chars + null terminator */
-    int rc;
+    char              long_username[34]; /* 33 chars + null terminator */
+    int               rc;
 
     if (client == NULL) {
         return WH_ERROR_BADARGS;
@@ -626,11 +642,11 @@ int whTest_AuthAddUser(whClientContext* client)
     /* Login as admin first */
     whAuthPermissions admin_perms;
     memset(&admin_perms, 0, sizeof(admin_perms));
-    server_rc = 0;
+    server_rc         = 0;
     whUserId admin_id = WH_USER_ID_INVALID;
-    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_LoginOp(client, WH_AUTH_METHOD_PIN,
-                                                TEST_ADMIN_USERNAME, TEST_ADMIN_PIN, 4, &server_rc,
-                                                &admin_id, &admin_perms));
+    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_LoginOp(
+        client, WH_AUTH_METHOD_PIN, TEST_ADMIN_USERNAME, TEST_ADMIN_PIN, 4,
+        &server_rc, &admin_id, &admin_perms));
     WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
 
     /* Test 1: Add user with invalid username (too long) */
@@ -639,7 +655,7 @@ int whTest_AuthAddUser(whClientContext* client)
     long_username[33] = '\0';
     memset(&perms, 0, sizeof(perms));
     server_rc = 0;
-    user_id = WH_USER_ID_INVALID;
+    user_id   = WH_USER_ID_INVALID;
 
     /* Expect client-side rejection due to username length */
     rc = wh_Client_AuthUserAddRequest(client, long_username, perms,
@@ -651,8 +667,8 @@ int whTest_AuthAddUser(whClientContext* client)
     WH_TEST_PRINT("  Test: Add user with invalid permissions\n");
     memset(&perms, 0, sizeof(perms));
     perms.keyIdCount = WH_AUTH_MAX_KEY_IDS + 1; /* Invalid: exceeds max */
-    server_rc = 0;
-    user_id = WH_USER_ID_INVALID;
+    server_rc        = 0;
+    user_id          = WH_USER_ID_INVALID;
     _whTest_Auth_UserAddOp(client, "testuser1", perms, WH_AUTH_METHOD_PIN,
                            "test", 4, &server_rc, &user_id);
     /* Should clamp or reject invalid keyIdCount */
@@ -665,19 +681,19 @@ int whTest_AuthAddUser(whClientContext* client)
     WH_TEST_PRINT("  Test: Add user if already exists\n");
     memset(&perms, 0, sizeof(perms));
     server_rc = 0;
-    user_id = WH_USER_ID_INVALID;
-    _whTest_Auth_UserAddOp(client, "testuser2", perms,
-                                                   WH_AUTH_METHOD_PIN, "test",
-                                                   4, &server_rc, &user_id);
+    user_id   = WH_USER_ID_INVALID;
+    _whTest_Auth_UserAddOp(client, "testuser2", perms, WH_AUTH_METHOD_PIN,
+                           "test", 4, &server_rc, &user_id);
     WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
     WH_TEST_ASSERT_RETURN(user_id != WH_USER_ID_INVALID);
 
     /* Try to add same user again */
     whUserId user_id2 = WH_USER_ID_INVALID;
-    server_rc = 0;
+    server_rc         = 0;
     _whTest_Auth_UserAddOp(client, "testuser2", perms, WH_AUTH_METHOD_PIN,
                            "test", 4, &server_rc, &user_id2);
-    /* Should fail - user already exists (allow success if backend does not check) */
+    /* Should fail - user already exists (allow success if backend does not
+     * check) */
     if (server_rc == WH_ERROR_OK && user_id2 != WH_USER_ID_INVALID) {
         WH_TEST_PRINT("    Note: duplicate username allowed by backend\n");
         _whTest_Auth_UserDeleteOp(client, user_id2, &server_rc);
@@ -695,12 +711,12 @@ int whTest_AuthAddUser(whClientContext* client)
 /* Delete User Tests */
 int whTest_AuthDeleteUser(whClientContext* client)
 {
-    int32_t server_rc;
+    int32_t           server_rc;
     whAuthPermissions admin_perms;
-    whUserId admin_id = WH_USER_ID_INVALID;
+    whUserId          admin_id = WH_USER_ID_INVALID;
     whAuthPermissions perms;
     whAuthPermissions out_perms;
-    whUserId delete_user_id = WH_USER_ID_INVALID;
+    whUserId          delete_user_id = WH_USER_ID_INVALID;
 
     if (client == NULL) {
         return WH_ERROR_BADARGS;
@@ -717,8 +733,8 @@ int whTest_AuthDeleteUser(whClientContext* client)
     /* Test 1: Delete user with invalid user id */
     WH_TEST_PRINT("  Test: Delete user with invalid user ID\n");
     server_rc = 0;
-    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserDeleteOp(client, WH_USER_ID_INVALID,
-                                                     &server_rc));
+    WH_TEST_RETURN_ON_FAIL(
+        _whTest_Auth_UserDeleteOp(client, WH_USER_ID_INVALID, &server_rc));
     /* Should fail for invalid user ID */
     WH_TEST_ASSERT_RETURN(server_rc != WH_ERROR_OK);
 
@@ -727,35 +743,33 @@ int whTest_AuthDeleteUser(whClientContext* client)
     server_rc = 0;
     WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserDeleteOp(client, 999, &server_rc));
     /* Should fail - user doesn't exist */
-    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_NOTFOUND || server_rc != WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_NOTFOUND ||
+                          server_rc != WH_ERROR_OK);
 
     /* Test 2b: Delete existing user (success path)  */
     WH_TEST_PRINT("  Test: Delete existing user\n");
     memset(&perms, 0, sizeof(perms));
     server_rc = 0;
     WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserAddOp(client, "deleteuser", perms,
-                                                   WH_AUTH_METHOD_PIN, "pass",
-                                                   4, &server_rc,
-                                                   &delete_user_id));
+                                                  WH_AUTH_METHOD_PIN, "pass", 4,
+                                                  &server_rc, &delete_user_id));
     WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
     WH_TEST_ASSERT_RETURN(delete_user_id != WH_USER_ID_INVALID);
 
     server_rc = 0;
-    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserGetOp(client, "deleteuser",
-                                                  &server_rc, &delete_user_id,
-                                                  &out_perms));
+    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserGetOp(
+        client, "deleteuser", &server_rc, &delete_user_id, &out_perms));
     WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
 
     server_rc = 0;
-    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserDeleteOp(client, delete_user_id,
-                                                     &server_rc));
+    WH_TEST_RETURN_ON_FAIL(
+        _whTest_Auth_UserDeleteOp(client, delete_user_id, &server_rc));
     WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
 
-    server_rc = 0;
+    server_rc      = 0;
     delete_user_id = WH_USER_ID_INVALID;
-    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserGetOp(client, "deleteuser",
-                                                  &server_rc, &delete_user_id,
-                                                  &out_perms));
+    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserGetOp(
+        client, "deleteuser", &server_rc, &delete_user_id, &out_perms));
     WH_TEST_ASSERT_RETURN(server_rc != WH_ERROR_OK ||
                           delete_user_id == WH_USER_ID_INVALID);
 
@@ -777,12 +791,12 @@ int whTest_AuthDeleteUser(whClientContext* client)
 /* Set User Permissions Tests */
 int whTest_AuthSetPermissions(whClientContext* client)
 {
-    int32_t server_rc;
-    whUserId user_id;
+    int32_t           server_rc;
+    whUserId          user_id;
     whAuthPermissions perms, new_perms;
     whAuthPermissions fetched_perms;
-    whUserId fetched_user_id = WH_USER_ID_INVALID;
-    int32_t get_rc = 0;
+    whUserId          fetched_user_id = WH_USER_ID_INVALID;
+    int32_t           get_rc          = 0;
 
     if (client == NULL) {
         return WH_ERROR_BADARGS;
@@ -791,7 +805,7 @@ int whTest_AuthSetPermissions(whClientContext* client)
     /* Login as admin first */
     whAuthPermissions admin_perms;
     memset(&admin_perms, 0, sizeof(admin_perms));
-    server_rc = 0;
+    server_rc         = 0;
     whUserId admin_id = WH_USER_ID_INVALID;
     WH_TEST_RETURN_ON_FAIL(_whTest_Auth_LoginOp(client, WH_AUTH_METHOD_PIN,
                                                 "admin", "1234", 4, &server_rc,
@@ -801,10 +815,10 @@ int whTest_AuthSetPermissions(whClientContext* client)
     /* Create a test user first */
     memset(&perms, 0, sizeof(perms));
     server_rc = 0;
-    user_id = WH_USER_ID_INVALID;
+    user_id   = WH_USER_ID_INVALID;
     WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserAddOp(client, "testuser3", perms,
-                                                   WH_AUTH_METHOD_PIN, "test",
-                                                   4, &server_rc, &user_id));
+                                                  WH_AUTH_METHOD_PIN, "test", 4,
+                                                  &server_rc, &user_id));
     WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
     WH_TEST_ASSERT_RETURN(user_id != WH_USER_ID_INVALID);
 
@@ -812,9 +826,8 @@ int whTest_AuthSetPermissions(whClientContext* client)
     WH_TEST_PRINT("  Test: Set user permissions with invalid user ID\n");
     memset(&new_perms, 0xFF, sizeof(new_perms));
     server_rc = 0;
-    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserSetPermsOp(client,
-                                                       WH_USER_ID_INVALID,
-                                                       new_perms, &server_rc));
+    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserSetPermsOp(
+        client, WH_USER_ID_INVALID, new_perms, &server_rc));
     /* Should fail for invalid user ID */
     WH_TEST_ASSERT_RETURN(server_rc != WH_ERROR_OK);
 
@@ -822,7 +835,7 @@ int whTest_AuthSetPermissions(whClientContext* client)
     WH_TEST_PRINT("  Test: Set user permissions with invalid permissions\n");
     memset(&new_perms, 0, sizeof(new_perms));
     new_perms.keyIdCount = WH_AUTH_MAX_KEY_IDS + 1; /* Invalid */
-    server_rc = 0;
+    server_rc            = 0;
     _whTest_Auth_UserSetPermsOp(client, user_id, new_perms, &server_rc);
     /* Should clamp or reject invalid keyIdCount */
     if (server_rc == WH_ERROR_OK) {
@@ -836,17 +849,16 @@ int whTest_AuthSetPermissions(whClientContext* client)
     new_perms.actionPermissions[(WH_MESSAGE_GROUP_AUTH >> 8) & 0xFF] =
         WH_MESSAGE_AUTH_ACTION_USER_ADD;
     server_rc = 0;
-    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserSetPermsOp(client, user_id,
-                                                       new_perms, &server_rc));
+    WH_TEST_RETURN_ON_FAIL(
+        _whTest_Auth_UserSetPermsOp(client, user_id, new_perms, &server_rc));
     WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
 
     memset(&fetched_perms, 0, sizeof(fetched_perms));
     fetched_user_id = WH_USER_ID_INVALID;
-    get_rc = 0;
+    get_rc          = 0;
     /* Use blocking version to verify permissions were set */
-    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserGetOp(client, "testuser3", &get_rc,
-                                                  &fetched_user_id,
-                                                  &fetched_perms));
+    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserGetOp(
+        client, "testuser3", &get_rc, &fetched_user_id, &fetched_perms));
     WH_TEST_ASSERT_RETURN(get_rc == WH_ERROR_OK);
     WH_TEST_ASSERT_RETURN(fetched_user_id == user_id);
     WH_TEST_ASSERT_RETURN(fetched_perms.groupPermissions ==
@@ -859,10 +871,11 @@ int whTest_AuthSetPermissions(whClientContext* client)
     WH_TEST_PRINT("  Test: Set user permissions for non-existent user\n");
     memset(&new_perms, 0, sizeof(new_perms));
     server_rc = 0;
-    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserSetPermsOp(client, 999, new_perms,
-                                                       &server_rc));
+    WH_TEST_RETURN_ON_FAIL(
+        _whTest_Auth_UserSetPermsOp(client, 999, new_perms, &server_rc));
     /* Should fail - user doesn't exist */
-    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_NOTFOUND || server_rc != WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_NOTFOUND ||
+                          server_rc != WH_ERROR_OK);
 
     /* Test 4: Set user permissions when not logged in */
     WH_TEST_PRINT("  Test: Set user permissions when not logged in\n");
@@ -890,8 +903,8 @@ int whTest_AuthSetPermissions(whClientContext* client)
 /* Set User Credentials Tests */
 int whTest_AuthSetCredentials(whClientContext* client)
 {
-    int32_t server_rc;
-    whUserId user_id;
+    int32_t           server_rc;
+    whUserId          user_id;
     whAuthPermissions perms;
 
     if (client == NULL) {
@@ -901,7 +914,7 @@ int whTest_AuthSetCredentials(whClientContext* client)
     /* Login as admin first */
     whAuthPermissions admin_perms;
     memset(&admin_perms, 0, sizeof(admin_perms));
-    server_rc = 0;
+    server_rc         = 0;
     whUserId admin_id = WH_USER_ID_INVALID;
     WH_TEST_RETURN_ON_FAIL(_whTest_Auth_LoginOp(client, WH_AUTH_METHOD_PIN,
                                                 "admin", "1234", 4, &server_rc,
@@ -911,18 +924,18 @@ int whTest_AuthSetCredentials(whClientContext* client)
     /* Create a test user first */
     memset(&perms, 0, sizeof(perms));
     server_rc = 0;
-    user_id = WH_USER_ID_INVALID;
+    user_id   = WH_USER_ID_INVALID;
     WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserAddOp(client, "testuser4", perms,
-                                                   WH_AUTH_METHOD_PIN, "test",
-                                                   4, &server_rc, &user_id));
+                                                  WH_AUTH_METHOD_PIN, "test", 4,
+                                                  &server_rc, &user_id));
     WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
     WH_TEST_ASSERT_RETURN(user_id != WH_USER_ID_INVALID);
 
     /* Test 1: Set user credentials with invalid user id */
     WH_TEST_PRINT("  Test: Set user credentials with invalid user ID\n");
     server_rc = 0;
-    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserSetCredsOp(client,
-        WH_USER_ID_INVALID, WH_AUTH_METHOD_PIN, "test", 4, "newpass", 7,
+    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserSetCredsOp(
+        client, WH_USER_ID_INVALID, WH_AUTH_METHOD_PIN, "test", 4, "newpass", 7,
         &server_rc));
     /* Should fail for invalid user ID */
     WH_TEST_ASSERT_RETURN(server_rc != WH_ERROR_OK);
@@ -930,23 +943,25 @@ int whTest_AuthSetCredentials(whClientContext* client)
     /* Test 2: Set user credentials with invalid method */
     WH_TEST_PRINT("  Test: Set user credentials with invalid method\n");
     server_rc = 0;
-    _whTest_Auth_UserSetCredsOp(client, user_id, WH_AUTH_METHOD_NONE,
-                                "test", 4, "newpass", 7, &server_rc);
+    _whTest_Auth_UserSetCredsOp(client, user_id, WH_AUTH_METHOD_NONE, "test", 4,
+                                "newpass", 7, &server_rc);
     /* Should fail for invalid method */
     WH_TEST_ASSERT_RETURN(server_rc != WH_ERROR_OK);
 
     /* Test 3: Set user credentials for non-existent user */
     WH_TEST_PRINT("  Test: Set user credentials for non-existent user\n");
     server_rc = 0;
-    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserSetCredsOp(client, 999,
-        WH_AUTH_METHOD_PIN, NULL, 0, "newpass", 7, &server_rc));
+    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserSetCredsOp(
+        client, 999, WH_AUTH_METHOD_PIN, NULL, 0, "newpass", 7, &server_rc));
     /* Should fail - user doesn't exist */
-    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_NOTFOUND || server_rc != WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_NOTFOUND ||
+                          server_rc != WH_ERROR_OK);
 
     WH_TEST_PRINT("  Test: Admin setting credentials for non-admin user\n");
     server_rc = 0;
-    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserSetCredsOp(client, user_id,
-        WH_AUTH_METHOD_PIN, "test", 4, "newpass", 7, &server_rc));
+    WH_TEST_RETURN_ON_FAIL(
+        _whTest_Auth_UserSetCredsOp(client, user_id, WH_AUTH_METHOD_PIN, "test",
+                                    4, "newpass", 7, &server_rc));
 
     /* Should succeed - admin can set credentials for other users */
     WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
@@ -954,12 +969,11 @@ int whTest_AuthSetCredentials(whClientContext* client)
     /* Verify new credentials work */
     _whTest_Auth_LogoutOp(client, admin_id, &server_rc);
     memset(&admin_perms, 0, sizeof(admin_perms));
-    server_rc = 0;
+    server_rc             = 0;
     whUserId test_user_id = WH_USER_ID_INVALID;
-    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_LoginOp(client, WH_AUTH_METHOD_PIN,
-                                                "testuser4", "newpass", 7,
-                                                &server_rc, &test_user_id,
-                                                &admin_perms));
+    WH_TEST_RETURN_ON_FAIL(
+        _whTest_Auth_LoginOp(client, WH_AUTH_METHOD_PIN, "testuser4", "newpass",
+                             7, &server_rc, &test_user_id, &admin_perms));
     WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
     WH_TEST_ASSERT_RETURN(test_user_id == user_id);
 
@@ -973,9 +987,9 @@ int whTest_AuthSetCredentials(whClientContext* client)
 /* Authorization Checks Tests */
 int whTest_AuthRequestAuthorization(whClientContext* client)
 {
-    int32_t server_rc;
-    whUserId user_id;
-    whUserId temp_id3 = WH_USER_ID_INVALID;
+    int32_t           server_rc;
+    whUserId          user_id;
+    whUserId          temp_id3 = WH_USER_ID_INVALID;
     whAuthPermissions perms;
 
     if (client == NULL) {
@@ -990,7 +1004,7 @@ int whTest_AuthRequestAuthorization(whClientContext* client)
 
     /* Try an operation that requires auth (e.g., add user) */
     memset(&perms, 0, sizeof(perms));
-    server_rc = 0;
+    server_rc        = 0;
     whUserId temp_id = WH_USER_ID_INVALID;
     _whTest_Auth_UserAddOp(client, "testuser5", perms, WH_AUTH_METHOD_PIN,
                            "test", 4, &server_rc, &temp_id);
@@ -1001,20 +1015,21 @@ int whTest_AuthRequestAuthorization(whClientContext* client)
     WH_TEST_PRINT("  Test: Operation when logged in and allowed\n");
     /* Login as admin */
     memset(&perms, 0, sizeof(perms));
-    server_rc = 0;
+    server_rc         = 0;
     whUserId admin_id = WH_USER_ID_INVALID;
     WH_TEST_RETURN_ON_FAIL(_whTest_Auth_LoginOp(client, WH_AUTH_METHOD_PIN,
                                                 "admin", "1234", 4, &server_rc,
                                                 &admin_id, &perms));
     WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
 
-    /* Retry operation after login (admin should be allowed) - use blocking version */
+    /* Retry operation after login (admin should be allowed) - use blocking
+     * version */
     memset(&perms, 0, sizeof(perms));
     server_rc = 0;
-    user_id = WH_USER_ID_INVALID;
+    user_id   = WH_USER_ID_INVALID;
     WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserAddOp(client, "testuser6", perms,
-                                                   WH_AUTH_METHOD_PIN, "test",
-                                                   4, &server_rc, &user_id));
+                                                  WH_AUTH_METHOD_PIN, "test", 4,
+                                                  &server_rc, &user_id));
     /* Should succeed - admin has permissions */
     WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
     WH_TEST_ASSERT_RETURN(user_id != WH_USER_ID_INVALID);
@@ -1023,28 +1038,26 @@ int whTest_AuthRequestAuthorization(whClientContext* client)
     WH_TEST_PRINT("  Test: Operation when logged in and not allowed\n");
     /* Create a user with limited permissions */
     memset(&perms, 0, sizeof(perms));
-    server_rc = 0;
+    server_rc                = 0;
     whUserId limited_user_id = WH_USER_ID_INVALID;
-    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserAddOp(client, "limiteduser", perms,
-                                                   WH_AUTH_METHOD_PIN, "pass",
-                                                   4, &server_rc,
-                                                   &limited_user_id));
+    WH_TEST_RETURN_ON_FAIL(
+        _whTest_Auth_UserAddOp(client, "limiteduser", perms, WH_AUTH_METHOD_PIN,
+                               "pass", 4, &server_rc, &limited_user_id));
     WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
 
     /* Logout admin and login as limited user */
     _whTest_Auth_LogoutOp(client, admin_id, &server_rc);
     memset(&perms, 0, sizeof(perms));
-    server_rc = 0;
+    server_rc             = 0;
     whUserId logged_in_id = WH_USER_ID_INVALID;
-    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_LoginOp(client, WH_AUTH_METHOD_PIN,
-                                                "limiteduser", "pass", 4,
-                                                &server_rc, &logged_in_id,
-                                                &perms));
+    WH_TEST_RETURN_ON_FAIL(
+        _whTest_Auth_LoginOp(client, WH_AUTH_METHOD_PIN, "limiteduser", "pass",
+                             4, &server_rc, &logged_in_id, &perms));
     WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
 
     /* Try an operation that requires permissions */
     memset(&perms, 0, sizeof(perms));
-    server_rc = 0;
+    server_rc         = 0;
     whUserId temp_id2 = WH_USER_ID_INVALID;
     _whTest_Auth_UserAddOp(client, "testuser7", perms, WH_AUTH_METHOD_PIN,
                            "test", 4, &server_rc, &temp_id2);
@@ -1055,7 +1068,7 @@ int whTest_AuthRequestAuthorization(whClientContext* client)
     WH_TEST_PRINT("  Test: Logged in as different user and allowed\n");
     _whTest_Auth_LogoutOp(client, logged_in_id, &server_rc);
 
-    server_rc = 0;
+    server_rc                = 0;
     whUserId allowed_user_id = WH_USER_ID_INVALID;
     /* Login as admin to create allowed user */
     WH_TEST_RETURN_ON_FAIL(_whTest_Auth_LoginOp(client, WH_AUTH_METHOD_PIN,
@@ -1067,24 +1080,22 @@ int whTest_AuthRequestAuthorization(whClientContext* client)
     perms.groupPermissions = WH_MESSAGE_GROUP_AUTH;
     perms.actionPermissions[(WH_MESSAGE_GROUP_AUTH >> 8) & 0xFF] =
         WH_MESSAGE_AUTH_ACTION_USER_ADD;
-    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserAddOp(client, "alloweduser", perms,
-                                                   WH_AUTH_METHOD_PIN, "pass",
-                                                   4, &server_rc,
-                                                   &allowed_user_id));
+    WH_TEST_RETURN_ON_FAIL(
+        _whTest_Auth_UserAddOp(client, "alloweduser", perms, WH_AUTH_METHOD_PIN,
+                               "pass", 4, &server_rc, &allowed_user_id));
     WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
     _whTest_Auth_LogoutOp(client, admin_id, &server_rc);
 
     memset(&perms, 0, sizeof(perms));
-    server_rc = 0;
+    server_rc    = 0;
     logged_in_id = WH_USER_ID_INVALID;
-    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_LoginOp(client, WH_AUTH_METHOD_PIN,
-                                                "alloweduser", "pass", 4,
-                                                &server_rc, &logged_in_id,
-                                                &perms));
+    WH_TEST_RETURN_ON_FAIL(
+        _whTest_Auth_LoginOp(client, WH_AUTH_METHOD_PIN, "alloweduser", "pass",
+                             4, &server_rc, &logged_in_id, &perms));
     WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
 
     server_rc = 0;
-    temp_id3 = WH_USER_ID_INVALID;
+    temp_id3  = WH_USER_ID_INVALID;
     _whTest_Auth_UserAddOp(client, "testuser8", perms, WH_AUTH_METHOD_PIN,
                            "test", 4, &server_rc, &temp_id3);
     WH_TEST_ASSERT_RETURN(server_rc != WH_ERROR_OK);
@@ -1094,16 +1105,15 @@ int whTest_AuthRequestAuthorization(whClientContext* client)
     _whTest_Auth_LogoutOp(client, logged_in_id, &server_rc);
 
     memset(&perms, 0, sizeof(perms));
-    server_rc = 0;
+    server_rc    = 0;
     logged_in_id = WH_USER_ID_INVALID;
-    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_LoginOp(client, WH_AUTH_METHOD_PIN,
-                                                "limiteduser", "pass", 4,
-                                                &server_rc, &logged_in_id,
-                                                &perms));
+    WH_TEST_RETURN_ON_FAIL(
+        _whTest_Auth_LoginOp(client, WH_AUTH_METHOD_PIN, "limiteduser", "pass",
+                             4, &server_rc, &logged_in_id, &perms));
     WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
 
     server_rc = 0;
-    temp_id3 = WH_USER_ID_INVALID;
+    temp_id3  = WH_USER_ID_INVALID;
     _whTest_Auth_UserAddOp(client, "testuser9", perms, WH_AUTH_METHOD_PIN,
                            "test", 4, &server_rc, &temp_id3);
     WH_TEST_ASSERT_RETURN(server_rc != WH_ERROR_OK);
@@ -1111,9 +1121,9 @@ int whTest_AuthRequestAuthorization(whClientContext* client)
     /* Cleanup */
     _whTest_Auth_LogoutOp(client, logged_in_id, &server_rc);
     server_rc = 0;
-    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_LoginOp(client, WH_AUTH_METHOD_PIN,
-                                            TEST_ADMIN_USERNAME, TEST_ADMIN_PIN, 4, &server_rc,
-                                                &admin_id, &perms));
+    WH_TEST_RETURN_ON_FAIL(
+        _whTest_Auth_LoginOp(client, WH_AUTH_METHOD_PIN, TEST_ADMIN_USERNAME,
+                             TEST_ADMIN_PIN, 4, &server_rc, &admin_id, &perms));
     _whTest_Auth_DeleteUserByName(client, "limiteduser");
     _whTest_Auth_DeleteUserByName(client, "alloweduser");
     _whTest_Auth_DeleteUserByName(client, "testuser5");
@@ -1162,7 +1172,7 @@ int whTest_AuthTest(whClientContext* client_ctx)
     WH_TEST_RETURN_ON_FAIL(whTest_AuthRequestAuthorization(client_ctx));
 
     WH_TEST_PRINT("All authentication tests completed successfully\n");
-    
+
     return WH_TEST_SUCCESS;
 }
 
