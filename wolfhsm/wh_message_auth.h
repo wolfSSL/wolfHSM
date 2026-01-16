@@ -136,7 +136,7 @@ int wh_MessageAuth_TranslateLogoutRequest(
  * uint16_t (groupPermissions) + uint16_t[WH_NUMBER_OF_GROUPS]
  * (actionPermissions) + uint16_t (keyIdCount) + uint32_t[WH_AUTH_MAX_KEY_IDS]
  * (keyIds) */
-#define WH_FLAT_PERRMISIONS_LEN \
+#define WH_FLAT_PERMISSIONS_LEN \
     (2 + (2 * WH_NUMBER_OF_GROUPS) + 2 + (4 * WH_AUTH_MAX_KEY_IDS))
 
 /**
@@ -165,7 +165,7 @@ int wh_MessageAuth_UnflattenPermissions(uint8_t* buffer, uint16_t buffer_len,
 /** User Add Request */
 typedef struct {
     char     username[WH_MESSAGE_AUTH_MAX_USERNAME_LEN];
-    uint8_t  permissions[WH_FLAT_PERRMISIONS_LEN];
+    uint8_t  permissions[WH_FLAT_PERMISSIONS_LEN];
     uint16_t method;
     uint16_t credentials_len;
     /* credentials follow */
@@ -247,7 +247,7 @@ int wh_MessageAuth_TranslateUserGetRequest(
 typedef struct {
     int32_t  rc;
     uint16_t user_id;
-    uint8_t  permissions[WH_FLAT_PERRMISIONS_LEN];
+    uint8_t  permissions[WH_FLAT_PERMISSIONS_LEN];
 } whMessageAuth_UserGetResponse;
 
 /**
@@ -265,7 +265,7 @@ int wh_MessageAuth_TranslateUserGetResponse(
 /** User Set Permissions Request */
 typedef struct {
     uint16_t user_id;
-    uint8_t  permissions[WH_FLAT_PERRMISIONS_LEN];
+    uint8_t  permissions[WH_FLAT_PERMISSIONS_LEN];
 } whMessageAuth_UserSetPermissionsRequest;
 
 /**

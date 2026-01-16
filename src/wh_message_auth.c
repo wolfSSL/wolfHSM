@@ -120,7 +120,7 @@ int wh_MessageAuth_FlattenPermissions(whAuthPermissions* permissions,
     uint32_t keyId;
 
     if (permissions == NULL || buffer == NULL ||
-        buffer_len < WH_FLAT_PERRMISIONS_LEN) {
+        buffer_len < WH_FLAT_PERMISSIONS_LEN) {
         return WH_ERROR_BADARGS;
     }
 
@@ -169,7 +169,7 @@ int wh_MessageAuth_UnflattenPermissions(uint8_t* buffer, uint16_t buffer_len,
     uint32_t keyId;
 
     if (buffer == NULL || permissions == NULL ||
-        buffer_len < WH_FLAT_PERRMISIONS_LEN) {
+        buffer_len < WH_FLAT_PERMISSIONS_LEN) {
         return WH_ERROR_BADARGS;
     }
 

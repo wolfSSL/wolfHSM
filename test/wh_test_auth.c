@@ -414,7 +414,7 @@ static int _whTest_Auth_BadArgs(void)
     rc = wh_Auth_UserSetCredentials(&ctx, 1, WH_AUTH_METHOD_PIN, "pin", 3,
                                     "new", 3);
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
-    rc = wh_Auth_Logout(NULL, 999); /* This test may be troublesum if the port
+    rc = wh_Auth_Logout(NULL, 999); /* This test may be troublesome if the port
                                      * supports 999 users */
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
 

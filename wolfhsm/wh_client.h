@@ -1861,13 +1861,12 @@ int wh_Client_AuthLoginRequest(whClientContext* c, whAuthMethod method,
  *
  * This function attempts to process an authentication response message from the
  * server. It validates the response and extracts the return code, user ID,
- * session ID, and permissions. This function does not block; it returns
+ * and permissions. This function does not block; it returns
  * WH_ERROR_NOTREADY if a response has not been received.
  *
  * @param[in] c Pointer to the client context.
  * @param[out] out_rc Pointer to store the return code from the server.
  * @param[out] out_user_id Pointer to store the authenticated user ID.
- * @param[out] out_session_id Pointer to store the session ID.
  * @param[out] out_permissions Pointer to store the user permissions.
  * @return int Returns 0 on success, WH_ERROR_NOTREADY if no response is
  * available, or a negative error code on failure.
@@ -1892,7 +1891,6 @@ int wh_Client_AuthLoginResponse(whClientContext* c, int32_t* out_rc,
  * @param[in] auth_data_len Length of the authentication data.
  * @param[out] out_rc Pointer to store the return code from the server.
  * @param[out] out_user_id Pointer to store the authenticated user ID.
- * @param[out] out_session_id Pointer to store the session ID.
  * @param[out] out_permissions Pointer to store the user permissions.
  * @return int Returns 0 on success, or a negative error code on failure.
  */

@@ -45,8 +45,10 @@ typedef struct whAuthBase_User {
 } whAuthBase_User;
 static whAuthBase_User users[WH_AUTH_BASE_MAX_USERS];
 
+#if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER) && !defined(WOLFHSM_CFG_NO_CRYPTO)
 #include <wolfssl/ssl.h>
 #include <wolfssl/wolfcrypt/asn.h>
+#endif
 
 int posixAuth_Init(void* context, const void* config)
 {
@@ -85,7 +87,7 @@ static whAuthBase_User* posixAuth_CheckPin(const char* username, const void* aut
     return NULL;
 }
 
-
+#if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER) && !defined(WOLFHSM_CFG_NO_CRYPTO)
 static int posixAuth_VerifyCertificate(whAuthBase_User* found_user,
                              const uint8_t*   certificate,
                              uint16_t         certificate_len)
@@ -128,6 +130,7 @@ static whAuthBase_User* posixAuth_CheckCertificate(const char* username,
     }
     return NULL;
 }
+#endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER && !WOLFHSM_CFG_NO_CRYPTO */
 
 int posixAuth_Login(void* context, uint8_t client_id, whAuthMethod method,
                       const char* username, const void* auth_data,
@@ -148,9 +151,11 @@ int posixAuth_Login(void* context, uint8_t client_id, whAuthMethod method,
         case WH_AUTH_METHOD_PIN:
             current_user = posixAuth_CheckPin(username, auth_data, auth_data_len);
             break;
+#if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER) && !defined(WOLFHSM_CFG_NO_CRYPTO)
         case WH_AUTH_METHOD_CERTIFICATE:
             current_user = posixAuth_CheckCertificate(username, auth_data, auth_data_len);
             break;
+#endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER && !WOLFHSM_CFG_NO_CRYPTO */
         default:
             return WH_ERROR_BADARGS;
     }
@@ -300,8 +305,11 @@ int posixAuth_UserAdd(void* context, const char* username,
 
     /* Validate method is supported if credentials are provided */
     if (credentials != NULL && credentials_len > 0) {
-        if (method != WH_AUTH_METHOD_PIN &&
-            method != WH_AUTH_METHOD_CERTIFICATE) {
+        if (method != WH_AUTH_METHOD_PIN
+#if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER) && !defined(WOLFHSM_CFG_NO_CRYPTO)
+            && method != WH_AUTH_METHOD_CERTIFICATE
+#endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER && !WOLFHSM_CFG_NO_CRYPTO */
+            ) {
             return WH_ERROR_BADARGS;
         }
     }
@@ -315,7 +323,7 @@ int posixAuth_UserAdd(void* context, const char* username,
     if (i >= WH_AUTH_BASE_MAX_USERS) {
         return WH_ERROR_BUFFER_SIZE;
     }
-    userId   = i + 1; /* save 0 fron WH_USER_ID_INVALID */
+    userId   = i + 1; /* save 0 for WH_USER_ID_INVALID */
     new_user = &users[i];
 
     memset(new_user, 0, sizeof(whAuthBase_User));
@@ -358,7 +366,7 @@ int posixAuth_UserDelete(void* context, uint16_t current_user_id,
 {
     whAuthBase_User* user;
 
-    if (user_id == WH_USER_ID_INVALID || user_id >= WH_AUTH_BASE_MAX_USERS) {
+    if (user_id == WH_USER_ID_INVALID || user_id > WH_AUTH_BASE_MAX_USERS) {
         return WH_ERROR_NOTFOUND;
     }
 
@@ -379,7 +387,7 @@ int posixAuth_UserSetPermissions(void* context, uint16_t current_user_id,
 {
     whAuthBase_User* user;
 
-    if (user_id == WH_USER_ID_INVALID || user_id >= WH_AUTH_BASE_MAX_USERS) {
+    if (user_id == WH_USER_ID_INVALID || user_id > WH_AUTH_BASE_MAX_USERS) {
         return WH_ERROR_NOTFOUND;
     }
 
@@ -432,12 +440,16 @@ int posixAuth_UserSetCredentials(void* context, uint16_t user_id,
     whAuthBase_User* user;
     int              rc = WH_ERROR_OK;
 
-    if (user_id == WH_USER_ID_INVALID || user_id >= WH_AUTH_BASE_MAX_USERS) {
+    if (user_id == WH_USER_ID_INVALID || user_id > WH_AUTH_BASE_MAX_USERS) {
         return WH_ERROR_BADARGS;
     }
 
     /* Validate method is supported */
-    if (method != WH_AUTH_METHOD_PIN && method != WH_AUTH_METHOD_CERTIFICATE) {
+    if (method != WH_AUTH_METHOD_PIN
+#if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER) && !defined(WOLFHSM_CFG_NO_CRYPTO)
+        && method != WH_AUTH_METHOD_CERTIFICATE
+#endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER && !WOLFHSM_CFG_NO_CRYPTO */
+        ) {
         return WH_ERROR_BADARGS;
     }
 
