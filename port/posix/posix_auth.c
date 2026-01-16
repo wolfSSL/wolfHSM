@@ -206,17 +206,14 @@ int posixAuth_CheckRequestAuthorization(void* context, uint16_t user_id,
     int rc;
 
     if (user_id == WH_USER_ID_INVALID) {
-        /* allow user login request attempt */
-        if (group == WH_MESSAGE_GROUP_AUTH) {
-            if (action == WH_MESSAGE_AUTH_ACTION_LOGIN) {
-                rc = WH_ERROR_OK;
-            }
-            else {
-                rc = WH_ERROR_ACCESS;
-            }
+        /* allow user login request attempt and comm */
+        if (group == WH_MESSAGE_GROUP_COMM ||
+            (group == WH_MESSAGE_GROUP_AUTH &&
+                action == WH_MESSAGE_AUTH_ACTION_LOGIN)) {
+            rc = WH_ERROR_OK;
         }
         else {
-            rc = WH_ERROR_OK; /*rc = WH_ERROR_ACCESS;*/
+            rc = WH_ERROR_ACCESS;
         }
     }
     else {
@@ -235,8 +232,10 @@ int posixAuth_CheckRequestAuthorization(void* context, uint16_t user_id,
         }
         else {
             if (user->user.permissions.groupPermissions & group) {
+                /* action enum value (0,1,...) to bitmask (0x01,0x02,...) */
+                uint32_t actionBitmask = WH_AUTH_ACTION_TO_BITMASK(action);
                 if (user->user.permissions.actionPermissions[groupIndex] &
-                    action) {
+                    actionBitmask) {
                     rc = WH_ERROR_OK;
                 }
                 else {
@@ -342,7 +341,8 @@ int posixAuth_UserAdd(void* context, const char* username,
             new_user->user.permissions.keyIds[j] = 0;
         }
     }
-    strcpy(new_user->user.username, username);
+    strncpy(new_user->user.username, username,
+        sizeof(new_user->user.username) - 1);
     new_user->user.is_active       = false;
     new_user->user.failed_attempts = 0;
     new_user->user.lockout_until   = 0;

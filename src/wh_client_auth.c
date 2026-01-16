@@ -599,7 +599,6 @@ int wh_Client_AuthUserSetCredentialsRequest(
     /* Build message header */
     msg->user_id                 = user_id;
     msg->method                  = method;
-    msg->WH_PAD[0]               = 0;
     msg->current_credentials_len = current_credentials_len;
     msg->new_credentials_len     = new_credentials_len;
 
