@@ -31,7 +31,6 @@
 #include "wolfhsm/wh_client.h"
 #include "wolfhsm/wh_server.h"
 #include "wolfhsm/wh_auth.h"
-#include "wolfhsm/wh_auth_base.h"
 #include "wolfhsm/wh_nvm.h"
 #include "wolfhsm/wh_nvm_flash.h"
 #include "wolfhsm/wh_flash_ramsim.h"
@@ -41,9 +40,11 @@
 #include "wh_test_common.h"
 #include "wh_test_auth.h"
 
-#if defined(WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP) && defined(WOLFHSM_CFG_TEST_POSIX)
+#if defined(WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP)
 #include "port/posix/posix_transport_tcp.h"
 #endif
+
+#include "port/posix/posix_auth.h"
 
 #define FLASH_RAM_SIZE (1024 * 1024) /* 1MB */
 #define BUFFER_SIZE 4096
@@ -77,17 +78,17 @@ static whNvmContext          nvm[1]    = {{0}};
 
 /* Auth setup following wh_posix_server pattern */
 static whAuthCb default_auth_cb = {
-    .Init                      = wh_AuthBase_Init,
-    .Cleanup                   = wh_AuthBase_Cleanup,
-    .Login                     = wh_AuthBase_Login,
-    .Logout                    = wh_AuthBase_Logout,
-    .CheckRequestAuthorization = wh_AuthBase_CheckRequestAuthorization,
-    .CheckKeyAuthorization     = wh_AuthBase_CheckKeyAuthorization,
-    .UserAdd                   = wh_AuthBase_UserAdd,
-    .UserDelete                = wh_AuthBase_UserDelete,
-    .UserSetPermissions        = wh_AuthBase_UserSetPermissions,
-    .UserGet                   = wh_AuthBase_UserGet,
-    .UserSetCredentials        = wh_AuthBase_UserSetCredentials};
+    .Init                      = posixAuth_Init,
+    .Cleanup                   = posixAuth_Cleanup,
+    .Login                     = posixAuth_Login,
+    .Logout                    = posixAuth_Logout,
+    .CheckRequestAuthorization = posixAuth_CheckRequestAuthorization,
+    .CheckKeyAuthorization     = posixAuth_CheckKeyAuthorization,
+    .UserAdd                   = posixAuth_UserAdd,
+    .UserDelete                = posixAuth_UserDelete,
+    .UserSetPermissions        = posixAuth_UserSetPermissions,
+    .UserGet                   = posixAuth_UserGet,
+    .UserSetCredentials        = posixAuth_UserSetCredentials};
 static whAuthContext auth_ctx = {0};
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
@@ -98,6 +99,9 @@ static whServerCryptoContext crypto[1] = {{.devId = INVALID_DEVID}};
 static int _whTest_Auth_SetupMemory(whClientContext** out_client)
 {
     int rc = WH_ERROR_OK;
+    whAuthPermissions permissions;
+    uint16_t out_user_id;
+    int i;
 
     /* Initialize transport memory config - avoid compound literals for C90 */
     tmcf->req       = (whTransportMemCsr*)req_buffer;
@@ -145,6 +149,19 @@ static int _whTest_Auth_SetupMemory(whClientContext** out_client)
     rc = wh_Auth_Init(&auth_ctx, &auth_config);
     if (rc != WH_ERROR_OK) {
         WH_ERROR_PRINT("Failed to initialize Auth Manager: %d\n", rc);
+        return rc;
+    }
+
+    /* Add and admin user with permissions for everything */
+    memset(&permissions, 0xFF, sizeof(whAuthPermissions));
+    permissions.keyIdCount = 0;
+    for (i = 0; i < WH_AUTH_MAX_KEY_IDS; i++) {
+        permissions.keyIds[i] = 0;
+    }
+    rc = posixAuth_UserAdd(&auth_ctx, TEST_ADMIN_USERNAME, &out_user_id, permissions,
+                                WH_AUTH_METHOD_PIN, TEST_ADMIN_PIN, strlen(TEST_ADMIN_PIN));
+    if (rc != WH_ERROR_OK) {
+        WH_ERROR_PRINT("Failed to add admin user: %d\n", rc);
         return rc;
     }
 
@@ -397,47 +414,34 @@ static int _whTest_Auth_BadArgs(void)
     rc = wh_Auth_UserSetCredentials(&ctx, 1, WH_AUTH_METHOD_PIN, "pin", 3,
                                     "new", 3);
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
-
-    WH_TEST_PRINT("  Test: Auth base bad args\n");
-    rc = wh_AuthBase_Login(NULL, 0, WH_AUTH_METHOD_PIN, TEST_ADMIN_USERNAME,
-                           TEST_ADMIN_PIN, 4, NULL, &perms, &loggedIn);
-    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
-    rc = wh_AuthBase_Login(NULL, 0, WH_AUTH_METHOD_NONE, NULL, NULL, 0,
-                           &user_id, &perms, &loggedIn);
+    rc = wh_Auth_Logout(NULL, 999); /* This test may be troublesum if the port
+                                     * supports 999 users */
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
 
-    rc = wh_AuthBase_Logout(NULL, 0, WH_USER_ID_INVALID);
+    WH_TEST_PRINT("  Test: Auth client bad args\n");
+    rc = wh_Client_AuthLoginRequest(NULL, WH_AUTH_METHOD_PIN, TEST_ADMIN_USERNAME,
+                           TEST_ADMIN_PIN, strlen(TEST_ADMIN_PIN));
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
-    rc = wh_AuthBase_Logout(NULL, 0, 999);
-    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_NOTFOUND);
+    rc = wh_Client_AuthLogoutRequest(NULL, WH_USER_ID_INVALID);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
 
-    rc = wh_AuthBase_CheckRequestAuthorization(NULL, WH_USER_ID_INVALID,
+    rc = wh_Auth_CheckRequestAuthorization(NULL,
                                                WH_MESSAGE_GROUP_AUTH,
                                                WH_MESSAGE_AUTH_ACTION_LOGIN);
-    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_OK);
-    rc = wh_AuthBase_CheckRequestAuthorization(NULL, WH_USER_ID_INVALID,
-                                               WH_MESSAGE_GROUP_AUTH,
-                                               WH_MESSAGE_AUTH_ACTION_LOGOUT);
-    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_ACCESS);
-    rc = wh_AuthBase_CheckRequestAuthorization(NULL, WH_USER_ID_INVALID,
-                                               WH_MESSAGE_GROUP_COMM, 0);
-    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
 
-    rc = wh_AuthBase_CheckKeyAuthorization(NULL, WH_USER_ID_INVALID, 1, 0);
-    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_ACCESS);
-
-    rc = wh_AuthBase_UserAdd(NULL, "baduser", &user_id, perms,
+    rc = wh_Client_AuthUserAddRequest(NULL, "baduser", perms,
                              WH_AUTH_METHOD_NONE, "x", 1);
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
-    rc = wh_AuthBase_UserDelete(NULL, 0, WH_USER_ID_INVALID);
-    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_NOTFOUND);
-    rc = wh_AuthBase_UserSetPermissions(NULL, 0, WH_USER_ID_INVALID, perms);
-    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_NOTFOUND);
-    rc = wh_AuthBase_UserSetCredentials(NULL, WH_USER_ID_INVALID,
+    rc = wh_Client_AuthUserDeleteRequest(NULL, WH_USER_ID_INVALID);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
+    rc = wh_Client_AuthUserSetPermissionsRequest(NULL, WH_USER_ID_INVALID, perms);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
+    rc = wh_Client_AuthUserSetCredentialsRequest(NULL, WH_USER_ID_INVALID,
                                         WH_AUTH_METHOD_PIN, NULL, 0, "new", 3);
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
-    rc = wh_AuthBase_UserGet(NULL, "missing", &user_id, &perms);
-    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_NOTFOUND);
+    rc = wh_Client_AuthUserGetRequest(NULL, "missing");
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
 
     return WH_TEST_SUCCESS;
 }
