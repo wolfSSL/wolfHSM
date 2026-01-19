@@ -43,8 +43,7 @@ static int wh_DemoClient_AuthPin(whClientContext* clientContext)
             "admin",
             "1234", 4,
             &serverRc,
-            &adminUserId,
-            &out_permissions);
+            &adminUserId);
     if (rc != 0) {
         printf("[AUTH-DEMO] Failed to login as admin: %d\n", rc);
         return rc;
@@ -53,7 +52,7 @@ static int wh_DemoClient_AuthPin(whClientContext* clientContext)
         printf("[AUTH-DEMO] Server-side error logging in as admin: %d\n", (int)serverRc);
         return (int)serverRc;
     }
-    
+
     memset(&out_permissions, 0, sizeof(whAuthPermissions));
     rc = wh_Client_AuthUserAdd(clientContext, "demo", out_permissions,
             WH_AUTH_METHOD_PIN, pin, (uint16_t)(sizeof(pin) - 1),
@@ -78,8 +77,7 @@ static int wh_DemoClient_AuthPin(whClientContext* clientContext)
         badPin,
         (uint16_t)(sizeof(badPin) - 1),
         &serverRc,
-        &userId,
-        &out_permissions);
+        &userId);
 
     if (rc == WH_ERROR_OK && serverRc != WH_AUTH_LOGIN_FAILED) {
         printf("[AUTH-DEMO] Failed to not login with bad pin: %d, serverRc=%d\n", rc, serverRc);
@@ -92,8 +90,7 @@ static int wh_DemoClient_AuthPin(whClientContext* clientContext)
                                     pin,
                                     (uint16_t)(sizeof(pin) - 1),
                                     &serverRc,
-                                    &userId,
-                                    &out_permissions);
+                                    &userId);
 
     if (rc == WH_ERROR_NOTIMPL) {
         printf("[AUTH-DEMO] wh_Client_AuthAuthenticate() not implemented yet.\n");
@@ -151,8 +148,7 @@ static int wh_DemoClient_AuthPin(whClientContext* clientContext)
             pin,
             (uint16_t)(sizeof(pin) - 1),
             &serverRc,
-            &userId,
-            &out_permissions);
+            &userId);
 
     if (rc == 0 && serverRc == 0) {
         printf("[AUTH-DEMO] Old PIN still works (unexpected)\n");
@@ -165,8 +161,7 @@ static int wh_DemoClient_AuthPin(whClientContext* clientContext)
             newPin,
             (uint16_t)(sizeof(newPin) - 1),
             &serverRc,
-            &userId,
-            &out_permissions);
+            &userId);
 
     if (rc != 0) {
         printf("[AUTH-DEMO] Client-side error with new PIN: %d\n", rc);
@@ -226,8 +221,7 @@ static int wh_DemoClient_AuthCertificate(whClientContext* clientContext)
             "admin",
             "1234", 4,
             &serverRc,
-            &adminUserId,
-            &out_permissions);
+            &adminUserId);
     if (rc != 0) {
         printf("[AUTH-DEMO] Failed to login as admin: %d\n", rc);
         return rc;
@@ -264,8 +258,7 @@ static int wh_DemoClient_AuthCertificate(whClientContext* clientContext)
             server_cert,
             server_cert_len,
             &serverRc,
-            &userId,
-            &out_permissions);
+            &userId);
 
     if (rc == WH_ERROR_NOTIMPL) {
         printf("[AUTH-DEMO] wh_Client_AuthLogin() not implemented for certificates.\n");
@@ -311,8 +304,7 @@ static int wh_DemoClient_AuthUserDelete(whClientContext* clientContext)
             "admin",
             "1234", 4,
             &serverRc,
-            &adminUserId,
-            &permissions);
+            &adminUserId);
     if (rc != 0) {
         return rc;
     }
@@ -364,8 +356,7 @@ static int wh_DemoClient_AuthUserSetPermissions(whClientContext* clientContext)
             "admin",
             "1234", 4,
             &serverRc,
-            &adminUserId,
-            &permissions);
+            &adminUserId);
     if (rc != 0) {
         return rc;
     }
