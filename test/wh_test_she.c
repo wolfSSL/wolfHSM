@@ -81,6 +81,13 @@ enum {
 #define FLASH_SECTOR_SIZE (128 * 1024) /* 128KB */
 #define FLASH_PAGE_SIZE (8) /* 8B */
 
+#ifndef TEST_ADMIN_USERNAME
+#define TEST_ADMIN_USERNAME "admin"
+#endif
+#ifndef TEST_ADMIN_PIN
+#define TEST_ADMIN_PIN "1234"
+#endif
+
 #ifdef WOLFHSM_CFG_ENABLE_CLIENT
 /* Helper function to destroy a SHE key so the unit tests don't
  * leak NVM objects across invocations. Necessary, as SHE doesn't expose a
@@ -163,6 +170,11 @@ int whTest_SheClientConfig(whClientConfig* config)
 
     WH_TEST_RETURN_ON_FAIL(wh_Client_Init(client, config));
     WH_TEST_RETURN_ON_FAIL(wh_Client_CommInit(client, &outClientId, &outServerId));
+
+    /* Attempt log in as an admin user for the rest of the tests */
+    WH_TEST_RETURN_ON_FAIL(wh_Client_AuthLogin(client, WH_AUTH_METHOD_PIN,
+        TEST_ADMIN_USERNAME, TEST_ADMIN_PIN, strlen(TEST_ADMIN_PIN),
+        NULL, NULL));
 
     {
         int32_t  server_rc       = 0;
