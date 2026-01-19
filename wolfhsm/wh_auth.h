@@ -57,16 +57,28 @@ typedef enum {
 #define WH_NUMBER_OF_GROUPS 14
 #define WH_AUTH_MAX_KEY_IDS \
     2 /* Maximum number of key IDs a user can have access to */
+#define WH_AUTH_ACTIONS_PER_GROUP 256 /* Support up to 256 actions (0-255) */
+#define WH_AUTH_ACTION_WORDS \
+    ((WH_AUTH_ACTIONS_PER_GROUP + 31) / 32) /* 8 uint32_t words for 256 bits */
 
-/* Convert action enum value (0,1,2,3...) to bitmask (0x01,0x02,0x04,0x08...) */
+/* Convert action enum value (0-255) to bitmask and word index.
+ * Returns the word index in the upper 16 bits and bitmask in lower 32 bits.
+ * Use WH_AUTH_ACTION_WORD() and WH_AUTH_ACTION_BIT() to extract. */
+#define WH_AUTH_ACTION_TO_WORD_AND_BIT(_action) \
+    ((((_action) / 32) << 16) | (1UL << ((_action) % 32)))
+#define WH_AUTH_ACTION_WORD(_word_and_bit) (((_word_and_bit) >> 16) & 0xFF)
+#define WH_AUTH_ACTION_BIT(_word_and_bit) ((_word_and_bit) & 0xFFFFFFFFUL)
+
+/* Legacy macro for backward compatibility - only works for actions < 32 */
 #define WH_AUTH_ACTION_TO_BITMASK(_action) \
     (((_action) < 32) ? (1UL << (_action)) : 0)
 
 typedef struct {
     uint16_t groupPermissions; /* bit mask of if allowed for use in group */
-    uint32_t
-        actionPermissions[WH_NUMBER_OF_GROUPS]; /* array of action permissions
-                                                   for each group */
+    uint32_t actionPermissions[WH_NUMBER_OF_GROUPS]
+                              [WH_AUTH_ACTION_WORDS]; /* multi-word bit array
+                                                          for action permissions
+                                                          (256 bits per group) */
     uint16_t keyIdCount; /* Number of key IDs in the keyIds array (0 to
                             WH_AUTH_MAX_KEY_IDS) */
     uint32_t keyIds[WH_AUTH_MAX_KEY_IDS]; /* Array of key IDs that user has

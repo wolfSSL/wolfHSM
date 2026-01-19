@@ -93,8 +93,7 @@ int wh_Client_AuthLoginRequest(whClientContext* c, whAuthMethod method,
 }
 
 int wh_Client_AuthLoginResponse(whClientContext* c, int32_t* out_rc,
-                                whUserId*          out_user_id,
-                                whAuthPermissions* out_permissions)
+                                whUserId*          out_user_id)
 {
     uint8_t                      buffer[WOLFHSM_CFG_COMM_DATA_LEN] = {0};
     whMessageAuth_LoginResponse* msg = (whMessageAuth_LoginResponse*)buffer;
@@ -126,8 +125,6 @@ int wh_Client_AuthLoginResponse(whClientContext* c, int32_t* out_rc,
             if (out_user_id != NULL) {
                 *out_user_id = msg->user_id;
             }
-            /* @TODO: Set permissions */
-            (void)out_permissions;
         }
     }
     return rc;
@@ -136,8 +133,7 @@ int wh_Client_AuthLoginResponse(whClientContext* c, int32_t* out_rc,
 int wh_Client_AuthLogin(whClientContext* c, whAuthMethod method,
                         const char* username, const void* auth_data,
                         uint16_t auth_data_len, int32_t* out_rc,
-                        whUserId*          out_user_id,
-                        whAuthPermissions* out_permissions)
+                        whUserId*          out_user_id)
 {
     int rc;
 
@@ -151,8 +147,7 @@ int wh_Client_AuthLogin(whClientContext* c, whAuthMethod method,
     }
 
     do {
-        rc = wh_Client_AuthLoginResponse(c, out_rc, out_user_id,
-                                         out_permissions);
+        rc = wh_Client_AuthLoginResponse(c, out_rc, out_user_id);
     } while (rc == WH_ERROR_NOTREADY);
 
     return rc;
