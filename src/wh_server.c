@@ -50,6 +50,9 @@
 /* Server API's */
 #include "wolfhsm/wh_server.h"
 #include "wolfhsm/wh_server_nvm.h"
+#ifndef WOLFHSM_CFG_NO_AUTHENTICATION
+#include "wolfhsm/wh_auth.h"
+#endif /* WOLFHSM_CFG_NO_AUTHENTICATION */
 #include "wolfhsm/wh_server_auth.h"
 #include "wolfhsm/wh_server_crypto.h"
 #include "wolfhsm/wh_server_keystore.h"
@@ -258,6 +261,16 @@ static int _wh_Server_HandleCommRequest(whServerContext* server,
     {
         /* No message */
         /* Process the close action */
+
+#ifndef WOLFHSM_CFG_NO_AUTHENTICATION
+        /* Log out the current user when communication channel closes */
+        if (server->auth != NULL && server->auth->user.user_id !=
+                WH_USER_ID_INVALID) {
+            whUserId user_id = server->auth->user.user_id;
+            (void)wh_Auth_Logout(server->auth, user_id);
+        }
+#endif /* WOLFHSM_CFG_NO_AUTHENTICATION */
+
         wh_Server_SetConnected(server, WH_COMM_DISCONNECTED);
         *out_resp_size = 0;
 
@@ -331,7 +344,6 @@ static uint16_t _wh_Server_FormatAuthErrorResponse(uint16_t magic,
                     whMessageAuth_LoginResponse resp = {0};
                     resp.rc                          = error_code;
                     resp.user_id                     = WH_USER_ID_INVALID;
-                    resp.permissions                 = 0;
                     wh_MessageAuth_TranslateLoginResponse(
                         magic, &resp,
                         (whMessageAuth_LoginResponse*)resp_packet);

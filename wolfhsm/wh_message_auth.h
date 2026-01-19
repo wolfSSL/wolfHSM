@@ -48,9 +48,10 @@ enum WH_MESSAGE_AUTH_ACTION_ENUM {
 
 enum WH_MESSAGE_AUTH_MAX_ENUM {
     WH_MESSAGE_AUTH_MAX_USERNAME_LEN = 32,
-    /* Reserve space for UserAddRequest fixed fields (username + permissions +
-       method + credentials_len = 70 bytes) */
-    WH_MESSAGE_AUTH_MAX_CREDENTIALS_LEN = WOLFHSM_CFG_COMM_DATA_LEN - 86,
+    /* Reserve space for UserAddRequest fixed fields:
+     * username (32) + permissions (WH_FLAT_PERMISSIONS_LEN) + method (2) +
+     * credentials_len (2) + overhead (2) = 32 + 460 + 2 + 2 + 2 = 498 bytes */
+    WH_MESSAGE_AUTH_MAX_CREDENTIALS_LEN = WOLFHSM_CFG_COMM_DATA_LEN - 498,
     WH_MESSAGE_AUTH_MAX_SESSIONS        = 16,
 };
 
@@ -97,7 +98,6 @@ int wh_MessageAuth_TranslateLoginRequest(
 typedef struct {
     int32_t  rc;
     uint16_t user_id;
-    uint32_t permissions;
 } whMessageAuth_LoginResponse;
 
 /**
@@ -133,11 +133,12 @@ int wh_MessageAuth_TranslateLogoutRequest(
 /** Logout Response (SimpleResponse) */
 
 /* whAuthPermissions struct
- * uint16_t (groupPermissions) + uint32_t[WH_NUMBER_OF_GROUPS]
+ * uint16_t (groupPermissions) + uint32_t[WH_NUMBER_OF_GROUPS][WH_AUTH_ACTION_WORDS]
  * (actionPermissions) + uint16_t (keyIdCount) + uint32_t[WH_AUTH_MAX_KEY_IDS]
  * (keyIds) */
 #define WH_FLAT_PERMISSIONS_LEN \
-    (2 + (4 * WH_NUMBER_OF_GROUPS) + 2 + (4 * WH_AUTH_MAX_KEY_IDS))
+    (2 + (4 * WH_NUMBER_OF_GROUPS * WH_AUTH_ACTION_WORDS) + 2 + \
+     (4 * WH_AUTH_MAX_KEY_IDS))
 
 /**
  * @brief Flatten permissions structure into a byte buffer.

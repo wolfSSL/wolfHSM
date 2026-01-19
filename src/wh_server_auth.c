@@ -95,7 +95,6 @@ int wh_Server_HandleAuthRequest(whServerContext* server, uint16_t magic,
                     }
                 }
             }
-            /* @TODO setting of permissions */
 
             wh_MessageAuth_TranslateLoginResponse(
                 magic, &resp, (whMessageAuth_LoginResponse*)resp_packet);

@@ -71,6 +71,13 @@
 #define FLASH_SECTOR_SIZE (128 * 1024) /* 128KB */
 #define FLASH_PAGE_SIZE (8) /* 8B */
 
+#ifndef TEST_ADMIN_USERNAME
+#define TEST_ADMIN_USERNAME "admin"
+#endif
+#ifndef TEST_ADMIN_PIN
+#define TEST_ADMIN_PIN "1234"
+#endif
+
 #define ALT_CLIENT_ID (2)
 
 enum {
@@ -5291,6 +5298,13 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     ret = wh_Client_CommInit(client, NULL, NULL);
     if (ret != 0) {
         WH_ERROR_PRINT("Failed to comm init:%d\n", ret);
+    }
+
+    if (ret == 0) {
+        /* Attempt log in as an admin user for the rest of the tests */
+        WH_TEST_RETURN_ON_FAIL(wh_Client_AuthLogin(client, WH_AUTH_METHOD_PIN,
+            TEST_ADMIN_USERNAME, TEST_ADMIN_PIN, strlen(TEST_ADMIN_PIN),
+            NULL, NULL));
     }
 
 #ifdef WOLFHSM_CFG_DEBUG_VERBOSE

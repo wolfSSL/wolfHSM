@@ -54,6 +54,13 @@
 
 #endif /* HAVE_AESGCM */
 
+#ifndef TEST_ADMIN_USERNAME
+#define TEST_ADMIN_USERNAME "admin"
+#endif
+#ifndef TEST_ADMIN_PIN
+#define TEST_ADMIN_PIN "1234"
+#endif
+
 static int _InitServerKek(whClientContext* client)
 {
     /* IMPORTANT NOTE: Server KEK is typically intrinsic or set during
@@ -327,6 +334,12 @@ int whTest_KeyWrapClientConfig(whClientConfig* clientCfg)
         WH_ERROR_PRINT("Failed to wh_Client_Init %d\n", ret);
         goto cleanup_and_exit;
     }
+
+    /* Log in as an admin user for the rest of the tests */
+    WH_TEST_RETURN_ON_FAIL(wh_Client_AuthLogin(client, WH_AUTH_METHOD_PIN,
+        TEST_ADMIN_USERNAME, TEST_ADMIN_PIN, strlen(TEST_ADMIN_PIN), &ret,
+        NULL));
+    WH_TEST_ASSERT_RETURN(ret == 0);
 
     ret = whTest_Client_KeyWrap(client);
     if (ret != 0) {
