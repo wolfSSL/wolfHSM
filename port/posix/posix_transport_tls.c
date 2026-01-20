@@ -491,6 +491,8 @@ int posixTransportTls_RecvRequest(void* context, uint16_t* out_size, void* data)
         /* Set the socket file descriptor */
         rc = wolfSSL_set_fd(ctx->ssl, ctx->accept_fd_p1 - 1);
         if (rc != WOLFSSL_SUCCESS) {
+            wolfSSL_free(ctx->ssl);
+            ctx->ssl = NULL;
             return WH_ERROR_ABORTED;
         }
 
@@ -502,6 +504,8 @@ int posixTransportTls_RecvRequest(void* context, uint16_t* out_size, void* data)
                 err == WOLFSSL_ERROR_WANT_WRITE) {
                 return WH_ERROR_NOTREADY;
             }
+            wolfSSL_free(ctx->ssl);
+            ctx->ssl = NULL;
             return WH_ERROR_ABORTED;
         }
 
