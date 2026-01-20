@@ -91,8 +91,6 @@ typedef struct {
     char              username[32]; /* Max username length */
     whAuthPermissions permissions;
     bool              is_active;
-    uint32_t          failed_attempts;
-    uint32_t          lockout_until; /* Timestamp when lockout expires */
 } whAuthUser;
 
 /** Auth Manager Callback Structure */
