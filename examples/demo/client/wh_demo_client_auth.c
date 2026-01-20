@@ -353,7 +353,7 @@ static int wh_DemoClient_AuthUserSetPermissions(whClientContext* clientContext)
     permissions.groupPermissions |= WH_MESSAGE_GROUP_CRYPTO;
     
     /* Enable all CRYPTO actions by setting all bits in all words, an example of
-     * a CRYTPO action is WC_ALGO_TYPE_CIPHER or WC_ALGO_TYPE_PK*/
+     * a CRYPTO action is WC_ALGO_TYPE_CIPHER or WC_ALGO_TYPE_PK*/
     {
         int groupIndex = (WH_MESSAGE_GROUP_CRYPTO >> 8) & 0xFF;
         int wordIndex;
@@ -372,9 +372,6 @@ static int wh_DemoClient_AuthUserSetPermissions(whClientContext* clientContext)
     }
 
     rc = wh_Client_AuthUserGet(clientContext, "demo", &serverRc, &userId, &permissions);
-    if (rc != 0) {
-        return rc;
-    }
     if (rc != 0 || serverRc != 0) {
         printf("[AUTH-DEMO] Failed to get user: %d, server error %d\n", rc,
             serverRc);
@@ -382,9 +379,6 @@ static int wh_DemoClient_AuthUserSetPermissions(whClientContext* clientContext)
     }
 
     rc = wh_Client_AuthLogout(clientContext, adminUserId, &serverRc);
-    if (rc != 0) {
-        return rc;
-    }
     if (serverRc != 0) {
         return (int)serverRc;
     }
