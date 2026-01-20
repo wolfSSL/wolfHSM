@@ -355,8 +355,6 @@ int posixAuth_UserAdd(void* context, const char* username,
     strncpy(new_user->user.username, username,
         sizeof(new_user->user.username) - 1);
     new_user->user.is_active       = false;
-    new_user->user.failed_attempts = 0;
-    new_user->user.lockout_until   = 0;
 
     /* Set credentials if provided */
     if (credentials != NULL && credentials_len > 0) {

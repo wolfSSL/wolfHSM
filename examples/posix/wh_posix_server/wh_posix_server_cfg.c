@@ -672,7 +672,7 @@ static whAuthContext auth_ctx = {0};
 /**
  * @brief Configure a default auth context for the server
  *
- * This function sets up a basic auth context with stub implementations that
+ * This function sets up a basic auth context with example implementations that
  * allow all operations. This is suitable for development and testing.
  * For production use, a proper auth backend should be implemented.
  *
@@ -712,7 +712,7 @@ int wh_PosixServer_ExampleAuthConfig(void* conf)
     WOLFHSM_CFG_PRINTF(
         "Default auth context configured (stub implementation)\n");
 
-    /* Add and admin user with permissions for everything */
+    /* Add an admin user with permissions for everything */
     memset(&permissions, 0xFF, sizeof(whAuthPermissions));
     permissions.keyIdCount = 0;
     for (i = 0; i < WH_AUTH_MAX_KEY_IDS; i++) {

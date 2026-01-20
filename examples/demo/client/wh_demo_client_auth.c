@@ -1,10 +1,22 @@
 /*
- * Auth Manager demo client
+ * Copyright (C) 2026 wolfSSL Inc.
  *
- * The session ID is associated with the client_id on the server side,
- * so subsequent operations from this client will be authorized based on
- * the authenticated session.
+ * This file is part of wolfHSM.
+ *
+ * wolfHSM is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * wolfHSM is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
+
 
 #include <stdio.h>
 #include <string.h>
@@ -12,6 +24,7 @@
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_client.h"
 #include "wolfhsm/wh_auth.h"
+#include "wolfhsm/wh_message.h"
 
 #include "wh_demo_client_auth.h"
 #include "wh_demo_client_crypto.h"
@@ -21,10 +34,10 @@ static int wh_DemoClient_AuthPin(whClientContext* clientContext)
     int              rc        = 0;
     int32_t          serverRc  = 0;
     const uint8_t    pin[]     = "1234"; /* demo PIN */
-    const uint8_t    badPin[]  = "4321"; 
+    const uint8_t newPin[]     = "5678"; /* new PIN */
     whUserId         userId    = WH_USER_ID_INVALID;
+    whUserId adminUserId       = WH_USER_ID_INVALID;
     whAuthPermissions out_permissions;
-    int32_t out_rc;
 
     /* give permissions for everything */
     memset(&out_permissions, 0xFF, sizeof(whAuthPermissions));
@@ -33,100 +46,66 @@ static int wh_DemoClient_AuthPin(whClientContext* clientContext)
         return WH_ERROR_BADARGS;
     }
 
-    /* ============================================================
-     * Step 1: Attempt crypto operation without authentication
-     * ============================================================ */
-    whUserId adminUserId = WH_USER_ID_INVALID;
     /* login as the admin and add a new user  */
     rc = wh_Client_AuthLogin(clientContext,
-            WH_AUTH_METHOD_PIN,
-            "admin",
-            "1234", 4,
-            &serverRc,
-            &adminUserId);
+            WH_AUTH_METHOD_PIN, "admin", "1234", 4, &serverRc, &adminUserId);
     if (rc != 0) {
         printf("[AUTH-DEMO] Failed to login as admin: %d\n", rc);
         return rc;
     }
     if (serverRc != 0) {
-        printf("[AUTH-DEMO] Server-side error logging in as admin: %d\n", (int)serverRc);
+        printf("[AUTH-DEMO] Server-side error logging in as admin: %d\n",
+            (int)serverRc);
         return (int)serverRc;
     }
 
     memset(&out_permissions, 0, sizeof(whAuthPermissions));
     rc = wh_Client_AuthUserAdd(clientContext, "demo", out_permissions,
             WH_AUTH_METHOD_PIN, pin, (uint16_t)(sizeof(pin) - 1),
-            &out_rc, &userId);
-    if (rc != 0) {
-        printf("[AUTH-DEMO] Failed to add user: %d\n", rc);
+            &serverRc, &userId);
+    if (rc != 0 || serverRc != 0) {
+        printf("[AUTH-DEMO] Failed to add user: %d, server error %d\n", rc,
+            serverRc);
         return rc;
     }
 
     rc = wh_Client_AuthLogout(clientContext, adminUserId, &serverRc);
-    if (rc != 0) {
+    if (rc != 0 || serverRc != 0) {
         printf("[AUTH-DEMO] Failed to logout user: %d\n", rc);
         return rc;
     }
 
-    /* ============================================================
-     * Step 2: Authenticate user
-     * ============================================================ */
+    /* Log in as the newly created 'demo' user */
     rc = wh_Client_AuthLogin(clientContext,
-        WH_AUTH_METHOD_PIN,
-        "demo",
-        badPin,
-        (uint16_t)(sizeof(badPin) - 1),
-        &serverRc,
-        &userId);
-
-    if (rc == WH_ERROR_OK && serverRc != WH_AUTH_LOGIN_FAILED) {
-        printf("[AUTH-DEMO] Failed to not login with bad pin: %d, serverRc=%d\n", rc, serverRc);
-        return rc;
-    }
-
-    rc = wh_Client_AuthLogin(clientContext,
-                                    WH_AUTH_METHOD_PIN,
-                                    "demo",
-                                    pin,
-                                    (uint16_t)(sizeof(pin) - 1),
-                                    &serverRc,
+                                    WH_AUTH_METHOD_PIN, "demo", pin,
+                                    (uint16_t)(sizeof(pin) - 1), &serverRc,
                                     &userId);
-
-    if (rc == WH_ERROR_NOTIMPL) {
-        printf("[AUTH-DEMO] wh_Client_AuthAuthenticate() not implemented yet.\n");
-        printf("[AUTH-DEMO] This demo currently serves as a control-flow sketch.\n");
-        return rc;
-    }
-
     if (rc != 0) {
-        printf("[AUTH-DEMO] Client-side error rc=%d while sending auth request.\n", rc);
+        printf("[AUTH-DEMO] Login message failure, rc=%d\n", rc);
         return rc;
     }
 
     if (serverRc != 0) {
-        printf("[AUTH-DEMO] Server-side auth failed, rc=%d.\n", (int)serverRc);
+        printf("[AUTH-DEMO] Server-side login failed, rc=%d.\n", (int)serverRc);
         return (int)serverRc;
     }
 
-    /* ============================================================
-     * Step 3: Update user credentials
-     * ============================================================ */
-    const uint8_t newPin[] = "5678"; /* new PIN */
-
+    /* Update user credentials */
     rc = wh_Client_AuthUserSetCredentials(clientContext, userId,
             WH_AUTH_METHOD_PIN,
             pin, (uint16_t)(sizeof(pin) - 1),  /* current credentials */
             newPin, (uint16_t)(sizeof(newPin) - 1),  /* new credentials */
-            &out_rc);
+            &serverRc);
 
     if (rc != 0) {
         printf("[AUTH-DEMO] Failed to update credentials: %d\n", rc);
         return rc;
     }
 
-    if (out_rc != 0) {
-        printf("[AUTH-DEMO] Server-side error updating credentials: %d\n", (int)out_rc);
-        return (int)out_rc;
+    if (serverRc != 0) {
+        printf("[AUTH-DEMO] Server-side error updating credentials: %d\n",
+            (int)serverRc);
+        return (int)serverRc;
     }
 
     /* logout the user */
@@ -137,7 +116,8 @@ static int wh_DemoClient_AuthPin(whClientContext* clientContext)
     }
 
     if (serverRc != 0) {
-        printf("[AUTH-DEMO] Server-side error logging out user: %d\n", (int)serverRc);
+        printf("[AUTH-DEMO] Server-side error logging out user: %d\n",
+            (int)serverRc);
         return (int)serverRc;
     }
 
@@ -189,7 +169,6 @@ static int wh_DemoClient_AuthCertificate(whClientContext* clientContext)
     whUserId         userId    = WH_USER_ID_INVALID;
     whUserId         adminUserId = WH_USER_ID_INVALID;
     whAuthPermissions out_permissions;
-    int32_t out_rc;
 
     /* Include test certificates - prefer wolfssl/certs_test.h if available,
      * otherwise use test certificates from wh_test_cert_data.h */
@@ -211,11 +190,7 @@ static int wh_DemoClient_AuthCertificate(whClientContext* clientContext)
         return WH_ERROR_BADARGS;
     }
 
-    /* ============================================================
-     * Step 1: Add user with CA certificate as credentials
-     * ============================================================ */
-
-    /* login as the admin and add a new user  */
+    /* login as the admin and add a new user with CA certificate */
     rc = wh_Client_AuthLogin(clientContext,
             WH_AUTH_METHOD_PIN,
             "admin",
@@ -227,20 +202,23 @@ static int wh_DemoClient_AuthCertificate(whClientContext* clientContext)
         return rc;
     }
     if (serverRc != 0) {
-        printf("[AUTH-DEMO] Server-side error logging in as admin: %d\n", (int)serverRc);
+        printf("[AUTH-DEMO] Server-side error logging in as admin: %d\n",
+            (int)serverRc);
         return (int)serverRc;
     }
 
     rc = wh_Client_AuthUserAdd(clientContext, "certuser", out_permissions,
             WH_AUTH_METHOD_CERTIFICATE, ca_cert, ca_cert_len,
-            &out_rc, &userId);
+            &serverRc, &userId);
     if (rc != 0) {
         printf("[AUTH-DEMO] Failed to add user: %d\n", rc);
         return rc;
     }
-    if (out_rc != 0) {
-        printf("[AUTH-DEMO] Server-side error adding user: %d\n", (int)out_rc);
-        return (int)out_rc;
+
+    if (serverRc != 0) {
+        printf("[AUTH-DEMO] Server-side error adding user: %d\n",
+            (int)serverRc);
+        return (int)serverRc;
     }
 
     rc = wh_Client_AuthLogout(clientContext, adminUserId, &serverRc);
@@ -249,9 +227,7 @@ static int wh_DemoClient_AuthCertificate(whClientContext* clientContext)
         return rc;
     }
 
-    /* ============================================================
-     * Step 2: Authenticate user with server certificate
-     * ============================================================ */
+    /* Authenticate user with server certificate */
     rc = wh_Client_AuthLogin(clientContext,
             WH_AUTH_METHOD_CERTIFICATE,
             "certuser",
@@ -259,23 +235,13 @@ static int wh_DemoClient_AuthCertificate(whClientContext* clientContext)
             server_cert_len,
             &serverRc,
             &userId);
-
-    if (rc == WH_ERROR_NOTIMPL) {
-        printf("[AUTH-DEMO] wh_Client_AuthLogin() not implemented for certificates.\n");
+    if (rc != 0 || serverRc != 0) {
+        printf("[AUTH-DEMO] Error logging in rc=%d server rc = %d.\n", rc,
+            serverRc);
         return rc;
     }
 
-    if (rc != 0) {
-        printf("[AUTH-DEMO] Client-side error rc=%d while sending auth request.\n", rc);
-        return rc;
-    }
-
-    if (serverRc != 0) {
-        printf("[AUTH-DEMO] Server-side auth failed, rc=%d.\n", (int)serverRc);
-        return (int)serverRc;
-    }
-
-    /* Try doing a crypto operation, with permissions all 0 this should fail */
+    /* Try doing a crypto operation, with permissions all 0, this should fail */
     rc = wh_DemoClient_CryptoAesCbc(clientContext);
     if (rc == 0 || rc == WH_ERROR_OK) {
         /* found success when should have failed */
@@ -290,6 +256,7 @@ static int wh_DemoClient_AuthCertificate(whClientContext* clientContext)
     }
     return rc;
 }
+
 
 static int wh_DemoClient_AuthUserDelete(whClientContext* clientContext)
 {
@@ -312,12 +279,14 @@ static int wh_DemoClient_AuthUserDelete(whClientContext* clientContext)
         return (int)serverRc;
     }
 
-    rc = wh_Client_AuthUserGet(clientContext, "certuser", &serverRc, &userId, &permissions);
+    rc = wh_Client_AuthUserGet(clientContext, "certuser", &serverRc, &userId,
+        &permissions);
     if (rc != 0) {
         return rc;
     }
     if (serverRc != 0) {
-        printf("[AUTH-DEMO] Server-side error %d while getting user: %d\n", (int)serverRc, userId);
+        printf("[AUTH-DEMO] Server-side error %d while getting user: %d\n",
+            (int)serverRc, userId);
         return (int)serverRc;
     }
 
@@ -327,7 +296,8 @@ static int wh_DemoClient_AuthUserDelete(whClientContext* clientContext)
         return rc;
     }
     if (serverRc != 0) {
-        printf("[AUTH-DEMO] Server-side error deleting user: %d\n", (int)serverRc);
+        printf("[AUTH-DEMO] Server-side error deleting user: %d\n",
+            (int)serverRc);
         return (int)serverRc;
     }
 
@@ -361,43 +331,54 @@ static int wh_DemoClient_AuthUserSetPermissions(whClientContext* clientContext)
         return rc;
     }
     if (serverRc != 0) {
-        printf("[AUTH-DEMO] Server-side error %d while logging in as admin: %d\n", (int)serverRc, adminUserId);
+        printf("[AUTH-DEMO] Error %d while logging in as admin: %d\n",
+            (int)serverRc, adminUserId);
         return (int)serverRc;
     }
 
-    rc = wh_Client_AuthUserGet(clientContext, "demo", &serverRc, &userId, &permissions);
+    rc = wh_Client_AuthUserGet(clientContext, "demo", &serverRc, &userId,
+        &permissions);
     if (rc != 0) {
         printf("[AUTH-DEMO] Failed to get user: %d\n", rc);
         return rc;
     }
     if (serverRc != 0) {
-        printf("[AUTH-DEMO] Server-side error %d while getting user: %d\n", (int)serverRc, userId);
+        printf("[AUTH-DEMO] Server-side error %d while getting user: %d\n",
+            (int)serverRc, userId);
         return (int)serverRc;
     }
 
-    /* Set up key IDs: allow access to key 1 for encrypt and key 2 for decrypt */
-    permissions.keyIdCount = 2;
-    permissions.keyIds[0] = 1; /* encrypt key */
-    permissions.keyIds[1] = 2; /* decrypt key */
-
-    rc = wh_Client_AuthUserSetPermissions(clientContext, userId, permissions, &serverRc);
-    if (rc != 0) {
-        printf("[AUTH-DEMO] Failed to set permissions: %d\n", rc);
-        return rc;
+    /* Enable CRYPTO group and all CRYPTO actions */
+    memset(&permissions, 0, sizeof(permissions));
+    permissions.groupPermissions |= WH_MESSAGE_GROUP_CRYPTO;
+    
+    /* Enable all CRYPTO actions by setting all bits in all words, an example of
+     * a CRYTPO action is WC_ALGO_TYPE_CIPHER or WC_ALGO_TYPE_PK*/
+    {
+        int groupIndex = (WH_MESSAGE_GROUP_CRYPTO >> 8) & 0xFF;
+        int wordIndex;
+        /* Set all action bits for CRYPTO group (allows all actions) */
+        for (wordIndex = 0; wordIndex < WH_AUTH_ACTION_WORDS; wordIndex++) {
+            permissions.actionPermissions[groupIndex][wordIndex] = 0xFFFFFFFF;
+        }
     }
-    if (serverRc != 0) {
-        printf("[AUTH-DEMO] Server-side error %d while setting permissions for user: %d\n", (int)serverRc, userId);
-        return (int)serverRc;
-    }
 
+    rc = wh_Client_AuthUserSetPermissions(clientContext, userId, permissions,
+        &serverRc);
+    if (rc != 0 || serverRc != 0) {
+        printf("[AUTH-DEMO] Failed to set permissions: %d, server error %d\n",
+            rc, serverRc);
+        return rc != 0 ? rc : (int)serverRc;
+    }
 
     rc = wh_Client_AuthUserGet(clientContext, "demo", &serverRc, &userId, &permissions);
     if (rc != 0) {
         return rc;
     }
-    if (serverRc != 0) {
-        printf("[AUTH-DEMO] Server-side error %d while getting user: %d\n", (int)serverRc, userId);
-        return (int)serverRc;
+    if (rc != 0 || serverRc != 0) {
+        printf("[AUTH-DEMO] Failed to get user: %d, server error %d\n", rc,
+            serverRc);
+        return rc != 0 ? rc : (int)serverRc;
     }
 
     rc = wh_Client_AuthLogout(clientContext, adminUserId, &serverRc);

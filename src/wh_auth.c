@@ -24,17 +24,16 @@
  * to the configured auth backend callbacks.
  *
  * - Verifies PINs/credentials
- * - Manages sessions
- * - Authorization decisions
- * - Session state tracking and logging
+ * - Calls to implemented callbacks for managing users and permissions
+ * - Authorization decisions are routed through the implemented callbacks
  *
  * The Auth Manager is agnostic to the transport used and manages authentication
- * of a session. It can take a PIN or certificate for verification and logs
- * all login attempts along with actions done by logged in users. An
+ * of a session. It can take a PIN or certificate for verification. An
  * authenticated session is separate from a comm connection and sits on top of
  * a comm connection. Allowing for multiple authenticated sessions opened and
  * closed multiple times through out the span of a single comm connection
- * established.
+ * established. Currently there is a restriction of one user logged in at a time
+ * per comm connection.
  */
 
 /* Pick up compile-time configuration */
@@ -189,8 +188,7 @@ int wh_Auth_CheckKeyAuthorization(whAuthContext* context, uint32_t key_id,
     return rc;
 }
 
-/********** API That Interact With User Database
- * *******************************/
+/********** API That Manages User Database ******************************/
 
 int wh_Auth_UserAdd(whAuthContext* context, const char* username,
                     whUserId* out_user_id, whAuthPermissions permissions,

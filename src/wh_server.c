@@ -519,7 +519,6 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
          * group and action requested. When dealing with key ID's there should
          * be an additional authorization check after parsing the request and
          * translating the key ID and before it is used. */
-        /* Check authorization if auth context is configured */
         if (server->auth != NULL) {
             rc = wh_Auth_CheckRequestAuthorization(server->auth, group, action);
             if (rc != WH_ERROR_OK) {
