@@ -13,6 +13,7 @@ jobs:
             transport: [ 'tcp', 'shm', 'dma' ]
             asan: [ 'ASAN=1', 'ASAN=0' ]
             debug: [ '', 'DEBUG_VERBOSE=1' ]
+            test: [ '', '--test' ]
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
@@ -54,13 +55,7 @@ jobs:
     - name: Run POSIX client
       run: |
         cd examples/posix/wh_posix_client
-        ./Build/wh_posix_client.elf --type ${{ matrix.transport }}
-
-    - name: Run POSIX demo test
-      if: matrix.transport == 'tcp'
-      run: |
-        cd examples/posix/wh_posix_client
-        ./Build/wh_posix_client.elf --type ${{ matrix.transport }} --test
+        ./Build/wh_posix_client.elf --type ${{ matrix.transport }} ${{ matrix.test }}
 
     # Optional: Kill the server process if it doesn't exit on its own
     - name: Cleanup POSIX server
