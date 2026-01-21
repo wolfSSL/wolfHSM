@@ -28,6 +28,7 @@
 #include "wolfhsm/wh_error.h"
 
 #include "wh_test_common.h"
+#include "wh_test.h"
 
 /* Individual unit test drivers */
 #include "wh_test_comm.h"
@@ -54,6 +55,9 @@
 
 #if defined(WOLFHSM_CFG_TEST_POSIX) && defined(WOLFHSM_CFG_ENABLE_CLIENT)
 #include "port/posix/posix_transport_tcp.h"
+#if defined(WOLFHSM_CFG_TEST_CLIENT_ONLY) && defined(WOLFHSM_CFG_TLS)
+#include "port/posix/posix_transport_tls.h"
+#endif /* WOLFHSM_CFG_TEST_CLIENT_ONLY && WOLFHSM_CFG_TLS */
 #endif
 
 #include "wolfhsm/wh_client.h"
@@ -146,7 +150,8 @@ int whTest_ClientConfig(whClientConfig* clientCfg)
     return WH_ERROR_OK;
 }
 
-#if defined(WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP) && defined(WOLFHSM_CFG_TEST_POSIX)
+#if defined(WOLFHSM_CFG_TEST_CLIENT_ONLY) && defined(WOLFHSM_CFG_TEST_POSIX)
+#if !defined(WOLFHSM_CFG_TLS)
 /*
  * Run all the client-only tests on a default client configuration matching the
  * example server TCP configuration.
@@ -173,7 +178,75 @@ int whTest_ClientTcp(void)
 
     return whTest_ClientConfig(c_conf);
 }
-#endif /* WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP && WOLFHSM_CFG_TEST_POSIX */
+#endif /* WOLFHSM_CFG_TEST_POSIX && !WOLFHSM_CFG_TLS */
+
+#if defined(WOLFHSM_CFG_TLS)
+/* client configuration setup example for TLS transport */
+
+#define WH_POSIX_SERVER_TCP_PORT 23456
+#define WH_POSIX_SERVER_TCP_IPSTRING "127.0.0.1"
+#define WH_POSIX_CLIENT_ID 12
+
+#undef USE_CERT_BUFFERS_2048
+#define USE_CERT_BUFFERS_2048
+#include "wolfssl/certs_test.h"
+
+posixTransportTlsClientContext tccTls;
+posixTransportTlsConfig        tlsConfig;
+whCommClientConfig             c_comm;
+whTransportClientCb            tlsCb = PTTLS_CLIENT_CB;
+
+static int whPosixClient_ExampleTlsConfig(void* conf)
+{
+    whClientConfig* c_conf = (whClientConfig*)conf;
+
+    memset(&tccTls, 0, sizeof(posixTransportTlsClientContext));
+
+    /* Initialize TLS context fields that need specific values */
+    tccTls.state         = 0;
+    tccTls.connect_fd_p1 = 0; /* Invalid fd */
+
+    tlsConfig.server_ip_string          = WH_POSIX_SERVER_TCP_IPSTRING;
+    tlsConfig.server_port               = WH_POSIX_SERVER_TCP_PORT;
+    tlsConfig.disable_peer_verification = false;
+
+    /* Set certificate buffers in config structure */
+    tlsConfig.ca_cert     = ca_cert_der_2048;
+    tlsConfig.ca_cert_len = sizeof_ca_cert_der_2048;
+    tlsConfig.cert        = client_cert_der_2048;
+    tlsConfig.cert_len    = sizeof_client_cert_der_2048;
+    tlsConfig.key         = client_key_der_2048;
+    tlsConfig.key_len     = sizeof_client_key_der_2048;
+
+    c_comm.transport_cb      = &tlsCb;
+    c_comm.transport_context = (void*)&tccTls;
+    c_comm.transport_config  = (void*)&tlsConfig;
+    c_comm.client_id         = WH_POSIX_CLIENT_ID;
+    c_conf->comm             = &c_comm;
+
+    return WH_ERROR_OK;
+}
+
+
+/*
+ * Run all the client-only tests on a default client configuration matching the
+ * example server TLS configuration.
+ */
+int whTest_ClientTls(void)
+{
+    int            ret;
+    whClientConfig c_conf[1];
+
+    if (whPosixClient_ExampleTlsConfig(c_conf) != WH_ERROR_OK) {
+        ret = -1;
+    }
+    else {
+        ret = whTest_ClientConfig(c_conf);
+    }
+    return ret;
+}
+#endif /* WOLFHSM_CFG_TLS */
+#endif /* WOLFHSM_CFG_TEST_CLIENT_ONLY && WOLFHSM_CFG_TEST_POSIX */
 #endif /* WOLFHSM_CFG_ENABLE_CLIENT */
 
 #if !defined(WOLFHSM_CFG_TEST_UNIT_NO_MAIN)
@@ -182,10 +255,16 @@ int main(void)
 {
     int ret = 0;
 
-#if defined(WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP) && \
+#if defined(WOLFHSM_CFG_TEST_CLIENT_ONLY) && \
     defined(WOLFHSM_CFG_ENABLE_CLIENT) && defined(WOLFHSM_CFG_TEST_POSIX)
-    /* Test driver should run TCP client tests against the example server */
+    /* Test driver should run client tests against the example server */
+#if defined(WOLFHSM_CFG_TLS)
+    /* Run TLS client tests */
+    ret = whTest_ClientTls();
+#else
+    /* Run TCP client tests (default) */
     ret = whTest_ClientTcp();
+#endif
 #elif defined(WOLFHSM_CFG_ENABLE_CLIENT) && defined(WOLFHSM_CFG_ENABLE_SERVER)
     /* Default case: Test driver should run all the unit tests locally */
     ret = whTest_Unit();

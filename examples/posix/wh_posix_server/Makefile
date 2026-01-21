@@ -87,6 +87,11 @@ ifeq ($(SHE),1)
 CFLAGS += -DWOLFHSM_CFG_SHE_EXTENSION
 endif
 
+# Support a TLS-capable build
+ifeq ($(TLS),1)
+CFLAGS += -DWOLFHSM_CFG_TLS
+endif
+
 ifeq ($(DMA),1)
 CFLAGS += -DWOLFHSM_CFG_DMA
 endif
