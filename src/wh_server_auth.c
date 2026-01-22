@@ -148,7 +148,7 @@ int wh_Server_HandleAuthRequest(whServerContext* server, uint16_t magic,
             whMessageAuth_SimpleResponse    resp = {0};
 
             if (req_size != sizeof(req)) {
-                resp.rc = WH_ERROR_ABORTED;
+                resp.rc = WH_ERROR_BADARGS;
             }
             else {
                 wh_MessageAuth_TranslateUserDeleteRequest(magic, req_packet,
