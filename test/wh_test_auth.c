@@ -56,7 +56,7 @@
 #define TEST_ADMIN_PIN "1234"
 #endif
 
-#ifndef WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP
+#if !defined(WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP) && defined(WOLFHSM_CFG_ENABLE_SERVER)
 /* Memory transport mode - setup structures */
 static uint8_t                     req_buffer[BUFFER_SIZE]  = {0};
 static uint8_t                     resp_buffer[BUFFER_SIZE] = {0};
@@ -236,7 +236,7 @@ static int _whTest_Auth_CleanupMemory(void)
 #endif
     return WH_ERROR_OK;
 }
-#endif /* !WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP */
+#endif /* !WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP && WOLFHSM_CFG_ENABLE_SERVER */
 
 
 /* ============================================================================
@@ -249,7 +249,7 @@ static int _whTest_Auth_LoginOp(whClientContext* client, whAuthMethod method,
                                 uint16_t auth_data_len, int32_t* out_rc,
                                 whUserId*          out_user_id)
 {
-#ifdef WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP
+#if defined(WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP) || !defined(WOLFHSM_CFG_ENABLE_SERVER)
     return wh_Client_AuthLogin(client, method, username, auth_data,
                                auth_data_len, out_rc, out_user_id);
 #else
@@ -263,12 +263,12 @@ static int _whTest_Auth_LoginOp(whClientContext* client, whAuthMethod method,
 static int _whTest_Auth_LogoutOp(whClientContext* client, whUserId user_id,
                                  int32_t* out_rc)
 {
-#ifndef WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP
+#if defined(WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP) || !defined(WOLFHSM_CFG_ENABLE_SERVER)
+    return wh_Client_AuthLogout(client, user_id, out_rc);
+#else
     WH_TEST_RETURN_ON_FAIL(wh_Client_AuthLogoutRequest(client, user_id));
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
     return wh_Client_AuthLogoutResponse(client, out_rc);
-#else
-    return wh_Client_AuthLogout(client, user_id, out_rc);
 #endif
 }
 
@@ -278,27 +278,27 @@ static int _whTest_Auth_UserAddOp(whClientContext* client, const char* username,
                                   uint16_t credentials_len, int32_t* out_rc,
                                   whUserId* out_user_id)
 {
-#ifndef WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP
+#if defined(WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP) || !defined(WOLFHSM_CFG_ENABLE_SERVER)
+    return wh_Client_AuthUserAdd(client, username, permissions, method,
+                                 credentials, credentials_len, out_rc,
+                                 out_user_id);
+#else
     WH_TEST_RETURN_ON_FAIL(wh_Client_AuthUserAddRequest(
         client, username, permissions, method, credentials, credentials_len));
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
     return wh_Client_AuthUserAddResponse(client, out_rc, out_user_id);
-#else
-    return wh_Client_AuthUserAdd(client, username, permissions, method,
-                                 credentials, credentials_len, out_rc,
-                                 out_user_id);
 #endif
 }
 
 static int _whTest_Auth_UserDeleteOp(whClientContext* client, whUserId user_id,
                                      int32_t* out_rc)
 {
-#ifndef WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP
+#if defined(WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP) || !defined(WOLFHSM_CFG_ENABLE_SERVER)
+    return wh_Client_AuthUserDelete(client, user_id, out_rc);
+#else
     WH_TEST_RETURN_ON_FAIL(wh_Client_AuthUserDeleteRequest(client, user_id));
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
     return wh_Client_AuthUserDeleteResponse(client, out_rc);
-#else
-    return wh_Client_AuthUserDelete(client, user_id, out_rc);
 #endif
 }
 
@@ -307,14 +307,14 @@ static int _whTest_Auth_UserSetPermsOp(whClientContext*  client,
                                        whAuthPermissions permissions,
                                        int32_t*          out_rc)
 {
-#ifndef WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP
+#if defined(WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP) || !defined(WOLFHSM_CFG_ENABLE_SERVER)
+    return wh_Client_AuthUserSetPermissions(client, user_id, permissions,
+                                            out_rc);
+#else
     WH_TEST_RETURN_ON_FAIL(
         wh_Client_AuthUserSetPermissionsRequest(client, user_id, permissions));
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
     return wh_Client_AuthUserSetPermissionsResponse(client, out_rc);
-#else
-    return wh_Client_AuthUserSetPermissions(client, user_id, permissions,
-                                            out_rc);
 #endif
 }
 
@@ -323,16 +323,16 @@ static int _whTest_Auth_UserSetCredsOp(
     const void* current_credentials, uint16_t current_credentials_len,
     const void* new_credentials, uint16_t new_credentials_len, int32_t* out_rc)
 {
-#ifndef WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP
+#if defined(WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP) || !defined(WOLFHSM_CFG_ENABLE_SERVER)
+    return wh_Client_AuthUserSetCredentials(
+        client, user_id, method, current_credentials, current_credentials_len,
+        new_credentials, new_credentials_len, out_rc);
+#else
     WH_TEST_RETURN_ON_FAIL(wh_Client_AuthUserSetCredentialsRequest(
         client, user_id, method, current_credentials, current_credentials_len,
         new_credentials, new_credentials_len));
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
     return wh_Client_AuthUserSetCredentialsResponse(client, out_rc);
-#else
-    return wh_Client_AuthUserSetCredentials(
-        client, user_id, method, current_credentials, current_credentials_len,
-        new_credentials, new_credentials_len, out_rc);
 #endif
 }
 
@@ -340,14 +340,14 @@ static int _whTest_Auth_UserGetOp(whClientContext* client, const char* username,
                                   int32_t* out_rc, whUserId* out_user_id,
                                   whAuthPermissions* out_permissions)
 {
-#ifndef WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP
+#if defined(WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP) || !defined(WOLFHSM_CFG_ENABLE_SERVER)
+    return wh_Client_AuthUserGet(client, username, out_rc, out_user_id,
+                                 out_permissions);
+#else
     WH_TEST_RETURN_ON_FAIL(wh_Client_AuthUserGetRequest(client, username));
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
     return wh_Client_AuthUserGetResponse(client, out_rc, out_user_id,
                                          out_permissions);
-#else
-    return wh_Client_AuthUserGet(client, username, out_rc, out_user_id,
-                                 out_permissions);
 #endif
 }
 
@@ -1222,7 +1222,7 @@ int whTest_AuthTCP(whClientConfig* clientCfg)
 
 int whTest_AuthMEM(void)
 {
-#ifndef WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP
+#if !defined(WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP) && defined(WOLFHSM_CFG_ENABLE_SERVER)
     whClientContext* client_ctx = NULL;
 
     /* Memory transport mode */
