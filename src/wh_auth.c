@@ -86,9 +86,10 @@ int wh_Auth_Cleanup(whAuthContext* context)
 }
 
 
-/* return value is if the login attempt happened or if a fatal error occurred.
- * The result of the login attempt is stored in loggedIn -- 1 for success,
- * 0 for failure */
+/* Returns a wolfHSM error code: WH_ERROR_OK (0) if the call completed
+ * successfully (regardless of authentication result), or a negative error code
+ * if a fatal error occurred. The result of the login attempt is stored in
+ * loggedIn: 1 for successful authentication, 0 for failed authentication. */
 int wh_Auth_Login(whAuthContext* context, uint8_t client_id,
                   whAuthMethod method, const char* username,
                   const void* auth_data, uint16_t auth_data_len, int* loggedIn)
