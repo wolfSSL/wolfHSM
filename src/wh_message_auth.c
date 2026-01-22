@@ -353,19 +353,19 @@ int wh_MessageAuth_TranslateUserSetCredentialsRequest(
     WH_T16(magic, dest_header, src_header, current_credentials_len);
     WH_T16(magic, dest_header, src_header, new_credentials_len);
 
-    /* Validate lengths */
-    expected_size = header_size + src_header->current_credentials_len +
-                    src_header->new_credentials_len;
-    if (src_size < expected_size) {
-        return WH_ERROR_BADARGS;
-    }
-
     if (src_header->current_credentials_len >
         WH_MESSAGE_AUTH_MAX_CREDENTIALS_LEN) {
         return WH_ERROR_BUFFER_SIZE;
     }
     if (src_header->new_credentials_len > WH_MESSAGE_AUTH_MAX_CREDENTIALS_LEN) {
         return WH_ERROR_BUFFER_SIZE;
+    }
+
+    /* Validate lengths */
+    expected_size = header_size + src_header->current_credentials_len +
+                    src_header->new_credentials_len;
+    if (src_size < expected_size) {
+        return WH_ERROR_BADARGS;
     }
 
     /* Copy variable-length credential data */

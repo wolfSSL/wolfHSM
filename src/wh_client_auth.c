@@ -80,7 +80,8 @@ int wh_Client_AuthLoginRequest(whClientContext* c, whAuthMethod method,
         return WH_ERROR_BADARGS;
     }
 
-    strncpy(msg->username, username, sizeof(msg->username));
+    strncpy(msg->username, username, sizeof(msg->username) - 1);
+    msg->username[sizeof(msg->username) - 1] = '\0';
     msg->method        = method;
     msg->auth_data_len = auth_data_len;
     if (auth_data_len > 0 && auth_data != NULL) {
@@ -240,7 +241,8 @@ int wh_Client_AuthUserAddRequest(whClientContext* c, const char* username,
         return WH_ERROR_BADARGS;
     }
 
-    strncpy(msg->username, username, sizeof(msg->username));
+    strncpy(msg->username, username, sizeof(msg->username) - 1);
+    msg->username[sizeof(msg->username) - 1] = '\0';
 
     if (wh_MessageAuth_FlattenPermissions(&permissions, msg->permissions,
                                           sizeof(msg->permissions)) != 0) {
@@ -287,8 +289,7 @@ int wh_Client_AuthUserAddResponse(whClientContext* c, int32_t* out_rc,
         /* Validate response */
         if ((resp_group != WH_MESSAGE_GROUP_AUTH) ||
             (resp_action != WH_MESSAGE_AUTH_ACTION_USER_ADD) ||
-            (resp_size < hdr_len) || (resp_size > (uint16_t)sizeof(buffer)) ||
-            (resp_size - hdr_len > (uint16_t)sizeof(whMessageAuth_UserAddResponse))) {
+            (resp_size != hdr_len) || (resp_size > (uint16_t)sizeof(buffer))) {
             /* Invalid message */
             rc = WH_ERROR_ABORTED;
         }
@@ -411,6 +412,7 @@ int wh_Client_AuthUserGetRequest(whClientContext* c, const char* username)
     }
 
     strncpy(msg.username, username, sizeof(msg.username) - 1);
+    msg.username[sizeof(msg.username) - 1] = '\0';
     return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_AUTH,
                                  WH_MESSAGE_AUTH_ACTION_USER_GET, sizeof(msg),
                                  &msg);

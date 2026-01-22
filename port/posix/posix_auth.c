@@ -43,6 +43,10 @@ typedef struct whAuthBase_User {
     unsigned char credentials[WH_AUTH_BASE_MAX_CREDENTIALS_LEN];
     uint16_t      credentials_len;
 } whAuthBase_User;
+/* TODO: Thread safety - The global users array is not protected by any
+ * synchronization mechanism. In a multi-threaded environment, concurrent
+ * access could lead to race conditions. Consider adding appropriate locking
+ * mechanisms (mutex, rwlock) to protect concurrent access. */
 static whAuthBase_User users[WH_AUTH_BASE_MAX_USERS];
 
 #if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER) && !defined(WOLFHSM_CFG_NO_CRYPTO)
@@ -186,7 +190,7 @@ int posixAuth_Logout(void* context, uint16_t current_user_id,
         return WH_ERROR_BADARGS;
     }
 
-    if (user_id - 1 >= WH_AUTH_BASE_MAX_USERS) {
+    if (user_id > WH_AUTH_BASE_MAX_USERS) {
         return WH_ERROR_NOTFOUND;
     }
 
@@ -218,7 +222,12 @@ int posixAuth_CheckRequestAuthorization(void* context, uint16_t user_id,
     }
     else {
         int              groupIndex = (group >> 8) & 0xFF;
-        whAuthBase_User* user       = &users[user_id - 1];
+        whAuthBase_User* user;
+
+        if (user_id > WH_AUTH_BASE_MAX_USERS) {
+            return WH_ERROR_ACCESS;
+        }
+        user = &users[user_id - 1];
 
         /* check if user has permissions for the group and action */
 
@@ -276,7 +285,7 @@ int posixAuth_CheckKeyAuthorization(void* context, uint16_t user_id,
         return WH_ERROR_ACCESS;
     }
 
-    if (user_id - 1 >= WH_AUTH_BASE_MAX_USERS) {
+    if (user_id > WH_AUTH_BASE_MAX_USERS) {
         return WH_ERROR_NOTFOUND;
     }
 
@@ -354,6 +363,7 @@ int posixAuth_UserAdd(void* context, const char* username,
     }
     strncpy(new_user->user.username, username,
         sizeof(new_user->user.username) - 1);
+    new_user->user.username[sizeof(new_user->user.username) - 1] = '\0';
     new_user->user.is_active       = false;
 
     /* Set credentials if provided */
