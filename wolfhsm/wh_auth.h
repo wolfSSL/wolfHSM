@@ -193,8 +193,11 @@ int wh_Auth_Cleanup(whAuthContext* context);
  * @param[in] username The username to authenticate.
  * @param[in] auth_data Pointer to the authentication data.
  * @param[in] auth_data_len Length of the authentication data.
- * @param[out] loggedIn Pointer to store the login status.
- * @return int Returns 0 on success, or a negative error code on failure.
+ * @param[out] loggedIn Pointer to store the login status (1 for success).
+ * @return int Returns 0 if the authentication attempt was processed successfully
+ *         (regardless of authentication result), or a negative error code if a
+ *         fatal error occurred. The authentication result is returned in the
+ *         loggedIn parameter.
  */
 int wh_Auth_Login(whAuthContext* context, uint8_t client_id,
                   whAuthMethod method, const char* username,
