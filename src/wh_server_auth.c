@@ -136,6 +136,7 @@ int wh_Server_HandleAuthRequest(whServerContext* server, uint16_t magic,
                                               req.method, credentials,
                                               req.credentials_len);
                     resp.rc = rc;
+                    memset(credentials, 0, req.credentials_len);
                 }
             }
             wh_MessageAuth_TranslateUserAddResponse(
@@ -242,6 +243,8 @@ int wh_Server_HandleAuthRequest(whServerContext* server, uint16_t magic,
                         (req_header.new_credentials_len > 0) ? new_creds : NULL,
                         req_header.new_credentials_len);
                     resp.rc = rc;
+                    memset(current_creds, 0, sizeof(current_creds));
+                    memset(new_creds, 0, sizeof(new_creds));
                 }
             }
             wh_MessageAuth_TranslateSimpleResponse(
