@@ -44,12 +44,16 @@
 #include "wolfhsm/wh_comm.h"
 #include "wolfhsm/wh_transport_mem.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /** Pico-2 SHM configuration structure */
 typedef struct {
     uint16_t    req_size;      /* Request buffer size */
     uint16_t    resp_size;     /* Response buffer size */
     size_t      dma_size;      /* DMA buffer size (optional) */
-    void*       shared_mem;    /* Base address of shared memory region */
+    void*       shared_mem;    /* Base address of shared memory region (must be 4-byte aligned) */
     size_t      shared_mem_size; /* Total size of shared memory region */
 } pico2TransportShmConfig;
 
@@ -92,7 +96,7 @@ typedef pico2TransportShmContext pico2TransportShmServerContext;
  * @return WH_ERROR_OK on success, or error code on failure
  */
 int pico2TransportShm_GetDma(pico2TransportShmContext* ctx,
-        void* *out_dma, size_t *out_size);
+        void** out_dma, size_t *out_size);
 
 /**
  * @brief Set heap hint for DMA operations
@@ -246,5 +250,9 @@ int pico2TransportShm_ClientStaticMemDmaCallback(whClientContext* client,
                                                  whDmaFlags flags);
 
 #endif /* WOLFHSM_CFG_DMA */
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* !PORT_PICO2_PICO2_TRANSPORT_SHM_H_ */

@@ -85,7 +85,12 @@ static int pico2TransportShm_MapMemory(const pico2TransportShmConfig* cfg,
         return WH_ERROR_BADARGS;
     }
 
-    /* Calculate required size */
+    /* Calculate required size with overflow check */
+    if ((SIZE_MAX - PICO2_SHM_HEADER_SIZE < cfg->req_size) ||
+        (SIZE_MAX - PICO2_SHM_HEADER_SIZE - cfg->req_size < cfg->resp_size) ||
+        (SIZE_MAX - PICO2_SHM_HEADER_SIZE - cfg->req_size - cfg->resp_size < cfg->dma_size)) {
+        return WH_ERROR_BADARGS;
+    }
     size_t required_size = PICO2_SHM_HEADER_SIZE + cfg->req_size +
                            cfg->resp_size + cfg->dma_size;
 
@@ -276,6 +281,13 @@ int pico2TransportShm_ClientInit(void* c, const void* cf,
 
     if (map->header->initialized != PICO2_INITIALIZED_CREATOR) {
         return WH_ERROR_NOTREADY;
+    }
+
+    /* Validate server configuration matches client configuration */
+    if ((map->header->req_size != cfg->req_size) ||
+        (map->header->resp_size != cfg->resp_size) ||
+        (map->header->dma_size != cfg->dma_size)) {
+        return WH_ERROR_BADARGS;
     }
 
     /* Configure the underlying transport context */
@@ -527,8 +539,8 @@ int pico2TransportShm_ServerStaticMemDmaCallback(
     }
 
     /* Verify the address is within DMA buffer */
-    if ((clientAddr < (uintptr_t)ctx->dma) ||
-        ((clientAddr + len) > ((uintptr_t)ctx->dma + ctx->dma_size))) {
+    if ((clientAddr < (uintptr_t)ctx->dma) || (len > ctx->dma_size) ||
+        ((clientAddr - (uintptr_t)ctx->dma) > (ctx->dma_size - len))) {
         return WH_ERROR_BADARGS;
     }
 
@@ -572,8 +584,8 @@ int pico2TransportShm_ClientStaticMemDmaCallback(whClientContext* client,
     }
 
     /* Verify the address is within DMA buffer */
-    if ((clientAddr < (uintptr_t)ctx->dma) ||
-        ((clientAddr + len) > ((uintptr_t)ctx->dma + ctx->dma_size))) {
+    if ((clientAddr < (uintptr_t)ctx->dma) || (len > ctx->dma_size) ||
+        ((clientAddr - (uintptr_t)ctx->dma) > (ctx->dma_size - len))) {
         return WH_ERROR_BADARGS;
     }
 
