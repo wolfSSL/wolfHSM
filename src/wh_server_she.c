@@ -456,7 +456,7 @@ static int _LoadKey(whServerContext* server, uint16_t magic, uint16_t req_size,
     uint8_t       kdfInput[WH_SHE_KEY_SZ * 2];
     uint8_t       cmacOutput[AES_BLOCK_SIZE];
     uint8_t       tmpKey[WH_SHE_KEY_SZ];
-    whNvmMetadata meta[1];
+    whNvmMetadata meta[1] = {0};
     uint32_t      she_meta_count = 0;
     uint32_t      she_meta_flags = 0;
     uint32_t*     msg_counter_BE;
@@ -872,7 +872,7 @@ static int _InitRnd(whServerContext* server, uint16_t magic, uint16_t req_size,
     uint8_t                      kdfInput[WH_SHE_KEY_SZ * 2];
     uint8_t                      cmacOutput[AES_BLOCK_SIZE];
     uint8_t                      tmpKey[WH_SHE_KEY_SZ];
-    whNvmMetadata                meta[1];
+    whNvmMetadata                meta[1] = {0};
     whMessageShe_InitRngResponse resp;
 
     /* check that init hasn't already been called since startup */
@@ -1017,7 +1017,7 @@ static int _ExtendSeed(whServerContext* server, uint16_t magic,
     int                             ret = 0;
     uint32_t                        keySz;
     uint8_t                         kdfInput[WH_SHE_KEY_SZ * 2];
-    whNvmMetadata                   meta[1];
+    whNvmMetadata                   meta[1] = {0};
     whMessageShe_ExtendSeedRequest  req;
     whMessageShe_ExtendSeedResponse resp;
 

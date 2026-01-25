@@ -112,7 +112,10 @@ DEF += -DWC_USE_DEVID=0x57444D41 -DWC_NO_DEFAULT_DEVID
 CFLAGS += -DWOLFHSM_CFG_DMA
 else
 DEF += -DWC_USE_DEVID=0x5748534D
+endif
 
+ifeq ($(TLS),1)
+CFLAGS += -DWOLFHSM_CFG_TLS
 endif
 
 #wolfCrypt test/benchmark source files

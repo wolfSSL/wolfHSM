@@ -10,19 +10,31 @@
 
 #include "port/posix/posix_transport_shm.h"
 #include "port/posix/posix_transport_tcp.h"
+#ifdef WOLFHSM_CFG_TLS
+#include "port/posix/posix_transport_tls.h"
+#endif
 
 #include <string.h>
 
 posixTransportShmClientContext tccShm;
 posixTransportTcpClientContext tccTcp;
+#ifdef WOLFHSM_CFG_TLS
+posixTransportTlsClientContext tccTls;
+#endif
 
 posixTransportShmConfig shmConfig;
 posixTransportTcpConfig tcpConfig;
+#ifdef WOLFHSM_CFG_TLS
+posixTransportTlsConfig tlsConfig;
+#endif
 
 whCommClientConfig c_comm;
 
 whTransportClientCb shmCb = POSIX_TRANSPORT_SHM_CLIENT_CB;
 whTransportClientCb tcpCb = PTT_CLIENT_CB;
+#ifdef WOLFHSM_CFG_TLS
+whTransportClientCb tlsCb = PTTLS_CLIENT_CB;
+#endif
 
 #ifdef WOLFSSL_STATIC_MEMORY
 whTransportClientCb dmaCb = POSIX_TRANSPORT_SHM_CLIENT_CB;
@@ -122,6 +134,85 @@ int wh_PosixClient_ExampleTcpConfig(void* conf)
 
     return WH_ERROR_OK;
 }
+
+#if defined(WOLFHSM_CFG_TLS)
+/* client configuration setup example for TLS transport */
+#undef USE_CERT_BUFFERS_2048
+#define USE_CERT_BUFFERS_2048
+#include "wolfssl/certs_test.h"
+
+int wh_PosixClient_ExampleTlsConfig(void* conf)
+{
+    whClientConfig* c_conf = (whClientConfig*)conf;
+
+    memset(&tccTls, 0, sizeof(posixTransportTlsClientContext));
+
+    /* Initialize TLS context fields that need specific values */
+    tccTls.state         = 0;
+    tccTls.connect_fd_p1 = 0; /* Invalid fd */
+
+    tlsConfig.server_ip_string          = WH_POSIX_SERVER_TCP_IPSTRING;
+    tlsConfig.server_port               = WH_POSIX_SERVER_TCP_PORT;
+    tlsConfig.disable_peer_verification = false;
+
+    tlsConfig.ca_cert     = ca_cert_der_2048;
+    tlsConfig.ca_cert_len = sizeof_ca_cert_der_2048;
+    tlsConfig.cert        = client_cert_der_2048;
+    tlsConfig.cert_len    = sizeof_client_cert_der_2048;
+    tlsConfig.key         = client_key_der_2048;
+    tlsConfig.key_len     = sizeof_client_key_der_2048;
+    tlsConfig.heap_hint   = NULL;
+
+    c_comm.transport_cb      = &tlsCb;
+    c_comm.transport_context = (void*)&tccTls;
+    c_comm.transport_config  = (void*)&tlsConfig;
+    c_comm.client_id         = WH_POSIX_CLIENT_ID;
+    c_conf->comm             = &c_comm;
+
+    return WH_ERROR_OK;
+}
+
+
+#ifndef NO_PSK
+/* Simple PSK example callback */
+static unsigned int psk_tls12_client_cb(WOLFSSL* ssl, const char* hint,
+                                        char* identity, unsigned int id_max_len,
+                                        unsigned char* key,
+                                        unsigned int   key_max_len)
+{
+    size_t len;
+
+    memset(key, 0, key_max_len);
+    const char* exampleIdentity = "PSK_EXAMPLE_CLIENT_IDENTITY";
+
+    printf("PSK server identity hint: %s\n", hint);
+    printf("PSK using identity: %s\n", exampleIdentity);
+    strncpy(identity, exampleIdentity, id_max_len);
+
+    printf("Enter PSK password: ");
+    if (fgets((char*)key, key_max_len - 1, stdin) == NULL) {
+        memset(key, 0, key_max_len);
+        return 0U;
+    }
+
+    (void)ssl;
+    len               = strcspn((char*)key, "\n");
+    ((char*)key)[len] = '\0';
+    return (unsigned int)len;
+}
+
+
+int wh_PosixClient_ExamplePskConfig(void* conf)
+{
+    if (wh_PosixClient_ExampleTlsConfig(conf) != WH_ERROR_OK) {
+        return WH_ERROR_ABORTED;
+    }
+    tlsConfig.psk_client_cb = psk_tls12_client_cb;
+
+    return WH_ERROR_OK;
+}
+#endif /* NO_PSK */
+#endif /* WOLFHSM_CFG_TLS */
 
 
 /* client configuration setup example for transport */

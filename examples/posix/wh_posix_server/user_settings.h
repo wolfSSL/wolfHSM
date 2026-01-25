@@ -47,10 +47,15 @@ extern "C" {
 #define WOLFSSL_BASE64_ENCODE
 #define HAVE_ANONYMOUS_INLINE_AGGREGATES 1
 
-/* For cert manager */
+#ifndef WOLFHSM_CFG_TLS
+/* These macros reduce footprint size when TLS functionality is not needed */
 #define NO_TLS
 /* Eliminates need for IO layer since we only use CM */
 #define WOLFSSL_USER_IO
+#define WOLFSSL_NO_TLS12
+#define NO_PSK
+#endif /* WOLFHSM_CFG_TLS */
+
 /* For ACert support (also requires WOLFSSL_ASN_TEMPLATE) */
 #define WOLFSSL_ACERT
 
@@ -71,7 +76,6 @@ extern "C" {
 #define NO_ERROR_QUEUE
 #define NO_INLINE
 #define NO_OLD_TLS
-#define WOLFSSL_NO_TLS12
 #define NO_DO178
 /* Prevents certain functions (SHA, hash.c) on server from falling back to
  * client cryptoCb when using non-devId APIs */
@@ -154,7 +158,6 @@ extern "C" {
 /* Remove unneeded crypto */
 #define NO_DSA
 #define NO_RC4
-#define NO_PSK
 #define NO_MD4
 #define NO_MD5
 #define NO_DES3
@@ -190,11 +193,17 @@ extern "C" {
 #endif                       /* optional malloc check */
 #endif                       /* optional static memory */
 
-#ifdef WOLFHSM_CFG_DMA
+#if defined(WOLFHSM_CFG_DMA) || defined(WOLFHSM_CFG_TLS)
+/* If using DMA or TLS use static memory for no dynamic memory allocation */
 #undef WOLFSSL_STATIC_MEMORY
 #define WOLFSSL_STATIC_MEMORY
 #endif
 
+/* additional memory debugging macros, prints out each alloc and free */
+/* #define WOLFSSL_DEBUG_MEMORY */
+/* #define WOLFSSL_DEBUG_MEMORY_PRINT */
+
+/* #define DEBUG_WOLFSSL */
 #ifdef __cplusplus
 }
 #endif

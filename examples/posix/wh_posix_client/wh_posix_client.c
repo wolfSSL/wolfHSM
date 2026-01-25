@@ -94,7 +94,7 @@ static int wh_ClientTask(void* cf, const char* type, int test)
     WOLFHSM_CFG_PRINTF("Client connecting to server...\n");
     if (ret == 0 && test) {
         WOLFHSM_CFG_PRINTF("Running client demos...\n");
-        return wh_DemoClient_All(client);
+        ret = wh_DemoClient_All(client);
     }
 
     if (ret != 0) {
@@ -160,7 +160,17 @@ void Usage(const char* exeName)
 {
     WOLFHSM_CFG_PRINTF("Usage: %s --type <type> --test\n", exeName);
     WOLFHSM_CFG_PRINTF("Example: %s --type tcp\n", exeName);
-    WOLFHSM_CFG_PRINTF("type: tcp (default), shm\n");
+    WOLFHSM_CFG_PRINTF("type: tcp (default), shm");
+#ifdef WOLFHSM_CFG_TLS
+    WOLFHSM_CFG_PRINTF(", tls");
+#if !defined(NO_PSK)
+    WOLFHSM_CFG_PRINTF(", psk");
+#endif
+#endif /* WOLFHSM_CFG_TLS */
+#ifdef WOLFSSL_STATIC_MEMORY
+    WOLFHSM_CFG_PRINTF(", dma");
+#endif
+    WOLFHSM_CFG_PRINTF("\n");
 }
 
 int main(int argc, char** argv)
@@ -204,6 +214,18 @@ int main(int argc, char** argv)
         WOLFHSM_CFG_PRINTF("Using shared memory transport\n");
         wh_PosixClient_ExampleShmConfig(c_conf);
     }
+#ifdef WOLFHSM_CFG_TLS
+    else if (strcmp(type, "tls") == 0) {
+        WOLFHSM_CFG_PRINTF("Using TLS transport\n");
+        wh_PosixClient_ExampleTlsConfig(c_conf);
+    }
+#if !defined(NO_PSK)
+    else if (strcmp(type, "psk") == 0) {
+        WOLFHSM_CFG_PRINTF("Using TLS PSK transport\n");
+        wh_PosixClient_ExamplePskConfig(c_conf);
+    }
+#endif /* !NO_PSK */
+#endif /* WOLFHSM_CFG_TLS */
 #ifdef WOLFSSL_STATIC_MEMORY
     else if (strcmp(type, "dma") == 0) {
         WOLFHSM_CFG_PRINTF("Using DMA with shared memory transport\n");
