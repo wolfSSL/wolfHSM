@@ -152,6 +152,11 @@ ifeq ($(STRESS),1)
 	DEF += -DWOLFHSM_CFG_TEST_STRESS
 endif
 
+# Support an authentication-capable build
+ifeq ($(AUTH),1)
+	DEF += -DWOLFHSM_CFG_ENABLE_AUTHENTICATION
+endif
+
 ## Project defines
 # Option to build wolfcrypt tests
 ifeq ($(TESTWOLFCRYPT),1)

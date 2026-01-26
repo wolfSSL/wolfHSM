@@ -14,14 +14,16 @@
 #include "wolfhsm/wh_nvm.h"
 #include "wolfhsm/wh_nvm_flash.h"
 #include "wolfhsm/wh_flash_ramsim.h"
+#ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
 #include "wolfhsm/wh_auth.h"
+#include "port/posix/posix_auth.h"
+#endif /* WOLFHSM_CFG_ENABLE_AUTHENTICATION */
 
 #include "port/posix/posix_transport_shm.h"
 #include "port/posix/posix_transport_tcp.h"
 #ifdef WOLFHSM_CFG_TLS
 #include "port/posix/posix_transport_tls.h"
 #endif
-#include "port/posix/posix_auth.h"
 
 posixTransportShmConfig shmConfig;
 posixTransportTcpConfig tcpConfig;
@@ -654,6 +656,7 @@ int wh_PosixServer_ExampleNvmConfig(void* conf, const char* nvmInitFilePath)
 }
 
 
+#ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
 /* Default auth callback structure */
 static whAuthCb default_auth_cb = {
     .Init                      = posixAuth_Init,
@@ -727,3 +730,10 @@ int wh_PosixServer_ExampleAuthConfig(void* conf)
 
     return WH_ERROR_OK;
 }
+#else
+int wh_PosixServer_ExampleAuthConfig(void* conf)
+{
+    (void)conf;
+    return WH_ERROR_OK;
+}
+#endif /* WOLFHSM_CFG_ENABLE_AUTHENTICATION */

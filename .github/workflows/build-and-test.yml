@@ -76,3 +76,11 @@ jobs:
     # Build and test in multithreaded mode with everything enabled and wolfCrypt tests with dma
     - name: Build and test with THREADSAFE and TESTWOLFCRYPT with DMA
       run: cd test && make clean && make -j THREADSAFE=1 TESTWOLFCRYPT=1 TESTWOLFCRYPT_DMA=1 DMA=1 SHE=1 ASAN=1 WOLFSSL_DIR=../wolfssl && make run
+
+    # Build and test with AUTH=1
+    - name: Build and test with AUTH
+      run: cd test && make clean && make -j AUTH=1 WOLFSSL_DIR=../wolfssl && make run
+
+    # Build and test with AUTH=1 and ASAN
+    - name: Build and test with AUTH ASAN
+      run: cd test && make clean && make -j AUTH=1 ASAN=1 WOLFSSL_DIR=../wolfssl && make run
