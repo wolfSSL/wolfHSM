@@ -51,7 +51,7 @@
 
 int wh_Auth_Init(whAuthContext* context, const whAuthConfig* config)
 {
-    int rc = 0;
+    int rc = WH_ERROR_OK;
 
     if ((context == NULL) || (config == NULL)) {
         return WH_ERROR_BADARGS;
@@ -63,7 +63,7 @@ int wh_Auth_Init(whAuthContext* context, const whAuthConfig* config)
 
     if (context->cb != NULL && context->cb->Init != NULL) {
         rc = context->cb->Init(context->context, config->config);
-        if (rc != 0) {
+        if (rc != WH_ERROR_OK) {
             context->cb      = NULL;
             context->context = NULL;
         }
