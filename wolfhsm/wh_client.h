@@ -1847,7 +1847,7 @@ int wh_Client_CustomCbCheckRegistered(whClientContext* c, uint16_t id,
  * @param[in] c Pointer to the client context.
  * @param[in] method The authentication method to use (e.g.,
  * WH_AUTH_METHOD_PIN).
- * @param[in] username The user name to login
+ * @param[in] username The user name to login (null-terminated C string).
  * @param[in] auth_data Pointer to the authentication data.
  * @param[in] auth_data_len Length of the authentication data.
  * @return int Returns 0 on success, or a negative error code on failure.
@@ -1884,7 +1884,7 @@ int wh_Client_AuthLoginResponse(whClientContext* c, int32_t* out_rc,
  * @param[in] c Pointer to the client context.
  * @param[in] method The authentication method to use (e.g.,
  * WH_AUTH_METHOD_PIN).
- * @param[in] username The user name to login
+ * @param[in] username The user name to login (null-terminated C string).
  * @param[in] auth_data Pointer to the authentication data.
  * @param[in] auth_data_len Length of the authentication data.
  * @param[out] out_rc Pointer to store the return code from the server.
