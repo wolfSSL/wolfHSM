@@ -64,3 +64,11 @@ jobs:
     # Build and test with DEBUG_VERBOSE=1 (includes DEBUG)
     - name: Build and test with DEBUG_VERBOSE
       run: cd test && make clean && make -j DEBUG_VERBOSE=1 WOLFSSL_DIR=../wolfssl && make run
+
+    # Build and test with AUTH=1
+    - name: Build and test with AUTH
+      run: cd test && make clean && make -j AUTH=1 WOLFSSL_DIR=../wolfssl && make run
+
+    # Build and test with AUTH=1 and ASAN
+    - name: Build and test with AUTH ASAN
+      run: cd test && make clean && make -j AUTH=1 ASAN=1 WOLFSSL_DIR=../wolfssl && make run
