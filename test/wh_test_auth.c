@@ -576,6 +576,11 @@ int whTest_AuthLogin(whClientContext* client)
     WH_TEST_RETURN_ON_FAIL(
         _whTest_Auth_LoginOp(client, WH_AUTH_METHOD_PIN, TEST_ADMIN_USERNAME,
                              "wrong", 5, &server_rc, &user_id));
+    if (server_rc == WH_AUTH_NOT_ENABLED) {
+        WH_TEST_PRINT("Server does not support authentication, skipping "
+            "authentication tests\n");
+        return WH_AUTH_NOT_ENABLED;
+    }
     WH_TEST_ASSERT_RETURN(server_rc == WH_AUTH_LOGIN_FAILED ||
                           server_rc != WH_ERROR_OK);
     WH_TEST_ASSERT_RETURN(user_id == WH_USER_ID_INVALID);
@@ -1165,10 +1170,34 @@ int whTest_AuthRequestAuthorization(whClientContext* client)
     return WH_TEST_SUCCESS;
 }
 
+
+static int CheckServerSupportsAuth(whClientContext* client_ctx)
+{
+    int32_t server_rc;
+    whUserId user_id;
+    int isSupported = 0;
+
+    WH_TEST_RETURN_ON_FAIL(wh_Client_AuthLogin(client_ctx, WH_AUTH_METHOD_PIN,
+        TEST_ADMIN_USERNAME, TEST_ADMIN_PIN, strlen(TEST_ADMIN_PIN), &server_rc,
+        &user_id));
+    if (server_rc != WH_AUTH_NOT_ENABLED) {
+        WH_TEST_RETURN_ON_FAIL(wh_Client_AuthLogout(client_ctx, user_id,
+            &server_rc));
+        isSupported = 1;
+    }
+    return isSupported;
+}
+
 /* Main Test Function */
 int whTest_AuthTest(whClientContext* client_ctx)
 {
     WH_TEST_PRINT("Testing authentication functionality...\n");
+
+    if (!CheckServerSupportsAuth(client_ctx)) {
+        WH_TEST_PRINT("Server does not support authentication, skipping "
+            "authentication tests\n");
+        return WH_TEST_SKIP;
+    }
 
     WH_TEST_PRINT("Running auth bad-args tests...\n");
     WH_TEST_RETURN_ON_FAIL(_whTest_Auth_BadArgs());

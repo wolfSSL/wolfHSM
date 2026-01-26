@@ -5302,10 +5302,12 @@ int whTest_CryptoClientConfig(whClientConfig* config)
 
     if (ret == 0) {
 #ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
+        int serverRc;
+
         /* Attempt log in as an admin user for the rest of the tests */
         WH_TEST_RETURN_ON_FAIL(wh_Client_AuthLogin(client, WH_AUTH_METHOD_PIN,
             TEST_ADMIN_USERNAME, TEST_ADMIN_PIN, strlen(TEST_ADMIN_PIN),
-            NULL, NULL));
+            &serverRc, NULL));
 #endif /* WOLFHSM_CFG_ENABLE_AUTHENTICATION */
     }
 
