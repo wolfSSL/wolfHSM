@@ -71,6 +71,7 @@ enum WH_ERROR_ENUM {
     /* Auth error codes */
     WH_AUTH_LOGIN_FAILED     = -2300, /* user login attempt failed */
     WH_AUTH_PERMISSION_ERROR = -2301, /* user attempted an action not allowed */
+    WH_AUTH_NOT_ENABLED      = -2302, /* server does not have auth feature */
 };
 
 #define WH_SHE_ERC_NO_ERROR WH_ERROR_OK
