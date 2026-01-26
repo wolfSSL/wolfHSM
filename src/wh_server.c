@@ -563,12 +563,22 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
                     size, data, &size, data);
         break;
 
-#ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
         case WH_MESSAGE_GROUP_AUTH:
+#ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
             rc = wh_Server_HandleAuthRequest(server, magic, action, seq, size,
                                              data, &size, data);
-            break;
+#else
+            /* Format simple error response indicating auth is not enabled */
+            rc = WH_AUTH_NOT_ENABLED;
+            if (data != NULL) {
+                *(int32_t*)data = (int32_t)wh_Translate32(magic, (uint32_t)rc);
+                size = sizeof(int32_t);
+            }
+            else {
+                size = 0;
+            }
 #endif /* WOLFHSM_CFG_ENABLE_AUTHENTICATION */
+        break;
 
         case WH_MESSAGE_GROUP_COUNTER:
             rc = wh_Server_HandleCounter(server, magic, action, size, data,

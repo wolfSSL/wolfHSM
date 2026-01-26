@@ -110,6 +110,10 @@ int wh_Client_AuthLoginResponse(whClientContext* c, int32_t* out_rc,
         return WH_ERROR_BADARGS;
     }
 
+    if (out_user_id != NULL) {
+        *out_user_id = WH_USER_ID_INVALID;
+    }
+
     rc = wh_Client_RecvResponse(c, &resp_group, &resp_action, &resp_size,
                                 buffer);
     if (rc == WH_ERROR_OK) {
@@ -117,8 +121,18 @@ int wh_Client_AuthLoginResponse(whClientContext* c, int32_t* out_rc,
         if ((resp_group != WH_MESSAGE_GROUP_AUTH) ||
             (resp_action != WH_MESSAGE_AUTH_ACTION_LOGIN) ||
             (resp_size != sizeof(whMessageAuth_LoginResponse))) {
-            /* Invalid message */
             rc = WH_ERROR_ABORTED;
+
+            /* check if server did not understand the request and responded with
+             * a simple error response */
+            if (resp_size == sizeof(whMessageAuth_SimpleResponse)) {
+                /* NOT accepting WH_ERROR_OK from server if we got a response
+                 * other than a login response */
+                if (out_rc != NULL && msg->rc != WH_ERROR_OK) {
+                    *out_rc = msg->rc;
+                    rc = WH_ERROR_OK;
+                }
+            }
         }
         else {
             /* Valid message */

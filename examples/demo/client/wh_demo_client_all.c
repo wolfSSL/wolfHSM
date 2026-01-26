@@ -3,6 +3,7 @@
 #include "wh_demo_client_nvm.h"
 #ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
 #include "wh_demo_client_auth.h"
+#include "wolfhsm/wh_error.h"
 #endif /* WOLFHSM_CFG_ENABLE_AUTHENTICATION */
 #include "wh_demo_client_keystore.h"
 #include "wh_demo_client_crypto.h"
@@ -26,7 +27,7 @@ int wh_DemoClient_All(whClientContext* clientContext)
         4, &rc, &userId) != 0) {
         return -1;
     }
-    if (rc != 0) {
+    if (rc != WH_ERROR_OK && rc != WH_AUTH_NOT_ENABLED) {
         return rc;
     }
 #endif /* WOLFHSM_CFG_ENABLE_AUTHENTICATION */
