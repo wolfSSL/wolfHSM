@@ -35,7 +35,9 @@
 #include "posix_auth.h"
 
 /* hash pin with use as credentials */
+#ifndef WOLFHSM_CFG_NO_CRYPTO
 #include <wolfssl/wolfcrypt/hash.h>
+#endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
 /* simple base user list */
 #define WH_AUTH_BASE_MAX_USERS 5
@@ -82,34 +84,50 @@ static whAuthBase_User* posixAuth_FindUser(const char* username)
     return NULL;
 }
 
-/* Hash PIN credentials using SHA256 */
+/* Hash PIN credentials using SHA256 (if crypto is available) */
 static int posixAuth_HashPin(const void* pin, uint16_t pin_len,
                              unsigned char* hash_out)
 {
+#ifndef WOLFHSM_CFG_NO_CRYPTO
     int ret = wc_Sha256Hash_ex((const unsigned char*)pin, (word32)pin_len, hash_out,
                                NULL, INVALID_DEVID);
     if (ret != 0) {
         return WH_ERROR_ABORTED;
     }
     return WH_ERROR_OK;
+#else
+    /* When crypto is disabled, just copy the PIN as-is */
+    if (pin_len > WH_AUTH_BASE_MAX_CREDENTIALS_LEN) {
+        return WH_ERROR_BUFFER_SIZE;
+    }
+    memcpy(hash_out, pin, pin_len);
+    return WH_ERROR_OK;
+#endif /* WOLFHSM_CFG_NO_CRYPTO */
 }
 
 static whAuthBase_User* posixAuth_CheckPin(const char* username, const void* auth_data,
                                  uint16_t auth_data_len)
 {
     whAuthBase_User* found_user;
-    unsigned char hash[WC_SHA256_DIGEST_SIZE];
+    unsigned char authCheck[WH_AUTH_BASE_MAX_CREDENTIALS_LEN];
+    uint16_t authCheck_len;
     int rc;
 
-    rc = posixAuth_HashPin(auth_data, auth_data_len, hash);
+    /* Process auth_data: hash if crypto enabled, copy if disabled */
+    rc = posixAuth_HashPin(auth_data, auth_data_len, authCheck);
     if (rc != WH_ERROR_OK) {
         return NULL;
     }
+#ifndef WOLFHSM_CFG_NO_CRYPTO
+    authCheck_len = WC_SHA256_DIGEST_SIZE;
+#else
+    authCheck_len = auth_data_len;
+#endif /* WOLFHSM_CFG_NO_CRYPTO */
 
     found_user = posixAuth_FindUser(username);
     if (found_user != NULL && found_user->method == WH_AUTH_METHOD_PIN &&
-        found_user->credentials_len == WC_SHA256_DIGEST_SIZE &&
-        memcmp(found_user->credentials, hash, WC_SHA256_DIGEST_SIZE) == 0) {
+        found_user->credentials_len == authCheck_len &&
+        memcmp(found_user->credentials, authCheck, authCheck_len) == 0) {
         return found_user;
     }
     return NULL;
@@ -394,6 +412,7 @@ int posixAuth_UserAdd(void* context, const char* username,
     if (credentials != NULL && credentials_len > 0) {
         new_user->method = method;
         if (method == WH_AUTH_METHOD_PIN) {
+#ifndef WOLFHSM_CFG_NO_CRYPTO
             /* Hash PIN before storing */
             unsigned char hash[WC_SHA256_DIGEST_SIZE];
             int rc = posixAuth_HashPin(credentials, credentials_len, hash);
@@ -402,6 +421,14 @@ int posixAuth_UserAdd(void* context, const char* username,
             }
             memcpy(new_user->credentials, hash, WC_SHA256_DIGEST_SIZE);
             new_user->credentials_len = WC_SHA256_DIGEST_SIZE;
+#else
+            /* When crypto is disabled, store PIN as-is */
+            if (credentials_len > WH_AUTH_BASE_MAX_CREDENTIALS_LEN) {
+                return WH_ERROR_BUFFER_SIZE;
+            }
+            memcpy(new_user->credentials, credentials, credentials_len);
+            new_user->credentials_len = credentials_len;
+#endif /* WOLFHSM_CFG_NO_CRYPTO */
         }
         else {
             /* For non-PIN methods (e.g., certificate), store as-is */
@@ -522,6 +549,7 @@ int posixAuth_UserSetCredentials(void* context, uint16_t user_id,
             return WH_ERROR_ACCESS;
         }
         if (user->method == WH_AUTH_METHOD_PIN) {
+#ifndef WOLFHSM_CFG_NO_CRYPTO
             /* For PIN, hash the provided credentials before comparing */
             unsigned char hash[WC_SHA256_DIGEST_SIZE];
             int rc = posixAuth_HashPin(current_credentials, current_credentials_len, hash);
@@ -532,6 +560,14 @@ int posixAuth_UserSetCredentials(void* context, uint16_t user_id,
                 memcmp(user->credentials, hash, WC_SHA256_DIGEST_SIZE) != 0) {
                 return WH_ERROR_ACCESS;
             }
+#else
+            /* When crypto is disabled, compare PINs directly */
+            if (user->credentials_len != current_credentials_len ||
+                memcmp(user->credentials, current_credentials,
+                       current_credentials_len) != 0) {
+                return WH_ERROR_ACCESS;
+            }
+#endif /* WOLFHSM_CFG_NO_CRYPTO */
         }
         else {
             /* For non-PIN methods, compare as-is */
@@ -554,6 +590,7 @@ int posixAuth_UserSetCredentials(void* context, uint16_t user_id,
     user->method = method;
     if (new_credentials_len > 0) {
         if (method == WH_AUTH_METHOD_PIN) {
+#ifndef WOLFHSM_CFG_NO_CRYPTO
             /* Hash PIN before storing */
             unsigned char hash[WC_SHA256_DIGEST_SIZE];
             int rc = posixAuth_HashPin(new_credentials, new_credentials_len, hash);
@@ -562,6 +599,14 @@ int posixAuth_UserSetCredentials(void* context, uint16_t user_id,
             }
             memcpy(user->credentials, hash, WC_SHA256_DIGEST_SIZE);
             user->credentials_len = WC_SHA256_DIGEST_SIZE;
+#else
+            /* When crypto is disabled, store PIN as-is */
+            if (new_credentials_len > WH_AUTH_BASE_MAX_CREDENTIALS_LEN) {
+                return WH_ERROR_BUFFER_SIZE;
+            }
+            memcpy(user->credentials, new_credentials, new_credentials_len);
+            user->credentials_len = new_credentials_len;
+#endif /* WOLFHSM_CFG_NO_CRYPTO */
         }
         else {
             /* For non-PIN methods (e.g., certificate), store as-is */

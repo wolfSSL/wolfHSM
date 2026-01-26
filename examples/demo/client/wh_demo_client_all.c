@@ -1,7 +1,9 @@
 #include "wh_demo_client_wctest.h"
 #include "wh_demo_client_wcbench.h"
 #include "wh_demo_client_nvm.h"
+#ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
 #include "wh_demo_client_auth.h"
+#endif /* WOLFHSM_CFG_ENABLE_AUTHENTICATION */
 #include "wh_demo_client_keystore.h"
 #include "wh_demo_client_crypto.h"
 #include "wh_demo_client_secboot.h"
@@ -11,6 +13,7 @@
 int wh_DemoClient_All(whClientContext* clientContext)
 {
     int rc = 0;
+#ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
     whUserId userId = WH_USER_ID_INVALID;
     /* Auth demos */
     rc = wh_DemoClient_Auth(clientContext);
@@ -26,6 +29,7 @@ int wh_DemoClient_All(whClientContext* clientContext)
     if (rc != 0) {
         return rc;
     }
+#endif /* WOLFHSM_CFG_ENABLE_AUTHENTICATION */
 
     /* wolfCrypt test and benchmark */
 #ifdef WH_DEMO_WCTEST

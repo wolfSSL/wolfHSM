@@ -98,6 +98,11 @@ ifeq ($(TLS),1)
 CFLAGS += -DWOLFHSM_CFG_TLS
 endif
 
+# Support an authentication-capable build
+ifeq ($(AUTH),1)
+DEF += -DWOLFHSM_CFG_ENABLE_AUTHENTICATION
+endif
+
 ifeq ($(DMA),1)
 CFLAGS += -DWOLFHSM_CFG_DMA
 endif

@@ -415,12 +415,14 @@ int main(int argc, char** argv)
         return rc;
     }
 
+#ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
     /* Auth Manager Configuration */
     rc = wh_PosixServer_ExampleAuthConfig(s_conf);
     if (rc != WH_ERROR_OK) {
         WOLFHSM_CFG_PRINTF("Failed to initialize Auth Manager: %d\n", rc);
         return rc;
     }
+#endif /* WOLFHSM_CFG_ENABLE_AUTHENTICATION */
 
 #if !defined(WOLFHSM_CFG_NO_CRYPTO)
     /* Crypto context */
