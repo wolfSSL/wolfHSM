@@ -42,7 +42,9 @@
 #include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_message_comm.h"
 #include "wolfhsm/wh_message_nvm.h"
+#ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
 #include "wolfhsm/wh_message_auth.h"
+#endif /* WOLFHSM_CFG_ENABLE_AUTHENTICATION */
 #if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER) && !defined(WOLFHSM_CFG_NO_CRYPTO)
 #include "wolfhsm/wh_message_cert.h"
 #endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER && !WOLFHSM_CFG_NO_CRYPTO */
@@ -50,10 +52,10 @@
 /* Server API's */
 #include "wolfhsm/wh_server.h"
 #include "wolfhsm/wh_server_nvm.h"
-#ifndef WOLFHSM_CFG_NO_AUTHENTICATION
+#ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
 #include "wolfhsm/wh_auth.h"
-#endif /* WOLFHSM_CFG_NO_AUTHENTICATION */
 #include "wolfhsm/wh_server_auth.h"
+#endif /* WOLFHSM_CFG_ENABLE_AUTHENTICATION */
 #include "wolfhsm/wh_server_crypto.h"
 #include "wolfhsm/wh_server_keystore.h"
 #include "wolfhsm/wh_server_counter.h"
@@ -262,14 +264,14 @@ static int _wh_Server_HandleCommRequest(whServerContext* server,
         /* No message */
         /* Process the close action */
 
-#ifndef WOLFHSM_CFG_NO_AUTHENTICATION
+#ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
         /* Log out the current user when communication channel closes */
         if (server->auth != NULL && server->auth->user.user_id !=
                 WH_USER_ID_INVALID) {
             whUserId user_id = server->auth->user.user_id;
             (void)wh_Auth_Logout(server->auth, user_id);
         }
-#endif /* WOLFHSM_CFG_NO_AUTHENTICATION */
+#endif /* WOLFHSM_CFG_ENABLE_AUTHENTICATION */
 
         wh_Server_SetConnected(server, WH_COMM_DISCONNECTED);
         *out_resp_size = 0;
@@ -316,6 +318,7 @@ static int _wh_Server_HandlePkcs11Request(whServerContext* server,
     return rc;
 }
 
+#ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
 /* Helper to format an authorization error response for any group/action.
  * All response structures have int32_t rc as the first field.
  * Returns the response size to send. */
@@ -337,6 +340,7 @@ static uint16_t _wh_Server_FormatAuthErrorResponse(uint16_t magic,
         (int32_t)wh_Translate32(magic, (uint32_t)error_code);
 
     switch (group) {
+#ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
         case WH_MESSAGE_GROUP_AUTH:
             /* Auth group has some responses larger than SimpleResponse */
             switch (action) {
@@ -383,6 +387,7 @@ static uint16_t _wh_Server_FormatAuthErrorResponse(uint16_t magic,
                 }
             }
             break;
+#endif /* WOLFHSM_CFG_ENABLE_AUTHENTICATION */
 
         case WH_MESSAGE_GROUP_NVM:
             /* NVM group - some actions have larger responses than
@@ -481,6 +486,7 @@ static uint16_t _wh_Server_FormatAuthErrorResponse(uint16_t magic,
 
     return resp_size;
 }
+#endif /* WOLFHSM_CFG_ENABLE_AUTHENTICATION */
 
 
 int wh_Server_HandleRequestMessage(whServerContext* server)
@@ -514,7 +520,7 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
         group = WH_MESSAGE_GROUP(kind);
         action = WH_MESSAGE_ACTION(kind);
 
-#ifndef WOLFHSM_CFG_NO_AUTHENTICATION
+#ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
         /* General authentication check for if user has permissions for the
          * group and action requested. When dealing with key ID's there should
          * be an additional authorization check after parsing the request and
@@ -543,7 +549,7 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
                 return rc;
             }
         }
-#endif /* WOLFHSM_CFG_NO_AUTHENTICATION */
+#endif /* WOLFHSM_CFG_ENABLE_AUTHENTICATION */
 
         switch (group) {
 
@@ -557,10 +563,12 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
                     size, data, &size, data);
         break;
 
+#ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
         case WH_MESSAGE_GROUP_AUTH:
             rc = wh_Server_HandleAuthRequest(server, magic, action, seq, size,
                                              data, &size, data);
             break;
+#endif /* WOLFHSM_CFG_ENABLE_AUTHENTICATION */
 
         case WH_MESSAGE_GROUP_COUNTER:
             rc = wh_Server_HandleCounter(server, magic, action, size, data,

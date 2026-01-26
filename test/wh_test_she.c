@@ -171,10 +171,12 @@ int whTest_SheClientConfig(whClientConfig* config)
     WH_TEST_RETURN_ON_FAIL(wh_Client_Init(client, config));
     WH_TEST_RETURN_ON_FAIL(wh_Client_CommInit(client, &outClientId, &outServerId));
 
+#ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
     /* Attempt log in as an admin user for the rest of the tests */
     WH_TEST_RETURN_ON_FAIL(wh_Client_AuthLogin(client, WH_AUTH_METHOD_PIN,
         TEST_ADMIN_USERNAME, TEST_ADMIN_PIN, strlen(TEST_ADMIN_PIN),
         NULL, NULL));
+#endif /* WOLFHSM_CFG_ENABLE_AUTHENTICATION */
 
     {
         int32_t  server_rc       = 0;

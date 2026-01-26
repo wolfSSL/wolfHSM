@@ -30,21 +30,24 @@
 #include "wolfhsm/wh_transport_mem.h"
 #include "wolfhsm/wh_client.h"
 #include "wolfhsm/wh_server.h"
+#ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
 #include "wolfhsm/wh_auth.h"
+#include "wolfhsm/wh_message_auth.h"
+#include "port/posix/posix_auth.h"
+#endif /* WOLFHSM_CFG_ENABLE_AUTHENTICATION */
 #include "wolfhsm/wh_nvm.h"
 #include "wolfhsm/wh_nvm_flash.h"
 #include "wolfhsm/wh_flash_ramsim.h"
 #include "wolfhsm/wh_message.h"
-#include "wolfhsm/wh_message_auth.h"
 
 #include "wh_test_common.h"
+#ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
 #include "wh_test_auth.h"
+#endif /* WOLFHSM_CFG_ENABLE_AUTHENTICATION */
 
 #if defined(WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP)
 #include "port/posix/posix_transport_tcp.h"
 #endif
-
-#include "port/posix/posix_auth.h"
 
 #define FLASH_RAM_SIZE (1024 * 1024) /* 1MB */
 #define BUFFER_SIZE 4096
@@ -55,6 +58,8 @@
 #ifndef TEST_ADMIN_PIN
 #define TEST_ADMIN_PIN "1234"
 #endif
+
+#ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
 
 #if !defined(WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP) && defined(WOLFHSM_CFG_ENABLE_SERVER)
 /* Memory transport mode - setup structures */
@@ -1235,3 +1240,4 @@ int whTest_AuthMEM(void)
     return WH_TEST_FAIL;
 #endif
 }
+#endif /* WOLFHSM_CFG_ENABLE_AUTHENTICATION */

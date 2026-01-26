@@ -42,7 +42,9 @@
 #include "wh_test_log.h"
 #include "wh_test_lock.h"
 #include "wh_test_posix_threadsafe_stress.h"
+#ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
 #include "wh_test_auth.h"
+#endif /* WOLFHSM_CFG_ENABLE_AUTHENTICATION */
 
 #if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER)
 #include "wh_test_cert.h"
@@ -90,8 +92,10 @@ int whTest_Unit(void)
     WH_TEST_ASSERT(0 == whTest_Comm());
     WH_TEST_ASSERT(0 == whTest_ClientServer());
 
+#ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
     /* Auth tests */
     WH_TEST_ASSERT(0 == whTest_AuthMEM());
+#endif /* WOLFHSM_CFG_ENABLE_AUTHENTICATION */
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     /* Crypto Tests */
@@ -156,7 +160,9 @@ int whTest_ClientConfig(whClientConfig* clientCfg)
     WH_TEST_RETURN_ON_FAIL(whTest_WolfCryptTestCfg(clientCfg));
 #endif /* WOLFHSM_CFG_TEST_WOLFCRYPTTEST */
 
+#ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
     WH_TEST_RETURN_ON_FAIL(whTest_AuthTCP(clientCfg));
+#endif /* WOLFHSM_CFG_ENABLE_AUTHENTICATION */
 
     return WH_ERROR_OK;
 }

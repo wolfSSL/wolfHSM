@@ -26,6 +26,7 @@
 #include "wolfhsm/wh_server.h"
 #include "wolfhsm/wh_client.h"
 
+#ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
 #include "wolfhsm/wh_auth.h"
 #include "wh_test_common.h"
 
@@ -44,4 +45,5 @@ int whTest_AuthSetCredentials(whClientContext* client);
 int whTest_AuthRequestAuthorization(whClientContext* client);
 int whTest_AuthKeyAuthorization(whClientContext* client);
 
+#endif /* WOLFHSM_CFG_ENABLE_AUTHENTICATION */
 #endif /* WOLFHSM_WH_TEST_AUTH_H_ */

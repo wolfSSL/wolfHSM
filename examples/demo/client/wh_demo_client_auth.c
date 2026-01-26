@@ -23,6 +23,7 @@
 
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_client.h"
+#ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
 #include "wolfhsm/wh_auth.h"
 #include "wolfhsm/wh_message.h"
 
@@ -414,3 +415,4 @@ int wh_DemoClient_Auth(whClientContext* clientContext)
     printf("[AUTH-DEMO] Authentication demo completed.\n");
     return rc;
 }
+#endif /* WOLFHSM_CFG_ENABLE_AUTHENTICATION */
