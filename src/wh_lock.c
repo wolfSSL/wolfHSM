@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024 wolfSSL Inc.
+ * Copyright (C) 2026 wolfSSL Inc.
  *
  * This file is part of wolfHSM.
  *
@@ -27,6 +27,7 @@
 #include "wolfhsm/wh_settings.h"
 
 #include <stddef.h> /* For NULL */
+#include <string.h> /* For memset */
 
 #include "wolfhsm/wh_lock.h"
 #include "wolfhsm/wh_error.h"
@@ -45,6 +46,7 @@ int wh_Lock_Init(whLock* lock, const whLockConfig* config)
     if ((config == NULL) || (config->cb == NULL)) {
         lock->cb      = NULL;
         lock->context = NULL;
+        lock->initialized = 1; /* Mark as initialized even in no-op mode */
         return WH_ERROR_OK;
     }
 
@@ -57,10 +59,12 @@ int wh_Lock_Init(whLock* lock, const whLockConfig* config)
         if (ret != WH_ERROR_OK) {
             lock->cb      = NULL;
             lock->context = NULL;
+            /* Do not set initialized on failure */
             return ret;
         }
     }
 
+    lock->initialized = 1; /* Mark as initialized after successful init */
     return WH_ERROR_OK;
 }
 
@@ -74,16 +78,26 @@ int wh_Lock_Cleanup(whLock* lock)
         (void)lock->cb->cleanup(lock->context);
     }
 
-    lock->cb      = NULL;
-    lock->context = NULL;
+    /* Zero the entire structure to make post-cleanup state distinguishable */
+    memset(lock, 0, sizeof(*lock));
 
     return WH_ERROR_OK;
 }
 
 int wh_Lock_Acquire(whLock* lock)
 {
-    /* No-op if lock is NULL or not configured */
-    if ((lock == NULL) || (lock->cb == NULL) || (lock->cb->acquire == NULL)) {
+    /* Return error if lock is NULL */
+    if (lock == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Return error if lock is not initialized */
+    if (lock->initialized == 0) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* No-op if not configured (no callbacks) */
+    if ((lock->cb == NULL) || (lock->cb->acquire == NULL)) {
         return WH_ERROR_OK;
     }
 
@@ -92,8 +106,18 @@ int wh_Lock_Acquire(whLock* lock)
 
 int wh_Lock_Release(whLock* lock)
 {
-    /* No-op if lock is NULL or not configured */
-    if ((lock == NULL) || (lock->cb == NULL) || (lock->cb->release == NULL)) {
+    /* Return error if lock is NULL */
+    if (lock == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Return error if lock is not initialized */
+    if (lock->initialized == 0) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* No-op if not configured (no callbacks) */
+    if ((lock->cb == NULL) || (lock->cb->release == NULL)) {
         return WH_ERROR_OK;
     }
 

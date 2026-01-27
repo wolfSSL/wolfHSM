@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2025 wolfSSL Inc.
+ * Copyright (C) 2026 wolfSSL Inc.
  *
  * This file is part of wolfHSM.
  *
@@ -17,13 +17,13 @@
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
 /*
- * test/wh_test_threadsafe_stress.c
+ * test/wh_test_posix_threadsafe_stress.c
  *
- * Phased contention test for thread safety validation.
+ * POSIX-based phased contention test for thread safety validation.
  *
  * Intended to drive a high volume of concurrent requests across multiple
  * servers sharing a single NVM context, while running under TSAN to detect any
- * data races.
+ * data races. Uses POSIX threading primitives (pthreads).
  *
  * Architecture:
  * - 1 shared NVM context with lock
@@ -31,6 +31,10 @@
  * - 4 client threads (all doing both NVM and keystore ops)
  * - Different contention phases to stress test contention patterns across
  *    various different APIs
+ *
+ * NOTE: Uses PTHREAD_MUTEX_ERRORCHECK attribute to trap undefined behavior
+ * errors (EDEADLK for deadlock, EPERM for non-owner unlock) which indicate
+ * bugs in the locking implementation.
  */
 
 #include "wolfhsm/wh_settings.h"
@@ -65,7 +69,7 @@
 #include "wolfssl/wolfcrypt/random.h"
 
 #include "wh_test_common.h"
-#include "wh_test_threadsafe_stress.h"
+#include "wh_test_posix_threadsafe_stress.h"
 
 
 /*
@@ -2054,7 +2058,7 @@ cleanup:
          !WOLFHSM_CFG_GLOBAL_KEYS || !WOLFHSM_CFG_ENABLE_CLIENT || \
          !WOLFHSM_CFG_ENABLE_SERVER || WOLFHSM_CFG_NO_CRYPTO */
 
-#include "wh_test_threadsafe_stress.h"
+#include "wh_test_posix_threadsafe_stress.h"
 #include "wh_test_common.h"
 
 int whTest_ThreadSafeStress(void)

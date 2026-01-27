@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024 wolfSSL Inc.
+ * Copyright (C) 2026 wolfSSL Inc.
  *
  * This file is part of wolfHSM.
  *
@@ -81,10 +81,17 @@ typedef struct whLockCb_t {
  *
  * Holds callback table and platform-specific context.
  * The context pointer is passed to all callbacks.
+ *
+ * IMPORTANT: Lock initialization and cleanup must be performed in a
+ * single-threaded context before any threads attempt to use the lock. The
+ * initialized flag is not atomic and is only safe to access during
+ * initialization/cleanup phases.
  */
 typedef struct whLock_t {
     const whLockCb* cb;      /* Platform callbacks (may be NULL) */
     void*           context; /* Platform context (e.g., mutex pointer) */
+    int     initialized;     /* 1 if initialized, 0 otherwise (not atomic) */
+    uint8_t WH_PAD[4];
 } whLock;
 
 /**
@@ -103,21 +110,42 @@ typedef struct whLockConfig_t {
  * If config is NULL or config->cb is NULL, locking is disabled
  * (single-threaded mode) and all lock operations become no-ops.
  *
- * @param[in] lock Pointer to the lock structure.
- * @param[in] config Pointer to the lock configuration (may be NULL).
- * @return int Returns WH_ERROR_OK on success, or a negative error code on
- *         failure.
+ * IMPORTANT: Initialization must be performed in a single-threaded context
+ * before any threads attempt to use the lock. The initialized flag is not
+ * atomic and is only safe to access during initialization/cleanup phases.
+ *
+ * On error, no state is modified.
+ *
+ * @param[in] lock Pointer to the lock structure. Must not be NULL.
+ * @param[in] config Pointer to the lock configuration (may be NULL for no-op
+ * mode).
+ * @return int Returns WH_ERROR_OK on success.
+ *         Returns WH_ERROR_BADARGS if lock is NULL.
+ *         Returns negative error code on callback initialization failure.
  */
 int wh_Lock_Init(whLock* lock, const whLockConfig* config);
 
 /**
  * @brief Cleans up a lock instance.
  *
- * This function cleans up the lock by calling the cleanup callback.
+ * This function cleans up the lock by calling the cleanup callback and then
+ * zeros the entire structure to make post-cleanup state distinguishable.
+ *
+ * IMPORTANT: Cleanup must only be called when no other threads are accessing
+ * the lock. Calling cleanup while the lock is held or while other threads are
+ * waiting results in undefined behavior. In typical usage, cleanup occurs
+ * during controlled shutdown sequences after all worker threads have been
+ * stopped.
+ *
+ * Cleanup must be performed in a single-threaded context, similar to
+ * initialization.
+ *
+ * This function is idempotent - calling cleanup on an already cleaned up or
+ * uninitialized lock returns WH_ERROR_OK.
  *
  * @param[in] lock Pointer to the lock structure.
- * @return int Returns WH_ERROR_OK on success, or WH_ERROR_BADARGS if lock
- *         is NULL.
+ * @return int Returns WH_ERROR_OK on success.
+ *         Returns WH_ERROR_BADARGS if lock is NULL.
  */
 int wh_Lock_Cleanup(whLock* lock);
 
@@ -125,11 +153,13 @@ int wh_Lock_Cleanup(whLock* lock);
  * @brief Acquires exclusive access to a lock.
  *
  * This function blocks until the lock is acquired. If no callbacks are
- * configured, this is a no-op that returns WH_ERROR_OK.
+ * configured (no-op mode), this returns WH_ERROR_OK immediately.
  *
- * @param[in] lock Pointer to the lock structure.
- * @return int Returns WH_ERROR_OK on success, or a negative error code on
- *         failure (e.g., WH_ERROR_LOCKED if acquisition failed).
+ * @param[in] lock Pointer to the lock structure. Must not be NULL.
+ * @return int Returns WH_ERROR_OK on success (lock acquired or no-op mode).
+ *         Returns WH_ERROR_BADARGS if lock is NULL or not initialized.
+ *         Returns WH_ERROR_ABORTED if the blocking operation itself failed
+ *                 (indicates callback failure, not contention).
  */
 int wh_Lock_Acquire(whLock* lock);
 
@@ -137,11 +167,16 @@ int wh_Lock_Acquire(whLock* lock);
  * @brief Releases exclusive access to a lock.
  *
  * This function releases a previously acquired lock. If no callbacks are
- * configured, this is a no-op that returns WH_ERROR_OK.
+ * configured (no-op mode), this returns WH_ERROR_OK immediately.
  *
- * @param[in] lock Pointer to the lock structure.
- * @return int Returns WH_ERROR_OK on success, or a negative error code on
- *         failure.
+ * Releasing a lock that is initialized but not currently acquired returns
+ * WH_ERROR_OK (idempotent behavior).
+ *
+ * @param[in] lock Pointer to the lock structure. Must not be NULL.
+ * @return int Returns WH_ERROR_OK on success (lock released or no-op mode).
+ *         Returns WH_ERROR_BADARGS if lock is NULL or not initialized.
+ *         Returns WH_ERROR_LOCKED (optional) if non-owner attempts to release
+ *                 or owner attempts double-acquire (platform-specific).
  */
 int wh_Lock_Release(whLock* lock);
 

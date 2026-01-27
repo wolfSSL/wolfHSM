@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024 wolfSSL Inc.
+ * Copyright (C) 2026 wolfSSL Inc.
  *
  * This file is part of wolfHSM.
  *
@@ -75,6 +75,18 @@ static int testLockLifecycle(whLockConfig* lockConfig)
     rc = wh_Lock_Cleanup(&lock);
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_OK);
 
+    /* After cleanup, acquire should fail */
+    rc = wh_Lock_Acquire(&lock);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
+
+    /* After cleanup, release should fail */
+    rc = wh_Lock_Release(&lock);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
+
+    /* Second cleanup should succeed (idempotent) */
+    rc = wh_Lock_Cleanup(&lock);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_OK);
+
     WH_TEST_PRINT("  Lock lifecycle: PASS\n");
     return WH_ERROR_OK;
 }
@@ -105,6 +117,33 @@ static int testNullConfigNoOp(void)
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_OK);
 
     WH_TEST_PRINT("  NULL config no-op: PASS\n");
+    return WH_ERROR_OK;
+}
+
+/* Test: Operations on uninitialized lock should fail appropriately */
+static int testUninitializedLock(void)
+{
+    whLock lock;
+    int    rc;
+
+    WH_TEST_PRINT("Testing uninitialized lock...\n");
+
+    /* Create zeroed lock structure (no init call) */
+    memset(&lock, 0, sizeof(lock));
+
+    /* Acquire on uninitialized lock should fail */
+    rc = wh_Lock_Acquire(&lock);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
+
+    /* Release on uninitialized lock should fail */
+    rc = wh_Lock_Release(&lock);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
+
+    /* Cleanup on uninitialized lock should succeed (idempotent) */
+    rc = wh_Lock_Cleanup(&lock);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_OK);
+
+    WH_TEST_PRINT("  Uninitialized lock: PASS\n");
     return WH_ERROR_OK;
 }
 
@@ -188,6 +227,7 @@ int whTest_LockConfig(whLockConfig* lockConfig)
 
     WH_TEST_RETURN_ON_FAIL(testLockLifecycle(lockConfig));
     WH_TEST_RETURN_ON_FAIL(testNullConfigNoOp());
+    WH_TEST_RETURN_ON_FAIL(testUninitializedLock());
     WH_TEST_RETURN_ON_FAIL(testNvmWithLock(lockConfig));
 
     WH_TEST_PRINT("Lock tests PASSED\n");

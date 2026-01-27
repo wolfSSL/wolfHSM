@@ -303,15 +303,12 @@ int wh_Nvm_GetAvailable(whNvmContext* context,
     }
 
     rc = _LockNvm(context);
-    if (rc != WH_ERROR_OK) {
-        return rc;
+    if (rc == WH_ERROR_OK) {
+        rc = _GetAvailableUnlocked(context, out_avail_size, out_avail_objects,
+                                   out_reclaim_size, out_reclaim_objects);
+
+        (void)_UnlockNvm(context);
     }
-
-    rc = _GetAvailableUnlocked(context, out_avail_size, out_avail_objects,
-                               out_reclaim_size, out_reclaim_objects);
-
-    (void)_UnlockNvm(context);
-
     return rc;
 }
 
@@ -330,33 +327,30 @@ int wh_Nvm_AddObjectWithReclaim(whNvmContext* context, whNvmMetadata *meta,
     }
 
     ret = _LockNvm(context);
-    if (ret != WH_ERROR_OK) {
-        return ret;
-    }
-
-    /* check if we have available object and data space */
-    ret = _GetAvailableUnlocked(context, &availableSize, &availableObjects,
-                                &reclaimSize, &reclaimObjects);
-    if (ret == 0) {
-        if (    (availableSize < dataLen) ||
-                (availableObjects == 0) ) {
-            /* There's no available space, so try to reclaim space, */
-            if  (   (availableSize + reclaimSize >= dataLen) &&
-                    (availableObjects + reclaimObjects > 0) ) {
-                /* Reclaim will make sufficient space available */
-                ret = _DestroyObjectsUnlocked(context, 0, NULL);
-            } else {
-                /* Reclaim will not help */
-                ret = WH_ERROR_NOSPACE;
+    if (ret == WH_ERROR_OK) {
+        /* check if we have available object and data space */
+        ret = _GetAvailableUnlocked(context, &availableSize, &availableObjects,
+                                    &reclaimSize, &reclaimObjects);
+        if (ret == 0) {
+            if ((availableSize < dataLen) || (availableObjects == 0)) {
+                /* There's no available space, so try to reclaim space, */
+                if ((availableSize + reclaimSize >= dataLen) &&
+                    (availableObjects + reclaimObjects > 0)) {
+                    /* Reclaim will make sufficient space available */
+                    ret = _DestroyObjectsUnlocked(context, 0, NULL);
+                }
+                else {
+                    /* Reclaim will not help */
+                    ret = WH_ERROR_NOSPACE;
+                }
             }
         }
-    }
-    if (ret == 0) {
-        ret = _AddObjectUnlocked(context, meta, dataLen, data);
-    }
+        if (ret == 0) {
+            ret = _AddObjectUnlocked(context, meta, dataLen, data);
+        }
 
-    (void)_UnlockNvm(context);
-
+        (void)_UnlockNvm(context);
+    }
     return ret;
 }
 
@@ -370,14 +364,11 @@ int wh_Nvm_AddObject(whNvmContext* context, whNvmMetadata *meta,
     }
 
     rc = _LockNvm(context);
-    if (rc != WH_ERROR_OK) {
-        return rc;
+    if (rc == WH_ERROR_OK) {
+        rc = _AddObjectUnlocked(context, meta, data_len, data);
+
+        (void)_UnlockNvm(context);
     }
-
-    rc = _AddObjectUnlocked(context, meta, data_len, data);
-
-    (void)_UnlockNvm(context);
-
     return rc;
 }
 
@@ -391,14 +382,11 @@ int wh_Nvm_AddObjectChecked(whNvmContext* context, whNvmMetadata* meta,
     }
 
     ret = _LockNvm(context);
-    if (ret != WH_ERROR_OK) {
-        return ret;
+    if (ret == WH_ERROR_OK) {
+        ret = _Nvm_AddObjectCheckedUnlocked(context, meta, data_len, data);
+
+        (void)_UnlockNvm(context);
     }
-
-    ret = _Nvm_AddObjectCheckedUnlocked(context, meta, data_len, data);
-
-    (void)_UnlockNvm(context);
-
     return ret;
 }
 
@@ -413,14 +401,11 @@ int wh_Nvm_List(whNvmContext* context,
     }
 
     rc = _LockNvm(context);
-    if (rc != WH_ERROR_OK) {
-        return rc;
+    if (rc == WH_ERROR_OK) {
+        rc = _ListUnlocked(context, access, flags, start_id, out_count, out_id);
+
+        (void)_UnlockNvm(context);
     }
-
-    rc = _ListUnlocked(context, access, flags, start_id, out_count, out_id);
-
-    (void)_UnlockNvm(context);
-
     return rc;
 }
 
@@ -434,14 +419,11 @@ int wh_Nvm_GetMetadata(whNvmContext* context, whNvmId id,
     }
 
     rc = _LockNvm(context);
-    if (rc != WH_ERROR_OK) {
-        return rc;
+    if (rc == WH_ERROR_OK) {
+        rc = _GetMetadataUnlocked(context, id, meta);
+
+        (void)_UnlockNvm(context);
     }
-
-    rc = _GetMetadataUnlocked(context, id, meta);
-
-    (void)_UnlockNvm(context);
-
     return rc;
 }
 
@@ -456,14 +438,11 @@ int wh_Nvm_DestroyObjects(whNvmContext* context, whNvmId list_count,
     }
 
     rc = _LockNvm(context);
-    if (rc != WH_ERROR_OK) {
-        return rc;
+    if (rc == WH_ERROR_OK) {
+        rc = _DestroyObjectsUnlocked(context, list_count, id_list);
+
+        (void)_UnlockNvm(context);
     }
-
-    rc = _DestroyObjectsUnlocked(context, list_count, id_list);
-
-    (void)_UnlockNvm(context);
-
     return rc;
 }
 
@@ -477,14 +456,11 @@ int wh_Nvm_DestroyObjectsChecked(whNvmContext* context, whNvmId list_count,
     }
 
     ret = _LockNvm(context);
-    if (ret != WH_ERROR_OK) {
-        return ret;
+    if (ret == WH_ERROR_OK) {
+        ret = _Nvm_DestroyObjectsCheckedUnlocked(context, list_count, id_list);
+
+        (void)_UnlockNvm(context);
     }
-
-    ret = _Nvm_DestroyObjectsCheckedUnlocked(context, list_count, id_list);
-
-    (void)_UnlockNvm(context);
-
     return ret;
 }
 
@@ -499,14 +475,11 @@ int wh_Nvm_Read(whNvmContext* context, whNvmId id, whNvmSize offset,
     }
 
     rc = _LockNvm(context);
-    if (rc != WH_ERROR_OK) {
-        return rc;
+    if (rc == WH_ERROR_OK) {
+        rc = _ReadUnlocked(context, id, offset, data_len, data);
+
+        (void)_UnlockNvm(context);
     }
-
-    rc = _ReadUnlocked(context, id, offset, data_len, data);
-
-    (void)_UnlockNvm(context);
-
     return rc;
 }
 
@@ -520,14 +493,11 @@ int wh_Nvm_ReadChecked(whNvmContext* context, whNvmId id, whNvmSize offset,
     }
 
     ret = _LockNvm(context);
-    if (ret != WH_ERROR_OK) {
-        return ret;
+    if (ret == WH_ERROR_OK) {
+        ret = _Nvm_ReadCheckedUnlocked(context, id, offset, data_len, data);
+
+        (void)_UnlockNvm(context);
     }
-
-    ret = _Nvm_ReadCheckedUnlocked(context, id, offset, data_len, data);
-
-    (void)_UnlockNvm(context);
-
     return ret;
 }
 

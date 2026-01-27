@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024 wolfSSL Inc.
+ * Copyright (C) 2026 wolfSSL Inc.
  *
  * This file is part of wolfHSM.
  *
@@ -28,6 +28,7 @@
 #ifdef WOLFHSM_CFG_THREADSAFE
 
 #include <pthread.h>
+#include <errno.h>
 
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_lock.h"
@@ -57,6 +58,9 @@ int posixLock_Init(void* context, const void* config)
 
     rc = pthread_mutex_init(&ctx->mutex, attr);
     if (rc != 0) {
+        if (rc == EINVAL) {
+            return WH_ERROR_BADARGS;
+        }
         return WH_ERROR_ABORTED;
     }
 
@@ -80,6 +84,9 @@ int posixLock_Cleanup(void* context)
 
     rc = pthread_mutex_destroy(&ctx->mutex);
     if (rc != 0) {
+        if (rc == EINVAL) {
+            return WH_ERROR_BADARGS;
+        }
         return WH_ERROR_ABORTED;
     }
 
@@ -103,6 +110,14 @@ int posixLock_Acquire(void* context)
 
     rc = pthread_mutex_lock(&ctx->mutex);
     if (rc != 0) {
+        /* Trap error-checking mutex errors that indicate bugs */
+        if (rc == EDEADLK) {
+            /* Deadlock would occur - owner trying to re-acquire */
+            return WH_ERROR_ABORTED;
+        }
+        if (rc == EINVAL) {
+            return WH_ERROR_BADARGS;
+        }
         return WH_ERROR_ABORTED;
     }
 
@@ -125,6 +140,14 @@ int posixLock_Release(void* context)
 
     rc = pthread_mutex_unlock(&ctx->mutex);
     if (rc != 0) {
+        /* Trap error-checking mutex errors that indicate bugs */
+        if (rc == EPERM) {
+            /* Non-owner attempting to unlock */
+            return WH_ERROR_LOCKED;
+        }
+        if (rc == EINVAL) {
+            return WH_ERROR_BADARGS;
+        }
         return WH_ERROR_ABORTED;
     }
 

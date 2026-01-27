@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2025 wolfSSL Inc.
+ * Copyright (C) 2026 wolfSSL Inc.
  *
  * This file is part of wolfHSM.
  *
@@ -17,13 +17,14 @@
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
 /*
- * test/wh_test_threadsafe_stress.h
+ * test/wh_test_posix_threadsafe_stress.h
  *
- * Multithreaded stress test for thread safety validation.
+ * POSIX multithreaded stress test for thread safety validation.
+ * This test uses POSIX threading primitives (pthreads).
  */
 
-#ifndef TEST_WH_TEST_THREADSAFE_STRESS_H_
-#define TEST_WH_TEST_THREADSAFE_STRESS_H_
+#ifndef TEST_WH_TEST_POSIX_THREADSAFE_STRESS_H_
+#define TEST_WH_TEST_POSIX_THREADSAFE_STRESS_H_
 
 /*
  * Runs multithreaded stress tests for thread safety validation.
@@ -37,4 +38,4 @@
  */
 int whTest_ThreadSafeStress(void);
 
-#endif /* TEST_WH_TEST_THREADSAFE_STRESS_H_ */
+#endif /* TEST_WH_TEST_POSIX_THREADSAFE_STRESS_H_ */

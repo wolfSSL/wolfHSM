@@ -41,7 +41,7 @@
 #include "wh_test_multiclient.h"
 #include "wh_test_log.h"
 #include "wh_test_lock.h"
-#include "wh_test_threadsafe_stress.h"
+#include "wh_test_posix_threadsafe_stress.h"
 
 #if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER)
 #include "wh_test_cert.h"
