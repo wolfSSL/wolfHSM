@@ -1,0 +1,105 @@
+name: Build and Test DTLS Client Example
+
+on:
+  push:
+    branches: [ 'master', 'main', 'release/**' ]
+  pull_request:
+    branches: [ '*' ]
+
+jobs:
+  build-and-test-dtls:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+    #  Checkout repositories
+    - name: Checkout wolfHSM
+      uses: actions/checkout@v4
+
+    - name: Checkout wolfSSL
+      uses: actions/checkout@v4
+      with:
+        repository: wolfssl/wolfssl
+        path: wolfssl
+
+    #  Build wolfSSL with DTLS support
+    - name: Build wolfSSL with DTLS
+      run: |
+        cd wolfssl
+        ./autogen.sh
+        ./configure --enable-dtls --enable-dtls13 --enable-ecc
+        make -j
+
+    #  Build wolfHSM server
+    - name: Build wolfHSM POSIX server
+      run: |
+        cd examples/posix/wh_posix_server
+        make clean
+        make -j WOLFSSL_DIR=../../../wolfssl
+
+    #  Build DTLS client
+    - name: Build DTLS client
+      run: |
+        cd examples/posix/tls/wh_posix_dtls_client
+        make clean
+        make
+
+    #  Start wolfHSM server in background
+    - name: Start wolfHSM server
+      run: |
+        cd examples/posix/wh_posix_server
+        ./Build/wh_posix_server.elf --type tcp \
+          --key ../../../wolfssl/certs/ecc-client-key.der \
+          --id 1 \
+          --client 12 &
+        SERVER_PID=$!
+        echo "WOLFHSM_SERVER_PID=$SERVER_PID" >> $GITHUB_ENV
+        echo "Started wolfHSM server with PID $SERVER_PID"
+        sleep 2
+
+    #  Start wolfSSL DTLS server in background
+    - name: Start wolfSSL DTLS server
+      run: |
+        cd wolfssl
+        ./examples/server/server -u -v 4 \
+          -c ./certs/server-ecc.pem \
+          -k ./certs/ecc-key.pem \
+          -A ./certs/client-ecc-cert.pem \
+          -p 11111 \
+          -i &
+        DTLS_SERVER_PID=$!
+        echo "DTLS_SERVER_PID=$DTLS_SERVER_PID" >> $GITHUB_ENV
+        echo "Started DTLS server with PID $DTLS_SERVER_PID"
+        sleep 2
+
+    #  Run DTLS client test
+    - name: Run DTLS client test
+      run: |
+        cd examples/posix/tls/wh_posix_dtls_client
+
+        # Send test message with 5 second timeout
+        echo "Hello from CI test" | timeout 5 ./Build/wh_posix_dtls_client.elf 127.0.0.1 > client_output.txt 2>&1 || CLIENT_EXIT=$?
+
+        # Display output for debugging
+        cat client_output.txt
+
+        # Check for successful handshake (exit code 0 = clean exit, 124 = timeout)
+        if grep -q "DTLS handshake successful!" client_output.txt; then
+          echo "✓ DTLS client test completed successfully"
+          exit 0
+        else
+          echo "✗ DTLS handshake did not complete"
+          exit 1
+        fi
+
+    #  Cleanup servers (always run)
+    - name: Cleanup servers
+      if: always()
+      run: |
+        echo "Cleaning up server processes..."
+        kill ${{ env.WOLFHSM_SERVER_PID }} 2>/dev/null || true
+        kill ${{ env.DTLS_SERVER_PID }} 2>/dev/null || true
+        sleep 1
+        kill -9 ${{ env.WOLFHSM_SERVER_PID }} 2>/dev/null || true
+        kill -9 ${{ env.DTLS_SERVER_PID }} 2>/dev/null || true
+        echo "Cleanup complete"
