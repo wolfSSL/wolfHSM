@@ -35,7 +35,6 @@
 #include "wolfhsm/wh_server_cert.h"
 #include "wolfhsm/wh_server_nvm.h"
 #include "wolfhsm/wh_server_keystore.h"
-#include "wolfhsm/wh_nvm_internal.h"
 #include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_message_cert.h"
 
@@ -43,27 +42,6 @@
 #include "wolfssl/ssl.h"
 #include "wolfssl/wolfcrypt/asn.h"
 
-/* Helper functions for NVM locking */
-#ifdef WOLFHSM_CFG_THREADSAFE
-static int _LockNvm(whServerContext* server)
-{
-    if (server->nvm != NULL) {
-        return wh_Lock_Acquire(&server->nvm->lock);
-    }
-    return WH_ERROR_OK;
-}
-
-static int _UnlockNvm(whServerContext* server)
-{
-    if (server->nvm != NULL) {
-        return wh_Lock_Release(&server->nvm->lock);
-    }
-    return WH_ERROR_OK;
-}
-#else
-#define _LockNvm(server) (WH_ERROR_OK)
-#define _UnlockNvm(server) (WH_ERROR_OK)
-#endif /* WOLFHSM_CFG_THREADSAFE */
 
 static int _verifyChainAgainstCmStore(whServerContext*      server,
                                       WOLFSSL_CERT_MANAGER* cm,
@@ -248,10 +226,9 @@ int wh_Server_CertEraseTrusted(whServerContext* server, whNvmId id)
     return rc;
 }
 
-/* Get a trusted certificate from NVM storage (unlocked variant)
- * Assumes caller holds server->nvm->lock */
-static int _CertReadTrustedUnlocked(whServerContext* server, whNvmId id,
-                                    uint8_t* cert, uint32_t* inout_cert_len)
+/* Get a trusted certificate from NVM storage */
+int wh_Server_CertReadTrusted(whServerContext* server, whNvmId id,
+                              uint8_t* cert, uint32_t* inout_cert_len)
 {
     int           rc;
     whNvmMetadata meta;
@@ -261,8 +238,9 @@ static int _CertReadTrustedUnlocked(whServerContext* server, whNvmId id,
         return WH_ERROR_BADARGS;
     }
 
+
     /* Get metadata to check the certificate size */
-    rc = wh_Nvm_GetMetadataUnlocked(server->nvm, id, &meta);
+    rc = wh_Nvm_GetMetadata(server->nvm, id, &meta);
     if (rc != 0) {
         return rc;
     }
@@ -276,22 +254,7 @@ static int _CertReadTrustedUnlocked(whServerContext* server, whNvmId id,
      * be reflected back to the user on length mismatch failure */
     *inout_cert_len = meta.len;
 
-    return wh_Nvm_ReadUnlocked(server->nvm, id, 0, meta.len, cert);
-}
-
-/* Get a trusted certificate from NVM storage */
-int wh_Server_CertReadTrusted(whServerContext* server, whNvmId id,
-                              uint8_t* cert, uint32_t* inout_cert_len)
-{
-    int rc;
-
-    /* Acquire lock for atomic GetMetadata + Read */
-    rc = _LockNvm(server);
-    if (rc == WH_ERROR_OK) {
-        rc = _CertReadTrustedUnlocked(server, id, cert, inout_cert_len);
-        (void)_UnlockNvm(server);
-    }
-    return rc;
+    return wh_Nvm_Read(server->nvm, id, 0, meta.len, cert);
 }
 
 /* Verify a certificate against trusted certificates */
@@ -451,9 +414,13 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
             cert_data = (const uint8_t*)req_packet + sizeof(req);
 
             /* Process the add trusted action */
-            rc = wh_Server_CertAddTrusted(server, req.id, req.access, req.flags,
-                                          req.label, WH_NVM_LABEL_LEN,
-                                          cert_data, req.cert_len);
+            rc = WH_SERVER_NVM_LOCK(server);
+            if (rc == WH_ERROR_OK) {
+                rc = wh_Server_CertAddTrusted(
+                    server, req.id, req.access, req.flags, req.label,
+                    WH_NVM_LABEL_LEN, cert_data, req.cert_len);
+                (void)WH_SERVER_NVM_UNLOCK(server);
+            }
             resp.rc = rc;
 
             /* Convert the response struct */
@@ -471,7 +438,11 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
                 magic, (whMessageCert_EraseTrustedRequest*)req_packet, &req);
 
             /* Process the delete trusted action */
-            rc      = wh_Server_CertEraseTrusted(server, req.id);
+            rc = WH_SERVER_NVM_LOCK(server);
+            if (rc == WH_ERROR_OK) {
+                rc = wh_Server_CertEraseTrusted(server, req.id);
+                (void)WH_SERVER_NVM_UNLOCK(server);
+            }
             resp.rc = rc;
 
             /* Convert the response struct */
@@ -500,35 +471,26 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
                             ? max_transport_cert_len
                             : WOLFHSM_CFG_MAX_CERT_SIZE;
 
-            /* Acquire lock for atomic flag check + read */
-            rc = _LockNvm(server);
+            /* Check metadata to check if the certificate is non-exportable.
+             * This is unfortunately redundant since metadata is checked in
+             * wh_Server_CertReadTrusted(). */
+            rc = WH_SERVER_NVM_LOCK(server);
             if (rc == WH_ERROR_OK) {
-                /* Check metadata to check if the certificate is
-                 * non-exportable */
-                rc = wh_Nvm_GetMetadataUnlocked(server->nvm, req.id, &meta);
+                rc = wh_Nvm_GetMetadata(server->nvm, req.id, &meta);
                 if (rc == WH_ERROR_OK) {
                     /* Check if the certificate is non-exportable */
                     if (meta.flags & WH_NVM_FLAGS_NONEXPORTABLE) {
-                        resp.rc       = WH_ERROR_ACCESS;
-                        resp.cert_len = 0;
+                        rc = WH_ERROR_ACCESS;
                     }
                     else {
-                        rc = _CertReadTrustedUnlocked(server, req.id, cert_data,
-                                                      &cert_len);
-                        resp.rc       = rc;
+                        rc = wh_Server_CertReadTrusted(server, req.id,
+                                                       cert_data, &cert_len);
                         resp.cert_len = cert_len;
                     }
                 }
-                else {
-                    resp.rc       = rc;
-                    resp.cert_len = 0;
-                }
-                (void)_UnlockNvm(server);
+                (void)WH_SERVER_NVM_UNLOCK(server);
             }
-            else {
-                resp.rc       = rc;
-                resp.cert_len = 0;
-            }
+            resp.rc = rc;
 
             /* Convert the response struct */
             wh_MessageCert_TranslateReadTrustedResponse(
@@ -557,14 +519,19 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
                 whKeyId keyId = wh_KeyId_TranslateFromClient(
                     WH_KEYTYPE_CRYPTO, server->comm->client_id, req.keyId);
 
-                /* Process the verify action */
-                resp.rc = wh_Server_CertVerify(server, cert_data, req.cert_len,
-                                               req.trustedRootNvmId, req.flags,
-                                               req.cachedKeyFlags, &keyId);
 
-                /* Propagate the keyId back to the client with flags preserved
-                 */
-                resp.keyId = wh_KeyId_TranslateToClient(keyId);
+                rc = WH_SERVER_NVM_LOCK(server);
+                if (rc == WH_ERROR_OK) {
+                    /* Process the verify action */
+                    rc = wh_Server_CertVerify(server, cert_data, req.cert_len,
+                                              req.trustedRootNvmId, req.flags,
+                                              req.cachedKeyFlags, &keyId);
+                    /* Propagate the keyId back to the client with flags
+                     * preserved */
+                    resp.keyId = wh_KeyId_TranslateToClient(keyId);
+                    (void)WH_SERVER_NVM_UNLOCK(server);
+                }
+                resp.rc = rc;
             }
 
             /* Convert the response struct */
@@ -596,9 +563,14 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
             }
             if (resp.rc == WH_ERROR_OK) {
                 /* Process the add trusted action */
-                resp.rc = wh_Server_CertAddTrusted(
-                    server, req.id, req.access, req.flags, req.label,
-                    WH_NVM_LABEL_LEN, cert_data, req.cert_len);
+                resp.rc = WH_SERVER_NVM_LOCK(server);
+                if (resp.rc == WH_ERROR_OK) {
+                    resp.rc = wh_Server_CertAddTrusted(
+                        server, req.id, req.access, req.flags, req.label,
+                        WH_NVM_LABEL_LEN, cert_data, req.cert_len);
+
+                    (void)WH_SERVER_NVM_UNLOCK(server);
+                } /* WH_SERVER_NVM_LOCK() == WH_ERROR_OK */
             }
             if (resp.rc == WH_ERROR_OK) {
                 /* Post-process client address */
@@ -636,13 +608,10 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
                     WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
             }
             if (resp.rc == WH_ERROR_OK) {
-                /* Acquire lock for atomic flag check + read */
-                resp.rc = _LockNvm(server);
+                /* Check metadata to see if the certificate is non-exportable */
+                resp.rc = WH_SERVER_NVM_LOCK(server);
                 if (resp.rc == WH_ERROR_OK) {
-                    /* Check metadata to see if the certificate is
-                     * non-exportable */
-                    resp.rc =
-                        wh_Nvm_GetMetadataUnlocked(server->nvm, req.id, &meta);
+                    resp.rc = wh_Nvm_GetMetadata(server->nvm, req.id, &meta);
                     if (resp.rc == WH_ERROR_OK) {
                         if ((meta.flags & WH_NVM_FLAGS_NONEXPORTABLE) != 0) {
                             resp.rc = WH_ERROR_ACCESS;
@@ -650,12 +619,13 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
                         else {
                             /* Clamp cert_len to actual stored length */
                             cert_len = req.cert_len;
-                            resp.rc  = _CertReadTrustedUnlocked(
+                            resp.rc  = wh_Server_CertReadTrusted(
                                  server, req.id, cert_data, &cert_len);
                         }
                     }
-                    (void)_UnlockNvm(server);
-                }
+
+                    (void)WH_SERVER_NVM_UNLOCK(server);
+                } /* WH_SERVER_NVM_LOCK() == WH_ERROR_OK */
             }
             if (resp.rc == WH_ERROR_OK) {
                 /* Post-process client address */
@@ -671,9 +641,10 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
         }; break;
 
         case WH_MESSAGE_CERT_ACTION_VERIFY_DMA: {
-            whMessageCert_VerifyDmaRequest req       = {0};
+            whMessageCert_VerifyDmaRequest  req       = {0};
             whMessageCert_VerifyDmaResponse resp      = {0};
-            void*                          cert_data = NULL;
+            void*                           cert_data = NULL;
+            whKeyId                         keyId     = WH_KEYID_ERASED;
 
             if (req_size != sizeof(req)) {
                 /* Request is malformed */
@@ -684,24 +655,29 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
                 wh_MessageCert_TranslateVerifyDmaRequest(
                     magic, (whMessageCert_VerifyDmaRequest*)req_packet, &req);
 
+                /* Map client keyId to server keyId space */
+                keyId = wh_KeyId_TranslateFromClient(
+                    WH_KEYTYPE_CRYPTO, server->comm->client_id, req.keyId);
+
                 /* Process client address */
                 resp.rc = wh_Server_DmaProcessClientAddress(
                     server, req.cert_addr, &cert_data, req.cert_len,
                     WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
             }
             if (resp.rc == WH_ERROR_OK) {
-                /* Map client keyId to server keyId space */
-                whKeyId keyId = wh_KeyId_TranslateFromClient(
-                    WH_KEYTYPE_CRYPTO, server->comm->client_id, req.keyId);
+                resp.rc = WH_SERVER_NVM_LOCK(server);
+                if (resp.rc == WH_ERROR_OK) {
+                    /* Process the verify action */
+                    resp.rc = wh_Server_CertVerify(
+                        server, cert_data, req.cert_len, req.trustedRootNvmId,
+                        req.flags, req.cachedKeyFlags, &keyId);
 
-                /* Process the verify action */
-                resp.rc = wh_Server_CertVerify(server, cert_data, req.cert_len,
-                                               req.trustedRootNvmId, req.flags,
-                                               req.cachedKeyFlags, &keyId);
+                    /* Propagate the keyId back to the client with flags
+                     * preserved */
+                    resp.keyId = wh_KeyId_TranslateToClient(keyId);
 
-                /* Propagate the keyId back to the client with flags preserved
-                 */
-                resp.keyId = wh_KeyId_TranslateToClient(keyId);
+                    (void)WH_SERVER_NVM_UNLOCK(server);
+                } /* WH_SERVER_NVM_LOCK() == WH_ERROR_OK */
             }
             if (resp.rc == WH_ERROR_OK) {
                 /* Post-process client address */
@@ -730,8 +706,13 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
             cert_data = (const uint8_t*)req_packet + sizeof(req);
 
             /* Process the verify action */
-            rc = wh_Server_CertVerifyAcert(server, cert_data, req.cert_len,
-                                           req.trustedRootNvmId);
+            rc = WH_SERVER_NVM_LOCK(server);
+            if (rc == WH_ERROR_OK) {
+                rc = wh_Server_CertVerifyAcert(server, cert_data, req.cert_len,
+                                               req.trustedRootNvmId);
+
+                (void)WH_SERVER_NVM_UNLOCK(server);
+            } /* WH_SERVER_NVM_LOCK() == WH_ERROR_OK */
 
             /* Signature confirmation error is not an error for the server, so
              * propagate this error to the client in the response, otherwise
@@ -773,8 +754,14 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
             }
             if (rc == WH_ERROR_OK) {
                 /* Process the verify action */
-                rc = wh_Server_CertVerifyAcert(server, cert_data, req.cert_len,
-                                               req.trustedRootNvmId);
+                rc = WH_SERVER_NVM_LOCK(server);
+                if (rc == WH_ERROR_OK) {
+                    rc = wh_Server_CertVerifyAcert(
+                        server, cert_data, req.cert_len, req.trustedRootNvmId);
+
+                    (void)WH_SERVER_NVM_UNLOCK(server);
+                } /* WH_SERVER_NVM_LOCK() == WH_ERROR_OK */
+
                 /* Signature confirmation error is not an error for the server,
                  * so propagate this error to the client in the response,
                  * otherwise return the error code from the verify action */

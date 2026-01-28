@@ -1608,68 +1608,120 @@ int wh_Server_HandleSheRequest(whServerContext* server, uint16_t magic,
                           resp_packet);
             break;
         case WH_SHE_SECURE_BOOT_INIT:
-            ret = _SecureBootInit(server, magic, req_size, req_packet,
-                                  out_resp_size, resp_packet);
+            ret = WH_SERVER_NVM_LOCK(server);
+            if (ret == WH_ERROR_OK) {
+                ret = _SecureBootInit(server, magic, req_size, req_packet,
+                                      out_resp_size, resp_packet);
+                (void)WH_SERVER_NVM_UNLOCK(server);
+            } /* WH_SERVER_NVM_LOCK() == WH_ERROR_OK */
             break;
         case WH_SHE_SECURE_BOOT_UPDATE:
             ret = _SecureBootUpdate(server, magic, req_size, req_packet,
                                     out_resp_size, resp_packet);
             break;
         case WH_SHE_SECURE_BOOT_FINISH:
-            ret = _SecureBootFinish(server, magic, req_size, req_packet,
-                                    out_resp_size, resp_packet);
+            ret = WH_SERVER_NVM_LOCK(server);
+            if (ret == WH_ERROR_OK) {
+                ret = _SecureBootFinish(server, magic, req_size, req_packet,
+                                        out_resp_size, resp_packet);
+                (void)WH_SERVER_NVM_UNLOCK(server);
+            } /* WH_SERVER_NVM_LOCK() == WH_ERROR_OK */
             break;
         case WH_SHE_GET_STATUS:
             ret = _GetStatus(server, magic, req_size, req_packet, out_resp_size,
                              resp_packet);
             break;
         case WH_SHE_LOAD_KEY:
-            ret = _LoadKey(server, magic, req_size, req_packet, out_resp_size,
-                           resp_packet);
+            ret = WH_SERVER_NVM_LOCK(server);
+            if (ret == WH_ERROR_OK) {
+                ret = _LoadKey(server, magic, req_size, req_packet,
+                               out_resp_size, resp_packet);
+                (void)WH_SERVER_NVM_UNLOCK(server);
+            } /* WH_SERVER_NVM_LOCK() == WH_ERROR_OK */
             break;
         case WH_SHE_LOAD_PLAIN_KEY:
-            ret = _LoadPlainKey(server, magic, req_size, req_packet,
-                                out_resp_size, resp_packet);
+            ret = WH_SERVER_NVM_LOCK(server);
+            if (ret == WH_ERROR_OK) {
+                ret = _LoadPlainKey(server, magic, req_size, req_packet,
+                                    out_resp_size, resp_packet);
+                (void)WH_SERVER_NVM_UNLOCK(server);
+            } /* WH_SERVER_NVM_LOCK() == WH_ERROR_OK */
             break;
         case WH_SHE_EXPORT_RAM_KEY:
-            ret = _ExportRamKey(server, magic, req_size, req_packet,
-                                out_resp_size, resp_packet);
+            ret = WH_SERVER_NVM_LOCK(server);
+            if (ret == WH_ERROR_OK) {
+                ret = _ExportRamKey(server, magic, req_size, req_packet,
+                                    out_resp_size, resp_packet);
+                (void)WH_SERVER_NVM_UNLOCK(server);
+            } /* WH_SERVER_NVM_LOCK() == WH_ERROR_OK */
             break;
         case WH_SHE_INIT_RND:
-            ret = _InitRnd(server, magic, req_size, req_packet, out_resp_size,
-                           resp_packet);
+            ret = WH_SERVER_NVM_LOCK(server);
+            if (ret == WH_ERROR_OK) {
+                ret = _InitRnd(server, magic, req_size, req_packet,
+                               out_resp_size, resp_packet);
+                (void)WH_SERVER_NVM_UNLOCK(server);
+            } /* WH_SERVER_NVM_LOCK() == WH_ERROR_OK */
             break;
         case WH_SHE_RND:
             ret = _Rnd(server, magic, req_size, req_packet, out_resp_size,
                        resp_packet);
             break;
         case WH_SHE_EXTEND_SEED:
-            ret = _ExtendSeed(server, magic, req_size, req_packet,
-                              out_resp_size, resp_packet);
+            ret = WH_SERVER_NVM_LOCK(server);
+            if (ret == WH_ERROR_OK) {
+                ret = _ExtendSeed(server, magic, req_size, req_packet,
+                                  out_resp_size, resp_packet);
+                (void)WH_SERVER_NVM_UNLOCK(server);
+            } /* WH_SERVER_NVM_LOCK() == WH_ERROR_OK */
             break;
         case WH_SHE_ENC_ECB:
-            ret = _EncEcb(server, magic, req_size, req_packet, out_resp_size,
-                          resp_packet);
+            ret = WH_SERVER_NVM_LOCK(server);
+            if (ret == WH_ERROR_OK) {
+                ret = _EncEcb(server, magic, req_size, req_packet,
+                              out_resp_size, resp_packet);
+                (void)WH_SERVER_NVM_UNLOCK(server);
+            } /* WH_SERVER_NVM_LOCK() == WH_ERROR_OK */
             break;
         case WH_SHE_ENC_CBC:
-            ret = _EncCbc(server, magic, req_size, req_packet, out_resp_size,
-                          resp_packet);
+            ret = WH_SERVER_NVM_LOCK(server);
+            if (ret == WH_ERROR_OK) {
+                ret = _EncCbc(server, magic, req_size, req_packet,
+                              out_resp_size, resp_packet);
+                (void)WH_SERVER_NVM_UNLOCK(server);
+            } /* WH_SERVER_NVM_LOCK() == WH_ERROR_OK */
             break;
         case WH_SHE_DEC_ECB:
-            ret = _DecEcb(server, magic, req_size, req_packet, out_resp_size,
-                          resp_packet);
+            ret = WH_SERVER_NVM_LOCK(server);
+            if (ret == WH_ERROR_OK) {
+                ret = _DecEcb(server, magic, req_size, req_packet,
+                              out_resp_size, resp_packet);
+                (void)WH_SERVER_NVM_UNLOCK(server);
+            } /* WH_SERVER_NVM_LOCK() == WH_ERROR_OK */
             break;
         case WH_SHE_DEC_CBC:
-            ret = _DecCbc(server, magic, req_size, req_packet, out_resp_size,
-                          resp_packet);
+            ret = WH_SERVER_NVM_LOCK(server);
+            if (ret == WH_ERROR_OK) {
+                ret = _DecCbc(server, magic, req_size, req_packet,
+                              out_resp_size, resp_packet);
+                (void)WH_SERVER_NVM_UNLOCK(server);
+            } /* WH_SERVER_NVM_LOCK() == WH_ERROR_OK */
             break;
         case WH_SHE_GEN_MAC:
-            ret = _GenerateMac(server, magic, req_size, req_packet,
-                               out_resp_size, resp_packet);
+            ret = WH_SERVER_NVM_LOCK(server);
+            if (ret == WH_ERROR_OK) {
+                ret = _GenerateMac(server, magic, req_size, req_packet,
+                                   out_resp_size, resp_packet);
+                (void)WH_SERVER_NVM_UNLOCK(server);
+            } /* WH_SERVER_NVM_LOCK() == WH_ERROR_OK */
             break;
         case WH_SHE_VERIFY_MAC:
-            ret = _VerifyMac(server, magic, req_size, req_packet, out_resp_size,
-                             resp_packet);
+            ret = WH_SERVER_NVM_LOCK(server);
+            if (ret == WH_ERROR_OK) {
+                ret = _VerifyMac(server, magic, req_size, req_packet,
+                                 out_resp_size, resp_packet);
+                (void)WH_SERVER_NVM_UNLOCK(server);
+            } /* WH_SERVER_NVM_LOCK() == WH_ERROR_OK */
             break;
         default:
             ret = WH_ERROR_BADARGS;

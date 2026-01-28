@@ -145,4 +145,15 @@ int wh_Nvm_Read(whNvmContext* context, whNvmId id, whNvmSize offset,
 int wh_Nvm_ReadChecked(whNvmContext* context, whNvmId id, whNvmSize offset,
                        whNvmSize data_len, uint8_t* data);
 
+/** NVM Locking API for handler-level thread safety */
+#ifdef WOLFHSM_CFG_THREADSAFE
+int wh_Nvm_Lock(whNvmContext* nvm);
+int wh_Nvm_Unlock(whNvmContext* nvm);
+#define WH_NVM_LOCK(nvm) wh_Nvm_Lock(nvm)
+#define WH_NVM_UNLOCK(nvm) wh_Nvm_Unlock(nvm)
+#else
+#define WH_NVM_LOCK(nvm) (WH_ERROR_OK)
+#define WH_NVM_UNLOCK(nvm) (WH_ERROR_OK)
+#endif
+
 #endif /* !WOLFHSM_WH_NVM_H_ */

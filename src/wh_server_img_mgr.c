@@ -37,7 +37,6 @@
 #include "wolfhsm/wh_server_img_mgr.h"
 #include "wolfhsm/wh_server_keystore.h"
 #include "wolfhsm/wh_nvm.h"
-#include "wolfhsm/wh_nvm_internal.h"
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
 #include "wolfssl/wolfcrypt/settings.h"
@@ -50,28 +49,6 @@
 #include "wolfssl/wolfcrypt/aes.h"
 #include "wolfssl/wolfcrypt/rsa.h"
 #endif
-
-/* Helper functions for NVM locking */
-#ifdef WOLFHSM_CFG_THREADSAFE
-static int _LockNvm(whServerContext* server)
-{
-    if (server->nvm != NULL) {
-        return wh_Lock_Acquire(&server->nvm->lock);
-    }
-    return WH_ERROR_OK;
-}
-
-static int _UnlockNvm(whServerContext* server)
-{
-    if (server->nvm != NULL) {
-        return wh_Lock_Release(&server->nvm->lock);
-    }
-    return WH_ERROR_OK;
-}
-#else
-#define _LockNvm(server) (WH_ERROR_OK)
-#define _UnlockNvm(server) (WH_ERROR_OK)
-#endif /* WOLFHSM_CFG_THREADSAFE */
 
 int wh_Server_ImgMgrInit(whServerImgMgrContext*      context,
                          const whServerImgMgrConfig* config)
@@ -136,28 +113,21 @@ int wh_Server_ImgMgrVerifyImg(whServerImgMgrContext*      context,
     }
 
     /* Load the signature from NVM */
-    /* Acquire lock for atomic GetMetadata + Read */
-    ret = _LockNvm(server);
-    if (ret == WH_ERROR_OK) {
-        ret = wh_Nvm_GetMetadataUnlocked(server->nvm, img->sigNvmId, &sigMeta);
-        if (ret == WH_ERROR_OK) {
-            /* Ensure signature fits in buffer */
-            if (sigMeta.len > sigSize) {
-                ret = WH_ERROR_BADARGS;
-            }
-            else {
-                ret = wh_Nvm_ReadUnlocked(server->nvm, img->sigNvmId, 0,
-                                          sigMeta.len, sigBuf);
-                if (ret == WH_ERROR_OK) {
-                    actualSigSize = sigMeta.len;
-                }
-            }
-        }
-        (void)_UnlockNvm(server);
-    }
+    ret = wh_Nvm_GetMetadata(server->nvm, img->sigNvmId, &sigMeta);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
+
+    /* Ensure signature fits in buffer */
+    if (sigMeta.len > sigSize) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_Nvm_Read(server->nvm, img->sigNvmId, 0, sigMeta.len, sigBuf);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+    actualSigSize = sigMeta.len;
 
     /* Invoke verify method callback */
     if (img->verifyMethod != NULL) {

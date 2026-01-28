@@ -463,4 +463,22 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
     return rc;
 }
 
+#ifdef WOLFHSM_CFG_THREADSAFE
+int wh_Server_NvmLock(whServerContext* server)
+{
+    if (server == NULL || server->nvm == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    return wh_Lock_Acquire(&server->nvm->lock);
+}
+
+int wh_Server_NvmUnlock(whServerContext* server)
+{
+    if (server == NULL || server->nvm == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    return wh_Lock_Release(&server->nvm->lock);
+}
+#endif /* WOLFHSM_CFG_THREADSAFE */
+
 #endif /* WOLFHSM_CFG_ENABLE_SERVER */
