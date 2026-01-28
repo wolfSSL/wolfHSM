@@ -261,7 +261,8 @@ int main(void)
 {
     int ret = 0;
 
-#if defined(WOLFHSM_CFG_THREADSAFE) && defined(WOLFHSM_CFG_TEST_STRESS)
+#if defined(WOLFHSM_CFG_THREADSAFE) && defined(WOLFHSM_CFG_TEST_STRESS) && \
+    defined(WOLFHSM_CFG_TEST_POSIX)
     /* Stress test mode: only run thread safety stress test */
     ret = whTest_ThreadSafeStress();
 

@@ -1,4 +1,4 @@
-name: Build and Test Stress
+name: Multi-threaded Stress Test
 
 on:
   push:

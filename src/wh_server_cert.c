@@ -419,8 +419,9 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
                 rc = wh_Server_CertAddTrusted(
                     server, req.id, req.access, req.flags, req.label,
                     WH_NVM_LABEL_LEN, cert_data, req.cert_len);
+
                 (void)WH_SERVER_NVM_UNLOCK(server);
-            }
+            } /* WH_SERVER_NVM_LOCK() */
             resp.rc = rc;
 
             /* Convert the response struct */
@@ -441,8 +442,9 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
             rc = WH_SERVER_NVM_LOCK(server);
             if (rc == WH_ERROR_OK) {
                 rc = wh_Server_CertEraseTrusted(server, req.id);
+
                 (void)WH_SERVER_NVM_UNLOCK(server);
-            }
+            } /* WH_SERVER_NVM_LOCK() */
             resp.rc = rc;
 
             /* Convert the response struct */
@@ -488,8 +490,9 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
                         resp.cert_len = cert_len;
                     }
                 }
+
                 (void)WH_SERVER_NVM_UNLOCK(server);
-            }
+            } /* WH_SERVER_NVM_LOCK() */
             resp.rc = rc;
 
             /* Convert the response struct */
@@ -529,8 +532,9 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
                     /* Propagate the keyId back to the client with flags
                      * preserved */
                     resp.keyId = wh_KeyId_TranslateToClient(keyId);
+
                     (void)WH_SERVER_NVM_UNLOCK(server);
-                }
+                } /* WH_SERVER_NVM_LOCK() */
                 resp.rc = rc;
             }
 
@@ -570,7 +574,7 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
                         WH_NVM_LABEL_LEN, cert_data, req.cert_len);
 
                     (void)WH_SERVER_NVM_UNLOCK(server);
-                } /* WH_SERVER_NVM_LOCK() == WH_ERROR_OK */
+                } /* WH_SERVER_NVM_LOCK() */
             }
             if (resp.rc == WH_ERROR_OK) {
                 /* Post-process client address */
@@ -620,12 +624,12 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
                             /* Clamp cert_len to actual stored length */
                             cert_len = req.cert_len;
                             resp.rc  = wh_Server_CertReadTrusted(
-                                 server, req.id, cert_data, &cert_len);
+                                server, req.id, cert_data, &cert_len);
                         }
                     }
 
                     (void)WH_SERVER_NVM_UNLOCK(server);
-                } /* WH_SERVER_NVM_LOCK() == WH_ERROR_OK */
+                } /* WH_SERVER_NVM_LOCK() */
             }
             if (resp.rc == WH_ERROR_OK) {
                 /* Post-process client address */
@@ -677,7 +681,7 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
                     resp.keyId = wh_KeyId_TranslateToClient(keyId);
 
                     (void)WH_SERVER_NVM_UNLOCK(server);
-                } /* WH_SERVER_NVM_LOCK() == WH_ERROR_OK */
+                } /* WH_SERVER_NVM_LOCK() */
             }
             if (resp.rc == WH_ERROR_OK) {
                 /* Post-process client address */
@@ -712,7 +716,7 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
                                                req.trustedRootNvmId);
 
                 (void)WH_SERVER_NVM_UNLOCK(server);
-            } /* WH_SERVER_NVM_LOCK() == WH_ERROR_OK */
+            } /* WH_SERVER_NVM_LOCK() */
 
             /* Signature confirmation error is not an error for the server, so
              * propagate this error to the client in the response, otherwise
@@ -760,7 +764,7 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
                         server, cert_data, req.cert_len, req.trustedRootNvmId);
 
                     (void)WH_SERVER_NVM_UNLOCK(server);
-                } /* WH_SERVER_NVM_LOCK() == WH_ERROR_OK */
+                } /* WH_SERVER_NVM_LOCK() */
 
                 /* Signature confirmation error is not an error for the server,
                  * so propagate this error to the client in the response,

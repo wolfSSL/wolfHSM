@@ -84,7 +84,7 @@ int wh_Server_HandleCounter(whServerContext* server, uint16_t magic,
                 }
 
                 (void)WH_SERVER_NVM_UNLOCK(server);
-            } /* WH_SERVER_NVM_LOCK() == WH_ERROR_OK */
+            } /* WH_SERVER_NVM_LOCK() */
             resp.rc = ret;
 
             (void)wh_MessageCounter_TranslateInitResponse(
@@ -140,7 +140,7 @@ int wh_Server_HandleCounter(whServerContext* server, uint16_t magic,
                 }
 
                 (void)WH_SERVER_NVM_UNLOCK(server);
-            } /* WH_SERVER_NVM_LOCK() == WH_ERROR_OK */
+            } /* WH_SERVER_NVM_LOCK() */
             resp.rc = ret;
 
             (void)wh_MessageCounter_TranslateIncrementResponse(
@@ -181,7 +181,7 @@ int wh_Server_HandleCounter(whServerContext* server, uint16_t magic,
                 }
 
                 (void)WH_SERVER_NVM_UNLOCK(server);
-            } /* WH_SERVER_NVM_LOCK() == WH_ERROR_OK */
+            } /* WH_SERVER_NVM_LOCK() */
             resp.rc = ret;
 
             (void)wh_MessageCounter_TranslateReadResponse(
@@ -216,7 +216,7 @@ int wh_Server_HandleCounter(whServerContext* server, uint16_t magic,
                 ret = wh_Nvm_DestroyObjects(server->nvm, 1, &counterId);
 
                 (void)WH_SERVER_NVM_UNLOCK(server);
-            } /* WH_SERVER_NVM_LOCK() == WH_ERROR_OK */
+            } /* WH_SERVER_NVM_LOCK() */
             resp.rc = ret;
 
             (void)wh_MessageCounter_TranslateDestroyResponse(

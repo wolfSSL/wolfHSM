@@ -39,11 +39,12 @@
 #include "wolfhsm/wh_nvm_flash.h"
 #include "wolfhsm/wh_flash_ramsim.h"
 
+#ifdef WOLFHSM_CFG_TEST_POSIX
 #include "port/posix/posix_lock.h"
-
 #define FLASH_RAM_SIZE (1024 * 1024)
 #define FLASH_SECTOR_SIZE (4096)
 #define FLASH_PAGE_SIZE (8)
+#endif
 
 /* Test: Lock init/cleanup lifecycle */
 static int testLockLifecycle(whLockConfig* lockConfig)
@@ -147,8 +148,10 @@ static int testUninitializedLock(void)
     return WH_ERROR_OK;
 }
 
-/* Test: NVM with lock config */
-static int testNvmWithLock(whLockConfig* lockConfig)
+#ifdef WOLFHSM_CFG_TEST_POSIX
+/* Test: NVM simulator with lock config. Restrict to POSIX port test due to
+ * resource utilization */
+static int testNvmRamSimWithLock(whLockConfig* lockConfig)
 {
     /* Flash simulator */
     uint8_t          flashMemory[FLASH_RAM_SIZE];
@@ -220,6 +223,7 @@ static int testNvmWithLock(whLockConfig* lockConfig)
     WH_TEST_PRINT("  NVM with lock: PASS\n");
     return WH_ERROR_OK;
 }
+#endif /* WOLFHSM_CFG_TEST_POSIX */
 
 int whTest_LockConfig(whLockConfig* lockConfig)
 {
@@ -228,7 +232,9 @@ int whTest_LockConfig(whLockConfig* lockConfig)
     WH_TEST_RETURN_ON_FAIL(testLockLifecycle(lockConfig));
     WH_TEST_RETURN_ON_FAIL(testNullConfigNoOp());
     WH_TEST_RETURN_ON_FAIL(testUninitializedLock());
-    WH_TEST_RETURN_ON_FAIL(testNvmWithLock(lockConfig));
+#ifdef WOLFHSM_CFG_TEST_POSIX
+    WH_TEST_RETURN_ON_FAIL(testNvmRamSimWithLock(lockConfig));
+#endif
 
     WH_TEST_PRINT("Lock tests PASSED\n");
     return WH_ERROR_OK;

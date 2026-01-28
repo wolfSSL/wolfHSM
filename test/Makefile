@@ -146,6 +146,9 @@ endif
 
 # Support stress test mode (only runs thread safety stress test)
 ifeq ($(STRESS),1)
+    ifneq ($(THREADSAFE),1)
+        $(error Stress test requires building with THREADSAFE=1)
+    endif
 	DEF += -DWOLFHSM_CFG_TEST_STRESS
 endif
 
@@ -301,7 +304,11 @@ ifeq (,$(wildcard $(BUILD_DIR)/$(BIN).elf))
 	$(error $(BUILD_DIR)/$(BIN).elf not found.  Try: make)
 else
 ifeq ($(TSAN),1)
-	TSAN_OPTIONS="suppressions=$(PROJECT_DIR)/tsan.supp" $(BUILD_DIR)/$(BIN).elf
+	# TSAN options:
+	# - fail fast on first data race detected
+	# - non-zero exit code if races are detected to ensure CI fails
+	# - use our custom suppressions file to ignore wolfCrypt and SHM transport
+	TSAN_OPTIONS="halt_on_error=1:exitcode=66:suppressions=$(PROJECT_DIR)/tsan.supp" $(BUILD_DIR)/$(BIN).elf
 else
 	$(BUILD_DIR)/$(BIN).elf
 endif

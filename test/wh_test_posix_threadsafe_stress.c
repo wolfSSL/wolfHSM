@@ -2420,19 +2420,6 @@ cleanup:
     return testResult;
 }
 
-#else /* !WOLFHSM_CFG_THREADSAFE || !WOLFHSM_CFG_TEST_POSIX ||     \
-         !WOLFHSM_CFG_GLOBAL_KEYS || !WOLFHSM_CFG_ENABLE_CLIENT || \
-         !WOLFHSM_CFG_ENABLE_SERVER || WOLFHSM_CFG_NO_CRYPTO */
-
-#include "wh_test_posix_threadsafe_stress.h"
-#include "wh_test_common.h"
-
-int whTest_ThreadSafeStress(void)
-{
-    WH_TEST_PRINT("Thread safety stress test skipped ");
-    WH_TEST_PRINT("(requires THREADSAFE + TEST_POSIX + GLOBAL_KEYS + ");
-    WH_TEST_PRINT("ENABLE_CLIENT + ENABLE_SERVER + crypto)\n");
-    return 0;
-}
-
-#endif /* WOLFHSM_CFG_THREADSAFE && WOLFHSM_CFG_TEST_POSIX && ... */
+#endif /* !WOLFHSM_CFG_THREADSAFE || !WOLFHSM_CFG_TEST_POSIX ||     \
+          !WOLFHSM_CFG_GLOBAL_KEYS || !WOLFHSM_CFG_ENABLE_CLIENT || \
+          !WOLFHSM_CFG_ENABLE_SERVER || WOLFHSM_CFG_NO_CRYPTO */

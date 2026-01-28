@@ -1613,7 +1613,7 @@ int wh_Server_HandleSheRequest(whServerContext* server, uint16_t magic,
                 ret = _SecureBootInit(server, magic, req_size, req_packet,
                                       out_resp_size, resp_packet);
                 (void)WH_SERVER_NVM_UNLOCK(server);
-            } /* WH_SERVER_NVM_LOCK() == WH_ERROR_OK */
+            } /* WH_SERVER_NVM_LOCK() */
             break;
         case WH_SHE_SECURE_BOOT_UPDATE:
             ret = _SecureBootUpdate(server, magic, req_size, req_packet,
@@ -1625,7 +1625,7 @@ int wh_Server_HandleSheRequest(whServerContext* server, uint16_t magic,
                 ret = _SecureBootFinish(server, magic, req_size, req_packet,
                                         out_resp_size, resp_packet);
                 (void)WH_SERVER_NVM_UNLOCK(server);
-            } /* WH_SERVER_NVM_LOCK() == WH_ERROR_OK */
+            } /* WH_SERVER_NVM_LOCK() */
             break;
         case WH_SHE_GET_STATUS:
             ret = _GetStatus(server, magic, req_size, req_packet, out_resp_size,
@@ -1637,7 +1637,7 @@ int wh_Server_HandleSheRequest(whServerContext* server, uint16_t magic,
                 ret = _LoadKey(server, magic, req_size, req_packet,
                                out_resp_size, resp_packet);
                 (void)WH_SERVER_NVM_UNLOCK(server);
-            } /* WH_SERVER_NVM_LOCK() == WH_ERROR_OK */
+            } /* WH_SERVER_NVM_LOCK() */
             break;
         case WH_SHE_LOAD_PLAIN_KEY:
             ret = WH_SERVER_NVM_LOCK(server);
@@ -1645,7 +1645,7 @@ int wh_Server_HandleSheRequest(whServerContext* server, uint16_t magic,
                 ret = _LoadPlainKey(server, magic, req_size, req_packet,
                                     out_resp_size, resp_packet);
                 (void)WH_SERVER_NVM_UNLOCK(server);
-            } /* WH_SERVER_NVM_LOCK() == WH_ERROR_OK */
+            } /* WH_SERVER_NVM_LOCK() */
             break;
         case WH_SHE_EXPORT_RAM_KEY:
             ret = WH_SERVER_NVM_LOCK(server);
@@ -1653,7 +1653,7 @@ int wh_Server_HandleSheRequest(whServerContext* server, uint16_t magic,
                 ret = _ExportRamKey(server, magic, req_size, req_packet,
                                     out_resp_size, resp_packet);
                 (void)WH_SERVER_NVM_UNLOCK(server);
-            } /* WH_SERVER_NVM_LOCK() == WH_ERROR_OK */
+            } /* WH_SERVER_NVM_LOCK() */
             break;
         case WH_SHE_INIT_RND:
             ret = WH_SERVER_NVM_LOCK(server);
@@ -1661,7 +1661,7 @@ int wh_Server_HandleSheRequest(whServerContext* server, uint16_t magic,
                 ret = _InitRnd(server, magic, req_size, req_packet,
                                out_resp_size, resp_packet);
                 (void)WH_SERVER_NVM_UNLOCK(server);
-            } /* WH_SERVER_NVM_LOCK() == WH_ERROR_OK */
+            } /* WH_SERVER_NVM_LOCK() */
             break;
         case WH_SHE_RND:
             ret = _Rnd(server, magic, req_size, req_packet, out_resp_size,
@@ -1673,7 +1673,7 @@ int wh_Server_HandleSheRequest(whServerContext* server, uint16_t magic,
                 ret = _ExtendSeed(server, magic, req_size, req_packet,
                                   out_resp_size, resp_packet);
                 (void)WH_SERVER_NVM_UNLOCK(server);
-            } /* WH_SERVER_NVM_LOCK() == WH_ERROR_OK */
+            } /* WH_SERVER_NVM_LOCK() */
             break;
         case WH_SHE_ENC_ECB:
             ret = WH_SERVER_NVM_LOCK(server);
@@ -1681,7 +1681,7 @@ int wh_Server_HandleSheRequest(whServerContext* server, uint16_t magic,
                 ret = _EncEcb(server, magic, req_size, req_packet,
                               out_resp_size, resp_packet);
                 (void)WH_SERVER_NVM_UNLOCK(server);
-            } /* WH_SERVER_NVM_LOCK() == WH_ERROR_OK */
+            } /* WH_SERVER_NVM_LOCK() */
             break;
         case WH_SHE_ENC_CBC:
             ret = WH_SERVER_NVM_LOCK(server);
@@ -1689,7 +1689,7 @@ int wh_Server_HandleSheRequest(whServerContext* server, uint16_t magic,
                 ret = _EncCbc(server, magic, req_size, req_packet,
                               out_resp_size, resp_packet);
                 (void)WH_SERVER_NVM_UNLOCK(server);
-            } /* WH_SERVER_NVM_LOCK() == WH_ERROR_OK */
+            } /* WH_SERVER_NVM_LOCK() */
             break;
         case WH_SHE_DEC_ECB:
             ret = WH_SERVER_NVM_LOCK(server);
@@ -1697,7 +1697,7 @@ int wh_Server_HandleSheRequest(whServerContext* server, uint16_t magic,
                 ret = _DecEcb(server, magic, req_size, req_packet,
                               out_resp_size, resp_packet);
                 (void)WH_SERVER_NVM_UNLOCK(server);
-            } /* WH_SERVER_NVM_LOCK() == WH_ERROR_OK */
+            } /* WH_SERVER_NVM_LOCK() */
             break;
         case WH_SHE_DEC_CBC:
             ret = WH_SERVER_NVM_LOCK(server);
@@ -1705,7 +1705,7 @@ int wh_Server_HandleSheRequest(whServerContext* server, uint16_t magic,
                 ret = _DecCbc(server, magic, req_size, req_packet,
                               out_resp_size, resp_packet);
                 (void)WH_SERVER_NVM_UNLOCK(server);
-            } /* WH_SERVER_NVM_LOCK() == WH_ERROR_OK */
+            } /* WH_SERVER_NVM_LOCK() */
             break;
         case WH_SHE_GEN_MAC:
             ret = WH_SERVER_NVM_LOCK(server);
@@ -1713,7 +1713,7 @@ int wh_Server_HandleSheRequest(whServerContext* server, uint16_t magic,
                 ret = _GenerateMac(server, magic, req_size, req_packet,
                                    out_resp_size, resp_packet);
                 (void)WH_SERVER_NVM_UNLOCK(server);
-            } /* WH_SERVER_NVM_LOCK() == WH_ERROR_OK */
+            } /* WH_SERVER_NVM_LOCK() */
             break;
         case WH_SHE_VERIFY_MAC:
             ret = WH_SERVER_NVM_LOCK(server);
@@ -1721,7 +1721,7 @@ int wh_Server_HandleSheRequest(whServerContext* server, uint16_t magic,
                 ret = _VerifyMac(server, magic, req_size, req_packet,
                                  out_resp_size, resp_packet);
                 (void)WH_SERVER_NVM_UNLOCK(server);
-            } /* WH_SERVER_NVM_LOCK() == WH_ERROR_OK */
+            } /* WH_SERVER_NVM_LOCK() */
             break;
         default:
             ret = WH_ERROR_BADARGS;

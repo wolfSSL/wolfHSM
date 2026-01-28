@@ -44,8 +44,8 @@ int wh_Lock_Init(whLock* lock, const whLockConfig* config)
 
     /* Allow NULL config for single-threaded mode (no-op locking) */
     if ((config == NULL) || (config->cb == NULL)) {
-        lock->cb      = NULL;
-        lock->context = NULL;
+        lock->cb          = NULL;
+        lock->context     = NULL;
         lock->initialized = 1; /* Mark as initialized even in no-op mode */
         return WH_ERROR_OK;
     }
