@@ -57,6 +57,9 @@
  *  WOLFHSM_CFG_ENABLE_SERVER - If defined, include server-specific
  * functionality
  *
+ *  WOLFHSM_CFG_ENABLE_TIMEOUT - If defined, include timeout helpers and
+ * client response timeout support.
+ *
  *  WOLFHSM_CFG_NVM_OBJECT_COUNT - Number of objects in ram and disk directories
  *      Default: 32
  *
