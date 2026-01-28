@@ -169,6 +169,24 @@ static uint8_t* _createCryptoRequestWithSubtype(uint8_t* reqBuf, uint16_t type,
     return reqBuf + sizeof(whMessageCrypto_GenericRequestHeader);
 }
 
+static int _recvCryptoResponse(whClientContext* ctx, 
+                               uint16_t* group, uint16_t* action, 
+                               uint16_t* size, void *data)
+{
+    int ret;
+
+#ifdef WOLFHSM_CFG_ENABLE_TIMEOUT
+    ret = wh_Client_RecvResponseTimeout(ctx, group, action, size, data,
+                                        ctx->respTimeout);
+#else
+    do {
+        ret = wh_Client_RecvResponse(ctx, group, action, size, data);
+    } while (ret == WH_ERROR_NOTREADY);
+#endif /* WOLFHSM_CFG_ENABLE_TIMEOUT */
+
+    return ret;
+}
+
 /* Helper function to validate and extract crypto response */
 /* TODO: add algoSubType checking */
 static int _getCryptoResponse(uint8_t* respBuf, uint16_t type,
@@ -240,10 +258,8 @@ int wh_Client_RngGenerate(whClientContext* ctx, uint8_t* out, uint32_t size)
         /* Send request and get response */
         ret = wh_Client_SendRequest(ctx, group, action, req_len, dataPtr);
         if (ret == 0) {
-            do {
-                ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
-                                             dataPtr);
-            } while (ret == WH_ERROR_NOTREADY);
+            ret = _recvCryptoResponse(ctx, &group, &action, &res_len,
+                                      dataPtr);
         }
         if (ret == WH_ERROR_OK) {
             /* Get response */
@@ -318,10 +334,8 @@ int wh_Client_RngGenerateDma(whClientContext* ctx, uint8_t* out, uint32_t size)
 
     if (ret == WH_ERROR_OK) {
         /* Wait for and receive the response */
-        do {
-            ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
-                                         (uint8_t*)dataPtr);
-        } while (ret == WH_ERROR_NOTREADY);
+        ret = _recvCryptoResponse(ctx, NULL, NULL, &respSz,
+                                  (uint8_t*)dataPtr);
     }
 
     if (ret == WH_ERROR_OK) {
@@ -421,10 +435,7 @@ int wh_Client_AesCtr(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
     if (ret == WH_ERROR_OK) {
         /* Response packet */
         uint16_t res_len = 0;
-        do {
-            ret =
-                wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
-        } while (ret == WH_ERROR_NOTREADY);
+        ret = _recvCryptoResponse(ctx, &group, &action, &res_len, dataPtr);
         if (ret == WH_ERROR_OK) {
             ret = _getCryptoResponse(dataPtr, type, (uint8_t**)&res);
             if (ret == WH_ERROR_OK) {
@@ -880,10 +891,7 @@ int wh_Client_AesCbc(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
     if (ret == WH_ERROR_OK) {
         /* Response packet */
         uint16_t res_len = 0;
-        do {
-            ret =
-                wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
-        } while (ret == WH_ERROR_NOTREADY);
+        ret = _recvCryptoResponse(ctx, &group, &action, &res_len, dataPtr);
         if (ret == WH_ERROR_OK) {
             ret = _getCryptoResponse(dataPtr, type, (uint8_t**)&res);
             if (ret == WH_ERROR_OK) {
@@ -993,15 +1001,9 @@ int wh_Client_AesCbcDma(whClientContext* ctx, Aes* aes, int enc,
     WH_DEBUG_VERBOSE_HEXDUMP("[client] AESCBC DMA req packet: \n",
                             dataPtr, req_len);
     if (ret == WH_ERROR_OK) {
-        ret = wh_Client_SendRequest(ctx, group, action, req_len, dataPtr);
-    }
-    if (ret == WH_ERROR_OK) {
-        uint16_t resLen = 0;
-        do {
-            ret =
-                wh_Client_RecvResponse(ctx, &group, &action, &resLen, dataPtr);
-        } while (ret == WH_ERROR_NOTREADY);
-
+        /* Response packet */
+        uint16_t res_len = 0;
+        ret = _recvCryptoResponse(ctx, &group, &action, &res_len, dataPtr);
         if (ret == WH_ERROR_OK) {
             /* Get response */
             whMessageCrypto_AesCbcDmaResponse* res;
@@ -1244,10 +1246,7 @@ int wh_Client_AesGcm(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
     ret = wh_Client_SendRequest(ctx, group, action, req_len, dataPtr);
     if (ret == WH_ERROR_OK) {
         uint16_t res_len = 0;
-        do {
-            ret =
-                wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
-        } while (ret == WH_ERROR_NOTREADY);
+        ret = _recvCryptoResponse(ctx, &group, &action, &res_len, dataPtr);
 
         if (ret == WH_ERROR_OK) {
             /* Get response */
@@ -1419,10 +1418,7 @@ int wh_Client_AesGcmDma(whClientContext* ctx, Aes* aes, int enc,
     }
     if (ret == WH_ERROR_OK) {
         uint16_t resLen = 0;
-        do {
-            ret =
-                wh_Client_RecvResponse(ctx, &group, &action, &resLen, dataPtr);
-        } while (ret == WH_ERROR_NOTREADY);
+        ret = _recvCryptoResponse(ctx, &group, &action, &resLen, dataPtr);
 
         if (ret == WH_ERROR_OK) {
             /* Get response */
@@ -1611,10 +1607,8 @@ static int _EccMakeKey(whClientContext* ctx, int size, int curveId,
             if (ret == WH_ERROR_OK) {
                 /* Response Message */
                 uint16_t res_len;
-                do {
-                    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
-                                                 (uint8_t*)dataPtr);
-                } while (ret == WH_ERROR_NOTREADY);
+                ret = _recvCryptoResponse(ctx, &group, &action, &res_len,
+                                          (uint8_t*)dataPtr);
 
                 if (ret == WH_ERROR_OK) {
                     /* Get response structure pointer, validates generic header
@@ -1775,10 +1769,8 @@ int wh_Client_EccSharedSecret(whClientContext* ctx, ecc_key* priv_key,
                 uint16_t res_len;
 
                 /* Recv Response */
-                do {
-                    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
-                                                 (uint8_t*)dataPtr);
-                } while (ret == WH_ERROR_NOTREADY);
+                ret = _recvCryptoResponse(ctx, &group, &action, &res_len,
+                                          (uint8_t*)dataPtr);
                 WH_DEBUG_CLIENT_VERBOSE("resp packet recv. ret:%d\n", ret);
                 if (ret == WH_ERROR_OK) {
                     /* Get response structure pointer, validates generic header
@@ -1911,10 +1903,8 @@ int wh_Client_EccSign(whClientContext* ctx, ecc_key* key, const uint8_t* hash,
                 uint16_t res_len = 0;
 
                 /* Recv Response */
-                do {
-                    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
-                                                 (uint8_t*)dataPtr);
-                } while (ret == WH_ERROR_NOTREADY);
+                ret = _recvCryptoResponse(ctx, &group, &action, &res_len,
+                                          (uint8_t*)dataPtr);
 
                 if (ret == WH_ERROR_OK) {
                     /* Get response structure pointer, validates generic header
@@ -2065,10 +2055,8 @@ int wh_Client_EccVerify(whClientContext* ctx, ecc_key* key, const uint8_t* sig,
                 uint16_t res_len = 0;
 
                 /* Recv Response */
-                do {
-                    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
-                                                 (uint8_t*)dataPtr);
-                } while (ret == WH_ERROR_NOTREADY);
+                ret = _recvCryptoResponse(ctx, &group, &action, &res_len,
+                                          (uint8_t*)dataPtr);
                 if (ret == WH_ERROR_OK) {
                     /* Get response structure pointer, validates generic header
                      * rc */
@@ -2143,10 +2131,8 @@ int wh_Client_EccCheckPubKey(whClientContext* ctx, ecc_key* key,
         (uint8_t*)packet);
     /* read response */
     if (ret == 0) {
-        do {
-            ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
-                (uint8_t*)packet);
-        } while (ret == WH_ERROR_NOTREADY);
+        ret = _recvCryptoResponse(ctx, &group, &action, &dataSz,
+                                  (uint8_t*)packet);
     }
     if (ret == 0) {
         if (packet->rc != 0)
@@ -2288,10 +2274,8 @@ static int _Curve25519MakeKey(whClientContext* ctx, uint16_t size,
     WH_DEBUG_CLIENT_VERBOSE("Curve25519 KeyGen Req sent:size:%u, ret:%d\n",
            (unsigned int)req->sz, ret);
     if (ret == 0) {
-        do {
-            ret = wh_Client_RecvResponse(ctx, &group, &action, &data_len,
-                                         (uint8_t*)dataPtr);
-        } while (ret == WH_ERROR_NOTREADY);
+        ret = _recvCryptoResponse(ctx, &group, &action, &data_len,
+                                  (uint8_t*)dataPtr);
     }
 
 
@@ -2447,10 +2431,8 @@ int wh_Client_Curve25519SharedSecret(whClientContext* ctx,
                 pub_evict = prv_evict = 0;
 
                 /* Recv Response */
-                do {
-                    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
-                                                 (uint8_t*)dataPtr);
-                } while (ret == WH_ERROR_NOTREADY);
+                ret = _recvCryptoResponse(ctx, &group, &action, &res_len,
+                                          (uint8_t*)dataPtr);
                 WH_DEBUG_CLIENT_VERBOSE("resp packet recv. ret:%d\n",
                        ret);
                 if (ret == WH_ERROR_OK) {
@@ -2616,10 +2598,8 @@ static int _Ed25519MakeKey(whClientContext* ctx, whKeyId* inout_key_id,
         return ret;
     }
     uint16_t res_len = 0;
-    do {
-        ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
-                                     (uint8_t*)dataPtr);
-    } while (ret == WH_ERROR_NOTREADY);
+    ret = _recvCryptoResponse(ctx, &group, &action, &res_len,
+                              (uint8_t*)dataPtr);
 
     if (ret != WH_ERROR_OK) {
         return ret;
@@ -2761,10 +2741,8 @@ int wh_Client_Ed25519Sign(whClientContext* ctx, ed25519_key* key,
             evict = 0;
 
             uint16_t res_len = 0;
-            do {
-                ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
-                                             (uint8_t*)dataPtr);
-            } while (ret == WH_ERROR_NOTREADY);
+            ret = _recvCryptoResponse(ctx, &group, &action, &res_len,
+                                      (uint8_t*)dataPtr);
 
             if (group != WH_MESSAGE_GROUP_CRYPTO || action != WC_ALGO_TYPE_PK) {
                 ret = WH_ERROR_ABORTED;
@@ -2899,10 +2877,8 @@ int wh_Client_Ed25519Verify(whClientContext* ctx, ed25519_key* key,
             evict = 0;
 
             uint16_t res_len = 0;
-            do {
-                ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
-                                             (uint8_t*)dataPtr);
-            } while (ret == WH_ERROR_NOTREADY);
+            ret = _recvCryptoResponse(ctx, &group, &action, &res_len,
+                                      (uint8_t*)dataPtr);
 
             if (group != WH_MESSAGE_GROUP_CRYPTO || action != WC_ALGO_TYPE_PK) {
                 ret = WH_ERROR_ABORTED;
@@ -3035,10 +3011,8 @@ int wh_Client_Ed25519SignDma(whClientContext* ctx, ed25519_key* key,
             evict = 0;
 
             uint16_t res_len = 0;
-            do {
-                ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
-                                             (uint8_t*)dataPtr);
-            } while (ret == WH_ERROR_NOTREADY);
+            ret = _recvCryptoResponse(ctx, &group, &action, &res_len,
+                                      (uint8_t*)dataPtr);
 
             if (group != WH_MESSAGE_GROUP_CRYPTO_DMA ||
                 action != WC_ALGO_TYPE_PK) {
@@ -3182,10 +3156,8 @@ int wh_Client_Ed25519VerifyDma(whClientContext* ctx, ed25519_key* key,
             evict = 0;
 
             uint16_t res_len = 0;
-            do {
-                ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
-                                             (uint8_t*)dataPtr);
-            } while (ret == WH_ERROR_NOTREADY);
+            ret = _recvCryptoResponse(ctx, &group, &action, &res_len,
+                                      (uint8_t*)dataPtr);
 
             if (group != WH_MESSAGE_GROUP_CRYPTO_DMA ||
                 action != WC_ALGO_TYPE_PK) {
@@ -3370,10 +3342,7 @@ static int _RsaMakeKey(whClientContext* ctx, uint32_t size, uint32_t e,
            (unsigned int)req->size, (unsigned int)req->e, ret);
     if (ret == 0) {
         uint16_t res_len = 0;
-        do {
-            ret =
-                wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
-        } while (ret == WH_ERROR_NOTREADY);
+        ret = _recvCryptoResponse(ctx, &group, &action, &res_len, dataPtr);
 
         WH_DEBUG_CLIENT_VERBOSE("RSA KeyGen Res recv: ret:%d, res_len: %u\n", ret,
                (unsigned int)res_len);
@@ -3534,10 +3503,8 @@ int wh_Client_RsaFunction(whClientContext* ctx, RsaKey* key, int rsa_type,
                 uint16_t res_len = 0;
 
                 /* Recv Response */
-                do {
-                    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
-                                                 (uint8_t*)dataPtr);
-                } while (ret == WH_ERROR_NOTREADY);
+                ret = _recvCryptoResponse(ctx, &group, &action, &res_len,
+                                          (uint8_t*)dataPtr);
 
                 if (ret == WH_ERROR_OK) {
                     /* Get response */
@@ -3646,10 +3613,8 @@ int wh_Client_RsaGetSize(whClientContext* ctx, const RsaKey* key, int* out_size)
                 uint16_t res_len = 0;
 
                 /* Recv Response */
-                do {
-                    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
-                                                 (uint8_t*)dataPtr);
-                } while (ret == WH_ERROR_NOTREADY);
+                ret = _recvCryptoResponse(ctx, &group, &action, &res_len,
+                                          (uint8_t*)dataPtr);
 
                 if (ret == WH_ERROR_OK) {
                     /* Get response */
@@ -3770,10 +3735,7 @@ static int _HkdfMakeKey(whClientContext* ctx, int hashType, whKeyId keyIdIn,
 
     if (ret == 0) {
         uint16_t res_len = 0;
-        do {
-            ret =
-                wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
-        } while (ret == WH_ERROR_NOTREADY);
+        ret = _recvCryptoResponse(ctx, &group, &action, &res_len, dataPtr);
 
         WH_DEBUG_CLIENT_VERBOSE("HKDF Res recv: ret:%d, res_len: %u\n", ret,
                (unsigned int)res_len);
@@ -3938,9 +3900,7 @@ static int _CmacKdfMakeKey(whClientContext* ctx, whKeyId saltKeyId,
     }
 
     uint16_t res_len = 0;
-    do {
-        ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
-    } while (ret == WH_ERROR_NOTREADY);
+    ret = _recvCryptoResponse(ctx, &group, &action, &res_len, dataPtr);
 
     if (ret == WH_ERROR_OK) {
         ret = _getCryptoResponse(dataPtr, WC_ALGO_TYPE_KDF, (uint8_t**)&res);
@@ -4130,10 +4090,8 @@ int wh_Client_Cmac(whClientContext* ctx, Cmac* cmac, CmacType type,
 
 
         uint16_t res_len = 0;
-        do {
-            ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
-                                         (uint8_t*)dataPtr);
-        } while (ret == WH_ERROR_NOTREADY);
+        ret = _recvCryptoResponse(ctx, &group, &action, &res_len,
+                                  (uint8_t*)dataPtr);
         if (ret == WH_ERROR_OK) {
             /* Get response */
             ret =
@@ -4160,7 +4118,6 @@ int wh_Client_Cmac(whClientContext* ctx, Cmac* cmac, CmacType type,
 }
 
 #endif /* !NO_AES */
-
 
 #ifdef WOLFHSM_CFG_DMA
 int wh_Client_CmacDma(whClientContext* ctx, Cmac* cmac, CmacType type,
@@ -4263,10 +4220,9 @@ int wh_Client_CmacDma(whClientContext* ctx, Cmac* cmac, CmacType type,
         }
 
         uint16_t respSz = 0;
-        do {
-            ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
-                                         (uint8_t*)dataPtr);
-        } while (ret == WH_ERROR_NOTREADY);
+        ret = _recvCryptoResponse(ctx, NULL, NULL, &respSz,
+                                  (uint8_t*)dataPtr);
+    
 
         if (ret == WH_ERROR_OK) {
             ret =
@@ -4366,10 +4322,8 @@ static int _xferSha256BlockAndUpdateDigest(whClientContext* ctx,
     WH_DEBUG_CLIENT_VERBOSE("  ret = %d\n", ret);
 
     if (ret == 0) {
-        do {
-            ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
-                                         (uint8_t*)dataPtr);
-        } while (ret == WH_ERROR_NOTREADY);
+        ret = _recvCryptoResponse(ctx, &group, &action, &dataSz,
+                                  (uint8_t*)dataPtr);
     }
     if (ret == 0) {
         /* Get response */
@@ -4522,10 +4476,8 @@ int wh_Client_Sha256Dma(whClientContext* ctx, wc_Sha256* sha, const uint8_t* in,
             (uint8_t*)dataPtr);
 
         if (ret == WH_ERROR_OK) {
-            do {
-                ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
-                                             (uint8_t*)dataPtr);
-            } while (ret == WH_ERROR_NOTREADY);
+            ret = _recvCryptoResponse(ctx, NULL, NULL, &respSz,
+                                      (uint8_t*)dataPtr);
         }
 
         if (ret == WH_ERROR_OK) {
@@ -4551,10 +4503,8 @@ int wh_Client_Sha256Dma(whClientContext* ctx, wc_Sha256* sha, const uint8_t* in,
             (uint8_t*)dataPtr);
 
         if (ret == WH_ERROR_OK) {
-            do {
-                ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
-                                             (uint8_t*)dataPtr);
-            } while (ret == WH_ERROR_NOTREADY);
+            ret = _recvCryptoResponse(ctx, NULL, NULL, &respSz,
+                                      (uint8_t*)dataPtr);
         }
 
         /* Copy out the final hash value */
@@ -4652,10 +4602,8 @@ static int _xferSha224BlockAndUpdateDigest(whClientContext* ctx,
     WH_DEBUG_CLIENT_VERBOSE("  ret = %d\n", ret);
 
     if (ret == 0) {
-        do {
-            ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
-                                         (uint8_t*)dataPtr);
-        } while (ret == WH_ERROR_NOTREADY);
+        ret = _recvCryptoResponse(ctx, &group, &action, &dataSz,
+                                  (uint8_t*)dataPtr);
     }
     if (ret == 0) {
         /* Get response */
@@ -4807,10 +4755,8 @@ int wh_Client_Sha224Dma(whClientContext* ctx, wc_Sha224* sha, const uint8_t* in,
             (uint8_t*)dataPtr);
 
         if (ret == WH_ERROR_OK) {
-            do {
-                ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
-                                             (uint8_t*)dataPtr);
-            } while (ret == WH_ERROR_NOTREADY);
+            ret = _recvCryptoResponse(ctx, NULL, NULL, &respSz,
+                                      (uint8_t*)dataPtr);
         }
 
         if (ret == WH_ERROR_OK) {
@@ -4837,10 +4783,8 @@ int wh_Client_Sha224Dma(whClientContext* ctx, wc_Sha224* sha, const uint8_t* in,
             (uint8_t*)dataPtr);
 
         if (ret == WH_ERROR_OK) {
-            do {
-                ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
-                                             (uint8_t*)dataPtr);
-            } while (ret == WH_ERROR_NOTREADY);
+            ret = _recvCryptoResponse(ctx, NULL, NULL, &respSz,
+                                      (uint8_t*)dataPtr);
         }
 
         /* Copy out the final hash value */
@@ -4933,10 +4877,8 @@ static int _xferSha384BlockAndUpdateDigest(whClientContext* ctx,
     WH_DEBUG_CLIENT_VERBOSE("  ret = %d\n", ret);
 
     if (ret == 0) {
-        do {
-            ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
-                                         (uint8_t*)dataPtr);
-        } while (ret == WH_ERROR_NOTREADY);
+        ret = _recvCryptoResponse(ctx, &group, &action, &dataSz,
+                                  (uint8_t*)dataPtr);
     }
     if (ret == 0) {
         /* Get response */
@@ -5088,10 +5030,8 @@ int wh_Client_Sha384Dma(whClientContext* ctx, wc_Sha384* sha, const uint8_t* in,
             (uint8_t*)dataPtr);
 
         if (ret == WH_ERROR_OK) {
-            do {
-                ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
-                                             (uint8_t*)dataPtr);
-            } while (ret == WH_ERROR_NOTREADY);
+            ret = _recvCryptoResponse(ctx, NULL, NULL, &respSz,
+                                      (uint8_t*)dataPtr);
         }
 
         if (ret == WH_ERROR_OK) {
@@ -5118,10 +5058,8 @@ int wh_Client_Sha384Dma(whClientContext* ctx, wc_Sha384* sha, const uint8_t* in,
             (uint8_t*)dataPtr);
 
         if (ret == WH_ERROR_OK) {
-            do {
-                ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
-                                             (uint8_t*)dataPtr);
-            } while (ret == WH_ERROR_NOTREADY);
+            ret = _recvCryptoResponse(ctx, NULL, NULL, &respSz,
+                                      (uint8_t*)dataPtr);
         }
 
         /* Copy out the final hash value */
@@ -5215,10 +5153,8 @@ static int _xferSha512BlockAndUpdateDigest(whClientContext* ctx,
     WH_DEBUG_CLIENT_VERBOSE("  ret = %d\n", ret);
 
     if (ret == 0) {
-        do {
-            ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
-                                         (uint8_t*)dataPtr);
-        } while (ret == WH_ERROR_NOTREADY);
+        ret = _recvCryptoResponse(ctx, &group, &action, &dataSz,
+                                  (uint8_t*)dataPtr);
     }
     if (ret == 0) {
         /* Get response */
@@ -5381,10 +5317,8 @@ int wh_Client_Sha512Dma(whClientContext* ctx, wc_Sha512* sha, const uint8_t* in,
             (uint8_t*)dataPtr);
 
         if (ret == WH_ERROR_OK) {
-            do {
-                ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
-                                             (uint8_t*)dataPtr);
-            } while (ret == WH_ERROR_NOTREADY);
+            ret = _recvCryptoResponse(ctx, NULL, NULL, &respSz,
+                                      (uint8_t*)dataPtr);
         }
 
         if (ret == WH_ERROR_OK) {
@@ -5411,10 +5345,8 @@ int wh_Client_Sha512Dma(whClientContext* ctx, wc_Sha512* sha, const uint8_t* in,
             (uint8_t*)dataPtr);
 
         if (ret == WH_ERROR_OK) {
-            do {
-                ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
-                                             (uint8_t*)dataPtr);
-            } while (ret == WH_ERROR_NOTREADY);
+            ret = _recvCryptoResponse(ctx, NULL, NULL, &respSz,
+                                      (uint8_t*)dataPtr);
         }
 
         /* Copy out the final hash value */
@@ -5589,10 +5521,8 @@ static int _MlDsaMakeKey(whClientContext* ctx, int size, int level,
                    (unsigned int)req->sz, ret);
             if (ret == 0) {
                 uint16_t res_len;
-                do {
-                    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
-                                                 (uint8_t*)dataPtr);
-                } while (ret == WH_ERROR_NOTREADY);
+                ret = _recvCryptoResponse(ctx, &group, &action, &res_len,
+                                          (uint8_t*)dataPtr);
 
                 if (ret == WH_ERROR_OK) {
                     /* Get response structure pointer, validates generic header
@@ -5751,10 +5681,8 @@ int wh_Client_MlDsaSign(whClientContext* ctx, const byte* in, word32 in_len,
                 uint16_t res_len = 0;
 
                 /* Recv Response */
-                do {
-                    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
-                                                 (uint8_t*)dataPtr);
-                } while (ret == WH_ERROR_NOTREADY);
+                ret = _recvCryptoResponse(ctx, &group, &action, &res_len,
+                                          (uint8_t*)dataPtr);
 
                 if (ret == WH_ERROR_OK) {
                     /* Get response structure pointer, validates generic header
@@ -5887,10 +5815,8 @@ int wh_Client_MlDsaVerify(whClientContext* ctx, const byte* sig, word32 sig_len,
                 uint16_t res_len = 0;
 
                 /* Recv Response */
-                do {
-                    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
-                                                 (uint8_t*)dataPtr);
-                } while (ret == WH_ERROR_NOTREADY);
+                ret = _recvCryptoResponse(ctx, &group, &action, &res_len,
+                                          (uint8_t*)dataPtr);
                 if (ret == 0) {
                     /* Get response structure pointer, validates generic header
                      * rc */
@@ -6056,10 +5982,8 @@ static int _MlDsaMakeKeyDma(whClientContext* ctx, int level,
         }
         if (ret == WH_ERROR_OK) {
             uint16_t res_len;
-            do {
-                ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
-                                             (uint8_t*)dataPtr);
-            } while (ret == WH_ERROR_NOTREADY);
+            ret = _recvCryptoResponse(ctx, &group, &action, &res_len,
+                                      (uint8_t*)dataPtr);
         }
 
         (void)wh_Client_DmaProcessClientAddress(
@@ -6216,10 +6140,8 @@ int wh_Client_MlDsaSignDma(whClientContext* ctx, const byte* in, word32 in_len,
                 uint16_t res_len = 0;
 
                 /* Recv Response */
-                do {
-                    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
-                                                 (uint8_t*)dataPtr);
-                } while (ret == WH_ERROR_NOTREADY);
+                ret = _recvCryptoResponse(ctx, &group, &action, &res_len,
+                                          (uint8_t*)dataPtr);
 
                 if (ret == WH_ERROR_OK) {
                     /* Get response structure pointer, validates generic header
@@ -6352,10 +6274,8 @@ int wh_Client_MlDsaVerifyDma(whClientContext* ctx, const byte* sig,
                 uint16_t res_len = 0;
 
                 /* Recv Response */
-                do {
-                    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
-                                                 (uint8_t*)dataPtr);
-                } while (ret == WH_ERROR_NOTREADY);
+                ret = _recvCryptoResponse(ctx, &group, &action, &res_len,
+                                          (uint8_t*)dataPtr);
 
                 if (ret == WH_ERROR_OK) {
                     /* Get response structure pointer, validates generic header
