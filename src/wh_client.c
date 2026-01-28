@@ -77,6 +77,15 @@ int wh_Client_Init(whClientContext* c, const whClientConfig* config)
 
     memset(c, 0, sizeof(*c));
 
+#ifdef WOLFHSM_CFG_ENABLE_TIMEOUT
+    if (config->respTimeoutConfig != NULL) {
+        rc = wh_Timeout_Init(c->respTimeout, config->respTimeoutConfig);
+        if (rc != 0) {
+            return rc;
+        }
+    }
+#endif
+
     rc = wh_CommClient_Init(c->comm, config->comm);
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
@@ -193,6 +202,31 @@ int wh_Client_RecvResponse(whClientContext *c,
         }
     }
     return rc;
+}
+
+int wh_Client_RecvResponseTimeout(whClientContext *c,
+        uint16_t *out_group, uint16_t *out_action,
+        uint16_t *out_size, void* data, whTimeoutCtx *timeout)
+{
+    int ret;
+
+    if ((c == NULL) || (timeout == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_Timeout_Start(timeout);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    do {
+        ret = wh_Client_RecvResponse(c, out_group, out_action, out_size, data);
+        if ((ret == WH_ERROR_NOTREADY) && wh_Timeout_Expired(timeout)) {
+            return WH_ERROR_TIMEOUT;
+        }
+    } while (ret == WH_ERROR_NOTREADY);
+
+    return ret;
 }
 
 int wh_Client_CommInitRequest(whClientContext* c)

@@ -65,4 +65,6 @@
 /* Allow persistent NVM artifacts in tests */
 #define WOLFHSM_CFG_TEST_ALLOW_PERSISTENT_NVM_ARTIFACTS
 
+#define WOLFHSM_CFG_ENABLE_TIMEOUT
+
 #endif /* WOLFHSM_CFG_H_ */
