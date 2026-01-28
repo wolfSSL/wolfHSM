@@ -1,0 +1,36 @@
+# ThreadSanitizer Suppression File for wolfHSM
+#
+# This file suppresses known false positives and external library issues.
+# Use with: TSAN_OPTIONS="suppressions=tsan.supp" ./wh_test_stress.elf
+
+# =============================================================================
+# Category 1: wolfSSL/wolfCrypt Global State (External Library)
+# =============================================================================
+# These races occur in wolfSSL's global initialization and crypto callback
+# registration. They are wolfSSL library issues, not wolfHSM bugs.
+
+# Race on initRefCount in wolfCrypt_Init/wolfCrypt_Cleanup
+race:wolfCrypt_Init
+race:wolfCrypt_Cleanup
+
+# Races on gCryptoDev array in crypto callback registration
+race:wc_CryptoCb_RegisterDevice
+race:wc_CryptoCb_UnRegisterDevice
+race:wc_CryptoCb_GetDevice
+
+# =============================================================================
+# Category 2: Transport Memory Layer (Lock-free by Design)
+# =============================================================================
+# The shared memory transport uses a lock-free protocol with volatile pointers,
+# memory fences, and cache operations. TSAN doesn't understand this higher-level
+# protocol and flags the raw memory accesses as races.
+
+# CSR (Control/Status Register) access functions
+race:wh_TransportMem_SendRequest
+race:wh_TransportMem_RecvRequest
+race:wh_TransportMem_SendResponse
+race:wh_TransportMem_RecvResponse
+
+# Shared buffer memcpy operations
+race:wh_Utils_memcpy_flush
+race:wh_Utils_memcpy_invalidate

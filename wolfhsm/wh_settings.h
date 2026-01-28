@@ -102,6 +102,13 @@
  *  WOLFHSM_CFG_DEBUG_VERBOSE - If defined, enable verbose debug output
  *      Default: Not defined
  *
+ *  WOLFHSM_CFG_THREADSAFE - If defined, enable thread-safe access to shared
+ *      server resources. Requires platform to provide lock callbacks via
+ *      whLockConfig. When enabled, protects global key cache, NVM operations,
+ *      and hardware crypto (if shared). When not defined, all lock operations
+ *      are no-ops with zero overhead.
+ *      Default: Not defined
+ *
  *  WOLFHSM_CFG_PRINTF - Function or macro for printf redirection. Must have
  *      signature: int func(const char* fmt, ...)
  *      Default: stdlib printf
@@ -164,6 +171,8 @@
 #else
 #include <wolfssl/options.h>
 #endif /* WOLFSSL_USER_SETTINGS */
+
+#include "wolfssl/wolfcrypt/types.h"
 
 #if defined(WOLFHSM_CFG_DEBUG) || defined(WOLFHSM_CFG_DEBUG_VERBOSE)
 #define WOLFHSM_CFG_HEXDUMP

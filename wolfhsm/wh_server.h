@@ -497,4 +497,15 @@ int whServerDma_CopyToClient(struct whServerContext_t* server,
                              whServerDmaFlags flags);
 #endif /* WOLFHSM_CFG_DMA */
 
+/** Server NVM Locking API for handler-level thread safety */
+#ifdef WOLFHSM_CFG_THREADSAFE
+int wh_Server_NvmLock(whServerContext* server);
+int wh_Server_NvmUnlock(whServerContext* server);
+#define WH_SERVER_NVM_LOCK(server) wh_Server_NvmLock(server)
+#define WH_SERVER_NVM_UNLOCK(server) wh_Server_NvmUnlock(server)
+#else
+#define WH_SERVER_NVM_LOCK(server) (WH_ERROR_OK)
+#define WH_SERVER_NVM_UNLOCK(server) (WH_ERROR_OK)
+#endif
+
 #endif /* !WOLFHSM_WH_SERVER_H_ */
