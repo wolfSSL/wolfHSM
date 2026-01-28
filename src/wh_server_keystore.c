@@ -19,6 +19,23 @@
 /*
  * src/wh_server_keystore.c
  *
+ * LOCKING DISCIPLINE FOR COMPOUND OPERATIONS:
+ *
+ * All compound operations (those involving multiple cache/NVM accesses) MUST:
+ * 1. Acquire server->nvm->lock at the start using _LockKeystore()
+ * 2. Use only *Unlocked() variants of NVM/cache functions internally
+ * 3. Keep lock held for entire operation, including DMA transfers
+ * 4. Release lock only after all metadata-dependent operations complete
+ *
+ * Rationale: Releasing the lock mid-operation creates TOCTOU (Time-Of-Check-
+ * Time-Of-Use) vulnerabilities where metadata can become stale or objects can
+ * be destroyed/replaced between checks. DMA operations that depend on cached
+ * metadata MUST occur under the same lock that validated that metadata.
+ *
+ * Examples of correct implementations in this file:
+ * - wh_Server_KeystoreCacheKeyDmaChecked() (lines 2518-2542)
+ * - wh_Server_KeystoreExportKeyDmaChecked() (lines 2579-2616)
+ * - wh_Server_KeystoreRevokeKey() (lines 1179-1231)
  */
 
 /* Pick up compile-time configuration */
@@ -417,7 +434,8 @@ static int _MarkKeyCommittedUnlocked(whKeyCacheContext* ctx, whKeyId keyId,
     return ret;
 }
 
-int wh_Server_KeystoreGetUniqueId(whServerContext* server, whNvmId* inout_id)
+/* Unlocked variant - assumes caller holds server->nvm->lock */
+static int _GetUniqueIdUnlocked(whServerContext* server, whNvmId* inout_id)
 {
     int     ret   = WH_ERROR_OK;
     int     found = 0;
@@ -435,11 +453,6 @@ int wh_Server_KeystoreGetUniqueId(whServerContext* server, whNvmId* inout_id)
         return WH_ERROR_BADARGS;
     }
 
-    ret = _LockKeystore(server);
-    if (ret != WH_ERROR_OK) {
-        return ret;
-    }
-
     /* try every index until we find a unique one, don't worry about capacity */
     for (id = WH_KEYID_IDMAX; id > WH_KEYID_ERASED; id--) {
         /* id loop var is not an input client ID so we don't need to handle the
@@ -453,7 +466,7 @@ int wh_Server_KeystoreGetUniqueId(whServerContext* server, whNvmId* inout_id)
             continue;
         }
         else if (ret != WH_ERROR_NOTFOUND) {
-            goto cleanup;
+            return ret;
         }
 
         /* Check if keyId exists in NVM */
@@ -465,20 +478,30 @@ int wh_Server_KeystoreGetUniqueId(whServerContext* server, whNvmId* inout_id)
         }
 
         if (ret != WH_ERROR_OK) {
-            goto cleanup;
+            return ret;
         }
     }
 
     if (!found) {
-        ret = WH_ERROR_NOSPACE;
-        goto cleanup;
+        return WH_ERROR_NOSPACE;
     }
 
     /* Return found id */
     *inout_id = buildId;
-    ret       = WH_ERROR_OK;
+    return WH_ERROR_OK;
+}
 
-cleanup:
+int wh_Server_KeystoreGetUniqueId(whServerContext* server, whNvmId* inout_id)
+{
+    int ret;
+
+    ret = _LockKeystore(server);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    ret = _GetUniqueIdUnlocked(server, inout_id);
+
     (void)_UnlockKeystore(server);
     return ret;
 }
@@ -535,8 +558,17 @@ int wh_Server_KeystoreGetCacheSlotChecked(whServerContext* server,
     return ret;
 }
 
-static int _KeystoreCacheKeyLocked(whServerContext* server, whNvmMetadata* meta,
-                                   uint8_t* in, int checked)
+/* Forward declarations for unlocked variants */
+#ifdef WOLFHSM_CFG_DMA
+static int _KeystoreCacheKeyDmaUnlocked(whServerContext* server,
+                                        whNvmMetadata* meta, uint64_t keyAddr,
+                                        int checked);
+#endif
+
+/* Unlocked variant - assumes caller holds server->nvm->lock */
+static int _KeystoreCacheKeyUnlocked(whServerContext* server,
+                                     whNvmMetadata* meta, uint8_t* in,
+                                     int checked)
 {
     uint8_t*       slotBuf  = NULL;
     whNvmMetadata* slotMeta = NULL;
@@ -550,12 +582,7 @@ static int _KeystoreCacheKeyLocked(whServerContext* server, whNvmMetadata* meta,
         return WH_ERROR_BADARGS;
     }
 
-    ret = _LockKeystore(server);
-    if (ret != WH_ERROR_OK) {
-        return ret;
-    }
-
-    /* Use unlocked variants since we already hold the lock */
+    /* Use unlocked variants - caller already holds lock */
     if (checked) {
         ret = _GetCacheSlotCheckedUnlocked(server, meta->id, meta->len,
                                            &slotBuf, &slotMeta);
@@ -575,6 +602,21 @@ static int _KeystoreCacheKeyLocked(whServerContext* server, whNvmMetadata* meta,
                                 meta->id, meta->len);
         WH_DEBUG_VERBOSE_HEXDUMP("[server] cacheKey: key=", in, meta->len);
     }
+
+    return ret;
+}
+
+static int _KeystoreCacheKeyLocked(whServerContext* server, whNvmMetadata* meta,
+                                   uint8_t* in, int checked)
+{
+    int ret;
+
+    ret = _LockKeystore(server);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    ret = _KeystoreCacheKeyUnlocked(server, meta, in, checked);
 
     (void)_UnlockKeystore(server);
 
@@ -1099,37 +1141,39 @@ int wh_Server_KeystoreEraseKeyChecked(whServerContext* server, whNvmId keyId)
     }
 
     ret = _LockKeystore(server);
-    if (ret != WH_ERROR_OK) {
-        return ret;
-    }
-
-    /* Check eviction policy first */
-    ret = _KeystoreCheckPolicyUnlocked(server, WH_KS_OP_EVICT, keyId);
-    if (ret != WH_ERROR_OK && ret != WH_ERROR_NOTFOUND) {
-        goto cleanup;
-    }
-
-    /* Check NVM destroy policy (NONMODIFIABLE/NONDESTROYABLE enforcement) */
-    ret = wh_Nvm_GetMetadataUnlocked(server->nvm, keyId, &meta);
     if (ret == WH_ERROR_OK) {
-        if (meta.flags &
-            (WH_NVM_FLAGS_NONMODIFIABLE | WH_NVM_FLAGS_NONDESTROYABLE)) {
-            ret = WH_ERROR_ACCESS;
-            goto cleanup;
+        /* Check eviction policy first */
+        ret = _KeystoreCheckPolicyUnlocked(server, WH_KS_OP_EVICT, keyId);
+        if (ret == WH_ERROR_NOTFOUND) {
+            ret = WH_ERROR_OK; /* NOTFOUND is acceptable for eviction policy */
         }
+
+        if (ret == WH_ERROR_OK) {
+            /* Check NVM destroy policy (NONMODIFIABLE/NONDESTROYABLE
+             * enforcement) */
+            ret = wh_Nvm_GetMetadataUnlocked(server->nvm, keyId, &meta);
+            if (ret == WH_ERROR_OK) {
+                if (meta.flags & (WH_NVM_FLAGS_NONMODIFIABLE |
+                                  WH_NVM_FLAGS_NONDESTROYABLE)) {
+                    ret = WH_ERROR_ACCESS;
+                }
+            }
+            else if (ret == WH_ERROR_NOTFOUND) {
+                ret =
+                    WH_ERROR_OK; /* NOTFOUND is acceptable for metadata check */
+            }
+
+            if (ret == WH_ERROR_OK) {
+                /* Remove the key from the cache if present */
+                (void)_EvictKeyUnlocked(server, keyId);
+
+                /* Destroy the object */
+                ret = wh_Nvm_DestroyObjectsUnlocked(server->nvm, 1, &keyId);
+            }
+        }
+
+        (void)_UnlockKeystore(server);
     }
-    else if (ret != WH_ERROR_NOTFOUND) {
-        goto cleanup;
-    }
-
-    /* Remove the key from the cache if present */
-    (void)_EvictKeyUnlocked(server, keyId);
-
-    /* Destroy the object */
-    ret = wh_Nvm_DestroyObjectsUnlocked(server->nvm, 1, &keyId);
-
-cleanup:
-    (void)_UnlockKeystore(server);
     return ret;
 }
 
@@ -1163,51 +1207,45 @@ int wh_Server_KeystoreRevokeKey(whServerContext* server, whNvmId keyId)
     }
 
     ret = _LockKeystore(server);
-    if (ret != WH_ERROR_OK) {
-        return ret;
-    }
-
-    ret = _KeystoreCheckPolicyUnlocked(server, WH_KS_OP_REVOKE, keyId);
-    if (ret != WH_ERROR_OK) {
-        goto cleanup;
-    }
-
-    /* Check if key is in NVM */
-    ret = wh_Nvm_GetMetadataUnlocked(server->nvm, keyId, NULL);
     if (ret == WH_ERROR_OK) {
-        isInNvm = 1;
-    }
-    else if (ret != WH_ERROR_NOTFOUND) {
-        goto cleanup;
-    }
-
-    /* Freshen key into cache */
-    ret = _FreshenKeyUnlocked(server, keyId, &cacheBuf, &cacheMeta);
-    if (ret != WH_ERROR_OK) {
-        goto cleanup;
-    }
-
-    /* If already revoked and committed, nothing to do */
-    if (_isKeyRevoked(cacheMeta) && _KeyIsCommittedUnlocked(server, keyId)) {
-        ret = WH_ERROR_OK;
-        goto cleanup;
-    }
-
-    /* Revoke the key by updating its metadata */
-    _revokeKey(cacheMeta);
-
-    /* Commit the changes */
-    if (isInNvm) {
-        ret = wh_Nvm_AddObjectWithReclaimUnlocked(server->nvm, cacheMeta,
-                                                  cacheMeta->len, cacheBuf);
+        ret = _KeystoreCheckPolicyUnlocked(server, WH_KS_OP_REVOKE, keyId);
         if (ret == WH_ERROR_OK) {
-            _MarkKeyCommittedUnlocked(_GetCacheContext(server, keyId), keyId,
-                                      1);
-        }
-    }
+            /* Check if key is in NVM */
+            ret = wh_Nvm_GetMetadataUnlocked(server->nvm, keyId, NULL);
+            if (ret == WH_ERROR_OK) {
+                isInNvm = 1;
+            }
+            else if (ret == WH_ERROR_NOTFOUND) {
+                ret = WH_ERROR_OK; /* NOTFOUND is acceptable */
+            }
 
-cleanup:
-    (void)_UnlockKeystore(server);
+            if (ret == WH_ERROR_OK) {
+                /* Freshen key into cache */
+                ret = _FreshenKeyUnlocked(server, keyId, &cacheBuf, &cacheMeta);
+                if (ret == WH_ERROR_OK) {
+                    /* If already revoked and committed, nothing to do */
+                    if (!(_isKeyRevoked(cacheMeta) &&
+                          _KeyIsCommittedUnlocked(server, keyId))) {
+                        /* Revoke the key by updating its metadata */
+                        _revokeKey(cacheMeta);
+
+                        /* Commit the changes */
+                        if (isInNvm) {
+                            ret = wh_Nvm_AddObjectWithReclaimUnlocked(
+                                server->nvm, cacheMeta, cacheMeta->len,
+                                cacheBuf);
+                            if (ret == WH_ERROR_OK) {
+                                _MarkKeyCommittedUnlocked(
+                                    _GetCacheContext(server, keyId), keyId, 1);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        (void)_UnlockKeystore(server);
+    }
     return ret;
 }
 
@@ -1986,11 +2024,19 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
 
             /* get a new id if one wasn't provided */
             if (WH_KEYID_ISERASED(meta->id)) {
-                ret     = wh_Server_KeystoreGetUniqueId(server, &meta->id);
+                /* Atomic GetUniqueId + CacheKey */
+                ret = _LockKeystore(server);
+                if (ret == WH_ERROR_OK) {
+                    ret = _GetUniqueIdUnlocked(server, &meta->id);
+                    if (ret == WH_ERROR_OK) {
+                        ret = _KeystoreCacheKeyUnlocked(server, meta, in, 1);
+                    }
+                    (void)_UnlockKeystore(server);
+                }
                 resp.rc = ret;
             }
-            /* write the key */
-            if (ret == WH_ERROR_OK) {
+            else {
+                /* ID provided, use normal locking */
                 ret     = wh_Server_KeystoreCacheKeyChecked(server, meta, in);
                 resp.rc = ret;
             }
@@ -2029,12 +2075,25 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
 
             /* get a new id if one wasn't provided */
             if (WH_KEYID_ISERASED(meta->id)) {
-                ret     = wh_Server_KeystoreGetUniqueId(server, &meta->id);
+                /* Atomic GetUniqueId + CacheKey DMA */
+                ret = _LockKeystore(server);
+                if (ret == WH_ERROR_OK) {
+                    ret = _GetUniqueIdUnlocked(server, &meta->id);
+                    if (ret == WH_ERROR_OK) {
+                        ret = _KeystoreCacheKeyDmaUnlocked(server, meta,
+                                                           req.key.addr, 1);
+                    }
+                    (void)_UnlockKeystore(server);
+                }
                 resp.rc = ret;
+                /* propagate bad address to client if DMA operation failed */
+                if (ret != WH_ERROR_OK) {
+                    resp.dmaAddrStatus.badAddr.addr = req.key.addr;
+                    resp.dmaAddrStatus.badAddr.sz   = req.key.sz;
+                }
             }
-
-            /* write the key using DMA */
-            if (ret == WH_ERROR_OK) {
+            else {
+                /* ID provided, use normal locking */
                 ret     = wh_Server_KeystoreCacheKeyDmaChecked(server, meta,
                                                                req.key.addr);
                 resp.rc = ret;
@@ -2405,20 +2464,17 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
 
 #ifdef WOLFHSM_CFG_DMA
 
-int _KeystoreCacheKeyDma(whServerContext* server, whNvmMetadata* meta,
-                         uint64_t keyAddr, int checked)
+/* Unlocked variant - assumes caller holds server->nvm->lock */
+static int _KeystoreCacheKeyDmaUnlocked(whServerContext* server,
+                                        whNvmMetadata* meta, uint64_t keyAddr,
+                                        int checked)
 {
-    int                ret;
-    uint8_t*           buffer   = NULL;
-    whNvmMetadata*     slotMeta = NULL;
+    int            ret;
+    uint8_t*       buffer   = NULL;
+    whNvmMetadata* slotMeta = NULL;
 
     if ((server == NULL) || (meta == NULL)) {
         return WH_ERROR_BADARGS;
-    }
-
-    ret = _LockKeystore(server);
-    if (ret != WH_ERROR_OK) {
-        return ret;
     }
 
     /* Get a cache slot, optionally checking if necessary */
@@ -2431,7 +2487,7 @@ int _KeystoreCacheKeyDma(whServerContext* server, whNvmMetadata* meta,
                                     &slotMeta);
     }
     if (ret != 0) {
-        goto cleanup;
+        return ret;
     }
 
     /* Copy metadata */
@@ -2450,8 +2506,21 @@ int _KeystoreCacheKeyDma(whServerContext* server, whNvmMetadata* meta,
                                   0);
     }
 
-cleanup:
-    (void)_UnlockKeystore(server);
+    return ret;
+}
+
+int _KeystoreCacheKeyDma(whServerContext* server, whNvmMetadata* meta,
+                         uint64_t keyAddr, int checked)
+{
+    int ret;
+
+    ret = _LockKeystore(server);
+    if (ret == WH_ERROR_OK) {
+
+        ret = _KeystoreCacheKeyDmaUnlocked(server, meta, keyAddr, checked);
+
+        (void)_UnlockKeystore(server);
+    }
     return ret;
 }
 int wh_Server_KeystoreCacheKeyDma(whServerContext* server, whNvmMetadata* meta,
@@ -2479,31 +2548,28 @@ int wh_Server_KeystoreExportKeyDma(whServerContext* server, whKeyId keyId,
     }
 
     ret = _LockKeystore(server);
-    if (ret != WH_ERROR_OK) {
-        return ret;
+    if (ret == WH_ERROR_OK) {
+        ret = _FreshenKeyUnlocked(server, keyId, &buffer, &cacheMeta);
+        if (ret == WH_ERROR_OK) {
+            if (keySz < cacheMeta->len) {
+                ret = WH_ERROR_NOSPACE;
+            }
+            else {
+                memcpy(outMeta, cacheMeta, sizeof(whNvmMetadata));
+            }
+
+            if (ret == WH_ERROR_OK) {
+                /* Copy key data using DMA */
+                ret = whServerDma_CopyToClient(server, keyAddr, buffer,
+                                               outMeta->len,
+                                               (whServerDmaFlags){0});
+            }
+        }
+        (void)_UnlockKeystore(server);
     }
-
-    /* bring key in cache */
-    ret = _FreshenKeyUnlocked(server, keyId, &buffer, &cacheMeta);
-    if (ret != WH_ERROR_OK) {
-        goto cleanup;
-    }
-
-    if (keySz < cacheMeta->len) {
-        ret = WH_ERROR_NOSPACE;
-        goto cleanup;
-    }
-
-    memcpy(outMeta, cacheMeta, sizeof(whNvmMetadata));
-
-    /* Copy key data using DMA */
-    ret = whServerDma_CopyToClient(server, keyAddr, buffer, outMeta->len,
-                                   (whServerDmaFlags){0});
-
-cleanup:
-    (void)_UnlockKeystore(server);
     return ret;
 }
+
 int wh_Server_KeystoreExportKeyDmaChecked(whServerContext* server,
                                           whKeyId keyId, uint64_t keyAddr,
                                           uint64_t       keySz,
@@ -2518,34 +2584,28 @@ int wh_Server_KeystoreExportKeyDmaChecked(whServerContext* server,
     }
 
     ret = _LockKeystore(server);
-    if (ret != WH_ERROR_OK) {
-        return ret;
+    if (ret == WH_ERROR_OK) {
+        ret = _KeystoreCheckPolicyUnlocked(server, WH_KS_OP_EXPORT, keyId);
+        if (ret == WH_ERROR_OK) {
+            ret = _FreshenKeyUnlocked(server, keyId, &buffer, &cacheMeta);
+            if (ret == WH_ERROR_OK) {
+                if (keySz < cacheMeta->len) {
+                    ret = WH_ERROR_NOSPACE;
+                }
+                else {
+                    memcpy(outMeta, cacheMeta, sizeof(whNvmMetadata));
+                }
+
+                if (ret == WH_ERROR_OK) {
+                    /* Copy key data using DMA */
+                    ret = whServerDma_CopyToClient(server, keyAddr, buffer,
+                                                   outMeta->len,
+                                                   (whServerDmaFlags){0});
+                }
+            }
+        }
+        (void)_UnlockKeystore(server);
     }
-
-    ret = _KeystoreCheckPolicyUnlocked(server, WH_KS_OP_EXPORT, keyId);
-    if (ret != WH_ERROR_OK) {
-        goto cleanup;
-    }
-
-    /* Freshen key into cache */
-    ret = _FreshenKeyUnlocked(server, keyId, &buffer, &cacheMeta);
-    if (ret != WH_ERROR_OK) {
-        goto cleanup;
-    }
-
-    if (keySz < cacheMeta->len) {
-        ret = WH_ERROR_NOSPACE;
-        goto cleanup;
-    }
-
-    memcpy(outMeta, cacheMeta, sizeof(whNvmMetadata));
-
-    /* Copy key data using DMA */
-    ret = whServerDma_CopyToClient(server, keyAddr, buffer, outMeta->len,
-                                   (whServerDmaFlags){0});
-
-cleanup:
-    (void)_UnlockKeystore(server);
     return ret;
 }
 #endif /* WOLFHSM_CFG_DMA */

@@ -215,6 +215,7 @@ static const whTransportServerCb serverTransportCb = WH_TRANSPORT_MEM_SERVER_CB;
 #define HOT_NVM_ID ((whNvmId)100)
 #define HOT_NVM_ID_2 ((whNvmId)101)
 #define HOT_NVM_ID_3 ((whNvmId)102)
+#define HOT_COUNTER_ID ((whNvmId)200)
 
 /* ============================================================================
  * PHASE DEFINITIONS
@@ -240,6 +241,8 @@ typedef enum {
     PHASE_NVM_CONCURRENT_READ,
     PHASE_NVM_LIST_DURING_MODIFY,
     PHASE_NVM_CONCURRENT_DESTROY,
+    PHASE_NVM_READ_VS_RESIZE,    /* 2 read, 2 resize same object */
+    PHASE_NVM_CONCURRENT_RESIZE, /* 4 threads resize same object */
 
     /* Cross-subsystem phases */
     PHASE_CROSS_COMMIT_VS_ADD,
@@ -261,12 +264,17 @@ typedef enum {
     PHASE_NVM_GETAVAILABLE_VS_ADD,    /* 2 query space, 2 add objects */
     PHASE_NVM_GETMETADATA_VS_DESTROY, /* 2 query metadata, 2 destroy */
 
+    /* Counter */
+    PHASE_COUNTER_CONCURRENT_INCREMENT, /* 4 threads increment same counter */
+    PHASE_COUNTER_INCREMENT_VS_READ,    /* 2 increment, 2 read same counter */
+
 #ifdef WOLFHSM_CFG_DMA
     /* DMA Operations */
     PHASE_KS_CACHE_DMA_VS_EXPORT,  /* 2 DMA cache, 2 regular export */
     PHASE_KS_EXPORT_DMA_VS_EVICT,  /* 2 DMA export, 2 evict */
     PHASE_NVM_ADD_DMA_VS_READ,     /* 2 DMA add, 2 regular read */
     PHASE_NVM_READ_DMA_VS_DESTROY, /* 2 DMA read, 2 destroy */
+    PHASE_NVM_READ_DMA_VS_RESIZE,  /* 2 DMA read, 2 resize same object */
 #endif
 
     PHASE_COUNT
@@ -407,6 +415,25 @@ static const PhaseConfig phases[] = {
      "NVM: GetMetadata vs Destroy",
      PHASE_ITERATIONS,
      {ROLE_OP_A, ROLE_OP_A, ROLE_OP_B, ROLE_OP_B}},
+    {PHASE_NVM_READ_VS_RESIZE,
+     "NVM Read vs Resize",
+     PHASE_ITERATIONS,
+     {ROLE_OP_A, ROLE_OP_A, ROLE_OP_B, ROLE_OP_B}},
+
+    {PHASE_NVM_CONCURRENT_RESIZE,
+     "NVM Concurrent Resize",
+     PHASE_ITERATIONS,
+     {ROLE_OP_A, ROLE_OP_A, ROLE_OP_A, ROLE_OP_A}},
+
+    /* Counter */
+    {PHASE_COUNTER_CONCURRENT_INCREMENT,
+     "Counter Concurrent Increment",
+     PHASE_ITERATIONS,
+     {ROLE_OP_A, ROLE_OP_A, ROLE_OP_A, ROLE_OP_A}},
+    {PHASE_COUNTER_INCREMENT_VS_READ,
+     "Counter Increment vs Read",
+     PHASE_ITERATIONS,
+     {ROLE_OP_A, ROLE_OP_A, ROLE_OP_B, ROLE_OP_B}},
 
 #ifdef WOLFHSM_CFG_DMA
     /* DMA Operations */
@@ -424,6 +451,10 @@ static const PhaseConfig phases[] = {
      {ROLE_OP_A, ROLE_OP_A, ROLE_OP_B, ROLE_OP_B}},
     {PHASE_NVM_READ_DMA_VS_DESTROY,
      "NVM: Read DMA vs Destroy",
+     PHASE_ITERATIONS,
+     {ROLE_OP_A, ROLE_OP_A, ROLE_OP_B, ROLE_OP_B}},
+    {PHASE_NVM_READ_DMA_VS_RESIZE,
+     "NVM Read DMA vs Resize",
      PHASE_ITERATIONS,
      {ROLE_OP_A, ROLE_OP_A, ROLE_OP_B, ROLE_OP_B}},
 #endif
@@ -1010,6 +1041,94 @@ static int doKeyRevoke(whClientContext* client, whKeyId keyId)
     return rc;
 }
 
+static int doCounterInit(whClientContext* client, whNvmId counterId,
+                         uint32_t initialValue)
+{
+    uint32_t counter = 0;
+    int      rc;
+
+    /* Send request */
+    rc = wh_Client_CounterInitRequest(client, counterId, initialValue);
+    if (rc != WH_ERROR_OK) {
+        return rc;
+    }
+
+    /* Wait for response from server thread */
+    do {
+        rc = wh_Client_CounterInitResponse(client, &counter);
+        if (rc == WH_ERROR_NOTREADY) {
+            sched_yield();
+        }
+    } while (rc == WH_ERROR_NOTREADY);
+
+    return rc;
+}
+
+static int doCounterIncrement(whClientContext* client, whNvmId counterId,
+                              uint32_t* out_counter)
+{
+    int rc;
+
+    /* Send request */
+    rc = wh_Client_CounterIncrementRequest(client, counterId);
+    if (rc != WH_ERROR_OK) {
+        return rc;
+    }
+
+    /* Wait for response from server thread */
+    do {
+        rc = wh_Client_CounterIncrementResponse(client, out_counter);
+        if (rc == WH_ERROR_NOTREADY) {
+            sched_yield();
+        }
+    } while (rc == WH_ERROR_NOTREADY);
+
+    return rc;
+}
+
+static int doCounterRead(whClientContext* client, whNvmId counterId,
+                         uint32_t* out_counter)
+{
+    int rc;
+
+    /* Send request */
+    rc = wh_Client_CounterReadRequest(client, counterId);
+    if (rc != WH_ERROR_OK) {
+        return rc;
+    }
+
+    /* Wait for response from server thread */
+    do {
+        rc = wh_Client_CounterReadResponse(client, out_counter);
+        if (rc == WH_ERROR_NOTREADY) {
+            sched_yield();
+        }
+    } while (rc == WH_ERROR_NOTREADY);
+
+    return rc;
+}
+
+static int doCounterDestroy(whClientContext* client, whNvmId counterId)
+{
+    int rc;
+
+    /* Send request */
+    rc = wh_Client_CounterDestroyRequest(client, counterId);
+    if (rc != WH_ERROR_OK) {
+        return rc;
+    }
+
+    /* Wait for response from server thread */
+    do {
+        rc = wh_Client_CounterDestroyResponse(client);
+        if (rc == WH_ERROR_NOTREADY) {
+            sched_yield();
+        }
+    } while (rc == WH_ERROR_NOTREADY);
+
+    return rc;
+}
+
 #ifdef WOLFHSM_CFG_DMA
 static int doKeyCacheDma(ClientServerPair* pair, whKeyId keyId, int iteration)
 {
@@ -1300,6 +1419,28 @@ static int doPhaseSetup(ClientServerPair* pair, ContentionPhase phase,
                 rc = WH_ERROR_OK;
             return rc;
 
+        /* Counter phases - create counter with initial value 0 */
+        case PHASE_COUNTER_CONCURRENT_INCREMENT:
+        case PHASE_COUNTER_INCREMENT_VS_READ:
+            /* Destroy any existing counter first */
+            (void)doCounterDestroy(client, HOT_COUNTER_ID);
+            /* Initialize counter with value 0 */
+            rc = doCounterInit(client, HOT_COUNTER_ID, 0);
+            if (rc == WH_ERROR_NOSPACE)
+                rc = WH_ERROR_OK;
+            return rc;
+
+        /* NVM Read vs Resize - create object with initial size */
+        case PHASE_NVM_READ_VS_RESIZE:
+        case PHASE_NVM_CONCURRENT_RESIZE:
+            /* Destroy any existing object first */
+            (void)doNvmDestroy(client, HOT_NVM_ID);
+            /* Create object with initial size (64 bytes) */
+            rc = doNvmAddObject(client, HOT_NVM_ID, 0);
+            if (rc == WH_ERROR_NOSPACE)
+                rc = WH_ERROR_OK;
+            return rc;
+
 #ifdef WOLFHSM_CFG_DMA
         /* DMA phases: evict first to make room in cache, tolerate NOSPACE
          * (cache may be full from earlier phases like GetUniqueId) */
@@ -1320,6 +1461,14 @@ static int doPhaseSetup(ClientServerPair* pair, ContentionPhase phase,
         case PHASE_NVM_READ_DMA_VS_DESTROY:
             (void)doNvmDestroy(client, HOT_NVM_ID);
             return doNvmAddObject(client, HOT_NVM_ID, 0);
+
+        /* NVM Read DMA vs Resize */
+        case PHASE_NVM_READ_DMA_VS_RESIZE:
+            (void)doNvmDestroy(client, HOT_NVM_ID);
+            rc = doNvmAddObject(client, HOT_NVM_ID, 0);
+            if (rc == WH_ERROR_NOSPACE)
+                rc = WH_ERROR_OK;
+            return rc;
 #endif
 
         default:
@@ -1504,6 +1653,91 @@ static int executePhaseOperation(ClientServerPair* pair, ContentionPhase phase,
             else
                 return doNvmDestroy(client, HOT_NVM_ID);
 
+        /* Counter Concurrent Increment */
+        case PHASE_COUNTER_CONCURRENT_INCREMENT: {
+            uint32_t counter = 0;
+            return doCounterIncrement(client, HOT_COUNTER_ID, &counter);
+        }
+
+        /* Counter Increment vs Read */
+        case PHASE_COUNTER_INCREMENT_VS_READ: {
+            uint32_t counter = 0;
+            if (role == ROLE_OP_A)
+                return doCounterIncrement(client, HOT_COUNTER_ID, &counter);
+            else
+                return doCounterRead(client, HOT_COUNTER_ID, &counter);
+        }
+
+        /* NVM Read vs Resize - alternating object sizes */
+        case PHASE_NVM_READ_VS_RESIZE:
+            if (role == ROLE_OP_A) {
+                /* Read operation */
+                return doNvmRead(client, HOT_NVM_ID);
+            }
+            else {
+                /* Resize operation: destroy and re-add with different size
+                 * Alternate between 64 bytes (full) and 32 bytes (half) */
+                int       rc;
+                uint8_t   data[NVM_OBJECT_DATA_SIZE];
+                int32_t   out_rc;
+                whNvmSize newSize = (iteration % 2 == 0)
+                                        ? NVM_OBJECT_DATA_SIZE
+                                        : (NVM_OBJECT_DATA_SIZE / 2);
+
+                /* Destroy existing object */
+                (void)doNvmDestroy(client, HOT_NVM_ID);
+
+                /* Re-add with new size */
+                memset(data, (uint8_t)(iteration & 0xFF), newSize);
+                rc = wh_Client_NvmAddObjectRequest(
+                    client, HOT_NVM_ID, WH_NVM_ACCESS_ANY,
+                    WH_NVM_FLAGS_USAGE_ANY, 0, NULL, newSize, data);
+                if (rc != WH_ERROR_OK) {
+                    return rc;
+                }
+
+                do {
+                    rc = wh_Client_NvmAddObjectResponse(client, &out_rc);
+                    if (rc == WH_ERROR_NOTREADY) {
+                        sched_yield();
+                    }
+                } while (rc == WH_ERROR_NOTREADY);
+
+                return (rc == WH_ERROR_OK) ? out_rc : rc;
+            }
+
+        /* NVM Concurrent Resize */
+        case PHASE_NVM_CONCURRENT_RESIZE: {
+            /* All threads resize: destroy and re-add with different size */
+            int       rc;
+            uint8_t   data[NVM_OBJECT_DATA_SIZE];
+            int32_t   out_rc;
+            whNvmSize newSize = (iteration % 2 == 0)
+                                    ? NVM_OBJECT_DATA_SIZE
+                                    : (NVM_OBJECT_DATA_SIZE / 2);
+
+            /* Destroy existing object */
+            (void)doNvmDestroy(client, HOT_NVM_ID);
+
+            /* Re-add with new size */
+            memset(data, (uint8_t)(iteration & 0xFF), newSize);
+            rc = wh_Client_NvmAddObjectRequest(
+                client, HOT_NVM_ID, WH_NVM_ACCESS_ANY, WH_NVM_FLAGS_USAGE_ANY,
+                0, NULL, newSize, data);
+            if (rc != WH_ERROR_OK) {
+                return rc;
+            }
+
+            do {
+                rc = wh_Client_NvmAddObjectResponse(client, &out_rc);
+                if (rc == WH_ERROR_NOTREADY) {
+                    sched_yield();
+                }
+            } while (rc == WH_ERROR_NOTREADY);
+
+            return (rc == WH_ERROR_OK) ? out_rc : rc;
+        }
+
 #ifdef WOLFHSM_CFG_DMA
         /* DMA: Cache DMA vs Export */
         case PHASE_KS_CACHE_DMA_VS_EXPORT:
@@ -1532,6 +1766,50 @@ static int executePhaseOperation(ClientServerPair* pair, ContentionPhase phase,
                 return doNvmReadDma(pair, HOT_NVM_ID);
             else
                 return doNvmDestroy(client, HOT_NVM_ID);
+
+        /* NVM Read DMA vs Resize */
+        case PHASE_NVM_READ_DMA_VS_RESIZE:
+            if (role == ROLE_OP_A) {
+                /* DMA Read operation */
+                return doNvmReadDma(pair, HOT_NVM_ID);
+            }
+            else {
+                /* Resize operation: destroy and re-add with different size */
+                int           rc;
+                uint8_t       data[NVM_OBJECT_DATA_SIZE];
+                int32_t       out_rc;
+                whNvmSize     newSize = (iteration % 2 == 0)
+                                            ? NVM_OBJECT_DATA_SIZE
+                                            : (NVM_OBJECT_DATA_SIZE / 2);
+                whNvmMetadata meta;
+
+                /* Destroy existing object */
+                (void)doNvmDestroy(client, HOT_NVM_ID);
+
+                /* Re-add with new size */
+                memset(data, (uint8_t)(iteration & 0xFF), newSize);
+                memset(&meta, 0, sizeof(meta));
+                meta.id     = HOT_NVM_ID;
+                meta.access = WH_NVM_ACCESS_ANY;
+                meta.flags  = WH_NVM_FLAGS_USAGE_ANY;
+                meta.len    = newSize;
+
+                rc = wh_Client_NvmAddObjectRequest(
+                    client, HOT_NVM_ID, WH_NVM_ACCESS_ANY,
+                    WH_NVM_FLAGS_USAGE_ANY, 0, NULL, newSize, data);
+                if (rc != WH_ERROR_OK) {
+                    return rc;
+                }
+
+                do {
+                    rc = wh_Client_NvmAddObjectResponse(client, &out_rc);
+                    if (rc == WH_ERROR_NOTREADY) {
+                        sched_yield();
+                    }
+                } while (rc == WH_ERROR_NOTREADY);
+
+                return (rc == WH_ERROR_OK) ? out_rc : rc;
+            }
 #endif
 
         default:
@@ -1616,6 +1894,19 @@ static int isAcceptableResult(ContentionPhase phase, int rc)
         case PHASE_NVM_GETMETADATA_VS_DESTROY:
             return (rc == WH_ERROR_NOTFOUND);
 
+        /* Counter phases - NOTFOUND marked acceptable to prevent test abort,
+         * but validation will catch it as a bug (counter < expectedMin).
+         * NOTFOUND shouldn't occur in CONCURRENT_INCREMENT (no destroys). */
+        case PHASE_COUNTER_CONCURRENT_INCREMENT:
+        case PHASE_COUNTER_INCREMENT_VS_READ:
+            return (rc == WH_ERROR_NOTFOUND);
+
+        /* NVM Read vs Resize - NOTFOUND acceptable (object destroyed
+         * during resize), NOSPACE acceptable (NVM full) */
+        case PHASE_NVM_READ_VS_RESIZE:
+        case PHASE_NVM_CONCURRENT_RESIZE:
+            return (rc == WH_ERROR_NOTFOUND || rc == WH_ERROR_NOSPACE);
+
 #ifdef WOLFHSM_CFG_DMA
         /* DMA phases: same as non-DMA equivalents */
         case PHASE_KS_CACHE_DMA_VS_EXPORT:
@@ -1629,6 +1920,10 @@ static int isAcceptableResult(ContentionPhase phase, int rc)
 
         case PHASE_NVM_READ_DMA_VS_DESTROY:
             return (rc == WH_ERROR_NOTFOUND);
+
+        /* NVM Read DMA vs Resize */
+        case PHASE_NVM_READ_DMA_VS_RESIZE:
+            return (rc == WH_ERROR_NOTFOUND || rc == WH_ERROR_NOSPACE);
 #endif
 
         default:
@@ -1729,6 +2024,70 @@ static int allClientsReachedIterations(StressTestContext* ctx, int target)
     return 1;
 }
 
+/* Post-phase validation for applicable tests
+ * Returns WH_ERROR_OK if validation passes, error code otherwise */
+static int validatePhaseResult(StressTestContext* ctx, ContentionPhase phase,
+                               int totalIterations, int totalErrors)
+{
+    int rc;
+
+    switch (phase) {
+        case PHASE_COUNTER_CONCURRENT_INCREMENT: {
+            /* Validate counter value matches expected increments
+             * Expected: number of successful increments
+             * Count ROLE_OP_A threads (all 4 in this phase) */
+            uint32_t counter  = 0;
+            int      opACount = 0;
+            int      i;
+
+            /* Count how many threads were doing increments (ROLE_OP_A) */
+            for (i = 0; i < NUM_CLIENTS; i++) {
+                if (ctx->clientRoles[i] == ROLE_OP_A) {
+                    opACount++;
+                }
+            }
+
+            /* Read final counter value using client 0 */
+            rc = doCounterRead(&ctx->pairs[0].client, HOT_COUNTER_ID, &counter);
+            if (rc != WH_ERROR_OK) {
+                WH_ERROR_PRINT(
+                    "    VALIDATION FAILED: Counter read failed: %d\n", rc);
+                return WH_ERROR_ABORTED;
+            }
+
+            /* Calculate expected value: iterations per client × number of
+             * incrementing clients Each incrementing client did
+             * config->iterations increments
+             * Account for errors: totalIterations counts all attempts,
+             * but totalErrors counts unacceptable failures that didn't
+             * increment */
+            uint32_t expectedMin = totalIterations - totalErrors;
+
+            WH_TEST_PRINT("    Counter validation: value=%u, expected_min=%u "
+                          "(iters=%d, errors=%d)\n",
+                          counter, expectedMin, totalIterations, totalErrors);
+
+            /* Counter must equal expectedMin. If counter < expectedMin, this
+             * indicates either:
+             * 1. Lost increments due to locking bug (race condition)
+             * 2. NOTFOUND occurred (shouldn't happen - no concurrent destroys)
+             */
+            if (counter < expectedMin) {
+                WH_ERROR_PRINT("    VALIDATION FAILED: Counter value %u < "
+                               "expected min %u\n",
+                               counter, expectedMin);
+                return WH_ERROR_ABORTED;
+            }
+
+            return WH_ERROR_OK;
+        }
+
+        /* Other phases don't need special validation yet */
+        default:
+            return WH_ERROR_OK;
+    }
+}
+
 /* Select the appropriate keyId for a phase.
  * Revoke-related phases need unique key IDs because revoked keys can't be
  * erased or re-cached. Each phase type that might leave a key revoked needs
@@ -1753,6 +2112,7 @@ static int runPhase(StressTestContext* ctx, const PhaseConfig* config,
                     whKeyId keyId)
 {
     int i;
+    int rc;
 #ifdef WOLFHSM_CFG_TEST_STRESS_PHASE_TIMEOUT_SEC
     time_t phaseStart;
 #endif
@@ -1822,6 +2182,12 @@ static int runPhase(StressTestContext* ctx, const PhaseConfig* config,
     }
     WH_TEST_PRINT("    Total: %d iterations, %d errors\n", totalIterations,
                   totalErrors);
+
+    /* 10. Run phase-specific validation */
+    rc = validatePhaseResult(ctx, config->phase, totalIterations, totalErrors);
+    if (rc != WH_ERROR_OK) {
+        return rc;
+    }
 
     /* Return error if phase failed */
     if (timedOut || totalErrors > 0) {

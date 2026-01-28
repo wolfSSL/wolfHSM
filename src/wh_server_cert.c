@@ -35,6 +35,7 @@
 #include "wolfhsm/wh_server_cert.h"
 #include "wolfhsm/wh_server_nvm.h"
 #include "wolfhsm/wh_server_keystore.h"
+#include "wolfhsm/wh_nvm_internal.h"
 #include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_message_cert.h"
 
@@ -42,6 +43,27 @@
 #include "wolfssl/ssl.h"
 #include "wolfssl/wolfcrypt/asn.h"
 
+/* Helper functions for NVM locking */
+#ifdef WOLFHSM_CFG_THREADSAFE
+static int _LockNvm(whServerContext* server)
+{
+    if (server->nvm != NULL) {
+        return wh_Lock_Acquire(&server->nvm->lock);
+    }
+    return WH_ERROR_OK;
+}
+
+static int _UnlockNvm(whServerContext* server)
+{
+    if (server->nvm != NULL) {
+        return wh_Lock_Release(&server->nvm->lock);
+    }
+    return WH_ERROR_OK;
+}
+#else
+#define _LockNvm(server) (WH_ERROR_OK)
+#define _UnlockNvm(server) (WH_ERROR_OK)
+#endif /* WOLFHSM_CFG_THREADSAFE */
 
 static int _verifyChainAgainstCmStore(whServerContext*      server,
                                       WOLFSSL_CERT_MANAGER* cm,
@@ -226,9 +248,10 @@ int wh_Server_CertEraseTrusted(whServerContext* server, whNvmId id)
     return rc;
 }
 
-/* Get a trusted certificate from NVM storage */
-int wh_Server_CertReadTrusted(whServerContext* server, whNvmId id,
-                              uint8_t* cert, uint32_t* inout_cert_len)
+/* Get a trusted certificate from NVM storage (unlocked variant)
+ * Assumes caller holds server->nvm->lock */
+static int _CertReadTrustedUnlocked(whServerContext* server, whNvmId id,
+                                    uint8_t* cert, uint32_t* inout_cert_len)
 {
     int           rc;
     whNvmMetadata meta;
@@ -238,9 +261,8 @@ int wh_Server_CertReadTrusted(whServerContext* server, whNvmId id,
         return WH_ERROR_BADARGS;
     }
 
-
     /* Get metadata to check the certificate size */
-    rc = wh_Nvm_GetMetadata(server->nvm, id, &meta);
+    rc = wh_Nvm_GetMetadataUnlocked(server->nvm, id, &meta);
     if (rc != 0) {
         return rc;
     }
@@ -254,7 +276,22 @@ int wh_Server_CertReadTrusted(whServerContext* server, whNvmId id,
      * be reflected back to the user on length mismatch failure */
     *inout_cert_len = meta.len;
 
-    return wh_Nvm_Read(server->nvm, id, 0, meta.len, cert);
+    return wh_Nvm_ReadUnlocked(server->nvm, id, 0, meta.len, cert);
+}
+
+/* Get a trusted certificate from NVM storage */
+int wh_Server_CertReadTrusted(whServerContext* server, whNvmId id,
+                              uint8_t* cert, uint32_t* inout_cert_len)
+{
+    int rc;
+
+    /* Acquire lock for atomic GetMetadata + Read */
+    rc = _LockNvm(server);
+    if (rc == WH_ERROR_OK) {
+        rc = _CertReadTrustedUnlocked(server, id, cert, inout_cert_len);
+        (void)_UnlockNvm(server);
+    }
+    return rc;
 }
 
 /* Verify a certificate against trusted certificates */
@@ -463,21 +500,30 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
                             ? max_transport_cert_len
                             : WOLFHSM_CFG_MAX_CERT_SIZE;
 
-            /* Check metadata to check if the certificate is non-exportable.
-             * This is unfortunately redundant since metadata is checked in
-             * wh_Server_CertReadTrusted(). */
-            rc = wh_Nvm_GetMetadata(server->nvm, req.id, &meta);
+            /* Acquire lock for atomic flag check + read */
+            rc = _LockNvm(server);
             if (rc == WH_ERROR_OK) {
-                /* Check if the certificate is non-exportable */
-                if (meta.flags & WH_NVM_FLAGS_NONEXPORTABLE) {
-                    resp.rc = WH_ERROR_ACCESS;
+                /* Check metadata to check if the certificate is
+                 * non-exportable */
+                rc = wh_Nvm_GetMetadataUnlocked(server->nvm, req.id, &meta);
+                if (rc == WH_ERROR_OK) {
+                    /* Check if the certificate is non-exportable */
+                    if (meta.flags & WH_NVM_FLAGS_NONEXPORTABLE) {
+                        resp.rc       = WH_ERROR_ACCESS;
+                        resp.cert_len = 0;
+                    }
+                    else {
+                        rc = _CertReadTrustedUnlocked(server, req.id, cert_data,
+                                                      &cert_len);
+                        resp.rc       = rc;
+                        resp.cert_len = cert_len;
+                    }
                 }
                 else {
-                    rc = wh_Server_CertReadTrusted(server, req.id, cert_data,
-                                                   &cert_len);
                     resp.rc       = rc;
-                    resp.cert_len = cert_len;
+                    resp.cert_len = 0;
                 }
+                (void)_UnlockNvm(server);
             }
             else {
                 resp.rc       = rc;
@@ -590,18 +636,25 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
                     WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
             }
             if (resp.rc == WH_ERROR_OK) {
-                /* Check metadata to see if the certificate is non-exportable */
-                resp.rc = wh_Nvm_GetMetadata(server->nvm, req.id, &meta);
+                /* Acquire lock for atomic flag check + read */
+                resp.rc = _LockNvm(server);
                 if (resp.rc == WH_ERROR_OK) {
-                    if ((meta.flags & WH_NVM_FLAGS_NONEXPORTABLE) != 0) {
-                        resp.rc = WH_ERROR_ACCESS;
+                    /* Check metadata to see if the certificate is
+                     * non-exportable */
+                    resp.rc =
+                        wh_Nvm_GetMetadataUnlocked(server->nvm, req.id, &meta);
+                    if (resp.rc == WH_ERROR_OK) {
+                        if ((meta.flags & WH_NVM_FLAGS_NONEXPORTABLE) != 0) {
+                            resp.rc = WH_ERROR_ACCESS;
+                        }
+                        else {
+                            /* Clamp cert_len to actual stored length */
+                            cert_len = req.cert_len;
+                            resp.rc  = _CertReadTrustedUnlocked(
+                                 server, req.id, cert_data, &cert_len);
+                        }
                     }
-                    else {
-                        /* Clamp cert_len to actual stored length */
-                        cert_len = req.cert_len;
-                        resp.rc  = wh_Server_CertReadTrusted(
-                             server, req.id, cert_data, &cert_len);
-                    }
+                    (void)_UnlockNvm(server);
                 }
             }
             if (resp.rc == WH_ERROR_OK) {

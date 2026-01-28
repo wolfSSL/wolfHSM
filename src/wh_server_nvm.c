@@ -19,6 +19,21 @@
 /*
  * src/wh_server_nvm.c
  *
+ * LOCKING DISCIPLINE FOR COMPOUND OPERATIONS:
+ *
+ * All compound operations (those involving multiple cache/NVM accesses) MUST:
+ * 1. Acquire server->nvm->lock at the start using _LockNvm()
+ * 2. Use only *Unlocked() variants of NVM/cache functions internally
+ * 3. Keep lock held for entire operation, including DMA transfers
+ * 4. Release lock only after all metadata-dependent operations complete
+ *
+ * Rationale: Releasing the lock mid-operation creates TOCTOU (Time-Of-Check-
+ * Time-Of-Use) vulnerabilities where metadata can become stale or objects can
+ * be destroyed/replaced between checks. DMA operations that depend on cached
+ * metadata MUST occur under the same lock that validated that metadata.
+ *
+ * This pattern matches keystore DMA operations (KeystoreCacheKeyDmaChecked,
+ * KeystoreExportKeyDmaChecked) which hold locks throughout their execution.
  */
 
 /* Pick up compile-time configuration */
@@ -36,6 +51,7 @@
 #include "wolfhsm/wh_comm.h"
 
 #include "wolfhsm/wh_nvm.h"
+#include "wolfhsm/wh_nvm_internal.h"
 
 #include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_message_nvm.h"
@@ -43,10 +59,33 @@
 #include "wolfhsm/wh_server.h"
 #include "wolfhsm/wh_server_nvm.h"
 
-/* Handle NVM read, do access checking and clamping */
-static int _HandleNvmRead(whServerContext* server, uint8_t* out_data,
-                          whNvmSize offset, whNvmSize len, whNvmSize* out_len,
-                          whNvmId id)
+/* Helper functions for NVM locking */
+#ifdef WOLFHSM_CFG_THREADSAFE
+static int _LockNvm(whServerContext* server)
+{
+    if (server->nvm != NULL) {
+        return wh_Lock_Acquire(&server->nvm->lock);
+    }
+    return WH_ERROR_OK;
+}
+
+static int _UnlockNvm(whServerContext* server)
+{
+    if (server->nvm != NULL) {
+        return wh_Lock_Release(&server->nvm->lock);
+    }
+    return WH_ERROR_OK;
+}
+#else
+#define _LockNvm(server) (WH_ERROR_OK)
+#define _UnlockNvm(server) (WH_ERROR_OK)
+#endif /* WOLFHSM_CFG_THREADSAFE */
+
+/* Handle NVM read (unlocked variant), do access checking and clamping
+ * Assumes caller holds server->nvm->lock */
+static int _HandleNvmReadUnlocked(whServerContext* server, uint8_t* out_data,
+                                  whNvmSize offset, whNvmSize len,
+                                  whNvmSize* out_len, whNvmId id)
 {
     whNvmMetadata meta;
     int32_t       rc;
@@ -59,7 +98,7 @@ static int _HandleNvmRead(whServerContext* server, uint8_t* out_data,
         return WH_ERROR_ABORTED;
     }
 
-    rc = wh_Nvm_GetMetadata(server->nvm, id, &meta);
+    rc = wh_Nvm_GetMetadataUnlocked(server->nvm, id, &meta);
     if (rc != WH_ERROR_OK) {
         return rc;
     }
@@ -72,11 +111,27 @@ static int _HandleNvmRead(whServerContext* server, uint8_t* out_data,
         len = meta.len - offset;
     }
 
-    rc = wh_Nvm_ReadChecked(server->nvm, id, offset, len, out_data);
+    rc = wh_Nvm_ReadCheckedUnlocked(server->nvm, id, offset, len, out_data);
     if (rc != WH_ERROR_OK)
         return rc;
     *out_len = len;
     return WH_ERROR_OK;
+}
+
+/* Handle NVM read, do access checking and clamping */
+static int _HandleNvmRead(whServerContext* server, uint8_t* out_data,
+                          whNvmSize offset, whNvmSize len, whNvmSize* out_len,
+                          whNvmId id)
+{
+    int32_t rc;
+
+    /* Acquire lock for atomic GetMetadata + ReadChecked */
+    rc = _LockNvm(server);
+    if (rc == WH_ERROR_OK) {
+        rc = _HandleNvmReadUnlocked(server, out_data, offset, len, out_len, id);
+        (void)_UnlockNvm(server);
+    }
+    return rc;
 }
 
 int wh_Server_HandleNvmRequest(whServerContext* server,
@@ -373,38 +428,51 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
             wh_MessageNvm_TranslateReadDmaRequest(magic,
                     (whMessageNvm_ReadDmaRequest*)req_packet, &req);
 
-            resp.rc = wh_Nvm_GetMetadata(server->nvm, req.id, &meta);
-        }
+            /* Acquire lock for entire operation to prevent TOCTOU */
+            resp.rc = _LockNvm(server);
+            if (resp.rc == WH_ERROR_OK) {
+                resp.rc =
+                    wh_Nvm_GetMetadataUnlocked(server->nvm, req.id, &meta);
 
-        if (resp.rc == 0) {
-            if (req.offset >= meta.len) {
-                resp.rc = WH_ERROR_BADARGS;
+                if (resp.rc == 0) {
+                    if (req.offset >= meta.len) {
+                        resp.rc = WH_ERROR_BADARGS;
+                    }
+                }
+
+                if (resp.rc == 0) {
+                    read_len = req.data_len;
+                    /* Clamp length to object size */
+                    if ((req.offset + read_len) > meta.len) {
+                        read_len = meta.len - req.offset;
+                    }
+                }
+
+                /* use unclamped length for DMA address processing in case DMA
+                 * callbacks are sensible to alignment and/or size.
+                 * Keep lock held during DMA to ensure metadata remains valid.
+                 */
+                if (resp.rc == 0) {
+                    /* perform platform-specific host address processing */
+                    resp.rc = wh_Server_DmaProcessClientAddress(
+                        server, req.data_hostaddr, &data, req.data_len,
+                        WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
+                }
+
+                if (resp.rc == WH_ERROR_OK) {
+                    /* Process the Read action */
+                    resp.rc = wh_Nvm_ReadCheckedUnlocked(server->nvm, req.id,
+                                                         req.offset, read_len,
+                                                         (uint8_t*)data);
+                }
+                /* Release lock after all metadata-dependent operations */
+                (void)_UnlockNvm(server);
             }
         }
-
         if (resp.rc == 0) {
-            read_len = req.data_len;
-            /* Clamp length to object size */
-            if ((req.offset + read_len) > meta.len) {
-                read_len = meta.len - req.offset;
-            }
-        }
-
-        /* use unclamped length for DMA address processing in case DMA callbacks
-         * are sensible to alignment and/or size */
-        if (resp.rc == 0) {
-            /* perform platform-specific host address processing */
-            resp.rc = wh_Server_DmaProcessClientAddress(
-                server, req.data_hostaddr, &data, req.data_len,
-                WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
-        }
-        if (resp.rc == 0) {
-            /* Process the Read action */
-            resp.rc = wh_Nvm_ReadChecked(server->nvm, req.id, req.offset,
-                                         read_len, (uint8_t*)data);
-        }
-        if (resp.rc == 0) {
-            /* perform platform-specific host address processing */
+            /* perform platform-specific host address processing.
+             * POST processing can be outside lock as it doesn't depend on
+             * metadata validity. */
             resp.rc = wh_Server_DmaProcessClientAddress(
                 server, req.data_hostaddr, &data, req.data_len,
                 WH_DMA_OPER_CLIENT_WRITE_POST, (whServerDmaFlags){0});

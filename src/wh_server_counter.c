@@ -34,8 +34,31 @@
 #include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_message_counter.h"
 #include "wolfhsm/wh_server.h"
+#include "wolfhsm/wh_nvm_internal.h"
 
 #include "wolfhsm/wh_server_counter.h"
+
+/* Helper functions for NVM locking */
+#ifdef WOLFHSM_CFG_THREADSAFE
+static int _LockNvm(whServerContext* server)
+{
+    if (server->nvm != NULL) {
+        return wh_Lock_Acquire(&server->nvm->lock);
+    }
+    return WH_ERROR_OK;
+}
+
+static int _UnlockNvm(whServerContext* server)
+{
+    if (server->nvm != NULL) {
+        return wh_Lock_Release(&server->nvm->lock);
+    }
+    return WH_ERROR_OK;
+}
+#else
+#define _LockNvm(server) (WH_ERROR_OK)
+#define _UnlockNvm(server) (WH_ERROR_OK)
+#endif /* WOLFHSM_CFG_THREADSAFE */
 
 int wh_Server_HandleCounter(whServerContext* server, uint16_t magic,
                             uint16_t action, uint16_t req_size,
@@ -104,33 +127,41 @@ int wh_Server_HandleCounter(whServerContext* server, uint16_t magic,
             (void)wh_MessageCounter_TranslateIncrementRequest(
                 magic, (whMessageCounter_IncrementRequest*)req_packet, &req);
 
-            /* read the counter, stored in the metadata label */
-            ret = wh_Nvm_GetMetadata(
-                server->nvm,
-                WH_MAKE_KEYID(WH_KEYTYPE_COUNTER,
-                              (uint16_t)server->comm->client_id,
-                              (uint16_t)req.counterId),
-                meta);
-            resp.rc = ret;
+            counterId = WH_MAKE_KEYID(WH_KEYTYPE_COUNTER,
+                                      (uint16_t)server->comm->client_id,
+                                      (uint16_t)req.counterId);
 
-            /* increment and write the counter back */
+            /* Acquire lock for atomic read-modify-write */
+            ret = _LockNvm(server);
             if (ret == WH_ERROR_OK) {
-                *counter = *counter + 1;
-                /* set counter to uint32_t max if it rolled over */
-                if (*counter == 0) {
-                    *counter = UINT32_MAX;
+                /* read the counter, stored in the metadata label */
+                ret = wh_Nvm_GetMetadataUnlocked(server->nvm, counterId, meta);
+                resp.rc = ret;
+
+                /* increment and write the counter back */
+                if (ret == WH_ERROR_OK) {
+                    *counter = *counter + 1;
+                    /* set counter to uint32_t max if it rolled over */
+                    if (*counter == 0) {
+                        *counter = UINT32_MAX;
+                    }
+                    /* only update if we didn't saturate */
+                    else {
+                        ret = wh_Nvm_AddObjectWithReclaimUnlocked(
+                            server->nvm, meta, 0, NULL);
+                        resp.rc = ret;
+                    }
                 }
-                /* only update if we didn't saturate */
-                else {
-                    ret =
-                        wh_Nvm_AddObjectWithReclaim(server->nvm, meta, 0, NULL);
-                    resp.rc = ret;
+
+                /* return counter to the caller */
+                if (ret == WH_ERROR_OK) {
+                    resp.counter = *counter;
                 }
+                /* Release lock */
+                (void)_UnlockNvm(server);
             }
-
-            /* return counter to the caller */
-            if (ret == WH_ERROR_OK) {
-                resp.counter = *counter;
+            else {
+                resp.rc = ret;
             }
 
             (void)wh_MessageCounter_TranslateIncrementResponse(
