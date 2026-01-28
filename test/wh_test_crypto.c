@@ -690,6 +690,258 @@ static int whTest_CryptoEccCacheDuplicate(whClientContext* client)
 
     return ret;
 }
+
+#if defined(HAVE_ECC_SIGN) && defined(HAVE_ECC_VERIFY) && \
+    !defined(WOLF_CRYPTO_CB_ONLY_ECC)
+
+/* Key sizes in bytes for each curve */
+#define WH_TEST_ECC_P256_KEY_SIZE 32
+#define WH_TEST_ECC_P384_KEY_SIZE 48
+#define WH_TEST_ECC_P521_KEY_SIZE 66
+
+/* Use maximum digest size for all curves to test hash truncation edge cases.
+ * ECDSA implementations must properly truncate hashes larger than the curve
+ * order. */
+#define WH_TEST_ECC_HASH_SIZE WC_MAX_DIGEST_SIZE
+
+static int whTest_CryptoEccCrossVerify_OneCurve(whClientContext* ctx,
+                                                WC_RNG*          rng,
+                                                int              keySize,
+                                                int              curveId,
+                                                const char*      name)
+{
+    ecc_key hsmKey[1]                   = {0};
+    ecc_key swKey[1]                    = {0};
+    uint8_t hash[WH_TEST_ECC_HASH_SIZE] = {0};
+    uint8_t sig[ECC_MAX_SIG_SIZE]       = {0};
+    uint8_t pubX[ECC_MAXSIZE]           = {0};
+    uint8_t pubY[ECC_MAXSIZE]           = {0};
+    word32  pubXLen                     = 0;
+    word32  pubYLen                     = 0;
+    word32  sigLen                      = 0;
+    int     res                         = 0;
+    whKeyId keyId                       = WH_KEYID_ERASED;
+    int     hsmKeyInit                  = 0;
+    int     swKeyInit                   = 0;
+    int     ret                         = WH_ERROR_OK;
+    int     i;
+
+    /* Use non-repeating pattern to detect hash truncation bugs */
+    for (i = 0; i < WH_TEST_ECC_HASH_SIZE; i++) {
+        hash[i] = (uint8_t)i;
+    }
+
+    WH_TEST_PRINT("  Testing %s curve...\n", name);
+
+    pubXLen = keySize;
+    pubYLen = keySize;
+
+    /* Test 1: HSM sign + Software verify */
+    ret = wc_ecc_init_ex(hsmKey, NULL, WH_DEV_ID);
+    if (ret != 0) {
+        WH_ERROR_PRINT("%s: Failed to init HSM key: %d\n", name, ret);
+    }
+    else {
+        hsmKeyInit = 1;
+    }
+    if (ret == 0) {
+        ret = wc_ecc_make_key(rng, keySize, hsmKey);
+        if (ret != 0) {
+            WH_ERROR_PRINT("%s: Failed to generate HSM key: %d\n", name, ret);
+        }
+    }
+    if (ret == 0) {
+        /* Export public key from HSM */
+        ret = wc_ecc_export_public_raw(hsmKey, pubX, &pubXLen, pubY, &pubYLen);
+        if (ret != 0) {
+            WH_ERROR_PRINT("%s: Failed to export HSM public key: %d\n", name,
+                           ret);
+        }
+    }
+    if (ret == 0) {
+        /* Sign with HSM */
+        sigLen = sizeof(sig);
+        ret = wc_ecc_sign_hash(hash, sizeof(hash), sig, &sigLen, rng, hsmKey);
+        if (ret != 0) {
+            WH_ERROR_PRINT("%s: HSM sign failed: %d\n", name, ret);
+        }
+    }
+    if (ret == 0) {
+        /* Import public key into software key for verification */
+        ret = wc_ecc_init_ex(swKey, NULL, INVALID_DEVID);
+        if (ret != 0) {
+            WH_ERROR_PRINT("%s: Failed to init SW key: %d\n", name, ret);
+        }
+        else {
+            swKeyInit = 1;
+        }
+    }
+    if (ret == 0) {
+        ret = wc_ecc_import_unsigned(swKey, pubX, pubY, NULL, curveId);
+        if (ret != 0) {
+            WH_ERROR_PRINT("%s: Failed to import public to SW: %d\n", name,
+                           ret);
+        }
+    }
+    if (ret == 0) {
+        /* Verify with software */
+        res = 0;
+        ret = wc_ecc_verify_hash(sig, sigLen, hash, sizeof(hash), &res, swKey);
+        if (ret != 0) {
+            WH_ERROR_PRINT("%s: SW verify failed: %d\n", name, ret);
+        }
+        else if (res != 1) {
+            WH_ERROR_PRINT("%s: HSM sign + SW verify: signature invalid\n",
+                           name);
+            ret = -1;
+        }
+        else {
+            WH_TEST_PRINT("    HSM sign + SW verify: PASS\n");
+        }
+    }
+    /* Cleanup Test 1 keys */
+    if (swKeyInit) {
+        wc_ecc_free(swKey);
+        swKeyInit = 0;
+    }
+    if (hsmKeyInit) {
+        if (wh_Client_EccGetKeyId(hsmKey, &keyId) == 0 &&
+            !WH_KEYID_ISERASED(keyId)) {
+            (void)wh_Client_KeyEvict(ctx, keyId);
+        }
+        wc_ecc_free(hsmKey);
+        hsmKeyInit = 0;
+    }
+
+    /* Test 2: Software sign + HSM verify */
+    if (ret == 0) {
+        memset(sig, 0, sizeof(sig));
+        memset(pubX, 0, sizeof(pubX));
+        memset(pubY, 0, sizeof(pubY));
+        pubXLen = keySize;
+        pubYLen = keySize;
+        keyId   = WH_KEYID_ERASED;
+
+        ret = wc_ecc_init_ex(swKey, NULL, INVALID_DEVID);
+        if (ret != 0) {
+            WH_ERROR_PRINT("%s: Failed to init SW key: %d\n", name, ret);
+        }
+        else {
+            swKeyInit = 1;
+        }
+    }
+    if (ret == 0) {
+        ret = wc_ecc_make_key(rng, keySize, swKey);
+        if (ret != 0) {
+            WH_ERROR_PRINT("%s: Failed to generate SW key: %d\n", name, ret);
+        }
+    }
+    if (ret == 0) {
+        /* Export public key from software */
+        ret = wc_ecc_export_public_raw(swKey, pubX, &pubXLen, pubY, &pubYLen);
+        if (ret != 0) {
+            WH_ERROR_PRINT("%s: Failed to export SW public key: %d\n", name,
+                           ret);
+        }
+    }
+    if (ret == 0) {
+        /* Sign with software */
+        sigLen = sizeof(sig);
+        ret = wc_ecc_sign_hash(hash, sizeof(hash), sig, &sigLen, rng, swKey);
+        if (ret != 0) {
+            WH_ERROR_PRINT("%s: SW sign failed: %d\n", name, ret);
+        }
+    }
+    if (ret == 0) {
+        /* Import public key into HSM key for verification */
+        ret = wc_ecc_init_ex(hsmKey, NULL, WH_DEV_ID);
+        if (ret != 0) {
+            WH_ERROR_PRINT("%s: Failed to init HSM key: %d\n", name, ret);
+        }
+        else {
+            hsmKeyInit = 1;
+        }
+    }
+    if (ret == 0) {
+        ret = wc_ecc_import_unsigned(hsmKey, pubX, pubY, NULL, curveId);
+        if (ret != 0) {
+            WH_ERROR_PRINT("%s: Failed to import public to HSM: %d\n", name,
+                           ret);
+        }
+    }
+    if (ret == 0) {
+        /* Verify with HSM */
+        res = 0;
+        ret = wc_ecc_verify_hash(sig, sigLen, hash, sizeof(hash), &res, hsmKey);
+        if (ret != 0) {
+            WH_ERROR_PRINT("%s: HSM verify failed: %d\n", name, ret);
+        }
+        else if (res != 1) {
+            WH_ERROR_PRINT("%s: SW sign + HSM verify: signature invalid\n",
+                           name);
+            ret = -1;
+        }
+        else {
+            WH_TEST_PRINT("    SW sign + HSM verify: PASS\n");
+        }
+    }
+    /* Cleanup Test 2 keys */
+    if (hsmKeyInit) {
+        if (wh_Client_EccGetKeyId(hsmKey, &keyId) == 0 &&
+            !WH_KEYID_ISERASED(keyId)) {
+            (void)wh_Client_KeyEvict(ctx, keyId);
+        }
+        wc_ecc_free(hsmKey);
+    }
+    if (swKeyInit) {
+        wc_ecc_free(swKey);
+    }
+
+    return ret;
+}
+
+/**
+ * Test ECDSA cross-verification between HSM and software implementations.
+ * This detects bugged hardware that might verify its own bad signatures.
+ *
+ * Tests two scenarios per curve:
+ * 1. HSM sign + Software verify
+ * 2. Software sign + HSM verify
+ */
+static int whTest_CryptoEccCrossVerify(whClientContext* ctx, WC_RNG* rng)
+{
+    int ret = WH_ERROR_OK;
+
+    WH_TEST_PRINT("Testing ECDSA cross-verification (HSM<->SW)...\n");
+
+#if !defined(NO_ECC256)
+    if (ret == 0) {
+        ret = whTest_CryptoEccCrossVerify_OneCurve(
+            ctx, rng, WH_TEST_ECC_P256_KEY_SIZE, ECC_SECP256R1, "P-256");
+    }
+#endif
+
+#if (defined(HAVE_ECC384) || defined(HAVE_ALL_CURVES)) && ECC_MIN_KEY_SZ <= 384
+    if (ret == 0) {
+        ret = whTest_CryptoEccCrossVerify_OneCurve(
+            ctx, rng, WH_TEST_ECC_P384_KEY_SIZE, ECC_SECP384R1, "P-384");
+    }
+#endif
+
+#if (defined(HAVE_ECC521) || defined(HAVE_ALL_CURVES)) && ECC_MIN_KEY_SZ <= 521
+    if (ret == 0) {
+        ret = whTest_CryptoEccCrossVerify_OneCurve(
+            ctx, rng, WH_TEST_ECC_P521_KEY_SIZE, ECC_SECP521R1, "P-521");
+    }
+#endif
+
+    if (ret == 0) {
+        WH_TEST_PRINT("ECDSA cross-verification SUCCESS\n");
+    }
+
+    return ret;
+}
+#endif /* HAVE_ECC_SIGN && HAVE_ECC_VERIFY && !WOLF_CRYPTO_CB_ONLY_ECC */
 #endif /* HAVE_ECC */
 
 #ifdef HAVE_ED25519
@@ -5146,6 +5398,12 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     if (ret == 0) {
         ret = whTest_CryptoEccCacheDuplicate(client);
     }
+#if defined(HAVE_ECC_SIGN) && defined(HAVE_ECC_VERIFY) && \
+    !defined(WOLF_CRYPTO_CB_ONLY_ECC)
+    if (ret == 0) {
+        ret = whTest_CryptoEccCrossVerify(client, rng);
+    }
+#endif
 #endif /* HAVE_ECC */
 
 #ifdef HAVE_ED25519
