@@ -1677,14 +1677,14 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
                 if (ret == WH_ERROR_OK) {
                     ret = wh_Server_KeystoreCacheKeyChecked(server, meta, in);
                 }
-                if (ret == WH_ERROR_OK) {
-                    /* Translate server keyId back to client format with flags
-                     */
-                    resp.id = wh_KeyId_TranslateToClient(meta->id);
-                }
 
                 (void)WH_SERVER_NVM_UNLOCK(server);
             } /* WH_SERVER_NVM_LOCK() */
+
+            if (ret == WH_ERROR_OK) {
+                /* Translate server keyId back to client format with flags */
+                resp.id = wh_KeyId_TranslateToClient(meta->id);
+            }
             resp.rc = ret;
 
             (void)wh_MessageKeystore_TranslateCacheResponse(
@@ -1734,14 +1734,13 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
                     }
                 }
 
-                if (ret == WH_ERROR_OK) {
-                    /* Translate server keyId back to client format with flags
-                     */
-                    resp.id = wh_KeyId_TranslateToClient(meta->id);
-                }
-
                 (void)WH_SERVER_NVM_UNLOCK(server);
             } /* WH_SERVER_NVM_LOCK() */
+
+            if (ret == WH_ERROR_OK) {
+                /* Translate server keyId back to client format with flags */
+                resp.id = wh_KeyId_TranslateToClient(meta->id);
+            }
             resp.rc = ret;
 
             (void)wh_MessageKeystore_TranslateCacheDmaResponse(

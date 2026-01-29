@@ -214,16 +214,16 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
                 /* Process the getmetadata action */
                 rc = wh_Nvm_GetMetadata(server->nvm, req.id, &meta);
 
-                if (rc == 0) {
-                    resp.id     = meta.id;
-                    resp.access = meta.access;
-                    resp.flags  = meta.flags;
-                    resp.len    = meta.len;
-                    memcpy(resp.label, meta.label, sizeof(resp.label));
-                }
-
                 (void)WH_SERVER_NVM_UNLOCK(server);
             } /* WH_SERVER_NVM_LOCK() */
+
+            if (rc == WH_ERROR_OK) {
+                resp.id     = meta.id;
+                resp.access = meta.access;
+                resp.flags  = meta.flags;
+                resp.len    = meta.len;
+                memcpy(resp.label, meta.label, sizeof(resp.label));
+            }
             resp.rc = rc;
         }
         /* Convert the response struct */
