@@ -82,9 +82,9 @@ jobs:
             make -j CLIENT_ONLY=1 TLS=1 SHE=1 DEBUG_VERBOSE=1 WOLFSSL_DIR=../wolfssl && make run
         fi
 
-    # Restart server with fresh state for AUTH test run, even with the serer not
-    # supporting AUTH and the client supporting AUTH -- the client should still
-    # be able to connect and run tests while not authenticated.
+    # Restart server with fresh state for AUTH test run, even with the server
+    # not supporting AUTH and the client supporting AUTH -- the client should
+    # still be able to connect and run tests while not authenticated.
     - name: Restart POSIX server for AUTH
       run: |
         kill $SERVER_PID || true

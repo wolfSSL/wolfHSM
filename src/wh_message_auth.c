@@ -70,6 +70,8 @@ int wh_MessageAuth_TranslateLoginRequest(
     if (src_header != dest_header) {
         memcpy(dest_header->username, src_header->username,
                sizeof(dest_header->username));
+        /* make sure the destination username is null terminated */
+        dest_header->username[sizeof(dest_header->username) - 1] = '\0';
     }
     WH_T16(magic, dest_header, src_header, auth_data_len);
 
