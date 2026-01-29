@@ -108,8 +108,6 @@ int wh_Nvm_Init(whNvmContext* context, const whNvmConfig* config)
     /* Initialize lock (NULL lockConfig = no-op locking) */
     rc = wh_Lock_Init(&context->lock, config->lockConfig);
     if (rc != WH_ERROR_OK) {
-        context->cb      = NULL;
-        context->context = NULL;
         return rc;
     }
 #endif
