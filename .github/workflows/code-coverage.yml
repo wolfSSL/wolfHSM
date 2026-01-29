@@ -37,11 +37,12 @@ jobs:
       run: cd test && make coverage WOLFSSL_DIR=../wolfssl
 
     # Display coverage summary in the action log
+    # Using gcov-ignore-parse-errors to avoid (GCC bug #68080)
     - name: Display coverage summary
       run: |
         echo "=== Coverage Summary ==="
         cd test
-        gcovr Build --root .. --filter '\.\./src/.*' --filter '\.\./wolfhsm/.*' --print-summary
+        gcovr --gcov-ignore-parse-errors="negative_hits.warn" Build --root .. --filter '\.\./src/.*' --filter '\.\./wolfhsm/.*' --print-summary
 
     # Upload coverage report as artifact
     - name: Upload coverage report
