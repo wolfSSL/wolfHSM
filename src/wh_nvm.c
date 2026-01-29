@@ -116,7 +116,7 @@ int wh_Nvm_Init(whNvmContext* context, const whNvmConfig* config)
 
     if (context->cb != NULL && context->cb->Init != NULL) {
         rc = context->cb->Init(context->context, config->config);
-        if (rc != 0) {
+        if (rc != WH_ERROR_OK) {
             context->cb = NULL;
             context->context = NULL;
 #ifdef WOLFHSM_CFG_THREADSAFE
