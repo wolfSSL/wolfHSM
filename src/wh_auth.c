@@ -231,7 +231,7 @@ int wh_Auth_CheckKeyAuthorization(whAuthContext* context, uint32_t key_id,
                                   uint16_t action)
 {
     uint16_t user_id;
-    int      rc;
+    int      rc = WH_ERROR_ACCESS;
     int      i;
     whAuthUser* user;
 
