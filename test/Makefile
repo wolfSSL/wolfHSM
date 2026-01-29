@@ -297,6 +297,7 @@ coverage:
 	$(BUILD_DIR)/$(BIN).elf
 	@echo "Generating coverage report..."
 	mkdir -p ../coverage && gcovr Build \
+		--gcov-ignore-parse-errors="negative_hits.warn" \
 		--root .. \
 		--gcov-executable gcov \
 		--filter '\.\./src/.*' \
