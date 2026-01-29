@@ -302,6 +302,11 @@ int wh_Nvm_AddObjectChecked(whNvmContext* context, whNvmMetadata* meta,
  *             WH_ERROR_BADARGS if context is NULL or not initialized.
  *             WH_ERROR_ABORTED if the backend callback is NULL.
  *             WH_ERROR_NOTFOUND if no matching objects found.
+ *
+ * @note This function returns one matching ID per call. Enumerating all
+ *       objects requires multiple calls with successive start_id values.
+ *       In thread-safe builds, if the NVM lock is not held across calls,
+ *       concurrent modifications may result in skipped or repeated entries.
  */
 int wh_Nvm_List(whNvmContext* context, whNvmAccess access, whNvmFlags flags,
                 whNvmId start_id, whNvmId* out_count, whNvmId* out_id);
