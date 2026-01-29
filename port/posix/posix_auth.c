@@ -64,6 +64,7 @@ int posixAuth_Init(void* context, const void* config)
     (void)context;
     (void)config;
 
+    memset(users, 0, sizeof(users));
     return WH_ERROR_OK;
 }
 
@@ -186,7 +187,7 @@ int posixAuth_Login(void* context, uint8_t client_id, whAuthMethod method,
     whAuthBase_User* current_user = NULL;
 
     if ((out_user_id == NULL) || (out_permissions == NULL) ||
-        (loggedIn == NULL)) {
+        (loggedIn == NULL) || (username == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
