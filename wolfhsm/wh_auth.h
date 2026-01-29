@@ -112,12 +112,12 @@ typedef struct {
     int (*Logout)(void* context, whUserId current_user_id, whUserId user_id);
 
 
-    /* Check if an action is authorized for a session */
-    int (*CheckRequestAuthorization)(void* context, uint16_t user_id,
+    /* Allow override of if action is authorized for a user */
+    int (*CheckRequestAuthorization)(void* context, int err, uint16_t user_id,
                                      uint16_t group, uint16_t action);
 
-    /* Check if a key is authorized for use */
-    int (*CheckKeyAuthorization)(void* context, uint16_t user_id,
+    /* Allow override of if a key is authorized for use */
+    int (*CheckKeyAuthorization)(void* context, int err, uint16_t user_id,
                                  uint32_t key_id, uint16_t action);
 
     /* Add a new user */

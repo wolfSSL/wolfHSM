@@ -47,6 +47,7 @@
 #include "wolfhsm/wh_error.h"
 
 #include "wolfhsm/wh_auth.h"
+#include "wolfhsm/wh_message_auth.h"
 
 
 int wh_Auth_Init(whAuthContext* context, const whAuthConfig* config)
@@ -155,17 +156,72 @@ int wh_Auth_CheckRequestAuthorization(whAuthContext* context, uint16_t group,
 {
     uint16_t user_id;
     int      rc;
+    whAuthUser* user;
 
-    if ((context == NULL) || (context->cb == NULL) ||
-        (context->cb->CheckRequestAuthorization == NULL)) {
+    if ((context == NULL) || (context->cb == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
-    user_id = context->user.user_id;
+    user = &context->user;
+    user_id = user->user_id;
     /* @TODO add logging call here and with resulting return value  */
 
-    rc = context->cb->CheckRequestAuthorization(context->context, user_id,
-                                                group, action);
+    if (user_id == WH_USER_ID_INVALID) {
+        /* allow user login request attempt and comm */
+        if (group == WH_MESSAGE_GROUP_COMM ||
+            (group == WH_MESSAGE_GROUP_AUTH &&
+                action == WH_MESSAGE_AUTH_ACTION_LOGIN)) {
+            rc = WH_ERROR_OK;
+        }
+        else {
+            rc = WH_ERROR_ACCESS;
+        }
+    }
+    else {
+        int groupIndex = (group >> 8) & 0xFF;
+
+        /* some operations a user logged in should by default have access to;
+            * - logging out
+            * - updating own credentials */
+        if (group == WH_MESSAGE_GROUP_AUTH &&
+            (action == WH_MESSAGE_AUTH_ACTION_LOGOUT ||
+                action == WH_MESSAGE_AUTH_ACTION_USER_SET_CREDENTIALS)) {
+            rc = WH_ERROR_OK;
+        }
+        else {
+            if (user->permissions.groupPermissions & group) {
+                /* Check if action is within supported range */
+                if (action < WH_AUTH_ACTIONS_PER_GROUP) {
+                    /* Get word index and bitmask for this action */
+                    uint32_t wordAndBit = WH_AUTH_ACTION_TO_WORD_AND_BIT(action);
+                    uint32_t wordIndex   = WH_AUTH_ACTION_WORD(wordAndBit);
+                    uint32_t bitmask     = WH_AUTH_ACTION_BIT(wordAndBit);
+
+                    if (wordIndex < WH_AUTH_ACTION_WORDS &&
+                        (user->permissions.actionPermissions[groupIndex]
+                                                                [wordIndex] &
+                            bitmask)) {
+                        rc = WH_ERROR_OK;
+                    }
+                    else {
+                        rc = WH_ERROR_ACCESS;
+                    }
+                }
+                else {
+                    rc = WH_ERROR_ACCESS;
+                }
+            }
+            else {
+                rc = WH_ERROR_ACCESS;
+            }
+        }
+    }
+
+    /* allow authorization override if callback is set */
+    if (context->cb->CheckRequestAuthorization != NULL) {
+        rc = context->cb->CheckRequestAuthorization(context->context, rc,
+            user_id, group, action);
+    }
     return rc;
 }
 
@@ -176,16 +232,36 @@ int wh_Auth_CheckKeyAuthorization(whAuthContext* context, uint32_t key_id,
 {
     uint16_t user_id;
     int      rc;
+    int      i;
+    whAuthUser* user;
 
-    if ((context == NULL) || (context->cb == NULL) ||
-        (context->cb->CheckKeyAuthorization == NULL)) {
+    if ((context == NULL) || (context->cb == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
     user_id = context->user.user_id;
+    user = &context->user;
+    if (user->user_id == WH_USER_ID_INVALID) {
+        return WH_ERROR_ACCESS;
+    }
 
-    rc = context->cb->CheckKeyAuthorization(context->context, user_id, key_id,
-                                              action);
+    /* Check if the requested key_id is in the user's keyIds array */
+    for (i = 0;
+         i < user->permissions.keyIdCount && i < WH_AUTH_MAX_KEY_IDS;
+         i++) {
+        if (user->permissions.keyIds[i] == key_id) {
+            rc = WH_ERROR_OK;
+            break;
+        }
+    }
+
+    (void)context;
+    (void)action; /* Action could be used for future fine-grained key access
+                     control */
+    if (context->cb->CheckKeyAuthorization != NULL) {
+        rc = context->cb->CheckKeyAuthorization(context->context, rc,
+            user_id, key_id, action);
+    }
     return rc;
 }
 

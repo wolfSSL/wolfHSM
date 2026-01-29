@@ -81,20 +81,21 @@ int posixAuth_Logout(void* context, uint16_t current_user_id,
                        uint16_t user_id);
 
 /**
- * @brief Check if an action is authorized for a session.
+ * @brief Option to override authorization check.
  *
  * @param[in] context Pointer to the auth base context.
+ * @param[in] err The current error code set for check authorization.
  * @param[in] user_id The user ID to check authorization for.
  * @param[in] group The group to check authorization for.
  * @param[in] action The action to check authorization for.
  * @return int Returns 0 if authorized, or a negative error code on failure.
  */
-int posixAuth_CheckRequestAuthorization(void* context, uint16_t user_id,
+int posixAuth_CheckRequestAuthorization(void* context, int err, uint16_t user_id,
                                           uint16_t group, uint16_t action);
 
 /* authorization check on key usage after the request has been parsed and before
  * the action is done */
-int posixAuth_CheckKeyAuthorization(void* context, uint16_t user_id,
+int posixAuth_CheckKeyAuthorization(void* context, int err, uint16_t user_id,
                                       uint32_t key_id, uint16_t action);
 
 /**
