@@ -191,10 +191,7 @@ static const whTransportServerCb serverTransportCb = WH_TRANSPORT_MEM_SERVER_CB;
 
 /* Hot resources - all clients target these same IDs
  * NOTE: Use client-facing keyId format (simple ID + flags), NOT server-internal
- * format (WH_MAKE_KEYID). The server's wh_KeyId_TranslateFromClient() extracts
- * only the lower 8 bits as ID and checks WH_KEYID_CLIENT_GLOBAL_FLAG for
- * global. Using WH_MAKE_KEYID with user=1 sets bit 8, which is
- * WH_KEYID_CLIENT_GLOBAL_FLAG!
+ * format (WH_MAKE_KEYID).
  *
  * We need separate key IDs for different test categories because:
  * - Revoked keys have NONMODIFIABLE flag and can't be erased or re-cached
