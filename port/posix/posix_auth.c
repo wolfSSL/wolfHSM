@@ -246,111 +246,32 @@ int posixAuth_Logout(void* context, uint16_t current_user_id,
 }
 
 
-int posixAuth_CheckRequestAuthorization(void* context, uint16_t user_id,
-                                          uint16_t group, uint16_t action)
+int posixAuth_CheckRequestAuthorization(void* context, int err,
+    uint16_t user_id, uint16_t group, uint16_t action)
 {
-    int rc;
-
-    if (user_id == WH_USER_ID_INVALID) {
-        /* allow user login request attempt and comm */
-        if (group == WH_MESSAGE_GROUP_COMM ||
-            (group == WH_MESSAGE_GROUP_AUTH &&
-                action == WH_MESSAGE_AUTH_ACTION_LOGIN)) {
-            rc = WH_ERROR_OK;
-        }
-        else {
-            rc = WH_ERROR_ACCESS;
-        }
-    }
-    else {
-        int              groupIndex = (group >> 8) & 0xFF;
-        whAuthBase_User* user;
-
-        if (user_id > WH_AUTH_BASE_MAX_USERS) {
-            return WH_ERROR_ACCESS;
-        }
-        user = &users[user_id - 1];
-
-        /* check if user has permissions for the group and action */
-
-        /* some operations a user logged in should by default have access to;
-         * - logging out
-         * - updating own credentials */
-        if (group == WH_MESSAGE_GROUP_AUTH &&
-            (action == WH_MESSAGE_AUTH_ACTION_LOGOUT ||
-             action == WH_MESSAGE_AUTH_ACTION_USER_SET_CREDENTIALS)) {
-            rc = WH_ERROR_OK;
-        }
-        else {
-            if (user->user.permissions.groupPermissions & group) {
-                /* Check if action is within supported range */
-                if (action < WH_AUTH_ACTIONS_PER_GROUP) {
-                    /* Get word index and bitmask for this action */
-                    uint32_t wordAndBit = WH_AUTH_ACTION_TO_WORD_AND_BIT(action);
-                    uint32_t wordIndex   = WH_AUTH_ACTION_WORD(wordAndBit);
-                    uint32_t bitmask     = WH_AUTH_ACTION_BIT(wordAndBit);
-
-                    if (wordIndex < WH_AUTH_ACTION_WORDS &&
-                        (user->user.permissions.actionPermissions[groupIndex]
-                                                              [wordIndex] &
-                         bitmask)) {
-                        rc = WH_ERROR_OK;
-                    }
-                    else {
-                        rc = WH_ERROR_ACCESS;
-                    }
-                }
-                else {
-                    rc = WH_ERROR_ACCESS;
-                }
-            }
-            else {
-                rc = WH_ERROR_ACCESS;
-            }
-        }
-    }
-
     (void)context;
-    return rc;
+    (void)user_id;
+    (void)group;
+    (void)action;
+
+    /* could override the error code here */
+    /* the value passed in as 'err' is the current error code */
+    return err;
 }
 
 /* authorization check on key usage after the request has been parsed and before
  * the action is done */
-int posixAuth_CheckKeyAuthorization(void* context, uint16_t user_id,
+int posixAuth_CheckKeyAuthorization(void* context, int err, uint16_t user_id,
                                       uint32_t key_id, uint16_t action)
 {
-    int              rc = WH_ERROR_ACCESS;
-    int              i;
-    whAuthBase_User* user;
-
-    if (user_id == WH_USER_ID_INVALID) {
-        return WH_ERROR_ACCESS;
-    }
-
-    if (user_id > WH_AUTH_BASE_MAX_USERS) {
-        return WH_ERROR_NOTFOUND;
-    }
-
-    user = &users[user_id - 1];
-
-    if (user->user.user_id == WH_USER_ID_INVALID) {
-        return WH_ERROR_NOTFOUND;
-    }
-
-    /* Check if the requested key_id is in the user's keyIds array */
-    for (i = 0;
-         i < user->user.permissions.keyIdCount && i < WH_AUTH_MAX_KEY_IDS;
-         i++) {
-        if (user->user.permissions.keyIds[i] == key_id) {
-            rc = WH_ERROR_OK;
-            break;
-        }
-    }
-
     (void)context;
-    (void)action; /* Action could be used for future fine-grained key access
-                     control */
-    return rc;
+    (void)user_id;
+    (void)key_id;
+    (void)action;
+
+    /* could override the error code here */
+    /* the value passed in as 'err' is the current error code */
+    return err;
 }
 
 
