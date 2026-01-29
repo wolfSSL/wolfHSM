@@ -1177,11 +1177,11 @@ static int CheckServerSupportsAuth(whClientContext* client_ctx)
     whUserId user_id;
     int isSupported = 0;
 
-    WH_TEST_RETURN_ON_FAIL(wh_Client_AuthLogin(client_ctx, WH_AUTH_METHOD_PIN,
+    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_LoginOp(client_ctx, WH_AUTH_METHOD_PIN,
         TEST_ADMIN_USERNAME, TEST_ADMIN_PIN, strlen(TEST_ADMIN_PIN), &server_rc,
         &user_id));
     if (server_rc != WH_AUTH_NOT_ENABLED) {
-        WH_TEST_RETURN_ON_FAIL(wh_Client_AuthLogout(client_ctx, user_id,
+        WH_TEST_RETURN_ON_FAIL(_whTest_Auth_LogoutOp(client_ctx, user_id,
             &server_rc));
         isSupported = 1;
     }
