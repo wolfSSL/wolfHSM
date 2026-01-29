@@ -657,11 +657,21 @@ static int initClientServerPair(StressTestContext* ctx, int pairIndex)
     pair->serverConfig.crypto      = &pair->cryptoCtx;
     pair->serverConfig.devId       = INVALID_DEVID;
 
+    /* Initialize client in the main thread to avoid concurrent calls to
+     * wolfCrypt_Init() and wc_CryptoCb_RegisterDevice() */
+    rc = wh_Client_Init(&pair->client, &pair->clientConfig);
+    if (rc != WH_ERROR_OK) {
+        WH_ERROR_PRINT("Client %d init failed: %d\n", pairIndex, rc);
+        wc_FreeRng(pair->cryptoCtx.rng);
+        return rc;
+    }
+
     return WH_ERROR_OK;
 }
 
 static void cleanupClientServerPair(ClientServerPair* pair)
 {
+    wh_Client_Cleanup(&pair->client);
     wc_FreeRng(pair->cryptoCtx.rng);
 }
 
@@ -1939,14 +1949,6 @@ static void* contentionClientThread(void* arg)
     int                rc;
     int                localIteration;
 
-    /* Initialize client */
-    rc = wh_Client_Init(&pair->client, &pair->clientConfig);
-    if (rc != WH_ERROR_OK) {
-        WH_ERROR_PRINT("Client %d init failed: %d\n", pair->clientId, rc);
-        ATOMIC_ADD_INT(&pair->errorCount, 1);
-        return NULL;
-    }
-
     /* Wait for all threads to start */
     pthread_barrier_wait(&ctx->startBarrier);
 
@@ -2002,7 +2004,6 @@ static void* contentionClientThread(void* arg)
         pthread_barrier_wait(&ctx->streamEndBarrier);
     }
 
-    wh_Client_Cleanup(&pair->client);
     return NULL;
 }
 
