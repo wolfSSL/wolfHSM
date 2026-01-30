@@ -3606,8 +3606,6 @@ static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
 
     uint8_t labelIn[WH_NVM_LABEL_LEN] = "CMAC Key Label";
 
-    uint8_t  keyEnd[sizeof(knownCmacKey)] = {0};
-    uint8_t  labelEnd[WH_NVM_LABEL_LEN]   = {0};
     uint16_t outLen                       = 0;
     uint8_t  macOut[AES_BLOCK_SIZE]       = {0};
     word32   macLen;
@@ -3697,20 +3695,13 @@ static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
                         else
 #endif /* WOLFHSM_CFG_DMA */
                         {
-                            /* TODO: Eliminate this autoevict */
-                            /* verify the key was evicted after oneshot */
-                            outLen = sizeof(keyEnd);
-                            ret    = wh_Client_KeyExport(ctx, keyId, labelEnd,
-                                                         sizeof(labelEnd), keyEnd,
-                                                         &outLen);
-                            if (ret != WH_ERROR_NOTFOUND) {
+                            /* Key should still be present after oneshot since
+                             * server no longer caches/evicts the Cmac struct */
+                            ret = wh_Client_KeyEvict(ctx, keyId);
+                            if (ret != 0) {
                                 WH_ERROR_PRINT(
-                                    "Failed to not find evicted key: %d\n",
-                                    ret);
+                                    "Failed to wh_Client_KeyEvict %d\n", ret);
                                 ret = -1;
-                            }
-                            else {
-                                ret = 0;
                             }
                         }
                     }
@@ -3881,6 +3872,7 @@ static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
                                     "Failed to wc_CmacFinal %d\n", ret);
                             }
                             else {
+                                outLen = sizeof(macOut);
                                 ret = wh_Client_CmacCancelableResponse(
                                     ctx, cmac, macOut, &outLen);
                                 if (ret != 0) {

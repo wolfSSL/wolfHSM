@@ -695,6 +695,22 @@ int wh_MessageCrypto_TranslateSha2Response(
 }
 
 
+/* CMAC State translation */
+int wh_MessageCrypto_TranslateCmacState(
+    uint16_t magic, const whMessageCrypto_CmacState* src,
+    whMessageCrypto_CmacState* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    /* buffer and digest are byte arrays - memcpy, no endian swap */
+    memcpy(dest->buffer, src->buffer, sizeof(dest->buffer));
+    memcpy(dest->digest, src->digest, sizeof(dest->digest));
+    WH_T32(magic, dest, src, bufferSz);
+    WH_T32(magic, dest, src, totalSz);
+    return 0;
+}
+
 /* CMAC Request translation */
 int wh_MessageCrypto_TranslateCmacRequest(
     uint16_t magic, const whMessageCrypto_CmacRequest* src,
@@ -708,7 +724,8 @@ int wh_MessageCrypto_TranslateCmacRequest(
     WH_T32(magic, dest, src, inSz);
     WH_T32(magic, dest, src, keySz);
     WH_T16(magic, dest, src, keyId);
-    return 0;
+    return wh_MessageCrypto_TranslateCmacState(
+        magic, &src->resumeState, &dest->resumeState);
 }
 
 /* CMAC Response translation */
@@ -721,7 +738,8 @@ int wh_MessageCrypto_TranslateCmacResponse(
     }
     WH_T32(magic, dest, src, outSz);
     WH_T16(magic, dest, src, keyId);
-    return 0;
+    return wh_MessageCrypto_TranslateCmacState(
+        magic, &src->resumeState, &dest->resumeState);
 }
 
 /* ML-DSA Key Generation Request translation */

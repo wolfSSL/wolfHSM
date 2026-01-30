@@ -797,14 +797,25 @@ int wh_MessageCrypto_TranslateSha2Response(
  * CMAC
  */
 
+/* CMAC intermediate state - non-sensitive fields only.
+ * k1/k2 subkeys are NOT included as they are key-derived material.
+ * Server re-derives them via wc_InitCmac_ex on each request. */
+typedef struct {
+    uint8_t  buffer[16]; /* AES_BLOCK_SIZE: partial block buffer */
+    uint8_t  digest[16]; /* AES_BLOCK_SIZE: running CBC-MAC digest */
+    uint32_t bufferSz;   /* bytes in partial block buffer */
+    uint32_t totalSz;    /* total bytes processed */
+} whMessageCrypto_CmacState;
+
 /* CMAC Request */
 typedef struct {
-    uint32_t type; /* wolfCrypt CmacType enum */
-    uint32_t outSz;
-    uint32_t inSz;
-    uint32_t keySz;
-    uint16_t keyId;
-    uint8_t  WH_PAD[6];
+    uint32_t type;  /* wolfCrypt CmacType enum */
+    uint32_t outSz; /* output MAC size (0 if not finalizing) */
+    uint32_t inSz;  /* input data size */
+    uint32_t keySz; /* key size (0 if using keyId or already initialized) */
+    uint16_t keyId; /* key ID for HSM-stored key */
+    uint8_t  WH_PAD[2];
+    whMessageCrypto_CmacState resumeState;
     /* Data follows:
      * uint8_t in[inSz]
      * uint8_t key[keySz]
@@ -813,13 +824,23 @@ typedef struct {
 
 /* CMAC Response */
 typedef struct {
-    uint32_t outSz;
-    uint16_t keyId;
+    uint32_t outSz; /* actual output MAC size */
+    uint16_t keyId; /* key ID (ERASED for non-HSM) */
     uint8_t  WH_PAD[2];
+    whMessageCrypto_CmacState resumeState;
+    uint8_t  WH_PAD2[12]; /* pad to match request size */
     /* Data follows:
-     * uint8_t out[outSz];
+     * uint8_t out[outSz]
      */
 } whMessageCrypto_CmacResponse;
+
+WH_UTILS_STATIC_ASSERT(sizeof(whMessageCrypto_CmacRequest) ==
+                            sizeof(whMessageCrypto_CmacResponse),
+                        "CmacRequest and CmacResponse must be the same size");
+
+int wh_MessageCrypto_TranslateCmacState(
+    uint16_t magic, const whMessageCrypto_CmacState* src,
+    whMessageCrypto_CmacState* dest);
 
 int wh_MessageCrypto_TranslateCmacRequest(
     uint16_t magic, const whMessageCrypto_CmacRequest* src,

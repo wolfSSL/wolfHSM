@@ -3598,6 +3598,14 @@ int wh_Client_Cmac(whClientContext* ctx, Cmac* cmac, CmacType type,
     uint32_t mac_len =
         ((outMac == NULL) || (outMacLen == NULL)) ? 0 : *outMacLen;
 
+    /* For non-HSM keys on subsequent calls (no key provided), send the
+     * stored key bytes so the server can reconstruct the CMAC context */
+    if (key == NULL && keyLen == 0 && WH_KEYID_ISERASED(key_id) &&
+        (inLen != 0 || mac_len != 0)) {
+        key    = (const uint8_t*)cmac->aes.devKey;
+        keyLen = cmac->aes.keylen;
+    }
+
     /* Return success for a call with NULL params, or 0 len's */
     if ((inLen == 0) && (keyLen == 0) && (mac_len == 0)) {
         /* Update the type */
@@ -3605,10 +3613,10 @@ int wh_Client_Cmac(whClientContext* ctx, Cmac* cmac, CmacType type,
         return WH_ERROR_OK;
     }
 
-    WH_DEBUG_CLIENT_VERBOSE("cmac key:%p key_len:%d in:%p in_len:%d out:%p out_len:%d "
-           "keyId:%x\n",
-           key, (int)keyLen, in, (int)inLen, outMac, (int)mac_len, key_id);
-
+    WH_DEBUG_CLIENT_VERBOSE(
+        "cmac key:%p key_len:%d in:%p in_len:%d out:%p out_len:%d "
+        "keyId:%x\n",
+        key, (int)keyLen, in, (int)inLen, outMac, (int)mac_len, key_id);
 
     /* Get data pointer */
     dataPtr = (uint8_t*)wh_CommClient_GetDataPtr(ctx->comm);
@@ -3642,6 +3650,13 @@ int wh_Client_Cmac(whClientContext* ctx, Cmac* cmac, CmacType type,
     req->keyId = key_id;
     req->keySz = keyLen;
     req->outSz = mac_len;
+
+    /* Pack non-sensitive CMAC state into request */
+    memcpy(req->resumeState.buffer, cmac->buffer, AES_BLOCK_SIZE);
+    memcpy(req->resumeState.digest, cmac->digest, AES_BLOCK_SIZE);
+    req->resumeState.bufferSz = cmac->bufferSz;
+    req->resumeState.totalSz  = cmac->totalSz;
+
     /* multiple modes are possible so we need to set zero size if buffers
      * are NULL */
     if ((in != NULL) && (inLen > 0)) {
@@ -3656,6 +3671,13 @@ int wh_Client_Cmac(whClientContext* ctx, Cmac* cmac, CmacType type,
     if (ret == WH_ERROR_OK) {
         /* Update the local type since call succeeded */
         cmac->type = type;
+
+        /* Store key bytes locally for future calls (non-HSM keys) */
+        if (key != NULL && keyLen > 0 && WH_KEYID_ISERASED(key_id)) {
+            memcpy((void*)cmac->aes.devKey, key, keyLen);
+            cmac->aes.keylen = keyLen;
+        }
+
 #ifdef WOLFHSM_CFG_CANCEL_API
         /* if the client marked they may want to cancel, handle the
          * response in a separate call */
@@ -3671,16 +3693,17 @@ int wh_Client_Cmac(whClientContext* ctx, Cmac* cmac, CmacType type,
         } while (ret == WH_ERROR_NOTREADY);
         if (ret == WH_ERROR_OK) {
             /* Get response */
-            ret =
-                _getCryptoResponse(dataPtr, WC_ALGO_TYPE_CMAC, (uint8_t**)&res);
+            ret = _getCryptoResponse(dataPtr, WC_ALGO_TYPE_CMAC,
+                                     (uint8_t**)&res);
             /* wolfCrypt allows positive error codes on success in some
              * scenarios */
             if (ret >= 0) {
-                /* read keyId and res_out */
-                if (key != NULL) {
-                    WH_DEBUG_CLIENT_VERBOSE("got keyid %x\n", res->keyId);
-                    cmac->devCtx = WH_KEYID_TO_DEVCTX(res->keyId);
-                }
+                /* Restore non-sensitive state from server response */
+                memcpy(cmac->buffer, res->resumeState.buffer, AES_BLOCK_SIZE);
+                memcpy(cmac->digest, res->resumeState.digest, AES_BLOCK_SIZE);
+                cmac->bufferSz = res->resumeState.bufferSz;
+                cmac->totalSz  = res->resumeState.totalSz;
+
                 if (outMac != NULL) {
                     uint8_t* res_mac = (uint8_t*)(res + 1);
                     memcpy(outMac, res_mac, res->outSz);
@@ -3711,7 +3734,6 @@ int wh_Client_CmacCancelableResponse(whClientContext* c, Cmac* cmac,
         return WH_ERROR_BADARGS;
     }
 
-
     /* Get data pointer */
     dataPtr = (uint8_t*)wh_CommClient_GetDataPtr(c->comm);
     if (dataPtr == NULL) {
@@ -3733,7 +3755,12 @@ int wh_Client_CmacCancelableResponse(whClientContext* c, Cmac* cmac,
         ret = _getCryptoResponse(dataPtr, WC_ALGO_TYPE_CMAC, (uint8_t**)&res);
         /* wolfCrypt allows positive error codes on success in some scenarios */
         if (ret >= 0) {
-            cmac->devCtx = (void*)((intptr_t)res->keyId);
+            /* Restore non-sensitive state from server response */
+            memcpy(cmac->buffer, res->resumeState.buffer, AES_BLOCK_SIZE);
+            memcpy(cmac->digest, res->resumeState.digest, AES_BLOCK_SIZE);
+            cmac->bufferSz = res->resumeState.bufferSz;
+            cmac->totalSz  = res->resumeState.totalSz;
+
             if (out != NULL && outSz != NULL) {
                 if (res->outSz > *outSz) {
                     ret = WH_ERROR_BUFFER_SIZE;
