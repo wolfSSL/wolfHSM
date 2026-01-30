@@ -28,9 +28,9 @@
 /* Pick up compile-time configuration */
 #include "wolfhsm/wh_settings.h"
 
-#define WH_MSEC_TO_USEC(sec) (sec * 1000ULL)
+#define WH_MSEC_TO_USEC(usec) (usec * 1000ULL)
 #define WH_SEC_TO_USEC(sec) (sec * 1000000ULL)
-#define WH_MIN_TO_USEC(sec) (sec * WH_SEC_TO_USEC(60))
+#define WH_MIN_TO_USEC(min) (min * WH_SEC_TO_USEC(60))
 
 #include <stdint.h>
 
@@ -85,6 +85,9 @@ int wh_Timeout_Stop(whTimeoutCtx* timeout);
 
 /**
  * Check whether a timeout has expired.
+ *
+ * If the timeout is expired and an expired callback is configured, the
+ * callback is invoked before returning.
  *
  * @param timeout The timeout context to check.
  * @return 1 if expired, 0 if not expired or disabled.
