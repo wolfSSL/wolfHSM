@@ -93,6 +93,25 @@ ifeq ($(COVERAGE),1)
 	LDFLAGS += --coverage
 endif
 
+# Enable threadsafe mode, adding lock protection to shared structures
+ifeq ($(THREADSAFE),1)
+    DEF += -DWOLFHSM_CFG_THREADSAFE
+endif
+
+# Add thread sanitizer option (mutually exclusive with ASAN)
+ifeq ($(TSAN),1)
+    ifeq ($(ASAN),1)
+    	$(error TSAN and ASAN cannot be used together)
+    endif
+    CFLAGS += -fsanitize=thread -fPIE
+    DEF += -DWOLFSSL_NO_FENCE
+    ifeq ($(STRESS),1)
+	    # Force TSAN annotations on in stress test
+        DEF += -DWOLFHSM_CFG_TEST_STRESS_TSAN
+    endif
+    LDFLAGS += -fsanitize=thread -pie
+endif
+
 ## wolfSSL defines
 ifeq ($(DEBUG_WOLFSSL),1)
 	DEF += -DDEBUG_WOLFSSL
@@ -103,6 +122,7 @@ ifeq ($(NOCRYPTO),1)
 	DEF += -DWOLFHSM_CFG_NO_CRYPTO
 endif
 
+# Enable scan-build
 ifeq ($(SCAN),1)
 	SCAN_LOG = scan_test.log
 	# Default target
@@ -122,6 +142,14 @@ endif
 # Support a TLS-capable build
 ifeq ($(TLS),1)
 	DEF += -DWOLFHSM_CFG_TLS
+endif
+
+# Support stress test mode (only runs thread safety stress test)
+ifeq ($(STRESS),1)
+    ifneq ($(THREADSAFE),1)
+        $(error Stress test requires building with THREADSAFE=1)
+    endif
+	DEF += -DWOLFHSM_CFG_TEST_STRESS
 endif
 
 ## Project defines
@@ -193,7 +221,7 @@ SRC_C +=  $(wildcard $(WOLFHSM_DIR)/src/*.c)
 # wolfHSM port/HAL code
 SRC_C +=  $(wildcard $(WOLFHSM_PORT_DIR)/*.c)
 
-# Project
+# Test source files
 SRC_C +=  $(wildcard $(PROJECT_DIR)/*.c)
 
 
@@ -275,7 +303,15 @@ run:
 ifeq (,$(wildcard $(BUILD_DIR)/$(BIN).elf))
 	$(error $(BUILD_DIR)/$(BIN).elf not found.  Try: make)
 else
+ifeq ($(TSAN),1)
+	# TSAN options:
+	# - fail fast on first data race detected
+	# - non-zero exit code if races are detected to ensure CI fails
+	# - use our custom suppressions file to ignore wolfCrypt and SHM transport
+	TSAN_OPTIONS="halt_on_error=1:exitcode=66:suppressions=$(PROJECT_DIR)/tsan.supp" $(BUILD_DIR)/$(BIN).elf
+else
 	$(BUILD_DIR)/$(BIN).elf
+endif
 endif
 
 # Coverage target: build with coverage, run tests, and generate report

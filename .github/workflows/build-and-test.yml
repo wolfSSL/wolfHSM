@@ -64,3 +64,15 @@ jobs:
     # Build and test with DEBUG_VERBOSE=1 (includes DEBUG)
     - name: Build and test with DEBUG_VERBOSE
       run: cd test && make clean && make -j DEBUG_VERBOSE=1 WOLFSSL_DIR=../wolfssl && make run
+
+    # Build and test in multithreaded mode with everything enabled
+    - name: Build and test with THREADSAFE and everything
+      run: cd test && make clean && make -j THREADSAFE=1 DMA=1 SHE=1 ASAN=1 WOLFSSL_DIR=../wolfssl && make run
+
+    # Build and test in multithreaded mode with everything enabled and wolfCrypt tests
+    - name: Build and test with THREADSAFE and TESTWOLFCRYPT and everything
+      run: cd test && make clean && make -j THREADSAFE=1 TESTWOLFCRYPT=1 DMA=1 SHE=1 ASAN=1 WOLFSSL_DIR=../wolfssl && make run
+
+    # Build and test in multithreaded mode with everything enabled and wolfCrypt tests with dma
+    - name: Build and test with THREADSAFE and TESTWOLFCRYPT with DMA
+      run: cd test && make clean && make -j THREADSAFE=1 TESTWOLFCRYPT=1 TESTWOLFCRYPT_DMA=1 DMA=1 SHE=1 ASAN=1 WOLFSSL_DIR=../wolfssl && make run

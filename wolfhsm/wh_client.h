@@ -1517,6 +1517,10 @@ int wh_Client_NvmListResponse(whClientContext* c, int32_t* out_rc,
  * the criteria.
  * @param[out] out_id Pointer to store the ID of the first matching NVM object.
  * @return int Returns 0 on success, or a negative error code on failure.
+ *
+ * @note Enumerating all objects requires calling this function in a loop
+ *       with successive start_id values. In thread-safe builds, concurrent
+ *       NVM modifications between calls may result in inconsistent results.
  */
 int wh_Client_NvmList(whClientContext* c, whNvmAccess access, whNvmFlags flags,
                       whNvmId start_id, int32_t* out_rc, whNvmId* out_count,
