@@ -683,24 +683,6 @@ int wh_Client_Cmac(whClientContext* ctx, Cmac* cmac, CmacType type,
                    const uint8_t* key, uint32_t keyLen, const uint8_t* in,
                    uint32_t inLen, uint8_t* outMac, uint32_t* outMacLen);
 
-/**
- * @brief Handle cancelable CMAC response.
- *
- * This function handles a CMAC operation response from the server when
- * cancellation has been enabled, since wolfCrypt won't automatically block and
- * wait for the response. Note that DMA-based CMAC operations are NOT
- * cancellable and if a cancel is requested, the cancellation will be aborted.
- *
- * @param[in] c Pointer to the client context structure.
- * @param[in] cmac Pointer to the CMAC key structure.
- * @param[out] out Buffer to store the CMAC result, only required after
- *    wc_CmacFinal.
- * @param[in,out] outSz Pointer to the size of the out buffer in bytes, will be
- *    set to the size returned by the server on return.
- * @return int Returns 0 on success, or a negative error code on failure.
- */
-int wh_Client_CmacCancelableResponse(whClientContext* c, Cmac* cmac,
-    uint8_t* out, uint16_t* outSz);
 
 /**
  * @brief Associates a CMAC key with a specific key ID.

@@ -3678,13 +3678,6 @@ int wh_Client_Cmac(whClientContext* ctx, Cmac* cmac, CmacType type,
             cmac->aes.keylen = keyLen;
         }
 
-#ifdef WOLFHSM_CFG_CANCEL_API
-        /* if the client marked they may want to cancel, handle the
-         * response in a separate call */
-        if (ctx->cancelable) {
-            return ret;
-        }
-#endif
 
         uint16_t res_len = 0;
         do {
@@ -3719,63 +3712,6 @@ int wh_Client_Cmac(whClientContext* ctx, Cmac* cmac, CmacType type,
 
 #endif /* !NO_AES */
 
-#ifdef WOLFHSM_CFG_CANCEL_API
-int wh_Client_CmacCancelableResponse(whClientContext* c, Cmac* cmac,
-                                     uint8_t* out, uint16_t* outSz)
-{
-    whMessageCrypto_CmacResponse* res     = NULL;
-    uint8_t*                      dataPtr = NULL;
-    int                           ret;
-    uint16_t                      group;
-    uint16_t                      action;
-    uint16_t                      dataSz;
-
-    if (c == NULL || cmac == NULL) {
-        return WH_ERROR_BADARGS;
-    }
-
-    /* Get data pointer */
-    dataPtr = (uint8_t*)wh_CommClient_GetDataPtr(c->comm);
-    if (dataPtr == NULL) {
-        return WH_ERROR_BADARGS;
-    }
-
-    do {
-        ret = wh_Client_RecvResponse(c, &group, &action, &dataSz,
-                                     (uint8_t*)dataPtr);
-    } while (ret == WH_ERROR_NOTREADY);
-
-    /* check for out of sequence action */
-    if (ret == 0 &&
-        (group != WH_MESSAGE_GROUP_CRYPTO || action != WC_ALGO_TYPE_CMAC)) {
-        ret = WH_ERROR_ABORTED;
-    }
-    if (ret == 0) {
-        /* Setup generic header and get pointer to response data */
-        ret = _getCryptoResponse(dataPtr, WC_ALGO_TYPE_CMAC, (uint8_t**)&res);
-        /* wolfCrypt allows positive error codes on success in some scenarios */
-        if (ret >= 0) {
-            /* Restore non-sensitive state from server response */
-            memcpy(cmac->buffer, res->resumeState.buffer, AES_BLOCK_SIZE);
-            memcpy(cmac->digest, res->resumeState.digest, AES_BLOCK_SIZE);
-            cmac->bufferSz = res->resumeState.bufferSz;
-            cmac->totalSz  = res->resumeState.totalSz;
-
-            if (out != NULL && outSz != NULL) {
-                if (res->outSz > *outSz) {
-                    ret = WH_ERROR_BUFFER_SIZE;
-                }
-                else {
-                    uint8_t* packOut = (uint8_t*)(res + 1);
-                    memcpy(out, packOut, res->outSz);
-                    *outSz = res->outSz;
-                }
-            }
-        }
-    }
-    return ret;
-}
-#endif /* WOLFHSM_CFG_CANCEL_API */
 
 #ifdef WOLFHSM_CFG_DMA
 int wh_Client_CmacDma(whClientContext* ctx, Cmac* cmac, CmacType type,

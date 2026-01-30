@@ -170,25 +170,6 @@ int wh_Server_GetConnected(whServerContext *server,
     return WH_ERROR_OK;
 }
 
-#ifdef WOLFHSM_CFG_CANCEL_API
-int wh_Server_GetCanceledSequence(whServerContext* server, uint16_t* outSeq)
-{
-    if (server == NULL || outSeq == NULL)
-        return WH_ERROR_BADARGS;
-    *outSeq = server->cancelSeq;
-    server->cancelSeq = 0;
-    return 0;
-}
-
-int wh_Server_SetCanceledSequence(whServerContext* server, uint16_t cancelSeq)
-{
-    if (server == NULL) {
-        return WH_ERROR_BADARGS;
-    }
-    server->cancelSeq = cancelSeq;
-    return WH_ERROR_OK;
-}
-#endif /* WOLFHSM_CFG_CANCEL_API */
 
 static int _wh_Server_HandleCommRequest(whServerContext* server,
         uint16_t magic, uint16_t action, uint16_t seq,
@@ -417,16 +398,6 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
         /* Capture handler result for logging. The response packet already
          * contains the error code for the client in the resp.rc field. */
         handlerRc = rc;
-
-        /* Handle cancellation by modifying response kind */
-#ifdef WOLFHSM_CFG_CANCEL_API
-        if (handlerRc == WH_ERROR_CANCEL) {
-            /* notify the client that their request was canceled */
-            kind = WH_MESSAGE_KIND(WH_MESSAGE_GROUP_CANCEL, 0);
-            size = 0;
-            data = NULL;
-        }
-#endif
 
         /* Always send the response to the client, regardless of handler error.
          * The response packet contains the operational error code for the

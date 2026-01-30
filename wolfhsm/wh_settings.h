@@ -90,12 +90,6 @@
  * test harness.
  *     Default: Not defined
  *
- *  WOLFHSM_CFG_CANCEL_API - If defined, enables the cancellation API support
- * allowing clients to cancel in-progress operations. This includes the client
- * cancel functions and server-side cancellation handling. When not defined,
- * all cancellation code is compiled out.
- *     Default: Not defined
- *
  *  WOLFHSM_CFG_DEBUG - If defined, enable basic debug output from wolfHSM
  *      Default: Not defined
  *

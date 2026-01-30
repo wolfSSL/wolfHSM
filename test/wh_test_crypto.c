@@ -26,7 +26,6 @@
 #ifndef WOLFHSM_CFG_NO_CRYPTO
 
 #include <stdint.h>
-#include <stdio.h>  /* For printf */
 #include <string.h> /* For memset, memcpy */
 
 #include "wolfssl/wolfcrypt/settings.h"
@@ -90,15 +89,6 @@ enum {
 #ifdef WOLFHSM_CFG_IS_TEST_SERVER
 /* Flag causing the server loop to sleep(1) */
 int serverDelay = 0;
-
-#if defined(WOLFHSM_CFG_TEST_POSIX) && defined(WOLFHSM_CFG_ENABLE_CLIENT) && \
-    defined(WOLFHSM_CFG_ENABLE_SERVER) && defined(WOLFHSM_CFG_CANCEL_API)
-/* pointer to expose server context cancel sequence to the client cancel
- * callback */
-static uint16_t* cancelSeqP;
-
-#endif /* WOLFHSM_CFG_TEST_POSIX && WOLFHSM_CFG_ENABLE_CLIENT && \
-          WOLFHSM_CFG_ENABLE_SERVER && WOLFHSM_CFG_CANCEL_API */
 #endif /* WOLFHSM_CFG_IS_TEST_SERVER */
 
 #if defined(WOLFHSM_CFG_DEBUG_VERBOSE) && defined(WOLFHSM_CFG_ENABLE_CLIENT)
@@ -3606,7 +3596,6 @@ static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
 
     uint8_t labelIn[WH_NVM_LABEL_LEN] = "CMAC Key Label";
 
-    uint16_t outLen                       = 0;
     uint8_t  macOut[AES_BLOCK_SIZE]       = {0};
     word32   macLen;
     whKeyId  keyId;
@@ -3769,145 +3758,6 @@ static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
         }
     }
 
-#if defined(WOLFHSM_CFG_CANCEL_API) && !defined(WOLFHSM_CFG_TEST_CLIENT_ONLY)
-    /* test CMAC cancellation for supported devIds */
-    if (ret == 0
-#ifdef WOLFHSM_CFG_DMA
-        && devId != WH_DEV_ID_DMA
-#endif
-    ) {
-#define WH_TEST_CMAC_TEXTSIZE 1000
-        char cmacFodder[WH_TEST_CMAC_TEXTSIZE] = {0};
-
-        ret = wh_Client_EnableCancel(ctx);
-        if (ret != 0) {
-            WH_ERROR_PRINT("Failed to wh_Client_EnableCancel %d\n", ret);
-        }
-        if (ret == 0) {
-            ret = wc_InitCmac_ex(cmac, knownCmacKey, sizeof(knownCmacKey),
-                                 WC_CMAC_AES, NULL, NULL, devId);
-            if (ret != 0) {
-                WH_ERROR_PRINT("Failed to wc_InitCmac_ex %d\n", ret);
-            }
-            else {
-                ret = wh_Client_CmacCancelableResponse(ctx, cmac, NULL, 0);
-                if (ret != 0) {
-                    WH_ERROR_PRINT(
-                        "Failed to wh_Client_CmacCancelableResponse %d\n", ret);
-                }
-                else {
-
-#if WOLFHSM_CFG_IS_TEST_SERVER
-                    /* TODO: use hsm pause/resume functionality on real hardware
-                     */
-                    /* delay the server so scheduling doesn't interfere with the
-                     * timing */
-                    serverDelay = 1;
-#endif
-
-                    ret = wc_CmacUpdate(cmac, (byte*)cmacFodder,
-                                        sizeof(cmacFodder));
-                    if (ret != 0) {
-                        WH_ERROR_PRINT("Failed to wc_CmacUpdate %d\n", ret);
-                    }
-                    else {
-                        ret = wh_Client_CancelRequest(ctx);
-                        if (ret != 0) {
-                            WH_ERROR_PRINT(
-                                "Failed to wh_Client_CancelRequest %d\n", ret);
-                        }
-                        else {
-#if WOLFHSM_CFG_IS_TEST_SERVER
-                            serverDelay = 0;
-#endif
-                            do {
-                                ret = wh_Client_CancelResponse(ctx);
-                            } while (ret == WH_ERROR_NOTREADY);
-                            if ((ret != 0) &&
-                                (ret != WH_ERROR_CANCEL_LATE)) {
-                                WH_ERROR_PRINT(
-                                    "Failed to wh_Client_CancelResponse %d\n",
-                                    ret);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        if (ret == 0) {
-            /* test cancelable request and response work for standard CMAC
-                * request with no cancellation */
-            ret = wc_InitCmac_ex(cmac, knownCmacKey, sizeof(knownCmacKey),
-                                    WC_CMAC_AES, NULL, NULL, devId);
-            if (ret != 0) {
-                WH_ERROR_PRINT("Failed to wc_InitCmac_ex %d\n", ret);
-            }
-            else {
-                ret = wh_Client_CmacCancelableResponse(ctx, cmac, NULL, 0);
-                if (ret != 0) {
-                    WH_ERROR_PRINT(
-                        "Failed to wh_Client_CmacCancelableResponse %d\n",
-                        ret);
-                }
-                else {
-                    ret = wc_CmacUpdate(cmac, (byte*)knownCmacMessage,
-                                        sizeof(knownCmacMessage));
-                    if (ret != 0) {
-                        WH_ERROR_PRINT("Failed to wc_CmacUpdate %d\n", ret);
-                    }
-                    else {
-                        ret = wh_Client_CmacCancelableResponse(ctx, cmac,
-                                                                NULL, 0);
-                        if (ret != 0) {
-                            WH_ERROR_PRINT(
-                                "Failed to "
-                                "wh_Client_CmacCancelableResponse %d\n",
-                                ret);
-                        }
-                        else {
-                            macLen = sizeof(knownCmacTag);
-                            ret    = wc_CmacFinal(cmac, macOut, &macLen);
-                            if (ret != 0) {
-                                WH_ERROR_PRINT(
-                                    "Failed to wc_CmacFinal %d\n", ret);
-                            }
-                            else {
-                                outLen = sizeof(macOut);
-                                ret = wh_Client_CmacCancelableResponse(
-                                    ctx, cmac, macOut, &outLen);
-                                if (ret != 0) {
-                                    WH_ERROR_PRINT(
-                                        "Failed to "
-                                        "wh_Client_CmacCancelableResponse "
-                                        "%d\n",
-                                        ret);
-                                }
-                                else {
-                                    if (memcmp(knownCmacTag, macOut,
-                                                sizeof(knownCmacTag)) != 0) {
-                                        WH_ERROR_PRINT("CMAC FAILED KNOWN "
-                                                        "ANSWER TEST\n");
-                                        ret = -1;
-                                    }
-                                    else {
-                                        ret = wh_Client_DisableCancel(ctx);
-                                        if (ret != 0) {
-                                            WH_ERROR_PRINT(
-                                                "Failed to "
-                                                "wh_Client_DisableCancel "
-                                                "%d\n",
-                                                ret);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-#endif /* WOLFHSM_CFG_CANCEL_API */
     if (ret == 0) {
         WH_TEST_PRINT("CMAC DEVID=0x%X SUCCESS\n", devId);
     }
@@ -5572,11 +5422,6 @@ int whTest_CryptoServerConfig(whServerConfig* config)
         return WH_ERROR_BADARGS;
     }
 
-#if defined(WOLFHSM_CFG_IS_TEST_SERVER) && defined(WOLFHSM_CFG_TEST_POSIX) && \
-    defined(WOLFHSM_CFG_CANCEL_API)
-    /* expose server ctx to client cancel callback */
-    cancelSeqP = &server->cancelSeq;
-#endif
 
     WH_TEST_RETURN_ON_FAIL(wh_Server_Init(server, config));
     WH_TEST_RETURN_ON_FAIL(wh_Server_SetConnected(server, am_connected));
@@ -5648,15 +5493,6 @@ static void* _whServerTask(void* cf)
 #if defined(WOLFHSM_CFG_TEST_POSIX) && defined(WOLFHSM_CFG_ENABLE_CLIENT) && \
     defined(WOLFHSM_CFG_ENABLE_SERVER)
 
-#if defined(WOLFHSM_CFG_IS_TEST_SERVER) && defined(WOLFHSM_CFG_CANCEL_API)
-/* Test client cancel callback that directly sets the sequence to cancel in the
- * server context */
-static int _cancelCb(uint16_t seq)
-{
-    *cancelSeqP = seq;
-    return 0;
-}
-#endif
 
 static void _whClientServerThreadTest(whClientConfig* c_conf,
                                 whServerConfig* s_conf)
@@ -5714,9 +5550,6 @@ static int wh_ClientServer_MemThreadTest(whTestNvmBackendType nvmType)
         .comm = cc_conf,
 #ifdef WOLFHSM_CFG_DMA
         .dmaConfig = &clientDmaConfig,
-#endif
-#ifdef WOLFHSM_CFG_CANCEL_API
-        .cancelCb = _cancelCb,
 #endif
     }};
 

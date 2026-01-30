@@ -59,12 +59,6 @@
 #define WOLFHSM_CFG_KEYWRAP
 #endif
 
-/* Only enable cancellation tests in POSIX test harness if using the
- * instrumented tests server. Otherwise CMAC is too fast to test cancellation */
-#ifdef WOLFHSM_CFG_IS_TEST_SERVER
-#define WOLFHSM_CFG_CANCEL_API
-#endif
-
 /* Test log-based NVM flash backend */
 #define WOLFHSM_CFG_SERVER_NVM_FLASH_LOG
 

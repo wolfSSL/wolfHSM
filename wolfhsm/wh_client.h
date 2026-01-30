@@ -104,23 +104,10 @@ typedef struct {
 } whClientDmaContext;
 #endif /* WOLFHSM_CFG_DMA */
 
-/**
- * Out of band callback function to inform the server to cancel a request,
- *    internal logic is provided by the port code.
- *
- * @param cancelSeq The sequence of the request to cancel.
- * @return Returns 0 on success, or a negative value indicating an error.
- */
-typedef int (*whClientCancelCb)(uint16_t cancelSeq);
-
 /* Client context */
 struct whClientContext_t {
     uint16_t     last_req_id;
     uint16_t     last_req_kind;
-#ifdef WOLFHSM_CFG_CANCEL_API
-    uint8_t          cancelable;
-    whClientCancelCb cancelCb;
-#endif
 #ifdef WOLFHSM_CFG_DMA
     whClientDmaContext dma;
 #endif /* WOLFHSM_CFG_DMA */
@@ -129,9 +116,6 @@ struct whClientContext_t {
 
 struct whClientConfig_t {
     whCommClientConfig* comm;
-#ifdef WOLFHSM_CFG_CANCEL_API
-    whClientCancelCb cancelCb;
-#endif
 #ifdef WOLFHSM_CFG_DMA
     whClientDmaConfig* dmaConfig;
 #endif /* WOLFHSM_CFG_DMA */
@@ -363,67 +347,6 @@ int wh_Client_CommInfo(whClientContext* c,
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_Client_CommCloseRequest(whClientContext* c);
-
-#ifdef WOLFHSM_CFG_CANCEL_API
-/**
- * @brief Enables request cancellation.
- *
- * This function allows subsequent requests to be canceled, the responses that
- * are normally handled by automatically by wolfCrypt must be handled with a
- * wolfHSM specific function call.
- *
- * @param[in] c Pointer to the client context.
- * @return int Returns 0 on success, or a negative error code on failure.
- */
-int wh_Client_EnableCancel(whClientContext* c);
-
-/**
- * @brief Disables request cancellation.
- *
- * This function disables request cancellation, making wolfCrypt automatically
- * handle responses again.
- *
- * @param[in] c Pointer to the client context.
- * @return int Returns 0 on success, or a negative error code on failure.
- */
-int wh_Client_DisableCancel(whClientContext* c);
-
-/**
- * @brief Cancels the previous request, currently only supports CMAC. Async
- * Request
- *
- * This function sends a cancellation request to the server to cancel the
- * previous request made. Does not wait for the response which must be handled
- * separately
- *
- * @param[in] c Pointer to the client context.
- * @return int Returns 0 on success, or a negative error code on failure.
- */
-int wh_Client_CancelRequest(whClientContext* c);
-/**
- * @brief Handles the response for a cancellation the previous request, currently
- * only supports CMAC. Async response handler.
- *
- * This function handles the response for a request cancellation previously sent
- * to the server. Blocks to wait for the response.
- *
- * @param[in] c Pointer to the client context.
- * @return int Returns 0 or WH_ERROR_CANCEL_LATE on success, or a negative
- *    error code on failure.
- */
-int wh_Client_CancelResponse(whClientContext* c);
-/**
- * @brief Cancels the previous request, currently only supports CMAC.
- *
- * This function sends a cancellation request to the server and waits for the
- * response to cancel the previous request made.
- *
- * @param[in] c Pointer to the client context.
- * @return int Returns 0 or WH_ERROR_CANCEL_LATE on success, or a negative
- *    error code on failure.
- */
-int wh_Client_Cancel(whClientContext* c);
-#endif /* WOLFHSM_CFG_CANCEL_API */
 
 /**
  * @brief Receives a communication close response from the server.

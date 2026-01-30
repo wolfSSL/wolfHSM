@@ -35,8 +35,6 @@ enum WH_ERROR_ENUM {
     WH_ERROR_BADARGS     = -2000, /* No side effects. Fix args. */
     WH_ERROR_NOTREADY    = -2001, /* Retry function. */
     WH_ERROR_ABORTED     = -2002, /* Function has fatally failed. Cleanup. */
-    WH_ERROR_CANCEL      = -2003, /* Operation was canceled */
-    WH_ERROR_CANCEL_LATE = -2004, /* Cancel was processed too late */
     WH_ERROR_CERT_VERIFY = -2005, /* Certificate verification failed */
     WH_ERROR_BUFFER_SIZE = -2006, /* Generic buffer size mismatch. Buffer
                                    * length is not what was expected */
