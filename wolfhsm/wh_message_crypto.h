@@ -824,23 +824,18 @@ typedef struct {
 
 /* CMAC Response */
 typedef struct {
-    uint32_t outSz; /* actual output MAC size */
-    uint16_t keyId; /* key ID (ERASED for non-HSM) */
-    uint8_t  WH_PAD[2];
     whMessageCrypto_CmacState resumeState;
-    uint8_t  WH_PAD2[12]; /* pad to match request size */
+    uint32_t                  outSz; /* actual output MAC size */
+    uint16_t                  keyId; /* key ID (ERASED for non-HSM) */
+    uint8_t                   WH_PAD[2];
     /* Data follows:
      * uint8_t out[outSz]
      */
 } whMessageCrypto_CmacResponse;
 
-WH_UTILS_STATIC_ASSERT(sizeof(whMessageCrypto_CmacRequest) ==
-                            sizeof(whMessageCrypto_CmacResponse),
-                        "CmacRequest and CmacResponse must be the same size");
-
-int wh_MessageCrypto_TranslateCmacState(
-    uint16_t magic, const whMessageCrypto_CmacState* src,
-    whMessageCrypto_CmacState* dest);
+int wh_MessageCrypto_TranslateCmacState(uint16_t                         magic,
+                                        const whMessageCrypto_CmacState* src,
+                                        whMessageCrypto_CmacState*       dest);
 
 int wh_MessageCrypto_TranslateCmacRequest(
     uint16_t magic, const whMessageCrypto_CmacRequest* src,
@@ -985,21 +980,27 @@ int wh_MessageCrypto_TranslateSha2DmaRequest(
 int wh_MessageCrypto_TranslateSha2DmaResponse(
     uint16_t magic, const whMessageCrypto_Sha2DmaResponse* src,
     whMessageCrypto_Sha2DmaResponse* dest);
-/* CMAC DMA Request */
+/* CMAC DMA Request - only input data goes via DMA; state, key, and output
+ * are passed inline in the message for cross-architecture safety */
 typedef struct {
-    uint32_t                  type;     /* enum wc_CmacType */
-    uint32_t                  finalize; /* 1 if final, 0 if update */
-    whMessageCrypto_DmaBuffer state;    /* CMAC state buffer */
-    whMessageCrypto_DmaBuffer key;      /* Key buffer */
-    whMessageCrypto_DmaBuffer input;    /* Input buffer */
-    whMessageCrypto_DmaBuffer output;   /* Output buffer */
+    whMessageCrypto_CmacState resumeState; /* portable CMAC state */
+    whMessageCrypto_DmaBuffer input; /* Input data via DMA */
+    uint32_t                  type;  /* enum wc_CmacType */
+    uint32_t                  outSz; /* output MAC size (0 = not finalizing) */
+    uint32_t                  keySz; /* inline key size (0 = use keyId) */
+    uint16_t                  keyId; /* HSM key ID */
+    uint8_t                   WH_PAD[2];
+    /* Trailing data: uint8_t key[keySz] */
 } whMessageCrypto_CmacDmaRequest;
 
-/* CMAC DMA Response */
+/* CMAC DMA Response - state and output MAC returned inline */
 typedef struct {
+    whMessageCrypto_CmacState     resumeState; /* portable CMAC state */
     whMessageCrypto_DmaAddrStatus dmaAddrStatus;
-    uint32_t                      outSz;
-    uint8_t                       WH_PAD[4]; /* Pad to 8-byte alignment */
+    uint32_t                      outSz; /* actual output MAC size */
+    uint16_t                      keyId;
+    uint8_t                       WH_PAD[2];
+    /* Trailing data: uint8_t out[outSz] (max AES_BLOCK_SIZE = 16 bytes) */
 } whMessageCrypto_CmacDmaResponse;
 
 /* CMAC DMA translation functions */

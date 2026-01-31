@@ -70,22 +70,6 @@ typedef struct whServerCryptoContext {
 #ifndef WC_NO_RNG
     WC_RNG rng[1];
 #endif
-    union {
-#if 0
-#ifndef NO_AES
-        Aes aes[1];
-#endif
-#ifndef NO_RSA
-        RsaKey rsa[1];
-#endif
-#ifdef HAVE_CURVE25519
-        curve25519_key curve25519Private[1];
-#endif
-#endif /* 0 */
-#ifdef WOLFSSL_CMAC
-        Cmac cmac[1];
-#endif
-    } algoCtx;
 } whServerCryptoContext;
 
 

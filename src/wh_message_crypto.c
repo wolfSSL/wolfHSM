@@ -696,9 +696,9 @@ int wh_MessageCrypto_TranslateSha2Response(
 
 
 /* CMAC State translation */
-int wh_MessageCrypto_TranslateCmacState(
-    uint16_t magic, const whMessageCrypto_CmacState* src,
-    whMessageCrypto_CmacState* dest)
+int wh_MessageCrypto_TranslateCmacState(uint16_t                         magic,
+                                        const whMessageCrypto_CmacState* src,
+                                        whMessageCrypto_CmacState*       dest)
 {
     if ((src == NULL) || (dest == NULL)) {
         return WH_ERROR_BADARGS;
@@ -724,8 +724,8 @@ int wh_MessageCrypto_TranslateCmacRequest(
     WH_T32(magic, dest, src, inSz);
     WH_T32(magic, dest, src, keySz);
     WH_T16(magic, dest, src, keyId);
-    return wh_MessageCrypto_TranslateCmacState(
-        magic, &src->resumeState, &dest->resumeState);
+    return wh_MessageCrypto_TranslateCmacState(magic, &src->resumeState,
+                                               &dest->resumeState);
 }
 
 /* CMAC Response translation */
@@ -738,8 +738,8 @@ int wh_MessageCrypto_TranslateCmacResponse(
     }
     WH_T32(magic, dest, src, outSz);
     WH_T16(magic, dest, src, keyId);
-    return wh_MessageCrypto_TranslateCmacState(
-        magic, &src->resumeState, &dest->resumeState);
+    return wh_MessageCrypto_TranslateCmacState(magic, &src->resumeState,
+                                               &dest->resumeState);
 }
 
 /* ML-DSA Key Generation Request translation */
@@ -835,9 +835,10 @@ int wh_MessageCrypto_TranslateMlDsaVerifyResponse(
  */
 
 /* DMA Buffer translation */
-static int wh_MessageCrypto_TranslateDmaBuffer(uint16_t                         magic,
-                                        const whMessageCrypto_DmaBuffer* src,
-                                        whMessageCrypto_DmaBuffer*       dest)
+static int
+wh_MessageCrypto_TranslateDmaBuffer(uint16_t                         magic,
+                                    const whMessageCrypto_DmaBuffer* src,
+                                    whMessageCrypto_DmaBuffer*       dest)
 {
     if ((src == NULL) || (dest == NULL)) {
         return WH_ERROR_BADARGS;
@@ -914,31 +915,19 @@ int wh_MessageCrypto_TranslateCmacDmaRequest(
         return WH_ERROR_BADARGS;
     }
 
-    WH_T32(magic, dest, src, type);
-    WH_T32(magic, dest, src, finalize);
-
-    ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->state, &dest->state);
-    if (ret != 0) {
-        return ret;
-    }
-
-    ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->key, &dest->key);
-    if (ret != 0) {
-        return ret;
-    }
-
     ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->input, &dest->input);
     if (ret != 0) {
         return ret;
     }
 
-    ret =
-        wh_MessageCrypto_TranslateDmaBuffer(magic, &src->output, &dest->output);
-    if (ret != 0) {
-        return ret;
-    }
+    WH_T32(magic, dest, src, type);
+    WH_T32(magic, dest, src, outSz);
+    WH_T32(magic, dest, src, keySz);
+    WH_T16(magic, dest, src, keyId);
 
-    return 0;
+    ret = wh_MessageCrypto_TranslateCmacState(magic, &src->resumeState,
+                                              &dest->resumeState);
+    return ret;
 }
 
 /* CMAC DMA Response translation */
@@ -959,7 +948,11 @@ int wh_MessageCrypto_TranslateCmacDmaResponse(
     }
 
     WH_T32(magic, dest, src, outSz);
-    return 0;
+    WH_T16(magic, dest, src, keyId);
+
+    ret = wh_MessageCrypto_TranslateCmacState(magic, &src->resumeState,
+                                              &dest->resumeState);
+    return ret;
 }
 
 /* ML-DSA DMA Key Generation Request translation */
