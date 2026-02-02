@@ -153,10 +153,15 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
             wh_MessageNvm_TranslateListRequest(magic,
                     (whMessageNvm_ListRequest*)req_packet, &req);
 
-            /* Process the list action */
-            resp.rc = wh_Nvm_List(server->nvm,
-                    req.access, req.flags, req.startId,
-                    &resp.count, &resp.id);
+            rc = WH_SERVER_NVM_LOCK(server);
+            if (rc == WH_ERROR_OK) {
+                /* Process the list action */
+                rc = wh_Nvm_List(server->nvm, req.access, req.flags,
+                                 req.startId, &resp.count, &resp.id);
+
+                (void)WH_SERVER_NVM_UNLOCK(server);
+            } /* WH_SERVER_NVM_LOCK() */
+            resp.rc = rc;
         }
         /* Convert the response struct */
         wh_MessageNvm_TranslateListResponse(magic,
@@ -173,10 +178,16 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
             /* Request is malformed */
             resp.rc = WH_ERROR_ABORTED;
         } else {
-            /* Process the available action */
-            resp.rc = wh_Nvm_GetAvailable(server->nvm,
-                    &resp.avail_size, &resp.avail_objects,
+            rc = WH_SERVER_NVM_LOCK(server);
+            if (rc == WH_ERROR_OK) {
+                /* Process the available action */
+                rc = wh_Nvm_GetAvailable(
+                    server->nvm, &resp.avail_size, &resp.avail_objects,
                     &resp.reclaim_size, &resp.reclaim_objects);
+
+                (void)WH_SERVER_NVM_UNLOCK(server);
+            } /* WH_SERVER_NVM_LOCK() */
+            resp.rc = rc;
         }
         /* Convert the response struct */
         wh_MessageNvm_TranslateGetAvailableResponse(magic,
@@ -198,16 +209,22 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
             wh_MessageNvm_TranslateGetMetadataRequest(magic,
                     (whMessageNvm_GetMetadataRequest*)req_packet, &req);
 
-            /* Process the getmetadata action */
-            resp.rc = wh_Nvm_GetMetadata(server->nvm, req.id, &meta);
+            rc = WH_SERVER_NVM_LOCK(server);
+            if (rc == WH_ERROR_OK) {
+                /* Process the getmetadata action */
+                rc = wh_Nvm_GetMetadata(server->nvm, req.id, &meta);
 
-            if (resp.rc == 0) {
-                resp.id = meta.id;
+                (void)WH_SERVER_NVM_UNLOCK(server);
+            } /* WH_SERVER_NVM_LOCK() */
+
+            if (rc == WH_ERROR_OK) {
+                resp.id     = meta.id;
                 resp.access = meta.access;
-                resp.flags = meta.flags;
-                resp.len = meta.len;
+                resp.flags  = meta.flags;
+                resp.len    = meta.len;
                 memcpy(resp.label, meta.label, sizeof(resp.label));
             }
+            resp.rc = rc;
         }
         /* Convert the response struct */
         wh_MessageNvm_TranslateGetMetadataResponse(magic,
@@ -237,15 +254,22 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
                 meta.flags = req.flags;
                 meta.len = req.len;
                 memcpy(meta.label, req.label, sizeof(meta.label));
-                resp.rc =
-                    wh_Nvm_AddObjectChecked(server->nvm, &meta, req.len, data);
+
+                rc = WH_SERVER_NVM_LOCK(server);
+                if (rc == WH_ERROR_OK) {
+                    rc = wh_Nvm_AddObjectChecked(server->nvm, &meta, req.len,
+                                                 data);
+
+                    (void)WH_SERVER_NVM_UNLOCK(server);
+                } /* WH_SERVER_NVM_LOCK() */
+                resp.rc = rc;
             }
         }
         /* Convert the response struct */
         wh_MessageNvm_TranslateSimpleResponse(magic,
                 &resp, (whMessageNvm_SimpleResponse*)resp_packet);
         *out_resp_size = sizeof(resp);
-   }; break;
+    }; break;
 
     case WH_MESSAGE_NVM_ACTION_DESTROYOBJECTS:
     {
@@ -261,9 +285,15 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
                     (whMessageNvm_DestroyObjectsRequest*)req_packet, &req);
 
             if (req.list_count <= WH_MESSAGE_NVM_MAX_DESTROY_OBJECTS_COUNT) {
-                /* Process the DestroyObjects action */
-                resp.rc = wh_Nvm_DestroyObjectsChecked(
-                    server->nvm, req.list_count, req.list);
+                rc = WH_SERVER_NVM_LOCK(server);
+                if (rc == WH_ERROR_OK) {
+                    /* Process the DestroyObjects action */
+                    rc = wh_Nvm_DestroyObjectsChecked(server->nvm,
+                                                      req.list_count, req.list);
+
+                    (void)WH_SERVER_NVM_UNLOCK(server);
+                } /* WH_SERVER_NVM_LOCK() */
+                resp.rc = rc;
             }
             else {
                 /* Problem in transport or request */
@@ -293,11 +323,17 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
             wh_MessageNvm_TranslateReadRequest(
                 magic, (whMessageNvm_ReadRequest*)req_packet, &req);
 
-            resp.rc = _HandleNvmRead(server, data, req.offset, req.data_len,
-                                     &req.data_len, req.id);
-            if (resp.rc == WH_ERROR_OK) {
-                data_len = req.data_len;
-            }
+            rc = WH_SERVER_NVM_LOCK(server);
+            if (rc == WH_ERROR_OK) {
+                rc = _HandleNvmRead(server, data, req.offset, req.data_len,
+                                    &req.data_len, req.id);
+                if (rc == WH_ERROR_OK) {
+                    data_len = req.data_len;
+                }
+
+                (void)WH_SERVER_NVM_UNLOCK(server);
+            } /* WH_SERVER_NVM_LOCK() */
+            resp.rc = rc;
         }
         /* Convert the response struct */
         wh_MessageNvm_TranslateReadResponse(
@@ -334,10 +370,16 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
                 WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
         }
         if (resp.rc == 0) {
-            /* Process the AddObject action */
-            resp.rc =
-                wh_Nvm_AddObjectChecked(server->nvm, (whNvmMetadata*)metadata,
-                                        req.data_len, (const uint8_t*)data);
+            rc = WH_SERVER_NVM_LOCK(server);
+            if (rc == WH_ERROR_OK) {
+                /* Process the AddObject action */
+                rc = wh_Nvm_AddObjectChecked(
+                    server->nvm, (whNvmMetadata*)metadata, req.data_len,
+                    (const uint8_t*)data);
+
+                (void)WH_SERVER_NVM_UNLOCK(server);
+            } /* WH_SERVER_NVM_LOCK() */
+            resp.rc = rc;
         }
         if (resp.rc == 0) {
             /* perform platform-specific host address processing */
@@ -361,7 +403,7 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
         whMessageNvm_ReadDmaRequest req  = {0};
         whMessageNvm_SimpleResponse resp = {0};
         whNvmMetadata               meta = {0};
-        whNvmSize                   read_len;
+        whNvmSize                   read_len = 0;
         void*                       data = NULL;
 
         if (req_size != sizeof(req)) {
@@ -373,41 +415,47 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
             wh_MessageNvm_TranslateReadDmaRequest(magic,
                     (whMessageNvm_ReadDmaRequest*)req_packet, &req);
 
-            resp.rc = wh_Nvm_GetMetadata(server->nvm, req.id, &meta);
-        }
+            rc = WH_SERVER_NVM_LOCK(server);
+            if (rc == WH_ERROR_OK) {
+                rc = wh_Nvm_GetMetadata(server->nvm, req.id, &meta);
 
-        if (resp.rc == 0) {
-            if (req.offset >= meta.len) {
-                resp.rc = WH_ERROR_BADARGS;
-            }
-        }
+                if (rc == 0) {
+                    if (req.offset >= meta.len) {
+                        rc = WH_ERROR_BADARGS;
+                    }
+                }
 
-        if (resp.rc == 0) {
-            read_len = req.data_len;
-            /* Clamp length to object size */
-            if ((req.offset + read_len) > meta.len) {
-                read_len = meta.len - req.offset;
-            }
-        }
+                if (rc == 0) {
+                    read_len = req.data_len;
+                    /* Clamp length to object size */
+                    if ((req.offset + read_len) > meta.len) {
+                        read_len = meta.len - req.offset;
+                    }
+                }
 
-        /* use unclamped length for DMA address processing in case DMA callbacks
-         * are sensible to alignment and/or size */
-        if (resp.rc == 0) {
-            /* perform platform-specific host address processing */
-            resp.rc = wh_Server_DmaProcessClientAddress(
-                server, req.data_hostaddr, &data, req.data_len,
-                WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
-        }
-        if (resp.rc == 0) {
-            /* Process the Read action */
-            resp.rc = wh_Nvm_ReadChecked(server->nvm, req.id, req.offset,
-                                         read_len, (uint8_t*)data);
-        }
-        if (resp.rc == 0) {
-            /* perform platform-specific host address processing */
-            resp.rc = wh_Server_DmaProcessClientAddress(
-                server, req.data_hostaddr, &data, req.data_len,
-                WH_DMA_OPER_CLIENT_WRITE_POST, (whServerDmaFlags){0});
+                /* use unclamped length for DMA address processing in case DMA
+                 * callbacks are sensible to alignment and/or size */
+                if (rc == 0) {
+                    /* perform platform-specific host address processing */
+                    rc = wh_Server_DmaProcessClientAddress(
+                        server, req.data_hostaddr, &data, req.data_len,
+                        WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
+                }
+                if (rc == 0) {
+                    /* Process the Read action */
+                    rc = wh_Nvm_ReadChecked(server->nvm, req.id, req.offset,
+                                            read_len, (uint8_t*)data);
+                }
+                if (rc == 0) {
+                    /* perform platform-specific host address processing */
+                    rc = wh_Server_DmaProcessClientAddress(
+                        server, req.data_hostaddr, &data, req.data_len,
+                        WH_DMA_OPER_CLIENT_WRITE_POST, (whServerDmaFlags){0});
+                }
+
+                (void)WH_SERVER_NVM_UNLOCK(server);
+            } /* WH_SERVER_NVM_LOCK() */
+            resp.rc = rc;
         }
         /* Convert the response struct */
         wh_MessageNvm_TranslateSimpleResponse(magic,

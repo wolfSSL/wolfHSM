@@ -30,7 +30,7 @@
 
 #include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_error.h"
-
+#include "wolfhsm/wh_lock.h"
 #include "wolfhsm/wh_nvm.h"
 
 typedef enum {
@@ -104,11 +104,22 @@ int wh_Nvm_Init(whNvmContext* context, const whNvmConfig* config)
     memset(&context->globalCache, 0, sizeof(context->globalCache));
 #endif
 
+#ifdef WOLFHSM_CFG_THREADSAFE
+    /* Initialize lock (NULL lockConfig = no-op locking) */
+    rc = wh_Lock_Init(&context->lock, config->lockConfig);
+    if (rc != WH_ERROR_OK) {
+        return rc;
+    }
+#endif
+
     if (context->cb != NULL && context->cb->Init != NULL) {
         rc = context->cb->Init(context->context, config->config);
-        if (rc != 0) {
+        if (rc != WH_ERROR_OK) {
             context->cb = NULL;
             context->context = NULL;
+#ifdef WOLFHSM_CFG_THREADSAFE
+            (void)wh_Lock_Cleanup(&context->lock);
+#endif
         }
     }
 
@@ -117,6 +128,8 @@ int wh_Nvm_Init(whNvmContext* context, const whNvmConfig* config)
 
 int wh_Nvm_Cleanup(whNvmContext* context)
 {
+    int rc;
+
     if (    (context == NULL) ||
             (context->cb == NULL) ) {
         return WH_ERROR_BADARGS;
@@ -129,9 +142,20 @@ int wh_Nvm_Cleanup(whNvmContext* context)
 
     /* No callback? Return ABORTED */
     if (context->cb->Cleanup == NULL) {
-        return WH_ERROR_ABORTED;
+        rc = WH_ERROR_ABORTED;
     }
-    return context->cb->Cleanup(context->context);
+    else {
+        rc = context->cb->Cleanup(context->context);
+    }
+
+#ifdef WOLFHSM_CFG_THREADSAFE
+    (void)wh_Lock_Cleanup(&context->lock);
+#endif
+
+    context->cb      = NULL;
+    context->context = NULL;
+
+    return rc;
 }
 
 int wh_Nvm_GetAvailable(whNvmContext* context,
@@ -314,3 +338,23 @@ int wh_Nvm_ReadChecked(whNvmContext* context, whNvmId id, whNvmSize offset,
 
     return wh_Nvm_Read(context, id, offset, data_len, data);
 }
+
+#ifdef WOLFHSM_CFG_THREADSAFE
+
+int wh_Nvm_Lock(whNvmContext* nvm)
+{
+    if (nvm == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    return wh_Lock_Acquire(&nvm->lock);
+}
+
+int wh_Nvm_Unlock(whNvmContext* nvm)
+{
+    if (nvm == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    return wh_Lock_Release(&nvm->lock);
+}
+
+#endif /* WOLFHSM_CFG_THREADSAFE */
