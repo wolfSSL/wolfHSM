@@ -42,6 +42,7 @@
 #include "wh_test_log.h"
 #include "wh_test_lock.h"
 #include "wh_test_posix_threadsafe_stress.h"
+#include "wh_test_crypto_affinity.h"
 
 #if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER)
 #include "wh_test_cert.h"
@@ -92,6 +93,10 @@ int whTest_Unit(void)
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     /* Crypto Tests */
     WH_TEST_ASSERT(0 == whTest_Crypto());
+
+#ifdef WOLF_CRYPTO_CB
+    WH_TEST_ASSERT(0 == whTest_CryptoAffinity());
+#endif
 
 #if defined(WOLFHSM_CFG_SERVER_IMG_MGR) && !defined(WOLFHSM_CFG_NO_CRYPTO)
     /* Image Manager Tests */
