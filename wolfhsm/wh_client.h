@@ -48,6 +48,7 @@
 
 /* Component includes */
 #include "wolfhsm/wh_comm.h"
+#include "wolfhsm/wh_message_comm.h"
 #include "wolfhsm/wh_message_customcb.h"
 #ifdef WOLFHSM_CFG_DMA
 #include "wolfhsm/wh_dma.h"
@@ -335,6 +336,43 @@ int wh_Client_CommInfo(whClientContext* c,
         uint32_t *out_boot_state,
         uint32_t *out_lifecycle_state,
         uint32_t *out_nvm_state);
+
+/**
+ * @brief Sends a crypto affinity request to the server.
+ *
+ * This function prepares and sends a request to select software or hardware
+ * crypto on the server.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] affinity Requested crypto affinity.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_SetCryptoAffinityRequest(whClientContext* c, uint32_t affinity);
+
+/**
+ * @brief Receives a crypto affinity response from the server.
+ *
+ * This function waits for and processes the response message from the server.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[out] out_rc Pointer to store the server result code.
+ * @param[out] out_affinity Pointer to store the active crypto affinity.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_SetCryptoAffinityResponse(whClientContext* c, int32_t* out_rc,
+                                        uint32_t* out_affinity);
+
+/**
+ * @brief Sets the crypto affinity with a blocking call.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] affinity Requested crypto affinity.
+ * @param[out] out_rc Pointer to store the server result code.
+ * @param[out] out_affinity Pointer to store the active crypto affinity.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_SetCryptoAffinity(whClientContext* c, uint32_t affinity,
+                                int32_t* out_rc, uint32_t* out_affinity);
 
 /**
  * @brief Sends a communication close request to the server.

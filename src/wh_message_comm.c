@@ -83,4 +83,25 @@ int wh_MessageComm_TranslateInfoResponse(uint16_t magic,
     return 0;
 }
 
+int wh_MessageComm_TranslateSetCryptoAffinityRequest(
+    uint16_t magic, const whMessageCommSetCryptoAffinityRequest* src,
+    whMessageCommSetCryptoAffinityRequest* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, affinity);
+    return 0;
+}
 
+int wh_MessageComm_TranslateSetCryptoAffinityResponse(
+    uint16_t magic, const whMessageCommSetCryptoAffinityResponse* src,
+    whMessageCommSetCryptoAffinityResponse* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, rc);
+    WH_T32(magic, dest, src, affinity);
+    return 0;
+}

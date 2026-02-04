@@ -81,8 +81,10 @@ int wh_Server_Init(whServerContext* server, whServerConfig* config)
     if (server->crypto != NULL) {
 #if defined(WOLF_CRYPTO_CB)
         server->crypto->devId = config->devId;
+        server->crypto->configDevId = config->devId;
 #else
         server->crypto->devId = INVALID_DEVID;
+        server->crypto->configDevId = INVALID_DEVID;
 #endif
     }
 #ifdef WOLFHSM_CFG_SHE_EXTENSION
@@ -247,6 +249,56 @@ static int _wh_Server_HandleCommRequest(whServerContext* server,
         *out_resp_size = sizeof(resp);
     }; break;
 
+    case WH_MESSAGE_COMM_ACTION_SET_CRYPTO_AFFINITY: {
+        whMessageCommSetCryptoAffinityRequest  req  = {0};
+        whMessageCommSetCryptoAffinityResponse resp = {0};
+
+        wh_MessageComm_TranslateSetCryptoAffinityRequest(
+            magic, (const whMessageCommSetCryptoAffinityRequest*)req_packet,
+            &req);
+
+#ifndef WOLFHSM_CFG_NO_CRYPTO
+        if (server->crypto == NULL) {
+            resp.rc       = WH_ERROR_ABORTED;
+            resp.affinity = WH_CRYPTO_AFFINITY_SW;
+        }
+        else {
+            switch (req.affinity) {
+                case WH_CRYPTO_AFFINITY_SW:
+                    server->crypto->devId = INVALID_DEVID;
+                    resp.rc               = WH_ERROR_OK;
+                    break;
+                case WH_CRYPTO_AFFINITY_HW:
+#ifdef WOLF_CRYPTO_CB
+                    if (server->crypto->configDevId != INVALID_DEVID) {
+                        server->crypto->devId = server->crypto->configDevId;
+                        resp.rc               = WH_ERROR_OK;
+                    }
+                    else {
+                        resp.rc = WH_ERROR_BADCONFIG;
+                    }
+                    break;
+#else
+                    resp.rc = WH_ERROR_NOTIMPL;
+                    break;
+#endif
+                default:
+                    resp.rc = WH_ERROR_BADARGS;
+                    break;
+            }
+            resp.affinity = (server->crypto->devId == INVALID_DEVID)
+                                ? WH_CRYPTO_AFFINITY_SW
+                                : WH_CRYPTO_AFFINITY_HW;
+        }
+#else
+        resp.rc       = WH_ERROR_NOTIMPL;
+        resp.affinity = WH_CRYPTO_AFFINITY_SW;
+#endif
+
+        wh_MessageComm_TranslateSetCryptoAffinityResponse(
+            magic, &resp, (whMessageCommSetCryptoAffinityResponse*)resp_packet);
+        *out_resp_size = sizeof(resp);
+    }; break;
 
     case WH_MESSAGE_COMM_ACTION_CLOSE:
     {

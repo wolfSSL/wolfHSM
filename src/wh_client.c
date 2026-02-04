@@ -410,6 +410,75 @@ int wh_Client_CommInfo(whClientContext* c,
     return rc;
 }
 
+int wh_Client_SetCryptoAffinityRequest(whClientContext* c, uint32_t affinity)
+{
+    whMessageCommSetCryptoAffinityRequest msg = {0};
+
+    if (c == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    msg.affinity = affinity;
+
+    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_COMM,
+                                 WH_MESSAGE_COMM_ACTION_SET_CRYPTO_AFFINITY,
+                                 sizeof(msg), &msg);
+}
+
+int wh_Client_SetCryptoAffinityResponse(whClientContext* c, int32_t* out_rc,
+                                        uint32_t* out_affinity)
+{
+    int                                    rc          = 0;
+    whMessageCommSetCryptoAffinityResponse msg         = {0};
+    uint16_t                               resp_group  = 0;
+    uint16_t                               resp_action = 0;
+    uint16_t                               resp_size   = 0;
+
+    if (c == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    rc = wh_Client_RecvResponse(c, &resp_group, &resp_action, &resp_size, &msg);
+    if (rc == 0) {
+        /* Validate response */
+        if ((resp_group != WH_MESSAGE_GROUP_COMM) ||
+            (resp_action != WH_MESSAGE_COMM_ACTION_SET_CRYPTO_AFFINITY) ||
+            (resp_size != sizeof(msg))) {
+            /* Invalid message */
+            rc = WH_ERROR_ABORTED;
+        }
+        else {
+            /* Valid message */
+            if (out_rc != NULL) {
+                *out_rc = msg.rc;
+            }
+            if (out_affinity != NULL) {
+                *out_affinity = msg.affinity;
+            }
+        }
+    }
+    return rc;
+}
+
+int wh_Client_SetCryptoAffinity(whClientContext* c, uint32_t affinity,
+                                int32_t* out_rc, uint32_t* out_affinity)
+{
+    int rc = 0;
+    if (c == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    do {
+        rc = wh_Client_SetCryptoAffinityRequest(c, affinity);
+    } while (rc == WH_ERROR_NOTREADY);
+
+    if (rc == 0) {
+        do {
+            rc = wh_Client_SetCryptoAffinityResponse(c, out_rc, out_affinity);
+        } while (rc == WH_ERROR_NOTREADY);
+    }
+    return rc;
+}
+
 
 int wh_Client_CommCloseRequest(whClientContext* c)
 {

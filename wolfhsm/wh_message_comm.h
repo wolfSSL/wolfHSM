@@ -35,12 +35,18 @@
 
 /* Comm component message kinds */
 enum WH_MESSAGE_COMM_ACTION_ENUM {
-    WH_MESSAGE_COMM_ACTION_NONE      = 0x00,
-    WH_MESSAGE_COMM_ACTION_INIT      = 0x01,
-    WH_MESSAGE_COMM_ACTION_KEEPALIVE = 0x02,
-    WH_MESSAGE_COMM_ACTION_CLOSE     = 0x03,
-    WH_MESSAGE_COMM_ACTION_INFO      = 0x04,
-    WH_MESSAGE_COMM_ACTION_ECHO      = 0x05,
+    WH_MESSAGE_COMM_ACTION_NONE                = 0x00,
+    WH_MESSAGE_COMM_ACTION_INIT                = 0x01,
+    WH_MESSAGE_COMM_ACTION_KEEPALIVE           = 0x02,
+    WH_MESSAGE_COMM_ACTION_CLOSE               = 0x03,
+    WH_MESSAGE_COMM_ACTION_INFO                = 0x04,
+    WH_MESSAGE_COMM_ACTION_ECHO                = 0x05,
+    WH_MESSAGE_COMM_ACTION_SET_CRYPTO_AFFINITY = 0x06,
+};
+
+enum WH_CRYPTO_AFFINITY_ENUM {
+    WH_CRYPTO_AFFINITY_SW = 0,
+    WH_CRYPTO_AFFINITY_HW = 1,
 };
 
 /* Info request/response data sizes*/
@@ -99,6 +105,23 @@ typedef struct {
 int wh_MessageComm_TranslateInfoResponse(uint16_t magic,
         const whMessageCommInfoResponse* src,
         whMessageCommInfoResponse* dest);
+
+typedef struct {
+    uint32_t affinity;
+} whMessageCommSetCryptoAffinityRequest;
+
+int wh_MessageComm_TranslateSetCryptoAffinityRequest(
+    uint16_t magic, const whMessageCommSetCryptoAffinityRequest* src,
+    whMessageCommSetCryptoAffinityRequest* dest);
+
+typedef struct {
+    int32_t  rc;
+    uint32_t affinity;
+} whMessageCommSetCryptoAffinityResponse;
+
+int wh_MessageComm_TranslateSetCryptoAffinityResponse(
+    uint16_t magic, const whMessageCommSetCryptoAffinityResponse* src,
+    whMessageCommSetCryptoAffinityResponse* dest);
 
 
 #endif /* !WOLFHSM_WH_MESSAGE_COMM_H_ */
