@@ -600,6 +600,26 @@ int wh_Client_AesGetKeyId(Aes* key, whNvmId* outId);
 #ifdef WOLFSSL_AES_COUNTER
 int wh_Client_AesCtr(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
                      uint32_t len, uint8_t* out);
+
+#ifdef WOLFHSM_CFG_DMA
+/**
+ * @brief Performs an AES-CTR operation using DMA.
+ *
+ * This function performs an AES-CTR encrypt or decrypt operation on the input
+ * data and stores the result in the output buffer using direct memory access
+ * when communicating with the wolfHSM server.
+ *
+ * @param[in] ctx Pointer to the wolfHSM client context.
+ * @param[in] aes Pointer to the AES structure.
+ * @param[in] enc 1 for encrypt, 0 for decrypt.
+ * @param[in] in Pointer to the input data.
+ * @param[in] len Length of the input and output data in bytes.
+ * @param[out] out Pointer to the output data.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_AesCtrDma(whClientContext* ctx, Aes* aes, int enc,
+                        const uint8_t* in, uint32_t len, uint8_t* out);
+#endif /* WOLFHSM_CFG_DMA */
 #endif /* WOLFSSL_AES_COUNTER */
 #ifdef HAVE_AES_ECB
 int wh_Client_AesEcb(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
