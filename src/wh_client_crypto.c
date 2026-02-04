@@ -3838,8 +3838,12 @@ int wh_Client_CmacDma(whClientContext* ctx, Cmac* cmac, CmacType type,
     /* If this is just a deferred initialization (NULL key, but keyId set),
      * don't send a request - server will initialize on first update */
     if ((key == NULL) && (in == NULL) && (outMac == NULL)) {
-        /* Just a keyId set operation, nothing to do via DMA */
-        return 0;
+        /* Just a keyId set operation, nothing to do via DMA except for
+         * cleanup of the state buffer */
+        (void)wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)cmac, (void**)&stateAddr, req->state.sz,
+            WH_DMA_OPER_CLIENT_WRITE_POST, (whDmaFlags){0});
+        return WH_ERROR_OK;
     }
 
     if (ret == WH_ERROR_OK) {
