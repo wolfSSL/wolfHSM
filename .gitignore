@@ -9,6 +9,7 @@ tools/testcertgen/*.der
 *.code-workspace
 .vscode
 compile_commands.json
+**/.cache
 
 # Static analysis
 tools/static-analysis/reports/

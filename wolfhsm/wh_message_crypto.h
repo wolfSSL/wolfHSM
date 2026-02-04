@@ -153,6 +153,7 @@ typedef struct {
      * uint8_t tmp[AES_BLOCK_SIZE]
      */
 } whMessageCrypto_AesCtrRequest;
+
 /* AES CTR Response */
 typedef struct {
     uint32_t sz;   /* Size of output data */
@@ -166,13 +167,16 @@ typedef struct {
      * uint8_t tmp[AES_BLOCK_SIZE]
      */
 } whMessageCrypto_AesCtrResponse;
+
 WH_UTILS_STATIC_ASSERT(
     sizeof(whMessageCrypto_AesCtrRequest) ==
         sizeof(whMessageCrypto_AesCtrResponse),
     "AesCtrRequest and AesCtrResponse must be the same size");
+
 int wh_MessageCrypto_TranslateAesCtrRequest(
     uint16_t magic, const whMessageCrypto_AesCtrRequest* src,
     whMessageCrypto_AesCtrRequest* dest);
+
 int wh_MessageCrypto_TranslateAesCtrResponse(
     uint16_t magic, const whMessageCrypto_AesCtrResponse* src,
     whMessageCrypto_AesCtrResponse* dest);
@@ -1010,36 +1014,68 @@ int wh_MessageCrypto_TranslateCmacAesDmaResponse(
     uint16_t magic, const whMessageCrypto_CmacAesDmaResponse* src,
     whMessageCrypto_CmacAesDmaResponse* dest);
 
-/* AES DMA Request [CTR / CBC / GCM / ECB]*/
+/* AES-CTR DMA Request */
+typedef struct {
+    whMessageCrypto_DmaBuffer input;    /* Input buffer */
+    whMessageCrypto_DmaBuffer output;   /* Output buffer */
+    uint32_t                  enc;      /* 1 for encrypt, 0 for decrypt */
+    uint32_t                  left;     /* unused bytes left from last call */
+    uint32_t                  keyId;
+    uint32_t                  keySz;    /* inline key size (0 = use keyId) */
+    /* Trailing data:
+     *     uint8_t iv[AES_IV_SIZE]
+     *     uint8_t tmp[AES_BLOCK_SIZE]
+     *     uint8_t key[keySz]
+     */
+} whMessageCrypto_AesCtrDmaRequest;
+
+/* AES-CTR DMA Response */
+typedef struct {
+    whMessageCrypto_DmaAddrStatus dmaAddrStatus;
+    uint32_t                      outSz;
+    uint32_t                      left;     /* unused bytes left from last call */
+    /* Trailing data:
+     *    uint8_t iv[AES_IV_SIZE]
+     *    uint8_t tmp[AES_BLOCK_SIZE] */
+} whMessageCrypto_AesCtrDmaResponse;
+
+/* AES-CTR DMA translation functions */
+int wh_MessageCrypto_TranslateAesCtrDmaRequest(
+    uint16_t magic, const whMessageCrypto_AesCtrDmaRequest* src,
+    whMessageCrypto_AesCtrDmaRequest* dest);
+
+int wh_MessageCrypto_TranslateAesCtrDmaResponse(
+    uint16_t magic, const whMessageCrypto_AesCtrDmaResponse* src,
+    whMessageCrypto_AesCtrDmaResponse* dest);
+
+/* AES-GCM DMA Request */
 typedef struct {
     uint32_t                  enc;      /* 1 for encrypt, 0 for decrypt */
-    uint32_t                  type;     /* enum wc_AesType */
     uint32_t                  finalize; /* 1 if final, 0 if update */
     uint32_t                  keyId;
-    whMessageCrypto_DmaBuffer state;   /* AES state buffer (for CBC / CTR) */
-    whMessageCrypto_DmaBuffer key;     /* Key buffer */
-    whMessageCrypto_DmaBuffer input;   /* Input buffer */
-    whMessageCrypto_DmaBuffer output;  /* Output buffer */
-    whMessageCrypto_DmaBuffer authTag; /* Auth tag buffer */
-    whMessageCrypto_DmaBuffer iv;      /* IV buffer */
-    whMessageCrypto_DmaBuffer aad;     /* AAD buffer */
-} whMessageCrypto_AesDmaRequest;
+    whMessageCrypto_DmaBuffer key;      /* Key buffer */
+    whMessageCrypto_DmaBuffer input;    /* Input buffer */
+    whMessageCrypto_DmaBuffer output;   /* Output buffer */
+    whMessageCrypto_DmaBuffer authTag;  /* Auth tag buffer */
+    whMessageCrypto_DmaBuffer iv;       /* IV buffer */
+    whMessageCrypto_DmaBuffer aad;      /* AAD buffer */
+} whMessageCrypto_AesGcmDmaRequest;
 
-/* AES DMA Response */
+/* AES-GCM DMA Response */
 typedef struct {
     whMessageCrypto_DmaAddrStatus dmaAddrStatus;
     uint32_t                      outSz;
     uint8_t                       WH_PAD[4]; /* Pad to 8-byte alignment */
-} whMessageCrypto_AesDmaResponse;
+} whMessageCrypto_AesGcmDmaResponse;
 
-/* AES DMA translation functions */
-int wh_MessageCrypto_TranslateAesDmaRequest(
-    uint16_t magic, const whMessageCrypto_AesDmaRequest* src,
-    whMessageCrypto_AesDmaRequest* dest);
+/* AES-GCM DMA translation functions */
+int wh_MessageCrypto_TranslateAesGcmDmaRequest(
+    uint16_t magic, const whMessageCrypto_AesGcmDmaRequest* src,
+    whMessageCrypto_AesGcmDmaRequest* dest);
 
-int wh_MessageCrypto_TranslateAesDmaResponse(
-    uint16_t magic, const whMessageCrypto_AesDmaResponse* src,
-    whMessageCrypto_AesDmaResponse* dest);
+int wh_MessageCrypto_TranslateAesGcmDmaResponse(
+    uint16_t magic, const whMessageCrypto_AesGcmDmaResponse* src,
+    whMessageCrypto_AesGcmDmaResponse* dest);
 
 /* ML-DSA DMA Key Generation Request */
 typedef struct {
