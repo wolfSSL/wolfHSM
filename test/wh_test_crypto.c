@@ -3611,11 +3611,13 @@ static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
         0x1a, 0x0a, 0x52, 0xef, 0xf6, 0x9f, 0x24, 0x45, 0xdf, 0x4f, 0x9b,
         0x17, 0xad, 0x2b, 0x41, 0x7b, 0xe6, 0x6c, 0x37, 0x10};
 
-#define CMAC_MLEN_0 0
-#define CMAC_MLEN_128 (128 / 8)
-#define CMAC_MLEN_319 (320 / 8 - 1)
-#define CMAC_MLEN_320 (320 / 8)
-#define CMAC_MLEN_512 (512 / 8)
+    enum {
+        CMAC_MLEN_0   = 0,
+        CMAC_MLEN_128 = 128 / 8,
+        CMAC_MLEN_319 = 320 / 8 - 1,
+        CMAC_MLEN_320 = 320 / 8,
+        CMAC_MLEN_512 = 512 / 8,
+    };
 
     /* Expected tags */
 #ifdef WOLFSSL_AES_128
@@ -3876,11 +3878,6 @@ static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
 #endif /* WOLFSSL_AES_128 */
     }
 
-#undef CMAC_MLEN_0
-#undef CMAC_MLEN_128
-#undef CMAC_MLEN_319
-#undef CMAC_MLEN_320
-#undef CMAC_MLEN_512
 
     if (ret == 0) {
         WH_TEST_PRINT("CMAC DEVID=0x%X SUCCESS\n", devId);

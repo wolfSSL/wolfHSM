@@ -2968,29 +2968,79 @@ static int _HandleAesGcmDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
 #endif /* HAVE_AESGCM */
 #endif /* !NO_AES */
 
-#ifdef WOLFSSL_CMAC
+#if defined(WOLFSSL_CMAC) && !defined(NO_AES) && defined(WOLFSSL_AES_DIRECT)
+
+/* Resolve CMAC key from request (inline key or keystore ID).
+ * outKey must be at least AES_MAX_KEY_SIZE bytes. */
+static int _CmacResolveKey(whServerContext* ctx, const uint8_t* requestKey,
+                           uint32_t requestKeySz, whKeyId clientKeyId,
+                           uint8_t* outKey, word32* outKeyLen)
+{
+    int ret = WH_ERROR_OK;
+
+    if (requestKeySz != 0) {
+        /* Client provided the key directly in the request */
+        memcpy(outKey, requestKey, requestKeySz);
+        *outKeyLen = requestKeySz;
+    }
+    else if (!WH_KEYID_ISERASED(clientKeyId)) {
+        /* Load key from keystore by ID */
+        whKeyId keyId = wh_KeyId_TranslateFromClient(
+            WH_KEYTYPE_CRYPTO, ctx->comm->client_id, clientKeyId);
+
+        /* Validate key usage policy - CMAC accepts sign or verify */
+        ret = wh_Server_KeystoreFindEnforceKeyUsage(ctx, keyId,
+                                                    WH_NVM_FLAGS_USAGE_SIGN);
+        if (ret == WH_ERROR_USAGE) {
+            ret = wh_Server_KeystoreFindEnforceKeyUsage(
+                ctx, keyId, WH_NVM_FLAGS_USAGE_VERIFY);
+        }
+
+        if (ret == WH_ERROR_OK) {
+            ret =
+                wh_Server_KeystoreReadKey(ctx, keyId, NULL, outKey, outKeyLen);
+        }
+
+        if (ret == WH_ERROR_OK) {
+            /* Validate AES key size */
+            if (*outKeyLen != AES_128_KEY_SIZE &&
+                *outKeyLen != AES_192_KEY_SIZE &&
+                *outKeyLen != AES_256_KEY_SIZE) {
+                ret = WH_ERROR_ABORTED;
+            }
+        }
+    }
+    else {
+        /* No key provided - error */
+        ret = WH_ERROR_BADARGS;
+    }
+
+    return ret;
+}
+
 static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
                        const void* cryptoDataIn, uint16_t inSize,
                        void* cryptoDataOut, uint16_t* outSize)
 {
-    int ret;
-    whMessageCrypto_CmacRequest req;
-    whMessageCrypto_CmacResponse res;
     (void)seq;
 
+    int                             ret;
+    whMessageCrypto_CmacAesRequest  req;
+    whMessageCrypto_CmacAesResponse res;
+
     /* Validate minimum size */
-    if (inSize < sizeof(whMessageCrypto_CmacRequest)) {
+    if (inSize < sizeof(whMessageCrypto_CmacAesRequest)) {
         return WH_ERROR_BADARGS;
     }
 
     /* Translate request */
-    ret = wh_MessageCrypto_TranslateCmacRequest(magic, cryptoDataIn, &req);
+    ret = wh_MessageCrypto_TranslateCmacAesRequest(magic, cryptoDataIn, &req);
     if (ret != 0) {
         return ret;
     }
 
     /* Validate variable-length fields fit within inSize */
-    uint32_t available = inSize - sizeof(whMessageCrypto_CmacRequest);
+    uint32_t available = inSize - sizeof(whMessageCrypto_CmacAesRequest);
     if (req.inSz > available) {
         return WH_ERROR_BADARGS;
     }
@@ -3006,142 +3056,80 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
 
     /* Setup fixed size fields */
     uint8_t* in =
-        (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_CmacRequest);
+        (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_CmacAesRequest);
     uint8_t* key = in + req.inSz;
     uint8_t* out =
-        (uint8_t*)(cryptoDataOut) + sizeof(whMessageCrypto_CmacResponse);
+        (uint8_t*)(cryptoDataOut) + sizeof(whMessageCrypto_CmacAesResponse);
 
     memset(&res, 0, sizeof(res));
 
-    switch(req.type) {
-#if !defined(NO_AES) && defined(WOLFSSL_AES_DIRECT)
-        case WC_CMAC_AES: {
-            uint8_t tmpKey[AES_MAX_KEY_SIZE];
-            word32  tmpKeyLen = 0;
-            Cmac    cmac[1];
+    uint8_t tmpKey[AES_MAX_KEY_SIZE];
+    word32  tmpKeyLen = sizeof(tmpKey);
+    Cmac    cmac[1];
 
-            /* Determine the key to use - shared across oneshot and
-             * multi-step paths */
-            if (req.keySz != 0) {
-                /* Client provided the key directly in the request */
-                memcpy(tmpKey, key, req.keySz);
-                tmpKeyLen = req.keySz;
-            }
-            else if (!WH_KEYID_ISERASED(req.keyId)) {
-                /* Load key from keystore by ID */
-                whKeyId keyId = wh_KeyId_TranslateFromClient(
-                    WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+    /* Resolve the key to use */
+    ret = _CmacResolveKey(ctx, key, req.keySz, req.keyId, tmpKey, &tmpKeyLen);
 
-                /* Validate key usage policy - CMAC accepts sign or verify */
-                ret = wh_Server_KeystoreFindEnforceKeyUsage(
-                    ctx, keyId, WH_NVM_FLAGS_USAGE_SIGN);
-                if (ret == WH_ERROR_USAGE) {
-                    ret = wh_Server_KeystoreFindEnforceKeyUsage(
-                        ctx, keyId, WH_NVM_FLAGS_USAGE_VERIFY);
-                }
+    /* Oneshot: input and output are both present */
+    if (ret == 0 && req.inSz != 0 && req.outSz != 0) {
+        len = req.outSz;
 
-                if (ret == WH_ERROR_OK) {
-                    tmpKeyLen = sizeof(tmpKey);
-                    ret = wh_Server_KeystoreReadKey(ctx, keyId, NULL, tmpKey,
-                                                    &tmpKeyLen);
-                }
+        WH_DEBUG_SERVER_VERBOSE("cmac generate oneshot\n");
 
-                if (ret == WH_ERROR_OK) {
-                    /* Validate AES key size */
-                    if (tmpKeyLen != AES_128_KEY_SIZE &&
-                        tmpKeyLen != AES_192_KEY_SIZE &&
-                        tmpKeyLen != AES_256_KEY_SIZE) {
-                        ret = WH_ERROR_ABORTED;
-                    }
-                }
-            }
-            else {
-                /* No key provided - error */
-                ret = BAD_FUNC_ARG;
-            }
+        ret = wc_AesCmacGenerate_ex(cmac, out, &len, in, req.inSz, tmpKey,
+                                    tmpKeyLen, NULL, ctx->crypto->devId);
 
-            /* Oneshot: input and output are both present */
-            if (ret == 0 && req.inSz != 0 && req.outSz != 0) {
-                len = req.outSz;
-
-                WH_DEBUG_SERVER_VERBOSE("cmac generate oneshot\n");
-
-                ret =
-                    wc_AesCmacGenerate_ex(cmac, out, &len, in, req.inSz, tmpKey,
-                                          tmpKeyLen, NULL, ctx->crypto->devId);
-
-                if (ret == 0) {
-                    res.outSz = len;
-                    res.keyId = WH_KEYID_ERASED;
-                }
-            }
-            else if (ret == 0) {
-                /* Multi-step: init/update/final */
-                WH_DEBUG_SERVER_VERBOSE(
-                    "cmac begin keySz:%d inSz:%d outSz:%d keyId:%x\n",
-                    req.keySz, req.inSz, req.outSz, req.keyId);
-
-                /* Initialize CMAC context with key (re-derives k1/k2
-                 * subkeys) */
-                ret = wc_InitCmac_ex(cmac, tmpKey, tmpKeyLen, req.type, NULL,
-                                     NULL, ctx->crypto->devId);
-                WH_DEBUG_SERVER_VERBOSE(
-                    "cmac init with keylen:%d, type:%d ret:%d\n", tmpKeyLen,
-                    req.type, ret);
-
-                if (ret == 0 && req.resumeState.bufferSz > AES_BLOCK_SIZE) {
-                    ret = BAD_FUNC_ARG;
-                }
-
-                /* Restore non-sensitive state from client. On the first call
-                 * (init), the client sends zeroed state which is effectively a
-                 * no-op since wc_InitCmac_ex already zeroed the struct. On
-                 * subsequent calls (update/final), this restores the running
-                 * intermediate state. */
-                if (ret == 0) {
-                    memcpy(cmac->buffer, req.resumeState.buffer,
-                           AES_BLOCK_SIZE);
-                    memcpy(cmac->digest, req.resumeState.digest,
-                           AES_BLOCK_SIZE);
-                    cmac->bufferSz = req.resumeState.bufferSz;
-                    cmac->totalSz  = req.resumeState.totalSz;
-                }
-
-                /* Handle CMAC update */
-                if (ret == 0 && req.inSz != 0) {
-                    ret = wc_CmacUpdate(cmac, in, req.inSz);
-                    WH_DEBUG_SERVER_VERBOSE("cmac update done. ret:%d\n", ret);
-                }
-
-                if (ret == 0 && req.outSz != 0) {
-                    /* Finalize CMAC operation */
-                    len = req.outSz;
-                    WH_DEBUG_SERVER_VERBOSE("cmac final len:%d\n", len);
-                    ret       = wc_CmacFinal(cmac, out, &len);
-                    res.outSz = len;
-                    res.keyId = WH_KEYID_ERASED;
-                }
-                else if (ret == 0) {
-                    /* Not finalizing - return updated state to client */
-                    memcpy(res.resumeState.buffer, cmac->buffer,
-                           AES_BLOCK_SIZE);
-                    memcpy(res.resumeState.digest, cmac->digest,
-                           AES_BLOCK_SIZE);
-                    res.resumeState.bufferSz = cmac->bufferSz;
-                    res.resumeState.totalSz  = cmac->totalSz;
-                    res.keyId                = req.keyId;
-                    res.outSz                = 0;
-                }
-            }
-        } break;
-#endif /* !NO_AES && WOLFSSL_AES_DIRECT */
-    default:
-        /* Type not supported */
-        ret = CRYPTOCB_UNAVAILABLE;
+        if (ret == 0) {
+            res.outSz = len;
+            res.keyId = WH_KEYID_ERASED;
+        }
     }
+    else if (ret == 0) {
+        /* Multi-step: init/update/final */
+        WH_DEBUG_SERVER_VERBOSE(
+            "cmac begin keySz:%d inSz:%d outSz:%d keyId:%x\n", req.keySz,
+            req.inSz, req.outSz, req.keyId);
+
+        /* Initialize CMAC context with key (re-derives k1/k2 subkeys) */
+        ret = wc_InitCmac_ex(cmac, tmpKey, tmpKeyLen, WC_CMAC_AES, NULL, NULL,
+                             ctx->crypto->devId);
+        WH_DEBUG_SERVER_VERBOSE("cmac init with keylen:%d ret:%d\n", tmpKeyLen,
+                                ret);
+
+        /* Restore non-sensitive state from client. On the first call
+         * (init), the client sends zeroed state which is effectively a
+         * no-op since wc_InitCmac_ex already zeroed the struct. On
+         * subsequent calls (update/final), this restores the running
+         * intermediate state. */
+        if (ret == 0) {
+            ret = wh_Crypto_CmacAesRestoreStateFromMsg(cmac, &req.resumeState);
+        }
+
+        /* Handle CMAC update */
+        if (ret == 0 && req.inSz != 0) {
+            ret = wc_CmacUpdate(cmac, in, req.inSz);
+            WH_DEBUG_SERVER_VERBOSE("cmac update done. ret:%d\n", ret);
+        }
+
+        if (ret == 0 && req.outSz != 0) {
+            /* Finalize CMAC operation */
+            len = req.outSz;
+            WH_DEBUG_SERVER_VERBOSE("cmac final len:%d\n", len);
+            ret       = wc_CmacFinal(cmac, out, &len);
+            res.outSz = len;
+            res.keyId = WH_KEYID_ERASED;
+        }
+        else if (ret == 0) {
+            /* Not finalizing - return updated state to client */
+            wh_Crypto_CmacAesSaveStateToMsg(&res.resumeState, cmac);
+            res.keyId = req.keyId;
+            res.outSz = 0;
+        }
+    }
+
     if (ret == 0) {
-        ret =
-            wh_MessageCrypto_TranslateCmacResponse(magic, &res, cryptoDataOut);
+        ret = wh_MessageCrypto_TranslateCmacAesResponse(magic, &res,
+                                                        cryptoDataOut);
         if (ret == 0) {
             *outSize = sizeof(res) + res.outSz;
         }
@@ -3149,7 +3137,7 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
     WH_DEBUG_SERVER_VERBOSE("cmac end ret:%d\n", ret);
     return ret;
 }
-#endif /* WOLFSSL_CMAC */
+#endif /* WOLFSSL_CMAC && !NO_AES && WOLFSSL_AES_DIRECT */
 
 #ifndef NO_SHA256
 static int _HandleSha256(whServerContext* ctx, uint16_t magic,
@@ -4082,7 +4070,7 @@ int wh_Server_HandleCryptoRequest(whServerContext* ctx, uint16_t magic,
             break;
 #endif /* HAVE_HKDF || HAVE_CMAC_KDF */
 
-#ifdef WOLFSSL_CMAC
+#if defined(WOLFSSL_CMAC) && !defined(NO_AES) && defined(WOLFSSL_AES_DIRECT)
         case WC_ALGO_TYPE_CMAC:
             ret = _HandleCmac(ctx, magic, seq, cryptoDataIn, cryptoInSize,
                               cryptoDataOut, &cryptoOutSize);
@@ -5078,7 +5066,7 @@ static int _HandlePqcSigAlgorithmDma(whServerContext* ctx, uint16_t magic,
 }
 #endif /* HAVE_DILITHIUM || HAVE_FALCON */
 
-#ifdef WOLFSSL_CMAC
+#if defined(WOLFSSL_CMAC) && !defined(NO_AES) && defined(WOLFSSL_AES_DIRECT)
 static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
                           const void* cryptoDataIn, uint16_t inSize,
                           void* cryptoDataOut, uint16_t* outSize)
@@ -5086,22 +5074,22 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
     (void)seq;
 
     int ret = 0;
-    whMessageCrypto_CmacDmaRequest req;
-    whMessageCrypto_CmacDmaResponse res;
+    whMessageCrypto_CmacAesDmaRequest  req;
+    whMessageCrypto_CmacAesDmaResponse res;
 
-    if (inSize < sizeof(whMessageCrypto_CmacDmaRequest)) {
+    if (inSize < sizeof(whMessageCrypto_CmacAesDmaRequest)) {
         return WH_ERROR_BADARGS;
     }
 
     /* Translate request */
-    ret = wh_MessageCrypto_TranslateCmacDmaRequest(
-        magic, (whMessageCrypto_CmacDmaRequest*)cryptoDataIn, &req);
+    ret = wh_MessageCrypto_TranslateCmacAesDmaRequest(
+        magic, (whMessageCrypto_CmacAesDmaRequest*)cryptoDataIn, &req);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
 
     /* Validate variable-length fields fit within inSize */
-    uint32_t available = inSize - sizeof(whMessageCrypto_CmacDmaRequest);
+    uint32_t available = inSize - sizeof(whMessageCrypto_CmacAesDmaRequest);
     if (req.keySz > available) {
         return WH_ERROR_BADARGS;
     }
@@ -5113,199 +5101,115 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
 
     /* Pointers to inline trailing data */
     uint8_t* key =
-        (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_CmacDmaRequest);
+        (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_CmacAesDmaRequest);
     uint8_t* out =
-        (uint8_t*)(cryptoDataOut) + sizeof(whMessageCrypto_CmacDmaResponse);
+        (uint8_t*)(cryptoDataOut) + sizeof(whMessageCrypto_CmacAesDmaResponse);
 
     memset(&res, 0, sizeof(res));
 
     /* DMA translated address for input */
     void* inAddr = NULL;
 
-    switch (req.type) {
-#if !defined(NO_AES) && defined(WOLFSSL_AES_DIRECT)
-        case WC_CMAC_AES: {
-            uint8_t tmpKey[AES_MAX_KEY_SIZE];
-            word32  tmpKeyLen = 0;
-            Cmac    cmac[1];
+    uint8_t tmpKey[AES_MAX_KEY_SIZE];
+    word32  tmpKeyLen = sizeof(tmpKey);
+    Cmac    cmac[1];
 
-            /* Attempt oneshot if input and output are both present */
-            if (req.input.sz != 0 && req.outSz != 0) {
-                len = req.outSz;
+    /* Attempt oneshot if input and output are both present */
+    if (req.input.sz != 0 && req.outSz != 0) {
+        len = req.outSz;
 
-                /* Translate DMA address for input */
-                ret = wh_Server_DmaProcessClientAddress(
-                    ctx, req.input.addr, &inAddr, req.input.sz,
-                    WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
-                if (ret == WH_ERROR_ACCESS) {
-                    res.dmaAddrStatus.badAddr = req.input;
-                }
+        /* Translate DMA address for input */
+        ret = wh_Server_DmaProcessClientAddress(
+            ctx, req.input.addr, &inAddr, req.input.sz,
+            WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
+        if (ret == WH_ERROR_ACCESS) {
+            res.dmaAddrStatus.badAddr = req.input;
+        }
 
-                if (ret == WH_ERROR_OK && req.keySz != 0) {
-                    /* Client-supplied key - direct one-shot */
-                    WH_DEBUG_SERVER_VERBOSE("dma cmac generate oneshot\n");
+        /* Resolve key */
+        if (ret == WH_ERROR_OK) {
+            ret = _CmacResolveKey(ctx, key, req.keySz, req.keyId, tmpKey,
+                                  &tmpKeyLen);
+        }
 
-                    ret = wc_AesCmacGenerate_ex(cmac, out, &len, inAddr,
-                                                req.input.sz, key, req.keySz,
-                                                NULL, ctx->crypto->devId);
-                }
-                else if (ret == WH_ERROR_OK && !WH_KEYID_ISERASED(req.keyId)) {
-                    /* HSM-local key via keyId */
-                    whKeyId keyId = wh_KeyId_TranslateFromClient(
-                        WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+        if (ret == WH_ERROR_OK && req.keySz != 0) {
+            /* Client-supplied key - direct one-shot */
+            WH_DEBUG_SERVER_VERBOSE("dma cmac generate oneshot\n");
 
-                    WH_DEBUG_SERVER_VERBOSE(
-                        "dma cmac generate oneshot with keyId:%x\n", keyId);
+            ret = wc_AesCmacGenerate_ex(cmac, out, &len, inAddr, req.input.sz,
+                                        tmpKey, tmpKeyLen, NULL,
+                                        ctx->crypto->devId);
+        }
+        else if (ret == WH_ERROR_OK) {
+            /* HSM-local key via keyId - init then generate */
+            WH_DEBUG_SERVER_VERBOSE("dma cmac generate oneshot with keyId:%x\n",
+                                    req.keyId);
 
-                    /* Enforce usage policy (sign or verify) */
-                    ret = wh_Server_KeystoreFindEnforceKeyUsage(
-                        ctx, keyId, WH_NVM_FLAGS_USAGE_SIGN);
-                    if (ret == WH_ERROR_USAGE) {
-                        ret = wh_Server_KeystoreFindEnforceKeyUsage(
-                            ctx, keyId, WH_NVM_FLAGS_USAGE_VERIFY);
-                    }
+            ret = wc_InitCmac_ex(cmac, tmpKey, tmpKeyLen, WC_CMAC_AES, NULL,
+                                 NULL, ctx->crypto->devId);
 
-                    if (ret == WH_ERROR_OK) {
-                        tmpKeyLen = sizeof(tmpKey);
-                        ret       = wh_Server_KeystoreReadKey(ctx, keyId, NULL,
-                                                              tmpKey, &tmpKeyLen);
-                    }
-
-                    if (ret == WH_ERROR_OK) {
-                        /* Validate AES key size */
-                        if (tmpKeyLen != AES_128_KEY_SIZE &&
-                            tmpKeyLen != AES_192_KEY_SIZE &&
-                            tmpKeyLen != AES_256_KEY_SIZE) {
-                            ret = WH_ERROR_ABORTED;
-                        }
-                    }
-
-                    if (ret == WH_ERROR_OK) {
-                        ret = wc_InitCmac_ex(cmac, tmpKey, tmpKeyLen, req.type,
-                                             NULL, NULL, ctx->crypto->devId);
-                    }
-
-                    if (ret == WH_ERROR_OK) {
-                        ret = wc_AesCmacGenerate_ex(cmac, out, &len, inAddr,
-                                                    req.input.sz, NULL, 0, NULL,
-                                                    ctx->crypto->devId);
-                    }
-                }
-                else if (ret == WH_ERROR_OK) {
-                    /* No key available */
-                    ret = BAD_FUNC_ARG;
-                }
-
-                if (ret == 0) {
-                    res.outSz = len;
-                    res.keyId = WH_KEYID_ERASED;
-                }
+            if (ret == WH_ERROR_OK) {
+                ret =
+                    wc_AesCmacGenerate_ex(cmac, out, &len, inAddr, req.input.sz,
+                                          NULL, 0, NULL, ctx->crypto->devId);
             }
-            else {
-                WH_DEBUG_SERVER_VERBOSE(
-                    "dma cmac begin keySz:%d inSz:%d outSz:%d keyId:%x\n",
-                    (int)req.keySz, (int)req.input.sz, (int)req.outSz,
-                    req.keyId);
+        }
 
-                /* Determine the key to use for initialization */
-                if (req.keySz != 0) {
-                    /* Client provided the key directly in the request */
-                    memcpy(tmpKey, key, req.keySz);
-                    tmpKeyLen = req.keySz;
-                }
-                else if (!WH_KEYID_ISERASED(req.keyId)) {
-                    /* Load key from keystore by ID */
-                    whKeyId keyId = wh_KeyId_TranslateFromClient(
-                        WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+        if (ret == 0) {
+            res.outSz = len;
+            res.keyId = WH_KEYID_ERASED;
+        }
+    }
+    else {
+        WH_DEBUG_SERVER_VERBOSE(
+            "dma cmac begin keySz:%d inSz:%d outSz:%d keyId:%x\n",
+            (int)req.keySz, (int)req.input.sz, (int)req.outSz, req.keyId);
 
-                    /* Validate key usage policy */
-                    ret = wh_Server_KeystoreFindEnforceKeyUsage(
-                        ctx, keyId, WH_NVM_FLAGS_USAGE_SIGN);
-                    if (ret == WH_ERROR_USAGE) {
-                        ret = wh_Server_KeystoreFindEnforceKeyUsage(
-                            ctx, keyId, WH_NVM_FLAGS_USAGE_VERIFY);
-                    }
-                    if (ret != WH_ERROR_OK) {
-                        break;
-                    }
+        /* Resolve key */
+        ret =
+            _CmacResolveKey(ctx, key, req.keySz, req.keyId, tmpKey, &tmpKeyLen);
 
-                    tmpKeyLen = sizeof(tmpKey);
-                    ret = wh_Server_KeystoreReadKey(ctx, keyId, NULL, tmpKey,
-                                                    &tmpKeyLen);
-                    if (ret != WH_ERROR_OK) {
-                        break;
-                    }
-                }
-                else {
-                    /* No key provided - error */
-                    ret = BAD_FUNC_ARG;
-                    break;
-                }
+        /* Initialize CMAC context with key (re-derives k1/k2 subkeys) */
+        if (ret == 0) {
+            ret = wc_InitCmac_ex(cmac, tmpKey, tmpKeyLen, WC_CMAC_AES, NULL,
+                                 NULL, ctx->crypto->devId);
+            WH_DEBUG_SERVER_VERBOSE("dma cmac init with keylen:%d ret:%d\n",
+                                    tmpKeyLen, ret);
+        }
 
-                /* Initialize CMAC context with key (re-derives k1/k2 subkeys)
-                 */
-                if (ret == 0) {
-                    ret = wc_InitCmac_ex(cmac, tmpKey, tmpKeyLen, req.type,
-                                         NULL, NULL, ctx->crypto->devId);
-                    WH_DEBUG_SERVER_VERBOSE(
-                        "dma cmac init with keylen:%d, type:%d ret:%d\n",
-                        tmpKeyLen, req.type, ret);
-                }
+        /* Restore non-sensitive state from client */
+        if (ret == 0) {
+            ret = wh_Crypto_CmacAesRestoreStateFromMsg(cmac, &req.resumeState);
+        }
 
-                /* Restore non-sensitive state from client */
-                if (ret == 0 && req.resumeState.bufferSz > AES_BLOCK_SIZE) {
-                    ret = BAD_FUNC_ARG;
-                }
-
-                if (ret == 0) {
-                    memcpy(cmac->buffer, req.resumeState.buffer,
-                           AES_BLOCK_SIZE);
-                    memcpy(cmac->digest, req.resumeState.digest,
-                           AES_BLOCK_SIZE);
-                    cmac->bufferSz = req.resumeState.bufferSz;
-                    cmac->totalSz  = req.resumeState.totalSz;
-                }
-
-                /* Handle CMAC update with DMA input */
-                if (ret == 0 && req.input.sz != 0) {
-                    ret = wh_Server_DmaProcessClientAddress(
-                        ctx, req.input.addr, &inAddr, req.input.sz,
-                        WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
-                    if (ret == WH_ERROR_ACCESS) {
-                        res.dmaAddrStatus.badAddr = req.input;
-                    }
-                    if (ret == WH_ERROR_OK) {
-                        ret = wc_CmacUpdate(cmac, inAddr, req.input.sz);
-                        WH_DEBUG_SERVER_VERBOSE(
-                            "dma cmac update done. ret:%d\n", ret);
-                    }
-                }
-
-                if (ret == 0 && req.outSz != 0) {
-                    /* Finalize CMAC operation */
-                    len = req.outSz;
-                    WH_DEBUG_SERVER_VERBOSE("dma cmac final len:%d\n", len);
-                    ret       = wc_CmacFinal(cmac, out, &len);
-                    res.outSz = len;
-                    res.keyId = WH_KEYID_ERASED;
-                }
-                else if (ret == 0) {
-                    /* Not finalizing - return updated state to client */
-                    memcpy(res.resumeState.buffer, cmac->buffer,
-                           AES_BLOCK_SIZE);
-                    memcpy(res.resumeState.digest, cmac->digest,
-                           AES_BLOCK_SIZE);
-                    res.resumeState.bufferSz = cmac->bufferSz;
-                    res.resumeState.totalSz  = cmac->totalSz;
-                    res.keyId                = req.keyId;
-                    res.outSz                = 0;
-                }
+        /* Handle CMAC update with DMA input */
+        if (ret == 0 && req.input.sz != 0) {
+            ret = wh_Server_DmaProcessClientAddress(
+                ctx, req.input.addr, &inAddr, req.input.sz,
+                WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
+            if (ret == WH_ERROR_ACCESS) {
+                res.dmaAddrStatus.badAddr = req.input;
             }
-        } break;
-#endif /* !NO_AES && WOLFSSL_AES_DIRECT */
-        default:
-            /* Type not supported */
-            ret = CRYPTOCB_UNAVAILABLE;
+            if (ret == WH_ERROR_OK) {
+                ret = wc_CmacUpdate(cmac, inAddr, req.input.sz);
+                WH_DEBUG_SERVER_VERBOSE("dma cmac update done. ret:%d\n", ret);
+            }
+        }
+
+        if (ret == 0 && req.outSz != 0) {
+            /* Finalize CMAC operation */
+            len = req.outSz;
+            WH_DEBUG_SERVER_VERBOSE("dma cmac final len:%d\n", len);
+            ret       = wc_CmacFinal(cmac, out, &len);
+            res.outSz = len;
+            res.keyId = WH_KEYID_ERASED;
+        }
+        else if (ret == 0) {
+            /* Not finalizing - return updated state to client */
+            wh_Crypto_CmacAesSaveStateToMsg(&res.resumeState, cmac);
+            res.keyId = req.keyId;
+            res.outSz = 0;
+        }
     }
 
     /* Clean up DMA input address */
@@ -5319,8 +5223,8 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
     }
 
     if (ret == 0) {
-        ret = wh_MessageCrypto_TranslateCmacDmaResponse(
-            magic, &res, (whMessageCrypto_CmacDmaResponse*)cryptoDataOut);
+        ret = wh_MessageCrypto_TranslateCmacAesDmaResponse(
+            magic, &res, (whMessageCrypto_CmacAesDmaResponse*)cryptoDataOut);
         if (ret == 0) {
             *outSize = sizeof(res) + res.outSz;
         }
@@ -5329,7 +5233,7 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
     WH_DEBUG_SERVER_VERBOSE("dma cmac end ret:%d\n", ret);
     return ret;
 }
-#endif /* WOLFSSL_CMAC */
+#endif /* WOLFSSL_CMAC && !NO_AES && WOLFSSL_AES_DIRECT */
 
 #ifndef WC_NO_RNG
 static int _HandleRngDma(whServerContext* ctx, uint16_t magic, uint16_t seq,

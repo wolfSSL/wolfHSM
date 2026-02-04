@@ -101,7 +101,7 @@ whMessageCrypto_EccSignRequest        pkEccSignReq;
 whMessageCrypto_EccVerifyRequest      pkEccVerifyReq;
 whMessageCrypto_EccCheckRequest       pkEccCheckReq;
 whMessageCrypto_RngRequest            rngReq;
-whMessageCrypto_CmacRequest           cmacReq;
+whMessageCrypto_CmacAesRequest        cmacReq;
 whMessageCrypto_AesCbcResponse        cipherAesCbcRes;
 whMessageCrypto_AesGcmResponse        cipherAesGcmRes;
 whMessageCrypto_RsaKeyGenResponse     pkRsakgRes;
@@ -113,7 +113,7 @@ whMessageCrypto_EccSignResponse       pkEccSignRes;
 whMessageCrypto_EccVerifyResponse     pkEccVerifyRes;
 whMessageCrypto_EccCheckResponse      pkEccCheckRes;
 whMessageCrypto_RngResponse           rngRes;
-whMessageCrypto_CmacResponse          cmacRes;
+whMessageCrypto_CmacAesResponse       cmacRes;
 whMessageCrypto_Sha256Request         hashSha256Req;
 whMessageCrypto_Sha512Request         hashSha512Req;
 whMessageCrypto_Sha2Response          hashSha2Res;
@@ -130,8 +130,8 @@ whMessageCrypto_MlDsaSignDmaRequest    pqMldsaSignDmaReq;
 whMessageCrypto_MlDsaSignDmaResponse   pqMldsaSignDmaRes;
 whMessageCrypto_MlDsaVerifyDmaRequest  pqMldsaVerifyDmaReq;
 whMessageCrypto_MlDsaVerifyDmaResponse pqMldsaVerifyDmaRes;
-whMessageCrypto_CmacDmaRequest         cmacDmaReq;
-whMessageCrypto_CmacDmaResponse        cmacDmaRes;
+whMessageCrypto_CmacAesDmaRequest      cmacDmaReq;
+whMessageCrypto_CmacAesDmaResponse     cmacDmaRes;
 #endif /* WOLFHSM_CFG_DMA */
 
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */

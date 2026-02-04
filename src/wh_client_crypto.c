@@ -3587,12 +3587,12 @@ int wh_Client_Cmac(whClientContext* ctx, Cmac* cmac, CmacType type,
                    const uint8_t* key, uint32_t keyLen, const uint8_t* in,
                    uint32_t inLen, uint8_t* outMac, uint32_t* outMacLen)
 {
-    int                           ret     = WH_ERROR_OK;
-    uint16_t                      group   = WH_MESSAGE_GROUP_CRYPTO;
-    uint16_t                      action  = WC_ALGO_TYPE_CMAC;
-    whMessageCrypto_CmacRequest*  req     = NULL;
-    whMessageCrypto_CmacResponse* res     = NULL;
-    uint8_t*                      dataPtr = NULL;
+    int                              ret     = WH_ERROR_OK;
+    uint16_t                         group   = WH_MESSAGE_GROUP_CRYPTO;
+    uint16_t                         action  = WC_ALGO_TYPE_CMAC;
+    whMessageCrypto_CmacAesRequest*  req     = NULL;
+    whMessageCrypto_CmacAesResponse* res     = NULL;
+    uint8_t*                         dataPtr = NULL;
 
     if (ctx == NULL || cmac == NULL) {
         return WH_ERROR_BADARGS;
@@ -3630,8 +3630,8 @@ int wh_Client_Cmac(whClientContext* ctx, Cmac* cmac, CmacType type,
     }
 
     /* Setup generic header and get pointer to request data */
-    req = (whMessageCrypto_CmacRequest*)_createCryptoRequest(dataPtr,
-                                                             WC_ALGO_TYPE_CMAC);
+    req = (whMessageCrypto_CmacAesRequest*)_createCryptoRequest(
+        dataPtr, WC_ALGO_TYPE_CMAC);
 
     uint8_t* req_in  = (uint8_t*)(req + 1);
     uint8_t* req_key = req_in + inLen;
@@ -3645,19 +3645,13 @@ int wh_Client_Cmac(whClientContext* ctx, Cmac* cmac, CmacType type,
     uint16_t req_len = hdr_sz + inLen + keyLen;
 
     /* Setup request packet */
-    req->type  = type;
     req->inSz  = inLen;
     req->keyId = key_id;
     req->keySz = keyLen;
     req->outSz = mac_len;
 
     /* Pack non-sensitive CMAC state into request */
-    memcpy(req->resumeState.buffer, cmac->buffer,
-           sizeof(req->resumeState.buffer));
-    memcpy(req->resumeState.digest, cmac->digest,
-           sizeof(req->resumeState.digest));
-    req->resumeState.bufferSz = cmac->bufferSz;
-    req->resumeState.totalSz  = cmac->totalSz;
+    wh_Crypto_CmacAesSaveStateToMsg(&req->resumeState, cmac);
 
     /* copy input data to request, if relevant */
     if ((in != NULL) && (inLen > 0)) {
@@ -3693,15 +3687,11 @@ int wh_Client_Cmac(whClientContext* ctx, Cmac* cmac, CmacType type,
              * scenarios */
             if (ret >= 0) {
                 /* Restore non-sensitive state from server response */
-                memcpy(cmac->buffer, res->resumeState.buffer,
-                       sizeof(cmac->buffer));
-                memcpy(cmac->digest, res->resumeState.digest,
-                       sizeof(cmac->digest));
-                cmac->bufferSz = res->resumeState.bufferSz;
-                cmac->totalSz  = res->resumeState.totalSz;
+                ret = wh_Crypto_CmacAesRestoreStateFromMsg(cmac,
+                                                           &res->resumeState);
 
                 /* Copy out finalized CMAC if present */
-                if (outMac != NULL && outMacLen != NULL) {
+                if (ret == 0 && outMac != NULL && outMacLen != NULL) {
                     if (res->outSz < *outMacLen) {
                         *outMacLen = res->outSz;
                     }
@@ -3722,11 +3712,11 @@ int wh_Client_CmacDma(whClientContext* ctx, Cmac* cmac, CmacType type,
                       const uint8_t* key, uint32_t keyLen, const uint8_t* in,
                       uint32_t inLen, uint8_t* outMac, uint32_t* outMacLen)
 {
-    int                              ret     = WH_ERROR_OK;
-    whMessageCrypto_CmacDmaRequest*  req     = NULL;
-    whMessageCrypto_CmacDmaResponse* res     = NULL;
-    uint8_t*                         dataPtr = NULL;
-    uintptr_t                        inAddr  = 0;
+    int                                 ret     = WH_ERROR_OK;
+    whMessageCrypto_CmacAesDmaRequest*  req     = NULL;
+    whMessageCrypto_CmacAesDmaResponse* res     = NULL;
+    uint8_t*                            dataPtr = NULL;
+    uintptr_t                           inAddr  = 0;
 
     if (ctx == NULL || cmac == NULL) {
         return WH_ERROR_BADARGS;
@@ -3763,7 +3753,7 @@ int wh_Client_CmacDma(whClientContext* ctx, Cmac* cmac, CmacType type,
     }
 
     /* Setup generic header and get pointer to request data */
-    req = (whMessageCrypto_CmacDmaRequest*)_createCryptoRequest(
+    req = (whMessageCrypto_CmacAesDmaRequest*)_createCryptoRequest(
         dataPtr, WC_ALGO_TYPE_CMAC);
     memset(req, 0, sizeof(*req));
 
@@ -3777,16 +3767,12 @@ int wh_Client_CmacDma(whClientContext* ctx, Cmac* cmac, CmacType type,
     uint16_t req_len = hdr_sz + keyLen;
 
     /* Setup request fields */
-    req->type  = type;
     req->outSz = mac_len;
     req->keyId = key_id;
     req->keySz = keyLen;
 
     /* Pack non-sensitive CMAC state into request */
-    memcpy(req->resumeState.buffer, cmac->buffer, AES_BLOCK_SIZE);
-    memcpy(req->resumeState.digest, cmac->digest, AES_BLOCK_SIZE);
-    req->resumeState.bufferSz = cmac->bufferSz;
-    req->resumeState.totalSz  = cmac->totalSz;
+    wh_Crypto_CmacAesSaveStateToMsg(&req->resumeState, cmac);
 
     /* Copy key bytes into trailing data */
     if ((key != NULL) && (keyLen > 0)) {
@@ -3833,13 +3819,11 @@ int wh_Client_CmacDma(whClientContext* ctx, Cmac* cmac, CmacType type,
             /* wolfCrypt allows positive error codes on success */
             if (ret >= 0) {
                 /* Restore non-sensitive state from server response */
-                memcpy(cmac->buffer, res->resumeState.buffer, AES_BLOCK_SIZE);
-                memcpy(cmac->digest, res->resumeState.digest, AES_BLOCK_SIZE);
-                cmac->bufferSz = res->resumeState.bufferSz;
-                cmac->totalSz  = res->resumeState.totalSz;
+                ret = wh_Crypto_CmacAesRestoreStateFromMsg(cmac,
+                                                           &res->resumeState);
 
                 /* Copy out finalized CMAC if present */
-                if (outMac != NULL && outMacLen != NULL) {
+                if (ret == 0 && outMac != NULL && outMacLen != NULL) {
                     if (res->outSz < *outMacLen) {
                         *outMacLen = res->outSz;
                     }
