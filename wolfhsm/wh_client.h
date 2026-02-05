@@ -196,9 +196,10 @@ int wh_Client_RecvResponse(whClientContext* c, uint16_t* out_group,
  * @return 0 if successful, WH_ERROR_TIMEOUT on expiration, or a negative value
  * if an error occurred.
  */
-int wh_Client_RecvResponseBlockingWithTimeout(whClientContext* c, uint16_t* out_group,
-                                              uint16_t* out_action, uint16_t* out_size,
-                                              void* data);
+int wh_Client_RecvResponseBlockingWithTimeout(whClientContext* c,
+                                              uint16_t*        out_group,
+                                              uint16_t*        out_action,
+                                              uint16_t* out_size, void* data);
 
 /** Comm component functions */
 
