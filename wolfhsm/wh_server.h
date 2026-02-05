@@ -70,22 +70,6 @@ typedef struct whServerCryptoContext {
 #ifndef WC_NO_RNG
     WC_RNG rng[1];
 #endif
-    union {
-#if 0
-#ifndef NO_AES
-        Aes aes[1];
-#endif
-#ifndef NO_RSA
-        RsaKey rsa[1];
-#endif
-#ifdef HAVE_CURVE25519
-        curve25519_key curve25519Private[1];
-#endif
-#endif /* 0 */
-#ifdef WOLFSSL_CMAC
-        Cmac cmac[1];
-#endif
-    } algoCtx;
 } whServerCryptoContext;
 
 
@@ -186,10 +170,7 @@ struct whServerContext_t {
 #ifdef WOLFHSM_CFG_DMA
     whServerDmaContext dma;
 #endif /* WOLFHSM_CFG_DMA */
-    int                connected;
-#ifdef WOLFHSM_CFG_CANCEL_API
-    uint16_t           cancelSeq;
-#endif
+    int connected;
 #ifdef WOLFHSM_CFG_LOGGING
     whLogContext log;
 #endif /* WOLFHSM_CFG_LOGGING */
@@ -254,36 +235,6 @@ int wh_Server_SetConnectedCb(void* s, whCommConnected connected);
  */
 int wh_Server_GetConnected(whServerContext* server,
                            whCommConnected* out_connected);
-
-#ifdef WOLFHSM_CFG_CANCEL_API
-/**
- * @brief Gets the canceled sequence number of the server.
- *
- * The canceled sequence number is the comms layer sequence number of the last
- * canceled request. This number is set by the server port in response to an
- * out-of-band signal from the client when the client wishes to cancel a
- * request.
- *
- * @param[in] server Pointer to the server context.
- * @param[out] outSeq Pointer to store the canceled sequence number.
- * @return int Returns 0 on success, or WH_ERROR_BADARGS if the arguments are
- * invalid
- *
- */
-int wh_Server_GetCanceledSequence(whServerContext* server, uint16_t* outSeq);
-
-
-/**
- * @brief Sets the canceled sequence number of the server.
- *
- * The canceled sequence number is the comms layer sequence number of the last
- * canceled request. This function should be used by the server port to set the
- * canceled sequence number in response to an out-of-band signal from the
- * client.
- *
- */
-int wh_Server_SetCanceledSequence(whServerContext* server, uint16_t cancelSeq);
-#endif /* WOLFHSM_CFG_CANCEL_API */
 
 /**
  * @brief Handles incoming request messages and dispatches them to the

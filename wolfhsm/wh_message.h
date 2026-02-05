@@ -43,7 +43,7 @@ enum WH_MESSAGE_ENUM {
     WH_MESSAGE_GROUP_PKCS11     = 0x0600, /* PKCS11 protocol */
     WH_MESSAGE_GROUP_SHE        = 0x0700, /* SHE protocol */
     WH_MESSAGE_GROUP_COUNTER    = 0x0800, /* monotonic counters */
-    WH_MESSAGE_GROUP_CANCEL     = 0x0900, /* request cancellation */
+    WH_MESSAGE_GROUP_RESERVED   = 0x0900, /* Reserved for future use */
     WH_MESSAGE_GROUP_CUSTOM     = 0x0A00, /* User-specified features */
     WH_MESSAGE_GROUP_CRYPTO_DMA = 0x0B00, /* DMA crypto operations */
     WH_MESSAGE_GROUP_CERT       = 0x0C00, /* Certificate operations */

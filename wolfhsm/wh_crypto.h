@@ -37,11 +37,24 @@
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/types.h"
 #include "wolfssl/wolfcrypt/aes.h"
+#include "wolfssl/wolfcrypt/cmac.h"
 #include "wolfssl/wolfcrypt/rsa.h"
 #include "wolfssl/wolfcrypt/curve25519.h"
 #include "wolfssl/wolfcrypt/ecc.h"
 #include "wolfssl/wolfcrypt/ed25519.h"
 #include "wolfssl/wolfcrypt/dilithium.h"
+
+#include "wolfhsm/wh_message_crypto.h"
+
+#ifdef WOLFSSL_CMAC
+/* Save portable CMAC state from a Cmac context into a message state struct */
+void wh_Crypto_CmacAesSaveStateToMsg(whMessageCrypto_CmacAesState* state,
+                                     const Cmac*                   cmac);
+/* Restore portable CMAC state from a message state struct into a Cmac context
+ */
+int wh_Crypto_CmacAesRestoreStateFromMsg(
+    Cmac* cmac, const whMessageCrypto_CmacAesState* state);
+#endif /* WOLFSSL_CMAC */
 
 #ifndef NO_AES
 int wh_Crypto_SerializeAesKey(Aes* key, uint16_t max_size,

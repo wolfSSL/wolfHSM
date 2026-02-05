@@ -76,10 +76,6 @@ int wh_Client_Init(whClientContext* c, const whClientConfig* config)
     }
 
     memset(c, 0, sizeof(*c));
-#ifdef WOLFHSM_CFG_CANCEL_API
-    /* register the cancel callback */
-    c->cancelCb = config->cancelCb;
-#endif
 
     rc = wh_CommClient_Init(c->comm, config->comm);
 
@@ -472,73 +468,6 @@ int wh_Client_CommClose(whClientContext* c)
     return rc;
 }
 
-#ifdef WOLFHSM_CFG_CANCEL_API
-int wh_Client_EnableCancel(whClientContext* c)
-{
-    if (c == NULL)
-        return WH_ERROR_BADARGS;
-    c->cancelable = 1;
-    return 0;
-}
-
-int wh_Client_DisableCancel(whClientContext* c)
-{
-    if (c == NULL)
-        return WH_ERROR_BADARGS;
-    c->cancelable = 0;
-    return 0;
-}
-
-int wh_Client_CancelRequest(whClientContext* c)
-{
-    if (c == NULL) {
-        return WH_ERROR_BADARGS;
-    }
-
-    if (c->cancelCb == NULL) {
-        return WH_ERROR_ABORTED;
-    }
-
-    /* Since we aren't sending this request through the standard transport, we
-     * need to update the client context's last sent "kind" to prevent the Comm
-     * Client receive function from discarding the next response as an
-     * out-of-order/corrupted message. No need to update the sequence number/ID
-     * as it will not have been incremented by the cancel operation, as it is
-     * out-of-band */
-    c->last_req_kind = WH_MESSAGE_KIND(WH_MESSAGE_GROUP_CANCEL, 0);
-
-    return c->cancelCb(c->comm->seq);
-}
-
-int wh_Client_CancelResponse(whClientContext* c)
-{
-    int ret = 0;
-    uint16_t group;
-    uint16_t action;
-    uint16_t size;
-    uint8_t* buf;
-    if (c == NULL)
-        return WH_ERROR_BADARGS;
-    /* check if the request was canceled */
-    buf = wh_CommClient_GetDataPtr(c->comm);
-    ret = wh_Client_RecvResponse(c, &group, &action, &size, buf);
-    if (ret == 0 && group != WH_MESSAGE_GROUP_CANCEL)
-        return WH_ERROR_CANCEL_LATE;
-    return ret;
-}
-
-int wh_Client_Cancel(whClientContext* c)
-{
-    int ret;
-    ret = wh_Client_CancelRequest(c);
-    if (ret == 0) {
-        do {
-            ret = wh_Client_CancelResponse(c);
-        } while (ret == WH_ERROR_NOTREADY);
-    }
-    return ret;
-}
-#endif /* WOLFHSM_CFG_CANCEL_API */
 
 int wh_Client_EchoRequest(whClientContext* c, uint16_t size, const void* data)
 {

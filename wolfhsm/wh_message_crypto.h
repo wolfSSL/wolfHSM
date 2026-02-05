@@ -794,40 +794,55 @@ int wh_MessageCrypto_TranslateSha2Response(
     whMessageCrypto_Sha2Response* dest);
 
 /*
- * CMAC
+ * CMAC (AES)
  */
 
-/* CMAC Request */
+/* CMAC-AES intermediate state - non-sensitive fields only.
+ * k1/k2 subkeys are NOT included as they are key-derived material.
+ * Server re-derives them via wc_InitCmac_ex on each request. */
 typedef struct {
-    uint32_t type; /* wolfCrypt CmacType enum */
-    uint32_t outSz;
-    uint32_t inSz;
-    uint32_t keySz;
-    uint16_t keyId;
-    uint8_t  WH_PAD[6];
+    uint8_t  buffer[16]; /* AES_BLOCK_SIZE: partial block buffer */
+    uint8_t  digest[16]; /* AES_BLOCK_SIZE: running CBC-MAC digest */
+    uint32_t bufferSz;   /* bytes in partial block buffer */
+    uint32_t totalSz;    /* total bytes processed */
+} whMessageCrypto_CmacAesState;
+
+/* CMAC-AES Request */
+typedef struct {
+    uint32_t outSz; /* output MAC size (0 if not finalizing) */
+    uint32_t inSz;  /* input data size */
+    uint32_t keySz; /* key size (0 if using keyId or already initialized) */
+    uint16_t keyId; /* key ID for HSM-stored key */
+    uint8_t  WH_PAD[2];
+    whMessageCrypto_CmacAesState resumeState;
     /* Data follows:
      * uint8_t in[inSz]
      * uint8_t key[keySz]
      */
-} whMessageCrypto_CmacRequest;
+} whMessageCrypto_CmacAesRequest;
 
-/* CMAC Response */
+/* CMAC-AES Response */
 typedef struct {
-    uint32_t outSz;
-    uint16_t keyId;
-    uint8_t  WH_PAD[2];
+    whMessageCrypto_CmacAesState resumeState;
+    uint32_t                     outSz; /* actual output MAC size */
+    uint16_t                     keyId; /* key ID (ERASED for non-HSM) */
+    uint8_t                      WH_PAD[2];
     /* Data follows:
-     * uint8_t out[outSz];
+     * uint8_t out[outSz]
      */
-} whMessageCrypto_CmacResponse;
+} whMessageCrypto_CmacAesResponse;
 
-int wh_MessageCrypto_TranslateCmacRequest(
-    uint16_t magic, const whMessageCrypto_CmacRequest* src,
-    whMessageCrypto_CmacRequest* dest);
+int wh_MessageCrypto_TranslateCmacAesState(
+    uint16_t magic, const whMessageCrypto_CmacAesState* src,
+    whMessageCrypto_CmacAesState* dest);
 
-int wh_MessageCrypto_TranslateCmacResponse(
-    uint16_t magic, const whMessageCrypto_CmacResponse* src,
-    whMessageCrypto_CmacResponse* dest);
+int wh_MessageCrypto_TranslateCmacAesRequest(
+    uint16_t magic, const whMessageCrypto_CmacAesRequest* src,
+    whMessageCrypto_CmacAesRequest* dest);
+
+int wh_MessageCrypto_TranslateCmacAesResponse(
+    uint16_t magic, const whMessageCrypto_CmacAesResponse* src,
+    whMessageCrypto_CmacAesResponse* dest);
 
 
 /*
@@ -964,31 +979,36 @@ int wh_MessageCrypto_TranslateSha2DmaRequest(
 int wh_MessageCrypto_TranslateSha2DmaResponse(
     uint16_t magic, const whMessageCrypto_Sha2DmaResponse* src,
     whMessageCrypto_Sha2DmaResponse* dest);
-/* CMAC DMA Request */
+/* CMAC-AES DMA Request - only input data goes via DMA; state, key, and output
+ * are passed inline in the message for cross-architecture safety */
 typedef struct {
-    uint32_t                  type;     /* enum wc_CmacType */
-    uint32_t                  finalize; /* 1 if final, 0 if update */
-    whMessageCrypto_DmaBuffer state;    /* CMAC state buffer */
-    whMessageCrypto_DmaBuffer key;      /* Key buffer */
-    whMessageCrypto_DmaBuffer input;    /* Input buffer */
-    whMessageCrypto_DmaBuffer output;   /* Output buffer */
-} whMessageCrypto_CmacDmaRequest;
+    whMessageCrypto_CmacAesState resumeState; /* portable CMAC state */
+    whMessageCrypto_DmaBuffer    input;       /* Input data via DMA */
+    uint32_t outSz; /* output MAC size (0 = not finalizing) */
+    uint32_t keySz; /* inline key size (0 = use keyId) */
+    uint16_t keyId; /* HSM key ID */
+    uint8_t  WH_PAD[2];
+    /* Trailing data: uint8_t key[keySz] */
+} whMessageCrypto_CmacAesDmaRequest;
 
-/* CMAC DMA Response */
+/* CMAC-AES DMA Response - state and output MAC returned inline */
 typedef struct {
+    whMessageCrypto_CmacAesState  resumeState; /* portable CMAC state */
     whMessageCrypto_DmaAddrStatus dmaAddrStatus;
-    uint32_t                      outSz;
-    uint8_t                       WH_PAD[4]; /* Pad to 8-byte alignment */
-} whMessageCrypto_CmacDmaResponse;
+    uint32_t                      outSz; /* actual output MAC size */
+    uint16_t                      keyId;
+    uint8_t                       WH_PAD[2];
+    /* Trailing data: uint8_t out[outSz] (max AES_BLOCK_SIZE = 16 bytes) */
+} whMessageCrypto_CmacAesDmaResponse;
 
-/* CMAC DMA translation functions */
-int wh_MessageCrypto_TranslateCmacDmaRequest(
-    uint16_t magic, const whMessageCrypto_CmacDmaRequest* src,
-    whMessageCrypto_CmacDmaRequest* dest);
+/* CMAC-AES DMA translation functions */
+int wh_MessageCrypto_TranslateCmacAesDmaRequest(
+    uint16_t magic, const whMessageCrypto_CmacAesDmaRequest* src,
+    whMessageCrypto_CmacAesDmaRequest* dest);
 
-int wh_MessageCrypto_TranslateCmacDmaResponse(
-    uint16_t magic, const whMessageCrypto_CmacDmaResponse* src,
-    whMessageCrypto_CmacDmaResponse* dest);
+int wh_MessageCrypto_TranslateCmacAesDmaResponse(
+    uint16_t magic, const whMessageCrypto_CmacAesDmaResponse* src,
+    whMessageCrypto_CmacAesDmaResponse* dest);
 
 /* AES DMA Request [CTR / CBC / GCM / ECB]*/
 typedef struct {

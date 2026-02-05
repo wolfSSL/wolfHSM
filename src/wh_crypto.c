@@ -32,10 +32,13 @@
 #include <stdint.h>
 #include <stddef.h>  /* For NULL */
 
+#include <string.h>
+
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/types.h"
 #include "wolfssl/wolfcrypt/error-crypt.h"
 #include "wolfssl/wolfcrypt/asn.h"
+#include "wolfssl/wolfcrypt/cmac.h"
 #include "wolfssl/wolfcrypt/rsa.h"
 #include "wolfssl/wolfcrypt/curve25519.h"
 #include "wolfssl/wolfcrypt/ecc.h"
@@ -375,5 +378,29 @@ int wh_Crypto_MlDsaDeserializeKeyDer(const uint8_t* buffer, uint16_t size,
     return ret;
 }
 #endif /* HAVE_DILITHIUM */
+
+#ifdef WOLFSSL_CMAC
+void wh_Crypto_CmacAesSaveStateToMsg(whMessageCrypto_CmacAesState* state,
+                                     const Cmac*                   cmac)
+{
+    memcpy(state->buffer, cmac->buffer, AES_BLOCK_SIZE);
+    memcpy(state->digest, cmac->digest, AES_BLOCK_SIZE);
+    state->bufferSz = cmac->bufferSz;
+    state->totalSz  = cmac->totalSz;
+}
+
+int wh_Crypto_CmacAesRestoreStateFromMsg(
+    Cmac* cmac, const whMessageCrypto_CmacAesState* state)
+{
+    if (state->bufferSz > AES_BLOCK_SIZE) {
+        return WH_ERROR_BADARGS;
+    }
+    memcpy(cmac->buffer, state->buffer, AES_BLOCK_SIZE);
+    memcpy(cmac->digest, state->digest, AES_BLOCK_SIZE);
+    cmac->bufferSz = state->bufferSz;
+    cmac->totalSz  = state->totalSz;
+    return 0;
+}
+#endif /* WOLFSSL_CMAC */
 
 #endif  /* !WOLFHSM_CFG_NO_CRYPTO */
