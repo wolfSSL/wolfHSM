@@ -703,8 +703,6 @@ int wh_Client_AesCbc(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
         return WH_ERROR_BADARGS;
     }
 
-
-    uint32_t       last_offset = (blocks - 1) * AES_BLOCK_SIZE;
     uint32_t       key_len     = aes->keylen;
     const uint8_t* key         = (const uint8_t*)(aes->devKey);
     whKeyId        key_id      = WH_DEVCTX_TO_KEYID(aes->devCtx);
@@ -729,12 +727,10 @@ int wh_Client_AesCbc(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
     uint32_t req_len = sizeof(whMessageCrypto_GenericRequestHeader) +
                        sizeof(*req) + len + key_len + iv_len;
 
-
     WH_DEBUG_CLIENT_VERBOSE("enc:%d keylen:%d ivsz:%d insz:%d reqsz:%u "
-           "blocks:%u lastoffset:%u\n",
+           "blocks:%u\n",
            enc, (int)key_len, (int)iv_len, (int)len,
-           (unsigned int)req_len, (unsigned int)blocks,
-           (unsigned int)last_offset);
+           (unsigned int)req_len, (unsigned int)blocks);
 
     if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
         return WH_ERROR_BADARGS;
@@ -755,13 +751,6 @@ int wh_Client_AesCbc(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
         memcpy(req_iv, iv, iv_len);
     }
 
-    /* Determine where ciphertext is for chaining */
-    if (enc == 0) {
-        /* Update the CBC state with the last cipher text block */
-        /* III Must do this before the decrypt if in-place */
-        memcpy(iv, in + last_offset, iv_len);
-    }
-
     WH_DEBUG_VERBOSE_HEXDUMP("[client] in: \n", req_in, len);
     WH_DEBUG_VERBOSE_HEXDUMP("[client] key: \n", req_key, key_len);
     WH_DEBUG_VERBOSE_HEXDUMP("[client] iv: \n", req_iv, iv_len);
@@ -780,21 +769,151 @@ int wh_Client_AesCbc(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
             if (ret == WH_ERROR_OK) {
                 /* Response packet */
                 uint8_t* res_out = (uint8_t*)(res + 1);
+                uint8_t* res_iv = res_out + res->sz;
                 WH_DEBUG_CLIENT_VERBOSE("out size:%d res_len:%d\n", (int)res->sz,
                        (int)res_len);
                 WH_DEBUG_VERBOSE_HEXDUMP("[client] res_out: \n", out, res->sz);
+                WH_DEBUG_VERBOSE_HEXDUMP("[client] res_iv: \n", res_iv, AES_IV_SIZE);
                 /* copy the response res_out */
                 memcpy(out, res_out, res->sz);
-                if (enc != 0) {
-                    /* Update the CBC state with the last cipher text block
-                     */
-                    memcpy(iv, out + last_offset, AES_IV_SIZE);
-                }
+                /* Update the CBC state with the last cipher text block */
+                memcpy(iv, res_iv, AES_IV_SIZE);
             }
         }
     }
     return ret;
 }
+
+#ifdef WOLFHSM_CFG_DMA
+int wh_Client_AesCbcDma(whClientContext* ctx, Aes* aes, int enc,
+                        const uint8_t* in, uint32_t len, uint8_t* out)
+{
+    int                               ret     = WH_ERROR_OK;
+    whMessageCrypto_AesCbcDmaRequest* req     = NULL;
+    uint8_t*                          dataPtr = NULL;
+    uintptr_t                         inAddr  = 0;
+    uintptr_t                         outAddr = 0;
+
+    uint16_t       group  = WH_MESSAGE_GROUP_CRYPTO_DMA;
+    uint16_t       action = WC_ALGO_TYPE_CIPHER;
+    uint16_t       type   = WC_CIPHER_AES_CBC;
+
+    const uint8_t* key    = NULL;
+    uint8_t*       iv     = (uint8_t*)aes->reg;
+
+    if (ctx == NULL || aes == NULL || in == NULL || out == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    if ((len % AES_BLOCK_SIZE) != 0) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Get data buffer */
+    dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
+    if (dataPtr == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Setup generic header and get pointer to request data */
+    req = (whMessageCrypto_AesCbcDmaRequest*)_createCryptoRequest(
+        dataPtr, WC_CIPHER_AES_CBC);
+    uint8_t* req_iv = (uint8_t*)req + sizeof(whMessageCrypto_AesCbcDmaRequest);
+    uint8_t* req_key = req_iv + AES_IV_SIZE;
+    uint32_t req_len = sizeof(whMessageCrypto_GenericRequestHeader) +
+                       sizeof(*req) + AES_IV_SIZE;
+
+    /* Setup request packet */
+    memset(req, 0, sizeof(*req));
+    req->enc  = enc;
+
+    req->keyId = WH_DEVCTX_TO_KEYID(aes->devCtx);
+    if (req->keyId != WH_KEYID_ERASED) {
+        /* Using keyId-based key, server will load it from keystore */
+        key        = NULL;
+        req->keySz = 0;
+    }
+    else {
+        /* Using direct key */
+        key    = (const uint8_t*)(aes->devKey);
+        req->keySz = aes->keylen;
+        req_len    += req->keySz;
+    }
+
+    /* Copy request data not handled by DMA */
+    memcpy(req_iv, iv, AES_IV_SIZE);
+    if (key != NULL && req->keySz > 0) {
+        memcpy(req_key, key, req->keySz);
+    }
+
+    if (ret == WH_ERROR_OK && in != NULL) {
+        req->input.sz = len;
+        ret           = wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)in, (void**)&inAddr, req->input.sz,
+            WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
+        if (ret == WH_ERROR_OK) {
+            req->input.addr = inAddr;
+        }
+    }
+
+    if (ret == WH_ERROR_OK && out != NULL) {
+        req->output.sz = len;
+        ret            = wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)out, (void**)&outAddr, req->output.sz,
+            WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
+        if (ret == WH_ERROR_OK) {
+            req->output.addr = outAddr;
+        }
+    }
+
+    WH_DEBUG_VERBOSE_HEXDUMP("[client] key: \n", req_key, req->keySz);
+    WH_DEBUG_VERBOSE_HEXDUMP("[client] iv: \n", req_iv, AES_IV_SIZE);
+
+    /* Send request and receive response */
+    WH_DEBUG_VERBOSE_HEXDUMP("[client] AESCBC DMA req packet: \n",
+                            dataPtr, req_len);
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Client_SendRequest(ctx, group, action, req_len, dataPtr);
+    }
+    if (ret == WH_ERROR_OK) {
+        uint16_t resLen = 0;
+        do {
+            ret =
+                wh_Client_RecvResponse(ctx, &group, &action, &resLen, dataPtr);
+        } while (ret == WH_ERROR_NOTREADY);
+
+        if (ret == WH_ERROR_OK) {
+            /* Get response */
+            whMessageCrypto_AesCbcDmaResponse* res;
+            ret = _getCryptoResponse(dataPtr, type, (uint8_t**)&res);
+            /* wolfCrypt allows positive error codes on success in some
+             * scenarios */
+            if (ret >= WH_ERROR_OK) {
+                uint8_t* res_iv = (uint8_t*)res +
+                                   sizeof(whMessageCrypto_AesCbcDmaResponse);
+                WH_DEBUG_VERBOSE_HEXDUMP("[client] res_iv: \n", res_iv,
+                                         AES_IV_SIZE);
+                memcpy(iv, res_iv, AES_IV_SIZE);
+                ret = WH_ERROR_OK; /* Success */
+            }
+        }
+    }
+
+    /* post address translation callbacks (for cleanup) */
+    if (in != NULL) {
+        (void)wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)in, (void**)&inAddr, len,
+            WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
+    }
+    if (out != NULL) {
+        (void)wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)out, (void**)&outAddr, len,
+            WH_DMA_OPER_CLIENT_WRITE_POST, (whDmaFlags){0});
+    }
+
+    return ret;
+}
+#endif /* WOLFHSM_CFG_DMA */
 #endif /* HAVE_AES_CBC */
 
 #ifdef HAVE_AESGCM

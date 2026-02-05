@@ -2571,6 +2571,16 @@ static int _HandleAesCtrDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
             res.dmaAddrStatus.badAddr = req.output;
         }
     }
+    /* Clean up DMA input address (unconditionally) */
+    if (inAddr != NULL) {
+        if (wh_Server_DmaProcessClientAddress(
+                ctx, req.input.addr, &inAddr, req.input.sz,
+                WH_DMA_OPER_CLIENT_READ_POST,
+                (whServerDmaFlags){0}) != WH_ERROR_OK) {
+            WH_DEBUG_SERVER_VERBOSE(
+                "[AesCtr] Error cleaning up input DMA address\n");
+        }
+    }
 
     wc_AesFree(aes);
 
@@ -2699,7 +2709,7 @@ static int _HandleAesCbc(whServerContext* ctx, uint16_t magic, const void* crypt
                          uint16_t inSize, void* cryptoDataOut,
                          uint16_t* outSize)
 {
-    int                            ret    = 0;
+    int                            ret    = WH_ERROR_OK;
     Aes                            aes[1] = {0};
     whMessageCrypto_AesCbcRequest  req;
     whMessageCrypto_AesCbcResponse res;
@@ -2714,24 +2724,17 @@ static int _HandleAesCbc(whServerContext* ctx, uint16_t magic, const void* crypt
     /* Translate request */
     ret = wh_MessageCrypto_TranslateAesCbcRequest(
         magic, (const whMessageCrypto_AesCbcRequest*)cryptoDataIn, &req);
-    if (ret != 0) {
+    if (ret != WH_ERROR_OK) {
         return ret;
     }
 
     /* Validate variable-length fields fit within inSize */
-    uint32_t enc     = req.enc;
-    uint32_t key_len = req.keyLen;
-    uint32_t len     = req.sz;
-    uint32_t available = inSize - sizeof(whMessageCrypto_AesCbcRequest);
-    if (len > available) {
-        return WH_ERROR_BADARGS;
-    }
-    available -= len;
-    if (key_len > available) {
-        return WH_ERROR_BADARGS;
-    }
-    available -= key_len;
-    if (AES_BLOCK_SIZE > available) {
+    uint32_t enc         = req.enc;
+    uint32_t key_len     = req.keyLen;
+    uint32_t len         = req.sz;
+    uint64_t needed_size = sizeof(whMessageCrypto_AesCbcRequest) + len +
+                           key_len + AES_BLOCK_SIZE;
+    if (needed_size != inSize) {
         return WH_ERROR_BADARGS;
     }
 
@@ -2746,6 +2749,7 @@ static int _HandleAesCbc(whServerContext* ctx, uint16_t magic, const void* crypt
 
     uint8_t* out =
         (uint8_t*)(cryptoDataOut) + sizeof(whMessageCrypto_AesCbcResponse);
+    uint8_t* out_iv = out + len;
 
     /* Debug printouts */
     WH_DEBUG_VERBOSE_HEXDUMP("[AesCbc] Input data", in, len);
@@ -2753,13 +2757,13 @@ static int _HandleAesCbc(whServerContext* ctx, uint16_t magic, const void* crypt
     /* Freshen key and validate usage policy if key is not erased */
     if (!WH_KEYID_ISERASED(key_id)) {
         ret = wh_Server_KeystoreFreshenKey(ctx, key_id, &cachedKey, &keyMeta);
-        if (ret == 0) {
+        if (ret == WH_ERROR_OK) {
             /* Validate key usage policy */
             ret = wh_Server_KeystoreEnforceKeyUsage(
                 keyMeta, enc != 0 ? WH_NVM_FLAGS_USAGE_ENCRYPT
                                   : WH_NVM_FLAGS_USAGE_DECRYPT);
         }
-        if (ret == 0) {
+        if (ret == WH_ERROR_OK) {
             /* override the incoming values with cached key */
             key     = cachedKey;
             key_len = keyMeta->len;
@@ -2769,36 +2773,45 @@ static int _HandleAesCbc(whServerContext* ctx, uint16_t magic, const void* crypt
     else {
         WH_DEBUG_VERBOSE_HEXDUMP("[AesCbc] Key ", key, key_len);
     }
-    if (ret == 0) {
+    /* Verify key size is valid for AES */
+    if (ret == WH_ERROR_OK && key_len != AES_128_KEY_SIZE &&
+        key_len != AES_192_KEY_SIZE && key_len != AES_256_KEY_SIZE) {
+        WH_DEBUG_SERVER("[AesCbc] Invalid key size: %d", key_len);
+        ret = WH_ERROR_BADARGS;
+    }
+    if (ret == WH_ERROR_OK) {
         /* init key with possible hardware */
         ret = wc_AesInit(aes, NULL, ctx->crypto->devId);
     }
-    if (ret == 0) {
+    if (ret == WH_ERROR_OK) {
         /* load the key */
         ret = wc_AesSetKey(aes, (byte*)key, (word32)key_len, (byte*)iv,
                            enc != 0 ? AES_ENCRYPTION : AES_DECRYPTION);
-        if (ret == 0) {
+        if (ret == WH_ERROR_OK) {
             /* do the crypto operation */
             if (enc != 0) {
                 ret = wc_AesCbcEncrypt(aes, (byte*)out, (byte*)in, (word32)len);
-                if (ret == 0) {
+                if (ret == WH_ERROR_OK) {
                     WH_DEBUG_VERBOSE_HEXDUMP("[AesCbc] Encrypted output", out, len);
                 }
             }
             else {
                 ret = wc_AesCbcDecrypt(aes, (byte*)out, (byte*)in, (word32)len);
-                if (ret == 0) {
+                if (ret == WH_ERROR_OK) {
                     WH_DEBUG_VERBOSE_HEXDUMP("[AesCbc] Decrypted output", out, len);
                 }
             }
         }
+        if (ret == WH_ERROR_OK) {
+            memcpy(out_iv, aes->reg, AES_IV_SIZE);
+        }
         wc_AesFree(aes);
     }
     /* encode the return sz */
-    if (ret == 0) {
+    if (ret == WH_ERROR_OK) {
         /* set sz */
         res.sz   = len;
-        *outSize = sizeof(whMessageCrypto_AesCbcResponse) + len;
+        *outSize = sizeof(whMessageCrypto_AesCbcResponse) + len + AES_IV_SIZE;
 
         /* Translate response back */
         ret = wh_MessageCrypto_TranslateAesCbcResponse(
@@ -2806,6 +2819,180 @@ static int _HandleAesCbc(whServerContext* ctx, uint16_t magic, const void* crypt
     }
     return ret;
 }
+
+#ifdef WOLFHSM_CFG_DMA
+static int _HandleAesCbcDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
+                            const void* cryptoDataIn, uint16_t inSize,
+                            void* cryptoDataOut, uint16_t* outSize)
+{
+    int                               ret = WH_ERROR_OK;
+    whMessageCrypto_AesCbcDmaRequest  req;
+    whMessageCrypto_AesCbcDmaResponse res;
+    Aes                               aes[1] = {0};
+
+    void*  inAddr  = NULL;
+    void*  outAddr = NULL;
+    word32 outSz   = 0;
+
+    whKeyId        keyId;
+    uint8_t*       cachedKey = NULL;
+    whNvmMetadata* keyMeta   = NULL;
+
+    (void)seq;
+
+    if (inSize < sizeof(whMessageCrypto_AesCbcDmaRequest)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Translate request */
+    ret = wh_MessageCrypto_TranslateAesCbcDmaRequest(
+        magic, (whMessageCrypto_AesCbcDmaRequest*)cryptoDataIn, &req);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    uint32_t enc         = req.enc;
+    uint32_t keyLen      = req.keySz;
+    uint32_t len         = req.input.sz;
+    uint64_t needed_size = sizeof(whMessageCrypto_AesCbcDmaRequest) + keyLen +
+                           AES_IV_SIZE;
+    if (needed_size != inSize) {
+        return WH_ERROR_BADARGS;
+    }
+    if (req.input.sz != req.output.sz) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* iv is a fixed size field, key is optional and variable length */
+    uint8_t* key    = NULL;
+    uint8_t* iv     = (uint8_t*)(cryptoDataIn) +
+                      sizeof(whMessageCrypto_AesCbcDmaRequest);
+    uint8_t* out_iv = (uint8_t*)(cryptoDataOut) +
+                      sizeof(whMessageCrypto_AesCbcDmaResponse);
+
+    memset(&res, 0, sizeof(res));
+
+    /* Handle key operations */
+    if (ret == WH_ERROR_OK && keyLen > 0) {
+        key = iv + AES_IV_SIZE;
+        WH_DEBUG_VERBOSE_HEXDUMP("[AesCbc] Key ", key, keyLen);
+    }
+    else if (ret == WH_ERROR_OK && keyLen == 0) {
+        /* Handle keyId-based keys if no direct key was provided */
+        keyId = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                             ctx->comm->client_id, req.keyId);
+
+        /* Freshen key and validate usage policy if key is not erased */
+        if (!WH_KEYID_ISERASED(keyId)) {
+            ret = wh_Server_KeystoreFreshenKey(ctx, keyId, &cachedKey,
+                                               &keyMeta);
+            if (ret == WH_ERROR_OK) {
+                /* Validate key usage policy */
+                ret = wh_Server_KeystoreEnforceKeyUsage(
+                    keyMeta, enc != 0 ? WH_NVM_FLAGS_USAGE_ENCRYPT
+                                    : WH_NVM_FLAGS_USAGE_DECRYPT);
+            }
+            if (ret == WH_ERROR_OK) {
+                key    = cachedKey;
+                keyLen = keyMeta->len;
+                WH_DEBUG_VERBOSE_HEXDUMP("[AesCbc] Key from HSM", key, keyLen);
+            }
+        }
+    }
+    /* Verify key size is valid for AES */
+    if (ret == WH_ERROR_OK && keyLen != AES_128_KEY_SIZE &&
+        keyLen != AES_192_KEY_SIZE && keyLen != AES_256_KEY_SIZE) {
+        WH_DEBUG_SERVER("[AesCbc] Invalid key size: %d", keyLen);
+        ret = WH_ERROR_BADARGS;
+    }
+
+    /* Handle input data */
+    if (ret == WH_ERROR_OK && req.input.sz > 0) {
+        ret = wh_Server_DmaProcessClientAddress(
+            ctx, req.input.addr, &inAddr, req.input.sz,
+            WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
+        if (ret != WH_ERROR_OK) {
+            res.dmaAddrStatus.badAddr = req.input;
+        }
+    }
+
+    /* Handle output data */
+    if (ret == WH_ERROR_OK && req.output.sz > 0) {
+        ret = wh_Server_DmaProcessClientAddress(
+            ctx, req.output.addr, &outAddr, req.output.sz,
+            WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
+        if (ret != WH_ERROR_OK) {
+            res.dmaAddrStatus.badAddr = req.output;
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        ret = wc_AesInit(aes, NULL, ctx->crypto->devId);
+    }
+
+    if (ret == WH_ERROR_OK) {
+        ret = wc_AesSetKey(aes, (byte*)key, keyLen, (byte*)iv,
+                           req.enc != 0 ? AES_ENCRYPTION : AES_DECRYPTION);
+    }
+
+    if (ret == WH_ERROR_OK) {
+        if (enc != 0) {
+            ret = wc_AesCbcEncrypt(aes, (byte*)outAddr, (byte*)inAddr,
+                                   (word32)len);
+            if (ret == WH_ERROR_OK) {
+                WH_DEBUG_VERBOSE_HEXDUMP("[AesCbc] Encrypted output",
+                                         outAddr, len);
+            }
+        }
+        else {
+            ret = wc_AesCbcDecrypt(aes, (byte*)outAddr, (byte*)inAddr,
+                                   (word32)len);
+            if (ret == WH_ERROR_OK) {
+                WH_DEBUG_VERBOSE_HEXDUMP("[AesCbc] Decrypted output",
+                                         outAddr, len);
+            }
+        }
+        if (ret == WH_ERROR_OK) {
+            outSz = len;
+            memcpy(out_iv, aes->reg, AES_IV_SIZE);
+        }
+    }
+
+    /* Post-write DMA address processing for output (on success) */
+    if (ret == WH_ERROR_OK) {
+        if (req.output.sz > 0) {
+            ret = wh_Server_DmaProcessClientAddress(
+                    ctx, req.output.addr, &outAddr, req.output.sz,
+                    WH_DMA_OPER_CLIENT_WRITE_POST, (whServerDmaFlags){0});
+            if (ret == WH_ERROR_ACCESS) {
+                res.dmaAddrStatus.badAddr = req.output;
+            }
+        }
+    }
+    /* Clean up DMA input address (unconditionally) */
+    if (inAddr != NULL) {
+        if (wh_Server_DmaProcessClientAddress(
+                ctx, req.input.addr, &inAddr, req.input.sz,
+                WH_DMA_OPER_CLIENT_READ_POST,
+                (whServerDmaFlags){0}) != WH_ERROR_OK) {
+            WH_DEBUG_SERVER_VERBOSE(
+                "[AesCbc] Error cleaning up input DMA address\n");
+        }
+    }
+
+    wc_AesFree(aes);
+
+    /* Set response */
+    res.outSz = outSz;
+
+    /* Translate response back */
+    (void)wh_MessageCrypto_TranslateAesCbcDmaResponse(
+        magic, &res, (whMessageCrypto_AesCbcDmaResponse*)cryptoDataOut);
+    *outSize  = sizeof(whMessageCrypto_AesCbcDmaResponse) + AES_IV_SIZE;
+
+    return ret;
+}
+#endif /* WOLFHSM_CFG_DMA */
 #endif /* HAVE_AES_CBC */
 
 #ifdef HAVE_AESGCM
@@ -5569,13 +5756,6 @@ int wh_Server_HandleCryptoDmaRequest(whServerContext* ctx, uint16_t magic,
 
         case WC_ALGO_TYPE_CIPHER:
             switch (rqstHeader.algoType) {
-#ifdef WOLFSSL_AES_COUNTER
-                case WC_CIPHER_AES_CTR:
-                    ret = _HandleAesCtrDma(ctx, magic, seq, cryptoDataIn,
-                                           cryptoInSize, cryptoDataOut,
-                                           &cryptoOutSize);
-                    break;
-#endif /* WOLFSSL_AES_COUNTER */
 #ifdef HAVE_AESGCM
                 case WC_CIPHER_AES_GCM:
                     ret = _HandleAesGcmDma(ctx, magic, seq, cryptoDataIn,
@@ -5583,6 +5763,20 @@ int wh_Server_HandleCryptoDmaRequest(whServerContext* ctx, uint16_t magic,
                                            &cryptoOutSize);
                     break;
 #endif /* HAVE_AESGCM */
+#ifdef WOLFSSL_AES_COUNTER
+                case WC_CIPHER_AES_CTR:
+                    ret = _HandleAesCtrDma(ctx, magic, seq, cryptoDataIn,
+                                           cryptoInSize, cryptoDataOut,
+                                           &cryptoOutSize);
+                    break;
+#endif /* WOLFSSL_AES_COUNTER */
+#ifdef HAVE_AES_CBC
+                case WC_CIPHER_AES_CBC:
+                    ret = _HandleAesCbcDma(ctx, magic, seq, cryptoDataIn,
+                                           cryptoInSize, cryptoDataOut,
+                                           &cryptoOutSize);
+                    break;
+#endif /* HAVE_AES_CBC */
                 default:
                     ret = NOT_COMPILED_IN;
                     break;

@@ -240,6 +240,7 @@ typedef struct {
     uint8_t WH_PAD[sizeof(whMessageCrypto_AesCbcRequest) - sizeof(uint32_t)];
     /* Data follows:
      * uint8_t out[sz]
+     * uint8_t iv[AES_IV_SIZE]
      */
 } whMessageCrypto_AesCbcResponse;
 
@@ -1013,6 +1014,37 @@ int wh_MessageCrypto_TranslateCmacAesDmaRequest(
 int wh_MessageCrypto_TranslateCmacAesDmaResponse(
     uint16_t magic, const whMessageCrypto_CmacAesDmaResponse* src,
     whMessageCrypto_CmacAesDmaResponse* dest);
+
+/* AES-CBC DMA Request - only input and output data go via DMA. Key and IV
+ * are passed inline. */
+typedef struct {
+    whMessageCrypto_DmaBuffer input;    /* Input buffer */
+    whMessageCrypto_DmaBuffer output;   /* Output buffer */
+    uint32_t                  enc;      /* 1 for encrypt, 0 for decrypt */
+    uint32_t                  keyId;
+    uint32_t                  keySz;    /* inline key size (0 = use keyId) */
+    uint8_t                   WH_PAD[4]; /* Pad to 8-byte alignment */
+    /* Trailing data:
+     *     uint8_t iv[AES_IV_SIZE]
+     *     uint8_t key[keySz]
+     */
+} whMessageCrypto_AesCbcDmaRequest;
+
+/* AES-CBC DMA Response */
+typedef struct {
+    whMessageCrypto_DmaAddrStatus dmaAddrStatus;
+    uint32_t                      outSz;
+    /* Trailing data: uint8_t iv[AES_IV_SIZE] */
+} whMessageCrypto_AesCbcDmaResponse;
+
+/* AES-CBC DMA translation functions */
+int wh_MessageCrypto_TranslateAesCbcDmaRequest(
+    uint16_t magic, const whMessageCrypto_AesCbcDmaRequest* src,
+    whMessageCrypto_AesCbcDmaRequest* dest);
+
+int wh_MessageCrypto_TranslateAesCbcDmaResponse(
+    uint16_t magic, const whMessageCrypto_AesCbcDmaResponse* src,
+    whMessageCrypto_AesCbcDmaResponse* dest);
 
 /* AES-CTR DMA Request */
 typedef struct {
