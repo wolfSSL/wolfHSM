@@ -191,7 +191,6 @@ typedef struct {
     /* Data follows:
      * uint8_t in[sz]
      * uint8_t key[keyLen]
-     * uint8_t iv[AES_IV_SIZE]
      */
 } whMessageCrypto_AesEcbRequest;
 
@@ -993,6 +992,30 @@ int wh_MessageCrypto_TranslateCmacDmaRequest(
 int wh_MessageCrypto_TranslateCmacDmaResponse(
     uint16_t magic, const whMessageCrypto_CmacDmaResponse* src,
     whMessageCrypto_CmacDmaResponse* dest);
+
+/* AES-ECB DMA Request */
+typedef struct {
+    uint32_t                  enc;      /* 1 for encrypt, 0 for decrypt */
+    uint32_t                  keyId;
+    whMessageCrypto_DmaBuffer key;      /* Key buffer */
+    whMessageCrypto_DmaBuffer input;    /* Input buffer */
+    whMessageCrypto_DmaBuffer output;   /* Output buffer */
+} whMessageCrypto_AesEcbDmaRequest;
+
+/* AES-ECB DMA Response */
+typedef struct {
+    whMessageCrypto_DmaAddrStatus dmaAddrStatus;
+    uint32_t                      outSz;
+} whMessageCrypto_AesEcbDmaResponse;
+
+/* AES-ECB DMA translation functions */
+int wh_MessageCrypto_TranslateAesEcbDmaRequest(
+    uint16_t magic, const whMessageCrypto_AesEcbDmaRequest* src,
+    whMessageCrypto_AesEcbDmaRequest* dest);
+
+int wh_MessageCrypto_TranslateAesEcbDmaResponse(
+    uint16_t magic, const whMessageCrypto_AesEcbDmaResponse* src,
+    whMessageCrypto_AesEcbDmaResponse* dest);
 
 /* AES-CBC DMA Request */
 typedef struct {
