@@ -994,6 +994,31 @@ int wh_MessageCrypto_TranslateCmacDmaResponse(
     uint16_t magic, const whMessageCrypto_CmacDmaResponse* src,
     whMessageCrypto_CmacDmaResponse* dest);
 
+/* AES-CBC DMA Request */
+typedef struct {
+    uint32_t                  enc;      /* 1 for encrypt, 0 for decrypt */
+    uint32_t                  keyId;
+    whMessageCrypto_DmaBuffer key;      /* Key buffer */
+    whMessageCrypto_DmaBuffer input;    /* Input buffer */
+    whMessageCrypto_DmaBuffer output;   /* Output buffer */
+    whMessageCrypto_DmaBuffer iv;       /* IV buffer */
+} whMessageCrypto_AesCbcDmaRequest;
+
+/* AES-CBC DMA Response */
+typedef struct {
+    whMessageCrypto_DmaAddrStatus dmaAddrStatus;
+    uint32_t                      outSz;
+} whMessageCrypto_AesCbcDmaResponse;
+
+/* AES-CBC DMA translation functions */
+int wh_MessageCrypto_TranslateAesCbcDmaRequest(
+    uint16_t magic, const whMessageCrypto_AesCbcDmaRequest* src,
+    whMessageCrypto_AesCbcDmaRequest* dest);
+
+int wh_MessageCrypto_TranslateAesCbcDmaResponse(
+    uint16_t magic, const whMessageCrypto_AesCbcDmaResponse* src,
+    whMessageCrypto_AesCbcDmaResponse* dest);
+
 /* AES-CTR DMA Request */
 typedef struct {
     uint32_t                  enc;      /* 1 for encrypt, 0 for decrypt */

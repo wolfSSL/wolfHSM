@@ -1203,6 +1203,65 @@ int wh_MessageCrypto_TranslateEd25519VerifyDmaResponse(
     return 0;
 }
 
+/* AES-CBC DMA translation functions */
+int wh_MessageCrypto_TranslateAesCbcDmaRequest(
+    uint16_t magic, const whMessageCrypto_AesCbcDmaRequest* src,
+    whMessageCrypto_AesCbcDmaRequest* dest)
+{
+    int ret;
+
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    WH_T32(magic, dest, src, enc);
+    WH_T32(magic, dest, src, keyId);
+
+    ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->key, &dest->key);
+    if (ret != 0) {
+        return ret;
+    }
+
+    ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->input, &dest->input);
+    if (ret != 0) {
+        return ret;
+    }
+
+    ret =
+        wh_MessageCrypto_TranslateDmaBuffer(magic, &src->output, &dest->output);
+    if (ret != 0) {
+        return ret;
+    }
+
+    ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->iv, &dest->iv);
+    if (ret != 0) {
+        return ret;
+    }
+
+    return 0;
+}
+
+int wh_MessageCrypto_TranslateAesCbcDmaResponse(
+    uint16_t magic, const whMessageCrypto_AesCbcDmaResponse* src,
+    whMessageCrypto_AesCbcDmaResponse* dest)
+{
+    int ret;
+
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateDmaAddrStatus(magic, &src->dmaAddrStatus,
+                                                  &dest->dmaAddrStatus);
+    if (ret != 0) {
+        return ret;
+    }
+
+    WH_T32(magic, dest, src, outSz);
+
+    return 0;
+}
+
 /* AES-CTR DMA Request translation */
 int wh_MessageCrypto_TranslateAesCtrDmaRequest(
     uint16_t magic, const whMessageCrypto_AesCtrDmaRequest* src,
