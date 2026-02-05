@@ -163,14 +163,14 @@ static uint8_t* _createCryptoRequestWithSubtype(uint8_t* reqBuf, uint16_t type,
     return reqBuf + sizeof(whMessageCrypto_GenericRequestHeader);
 }
 
-static int _recvCryptoResponse(whClientContext* ctx, 
-                               uint16_t* group, uint16_t* action, 
-                               uint16_t* size, void *data)
+static int _recvCryptoResponse(whClientContext* ctx, uint16_t* group,
+                               uint16_t* action, uint16_t* size, void* data)
 {
     int ret;
 
 #ifdef WOLFHSM_CFG_ENABLE_TIMEOUT
-    ret = wh_Client_RecvResponseBlockingWithTimeout(ctx, group, action, size, data);
+    ret = wh_Client_RecvResponseBlockingWithTimeout(ctx, group, action, size,
+                                                    data);
 #else
     do {
         ret = wh_Client_RecvResponse(ctx, group, action, size, data);
@@ -250,8 +250,7 @@ int wh_Client_RngGenerate(whClientContext* ctx, uint8_t* out, uint32_t size)
         /* Send request and get response */
         ret = wh_Client_SendRequest(ctx, group, action, req_len, dataPtr);
         if (ret == 0) {
-            ret = _recvCryptoResponse(ctx, &group, &action, &res_len,
-                                      dataPtr);
+            ret = _recvCryptoResponse(ctx, &group, &action, &res_len, dataPtr);
         }
         if (ret == WH_ERROR_OK) {
             /* Get response */
@@ -326,8 +325,7 @@ int wh_Client_RngGenerateDma(whClientContext* ctx, uint8_t* out, uint32_t size)
 
     if (ret == WH_ERROR_OK) {
         /* Wait for and receive the response */
-        ret = _recvCryptoResponse(ctx, NULL, NULL, &respSz,
-                                  (uint8_t*)dataPtr);
+        ret = _recvCryptoResponse(ctx, NULL, NULL, &respSz, (uint8_t*)dataPtr);
     }
 
     if (ret == WH_ERROR_OK) {
@@ -2147,8 +2145,8 @@ static int _Ed25519MakeKey(whClientContext* ctx, whKeyId* inout_key_id,
         return ret;
     }
     uint16_t res_len = 0;
-    ret = _recvCryptoResponse(ctx, &group, &action, &res_len,
-                              (uint8_t*)dataPtr);
+    ret =
+        _recvCryptoResponse(ctx, &group, &action, &res_len, (uint8_t*)dataPtr);
 
     if (ret != WH_ERROR_OK) {
         return ret;
@@ -3637,8 +3635,8 @@ int wh_Client_Cmac(whClientContext* ctx, Cmac* cmac, CmacType type,
 
 
         uint16_t res_len = 0;
-        ret = _recvCryptoResponse(ctx, &group, &action, &res_len,
-                                  (uint8_t*)dataPtr);
+        ret              = _recvCryptoResponse(ctx, &group, &action, &res_len,
+                                               (uint8_t*)dataPtr);
         if (ret == WH_ERROR_OK) {
             /* Get response */
             ret =
@@ -3767,8 +3765,7 @@ int wh_Client_CmacDma(whClientContext* ctx, Cmac* cmac, CmacType type,
         }
 
         uint16_t respSz = 0;
-        ret = _recvCryptoResponse(ctx, NULL, NULL, &respSz,
-                                  (uint8_t*)dataPtr);
+        ret = _recvCryptoResponse(ctx, NULL, NULL, &respSz, (uint8_t*)dataPtr);
     }
 
         if (ret == WH_ERROR_OK) {

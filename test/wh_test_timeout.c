@@ -40,13 +40,13 @@ static void whTest_TimeoutCb(void* ctx)
 
 int whTest_Timeout(void)
 {
-    int cb_count = 0;
+    int             cb_count = 0;
     whTimeoutConfig cfg;
-    whTimeoutCtx timeout[1];
+    whTimeoutCtx    timeout[1];
 
     cfg.timeoutUs = 1;
     cfg.expiredCb = whTest_TimeoutCb;
-    cfg.cbCtx = &cb_count;
+    cfg.cbCtx     = &cb_count;
 
     wh_Timeout_Init(timeout, &cfg);
     WH_TEST_ASSERT_RETURN(timeout->startUs == 0);

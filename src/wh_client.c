@@ -204,20 +204,20 @@ int wh_Client_RecvResponse(whClientContext *c,
     return rc;
 }
 
-int wh_Client_RecvResponseBlockingWithTimeout(whClientContext *c,
-        uint16_t *out_group, uint16_t *out_action,
-        uint16_t *out_size, void* data)
+#ifdef WOLFHSM_CFG_ENABLE_TIMEOUT
+int wh_Client_RecvResponseBlockingWithTimeout(whClientContext* c,
+                                              uint16_t*        out_group,
+                                              uint16_t*        out_action,
+                                              uint16_t* out_size, void* data)
 {
-    int ret;
+    int           ret;
     whTimeoutCtx* timeout;
 
     if (c == NULL) {
         return WH_ERROR_BADARGS;
     }
 
-#ifdef WOLFHSM_CFG_ENABLE_TIMEOUT
     timeout = &c->respTimeout;
-#endif
 
     ret = wh_Timeout_Start(timeout);
     if (ret != WH_ERROR_OK) {
@@ -233,6 +233,7 @@ int wh_Client_RecvResponseBlockingWithTimeout(whClientContext *c,
 
     return ret;
 }
+#endif /* WOLFHSM_CFG_ENABLE_TIMEOUT */
 
 int wh_Client_CommInitRequest(whClientContext* c)
 {

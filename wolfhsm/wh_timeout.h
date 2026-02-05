@@ -37,16 +37,16 @@
 typedef void (*whTimeoutExpiredCb)(void* ctx);
 
 typedef struct {
-    uint64_t startUs;
-    uint64_t timeoutUs;
+    uint64_t           startUs;
+    uint64_t           timeoutUs;
     whTimeoutExpiredCb expiredCb;
-    void* cbCtx;
+    void*              cbCtx;
 } whTimeoutCtx;
 
 typedef struct {
-    uint64_t timeoutUs;
+    uint64_t           timeoutUs;
     whTimeoutExpiredCb expiredCb;
-    void* cbCtx;
+    void*              cbCtx;
 } whTimeoutConfig;
 
 /**
