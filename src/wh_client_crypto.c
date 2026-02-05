@@ -170,8 +170,7 @@ static int _recvCryptoResponse(whClientContext* ctx,
     int ret;
 
 #ifdef WOLFHSM_CFG_ENABLE_TIMEOUT
-    ret = wh_Client_RecvResponseTimeout(ctx, group, action, size, data,
-                                        ctx->respTimeout);
+    ret = wh_Client_RecvResponseBlockingWithTimeout(ctx, group, action, size, data);
 #else
     do {
         ret = wh_Client_RecvResponse(ctx, group, action, size, data);

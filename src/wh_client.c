@@ -79,8 +79,8 @@ int wh_Client_Init(whClientContext* c, const whClientConfig* config)
 
 #ifdef WOLFHSM_CFG_ENABLE_TIMEOUT
     if (config->respTimeoutConfig != NULL) {
-        rc = wh_Timeout_Init(c->respTimeout, config->respTimeoutConfig);
-        if (rc != 0) {
+        rc = wh_Timeout_Init(&c->respTimeout, config->respTimeoutConfig);
+        if (rc != WH_ERROR_OK) {
             return rc;
         }
     }
@@ -204,15 +204,20 @@ int wh_Client_RecvResponse(whClientContext *c,
     return rc;
 }
 
-int wh_Client_RecvResponseTimeout(whClientContext *c,
+int wh_Client_RecvResponseBlockingWithTimeout(whClientContext *c,
         uint16_t *out_group, uint16_t *out_action,
-        uint16_t *out_size, void* data, whTimeoutCtx *timeout)
+        uint16_t *out_size, void* data)
 {
     int ret;
+    whTimeoutCtx* timeout;
 
-    if ((c == NULL) || (timeout == NULL)) {
+    if (c == NULL) {
         return WH_ERROR_BADARGS;
     }
+
+#ifdef WOLFHSM_CFG_ENABLE_TIMEOUT
+    timeout = &c->respTimeout;
+#endif
 
     ret = wh_Timeout_Start(timeout);
     if (ret != WH_ERROR_OK) {
