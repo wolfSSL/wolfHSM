@@ -191,7 +191,6 @@ typedef struct {
     /* Data follows:
      * uint8_t in[sz]
      * uint8_t key[keyLen]
-     * uint8_t iv[AES_IV_SIZE]
      */
 } whMessageCrypto_AesEcbRequest;
 
@@ -984,6 +983,7 @@ int wh_MessageCrypto_TranslateSha2DmaRequest(
 int wh_MessageCrypto_TranslateSha2DmaResponse(
     uint16_t magic, const whMessageCrypto_Sha2DmaResponse* src,
     whMessageCrypto_Sha2DmaResponse* dest);
+
 /* CMAC-AES DMA Request - only input data goes via DMA; state, key, and output
  * are passed inline in the message for cross-architecture safety */
 typedef struct {
@@ -1014,6 +1014,33 @@ int wh_MessageCrypto_TranslateCmacAesDmaRequest(
 int wh_MessageCrypto_TranslateCmacAesDmaResponse(
     uint16_t magic, const whMessageCrypto_CmacAesDmaResponse* src,
     whMessageCrypto_CmacAesDmaResponse* dest);
+
+/* AES-ECB DMA Request - only input and output data go via DMA. Key is
+ * passed inline. */
+typedef struct {
+    whMessageCrypto_DmaBuffer input;     /* Input buffer */
+    whMessageCrypto_DmaBuffer output;    /* Output buffer */
+    uint32_t                  enc;       /* 1 for encrypt, 0 for decrypt */
+    uint32_t                  keyId;
+    uint32_t                  keySz;     /* inline key size (0 = use keyId) */
+    uint8_t                   WH_PAD[4]; /* Pad to 8-byte alignment */
+    /* Trailing data: uint8_t key[keySz] */
+} whMessageCrypto_AesEcbDmaRequest;
+
+/* AES-ECB DMA Response */
+typedef struct {
+    whMessageCrypto_DmaAddrStatus dmaAddrStatus;
+    uint32_t                      outSz;
+} whMessageCrypto_AesEcbDmaResponse;
+
+/* AES-ECB DMA translation functions */
+int wh_MessageCrypto_TranslateAesEcbDmaRequest(
+    uint16_t magic, const whMessageCrypto_AesEcbDmaRequest* src,
+    whMessageCrypto_AesEcbDmaRequest* dest);
+
+int wh_MessageCrypto_TranslateAesEcbDmaResponse(
+    uint16_t magic, const whMessageCrypto_AesEcbDmaResponse* src,
+    whMessageCrypto_AesEcbDmaResponse* dest);
 
 /* AES-CBC DMA Request - only input and output data go via DMA. Key and IV
  * are passed inline. */

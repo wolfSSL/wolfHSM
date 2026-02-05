@@ -367,6 +367,138 @@ int wh_Bench_Mod_Aes256CTRDecryptDma(whClientContext*  client,
 
 #endif /* WOLFSSL_AES_COUNTER */
 #if defined(HAVE_AES_ECB)
+#if defined(WOLFHSM_CFG_DMA)
+static int _benchAesEcbDma(whClientContext* client, whBenchOpContext* ctx,
+                           int id, const uint8_t* key, size_t keyLen,
+                           int encrypt)
+{
+    int            ret       = 0;
+    int            needEvict = 0;
+    whKeyId        keyId     = WH_KEYID_ERASED;
+    Aes            aes[1];
+    char           keyLabel[]            = "key label";
+    const size_t   inLen = WOLFHSM_CFG_BENCH_DMA_BUFFER_SIZE / 2;
+    int            i;
+    const uint8_t* in  = NULL;
+    uint8_t*       out = NULL;
+
+#if defined(WOLFHSM_CFG_TEST_POSIX)
+    /* Allocate buffers using XMALLOC with heap hints for DMA */
+    if (ctx->transportType == WH_BENCH_TRANSPORT_POSIX_DMA) {
+        void* heap =
+            posixTransportShm_GetDmaHeap(client->comm->transport_context);
+        in = XMALLOC(inLen, heap, DYNAMIC_TYPE_TMP_BUFFER);
+        if (in == NULL) {
+            WH_BENCH_PRINTF("Failed to allocate memory for DMA input\n");
+            return WH_ERROR_NOSPACE;
+        }
+
+        out = XMALLOC(inLen, heap, DYNAMIC_TYPE_TMP_BUFFER);
+        if (out == NULL) {
+            WH_BENCH_PRINTF("Failed to allocate memory for DMA output\n");
+            XFREE((uint8_t*)in, heap, DYNAMIC_TYPE_TMP_BUFFER);
+            return WH_ERROR_NOSPACE;
+        }
+    }
+    else
+#endif /* WOLFHSM_CFG_TEST_POSIX */
+    {
+        in  = WH_BENCH_DMA_BUFFER;
+        out = (uint8_t*)in + inLen;
+    }
+
+#if defined(WOLFHSM_CFG_BENCH_INIT_DATA_BUFFERS)
+    /* Initialize the input buffer with something non-zero */
+    memset((uint8_t*)in, 0xAA, inLen);
+    memset(out, 0xAA, inLen);
+#endif
+
+    /* Initialize the aes struct */
+    ret = wc_AesInit(aes, NULL, WH_DEV_ID_DMA);
+    if (ret != 0) {
+        WH_BENCH_PRINTF("Failed to wc_AesInit %d\n", ret);
+        goto exit;
+    }
+
+    /* cache the key on the HSM */
+    ret = wh_Client_KeyCache(client, WH_NVM_FLAGS_USAGE_ANY, (uint8_t*)keyLabel,
+                             sizeof(keyLabel), (uint8_t*)key, keyLen, &keyId);
+    if (ret != 0) {
+        WH_BENCH_PRINTF("Failed to wh_Client_KeyCache %d\n", ret);
+        goto exit;
+    }
+
+    needEvict = 1;
+
+    /* set the keyId on the struct */
+    ret = wh_Client_AesSetKeyId(aes, keyId);
+    if (ret != 0) {
+        WH_BENCH_PRINTF("Failed to wh_Client_SetKeyIdAes %d\n", ret);
+        goto exit;
+    }
+
+    ret = wh_Bench_SetDataSize(ctx, id, inLen);
+    if (ret != 0) {
+        WH_BENCH_PRINTF("Failed to wh_Bench_SetDataSize %d\n", ret);
+        goto exit;
+    }
+
+    /* Perform the benchmark */
+    for (i = 0; i < WOLFHSM_CFG_BENCH_CRYPT_ITERS; i++) {
+        int benchStartRet;
+        int benchStopRet;
+
+        if (encrypt) {
+            benchStartRet = wh_Bench_StartOp(ctx, id);
+            ret           = wc_AesEcbEncrypt(aes, out, in, inLen);
+            benchStopRet  = wh_Bench_StopOp(ctx, id);
+        }
+        else {
+            benchStartRet = wh_Bench_StartOp(ctx, id);
+            ret           = wc_AesEcbDecrypt(aes, out, in, inLen);
+            benchStopRet  = wh_Bench_StopOp(ctx, id);
+        }
+
+        if (benchStartRet != 0) {
+            WH_BENCH_PRINTF("Failed to wh_Bench_StartOp %d\n", benchStartRet);
+            ret = benchStartRet;
+            goto exit;
+        }
+        if (ret != 0) {
+            WH_BENCH_PRINTF("Failed to wc_AesEcb%s %d\n",
+                            encrypt ? "Encrypt" : "Decrypt", ret);
+            goto exit;
+        }
+        if (benchStopRet != 0) {
+            WH_BENCH_PRINTF("Failed to wh_Bench_StopOp %d\n", benchStopRet);
+            ret = benchStopRet;
+            goto exit;
+        }
+    }
+
+exit:
+    if (needEvict) {
+        (void)wh_Client_KeyEvict(client, keyId);
+    }
+    wc_AesFree(aes);
+
+#if defined(WOLFHSM_CFG_TEST_POSIX)
+    if (ctx->transportType == WH_BENCH_TRANSPORT_POSIX_DMA) {
+        void* heap =
+            posixTransportShm_GetDmaHeap(client->comm->transport_context);
+        if (in != NULL) {
+            XFREE((uint8_t*)in, heap, DYNAMIC_TYPE_TMP_BUFFER);
+        }
+        if (out != NULL) {
+            XFREE(out, heap, DYNAMIC_TYPE_TMP_BUFFER);
+        }
+    }
+#endif /* WOLFHSM_CFG_TEST_POSIX */
+
+    return ret;
+}
+#endif /* WOLFHSM_CFG_DMA */
+
 static int _benchAesEcb(whClientContext* client, whBenchOpContext* ctx, int id,
                         const uint8_t* key, size_t keyLen, int encrypt)
 {
@@ -391,7 +523,7 @@ static int _benchAesEcb(whClientContext* client, whBenchOpContext* ctx, int id,
     ret = wc_AesInit(aes, NULL, WH_DEV_ID);
     if (ret != 0) {
         WH_BENCH_PRINTF("Failed to wc_AesInit %d\n", ret);
-        return ret;
+        goto exit;
     }
 
     /* cache the key on the HSM */
@@ -496,6 +628,74 @@ int wh_Bench_Mod_Aes256ECBDecrypt(whClientContext*  client,
     (void)params;
     return _benchAesEcb(client, ctx, id, (uint8_t*)key256, sizeof(key256),
                         DECRYPT);
+}
+
+int wh_Bench_Mod_Aes128ECBEncryptDma(whClientContext*  client,
+                                     whBenchOpContext* ctx, int id,
+                                     void* params)
+{
+#if defined(WOLFHSM_CFG_DMA)
+    (void)params;
+    return _benchAesEcbDma(client, ctx, id, (uint8_t*)key128, sizeof(key128),
+                           ENCRYPT);
+#else
+    (void)client;
+    (void)ctx;
+    (void)id;
+    (void)params;
+    return WH_ERROR_NOTIMPL;
+#endif
+}
+
+int wh_Bench_Mod_Aes128ECBDecryptDma(whClientContext*  client,
+                                     whBenchOpContext* ctx, int id,
+                                     void* params)
+{
+#if defined(WOLFHSM_CFG_DMA)
+    (void)params;
+    return _benchAesEcbDma(client, ctx, id, (uint8_t*)key128, sizeof(key128),
+                           DECRYPT);
+#else
+    (void)client;
+    (void)ctx;
+    (void)id;
+    (void)params;
+    return WH_ERROR_NOTIMPL;
+#endif
+}
+
+int wh_Bench_Mod_Aes256ECBEncryptDma(whClientContext*  client,
+                                     whBenchOpContext* ctx, int id,
+                                     void* params)
+{
+#if defined(WOLFHSM_CFG_DMA)
+    (void)params;
+    return _benchAesEcbDma(client, ctx, id, (uint8_t*)key256, sizeof(key256),
+                           ENCRYPT);
+#else
+    (void)client;
+    (void)ctx;
+    (void)id;
+    (void)params;
+    return WH_ERROR_NOTIMPL;
+#endif
+}
+
+int wh_Bench_Mod_Aes256ECBDecryptDma(whClientContext*  client,
+                                     whBenchOpContext* ctx, int id,
+                                     void* params)
+{
+#if defined(WOLFHSM_CFG_DMA)
+    (void)params;
+    return _benchAesEcbDma(client, ctx, id, (uint8_t*)key256, sizeof(key256),
+                           DECRYPT);
+#else
+    (void)client;
+    (void)ctx;
+    (void)id;
+    (void)params;
+    return WH_ERROR_NOTIMPL;
+#endif
 }
 #endif /* HAVE_AES_ECB */
 

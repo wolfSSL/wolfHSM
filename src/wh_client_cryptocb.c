@@ -1000,8 +1000,19 @@ int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
                                           tag_len, out);
             } break;
 #endif /* HAVE_AESGCM */
-#endif /* !NO_AES */
+#ifdef HAVE_AES_ECB
+            case WC_CIPHER_AES_ECB: {
+                /* Extract info parameters */
+                uint32_t       enc = info->cipher.enc;
+                Aes*           aes = info->cipher.aesecb.aes;
+                const uint8_t* in  = info->cipher.aesecb.in;
+                uint32_t       len = info->cipher.aesecb.sz;
+                uint8_t*       out = info->cipher.aesecb.out;
 
+                ret = wh_Client_AesEcbDma(ctx, aes, enc, in, len, out);
+            } break;
+#endif /* HAVE_AES_ECB */
+#endif /* !NO_AES */
             default:
                 ret = CRYPTOCB_UNAVAILABLE;
                 break;

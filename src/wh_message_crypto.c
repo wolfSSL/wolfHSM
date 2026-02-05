@@ -1212,6 +1212,42 @@ int wh_MessageCrypto_TranslateEd25519VerifyDmaResponse(
     return 0;
 }
 
+/* AES-ECB DMA translation functions */
+int wh_MessageCrypto_TranslateAesEcbDmaRequest(
+    uint16_t magic, const whMessageCrypto_AesEcbDmaRequest* src,
+    whMessageCrypto_AesEcbDmaRequest* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    WH_T32(magic, dest, src, enc);
+    WH_T32(magic, dest, src, keyId);
+    WH_T32(magic, dest, src, keySz);
+
+    (void)wh_MessageCrypto_TranslateDmaBuffer(magic, &src->input, &dest->input);
+    (void)wh_MessageCrypto_TranslateDmaBuffer(magic, &src->output,
+                                              &dest->output);
+
+    return WH_ERROR_OK;
+}
+
+int wh_MessageCrypto_TranslateAesEcbDmaResponse(
+    uint16_t magic, const whMessageCrypto_AesEcbDmaResponse* src,
+    whMessageCrypto_AesEcbDmaResponse* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    (void)wh_MessageCrypto_TranslateDmaAddrStatus(magic, &src->dmaAddrStatus,
+                                                  &dest->dmaAddrStatus);
+
+    WH_T32(magic, dest, src, outSz);
+
+    return WH_ERROR_OK;
+}
+
 /* AES-CBC DMA translation functions */
 int wh_MessageCrypto_TranslateAesCbcDmaRequest(
     uint16_t magic, const whMessageCrypto_AesCbcDmaRequest* src,
