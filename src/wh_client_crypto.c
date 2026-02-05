@@ -3766,8 +3766,6 @@ int wh_Client_CmacDma(whClientContext* ctx, Cmac* cmac, CmacType type,
 
         uint16_t respSz = 0;
         ret = _recvCryptoResponse(ctx, NULL, NULL, &respSz, (uint8_t*)dataPtr);
-    }
-
         if (ret == WH_ERROR_OK) {
             ret =
                 _getCryptoResponse(dataPtr, WC_ALGO_TYPE_CMAC, (uint8_t**)&res);
