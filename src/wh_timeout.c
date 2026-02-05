@@ -32,10 +32,10 @@ int wh_Timeout_Init(whTimeoutCtx* timeout, const whTimeoutConfig* config)
         return WH_ERROR_BADARGS;
     }
 
-    timeout->startUs = 0;
+    timeout->startUs   = 0;
     timeout->timeoutUs = config->timeoutUs;
     timeout->expiredCb = config->expiredCb;
-    timeout->cbCtx = config->cbCtx;
+    timeout->cbCtx     = config->cbCtx;
 
     return WH_ERROR_OK;
 }
@@ -68,7 +68,7 @@ int wh_Timeout_Stop(whTimeoutCtx* timeout)
         return WH_ERROR_BADARGS;
     }
 
-    timeout->startUs = 0;
+    timeout->startUs   = 0;
     timeout->timeoutUs = 0;
 
     return WH_ERROR_OK;
@@ -76,8 +76,8 @@ int wh_Timeout_Stop(whTimeoutCtx* timeout)
 
 int wh_Timeout_Expired(const whTimeoutCtx* timeout)
 {
-    uint64_t nowUs = 0;
-    int expired = 0;
+    uint64_t nowUs   = 0;
+    int      expired = 0;
 
     if (timeout == NULL) {
         return 0;
@@ -87,7 +87,7 @@ int wh_Timeout_Expired(const whTimeoutCtx* timeout)
         return 0;
     }
 
-    nowUs = WH_GETTIME_US();
+    nowUs   = WH_GETTIME_US();
     expired = (nowUs - timeout->startUs) >= timeout->timeoutUs;
     if (expired && (timeout->expiredCb != NULL)) {
         timeout->expiredCb(timeout->cbCtx);
