@@ -23,6 +23,8 @@
 /* Pick up compile-time configuration */
 #include "wolfhsm/wh_settings.h"
 
+#ifdef WOLFHSM_CFG_ENABLE_TIMEOUT
+
 #include "wolfhsm/wh_timeout.h"
 #include "wolfhsm/wh_error.h"
 
@@ -74,7 +76,7 @@ int wh_Timeout_Stop(whTimeoutCtx* timeout)
     return WH_ERROR_OK;
 }
 
-int wh_Timeout_Expired(const whTimeoutCtx* timeout)
+int wh_Timeout_Expired(whTimeoutCtx* timeout)
 {
     uint64_t nowUs   = 0;
     int      expired = 0;
@@ -90,7 +92,10 @@ int wh_Timeout_Expired(const whTimeoutCtx* timeout)
     nowUs   = WH_GETTIME_US();
     expired = (nowUs - timeout->startUs) >= timeout->timeoutUs;
     if (expired && (timeout->expiredCb != NULL)) {
-        timeout->expiredCb(timeout->cbCtx);
+        /* Allow the callback to overwrite the expired value */
+        timeout->expiredCb(timeout, &expired);
     }
     return expired;
 }
+
+#endif /* WOLFHSM_CFG_ENABLE_TIMEOUT */

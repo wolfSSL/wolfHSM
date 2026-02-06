@@ -28,20 +28,22 @@
 /* Pick up compile-time configuration */
 #include "wolfhsm/wh_settings.h"
 
-#define WH_MSEC_TO_USEC(usec) (usec * 1000ULL)
-#define WH_SEC_TO_USEC(sec) (sec * 1000000ULL)
-#define WH_MIN_TO_USEC(min) (min * WH_SEC_TO_USEC(60))
+#define WH_MSEC_TO_USEC(usec) ((usec) * (1000ULL))
+#define WH_SEC_TO_USEC(sec) ((sec) * (1000000ULL))
+#define WH_MIN_TO_USEC(min) ((min) * (WH_SEC_TO_USEC(60)))
 
 #include <stdint.h>
 
-typedef void (*whTimeoutExpiredCb)(void* ctx);
+/* Forward declare so the callback typedef can reference it */
+typedef struct whTimeoutCtx whTimeoutCtx;
+typedef void (*whTimeoutExpiredCb)(whTimeoutCtx* ctx, int* isExpired);
 
-typedef struct {
+struct whTimeoutCtx {
     uint64_t           startUs;
     uint64_t           timeoutUs;
     whTimeoutExpiredCb expiredCb;
     void*              cbCtx;
-} whTimeoutCtx;
+};
 
 typedef struct {
     uint64_t           timeoutUs;
@@ -92,6 +94,6 @@ int wh_Timeout_Stop(whTimeoutCtx* timeout);
  * @param timeout The timeout context to check.
  * @return 1 if expired, 0 if not expired or disabled.
  */
-int wh_Timeout_Expired(const whTimeoutCtx* timeout);
+int wh_Timeout_Expired(whTimeoutCtx* timeout);
 
 #endif /* !WOLFHSM_WH_TIMEOUT_H_ */
