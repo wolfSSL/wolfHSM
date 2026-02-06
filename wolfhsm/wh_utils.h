@@ -69,6 +69,9 @@ uint32_t wh_Utils_ntohl(uint32_t networklong);
 
 int wh_Utils_memeqzero(uint8_t* buffer, uint32_t size);
 
+/* Secure zeroization that resists compiler optimization */
+void wh_Utils_ForceZero(void* mem, uint32_t size);
+
 /** Cache helper functions */
 /* Flush the cache lines starting at p for at least n bytes */
 void* wh_Utils_CacheFlush(void* p, size_t n);

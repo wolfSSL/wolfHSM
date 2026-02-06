@@ -91,6 +91,18 @@ int wh_Utils_memeqzero(uint8_t* buffer, uint32_t size)
     return 1;
 }
 
+/* Secure zeroization that resists compiler optimization.
+ * Uses volatile to prevent the compiler from optimizing away the writes. */
+void wh_Utils_ForceZero(void* mem, uint32_t size)
+{
+    volatile uint8_t* p = (volatile uint8_t*)mem;
+    while (size > 0) {
+        *p = 0;
+        p++;
+        size--;
+    }
+}
+
 /** Cache helper functions */
 const void* wh_Utils_CacheInvalidate(const void* p, size_t n)
 {
