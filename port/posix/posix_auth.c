@@ -181,7 +181,7 @@ static whAuthBase_User* posixAuth_CheckCertificate(const char* username,
 
 int posixAuth_Login(void* context, uint8_t client_id, whAuthMethod method,
                       const char* username, const void* auth_data,
-                      uint16_t auth_data_len, uint16_t* out_user_id,
+                      uint16_t auth_data_len, whUserId* out_user_id,
                       whAuthPermissions* out_permissions, int* loggedIn)
 {
     whAuthBase_User* current_user = NULL;
@@ -277,7 +277,7 @@ int posixAuth_CheckKeyAuthorization(void* context, int err, uint16_t user_id,
 
 
 int posixAuth_UserAdd(void* context, const char* username,
-                        uint16_t* out_user_id, whAuthPermissions permissions,
+                        whUserId* out_user_id, whAuthPermissions permissions,
                         whAuthMethod method, const void* credentials,
                         uint16_t credentials_len)
 {
@@ -420,7 +420,7 @@ int posixAuth_UserSetPermissions(void* context, uint16_t current_user_id,
 
 
 int posixAuth_UserGet(void* context, const char* username,
-                        uint16_t*          out_user_id,
+                        whUserId*          out_user_id,
                         whAuthPermissions* out_permissions)
 {
     whAuthBase_User* user = posixAuth_FindUser(username);

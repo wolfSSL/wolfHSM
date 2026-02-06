@@ -126,19 +126,21 @@ int wh_MessageAuth_FlattenPermissions(whAuthPermissions* permissions,
         return WH_ERROR_BADARGS;
     }
 
-    /* Serialize groupPermissions (2 bytes) */
-    buffer[idx++] = (uint8_t)(permissions->groupPermissions & 0xFF);
-    buffer[idx++] = (uint8_t)((permissions->groupPermissions >> 8) & 0xFF);
+    /* Serialize groupPermissions array (WH_NUMBER_OF_GROUPS bytes) */
+    for (i = 0; i < WH_NUMBER_OF_GROUPS; i++) {
+        buffer[idx++] = permissions->groupPermissions[i];
+    }
 
-    /* Serialize actionPermissions array (4*WH_NUMBER_OF_GROUPS*WH_AUTH_ACTION_WORDS bytes) */
+    /* Serialize actionPermissions array
+     * (4*WH_NUMBER_OF_GROUPS*WH_AUTH_ACTION_WORDS bytes) */
     for (i = 0; i < WH_NUMBER_OF_GROUPS; i++) {
         int j;
         for (j = 0; j < WH_AUTH_ACTION_WORDS; j++) {
             uint32_t actionPerm = permissions->actionPermissions[i][j];
-            buffer[idx++] = (uint8_t)(actionPerm & 0xFF);
-            buffer[idx++] = (uint8_t)((actionPerm >> 8) & 0xFF);
-            buffer[idx++] = (uint8_t)((actionPerm >> 16) & 0xFF);
-            buffer[idx++] = (uint8_t)((actionPerm >> 24) & 0xFF);
+            buffer[idx++]       = (uint8_t)(actionPerm & 0xFF);
+            buffer[idx++]       = (uint8_t)((actionPerm >> 8) & 0xFF);
+            buffer[idx++]       = (uint8_t)((actionPerm >> 16) & 0xFF);
+            buffer[idx++]       = (uint8_t)((actionPerm >> 24) & 0xFF);
         }
     }
 
@@ -179,25 +181,25 @@ int wh_MessageAuth_UnflattenPermissions(uint8_t* buffer, uint16_t buffer_len,
         return WH_ERROR_BADARGS;
     }
 
-    /* Deserialize groupPermissions (2 bytes) */
-    permissions->groupPermissions = buffer[idx] | (buffer[idx + 1] << 8);
-    idx += 2;
+    /* Deserialize groupPermissions array (WH_NUMBER_OF_GROUPS bytes) */
+    for (i = 0; i < WH_NUMBER_OF_GROUPS; i++) {
+        permissions->groupPermissions[i] = buffer[idx++];
+    }
 
-    /* Deserialize actionPermissions array (4*WH_NUMBER_OF_GROUPS*WH_AUTH_ACTION_WORDS bytes) */
+    /* Deserialize actionPermissions array
+     * (4*WH_NUMBER_OF_GROUPS*WH_AUTH_ACTION_WORDS bytes) */
     for (i = 0; i < WH_NUMBER_OF_GROUPS; i++) {
         int j;
         for (j = 0; j < WH_AUTH_ACTION_WORDS; j++) {
             permissions->actionPermissions[i][j] =
-                buffer[idx] |
-                (buffer[idx + 1] << 8) |
-                (buffer[idx + 2] << 16) |
-                (buffer[idx + 3] << 24);
+                (uint32_t)(buffer[idx] | (buffer[idx + 1] << 8) |
+                           (buffer[idx + 2] << 16) | (buffer[idx + 3] << 24));
             idx += 4;
         }
     }
 
     /* Deserialize keyIdCount (2 bytes) */
-    keyIdCount = buffer[idx] | (buffer[idx + 1] << 8);
+    keyIdCount = (uint16_t)(buffer[idx] | (buffer[idx + 1] << 8));
     idx += 2;
     if (keyIdCount > WH_AUTH_MAX_KEY_IDS) {
         keyIdCount = WH_AUTH_MAX_KEY_IDS;
@@ -206,10 +208,8 @@ int wh_MessageAuth_UnflattenPermissions(uint8_t* buffer, uint16_t buffer_len,
 
     /* Deserialize keyIds array (4*WH_AUTH_MAX_KEY_IDS bytes) */
     for (i = 0; i < WH_AUTH_MAX_KEY_IDS; i++) {
-        keyId = buffer[idx] |
-                (buffer[idx + 1] << 8) |
-                (buffer[idx + 2] << 16) |
-                (buffer[idx + 3] << 24);
+        keyId = (uint32_t)(buffer[idx] | (buffer[idx + 1] << 8) |
+                           (buffer[idx + 2] << 16) | (buffer[idx + 3] << 24));
         permissions->keyIds[i] = keyId;
         idx += 4;
     }

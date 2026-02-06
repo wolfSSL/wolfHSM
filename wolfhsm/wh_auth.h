@@ -40,6 +40,7 @@
 #include <stdbool.h>
 
 #include "wolfhsm/wh_common.h"
+#include "wolfhsm/wh_message.h" /* for WH_NUMBER_OF_GROUPS */
 
 /** Auth Manager Types */
 
@@ -54,27 +55,23 @@ typedef enum {
     WH_AUTH_METHOD_CERTIFICATE,
 } whAuthMethod;
 
-#define WH_NUMBER_OF_GROUPS 14
 #define WH_AUTH_MAX_KEY_IDS \
     2 /* Maximum number of key IDs a user can have access to */
 #define WH_AUTH_ACTIONS_PER_GROUP 256 /* Support up to 256 actions (0-255) */
 #define WH_AUTH_ACTION_WORDS \
     ((WH_AUTH_ACTIONS_PER_GROUP + 31) / 32) /* 8 uint32_t words for 256 bits */
 
-/* Convert action enum value (0-255) to bitmask and word index.
- * Returns the word index in the upper 16 bits and bitmask in lower 32 bits.
- * Use WH_AUTH_ACTION_WORD() and WH_AUTH_ACTION_BIT() to extract. */
-#define WH_AUTH_ACTION_TO_WORD_AND_BIT(_action) \
-    ((((_action) / 32) << 16) | (1UL << ((_action) % 32)))
-#define WH_AUTH_ACTION_WORD(_word_and_bit) (((_word_and_bit) >> 16) & 0xFF)
-#define WH_AUTH_ACTION_BIT(_word_and_bit) ((_word_and_bit) & 0xFFFFFFFFUL)
-
-/* Legacy macro for backward compatibility - only works for actions < 32 */
-#define WH_AUTH_ACTION_TO_BITMASK(_action) \
-    (((_action) < 32) ? (1UL << (_action)) : 0)
+/* Convert action enum value (0-255) to word index and bitmask.
+ * Sets wordIdx to the array index (0-7) and bitMask to the bit position. */
+#define WH_AUTH_ACTION_TO_WORD_AND_BITMASK(action, wordIdx, bitMask) \
+    do {                                                             \
+        (wordIdx) = ((action) / 32);                                 \
+        (bitMask) = (1UL << ((action) % 32));                        \
+    } while (0)
 
 typedef struct {
-    uint16_t groupPermissions; /* bit mask of if allowed for use in group */
+    uint8_t groupPermissions[WH_NUMBER_OF_GROUPS]; /* boolean array of if group
+                                                       is allowed */
     uint32_t actionPermissions[WH_NUMBER_OF_GROUPS]
                               [WH_AUTH_ACTION_WORDS]; /* multi-word bit array
                                                           for action permissions
@@ -154,8 +151,6 @@ typedef struct whAuthContext_t {
     whAuthUser user;
     void*      context;
 } whAuthContext;
-
-#define WOLFHSM_MAX_CERTIFICATE_LEN 2048
 
 /* Simple helper configuration structure associated with an Auth Manager
  * instance */

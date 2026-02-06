@@ -189,13 +189,15 @@ int wh_Auth_CheckRequestAuthorization(whAuthContext* context, uint16_t group,
             rc = WH_ERROR_OK;
         }
         else {
-            if (user->permissions.groupPermissions & group) {
+            if (user->permissions.groupPermissions[groupIndex]) {
                 /* Check if action is within supported range */
                 if (action < WH_AUTH_ACTIONS_PER_GROUP) {
                     /* Get word index and bitmask for this action */
-                    uint32_t wordAndBit = WH_AUTH_ACTION_TO_WORD_AND_BIT(action);
-                    uint32_t wordIndex   = WH_AUTH_ACTION_WORD(wordAndBit);
-                    uint32_t bitmask     = WH_AUTH_ACTION_BIT(wordAndBit);
+                    uint32_t wordIndex;
+                    uint32_t bitmask;
+
+                    WH_AUTH_ACTION_TO_WORD_AND_BITMASK(action, wordIndex,
+                        bitmask);
 
                     if (wordIndex < WH_AUTH_ACTION_WORDS &&
                         (user->permissions.actionPermissions[groupIndex]
@@ -255,9 +257,6 @@ int wh_Auth_CheckKeyAuthorization(whAuthContext* context, uint32_t key_id,
         }
     }
 
-    (void)context;
-    (void)action; /* Action could be used for future fine-grained key access
-                     control */
     if (context->cb->CheckKeyAuthorization != NULL) {
         rc = context->cb->CheckKeyAuthorization(context->context, rc,
             user_id, key_id, action);
