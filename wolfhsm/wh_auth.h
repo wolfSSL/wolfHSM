@@ -62,8 +62,9 @@ typedef enum {
 #define WH_AUTH_MAX_KEY_IDS \
     2 /* Maximum number of key IDs a user can have access to */
 #define WH_AUTH_ACTIONS_PER_GROUP 256 /* Support up to 256 actions (0-255) */
-#define WH_AUTH_ACTION_WORDS \
-    ((WH_AUTH_ACTIONS_PER_GROUP + 31) / 32) /* 8 uint32_t words for 256 bits */
+#define WH_AUTH_ACTION_WORDS                                                 \
+    ((WH_AUTH_ACTIONS_PER_GROUP + 31) / 32) /* 8 uint32_t words for 256 bits \
+                                             */
 
 /* Convert action enum value (0-255) to word index and bitmask.
  * Sets wordIdx to the array index (0-7) and bitMask to the bit position. */
@@ -76,10 +77,11 @@ typedef enum {
 typedef struct {
     uint8_t groupPermissions[WH_NUMBER_OF_GROUPS]; /* boolean array of if group
                                                        is allowed */
-    uint32_t actionPermissions[WH_NUMBER_OF_GROUPS]
-                              [WH_AUTH_ACTION_WORDS]; /* multi-word bit array
-                                                          for action permissions
-                                                          (256 bits per group) */
+    uint32_t
+        actionPermissions[WH_NUMBER_OF_GROUPS]
+                         [WH_AUTH_ACTION_WORDS]; /* multi-word bit array
+                                                     for action permissions
+                                                     (256 bits per group) */
     uint16_t keyIdCount; /* Number of key IDs in the keyIds array (0 to
                             WH_AUTH_MAX_KEY_IDS) */
     uint32_t keyIds[WH_AUTH_MAX_KEY_IDS]; /* Array of key IDs that user has
@@ -199,9 +201,9 @@ int wh_Auth_Cleanup(whAuthContext* context);
  * @param[in] auth_data Pointer to the authentication data.
  * @param[in] auth_data_len Length of the authentication data.
  * @param[out] loggedIn Pointer to store the login status (1 for success).
- * @return int Returns 0 if the authentication attempt was processed successfully
- *         (regardless of authentication result), or a negative error code if a
- *         fatal error occurred. The authentication result is returned in the
+ * @return int Returns 0 if the authentication attempt was processed
+ * successfully (regardless of authentication result), or a negative error code
+ * if a fatal error occurred. The authentication result is returned in the
  *         loggedIn parameter.
  */
 int wh_Auth_Login(whAuthContext* context, uint8_t client_id,

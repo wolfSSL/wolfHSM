@@ -690,9 +690,9 @@ int wh_PosixServer_ExampleAuthConfig(void* conf)
     static void*    auth_backend_context =
         NULL; /* No backend context needed for stubs */
     static whAuthConfig auth_config = {0};
-    whAuthPermissions permissions;
-    uint16_t out_user_id;
-    int i;
+    whAuthPermissions   permissions;
+    uint16_t            out_user_id;
+    int                 i;
 
     if (s_conf == NULL) {
         return WH_ERROR_BADARGS;

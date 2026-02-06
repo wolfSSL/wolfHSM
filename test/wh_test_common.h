@@ -73,13 +73,13 @@
  * stringified call argument along with caller source file info and
  * causes the calling function to return the value of "call"
  */
-#define WH_TEST_RETURN_ON_FAIL(call)                 \
-    do {                                             \
-        int ret = (call);                            \
+#define WH_TEST_RETURN_ON_FAIL(call)                         \
+    do {                                                     \
+        int ret = (call);                                    \
         if (ret != WH_TEST_SUCCESS && ret != WH_TEST_SKIP) { \
-            WH_ERROR_PRINT(#call ": ret=%d\n", ret); \
-            return ret;                              \
-        }                                            \
+            WH_ERROR_PRINT(#call ": ret=%d\n", ret);         \
+            return ret;                                      \
+        }                                                    \
     } while (0)
 
 

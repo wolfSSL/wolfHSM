@@ -1948,7 +1948,7 @@ int wh_Client_AuthLoginRequest(whClientContext* c, whAuthMethod method,
  * available, or a negative error code on failure.
  */
 int wh_Client_AuthLoginResponse(whClientContext* c, int32_t* out_rc,
-                                whUserId*          out_user_id);
+                                whUserId* out_user_id);
 
 /**
  * @brief Authenticates a user with the server (blocking convenience wrapper).
@@ -1971,13 +1971,14 @@ int wh_Client_AuthLoginResponse(whClientContext* c, int32_t* out_rc,
 int wh_Client_AuthLogin(whClientContext* c, whAuthMethod method,
                         const char* username, const void* auth_data,
                         uint16_t auth_data_len, int32_t* out_rc,
-                        whUserId*          out_user_id);
+                        whUserId* out_user_id);
 
 /**
  * @brief Sends a logout request to the server.
  *
  * This function prepares and sends a logout request message to the server.
- * This function does not block; it returns immediately after sending the request.
+ * This function does not block; it returns immediately after sending the
+ * request.
  *
  * @param[in] c Pointer to the client context.
  * @param[in] user_id The user ID to logout.
@@ -2003,9 +2004,9 @@ int wh_Client_AuthLogoutResponse(whClientContext* c, int32_t* out_rc);
  * @brief Logs out a user from the server (blocking convenience wrapper).
  *
  * This function handles the complete process of sending a logout request to the
- * server and receiving the response. It sends the request and repeatedly attempts
- * to receive a valid response. This function blocks until the entire operation is
- * complete or an error occurs.
+ * server and receiving the response. It sends the request and repeatedly
+ * attempts to receive a valid response. This function blocks until the entire
+ * operation is complete or an error occurs.
  *
  * @param[in] c Pointer to the client context.
  * @param[in] user_id The user ID to logout.
@@ -2017,9 +2018,9 @@ int wh_Client_AuthLogout(whClientContext* c, whUserId user_id, int32_t* out_rc);
 /**
  * @brief Receives a user add response from the server.
  *
- * This function attempts to process a user add response message from the server.
- * This function does not block; it returns WH_ERROR_NOTREADY if a response has
- * not been received.
+ * This function attempts to process a user add response message from the
+ * server. This function does not block; it returns WH_ERROR_NOTREADY if a
+ * response has not been received.
  *
  * @param[in] c Pointer to the client context.
  * @param[out] out_rc Pointer to store the return code from the server.
@@ -2034,7 +2035,8 @@ int wh_Client_AuthUserAddResponse(whClientContext* c, int32_t* out_rc,
  * @brief Sends a user add request to the server.
  *
  * This function prepares and sends a user add request message to the server.
- * This function does not block; it returns immediately after sending the request.
+ * This function does not block; it returns immediately after sending the
+ * request.
  *
  * @param[in] c Pointer to the client context.
  * @param[in] username The username for the new user.
@@ -2052,10 +2054,10 @@ int wh_Client_AuthUserAddRequest(whClientContext* c, const char* username,
 /**
  * @brief Adds a new user to the server (blocking convenience wrapper).
  *
- * This function handles the complete process of sending a user add request to the
- * server and receiving the response. It sends the request and repeatedly attempts
- * to receive a valid response. This function blocks until the entire operation is
- * complete or an error occurs.
+ * This function handles the complete process of sending a user add request to
+ * the server and receiving the response. It sends the request and repeatedly
+ * attempts to receive a valid response. This function blocks until the entire
+ * operation is complete or an error occurs.
  *
  * @param[in] c Pointer to the client context.
  * @param[in] username The username for the new user.
@@ -2076,7 +2078,8 @@ int wh_Client_AuthUserAdd(whClientContext* c, const char* username,
  * @brief Sends a user get request to the server.
  *
  * This function prepares and sends a user get request message to the server.
- * This function does not block; it returns immediately after sending the request.
+ * This function does not block; it returns immediately after sending the
+ * request.
  *
  * @param[in] c Pointer to the client context.
  * @param[in] username The username to look up.
@@ -2087,9 +2090,9 @@ int wh_Client_AuthUserGetRequest(whClientContext* c, const char* username);
 /**
  * @brief Receives a user get response from the server.
  *
- * This function attempts to process a user get response message from the server.
- * This function does not block; it returns WH_ERROR_NOTREADY if a response has
- * not been received.
+ * This function attempts to process a user get response message from the
+ * server. This function does not block; it returns WH_ERROR_NOTREADY if a
+ * response has not been received.
  *
  * @param[in] c Pointer to the client context.
  * @param[out] out_rc Pointer to store the return code from the server.
@@ -2105,10 +2108,10 @@ int wh_Client_AuthUserGetResponse(whClientContext* c, int32_t* out_rc,
 /**
  * @brief Gets user information from the server (blocking convenience wrapper).
  *
- * This function handles the complete process of sending a user get request to the
- * server and receiving the response. It sends the request and repeatedly attempts
- * to receive a valid response. This function blocks until the entire operation is
- * complete or an error occurs.
+ * This function handles the complete process of sending a user get request to
+ * the server and receiving the response. It sends the request and repeatedly
+ * attempts to receive a valid response. This function blocks until the entire
+ * operation is complete or an error occurs.
  *
  * @param[in] c Pointer to the client context.
  * @param[in] username The username to look up.
@@ -2125,7 +2128,8 @@ int wh_Client_AuthUserGet(whClientContext* c, const char* username,
  * @brief Sends a user delete request to the server.
  *
  * This function prepares and sends a user delete request message to the server.
- * This function does not block; it returns immediately after sending the request.
+ * This function does not block; it returns immediately after sending the
+ * request.
  *
  * @param[in] c Pointer to the client context.
  * @param[in] user_id The user ID to delete.
@@ -2136,9 +2140,9 @@ int wh_Client_AuthUserDeleteRequest(whClientContext* c, whUserId user_id);
 /**
  * @brief Receives a user delete response from the server.
  *
- * This function attempts to process a user delete response message from the server.
- * This function does not block; it returns WH_ERROR_NOTREADY if a response has
- * not been received.
+ * This function attempts to process a user delete response message from the
+ * server. This function does not block; it returns WH_ERROR_NOTREADY if a
+ * response has not been received.
  *
  * @param[in] c Pointer to the client context.
  * @param[out] out_rc Pointer to store the return code from the server.
@@ -2150,10 +2154,10 @@ int wh_Client_AuthUserDeleteResponse(whClientContext* c, int32_t* out_rc);
 /**
  * @brief Deletes a user from the server (blocking convenience wrapper).
  *
- * This function handles the complete process of sending a user delete request to the
- * server and receiving the response. It sends the request and repeatedly attempts
- * to receive a valid response. This function blocks until the entire operation is
- * complete or an error occurs.
+ * This function handles the complete process of sending a user delete request
+ * to the server and receiving the response. It sends the request and repeatedly
+ * attempts to receive a valid response. This function blocks until the entire
+ * operation is complete or an error occurs.
  *
  * @param[in] c Pointer to the client context.
  * @param[in] user_id The user ID to delete.
@@ -2166,8 +2170,9 @@ int wh_Client_AuthUserDelete(whClientContext* c, whUserId user_id,
 /**
  * @brief Sends a user set permissions request to the server.
  *
- * This function prepares and sends a user set permissions request message to the server.
- * This function does not block; it returns immediately after sending the request.
+ * This function prepares and sends a user set permissions request message to
+ * the server. This function does not block; it returns immediately after
+ * sending the request.
  *
  * @param[in] c Pointer to the client context.
  * @param[in] user_id The user ID to set permissions for.
@@ -2181,9 +2186,9 @@ int wh_Client_AuthUserSetPermissionsRequest(whClientContext*  c,
 /**
  * @brief Receives a user set permissions response from the server.
  *
- * This function attempts to process a user set permissions response message from the server.
- * This function does not block; it returns WH_ERROR_NOTREADY if a response has
- * not been received.
+ * This function attempts to process a user set permissions response message
+ * from the server. This function does not block; it returns WH_ERROR_NOTREADY
+ * if a response has not been received.
  *
  * @param[in] c Pointer to the client context.
  * @param[out] out_rc Pointer to store the return code from the server.
@@ -2196,10 +2201,10 @@ int wh_Client_AuthUserSetPermissionsResponse(whClientContext* c,
 /**
  * @brief Sets user permissions on the server (blocking convenience wrapper).
  *
- * This function handles the complete process of sending a user set permissions request to the
- * server and receiving the response. It sends the request and repeatedly attempts
- * to receive a valid response. This function blocks until the entire operation is
- * complete or an error occurs.
+ * This function handles the complete process of sending a user set permissions
+ * request to the server and receiving the response. It sends the request and
+ * repeatedly attempts to receive a valid response. This function blocks until
+ * the entire operation is complete or an error occurs.
  *
  * @param[in] c Pointer to the client context.
  * @param[in] user_id The user ID to set permissions for.
@@ -2214,8 +2219,9 @@ int wh_Client_AuthUserSetPermissions(whClientContext* c, whUserId user_id,
 /**
  * @brief Sends a user set credentials request to the server.
  *
- * This function prepares and sends a user set credentials request message to the server.
- * This function does not block; it returns immediately after sending the request.
+ * This function prepares and sends a user set credentials request message to
+ * the server. This function does not block; it returns immediately after
+ * sending the request.
  *
  * @param[in] c Pointer to the client context.
  * @param[in] user_id The user ID to set credentials for.
@@ -2234,9 +2240,9 @@ int wh_Client_AuthUserSetCredentialsRequest(
 /**
  * @brief Receives a user set credentials response from the server.
  *
- * This function attempts to process a user set credentials response message from the server.
- * This function does not block; it returns WH_ERROR_NOTREADY if a response has
- * not been received.
+ * This function attempts to process a user set credentials response message
+ * from the server. This function does not block; it returns WH_ERROR_NOTREADY
+ * if a response has not been received.
  *
  * @param[in] c Pointer to the client context.
  * @param[out] out_rc Pointer to store the return code from the server.
@@ -2249,10 +2255,10 @@ int wh_Client_AuthUserSetCredentialsResponse(whClientContext* c,
 /**
  * @brief Sets user credentials on the server (blocking convenience wrapper).
  *
- * This function handles the complete process of sending a user set credentials request to the
- * server and receiving the response. It sends the request and repeatedly attempts
- * to receive a valid response. This function blocks until the entire operation is
- * complete or an error occurs.
+ * This function handles the complete process of sending a user set credentials
+ * request to the server and receiving the response. It sends the request and
+ * repeatedly attempts to receive a valid response. This function blocks until
+ * the entire operation is complete or an error occurs.
  *
  * @param[in] c Pointer to the client context.
  * @param[in] user_id The user ID to set credentials for.

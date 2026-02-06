@@ -192,8 +192,9 @@ int wh_MessageAuth_UnflattenPermissions(uint8_t* buffer, uint16_t buffer_len,
         int j;
         for (j = 0; j < WH_AUTH_ACTION_WORDS; j++) {
             permissions->actionPermissions[i][j] =
-                (uint32_t)(buffer[idx] | (buffer[idx + 1] << 8) |
-                           (buffer[idx + 2] << 16) | (buffer[idx + 3] << 24));
+                ((uint32_t)buffer[idx]) | ((uint32_t)buffer[idx + 1] << 8) |
+                ((uint32_t)buffer[idx + 2] << 16) |
+                ((uint32_t)buffer[idx + 3] << 24);
             idx += 4;
         }
     }
@@ -208,8 +209,9 @@ int wh_MessageAuth_UnflattenPermissions(uint8_t* buffer, uint16_t buffer_len,
 
     /* Deserialize keyIds array (4*WH_AUTH_MAX_KEY_IDS bytes) */
     for (i = 0; i < WH_AUTH_MAX_KEY_IDS; i++) {
-        keyId = (uint32_t)(buffer[idx] | (buffer[idx + 1] << 8) |
-                           (buffer[idx + 2] << 16) | (buffer[idx + 3] << 24));
+        keyId = ((uint32_t)buffer[idx]) | ((uint32_t)buffer[idx + 1] << 8) |
+                ((uint32_t)buffer[idx + 2] << 16) |
+                ((uint32_t)buffer[idx + 3] << 24);
         permissions->keyIds[i] = keyId;
         idx += 4;
     }
@@ -241,6 +243,8 @@ int wh_MessageAuth_TranslateUserAddRequest(
     if (src_header != dest_header) {
         memcpy(dest_header->username, src_header->username,
                sizeof(dest_header->username));
+        /* make sure the destination username is null terminated */
+        dest_header->username[sizeof(dest_header->username) - 1] = '\0';
         memcpy(dest_header->permissions, src_header->permissions,
                sizeof(dest_header->permissions));
     }
@@ -294,6 +298,8 @@ int wh_MessageAuth_TranslateUserGetRequest(
 
     if (src != dest) {
         memcpy(dest->username, src->username, sizeof(dest->username));
+        /* make sure the destination username is null terminated */
+        dest->username[sizeof(dest->username) - 1] = '\0';
     }
     (void)magic;
     return 0;
