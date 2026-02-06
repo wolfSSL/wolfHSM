@@ -33,7 +33,7 @@
 #ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
 #include "wolfhsm/wh_auth.h"
 #include "wolfhsm/wh_message_auth.h"
-#include "port/posix/posix_auth.h"
+#include "wolfhsm/wh_auth_base.h"
 #endif /* WOLFHSM_CFG_ENABLE_AUTHENTICATION */
 #include "wolfhsm/wh_nvm.h"
 #include "wolfhsm/wh_nvm_flash.h"
@@ -85,19 +85,47 @@ static whTestNvmBackendUnion nvm_setup;
 static whNvmConfig           n_conf[1] = {0};
 static whNvmContext          nvm[1]    = {{0}};
 
+/* Test-specific authorization override callbacks to verify they are invoked */
+static int test_checkRequestAuthorizationCalled = 0;
+static int test_checkKeyAuthorizationCalled = 0;
+
+static int test_CheckRequestAuthorization(void* context, int err,
+    uint16_t user_id, uint16_t group, uint16_t action)
+{
+    (void)context;
+    (void)user_id;
+    (void)group;
+    (void)action;
+    test_checkRequestAuthorizationCalled++;
+    /* Pass through the error code unchanged */
+    return err;
+}
+
+static int test_CheckKeyAuthorization(void* context, int err, uint16_t user_id,
+                                      uint32_t key_id, uint16_t action)
+{
+    (void)context;
+    (void)user_id;
+    (void)key_id;
+    (void)action;
+    test_checkKeyAuthorizationCalled++;
+    /* Pass through the error code unchanged */
+    return err;
+}
+
 /* Auth setup following wh_posix_server pattern */
 static whAuthCb default_auth_cb = {
-    .Init                      = posixAuth_Init,
-    .Cleanup                   = posixAuth_Cleanup,
-    .Login                     = posixAuth_Login,
-    .Logout                    = posixAuth_Logout,
-    .CheckRequestAuthorization = posixAuth_CheckRequestAuthorization,
-    .CheckKeyAuthorization     = posixAuth_CheckKeyAuthorization,
-    .UserAdd                   = posixAuth_UserAdd,
-    .UserDelete                = posixAuth_UserDelete,
-    .UserSetPermissions        = posixAuth_UserSetPermissions,
-    .UserGet                   = posixAuth_UserGet,
-    .UserSetCredentials        = posixAuth_UserSetCredentials};
+    .Init                      = wh_Auth_BaseInit,
+    .Cleanup                   = wh_Auth_BaseCleanup,
+    .Login                     = wh_Auth_BaseLogin,
+    .Logout                    = wh_Auth_BaseLogout,
+    .CheckRequestAuthorization = test_CheckRequestAuthorization,
+    .CheckKeyAuthorization     = test_CheckKeyAuthorization,
+    .UserAdd                   = wh_Auth_BaseUserAdd,
+    .UserDelete                = wh_Auth_BaseUserDelete,
+    .UserSetPermissions        = wh_Auth_BaseUserSetPermissions,
+    .UserGet                   = wh_Auth_BaseUserGet,
+    .UserSetCredentials        = wh_Auth_BaseUserSetCredentials};
 static whAuthContext auth_ctx = {0};
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
@@ -167,7 +195,7 @@ static int _whTest_Auth_SetupMemory(whClientContext** out_client)
     for (i = 0; i < WH_AUTH_MAX_KEY_IDS; i++) {
         permissions.keyIds[i] = 0;
     }
-    rc = posixAuth_UserAdd(&auth_ctx, TEST_ADMIN_USERNAME, &out_user_id, permissions,
+    rc = wh_Auth_BaseUserAdd(&auth_ctx, TEST_ADMIN_USERNAME, &out_user_id, permissions,
                                 WH_AUTH_METHOD_PIN, TEST_ADMIN_PIN, strlen(TEST_ADMIN_PIN));
     if (rc != WH_ERROR_OK) {
         WH_ERROR_PRINT("Failed to add admin user: %d\n", rc);
@@ -1265,6 +1293,11 @@ int whTest_AuthMEM(void)
     /* Memory transport mode */
     WH_TEST_RETURN_ON_FAIL(_whTest_Auth_SetupMemory(&client_ctx));
     WH_TEST_RETURN_ON_FAIL(whTest_AuthTest(client_ctx));
+
+    /* Verify that authorization callbacks were invoked during tests */
+    WH_TEST_PRINT("Verifying authorization override callbacks were called...\n");
+    WH_TEST_ASSERT_RETURN(test_checkRequestAuthorizationCalled > 0);
+
     WH_TEST_RETURN_ON_FAIL(_whTest_Auth_CleanupMemory());
 
     return WH_TEST_SUCCESS;

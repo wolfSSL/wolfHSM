@@ -17,13 +17,13 @@
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
 /*
- * posix_auth.h
+ * wh_auth_base.h
  *
  * Basic authentication and authorization implementation.
  */
 
-#ifndef PORT_POSIX_POSIX_AUTH_H_
-#define PORT_POSIX_POSIX_AUTH_H_
+#ifndef WOLFHSM_WH_AUTH_BASE_H_
+#define WOLFHSM_WH_AUTH_BASE_H_
 
 /* Pick up compile-time configuration */
 #include "wolfhsm/wh_settings.h"
@@ -34,21 +34,21 @@
 #include "wolfhsm/wh_auth.h"
 
 /**
- * @brief Initialize the auth base backend.
+ * @brief Initialize the auth base implementation.
  *
  * @param[in] context Pointer to the auth base context.
  * @param[in] config Pointer to the configuration data.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
-int posixAuth_Init(void* context, const void* config);
+int wh_Auth_BaseInit(void* context, const void* config);
 
 /**
- * @brief Cleanup the auth base backend.
+ * @brief Cleanup the auth base implementation.
  *
  * @param[in] context Pointer to the auth base context.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
-int posixAuth_Cleanup(void* context);
+int wh_Auth_BaseCleanup(void* context);
 
 /**
  * @brief Authenticate a user using the specified method.
@@ -64,7 +64,7 @@ int posixAuth_Cleanup(void* context);
  * @param[out] loggedIn Pointer to store the login status.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
-int posixAuth_Login(void* context, uint8_t client_id, whAuthMethod method,
+int wh_Auth_BaseLogin(void* context, uint8_t client_id, whAuthMethod method,
                       const char* username, const void* auth_data,
                       uint16_t auth_data_len, whUserId* out_user_id,
                       whAuthPermissions* out_permissions, int* loggedIn);
@@ -77,26 +77,8 @@ int posixAuth_Login(void* context, uint8_t client_id, whAuthMethod method,
  * @param[in] user_id The user ID to logout.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
-int posixAuth_Logout(void* context, uint16_t current_user_id,
+int wh_Auth_BaseLogout(void* context, uint16_t current_user_id,
                        uint16_t user_id);
-
-/**
- * @brief Option to override authorization check.
- *
- * @param[in] context Pointer to the auth base context.
- * @param[in] err The current error code set for check authorization.
- * @param[in] user_id The user ID to check authorization for.
- * @param[in] group The group to check authorization for.
- * @param[in] action The action to check authorization for.
- * @return int Returns 0 if authorized, or a negative error code on failure.
- */
-int posixAuth_CheckRequestAuthorization(void* context, int err, uint16_t user_id,
-                                          uint16_t group, uint16_t action);
-
-/* authorization check on key usage after the request has been parsed and before
- * the action is done */
-int posixAuth_CheckKeyAuthorization(void* context, int err, uint16_t user_id,
-                                      uint32_t key_id, uint16_t action);
 
 /**
  * @brief Add a new user.
@@ -110,7 +92,7 @@ int posixAuth_CheckKeyAuthorization(void* context, int err, uint16_t user_id,
  * @param[in] credentials_len Length of the credentials data.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
-int posixAuth_UserAdd(void* context, const char* username,
+int wh_Auth_BaseUserAdd(void* context, const char* username,
                         whUserId* out_user_id, whAuthPermissions permissions,
                         whAuthMethod method, const void* credentials,
                         uint16_t credentials_len);
@@ -123,7 +105,7 @@ int posixAuth_UserAdd(void* context, const char* username,
  * @param[in] user_id The user ID to delete.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
-int posixAuth_UserDelete(void* context, uint16_t current_user_id,
+int wh_Auth_BaseUserDelete(void* context, uint16_t current_user_id,
                            uint16_t user_id);
 
 /**
@@ -135,7 +117,7 @@ int posixAuth_UserDelete(void* context, uint16_t current_user_id,
  * @param[in] permissions The new permissions to set.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
-int posixAuth_UserSetPermissions(void* context, uint16_t current_user_id,
+int wh_Auth_BaseUserSetPermissions(void* context, uint16_t current_user_id,
                                    uint16_t          user_id,
                                    whAuthPermissions permissions);
 
@@ -148,7 +130,7 @@ int posixAuth_UserSetPermissions(void* context, uint16_t current_user_id,
  * @param[out] out_permissions Pointer to store the user permissions.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
-int posixAuth_UserGet(void* context, const char* username,
+int wh_Auth_BaseUserGet(void* context, const char* username,
                         whUserId*          out_user_id,
                         whAuthPermissions* out_permissions);
 
@@ -164,11 +146,11 @@ int posixAuth_UserGet(void* context, const char* username,
  * @param[in] new_credentials_len Length of the new credentials data.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
-int posixAuth_UserSetCredentials(void* context, uint16_t user_id,
+int wh_Auth_BaseUserSetCredentials(void* context, uint16_t user_id,
                                    whAuthMethod method,
                                    const void*  current_credentials,
                                    uint16_t     current_credentials_len,
                                    const void*  new_credentials,
                                    uint16_t     new_credentials_len);
 
-#endif /* PORT_POSIX_POSIX_AUTH_H_ */
+#endif /* WOLFHSM_WH_AUTH_BASE_H_ */
