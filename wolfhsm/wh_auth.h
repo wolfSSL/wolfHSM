@@ -42,6 +42,10 @@
 #include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_message.h" /* for WH_NUMBER_OF_GROUPS */
 
+#ifdef WOLFHSM_CFG_THREADSAFE
+#include "wolfhsm/wh_lock.h"
+#endif
+
 /** Auth Manager Types */
 
 /* User identifier type */
@@ -150,6 +154,9 @@ typedef struct whAuthContext_t {
     whAuthCb*  cb;
     whAuthUser user;
     void*      context;
+#ifdef WOLFHSM_CFG_THREADSAFE
+    whLock lock; /* Lock for serializing auth operations */
+#endif
 } whAuthContext;
 
 /* Simple helper configuration structure associated with an Auth Manager
@@ -158,6 +165,9 @@ typedef struct whAuthConfig_t {
     whAuthCb* cb;
     void*     context;
     void*     config;
+#ifdef WOLFHSM_CFG_THREADSAFE
+    whLockConfig* lockConfig; /* Lock configuration for thread safety */
+#endif
 } whAuthConfig;
 
 /** Public Auth Manager API Functions */
@@ -298,4 +308,33 @@ int wh_Auth_UserSetCredentials(whAuthContext* context, whUserId user_id,
                                uint16_t     current_credentials_len,
                                const void*  new_credentials,
                                uint16_t     new_credentials_len);
+
+#ifdef WOLFHSM_CFG_THREADSAFE
+/**
+ * @brief Acquires the auth lock.
+ *
+ * @param[in] auth Pointer to the auth context. Must not be NULL.
+ * @return int WH_ERROR_OK on success.
+ *             WH_ERROR_BADARGS if auth is NULL.
+ *             Other negative error codes on lock acquisition failure.
+ */
+int wh_Auth_Lock(whAuthContext* auth);
+
+/**
+ * @brief Releases the auth lock.
+ *
+ * @param[in] auth Pointer to the auth context. Must not be NULL.
+ * @return int WH_ERROR_OK on success.
+ *             WH_ERROR_BADARGS if auth is NULL.
+ *             Other negative error codes on lock release failure.
+ */
+int wh_Auth_Unlock(whAuthContext* auth);
+
+#define WH_AUTH_LOCK(auth) wh_Auth_Lock(auth)
+#define WH_AUTH_UNLOCK(auth) wh_Auth_Unlock(auth)
+#else
+#define WH_AUTH_LOCK(auth) (WH_ERROR_OK)
+#define WH_AUTH_UNLOCK(auth) (WH_ERROR_OK)
+#endif
+
 #endif /* !WOLFHSM_WH_AUTH_H_ */
