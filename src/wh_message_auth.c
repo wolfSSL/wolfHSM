@@ -76,7 +76,7 @@ int wh_MessageAuth_TranslateLoginRequest(
     WH_T16(magic, dest_header, src_header, auth_data_len);
 
     expected_size = (uint16_t)(header_size + dest_header->auth_data_len);
-    if (dest_header->auth_data_len > WH_MESSAGE_AUTH_MAX_CREDENTIALS_LEN ||
+    if (dest_header->auth_data_len > WH_MESSAGE_AUTH_LOGIN_MAX_AUTH_DATA_LEN ||
         src_size < expected_size) {
         return WH_ERROR_BADARGS;
     }
@@ -126,8 +126,9 @@ int wh_MessageAuth_FlattenPermissions(whAuthPermissions* permissions,
         return WH_ERROR_BADARGS;
     }
 
-    /* Serialize groupPermissions array (WH_NUMBER_OF_GROUPS bytes) */
-    for (i = 0; i < WH_NUMBER_OF_GROUPS; i++) {
+    /* Serialize groupPermissions array (WH_NUMBER_OF_GROUPS + 1 bytes)
+     * The last byte is the admin flag */
+    for (i = 0; i < WH_NUMBER_OF_GROUPS + 1; i++) {
         buffer[idx++] = permissions->groupPermissions[i];
     }
 
@@ -181,8 +182,9 @@ int wh_MessageAuth_UnflattenPermissions(uint8_t* buffer, uint16_t buffer_len,
         return WH_ERROR_BADARGS;
     }
 
-    /* Deserialize groupPermissions array (WH_NUMBER_OF_GROUPS bytes) */
-    for (i = 0; i < WH_NUMBER_OF_GROUPS; i++) {
+    /* Deserialize groupPermissions array (WH_NUMBER_OF_GROUPS + 1 bytes)
+     * The last byte is the admin flag */
+    for (i = 0; i < WH_NUMBER_OF_GROUPS + 1; i++) {
         permissions->groupPermissions[i] = buffer[idx++];
     }
 
@@ -253,7 +255,7 @@ int wh_MessageAuth_TranslateUserAddRequest(
     WH_T16(magic, dest_header, src_header, credentials_len);
 
     expected_size = (uint16_t)(header_size + dest_header->credentials_len);
-    if (dest_header->credentials_len > WH_MESSAGE_AUTH_MAX_CREDENTIALS_LEN ||
+    if (dest_header->credentials_len > WH_MESSAGE_AUTH_USERADD_MAX_CREDENTIALS_LEN ||
         src_size < expected_size) {
         return WH_ERROR_BUFFER_SIZE;
     }
@@ -362,10 +364,11 @@ int wh_MessageAuth_TranslateUserSetCredentialsRequest(
     WH_T16(magic, dest_header, src_header, new_credentials_len);
 
     if (src_header->current_credentials_len >
-        WH_MESSAGE_AUTH_MAX_CREDENTIALS_LEN) {
+        WH_MESSAGE_AUTH_SETCREDS_MAX_CREDENTIALS_LEN) {
         return WH_ERROR_BUFFER_SIZE;
     }
-    if (src_header->new_credentials_len > WH_MESSAGE_AUTH_MAX_CREDENTIALS_LEN) {
+    if (src_header->new_credentials_len >
+        WH_MESSAGE_AUTH_SETCREDS_MAX_CREDENTIALS_LEN) {
         return WH_ERROR_BUFFER_SIZE;
     }
 

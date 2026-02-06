@@ -65,10 +65,10 @@ int wh_Server_HandleAuthRequest(whServerContext* server, uint16_t magic,
     switch (action) {
 
         case WH_MESSAGE_AUTH_ACTION_LOGIN: {
-            whMessageAuth_LoginRequest  req                        = {0};
-            whMessageAuth_LoginResponse resp                       = {0};
-            int                         loggedIn                   = 0;
-            uint8_t auth_data[WH_MESSAGE_AUTH_MAX_CREDENTIALS_LEN] = {0};
+            whMessageAuth_LoginRequest  req                            = {0};
+            whMessageAuth_LoginResponse resp                           = {0};
+            int                         loggedIn                       = 0;
+            uint8_t auth_data[WH_MESSAGE_AUTH_LOGIN_MAX_AUTH_DATA_LEN] = {0};
 
             rc = wh_MessageAuth_TranslateLoginRequest(
                 magic, req_packet, req_size, &req, auth_data);
@@ -118,10 +118,10 @@ int wh_Server_HandleAuthRequest(whServerContext* server, uint16_t magic,
         } break;
 
         case WH_MESSAGE_AUTH_ACTION_USER_ADD: {
-            whMessageAuth_UserAddRequest  req                        = {0};
-            whMessageAuth_UserAddResponse resp                       = {0};
-            whAuthPermissions             permissions                = {0};
-            uint8_t credentials[WH_MESSAGE_AUTH_MAX_CREDENTIALS_LEN] = {0};
+            whMessageAuth_UserAddRequest  req         = {0};
+            whMessageAuth_UserAddResponse resp        = {0};
+            whAuthPermissions             permissions = {0};
+            uint8_t credentials[WH_MESSAGE_AUTH_USERADD_MAX_CREDENTIALS_LEN] = {0};
 
             rc = wh_MessageAuth_TranslateUserAddRequest(
                 magic, req_packet, req_size, &req, credentials);
@@ -223,10 +223,10 @@ int wh_Server_HandleAuthRequest(whServerContext* server, uint16_t magic,
         } break;
 
         case WH_MESSAGE_AUTH_ACTION_USER_SET_CREDENTIALS: {
-            whMessageAuth_UserSetCredentialsRequest req_header         = {0};
-            uint8_t current_creds[WH_MESSAGE_AUTH_MAX_CREDENTIALS_LEN] = {0};
-            uint8_t new_creds[WH_MESSAGE_AUTH_MAX_CREDENTIALS_LEN]     = {0};
-            whMessageAuth_SimpleResponse resp                          = {0};
+            whMessageAuth_UserSetCredentialsRequest req_header = {0};
+            uint8_t current_creds[WH_MESSAGE_AUTH_SETCREDS_MAX_CREDENTIALS_LEN] = {0};
+            uint8_t new_creds[WH_MESSAGE_AUTH_SETCREDS_MAX_CREDENTIALS_LEN]     = {0};
+            whMessageAuth_SimpleResponse resp                                   = {0};
             uint16_t min_size = sizeof(whMessageAuth_UserSetCredentialsRequest);
 
             if (req_size < min_size) {

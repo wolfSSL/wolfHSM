@@ -66,6 +66,10 @@ typedef enum {
     ((WH_AUTH_ACTIONS_PER_GROUP + 31) / 32) /* 8 uint32_t words for 256 bits \
                                              */
 
+/* Check if the user has admin permission flag set */
+#define WH_AUTH_IS_ADMIN(permissions) \
+    (permissions.groupPermissions[WH_NUMBER_OF_GROUPS])
+
 /* Convert action enum value (0-255) to word index and bitmask.
  * Sets wordIdx to the array index (0-7) and bitMask to the bit position. */
 #define WH_AUTH_ACTION_TO_WORD_AND_BITMASK(action, wordIdx, bitMask) \
@@ -75,8 +79,9 @@ typedef enum {
     } while (0)
 
 typedef struct {
-    uint8_t groupPermissions[WH_NUMBER_OF_GROUPS]; /* boolean array of if group
-                                                       is allowed */
+    uint8_t groupPermissions[WH_NUMBER_OF_GROUPS + 1]; /* boolean array of if group
+                                                       is allowed, last boolean
+                                                       is admin permission */
     uint32_t
         actionPermissions[WH_NUMBER_OF_GROUPS]
                          [WH_AUTH_ACTION_WORDS]; /* multi-word bit array
