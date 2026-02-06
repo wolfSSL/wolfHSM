@@ -16,7 +16,7 @@
 #include "wolfhsm/wh_flash_ramsim.h"
 #ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
 #include "wolfhsm/wh_auth.h"
-#include "port/posix/posix_auth.h"
+#include "wolfhsm/wh_auth_base.h"
 #endif /* WOLFHSM_CFG_ENABLE_AUTHENTICATION */
 
 #include "port/posix/posix_transport_shm.h"
@@ -659,17 +659,17 @@ int wh_PosixServer_ExampleNvmConfig(void* conf, const char* nvmInitFilePath)
 #ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
 /* Default auth callback structure */
 static whAuthCb default_auth_cb = {
-    .Init                      = posixAuth_Init,
-    .Cleanup                   = posixAuth_Cleanup,
-    .Login                     = posixAuth_Login,
-    .Logout                    = posixAuth_Logout,
-    .CheckRequestAuthorization = posixAuth_CheckRequestAuthorization,
-    .CheckKeyAuthorization     = posixAuth_CheckKeyAuthorization,
-    .UserAdd                   = posixAuth_UserAdd,
-    .UserDelete                = posixAuth_UserDelete,
-    .UserSetPermissions        = posixAuth_UserSetPermissions,
-    .UserGet                   = posixAuth_UserGet,
-    .UserSetCredentials        = posixAuth_UserSetCredentials};
+    .Init                      = wh_Auth_BaseInit,
+    .Cleanup                   = wh_Auth_BaseCleanup,
+    .Login                     = wh_Auth_BaseLogin,
+    .Logout                    = wh_Auth_BaseLogout,
+    .CheckRequestAuthorization = NULL, /* authorization override not used */
+    .CheckKeyAuthorization     = NULL,
+    .UserAdd                   = wh_Auth_BaseUserAdd,
+    .UserDelete                = wh_Auth_BaseUserDelete,
+    .UserSetPermissions        = wh_Auth_BaseUserSetPermissions,
+    .UserGet                   = wh_Auth_BaseUserGet,
+    .UserSetCredentials        = wh_Auth_BaseUserSetCredentials};
 static whAuthContext auth_ctx = {0};
 
 /**
@@ -721,7 +721,7 @@ int wh_PosixServer_ExampleAuthConfig(void* conf)
     for (i = 0; i < WH_AUTH_MAX_KEY_IDS; i++) {
         permissions.keyIds[i] = 0;
     }
-    rc = posixAuth_UserAdd(&auth_ctx, "admin", &out_user_id, permissions,
+    rc = wh_Auth_BaseUserAdd(&auth_ctx, "admin", &out_user_id, permissions,
                              WH_AUTH_METHOD_PIN, "1234", 4);
     if (rc != WH_ERROR_OK) {
         WOLFHSM_CFG_PRINTF("Failed to add admin user: %d\n", rc);
