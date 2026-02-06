@@ -62,9 +62,22 @@ int wh_Auth_Init(whAuthContext* context, const whAuthConfig* config)
     context->context = config->context;
     memset(&context->user, 0, sizeof(whAuthUser));
 
+#ifdef WOLFHSM_CFG_THREADSAFE
+    /* Initialize the lock for thread-safe auth operations */
+    rc = wh_Lock_Init(&context->lock, config->lockConfig);
+    if (rc != WH_ERROR_OK) {
+        context->cb      = NULL;
+        context->context = NULL;
+        return rc;
+    }
+#endif /* WOLFHSM_CFG_THREADSAFE */
+
     if (context->cb != NULL && context->cb->Init != NULL) {
         rc = context->cb->Init(context->context, config->config);
         if (rc != WH_ERROR_OK) {
+#ifdef WOLFHSM_CFG_THREADSAFE
+            (void)wh_Lock_Cleanup(&context->lock);
+#endif
             context->cb      = NULL;
             context->context = NULL;
         }
@@ -76,6 +89,8 @@ int wh_Auth_Init(whAuthContext* context, const whAuthConfig* config)
 
 int wh_Auth_Cleanup(whAuthContext* context)
 {
+    int rc = WH_ERROR_OK;
+
     if ((context == NULL) || (context->cb == NULL)) {
         return WH_ERROR_BADARGS;
     }
@@ -83,7 +98,15 @@ int wh_Auth_Cleanup(whAuthContext* context)
     if (context->cb->Cleanup == NULL) {
         return WH_ERROR_ABORTED;
     }
-    return context->cb->Cleanup(context->context);
+
+    rc = context->cb->Cleanup(context->context);
+
+#ifdef WOLFHSM_CFG_THREADSAFE
+    /* Cleanup the lock for thread-safe auth operations */
+    (void)wh_Lock_Cleanup(&context->lock);
+#endif /* WOLFHSM_CFG_THREADSAFE */
+
+    return rc;
 }
 
 
@@ -109,6 +132,11 @@ int wh_Auth_Login(whAuthContext* context, uint8_t client_id,
         return WH_ERROR_BADARGS;
     }
 
+    rc = WH_AUTH_LOCK(context);
+    if (rc != WH_ERROR_OK) {
+        return rc;
+    }
+
     /* allowing only one user logged in to an open connection at a time */
     if (context->user.user_id != WH_USER_ID_INVALID) {
         *loggedIn = 0;
@@ -125,6 +153,7 @@ int wh_Auth_Login(whAuthContext* context, uint8_t client_id,
         }
     }
 
+    (void)WH_AUTH_UNLOCK(context);
     return rc;
 }
 
@@ -138,14 +167,19 @@ int wh_Auth_Logout(whAuthContext* context, whUserId user_id)
         return WH_ERROR_BADARGS;
     }
 
-    rc = context->cb->Logout(context->context, context->user.user_id, user_id);
+    rc = WH_AUTH_LOCK(context);
     if (rc != WH_ERROR_OK) {
         return rc;
     }
 
-    /* Clear the user context */
-    memset(&context->user, 0, sizeof(whAuthUser));
-    return WH_ERROR_OK;
+    rc = context->cb->Logout(context->context, context->user.user_id, user_id);
+    if (rc == WH_ERROR_OK) {
+        /* Clear the user context */
+        memset(&context->user, 0, sizeof(whAuthUser));
+    }
+
+    (void)WH_AUTH_UNLOCK(context);
+    return rc;
 }
 
 
@@ -271,51 +305,91 @@ int wh_Auth_UserAdd(whAuthContext* context, const char* username,
                     whAuthMethod method, const void* credentials,
                     uint16_t credentials_len)
 {
+    int rc;
+
     if ((context == NULL) || (context->cb == NULL) ||
         (context->cb->UserAdd == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
-    return context->cb->UserAdd(context->context, username, out_user_id,
-                                permissions, method, credentials,
-                                credentials_len);
+    rc = WH_AUTH_LOCK(context);
+    if (rc != WH_ERROR_OK) {
+        return rc;
+    }
+
+    rc = context->cb->UserAdd(context->context, username, out_user_id,
+                              permissions, method, credentials,
+                              credentials_len);
+
+    (void)WH_AUTH_UNLOCK(context);
+    return rc;
 }
 
 
 int wh_Auth_UserDelete(whAuthContext* context, whUserId user_id)
 {
+    int rc;
+
     if ((context == NULL) || (context->cb == NULL) ||
         (context->cb->UserDelete == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
-    return context->cb->UserDelete(context->context, context->user.user_id,
-                                   user_id);
+    rc = WH_AUTH_LOCK(context);
+    if (rc != WH_ERROR_OK) {
+        return rc;
+    }
+
+    rc = context->cb->UserDelete(context->context, context->user.user_id,
+                                 user_id);
+
+    (void)WH_AUTH_UNLOCK(context);
+    return rc;
 }
 
 
 int wh_Auth_UserSetPermissions(whAuthContext* context, whUserId user_id,
                                whAuthPermissions permissions)
 {
+    int rc;
+
     if ((context == NULL) || (context->cb == NULL) ||
         (context->cb->UserSetPermissions == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
-    return context->cb->UserSetPermissions(
+    rc = WH_AUTH_LOCK(context);
+    if (rc != WH_ERROR_OK) {
+        return rc;
+    }
+
+    rc = context->cb->UserSetPermissions(
         context->context, context->user.user_id, user_id, permissions);
+
+    (void)WH_AUTH_UNLOCK(context);
+    return rc;
 }
 
 int wh_Auth_UserGet(whAuthContext* context, const char* username,
                     whUserId* out_user_id, whAuthPermissions* out_permissions)
 {
+    int rc;
+
     if ((context == NULL) || (context->cb == NULL) ||
         (context->cb->UserGet == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
-    return context->cb->UserGet(context->context, username, out_user_id,
-                                out_permissions);
+    rc = WH_AUTH_LOCK(context);
+    if (rc != WH_ERROR_OK) {
+        return rc;
+    }
+
+    rc = context->cb->UserGet(context->context, username, out_user_id,
+                              out_permissions);
+
+    (void)WH_AUTH_UNLOCK(context);
+    return rc;
 }
 
 int wh_Auth_UserSetCredentials(whAuthContext* context, whUserId user_id,
@@ -325,12 +399,44 @@ int wh_Auth_UserSetCredentials(whAuthContext* context, whUserId user_id,
                                const void*  new_credentials,
                                uint16_t     new_credentials_len)
 {
+    int rc;
+
     if ((context == NULL) || (context->cb == NULL) ||
         (context->cb->UserSetCredentials == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
-    return context->cb->UserSetCredentials(
+    rc = WH_AUTH_LOCK(context);
+    if (rc != WH_ERROR_OK) {
+        return rc;
+    }
+
+    rc = context->cb->UserSetCredentials(
         context->context, user_id, method, current_credentials,
         current_credentials_len, new_credentials, new_credentials_len);
+
+    (void)WH_AUTH_UNLOCK(context);
+    return rc;
 }
+
+
+/********** Lock/Unlock Functions for Thread Safety *************************/
+
+#ifdef WOLFHSM_CFG_THREADSAFE
+int wh_Auth_Lock(whAuthContext* auth)
+{
+    if (auth == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    return wh_Lock_Acquire(&auth->lock);
+}
+
+
+int wh_Auth_Unlock(whAuthContext* auth)
+{
+    if (auth == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    return wh_Lock_Release(&auth->lock);
+}
+#endif /* WOLFHSM_CFG_THREADSAFE */

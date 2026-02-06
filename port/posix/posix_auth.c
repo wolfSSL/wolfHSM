@@ -48,10 +48,9 @@ typedef struct whAuthBase_User {
     unsigned char credentials[WH_AUTH_BASE_MAX_CREDENTIALS_LEN];
     uint16_t      credentials_len;
 } whAuthBase_User;
-/* TODO: Thread safety - The global users array is not protected by any
- * synchronization mechanism. In a multi-threaded environment, concurrent
- * access could lead to race conditions. Consider adding appropriate locking
- * mechanisms (mutex, rwlock) to protect concurrent access. */
+/* The global users array is protected by the auth context lock when
+ * WOLFHSM_CFG_THREADSAFE is defined. Locking is performed by the wh_Auth_*
+ * wrapper functions in wh_auth.c. */
 static whAuthBase_User users[WH_AUTH_BASE_MAX_USERS];
 
 #if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER) && !defined(WOLFHSM_CFG_NO_CRYPTO)
