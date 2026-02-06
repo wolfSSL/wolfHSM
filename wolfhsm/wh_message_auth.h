@@ -35,25 +35,12 @@
 #include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_auth.h"
 
-enum WH_MESSAGE_AUTH_ACTION_ENUM {
-    WH_MESSAGE_AUTH_ACTION_AUTHENTICATE         = 0x01,
-    WH_MESSAGE_AUTH_ACTION_LOGIN                = 0x02,
-    WH_MESSAGE_AUTH_ACTION_LOGOUT               = 0x03,
-    WH_MESSAGE_AUTH_ACTION_USER_ADD             = 0x04,
-    WH_MESSAGE_AUTH_ACTION_USER_DELETE          = 0x05,
-    WH_MESSAGE_AUTH_ACTION_USER_GET             = 0x06,
-    WH_MESSAGE_AUTH_ACTION_USER_SET_PERMISSIONS = 0x07,
-    WH_MESSAGE_AUTH_ACTION_USER_SET_CREDENTIALS = 0x08,
-};
-
-enum WH_MESSAGE_AUTH_MAX_ENUM {
-    WH_MESSAGE_AUTH_MAX_USERNAME_LEN = 32,
-    /* Reserve space for UserAddRequest fixed fields:
-     * username (32) + permissions (WH_FLAT_PERMISSIONS_LEN) + method (2) +
-     * credentials_len (2) + overhead (2) = 32 + 460 + 2 + 2 + 2 = 498 bytes */
-    WH_MESSAGE_AUTH_MAX_CREDENTIALS_LEN = WOLFHSM_CFG_COMM_DATA_LEN - 498,
-    WH_MESSAGE_AUTH_MAX_SESSIONS        = 16,
-};
+#define WH_MESSAGE_AUTH_MAX_USERNAME_LEN 32
+/* Reserve space for UserAddRequest fixed fields:
+ * username (32) + permissions (WH_FLAT_PERMISSIONS_LEN) + method (2) +
+ * credentials_len (2) + overhead (2) = 32 + 460 + 2 + 2 + 2 = 498 bytes */
+#define WH_MESSAGE_AUTH_MAX_CREDENTIALS_LEN (WOLFHSM_CFG_COMM_DATA_LEN - 498)
+#define WH_MESSAGE_AUTH_MAX_SESSIONS 16
 
 /* Simple reusable response message */
 typedef struct {
@@ -133,11 +120,12 @@ int wh_MessageAuth_TranslateLogoutRequest(
 /** Logout Response (SimpleResponse) */
 
 /* whAuthPermissions struct
- * uint16_t (groupPermissions) + uint32_t[WH_NUMBER_OF_GROUPS][WH_AUTH_ACTION_WORDS]
- * (actionPermissions) + uint16_t (keyIdCount) + uint32_t[WH_AUTH_MAX_KEY_IDS]
- * (keyIds) */
-#define WH_FLAT_PERMISSIONS_LEN \
-    (2 + (4 * WH_NUMBER_OF_GROUPS * WH_AUTH_ACTION_WORDS) + 2 + \
+ * uint8_t[WH_NUMBER_OF_GROUPS] (groupPermissions) +
+ * uint32_t[WH_NUMBER_OF_GROUPS][WH_AUTH_ACTION_WORDS] (actionPermissions) +
+ * uint16_t (keyIdCount) + uint32_t[WH_AUTH_MAX_KEY_IDS] (keyIds) */
+#define WH_FLAT_PERMISSIONS_LEN                               \
+    (WH_NUMBER_OF_GROUPS +                                    \
+     (4 * WH_NUMBER_OF_GROUPS * WH_AUTH_ACTION_WORDS) + 2 +   \
      (4 * WH_AUTH_MAX_KEY_IDS))
 
 /**

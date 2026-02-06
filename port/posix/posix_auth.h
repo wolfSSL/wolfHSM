@@ -66,7 +66,7 @@ int posixAuth_Cleanup(void* context);
  */
 int posixAuth_Login(void* context, uint8_t client_id, whAuthMethod method,
                       const char* username, const void* auth_data,
-                      uint16_t auth_data_len, uint16_t* out_user_id,
+                      uint16_t auth_data_len, whUserId* out_user_id,
                       whAuthPermissions* out_permissions, int* loggedIn);
 
 /**
@@ -111,7 +111,7 @@ int posixAuth_CheckKeyAuthorization(void* context, int err, uint16_t user_id,
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int posixAuth_UserAdd(void* context, const char* username,
-                        uint16_t* out_user_id, whAuthPermissions permissions,
+                        whUserId* out_user_id, whAuthPermissions permissions,
                         whAuthMethod method, const void* credentials,
                         uint16_t credentials_len);
 
@@ -149,7 +149,7 @@ int posixAuth_UserSetPermissions(void* context, uint16_t current_user_id,
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int posixAuth_UserGet(void* context, const char* username,
-                        uint16_t*          out_user_id,
+                        whUserId*          out_user_id,
                         whAuthPermissions* out_permissions);
 
 /**

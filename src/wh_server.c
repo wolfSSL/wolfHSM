@@ -322,7 +322,7 @@ static int _wh_Server_HandlePkcs11Request(whServerContext* server,
 /* Helper to format an authorization error response for any group/action.
  * All response structures have int32_t rc as the first field.
  * Returns the response size to send. */
-static uint16_t _wh_Server_FormatAuthErrorResponse(uint16_t magic,
+static uint16_t _FormatAuthErrorResponse(uint16_t magic,
                                                    uint16_t group,
                                                    uint16_t action,
                                                    int32_t  error_code,
@@ -531,7 +531,7 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
                 /* Authorization failed - format and send error response to
                  * client */
                 int32_t  error_code = (int32_t)WH_AUTH_PERMISSION_ERROR;
-                uint16_t resp_size  = _wh_Server_FormatAuthErrorResponse(
+                uint16_t resp_size  = _FormatAuthErrorResponse(
                     magic, group, action, error_code, data);
 
                 /* Send error response to client */

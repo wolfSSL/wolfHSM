@@ -377,13 +377,14 @@ static int wh_DemoClient_AuthUserSetPermissions(whClientContext* clientContext)
 
     /* Enable CRYPTO group and all CRYPTO actions */
     memset(&permissions, 0, sizeof(permissions));
-    permissions.groupPermissions |= WH_MESSAGE_GROUP_CRYPTO;
-    
+
     /* Enable all CRYPTO actions by setting all bits in all words, an example of
      * a CRYPTO action is WC_ALGO_TYPE_CIPHER or WC_ALGO_TYPE_PK */
     {
         int groupIndex = (WH_MESSAGE_GROUP_CRYPTO >> 8) & 0xFF;
         int wordIndex;
+        /* Enable access to CRYPTO group */
+        permissions.groupPermissions[groupIndex] = 1;
         /* Set all action bits for CRYPTO group (allows all actions) */
         for (wordIndex = 0; wordIndex < WH_AUTH_ACTION_WORDS; wordIndex++) {
             permissions.actionPermissions[groupIndex][wordIndex] = 0xFFFFFFFF;

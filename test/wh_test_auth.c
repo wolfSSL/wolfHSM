@@ -856,13 +856,14 @@ int whTest_AuthSetPermissions(whClientContext* client)
     /* Test 2b: Set user permissions success path  */
     WH_TEST_PRINT("  Test: Set user permissions success\n");
     memset(&new_perms, 0, sizeof(new_perms));
-    new_perms.groupPermissions = WH_MESSAGE_GROUP_AUTH;
     /* Convert action enum value to bitmask: action 0x04 -> word 0, bit 4 -> 0x10 */
     {
-        int groupIndex = (WH_MESSAGE_GROUP_AUTH >> 8) & 0xFF;
-        uint32_t wordAndBit = WH_AUTH_ACTION_TO_WORD_AND_BIT(WH_MESSAGE_AUTH_ACTION_USER_ADD);
-        uint32_t wordIndex = WH_AUTH_ACTION_WORD(wordAndBit);
-        uint32_t bitmask = WH_AUTH_ACTION_BIT(wordAndBit);
+        int      groupIndex = (WH_MESSAGE_GROUP_AUTH >> 8) & 0xFF;
+        uint32_t wordIndex;
+        uint32_t bitmask;
+        WH_AUTH_ACTION_TO_WORD_AND_BITMASK(WH_MESSAGE_AUTH_ACTION_USER_ADD,
+                                           wordIndex, bitmask);
+        new_perms.groupPermissions[groupIndex]             = 1;
         new_perms.actionPermissions[groupIndex][wordIndex] = bitmask;
     }
     server_rc = 0;
@@ -878,13 +879,14 @@ int whTest_AuthSetPermissions(whClientContext* client)
         client, "testuser3", &get_rc, &fetched_user_id, &fetched_perms));
     WH_TEST_ASSERT_RETURN(get_rc == WH_ERROR_OK);
     WH_TEST_ASSERT_RETURN(fetched_user_id == user_id);
-    WH_TEST_ASSERT_RETURN(fetched_perms.groupPermissions ==
-                          new_perms.groupPermissions);
     {
-        /* Compare all action permission words for this group */
-        int groupIndex = (WH_MESSAGE_GROUP_AUTH >> 8) & 0xFF;
+        /* Compare group permission and all action permission words */
+        int groupIndex        = (WH_MESSAGE_GROUP_AUTH >> 8) & 0xFF;
         int j;
         int permissions_match = 1;
+        /* Verify groupPermissions for this group */
+        WH_TEST_ASSERT_RETURN(fetched_perms.groupPermissions[groupIndex] ==
+                              new_perms.groupPermissions[groupIndex]);
         for (j = 0; j < WH_AUTH_ACTION_WORDS; j++) {
             if (fetched_perms.actionPermissions[groupIndex][j] !=
                 new_perms.actionPermissions[groupIndex][j]) {
@@ -1105,13 +1107,14 @@ int whTest_AuthRequestAuthorization(whClientContext* client)
     WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
 
     memset(&perms, 0, sizeof(perms));
-    perms.groupPermissions = WH_MESSAGE_GROUP_AUTH;
     /* Convert action enum value to bitmask: action 0x04 -> word 0, bit 4 -> 0x10 */
     {
-        int groupIndex = (WH_MESSAGE_GROUP_AUTH >> 8) & 0xFF;
-        uint32_t wordAndBit = WH_AUTH_ACTION_TO_WORD_AND_BIT(WH_MESSAGE_AUTH_ACTION_USER_ADD);
-        uint32_t wordIndex = WH_AUTH_ACTION_WORD(wordAndBit);
-        uint32_t bitmask = WH_AUTH_ACTION_BIT(wordAndBit);
+        int      groupIndex = (WH_MESSAGE_GROUP_AUTH >> 8) & 0xFF;
+        uint32_t wordIndex;
+        uint32_t bitmask;
+        WH_AUTH_ACTION_TO_WORD_AND_BITMASK(WH_MESSAGE_AUTH_ACTION_USER_ADD,
+                                           wordIndex, bitmask);
+        perms.groupPermissions[groupIndex]             = 1;
         perms.actionPermissions[groupIndex][wordIndex] = bitmask;
     }
     WH_TEST_RETURN_ON_FAIL(
