@@ -517,7 +517,7 @@ static int _whTest_Auth_MessageBadArgs(void)
 
     memset(&login_hdr, 0, sizeof(login_hdr));
     login_hdr.auth_data_len =
-        (uint16_t)(WH_MESSAGE_AUTH_MAX_CREDENTIALS_LEN + 1);
+        (uint16_t)(WH_MESSAGE_AUTH_LOGIN_MAX_AUTH_DATA_LEN + 1);
     rc = wh_MessageAuth_TranslateLoginRequest(0, &login_hdr, sizeof(login_hdr),
                                               &login_out, NULL);
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
@@ -527,7 +527,7 @@ static int _whTest_Auth_MessageBadArgs(void)
 
     memset(&add_hdr, 0, sizeof(add_hdr));
     add_hdr.credentials_len =
-        (uint16_t)(WH_MESSAGE_AUTH_MAX_CREDENTIALS_LEN + 1);
+        (uint16_t)(WH_MESSAGE_AUTH_USERADD_MAX_CREDENTIALS_LEN + 1);
     rc = wh_MessageAuth_TranslateUserAddRequest(0, &add_hdr, sizeof(add_hdr),
                                                 &add_out, NULL);
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BUFFER_SIZE);
@@ -822,7 +822,69 @@ int whTest_AuthDeleteUser(whClientContext* client)
     WH_TEST_ASSERT_RETURN(server_rc != WH_ERROR_OK ||
                           delete_user_id == WH_USER_ID_INVALID);
 
-    /* Test 3: Delete user when not logged in */
+    /* Test 3: Non-admin user trying to delete another user */
+    WH_TEST_PRINT("  Test: Non-admin user trying to delete another user\n");
+    {
+        whUserId          nonadmin_id = WH_USER_ID_INVALID;
+        whUserId          target_id   = WH_USER_ID_INVALID;
+        whAuthPermissions nonadmin_perms;
+
+        /* Create a non-admin user (admin flag not set) */
+        memset(&nonadmin_perms, 0, sizeof(nonadmin_perms));
+        /* Set some group permissions but NOT the admin flag */
+        nonadmin_perms.groupPermissions[0] = 1;
+        /* Ensure admin flag is NOT set */
+        nonadmin_perms.groupPermissions[WH_NUMBER_OF_GROUPS] = 0;
+
+        server_rc = 0;
+        WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserAddOp(
+            client, "nonadmin", nonadmin_perms, WH_AUTH_METHOD_PIN, "pass", 4,
+            &server_rc, &nonadmin_id));
+        WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+        WH_TEST_ASSERT_RETURN(nonadmin_id != WH_USER_ID_INVALID);
+
+        /* Create a target user to try to delete */
+        memset(&perms, 0, sizeof(perms));
+        server_rc = 0;
+        WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserAddOp(
+            client, "targetuser", perms, WH_AUTH_METHOD_PIN, "pass", 4,
+            &server_rc, &target_id));
+        WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+        WH_TEST_ASSERT_RETURN(target_id != WH_USER_ID_INVALID);
+
+        /* Logout admin and login as non-admin user */
+        server_rc = 0;
+        _whTest_Auth_LogoutOp(client, admin_id, &server_rc);
+
+        server_rc = 0;
+        WH_TEST_RETURN_ON_FAIL(_whTest_Auth_LoginOp(client, WH_AUTH_METHOD_PIN,
+                                                    "nonadmin", "pass", 4,
+                                                    &server_rc, &nonadmin_id));
+        WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+
+        /* Try to delete the target user as non-admin - should fail */
+        server_rc = 0;
+        WH_TEST_RETURN_ON_FAIL(
+            _whTest_Auth_UserDeleteOp(client, target_id, &server_rc));
+        WH_TEST_ASSERT_RETURN(server_rc != WH_ERROR_OK);
+        WH_TEST_PRINT("    Non-admin delete attempt correctly denied\n");
+
+        /* Logout non-admin and login as admin to cleanup */
+        server_rc = 0;
+        _whTest_Auth_LogoutOp(client, nonadmin_id, &server_rc);
+
+        server_rc = 0;
+        WH_TEST_RETURN_ON_FAIL(_whTest_Auth_LoginOp(
+            client, WH_AUTH_METHOD_PIN, "admin", "1234", 4, &server_rc,
+            &admin_id));
+        WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+
+        /* Cleanup - delete both test users */
+        _whTest_Auth_UserDeleteOp(client, nonadmin_id, &server_rc);
+        _whTest_Auth_UserDeleteOp(client, target_id, &server_rc);
+    }
+
+    /* Test 4: Delete user when not logged in */
     WH_TEST_PRINT("  Test: Delete user when not logged in\n");
     /* Ensure we're logged out */
     server_rc = 0;

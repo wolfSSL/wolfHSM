@@ -36,10 +36,6 @@
 #include "wolfhsm/wh_auth.h"
 
 #define WH_MESSAGE_AUTH_MAX_USERNAME_LEN 32
-/* Reserve space for UserAddRequest fixed fields:
- * username (32) + permissions (WH_FLAT_PERMISSIONS_LEN) + method (2) +
- * credentials_len (2) + overhead (2) = 32 + 460 + 2 + 2 + 2 = 498 bytes */
-#define WH_MESSAGE_AUTH_MAX_CREDENTIALS_LEN (WOLFHSM_CFG_COMM_DATA_LEN - 498)
 #define WH_MESSAGE_AUTH_MAX_SESSIONS 16
 
 /* Simple reusable response message */
@@ -120,11 +116,11 @@ int wh_MessageAuth_TranslateLogoutRequest(
 /** Logout Response (SimpleResponse) */
 
 /* whAuthPermissions struct
- * uint8_t[WH_NUMBER_OF_GROUPS] (groupPermissions) +
+ * uint8_t[WH_NUMBER_OF_GROUPS + 1] (groupPermissions, last byte is admin flag) +
  * uint32_t[WH_NUMBER_OF_GROUPS][WH_AUTH_ACTION_WORDS] (actionPermissions) +
  * uint16_t (keyIdCount) + uint32_t[WH_AUTH_MAX_KEY_IDS] (keyIds) */
-#define WH_FLAT_PERMISSIONS_LEN                                               \
-    (WH_NUMBER_OF_GROUPS + (4 * WH_NUMBER_OF_GROUPS * WH_AUTH_ACTION_WORDS) + \
+#define WH_FLAT_PERMISSIONS_LEN                                                  \
+    ((WH_NUMBER_OF_GROUPS + 1) + (4 * WH_NUMBER_OF_GROUPS * WH_AUTH_ACTION_WORDS) + \
      2 + (4 * WH_AUTH_MAX_KEY_IDS))
 
 /**
@@ -310,4 +306,24 @@ int wh_MessageAuth_TranslateUserSetCredentialsRequest(
 
 /** User Set Credentials Response */
 /* Use SimpleResponse */
+
+/*
+ * Per-message maximum credential lengths based on actual header sizes.
+ * These ensure each message type can use the maximum available space
+ * in WOLFHSM_CFG_COMM_DATA_LEN for its variable-length credential data.
+ */
+
+/* Login: auth_data follows the LoginRequest header */
+#define WH_MESSAGE_AUTH_LOGIN_MAX_AUTH_DATA_LEN \
+    (WOLFHSM_CFG_COMM_DATA_LEN - sizeof(whMessageAuth_LoginRequest))
+
+/* UserAdd: credentials follow the UserAddRequest header */
+#define WH_MESSAGE_AUTH_USERADD_MAX_CREDENTIALS_LEN \
+    (WOLFHSM_CFG_COMM_DATA_LEN - sizeof(whMessageAuth_UserAddRequest))
+
+/* UserSetCredentials: both current and new credentials follow the header.
+ * Each credential buffer can use up to half of the remaining space. */
+#define WH_MESSAGE_AUTH_SETCREDS_MAX_CREDENTIALS_LEN \
+    ((WOLFHSM_CFG_COMM_DATA_LEN - sizeof(whMessageAuth_UserSetCredentialsRequest)) / 2)
+
 #endif /* !WOLFHSM_WH_MESSAGE_AUTH_H_ */

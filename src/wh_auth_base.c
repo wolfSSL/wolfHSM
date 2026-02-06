@@ -29,6 +29,7 @@
 
 #include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_error.h"
+#include "wolfhsm/wh_utils.h"
 
 #include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_message_auth.h"
@@ -70,6 +71,7 @@ int wh_Auth_BaseInit(void* context, const void* config)
 int wh_Auth_BaseCleanup(void* context)
 {
     (void)context;
+    wh_Utils_ForceZero(users, sizeof(users));
     return WH_ERROR_OK;
 }
 
@@ -231,16 +233,20 @@ int wh_Auth_BaseLogout(void* context, uint16_t current_user_id,
 {
     whAuthBase_User* user;
 
-    if (user_id == WH_USER_ID_INVALID) {
+    if (current_user_id == WH_USER_ID_INVALID ||
+        user_id == WH_USER_ID_INVALID) {
         return WH_ERROR_BADARGS;
     }
 
-    if (user_id > WH_AUTH_BASE_MAX_USERS) {
+    if (current_user_id > WH_AUTH_BASE_MAX_USERS ||
+        user_id > WH_AUTH_BASE_MAX_USERS) {
         return WH_ERROR_NOTFOUND;
     }
 
-    /* @TODO there likely should be restrictions here on who can logout who */
-    (void)current_user_id;
+    if (current_user_id != user_id &&
+        !WH_AUTH_IS_ADMIN(users[current_user_id - 1].user.permissions)) {
+        return WH_ERROR_ACCESS;
+    }
 
     user                 = &users[user_id - 1];
     user->user.is_active = false;
@@ -348,6 +354,16 @@ int wh_Auth_BaseUserDelete(void* context, uint16_t current_user_id,
         return WH_ERROR_NOTFOUND;
     }
 
+    if (current_user_id == WH_USER_ID_INVALID ||
+        current_user_id > WH_AUTH_BASE_MAX_USERS) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Only allow an admin user to delete users */
+    if (!WH_AUTH_IS_ADMIN(users[current_user_id - 1].user.permissions)) {
+        return WH_ERROR_ACCESS;
+    }
+
     user = &users[user_id - 1];
     if (user->user.user_id == WH_USER_ID_INVALID) {
         return WH_ERROR_NOTFOUND;
@@ -355,7 +371,6 @@ int wh_Auth_BaseUserDelete(void* context, uint16_t current_user_id,
 
     memset(user, 0, sizeof(whAuthBase_User));
     (void)context;
-    (void)current_user_id;
     return WH_ERROR_OK;
 }
 
@@ -367,6 +382,11 @@ int wh_Auth_BaseUserSetPermissions(void* context, uint16_t current_user_id,
 
     if (user_id == WH_USER_ID_INVALID || user_id > WH_AUTH_BASE_MAX_USERS) {
         return WH_ERROR_NOTFOUND;
+    }
+
+    /* Only allow an admin user to change permissions */
+    if (!WH_AUTH_IS_ADMIN(users[current_user_id - 1].user.permissions)) {
+        return WH_ERROR_ACCESS;
     }
 
     user = &users[user_id - 1];
@@ -387,7 +407,6 @@ int wh_Auth_BaseUserSetPermissions(void* context, uint16_t current_user_id,
         }
     }
     (void)context;
-    (void)current_user_id;
     return WH_ERROR_OK;
 }
 
