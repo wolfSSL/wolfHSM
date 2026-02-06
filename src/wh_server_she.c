@@ -456,7 +456,7 @@ static int _LoadKey(whServerContext* server, uint16_t magic, uint16_t req_size,
     uint8_t       kdfInput[WH_SHE_KEY_SZ * 2];
     uint8_t       cmacOutput[AES_BLOCK_SIZE];
     uint8_t       tmpKey[WH_SHE_KEY_SZ];
-    whNvmMetadata meta[1] = {0};
+    whNvmMetadata meta[1]        = {0};
     uint32_t      she_meta_count = 0;
     uint32_t      she_meta_flags = 0;
     uint32_t      msg_counter_val;

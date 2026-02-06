@@ -42,6 +42,7 @@
 
 #include "wolfhsm/wh_server.h"
 #include "wolfhsm/wh_server_auth.h"
+#include "wolfhsm/wh_utils.h"
 
 /* This function is responsible for handling all authentication and
  * authorization requests from the client.
@@ -90,6 +91,9 @@ int wh_Server_HandleAuthRequest(whServerContext* server, uint16_t magic,
                     }
                 }
             }
+            /* Zeroize sensitive credential data before returning */
+            wh_Utils_ForceZero(auth_data, sizeof(auth_data));
+
             wh_MessageAuth_TranslateLoginResponse(
                 magic, &resp, (whMessageAuth_LoginResponse*)resp_packet);
             *out_resp_size = sizeof(resp);
@@ -132,13 +136,14 @@ int wh_Server_HandleAuthRequest(whServerContext* server, uint16_t magic,
                 }
                 else {
                     rc      = wh_Auth_UserAdd(server->auth, req.username,
-                                              &resp.user_id, permissions,
-                                              req.method, credentials,
-                                              req.credentials_len);
+                                              &resp.user_id, permissions, req.method,
+                                              credentials, req.credentials_len);
                     resp.rc = rc;
-                    memset(credentials, 0, req.credentials_len);
                 }
             }
+            /* Zeroize sensitive credential data before returning */
+            wh_Utils_ForceZero(credentials, sizeof(credentials));
+
             wh_MessageAuth_TranslateUserAddResponse(
                 magic, &resp, (whMessageAuth_UserAddResponse*)resp_packet);
             *out_resp_size = sizeof(resp);
@@ -153,7 +158,7 @@ int wh_Server_HandleAuthRequest(whServerContext* server, uint16_t magic,
             }
             else {
                 wh_MessageAuth_TranslateUserDeleteRequest(magic, req_packet,
-                    &req);
+                                                          &req);
                 rc      = wh_Auth_UserDelete(server->auth, req.user_id);
                 resp.rc = rc;
             }
@@ -163,8 +168,8 @@ int wh_Server_HandleAuthRequest(whServerContext* server, uint16_t magic,
         } break;
 
         case WH_MESSAGE_AUTH_ACTION_USER_GET: {
-            whMessageAuth_UserGetRequest  req             = {0};
-            whMessageAuth_UserGetResponse resp            = {0};
+            whMessageAuth_UserGetRequest  req  = {0};
+            whMessageAuth_UserGetResponse resp = {0};
 
             if (req_size != sizeof(req)) {
                 resp.rc = WH_ERROR_BADARGS;
@@ -175,14 +180,14 @@ int wh_Server_HandleAuthRequest(whServerContext* server, uint16_t magic,
 
                 wh_MessageAuth_TranslateUserGetRequest(magic, req_packet, &req);
 
-                rc      = wh_Auth_UserGet(server->auth, req.username,
-                    &out_user_id, &out_permissions);
+                rc = wh_Auth_UserGet(server->auth, req.username, &out_user_id,
+                                     &out_permissions);
                 resp.rc = rc;
                 if (rc == WH_ERROR_OK) {
                     resp.user_id = out_user_id;
                     wh_MessageAuth_FlattenPermissions(&out_permissions,
-                                                    resp.permissions,
-                                                    sizeof(resp.permissions));
+                                                      resp.permissions,
+                                                      sizeof(resp.permissions));
                 }
             }
             wh_MessageAuth_TranslateUserGetResponse(
@@ -243,10 +248,12 @@ int wh_Server_HandleAuthRequest(whServerContext* server, uint16_t magic,
                         (req_header.new_credentials_len > 0) ? new_creds : NULL,
                         req_header.new_credentials_len);
                     resp.rc = rc;
-                    memset(current_creds, 0, sizeof(current_creds));
-                    memset(new_creds, 0, sizeof(new_creds));
                 }
             }
+            /* Zeroize sensitive credential data before returning */
+            wh_Utils_ForceZero(current_creds, sizeof(current_creds));
+            wh_Utils_ForceZero(new_creds, sizeof(new_creds));
+
             wh_MessageAuth_TranslateSimpleResponse(
                 magic, &resp, (whMessageAuth_SimpleResponse*)resp_packet);
             *out_resp_size = sizeof(resp);

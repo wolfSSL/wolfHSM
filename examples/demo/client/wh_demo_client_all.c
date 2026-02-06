@@ -24,7 +24,7 @@ int wh_DemoClient_All(whClientContext* clientContext)
 
     /* Log in as an admin user for the rest of the tests */
     if (wh_Client_AuthLogin(clientContext, WH_AUTH_METHOD_PIN, "admin", "1234",
-        4, &rc, &userId) != 0) {
+                            4, &rc, &userId) != 0) {
         return -1;
     }
     if (rc != WH_ERROR_OK && rc != WH_AUTH_NOT_ENABLED) {

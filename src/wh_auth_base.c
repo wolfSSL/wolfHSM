@@ -86,11 +86,11 @@ static whAuthBase_User* wh_Auth_BaseFindUser(const char* username)
 
 /* Hash PIN credentials using SHA256 (if crypto is available) */
 static int wh_Auth_BaseHashPin(const void* pin, uint16_t pin_len,
-                             unsigned char* hash_out)
+                               unsigned char* hash_out)
 {
 #ifndef WOLFHSM_CFG_NO_CRYPTO
-    int ret = wc_Sha256Hash_ex((const unsigned char*)pin, (word32)pin_len, hash_out,
-                               NULL, INVALID_DEVID);
+    int ret = wc_Sha256Hash_ex((const unsigned char*)pin, (word32)pin_len,
+                               hash_out, NULL, INVALID_DEVID);
     if (ret != 0) {
         return WH_ERROR_ABORTED;
     }
@@ -105,13 +105,14 @@ static int wh_Auth_BaseHashPin(const void* pin, uint16_t pin_len,
 #endif /* WOLFHSM_CFG_NO_CRYPTO */
 }
 
-static whAuthBase_User* wh_Auth_BaseCheckPin(const char* username, const void* auth_data,
-                                 uint16_t auth_data_len)
+static whAuthBase_User* wh_Auth_BaseCheckPin(const char* username,
+                                             const void* auth_data,
+                                             uint16_t    auth_data_len)
 {
     whAuthBase_User* found_user;
-    unsigned char authCheck[WH_AUTH_BASE_MAX_CREDENTIALS_LEN];
-    uint16_t authCheck_len;
-    int rc;
+    unsigned char    authCheck[WH_AUTH_BASE_MAX_CREDENTIALS_LEN];
+    uint16_t         authCheck_len;
+    int              rc;
 
     /* Process auth_data: hash if crypto enabled, copy if disabled */
     rc = wh_Auth_BaseHashPin(auth_data, auth_data_len, authCheck);
@@ -135,8 +136,8 @@ static whAuthBase_User* wh_Auth_BaseCheckPin(const char* username, const void* a
 
 #if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER) && !defined(WOLFHSM_CFG_NO_CRYPTO)
 static int wh_Auth_BaseVerifyCertificate(whAuthBase_User* found_user,
-                             const uint8_t*   certificate,
-                             uint16_t         certificate_len)
+                                         const uint8_t*   certificate,
+                                         uint16_t         certificate_len)
 {
     int                   rc = WH_ERROR_OK;
     int                   err;
@@ -161,16 +162,16 @@ static int wh_Auth_BaseVerifyCertificate(whAuthBase_User* found_user,
 }
 
 static whAuthBase_User* wh_Auth_BaseCheckCertificate(const char* username,
-                                         const void* auth_data,
-                                         uint16_t    auth_data_len)
+                                                     const void* auth_data,
+                                                     uint16_t    auth_data_len)
 {
     whAuthBase_User* found_user;
     found_user = wh_Auth_BaseFindUser(username);
     if (found_user != NULL &&
         found_user->method == WH_AUTH_METHOD_CERTIFICATE &&
         found_user->credentials_len > 0) {
-        if (wh_Auth_BaseVerifyCertificate(found_user, auth_data, auth_data_len) ==
-            WH_ERROR_OK) {
+        if (wh_Auth_BaseVerifyCertificate(found_user, auth_data,
+                                          auth_data_len) == WH_ERROR_OK) {
             return found_user;
         }
     }
@@ -195,11 +196,13 @@ int wh_Auth_BaseLogin(void* context, uint8_t client_id, whAuthMethod method,
     (void)client_id;
     switch (method) {
         case WH_AUTH_METHOD_PIN:
-            current_user = wh_Auth_BaseCheckPin(username, auth_data, auth_data_len);
+            current_user =
+                wh_Auth_BaseCheckPin(username, auth_data, auth_data_len);
             break;
 #if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER) && !defined(WOLFHSM_CFG_NO_CRYPTO)
         case WH_AUTH_METHOD_CERTIFICATE:
-            current_user = wh_Auth_BaseCheckCertificate(username, auth_data, auth_data_len);
+            current_user = wh_Auth_BaseCheckCertificate(username, auth_data,
+                                                        auth_data_len);
             break;
 #endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER && !WOLFHSM_CFG_NO_CRYPTO */
         default:
@@ -262,7 +265,7 @@ int wh_Auth_BaseUserAdd(void* context, const char* username,
 #if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER) && !defined(WOLFHSM_CFG_NO_CRYPTO)
             && method != WH_AUTH_METHOD_CERTIFICATE
 #endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER && !WOLFHSM_CFG_NO_CRYPTO */
-            ) {
+        ) {
             return WH_ERROR_BADARGS;
         }
     }
@@ -296,9 +299,9 @@ int wh_Auth_BaseUserAdd(void* context, const char* username,
         }
     }
     strncpy(new_user->user.username, username,
-        sizeof(new_user->user.username) - 1);
+            sizeof(new_user->user.username) - 1);
     new_user->user.username[sizeof(new_user->user.username) - 1] = '\0';
-    new_user->user.is_active       = false;
+    new_user->user.is_active                                     = false;
 
     /* Set credentials if provided */
     if (credentials != NULL && credentials_len > 0) {
@@ -424,7 +427,7 @@ int wh_Auth_BaseUserSetCredentials(void* context, uint16_t user_id,
 #if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER) && !defined(WOLFHSM_CFG_NO_CRYPTO)
         && method != WH_AUTH_METHOD_CERTIFICATE
 #endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER && !WOLFHSM_CFG_NO_CRYPTO */
-        ) {
+    ) {
         return WH_ERROR_BADARGS;
     }
 
@@ -444,7 +447,8 @@ int wh_Auth_BaseUserSetCredentials(void* context, uint16_t user_id,
 #ifndef WOLFHSM_CFG_NO_CRYPTO
             /* For PIN, hash the provided credentials before comparing */
             unsigned char hash[WC_SHA256_DIGEST_SIZE];
-            int rc = wh_Auth_BaseHashPin(current_credentials, current_credentials_len, hash);
+            int           rc = wh_Auth_BaseHashPin(current_credentials,
+                                                   current_credentials_len, hash);
             if (rc != WH_ERROR_OK) {
                 return rc;
             }
@@ -485,7 +489,8 @@ int wh_Auth_BaseUserSetCredentials(void* context, uint16_t user_id,
 #ifndef WOLFHSM_CFG_NO_CRYPTO
             /* Hash PIN before storing */
             unsigned char hash[WC_SHA256_DIGEST_SIZE];
-            int rc = wh_Auth_BaseHashPin(new_credentials, new_credentials_len, hash);
+            int           rc =
+                wh_Auth_BaseHashPin(new_credentials, new_credentials_len, hash);
             if (rc != WH_ERROR_OK) {
                 return rc;
             }

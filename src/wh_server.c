@@ -266,8 +266,8 @@ static int _wh_Server_HandleCommRequest(whServerContext* server,
 
 #ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
         /* Log out the current user when communication channel closes */
-        if (server->auth != NULL && server->auth->user.user_id !=
-                WH_USER_ID_INVALID) {
+        if (server->auth != NULL &&
+            server->auth->user.user_id != WH_USER_ID_INVALID) {
             whUserId user_id = server->auth->user.user_id;
             (void)wh_Auth_Logout(server->auth, user_id);
         }
@@ -322,11 +322,9 @@ static int _wh_Server_HandlePkcs11Request(whServerContext* server,
 /* Helper to format an authorization error response for any group/action.
  * All response structures have int32_t rc as the first field.
  * Returns the response size to send. */
-static uint16_t _FormatAuthErrorResponse(uint16_t magic,
-                                                   uint16_t group,
-                                                   uint16_t action,
-                                                   int32_t  error_code,
-                                                   void*    resp_packet)
+static uint16_t _FormatAuthErrorResponse(uint16_t magic, uint16_t group,
+                                         uint16_t action, int32_t error_code,
+                                         void* resp_packet)
 {
     uint16_t resp_size = sizeof(int32_t); /* Minimum: just the rc field */
 
@@ -565,20 +563,35 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
 
         case WH_MESSAGE_GROUP_AUTH:
 #ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
-            rc = wh_Server_HandleAuthRequest(server, magic, action, seq, size,
-                                             data, &size, data);
+            if (server->auth == NULL) {
+                /* Auth compiled in but not configured - format error response
+                 */
+                rc = WH_AUTH_NOT_ENABLED;
+                if (data != NULL) {
+                    *(int32_t*)data =
+                        (int32_t)wh_Translate32(magic, (uint32_t)rc);
+                    size = sizeof(int32_t);
+                }
+                else {
+                    size = 0;
+                }
+            }
+            else {
+                rc = wh_Server_HandleAuthRequest(server, magic, action, seq,
+                                                 size, data, &size, data);
+            }
 #else
             /* Format simple error response indicating auth is not enabled */
             rc = WH_AUTH_NOT_ENABLED;
             if (data != NULL) {
                 *(int32_t*)data = (int32_t)wh_Translate32(magic, (uint32_t)rc);
-                size = sizeof(int32_t);
+                size            = sizeof(int32_t);
             }
             else {
                 size = 0;
             }
 #endif /* WOLFHSM_CFG_ENABLE_AUTHENTICATION */
-        break;
+            break;
 
         case WH_MESSAGE_GROUP_COUNTER:
             rc = wh_Server_HandleCounter(server, magic, action, size, data,

@@ -123,10 +123,9 @@ int wh_MessageAuth_TranslateLogoutRequest(
  * uint8_t[WH_NUMBER_OF_GROUPS] (groupPermissions) +
  * uint32_t[WH_NUMBER_OF_GROUPS][WH_AUTH_ACTION_WORDS] (actionPermissions) +
  * uint16_t (keyIdCount) + uint32_t[WH_AUTH_MAX_KEY_IDS] (keyIds) */
-#define WH_FLAT_PERMISSIONS_LEN                               \
-    (WH_NUMBER_OF_GROUPS +                                    \
-     (4 * WH_NUMBER_OF_GROUPS * WH_AUTH_ACTION_WORDS) + 2 +   \
-     (4 * WH_AUTH_MAX_KEY_IDS))
+#define WH_FLAT_PERMISSIONS_LEN                                               \
+    (WH_NUMBER_OF_GROUPS + (4 * WH_NUMBER_OF_GROUPS * WH_AUTH_ACTION_WORDS) + \
+     2 + (4 * WH_AUTH_MAX_KEY_IDS))
 
 /**
  * @brief Flatten permissions structure into a byte buffer.
@@ -167,7 +166,8 @@ typedef struct {
  * @param[in] src_packet Pointer to the source packet data.
  * @param[in] src_size Size of the source packet.
  * @param[out] dest_header Pointer to the destination user add request header.
- * @param[out] dest_credentials Pointer to the destination buffer for credentials.
+ * @param[out] dest_credentials Pointer to the destination buffer for
+ * credentials.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_MessageAuth_TranslateUserAddRequest(
@@ -200,7 +200,8 @@ typedef struct {
 } whMessageAuth_UserDeleteRequest;
 
 /**
- * @brief Translate a user delete request message between different magic numbers.
+ * @brief Translate a user delete request message between different magic
+ * numbers.
  *
  * @param[in] magic The magic number for translation.
  * @param[in] src Pointer to the source user delete request message.
@@ -258,11 +259,13 @@ typedef struct {
 } whMessageAuth_UserSetPermissionsRequest;
 
 /**
- * @brief Translate a user set permissions request message between different magic numbers.
+ * @brief Translate a user set permissions request message between different
+ * magic numbers.
  *
  * @param[in] magic The magic number for translation.
  * @param[in] src Pointer to the source user set permissions request message.
- * @param[out] dest Pointer to the destination user set permissions request message.
+ * @param[out] dest Pointer to the destination user set permissions request
+ * message.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_MessageAuth_TranslateUserSetPermissionsRequest(
@@ -286,14 +289,18 @@ typedef struct {
 } whMessageAuth_UserSetCredentialsRequest;
 
 /**
- * @brief Translate a user set credentials request message between different magic numbers.
+ * @brief Translate a user set credentials request message between different
+ * magic numbers.
  *
  * @param[in] magic The magic number for translation.
  * @param[in] src_packet Pointer to the source packet data.
  * @param[in] src_size Size of the source packet.
- * @param[out] dest_header Pointer to the destination user set credentials request header.
- * @param[out] dest_current_creds Pointer to the destination buffer for current credentials.
- * @param[out] dest_new_creds Pointer to the destination buffer for new credentials.
+ * @param[out] dest_header Pointer to the destination user set credentials
+ * request header.
+ * @param[out] dest_current_creds Pointer to the destination buffer for current
+ * credentials.
+ * @param[out] dest_new_creds Pointer to the destination buffer for new
+ * credentials.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_MessageAuth_TranslateUserSetCredentialsRequest(

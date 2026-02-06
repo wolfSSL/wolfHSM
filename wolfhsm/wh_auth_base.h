@@ -73,7 +73,8 @@ int wh_Auth_BaseLogin(void* context, uint8_t client_id, whAuthMethod method,
  * @brief Logout a user.
  *
  * @param[in] context Pointer to the auth base context.
- * @param[in] current_user_id The user ID of the current user performing the logout.
+ * @param[in] current_user_id The user ID of the current user performing the
+ * logout.
  * @param[in] user_id The user ID to logout.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
@@ -101,7 +102,8 @@ int wh_Auth_BaseUserAdd(void* context, const char* username,
  * @brief Delete a user.
  *
  * @param[in] context Pointer to the auth base context.
- * @param[in] current_user_id The user ID of the current user performing the deletion.
+ * @param[in] current_user_id The user ID of the current user performing the
+ * deletion.
  * @param[in] user_id The user ID to delete.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
@@ -112,7 +114,8 @@ int wh_Auth_BaseUserDelete(void* context, uint16_t current_user_id,
  * @brief Set user permissions.
  *
  * @param[in] context Pointer to the auth base context.
- * @param[in] current_user_id The user ID of the current user performing the operation.
+ * @param[in] current_user_id The user ID of the current user performing the
+ * operation.
  * @param[in] user_id The user ID to set permissions for.
  * @param[in] permissions The new permissions to set.
  * @return int Returns 0 on success, or a negative error code on failure.

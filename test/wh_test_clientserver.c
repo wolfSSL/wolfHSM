@@ -1168,9 +1168,9 @@ int whTest_ClientServerClientConfig(whClientConfig* clientCfg)
 
 #ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
     /* Attempt to log in as an admin user for the rest of the tests */
-    WH_TEST_RETURN_ON_FAIL(wh_Client_AuthLogin(client, WH_AUTH_METHOD_PIN,
-        TEST_ADMIN_USERNAME, TEST_ADMIN_PIN, strlen(TEST_ADMIN_PIN), &server_rc,
-        NULL));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_AuthLogin(
+        client, WH_AUTH_METHOD_PIN, TEST_ADMIN_USERNAME, TEST_ADMIN_PIN,
+        strlen(TEST_ADMIN_PIN), &server_rc, NULL));
 #endif /* WOLFHSM_CFG_ENABLE_AUTHENTICATION */
 
     for (counter = 0; counter < REPEAT_COUNT; counter++) {
