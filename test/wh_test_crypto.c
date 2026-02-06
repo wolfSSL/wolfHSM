@@ -3125,11 +3125,7 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
         }
     }
 #ifdef WOLFSSL_AES_COUNTER
-    if (ret == 0
-#ifdef WOLFHSM_CFG_DMA
-        && devId != WH_DEV_ID_DMA
-#endif
-    ) {
+    if (ret == 0) {
         /* test aes CTR with client side key */
         ret = wc_AesInit(aes, NULL, devId);
         if (ret != 0) {
@@ -3242,7 +3238,6 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
     }
 #endif
 
-
 #ifdef HAVE_AES_ECB
     if (ret == 0) {
         /* test aes ECB with client side key */
@@ -3251,7 +3246,8 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
             WH_ERROR_PRINT("Failed to wc_AesInit %d\n", ret);
         }
         else {
-            ret = wc_AesSetKey(aes, key, sizeof(key), iv, AES_ENCRYPTION);
+            /* AES-ECB does not use IV */
+            ret = wc_AesSetKey(aes, key, sizeof(key), NULL, AES_ENCRYPTION);
             if (ret != 0) {
                 WH_ERROR_PRINT("Failed to wc_AesSetKey %d\n", ret);
             }
@@ -3262,7 +3258,7 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
                 }
                 else {
                     ret =
-                        wc_AesSetKey(aes, key, sizeof(key), iv, AES_DECRYPTION);
+                        wc_AesSetKey(aes, key, sizeof(key), NULL, AES_DECRYPTION);
                     if (ret != 0) {
                         WH_ERROR_PRINT("Failed to wc_AesSetKey %d\n", ret);
                     }
@@ -3308,7 +3304,8 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
                     WH_ERROR_PRINT("Failed to wh_Client_SetKeyIdAes %d\n", ret);
                 }
                 else {
-                    ret = wc_AesSetIV(aes, iv);
+                    /* AES-ECB does not use IV */
+                    ret = wc_AesSetIV(aes, NULL);
                     if (ret != 0) {
                         WH_ERROR_PRINT("Failed to wc_AesSetIV %d\n", ret);
                     }
@@ -3320,8 +3317,8 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
                                            ret);
                         }
                         else {
-                            /* Reset the IV to support decryption */
-                            ret = wc_AesSetIV(aes, iv);
+                            /* AES-ECB does not use IV */
+                            ret = wc_AesSetIV(aes, NULL);
                             if (ret != 0) {
                                 WH_ERROR_PRINT("Failed to wc_AesSetIV %d\n",
                                                ret);
@@ -3357,11 +3354,7 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
 #endif /* HAVE_AES_ECB */
 
 #ifdef HAVE_AES_CBC
-    if (ret == 0
-#ifdef WOLFHSM_CFG_DMA
-        && devId != WH_DEV_ID_DMA
-#endif
-    ) {
+    if (ret == 0) {
         /* test aes CBC with client side key */
         ret = wc_AesInit(aes, NULL, devId);
         if (ret != 0) {
@@ -3401,11 +3394,7 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
             memset(plainOut, 0, sizeof(plainOut));
         }
     }
-    if (ret == 0
-#ifdef WOLFHSM_CFG_DMA
-        && devId != WH_DEV_ID_DMA
-#endif
-    ) {
+    if (ret == 0) {
         /* test aes CBC with HSM side key */
         ret = wc_AesInit(aes, NULL, devId);
         if (ret != 0) {
