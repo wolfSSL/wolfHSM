@@ -45,7 +45,6 @@ enum WH_ERROR_ENUM {
                                       compile-time configuration */
     WH_ERROR_USAGE =
         -2009, /* Operation not permitted based on object/key usage flags */
-    WH_ERROR_BADCONFIG = -2010, /* Failed due to runtime configuration */
 
     /* NVM and keystore specific status returns */
     WH_ERROR_LOCKED      = -2100, /* Unlock and retry if necessary */

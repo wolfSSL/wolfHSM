@@ -79,13 +79,8 @@ int wh_Server_Init(whServerContext* server, whServerConfig* config)
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     server->crypto = config->crypto;
     if (server->crypto != NULL) {
-#if defined(WOLF_CRYPTO_CB)
         server->crypto->devId = config->devId;
-        server->crypto->configDevId = config->devId;
-#else
-        server->crypto->devId = INVALID_DEVID;
-        server->crypto->configDevId = INVALID_DEVID;
-#endif
+        server->crypto->defaultDevId = config->devId;
     }
 #ifdef WOLFHSM_CFG_SHE_EXTENSION
     server->she = config->she;
@@ -253,7 +248,16 @@ static int _wh_Server_HandleCommRequest(whServerContext* server,
         whMessageCommSetCryptoAffinityRequest  req  = {0};
         whMessageCommSetCryptoAffinityResponse resp = {0};
 
-        wh_MessageComm_TranslateSetCryptoAffinityRequest(
+        if (req_size != sizeof(whMessageCommSetCryptoAffinityRequest)) {
+            resp.rc = WH_ERROR_ABORTED; 
+
+            (void)wh_MessageComm_TranslateSetCryptoAffinityResponse(
+                magic, &resp, (whMessageCommSetCryptoAffinityResponse*)resp_packet);
+            *out_resp_size = sizeof(resp);
+            break;
+        }
+
+        (void)wh_MessageComm_TranslateSetCryptoAffinityRequest(
             magic, (const whMessageCommSetCryptoAffinityRequest*)req_packet,
             &req);
 
@@ -263,28 +267,27 @@ static int _wh_Server_HandleCommRequest(whServerContext* server,
             resp.affinity = WH_CRYPTO_AFFINITY_SW;
         }
         else {
-            switch (req.affinity) {
-                case WH_CRYPTO_AFFINITY_SW:
-                    server->crypto->devId = INVALID_DEVID;
+            if (req.affinity == WH_CRYPTO_AFFINITY_SW) {
+                server->crypto->devId = INVALID_DEVID;
+                resp.rc               = WH_ERROR_OK;
+            }
+            else if (req.affinity == WH_CRYPTO_AFFINITY_HW) {
+                /* If the devId the server was configured with is valid then
+                 * switch back to it. The devId is used to call the appropriate
+                 * callback to utilize HW crypto */
+                if (server->crypto->defaultDevId != INVALID_DEVID) {
+                    server->crypto->devId = server->crypto->defaultDevId;
                     resp.rc               = WH_ERROR_OK;
-                    break;
-                case WH_CRYPTO_AFFINITY_HW:
-#ifdef WOLF_CRYPTO_CB
-                    if (server->crypto->configDevId != INVALID_DEVID) {
-                        server->crypto->devId = server->crypto->configDevId;
-                        resp.rc               = WH_ERROR_OK;
-                    }
-                    else {
-                        resp.rc = WH_ERROR_BADCONFIG;
-                    }
-                    break;
-#else
+                }
+                /* If the server was not configured with a valid devId
+                 * Then we are unable to use HW crypto. Return error back
+                 * back to the client */
+                else {
                     resp.rc = WH_ERROR_NOTIMPL;
-                    break;
-#endif
-                default:
-                    resp.rc = WH_ERROR_BADARGS;
-                    break;
+                }
+            }
+            else {
+                resp.rc = WH_ERROR_BADARGS;
             }
             resp.affinity = (server->crypto->devId == INVALID_DEVID)
                                 ? WH_CRYPTO_AFFINITY_SW
@@ -295,8 +298,32 @@ static int _wh_Server_HandleCommRequest(whServerContext* server,
         resp.affinity = WH_CRYPTO_AFFINITY_SW;
 #endif
 
-        wh_MessageComm_TranslateSetCryptoAffinityResponse(
+        (void)wh_MessageComm_TranslateSetCryptoAffinityResponse(
             magic, &resp, (whMessageCommSetCryptoAffinityResponse*)resp_packet);
+        *out_resp_size = sizeof(resp);
+    }; break;
+
+    case WH_MESSAGE_COMM_ACTION_GET_CRYPTO_AFFINITY: {
+        whMessageCommGetCryptoAffinityResponse resp = {0};
+
+#ifndef WOLFHSM_CFG_NO_CRYPTO
+        if (server->crypto == NULL) {
+            resp.rc       = WH_ERROR_ABORTED;
+            resp.affinity = WH_CRYPTO_AFFINITY_SW;
+        }
+        else {
+            resp.rc       = WH_ERROR_OK;
+            resp.affinity = (server->crypto->devId == INVALID_DEVID)
+                                ? WH_CRYPTO_AFFINITY_SW
+                                : WH_CRYPTO_AFFINITY_HW;
+        }
+#else
+        resp.rc       = WH_ERROR_NOTIMPL;
+        resp.affinity = WH_CRYPTO_AFFINITY_SW;
+#endif
+
+        wh_MessageComm_TranslateGetCryptoAffinityResponse(
+            magic, &resp, (whMessageCommGetCryptoAffinityResponse*)resp_packet);
         *out_resp_size = sizeof(resp);
     }; break;
 
