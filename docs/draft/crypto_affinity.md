@@ -7,7 +7,7 @@ The crypto affinity feature allows a client to control and query whether the ser
 ```c
 enum WH_CRYPTO_AFFINITY_ENUM {
     WH_CRYPTO_AFFINITY_SW = 0,  // Use software crypto (devId = INVALID_DEVID)
-    WH_CRYPTO_AFFINITY_HW = 1,  // Attmept to use hardware crypto (devId = configured value)
+    WH_CRYPTO_AFFINITY_HW = 1,  // Attempt to use hardware crypto (devId = configured value)
 };
 ```
 
