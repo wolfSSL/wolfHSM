@@ -1108,7 +1108,7 @@ static int _benchAesGcmDma(whClientContext* client, whBenchOpContext* ctx,
     ret = wc_AesInit(aes, NULL, WH_DEV_ID_DMA);
     if (ret != 0) {
         WH_BENCH_PRINTF("Failed to wc_AesInit %d\n", ret);
-        return ret;
+        goto exit;
     }
 
     /* cache the key on the HSM */
@@ -1240,7 +1240,7 @@ static int _benchAesGcm(whClientContext* client, whBenchOpContext* ctx, int id,
     ret = wc_AesInit(aes, NULL, WH_DEV_ID);
     if (ret != 0) {
         WH_BENCH_PRINTF("Failed to wc_AesInit %d\n", ret);
-        return ret;
+        goto exit;
     }
 
     /* cache the key on the HSM */

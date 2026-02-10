@@ -1327,49 +1327,21 @@ int wh_MessageCrypto_TranslateAesGcmDmaRequest(
     uint16_t magic, const whMessageCrypto_AesGcmDmaRequest* src,
     whMessageCrypto_AesGcmDmaRequest* dest)
 {
-    int ret;
-
     if ((src == NULL) || (dest == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
     WH_T32(magic, dest, src, enc);
-    WH_T32(magic, dest, src, finalize);
     WH_T32(magic, dest, src, keyId);
+    WH_T32(magic, dest, src, keySz);
+    WH_T32(magic, dest, src, ivSz);
+    WH_T32(magic, dest, src, authTagSz);
 
-    ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->key, &dest->key);
-    if (ret != 0) {
-        return ret;
-    }
+    (void)wh_MessageCrypto_TranslateDmaBuffer(magic, &src->input, &dest->input);
+    (void)wh_MessageCrypto_TranslateDmaBuffer(magic, &src->output, &dest->output);
+    (void)wh_MessageCrypto_TranslateDmaBuffer(magic, &src->aad, &dest->aad);
 
-    ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->input, &dest->input);
-    if (ret != 0) {
-        return ret;
-    }
-
-    ret =
-        wh_MessageCrypto_TranslateDmaBuffer(magic, &src->output, &dest->output);
-    if (ret != 0) {
-        return ret;
-    }
-
-    ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->authTag,
-                                              &dest->authTag);
-    if (ret != 0) {
-        return ret;
-    }
-
-    ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->iv, &dest->iv);
-    if (ret != 0) {
-        return ret;
-    }
-
-    ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->aad, &dest->aad);
-    if (ret != 0) {
-        return ret;
-    }
-
-    return 0;
+    return WH_ERROR_OK;
 }
 
 /* AES-GCM DMA Response translation */
@@ -1377,20 +1349,17 @@ int wh_MessageCrypto_TranslateAesGcmDmaResponse(
     uint16_t magic, const whMessageCrypto_AesGcmDmaResponse* src,
     whMessageCrypto_AesGcmDmaResponse* dest)
 {
-    int ret;
-
     if ((src == NULL) || (dest == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_MessageCrypto_TranslateDmaAddrStatus(magic, &src->dmaAddrStatus,
+    (void)wh_MessageCrypto_TranslateDmaAddrStatus(magic, &src->dmaAddrStatus,
                                                   &dest->dmaAddrStatus);
-    if (ret != 0) {
-        return ret;
-    }
 
     WH_T32(magic, dest, src, outSz);
-    return 0;
+    WH_T32(magic, dest, src, authTagSz);
+
+    return WH_ERROR_OK;
 }
 
 /* RNG DMA Request translation */

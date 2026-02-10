@@ -3174,7 +3174,7 @@ static int _HandleAesGcm(whServerContext* ctx, uint16_t magic,
                          const void* cryptoDataIn, uint16_t inSize,
                          void* cryptoDataOut, uint16_t* outSize)
 {
-    int            ret       = 0;
+    int            ret       = WH_ERROR_OK;
     Aes            aes[1]    = {0};
     uint8_t*       cachedKey = NULL;
     whNvmMetadata* keyMeta   = NULL;
@@ -3188,45 +3188,24 @@ static int _HandleAesGcm(whServerContext* ctx, uint16_t magic,
     whMessageCrypto_AesGcmRequest req;
     ret = wh_MessageCrypto_TranslateAesGcmRequest(
         magic, (const whMessageCrypto_AesGcmRequest*)cryptoDataIn, &req);
-    if (ret != 0) {
+    if (ret != WH_ERROR_OK) {
         return ret;
     }
 
-    /* Validate variable-length fields fit within inSize */
-    uint32_t available = inSize - sizeof(whMessageCrypto_AesGcmRequest);
-    if (req.sz > available) {
-        return WH_ERROR_BADARGS;
-    }
-    available -= req.sz;
-    if (req.keyLen > available) {
-        return WH_ERROR_BADARGS;
-    }
-    available -= req.keyLen;
-    if (req.ivSz > available) {
-        return WH_ERROR_BADARGS;
-    }
-    available -= req.ivSz;
-    if (req.authInSz > available) {
-        return WH_ERROR_BADARGS;
-    }
-    available -= req.authInSz;
-    if (req.enc == 0 && req.authTagSz > available) {
-        return WH_ERROR_BADARGS;
-    }
-
-    /* Translate response */
-    whMessageCrypto_AesGcmResponse res;
-    res.sz        = req.sz;
-    res.authTagSz = (req.enc == 0) ? 0 : req.authTagSz;
-
-    uint32_t enc        = req.enc;
-    uint32_t key_len    = req.keyLen;
-    uint32_t len        = req.sz;
-    uint32_t iv_len     = req.ivSz;
-    uint32_t authin_len = req.authInSz;
-    uint32_t tag_len    = req.authTagSz;
-    whKeyId  key_id     = wh_KeyId_TranslateFromClient(
+    uint32_t enc         = req.enc;
+    uint32_t key_len     = req.keyLen;
+    uint32_t len         = req.sz;
+    uint32_t iv_len      = req.ivSz;
+    uint32_t authin_len  = req.authInSz;
+    uint32_t tag_len     = req.authTagSz;
+    whKeyId  key_id      = wh_KeyId_TranslateFromClient(
              WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+    uint64_t needed_size = sizeof(whMessageCrypto_AesGcmRequest) + len +
+                           key_len + iv_len + authin_len +
+                           ((enc == 0) ? tag_len : 0);
+    if (needed_size != inSize) {
+        return WH_ERROR_BADARGS;
+    }
 
     /* in, key, iv, authin, tag, and out are after fixed size fields */
     uint8_t* in = (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_AesGcmRequest);
@@ -3235,11 +3214,10 @@ static int _HandleAesGcm(whServerContext* ctx, uint16_t magic,
     uint8_t* authin = iv + iv_len;
     uint8_t* tag = authin + authin_len;
 
-    /* TODO: This should not include the generic request header, though doesn't
-     * matter since it is just a debug printf*/
-    uint32_t req_len = sizeof(whMessageCrypto_AesGcmRequest) + len + key_len +
-                       iv_len + authin_len + ((enc == 0) ? tag_len : 0);
-    (void)req_len;
+    /* Translate response */
+    whMessageCrypto_AesGcmResponse res;
+    res.sz        = req.sz;
+    res.authTagSz = (req.enc == 0) ? 0 : req.authTagSz;
 
     /* Set up response pointers */
     uint8_t* out = (uint8_t*)(cryptoDataOut) + sizeof(whMessageCrypto_AesGcmResponse);
@@ -3249,41 +3227,48 @@ static int _HandleAesGcm(whServerContext* ctx, uint16_t magic,
                        ((enc == 0) ? 0 : tag_len);
 
     WH_DEBUG_SERVER_VERBOSE("AESGCM: enc:%d keylen:%d ivsz:%d insz:%d authinsz:%d "
-           "authtagsz:%d reqsz:%u ressz:%u\n",
-           enc, key_len, iv_len, len, authin_len, tag_len, req_len, res_len);
+            "authtagsz:%d reqsz:%u ressz:%u\n",
+            enc, key_len, iv_len, len, authin_len, tag_len, (uint32_t)needed_size,
+            res_len);
     WH_DEBUG_SERVER_VERBOSE("AESGCM: req:%p in:%p key:%p iv:%p authin:%p tag:%p res:%p "
-           "out:%p out_tag:%p\n",
-           &req, in, key, iv, authin, tag, &res, out, out_tag);
+            "out:%p out_tag:%p\n",
+            &req, in, key, iv, authin, tag, &res, out, out_tag);
     WH_DEBUG_VERBOSE_HEXDUMP("[server] AESGCM req packet: \n", (uint8_t*)cryptoDataIn,
-                     req_len);
+            (uint32_t)needed_size);
 
     /* Freshen key and validate usage policy if key is not erased */
     if (!WH_KEYID_ISERASED(key_id)) {
         ret = wh_Server_KeystoreFreshenKey(ctx, key_id, &cachedKey, &keyMeta);
         WH_DEBUG_SERVER_VERBOSE("AesGcm FreshenKey key_id:%u ret:%d\n", key_id, ret);
-        if (ret == 0) {
+        if (ret == WH_ERROR_OK) {
             /* Validate key usage policy */
             ret = wh_Server_KeystoreEnforceKeyUsage(
                 keyMeta, enc != 0 ? WH_NVM_FLAGS_USAGE_ENCRYPT
                                   : WH_NVM_FLAGS_USAGE_DECRYPT);
         }
-        if (ret == 0) {
+        if (ret == WH_ERROR_OK) {
             /* override the incoming values with cached key */
             key     = cachedKey;
             key_len = keyMeta->len;
         }
     }
-    if (ret == 0) {
+    /* Verify key size is valid for AES */
+    if (ret == WH_ERROR_OK && key_len != AES_128_KEY_SIZE &&
+        key_len != AES_192_KEY_SIZE && key_len != AES_256_KEY_SIZE) {
+        WH_DEBUG_SERVER("[AesGcm] Invalid key size: %d", key_len);
+        ret = WH_ERROR_BADARGS;
+    }
+    if (ret == WH_ERROR_OK) {
         /* init key with possible hardware */
         ret = wc_AesInit(aes, NULL, ctx->crypto->devId);
     }
-    if (ret == 0) {
+    if (ret == WH_ERROR_OK) {
         /* load the key */
         ret = wc_AesGcmSetKey(aes, (byte*)key, (word32)key_len);
         WH_DEBUG_SERVER_VERBOSE("AesGcmSetKey key_id:%u key_len:%u ret:%d\n", key_id,
                key_len, ret);
         WH_DEBUG_VERBOSE_HEXDUMP("[server] key: ", key, key_len);
-        if (ret == 0) {
+        if (ret == WH_ERROR_OK) {
             /* do the crypto operation */
             WH_DEBUG_SERVER_VERBOSE("enc:%d len:%d, ivSz:%d authTagSz:%d, authInSz:%d\n",
                 enc, len, iv_len, tag_len, authin_len);
@@ -3316,14 +3301,14 @@ static int _HandleAesGcm(whServerContext* ctx, uint16_t magic,
         wc_AesFree(aes);
     }
     /* encode the return sz */
-    if (ret == 0) {
+    if (ret == WH_ERROR_OK) {
         /* set sz */
         res.sz        = len;
         res.authTagSz = (enc == 0) ? 0 : tag_len;
         *outSize      = res_len;
         WH_DEBUG_SERVER_VERBOSE("res out_size:%d\n", *outSize);
         WH_DEBUG_VERBOSE_HEXDUMP("[server] AESGCM res packet: \n",
-                         (uint8_t*)cryptoDataOut, res_len);
+                                 (uint8_t*)cryptoDataOut, res_len);
 
         /* Translate response back */
         ret = wh_MessageCrypto_TranslateAesGcmResponse(
@@ -3337,21 +3322,19 @@ static int _HandleAesGcmDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
                             const void* cryptoDataIn, uint16_t inSize,
                             void* cryptoDataOut, uint16_t* outSize)
 {
-    int                               ret = 0;
+    int                               ret = WH_ERROR_OK;
     whMessageCrypto_AesGcmDmaRequest  req;
     whMessageCrypto_AesGcmDmaResponse res;
-    byte                              tmpKey[AES_256_KEY_SIZE];
     Aes                               aes[1] = {0};
 
     void*  inAddr      = NULL;
     void*  outAddr     = NULL;
-    void*  authTagAddr = NULL;
-    void*  ivAddr      = NULL;
     void*  aadAddr     = NULL;
     word32 outSz       = 0;
 
-    whKeyId  keyId;
-    uint32_t keyLen;
+    whKeyId        keyId;
+    uint8_t*       cachedKey = NULL;
+    whNvmMetadata* keyMeta   = NULL;
 
     (void)seq;
 
@@ -3359,25 +3342,69 @@ static int _HandleAesGcmDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
         return WH_ERROR_BADARGS;
     }
 
+    /* Translate request */
     ret = wh_MessageCrypto_TranslateAesGcmDmaRequest(
         magic, (whMessageCrypto_AesGcmDmaRequest*)cryptoDataIn, &req);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
 
-    if (ret == WH_ERROR_OK) {
-        ret = wc_AesInit(aes, NULL, ctx->crypto->devId);
+    uint32_t enc         = req.enc;
+    uint32_t keyLen      = req.keySz;
+    uint32_t len         = req.input.sz;
+    uint32_t ivLen       = req.ivSz;
+    uint32_t tagLen      = req.authTagSz;
+    uint64_t needed_size = sizeof(whMessageCrypto_AesGcmDmaRequest) + keyLen +
+                           ivLen + (enc != 0 ? 0 : tagLen);
+    if (needed_size != inSize) {
+        return WH_ERROR_BADARGS;
+    }
+    if (req.input.sz != req.output.sz) {
+        return WH_ERROR_BADARGS;
     }
 
-    /* Handle key operations */
-    if (ret == WH_ERROR_OK && req.key.sz > 0) {
-        /* Copy key from client if provided */
-        ret = whServerDma_CopyFromClient(ctx, tmpKey, req.key.addr, req.key.sz,
-                                         (whServerDmaFlags){0});
-        if (ret != WH_ERROR_OK) {
-            res.dmaAddrStatus.badAddr = req.key;
+    /* iv is a fixed size field, key and authTag are optional (key is variable
+     * length) */
+    uint8_t* key     = NULL;
+    uint8_t* iv      = (uint8_t*)(cryptoDataIn) +
+                       sizeof(whMessageCrypto_AesGcmDmaRequest);
+    uint8_t* tag     = iv + ivLen;
+    uint8_t* out_tag = (uint8_t*)(cryptoDataOut) +
+                       sizeof(whMessageCrypto_AesGcmDmaResponse);
+
+    memset(&res, 0, sizeof(res));
+
+    if (ret == WH_ERROR_OK && keyLen > 0) {
+        key = tag + (enc != 0 ? 0 : tagLen);
+        WH_DEBUG_VERBOSE_HEXDUMP("[AesGcm] Key ", key, keyLen);
+    }
+    else if (ret == WH_ERROR_OK && keyLen == 0) {
+        /* Handle keyId-based keys if no direct key was provided */
+        keyId = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                             ctx->comm->client_id, req.keyId);
+
+        /* Freshen key and validate usage policy if key is not erased */
+        if (!WH_KEYID_ISERASED(keyId)) {
+            ret = wh_Server_KeystoreFreshenKey(ctx, keyId, &cachedKey,
+                                               &keyMeta);
+            if (ret == WH_ERROR_OK) {
+                /* Validate key usage policy */
+                ret = wh_Server_KeystoreEnforceKeyUsage(
+                    keyMeta, enc != 0 ? WH_NVM_FLAGS_USAGE_ENCRYPT
+                                    : WH_NVM_FLAGS_USAGE_DECRYPT);
+            }
+            if (ret == WH_ERROR_OK) {
+                key    = cachedKey;
+                keyLen = keyMeta->len;
+                WH_DEBUG_VERBOSE_HEXDUMP("[AesGcm] Key from HSM", key, keyLen);
+            }
         }
-        keyLen = req.key.sz;
+    }
+    /* Verify key size is valid for AES */
+    if (ret == WH_ERROR_OK && keyLen != AES_128_KEY_SIZE &&
+        keyLen != AES_192_KEY_SIZE && keyLen != AES_256_KEY_SIZE) {
+        WH_DEBUG_SERVER("[AesGcm] Invalid key size: %d", keyLen);
+        ret = WH_ERROR_BADARGS;
     }
 
     /* Handle input data */
@@ -3388,17 +3415,6 @@ static int _HandleAesGcmDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
             WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
         if (ret != WH_ERROR_OK) {
             res.dmaAddrStatus.badAddr = req.input;
-        }
-    }
-
-    /* Handle IV */
-    if (ret == WH_ERROR_OK && req.iv.sz > 0) {
-        /* Process client address for IV */
-        ret = wh_Server_DmaProcessClientAddress(
-            ctx, req.iv.addr, &ivAddr, req.iv.sz, WH_DMA_OPER_CLIENT_READ_PRE,
-            (whServerDmaFlags){0});
-        if (ret != WH_ERROR_OK) {
-            res.dmaAddrStatus.badAddr = req.iv;
         }
     }
 
@@ -3413,17 +3429,6 @@ static int _HandleAesGcmDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
         }
     }
 
-    /* Handle auth tag for decryption */
-    if (ret == WH_ERROR_OK && req.authTag.sz > 0) {
-        /* Process client address for auth tag */
-        ret = wh_Server_DmaProcessClientAddress(
-            ctx, req.authTag.addr, &authTagAddr, req.authTag.sz,
-            WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
-        if (ret != WH_ERROR_OK) {
-            res.dmaAddrStatus.badAddr = req.authTag;
-        }
-    }
-
     /* Handle output buffer */
     if (ret == WH_ERROR_OK && req.output.sz > 0) {
         /* Process client address for output buffer */
@@ -3435,79 +3440,73 @@ static int _HandleAesGcmDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
         }
     }
 
-    /* Handle keyId-based keys if no direct key was provided */
-    if (ret == WH_ERROR_OK && req.key.sz == 0) {
-        keyId  = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
-                                              ctx->comm->client_id, req.keyId);
-        keyLen = sizeof(tmpKey);
-        ret    = wh_Server_KeystoreReadKey(ctx, keyId, NULL, tmpKey, &keyLen);
-        if (ret == WH_ERROR_OK) {
-            /* Verify key size is valid for AES */
-            if (keyLen != AES_128_KEY_SIZE && keyLen != AES_192_KEY_SIZE &&
-                keyLen != AES_256_KEY_SIZE) {
-                ret = WH_ERROR_ABORTED;
-            }
-        }
+    if (ret == WH_ERROR_OK) {
+        ret = wc_AesInit(aes, NULL, ctx->crypto->devId);
     }
 
     if (ret == WH_ERROR_OK) {
-        ret = wc_AesGcmSetKey(aes, tmpKey, keyLen);
+        ret = wc_AesGcmSetKey(aes, (byte*)key, (word32)keyLen);
     }
 
     if (ret == WH_ERROR_OK) {
-        if (req.enc) {
+        if (enc != 0) {
             ret = wc_AesGcmEncrypt(
-                aes, (byte*)outAddr, (byte*)inAddr, (word32)req.input.sz,
-                (byte*)ivAddr, (word32)req.iv.sz, (byte*)authTagAddr,
-                (word32)req.authTag.sz, (byte*)aadAddr, (word32)req.aad.sz);
-            if (ret == 0) {
-                outSz = req.input.sz;
-            }
+                aes, (byte*)outAddr, (byte*)inAddr, (word32)len,
+                (byte*)iv, (word32)ivLen, (byte*)out_tag, (word32)tagLen,
+                (byte*)aadAddr, (word32)req.aad.sz);
         }
         else {
             ret = wc_AesGcmDecrypt(
-                aes, (byte*)outAddr, (byte*)inAddr, (word32)req.input.sz,
-                (byte*)ivAddr, (word32)req.iv.sz, (byte*)authTagAddr,
-                (word32)req.authTag.sz, (byte*)aadAddr, (word32)req.aad.sz);
-            if (ret == 0) {
-                outSz = req.input.sz;
-            }
+                aes, (byte*)outAddr, (byte*)inAddr, (word32)len,
+                (byte*)iv, (word32)ivLen, (byte*)tag, (word32)tagLen,
+                (byte*)aadAddr, (word32)req.aad.sz);
+        }
+        if (ret == WH_ERROR_OK) {
+            outSz = len;
         }
     }
 
-    /* Post-write DMA address processing for output/authTag (on success) */
+    /* Post-write DMA address processing for output (on success) */
     if (ret == WH_ERROR_OK) {
         if (req.output.sz > 0) {
-            int rc2 = wh_Server_DmaProcessClientAddress(
-                ctx, req.output.addr, &outAddr, req.output.sz,
-                WH_DMA_OPER_CLIENT_WRITE_POST, (whServerDmaFlags){0});
-            if (rc2 != WH_ERROR_OK) {
-                if (rc2 == WH_ERROR_ACCESS) {
-                    res.dmaAddrStatus.badAddr = req.output;
-                }
-                ret = rc2;
+            ret = wh_Server_DmaProcessClientAddress(
+                    ctx, req.output.addr, &outAddr, req.output.sz,
+                    WH_DMA_OPER_CLIENT_WRITE_POST, (whServerDmaFlags){0});
+            if (ret == WH_ERROR_ACCESS) {
+                res.dmaAddrStatus.badAddr = req.output;
             }
         }
-        /* During encryption, the auth tag is written to client memory */
-        if (ret == WH_ERROR_OK && req.enc && req.authTag.sz > 0) {
-            int rc2 = wh_Server_DmaProcessClientAddress(
-                ctx, req.authTag.addr, &authTagAddr, req.authTag.sz,
-                WH_DMA_OPER_CLIENT_WRITE_POST, (whServerDmaFlags){0});
-            if (rc2 != WH_ERROR_OK) {
-                if (rc2 == WH_ERROR_ACCESS) {
-                    res.dmaAddrStatus.badAddr = req.authTag;
-                }
-                ret = rc2;
-            }
+    }
+    /* Clean up DMA input and aad address (unconditionally) */
+    if (inAddr != NULL) {
+        if (wh_Server_DmaProcessClientAddress(
+                ctx, req.input.addr, &inAddr, req.input.sz,
+                WH_DMA_OPER_CLIENT_READ_POST,
+                (whServerDmaFlags){0}) != WH_ERROR_OK) {
+            WH_DEBUG_SERVER_VERBOSE(
+                "[AesGcm] Error cleaning up input DMA address\n");
+        }
+    }
+    if (aadAddr != NULL) {
+        if (wh_Server_DmaProcessClientAddress(
+                ctx, req.aad.addr, &aadAddr, req.aad.sz,
+                WH_DMA_OPER_CLIENT_READ_POST,
+                (whServerDmaFlags){0}) != WH_ERROR_OK) {
+            WH_DEBUG_SERVER_VERBOSE(
+                "[AesGcm] Error cleaning up aad DMA address\n");
         }
     }
 
     wc_AesFree(aes);
-    res.outSz = outSz;
 
+    /* Set response */
+    res.outSz = outSz;
+    res.authTagSz = (enc == 0) ? 0 : tagLen;
+
+    /* Translate response back */
     (void)wh_MessageCrypto_TranslateAesGcmDmaResponse(
         magic, &res, (whMessageCrypto_AesGcmDmaResponse*)cryptoDataOut);
-    *outSize = sizeof(res);
+    *outSize = sizeof(whMessageCrypto_AesGcmDmaResponse) + res.authTagSz;
 
     return ret;
 }

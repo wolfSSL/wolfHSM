@@ -1109,22 +1109,28 @@ int wh_MessageCrypto_TranslateAesCtrDmaResponse(
 
 /* AES-GCM DMA Request */
 typedef struct {
-    uint32_t                  enc;      /* 1 for encrypt, 0 for decrypt */
-    uint32_t                  finalize; /* 1 if final, 0 if update */
+    whMessageCrypto_DmaBuffer input;     /* Input buffer */
+    whMessageCrypto_DmaBuffer output;    /* Output buffer */
+    whMessageCrypto_DmaBuffer aad;       /* AAD buffer */
+    uint32_t                  enc;       /* 1 for encrypt, 0 for decrypt */
     uint32_t                  keyId;
-    whMessageCrypto_DmaBuffer key;      /* Key buffer */
-    whMessageCrypto_DmaBuffer input;    /* Input buffer */
-    whMessageCrypto_DmaBuffer output;   /* Output buffer */
-    whMessageCrypto_DmaBuffer authTag;  /* Auth tag buffer */
-    whMessageCrypto_DmaBuffer iv;       /* IV buffer */
-    whMessageCrypto_DmaBuffer aad;      /* AAD buffer */
+    uint32_t                  keySz;     /* inline key size (0 = use keyId) */
+    uint32_t                  ivSz;      /* Size of IV */
+    uint32_t                  authTagSz; /* Size of auth tag */
+    uint8_t                   WH_PAD[4]; /* Pad to 8-byte alignment */
+    /* Trailing data:
+     *     uint8_t iv[ivSz]
+     *     uint8_t authTag[authTagSz]
+     *     uint8_t key[keySz]
+     */
 } whMessageCrypto_AesGcmDmaRequest;
 
 /* AES-GCM DMA Response */
 typedef struct {
     whMessageCrypto_DmaAddrStatus dmaAddrStatus;
     uint32_t                      outSz;
-    uint8_t                       WH_PAD[4]; /* Pad to 8-byte alignment */
+    uint32_t                      authTagSz; /* Size of auth tag */
+    /* Trailing data: uint8_t authTag[authTagSz] */
 } whMessageCrypto_AesGcmDmaResponse;
 
 /* AES-GCM DMA translation functions */
