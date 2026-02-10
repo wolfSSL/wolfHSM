@@ -78,10 +78,8 @@ int wh_Server_Init(whServerContext* server, whServerConfig* config)
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     server->crypto = config->crypto;
-    if (server->crypto != NULL) {
-        server->crypto->devId = config->devId;
-        server->crypto->defaultDevId = config->devId;
-    }
+    server->devId        = config->devId;
+    server->defaultDevId = config->devId;
 #ifdef WOLFHSM_CFG_SHE_EXTENSION
     server->she = config->she;
 #endif
@@ -268,15 +266,15 @@ static int _wh_Server_HandleCommRequest(whServerContext* server,
         }
         else {
             if (req.affinity == WH_CRYPTO_AFFINITY_SW) {
-                server->crypto->devId = INVALID_DEVID;
+                server->devId = INVALID_DEVID;
                 resp.rc               = WH_ERROR_OK;
             }
             else if (req.affinity == WH_CRYPTO_AFFINITY_HW) {
                 /* If the devId the server was configured with is valid then
                  * switch back to it. The devId is used to call the appropriate
                  * callback to utilize HW crypto */
-                if (server->crypto->defaultDevId != INVALID_DEVID) {
-                    server->crypto->devId = server->crypto->defaultDevId;
+                if (server->defaultDevId != INVALID_DEVID) {
+                    server->devId = server->defaultDevId;
                     resp.rc               = WH_ERROR_OK;
                 }
                 /* If the server was not configured with a valid devId
@@ -289,7 +287,7 @@ static int _wh_Server_HandleCommRequest(whServerContext* server,
             else {
                 resp.rc = WH_ERROR_BADARGS;
             }
-            resp.affinity = (server->crypto->devId == INVALID_DEVID)
+            resp.affinity = (server->devId == INVALID_DEVID)
                                 ? WH_CRYPTO_AFFINITY_SW
                                 : WH_CRYPTO_AFFINITY_HW;
         }
@@ -313,7 +311,7 @@ static int _wh_Server_HandleCommRequest(whServerContext* server,
         }
         else {
             resp.rc       = WH_ERROR_OK;
-            resp.affinity = (server->crypto->devId == INVALID_DEVID)
+            resp.affinity = (server->devId == INVALID_DEVID)
                                 ? WH_CRYPTO_AFFINITY_SW
                                 : WH_CRYPTO_AFFINITY_HW;
         }

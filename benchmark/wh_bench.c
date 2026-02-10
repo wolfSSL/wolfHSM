@@ -1047,9 +1047,7 @@ int wh_Bench_ClientServer_Posix(int transport, int moduleIndex)
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     /* Crypto context */
-    whServerCryptoContext crypto[1] = {{
-        .devId = INVALID_DEVID,
-    }};
+    whServerCryptoContext crypto[1] = {0};
 #endif
 
     /* Set up server configuration with NVM and crypto */
@@ -1085,7 +1083,7 @@ int wh_Bench_ClientServer_Posix(int transport, int moduleIndex)
     }
 
     /* Initialize RNG */
-    ret = wc_InitRng_ex(crypto->rng, NULL, crypto->devId);
+    ret = wc_InitRng_ex(crypto->rng, NULL, INVALID_DEVID);
     if (ret != 0) {
         WH_BENCH_PRINTF("Failed to initialize RNG: %d\n", ret);
         wolfCrypt_Cleanup();
