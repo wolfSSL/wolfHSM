@@ -375,6 +375,41 @@ int wh_Client_SetCryptoAffinity(whClientContext* c, uint32_t affinity,
                                 int32_t* out_rc, uint32_t* out_affinity);
 
 /**
+ * @brief Sends a get crypto affinity request to the server.
+ *
+ * This function sends a request to query the current crypto affinity
+ * (software or hardware) on the server without changing it.
+ *
+ * @param[in] c Pointer to the client context.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_GetCryptoAffinityRequest(whClientContext* c);
+
+/**
+ * @brief Receives a get crypto affinity response from the server.
+ *
+ * This function waits for and processes the response message from the server.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[out] out_rc Pointer to store the server result code.
+ * @param[out] out_affinity Pointer to store the current crypto affinity.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_GetCryptoAffinityResponse(whClientContext* c, int32_t* out_rc,
+                                        uint32_t* out_affinity);
+
+/**
+ * @brief Gets the current crypto affinity with a blocking call.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[out] out_rc Pointer to store the server result code.
+ * @param[out] out_affinity Pointer to store the current crypto affinity.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_GetCryptoAffinity(whClientContext* c, int32_t* out_rc,
+                                uint32_t* out_affinity);
+
+/**
  * @brief Sends a communication close request to the server.
  *
  * This function prepares and sends a communication close request

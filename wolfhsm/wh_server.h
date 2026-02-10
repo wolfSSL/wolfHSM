@@ -67,7 +67,7 @@ typedef struct whServerContext_t whServerContext;
 
 typedef struct whServerCryptoContext {
     int devId;
-    int configDevId;
+    int defaultDevId;
 #ifndef WC_NO_RNG
     WC_RNG rng[1];
 #endif

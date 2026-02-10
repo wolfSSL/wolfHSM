@@ -42,11 +42,7 @@ enum WH_MESSAGE_COMM_ACTION_ENUM {
     WH_MESSAGE_COMM_ACTION_INFO                = 0x04,
     WH_MESSAGE_COMM_ACTION_ECHO                = 0x05,
     WH_MESSAGE_COMM_ACTION_SET_CRYPTO_AFFINITY = 0x06,
-};
-
-enum WH_CRYPTO_AFFINITY_ENUM {
-    WH_CRYPTO_AFFINITY_SW = 0,
-    WH_CRYPTO_AFFINITY_HW = 1,
+    WH_MESSAGE_COMM_ACTION_GET_CRYPTO_AFFINITY = 0x07,
 };
 
 /* Info request/response data sizes*/
@@ -122,6 +118,15 @@ typedef struct {
 int wh_MessageComm_TranslateSetCryptoAffinityResponse(
     uint16_t magic, const whMessageCommSetCryptoAffinityResponse* src,
     whMessageCommSetCryptoAffinityResponse* dest);
+
+typedef struct {
+    int32_t  rc;
+    uint32_t affinity;
+} whMessageCommGetCryptoAffinityResponse;
+
+int wh_MessageComm_TranslateGetCryptoAffinityResponse(
+    uint16_t magic, const whMessageCommGetCryptoAffinityResponse* src,
+    whMessageCommGetCryptoAffinityResponse* dest);
 
 
 #endif /* !WOLFHSM_WH_MESSAGE_COMM_H_ */

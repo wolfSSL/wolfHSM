@@ -105,3 +105,15 @@ int wh_MessageComm_TranslateSetCryptoAffinityResponse(
     WH_T32(magic, dest, src, affinity);
     return 0;
 }
+
+int wh_MessageComm_TranslateGetCryptoAffinityResponse(
+    uint16_t magic, const whMessageCommGetCryptoAffinityResponse* src,
+    whMessageCommGetCryptoAffinityResponse* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, rc);
+    WH_T32(magic, dest, src, affinity);
+    return 0;
+}
