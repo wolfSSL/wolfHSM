@@ -162,10 +162,8 @@ static int whTest_CryptoAffinityWithCb(void)
     }};
     whNvmContext nvm[1]    = {0};
 
-    /* Crypto context - configure with our test device ID */
-    whServerCryptoContext crypto[1] = {{
-        .devId = TEST_DEV_ID,
-    }};
+    /* Crypto context */
+    whServerCryptoContext crypto[1] = {0};
 
     whServerConfig  s_conf[1] = {{
          .comm_config = cs_conf,
@@ -205,8 +203,8 @@ static int whTest_CryptoAffinityWithCb(void)
 
     /* Verify initial state - should be HW since we configured with valid devId
      */
-    WH_TEST_ASSERT_RETURN(server->crypto->devId == TEST_DEV_ID);
-    WH_TEST_ASSERT_RETURN(server->crypto->defaultDevId == TEST_DEV_ID);
+    WH_TEST_ASSERT_RETURN(server->devId == TEST_DEV_ID);
+    WH_TEST_ASSERT_RETURN(server->defaultDevId == TEST_DEV_ID);
 
     /* Test 1a: Get initial affinity - should be HW */
     WH_TEST_RETURN_ON_FAIL(wh_Client_GetCryptoAffinityRequest(client));
@@ -224,7 +222,7 @@ static int whTest_CryptoAffinityWithCb(void)
         wh_Client_SetCryptoAffinityResponse(client, &server_rc, &affinity));
     WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
     WH_TEST_ASSERT_RETURN(affinity == WH_CRYPTO_AFFINITY_SW);
-    WH_TEST_ASSERT_RETURN(server->crypto->devId == INVALID_DEVID);
+    WH_TEST_ASSERT_RETURN(server->devId == INVALID_DEVID);
 
     /* Test 1b: Get affinity after setting SW - should be SW */
     WH_TEST_RETURN_ON_FAIL(wh_Client_GetCryptoAffinityRequest(client));
@@ -243,7 +241,7 @@ static int whTest_CryptoAffinityWithCb(void)
         wh_Client_SetCryptoAffinityResponse(client, &server_rc, &affinity));
     WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
     WH_TEST_ASSERT_RETURN(affinity == WH_CRYPTO_AFFINITY_HW);
-    WH_TEST_ASSERT_RETURN(server->crypto->devId == TEST_DEV_ID);
+    WH_TEST_ASSERT_RETURN(server->devId == TEST_DEV_ID);
 
     /* Test 3: Invalid affinity value - should return BADARGS */
     WH_TEST_RETURN_ON_FAIL(wh_Client_SetCryptoAffinityRequest(client, 0xFF));
@@ -268,7 +266,7 @@ static int whTest_CryptoAffinityWithCb(void)
     {
         WC_RNG  testRng[1];
         uint8_t randomBytes[16];
-        rc = wc_InitRng_ex(testRng, NULL, server->crypto->devId);
+        rc = wc_InitRng_ex(testRng, NULL, server->devId);
         if (rc == 0) {
             (void)wc_RNG_GenerateBlock(testRng, randomBytes,
                                        sizeof(randomBytes));
@@ -294,7 +292,7 @@ static int whTest_CryptoAffinityWithCb(void)
     {
         WC_RNG  testRng[1];
         uint8_t randomBytes[16];
-        rc = wc_InitRng_ex(testRng, NULL, server->crypto->devId);
+        rc = wc_InitRng_ex(testRng, NULL, server->devId);
         if (rc == 0) {
             (void)wc_RNG_GenerateBlock(testRng, randomBytes,
                                        sizeof(randomBytes));
@@ -391,10 +389,8 @@ static int whTest_CryptoAffinityNoCb(void)
     }};
     whNvmContext nvm[1]    = {0};
 
-    /* Crypto context - configure with INVALID_DEVID (no HW crypto) */
-    whServerCryptoContext crypto[1] = {{
-        .devId = INVALID_DEVID,
-    }};
+    /* Crypto context */
+    whServerCryptoContext crypto[1] = {0};
 
     whServerConfig  s_conf[1] = {{
          .comm_config = cs_conf,
@@ -432,8 +428,8 @@ static int whTest_CryptoAffinityNoCb(void)
 
     /* Verify initial state - should be SW since we configured with INVALID_DEVID
      */
-    WH_TEST_ASSERT_RETURN(server->crypto->devId == INVALID_DEVID);
-    WH_TEST_ASSERT_RETURN(server->crypto->defaultDevId == INVALID_DEVID);
+    WH_TEST_ASSERT_RETURN(server->devId == INVALID_DEVID);
+    WH_TEST_ASSERT_RETURN(server->defaultDevId == INVALID_DEVID);
 
     /* Test 0: Get initial affinity - should be SW since configured with
      * INVALID_DEVID */
@@ -452,7 +448,7 @@ static int whTest_CryptoAffinityNoCb(void)
         wh_Client_SetCryptoAffinityResponse(client, &server_rc, &affinity));
     WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
     WH_TEST_ASSERT_RETURN(affinity == WH_CRYPTO_AFFINITY_SW);
-    WH_TEST_ASSERT_RETURN(server->crypto->devId == INVALID_DEVID);
+    WH_TEST_ASSERT_RETURN(server->devId == INVALID_DEVID);
 
     /* Test 2: Set HW affinity - should fail with BADCONFIG since no HW
      * configured */
@@ -464,7 +460,7 @@ static int whTest_CryptoAffinityNoCb(void)
     WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_NOTIMPL);
     /* Affinity should remain SW after failed HW request */
     WH_TEST_ASSERT_RETURN(affinity == WH_CRYPTO_AFFINITY_SW);
-    WH_TEST_ASSERT_RETURN(server->crypto->devId == INVALID_DEVID);
+    WH_TEST_ASSERT_RETURN(server->devId == INVALID_DEVID);
 
     /* Test 3: Verify SW affinity still works after failed HW request */
     WH_TEST_RETURN_ON_FAIL(

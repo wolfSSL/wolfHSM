@@ -1487,9 +1487,7 @@ static int whTest_LogClientServerMemTransport(void)
         WH_NVM_TEST_BACKEND_FLASH, &nvm_setup, n_conf, fc_conf, fc, fcb));
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
-    whServerCryptoContext crypto[1] = {{
-        .devId = INVALID_DEVID,
-    }};
+    whServerCryptoContext crypto[1] = {0};
 #endif
 
     posixLogFileContext posixCtx[1]  = {0};
@@ -1519,7 +1517,7 @@ static int whTest_LogClientServerMemTransport(void)
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     WH_TEST_RETURN_ON_FAIL(wolfCrypt_Init());
-    WH_TEST_RETURN_ON_FAIL(wc_InitRng_ex(crypto->rng, NULL, crypto->devId));
+    WH_TEST_RETURN_ON_FAIL(wc_InitRng_ex(crypto->rng, NULL, INVALID_DEVID));
 #endif
 
     _whLogClientServerThreadTest(c_conf, s_conf);

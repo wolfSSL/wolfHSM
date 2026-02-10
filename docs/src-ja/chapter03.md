@@ -171,15 +171,14 @@ whNvmContext nvmCtx = {0};
 wh_Nvm_Init(&nvmCtx, &whNvmConfig);
 
 /* 手順3: 暗号コンテキスト構造体の割り当てと初期化 */
-whServerCryptoContext cryptoCtx {
-   .devID = INVALID_DEVID; /* あるいは、カスタム暗号コールバックdevIDを設定 */
-};
+whServerCryptoContext cryptoCtx = {0};
 
 /* サーバー設定の割り当てと初期化 */
 whServerConfig serverCfg = {
        .comm   = commServerCfg,
        .nvm    = nvmCtx,
-       .crypto = cryptoCtx,
+       .crypto = &cryptoCtx,
+       .devId  = INVALID_DEVID, /* あるいは、カスタム暗号コールバックdevIDを設定 */
 };
 
 /* 手順4: wolfCryptの初期化 */

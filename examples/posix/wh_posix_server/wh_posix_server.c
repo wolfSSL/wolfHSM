@@ -416,9 +416,7 @@ int main(int argc, char** argv)
     }
 #if !defined(WOLFHSM_CFG_NO_CRYPTO)
     /* Crypto context */
-    whServerCryptoContext crypto[1] = {{
-        .devId = INVALID_DEVID,
-    }};
+    whServerCryptoContext crypto[1] = {0};
 
 #if defined(WOLFHSM_CFG_SHE_EXTENSION)
     whServerSheContext she[1] = {{0}};
@@ -452,11 +450,11 @@ int main(int argc, char** argv)
     wh_Utils_Hexdump("Context 4: Server HW RNG:\n", buffer, sizeof(buffer));
 
     /* Context 5: Set default server crypto to use cryptocb */
-    crypto->devId = HW_DEV_ID;
+    s_conf->devId = HW_DEV_ID;
     WOLFHSM_CFG_PRINTF("Context 5: Setting up default server crypto with devId=%d\n",
-           crypto->devId);
+           s_conf->devId);
 
-    rc = wc_InitRng_ex(crypto->rng, NULL, crypto->devId);
+    rc = wc_InitRng_ex(crypto->rng, NULL, s_conf->devId);
     if (rc != 0) {
         WOLFHSM_CFG_PRINTF("Failed to wc_InitRng_ex: %d\n", rc);
         return rc;

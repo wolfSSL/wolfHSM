@@ -942,7 +942,7 @@ static int _AesGcmKeyWrap(whServerContext* server, whKeyId serverKeyId,
     }
 
     /* Initialize AES context and set it to use the server side key */
-    ret = wc_AesInit(aes, NULL, server->crypto->devId);
+    ret = wc_AesInit(aes, NULL, server->devId);
     if (ret != 0) {
         return ret;
     }
@@ -1022,7 +1022,7 @@ static int _AesGcmKeyUnwrap(whServerContext* server, uint16_t serverKeyId,
     }
 
     /* Initialize AES context and set it to use the server side key */
-    ret = wc_AesInit(aes, NULL, server->crypto->devId);
+    ret = wc_AesInit(aes, NULL, server->devId);
     if (ret != 0) {
         return ret;
     }
@@ -1083,7 +1083,7 @@ static int _AesGcmDataWrap(whServerContext* server, whKeyId serverKeyId,
     serverKeySz = serverKeyMetadata->len;
 
     /* Initialize AES context and set it to use the server side key */
-    ret = wc_AesInit(aes, NULL, server->crypto->devId);
+    ret = wc_AesInit(aes, NULL, server->devId);
     if (ret != 0) {
         return ret;
     }
@@ -1149,7 +1149,7 @@ static int _AesGcmDataUnwrap(whServerContext* server, uint16_t serverKeyId,
     serverKeySz = serverKeyMetadata->len;
 
     /* Initialize AES context and set it to use the server side key */
-    ret = wc_AesInit(aes, NULL, server->crypto->devId);
+    ret = wc_AesInit(aes, NULL, server->devId);
     if (ret != 0) {
         return ret;
     }

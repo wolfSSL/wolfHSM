@@ -122,8 +122,8 @@ When affinity is set:
 
 | Affinity | Server Action |
 |----------|---------------|
-| `WH_CRYPTO_AFFINITY_SW` | `server->crypto->devId = INVALID_DEVID` (wolfCrypt uses software) |
-| `WH_CRYPTO_AFFINITY_HW` | `server->crypto->devId = server->crypto->defaultDevId` (wolfCrypt uses registered crypto callback) |
+| `WH_CRYPTO_AFFINITY_SW` | `server->devId = INVALID_DEVID` (wolfCrypt uses software) |
+| `WH_CRYPTO_AFFINITY_HW` | `server->devId = server->defaultDevId` (wolfCrypt uses registered crypto callback) |
 
 When affinity is queried (Get), the server reads the current `devId` and returns the corresponding affinity value without modifying any state.
 

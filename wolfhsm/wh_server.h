@@ -66,8 +66,6 @@ typedef struct whServerContext_t whServerContext;
 #ifndef WOLFHSM_CFG_NO_CRYPTO
 
 typedef struct whServerCryptoContext {
-    int devId;
-    int defaultDevId;
 #ifndef WC_NO_RNG
     WC_RNG rng[1];
 #endif
@@ -162,6 +160,8 @@ struct whServerContext_t {
     whCommServer  comm[1];
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     whServerCryptoContext* crypto;
+    int                   devId;
+    int                   defaultDevId;
     whKeyCacheContext      localCache; /* Unified cache structure */
 #ifdef WOLFHSM_CFG_SHE_EXTENSION
     whServerSheContext* she;
