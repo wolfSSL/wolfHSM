@@ -2495,8 +2495,9 @@ int wh_Client_Ed25519SignDma(whClientContext* ctx, ed25519_key* key,
     uintptr_t                               msgAddr = 0;
     uintptr_t                               sigAddr = 0;
 
-    whKeyId key_id = WH_DEVCTX_TO_KEYID(key->devCtx);
-    int     evict  = 0;
+    whKeyId  key_id   = WH_DEVCTX_TO_KEYID(key->devCtx);
+    int      evict    = 0;
+    uint32_t inSigLen = (inout_sig_len != NULL) ? *inout_sig_len : 0;
 
     if ((ctx == NULL) || (key == NULL) || ((msg == NULL) && (msgLen > 0)) ||
         (sig == NULL) || (inout_sig_len == NULL) ||
@@ -2557,7 +2558,7 @@ int wh_Client_Ed25519SignDma(whClientContext* ctx, ed25519_key* key,
         req->type    = type;
         req->ctxSz   = contextLen;
         req->msg.sz  = msgLen;
-        req->sig.sz  = (inout_sig_len != NULL) ? *inout_sig_len : 0;
+        req->sig.sz  = inSigLen;
         if ((context != NULL) && (contextLen > 0)) {
             memcpy(req_ctx, context, contextLen);
         }
@@ -2611,10 +2612,10 @@ int wh_Client_Ed25519SignDma(whClientContext* ctx, ed25519_key* key,
         }
 
         (void)wh_Client_DmaProcessClientAddress(
-            ctx, (uintptr_t)sig, (void**)&sigAddr, req->sig.sz,
+            ctx, (uintptr_t)sig, (void**)&sigAddr, inSigLen,
             WH_DMA_OPER_CLIENT_WRITE_POST, (whDmaFlags){0});
         (void)wh_Client_DmaProcessClientAddress(
-            ctx, (uintptr_t)msg, (void**)&msgAddr, req->msg.sz,
+            ctx, (uintptr_t)msg, (void**)&msgAddr, msgLen,
             WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
     }
 
@@ -2756,10 +2757,10 @@ int wh_Client_Ed25519VerifyDma(whClientContext* ctx, ed25519_key* key,
         }
 
         (void)wh_Client_DmaProcessClientAddress(
-            ctx, (uintptr_t)msg, (void**)&msgAddr, req->msg.sz,
+            ctx, (uintptr_t)msg, (void**)&msgAddr, msgLen,
             WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
         (void)wh_Client_DmaProcessClientAddress(
-            ctx, (uintptr_t)sig, (void**)&sigAddr, req->sig.sz,
+            ctx, (uintptr_t)sig, (void**)&sigAddr, sigLen,
             WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
     }
 
@@ -4119,13 +4120,13 @@ int wh_Client_Sha256Dma(whClientContext* ctx, wc_Sha256* sha, const uint8_t* in,
     if (in != NULL || out != NULL) {
         /* post operation address translations */
         (void)wh_Client_DmaProcessClientAddress(
-            ctx, (uintptr_t)sha256, (void**)&stateAddr, req->state.sz,
+            ctx, (uintptr_t)sha256, (void**)&stateAddr, sizeof(*sha256),
             WH_DMA_OPER_CLIENT_WRITE_POST, (whDmaFlags){0});
         (void)wh_Client_DmaProcessClientAddress(
-            ctx, (uintptr_t)in, (void**)&inAddr, req->input.sz,
+            ctx, (uintptr_t)in, (void**)&inAddr, inLen,
             WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
         (void)wh_Client_DmaProcessClientAddress(
-            ctx, (uintptr_t)out, (void**)&outAddr, req->output.sz,
+            ctx, (uintptr_t)out, (void**)&outAddr, WC_SHA256_DIGEST_SIZE,
             WH_DMA_OPER_CLIENT_WRITE_POST, (whDmaFlags){0});
     }
 
@@ -4401,13 +4402,13 @@ int wh_Client_Sha224Dma(whClientContext* ctx, wc_Sha224* sha, const uint8_t* in,
 
     if (in != NULL || out != NULL) {
         (void)wh_Client_DmaProcessClientAddress(
-            ctx, (uintptr_t)sha224, (void**)&stateAddr, req->state.sz,
+            ctx, (uintptr_t)sha224, (void**)&stateAddr, sizeof(*sha224),
             WH_DMA_OPER_CLIENT_WRITE_POST, (whDmaFlags){0});
         (void)wh_Client_DmaProcessClientAddress(
-            ctx, (uintptr_t)in, (void**)&inAddr, req->input.sz,
+            ctx, (uintptr_t)in, (void**)&inAddr, inLen,
             WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
         (void)wh_Client_DmaProcessClientAddress(
-            ctx, (uintptr_t)out, (void**)&outAddr, req->output.sz,
+            ctx, (uintptr_t)out, (void**)&outAddr, WC_SHA224_DIGEST_SIZE,
             WH_DMA_OPER_CLIENT_WRITE_POST, (whDmaFlags){0});
     }
     return ret;
@@ -4682,13 +4683,13 @@ int wh_Client_Sha384Dma(whClientContext* ctx, wc_Sha384* sha, const uint8_t* in,
 
     if (in != NULL || out != NULL) {
         (void)wh_Client_DmaProcessClientAddress(
-            ctx, (uintptr_t)sha384, (void**)&stateAddr, req->state.sz,
+            ctx, (uintptr_t)sha384, (void**)&stateAddr, sizeof(*sha384),
             WH_DMA_OPER_CLIENT_WRITE_POST, (whDmaFlags){0});
         (void)wh_Client_DmaProcessClientAddress(
-            ctx, (uintptr_t)in, (void**)&inAddr, req->input.sz,
+            ctx, (uintptr_t)in, (void**)&inAddr, inLen,
             WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
         (void)wh_Client_DmaProcessClientAddress(
-            ctx, (uintptr_t)out, (void**)&outAddr, req->output.sz,
+            ctx, (uintptr_t)out, (void**)&outAddr, WC_SHA384_DIGEST_SIZE,
             WH_DMA_OPER_CLIENT_WRITE_POST, (whDmaFlags){0});
     }
     return ret;
@@ -4975,13 +4976,13 @@ int wh_Client_Sha512Dma(whClientContext* ctx, wc_Sha512* sha, const uint8_t* in,
 
     if (in != NULL || out != NULL) {
         (void)wh_Client_DmaProcessClientAddress(
-            ctx, (uintptr_t)sha512, (void**)&stateAddr, req->state.sz,
+            ctx, (uintptr_t)sha512, (void**)&stateAddr, sizeof(*sha512),
             WH_DMA_OPER_CLIENT_WRITE_POST, (whDmaFlags){0});
         (void)wh_Client_DmaProcessClientAddress(
-            ctx, (uintptr_t)in, (void**)&inAddr, req->input.sz,
+            ctx, (uintptr_t)in, (void**)&inAddr, inLen,
             WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
         (void)wh_Client_DmaProcessClientAddress(
-            ctx, (uintptr_t)out, (void**)&outAddr, req->output.sz,
+            ctx, (uintptr_t)out, (void**)&outAddr, WC_SHA512_DIGEST_SIZE,
             WH_DMA_OPER_CLIENT_WRITE_POST, (whDmaFlags){0});
     }
     return ret;
@@ -5776,10 +5777,10 @@ int wh_Client_MlDsaSignDma(whClientContext* ctx, const byte* in, word32 in_len,
             }
 
             (void)wh_Client_DmaProcessClientAddress(
-                ctx, (uintptr_t)out, (void**)&outAddr, req->sig.sz,
+                ctx, (uintptr_t)out, (void**)&outAddr, *out_len,
                 WH_DMA_OPER_CLIENT_WRITE_POST, (whDmaFlags){0});
             (void)wh_Client_DmaProcessClientAddress(
-                ctx, (uintptr_t)in, (void**)&inAddr, req->msg.sz,
+                ctx, (uintptr_t)in, (void**)&inAddr, in_len,
                 WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
         }
         else {
