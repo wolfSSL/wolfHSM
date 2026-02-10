@@ -305,7 +305,7 @@ static int _HandleRsaKeyGen(whServerContext* ctx, uint16_t magic,
     uint16_t der_size = 0;
 
     /* init the rsa key */
-    ret = wc_InitRsaKey_ex(rsa, NULL, ctx->crypto->devId);
+    ret = wc_InitRsaKey_ex(rsa, NULL, ctx->devId);
     if (ret == 0) {
         /* make the rsa key with the given params */
         ret = wc_MakeRsaKey(rsa, key_size, e, ctx->crypto->rng);
@@ -457,7 +457,7 @@ static int _HandleRsaFunction( whServerContext* ctx, uint16_t magic,
     }
 
     /* init rsa key */
-    ret = wc_InitRsaKey_ex(rsa, NULL, ctx->crypto->devId);
+    ret = wc_InitRsaKey_ex(rsa, NULL, ctx->devId);
     /* load the key from the keystore */
     if (ret == 0) {
         ret = wh_Server_CacheExportRsaKey(ctx, key_id, rsa);
@@ -517,7 +517,7 @@ static int _HandleRsaGetSize(whServerContext* ctx, uint16_t magic,
     int      evict = !!(options & WH_MESSAGE_CRYPTO_RSA_GET_SIZE_OPTIONS_EVICT);
 
     /* init rsa key */
-    ret = wc_InitRsaKey_ex(rsa, NULL, ctx->crypto->devId);
+    ret = wc_InitRsaKey_ex(rsa, NULL, ctx->devId);
     /* load the key from the keystore */
     if (ret == 0) {
         ret = wh_Server_CacheExportRsaKey(ctx, key_id, rsa);
@@ -838,7 +838,7 @@ static int _HandleEccKeyGen(whServerContext* ctx, uint16_t magic,
     uint16_t res_size = 0;
 
     /* init ecc key */
-    ret = wc_ecc_init_ex(key, NULL, ctx->crypto->devId);
+    ret = wc_ecc_init_ex(key, NULL, ctx->devId);
     if (ret == 0) {
         /* generate the key */
         ret = wc_ecc_make_key_ex(ctx->crypto->rng, key_size, key, curve_id);
@@ -943,9 +943,9 @@ static int _HandleEccSharedSecret(whServerContext* ctx, uint16_t magic,
     word32 res_len = 0;
 
     /* init ecc keys */
-    ret = wc_ecc_init_ex(pub_key, NULL, ctx->crypto->devId);
+    ret = wc_ecc_init_ex(pub_key, NULL, ctx->devId);
     if (ret == 0) {
-        ret = wc_ecc_init_ex(prv_key, NULL, ctx->crypto->devId);
+        ret = wc_ecc_init_ex(prv_key, NULL, ctx->devId);
         if (ret == 0) {
             /* set rng */
             ret = wc_ecc_set_rng(prv_key, ctx->crypto->rng);
@@ -1040,7 +1040,7 @@ static int _HandleEccSign(whServerContext* ctx, uint16_t magic,
     word32 res_len = max_len;
 
     /* init private key */
-    ret = wc_ecc_init_ex(key, NULL, ctx->crypto->devId);
+    ret = wc_ecc_init_ex(key, NULL, ctx->devId);
     if (ret == 0) {
         /* load the private key */
         ret = wh_Server_EccKeyCacheExport(ctx, key_id, key);
@@ -1136,7 +1136,7 @@ static int _HandleEccVerify(whServerContext* ctx, uint16_t magic,
     int      result   = 0;
 
     /* init public key */
-    ret = wc_ecc_init_ex(key, NULL, ctx->crypto->devId);
+    ret = wc_ecc_init_ex(key, NULL, ctx->devId);
     if (ret == 0) {
         /* load the public key */
         ret = wh_Server_EccKeyCacheExport(ctx, key_id, key);
@@ -1203,7 +1203,7 @@ static int _HandleEccCheckPrivKey(whServerContext* server, whPacket* packet,
     /* Response packet */
     wh_Packet_pk_ecc_check_res* res = &packet->pkEccCheckRes;
 
-    ret = wc_ecc_init_ex(key, NULL, server->crypto->devId);
+    ret = wc_ecc_init_ex(key, NULL, server->devId);
     if (ret == 0) {
         /* load the private key */
         ret = wh_Server_EccKeyCacheExport(server, key, key_id);
@@ -1604,7 +1604,7 @@ static int _HandleCmacKdf(whServerContext* ctx, uint16_t magic,
 
     ret = wc_KDA_KDF_twostep_cmac(
         salt, saltSz, z, zSz, (fixedInfoSz > 0) ? fixedInfo : NULL, fixedInfoSz,
-        out, outSz, NULL, ctx->crypto->devId);
+        out, outSz, NULL, ctx->devId);
     if (ret == 0) {
         if (flags & WH_NVM_FLAGS_EPHEMERAL) {
             keyIdOut     = WH_KEYID_ERASED;
@@ -1677,7 +1677,7 @@ static int _HandleCurve25519KeyGen(whServerContext* ctx, uint16_t magic,
         (word32)(WOLFHSM_CFG_COMM_DATA_LEN - (out - (uint8_t*)cryptoDataOut));
 
     /* init key */
-    ret = wc_curve25519_init_ex(key, NULL, ctx->crypto->devId);
+    ret = wc_curve25519_init_ex(key, NULL, ctx->devId);
     if (ret == 0) {
         /* make the key */
         ret = wc_curve25519_make_key(ctx->crypto->rng, key_size, key);
@@ -1776,10 +1776,10 @@ static int _HandleCurve25519SharedSecret(whServerContext* ctx, uint16_t magic,
     word32 res_len      = max_len;
 
     /* init private key */
-    ret = wc_curve25519_init_ex(priv, NULL, ctx->crypto->devId);
+    ret = wc_curve25519_init_ex(priv, NULL, ctx->devId);
     if (ret == 0) {
         /* init public key */
-        ret = wc_curve25519_init_ex(pub, NULL, ctx->crypto->devId);
+        ret = wc_curve25519_init_ex(pub, NULL, ctx->devId);
         if (ret == 0) {
 #ifdef WOLFSSL_CURVE25519_BLINDING
             ret = wc_curve25519_set_rng(priv, ctx->crypto->rng);
@@ -1853,7 +1853,7 @@ static int _HandleEd25519KeyGen(whServerContext* ctx, uint16_t magic,
                                    (res_out - (uint8_t*)cryptoDataOut));
     uint16_t ser_size = 0;
 
-    ret = wc_ed25519_init_ex(key, NULL, ctx->crypto->devId);
+    ret = wc_ed25519_init_ex(key, NULL, ctx->devId);
     if (ret == 0) {
         ret = wc_ed25519_make_key(ctx->crypto->rng, ED25519_KEY_SIZE, key);
         if (ret == 0) {
@@ -1957,7 +1957,7 @@ static int _HandleEd25519Sign(whServerContext* ctx, uint16_t magic,
         (uint8_t*)cryptoDataOut + sizeof(whMessageCrypto_Ed25519SignResponse);
     word32 sig_len = sizeof(sig);
 
-    ret = wc_ed25519_init_ex(key, NULL, ctx->crypto->devId);
+    ret = wc_ed25519_init_ex(key, NULL, ctx->devId);
     if (ret == 0) {
         ret = wh_Server_CacheExportEd25519Key(ctx, key_id, key);
         if (ret == WH_ERROR_OK) {
@@ -2056,7 +2056,7 @@ static int _HandleEd25519Verify(whServerContext* ctx, uint16_t magic,
 
     int result = 0;
 
-    ret = wc_ed25519_init_ex(key, NULL, ctx->crypto->devId);
+    ret = wc_ed25519_init_ex(key, NULL, ctx->devId);
     if (ret == 0) {
         ret = wh_Server_CacheExportEd25519Key(ctx, key_id, key);
         if (ret == WH_ERROR_OK) {
@@ -2151,7 +2151,7 @@ static int _HandleEd25519SignDma(whServerContext* ctx, uint16_t magic,
         }
     }
     if (ret == WH_ERROR_OK) {
-        ret = wc_ed25519_init_ex(key, NULL, ctx->crypto->devId);
+        ret = wc_ed25519_init_ex(key, NULL, ctx->devId);
         if (ret == 0) {
             ret = wh_Server_CacheExportEd25519Key(ctx, key_id, key);
             if (ret == WH_ERROR_OK) {
@@ -2258,7 +2258,7 @@ static int _HandleEd25519VerifyDma(whServerContext* ctx, uint16_t magic,
     }
 
     if (ret == WH_ERROR_OK) {
-        ret = wc_ed25519_init_ex(key, NULL, ctx->crypto->devId);
+        ret = wc_ed25519_init_ex(key, NULL, ctx->devId);
         if (ret == 0) {
             ret = wh_Server_CacheExportEd25519Key(ctx, key_id, key);
             if (ret == WH_ERROR_OK) {
@@ -2375,7 +2375,7 @@ static int _HandleAesCtr(whServerContext* ctx, uint16_t magic,
     }
     if (ret == WH_ERROR_OK) {
         /* init key with possible hardware */
-        ret = wc_AesInit(aes, NULL, ctx->crypto->devId);
+        ret = wc_AesInit(aes, NULL, ctx->devId);
     }
     if (ret == WH_ERROR_OK) {
         /* load the key */
@@ -2682,7 +2682,7 @@ static int _HandleAesEcb(whServerContext* ctx, uint16_t magic,
     }
     if (ret == WH_ERROR_OK) {
         /* init key with possible hardware */
-        ret = wc_AesInit(aes, NULL, ctx->crypto->devId);
+        ret = wc_AesInit(aes, NULL, ctx->devId);
     }
     if (ret == WH_ERROR_OK) {
         /* load the key. AES-ECB does not use IV */
@@ -2965,7 +2965,7 @@ static int _HandleAesCbc(whServerContext* ctx, uint16_t magic, const void* crypt
     }
     if (ret == WH_ERROR_OK) {
         /* init key with possible hardware */
-        ret = wc_AesInit(aes, NULL, ctx->crypto->devId);
+        ret = wc_AesInit(aes, NULL, ctx->devId);
     }
     if (ret == WH_ERROR_OK) {
         /* load the key */
@@ -3270,7 +3270,7 @@ static int _HandleAesGcm(whServerContext* ctx, uint16_t magic,
     }
     if (ret == WH_ERROR_OK) {
         /* init key with possible hardware */
-        ret = wc_AesInit(aes, NULL, ctx->crypto->devId);
+        ret = wc_AesInit(aes, NULL, ctx->devId);
     }
     if (ret == WH_ERROR_OK) {
         /* load the key */
@@ -3633,7 +3633,7 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
 
         ret =
             wc_AesCmacGenerate_ex(cmac, out, &len, in, req.inSz, tmpKey,
-                                  (word32)tmpKeyLen, NULL, ctx->crypto->devId);
+                                  (word32)tmpKeyLen, NULL, ctx->devId);
 
         if (ret == 0) {
             res.outSz = len;
@@ -3648,7 +3648,7 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
 
         /* Initialize CMAC context with key (re-derives k1/k2 subkeys) */
         ret = wc_InitCmac_ex(cmac, tmpKey, tmpKeyLen, WC_CMAC_AES, NULL, NULL,
-                             ctx->crypto->devId);
+                             ctx->devId);
         WH_DEBUG_SERVER_VERBOSE("cmac init with keylen:%d ret:%d\n", tmpKeyLen,
                                 ret);
 
@@ -3716,7 +3716,7 @@ static int _HandleSha256(whServerContext* ctx, uint16_t magic,
         return ret;
     }
     /* always init sha2 struct with the devid */
-    ret = wc_InitSha256_ex(sha256, NULL, ctx->crypto->devId);
+    ret = wc_InitSha256_ex(sha256, NULL, ctx->devId);
     if (ret != 0) {
         return ret;
     }
@@ -3789,7 +3789,7 @@ static int _HandleSha224(whServerContext* ctx, uint16_t magic,
     if (req.isLastBlock && req.lastBlockLen > WC_SHA224_BLOCK_SIZE) {
         return WH_ERROR_BADARGS;
     }
-    ret = wc_InitSha224_ex(sha224, NULL, ctx->crypto->devId);
+    ret = wc_InitSha224_ex(sha224, NULL, ctx->devId);
     if (ret != 0) {
         return ret;
     }
@@ -3865,7 +3865,7 @@ static int _HandleSha384(whServerContext* ctx, uint16_t magic,
     }
 
     /* init sha2 struct with the devid */
-    ret = wc_InitSha384_ex(sha384, NULL, ctx->crypto->devId);
+    ret = wc_InitSha384_ex(sha384, NULL, ctx->devId);
     if (ret != 0) {
         return ret;
     }
@@ -3946,16 +3946,16 @@ static int _HandleSha512(whServerContext* ctx, uint16_t magic,
     switch (hashType) {
 #ifndef WOLFSSL_NOSHA512_224
         case WC_HASH_TYPE_SHA512_224:
-            ret = wc_InitSha512_224_ex(sha512, NULL, ctx->crypto->devId);
+            ret = wc_InitSha512_224_ex(sha512, NULL, ctx->devId);
             break;
 #endif
 #ifndef WOLFSSL_NOSHA512_256
         case WC_HASH_TYPE_SHA512_256:
-            ret = wc_InitSha512_256_ex(sha512, NULL, ctx->crypto->devId);
+            ret = wc_InitSha512_256_ex(sha512, NULL, ctx->devId);
             break;
 #endif
         default:
-            ret = wc_InitSha512_ex(sha512, NULL, ctx->crypto->devId);
+            ret = wc_InitSha512_ex(sha512, NULL, ctx->devId);
             break;
     }
     if (ret != 0) {
@@ -4101,7 +4101,7 @@ static int _HandleMlDsaKeyGen(whServerContext* ctx, uint16_t magic,
     }
     else {
         /* init mldsa key */
-        ret = wc_MlDsaKey_Init(key, NULL, ctx->crypto->devId);
+        ret = wc_MlDsaKey_Init(key, NULL, ctx->devId);
         if (ret == 0) {
             /* Set the ML-DSA security level */
             ret = wc_MlDsaKey_SetParams(key, level);
@@ -4220,7 +4220,7 @@ static int _HandleMlDsaSign(whServerContext* ctx, uint16_t magic,
     word32       res_len = max_len;
 
     /* init private key */
-    ret = wc_MlDsaKey_Init(key, NULL, ctx->crypto->devId);
+    ret = wc_MlDsaKey_Init(key, NULL, ctx->devId);
     if (ret == 0) {
         /* load the private key */
         ret = wh_Server_MlDsaKeyCacheExport(ctx, key_id, key);
@@ -4310,7 +4310,7 @@ static int _HandleMlDsaVerify(whServerContext* ctx, uint16_t magic,
     int result = 0;
 
     /* init public key */
-    ret = wc_MlDsaKey_Init(key, NULL, ctx->crypto->devId);
+    ret = wc_MlDsaKey_Init(key, NULL, ctx->devId);
     if (ret == 0) {
         /* load the public key */
         ret = wh_Server_MlDsaKeyCacheExport(ctx, key_id, key);
@@ -4759,7 +4759,7 @@ static int _HandleSha256Dma(whServerContext* ctx, uint16_t magic, uint16_t seq,
              * copied back into client memory. */
             clientDevId = sha256->devId;
             /* overwrite the devId to that of the server for local crypto */
-            sha256->devId = ctx->crypto->devId;
+            sha256->devId = ctx->devId;
         }
     }
 
@@ -4880,7 +4880,7 @@ static int _HandleSha224Dma(whServerContext* ctx, uint16_t magic, uint16_t seq,
              * copied back into client memory. */
             clientDevId = sha224->devId;
             /* overwrite the devId to that of the server for local crypto */
-            sha224->devId = ctx->crypto->devId;
+            sha224->devId = ctx->devId;
         }
     }
 
@@ -5001,7 +5001,7 @@ static int _HandleSha384Dma(whServerContext* ctx, uint16_t magic, uint16_t seq,
              * copied back into client memory. */
             clientDevId = sha384->devId;
             /* overwrite the devId to that of the server for local crypto */
-            sha384->devId = ctx->crypto->devId;
+            sha384->devId = ctx->devId;
         }
     }
 
@@ -5122,7 +5122,7 @@ static int _HandleSha512Dma(whServerContext* ctx, uint16_t magic, uint16_t seq,
              * copied back into client memory. */
             clientDevId = sha512->devId;
             /* overwrite the devId to that of the server for local crypto */
-            sha512->devId = ctx->crypto->devId;
+            sha512->devId = ctx->devId;
             /* retrieve hash Type to handle 512, 512-224, or 512-256 */
             hashType = sha512->hashType;
         }
@@ -5255,7 +5255,7 @@ static int _HandleMlDsaKeyGenDma(whServerContext* ctx, uint16_t magic,
     }
     else {
         /* init mldsa key */
-        ret = wc_MlDsaKey_Init(key, NULL, ctx->crypto->devId);
+        ret = wc_MlDsaKey_Init(key, NULL, ctx->devId);
         if (ret == 0) {
             /* Set the ML-DSA security level */
             ret = wc_MlDsaKey_SetParams(key, req.level);
@@ -5381,7 +5381,7 @@ static int _HandleMlDsaSignDma(whServerContext* ctx, uint16_t magic,
     evict  = !!(req.options & WH_MESSAGE_CRYPTO_MLDSA_SIGN_OPTIONS_EVICT);
 
     /* Initialize key */
-    ret = wc_MlDsaKey_Init(key, NULL, ctx->crypto->devId);
+    ret = wc_MlDsaKey_Init(key, NULL, ctx->devId);
     if (ret == 0) {
         /* Export key from cache */
         /* TODO: sanity check security level against key pulled from cache? */
@@ -5492,7 +5492,7 @@ static int _HandleMlDsaVerifyDma(whServerContext* ctx, uint16_t magic,
     evict  = !!(req.options & WH_MESSAGE_CRYPTO_MLDSA_VERIFY_OPTIONS_EVICT);
 
     /* Initialize key */
-    ret = wc_MlDsaKey_Init(key, NULL, ctx->crypto->devId);
+    ret = wc_MlDsaKey_Init(key, NULL, ctx->devId);
     if (ret != 0) {
         return ret;
     }
@@ -5696,7 +5696,7 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
 
             ret = wc_AesCmacGenerate_ex(cmac, out, &len, inAddr, req.input.sz,
                                         tmpKey, (word32)tmpKeyLen, NULL,
-                                        ctx->crypto->devId);
+                                        ctx->devId);
         }
         else if (ret == WH_ERROR_OK) {
             /* HSM-local key via keyId - init then generate */
@@ -5704,12 +5704,12 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
                                     req.keyId);
 
             ret = wc_InitCmac_ex(cmac, tmpKey, (word32)tmpKeyLen, WC_CMAC_AES,
-                                 NULL, NULL, ctx->crypto->devId);
+                                 NULL, NULL, ctx->devId);
 
             if (ret == WH_ERROR_OK) {
                 ret =
                     wc_AesCmacGenerate_ex(cmac, out, &len, inAddr, req.input.sz,
-                                          NULL, 0, NULL, ctx->crypto->devId);
+                                          NULL, 0, NULL, ctx->devId);
             }
         }
 
@@ -5730,7 +5730,7 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
         /* Initialize CMAC context with key (re-derives k1/k2 subkeys) */
         if (ret == 0) {
             ret = wc_InitCmac_ex(cmac, tmpKey, (word32)tmpKeyLen, WC_CMAC_AES,
-                                 NULL, NULL, ctx->crypto->devId);
+                                 NULL, NULL, ctx->devId);
             WH_DEBUG_SERVER_VERBOSE("dma cmac init with keylen:%d ret:%d\n",
                                     tmpKeyLen, ret);
         }

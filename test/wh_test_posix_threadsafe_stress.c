@@ -641,11 +641,8 @@ static int initClientServerPair(StressTestContext* ctx, int pairIndex)
     pair->serverCommConfig.transport_config  = &pair->tmConfig;
     pair->serverCommConfig.server_id         = (uint16_t)(200 + pairIndex);
 
-    /* Configure crypto context */
-    pair->cryptoCtx.devId = INVALID_DEVID;
-
     /* Initialize RNG for this server */
-    rc = wc_InitRng_ex(pair->cryptoCtx.rng, NULL, pair->cryptoCtx.devId);
+    rc = wc_InitRng_ex(pair->cryptoCtx.rng, NULL, INVALID_DEVID);
     if (rc != 0) {
         WH_ERROR_PRINT("Failed to init RNG for pair %d: %d\n", pairIndex, rc);
         return rc;

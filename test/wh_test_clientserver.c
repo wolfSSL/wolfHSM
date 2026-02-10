@@ -623,9 +623,7 @@ int whTest_ClientServerSequential(whTestNvmBackendType nvmType)
         whTest_NvmCfgBackend(nvmType, &nvm_setup, n_conf, fc_conf, fc, fcb));
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
-    whServerCryptoContext crypto[1] = {{
-        .devId = INVALID_DEVID,
-    }};
+    whServerCryptoContext crypto[1] = {0};
 #endif
 
     whServerConfig s_conf[1] = {{
@@ -644,7 +642,7 @@ int whTest_ClientServerSequential(whTestNvmBackendType nvmType)
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     WH_TEST_RETURN_ON_FAIL(wolfCrypt_Init());
-    WH_TEST_RETURN_ON_FAIL(wc_InitRng_ex(crypto->rng, NULL, crypto->devId));
+    WH_TEST_RETURN_ON_FAIL(wc_InitRng_ex(crypto->rng, NULL, INVALID_DEVID));
 #endif
     WH_TEST_RETURN_ON_FAIL(wh_Nvm_Init(nvm, n_conf));
 
@@ -1613,9 +1611,7 @@ static int wh_ClientServer_MemThreadTest(whTestNvmBackendType nvmType)
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     /* Crypto context */
-    whServerCryptoContext crypto[1] = {{
-            .devId = INVALID_DEVID,
-    }};
+    whServerCryptoContext crypto[1] = {0};
 #endif
 
 
@@ -1632,7 +1628,7 @@ static int wh_ClientServer_MemThreadTest(whTestNvmBackendType nvmType)
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     WH_TEST_RETURN_ON_FAIL(wolfCrypt_Init());
-    WH_TEST_RETURN_ON_FAIL(wc_InitRng_ex(crypto->rng, NULL, crypto->devId));
+    WH_TEST_RETURN_ON_FAIL(wc_InitRng_ex(crypto->rng, NULL, INVALID_DEVID));
 #endif
     _whClientServerThreadTest(c_conf, s_conf);
 
@@ -1698,9 +1694,7 @@ static int wh_ClientServer_PosixMemMapThreadTest(whTestNvmBackendType nvmType)
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     /* Crypto context */
-    whServerCryptoContext crypto[1] = {{
-            .devId = INVALID_DEVID,
-    }};
+    whServerCryptoContext crypto[1] = {0};
 #endif
 
     whServerConfig s_conf[1] = {{
@@ -1715,7 +1709,7 @@ static int wh_ClientServer_PosixMemMapThreadTest(whTestNvmBackendType nvmType)
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     WH_TEST_RETURN_ON_FAIL(wolfCrypt_Init());
-    WH_TEST_RETURN_ON_FAIL(wc_InitRng_ex(crypto->rng, NULL, crypto->devId));
+    WH_TEST_RETURN_ON_FAIL(wc_InitRng_ex(crypto->rng, NULL, INVALID_DEVID));
 #endif
     _whClientServerThreadTest(c_conf, s_conf);
 

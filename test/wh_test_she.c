@@ -730,9 +730,7 @@ static int wh_ClientServer_MemThreadTest(whTestSheClientFn clientFn)
     whNvmContext nvm[1] = {{0}};
 
     /* Crypto context */
-    whServerCryptoContext crypto[1] = {{
-            .devId = INVALID_DEVID,
-    }};
+    whServerCryptoContext crypto[1] = {0};
 
     whServerSheContext she[1];
     memset(she, 0, sizeof(she));
@@ -748,7 +746,7 @@ static int wh_ClientServer_MemThreadTest(whTestSheClientFn clientFn)
     WH_TEST_RETURN_ON_FAIL(wh_Nvm_Init(nvm, n_conf));
 
     WH_TEST_RETURN_ON_FAIL(wolfCrypt_Init());
-    WH_TEST_RETURN_ON_FAIL(wc_InitRng_ex(crypto->rng, NULL, crypto->devId));
+    WH_TEST_RETURN_ON_FAIL(wc_InitRng_ex(crypto->rng, NULL, INVALID_DEVID));
 
     _whClientServerThreadTest(c_conf, s_conf, clientFn);
 
