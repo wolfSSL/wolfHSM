@@ -42,6 +42,7 @@
 #include "wh_test_log.h"
 #include "wh_test_lock.h"
 #include "wh_test_posix_threadsafe_stress.h"
+#include "wh_test_timeout.h"
 
 #if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER)
 #include "wh_test_cert.h"
@@ -73,6 +74,9 @@ int whTest_Unit(void)
     /* Component Tests */
     WH_TEST_ASSERT(0 == whTest_Flash_RamSim());
     WH_TEST_ASSERT(0 == whTest_NvmFlash());
+#ifdef WOLFHSM_CFG_ENABLE_TIMEOUT
+    WH_TEST_ASSERT(0 == whTest_Timeout());
+#endif
 #ifdef WOLFHSM_CFG_LOGGING
     WH_TEST_ASSERT(0 == whTest_Log());
 #endif
