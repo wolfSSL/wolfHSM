@@ -2974,7 +2974,7 @@ static int _HandleAesGcmDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
  * outKey must be at least AES_MAX_KEY_SIZE bytes. */
 static int _CmacResolveKey(whServerContext* ctx, const uint8_t* requestKey,
                            uint32_t requestKeySz, whKeyId clientKeyId,
-                           uint8_t* outKey, word32* outKeyLen)
+                           uint8_t* outKey, uint32_t* outKeyLen)
 {
     int ret = WH_ERROR_OK;
 
@@ -3052,7 +3052,6 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
         return WH_ERROR_BADARGS;
     }
 
-    word32 len;
 
     /* Setup fixed size fields */
     uint8_t* in =
@@ -3064,7 +3063,7 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
     memset(&res, 0, sizeof(res));
 
     uint8_t tmpKey[AES_MAX_KEY_SIZE];
-    word32  tmpKeyLen = sizeof(tmpKey);
+    uint32_t tmpKeyLen = sizeof(tmpKey);
     Cmac    cmac[1];
 
     /* Resolve the key to use */
@@ -3072,12 +3071,13 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
 
     /* Oneshot: input and output are both present */
     if (ret == 0 && req.inSz != 0 && req.outSz != 0) {
-        len = req.outSz;
+        word32 len = (word32)req.outSz;
 
         WH_DEBUG_SERVER_VERBOSE("cmac generate oneshot\n");
 
-        ret = wc_AesCmacGenerate_ex(cmac, out, &len, in, req.inSz, tmpKey,
-                                    tmpKeyLen, NULL, ctx->crypto->devId);
+        ret =
+            wc_AesCmacGenerate_ex(cmac, out, &len, in, req.inSz, tmpKey,
+                                  (word32)tmpKeyLen, NULL, ctx->crypto->devId);
 
         if (ret == 0) {
             res.outSz = len;
@@ -3113,10 +3113,10 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
 
         if (ret == 0 && req.outSz != 0) {
             /* Finalize CMAC operation */
-            len = req.outSz;
+            word32 len = (word32)req.outSz;
             WH_DEBUG_SERVER_VERBOSE("cmac final len:%d\n", len);
             ret       = wc_CmacFinal(cmac, out, &len);
-            res.outSz = len;
+            res.outSz = (uint32_t)len;
             res.keyId = WH_KEYID_ERASED;
         }
         else if (ret == 0) {
@@ -5111,7 +5111,7 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
     void* inAddr = NULL;
 
     uint8_t tmpKey[AES_MAX_KEY_SIZE];
-    word32  tmpKeyLen = sizeof(tmpKey);
+    uint32_t tmpKeyLen = sizeof(tmpKey);
     Cmac    cmac[1];
 
     /* Attempt oneshot if input and output are both present */
@@ -5137,7 +5137,7 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
             WH_DEBUG_SERVER_VERBOSE("dma cmac generate oneshot\n");
 
             ret = wc_AesCmacGenerate_ex(cmac, out, &len, inAddr, req.input.sz,
-                                        tmpKey, tmpKeyLen, NULL,
+                                        tmpKey, (word32)tmpKeyLen, NULL,
                                         ctx->crypto->devId);
         }
         else if (ret == WH_ERROR_OK) {
@@ -5145,8 +5145,8 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
             WH_DEBUG_SERVER_VERBOSE("dma cmac generate oneshot with keyId:%x\n",
                                     req.keyId);
 
-            ret = wc_InitCmac_ex(cmac, tmpKey, tmpKeyLen, WC_CMAC_AES, NULL,
-                                 NULL, ctx->crypto->devId);
+            ret = wc_InitCmac_ex(cmac, tmpKey, (word32)tmpKeyLen, WC_CMAC_AES,
+                                 NULL, NULL, ctx->crypto->devId);
 
             if (ret == WH_ERROR_OK) {
                 ret =
@@ -5171,8 +5171,8 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
 
         /* Initialize CMAC context with key (re-derives k1/k2 subkeys) */
         if (ret == 0) {
-            ret = wc_InitCmac_ex(cmac, tmpKey, tmpKeyLen, WC_CMAC_AES, NULL,
-                                 NULL, ctx->crypto->devId);
+            ret = wc_InitCmac_ex(cmac, tmpKey, (word32)tmpKeyLen, WC_CMAC_AES,
+                                 NULL, NULL, ctx->crypto->devId);
             WH_DEBUG_SERVER_VERBOSE("dma cmac init with keylen:%d ret:%d\n",
                                     tmpKeyLen, ret);
         }
