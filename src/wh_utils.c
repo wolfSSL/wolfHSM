@@ -103,6 +103,20 @@ void wh_Utils_ForceZero(void* mem, uint32_t size)
     }
 }
 
+/** Constant time compare of two buffers to mitigate side channel leaks
+ * returns 0 on success where buffer a is equal to buffer b for length bytes */
+int wh_Utils_ConstantCompare(const uint8_t* a, const uint8_t* b, size_t length)
+{
+    size_t i;
+    size_t ret = 0;
+
+    for (i = 0; i < length; i++) {
+        ret |= a[i] ^ b[i];
+    }
+
+    return (int)ret;
+}
+
 /** Cache helper functions */
 const void* wh_Utils_CacheInvalidate(const void* p, size_t n)
 {

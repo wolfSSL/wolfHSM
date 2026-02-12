@@ -133,27 +133,25 @@ int wh_Auth_Login(whAuthContext* context, uint8_t client_id,
     }
 
     rc = WH_AUTH_LOCK(context);
-    if (rc != WH_ERROR_OK) {
-        return rc;
-    }
-
-    /* allowing only one user logged in to an open connection at a time */
-    if (context->user.user_id != WH_USER_ID_INVALID) {
-        *loggedIn = 0;
-        rc        = WH_ERROR_OK; /* login attempt happened but failed */
-    }
-    else {
-        rc = context->cb->Login(context->context, client_id, method, username,
-                                auth_data, auth_data_len, &out_user_id,
-                                &out_permissions, loggedIn);
-        if (rc == WH_ERROR_OK && *loggedIn) {
-            context->user.user_id     = out_user_id;
-            context->user.permissions = out_permissions;
-            context->user.is_active   = true;
+    if (rc == WH_ERROR_OK) {
+        /* allowing only one user logged in to an open connection at a time */
+        if (context->user.user_id != WH_USER_ID_INVALID) {
+            *loggedIn = 0;
+            rc        = WH_ERROR_OK; /* login attempt happened but failed */
         }
-    }
+        else {
+            rc = context->cb->Login(context->context, client_id, method,
+                                    username, auth_data, auth_data_len,
+                                    &out_user_id, &out_permissions, loggedIn);
+            if (rc == WH_ERROR_OK && *loggedIn) {
+                context->user.user_id     = out_user_id;
+                context->user.permissions = out_permissions;
+                context->user.is_active   = true;
+            }
+        }
 
-    (void)WH_AUTH_UNLOCK(context);
+        (void)WH_AUTH_UNLOCK(context);
+    } /* LOCK() */
     return rc;
 }
 
@@ -168,17 +166,16 @@ int wh_Auth_Logout(whAuthContext* context, whUserId user_id)
     }
 
     rc = WH_AUTH_LOCK(context);
-    if (rc != WH_ERROR_OK) {
-        return rc;
-    }
-
-    rc = context->cb->Logout(context->context, context->user.user_id, user_id);
     if (rc == WH_ERROR_OK) {
-        /* Clear the user context */
-        memset(&context->user, 0, sizeof(whAuthUser));
-    }
+        rc = context->cb->Logout(context->context, context->user.user_id,
+            user_id);
+        if (rc == WH_ERROR_OK) {
+            /* Clear the user context */
+            memset(&context->user, 0, sizeof(whAuthUser));
+        }
 
-    (void)WH_AUTH_UNLOCK(context);
+        (void)WH_AUTH_UNLOCK(context);
+    } /* LOCK() */
     return rc;
 }
 
@@ -197,56 +194,54 @@ int wh_Auth_CheckRequestAuthorization(whAuthContext* context, uint16_t group,
     }
 
     rc = WH_AUTH_LOCK(context);
-    if (rc != WH_ERROR_OK) {
-        return rc;
-    }
+    if (rc == WH_ERROR_OK) {
+        user    = &context->user;
+        user_id = user->user_id;
+        /* @TODO add logging call here and with resulting return value  */
 
-    user    = &context->user;
-    user_id = user->user_id;
-    /* @TODO add logging call here and with resulting return value  */
-
-    if (user_id == WH_USER_ID_INVALID) {
-        /* allow user login request attempt and comm */
-        if (group == WH_MESSAGE_GROUP_COMM ||
-            (group == WH_MESSAGE_GROUP_AUTH &&
-             action == WH_MESSAGE_AUTH_ACTION_LOGIN)) {
-            rc = WH_ERROR_OK;
-        }
-        else {
-            rc = WH_ERROR_ACCESS;
-        }
-    }
-    else {
-        int groupIndex = (group >> 8) & 0xFF;
-
-        /* some operations a user logged in should by default have access to;
-         * - logging out
-         * - updating own credentials */
-        if (group == WH_MESSAGE_GROUP_AUTH &&
-            (action == WH_MESSAGE_AUTH_ACTION_LOGOUT ||
-             action == WH_MESSAGE_AUTH_ACTION_USER_SET_CREDENTIALS)) {
-            rc = WH_ERROR_OK;
-        }
-        else {
-            /* Validate groupIndex is within bounds */
-            if (groupIndex >= WH_NUMBER_OF_GROUPS || groupIndex < 0) {
+        if (user_id == WH_USER_ID_INVALID) {
+            /* allow user login request attempt and comm */
+            if (group == WH_MESSAGE_GROUP_COMM ||
+                (group == WH_MESSAGE_GROUP_AUTH &&
+                 action == WH_MESSAGE_AUTH_ACTION_LOGIN)) {
+                rc = WH_ERROR_OK;
+            }
+            else {
                 rc = WH_ERROR_ACCESS;
             }
-            else if (user->permissions.groupPermissions[groupIndex]) {
-                /* Check if action is within supported range */
-                if (action < WH_AUTH_ACTIONS_PER_GROUP) {
-                    /* Get word index and bitmask for this action */
-                    uint32_t wordIndex;
-                    uint32_t bitmask;
+        }
+        else {
+            int groupIndex = (group >> 8) & 0xFF;
 
-                    WH_AUTH_ACTION_TO_WORD_AND_BITMASK(action, wordIndex,
-                                                       bitmask);
+            /* A user logged in should by default have access to logging out */
+            if (group == WH_MESSAGE_GROUP_AUTH &&
+                action == WH_MESSAGE_AUTH_ACTION_LOGOUT) {
+                rc = WH_ERROR_OK;
+            }
+            else {
+                /* Validate groupIndex is within bounds */
+                if (groupIndex >= WH_NUMBER_OF_GROUPS || groupIndex < 0) {
+                    rc = WH_ERROR_ACCESS;
+                }
+                else if (user->permissions.groupPermissions[groupIndex]) {
+                    /* Check if action is within supported range */
+                    if (action < WH_AUTH_ACTIONS_PER_GROUP) {
+                        /* Get word index and bitmask for this action */
+                        uint32_t wordIndex;
+                        uint32_t bitmask;
 
-                    if (wordIndex < WH_AUTH_ACTION_WORDS &&
-                        (user->permissions
-                             .actionPermissions[groupIndex][wordIndex] &
-                         bitmask)) {
-                        rc = WH_ERROR_OK;
+                        WH_AUTH_ACTION_TO_WORD_AND_BITMASK(action, wordIndex,
+                                                           bitmask);
+
+                        if (wordIndex < WH_AUTH_ACTION_WORDS &&
+                            (user->permissions
+                                 .actionPermissions[groupIndex][wordIndex] &
+                             bitmask)) {
+                            rc = WH_ERROR_OK;
+                        }
+                        else {
+                            rc = WH_ERROR_ACCESS;
+                        }
                     }
                     else {
                         rc = WH_ERROR_ACCESS;
@@ -256,19 +251,15 @@ int wh_Auth_CheckRequestAuthorization(whAuthContext* context, uint16_t group,
                     rc = WH_ERROR_ACCESS;
                 }
             }
-            else {
-                rc = WH_ERROR_ACCESS;
-            }
         }
-    }
 
-    (void)WH_AUTH_UNLOCK(context);
-
-    /* allow authorization override if callback is set */
-    if (context->cb->CheckRequestAuthorization != NULL) {
-        rc = context->cb->CheckRequestAuthorization(context->context, rc,
-                                                    user_id, group, action);
-    }
+        /* allow authorization override if callback is set */
+        if (context->cb->CheckRequestAuthorization != NULL) {
+            rc = context->cb->CheckRequestAuthorization(context->context, rc,
+                                                        user_id, group, action);
+        }
+        (void)WH_AUTH_UNLOCK(context);
+    } /* LOCK() */
     return rc;
 }
 
@@ -287,35 +278,32 @@ int wh_Auth_CheckKeyAuthorization(whAuthContext* context, uint32_t key_id,
     }
 
     rc = WH_AUTH_LOCK(context);
-    if (rc != WH_ERROR_OK) {
-        return rc;
-    }
+    if (rc == WH_ERROR_OK) {
+        /* Reset rc to default access denied after successful lock */
+        rc = WH_ERROR_ACCESS;
 
-    /* Reset rc to default access denied after successful lock */
-    rc = WH_ERROR_ACCESS;
-
-    user_id = context->user.user_id;
-    user    = &context->user;
-    if (user->user_id == WH_USER_ID_INVALID) {
-        (void)WH_AUTH_UNLOCK(context);
-        return WH_ERROR_ACCESS;
-    }
-
-    /* Check if the requested key_id is in the user's keyIds array */
-    for (i = 0; i < user->permissions.keyIdCount && i < WH_AUTH_MAX_KEY_IDS;
-         i++) {
-        if (user->permissions.keyIds[i] == key_id) {
-            rc = WH_ERROR_OK;
-            break;
+        user_id = context->user.user_id;
+        user    = &context->user;
+        if (user->user_id == WH_USER_ID_INVALID) {
+            (void)WH_AUTH_UNLOCK(context);
+            return WH_ERROR_ACCESS;
         }
-    }
 
-    (void)WH_AUTH_UNLOCK(context);
+        /* Check if the requested key_id is in the user's keyIds array */
+        for (i = 0; i < user->permissions.keyIdCount && i < WH_AUTH_MAX_KEY_IDS;
+             i++) {
+            if (user->permissions.keyIds[i] == key_id) {
+                rc = WH_ERROR_OK;
+                break;
+            }
+        }
 
-    if (context->cb->CheckKeyAuthorization != NULL) {
-        rc = context->cb->CheckKeyAuthorization(context->context, rc, user_id,
-                                                key_id, action);
-    }
+        if (context->cb->CheckKeyAuthorization != NULL) {
+            rc = context->cb->CheckKeyAuthorization(context->context, rc,
+                user_id, key_id, action);
+        }
+        (void)WH_AUTH_UNLOCK(context);
+    } /* LOCK() */
     return rc;
 }
 
@@ -334,15 +322,19 @@ int wh_Auth_UserAdd(whAuthContext* context, const char* username,
     }
 
     rc = WH_AUTH_LOCK(context);
-    if (rc != WH_ERROR_OK) {
-        return rc;
-    }
-
-    rc =
-        context->cb->UserAdd(context->context, username, out_user_id,
+    if (rc == WH_ERROR_OK) {
+        /* only an admin level user can add another admin level user */
+        if (WH_AUTH_IS_ADMIN(permissions) &&
+            !WH_AUTH_IS_ADMIN(context->user.permissions)) {
+            rc = WH_AUTH_PERMISSION_ERROR;
+        }
+        else {
+            rc =
+                context->cb->UserAdd(context->context, username, out_user_id,
                              permissions, method, credentials, credentials_len);
-
-    (void)WH_AUTH_UNLOCK(context);
+        }
+        (void)WH_AUTH_UNLOCK(context);
+    } /* LOCK() */
     return rc;
 }
 
@@ -357,14 +349,12 @@ int wh_Auth_UserDelete(whAuthContext* context, whUserId user_id)
     }
 
     rc = WH_AUTH_LOCK(context);
-    if (rc != WH_ERROR_OK) {
-        return rc;
-    }
+    if (rc == WH_ERROR_OK) {
+        rc = context->cb->UserDelete(context->context, context->user.user_id,
+                                     user_id);
 
-    rc = context->cb->UserDelete(context->context, context->user.user_id,
-                                 user_id);
-
-    (void)WH_AUTH_UNLOCK(context);
+        (void)WH_AUTH_UNLOCK(context);
+    }  /* LOCK() */
     return rc;
 }
 
@@ -402,14 +392,12 @@ int wh_Auth_UserGet(whAuthContext* context, const char* username,
     }
 
     rc = WH_AUTH_LOCK(context);
-    if (rc != WH_ERROR_OK) {
-        return rc;
-    }
+    if (rc == WH_ERROR_OK) {
+        rc = context->cb->UserGet(context->context, username, out_user_id,
+                                  out_permissions);
 
-    rc = context->cb->UserGet(context->context, username, out_user_id,
-                              out_permissions);
-
-    (void)WH_AUTH_UNLOCK(context);
+        (void)WH_AUTH_UNLOCK(context);
+    }  /* LOCK() */
     return rc;
 }
 
@@ -428,15 +416,13 @@ int wh_Auth_UserSetCredentials(whAuthContext* context, whUserId user_id,
     }
 
     rc = WH_AUTH_LOCK(context);
-    if (rc != WH_ERROR_OK) {
-        return rc;
-    }
+    if (rc == WH_ERROR_OK) {
+        rc = context->cb->UserSetCredentials(
+            context->context, user_id, method, current_credentials,
+            current_credentials_len, new_credentials, new_credentials_len);
 
-    rc = context->cb->UserSetCredentials(
-        context->context, user_id, method, current_credentials,
-        current_credentials_len, new_credentials, new_credentials_len);
-
-    (void)WH_AUTH_UNLOCK(context);
+        (void)WH_AUTH_UNLOCK(context);
+    }  /* LOCK() */
     return rc;
 }
 

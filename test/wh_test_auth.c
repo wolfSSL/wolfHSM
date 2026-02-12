@@ -509,38 +509,36 @@ static int _whTest_Auth_MessageBadArgs(void)
     rc = wh_MessageAuth_TranslateSimpleResponse(0, &simple, NULL);
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
 
-    rc = wh_MessageAuth_TranslateLoginRequest(0, NULL, 0, &login_out, NULL);
+    rc = wh_MessageAuth_TranslateLoginRequest(0, NULL, 0, &login_out);
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
-    rc = wh_MessageAuth_TranslateLoginRequest(0, &login_hdr, 0, &login_out,
-                                              NULL);
+    rc = wh_MessageAuth_TranslateLoginRequest(0, &login_hdr, 0, &login_out);
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
 
     memset(&login_hdr, 0, sizeof(login_hdr));
     login_hdr.auth_data_len =
         (uint16_t)(WH_MESSAGE_AUTH_LOGIN_MAX_AUTH_DATA_LEN + 1);
     rc = wh_MessageAuth_TranslateLoginRequest(0, &login_hdr, sizeof(login_hdr),
-                                              &login_out, NULL);
+                                              &login_out);
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
 
-    rc = wh_MessageAuth_TranslateUserAddRequest(0, NULL, 0, &add_out, NULL);
+    rc = wh_MessageAuth_TranslateUserAddRequest(0, NULL, 0, &add_out);
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
 
     memset(&add_hdr, 0, sizeof(add_hdr));
     add_hdr.credentials_len =
         (uint16_t)(WH_MESSAGE_AUTH_USERADD_MAX_CREDENTIALS_LEN + 1);
     rc = wh_MessageAuth_TranslateUserAddRequest(0, &add_hdr, sizeof(add_hdr),
-                                                &add_out, NULL);
+                                                &add_out);
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BUFFER_SIZE);
 
-    rc = wh_MessageAuth_TranslateUserSetCredentialsRequest(0, NULL, 0, &set_hdr,
-                                                           NULL, NULL);
+    rc = wh_MessageAuth_TranslateUserSetCredentialsRequest(0, NULL, 0, &set_hdr);
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
 
     memset(&set_hdr, 0, sizeof(set_hdr));
     set_hdr.current_credentials_len = 4;
     set_hdr.new_credentials_len     = 4;
     rc = wh_MessageAuth_TranslateUserSetCredentialsRequest(
-        0, &set_hdr, sizeof(set_hdr), &set_hdr, NULL, NULL);
+        0, &set_hdr, sizeof(set_hdr), &set_hdr);
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
 
     return WH_TEST_SUCCESS;
@@ -737,22 +735,75 @@ int whTest_AuthAddUser(whClientContext* client)
     WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
     WH_TEST_ASSERT_RETURN(user_id != WH_USER_ID_INVALID);
 
-    /* Try to add same user again */
+    /* Try to add same user again - should fail duplicate username */
     whUserId user_id2 = WH_USER_ID_INVALID;
     server_rc         = 0;
     _whTest_Auth_UserAddOp(client, "testuser2", perms, WH_AUTH_METHOD_PIN,
                            "test", 4, &server_rc, &user_id2);
-    /* Should fail - user already exists (allow success if backend does not
-     * check) */
-    if (server_rc == WH_ERROR_OK && user_id2 != WH_USER_ID_INVALID) {
-        WH_TEST_PRINT("    Note: duplicate username allowed by backend\n");
-        _whTest_Auth_UserDeleteOp(client, user_id2, &server_rc);
+    WH_TEST_ASSERT_RETURN(server_rc != WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(user_id2 == WH_USER_ID_INVALID);
+
+    /* Test 4: Non-admin cannot add admin user */
+    WH_TEST_PRINT("  Test: Non-admin cannot add admin user\n");
+    {
+        whAuthPermissions nonadmin_add_perms;
+
+        memset(&nonadmin_add_perms, 0, sizeof(nonadmin_add_perms));
+        WH_AUTH_SET_ALLOWED_ACTION(nonadmin_add_perms, WH_MESSAGE_GROUP_AUTH,
+                                  WH_MESSAGE_AUTH_ACTION_USER_ADD);
+        WH_AUTH_SET_IS_ADMIN(nonadmin_add_perms, 0);
+
+        server_rc = 0;
+        user_id   = WH_USER_ID_INVALID;
+        WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserAddOp(client, "addadmin_testuser",
+                                                      nonadmin_add_perms,
+                                                      WH_AUTH_METHOD_PIN,
+                                                      "pass", 4, &server_rc,
+                                                      &user_id));
+        WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+        WH_TEST_ASSERT_RETURN(user_id != WH_USER_ID_INVALID);
+
+        _whTest_Auth_LogoutOp(client, admin_id, &server_rc);
+        WH_TEST_RETURN_ON_FAIL(_whTest_Auth_LoginOp(client, WH_AUTH_METHOD_PIN,
+                                                    "addadmin_testuser", "pass", 4,
+                                                    &server_rc, &user_id));
+        WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+
+        /* Non-admin can add other non-admin users */
+        memset(&perms, 0, sizeof(perms));
+        server_rc = 0;
+        user_id2  = WH_USER_ID_INVALID;
+        WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserAddOp(client, "other_nonadmin",
+                                                      perms, WH_AUTH_METHOD_PIN,
+                                                      "test", 4, &server_rc,
+                                                      &user_id2));
+        WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+        WH_TEST_ASSERT_RETURN(user_id2 != WH_USER_ID_INVALID);
+
+        /* Non-admin cannot add admin user */
+        memset(&perms, 0xFF, sizeof(perms));
+        perms.keyIdCount = 0;
+        server_rc        = 0;
+        user_id2         = WH_USER_ID_INVALID;
+        _whTest_Auth_UserAddOp(client, "wouldbe_admin", perms,
+                               WH_AUTH_METHOD_PIN, "test", 4, &server_rc,
+                               &user_id2);
+        WH_TEST_ASSERT_RETURN(server_rc == WH_AUTH_PERMISSION_ERROR);
+        WH_TEST_ASSERT_RETURN(user_id2 == WH_USER_ID_INVALID);
     }
+
+    _whTest_Auth_LogoutOp(client, user_id, &server_rc);
+    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_LoginOp(client, WH_AUTH_METHOD_PIN,
+                                                TEST_ADMIN_USERNAME,
+                                                TEST_ADMIN_PIN, 4,
+                                                &server_rc, &admin_id));
 
     /* Cleanup */
     server_rc = 0;
     _whTest_Auth_DeleteUserByName(client, "testuser1");
     _whTest_Auth_DeleteUserByName(client, "testuser2");
+    _whTest_Auth_DeleteUserByName(client, "addadmin_testuser");
+    _whTest_Auth_DeleteUserByName(client, "other_nonadmin");
     _whTest_Auth_LogoutOp(client, admin_id, &server_rc);
 
     return WH_TEST_SUCCESS;
@@ -829,12 +880,10 @@ int whTest_AuthDeleteUser(whClientContext* client)
         whUserId          target_id   = WH_USER_ID_INVALID;
         whAuthPermissions nonadmin_perms;
 
-        /* Create a non-admin user (admin flag not set) */
+        /* non-admin user with all auth group actions (includes delete) */
         memset(&nonadmin_perms, 0, sizeof(nonadmin_perms));
-        /* Set some group permissions but NOT the admin flag */
-        nonadmin_perms.groupPermissions[0] = 1;
-        /* Ensure admin flag is NOT set */
-        nonadmin_perms.groupPermissions[WH_NUMBER_OF_GROUPS] = 0;
+        WH_AUTH_SET_ALLOWED_GROUP(nonadmin_perms, WH_MESSAGE_GROUP_AUTH);
+        WH_AUTH_SET_IS_ADMIN(nonadmin_perms, 0);
 
         server_rc = 0;
         WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserAddOp(
@@ -955,17 +1004,8 @@ int whTest_AuthSetPermissions(whClientContext* client)
     /* Test 2b: Set user permissions success path  */
     WH_TEST_PRINT("  Test: Set user permissions success\n");
     memset(&new_perms, 0, sizeof(new_perms));
-    /* Convert action enum value to bitmask: action 0x04 -> word 0, bit 4 ->
-     * 0x10 */
-    {
-        int      groupIndex = (WH_MESSAGE_GROUP_AUTH >> 8) & 0xFF;
-        uint32_t wordIndex;
-        uint32_t bitmask;
-        WH_AUTH_ACTION_TO_WORD_AND_BITMASK(WH_MESSAGE_AUTH_ACTION_USER_ADD,
-                                           wordIndex, bitmask);
-        new_perms.groupPermissions[groupIndex]             = 1;
-        new_perms.actionPermissions[groupIndex][wordIndex] = bitmask;
-    }
+    WH_AUTH_SET_ALLOWED_ACTION(new_perms, WH_MESSAGE_GROUP_AUTH,
+                           WH_MESSAGE_AUTH_ACTION_USER_ADD);
     server_rc = 0;
     WH_TEST_RETURN_ON_FAIL(
         _whTest_Auth_UserSetPermsOp(client, user_id, new_perms, &server_rc));
@@ -1163,8 +1203,11 @@ int whTest_AuthRequestAuthorization(whClientContext* client)
 
     /* Test 3: Operation when logged in and not allowed */
     WH_TEST_PRINT("  Test: Operation when logged in and not allowed\n");
-    /* Create a user with limited permissions */
+    /* Create a user with auth group but not USER_ADD action */
     memset(&perms, 0, sizeof(perms));
+    WH_AUTH_SET_ALLOWED_GROUP(perms, WH_MESSAGE_GROUP_AUTH);
+    WH_AUTH_CLEAR_ALLOWED_ACTION(perms, WH_MESSAGE_GROUP_AUTH,
+                                 WH_MESSAGE_AUTH_ACTION_USER_ADD);
     server_rc                = 0;
     whUserId limited_user_id = WH_USER_ID_INVALID;
     WH_TEST_RETURN_ON_FAIL(
@@ -1188,8 +1231,35 @@ int whTest_AuthRequestAuthorization(whClientContext* client)
     whUserId temp_id2 = WH_USER_ID_INVALID;
     _whTest_Auth_UserAddOp(client, "testuser7", perms, WH_AUTH_METHOD_PIN,
                            "test", 4, &server_rc, &temp_id2);
-    /* Should fail authorization - user doesn't have permissions */
+    /* Should fail authorization - user doesn't have USER_ADD permission */
     WH_TEST_ASSERT_RETURN(server_rc != WH_ERROR_OK);
+
+    /* Test 3b: User with auth group cleared cannot add (WH_AUTH_CLEAR_ALLOWED_GROUP) */
+    WH_TEST_PRINT("  Test: User with no auth group cannot add\n");
+    _whTest_Auth_LogoutOp(client, logged_in_id, &server_rc);
+    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_LoginOp(
+        client, WH_AUTH_METHOD_PIN, "admin", "1234", 4, &server_rc, &admin_id));
+    memset(&perms, 0xFF, sizeof(perms));
+    perms.keyIdCount = 0;
+    WH_AUTH_CLEAR_ALLOWED_GROUP(perms, WH_MESSAGE_GROUP_AUTH);
+    WH_AUTH_SET_IS_ADMIN(perms, 0);
+    server_rc            = 0;
+    whUserId noauth_id   = WH_USER_ID_INVALID;
+    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserAddOp(client, "noauthuser", perms,
+                                                  WH_AUTH_METHOD_PIN, "pass", 4,
+                                                  &server_rc, &noauth_id));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+    _whTest_Auth_LogoutOp(client, admin_id, &server_rc);
+    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_LoginOp(client, WH_AUTH_METHOD_PIN,
+                                                "noauthuser", "pass", 4,
+                                                &server_rc, &logged_in_id));
+    memset(&perms, 0, sizeof(perms));
+    server_rc = 0;
+    temp_id2  = WH_USER_ID_INVALID;
+    _whTest_Auth_UserAddOp(client, "testuser7b", perms, WH_AUTH_METHOD_PIN,
+                           "test", 4, &server_rc, &temp_id2);
+    WH_TEST_ASSERT_RETURN(server_rc != WH_ERROR_OK);
+    _whTest_Auth_LogoutOp(client, logged_in_id, &server_rc);
 
     /* Test 4: Logged in as different user and allowed */
     WH_TEST_PRINT("  Test: Logged in as different user and allowed\n");
@@ -1203,17 +1273,10 @@ int whTest_AuthRequestAuthorization(whClientContext* client)
     WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
 
     memset(&perms, 0, sizeof(perms));
-    /* Convert action enum value to bitmask: action 0x04 -> word 0, bit 4 ->
-     * 0x10 */
-    {
-        int      groupIndex = (WH_MESSAGE_GROUP_AUTH >> 8) & 0xFF;
-        uint32_t wordIndex;
-        uint32_t bitmask;
-        WH_AUTH_ACTION_TO_WORD_AND_BITMASK(WH_MESSAGE_AUTH_ACTION_USER_ADD,
-                                           wordIndex, bitmask);
-        perms.groupPermissions[groupIndex]             = 1;
-        perms.actionPermissions[groupIndex][wordIndex] = bitmask;
-    }
+    WH_AUTH_SET_ALLOWED_ACTION(perms, WH_MESSAGE_GROUP_AUTH,
+                           WH_MESSAGE_AUTH_ACTION_USER_ADD);
+    /* Free slot: noauthuser no longer needed (WH_AUTH_BASE_MAX_USERS=5) */
+    _whTest_Auth_DeleteUserByName(client, "noauthuser");
     WH_TEST_RETURN_ON_FAIL(
         _whTest_Auth_UserAddOp(client, "alloweduser", perms, WH_AUTH_METHOD_PIN,
                                "pass", 4, &server_rc, &allowed_user_id));

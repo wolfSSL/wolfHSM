@@ -66,16 +66,18 @@ typedef struct {
 /**
  * @brief Translate a login request message between different magic numbers.
  *
+ * Translates the fixed-size header only. Auth data follows the header in
+ * src_packet at offset sizeof(whMessageAuth_LoginRequest).
+ *
  * @param[in] magic The magic number for translation.
  * @param[in] src_packet Pointer to the source packet data.
  * @param[in] src_size Size of the source packet.
  * @param[out] dest_header Pointer to the destination login request header.
- * @param[out] dest_auth_data Pointer to the destination buffer for auth data.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_MessageAuth_TranslateLoginRequest(
     uint16_t magic, const void* src_packet, uint16_t src_size,
-    whMessageAuth_LoginRequest* dest_header, uint8_t* dest_auth_data);
+    whMessageAuth_LoginRequest* dest_header);
 
 /** Login Response */
 typedef struct {
@@ -158,17 +160,18 @@ typedef struct {
 /**
  * @brief Translate a user add request message between different magic numbers.
  *
+ * Translates the fixed-size header only. Credentials follow the header in
+ * src_packet at offset sizeof(whMessageAuth_UserAddRequest).
+ *
  * @param[in] magic The magic number for translation.
  * @param[in] src_packet Pointer to the source packet data.
  * @param[in] src_size Size of the source packet.
  * @param[out] dest_header Pointer to the destination user add request header.
- * @param[out] dest_credentials Pointer to the destination buffer for
- * credentials.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_MessageAuth_TranslateUserAddRequest(
     uint16_t magic, const void* src_packet, uint16_t src_size,
-    whMessageAuth_UserAddRequest* dest_header, uint8_t* dest_credentials);
+    whMessageAuth_UserAddRequest* dest_header);
 
 /** User Add Response */
 typedef struct {
@@ -288,21 +291,20 @@ typedef struct {
  * @brief Translate a user set credentials request message between different
  * magic numbers.
  *
+ * Translates the fixed-size header only. Current and new credentials follow
+ * the header in src_packet at offsets sizeof(header) and
+ * sizeof(header) + current_credentials_len.
+ *
  * @param[in] magic The magic number for translation.
  * @param[in] src_packet Pointer to the source packet data.
  * @param[in] src_size Size of the source packet.
  * @param[out] dest_header Pointer to the destination user set credentials
  * request header.
- * @param[out] dest_current_creds Pointer to the destination buffer for current
- * credentials.
- * @param[out] dest_new_creds Pointer to the destination buffer for new
- * credentials.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_MessageAuth_TranslateUserSetCredentialsRequest(
     uint16_t magic, const void* src_packet, uint16_t src_size,
-    whMessageAuth_UserSetCredentialsRequest* dest_header,
-    uint8_t* dest_current_creds, uint8_t* dest_new_creds);
+    whMessageAuth_UserSetCredentialsRequest* dest_header);
 
 /** User Set Credentials Response */
 /* Use SimpleResponse */
