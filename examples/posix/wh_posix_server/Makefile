@@ -59,6 +59,12 @@ endif
 # Set to @ if you want to suppress command echo
 CMD_ECHO ?=
 
+# Add code coverage option
+ifeq ($(COVERAGE),1)
+    CFLAGS += --coverage
+    LDFLAGS += --coverage
+endif
+
 # Check if DEBUG is set to 1 and append debug flags
 ifeq ($(DEBUG),1)
 	DBGFLAGS = -ggdb -g3
@@ -90,6 +96,11 @@ endif
 # Support a TLS-capable build
 ifeq ($(TLS),1)
 CFLAGS += -DWOLFHSM_CFG_TLS
+endif
+
+# Support an authentication-capable build
+ifeq ($(AUTH),1)
+DEF += -DWOLFHSM_CFG_ENABLE_AUTHENTICATION
 endif
 
 ifeq ($(DMA),1)

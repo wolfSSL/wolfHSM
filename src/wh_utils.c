@@ -91,6 +91,32 @@ int wh_Utils_memeqzero(uint8_t* buffer, uint32_t size)
     return 1;
 }
 
+/* Secure zeroization that resists compiler optimization.
+ * Uses volatile to prevent the compiler from optimizing away the writes. */
+void wh_Utils_ForceZero(void* mem, uint32_t size)
+{
+    volatile uint8_t* p = (volatile uint8_t*)mem;
+    while (size > 0) {
+        *p = 0;
+        p++;
+        size--;
+    }
+}
+
+/** Constant time compare of two buffers to mitigate side channel leaks
+ * returns 0 on success where buffer a is equal to buffer b for length bytes */
+int wh_Utils_ConstantCompare(const uint8_t* a, const uint8_t* b, size_t length)
+{
+    size_t i;
+    size_t ret = 0;
+
+    for (i = 0; i < length; i++) {
+        ret |= a[i] ^ b[i];
+    }
+
+    return (int)ret;
+}
+
 /** Cache helper functions */
 const void* wh_Utils_CacheInvalidate(const void* p, size_t n)
 {
