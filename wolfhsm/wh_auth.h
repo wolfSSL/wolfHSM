@@ -70,12 +70,58 @@ typedef enum {
 #define WH_AUTH_IS_ADMIN(permissions) \
     (permissions.groupPermissions[WH_NUMBER_OF_GROUPS])
 
+/* Set the admin permission flag (value: 0 = non-admin, non-zero = admin) */
+#define WH_AUTH_SET_IS_ADMIN(permissions, value) \
+    ((permissions).groupPermissions[WH_NUMBER_OF_GROUPS] = (value) ? 1 : 0)
+
 /* Convert action enum value (0-255) to word index and bitmask.
  * Sets wordIdx to the array index (0-7) and bitMask to the bit position. */
 #define WH_AUTH_ACTION_TO_WORD_AND_BITMASK(action, wordIdx, bitMask) \
     do {                                                             \
         (wordIdx) = ((action) / 32);                                 \
         (bitMask) = (1UL << ((action) % 32));                        \
+    } while (0)
+
+/* Enable a message group in permissions. Allows all actions in the group. */
+#define WH_AUTH_SET_ALLOWED_GROUP(permissions, group)                \
+    do {                                                              \
+        int _g = ((group) >> 8) & 0xFF;                               \
+        int _i;                                                       \
+        (permissions).groupPermissions[_g] = 1;                       \
+        for (_i = 0; _i < (int)WH_AUTH_ACTION_WORDS; _i++) {          \
+            (permissions).actionPermissions[_g][_i] = 0xFFFFFFFFU;    \
+        }                                                             \
+    } while (0)
+
+/* Set permissions to allow a specific action in a group.
+ * Enables the group and only the given action bit. */
+#define WH_AUTH_SET_ALLOWED_ACTION(permissions, group, action)       \
+    do {                                                              \
+        int _g = ((group) >> 8) & 0xFF;                               \
+        uint32_t _w, _b;                                              \
+        WH_AUTH_ACTION_TO_WORD_AND_BITMASK((action), _w, _b);        \
+        (permissions).groupPermissions[_g] = 1;                       \
+        (permissions).actionPermissions[_g][_w] |= (_b);              \
+    } while (0)
+
+/* Set permissions to disallow a group. Clears group and all action bits. */
+#define WH_AUTH_CLEAR_ALLOWED_GROUP(permissions, group)               \
+    do {                                                              \
+        int _g = ((group) >> 8) & 0xFF;                               \
+        int _i;                                                       \
+        (permissions).groupPermissions[_g] = 0;                       \
+        for (_i = 0; _i < (int)WH_AUTH_ACTION_WORDS; _i++) {          \
+            (permissions).actionPermissions[_g][_i] = 0;              \
+        }                                                             \
+    } while (0)
+
+/* Clear permission for a specific action in a group. */
+#define WH_AUTH_CLEAR_ALLOWED_ACTION(permissions, group, action)     \
+    do {                                                              \
+        int _g = ((group) >> 8) & 0xFF;                               \
+        uint32_t _w, _b;                                              \
+        WH_AUTH_ACTION_TO_WORD_AND_BITMASK((action), _w, _b);        \
+        (permissions).actionPermissions[_g][_w] &= ~(_b);             \
     } while (0)
 
 typedef struct {

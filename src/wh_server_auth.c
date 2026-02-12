@@ -65,18 +65,19 @@ int wh_Server_HandleAuthRequest(whServerContext* server, uint16_t magic,
     switch (action) {
 
         case WH_MESSAGE_AUTH_ACTION_LOGIN: {
-            whMessageAuth_LoginRequest  req                            = {0};
-            whMessageAuth_LoginResponse resp                           = {0};
-            int                         loggedIn                       = 0;
-            uint8_t auth_data[WH_MESSAGE_AUTH_LOGIN_MAX_AUTH_DATA_LEN] = {0};
+            whMessageAuth_LoginRequest  req   = {0};
+            whMessageAuth_LoginResponse resp  = {0};
+            int                         loggedIn = 0;
+            uint8_t* auth_data = NULL;
 
             rc = wh_MessageAuth_TranslateLoginRequest(
-                magic, req_packet, req_size, &req, auth_data);
+                magic, req_packet, req_size, &req);
             if (rc != WH_ERROR_OK) {
                 resp.rc = rc;
             }
-
-            if (resp.rc == WH_ERROR_OK) {
+            else {
+                auth_data = (uint8_t*)req_packet +
+                    sizeof(whMessageAuth_LoginRequest);
                 rc      = wh_Auth_Login(server->auth, server->comm->client_id,
                                         req.method, req.username, auth_data,
                                         req.auth_data_len, &loggedIn);
@@ -92,7 +93,9 @@ int wh_Server_HandleAuthRequest(whServerContext* server, uint16_t magic,
                 }
             }
             /* Zeroize sensitive credential data before returning */
-            wh_Utils_ForceZero(auth_data, sizeof(auth_data));
+            if (auth_data != NULL && req.auth_data_len > 0) {
+                wh_Utils_ForceZero(auth_data, req.auth_data_len);
+            }
 
             wh_MessageAuth_TranslateLoginResponse(
                 magic, &resp, (whMessageAuth_LoginResponse*)resp_packet);
@@ -121,14 +124,16 @@ int wh_Server_HandleAuthRequest(whServerContext* server, uint16_t magic,
             whMessageAuth_UserAddRequest  req         = {0};
             whMessageAuth_UserAddResponse resp        = {0};
             whAuthPermissions             permissions = {0};
-            uint8_t credentials[WH_MESSAGE_AUTH_USERADD_MAX_CREDENTIALS_LEN] = {0};
+            uint8_t* credentials = NULL;
 
             rc = wh_MessageAuth_TranslateUserAddRequest(
-                magic, req_packet, req_size, &req, credentials);
+                magic, req_packet, req_size, &req);
             if (rc != WH_ERROR_OK) {
                 resp.rc = rc;
             }
             else {
+                credentials = (uint8_t*)req_packet +
+                    sizeof(whMessageAuth_UserAddRequest);
                 if (wh_MessageAuth_UnflattenPermissions(req.permissions,
                                                         sizeof(req.permissions),
                                                         &permissions) != 0) {
@@ -142,7 +147,9 @@ int wh_Server_HandleAuthRequest(whServerContext* server, uint16_t magic,
                 }
             }
             /* Zeroize sensitive credential data before returning */
-            wh_Utils_ForceZero(credentials, sizeof(credentials));
+            if (credentials != NULL && req.credentials_len > 0) {
+                wh_Utils_ForceZero(credentials, req.credentials_len);
+            }
 
             wh_MessageAuth_TranslateUserAddResponse(
                 magic, &resp, (whMessageAuth_UserAddResponse*)resp_packet);
@@ -224,9 +231,9 @@ int wh_Server_HandleAuthRequest(whServerContext* server, uint16_t magic,
 
         case WH_MESSAGE_AUTH_ACTION_USER_SET_CREDENTIALS: {
             whMessageAuth_UserSetCredentialsRequest req_header = {0};
-            uint8_t current_creds[WH_MESSAGE_AUTH_SETCREDS_MAX_CREDENTIALS_LEN] = {0};
-            uint8_t new_creds[WH_MESSAGE_AUTH_SETCREDS_MAX_CREDENTIALS_LEN]     = {0};
-            whMessageAuth_SimpleResponse resp                                   = {0};
+            uint8_t* current_creds = NULL;
+            uint8_t* new_creds     = NULL;
+            whMessageAuth_SimpleResponse resp                  = {0};
             uint16_t min_size = sizeof(whMessageAuth_UserSetCredentialsRequest);
 
             if (req_size < min_size) {
@@ -234,12 +241,15 @@ int wh_Server_HandleAuthRequest(whServerContext* server, uint16_t magic,
             }
             else {
                 rc = wh_MessageAuth_TranslateUserSetCredentialsRequest(
-                    magic, req_packet, req_size, &req_header, current_creds,
-                    new_creds);
+                    magic, req_packet, req_size, &req_header);
                 if (rc != 0) {
                     resp.rc = rc;
                 }
                 else {
+                    current_creds = (uint8_t*)req_packet +
+                        sizeof(whMessageAuth_UserSetCredentialsRequest);
+                    new_creds = current_creds +
+                        req_header.current_credentials_len;
                     rc = wh_Auth_UserSetCredentials(
                         server->auth, req_header.user_id, req_header.method,
                         (req_header.current_credentials_len > 0) ? current_creds
@@ -251,8 +261,13 @@ int wh_Server_HandleAuthRequest(whServerContext* server, uint16_t magic,
                 }
             }
             /* Zeroize sensitive credential data before returning */
-            wh_Utils_ForceZero(current_creds, sizeof(current_creds));
-            wh_Utils_ForceZero(new_creds, sizeof(new_creds));
+            if (current_creds != NULL && req_header.current_credentials_len > 0) {
+                wh_Utils_ForceZero(current_creds,
+                    req_header.current_credentials_len);
+            }
+            if (new_creds != NULL && req_header.new_credentials_len > 0) {
+                wh_Utils_ForceZero(new_creds, req_header.new_credentials_len);
+            }
 
             wh_MessageAuth_TranslateSimpleResponse(
                 magic, &resp, (whMessageAuth_SimpleResponse*)resp_packet);

@@ -68,6 +68,9 @@ static int wh_DemoClient_AuthPin(whClientContext* clientContext)
     }
 
     memset(&out_permissions, 0, sizeof(whAuthPermissions));
+    /* Allow demo user to change own credentials */
+    WH_AUTH_SET_ALLOWED_ACTION(out_permissions, WH_MESSAGE_GROUP_AUTH,
+                              WH_MESSAGE_AUTH_ACTION_USER_SET_CREDENTIALS);
     rc = wh_Client_AuthUserAdd(clientContext, "demo", out_permissions,
                                WH_AUTH_METHOD_PIN, pin,
                                (uint16_t)(sizeof(pin) - 1), &serverRc, &userId);
@@ -351,19 +354,7 @@ static int wh_DemoClient_AuthUserSetPermissions(whClientContext* clientContext)
 
     /* Enable CRYPTO group and all CRYPTO actions */
     memset(&permissions, 0, sizeof(permissions));
-
-    /* Enable all CRYPTO actions by setting all bits in all words, an example of
-     * a CRYPTO action is WC_ALGO_TYPE_CIPHER or WC_ALGO_TYPE_PK */
-    {
-        int groupIndex = (WH_MESSAGE_GROUP_CRYPTO >> 8) & 0xFF;
-        int wordIndex;
-        /* Enable access to CRYPTO group */
-        permissions.groupPermissions[groupIndex] = 1;
-        /* Set all action bits for CRYPTO group (allows all actions) */
-        for (wordIndex = 0; wordIndex < WH_AUTH_ACTION_WORDS; wordIndex++) {
-            permissions.actionPermissions[groupIndex][wordIndex] = 0xFFFFFFFF;
-        }
-    }
+    WH_AUTH_SET_ALLOWED_GROUP(permissions, WH_MESSAGE_GROUP_CRYPTO);
 
     rc = wh_Client_AuthUserSetPermissions(clientContext, userId, permissions,
                                           &serverRc);

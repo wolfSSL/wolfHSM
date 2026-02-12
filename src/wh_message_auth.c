@@ -48,10 +48,9 @@ int wh_MessageAuth_TranslateSimpleResponse(
 
 int wh_MessageAuth_TranslateLoginRequest(
     uint16_t magic, const void* src_packet, uint16_t src_size,
-    whMessageAuth_LoginRequest* dest_header, uint8_t* dest_auth_data)
+    whMessageAuth_LoginRequest* dest_header)
 {
     const whMessageAuth_LoginRequest* src_header;
-    const uint8_t*                    src_data;
     uint16_t header_size = sizeof(whMessageAuth_LoginRequest);
     uint16_t expected_size;
 
@@ -64,7 +63,6 @@ int wh_MessageAuth_TranslateLoginRequest(
     }
 
     src_header = (const whMessageAuth_LoginRequest*)src_packet;
-    src_data   = (const uint8_t*)src_packet + header_size;
 
     WH_T16(magic, dest_header, src_header, method);
     if (src_header != dest_header) {
@@ -81,9 +79,6 @@ int wh_MessageAuth_TranslateLoginRequest(
         return WH_ERROR_BADARGS;
     }
 
-    if (dest_auth_data != NULL && dest_header->auth_data_len > 0) {
-        memcpy(dest_auth_data, src_data, dest_header->auth_data_len);
-    }
     return 0;
 }
 
@@ -224,10 +219,9 @@ int wh_MessageAuth_UnflattenPermissions(uint8_t* buffer, uint16_t buffer_len,
 
 int wh_MessageAuth_TranslateUserAddRequest(
     uint16_t magic, const void* src_packet, uint16_t src_size,
-    whMessageAuth_UserAddRequest* dest_header, uint8_t* dest_credentials)
+    whMessageAuth_UserAddRequest* dest_header)
 {
     const whMessageAuth_UserAddRequest* src_header;
-    const uint8_t*                      src_data;
     uint16_t header_size = sizeof(whMessageAuth_UserAddRequest);
     uint16_t expected_size;
 
@@ -240,7 +234,6 @@ int wh_MessageAuth_TranslateUserAddRequest(
     }
 
     src_header = (const whMessageAuth_UserAddRequest*)src_packet;
-    src_data   = (const uint8_t*)src_packet + header_size;
 
     if (src_header != dest_header) {
         memcpy(dest_header->username, src_header->username,
@@ -260,9 +253,6 @@ int wh_MessageAuth_TranslateUserAddRequest(
         return WH_ERROR_BUFFER_SIZE;
     }
 
-    if (dest_credentials != NULL && dest_header->credentials_len > 0) {
-        memcpy(dest_credentials, src_data, dest_header->credentials_len);
-    }
     return 0;
 }
 
@@ -338,11 +328,9 @@ int wh_MessageAuth_TranslateUserSetPermissionsRequest(
 
 int wh_MessageAuth_TranslateUserSetCredentialsRequest(
     uint16_t magic, const void* src_packet, uint16_t src_size,
-    whMessageAuth_UserSetCredentialsRequest* dest_header,
-    uint8_t* dest_current_creds, uint8_t* dest_new_creds)
+    whMessageAuth_UserSetCredentialsRequest* dest_header)
 {
     const whMessageAuth_UserSetCredentialsRequest* src_header;
-    const uint8_t*                                 src_data;
     uint16_t header_size = sizeof(whMessageAuth_UserSetCredentialsRequest);
     uint16_t expected_size;
 
@@ -355,7 +343,6 @@ int wh_MessageAuth_TranslateUserSetCredentialsRequest(
     }
 
     src_header = (const whMessageAuth_UserSetCredentialsRequest*)src_packet;
-    src_data   = (const uint8_t*)src_packet + header_size;
 
     /* Translate header fields */
     WH_T16(magic, dest_header, src_header, user_id);
@@ -363,30 +350,20 @@ int wh_MessageAuth_TranslateUserSetCredentialsRequest(
     WH_T16(magic, dest_header, src_header, current_credentials_len);
     WH_T16(magic, dest_header, src_header, new_credentials_len);
 
-    if (src_header->current_credentials_len >
+    if (dest_header->current_credentials_len >
         WH_MESSAGE_AUTH_SETCREDS_MAX_CREDENTIALS_LEN) {
         return WH_ERROR_BUFFER_SIZE;
     }
-    if (src_header->new_credentials_len >
+    if (dest_header->new_credentials_len >
         WH_MESSAGE_AUTH_SETCREDS_MAX_CREDENTIALS_LEN) {
         return WH_ERROR_BUFFER_SIZE;
     }
 
     /* Validate lengths */
-    expected_size = header_size + src_header->current_credentials_len +
-                    src_header->new_credentials_len;
+    expected_size = header_size + dest_header->current_credentials_len +
+                    dest_header->new_credentials_len;
     if (src_size < expected_size) {
         return WH_ERROR_BADARGS;
-    }
-
-    /* Copy variable-length credential data */
-    if (dest_current_creds != NULL && src_header->current_credentials_len > 0) {
-        memcpy(dest_current_creds, src_data,
-               src_header->current_credentials_len);
-    }
-    if (dest_new_creds != NULL && src_header->new_credentials_len > 0) {
-        memcpy(dest_new_creds, src_data + src_header->current_credentials_len,
-               src_header->new_credentials_len);
     }
 
     return 0;

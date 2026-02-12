@@ -88,3 +88,7 @@ jobs:
     # Build and test with AUTH=1 and THREADSAFE
     - name: Build and test with AUTH THREADSAFE ASAN
       run: cd test && make clean && make -j AUTH=1 THREADSAFE=1 ASAN=1 WOLFSSL_DIR=../wolfssl && make run
+
+    # Build and test with AUTH=1 and NOCRYPTO=1 (auth on, crypto off)
+    - name: Build and test with AUTH NOCRYPTO
+      run: cd test && make clean && make -j AUTH=1 NOCRYPTO=1 WOLFSSL_DIR=../wolfssl && make run

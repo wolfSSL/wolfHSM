@@ -130,7 +130,8 @@ static whAuthBase_User* wh_Auth_BaseCheckPin(const char* username,
     found_user = wh_Auth_BaseFindUser(username);
     if (found_user != NULL && found_user->method == WH_AUTH_METHOD_PIN &&
         found_user->credentials_len == authCheck_len &&
-        memcmp(found_user->credentials, authCheck, authCheck_len) == 0) {
+        wh_Utils_ConstantCompare(found_user->credentials, authCheck,
+        authCheck_len) == 0) {
         return found_user;
     }
     return NULL;
@@ -141,25 +142,22 @@ static int wh_Auth_BaseVerifyCertificate(whAuthBase_User* found_user,
                                          const uint8_t*   certificate,
                                          uint16_t         certificate_len)
 {
-    int                   rc = WH_ERROR_OK;
-    int                   err;
+    int                   rc = WH_ERROR_ABORTED;
     WOLFSSL_CERT_MANAGER* cm = NULL;
     cm                       = wolfSSL_CertManagerNew();
-    if (cm == NULL) {
-        return WH_ERROR_ABORTED;
+    if (cm != NULL) {
+        if (wolfSSL_CertManagerLoadCABuffer(cm, found_user->credentials,
+                                            found_user->credentials_len,
+                                            WOLFSSL_FILETYPE_ASN1) ==
+                                            WOLFSSL_SUCCESS) {
+            if (wolfSSL_CertManagerVerifyBuffer(cm, certificate,
+                    certificate_len, WOLFSSL_FILETYPE_ASN1) ==
+                    WOLFSSL_SUCCESS) {
+                rc = WH_ERROR_OK;
+            }
+        }
+        wolfSSL_CertManagerFree(cm);
     }
-    err = wolfSSL_CertManagerLoadCABuffer(cm, found_user->credentials,
-                                          found_user->credentials_len,
-                                          WOLFSSL_FILETYPE_ASN1);
-    if (err != WOLFSSL_SUCCESS) {
-        rc = WH_ERROR_ABORTED;
-    }
-    err = wolfSSL_CertManagerVerifyBuffer(cm, certificate, certificate_len,
-                                          WOLFSSL_FILETYPE_ASN1);
-    if (err != WOLFSSL_SUCCESS) {
-        rc = WH_ERROR_ABORTED;
-    }
-    wolfSSL_CertManagerFree(cm);
     return rc;
 }
 
@@ -280,6 +278,11 @@ int wh_Auth_BaseUserAdd(void* context, const char* username,
         if (users[i].user.user_id == WH_USER_ID_INVALID) {
             break;
         }
+
+        /* do not allow duplicate users with same name */
+        if (strcmp(users[i].user.username, username) == 0) {
+            return WH_ERROR_BADARGS;
+        }
     }
 
     if (i >= WH_AUTH_BASE_MAX_USERS) {
@@ -384,6 +387,11 @@ int wh_Auth_BaseUserSetPermissions(void* context, uint16_t current_user_id,
         return WH_ERROR_NOTFOUND;
     }
 
+    if (current_user_id == WH_USER_ID_INVALID ||
+            current_user_id > WH_AUTH_BASE_MAX_USERS) {
+        return WH_ERROR_NOTFOUND;
+    }
+
     /* Only allow an admin user to change permissions */
     if (!WH_AUTH_IS_ADMIN(users[current_user_id - 1].user.permissions)) {
         return WH_ERROR_ACCESS;
@@ -466,19 +474,20 @@ int wh_Auth_BaseUserSetCredentials(void* context, uint16_t user_id,
 #ifndef WOLFHSM_CFG_NO_CRYPTO
             /* For PIN, hash the provided credentials before comparing */
             unsigned char hash[WC_SHA256_DIGEST_SIZE];
-            int           rc = wh_Auth_BaseHashPin(current_credentials,
-                                                   current_credentials_len, hash);
+            rc = wh_Auth_BaseHashPin(current_credentials,
+                                    current_credentials_len, hash);
             if (rc != WH_ERROR_OK) {
                 return rc;
             }
             if (user->credentials_len != WC_SHA256_DIGEST_SIZE ||
-                memcmp(user->credentials, hash, WC_SHA256_DIGEST_SIZE) != 0) {
+                wh_Utils_ConstantCompare(user->credentials, hash,
+                WC_SHA256_DIGEST_SIZE) != 0) {
                 return WH_ERROR_ACCESS;
             }
 #else
             /* When crypto is disabled, compare PINs directly */
             if (user->credentials_len != current_credentials_len ||
-                memcmp(user->credentials, current_credentials,
+                wh_Utils_ConstantCompare(user->credentials, current_credentials,
                        current_credentials_len) != 0) {
                 return WH_ERROR_ACCESS;
             }
@@ -487,7 +496,7 @@ int wh_Auth_BaseUserSetCredentials(void* context, uint16_t user_id,
         else {
             /* For non-PIN methods, compare as-is */
             if (user->credentials_len != current_credentials_len ||
-                memcmp(user->credentials, current_credentials,
+                wh_Utils_ConstantCompare(user->credentials, current_credentials,
                        current_credentials_len) != 0) {
                 return WH_ERROR_ACCESS;
             }
@@ -508,8 +517,7 @@ int wh_Auth_BaseUserSetCredentials(void* context, uint16_t user_id,
 #ifndef WOLFHSM_CFG_NO_CRYPTO
             /* Hash PIN before storing */
             unsigned char hash[WC_SHA256_DIGEST_SIZE];
-            int           rc =
-                wh_Auth_BaseHashPin(new_credentials, new_credentials_len, hash);
+            rc = wh_Auth_BaseHashPin(new_credentials, new_credentials_len, hash);
             if (rc != WH_ERROR_OK) {
                 return rc;
             }
