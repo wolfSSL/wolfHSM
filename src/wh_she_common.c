@@ -37,38 +37,38 @@
 
 #include "wolfhsm/wh_she_common.h"
 
-typedef struct {
-    uint32_t count;
-    uint32_t flags;
-} whSheMetadata;
-
 int wh_She_Label2Meta(const uint8_t* label, uint32_t *out_count,
         uint32_t *out_flags)
 {
-    whSheMetadata* meta = (whSheMetadata*)label;
+    uint32_t tmp;
 
     if (label == NULL) {
         return WH_ERROR_BADARGS;
     }
 
     if (out_count != NULL) {
-        *out_count = wh_Utils_ntohl(meta->count);
+        memcpy(&tmp, label, sizeof(uint32_t));
+        *out_count = wh_Utils_ntohl(tmp);
     }
     if (out_flags != NULL) {
-        *out_flags = wh_Utils_ntohl(meta->flags);
+        memcpy(&tmp, label + sizeof(uint32_t), sizeof(uint32_t));
+        *out_flags = wh_Utils_ntohl(tmp);
     }
     return 0;
 }
 
 int wh_She_Meta2Label(uint32_t count, uint32_t flags, uint8_t* label)
 {
-    whSheMetadata* meta = (whSheMetadata*)label;
+    uint32_t tmp;
+
     if (label == NULL) {
         return WH_ERROR_BADARGS;
     }
 
-    meta->count = wh_Utils_htonl(count);
-    meta->flags = wh_Utils_htonl(flags);
+    tmp = wh_Utils_htonl(count);
+    memcpy(label, &tmp, sizeof(uint32_t));
+    tmp = wh_Utils_htonl(flags);
+    memcpy(label + sizeof(uint32_t), &tmp, sizeof(uint32_t));
 
     return 0;
 }

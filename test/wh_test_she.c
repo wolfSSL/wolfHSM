@@ -164,7 +164,6 @@ int whTest_SheClientConfig(whClientConfig* config)
     WH_TEST_RETURN_ON_FAIL(wh_Client_Init(client, config));
     WH_TEST_RETURN_ON_FAIL(wh_Client_CommInit(client, &outClientId, &outServerId));
 
-#ifdef WOLFHSM_CFG_DEBUG_VERBOSE
     {
         int32_t  server_rc       = 0;
         whNvmId  avail_objects   = 0;
@@ -182,7 +181,6 @@ int whTest_SheClientConfig(whClientConfig* config)
                ret, (int)server_rc, (int)avail_size, (int)avail_objects,
                (int)reclaim_size, (int)reclaim_objects);
     }
-#endif /* WOLFHSM_CFG_DEBUG_VERBOSE */
 
     /* generate a new cmac key */
     if ((ret = wc_InitRng_ex(rng, NULL, WH_DEV_ID)) != 0) {
@@ -391,7 +389,6 @@ int whTest_SheClientConfig(whClientConfig* config)
     }
     WH_TEST_PRINT("SHE CMAC SUCCESS\n");
 
-#ifdef WOLFHSM_CFG_DEBUG_VERBOSE
     {
         int32_t  server_rc       = 0;
         whNvmId  avail_objects   = 0;
@@ -409,7 +406,6 @@ int whTest_SheClientConfig(whClientConfig* config)
                ret, (int)server_rc, (int)avail_size, (int)avail_objects,
                (int)reclaim_size, (int)reclaim_objects);
     }
-#endif /* WOLFHSM_CFG_DEBUG_VERBOSE */
 
 
 exit:

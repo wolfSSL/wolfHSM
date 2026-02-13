@@ -74,7 +74,7 @@ static int _testNonExportableNvmAccess(whClientContext* client)
         return -1;
     }
 
-    WH_TEST_DEBUG_PRINT("Non-exportable NVM object read correctly denied\n");
+    WH_TEST_PRINT("Non-exportable NVM object read correctly denied\n");
 
     /* Clean up NVM object */
     whNvmId destroyList[] = {nvmId};
@@ -114,7 +114,7 @@ static int _testNonExportableNvmAccess(whClientContext* client)
         return -1;
     }
 
-    WH_TEST_DEBUG_PRINT("Exportable NVM object read succeeded\n");
+    WH_TEST_PRINT("Exportable NVM object read succeeded\n");
 
     /* Clean up */
     out_rc = 0;
@@ -149,7 +149,7 @@ static int _testNonExportableNvmAccess(whClientContext* client)
         return -1;
     }
 
-    WH_TEST_DEBUG_PRINT("Non-exportable NVM object DMA read correctly denied\n");
+    WH_TEST_PRINT("Non-exportable NVM object DMA read correctly denied\n");
 
     /* Clean up */
     out_rc = 0;
@@ -186,7 +186,7 @@ static int _testNonExportableNvmAccess(whClientContext* client)
         return -1;
     }
 
-    WH_TEST_DEBUG_PRINT("Exportable NVM object DMA read succeeded\n");
+    WH_TEST_PRINT("Exportable NVM object DMA read succeeded\n");
 
     /* Clean up */
     out_rc = 0;

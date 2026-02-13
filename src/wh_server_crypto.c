@@ -451,7 +451,7 @@ static int _HandleRsaFunction( whServerContext* ctx, uint16_t magic,
                 }
             }
             if (ret != WH_ERROR_OK) {
-                return ret;
+                goto cleanup;
             }
         }
     }
@@ -472,6 +472,7 @@ static int _HandleRsaFunction( whServerContext* ctx, uint16_t magic,
         /* free the key */
         wc_FreeRsaKey(rsa);
     }
+cleanup:
     if (evict != 0) {
         /* User requested to evict from cache, even if the call failed */
         (void)wh_Server_KeystoreEvictKey(ctx, key_id);
@@ -930,7 +931,7 @@ static int _HandleEccSharedSecret(whServerContext* ctx, uint16_t magic,
         ret = wh_Server_KeystoreFindEnforceKeyUsage(ctx, prv_key_id,
                                                     WH_NVM_FLAGS_USAGE_DERIVE);
         if (ret != WH_ERROR_OK) {
-            return ret;
+            goto cleanup;
         }
     }
 
@@ -965,6 +966,7 @@ static int _HandleEccSharedSecret(whServerContext* ctx, uint16_t magic,
         }
         wc_ecc_free(pub_key);
     }
+cleanup:
     if (evict_pub) {
         /* User requested to evict from cache, even if the call failed */
         (void)wh_Server_KeystoreEvictKey(ctx, pub_key_id);
@@ -1026,7 +1028,7 @@ static int _HandleEccSign(whServerContext* ctx, uint16_t magic,
         ret = wh_Server_KeystoreFindEnforceKeyUsage(ctx, key_id,
                                                     WH_NVM_FLAGS_USAGE_SIGN);
         if (ret != WH_ERROR_OK) {
-            return ret;
+            goto cleanup;
         }
     }
 
@@ -1053,6 +1055,7 @@ static int _HandleEccSign(whServerContext* ctx, uint16_t magic,
         }
         wc_ecc_free(key);
     }
+cleanup:
     if (evict != 0) {
         /* typecasting to void so that not overwrite ret */
         (void)wh_Server_KeystoreEvictKey(ctx, key_id);
@@ -1120,7 +1123,7 @@ static int _HandleEccVerify(whServerContext* ctx, uint16_t magic,
         ret = wh_Server_KeystoreFindEnforceKeyUsage(ctx, key_id,
                                                     WH_NVM_FLAGS_USAGE_VERIFY);
         if (ret != WH_ERROR_OK) {
-            return ret;
+            goto cleanup;
         }
     }
 
@@ -1162,6 +1165,8 @@ static int _HandleEccVerify(whServerContext* ctx, uint16_t magic,
         }
         wc_ecc_free(key);
     }
+
+cleanup:
     if (evict != 0) {
         /* User requested to evict from cache, even if the call failed */
         (void)wh_Server_KeystoreEvictKey(ctx, key_id);
@@ -1759,7 +1764,7 @@ static int _HandleCurve25519SharedSecret(whServerContext* ctx, uint16_t magic,
         ret = wh_Server_KeystoreFindEnforceKeyUsage(ctx, prv_key_id,
                                                     WH_NVM_FLAGS_USAGE_DERIVE);
         if (ret != WH_ERROR_OK) {
-            return ret;
+            goto cleanup;
         }
     }
 
@@ -1796,6 +1801,7 @@ static int _HandleCurve25519SharedSecret(whServerContext* ctx, uint16_t magic,
         }
         wc_curve25519_free(priv);
     }
+cleanup:
     if (evict_pub) {
         /* User requested to evict from cache, even if the call failed */
         (void)wh_Server_KeystoreEvictKey(ctx, pub_key_id);
@@ -1943,7 +1949,7 @@ static int _HandleEd25519Sign(whServerContext* ctx, uint16_t magic,
         ret = wh_Server_KeystoreFindEnforceKeyUsage(ctx, key_id,
                                                     WH_NVM_FLAGS_USAGE_SIGN);
         if (ret != WH_ERROR_OK) {
-            return ret;
+            goto cleanup;
         }
     }
 
@@ -1970,6 +1976,7 @@ static int _HandleEd25519Sign(whServerContext* ctx, uint16_t magic,
         memcpy(res_sig, sig, sig_len);
     }
 
+cleanup:
     if (evict) {
         /* User requested to evict from cache, even if the call failed */
         (void)wh_Server_KeystoreEvictKey(ctx, key_id);
@@ -2043,7 +2050,7 @@ static int _HandleEd25519Verify(whServerContext* ctx, uint16_t magic,
         ret = wh_Server_KeystoreFindEnforceKeyUsage(ctx, key_id,
                                                     WH_NVM_FLAGS_USAGE_VERIFY);
         if (ret != WH_ERROR_OK) {
-            return ret;
+            goto cleanup;
         }
     }
 
@@ -2060,6 +2067,7 @@ static int _HandleEd25519Verify(whServerContext* ctx, uint16_t magic,
         wc_ed25519_free(key);
     }
 
+cleanup:
     if (evict != 0) {
         (void)wh_Server_KeystoreEvictKey(ctx, key_id);
     }
@@ -2121,7 +2129,7 @@ static int _HandleEd25519SignDma(whServerContext* ctx, uint16_t magic,
         ret = wh_Server_KeystoreFindEnforceKeyUsage(ctx, key_id,
                                                     WH_NVM_FLAGS_USAGE_SIGN);
         if (ret != WH_ERROR_OK) {
-            return ret;
+            goto cleanup;
         }
     }
 
@@ -2168,6 +2176,7 @@ static int _HandleEd25519SignDma(whServerContext* ctx, uint16_t magic,
         ctx, (uintptr_t)req.msg.addr, &msgAddr, req.msg.sz,
         WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
 
+cleanup:
     if (evict != 0) {
         (void)wh_Server_KeystoreEvictKey(ctx, key_id);
     }
@@ -2227,7 +2236,7 @@ static int _HandleEd25519VerifyDma(whServerContext* ctx, uint16_t magic,
         ret = wh_Server_KeystoreFindEnforceKeyUsage(ctx, key_id,
                                                     WH_NVM_FLAGS_USAGE_VERIFY);
         if (ret != WH_ERROR_OK) {
-            return ret;
+            goto cleanup;
         }
     }
 
@@ -2272,6 +2281,7 @@ static int _HandleEd25519VerifyDma(whServerContext* ctx, uint16_t magic,
         ctx, (uintptr_t)req.sig.addr, &sigAddr, req.sig.sz,
         WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
 
+cleanup:
     if (evict != 0) {
         (void)wh_Server_KeystoreEvictKey(ctx, key_id);
     }
@@ -2974,7 +2984,7 @@ static int _HandleAesGcmDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
  * outKey must be at least AES_MAX_KEY_SIZE bytes. */
 static int _CmacResolveKey(whServerContext* ctx, const uint8_t* requestKey,
                            uint32_t requestKeySz, whKeyId clientKeyId,
-                           uint8_t* outKey, word32* outKeyLen)
+                           uint8_t* outKey, uint32_t* outKeyLen)
 {
     int ret = WH_ERROR_OK;
 
@@ -3052,7 +3062,6 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
         return WH_ERROR_BADARGS;
     }
 
-    word32 len;
 
     /* Setup fixed size fields */
     uint8_t* in =
@@ -3064,7 +3073,7 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
     memset(&res, 0, sizeof(res));
 
     uint8_t tmpKey[AES_MAX_KEY_SIZE];
-    word32  tmpKeyLen = sizeof(tmpKey);
+    uint32_t tmpKeyLen = sizeof(tmpKey);
     Cmac    cmac[1];
 
     /* Resolve the key to use */
@@ -3072,12 +3081,13 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
 
     /* Oneshot: input and output are both present */
     if (ret == 0 && req.inSz != 0 && req.outSz != 0) {
-        len = req.outSz;
+        word32 len = (word32)req.outSz;
 
         WH_DEBUG_SERVER_VERBOSE("cmac generate oneshot\n");
 
-        ret = wc_AesCmacGenerate_ex(cmac, out, &len, in, req.inSz, tmpKey,
-                                    tmpKeyLen, NULL, ctx->crypto->devId);
+        ret =
+            wc_AesCmacGenerate_ex(cmac, out, &len, in, req.inSz, tmpKey,
+                                  (word32)tmpKeyLen, NULL, ctx->crypto->devId);
 
         if (ret == 0) {
             res.outSz = len;
@@ -3113,10 +3123,10 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
 
         if (ret == 0 && req.outSz != 0) {
             /* Finalize CMAC operation */
-            len = req.outSz;
+            word32 len = (word32)req.outSz;
             WH_DEBUG_SERVER_VERBOSE("cmac final len:%d\n", len);
             ret       = wc_CmacFinal(cmac, out, &len);
-            res.outSz = len;
+            res.outSz = (uint32_t)len;
             res.keyId = WH_KEYID_ERASED;
         }
         else if (ret == 0) {
@@ -3642,7 +3652,7 @@ static int _HandleMlDsaSign(whServerContext* ctx, uint16_t magic,
         ret = wh_Server_KeystoreFindEnforceKeyUsage(ctx, key_id,
                                                     WH_NVM_FLAGS_USAGE_SIGN);
         if (ret != WH_ERROR_OK) {
-            return ret;
+            goto cleanup;
         }
     }
 
@@ -3675,6 +3685,7 @@ static int _HandleMlDsaSign(whServerContext* ctx, uint16_t magic,
         }
         wc_MlDsaKey_Free(key);
     }
+cleanup:
     if (evict != 0) {
         /* User requested to evict from cache, even if the call failed */
         (void)wh_Server_KeystoreEvictKey(ctx, key_id);
@@ -3726,13 +3737,14 @@ static int _HandleMlDsaVerify(whServerContext* ctx, uint16_t magic,
     uint32_t sig_len  = req.sigSz;
     byte*    req_sig =
         (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_MlDsaVerifyRequest);
+    int evict = !!(options & WH_MESSAGE_CRYPTO_MLDSA_VERIFY_OPTIONS_EVICT);
 
     /* Validate key usage policy for verification */
     if (!WH_KEYID_ISERASED(key_id)) {
         ret = wh_Server_KeystoreFindEnforceKeyUsage(ctx, key_id,
                                                     WH_NVM_FLAGS_USAGE_VERIFY);
         if (ret != WH_ERROR_OK) {
-            return ret;
+            goto cleanup;
         }
     }
 
@@ -3746,8 +3758,7 @@ static int _HandleMlDsaVerify(whServerContext* ctx, uint16_t magic,
         return WH_ERROR_BADARGS;
     }
 
-    byte*    req_hash = req_sig + sig_len;
-    int      evict = !!(options & WH_MESSAGE_CRYPTO_MLDSA_VERIFY_OPTIONS_EVICT);
+    byte* req_hash = req_sig + sig_len;
 
     /* Response message */
     int result = 0;
@@ -3764,6 +3775,7 @@ static int _HandleMlDsaVerify(whServerContext* ctx, uint16_t magic,
         }
         wc_MlDsaKey_Free(key);
     }
+cleanup:
     if (evict != 0) {
         /* User requested to evict from cache, even if the call failed */
         (void)wh_Server_KeystoreEvictKey(ctx, key_id);
@@ -5111,7 +5123,7 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
     void* inAddr = NULL;
 
     uint8_t tmpKey[AES_MAX_KEY_SIZE];
-    word32  tmpKeyLen = sizeof(tmpKey);
+    uint32_t tmpKeyLen = sizeof(tmpKey);
     Cmac    cmac[1];
 
     /* Attempt oneshot if input and output are both present */
@@ -5137,7 +5149,7 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
             WH_DEBUG_SERVER_VERBOSE("dma cmac generate oneshot\n");
 
             ret = wc_AesCmacGenerate_ex(cmac, out, &len, inAddr, req.input.sz,
-                                        tmpKey, tmpKeyLen, NULL,
+                                        tmpKey, (word32)tmpKeyLen, NULL,
                                         ctx->crypto->devId);
         }
         else if (ret == WH_ERROR_OK) {
@@ -5145,8 +5157,8 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
             WH_DEBUG_SERVER_VERBOSE("dma cmac generate oneshot with keyId:%x\n",
                                     req.keyId);
 
-            ret = wc_InitCmac_ex(cmac, tmpKey, tmpKeyLen, WC_CMAC_AES, NULL,
-                                 NULL, ctx->crypto->devId);
+            ret = wc_InitCmac_ex(cmac, tmpKey, (word32)tmpKeyLen, WC_CMAC_AES,
+                                 NULL, NULL, ctx->crypto->devId);
 
             if (ret == WH_ERROR_OK) {
                 ret =
@@ -5171,8 +5183,8 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
 
         /* Initialize CMAC context with key (re-derives k1/k2 subkeys) */
         if (ret == 0) {
-            ret = wc_InitCmac_ex(cmac, tmpKey, tmpKeyLen, WC_CMAC_AES, NULL,
-                                 NULL, ctx->crypto->devId);
+            ret = wc_InitCmac_ex(cmac, tmpKey, (word32)tmpKeyLen, WC_CMAC_AES,
+                                 NULL, NULL, ctx->crypto->devId);
             WH_DEBUG_SERVER_VERBOSE("dma cmac init with keylen:%d ret:%d\n",
                                     tmpKeyLen, ret);
         }
