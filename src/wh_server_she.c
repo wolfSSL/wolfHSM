@@ -459,7 +459,7 @@ static int _LoadKey(whServerContext* server, uint16_t magic, uint16_t req_size,
     whNvmMetadata meta[1] = {0};
     uint32_t      she_meta_count = 0;
     uint32_t      she_meta_flags = 0;
-    uint32_t*     msg_counter_BE;
+    uint32_t      msg_counter_val;
 
     whMessageShe_LoadKeyRequest  req  = {0};
     whMessageShe_LoadKeyResponse resp = {0};
@@ -561,10 +561,10 @@ static int _LoadKey(whServerContext* server, uint16_t magic, uint16_t req_size,
                                 sizeof(server->she->uid)) != 0) {
         ret = WH_SHE_ERC_KEY_UPDATE_ERROR;
     }
-    /* verify msg_counter_BE is greater than stored value */
-    msg_counter_BE = (uint32_t*)req.messageTwo;
+    /* verify msg_counter_val is greater than stored value */
+    memcpy(&msg_counter_val, req.messageTwo, sizeof(uint32_t));
     if (ret == 0 && keyRet != WH_ERROR_NOTFOUND &&
-        wh_Utils_ntohl(*msg_counter_BE) >> 4 <= she_meta_count) {
+        wh_Utils_ntohl(msg_counter_val) >> 4 <= she_meta_count) {
         ret = WH_SHE_ERC_KEY_UPDATE_ERROR;
     }
     /* write key with msg_counter_BE */
@@ -572,7 +572,7 @@ static int _LoadKey(whServerContext* server, uint16_t magic, uint16_t req_size,
         meta->id       = WH_MAKE_KEYID(WH_KEYTYPE_SHE, server->comm->client_id,
                                        _PopId(req.messageOne));
         she_meta_flags = _PopFlags(req.messageTwo);
-        she_meta_count = wh_Utils_ntohl(*msg_counter_BE) >> 4;
+        she_meta_count = wh_Utils_ntohl(msg_counter_val) >> 4;
         /* Update the meta label with new values */
         wh_She_Meta2Label(she_meta_count, she_meta_flags, meta->label);
         meta->len = WH_SHE_KEY_SZ;
@@ -619,8 +619,8 @@ static int _LoadKey(whServerContext* server, uint16_t magic, uint16_t req_size,
     }
     if (ret == 0) {
         /* Prepare counter in separate buffer */
-        msg_counter_BE  = (uint32_t*)counter_buffer;
-        *msg_counter_BE = wh_Utils_htonl(she_meta_count << 4);
+        msg_counter_val = wh_Utils_htonl(she_meta_count << 4);
+        memcpy(counter_buffer, &msg_counter_val, sizeof(uint32_t));
         counter_buffer[3] |= 0x08;
 
         /* First copy UID into messageFour */
@@ -714,7 +714,7 @@ static int _ExportRamKey(whServerContext* server, uint16_t magic,
     uint8_t                           cmacOutput[AES_BLOCK_SIZE];
     uint8_t                           tmpKey[WH_SHE_KEY_SZ];
     whNvmMetadata                     meta[1];
-    uint32_t*                         counter;
+    uint32_t                          counter_val;
     whMessageShe_ExportRamKeyResponse resp;
 
     /* check if ram key was loaded by CMD_LOAD_PLAIN_KEY */
@@ -750,8 +750,8 @@ static int _ExportRamKey(whServerContext* server, uint16_t magic,
         /* set the counter, flags and ram key */
         memset(resp.messageTwo, 0, sizeof(resp.messageTwo));
         /* set count to 1 */
-        counter  = (uint32_t*)resp.messageTwo;
-        *counter = (wh_Utils_htonl(1) << 4);
+        counter_val = (wh_Utils_htonl(1) << 4);
+        memcpy(resp.messageTwo, &counter_val, sizeof(uint32_t));
         keySz    = WH_SHE_KEY_SZ;
         ret      = wh_Server_KeystoreReadKey(
                  server,
@@ -821,8 +821,9 @@ static int _ExportRamKey(whServerContext* server, uint16_t magic,
     if (ret == 0) {
         memset(resp.messageFour, 0, sizeof(resp.messageFour));
         /* set counter to 1, pad with 1 bit */
-        counter  = (uint32_t*)(resp.messageFour + WH_SHE_KEY_SZ);
-        *counter = (wh_Utils_htonl(1) << 4);
+        counter_val = (wh_Utils_htonl(1) << 4);
+        memcpy(resp.messageFour + WH_SHE_KEY_SZ, &counter_val,
+               sizeof(uint32_t));
         resp.messageFour[WH_SHE_KEY_SZ + 3] |= 0x08;
         /* encrypt the new counter */
         ret = wc_AesEncryptDirect(server->she->sheAes,
