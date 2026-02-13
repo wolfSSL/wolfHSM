@@ -1171,8 +1171,8 @@ int whTest_ClientServerClientConfig(whClientConfig* clientCfg)
 
         WH_TEST_RETURN_ON_FAIL(ret = wh_Client_Echo(client, send_len, send_buffer, &recv_len, recv_buffer));
 
-        WH_TEST_DEBUG_PRINT("Client Echo:%d, len:%d, %.*s, expected:%.*s\n",
-            ret, recv_len, recv_len, recv_buffer, send_len, send_buffer);
+        WH_TEST_PRINT("Client Echo:%d, len:%d, %.*s, expected:%.*s\n", ret,
+                      recv_len, recv_len, recv_buffer, send_len, send_buffer);
 
         WH_TEST_ASSERT_RETURN( recv_len == send_len);
         WH_TEST_ASSERT_RETURN( strncmp(recv_buffer, send_buffer, recv_len) == 0);
@@ -1187,11 +1187,10 @@ int whTest_ClientServerClientConfig(whClientConfig* clientCfg)
         client, &server_rc, &avail_size, &avail_objects, &reclaim_size,
         &reclaim_objects));
 
-    WH_TEST_DEBUG_PRINT(
-        "Client NvmGetAvailable:%d, server_rc:%d avail_size:%d "
-        "avail_objects:%d, reclaim_size:%d reclaim_objects:%d\n",
-        ret, (int)server_rc, (int)avail_size, (int)avail_objects,
-        (int)reclaim_size, (int)reclaim_objects);
+    WH_TEST_PRINT("Client NvmGetAvailable:%d, server_rc:%d avail_size:%d "
+                  "avail_objects:%d, reclaim_size:%d reclaim_objects:%d\n",
+                  ret, (int)server_rc, (int)avail_size, (int)avail_objects,
+                  (int)reclaim_size, (int)reclaim_objects);
     WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
     WH_TEST_ASSERT_RETURN(avail_objects == WOLFHSM_CFG_NVM_OBJECT_COUNT);
 
@@ -1235,19 +1234,18 @@ int whTest_ClientServerClientConfig(whClientConfig* clientCfg)
             client, id, access, flags, label_len, (uint8_t*)label, len,
             (uint8_t*)send_buffer, &server_rc));
 
-        WH_TEST_DEBUG_PRINT("Client NvmAddObject:%d, server_rc:%d\n", ret,
-                            (int)server_rc);
+        WH_TEST_PRINT("Client NvmAddObject:%d, server_rc:%d\n", ret,
+                      (int)server_rc);
         WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
 
         WH_TEST_RETURN_ON_FAIL(ret = wh_Client_NvmGetAvailable(
             client, &server_rc, &avail_size, &avail_objects, &reclaim_size,
             &reclaim_objects));
 
-        WH_TEST_DEBUG_PRINT(
-            "Client NvmGetAvailable:%d, server_rc:%d, avail_size:%d "
-            "avail_objects:%d, reclaim_size:%d reclaim_objects:%d\n",
-            ret, (int)server_rc, (int)avail_size, (int)avail_objects,
-            (int)reclaim_size, (int)reclaim_objects);
+        WH_TEST_PRINT("Client NvmGetAvailable:%d, server_rc:%d, avail_size:%d "
+                      "avail_objects:%d, reclaim_size:%d reclaim_objects:%d\n",
+                      ret, (int)server_rc, (int)avail_size, (int)avail_objects,
+                      (int)reclaim_size, (int)reclaim_objects);
 
         /* Check that available objects decreased by one */
         WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
@@ -1258,9 +1256,9 @@ int whTest_ClientServerClientConfig(whClientConfig* clientCfg)
                                            &gaccess, &gflags, &glen,
                                            sizeof(glabel), (uint8_t*)glabel));
 
-        WH_TEST_DEBUG_PRINT("Client NvmGetMetadata:%d, id:%u, access:0x%x, "
-                            "flags:0x%x, len:%u label:%s\n",
-                            ret, gid, gaccess, gflags, glen, glabel);
+        WH_TEST_PRINT("Client NvmGetMetadata:%d, id:%u, access:0x%x, "
+                      "flags:0x%x, len:%u label:%s\n",
+                      ret, gid, gaccess, gflags, glen, glabel);
 
         /* Ensure metadata matches that of the object we just wrote */
         WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
@@ -1271,9 +1269,9 @@ int whTest_ClientServerClientConfig(whClientConfig* clientCfg)
                                                        &server_rc, &rlen,
                                                        (uint8_t*)recv_buffer));
 
-        WH_TEST_DEBUG_PRINT(
-            "Client NvmRead:%d, server_rc:%d id:%u, len:%u data:%s\n", ret,
-            (int)server_rc, (unsigned int)gid, (unsigned int)rlen, recv_buffer);
+        WH_TEST_PRINT("Client NvmRead:%d, server_rc:%d id:%u, len:%u data:%s\n",
+                      ret, (int)server_rc, (unsigned int)gid,
+                      (unsigned int)rlen, recv_buffer);
 
         /* Ensure data and size of response object matches that of the written
          * object */
@@ -1290,9 +1288,9 @@ int whTest_ClientServerClientConfig(whClientConfig* clientCfg)
         WH_TEST_RETURN_ON_FAIL(
             ret = wh_Client_NvmList(client, list_access, list_flags, list_id,
                                     &server_rc, &list_count, &list_id));
-        WH_TEST_DEBUG_PRINT("Client NvmList:%d, server_rc:%d count:%u id:%u\n",
-                            ret, (int)server_rc, (unsigned int)list_count,
-                            (unsigned int)list_id);
+        WH_TEST_PRINT("Client NvmList:%d, server_rc:%d count:%u id:%u\n", ret,
+                      (int)server_rc, (unsigned int)list_count,
+                      (unsigned int)list_id);
 
         if (list_count > 0) {
             /* ensure list_id contains ID of object written, and list_count
@@ -1302,17 +1300,17 @@ int whTest_ClientServerClientConfig(whClientConfig* clientCfg)
             WH_TEST_RETURN_ON_FAIL(
                 ret = wh_Client_NvmDestroyObjects(client, 1, &list_id, &server_rc));
 
-            WH_TEST_DEBUG_PRINT("Client NvmDestroyObjects:%d, server_rc:%d for "
-                                "id:%u with count:%u\n",
-                                ret, (int)server_rc, (unsigned int)list_id,
-                                (unsigned int)list_count);
+            WH_TEST_PRINT("Client NvmDestroyObjects:%d, server_rc:%d for "
+                          "id:%u with count:%u\n",
+                          ret, (int)server_rc, (unsigned int)list_id,
+                          (unsigned int)list_count);
             WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
 
             /* Ensure object was destroyed and no longer exists */
             WH_TEST_RETURN_ON_FAIL(ret = wh_Client_NvmGetMetadata(client, list_id, &server_rc, NULL, NULL, NULL, NULL, 0, NULL));
             WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND == server_rc);
 
-            WH_TEST_DEBUG_PRINT(
+            WH_TEST_PRINT(
                 "Client NvmGetMetadata:%d, server_rc:%d count:%u id:%u\n", ret,
                 (int)server_rc, (unsigned int)list_count,
                 (unsigned int)list_id);
@@ -1355,26 +1353,24 @@ int whTest_ClientServerClientConfig(whClientConfig* clientCfg)
 
         WH_TEST_RETURN_ON_FAIL(ret = wh_Client_NvmAddObjectDma(client, &meta, len, (uint8_t*)send_buffer, &server_rc));
 
-        WH_TEST_DEBUG_PRINT(
-            "Client NvmAddObjectDma:%d, server_rc:%d, meta.len:%u\n", ret,
-            (int)server_rc, meta.len);
+        WH_TEST_PRINT("Client NvmAddObjectDma:%d, server_rc:%d, meta.len:%u\n",
+                      ret, (int)server_rc, meta.len);
         WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
 
         WH_TEST_RETURN_ON_FAIL(ret = wh_Client_NvmGetAvailable(client, &server_rc, &avail_size, &avail_objects, &reclaim_size, &reclaim_objects));
 
-        WH_TEST_DEBUG_PRINT(
-            "Client NvmGetAvailable:%d, server_rc:%d, avail_size:%d "
-            "avail_objects:%d, reclaim_size:%d reclaim_objects:%d\n",
-            ret, (int)server_rc, (int)avail_size, (int)avail_objects,
-            (int)reclaim_size, (int)reclaim_objects);
+        WH_TEST_PRINT("Client NvmGetAvailable:%d, server_rc:%d, avail_size:%d "
+                      "avail_objects:%d, reclaim_size:%d reclaim_objects:%d\n",
+                      ret, (int)server_rc, (int)avail_size, (int)avail_objects,
+                      (int)reclaim_size, (int)reclaim_objects);
         WH_TEST_ASSERT_RETURN(lastAvailObjects - 1 == avail_objects);
 
         WH_TEST_RETURN_ON_FAIL(ret = wh_Client_NvmGetMetadata(client, meta.id, &server_rc, &gid, &gaccess, &gflags, &glen, sizeof(glabel), (uint8_t*)glabel));
 
-        WH_TEST_DEBUG_PRINT("Client NvmGetMetadata:%d, id:%u, access:0x%x, "
-                            "flags:0x%x, len:%u label:%s\n",
-                            ret, (unsigned int)gid, (unsigned int)gaccess,
-                            (unsigned int)gflags, (unsigned int)glen, glabel);
+        WH_TEST_PRINT("Client NvmGetMetadata:%d, id:%u, access:0x%x, "
+                      "flags:0x%x, len:%u label:%s\n",
+                      ret, (unsigned int)gid, (unsigned int)gaccess,
+                      (unsigned int)gflags, (unsigned int)glen, glabel);
 
         /* Ensure metadata matches that of the object we just wrote */
         WH_TEST_ASSERT_RETURN(gid == meta.id);
@@ -1384,10 +1380,10 @@ int whTest_ClientServerClientConfig(whClientConfig* clientCfg)
         WH_TEST_RETURN_ON_FAIL(
             ret = wh_Client_NvmReadDma(client, meta.id, 0, glen,
                                        (uint8_t*)recv_buffer, &server_rc));
-        WH_TEST_DEBUG_PRINT("Client NvmReadDma:%d, server_rc:%d id:%u, len:%u "
-                            "data:%s\n",
-                            ret, (int)server_rc, (unsigned int)gid,
-                            (unsigned int)glen, recv_buffer);
+        WH_TEST_PRINT("Client NvmReadDma:%d, server_rc:%d id:%u, len:%u "
+                      "data:%s\n",
+                      ret, (int)server_rc, (unsigned int)gid,
+                      (unsigned int)glen, recv_buffer);
 
         /* Ensure data and size of response object matches that of the written
          * object */
@@ -1400,9 +1396,9 @@ int whTest_ClientServerClientConfig(whClientConfig* clientCfg)
         WH_TEST_RETURN_ON_FAIL(
             ret = wh_Client_NvmList(client, list_access, list_flags, list_id,
                                     &server_rc, &list_count, &list_id));
-        WH_TEST_DEBUG_PRINT("Client NvmList:%d, server_rc:%d count:%u id:%u\n",
-                            ret, (int)server_rc, (unsigned int)list_count,
-                            (unsigned int)list_id);
+        WH_TEST_PRINT("Client NvmList:%d, server_rc:%d count:%u id:%u\n", ret,
+                      (int)server_rc, (unsigned int)list_count,
+                      (unsigned int)list_id);
         WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
 
         if (list_count > 0) {
@@ -1415,10 +1411,10 @@ int whTest_ClientServerClientConfig(whClientConfig* clientCfg)
 
             WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
 
-            WH_TEST_DEBUG_PRINT("Client NvmDestroyObjects:%d, server_rc:%d for "
-                                "id:%u with count:%u\n",
-                                ret, (int)server_rc, (unsigned int)list_id,
-                                (unsigned int)list_count);
+            WH_TEST_PRINT("Client NvmDestroyObjects:%d, server_rc:%d for "
+                          "id:%u with count:%u\n",
+                          ret, (int)server_rc, (unsigned int)list_id,
+                          (unsigned int)list_count);
 
             /* Ensure object was destroyed and no longer exists */
             WH_TEST_RETURN_ON_FAIL(ret = wh_Client_NvmGetMetadata(client, list_id, &server_rc, NULL, NULL, NULL, NULL, 0, NULL));
@@ -1430,19 +1426,17 @@ int whTest_ClientServerClientConfig(whClientConfig* clientCfg)
 
 
     WH_TEST_RETURN_ON_FAIL(ret = wh_Client_NvmCleanup(client, &server_rc));
-    WH_TEST_DEBUG_PRINT("Client NvmCleanup:%d, server_rc:%d\n", ret,
-                        (int)server_rc);
+    WH_TEST_PRINT("Client NvmCleanup:%d, server_rc:%d\n", ret, (int)server_rc);
     WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
 
     /* Ensure NVM tests didn't leak objects */
     WH_TEST_RETURN_ON_FAIL(ret = wh_Client_NvmGetAvailable(
                                client, &server_rc, &avail_size, &avail_objects,
                                &reclaim_size, &reclaim_objects));
-    WH_TEST_DEBUG_PRINT(
-        "Client NvmGetAvailable:%d, server_rc:%d, avail_size:%d "
-        "avail_objects:%d, reclaim_size:%d reclaim_objects:%d\n",
-        ret, (int)server_rc, (int)avail_size, (int)avail_objects,
-        (int)reclaim_size, (int)reclaim_objects);
+    WH_TEST_PRINT("Client NvmGetAvailable:%d, server_rc:%d, avail_size:%d "
+                  "avail_objects:%d, reclaim_size:%d reclaim_objects:%d\n",
+                  ret, (int)server_rc, (int)avail_size, (int)avail_objects,
+                  (int)reclaim_size, (int)reclaim_objects);
     WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
     WH_TEST_ASSERT_RETURN(avail_objects == WOLFHSM_CFG_NVM_OBJECT_COUNT);
 
