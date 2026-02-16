@@ -1458,6 +1458,12 @@ static int whTest_CryptoCurve25519(whClientContext* ctx, int devId, WC_RNG* rng)
                         ret = -1;
                     }
                 }
+                if (!WH_KEYID_ISERASED(key_id_a)) {
+                    (void)wh_Client_KeyEvict(ctx, key_id_a);
+                }
+                if (!WH_KEYID_ISERASED(key_id_b)) {
+                    (void)wh_Client_KeyEvict(ctx, key_id_b);
+                }
                 wc_curve25519_free(key_b);
             }
             wc_curve25519_free(key_a);
@@ -2045,6 +2051,7 @@ static int whTest_CryptoHkdf(whClientContext* ctx, int devId, WC_RNG* rng)
     /* Verify key was cached */
     if (key_id == WH_KEYID_ERASED) {
         WH_ERROR_PRINT("Key ID was not assigned\n");
+        (void)wh_Client_KeyEvict(ctx, key_id);
         return -1;
     }
 
@@ -2057,6 +2064,7 @@ static int whTest_CryptoHkdf(whClientContext* ctx, int devId, WC_RNG* rng)
                                   sizeof(export_label), okm2, &export_len);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed to wh_Client_KeyExport: %d\n", ret);
+            (void)wh_Client_KeyEvict(ctx, key_id);
             return ret;
         }
 
@@ -2064,6 +2072,7 @@ static int whTest_CryptoHkdf(whClientContext* ctx, int devId, WC_RNG* rng)
         if (export_len != WH_TEST_HKDF_OKM_SIZE) {
             WH_ERROR_PRINT("Exported key length mismatch: %u != %u\n",
                            export_len, WH_TEST_HKDF_OKM_SIZE);
+            (void)wh_Client_KeyEvict(ctx, key_id);
             return -1;
         }
 
@@ -2071,8 +2080,16 @@ static int whTest_CryptoHkdf(whClientContext* ctx, int devId, WC_RNG* rng)
         if (memcmp(okm2, expected, WH_TEST_HKDF_OKM_SIZE) != 0) {
             WH_ERROR_PRINT(
                 "HKDF output does not match expected (MakeCacheKey)\n");
+            (void)wh_Client_KeyEvict(ctx, key_id);
             return -1;
         }
+    }
+
+    /* Evict the cached HKDF key */
+    ret = wh_Client_KeyEvict(ctx, key_id);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to evict HKDF cached key: %d\n", ret);
+        return ret;
     }
 
     /* Test 6: HKDF with cached input key */

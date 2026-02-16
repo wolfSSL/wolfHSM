@@ -145,9 +145,9 @@ int wh_She_GenerateLoadableKey(uint8_t keyId,
 
         /* Build cleartext M2: set the counter, flags and key */
         memset(messageTwo, 0, WH_SHE_M2_SZ);
-        *((uint32_t*)messageTwo) = wh_Utils_htonl(
-                (count  << WH_SHE_M2_COUNT_SHIFT) |
-                (flags  << WH_SHE_M2_FLAGS_SHIFT) );
+        field = wh_Utils_htonl((count << WH_SHE_M2_COUNT_SHIFT) |
+                               (flags << WH_SHE_M2_FLAGS_SHIFT));
+        memcpy(messageTwo, &field, sizeof(uint32_t));
         memcpy(messageTwo + WH_SHE_M2_KEY_OFFSET, key, WH_SHE_KEY_SZ);
 
         /* encrypt M2 with K1 */
@@ -214,9 +214,9 @@ int wh_She_GenerateLoadableKey(uint8_t keyId,
                 (keyId      << WH_SHE_M4_KID_SHIFT) |
                 (authKeyId  << WH_SHE_M4_AID_SHIFT);
         /* set counter, pad with 1 bit */
-        *((uint32_t*)(messageFour + WH_SHE_M4_COUNT_OFFSET)) =
-                wh_Utils_htonl( (count  << WH_SHE_M4_COUNT_SHIFT) |
-                                (WH_SHE_M4_COUNT_PAD) );
+        field = wh_Utils_htonl((count << WH_SHE_M4_COUNT_SHIFT) |
+                               (WH_SHE_M4_COUNT_PAD));
+        memcpy(messageFour + WH_SHE_M4_COUNT_OFFSET, &field, sizeof(uint32_t));
 
         ret = wc_AesInit(aes, NULL, INVALID_DEVID);
         if (ret == 0) {

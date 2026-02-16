@@ -987,7 +987,7 @@ typedef struct {
     uint32_t outSz; /* output MAC size (0 = not finalizing) */
     uint32_t keySz; /* inline key size (0 = use keyId) */
     uint16_t keyId; /* HSM key ID */
-    uint8_t  WH_PAD[2];
+    uint8_t  WH_PAD[6];
     /* Trailing data: uint8_t key[keySz] */
 } whMessageCrypto_CmacAesDmaRequest;
 
