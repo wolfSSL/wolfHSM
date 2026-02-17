@@ -1244,6 +1244,10 @@ int wh_Client_AesGcmDma(whClientContext* ctx, Aes* aes, int enc,
         req_len    += req->keySz;
     }
 
+    if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
+        return WH_ERROR_BADARGS;
+    }
+
     /* Copy request data not handled by DMA */
     memcpy(req_iv, iv, iv_len);
     if (enc == 0 && tag_len > 0) {
