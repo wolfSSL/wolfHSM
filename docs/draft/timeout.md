@@ -82,7 +82,40 @@ Client App                    _recvCryptoResponse                 wh_Timeout
 From the application's perspective, the crypto APIs (`wh_Client_AesCbc`, `wh_Client_RsaFunction`, `wh_Client_EccSign`, etc.) now return `WH_ERROR_TIMEOUT` (-2010) instead of hanging indefinitely. The application can then decide how to handle it -- retry, log, fail gracefully, etc.
 The `expiredCb` fires *before* the error is returned, so you can use it for logging or cleanup without needing to check the return code first.
 
-## 5. Scope Limitations
+## 5. Overriding Expiration via the Callback
+
+The expired callback receives a pointer to the `isExpired` flag and can override it by setting `*isExpired = 0`. This suppresses the expiration for the current check, allowing the polling loop to continue. A common use case is to extend the timeout deadline: clear the flag, then call `wh_Timeout_Start()` to restart the timer.
+
+The callback can also return a non-zero error code to signal a failure. When it does, `wh_Timeout_Expired()` propagates that error directly to the caller instead of returning the expired flag.
+
+```c
+static int myOverrideCb(whTimeoutCtx* ctx, int* isExpired)
+{
+    int* retryCount = (int*)ctx->cbCtx;
+    if (retryCount == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    (*retryCount)++;
+
+    if (*retryCount <= 1) {
+        /* First expiration: suppress and restart the timer */
+        *isExpired = 0;
+        wh_Timeout_Start(ctx);
+    }
+    /* Subsequent expirations: allow the timeout to fire */
+    return WH_ERROR_OK;
+}
+
+int retryCount = 0;
+whTimeoutConfig timeoutCfg = {
+    .timeoutUs = WH_SEC_TO_USEC(5),
+    .expiredCb = myOverrideCb,
+    .cbCtx     = &retryCount,
+};
+```
+
+## 6. Scope Limitations
 A few things to note about the current design:
 - **Only crypto responses are covered.** Non-crypto client calls (key management, NVM operations, comm init) still use the old infinite-wait pattern. The timeout is specifically wired into `_recvCryptoResponse`.
 - **The timeout is per-client, not per-call.** All crypto operations for a given client share the same `respTimeout` context with the same duration. You can call `wh_Timeout_Set(ctx->respTimeout, newValue)` to change it between calls, but there's no per-operation override.

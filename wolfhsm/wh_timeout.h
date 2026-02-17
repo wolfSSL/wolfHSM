@@ -36,7 +36,20 @@
 
 /* Forward declare so the callback typedef can reference it */
 typedef struct whTimeoutCtx whTimeoutCtx;
-typedef void (*whTimeoutExpiredCb)(whTimeoutCtx* ctx, int* isExpired);
+
+/**
+ * Callback invoked when a timeout expires. The callback may override the
+ * expiration by setting *isExpired to 0 (e.g. to extend the timeout by calling
+ * wh_Timeout_Start() to restart the timer). Returning a non-zero error code
+ * from the callback will cause wh_Timeout_Expired() to propagate that error
+ * to its caller.
+ *
+ * @param ctx The timeout context that expired.
+ * @param isExpired Pointer to the expired flag; set to 0 to suppress
+ *                  expiration.
+ * @return 0 on success, or a negative error code to signal failure.
+ */
+typedef int (*whTimeoutExpiredCb)(whTimeoutCtx* ctx, int* isExpired);
 
 struct whTimeoutCtx {
     uint64_t           startUs;
@@ -89,10 +102,15 @@ int wh_Timeout_Stop(whTimeoutCtx* timeout);
  * Check whether a timeout has expired.
  *
  * If the timeout is expired and an expired callback is configured, the
- * callback is invoked before returning.
+ * callback is invoked before returning. The callback receives a pointer to the
+ * expired flag and may set it to 0 to override (suppress) the expiration, for
+ * example to extend the deadline by calling wh_Timeout_Start() to restart the
+ * timer. If the callback returns a non-zero error code, that error is
+ * propagated directly to the caller.
  *
  * @param timeout The timeout context to check.
- * @return 1 if expired, 0 if not expired or disabled.
+ * @return 1 if expired, 0 if not expired or disabled, or negative error code
+ *         from the expired callback.
  */
 int wh_Timeout_Expired(whTimeoutCtx* timeout);
 
