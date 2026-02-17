@@ -1,3 +1,36 @@
+# wolfHSM Release v1.4.0 (February 16, 2026)
+
+Due to NDA restrictions, access to the Infineon, ST Micro, TI, and Renesas ports is limited. Please contact [support@wolfssl.com](mailto:support@wolfssl.com) for access.
+
+## New Feature Additions
+* Added TLS transport for authentication between client and server peers in https://github.com/wolfSSL/wolfHSM/pull/227
+* Added global keystore enabling cryptographic keys to be shared across multiple clients with automatic cache routing in https://github.com/wolfSSL/wolfHSM/pull/224
+* Added key usage policy flags (encrypt, decrypt, sign, verify, wrap, derive) set by clients and enforced by the server in https://github.com/wolfSSL/wolfHSM/pull/233
+* Added server thread safety with NVM locking abstraction, enabling multiple server contexts to safely share NVM and global keystore resources in https://github.com/wolfSSL/wolfHSM/pull/275
+* Added logging framework with callback-based backend, ring buffer, and POSIX file log engines in https://github.com/wolfSSL/wolfHSM/pull/253
+* Added NVM object flag enforcement including non-destroyable flag and key revocation support in https://github.com/wolfSSL/wolfHSM/pull/263
+* Added ED25519 signature scheme support with DMA in https://github.com/wolfSSL/wolfHSM/pull/254
+* Added NIST SP 800-108 CMAC KDF support in https://github.com/wolfSSL/wolfHSM/pull/228
+* Added generic data wrap/unwrap for server-side data wrapping in https://github.com/wolfSSL/wolfHSM/pull/226
+
+## Bug Fixes
+* Fixed potential DMA buffer handling errors where request buffer sizes were overwritten by server responses in https://github.com/wolfSSL/wolfHSM/pull/284
+* Fixed potential buffer overflow in key cache by capping label size and corrected variable name logic error in `wh_Client_CommInfoResponse` in https://github.com/wolfSSL/wolfHSM/pull/234
+* Fixed CMAC DMA message struct padding, alignment bugs in SHE code, and test key cache leaks in https://github.com/wolfSSL/wolfHSM/pull/285
+* Fixed ECDH without DERIVE flag with `WOLF_CRYPTOCB_ONLY_ECC` in https://github.com/wolfSSL/wolfHSM/pull/251
+* Fixed compilation with `NO_AES` defined and removed extra printfs in https://github.com/wolfSSL/wolfHSM/pull/260
+* Fixed wrong `#endif` placement in `wh_client_crypto.c` and `#include` order in `nvm_flash_log.h` in https://github.com/wolfSSL/wolfHSM/pull/243
+* Fixed SHE NVM metadata struct initialization so flags are set to 0 in https://github.com/wolfSSL/wolfHSM/pull/273
+* Added NULL checks to message translation functions and additional input sanitization to server request handlers in https://github.com/wolfSSL/wolfHSM/pull/236 and https://github.com/wolfSSL/wolfHSM/pull/240
+
+## Enhancements and Optimizations
+* Refactored CMAC to use client-held state instead of persisting state on the server, and deprecated the cancellation API in https://github.com/wolfSSL/wolfHSM/pull/279
+* Refactored debug macros to replace all printf usage with `WOLFHSM_CFG_PRINTF`-based wrappers in https://github.com/wolfSSL/wolfHSM/pull/207
+* Expanded static memory DMA offset feature to CMAC, SHA-224, SHA-384, SHA-512, and ML-DSA in https://github.com/wolfSSL/wolfHSM/pull/191
+* Changed wrap object size argument from input-only to in/out in https://github.com/wolfSSL/wolfHSM/pull/241
+* Added scan-build static analysis GitHub Action in https://github.com/wolfSSL/wolfHSM/pull/195
+* Added ECDSA cross-validation test with software implementation in https://github.com/wolfSSL/wolfHSM/pull/277
+
 # wolfHSM Release v1.3.0 (October 24, 2025)
 
 Due to NDA restrictions, access to the Infineon, ST Micro, TI, and Renesas ports is limited. Please contact [support@wolfssl.com](mailto:support@wolfssl.com) for access.
