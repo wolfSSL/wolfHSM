@@ -80,6 +80,7 @@ int wh_Timeout_Expired(whTimeoutCtx* timeout)
 {
     uint64_t nowUs   = 0;
     int      expired = 0;
+    int      ret     = 0;
 
     if (timeout == NULL) {
         return 0;
@@ -92,8 +93,12 @@ int wh_Timeout_Expired(whTimeoutCtx* timeout)
     nowUs   = WH_GETTIME_US();
     expired = (nowUs - timeout->startUs) >= timeout->timeoutUs;
     if (expired && (timeout->expiredCb != NULL)) {
-        /* Allow the callback to overwrite the expired value */
-        timeout->expiredCb(timeout, &expired);
+        /* Allow the callback to overwrite the expired value. If the callback
+         * returns an error, propagate it to the caller. */
+        ret = timeout->expiredCb(timeout, &expired);
+        if (ret != WH_ERROR_OK) {
+            return ret;
+        }
     }
     return expired;
 }

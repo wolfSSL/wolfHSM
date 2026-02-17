@@ -49,13 +49,14 @@
 #endif /* HAVE_AES_CBC */
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
-static void whTest_TimeoutCb(whTimeoutCtx* ctx, int* isExpired)
+static int whTest_TimeoutCb(whTimeoutCtx* ctx, int* isExpired)
 {
     (void)isExpired;
     int* counter = (int*)ctx->cbCtx;
     if (counter != NULL) {
         (*counter)++;
     }
+    return WH_ERROR_OK;
 }
 
 #if !defined(WOLFHSM_CFG_NO_CRYPTO) && defined(HAVE_AES_CBC)
@@ -82,6 +83,7 @@ static int _timeoutTestConnectCb(void* context, whCommConnected connected)
 
 static int whTest_TimeoutAesCbc(void)
 {
+    WH_TEST_PRINT("Testing timeout AES CBC...\n");
     int rc = 0;
 
     /* Transport memory configuration */
@@ -215,11 +217,11 @@ static int whTest_TimeoutAesCbc(void)
 /* Callback that overrides expiration on the first invocation by resetting and
  * restarting the timeout. On the second invocation it allows expiration. The
  * cbCtx points to an int counter tracking how many times the callback fired. */
-static void _timeoutOverrideCb(whTimeoutCtx* ctx, int* isExpired)
+static int _timeoutOverrideCb(whTimeoutCtx* ctx, int* isExpired)
 {
     int* counter = (int*)ctx->cbCtx;
     if (counter == NULL) {
-        return;
+        return WH_ERROR_BADARGS;
     }
 
     (*counter)++;
@@ -230,10 +232,12 @@ static void _timeoutOverrideCb(whTimeoutCtx* ctx, int* isExpired)
         wh_Timeout_Start(ctx);
     }
     /* Subsequent expirations: let it expire normally */
+    return WH_ERROR_OK;
 }
 
 static int whTest_TimeoutAesCbcOverride(void)
 {
+    WH_TEST_PRINT("Testing timeout AES CBC with override callback...\n");
     int rc       = 0;
     int cb_count = 0;
 
@@ -373,6 +377,7 @@ static int whTest_TimeoutAesCbcOverride(void)
 
 int whTest_Timeout(void)
 {
+    WH_TEST_PRINT("Testing timeout...\n");
     int             cb_count = 0;
     whTimeoutConfig cfg;
     whTimeoutCtx    timeout[1];

@@ -991,6 +991,10 @@ int wh_Client_AesCbcDma(whClientContext* ctx, Aes* aes, int enc,
     WH_DEBUG_VERBOSE_HEXDUMP("[client] AESCBC DMA req packet: \n",
                             dataPtr, req_len);
     if (ret == WH_ERROR_OK) {
+        ret = wh_Client_SendRequest(ctx, group, action, req_len, dataPtr);
+    }
+
+    if (ret == WH_ERROR_OK) {
         /* Response packet */
         uint16_t res_len = 0;
         ret = _recvCryptoResponse(ctx, &group, &action, &res_len, dataPtr);
