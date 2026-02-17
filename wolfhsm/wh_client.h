@@ -48,6 +48,7 @@
 
 /* Component includes */
 #include "wolfhsm/wh_comm.h"
+#include "wolfhsm/wh_timeout.h"
 #include "wolfhsm/wh_message_customcb.h"
 #ifdef WOLFHSM_CFG_DMA
 #include "wolfhsm/wh_dma.h"
@@ -108,6 +109,9 @@ typedef struct {
 struct whClientContext_t {
     uint16_t     last_req_id;
     uint16_t     last_req_kind;
+#ifdef WOLFHSM_CFG_ENABLE_TIMEOUT
+    whTimeoutCtx respTimeout;
+#endif
 #ifdef WOLFHSM_CFG_DMA
     whClientDmaContext dma;
 #endif /* WOLFHSM_CFG_DMA */
@@ -119,6 +123,9 @@ struct whClientConfig_t {
 #ifdef WOLFHSM_CFG_DMA
     whClientDmaConfig* dmaConfig;
 #endif /* WOLFHSM_CFG_DMA */
+#ifdef WOLFHSM_CFG_ENABLE_TIMEOUT
+    whTimeoutConfig* respTimeoutConfig;
+#endif /* WOLFHSM_CFG_ENABLE_TIMEOUT*/
 };
 typedef struct whClientConfig_t whClientConfig;
 
@@ -177,7 +184,22 @@ int wh_Client_SendRequest(whClientContext* c, uint16_t group, uint16_t action,
 int wh_Client_RecvResponse(whClientContext* c, uint16_t* out_group,
                            uint16_t* out_action, uint16_t* out_size,
                            void* data);
-
+/**
+ * Receives a response from the server with a timeout window. The timeout
+ * duration is specified by the respTimeout field in the client context.
+ *
+ * @param c The client context.
+ * @param out_group Pointer to store the received group value.
+ * @param out_action Pointer to store the received action value.
+ * @param out_size Pointer to store the received size value.
+ * @param data Pointer to store the received data.
+ * @return 0 if successful, WH_ERROR_TIMEOUT on expiration, or a negative value
+ * if an error occurred.
+ */
+int wh_Client_RecvResponseBlockingWithTimeout(whClientContext* c,
+                                              uint16_t*        out_group,
+                                              uint16_t*        out_action,
+                                              uint16_t* out_size, void* data);
 
 /** Comm component functions */
 
