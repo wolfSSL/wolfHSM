@@ -1,0 +1,75 @@
+name: DTLS Demo Test
+
+on:
+  push:
+    branches: [ 'master', 'main', 'release/**' ]
+  pull_request:
+    branches: [ '*' ]
+
+jobs:
+  dtls-demo:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout wolfHSM
+      uses: actions/checkout@v4
+
+    - name: Checkout wolfSSL
+      uses: actions/checkout@v4
+      with:
+        repository: wolfssl/wolfssl
+        path: wolfssl
+
+    - name: Build wolfHSM POSIX server
+      run: |
+        cd examples/posix/wh_posix_server
+        make -j DMA=1 WOLFSSL_DIR=../../../wolfssl
+
+    - name: Build DTLS server demo
+      run: |
+        cd examples/demo/dtls_server
+        make -j WOLFSSL_DIR=../../../wolfssl
+
+    - name: Build wolfSSL with DTLS 1.3 support
+      run: |
+        cd wolfssl
+        ./autogen.sh
+        ./configure --enable-dtls --enable-dtls13
+        make -j
+
+    - name: Run DTLS demo test
+      run: |
+        # Start the wolfHSM POSIX server in background
+        cd examples/posix/wh_posix_server
+        ./Build/wh_posix_server.elf --type dma &
+        WH_SERVER_PID=$!
+        cd ../../..
+
+        # Give the server time to start
+        sleep 1
+
+        # Start the DTLS server demo in background
+        cd examples/demo/dtls_server
+        ./Build/wh_server.elf -A ../../../wolfssl/certs/client-cert.pem &
+        DTLS_SERVER_PID=$!
+        cd ../../..
+
+        # Give the DTLS server time to start
+        sleep 1
+
+        # Run the wolfSSL example client. It performs a DTLS 1.3 handshake,
+        # sends a test message, reads the echo reply, and exits.
+        # Timeout means the handshake hung, which is a failure.
+        cd wolfssl
+        timeout 10 ./examples/client/client -u -v 4
+        CLIENT_EXIT=$?
+
+        # Clean up background processes
+        kill $DTLS_SERVER_PID 2>/dev/null || true
+        kill $WH_SERVER_PID 2>/dev/null || true
+
+        if [ $CLIENT_EXIT -ne 0 ]; then
+          echo "DTLS demo test failed with exit code $CLIENT_EXIT"
+          exit 1
+        fi
+        echo "DTLS demo test passed"
