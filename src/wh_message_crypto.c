@@ -37,6 +37,7 @@ int wh_MessageCrypto_TranslateGenericRequestHeader(
     }
     WH_T32(magic, dest, src, algoType);
     WH_T32(magic, dest, src, algoSubType);
+    WH_T32(magic, dest, src, affinity);
     return 0;
 }
 
@@ -50,6 +51,7 @@ int wh_MessageCrypto_TranslateGenericResponseHeader(
     }
     WH_T32(magic, dest, src, algoType);
     WH_T32(magic, dest, src, rc);
+    WH_T32(magic, dest, src, reserved);
     return 0;
 }
 

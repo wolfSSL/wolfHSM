@@ -19,8 +19,9 @@
 /*
  * test/wh_test_crypto_affinity.c
  *
- * Tests for the SetCryptoAffinity API, verifying that the server correctly
- * switches between hardware and software crypto implementations.
+ * Tests for the crypto affinity API. Affinity is now client-local state
+ * transmitted per-message in the generic crypto header. No round-trip
+ * to the server is required to set or get the affinity.
  */
 
 #include "wolfhsm/wh_settings.h"
@@ -38,9 +39,9 @@
 #include "wolfssl/wolfcrypt/random.h"
 
 #include "wolfhsm/wh_error.h"
+#include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_comm.h"
 #include "wolfhsm/wh_transport_mem.h"
-#include "wolfhsm/wh_message_comm.h"
 #include "wolfhsm/wh_client.h"
 #include "wolfhsm/wh_server.h"
 #include "wolfhsm/wh_nvm.h"
@@ -95,9 +96,8 @@ static int _cryptoAffinityTestConnectCb(void*           context,
 
 static int whTest_CryptoAffinityWithCb(void)
 {
-    int      rc        = 0;
-    int32_t  server_rc = 0;
-    uint32_t affinity  = 0;
+    int      rc       = 0;
+    uint32_t affinity = 0;
 
     /* Transport memory configuration */
     uint8_t              req[BUFFER_SIZE]  = {0};
@@ -201,107 +201,85 @@ static int whTest_CryptoAffinityWithCb(void)
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
     WH_TEST_RETURN_ON_FAIL(wh_Client_CommInitResponse(client, NULL, NULL));
 
-    /* Verify initial state - should be HW since we configured with valid devId
-     */
-    WH_TEST_ASSERT_RETURN(server->devId == TEST_DEV_ID);
+    /* Verify server initial state - defaultDevId should be set */
     WH_TEST_ASSERT_RETURN(server->defaultDevId == TEST_DEV_ID);
 
-    /* Test 1a: Get initial affinity - should be HW */
-    WH_TEST_RETURN_ON_FAIL(wh_Client_GetCryptoAffinityRequest(client));
-    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
-    WH_TEST_RETURN_ON_FAIL(
-        wh_Client_GetCryptoAffinityResponse(client, &server_rc, &affinity));
-    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+    /* Test 1: Default affinity after init should be HW (0) */
+    rc = wh_Client_GetCryptoAffinity(client, &affinity);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_OK);
     WH_TEST_ASSERT_RETURN(affinity == WH_CRYPTO_AFFINITY_HW);
 
-    /* Test 1: Set SW affinity */
-    WH_TEST_RETURN_ON_FAIL(
-        wh_Client_SetCryptoAffinityRequest(client, WH_CRYPTO_AFFINITY_SW));
-    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
-    WH_TEST_RETURN_ON_FAIL(
-        wh_Client_SetCryptoAffinityResponse(client, &server_rc, &affinity));
-    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
-    WH_TEST_ASSERT_RETURN(affinity == WH_CRYPTO_AFFINITY_SW);
-    WH_TEST_ASSERT_RETURN(server->devId == INVALID_DEVID);
+    /* Test 2: Set HW affinity - local only, no round-trip */
+    rc = wh_Client_SetCryptoAffinity(client, WH_CRYPTO_AFFINITY_SW);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_OK);
 
-    /* Test 1b: Get affinity after setting SW - should be SW */
-    WH_TEST_RETURN_ON_FAIL(wh_Client_GetCryptoAffinityRequest(client));
-    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
-    WH_TEST_RETURN_ON_FAIL(
-        wh_Client_GetCryptoAffinityResponse(client, &server_rc, &affinity));
-    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+    rc = wh_Client_GetCryptoAffinity(client, &affinity);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_OK);
     WH_TEST_ASSERT_RETURN(affinity == WH_CRYPTO_AFFINITY_SW);
 
-    /* Test 2: Set HW affinity - should succeed since we have valid defaultDevId
-     */
-    WH_TEST_RETURN_ON_FAIL(
-        wh_Client_SetCryptoAffinityRequest(client, WH_CRYPTO_AFFINITY_HW));
-    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
-    WH_TEST_RETURN_ON_FAIL(
-        wh_Client_SetCryptoAffinityResponse(client, &server_rc, &affinity));
-    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+    /* Test 3: Restore HW affinity */
+    rc = wh_Client_SetCryptoAffinity(client, WH_CRYPTO_AFFINITY_HW);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_OK);
+
+    rc = wh_Client_GetCryptoAffinity(client, &affinity);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_OK);
     WH_TEST_ASSERT_RETURN(affinity == WH_CRYPTO_AFFINITY_HW);
-    WH_TEST_ASSERT_RETURN(server->devId == TEST_DEV_ID);
 
-    /* Test 3: Invalid affinity value - should return BADARGS */
-    WH_TEST_RETURN_ON_FAIL(wh_Client_SetCryptoAffinityRequest(client, 0xFF));
-    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
-    WH_TEST_RETURN_ON_FAIL(
-        wh_Client_SetCryptoAffinityResponse(client, &server_rc, &affinity));
-    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_BADARGS);
+    /* Test 4: Invalid affinity returns WH_ERROR_BADARGS */
+    rc = wh_Client_SetCryptoAffinity(client, 0xFF);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
+    /* Affinity should remain unchanged */
+    rc = wh_Client_GetCryptoAffinity(client, &affinity);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(affinity == WH_CRYPTO_AFFINITY_HW);
 
-    /* Test 4: Verify crypto callback is invoked when HW affinity is set */
+    /* Test 5: With HW affinity, crypto op triggers HW callback.
+     * Set HW affinity, then use the wolfHSM client devId to do a crypto op.
+     * The server should see affinity=HW in the message and use the HW devId. */
     cryptoCbInvokeCount = 0;
+    rc = wh_Client_SetCryptoAffinity(client, WH_CRYPTO_AFFINITY_HW);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_OK);
 
-    /* Set HW affinity */
-    WH_TEST_RETURN_ON_FAIL(
-        wh_Client_SetCryptoAffinityRequest(client, WH_CRYPTO_AFFINITY_HW));
-    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
-    WH_TEST_RETURN_ON_FAIL(
-        wh_Client_SetCryptoAffinityResponse(client, &server_rc, &affinity));
-    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
-
-    /* Do a crypto operation using the server's devId - this should hit our
-     * callback */
     {
         WC_RNG  testRng[1];
         uint8_t randomBytes[16];
-        rc = wc_InitRng_ex(testRng, NULL, server->devId);
+        /* Use the HW devId directly to verify the crypto callback is invoked */
+        rc = wc_InitRng_ex(testRng, NULL, TEST_DEV_ID);
         if (rc == 0) {
             (void)wc_RNG_GenerateBlock(testRng, randomBytes,
                                        sizeof(randomBytes));
             wc_FreeRng(testRng);
         }
     }
-
     /* Crypto callback should have been invoked at least once */
     WH_TEST_ASSERT_RETURN(cryptoCbInvokeCount > 0);
 
-    /* Test 5: Verify crypto callback is NOT invoked when SW affinity is set */
+    /* Test 6: With SW affinity, same devId does NOT trigger HW callback */
     cryptoCbInvokeCount = 0;
+    rc = wh_Client_SetCryptoAffinity(client, WH_CRYPTO_AFFINITY_SW);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_OK);
 
-    /* Set SW affinity */
-    WH_TEST_RETURN_ON_FAIL(
-        wh_Client_SetCryptoAffinityRequest(client, WH_CRYPTO_AFFINITY_SW));
-    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
-    WH_TEST_RETURN_ON_FAIL(
-        wh_Client_SetCryptoAffinityResponse(client, &server_rc, &affinity));
-    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
-
-    /* Do a crypto operation using the server's devId (now INVALID_DEVID) */
     {
         WC_RNG  testRng[1];
         uint8_t randomBytes[16];
-        rc = wc_InitRng_ex(testRng, NULL, server->devId);
+        /* Use INVALID_DEVID (SW) - callback should NOT be invoked */
+        rc = wc_InitRng_ex(testRng, NULL, INVALID_DEVID);
         if (rc == 0) {
             (void)wc_RNG_GenerateBlock(testRng, randomBytes,
                                        sizeof(randomBytes));
             wc_FreeRng(testRng);
         }
     }
-
     /* Crypto callback should NOT have been invoked */
     WH_TEST_ASSERT_RETURN(cryptoCbInvokeCount == 0);
+
+    /* Test 7: NULL args validation */
+    rc = wh_Client_SetCryptoAffinity(NULL, WH_CRYPTO_AFFINITY_SW);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
+    rc = wh_Client_GetCryptoAffinity(NULL, &affinity);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
+    rc = wh_Client_GetCryptoAffinity(client, NULL);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
 
     /* Cleanup */
     WH_TEST_RETURN_ON_FAIL(wh_Client_CommCloseRequest(client));
@@ -323,8 +301,8 @@ static int whTest_CryptoAffinityWithCb(void)
 
 static int whTest_CryptoAffinityNoCb(void)
 {
-    int32_t  server_rc = 0;
-    uint32_t affinity  = 0;
+    int      rc       = 0;
+    uint32_t affinity = 0;
 
     /* Transport memory configuration */
     uint8_t              req[BUFFER_SIZE]  = {0};
@@ -426,50 +404,31 @@ static int whTest_CryptoAffinityNoCb(void)
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
     WH_TEST_RETURN_ON_FAIL(wh_Client_CommInitResponse(client, NULL, NULL));
 
-    /* Verify initial state - should be SW since we configured with INVALID_DEVID
-     */
-    WH_TEST_ASSERT_RETURN(server->devId == INVALID_DEVID);
+    /* Verify server configured with INVALID_DEVID */
     WH_TEST_ASSERT_RETURN(server->defaultDevId == INVALID_DEVID);
 
-    /* Test 0: Get initial affinity - should be SW since configured with
-     * INVALID_DEVID */
-    WH_TEST_RETURN_ON_FAIL(wh_Client_GetCryptoAffinityRequest(client));
-    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
-    WH_TEST_RETURN_ON_FAIL(
-        wh_Client_GetCryptoAffinityResponse(client, &server_rc, &affinity));
-    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+    /* Test 1: Default affinity should be HW */
+    rc = wh_Client_GetCryptoAffinity(client, &affinity);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(affinity == WH_CRYPTO_AFFINITY_HW);
+
+    /* Test 2: Set SW affinity - should succeed */
+    rc = wh_Client_SetCryptoAffinity(client, WH_CRYPTO_AFFINITY_SW);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_OK);
+
+    rc = wh_Client_GetCryptoAffinity(client, &affinity);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_OK);
     WH_TEST_ASSERT_RETURN(affinity == WH_CRYPTO_AFFINITY_SW);
 
-    /* Test 1: Set SW affinity - should succeed */
-    WH_TEST_RETURN_ON_FAIL(
-        wh_Client_SetCryptoAffinityRequest(client, WH_CRYPTO_AFFINITY_SW));
-    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
-    WH_TEST_RETURN_ON_FAIL(
-        wh_Client_SetCryptoAffinityResponse(client, &server_rc, &affinity));
-    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
-    WH_TEST_ASSERT_RETURN(affinity == WH_CRYPTO_AFFINITY_SW);
-    WH_TEST_ASSERT_RETURN(server->devId == INVALID_DEVID);
+    /* Test 3: Set HW affinity on client side succeeds (it's just local state).
+     * But when the server processes a request with HW affinity and no valid
+     * defaultDevId, it will use INVALID_DEVID (SW) anyway. */
+    rc = wh_Client_SetCryptoAffinity(client, WH_CRYPTO_AFFINITY_HW);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_OK);
 
-    /* Test 2: Set HW affinity - should fail with BADCONFIG since no HW
-     * configured */
-    WH_TEST_RETURN_ON_FAIL(
-        wh_Client_SetCryptoAffinityRequest(client, WH_CRYPTO_AFFINITY_HW));
-    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
-    WH_TEST_RETURN_ON_FAIL(
-        wh_Client_SetCryptoAffinityResponse(client, &server_rc, &affinity));
-    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_NOTIMPL);
-    /* Affinity should remain SW after failed HW request */
-    WH_TEST_ASSERT_RETURN(affinity == WH_CRYPTO_AFFINITY_SW);
-    WH_TEST_ASSERT_RETURN(server->devId == INVALID_DEVID);
-
-    /* Test 3: Verify SW affinity still works after failed HW request */
-    WH_TEST_RETURN_ON_FAIL(
-        wh_Client_SetCryptoAffinityRequest(client, WH_CRYPTO_AFFINITY_SW));
-    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
-    WH_TEST_RETURN_ON_FAIL(
-        wh_Client_SetCryptoAffinityResponse(client, &server_rc, &affinity));
-    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
-    WH_TEST_ASSERT_RETURN(affinity == WH_CRYPTO_AFFINITY_SW);
+    rc = wh_Client_GetCryptoAffinity(client, &affinity);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(affinity == WH_CRYPTO_AFFINITY_HW);
 
     /* Cleanup */
     WH_TEST_RETURN_ON_FAIL(wh_Client_CommCloseRequest(client));

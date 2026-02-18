@@ -109,6 +109,7 @@ typedef struct {
 struct whClientContext_t {
     uint16_t     last_req_id;
     uint16_t     last_req_kind;
+    uint32_t     cryptoAffinity;
 #ifdef WOLFHSM_CFG_DMA
     whClientDmaContext dma;
 #endif /* WOLFHSM_CFG_DMA */
@@ -338,76 +339,26 @@ int wh_Client_CommInfo(whClientContext* c,
         uint32_t *out_nvm_state);
 
 /**
- * @brief Sends a crypto affinity request to the server.
+ * @brief Sets the crypto affinity on the client context.
  *
- * This function prepares and sends a request to select software or hardware
- * crypto on the server.
+ * Affinity is stored locally and transmitted per-message in every crypto
+ * request. No round-trip to the server is required.
  *
  * @param[in] c Pointer to the client context.
- * @param[in] affinity Requested crypto affinity.
- * @return int Returns 0 on success, or a negative error code on failure.
+ * @param[in] affinity Requested crypto affinity (WH_CRYPTO_AFFINITY_SW or
+ *                     WH_CRYPTO_AFFINITY_HW).
+ * @return int Returns 0 on success, or WH_ERROR_BADARGS on invalid input.
  */
-int wh_Client_SetCryptoAffinityRequest(whClientContext* c, uint32_t affinity);
+int wh_Client_SetCryptoAffinity(whClientContext* c, uint32_t affinity);
 
 /**
- * @brief Receives a crypto affinity response from the server.
- *
- * This function waits for and processes the response message from the server.
+ * @brief Gets the current crypto affinity from the client context.
  *
  * @param[in] c Pointer to the client context.
- * @param[out] out_rc Pointer to store the server result code.
- * @param[out] out_affinity Pointer to store the active crypto affinity.
- * @return int Returns 0 on success, or a negative error code on failure.
- */
-int wh_Client_SetCryptoAffinityResponse(whClientContext* c, int32_t* out_rc,
-                                        uint32_t* out_affinity);
-
-/**
- * @brief Sets the crypto affinity with a blocking call.
- *
- * @param[in] c Pointer to the client context.
- * @param[in] affinity Requested crypto affinity.
- * @param[out] out_rc Pointer to store the server result code.
- * @param[out] out_affinity Pointer to store the active crypto affinity.
- * @return int Returns 0 on success, or a negative error code on failure.
- */
-int wh_Client_SetCryptoAffinity(whClientContext* c, uint32_t affinity,
-                                int32_t* out_rc, uint32_t* out_affinity);
-
-/**
- * @brief Sends a get crypto affinity request to the server.
- *
- * This function sends a request to query the current crypto affinity
- * (software or hardware) on the server without changing it.
- *
- * @param[in] c Pointer to the client context.
- * @return int Returns 0 on success, or a negative error code on failure.
- */
-int wh_Client_GetCryptoAffinityRequest(whClientContext* c);
-
-/**
- * @brief Receives a get crypto affinity response from the server.
- *
- * This function waits for and processes the response message from the server.
- *
- * @param[in] c Pointer to the client context.
- * @param[out] out_rc Pointer to store the server result code.
  * @param[out] out_affinity Pointer to store the current crypto affinity.
- * @return int Returns 0 on success, or a negative error code on failure.
+ * @return int Returns 0 on success, or WH_ERROR_BADARGS on invalid input.
  */
-int wh_Client_GetCryptoAffinityResponse(whClientContext* c, int32_t* out_rc,
-                                        uint32_t* out_affinity);
-
-/**
- * @brief Gets the current crypto affinity with a blocking call.
- *
- * @param[in] c Pointer to the client context.
- * @param[out] out_rc Pointer to store the server result code.
- * @param[out] out_affinity Pointer to store the current crypto affinity.
- * @return int Returns 0 on success, or a negative error code on failure.
- */
-int wh_Client_GetCryptoAffinity(whClientContext* c, int32_t* out_rc,
-                                uint32_t* out_affinity);
+int wh_Client_GetCryptoAffinity(whClientContext* c, uint32_t* out_affinity);
 
 /**
  * @brief Sends a communication close request to the server.
