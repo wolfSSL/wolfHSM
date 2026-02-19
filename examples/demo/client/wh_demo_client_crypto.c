@@ -853,10 +853,10 @@ int wh_DemoClient_CryptoAesCbc(whClientContext* clientContext)
         }
 
         if (ret == 0) {
-            /* Reset the IV so we can decrypt */
-            ret = wc_AesSetIV(aes, NULL);
+            /* Reset the key schedule for decryption and reset the IV */
+            ret = wc_AesSetKey(aes, key, sizeof(key), NULL, AES_DECRYPTION);
             if (ret != 0) {
-                WOLFHSM_CFG_PRINTF("Failed to wc_AesSetIV %d\n", ret);
+                WOLFHSM_CFG_PRINTF("Failed to wc_AesSetKey %d\n", ret);
             }
         }
 
