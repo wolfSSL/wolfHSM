@@ -1750,6 +1750,200 @@ int whTest_AuthTest(whClientContext* client_ctx)
 }
 
 
+#if !defined(WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP) && \
+    defined(WOLFHSM_CFG_ENABLE_SERVER)
+/* Verify the base auth backend persists the user database to NVM: add a user
+ * with an NVM-backed config, cleanup (wiping RAM), re-init, and verify the
+ * user was reloaded with credentials/permissions intact and is_active reset.
+ * Uses the backend/core API directly with the module-level NVM context, so it
+ * only runs in memory transport mode. Must run after the client/server tests
+ * since it re-initializes the shared base auth user table. */
+static int _whTest_Auth_NvmPersistence(void)
+{
+    whAuthContext     ctx      = {0};
+    whAuthConfig      cfg      = {0};
+    whAuthBaseConfig  base_cfg = {0};
+    whAuthPermissions perms;
+    whAuthPermissions perms_out;
+    whUserId          user_id     = WH_USER_ID_INVALID;
+    whUserId          reloaded_id = WH_USER_ID_INVALID;
+    int               loggedIn    = 0;
+    int               i;
+
+    WH_TEST_PRINT("  Test: NVM-backed user database persistence\n");
+
+    base_cfg.nvm = nvm;
+    cfg.cb       = &default_auth_cb;
+    cfg.context  = NULL;
+    cfg.config   = &base_cfg;
+
+    /* Init with NVM backing and add an admin user (direct backend call, no
+     * user is logged in yet) */
+    WH_TEST_RETURN_ON_FAIL(wh_Auth_Init(&ctx, &cfg));
+
+    memset(&perms, 0xFF, sizeof(perms));
+    perms.keyIdCount = 0;
+    for (i = 0; i < WH_AUTH_MAX_KEY_IDS; i++) {
+        perms.keyIds[i] = 0;
+    }
+    WH_TEST_RETURN_ON_FAIL(wh_Auth_BaseUserAdd(&ctx, "nvmuser", &user_id,
+                                               perms, WH_AUTH_METHOD_PIN,
+                                               "4321", 4));
+    WH_TEST_ASSERT_RETURN(user_id != WH_USER_ID_INVALID);
+
+    /* Log in so is_active is set in RAM; session state must NOT persist */
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Auth_Login(&ctx, 0, WH_AUTH_METHOD_PIN, "nvmuser", "4321", 4,
+                      &loggedIn));
+    WH_TEST_ASSERT_RETURN(loggedIn == 1);
+
+    /* Cleanup wipes the in-memory user table */
+    WH_TEST_RETURN_ON_FAIL(wh_Auth_Cleanup(&ctx));
+
+    /* Re-init: the user database should be reloaded from NVM */
+    WH_TEST_RETURN_ON_FAIL(wh_Auth_Init(&ctx, &cfg));
+
+    memset(&perms_out, 0, sizeof(perms_out));
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Auth_UserGet(&ctx, "nvmuser", &reloaded_id, &perms_out));
+    WH_TEST_ASSERT_RETURN(reloaded_id == user_id);
+    WH_TEST_ASSERT_RETURN(WH_AUTH_IS_ADMIN(perms_out));
+
+    /* Login must succeed with the persisted credentials. This also verifies
+     * is_active was reset on load, since a still-active user cannot log in. */
+    loggedIn = 0;
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Auth_Login(&ctx, 0, WH_AUTH_METHOD_PIN, "nvmuser", "4321", 4,
+                      &loggedIn));
+    WH_TEST_ASSERT_RETURN(loggedIn == 1);
+
+    /* Remove the user (logged-in admin) so the persisted database is left
+     * empty, then cleanup */
+    WH_TEST_RETURN_ON_FAIL(wh_Auth_UserDelete(&ctx, user_id));
+    WH_TEST_RETURN_ON_FAIL(wh_Auth_Cleanup(&ctx));
+
+    /* Malformed/incompatible stored index is fatal: an index object that exists
+     * but has the wrong length must make init fail (WH_ERROR_ABORTED) rather
+     * than silently start with an empty database. Destroy it afterward so the
+     * shared NVM is left clean for the following tests. */
+    {
+        whNvmMetadata junk_meta = {0};
+        uint8_t       junk[8]   = {0};
+        whNvmId       idx_id    = WH_NVM_ID_AUTH_USER_INDEX;
+
+        junk_meta.id     = WH_NVM_ID_AUTH_USER_INDEX;
+        junk_meta.access = WH_NVM_ACCESS_NONE;
+        junk_meta.len    = sizeof(junk);
+        WH_TEST_RETURN_ON_FAIL(
+            wh_Nvm_AddObjectWithReclaim(nvm, &junk_meta, sizeof(junk), junk));
+        WH_TEST_ASSERT_RETURN(wh_Auth_Init(&ctx, &cfg) == WH_ERROR_ABORTED);
+        WH_TEST_RETURN_ON_FAIL(wh_Nvm_DestroyObjects(nvm, 1, &idx_id));
+    }
+
+    return WH_TEST_SUCCESS;
+}
+
+/* Verify the split object layout: the user index and each user's credentials
+ * are stored as separate NVM objects, credentials are pulled on demand, a
+ * credential change persists across reload, and deleting a user destroys its
+ * credential object. Unlike the other auth tests, this one inspects NVM
+ * directly with wh_Nvm_GetMetadata() to assert the on-disk object split. Uses
+ * the backend/core API directly with the module-level NVM context, so it only
+ * runs in memory transport mode. */
+static int _whTest_Auth_NvmSplitObjects(void)
+{
+    whAuthContext     ctx      = {0};
+    whAuthConfig      cfg      = {0};
+    whAuthBaseConfig  base_cfg = {0};
+    whAuthPermissions perms;
+    whAuthPermissions perms_out;
+    whNvmMetadata     meta     = {0};
+    whUserId          admin_id = WH_USER_ID_INVALID;
+    whUserId          user_id  = WH_USER_ID_INVALID;
+    whUserId          out_id   = WH_USER_ID_INVALID;
+    int               loggedIn = 0;
+    int               i;
+
+    WH_TEST_PRINT("  Test: NVM split index/credential objects\n");
+
+    base_cfg.nvm = nvm;
+    cfg.cb       = &default_auth_cb;
+    cfg.context  = NULL;
+    cfg.config   = &base_cfg;
+
+    WH_TEST_RETURN_ON_FAIL(wh_Auth_Init(&ctx, &cfg));
+
+    /* Admin (so credential changes on the second user are authorized) */
+    memset(&perms, 0xFF, sizeof(perms));
+    perms.keyIdCount = 0;
+    for (i = 0; i < WH_AUTH_MAX_KEY_IDS; i++) {
+        perms.keyIds[i] = 0;
+    }
+    WH_TEST_RETURN_ON_FAIL(wh_Auth_BaseUserAdd(&ctx, "splitadmin", &admin_id,
+                                               perms, WH_AUTH_METHOD_PIN,
+                                               "0000", 4));
+
+    memset(&perms, 0, sizeof(perms));
+    WH_TEST_RETURN_ON_FAIL(wh_Auth_BaseUserAdd(&ctx, "splituser", &user_id,
+                                               perms, WH_AUTH_METHOD_PIN,
+                                               "1111", 4));
+    WH_TEST_ASSERT_RETURN(admin_id != user_id);
+
+    /* The index object and a distinct credential object per user must exist */
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Nvm_GetMetadata(nvm, WH_NVM_ID_AUTH_USER_INDEX, &meta));
+    WH_TEST_RETURN_ON_FAIL(wh_Nvm_GetMetadata(
+        nvm, (whNvmId)(WH_NVM_ID_AUTH_CRED_BASE + (admin_id - 1)), &meta));
+    WH_TEST_RETURN_ON_FAIL(wh_Nvm_GetMetadata(
+        nvm, (whNvmId)(WH_NVM_ID_AUTH_CRED_BASE + (user_id - 1)), &meta));
+
+    /* Change the second user's PIN (as admin), then reload from NVM and confirm
+     * the new PIN works and the old one does not - proving the credential blob,
+     * not just the index, is persisted per user. */
+    WH_TEST_RETURN_ON_FAIL(wh_Auth_BaseUserSetCredentials(
+        &ctx, admin_id, user_id, WH_AUTH_METHOD_PIN, "1111", 4, "2222", 4));
+
+    WH_TEST_RETURN_ON_FAIL(wh_Auth_Cleanup(&ctx));
+    WH_TEST_RETURN_ON_FAIL(wh_Auth_Init(&ctx, &cfg));
+
+    loggedIn = 0;
+    WH_TEST_RETURN_ON_FAIL(wh_Auth_BaseLogin(&ctx, 0, WH_AUTH_METHOD_PIN,
+                                             "splituser", "1111", 4, &out_id,
+                                             &perms_out, &loggedIn));
+    WH_TEST_ASSERT_RETURN(loggedIn == 0); /* old PIN rejected */
+
+    loggedIn = 0;
+    WH_TEST_RETURN_ON_FAIL(wh_Auth_BaseLogin(&ctx, 0, WH_AUTH_METHOD_PIN,
+                                             "splituser", "2222", 4, &out_id,
+                                             &perms_out, &loggedIn));
+    WH_TEST_ASSERT_RETURN(loggedIn == 1); /* new PIN accepted */
+    WH_TEST_ASSERT_RETURN(out_id == user_id);
+
+    /* Delete the second user (as admin) and confirm its credential object is
+     * destroyed while the admin's remains. */
+    WH_TEST_RETURN_ON_FAIL(wh_Auth_BaseUserDelete(&ctx, admin_id, user_id));
+    WH_TEST_ASSERT_RETURN(
+        wh_Nvm_GetMetadata(
+            nvm, (whNvmId)(WH_NVM_ID_AUTH_CRED_BASE + (user_id - 1)), &meta) ==
+        WH_ERROR_NOTFOUND);
+    WH_TEST_RETURN_ON_FAIL(wh_Nvm_GetMetadata(
+        nvm, (whNvmId)(WH_NVM_ID_AUTH_CRED_BASE + (admin_id - 1)), &meta));
+
+    /* The deleted user must no longer resolve; the admin still must */
+    WH_TEST_ASSERT_RETURN(wh_Auth_BaseUserGet(&ctx, "splituser", &out_id,
+                                              &perms_out) == WH_ERROR_NOTFOUND);
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Auth_BaseUserGet(&ctx, "splitadmin", &out_id, &perms_out));
+    WH_TEST_ASSERT_RETURN(out_id == admin_id);
+
+    /* Clean up remaining admin so the shared user table is left empty */
+    WH_TEST_RETURN_ON_FAIL(wh_Auth_BaseUserDelete(&ctx, admin_id, admin_id));
+    WH_TEST_RETURN_ON_FAIL(wh_Auth_Cleanup(&ctx));
+
+    return WH_TEST_SUCCESS;
+}
+#endif /* !WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP && WOLFHSM_CFG_ENABLE_SERVER */
+
 /* Run all the tests against a remote server running */
 int whTest_AuthTCP(whClientConfig* clientCfg)
 {
@@ -1820,8 +2014,10 @@ int whTest_AuthMEM(void)
         "Verifying authorization override callbacks were called...\n");
     WH_TEST_ASSERT_RETURN(test_checkRequestAuthorizationCalled > 0);
 
-    /* Note that CheckKeyAuthorization is not implemented yet, so 
-     * test_checkKeyAuthorizationCalled is not checked here. */
+    /* Runs last: re-initializes the shared base auth user table */
+    WH_TEST_PRINT("Running NVM persistence tests...\n");
+    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_NvmPersistence());
+    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_NvmSplitObjects());
 
     WH_TEST_RETURN_ON_FAIL(_whTest_Auth_CleanupMemory());
 

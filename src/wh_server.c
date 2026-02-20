@@ -397,9 +397,12 @@ static uint16_t _FormatAuthErrorResponse(uint16_t magic, uint16_t group,
     }
 
     /* Write error code to first int32_t (rc field) - all responses start with
-     * this */
-    *(int32_t*)resp_packet =
-        (int32_t)wh_Translate32(magic, (uint32_t)error_code);
+     * this. Use memcpy since resp_packet may be only byte-aligned. */
+    {
+        int32_t translated_rc =
+            (int32_t)wh_Translate32(magic, (uint32_t)error_code);
+        memcpy(resp_packet, &translated_rc, sizeof(translated_rc));
+    }
 
     switch (group) {
 #ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
