@@ -71,6 +71,13 @@
 #define FLASH_SECTOR_SIZE (128 * 1024) /* 128KB */
 #define FLASH_PAGE_SIZE (8) /* 8B */
 
+#ifndef TEST_ADMIN_USERNAME
+#define TEST_ADMIN_USERNAME "admin"
+#endif
+#ifndef TEST_ADMIN_PIN
+#define TEST_ADMIN_PIN "1234"
+#endif
+
 #define ALT_CLIENT_ID (2)
 
 enum {
@@ -695,10 +702,8 @@ static int whTest_CryptoEccCacheDuplicate(whClientContext* client)
 #define WH_TEST_ECC_HASH_SIZE WC_MAX_DIGEST_SIZE
 
 static int whTest_CryptoEccCrossVerify_OneCurve(whClientContext* ctx,
-                                                WC_RNG*          rng,
-                                                int              keySize,
-                                                int              curveId,
-                                                const char*      name)
+                                                WC_RNG* rng, int keySize,
+                                                int curveId, const char* name)
 {
     ecc_key hsmKey[1]                   = {0};
     ecc_key swKey[1]                    = {0};
@@ -837,7 +842,7 @@ static int whTest_CryptoEccCrossVerify_OneCurve(whClientContext* ctx,
     if (ret == 0) {
         /* Sign with software */
         sigLen = sizeof(sig);
-        ret = wc_ecc_sign_hash(hash, sizeof(hash), sig, &sigLen, rng, swKey);
+        ret    = wc_ecc_sign_hash(hash, sizeof(hash), sig, &sigLen, rng, swKey);
         if (ret != 0) {
             WH_ERROR_PRINT("%s: SW sign failed: %d\n", name, ret);
         }
@@ -5291,6 +5296,17 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     ret = wh_Client_CommInit(client, NULL, NULL);
     if (ret != 0) {
         WH_ERROR_PRINT("Failed to comm init:%d\n", ret);
+    }
+
+    if (ret == 0) {
+#ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
+        int serverRc;
+
+        /* Attempt log in as an admin user for the rest of the tests */
+        WH_TEST_RETURN_ON_FAIL(wh_Client_AuthLogin(
+            client, WH_AUTH_METHOD_PIN, TEST_ADMIN_USERNAME, TEST_ADMIN_PIN,
+            strlen(TEST_ADMIN_PIN), &serverRc, NULL));
+#endif /* WOLFHSM_CFG_ENABLE_AUTHENTICATION */
     }
 
 #ifdef WOLFHSM_CFG_DEBUG_VERBOSE

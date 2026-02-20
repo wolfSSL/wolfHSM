@@ -39,9 +39,11 @@
 
 #include "wolfhsm/wh_settings.h"
 
+/* Note: pthread_barrier_t is not available on macOS, so skip this test */
 #if defined(WOLFHSM_CFG_THREADSAFE) && defined(WOLFHSM_CFG_TEST_POSIX) &&     \
     defined(WOLFHSM_CFG_GLOBAL_KEYS) && defined(WOLFHSM_CFG_ENABLE_CLIENT) && \
-    defined(WOLFHSM_CFG_ENABLE_SERVER) && !defined(WOLFHSM_CFG_NO_CRYPTO)
+    defined(WOLFHSM_CFG_ENABLE_SERVER) && !defined(WOLFHSM_CFG_NO_CRYPTO) &&  \
+    !defined(__APPLE__)
 
 #include <stdint.h>
 #include <stdio.h>
