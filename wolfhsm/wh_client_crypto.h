@@ -708,6 +708,44 @@ int wh_Client_AesCbc(whClientContext* ctx,
  */
 int wh_Client_AesCbcDma(whClientContext* ctx, Aes* aes, int enc,
                         const uint8_t* in, uint32_t len, uint8_t* out);
+
+/**
+ * @brief Send an AES-CBC encrypt/decrypt request to the server (non-blocking)
+ *
+ * Sends a single AES-CBC request to the server. The key material is read from
+ * the Aes struct (set via wc_AesSetKey or wh_Client_AesSetKeyId). For
+ * decryption, the IV is updated with the last input ciphertext block before
+ * sending to support in-place operation. Use wh_Client_AesCbcResponse to
+ * retrieve the result.
+ *
+ * @param[in] ctx Pointer to the client context
+ * @param[in] aes Pointer to the AES structure with key and IV state
+ * @param[in] enc 1 for encrypt, 0 for decrypt
+ * @param[in] in Pointer to the input data (must be block-aligned)
+ * @param[in] len Length of the input data in bytes (must be a multiple of
+ *                AES_BLOCK_SIZE)
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_AesCbcRequest(whClientContext* ctx, Aes* aes, int enc,
+                            const uint8_t* in, uint32_t len);
+
+/**
+ * @brief Receive the server's AES-CBC response (non-blocking)
+ *
+ * Retrieves the result of a prior wh_Client_AesCbcRequest call. For
+ * encryption, the IV in the Aes struct is updated with the last ciphertext
+ * block for CBC chaining. Returns WH_ERROR_NOTREADY if the response is not
+ * yet available.
+ *
+ * @param[in] ctx Pointer to the client context
+ * @param[in,out] aes Pointer to the AES structure (IV updated on encrypt)
+ * @param[out] out Pointer to where the output data is placed. May be NULL.
+ * @param[out] out_size Set to the number of bytes produced. May be NULL.
+ * @return int Returns 0 on success, WH_ERROR_NOTREADY if the response is not
+ *             yet available, or a negative error code on failure.
+ */
+int wh_Client_AesCbcResponse(whClientContext* ctx, Aes* aes, uint8_t* out,
+                             uint32_t* out_size);
 #endif /* HAVE_AES_CBC */
 
 #ifdef HAVE_AESGCM
