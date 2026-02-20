@@ -43,6 +43,7 @@
 #include "wolfhsm/wh_comm.h"
 #include "wolfhsm/wh_transport_mem.h"
 #include "wolfhsm/wh_client.h"
+#include "wolfhsm/wh_client_crypto.h"
 #include "wolfhsm/wh_server.h"
 #include "wolfhsm/wh_nvm.h"
 #include "wolfhsm/wh_nvm_flash.h"
@@ -234,41 +235,56 @@ static int whTest_CryptoAffinityWithCb(void)
     WH_TEST_ASSERT_RETURN(affinity == WH_CRYPTO_AFFINITY_HW);
 
     /* Test 5: With HW affinity, crypto op triggers HW callback.
-     * Set HW affinity, then use the wolfHSM client devId to do a crypto op.
-     * The server should see affinity=HW in the message and use the HW devId. */
+     * Set HW affinity, send an AES CBC request through the client-server path.
+     * The server should see affinity=HW in the message and use the HW devId,
+     * which triggers the registered crypto callback. */
     cryptoCbInvokeCount = 0;
     rc = wh_Client_SetCryptoAffinity(client, WH_CRYPTO_AFFINITY_HW);
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_OK);
 
     {
-        WC_RNG  testRng[1];
-        uint8_t randomBytes[16];
-        /* Use the HW devId directly to verify the crypto callback is invoked */
-        rc = wc_InitRng_ex(testRng, NULL, TEST_DEV_ID);
-        if (rc == 0) {
-            (void)wc_RNG_GenerateBlock(testRng, randomBytes,
-                                       sizeof(randomBytes));
-            wc_FreeRng(testRng);
-        }
+        Aes      aes[1];
+        uint8_t  key[AES_BLOCK_SIZE]     = {0x01};
+        uint8_t  iv[AES_BLOCK_SIZE]      = {0x02};
+        uint8_t  plainIn[AES_BLOCK_SIZE] = {0x03};
+        uint8_t  cipherOut[AES_BLOCK_SIZE] = {0};
+        uint32_t outSize = 0;
+
+        WH_TEST_RETURN_ON_FAIL(wc_AesInit(aes, NULL, INVALID_DEVID));
+        WH_TEST_RETURN_ON_FAIL(
+            wc_AesSetKey(aes, key, sizeof(key), iv, AES_ENCRYPTION));
+        WH_TEST_RETURN_ON_FAIL(
+            wh_Client_AesCbcRequest(client, aes, 1, plainIn, sizeof(plainIn)));
+        WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
+        WH_TEST_RETURN_ON_FAIL(
+            wh_Client_AesCbcResponse(client, aes, cipherOut, &outSize));
+        wc_AesFree(aes);
     }
     /* Crypto callback should have been invoked at least once */
     WH_TEST_ASSERT_RETURN(cryptoCbInvokeCount > 0);
 
-    /* Test 6: With SW affinity, same devId does NOT trigger HW callback */
+    /* Test 6: With SW affinity, same request does NOT trigger HW callback */
     cryptoCbInvokeCount = 0;
     rc = wh_Client_SetCryptoAffinity(client, WH_CRYPTO_AFFINITY_SW);
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_OK);
 
     {
-        WC_RNG  testRng[1];
-        uint8_t randomBytes[16];
-        /* Use INVALID_DEVID (SW) - callback should NOT be invoked */
-        rc = wc_InitRng_ex(testRng, NULL, INVALID_DEVID);
-        if (rc == 0) {
-            (void)wc_RNG_GenerateBlock(testRng, randomBytes,
-                                       sizeof(randomBytes));
-            wc_FreeRng(testRng);
-        }
+        Aes      aes[1];
+        uint8_t  key[AES_BLOCK_SIZE]     = {0x01};
+        uint8_t  iv[AES_BLOCK_SIZE]      = {0x02};
+        uint8_t  plainIn[AES_BLOCK_SIZE] = {0x03};
+        uint8_t  cipherOut[AES_BLOCK_SIZE] = {0};
+        uint32_t outSize = 0;
+
+        WH_TEST_RETURN_ON_FAIL(wc_AesInit(aes, NULL, INVALID_DEVID));
+        WH_TEST_RETURN_ON_FAIL(
+            wc_AesSetKey(aes, key, sizeof(key), iv, AES_ENCRYPTION));
+        WH_TEST_RETURN_ON_FAIL(
+            wh_Client_AesCbcRequest(client, aes, 1, plainIn, sizeof(plainIn)));
+        WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
+        WH_TEST_RETURN_ON_FAIL(
+            wh_Client_AesCbcResponse(client, aes, cipherOut, &outSize));
+        wc_AesFree(aes);
     }
     /* Crypto callback should NOT have been invoked */
     WH_TEST_ASSERT_RETURN(cryptoCbInvokeCount == 0);
@@ -429,6 +445,52 @@ static int whTest_CryptoAffinityNoCb(void)
     rc = wh_Client_GetCryptoAffinity(client, &affinity);
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_OK);
     WH_TEST_ASSERT_RETURN(affinity == WH_CRYPTO_AFFINITY_HW);
+
+    /* Test 4: AES CBC request with HW affinity succeeds even without a HW
+     * crypto callback because the server falls back to INVALID_DEVID (SW). */
+    {
+        Aes      aes[1];
+        uint8_t  key[AES_BLOCK_SIZE]       = {0x01};
+        uint8_t  iv[AES_BLOCK_SIZE]        = {0x02};
+        uint8_t  plainIn[AES_BLOCK_SIZE]   = {0x03};
+        uint8_t  cipherOut[AES_BLOCK_SIZE] = {0};
+        uint32_t outSize = 0;
+
+        WH_TEST_RETURN_ON_FAIL(wc_AesInit(aes, NULL, INVALID_DEVID));
+        WH_TEST_RETURN_ON_FAIL(
+            wc_AesSetKey(aes, key, sizeof(key), iv, AES_ENCRYPTION));
+        WH_TEST_RETURN_ON_FAIL(
+            wh_Client_AesCbcRequest(client, aes, 1, plainIn, sizeof(plainIn)));
+        WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
+        WH_TEST_RETURN_ON_FAIL(
+            wh_Client_AesCbcResponse(client, aes, cipherOut, &outSize));
+        WH_TEST_ASSERT_RETURN(outSize == sizeof(plainIn));
+        wc_AesFree(aes);
+    }
+
+    /* Test 5: AES CBC request with SW affinity also succeeds */
+    rc = wh_Client_SetCryptoAffinity(client, WH_CRYPTO_AFFINITY_SW);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_OK);
+
+    {
+        Aes      aes[1];
+        uint8_t  key[AES_BLOCK_SIZE]       = {0x01};
+        uint8_t  iv[AES_BLOCK_SIZE]        = {0x02};
+        uint8_t  plainIn[AES_BLOCK_SIZE]   = {0x03};
+        uint8_t  cipherOut[AES_BLOCK_SIZE] = {0};
+        uint32_t outSize = 0;
+
+        WH_TEST_RETURN_ON_FAIL(wc_AesInit(aes, NULL, INVALID_DEVID));
+        WH_TEST_RETURN_ON_FAIL(
+            wc_AesSetKey(aes, key, sizeof(key), iv, AES_ENCRYPTION));
+        WH_TEST_RETURN_ON_FAIL(
+            wh_Client_AesCbcRequest(client, aes, 1, plainIn, sizeof(plainIn)));
+        WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
+        WH_TEST_RETURN_ON_FAIL(
+            wh_Client_AesCbcResponse(client, aes, cipherOut, &outSize));
+        WH_TEST_ASSERT_RETURN(outSize == sizeof(plainIn));
+        wc_AesFree(aes);
+    }
 
     /* Cleanup */
     WH_TEST_RETURN_ON_FAIL(wh_Client_CommCloseRequest(client));

@@ -2388,9 +2388,10 @@ static int _HandleAesCtr(whServerContext* ctx, uint16_t magic, int devId,
 
 
 #ifdef WOLFHSM_CFG_DMA
-static int _HandleAesCtrDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
-                            const void* cryptoDataIn, uint16_t inSize,
-                            void* cryptoDataOut, uint16_t* outSize)
+static int _HandleAesCtrDma(whServerContext* ctx, uint16_t magic, int devId,
+                            uint16_t seq, const void* cryptoDataIn,
+                            uint16_t inSize, void* cryptoDataOut,
+                            uint16_t* outSize)
 {
     int                               ret = WH_ERROR_OK;
     whMessageCrypto_AesCtrDmaRequest  req;
@@ -2500,7 +2501,7 @@ static int _HandleAesCtrDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
     }
 
     if (ret == WH_ERROR_OK) {
-        ret = wc_AesInit(aes, NULL, ctx->crypto->devId);
+        ret = wc_AesInit(aes, NULL, devId);
     }
 
     if (ret == WH_ERROR_OK) {
@@ -2687,9 +2688,10 @@ static int _HandleAesEcb(whServerContext* ctx, uint16_t magic, int devId,
 }
 
 #ifdef WOLFHSM_CFG_DMA
-static int _HandleAesEcbDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
-                            const void* cryptoDataIn, uint16_t inSize,
-                            void* cryptoDataOut, uint16_t* outSize)
+static int _HandleAesEcbDma(whServerContext* ctx, uint16_t magic, int devId,
+                            uint16_t seq, const void* cryptoDataIn,
+                            uint16_t inSize, void* cryptoDataOut,
+                            uint16_t* outSize)
 {
     int                               ret = WH_ERROR_OK;
     whMessageCrypto_AesEcbDmaRequest  req;
@@ -2786,7 +2788,7 @@ static int _HandleAesEcbDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
     }
 
     if (ret == WH_ERROR_OK) {
-        ret = wc_AesInit(aes, NULL, ctx->crypto->devId);
+        ret = wc_AesInit(aes, NULL, devId);
     }
 
     if (ret == WH_ERROR_OK) {
@@ -2971,9 +2973,10 @@ static int _HandleAesCbc(whServerContext* ctx, uint16_t magic, int devId,
 }
 
 #ifdef WOLFHSM_CFG_DMA
-static int _HandleAesCbcDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
-                            const void* cryptoDataIn, uint16_t inSize,
-                            void* cryptoDataOut, uint16_t* outSize)
+static int _HandleAesCbcDma(whServerContext* ctx, uint16_t magic, int devId,
+                            uint16_t seq, const void* cryptoDataIn,
+                            uint16_t inSize, void* cryptoDataOut,
+                            uint16_t* outSize)
 {
     int                               ret = WH_ERROR_OK;
     whMessageCrypto_AesCbcDmaRequest  req;
@@ -3077,7 +3080,7 @@ static int _HandleAesCbcDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
     }
 
     if (ret == WH_ERROR_OK) {
-        ret = wc_AesInit(aes, NULL, ctx->crypto->devId);
+        ret = wc_AesInit(aes, NULL, devId);
     }
 
     if (ret == WH_ERROR_OK) {
@@ -5961,23 +5964,23 @@ int wh_Server_HandleCryptoDmaRequest(whServerContext* ctx, uint16_t magic,
 #endif /* HAVE_AESGCM */
 #ifdef WOLFSSL_AES_COUNTER
                 case WC_CIPHER_AES_CTR:
-                    ret = _HandleAesCtrDma(ctx, magic, seq, cryptoDataIn,
-                                           cryptoInSize, cryptoDataOut,
-                                           &cryptoOutSize);
+                    ret = _HandleAesCtrDma(ctx, magic, devId, seq,
+                                           cryptoDataIn, cryptoInSize,
+                                           cryptoDataOut, &cryptoOutSize);
                     break;
 #endif /* WOLFSSL_AES_COUNTER */
 #ifdef HAVE_AES_CBC
                 case WC_CIPHER_AES_CBC:
-                    ret = _HandleAesCbcDma(ctx, magic, seq, cryptoDataIn,
-                                           cryptoInSize, cryptoDataOut,
-                                           &cryptoOutSize);
+                    ret = _HandleAesCbcDma(ctx, magic, devId, seq,
+                                           cryptoDataIn, cryptoInSize,
+                                           cryptoDataOut, &cryptoOutSize);
                     break;
 #endif /* HAVE_AES_CBC */
 #ifdef HAVE_AES_ECB
                 case WC_CIPHER_AES_ECB:
-                    ret = _HandleAesEcbDma(ctx, magic, seq, cryptoDataIn,
-                                           cryptoInSize, cryptoDataOut,
-                                           &cryptoOutSize);
+                    ret = _HandleAesEcbDma(ctx, magic, devId, seq,
+                                           cryptoDataIn, cryptoInSize,
+                                           cryptoDataOut, &cryptoOutSize);
                     break;
 #endif /* HAVE_AES_ECB */
                 default:
