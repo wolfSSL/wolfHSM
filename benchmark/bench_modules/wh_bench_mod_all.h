@@ -33,17 +33,42 @@ int wh_Bench_Mod_Aes128CTREncrypt(whClientContext*  client,
 
 int wh_Bench_Mod_Aes128CTRDecrypt(whClientContext*  client,
                                   whBenchOpContext* ctx, int id, void* params);
+
+int wh_Bench_Mod_Aes128CTREncryptDma(whClientContext*  client,
+                                     whBenchOpContext* ctx, int id,
+                                     void* params);
+
+int wh_Bench_Mod_Aes128CTRDecryptDma(whClientContext*  client,
+                                     whBenchOpContext* ctx, int id,
+                                     void* params);
+
 int wh_Bench_Mod_Aes128ECBEncrypt(whClientContext*  client,
                                   whBenchOpContext* ctx, int id, void* params);
 
 int wh_Bench_Mod_Aes128ECBDecrypt(whClientContext*  client,
                                   whBenchOpContext* ctx, int id, void* params);
 
+int wh_Bench_Mod_Aes128ECBEncryptDma(whClientContext*  client,
+                                     whBenchOpContext* ctx, int id,
+                                     void* params);
+
+int wh_Bench_Mod_Aes128ECBDecryptDma(whClientContext*  client,
+                                     whBenchOpContext* ctx, int id,
+                                     void* params);
+
 int wh_Bench_Mod_Aes128CBCEncrypt(whClientContext*  client,
                                   whBenchOpContext* ctx, int id, void* params);
 
 int wh_Bench_Mod_Aes128CBCDecrypt(whClientContext*  client,
                                   whBenchOpContext* ctx, int id, void* params);
+
+int wh_Bench_Mod_Aes128CBCEncryptDma(whClientContext*  client,
+                                     whBenchOpContext* ctx, int id,
+                                     void* params);
+
+int wh_Bench_Mod_Aes128CBCDecryptDma(whClientContext*  client,
+                                     whBenchOpContext* ctx, int id,
+                                     void* params);
 
 int wh_Bench_Mod_Aes128GCMEncrypt(whClientContext*  client,
                                   whBenchOpContext* ctx, int id, void* params);
@@ -65,17 +90,41 @@ int wh_Bench_Mod_Aes256CTREncrypt(whClientContext*  client,
 int wh_Bench_Mod_Aes256CTRDecrypt(whClientContext*  client,
                                   whBenchOpContext* ctx, int id, void* params);
 
+int wh_Bench_Mod_Aes256CTRDecryptDma(whClientContext*  client,
+                                     whBenchOpContext* ctx, int id,
+                                     void* params);
+
+int wh_Bench_Mod_Aes256CTREncryptDma(whClientContext*  client,
+                                     whBenchOpContext* ctx, int id,
+                                     void* params);
+
 int wh_Bench_Mod_Aes256ECBEncrypt(whClientContext*  client,
                                   whBenchOpContext* ctx, int id, void* params);
 
 int wh_Bench_Mod_Aes256ECBDecrypt(whClientContext*  client,
                                   whBenchOpContext* ctx, int id, void* params);
 
+int wh_Bench_Mod_Aes256ECBEncryptDma(whClientContext*  client,
+                                     whBenchOpContext* ctx, int id,
+                                     void* params);
+
+int wh_Bench_Mod_Aes256ECBDecryptDma(whClientContext*  client,
+                                     whBenchOpContext* ctx, int id,
+                                     void* params);
+
 int wh_Bench_Mod_Aes256CBCEncrypt(whClientContext*  client,
                                   whBenchOpContext* ctx, int id, void* params);
 
 int wh_Bench_Mod_Aes256CBCDecrypt(whClientContext*  client,
                                   whBenchOpContext* ctx, int id, void* params);
+
+int wh_Bench_Mod_Aes256CBCEncryptDma(whClientContext*  client,
+                                     whBenchOpContext* ctx, int id,
+                                     void* params);
+
+int wh_Bench_Mod_Aes256CBCDecryptDma(whClientContext*  client,
+                                     whBenchOpContext* ctx, int id,
+                                     void* params);
 
 int wh_Bench_Mod_Aes256GCMEncrypt(whClientContext*  client,
                                   whBenchOpContext* ctx, int id, void* params);
