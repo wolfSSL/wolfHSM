@@ -1,6 +1,6 @@
 # Authentication Manager
 
-The wolfHSM Authentication Manager is a transport-agnostic component that provides authentication (PIN and certificate verification), session management, and authorization for wolfHSM operations. It is configured via a callback structure (`whAuthCb`) and can use the default in-memory implementation in `wh_auth_base.c`, or a custom backend that implements the same interface.
+The wolfHSM Authentication Manager is a transport-agnostic component that provides authentication (PIN and certificate verification), session management, and authorization for wolfHSM operations. It is configured via a callback structure (`whAuthCb`) and can use the default implementation in `wh_auth_base.c`, which supports either NVM-backed or in-memory-only user storage, or a custom backend that implements the same interface.
 
 ## Table of Contents
 
@@ -84,17 +84,42 @@ perms.keyIdCount = 0;
 
 ## Default User Database (wh_auth_base.c)
 
-The in-memory implementation in `src/wh_auth_base.c` provides a simple user database suitable for development and testing. It can be used as the auth backend by registering the `wh_Auth_Base*` callbacks in `whAuthCb`.
+The implementation in `src/wh_auth_base.c` provides a simple user database suitable for development and testing. It can be used as the auth backend by registering the `wh_Auth_Base*` callbacks in `whAuthCb`. The user database supports two modes:
+
+- **NVM-backed**: When configured with a non-NULL `whNvmContext*`, user records are persisted to a single NVM object (`WH_NVM_ID_AUTH_USER_DB`, 0xFE00) and survive server restarts.
+- **In-memory only**: When `whAuthBaseConfig.nvm` is NULL, the user database remains in RAM and is lost on restart.
 
 ### Storage
 
-- Static array of `whAuthBase_User` structures (max 5 users by default via `WH_AUTH_BASE_MAX_USERS`)
+- In-memory cache: static array of `whAuthBase_User` structures (max 5 users by default via `WH_AUTH_BASE_MAX_USERS`)
 - Each entry holds `whAuthUser`, authentication method, and credentials (max 2048 bytes via `WH_AUTH_BASE_MAX_CREDENTIALS_LEN`)
+- When NVM-backed: the entire user array is serialized (versioned format: magic + version + users) and stored in NVM object `WH_NVM_ID_AUTH_USER_DB`. Session state (`is_active`) is not persisted.
+
+### Configuration
+
+Use `whAuthBaseConfig` to enable NVM-backed persistence. Pass it via `whAuthConfig.config`:
+
+```c
+#include "wolfhsm/wh_auth.h"
+#include "wolfhsm/wh_auth_base.h"
+
+whAuthBaseConfig auth_base_config = {0};
+auth_base_config.nvm = server_config->nvm;  /* NVM context from server */
+
+whAuthConfig auth_config = {0};
+auth_config.cb     = &default_auth_cb;
+auth_config.config = &auth_base_config;
+
+wh_Auth_Init(&auth_ctx, &auth_config);
+```
+
+When `nvm` is NULL, the user database uses in-memory-only storage. The server must initialize NVM before auth when using NVM-backed storage.
 
 ### Init and Cleanup
 
-- `wh_Auth_BaseInit` zeros the user array
-- `wh_Auth_BaseCleanup` force-zeros sensitive data in memory
+- `wh_Auth_BaseInit`: If `whAuthBaseConfig.nvm` is non-NULL, loads the user database from NVM (if the object exists). Otherwise zeros the user array.
+- `wh_Auth_BaseCleanup` force-zeros sensitive data in memory; no NVM write on cleanup.
+- On UserAdd, UserDelete, UserSetPermissions, and UserSetCredentials: when NVM-backed, the updated user array is persisted to NVM after each mutation.
 
 ### Login
 
@@ -117,7 +142,7 @@ The default user database does not support multiple users with the same username
 
 ### Example: seeding a default admin user
 
-The POSIX server example in `examples/posix/wh_posix_server/wh_posix_server_cfg.c` seeds a default admin user at configuration time:
+The POSIX server example in `examples/posix/wh_posix_server/wh_posix_server_cfg.c` seeds a default admin user at configuration time. When NVM-backed, the admin user (and any other users added) persists across server restarts:
 
 ```c
 /* Add an admin user with permissions for everything */
@@ -129,6 +154,17 @@ for (i = 0; i < WH_AUTH_MAX_KEY_IDS; i++) {
 rc = wh_Auth_BaseUserAdd(&auth_ctx, "admin", &out_user_id, permissions,
                          WH_AUTH_METHOD_PIN, "1234", 4);
 ```
+
+### Example: store and retrieve user database state
+
+With NVM-backed configuration, the user database is stored on each mutation and retrieved on init. To verify persistence:
+
+1. Start the server with NVM and auth enabled (e.g., `wh_posix_server.elf` with `AUTH=1` build).
+2. Connect with the auth demo client, add users, then disconnect.
+3. Restart the server (same NVM backing store, e.g., RAM sim or file-backed flash).
+4. Connect again; previously added users are still present and can log in.
+
+The auth demo client (`examples/demo/client/wh_demo_client_auth.c`) demonstrates this flow: it adds users and can verify they persist when the server is restarted with NVM-backed auth.
 
 ## Admin vs Non-Admin Users and Restrictions
 
@@ -212,7 +248,7 @@ All public Auth Manager API functions in `src/wh_auth.c` acquire the lock via `W
 
 ### Base implementation
 
-The default user database in `wh_auth_base.c` uses a static global users array. When `WOLFHSM_CFG_THREADSAFE` is defined, this array is protected by the auth context lock; locking is performed by the `wh_Auth_*` wrapper functions, not by the base implementation itself.
+The default user database in `wh_auth_base.c` uses a static global users array (with optional NVM persistence when configured). When `WOLFHSM_CFG_THREADSAFE` is defined, this array is protected by the auth context lock; locking is performed by the `wh_Auth_*` wrapper functions, not by the base implementation itself.
 
 ### Configuration
 

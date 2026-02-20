@@ -34,6 +34,7 @@
 #include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_message_auth.h"
 #include "wolfhsm/wh_auth_base.h"
+#include "wolfhsm/wh_nvm.h"
 
 /* hash pin with use as credentials */
 #ifndef WOLFHSM_CFG_NO_CRYPTO
@@ -54,23 +55,116 @@ typedef struct whAuthBase_User {
  * wrapper functions in wh_auth.c. */
 static whAuthBase_User users[WH_AUTH_BASE_MAX_USERS];
 
+/* NVM persistence: when non-NULL, user database is stored in NVM */
+static whNvmContext* s_auth_base_nvm = NULL;
+
+/* Serialization format: magic (4) + version (2) + users array */
+#define WH_AUTH_BASE_NVM_MAGIC 0x57484142u /* "WHAB" */
+#define WH_AUTH_BASE_NVM_VERSION 1
+#define WH_AUTH_BASE_NVM_HEADER_SIZE 6
+#define WH_AUTH_BASE_NVM_DATA_SIZE \
+    (WH_AUTH_BASE_NVM_HEADER_SIZE + sizeof(whAuthBase_User) * WH_AUTH_BASE_MAX_USERS)
+
 #if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER) && !defined(WOLFHSM_CFG_NO_CRYPTO)
 #include <wolfssl/ssl.h>
 #include <wolfssl/wolfcrypt/asn.h>
 #endif
 
+/* Persist users array to NVM. Caller must hold auth lock. */
+static int wh_Auth_BasePersistToNvm(void)
+{
+    whNvmMetadata meta = {0};
+    uint8_t       buf[WH_AUTH_BASE_NVM_DATA_SIZE];
+    int           i;
+
+    if (s_auth_base_nvm == NULL) {
+        return WH_ERROR_OK;
+    }
+
+    /* Serialize: magic + version + users (clear is_active before storing) */
+    ((uint32_t*)buf)[0] = WH_AUTH_BASE_NVM_MAGIC;
+    ((uint16_t*)(buf + 4))[0] = WH_AUTH_BASE_NVM_VERSION;
+    memcpy(buf + WH_AUTH_BASE_NVM_HEADER_SIZE, users, sizeof(users));
+    /* Clear is_active in serialized copy - session state is not persisted */
+    for (i = 0; i < WH_AUTH_BASE_MAX_USERS; i++) {
+        ((whAuthBase_User*)(buf + WH_AUTH_BASE_NVM_HEADER_SIZE))[i].user.is_active = false;
+    }
+
+    meta.id     = WH_NVM_ID_AUTH_USER_DB;
+    meta.access = WH_NVM_ACCESS_NONE;
+    meta.flags  = WH_NVM_FLAGS_SENSITIVE;
+    meta.len    = WH_AUTH_BASE_NVM_DATA_SIZE;
+    memset(meta.label, 0, sizeof(meta.label));
+    memcpy(meta.label, "auth_user_db", 12);
+
+    return wh_Nvm_AddObject(s_auth_base_nvm, &meta, WH_AUTH_BASE_NVM_DATA_SIZE, buf);
+}
+
+/* Load users from NVM. Caller must hold auth lock. Returns WH_ERROR_OK on success. */
+static int wh_Auth_BaseLoadFromNvm(void)
+{
+    whNvmMetadata meta = {0};
+    uint8_t       buf[WH_AUTH_BASE_NVM_DATA_SIZE];
+    int           rc;
+
+    if (s_auth_base_nvm == NULL) {
+        return WH_ERROR_OK;
+    }
+
+    rc = wh_Nvm_GetMetadata(s_auth_base_nvm, WH_NVM_ID_AUTH_USER_DB, &meta);
+    if (rc == WH_ERROR_NOTFOUND) {
+        return WH_ERROR_OK; /* No stored data, keep empty */
+    }
+    if (rc != WH_ERROR_OK) {
+        return rc;
+    }
+    if (meta.len != WH_AUTH_BASE_NVM_DATA_SIZE) {
+        return WH_ERROR_OK; /* Version mismatch, ignore */
+    }
+
+    rc = wh_Nvm_Read(s_auth_base_nvm, WH_NVM_ID_AUTH_USER_DB, 0,
+                     WH_AUTH_BASE_NVM_DATA_SIZE, buf);
+    if (rc != WH_ERROR_OK) {
+        return rc;
+    }
+
+    if (((uint32_t*)buf)[0] != WH_AUTH_BASE_NVM_MAGIC ||
+        ((uint16_t*)(buf + 4))[0] != WH_AUTH_BASE_NVM_VERSION) {
+        return WH_ERROR_OK; /* Unknown format, start fresh */
+    }
+
+    memcpy(users, buf + WH_AUTH_BASE_NVM_HEADER_SIZE, sizeof(users));
+    /* Ensure is_active is false after load (session state is not persisted) */
+    {
+        int i;
+        for (i = 0; i < WH_AUTH_BASE_MAX_USERS; i++) {
+            users[i].user.is_active = false;
+        }
+    }
+    return WH_ERROR_OK;
+}
+
 int wh_Auth_BaseInit(void* context, const void* config)
 {
     (void)context;
-    (void)config;
 
     memset(users, 0, sizeof(users));
+    s_auth_base_nvm = NULL;
+
+    if (config != NULL) {
+        const whAuthBaseConfig* base_config = (const whAuthBaseConfig*)config;
+        if (base_config->nvm != NULL) {
+            s_auth_base_nvm = (whNvmContext*)base_config->nvm;
+            return wh_Auth_BaseLoadFromNvm();
+        }
+    }
     return WH_ERROR_OK;
 }
 
 int wh_Auth_BaseCleanup(void* context)
 {
     (void)context;
+    s_auth_base_nvm = NULL;
     wh_Utils_ForceZero(users, sizeof(users));
     return WH_ERROR_OK;
 }
@@ -261,6 +355,7 @@ int wh_Auth_BaseUserAdd(void* context, const char* username,
     whAuthContext*   auth_context = (whAuthContext*)context;
     whAuthBase_User* new_user;
     int              i;
+    int              rc;
     int              userId = WH_USER_ID_INVALID;
 
     /* Validate method is supported if credentials are provided */
@@ -344,8 +439,9 @@ int wh_Auth_BaseUserAdd(void* context, const char* username,
         }
     }
 
+    rc = wh_Auth_BasePersistToNvm();
     (void)auth_context;
-    return WH_ERROR_OK;
+    return rc;
 }
 
 int wh_Auth_BaseUserDelete(void* context, uint16_t current_user_id,
@@ -374,7 +470,7 @@ int wh_Auth_BaseUserDelete(void* context, uint16_t current_user_id,
 
     memset(user, 0, sizeof(whAuthBase_User));
     (void)context;
-    return WH_ERROR_OK;
+    return wh_Auth_BasePersistToNvm();
 }
 
 int wh_Auth_BaseUserSetPermissions(void* context, uint16_t current_user_id,
@@ -415,7 +511,7 @@ int wh_Auth_BaseUserSetPermissions(void* context, uint16_t current_user_id,
         }
     }
     (void)context;
-    return WH_ERROR_OK;
+    return wh_Auth_BasePersistToNvm();
 }
 
 
@@ -546,6 +642,9 @@ int wh_Auth_BaseUserSetCredentials(void* context, uint16_t user_id,
         user->credentials_len = 0;
     }
 
+    if (rc == WH_ERROR_OK) {
+        rc = wh_Auth_BasePersistToNvm();
+    }
     (void)auth_context;
     return rc;
 }
