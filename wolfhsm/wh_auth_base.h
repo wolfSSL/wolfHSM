@@ -33,6 +33,19 @@
 #include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_auth.h"
 
+/** NVM object ID for the auth user database (reserved, do not use for other objects) */
+#define WH_NVM_ID_AUTH_USER_DB ((whNvmId)0xFE00)
+
+/**
+ * @brief Configuration for the auth base implementation.
+ *
+ * When nvm is non-NULL and NVM is built in, the user database is persisted to NVM.
+ * When nvm is NULL, the user database remains in-memory only (lost on restart).
+ */
+typedef struct {
+    void* nvm; /**< NVM context (whNvmContext*) for persistent storage; NULL for in-memory only */
+} whAuthBaseConfig;
+
 /**
  * @brief Initialize the auth base implementation.
  *
