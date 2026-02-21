@@ -14,6 +14,10 @@
 #include "wolfhsm/wh_nvm.h"
 #include "wolfhsm/wh_nvm_flash.h"
 #include "wolfhsm/wh_flash_ramsim.h"
+#ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
+#include "wolfhsm/wh_auth.h"
+#include "wolfhsm/wh_auth_base.h"
+#endif /* WOLFHSM_CFG_ENABLE_AUTHENTICATION */
 
 #include "port/posix/posix_transport_shm.h"
 #include "port/posix/posix_transport_tcp.h"
@@ -650,3 +654,86 @@ int wh_PosixServer_ExampleNvmConfig(void* conf, const char* nvmInitFilePath)
 
     return WH_ERROR_OK;
 }
+
+
+#ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
+/* Default auth callback structure */
+static whAuthCb default_auth_cb = {
+    .Init                      = wh_Auth_BaseInit,
+    .Cleanup                   = wh_Auth_BaseCleanup,
+    .Login                     = wh_Auth_BaseLogin,
+    .Logout                    = wh_Auth_BaseLogout,
+    .CheckRequestAuthorization = NULL, /* authorization override not used */
+    .CheckKeyAuthorization     = NULL,
+    .UserAdd                   = wh_Auth_BaseUserAdd,
+    .UserDelete                = wh_Auth_BaseUserDelete,
+    .UserSetPermissions        = wh_Auth_BaseUserSetPermissions,
+    .UserGet                   = wh_Auth_BaseUserGet,
+    .UserSetCredentials        = wh_Auth_BaseUserSetCredentials};
+static whAuthContext auth_ctx = {0};
+
+/**
+ * @brief Configure a default auth context for the server
+ *
+ * This function sets up a basic auth context with example implementations that
+ * allow all operations. This is suitable for development and testing.
+ * For production use, a proper auth backend should be implemented.
+ *
+ * @param[in] conf Pointer to the server configuration
+ * @return int Returns WH_ERROR_OK on success, or a negative error code on
+ * failure
+ */
+int wh_PosixServer_ExampleAuthConfig(void* conf)
+{
+    int             rc;
+    whServerConfig* s_conf = (whServerConfig*)conf;
+    static void*    auth_backend_context =
+        NULL; /* No backend context needed for stubs */
+    static whAuthConfig auth_config = {0};
+    whAuthPermissions   permissions;
+    uint16_t            out_user_id;
+    int                 i;
+
+    if (s_conf == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Set up the auth config with default callbacks */
+    auth_config.cb      = &default_auth_cb;
+    auth_config.context = auth_backend_context;
+
+    /* Initialize the auth context */
+    rc = wh_Auth_Init(&auth_ctx, &auth_config);
+    if (rc != WH_ERROR_OK) {
+        WOLFHSM_CFG_PRINTF("Failed to initialize Auth Manager: %d\n", rc);
+        return rc;
+    }
+
+    /* Set the auth context in the server configuration */
+    s_conf->auth = &auth_ctx;
+
+    WOLFHSM_CFG_PRINTF(
+        "Default auth context configured (stub implementation)\n");
+
+    /* Add an admin user with permissions for everything */
+    memset(&permissions, 0xFF, sizeof(whAuthPermissions));
+    permissions.keyIdCount = 0;
+    for (i = 0; i < WH_AUTH_MAX_KEY_IDS; i++) {
+        permissions.keyIds[i] = 0;
+    }
+    rc = wh_Auth_BaseUserAdd(&auth_ctx, "admin", &out_user_id, permissions,
+                             WH_AUTH_METHOD_PIN, "1234", 4);
+    if (rc != WH_ERROR_OK) {
+        WOLFHSM_CFG_PRINTF("Failed to add admin user: %d\n", rc);
+        return rc;
+    }
+
+    return WH_ERROR_OK;
+}
+#else
+int wh_PosixServer_ExampleAuthConfig(void* conf)
+{
+    (void)conf;
+    return WH_ERROR_OK;
+}
+#endif /* WOLFHSM_CFG_ENABLE_AUTHENTICATION */

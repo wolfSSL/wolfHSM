@@ -3,6 +3,7 @@
 
 export DEBUG
 export DEBUG_VERBOSE
+export AUTH
 
 all: test benchmark tools examples
 

@@ -14,6 +14,7 @@ jobs:
             asan: [ 'ASAN=1', 'ASAN=0' ]
             debug: [ '', 'DEBUG_VERBOSE=1' ]
             test: [ '', '--test' ]
+            auth: [ '', 'AUTH=1' ]
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
@@ -39,17 +40,17 @@ jobs:
     - name: Build POSIX server
       run: |
         if [ "${{ matrix.transport }}" = "dma" ]; then
-          cd examples/posix/wh_posix_server && ${{ matrix.asan }} ${{ matrix.debug }} DMA=1 make -j WOLFSSL_DIR=../../../wolfssl
+          cd examples/posix/wh_posix_server && ${{ matrix.asan }} ${{ matrix.debug }} ${{ matrix.auth }} DMA=1 make -j WOLFSSL_DIR=../../../wolfssl
         else
-          cd examples/posix/wh_posix_server && ${{ matrix.asan }} ${{ matrix.debug }} TLS=${{ env.TLS }} make -j WOLFSSL_DIR=../../../wolfssl
+          cd examples/posix/wh_posix_server && ${{ matrix.asan }} ${{ matrix.debug }} ${{ matrix.auth }} TLS=${{ env.TLS }} make -j WOLFSSL_DIR=../../../wolfssl
         fi
 
     - name: Build POSIX client
       run: |
         if [ "${{ matrix.transport }}" = "dma" ]; then
-          cd examples/posix/wh_posix_client && ${{ matrix.asan }} ${{ matrix.debug }} DMA=1 make -j WOLFSSL_DIR=../../../wolfssl
+          cd examples/posix/wh_posix_client && ${{ matrix.asan }} ${{ matrix.debug }} ${{ matrix.auth }} DMA=1 make -j WOLFSSL_DIR=../../../wolfssl
         else
-          cd examples/posix/wh_posix_client && ${{ matrix.asan }} ${{ matrix.debug }} TLS=${{ env.TLS }} make -j WOLFSSL_DIR=../../../wolfssl
+          cd examples/posix/wh_posix_client && ${{ matrix.asan }} ${{ matrix.debug }} ${{ matrix.auth }} TLS=${{ env.TLS }} make -j WOLFSSL_DIR=../../../wolfssl
         fi
 
     # Start the server in the background

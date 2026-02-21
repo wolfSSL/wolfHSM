@@ -40,6 +40,7 @@ typedef struct whServerContext_t whServerContext;
 #include "wolfhsm/wh_comm.h"
 #include "wolfhsm/wh_keycache.h"
 #include "wolfhsm/wh_nvm.h"
+#include "wolfhsm/wh_auth.h"
 #include "wolfhsm/wh_message_customcb.h"
 #include "wolfhsm/wh_log.h"
 #ifdef WOLFHSM_CFG_DMA
@@ -136,6 +137,7 @@ typedef struct {
 typedef struct whServerConfig_t {
     whCommServerConfig* comm_config;
     whNvmContext*       nvm;
+    whAuthContext*      auth;
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     whServerCryptoContext* crypto;
@@ -158,6 +160,7 @@ typedef struct whServerConfig_t {
 /* Context structure to maintain the state of an HSM server */
 struct whServerContext_t {
     whNvmContext* nvm;
+    whAuthContext* auth;
     whCommServer  comm[1];
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     whServerCryptoContext* crypto;
