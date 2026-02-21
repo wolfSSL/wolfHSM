@@ -3877,6 +3877,11 @@ static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
                            ret);
             break;
         }
+        ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, NULL, devId);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed wc_InitCmac_ex (gen) tc=%d %d\n", i, ret);
+            break;
+        }
         ret = wh_Client_CmacSetKeyId(cmac, keyId);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed to wh_Client_CmacSetKeyId (gen) tc=%d %d\n",
@@ -3925,6 +3930,7 @@ static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
             WH_ERROR_PRINT("Failed wc_AesCmacVerify_ex tc=%d %d\n", i, ret);
             break;
         }
+        wc_CmacFree(cmac);
         ret = wh_Client_KeyEvict(ctx, keyId);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed to wh_Client_KeyEvict (ver) tc=%d %d\n", i,
