@@ -77,14 +77,8 @@ int wh_Server_Init(whServerContext* server, whServerConfig* config)
     server->nvm = config->nvm;
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
-    server->crypto = config->crypto;
-    if (server->crypto != NULL) {
-#if defined(WOLF_CRYPTO_CB)
-        server->crypto->devId = config->devId;
-#else
-        server->crypto->devId = INVALID_DEVID;
-#endif
-    }
+    server->crypto       = config->crypto;
+    server->defaultDevId = config->devId;
 #ifdef WOLFHSM_CFG_SHE_EXTENSION
     server->she = config->she;
 #endif
@@ -246,7 +240,6 @@ static int _wh_Server_HandleCommRequest(whServerContext* server,
                 &resp, (whMessageCommInfoResponse*)resp_packet);
         *out_resp_size = sizeof(resp);
     }; break;
-
 
     case WH_MESSAGE_COMM_ACTION_CLOSE:
     {

@@ -48,6 +48,7 @@
 
 /* Component includes */
 #include "wolfhsm/wh_comm.h"
+#include "wolfhsm/wh_message_comm.h"
 #include "wolfhsm/wh_message_customcb.h"
 #ifdef WOLFHSM_CFG_DMA
 #include "wolfhsm/wh_dma.h"
@@ -108,6 +109,7 @@ typedef struct {
 struct whClientContext_t {
     uint16_t     last_req_id;
     uint16_t     last_req_kind;
+    uint32_t     cryptoAffinity;
 #ifdef WOLFHSM_CFG_DMA
     whClientDmaContext dma;
 #endif /* WOLFHSM_CFG_DMA */
@@ -335,6 +337,28 @@ int wh_Client_CommInfo(whClientContext* c,
         uint32_t *out_boot_state,
         uint32_t *out_lifecycle_state,
         uint32_t *out_nvm_state);
+
+/**
+ * @brief Sets the crypto affinity on the client context.
+ *
+ * Affinity is stored locally and transmitted per-message in every crypto
+ * request. No round-trip to the server is required.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] affinity Requested crypto affinity (WH_CRYPTO_AFFINITY_SW or
+ *                     WH_CRYPTO_AFFINITY_HW).
+ * @return int Returns 0 on success, or WH_ERROR_BADARGS on invalid input.
+ */
+int wh_Client_SetCryptoAffinity(whClientContext* c, uint32_t affinity);
+
+/**
+ * @brief Gets the current crypto affinity from the client context.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[out] out_affinity Pointer to store the current crypto affinity.
+ * @return int Returns 0 on success, or WH_ERROR_BADARGS on invalid input.
+ */
+int wh_Client_GetCryptoAffinity(whClientContext* c, uint32_t* out_affinity);
 
 /**
  * @brief Sends a communication close request to the server.

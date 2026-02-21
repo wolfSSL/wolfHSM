@@ -42,6 +42,9 @@
 
 #ifdef WOLFHSM_CFG_ENABLE_CLIENT
 #include "wolfhsm/wh_client.h"
+#if !defined(WOLFHSM_CFG_NO_CRYPTO)
+#include "wolfhsm/wh_client_crypto.h"
+#endif
 #include "wh_test_nvmflags.h"
 #endif
 
@@ -504,6 +507,69 @@ static int _clientServerSequentialTestConnectCb(void*           context,
                                   connected);
 }
 
+#if !defined(WOLFHSM_CFG_NO_CRYPTO)
+#ifdef HAVE_AES_CBC
+static int _testAesCbcRequestResponse(whClientContext* client,
+                                      whServerContext* server)
+{
+    Aes      aes[1];
+    uint8_t  key[AES_BLOCK_SIZE]       = {0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF,
+                                          0x11, 0x22, 0x33, 0x44, 0x55, 0x66,
+                                          0x77, 0x88, 0x99, 0x00};
+    uint8_t  iv[AES_BLOCK_SIZE]        = {0};
+    uint8_t  plainIn[AES_BLOCK_SIZE]   = {0x77, 0x6F, 0x6C, 0x66, 0x48, 0x53,
+                                          0x4D, 0x20, 0x41, 0x45, 0x53, 0x20,
+                                          0x74, 0x65, 0x73, 0x74};
+    uint8_t  cipherOut[AES_BLOCK_SIZE] = {0};
+    uint8_t  plainOut[AES_BLOCK_SIZE]  = {0};
+    uint32_t outSize                   = 0;
+    int      rc;
+
+    WH_TEST_PRINT("  Testing AES CBC request/response...\n");
+
+    /* Encrypt */
+    WH_TEST_RETURN_ON_FAIL(wc_AesInit(aes, NULL, INVALID_DEVID));
+    WH_TEST_RETURN_ON_FAIL(
+        wc_AesSetKey(aes, key, sizeof(key), iv, AES_ENCRYPTION));
+
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Client_AesCbcRequest(client, aes, 1, plainIn, sizeof(plainIn)));
+
+    /* Response should not be ready before server processes */
+    rc = wh_Client_AesCbcResponse(client, aes, cipherOut, &outSize);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_NOTREADY);
+
+    /* Server processes the request */
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
+
+    /* Now response should be available */
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Client_AesCbcResponse(client, aes, cipherOut, &outSize));
+    WH_TEST_ASSERT_RETURN(outSize == sizeof(plainIn));
+    /* Ciphertext should differ from plaintext */
+    WH_TEST_ASSERT_RETURN(memcmp(cipherOut, plainIn, sizeof(plainIn)) != 0);
+    wc_AesFree(aes);
+
+    /* Decrypt */
+    WH_TEST_RETURN_ON_FAIL(wc_AesInit(aes, NULL, INVALID_DEVID));
+    WH_TEST_RETURN_ON_FAIL(
+        wc_AesSetKey(aes, key, sizeof(key), iv, AES_DECRYPTION));
+
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Client_AesCbcRequest(client, aes, 0, cipherOut, sizeof(cipherOut)));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Client_AesCbcResponse(client, aes, plainOut, &outSize));
+    WH_TEST_ASSERT_RETURN(outSize == sizeof(cipherOut));
+    /* Decrypted output should match original plaintext */
+    WH_TEST_ASSERT_RETURN(memcmp(plainOut, plainIn, sizeof(plainIn)) == 0);
+    wc_AesFree(aes);
+
+    return WH_ERROR_OK;
+}
+#endif /* HAVE_AES_CBC */
+#endif /* !WOLFHSM_CFG_NO_CRYPTO */
+
 static int _testOutOfBoundsNvmReads(whClientContext* client,
                                     whServerContext* server, whNvmId id)
 {
@@ -623,9 +689,7 @@ int whTest_ClientServerSequential(whTestNvmBackendType nvmType)
         whTest_NvmCfgBackend(nvmType, &nvm_setup, n_conf, fc_conf, fc, fcb));
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
-    whServerCryptoContext crypto[1] = {{
-        .devId = INVALID_DEVID,
-    }};
+    whServerCryptoContext crypto[1] = {0};
 #endif
 
     whServerConfig s_conf[1] = {{
@@ -644,7 +708,7 @@ int whTest_ClientServerSequential(whTestNvmBackendType nvmType)
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     WH_TEST_RETURN_ON_FAIL(wolfCrypt_Init());
-    WH_TEST_RETURN_ON_FAIL(wc_InitRng_ex(crypto->rng, NULL, crypto->devId));
+    WH_TEST_RETURN_ON_FAIL(wc_InitRng_ex(crypto->rng, NULL, INVALID_DEVID));
 #endif
     WH_TEST_RETURN_ON_FAIL(wh_Nvm_Init(nvm, n_conf));
 
@@ -1106,6 +1170,12 @@ int whTest_ClientServerSequential(whTestNvmBackendType nvmType)
     /* Test DMA callbacks and address allowlisting */
     WH_TEST_RETURN_ON_FAIL(_testDma(server, client));
 #endif /* WOLFHSM_CFG_DMA */
+
+#if !defined(WOLFHSM_CFG_NO_CRYPTO) && defined(HAVE_AES_CBC)
+    /* Test split AES CBC request/response */
+    WH_TEST_RETURN_ON_FAIL(
+        _testAesCbcRequestResponse(client, server));
+#endif /* !WOLFHSM_CFG_NO_CRYPTO && HAVE_AES_CBC */
 
     /* Check that we are still connected */
     WH_TEST_RETURN_ON_FAIL(wh_Server_GetConnected(server, &server_connected));
@@ -1613,9 +1683,7 @@ static int wh_ClientServer_MemThreadTest(whTestNvmBackendType nvmType)
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     /* Crypto context */
-    whServerCryptoContext crypto[1] = {{
-            .devId = INVALID_DEVID,
-    }};
+    whServerCryptoContext crypto[1] = {0};
 #endif
 
 
@@ -1632,7 +1700,7 @@ static int wh_ClientServer_MemThreadTest(whTestNvmBackendType nvmType)
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     WH_TEST_RETURN_ON_FAIL(wolfCrypt_Init());
-    WH_TEST_RETURN_ON_FAIL(wc_InitRng_ex(crypto->rng, NULL, crypto->devId));
+    WH_TEST_RETURN_ON_FAIL(wc_InitRng_ex(crypto->rng, NULL, INVALID_DEVID));
 #endif
     _whClientServerThreadTest(c_conf, s_conf);
 
@@ -1698,9 +1766,7 @@ static int wh_ClientServer_PosixMemMapThreadTest(whTestNvmBackendType nvmType)
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     /* Crypto context */
-    whServerCryptoContext crypto[1] = {{
-            .devId = INVALID_DEVID,
-    }};
+    whServerCryptoContext crypto[1] = {0};
 #endif
 
     whServerConfig s_conf[1] = {{
@@ -1715,7 +1781,7 @@ static int wh_ClientServer_PosixMemMapThreadTest(whTestNvmBackendType nvmType)
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     WH_TEST_RETURN_ON_FAIL(wolfCrypt_Init());
-    WH_TEST_RETURN_ON_FAIL(wc_InitRng_ex(crypto->rng, NULL, crypto->devId));
+    WH_TEST_RETURN_ON_FAIL(wc_InitRng_ex(crypto->rng, NULL, INVALID_DEVID));
 #endif
     _whClientServerThreadTest(c_conf, s_conf);
 

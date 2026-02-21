@@ -169,15 +169,14 @@ whNvmContext nvmCtx = {0};
 wh_Nvm_Init(&nvmCtx, &whNvmConfig);
 
 /* Step 3: Allocate and initialize a crypto context structure */
-whServerCryptoContext cryptoCtx {
-    .devID = INVALID_DEVID; /* or set to custom crypto callback devID */
-};
+whServerCryptoContext cryptoCtx = {0};
 
 /* Allocate and initialize the Server configuration*/
 whServerConfig serverCfg = {
         .comm   = commServerCfg,
         .nvm    = nvmCtx,
-        .crypto = cryptoCtx,
+        .crypto = &cryptoCtx,
+        .devId  = INVALID_DEVID, /* or set to custom crypto callback devID */
 };
 
 /* Step 4: Initialize wolfCrypt*/

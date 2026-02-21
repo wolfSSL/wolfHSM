@@ -240,9 +240,7 @@ static int wh_ClientServer_MemThreadTest(void)
     whNvmContext nvm[1]    = {{0}};
 
     /* Crypto context */
-    whServerCryptoContext crypto[1] = {{
-        .devId = INVALID_DEVID,
-    }};
+    whServerCryptoContext crypto[1] = {0};
 
     whServerConfig s_conf[1] = {{
         .comm_config = cs_conf,
@@ -254,7 +252,7 @@ static int wh_ClientServer_MemThreadTest(void)
 
     ret = wolfCrypt_Init();
     if (ret == 0) {
-        ret = wc_InitRng_ex(crypto->rng, NULL, crypto->devId);
+        ret = wc_InitRng_ex(crypto->rng, NULL, INVALID_DEVID);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed to initialize wolfCrypt rng: %d\n", ret);
         }

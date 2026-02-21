@@ -76,6 +76,7 @@ typedef struct {
     whMessageCrypto_AlgoType algoSubType; /* Subtype, specific to algoType.
                                              Right now only used for PQ algos */
 #define WH_MESSAGE_CRYPTO_ALGO_SUBTYPE_NONE 0
+    uint32_t affinity; /* Crypto affinity for this request */
 } whMessageCrypto_GenericRequestHeader;
 
 /* Generic crypto response header message. This must always be the first element
@@ -83,6 +84,7 @@ typedef struct {
 typedef struct {
     whMessageCrypto_AlgoType algoType; /* Type of crypto operation */
     int32_t                  rc;       /* Return code */
+    uint32_t                 reserved; /* Reserved for future use */
 } whMessageCrypto_GenericResponseHeader;
 
 WH_UTILS_STATIC_ASSERT(

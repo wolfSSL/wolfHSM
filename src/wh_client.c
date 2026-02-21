@@ -410,6 +410,28 @@ int wh_Client_CommInfo(whClientContext* c,
     return rc;
 }
 
+int wh_Client_SetCryptoAffinity(whClientContext* c, uint32_t affinity)
+{
+    if (c == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    if (affinity != WH_CRYPTO_AFFINITY_SW &&
+        affinity != WH_CRYPTO_AFFINITY_HW) {
+        return WH_ERROR_BADARGS;
+    }
+    c->cryptoAffinity = affinity;
+    return WH_ERROR_OK;
+}
+
+int wh_Client_GetCryptoAffinity(whClientContext* c, uint32_t* out_affinity)
+{
+    if (c == NULL || out_affinity == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    *out_affinity = c->cryptoAffinity;
+    return WH_ERROR_OK;
+}
+
 
 int wh_Client_CommCloseRequest(whClientContext* c)
 {

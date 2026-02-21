@@ -138,28 +138,34 @@ static int _xferSha224BlockAndUpdateDigest(whClientContext* ctx,
                                            uint32_t         isLastBlock);
 #endif /* WOLFSSL_SHA224 */
 
-static uint8_t* _createCryptoRequest(uint8_t* reqBuf, uint16_t type);
+static uint8_t* _createCryptoRequest(uint8_t* reqBuf, uint16_t type,
+                                     uint32_t affinity);
 static uint8_t* _createCryptoRequestWithSubtype(uint8_t* reqBuf, uint16_t type,
-                                                uint16_t algoSubType);
+                                                uint16_t algoSubType,
+                                                uint32_t affinity);
 static int      _getCryptoResponse(uint8_t* respBuf, uint16_t type,
                                    uint8_t** outResponse);
 
 
 /* Helper function to prepare a crypto request buffer with generic header */
-static uint8_t* _createCryptoRequest(uint8_t* reqBuf, uint16_t type)
+static uint8_t* _createCryptoRequest(uint8_t* reqBuf, uint16_t type,
+                                     uint32_t affinity)
 {
-    return _createCryptoRequestWithSubtype(reqBuf, type, WH_MESSAGE_CRYPTO_ALGO_SUBTYPE_NONE);
+    return _createCryptoRequestWithSubtype(
+        reqBuf, type, WH_MESSAGE_CRYPTO_ALGO_SUBTYPE_NONE, affinity);
 }
 
 /* Helper function to prepare a crypto request buffer with generic header and
  * subtype */
 static uint8_t* _createCryptoRequestWithSubtype(uint8_t* reqBuf, uint16_t type,
-                                                uint16_t algoSubType)
+                                                uint16_t algoSubType,
+                                                uint32_t affinity)
 {
     whMessageCrypto_GenericRequestHeader* header =
         (whMessageCrypto_GenericRequestHeader*)reqBuf;
     header->algoType    = type;
     header->algoSubType = algoSubType;
+    header->affinity    = affinity;
     return reqBuf + sizeof(whMessageCrypto_GenericRequestHeader);
 }
 
@@ -202,7 +208,8 @@ int wh_Client_RngGenerate(whClientContext* ctx, uint8_t* out, uint32_t size)
     }
 
     /* Setup generic header and get pointer to request data */
-    reqData = _createCryptoRequest(dataPtr, WC_ALGO_TYPE_RNG);
+    reqData =
+        _createCryptoRequest(dataPtr, WC_ALGO_TYPE_RNG, ctx->cryptoAffinity);
 
     /* Setup request header */
     req = (whMessageCrypto_RngRequest*)reqData;
@@ -288,7 +295,7 @@ int wh_Client_RngGenerateDma(whClientContext* ctx, uint8_t* out, uint32_t size)
 
     /* Setup generic header and get pointer to request data */
     req = (whMessageCrypto_RngDmaRequest*)_createCryptoRequest(
-        dataPtr, WC_ALGO_TYPE_RNG);
+        dataPtr, WC_ALGO_TYPE_RNG, ctx->cryptoAffinity);
 
     /* Set up output buffer address and size */
     req->output.sz = size;
@@ -369,7 +376,7 @@ int wh_Client_AesCtr(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
     }
     /* Setup generic header and get pointer to request data */
     req = (whMessageCrypto_AesCtrRequest*)_createCryptoRequest(
-        dataPtr, WC_CIPHER_AES_CTR);
+        dataPtr, WC_CIPHER_AES_CTR, ctx->cryptoAffinity);
     uint8_t* req_in  = (uint8_t*)(req + 1);
     uint8_t* req_key = req_in + len;
     uint8_t* req_iv  = req_key + key_len;
@@ -475,7 +482,7 @@ int wh_Client_AesCtrDma(whClientContext* ctx, Aes* aes, int enc,
 
     /* Setup generic header and get pointer to request data */
     req = (whMessageCrypto_AesCtrDmaRequest*)_createCryptoRequest(
-        dataPtr, WC_CIPHER_AES_CTR);
+        dataPtr, WC_CIPHER_AES_CTR, ctx->cryptoAffinity);
     uint8_t* req_iv = (uint8_t*)req + sizeof(whMessageCrypto_AesCtrDmaRequest);
     uint8_t* req_tmp = req_iv + AES_IV_SIZE;
     uint8_t* req_key = req_tmp + AES_BLOCK_SIZE;
@@ -619,7 +626,7 @@ int wh_Client_AesEcb(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
     }
     /* Setup generic header and get pointer to request data */
     req = (whMessageCrypto_AesEcbRequest*)_createCryptoRequest(
-        dataPtr, WC_CIPHER_AES_ECB);
+        dataPtr, WC_CIPHER_AES_ECB, ctx->cryptoAffinity);
     uint8_t* req_in  = (uint8_t*)(req + 1);
     uint8_t* req_key = req_in + len;
     uint32_t req_len = sizeof(whMessageCrypto_GenericRequestHeader) +
@@ -706,7 +713,7 @@ int wh_Client_AesEcbDma(whClientContext* ctx, Aes* aes, int enc,
 
     /* Setup generic header and get pointer to request data */
     req = (whMessageCrypto_AesEcbDmaRequest*)_createCryptoRequest(
-        dataPtr, WC_CIPHER_AES_ECB);
+        dataPtr, WC_CIPHER_AES_ECB, ctx->cryptoAffinity);
     uint8_t* req_key = (uint8_t*)req + sizeof(whMessageCrypto_AesEcbDmaRequest);
     uint32_t req_len = sizeof(whMessageCrypto_GenericRequestHeader) +
                        sizeof(*req);
@@ -833,7 +840,7 @@ int wh_Client_AesCbc(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
     }
     /* Setup generic header and get pointer to request data */
     req = (whMessageCrypto_AesCbcRequest*)_createCryptoRequest(
-        dataPtr, WC_CIPHER_AES_CBC);
+        dataPtr, WC_CIPHER_AES_CBC, ctx->cryptoAffinity);
     uint8_t* req_in  = (uint8_t*)(req + 1);
     uint8_t* req_key = req_in + len;
     uint8_t* req_iv  = req_key + key_len;
@@ -930,7 +937,7 @@ int wh_Client_AesCbcDma(whClientContext* ctx, Aes* aes, int enc,
 
     /* Setup generic header and get pointer to request data */
     req = (whMessageCrypto_AesCbcDmaRequest*)_createCryptoRequest(
-        dataPtr, WC_CIPHER_AES_CBC);
+        dataPtr, WC_CIPHER_AES_CBC, ctx->cryptoAffinity);
     uint8_t* req_iv = (uint8_t*)req + sizeof(whMessageCrypto_AesCbcDmaRequest);
     uint8_t* req_key = req_iv + AES_IV_SIZE;
     uint32_t req_len = sizeof(whMessageCrypto_GenericRequestHeader) +
@@ -1027,6 +1034,114 @@ int wh_Client_AesCbcDma(whClientContext* ctx, Aes* aes, int enc,
     return ret;
 }
 #endif /* WOLFHSM_CFG_DMA */
+
+int wh_Client_AesCbcRequest(whClientContext* ctx, Aes* aes, int enc,
+                            const uint8_t* in, uint32_t len)
+{
+    whMessageCrypto_AesCbcRequest* req;
+    uint8_t*                       dataPtr;
+
+    if ((ctx == NULL) || (aes == NULL) || ((len % AES_BLOCK_SIZE) != 0) ||
+        (in == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    uint16_t blocks = len / AES_BLOCK_SIZE;
+
+    if (blocks == 0) {
+        return WH_ERROR_OK;
+    }
+
+    uint32_t       key_len = aes->keylen;
+    const uint8_t* key     = (const uint8_t*)(aes->devKey);
+    whKeyId        key_id  = WH_DEVCTX_TO_KEYID(aes->devCtx);
+    uint8_t*       iv      = (uint8_t*)aes->reg;
+    uint32_t       iv_len  = AES_IV_SIZE;
+
+    dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
+    if (dataPtr == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    req = (whMessageCrypto_AesCbcRequest*)_createCryptoRequest(
+        dataPtr, WC_CIPHER_AES_CBC, ctx->cryptoAffinity);
+    uint8_t* req_in  = (uint8_t*)(req + 1);
+    uint8_t* req_key = req_in + len;
+    uint8_t* req_iv  = req_key + key_len;
+    uint32_t req_len = sizeof(whMessageCrypto_GenericRequestHeader) +
+                       sizeof(*req) + len + key_len + iv_len;
+
+    if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
+        return WH_ERROR_BADARGS;
+    }
+
+    req->enc    = enc;
+    req->keyLen = key_len;
+    req->sz     = len;
+    req->keyId  = key_id;
+    if ((in != NULL) && (len > 0)) {
+        memcpy(req_in, in, len);
+    }
+    if ((key != NULL) && (key_len > 0)) {
+        memcpy(req_key, key, key_len);
+    }
+    if ((iv != NULL) && (iv_len > 0)) {
+        memcpy(req_iv, iv, iv_len);
+    }
+
+    /* For decryption, update the IV with the last ciphertext block before
+     * sending, since the input buffer may be reused for output (in-place) */
+    if (enc == 0) {
+        uint32_t last_offset = (blocks - 1) * AES_BLOCK_SIZE;
+        memcpy(iv, in + last_offset, iv_len);
+    }
+
+    return wh_Client_SendRequest(ctx, WH_MESSAGE_GROUP_CRYPTO,
+                                 WC_ALGO_TYPE_CIPHER, req_len, dataPtr);
+}
+
+int wh_Client_AesCbcResponse(whClientContext* ctx, Aes* aes, uint8_t* out,
+                             uint32_t* out_size)
+{
+    int                             ret;
+    uint8_t*                        dataPtr;
+    uint16_t                        group   = 0;
+    uint16_t                        action  = 0;
+    uint16_t                        res_len = 0;
+    whMessageCrypto_AesCbcResponse* res;
+
+    if ((ctx == NULL) || (aes == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
+    if (dataPtr == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
+    if (ret == WH_ERROR_OK) {
+        ret = _getCryptoResponse(dataPtr, WC_CIPHER_AES_CBC, (uint8_t**)&res);
+        if (ret == WH_ERROR_OK) {
+            uint8_t* res_out = (uint8_t*)(res + 1);
+            if (out != NULL) {
+                memcpy(out, res_out, res->sz);
+                /* For encryption, update the IV with the last ciphertext
+                 * block for CBC chaining */
+                if (res->sz >= AES_BLOCK_SIZE) {
+                    uint32_t last_offset =
+                        ((res->sz / AES_BLOCK_SIZE) - 1) * AES_BLOCK_SIZE;
+                    memcpy((uint8_t*)aes->reg, out + last_offset, AES_IV_SIZE);
+                }
+            }
+            if (out_size != NULL) {
+                *out_size = res->sz;
+            }
+        }
+    }
+
+    return ret;
+}
 #endif /* HAVE_AES_CBC */
 
 #ifdef HAVE_AESGCM
@@ -1062,8 +1177,8 @@ int wh_Client_AesGcm(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
 
     /* Setup generic header and get pointer to request data */
     whMessageCrypto_AesGcmRequest* req =
-        (whMessageCrypto_AesGcmRequest*)_createCryptoRequest(dataPtr,
-                                                             WC_CIPHER_AES_GCM);
+        (whMessageCrypto_AesGcmRequest*)_createCryptoRequest(
+            dataPtr, WC_CIPHER_AES_GCM, ctx->cryptoAffinity);
 
     uint8_t* req_in     = (uint8_t*)(req + 1);
     uint8_t* req_key    = req_in + len;
@@ -1218,7 +1333,7 @@ int wh_Client_AesGcmDma(whClientContext* ctx, Aes* aes, int enc,
 
     /* Setup generic header and get pointer to request data */
     req = (whMessageCrypto_AesGcmDmaRequest*)_createCryptoRequest(
-        dataPtr, WC_CIPHER_AES_GCM);
+        dataPtr, WC_CIPHER_AES_GCM, ctx->cryptoAffinity);
     uint8_t* req_iv = (uint8_t*)req + sizeof(whMessageCrypto_AesGcmDmaRequest);
     uint8_t* req_tag = req_iv + iv_len;
     uint8_t* req_key = req_tag + (enc != 0 ? 0 : tag_len);
@@ -1455,7 +1570,7 @@ static int _EccMakeKey(whClientContext* ctx, int size, int curveId,
 
     /* Setup generic header and get pointer to request data */
     req = (whMessageCrypto_EccKeyGenRequest*)_createCryptoRequest(
-        dataPtr, WC_PK_TYPE_EC_KEYGEN);
+        dataPtr, WC_PK_TYPE_EC_KEYGEN, ctx->cryptoAffinity);
 
     /* Use the supplied key id if provided */
     if (inout_key_id != NULL) {
@@ -1626,7 +1741,7 @@ int wh_Client_EccSharedSecret(whClientContext* ctx, ecc_key* priv_key,
 
         /* Setup generic header and get pointer to request data */
         req = (whMessageCrypto_EcdhRequest*)_createCryptoRequest(
-            dataPtr, WC_PK_TYPE_ECDH);
+            dataPtr, WC_PK_TYPE_ECDH, ctx->cryptoAffinity);
 
         if (req_len <= WOLFHSM_CFG_COMM_DATA_LEN) {
             if (pub_evict != 0) {
@@ -1754,7 +1869,7 @@ int wh_Client_EccSign(whClientContext* ctx, ecc_key* key, const uint8_t* hash,
 
         /* Setup generic header and get pointer to request data */
         req = (whMessageCrypto_EccSignRequest*)_createCryptoRequest(
-            dataPtr, WC_PK_TYPE_ECDSA_SIGN);
+            dataPtr, WC_PK_TYPE_ECDSA_SIGN, ctx->cryptoAffinity);
 
         if (req_len <= WOLFHSM_CFG_COMM_DATA_LEN) {
             uint8_t* req_hash = (uint8_t*)(req + 1);
@@ -1896,7 +2011,7 @@ int wh_Client_EccVerify(whClientContext* ctx, ecc_key* key, const uint8_t* sig,
 
         /* Setup generic header and get pointer to request data */
         req = (whMessageCrypto_EccVerifyRequest*)_createCryptoRequest(
-            dataPtr, WC_PK_TYPE_ECDSA_VERIFY);
+            dataPtr, WC_PK_TYPE_ECDSA_VERIFY, ctx->cryptoAffinity);
 
         if (req_len <= WOLFHSM_CFG_COMM_DATA_LEN) {
             uint8_t* req_sig  = (uint8_t*)(req + 1);
@@ -2144,7 +2259,7 @@ static int _Curve25519MakeKey(whClientContext* ctx, uint16_t size,
 
     /* Setup generic header and get pointer to request data */
     req = (whMessageCrypto_Curve25519KeyGenRequest*)_createCryptoRequest(
-        dataPtr, WC_PK_TYPE_CURVE25519_KEYGEN);
+        dataPtr, WC_PK_TYPE_CURVE25519_KEYGEN, ctx->cryptoAffinity);
 
     /* Use the supplied key id if provided */
     if (inout_key_id != NULL) {
@@ -2298,7 +2413,7 @@ int wh_Client_Curve25519SharedSecret(whClientContext* ctx,
 
         /* Setup generic header and get pointer to request data */
         req = (whMessageCrypto_Curve25519Request*)_createCryptoRequest(
-            dataPtr, WC_PK_TYPE_CURVE25519);
+            dataPtr, WC_PK_TYPE_CURVE25519, ctx->cryptoAffinity);
 
         if (req_len <= WOLFHSM_CFG_COMM_DATA_LEN) {
             if (pub_evict != 0) {
@@ -2469,7 +2584,7 @@ static int _Ed25519MakeKey(whClientContext* ctx, whKeyId* inout_key_id,
     }
 
     req = (whMessageCrypto_Ed25519KeyGenRequest*)_createCryptoRequest(
-        dataPtr, WC_PK_TYPE_ED25519_KEYGEN);
+        dataPtr, WC_PK_TYPE_ED25519_KEYGEN, ctx->cryptoAffinity);
 
     uint16_t group  = WH_MESSAGE_GROUP_CRYPTO;
     uint16_t action = WC_ALGO_TYPE_PK;
@@ -2612,7 +2727,7 @@ int wh_Client_Ed25519Sign(whClientContext* ctx, ed25519_key* key,
         }
 
         req = (whMessageCrypto_Ed25519SignRequest*)_createCryptoRequest(
-            dataPtr, WC_PK_TYPE_ED25519_SIGN);
+            dataPtr, WC_PK_TYPE_ED25519_SIGN, ctx->cryptoAffinity);
 
         uint8_t* req_msg = (uint8_t*)(req + 1);
         uint8_t* req_ctx = req_msg + msgLen;
@@ -2748,7 +2863,7 @@ int wh_Client_Ed25519Verify(whClientContext* ctx, ed25519_key* key,
         }
 
         req = (whMessageCrypto_Ed25519VerifyRequest*)_createCryptoRequest(
-            dataPtr, WC_PK_TYPE_ED25519_VERIFY);
+            dataPtr, WC_PK_TYPE_ED25519_VERIFY, ctx->cryptoAffinity);
 
         uint8_t* req_sig = (uint8_t*)(req + 1);
         uint8_t* req_msg = req_sig + sigLen;
@@ -2877,7 +2992,7 @@ int wh_Client_Ed25519SignDma(whClientContext* ctx, ed25519_key* key,
         }
 
         req = (whMessageCrypto_Ed25519SignDmaRequest*)_createCryptoRequest(
-            dataPtr, WC_PK_TYPE_ED25519_SIGN);
+            dataPtr, WC_PK_TYPE_ED25519_SIGN, ctx->cryptoAffinity);
 
         uint8_t* req_ctx = (uint8_t*)(req + 1);
 
@@ -3024,7 +3139,7 @@ int wh_Client_Ed25519VerifyDma(whClientContext* ctx, ed25519_key* key,
         }
 
         req = (whMessageCrypto_Ed25519VerifyDmaRequest*)_createCryptoRequest(
-            dataPtr, WC_PK_TYPE_ED25519_VERIFY);
+            dataPtr, WC_PK_TYPE_ED25519_VERIFY, ctx->cryptoAffinity);
 
         uint8_t* req_ctx = (uint8_t*)(req + 1);
 
@@ -3214,7 +3329,7 @@ static int _RsaMakeKey(whClientContext* ctx, uint32_t size, uint32_t e,
 
     /* Setup generic header and get pointer to request data */
     req = (whMessageCrypto_RsaKeyGenRequest*)_createCryptoRequest(
-        dataPtr, WC_PK_TYPE_RSA_KEYGEN);
+        dataPtr, WC_PK_TYPE_RSA_KEYGEN, ctx->cryptoAffinity);
 
     uint16_t req_len =
         sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
@@ -3378,8 +3493,8 @@ int wh_Client_RsaFunction(whClientContext* ctx, RsaKey* key, int rsa_type,
             return WH_ERROR_BADARGS;
         }
 
-        req = (whMessageCrypto_RsaRequest*)_createCryptoRequest(dataPtr,
-                                                                WC_PK_TYPE_RSA);
+        req = (whMessageCrypto_RsaRequest*)_createCryptoRequest(
+            dataPtr, WC_PK_TYPE_RSA, ctx->cryptoAffinity);
 
         uint16_t group  = WH_MESSAGE_GROUP_CRYPTO;
         uint16_t action = WC_ALGO_TYPE_PK;
@@ -3506,7 +3621,7 @@ int wh_Client_RsaGetSize(whClientContext* ctx, const RsaKey* key, int* out_size)
         }
 
         req = (whMessageCrypto_RsaGetSizeRequest*)_createCryptoRequest(
-            dataPtr, WC_PK_TYPE_RSA_GET_SIZE);
+            dataPtr, WC_PK_TYPE_RSA_GET_SIZE, ctx->cryptoAffinity);
 
         if (req_len <= WOLFHSM_CFG_COMM_DATA_LEN) {
             if (evict != 0) {
@@ -3589,7 +3704,7 @@ static int _HkdfMakeKey(whClientContext* ctx, int hashType, whKeyId keyIdIn,
 
     /* Setup generic header and get pointer to request data */
     req = (whMessageCrypto_HkdfRequest*)_createCryptoRequestWithSubtype(
-        dataPtr, WC_ALGO_TYPE_KDF, WC_KDF_TYPE_HKDF);
+        dataPtr, WC_ALGO_TYPE_KDF, WC_KDF_TYPE_HKDF, ctx->cryptoAffinity);
 
     /* Calculate request length including variable-length data */
     uint16_t req_len = sizeof(whMessageCrypto_GenericRequestHeader) +
@@ -3760,7 +3875,8 @@ static int _CmacKdfMakeKey(whClientContext* ctx, whKeyId saltKeyId,
 
     /* Prepare request structure with subtype information */
     req = (whMessageCrypto_CmacKdfRequest*)_createCryptoRequestWithSubtype(
-        dataPtr, WC_ALGO_TYPE_KDF, WC_KDF_TYPE_TWOSTEP_CMAC);
+        dataPtr, WC_ALGO_TYPE_KDF, WC_KDF_TYPE_TWOSTEP_CMAC,
+        ctx->cryptoAffinity);
 
     uint32_t total_len = sizeof(whMessageCrypto_GenericRequestHeader) +
                          sizeof(*req) + saltSz + zSz + fixedInfoSz;
@@ -3965,7 +4081,7 @@ int wh_Client_Cmac(whClientContext* ctx, Cmac* cmac, CmacType type,
 
     /* Setup generic header and get pointer to request data */
     req = (whMessageCrypto_CmacAesRequest*)_createCryptoRequest(
-        dataPtr, WC_ALGO_TYPE_CMAC);
+        dataPtr, WC_ALGO_TYPE_CMAC, ctx->cryptoAffinity);
 
     uint8_t* req_in  = (uint8_t*)(req + 1);
     uint8_t* req_key = req_in + inLen;
@@ -4088,7 +4204,7 @@ int wh_Client_CmacDma(whClientContext* ctx, Cmac* cmac, CmacType type,
 
     /* Setup generic header and get pointer to request data */
     req = (whMessageCrypto_CmacAesDmaRequest*)_createCryptoRequest(
-        dataPtr, WC_ALGO_TYPE_CMAC);
+        dataPtr, WC_ALGO_TYPE_CMAC, ctx->cryptoAffinity);
     memset(req, 0, sizeof(*req));
 
     uint8_t* req_key = (uint8_t*)(req + 1);
@@ -4203,7 +4319,7 @@ static int _xferSha256BlockAndUpdateDigest(whClientContext* ctx,
 
     /* Setup generic header and get pointer to request data */
     req = (whMessageCrypto_Sha256Request*)_createCryptoRequest(
-        dataPtr, WC_HASH_TYPE_SHA256);
+        dataPtr, WC_HASH_TYPE_SHA256, ctx->cryptoAffinity);
 
 
     /* Send the full block to the server, along with the
@@ -4353,7 +4469,7 @@ int wh_Client_Sha256Dma(whClientContext* ctx, wc_Sha256* sha, const uint8_t* in,
 
     /* Setup generic header and get pointer to request data */
     req = (whMessageCrypto_Sha2DmaRequest*)_createCryptoRequest(
-        dataPtr, WC_HASH_TYPE_SHA256);
+        dataPtr, WC_HASH_TYPE_SHA256, ctx->cryptoAffinity);
 
     /* map addresses and setup default request structure */
     if (in != NULL || out != NULL) {
@@ -4490,7 +4606,7 @@ static int _xferSha224BlockAndUpdateDigest(whClientContext* ctx,
 
     /* Setup generic header and get pointer to request data */
     req = (whMessageCrypto_Sha256Request*)_createCryptoRequest(
-        dataPtr, WC_HASH_TYPE_SHA224);
+        dataPtr, WC_HASH_TYPE_SHA224, ctx->cryptoAffinity);
 
 
     /* Send the full block to the server, along with the
@@ -4640,7 +4756,7 @@ int wh_Client_Sha224Dma(whClientContext* ctx, wc_Sha224* sha, const uint8_t* in,
 
     /* Setup generic header and get pointer to request data */
     req = (whMessageCrypto_Sha2DmaRequest*)_createCryptoRequest(
-        dataPtr, WC_HASH_TYPE_SHA224);
+        dataPtr, WC_HASH_TYPE_SHA224, ctx->cryptoAffinity);
 
     if (in != NULL || out != NULL) {
         req->state.sz  = sizeof(*sha224);
@@ -4771,7 +4887,7 @@ static int _xferSha384BlockAndUpdateDigest(whClientContext* ctx,
 
     /* Setup generic header and get pointer to request data */
     req = (whMessageCrypto_Sha512Request*)_createCryptoRequest(
-        dataPtr, WC_HASH_TYPE_SHA384);
+        dataPtr, WC_HASH_TYPE_SHA384, ctx->cryptoAffinity);
 
 
     /* Send the full block to the server, along with the
@@ -4921,7 +5037,7 @@ int wh_Client_Sha384Dma(whClientContext* ctx, wc_Sha384* sha, const uint8_t* in,
 
     /* Setup generic header and get pointer to request data */
     req = (whMessageCrypto_Sha2DmaRequest*)_createCryptoRequest(
-        dataPtr, WC_HASH_TYPE_SHA384);
+        dataPtr, WC_HASH_TYPE_SHA384, ctx->cryptoAffinity);
 
     if (in != NULL || out != NULL) {
         req->state.sz  = sizeof(*sha384);
@@ -5053,7 +5169,7 @@ static int _xferSha512BlockAndUpdateDigest(whClientContext* ctx,
 
     /* Setup generic header and get pointer to request data */
     req = (whMessageCrypto_Sha512Request*)_createCryptoRequest(
-        dataPtr, WC_HASH_TYPE_SHA512);
+        dataPtr, WC_HASH_TYPE_SHA512, ctx->cryptoAffinity);
 
 
     /* Send the full block to the server, along with the
@@ -5214,7 +5330,7 @@ int wh_Client_Sha512Dma(whClientContext* ctx, wc_Sha512* sha, const uint8_t* in,
 
     /* Setup generic header and get pointer to request data */
     req = (whMessageCrypto_Sha2DmaRequest*)_createCryptoRequest(
-        dataPtr, WC_HASH_TYPE_SHA512);
+        dataPtr, WC_HASH_TYPE_SHA512, ctx->cryptoAffinity);
 
     if (in != NULL || out != NULL) {
         req->state.sz  = sizeof(*sha512);
@@ -5432,7 +5548,8 @@ static int _MlDsaMakeKey(whClientContext* ctx, int size, int level,
 
     /* Setup generic header and get pointer to request data */
     req = (whMessageCrypto_MlDsaKeyGenRequest*)_createCryptoRequestWithSubtype(
-        dataPtr, WC_PK_TYPE_PQC_SIG_KEYGEN, WC_PQC_SIG_TYPE_DILITHIUM);
+        dataPtr, WC_PK_TYPE_PQC_SIG_KEYGEN, WC_PQC_SIG_TYPE_DILITHIUM,
+        ctx->cryptoAffinity);
 
     /* Use the supplied key id if provided */
     if (inout_key_id != NULL) {
@@ -5600,7 +5717,8 @@ int wh_Client_MlDsaSign(whClientContext* ctx, const byte* in, word32 in_len,
         /* Setup generic header and get pointer to request data */
         req =
             (whMessageCrypto_MlDsaSignRequest*)_createCryptoRequestWithSubtype(
-                dataPtr, WC_PK_TYPE_PQC_SIG_SIGN, WC_PQC_SIG_TYPE_DILITHIUM);
+                dataPtr, WC_PK_TYPE_PQC_SIG_SIGN, WC_PQC_SIG_TYPE_DILITHIUM,
+                ctx->cryptoAffinity);
 
         if (req_len <= WOLFHSM_CFG_COMM_DATA_LEN) {
             uint8_t* req_hash = (uint8_t*)(req + 1);
@@ -5728,7 +5846,8 @@ int wh_Client_MlDsaVerify(whClientContext* ctx, const byte* sig, word32 sig_len,
         /* Setup generic header and get pointer to request data */
         req = (whMessageCrypto_MlDsaVerifyRequest*)
             _createCryptoRequestWithSubtype(dataPtr, WC_PK_TYPE_PQC_SIG_VERIFY,
-                                            WC_PQC_SIG_TYPE_DILITHIUM);
+                                            WC_PQC_SIG_TYPE_DILITHIUM,
+                                            ctx->cryptoAffinity);
 
         if (req_len <= WOLFHSM_CFG_COMM_DATA_LEN) {
             uint8_t* req_sig  = (uint8_t*)(req + 1);
@@ -5889,7 +6008,8 @@ static int _MlDsaMakeKeyDma(whClientContext* ctx, int level,
     /* Setup generic header and get pointer to request data */
     req =
         (whMessageCrypto_MlDsaKeyGenDmaRequest*)_createCryptoRequestWithSubtype(
-            dataPtr, WC_PK_TYPE_PQC_SIG_KEYGEN, WC_PQC_SIG_TYPE_DILITHIUM);
+            dataPtr, WC_PK_TYPE_PQC_SIG_KEYGEN, WC_PQC_SIG_TYPE_DILITHIUM,
+            ctx->cryptoAffinity);
 
     /* Use the supplied key id if provided */
     if (inout_key_id != NULL) {
@@ -6046,7 +6166,8 @@ int wh_Client_MlDsaSignDma(whClientContext* ctx, const byte* in, word32 in_len,
         /* Setup generic header and get pointer to request data */
         req = (whMessageCrypto_MlDsaSignDmaRequest*)
             _createCryptoRequestWithSubtype(dataPtr, WC_PK_TYPE_PQC_SIG_SIGN,
-                                            WC_PQC_SIG_TYPE_DILITHIUM);
+                                            WC_PQC_SIG_TYPE_DILITHIUM,
+                                            ctx->cryptoAffinity);
 
         if (req_len <= WOLFHSM_CFG_COMM_DATA_LEN) {
             if (evict != 0) {
@@ -6182,7 +6303,8 @@ int wh_Client_MlDsaVerifyDma(whClientContext* ctx, const byte* sig,
         /* Setup generic header and get pointer to request data */
         req = (whMessageCrypto_MlDsaVerifyDmaRequest*)
             _createCryptoRequestWithSubtype(dataPtr, WC_PK_TYPE_PQC_SIG_VERIFY,
-                                            WC_PQC_SIG_TYPE_DILITHIUM);
+                                            WC_PQC_SIG_TYPE_DILITHIUM,
+                                            ctx->cryptoAffinity);
 
         if (req_len <= WOLFHSM_CFG_COMM_DATA_LEN) {
             if (evict != 0) {

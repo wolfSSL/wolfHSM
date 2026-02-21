@@ -82,5 +82,3 @@ int wh_MessageComm_TranslateInfoResponse(uint16_t magic,
     WH_T32(magic, dest, src, nvm_state);
     return 0;
 }
-
-

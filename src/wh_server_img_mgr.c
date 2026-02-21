@@ -239,11 +239,11 @@ int wh_Server_ImgMgrVerifyMethodEccWithSha256(whServerImgMgrContext*   context,
 
     /* Hash the image data from server pointer using one-shot API */
     ret = wc_Sha256Hash_ex((const uint8_t*)serverPtr, (word32)img->size, hash,
-                           NULL, server->crypto->devId);
+                           NULL, server->defaultDevId);
 #else
     /* Hash the image data using one-shot API */
     ret = wc_Sha256Hash_ex((const uint8_t*)img->addr, (word32)img->size, hash,
-                           NULL, context->server->crypto->devId);
+                           NULL, context->server->defaultDevId);
 #endif
     if (ret != 0) {
         wc_ecc_free(&eccKey);
@@ -319,11 +319,11 @@ int wh_Server_ImgMgrVerifyMethodAesCmac(whServerImgMgrContext*   context,
     /* Compute CMAC of the image data from server pointer */
     ret = wc_AesCmacVerify_ex(&cmac, sig, (word32)sigSz, (const byte*)serverPtr,
                               (word32)img->size, key, (word32)keySz, NULL,
-                              server->crypto->devId);
+                              server->defaultDevId);
 #else
     ret = wc_AesCmacVerify_ex(&cmac, sig, (word32)sigSz, (const byte*)img->addr,
                               (word32)img->size, key, (word32)keySz, NULL,
-                              context->server->crypto->devId);
+                              context->server->defaultDevId);
 #endif
     if (ret != 0) {
         return ret;
@@ -389,11 +389,11 @@ int wh_Server_ImgMgrVerifyMethodRsaSslWithSha256(
 
     /* Hash the image data from server pointer using one-shot API */
     ret = wc_Sha256Hash_ex((const uint8_t*)serverPtr, (word32)img->size, hash,
-                           NULL, server->crypto->devId);
+                           NULL, server->defaultDevId);
 #else
     /* Hash the image data using one-shot API */
     ret = wc_Sha256Hash_ex((const uint8_t*)img->addr, (word32)img->size, hash,
-                           NULL, context->server->crypto->devId);
+                           NULL, context->server->defaultDevId);
 #endif
     if (ret != 0) {
         wc_FreeRsaKey(&rsaKey);
