@@ -56,6 +56,12 @@
 #include "port/posix/posix_transport_shm.h"
 #endif
 
+#ifndef TEST_ADMIN_USERNAME
+#define TEST_ADMIN_USERNAME "admin"
+#endif
+#ifndef TEST_ADMIN_PIN
+#define TEST_ADMIN_PIN "1234"
+#endif
 
 #define BUFFER_SIZE 4096
 #define REQ_SIZE 32
@@ -1160,6 +1166,12 @@ int whTest_ClientServerClientConfig(whClientConfig* clientCfg)
     WH_TEST_RETURN_ON_FAIL(wh_Client_CommInit(client, &client_id, &server_id));
     WH_TEST_ASSERT_RETURN(client_id == client->comm->client_id);
 
+#ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
+    /* Attempt to log in as an admin user for the rest of the tests */
+    WH_TEST_RETURN_ON_FAIL(wh_Client_AuthLogin(
+        client, WH_AUTH_METHOD_PIN, TEST_ADMIN_USERNAME, TEST_ADMIN_PIN,
+        strlen(TEST_ADMIN_PIN), &server_rc, NULL));
+#endif /* WOLFHSM_CFG_ENABLE_AUTHENTICATION */
 
     for (counter = 0; counter < REPEAT_COUNT; counter++) {
 
@@ -1710,6 +1722,8 @@ static int wh_ClientServer_PosixMemMapThreadTest(whTestNvmBackendType nvmType)
         .crypto = crypto,
 #endif
     }};
+    s_conf->auth = NULL; /* For non authenticated tests set auth context to NULL
+                          * which avoids authentication checks. */
 
     WH_TEST_RETURN_ON_FAIL(wh_Nvm_Init(nvm, n_conf));
 

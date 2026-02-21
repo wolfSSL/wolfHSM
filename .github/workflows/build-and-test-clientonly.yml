@@ -82,6 +82,56 @@ jobs:
             make -j CLIENT_ONLY=1 TLS=1 SHE=1 DEBUG_VERBOSE=1 WOLFSSL_DIR=../wolfssl && make run
         fi
 
+    # Restart server with fresh state for AUTH test run, even with the server
+    # not supporting AUTH and the client supporting AUTH -- the client should
+    # still be able to connect and run tests while not authenticated.
+    - name: Restart POSIX server for AUTH
+      run: |
+        kill $SERVER_PID || true
+        cd examples/posix/wh_posix_server
+        rm -f *.bin || true
+        ./Build/wh_posix_server.elf --type ${{ matrix.transport }} &
+        SERVER_PID=$!
+        echo "SERVER_PID=$SERVER_PID" >> $GITHUB_ENV
+        sleep 2
+
+    - name: Build client-only unit tests with AUTH against non-AUTH server
+      run: |
+        cd test
+        make clean
+        if [ "${{ matrix.transport }}" = "tcp" ]; then
+            make -j CLIENT_ONLY=1 SHE=1 AUTH=1 WOLFSSL_DIR=../wolfssl && make run
+        else
+            make -j CLIENT_ONLY=1 TLS=1 SHE=1 AUTH=1 WOLFSSL_DIR=../wolfssl && make run
+        fi
+
+    # Rebuild the server with AUTH support and restart
+    - name: Rebuild and restart POSIX server for AUTH
+      run: |
+        kill $SERVER_PID || true
+        cd examples/posix/wh_posix_server
+        make clean
+        if [ "${{ matrix.transport }}" = "tcp" ]; then
+            make -j SHE=1 AUTH=1 WOLFSSL_DIR=../../../wolfssl
+        else
+            make -j TLS=1 SHE=1 AUTH=1 WOLFSSL_DIR=../../../wolfssl
+        fi
+        rm -f *.bin || true
+        ./Build/wh_posix_server.elf --type ${{ matrix.transport }} &
+        SERVER_PID=$!
+        echo "SERVER_PID=$SERVER_PID" >> $GITHUB_ENV
+        sleep 2
+
+    - name: Build client-only unit tests with AUTH against AUTH server
+      run: |
+        cd test
+        make clean
+        if [ "${{ matrix.transport }}" = "tcp" ]; then
+            make -j CLIENT_ONLY=1 SHE=1 AUTH=1 WOLFSSL_DIR=../wolfssl && make run
+        else
+            make -j CLIENT_ONLY=1 TLS=1 SHE=1 AUTH=1 WOLFSSL_DIR=../wolfssl && make run
+        fi
+
     # Optional: Kill the server process if it doesn't exit on its own
     - name: Cleanup POSIX server
       if: always()
