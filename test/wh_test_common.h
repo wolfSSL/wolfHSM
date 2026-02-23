@@ -33,6 +33,7 @@
 
 #define WH_TEST_FAIL (-1)
 #define WH_TEST_SUCCESS (0)
+#define WH_TEST_SKIP (1)
 #define WH_TEST_DEFAULT_CLIENT_ID (1)
 
 /* Test-specific print macro that always prints (replacement for printf in tests)
@@ -72,13 +73,13 @@
  * stringified call argument along with caller source file info and
  * causes the calling function to return the value of "call"
  */
-#define WH_TEST_RETURN_ON_FAIL(call)                 \
-    do {                                             \
-        int ret = (call);                            \
-        if (ret != 0) {                              \
-            WH_ERROR_PRINT(#call ": ret=%d\n", ret); \
-            return ret;                              \
-        }                                            \
+#define WH_TEST_RETURN_ON_FAIL(call)                         \
+    do {                                                     \
+        int ret = (call);                                    \
+        if (ret != WH_TEST_SUCCESS && ret != WH_TEST_SKIP) { \
+            WH_ERROR_PRINT(#call ": ret=%d\n", ret);         \
+            return ret;                                      \
+        }                                                    \
     } while (0)
 
 

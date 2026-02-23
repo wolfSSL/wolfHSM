@@ -14,5 +14,6 @@ int wh_PosixServer_ExamplePskConfig(void* s_conf);
 #endif /* WOLFHSM_CFG_TLS */
 int wh_PosixServer_ExampleNvmConfig(void* conf, const char* nvmInitFilePath);
 int wh_PosixServer_ExampleRamSimConfig(void* conf, uint8_t* memory);
+int wh_PosixServer_ExampleAuthConfig(void* conf);
 
 #endif /* WH_POSIX_SERVER_CFG_H */
