@@ -45,7 +45,7 @@ enum {
 /* MSW of state variables (nfState) must be set to this pattern when written
  * to flash to prevent hardware on certain chipsets from confusing zero values
  * with erased flash */
-static const whFlashUnit BASE_STATE = 0x1234567800000000ull;
+static const whFlashUnit BASE_STATE = 0x1234567800000000ULL;
 
 /* On-flash layout of the state of an Object or Directory*/
 typedef struct {
@@ -79,7 +79,7 @@ typedef struct {
 #define NF_UNITS_PER_DIRECTORY WHFU_BYTES2UNITS(sizeof(nfDirectory))
 #define NF_DIRECTORY_OBJECTS_OFFSET WHFU_BYTES2UNITS(offsetof(nfDirectory, objects))
 #define NF_DIRECTORY_OBJECT_OFFSET(_n) \
-                    (NF_DIRECTORY_OBJECTS_OFFSET + (NF_UNITS_PER_OBJECT * _n))
+                    (NF_DIRECTORY_OBJECTS_OFFSET + (NF_UNITS_PER_OBJECT * (_n)))
 
 /* On-flash layout of a Partition */
 typedef struct {

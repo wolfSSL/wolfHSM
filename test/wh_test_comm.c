@@ -131,7 +131,7 @@ int whTest_CommMem(void)
                                                     &rx_req_len, rx_req));
 
     for (counter = 0; counter < REPEAT_COUNT; counter++) {
-        snprintf((char*)tx_req, sizeof(tx_req), "Request:%u", counter);
+        (void)snprintf((char*)tx_req, sizeof(tx_req), "Request:%u", counter);
         tx_req_len  = strlen((char*)tx_req);
         tx_req_type = counter * 2;
         WH_TEST_RETURN_ON_FAIL(
@@ -159,7 +159,7 @@ int whTest_CommMem(void)
         WH_TEST_DEBUG_PRINT("Server RecvRequest:%d, flags %x, type:%x, seq:%d, len:%d, %s\n",
                ret, rx_req_flags, rx_req_type, rx_req_seq, rx_req_len, rx_req);
 
-        snprintf((char*)tx_resp, sizeof(tx_resp), "Response:%s", rx_req);
+        (void)snprintf((char*)tx_resp, sizeof(tx_resp), "Response:%s", rx_req);
         tx_resp_len = strlen((char*)tx_resp);
         ret = wh_CommServer_SendResponse(server, rx_req_flags, rx_req_type,
                                          rx_req_seq, tx_resp_len, tx_resp);
@@ -218,7 +218,7 @@ static void* _whCommClientTask(void* cf)
     WH_TEST_ASSERT_MSG(0 == ret, "Client Init: ret=%d", ret);
 
     for (counter = 0; counter < REPEAT_COUNT; counter++) {
-        snprintf((char*)tx_req, sizeof(tx_req), "Request:%u", counter);
+        (void)snprintf((char*)tx_req, sizeof(tx_req), "Request:%u", counter);
         tx_req_len  = strlen((char*)tx_req);
         tx_req_type = counter * 2;
         do {
@@ -306,7 +306,7 @@ static void* _whCommServerTask(void* cf)
         }
 
         do {
-            snprintf((char*)tx_resp, sizeof(tx_resp), "Response:%s", rx_req);
+            (void)snprintf((char*)tx_resp, sizeof(tx_resp), "Response:%s", rx_req);
             tx_resp_len = strlen((char*)tx_resp);
             ret = wh_CommServer_SendResponse(server, rx_req_flags, rx_req_type,
                                              rx_req_seq, tx_resp_len, tx_resp);
@@ -354,14 +354,13 @@ static void _whCommClientServerThreadTest(whCommClientConfig* c_conf,
         WH_TEST_DEBUG_PRINT("Client thread create:%d\n", rc);
         if (rc == 0) {
             /* All good. Block on joining */
-
-            pthread_join(cthread, &retval);
-            pthread_join(sthread, &retval);
+            (void)pthread_join(cthread, &retval);
+            (void)pthread_join(sthread, &retval);
         }
         else {
             /* Cancel the server thread */
-            pthread_cancel(sthread);
-            pthread_join(sthread, &retval);
+            (void)pthread_cancel(sthread);
+            (void)pthread_join(sthread, &retval);
         }
     }
 }
@@ -433,8 +432,8 @@ void wh_CommClientServer_ShMemThreadTest(void)
 
     /* Make unique name for this test */
     char uniq_name[32] = {0};
-    snprintf(uniq_name, sizeof(uniq_name),"/wh_test_comm_shm.%u",
-            (unsigned) getpid());
+    (void)snprintf(uniq_name, sizeof(uniq_name),"/wh_test_comm_shm.%u",
+                   (unsigned) getpid());
     tmcf->name = uniq_name;
 
     _whCommClientServerThreadTest(c_conf, s_conf);

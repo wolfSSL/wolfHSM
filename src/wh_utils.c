@@ -42,22 +42,22 @@ uint16_t wh_Utils_Swap16(uint16_t val)
 
 uint32_t wh_Utils_Swap32(uint32_t val)
 {
-    return  ((val & 0xFF000000ul) >> 24) |
-            ((val & 0x00FF0000ul) >> 8) |
-            ((val & 0x0000FF00ul) << 8) |
-            ((val & 0x000000FFul) << 24);
+    return  ((val & 0xFF000000UL) >> 24) |
+            ((val & 0x00FF0000UL) >> 8) |
+            ((val & 0x0000FF00UL) << 8) |
+            ((val & 0x000000FFUL) << 24);
 }
 
 uint64_t wh_Utils_Swap64(uint64_t val)
 {
-    return  ((val & 0xFF00000000000000ull) >> 56) |
-            ((val & 0xFF000000000000ull) >> 40) |
-            ((val & 0xFF0000000000ull) >> 24) |
-            ((val & 0xFF00000000ull) >> 8)|
-            ((val & 0xFF000000ull) << 8) |
-            ((val & 0xFF0000ull) << 24 ) |
-            ((val & 0xFF00ull) << 40) |
-            ((val & 0xFFull) << 56);
+    return  ((val & 0xFF00000000000000ULL) >> 56) |
+            ((val & 0xFF000000000000ULL) >> 40) |
+            ((val & 0xFF0000000000ULL) >> 24) |
+            ((val & 0xFF00000000ULL) >> 8)|
+            ((val & 0xFF000000ULL) << 8) |
+            ((val & 0xFF0000ULL) << 24 ) |
+            ((val & 0xFF00ULL) << 40) |
+            ((val & 0xFFULL) << 56);
 }
 
 static int isLittleEndian(void) {

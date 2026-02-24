@@ -41,7 +41,7 @@ enum {
 };
 
 /** Local declarations */
-#define MAX_OFFSET(_context) (_context->partition_size * 2)
+#define MAX_OFFSET(_context) ((_context)->partition_size * 2)
 
 /* Helper for pwrite like memset.  Write the byte in c to filedes for size
  * bytes starting at offset */

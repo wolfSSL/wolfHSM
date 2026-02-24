@@ -400,7 +400,7 @@ int posixTransportShm_ServerInit(void* c, const void* cf,
 
     if (ret == WH_ERROR_OK) {
         memset(ctx, 0, sizeof(*ctx));
-        snprintf(ctx->name, sizeof(ctx->name), "%s", config->name);
+        (void)snprintf(ctx->name, sizeof(ctx->name), "%s", config->name);
         ctx->connectcb     = connectcb;
         ctx->connectcb_arg = connectcb_arg;
 
@@ -446,7 +446,7 @@ int posixTransportShm_ClientInit(void* c, const void* cf,
     }
 
     memset(ctx, 0, sizeof(*ctx));
-    snprintf(ctx->name, sizeof(ctx->name), "%s", config->name);
+    (void)snprintf(ctx->name, sizeof(ctx->name), "%s", config->name);
     ctx->connectcb     = connectcb;
     ctx->connectcb_arg = connectcb_arg;
 

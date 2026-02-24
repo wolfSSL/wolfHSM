@@ -346,27 +346,27 @@ int wh_Bench_PrintResults(whBenchOpContext* ctx)
 
                 if (throughput < 1024.0) {
                     /* Bytes per second */
-                    WH_BENCH_SNPRINTF(buffer, sizeof(buffer), "%.2f B/s",
-                                      throughput);
+                    (void)WH_BENCH_SNPRINTF(buffer, sizeof(buffer), "%.2f B/s",
+                                            throughput);
                 }
                 else if (throughput < 1024.0 * 1024.0) {
                     /* Kilobytes per second */
-                    WH_BENCH_SNPRINTF(buffer, sizeof(buffer), "%.2f KB/s",
-                                      throughput / 1024.0);
+                    (void)WH_BENCH_SNPRINTF(buffer, sizeof(buffer), "%.2f KB/s",
+                                            throughput / 1024.0);
                 }
                 else {
                     /* Megabytes per second */
-                    WH_BENCH_SNPRINTF(buffer, sizeof(buffer), "%.2f MB/s",
-                                      throughput / (1024.0 * 1024.0));
+                    (void)WH_BENCH_SNPRINTF(buffer, sizeof(buffer), "%.2f MB/s",
+                                            throughput / (1024.0 * 1024.0));
                 }
             }
             else if (ctx->ops[i].throughputType == BENCH_THROUGHPUT_OPS) {
-                WH_BENCH_SNPRINTF(buffer, sizeof(buffer), "%.2f ops/s",
-                                  ctx->ops[i].throughput);
+                (void)WH_BENCH_SNPRINTF(buffer, sizeof(buffer), "%.2f ops/s",
+                                        ctx->ops[i].throughput);
             }
             else {
                 /* No throughput */
-                WH_BENCH_SNPRINTF(buffer, sizeof(buffer), "N/A");
+                (void)WH_BENCH_SNPRINTF(buffer, sizeof(buffer), "N/A");
             }
             WH_BENCH_PRINTF("%-18s |\n", buffer);
         }
