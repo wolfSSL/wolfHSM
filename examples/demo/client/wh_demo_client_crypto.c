@@ -56,8 +56,6 @@
  */
 int wh_DemoClient_CryptoRsa(whClientContext* clientContext)
 {
-    (void)clientContext;
-
     int        ret           = 0;
     int        encSz         = 0;
     const char plainString[] = "The quick brown fox jumps over the lazy dog.";
@@ -65,6 +63,8 @@ int wh_DemoClient_CryptoRsa(whClientContext* clientContext)
     byte       cipherText[256];
     RsaKey     rsa[1];
     WC_RNG     rng[1];
+
+    (void)clientContext;
 
     /* set the plainText to the test string */
     strcpy((char*)plainText, plainString);
@@ -243,8 +243,6 @@ exit:
  */
 int wh_DemoClient_CryptoCurve25519(whClientContext* clientContext)
 {
-    (void)clientContext;
-
     int            ret = 0;
     word32         outLen;
     uint8_t        sharedOne[CURVE25519_KEYSIZE];
@@ -253,6 +251,8 @@ int wh_DemoClient_CryptoCurve25519(whClientContext* clientContext)
     /* public from the first shared secret's perspective, actually private */
     curve25519_key curve25519PublicKey[1];
     WC_RNG         rng[1];
+
+    (void)clientContext;
 
     /* initialize rng to make the curve25519 keys */
     ret = wc_InitRng_ex(rng, NULL, WH_DEV_ID);
@@ -482,8 +482,6 @@ exit:
  */
 int wh_DemoClient_CryptoEcc(whClientContext* clientContext)
 {
-    (void)clientContext;
-
     int        ret = 0;
     int        res;
     word32     outLen;
@@ -495,6 +493,8 @@ int wh_DemoClient_CryptoEcc(whClientContext* clientContext)
     const char plainMessage[16] = "message example";
     byte       message[sizeof(plainMessage)];
     byte       signature[128];
+
+    (void)clientContext;
 
     /* Set the message to the test string */
     strcpy((char*)message, plainMessage);
@@ -823,14 +823,14 @@ exit:
  */
 int wh_DemoClient_CryptoAesCbc(whClientContext* clientContext)
 {
-    (void)clientContext;
-
     int  ret = 0;
     Aes  aes[1];
     byte key[]       = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
     byte plainText[] = {15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0};
     byte cipherText[16];
     byte finalText[16];
+
+    (void)clientContext;
 
     /* Initialize the aes struct */
     ret = wc_AesInit(aes, NULL, WH_DEV_ID);
@@ -977,8 +977,6 @@ exit:
  */
 int wh_DemoClient_CryptoAesGcm(whClientContext* clientContext)
 {
-    (void)clientContext;
-
     int  ret = 0;
     Aes  aes[1];
     byte key[]    = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
@@ -988,6 +986,8 @@ int wh_DemoClient_CryptoAesGcm(whClientContext* clientContext)
     byte plainText[] = {15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0};
     byte cipherText[16];
     byte finalText[16];
+
+    (void)clientContext;
 
     /* initialize the aes struct */
     ret = wc_AesInit(aes, NULL, WH_DEV_ID);
@@ -1133,14 +1133,14 @@ exit:
  */
 int wh_DemoClient_CryptoCmac(whClientContext* clientContext)
 {
-    (void)clientContext;
-
     int    ret = 0;
     word32 outLen;
     Cmac   cmac[1];
     byte   key[]     = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
     char   message[] = "hash and verify me!";
     byte   tag[16];
+
+    (void)clientContext;
 
     /* initialize the cmac struct and set the key */
     ret = wc_InitCmac_ex(cmac, key, sizeof(key), WC_CMAC_AES, NULL, NULL,

@@ -282,6 +282,7 @@ int wh_Bench_PrintResults(whBenchOpContext* ctx)
 {
     int      i;
     uint64_t avgTime;
+    char     buffer[20] = {0};
 
     if (ctx == NULL) {
         return WH_ERROR_BADARGS;
@@ -340,7 +341,6 @@ int wh_Bench_PrintResults(whBenchOpContext* ctx)
                             (unsigned long long)ctx->ops[i].maxTimeUs);
 
             /* Print throughput - directly using printf with formatting */
-            char buffer[20] = {0};
             if (ctx->ops[i].throughputType == BENCH_THROUGHPUT_XBPS) {
                 double throughput = ctx->ops[i].throughput;
 

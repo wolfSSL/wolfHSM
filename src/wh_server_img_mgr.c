@@ -198,11 +198,15 @@ int wh_Server_ImgMgrVerifyMethodEccWithSha256(whServerImgMgrContext*   context,
                                               const uint8_t* key, size_t keySz,
                                               const uint8_t* sig, size_t sigSz)
 {
-    int     ret = WH_ERROR_OK;
-    ecc_key eccKey;
-    uint8_t hash[WC_SHA256_DIGEST_SIZE];
-    int     verifyResult = 0;
-    word32  inOutIdx     = 0;
+    int              ret          = WH_ERROR_OK;
+    ecc_key          eccKey;
+    uint8_t          hash[WC_SHA256_DIGEST_SIZE];
+    int              verifyResult = 0;
+    word32           inOutIdx     = 0;
+#ifdef WOLFHSM_CFG_DMA
+    whServerContext* server       = context->server;
+    void*            serverPtr    = NULL;
+#endif
 
     (void)context; /* Unused parameter */
 
@@ -226,9 +230,6 @@ int wh_Server_ImgMgrVerifyMethodEccWithSha256(whServerImgMgrContext*   context,
 #ifdef WOLFHSM_CFG_DMA
     /* For DMA case, we need to access the client memory through server pointer
      */
-    whServerContext* server    = context->server;
-    void*            serverPtr = NULL;
-
     ret = wh_Server_DmaProcessClientAddress(
         server, img->addr, &serverPtr, img->size, WH_DMA_OPER_CLIENT_READ_PRE,
         (whServerDmaFlags){0});
@@ -284,8 +285,12 @@ int wh_Server_ImgMgrVerifyMethodAesCmac(whServerImgMgrContext*   context,
                                         const uint8_t* key, size_t keySz,
                                         const uint8_t* sig, size_t sigSz)
 {
-    int     ret = WH_ERROR_OK;
-    Cmac    cmac;
+    int              ret = WH_ERROR_OK;
+    Cmac             cmac;
+#ifdef WOLFHSM_CFG_DMA
+    whServerContext* server    = context->server;
+    void*            serverPtr = NULL;
+#endif
 
     (void)context; /* Unused parameter */
 
@@ -306,9 +311,6 @@ int wh_Server_ImgMgrVerifyMethodAesCmac(whServerImgMgrContext*   context,
 #ifdef WOLFHSM_CFG_DMA
     /* For DMA case, we need to access the client memory through server pointer
      */
-    whServerContext* server    = context->server;
-    void*            serverPtr = NULL;
-
     ret = wh_Server_DmaProcessClientAddress(
         server, img->addr, &serverPtr, img->size, WH_DMA_OPER_CLIENT_READ_PRE,
         (whServerDmaFlags){0});
@@ -347,12 +349,16 @@ int wh_Server_ImgMgrVerifyMethodRsaSslWithSha256(
     whServerImgMgrContext* context, const whServerImgMgrImg* img,
     const uint8_t* key, size_t keySz, const uint8_t* sig, size_t sigSz)
 {
-    int     ret = WH_ERROR_OK;
-    RsaKey  rsaKey;
-    uint8_t hash[WC_SHA256_DIGEST_SIZE];
-    uint8_t decrypted[256]; /* Buffer for decrypted signature */
-    word32  decryptedLen = sizeof(decrypted);
-    word32  inOutIdx     = 0;
+    int              ret          = WH_ERROR_OK;
+    RsaKey           rsaKey;
+    uint8_t          hash[WC_SHA256_DIGEST_SIZE];
+    uint8_t          decrypted[256]; /* Buffer for decrypted signature */
+    word32           decryptedLen = sizeof(decrypted);
+    word32           inOutIdx     = 0;
+#ifdef WOLFHSM_CFG_DMA
+    whServerContext* server       = context->server;
+    void*            serverPtr    = NULL;
+#endif
 
     (void)context; /* Unused parameter */
 
@@ -376,9 +382,6 @@ int wh_Server_ImgMgrVerifyMethodRsaSslWithSha256(
 #ifdef WOLFHSM_CFG_DMA
     /* For DMA case, we need to access the client memory through server pointer
      */
-    whServerContext* server    = context->server;
-    void*            serverPtr = NULL;
-
     ret = wh_Server_DmaProcessClientAddress(
         server, img->addr, &serverPtr, img->size, WH_DMA_OPER_CLIENT_READ_PRE,
         (whServerDmaFlags){0});

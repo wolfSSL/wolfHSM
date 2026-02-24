@@ -1029,19 +1029,6 @@ int wh_Bench_ClientServer_Posix(int transport, int moduleIndex)
     /* Server configuration/contexts */
     whServerConfig s_conf[1] = {{0}};
 
-    /* Configure transport based on type */
-    ret = _configureClientTransport(transport, c_conf);
-    if (ret != WH_ERROR_OK) {
-        WH_BENCH_PRINTF("Failed to configure client transport: %d\n", ret);
-        return ret;
-    }
-
-    ret = _configureServerTransport(transport, s_conf);
-    if (ret != WH_ERROR_OK) {
-        WH_BENCH_PRINTF("Failed to configure server transport: %d\n", ret);
-        return ret;
-    }
-
     /* RamSim Flash state and configuration */
     whFlashRamsimCtx fc[1]      = {0};
     whFlashRamsimCfg fc_conf[1] = {{
@@ -1075,6 +1062,19 @@ int wh_Bench_ClientServer_Posix(int transport, int moduleIndex)
         .devId = INVALID_DEVID,
     }};
 #endif
+
+    /* Configure transport based on type */
+    ret = _configureClientTransport(transport, c_conf);
+    if (ret != WH_ERROR_OK) {
+        WH_BENCH_PRINTF("Failed to configure client transport: %d\n", ret);
+        return ret;
+    }
+
+    ret = _configureServerTransport(transport, s_conf);
+    if (ret != WH_ERROR_OK) {
+        WH_BENCH_PRINTF("Failed to configure server transport: %d\n", ret);
+        return ret;
+    }
 
     /* Set up server configuration with NVM and crypto */
     s_conf[0].nvm = nvm;

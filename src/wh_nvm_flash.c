@@ -438,13 +438,14 @@ static int nfPartition_ProgramCount(whNvmFlashContext* context,
 static int nfPartition_ProgramInit(whNvmFlashContext* context, int partition)
 {
     int ret = 0;
+    nfMemState init_state;
 
     if ((context == NULL) || (context->cb == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
     /* Valid initial state values for a partition */
-    nfMemState init_state =
+    init_state = (nfMemState)
     {
         .status = NF_STATUS_USED,
         .epoch = 0,
@@ -862,6 +863,8 @@ int wh_NvmFlash_Init(void* c, const void* cf)
         ret = config->cb->Init(config->context, config->config);
     }
     if (ret == WH_ERROR_OK) {
+        nfMemState part_states[2];
+
         /* Initialize and setup context */
         memset(context, 0, sizeof(*context));
         context->cb = config->cb;
@@ -877,8 +880,6 @@ int wh_NvmFlash_Init(void* c, const void* cf)
         /* Unlock the both partitions */
         (void)nfPartition_WriteUnlock(context, 0);
         (void)nfPartition_WriteUnlock(context, 1);
-
-        nfMemState part_states[2];
 
         /* Recover the partition states to determine which should be active.
          * No need to check error returns, since output state is initialized
@@ -956,9 +957,6 @@ int wh_NvmFlash_List(void* c,
         whNvmAccess access, whNvmFlags flags, whNvmId start_id,
         whNvmId *out_avail_objects, whNvmId *out_id)
 {
-    /* TODO: Implement access and flag matching */
-    (void)access; (void)flags;
-
     whNvmFlashContext* context = c;
     int this_entry;
     int this_count = 0;
@@ -968,6 +966,10 @@ int wh_NvmFlash_List(void* c,
     if (context == NULL) {
         return WH_ERROR_BADARGS;
     }
+
+    /* TODO: Implement access and flag matching */
+    (void)access;
+    (void)flags;
 
     d = &context->directory;
 
@@ -1022,10 +1024,10 @@ int wh_NvmFlash_GetAvailable(void* c,
         uint32_t *out_reclaim_size, whNvmId *out_reclaim_objects)
 {
     whNvmFlashContext* context = c;
+    nfMemDirectory *d = &context->directory;
     if (context == NULL) {
         return WH_ERROR_BADARGS;
     }
-    nfMemDirectory *d = &context->directory;
     if (out_avail_size != NULL) {
         *out_avail_size = (context->partition_units -
                 NF_PARTITION_DATA_OFFSET - d->next_free_data) *

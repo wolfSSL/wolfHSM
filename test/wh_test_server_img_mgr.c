@@ -210,6 +210,9 @@ static int whTest_ServerImgMgrServerCfgEcc256(whServerConfig* serverCfg)
     whServerImgMgrImg     testImage       = {0};
     const whNvmId         testEccKeyId    = 1;
     const whNvmId         testEccSigNvmId = 2;
+    word32                inOutIdx = 0;
+    int                   verifyResult = 0;
+    uint8_t               corruptedSig[128];
 
     /* ECC key and signature variables */
     ecc_key   eccKey;
@@ -221,8 +224,12 @@ static int whTest_ServerImgMgrServerCfgEcc256(whServerConfig* serverCfg)
     uint8_t   pubKeyDer[ECC_BUFSIZE];
     word32    pubKeyDerLen = sizeof(pubKeyDer);
 
-    /* NVM metadata for signature */
+    /* NVM metadata for signature and key */
     whNvmMetadata sigMeta = {0};
+    whNvmMetadata keyMeta = {0};
+
+    whServerImgMgrVerifyResult result;
+    whServerImgMgrVerifyResult results[1];
 
     /* Initialize wolfCrypt */
     ret = wc_InitRng(&rng);
@@ -239,9 +246,8 @@ static int whTest_ServerImgMgrServerCfgEcc256(whServerConfig* serverCfg)
     }
 
     /* Generate or import the test ECC key */
-    word32 inOutIdx = 0;
-    ret             = wc_EccPrivateKeyDecode(testEccPrivKey, &inOutIdx, &eccKey,
-                                             sizeof(testEccPrivKey));
+    ret= wc_EccPrivateKeyDecode(testEccPrivKey, &inOutIdx, &eccKey,
+                                sizeof(testEccPrivKey));
     if (ret != 0) {
         WH_ERROR_PRINT("Failed to decode ECC private key: %d\n", ret);
         wc_ecc_free(&eccKey);
@@ -298,9 +304,8 @@ static int whTest_ServerImgMgrServerCfgEcc256(whServerConfig* serverCfg)
     }
 
     /* Verify the signature directly to ensure it's correct */
-    int verifyResult = 0;
-    ret              = wc_ecc_verify_hash(signature, sigLen, hash, sizeof(hash),
-                                          &verifyResult, &eccKey);
+    ret = wc_ecc_verify_hash(signature, sigLen, hash, sizeof(hash),
+                             &verifyResult, &eccKey);
     if (ret != 0 || verifyResult != 1) {
         WH_ERROR_PRINT("Direct signature verification failed: ret=%d, result=%d\n", ret,
                verifyResult);
@@ -360,11 +365,10 @@ static int whTest_ServerImgMgrServerCfgEcc256(whServerConfig* serverCfg)
     }
 
     /* Cache the public key in the keystore */
-    whNvmMetadata keyMeta = {0};
-    keyMeta.id            = testEccKeyId;
-    keyMeta.access        = WH_NVM_ACCESS_ANY;
-    keyMeta.flags         = WH_NVM_FLAGS_NONE;
-    keyMeta.len           = pubKeyDerLen;
+    keyMeta.id     = testEccKeyId;
+    keyMeta.access = WH_NVM_ACCESS_ANY;
+    keyMeta.flags  = WH_NVM_FLAGS_NONE;
+    keyMeta.len    = pubKeyDerLen;
     snprintf((char*)keyMeta.label, WH_NVM_LABEL_LEN, "TestKey");
 
     ret = wh_Server_KeystoreCacheKey(server, &keyMeta, pubKeyDer);
@@ -389,7 +393,6 @@ static int whTest_ServerImgMgrServerCfgEcc256(whServerConfig* serverCfg)
     }
 
     /* Test image verification */
-    whServerImgMgrVerifyResult result;
     ret = wh_Server_ImgMgrVerifyImg(&imgMgr, &testImage, &result);
     if (ret != WH_ERROR_OK) {
         WH_ERROR_PRINT("Image verification failed: %d\n", ret);
@@ -454,7 +457,6 @@ static int whTest_ServerImgMgrServerCfgEcc256(whServerConfig* serverCfg)
     }
 
     /* Test verify all */
-    whServerImgMgrVerifyResult results[1];
     ret = wh_Server_ImgMgrVerifyAll(&imgMgr, results, 1, NULL);
     if (ret != WH_ERROR_OK) {
         WH_ERROR_PRINT("Verify all images failed: %d\n", ret);
@@ -490,7 +492,6 @@ static int whTest_ServerImgMgrServerCfgEcc256(whServerConfig* serverCfg)
     /* Negative test: corrupt signature and verify failure */
 
     /* Read current signature from NVM */
-    uint8_t corruptedSig[128];
     ret = wh_Nvm_Read(serverCfg->nvm, testEccSigNvmId, 0, sigLen, corruptedSig);
     if (ret != WH_ERROR_OK) {
         WH_ERROR_PRINT("Failed to read signature for negative test: %d\n", ret);
@@ -587,9 +588,14 @@ static int whTest_ServerImgMgrServerCfgAes128Cmac(whServerConfig* serverCfg)
     Cmac    cmac;
     uint8_t computed_cmac[AES_BLOCK_SIZE];
     word32  cmac_size = sizeof(computed_cmac);
+    uint8_t corruptedCmac[AES_BLOCK_SIZE];
 
-    /* NVM metadata for signature */
+    /* NVM metadata for signature and key */
     whNvmMetadata sigMeta = {0};
+    whNvmMetadata keyMeta = {0};
+
+    whServerImgMgrVerifyResult result;
+    whServerImgMgrVerifyResult results[1];
 
     /* Initialize CMAC and compute the expected signature */
     ret = wc_InitCmac(&cmac, testAes128Key, sizeof(testAes128Key), WC_CMAC_AES,
@@ -652,11 +658,10 @@ static int whTest_ServerImgMgrServerCfgAes128Cmac(whServerConfig* serverCfg)
     }
 
     /* Cache the AES128 key in the keystore */
-    whNvmMetadata keyMeta = {0};
-    keyMeta.id            = testAesCmacKeyId;
-    keyMeta.access        = WH_NVM_ACCESS_ANY;
-    keyMeta.flags         = WH_NVM_FLAGS_NONE;
-    keyMeta.len           = sizeof(testAes128Key);
+    keyMeta.id     = testAesCmacKeyId;
+    keyMeta.access = WH_NVM_ACCESS_ANY;
+    keyMeta.flags  = WH_NVM_FLAGS_NONE;
+    keyMeta.len    = sizeof(testAes128Key);
     snprintf((char*)keyMeta.label, WH_NVM_LABEL_LEN, "TestAes128Key");
 
     ret = wh_Server_KeystoreCacheKey(server, &keyMeta, (uint8_t*)testAes128Key);
@@ -675,7 +680,6 @@ static int whTest_ServerImgMgrServerCfgAes128Cmac(whServerConfig* serverCfg)
     }
 
     /* Test image verification */
-    whServerImgMgrVerifyResult result;
     ret = wh_Server_ImgMgrVerifyImg(&imgMgr, &testImage, &result);
     if (ret != WH_ERROR_OK) {
         WH_ERROR_PRINT("CMAC image verification failed: %d\n", ret);
@@ -722,7 +726,6 @@ static int whTest_ServerImgMgrServerCfgAes128Cmac(whServerConfig* serverCfg)
     }
 
     /* Test verify all */
-    whServerImgMgrVerifyResult results[1];
     ret = wh_Server_ImgMgrVerifyAll(&imgMgr, results, 1, NULL);
     if (ret != WH_ERROR_OK) {
         WH_ERROR_PRINT("CMAC verify all images failed: %d\n", ret);
@@ -749,7 +752,6 @@ static int whTest_ServerImgMgrServerCfgAes128Cmac(whServerConfig* serverCfg)
     /* Negative test: corrupt signature and verify failure */
 
     /* Read current signature from NVM */
-    uint8_t corruptedCmac[AES_BLOCK_SIZE];
     ret = wh_Nvm_Read(serverCfg->nvm, testAesCmacSigNvmId, 0, cmac_size,
                       corruptedCmac);
     if (ret != WH_ERROR_OK) {
@@ -821,6 +823,7 @@ static int whTest_ServerImgMgrServerCfgRsa2048(whServerConfig* serverCfg)
     whServerImgMgrImg     testImage       = {0};
     const whNvmId         testRsaKeyId    = 1;
     const whNvmId         testRsaSigNvmId = 2;
+    word32                inOutIdx = 0;
 
     /* RSA key and signature variables */
     RsaKey    rsaKey;
@@ -831,9 +834,16 @@ static int whTest_ServerImgMgrServerCfgRsa2048(whServerConfig* serverCfg)
     word32    sigLen = sizeof(signature);
     uint8_t   pubKeyDer[512]; /* conservative size for DER encoding */
     word32    pubKeyDerLen = sizeof(pubKeyDer);
+    uint8_t   decrypted[256];
+    word32    decryptedLen = sizeof(decrypted);
+    uint8_t   corruptedRsaSig[256];
 
-    /* NVM metadata for signature */
+    /* NVM metadata for signature and key */
     whNvmMetadata sigMeta = {0};
+    whNvmMetadata keyMeta = {0};
+
+    whServerImgMgrVerifyResult result;
+    whServerImgMgrVerifyResult results[1];
 
     ret = wc_InitRng(&rng);
     if (ret != 0) {
@@ -849,7 +859,6 @@ static int whTest_ServerImgMgrServerCfgRsa2048(whServerConfig* serverCfg)
     }
 
     /* Import the test RSA private key */
-    word32 inOutIdx = 0;
     ret = wc_RsaPrivateKeyDecode(testRsa2048PrivKey, &inOutIdx, &rsaKey,
                                  sizeof(testRsa2048PrivKey));
     if (ret != 0) {
@@ -908,8 +917,6 @@ static int whTest_ServerImgMgrServerCfgRsa2048(whServerConfig* serverCfg)
     sigLen = (word32)ret;
 
     /* Verify the signature directly to ensure it's correct */
-    uint8_t decrypted[256];
-    word32  decryptedLen = sizeof(decrypted);
     ret = wc_RsaSSL_Verify(signature, sigLen, decrypted, decryptedLen, &rsaKey);
     if (ret <= 0) {
         WH_ERROR_PRINT("Direct signature verification failed: %d\n", ret);
@@ -979,11 +986,10 @@ static int whTest_ServerImgMgrServerCfgRsa2048(whServerConfig* serverCfg)
     }
 
     /* Cache the public key in the keystore */
-    whNvmMetadata keyMeta = {0};
-    keyMeta.id            = testRsaKeyId;
-    keyMeta.access        = WH_NVM_ACCESS_ANY;
-    keyMeta.flags         = WH_NVM_FLAGS_NONE;
-    keyMeta.len           = pubKeyDerLen;
+    keyMeta.id     = testRsaKeyId;
+    keyMeta.access = WH_NVM_ACCESS_ANY;
+    keyMeta.flags  = WH_NVM_FLAGS_NONE;
+    keyMeta.len    = pubKeyDerLen;
     snprintf((char*)keyMeta.label, WH_NVM_LABEL_LEN, "TestRsaKey");
 
     ret = wh_Server_KeystoreCacheKey(server, &keyMeta, pubKeyDer);
@@ -1008,7 +1014,6 @@ static int whTest_ServerImgMgrServerCfgRsa2048(whServerConfig* serverCfg)
     }
 
     /* Test image verification */
-    whServerImgMgrVerifyResult result;
     ret = wh_Server_ImgMgrVerifyImg(&imgMgr, &testImage, &result);
     if (ret != WH_ERROR_OK) {
         WH_ERROR_PRINT("RSA image verification failed: %d\n", ret);
@@ -1073,7 +1078,6 @@ static int whTest_ServerImgMgrServerCfgRsa2048(whServerConfig* serverCfg)
     }
 
     /* Test verify all */
-    whServerImgMgrVerifyResult results[1];
     ret = wh_Server_ImgMgrVerifyAll(&imgMgr, results, 1, NULL);
     if (ret != WH_ERROR_OK) {
         WH_ERROR_PRINT("RSA verify all images failed: %d\n", ret);
@@ -1109,7 +1113,6 @@ static int whTest_ServerImgMgrServerCfgRsa2048(whServerConfig* serverCfg)
     /* Negative test: corrupt signature and verify failure */
 
     /* Read current signature from NVM */
-    uint8_t corruptedRsaSig[256];
     ret = wh_Nvm_Read(serverCfg->nvm, testRsaSigNvmId, 0, sigLen,
                       corruptedRsaSig);
     if (ret != WH_ERROR_OK) {
@@ -1233,9 +1236,6 @@ int whTest_ServerImgMgr(whTestNvmBackendType nvmType)
     whNvmConfig           n_conf[1] = {0};
     whNvmContext nvm[1]    = {{0}};
 
-    WH_TEST_RETURN_ON_FAIL(
-        whTest_NvmCfgBackend(nvmType, &nvm_setup, n_conf, fc_conf, fc, fcb));
-
     whServerCryptoContext crypto[1] = {{
         .devId = INVALID_DEVID,
     }};
@@ -1245,6 +1245,9 @@ int whTest_ServerImgMgr(whTestNvmBackendType nvmType)
         .nvm         = nvm,
         .crypto      = crypto,
     }};
+
+    WH_TEST_RETURN_ON_FAIL(
+        whTest_NvmCfgBackend(nvmType, &nvm_setup, n_conf, fc_conf, fc, fcb));
 
     /* Initialize NVM */
     rc = wh_Nvm_Init(nvm, n_conf);

@@ -41,6 +41,7 @@ int main(int argc, char** argv)
     int transport   = WH_BENCH_TRANSPORT_MEM;
     int moduleIndex = -1;
     int i;
+    int ret         = 0;
 
     WH_BENCH_PRINTF("wolfHSM POSIX benchmark built with wolfSSL version %s\n",
                     LIBWOLFSSL_VERSION_STRING);
@@ -82,7 +83,7 @@ int main(int argc, char** argv)
     }
 
 #if defined(WOLFHSM_CFG_TEST_POSIX)
-    int ret = wh_Bench_ClientServer_Posix(transport, moduleIndex);
+    ret = wh_Bench_ClientServer_Posix(transport, moduleIndex);
     if (ret != 0) {
         WH_BENCH_PRINTF("Memory transport benchmark failed: %d\n", ret);
         return ret;

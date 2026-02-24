@@ -696,8 +696,6 @@ exit:
 int _benchRsaKeyGen(whClientContext* client, whBenchOpContext* ctx, int id,
                     int keySize, int devId)
 {
-    (void)client;
-
     int    ret = 0;
     RsaKey rsa[1];
     WC_RNG rng[1];
@@ -705,6 +703,8 @@ int _benchRsaKeyGen(whClientContext* client, whBenchOpContext* ctx, int id,
     int    initialized_rng = 0;
     int    initialized_rsa = 0;
     long   exponent = WC_RSA_EXPONENT; /* Standard RSA exponent (65537) */
+
+    (void)client;
 
     /* Initialize RNG for RSA operations */
     ret = wc_InitRng_ex(rng, NULL, devId);

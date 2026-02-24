@@ -55,12 +55,12 @@ static void _HexDump(const char* p, size_t data_len)
     const size_t         bytesPerLine = 16;
     const unsigned char  two_digits   = 0x10;
     const unsigned char* u            = (const unsigned char*)p;
+    size_t               off          = 0;
 
     WH_TEST_DEBUG_PRINT("    HD:%p for %lu bytes\n", p, data_len);
     if ((p == NULL) || (data_len == 0))
         return;
 
-    size_t off = 0;
     for (off = 0; off < data_len; off++) {
         if ((off % bytesPerLine) == 0)
             WH_TEST_PRINT("    ");
@@ -111,9 +111,9 @@ static void _ShowList(const whNvmCb* cb, void* context)
                       id, &listCount, &id);
 
         if ((rc == 0) && (listCount > 0)) {
+            whNvmMetadata myMetadata;
             WH_TEST_DEBUG_PRINT("Found object id 0x%X (%d) with %d more objects\n", id, id,
                    listCount - 1);
-            whNvmMetadata myMetadata;
             memset(&myMetadata, 0, sizeof(myMetadata));
             rc = cb->GetMetadata(context, id, &myMetadata);
 
@@ -322,14 +322,6 @@ int whTest_NvmFlashCfg(void* cfg, void* context, const whNvmCb* cb)
 {
     int               ret        = 0;
 
-    WH_TEST_RETURN_ON_FAIL(cb->Init(context, cfg));
-
-#if defined(WOLFHSM_CFG_DEBUG_VERBOSE)
-    WH_TEST_DEBUG_PRINT("--Initial NVM contents\n");
-    _ShowAvailable(cb, context);
-    _ShowList(cb, context);
-#endif
-
     /* Add 3 new Objects */
     unsigned char data1[]   = "Data1";
     unsigned char data2[]   = "Data2";
@@ -347,6 +339,13 @@ int whTest_NvmFlashCfg(void* cfg, void* context, const whNvmCb* cb)
     whNvmMetadata meta2 = {.id = ids[1], .label = "Label2"};
     whNvmMetadata meta3 = {.id = ids[2], .label = "Label3"};
 
+    WH_TEST_RETURN_ON_FAIL(cb->Init(context, cfg));
+
+    #if defined(WOLFHSM_CFG_DEBUG_VERBOSE)
+        WH_TEST_DEBUG_PRINT("--Initial NVM contents\n");
+        _ShowAvailable(cb, context);
+        _ShowList(cb, context);
+    #endif
 
     /* Add 3 objects, checking for each object that we can read back what was
      * written */
@@ -488,8 +487,6 @@ int whTest_NvmFlash_RamSim(void)
         .memory     = memory,
     }};
 
-    WH_TEST_RETURN_ON_FAIL(whTest_Flash(myCb, myHalFlashCtx, myHalFlashCfg));
-
     /* NVM Configuration using PosixSim HAL Flash */
     whNvmFlashConfig myNvmCfg = {
         .cb      = myCb,
@@ -499,9 +496,6 @@ int whTest_NvmFlash_RamSim(void)
     whNvmFlashContext nvmFlashCtx[1] = {0};
     const whNvmCb     nvmFlashCb[1]  = {WH_NVM_FLASH_CB};
 
-    WH_TEST_RETURN_ON_FAIL(
-        whTest_NvmFlashCfg(&myNvmCfg, nvmFlashCtx, nvmFlashCb));
-
 #if defined(WOLFHSM_CFG_SERVER_NVM_FLASH_LOG)
     whNvmFlashLogConfig myLogCfg = {
         .flash_cb  = myCb,
@@ -510,6 +504,14 @@ int whTest_NvmFlash_RamSim(void)
     };
     whNvmFlashLogContext nvmLogCtx[1] = {0};
     const whNvmCb        nvmLogCb[1]  = {WH_NVM_FLASH_LOG_CB};
+#endif /* WOLFHSM_CFG_SERVER_NVM_FLASH_LOG */
+
+    WH_TEST_RETURN_ON_FAIL(whTest_Flash(myCb, myHalFlashCtx, myHalFlashCfg));
+
+    WH_TEST_RETURN_ON_FAIL(
+        whTest_NvmFlashCfg(&myNvmCfg, nvmFlashCtx, nvmFlashCb));
+
+#if defined(WOLFHSM_CFG_SERVER_NVM_FLASH_LOG)
     WH_TEST_RETURN_ON_FAIL(whTest_NvmFlashCfg(&myLogCfg, nvmLogCtx, nvmLogCb));
 #endif /* WOLFHSM_CFG_SERVER_NVM_FLASH_LOG */
 
@@ -636,9 +638,6 @@ int whTest_NvmFlash_PosixFileSim(void)
           .erased_byte    = (~(uint8_t)0),
     }};
 
-    WH_TEST_RETURN_ON_FAIL(whTest_Flash(myCb, myHalFlashContext,
-            myHalFlashConfig));
-
     /* NVM Configuration using PosixSim HAL Flash */
     whNvmFlashConfig myNvmCfg = {
         .cb      = myCb,
@@ -647,6 +646,19 @@ int whTest_NvmFlash_PosixFileSim(void)
     };
     whNvmFlashContext nvmFlashCtx[1] = {0};
     const whNvmCb     nvmFlashCb[1]  = {WH_NVM_FLASH_CB};
+
+#if defined(WOLFHSM_CFG_SERVER_NVM_FLASH_LOG)
+    whNvmFlashLogConfig myLogCfg = {
+        .flash_cb  = myCb,
+        .flash_ctx = myHalFlashContext,
+        .flash_cfg = myHalFlashConfig,
+    };
+    whNvmFlashLogContext nvmLogCtx[1] = {0};
+    const whNvmCb        nvmLogCb[1]  = {WH_NVM_FLASH_LOG_CB};
+#endif /* WOLFHSM_CFG_SERVER_NVM_FLASH_LOG */
+
+    WH_TEST_RETURN_ON_FAIL(whTest_Flash(myCb, myHalFlashContext,
+        myHalFlashConfig));
 
     WH_TEST_ASSERT(0 == whTest_NvmFlashCfg(&myNvmCfg, nvmFlashCtx, nvmFlashCb));
 
@@ -659,14 +671,6 @@ int whTest_NvmFlash_PosixFileSim(void)
     myHalFlashConfig[0].partition_size = WH_NVM_FLASH_LOG_PARTITION_SIZE;
 
     memset(myHalFlashContext, 0, sizeof(myHalFlashContext));
-
-    whNvmFlashLogConfig myLogCfg = {
-        .flash_cb  = myCb,
-        .flash_ctx = myHalFlashContext,
-        .flash_cfg = myHalFlashConfig,
-    };
-    whNvmFlashLogContext nvmLogCtx[1] = {0};
-    const whNvmCb        nvmLogCb[1]  = {WH_NVM_FLASH_LOG_CB};
 
     WH_TEST_RETURN_ON_FAIL(whTest_NvmFlashCfg(&myLogCfg, nvmLogCtx, nvmLogCb));
 #endif /* WOLFHSM_CFG_SERVER_NVM_FLASH_LOG */

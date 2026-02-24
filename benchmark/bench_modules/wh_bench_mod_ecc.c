@@ -293,14 +293,14 @@ exit:
 int _benchEccKeyGen(whClientContext* client, whBenchOpContext* ctx, int id,
                     int curveSize, int devId)
 {
-    (void)client;
-
     int     ret    = 0;
     ecc_key key[1] = {0};
     WC_RNG  rng[1] = {0};
     int     i;
     int     initialized_rng = 0;
     int     initialized_key = 0;
+
+    (void)client;
 
     /* Initialize the RNG for key generation */
     ret = wc_InitRng_ex(rng, NULL, devId);

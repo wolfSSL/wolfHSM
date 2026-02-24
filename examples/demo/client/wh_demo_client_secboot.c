@@ -128,9 +128,9 @@ static int _sha256File(const char* file_to_measure, uint8_t* hash)
         close(fd);
 
         if (ptr != (void*)-1) {
+            wc_Sha256 sha256[1];
             WOLFHSM_CFG_PRINTF("Generating SHA256 of %s over %u bytes at %p\n",
                    file_to_measure, (unsigned int)size, ptr);
-            wc_Sha256 sha256[1];
             ret = wc_InitSha256_ex(sha256, NULL, WH_DEV_ID);
             if (ret == 0) {
                 ret = wc_Sha256Update(sha256, ptr, (word32)size);
@@ -256,14 +256,16 @@ int wh_DemoClient_SecBoot_Boot(whClientContext* clientContext)
     WOLFHSM_CFG_PRINTF("SecBoot Client starting...\n");
     ret = wh_Client_CommInit(clientContext, &client_id, &server_id);
     if (ret == WH_ERROR_OK) {
+        uint8_t sig[ECC_MAX_SIG_SIZE] = {0};
+        whNvmSize siglen = 0;
+        int32_t rc = 0;
+        uint8_t hash[WC_SHA256_DIGEST_SIZE] = {0};
+
         WOLFHSM_CFG_PRINTF("SecBoot Client connected to server id %u with client id %u\n",
                 server_id, client_id);
 
         _showNvm(clientContext);
 
-        uint8_t sig[ECC_MAX_SIG_SIZE] = {0};
-        whNvmSize siglen = 0;
-        int32_t rc = 0;
         WOLFHSM_CFG_PRINTF("SecBoot Client loading signature from NVM as nvmId %u\n",
                 sig_nvmId);
         ret = wh_Client_NvmGetMetadata(clientContext,
@@ -283,8 +285,6 @@ int wh_DemoClient_SecBoot_Boot(whClientContext* clientContext)
         }
         wh_Utils_Hexdump("Signature:\n", sig, siglen);
 
-
-        uint8_t hash[WC_SHA256_DIGEST_SIZE] = {0};
         WOLFHSM_CFG_PRINTF("Measuring image %s...\n", file_to_measure);
         ret = _sha256File(file_to_measure, hash);
         if (ret == WH_ERROR_OK) {

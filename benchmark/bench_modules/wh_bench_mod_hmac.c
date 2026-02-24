@@ -34,8 +34,6 @@ static const size_t keyLen = sizeof(key) - 1; /* -1 for null terminator */
 int _benchHmacSha256(whClientContext* client, whBenchOpContext* ctx, int id,
                      int devId)
 {
-    (void)client;
-
     int            ret = 0;
     Hmac           hmac[1];
     uint8_t        out[WC_SHA256_DIGEST_SIZE];
@@ -43,6 +41,8 @@ int _benchHmacSha256(whClientContext* client, whBenchOpContext* ctx, int id,
     int            hmacInitialized = 0;
     const uint8_t* in;
     size_t         inLen;
+
+    (void)client;
 
 #if defined(WOLFHSM_CFG_DMA)
     if (devId == WH_DEV_ID_DMA) {

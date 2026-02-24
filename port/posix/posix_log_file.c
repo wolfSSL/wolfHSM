@@ -161,6 +161,7 @@ int posixLogFile_Export(void* c, void* export_arg)
     FILE*                in_fp   = NULL;
     char                 line[2048];
     int                  ret = 0;
+    int                  fd_dup = -1;
 
     if (context == NULL) {
         return WH_ERROR_BADARGS;
@@ -185,7 +186,7 @@ int posixLogFile_Export(void* c, void* export_arg)
     }
 
     /* Open file for reading (using fdopen with dup'd fd) */
-    int fd_dup = dup(context->fd);
+    fd_dup = dup(context->fd);
     if (fd_dup < 0) {
         pthread_mutex_unlock(&context->mutex);
         return WH_ERROR_ABORTED;
@@ -223,6 +224,7 @@ int posixLogFile_Iterate(void* c, whLogIterateCb iterate_cb, void* iterate_arg)
     FILE*                fp      = NULL;
     char                 line[2048];
     int                  ret = 0;
+    int                  fd_dup = -1;
 
     if ((context == NULL) || (iterate_cb == NULL)) {
         return WH_ERROR_BADARGS;
@@ -242,7 +244,7 @@ int posixLogFile_Iterate(void* c, whLogIterateCb iterate_cb, void* iterate_arg)
     }
 
     /* Open file for reading (using fdopen with dup'd fd) */
-    int fd_dup = dup(context->fd);
+    fd_dup = dup(context->fd);
     if (fd_dup < 0) {
         pthread_mutex_unlock(&context->mutex);
         return WH_ERROR_ABORTED;
@@ -267,13 +269,14 @@ int posixLogFile_Iterate(void* c, whLogIterateCb iterate_cb, void* iterate_arg)
         char               msg_buf[WOLFHSM_CFG_LOG_MSG_MAX];
         unsigned long long timestamp;
         unsigned int       line_num;
+        int                parsed = 0;
 
         memset(&entry, 0, sizeof(entry));
 
         /* Parse: TIMESTAMP|LEVEL|FILE:LINE|FUNCTION|MESSAGE\n */
-        int parsed = sscanf(line, "%llu|%31[^|]|%255[^:]:%u|%255[^|]|%255[^\n]",
-                            &timestamp, level_str, file_buf, &line_num,
-                            func_buf, msg_buf);
+        parsed = sscanf(line, "%llu|%31[^|]|%255[^:]:%u|%255[^|]|%255[^\n]",
+                        &timestamp, level_str, file_buf, &line_num,
+                        func_buf, msg_buf);
 
         /* Minimum number of fields to parse is 5, msg is optional */
         if (parsed >= 5) {

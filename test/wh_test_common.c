@@ -54,7 +54,9 @@ int whTest_NvmCfgBackend(whTestNvmBackendType   type,
 
     switch (type) {
 #if defined(WOLFHSM_CFG_SERVER_NVM_FLASH_LOG)
-        case WH_NVM_TEST_BACKEND_FLASH_LOG:
+        case WH_NVM_TEST_BACKEND_FLASH_LOG: {
+            static whNvmCb nflcb[1] = {WH_NVM_FLASH_LOG_CB};
+
             nvmSetup->nvmFlashLogCfg.flash_cb = fCb;
             /* restrict simulated flash partition to nvm_flash_log_partition */
             WH_TEST_ASSERT(fCfg->size >= WH_NVM_FLASH_LOG_PARTITION_SIZE * 2);
@@ -63,27 +65,28 @@ int whTest_NvmCfgBackend(whTestNvmBackendType   type,
             nvmSetup->nvmFlashLogCfg.flash_ctx = fCtx;
             memset(&nvmSetup->nvmFlashLogCtx, 0,
                    sizeof(nvmSetup->nvmFlashLogCtx));
-            static whNvmCb nflcb[1] = {WH_NVM_FLASH_LOG_CB};
 
             nvmCfg->cb      = nflcb;
             nvmCfg->context = &nvmSetup->nvmFlashLogCtx;
             nvmCfg->config  = &nvmSetup->nvmFlashLogCfg;
             break;
+        }
 #endif
-        case WH_NVM_TEST_BACKEND_FLASH:
+        case WH_NVM_TEST_BACKEND_FLASH: {
+            static whNvmCb nfcb[1] = {WH_NVM_FLASH_CB};
+
             /* NVM Flash Configuration using RamSim HAL Flash */
             nvmSetup->nvmFlashCfg.cb      = fCb;
             nvmSetup->nvmFlashCfg.context = fCtx;
             nvmSetup->nvmFlashCfg.config  = fCfg;
 
             memset(&nvmSetup->nvmFlashCtx, 0, sizeof(nvmSetup->nvmFlashCtx));
-            static whNvmCb nfcb[1] = {WH_NVM_FLASH_CB};
 
             nvmCfg->cb      = nfcb;
             nvmCfg->context = &nvmSetup->nvmFlashCtx;
             nvmCfg->config  = &nvmSetup->nvmFlashCfg;
             break;
-
+        }
         default:
             return WH_ERROR_BADARGS;
     }

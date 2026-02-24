@@ -137,9 +137,10 @@ static int nfl_FlashEraseHelper(whNvmFlashLogContext* ctx, uint32_t off,
 static whNvmFlashLogMetadata* nfl_ObjNext(whNvmFlashLogContext*  ctx,
                                           whNvmFlashLogMetadata* obj)
 {
+    uint8_t* next = NULL;
     if (obj == NULL || ctx == NULL)
         return NULL;
-    uint8_t* next =
+    next =
         (uint8_t*)obj + sizeof(whNvmFlashLogMetadata) + PAD_SIZE(obj->meta.len);
     if (next >= ctx->directory.data + ctx->directory.header.size)
         return NULL;

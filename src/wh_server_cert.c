@@ -317,6 +317,7 @@ int wh_Server_CertVerifyAcert(whServerContext* server, const uint8_t* cert,
                               uint32_t cert_len, whNvmId trustedRootNvmId)
 {
     int rc;
+    DecodedCert dc;
 
     /* Stack-based buffer for root certificate */
     uint8_t  root_cert[WOLFHSM_CFG_MAX_CERT_SIZE];
@@ -330,7 +331,6 @@ int wh_Server_CertVerifyAcert(whServerContext* server, const uint8_t* cert,
     }
 
     /* Decode and parse the root certificate */
-    DecodedCert dc;
     wc_InitDecodedCert(&dc, root_cert, root_cert_len, NULL);
     rc = wc_ParseCert(&dc, CERT_TYPE, 0, NULL);
     if (rc != 0) {
@@ -360,9 +360,9 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
                                 uint16_t req_size, const void* req_packet,
                                 uint16_t* out_resp_size, void* resp_packet)
 {
-    (void)seq;
-
     int rc = 0;
+
+    (void)seq;
 
     if ((server == NULL) || (req_packet == NULL) || (resp_packet == NULL) ||
         (out_resp_size == NULL)) {
@@ -511,6 +511,8 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
                 resp.rc = WH_ERROR_ABORTED;
             }
             else {
+                whKeyId keyId;
+
                 /* Convert request struct */
                 wh_MessageCert_TranslateVerifyRequest(
                     magic, (whMessageCert_VerifyRequest*)req_packet, &req);
@@ -519,7 +521,7 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
                 cert_data = (const uint8_t*)req_packet + sizeof(req);
 
                 /* Map client keyId to server keyId space */
-                whKeyId keyId = wh_KeyId_TranslateFromClient(
+                keyId = wh_KeyId_TranslateFromClient(
                     WH_KEYTYPE_CRYPTO, server->comm->client_id, req.keyId);
 
 

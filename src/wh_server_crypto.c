@@ -22,6 +22,7 @@
  */
 
 /* Pick up compile-time configuration */
+#include "wolfhsm/wh_keyid.h"
 #include "wolfhsm/wh_settings.h"
 
 #if !defined(WOLFHSM_CFG_NO_CRYPTO) && defined(WOLFHSM_CFG_ENABLE_SERVER)
@@ -201,7 +202,7 @@ static int _HandleMlDsaCheckPrivKey(whServerContext* ctx, uint16_t magic,
 int wh_Server_CacheImportRsaKey(whServerContext* ctx, RsaKey* key,
         whKeyId keyId, whNvmFlags flags, uint32_t label_len, uint8_t* label)
 {
-    int ret = 0;
+    int ret = WH_ERROR_OK;
     uint8_t* cacheBuf;
     whNvmMetadata* cacheMeta;
     uint16_t max_size;
@@ -250,7 +251,7 @@ int wh_Server_CacheExportRsaKey(whServerContext* ctx, whKeyId keyId,
 {
     uint8_t* cacheBuf;
     whNvmMetadata* cacheMeta;
-    int ret = 0;
+    int ret = WH_ERROR_OK;
 
     if (    (ctx == NULL) ||
             (key == NULL) ||
@@ -271,10 +272,20 @@ static int _HandleRsaKeyGen(whServerContext* ctx, uint16_t magic,
                          const void* cryptoDataIn, uint16_t inSize,
                          void* cryptoDataOut, uint16_t* outSize)
 {
-    int    ret    = 0;
-    RsaKey rsa[1] = {0};
-    whMessageCrypto_RsaKeyGenRequest req;
+    int                               ret        = WH_ERROR_OK;
+    RsaKey                            rsa[1]     = {0};
+    whMessageCrypto_RsaKeyGenRequest  req;
     whMessageCrypto_RsaKeyGenResponse res;
+    uint32_t                          key_size   = 0;
+    uint32_t                          e          = 0;
+    whNvmFlags                        flags      = WH_NVM_FLAGS_NONE;
+    uint8_t*                          label      = NULL;
+    uint32_t                          label_size = WH_NVM_LABEL_LEN;
+    whKeyId                           key_id     = WH_KEYID_ERASED;
+    uint8_t*                          out        = NULL;
+    uint16_t                          max_size   = 0;
+    uint16_t                          der_size   = 0;
+
     if (inSize < sizeof(whMessageCrypto_RsaKeyGenRequest)) {
         return WH_ERROR_BADARGS;
     }
@@ -287,29 +298,28 @@ static int _HandleRsaKeyGen(whServerContext* ctx, uint16_t magic,
     }
 
     /* Extract parameters from translated request */
-    int  key_size = req.size;
-    long e        = req.e;
+    key_size   = req.size;
+    e          = req.e;
+    flags      = req.flags;
+    label      = req.label;
+    label_size = WH_NVM_LABEL_LEN;
 
     /* Force incoming key_id to have current user/type */
-    whKeyId key_id = wh_KeyId_TranslateFromClient(
+    key_id = wh_KeyId_TranslateFromClient(
         WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
-    whNvmFlags flags      = req.flags;
-    uint8_t*   label      = req.label;
-    uint32_t   label_size = WH_NVM_LABEL_LEN;
+
 
     /* Get pointer to where key data would be stored (after response struct) */
-    uint8_t* out =
-        (uint8_t*)cryptoDataOut + sizeof(whMessageCrypto_RsaKeyGenResponse);
-    uint16_t max_size = (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN -
+    out = (uint8_t*)cryptoDataOut + sizeof(whMessageCrypto_RsaKeyGenResponse);
+    max_size = (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN -
                                    ((uint8_t*)out - (uint8_t*)cryptoDataOut));
-    uint16_t der_size = 0;
 
     /* init the rsa key */
     ret = wc_InitRsaKey_ex(rsa, NULL, ctx->crypto->devId);
     if (ret == 0) {
         /* make the rsa key with the given params */
         ret = wc_MakeRsaKey(rsa, key_size, e, ctx->crypto->rng);
-        WH_DEBUG_SERVER_VERBOSE("MakeRsaKey: size:%d, e:%ld, ret:%d\n", key_size, e, ret);
+        WH_DEBUG_SERVER_VERBOSE("MakeRsaKey: size:%d, e:%d, ret:%d\n", key_size, e, ret);
 
         if (ret == 0) {
             /* Check incoming flags */
@@ -368,6 +378,16 @@ static int _HandleRsaFunction( whServerContext* ctx, uint16_t magic,
     RsaKey                     rsa[1];
     whMessageCrypto_RsaRequest req;
 
+    int      op_type = 0;
+    uint32_t options = 0;
+    int      evict = 0;
+    whKeyId  key_id = WH_KEYID_ERASED;
+    uint32_t in_len = 0;
+    uint32_t out_len = 0;
+    uint8_t* in = NULL;
+    uint8_t* out = NULL;
+    uint16_t available = 0;
+
     /* Validate minimum size */
     if (inSize < sizeof(whMessageCrypto_RsaRequest)) {
         return WH_ERROR_BADARGS;
@@ -381,23 +401,23 @@ static int _HandleRsaFunction( whServerContext* ctx, uint16_t magic,
     }
 
     /* Extract parameters from translated request */
-    int      op_type = (int)(req.opType);
-    uint32_t options = req.options;
-    int      evict   = !!(options & WH_MESSAGE_CRYPTO_RSA_OPTIONS_EVICT);
-    whKeyId  key_id  = wh_KeyId_TranslateFromClient(
-          WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
-    word32 in_len  = (word32)(req.inLen);
-    word32 out_len = (word32)(req.outLen);
+    op_type = (int)(req.opType);
+    options = req.options;
+    evict   = !!(options & WH_MESSAGE_CRYPTO_RSA_OPTIONS_EVICT);
+    key_id  = wh_KeyId_TranslateFromClient(
+                WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+    in_len  = req.inLen;
+    out_len = req.outLen;
 
     /* Ensure input data fits within request payload */
-    uint32_t available = inSize - sizeof(whMessageCrypto_RsaRequest);
+    available = inSize - sizeof(whMessageCrypto_RsaRequest);
     if (in_len > available) {
         return WH_ERROR_BADARGS;
     }
 
     /* in and out are after the fixed size fields */
-    byte* in  = (uint8_t*)(cryptoDataIn + sizeof(whMessageCrypto_RsaRequest));
-    byte* out = (uint8_t*)(cryptoDataOut + sizeof(whMessageCrypto_RsaResponse));
+    in  = (uint8_t*)(cryptoDataIn + sizeof(whMessageCrypto_RsaRequest));
+    out = (uint8_t*)(cryptoDataOut + sizeof(whMessageCrypto_RsaResponse));
 
     WH_DEBUG_SERVER_VERBOSE("HandleRsaFunction opType:%d inLen:%u keyId:%u outLen:%u\n",
             op_type, in_len, key_id, out_len);
@@ -493,11 +513,15 @@ static int _HandleRsaGetSize(whServerContext* ctx, uint16_t magic,
                              const void* cryptoDataIn, uint16_t inSize,
                              void* cryptoDataOut, uint16_t* outSize)
 {
-    int                                ret;
+    int                                ret      = WH_ERROR_OK;
     RsaKey                             rsa[1];
     whMessageCrypto_RsaGetSizeRequest  req;
     whMessageCrypto_RsaGetSizeResponse res;
     int                                key_size = 0;
+    whKeyId                            key_id   = WH_KEYID_ERASED;
+    uint32_t                           options  = 0;
+    int                                evict    = 0;
+
 
     if (inSize < sizeof(whMessageCrypto_RsaGetSizeRequest)) {
         return WH_ERROR_BADARGS;
@@ -511,10 +535,10 @@ static int _HandleRsaGetSize(whServerContext* ctx, uint16_t magic,
     }
 
     /* Extract parameters from translated request */
-    whKeyId key_id = wh_KeyId_TranslateFromClient(
+    key_id = wh_KeyId_TranslateFromClient(
         WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
-    uint32_t options = req.options;
-    int      evict = !!(options & WH_MESSAGE_CRYPTO_RSA_GET_SIZE_OPTIONS_EVICT);
+    options = req.options;
+    evict = !!(options & WH_MESSAGE_CRYPTO_RSA_GET_SIZE_OPTIONS_EVICT);
 
     /* init rsa key */
     ret = wc_InitRsaKey_ex(rsa, NULL, ctx->crypto->devId);
@@ -558,7 +582,7 @@ int wh_Server_EccKeyCacheImport(whServerContext* ctx, ecc_key* key,
     uint8_t* cacheBuf;
     whNvmMetadata* cacheMeta;
     /* Maximum size of an ecc key der file */
-    uint16_t max_size = ECC_BUFSIZE;;
+    uint16_t max_size = ECC_BUFSIZE;
     uint16_t der_size;
 
     if (    (ctx == NULL) ||
@@ -676,7 +700,7 @@ int wh_Server_CacheImportCurve25519Key(whServerContext* server,
 {
     uint8_t*       cacheBuf;
     whNvmMetadata* cacheMeta;
-    int            ret;
+    int            ret = WH_ERROR_OK;
     uint8_t        der_buf[CURVE25519_MAX_KEY_TO_DER_SZ];
     uint16_t       keySz = sizeof(der_buf);
 
@@ -712,7 +736,7 @@ int wh_Server_CacheExportCurve25519Key(whServerContext* server, whKeyId keyId,
 {
     uint8_t* cacheBuf;
     whNvmMetadata* cacheMeta;
-    int ret = 0;
+    int ret = WH_ERROR_OK;
 
     if (    (server == NULL) ||
             (key == NULL) ||
@@ -807,12 +831,21 @@ static int _HandleEccKeyGen(whServerContext* ctx, uint16_t magic,
                             const void* cryptoDataIn, uint16_t inSize,
                             void* cryptoDataOut, uint16_t* outSize)
 {
-    (void)inSize;
-
     int                               ret = WH_ERROR_OK;
     ecc_key                           key[1];
     whMessageCrypto_EccKeyGenRequest  req;
     whMessageCrypto_EccKeyGenResponse res;
+    int                               key_size   = 0;
+    int                               curve_id   = 0;
+    whKeyId                           key_id     = WH_KEYID_ERASED;
+    whNvmFlags                        flags      = WH_NVM_FLAGS_NONE;
+    uint8_t*                          label      = NULL;
+    uint16_t                          label_size = WH_NVM_LABEL_LEN;
+    uint8_t*                          res_out    = NULL;
+    uint16_t                          max_size   = 0;
+    uint16_t                          res_size   = 0;
+
+    (void)inSize;
 
     /* Translate request */
     ret = wh_MessageCrypto_TranslateEccKeyGenRequest(
@@ -822,20 +855,18 @@ static int _HandleEccKeyGen(whServerContext* ctx, uint16_t magic,
     }
 
     /* Extract parameters from translated request */
-    int     key_size = req.sz;
-    int     curve_id = req.curveId;
-    whKeyId key_id   = wh_KeyId_TranslateFromClient(
-          WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
-    whNvmFlags flags      = req.flags;
-    uint8_t*   label      = req.label;
-    uint16_t   label_size = WH_NVM_LABEL_LEN;
+    key_size = req.sz;
+    curve_id = req.curveId;
+    key_id   = wh_KeyId_TranslateFromClient(
+        WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+    flags    = req.flags;
+    label    = req.label;
 
     /* Response message */
-    uint8_t* res_out =
-        (uint8_t*)cryptoDataOut + sizeof(whMessageCrypto_EccKeyGenResponse);
-    uint16_t max_size = (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN -
-                                   (res_out - (uint8_t*)cryptoDataOut));
-    uint16_t res_size = 0;
+    res_out =
+            (uint8_t*)cryptoDataOut + sizeof(whMessageCrypto_EccKeyGenResponse);
+    max_size = (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN -
+                          (res_out - (uint8_t*)cryptoDataOut));
 
     /* init ecc key */
     ret = wc_ecc_init_ex(key, NULL, ctx->crypto->devId);
@@ -903,12 +934,20 @@ static int _HandleEccSharedSecret(whServerContext* ctx, uint16_t magic,
                                   const void* cryptoDataIn, uint16_t inSize,
                                   void* cryptoDataOut, uint16_t* outSize)
 {
-    (void)inSize;
-
     int                         ret = WH_ERROR_OK;
     ecc_key                     pub_key[1];
     ecc_key                     prv_key[1];
     whMessageCrypto_EcdhRequest req;
+    uint32_t                    options    = 0;
+    int                         evict_pub  = 0;
+    int                         evict_prv  = 0;
+    whKeyId                     pub_key_id = WH_KEYID_ERASED;
+    whKeyId                     prv_key_id = WH_KEYID_ERASED;
+    byte*                       res_out    = NULL;
+    word32                      max_len    = 0;
+    word32                      res_len    = 0;
+
+    (void)inSize;
 
     /* Translate request */
     ret = wh_MessageCrypto_TranslateEcdhRequest(
@@ -918,12 +957,12 @@ static int _HandleEccSharedSecret(whServerContext* ctx, uint16_t magic,
     }
 
     /* Extract parameters from translated request */
-    uint32_t options   = req.options;
-    int      evict_pub = !!(options & WH_MESSAGE_CRYPTO_ECDH_OPTIONS_EVICTPUB);
-    int      evict_prv = !!(options & WH_MESSAGE_CRYPTO_ECDH_OPTIONS_EVICTPRV);
-    whKeyId  pub_key_id = wh_KeyId_TranslateFromClient(
+    options   = req.options;
+    evict_pub = !!(options & WH_MESSAGE_CRYPTO_ECDH_OPTIONS_EVICTPUB);
+    evict_prv = !!(options & WH_MESSAGE_CRYPTO_ECDH_OPTIONS_EVICTPRV);
+    pub_key_id = wh_KeyId_TranslateFromClient(
          WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.publicKeyId);
-    whKeyId prv_key_id = wh_KeyId_TranslateFromClient(
+    prv_key_id = wh_KeyId_TranslateFromClient(
         WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.privateKeyId);
 
     /* Validate key usage policy for key derivation (private key) */
@@ -936,11 +975,9 @@ static int _HandleEccSharedSecret(whServerContext* ctx, uint16_t magic,
     }
 
     /* Response message */
-    byte* res_out =
-        (byte*)cryptoDataOut + sizeof(whMessageCrypto_EcdhResponse);
-    word32 max_len = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
-                              (res_out - (uint8_t*)cryptoDataOut));
-    word32 res_len = 0;
+    res_out = (byte*)cryptoDataOut + sizeof(whMessageCrypto_EcdhResponse);
+    max_len = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
+                       (res_out - (uint8_t*)cryptoDataOut));
 
     /* init ecc keys */
     ret = wc_ecc_init_ex(pub_key, NULL, ctx->crypto->devId);
@@ -993,9 +1030,17 @@ static int _HandleEccSign(whServerContext* ctx, uint16_t magic,
                           const void* cryptoDataIn, uint16_t inSize,
                           void* cryptoDataOut, uint16_t* outSize)
 {
-    int                            ret;
+    int                            ret = WH_ERROR_OK;
     ecc_key                        key[1];
     whMessageCrypto_EccSignRequest req;
+    uint8_t*                       in      = NULL;
+    whKeyId                        key_id  = WH_KEYID_ERASED;
+    word32                         in_len  = 0;
+    uint32_t                       options = 0;
+    int                            evict   = 0;
+    byte*                          res_out = NULL;
+    word32                         max_len = 0;
+    word32                         res_len = 0;
 
     /* Validate minimum size */
     if (inSize < sizeof(whMessageCrypto_EccSignRequest)) {
@@ -1015,13 +1060,12 @@ static int _HandleEccSign(whServerContext* ctx, uint16_t magic,
     }
 
     /* Extract parameters from translated request */
-    uint8_t* in =
-        (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_EccSignRequest);
-    whKeyId key_id = wh_KeyId_TranslateFromClient(
+    in = (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_EccSignRequest);
+    key_id = wh_KeyId_TranslateFromClient(
         WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
-    word32   in_len  = req.sz;
-    uint32_t options = req.options;
-    int      evict   = !!(options & WH_MESSAGE_CRYPTO_ECCSIGN_OPTIONS_EVICT);
+    in_len  = req.sz;
+    options = req.options;
+    evict   = !!(options & WH_MESSAGE_CRYPTO_ECCSIGN_OPTIONS_EVICT);
 
     /* Validate key usage policy for signing */
     if (!WH_KEYID_ISERASED(key_id)) {
@@ -1033,11 +1077,10 @@ static int _HandleEccSign(whServerContext* ctx, uint16_t magic,
     }
 
     /* Response message */
-    byte* res_out =
-        (byte*)cryptoDataOut + sizeof(whMessageCrypto_EccSignResponse);
-    word32 max_len = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
-                              (res_out - (uint8_t*)cryptoDataOut));
-    word32 res_len = max_len;
+    res_out = (byte*)cryptoDataOut + sizeof(whMessageCrypto_EccSignResponse);
+    max_len = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
+                       (res_out - (uint8_t*)cryptoDataOut));
+    res_len = max_len;
 
     /* init private key */
     ret = wc_ecc_init_ex(key, NULL, ctx->crypto->devId);
@@ -1078,10 +1121,24 @@ static int _HandleEccVerify(whServerContext* ctx, uint16_t magic,
                             const void* cryptoDataIn, uint16_t inSize,
                             void* cryptoDataOut, uint16_t* outSize)
 {
-    int                               ret;
+    int                               ret = WH_ERROR_OK;
     ecc_key                           key[1];
     whMessageCrypto_EccVerifyRequest  req;
     whMessageCrypto_EccVerifyResponse res;
+
+    uint32_t available      = inSize - sizeof(whMessageCrypto_EccVerifyRequest);
+    uint32_t options        = 0;
+    whKeyId  key_id         = WH_KEYID_ERASED;
+    uint32_t hash_len       = 0;
+    uint32_t sig_len        = 0;
+    uint8_t* req_sig        = NULL;
+    uint8_t* req_hash       = NULL;
+    int      evict          = 0;
+    int      export_pub_key = 0;
+    byte*    res_pub        = NULL;
+    word32   max_size       = 0;
+    uint32_t pub_size       = 0;
+    int      result         = 0;
 
     /* Validate minimum size */
     if (inSize < sizeof(whMessageCrypto_EccVerifyRequest)) {
@@ -1096,7 +1153,6 @@ static int _HandleEccVerify(whServerContext* ctx, uint16_t magic,
     }
 
     /* Validate variable-length fields fit within inSize */
-    uint32_t available = inSize - sizeof(whMessageCrypto_EccVerifyRequest);
     if (req.sigSz > available) {
         return WH_ERROR_BADARGS;
     }
@@ -1106,16 +1162,16 @@ static int _HandleEccVerify(whServerContext* ctx, uint16_t magic,
     }
 
     /* Extract parameters from translated request */
-    uint32_t options = req.options;
-    whKeyId  key_id  = wh_KeyId_TranslateFromClient(
-          WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
-    uint32_t hash_len = req.hashSz;
-    uint32_t sig_len  = req.sigSz;
-    uint8_t* req_sig =
+    options = req.options;
+    key_id  = wh_KeyId_TranslateFromClient(
+        WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+    hash_len = req.hashSz;
+    sig_len  = req.sigSz;
+    req_sig =
         (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_EccVerifyRequest);
-    uint8_t* req_hash = req_sig + sig_len;
-    int      evict    = !!(options & WH_MESSAGE_CRYPTO_ECCVERIFY_OPTIONS_EVICT);
-    int      export_pub_key =
+    req_hash = req_sig + sig_len;
+    evict    = !!(options & WH_MESSAGE_CRYPTO_ECCVERIFY_OPTIONS_EVICT);
+    export_pub_key =
         !!(options & WH_MESSAGE_CRYPTO_ECCVERIFY_OPTIONS_EXPORTPUB);
 
     /* Validate key usage policy for verification */
@@ -1128,12 +1184,10 @@ static int _HandleEccVerify(whServerContext* ctx, uint16_t magic,
     }
 
     /* Response message */
-    byte* res_pub =
+    res_pub =
         (uint8_t*)(cryptoDataOut) + sizeof(whMessageCrypto_EccVerifyResponse);
-    word32   max_size = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
-                               (res_pub - (uint8_t*)cryptoDataOut));
-    uint32_t pub_size = 0;
-    int      result   = 0;
+    max_size = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
+                        (res_pub - (uint8_t*)cryptoDataOut));
 
     /* init public key */
     ret = wc_ecc_init_ex(key, NULL, ctx->crypto->devId);
@@ -1230,9 +1284,17 @@ static int _HandleRng(whServerContext* ctx, uint16_t magic,
                       const void* cryptoDataIn, uint16_t inSize,
                       void* cryptoDataOut, uint16_t* outSize)
 {
-    int                         ret = WH_ERROR_OK;
+    int                         ret         = WH_ERROR_OK;
     whMessageCrypto_RngRequest  req;
     whMessageCrypto_RngResponse res;
+    uint32_t                    actual_size = 0;
+    uint8_t*                    res_out     = NULL;
+
+    /* Calculate maximum data size server can respond with (subtract headers) */
+    const uint32_t server_max_data =
+        WOLFHSM_CFG_COMM_DATA_LEN -
+        sizeof(whMessageCrypto_GenericResponseHeader) -
+        sizeof(whMessageCrypto_RngResponse);
 
     if (inSize < sizeof(whMessageCrypto_RngRequest)) {
         return WH_ERROR_BADARGS;
@@ -1245,19 +1307,11 @@ static int _HandleRng(whServerContext* ctx, uint16_t magic,
         return ret;
     }
 
-    /* Calculate maximum data size server can respond with (subtract headers) */
-    const uint32_t server_max_data =
-        WOLFHSM_CFG_COMM_DATA_LEN -
-        sizeof(whMessageCrypto_GenericResponseHeader) -
-        sizeof(whMessageCrypto_RngResponse);
-
     /* Server responds with minimum of requested size and server max capacity */
-    uint32_t actual_size =
-        (req.sz < server_max_data) ? req.sz : server_max_data;
+    actual_size = (req.sz < server_max_data) ? req.sz : server_max_data;
 
     /* Generate the random data directly into response buffer */
-    uint8_t* res_out =
-        (uint8_t*)cryptoDataOut + sizeof(whMessageCrypto_RngResponse);
+    res_out = (uint8_t*)cryptoDataOut + sizeof(whMessageCrypto_RngResponse);
     ret = wc_RNG_GenerateBlock(ctx->crypto->rng, res_out, actual_size);
     if (ret != 0) {
         return ret;
@@ -1363,6 +1417,26 @@ static int _HandleHkdf(whServerContext* ctx, uint16_t magic,
     whMessageCrypto_HkdfRequest  req;
     whMessageCrypto_HkdfResponse res;
 
+    int        hashType   = 0;
+    uint32_t   inKeySz    = 0;
+    uint32_t   saltSz     = 0;
+    uint32_t   infoSz     = 0;
+    uint32_t   outSz      = 0;
+    whKeyId    key_id     = WH_KEYID_ERASED;
+    whKeyId    keyIdIn    = WH_KEYID_ERASED;
+    whNvmFlags flags      = 0;
+    uint8_t*   label      = 0;
+    uint16_t   label_size = WH_NVM_LABEL_LEN;
+    uint32_t   available  = inSize - sizeof(whMessageCrypto_HkdfRequest);
+
+    const uint8_t* inKey         = NULL;
+    const uint8_t* salt          = NULL;
+    const uint8_t* info          = NULL;
+    uint8_t*       cachedKeyBuf  = NULL;
+    whNvmMetadata* cachedKeyMeta = NULL;
+    uint8_t*       out           = NULL;
+    uint16_t       max_size      = 0;
+
     /* Validate minimum size */
     if (inSize < sizeof(whMessageCrypto_HkdfRequest)) {
         return WH_ERROR_BADARGS;
@@ -1376,21 +1450,19 @@ static int _HandleHkdf(whServerContext* ctx, uint16_t magic,
     }
 
     /* Extract parameters from translated request */
-    int      hashType = req.hashType;
-    uint32_t inKeySz  = req.inKeySz;
-    uint32_t saltSz   = req.saltSz;
-    uint32_t infoSz   = req.infoSz;
-    uint32_t outSz    = req.outSz;
-    whKeyId  key_id   = wh_KeyId_TranslateFromClient(
+    hashType = req.hashType;
+    inKeySz  = req.inKeySz;
+    saltSz   = req.saltSz;
+    infoSz   = req.infoSz;
+    outSz    = req.outSz;
+    flags    = req.flags;
+    label    = req.label;
+    key_id   = wh_KeyId_TranslateFromClient(
            WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyIdOut);
-    whKeyId keyIdIn = wh_KeyId_TranslateFromClient(
+    keyIdIn  = wh_KeyId_TranslateFromClient(
         WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyIdIn);
-    whNvmFlags flags      = req.flags;
-    uint8_t*   label      = req.label;
-    uint16_t   label_size = WH_NVM_LABEL_LEN;
 
     /* Validate variable-length fields fit within input buffer */
-    uint32_t available = inSize - sizeof(whMessageCrypto_HkdfRequest);
     if (inKeySz > available) {
         return WH_ERROR_BADARGS;
     }
@@ -1402,14 +1474,9 @@ static int _HandleHkdf(whServerContext* ctx, uint16_t magic,
     }
 
     /* Get pointers to variable-length input data */
-    const uint8_t* inKey =
-        (const uint8_t*)cryptoDataIn + sizeof(whMessageCrypto_HkdfRequest);
-    const uint8_t* salt = inKey + inKeySz;
-    const uint8_t* info = salt + saltSz;
-
-    /* Buffer for cached key if needed */
-    uint8_t*       cachedKeyBuf  = NULL;
-    whNvmMetadata* cachedKeyMeta = NULL;
+    inKey = (const uint8_t*)cryptoDataIn + sizeof(whMessageCrypto_HkdfRequest);
+    salt = inKey + inKeySz;
+    info = salt + saltSz;
 
     /* Check if we should use cached key as input */
     if (inKeySz == 0 && !WH_KEYID_ISERASED(keyIdIn)) {
@@ -1432,10 +1499,9 @@ static int _HandleHkdf(whServerContext* ctx, uint16_t magic,
 
     /* Get pointer to where output data would be stored (after response struct)
      */
-    uint8_t* out =
-        (uint8_t*)cryptoDataOut + sizeof(whMessageCrypto_HkdfResponse);
-    uint16_t max_size = (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN -
-                                   ((uint8_t*)out - (uint8_t*)cryptoDataOut));
+    out = (uint8_t*)cryptoDataOut + sizeof(whMessageCrypto_HkdfResponse);
+    max_size = (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN -
+                          ((uint8_t*)out - (uint8_t*)cryptoDataOut));
 
     /* Check if output size is valid */
     if (outSz > max_size) {
@@ -1502,6 +1568,28 @@ static int _HandleCmacKdf(whServerContext* ctx, uint16_t magic,
     whMessageCrypto_CmacKdfRequest  req;
     whMessageCrypto_CmacKdfResponse res;
 
+    uint32_t   saltSz      = 0;
+    uint32_t   zSz         = 0;
+    uint32_t   fixedInfoSz = 0;
+    uint32_t   outSz       = 0;
+    whKeyId    keyIdOut    = WH_KEYID_ERASED;
+    whKeyId    saltKeyId   = WH_KEYID_ERASED;
+    whKeyId    zKeyId      = WH_KEYID_ERASED;
+    whNvmFlags flags       = WH_NVM_FLAGS_NONE;
+    uint8_t*   label       = NULL;
+    uint16_t   label_size  = WH_NVM_LABEL_LEN;
+    uint32_t   available   = inSize - sizeof(whMessageCrypto_CmacKdfRequest);
+
+    const uint8_t* salt           = NULL;
+    const uint8_t* z              = NULL;
+    const uint8_t* fixedInfo      = NULL;
+    uint8_t*       cachedSaltBuf  = NULL;
+    whNvmMetadata* cachedSaltMeta = NULL;
+    uint8_t*       cachedZBuf     = NULL;
+    whNvmMetadata* cachedZMeta    = NULL;
+    uint8_t*       out            = NULL;
+    uint16_t       max_size       = 0;
+
     memset(&res, 0, sizeof(res));
 
     /* Validate minimum size */
@@ -1515,22 +1603,21 @@ static int _HandleCmacKdf(whServerContext* ctx, uint16_t magic,
         return ret;
     }
 
-    uint32_t saltSz      = req.saltSz;
-    uint32_t zSz         = req.zSz;
-    uint32_t fixedInfoSz = req.fixedInfoSz;
-    uint32_t outSz       = req.outSz;
-    whKeyId  keyIdOut    = wh_KeyId_TranslateFromClient(
-            WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyIdOut);
-    whKeyId saltKeyId = wh_KeyId_TranslateFromClient(
+    saltSz      = req.saltSz;
+    zSz         = req.zSz;
+    fixedInfoSz = req.fixedInfoSz;
+    outSz       = req.outSz;
+    flags       = (whNvmFlags)req.flags;
+    label       = req.label;
+    keyIdOut    = wh_KeyId_TranslateFromClient(
+        WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyIdOut);
+    saltKeyId   = wh_KeyId_TranslateFromClient(
         WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyIdSalt);
-    whKeyId zKeyId = wh_KeyId_TranslateFromClient(
+    zKeyId      = wh_KeyId_TranslateFromClient(
         WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyIdZ);
-    whNvmFlags flags      = (whNvmFlags)req.flags;
-    uint8_t*   label      = req.label;
-    uint16_t   label_size = WH_NVM_LABEL_LEN;
+
 
     /* Validate variable-length fields fit within input buffer */
-    uint32_t available = inSize - sizeof(whMessageCrypto_CmacKdfRequest);
     if (saltSz > available) {
         return WH_ERROR_BADARGS;
     }
@@ -1541,15 +1628,10 @@ static int _HandleCmacKdf(whServerContext* ctx, uint16_t magic,
         return WH_ERROR_BADARGS;
     }
 
-    const uint8_t* salt =
-        (const uint8_t*)cryptoDataIn + sizeof(whMessageCrypto_CmacKdfRequest);
-    const uint8_t* z         = salt + saltSz;
-    const uint8_t* fixedInfo = z + zSz;
-
-    uint8_t*       cachedSaltBuf  = NULL;
-    whNvmMetadata* cachedSaltMeta = NULL;
-    uint8_t*       cachedZBuf     = NULL;
-    whNvmMetadata* cachedZMeta    = NULL;
+    salt      = (const uint8_t*)cryptoDataIn +
+        sizeof(whMessageCrypto_CmacKdfRequest);
+    z         = salt + saltSz;
+    fixedInfo = z + zSz;
 
     if (saltSz == 0) {
         if (WH_KEYID_ISERASED(saltKeyId)) {
@@ -1593,10 +1675,9 @@ static int _HandleCmacKdf(whServerContext* ctx, uint16_t magic,
         return WH_ERROR_BADARGS;
     }
 
-    uint8_t* out =
-        (uint8_t*)cryptoDataOut + sizeof(whMessageCrypto_CmacKdfResponse);
-    uint16_t max_size = (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN -
-                                   ((uint8_t*)out - (uint8_t*)cryptoDataOut));
+    out = (uint8_t*)cryptoDataOut + sizeof(whMessageCrypto_CmacKdfResponse);
+    max_size = (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN -
+                          ((uint8_t*)out - (uint8_t*)cryptoDataOut));
 
     if (outSz > max_size) {
         return WH_ERROR_BADARGS;
@@ -1646,12 +1727,20 @@ static int _HandleCurve25519KeyGen(whServerContext* ctx, uint16_t magic,
                                    const void* cryptoDataIn, uint16_t inSize,
                                    void* cryptoDataOut, uint16_t* outSize)
 {
-    (void)inSize;
-
     int                                      ret = WH_ERROR_OK;
     curve25519_key                           key[1];
     whMessageCrypto_Curve25519KeyGenRequest  req;
     whMessageCrypto_Curve25519KeyGenResponse res;
+
+    int        key_size   = 0;
+    whKeyId    key_id     = WH_KEYID_ERASED;
+    whNvmFlags flags      = WH_NVM_FLAGS_NONE;
+    uint8_t*   label      = NULL;
+    uint16_t   label_size = WH_NVM_LABEL_LEN;
+    uint8_t*   out        = NULL;
+    uint16_t   ser_size   = 0;
+
+    (void)inSize;
 
     /* Translate request */
     ret = wh_MessageCrypto_TranslateCurve25519KeyGenRequest(
@@ -1662,18 +1751,17 @@ static int _HandleCurve25519KeyGen(whServerContext* ctx, uint16_t magic,
     }
 
     /* Extract parameters from translated request */
-    int     key_size = req.sz;
-    whKeyId key_id   = wh_KeyId_TranslateFromClient(
-          WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
-    whNvmFlags flags      = req.flags;
-    uint8_t*   label      = req.label;
-    uint16_t   label_size = WH_NVM_LABEL_LEN;
+    key_size = req.sz;
+    flags    = req.flags;
+    label    = req.label;
+    key_id   = wh_KeyId_TranslateFromClient(
+        WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
 
     /* Response Message */
-    uint8_t* out = (uint8_t*)cryptoDataOut +
-                   sizeof(whMessageCrypto_Curve25519KeyGenResponse);
+    out = (uint8_t*)cryptoDataOut +
+                    sizeof(whMessageCrypto_Curve25519KeyGenResponse);
     /* Initialize the key size to the max size of the buffer */
-    uint16_t ser_size =
+    ser_size =
         (word32)(WOLFHSM_CFG_COMM_DATA_LEN - (out - (uint8_t*)cryptoDataOut));
 
     /* init key */
@@ -1733,14 +1821,24 @@ static int _HandleCurve25519SharedSecret(whServerContext* ctx, uint16_t magic,
                                          uint16_t inSize, void* cryptoDataOut,
                                          uint16_t* outSize)
 {
-    (void)inSize;
-
     int ret;
     curve25519_key priv[1] = {0};
     curve25519_key pub[1] = {0};
 
     whMessageCrypto_Curve25519Request  req;
     whMessageCrypto_Curve25519Response res;
+
+    uint32_t options    = 0;
+    int      evict_pub  = 0;
+    int      evict_prv  = 0;
+    whKeyId  pub_key_id = WH_KEYID_ERASED;
+    whKeyId  prv_key_id = WH_KEYID_ERASED;
+    int      endian     = 0;
+    uint8_t* res_out    = NULL;
+    uint16_t max_len    = 0;
+    word32   res_len    = 0;
+
+    (void)inSize;
 
     /* Translate request */
     ret = wh_MessageCrypto_TranslateCurve25519Request(
@@ -1750,14 +1848,14 @@ static int _HandleCurve25519SharedSecret(whServerContext* ctx, uint16_t magic,
     }
 
     /* Extract parameters from translated request */
-    uint32_t options    = req.options;
-    int evict_pub = !!(options & WH_MESSAGE_CRYPTO_CURVE25519_OPTIONS_EVICTPUB);
-    int evict_prv = !!(options & WH_MESSAGE_CRYPTO_CURVE25519_OPTIONS_EVICTPRV);
-    whKeyId pub_key_id = wh_KeyId_TranslateFromClient(
+    options    = req.options;
+    evict_pub  = !!(options & WH_MESSAGE_CRYPTO_CURVE25519_OPTIONS_EVICTPUB);
+    evict_prv  = !!(options & WH_MESSAGE_CRYPTO_CURVE25519_OPTIONS_EVICTPRV);
+    pub_key_id = wh_KeyId_TranslateFromClient(
         WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.publicKeyId);
-    whKeyId prv_key_id = wh_KeyId_TranslateFromClient(
+    prv_key_id = wh_KeyId_TranslateFromClient(
         WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.privateKeyId);
-    int endian          = req.endian;
+    endian     = req.endian;
 
     /* Validate key usage policy for key derivation (private key) */
     if (!WH_KEYID_ISERASED(prv_key_id)) {
@@ -1769,11 +1867,11 @@ static int _HandleCurve25519SharedSecret(whServerContext* ctx, uint16_t magic,
     }
 
     /* Response message */
-    uint8_t* res_out       = (uint8_t*)cryptoDataOut +
-                             sizeof(whMessageCrypto_Curve25519Response);
-    uint16_t max_len      = (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN -
-                            (res_out - (uint8_t*)cryptoDataOut));
-    word32 res_len      = max_len;
+    res_out = (uint8_t*)cryptoDataOut +
+                        sizeof(whMessageCrypto_Curve25519Response);
+    max_len = (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN -
+                         (res_out - (uint8_t*)cryptoDataOut));
+    res_len = max_len;
 
     /* init private key */
     ret = wc_curve25519_init_ex(priv, NULL, ctx->crypto->devId);
@@ -1828,12 +1926,20 @@ static int _HandleEd25519KeyGen(whServerContext* ctx, uint16_t magic,
                                 const void* cryptoDataIn, uint16_t inSize,
                                 void* cryptoDataOut, uint16_t* outSize)
 {
-    (void)inSize;
-
     int                                   ret = WH_ERROR_OK;
     ed25519_key                           key[1];
     whMessageCrypto_Ed25519KeyGenRequest  req;
     whMessageCrypto_Ed25519KeyGenResponse res;
+
+    whKeyId    key_id     = WH_KEYID_ERASED;
+    whNvmFlags flags      = WH_NVM_FLAGS_NONE;
+    uint8_t*   label      = NULL;
+    uint16_t   label_size = WH_NVM_LABEL_LEN;
+    uint8_t*   res_out    = NULL;
+    uint16_t   max_size   = 0;
+    uint16_t   ser_size   = 0;
+
+    (void)inSize;
 
     ret = wh_MessageCrypto_TranslateEd25519KeyGenRequest(
         magic, (const whMessageCrypto_Ed25519KeyGenRequest*)cryptoDataIn, &req);
@@ -1841,17 +1947,15 @@ static int _HandleEd25519KeyGen(whServerContext* ctx, uint16_t magic,
         return ret;
     }
 
-    whKeyId key_id = wh_KeyId_TranslateFromClient(
+    key_id = wh_KeyId_TranslateFromClient(
         WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
-    whNvmFlags flags      = req.flags;
-    uint8_t*   label      = req.label;
-    uint16_t   label_size = WH_NVM_LABEL_LEN;
+    flags      = req.flags;
+    label      = req.label;
 
-    uint8_t* res_out =
+    res_out =
         (uint8_t*)cryptoDataOut + sizeof(whMessageCrypto_Ed25519KeyGenResponse);
-    uint16_t max_size = (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN -
-                                   (res_out - (uint8_t*)cryptoDataOut));
-    uint16_t ser_size = 0;
+    max_size = (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN -
+                          (res_out - (uint8_t*)cryptoDataOut));
 
     ret = wc_ed25519_init_ex(key, NULL, ctx->crypto->devId);
     if (ret == 0) {
@@ -1906,6 +2010,14 @@ static int _HandleEd25519Sign(whServerContext* ctx, uint16_t magic,
     ed25519_key                        key[1];
     whMessageCrypto_Ed25519SignRequest req;
     uint8_t                            sig[ED25519_SIG_SIZE];
+    word32                             sig_len   = sizeof(sig);
+    uint32_t                           available = inSize - sizeof(req);
+    whKeyId                            key_id    = WH_KEYID_ERASED;
+    uint32_t                           msg_len   = 0;
+    uint8_t*                           req_msg   = NULL;
+    uint8_t*                           req_ctx   = NULL;
+    int                                evict     = 0;
+    uint8_t*                           res_sig   = NULL;
 
     if (inSize < sizeof(req)) {
         return WH_ERROR_BADARGS;
@@ -1917,7 +2029,6 @@ static int _HandleEd25519Sign(whServerContext* ctx, uint16_t magic,
         return ret;
     }
 
-    uint32_t available = inSize - sizeof(req);
     if (req.msgSz > available) {
         return WH_ERROR_BADARGS;
     }
@@ -1938,12 +2049,12 @@ static int _HandleEd25519Sign(whServerContext* ctx, uint16_t magic,
         return WH_ERROR_BADARGS;
     }
 
-    whKeyId key_id = wh_KeyId_TranslateFromClient(
+    key_id = wh_KeyId_TranslateFromClient(
         WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
-    uint32_t msg_len = req.msgSz;
-    uint8_t* req_msg = (uint8_t*)cryptoDataIn + sizeof(req);
-    uint8_t* req_ctx = req_msg + msg_len;
-    int evict = !!(req.options & WH_MESSAGE_CRYPTO_ED25519_SIGN_OPTIONS_EVICT);
+    msg_len = req.msgSz;
+    req_msg = (uint8_t*)cryptoDataIn + sizeof(req);
+    req_ctx = req_msg + msg_len;
+    evict = !!(req.options & WH_MESSAGE_CRYPTO_ED25519_SIGN_OPTIONS_EVICT);
 
     if (!WH_KEYID_ISERASED(key_id)) {
         ret = wh_Server_KeystoreFindEnforceKeyUsage(ctx, key_id,
@@ -1953,9 +2064,8 @@ static int _HandleEd25519Sign(whServerContext* ctx, uint16_t magic,
         }
     }
 
-    uint8_t* res_sig =
+    res_sig =
         (uint8_t*)cryptoDataOut + sizeof(whMessageCrypto_Ed25519SignResponse);
-    word32 sig_len = sizeof(sig);
 
     ret = wc_ed25519_init_ex(key, NULL, ctx->crypto->devId);
     if (ret == 0) {
@@ -2003,6 +2113,15 @@ static int _HandleEd25519Verify(whServerContext* ctx, uint16_t magic,
     ed25519_key                           key[1];
     whMessageCrypto_Ed25519VerifyRequest  req;
     whMessageCrypto_Ed25519VerifyResponse res;
+    uint32_t                              available  = inSize - sizeof(req);
+    whKeyId                               key_id     = WH_KEYID_ERASED;
+    uint32_t                              sig_len    = 0;
+    uint32_t                              msg_len    = 0;
+    uint8_t*                              req_sig    = NULL;
+    uint8_t*                              req_msg    = NULL;
+    uint8_t*                              req_ctx    = NULL;
+    int                                   evict      = 0;
+    int                                   verify_res = 0;
 
     if (inSize < sizeof(req)) {
         return WH_ERROR_BADARGS;
@@ -2014,7 +2133,6 @@ static int _HandleEd25519Verify(whServerContext* ctx, uint16_t magic,
         return ret;
     }
 
-    uint32_t available = inSize - sizeof(req);
     if (req.sigSz > available) {
         return WH_ERROR_BADARGS;
     }
@@ -2035,16 +2153,15 @@ static int _HandleEd25519Verify(whServerContext* ctx, uint16_t magic,
         return WH_ERROR_BADARGS;
     }
 
-    whKeyId key_id = wh_KeyId_TranslateFromClient(
+    key_id = wh_KeyId_TranslateFromClient(
         WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
-    uint32_t sig_len = req.sigSz;
-    uint32_t msg_len = req.msgSz;
-    uint8_t* req_sig =
+    sig_len = req.sigSz;
+    msg_len = req.msgSz;
+    req_sig =
         (uint8_t*)cryptoDataIn + sizeof(whMessageCrypto_Ed25519VerifyRequest);
-    uint8_t* req_msg = req_sig + sig_len;
-    uint8_t* req_ctx = req_msg + msg_len;
-    int      evict =
-        !!(req.options & WH_MESSAGE_CRYPTO_ED25519_VERIFY_OPTIONS_EVICT);
+    req_msg = req_sig + sig_len;
+    req_ctx = req_msg + msg_len;
+    evict = !!(req.options & WH_MESSAGE_CRYPTO_ED25519_VERIFY_OPTIONS_EVICT);
 
     if (!WH_KEYID_ISERASED(key_id)) {
         ret = wh_Server_KeystoreFindEnforceKeyUsage(ctx, key_id,
@@ -2054,14 +2171,12 @@ static int _HandleEd25519Verify(whServerContext* ctx, uint16_t magic,
         }
     }
 
-    int result = 0;
-
     ret = wc_ed25519_init_ex(key, NULL, ctx->crypto->devId);
     if (ret == 0) {
         ret = wh_Server_CacheExportEd25519Key(ctx, key_id, key);
         if (ret == WH_ERROR_OK) {
             ret = wc_ed25519_verify_msg_ex(req_sig, sig_len, req_msg, msg_len,
-                                           &result, key, (byte)req.type,
+                                           &verify_res, key, (byte)req.type,
                                            req_ctx, (byte)req.ctxSz);
         }
         wc_ed25519_free(key);
@@ -2073,7 +2188,7 @@ cleanup:
     }
 
     if (ret == 0) {
-        res.res = result;
+        res.res = verify_res;
 
         wh_MessageCrypto_TranslateEd25519VerifyResponse(
             magic, &res, (whMessageCrypto_Ed25519VerifyResponse*)cryptoDataOut);
@@ -2088,13 +2203,17 @@ static int _HandleEd25519SignDma(whServerContext* ctx, uint16_t magic,
                                  const void* cryptoDataIn, uint16_t inSize,
                                  void* cryptoDataOut, uint16_t* outSize)
 {
-    int                                    ret = 0;
+    int                                    ret = WH_ERROR_OK;
     ed25519_key                            key[1];
     void*                                  msgAddr = NULL;
     void*                                  sigAddr = NULL;
     whMessageCrypto_Ed25519SignDmaRequest  req;
     whMessageCrypto_Ed25519SignDmaResponse res;
     word32                                 sigLen = 0;
+    uint32_t                               available = inSize - sizeof(req);
+    uint8_t*                               req_ctx = NULL;
+    whKeyId                                key_id = WH_KEYID_ERASED;
+    int                                    evict = 0;
 
     if (inSize < sizeof(req)) {
         return WH_ERROR_BADARGS;
@@ -2107,23 +2226,22 @@ static int _HandleEd25519SignDma(whServerContext* ctx, uint16_t magic,
         return ret;
     }
 
-    uint32_t available = inSize - sizeof(req);
     if (req.ctxSz > available) {
         return WH_ERROR_BADARGS;
     }
     if (req.ctxSz > WH_CRYPTO_ED25519_MAX_CTX_LEN) {
         return WH_ERROR_BADARGS;
     }
-    uint8_t* req_ctx = (uint8_t*)cryptoDataIn + sizeof(req);
+    req_ctx = (uint8_t*)cryptoDataIn + sizeof(req);
 
     if ((req.type != (byte)Ed25519) && (req.type != (byte)Ed25519ctx) &&
         (req.type != (byte)Ed25519ph)) {
         return WH_ERROR_BADARGS;
     }
 
-    whKeyId key_id = wh_KeyId_TranslateFromClient(
+    key_id = wh_KeyId_TranslateFromClient(
         WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
-    int evict = !!(req.options & WH_MESSAGE_CRYPTO_ED25519_SIGN_OPTIONS_EVICT);
+    evict  = !!(req.options & WH_MESSAGE_CRYPTO_ED25519_SIGN_OPTIONS_EVICT);
 
     if (!WH_KEYID_ISERASED(key_id)) {
         ret = wh_Server_KeystoreFindEnforceKeyUsage(ctx, key_id,
@@ -2195,12 +2313,16 @@ static int _HandleEd25519VerifyDma(whServerContext* ctx, uint16_t magic,
                                    const void* cryptoDataIn, uint16_t inSize,
                                    void* cryptoDataOut, uint16_t* outSize)
 {
-    int                                      ret = 0;
+    int                                      ret = WH_ERROR_OK;
     ed25519_key                              key[1];
-    void*                                    msgAddr = NULL;
-    void*                                    sigAddr = NULL;
+    void*                                    msgAddr   = NULL;
+    void*                                    sigAddr   = NULL;
     whMessageCrypto_Ed25519VerifyDmaRequest  req;
     whMessageCrypto_Ed25519VerifyDmaResponse res;
+    uint32_t                                 available = inSize - sizeof(req);
+    uint8_t*                                 req_ctx   = NULL;
+    whKeyId                                  key_id    = WH_KEYID_ERASED;
+    int                                      evict     = 0;
 
     if (inSize < sizeof(req)) {
         return WH_ERROR_BADARGS;
@@ -2213,24 +2335,22 @@ static int _HandleEd25519VerifyDma(whServerContext* ctx, uint16_t magic,
         return ret;
     }
 
-    uint32_t available = inSize - sizeof(req);
     if (req.ctxSz > available) {
         return WH_ERROR_BADARGS;
     }
     if (req.ctxSz > WH_CRYPTO_ED25519_MAX_CTX_LEN) {
         return WH_ERROR_BADARGS;
     }
-    uint8_t* req_ctx = (uint8_t*)cryptoDataIn + sizeof(req);
+    req_ctx = (uint8_t*)cryptoDataIn + sizeof(req);
 
     if ((req.type != (byte)Ed25519) && (req.type != (byte)Ed25519ctx) &&
         (req.type != (byte)Ed25519ph)) {
         return WH_ERROR_BADARGS;
     }
 
-    whKeyId key_id = wh_KeyId_TranslateFromClient(
+    key_id = wh_KeyId_TranslateFromClient(
         WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
-    int evict =
-        !!(req.options & WH_MESSAGE_CRYPTO_ED25519_VERIFY_OPTIONS_EVICT);
+    evict = !!(req.options & WH_MESSAGE_CRYPTO_ED25519_VERIFY_OPTIONS_EVICT);
 
     if (!WH_KEYID_ISERASED(key_id)) {
         ret = wh_Server_KeystoreFindEnforceKeyUsage(ctx, key_id,
@@ -2304,12 +2424,25 @@ static int _HandleAesCtr(whServerContext* ctx, uint16_t magic,
                          const void* cryptoDataIn, uint16_t inSize,
                          void* cryptoDataOut, uint16_t* outSize)
 {
-    int                            ret    = WH_ERROR_OK;
-    Aes                            aes[1] = {0};
+    int                            ret         = WH_ERROR_OK;
+    Aes                            aes[1]      = {0};
     whMessageCrypto_AesCtrRequest  req;
     whMessageCrypto_AesCtrResponse res;
-    uint8_t*                       cachedKey = NULL;
-    whNvmMetadata*                 keyMeta   = NULL;
+    uint8_t*                       cachedKey   = NULL;
+    whNvmMetadata*                 keyMeta     = NULL;
+    uint32_t                       enc         = 0;
+    uint32_t                       key_len     = 0;
+    uint32_t                       len         = 0;
+    uint32_t                       left        = 0;
+    uint64_t                       needed_size = 0;
+    whKeyId                        key_id      = WH_KEYID_ERASED;
+    uint8_t*                       in          = NULL;
+    uint8_t*                       key         = NULL;
+    uint8_t*                       iv          = NULL;
+    uint8_t*                       tmp         = NULL;
+    uint8_t*                       out         = NULL;
+    uint8_t*                       out_reg     = NULL;
+    uint8_t*                       out_tmp     = NULL;
 
     if (inSize < sizeof(whMessageCrypto_AesCtrRequest)) {
         return WH_ERROR_BADARGS;
@@ -2321,28 +2454,26 @@ static int _HandleAesCtr(whServerContext* ctx, uint16_t magic,
     if (ret != WH_ERROR_OK) {
         return ret;
     }
-    uint32_t enc         = req.enc;
-    uint32_t key_len     = req.keyLen;
-    uint32_t len         = req.sz;
-    uint32_t left        = req.left;
-    uint64_t needed_size = sizeof(whMessageCrypto_AesCtrRequest) + len +
-                           key_len + AES_IV_SIZE + AES_BLOCK_SIZE;
+    enc         = req.enc;
+    key_len     = req.keyLen;
+    len         = req.sz;
+    left        = req.left;
+    needed_size = sizeof(whMessageCrypto_AesCtrRequest) + len + key_len +
+                  AES_IV_SIZE + AES_BLOCK_SIZE;
     if (needed_size != inSize) {
         return WH_ERROR_BADARGS;
     }
-    whKeyId key_id = wh_KeyId_TranslateFromClient(
+    key_id = wh_KeyId_TranslateFromClient(
         WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
 
     /* in, key, iv, and out are after fixed size fields */
-    uint8_t* in =
-        (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_AesCtrRequest);
-    uint8_t* key = in + len;
-    uint8_t* iv  = key + key_len;
-    uint8_t* tmp = iv + AES_BLOCK_SIZE;
-    uint8_t* out =
-        (uint8_t*)(cryptoDataOut) + sizeof(whMessageCrypto_AesCtrResponse);
-    uint8_t* out_reg = out + len;
-    uint8_t* out_tmp = out_reg + AES_BLOCK_SIZE;
+    in  = (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_AesCtrRequest);
+    key = in + len;
+    iv  = key + key_len;
+    tmp = iv + AES_BLOCK_SIZE;
+    out = (uint8_t*)(cryptoDataOut) + sizeof(whMessageCrypto_AesCtrResponse);
+    out_reg = out + len;
+    out_tmp = out_reg + AES_BLOCK_SIZE;
 
     /* Debug printouts */
     WH_DEBUG_VERBOSE_HEXDUMP("[AesCtr] Input data ", in, len);
@@ -2430,14 +2561,22 @@ static int _HandleAesCtrDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
     whMessageCrypto_AesCtrDmaRequest  req;
     whMessageCrypto_AesCtrDmaResponse res;
     Aes                               aes[1] = {0};
-
-    void*  inAddr  = NULL;
-    void*  outAddr = NULL;
-    word32 outSz   = 0;
-
-    whKeyId        keyId;
-    uint8_t*       cachedKey = NULL;
-    whNvmMetadata* keyMeta   = NULL;
+    void*                             inAddr      = NULL;
+    void*                             outAddr     = NULL;
+    word32                            outSz       = 0;
+    whKeyId                           keyId       = WH_KEYID_ERASED;
+    uint8_t*                          cachedKey   = NULL;
+    whNvmMetadata*                    keyMeta     = NULL;
+    uint32_t                          enc         = 0;
+    uint32_t                          keyLen      = 0;
+    uint32_t                          len         = 0;
+    uint32_t                          left        = 0;
+    uint64_t                          needed_size = 0;
+    uint8_t*                          key         = NULL;
+    uint8_t*                          iv          = NULL;
+    uint8_t*                          tmp         = NULL;
+    uint8_t*                          out_iv      = NULL;
+    uint8_t*                          out_tmp     = NULL;
 
     (void)seq;
 
@@ -2452,12 +2591,12 @@ static int _HandleAesCtrDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
         return ret;
     }
 
-    uint32_t enc         = req.enc;
-    uint32_t keyLen      = req.keySz;
-    uint32_t len         = req.input.sz;
-    uint32_t left        = req.left;
-    uint64_t needed_size = sizeof(whMessageCrypto_AesCtrDmaRequest) + keyLen +
-                           AES_IV_SIZE + AES_BLOCK_SIZE;
+    enc         = req.enc;
+    keyLen      = req.keySz;
+    len         = req.input.sz;
+    left        = req.left;
+    needed_size = sizeof(whMessageCrypto_AesCtrDmaRequest) + keyLen +
+                  AES_IV_SIZE + AES_BLOCK_SIZE;
     if (needed_size != inSize) {
         return WH_ERROR_BADARGS;
     }
@@ -2467,13 +2606,12 @@ static int _HandleAesCtrDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
 
     /* iv and tmp are after fixed size fields, key is optional and variable
      * length */
-    uint8_t* key     = NULL;
-    uint8_t* iv      = (uint8_t*)(cryptoDataIn) +
-                       sizeof(whMessageCrypto_AesCtrDmaRequest);
-    uint8_t* tmp     = iv + AES_IV_SIZE;
-    uint8_t* out_iv = (uint8_t*)(cryptoDataOut) +
-                       sizeof(whMessageCrypto_AesCtrDmaResponse);
-    uint8_t* out_tmp = out_iv + AES_IV_SIZE;
+    iv      = (uint8_t*)(cryptoDataIn) +
+                        sizeof(whMessageCrypto_AesCtrDmaRequest);
+    tmp     = iv + AES_IV_SIZE;
+    out_iv  = (uint8_t*)(cryptoDataOut) +
+                        sizeof(whMessageCrypto_AesCtrDmaResponse);
+    out_tmp = out_iv + AES_IV_SIZE;
 
     memset(&res, 0, sizeof(res));
 
@@ -2614,12 +2752,20 @@ static int _HandleAesEcb(whServerContext* ctx, uint16_t magic,
                          const void* cryptoDataIn, uint16_t inSize,
                          void* cryptoDataOut, uint16_t* outSize)
 {
-    int                            ret    = WH_ERROR_OK;
-    Aes                            aes[1] = {0};
+    int                            ret         = WH_ERROR_OK;
+    Aes                            aes[1]      = {0};
     whMessageCrypto_AesEcbRequest  req;
     whMessageCrypto_AesEcbResponse res;
-    uint8_t*                       cachedKey = NULL;
-    whNvmMetadata*                 keyMeta   = NULL;
+    uint8_t*                       cachedKey   = NULL;
+    whNvmMetadata*                 keyMeta     = NULL;
+    uint32_t                       enc         = 0;
+    uint32_t                       key_len     = 0;
+    uint32_t                       len         = 0;
+    uint64_t                       needed_size = 0;
+    whKeyId                        key_id      = WH_KEYID_ERASED;
+    uint8_t*                       in          = NULL;
+    uint8_t*                       key         = NULL;
+    uint8_t*                       out         = NULL;
 
     if (inSize < sizeof(whMessageCrypto_AesEcbRequest)) {
         return WH_ERROR_BADARGS;
@@ -2632,25 +2778,21 @@ static int _HandleAesEcb(whServerContext* ctx, uint16_t magic,
         return ret;
     }
 
-    uint32_t enc     = req.enc;
-    uint32_t key_len = req.keyLen;
-    uint32_t len     = req.sz;
-    uint64_t needed_size =
-        sizeof(whMessageCrypto_AesEcbRequest) + len + key_len;
+    enc         = req.enc;
+    key_len     = req.keyLen;
+    len         = req.sz;
+    needed_size = sizeof(whMessageCrypto_AesEcbRequest) + len + key_len;
     if (needed_size != inSize) {
         return WH_ERROR_BADARGS;
     }
 
-    whKeyId key_id = wh_KeyId_TranslateFromClient(
+    key_id = wh_KeyId_TranslateFromClient(
         WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
 
     /* in, key, and out are after fixed size fields */
-    uint8_t* in =
-        (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_AesEcbRequest);
-    uint8_t* key = in + len;
-
-    uint8_t* out =
-        (uint8_t*)(cryptoDataOut) + sizeof(whMessageCrypto_AesEcbResponse);
+    in  = (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_AesEcbRequest);
+    key = in + len;
+    out = (uint8_t*)(cryptoDataOut) + sizeof(whMessageCrypto_AesEcbResponse);
 
     /* Debug printouts */
     WH_DEBUG_VERBOSE_HEXDUMP("[AesEcb] Input data", in, len);
@@ -2729,14 +2871,16 @@ static int _HandleAesEcbDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
     whMessageCrypto_AesEcbDmaRequest  req;
     whMessageCrypto_AesEcbDmaResponse res;
     Aes                               aes[1] = {0};
-
-    void*  inAddr  = NULL;
-    void*  outAddr = NULL;
-    word32 outSz   = 0;
-
-    whKeyId        keyId;
-    uint8_t*       cachedKey = NULL;
-    whNvmMetadata* keyMeta   = NULL;
+    void*                             inAddr      = NULL;
+    void*                             outAddr     = NULL;
+    word32                            outSz       = 0;
+    whKeyId                           keyId       = WH_KEYID_ERASED;
+    uint8_t*                          cachedKey   = NULL;
+    whNvmMetadata*                    keyMeta     = NULL;
+    uint32_t                          keyLen      = 0;
+    uint32_t                          len         = 0;
+    uint64_t                          needed_size = 0;
+    uint8_t*                          key         = NULL;
 
     (void)seq;
 
@@ -2751,9 +2895,9 @@ static int _HandleAesEcbDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
         return ret;
     }
 
-    uint32_t keyLen      = req.keySz;
-    uint32_t len         = req.input.sz;
-    uint64_t needed_size = sizeof(whMessageCrypto_AesEcbDmaRequest) + keyLen;
+    keyLen      = req.keySz;
+    len         = req.input.sz;
+    needed_size = sizeof(whMessageCrypto_AesEcbDmaRequest) + keyLen;
     if (needed_size != inSize) {
         return WH_ERROR_BADARGS;
     }
@@ -2761,8 +2905,8 @@ static int _HandleAesEcbDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
         return WH_ERROR_BADARGS;
     }
 
-    uint8_t* key = (uint8_t*)(cryptoDataIn) +
-                   sizeof(whMessageCrypto_AesEcbDmaRequest);
+    key = (uint8_t*)(cryptoDataIn) +
+                    sizeof(whMessageCrypto_AesEcbDmaRequest);
 
     memset(&res, 0, sizeof(res));
 
@@ -2893,12 +3037,22 @@ static int _HandleAesCbc(whServerContext* ctx, uint16_t magic, const void* crypt
                          uint16_t inSize, void* cryptoDataOut,
                          uint16_t* outSize)
 {
-    int                            ret    = WH_ERROR_OK;
-    Aes                            aes[1] = {0};
+    int                            ret         = WH_ERROR_OK;
+    Aes                            aes[1]      = {0};
     whMessageCrypto_AesCbcRequest  req;
     whMessageCrypto_AesCbcResponse res;
-    uint8_t*                       cachedKey = NULL;
-    whNvmMetadata*                 keyMeta   = NULL;
+    uint8_t*                       cachedKey   = NULL;
+    whNvmMetadata*                 keyMeta     = NULL;
+    uint32_t                       enc         = 0;
+    uint32_t                       key_len     = 0;
+    uint32_t                       len         = 0;
+    uint64_t                       needed_size = 0;
+    whKeyId                        key_id      = WH_KEYID_ERASED;
+    uint8_t*                       in          = NULL;
+    uint8_t*                       key         = NULL;
+    uint8_t*                       iv          = NULL;
+    uint8_t*                       out         = NULL;
+    uint8_t*                       out_iv      = NULL;
 
     /* Validate minimum size */
     if (inSize < sizeof(whMessageCrypto_AesCbcRequest)) {
@@ -2913,27 +3067,24 @@ static int _HandleAesCbc(whServerContext* ctx, uint16_t magic, const void* crypt
     }
 
     /* Validate variable-length fields fit within inSize */
-    uint32_t enc         = req.enc;
-    uint32_t key_len     = req.keyLen;
-    uint32_t len         = req.sz;
-    uint64_t needed_size = sizeof(whMessageCrypto_AesCbcRequest) + len +
-                           key_len + AES_BLOCK_SIZE;
+    enc         = req.enc;
+    key_len     = req.keyLen;
+    len         = req.sz;
+    needed_size = sizeof(whMessageCrypto_AesCbcRequest) + len + key_len +
+                  AES_BLOCK_SIZE;
     if (needed_size != inSize) {
         return WH_ERROR_BADARGS;
     }
 
-    whKeyId key_id = wh_KeyId_TranslateFromClient(
+    key_id = wh_KeyId_TranslateFromClient(
         WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
 
     /* in, key, iv, and out are after fixed size fields */
-    uint8_t* in =
-        (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_AesCbcRequest);
-    uint8_t* key = in + len;
-    uint8_t* iv  = key + key_len;
-
-    uint8_t* out =
-        (uint8_t*)(cryptoDataOut) + sizeof(whMessageCrypto_AesCbcResponse);
-    uint8_t* out_iv = out + len;
+    in     = (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_AesCbcRequest);
+    key    = in + len;
+    iv     = key + key_len;
+    out    = (uint8_t*)(cryptoDataOut) + sizeof(whMessageCrypto_AesCbcResponse);
+    out_iv = out + len;
 
     /* Debug printouts */
     WH_DEBUG_VERBOSE_HEXDUMP("[AesCbc] Input data", in, len);
@@ -3009,18 +3160,23 @@ static int _HandleAesCbcDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
                             const void* cryptoDataIn, uint16_t inSize,
                             void* cryptoDataOut, uint16_t* outSize)
 {
-    int                               ret = WH_ERROR_OK;
+    int                               ret         = WH_ERROR_OK;
     whMessageCrypto_AesCbcDmaRequest  req;
     whMessageCrypto_AesCbcDmaResponse res;
-    Aes                               aes[1] = {0};
-
-    void*  inAddr  = NULL;
-    void*  outAddr = NULL;
-    word32 outSz   = 0;
-
-    whKeyId        keyId;
-    uint8_t*       cachedKey = NULL;
-    whNvmMetadata* keyMeta   = NULL;
+    Aes                               aes[1]      = {0};
+    void*                             inAddr      = NULL;
+    void*                             outAddr     = NULL;
+    word32                            outSz       = 0;
+    whKeyId                           keyId       = WH_KEYID_ERASED;
+    uint8_t*                          cachedKey   = NULL;
+    whNvmMetadata*                    keyMeta     = NULL;
+    uint32_t                          enc         = 0;
+    uint32_t                          keyLen      = 0;
+    uint32_t                          len         = 0;
+    uint64_t                          needed_size = 0;
+    uint8_t*                          key         = NULL;
+    uint8_t*                          iv          = NULL;
+    uint8_t*                          out_iv      = NULL;
 
     (void)seq;
 
@@ -3035,11 +3191,11 @@ static int _HandleAesCbcDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
         return ret;
     }
 
-    uint32_t enc         = req.enc;
-    uint32_t keyLen      = req.keySz;
-    uint32_t len         = req.input.sz;
-    uint64_t needed_size = sizeof(whMessageCrypto_AesCbcDmaRequest) + keyLen +
-                           AES_IV_SIZE;
+    enc         = req.enc;
+    keyLen      = req.keySz;
+    len         = req.input.sz;
+    needed_size = sizeof(whMessageCrypto_AesCbcDmaRequest) + keyLen +
+                  AES_IV_SIZE;
     if (needed_size != inSize) {
         return WH_ERROR_BADARGS;
     }
@@ -3048,11 +3204,11 @@ static int _HandleAesCbcDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
     }
 
     /* iv is a fixed size field, key is optional and variable length */
-    uint8_t* key    = NULL;
-    uint8_t* iv     = (uint8_t*)(cryptoDataIn) +
-                      sizeof(whMessageCrypto_AesCbcDmaRequest);
-    uint8_t* out_iv = (uint8_t*)(cryptoDataOut) +
-                      sizeof(whMessageCrypto_AesCbcDmaResponse);
+    key    = NULL;
+    iv     = (uint8_t*)(cryptoDataIn) +
+                       sizeof(whMessageCrypto_AesCbcDmaRequest);
+    out_iv = (uint8_t*)(cryptoDataOut) +
+                       sizeof(whMessageCrypto_AesCbcDmaResponse);
 
     memset(&res, 0, sizeof(res));
 
@@ -3184,10 +3340,28 @@ static int _HandleAesGcm(whServerContext* ctx, uint16_t magic,
                          const void* cryptoDataIn, uint16_t inSize,
                          void* cryptoDataOut, uint16_t* outSize)
 {
-    int            ret       = WH_ERROR_OK;
-    Aes            aes[1]    = {0};
-    uint8_t*       cachedKey = NULL;
-    whNvmMetadata* keyMeta   = NULL;
+    int                            ret         = WH_ERROR_OK;
+    whMessageCrypto_AesGcmRequest  req;
+    whMessageCrypto_AesGcmResponse res;
+    Aes                            aes[1]      = {0};
+    uint8_t*                       cachedKey   = NULL;
+    whNvmMetadata*                 keyMeta     = NULL;
+    uint32_t                       enc         = 0;
+    uint32_t                       key_len     = 0;
+    uint32_t                       len         = 0;
+    uint32_t                       iv_len      = 0;
+    uint32_t                       authin_len  = 0;
+    uint32_t                       tag_len     = 0;
+    whKeyId                        key_id      = WH_KEYID_ERASED;
+    uint64_t                       needed_size = 0;
+    uint8_t*                       in          = NULL;
+    uint8_t*                       key         = NULL;
+    uint8_t*                       iv          = NULL;
+    uint8_t*                       authin      = NULL;
+    uint8_t*                       tag         = NULL;
+    uint8_t*                       out         = NULL;
+    uint8_t*                       out_tag     = NULL;
+    uint32_t                       res_len     = 0;
 
     /* Validate minimum size */
     if (inSize < sizeof(whMessageCrypto_AesGcmRequest)) {
@@ -3195,46 +3369,43 @@ static int _HandleAesGcm(whServerContext* ctx, uint16_t magic,
     }
 
     /* Translate request */
-    whMessageCrypto_AesGcmRequest req;
     ret = wh_MessageCrypto_TranslateAesGcmRequest(
         magic, (const whMessageCrypto_AesGcmRequest*)cryptoDataIn, &req);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
 
-    uint32_t enc         = req.enc;
-    uint32_t key_len     = req.keyLen;
-    uint32_t len         = req.sz;
-    uint32_t iv_len      = req.ivSz;
-    uint32_t authin_len  = req.authInSz;
-    uint32_t tag_len     = req.authTagSz;
-    whKeyId  key_id      = wh_KeyId_TranslateFromClient(
-             WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
-    uint64_t needed_size = sizeof(whMessageCrypto_AesGcmRequest) + len +
-                           key_len + iv_len + authin_len +
-                           ((enc == 0) ? tag_len : 0);
+    enc         = req.enc;
+    key_len     = req.keyLen;
+    len         = req.sz;
+    iv_len      = req.ivSz;
+    authin_len  = req.authInSz;
+    tag_len     = req.authTagSz;
+    key_id      = wh_KeyId_TranslateFromClient(
+                    WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+    needed_size = sizeof(whMessageCrypto_AesGcmRequest) + len + key_len +
+                  iv_len + authin_len + ((enc == 0) ? tag_len : 0);
     if (needed_size != inSize) {
         return WH_ERROR_BADARGS;
     }
 
     /* in, key, iv, authin, tag, and out are after fixed size fields */
-    uint8_t* in = (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_AesGcmRequest);
-    uint8_t* key = in + len;
-    uint8_t* iv = key + key_len;
-    uint8_t* authin = iv + iv_len;
-    uint8_t* tag = authin + authin_len;
+    in = (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_AesGcmRequest);
+    key = in + len;
+    iv = key + key_len;
+    authin = iv + iv_len;
+    tag = authin + authin_len;
 
     /* Translate response */
-    whMessageCrypto_AesGcmResponse res;
     res.sz        = req.sz;
     res.authTagSz = (req.enc == 0) ? 0 : req.authTagSz;
 
     /* Set up response pointers */
-    uint8_t* out = (uint8_t*)(cryptoDataOut) + sizeof(whMessageCrypto_AesGcmResponse);
-    uint8_t* out_tag = out + len;
+    out = (uint8_t*)(cryptoDataOut) + sizeof(whMessageCrypto_AesGcmResponse);
+    out_tag = out + len;
 
-    uint32_t res_len = sizeof(whMessageCrypto_AesGcmResponse) + len +
-                       ((enc == 0) ? 0 : tag_len);
+    res_len = sizeof(whMessageCrypto_AesGcmResponse) + len +
+              ((enc == 0) ? 0 : tag_len);
 
     WH_DEBUG_SERVER_VERBOSE("AESGCM: enc:%d keylen:%d ivsz:%d insz:%d authinsz:%d "
             "authtagsz:%d reqsz:%u ressz:%u\n",
@@ -3332,19 +3503,27 @@ static int _HandleAesGcmDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
                             const void* cryptoDataIn, uint16_t inSize,
                             void* cryptoDataOut, uint16_t* outSize)
 {
-    int                               ret = WH_ERROR_OK;
+    int                               ret         = WH_ERROR_OK;
     whMessageCrypto_AesGcmDmaRequest  req;
     whMessageCrypto_AesGcmDmaResponse res;
-    Aes                               aes[1] = {0};
-
-    void*  inAddr      = NULL;
-    void*  outAddr     = NULL;
-    void*  aadAddr     = NULL;
-    word32 outSz       = 0;
-
-    whKeyId        keyId;
-    uint8_t*       cachedKey = NULL;
-    whNvmMetadata* keyMeta   = NULL;
+    Aes                               aes[1]      = {0};
+    void*                             inAddr      = NULL;
+    void*                             outAddr     = NULL;
+    void*                             aadAddr     = NULL;
+    word32                            outSz       = 0;
+    whKeyId                           keyId       = WH_KEYID_ERASED;
+    uint8_t*                          cachedKey   = NULL;
+    whNvmMetadata*                    keyMeta     = NULL;
+    uint32_t                          enc         = 0;
+    uint32_t                          keyLen      = 0;
+    uint32_t                          len         = 0;
+    uint32_t                          ivLen       = 0;
+    uint32_t                          tagLen      = 0;
+    uint64_t                          needed_size = 0;
+    uint8_t*                          key         = NULL;
+    uint8_t*                          iv          = NULL;
+    uint8_t*                          tag         = NULL;
+    uint8_t*                          out_tag     = NULL;
 
     (void)seq;
 
@@ -3359,13 +3538,13 @@ static int _HandleAesGcmDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
         return ret;
     }
 
-    uint32_t enc         = req.enc;
-    uint32_t keyLen      = req.keySz;
-    uint32_t len         = req.input.sz;
-    uint32_t ivLen       = req.ivSz;
-    uint32_t tagLen      = req.authTagSz;
-    uint64_t needed_size = sizeof(whMessageCrypto_AesGcmDmaRequest) + keyLen +
-                           ivLen + (enc != 0 ? 0 : tagLen);
+    enc         = req.enc;
+    keyLen      = req.keySz;
+    len         = req.input.sz;
+    ivLen       = req.ivSz;
+    tagLen      = req.authTagSz;
+    needed_size = sizeof(whMessageCrypto_AesGcmDmaRequest) + keyLen + ivLen +
+                  (enc != 0 ? 0 : tagLen);
     if (needed_size != inSize) {
         return WH_ERROR_BADARGS;
     }
@@ -3375,12 +3554,12 @@ static int _HandleAesGcmDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
 
     /* iv is a fixed size field, key and authTag are optional (key is variable
      * length) */
-    uint8_t* key     = NULL;
-    uint8_t* iv      = (uint8_t*)(cryptoDataIn) +
-                       sizeof(whMessageCrypto_AesGcmDmaRequest);
-    uint8_t* tag     = iv + ivLen;
-    uint8_t* out_tag = (uint8_t*)(cryptoDataOut) +
-                       sizeof(whMessageCrypto_AesGcmDmaResponse);
+    key     = NULL;
+    iv      = (uint8_t*)(cryptoDataIn) +
+                        sizeof(whMessageCrypto_AesGcmDmaRequest);
+    tag     = iv + ivLen;
+    out_tag = (uint8_t*)(cryptoDataOut) +
+                        sizeof(whMessageCrypto_AesGcmDmaResponse);
 
     memset(&res, 0, sizeof(res));
 
@@ -3578,11 +3757,18 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
                        const void* cryptoDataIn, uint16_t inSize,
                        void* cryptoDataOut, uint16_t* outSize)
 {
-    (void)seq;
-
-    int                             ret;
+    int                             ret       = WH_ERROR_OK;
     whMessageCrypto_CmacAesRequest  req;
     whMessageCrypto_CmacAesResponse res;
+    uint32_t                        available = 0;
+    uint8_t                         tmpKey[AES_256_KEY_SIZE];
+    uint32_t                        tmpKeyLen = sizeof(tmpKey);
+    Cmac                            cmac[1]   = {0};
+    uint8_t*                        in        = NULL;
+    uint8_t*                        key       = NULL;
+    uint8_t*                        out       = NULL;
+
+    (void)seq;
 
     /* Validate minimum size */
     if (inSize < sizeof(whMessageCrypto_CmacAesRequest)) {
@@ -3596,7 +3782,7 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
     }
 
     /* Validate variable-length fields fit within inSize */
-    uint32_t available = inSize - sizeof(whMessageCrypto_CmacAesRequest);
+    available = inSize - sizeof(whMessageCrypto_CmacAesRequest);
     if (req.inSz > available) {
         return WH_ERROR_BADARGS;
     }
@@ -3604,23 +3790,16 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, uint16_t seq,
     if (req.keySz > available) {
         return WH_ERROR_BADARGS;
     }
-    if (req.keySz > AES_MAX_KEY_SIZE) {
+    if (req.keySz > AES_256_KEY_SIZE) {
         return WH_ERROR_BADARGS;
     }
 
-
     /* Setup fixed size fields */
-    uint8_t* in =
-        (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_CmacAesRequest);
-    uint8_t* key = in + req.inSz;
-    uint8_t* out =
-        (uint8_t*)(cryptoDataOut) + sizeof(whMessageCrypto_CmacAesResponse);
+    in  = (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_CmacAesRequest);
+    key = in + req.inSz;
+    out = (uint8_t*)(cryptoDataOut) + sizeof(whMessageCrypto_CmacAesResponse);
 
     memset(&res, 0, sizeof(res));
-
-    uint8_t tmpKey[AES_MAX_KEY_SIZE];
-    uint32_t tmpKeyLen = sizeof(tmpKey);
-    Cmac    cmac[1];
 
     /* Resolve the key to use */
     ret = _CmacResolveKey(ctx, key, req.keySz, req.keyId, tmpKey, &tmpKeyLen);
@@ -3769,7 +3948,7 @@ static int _HandleSha224(whServerContext* ctx, uint16_t magic,
                          const void* cryptoDataIn, uint16_t inSize,
                          void* cryptoDataOut, uint16_t* outSize)
 {
-    int                           ret = 0;
+    int                           ret = WH_ERROR_OK;
     wc_Sha224                     sha224[1];
     whMessageCrypto_Sha256Request req;
     whMessageCrypto_Sha2Response  res;
@@ -3843,7 +4022,7 @@ static int _HandleSha384(whServerContext* ctx, uint16_t magic,
                          const void* cryptoDataIn, uint16_t inSize,
                          void* cryptoDataOut, uint16_t* outSize)
 {
-    int                           ret = 0;
+    int                           ret = WH_ERROR_OK;
     wc_Sha384                     sha384[1];
     whMessageCrypto_Sha512Request req;
     whMessageCrypto_Sha2Response  res;
@@ -3920,7 +4099,7 @@ static int _HandleSha512(whServerContext* ctx, uint16_t magic,
                          const void* cryptoDataIn, uint16_t inSize,
                          void* cryptoDataOut, uint16_t* outSize)
 {
-    int                           ret = 0;
+    int                           ret = WH_ERROR_OK;
     wc_Sha512                     sha512[1];
     whMessageCrypto_Sha512Request req;
     whMessageCrypto_Sha2Response  res;
@@ -4061,12 +4240,21 @@ static int _HandleMlDsaKeyGen(whServerContext* ctx, uint16_t magic,
     (void)outSize;
     return WH_ERROR_NOHANDLER;
 #else
-    (void)inSize;
-
-    int                                 ret = WH_ERROR_OK;
-    MlDsaKey                            key[1];
+    int                                 ret        = WH_ERROR_OK;
+    MlDsaKey                            key[1]     = {0};
     whMessageCrypto_MlDsaKeyGenRequest  req;
     whMessageCrypto_MlDsaKeyGenResponse res;
+    int                                 key_size   = 0;
+    whKeyId                             key_id     = WH_KEYID_ERASED;
+    int                                 level      = 0;
+    whNvmFlags                          flags      = 0;
+    uint8_t*                            label      = 0;
+    uint16_t                            label_size = WH_NVM_LABEL_LEN;
+    uint8_t*                            res_out    = 0;
+    uint16_t                            max_size   = 0;
+    uint16_t                            res_size   = 0;
+
+    (void)inSize;
 
     /* Translate the request */
     ret = wh_MessageCrypto_TranslateMlDsaKeyGenRequest(
@@ -4076,20 +4264,19 @@ static int _HandleMlDsaKeyGen(whServerContext* ctx, uint16_t magic,
     }
 
     /* Extract parameters from translated request */
-    int     key_size = req.sz;
-    whKeyId key_id   = wh_KeyId_TranslateFromClient(
-          WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
-    int        level      = req.level;
-    whNvmFlags flags      = req.flags;
-    uint8_t*   label      = req.label;
-    uint16_t   label_size = WH_NVM_LABEL_LEN;
+    key_size = req.sz;
+    key_id   = wh_KeyId_TranslateFromClient(
+                WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+    level    = req.level;
+    flags    = req.flags;
+    label    = req.label;
 
     /* Response message */
-    uint8_t* res_out =
+    res_out =
         (uint8_t*)cryptoDataOut + sizeof(whMessageCrypto_MlDsaKeyGenResponse);
-    uint16_t max_size = (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN -
-                                   (res_out - (uint8_t*)cryptoDataOut));
-    uint16_t res_size = 0;
+    max_size = (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN -
+                         (res_out - (uint8_t*)cryptoDataOut));
+
 
     /* TODO key_sz is not used. Should this instead be used as max_size? Figure
      * out the relation between all three */
@@ -4171,12 +4358,21 @@ static int _HandleMlDsaSign(whServerContext* ctx, uint16_t magic,
     (void)outSize;
     return WH_ERROR_NOHANDLER;
 #else
-    (void)inSize;
-
-    int                                 ret;
-    MlDsaKey                            key[1];
+    int                                 ret            = WH_ERROR_OK;
+    MlDsaKey                            key[1]         = {0};
     whMessageCrypto_MlDsaSignRequest    req;
     whMessageCrypto_MlDsaSignResponse   res;
+    byte*                               in             = NULL;
+    whKeyId                             key_id         = WH_KEYID_ERASED;
+    word32                              in_len         = 0;
+    uint32_t                            options        = 0;
+    int                                 evict          = 0;
+    byte*                               res_out        = NULL;
+    word32                              available_data = 0;
+    word32                              max_len        = 0;
+    word32                              res_len        = 0;
+
+    (void)inSize;
 
     /* Translate the request */
     ret = wh_MessageCrypto_TranslateMlDsaSignRequest(
@@ -4186,12 +4382,13 @@ static int _HandleMlDsaSign(whServerContext* ctx, uint16_t magic,
     }
 
     /* Extract parameters from translated request */
-    byte*   in = (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_MlDsaSignRequest);
-    whKeyId key_id = wh_KeyId_TranslateFromClient(
-        WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
-    word32   in_len  = req.sz;
-    uint32_t options = req.options;
-    int      evict   = !!(options & WH_MESSAGE_CRYPTO_MLDSA_SIGN_OPTIONS_EVICT);
+    in      = (uint8_t*)(cryptoDataIn) +
+                        sizeof(whMessageCrypto_MlDsaSignRequest);
+    key_id  = wh_KeyId_TranslateFromClient(
+                WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+    in_len  = req.sz;
+    options = req.options;
+    evict   = !!(options & WH_MESSAGE_CRYPTO_MLDSA_SIGN_OPTIONS_EVICT);
 
     /* Validate key usage policy for signing */
     if (!WH_KEYID_ISERASED(key_id)) {
@@ -4207,17 +4404,17 @@ static int _HandleMlDsaSign(whServerContext* ctx, uint16_t magic,
     if (inSize < sizeof(whMessageCrypto_MlDsaSignRequest)) {
         return WH_ERROR_BADARGS;
     }
-    word32 available_data = inSize - sizeof(whMessageCrypto_MlDsaSignRequest);
+    available_data = inSize - sizeof(whMessageCrypto_MlDsaSignRequest);
     if (in_len > available_data) {
         return WH_ERROR_BADARGS;
     }
 
     /* Response message */
-    byte* res_out =
+    res_out =
         (uint8_t*)(cryptoDataOut) + sizeof(whMessageCrypto_MlDsaSignResponse);
-    const word32 max_len = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
-                                    (res_out - (uint8_t*)cryptoDataOut));
-    word32       res_len = max_len;
+    max_len = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
+                      (res_out - (uint8_t*)cryptoDataOut));
+    res_len = max_len;
 
     /* init private key */
     ret = wc_MlDsaKey_Init(key, NULL, ctx->crypto->devId);
@@ -4261,12 +4458,22 @@ static int _HandleMlDsaVerify(whServerContext* ctx, uint16_t magic,
     (void)outSize;
     return WH_ERROR_NOHANDLER;
 #else
-    (void)inSize;
-
-    int                                 ret;
-    MlDsaKey                            key[1];
+    int                                 ret        = WH_ERROR_OK;
+    MlDsaKey                            key[1]     = {0};
     whMessageCrypto_MlDsaVerifyRequest  req;
     whMessageCrypto_MlDsaVerifyResponse res;
+    uint32_t                            options    = 0;
+    whKeyId                             key_id     = WH_KEYID_ERASED;
+    uint32_t                            hash_len   = 0;
+    uint32_t                            sig_len    = 0;
+    byte*                               req_sig    = NULL;
+    int                                 evict      = 0;
+    uint32_t                            available  = 0;
+    byte*                               req_hash   = NULL;
+    int                                 verify_res = 0;
+
+
+    (void)inSize;
 
     /* Translate the request */
     ret = wh_MessageCrypto_TranslateMlDsaVerifyRequest(
@@ -4276,14 +4483,14 @@ static int _HandleMlDsaVerify(whServerContext* ctx, uint16_t magic,
     }
 
     /* Extract parameters from translated request */
-    uint32_t options = req.options;
-    whKeyId  key_id  = wh_KeyId_TranslateFromClient(
-          WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
-    uint32_t hash_len = req.hashSz;
-    uint32_t sig_len  = req.sigSz;
-    byte*    req_sig =
+    options  = req.options;
+    key_id   = wh_KeyId_TranslateFromClient(
+                WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+    hash_len = req.hashSz;
+    sig_len  = req.sigSz;
+    req_sig  =
         (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_MlDsaVerifyRequest);
-    int evict = !!(options & WH_MESSAGE_CRYPTO_MLDSA_VERIFY_OPTIONS_EVICT);
+    evict    = !!(options & WH_MESSAGE_CRYPTO_MLDSA_VERIFY_OPTIONS_EVICT);
 
     /* Validate key usage policy for verification */
     if (!WH_KEYID_ISERASED(key_id)) {
@@ -4298,16 +4505,13 @@ static int _HandleMlDsaVerify(whServerContext* ctx, uint16_t magic,
     if (inSize < sizeof(whMessageCrypto_MlDsaVerifyRequest)) {
         return WH_ERROR_BADARGS;
     }
-    uint32_t available = inSize - sizeof(whMessageCrypto_MlDsaVerifyRequest);
+    available = inSize - sizeof(whMessageCrypto_MlDsaVerifyRequest);
     if ((sig_len > available) || (hash_len > available) ||
         (sig_len > (available - hash_len))) {
         return WH_ERROR_BADARGS;
     }
 
-    byte* req_hash = req_sig + sig_len;
-
-    /* Response message */
-    int result = 0;
+    req_hash = req_sig + sig_len;
 
     /* init public key */
     ret = wc_MlDsaKey_Init(key, NULL, ctx->crypto->devId);
@@ -4317,7 +4521,7 @@ static int _HandleMlDsaVerify(whServerContext* ctx, uint16_t magic,
         if (ret == WH_ERROR_OK) {
             /* verify the signature */
             ret = wc_MlDsaKey_Verify(key, req_sig, sig_len, req_hash, hash_len,
-                                     &result);
+                                     &verify_res);
         }
         wc_MlDsaKey_Free(key);
     }
@@ -4327,7 +4531,7 @@ cleanup:
         (void)wh_Server_KeystoreEvictKey(ctx, key_id);
     }
     if (ret == 0) {
-        res.res  = result;
+        res.res  = verify_res;
 
         wh_MessageCrypto_TranslateMlDsaVerifyResponse(
             magic, &res, (whMessageCrypto_MlDsaVerifyResponse*)cryptoDataOut);
@@ -4722,13 +4926,13 @@ static int _HandleSha256Dma(whServerContext* ctx, uint16_t magic, uint16_t seq,
                             const void* cryptoDataIn, uint16_t inSize,
                             void* cryptoDataOut, uint16_t* outSize)
 {
-    (void)seq;
-
-    int                             ret = 0;
+    int                             ret = WH_ERROR_OK;
     whMessageCrypto_Sha2DmaRequest  req;
     whMessageCrypto_Sha2DmaResponse res;
     wc_Sha256                       sha256[1];
     int                             clientDevId;
+
+    (void)seq;
 
     if (inSize < sizeof(whMessageCrypto_Sha2DmaRequest)) {
         return WH_ERROR_BADARGS;
@@ -4844,12 +5048,13 @@ static int _HandleSha224Dma(whServerContext* ctx, uint16_t magic, uint16_t seq,
                             const void* cryptoDataIn, uint16_t inSize,
                             void* cryptoDataOut, uint16_t* outSize)
 {
-    (void)seq;
-    int                             ret = 0;
+    int                             ret = WH_ERROR_OK;
     whMessageCrypto_Sha2DmaRequest  req;
     whMessageCrypto_Sha2DmaResponse res;
     wc_Sha224                       sha224[1];
     int                             clientDevId;
+
+    (void)seq;
 
     if (inSize < sizeof(whMessageCrypto_Sha2DmaRequest)) {
         return WH_ERROR_BADARGS;
@@ -4965,12 +5170,13 @@ static int _HandleSha384Dma(whServerContext* ctx, uint16_t magic, uint16_t seq,
                             const void* cryptoDataIn, uint16_t inSize,
                             void* cryptoDataOut, uint16_t* outSize)
 {
-    (void)seq;
-    int                             ret = 0;
+    int                             ret = WH_ERROR_OK;
     whMessageCrypto_Sha2DmaRequest  req;
     whMessageCrypto_Sha2DmaResponse res;
     wc_Sha384                       sha384[1];
     int                             clientDevId;
+
+    (void)seq;
 
     if (inSize < sizeof(whMessageCrypto_Sha2DmaRequest)) {
         return WH_ERROR_BADARGS;
@@ -5086,13 +5292,14 @@ static int _HandleSha512Dma(whServerContext* ctx, uint16_t magic, uint16_t seq,
                             const void* cryptoDataIn, uint16_t inSize,
                             void* cryptoDataOut, uint16_t* outSize)
 {
-    (void)seq;
-    int                             ret = 0;
+    int                             ret = WH_ERROR_OK;
     whMessageCrypto_Sha2DmaRequest  req;
     whMessageCrypto_Sha2DmaResponse res;
     wc_Sha512                       sha512[1];
     int                             clientDevId;
     int                             hashType = WC_HASH_TYPE_SHA512;
+
+    (void)seq;
 
     if (inSize < sizeof(whMessageCrypto_Sha2DmaRequest)) {
         return WH_ERROR_BADARGS;
@@ -5351,13 +5558,16 @@ static int _HandleMlDsaSignDma(whServerContext* ctx, uint16_t magic,
     (void)outSize;
     return WH_ERROR_NOHANDLER;
 #else
-    int      ret = 0;
-    MlDsaKey key[1];
+    int      ret     = WH_ERROR_OK;
+    MlDsaKey key[1]  = {0};
     void*    msgAddr = NULL;
     void*    sigAddr = NULL;
 
     whMessageCrypto_MlDsaSignDmaRequest req;
     whMessageCrypto_MlDsaSignDmaResponse res;
+
+    whKeyId key_id;
+    int     evict = 0;
 
     if (inSize < sizeof(whMessageCrypto_MlDsaSignDmaRequest)) {
         return WH_ERROR_BADARGS;
@@ -5369,11 +5579,6 @@ static int _HandleMlDsaSignDma(whServerContext* ctx, uint16_t magic,
     if (ret != WH_ERROR_OK) {
         return ret;
     }
-
-    /* Transaction state */
-    whKeyId key_id;
-    int     evict = 0;
-
 
     /* Get key ID and evict flag */
     key_id = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
@@ -5437,7 +5642,6 @@ static int _HandleMlDsaSignDma(whServerContext* ctx, uint16_t magic,
     }
 
     if (ret == 0) {
-
         /* Translate the response */
         (void)wh_MessageCrypto_TranslateMlDsaSignDmaResponse(
             magic, &res, (whMessageCrypto_MlDsaSignDmaResponse*)cryptoDataOut);
@@ -5462,14 +5666,17 @@ static int _HandleMlDsaVerifyDma(whServerContext* ctx, uint16_t magic,
     (void)outSize;
     return WH_ERROR_NOHANDLER;
 #else
-    int      ret = 0;
-    MlDsaKey key[1];
+    int      ret      = WH_ERROR_OK;
+    MlDsaKey key[1]   = {0};
     void*    msgAddr  = NULL;
     void*    sigAddr  = NULL;
     int      verified = 0;
 
     whMessageCrypto_MlDsaVerifyDmaRequest req;
     whMessageCrypto_MlDsaVerifyDmaResponse res;
+
+    whKeyId key_id;
+    int     evict = 0;
 
     if (inSize < sizeof(whMessageCrypto_MlDsaVerifyDmaRequest)) {
         return WH_ERROR_BADARGS;
@@ -5481,10 +5688,6 @@ static int _HandleMlDsaVerifyDma(whServerContext* ctx, uint16_t magic,
     if (ret != WH_ERROR_OK) {
         return ret;
     }
-
-    /* Transaction state */
-    whKeyId key_id;
-    int     evict = 0;
 
     /* Get key ID and evict flag */
     key_id = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
@@ -5629,11 +5832,19 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
                           const void* cryptoDataIn, uint16_t inSize,
                           void* cryptoDataOut, uint16_t* outSize)
 {
-    (void)seq;
-
-    int ret = 0;
+    int                                ret       = WH_ERROR_OK;
     whMessageCrypto_CmacAesDmaRequest  req;
     whMessageCrypto_CmacAesDmaResponse res;
+    void*                              inAddr    = NULL;
+    uint8_t                            tmpKey[AES_256_KEY_SIZE];
+    uint32_t                           tmpKeyLen = sizeof(tmpKey);
+    Cmac                               cmac[1]   = {0};
+    uint32_t                           available = 0;
+    word32                             len       = 0;
+    uint8_t*                           key       = NULL;
+    uint8_t*                           out       = NULL;
+
+    (void)seq;
 
     if (inSize < sizeof(whMessageCrypto_CmacAesDmaRequest)) {
         return WH_ERROR_BADARGS;
@@ -5647,7 +5858,7 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
     }
 
     /* Validate variable-length fields fit within inSize */
-    uint32_t available = inSize - sizeof(whMessageCrypto_CmacAesDmaRequest);
+    available = inSize - sizeof(whMessageCrypto_CmacAesDmaRequest);
     if (req.keySz > available) {
         return WH_ERROR_BADARGS;
     }
@@ -5655,22 +5866,11 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
         return WH_ERROR_BADARGS;
     }
 
-    word32 len;
-
     /* Pointers to inline trailing data */
-    uint8_t* key =
-        (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_CmacAesDmaRequest);
-    uint8_t* out =
-        (uint8_t*)(cryptoDataOut) + sizeof(whMessageCrypto_CmacAesDmaResponse);
+    key = (uint8_t*)cryptoDataIn + sizeof(whMessageCrypto_CmacAesDmaRequest);
+    out = (uint8_t*)cryptoDataOut + sizeof(whMessageCrypto_CmacAesDmaResponse);
 
     memset(&res, 0, sizeof(res));
-
-    /* DMA translated address for input */
-    void* inAddr = NULL;
-
-    uint8_t tmpKey[AES_MAX_KEY_SIZE];
-    uint32_t tmpKeyLen = sizeof(tmpKey);
-    Cmac    cmac[1];
 
     /* Attempt oneshot if input and output are both present */
     if (req.input.sz != 0 && req.outSz != 0) {
@@ -5798,12 +5998,12 @@ static int _HandleRngDma(whServerContext* ctx, uint16_t magic, uint16_t seq,
                          const void* cryptoDataIn, uint16_t inSize,
                          void* cryptoDataOut, uint16_t* outSize)
 {
-    (void)seq;
-
-    int                            ret = 0;
+    int                            ret = WH_ERROR_OK;
     whMessageCrypto_RngDmaRequest  req;
     whMessageCrypto_RngDmaResponse res;
     void*                          outAddr = NULL;
+
+    (void)seq;
 
     if (inSize < sizeof(whMessageCrypto_RngDmaRequest)) {
         return WH_ERROR_BADARGS;

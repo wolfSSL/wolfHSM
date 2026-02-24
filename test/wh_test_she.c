@@ -568,7 +568,6 @@ static int wh_ClientServer_MemThreadTest(void)
     }};
 
     whServerSheContext she[1];
-    memset(she, 0, sizeof(she));
 
     whServerConfig                  s_conf[1] = {{
        .comm_config = cs_conf,
@@ -577,6 +576,8 @@ static int wh_ClientServer_MemThreadTest(void)
        .she = she,
        .devId = INVALID_DEVID,
     }};
+
+    memset(she, 0, sizeof(she));
 
     WH_TEST_RETURN_ON_FAIL(wh_Nvm_Init(nvm, n_conf));
 

@@ -181,9 +181,9 @@ static unsigned int psk_tls12_client_cb(WOLFSSL* ssl, const char* hint,
                                         unsigned int   key_max_len)
 {
     size_t len;
+    const char* exampleIdentity = "PSK_EXAMPLE_CLIENT_IDENTITY";
 
     memset(key, 0, key_max_len);
-    const char* exampleIdentity = "PSK_EXAMPLE_CLIENT_IDENTITY";
 
     printf("PSK server identity hint: %s\n", hint);
     printf("PSK using identity: %s\n", exampleIdentity);

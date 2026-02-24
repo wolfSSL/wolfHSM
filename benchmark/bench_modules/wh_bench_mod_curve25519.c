@@ -52,15 +52,15 @@ uint8_t key2_der[] = {
 int wh_Bench_Mod_Curve25519KeyGen(whClientContext*  client,
                                   whBenchOpContext* ctx, int id, void* params)
 {
-    (void)client;
-    (void)params;
-
     int            ret    = 0;
     curve25519_key key[1] = {0};
     WC_RNG         rng[1] = {0};
     int            i;
     int            initialized_rng = 0;
     int            initialized_key = 0;
+
+    (void)client;
+    (void)params;
 
     /* Initialize the RNG for key generation */
     ret = wc_InitRng_ex(rng, NULL, WH_DEV_ID);
@@ -126,8 +126,6 @@ int wh_Bench_Mod_Curve25519SharedSecret(whClientContext*  client,
                                         whBenchOpContext* ctx, int id,
                                         void* params)
 {
-    (void)params;
-
     int            ret = 0;
     word32         outLen;
     curve25519_key keyAlice[1] = {0};
@@ -139,6 +137,8 @@ int wh_Bench_Mod_Curve25519SharedSecret(whClientContext*  client,
     whKeyId        keyIdAlice        = WH_KEYID_ERASED;
     whKeyId        keyIdBob          = WH_KEYID_ERASED;
     char           keyLabel[]        = "bench-key";
+
+    (void)params;
 
     /* Cache Alice's key in the HSM */
     ret = wh_Client_KeyCache(client, WH_NVM_FLAGS_USAGE_ANY, (uint8_t*)keyLabel,

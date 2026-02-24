@@ -110,6 +110,7 @@ static int posixTransportTcp_Send(int fd, uint16_t* buffer_offset,
     int send_size = 0;
     uint32_t* packet_len = (uint32_t*)&(buffer[0]);
     void* packet_data = &(buffer[sizeof(uint32_t)]);
+    int remaining_size = 0;
 
     if (    (fd < 0) ||
             (buffer_offset == NULL) ||
@@ -127,7 +128,7 @@ static int posixTransportTcp_Send(int fd, uint16_t* buffer_offset,
         memcpy(packet_data, data, size);
         send_size = sizeof(uint32_t) + size;
     }
-    int remaining_size = send_size - *buffer_offset;
+    remaining_size = send_size - *buffer_offset;
 
 
     rc = send(fd, &(buffer[*buffer_offset]), remaining_size, MSG_NOSIGNAL);

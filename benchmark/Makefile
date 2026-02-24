@@ -40,7 +40,7 @@ ARCHFLAGS ?=
 # Enable extra C compiler warnings
 CFLAGS_EXTRA = -Werror -Wall -Wextra
 # Place functions / data into separate sections to allow unused code removal
-CFLAGS_EXTRA += -ffunction-sections -fdata-sections
+CFLAGS_EXTRA += -ffunction-sections -fdata-sections -Wdeclaration-after-statement
 
 # C standard to use (default to c90 if not specified)
 CSTD 		?= -std=c90

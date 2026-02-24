@@ -1543,6 +1543,9 @@ static int whTest_MultiClientSequential(void)
     }};
     whServerContext server2[1] = {0};
 
+    uint32_t client_id = 0;
+    uint32_t server_id = 0;
+
     /* Expose server contexts to connect callbacks */
     testServer1 = server1;
     testServer2 = server2;
@@ -1589,9 +1592,6 @@ static int whTest_MultiClientSequential(void)
         return ret;
 
     /* Initialize communication for both clients */
-    uint32_t client_id = 0;
-    uint32_t server_id = 0;
-
     ret = wh_Client_CommInitRequest(client1);
     if (ret != 0)
         return ret;

@@ -25,8 +25,6 @@
 int wh_Bench_Mod_Echo(whClientContext* client, whBenchOpContext* benchCtx,
                       int id, void* params)
 {
-    (void)params;
-
     int      i;
     int      ret;
     uint16_t send_len;
@@ -35,6 +33,8 @@ int wh_Bench_Mod_Echo(whClientContext* client, whBenchOpContext* benchCtx,
     uint8_t  recv_buffer[WOLFHSM_CFG_COMM_DATA_LEN];
     int      startRet;
     int      stopRet;
+
+    (void)params;
 
     /* Send an entire comm buffer's worth of data */
     memset(send_buffer, 0xAA, sizeof(send_buffer));
