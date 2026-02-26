@@ -601,6 +601,7 @@ int whTest_ClientServerSequential(whTestNvmBackendType nvmType)
                  .transport_context = (void*)tmsc,
                  .transport_config  = (void*)tmcf,
                  .server_id         = 124,
+                 .client_id         = WH_TEST_DEFAULT_CLIENT_ID,
     }};
 
     /* RamSim Flash state and configuration */
@@ -1590,6 +1591,7 @@ static int wh_ClientServer_MemThreadTest(whTestNvmBackendType nvmType)
                  .transport_context = (void*)tmsc,
                  .transport_config  = (void*)tmcf,
                  .server_id         = 124,
+                 .client_id         = WH_TEST_DEFAULT_CLIENT_ID,
     }};
 
     /* RamSim Flash state and configuration */
@@ -1675,6 +1677,7 @@ static int wh_ClientServer_PosixMemMapThreadTest(whTestNvmBackendType nvmType)
                     .transport_context = (void*)tmsc,
                     .transport_config  = (void*)tmcf,
                     .server_id         = 124,
+                    .client_id         = WH_TEST_DEFAULT_CLIENT_ID,
     }};
 
     /* RamSim Flash state and configuration */
@@ -1732,8 +1735,83 @@ static int wh_ClientServer_PosixMemMapThreadTest(whTestNvmBackendType nvmType)
           WOLFHSM_CFG_ENABLE_SERVER */
 
 #if defined(WOLFHSM_CFG_ENABLE_CLIENT) && defined(WOLFHSM_CFG_ENABLE_SERVER)
+static int _testCommInitIdentitySpoofing(void)
+{
+    /* Verify the server ignores client-claimed identity and uses its own
+     * configured expected_client_id during CommInit (C-8 mitigation). */
+    uint8_t              req[BUFFER_SIZE];
+    uint8_t              resp[BUFFER_SIZE];
+    whTransportMemConfig tmcf[1] = {{
+        .req       = (whTransportMemCsr*)req,
+        .req_size  = sizeof(req),
+        .resp      = (whTransportMemCsr*)resp,
+        .resp_size = sizeof(resp),
+    }};
+
+    const uint8_t SPOOFED_CLIENT_ID  = 99;
+    const uint8_t EXPECTED_CLIENT_ID = WH_TEST_DEFAULT_CLIENT_ID;
+
+    /* Client claims a different identity than the server expects */
+    whTransportClientCb         tccb[1]    = {WH_TRANSPORT_MEM_CLIENT_CB};
+    whTransportMemClientContext tmcc[1]    = {0};
+    whCommClientConfig          cc_conf[1] = {{
+                 .transport_cb      = tccb,
+                 .transport_context = (void*)tmcc,
+                 .transport_config  = (void*)tmcf,
+                 .client_id         = SPOOFED_CLIENT_ID,
+    }};
+    whClientContext client[1] = {0};
+    whClientConfig c_conf[1] = {{
+        .comm = cc_conf,
+    }};
+
+    /* Server is configured with the legitimate client identity */
+    whTransportServerCb         tscb[1]    = {WH_TRANSPORT_MEM_SERVER_CB};
+    whTransportMemServerContext tmsc[1]    = {0};
+    whCommServerConfig          cs_conf[1] = {{
+                 .transport_cb      = tscb,
+                 .transport_context = (void*)tmsc,
+                 .transport_config  = (void*)tmcf,
+                 .server_id         = 124,
+                 .client_id         = EXPECTED_CLIENT_ID,
+    }};
+    whServerConfig  s_conf[1] = {{
+        .comm_config = cs_conf,
+    }};
+    whServerContext server[1] = {0};
+
+    uint32_t resp_client_id = 0;
+    uint32_t resp_server_id = 0;
+
+    WH_TEST_RETURN_ON_FAIL(wh_Server_Init(server, s_conf));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_Init(client, c_conf));
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Server_SetConnected(server, WH_COMM_CONNECTED));
+
+    /* Client sends CommInit claiming SPOOFED_CLIENT_ID */
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CommInitRequest(client));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Client_CommInitResponse(client, &resp_client_id, &resp_server_id));
+
+    /* Server must use its configured identity, not the spoofed one */
+    WH_TEST_ASSERT_RETURN(server->comm->client_id == EXPECTED_CLIENT_ID);
+    WH_TEST_ASSERT_RETURN(resp_client_id == EXPECTED_CLIENT_ID);
+    WH_TEST_ASSERT_RETURN(resp_client_id != SPOOFED_CLIENT_ID);
+
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CommCloseRequest(client));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
+
+    wh_Client_Cleanup(client);
+    wh_Server_Cleanup(server);
+
+    return WH_ERROR_OK;
+}
+
 int whTest_ClientServer(void)
 {
+    WH_TEST_PRINT("Testing CommInit identity spoofing prevention...\n");
+    WH_TEST_ASSERT(0 == _testCommInitIdentitySpoofing());
     WH_TEST_PRINT("Testing client/server sequential: mem...\n");
     WH_TEST_ASSERT(0 == whTest_ClientServerSequential(WH_NVM_TEST_BACKEND_FLASH));
 

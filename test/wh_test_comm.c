@@ -94,6 +94,7 @@ int whTest_CommMem(void)
                  .transport_context = (void*)tmsc,
                  .transport_config  = (void*)tmcf,
                  .server_id         = 124,
+                 .client_id         = WH_TEST_DEFAULT_CLIENT_ID,
     }};
     whCommServer                server[1] = {0};
 
@@ -396,6 +397,7 @@ void wh_CommClientServer_MemThreadTest(void)
                  .transport_context = (void*)css,
                  .transport_config  = (void*)tmcf,
                  .server_id         = 0xF,
+                 .client_id         = WH_TEST_DEFAULT_CLIENT_ID,
     }};
 
     _whCommClientServerThreadTest(c_conf, s_conf);
@@ -435,6 +437,7 @@ void wh_CommClientServer_ShMemThreadTest(void)
                     .transport_context = (void*)css,
                     .transport_config  = (void*)tmcf,
                     .server_id         = 0xF,
+                    .client_id         = WH_TEST_DEFAULT_CLIENT_ID,
     }};
 
     _whCommClientServerThreadTest(c_conf, s_conf);
@@ -467,6 +470,7 @@ void wh_CommClientServer_TcpThreadTest(void)
                     .transport_context = (void*)tss,
                     .transport_config  = (void*)mytcpconfig,
                     .server_id         = 0xF,
+                    .client_id         = WH_TEST_DEFAULT_CLIENT_ID,
     }};
 
     _whCommClientServerThreadTest(c_conf, s_conf);

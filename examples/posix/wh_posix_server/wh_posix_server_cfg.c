@@ -62,6 +62,7 @@ int wh_PosixServer_ExampleShmDmaConfig(void* conf)
     s_comm.transport_context = (void*)&tscDma;
     s_comm.transport_config  = (void*)&shmConfig;
     s_comm.server_id         = WH_POSIX_SERVER_ID;
+    s_comm.client_id         = WH_POSIX_CLIENT_ID;
 
     s_conf->dmaConfig   = &dmaConfig;
     s_conf->comm_config = &s_comm;
@@ -89,6 +90,7 @@ int wh_PosixServer_ExampleShmConfig(void* conf)
     s_comm.transport_context = (void*)&tscShm;
     s_comm.transport_config  = (void*)&shmConfig;
     s_comm.server_id         = WH_POSIX_SERVER_ID;
+    s_comm.client_id         = WH_POSIX_CLIENT_ID;
 
     s_conf->comm_config = &s_comm;
 
@@ -112,6 +114,7 @@ int wh_PosixServer_ExampleTcpConfig(void* conf)
     s_comm.transport_context = (void*)&tscTcp;
     s_comm.transport_config  = (void*)&tcpConfig;
     s_comm.server_id         = WH_POSIX_SERVER_ID;
+    s_comm.client_id         = WH_POSIX_CLIENT_ID;
 
     s_conf->comm_config = &s_comm;
 
@@ -176,6 +179,7 @@ int wh_PosixServer_ExampleTlsConfig(void* ctx)
     s_comm.transport_context = (void*)&tscTls;
     s_comm.transport_config  = (void*)&tlsConfig;
     s_comm.server_id         = WH_POSIX_SERVER_ID;
+    s_comm.client_id         = WH_POSIX_CLIENT_ID;
 
     s_conf->comm_config = &s_comm;
 

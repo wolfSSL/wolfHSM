@@ -5751,10 +5751,14 @@ int whTest_CryptoServerConfig(whServerConfig* config)
 #ifdef WOLFHSM_CFG_IS_TEST_SERVER
         /* keep alive for 2 user changes */
         if (am_connected != WH_COMM_CONNECTED && userChange < 2) {
-            if (userChange == 0)
+            if (userChange == 0) {
                 server->comm->client_id = ALT_CLIENT_ID;
-            else if (userChange == 1)
+                server->comm->expected_client_id = ALT_CLIENT_ID;
+            }
+            else if (userChange == 1) {
                 server->comm->client_id = WH_TEST_DEFAULT_CLIENT_ID;
+                server->comm->expected_client_id = WH_TEST_DEFAULT_CLIENT_ID;
+            }
             userChange++;
             am_connected = WH_COMM_CONNECTED;
             WH_TEST_RETURN_ON_FAIL(wh_Server_SetConnected(server, am_connected));
@@ -5865,6 +5869,7 @@ static int wh_ClientServer_MemThreadTest(whTestNvmBackendType nvmType)
                  .transport_context = (void*)tmsc,
                  .transport_config  = (void*)tmcf,
                  .server_id         = 124,
+                 .client_id         = WH_TEST_DEFAULT_CLIENT_ID,
     }};
 
     /* RamSim Flash state and configuration */

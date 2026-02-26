@@ -863,6 +863,7 @@ static whCommServerConfig          g_mem_cs_conf = {
              .transport_context = (void*)&g_mem_tmsc,
              .transport_config  = (void*)&g_mem_tmcf,
              .server_id         = 124,
+             .client_id         = WH_BENCH_CLIENT_ID,
 };
 
 /* Helper function to configure client transport based on type */
@@ -981,6 +982,7 @@ static int _configureServerTransport(whBenchTransportType transport,
                 .transport_context = (void*)&tscShm,
                 .transport_config  = (void*)&myshmconfig,
                 .server_id         = 57,
+                .client_id         = WH_BENCH_CLIENT_ID,
             };
 
             memset(&tscShm, 0, sizeof(posixTransportShmServerContext));
@@ -1001,6 +1003,7 @@ static int _configureServerTransport(whBenchTransportType transport,
                 .transport_context = (void*)&tscTcp,
                 .transport_config  = (void*)&mytcpconfig,
                 .server_id         = 57,
+                .client_id         = WH_BENCH_CLIENT_ID,
             };
 
             memset(&tscTcp, 0, sizeof(posixTransportTcpServerContext));

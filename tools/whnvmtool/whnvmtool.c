@@ -528,6 +528,7 @@ int main(int argc, char* argv[])
         .transport_context = (void*)gTransportServerContext,
         .transport_config  = (void*)gTransportTcpConfig,
         .server_id         = 34,
+        .client_id         = 1,
     }};
 
     /* POSIX flash file NVM configuration */

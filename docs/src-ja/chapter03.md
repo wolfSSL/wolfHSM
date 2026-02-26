@@ -132,6 +132,7 @@ whCommServerConfig commServerCfg = {
        .transport_context  = (void*)transportMemServerCtx,
        .transport_config   = (void*)transportMemCfg,
        .server_id          = 456, /* 一意のサーバー識別子 */
+       .client_id          = 123, /* 接続するクライアントに割り当てるID */
 };
 
 /* サーバーNVMコンテキストの初期化 */

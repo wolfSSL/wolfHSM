@@ -1466,6 +1466,7 @@ static int whTest_LogClientServerMemTransport(void)
                  .transport_context = (void*)tmsc,
                  .transport_config  = (void*)tmcf,
                  .server_id         = 124,
+                 .client_id         = WH_TEST_DEFAULT_CLIENT_ID,
     }};
 
     uint8_t          memory[WH_LOG_TEST_FLASH_RAM_SIZE] = {0};

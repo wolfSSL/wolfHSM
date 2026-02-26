@@ -130,6 +130,7 @@ whCommServerConfig commServerCfg = {
         .transport_context  = (void*)transportMemServerCtx,
         .transport_config   = (void*)transportMemCfg,
         .server_id          = 456, /* unique server identifier */
+        .client_id          = 123, /* identity assigned to the connecting client */
 };
 
 /* Initialize the server NVM context */

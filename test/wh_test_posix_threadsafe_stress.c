@@ -640,6 +640,7 @@ static int initClientServerPair(StressTestContext* ctx, int pairIndex)
     pair->serverCommConfig.transport_context = &pair->serverTransportCtx;
     pair->serverCommConfig.transport_config  = &pair->tmConfig;
     pair->serverCommConfig.server_id         = (uint16_t)(200 + pairIndex);
+    pair->serverCommConfig.client_id         = (uint8_t)(100 + pairIndex);
 
     /* Configure crypto context */
     pair->cryptoCtx.devId = INVALID_DEVID;

@@ -100,6 +100,14 @@ int wh_Server_Init(whServerContext* server, whServerConfig* config)
     }
 #endif /* WOLFHSM_CFG_LOGGING */
 
+#ifdef WOLFHSM_CFG_GLOBAL_KEYS
+    if (config->comm_config != NULL &&
+        config->comm_config->client_id == WH_KEYUSER_GLOBAL) {
+        (void)wh_Server_Cleanup(server);
+        return WH_ERROR_BADARGS;
+    }
+#endif
+
     rc = wh_CommServer_Init(server->comm, config->comm_config,
             wh_Server_SetConnectedCb, (void*)server);
     if (rc != 0) {
@@ -189,23 +197,32 @@ static int _wh_Server_HandleCommRequest(whServerContext* server,
         wh_MessageComm_TranslateInitRequest(magic,
                 (whMessageCommInitRequest*)req_packet, &req);
 
+        /* Use server-assigned identity from config rather than trusting
+         * the client-supplied value. This prevents a malicious client from
+         * claiming another client's identity to access its keys. */
+        server->comm->client_id = server->comm->expected_client_id;
+
 #ifdef WOLFHSM_CFG_GLOBAL_KEYS
         /* USER=0 is reserved for global keys, client_id must be non-zero */
-        if (req.client_id == WH_KEYUSER_GLOBAL) {
+        if (server->comm->client_id == WH_KEYUSER_GLOBAL) {
             *out_resp_size = 0;
             return WH_ERROR_BADARGS;
         }
 #endif
 
-        /* Process the init action */
-        server->comm->client_id = req.client_id;
+        if (req.client_id != server->comm->client_id) {
+            WH_LOG_F(&server->log, WH_LOG_LEVEL_SECEVENT,
+                     "CommInit: client claimed id=0x%08X, "
+                     "server assigned id=0x%08X",
+                     req.client_id, server->comm->client_id);
+        }
 
         resp.client_id = server->comm->client_id;
         resp.server_id = server->comm->server_id;
 
         WH_LOG_F(&server->log, WH_LOG_LEVEL_INFO,
-                 "CommInit: client_id=0x%08X, server_id=0x%08X", req.client_id,
-                 resp.server_id);
+                 "CommInit: client_id=0x%08X, server_id=0x%08X",
+                 server->comm->client_id, resp.server_id);
 
         /* Convert the response struct */
         wh_MessageComm_TranslateInitResponse(magic,

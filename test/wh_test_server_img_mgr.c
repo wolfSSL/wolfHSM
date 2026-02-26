@@ -1215,6 +1215,7 @@ int whTest_ServerImgMgr(whTestNvmBackendType nvmType)
                  .transport_context = (void*)tmsc,
                  .transport_config  = (void*)tmcf,
                  .server_id         = 124,
+                 .client_id         = WH_TEST_DEFAULT_CLIENT_ID,
     }};
 
     /* RamSim Flash state and configuration */

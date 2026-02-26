@@ -229,6 +229,7 @@ int wh_CommServer_Init(whCommServer* context, const whCommServerConfig* config,
     context->transport_context  = config->transport_context;
     context->transport_cb       = config->transport_cb;
     context->server_id          = config->server_id;
+    context->expected_client_id = config->client_id;
 
     if (context->transport_cb->Init != NULL) {
         rc = context->transport_cb->Init(context->transport_context,

@@ -1514,6 +1514,7 @@ static int whTest_MultiClientSequential(void)
                  .transport_context = (void*)tmsc1,
                  .transport_config  = (void*)tmcf1,
                  .server_id         = 101,
+                 .client_id         = WH_TEST_DEFAULT_CLIENT_ID,
     }};
     whServerConfig              s_conf1[1]  = {{
                       .comm_config = cs_conf1,
@@ -1532,6 +1533,7 @@ static int whTest_MultiClientSequential(void)
                  .transport_context = (void*)tmsc2,
                  .transport_config  = (void*)tmcf2,
                  .server_id         = 102,
+                 .client_id         = WH_TEST_DEFAULT_CLIENT_ID + 1,
     }};
     whServerConfig              s_conf2[1]  = {{
                       .comm_config = cs_conf2,

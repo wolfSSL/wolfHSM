@@ -53,6 +53,7 @@ whCommServerConfig gCommServerConfig[1] = {{
     .transport_context = (void*)gTransportServerContext,
     .transport_config  = (void*)gTransportTcpConfig,
     .server_id         = 34,
+    .client_id         = 1,
 }};
 
 
