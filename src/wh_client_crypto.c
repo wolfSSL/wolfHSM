@@ -604,7 +604,7 @@ int wh_Client_AesEcb(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
     whKeyId                         key_id  = WH_DEVCTX_TO_KEYID(aes->devCtx);
     uint8_t*                        req_in  = NULL;
     uint8_t*                        req_key = NULL;
-    uint16_t                        req_len = 0;
+    uint64_t                        req_len = 0;
 
     uint16_t group  = WH_MESSAGE_GROUP_CRYPTO;
     uint16_t action = WC_ALGO_TYPE_CIPHER;

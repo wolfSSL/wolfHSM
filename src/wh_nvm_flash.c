@@ -1024,10 +1024,12 @@ int wh_NvmFlash_GetAvailable(void* c,
         uint32_t *out_reclaim_size, whNvmId *out_reclaim_objects)
 {
     whNvmFlashContext* context = c;
-    nfMemDirectory *d = &context->directory;
+    nfMemDirectory *d;
+
     if (context == NULL) {
         return WH_ERROR_BADARGS;
     }
+    d = &context->directory;
     if (out_avail_size != NULL) {
         *out_avail_size = (context->partition_units -
                 NF_PARTITION_DATA_OFFSET - d->next_free_data) *

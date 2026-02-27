@@ -301,19 +301,19 @@ int main(int argc, char** argv)
         WH_NVM_FLAGS_USAGE_ANY; /* Default flags if none provided */
     uint8_t     memory[WH_POSIX_FLASH_RAM_SIZE] = {0};
     whServerConfig s_conf[1];
-    WC_RNG         rng[1];
-    uint8_t        buffer[128] = {0};
 
 #if !defined(WOLFHSM_CFG_NO_CRYPTO)
     /* Crypto context */
     whServerCryptoContext crypto[1] = {{
         .devId = INVALID_DEVID,
     }};
+    WC_RNG         rng[1];
+    uint8_t        buffer[128] = {0};
 
 #if defined(WOLFHSM_CFG_SHE_EXTENSION)
     whServerSheContext she[1] = {{0}};
 #endif
-
+#endif /* !defined(WOLFHSM_CFG_NO_CRYPTO) */
 
     WOLFHSM_CFG_PRINTF("Example wolfHSM POSIX server ");
 #ifndef WOLFHSM_CFG_NO_CRYPTO
@@ -341,9 +341,10 @@ int main(int argc, char** argv)
         }
         else if (strcmp(argv[i], "--flags") == 0 && i + 1 < argc) {
             char* end;
-            unsigned long val = strtoul(argv[i + 1], &end, 0);
-            errno             = 0;
+            unsigned long val;
 
+            errno = 0;
+            val   = strtoul(argv[i + 1], &end, 0);
             if (errno || *end || val > 0xFFFF) {
                 WOLFHSM_CFG_PRINTF("Invalid --flags value: %s\n", argv[i + 1]);
                 return -1;
@@ -428,6 +429,7 @@ int main(int argc, char** argv)
         return rc;
     }
 
+#if !defined(WOLFHSM_CFG_NO_CRYPTO)
     s_conf->crypto = crypto;
     s_conf->devId  = INVALID_DEVID;
 #if defined(WOLFHSM_CFG_SHE_EXTENSION)
