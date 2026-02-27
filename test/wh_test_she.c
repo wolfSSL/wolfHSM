@@ -33,6 +33,7 @@
 #include "wolfhsm/wh_nvm.h"
 #include "wolfhsm/wh_nvm_flash.h"
 #include "wolfhsm/wh_flash_ramsim.h"
+#include "wolfhsm/wh_server_keystore.h"
 #endif
 
 #include "wolfhsm/wh_comm.h"
@@ -594,10 +595,119 @@ static int wh_ClientServer_MemThreadTest(void)
 #endif /* WOLFHSM_CFG_TEST_POSIX && WOLFHSM_CFG_ENABLE_CLIENT && \
           WOLFHSM_CFG_ENABLE_SERVER */
 
+#if defined(WOLFHSM_CFG_ENABLE_SERVER)
+static int wh_She_TestMasterEcuKeyFallback(void)
+{
+    int             ret = 0;
+    whServerContext server[1] = {0};
+    whNvmMetadata   outMeta[1] = {0};
+    uint8_t         keyBuf[WH_SHE_KEY_SZ] = {0};
+    uint32_t        keySz = sizeof(keyBuf);
+    uint8_t         zeros[WH_SHE_KEY_SZ] = {0};
+    whKeyId         masterEcuKeyId;
+
+    /* Transport (not used, but required for server init) */
+    uint8_t reqBuf[BUFFER_SIZE] = {0};
+    uint8_t respBuf[BUFFER_SIZE] = {0};
+    whTransportMemConfig tmcf[1] = {{
+        .req       = (whTransportMemCsr*)reqBuf,
+        .req_size  = sizeof(reqBuf),
+        .resp      = (whTransportMemCsr*)respBuf,
+        .resp_size = sizeof(respBuf),
+    }};
+    whTransportServerCb         tscb[1]   = {WH_TRANSPORT_MEM_SERVER_CB};
+    whTransportMemServerContext tmsc[1]   = {0};
+    whCommServerConfig          cs_conf[1] = {{
+        .transport_cb      = tscb,
+        .transport_context = (void*)tmsc,
+        .transport_config  = (void*)tmcf,
+        .server_id         = 124,
+    }};
+
+    /* RamSim Flash state and configuration */
+    uint8_t memory[FLASH_RAM_SIZE] = {0};
+    whFlashRamsimCtx fc[1] = {0};
+    whFlashRamsimCfg fc_conf[1] = {{
+        .size       = FLASH_RAM_SIZE,
+        .sectorSize = FLASH_SECTOR_SIZE,
+        .pageSize   = FLASH_PAGE_SIZE,
+        .erasedByte = ~(uint8_t)0,
+        .memory     = memory,
+    }};
+    const whFlashCb fcb[1] = {WH_FLASH_RAMSIM_CB};
+
+    /* NVM */
+    whNvmFlashConfig nf_conf[1] = {{
+        .cb      = fcb,
+        .context = fc,
+        .config  = fc_conf,
+    }};
+    whNvmFlashContext nfc[1] = {0};
+    whNvmCb nfcb[1] = {WH_NVM_FLASH_CB};
+    whNvmConfig n_conf[1] = {{
+        .cb      = nfcb,
+        .context = nfc,
+        .config  = nf_conf,
+    }};
+    whNvmContext nvm[1] = {{0}};
+
+    /* Crypto context */
+    whServerCryptoContext crypto[1] = {{
+        .devId = INVALID_DEVID,
+    }};
+
+    whServerSheContext she[1];
+    memset(she, 0, sizeof(she));
+
+    whServerConfig s_conf[1] = {{
+        .comm_config = cs_conf,
+        .nvm         = nvm,
+        .crypto      = crypto,
+        .she         = she,
+        .devId       = INVALID_DEVID,
+    }};
+
+    WH_TEST_RETURN_ON_FAIL(wh_Nvm_Init(nvm, n_conf));
+    WH_TEST_RETURN_ON_FAIL(wolfCrypt_Init());
+    WH_TEST_RETURN_ON_FAIL(wc_InitRng_ex(crypto->rng, NULL, crypto->devId));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_Init(server, s_conf));
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Server_SetConnected(server, WH_COMM_CONNECTED));
+
+    masterEcuKeyId = WH_MAKE_KEYID(WH_KEYTYPE_SHE,
+                                    server->comm->client_id,
+                                    WH_SHE_MASTER_ECU_KEY_ID);
+
+    /* Fill keyBuf with non-zero to ensure it gets overwritten */
+    memset(keyBuf, 0xFF, sizeof(keyBuf));
+
+    /* Read master ECU key when it has never been provisioned */
+    ret = wh_Server_KeystoreReadKey(server, masterEcuKeyId, outMeta,
+                                    keyBuf, &keySz);
+
+    WH_TEST_ASSERT_RETURN(ret == 0);
+    WH_TEST_ASSERT_RETURN(keySz == WH_SHE_KEY_SZ);
+    WH_TEST_ASSERT_RETURN(memcmp(keyBuf, zeros, WH_SHE_KEY_SZ) == 0);
+    WH_TEST_ASSERT_RETURN(outMeta->len == WH_SHE_KEY_SZ);
+    WH_TEST_ASSERT_RETURN(outMeta->id == masterEcuKeyId);
+
+    WH_TEST_PRINT("SHE master ECU key fallback metadata test SUCCESS\n");
+
+    wh_Server_Cleanup(server);
+    wh_Nvm_Cleanup(nvm);
+    wc_FreeRng(crypto->rng);
+    wolfCrypt_Cleanup();
+
+    return 0;
+}
+#endif /* WOLFHSM_CFG_ENABLE_SERVER */
+
 #if defined(WOLFHSM_CFG_TEST_POSIX) && defined(WOLFHSM_CFG_ENABLE_CLIENT) && \
     defined(WOLFHSM_CFG_ENABLE_SERVER)
 int whTest_She(void)
 {
+    WH_TEST_PRINT("Testing SHE: master ECU key fallback...\n");
+    WH_TEST_RETURN_ON_FAIL(wh_She_TestMasterEcuKeyFallback());
     WH_TEST_PRINT("Testing SHE: (pthread) mem...\n");
     WH_TEST_RETURN_ON_FAIL(wh_ClientServer_MemThreadTest());
     return 0;
