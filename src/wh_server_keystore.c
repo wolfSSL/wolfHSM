@@ -675,7 +675,7 @@ int wh_Server_KeystoreReadKey(whServerContext* server, whKeyId keyId,
         *outSz = meta->len;
         /* read meta */
         if (outMeta != NULL)
-            memcpy((uint8_t*)outMeta, (uint8_t*)meta, sizeof(meta));
+            memcpy((uint8_t*)outMeta, (uint8_t*)meta, sizeof(*outMeta));
         /* read the object */
         if (out != NULL)
             ret = wh_Nvm_Read(server->nvm, keyId, 0, *outSz, out);
@@ -689,13 +689,14 @@ int wh_Server_KeystoreReadKey(whServerContext* server, whKeyId keyId,
     if ((ret == WH_ERROR_NOTFOUND) &&
         (WH_KEYID_TYPE(keyId) == WH_KEYTYPE_SHE) &&
         (WH_KEYID_ID(keyId) == WH_SHE_MASTER_ECU_KEY_ID)) {
-        memset(out, 0, WH_SHE_KEY_SZ);
+        if (out != NULL)
+            memset(out, 0, WH_SHE_KEY_SZ);
         *outSz = WH_SHE_KEY_SZ;
         if (outMeta != NULL) {
             /* need empty flags and correct length and id */
-            memset(outMeta, 0, sizeof(meta));
-            meta->len = WH_SHE_KEY_SZ;
-            meta->id  = keyId;
+            memset(outMeta, 0, sizeof(*outMeta));
+            outMeta->len = WH_SHE_KEY_SZ;
+            outMeta->id  = keyId;
         }
         ret = 0;
     }
