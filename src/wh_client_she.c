@@ -156,7 +156,7 @@ int wh_Client_SheSecureBoot(whClientContext* c, uint8_t* bootloader,
     while (ret == 0 && bootloaderSent < bootloaderLen) {
         uint8_t* in;
         uint32_t justSent;
-        uint32_t remaining;
+        uint32_t              remaining;
         static const uint32_t maxChunk =
             WOLFHSM_CFG_COMM_DATA_LEN - sizeof(*updateReq);
 
@@ -171,7 +171,7 @@ int wh_Client_SheSecureBoot(whClientContext* c, uint8_t* bootloader,
         in = (uint8_t*)(updateReq + 1);
 
         /* send what's left in the size available */
-        remaining = bootloaderLen - bootloaderSent;
+        remaining     = bootloaderLen - bootloaderSent;
         updateReq->sz = (remaining > maxChunk) ? maxChunk : remaining;
 
         justSent = updateReq->sz;

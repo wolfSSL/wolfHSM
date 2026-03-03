@@ -74,11 +74,11 @@
 #endif
 
 enum {
-        REQ_SIZE = 32,
-        RESP_SIZE = 64,
-        BUFFER_SIZE = sizeof(whTransportMemCsr) + sizeof(whCommHeader) +
-                      WOLFHSM_CFG_COMM_DATA_LEN,
-    };
+    REQ_SIZE    = 32,
+    RESP_SIZE   = 64,
+    BUFFER_SIZE = sizeof(whTransportMemCsr) + sizeof(whCommHeader) +
+                  WOLFHSM_CFG_COMM_DATA_LEN,
+};
 
 #define FLASH_RAM_SIZE (1024 * 1024) /* 1MB */
 #define FLASH_SECTOR_SIZE (128 * 1024) /* 128KB */
@@ -435,23 +435,22 @@ exit:
     defined(WOLFHSM_CFG_ENABLE_SERVER)
 static int whTest_SheClientConfigBoundarySecureBoot(whClientConfig* config)
 {
-    int ret = 0;
-    WC_RNG rng[1];
-    Cmac cmac[1];
-    whClientContext client[1] = {0};
-    uint8_t key[16] = {0};
-    uint8_t zeros[WH_SHE_BOOT_MAC_PREFIX_LEN] = {0};
-    uint8_t sheUid[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x01};
-    uint8_t bootMacDigest[16] = {0};
-    uint8_t sreg = 0;
-    uint8_t bootloaderBoundary[
-        WOLFHSM_CFG_COMM_DATA_LEN -
-        sizeof(whMessageShe_SecureBootUpdateRequest)];
-    uint32_t digestSz = sizeof(bootMacDigest);
-    uint32_t bootloaderSz;
-    uint32_t serverCommDataLen = WOLFHSM_CFG_COMM_DATA_LEN;
-    uint32_t maxBoundaryUpdateChunk =
+    int             ret = 0;
+    WC_RNG          rng[1];
+    Cmac            cmac[1];
+    whClientContext client[1]                         = {0};
+    uint8_t         key[16]                           = {0};
+    uint8_t         zeros[WH_SHE_BOOT_MAC_PREFIX_LEN] = {0};
+    uint8_t         sheUid[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01};
+    uint8_t         bootMacDigest[16] = {0};
+    uint8_t         sreg              = 0;
+    uint8_t         bootloaderBoundary[WOLFHSM_CFG_COMM_DATA_LEN -
+                               sizeof(whMessageShe_SecureBootUpdateRequest)];
+    uint32_t        digestSz = sizeof(bootMacDigest);
+    uint32_t        bootloaderSz;
+    uint32_t        serverCommDataLen = WOLFHSM_CFG_COMM_DATA_LEN;
+    uint32_t        maxBoundaryUpdateChunk =
         WOLFHSM_CFG_COMM_DATA_LEN -
         sizeof(whMessageShe_SecureBootUpdateRequest);
     uint32_t outClientId = 0;
@@ -462,10 +461,11 @@ static int whTest_SheClientConfigBoundarySecureBoot(whClientConfig* config)
     }
 
     WH_TEST_RETURN_ON_FAIL(wh_Client_Init(client, config));
-    WH_TEST_RETURN_ON_FAIL(wh_Client_CommInit(client, &outClientId, &outServerId));
-    WH_TEST_RETURN_ON_FAIL(wh_Client_CommInfo(client, NULL, NULL,
-        &serverCommDataLen, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-        NULL, NULL, NULL, NULL));
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Client_CommInit(client, &outClientId, &outServerId));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CommInfo(
+        client, NULL, NULL, &serverCommDataLen, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL, NULL, NULL));
 
     if (serverCommDataLen <= sizeof(whMessageShe_SecureBootUpdateRequest)) {
         WH_ERROR_PRINT("Invalid server cfg_comm_data_len %u\n",
@@ -508,8 +508,7 @@ static int whTest_SheClientConfigBoundarySecureBoot(whClientConfig* config)
         WH_ERROR_PRINT("Failed to wc_CmacUpdate %d\n", ret);
         goto exit_boundary;
     }
-    if ((ret = wc_CmacUpdate(cmac, bootloaderBoundary,
-                             bootloaderSz)) != 0) {
+    if ((ret = wc_CmacUpdate(cmac, bootloaderBoundary, bootloaderSz)) != 0) {
         WH_ERROR_PRINT("Failed to wc_CmacUpdate %d\n", ret);
         goto exit_boundary;
     }
@@ -616,7 +615,7 @@ int whTest_SheServerConfig(whServerConfig* config)
 typedef int (*whTestSheClientFn)(whClientConfig* config);
 
 typedef struct {
-    whClientConfig* clientConfig;
+    whClientConfig*   clientConfig;
     whTestSheClientFn clientFn;
 } whTestSheClientTaskCtx;
 
@@ -639,15 +638,15 @@ static void* _whServerTask(void* cf)
 
 #if defined(WOLFHSM_CFG_TEST_POSIX) && defined(WOLFHSM_CFG_ENABLE_CLIENT) && \
     defined(WOLFHSM_CFG_ENABLE_SERVER)
-static void _whClientServerThreadTest(whClientConfig* c_conf,
-                                whServerConfig* s_conf,
-                                whTestSheClientFn clientFn)
+static void _whClientServerThreadTest(whClientConfig*   c_conf,
+                                      whServerConfig*   s_conf,
+                                      whTestSheClientFn clientFn)
 {
     pthread_t cthread = {0};
     pthread_t sthread = {0};
     whTestSheClientTaskCtx cTaskCtx = {
         .clientConfig = c_conf,
-        .clientFn = clientFn,
+        .clientFn     = clientFn,
     };
 
     void* retval;
@@ -765,58 +764,58 @@ static int wh_ClientServer_MemThreadTest(whTestSheClientFn clientFn)
 #if defined(WOLFHSM_CFG_ENABLE_SERVER)
 static int wh_She_TestMasterEcuKeyFallback(void)
 {
-    int             ret = 0;
-    whServerContext server[1] = {0};
-    whNvmMetadata   outMeta[1] = {0};
+    int             ret                   = 0;
+    whServerContext server[1]             = {0};
+    whNvmMetadata   outMeta[1]            = {0};
     uint8_t         keyBuf[WH_SHE_KEY_SZ] = {0};
-    uint32_t        keySz = sizeof(keyBuf);
-    uint8_t         zeros[WH_SHE_KEY_SZ] = {0};
+    uint32_t        keySz                 = sizeof(keyBuf);
+    uint8_t         zeros[WH_SHE_KEY_SZ]  = {0};
     whKeyId         masterEcuKeyId;
 
     /* Transport (not used, but required for server init) */
-    uint8_t reqBuf[BUFFER_SIZE] = {0};
-    uint8_t respBuf[BUFFER_SIZE] = {0};
-    whTransportMemConfig tmcf[1] = {{
-        .req       = (whTransportMemCsr*)reqBuf,
-        .req_size  = sizeof(reqBuf),
-        .resp      = (whTransportMemCsr*)respBuf,
-        .resp_size = sizeof(respBuf),
+    uint8_t                     reqBuf[BUFFER_SIZE]  = {0};
+    uint8_t                     respBuf[BUFFER_SIZE] = {0};
+    whTransportMemConfig        tmcf[1]              = {{
+                            .req       = (whTransportMemCsr*)reqBuf,
+                            .req_size  = sizeof(reqBuf),
+                            .resp      = (whTransportMemCsr*)respBuf,
+                            .resp_size = sizeof(respBuf),
     }};
-    whTransportServerCb         tscb[1]   = {WH_TRANSPORT_MEM_SERVER_CB};
-    whTransportMemServerContext tmsc[1]   = {0};
+    whTransportServerCb         tscb[1]    = {WH_TRANSPORT_MEM_SERVER_CB};
+    whTransportMemServerContext tmsc[1]    = {0};
     whCommServerConfig          cs_conf[1] = {{
-        .transport_cb      = tscb,
-        .transport_context = (void*)tmsc,
-        .transport_config  = (void*)tmcf,
-        .server_id         = 124,
+                 .transport_cb      = tscb,
+                 .transport_context = (void*)tmsc,
+                 .transport_config  = (void*)tmcf,
+                 .server_id         = 124,
     }};
 
     /* RamSim Flash state and configuration */
-    uint8_t memory[FLASH_RAM_SIZE] = {0};
-    whFlashRamsimCtx fc[1] = {0};
-    whFlashRamsimCfg fc_conf[1] = {{
-        .size       = FLASH_RAM_SIZE,
-        .sectorSize = FLASH_SECTOR_SIZE,
-        .pageSize   = FLASH_PAGE_SIZE,
-        .erasedByte = ~(uint8_t)0,
-        .memory     = memory,
+    uint8_t          memory[FLASH_RAM_SIZE] = {0};
+    whFlashRamsimCtx fc[1]                  = {0};
+    whFlashRamsimCfg fc_conf[1]             = {{
+                    .size       = FLASH_RAM_SIZE,
+                    .sectorSize = FLASH_SECTOR_SIZE,
+                    .pageSize   = FLASH_PAGE_SIZE,
+                    .erasedByte = ~(uint8_t)0,
+                    .memory     = memory,
     }};
-    const whFlashCb fcb[1] = {WH_FLASH_RAMSIM_CB};
+    const whFlashCb  fcb[1]                 = {WH_FLASH_RAMSIM_CB};
 
     /* NVM */
-    whNvmFlashConfig nf_conf[1] = {{
-        .cb      = fcb,
-        .context = fc,
-        .config  = fc_conf,
+    whNvmFlashConfig  nf_conf[1] = {{
+         .cb      = fcb,
+         .context = fc,
+         .config  = fc_conf,
     }};
-    whNvmFlashContext nfc[1] = {0};
-    whNvmCb nfcb[1] = {WH_NVM_FLASH_CB};
-    whNvmConfig n_conf[1] = {{
-        .cb      = nfcb,
-        .context = nfc,
-        .config  = nf_conf,
+    whNvmFlashContext nfc[1]     = {0};
+    whNvmCb           nfcb[1]    = {WH_NVM_FLASH_CB};
+    whNvmConfig       n_conf[1]  = {{
+               .cb      = nfcb,
+               .context = nfc,
+               .config  = nf_conf,
     }};
-    whNvmContext nvm[1] = {{0}};
+    whNvmContext      nvm[1]     = {{0}};
 
     /* Crypto context */
     whServerCryptoContext crypto[1] = {{
@@ -838,19 +837,17 @@ static int wh_She_TestMasterEcuKeyFallback(void)
     WH_TEST_RETURN_ON_FAIL(wolfCrypt_Init());
     WH_TEST_RETURN_ON_FAIL(wc_InitRng_ex(crypto->rng, NULL, crypto->devId));
     WH_TEST_RETURN_ON_FAIL(wh_Server_Init(server, s_conf));
-    WH_TEST_RETURN_ON_FAIL(
-        wh_Server_SetConnected(server, WH_COMM_CONNECTED));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_SetConnected(server, WH_COMM_CONNECTED));
 
-    masterEcuKeyId = WH_MAKE_KEYID(WH_KEYTYPE_SHE,
-                                    server->comm->client_id,
-                                    WH_SHE_MASTER_ECU_KEY_ID);
+    masterEcuKeyId = WH_MAKE_KEYID(WH_KEYTYPE_SHE, server->comm->client_id,
+                                   WH_SHE_MASTER_ECU_KEY_ID);
 
     /* Fill keyBuf with non-zero to ensure it gets overwritten */
     memset(keyBuf, 0xFF, sizeof(keyBuf));
 
     /* Read master ECU key when it has never been provisioned */
-    ret = wh_Server_KeystoreReadKey(server, masterEcuKeyId, outMeta,
-                                    keyBuf, &keySz);
+    ret = wh_Server_KeystoreReadKey(server, masterEcuKeyId, outMeta, keyBuf,
+                                    &keySz);
 
     WH_TEST_ASSERT_RETURN(ret == 0);
     WH_TEST_ASSERT_RETURN(keySz == WH_SHE_KEY_SZ);
@@ -876,10 +873,11 @@ int whTest_She(void)
     WH_TEST_PRINT("Testing SHE: master ECU key fallback...\n");
     WH_TEST_RETURN_ON_FAIL(wh_She_TestMasterEcuKeyFallback());
     WH_TEST_PRINT("Testing SHE: (pthread) mem core flow...\n");
-    WH_TEST_RETURN_ON_FAIL(wh_ClientServer_MemThreadTest(whTest_SheClientConfig));
-    WH_TEST_PRINT("Testing SHE: (pthread) mem boundary secure boot...\n");
     WH_TEST_RETURN_ON_FAIL(
-        wh_ClientServer_MemThreadTest(whTest_SheClientConfigBoundarySecureBoot));
+        wh_ClientServer_MemThreadTest(whTest_SheClientConfig));
+    WH_TEST_PRINT("Testing SHE: (pthread) mem boundary secure boot...\n");
+    WH_TEST_RETURN_ON_FAIL(wh_ClientServer_MemThreadTest(
+        whTest_SheClientConfigBoundarySecureBoot));
     return 0;
 }
 #endif
