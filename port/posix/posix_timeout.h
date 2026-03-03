@@ -20,7 +20,7 @@
  * port/posix/posix_timeout.h
  *
  * POSIX implementation of the wolfHSM timeout abstraction.
- * Uses posixGetTime() for time measurement.
+ * Uses CLOCK_MONOTONIC for time measurement.
  */
 
 #ifndef PORT_POSIX_POSIX_TIMEOUT_H_
