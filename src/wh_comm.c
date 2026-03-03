@@ -189,8 +189,12 @@ int wh_CommClient_RecvResponse(whCommClient* context,
     }
 #ifdef WOLFHSM_CFG_ENABLE_TIMEOUT
     else if (rc == WH_ERROR_NOTREADY) {
-        if (wh_Timeout_Expired(&context->respTimeout)) {
+        int expired = wh_Timeout_Expired(&context->respTimeout);
+        if (expired > 0) {
             rc = WH_ERROR_TIMEOUT;
+        }
+        else if (expired < 0) {
+            rc = expired;
         }
     }
 #endif

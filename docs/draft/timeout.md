@@ -11,6 +11,9 @@ posixTimeoutContext posixCtx = {0};
 posixTimeoutConfig  posixCfg = {.timeoutUs = WH_SEC_TO_USEC(5)};
 whTimeoutCb         timeoutCbTable = POSIX_TIMEOUT_CB;
 
+/* NOTE: The callback table, platform context, and expiredCtx must remain valid
+ * for the lifetime of the whCommClient/whTimeout instance. Do not use stack
+ * locals that go out of scope while the client is still in use. */
 whTimeoutConfig timeoutCfg = {
     .cb         = &timeoutCbTable,     /* platform callback table */
     .context    = &posixCtx,           /* platform context */

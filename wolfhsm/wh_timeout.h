@@ -40,7 +40,7 @@
 #include <stdint.h>
 
 /* Time conversion macros */
-#define WH_MSEC_TO_USEC(usec) ((usec) * (1000ULL))
+#define WH_MSEC_TO_USEC(ms) ((ms) * (1000ULL))
 #define WH_SEC_TO_USEC(sec) ((sec) * (1000000ULL))
 #define WH_MIN_TO_USEC(min) ((min) * (WH_SEC_TO_USEC(60)))
 

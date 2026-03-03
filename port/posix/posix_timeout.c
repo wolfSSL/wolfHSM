@@ -20,7 +20,7 @@
  * port/posix/posix_timeout.c
  *
  * POSIX implementation of the wolfHSM timeout abstraction.
- * Uses posixGetTime() from posix_time.h for time measurement.
+ * Uses CLOCK_MONOTONIC for time measurement.
  */
 
 #include "wolfhsm/wh_settings.h"
@@ -28,12 +28,24 @@
 #ifdef WOLFHSM_CFG_ENABLE_TIMEOUT
 
 #include <stddef.h>
+#include <time.h>
 
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_timeout.h"
 
-#include "port/posix/posix_time.h"
 #include "port/posix/posix_timeout.h"
+
+/* Use CLOCK_MONOTONIC for timeout measurement to avoid issues with wall-clock
+ * adjustments (NTP, manual changes, etc.) that could cause spurious expirations
+ * or overly long timeouts. */
+static uint64_t _getMonotonicTimeUs(void)
+{
+    struct timespec ts;
+    if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0) {
+        return 0;
+    }
+    return (uint64_t)ts.tv_sec * 1000000ULL + (uint64_t)(ts.tv_nsec / 1000);
+}
 
 int posixTimeout_Init(void* context, const void* config)
 {
@@ -107,7 +119,7 @@ int posixTimeout_Start(void* context)
         return WH_ERROR_NOTREADY;
     }
 
-    ctx->startUs = posixGetTime();
+    ctx->startUs = _getMonotonicTimeUs();
     ctx->started = 1;
 
     return WH_ERROR_OK;
@@ -150,7 +162,7 @@ int posixTimeout_Expired(void* context, int* expired)
         return WH_ERROR_OK;
     }
 
-    nowUs    = posixGetTime();
+    nowUs    = _getMonotonicTimeUs();
     *expired = ((nowUs - ctx->startUs) >= ctx->timeoutUs) ? 1 : 0;
 
     return WH_ERROR_OK;
