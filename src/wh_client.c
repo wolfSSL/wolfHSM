@@ -138,6 +138,10 @@ int wh_Client_Cleanup(whClientContext* c)
     (void)wolfCrypt_Cleanup();
 #endif  /* !WOLFHSM_CFG_NO_CRYPTO */
 
+#ifdef WOLFHSM_CFG_ENABLE_TIMEOUT
+    (void)wh_Timeout_Cleanup(&c->respTimeout);
+#endif
+
     (void)wh_CommClient_Cleanup(c->comm);
 
     memset(c, 0, sizeof(*c));
@@ -210,14 +214,23 @@ int wh_Client_RecvResponseBlockingWithTimeout(whClientContext* c,
                                               uint16_t*        out_action,
                                               uint16_t* out_size, void* data)
 {
-    int           ret;
-    whTimeoutCtx* timeout;
+    int        ret;
+    whTimeout* timeout;
 
     if (c == NULL) {
         return WH_ERROR_BADARGS;
     }
 
     timeout = &c->respTimeout;
+
+    /* If no timeout configured, fall back to standard blocking loop */
+    if (timeout->cb == NULL) {
+        do {
+            ret = wh_Client_RecvResponse(c, out_group, out_action, out_size,
+                                         data);
+        } while (ret == WH_ERROR_NOTREADY);
+        return ret;
+    }
 
     ret = wh_Timeout_Start(timeout);
     if (ret != WH_ERROR_OK) {

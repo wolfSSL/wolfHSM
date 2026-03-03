@@ -2,26 +2,35 @@
 
 ## 1. Configuration at Init Time
 
-When creating a client, you provide a `whTimeoutConfig` specifying the timeout duration and an optional callback:
+The timeout feature uses a callback-based abstraction (similar to the lock feature) that allows platform-specific timer implementations without introducing OS dependencies in core wolfHSM code. A platform port provides a callback table implementing the timer operations, and the core timeout module delegates to these callbacks.
+
+When creating a client, you provide a `whTimeoutConfig` specifying the platform callbacks, platform context, and an optional application-level expired callback:
 ```c
+/* Platform-specific setup (e.g. POSIX) */
+posixTimeoutContext posixCtx = {0};
+posixTimeoutConfig  posixCfg = {.timeoutUs = WH_SEC_TO_USEC(5)};
+whTimeoutCb         timeoutCbTable = POSIX_TIMEOUT_CB;
+
 whTimeoutConfig timeoutCfg = {
-    .timeoutUs = WH_SEC_TO_USEC(5),   /* 5-second timeout */
-    .expiredCb = myTimeoutHandler,      /* optional callback on expiry */
-    .cbCtx     = myAppContext,          /* context passed to callback */
+    .cb         = &timeoutCbTable,     /* platform callback table */
+    .context    = &posixCtx,           /* platform context */
+    .config     = &posixCfg,           /* platform-specific config */
+    .expiredCb  = myTimeoutHandler,    /* optional app callback on expiry */
+    .expiredCtx = myAppContext,        /* context passed to app callback */
 };
 whClientConfig clientCfg = {
     .comm              = &commConfig,
-    .respTimeoutConfig = &timeoutCfg,   /* attach timeout config */
+    .respTimeoutConfig = &timeoutCfg,  /* attach timeout config */
 };
 wh_Client_Init(&clientCtx, &clientCfg);
 ```
 
-During `wh_Client_Init` (`src/wh_client.c:84-89`), the config is copied into an embedded `whTimeoutCtx respTimeout[1]` inside the client context via `wh_Timeout_Init()`. This stores the timeout duration and callback but doesn't start any timer yet.
-If `respTimeoutConfig` is NULL, the timeout context is left zeroed and effectively disabled (a `timeoutUs` of 0 means "never expires").
+During `wh_Client_Init`, the config is used to initialize an embedded `whTimeout respTimeout` inside the client context via `wh_Timeout_Init()`. This calls the platform `init` callback to set up timer resources but doesn't start any timer yet.
+If `respTimeoutConfig` is NULL (or `cb` is NULL), the timeout is disabled and all operations become no-ops (timeout never expires).
 
 ## 2. What Happens During a Crypto Call
 
-Before this PR, every crypto function in `wh_client_crypto.c` had this pattern after sending a request:
+Before the timeout feature, every crypto function in `wh_client_crypto.c` had this pattern after sending a request:
 ```c
 /* Old pattern -- infinite busy-wait */
 do {
@@ -30,7 +39,7 @@ do {
 ```
 
 If the server never responded, the client would spin forever.
-The PR replaces all ~30 of these with a single helper `_recvCryptoResponse()` (`src/wh_client_crypto.c:165-180`):
+This is replaced with a single helper `_recvCryptoResponse()` (`src/wh_client_crypto.c`):
 ```c
 static int _recvCryptoResponse(whClientContext* ctx,
                                uint16_t* group, uint16_t* action,
@@ -38,8 +47,8 @@ static int _recvCryptoResponse(whClientContext* ctx,
 {
     int ret;
 #ifdef WOLFHSM_CFG_ENABLE_TIMEOUT
-    ret = wh_Client_RecvResponseTimeout(ctx, group, action, size, data,
-                                        ctx->respTimeout);
+    ret = wh_Client_RecvResponseBlockingWithTimeout(ctx, group, action,
+                                                     size, data);
 #else
     do {
         ret = wh_Client_RecvResponse(ctx, group, action, size, data);
@@ -49,31 +58,30 @@ static int _recvCryptoResponse(whClientContext* ctx,
 }
 ```
 
-When timeout is enabled, it delegates to `wh_Client_RecvResponseTimeout`. When disabled, the old infinite-loop behavior is preserved.
+When timeout is enabled, it delegates to `wh_Client_RecvResponseBlockingWithTimeout`. When disabled, the old infinite-loop behavior is preserved.
 
 ## 3. The Timeout Receive Loop
-`wh_Client_RecvResponseTimeout` (`src/wh_client.c:211-231`) does this:
-1. **Starts the timer** -- calls `wh_Timeout_Start()` which snapshots the current time via `WH_GETTIME_US()` into `timeout->startUs`.
+`wh_Client_RecvResponseBlockingWithTimeout` (`src/wh_client.c`) does this:
+1. **Starts the timer** -- calls `wh_Timeout_Start()` which delegates to the platform `start` callback (e.g. captures the current time).
 2. **Polls for a response** -- calls `wh_Client_RecvResponse()` in a loop.
 3. **On each `WH_ERROR_NOTREADY`**, checks `wh_Timeout_Expired()`:
-   - Gets the current time via `WH_GETTIME_US()`
-   - Computes `(now - startUs) >= timeoutUs`
-   - If expired: invokes the `expiredCb` (if set), then returns `WH_ERROR_TIMEOUT`
+   - Delegates to the platform `expired` callback to check elapsed time
+   - If expired: invokes the application `expiredCb` (if set), then returns `WH_ERROR_TIMEOUT`
    - If not expired: loops again
 4. **On any other return value** (success or error), returns immediately.
 ```
-Client App                    _recvCryptoResponse                 wh_Timeout
+Client App                    _recvCryptoResponse                 whTimeout
     |                                |                                |
     |-- wh_Client_AesCbc() --------> |                                |
-    |                                |-- wh_Timeout_Start --------> capture time
+    |                                |-- wh_Timeout_Start --------> cb->start()
     |                                |                                |
     |                                |-- RecvResponse (NOTREADY)      |
-    |                                |-- Expired? ------------------> no
+    |                                |-- Expired? -------> cb->expired() -> no
     |                                |-- RecvResponse (NOTREADY)      |
-    |                                |-- Expired? ------------------> no
+    |                                |-- Expired? -------> cb->expired() -> no
     |                                |   ...                          |
     |                                |-- RecvResponse (NOTREADY)      |
-    |                                |-- Expired? ------------------> YES
+    |                                |-- Expired? -------> cb->expired() -> YES
     |                                |                                |-- expiredCb()
     |<-- WH_ERROR_TIMEOUT -----------|                                |
 ```
@@ -84,14 +92,14 @@ The `expiredCb` fires *before* the error is returned, so you can use it for logg
 
 ## 5. Overriding Expiration via the Callback
 
-The expired callback receives a pointer to the `isExpired` flag and can override it by setting `*isExpired = 0`. This suppresses the expiration for the current check, allowing the polling loop to continue. A common use case is to extend the timeout deadline: clear the flag, then call `wh_Timeout_Start()` to restart the timer.
+The application expired callback receives a pointer to the `isExpired` flag and can override it by setting `*isExpired = 0`. This suppresses the expiration for the current check, allowing the polling loop to continue. A common use case is to extend the timeout deadline: clear the flag, then call `wh_Timeout_Start()` to restart the timer.
 
 The callback can also return a non-zero error code to signal a failure. When it does, `wh_Timeout_Expired()` propagates that error directly to the caller instead of returning the expired flag.
 
 ```c
-static int myOverrideCb(whTimeoutCtx* ctx, int* isExpired)
+static int myOverrideCb(whTimeout* timeout, int* isExpired)
 {
-    int* retryCount = (int*)ctx->cbCtx;
+    int* retryCount = (int*)timeout->expiredCtx;
     if (retryCount == NULL) {
         return WH_ERROR_BADARGS;
     }
@@ -101,21 +109,27 @@ static int myOverrideCb(whTimeoutCtx* ctx, int* isExpired)
     if (*retryCount <= 1) {
         /* First expiration: suppress and restart the timer */
         *isExpired = 0;
-        wh_Timeout_Start(ctx);
+        wh_Timeout_Start(timeout);
     }
     /* Subsequent expirations: allow the timeout to fire */
     return WH_ERROR_OK;
 }
 
 int retryCount = 0;
+posixTimeoutContext posixCtx = {0};
+posixTimeoutConfig  posixCfg = {.timeoutUs = WH_SEC_TO_USEC(5)};
+whTimeoutCb         timeoutCbTable = POSIX_TIMEOUT_CB;
+
 whTimeoutConfig timeoutCfg = {
-    .timeoutUs = WH_SEC_TO_USEC(5),
-    .expiredCb = myOverrideCb,
-    .cbCtx     = &retryCount,
+    .cb         = &timeoutCbTable,
+    .context    = &posixCtx,
+    .config     = &posixCfg,
+    .expiredCb  = myOverrideCb,
+    .expiredCtx = &retryCount,
 };
 ```
 
 ## 6. Scope Limitations
 A few things to note about the current design:
 - **Only crypto responses are covered.** Non-crypto client calls (key management, NVM operations, comm init) still use the old infinite-wait pattern. The timeout is specifically wired into `_recvCryptoResponse`.
-- **The timeout is per-client, not per-call.** All crypto operations for a given client share the same `respTimeout` context with the same duration. You can call `wh_Timeout_Set(ctx->respTimeout, newValue)` to change it between calls, but there's no per-operation override.
+- **The timeout is per-client, not per-call.** All crypto operations for a given client share the same `respTimeout` context with the same duration. You can call `wh_Timeout_Set()` to change the duration between calls, but there's no per-operation override.
