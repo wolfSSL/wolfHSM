@@ -89,6 +89,13 @@ int wh_CommClient_Init(whCommClient* context, const whCommClientConfig* config)
         if (context->connect_cb != NULL) {
             rc = context->connect_cb(context, WH_COMM_CONNECTED);
         }
+
+#ifdef WOLFHSM_CFG_ENABLE_TIMEOUT
+        if (rc == 0) {
+            rc = wh_Timeout_Init(&context->respTimeout,
+                                 config->respTimeoutConfig);
+        }
+#endif
     }
     return rc;
 }
@@ -126,6 +133,9 @@ int wh_CommClient_SendRequest(whCommClient* context, uint16_t magic,
     if (rc == 0) {
         context->seq++;
         if (out_seq != NULL) *out_seq = context->seq;
+#ifdef WOLFHSM_CFG_ENABLE_TIMEOUT
+        (void)wh_Timeout_Start(&context->respTimeout);
+#endif
     }
     return rc;
 }
@@ -154,6 +164,9 @@ int wh_CommClient_RecvResponse(whCommClient* context,
             &size,
             context->packet);
     if (rc == 0) {
+#ifdef WOLFHSM_CFG_ENABLE_TIMEOUT
+        (void)wh_Timeout_Stop(&context->respTimeout);
+#endif
         if (size < sizeof(*context->hdr)) {
             /* Size is too small */
             rc = WH_ERROR_ABORTED;
@@ -174,6 +187,13 @@ int wh_CommClient_RecvResponse(whCommClient* context,
             if (out_size != NULL) *out_size = data_size;
         }
     }
+#ifdef WOLFHSM_CFG_ENABLE_TIMEOUT
+    else if (rc == WH_ERROR_NOTREADY) {
+        if (wh_Timeout_Expired(&context->respTimeout)) {
+            rc = WH_ERROR_TIMEOUT;
+        }
+    }
+#endif
     return rc;
 }
 
@@ -200,6 +220,10 @@ int wh_CommClient_Cleanup(whCommClient* context)
     if (context->connect_cb != NULL) {
         (void)context->connect_cb(context, WH_COMM_DISCONNECTED);
     }
+
+#ifdef WOLFHSM_CFG_ENABLE_TIMEOUT
+    (void)wh_Timeout_Cleanup(&context->respTimeout);
+#endif
 
     if (    (context->transport_cb != NULL) &&
             (context->transport_cb->Cleanup != NULL)) {

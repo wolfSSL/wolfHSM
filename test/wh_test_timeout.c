@@ -113,15 +113,15 @@ static int whTest_TimeoutAesCbc(void)
     whTransportClientCb         tccb[1]    = {WH_TRANSPORT_MEM_CLIENT_CB};
     whTransportMemClientContext tmcc[1]    = {0};
     whCommClientConfig          cc_conf[1] = {{
-                 .transport_cb      = tccb,
-                 .transport_context = (void*)tmcc,
-                 .transport_config  = (void*)tmcf,
-                 .client_id         = WH_TEST_DEFAULT_CLIENT_ID,
-                 .connect_cb        = _timeoutTestConnectCb,
+                 .transport_cb         = tccb,
+                 .transport_context    = (void*)tmcc,
+                 .transport_config     = (void*)tmcf,
+                 .client_id            = WH_TEST_DEFAULT_CLIENT_ID,
+                 .connect_cb           = _timeoutTestConnectCb,
+                 .respTimeoutConfig    = &timeoutCfg,
     }};
     whClientConfig              c_conf[1]  = {{
                       .comm              = cc_conf,
-                      .respTimeoutConfig = &timeoutCfg,
     }};
     whClientContext             client[1]  = {0};
 
@@ -274,15 +274,15 @@ static int whTest_TimeoutAesCbcOverride(void)
     whTransportClientCb         tccb[1]    = {WH_TRANSPORT_MEM_CLIENT_CB};
     whTransportMemClientContext tmcc[1]    = {0};
     whCommClientConfig          cc_conf[1] = {{
-                 .transport_cb      = tccb,
-                 .transport_context = (void*)tmcc,
-                 .transport_config  = (void*)tmcf,
-                 .client_id         = WH_TEST_DEFAULT_CLIENT_ID,
-                 .connect_cb        = _timeoutTestConnectCb,
+                 .transport_cb         = tccb,
+                 .transport_context    = (void*)tmcc,
+                 .transport_config     = (void*)tmcf,
+                 .client_id            = WH_TEST_DEFAULT_CLIENT_ID,
+                 .connect_cb           = _timeoutTestConnectCb,
+                 .respTimeoutConfig    = &timeoutCfg,
     }};
     whClientConfig              c_conf[1]  = {{
                       .comm              = cc_conf,
-                      .respTimeoutConfig = &timeoutCfg,
     }};
     whClientContext             client[1]  = {0};
 

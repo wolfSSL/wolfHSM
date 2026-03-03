@@ -77,15 +77,6 @@ int wh_Client_Init(whClientContext* c, const whClientConfig* config)
 
     memset(c, 0, sizeof(*c));
 
-#ifdef WOLFHSM_CFG_ENABLE_TIMEOUT
-    if (config->respTimeoutConfig != NULL) {
-        rc = wh_Timeout_Init(&c->respTimeout, config->respTimeoutConfig);
-        if (rc != WH_ERROR_OK) {
-            return rc;
-        }
-    }
-#endif
-
     rc = wh_CommClient_Init(c->comm, config->comm);
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
@@ -137,10 +128,6 @@ int wh_Client_Cleanup(whClientContext* c)
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     (void)wolfCrypt_Cleanup();
 #endif  /* !WOLFHSM_CFG_NO_CRYPTO */
-
-#ifdef WOLFHSM_CFG_ENABLE_TIMEOUT
-    (void)wh_Timeout_Cleanup(&c->respTimeout);
-#endif
 
     (void)wh_CommClient_Cleanup(c->comm);
 
@@ -207,46 +194,6 @@ int wh_Client_RecvResponse(whClientContext *c,
     }
     return rc;
 }
-
-#ifdef WOLFHSM_CFG_ENABLE_TIMEOUT
-int wh_Client_RecvResponseBlockingWithTimeout(whClientContext* c,
-                                              uint16_t*        out_group,
-                                              uint16_t*        out_action,
-                                              uint16_t* out_size, void* data)
-{
-    int        ret;
-    whTimeout* timeout;
-
-    if (c == NULL) {
-        return WH_ERROR_BADARGS;
-    }
-
-    timeout = &c->respTimeout;
-
-    /* If no timeout configured, fall back to standard blocking loop */
-    if (timeout->cb == NULL) {
-        do {
-            ret = wh_Client_RecvResponse(c, out_group, out_action, out_size,
-                                         data);
-        } while (ret == WH_ERROR_NOTREADY);
-        return ret;
-    }
-
-    ret = wh_Timeout_Start(timeout);
-    if (ret != WH_ERROR_OK) {
-        return ret;
-    }
-
-    do {
-        ret = wh_Client_RecvResponse(c, out_group, out_action, out_size, data);
-        if ((ret == WH_ERROR_NOTREADY) && wh_Timeout_Expired(timeout)) {
-            return WH_ERROR_TIMEOUT;
-        }
-    } while (ret == WH_ERROR_NOTREADY);
-
-    return ret;
-}
-#endif /* WOLFHSM_CFG_ENABLE_TIMEOUT */
 
 int wh_Client_CommInitRequest(whClientContext* c)
 {
