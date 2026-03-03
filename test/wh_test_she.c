@@ -38,6 +38,7 @@
 
 #include "wolfhsm/wh_comm.h"
 #include "wolfhsm/wh_message.h"
+#include "wolfhsm/wh_message_she.h"
 
 #ifdef WOLFHSM_CFG_ENABLE_SERVER
 #include "wolfhsm/wh_server.h"
@@ -75,7 +76,8 @@
 enum {
         REQ_SIZE = 32,
         RESP_SIZE = 64,
-        BUFFER_SIZE = 4096,
+        BUFFER_SIZE = sizeof(whTransportMemCsr) + sizeof(whCommHeader) +
+                      WOLFHSM_CFG_COMM_DATA_LEN,
     };
 
 #define FLASH_RAM_SIZE (1024 * 1024) /* 1MB */
@@ -250,6 +252,7 @@ int whTest_SheClientConfig(whClientConfig* config)
     if ((sreg & WH_SHE_SREG_BOOT_OK) == 0 ||
         (sreg & WH_SHE_SREG_BOOT_FINISHED) == 0 ||
         (sreg & WH_SHE_SREG_SECURE_BOOT) == 0) {
+        ret = WH_ERROR_ABORTED;
         WH_ERROR_PRINT("Failed to secureBoot with SHE CMAC\n");
         goto exit;
     }
@@ -283,6 +286,7 @@ int whTest_SheClientConfig(whClientConfig* config)
         memcmp(messageThree, vectorMessageThree, sizeof(vectorMessageThree)) != 0 ||
         memcmp(messageFour, vectorMessageFour, sizeof(vectorMessageFour)) != 0 ||
         memcmp(messageFive, vectorMessageFive, sizeof(vectorMessageFive)) != 0) {
+        ret = WH_ERROR_ABORTED;
         WH_ERROR_PRINT("Failed to generate a loadable key to match the vector\n");
         goto exit;
     }
@@ -295,6 +299,7 @@ int whTest_SheClientConfig(whClientConfig* config)
     if (memcmp(outMessageFour, vectorMessageFour, sizeof(vectorMessageFour))
         != 0 || memcmp(outMessageFive, vectorMessageFive,
         sizeof(vectorMessageFive)) != 0) {
+        ret = WH_ERROR_ABORTED;
         WH_ERROR_PRINT("wh_Client_SheLoadKey FAILED TO MATCH\n");
         goto exit;
     }
@@ -333,6 +338,7 @@ int whTest_SheClientConfig(whClientConfig* config)
         goto exit;
     }
     if (memcmp(finalText, plainText, sizeof(plainText)) != 0) {
+        ret = WH_ERROR_ABORTED;
         WH_ERROR_PRINT("SHE ECB FAILED TO MATCH\n");
         goto exit;
     }
@@ -346,6 +352,7 @@ int whTest_SheClientConfig(whClientConfig* config)
         goto exit;
     }
     if (memcmp(finalText, plainText, sizeof(plainText)) != 0) {
+        ret = WH_ERROR_ABORTED;
         WH_ERROR_PRINT("SHE CBC FAILED TO MATCH\n");
         goto exit;
     }
@@ -359,6 +366,7 @@ int whTest_SheClientConfig(whClientConfig* config)
         goto exit;
     }
     if (sreg != 0) {
+        ret = WH_ERROR_ABORTED;
         WH_ERROR_PRINT("SHE CMAC FAILED TO VERIFY\n");
         goto exit;
     }
@@ -422,6 +430,152 @@ exit:
 
     return ret;
 }
+
+#if defined(WOLFHSM_CFG_TEST_POSIX) && defined(WOLFHSM_CFG_ENABLE_CLIENT) && \
+    defined(WOLFHSM_CFG_ENABLE_SERVER)
+static int whTest_SheClientConfigBoundarySecureBoot(whClientConfig* config)
+{
+    int ret = 0;
+    WC_RNG rng[1];
+    Cmac cmac[1];
+    whClientContext client[1] = {0};
+    uint8_t key[16] = {0};
+    uint8_t zeros[WH_SHE_BOOT_MAC_PREFIX_LEN] = {0};
+    uint8_t sheUid[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x01};
+    uint8_t bootMacDigest[16] = {0};
+    uint8_t sreg = 0;
+    uint8_t bootloaderBoundary[
+        WOLFHSM_CFG_COMM_DATA_LEN -
+        sizeof(whMessageShe_SecureBootUpdateRequest)];
+    uint32_t digestSz = sizeof(bootMacDigest);
+    uint32_t bootloaderSz;
+    uint32_t serverCommDataLen = WOLFHSM_CFG_COMM_DATA_LEN;
+    uint32_t maxBoundaryUpdateChunk =
+        WOLFHSM_CFG_COMM_DATA_LEN -
+        sizeof(whMessageShe_SecureBootUpdateRequest);
+    uint32_t outClientId = 0;
+    uint32_t outServerId = 0;
+
+    if (config == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    WH_TEST_RETURN_ON_FAIL(wh_Client_Init(client, config));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CommInit(client, &outClientId, &outServerId));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CommInfo(client, NULL, NULL,
+        &serverCommDataLen, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL));
+
+    if (serverCommDataLen <= sizeof(whMessageShe_SecureBootUpdateRequest)) {
+        WH_ERROR_PRINT("Invalid server cfg_comm_data_len %u\n",
+                       (unsigned int)serverCommDataLen);
+        ret = WH_ERROR_ABORTED;
+        goto exit_boundary;
+    }
+    if (serverCommDataLen < WOLFHSM_CFG_COMM_DATA_LEN) {
+        maxBoundaryUpdateChunk =
+            serverCommDataLen - sizeof(whMessageShe_SecureBootUpdateRequest);
+    }
+
+    bootloaderSz = maxBoundaryUpdateChunk;
+
+    if ((ret = wc_InitRng_ex(rng, NULL, WH_DEV_ID)) != 0) {
+        WH_ERROR_PRINT("Failed to wc_InitRng_ex %d\n", ret);
+        goto exit_boundary;
+    }
+    if ((ret = wc_RNG_GenerateBlock(rng, key, sizeof(key))) != 0) {
+        WH_ERROR_PRINT("Failed to wc_RNG_GenerateBlock %d\n", ret);
+        goto exit_boundary;
+    }
+    if ((ret = wc_RNG_GenerateBlock(rng, bootloaderBoundary,
+                                    maxBoundaryUpdateChunk)) != 0) {
+        WH_ERROR_PRINT("Failed to wc_RNG_GenerateBlock %d\n", ret);
+        goto exit_boundary;
+    }
+    wc_FreeRng(rng);
+
+    if ((ret = wc_InitCmac(cmac, key, sizeof(key), WC_CMAC_AES, NULL)) != 0) {
+        WH_ERROR_PRINT("Failed to wc_InitCmac %d\n", ret);
+        goto exit_boundary;
+    }
+    if ((ret = wc_CmacUpdate(cmac, zeros, sizeof(zeros))) != 0) {
+        WH_ERROR_PRINT("Failed to wc_CmacUpdate %d\n", ret);
+        goto exit_boundary;
+    }
+    if ((ret = wc_CmacUpdate(cmac, (uint8_t*)&bootloaderSz,
+                             sizeof(bootloaderSz))) != 0) {
+        WH_ERROR_PRINT("Failed to wc_CmacUpdate %d\n", ret);
+        goto exit_boundary;
+    }
+    if ((ret = wc_CmacUpdate(cmac, bootloaderBoundary,
+                             bootloaderSz)) != 0) {
+        WH_ERROR_PRINT("Failed to wc_CmacUpdate %d\n", ret);
+        goto exit_boundary;
+    }
+    digestSz = AES_BLOCK_SIZE;
+    if ((ret = wc_CmacFinal(cmac, bootMacDigest, (word32*)&digestSz)) != 0) {
+        WH_ERROR_PRINT("Failed to wc_CmacFinal %d\n", ret);
+        goto exit_boundary;
+    }
+
+    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_BOOT_MAC_KEY_ID, 0,
+                                          key, sizeof(key))) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_ShePreProgramKey %d\n", ret);
+        goto exit_boundary;
+    }
+    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_BOOT_MAC, 0,
+                                          bootMacDigest,
+                                          sizeof(bootMacDigest))) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_ShePreProgramKey %d\n", ret);
+        goto exit_boundary;
+    }
+    if ((ret = wh_Client_SheSetUid(client, sheUid, sizeof(sheUid))) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_SheSetUid %d\n", ret);
+        goto exit_boundary;
+    }
+    if ((ret = wh_Client_SheSecureBoot(client, bootloaderBoundary,
+                                       bootloaderSz)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_SheSecureBoot boundary %d\n", ret);
+        goto exit_boundary;
+    }
+    if ((ret = wh_Client_SheGetStatus(client, &sreg)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_SheGetStatus %d\n", ret);
+        goto exit_boundary;
+    }
+    if ((sreg & WH_SHE_SREG_BOOT_OK) == 0 ||
+        (sreg & WH_SHE_SREG_BOOT_FINISHED) == 0 ||
+        (sreg & WH_SHE_SREG_SECURE_BOOT) == 0) {
+        ret = WH_ERROR_ABORTED;
+        WH_ERROR_PRINT("Failed secureBoot boundary with SHE CMAC\n");
+        goto exit_boundary;
+    }
+    WH_TEST_PRINT("SHE secure boot boundary SUCCESS\n");
+
+    if ((ret = _destroySheKey(client, WH_SHE_BOOT_MAC_KEY_ID)) != 0) {
+        WH_ERROR_PRINT("Failed to _destroySheKey, ret=%d\n", ret);
+        goto exit_boundary;
+    }
+    if ((ret = _destroySheKey(client, WH_SHE_BOOT_MAC)) != 0) {
+        WH_ERROR_PRINT("Failed to _destroySheKey, ret=%d\n", ret);
+        goto exit_boundary;
+    }
+
+exit_boundary:
+    /* Tell server to close */
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CommClose(client));
+
+    if (ret == 0) {
+        WH_TEST_RETURN_ON_FAIL(wh_Client_Cleanup(client));
+    }
+    else {
+        wh_Client_Cleanup(client);
+    }
+
+    return ret;
+}
+#endif /* WOLFHSM_CFG_TEST_POSIX && WOLFHSM_CFG_ENABLE_CLIENT && \
+          WOLFHSM_CFG_ENABLE_SERVER */
 #endif /* WOLFHSM_CFG_ENABLE_CLIENT */
 
 #ifdef WOLFHSM_CFG_ENABLE_SERVER
@@ -459,9 +613,17 @@ int whTest_SheServerConfig(whServerConfig* config)
 
 #if defined(WOLFHSM_CFG_TEST_POSIX) && defined(WOLFHSM_CFG_ENABLE_CLIENT) && \
     !defined(WOLFHSM_CFG_TEST_CLIENT_ONLY)
+typedef int (*whTestSheClientFn)(whClientConfig* config);
+
+typedef struct {
+    whClientConfig* clientConfig;
+    whTestSheClientFn clientFn;
+} whTestSheClientTaskCtx;
+
 static void* _whClientTask(void* cf)
 {
-    WH_TEST_ASSERT(0 == whTest_SheClientConfig(cf));
+    whTestSheClientTaskCtx* ctx = (whTestSheClientTaskCtx*)cf;
+    WH_TEST_ASSERT(0 == ctx->clientFn(ctx->clientConfig));
     return NULL;
 }
 #endif /* WOLFHSM_CFG_TEST_POSIX && WOLFHSM_CFG_ENABLE_CLIENT && \
@@ -478,17 +640,22 @@ static void* _whServerTask(void* cf)
 #if defined(WOLFHSM_CFG_TEST_POSIX) && defined(WOLFHSM_CFG_ENABLE_CLIENT) && \
     defined(WOLFHSM_CFG_ENABLE_SERVER)
 static void _whClientServerThreadTest(whClientConfig* c_conf,
-                                whServerConfig* s_conf)
+                                whServerConfig* s_conf,
+                                whTestSheClientFn clientFn)
 {
     pthread_t cthread = {0};
     pthread_t sthread = {0};
+    whTestSheClientTaskCtx cTaskCtx = {
+        .clientConfig = c_conf,
+        .clientFn = clientFn,
+    };
 
     void* retval;
     int rc = 0;
 
     rc = pthread_create(&sthread, NULL, _whServerTask, s_conf);
     if (rc == 0) {
-        rc = pthread_create(&cthread, NULL, _whClientTask, c_conf);
+        rc = pthread_create(&cthread, NULL, _whClientTask, &cTaskCtx);
         if (rc == 0) {
             /* All good. Block on joining */
             pthread_join(cthread, &retval);
@@ -502,7 +669,7 @@ static void _whClientServerThreadTest(whClientConfig* c_conf,
     }
 }
 
-static int wh_ClientServer_MemThreadTest(void)
+static int wh_ClientServer_MemThreadTest(whTestSheClientFn clientFn)
 {
     uint8_t req[BUFFER_SIZE] = {0};
     uint8_t resp[BUFFER_SIZE] = {0};
@@ -584,7 +751,7 @@ static int wh_ClientServer_MemThreadTest(void)
     WH_TEST_RETURN_ON_FAIL(wolfCrypt_Init());
     WH_TEST_RETURN_ON_FAIL(wc_InitRng_ex(crypto->rng, NULL, crypto->devId));
 
-    _whClientServerThreadTest(c_conf, s_conf);
+    _whClientServerThreadTest(c_conf, s_conf, clientFn);
 
     wh_Nvm_Cleanup(nvm);
     wc_FreeRng(crypto->rng);
@@ -708,8 +875,11 @@ int whTest_She(void)
 {
     WH_TEST_PRINT("Testing SHE: master ECU key fallback...\n");
     WH_TEST_RETURN_ON_FAIL(wh_She_TestMasterEcuKeyFallback());
-    WH_TEST_PRINT("Testing SHE: (pthread) mem...\n");
-    WH_TEST_RETURN_ON_FAIL(wh_ClientServer_MemThreadTest());
+    WH_TEST_PRINT("Testing SHE: (pthread) mem core flow...\n");
+    WH_TEST_RETURN_ON_FAIL(wh_ClientServer_MemThreadTest(whTest_SheClientConfig));
+    WH_TEST_PRINT("Testing SHE: (pthread) mem boundary secure boot...\n");
+    WH_TEST_RETURN_ON_FAIL(
+        wh_ClientServer_MemThreadTest(whTest_SheClientConfigBoundarySecureBoot));
     return 0;
 }
 #endif
