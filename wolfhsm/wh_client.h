@@ -110,7 +110,7 @@ struct whClientContext_t {
     uint16_t     last_req_id;
     uint16_t     last_req_kind;
 #ifdef WOLFHSM_CFG_ENABLE_TIMEOUT
-    whTimeoutCtx respTimeout;
+    whTimeout respTimeout;
 #endif
 #ifdef WOLFHSM_CFG_DMA
     whClientDmaContext dma;

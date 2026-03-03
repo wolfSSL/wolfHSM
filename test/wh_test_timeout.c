@@ -31,6 +31,8 @@
 #include "wolfhsm/wh_timeout.h"
 #include "wolfhsm/wh_error.h"
 
+#include "port/posix/posix_timeout.h"
+
 #include "wh_test_common.h"
 #include "wh_test_timeout.h"
 
@@ -49,10 +51,10 @@
 #endif /* HAVE_AES_CBC */
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
-static int whTest_TimeoutCb(whTimeoutCtx* ctx, int* isExpired)
+static int whTest_TimeoutCb(whTimeout* timeout, int* isExpired)
 {
     (void)isExpired;
-    int* counter = (int*)ctx->cbCtx;
+    int* counter = (int*)timeout->expiredCtx;
     if (counter != NULL) {
         (*counter)++;
     }
@@ -97,10 +99,15 @@ static int whTest_TimeoutAesCbc(void)
     }};
 
     /* Client configuration with timeout */
-    whTimeoutConfig timeoutCfg = {
-        .timeoutUs = 1,
-        .expiredCb = NULL,
-        .cbCtx     = NULL,
+    posixTimeoutContext posixCtx                         = {0};
+    posixTimeoutConfig posixCfg                         = {.timeoutUs = 1};
+    whTimeoutCb        timeoutCbTable                   = POSIX_TIMEOUT_CB;
+    whTimeoutConfig    timeoutCfg                       = {
+                          .cb         = &timeoutCbTable,
+                          .context    = &posixCtx,
+                          .config     = &posixCfg,
+                          .expiredCb  = NULL,
+                          .expiredCtx = NULL,
     };
 
     whTransportClientCb         tccb[1]    = {WH_TRANSPORT_MEM_CLIENT_CB};
@@ -216,10 +223,11 @@ static int whTest_TimeoutAesCbc(void)
 
 /* Callback that overrides expiration on the first invocation by resetting and
  * restarting the timeout. On the second invocation it allows expiration. The
- * cbCtx points to an int counter tracking how many times the callback fired. */
-static int _timeoutOverrideCb(whTimeoutCtx* ctx, int* isExpired)
+ * expiredCtx points to an int counter tracking how many times the callback
+ * fired. */
+static int _timeoutOverrideCb(whTimeout* timeout, int* isExpired)
 {
-    int* counter = (int*)ctx->cbCtx;
+    int* counter = (int*)timeout->expiredCtx;
     if (counter == NULL) {
         return WH_ERROR_BADARGS;
     }
@@ -229,7 +237,7 @@ static int _timeoutOverrideCb(whTimeoutCtx* ctx, int* isExpired)
     if (*counter <= 1) {
         /* First expiration: override and restart the timer */
         *isExpired = 0;
-        wh_Timeout_Start(ctx);
+        wh_Timeout_Start(timeout);
     }
     /* Subsequent expirations: let it expire normally */
     return WH_ERROR_OK;
@@ -252,10 +260,15 @@ static int whTest_TimeoutAesCbcOverride(void)
     }};
 
     /* Client configuration with timeout and override callback */
-    whTimeoutConfig timeoutCfg = {
-        .timeoutUs = 1,
-        .expiredCb = _timeoutOverrideCb,
-        .cbCtx     = &cb_count,
+    posixTimeoutContext posixCtx                         = {0};
+    posixTimeoutConfig posixCfg                         = {.timeoutUs = 1};
+    whTimeoutCb        timeoutCbTable                   = POSIX_TIMEOUT_CB;
+    whTimeoutConfig    timeoutCfg                       = {
+                          .cb         = &timeoutCbTable,
+                          .context    = &posixCtx,
+                          .config     = &posixCfg,
+                          .expiredCb  = _timeoutOverrideCb,
+                          .expiredCtx = &cb_count,
     };
 
     whTransportClientCb         tccb[1]    = {WH_TRANSPORT_MEM_CLIENT_CB};
@@ -378,32 +391,38 @@ static int whTest_TimeoutAesCbcOverride(void)
 int whTest_Timeout(void)
 {
     WH_TEST_PRINT("Testing timeout...\n");
-    int             cb_count = 0;
-    whTimeoutConfig cfg;
-    whTimeoutCtx    timeout[1];
-
-    cfg.timeoutUs = 1;
-    cfg.expiredCb = whTest_TimeoutCb;
-    cfg.cbCtx     = &cb_count;
+    int                cb_count = 0;
+    posixTimeoutContext posixCtx = {0};
+    posixTimeoutConfig posixCfg = {.timeoutUs = 1};
+    whTimeoutCb        timeoutCbTable = POSIX_TIMEOUT_CB;
+    whTimeoutConfig    cfg = {
+        .cb         = &timeoutCbTable,
+        .context    = &posixCtx,
+        .config     = &posixCfg,
+        .expiredCb  = whTest_TimeoutCb,
+        .expiredCtx = &cb_count,
+    };
+    whTimeout timeout[1];
 
     wh_Timeout_Init(timeout, &cfg);
-    WH_TEST_ASSERT_RETURN(timeout->startUs == 0);
-    WH_TEST_ASSERT_RETURN(timeout->timeoutUs == cfg.timeoutUs);
+    WH_TEST_ASSERT_RETURN(posixCtx.startUs == 0);
+    WH_TEST_ASSERT_RETURN(posixCtx.timeoutUs == posixCfg.timeoutUs);
     WH_TEST_ASSERT_RETURN(timeout->expiredCb == cfg.expiredCb);
-    WH_TEST_ASSERT_RETURN(timeout->cbCtx == cfg.cbCtx);
+    WH_TEST_ASSERT_RETURN(timeout->expiredCtx == cfg.expiredCtx);
 
     wh_Timeout_Start(timeout);
-    WH_TEST_ASSERT_RETURN(timeout->timeoutUs > 0);
+    WH_TEST_ASSERT_RETURN(posixCtx.started == 1);
 
     wh_Timeout_Stop(timeout);
-    WH_TEST_ASSERT_RETURN(timeout->startUs == 0);
-    WH_TEST_ASSERT_RETURN(timeout->timeoutUs == 0);
+    WH_TEST_ASSERT_RETURN(posixCtx.startUs == 0);
+    WH_TEST_ASSERT_RETURN(posixCtx.started == 0);
 
-    /* No expiration when disabled */
+    /* No expiration when stopped */
     WH_TEST_ASSERT_RETURN(wh_Timeout_Expired(timeout) == 0);
 
     /* Test expired callback fires and increments counter */
     cb_count = 0;
+    memset(&posixCtx, 0, sizeof(posixCtx));
     wh_Timeout_Init(timeout, &cfg);
     wh_Timeout_Start(timeout);
     /* timeoutUs is 1 us, so spin until expired */
@@ -411,11 +430,22 @@ int whTest_Timeout(void)
         ;
     WH_TEST_ASSERT_RETURN(cb_count > 0);
 
+    wh_Timeout_Cleanup(timeout);
+
+    /* Test no-op mode (NULL config = timeout disabled, never expires) */
+    wh_Timeout_Init(timeout, NULL);
+    WH_TEST_ASSERT_RETURN(wh_Timeout_Start(timeout) == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(wh_Timeout_Expired(timeout) == 0);
+    WH_TEST_ASSERT_RETURN(wh_Timeout_Stop(timeout) == WH_ERROR_OK);
+    wh_Timeout_Cleanup(timeout);
+
+    /* Test bad arguments */
     WH_TEST_ASSERT_RETURN(wh_Timeout_Init(0, 0) == WH_ERROR_BADARGS);
     WH_TEST_ASSERT_RETURN(wh_Timeout_Set(0, 0) == WH_ERROR_BADARGS);
     WH_TEST_ASSERT_RETURN(wh_Timeout_Start(0) == WH_ERROR_BADARGS);
     WH_TEST_ASSERT_RETURN(wh_Timeout_Stop(0) == WH_ERROR_BADARGS);
     WH_TEST_ASSERT_RETURN(wh_Timeout_Expired(0) == 0);
+    WH_TEST_ASSERT_RETURN(wh_Timeout_Cleanup(0) == WH_ERROR_BADARGS);
 
 #if !defined(WOLFHSM_CFG_NO_CRYPTO) && defined(HAVE_AES_CBC)
     WH_TEST_RETURN_ON_FAIL(whTest_TimeoutAesCbc());
