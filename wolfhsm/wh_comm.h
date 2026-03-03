@@ -45,6 +45,10 @@
 
 #include <stdint.h>  /* For sized ints */
 
+#ifdef WOLFHSM_CFG_ENABLE_TIMEOUT
+#include "wolfhsm/wh_timeout.h"
+#endif
+
 /** Packet content types */
 /* Request/response packets are composed of a single fixed-length header
  * (whCommHeader) followed immediately by variable-length data between 0 and
@@ -160,6 +164,9 @@ typedef struct {
     whCommSetConnectedCb connect_cb;
     uint8_t client_id;
     uint8_t WH_PAD[7];
+#ifdef WOLFHSM_CFG_ENABLE_TIMEOUT
+    whTimeoutConfig* respTimeoutConfig;
+#endif
 } whCommClientConfig;
 
 /* Context structure for a client.  Note the client context will track the
@@ -180,6 +187,9 @@ typedef struct {
     uint8_t client_id;
     uint8_t server_id;
     uint8_t WH_PAD[4];
+#ifdef WOLFHSM_CFG_ENABLE_TIMEOUT
+    whTimeout respTimeout;
+#endif
 } whCommClient;
 
 
