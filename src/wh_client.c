@@ -1321,7 +1321,7 @@ int wh_Client_KeyCacheDmaRequest(whClientContext* c, uint32_t flags,
     int                                ret;
     whMessageKeystore_CacheDmaRequest* req = NULL;
     uintptr_t                          keyAddrPtr = 0;
-    uint16_t                           capSz = 0;
+    uint16_t                           capSz      = 0;
 
     if (c == NULL || (labelSz > 0 && label == NULL)) {
         return WH_ERROR_BADARGS;
@@ -1344,7 +1344,7 @@ int wh_Client_KeyCacheDmaRequest(whClientContext* c, uint32_t flags,
     req->key.addr = keyAddrPtr;
 
     /* Copy label if provided, truncate if necessary */
-    if (labelSz > 0 && label != NULL)  {
+    if (labelSz > 0 && label != NULL) {
         capSz = (labelSz > WH_NVM_LABEL_LEN) ? WH_NVM_LABEL_LEN : labelSz;
         req->labelSz = capSz;
         memcpy(req->label, label, capSz);

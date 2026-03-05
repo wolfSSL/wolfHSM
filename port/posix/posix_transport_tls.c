@@ -207,11 +207,12 @@ int posixTransportTls_SendRequest(void* context, uint16_t size,
         if (ctx->ssl == NULL) {
             int fd;
 
-            if (posixTransportTcp_GetConnectFd(
-                    (void*)&ctx->tcpCtx, &fd) != WH_ERROR_OK) {
+            if (posixTransportTcp_GetConnectFd((void*)&ctx->tcpCtx, &fd) !=
+                WH_ERROR_OK) {
                 return WH_ERROR_NOTREADY;
             }
-            ctx->connect_fd_p1 = fd + 1; /* follow +1 convetions, 0 is invalid */
+            ctx->connect_fd_p1 =
+                fd + 1; /* follow +1 convetions, 0 is invalid */
 
             ctx->ssl = wolfSSL_new(ctx->ssl_ctx);
             if (!ctx->ssl) {
