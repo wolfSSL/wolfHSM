@@ -94,11 +94,11 @@ static int _customServerCb(whServerContext*                 server,
                            const whMessageCustomCb_Request* req,
                            whMessageCustomCb_Response*      resp)
 {
-    (void)server;
-
     uint8_t* serverPtr = NULL;
     uint8_t* clientPtr = NULL;
     size_t   copySz    = 0;
+
+    (void)server;
 
     if (req->type == WH_MESSAGE_CUSTOM_CB_TYPE_DMA64) {
         clientPtr = (uint8_t*)((uintptr_t)req->data.dma64.client_addr);
@@ -206,13 +206,13 @@ static int _customServerDmaCb(struct whServerContext_t* server,
                               size_t len, whServerDmaOper oper,
                               whServerDmaFlags flags)
 {
-    (void)server;
-    (void)flags;
-
     /* remapped "client" address, a.k.a. arbitrary "server" buffer */
     void* srvTmpBuf =
         (void*)(clientAddr + (offsetof(TestMemory, srvRemapBufAllow) -
                               offsetof(TestMemory, cliBuf)));
+
+    (void)server;
+    (void)flags;
 
     /* This DMA callback simulates the remapping of client addresses by simply
      * copying the data between the client address and the "remapped" server
@@ -252,10 +252,9 @@ static int _customServerDmaCb(struct whServerContext_t* server,
     defined(WOLFHSM_CFG_ENABLE_SERVER)
 static int _testDma(whServerContext* server, whClientContext* client)
 {
-    (void)client;
-
     int        rc      = 0;
     TestMemory testMem = {0};
+    uint8_t    tmp[sizeof(testMem.srvRemapBufAllow)];
 
     const whServerDmaAddrAllowList allowList = {
         .readList =
@@ -269,6 +268,8 @@ static int _testDma(whServerContext* server, whClientContext* client)
                 {&testMem.srvRemapBufAllow, sizeof(testMem.srvRemapBufAllow)},
             },
     };
+
+    (void)client;
 
     /* Register a custom DMA callback */
     WH_TEST_RETURN_ON_FAIL(wh_Server_DmaRegisterCb(server, _customServerDmaCb));
@@ -330,7 +331,6 @@ static int _testDma(whServerContext* server, whClientContext* client)
 
     /* custom DMA callback uses the tmp server buffer for input data and
      * should set it to a known pattern on exit */
-    uint8_t tmp[sizeof(testMem.srvRemapBufAllow)];
     memset(tmp, TEST_MEM_UNMAPPED_BYTE, sizeof(tmp));
     WH_TEST_ASSERT_RETURN(0 == memcmp(testMem.srvRemapBufAllow, tmp,
                                       sizeof(testMem.srvRemapBufAllow)));
@@ -619,9 +619,6 @@ int whTest_ClientServerSequential(whTestNvmBackendType nvmType)
     whNvmConfig           n_conf[1] = {0};
     whNvmContext nvm[1]    = {{0}};
 
-    WH_TEST_RETURN_ON_FAIL(
-        whTest_NvmCfgBackend(nvmType, &nvm_setup, n_conf, fc_conf, fc, fcb));
-
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     whServerCryptoContext crypto[1] = {{
         .devId = INVALID_DEVID,
@@ -638,33 +635,6 @@ int whTest_ClientServerSequential(whTestNvmBackendType nvmType)
     whServerContext server[1] = {0};
 
     whCommConnected server_connected = WH_COMM_DISCONNECTED;
-
-    /* Expose the server context to our client connect callback */
-    clientServerSequentialTestServerCtx = server;
-
-#ifndef WOLFHSM_CFG_NO_CRYPTO
-    WH_TEST_RETURN_ON_FAIL(wolfCrypt_Init());
-    WH_TEST_RETURN_ON_FAIL(wc_InitRng_ex(crypto->rng, NULL, crypto->devId));
-#endif
-    WH_TEST_RETURN_ON_FAIL(wh_Nvm_Init(nvm, n_conf));
-
-    /* Server API should return NOTREADY until the server is connected */
-    WH_TEST_RETURN_ON_FAIL(wh_Server_GetConnected(server, &server_connected));
-    WH_TEST_ASSERT_RETURN(WH_COMM_DISCONNECTED == server_connected);
-    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTREADY ==
-                          wh_Server_HandleRequestMessage(server));
-
-
-    /* Init client and server contexts. NOTE: in this test the server MUST be
-    initialized before the client, as the client init function triggers the
-    server "connect" via the connect callback, and this will be overwritten (set
-    to zero) on server init */
-    WH_TEST_RETURN_ON_FAIL(wh_Server_Init(server, s_conf));
-    WH_TEST_RETURN_ON_FAIL(wh_Client_Init(client, c_conf));
-
-    /* Ensure server is now "connected" */
-    WH_TEST_RETURN_ON_FAIL(wh_Server_GetConnected(server, &server_connected));
-    WH_TEST_ASSERT_RETURN(WH_COMM_CONNECTED == server_connected);
 
     int      counter                  = 1;
     char     recv_buffer[WOLFHSM_CFG_COMM_DATA_LEN] = {0};
@@ -695,6 +665,41 @@ int whTest_ClientServerSequential(whTestNvmBackendType nvmType)
     uint32_t boot_state = 0;
     uint32_t lifecycle_state = 0;
     uint32_t nvm_state = 0;
+
+    whNvmAccess list_access = WH_NVM_ACCESS_ANY;
+    whNvmFlags  list_flags  = WH_NVM_FLAGS_NONE;
+    whNvmId     list_id     = 0;
+    whNvmId     list_count  = 0;
+
+    /* Expose the server context to our client connect callback */
+    clientServerSequentialTestServerCtx = server;
+
+    WH_TEST_RETURN_ON_FAIL(
+        whTest_NvmCfgBackend(nvmType, &nvm_setup, n_conf, fc_conf, fc, fcb));
+
+#ifndef WOLFHSM_CFG_NO_CRYPTO
+    WH_TEST_RETURN_ON_FAIL(wolfCrypt_Init());
+    WH_TEST_RETURN_ON_FAIL(wc_InitRng_ex(crypto->rng, NULL, crypto->devId));
+#endif
+    WH_TEST_RETURN_ON_FAIL(wh_Nvm_Init(nvm, n_conf));
+
+    /* Server API should return NOTREADY until the server is connected */
+    WH_TEST_RETURN_ON_FAIL(wh_Server_GetConnected(server, &server_connected));
+    WH_TEST_ASSERT_RETURN(WH_COMM_DISCONNECTED == server_connected);
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTREADY ==
+                          wh_Server_HandleRequestMessage(server));
+
+
+    /* Init client and server contexts. NOTE: in this test the server MUST be
+    initialized before the client, as the client init function triggers the
+    server "connect" via the connect callback, and this will be overwritten (set
+    to zero) on server init */
+    WH_TEST_RETURN_ON_FAIL(wh_Server_Init(server, s_conf));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_Init(client, c_conf));
+
+    /* Ensure server is now "connected" */
+    WH_TEST_RETURN_ON_FAIL(wh_Server_GetConnected(server, &server_connected));
+    WH_TEST_ASSERT_RETURN(WH_COMM_CONNECTED == server_connected);
 
     /* Check that the server side is ready to recv */
     WH_TEST_ASSERT_RETURN(WH_ERROR_NOTREADY ==
@@ -750,7 +755,7 @@ int whTest_ClientServerSequential(whTestNvmBackendType nvmType)
         /* Prepare echo test */
         send_len =
             snprintf(send_buffer, sizeof(send_buffer), "Request:%u", counter);
-        snprintf(recv_buffer, sizeof(recv_buffer), "NOTHING RECEIVED");
+        (void)snprintf(recv_buffer, sizeof(recv_buffer), "NOTHING RECEIVED");
         recv_len = 0;
 
         WH_TEST_RETURN_ON_FAIL(
@@ -891,10 +896,6 @@ int whTest_ClientServerSequential(whTestNvmBackendType nvmType)
     /* Perform out-of-bounds read tests on first object written */
     WH_TEST_RETURN_ON_FAIL(_testOutOfBoundsNvmReads(client, server, 20));
 
-    whNvmAccess list_access = WH_NVM_ACCESS_ANY;
-    whNvmFlags  list_flags  = WH_NVM_FLAGS_NONE;
-    whNvmId     list_id     = 0;
-    whNvmId     list_count  = 0;
     do {
         WH_TEST_RETURN_ON_FAIL(
             wh_Client_NvmListRequest(client, list_access, list_flags, list_id));
@@ -1140,8 +1141,6 @@ int whTest_ClientServerClientConfig(whClientConfig* clientCfg)
     int ret = 0;
     whClientContext client[1] = {0};
 
-    WH_TEST_RETURN_ON_FAIL(wh_Client_Init(client, clientCfg));
-
     int counter = 1;
     char recv_buffer[WOLFHSM_CFG_COMM_DATA_LEN] = {0};
     char send_buffer[WOLFHSM_CFG_COMM_DATA_LEN] = {0};
@@ -1156,6 +1155,13 @@ int whTest_ClientServerClientConfig(whClientConfig* clientCfg)
     whNvmId avail_objects = 0;
     whNvmId reclaim_objects = 0;
 
+    whNvmAccess list_access = WH_NVM_ACCESS_ANY;
+    whNvmFlags  list_flags  = WH_NVM_FLAGS_NONE;
+    whNvmId     list_id     = 0;
+    whNvmId     list_count  = 0;
+
+    WH_TEST_RETURN_ON_FAIL(wh_Client_Init(client, clientCfg));
+
     /* Init client/server comms */
     WH_TEST_RETURN_ON_FAIL(wh_Client_CommInit(client, &client_id, &server_id));
     WH_TEST_ASSERT_RETURN(client_id == client->comm->client_id);
@@ -1166,7 +1172,7 @@ int whTest_ClientServerClientConfig(whClientConfig* clientCfg)
         /* Prepare echo test */
         send_len =
             snprintf(send_buffer, sizeof(send_buffer), "Request:%u", counter);
-        snprintf(recv_buffer, sizeof(recv_buffer), "NOTHING RECEIVED");
+        (void)snprintf(recv_buffer, sizeof(recv_buffer), "NOTHING RECEIVED");
         recv_len = 0;
 
         WH_TEST_RETURN_ON_FAIL(ret = wh_Client_Echo(client, send_len, send_buffer, &recv_len, recv_buffer));
@@ -1280,10 +1286,6 @@ int whTest_ClientServerClientConfig(whClientConfig* clientCfg)
         WH_TEST_ASSERT_RETURN(0 == memcmp(send_buffer, recv_buffer, len));
     }
 
-    whNvmAccess list_access = WH_NVM_ACCESS_ANY;
-    whNvmFlags  list_flags  = WH_NVM_FLAGS_NONE;
-    whNvmId     list_id     = 0;
-    whNvmId     list_count  = 0;
     do {
         WH_TEST_RETURN_ON_FAIL(
             ret = wh_Client_NvmList(client, list_access, list_flags, list_id,
@@ -1548,13 +1550,11 @@ static void _whClientServerThreadTest(whClientConfig* c_conf,
         rc = pthread_create(&cthread, NULL, _whClientTask, c_conf);
         if (rc == 0) {
             /* All good. Block on joining */
-
-            pthread_join(cthread, &retval);
-            pthread_cancel(sthread);
+            (void)pthread_join(cthread, &retval);
+            (void)pthread_cancel(sthread);
         } else {
             /* Cancel the server thread */
-            pthread_cancel(sthread);
-
+            (void)pthread_cancel(sthread);
         }
     }
 }
@@ -1608,9 +1608,6 @@ static int wh_ClientServer_MemThreadTest(whTestNvmBackendType nvmType)
     whNvmConfig           n_conf[1] = {0};
     whNvmContext          nvm[1]    = {{0}};
 
-    WH_TEST_RETURN_ON_FAIL(
-        whTest_NvmCfgBackend(nvmType, &nvm_setup, n_conf, fc_conf, fc, fcb));
-
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     /* Crypto context */
     whServerCryptoContext crypto[1] = {{
@@ -1627,6 +1624,9 @@ static int wh_ClientServer_MemThreadTest(whTestNvmBackendType nvmType)
         .devId  = INVALID_DEVID,
 #endif
     }};
+
+    WH_TEST_RETURN_ON_FAIL(
+        whTest_NvmCfgBackend(nvmType, &nvm_setup, n_conf, fc_conf, fc, fcb));
 
     WH_TEST_RETURN_ON_FAIL(wh_Nvm_Init(nvm, n_conf));
 
@@ -1693,9 +1693,6 @@ static int wh_ClientServer_PosixMemMapThreadTest(whTestNvmBackendType nvmType)
     whNvmConfig           n_conf[1] = {0};
     whNvmContext nvm[1] = {{0}};
 
-    WH_TEST_RETURN_ON_FAIL(
-        whTest_NvmCfgBackend(nvmType, &nvm_setup, n_conf, fc_conf, fc, fcb));
-
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     /* Crypto context */
     whServerCryptoContext crypto[1] = {{
@@ -1710,6 +1707,9 @@ static int wh_ClientServer_PosixMemMapThreadTest(whTestNvmBackendType nvmType)
         .crypto = crypto,
 #endif
     }};
+
+    WH_TEST_RETURN_ON_FAIL(
+        whTest_NvmCfgBackend(nvmType, &nvm_setup, n_conf, fc_conf, fc, fcb));
 
     WH_TEST_RETURN_ON_FAIL(wh_Nvm_Init(nvm, n_conf));
 

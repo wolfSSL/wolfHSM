@@ -120,8 +120,6 @@ static int whTest_ShowNvmAvailable(whClientContext* ctx)
 #ifdef WOLFHSM_CFG_ENABLE_CLIENT
 static int whTest_CryptoRng(whClientContext* ctx, int devId, WC_RNG* rng)
 {
-    (void)ctx; /* Unused */
-
 #define WH_TEST_RNG_LIL 7
 #define WH_TEST_RNG_MED 1024
 #define WH_TEST_RNG_BIG (WOLFHSM_CFG_COMM_DATA_LEN * 2)
@@ -129,6 +127,8 @@ static int whTest_CryptoRng(whClientContext* ctx, int devId, WC_RNG* rng)
     uint8_t lil[WH_TEST_RNG_LIL];
     uint8_t med[WH_TEST_RNG_MED];
     uint8_t big[WH_TEST_RNG_BIG];
+
+    (void)ctx; /* Unused */
 
     ret = wc_InitRng_ex(rng, NULL, devId);
     if (ret != 0) {
@@ -356,9 +356,9 @@ static int whTest_CryptoEcc(whClientContext* ctx, int devId, WC_RNG* rng)
                         }
                     }
                     if (ret == 0) {
+                        word32 sigLen = sizeof(sig);
                         /* Use the shared secret as a random hash */
                         memcpy(hash, shared_ba, sizeof(hash));
-                        word32 sigLen = sizeof(sig);
                         ret = wc_ecc_sign_hash((void*)hash, sizeof(hash),
                                                (void*)sig, &sigLen, rng,
                                                bobKey);
@@ -457,8 +457,8 @@ static int whTest_CryptoEcc(whClientContext* ctx, int devId, WC_RNG* rng)
                 }
                 /* Test ECDSA sign/verify with exported keys */
                 if (ret == 0) {
-                    memcpy(hash, shared_ba, sizeof(hash));
                     word32 sigLen = sizeof(sig);
+                    memcpy(hash, shared_ba, sizeof(hash));
                     ret           = wc_ecc_sign_hash((void*)hash, sizeof(hash),
                                                      (void*)sig, &sigLen, rng, bobKey);
                     if (ret != 0) {
@@ -590,8 +590,8 @@ static int whTest_CryptoEcc(whClientContext* ctx, int devId, WC_RNG* rng)
                 }
                 /* Test ECDSA sign/verify with cached key */
                 if (ret == 0) {
-                    memcpy(hash, shared_ba, sizeof(hash));
                     word32 sigLen = sizeof(sig);
+                    memcpy(hash, shared_ba, sizeof(hash));
                     ret           = wc_ecc_sign_hash((void*)hash, sizeof(hash),
                                                      (void*)sig, &sigLen, rng, bobKey);
                     if (ret != 0) {
@@ -1016,8 +1016,6 @@ static int whTest_Ed25519ImportToServer(whClientContext* ctx, int devId,
 static int whTest_CryptoEd25519Inline(whClientContext* ctx, int devId,
                                       WC_RNG* rng)
 {
-    (void)ctx;
-
     int          ret       = 0;
     ed25519_key  key[1]    = {0};
     ed25519_key  pubKey[1] = {0};
@@ -1028,6 +1026,8 @@ static int whTest_CryptoEd25519Inline(whClientContext* ctx, int devId,
     const word32 msgSz    = (word32)sizeof(msg);
     byte         pubKeyRaw[ED25519_PUB_KEY_SIZE];
     word32       pubKeySize = sizeof(pubKeyRaw);
+
+    (void)ctx;
 
     ret = wc_ed25519_init_ex(key, NULL, devId);
     if (ret != 0) {
@@ -1479,7 +1479,6 @@ static int whTest_CryptoCurve25519(whClientContext* ctx, int devId, WC_RNG* rng)
 #ifndef NO_SHA256
 static int whTest_CryptoSha256(whClientContext* ctx, int devId, WC_RNG* rng)
 {
-    (void)ctx; (void)rng; /* Not currently used */
     int ret = WH_ERROR_OK;
     wc_Sha256 sha256[1];
     uint8_t   out[WC_SHA256_DIGEST_SIZE];
@@ -1498,6 +1497,8 @@ static int whTest_CryptoSha256(whClientContext* ctx, int devId, WC_RNG* rng)
         0x7b, 0x54, 0x45, 0x86, 0xb3, 0x51, 0x43, 0x4e, 0xf6, 0x83, 0xdb,
         0x78, 0x1d, 0x94, 0xd6, 0xb0, 0x36, 0x9b, 0x36, 0x56, 0x93, 0x0e,
         0xf4, 0x47, 0x9b, 0xae, 0xff, 0xfa, 0x1f, 0x36, 0x38, 0x64};
+
+    (void)ctx; (void)rng; /* Not currently used */
 
     /* Initialize SHA256 structure */
     ret = wc_InitSha256_ex(sha256, NULL, devId);
@@ -1593,8 +1594,6 @@ static int whTest_CryptoSha256(whClientContext* ctx, int devId, WC_RNG* rng)
 #ifdef WOLFSSL_SHA224
 static int whTest_CryptoSha224(whClientContext* ctx, int devId, WC_RNG* rng)
 {
-    (void)ctx;
-    (void)rng; /* Not currently used */
     int       ret = WH_ERROR_OK;
     wc_Sha224 sha224[1];
     uint8_t   out[WC_SHA224_DIGEST_SIZE];
@@ -1612,6 +1611,9 @@ static int whTest_CryptoSha224(whClientContext* ctx, int devId, WC_RNG* rng)
         0xb4, 0x22, 0xdc, 0xe8, 0xf9, 0x48, 0x8c, 0x4b, 0xc3, 0xef,
         0x8e, 0x7d, 0xbe, 0x11, 0xc7, 0x21, 0xba, 0x38, 0xcb, 0x61,
         0xf5, 0x6b, 0x7d, 0xc5, 0x30, 0xa7, 0x9c, 0xfd};
+
+    (void)ctx; (void)rng; /* Not currently used */
+
     /* Initialize SHA224 structure */
     ret = wc_InitSha224_ex(sha224, NULL, devId);
     if (ret != 0) {
@@ -1709,8 +1711,6 @@ static int whTest_CryptoSha224(whClientContext* ctx, int devId, WC_RNG* rng)
 #ifdef WOLFSSL_SHA384
 static int whTest_CryptoSha384(whClientContext* ctx, int devId, WC_RNG* rng)
 {
-    (void)ctx;
-    (void)rng; /* Not currently used */
     int       ret = WH_ERROR_OK;
     wc_Sha384 sha384[1];
     uint8_t   out[WC_SHA384_DIGEST_SIZE];
@@ -1733,6 +1733,9 @@ static int whTest_CryptoSha384(whClientContext* ctx, int devId, WC_RNG* rng)
         0x68, 0x49, 0x17, 0xdb, 0x8d, 0x3a, 0x78, 0xab, 0x22, 0xf3, 0xa1, 0x51,
         0x70, 0xae, 0x26, 0x80, 0x06, 0x25, 0x99, 0xa5, 0x3d, 0x0f, 0xc3, 0x7a,
         0xbd, 0xe1, 0xe2, 0xc6, 0x07, 0xdf, 0xd9, 0x6a, 0x89, 0xa8, 0x2b, 0x99};
+
+    (void)ctx; (void)rng; /* Not currently used */
+
     /* Initialize SHA384 structure */
     ret = wc_InitSha384_ex(sha384, NULL, devId);
     if (ret != 0) {
@@ -1830,8 +1833,6 @@ static int whTest_CryptoSha384(whClientContext* ctx, int devId, WC_RNG* rng)
 #ifdef WOLFSSL_SHA512
 static int whTest_CryptoSha512(whClientContext* ctx, int devId, WC_RNG* rng)
 {
-    (void)ctx;
-    (void)rng; /* Not currently used */
     int       ret = WH_ERROR_OK;
     wc_Sha512 sha512[1];
     uint8_t   out[WC_SHA512_DIGEST_SIZE];
@@ -1858,6 +1859,9 @@ static int whTest_CryptoSha512(whClientContext* ctx, int devId, WC_RNG* rng)
         0xf5, 0x27, 0x9c, 0xe7, 0x80, 0x99, 0x19, 0x9b, 0x91, 0xb3, 0x83,
         0x7f, 0x70, 0xaf, 0x8e, 0x02, 0xd9, 0x6d, 0x20, 0xab, 0x1e, 0x72,
         0xde, 0x7a, 0x25, 0xa3, 0xe5, 0x60, 0x9e, 0xb0, 0x43};
+
+    (void)ctx; (void)rng; /* Not currently used */
+
     /* Initialize SHA512 structure */
     ret = wc_InitSha512_ex(sha512, NULL, devId);
     if (ret != 0) {
@@ -1955,8 +1959,6 @@ static int whTest_CryptoSha512(whClientContext* ctx, int devId, WC_RNG* rng)
 #ifdef HAVE_HKDF
 static int whTest_CryptoHkdf(whClientContext* ctx, int devId, WC_RNG* rng)
 {
-    (void)rng; /* Not currently used */
-
     int ret = WH_ERROR_OK;
 
 #define WH_TEST_HKDF_IKM_SIZE 22
@@ -1983,6 +1985,8 @@ static int whTest_CryptoHkdf(whClientContext* ctx, int devId, WC_RNG* rng)
     uint8_t okm2[WH_TEST_HKDF_OKM_SIZE];
     whKeyId key_id  = WH_KEYID_ERASED;
     uint8_t label[] = "HKDF Test Label";
+
+    (void)rng; /* Not currently used */
 
     /* Test 1: Direct wc_HKDF call (uses crypto callback) */
     memset(okm, 0, sizeof(okm));
@@ -2164,8 +2168,6 @@ static int whTest_CryptoHkdf(whClientContext* ctx, int devId, WC_RNG* rng)
 
 static int whTest_CryptoCmacKdf(whClientContext* ctx, int devId, WC_RNG* rng)
 {
-    (void)rng;
-
     int ret = WH_ERROR_OK;
 
     /* Test vectors based on wolfSSL CMAC KDF implementation test vectors for
@@ -2197,6 +2199,10 @@ static int whTest_CryptoCmacKdf(whClientContext* ctx, int devId, WC_RNG* rng)
     uint16_t export_len      = WH_TEST_CMAC_KDF_OUT_SIZE;
     whKeyId  key_id          = WH_KEYID_ERASED;
     uint8_t  keyLabel[]      = "CMAC KDF Key";
+    whKeyId  saltKeyId       = WH_KEYID_ERASED;
+    whKeyId  zKeyId          = WH_KEYID_ERASED;
+
+    (void)rng;
 
     /* 1. Direct wolfCrypt API call that routes through the callback */
     memset(out, 0, sizeof(out));
@@ -2267,8 +2273,6 @@ static int whTest_CryptoCmacKdf(whClientContext* ctx, int devId, WC_RNG* rng)
     }
 
     /* 4. Use cached salt and Z inputs */
-    whKeyId saltKeyId = WH_KEYID_ERASED;
-    whKeyId zKeyId    = WH_KEYID_ERASED;
     ret = wh_Client_KeyCache(ctx, WH_NVM_FLAGS_USAGE_DERIVE, NULL, 0, salt,
                              WH_TEST_CMAC_KDF_SALT_SIZE, &saltKeyId);
     if (ret != 0) {
@@ -2409,8 +2413,6 @@ static int whTest_CacheExportKeyDma(whClientContext* ctx, whKeyId* inout_key_id,
 
 static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
 {
-    (void)devId; (void)rng; /* Unused */
-
 #define WH_TEST_KEYCACHE_KEYSIZE 16
     int ret;
     int i;
@@ -2420,6 +2422,8 @@ static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
     uint8_t keyOut[WH_TEST_KEYCACHE_KEYSIZE] = {0};
     uint8_t labelIn[WH_NVM_LABEL_LEN] = "KeyCache Test Label";
     uint8_t labelOut[WH_NVM_LABEL_LEN] = {0};
+
+    (void)devId; (void)rng; /* Unused */
 
     /* Randomize inputs */
     ret = wc_RNG_GenerateBlock(rng, key, sizeof(key));
@@ -2973,9 +2977,6 @@ static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
 static int whTest_NonExportableKeystore(whClientContext* ctx, int devId,
                                         WC_RNG* rng)
 {
-    (void)devId;
-    (void)rng;
-
     int     ret                   = 0;
     whKeyId keyId                 = WH_KEYID_ERASED;
     uint8_t key[WH_TEST_KEYSTORE_TEST_SZ] = {
@@ -2986,6 +2987,8 @@ static int whTest_NonExportableKeystore(whClientContext* ctx, int devId,
     uint8_t  label[WH_NVM_LABEL_LEN]         = "NonExportableTestKey";
     uint8_t  exportedLabel[WH_NVM_LABEL_LEN] = {0};
     uint16_t exportedKeySize;
+
+    (void)devId; (void)rng;
 
     WH_TEST_PRINT("Testing non-exportable keystore enforcement...\n");
 
@@ -3128,6 +3131,13 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
     uint8_t plainOut[WH_TEST_AES_TEXTSIZE] = { 0 };
     whKeyId keyId = WH_KEYID_ERASED;
     uint8_t labelIn[WH_NVM_LABEL_LEN] = "AES Key Label";
+
+#ifdef HAVE_AESGCM
+#define WH_TEST_AES_AUTHSIZE 16
+#define WH_TEST_AES_TAGSIZE 16
+    uint8_t authIn[WH_TEST_AES_AUTHSIZE];
+    uint8_t authTag[WH_TEST_AES_TAGSIZE] = { 0 };
+#endif
 
     memset(plainIn, 0xAA, sizeof(plainIn));
 
@@ -3644,11 +3654,6 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
 #endif /* HAVE_AES_CBC */
 
 #ifdef HAVE_AESGCM
-#define WH_TEST_AES_AUTHSIZE 16
-#define WH_TEST_AES_TAGSIZE 16
-    uint8_t authIn[WH_TEST_AES_AUTHSIZE];
-    uint8_t authTag[WH_TEST_AES_TAGSIZE] = { 0 };
-
     /* Generate random auth */
     if (ret == 0){
         ret = wc_RNG_GenerateBlock(rng, authIn, sizeof(authIn));
@@ -3753,8 +3758,6 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
 /* Direct copy of wolfCrypt tests, but using cached keys local to HSM instead */
 static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
 {
-    (void)rng;
-
     int     ret = 0;
     Cmac    cmac[1];
     uint8_t tag[AES_BLOCK_SIZE] = {0};
@@ -3863,6 +3866,8 @@ static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
 #endif
     };
     const word32 numCases = sizeof(testCases) / sizeof(testCases[0]);
+
+    (void)rng;
 
     for (i = 0; i < numCases && ret == 0; i++) {
         const CmacTestCase* tc = &testCases[i];
@@ -4077,8 +4082,6 @@ static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
 static int whTestCrypto_MlDsaWolfCrypt(whClientContext* ctx, int devId,
                                        WC_RNG* rng)
 {
-    (void)ctx;
-
     int ret      = 0;
     int verified = 0;
 
@@ -4087,6 +4090,8 @@ static int whTestCrypto_MlDsaWolfCrypt(whClientContext* ctx, int devId,
     byte     msg[] = "Test message for ML DSA signing";
     byte     sig[DILITHIUM_ML_DSA_44_SIG_SIZE];
     word32   sigSz = sizeof(sig);
+
+    (void)ctx;
 
     /* Initialize key */
     ret = wc_MlDsaKey_Init(&key, NULL, devId);
@@ -4166,8 +4171,6 @@ static int whTestCrypto_MlDsaWolfCrypt(whClientContext* ctx, int devId,
 static int whTestCrypto_MlDsaDmaClient(whClientContext* ctx, int devId,
                                        WC_RNG* rng)
 {
-    (void)rng;
-
     int      ret = 0;
     MlDsaKey key[1];
     MlDsaKey imported_key[1];
@@ -4180,6 +4183,8 @@ static int whTestCrypto_MlDsaDmaClient(whClientContext* ctx, int devId,
     byte   key_der2[DILITHIUM_MAX_PRV_KEY_SIZE];
     word32 key_der1_len = sizeof(key_der1);
     word32 key_der2_len = sizeof(key_der2);
+
+    (void)rng;
 
     /* Initialize keys */
     ret = wc_MlDsaKey_Init(key, NULL, devId);
@@ -4336,8 +4341,6 @@ static int whTestCrypto_MlDsaDmaClient(whClientContext* ctx, int devId,
 int whTestCrypto_MlDsaVerifyOnlyDma(whClientContext* ctx, int devId,
                                     WC_RNG* rng)
 {
-    (void)rng;
-
     /* Vectors from wolfCrypt test vectors, but decoupled for isolated usage */
     const byte ml_dsa_44_pub_key[] = {
         0xd8, 0xac, 0xaf, 0xd8, 0x2e, 0x14, 0x23, 0x78, 0xf7, 0x0d, 0x9a, 0x04,
@@ -4702,6 +4705,9 @@ int whTestCrypto_MlDsaVerifyOnlyDma(whClientContext* ctx, int devId,
     MlDsaKey key[1];
     whNvmId  keyId    = WH_KEYID_ERASED;
     int      evictKey = 0;
+    int      i = 0;
+
+    (void)rng;
 
     /* Initialize keys */
     ret = wc_MlDsaKey_Init(key, NULL, devId);
@@ -4717,7 +4723,6 @@ int whTestCrypto_MlDsaVerifyOnlyDma(whClientContext* ctx, int devId,
     }
 
     /* make dummy msg */
-    int i = 0;
     for (i = 0; i < (int)sizeof(test_msg); i++) {
         test_msg[i] = (byte)i;
     }
@@ -5883,9 +5888,6 @@ static int wh_ClientServer_MemThreadTest(whTestNvmBackendType nvmType)
     whNvmConfig           n_conf[1] = {0};
     whNvmContext nvm[1] = {{0}};
 
-    WH_TEST_RETURN_ON_FAIL(
-        whTest_NvmCfgBackend(nvmType, &nvm_setup, n_conf, fc_conf, fc, fcb));
-
     /* Crypto context */
     whServerCryptoContext crypto[1] = {{
             .devId = INVALID_DEVID,
@@ -5898,6 +5900,9 @@ static int wh_ClientServer_MemThreadTest(whTestNvmBackendType nvmType)
         .crypto      = crypto,
         .devId       = INVALID_DEVID,
     }};
+
+    WH_TEST_RETURN_ON_FAIL(
+        whTest_NvmCfgBackend(nvmType, &nvm_setup, n_conf, fc_conf, fc, fcb));
 
     WH_TEST_RETURN_ON_FAIL(wh_Nvm_Init(nvm, n_conf));
 

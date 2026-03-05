@@ -54,79 +54,81 @@ static whLogLevel posixLogFile_StringToLevel(const char* str)
     return WH_LOG_LEVEL_INFO; /* Default */
 }
 
-int posixLogFile_Init(void* c, const void* cf)
+int posixLogFile_Init(void* context, const void* config)
 {
-    posixLogFileContext*      context = c;
-    const posixLogFileConfig* config  = cf;
-    int                       rc      = 0;
+    posixLogFileContext*      ctx = context;
+    const posixLogFileConfig* cfg = config;
+    int                       rc  = 0;
 
-    if ((context == NULL) || (config == NULL) || (config->filename == NULL)) {
+    if ((ctx == NULL) || (cfg == NULL) || (cfg->filename == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
     /* Initialize context */
-    memset(context, 0, sizeof(*context));
-    context->fd = -1;
+    memset(ctx, 0, sizeof(*ctx));
+    ctx->fd = -1;
 
     /* Initialize mutex */
-    rc = pthread_mutex_init(&context->mutex, NULL);
+    rc = pthread_mutex_init(&ctx->mutex, NULL);
     if (rc != 0) {
         return WH_ERROR_ABORTED;
     }
 
     /* Copy filename */
-    strncpy(context->filename, config->filename, sizeof(context->filename) - 1);
-    context->filename[sizeof(context->filename) - 1] = '\0';
+    strncpy(ctx->filename, cfg->filename, sizeof(ctx->filename) - 1);
+    ctx->filename[sizeof(ctx->filename) - 1] = '\0';
 
     /* Open log file for append/create */
-    context->fd =
-        open(context->filename, O_RDWR | O_CREAT | O_APPEND, S_IRUSR | S_IWUSR);
-    if (context->fd < 0) {
-        pthread_mutex_destroy(&context->mutex);
+    ctx->fd =
+        open(ctx->filename, O_RDWR | O_CREAT | O_APPEND, S_IRUSR | S_IWUSR);
+    if (ctx->fd < 0) {
+        (void)pthread_mutex_destroy(&ctx->mutex);
         return WH_ERROR_ABORTED;
     }
 
-    context->initialized = 1;
+    ctx->initialized = 1;
     return WH_ERROR_OK;
 }
 
-int posixLogFile_Cleanup(void* c)
+int posixLogFile_Cleanup(void* context)
 {
-    posixLogFileContext* context = c;
+    posixLogFileContext* ctx = context;
 
-    if (context == NULL) {
+    if (ctx == NULL) {
         return WH_ERROR_BADARGS;
     }
 
-    if (context->initialized) {
-        if (context->fd >= 0) {
-            close(context->fd);
-            context->fd = -1;
+    if (ctx->initialized) {
+        if (ctx->fd >= 0) {
+            close(ctx->fd);
+            ctx->fd = -1;
         }
-        pthread_mutex_destroy(&context->mutex);
-        context->initialized = 0;
+        (void)pthread_mutex_destroy(&ctx->mutex);
+        ctx->initialized = 0;
     }
 
     return WH_ERROR_OK;
 }
 
-int posixLogFile_AddEntry(void* c, const whLogEntry* entry)
+int posixLogFile_AddEntry(void* context, const whLogEntry* entry)
 {
-    posixLogFileContext* context = c;
+    posixLogFileContext* ctx = context;
     char                 buffer[1024];
     int                  len;
     ssize_t              bytes_written;
 
-    if ((context == NULL) || (entry == NULL)) {
+    if ((ctx == NULL) || (entry == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
-    if (!context->initialized || context->fd < 0) {
+    if (!ctx->initialized || ctx->fd < 0) {
         return WH_ERROR_ABORTED;
     }
 
     /* Lock mutex */
-    pthread_mutex_lock(&context->mutex);
+    if (pthread_mutex_lock(&ctx->mutex) != 0) {
+        return WH_ERROR_ABORTED;
+    }
 
     /* Format log entry: TIMESTAMP|LEVEL|FILE:LINE|FUNCTION|MESSAGE\n */
     len = snprintf(buffer, sizeof(buffer), "%llu|%s|%s:%u|%s|%.*s\n",
@@ -137,15 +139,15 @@ int posixLogFile_AddEntry(void* c, const whLogEntry* entry)
                    entry->msg);
 
     if (len < 0 || (size_t)len >= sizeof(buffer)) {
-        pthread_mutex_unlock(&context->mutex);
+        (void)pthread_mutex_unlock(&ctx->mutex);
         return WH_ERROR_ABORTED;
     }
 
     /* Write to file */
-    bytes_written = write(context->fd, buffer, len);
+    bytes_written = write(ctx->fd, buffer, len);
 
     /* Unlock mutex */
-    pthread_mutex_unlock(&context->mutex);
+    (void)pthread_mutex_unlock(&ctx->mutex);
 
     if (bytes_written != len) {
         return WH_ERROR_ABORTED;
@@ -154,19 +156,20 @@ int posixLogFile_AddEntry(void* c, const whLogEntry* entry)
     return WH_ERROR_OK;
 }
 
-int posixLogFile_Export(void* c, void* export_arg)
+int posixLogFile_Export(void* context, void* export_arg)
 {
-    posixLogFileContext* context = c;
+    posixLogFileContext* ctx = context;
     FILE*                out_fp  = (FILE*)export_arg;
     FILE*                in_fp   = NULL;
     char                 line[2048];
     int                  ret = 0;
+    int                  fd_dup = -1;
 
-    if (context == NULL) {
+    if (ctx == NULL) {
         return WH_ERROR_BADARGS;
     }
 
-    if (!context->initialized || context->fd < 0) {
+    if (!ctx->initialized || ctx->fd < 0) {
         return WH_ERROR_ABORTED;
     }
 
@@ -176,18 +179,20 @@ int posixLogFile_Export(void* c, void* export_arg)
     }
 
     /* Lock mutex */
-    pthread_mutex_lock(&context->mutex);
+    if (pthread_mutex_lock(&ctx->mutex) != 0) {
+        return WH_ERROR_ABORTED;
+    }
 
     /* Flush any pending writes */
-    if (fsync(context->fd) != 0) {
-        pthread_mutex_unlock(&context->mutex);
+    if (fsync(ctx->fd) != 0) {
+        (void)pthread_mutex_unlock(&ctx->mutex);
         return WH_ERROR_ABORTED;
     }
 
     /* Open file for reading (using fdopen with dup'd fd) */
-    int fd_dup = dup(context->fd);
+    fd_dup = dup(ctx->fd);
     if (fd_dup < 0) {
-        pthread_mutex_unlock(&context->mutex);
+        (void)pthread_mutex_unlock(&ctx->mutex);
         return WH_ERROR_ABORTED;
     }
 
@@ -197,7 +202,7 @@ int posixLogFile_Export(void* c, void* export_arg)
     in_fp = fdopen(fd_dup, "r");
     if (in_fp == NULL) {
         close(fd_dup);
-        pthread_mutex_unlock(&context->mutex);
+        (void)pthread_mutex_unlock(&ctx->mutex);
         return WH_ERROR_ABORTED;
     }
 
@@ -212,39 +217,43 @@ int posixLogFile_Export(void* c, void* export_arg)
     fclose(in_fp); /* Also closes fd_dup */
 
     /* Unlock mutex */
-    pthread_mutex_unlock(&context->mutex);
+    (void)pthread_mutex_unlock(&ctx->mutex);
 
     return ret;
 }
 
-int posixLogFile_Iterate(void* c, whLogIterateCb iterate_cb, void* iterate_arg)
+int posixLogFile_Iterate(void* context, whLogIterateCb iterate_cb,
+                         void* iterate_arg)
 {
-    posixLogFileContext* context = c;
+    posixLogFileContext* ctx = context;
     FILE*                fp      = NULL;
     char                 line[2048];
     int                  ret = 0;
+    int                  fd_dup = -1;
 
-    if ((context == NULL) || (iterate_cb == NULL)) {
+    if ((ctx == NULL) || (iterate_cb == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
-    if (!context->initialized || context->fd < 0) {
+    if (!ctx->initialized || ctx->fd < 0) {
         return WH_ERROR_ABORTED;
     }
 
     /* Lock mutex */
-    pthread_mutex_lock(&context->mutex);
+    if (pthread_mutex_lock(&ctx->mutex) != 0) {
+        return WH_ERROR_ABORTED;
+    }
 
     /* Flush any pending writes */
-    if (fsync(context->fd) != 0) {
-        pthread_mutex_unlock(&context->mutex);
+    if (fsync(ctx->fd) != 0) {
+        (void)pthread_mutex_unlock(&ctx->mutex);
         return WH_ERROR_ABORTED;
     }
 
     /* Open file for reading (using fdopen with dup'd fd) */
-    int fd_dup = dup(context->fd);
+    fd_dup = dup(ctx->fd);
     if (fd_dup < 0) {
-        pthread_mutex_unlock(&context->mutex);
+        (void)pthread_mutex_unlock(&ctx->mutex);
         return WH_ERROR_ABORTED;
     }
 
@@ -254,7 +263,7 @@ int posixLogFile_Iterate(void* c, whLogIterateCb iterate_cb, void* iterate_arg)
     fp = fdopen(fd_dup, "r");
     if (fp == NULL) {
         close(fd_dup);
-        pthread_mutex_unlock(&context->mutex);
+        (void)pthread_mutex_unlock(&ctx->mutex);
         return WH_ERROR_ABORTED;
     }
 
@@ -267,13 +276,14 @@ int posixLogFile_Iterate(void* c, whLogIterateCb iterate_cb, void* iterate_arg)
         char               msg_buf[WOLFHSM_CFG_LOG_MSG_MAX];
         unsigned long long timestamp;
         unsigned int       line_num;
+        int                parsed = 0;
 
         memset(&entry, 0, sizeof(entry));
 
         /* Parse: TIMESTAMP|LEVEL|FILE:LINE|FUNCTION|MESSAGE\n */
-        int parsed = sscanf(line, "%llu|%31[^|]|%255[^:]:%u|%255[^|]|%255[^\n]",
-                            &timestamp, level_str, file_buf, &line_num,
-                            func_buf, msg_buf);
+        parsed = sscanf(line, "%llu|%31[^|]|%255[^:]:%u|%255[^|]|%255[^\n]",
+                        &timestamp, level_str, file_buf, &line_num,
+                        func_buf, msg_buf);
 
         /* Minimum number of fields to parse is 5, msg is optional */
         if (parsed >= 5) {
@@ -300,41 +310,43 @@ int posixLogFile_Iterate(void* c, whLogIterateCb iterate_cb, void* iterate_arg)
     fclose(fp); /* Also closes fd_dup */
 
     /* Unlock mutex */
-    pthread_mutex_unlock(&context->mutex);
+    (void)pthread_mutex_unlock(&ctx->mutex);
 
     return ret;
 }
 
-int posixLogFile_Clear(void* c)
+int posixLogFile_Clear(void* context)
 {
-    posixLogFileContext* context = c;
+    posixLogFileContext* ctx = context;
     int                  ret     = 0;
 
-    if (context == NULL) {
+    if (ctx == NULL) {
         return WH_ERROR_BADARGS;
     }
 
-    if (!context->initialized || context->fd < 0) {
+    if (!ctx->initialized || ctx->fd < 0) {
         return WH_ERROR_ABORTED;
     }
 
     /* Lock mutex */
-    pthread_mutex_lock(&context->mutex);
+    if (pthread_mutex_lock(&ctx->mutex) != 0) {
+        return WH_ERROR_ABORTED;
+    }
 
     /* Truncate file to zero length */
-    if (ftruncate(context->fd, 0) != 0) {
+    if (ftruncate(ctx->fd, 0) != 0) {
         ret = WH_ERROR_ABORTED;
     }
 
     /* Seek to beginning */
     if (ret == 0) {
-        if (lseek(context->fd, 0, SEEK_SET) < 0) {
+        if (lseek(ctx->fd, 0, SEEK_SET) < 0) {
             ret = WH_ERROR_ABORTED;
         }
     }
 
     /* Unlock mutex */
-    pthread_mutex_unlock(&context->mutex);
+    (void)pthread_mutex_unlock(&ctx->mutex);
 
     return ret;
 }

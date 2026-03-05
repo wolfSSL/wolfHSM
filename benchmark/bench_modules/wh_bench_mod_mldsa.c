@@ -898,14 +898,15 @@ exit:
 static int _benchMlDsaKeyGen(whClientContext* client, whBenchOpContext* ctx,
                              int id, int securityLevel, int devId)
 {
-    (void)client;
-
     int      ret = 0;
     MlDsaKey key;
     WC_RNG   rng[1] = {0};
     int      i;
     int      initialized_rng = 0;
     int      initialized_key = 0;
+
+    (void)client;
+
 
     /* Initialize the RNG */
     ret = wc_InitRng_ex(rng, NULL, devId);

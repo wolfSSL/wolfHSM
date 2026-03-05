@@ -33,41 +33,41 @@
 
 #ifdef WOLFHSM_CFG_LOGGING
 
-int whLogPrintf_Init(void* c, const void* cf)
+int whLogPrintf_Init(void* context, const void* config)
 {
-    whLogPrintfContext*      context = (whLogPrintfContext*)c;
-    const whLogPrintfConfig* config  = (const whLogPrintfConfig*)cf;
+    whLogPrintfContext*      ctx = (whLogPrintfContext*)context;
+    const whLogPrintfConfig* cfg  = (const whLogPrintfConfig*)config;
 
-    if (context == NULL) {
+    if (ctx == NULL) {
         return WH_ERROR_BADARGS;
     }
 
     /* Initialize context */
-    memset(context, 0, sizeof(*context));
+    memset(ctx, 0, sizeof(*ctx));
 
     /* Copy config if provided, otherwise use defaults */
-    if (config != NULL) {
-        context->logIfNotDebug = config->logIfNotDebug;
+    if (cfg != NULL) {
+        ctx->logIfNotDebug = cfg->logIfNotDebug;
     }
     else {
-        context->logIfNotDebug = 0;
+        ctx->logIfNotDebug = 0;
     }
 
-    context->initialized = 1;
+    ctx->initialized = 1;
 
     return WH_ERROR_OK;
 }
 
 
-int whLogPrintf_AddEntry(void* c, const whLogEntry* entry)
+int whLogPrintf_AddEntry(void* context, const whLogEntry* entry)
 {
-    whLogPrintfContext* context = (whLogPrintfContext*)c;
+    whLogPrintfContext* ctx = (whLogPrintfContext*)context;
 
-    if ((context == NULL) || (entry == NULL)) {
+    if ((ctx == NULL) || (entry == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
-    if (!context->initialized) {
+    if (!ctx->initialized) {
         return WH_ERROR_ABORTED;
     }
 
@@ -76,7 +76,7 @@ int whLogPrintf_AddEntry(void* c, const whLogEntry* entry)
      * - If logIfNotDebug is false: only log if WOLFHSM_CFG_DEBUG is defined
      */
 #ifndef WOLFHSM_CFG_DEBUG
-    if (!context->logIfNotDebug) {
+    if (!ctx->logIfNotDebug) {
         return WH_ERROR_OK;
     }
 #endif

@@ -16,6 +16,7 @@
  * You should have received a copy of the GNU General Public License
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
+#include <string.h>
 #include "wh_bench_mod.h"
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_client.h"
@@ -384,10 +385,10 @@ int _benchRsaCrypt(whClientContext* client, whBenchOpContext* ctx, int id,
         goto exit;
     }
 
-    strcpy((char*)inBuf, inStr);
+    strncpy((char*)inBuf, inStr, sizeof(inBuf)-1);
 
     /* Do an initial encryption to get the size of the output */
-    encSz = ret = wc_RsaPublicEncrypt(inBuf, sizeof(inStr), outBuf,
+    encSz = ret = wc_RsaPublicEncrypt(inBuf, strlen(inStr), outBuf,
                                       sizeof(outBuf), rsa, rng);
     if (ret < 0) {
         WH_BENCH_PRINTF("Failed to wc_RsaPublicEncrypt %d\n", ret);
@@ -408,7 +409,7 @@ int _benchRsaCrypt(whClientContext* client, whBenchOpContext* ctx, int id,
 
         if (operation == RSA_PUBLIC_ENCRYPT) {
             benchStartRet = wh_Bench_StartOp(ctx, id);
-            opRet         = wc_RsaPublicEncrypt(inBuf, sizeof(inStr), outBuf,
+            opRet         = wc_RsaPublicEncrypt(inBuf, strlen(inStr), outBuf,
                                                 sizeof(outBuf), rsa, rng);
             benchStopRet  = wh_Bench_StopOp(ctx, id);
         }
@@ -696,8 +697,6 @@ exit:
 int _benchRsaKeyGen(whClientContext* client, whBenchOpContext* ctx, int id,
                     int keySize, int devId)
 {
-    (void)client;
-
     int    ret = 0;
     RsaKey rsa[1];
     WC_RNG rng[1];
@@ -705,6 +704,8 @@ int _benchRsaKeyGen(whClientContext* client, whBenchOpContext* ctx, int id,
     int    initialized_rng = 0;
     int    initialized_rsa = 0;
     long   exponent = WC_RSA_EXPONENT; /* Standard RSA exponent (65537) */
+
+    (void)client;
 
     /* Initialize RNG for RSA operations */
     ret = wc_InitRng_ex(rng, NULL, devId);

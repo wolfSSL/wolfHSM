@@ -38,11 +38,11 @@
 int wh_TransportMem_Init(void* c, const void* cf,
         whCommSetConnectedCb connectcb, void* connectcb_arg)
 {
+    whTransportMemContext* context = c;
+    const whTransportMemConfig* config = cf;
+
     (void)connectcb; (void)connectcb_arg; /* Not used */
 
-    whTransportMemContext* context = c;
-
-    const whTransportMemConfig* config = cf;
     if (    (context == NULL) ||
             (config == NULL) ||
             (config->req == NULL) ||

@@ -122,6 +122,7 @@ int wh_FlashUnit_BlankCheck(const whFlashCb* cb, void* context,
 int wh_FlashUnit_Erase(const whFlashCb* cb, void* context,
         uint32_t offset, uint32_t count)
 {
+    int ret = 0;
     uint32_t byte_offset = offset * WHFU_BYTES_PER_UNIT;
     uint32_t byte_count = count * WHFU_BYTES_PER_UNIT;
 
@@ -133,7 +134,7 @@ int wh_FlashUnit_Erase(const whFlashCb* cb, void* context,
 
     if (count == 0) return 0;
 
-    int ret = cb->Erase(context, byte_offset, byte_count);
+    ret = cb->Erase(context, byte_offset, byte_count);
 
     if (ret == 0) {
         ret = cb->BlankCheck(context, byte_offset, byte_count);
@@ -206,15 +207,15 @@ int wh_FlashUnit_ProgramBytes(const whFlashCb* cb, void* context,
     whFlashUnitBuffer buffer = {0};
 
     uint32_t offset = byte_offset / WHFU_BYTES_PER_UNIT;
-    /* Unaligned writes are skipped */
-    data += byte_offset % WHFU_BYTES_PER_UNIT;
-
     uint32_t count = byte_count / WHFU_BYTES_PER_UNIT;
     uint32_t rem = byte_count % WHFU_BYTES_PER_UNIT;
 
     if ((cb == NULL) || (cb->Program == NULL)) {
         return WH_ERROR_BADARGS;
     }
+
+    /* Unaligned writes are skipped */
+    data += byte_offset % WHFU_BYTES_PER_UNIT;
 
     /* Aligned programming */
     if(count) {

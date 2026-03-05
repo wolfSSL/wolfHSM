@@ -55,11 +55,11 @@ int wh_Server_HandleCustomCbRequest(whServerContext* server, uint16_t magic,
                                     uint16_t req_size, const void* req_packet,
                                     uint16_t* out_resp_size, void* resp_packet)
 {
-    (void)seq;
-
     int                        rc   = 0;
     whMessageCustomCb_Request  req  = {0};
     whMessageCustomCb_Response resp = {0};
+
+    (void)seq;
 
     if (NULL == server || NULL == req_packet || NULL == resp_packet ||
         out_resp_size == NULL) {

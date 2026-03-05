@@ -97,10 +97,6 @@ int whTest_CommMem(void)
     }};
     whCommServer                server[1] = {0};
 
-    /* Init client and server */
-    WH_TEST_RETURN_ON_FAIL(wh_CommClient_Init(client, c_conf));
-    WH_TEST_RETURN_ON_FAIL(wh_CommServer_Init(server, s_conf, NULL, NULL));
-
     int counter = 1;
 
     uint8_t  tx_req[REQ_SIZE] = {0};
@@ -124,6 +120,10 @@ int whTest_CommMem(void)
     uint16_t rx_resp_type       = 0;
     uint16_t rx_resp_seq        = 0;
 
+    /* Init client and server */
+    WH_TEST_RETURN_ON_FAIL(wh_CommClient_Init(client, c_conf));
+    WH_TEST_RETURN_ON_FAIL(wh_CommServer_Init(server, s_conf, NULL, NULL));
+
     /* Check that neither side is ready to recv */
     WH_TEST_ASSERT_RETURN(WH_ERROR_NOTREADY ==
                           wh_CommServer_RecvRequest(server, &rx_req_flags,
@@ -131,7 +131,7 @@ int whTest_CommMem(void)
                                                     &rx_req_len, rx_req));
 
     for (counter = 0; counter < REPEAT_COUNT; counter++) {
-        snprintf((char*)tx_req, sizeof(tx_req), "Request:%u", counter);
+        (void)snprintf((char*)tx_req, sizeof(tx_req), "Request:%u", counter);
         tx_req_len  = strlen((char*)tx_req);
         tx_req_type = counter * 2;
         WH_TEST_RETURN_ON_FAIL(
@@ -159,7 +159,7 @@ int whTest_CommMem(void)
         WH_TEST_DEBUG_PRINT("Server RecvRequest:%d, flags %x, type:%x, seq:%d, len:%d, %s\n",
                ret, rx_req_flags, rx_req_type, rx_req_seq, rx_req_len, rx_req);
 
-        snprintf((char*)tx_resp, sizeof(tx_resp), "Response:%s", rx_req);
+        (void)snprintf((char*)tx_resp, sizeof(tx_resp), "Response:%s", rx_req);
         tx_resp_len = strlen((char*)tx_resp);
         ret = wh_CommServer_SendResponse(server, rx_req_flags, rx_req_type,
                                          rx_req_seq, tx_resp_len, tx_resp);
@@ -218,7 +218,7 @@ static void* _whCommClientTask(void* cf)
     WH_TEST_ASSERT_MSG(0 == ret, "Client Init: ret=%d", ret);
 
     for (counter = 0; counter < REPEAT_COUNT; counter++) {
-        snprintf((char*)tx_req, sizeof(tx_req), "Request:%u", counter);
+        (void)snprintf((char*)tx_req, sizeof(tx_req), "Request:%u", counter);
         tx_req_len  = strlen((char*)tx_req);
         tx_req_type = counter * 2;
         do {
@@ -271,9 +271,6 @@ static void* _whCommServerTask(void* cf)
     whCommServer        server[1];
     int                 counter = 1;
 
-    ret = wh_CommServer_Init(server, config, NULL, NULL);
-    WH_TEST_ASSERT_MSG(0 == ret, "Server Init: ret=%d", ret);
-
     uint8_t  rx_req[REQ_SIZE] = {0};
     uint16_t rx_req_len       = 0;
     uint16_t rx_req_flags     = 0;
@@ -282,6 +279,9 @@ static void* _whCommServerTask(void* cf)
 
     uint8_t  tx_resp[RESP_SIZE] = {0};
     uint16_t tx_resp_len        = 0;
+
+    ret = wh_CommServer_Init(server, config, NULL, NULL);
+    WH_TEST_ASSERT_MSG(0 == ret, "Server Init: ret=%d", ret);
 
     for (counter = 0; counter < REPEAT_COUNT; counter++) {
         do {
@@ -306,7 +306,7 @@ static void* _whCommServerTask(void* cf)
         }
 
         do {
-            snprintf((char*)tx_resp, sizeof(tx_resp), "Response:%s", rx_req);
+            (void)snprintf((char*)tx_resp, sizeof(tx_resp), "Response:%s", rx_req);
             tx_resp_len = strlen((char*)tx_resp);
             ret = wh_CommServer_SendResponse(server, rx_req_flags, rx_req_type,
                                              rx_req_seq, tx_resp_len, tx_resp);
@@ -354,14 +354,13 @@ static void _whCommClientServerThreadTest(whCommClientConfig* c_conf,
         WH_TEST_DEBUG_PRINT("Client thread create:%d\n", rc);
         if (rc == 0) {
             /* All good. Block on joining */
-
-            pthread_join(cthread, &retval);
-            pthread_join(sthread, &retval);
+            (void)pthread_join(cthread, &retval);
+            (void)pthread_join(sthread, &retval);
         }
         else {
             /* Cancel the server thread */
-            pthread_cancel(sthread);
-            pthread_join(sthread, &retval);
+            (void)pthread_cancel(sthread);
+            (void)pthread_join(sthread, &retval);
         }
     }
 }
@@ -411,12 +410,6 @@ void wh_CommClientServer_ShMemThreadTest(void)
         .dma_size = BUFFER_SIZE * 4,
     }};
 
-    /* Make unique name for this test */
-    char uniq_name[32] = {0};
-    snprintf(uniq_name, sizeof(uniq_name),"/wh_test_comm_shm.%u",
-            (unsigned) getpid());
-    tmcf->name = uniq_name;
-
     /* Client configuration/contexts */
     whTransportClientCb            tmccb[1]  = {POSIX_TRANSPORT_SHM_CLIENT_CB};
     posixTransportShmClientContext csc[1]    = {0};
@@ -436,6 +429,12 @@ void wh_CommClientServer_ShMemThreadTest(void)
                     .transport_config  = (void*)tmcf,
                     .server_id         = 0xF,
     }};
+
+    /* Make unique name for this test */
+    char uniq_name[32] = {0};
+    (void)snprintf(uniq_name, sizeof(uniq_name),"/wh_test_comm_shm.%u",
+                   (unsigned) getpid());
+    tmcf->name = uniq_name;
 
     _whCommClientServerThreadTest(c_conf, s_conf);
 }

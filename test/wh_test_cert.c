@@ -621,9 +621,6 @@ int whTest_CertRamSim(whTestNvmBackendType nvmType)
     whNvmConfig           n_conf[1] = {0};
     whNvmContext nvm[1]    = {{0}};
 
-    WH_TEST_RETURN_ON_FAIL(
-        whTest_NvmCfgBackend(nvmType, &nvm_setup, n_conf, fc_conf, fc, fcb));
-
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     whServerCryptoContext crypto[1] = {{
         .devId = INVALID_DEVID,
@@ -637,6 +634,9 @@ int whTest_CertRamSim(whTestNvmBackendType nvmType)
         .crypto = crypto,
 #endif
     }};
+
+    WH_TEST_RETURN_ON_FAIL(
+        whTest_NvmCfgBackend(nvmType, &nvm_setup, n_conf, fc_conf, fc, fcb));
 
     WH_TEST_PRINT("Testing Server Certificate with RAM sim...\n");
 

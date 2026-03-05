@@ -279,8 +279,9 @@ int wh_Client_CertEraseTrusted(whClientContext* c, whNvmId id, int32_t* out_rc)
 int wh_Client_CertReadTrustedRequest(whClientContext* c, whNvmId id,
                                      uint32_t cert_len)
 {
-    (void)cert_len;
     whMessageCert_ReadTrustedRequest req = {0};
+
+    (void)cert_len;
 
     if (c == NULL) {
         return WH_ERROR_BADARGS;

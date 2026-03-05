@@ -51,13 +51,13 @@ const char* wh_Log_LevelToString(whLogLevel level)
 }
 
 void wh_Log_AddMsg(whLogContext* ctx, whLogLevel level, const char* file,
-                   const char* function, uint32_t line, const char* src,
-                   size_t src_len)
+                   const char* function, uint32_t line, const char* msg,
+                   size_t msg_len)
 {
     uint64_t timestamp = WH_GETTIME_US();
     size_t   max_len =
         (WOLFHSM_CFG_LOG_MSG_MAX > 0) ? (WOLFHSM_CFG_LOG_MSG_MAX - 1) : 0;
-    size_t     copy_len = (src_len < max_len) ? src_len : max_len;
+    size_t     copy_len = (msg_len < max_len) ? msg_len : max_len;
     whLogEntry entry    = {.timestamp = timestamp,
                            .level     = level,
                            .file      = file,
@@ -65,8 +65,8 @@ void wh_Log_AddMsg(whLogContext* ctx, whLogLevel level, const char* file,
                            .line      = line,
                            .msg_len   = (uint32_t)copy_len};
 
-    if ((src != NULL) && (copy_len > 0)) {
-        memcpy(entry.msg, src, copy_len);
+    if ((msg != NULL) && (copy_len > 0)) {
+        memcpy(entry.msg, msg, copy_len);
     }
     /* Zero-pad remainder of message buffer to prevent information leakage */
     memset(&entry.msg[copy_len], 0, WOLFHSM_CFG_LOG_MSG_MAX - copy_len);

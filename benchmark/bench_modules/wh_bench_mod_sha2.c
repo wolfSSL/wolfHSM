@@ -34,8 +34,6 @@
 int _benchSha256(whClientContext* client, whBenchOpContext* ctx, int id,
                  int devId)
 {
-    (void)client;
-
     int            ret = 0;
     wc_Sha256*     sha256 = NULL;
     wc_Sha256      sha256Stack;
@@ -45,6 +43,8 @@ int _benchSha256(whClientContext* client, whBenchOpContext* ctx, int id,
     int            sha256Initialized = 0;
     const uint8_t* in;
     size_t         inLen;
+
+    (void)client;
 
     sha256 = &sha256Stack;
     out    = outStack;
@@ -192,8 +192,6 @@ int wh_Bench_Mod_Sha256Dma(whClientContext* client, whBenchOpContext* ctx,
 int _benchSha224(whClientContext* client, whBenchOpContext* ctx, int id,
                  int devId)
 {
-    (void)client;
-
     int            ret = 0;
     wc_Sha224      sha224[1];
     uint8_t        out[WC_SHA224_DIGEST_SIZE];
@@ -201,6 +199,8 @@ int _benchSha224(whClientContext* client, whBenchOpContext* ctx, int id,
     int            sha224Initialized = 0;
     const uint8_t* in;
     size_t         inLen;
+
+    (void)client;
 
 #if defined(WOLFHSM_CFG_DMA)
     if (devId == WH_DEV_ID_DMA) {
@@ -313,8 +313,6 @@ int wh_Bench_Mod_Sha224Dma(whClientContext* client, whBenchOpContext* ctx,
 int _benchSha384(whClientContext* client, whBenchOpContext* ctx, int id,
                  int devId)
 {
-    (void)client;
-
     int            ret = 0;
     wc_Sha384      sha384[1];
     uint8_t        out[WC_SHA384_DIGEST_SIZE];
@@ -322,6 +320,8 @@ int _benchSha384(whClientContext* client, whBenchOpContext* ctx, int id,
     int            sha384Initialized = 0;
     const uint8_t* in;
     size_t         inLen;
+
+    (void)client;
 
 #if defined(WOLFHSM_CFG_DMA)
     if (devId == WH_DEV_ID_DMA) {
@@ -433,8 +433,6 @@ int wh_Bench_Mod_Sha384Dma(whClientContext* client, whBenchOpContext* ctx,
 int _benchSha512(whClientContext* client, whBenchOpContext* ctx, int id,
                  int devId)
 {
-    (void)client;
-
     int            ret = 0;
     wc_Sha512      sha512[1];
     uint8_t        out[WC_SHA512_DIGEST_SIZE];
@@ -442,6 +440,8 @@ int _benchSha512(whClientContext* client, whBenchOpContext* ctx, int id,
     int            sha512Initialized = 0;
     const uint8_t* in;
     size_t         inLen;
+
+    (void)client;
 
 #if defined(WOLFHSM_CFG_DMA)
     if (devId == WH_DEV_ID_DMA) {

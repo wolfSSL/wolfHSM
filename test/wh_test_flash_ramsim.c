@@ -72,6 +72,8 @@ int whTest_Flash_RamSim(void)
 
     uint8_t testData[TEST_PAGE_SIZE] = {0};
     uint8_t readData[TEST_PAGE_SIZE] = {0};
+    uint32_t sector = 0;
+    uint32_t page   = 0;
 
     WH_TEST_PRINT("Testing RAM-based flash simulator...\n");
 
@@ -108,7 +110,6 @@ int whTest_Flash_RamSim(void)
         return ret;
     }
 
-    uint32_t sector = 0;
     for (sector = 0; sector < cfg.size / cfg.sectorSize; sector++) {
 
         uint32_t sectorOffset = sector * cfg.sectorSize;
@@ -131,7 +132,6 @@ int whTest_Flash_RamSim(void)
             return ret;
         }
 
-        uint32_t page = 0;
         for (page = 0; page < cfg.sectorSize / cfg.pageSize; page++) {
 
             uint32_t pageOffset = sectorOffset + page * cfg.pageSize;

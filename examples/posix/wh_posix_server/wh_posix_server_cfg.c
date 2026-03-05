@@ -352,14 +352,15 @@ static void stripComment(char* line)
 /* Function to trim leading and trailing whitespace */
 static void trimWhitespace(char* str)
 {
-    /* Trim leading whitespace */
     char* start = str;
+    char* end = start + strlen(start) - 1;
+
+    /* Trim leading whitespace */
     while (*start != '\0' && isspace((unsigned char)*start)) {
         start++;
     }
 
     /* Trim trailing whitespace */
-    char* end = start + strlen(start) - 1;
     while (end > start && isspace((unsigned char)*end)) {
         *end = '\0';
         end--;
@@ -389,16 +390,21 @@ static int parseInteger(const char* str, uint32_t maxValue, uint32_t* result)
 /* Function to parse the NVM init file and build the linked list */
 static void parseNvmInitFile(const char* filePath)
 {
-    FILE* file = fopen(filePath, "r");
+    FILE* file = NULL;
+    char line[MAX_LINE_LENGTH];
+    int  lineNumber = 0;
+
+    file = fopen(filePath, "r");
     if (!file) {
         perror("Error opening NVM init file");
         exit(EXIT_FAILURE);
     }
 
-    char line[MAX_LINE_LENGTH];
-    int  lineNumber = 0;
-
     while (fgets(line, sizeof(line), file)) {
+        char*    token;
+        char     label[256], filePath[PATH_MAX];
+        uint32_t clientId = 0, id, access, flags;
+
         lineNumber++;
         stripComment(line);
         trimWhitespace(line);
@@ -407,10 +413,6 @@ static void parseNvmInitFile(const char* filePath)
         if (strlen(line) == 0) {
             continue;
         }
-
-        char*    token;
-        char     label[256], filePath[PATH_MAX];
-        uint32_t clientId = 0, id, access, flags;
 
         /* Check if the line defines a key or an object */
         if (strncmp(line, "key", 3) == 0) {
@@ -478,7 +480,7 @@ static void parseNvmInitFile(const char* filePath)
             fclose(file);
             exit(EXIT_FAILURE);
         }
-        snprintf(label, sizeof(label), "%s", token);
+        (void)snprintf(label, sizeof(label), "%s", token);
 
         /* Parse the file path */
         token = strtok(NULL, " ");
@@ -500,7 +502,14 @@ static void parseNvmInitFile(const char* filePath)
 /* Process an entry by reading the file and adding it to NVM */
 static void processEntry(Entry* entry, int isKey, whNvmContext* nvmContext)
 {
-    FILE* file = fopen(entry->filePath, "rb");
+    long fileSize = 0;
+    FILE* file = NULL;
+    size_t bytesRead = 0;
+    uint8_t* buffer = NULL;
+    whNvmMetadata meta = {0};
+    int rc = 0;
+
+    file = fopen(entry->filePath, "rb");
     if (file == NULL) {
         WOLFHSM_CFG_PRINTF("Error processing entry: Unable to open file %s\n",
                 entry->filePath);
@@ -508,12 +517,12 @@ static void processEntry(Entry* entry, int isKey, whNvmContext* nvmContext)
     }
 
     /* Get the file size */
-    fseek(file, 0, SEEK_END);
-    long fileSize = ftell(file);
-    fseek(file, 0, SEEK_SET);
+    (void)fseek(file, 0, SEEK_END);
+    fileSize = ftell(file);
+    (void)fseek(file, 0, SEEK_SET);
 
     /* Allocate memory for the file data */
-    uint8_t* buffer = (uint8_t*)malloc(fileSize);
+    buffer = (uint8_t*)malloc(fileSize);
     if (buffer == NULL) {
         WOLFHSM_CFG_PRINTF("Error: Memory allocation failed for file %s\n",
                 entry->filePath);
@@ -522,7 +531,7 @@ static void processEntry(Entry* entry, int isKey, whNvmContext* nvmContext)
     }
 
     /* Read the file data into the buffer */
-    size_t bytesRead = fread(buffer, 1, fileSize, file);
+    bytesRead = fread(buffer, 1, fileSize, file);
     fclose(file);
 
     if (bytesRead != (size_t)fileSize) {
@@ -533,7 +542,6 @@ static void processEntry(Entry* entry, int isKey, whNvmContext* nvmContext)
     }
 
     /* Create metadata for the new entry */
-    whNvmMetadata meta = {0};
     if (isKey) {
         /* Keys have special ID format */
         meta.id = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, entry->clientId, entry->id);
@@ -553,9 +561,9 @@ static void processEntry(Entry* entry, int isKey, whNvmContext* nvmContext)
     meta.access = entry->access;
     meta.flags  = entry->flags;
     meta.len    = fileSize;
-    snprintf((char*)meta.label, WH_NVM_LABEL_LEN, "%s", entry->label);
+    (void)snprintf((char*)meta.label, WH_NVM_LABEL_LEN, "%s", entry->label);
 
-    int rc = wh_Nvm_AddObject(nvmContext, &meta, fileSize, buffer);
+    rc = wh_Nvm_AddObject(nvmContext, &meta, fileSize, buffer);
     if (rc != 0) {
         WOLFHSM_CFG_PRINTF("Error: Failed to add entry ID %u to NVM, ret = %d\n",
                 meta.id, rc);

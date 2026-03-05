@@ -48,6 +48,7 @@ static int _testNonExportableNvmAccess(whClientContext* client)
     uint8_t   nvmLabel[WH_NVM_LABEL_LEN]       = "NonExportableNvmObj";
     int32_t   out_rc                           = 0;
     whNvmSize out_len                          = 0;
+    whNvmId   destroyList[]                    = {nvmId};
 
     WH_TEST_PRINT("Testing non-exportable NVM object access protection...\n");
 
@@ -77,8 +78,7 @@ static int _testNonExportableNvmAccess(whClientContext* client)
     WH_TEST_PRINT("Non-exportable NVM object read correctly denied\n");
 
     /* Clean up NVM object */
-    whNvmId destroyList[] = {nvmId};
-    out_rc                = 0;
+    out_rc = 0;
     wh_Client_NvmDestroyObjects(client, 1, destroyList, &out_rc);
 
     /* Test 2: Verify exportable NVM objects can still be read */

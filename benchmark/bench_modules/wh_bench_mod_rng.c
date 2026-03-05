@@ -27,14 +27,14 @@
 
 int _benchRng(whClientContext* client, whBenchOpContext* ctx, int id, int devId)
 {
-    (void)client;
-
     int      ret = 0;
     WC_RNG   rng;
     int      i              = 0;
     int      rngInitialized = 0;
     uint8_t* out            = WH_BENCH_DATA_OUT_BUFFER;
     word32   outLen         = WOLFHSM_CFG_BENCH_DATA_BUFFER_SIZE;
+
+    (void)client;
 
     ret = wc_InitRng_ex(&rng, NULL, devId);
     if (ret != 0) {

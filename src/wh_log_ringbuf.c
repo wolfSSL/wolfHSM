@@ -31,19 +31,19 @@
 
 #ifdef WOLFHSM_CFG_LOGGING
 
-int whLogRingbuf_Init(void* c, const void* cf)
+int whLogRingbuf_Init(void* context, const void* config)
 {
-    whLogRingbufContext*      context = (whLogRingbufContext*)c;
-    const whLogRingbufConfig* config  = (const whLogRingbufConfig*)cf;
+    whLogRingbufContext*      ctx = (whLogRingbufContext*)context;
+    const whLogRingbufConfig* cfg  = (const whLogRingbufConfig*)config;
     size_t                    capacity;
 
-    if (context == NULL || config == NULL || config->buffer == NULL ||
-        config->buffer_size < sizeof(whLogEntry)) {
+    if (ctx == NULL || cfg == NULL || cfg->buffer == NULL ||
+        cfg->buffer_size < sizeof(whLogEntry)) {
         return WH_ERROR_BADARGS;
     }
 
     /* Calculate capacity (number of complete entries that fit in buffer) */
-    capacity = config->buffer_size / sizeof(whLogEntry);
+    capacity = cfg->buffer_size / sizeof(whLogEntry);
     /* Capacity must be able to hold at least one log entry, specifically to
      * prevent divide-by-zeros in the rollover logic */
     if (capacity == 0) {
@@ -51,26 +51,26 @@ int whLogRingbuf_Init(void* c, const void* cf)
     }
 
     /* Initialize context */
-    memset(context, 0, sizeof(*context));
-    context->entries     = (whLogEntry*)config->buffer;
-    context->capacity    = capacity;
-    context->count       = 0;
-    context->initialized = 1;
+    memset(ctx, 0, sizeof(*ctx));
+    ctx->entries     = (whLogEntry*)cfg->buffer;
+    ctx->capacity    = capacity;
+    ctx->count       = 0;
+    ctx->initialized = 1;
 
     return WH_ERROR_OK;
 }
 
 int whLogRingbuf_Cleanup(void* c)
 {
-    whLogRingbufContext* context = (whLogRingbufContext*)c;
+    whLogRingbufContext* ctx = (whLogRingbufContext*)c;
 
-    if (context == NULL) {
+    if (ctx == NULL) {
         return WH_ERROR_BADARGS;
     }
 
-    if (context->initialized) {
-        (void)whLogRingbuf_Clear(context);
-        context->initialized = 0;
+    if (ctx->initialized) {
+        (void)whLogRingbuf_Clear(ctx);
+        ctx->initialized = 0;
     }
 
     return WH_ERROR_OK;
@@ -78,25 +78,25 @@ int whLogRingbuf_Cleanup(void* c)
 
 int whLogRingbuf_AddEntry(void* c, const whLogEntry* entry)
 {
-    whLogRingbufContext* context = (whLogRingbufContext*)c;
+    whLogRingbufContext* ctx = (whLogRingbufContext*)c;
     size_t               head;
 
-    if ((context == NULL) || (entry == NULL)) {
+    if ((ctx == NULL) || (entry == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
-    if (!context->initialized) {
+    if (!ctx->initialized) {
         return WH_ERROR_ABORTED;
     }
 
     /* Calculate head position from count */
-    head = context->count % context->capacity;
+    head = ctx->count % ctx->capacity;
 
     /* Copy entry to ring buffer at head position */
-    memcpy(&context->entries[head], entry, sizeof(whLogEntry));
+    memcpy(&ctx->entries[head], entry, sizeof(whLogEntry));
 
     /* Increment count freely to track total messages written */
-    context->count++;
+    ctx->count++;
 
     return WH_ERROR_OK;
 }
@@ -110,47 +110,47 @@ int whLogRingbuf_Export(void* c, void* export_arg)
 
 int whLogRingbuf_Iterate(void* c, whLogIterateCb iterate_cb, void* iterate_arg)
 {
-    whLogRingbufContext* context = (whLogRingbufContext*)c;
+    whLogRingbufContext* ctx = (whLogRingbufContext*)c;
     size_t               capacity;
     size_t               num_entries;
     size_t               start_idx;
     size_t               i;
     int                  ret = 0;
 
-    if ((context == NULL) || (iterate_cb == NULL)) {
+    if ((ctx == NULL) || (iterate_cb == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
-    if (!context->initialized) {
+    if (!ctx->initialized) {
         return WH_ERROR_ABORTED;
     }
 
     /* If buffer is empty, nothing to iterate */
-    if (context->count == 0) {
+    if (ctx->count == 0) {
         return WH_ERROR_OK;
     }
 
-    capacity = context->capacity;
+    capacity = ctx->capacity;
 
     /* Calculate actual number of entries in buffer (capped at capacity) */
-    num_entries = (context->count < capacity) ? context->count : capacity;
+    num_entries = (ctx->count < capacity) ? ctx->count : capacity;
 
     /* Determine starting index for iteration:
      * - If not full: start at 0 (oldest entry)
      * - If full: start at head (oldest entry, about to be overwritten)
      *   head = count % capacity
      */
-    if (context->count < capacity) {
+    if (ctx->count < capacity) {
         start_idx = 0;
     }
     else {
-        start_idx = context->count % capacity;
+        start_idx = ctx->count % capacity;
     }
 
     /* Iterate through entries in chronological order */
     for (i = 0; i < num_entries; i++) {
         size_t idx = (start_idx + i) % capacity;
-        ret        = iterate_cb(iterate_arg, &context->entries[idx]);
+        ret        = iterate_cb(iterate_arg, &ctx->entries[idx]);
         if (ret != 0) {
             /* User callback requested early termination */
             break;
@@ -162,17 +162,17 @@ int whLogRingbuf_Iterate(void* c, whLogIterateCb iterate_cb, void* iterate_arg)
 
 int whLogRingbuf_Clear(void* c)
 {
-    whLogRingbufContext* context = (whLogRingbufContext*)c;
+    whLogRingbufContext* ctx = (whLogRingbufContext*)c;
 
-    if (context == NULL) {
+    if (ctx == NULL) {
         return WH_ERROR_BADARGS;
     }
 
     /* Reset ring buffer state */
-    context->count = 0;
+    ctx->count = 0;
 
     /* Zero the log entries */
-    memset(context->entries, 0, context->capacity * sizeof(whLogEntry));
+    memset(ctx->entries, 0, ctx->capacity * sizeof(whLogEntry));
 
     return WH_ERROR_OK;
 }

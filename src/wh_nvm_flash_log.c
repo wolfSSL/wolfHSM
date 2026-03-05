@@ -137,9 +137,10 @@ static int nfl_FlashEraseHelper(whNvmFlashLogContext* ctx, uint32_t off,
 static whNvmFlashLogMetadata* nfl_ObjNext(whNvmFlashLogContext*  ctx,
                                           whNvmFlashLogMetadata* obj)
 {
+    uint8_t* next = NULL;
     if (obj == NULL || ctx == NULL)
         return NULL;
-    uint8_t* next =
+    next =
         (uint8_t*)obj + sizeof(whNvmFlashLogMetadata) + PAD_SIZE(obj->meta.len);
     if (next >= ctx->directory.data + ctx->directory.header.size)
         return NULL;
@@ -507,7 +508,8 @@ int wh_NvmFlashLog_Cleanup(void* c)
 
 /* List objects */
 int wh_NvmFlashLog_List(void* c, whNvmAccess access, whNvmFlags flags,
-                        whNvmId start_id, whNvmId* out_count, whNvmId* out_id)
+                        whNvmId start_id, whNvmId* out_avail_objects,
+                        whNvmId* out_id)
 {
     whNvmFlashLogContext*  ctx      = (whNvmFlashLogContext*)c;
     whNvmFlashLogMetadata *next_obj = NULL, *start_obj = NULL;
@@ -531,16 +533,16 @@ int wh_NvmFlashLog_List(void* c, whNvmAccess access, whNvmFlags flags,
     }
 
     if (next_obj == NULL || next_obj->meta.id == WH_NVM_ID_INVALID) {
-        if (out_count != NULL)
-            *out_count = 0;
+        if (out_avail_objects != NULL)
+            *out_avail_objects = 0;
         if (out_id != NULL)
             *out_id = WH_NVM_ID_INVALID;
         return WH_ERROR_OK;
     }
 
     count = nfl_ObjectCount(ctx, next_obj);
-    if (out_count != NULL)
-        *out_count = count;
+    if (out_avail_objects != NULL)
+        *out_avail_objects = count;
     if (out_id != NULL)
         *out_id = next_obj->meta.id;
 

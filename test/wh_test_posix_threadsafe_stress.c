@@ -1947,13 +1947,17 @@ static void* contentionClientThread(void* arg)
     ClientServerPair*  pair = (ClientServerPair*)arg;
     StressTestContext* ctx  = pair->sharedCtx;
     int                rc;
-    int                localIteration;
+    int                localIteration = 0;
 
     /* Wait for all threads to start */
     pthread_barrier_wait(&ctx->startBarrier);
 
     /* Always call barrier first, then check exit flag - prevents deadlock */
     while (1) {
+        ContentionPhase phase;
+        whKeyId         keyId;
+        ClientRole      role;
+
         /* ===== SETUP PHASE (once per phase) ===== */
         pthread_barrier_wait(&ctx->setupBarrier);
         if (ATOMIC_LOAD_INT(&ctx->globalStopFlag)) {
@@ -1978,10 +1982,9 @@ static void* contentionClientThread(void* arg)
         /* ===== STREAMING PHASE (tight loop, no barriers) ===== */
         pthread_barrier_wait(&ctx->streamStartBarrier);
 
-        ContentionPhase phase = ctx->currentPhase;
-        whKeyId         keyId = ctx->currentKeyId;
-        ClientRole      role  = ctx->clientRoles[pair->clientId];
-        localIteration        = 0;
+        phase = ctx->currentPhase;
+        keyId = ctx->currentKeyId;
+        role  = ctx->clientRoles[pair->clientId];
 
         /* Stream requests until phaseRunning becomes 0 */
         while (ATOMIC_LOAD_INT(&ctx->phaseRunning)) {
@@ -2037,6 +2040,7 @@ static int validatePhaseResult(StressTestContext* ctx, ContentionPhase phase,
             uint32_t counter  = 0;
             int      opACount = 0;
             int      i;
+            uint32_t expectedMin;
 
             /* Count how many threads were doing increments (ROLE_OP_A) */
             for (i = 0; i < NUM_CLIENTS; i++) {
@@ -2059,7 +2063,7 @@ static int validatePhaseResult(StressTestContext* ctx, ContentionPhase phase,
              * Account for errors: totalIterations counts all attempts,
              * but totalErrors counts unacceptable failures that didn't
              * increment */
-            uint32_t expectedMin = totalIterations - totalErrors;
+            expectedMin = totalIterations - totalErrors;
 
             WH_TEST_PRINT("    Counter validation: value=%u, expected_min=%u "
                           "(iters=%d, errors=%d)\n",

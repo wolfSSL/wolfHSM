@@ -16,8 +16,6 @@
  */
 int wh_DemoClient_Nvm(whClientContext* clientContext)
 {
-    (void)clientContext;
-
     const int NUM_OBJECTS = 3;
 
     int32_t  rc;
@@ -26,6 +24,7 @@ int wh_DemoClient_Nvm(whClientContext* clientContext)
     uint32_t reclaimSize;
     whNvmId  availObjects;
     whNvmId  reclaimObjects;
+    int      i;
 
     whNvmId   objectIds[] = {1, 2, 3};
     uint8_t   labels[][7] = {"label1", "label2", "label3"};
@@ -33,6 +32,8 @@ int wh_DemoClient_Nvm(whClientContext* clientContext)
     uint8_t   readData[6];
     whNvmSize dataLen = 6;
     whNvmSize readLen;
+
+    (void)clientContext;
 
     if (clientContext == NULL) {
         WOLFHSM_CFG_PRINTF("Client context is NULL\n");
@@ -50,7 +51,6 @@ int wh_DemoClient_Nvm(whClientContext* clientContext)
 
     /* Add multiple objects, reading back each one and comparing the data
      * against what we wrote */
-    int i;
     for (i = 0; i < NUM_OBJECTS; i++) {
         /* Add an object */
         rc = wh_Client_NvmAddObject(

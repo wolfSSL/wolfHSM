@@ -226,10 +226,10 @@ uint32_t whFlashRamsim_PartitionSize(void* context)
 
 int whFlashRamsim_WriteLock(void* context, uint32_t offset, uint32_t size)
 {
+    whFlashRamsimCtx* ctx = (whFlashRamsimCtx*)context;
+
     (void)offset;
     (void)size;
-
-    whFlashRamsimCtx* ctx = (whFlashRamsimCtx*)context;
 
     if (ctx == NULL) {
         return WH_ERROR_BADARGS;
@@ -243,9 +243,10 @@ int whFlashRamsim_WriteLock(void* context, uint32_t offset, uint32_t size)
 
 int whFlashRamsim_WriteUnlock(void* context, uint32_t offset, uint32_t size)
 {
+    whFlashRamsimCtx* ctx = (whFlashRamsimCtx*)context;
+
     (void)offset;
     (void)size;
-    whFlashRamsimCtx* ctx = (whFlashRamsimCtx*)context;
 
     if (ctx == NULL) {
         return WH_ERROR_BADARGS;

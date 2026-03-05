@@ -232,11 +232,11 @@ static int wh_ServerTask(void* cf, const char* keyFilePath, int keyId,
 #if !defined(WOLFHSM_CFG_NO_CRYPTO)
 static int _hardwareCryptoCb(int devId, struct wc_CryptoInfo* info, void* ctx)
 {
-    (void)devId;
-    (void)ctx;
-
     /* Default response */
     int ret = CRYPTOCB_UNAVAILABLE;
+
+    (void)devId; (void)ctx;
+
     switch (info->algo_type) {
         case WC_ALGO_TYPE_RNG: {
             /*WOLFHSM_CFG_PRINTF("Hardware Crypto Callback: RNG operation requested\n");*/
@@ -302,6 +302,19 @@ int main(int argc, char** argv)
     uint8_t     memory[WH_POSIX_FLASH_RAM_SIZE] = {0};
     whServerConfig s_conf[1];
 
+#if !defined(WOLFHSM_CFG_NO_CRYPTO)
+    /* Crypto context */
+    whServerCryptoContext crypto[1] = {{
+        .devId = INVALID_DEVID,
+    }};
+    WC_RNG         rng[1];
+    uint8_t        buffer[128] = {0};
+
+#if defined(WOLFHSM_CFG_SHE_EXTENSION)
+    whServerSheContext she[1] = {{0}};
+#endif
+#endif /* !defined(WOLFHSM_CFG_NO_CRYPTO) */
+
     WOLFHSM_CFG_PRINTF("Example wolfHSM POSIX server ");
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     WOLFHSM_CFG_PRINTF("built with wolfSSL version %s\n", LIBWOLFSSL_VERSION_STRING);
@@ -328,9 +341,10 @@ int main(int argc, char** argv)
         }
         else if (strcmp(argv[i], "--flags") == 0 && i + 1 < argc) {
             char* end;
-            errno             = 0;
-            unsigned long val = strtoul(argv[i + 1], &end, 0);
+            unsigned long val;
 
+            errno = 0;
+            val   = strtoul(argv[i + 1], &end, 0);
             if (errno || *end || val > 0xFFFF) {
                 WOLFHSM_CFG_PRINTF("Invalid --flags value: %s\n", argv[i + 1]);
                 return -1;
@@ -414,17 +428,8 @@ int main(int argc, char** argv)
         WOLFHSM_CFG_PRINTF("Failed to initialize NVM: %d\n", rc);
         return rc;
     }
+
 #if !defined(WOLFHSM_CFG_NO_CRYPTO)
-    /* Crypto context */
-    whServerCryptoContext crypto[1] = {{
-        .devId = INVALID_DEVID,
-    }};
-
-#if defined(WOLFHSM_CFG_SHE_EXTENSION)
-    whServerSheContext she[1] = {{0}};
-#endif
-
-
     s_conf->crypto = crypto;
     s_conf->devId  = INVALID_DEVID;
 #if defined(WOLFHSM_CFG_SHE_EXTENSION)
@@ -435,8 +440,6 @@ int main(int argc, char** argv)
     wolfCrypt_Init();
 
     /* Context 3: Server Software Crypto */
-    WC_RNG  rng[1];
-    uint8_t buffer[128] = {0};
     wc_InitRng_ex(rng, NULL, INVALID_DEVID);
     wc_RNG_GenerateBlock(rng, buffer, sizeof(buffer));
     wc_FreeRng(rng);

@@ -100,12 +100,12 @@ int wh_Client_KeyWrapResponse(whClientContext*   ctx,
 int wh_Client_KeyWrap(whClientContext* ctx, enum wc_CipherType cipherType,
                       uint16_t serverKeyId, void* keyIn, uint16_t keySz,
                       whNvmMetadata* metadataIn, void* wrappedKeyOut,
-                      uint16_t* wrappedKeySz)
+                      uint16_t* wrappedKeyInOutSz)
 {
     int ret = WH_ERROR_OK;
 
     if (ctx == NULL || keyIn == NULL || metadataIn == NULL ||
-        wrappedKeyOut == NULL || wrappedKeySz == NULL) {
+        wrappedKeyOut == NULL || wrappedKeyInOutSz == NULL) {
         return WH_ERROR_BADARGS;
     }
 
@@ -117,7 +117,7 @@ int wh_Client_KeyWrap(whClientContext* ctx, enum wc_CipherType cipherType,
 
     do {
         ret = wh_Client_KeyWrapResponse(ctx, cipherType, wrappedKeyOut,
-                                        wrappedKeySz);
+                                        wrappedKeyInOutSz);
     } while (ret == WH_ERROR_NOTREADY);
 
     return ret;

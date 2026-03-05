@@ -889,6 +889,7 @@ static int whTest_LogRingbuf(void)
     /* Backend storage for ring buffer */
     const size_t numLogEntries = 32;
     whLogEntry   ringbuf_buffer[numLogEntries];
+    whLogCb      ringbufCb = WH_LOG_RINGBUF_CB;
 
     /* Setup ring buffer backend */
     memset(&logCtx, 0, sizeof(logCtx));
@@ -900,8 +901,6 @@ static int whTest_LogRingbuf(void)
     ringbufConfig.buffer_size = sizeof(ringbuf_buffer);
 
     /* Initialize callback table */
-    whLogCb ringbufCb = WH_LOG_RINGBUF_CB;
-
     logConfig.cb      = &ringbufCb;
     logConfig.context = &ringbufCtx;
     logConfig.config  = &ringbufConfig;
@@ -1005,6 +1004,8 @@ static int whTest_LogPosixFile(void)
     const char*         test_log_file = "/tmp/wolfhsm_test_log.txt";
     int                 export_count;
     int                 iterate_count;
+    FILE*               export_fp     = NULL;
+    char                line[2048];
 
     /* Remove any existing test log file */
     unlink(test_log_file);
@@ -1029,14 +1030,13 @@ static int whTest_LogPosixFile(void)
 
     /* Test: Export reads back all entries correctly */
     /* For POSIX backend, export to a temp file and count lines */
-    FILE* export_fp = tmpfile();
+    export_fp = tmpfile();
     WH_TEST_ASSERT_RETURN(export_fp != NULL);
     WH_TEST_RETURN_ON_FAIL(wh_Log_Export(&logCtx, export_fp));
     fflush(export_fp);
     rewind(export_fp);
 
     export_count = 0;
-    char line[2048];
     while (fgets(line, sizeof(line), export_fp) != NULL) {
         export_count++;
     }
@@ -1128,6 +1128,8 @@ static int whTest_LogPosixFileConcurrent(void)
     pthread_t           threads[4];
     thread_test_args    args[4];
     int                 i;
+    FILE*               verify_fp = NULL;
+    char                line[2048];
 
     /* Remove any existing test log file */
     unlink(test_log_file);
@@ -1167,7 +1169,7 @@ static int whTest_LogPosixFileConcurrent(void)
 
     /* Verify all entries were written */
     /* For POSIX backend, export to a temp file and count lines */
-    FILE* verify_fp = tmpfile();
+    verify_fp = tmpfile();
     WH_TEST_ASSERT_RETURN(verify_fp != NULL);
     WH_TEST_RETURN_ON_FAIL(wh_Log_Export(&logCtx, verify_fp));
     fflush(verify_fp);
@@ -1175,7 +1177,6 @@ static int whTest_LogPosixFileConcurrent(void)
 
     /* Count lines in exported file */
     export_count = 0;
-    char line[2048];
     while (fgets(line, sizeof(line), verify_fp) != NULL) {
         export_count++;
     }
@@ -1311,6 +1312,13 @@ enum {
 
 static int _clientServerLogSmokeTest(whClientContext* client)
 {
+    /* Basic smoke test: Check that there is at least one log entry in server
+     * log file */
+
+    FILE* log_file = NULL;
+    size_t entry_count = 0;
+    char   line[1024];
+
     /* Connect to the server, which should trigger an info log entry */
     WH_TEST_ASSERT(WH_ERROR_OK == wh_Client_CommInit(client, NULL, NULL));
 
@@ -1318,13 +1326,8 @@ static int _clientServerLogSmokeTest(whClientContext* client)
     WH_TEST_RETURN_ON_FAIL(wh_Client_CommClose(client));
 
     /* Now read the log file and verify that the log entries are present */
-    FILE* log_file = fopen(WH_LOG_TEST_SERVER_LOG_FILE, "r");
+    log_file = fopen(WH_LOG_TEST_SERVER_LOG_FILE, "r");
     WH_TEST_ASSERT(log_file != NULL);
-
-    /* Basic smoke test: Check that there is at least one log entry in server
-     * log file */
-    size_t entry_count = 0;
-    char   line[1024];
 
     /* Ensure there are at least 3 log entries and that they are somewhat sanely
      * ordered */
@@ -1483,9 +1486,6 @@ static int whTest_LogClientServerMemTransport(void)
     whNvmConfig           n_conf[1] = {0};
     whNvmContext          nvm[1] = {{0}};
 
-    WH_TEST_RETURN_ON_FAIL(whTest_NvmCfgBackend(
-        WH_NVM_TEST_BACKEND_FLASH, &nvm_setup, n_conf, fc_conf, fc, fcb));
-
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     whServerCryptoContext crypto[1] = {{
         .devId = INVALID_DEVID,
@@ -1503,8 +1503,6 @@ static int whTest_LogClientServerMemTransport(void)
                 .config  = posixCfg,
     }};
 
-    unlink(WH_LOG_TEST_SERVER_LOG_FILE);
-
     whServerConfig s_conf[1] = {{
         .comm_config = cs_conf,
         .nvm         = nvm,
@@ -1514,6 +1512,11 @@ static int whTest_LogClientServerMemTransport(void)
 #endif
         .logConfig = logConfig,
     }};
+
+    WH_TEST_RETURN_ON_FAIL(whTest_NvmCfgBackend(
+        WH_NVM_TEST_BACKEND_FLASH, &nvm_setup, n_conf, fc_conf, fc, fcb));
+
+    unlink(WH_LOG_TEST_SERVER_LOG_FILE);
 
     WH_TEST_RETURN_ON_FAIL(wh_Nvm_Init(nvm, n_conf));
 

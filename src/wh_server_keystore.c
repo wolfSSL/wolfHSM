@@ -1221,8 +1221,8 @@ static int _HandleKeyWrapRequest(whServerContext*                  server,
     }
 
     /* Translate the server key id passed in from the client */
-    serverKeyId = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO, 
-                                               server->comm->client_id, 
+    serverKeyId = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                               server->comm->client_id,
                                                req->serverKeyId);
 
     /* Store the wrapped key in the response data */
@@ -1288,8 +1288,8 @@ static int _HandleKeyUnwrapAndExportRequest(
     wrappedKey = reqData;
 
     /* Translate the server key id passed in from the client */
-    serverKeyId = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO, 
-                                               server->comm->client_id, 
+    serverKeyId = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                               server->comm->client_id,
                                                req->serverKeyId);
 
     /* Ensure the cipher type in the response matches the request */
@@ -1306,6 +1306,8 @@ static int _HandleKeyUnwrapAndExportRequest(
 #ifndef NO_AES
 #ifdef HAVE_AESGCM
         case WC_CIPHER_AES_GCM: {
+            uint16_t wrappedKeyUser = 0;
+            uint16_t wrappedKeyType = 0;
             uint16_t keySz = req->wrappedKeySz -
                              WH_KEYWRAP_AES_GCM_HEADER_SIZE - sizeof(*metadata);
 
@@ -1329,8 +1331,8 @@ static int _HandleKeyUnwrapAndExportRequest(
 
             /* Extract ownership from unwrapped metadata (preserves original
              * owner) */
-            uint16_t wrappedKeyUser = WH_KEYID_USER(metadata->id);
-            uint16_t wrappedKeyType = WH_KEYID_TYPE(metadata->id);
+            wrappedKeyUser = WH_KEYID_USER(metadata->id);
+            wrappedKeyType = WH_KEYID_TYPE(metadata->id);
 
             /* Require explicit wrapped-key encoding */
             if (wrappedKeyType != WH_KEYTYPE_WRAPPED) {
@@ -1376,6 +1378,15 @@ static int _HandleKeyUnwrapAndCacheRequest(
     whMessageKeystore_KeyUnwrapAndCacheResponse* resp, uint8_t* respData,
     uint32_t respDataSz)
 {
+    int           ret;
+    uint8_t*      wrappedKey;
+    whNvmMetadata metadata = {0};
+    uint16_t      keySz = 0;
+    uint8_t       key[WOLFHSM_CFG_KEYWRAP_MAX_KEY_SIZE];
+    whKeyId       serverKeyId;
+    uint16_t      wrappedKeyUser = 0;
+    uint16_t      wrappedKeyType = 0;
+
     /* The server doesn't have any extra response data to send back to the
      * client */
     (void)respData;
@@ -1384,13 +1395,6 @@ static int _HandleKeyUnwrapAndCacheRequest(
     if (server == NULL || req == NULL || reqData == NULL || resp == NULL) {
         return WH_ERROR_BADARGS;
     }
-
-    int           ret;
-    uint8_t*      wrappedKey;
-    whNvmMetadata metadata = {0};
-    uint16_t      keySz = 0;
-    uint8_t       key[WOLFHSM_CFG_KEYWRAP_MAX_KEY_SIZE];
-    whKeyId       serverKeyId;
 
     /* Check if the reqData is big enough to hold the wrapped key */
     if (reqDataSz < req->wrappedKeySz) {
@@ -1401,8 +1405,8 @@ static int _HandleKeyUnwrapAndCacheRequest(
     wrappedKey = reqData;
 
     /* Translate the server key id passed in from the client */
-    serverKeyId = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO, 
-                                               server->comm->client_id, 
+    serverKeyId = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                               server->comm->client_id,
                                                req->serverKeyId);
 
     /* Ensure the cipher type in the response matches the request */
@@ -1445,8 +1449,8 @@ static int _HandleKeyUnwrapAndCacheRequest(
     }
 
     /* Extract ownership from unwrapped metadata (preserves original owner) */
-    uint16_t wrappedKeyUser = WH_KEYID_USER(metadata.id);
-    uint16_t wrappedKeyType = WH_KEYID_TYPE(metadata.id);
+    wrappedKeyUser = WH_KEYID_USER(metadata.id);
+    wrappedKeyType = WH_KEYID_TYPE(metadata.id);
 
     /* Require explicit wrapped-key encoding */
     if (wrappedKeyType != WH_KEYTYPE_WRAPPED) {
@@ -1507,8 +1511,8 @@ static int _HandleDataWrapRequest(whServerContext*                   server,
     memcpy(data, reqData, req->dataSz);
 
     /* Translate the server key id passed in from the client */
-    serverKeyId = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO, 
-                                               server->comm->client_id, 
+    serverKeyId = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                               server->comm->client_id,
                                                req->serverKeyId);
 
     /* Ensure the cipher type in the response matches the request */
@@ -1631,12 +1635,12 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
                                const void* req_packet, uint16_t* out_resp_size,
                                void* resp_packet)
 {
-    (void)req_size;
-
     int           ret = WH_ERROR_OK;
     uint8_t*      in;
     uint8_t*      out;
     whNvmMetadata meta[1] = {{0}};
+
+    (void)req_size;
 
     /* validate args, even though these functions are only supposed to be
      * called by internal functions */

@@ -41,7 +41,7 @@ enum {
 };
 
 /** Local declarations */
-#define MAX_OFFSET(_context) (_context->partition_size * 2)
+#define MAX_OFFSET(_context) ((_context)->partition_size * 2)
 
 /* Helper for pwrite like memset.  Write the byte in c to filedes for size
  * bytes starting at offset */
@@ -151,8 +151,10 @@ int posixFlashFile_WriteLock(  void* c,
                             uint32_t offset,
                             uint32_t size)
 {
-    (void)offset; (void)size;
     posixFlashFileContext* context = c;
+
+    (void)offset; (void)size;
+
     if (context == NULL) {
         return WH_ERROR_BADARGS;
     }
@@ -163,8 +165,10 @@ int posixFlashFile_WriteUnlock(void* c,
                             uint32_t offset,
                             uint32_t size)
 {
-    (void)offset; (void)size;
     posixFlashFileContext* context = c;
+
+    (void)offset; (void)size;
+
     if (context == NULL) {
         return WH_ERROR_BADARGS;
     }
@@ -178,6 +182,8 @@ int posixFlashFile_Read(   void* c,
                         uint8_t* data)
 {
     posixFlashFileContext* context = c;
+    ssize_t rc = 0;
+
     if (    (context == NULL) ||
             (offset + size > MAX_OFFSET(context))){
         return WH_ERROR_BADARGS;
@@ -189,10 +195,10 @@ int posixFlashFile_Read(   void* c,
         return 0;
     }
 
-    ssize_t rc = pread( context->fd_p1 - 1,
-                        (void*) data,
-                        (size_t) size,
-                        (off_t) offset);
+    rc = pread(context->fd_p1 - 1,
+               (void*) data,
+               (size_t) size,
+               (off_t) offset);
     if (rc != size) {
         /* Error while reading */
         return WH_ERROR_ABORTED;
@@ -204,6 +210,8 @@ int posixFlashFile_Program(void* c,
         uint32_t offset, uint32_t size, const uint8_t* data)
 {
     posixFlashFileContext* context = c;
+    ssize_t rc = 0;
+
     if (    (context == NULL) ||
             (offset + size > MAX_OFFSET(context))){
         return WH_ERROR_BADARGS;
@@ -220,10 +228,10 @@ int posixFlashFile_Program(void* c,
         return WH_ERROR_LOCKED;
     }
 
-    ssize_t rc = pwrite(    context->fd_p1 - 1,
-                            (void*) data,
-                            (size_t) size,
-                            (off_t) offset);
+    rc = pwrite(context->fd_p1 - 1,
+                (void*) data,
+                (size_t) size,
+                (off_t) offset);
     if (rc != size) {
         /* Error while writing */
         return WH_ERROR_ABORTED;
@@ -277,6 +285,8 @@ int posixFlashFile_Erase(void* c,
         uint32_t offset, uint32_t size)
 {
     posixFlashFileContext* context = c;
+    ssize_t rc = 0;
+
     if (    (context == NULL) ||
             (offset + size > MAX_OFFSET(context))){
         return WH_ERROR_BADARGS;
@@ -292,10 +302,10 @@ int posixFlashFile_Erase(void* c,
         return WH_ERROR_LOCKED;
     }
 
-    ssize_t rc = pfill( context->fd_p1 - 1,
-                        context->erased_byte,
-                        (size_t) size,
-                        (off_t) offset);
+    rc = pfill(context->fd_p1 - 1,
+               context->erased_byte,
+               (size_t) size,
+               (off_t) offset);
     if (rc != size) {
         /* Error while writing */
         return WH_ERROR_ABORTED;
