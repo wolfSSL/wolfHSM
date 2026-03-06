@@ -74,9 +74,6 @@ int whTest_Unit(void)
     /* Component Tests */
     WH_TEST_ASSERT(0 == whTest_Flash_RamSim());
     WH_TEST_ASSERT(0 == whTest_NvmFlash());
-#ifdef WOLFHSM_CFG_ENABLE_TIMEOUT
-    WH_TEST_ASSERT(0 == whTest_Timeout());
-#endif
 #ifdef WOLFHSM_CFG_LOGGING
     WH_TEST_ASSERT(0 == whTest_Log());
 #endif
@@ -124,6 +121,10 @@ int whTest_Unit(void)
 
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
+#if defined(WOLFHSM_CFG_ENABLE_TIMEOUT) && defined(WOLFHSM_CFG_TEST_POSIX)
+    WH_TEST_ASSERT(0 == whTest_TimeoutPosix());
+#endif
+
     return 0;
 }
 #endif /* WOLFHSM_CFG_ENABLE_CLIENT && WOLFHSM_CFG_ENABLE_SERVER */
@@ -156,6 +157,10 @@ int whTest_ClientConfig(whClientConfig* clientCfg)
 #if defined(WOLFHSM_CFG_TEST_WOLFCRYPTTEST)
     WH_TEST_RETURN_ON_FAIL(whTest_WolfCryptTestCfg(clientCfg));
 #endif /* WOLFHSM_CFG_TEST_WOLFCRYPTTEST */
+
+#if defined(WOLFHSM_CFG_ENABLE_TIMEOUT)
+    WH_TEST_RETURN_ON_FAIL(whTest_TimeoutClientConfig(clientCfg));
+#endif /* WOLFHSM_CFG_ENABLE_TIMEOUT */
 
     return WH_ERROR_OK;
 }

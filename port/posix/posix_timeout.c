@@ -56,14 +56,9 @@ int posixTimeout_Init(void* context, const void* config)
         return WH_ERROR_BADARGS;
     }
 
-    /* Already initialized? */
-    if (ctx->initialized) {
-        return WH_ERROR_OK;
-    }
-
     ctx->startUs   = 0;
     ctx->timeoutUs = (cfg != NULL) ? cfg->timeoutUs : 0;
-    ctx->started   = 0;
+    ctx->running   = 0;
 
     ctx->initialized = 1;
     return WH_ERROR_OK;
@@ -77,14 +72,9 @@ int posixTimeout_Cleanup(void* context)
         return WH_ERROR_BADARGS;
     }
 
-    /* Not initialized? */
-    if (!ctx->initialized) {
-        return WH_ERROR_OK;
-    }
-
     ctx->startUs     = 0;
     ctx->timeoutUs   = 0;
-    ctx->started     = 0;
+    ctx->running     = 0;
     ctx->initialized = 0;
 
     return WH_ERROR_OK;
@@ -99,7 +89,7 @@ int posixTimeout_Set(void* context, uint64_t timeoutUs)
     }
 
     if (!ctx->initialized) {
-        return WH_ERROR_NOTREADY;
+        return WH_ERROR_BADARGS;
     }
 
     ctx->timeoutUs = timeoutUs;
@@ -116,11 +106,14 @@ int posixTimeout_Start(void* context)
     }
 
     if (!ctx->initialized) {
-        return WH_ERROR_NOTREADY;
+        return WH_ERROR_BADARGS;
     }
 
     ctx->startUs = _getMonotonicTimeUs();
-    ctx->started = 1;
+    if (ctx->startUs == 0) {
+        return WH_ERROR_ABORTED;
+    }
+    ctx->running = 1;
 
     return WH_ERROR_OK;
 }
@@ -134,11 +127,11 @@ int posixTimeout_Stop(void* context)
     }
 
     if (!ctx->initialized) {
-        return WH_ERROR_NOTREADY;
+        return WH_ERROR_BADARGS;
     }
 
     ctx->startUs = 0;
-    ctx->started = 0;
+    ctx->running = 0;
 
     return WH_ERROR_OK;
 }
@@ -153,16 +146,19 @@ int posixTimeout_Expired(void* context, int* expired)
     }
 
     if (!ctx->initialized) {
-        return WH_ERROR_NOTREADY;
+        return WH_ERROR_BADARGS;
     }
 
     /* Not started or no timeout configured = not expired */
-    if (!ctx->started || (ctx->timeoutUs == 0)) {
+    if (!ctx->running || (ctx->timeoutUs == 0)) {
         *expired = 0;
         return WH_ERROR_OK;
     }
 
-    nowUs    = _getMonotonicTimeUs();
+    nowUs = _getMonotonicTimeUs();
+    if (nowUs == 0) {
+        return WH_ERROR_ABORTED;
+    }
     *expired = ((nowUs - ctx->startUs) >= ctx->timeoutUs) ? 1 : 0;
 
     return WH_ERROR_OK;

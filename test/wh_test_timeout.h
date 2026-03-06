@@ -24,11 +24,21 @@
 #ifndef TEST_WH_TEST_TIMEOUT_H_
 #define TEST_WH_TEST_TIMEOUT_H_
 
+#include "wolfhsm/wh_client.h"
+
 /**
- * Runs timeout module tests.
+ * Runs timeout module tests against the given client configuration.
+ *
+ * @param[in] config Client configuration with timeout support enabled.
+ * @return 0 on success and a non-zero error code on failure.
+ */
+int whTest_TimeoutClientConfig(whClientConfig* config);
+
+/**
+ * Runs timeout tests using a default POSIX configuration.
  *
  * @return 0 on success and a non-zero error code on failure.
  */
-int whTest_Timeout(void);
+int whTest_TimeoutPosix(void);
 
 #endif /* TEST_WH_TEST_TIMEOUT_H_ */
