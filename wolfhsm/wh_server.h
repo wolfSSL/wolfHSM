@@ -160,7 +160,7 @@ struct whServerContext_t {
     whCommServer  comm[1];
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     whServerCryptoContext* crypto;
-    int                   defaultDevId;
+    int                    defaultDevId;
     whKeyCacheContext      localCache; /* Unified cache structure */
 #ifdef WOLFHSM_CFG_SHE_EXTENSION
     whServerSheContext* she;

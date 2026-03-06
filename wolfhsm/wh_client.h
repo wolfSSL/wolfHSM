@@ -48,7 +48,6 @@
 
 /* Component includes */
 #include "wolfhsm/wh_comm.h"
-#include "wolfhsm/wh_message_comm.h"
 #include "wolfhsm/wh_message_customcb.h"
 #ifdef WOLFHSM_CFG_DMA
 #include "wolfhsm/wh_dma.h"

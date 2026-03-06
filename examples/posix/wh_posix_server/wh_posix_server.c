@@ -451,8 +451,9 @@ int main(int argc, char** argv)
 
     /* Context 5: Set default server crypto to use cryptocb */
     s_conf->devId = HW_DEV_ID;
-    WOLFHSM_CFG_PRINTF("Context 5: Setting up default server crypto with devId=%d\n",
-           s_conf->devId);
+    WOLFHSM_CFG_PRINTF(
+        "Context 5: Setting up default server crypto with devId=%d\n",
+        s_conf->devId);
 
     rc = wc_InitRng_ex(crypto->rng, NULL, s_conf->devId);
     if (rc != 0) {

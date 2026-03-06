@@ -244,11 +244,11 @@ static int whTest_CryptoAffinityWithCb(void)
 
     {
         Aes      aes[1];
-        uint8_t  key[AES_BLOCK_SIZE]     = {0x01};
-        uint8_t  iv[AES_BLOCK_SIZE]      = {0x02};
-        uint8_t  plainIn[AES_BLOCK_SIZE] = {0x03};
+        uint8_t  key[AES_BLOCK_SIZE]       = {0x01};
+        uint8_t  iv[AES_BLOCK_SIZE]        = {0x02};
+        uint8_t  plainIn[AES_BLOCK_SIZE]   = {0x03};
         uint8_t  cipherOut[AES_BLOCK_SIZE] = {0};
-        uint32_t outSize = 0;
+        uint32_t outSize                   = 0;
 
         WH_TEST_RETURN_ON_FAIL(wc_AesInit(aes, NULL, INVALID_DEVID));
         WH_TEST_RETURN_ON_FAIL(
@@ -270,11 +270,11 @@ static int whTest_CryptoAffinityWithCb(void)
 
     {
         Aes      aes[1];
-        uint8_t  key[AES_BLOCK_SIZE]     = {0x01};
-        uint8_t  iv[AES_BLOCK_SIZE]      = {0x02};
-        uint8_t  plainIn[AES_BLOCK_SIZE] = {0x03};
+        uint8_t  key[AES_BLOCK_SIZE]       = {0x01};
+        uint8_t  iv[AES_BLOCK_SIZE]        = {0x02};
+        uint8_t  plainIn[AES_BLOCK_SIZE]   = {0x03};
         uint8_t  cipherOut[AES_BLOCK_SIZE] = {0};
-        uint32_t outSize = 0;
+        uint32_t outSize                   = 0;
 
         WH_TEST_RETURN_ON_FAIL(wc_AesInit(aes, NULL, INVALID_DEVID));
         WH_TEST_RETURN_ON_FAIL(
@@ -454,7 +454,7 @@ static int whTest_CryptoAffinityNoCb(void)
         uint8_t  iv[AES_BLOCK_SIZE]        = {0x02};
         uint8_t  plainIn[AES_BLOCK_SIZE]   = {0x03};
         uint8_t  cipherOut[AES_BLOCK_SIZE] = {0};
-        uint32_t outSize = 0;
+        uint32_t outSize                   = 0;
 
         WH_TEST_RETURN_ON_FAIL(wc_AesInit(aes, NULL, INVALID_DEVID));
         WH_TEST_RETURN_ON_FAIL(
@@ -478,7 +478,7 @@ static int whTest_CryptoAffinityNoCb(void)
         uint8_t  iv[AES_BLOCK_SIZE]        = {0x02};
         uint8_t  plainIn[AES_BLOCK_SIZE]   = {0x03};
         uint8_t  cipherOut[AES_BLOCK_SIZE] = {0};
-        uint32_t outSize = 0;
+        uint32_t outSize                   = 0;
 
         WH_TEST_RETURN_ON_FAIL(wc_AesInit(aes, NULL, INVALID_DEVID));
         WH_TEST_RETURN_ON_FAIL(

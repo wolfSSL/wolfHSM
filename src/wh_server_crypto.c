@@ -5964,23 +5964,23 @@ int wh_Server_HandleCryptoDmaRequest(whServerContext* ctx, uint16_t magic,
 #endif /* HAVE_AESGCM */
 #ifdef WOLFSSL_AES_COUNTER
                 case WC_CIPHER_AES_CTR:
-                    ret = _HandleAesCtrDma(ctx, magic, devId, seq,
-                                           cryptoDataIn, cryptoInSize,
-                                           cryptoDataOut, &cryptoOutSize);
+                    ret = _HandleAesCtrDma(ctx, magic, devId, seq, cryptoDataIn,
+                                           cryptoInSize, cryptoDataOut,
+                                           &cryptoOutSize);
                     break;
 #endif /* WOLFSSL_AES_COUNTER */
 #ifdef HAVE_AES_CBC
                 case WC_CIPHER_AES_CBC:
-                    ret = _HandleAesCbcDma(ctx, magic, devId, seq,
-                                           cryptoDataIn, cryptoInSize,
-                                           cryptoDataOut, &cryptoOutSize);
+                    ret = _HandleAesCbcDma(ctx, magic, devId, seq, cryptoDataIn,
+                                           cryptoInSize, cryptoDataOut,
+                                           &cryptoOutSize);
                     break;
 #endif /* HAVE_AES_CBC */
 #ifdef HAVE_AES_ECB
                 case WC_CIPHER_AES_ECB:
-                    ret = _HandleAesEcbDma(ctx, magic, devId, seq,
-                                           cryptoDataIn, cryptoInSize,
-                                           cryptoDataOut, &cryptoOutSize);
+                    ret = _HandleAesEcbDma(ctx, magic, devId, seq, cryptoDataIn,
+                                           cryptoInSize, cryptoDataOut,
+                                           &cryptoOutSize);
                     break;
 #endif /* HAVE_AES_ECB */
                 default:

@@ -1173,8 +1173,7 @@ int whTest_ClientServerSequential(whTestNvmBackendType nvmType)
 
 #if !defined(WOLFHSM_CFG_NO_CRYPTO) && defined(HAVE_AES_CBC)
     /* Test split AES CBC request/response */
-    WH_TEST_RETURN_ON_FAIL(
-        _testAesCbcRequestResponse(client, server));
+    WH_TEST_RETURN_ON_FAIL(_testAesCbcRequestResponse(client, server));
 #endif /* !WOLFHSM_CFG_NO_CRYPTO && HAVE_AES_CBC */
 
     /* Check that we are still connected */
