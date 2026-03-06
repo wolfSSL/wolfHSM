@@ -43,7 +43,7 @@ typedef struct posixTimeoutConfig_t {
 typedef struct posixTimeoutContext_t {
     uint64_t startUs;     /* Snapshot of start time */
     uint64_t timeoutUs;   /* Configured timeout duration */
-    int      started;     /* 1 if timer is running, 0 otherwise */
+    int      running;     /* 1 if timer is running, 0 otherwise */
     int      initialized; /* 1 if initialized, 0 otherwise */
 } posixTimeoutContext;
 

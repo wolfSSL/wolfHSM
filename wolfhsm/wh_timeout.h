@@ -122,7 +122,9 @@ struct whTimeout_t {
     whTimeoutExpiredCb expiredCb;  /* Application expired callback */
     void*              expiredCtx; /* Application callback context */
     int                initialized;
-    uint8_t            WH_PAD[4];
+#if UINTPTR_MAX == UINT64_MAX
+    uint8_t WH_PAD[4];
+#endif
 };
 
 /**
@@ -197,8 +199,9 @@ int wh_Timeout_Stop(whTimeout* timeout);
  * before returning. The callback may set *isExpired to 0 to override
  * (suppress) the expiration.
  *
- * @param[in] timeout The timeout instance.
- * @return 1 if expired, 0 if not expired or disabled, or negative error code.
+ * @param[in] timeout The timeout instance. Must not be NULL.
+ * @return 1 if expired, 0 if not expired or disabled, WH_ERROR_BADARGS if
+ *         timeout is NULL, or negative error code on callback failure.
  */
 int wh_Timeout_Expired(whTimeout* timeout);
 

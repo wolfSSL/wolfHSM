@@ -45,9 +45,7 @@
 
 #include <stdint.h>  /* For sized ints */
 
-#ifdef WOLFHSM_CFG_ENABLE_TIMEOUT
 #include "wolfhsm/wh_timeout.h"
-#endif
 
 /** Packet content types */
 /* Request/response packets are composed of a single fixed-length header

@@ -79,7 +79,10 @@ int wh_Timeout_Cleanup(whTimeout* timeout)
     }
 
     if ((timeout->cb != NULL) && (timeout->cb->cleanup != NULL)) {
-        (void)timeout->cb->cleanup(timeout->context);
+        int ret = timeout->cb->cleanup(timeout->context);
+        if (ret != WH_ERROR_OK) {
+            return ret;
+        }
     }
 
     /* Zero the entire structure to make post-cleanup state distinguishable */
@@ -148,7 +151,7 @@ int wh_Timeout_Expired(whTimeout* timeout)
     int ret     = 0;
 
     if (timeout == NULL) {
-        return 0;
+        return WH_ERROR_BADARGS;
     }
 
     /* Not initialized or no callbacks = never expired */
