@@ -177,8 +177,6 @@ int wh_Client_SendRequest(whClientContext* c, uint16_t group, uint16_t action,
 int wh_Client_RecvResponse(whClientContext* c, uint16_t* out_group,
                            uint16_t* out_action, uint16_t* out_size,
                            void* data);
-
-
 /** Comm component functions */
 
 /**
