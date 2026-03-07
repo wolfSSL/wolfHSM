@@ -77,8 +77,8 @@ int wh_Server_Init(whServerContext* server, whServerConfig* config)
     server->nvm = config->nvm;
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
-    server->crypto       = config->crypto;
-    server->defaultDevId = config->devId;
+    server->crypto = config->crypto;
+    server->devId  = config->devId;
 #ifdef WOLFHSM_CFG_SHE_EXTENSION
     server->she = config->she;
 #endif

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024 wolfSSL Inc.
+ * Copyright (C) 2026 wolfSSL Inc.
  *
  * This file is part of wolfHSM.
  *
@@ -202,8 +202,8 @@ static int whTest_CryptoAffinityWithCb(void)
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
     WH_TEST_RETURN_ON_FAIL(wh_Client_CommInitResponse(client, NULL, NULL));
 
-    /* Verify server initial state - defaultDevId should be set */
-    WH_TEST_ASSERT_RETURN(server->defaultDevId == TEST_DEV_ID);
+    /* Verify server initial state - devId should be set */
+    WH_TEST_ASSERT_RETURN(server->devId == TEST_DEV_ID);
 
     /* Test 1: Default affinity after init should be HW (0) */
     rc = wh_Client_GetCryptoAffinity(client, &affinity);
@@ -421,7 +421,7 @@ static int whTest_CryptoAffinityNoCb(void)
     WH_TEST_RETURN_ON_FAIL(wh_Client_CommInitResponse(client, NULL, NULL));
 
     /* Verify server configured with INVALID_DEVID */
-    WH_TEST_ASSERT_RETURN(server->defaultDevId == INVALID_DEVID);
+    WH_TEST_ASSERT_RETURN(server->devId == INVALID_DEVID);
 
     /* Test 1: Default affinity should be HW */
     rc = wh_Client_GetCryptoAffinity(client, &affinity);
@@ -438,7 +438,7 @@ static int whTest_CryptoAffinityNoCb(void)
 
     /* Test 3: Set HW affinity on client side succeeds (it's just local state).
      * But when the server processes a request with HW affinity and no valid
-     * defaultDevId, it will use INVALID_DEVID (SW) anyway. */
+     * devId, it will use INVALID_DEVID (SW) anyway. */
     rc = wh_Client_SetCryptoAffinity(client, WH_CRYPTO_AFFINITY_HW);
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_OK);
 

@@ -54,23 +54,23 @@ Retrieves the client's current crypto affinity. This is a **local operation** th
 ```c
 uint32_t affinity;
 
-/* Default affinity is WH_CRYPTO_AFFINITY_SW after wh_Client_Init() */
+/* Default affinity is WH_CRYPTO_AFFINITY_HW after wh_Client_Init() */
 wh_Client_GetCryptoAffinity(client, &affinity);
-/* affinity == WH_CRYPTO_AFFINITY_SW */
-
-/* Switch to hardware crypto -- takes effect immediately, no round-trip */
-int rc = wh_Client_SetCryptoAffinity(client, WH_CRYPTO_AFFINITY_HW);
-if (rc == WH_ERROR_OK) {
-    /* All subsequent crypto operations will request HW acceleration */
-}
+/* affinity == WH_CRYPTO_AFFINITY_HW */
 
 /* Perform a crypto operation -- affinity is sent in the request header */
 wc_AesCbcEncrypt(&aes, out, in, len);
 /* If server has a valid devId, hardware crypto callback is used */
 
-/* Switch back to software crypto */
-wh_Client_SetCryptoAffinity(client, WH_CRYPTO_AFFINITY_SW);
-/* Subsequent crypto operations use software implementation */
+/* Switch to software crypto -- takes effect immediately, no round-trip */
+int rc = wh_Client_SetCryptoAffinity(client, WH_CRYPTO_AFFINITY_SW);
+if (rc == WH_ERROR_OK) {
+    /* All subsequent crypto operations will use software implementation */
+}
+
+/* Switch back to hardware crypto */
+wh_Client_SetCryptoAffinity(client, WH_CRYPTO_AFFINITY_HW);
+/* Subsequent crypto operations request HW acceleration */
 ```
 
 ## Server Behavior
@@ -80,9 +80,9 @@ When the server receives a crypto request, it reads the affinity field from the 
 | Affinity in Request | Server Action |
 |---------------------|---------------|
 | `WH_CRYPTO_AFFINITY_SW` | Uses `INVALID_DEVID` (wolfCrypt software implementation) |
-| `WH_CRYPTO_AFFINITY_HW` | Uses `server->defaultDevId` if valid, otherwise falls back to `INVALID_DEVID` |
+| `WH_CRYPTO_AFFINITY_HW` | Uses `server->devId` if valid, otherwise falls back to `INVALID_DEVID` |
 
-The `defaultDevId` is configured at server initialization from `config->devId`. If the server was not configured with a valid hardware `devId`, hardware affinity requests will silently fall back to software crypto.
+The `devId` is configured at server initialization from `config->devId`. If the server was not configured with a valid hardware `devId`, hardware affinity requests will silently fall back to software crypto.
 
 ## Protocol Details
 

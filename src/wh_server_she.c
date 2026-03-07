@@ -166,8 +166,8 @@ static int _AesMp16(whServerContext* server, uint8_t* in, word32 inSz,
     if (server == NULL || server->she == NULL) {
         return WH_ERROR_BADARGS;
     }
-    return wh_She_AesMp16_ex(server->she->sheAes, NULL, server->defaultDevId,
-                             in, inSz, out);
+    return wh_She_AesMp16_ex(server->she->sheAes, NULL, server->devId, in, inSz,
+                             out);
 }
 
 /* AuthID is the 4 rightmost bits of messageOne */
@@ -262,7 +262,7 @@ static int _SecureBootInit(whServerContext* server, uint16_t magic,
      * expected digest so meta->len will be too long */
     if (ret == 0) {
         ret = wc_InitCmac_ex(server->she->sheCmac, macKey, WH_SHE_KEY_SZ,
-                             WC_CMAC_AES, NULL, NULL, server->defaultDevId);
+                             WC_CMAC_AES, NULL, NULL, server->devId);
     }
     /* hash 12 zeros */
     if (ret == 0) {
@@ -498,10 +498,9 @@ static int _LoadKey(whServerContext* server, uint16_t magic, uint16_t req_size,
                sizeof(req.messageTwo));
 
         field = AES_BLOCK_SIZE;
-        ret   = wc_AesCmacGenerate_ex(server->she->sheCmac, cmacOutput,
-                                      (word32*)&field, cmacInput,
-                                      sizeof(cmacInput), tmpKey, WH_SHE_KEY_SZ,
-                                      NULL, server->defaultDevId);
+        ret   = wc_AesCmacGenerate_ex(
+            server->she->sheCmac, cmacOutput, (word32*)&field, cmacInput,
+            sizeof(cmacInput), tmpKey, WH_SHE_KEY_SZ, NULL, server->devId);
     }
     /* compare digest to M3 */
     if (ret == 0 && memcmp(req.messageThree, cmacOutput, field) != 0) {
@@ -518,7 +517,7 @@ static int _LoadKey(whServerContext* server, uint16_t magic, uint16_t req_size,
     }
     /* decrypt messageTwo */
     if (ret == 0) {
-        ret = wc_AesInit(server->she->sheAes, NULL, server->defaultDevId);
+        ret = wc_AesInit(server->she->sheAes, NULL, server->devId);
     }
     if (ret == 0) {
         ret = wc_AesSetKey(server->she->sheAes, tmpKey, WH_SHE_KEY_SZ, NULL,
@@ -611,7 +610,7 @@ static int _LoadKey(whServerContext* server, uint16_t magic, uint16_t req_size,
                        meta->len + sizeof(_SHE_KEY_UPDATE_ENC_C), tmpKey);
     }
     if (ret == 0) {
-        ret = wc_AesInit(server->she->sheAes, NULL, server->defaultDevId);
+        ret = wc_AesInit(server->she->sheAes, NULL, server->devId);
     }
     if (ret == 0) {
         ret = wc_AesSetKey(server->she->sheAes, tmpKey, WH_SHE_KEY_SZ, NULL,
@@ -651,7 +650,7 @@ static int _LoadKey(whServerContext* server, uint16_t magic, uint16_t req_size,
         ret   = wc_AesCmacGenerate_ex(server->she->sheCmac, resp.messageFive,
                                       (word32*)&field, resp.messageFour,
                                       sizeof(resp.messageFour), tmpKey,
-                                      WH_SHE_KEY_SZ, NULL, server->defaultDevId);
+                                      WH_SHE_KEY_SZ, NULL, server->devId);
     }
     if (ret == 0) {
         /* mark if the ram key was loaded */
@@ -764,7 +763,7 @@ static int _ExportRamKey(whServerContext* server, uint16_t magic,
     }
     /* encrypt M2 with K1 */
     if (ret == 0) {
-        ret = wc_AesInit(server->she->sheAes, NULL, server->defaultDevId);
+        ret = wc_AesInit(server->she->sheAes, NULL, server->devId);
     }
     if (ret == 0) {
         ret = wc_AesSetKey(server->she->sheAes, tmpKey, WH_SHE_KEY_SZ, NULL,
@@ -795,10 +794,9 @@ static int _ExportRamKey(whServerContext* server, uint16_t magic,
                sizeof(resp.messageTwo));
 
         field = AES_BLOCK_SIZE;
-        ret   = wc_AesCmacGenerate_ex(server->she->sheCmac, resp.messageThree,
-                                      (word32*)&field, cmacInput,
-                                      sizeof(cmacInput), tmpKey, WH_SHE_KEY_SZ,
-                                      NULL, server->defaultDevId);
+        ret   = wc_AesCmacGenerate_ex(
+            server->she->sheCmac, resp.messageThree, (word32*)&field, cmacInput,
+            sizeof(cmacInput), tmpKey, WH_SHE_KEY_SZ, NULL, server->devId);
     }
     if (ret == 0) {
         /* copy the ram key to kdfInput */
@@ -812,7 +810,7 @@ static int _ExportRamKey(whServerContext* server, uint16_t magic,
     }
     /* set K3 as encryption key */
     if (ret == 0) {
-        ret = wc_AesInit(server->she->sheAes, NULL, server->defaultDevId);
+        ret = wc_AesInit(server->she->sheAes, NULL, server->devId);
     }
     if (ret == 0) {
         ret = wc_AesSetKey(server->she->sheAes, tmpKey, WH_SHE_KEY_SZ, NULL,
@@ -850,7 +848,7 @@ static int _ExportRamKey(whServerContext* server, uint16_t magic,
         ret   = wc_AesCmacGenerate_ex(server->she->sheCmac, resp.messageFive,
                                       (word32*)&field, resp.messageFour,
                                       sizeof(resp.messageFour), tmpKey,
-                                      WH_SHE_KEY_SZ, NULL, server->defaultDevId);
+                                      WH_SHE_KEY_SZ, NULL, server->devId);
     }
 
     resp.rc = _TranslateSheReturnCode(ret);
@@ -914,7 +912,7 @@ static int _InitRnd(whServerContext* server, uint16_t magic, uint16_t req_size,
     }
     /* set up aes */
     if (ret == 0) {
-        ret = wc_AesInit(server->she->sheAes, NULL, server->defaultDevId);
+        ret = wc_AesInit(server->she->sheAes, NULL, server->devId);
     }
     if (ret == 0) {
         ret = wc_AesSetKey(server->she->sheAes, tmpKey, WH_SHE_KEY_SZ, NULL,
@@ -979,7 +977,7 @@ static int _Rnd(whServerContext* server, uint16_t magic, uint16_t req_size,
 
     /* set up aes */
     if (ret == 0) {
-        ret = wc_AesInit(server->she->sheAes, NULL, server->defaultDevId);
+        ret = wc_AesInit(server->she->sheAes, NULL, server->devId);
     }
 
     /* use PRNG_KEY as the encryption key */
@@ -1105,7 +1103,7 @@ static int _EncEcb(whServerContext* server, uint16_t magic, uint16_t req_size,
         WH_MAKE_KEYID(WH_KEYTYPE_SHE, server->comm->client_id, req.keyId), NULL,
         tmpKey, &keySz);
     if (ret == 0) {
-        ret = wc_AesInit(server->she->sheAes, NULL, server->defaultDevId);
+        ret = wc_AesInit(server->she->sheAes, NULL, server->devId);
     }
     else {
         ret = WH_SHE_ERC_KEY_NOT_AVAILABLE;
@@ -1164,7 +1162,7 @@ static int _EncCbc(whServerContext* server, uint16_t magic, uint16_t req_size,
         tmpKey, &keySz);
 
     if (ret == 0) {
-        ret = wc_AesInit(server->she->sheAes, NULL, server->defaultDevId);
+        ret = wc_AesInit(server->she->sheAes, NULL, server->devId);
     }
     else {
         ret = WH_SHE_ERC_KEY_NOT_AVAILABLE;
@@ -1229,7 +1227,7 @@ static int _DecEcb(whServerContext* server, uint16_t magic, uint16_t req_size,
         WH_MAKE_KEYID(WH_KEYTYPE_SHE, server->comm->client_id, req.keyId), NULL,
         tmpKey, &keySz);
     if (ret == 0) {
-        ret = wc_AesInit(server->she->sheAes, NULL, server->defaultDevId);
+        ret = wc_AesInit(server->she->sheAes, NULL, server->devId);
     }
     else {
         ret = WH_SHE_ERC_KEY_NOT_AVAILABLE;
@@ -1293,7 +1291,7 @@ static int _DecCbc(whServerContext* server, uint16_t magic, uint16_t req_size,
         tmpKey, &keySz);
 
     if (ret == 0) {
-        ret = wc_AesInit(server->she->sheAes, NULL, server->defaultDevId);
+        ret = wc_AesInit(server->she->sheAes, NULL, server->devId);
     }
     else {
         ret = WH_SHE_ERC_KEY_NOT_AVAILABLE;
@@ -1355,7 +1353,7 @@ static int _GenerateMac(whServerContext* server, uint16_t magic,
     if (ret == 0) {
         ret = wc_AesCmacGenerate_ex(server->she->sheCmac, resp.mac,
                                     (word32*)&field, in, req.sz, tmpKey,
-                                    WH_SHE_KEY_SZ, NULL, server->defaultDevId);
+                                    WH_SHE_KEY_SZ, NULL, server->devId);
     }
     else {
         ret = WH_SHE_ERC_KEY_NOT_AVAILABLE;
@@ -1399,7 +1397,7 @@ static int _VerifyMac(whServerContext* server, uint16_t magic,
     if (ret == 0) {
         ret = wc_AesCmacVerify_ex(server->she->sheCmac, mac, req.macLen,
                                   message, req.messageLen, tmpKey, keySz, NULL,
-                                  server->defaultDevId);
+                                  server->devId);
         /* only evaluate if key was found */
         if (ret == 0) {
             resp.status = 0;

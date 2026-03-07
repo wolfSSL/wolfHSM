@@ -4431,8 +4431,8 @@ int wh_Server_HandleCryptoRequest(whServerContext* ctx, uint16_t magic,
 
     /* Compute devId from the per-message affinity field */
     int devId = (rqstHeader.affinity == WH_CRYPTO_AFFINITY_HW &&
-                 ctx->defaultDevId != INVALID_DEVID)
-                    ? ctx->defaultDevId
+                 ctx->devId != INVALID_DEVID)
+                    ? ctx->devId
                     : INVALID_DEVID;
 
     WH_DEBUG_SERVER_VERBOSE("HandleCryptoRequest. Action:%u\n", action);
@@ -4527,12 +4527,6 @@ int wh_Server_HandleCryptoRequest(whServerContext* ctx, uint16_t magic,
                                            &cryptoOutSize);
                     break;
 #endif /* HAVE_ECC_VERIFY */
-#if 0
-        case WC_PK_TYPE_EC_CHECK_PRIV_KEY:
-            ret = _HandleEccCheckPrivKey(ctx, magic, devId, cryptoDataIn, cryptoInSize,
-                                          cryptoDataOut, &cryptoOutSize);
-            break;
-#endif
 #endif /* HAVE_ECC */
 
 #ifdef HAVE_CURVE25519
@@ -5900,8 +5894,8 @@ int wh_Server_HandleCryptoDmaRequest(whServerContext* ctx, uint16_t magic,
 
     /* Compute devId from the per-message affinity field */
     int devId = (rqstHeader.affinity == WH_CRYPTO_AFFINITY_HW &&
-                 ctx->defaultDevId != INVALID_DEVID)
-                    ? ctx->defaultDevId
+                 ctx->devId != INVALID_DEVID)
+                    ? ctx->devId
                     : INVALID_DEVID;
 
     switch (action) {
