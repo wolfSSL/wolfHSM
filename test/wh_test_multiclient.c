@@ -1502,8 +1502,8 @@ static int whTest_MultiClientSequential(void)
 
 #if !defined(WOLFHSM_CFG_NO_CRYPTO)
     /* Crypto contexts for both servers */
-    whServerCryptoContext crypto1[1] = {{.devId = INVALID_DEVID}};
-    whServerCryptoContext crypto2[1] = {{.devId = INVALID_DEVID}};
+    whServerCryptoContext crypto1[1] = {0};
+    whServerCryptoContext crypto2[1] = {0};
 #endif
 
     /* Server 1 configuration */
@@ -1561,11 +1561,11 @@ static int whTest_MultiClientSequential(void)
 
 #if !defined(WOLFHSM_CFG_NO_CRYPTO)
     /* Initialize RNGs */
-    ret = wc_InitRng_ex(crypto1->rng, NULL, crypto1->devId);
+    ret = wc_InitRng_ex(crypto1->rng, NULL, INVALID_DEVID);
     if (ret != 0)
         return ret;
 
-    ret = wc_InitRng_ex(crypto2->rng, NULL, crypto2->devId);
+    ret = wc_InitRng_ex(crypto2->rng, NULL, INVALID_DEVID);
     if (ret != 0)
         return ret;
 #endif
