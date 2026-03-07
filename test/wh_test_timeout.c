@@ -77,8 +77,8 @@ static int _timeoutTestConnectCb(void* context, whCommConnected connected)
 
 static int whTest_TimeoutAesCbc(void)
 {
-    WH_TEST_PRINT("Testing timeout AES CBC...\n");
     int rc = 0;
+    WH_TEST_PRINT("Testing timeout AES CBC...\n");
 
     /* Transport memory configuration */
     uint8_t              req[TIMEOUT_TEST_BUFFER_SIZE]  = {0};
@@ -229,7 +229,7 @@ static int _timeoutOverrideCb(whTimeout* timeout, int* isExpired)
     if (*counter <= 1) {
         /* First expiration: override and restart the timer */
         *isExpired = 0;
-        wh_Timeout_Start(timeout);
+        return wh_Timeout_Start(timeout);
     }
     /* Subsequent expirations: let it expire normally */
     return WH_ERROR_OK;
@@ -237,9 +237,9 @@ static int _timeoutOverrideCb(whTimeout* timeout, int* isExpired)
 
 static int whTest_TimeoutAesCbcOverride(void)
 {
-    WH_TEST_PRINT("Testing timeout AES CBC with override callback...\n");
     int rc       = 0;
     int cb_count = 0;
+    WH_TEST_PRINT("Testing timeout AES CBC with override callback...\n");
 
     /* Transport memory configuration */
     uint8_t              req[TIMEOUT_TEST_BUFFER_SIZE]  = {0};
@@ -384,8 +384,8 @@ static int whTest_TimeoutAesCbcOverride(void)
 /* Generic timeout API test - no platform dependencies */
 static int whTest_TimeoutApi(void)
 {
-    WH_TEST_PRINT("Testing timeout API...\n");
     whTimeout timeout[1];
+    WH_TEST_PRINT("Testing timeout API...\n");
 
     /* Test no-op mode (NULL config = timeout disabled, never expires) */
     wh_Timeout_Init(timeout, NULL);
@@ -411,11 +411,11 @@ static int whTest_TimeoutApi(void)
 
 static int whTest_TimeoutResponse(whClientContext* client)
 {
-    WH_TEST_PRINT("Testing timeout response...\n");
     int      rc                         = 0;
     uint8_t  echoData[]                 = "hello";
     uint8_t  respData[sizeof(echoData)] = {0};
     uint16_t respLen                    = 0;
+    WH_TEST_PRINT("Testing timeout response...\n");
 
     /* Send an echo request into the void (no server will process it) */
     rc = wh_Client_EchoRequest(client, sizeof(echoData), echoData);
@@ -432,8 +432,8 @@ static int whTest_TimeoutResponse(whClientContext* client)
 
 int whTest_TimeoutClientConfig(whClientConfig* config)
 {
-    WH_TEST_PRINT("Testing timeout client config...\n");
     whClientContext client[1] = {0};
+    WH_TEST_PRINT("Testing timeout client config...\n");
 
     WH_TEST_RETURN_ON_FAIL(whTest_TimeoutApi());
 

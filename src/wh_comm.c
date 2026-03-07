@@ -133,10 +133,12 @@ int wh_CommClient_SendRequest(whCommClient* context, uint16_t magic,
     if (rc == 0) {
         context->seq++;
         if (out_seq != NULL) *out_seq = context->seq;
-#ifdef WOLFHSM_CFG_ENABLE_TIMEOUT
-        rc = wh_Timeout_Start(&context->respTimeout);
-#endif
     }
+#ifdef WOLFHSM_CFG_ENABLE_TIMEOUT
+    if (rc == 0) {
+        rc = wh_Timeout_Start(&context->respTimeout);
+    }
+#endif
     return rc;
 }
 
