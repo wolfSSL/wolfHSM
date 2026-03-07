@@ -816,9 +816,7 @@ static int wh_She_TestMasterEcuKeyFallback(void)
     whNvmContext      nvm[1]     = {{0}};
 
     /* Crypto context */
-    whServerCryptoContext crypto[1] = {{
-        .devId = INVALID_DEVID,
-    }};
+    whServerCryptoContext crypto[1] = {0};
 
     whServerSheContext she[1];
     memset(she, 0, sizeof(she));
@@ -833,7 +831,7 @@ static int wh_She_TestMasterEcuKeyFallback(void)
 
     WH_TEST_RETURN_ON_FAIL(wh_Nvm_Init(nvm, n_conf));
     WH_TEST_RETURN_ON_FAIL(wolfCrypt_Init());
-    WH_TEST_RETURN_ON_FAIL(wc_InitRng_ex(crypto->rng, NULL, crypto->devId));
+    WH_TEST_RETURN_ON_FAIL(wc_InitRng_ex(crypto->rng, NULL, s_conf->devId));
     WH_TEST_RETURN_ON_FAIL(wh_Server_Init(server, s_conf));
     WH_TEST_RETURN_ON_FAIL(wh_Server_SetConnected(server, WH_COMM_CONNECTED));
 
