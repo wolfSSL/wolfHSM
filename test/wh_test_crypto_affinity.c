@@ -210,7 +210,7 @@ static int whTest_CryptoAffinityWithCb(void)
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_OK);
     WH_TEST_ASSERT_RETURN(affinity == WH_CRYPTO_AFFINITY_HW);
 
-    /* Test 2: Set HW affinity - local only, no round-trip */
+    /* Test 2: Set SW affinity - local only, no round-trip */
     rc = wh_Client_SetCryptoAffinity(client, WH_CRYPTO_AFFINITY_SW);
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_OK);
 

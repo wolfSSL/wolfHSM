@@ -69,6 +69,7 @@ typedef struct whServerCryptoContext {
 #ifndef WC_NO_RNG
     WC_RNG rng[1];
 #else
+    /* Placeholder to prevent empty struct in C90 */
     uint8_t WH_PAD[1];
 #endif
 } whServerCryptoContext;

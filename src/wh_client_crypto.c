@@ -1040,23 +1040,33 @@ int wh_Client_AesCbcRequest(whClientContext* ctx, Aes* aes, int enc,
 {
     whMessageCrypto_AesCbcRequest* req;
     uint8_t*                       dataPtr;
+    uint16_t                       blocks;
+    uint32_t                       key_len;
+    const uint8_t*                 key;
+    whKeyId                        key_id;
+    uint8_t*                       iv;
+    uint32_t                       iv_len;
+    uint8_t*                       req_in;
+    uint8_t*                       req_key;
+    uint8_t*                       req_iv;
+    uint32_t                       req_len;
 
     if ((ctx == NULL) || (aes == NULL) || ((len % AES_BLOCK_SIZE) != 0) ||
         (in == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
-    uint16_t blocks = len / AES_BLOCK_SIZE;
+    blocks = len / AES_BLOCK_SIZE;
 
     if (blocks == 0) {
         return WH_ERROR_OK;
     }
 
-    uint32_t       key_len = aes->keylen;
-    const uint8_t* key     = (const uint8_t*)(aes->devKey);
-    whKeyId        key_id  = WH_DEVCTX_TO_KEYID(aes->devCtx);
-    uint8_t*       iv      = (uint8_t*)aes->reg;
-    uint32_t       iv_len  = AES_IV_SIZE;
+    key_len = aes->keylen;
+    key     = (const uint8_t*)(aes->devKey);
+    key_id  = WH_DEVCTX_TO_KEYID(aes->devCtx);
+    iv      = (uint8_t*)aes->reg;
+    iv_len  = AES_IV_SIZE;
 
     dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
     if (dataPtr == NULL) {
@@ -1065,11 +1075,11 @@ int wh_Client_AesCbcRequest(whClientContext* ctx, Aes* aes, int enc,
 
     req = (whMessageCrypto_AesCbcRequest*)_createCryptoRequest(
         dataPtr, WC_CIPHER_AES_CBC, ctx->cryptoAffinity);
-    uint8_t* req_in  = (uint8_t*)(req + 1);
-    uint8_t* req_key = req_in + len;
-    uint8_t* req_iv  = req_key + key_len;
-    uint32_t req_len = sizeof(whMessageCrypto_GenericRequestHeader) +
-                       sizeof(*req) + len + key_len + iv_len;
+    req_in  = (uint8_t*)(req + 1);
+    req_key = req_in + len;
+    req_iv  = req_key + key_len;
+    req_len = sizeof(whMessageCrypto_GenericRequestHeader) +
+              sizeof(*req) + len + key_len + iv_len;
 
     if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
         return WH_ERROR_BADARGS;
@@ -1110,7 +1120,7 @@ int wh_Client_AesCbcResponse(whClientContext* ctx, Aes* aes, uint8_t* out,
     uint16_t                        res_len = 0;
     whMessageCrypto_AesCbcResponse* res;
 
-    if ((ctx == NULL) || (aes == NULL)) {
+    if ((ctx == NULL) || (aes == NULL) || (out == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
@@ -1124,15 +1134,13 @@ int wh_Client_AesCbcResponse(whClientContext* ctx, Aes* aes, uint8_t* out,
         ret = _getCryptoResponse(dataPtr, WC_CIPHER_AES_CBC, (uint8_t**)&res);
         if (ret == WH_ERROR_OK) {
             uint8_t* res_out = (uint8_t*)(res + 1);
-            if (out != NULL) {
-                memcpy(out, res_out, res->sz);
-                /* For encryption, update the IV with the last ciphertext
-                 * block for CBC chaining */
-                if (res->sz >= AES_BLOCK_SIZE) {
-                    uint32_t last_offset =
-                        ((res->sz / AES_BLOCK_SIZE) - 1) * AES_BLOCK_SIZE;
-                    memcpy((uint8_t*)aes->reg, out + last_offset, AES_IV_SIZE);
-                }
+            memcpy(out, res_out, res->sz);
+            /* For encryption, update the IV with the last ciphertext
+             * block for CBC chaining */
+            if (res->sz >= AES_BLOCK_SIZE) {
+                uint32_t last_offset =
+                    ((res->sz / AES_BLOCK_SIZE) - 1) * AES_BLOCK_SIZE;
+                memcpy((uint8_t*)aes->reg, out + last_offset, AES_IV_SIZE);
             }
             if (out_size != NULL) {
                 *out_size = res->sz;

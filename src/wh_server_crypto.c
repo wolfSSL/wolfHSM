@@ -4401,6 +4401,7 @@ int wh_Server_HandleCryptoRequest(whServerContext* ctx, uint16_t magic,
                                   uint16_t* out_resp_size, void* resp_packet)
 {
     int                                   ret        = 0;
+    int                                   devId      = INVALID_DEVID;
     whMessageCrypto_GenericRequestHeader  rqstHeader = {0};
     whMessageCrypto_GenericResponseHeader respHeader = {0};
 
@@ -4430,10 +4431,10 @@ int wh_Server_HandleCryptoRequest(whServerContext* ctx, uint16_t magic,
         magic, (whMessageCrypto_GenericRequestHeader*)req_packet, &rqstHeader);
 
     /* Compute devId from the per-message affinity field */
-    int devId = (rqstHeader.affinity == WH_CRYPTO_AFFINITY_HW &&
-                 ctx->devId != INVALID_DEVID)
-                    ? ctx->devId
-                    : INVALID_DEVID;
+    devId = (rqstHeader.affinity == WH_CRYPTO_AFFINITY_HW &&
+             ctx->devId != INVALID_DEVID)
+                ? ctx->devId
+                : INVALID_DEVID;
 
     WH_DEBUG_SERVER_VERBOSE("HandleCryptoRequest. Action:%u\n", action);
     WH_DEBUG_VERBOSE_HEXDUMP("[server] Crypto Request:\n", (const uint8_t*)req_packet,
@@ -5864,6 +5865,7 @@ int wh_Server_HandleCryptoDmaRequest(whServerContext* ctx, uint16_t magic,
                                      uint16_t* out_resp_size, void* resp_packet)
 {
     int                                   ret        = 0;
+    int                                   devId      = INVALID_DEVID;
     whMessageCrypto_GenericRequestHeader  rqstHeader = {0};
     whMessageCrypto_GenericResponseHeader respHeader = {0};
 
@@ -5893,10 +5895,10 @@ int wh_Server_HandleCryptoDmaRequest(whServerContext* ctx, uint16_t magic,
         magic, (whMessageCrypto_GenericRequestHeader*)req_packet, &rqstHeader);
 
     /* Compute devId from the per-message affinity field */
-    int devId = (rqstHeader.affinity == WH_CRYPTO_AFFINITY_HW &&
-                 ctx->devId != INVALID_DEVID)
-                    ? ctx->devId
-                    : INVALID_DEVID;
+    devId = (rqstHeader.affinity == WH_CRYPTO_AFFINITY_HW &&
+             ctx->devId != INVALID_DEVID)
+                ? ctx->devId
+                : INVALID_DEVID;
 
     switch (action) {
         case WC_ALGO_TYPE_HASH:

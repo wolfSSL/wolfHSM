@@ -739,7 +739,7 @@ int wh_Client_AesCbcRequest(whClientContext* ctx, Aes* aes, int enc,
  *
  * @param[in] ctx Pointer to the client context
  * @param[in,out] aes Pointer to the AES structure (IV updated on encrypt)
- * @param[out] out Pointer to where the output data is placed. May be NULL.
+ * @param[out] out Pointer to where the output data is placed. Must not be NULL.
  * @param[out] out_size Set to the number of bytes produced. May be NULL.
  * @return int Returns 0 on success, WH_ERROR_NOTREADY if the response is not
  *             yet available, or a negative error code on failure.
