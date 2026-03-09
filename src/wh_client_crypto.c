@@ -1134,14 +1134,11 @@ int wh_Client_AesCbcResponse(whClientContext* ctx, Aes* aes, uint8_t* out,
         ret = _getCryptoResponse(dataPtr, WC_CIPHER_AES_CBC, (uint8_t**)&res);
         if (ret == WH_ERROR_OK) {
             uint8_t* res_out = (uint8_t*)(res + 1);
+            uint8_t* res_iv  = res_out + res->sz;
             memcpy(out, res_out, res->sz);
-            /* For encryption, update the IV with the last ciphertext
-             * block for CBC chaining */
-            if (res->sz >= AES_BLOCK_SIZE) {
-                uint32_t last_offset =
-                    ((res->sz / AES_BLOCK_SIZE) - 1) * AES_BLOCK_SIZE;
-                memcpy((uint8_t*)aes->reg, out + last_offset, AES_IV_SIZE);
-            }
+            /* Update the IV from the server response for CBC chaining.
+             * The server provides the updated IV after the output data. */
+            memcpy((uint8_t*)aes->reg, res_iv, AES_IV_SIZE);
             if (out_size != NULL) {
                 *out_size = res->sz;
             }
