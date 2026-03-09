@@ -3641,6 +3641,114 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
         memset(cipher, 0, sizeof(cipher));
         memset(plainOut, 0, sizeof(plainOut));
     }
+    if (ret == 0) {
+        /* test async AES CBC with incremental steps (streaming IV chaining) */
+        uint32_t outSize = 0;
+        uint32_t halfSize = sizeof(plainIn) / 2;
+
+        WH_TEST_PRINT("AES CBC ASYNC STREAMING test\n");
+        ret = wc_AesInit(aes, NULL, INVALID_DEVID);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wc_AesInit %d\n", ret);
+        }
+
+        /* Encrypt first half */
+        if (ret == 0) {
+            ret = wc_AesSetKey(aes, key, sizeof(key), iv, AES_ENCRYPTION);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to wc_AesSetKey %d\n", ret);
+            }
+        }
+        if (ret == 0) {
+            ret = wh_Client_AesCbcRequest(ctx, aes, 1, plainIn, halfSize);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to AesCbcRequest enc1 %d\n", ret);
+            }
+        }
+        if (ret == 0) {
+            do {
+                ret = wh_Client_AesCbcResponse(ctx, aes, cipher, &outSize);
+            } while (ret == WH_ERROR_NOTREADY);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to AesCbcResponse enc1 %d\n", ret);
+            }
+        }
+
+        /* Encrypt second half (IV should chain from first half) */
+        if (ret == 0) {
+            ret = wh_Client_AesCbcRequest(ctx, aes, 1,
+                                           plainIn + halfSize, halfSize);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to AesCbcRequest enc2 %d\n", ret);
+            }
+        }
+        if (ret == 0) {
+            do {
+                ret = wh_Client_AesCbcResponse(ctx, aes,
+                                                cipher + halfSize, &outSize);
+            } while (ret == WH_ERROR_NOTREADY);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to AesCbcResponse enc2 %d\n", ret);
+            }
+        }
+
+        /* Decrypt first half */
+        if (ret == 0) {
+            ret = wc_AesSetKey(aes, key, sizeof(key), iv, AES_DECRYPTION);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to wc_AesSetKey dec %d\n", ret);
+            }
+        }
+        if (ret == 0) {
+            ret = wh_Client_AesCbcRequest(ctx, aes, 0, cipher, halfSize);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to AesCbcRequest dec1 %d\n", ret);
+            }
+        }
+        if (ret == 0) {
+            do {
+                ret = wh_Client_AesCbcResponse(ctx, aes, plainOut, &outSize);
+            } while (ret == WH_ERROR_NOTREADY);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to AesCbcResponse dec1 %d\n", ret);
+            }
+        }
+
+        /* Decrypt second half (IV should chain from first half) */
+        if (ret == 0) {
+            ret = wh_Client_AesCbcRequest(ctx, aes, 0,
+                                           cipher + halfSize, halfSize);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to AesCbcRequest dec2 %d\n", ret);
+            }
+        }
+        if (ret == 0) {
+            do {
+                ret = wh_Client_AesCbcResponse(ctx, aes,
+                                                plainOut + halfSize, &outSize);
+            } while (ret == WH_ERROR_NOTREADY);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to AesCbcResponse dec2 %d\n", ret);
+            }
+        }
+
+        /* Verify round-trip */
+        if (ret == 0) {
+            if (memcmp(plainIn, plainOut, sizeof(plainIn)) != 0) {
+                WH_ERROR_PRINT("Failed to match async AES-CBC streaming\n");
+                ret = -1;
+            }
+        }
+
+        (void)wc_AesFree(aes);
+        memset(cipher, 0, sizeof(cipher));
+        memset(plainOut, 0, sizeof(plainOut));
+
+        if (ret == 0) {
+            WH_TEST_PRINT("AES CBC ASYNC STREAMING DEVID=0x%X SUCCESS\n",
+                           devId);
+        }
+    }
 #endif /* HAVE_AES_CBC */
 
 #ifdef HAVE_AESGCM
@@ -5887,9 +5995,7 @@ static int wh_ClientServer_MemThreadTest(whTestNvmBackendType nvmType)
         whTest_NvmCfgBackend(nvmType, &nvm_setup, n_conf, fc_conf, fc, fcb));
 
     /* Crypto context */
-    whServerCryptoContext crypto[1] = {{
-            .devId = INVALID_DEVID,
-    }};
+    whServerCryptoContext crypto[1] = {0};
 
 
     whServerConfig s_conf[1] = {{
@@ -5903,7 +6009,7 @@ static int wh_ClientServer_MemThreadTest(whTestNvmBackendType nvmType)
 
     ret = wolfCrypt_Init();
     if (ret == 0) {
-        ret = wc_InitRng_ex(crypto->rng, NULL, crypto->devId);
+        ret = wc_InitRng_ex(crypto->rng, NULL, INVALID_DEVID);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed to initialize wolfCrypt rng: %d\n", ret);
         }
