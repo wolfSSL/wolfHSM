@@ -169,9 +169,9 @@ int wh_FlashUnit_ReadBytes(const whFlashCb* cb, void* context,
     if (offset_rem != 0) {
         ret = wh_FlashUnit_Read(cb, context, offset_units, 1, &buffer.unit);
         if (ret == 0) {
-            uint32_t this_size = offset_rem;
+            uint32_t this_size = WHFU_BYTES_PER_UNIT - offset_rem;
             if (data_len < this_size) this_size = data_len;
-            memcpy(data, &buffer.bytes[WHFU_BYTES_PER_UNIT - offset_rem], this_size);
+            memcpy(data, &buffer.bytes[offset_rem], this_size);
             data += this_size;
             data_len -= this_size;
             offset_units++;

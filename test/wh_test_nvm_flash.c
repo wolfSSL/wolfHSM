@@ -301,6 +301,47 @@ int whTest_Flash(const whFlashCb* fcb, void* fctx, const void* cfg)
                 17 * WHFU_BYTES_PER_UNIT, 8, read_bytes));
     WH_TEST_RETURN_ON_FAIL(memcmp(write_bytes, read_bytes, 8));
 
+    /* Test unaligned ReadBytes (exercises the offset_rem != 0 path) */
+    {
+        uint8_t pattern[WHFU_BYTES_PER_UNIT * 4];
+        uint8_t readback[WHFU_BYTES_PER_UNIT * 4];
+        uint32_t base_unit = 20;
+        uint32_t i;
+
+        for (i = 0; i < sizeof(pattern); i++) {
+            pattern[i] = (uint8_t)(0x10 + i);
+        }
+
+        /* Program 4 full units at base_unit */
+        WH_TEST_RETURN_ON_FAIL(wh_FlashUnit_ProgramBytes(fcb, fctx,
+                    base_unit * WHFU_BYTES_PER_UNIT, sizeof(pattern), pattern));
+
+        /* offset_rem = 3: should read pattern[3..7] */
+        memset(readback, 0, sizeof(readback));
+        WH_TEST_RETURN_ON_FAIL(wh_FlashUnit_ReadBytes(fcb, fctx,
+                    base_unit * WHFU_BYTES_PER_UNIT + 3, 5, readback));
+        WH_TEST_ASSERT_RETURN(0 == memcmp(readback, &pattern[3], 5));
+
+        /* offset_rem = 1: should read pattern[1..10] */
+        memset(readback, 0, sizeof(readback));
+        WH_TEST_RETURN_ON_FAIL(wh_FlashUnit_ReadBytes(fcb, fctx,
+                    base_unit * WHFU_BYTES_PER_UNIT + 1, 10, readback));
+        WH_TEST_ASSERT_RETURN(0 == memcmp(readback, &pattern[1], 10));
+
+        /* offset_rem = 5: should read pattern[5..7] */
+        memset(readback, 0, sizeof(readback));
+        WH_TEST_RETURN_ON_FAIL(wh_FlashUnit_ReadBytes(fcb, fctx,
+                    base_unit * WHFU_BYTES_PER_UNIT + 5, 3, readback));
+        WH_TEST_ASSERT_RETURN(0 == memcmp(readback, &pattern[5], 3));
+
+        /* Full 3-phase read: leading partial + aligned middle + trailing
+         * offset_rem = 2, len = 21: 6 leading + 8 aligned + 7 trailing */
+        memset(readback, 0, sizeof(readback));
+        WH_TEST_RETURN_ON_FAIL(wh_FlashUnit_ReadBytes(fcb, fctx,
+                    base_unit * WHFU_BYTES_PER_UNIT + 2, 21, readback));
+        WH_TEST_ASSERT_RETURN(0 == memcmp(readback, &pattern[2], 21));
+    }
+
     /* Erase the first partition */
     WH_TEST_RETURN_ON_FAIL(wh_FlashUnit_Erase(fcb, fctx,
             0, partition_units));
