@@ -109,9 +109,6 @@ struct whClientContext_t {
     uint16_t     last_req_id;
     uint16_t     last_req_kind;
     uint32_t     cryptoAffinity;
-#ifdef WOLFHSM_CFG_ENABLE_TIMEOUT
-    whTimeout respTimeout;
-#endif
 #ifdef WOLFHSM_CFG_DMA
     whClientDmaContext dma;
 #endif /* WOLFHSM_CFG_DMA */
