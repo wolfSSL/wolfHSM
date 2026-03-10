@@ -121,10 +121,8 @@ struct whTimeout_t {
     void*              context;    /* Platform context */
     whTimeoutExpiredCb expiredCb;  /* Application expired callback */
     void*              expiredCtx; /* Application callback context */
-    int                initialized;
-#if UINTPTR_MAX == UINT64_MAX
-    uint8_t WH_PAD[4];
-#endif
+    int32_t            initialized;
+    uint8_t            WH_PAD[4];
 };
 
 /**

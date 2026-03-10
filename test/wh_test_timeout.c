@@ -418,8 +418,8 @@ static int whTest_TimeoutResponse(whClientContext* client)
     WH_TEST_PRINT("Testing timeout response...\n");
 
     /* Send an echo request into the void (no server will process it) */
-    rc = wh_Client_EchoRequest(client, sizeof(echoData), echoData);
-    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_OK);
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Client_EchoRequest(client, sizeof(echoData), echoData));
 
     /* Poll for response - should time out */
     do {
