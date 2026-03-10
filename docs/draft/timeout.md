@@ -1,5 +1,11 @@
 # Timeout Functionality: Client Perspective
 
+## Overview
+
+The response timeout feature is primarily designed to prevent the client from blocking indefinitely when the server fails to respond to a request. This is most relevant for **blocking operations** such as wolfCrypt cryptographic calls, where the client sends a request and polls for a response in a tight loop. Without a timeout, a non-responsive server would cause the client to hang forever.
+
+Since the timeout is checked inside `wh_CommClient_RecvResponse`, it **can** also apply to the split (async) API where the caller manually polls `RecvResponse`. However, in the async case the timeout is only evaluated each time the caller invokes `RecvResponse` -- it does not proactively notify the caller or fire asynchronously. If the caller is not actively polling, the timeout has no effect.
+
 ## 1. Configuration at Init Time
 
 The timeout feature uses a callback-based abstraction (similar to the lock feature) that allows platform-specific timer implementations without introducing OS dependencies in core wolfHSM code. A platform port provides a callback table implementing the timer operations, and the core timeout module delegates to these callbacks.
@@ -44,7 +50,9 @@ The timeout is handled transparently in the comm layer:
 1. **`wh_CommClient_SendRequest`**: After a successful send, starts the response timer via `wh_Timeout_Start()`.
 2. **`wh_CommClient_RecvResponse`**: When the transport returns `WH_ERROR_NOTREADY`, checks `wh_Timeout_Expired()`. If expired, returns `WH_ERROR_TIMEOUT`. On successful receive, stops the timer via `wh_Timeout_Stop()`.
 
-This means every `do { ... } while (ret == WH_ERROR_NOTREADY)` loop in the codebase automatically gets timeout support -- crypto, NVM, keystore, cert, SHE, keywrap, and all other client operations.
+For blocking (synchronous) client APIs, this means the internal `do { ... } while (ret == WH_ERROR_NOTREADY)` polling loop automatically gets timeout support -- the client will return `WH_ERROR_TIMEOUT` instead of spinning forever if the server does not respond within the configured deadline.
+
+For split (async) APIs where the application calls `SendRequest` and `RecvResponse` separately, the timeout check occurs each time `RecvResponse` is called and returns `WH_ERROR_NOTREADY`. The timeout does **not** interrupt the caller or provide out-of-band notification -- it is purely poll-based.
 
 ```
 Client App                      CommClient                       whTimeout
@@ -108,5 +116,7 @@ whTimeoutConfig timeoutCfg = {
 ```
 
 ## 5. Design Notes
+- **Primary use case: blocking wolfCrypt operations.** The timeout is designed to prevent indefinite hangs when the server fails to respond to blocking client API calls, which currently only exist when using the wolfCrypt API for crypto. These calls internally poll `RecvResponse` in a tight loop, and the timeout provides automatic protection against a non-responsive server.
+- **Async API compatibility.** The timeout mechanism also works with the split wolfHSM `SendRequest`/`RecvResponse` API, but only checks for expiration when `RecvResponse` is called by the application. It is purely poll-driven, and there is no callback, signal, or interrupt that fires independently. If the application stops calling `RecvResponse`, the timeout will not trigger.
 - **The timeout is per-comm-client, not per-call.** All operations for a given client share the same `respTimeout` context with the same duration. You can call `wh_Timeout_Set()` to change the duration between calls, but there's no per-operation override.
 - **Timer starts on send, checks on receive.** The timer window begins when a request is successfully sent, measuring the full round-trip wait.
