@@ -146,9 +146,7 @@ static int whTest_TimeoutAesCbc(void)
     WH_TEST_RETURN_ON_FAIL(whTest_NvmCfgBackend(
         WH_NVM_TEST_BACKEND_FLASH, &nvm_setup, n_conf, fc_conf, fc, fcb));
 
-    whServerCryptoContext crypto[1] = {{
-        .devId = INVALID_DEVID,
-    }};
+    whServerCryptoContext crypto[1] = {0};
 
     whServerConfig  s_conf[1] = {{
          .comm_config = cs_conf,
@@ -307,9 +305,7 @@ static int whTest_TimeoutAesCbcOverride(void)
     WH_TEST_RETURN_ON_FAIL(whTest_NvmCfgBackend(
         WH_NVM_TEST_BACKEND_FLASH, &nvm_setup, n_conf, fc_conf, fc, fcb));
 
-    whServerCryptoContext crypto[1] = {{
-        .devId = INVALID_DEVID,
-    }};
+    whServerCryptoContext crypto[1] = {0};
 
     whServerConfig  s_conf[1] = {{
          .comm_config = cs_conf,
