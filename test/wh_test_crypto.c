@@ -5614,8 +5614,10 @@ int whTest_CryptoClientConfig(whClientConfig* config)
 
 #ifdef WOLFHSM_CFG_KEYWRAP
     if (ret == 0) {
-        /* Test keywrap functionality */
         ret = whTest_Client_KeyWrap(client);
+    }
+    if (ret == 0) {
+        ret = whTest_Client_DataWrap(client);
     }
 #endif
 
