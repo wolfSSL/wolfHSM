@@ -135,13 +135,15 @@ static int whTest_ServerCfgLoop(whServerConfig* serverCfg)
 }
 #endif /* WOLFHSM_CFG_TEST_POSIX && WOLFHSM_CFG_ENABLE_SERVER */
 
-#if defined(WOLFHSM_CFG_TEST_POSIX) && defined(WOLFHSM_CFG_ENABLE_CLIENT)
+#if defined(WOLFHSM_CFG_TEST_POSIX) && defined(WOLFHSM_CFG_ENABLE_CLIENT) && \
+    defined(WOLFHSM_CFG_ENABLE_SERVER)
 static void* _whClientTask(void* cf)
 {
     WH_TEST_ASSERT(0 == whTest_WolfCryptTestCfg(cf));
     return NULL;
 }
-#endif /* WOLFHSM_CFG_TEST_POSIX && WOLFHSM_CFG_ENABLE_CLIENT */
+#endif /* WOLFHSM_CFG_TEST_POSIX && WOLFHSM_CFG_ENABLE_CLIENT && \
+          WOLFHSM_CFG_ENABLE_SERVER */
 
 #if defined(WOLFHSM_CFG_TEST_POSIX) && defined(WOLFHSM_CFG_ENABLE_SERVER)
 static void* _whServerTask(void* cf)
