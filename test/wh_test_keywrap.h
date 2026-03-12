@@ -23,6 +23,7 @@
 #include "wolfhsm/wh_client.h"
 
 int whTest_Client_KeyWrap(whClientContext* ctx);
+int whTest_Client_DataWrap(whClientContext* ctx);
 int whTest_KeyWrapClientConfig(whClientConfig* cf);
 
 #endif /* WH_TEST_COMM_H_ */

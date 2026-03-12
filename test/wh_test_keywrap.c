@@ -257,6 +257,84 @@ static int _AesGcm_TestDataWrap(whClientContext* client)
     return ret;
 }
 
+static int _AesGcm_TestKeyUnwrapUnderflow(whClientContext* client)
+{
+    int           ret;
+    uint8_t       dummyBuf[1] = {0};
+    whNvmMetadata tmpMetadata = {0};
+    uint8_t       tmpKey[WH_TEST_AES_KEYSIZE] = {0};
+    uint16_t      tmpKeySz = sizeof(tmpKey);
+    whKeyId       wrappedKeyId = WH_KEYID_ERASED;
+
+    /* wrappedKeySz=0: must return WH_ERROR_BADARGS, not underflow */
+    ret = wh_Client_KeyUnwrapAndExport(client, WC_CIPHER_AES_GCM, WH_TEST_KEKID,
+                                       dummyBuf, 0, &tmpMetadata, tmpKey,
+                                       &tmpKeySz);
+    if (ret != WH_ERROR_BADARGS) {
+        WH_ERROR_PRINT("KeyUnwrapAndExport(sz=0) expected BADARGS, got %d\n",
+                       ret);
+        return WH_TEST_FAIL;
+    }
+
+    /* wrappedKeySz=1: must return WH_ERROR_BADARGS, not underflow */
+    tmpKeySz = sizeof(tmpKey);
+    ret = wh_Client_KeyUnwrapAndExport(client, WC_CIPHER_AES_GCM, WH_TEST_KEKID,
+                                       dummyBuf, 1, &tmpMetadata, tmpKey,
+                                       &tmpKeySz);
+    if (ret != WH_ERROR_BADARGS) {
+        WH_ERROR_PRINT("KeyUnwrapAndExport(sz=1) expected BADARGS, got %d\n",
+                       ret);
+        return WH_TEST_FAIL;
+    }
+
+    /* wrappedKeySz=0: test KeyUnwrapAndCache path */
+    ret = wh_Client_KeyUnwrapAndCache(client, WC_CIPHER_AES_GCM, WH_TEST_KEKID,
+                                      dummyBuf, 0, &wrappedKeyId);
+    if (ret != WH_ERROR_BADARGS) {
+        WH_ERROR_PRINT("KeyUnwrapAndCache(sz=0) expected BADARGS, got %d\n",
+                       ret);
+        return WH_TEST_FAIL;
+    }
+
+    /* wrappedKeySz=1: test KeyUnwrapAndCache path */
+    ret = wh_Client_KeyUnwrapAndCache(client, WC_CIPHER_AES_GCM, WH_TEST_KEKID,
+                                      dummyBuf, 1, &wrappedKeyId);
+    if (ret != WH_ERROR_BADARGS) {
+        WH_ERROR_PRINT("KeyUnwrapAndCache(sz=1) expected BADARGS, got %d\n",
+                       ret);
+        return WH_TEST_FAIL;
+    }
+
+    return WH_ERROR_OK;
+}
+
+static int _AesGcm_TestDataUnwrapUnderflow(whClientContext* client)
+{
+    int      ret;
+    uint8_t  dummyBuf[1] = {0};
+    uint8_t  outBuf[32]  = {0};
+    uint32_t outSz       = sizeof(outBuf);
+
+    /* wrappedDataSz=0: must return WH_ERROR_BADARGS, not underflow */
+    ret = wh_Client_DataUnwrap(client, WC_CIPHER_AES_GCM, WH_TEST_KEKID,
+                               dummyBuf, 0, outBuf, &outSz);
+    if (ret != WH_ERROR_BADARGS) {
+        WH_ERROR_PRINT("DataUnwrap(sz=0) expected BADARGS, got %d\n", ret);
+        return WH_TEST_FAIL;
+    }
+
+    /* wrappedDataSz=1: must return WH_ERROR_BADARGS, not underflow */
+    outSz = sizeof(outBuf);
+    ret = wh_Client_DataUnwrap(client, WC_CIPHER_AES_GCM, WH_TEST_KEKID,
+                               dummyBuf, 1, outBuf, &outSz);
+    if (ret != WH_ERROR_BADARGS) {
+        WH_ERROR_PRINT("DataUnwrap(sz=1) expected BADARGS, got %d\n", ret);
+        return WH_TEST_FAIL;
+    }
+
+    return WH_ERROR_OK;
+}
+
 #endif /* HAVE_AESGCM */
 
 int whTest_Client_KeyWrap(whClientContext* client)
@@ -281,6 +359,14 @@ int whTest_Client_KeyWrap(whClientContext* client)
     if (ret != WH_ERROR_OK) {
         WH_ERROR_PRINT("Failed to _AesGcm_TestKeyWrap %d\n", ret);
     }
+
+    if (ret == WH_ERROR_OK) {
+        ret = _AesGcm_TestKeyUnwrapUnderflow(client);
+        if (ret != WH_ERROR_OK) {
+            WH_ERROR_PRINT("Failed to _AesGcm_TestKeyUnwrapUnderflow %d\n",
+                           ret);
+        }
+    }
 #endif
 
     _CleanupServerKek(client);
@@ -303,6 +389,14 @@ int whTest_Client_DataWrap(whClientContext* client)
     ret = _AesGcm_TestDataWrap(client);
     if (ret != WH_ERROR_OK) {
         WH_ERROR_PRINT("Failed to _AesGcm_TestDataWrap %d\n", ret);
+    }
+
+    if (ret == WH_ERROR_OK) {
+        ret = _AesGcm_TestDataUnwrapUnderflow(client);
+        if (ret != WH_ERROR_OK) {
+            WH_ERROR_PRINT("Failed to _AesGcm_TestDataUnwrapUnderflow %d\n",
+                           ret);
+        }
     }
 #endif
 
