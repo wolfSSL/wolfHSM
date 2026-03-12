@@ -16,6 +16,9 @@
  * You should have received a copy of the GNU General Public License
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
+
+#include "wolfhsm/wh_settings.h"
+
 #include <stdint.h>
 #include <string.h> /* For memset, memcpy */
 
@@ -25,7 +28,6 @@
 #include <unistd.h>   /* For sleep */
 #endif
 
-#include "wolfhsm/wh_settings.h"
 
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_comm.h"
@@ -751,6 +753,7 @@ typedef struct {
     int             transport;
 } whBenchClientTaskData;
 
+#if defined(WOLFHSM_CFG_ENABLE_SERVER) && defined(WOLFHSM_CFG_ENABLE_CLIENT)
 static void* _whBenchClientTask(void* data)
 {
     whBenchClientTaskData* taskData  = (whBenchClientTaskData*)data;
@@ -838,7 +841,8 @@ static void _whBenchClientServerThreadTest(whClientConfig* c_conf,
     }
 }
 
-/* Global static variables for transport configurations */
+/* Global static variables for transport configurations (used by
+ * wh_Bench_ClientServer_Posix which requires both client and server) */
 static uint8_t              g_mem_req[BUFFER_SIZE]  = {0};
 static uint8_t              g_mem_resp[BUFFER_SIZE] = {0};
 static whTransportMemConfig g_mem_tmcf              = {
@@ -1016,7 +1020,6 @@ static int _configureServerTransport(whBenchTransportType transport,
     return ret;
 }
 
-
 /* transport is the type of transport to use */
 int wh_Bench_ClientServer_Posix(int transport, int moduleIndex)
 {
@@ -1131,6 +1134,7 @@ int wh_Bench_ClientServer_Posix(int transport, int moduleIndex)
 
     return WH_ERROR_OK;
 }
+#endif /* WOLFHSM_CFG_ENABLE_SERVER && WOLFHSM_CFG_ENABLE_CLIENT */
 
 
 #endif /* WOLFHSM_CFG_TEST_POSIX */
