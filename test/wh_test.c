@@ -43,6 +43,7 @@
 #include "wh_test_lock.h"
 #include "wh_test_posix_threadsafe_stress.h"
 #include "wh_test_crypto_affinity.h"
+#include "wh_test_timeout.h"
 
 #if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER)
 #include "wh_test_cert.h"
@@ -125,6 +126,10 @@ int whTest_Unit(void)
 
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
+#if defined(WOLFHSM_CFG_ENABLE_TIMEOUT) && defined(WOLFHSM_CFG_TEST_POSIX)
+    WH_TEST_ASSERT(0 == whTest_TimeoutPosix());
+#endif
+
     return 0;
 }
 #endif /* WOLFHSM_CFG_ENABLE_CLIENT && WOLFHSM_CFG_ENABLE_SERVER */
@@ -157,6 +162,10 @@ int whTest_ClientConfig(whClientConfig* clientCfg)
 #if defined(WOLFHSM_CFG_TEST_WOLFCRYPTTEST)
     WH_TEST_RETURN_ON_FAIL(whTest_WolfCryptTestCfg(clientCfg));
 #endif /* WOLFHSM_CFG_TEST_WOLFCRYPTTEST */
+
+#if defined(WOLFHSM_CFG_ENABLE_TIMEOUT)
+    WH_TEST_RETURN_ON_FAIL(whTest_TimeoutClientConfig(clientCfg));
+#endif /* WOLFHSM_CFG_ENABLE_TIMEOUT */
 
     return WH_ERROR_OK;
 }
