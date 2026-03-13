@@ -12,10 +12,10 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Checkout wolfssl
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         repository: wolfssl/wolfssl
         ref: v5.6.4-stable
@@ -99,10 +99,10 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Checkout wolfssl
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         repository: wolfssl/wolfssl
         path: wolfssl
