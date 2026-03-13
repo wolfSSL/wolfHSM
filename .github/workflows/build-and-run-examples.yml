@@ -18,11 +18,11 @@ jobs:
     timeout-minutes: 5
 
     steps:
-    - uses: actions/checkout@master
+    - uses: actions/checkout@v4
 
     # pull and build wolfssl
     - name: Checkout wolfssl
-      uses: actions/checkout@master
+      uses: actions/checkout@v4
       with:
         repository: wolfssl/wolfssl
         path: wolfssl
