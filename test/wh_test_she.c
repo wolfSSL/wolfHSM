@@ -42,6 +42,7 @@
 
 #ifdef WOLFHSM_CFG_ENABLE_SERVER
 #include "wolfhsm/wh_server.h"
+#include "wolfhsm/wh_server_she.h"
 #endif
 
 #ifdef WOLFHSM_CFG_ENABLE_CLIENT
@@ -862,12 +863,392 @@ static int wh_She_TestMasterEcuKeyFallback(void)
 }
 #endif /* WOLFHSM_CFG_ENABLE_SERVER */
 
+#if defined(WOLFHSM_CFG_ENABLE_SERVER)
+/* Value of WH_SHE_SB_SUCCESS from wh_server_she.c internal enum */
+#define TEST_SHE_SB_STATE_SUCCESS 3
+
+/**
+ * Test that SHE server handlers correctly reject requests with invalid
+ * req_size. Each handler is called directly via wh_Server_HandleSheRequest()
+ * with a realistic but incorrectly sized request packet.
+ */
+static int wh_She_TestReqSizeChecking(void)
+{
+    int             ret = 0;
+    whServerContext server[1] = {0};
+    uint16_t        req_size = 0;
+    uint16_t        resp_size = 0;
+
+    /* Buffers for request and response packets */
+    uint8_t req_packet[WOLFHSM_CFG_COMM_DATA_LEN];
+    uint8_t resp_packet[WOLFHSM_CFG_COMM_DATA_LEN];
+
+    /* Transport (not used, but required for server init) */
+    uint8_t                     reqBuf[BUFFER_SIZE]  = {0};
+    uint8_t                     respBuf[BUFFER_SIZE] = {0};
+    whTransportMemConfig        tmcf[1]              = {{
+                            .req       = (whTransportMemCsr*)reqBuf,
+                            .req_size  = sizeof(reqBuf),
+                            .resp      = (whTransportMemCsr*)respBuf,
+                            .resp_size = sizeof(respBuf),
+    }};
+    whTransportServerCb         tscb[1]    = {WH_TRANSPORT_MEM_SERVER_CB};
+    whTransportMemServerContext tmsc[1]    = {0};
+    whCommServerConfig          cs_conf[1] = {{
+                 .transport_cb      = tscb,
+                 .transport_context = (void*)tmsc,
+                 .transport_config  = (void*)tmcf,
+                 .server_id         = 124,
+    }};
+
+    /* RamSim Flash state and configuration.
+     * memory[] is static to avoid 1MB stack allocation. */
+    static uint8_t   memory[FLASH_RAM_SIZE];
+    whFlashRamsimCtx fc[1]                  = {0};
+    whFlashRamsimCfg fc_conf[1]             = {{0}};
+    const whFlashCb  fcb[1]                 = {WH_FLASH_RAMSIM_CB};
+
+    /* NVM */
+    whNvmFlashConfig  nf_conf[1] = {{
+         .cb      = fcb,
+         .context = fc,
+         .config  = fc_conf,
+    }};
+    whNvmFlashContext nfc[1]     = {0};
+    whNvmCb           nfcb[1]    = {WH_NVM_FLASH_CB};
+    whNvmConfig       n_conf[1]  = {{
+               .cb      = nfcb,
+               .context = nfc,
+               .config  = nf_conf,
+    }};
+    whNvmContext      nvm[1]     = {{0}};
+
+    /* Crypto context */
+    whServerCryptoContext crypto[1] = {0};
+
+    whServerSheContext she[1];
+
+    whServerConfig s_conf[1] = {{
+        .comm_config = cs_conf,
+        .nvm         = nvm,
+        .crypto      = crypto,
+        .she         = she,
+        .devId       = INVALID_DEVID,
+    }};
+
+    memset(she, 0, sizeof(she));
+    memset(memory, 0, sizeof(memory));
+
+    fc_conf->size       = FLASH_RAM_SIZE;
+    fc_conf->sectorSize = FLASH_SECTOR_SIZE;
+    fc_conf->pageSize   = FLASH_PAGE_SIZE;
+    fc_conf->erasedByte = ~(uint8_t)0;
+    fc_conf->memory     = memory;
+
+    WH_TEST_RETURN_ON_FAIL(wh_Nvm_Init(nvm, n_conf));
+    WH_TEST_RETURN_ON_FAIL(wolfCrypt_Init());
+    WH_TEST_RETURN_ON_FAIL(wc_InitRng_ex(crypto->rng, NULL, s_conf->devId));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_Init(server, s_conf));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_SetConnected(server, WH_COMM_CONNECTED));
+
+    /*
+     * Set SHE state so _ReportInvalidSheState allows requests through.
+     * WH_SHE_SET_UID always passes the state gate, but most other handlers
+     * require uidSet=1 and sbState=WH_SHE_SB_SUCCESS.
+     */
+    server->she->uidSet  = 1;
+    server->she->sbState = TEST_SHE_SB_STATE_SUCCESS;
+
+    /*
+     * Test 1: WH_SHE_SET_UID with truncated request.
+     * Populate a valid UID in the packet, but pass req_size one byte short.
+     */
+    {
+        whMessageShe_SetUidRequest* req =
+            (whMessageShe_SetUidRequest*)req_packet;
+        memset(req->uid, 0xAA, WH_SHE_UID_SZ);
+        req_size = sizeof(whMessageShe_SetUidRequest) - 1;
+        ret = wh_Server_HandleSheRequest(server, WH_COMM_MAGIC_NATIVE,
+                  WH_SHE_SET_UID, req_size,
+                  req_packet, &resp_size, resp_packet);
+        WH_TEST_ASSERT_RETURN(ret == WH_ERROR_BUFFER_SIZE);
+    }
+
+    /*
+     * Test 2: WH_SHE_SECURE_BOOT_INIT with truncated request.
+     * Set a valid bootloader size, but pass req_size one byte short.
+     */
+    {
+        whMessageShe_SecureBootInitRequest* req =
+            (whMessageShe_SecureBootInitRequest*)req_packet;
+        /* Need sbState=WH_SHE_SB_INIT for this handler to not return
+         * ERC_SEQUENCE_ERROR, but since we're testing the size check which
+         * happens first, we just need to pass the state gate. The state gate
+         * allows SECURE_BOOT_INIT through regardless of sbState. */
+        req->sz = 256;
+        req_size = sizeof(whMessageShe_SecureBootInitRequest) - 1;
+        ret = wh_Server_HandleSheRequest(server, WH_COMM_MAGIC_NATIVE,
+                  WH_SHE_SECURE_BOOT_INIT, req_size,
+                  req_packet, &resp_size, resp_packet);
+        WH_TEST_ASSERT_RETURN(ret == WH_ERROR_BUFFER_SIZE);
+    }
+
+    /* Secure boot failure resets sbState to SB_INIT, restore it */
+    server->she->sbState = TEST_SHE_SB_STATE_SUCCESS;
+
+    /*
+     * Test 3: WH_SHE_SECURE_BOOT_UPDATE with truncated fixed header.
+     * Set a valid chunk size but pass req_size smaller than the header.
+     */
+    {
+        whMessageShe_SecureBootUpdateRequest* req =
+            (whMessageShe_SecureBootUpdateRequest*)req_packet;
+        req->sz = 64;
+        req_size = sizeof(whMessageShe_SecureBootUpdateRequest) - 1;
+        ret = wh_Server_HandleSheRequest(server, WH_COMM_MAGIC_NATIVE,
+                  WH_SHE_SECURE_BOOT_UPDATE, req_size,
+                  req_packet, &resp_size, resp_packet);
+        WH_TEST_ASSERT_RETURN(ret == WH_ERROR_BUFFER_SIZE);
+    }
+
+    /* Secure boot failure resets sbState to SB_INIT, restore it */
+    server->she->sbState = TEST_SHE_SB_STATE_SUCCESS;
+
+    /*
+     * Test 4: WH_SHE_SECURE_BOOT_FINISH expects no request body.
+     * Send a nonzero req_size to trigger the check.
+     */
+    {
+        req_size = 1;
+        ret = wh_Server_HandleSheRequest(server, WH_COMM_MAGIC_NATIVE,
+                  WH_SHE_SECURE_BOOT_FINISH, req_size,
+                  req_packet, &resp_size, resp_packet);
+        WH_TEST_ASSERT_RETURN(ret == WH_ERROR_BUFFER_SIZE);
+    }
+
+    /* Secure boot failure resets sbState to SB_INIT, restore it */
+    server->she->sbState = TEST_SHE_SB_STATE_SUCCESS;
+
+    /*
+     * Test 5: WH_SHE_LOAD_KEY with truncated request.
+     * Fill M1/M2/M3 with nonzero data, pass req_size one byte short.
+     * NOTE: _LoadKey has an else clause that overwrites WH_ERROR_BUFFER_SIZE
+     * with WH_SHE_ERC_KEY_NOT_AVAILABLE. The size check fires but the error
+     * code is overwritten. Verify the request is still rejected (not OK).
+     */
+    {
+        whMessageShe_LoadKeyRequest* req =
+            (whMessageShe_LoadKeyRequest*)req_packet;
+        memset(req->messageOne, 0x11, WH_SHE_M1_SZ);
+        memset(req->messageTwo, 0x22, WH_SHE_M2_SZ);
+        memset(req->messageThree, 0x33, WH_SHE_M3_SZ);
+        req_size = sizeof(whMessageShe_LoadKeyRequest) - 1;
+        ret = wh_Server_HandleSheRequest(server, WH_COMM_MAGIC_NATIVE,
+                  WH_SHE_LOAD_KEY, req_size,
+                  req_packet, &resp_size, resp_packet);
+        WH_TEST_ASSERT_RETURN(ret != WH_ERROR_OK);
+    }
+
+    /*
+     * Test 6: WH_SHE_LOAD_PLAIN_KEY with truncated request.
+     * Fill a valid key, pass req_size one byte short.
+     */
+    {
+        whMessageShe_LoadPlainKeyRequest* req =
+            (whMessageShe_LoadPlainKeyRequest*)req_packet;
+        memset(req->key, 0xBB, WH_SHE_KEY_SZ);
+        req_size = sizeof(whMessageShe_LoadPlainKeyRequest) - 1;
+        ret = wh_Server_HandleSheRequest(server, WH_COMM_MAGIC_NATIVE,
+                  WH_SHE_LOAD_PLAIN_KEY, req_size,
+                  req_packet, &resp_size, resp_packet);
+        WH_TEST_ASSERT_RETURN(ret == WH_ERROR_BUFFER_SIZE);
+    }
+
+    /*
+     * Test 7: WH_SHE_EXPORT_RAM_KEY expects no request body.
+     * Send a nonzero req_size to trigger the check.
+     */
+    {
+        req_size = 1;
+        ret = wh_Server_HandleSheRequest(server, WH_COMM_MAGIC_NATIVE,
+                  WH_SHE_EXPORT_RAM_KEY, req_size,
+                  req_packet, &resp_size, resp_packet);
+        WH_TEST_ASSERT_RETURN(ret == WH_ERROR_BUFFER_SIZE);
+    }
+
+    /*
+     * Test 8: WH_SHE_INIT_RND expects no request body.
+     * Send a nonzero req_size to trigger the check.
+     */
+    {
+        req_size = 1;
+        ret = wh_Server_HandleSheRequest(server, WH_COMM_MAGIC_NATIVE,
+                  WH_SHE_INIT_RND, req_size,
+                  req_packet, &resp_size, resp_packet);
+        WH_TEST_ASSERT_RETURN(ret == WH_ERROR_BUFFER_SIZE);
+    }
+
+    /*
+     * Test 9: WH_SHE_RND expects no request body.
+     * Send a nonzero req_size to trigger the check.
+     */
+    {
+        req_size = 1;
+        ret = wh_Server_HandleSheRequest(server, WH_COMM_MAGIC_NATIVE,
+                  WH_SHE_RND, req_size,
+                  req_packet, &resp_size, resp_packet);
+        WH_TEST_ASSERT_RETURN(ret == WH_ERROR_BUFFER_SIZE);
+    }
+
+    /*
+     * Test 10: WH_SHE_EXTEND_SEED with truncated request.
+     * Fill valid entropy data, pass req_size one byte short.
+     */
+    {
+        whMessageShe_ExtendSeedRequest* req =
+            (whMessageShe_ExtendSeedRequest*)req_packet;
+        memset(req->entropy, 0xCC, WH_SHE_KEY_SZ);
+        req_size = sizeof(whMessageShe_ExtendSeedRequest) - 1;
+        ret = wh_Server_HandleSheRequest(server, WH_COMM_MAGIC_NATIVE,
+                  WH_SHE_EXTEND_SEED, req_size,
+                  req_packet, &resp_size, resp_packet);
+        WH_TEST_ASSERT_RETURN(ret == WH_ERROR_BUFFER_SIZE);
+    }
+
+    /*
+     * Test 11: WH_SHE_ENC_ECB with valid header but truncated payload.
+     * Set sz to 16 (one AES block) but only include the header, no data.
+     */
+    {
+        whMessageShe_EncEcbRequest* req =
+            (whMessageShe_EncEcbRequest*)req_packet;
+        req->sz    = 16;
+        req->keyId = WH_SHE_RAM_KEY_ID;
+        req_size = sizeof(whMessageShe_EncEcbRequest);
+        ret = wh_Server_HandleSheRequest(server, WH_COMM_MAGIC_NATIVE,
+                  WH_SHE_ENC_ECB, req_size,
+                  req_packet, &resp_size, resp_packet);
+        WH_TEST_ASSERT_RETURN(ret == WH_ERROR_BUFFER_SIZE);
+    }
+
+    /*
+     * Test 12: WH_SHE_ENC_ECB with truncated header.
+     * Pass req_size one byte short of the header struct.
+     */
+    {
+        whMessageShe_EncEcbRequest* req =
+            (whMessageShe_EncEcbRequest*)req_packet;
+        req->sz    = 16;
+        req->keyId = WH_SHE_RAM_KEY_ID;
+        req_size = sizeof(whMessageShe_EncEcbRequest) - 1;
+        ret = wh_Server_HandleSheRequest(server, WH_COMM_MAGIC_NATIVE,
+                  WH_SHE_ENC_ECB, req_size,
+                  req_packet, &resp_size, resp_packet);
+        WH_TEST_ASSERT_RETURN(ret == WH_ERROR_BUFFER_SIZE);
+    }
+
+    /*
+     * Test 13: WH_SHE_ENC_CBC with valid header but truncated payload.
+     * Set sz to 16 (one AES block), fill a valid IV, but only include the
+     * header with no cipher data following it.
+     */
+    {
+        whMessageShe_EncCbcRequest* req =
+            (whMessageShe_EncCbcRequest*)req_packet;
+        req->sz    = 16;
+        req->keyId = WH_SHE_RAM_KEY_ID;
+        memset(req->iv, 0xDD, WH_SHE_KEY_SZ);
+        req_size = sizeof(whMessageShe_EncCbcRequest);
+        ret = wh_Server_HandleSheRequest(server, WH_COMM_MAGIC_NATIVE,
+                  WH_SHE_ENC_CBC, req_size,
+                  req_packet, &resp_size, resp_packet);
+        WH_TEST_ASSERT_RETURN(ret == WH_ERROR_BUFFER_SIZE);
+    }
+
+    /*
+     * Test 14: WH_SHE_DEC_ECB with valid header but truncated payload.
+     */
+    {
+        whMessageShe_DecEcbRequest* req =
+            (whMessageShe_DecEcbRequest*)req_packet;
+        req->sz    = 16;
+        req->keyId = WH_SHE_RAM_KEY_ID;
+        req_size = sizeof(whMessageShe_DecEcbRequest);
+        ret = wh_Server_HandleSheRequest(server, WH_COMM_MAGIC_NATIVE,
+                  WH_SHE_DEC_ECB, req_size,
+                  req_packet, &resp_size, resp_packet);
+        WH_TEST_ASSERT_RETURN(ret == WH_ERROR_BUFFER_SIZE);
+    }
+
+    /*
+     * Test 15: WH_SHE_DEC_CBC with valid header but truncated payload.
+     */
+    {
+        whMessageShe_DecCbcRequest* req =
+            (whMessageShe_DecCbcRequest*)req_packet;
+        req->sz    = 16;
+        req->keyId = WH_SHE_RAM_KEY_ID;
+        memset(req->iv, 0xEE, WH_SHE_KEY_SZ);
+        req_size = sizeof(whMessageShe_DecCbcRequest);
+        ret = wh_Server_HandleSheRequest(server, WH_COMM_MAGIC_NATIVE,
+                  WH_SHE_DEC_CBC, req_size,
+                  req_packet, &resp_size, resp_packet);
+        WH_TEST_ASSERT_RETURN(ret == WH_ERROR_BUFFER_SIZE);
+    }
+
+    /*
+     * Test 16: WH_SHE_GEN_MAC with valid header but truncated payload.
+     * Set sz to 16 bytes of message data, but only pass the header.
+     */
+    {
+        whMessageShe_GenMacRequest* req =
+            (whMessageShe_GenMacRequest*)req_packet;
+        req->keyId = WH_SHE_RAM_KEY_ID;
+        req->sz    = 16;
+        req_size = sizeof(whMessageShe_GenMacRequest);
+        ret = wh_Server_HandleSheRequest(server, WH_COMM_MAGIC_NATIVE,
+                  WH_SHE_GEN_MAC, req_size,
+                  req_packet, &resp_size, resp_packet);
+        WH_TEST_ASSERT_RETURN(ret == WH_ERROR_BUFFER_SIZE);
+    }
+
+    /*
+     * Test 17: WH_SHE_VERIFY_MAC with valid header but truncated payload.
+     * Set messageLen=16 and macLen=16 but only pass the header.
+     */
+    {
+        whMessageShe_VerifyMacRequest* req =
+            (whMessageShe_VerifyMacRequest*)req_packet;
+        req->keyId     = WH_SHE_RAM_KEY_ID;
+        req->messageLen = 16;
+        req->macLen     = 16;
+        req_size = sizeof(whMessageShe_VerifyMacRequest);
+        ret = wh_Server_HandleSheRequest(server, WH_COMM_MAGIC_NATIVE,
+                  WH_SHE_VERIFY_MAC, req_size,
+                  req_packet, &resp_size, resp_packet);
+        WH_TEST_ASSERT_RETURN(ret == WH_ERROR_BUFFER_SIZE);
+    }
+
+    WH_TEST_PRINT("SHE req_size checking test SUCCESS\n");
+
+    wh_Server_Cleanup(server);
+    wh_Nvm_Cleanup(nvm);
+    wc_FreeRng(crypto->rng);
+    wolfCrypt_Cleanup();
+
+    return 0;
+}
+#endif /* WOLFHSM_CFG_ENABLE_SERVER */
+
 #if defined(WOLFHSM_CFG_TEST_POSIX) && defined(WOLFHSM_CFG_ENABLE_CLIENT) && \
     defined(WOLFHSM_CFG_ENABLE_SERVER)
 int whTest_She(void)
 {
     WH_TEST_PRINT("Testing SHE: master ECU key fallback...\n");
     WH_TEST_RETURN_ON_FAIL(wh_She_TestMasterEcuKeyFallback());
+
+    WH_TEST_PRINT("Testing SHE: req_size checking...\n");
+    WH_TEST_RETURN_ON_FAIL(wh_She_TestReqSizeChecking());
     WH_TEST_PRINT("Testing SHE: (pthread) mem core flow...\n");
     WH_TEST_RETURN_ON_FAIL(
         wh_ClientServer_MemThreadTest(whTest_SheClientConfig));
