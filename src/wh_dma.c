@@ -51,21 +51,33 @@ static int _checkAddrAgainstAllowList(const whDmaAddrList allowList, void* addr,
                                       size_t size)
 {
     uintptr_t startAddr = (uintptr_t)addr;
-    uintptr_t endAddr   = startAddr + size;
-    int       i         = 0;
+    uintptr_t endAddr;
+    int       i = 0;
 
     if (0 == size) {
         return WH_ERROR_BADARGS;
     }
 
+    /* Reject if the requested range would wrap the address space */
+    if (startAddr > UINTPTR_MAX - size) {
+        return WH_ERROR_BADARGS;
+    }
+    endAddr = startAddr + size;
+
     /* Check if the address range is fully within a allowlist entry */
     for (i = 0; i < WOLFHSM_CFG_DMAADDR_COUNT; i++) {
         uintptr_t allowListStartAddr = (uintptr_t)allowList[i].addr;
-        uintptr_t allowListEndAddr   = allowListStartAddr + allowList[i].size;
+        uintptr_t allowListEndAddr;
 
         if (0 == allowList[i].size) {
             continue;
         }
+
+        /* Skip allow list entries that would wrap the address space */
+        if (allowListStartAddr > UINTPTR_MAX - allowList[i].size) {
+            continue;
+        }
+        allowListEndAddr = allowListStartAddr + allowList[i].size;
 
         if (startAddr >= allowListStartAddr && endAddr <= allowListEndAddr) {
             return WH_ERROR_OK;

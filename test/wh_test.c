@@ -44,6 +44,7 @@
 #include "wh_test_posix_threadsafe_stress.h"
 #include "wh_test_crypto_affinity.h"
 #include "wh_test_timeout.h"
+#include "wh_test_dma.h"
 
 #if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER)
 #include "wh_test_cert.h"
@@ -86,6 +87,10 @@ int whTest_Unit(void)
 #endif /* WOLFHSM_CFG_SERVER_NVM_FLASH_LOG */
 
 #endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER && !WOLFHSM_CFG_NO_CRYPTO */
+
+#ifdef WOLFHSM_CFG_DMA
+    WH_TEST_ASSERT(0 == whTest_Dma());
+#endif
 
     /* Comm tests */
     WH_TEST_ASSERT(0 == whTest_Comm());
