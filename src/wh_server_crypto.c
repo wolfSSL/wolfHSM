@@ -28,6 +28,7 @@
 
 /* System libraries */
 #include <stdint.h>
+#include <stdio.h> /* DEBUG */
 #include <stddef.h>  /* For NULL */
 #include <string.h>  /* For memset, memcpy */
 
@@ -4289,8 +4290,13 @@ static int _HandleMlDsaVerify(whServerContext* ctx, uint16_t magic, int devId,
         ret = wh_Server_MlDsaKeyCacheExport(ctx, key_id, key);
         if (ret == WH_ERROR_OK) {
             /* verify the signature */
+            printf("[DEBUG SERVER MLDSA VERIFY] calling wc_MlDsaKey_Verify "
+                   "(wc_dilithium_verify_msg) sig_len=%u hash_len=%u\n",
+                   (unsigned)sig_len, (unsigned)hash_len);
             ret = wc_MlDsaKey_Verify(key, req_sig, sig_len, req_hash, hash_len,
                                      &result);
+            printf("[DEBUG SERVER MLDSA VERIFY] ret=%d result=%d\n",
+                   ret, result);
         }
         wc_MlDsaKey_Free(key);
     }

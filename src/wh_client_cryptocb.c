@@ -27,6 +27,7 @@
 #if !defined(WOLFHSM_CFG_NO_CRYPTO) && defined(WOLFHSM_CFG_ENABLE_CLIENT)
 
 #include <stdint.h>
+#include <stdio.h> /* DEBUG */
 
 #include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_error.h"
@@ -649,6 +650,12 @@ static int _handlePqcSign(whClientContext* ctx, wc_CryptoInfo* info, int useDma)
     void*       key     = info->pk.pqc_sign.key;
     int         type    = info->pk.pqc_sign.type;
 
+    /* DEBUG: log context parameters from cryptocb */
+    printf("[DEBUG PQC SIGN] context=%p contextLen=%u preHashType=%u\n",
+           (const void*)info->pk.pqc_sign.context,
+           (unsigned)info->pk.pqc_sign.contextLen,
+           (unsigned)info->pk.pqc_sign.preHashType);
+
 #ifndef WOLFHSM_CFG_DMA
     if (useDma) {
         /* TODO: proper error code? */
@@ -695,6 +702,12 @@ static int _handlePqcVerify(whClientContext* ctx, wc_CryptoInfo* info,
     int*        res     = info->pk.pqc_verify.res;
     void*       key     = info->pk.pqc_verify.key;
     int         type    = info->pk.pqc_verify.type;
+
+    /* DEBUG: log context parameters from cryptocb */
+    printf("[DEBUG PQC VERIFY] context=%p contextLen=%u preHashType=%u\n",
+           (const void*)info->pk.pqc_verify.context,
+           (unsigned)info->pk.pqc_verify.contextLen,
+           (unsigned)info->pk.pqc_verify.preHashType);
 
 #ifndef WOLFHSM_CFG_DMA
     if (useDma) {
