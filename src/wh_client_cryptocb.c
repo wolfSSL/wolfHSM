@@ -27,7 +27,6 @@
 #if !defined(WOLFHSM_CFG_NO_CRYPTO) && defined(WOLFHSM_CFG_ENABLE_CLIENT)
 
 #include <stdint.h>
-#include <stdio.h> /* DEBUG */
 
 #include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_error.h"
@@ -643,18 +642,15 @@ static int _handlePqcSign(whClientContext* ctx, wc_CryptoInfo* info, int useDma)
     int ret = CRYPTOCB_UNAVAILABLE;
 
     /* Extract info parameters */
-    const byte* in      = info->pk.pqc_sign.in;
-    word32      in_len  = info->pk.pqc_sign.inlen;
-    byte*       out     = info->pk.pqc_sign.out;
-    word32*     out_len = info->pk.pqc_sign.outlen;
-    void*       key     = info->pk.pqc_sign.key;
-    int         type    = info->pk.pqc_sign.type;
-
-    /* DEBUG: log context parameters from cryptocb */
-    printf("[DEBUG PQC SIGN] context=%p contextLen=%u preHashType=%u\n",
-           (const void*)info->pk.pqc_sign.context,
-           (unsigned)info->pk.pqc_sign.contextLen,
-           (unsigned)info->pk.pqc_sign.preHashType);
+    const byte* in          = info->pk.pqc_sign.in;
+    word32      in_len      = info->pk.pqc_sign.inlen;
+    byte*       out         = info->pk.pqc_sign.out;
+    word32*     out_len     = info->pk.pqc_sign.outlen;
+    void*       key         = info->pk.pqc_sign.key;
+    int         type        = info->pk.pqc_sign.type;
+    const byte* context     = info->pk.pqc_sign.context;
+    byte        contextLen  = info->pk.pqc_sign.contextLen;
+    word32      preHashType = info->pk.pqc_sign.preHashType;
 
 #ifndef WOLFHSM_CFG_DMA
     if (useDma) {
@@ -668,13 +664,15 @@ static int _handlePqcSign(whClientContext* ctx, wc_CryptoInfo* info, int useDma)
         case WC_PQC_SIG_TYPE_DILITHIUM:
 #ifdef WOLFHSM_CFG_DMA
             if (useDma) {
-                ret =
-                    wh_Client_MlDsaSignDma(ctx, in, in_len, out, out_len, key);
+                ret = wh_Client_MlDsaSignDma(ctx, in, in_len, out, out_len,
+                                             key, context, contextLen,
+                                             preHashType);
             }
             else
 #endif /* WOLFHSM_CFG_DMA */
             {
-                ret = wh_Client_MlDsaSign(ctx, in, in_len, out, out_len, key);
+                ret = wh_Client_MlDsaSign(ctx, in, in_len, out, out_len, key,
+                                          context, contextLen, preHashType);
             }
             break;
 #endif /* HAVE_DILITHIUM */
@@ -695,19 +693,16 @@ static int _handlePqcVerify(whClientContext* ctx, wc_CryptoInfo* info,
     int ret = CRYPTOCB_UNAVAILABLE;
 
     /* Extract info parameters */
-    const byte* sig     = info->pk.pqc_verify.sig;
-    word32      sig_len = info->pk.pqc_verify.siglen;
-    const byte* msg     = info->pk.pqc_verify.msg;
-    word32      msg_len = info->pk.pqc_verify.msglen;
-    int*        res     = info->pk.pqc_verify.res;
-    void*       key     = info->pk.pqc_verify.key;
-    int         type    = info->pk.pqc_verify.type;
-
-    /* DEBUG: log context parameters from cryptocb */
-    printf("[DEBUG PQC VERIFY] context=%p contextLen=%u preHashType=%u\n",
-           (const void*)info->pk.pqc_verify.context,
-           (unsigned)info->pk.pqc_verify.contextLen,
-           (unsigned)info->pk.pqc_verify.preHashType);
+    const byte* sig         = info->pk.pqc_verify.sig;
+    word32      sig_len     = info->pk.pqc_verify.siglen;
+    const byte* msg         = info->pk.pqc_verify.msg;
+    word32      msg_len     = info->pk.pqc_verify.msglen;
+    int*        res         = info->pk.pqc_verify.res;
+    void*       key         = info->pk.pqc_verify.key;
+    int         type        = info->pk.pqc_verify.type;
+    const byte* context     = info->pk.pqc_verify.context;
+    byte        contextLen  = info->pk.pqc_verify.contextLen;
+    word32      preHashType = info->pk.pqc_verify.preHashType;
 
 #ifndef WOLFHSM_CFG_DMA
     if (useDma) {
@@ -722,13 +717,15 @@ static int _handlePqcVerify(whClientContext* ctx, wc_CryptoInfo* info,
 #ifdef WOLFHSM_CFG_DMA
             if (useDma) {
                 ret = wh_Client_MlDsaVerifyDma(ctx, sig, sig_len, msg, msg_len,
-                                               res, key);
+                                               res, key, context, contextLen,
+                                               preHashType);
             }
             else
 #endif /* WOLFHSM_CFG_DMA */
             {
-                ret = wh_Client_MlDsaVerify(ctx, sig, sig_len, msg, msg_len, res,
-                                            key);
+                ret = wh_Client_MlDsaVerify(ctx, sig, sig_len, msg, msg_len,
+                                            res, key, context, contextLen,
+                                            preHashType);
             }
             break;
 #endif /* HAVE_DILITHIUM */

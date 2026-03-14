@@ -5666,7 +5666,9 @@ int wh_Client_MlDsaMakeExportKey(whClientContext* ctx, int level, int size,
 
 
 int wh_Client_MlDsaSign(whClientContext* ctx, const byte* in, word32 in_len,
-                        byte* out, word32* inout_len, MlDsaKey* key)
+                        byte* out, word32* inout_len, MlDsaKey* key,
+                        const byte* context, byte contextLen,
+                        word32 preHashType)
 {
     int                                ret     = 0;
     whMessageCrypto_MlDsaSignRequest*  req     = NULL;
@@ -5709,7 +5711,7 @@ int wh_Client_MlDsaSign(whClientContext* ctx, const byte* in, word32 in_len,
         uint16_t action = WC_ALGO_TYPE_PK;
 
         uint16_t req_len = sizeof(whMessageCrypto_GenericRequestHeader) +
-                           sizeof(*req) + in_len;
+                           sizeof(*req) + in_len + contextLen;
         uint32_t options = 0;
 
         /* Get data pointer from the context to use as request/response storage
@@ -5726,18 +5728,23 @@ int wh_Client_MlDsaSign(whClientContext* ctx, const byte* in, word32 in_len,
                 ctx->cryptoAffinity);
 
         if (req_len <= WOLFHSM_CFG_COMM_DATA_LEN) {
-            uint8_t* req_hash = (uint8_t*)(req + 1);
+            uint8_t* req_data = (uint8_t*)(req + 1);
             if (evict != 0) {
                 options |= WH_MESSAGE_CRYPTO_MLDSA_SIGN_OPTIONS_EVICT;
             }
 
             memset(req, 0, sizeof(*req));
-            req->options = options;
-            req->level   = key->level;
-            req->keyId   = key_id;
-            req->sz      = in_len;
+            req->options     = options;
+            req->level       = key->level;
+            req->keyId       = key_id;
+            req->sz          = in_len;
+            req->contextSz   = contextLen;
+            req->preHashType = preHashType;
             if ((in != NULL) && (in_len > 0)) {
-                memcpy(req_hash, in, in_len);
+                memcpy(req_data, in, in_len);
+            }
+            if ((context != NULL) && (contextLen > 0)) {
+                memcpy(req_data + in_len, context, contextLen);
             }
 
             /* Send Request */
@@ -5795,7 +5802,8 @@ int wh_Client_MlDsaSign(whClientContext* ctx, const byte* in, word32 in_len,
 
 int wh_Client_MlDsaVerify(whClientContext* ctx, const byte* sig, word32 sig_len,
                           const byte* msg, word32 msg_len, int* out_res,
-                          MlDsaKey* key)
+                          MlDsaKey* key, const byte* context, byte contextLen,
+                          word32 preHashType)
 {
     int                                  ret     = WH_ERROR_OK;
     uint8_t*                             dataPtr = NULL;
@@ -5838,7 +5846,7 @@ int wh_Client_MlDsaVerify(whClientContext* ctx, const byte* sig, word32 sig_len,
         uint32_t options = 0;
 
         uint16_t req_len = sizeof(whMessageCrypto_GenericRequestHeader) +
-                           sizeof(*req) + sig_len + msg_len;
+                           sizeof(*req) + sig_len + msg_len + contextLen;
 
 
         /* Get data pointer from the context to use as request/response storage
@@ -5864,16 +5872,21 @@ int wh_Client_MlDsaVerify(whClientContext* ctx, const byte* sig, word32 sig_len,
             }
 
             memset(req, 0, sizeof(*req));
-            req->options = options;
-            req->level   = key->level;
-            req->keyId   = key_id;
-            req->sigSz   = sig_len;
+            req->options     = options;
+            req->level       = key->level;
+            req->keyId       = key_id;
+            req->sigSz       = sig_len;
             if ((sig != NULL) && (sig_len > 0)) {
                 memcpy(req_sig, sig, sig_len);
             }
-            req->hashSz = msg_len;
+            req->hashSz      = msg_len;
             if ((msg != NULL) && (msg_len > 0)) {
                 memcpy(req_hash, msg, msg_len);
+            }
+            req->contextSz   = contextLen;
+            req->preHashType = preHashType;
+            if ((context != NULL) && (contextLen > 0)) {
+                memcpy(req_hash + msg_len, context, contextLen);
             }
 
             /* write request */
@@ -6116,7 +6129,9 @@ int wh_Client_MlDsaMakeExportKeyDma(whClientContext* ctx, int level,
 
 
 int wh_Client_MlDsaSignDma(whClientContext* ctx, const byte* in, word32 in_len,
-                           byte* out, word32* out_len, MlDsaKey* key)
+                           byte* out, word32* out_len, MlDsaKey* key,
+                           const byte* context, byte contextLen,
+                           word32 preHashType)
 {
     int                                   ret     = 0;
     whMessageCrypto_MlDsaSignDmaRequest*  req     = NULL;
@@ -6158,7 +6173,8 @@ int wh_Client_MlDsaSignDma(whClientContext* ctx, const byte* in, word32 in_len,
         uint16_t action = WC_ALGO_TYPE_PK;
 
         uint16_t req_len =
-            sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
+            sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req) +
+            contextLen;
         uint32_t options = 0;
 
         /* Get data pointer from the context to use as request/response storage
@@ -6180,9 +6196,14 @@ int wh_Client_MlDsaSignDma(whClientContext* ctx, const byte* in, word32 in_len,
             }
 
             memset(req, 0, sizeof(*req));
-            req->options = options;
-            req->level   = key->level;
-            req->keyId   = key_id;
+            req->options     = options;
+            req->level       = key->level;
+            req->keyId       = key_id;
+            req->contextSz   = contextLen;
+            req->preHashType = preHashType;
+            if ((context != NULL) && (contextLen > 0)) {
+                memcpy((uint8_t*)(req + 1), context, contextLen);
+            }
 
             /* Set up DMA buffers */
             req->msg.sz   = in_len;
@@ -6256,7 +6277,8 @@ int wh_Client_MlDsaSignDma(whClientContext* ctx, const byte* in, word32 in_len,
 
 int wh_Client_MlDsaVerifyDma(whClientContext* ctx, const byte* sig,
                              word32 sig_len, const byte* msg, word32 msg_len,
-                             int* out_res, MlDsaKey* key)
+                             int* out_res, MlDsaKey* key, const byte* context,
+                             byte contextLen, word32 preHashType)
 {
     int                                     ret     = 0;
     whMessageCrypto_MlDsaVerifyDmaRequest*  req     = NULL;
@@ -6296,7 +6318,8 @@ int wh_Client_MlDsaVerifyDma(whClientContext* ctx, const byte* sig,
         uintptr_t msgAddr = 0;
 
         uint16_t req_len =
-            sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
+            sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req) +
+            contextLen;
 
         /* Get data pointer from the context to use as request/response storage
          */
@@ -6317,9 +6340,14 @@ int wh_Client_MlDsaVerifyDma(whClientContext* ctx, const byte* sig,
             }
 
             memset(req, 0, sizeof(*req));
-            req->options = options;
-            req->level   = key->level;
-            req->keyId   = key_id;
+            req->options     = options;
+            req->level       = key->level;
+            req->keyId       = key_id;
+            req->contextSz   = contextLen;
+            req->preHashType = preHashType;
+            if ((context != NULL) && (contextLen > 0)) {
+                memcpy((uint8_t*)(req + 1), context, contextLen);
+            }
 
             /* Set up DMA buffers */
             req->sig.sz   = sig_len;

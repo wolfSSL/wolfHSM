@@ -4372,14 +4372,16 @@ static int whTestCrypto_MlDsaDmaClient(whClientContext* ctx, int devId,
         int    verified = 0;
 
         /* Sign the message */
-        ret = wh_Client_MlDsaSignDma(ctx, msg, sizeof(msg), sig, &sigLen, key);
+        ret = wh_Client_MlDsaSignDma(ctx, msg, sizeof(msg), sig, &sigLen, key,
+                                     NULL, 0, WC_HASH_TYPE_NONE);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed to sign message using ML-DSA: %d\n", ret);
         }
         else {
             /* Verify the signature - should succeed */
             ret = wh_Client_MlDsaVerifyDma(ctx, sig, sigLen, msg, sizeof(msg),
-                                           &verified, key);
+                                           &verified, key, NULL, 0,
+                                           WC_HASH_TYPE_NONE);
             if (ret != 0) {
                 WH_ERROR_PRINT("Failed to verify signature using ML-DSA: %d\n",
                                ret);
@@ -4393,7 +4395,8 @@ static int whTestCrypto_MlDsaDmaClient(whClientContext* ctx, int devId,
                 /* Modify signature and verify again - should fail */
                 sig[0] ^= 0xFF;
                 ret = wh_Client_MlDsaVerifyDma(ctx, sig, sigLen, msg,
-                                               sizeof(msg), &verified, key);
+                                               sizeof(msg), &verified, key,
+                                               NULL, 0, WC_HASH_TYPE_NONE);
                 if (ret != 0) {
                     WH_ERROR_PRINT("Failed to verify modified signature using "
                                    "ML-DSA: %d\n",
