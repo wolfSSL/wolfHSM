@@ -1124,16 +1124,10 @@ int wh_Client_MlDsaMakeCacheKey(whClientContext* ctx, int size, int level,
  * @param[in,out] out_len Pointer to size of output buffer, updated with actual
  * size.
  * @param[in] key Pointer to the ML-DSA key structure.
- * @param[in] context Optional FIPS 204 context string (NULL if none).
- * @param[in] contextLen Length of context string (0-255).
- * @param[in] preHashType Hash type for pre-hash mode (WC_HASH_TYPE_NONE for
- * pure ML-DSA).
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_Client_MlDsaSign(whClientContext* ctx, const byte* in, word32 in_len,
-                        byte* out, word32* out_len, MlDsaKey* key,
-                        const byte* context, byte contextLen,
-                        word32 preHashType);
+                        byte* out, word32* out_len, MlDsaKey* key);
 
 /**
  * @brief Verify a ML-DSA signature.
@@ -1147,16 +1141,11 @@ int wh_Client_MlDsaSign(whClientContext* ctx, const byte* in, word32 in_len,
  * @param[in] msg_len Length of the message in bytes.
  * @param[out] res Pointer to store verification result (1=success, 0=failure).
  * @param[in] key Pointer to the ML-DSA key structure.
- * @param[in] context Optional FIPS 204 context string (NULL if none).
- * @param[in] contextLen Length of context string (0-255).
- * @param[in] preHashType Hash type for pre-hash mode (WC_HASH_TYPE_NONE for
- * pure ML-DSA).
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_Client_MlDsaVerify(whClientContext* ctx, const byte* sig, word32 sig_len,
                           const byte* msg, word32 msg_len, int* res,
-                          MlDsaKey* key, const byte* context, byte contextLen,
-                          word32 preHashType);
+                          MlDsaKey* key);
 
 /**
  * @brief Check a ML-DSA private key.
@@ -1236,16 +1225,10 @@ int wh_Client_MlDsaMakeExportKeyDma(whClientContext* ctx, int level,
  * @param[in,out] out_len On input, size of out buffer. On output, length of
  * signature.
  * @param[in] key Pointer to the ML-DSA key structure.
- * @param[in] context Optional FIPS 204 context string (NULL if none).
- * @param[in] contextLen Length of context string (0-255).
- * @param[in] preHashType Hash type for pre-hash mode (WC_HASH_TYPE_NONE for
- * pure ML-DSA).
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_Client_MlDsaSignDma(whClientContext* ctx, const byte* in, word32 in_len,
-                           byte* out, word32* out_len, MlDsaKey* key,
-                           const byte* context, byte contextLen,
-                           word32 preHashType);
+                           byte* out, word32* out_len, MlDsaKey* key);
 
 /**
  * @brief Verify a ML-DSA signature with DMA.
@@ -1259,16 +1242,11 @@ int wh_Client_MlDsaSignDma(whClientContext* ctx, const byte* in, word32 in_len,
  * @param[in] msg_len Length of the message in bytes.
  * @param[out] res Result of verification (1 = success, 0 = failure).
  * @param[in] key Pointer to the ML-DSA key structure.
- * @param[in] context Optional FIPS 204 context string (NULL if none).
- * @param[in] contextLen Length of context string (0-255).
- * @param[in] preHashType Hash type for pre-hash mode (WC_HASH_TYPE_NONE for
- * pure ML-DSA).
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_Client_MlDsaVerifyDma(whClientContext* ctx, const byte* sig,
                              word32 sig_len, const byte* msg, word32 msg_len,
-                             int* res, MlDsaKey* key, const byte* context,
-                             byte contextLen, word32 preHashType);
+                             int* res, MlDsaKey* key);
 
 /**
  * @brief Check a ML-DSA private key against public key with DMA.

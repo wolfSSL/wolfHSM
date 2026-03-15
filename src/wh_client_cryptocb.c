@@ -65,6 +65,29 @@ static int _handlePqcSigCheckPrivKey(whClientContext* ctx, wc_CryptoInfo* info,
                                      int useDma);
 #endif /* HAVE_DILITHIUM || HAVE_FALCON */
 
+/* Internal extended ML-DSA helpers (not part of public API) */
+#ifdef HAVE_DILITHIUM
+int wh_Client_MlDsaSign_ex(whClientContext* ctx, const byte* in, word32 in_len,
+                            byte* out, word32* out_len, MlDsaKey* key,
+                            const byte* context, byte contextLen,
+                            word32 preHashType);
+int wh_Client_MlDsaVerify_ex(whClientContext* ctx, const byte* sig,
+                              word32 sig_len, const byte* msg, word32 msg_len,
+                              int* res, MlDsaKey* key, const byte* context,
+                              byte contextLen, word32 preHashType);
+#ifdef WOLFHSM_CFG_DMA
+int wh_Client_MlDsaSignDma_ex(whClientContext* ctx, const byte* in,
+                               word32 in_len, byte* out, word32* out_len,
+                               MlDsaKey* key, const byte* context,
+                               byte contextLen, word32 preHashType);
+int wh_Client_MlDsaVerifyDma_ex(whClientContext* ctx, const byte* sig,
+                                 word32 sig_len, const byte* msg,
+                                 word32 msg_len, int* res, MlDsaKey* key,
+                                 const byte* context, byte contextLen,
+                                 word32 preHashType);
+#endif /* WOLFHSM_CFG_DMA */
+#endif /* HAVE_DILITHIUM */
+
 int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
 {
     /* III When possible, return wolfCrypt-enumerated errors */
@@ -664,15 +687,15 @@ static int _handlePqcSign(whClientContext* ctx, wc_CryptoInfo* info, int useDma)
         case WC_PQC_SIG_TYPE_DILITHIUM:
 #ifdef WOLFHSM_CFG_DMA
             if (useDma) {
-                ret = wh_Client_MlDsaSignDma(ctx, in, in_len, out, out_len,
-                                             key, context, contextLen,
-                                             preHashType);
+                ret = wh_Client_MlDsaSignDma_ex(ctx, in, in_len, out, out_len,
+                                                key, context, contextLen,
+                                                preHashType);
             }
             else
 #endif /* WOLFHSM_CFG_DMA */
             {
-                ret = wh_Client_MlDsaSign(ctx, in, in_len, out, out_len, key,
-                                          context, contextLen, preHashType);
+                ret = wh_Client_MlDsaSign_ex(ctx, in, in_len, out, out_len, key,
+                                             context, contextLen, preHashType);
             }
             break;
 #endif /* HAVE_DILITHIUM */
@@ -716,16 +739,16 @@ static int _handlePqcVerify(whClientContext* ctx, wc_CryptoInfo* info,
         case WC_PQC_SIG_TYPE_DILITHIUM:
 #ifdef WOLFHSM_CFG_DMA
             if (useDma) {
-                ret = wh_Client_MlDsaVerifyDma(ctx, sig, sig_len, msg, msg_len,
-                                               res, key, context, contextLen,
-                                               preHashType);
+                ret = wh_Client_MlDsaVerifyDma_ex(ctx, sig, sig_len, msg, msg_len,
+                                                  res, key, context, contextLen,
+                                                  preHashType);
             }
             else
 #endif /* WOLFHSM_CFG_DMA */
             {
-                ret = wh_Client_MlDsaVerify(ctx, sig, sig_len, msg, msg_len,
-                                            res, key, context, contextLen,
-                                            preHashType);
+                ret = wh_Client_MlDsaVerify_ex(ctx, sig, sig_len, msg, msg_len,
+                                               res, key, context, contextLen,
+                                               preHashType);
             }
             break;
 #endif /* HAVE_DILITHIUM */

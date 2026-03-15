@@ -5665,10 +5665,10 @@ int wh_Client_MlDsaMakeExportKey(whClientContext* ctx, int level, int size,
 }
 
 
-int wh_Client_MlDsaSign(whClientContext* ctx, const byte* in, word32 in_len,
-                        byte* out, word32* inout_len, MlDsaKey* key,
-                        const byte* context, byte contextLen,
-                        word32 preHashType)
+int wh_Client_MlDsaSign_ex(whClientContext* ctx, const byte* in, word32 in_len,
+                      byte* out, word32* inout_len, MlDsaKey* key,
+                      const byte* context, byte contextLen,
+                      word32 preHashType)
 {
     int                                ret     = 0;
     whMessageCrypto_MlDsaSignRequest*  req     = NULL;
@@ -5800,10 +5800,17 @@ int wh_Client_MlDsaSign(whClientContext* ctx, const byte* in, word32 in_len,
     return ret;
 }
 
-int wh_Client_MlDsaVerify(whClientContext* ctx, const byte* sig, word32 sig_len,
-                          const byte* msg, word32 msg_len, int* out_res,
-                          MlDsaKey* key, const byte* context, byte contextLen,
-                          word32 preHashType)
+int wh_Client_MlDsaSign(whClientContext* ctx, const byte* in, word32 in_len,
+                        byte* out, word32* out_len, MlDsaKey* key)
+{
+    return wh_Client_MlDsaSign_ex(ctx, in, in_len, out, out_len, key,
+                                  NULL, 0, WC_HASH_TYPE_NONE);
+}
+
+int wh_Client_MlDsaVerify_ex(whClientContext* ctx, const byte* sig, word32 sig_len,
+                         const byte* msg, word32 msg_len, int* out_res,
+                         MlDsaKey* key, const byte* context, byte contextLen,
+                         word32 preHashType)
 {
     int                                  ret     = WH_ERROR_OK;
     uint8_t*                             dataPtr = NULL;
@@ -5928,6 +5935,14 @@ int wh_Client_MlDsaVerify(whClientContext* ctx, const byte* sig, word32 sig_len,
     }
     WH_DEBUG_CLIENT_VERBOSE("ret:%d\n", ret);
     return ret;
+}
+
+int wh_Client_MlDsaVerify(whClientContext* ctx, const byte* sig, word32 sig_len,
+                          const byte* msg, word32 msg_len, int* res,
+                          MlDsaKey* key)
+{
+    return wh_Client_MlDsaVerify_ex(ctx, sig, sig_len, msg, msg_len, res, key,
+                                    NULL, 0, WC_HASH_TYPE_NONE);
 }
 
 int wh_Client_MlDsaCheckPrivKey(whClientContext* ctx, MlDsaKey* key,
@@ -6128,10 +6143,10 @@ int wh_Client_MlDsaMakeExportKeyDma(whClientContext* ctx, int level,
 }
 
 
-int wh_Client_MlDsaSignDma(whClientContext* ctx, const byte* in, word32 in_len,
-                           byte* out, word32* out_len, MlDsaKey* key,
-                           const byte* context, byte contextLen,
-                           word32 preHashType)
+int wh_Client_MlDsaSignDma_ex(whClientContext* ctx, const byte* in, word32 in_len,
+                         byte* out, word32* out_len, MlDsaKey* key,
+                         const byte* context, byte contextLen,
+                         word32 preHashType)
 {
     int                                   ret     = 0;
     whMessageCrypto_MlDsaSignDmaRequest*  req     = NULL;
@@ -6275,10 +6290,17 @@ int wh_Client_MlDsaSignDma(whClientContext* ctx, const byte* in, word32 in_len,
     return ret;
 }
 
-int wh_Client_MlDsaVerifyDma(whClientContext* ctx, const byte* sig,
-                             word32 sig_len, const byte* msg, word32 msg_len,
-                             int* out_res, MlDsaKey* key, const byte* context,
-                             byte contextLen, word32 preHashType)
+int wh_Client_MlDsaSignDma(whClientContext* ctx, const byte* in, word32 in_len,
+                           byte* out, word32* out_len, MlDsaKey* key)
+{
+    return wh_Client_MlDsaSignDma_ex(ctx, in, in_len, out, out_len, key,
+                                     NULL, 0, WC_HASH_TYPE_NONE);
+}
+
+int wh_Client_MlDsaVerifyDma_ex(whClientContext* ctx, const byte* sig,
+                            word32 sig_len, const byte* msg, word32 msg_len,
+                            int* out_res, MlDsaKey* key, const byte* context,
+                            byte contextLen, word32 preHashType)
 {
     int                                     ret     = 0;
     whMessageCrypto_MlDsaVerifyDmaRequest*  req     = NULL;
@@ -6417,6 +6439,14 @@ int wh_Client_MlDsaVerifyDma(whClientContext* ctx, const byte* sig,
     }
 
     return ret;
+}
+
+int wh_Client_MlDsaVerifyDma(whClientContext* ctx, const byte* sig,
+                             word32 sig_len, const byte* msg, word32 msg_len,
+                             int* res, MlDsaKey* key)
+{
+    return wh_Client_MlDsaVerifyDma_ex(ctx, sig, sig_len, msg, msg_len, res, key,
+                                       NULL, 0, WC_HASH_TYPE_NONE);
 }
 
 
