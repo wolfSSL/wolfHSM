@@ -4159,12 +4159,14 @@ static int _HandleMlDsaSign(whServerContext* ctx, uint16_t magic, int devId,
     }
 
     /* Extract parameters from translated request */
-    byte*   in = (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_MlDsaSignRequest);
-    whKeyId key_id = wh_KeyId_TranslateFromClient(
+    byte*    in      = (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_MlDsaSignRequest);
+    whKeyId  key_id  = wh_KeyId_TranslateFromClient(
         WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
-    word32   in_len  = req.sz;
-    uint32_t options = req.options;
-    int      evict   = !!(options & WH_MESSAGE_CRYPTO_MLDSA_SIGN_OPTIONS_EVICT);
+    word32   in_len      = req.sz;
+    uint32_t contextSz   = req.contextSz;
+    uint32_t preHashType = req.preHashType;
+    uint32_t options     = req.options;
+    int      evict       = !!(options & WH_MESSAGE_CRYPTO_MLDSA_SIGN_OPTIONS_EVICT);
 
     /* Validate key usage policy for signing */
     if (!WH_KEYID_ISERASED(key_id)) {
@@ -4184,6 +4186,13 @@ static int _HandleMlDsaSign(whServerContext* ctx, uint16_t magic, int devId,
     if (in_len > available_data) {
         return WH_ERROR_BADARGS;
     }
+    if (contextSz > (available_data - in_len)) {
+        return WH_ERROR_BADARGS;
+    }
+    if (contextSz > 255) {
+        return WH_ERROR_BADARGS;
+    }
+    byte* req_context = (contextSz > 0) ? (in + in_len) : NULL;
 
     /* Response message */
     byte* res_out =
@@ -4198,9 +4207,17 @@ static int _HandleMlDsaSign(whServerContext* ctx, uint16_t magic, int devId,
         /* load the private key */
         ret = wh_Server_MlDsaKeyCacheExport(ctx, key_id, key);
         if (ret == WH_ERROR_OK) {
-            /* sign the input */
-            ret     = wc_MlDsaKey_Sign(key, res_out, &res_len, in, in_len,
-                                       ctx->crypto->rng);
+            /* sign the input using appropriate FIPS 204 API */
+            if (preHashType != WC_HASH_TYPE_NONE) {
+                ret = wc_MlDsaKey_SignCtxHash(
+                    key, req_context, (byte)contextSz, res_out, &res_len,
+                    in, in_len, preHashType, ctx->crypto->rng);
+            }
+            else {
+                ret = wc_MlDsaKey_SignCtx(
+                    key, req_context, (byte)contextSz, res_out, &res_len,
+                    in, in_len, ctx->crypto->rng);
+            }
         }
         wc_MlDsaKey_Free(key);
     }
@@ -4234,8 +4251,6 @@ static int _HandleMlDsaVerify(whServerContext* ctx, uint16_t magic, int devId,
     (void)outSize;
     return WH_ERROR_NOHANDLER;
 #else
-    (void)inSize;
-
     int                                 ret;
     MlDsaKey                            key[1];
     whMessageCrypto_MlDsaVerifyRequest  req;
@@ -4249,11 +4264,13 @@ static int _HandleMlDsaVerify(whServerContext* ctx, uint16_t magic, int devId,
     }
 
     /* Extract parameters from translated request */
-    uint32_t options = req.options;
-    whKeyId  key_id  = wh_KeyId_TranslateFromClient(
+    uint32_t options     = req.options;
+    whKeyId  key_id      = wh_KeyId_TranslateFromClient(
           WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
-    uint32_t hash_len = req.hashSz;
-    uint32_t sig_len  = req.sigSz;
+    uint32_t hash_len    = req.hashSz;
+    uint32_t sig_len     = req.sigSz;
+    uint32_t contextSz   = req.contextSz;
+    uint32_t preHashType = req.preHashType;
     byte*    req_sig =
         (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_MlDsaVerifyRequest);
     int evict = !!(options & WH_MESSAGE_CRYPTO_MLDSA_VERIFY_OPTIONS_EVICT);
@@ -4276,8 +4293,15 @@ static int _HandleMlDsaVerify(whServerContext* ctx, uint16_t magic, int devId,
         (sig_len > (available - hash_len))) {
         return WH_ERROR_BADARGS;
     }
+    if (contextSz > (available - sig_len - hash_len)) {
+        return WH_ERROR_BADARGS;
+    }
+    if (contextSz > 255) {
+        return WH_ERROR_BADARGS;
+    }
 
-    byte* req_hash = req_sig + sig_len;
+    byte* req_hash    = req_sig + sig_len;
+    byte* req_context = (contextSz > 0) ? (req_hash + hash_len) : NULL;
 
     /* Response message */
     int result = 0;
@@ -4288,9 +4312,17 @@ static int _HandleMlDsaVerify(whServerContext* ctx, uint16_t magic, int devId,
         /* load the public key */
         ret = wh_Server_MlDsaKeyCacheExport(ctx, key_id, key);
         if (ret == WH_ERROR_OK) {
-            /* verify the signature */
-            ret = wc_MlDsaKey_Verify(key, req_sig, sig_len, req_hash, hash_len,
-                                     &result);
+            /* verify the signature using appropriate FIPS 204 API */
+            if (preHashType != WC_HASH_TYPE_NONE) {
+                ret = wc_MlDsaKey_VerifyCtxHash(
+                    key, req_sig, sig_len, req_context, (byte)contextSz,
+                    req_hash, hash_len, preHashType, &result);
+            }
+            else {
+                ret = wc_MlDsaKey_VerifyCtx(
+                    key, req_sig, sig_len, req_context, (byte)contextSz,
+                    req_hash, hash_len, &result);
+            }
         }
         wc_MlDsaKey_Free(key);
     }
@@ -5381,6 +5413,21 @@ static int _HandleMlDsaSignDma(whServerContext* ctx, uint16_t magic, int devId,
                                           ctx->comm->client_id, req.keyId);
     evict  = !!(req.options & WH_MESSAGE_CRYPTO_MLDSA_SIGN_OPTIONS_EVICT);
 
+    /* Extract context from inline data after the struct */
+    uint32_t contextSz   = req.contextSz;
+    uint32_t preHashType = req.preHashType;
+    byte*    req_context  = NULL;
+    if (contextSz > 255) {
+        return WH_ERROR_BADARGS;
+    }
+    if (contextSz > 0) {
+        if (inSize < sizeof(whMessageCrypto_MlDsaSignDmaRequest) + contextSz) {
+            return WH_ERROR_BADARGS;
+        }
+        req_context = (uint8_t*)(cryptoDataIn) +
+                      sizeof(whMessageCrypto_MlDsaSignDmaRequest);
+    }
+
     /* Initialize key */
     ret = wc_MlDsaKey_Init(key, NULL, devId);
     if (ret == 0) {
@@ -5400,10 +5447,20 @@ static int _HandleMlDsaSignDma(whServerContext* ctx, uint16_t magic, int devId,
                     WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
 
                 if (ret == 0) {
-                    /* Sign the message */
+                    /* Sign the message using appropriate FIPS 204 API */
                     word32 sigLen = req.sig.sz;
-                    ret = wc_MlDsaKey_Sign(key, sigAddr, &sigLen, msgAddr,
-                                           req.msg.sz, ctx->crypto->rng);
+                    if (preHashType != WC_HASH_TYPE_NONE) {
+                        ret = wc_MlDsaKey_SignCtxHash(
+                            key, req_context, (byte)contextSz,
+                            sigAddr, &sigLen, msgAddr, req.msg.sz,
+                            preHashType, ctx->crypto->rng);
+                    }
+                    else {
+                        ret = wc_MlDsaKey_SignCtx(
+                            key, req_context, (byte)contextSz,
+                            sigAddr, &sigLen, msgAddr, req.msg.sz,
+                            ctx->crypto->rng);
+                    }
 
                     if (ret == 0) {
                         /* Post-write processing of signature buffer */
@@ -5493,6 +5550,21 @@ static int _HandleMlDsaVerifyDma(whServerContext* ctx, uint16_t magic,
                                           ctx->comm->client_id, req.keyId);
     evict  = !!(req.options & WH_MESSAGE_CRYPTO_MLDSA_VERIFY_OPTIONS_EVICT);
 
+    /* Extract context from inline data after the struct */
+    uint32_t contextSz   = req.contextSz;
+    uint32_t preHashType = req.preHashType;
+    byte*    req_context  = NULL;
+    if (contextSz > 255) {
+        return WH_ERROR_BADARGS;
+    }
+    if (contextSz > 0) {
+        if (inSize < sizeof(whMessageCrypto_MlDsaVerifyDmaRequest) + contextSz) {
+            return WH_ERROR_BADARGS;
+        }
+        req_context = (uint8_t*)(cryptoDataIn) +
+                      sizeof(whMessageCrypto_MlDsaVerifyDmaRequest);
+    }
+
     /* Initialize key */
     ret = wc_MlDsaKey_Init(key, NULL, devId);
     if (ret != 0) {
@@ -5514,9 +5586,17 @@ static int _HandleMlDsaVerifyDma(whServerContext* ctx, uint16_t magic,
                 WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
 
             if (ret == 0) {
-                /* Verify the signature */
-                ret = wc_MlDsaKey_Verify(key, sigAddr, req.sig.sz, msgAddr,
-                                         req.msg.sz, &verified);
+                /* Verify the signature using appropriate FIPS 204 API */
+                if (preHashType != WC_HASH_TYPE_NONE) {
+                    ret = wc_MlDsaKey_VerifyCtxHash(
+                        key, sigAddr, req.sig.sz, req_context, (byte)contextSz,
+                        msgAddr, req.msg.sz, preHashType, &verified);
+                }
+                else {
+                    ret = wc_MlDsaKey_VerifyCtx(
+                        key, sigAddr, req.sig.sz, req_context, (byte)contextSz,
+                        msgAddr, req.msg.sz, &verified);
+                }
 
                 if (ret == 0) {
                     /* Post-read processing of signature buffer */

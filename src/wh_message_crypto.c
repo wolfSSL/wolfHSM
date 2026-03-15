@@ -788,6 +788,8 @@ int wh_MessageCrypto_TranslateMlDsaSignRequest(
     WH_T32(magic, dest, src, level);
     WH_T32(magic, dest, src, keyId);
     WH_T32(magic, dest, src, sz);
+    WH_T32(magic, dest, src, contextSz);
+    WH_T32(magic, dest, src, preHashType);
     return 0;
 }
 
@@ -816,6 +818,8 @@ int wh_MessageCrypto_TranslateMlDsaVerifyRequest(
     WH_T32(magic, dest, src, keyId);
     WH_T32(magic, dest, src, sigSz);
     WH_T32(magic, dest, src, hashSz);
+    WH_T32(magic, dest, src, contextSz);
+    WH_T32(magic, dest, src, preHashType);
     return 0;
 }
 
@@ -1030,6 +1034,8 @@ int wh_MessageCrypto_TranslateMlDsaSignDmaRequest(
     WH_T32(magic, dest, src, options);
     WH_T32(magic, dest, src, level);
     WH_T32(magic, dest, src, keyId);
+    WH_T32(magic, dest, src, contextSz);
+    WH_T32(magic, dest, src, preHashType);
 
     return 0;
 }
@@ -1079,6 +1085,8 @@ int wh_MessageCrypto_TranslateMlDsaVerifyDmaRequest(
     WH_T32(magic, dest, src, options);
     WH_T32(magic, dest, src, level);
     WH_T32(magic, dest, src, keyId);
+    WH_T32(magic, dest, src, contextSz);
+    WH_T32(magic, dest, src, preHashType);
 
     return 0;
 }

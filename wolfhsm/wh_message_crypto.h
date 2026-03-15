@@ -889,9 +889,11 @@ typedef struct {
     uint32_t level;
     uint32_t keyId;
     uint32_t sz;
-    uint8_t  WH_PAD[4];
+    uint32_t contextSz;   /* FIPS 204 context length (0-255) */
+    uint32_t preHashType;  /* enum wc_HashType, 0 for pure ML-DSA */
     /* Data follows:
      * uint8_t in[sz];
+     * uint8_t context[contextSz];
      */
 } whMessageCrypto_MlDsaSignRequest;
 
@@ -921,10 +923,13 @@ typedef struct {
     uint32_t keyId;
     uint32_t sigSz;
     uint32_t hashSz;
+    uint32_t contextSz;   /* FIPS 204 context length (0-255) */
+    uint32_t preHashType;  /* enum wc_HashType, 0 for pure ML-DSA */
     uint8_t  WH_PAD[4];
     /* Data follows:
      * uint8_t sig[sigSz];
      * uint8_t hash[hashSz];
+     * uint8_t context[contextSz];
      */
 } whMessageCrypto_MlDsaVerifyRequest;
 
@@ -1165,12 +1170,17 @@ typedef struct {
 
 /* ML-DSA DMA Sign Request */
 typedef struct {
-    whMessageCrypto_DmaBuffer msg;       /* Message buffer */
-    whMessageCrypto_DmaBuffer sig;       /* Signature buffer */
-    uint32_t                  options;   /* Same options as non-DMA version */
-    uint32_t                  level;     /* ML-DSA security level */
-    uint32_t                  keyId;     /* Key ID to use for signing */
-    uint8_t                   WH_PAD[4]; /* Pad to 8-byte alignment */
+    whMessageCrypto_DmaBuffer msg;         /* Message buffer */
+    whMessageCrypto_DmaBuffer sig;         /* Signature buffer */
+    uint32_t                  options;     /* Same options as non-DMA version */
+    uint32_t                  level;       /* ML-DSA security level */
+    uint32_t                  keyId;       /* Key ID to use for signing */
+    uint32_t                  contextSz;   /* FIPS 204 context length (0-255) */
+    uint32_t                  preHashType;  /* enum wc_HashType */
+    uint8_t                   WH_PAD[4];   /* Pad to 8-byte alignment */
+    /* Data follows:
+     * uint8_t context[contextSz];
+     */
 } whMessageCrypto_MlDsaSignDmaRequest;
 
 /* ML-DSA DMA Sign Response */
@@ -1182,12 +1192,17 @@ typedef struct {
 
 /* ML-DSA DMA Verify Request */
 typedef struct {
-    whMessageCrypto_DmaBuffer sig;       /* Signature buffer */
-    whMessageCrypto_DmaBuffer msg;       /* Message buffer */
-    uint32_t                  options;   /* Same options as non-DMA version */
-    uint32_t                  level;     /* ML-DSA security level */
-    uint32_t                  keyId;     /* Key ID to use for verification */
-    uint8_t                   WH_PAD[4]; /* Pad to 8-byte alignment */
+    whMessageCrypto_DmaBuffer sig;         /* Signature buffer */
+    whMessageCrypto_DmaBuffer msg;         /* Message buffer */
+    uint32_t                  options;     /* Same options as non-DMA version */
+    uint32_t                  level;       /* ML-DSA security level */
+    uint32_t                  keyId;       /* Key ID to use for verification */
+    uint32_t                  contextSz;   /* FIPS 204 context length (0-255) */
+    uint32_t                  preHashType;  /* enum wc_HashType */
+    uint8_t                   WH_PAD[4];   /* Pad to 8-byte alignment */
+    /* Data follows:
+     * uint8_t context[contextSz];
+     */
 } whMessageCrypto_MlDsaVerifyDmaRequest;
 
 /* ML-DSA DMA Verify Response */

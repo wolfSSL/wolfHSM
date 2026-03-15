@@ -33,7 +33,7 @@
 /* #define WOLFHSM_CFG_NO_CRYPTO */
 /* #define WOLFHSM_CFG_SHE_EXTENSION */
 
-#define WOLFHSM_CFG_COMM_DATA_LEN (1280 * 4)
+#define WOLFHSM_CFG_COMM_DATA_LEN (1024 * 8)
 
 /* Enable global keys feature for testing */
 #define WOLFHSM_CFG_GLOBAL_KEYS

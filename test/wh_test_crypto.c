@@ -60,6 +60,29 @@
 
 #include "wh_test_common.h"
 
+/* Internal extended ML-DSA helpers (not part of public API) */
+#if defined(HAVE_DILITHIUM) && defined(WOLFHSM_CFG_ENABLE_CLIENT)
+int wh_Client_MlDsaSign_ex(whClientContext* ctx, const byte* in, word32 in_len,
+                            byte* out, word32* out_len, MlDsaKey* key,
+                            const byte* context, byte contextLen,
+                            word32 preHashType);
+int wh_Client_MlDsaVerify_ex(whClientContext* ctx, const byte* sig,
+                              word32 sig_len, const byte* msg, word32 msg_len,
+                              int* res, MlDsaKey* key, const byte* context,
+                              byte contextLen, word32 preHashType);
+#ifdef WOLFHSM_CFG_DMA
+int wh_Client_MlDsaSignDma_ex(whClientContext* ctx, const byte* in,
+                               word32 in_len, byte* out, word32* out_len,
+                               MlDsaKey* key, const byte* context,
+                               byte contextLen, word32 preHashType);
+int wh_Client_MlDsaVerifyDma_ex(whClientContext* ctx, const byte* sig,
+                                 word32 sig_len, const byte* msg,
+                                 word32 msg_len, int* res, MlDsaKey* key,
+                                 const byte* context, byte contextLen,
+                                 word32 preHashType);
+#endif /* WOLFHSM_CFG_DMA */
+#endif /* HAVE_DILITHIUM && WOLFHSM_CFG_ENABLE_CLIENT */
+
 #if defined(WOLFHSM_CFG_TEST_POSIX)
 #include <unistd.h> /* For sleep */
 #include <pthread.h> /* For pthread_create/cancel/join/_t */
@@ -4270,6 +4293,125 @@ static int whTestCrypto_MlDsaWolfCrypt(whClientContext* ctx, int devId,
     return ret;
 }
 
+static int whTestCrypto_MlDsaClient(whClientContext* ctx, int devId,
+                                    WC_RNG* rng)
+{
+    (void)devId;
+    (void)rng;
+
+    int      ret = 0;
+    MlDsaKey key[1];
+
+    /* Initialize key */
+    ret = wc_MlDsaKey_Init(key, NULL, devId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to initialize ML-DSA key: %d\n", ret);
+        return ret;
+    }
+
+    /* Generate ephemeral key using non-DMA client API */
+    if (ret == 0) {
+        ret = wh_Client_MlDsaMakeExportKey(ctx, WC_ML_DSA_44, 0, key);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to generate ML-DSA key: %d\n", ret);
+        }
+    }
+
+    /* Test basic sign/verify using the public API (no context) */
+    if (ret == 0) {
+        byte   msg[] = "Test message for non-DMA ML-DSA";
+        byte   sig[DILITHIUM_MAX_SIG_SIZE];
+        word32 sigLen   = sizeof(sig);
+        int    verified = 0;
+
+        ret = wh_Client_MlDsaSign(ctx, msg, sizeof(msg), sig, &sigLen, key);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to sign using ML-DSA non-DMA: %d\n", ret);
+        }
+        else {
+            ret = wh_Client_MlDsaVerify(ctx, sig, sigLen, msg, sizeof(msg),
+                                        &verified, key);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to verify ML-DSA non-DMA: %d\n", ret);
+            }
+            else if (!verified) {
+                WH_ERROR_PRINT("ML-DSA non-DMA verification failed\n");
+                ret = -1;
+            }
+            else {
+                /* Modify signature - should fail verification */
+                sig[0] ^= 0xFF;
+                int vret = wh_Client_MlDsaVerify(ctx, sig, sigLen, msg,
+                                                 sizeof(msg), &verified, key);
+                if (vret != 0) {
+                    WH_ERROR_PRINT("Failed to call verify with modified sig: "
+                                   "%d\n", vret);
+                    ret = vret;
+                }
+                else if (verified) {
+                    WH_ERROR_PRINT("ML-DSA non-DMA verified bad signature\n");
+                    ret = -1;
+                }
+            }
+        }
+    }
+
+    /* Test sign/verify with FIPS 204 context string using _ex helpers */
+    if (ret == 0) {
+        byte       msg[] = "Context test message non-DMA";
+        byte       sig[DILITHIUM_MAX_SIG_SIZE];
+        word32     sigLen   = sizeof(sig);
+        int        verified = 0;
+        const byte ctx_str[] = "test-context";
+
+        ret = wh_Client_MlDsaSign_ex(ctx, msg, sizeof(msg), sig, &sigLen, key,
+                                     ctx_str, sizeof(ctx_str),
+                                     WC_HASH_TYPE_NONE);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to sign with context non-DMA: %d\n", ret);
+        }
+        else {
+            /* Verify with same context - should succeed */
+            ret = wh_Client_MlDsaVerify_ex(ctx, sig, sigLen, msg, sizeof(msg),
+                                           &verified, key, ctx_str,
+                                           sizeof(ctx_str), WC_HASH_TYPE_NONE);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to verify with context non-DMA: %d\n",
+                               ret);
+            }
+            else if (!verified) {
+                WH_ERROR_PRINT("Context verification failed non-DMA\n");
+                ret = -1;
+            }
+            else {
+                /* Verify with wrong context - should fail verification */
+                const byte wrong_ctx[] = "wrong-context";
+                int wrong_verified = 0;
+                int vret = wh_Client_MlDsaVerify_ex(
+                    ctx, sig, sigLen, msg, sizeof(msg), &wrong_verified, key,
+                    wrong_ctx, sizeof(wrong_ctx), WC_HASH_TYPE_NONE);
+                if (vret != 0) {
+                    WH_ERROR_PRINT("Failed to call verify with wrong context "
+                                   "non-DMA: %d\n", vret);
+                    ret = vret;
+                }
+                else if (wrong_verified) {
+                    WH_ERROR_PRINT("Verification succeeded with wrong context "
+                                   "non-DMA\n");
+                    ret = -1;
+                }
+            }
+        }
+    }
+
+    if (ret == 0) {
+        WH_TEST_PRINT("ML-DSA Client Non-DMA API SUCCESS\n");
+    }
+
+    wc_MlDsaKey_Free(key);
+    return ret;
+}
+
 #ifdef WOLFHSM_CFG_DMA
 static int whTestCrypto_MlDsaDmaClient(whClientContext* ctx, int devId,
                                        WC_RNG* rng)
@@ -4407,6 +4549,58 @@ static int whTestCrypto_MlDsaDmaClient(whClientContext* ctx, int devId,
                 else {
                     /* Test passed - verification failed as expected */
                     ret = 0;
+                }
+            }
+        }
+    }
+
+    /* Test signing and verification with a FIPS 204 context string */
+    if (ret == 0) {
+        byte   msg[] = "Context test message";
+        byte   sig[DILITHIUM_MAX_SIG_SIZE];
+        word32 sigLen   = sizeof(sig);
+        int    verified = 0;
+        const byte ctx_str[] = "test-context";
+
+        /* Use the _ex helper to sign with a context string */
+        ret = wh_Client_MlDsaSignDma_ex(ctx, msg, sizeof(msg), sig, &sigLen,
+                                         key, ctx_str, sizeof(ctx_str),
+                                         WC_HASH_TYPE_NONE);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to sign with context using ML-DSA: %d\n",
+                           ret);
+        }
+        else {
+            /* Verify with the same context - should succeed */
+            ret = wh_Client_MlDsaVerifyDma_ex(ctx, sig, sigLen, msg,
+                                               sizeof(msg), &verified, key,
+                                               ctx_str, sizeof(ctx_str),
+                                               WC_HASH_TYPE_NONE);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to verify with context using ML-DSA: "
+                               "%d\n", ret);
+            }
+            else if (!verified) {
+                WH_ERROR_PRINT("Context verification failed when it should "
+                               "have succeeded\n");
+                ret = -1;
+            }
+            else {
+                /* Verify with wrong context - should fail verification */
+                const byte wrong_ctx[] = "wrong-context";
+                int wrong_verified = 0;
+                int vret = wh_Client_MlDsaVerifyDma_ex(
+                    ctx, sig, sigLen, msg, sizeof(msg), &wrong_verified, key,
+                    wrong_ctx, sizeof(wrong_ctx), WC_HASH_TYPE_NONE);
+                if (vret != 0) {
+                    WH_ERROR_PRINT("Failed to call verify with wrong context: "
+                                   "%d\n", vret);
+                    ret = vret;
+                }
+                else if (wrong_verified) {
+                    WH_ERROR_PRINT("Context verification succeeded with wrong "
+                                   "context\n");
+                    ret = -1;
                 }
             }
         }
@@ -5765,6 +5959,10 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         if (ret == WH_ERROR_OK) {
             i++;
         }
+    }
+
+    if (ret == 0) {
+        ret = whTestCrypto_MlDsaClient(client, WH_DEV_ID, rng);
     }
 
 #ifdef WOLFHSM_CFG_DMA
