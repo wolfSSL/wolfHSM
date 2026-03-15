@@ -70,7 +70,7 @@
 #endif
 
 
-#define BUFFER_SIZE 4096
+#define BUFFER_SIZE (1024 * 8)
 #define FLASH_RAM_SIZE (1024 * 1024) /* 1MB */
 
 #if defined(WOLFHSM_CFG_ENABLE_CLIENT) && !defined(NO_CRYPT_TEST)

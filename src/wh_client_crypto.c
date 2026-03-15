@@ -5474,7 +5474,7 @@ int wh_Client_MlDsaImportKey(whClientContext* ctx, MlDsaKey* key,
 {
     int      ret    = WH_ERROR_OK;
     whKeyId  key_id = WH_KEYID_ERASED;
-    byte     buffer[DILITHIUM_MAX_PRV_KEY_SIZE];
+    byte     buffer[DILITHIUM_MAX_BOTH_KEY_DER_SIZE];
     uint16_t buffer_len = 0;
 
     if ((ctx == NULL) || (key == NULL) ||
@@ -5511,7 +5511,7 @@ int wh_Client_MlDsaExportKey(whClientContext* ctx, whKeyId keyId, MlDsaKey* key,
 {
     int ret = WH_ERROR_OK;
     /* buffer cannot be larger than MTU */
-    byte     buffer[DILITHIUM_MAX_PRV_KEY_SIZE];
+    byte     buffer[DILITHIUM_MAX_BOTH_KEY_DER_SIZE];
     uint16_t buffer_len = sizeof(buffer);
 
     if ((ctx == NULL) || WH_KEYID_ISERASED(keyId) || (key == NULL)) {
@@ -5965,7 +5965,7 @@ int wh_Client_MlDsaImportKeyDma(whClientContext* ctx, MlDsaKey* key,
 {
     int      ret    = WH_ERROR_OK;
     whKeyId  key_id = WH_KEYID_ERASED;
-    byte     buffer[DILITHIUM_MAX_PRV_KEY_SIZE];
+    byte     buffer[DILITHIUM_MAX_BOTH_KEY_DER_SIZE];
     uint16_t buffer_len = 0;
 
     if ((ctx == NULL) || (key == NULL) ||
@@ -5997,7 +5997,7 @@ int wh_Client_MlDsaExportKeyDma(whClientContext* ctx, whKeyId keyId,
                                 uint8_t* label)
 {
     int      ret                                = WH_ERROR_OK;
-    byte     buffer[DILITHIUM_MAX_PRV_KEY_SIZE] = {0};
+    byte     buffer[DILITHIUM_MAX_BOTH_KEY_DER_SIZE] = {0};
     uint16_t buffer_len                         = sizeof(buffer);
 
     if ((ctx == NULL) || WH_KEYID_ISERASED(keyId) || (key == NULL)) {
@@ -6021,7 +6021,7 @@ static int _MlDsaMakeKeyDma(whClientContext* ctx, int level,
 {
     int                                     ret    = WH_ERROR_OK;
     whKeyId                                 key_id = WH_KEYID_ERASED;
-    byte                                    buffer[DILITHIUM_MAX_PRV_KEY_SIZE];
+    byte                                    buffer[DILITHIUM_MAX_BOTH_KEY_DER_SIZE];
     uint8_t*                                dataPtr = NULL;
     whMessageCrypto_MlDsaKeyGenDmaRequest*  req     = NULL;
     whMessageCrypto_MlDsaKeyGenDmaResponse* res     = NULL;
