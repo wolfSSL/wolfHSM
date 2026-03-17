@@ -1,0 +1,48 @@
+Hello Claude this file is to go over how to fix proposed bugs for this branch.
+
+to start off read the STEPS section then go to the BUG-REPORT section to see the report is
+
+STEPS:
+1. review proposued bug and confirm the existance
+2. If bug does exisit come up with option for the fix and compare it to proposed fix if there is one
+3. Once the bug is fixed analayze if there should be a test in place to prevent this from happneing in the future
+
+
+BUG-REPORT:
+# 149: `wh_Utils_memeqzero` Skips Checking `buffer[0]`
+
+- **Severity:** Medium
+- **Status:** open
+- **File:** `src/wh_utils.c:84-92`
+- **Function:** `wh_Utils_memeqzero`
+- **Category:** Off-by-One / Logic Error
+- **Discovered:** 2026-02-25 13:22:48
+
+## Description
+
+| **Confidence** | High |
+
+The function checks whether a buffer is all zeros, but the loop decrements `size` before reading `buffer[size]`, so it checks indices `[size-1]` down to `[1]` and never checks `buffer[0]`:
+
+## Code
+
+```c
+int wh_Utils_memeqzero(uint8_t* buffer, uint32_t size)
+{
+    while (size > 1) {
+        size--;
+        if (buffer[size] != 0)
+            return 0;
+    }
+    return 1;
+}
+```
+
+For a 1-byte buffer (`size = 1`), the `while (size > 1)` condition is false, so the function immediately returns 1 (all-zero) without checking `buffer[0]`. For larger buffers, `buffer[0]` is similarly never checked.
+
+This means a buffer like `{0xFF, 0x00, 0x00}` is incorrectly reported as all-zero.
+
+## Recommendation
+
+Change the loop condition to `while (size > 0)` or change the check pattern to `while (size--) { if (buffer[size] != 0) return 0; }`.
+
