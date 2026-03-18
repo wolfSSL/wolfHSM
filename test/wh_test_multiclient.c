@@ -50,10 +50,6 @@
 #include "wh_test_common.h"
 
 /* Test configuration */
-#define FLASH_RAM_SIZE (1024 * 1024)   /* 1MB */
-#define FLASH_SECTOR_SIZE (128 * 1024) /* 128KB */
-#define FLASH_PAGE_SIZE (8)            /* 8B */
-#define BUFFER_SIZE 4096
 
 #ifdef WOLFHSM_CFG_GLOBAL_KEYS
 /* Test key data */
@@ -1424,81 +1420,31 @@ static int whTest_MultiClientSequential(void)
 {
     int ret = 0;
 
-    /* Transport memory configurations for both clients */
-    static uint8_t       req1[BUFFER_SIZE];
-    static uint8_t       resp1[BUFFER_SIZE];
-    whTransportMemConfig tmcf1[1] = {{
-        .req       = (whTransportMemCsr*)req1,
-        .req_size  = sizeof(req1),
-        .resp      = (whTransportMemCsr*)resp1,
-        .resp_size = sizeof(resp1),
-    }};
+    /* Client-server pair 1 */
+    whTest_ClientServerMemSetup* csSetup1 = NULL;
+    whCommClientConfig* cc_conf1 = NULL;
+    whCommServerConfig* cs_conf1 = NULL;
+    WH_TEST_RETURN_ON_FAIL(whTest_ClientServerMemSetup_Init(
+        &csSetup1, WH_TEST_DEFAULT_CLIENT_ID, 101, _connectCb1,
+        &cc_conf1, &cs_conf1));
+    whClientContext client1[1] = {0};
+    whClientConfig c_conf1[1] = {{.comm = cc_conf1}};
 
-    static uint8_t       req2[BUFFER_SIZE];
-    static uint8_t       resp2[BUFFER_SIZE];
-    whTransportMemConfig tmcf2[1] = {{
-        .req       = (whTransportMemCsr*)req2,
-        .req_size  = sizeof(req2),
-        .resp      = (whTransportMemCsr*)resp2,
-        .resp_size = sizeof(resp2),
-    }};
+    /* Client-server pair 2 */
+    whTest_ClientServerMemSetup* csSetup2 = NULL;
+    whCommClientConfig* cc_conf2 = NULL;
+    whCommServerConfig* cs_conf2 = NULL;
+    WH_TEST_RETURN_ON_FAIL(whTest_ClientServerMemSetup_Init(
+        &csSetup2, WH_TEST_DEFAULT_CLIENT_ID + 1, 102, _connectCb2,
+        &cc_conf2, &cs_conf2));
+    whClientContext client2[1] = {0};
+    whClientConfig c_conf2[1] = {{.comm = cc_conf2}};
 
-    /* Client 1 configuration */
-    whTransportClientCb         tccb1[1]    = {WH_TRANSPORT_MEM_CLIENT_CB};
-    whTransportMemClientContext tmcc1[1]    = {0};
-    whCommClientConfig          cc_conf1[1] = {{
-                 .transport_cb      = tccb1,
-                 .transport_context = (void*)tmcc1,
-                 .transport_config  = (void*)tmcf1,
-                 .client_id         = WH_TEST_DEFAULT_CLIENT_ID,
-                 .connect_cb        = _connectCb1,
-    }};
-    whClientContext             client1[1]  = {0};
-    whClientConfig              c_conf1[1]  = {{
-                      .comm = cc_conf1,
-    }};
-
-    /* Client 2 configuration */
-    whTransportClientCb         tccb2[1]    = {WH_TRANSPORT_MEM_CLIENT_CB};
-    whTransportMemClientContext tmcc2[1]    = {0};
-    whCommClientConfig          cc_conf2[1] = {{
-                 .transport_cb      = tccb2,
-                 .transport_context = (void*)tmcc2,
-                 .transport_config  = (void*)tmcf2,
-                 .client_id         = WH_TEST_DEFAULT_CLIENT_ID + 1,
-                 .connect_cb        = _connectCb2,
-    }};
-    whClientContext             client2[1]  = {0};
-    whClientConfig              c_conf2[1]  = {{
-                      .comm = cc_conf2,
-    }};
-
-    /* Shared NVM configuration using RamSim Flash */
-    static uint8_t   memory[FLASH_RAM_SIZE] = {0};
-    whFlashRamsimCtx fc[1]                  = {0};
-    whFlashRamsimCfg fc_conf[1]             = {{
-                    .size       = FLASH_RAM_SIZE,
-                    .sectorSize = FLASH_SECTOR_SIZE,
-                    .pageSize   = FLASH_PAGE_SIZE,
-                    .erasedByte = ~(uint8_t)0,
-                    .memory     = memory,
-    }};
-    const whFlashCb  fcb[1]                 = {WH_FLASH_RAMSIM_CB};
-
-    whNvmFlashConfig  nf_conf[1] = {{
-         .cb      = fcb,
-         .context = fc,
-         .config  = fc_conf,
-    }};
-    whNvmFlashContext nfc[1]     = {0};
-    whNvmCb           nfcb[1]    = {WH_NVM_FLASH_CB};
-
-    whNvmConfig  n_conf[1] = {{
-         .cb      = nfcb,
-         .context = nfc,
-         .config  = nf_conf,
-    }};
-    whNvmContext nvm[1]    = {0}; /* Shared NVM */
+    /* Shared NVM */
+    whTest_NvmSetup* nvmSetup = NULL;
+    whNvmContext* nvm = NULL;
+    WH_TEST_RETURN_ON_FAIL(whTest_NvmSetup_Init(
+        &nvmSetup, WH_NVM_TEST_BACKEND_FLASH, &nvm));
 
 #if !defined(WOLFHSM_CFG_NO_CRYPTO)
     /* Crypto contexts for both servers */
@@ -1507,17 +1453,9 @@ static int whTest_MultiClientSequential(void)
 #endif
 
     /* Server 1 configuration */
-    whTransportServerCb         tscb1[1]    = {WH_TRANSPORT_MEM_SERVER_CB};
-    whTransportMemServerContext tmsc1[1]    = {0};
-    whCommServerConfig          cs_conf1[1] = {{
-                 .transport_cb      = tscb1,
-                 .transport_context = (void*)tmsc1,
-                 .transport_config  = (void*)tmcf1,
-                 .server_id         = 101,
-    }};
-    whServerConfig              s_conf1[1]  = {{
-                      .comm_config = cs_conf1,
-                      .nvm         = nvm, /* Shared NVM */
+    whServerConfig s_conf1[1] = {{
+        .comm_config = cs_conf1,
+        .nvm         = nvm,
 #if !defined(WOLFHSM_CFG_NO_CRYPTO)
         .crypto = crypto1,
 #endif
@@ -1525,18 +1463,9 @@ static int whTest_MultiClientSequential(void)
     whServerContext server1[1] = {0};
 
     /* Server 2 configuration */
-    whTransportServerCb         tscb2[1]    = {WH_TRANSPORT_MEM_SERVER_CB};
-    whTransportMemServerContext tmsc2[1]    = {0};
-    whCommServerConfig          cs_conf2[1] = {{
-                 .transport_cb      = tscb2,
-                 .transport_context = (void*)tmsc2,
-                 .transport_config  = (void*)tmcf2,
-                 .server_id         = 102,
-    }};
-    whServerConfig              s_conf2[1]  = {{
-                      .comm_config = cs_conf2,
-                      .nvm         = nvm, /* Shared NVM */
-
+    whServerConfig s_conf2[1] = {{
+        .comm_config = cs_conf2,
+        .nvm         = nvm,
 #if !defined(WOLFHSM_CFG_NO_CRYPTO)
         .crypto = crypto2,
 #endif
@@ -1554,10 +1483,7 @@ static int whTest_MultiClientSequential(void)
         return ret;
 #endif
 
-    /* Initialize NVM (shared) */
-    ret = wh_Nvm_Init(nvm, n_conf);
-    if (ret != 0)
-        return ret;
+    /* NVM already initialized by whTest_NvmSetup_Init */
 
 #if !defined(WOLFHSM_CFG_NO_CRYPTO)
     /* Initialize RNGs */
@@ -1631,7 +1557,9 @@ static int whTest_MultiClientSequential(void)
     wc_FreeRng(crypto2->rng);
     wolfCrypt_Cleanup();
 #endif
-    wh_Nvm_Cleanup(nvm);
+    whTest_NvmSetup_Cleanup(nvmSetup);
+    whTest_ClientServerMemSetup_Cleanup(csSetup1);
+    whTest_ClientServerMemSetup_Cleanup(csSetup2);
 
     WH_TEST_PRINT("=== Multi-Client Sequential Tests Complete ===\n");
 

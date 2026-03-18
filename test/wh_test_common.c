@@ -17,15 +17,44 @@
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <stdlib.h>
 #include <string.h>
 
 #include <wolfhsm/wh_nvm.h>
 #include <wolfhsm/wh_nvm_flash.h>
 #include <wolfhsm/wh_nvm_flash_log.h>
 #include <wolfhsm/wh_flash_ramsim.h>
+#include <wolfhsm/wh_transport_mem.h>
 #include <wolfhsm/wh_error.h>
 
 #include "wh_test_common.h"
+
+
+/* Opaque struct for client+server memory transport setup */
+struct whTest_ClientServerMemSetup {
+    uint8_t*                    req;
+    uint8_t*                    resp;
+    int                         bufferSize;
+    whTransportMemConfig        transportMemCfg;
+    whTransportClientCb         transportClientCb;
+    whTransportMemClientContext transportMemClientCtx;
+    whCommClientConfig          commClientCfg;
+    whTransportServerCb         transportServerCb;
+    whTransportMemServerContext transportMemServerCtx;
+    whCommServerConfig          commServerCfg;
+};
+
+/* Opaque struct for NVM setup */
+struct whTest_NvmSetup {
+    uint8_t*              memory;
+    int                   flashRamSize;
+    whFlashRamsimCtx      flashRamsimCtx;
+    whFlashRamsimCfg      flashRamsimCfg;
+    whFlashCb             flashCb;
+    whTestNvmBackendUnion nvmBackendUnion;
+    whNvmConfig           nvmConfig;
+    whNvmContext          nvmContext;
+};
 
 
 /**
@@ -89,4 +118,259 @@ int whTest_NvmCfgBackend(whTestNvmBackendType   type,
     }
 
     return 0;
+}
+
+
+/*
+ * Helper to wire (or re-wire) the transport mem config from the current
+ * buffer pointers and size stored in the setup struct.
+ */
+static void _csMemSetup_WireTransportCfg(whTest_ClientServerMemSetup* setup)
+{
+    memset(&setup->transportMemCfg, 0, sizeof(setup->transportMemCfg));
+    setup->transportMemCfg.req       = (whTransportMemCsr*)setup->req;
+    setup->transportMemCfg.req_size  = setup->bufferSize;
+    setup->transportMemCfg.resp      = (whTransportMemCsr*)setup->resp;
+    setup->transportMemCfg.resp_size = setup->bufferSize;
+}
+
+int whTest_ClientServerMemSetup_Init(
+    whTest_ClientServerMemSetup** outSetup,
+    int                           clientId,
+    int                           serverId,
+    whCommSetConnectedCb          connectCb,
+    whCommClientConfig**          outCommClientCfg,
+    whCommServerConfig**          outCommServerCfg)
+{
+    whTest_ClientServerMemSetup* setup;
+
+    if (outSetup == NULL || outCommClientCfg == NULL ||
+        outCommServerCfg == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    setup = malloc(sizeof(*setup));
+    if (setup == NULL) {
+        return WH_ERROR_ABORTED;
+    }
+    memset(setup, 0, sizeof(*setup));
+
+    /* Allocate default-sized buffers */
+    setup->bufferSize = WH_TEST_BUFFER_SIZE;
+    setup->req = malloc(setup->bufferSize);
+    setup->resp = malloc(setup->bufferSize);
+    if (setup->req == NULL || setup->resp == NULL) {
+        free(setup->req);
+        free(setup->resp);
+        free(setup);
+        return WH_ERROR_ABORTED;
+    }
+    memset(setup->req, 0, setup->bufferSize);
+    memset(setup->resp, 0, setup->bufferSize);
+
+    /* Wire transport memory config */
+    _csMemSetup_WireTransportCfg(setup);
+
+    /* Client transport */
+    whTransportClientCb clientCb = WH_TRANSPORT_MEM_CLIENT_CB;
+    setup->transportClientCb = clientCb;
+    memset(&setup->transportMemClientCtx, 0,
+           sizeof(setup->transportMemClientCtx));
+
+    /* Client comm config */
+    memset(&setup->commClientCfg, 0, sizeof(setup->commClientCfg));
+    setup->commClientCfg.transport_cb      = &setup->transportClientCb;
+    setup->commClientCfg.transport_context = (void*)&setup->transportMemClientCtx;
+    setup->commClientCfg.transport_config  = (void*)&setup->transportMemCfg;
+    setup->commClientCfg.client_id         = clientId;
+    setup->commClientCfg.connect_cb        = connectCb;
+
+    /* Server transport */
+    whTransportServerCb serverCb = WH_TRANSPORT_MEM_SERVER_CB;
+    setup->transportServerCb = serverCb;
+    memset(&setup->transportMemServerCtx, 0,
+           sizeof(setup->transportMemServerCtx));
+
+    /* Server comm config */
+    memset(&setup->commServerCfg, 0, sizeof(setup->commServerCfg));
+    setup->commServerCfg.transport_cb      = &setup->transportServerCb;
+    setup->commServerCfg.transport_context = (void*)&setup->transportMemServerCtx;
+    setup->commServerCfg.transport_config  = (void*)&setup->transportMemCfg;
+    setup->commServerCfg.server_id         = serverId;
+
+    *outSetup         = setup;
+    *outCommClientCfg = &setup->commClientCfg;
+    *outCommServerCfg = &setup->commServerCfg;
+
+    return WH_ERROR_OK;
+}
+
+int whTest_ClientServerMemSetup_ResizeBuffers(
+    whTest_ClientServerMemSetup* setup,
+    int                          newBufferSize)
+{
+    uint8_t* newReq;
+    uint8_t* newResp;
+
+    if (setup == NULL || newBufferSize <= 0) {
+        return WH_ERROR_BADARGS;
+    }
+
+    newReq = malloc(newBufferSize);
+    newResp = malloc(newBufferSize);
+    if (newReq == NULL || newResp == NULL) {
+        free(newReq);
+        free(newResp);
+        return WH_ERROR_ABORTED;
+    }
+    memset(newReq, 0, newBufferSize);
+    memset(newResp, 0, newBufferSize);
+
+    /* Free old buffers and install new ones */
+    free(setup->req);
+    free(setup->resp);
+    setup->req        = newReq;
+    setup->resp       = newResp;
+    setup->bufferSize = newBufferSize;
+
+    /* Re-wire the transport config to point at the new buffers */
+    _csMemSetup_WireTransportCfg(setup);
+
+    return WH_ERROR_OK;
+}
+
+int whTest_ClientServerMemSetup_Cleanup(
+    whTest_ClientServerMemSetup* setup)
+{
+    if (setup == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    free(setup->req);
+    free(setup->resp);
+    free(setup);
+
+    return WH_ERROR_OK;
+}
+
+
+int whTest_NvmSetup_Init(
+    whTest_NvmSetup**    outSetup,
+    whTestNvmBackendType nvmType,
+    whNvmContext**       outNvmContext)
+{
+    whTest_NvmSetup* setup;
+    int              rc;
+
+    if (outSetup == NULL || outNvmContext == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    setup = malloc(sizeof(*setup));
+    if (setup == NULL) {
+        return WH_ERROR_ABORTED;
+    }
+    memset(setup, 0, sizeof(*setup));
+
+    /* Allocate default flash memory */
+    setup->flashRamSize = WH_TEST_FLASH_RAM_SIZE;
+    setup->memory = malloc(setup->flashRamSize);
+    if (setup->memory == NULL) {
+        free(setup);
+        return WH_ERROR_ABORTED;
+    }
+    memset(setup->memory, 0, setup->flashRamSize);
+
+    /* Configure flash ramsim */
+    setup->flashRamsimCfg.size       = setup->flashRamSize;
+    setup->flashRamsimCfg.sectorSize = WH_TEST_FLASH_SECTOR_SIZE;
+    setup->flashRamsimCfg.pageSize   = WH_TEST_FLASH_PAGE_SIZE;
+    setup->flashRamsimCfg.erasedByte = ~(uint8_t)0;
+    setup->flashRamsimCfg.memory     = setup->memory;
+
+    {
+        whFlashCb cb = WH_FLASH_RAMSIM_CB;
+        setup->flashCb = cb;
+    }
+
+    /* Configure NVM backend */
+    memset(&setup->nvmConfig, 0, sizeof(setup->nvmConfig));
+    rc = whTest_NvmCfgBackend(nvmType, &setup->nvmBackendUnion,
+                              &setup->nvmConfig, &setup->flashRamsimCfg,
+                              &setup->flashRamsimCtx, &setup->flashCb);
+    if (rc != 0) {
+        free(setup->memory);
+        free(setup);
+        return rc;
+    }
+
+    /* Init NVM */
+    rc = wh_Nvm_Init(&setup->nvmContext, &setup->nvmConfig);
+    if (rc != 0) {
+        free(setup->memory);
+        free(setup);
+        return rc;
+    }
+
+    *outSetup      = setup;
+    *outNvmContext  = &setup->nvmContext;
+
+    return WH_ERROR_OK;
+}
+
+int whTest_NvmSetup_ResizeFlash(
+    whTest_NvmSetup* setup,
+    int              flashRamSize,
+    int              flashSectorSize,
+    int              flashPageSize)
+{
+    uint8_t* newMemory;
+    int      rc;
+
+    if (setup == NULL || flashRamSize <= 0 || flashSectorSize <= 0 ||
+        flashPageSize <= 0) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Cleanup existing NVM state */
+    wh_Nvm_Cleanup(&setup->nvmContext);
+
+    /* Reallocate flash memory */
+    newMemory = malloc(flashRamSize);
+    if (newMemory == NULL) {
+        return WH_ERROR_ABORTED;
+    }
+    memset(newMemory, 0, flashRamSize);
+
+    free(setup->memory);
+    setup->memory       = newMemory;
+    setup->flashRamSize = flashRamSize;
+
+    /* Reconfigure flash ramsim */
+    setup->flashRamsimCfg.size       = flashRamSize;
+    setup->flashRamsimCfg.sectorSize = flashSectorSize;
+    setup->flashRamsimCfg.pageSize   = flashPageSize;
+    setup->flashRamsimCfg.memory     = setup->memory;
+
+    /* Re-init NVM */
+    rc = wh_Nvm_Init(&setup->nvmContext, &setup->nvmConfig);
+    if (rc != 0) {
+        return rc;
+    }
+
+    return WH_ERROR_OK;
+}
+
+int whTest_NvmSetup_Cleanup(
+    whTest_NvmSetup* setup)
+{
+    if (setup == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    wh_Nvm_Cleanup(&setup->nvmContext);
+    free(setup->memory);
+    free(setup);
+
+    return WH_ERROR_OK;
 }

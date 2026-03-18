@@ -31,7 +31,6 @@
 
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_comm.h"
-#include "wolfhsm/wh_transport_mem.h"
 
 #ifdef WOLFHSM_CFG_ENABLE_SERVER
 #include "wolfhsm/wh_server.h"
@@ -53,7 +52,6 @@ const struct timespec ONE_MS = {.tv_sec = 0, .tv_nsec = 1000000};
 
 #include "wh_test_comm.h"
 
-#define BUFFER_SIZE 4096
 #define REQ_SIZE 32
 #define RESP_SIZE 64
 #define REPEAT_COUNT 10
@@ -64,37 +62,14 @@ int whTest_CommMem(void)
 {
     int ret = 0;
 
-    /* Transport memory configuration */
-    uint8_t              req[BUFFER_SIZE] = {0};
-    uint8_t              resp[BUFFER_SIZE] = {0};
-    whTransportMemConfig tmcf[1] = {{
-        .req       = (whTransportMemCsr*)req,
-        .req_size  = sizeof(req),
-        .resp      = (whTransportMemCsr*)resp,
-        .resp_size = sizeof(resp),
-    }};
-
-
-    /* Client configuration/contexts */
-    whTransportClientCb         tccb[1]   = {WH_TRANSPORT_MEM_CLIENT_CB};
-    whTransportMemClientContext tmcc[1]   = {0};
-    whCommClientConfig          c_conf[1] = {{
-                 .transport_cb      = tccb,
-                 .transport_context = (void*)tmcc,
-                 .transport_config  = (void*)tmcf,
-                 .client_id         = WH_TEST_DEFAULT_CLIENT_ID,
-    }};
+    /* Set up client/server memory transport using opaque helper */
+    whTest_ClientServerMemSetup* csSetup = NULL;
+    whCommClientConfig* c_conf = NULL;
+    whCommServerConfig* s_conf = NULL;
+    WH_TEST_RETURN_ON_FAIL(whTest_ClientServerMemSetup_Init(
+        &csSetup, WH_TEST_DEFAULT_CLIENT_ID, WH_TEST_SERVER_ID, NULL,
+        &c_conf, &s_conf));
     whCommClient                client[1] = {0};
-
-    /* Server configuration/contexts */
-    whTransportServerCb         tscb[1]   = {WH_TRANSPORT_MEM_SERVER_CB};
-    whTransportMemServerContext tmsc[1]   = {0};
-    whCommServerConfig          s_conf[1] = {{
-                 .transport_cb      = tscb,
-                 .transport_context = (void*)tmsc,
-                 .transport_config  = (void*)tmcf,
-                 .server_id         = 124,
-    }};
     whCommServer                server[1] = {0};
 
     /* Init client and server */
@@ -184,6 +159,8 @@ int whTest_CommMem(void)
 
     WH_TEST_RETURN_ON_FAIL(wh_CommServer_Cleanup(server));
     WH_TEST_RETURN_ON_FAIL(wh_CommClient_Cleanup(client));
+
+    whTest_ClientServerMemSetup_Cleanup(csSetup);
 
     return ret;
 }
@@ -368,37 +345,17 @@ static void _whCommClientServerThreadTest(whCommClientConfig* c_conf,
 
 void wh_CommClientServer_MemThreadTest(void)
 {
-    /* Transport memory configuration */
-    uint8_t              req[BUFFER_SIZE] = {0};
-    uint8_t              resp[BUFFER_SIZE] = {0};
-    whTransportMemConfig tmcf[1] = {{
-        .req       = (whTransportMemCsr*)req,
-        .req_size  = sizeof(req),
-        .resp      = (whTransportMemCsr*)resp,
-        .resp_size = sizeof(resp),
-    }};
-
-    /* Client configuration/contexts */
-    whTransportClientCb         tmccb[1]  = {WH_TRANSPORT_MEM_CLIENT_CB};
-    whTransportMemClientContext csc[1]    = {0};
-    whCommClientConfig          c_conf[1] = {{
-                 .transport_cb      = tmccb,
-                 .transport_context = (void*)csc,
-                 .transport_config  = (void*)tmcf,
-                 .client_id         = WH_TEST_DEFAULT_CLIENT_ID,
-    }};
-
-    /* Server configuration/contexts */
-    whTransportServerCb         tmscb[1]  = {WH_TRANSPORT_MEM_SERVER_CB};
-    whTransportMemServerContext css[1]    = {0};
-    whCommServerConfig          s_conf[1] = {{
-                 .transport_cb      = tmscb,
-                 .transport_context = (void*)css,
-                 .transport_config  = (void*)tmcf,
-                 .server_id         = 0xF,
-    }};
+    /* Set up client/server memory transport using opaque helper */
+    whTest_ClientServerMemSetup* csSetup = NULL;
+    whCommClientConfig* c_conf = NULL;
+    whCommServerConfig* s_conf = NULL;
+    whTest_ClientServerMemSetup_Init(
+        &csSetup, WH_TEST_DEFAULT_CLIENT_ID, 0xF, NULL,
+        &c_conf, &s_conf);
 
     _whCommClientServerThreadTest(c_conf, s_conf);
+
+    whTest_ClientServerMemSetup_Cleanup(csSetup);
 }
 
 void wh_CommClientServer_ShMemThreadTest(void)
@@ -406,9 +363,9 @@ void wh_CommClientServer_ShMemThreadTest(void)
     /* Transport memory configuration */
     posixTransportShmConfig tmcf[1] = {{
         .name = "/wh_test_comm_shm",
-        .req_size   = BUFFER_SIZE,
-        .resp_size  = BUFFER_SIZE,
-        .dma_size = BUFFER_SIZE * 4,
+        .req_size   = WH_TEST_BUFFER_SIZE,
+        .resp_size  = WH_TEST_BUFFER_SIZE,
+        .dma_size = WH_TEST_BUFFER_SIZE * 4,
     }};
 
     /* Make unique name for this test */

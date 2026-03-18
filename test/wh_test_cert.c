@@ -53,9 +53,6 @@
 static int whTest_CertNonExportable(whClientContext* client);
 #endif
 
-#define FLASH_RAM_SIZE (1024 * 1024) /* 1MB */
-#define FLASH_SECTOR_SIZE (128 * 1024) /* 128KB */
-#define FLASH_PAGE_SIZE (8) /* 8B */
 
 #ifdef WOLFHSM_CFG_ENABLE_SERVER
 /* Run certificate configuration tests */
@@ -583,46 +580,20 @@ static int whTest_CertNonExportable(whClientContext* client)
 #ifdef WOLFHSM_CFG_ENABLE_SERVER
 int whTest_CertRamSim(whTestNvmBackendType nvmType)
 {
-    int            rc          = WH_ERROR_OK;
-    const uint32_t BUFFER_SIZE = 1024;
+    int rc = WH_ERROR_OK;
 
-    /* Transport memory configuration */
-    uint8_t              req[BUFFER_SIZE];
-    uint8_t              resp[BUFFER_SIZE];
-    whTransportMemConfig tmcf[1] = {{
-        .req       = (whTransportMemCsr*)req,
-        .req_size  = sizeof(req),
-        .resp      = (whTransportMemCsr*)resp,
-        .resp_size = sizeof(resp),
-    }};
-
-    /* Server configuration/contexts */
-    whTransportServerCb         tscb[1]    = {WH_TRANSPORT_MEM_SERVER_CB};
-    whTransportMemServerContext tmsc[1]    = {0};
-    whCommServerConfig          cs_conf[1] = {{
-                 .transport_cb      = tscb,
-                 .transport_context = (void*)tmsc,
-                 .transport_config  = (void*)tmcf,
-                 .server_id         = 124,
-    }};
-    /* RamSim Flash state and configuration */
-    uint8_t memory[FLASH_RAM_SIZE] = {0};
-    whFlashRamsimCtx fc[1]      = {0};
-    whFlashRamsimCfg fc_conf[1] = {{
-        .size       = FLASH_RAM_SIZE,    /* 1MB  Flash */
-        .sectorSize = FLASH_SECTOR_SIZE, /* 128KB  Sector Size */
-        .pageSize   = FLASH_PAGE_SIZE,   /* 8B   Page Size */
-        .erasedByte = ~(uint8_t)0,
-        .memory     = memory,
-    }};
-    const whFlashCb  fcb[1]     = {WH_FLASH_RAMSIM_CB};
-
-    whTestNvmBackendUnion nvm_setup;
-    whNvmConfig           n_conf[1] = {0};
-    whNvmContext nvm[1]    = {{0}};
-
+    whTest_ClientServerMemSetup* csSetup = NULL;
+    whCommClientConfig* cc_conf = NULL;
+    whCommServerConfig* cs_conf = NULL;
+    WH_TEST_RETURN_ON_FAIL(whTest_ClientServerMemSetup_Init(
+        &csSetup, WH_TEST_DEFAULT_CLIENT_ID, WH_TEST_SERVER_ID, NULL,
+        &cc_conf, &cs_conf));
     WH_TEST_RETURN_ON_FAIL(
-        whTest_NvmCfgBackend(nvmType, &nvm_setup, n_conf, fc_conf, fc, fcb));
+        whTest_ClientServerMemSetup_ResizeBuffers(csSetup, 1024));
+
+    whTest_NvmSetup* nvmSetup = NULL;
+    whNvmContext* nvm = NULL;
+    WH_TEST_RETURN_ON_FAIL(whTest_NvmSetup_Init(&nvmSetup, nvmType, &nvm));
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     whServerCryptoContext crypto[1] = {0};
@@ -638,8 +609,6 @@ int whTest_CertRamSim(whTestNvmBackendType nvmType)
 
     WH_TEST_PRINT("Testing Server Certificate with RAM sim...\n");
 
-    /* Initialize NVM */
-    WH_TEST_RETURN_ON_FAIL(wh_Nvm_Init(nvm, n_conf));
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     WH_TEST_RETURN_ON_FAIL(wolfCrypt_Init());
     WH_TEST_RETURN_ON_FAIL(wc_InitRng_ex(crypto->rng, NULL, INVALID_DEVID));
@@ -651,12 +620,13 @@ int whTest_CertRamSim(whTestNvmBackendType nvmType)
         WH_ERROR_PRINT("Certificate server config tests failed: %d\n", rc);
     }
 
-    /* Cleanup NVM */
-    wh_Nvm_Cleanup(nvm);
+    /* Cleanup */
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     wc_FreeRng(crypto->rng);
     wolfCrypt_Cleanup();
 #endif
+    whTest_NvmSetup_Cleanup(nvmSetup);
+    whTest_ClientServerMemSetup_Cleanup(csSetup);
 
     return rc;
 }

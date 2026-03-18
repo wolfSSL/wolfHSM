@@ -55,10 +55,6 @@
 #if defined(WOLFHSM_CFG_TEST_POSIX) && defined(WOLFHSM_CFG_ENABLE_SERVER) && \
     !defined(WOLFHSM_CFG_NO_CRYPTO) && defined(HAVE_AES_CBC)
 
-#define TIMEOUT_TEST_BUFFER_SIZE 4096
-#define TIMEOUT_TEST_FLASH_RAM_SIZE (1024 * 1024)
-#define TIMEOUT_TEST_FLASH_SECTOR_SIZE (128 * 1024)
-#define TIMEOUT_TEST_FLASH_PAGE_SIZE 8
 
 static whServerContext* timeoutTestServerCtx = NULL;
 
@@ -80,16 +76,6 @@ static int whTest_TimeoutAesCbc(void)
     int rc = 0;
     WH_TEST_PRINT("Testing timeout AES CBC...\n");
 
-    /* Transport memory configuration */
-    uint8_t              req[TIMEOUT_TEST_BUFFER_SIZE]  = {0};
-    uint8_t              resp[TIMEOUT_TEST_BUFFER_SIZE] = {0};
-    whTransportMemConfig tmcf[1]                        = {{
-                               .req       = (whTransportMemCsr*)req,
-                               .req_size  = sizeof(req),
-                               .resp      = (whTransportMemCsr*)resp,
-                               .resp_size = sizeof(resp),
-    }};
-
     /* Client configuration with timeout */
     posixTimeoutContext posixCtx       = {0};
     posixTimeoutConfig  posixCfg       = {.timeoutUs = 1};
@@ -102,49 +88,21 @@ static int whTest_TimeoutAesCbc(void)
                 .expiredCtx = NULL,
     };
 
-    whTransportClientCb         tccb[1]    = {WH_TRANSPORT_MEM_CLIENT_CB};
-    whTransportMemClientContext tmcc[1]    = {0};
-    whCommClientConfig          cc_conf[1] = {{
-                 .transport_cb      = tccb,
-                 .transport_context = (void*)tmcc,
-                 .transport_config  = (void*)tmcf,
-                 .client_id         = WH_TEST_DEFAULT_CLIENT_ID,
-                 .connect_cb        = _timeoutTestConnectCb,
-                 .respTimeoutConfig = &timeoutCfg,
-    }};
-    whClientConfig              c_conf[1]  = {{
-                      .comm = cc_conf,
-    }};
-    whClientContext             client[1]  = {0};
+    whTest_ClientServerMemSetup* csSetup = NULL;
+    whCommClientConfig* cc_conf = NULL;
+    whCommServerConfig* cs_conf = NULL;
+    WH_TEST_RETURN_ON_FAIL(whTest_ClientServerMemSetup_Init(
+        &csSetup, WH_TEST_DEFAULT_CLIENT_ID, WH_TEST_SERVER_ID,
+        _timeoutTestConnectCb, &cc_conf, &cs_conf));
+    cc_conf->respTimeoutConfig = &timeoutCfg;
 
-    /* Server configuration */
-    whTransportServerCb         tscb[1]    = {WH_TRANSPORT_MEM_SERVER_CB};
-    whTransportMemServerContext tmsc[1]    = {0};
-    whCommServerConfig          cs_conf[1] = {{
-                 .transport_cb      = tscb,
-                 .transport_context = (void*)tmsc,
-                 .transport_config  = (void*)tmcf,
-                 .server_id         = 124,
-    }};
+    whClientConfig c_conf[1] = {{.comm = cc_conf}};
+    whClientContext client[1] = {0};
 
-    /* Flash/NVM configuration */
-    uint8_t          flash_memory[TIMEOUT_TEST_FLASH_RAM_SIZE] = {0};
-    whFlashRamsimCtx fc[1]                                     = {0};
-    whFlashRamsimCfg fc_conf[1]                                = {{
-                                       .size       = TIMEOUT_TEST_FLASH_RAM_SIZE,
-                                       .sectorSize = TIMEOUT_TEST_FLASH_SECTOR_SIZE,
-                                       .pageSize   = TIMEOUT_TEST_FLASH_PAGE_SIZE,
-                                       .erasedByte = ~(uint8_t)0,
-                                       .memory     = flash_memory,
-    }};
-    const whFlashCb  fcb[1] = {WH_FLASH_RAMSIM_CB};
-
-    whTestNvmBackendUnion nvm_setup;
-    whNvmConfig           n_conf[1] = {0};
-    whNvmContext          nvm[1]    = {{0}};
-
-    WH_TEST_RETURN_ON_FAIL(whTest_NvmCfgBackend(
-        WH_NVM_TEST_BACKEND_FLASH, &nvm_setup, n_conf, fc_conf, fc, fcb));
+    whTest_NvmSetup* nvmSetup = NULL;
+    whNvmContext* nvm = NULL;
+    WH_TEST_RETURN_ON_FAIL(whTest_NvmSetup_Init(
+        &nvmSetup, WH_NVM_TEST_BACKEND_FLASH, &nvm));
 
     whServerCryptoContext crypto[1] = {0};
 
@@ -159,7 +117,6 @@ static int whTest_TimeoutAesCbc(void)
     timeoutTestServerCtx = server;
 
     WH_TEST_RETURN_ON_FAIL(wolfCrypt_Init());
-    WH_TEST_RETURN_ON_FAIL(wh_Nvm_Init(nvm, n_conf));
     WH_TEST_RETURN_ON_FAIL(wc_InitRng_ex(crypto->rng, NULL, INVALID_DEVID));
 
     /* Server must be initialized before client (connect callback) */
@@ -205,8 +162,9 @@ static int whTest_TimeoutAesCbc(void)
     WH_TEST_RETURN_ON_FAIL(wh_Client_Cleanup(client));
 
     wc_FreeRng(crypto->rng);
-    wh_Nvm_Cleanup(nvm);
+    whTest_NvmSetup_Cleanup(nvmSetup);
     wolfCrypt_Cleanup();
+    whTest_ClientServerMemSetup_Cleanup(csSetup);
 
     return WH_ERROR_OK;
 }
@@ -239,16 +197,6 @@ static int whTest_TimeoutAesCbcOverride(void)
     int cb_count = 0;
     WH_TEST_PRINT("Testing timeout AES CBC with override callback...\n");
 
-    /* Transport memory configuration */
-    uint8_t              req[TIMEOUT_TEST_BUFFER_SIZE]  = {0};
-    uint8_t              resp[TIMEOUT_TEST_BUFFER_SIZE] = {0};
-    whTransportMemConfig tmcf[1]                        = {{
-                               .req       = (whTransportMemCsr*)req,
-                               .req_size  = sizeof(req),
-                               .resp      = (whTransportMemCsr*)resp,
-                               .resp_size = sizeof(resp),
-    }};
-
     /* Client configuration with timeout and override callback */
     posixTimeoutContext posixCtx       = {0};
     posixTimeoutConfig  posixCfg       = {.timeoutUs = 1};
@@ -261,49 +209,21 @@ static int whTest_TimeoutAesCbcOverride(void)
                 .expiredCtx = &cb_count,
     };
 
-    whTransportClientCb         tccb[1]    = {WH_TRANSPORT_MEM_CLIENT_CB};
-    whTransportMemClientContext tmcc[1]    = {0};
-    whCommClientConfig          cc_conf[1] = {{
-                 .transport_cb      = tccb,
-                 .transport_context = (void*)tmcc,
-                 .transport_config  = (void*)tmcf,
-                 .client_id         = WH_TEST_DEFAULT_CLIENT_ID,
-                 .connect_cb        = _timeoutTestConnectCb,
-                 .respTimeoutConfig = &timeoutCfg,
-    }};
-    whClientConfig              c_conf[1]  = {{
-                      .comm = cc_conf,
-    }};
-    whClientContext             client[1]  = {0};
+    whTest_ClientServerMemSetup* csSetup = NULL;
+    whCommClientConfig* cc_conf = NULL;
+    whCommServerConfig* cs_conf = NULL;
+    WH_TEST_RETURN_ON_FAIL(whTest_ClientServerMemSetup_Init(
+        &csSetup, WH_TEST_DEFAULT_CLIENT_ID, WH_TEST_SERVER_ID,
+        _timeoutTestConnectCb, &cc_conf, &cs_conf));
+    cc_conf->respTimeoutConfig = &timeoutCfg;
 
-    /* Server configuration */
-    whTransportServerCb         tscb[1]    = {WH_TRANSPORT_MEM_SERVER_CB};
-    whTransportMemServerContext tmsc[1]    = {0};
-    whCommServerConfig          cs_conf[1] = {{
-                 .transport_cb      = tscb,
-                 .transport_context = (void*)tmsc,
-                 .transport_config  = (void*)tmcf,
-                 .server_id         = 124,
-    }};
+    whClientConfig c_conf[1] = {{.comm = cc_conf}};
+    whClientContext client[1] = {0};
 
-    /* Flash/NVM configuration */
-    uint8_t          flash_memory[TIMEOUT_TEST_FLASH_RAM_SIZE] = {0};
-    whFlashRamsimCtx fc[1]                                     = {0};
-    whFlashRamsimCfg fc_conf[1]                                = {{
-                                       .size       = TIMEOUT_TEST_FLASH_RAM_SIZE,
-                                       .sectorSize = TIMEOUT_TEST_FLASH_SECTOR_SIZE,
-                                       .pageSize   = TIMEOUT_TEST_FLASH_PAGE_SIZE,
-                                       .erasedByte = ~(uint8_t)0,
-                                       .memory     = flash_memory,
-    }};
-    const whFlashCb  fcb[1] = {WH_FLASH_RAMSIM_CB};
-
-    whTestNvmBackendUnion nvm_setup;
-    whNvmConfig           n_conf[1] = {0};
-    whNvmContext          nvm[1]    = {{0}};
-
-    WH_TEST_RETURN_ON_FAIL(whTest_NvmCfgBackend(
-        WH_NVM_TEST_BACKEND_FLASH, &nvm_setup, n_conf, fc_conf, fc, fcb));
+    whTest_NvmSetup* nvmSetup = NULL;
+    whNvmContext* nvm = NULL;
+    WH_TEST_RETURN_ON_FAIL(whTest_NvmSetup_Init(
+        &nvmSetup, WH_NVM_TEST_BACKEND_FLASH, &nvm));
 
     whServerCryptoContext crypto[1] = {0};
 
@@ -318,7 +238,6 @@ static int whTest_TimeoutAesCbcOverride(void)
     timeoutTestServerCtx = server;
 
     WH_TEST_RETURN_ON_FAIL(wolfCrypt_Init());
-    WH_TEST_RETURN_ON_FAIL(wh_Nvm_Init(nvm, n_conf));
     WH_TEST_RETURN_ON_FAIL(wc_InitRng_ex(crypto->rng, NULL, INVALID_DEVID));
 
     /* Server must be initialized before client (connect callback) */
@@ -368,8 +287,9 @@ static int whTest_TimeoutAesCbcOverride(void)
     WH_TEST_RETURN_ON_FAIL(wh_Client_Cleanup(client));
 
     wc_FreeRng(crypto->rng);
-    wh_Nvm_Cleanup(nvm);
+    whTest_NvmSetup_Cleanup(nvmSetup);
     wolfCrypt_Cleanup();
+    whTest_ClientServerMemSetup_Cleanup(csSetup);
 
     return WH_ERROR_OK;
 }
@@ -454,14 +374,6 @@ int whTest_TimeoutPosix(void)
 {
     WH_TEST_PRINT("Testing timeout (POSIX)...\n");
 
-    uint8_t              req[4096]      = {0};
-    uint8_t              resp[4096]     = {0};
-    whTransportMemConfig tmcf[1]        = {{
-               .req       = (whTransportMemCsr*)req,
-               .req_size  = sizeof(req),
-               .resp      = (whTransportMemCsr*)resp,
-               .resp_size = sizeof(resp),
-    }};
     posixTimeoutContext  posixCtx       = {0};
     posixTimeoutConfig   posixCfg       = {.timeoutUs = 1};
     whTimeoutCb          timeoutCbTable = POSIX_TIMEOUT_CB;
@@ -470,20 +382,20 @@ int whTest_TimeoutPosix(void)
                  .context = &posixCtx,
                  .config  = &posixCfg,
     };
-    whTransportClientCb         tccb[1]   = {WH_TRANSPORT_MEM_CLIENT_CB};
-    whTransportMemClientContext tmcc[1]   = {0};
-    whCommClientConfig          ccConf[1] = {{
-                 .transport_cb      = tccb,
-                 .transport_context = (void*)tmcc,
-                 .transport_config  = (void*)tmcf,
-                 .client_id         = WH_TEST_DEFAULT_CLIENT_ID,
-                 .respTimeoutConfig = &timeoutCfg,
-    }};
-    whClientConfig              cConf[1]  = {{
-                      .comm = ccConf,
-    }};
 
-    return whTest_TimeoutClientConfig(cConf);
+    whTest_ClientServerMemSetup* csSetup = NULL;
+    whCommClientConfig* ccConf = NULL;
+    whCommServerConfig* csConf = NULL;
+    WH_TEST_RETURN_ON_FAIL(whTest_ClientServerMemSetup_Init(
+        &csSetup, WH_TEST_DEFAULT_CLIENT_ID, WH_TEST_SERVER_ID, NULL,
+        &ccConf, &csConf));
+    ccConf->respTimeoutConfig = &timeoutCfg;
+
+    whClientConfig cConf[1] = {{.comm = ccConf}};
+
+    int rc = whTest_TimeoutClientConfig(cConf);
+    whTest_ClientServerMemSetup_Cleanup(csSetup);
+    return rc;
 }
 #endif /* WOLFHSM_CFG_TEST_POSIX */
 

@@ -1299,9 +1299,6 @@ static int whTest_LogPosixFile_Generic(void)
 #if defined(WOLFHSM_CFG_TEST_POSIX) && defined(WOLFHSM_CFG_ENABLE_CLIENT) && \
     defined(WOLFHSM_CFG_ENABLE_SERVER)
 
-#define WH_LOG_TEST_FLASH_RAM_SIZE (1024 * 1024)
-#define WH_LOG_TEST_FLASH_SECTOR_SIZE (128 * 1024)
-#define WH_LOG_TEST_FLASH_PAGE_SIZE (8)
 #define WH_LOG_TEST_SERVER_LOG_FILE "/tmp/wh_log_clientserver_posix.txt"
 
 enum {
@@ -1428,24 +1425,14 @@ static void _whLogClientServerThreadTest(whClientConfig* c_conf,
 
 static int whTest_LogClientServerMemTransport(void)
 {
-    uint8_t              req[WH_LOG_TEST_BUFFER_SIZE]  = {0};
-    uint8_t              resp[WH_LOG_TEST_BUFFER_SIZE] = {0};
-    whTransportMemConfig tmcf[1]                       = {{
-                              .req       = (whTransportMemCsr*)req,
-                              .req_size  = sizeof(req),
-                              .resp      = (whTransportMemCsr*)resp,
-                              .resp_size = sizeof(resp),
-    }};
-
-    /* Client configuration */
-    whTransportClientCb         tccb[1]    = {WH_TRANSPORT_MEM_CLIENT_CB};
-    whTransportMemClientContext tmcc[1]    = {{0}};
-    whCommClientConfig          cc_conf[1] = {{
-                 .transport_cb      = tccb,
-                 .transport_context = (void*)tmcc,
-                 .transport_config  = (void*)tmcf,
-                 .client_id         = WH_TEST_DEFAULT_CLIENT_ID,
-    }};
+    whTest_ClientServerMemSetup* csSetup = NULL;
+    whCommClientConfig* cc_conf = NULL;
+    whCommServerConfig* cs_conf = NULL;
+    WH_TEST_RETURN_ON_FAIL(whTest_ClientServerMemSetup_Init(
+        &csSetup, WH_TEST_DEFAULT_CLIENT_ID, WH_TEST_SERVER_ID, NULL,
+        &cc_conf, &cs_conf));
+    WH_TEST_RETURN_ON_FAIL(whTest_ClientServerMemSetup_ResizeBuffers(
+        csSetup, WH_LOG_TEST_BUFFER_SIZE));
 
 #ifdef WOLFHSM_CFG_DMA
     whClientDmaConfig clientDmaConfig = {0};
@@ -1458,33 +1445,10 @@ static int whTest_LogClientServerMemTransport(void)
 #endif
     }};
 
-    /* Server configuration */
-    whTransportServerCb         tscb[1]    = {WH_TRANSPORT_MEM_SERVER_CB};
-    whTransportMemServerContext tmsc[1]    = {{0}};
-    whCommServerConfig          cs_conf[1] = {{
-                 .transport_cb      = tscb,
-                 .transport_context = (void*)tmsc,
-                 .transport_config  = (void*)tmcf,
-                 .server_id         = 124,
-    }};
-
-    uint8_t          memory[WH_LOG_TEST_FLASH_RAM_SIZE] = {0};
-    whFlashRamsimCtx fc[1]                              = {{0}};
-    whFlashRamsimCfg fc_conf[1]                         = {{
-                                .size       = WH_LOG_TEST_FLASH_RAM_SIZE,
-                                .sectorSize = WH_LOG_TEST_FLASH_SECTOR_SIZE,
-                                .pageSize   = WH_LOG_TEST_FLASH_PAGE_SIZE,
-                                .erasedByte = ~(uint8_t)0,
-                                .memory     = memory,
-    }};
-    const whFlashCb  fcb[1]                             = {WH_FLASH_RAMSIM_CB};
-
-    whTestNvmBackendUnion nvm_setup;
-    whNvmConfig           n_conf[1] = {0};
-    whNvmContext          nvm[1] = {{0}};
-
-    WH_TEST_RETURN_ON_FAIL(whTest_NvmCfgBackend(
-        WH_NVM_TEST_BACKEND_FLASH, &nvm_setup, n_conf, fc_conf, fc, fcb));
+    whTest_NvmSetup* nvmSetup = NULL;
+    whNvmContext* nvm = NULL;
+    WH_TEST_RETURN_ON_FAIL(whTest_NvmSetup_Init(
+        &nvmSetup, WH_NVM_TEST_BACKEND_FLASH, &nvm));
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     whServerCryptoContext crypto[1] = {0};
@@ -1513,7 +1477,6 @@ static int whTest_LogClientServerMemTransport(void)
         .logConfig = logConfig,
     }};
 
-    WH_TEST_RETURN_ON_FAIL(wh_Nvm_Init(nvm, n_conf));
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     WH_TEST_RETURN_ON_FAIL(wolfCrypt_Init());
@@ -1526,7 +1489,8 @@ static int whTest_LogClientServerMemTransport(void)
     wc_FreeRng(crypto->rng);
     wolfCrypt_Cleanup();
 #endif
-    wh_Nvm_Cleanup(nvm);
+    whTest_NvmSetup_Cleanup(nvmSetup);
+    whTest_ClientServerMemSetup_Cleanup(csSetup);
 
     return WH_ERROR_OK;
 }

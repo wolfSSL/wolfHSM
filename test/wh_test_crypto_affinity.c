@@ -52,10 +52,6 @@
 #include "wh_test_common.h"
 #include "wh_test_crypto_affinity.h"
 
-#define BUFFER_SIZE 4096
-#define FLASH_RAM_SIZE (1024 * 1024)
-#define FLASH_SECTOR_SIZE (128 * 1024)
-#define FLASH_PAGE_SIZE (8)
 #define TEST_DEV_ID 0xCA
 
 /* Counter to track how many times the crypto callback is invoked */
@@ -100,68 +96,20 @@ static int whTest_CryptoAffinityWithCb(void)
     int      rc       = 0;
     uint32_t affinity = 0;
 
-    /* Transport memory configuration */
-    uint8_t              req[BUFFER_SIZE]  = {0};
-    uint8_t              resp[BUFFER_SIZE] = {0};
-    whTransportMemConfig tmcf[1]           = {{
-                  .req       = (whTransportMemCsr*)req,
-                  .req_size  = sizeof(req),
-                  .resp      = (whTransportMemCsr*)resp,
-                  .resp_size = sizeof(resp),
-    }};
+    whTest_ClientServerMemSetup* csSetup = NULL;
+    whCommClientConfig* cc_conf = NULL;
+    whCommServerConfig* cs_conf = NULL;
+    WH_TEST_RETURN_ON_FAIL(whTest_ClientServerMemSetup_Init(
+        &csSetup, 1, 123, _cryptoAffinityTestConnectCb,
+        &cc_conf, &cs_conf));
 
-    /* Client configuration/contexts */
-    whTransportClientCb         tccb[1]    = {WH_TRANSPORT_MEM_CLIENT_CB};
-    whTransportMemClientContext tmcc[1]    = {0};
-    whCommClientConfig          cc_conf[1] = {{
-                 .transport_cb      = tccb,
-                 .transport_context = (void*)tmcc,
-                 .transport_config  = (void*)tmcf,
-                 .client_id         = 1,
-                 .connect_cb        = _cryptoAffinityTestConnectCb,
-    }};
-    whClientConfig              c_conf[1]  = {{
-                      .comm = cc_conf,
-    }};
-    whClientContext             client[1]  = {0};
+    whClientConfig c_conf[1] = {{.comm = cc_conf}};
+    whClientContext client[1] = {0};
 
-    /* Server configuration/contexts */
-    whTransportServerCb         tscb[1]    = {WH_TRANSPORT_MEM_SERVER_CB};
-    whTransportMemServerContext tmsc[1]    = {0};
-    whCommServerConfig          cs_conf[1] = {{
-                 .transport_cb      = tscb,
-                 .transport_context = (void*)tmsc,
-                 .transport_config  = (void*)tmcf,
-                 .server_id         = 123,
-    }};
-
-    /* Flash/NVM configuration */
-    uint8_t          flash_memory[FLASH_RAM_SIZE] = {0};
-    whFlashRamsimCtx fc[1]                        = {0};
-    whFlashRamsimCfg fc_conf[1]                   = {{
-                          .size       = FLASH_RAM_SIZE,
-                          .sectorSize = FLASH_SECTOR_SIZE,
-                          .pageSize   = FLASH_PAGE_SIZE,
-                          .erasedByte = ~(uint8_t)0,
-                          .memory     = flash_memory,
-    }};
-    const whFlashCb  fcb[1]                       = {WH_FLASH_RAMSIM_CB};
-
-    whNvmFlashContext nfc[1]     = {0};
-    whNvmFlashConfig  nf_conf[1] = {{
-         .cb      = fcb,
-         .context = fc,
-         .config  = fc_conf,
-    }};
-
-
-    whNvmCb      nfcb[1]   = {WH_NVM_FLASH_CB};
-    whNvmConfig  n_conf[1] = {{
-         .cb      = nfcb,
-         .context = nfc,
-         .config  = nf_conf,
-    }};
-    whNvmContext nvm[1]    = {0};
+    whTest_NvmSetup* nvmSetup = NULL;
+    whNvmContext* nvm = NULL;
+    WH_TEST_RETURN_ON_FAIL(whTest_NvmSetup_Init(
+        &nvmSetup, WH_NVM_TEST_BACKEND_FLASH, &nvm));
 
     /* Crypto context */
     whServerCryptoContext crypto[1] = {0};
@@ -182,9 +130,6 @@ static int whTest_CryptoAffinityWithCb(void)
     WH_TEST_RETURN_ON_FAIL(wolfCrypt_Init());
     WH_TEST_RETURN_ON_FAIL(
         wc_CryptoCb_RegisterDevice(TEST_DEV_ID, _testCryptoCb, NULL));
-
-    /* Initialize NVM */
-    WH_TEST_RETURN_ON_FAIL(wh_Nvm_Init(nvm, n_conf));
 
     /* Initialize RNG */
     WH_TEST_RETURN_ON_FAIL(wc_InitRng_ex(crypto->rng, NULL, INVALID_DEVID));
@@ -306,9 +251,10 @@ static int whTest_CryptoAffinityWithCb(void)
     WH_TEST_RETURN_ON_FAIL(wh_Client_Cleanup(client));
 
     wc_FreeRng(crypto->rng);
-    wh_Nvm_Cleanup(nvm);
+    whTest_NvmSetup_Cleanup(nvmSetup);
     wc_CryptoCb_UnRegisterDevice(TEST_DEV_ID);
     wolfCrypt_Cleanup();
+    whTest_ClientServerMemSetup_Cleanup(csSetup);
 
     WH_TEST_PRINT("PASS\n");
     return WH_ERROR_OK;
@@ -320,68 +266,20 @@ static int whTest_CryptoAffinityNoCb(void)
     int      rc       = 0;
     uint32_t affinity = 0;
 
-    /* Transport memory configuration */
-    uint8_t              req[BUFFER_SIZE]  = {0};
-    uint8_t              resp[BUFFER_SIZE] = {0};
-    whTransportMemConfig tmcf[1]           = {{
-                  .req       = (whTransportMemCsr*)req,
-                  .req_size  = sizeof(req),
-                  .resp      = (whTransportMemCsr*)resp,
-                  .resp_size = sizeof(resp),
-    }};
+    whTest_ClientServerMemSetup* csSetup = NULL;
+    whCommClientConfig* cc_conf = NULL;
+    whCommServerConfig* cs_conf = NULL;
+    WH_TEST_RETURN_ON_FAIL(whTest_ClientServerMemSetup_Init(
+        &csSetup, 1, 123, _cryptoAffinityTestConnectCb,
+        &cc_conf, &cs_conf));
 
-    /* Client configuration/contexts */
-    whTransportClientCb         tccb[1]    = {WH_TRANSPORT_MEM_CLIENT_CB};
-    whTransportMemClientContext tmcc[1]    = {0};
-    whCommClientConfig          cc_conf[1] = {{
-                 .transport_cb      = tccb,
-                 .transport_context = (void*)tmcc,
-                 .transport_config  = (void*)tmcf,
-                 .client_id         = 1,
-                 .connect_cb        = _cryptoAffinityTestConnectCb,
-    }};
-    whClientConfig              c_conf[1]  = {{
-                      .comm = cc_conf,
-    }};
-    whClientContext             client[1]  = {0};
+    whClientConfig c_conf[1] = {{.comm = cc_conf}};
+    whClientContext client[1] = {0};
 
-    /* Server configuration/contexts */
-    whTransportServerCb         tscb[1]    = {WH_TRANSPORT_MEM_SERVER_CB};
-    whTransportMemServerContext tmsc[1]    = {0};
-    whCommServerConfig          cs_conf[1] = {{
-                 .transport_cb      = tscb,
-                 .transport_context = (void*)tmsc,
-                 .transport_config  = (void*)tmcf,
-                 .server_id         = 123,
-    }};
-
-    /* Flash/NVM configuration */
-    uint8_t          flash_memory[FLASH_RAM_SIZE] = {0};
-    whFlashRamsimCtx fc[1]                        = {0};
-    whFlashRamsimCfg fc_conf[1]                   = {{
-                          .size       = FLASH_RAM_SIZE,
-                          .sectorSize = FLASH_SECTOR_SIZE,
-                          .pageSize   = FLASH_PAGE_SIZE,
-                          .erasedByte = ~(uint8_t)0,
-                          .memory     = flash_memory,
-    }};
-    const whFlashCb  fcb[1]                       = {WH_FLASH_RAMSIM_CB};
-
-    whNvmFlashContext nfc[1]     = {0};
-    whNvmFlashConfig  nf_conf[1] = {{
-         .cb      = fcb,
-         .context = fc,
-         .config  = fc_conf,
-    }};
-
-
-    whNvmCb      nfcb[1]   = {WH_NVM_FLASH_CB};
-    whNvmConfig  n_conf[1] = {{
-         .cb      = nfcb,
-         .context = nfc,
-         .config  = nf_conf,
-    }};
-    whNvmContext nvm[1]    = {0};
+    whTest_NvmSetup* nvmSetup = NULL;
+    whNvmContext* nvm = NULL;
+    WH_TEST_RETURN_ON_FAIL(whTest_NvmSetup_Init(
+        &nvmSetup, WH_NVM_TEST_BACKEND_FLASH, &nvm));
 
     /* Crypto context */
     whServerCryptoContext crypto[1] = {0};
@@ -400,9 +298,6 @@ static int whTest_CryptoAffinityNoCb(void)
 
     /* Initialize wolfCrypt */
     WH_TEST_RETURN_ON_FAIL(wolfCrypt_Init());
-
-    /* Initialize NVM */
-    WH_TEST_RETURN_ON_FAIL(wh_Nvm_Init(nvm, n_conf));
 
     /* Initialize RNG */
     WH_TEST_RETURN_ON_FAIL(wc_InitRng_ex(crypto->rng, NULL, INVALID_DEVID));
@@ -501,8 +396,9 @@ static int whTest_CryptoAffinityNoCb(void)
     WH_TEST_RETURN_ON_FAIL(wh_Client_Cleanup(client));
 
     wc_FreeRng(crypto->rng);
-    wh_Nvm_Cleanup(nvm);
+    whTest_NvmSetup_Cleanup(nvmSetup);
     wolfCrypt_Cleanup();
+    whTest_ClientServerMemSetup_Cleanup(csSetup);
 
     WH_TEST_PRINT("PASS\n");
     return WH_ERROR_OK;

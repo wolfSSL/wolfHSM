@@ -26,6 +26,7 @@
 #include <assert.h>
 #endif
 
+#include <wolfhsm/wh_comm.h>
 #include <wolfhsm/wh_nvm.h>
 #include <wolfhsm/wh_flash_ramsim.h>
 #include <wolfhsm/wh_nvm_flash.h>
@@ -34,6 +35,13 @@
 #define WH_TEST_FAIL (-1)
 #define WH_TEST_SUCCESS (0)
 #define WH_TEST_DEFAULT_CLIENT_ID (1)
+
+/* Default test configuration constants */
+#define WH_TEST_BUFFER_SIZE       4096
+#define WH_TEST_FLASH_RAM_SIZE    (1024 * 1024)
+#define WH_TEST_FLASH_SECTOR_SIZE (128 * 1024)
+#define WH_TEST_FLASH_PAGE_SIZE   8
+#define WH_TEST_SERVER_ID         124
 
 /* Test-specific print macro that always prints (replacement for printf in tests)
  * This internally uses WOLFHSM_CFG_PRINTF for consistency */
@@ -144,4 +152,48 @@ int whTest_NvmCfgBackend(whTestNvmBackendType   type,
                          whTestNvmBackendUnion* nvmSetup, whNvmConfig* nvmCfg,
                          whFlashRamsimCfg* fCfg, whFlashRamsimCtx* fCtx,
                          const whFlashCb* fCb);
+
+/*
+ * Client+Server memory transport setup helpers.
+ * The struct is opaque; all internal wiring (transport buffers, transport CBs,
+ * transport contexts) is hidden in the .c file.
+ */
+typedef struct whTest_ClientServerMemSetup whTest_ClientServerMemSetup;
+
+int whTest_ClientServerMemSetup_Init(
+    whTest_ClientServerMemSetup** outSetup,
+    int                           clientId,
+    int                           serverId,
+    whCommSetConnectedCb          connectCb,
+    whCommClientConfig**          outCommClientCfg,
+    whCommServerConfig**          outCommServerCfg);
+
+int whTest_ClientServerMemSetup_ResizeBuffers(
+    whTest_ClientServerMemSetup* setup,
+    int                          newBufferSize);
+
+int whTest_ClientServerMemSetup_Cleanup(
+    whTest_ClientServerMemSetup* setup);
+
+/*
+ * NVM setup helpers.
+ * The struct is opaque; all internal wiring (flash ramsim, NVM backend union)
+ * is hidden in the .c file.
+ */
+typedef struct whTest_NvmSetup whTest_NvmSetup;
+
+int whTest_NvmSetup_Init(
+    whTest_NvmSetup**    outSetup,
+    whTestNvmBackendType nvmType,
+    whNvmContext**       outNvmContext);
+
+int whTest_NvmSetup_ResizeFlash(
+    whTest_NvmSetup* setup,
+    int              flashRamSize,
+    int              flashSectorSize,
+    int              flashPageSize);
+
+int whTest_NvmSetup_Cleanup(
+    whTest_NvmSetup* setup);
+
 #endif /* WH_TEST_COMMON_H_ */

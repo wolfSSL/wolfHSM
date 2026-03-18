@@ -67,9 +67,6 @@
 #include "port/posix/posix_flash_file.h"
 #endif
 
-#define FLASH_RAM_SIZE (1024 * 1024) /* 1MB */
-#define FLASH_SECTOR_SIZE (128 * 1024) /* 128KB */
-#define FLASH_PAGE_SIZE (8) /* 8B */
 
 #define ALT_CLIENT_ID (2)
 
@@ -6117,26 +6114,18 @@ static void _whClientServerThreadTest(whClientConfig* c_conf,
 
 static int wh_ClientServer_MemThreadTest(whTestNvmBackendType nvmType)
 {
-    int     ret               = 0;
-    uint8_t req[BUFFER_SIZE] = {0};
-    uint8_t resp[BUFFER_SIZE] = {0};
+    whTest_ClientServerMemSetup* csSetup = NULL;
+    whCommClientConfig* cc_conf = NULL;
+    whCommServerConfig* cs_conf = NULL;
+    WH_TEST_RETURN_ON_FAIL(whTest_ClientServerMemSetup_Init(
+        &csSetup, WH_TEST_DEFAULT_CLIENT_ID, WH_TEST_SERVER_ID, NULL,
+        &cc_conf, &cs_conf));
+    WH_TEST_RETURN_ON_FAIL(whTest_ClientServerMemSetup_ResizeBuffers(
+        csSetup, BUFFER_SIZE));
 
-    whTransportMemConfig tmcf[1] = {{
-        .req        = (whTransportMemCsr*)req,
-        .req_size   = sizeof(req),
-        .resp       = (whTransportMemCsr*)resp,
-        .resp_size  = sizeof(resp),
-    }};
-
-    /* Client configuration/contexts */
-    whTransportClientCb         tccb[1]   = {WH_TRANSPORT_MEM_CLIENT_CB};
-    whTransportMemClientContext tmcc[1]   = {0};
-    whCommClientConfig          cc_conf[1] = {{
-                 .transport_cb      = tccb,
-                 .transport_context = (void*)tmcc,
-                 .transport_config  = (void*)tmcf,
-                 .client_id         = WH_TEST_DEFAULT_CLIENT_ID,
-    }};
+    whTest_NvmSetup* nvmSetup = NULL;
+    whNvmContext* nvm = NULL;
+    WH_TEST_RETURN_ON_FAIL(whTest_NvmSetup_Init(&nvmSetup, nvmType, &nvm));
 
 #ifdef WOLFHSM_CFG_DMA
     whClientDmaConfig clientDmaConfig = {0};
@@ -6148,38 +6137,8 @@ static int wh_ClientServer_MemThreadTest(whTestNvmBackendType nvmType)
 #endif
     }};
 
-    /* Server configuration/contexts */
-    whTransportServerCb         tscb[1]   = {WH_TRANSPORT_MEM_SERVER_CB};
-    whTransportMemServerContext tmsc[1]   = {0};
-    whCommServerConfig          cs_conf[1] = {{
-                 .transport_cb      = tscb,
-                 .transport_context = (void*)tmsc,
-                 .transport_config  = (void*)tmcf,
-                 .server_id         = 124,
-    }};
-
-    /* RamSim Flash state and configuration */
-    uint8_t memory[FLASH_RAM_SIZE] = {0};
-    whFlashRamsimCtx fc[1] = {0};
-    whFlashRamsimCfg fc_conf[1] = {{
-        .size       = FLASH_RAM_SIZE, /* 1MB  Flash */
-        .sectorSize = FLASH_SECTOR_SIZE,  /* 128KB  Sector Size */
-        .pageSize   = FLASH_PAGE_SIZE,           /* 8B   Page Size */
-        .erasedByte = ~(uint8_t)0,
-        .memory     = memory,
-    }};
-    const whFlashCb  fcb[1]          = {WH_FLASH_RAMSIM_CB};
-
-    whTestNvmBackendUnion nvm_setup;
-    whNvmConfig           n_conf[1] = {0};
-    whNvmContext nvm[1] = {{0}};
-
-    WH_TEST_RETURN_ON_FAIL(
-        whTest_NvmCfgBackend(nvmType, &nvm_setup, n_conf, fc_conf, fc, fcb));
-
     /* Crypto context */
     whServerCryptoContext crypto[1] = {0};
-
 
     whServerConfig s_conf[1] = {{
         .comm_config = cs_conf,
@@ -6188,9 +6147,7 @@ static int wh_ClientServer_MemThreadTest(whTestNvmBackendType nvmType)
         .devId       = INVALID_DEVID,
     }};
 
-    WH_TEST_RETURN_ON_FAIL(wh_Nvm_Init(nvm, n_conf));
-
-    ret = wolfCrypt_Init();
+    int ret = wolfCrypt_Init();
     if (ret == 0) {
         ret = wc_InitRng_ex(crypto->rng, NULL, INVALID_DEVID);
         if (ret != 0) {
@@ -6204,9 +6161,10 @@ static int wh_ClientServer_MemThreadTest(whTestNvmBackendType nvmType)
         WH_ERROR_PRINT("Failed to initialize wolfCrypt: %d\n", ret);
     }
 
-    wh_Nvm_Cleanup(nvm);
+    whTest_NvmSetup_Cleanup(nvmSetup);
     wc_FreeRng(crypto->rng);
     wolfCrypt_Cleanup();
+    whTest_ClientServerMemSetup_Cleanup(csSetup);
 
     return WH_ERROR_OK;
 }
