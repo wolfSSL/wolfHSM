@@ -4213,9 +4213,15 @@ static int _HandleMlDsaSign(whServerContext* ctx, uint16_t magic, int devId,
                     key, req_context, (byte)contextSz, res_out, &res_len,
                     in, in_len, preHashType, ctx->crypto->rng);
             }
-            else {
+            else if (contextSz > 0) {
                 ret = wc_MlDsaKey_SignCtx(
                     key, req_context, (byte)contextSz, res_out, &res_len,
+                    in, in_len, ctx->crypto->rng);
+            }
+            else {
+                /* Fall back to legacy method if no context is provided */
+                ret = wc_MlDsaKey_Sign(
+                    key, res_out, &res_len,
                     in, in_len, ctx->crypto->rng);
             }
         }
@@ -4318,9 +4324,15 @@ static int _HandleMlDsaVerify(whServerContext* ctx, uint16_t magic, int devId,
                     key, req_sig, sig_len, req_context, (byte)contextSz,
                     req_hash, hash_len, preHashType, &result);
             }
-            else {
+            else if (contextSz > 0) {
                 ret = wc_MlDsaKey_VerifyCtx(
                     key, req_sig, sig_len, req_context, (byte)contextSz,
+                    req_hash, hash_len, &result);
+            }
+            else {
+                /* Fall back to legacy method if no context is provided */
+                ret = wc_MlDsaKey_Verify(
+                    key, req_sig, sig_len,
                     req_hash, hash_len, &result);
             }
         }
@@ -5455,11 +5467,17 @@ static int _HandleMlDsaSignDma(whServerContext* ctx, uint16_t magic, int devId,
                             sigAddr, &sigLen, msgAddr, req.msg.sz,
                             preHashType, ctx->crypto->rng);
                     }
-                    else {
+                    else if (contextSz > 0) {
                         ret = wc_MlDsaKey_SignCtx(
                             key, req_context, (byte)contextSz,
                             sigAddr, &sigLen, msgAddr, req.msg.sz,
                             ctx->crypto->rng);
+                    }
+                    else {
+                        /* Fall back to legacy method if no context is provided */
+                        ret = wc_MlDsaKey_Sign(
+                            key, sigAddr, &sigLen,
+                            msgAddr, req.msg.sz, ctx->crypto->rng);
                     }
 
                     if (ret == 0) {
@@ -5592,9 +5610,15 @@ static int _HandleMlDsaVerifyDma(whServerContext* ctx, uint16_t magic,
                         key, sigAddr, req.sig.sz, req_context, (byte)contextSz,
                         msgAddr, req.msg.sz, preHashType, &verified);
                 }
-                else {
+                else if (contextSz > 0) {
                     ret = wc_MlDsaKey_VerifyCtx(
                         key, sigAddr, req.sig.sz, req_context, (byte)contextSz,
+                        msgAddr, req.msg.sz, &verified);
+                }
+                else {
+                    /* Fall back to legacy method if no context is provided */
+                    ret = wc_MlDsaKey_Verify(
+                        key, sigAddr, req.sig.sz,
                         msgAddr, req.msg.sz, &verified);
                 }
 

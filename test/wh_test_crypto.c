@@ -4182,6 +4182,88 @@ static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
 #if !defined(WOLFSSL_DILITHIUM_NO_VERIFY) && \
     !defined(WOLFSSL_DILITHIUM_NO_SIGN) &&   \
     !defined(WOLFSSL_DILITHIUM_NO_MAKE_KEY) && !defined(WOLFSSL_NO_ML_DSA_44)
+/* Test that a signature created locally with wc_MlDsaKey_Sign (basic API,
+ * no FIPS 204 context) can be verified through the wolfHSM server using
+ * wh_Client_MlDsaVerify. This is the flow that wolfBoot uses: sign at build
+ * time with wolfCrypt, verify at boot through the HSM crypto callback. */
+static int whTestCrypto_MlDsaLocalSignServerVerify(whClientContext* ctx,
+                                                   int devId, WC_RNG* rng)
+{
+    (void)devId;
+
+    int      ret      = 0;
+    int      verified = 0;
+    MlDsaKey key[1];
+    byte     msg[] = "wolfBoot-style local sign, HSM verify";
+    byte     sig[DILITHIUM_ML_DSA_44_SIG_SIZE];
+    word32   sigSz = sizeof(sig);
+
+    /* Initialize and generate a key pair locally */
+    ret = wc_MlDsaKey_Init(key, NULL, INVALID_DEVID);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to init ML-DSA key: %d\n", ret);
+        return ret;
+    }
+
+    ret = wc_MlDsaKey_SetParams(key, WC_ML_DSA_44);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to set ML-DSA params: %d\n", ret);
+        wc_MlDsaKey_Free(key);
+        return ret;
+    }
+
+    ret = wc_MlDsaKey_MakeKey(key, rng);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to generate ML-DSA key: %d\n", ret);
+        wc_MlDsaKey_Free(key);
+        return ret;
+    }
+
+    /* Sign locally using the basic wolfCrypt API (no context, no HSM) */
+    ret = wc_MlDsaKey_Sign(key, sig, &sigSz, msg, sizeof(msg), rng);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to sign locally with ML-DSA: %d\n", ret);
+        wc_MlDsaKey_Free(key);
+        return ret;
+    }
+
+    /* Now verify through the wolfHSM server using the client API.
+     * The server must use wc_MlDsaKey_Verify (not VerifyCtx) when
+     * contextSz == 0 and preHashType == WC_HASH_TYPE_NONE. */
+    ret = wh_Client_MlDsaVerify(ctx, sig, sigSz, msg, sizeof(msg), &verified,
+                                key, NULL, 0, WC_HASH_TYPE_NONE);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to verify via HSM: %d\n", ret);
+        wc_MlDsaKey_Free(key);
+        return ret;
+    }
+
+    if (!verified) {
+        WH_ERROR_PRINT("ML-DSA local-sign/HSM-verify: signature invalid\n");
+        wc_MlDsaKey_Free(key);
+        return -1;
+    }
+
+    /* Tampered signature should fail */
+    sig[0] ^= 0xFF;
+    ret = wh_Client_MlDsaVerify(ctx, sig, sigSz, msg, sizeof(msg), &verified,
+                                key, NULL, 0, WC_HASH_TYPE_NONE);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to call verify with tampered sig: %d\n", ret);
+        wc_MlDsaKey_Free(key);
+        return ret;
+    }
+    if (verified) {
+        WH_ERROR_PRINT("ML-DSA local-sign/HSM-verify: accepted tampered sig\n");
+        wc_MlDsaKey_Free(key);
+        return -1;
+    }
+
+    WH_TEST_PRINT("ML-DSA Local-Sign/HSM-Verify SUCCESS\n");
+    wc_MlDsaKey_Free(key);
+    return 0;
+}
+
 static int whTestCrypto_MlDsaWolfCrypt(whClientContext* ctx, int devId,
                                        WC_RNG* rng)
 {
@@ -5944,6 +6026,10 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         if (ret == WH_ERROR_OK) {
             i++;
         }
+    }
+
+    if (ret == 0) {
+        ret = whTestCrypto_MlDsaLocalSignServerVerify(client, WH_DEV_ID, rng);
     }
 
     if (ret == 0) {
