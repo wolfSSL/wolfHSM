@@ -1664,8 +1664,6 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
                                const void* req_packet, uint16_t* out_resp_size,
                                void* resp_packet)
 {
-    (void)req_size;
-
     int           ret = WH_ERROR_OK;
     uint8_t*      in;
     uint8_t*      out;
@@ -1679,41 +1677,60 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
 
     switch (action) {
         case WH_KEY_CACHE: {
-            whMessageKeystore_CacheRequest  req;
-            whMessageKeystore_CacheResponse resp;
+            whMessageKeystore_CacheRequest  req = {0};
+            whMessageKeystore_CacheResponse resp = {0};
 
-            /* translate request */
-            (void)wh_MessageKeystore_TranslateCacheRequest(
-                magic, (whMessageKeystore_CacheRequest*)req_packet, &req);
-
-            /* in is after fixed size fields */
-            in = (uint8_t*)req_packet + sizeof(req);
-
-            /* set the metadata fields */
-            meta->id = wh_KeyId_TranslateFromClient(
-                WH_KEYTYPE_CRYPTO, server->comm->client_id, req.id);
-            meta->access = WH_NVM_ACCESS_ANY;
-            meta->flags  = req.flags;
-            meta->len    = req.sz;
-            /* truncate label if it's too large */
-            if (req.labelSz > WH_NVM_LABEL_LEN) {
-                req.labelSz = WH_NVM_LABEL_LEN;
+            /* Validate req_size can hold the fixed request struct */
+            if (req_size < sizeof(req)) {
+                ret = WH_ERROR_BADARGS;
             }
-            memcpy(meta->label, req.label, req.labelSz);
 
-            ret = WH_SERVER_NVM_LOCK(server);
             if (ret == WH_ERROR_OK) {
-                /* get a new id if one wasn't provided */
-                if (WH_KEYID_ISERASED(meta->id)) {
-                    ret = wh_Server_KeystoreGetUniqueId(server, &meta->id);
-                }
-                /* write the key */
-                if (ret == WH_ERROR_OK) {
-                    ret = wh_Server_KeystoreCacheKeyChecked(server, meta, in);
-                }
+                /* translate request */
+                (void)wh_MessageKeystore_TranslateCacheRequest(
+                    magic, (whMessageKeystore_CacheRequest*)req_packet, &req);
 
-                (void)WH_SERVER_NVM_UNLOCK(server);
-            } /* WH_SERVER_NVM_LOCK() */
+                /* Validate that the variable-length key data fits within the
+                 * received packet */
+                if (req.sz > req_size - sizeof(req)) {
+                    ret = WH_ERROR_BADARGS;
+                }
+            }
+
+            if (ret == WH_ERROR_OK) {
+                /* in is after fixed size fields */
+                in = (uint8_t*)req_packet + sizeof(req);
+
+                /* set the metadata fields */
+                meta->id = wh_KeyId_TranslateFromClient(
+                    WH_KEYTYPE_CRYPTO, server->comm->client_id, req.id);
+                meta->access = WH_NVM_ACCESS_ANY;
+                meta->flags  = req.flags;
+                meta->len    = req.sz;
+                /* truncate label if it's too large */
+                if (req.labelSz > WH_NVM_LABEL_LEN) {
+                    req.labelSz = WH_NVM_LABEL_LEN;
+                }
+                memcpy(meta->label, req.label, req.labelSz);
+            }
+
+            if (ret == WH_ERROR_OK) {
+                ret = WH_SERVER_NVM_LOCK(server);
+                if (ret == WH_ERROR_OK) {
+                    /* get a new id if one wasn't provided */
+                    if (WH_KEYID_ISERASED(meta->id)) {
+                        ret =
+                            wh_Server_KeystoreGetUniqueId(server, &meta->id);
+                    }
+                    /* write the key */
+                    if (ret == WH_ERROR_OK) {
+                        ret = wh_Server_KeystoreCacheKeyChecked(server, meta,
+                                                                in);
+                    }
+
+                    (void)WH_SERVER_NVM_UNLOCK(server);
+                } /* WH_SERVER_NVM_LOCK() */
+            }
 
             if (ret == WH_ERROR_OK) {
                 /* Translate server keyId back to client format with flags */
@@ -1730,46 +1747,56 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
 #ifdef WOLFHSM_CFG_DMA
 
         case WH_KEY_CACHE_DMA: {
-            whMessageKeystore_CacheDmaRequest  req;
-            whMessageKeystore_CacheDmaResponse resp;
+            whMessageKeystore_CacheDmaRequest  req = {0};
+            whMessageKeystore_CacheDmaResponse resp = {0};
 
-            /* translate request */
-            (void)wh_MessageKeystore_TranslateCacheDmaRequest(
-                magic, (whMessageKeystore_CacheDmaRequest*)req_packet, &req);
-
-            /* set the metadata fields */
-            meta->id = wh_KeyId_TranslateFromClient(
-                WH_KEYTYPE_CRYPTO, server->comm->client_id, req.id);
-            meta->access = WH_NVM_ACCESS_ANY;
-            meta->flags  = req.flags;
-            meta->len    = req.key.sz;
-            /* truncate label if it's too large */
-            if (req.labelSz > WH_NVM_LABEL_LEN) {
-                req.labelSz = WH_NVM_LABEL_LEN;
+            if (req_size < sizeof(req)) {
+                ret = WH_ERROR_BADARGS;
             }
-            memcpy(meta->label, req.label, req.labelSz);
 
-            ret = WH_SERVER_NVM_LOCK(server);
             if (ret == WH_ERROR_OK) {
-                /* get a new id if one wasn't provided */
-                if (WH_KEYID_ISERASED(meta->id)) {
-                    ret = wh_Server_KeystoreGetUniqueId(server, &meta->id);
-                }
+                /* translate request */
+                (void)wh_MessageKeystore_TranslateCacheDmaRequest(
+                    magic, (whMessageKeystore_CacheDmaRequest*)req_packet,
+                    &req);
 
-                /* write the key using DMA */
+                /* set the metadata fields */
+                meta->id = wh_KeyId_TranslateFromClient(
+                    WH_KEYTYPE_CRYPTO, server->comm->client_id, req.id);
+                meta->access = WH_NVM_ACCESS_ANY;
+                meta->flags  = req.flags;
+                meta->len    = req.key.sz;
+                /* truncate label if it's too large */
+                if (req.labelSz > WH_NVM_LABEL_LEN) {
+                    req.labelSz = WH_NVM_LABEL_LEN;
+                }
+                memcpy(meta->label, req.label, req.labelSz);
+            }
+
+            if (ret == WH_ERROR_OK) {
+                ret = WH_SERVER_NVM_LOCK(server);
                 if (ret == WH_ERROR_OK) {
-                    ret = wh_Server_KeystoreCacheKeyDmaChecked(server, meta,
-                                                               req.key.addr);
-                    /* propagate bad address to client if DMA operation failed
-                     */
-                    if (ret != WH_ERROR_OK) {
-                        resp.dmaAddrStatus.badAddr.addr = req.key.addr;
-                        resp.dmaAddrStatus.badAddr.sz   = req.key.sz;
+                    /* get a new id if one wasn't provided */
+                    if (WH_KEYID_ISERASED(meta->id)) {
+                        ret =
+                            wh_Server_KeystoreGetUniqueId(server, &meta->id);
                     }
-                }
 
-                (void)WH_SERVER_NVM_UNLOCK(server);
-            } /* WH_SERVER_NVM_LOCK() */
+                    /* write the key using DMA */
+                    if (ret == WH_ERROR_OK) {
+                        ret = wh_Server_KeystoreCacheKeyDmaChecked(
+                            server, meta, req.key.addr);
+                        /* propagate bad address to client if DMA operation
+                         * failed */
+                        if (ret != WH_ERROR_OK) {
+                            resp.dmaAddrStatus.badAddr.addr = req.key.addr;
+                            resp.dmaAddrStatus.badAddr.sz   = req.key.sz;
+                        }
+                    }
+
+                    (void)WH_SERVER_NVM_UNLOCK(server);
+                } /* WH_SERVER_NVM_LOCK() */
+            }
 
             if (ret == WH_ERROR_OK) {
                 /* Translate server keyId back to client format with flags */
@@ -1784,34 +1811,45 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
         } break;
 
         case WH_KEY_EXPORT_DMA: {
-            whMessageKeystore_ExportDmaRequest  req;
-            whMessageKeystore_ExportDmaResponse resp;
+            whMessageKeystore_ExportDmaRequest  req = {0};
+            whMessageKeystore_ExportDmaResponse resp = {0};
 
-            /* translate request */
-            (void)wh_MessageKeystore_TranslateExportDmaRequest(
-                magic, (whMessageKeystore_ExportDmaRequest*)req_packet, &req);
+            if (req_size < sizeof(req)) {
+                ret = WH_ERROR_BADARGS;
+            }
 
-            ret = WH_SERVER_NVM_LOCK(server);
             if (ret == WH_ERROR_OK) {
-                ret = wh_Server_KeystoreExportKeyDmaChecked(
-                    server,
-                    wh_KeyId_TranslateFromClient(
-                        WH_KEYTYPE_CRYPTO, server->comm->client_id, req.id),
-                    req.key.addr, req.key.sz, meta);
+                /* translate request */
+                (void)wh_MessageKeystore_TranslateExportDmaRequest(
+                    magic, (whMessageKeystore_ExportDmaRequest*)req_packet,
+                    &req);
+            }
 
-                /* propagate bad address to client if DMA operation failed */
-                if (ret != WH_ERROR_OK) {
-                    resp.dmaAddrStatus.badAddr.addr = req.key.addr;
-                    resp.dmaAddrStatus.badAddr.sz   = req.key.sz;
-                }
-
+            if (ret == WH_ERROR_OK) {
+                ret = WH_SERVER_NVM_LOCK(server);
                 if (ret == WH_ERROR_OK) {
-                    resp.len = req.key.sz;
-                    memcpy(resp.label, meta->label, sizeof(meta->label));
-                }
+                    ret = wh_Server_KeystoreExportKeyDmaChecked(
+                        server,
+                        wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                                     server->comm->client_id,
+                                                     req.id),
+                        req.key.addr, req.key.sz, meta);
 
-                (void)WH_SERVER_NVM_UNLOCK(server);
-            } /* WH_SERVER_NVM_LOCK() */
+                    /* propagate bad address to client if DMA operation failed
+                     */
+                    if (ret != WH_ERROR_OK) {
+                        resp.dmaAddrStatus.badAddr.addr = req.key.addr;
+                        resp.dmaAddrStatus.badAddr.sz   = req.key.sz;
+                    }
+
+                    if (ret == WH_ERROR_OK) {
+                        resp.len = req.key.sz;
+                        memcpy(resp.label, meta->label, sizeof(meta->label));
+                    }
+
+                    (void)WH_SERVER_NVM_UNLOCK(server);
+                } /* WH_SERVER_NVM_LOCK() */
+            }
             resp.rc = ret;
 
             (void)wh_MessageKeystore_TranslateExportDmaResponse(
@@ -1823,22 +1861,31 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
 #endif /* WOLFHSM_CFG_DMA */
 
         case WH_KEY_EVICT: {
-            whMessageKeystore_EvictRequest  req;
+            whMessageKeystore_EvictRequest  req = {0};
             whMessageKeystore_EvictResponse resp = {0};
 
-            (void)wh_MessageKeystore_TranslateEvictRequest(
-                magic, (whMessageKeystore_EvictRequest*)req_packet, &req);
+            if (req_size < sizeof(req)) {
+                ret = WH_ERROR_BADARGS;
+            }
 
-            ret = WH_SERVER_NVM_LOCK(server);
             if (ret == WH_ERROR_OK) {
-                ret = wh_Server_KeystoreEvictKeyChecked(
-                    server,
-                    wh_KeyId_TranslateFromClient(
-                        WH_KEYTYPE_CRYPTO, server->comm->client_id, req.id));
-                resp.ok = 0; /* unused */
+                (void)wh_MessageKeystore_TranslateEvictRequest(
+                    magic, (whMessageKeystore_EvictRequest*)req_packet, &req);
+            }
 
-                (void)WH_SERVER_NVM_UNLOCK(server);
-            } /* WH_SERVER_NVM_LOCK() */
+            if (ret == WH_ERROR_OK) {
+                ret = WH_SERVER_NVM_LOCK(server);
+                if (ret == WH_ERROR_OK) {
+                    ret = wh_Server_KeystoreEvictKeyChecked(
+                        server,
+                        wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                                     server->comm->client_id,
+                                                     req.id));
+                    resp.ok = 0; /* unused */
+
+                    (void)WH_SERVER_NVM_UNLOCK(server);
+                } /* WH_SERVER_NVM_LOCK() */
+            }
             resp.rc = ret;
 
             (void)wh_MessageKeystore_TranslateEvictResponse(
@@ -1847,36 +1894,46 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
         } break;
 
         case WH_KEY_EXPORT: {
-            whMessageKeystore_ExportRequest  req;
+            whMessageKeystore_ExportRequest  req = {0};
             whMessageKeystore_ExportResponse resp = {0};
             uint32_t                         keySz;
 
-            /* translate request */
-            (void)wh_MessageKeystore_TranslateExportRequest(
-                magic, (whMessageKeystore_ExportRequest*)req_packet, &req);
-
-            /* out is after fixed size fields */
-            out   = (uint8_t*)resp_packet + sizeof(resp);
-            keySz = WOLFHSM_CFG_COMM_DATA_LEN - sizeof(resp);
-
             resp.len = 0;
-            ret      = WH_SERVER_NVM_LOCK(server);
+
+            if (req_size < sizeof(req)) {
+                ret = WH_ERROR_BADARGS;
+            }
+
             if (ret == WH_ERROR_OK) {
-                /* read the key */
-                ret = wh_Server_KeystoreReadKeyChecked(
-                    server,
-                    wh_KeyId_TranslateFromClient(
-                        WH_KEYTYPE_CRYPTO, server->comm->client_id, req.id),
-                    meta, out, &keySz);
+                /* translate request */
+                (void)wh_MessageKeystore_TranslateExportRequest(
+                    magic, (whMessageKeystore_ExportRequest*)req_packet, &req);
 
-                /* Only provide key output if no error */
+                /* out is after fixed size fields */
+                out   = (uint8_t*)resp_packet + sizeof(resp);
+                keySz = WOLFHSM_CFG_COMM_DATA_LEN - sizeof(resp);
+            }
+
+            if (ret == WH_ERROR_OK) {
+                ret = WH_SERVER_NVM_LOCK(server);
                 if (ret == WH_ERROR_OK) {
-                    resp.len = keySz;
-                    memcpy(resp.label, meta->label, sizeof(meta->label));
-                }
+                    /* read the key */
+                    ret = wh_Server_KeystoreReadKeyChecked(
+                        server,
+                        wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                                     server->comm->client_id,
+                                                     req.id),
+                        meta, out, &keySz);
 
-                (void)WH_SERVER_NVM_UNLOCK(server);
-            } /* WH_SERVER_NVM_LOCK() */
+                    /* Only provide key output if no error */
+                    if (ret == WH_ERROR_OK) {
+                        resp.len = keySz;
+                        memcpy(resp.label, meta->label, sizeof(meta->label));
+                    }
+
+                    (void)WH_SERVER_NVM_UNLOCK(server);
+                } /* WH_SERVER_NVM_LOCK() */
+            }
             resp.rc = ret;
 
             (void)wh_MessageKeystore_TranslateExportResponse(
@@ -1886,23 +1943,32 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
         } break;
 
         case WH_KEY_COMMIT: {
-            whMessageKeystore_CommitRequest  req;
-            whMessageKeystore_CommitResponse resp;
+            whMessageKeystore_CommitRequest  req = {0};
+            whMessageKeystore_CommitResponse resp = {0};
 
-            /* translate request */
-            (void)wh_MessageKeystore_TranslateCommitRequest(
-                magic, (whMessageKeystore_CommitRequest*)req_packet, &req);
+            if (req_size < sizeof(req)) {
+                ret = WH_ERROR_BADARGS;
+            }
 
-            ret = WH_SERVER_NVM_LOCK(server);
             if (ret == WH_ERROR_OK) {
-                ret = wh_Server_KeystoreCommitKeyChecked(
-                    server,
-                    wh_KeyId_TranslateFromClient(
-                        WH_KEYTYPE_CRYPTO, server->comm->client_id, req.id));
-                resp.ok = 0; /* unused */
+                /* translate request */
+                (void)wh_MessageKeystore_TranslateCommitRequest(
+                    magic, (whMessageKeystore_CommitRequest*)req_packet, &req);
+            }
 
-                (void)WH_SERVER_NVM_UNLOCK(server);
-            } /* WH_SERVER_NVM_LOCK() */
+            if (ret == WH_ERROR_OK) {
+                ret = WH_SERVER_NVM_LOCK(server);
+                if (ret == WH_ERROR_OK) {
+                    ret = wh_Server_KeystoreCommitKeyChecked(
+                        server,
+                        wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                                     server->comm->client_id,
+                                                     req.id));
+                    resp.ok = 0; /* unused */
+
+                    (void)WH_SERVER_NVM_UNLOCK(server);
+                } /* WH_SERVER_NVM_LOCK() */
+            }
             resp.rc = ret;
 
             (void)wh_MessageKeystore_TranslateCommitResponse(
@@ -1912,23 +1978,32 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
         } break;
 
         case WH_KEY_ERASE: {
-            whMessageKeystore_EraseRequest  req;
-            whMessageKeystore_EraseResponse resp;
+            whMessageKeystore_EraseRequest  req = {0};
+            whMessageKeystore_EraseResponse resp = {0};
 
-            /* translate request */
-            (void)wh_MessageKeystore_TranslateEraseRequest(
-                magic, (whMessageKeystore_EraseRequest*)req_packet, &req);
+            if (req_size < sizeof(req)) {
+                ret = WH_ERROR_BADARGS;
+            }
 
-            ret = WH_SERVER_NVM_LOCK(server);
             if (ret == WH_ERROR_OK) {
-                ret = wh_Server_KeystoreEraseKeyChecked(
-                    server,
-                    wh_KeyId_TranslateFromClient(
-                        WH_KEYTYPE_CRYPTO, server->comm->client_id, req.id));
-                resp.ok = 0; /* unused */
+                /* translate request */
+                (void)wh_MessageKeystore_TranslateEraseRequest(
+                    magic, (whMessageKeystore_EraseRequest*)req_packet, &req);
+            }
 
-                (void)WH_SERVER_NVM_UNLOCK(server);
-            } /* WH_SERVER_NVM_LOCK() */
+            if (ret == WH_ERROR_OK) {
+                ret = WH_SERVER_NVM_LOCK(server);
+                if (ret == WH_ERROR_OK) {
+                    ret = wh_Server_KeystoreEraseKeyChecked(
+                        server,
+                        wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                                     server->comm->client_id,
+                                                     req.id));
+                    resp.ok = 0; /* unused */
+
+                    (void)WH_SERVER_NVM_UNLOCK(server);
+                } /* WH_SERVER_NVM_LOCK() */
+            }
             resp.rc = ret;
 
             (void)wh_MessageKeystore_TranslateEraseResponse(
@@ -1938,26 +2013,34 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
         } break;
 
         case WH_KEY_REVOKE: {
-            whMessageKeystore_RevokeRequest  req;
-            whMessageKeystore_RevokeResponse resp;
+            whMessageKeystore_RevokeRequest  req = {0};
+            whMessageKeystore_RevokeResponse resp = {0};
 
-            (void)wh_MessageKeystore_TranslateRevokeRequest(
-                magic, (whMessageKeystore_RevokeRequest*)req_packet, &req);
+            if (req_size < sizeof(req)) {
+                ret = WH_ERROR_BADARGS;
+            }
 
-            ret     = WH_SERVER_NVM_LOCK(server);
-            resp.rc = ret;
             if (ret == WH_ERROR_OK) {
-                resp.rc = wh_Server_KeystoreRevokeKey(
-                    server,
-                    wh_KeyId_TranslateFromClient(
-                        WH_KEYTYPE_CRYPTO, server->comm->client_id, req.id));
+                (void)wh_MessageKeystore_TranslateRevokeRequest(
+                    magic, (whMessageKeystore_RevokeRequest*)req_packet, &req);
+            }
 
-                (void)WH_SERVER_NVM_UNLOCK(server);
-            } /* WH_SERVER_NVM_LOCK() */
+            if (ret == WH_ERROR_OK) {
+                ret = WH_SERVER_NVM_LOCK(server);
+                if (ret == WH_ERROR_OK) {
+                    ret = wh_Server_KeystoreRevokeKey(
+                        server,
+                        wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                                    server->comm->client_id,
+                                                    req.id));
+                    (void)WH_SERVER_NVM_UNLOCK(server);
+                } /* WH_SERVER_NVM_LOCK() */
+            }
+            resp.rc = ret;
 
             (void)wh_MessageKeystore_TranslateRevokeResponse(
                 magic, &resp, (whMessageKeystore_RevokeResponse*)resp_packet);
-
+            
             *out_resp_size = sizeof(resp);
         } break;
 
@@ -1967,39 +2050,45 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
             whMessageKeystore_KeyWrapResponse wrapResp = {0};
             uint8_t*                       reqData;
             uint8_t*                       respData;
-            uint32_t reqDataSz  = WOLFHSM_CFG_COMM_DATA_LEN - sizeof(wrapReq);
             uint32_t respDataSz = WOLFHSM_CFG_COMM_DATA_LEN - sizeof(wrapResp);
+            uint32_t reqDataSz;
 
-            /* Validate the bounds of the request data */
-            if (reqDataSz < req_size) {
-                return WH_ERROR_BUFFER_SIZE;
+            /* Validate req_size can hold the fixed request struct */
+            if (req_size < sizeof(wrapReq)) {
+                ret = WH_ERROR_BADARGS;
             }
 
-            /* Translate request */
-            (void)wh_MessageKeystore_TranslateKeyWrapRequest(magic, req_packet,
-                                                             &wrapReq);
-
-
-            /* Set the request data pointer directly after the request */
-            reqData =
-                (uint8_t*)req_packet + sizeof(whMessageKeystore_KeyWrapRequest);
-
-            /* Set the response data pointer directly after the response */
-            respData = (uint8_t*)resp_packet +
-                       sizeof(whMessageKeystore_KeyWrapResponse);
-
-            /* Note: Locking here is mega-overkill, as there is only one small
-             * section inside this request pipeline that needs to be locked -
-             * freshening the server key and checking usage. Consider relocating
-             * locking to this section */
-            ret = WH_SERVER_NVM_LOCK(server);
             if (ret == WH_ERROR_OK) {
-                ret =
-                    _HandleKeyWrapRequest(server, &wrapReq, reqData, reqDataSz,
-                                          &wrapResp, respData, respDataSz);
+                /* Compute actual variable data size from the received packet */
+                reqDataSz = req_size - sizeof(wrapReq);
 
-                (void)WH_SERVER_NVM_UNLOCK(server);
-            } /* WH_SERVER_NVM_LOCK() */
+                /* Translate request */
+                (void)wh_MessageKeystore_TranslateKeyWrapRequest(
+                    magic, req_packet, &wrapReq);
+
+                /* Set the request data pointer directly after the request */
+                reqData = (uint8_t*)req_packet +
+                          sizeof(whMessageKeystore_KeyWrapRequest);
+
+                /* Set the response data pointer directly after the response */
+                respData = (uint8_t*)resp_packet +
+                           sizeof(whMessageKeystore_KeyWrapResponse);
+            }
+
+            /* Note: Locking here is mega-overkill, as there is only one
+             * small section inside this request pipeline that needs to be
+             * locked - freshening the server key and checking usage.
+             * Consider relocating locking to this section */
+            if (ret == WH_ERROR_OK) {
+                ret = WH_SERVER_NVM_LOCK(server);
+                if (ret == WH_ERROR_OK) {
+                    ret = _HandleKeyWrapRequest(server, &wrapReq, reqData,
+                                                reqDataSz, &wrapResp,
+                                                respData, respDataSz);
+
+                    (void)WH_SERVER_NVM_UNLOCK(server);
+                } /* WH_SERVER_NVM_LOCK() */
+            }
             wrapResp.rc = ret;
 
             (void)wh_MessageKeystore_TranslateKeyWrapResponse(magic, &wrapResp,
@@ -2013,39 +2102,46 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
             whMessageKeystore_KeyUnwrapAndExportResponse unwrapResp = {0};
             uint8_t*                                  reqData;
             uint8_t*                                  respData;
-            uint32_t reqDataSz = WOLFHSM_CFG_COMM_DATA_LEN - sizeof(unwrapReq);
             uint32_t respDataSz =
                 WOLFHSM_CFG_COMM_DATA_LEN - sizeof(unwrapResp);
+            uint32_t reqDataSz;
 
-            /* Validate the bounds of the request data */
-            if (reqDataSz < req_size) {
-                return WH_ERROR_BUFFER_SIZE;
+            /* Validate req_size can hold the fixed request struct */
+            if (req_size < sizeof(unwrapReq)) {
+                ret = WH_ERROR_BADARGS;
             }
 
-            /* Translate request */
-            (void)wh_MessageKeystore_TranslateKeyUnwrapAndExportRequest(
-                magic, req_packet, &unwrapReq);
-
-            /* Set the request data pointer directly after the request */
-            reqData = (uint8_t*)req_packet +
-                      sizeof(whMessageKeystore_KeyUnwrapAndExportRequest);
-
-            /* Set the response data pointer directly after the response */
-            respData = (uint8_t*)resp_packet +
-                       sizeof(whMessageKeystore_KeyUnwrapAndExportResponse);
-
-            /* Note: Locking here is mega-overkill, as there is only one small
-             * section inside this request pipeline that needs to be locked -
-             * freshening the server key and checking usage. Consider relocating
-             * locking to this section */
-            ret = WH_SERVER_NVM_LOCK(server);
             if (ret == WH_ERROR_OK) {
-                ret = _HandleKeyUnwrapAndExportRequest(
-                    server, &unwrapReq, reqData, reqDataSz, &unwrapResp,
-                    respData, respDataSz);
+                /* Compute actual variable data size from the received packet */
+                reqDataSz = req_size - sizeof(unwrapReq);
 
-                (void)WH_SERVER_NVM_UNLOCK(server);
-            } /* WH_SERVER_NVM_LOCK() */
+                /* Translate request */
+                (void)wh_MessageKeystore_TranslateKeyUnwrapAndExportRequest(
+                    magic, req_packet, &unwrapReq);
+
+                /* Set the request data pointer directly after the request */
+                reqData = (uint8_t*)req_packet +
+                          sizeof(whMessageKeystore_KeyUnwrapAndExportRequest);
+
+                /* Set the response data pointer directly after the response */
+                respData = (uint8_t*)resp_packet +
+                           sizeof(whMessageKeystore_KeyUnwrapAndExportResponse);
+            }
+
+            /* Note: Locking here is mega-overkill, as there is only one
+             * small section inside this request pipeline that needs to be
+             * locked - freshening the server key and checking usage.
+             * Consider relocating locking to this section */
+            if (ret == WH_ERROR_OK) {
+                ret = WH_SERVER_NVM_LOCK(server);
+                if (ret == WH_ERROR_OK) {
+                    ret = _HandleKeyUnwrapAndExportRequest(
+                        server, &unwrapReq, reqData, reqDataSz, &unwrapResp,
+                        respData, respDataSz);
+
+                    (void)WH_SERVER_NVM_UNLOCK(server);
+                } /* WH_SERVER_NVM_LOCK() */
+            }
             unwrapResp.rc = ret;
 
             (void)wh_MessageKeystore_TranslateKeyUnwrapAndExportResponse(
@@ -2061,34 +2157,41 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
             whMessageKeystore_KeyUnwrapAndCacheResponse cacheResp = {0};
             uint8_t*                                 reqData;
             uint8_t*                                 respData;
-            uint32_t reqDataSz  = WOLFHSM_CFG_COMM_DATA_LEN - sizeof(cacheReq);
             uint32_t respDataSz = WOLFHSM_CFG_COMM_DATA_LEN - sizeof(cacheResp);
+            uint32_t reqDataSz;
 
-            /* Validate the bounds of the request data */
-            if (reqDataSz < req_size) {
-                return WH_ERROR_BUFFER_SIZE;
+            /* Validate req_size can hold the fixed request struct */
+            if (req_size < sizeof(cacheReq)) {
+                ret = WH_ERROR_BADARGS;
             }
 
-            /* Translate request */
-            (void)wh_MessageKeystore_TranslateKeyUnwrapAndCacheRequest(
-                magic, req_packet, &cacheReq);
-
-            /* Set the request data pointer directly after the request */
-            reqData = (uint8_t*)req_packet +
-                      sizeof(whMessageKeystore_KeyUnwrapAndCacheRequest);
-
-            /* Set the response data pointer directly after the response */
-            respData = (uint8_t*)resp_packet +
-                       sizeof(whMessageKeystore_KeyUnwrapAndCacheResponse);
-
-            ret = WH_SERVER_NVM_LOCK(server);
             if (ret == WH_ERROR_OK) {
-                ret = _HandleKeyUnwrapAndCacheRequest(
-                    server, &cacheReq, reqData, reqDataSz, &cacheResp, respData,
-                    respDataSz);
+                /* Compute actual variable data size from the received packet */
+                reqDataSz = req_size - sizeof(cacheReq);
 
-                (void)WH_SERVER_NVM_UNLOCK(server);
-            } /* WH_SERVER_NVM_LOCK() */
+                /* Translate request */
+                (void)wh_MessageKeystore_TranslateKeyUnwrapAndCacheRequest(
+                    magic, req_packet, &cacheReq);
+
+                /* Set the request data pointer directly after the request */
+                reqData = (uint8_t*)req_packet +
+                          sizeof(whMessageKeystore_KeyUnwrapAndCacheRequest);
+
+                /* Set the response data pointer directly after the response */
+                respData = (uint8_t*)resp_packet +
+                           sizeof(whMessageKeystore_KeyUnwrapAndCacheResponse);
+            }
+
+            if (ret == WH_ERROR_OK) {
+                ret = WH_SERVER_NVM_LOCK(server);
+                if (ret == WH_ERROR_OK) {
+                    ret = _HandleKeyUnwrapAndCacheRequest(
+                        server, &cacheReq, reqData, reqDataSz, &cacheResp,
+                        respData, respDataSz);
+
+                    (void)WH_SERVER_NVM_UNLOCK(server);
+                } /* WH_SERVER_NVM_LOCK() */
+            }
             cacheResp.rc = ret;
 
             (void)wh_MessageKeystore_TranslateKeyUnwrapAndCacheResponse(
@@ -2103,39 +2206,45 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
             whMessageKeystore_DataWrapResponse wrapResp = {0};
             uint8_t*                           reqData;
             uint8_t*                           respData;
-            uint32_t reqDataSz  = WOLFHSM_CFG_COMM_DATA_LEN - sizeof(wrapReq);
             uint32_t respDataSz = WOLFHSM_CFG_COMM_DATA_LEN - sizeof(wrapResp);
+            uint32_t reqDataSz;
 
-            /* Validate the bounds of the request data */
-            if (reqDataSz < req_size) {
-                return WH_ERROR_BUFFER_SIZE;
+            /* Validate req_size can hold the fixed request struct */
+            if (req_size < sizeof(wrapReq)) {
+                ret = WH_ERROR_BADARGS;
             }
 
-            /* Translate request */
-            (void)wh_MessageKeystore_TranslateDataWrapRequest(magic, req_packet,
-                                                              &wrapReq);
-
-
-            /* Set the request data pointer directly after the request */
-            reqData = (uint8_t*)req_packet +
-                      sizeof(whMessageKeystore_DataWrapRequest);
-
-            /* Set the response data pointer directly after the response */
-            respData = (uint8_t*)resp_packet +
-                       sizeof(whMessageKeystore_DataWrapResponse);
-
-            /* Note: Locking here is mega-overkill, as there is only one small
-             * section inside this request pipeline that needs to be locked -
-             * freshening the server key and checking usage. Consider relocating
-             * locking to this section */
-            ret = WH_SERVER_NVM_LOCK(server);
             if (ret == WH_ERROR_OK) {
-                ret =
-                    _HandleDataWrapRequest(server, &wrapReq, reqData, reqDataSz,
-                                           &wrapResp, respData, respDataSz);
+                /* Compute actual variable data size from the received packet */
+                reqDataSz = req_size - sizeof(wrapReq);
 
-                (void)WH_SERVER_NVM_UNLOCK(server);
-            } /* WH_SERVER_NVM_LOCK() */
+                /* Translate request */
+                (void)wh_MessageKeystore_TranslateDataWrapRequest(
+                    magic, req_packet, &wrapReq);
+
+                /* Set the request data pointer directly after the request */
+                reqData = (uint8_t*)req_packet +
+                          sizeof(whMessageKeystore_DataWrapRequest);
+
+                /* Set the response data pointer directly after the response */
+                respData = (uint8_t*)resp_packet +
+                           sizeof(whMessageKeystore_DataWrapResponse);
+            }
+
+            /* Note: Locking here is mega-overkill, as there is only one
+             * small section inside this request pipeline that needs to be
+             * locked - freshening the server key and checking usage.
+             * Consider relocating locking to this section */
+            if (ret == WH_ERROR_OK) {
+                ret = WH_SERVER_NVM_LOCK(server);
+                if (ret == WH_ERROR_OK) {
+                    ret = _HandleDataWrapRequest(server, &wrapReq, reqData,
+                                                 reqDataSz, &wrapResp,
+                                                 respData, respDataSz);
+
+                    (void)WH_SERVER_NVM_UNLOCK(server);
+                } /* WH_SERVER_NVM_LOCK() */
+            }
             wrapResp.rc = ret;
 
             (void)wh_MessageKeystore_TranslateDataWrapResponse(magic, &wrapResp,
@@ -2149,40 +2258,46 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
             whMessageKeystore_DataUnwrapResponse unwrapResp = {0};
             uint8_t*                             reqData;
             uint8_t*                             respData;
-            uint32_t reqDataSz = WOLFHSM_CFG_COMM_DATA_LEN - sizeof(unwrapReq);
             uint32_t respDataSz =
                 WOLFHSM_CFG_COMM_DATA_LEN - sizeof(unwrapResp);
+            uint32_t reqDataSz;
 
-            /* Validate the bounds of the request data */
-            if (reqDataSz < req_size) {
-                return WH_ERROR_BUFFER_SIZE;
+            /* Validate req_size can hold the fixed request struct */
+            if (req_size < sizeof(unwrapReq)) {
+                ret = WH_ERROR_BADARGS;
             }
 
-            /* Translate request */
-            (void)wh_MessageKeystore_TranslateDataUnwrapRequest(
-                magic, req_packet, &unwrapReq);
-
-
-            /* Set the request data pointer directly after the request */
-            reqData = (uint8_t*)req_packet +
-                      sizeof(whMessageKeystore_DataUnwrapRequest);
-
-            /* Set the response data pointer directly after the response */
-            respData = (uint8_t*)resp_packet +
-                       sizeof(whMessageKeystore_DataUnwrapResponse);
-
-            /* Note: Locking here is mega-overkill, as there is only one small
-             * section inside this request pipeline that needs to be locked -
-             * freshening the server key and checking usage. Consider relocating
-             * locking to this section */
-            ret = WH_SERVER_NVM_LOCK(server);
             if (ret == WH_ERROR_OK) {
-                ret = _HandleDataUnwrapRequest(server, &unwrapReq, reqData,
-                                               reqDataSz, &unwrapResp, respData,
-                                               respDataSz);
+                /* Compute actual variable data size from the received packet */
+                reqDataSz = req_size - sizeof(unwrapReq);
 
-                (void)WH_SERVER_NVM_UNLOCK(server);
-            } /* WH_SERVER_NVM_LOCK() */
+                /* Translate request */
+                (void)wh_MessageKeystore_TranslateDataUnwrapRequest(
+                    magic, req_packet, &unwrapReq);
+
+                /* Set the request data pointer directly after the request */
+                reqData = (uint8_t*)req_packet +
+                          sizeof(whMessageKeystore_DataUnwrapRequest);
+
+                /* Set the response data pointer directly after the response */
+                respData = (uint8_t*)resp_packet +
+                           sizeof(whMessageKeystore_DataUnwrapResponse);
+            }
+
+            /* Note: Locking here is mega-overkill, as there is only one
+             * small section inside this request pipeline that needs to be
+             * locked - freshening the server key and checking usage.
+             * Consider relocating locking to this section */
+            if (ret == WH_ERROR_OK) {
+                ret = WH_SERVER_NVM_LOCK(server);
+                if (ret == WH_ERROR_OK) {
+                    ret = _HandleDataUnwrapRequest(
+                        server, &unwrapReq, reqData, reqDataSz, &unwrapResp,
+                        respData, respDataSz);
+
+                    (void)WH_SERVER_NVM_UNLOCK(server);
+                } /* WH_SERVER_NVM_LOCK() */
+            }
             unwrapResp.rc = ret;
 
             (void)wh_MessageKeystore_TranslateDataUnwrapResponse(
