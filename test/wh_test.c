@@ -62,6 +62,10 @@
 #include "wh_test_server_img_mgr.h"
 #endif
 
+#if defined(WOLFHSM_CFG_TEST_POSIX) && defined(WOLFHSM_CFG_TEST_PKCS11)
+#include "wh_test_pkcs11.h"
+#endif
+
 #if defined(WOLFHSM_CFG_TEST_POSIX) && defined(WOLFHSM_CFG_ENABLE_CLIENT)
 #include "port/posix/posix_transport_tcp.h"
 #if defined(WOLFHSM_CFG_TEST_CLIENT_ONLY) && defined(WOLFHSM_CFG_TLS)
@@ -147,6 +151,10 @@ int whTest_Unit(void)
 
 #if defined(WOLFHSM_CFG_ENABLE_TIMEOUT) && defined(WOLFHSM_CFG_TEST_POSIX)
     WH_TEST_ASSERT(0 == whTest_TimeoutPosix());
+#endif
+
+#if defined(WOLFHSM_CFG_TEST_POSIX) && defined(WOLFHSM_CFG_TEST_PKCS11)
+    WH_TEST_ASSERT(0 == whTest_Pkcs11());
 #endif
 
     return 0;

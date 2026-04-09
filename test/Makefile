@@ -152,6 +152,24 @@ ifeq ($(TLS),1)
 	DEF += -DWOLFHSM_CFG_TLS
 endif
 
+# PKCS11=1: enable wh_test_pkcs11 integration test
+# Requires: p11-kit-dev, wh_server_uds daemon binary
+# Optional: WH_TEST_PKCS11_DAEMON_PATH=<path> override daemon location
+ifeq ($(PKCS11),1)
+    P11KIT_CFLAGS := $(shell pkg-config --cflags p11-kit-1 2>/dev/null)
+    ifeq ($(P11KIT_CFLAGS),)
+        $(error "PKCS11=1 requires p11-kit-1 (install libp11-kit-dev)")
+    endif
+    INC  += $(P11KIT_CFLAGS)
+    DEF  += -DWOLFHSM_CFG_TEST_PKCS11
+    LIBS += -ldl
+    ifdef WH_TEST_PKCS11_DAEMON_PATH
+        DEF += -DWH_TEST_PKCS11_DAEMON_PATH=\"$(WH_TEST_PKCS11_DAEMON_PATH)\"
+    endif
+    # PKCS11 test requires C99 for designated initialisers in attribute arrays
+    CSTD := -std=c99
+endif
+
 # Support stress test mode (only runs thread safety stress test)
 ifeq ($(STRESS),1)
     ifneq ($(THREADSAFE),1)

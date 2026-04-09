@@ -44,9 +44,11 @@
 #if defined(WOLFHSM_CFG_TEST_POSIX)
 #include <pthread.h> /* For pthread_create/cancel/join/_t */
 #include <unistd.h>
-#include <time.h> /* For nanosleep */
+#include <time.h>    /* For nanosleep */
+#include <sys/stat.h> /* For stat() in UDS socket-cleanup check */
 #include "port/posix/posix_transport_tcp.h"
 #include "port/posix/posix_transport_shm.h"
+#include "port/posix/posix_transport_uds.h"
 
 const struct timespec ONE_MS = {.tv_sec = 0, .tv_nsec = 1000000};
 #endif
@@ -531,6 +533,51 @@ void wh_CommClientServer_ShMemThreadTest(void)
     _whCommClientServerThreadTest(c_conf, s_conf);
 }
 
+void wh_CommClientServer_UdsThreadTest(void)
+{
+    /* Build a unique socket path using the PID so parallel test runs
+     * (e.g. multiple make -j invocations) do not collide with each other.
+     * /tmp is writable without elevated privileges on all POSIX systems.
+     * The path is short enough to fit in sun_path (max 107 usable chars). */
+    char uds_path[64] = {0};
+    (void)snprintf(uds_path, sizeof(uds_path),
+                   "/tmp/wh_test_comm_uds.%u.sock", (unsigned)getpid());
+
+    posixTransportUdsConfig udscfg[1] = {{
+        .server_path = uds_path,
+    }};
+
+    /* Client configuration/contexts */
+    whTransportClientCb            ptuccb[1] = {PTU_CLIENT_CB};
+    posixTransportUdsClientContext tuc[1]    = {0};
+    whCommClientConfig             c_conf[1] = {{
+                    .transport_cb      = ptuccb,
+                    .transport_context = (void*)tuc,
+                    .transport_config  = (void*)udscfg,
+                    .client_id         = WH_TEST_DEFAULT_CLIENT_ID,
+    }};
+
+    /* Server configuration/contexts */
+    whTransportServerCb            ptuscb[1] = {PTU_SERVER_CB};
+    posixTransportUdsServerContext tus[1]    = {0};
+    whCommServerConfig             s_conf[1] = {{
+                    .transport_cb      = ptuscb,
+                    .transport_context = (void*)tus,
+                    .transport_config  = (void*)udscfg,
+                    .server_id         = 0xF,
+    }};
+
+    _whCommClientServerThreadTest(c_conf, s_conf);
+
+    /* Verify the socket file was removed by server cleanup.
+     * A stale socket file is a resource leak and would cause the next
+     * InitListen to silently succeed on the wrong inode. */
+    {
+        struct stat st;
+        WH_TEST_ASSERT(stat(uds_path, &st) != 0);
+    }
+}
+
 void wh_CommClientServer_TcpThreadTest(void)
 {
     posixTransportTcpConfig mytcpconfig[1] = {{
@@ -580,6 +627,9 @@ int whTest_Comm(void)
 
     WH_TEST_PRINT("Testing comms: (pthread) posix mem...\n");
     wh_CommClientServer_ShMemThreadTest();
+
+    WH_TEST_PRINT("Testing comms: (pthread) uds...\n");
+    wh_CommClientServer_UdsThreadTest();
 #endif /* defined(WOLFHSM_CFG_TEST_POSIX) */
 
     return 0;
