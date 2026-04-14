@@ -44,6 +44,8 @@
 #include "wolfssl/wolfcrypt/ecc.h"
 #include "wolfssl/wolfcrypt/ed25519.h"
 #include "wolfssl/wolfcrypt/wc_mldsa.h"
+#include "wolfssl/wolfcrypt/wc_mlkem.h"
+#include "wolfssl/wolfcrypt/memory.h"
 
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_utils.h"
@@ -378,6 +380,110 @@ int wh_Crypto_MlDsaDeserializeKeyDer(const uint8_t* buffer, uint16_t size,
     return ret;
 }
 #endif /* WOLFSSL_HAVE_MLDSA */
+
+#ifdef WOLFSSL_HAVE_MLKEM
+int wh_Crypto_MlKemSerializeKey(MlKemKey* key, uint16_t max_size,
+                                uint8_t* buffer, uint16_t* out_size)
+{
+    int    ret = WH_ERROR_OK;
+    word32 keySize;
+
+    if ((key == NULL) || (buffer == NULL) || (out_size == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Try to encode the private key first. wc_MlKemKey_PrivateKeySize()
+     * returns the size regardless of whether a private key is present, so we
+     * must attempt encoding and check the return to detect public-only keys. */
+    ret = wc_MlKemKey_PrivateKeySize(key, &keySize);
+    if (ret == WH_ERROR_OK) {
+        if (keySize > max_size) {
+            return WH_ERROR_BADARGS;
+        }
+        ret = wc_MlKemKey_EncodePrivateKey(key, buffer, keySize);
+    }
+    if (ret != WH_ERROR_OK) {
+        /* Private key encoding failed - try public key only */
+        ret = wc_MlKemKey_PublicKeySize(key, &keySize);
+        if (ret == WH_ERROR_OK) {
+            if (keySize > max_size) {
+                return WH_ERROR_BADARGS;
+            }
+            ret = wc_MlKemKey_EncodePublicKey(key, buffer, keySize);
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        *out_size = (uint16_t)keySize;
+    }
+    else {
+        /* Clear buffer to avoid leaking partial key material on error */
+        wc_ForceZero(buffer, keySize);
+    }
+
+    return ret;
+}
+
+int wh_Crypto_MlKemDeserializeKey(const uint8_t* buffer, uint16_t size,
+                                  MlKemKey* key)
+{
+    static const int levels[] = {
+        WC_ML_KEM_512,
+        WC_ML_KEM_768,
+        WC_ML_KEM_1024
+    };
+    int    ret;
+    int    origLevel;
+    int    origDevId;
+    void*  origHeap;
+    word32 i;
+
+    if ((buffer == NULL) || (key == NULL) || (size == 0)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Save original key properties so we can restore on failure */
+    origLevel = key->type;
+    origDevId = key->devId;
+    origHeap  = key->heap;
+
+    /* First, try decoding with the level already set in the key */
+    ret = wc_MlKemKey_DecodePrivateKey(key, buffer, size);
+    if (ret == WH_ERROR_OK) {
+        return ret;
+    }
+    ret = wc_MlKemKey_DecodePublicKey(key, buffer, size);
+    if (ret == WH_ERROR_OK) {
+        return ret;
+    }
+
+    /* Current level didn't work, try other levels in place */
+    for (i = 0; i < (word32)(sizeof(levels) / sizeof(levels[0])); i++) {
+        if (levels[i] == origLevel) {
+            continue;
+        }
+        wc_MlKemKey_Free(key);
+        ret = wc_MlKemKey_Init(key, levels[i], origHeap, origDevId);
+        if (ret != WH_ERROR_OK) {
+            continue;
+        }
+        ret = wc_MlKemKey_DecodePrivateKey(key, buffer, size);
+        if (ret == WH_ERROR_OK) {
+            return ret;
+        }
+        ret = wc_MlKemKey_DecodePublicKey(key, buffer, size);
+        if (ret == WH_ERROR_OK) {
+            return ret;
+        }
+    }
+
+    /* None of the levels worked, restore original level and devId. We return an
+     * in ret anyway. So we ignore the return value of wc_MlKemKey_Init(). */
+    wc_MlKemKey_Free(key);
+    (void)wc_MlKemKey_Init(key, origLevel, origHeap, origDevId);
+    return ret;
+}
+#endif /* WOLFSSL_HAVE_MLKEM */
 
 #ifdef WOLFSSL_CMAC
 void wh_Crypto_CmacAesSaveStateToMsg(whMessageCrypto_CmacAesState* state,

@@ -47,12 +47,22 @@
 #include "wolfssl/wolfcrypt/ecc.h"
 #include "wolfssl/wolfcrypt/sha256.h"
 #include "wolfssl/wolfcrypt/sha512.h"
+#include "wolfssl/wolfcrypt/wc_mlkem.h"
 
 #include "wolfhsm/wh_crypto.h"
 #include "wolfhsm/wh_client_crypto.h"
 #include "wolfhsm/wh_client_cryptocb.h"
 #include "wolfhsm/wh_message_crypto.h"
 
+
+#if defined(WOLFSSL_HAVE_MLKEM)
+static int _handlePqcKemKeyGen(whClientContext* ctx, wc_CryptoInfo* info,
+                               int useDma);
+static int _handlePqcEncaps(whClientContext* ctx, wc_CryptoInfo* info,
+                            int useDma);
+static int _handlePqcDecaps(whClientContext* ctx, wc_CryptoInfo* info,
+                            int useDma);
+#endif /* WOLFSSL_HAVE_MLKEM */
 
 #if defined(WOLFSSL_HAVE_MLDSA) || defined(HAVE_FALCON)
 static int _handlePqcSigKeyGen(whClientContext* ctx, wc_CryptoInfo* info,
@@ -429,6 +439,21 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
 #endif /* HAVE_ED25519 */
 #endif /* HAVE_CURVE25519 */
 
+#if defined(WOLFSSL_HAVE_MLKEM)
+        case WC_PK_TYPE_PQC_KEM_KEYGEN:
+            ret = _handlePqcKemKeyGen(ctx, info, 0);
+            break;
+
+        case WC_PK_TYPE_PQC_KEM_ENCAPS:
+            ret = _handlePqcEncaps(ctx, info, 0);
+            break;
+
+        case WC_PK_TYPE_PQC_KEM_DECAPS:
+            ret = _handlePqcDecaps(ctx, info, 0);
+            break;
+
+#endif /* WOLFSSL_HAVE_MLKEM */
+
 #if defined(WOLFSSL_HAVE_MLDSA) || defined(HAVE_FALCON)
         case WC_PK_TYPE_PQC_SIG_KEYGEN:
             ret = _handlePqcSigKeyGen(ctx, info, 0);
@@ -606,6 +631,167 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
     }
     return ret;
 }
+
+#if defined(WOLFSSL_HAVE_MLKEM)
+static int _handlePqcKemKeyGen(whClientContext* ctx, wc_CryptoInfo* info,
+                               int useDma)
+{
+    int ret = CRYPTOCB_UNAVAILABLE;
+
+    /* Extract info parameters */
+    int   size = info->pk.pqc_kem_kg.size;
+    void* key  = info->pk.pqc_kem_kg.key;
+    int   type = info->pk.pqc_kem_kg.type;
+
+#ifndef WOLFHSM_CFG_DMA
+    if (useDma) {
+        /* TODO: proper error code? */
+        return WC_HW_E;
+    }
+#endif
+
+    (void)size;
+
+    switch (type) {
+        case WC_PQC_KEM_TYPE_KYBER: {
+            int level = ((MlKemKey*)key)->type;
+#ifdef WOLFHSM_CFG_DMA
+            if (useDma) {
+                ret = wh_Client_MlKemMakeExportKeyDma(ctx, level, key);
+            }
+            else
+#endif /* WOLFHSM_CFG_DMA */
+            {
+                ret = wh_Client_MlKemMakeExportKey(ctx, level, key);
+            }
+        } break;
+
+        default:
+            ret = CRYPTOCB_UNAVAILABLE;
+            break;
+    }
+
+    if (ret == WH_ERROR_BADARGS) {
+        ret = BAD_FUNC_ARG;
+    }
+    else if (ret == WH_ERROR_NOTIMPL) {
+        ret = CRYPTOCB_UNAVAILABLE;
+    }
+
+    return ret;
+}
+
+static int _handlePqcEncaps(whClientContext* ctx, wc_CryptoInfo* info,
+                            int useDma)
+{
+    int ret = CRYPTOCB_UNAVAILABLE;
+
+    /* Extract info parameters */
+    byte*  ciphertext    = info->pk.pqc_encaps.ciphertext;
+    word32 ciphertextLen = info->pk.pqc_encaps.ciphertextLen;
+    byte*  sharedSecret  = info->pk.pqc_encaps.sharedSecret;
+    word32 sharedSecLen  = info->pk.pqc_encaps.sharedSecretLen;
+    void*  key           = info->pk.pqc_encaps.key;
+    int    type          = info->pk.pqc_encaps.type;
+
+#ifndef WOLFHSM_CFG_DMA
+    if (useDma) {
+        /* TODO: proper error code? */
+        return WC_HW_E;
+    }
+#endif
+
+    switch (type) {
+        case WC_PQC_KEM_TYPE_KYBER:
+#ifdef WOLFHSM_CFG_DMA
+            if (useDma) {
+                ret = wh_Client_MlKemEncapsulateDma(ctx, key, ciphertext,
+                                                    &ciphertextLen,
+                                                    sharedSecret, &sharedSecLen);
+            }
+            else
+#endif /* WOLFHSM_CFG_DMA */
+            {
+                ret = wh_Client_MlKemEncapsulate(ctx, key, ciphertext,
+                                                 &ciphertextLen, sharedSecret,
+                                                 &sharedSecLen);
+            }
+            if (ret == WH_ERROR_OK) {
+                info->pk.pqc_encaps.ciphertextLen = ciphertextLen;
+                info->pk.pqc_encaps.sharedSecretLen = sharedSecLen;
+            }
+            break;
+
+        default:
+            ret = CRYPTOCB_UNAVAILABLE;
+            break;
+    }
+
+    if (ret == WH_ERROR_BADARGS) {
+        ret = BAD_FUNC_ARG;
+    }
+    else if (ret == WH_ERROR_NOTIMPL) {
+        ret = CRYPTOCB_UNAVAILABLE;
+    }
+
+    return ret;
+}
+
+static int _handlePqcDecaps(whClientContext* ctx, wc_CryptoInfo* info,
+                            int useDma)
+{
+    int ret = CRYPTOCB_UNAVAILABLE;
+
+    /* Extract info parameters */
+    const byte* ciphertext    = info->pk.pqc_decaps.ciphertext;
+    word32      ciphertextLen = info->pk.pqc_decaps.ciphertextLen;
+    byte*       sharedSecret  = info->pk.pqc_decaps.sharedSecret;
+    word32      sharedSecLen  = info->pk.pqc_decaps.sharedSecretLen;
+    void*       key           = info->pk.pqc_decaps.key;
+    int         type          = info->pk.pqc_decaps.type;
+
+#ifndef WOLFHSM_CFG_DMA
+    if (useDma) {
+        /* TODO: proper error code? */
+        return WC_HW_E;
+    }
+#endif
+
+    switch (type) {
+        case WC_PQC_KEM_TYPE_KYBER:
+#ifdef WOLFHSM_CFG_DMA
+            if (useDma) {
+                ret = wh_Client_MlKemDecapsulateDma(
+                    ctx, key, ciphertext, ciphertextLen, sharedSecret,
+                    &sharedSecLen);
+            }
+            else
+#endif /* WOLFHSM_CFG_DMA */
+            {
+                ret = wh_Client_MlKemDecapsulate(ctx, key, ciphertext,
+                                                 ciphertextLen, sharedSecret,
+                                                 &sharedSecLen);
+            }
+            if (ret == WH_ERROR_OK) {
+                info->pk.pqc_decaps.sharedSecretLen = sharedSecLen;
+            }
+            break;
+
+        default:
+            ret = CRYPTOCB_UNAVAILABLE;
+            break;
+    }
+
+    if (ret == WH_ERROR_BADARGS) {
+        ret = BAD_FUNC_ARG;
+    }
+    else if (ret == WH_ERROR_NOTIMPL) {
+        ret = CRYPTOCB_UNAVAILABLE;
+    }
+
+    return ret;
+}
+#endif /* WOLFSSL_HAVE_MLKEM */
 
 #if defined(HAVE_FALCON) || defined(WOLFSSL_HAVE_MLDSA)
 static int _handlePqcSigKeyGen(whClientContext* ctx, wc_CryptoInfo* info,
@@ -871,6 +1057,17 @@ int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
 
     case WC_ALGO_TYPE_PK: {
         switch (info->pk.type) {
+#if defined(WOLFSSL_HAVE_MLKEM)
+            case WC_PK_TYPE_PQC_KEM_KEYGEN:
+                ret = _handlePqcKemKeyGen(ctx, info, 1);
+                break;
+            case WC_PK_TYPE_PQC_KEM_ENCAPS:
+                ret = _handlePqcEncaps(ctx, info, 1);
+                break;
+            case WC_PK_TYPE_PQC_KEM_DECAPS:
+                ret = _handlePqcDecaps(ctx, info, 1);
+                break;
+#endif /* WOLFSSL_HAVE_MLKEM */
 #if defined(WOLFSSL_HAVE_MLDSA) || defined(HAVE_FALCON)
             case WC_PK_TYPE_PQC_SIG_KEYGEN:
                 ret = _handlePqcSigKeyGen(ctx, info, 1);

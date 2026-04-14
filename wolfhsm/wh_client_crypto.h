@@ -51,6 +51,7 @@
 #include "wolfssl/wolfcrypt/ecc.h"
 #include "wolfssl/wolfcrypt/ed25519.h"
 #include "wolfssl/wolfcrypt/wc_mldsa.h"
+#include "wolfssl/wolfcrypt/wc_mlkem.h"
 #include "wolfssl/wolfcrypt/hmac.h"
 
 /**
@@ -2715,6 +2716,205 @@ int wh_Client_MlDsaCheckPrivKeyDma(whClientContext* ctx, wc_MlDsaKey* key,
 #endif /* WOLFHSM_CFG_DMA */
 
 #endif /* WOLFSSL_HAVE_MLDSA */
+
+#ifdef WOLFSSL_HAVE_MLKEM
+
+/**
+ * @brief Associate a ML-KEM key with a specific key ID.
+ *
+ * Sets the device context of a ML-KEM key to the specified key ID. On the
+ * server side, this key ID is used to reference the key stored in the HSM.
+ *
+ * @param[in] key Pointer to the ML-KEM key structure.
+ * @param[in] keyId Key ID to be associated with the ML-KEM key.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_MlKemSetKeyId(MlKemKey* key, whKeyId keyId);
+
+/**
+ * @brief Retrieve the key ID associated with a ML-KEM key.
+ *
+ * @param[in] key Pointer to the ML-KEM key structure.
+ * @param[out] outId Pointer to store the retrieved key ID.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_MlKemGetKeyId(MlKemKey* key, whKeyId* outId);
+
+/**
+ * @brief Import a ML-KEM key to the server key cache.
+ *
+ * @param[in] ctx Pointer to the client context.
+ * @param[in] key Pointer to the ML-KEM key to import.
+ * @param[in,out] inout_keyId Pointer to key ID to use/receive.
+ * @param[in] flags Flags to control key persistence.
+ * @param[in] label_len Length of optional label in bytes.
+ * @param[in] label Optional label to associate with the key.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_MlKemImportKey(whClientContext* ctx, MlKemKey* key,
+                             whKeyId* inout_keyId, whNvmFlags flags,
+                             uint16_t label_len, uint8_t* label);
+
+/**
+ * @brief Export a ML-KEM key from the server key cache.
+ *
+ * @param[in] ctx Pointer to the client context.
+ * @param[in] keyId Key ID of the key to export.
+ * @param[out] key Pointer to the ML-KEM key structure to populate.
+ * @param[in] label_len Length of optional label in bytes.
+ * @param[out] label Optional label buffer to receive the key label.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_MlKemExportKey(whClientContext* ctx, whKeyId keyId, MlKemKey* key,
+                             uint16_t label_len, uint8_t* label);
+
+/**
+ * @brief Generate a ML-KEM key pair and return it as an ephemeral key.
+ *
+ * The key pair is generated on the server, serialized, and returned to the
+ * client without being cached.
+ *
+ * @param[in] ctx Pointer to the client context.
+ * @param[in] level ML-KEM security level (WC_ML_KEM_512/768/1024).
+ * @param[out] key Pointer to the ML-KEM key to populate with the generated key.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_MlKemMakeExportKey(whClientContext* ctx, int level,
+                                 MlKemKey* key);
+
+/**
+ * @brief Generate a ML-KEM key pair and cache it on the server.
+ *
+ * @param[in] ctx Pointer to the client context.
+ * @param[in] level ML-KEM security level (WC_ML_KEM_512/768/1024).
+ * @param[in,out] inout_key_id Pointer to key ID to use/receive.
+ * @param[in] flags Flags to control key persistence and usage.
+ * @param[in] label_len Length of optional label in bytes.
+ * @param[in] label Optional label to associate with the key.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_MlKemMakeCacheKey(whClientContext* ctx, int level,
+                                whKeyId* inout_key_id, whNvmFlags flags,
+                                uint16_t label_len, uint8_t* label);
+
+/**
+ * @brief Perform ML-KEM encapsulation using a server-cached public key.
+ *
+ * Generates a shared secret and ciphertext using the public key identified by
+ * the key ID stored in the provided MlKemKey. If the key is not yet cached,
+ * it will be auto-imported and evicted after use.
+ *
+ * @param[in] ctx Pointer to the client context.
+ * @param[in] key Pointer to the ML-KEM key (must have key ID set).
+ * @param[out] ct Buffer to receive the ciphertext.
+ * @param[in,out] inout_ct_len On input, size of ct buffer; on output, actual
+ *                ciphertext length.
+ * @param[out] ss Buffer to receive the shared secret.
+ * @param[in,out] inout_ss_len On input, size of ss buffer; on output, actual
+ *                shared secret length.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_MlKemEncapsulate(whClientContext* ctx, MlKemKey* key,
+                               byte* ct, word32* inout_ct_len,
+                               byte* ss, word32* inout_ss_len);
+
+/**
+ * @brief Perform ML-KEM decapsulation using a server-cached private key.
+ *
+ * Recovers the shared secret from the ciphertext using the private key
+ * identified by the key ID stored in the provided MlKemKey. If the key is not
+ * yet cached, it will be auto-imported and evicted after use.
+ *
+ * @param[in] ctx Pointer to the client context.
+ * @param[in] key Pointer to the ML-KEM key (must have key ID set).
+ * @param[in] ct Pointer to the ciphertext.
+ * @param[in] ct_len Length of the ciphertext in bytes.
+ * @param[out] ss Buffer to receive the shared secret.
+ * @param[in,out] inout_ss_len On input, size of ss buffer; on output, actual
+ *                shared secret length.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_MlKemDecapsulate(whClientContext* ctx, MlKemKey* key,
+                               const byte* ct, word32 ct_len, byte* ss,
+                               word32* inout_ss_len);
+
+#ifdef WOLFHSM_CFG_DMA
+
+/**
+ * @brief Import a ML-KEM key using DMA.
+ *
+ * @param[in] ctx Pointer to the client context.
+ * @param[in] key Pointer to the ML-KEM key to import.
+ * @param[in,out] inout_keyId Pointer to store/provide the key ID.
+ * @param[in] flags NVM flags for key storage.
+ * @param[in] label_len Length of the key label in bytes.
+ * @param[in] label Pointer to the key label.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_MlKemImportKeyDma(whClientContext* ctx, MlKemKey* key,
+                                whKeyId* inout_keyId, whNvmFlags flags,
+                                uint16_t label_len, uint8_t* label);
+
+/**
+ * @brief Export a ML-KEM key from the server using DMA.
+ *
+ * @param[in] ctx Pointer to the client context.
+ * @param[in] keyId Key ID of the key to export.
+ * @param[out] key Pointer to the ML-KEM key structure to populate.
+ * @param[in] label_len Length of the key label in bytes.
+ * @param[out] label Pointer to the key label buffer.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_MlKemExportKeyDma(whClientContext* ctx, whKeyId keyId,
+                                MlKemKey* key, uint16_t label_len,
+                                uint8_t* label);
+
+/**
+ * @brief Generate an ephemeral ML-KEM key pair using DMA.
+ *
+ * @param[in] ctx Pointer to the client context.
+ * @param[in] level ML-KEM security level (WC_ML_KEM_512/768/1024).
+ * @param[out] key Pointer to the ML-KEM key to populate.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_MlKemMakeExportKeyDma(whClientContext* ctx, int level,
+                                    MlKemKey* key);
+
+/**
+ * @brief Perform ML-KEM encapsulation using DMA.
+ *
+ * @param[in] ctx Pointer to the client context.
+ * @param[in] key Pointer to the ML-KEM key (must have key ID set).
+ * @param[out] ct Buffer to receive the ciphertext.
+ * @param[in,out] inout_ct_len On input, size of ct buffer; on output, actual
+ *                ciphertext length.
+ * @param[out] ss Buffer to receive the shared secret.
+ * @param[in,out] inout_ss_len On input, size of ss buffer; on output, actual
+ *                shared secret length.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_MlKemEncapsulateDma(whClientContext* ctx, MlKemKey* key,
+                                  byte* ct, word32* inout_ct_len, byte* ss,
+                                  word32* inout_ss_len);
+
+/**
+ * @brief Perform ML-KEM decapsulation using DMA.
+ *
+ * @param[in] ctx Pointer to the client context.
+ * @param[in] key Pointer to the ML-KEM key (must have key ID set).
+ * @param[in] ct Pointer to the ciphertext.
+ * @param[in] ct_len Length of the ciphertext in bytes.
+ * @param[out] ss Buffer to receive the shared secret.
+ * @param[in,out] inout_ss_len On input, size of ss buffer; on output, actual
+ *                shared secret length.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_MlKemDecapsulateDma(whClientContext* ctx, MlKemKey* key,
+                                  const byte* ct, word32 ct_len, byte* ss,
+                                  word32* inout_ss_len);
+#endif /* WOLFHSM_CFG_DMA */
+
+#endif /* WOLFSSL_HAVE_MLKEM */
 
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
 #endif /* !WOLFHSM_WH_CLIENT_CRYPTO_H_ */

@@ -831,6 +831,91 @@ int wh_MessageCrypto_TranslateMlDsaVerifyResponse(
     return 0;
 }
 
+/* ML-KEM Key Generation Request translation */
+int wh_MessageCrypto_TranslateMlKemKeyGenRequest(
+    uint16_t magic, const whMessageCrypto_MlKemKeyGenRequest* src,
+    whMessageCrypto_MlKemKeyGenRequest* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, level);
+    WH_T32(magic, dest, src, keyId);
+    WH_T32(magic, dest, src, flags);
+    WH_T32(magic, dest, src, access);
+    if (src != dest) {
+        memcpy(dest->label, src->label, sizeof(src->label));
+    }
+    return 0;
+}
+
+/* ML-KEM Key Generation Response translation */
+int wh_MessageCrypto_TranslateMlKemKeyGenResponse(
+    uint16_t magic, const whMessageCrypto_MlKemKeyGenResponse* src,
+    whMessageCrypto_MlKemKeyGenResponse* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, keyId);
+    WH_T32(magic, dest, src, len);
+    return 0;
+}
+
+/* ML-KEM Encapsulation Request translation */
+int wh_MessageCrypto_TranslateMlKemEncapsRequest(
+    uint16_t magic, const whMessageCrypto_MlKemEncapsRequest* src,
+    whMessageCrypto_MlKemEncapsRequest* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, options);
+    WH_T32(magic, dest, src, level);
+    WH_T32(magic, dest, src, keyId);
+    return 0;
+}
+
+/* ML-KEM Encapsulation Response translation */
+int wh_MessageCrypto_TranslateMlKemEncapsResponse(
+    uint16_t magic, const whMessageCrypto_MlKemEncapsResponse* src,
+    whMessageCrypto_MlKemEncapsResponse* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, ctSz);
+    WH_T32(magic, dest, src, ssSz);
+    return 0;
+}
+
+/* ML-KEM Decapsulation Request translation */
+int wh_MessageCrypto_TranslateMlKemDecapsRequest(
+    uint16_t magic, const whMessageCrypto_MlKemDecapsRequest* src,
+    whMessageCrypto_MlKemDecapsRequest* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, options);
+    WH_T32(magic, dest, src, level);
+    WH_T32(magic, dest, src, keyId);
+    WH_T32(magic, dest, src, ctSz);
+    return 0;
+}
+
+/* ML-KEM Decapsulation Response translation */
+int wh_MessageCrypto_TranslateMlKemDecapsResponse(
+    uint16_t magic, const whMessageCrypto_MlKemDecapsResponse* src,
+    whMessageCrypto_MlKemDecapsResponse* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, ssSz);
+    return 0;
+}
+
 /*
  * DMA Messages
  */
@@ -1141,6 +1226,143 @@ int wh_MessageCrypto_TranslateMlDsaVerifyDmaResponse(
     }
 
     WH_T32(magic, dest, src, verifyResult);
+    return 0;
+}
+
+/* ML-KEM DMA Key Generation Request translation */
+int wh_MessageCrypto_TranslateMlKemKeyGenDmaRequest(
+    uint16_t magic, const whMessageCrypto_MlKemKeyGenDmaRequest* src,
+    whMessageCrypto_MlKemKeyGenDmaRequest* dest)
+{
+    int ret;
+
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->key, &dest->key);
+    if (ret != 0) {
+        return ret;
+    }
+
+    WH_T32(magic, dest, src, level);
+    WH_T32(magic, dest, src, flags);
+    WH_T32(magic, dest, src, keyId);
+    WH_T32(magic, dest, src, access);
+    WH_T32(magic, dest, src, labelSize);
+    if (src != dest) {
+        memcpy(dest->label, src->label, sizeof(src->label));
+    }
+
+    return 0;
+}
+
+/* ML-KEM DMA Key Generation Response translation */
+int wh_MessageCrypto_TranslateMlKemKeyGenDmaResponse(
+    uint16_t magic, const whMessageCrypto_MlKemKeyGenDmaResponse* src,
+    whMessageCrypto_MlKemKeyGenDmaResponse* dest)
+{
+    int ret;
+
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateDmaAddrStatus(magic, &src->dmaAddrStatus,
+                                                  &dest->dmaAddrStatus);
+    if (ret != 0) {
+        return ret;
+    }
+
+    WH_T32(magic, dest, src, keyId);
+    WH_T32(magic, dest, src, keySize);
+    return 0;
+}
+
+/* ML-KEM DMA Encapsulation Request translation */
+int wh_MessageCrypto_TranslateMlKemEncapsDmaRequest(
+    uint16_t magic, const whMessageCrypto_MlKemEncapsDmaRequest* src,
+    whMessageCrypto_MlKemEncapsDmaRequest* dest)
+{
+    int ret;
+
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->ct, &dest->ct);
+    if (ret != 0) {
+        return ret;
+    }
+
+    WH_T32(magic, dest, src, options);
+    WH_T32(magic, dest, src, level);
+    WH_T32(magic, dest, src, keyId);
+    return 0;
+}
+
+/* ML-KEM DMA Encapsulation Response translation */
+int wh_MessageCrypto_TranslateMlKemEncapsDmaResponse(
+    uint16_t magic, const whMessageCrypto_MlKemEncapsDmaResponse* src,
+    whMessageCrypto_MlKemEncapsDmaResponse* dest)
+{
+    int ret;
+
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateDmaAddrStatus(magic, &src->dmaAddrStatus,
+                                                  &dest->dmaAddrStatus);
+    if (ret != 0) {
+        return ret;
+    }
+
+    WH_T32(magic, dest, src, ctLen);
+    WH_T32(magic, dest, src, ssLen);
+    return 0;
+}
+
+/* ML-KEM DMA Decapsulation Request translation */
+int wh_MessageCrypto_TranslateMlKemDecapsDmaRequest(
+    uint16_t magic, const whMessageCrypto_MlKemDecapsDmaRequest* src,
+    whMessageCrypto_MlKemDecapsDmaRequest* dest)
+{
+    int ret;
+
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->ct, &dest->ct);
+    if (ret != 0) {
+        return ret;
+    }
+
+    WH_T32(magic, dest, src, options);
+    WH_T32(magic, dest, src, level);
+    WH_T32(magic, dest, src, keyId);
+    return 0;
+}
+
+/* ML-KEM DMA Decapsulation Response translation */
+int wh_MessageCrypto_TranslateMlKemDecapsDmaResponse(
+    uint16_t magic, const whMessageCrypto_MlKemDecapsDmaResponse* src,
+    whMessageCrypto_MlKemDecapsDmaResponse* dest)
+{
+    int ret;
+
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateDmaAddrStatus(magic, &src->dmaAddrStatus,
+                                                  &dest->dmaAddrStatus);
+    if (ret != 0) {
+        return ret;
+    }
+
+    WH_T32(magic, dest, src, ssLen);
     return 0;
 }
 

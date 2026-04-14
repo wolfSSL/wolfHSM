@@ -379,4 +379,49 @@ int wh_Bench_Mod_MlDsa87KeyGen(whClientContext* client, whBenchOpContext* ctx,
 int wh_Bench_Mod_MlDsa87KeyGenDma(whClientContext*  client,
                                   whBenchOpContext* ctx, int id, void* params);
 
+/*
+ * ML-KEM benchmark module prototypes (wh_bench_mod_mlkem.c)
+ */
+int wh_Bench_Mod_MlKem512KeyGen(whClientContext* client, whBenchOpContext* ctx,
+                                int id, void* params);
+int wh_Bench_Mod_MlKem512KeyGenDma(whClientContext*  client,
+                                   whBenchOpContext* ctx, int id, void* params);
+int wh_Bench_Mod_MlKem512Encaps(whClientContext* client, whBenchOpContext* ctx,
+                                int id, void* params);
+int wh_Bench_Mod_MlKem512EncapsDma(whClientContext*  client,
+                                   whBenchOpContext* ctx, int id, void* params);
+int wh_Bench_Mod_MlKem512Decaps(whClientContext* client, whBenchOpContext* ctx,
+                                int id, void* params);
+int wh_Bench_Mod_MlKem512DecapsDma(whClientContext*  client,
+                                   whBenchOpContext* ctx, int id, void* params);
+
+int wh_Bench_Mod_MlKem768KeyGen(whClientContext* client, whBenchOpContext* ctx,
+                                int id, void* params);
+int wh_Bench_Mod_MlKem768KeyGenDma(whClientContext*  client,
+                                   whBenchOpContext* ctx, int id, void* params);
+int wh_Bench_Mod_MlKem768Encaps(whClientContext* client, whBenchOpContext* ctx,
+                                int id, void* params);
+int wh_Bench_Mod_MlKem768EncapsDma(whClientContext*  client,
+                                   whBenchOpContext* ctx, int id, void* params);
+int wh_Bench_Mod_MlKem768Decaps(whClientContext* client, whBenchOpContext* ctx,
+                                int id, void* params);
+int wh_Bench_Mod_MlKem768DecapsDma(whClientContext*  client,
+                                   whBenchOpContext* ctx, int id, void* params);
+
+int wh_Bench_Mod_MlKem1024KeyGen(whClientContext* client,
+                                 whBenchOpContext* ctx, int id, void* params);
+int wh_Bench_Mod_MlKem1024KeyGenDma(whClientContext*  client,
+                                    whBenchOpContext* ctx, int id,
+                                    void* params);
+int wh_Bench_Mod_MlKem1024Encaps(whClientContext* client,
+                                 whBenchOpContext* ctx, int id, void* params);
+int wh_Bench_Mod_MlKem1024EncapsDma(whClientContext*  client,
+                                    whBenchOpContext* ctx, int id,
+                                    void* params);
+int wh_Bench_Mod_MlKem1024Decaps(whClientContext* client,
+                                 whBenchOpContext* ctx, int id, void* params);
+int wh_Bench_Mod_MlKem1024DecapsDma(whClientContext*  client,
+                                    whBenchOpContext* ctx, int id,
+                                    void* params);
+
 #endif /* WH_BENCH_MOD_ALL_H_ */

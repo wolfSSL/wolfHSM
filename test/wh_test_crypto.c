@@ -32,6 +32,7 @@
 #include "wolfssl/wolfcrypt/types.h"
 #include "wolfssl/wolfcrypt/kdf.h"
 #include "wolfssl/wolfcrypt/ed25519.h"
+#include "wolfssl/wolfcrypt/wc_mlkem.h"
 
 #include "wolfhsm/wh_error.h"
 
@@ -59,6 +60,7 @@
 #endif
 
 #include "wolfhsm/wh_transport_mem.h"
+#include "wolfhsm/wh_crypto.h"
 
 #include "wh_test_common.h"
 
@@ -11112,6 +11114,712 @@ int whTestCrypto_MlDsaVerifyOnlyDma(whClientContext* ctx, int devId,
 
 #endif /* WOLFSSL_HAVE_MLDSA */
 
+#ifdef WOLFSSL_HAVE_MLKEM
+#if !defined(WOLFSSL_MLKEM_NO_MAKE_KEY) &&    \
+    !defined(WOLFSSL_MLKEM_NO_ENCAPSULATE) && \
+    !defined(WOLFSSL_MLKEM_NO_DECAPSULATE)
+static int whTestCrypto_MlKemGetLevels(int* levels, int maxLevels)
+{
+    int count = 0;
+
+#ifndef WOLFSSL_NO_ML_KEM_512
+    if (count < maxLevels) {
+        levels[count++] = WC_ML_KEM_512;
+    }
+#endif
+#ifndef WOLFSSL_NO_ML_KEM_768
+    if (count < maxLevels) {
+        levels[count++] = WC_ML_KEM_768;
+    }
+#endif
+#ifndef WOLFSSL_NO_ML_KEM_1024
+    if (count < maxLevels) {
+        levels[count++] = WC_ML_KEM_1024;
+    }
+#endif
+
+    return count;
+}
+
+static int whTestCrypto_MlKemWolfCrypt(whClientContext* ctx, int devId,
+                                       WC_RNG* rng)
+{
+    int    ret      = 0;
+    int    levels[3];
+    int    levelCnt = 0;
+    int    i;
+    byte   ct[WC_ML_KEM_MAX_CIPHER_TEXT_SIZE];
+    byte   ssEnc[WC_ML_KEM_SS_SZ];
+    byte   ssDec[WC_ML_KEM_SS_SZ];
+    word32 ctLen;
+    word32 ssEncLen;
+    word32 ssDecLen;
+
+    (void)ctx;
+
+    levelCnt =
+        whTestCrypto_MlKemGetLevels(levels, (int)(sizeof(levels) / sizeof(levels[0])));
+
+    for (i = 0; (ret == 0) && (i < levelCnt); i++) {
+        MlKemKey key[1];
+        int      keyInited = 0;
+
+        ctLen    = sizeof(ct);
+        ssEncLen = sizeof(ssEnc);
+        ssDecLen = sizeof(ssDec);
+        memset(ct, 0, sizeof(ct));
+        memset(ssEnc, 0, sizeof(ssEnc));
+        memset(ssDec, 0, sizeof(ssDec));
+
+        ret = wc_MlKemKey_Init(key, levels[i], NULL, devId);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to init ML-KEM key level=%d ret=%d\n",
+                           levels[i], ret);
+            break;
+        }
+        keyInited = 1;
+
+        ret = wc_MlKemKey_MakeKey(key, rng);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to make ML-KEM key level=%d ret=%d\n",
+                           levels[i], ret);
+        }
+        if (ret == 0) {
+            ret = wc_MlKemKey_CipherTextSize(key, &ctLen);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to get ML-KEM ct size level=%d ret=%d\n",
+                               levels[i], ret);
+            }
+        }
+        if (ret == 0) {
+            ret = wc_MlKemKey_SharedSecretSize(key, &ssEncLen);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to get ML-KEM ss size level=%d ret=%d\n",
+                               levels[i], ret);
+            }
+            else {
+                ssDecLen = ssEncLen;
+            }
+        }
+        if (ret == 0) {
+            ret = wc_MlKemKey_Encapsulate(key, ct, ssEnc, rng);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed ML-KEM encapsulate level=%d ret=%d\n",
+                               levels[i], ret);
+            }
+        }
+        if (ret == 0) {
+            ret = wc_MlKemKey_Decapsulate(key, ssDec, ct, ctLen);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed ML-KEM decapsulate level=%d ret=%d\n",
+                               levels[i], ret);
+            }
+            else if ((ssEncLen != ssDecLen) ||
+                     (memcmp(ssEnc, ssDec, ssEncLen) != 0)) {
+                WH_ERROR_PRINT("ML-KEM shared secret mismatch level=%d\n",
+                               levels[i]);
+                ret = -1;
+            }
+        }
+
+        if (keyInited) {
+            wc_MlKemKey_Free(key);
+        }
+    }
+
+    if (ret == 0) {
+        WH_TEST_PRINT("ML-KEM DEVID=0x%X SUCCESS\n", devId);
+    }
+
+    return ret;
+}
+
+static int whTestCrypto_MlKemClient(whClientContext* ctx, int devId, WC_RNG* rng)
+{
+    int    ret      = 0;
+    int    levels[3];
+    int    levelCnt = 0;
+    int    i;
+    byte   ct[WC_ML_KEM_MAX_CIPHER_TEXT_SIZE];
+    byte   ssEnc[WC_ML_KEM_SS_SZ];
+    byte   ssDec[WC_ML_KEM_SS_SZ];
+    byte   ssWrong[WC_ML_KEM_SS_SZ];
+    byte   usageCt[WC_ML_KEM_MAX_CIPHER_TEXT_SIZE];
+    byte   usageSs[WC_ML_KEM_SS_SZ];
+    word32 ctLen;
+    word32 ssEncLen;
+    word32 ssDecLen;
+    word32 ssWrongLen;
+    word32 usageCtLen;
+    word32 usageSsLen;
+    const uint8_t usageLabel[] = "mlkem-no-derive";
+
+    (void)rng;
+
+    levelCnt =
+        whTestCrypto_MlKemGetLevels(levels, (int)(sizeof(levels) / sizeof(levels[0])));
+
+    for (i = 0; (ret == 0) && (i < levelCnt); i++) {
+        MlKemKey key[1];
+        MlKemKey wrongKey[1];
+        MlKemKey usageKey[1];
+        int      keyInited      = 0;
+        int      wrongInited    = 0;
+        int      usageInited    = 0;
+        whKeyId  usageKeyId     = WH_KEYID_ERASED;
+        int      usageKeyCached = 0;
+
+        ctLen      = sizeof(ct);
+        ssEncLen   = sizeof(ssEnc);
+        ssDecLen   = sizeof(ssDec);
+        ssWrongLen = sizeof(ssWrong);
+        usageCtLen = sizeof(usageCt);
+        usageSsLen = sizeof(usageSs);
+        memset(ct, 0, sizeof(ct));
+        memset(ssEnc, 0, sizeof(ssEnc));
+        memset(ssDec, 0, sizeof(ssDec));
+        memset(ssWrong, 0, sizeof(ssWrong));
+        memset(usageCt, 0, sizeof(usageCt));
+        memset(usageSs, 0, sizeof(usageSs));
+
+        ret = wc_MlKemKey_Init(key, levels[i], NULL, devId);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to init ML-KEM client key level=%d ret=%d\n",
+                           levels[i], ret);
+            break;
+        }
+        keyInited = 1;
+
+        ret = wc_MlKemKey_Init(wrongKey, levels[i], NULL, devId);
+        if (ret != 0) {
+            WH_ERROR_PRINT(
+                "Failed to init ML-KEM wrong key level=%d ret=%d\n",
+                levels[i], ret);
+        }
+        else {
+            wrongInited = 1;
+        }
+
+        if (ret == 0) {
+            ret = wh_Client_MlKemMakeExportKey(ctx, levels[i], key);
+            if (ret != 0) {
+                WH_ERROR_PRINT(
+                    "Failed ML-KEM make export key level=%d ret=%d\n",
+                    levels[i], ret);
+            }
+        }
+        if (ret == 0) {
+            ret = wh_Client_MlKemMakeExportKey(ctx, levels[i], wrongKey);
+            if (ret != 0) {
+                WH_ERROR_PRINT(
+                    "Failed ML-KEM make wrong export key level=%d ret=%d\n",
+                    levels[i], ret);
+            }
+        }
+
+        if (ret == 0) {
+            ret = wh_Client_MlKemEncapsulate(ctx, key, ct, &ctLen, ssEnc,
+                                             &ssEncLen);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed ML-KEM encapsulate level=%d ret=%d\n",
+                               levels[i], ret);
+            }
+        }
+        if (ret == 0) {
+            ret = wh_Client_MlKemDecapsulate(ctx, key, ct, ctLen, ssDec,
+                                             &ssDecLen);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed ML-KEM decapsulate level=%d ret=%d\n",
+                               levels[i], ret);
+            }
+            else if ((ssEncLen != ssDecLen) ||
+                     (memcmp(ssEnc, ssDec, ssEncLen) != 0)) {
+                WH_ERROR_PRINT("ML-KEM client shared secret mismatch level=%d\n",
+                               levels[i]);
+                ret = -1;
+            }
+        }
+        if (ret == 0) {
+            ret = wh_Client_MlKemDecapsulate(ctx, wrongKey, ct, ctLen, ssWrong,
+                                             &ssWrongLen);
+            if (ret != 0) {
+                WH_ERROR_PRINT(
+                    "Failed ML-KEM wrong-key decapsulate level=%d ret=%d\n",
+                    levels[i], ret);
+            }
+            else if ((ssWrongLen == ssEncLen) &&
+                     (memcmp(ssWrong, ssEnc, ssEncLen) == 0)) {
+                WH_ERROR_PRINT(
+                    "ML-KEM wrong-key decaps unexpectedly matched level=%d\n",
+                    levels[i]);
+                ret = -1;
+            }
+        }
+
+        if (ret == 0) {
+            ret = wh_Client_MlKemMakeCacheKey(
+                ctx, levels[i], &usageKeyId, WH_NVM_FLAGS_NONE,
+                (uint16_t)strlen((const char*)usageLabel), (uint8_t*)usageLabel);
+            if (ret != 0) {
+                WH_ERROR_PRINT(
+                    "Failed ML-KEM cache key without derive level=%d ret=%d\n",
+                    levels[i], ret);
+            }
+            else {
+                usageKeyCached = 1;
+            }
+        }
+        if (ret == 0) {
+            ret = wc_MlKemKey_Init(usageKey, levels[i], NULL, devId);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed init ML-KEM usage key level=%d ret=%d\n",
+                               levels[i], ret);
+            }
+            else {
+                usageInited = 1;
+            }
+        }
+        if (ret == 0) {
+            ret = wh_Client_MlKemSetKeyId(usageKey, usageKeyId);
+            if (ret != 0) {
+                WH_ERROR_PRINT(
+                    "Failed set ML-KEM usage key ID level=%d ret=%d\n",
+                    levels[i], ret);
+            }
+        }
+        if (ret == 0) {
+            ret = wh_Client_MlKemEncapsulate(ctx, usageKey, usageCt, &usageCtLen,
+                                             usageSs, &usageSsLen);
+            if (ret == WH_ERROR_USAGE) {
+                ret = 0;
+            }
+            else {
+                WH_ERROR_PRINT("Expected WH_ERROR_USAGE for ML-KEM derive "
+                               "policy encaps level=%d got=%d\n",
+                               levels[i], ret);
+                ret = WH_ERROR_ABORTED;
+            }
+        }
+        /* Negative test: decapsulate with key lacking derive usage */
+        if (ret == 0) {
+            byte   dummyCt[WC_ML_KEM_MAX_CIPHER_TEXT_SIZE] = {0};
+            word32 dummyCtLen = sizeof(dummyCt);
+            ret = wh_Client_MlKemDecapsulate(ctx, usageKey, dummyCt,
+                                             dummyCtLen, usageSs,
+                                             &usageSsLen);
+            if (ret == WH_ERROR_USAGE) {
+                ret = 0;
+            }
+            else {
+                WH_ERROR_PRINT("Expected WH_ERROR_USAGE for ML-KEM derive "
+                               "policy decaps level=%d got=%d\n",
+                               levels[i], ret);
+                ret = WH_ERROR_ABORTED;
+            }
+        }
+
+        if (usageKeyCached) {
+            int evictRet = wh_Client_KeyEvict(ctx, usageKeyId);
+            if ((evictRet != 0) && (ret == 0)) {
+                WH_ERROR_PRINT("Failed ML-KEM usage key evict level=%d ret=%d\n",
+                               levels[i], evictRet);
+                ret = evictRet;
+            }
+            usageKeyCached = 0;
+        }
+        if (usageInited) {
+            wc_MlKemKey_Free(usageKey);
+            usageInited = 0;
+        }
+
+        /* Positive test: cached key WITH derive usage should succeed */
+        if (ret == 0) {
+            const uint8_t deriveLabel[] = "mlkem-derive-ok";
+            byte   deriveCt[WC_ML_KEM_MAX_CIPHER_TEXT_SIZE];
+            byte   deriveSsEnc[WC_ML_KEM_SS_SZ];
+            byte   deriveSsDec[WC_ML_KEM_SS_SZ];
+            word32 deriveCtLen  = sizeof(deriveCt);
+            word32 deriveSsEncLen = sizeof(deriveSsEnc);
+            word32 deriveSsDecLen = sizeof(deriveSsDec);
+
+            ret = wh_Client_MlKemMakeCacheKey(
+                ctx, levels[i], &usageKeyId, WH_NVM_FLAGS_USAGE_DERIVE,
+                (uint16_t)strlen((const char*)deriveLabel),
+                (uint8_t*)deriveLabel);
+            if (ret != 0) {
+                WH_ERROR_PRINT(
+                    "Failed ML-KEM cache key with derive level=%d ret=%d\n",
+                    levels[i], ret);
+            }
+            else {
+                usageKeyCached = 1;
+            }
+            if (ret == 0) {
+                ret = wc_MlKemKey_Init(usageKey, levels[i], NULL, devId);
+                if (ret != 0) {
+                    WH_ERROR_PRINT(
+                        "Failed init ML-KEM derive key level=%d ret=%d\n",
+                        levels[i], ret);
+                }
+                else {
+                    usageInited = 1;
+                }
+            }
+            if (ret == 0) {
+                ret = wh_Client_MlKemSetKeyId(usageKey, usageKeyId);
+            }
+            if (ret == 0) {
+                ret = wh_Client_MlKemEncapsulate(ctx, usageKey, deriveCt,
+                                                 &deriveCtLen, deriveSsEnc,
+                                                 &deriveSsEncLen);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("Failed ML-KEM encaps with derive key "
+                                   "level=%d ret=%d\n",
+                                   levels[i], ret);
+                }
+            }
+            if (ret == 0) {
+                ret = wh_Client_MlKemDecapsulate(ctx, usageKey, deriveCt,
+                                                 deriveCtLen, deriveSsDec,
+                                                 &deriveSsDecLen);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("Failed ML-KEM decaps with derive key "
+                                   "level=%d ret=%d\n",
+                                   levels[i], ret);
+                }
+                else if ((deriveSsEncLen != deriveSsDecLen) ||
+                         (memcmp(deriveSsEnc, deriveSsDec,
+                                 deriveSsEncLen) != 0)) {
+                    WH_ERROR_PRINT("ML-KEM derive key shared secret mismatch "
+                                   "level=%d\n",
+                                   levels[i]);
+                    ret = -1;
+                }
+            }
+            if (usageKeyCached) {
+                int evictRet = wh_Client_KeyEvict(ctx, usageKeyId);
+                if ((evictRet != 0) && (ret == 0)) {
+                    WH_ERROR_PRINT("Failed ML-KEM derive key evict level=%d "
+                                   "ret=%d\n",
+                                   levels[i], evictRet);
+                    ret = evictRet;
+                }
+            }
+            if (usageInited) {
+                wc_MlKemKey_Free(usageKey);
+            }
+        }
+
+        if (wrongInited) {
+            wc_MlKemKey_Free(wrongKey);
+        }
+        if (keyInited) {
+            wc_MlKemKey_Free(key);
+        }
+    }
+
+    if (ret == 0) {
+        WH_TEST_PRINT("ML-KEM Client Non-DMA API SUCCESS\n");
+    }
+
+    return ret;
+}
+
+#ifdef WOLFHSM_CFG_DMA
+static int whTestCrypto_MlKemDmaClient(whClientContext* ctx, int devId,
+                                       WC_RNG* rng)
+{
+    int      ret      = 0;
+    int      levels[3];
+    int      levelCnt = 0;
+    int      i;
+    byte     ct[WC_ML_KEM_MAX_CIPHER_TEXT_SIZE];
+    byte     ssEnc[WC_ML_KEM_SS_SZ];
+    byte     ssDec[WC_ML_KEM_SS_SZ];
+    byte     ssWrong[WC_ML_KEM_SS_SZ];
+    byte     keyBuf1[WC_ML_KEM_MAX_PRIVATE_KEY_SIZE];
+    byte     keyBuf2[WC_ML_KEM_MAX_PRIVATE_KEY_SIZE];
+    word32   ctLen;
+    word32   ssEncLen;
+    word32   ssDecLen;
+    word32   ssWrongLen;
+    uint16_t keyBuf1Len;
+    uint16_t keyBuf2Len;
+    whKeyId  keyId;
+    const uint8_t cacheLabel[] = "mlkem-dma-cache";
+
+    (void)rng;
+
+    levelCnt =
+        whTestCrypto_MlKemGetLevels(levels, (int)(sizeof(levels) / sizeof(levels[0])));
+
+    for (i = 0; (ret == 0) && (i < levelCnt); i++) {
+        MlKemKey key[1];
+        MlKemKey importedKey[1];
+        MlKemKey wrongKey[1];
+        int      keyInited      = 0;
+        int      importedInited = 0;
+        int      wrongInited    = 0;
+        int      keyCached      = 0;
+
+        ctLen      = sizeof(ct);
+        ssEncLen   = sizeof(ssEnc);
+        ssDecLen   = sizeof(ssDec);
+        ssWrongLen = sizeof(ssWrong);
+        keyBuf1Len = sizeof(keyBuf1);
+        keyBuf2Len = sizeof(keyBuf2);
+        keyId      = WH_KEYID_ERASED;
+
+        memset(ct, 0, sizeof(ct));
+        memset(ssEnc, 0, sizeof(ssEnc));
+        memset(ssDec, 0, sizeof(ssDec));
+        memset(ssWrong, 0, sizeof(ssWrong));
+        memset(keyBuf1, 0, sizeof(keyBuf1));
+        memset(keyBuf2, 0, sizeof(keyBuf2));
+
+        ret = wc_MlKemKey_Init(key, levels[i], NULL, devId);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed init ML-KEM DMA key level=%d ret=%d\n",
+                           levels[i], ret);
+            break;
+        }
+        keyInited = 1;
+
+        ret = wc_MlKemKey_Init(importedKey, levels[i], NULL, devId);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed init ML-KEM DMA imported key level=%d "
+                           "ret=%d\n",
+                           levels[i], ret);
+        }
+        else {
+            importedInited = 1;
+        }
+
+        if (ret == 0) {
+            ret = wc_MlKemKey_Init(wrongKey, levels[i], NULL, devId);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed init ML-KEM DMA wrong key level=%d "
+                               "ret=%d\n",
+                               levels[i], ret);
+            }
+            else {
+                wrongInited = 1;
+            }
+        }
+
+        if (ret == 0) {
+            ret = wh_Client_MlKemMakeExportKeyDma(ctx, levels[i], key);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed ML-KEM DMA keygen level=%d ret=%d\n",
+                               levels[i], ret);
+            }
+        }
+        if (ret == 0) {
+            ret = wh_Client_MlKemMakeExportKeyDma(ctx, levels[i], wrongKey);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed ML-KEM DMA wrong keygen level=%d ret=%d\n",
+                               levels[i], ret);
+            }
+        }
+
+        if (ret == 0) {
+            ret = wh_Crypto_MlKemSerializeKey(key, keyBuf1Len, keyBuf1,
+                                              &keyBuf1Len);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed ML-KEM DMA serialize key level=%d "
+                               "ret=%d\n",
+                               levels[i], ret);
+            }
+        }
+        if (ret == 0) {
+            ret = wh_Client_MlKemImportKeyDma(
+                ctx, key, &keyId, WH_NVM_FLAGS_NONE,
+                (uint16_t)strlen((const char*)cacheLabel), (uint8_t*)cacheLabel);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed ML-KEM DMA import key level=%d ret=%d\n",
+                               levels[i], ret);
+            }
+            else {
+                keyCached = 1;
+            }
+        }
+        if (ret == 0) {
+            ret = wh_Client_MlKemExportKeyDma(
+                ctx, keyId, importedKey,
+                (uint16_t)strlen((const char*)cacheLabel), (uint8_t*)cacheLabel);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed ML-KEM DMA export key level=%d ret=%d\n",
+                               levels[i], ret);
+            }
+        }
+        if (ret == 0) {
+            ret = wh_Crypto_MlKemSerializeKey(importedKey, keyBuf2Len, keyBuf2,
+                                              &keyBuf2Len);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed ML-KEM DMA serialize imported key "
+                               "level=%d ret=%d\n",
+                               levels[i], ret);
+            }
+            else if ((keyBuf1Len != keyBuf2Len) ||
+                     (memcmp(keyBuf1, keyBuf2, keyBuf1Len) != 0)) {
+                WH_ERROR_PRINT("ML-KEM DMA imported key mismatch level=%d\n",
+                               levels[i]);
+                ret = -1;
+            }
+        }
+
+        if (ret == 0) {
+            ret = wh_Client_MlKemEncapsulateDma(ctx, key, ct, &ctLen, ssEnc,
+                                                &ssEncLen);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed ML-KEM DMA encapsulate level=%d ret=%d\n",
+                               levels[i], ret);
+            }
+        }
+        if (ret == 0) {
+            ret = wh_Client_MlKemDecapsulateDma(ctx, key, ct, ctLen, ssDec,
+                                                &ssDecLen);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed ML-KEM DMA decapsulate level=%d ret=%d\n",
+                               levels[i], ret);
+            }
+            else if ((ssEncLen != ssDecLen) ||
+                     (memcmp(ssEnc, ssDec, ssEncLen) != 0)) {
+                WH_ERROR_PRINT("ML-KEM DMA shared secret mismatch level=%d\n",
+                               levels[i]);
+                ret = -1;
+            }
+        }
+        if (ret == 0) {
+            ret = wh_Client_MlKemDecapsulateDma(ctx, wrongKey, ct, ctLen,
+                                                ssWrong, &ssWrongLen);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed ML-KEM DMA wrong-key decaps level=%d "
+                               "ret=%d\n",
+                               levels[i], ret);
+            }
+            else if ((ssWrongLen == ssEncLen) &&
+                     (memcmp(ssWrong, ssEnc, ssEncLen) == 0)) {
+                WH_ERROR_PRINT("ML-KEM DMA wrong-key decaps unexpectedly "
+                               "matched level=%d\n",
+                               levels[i]);
+                ret = -1;
+            }
+        }
+
+        /* Usage policy enforcement: key without derive should be denied */
+        if (ret == 0) {
+            MlKemKey  usageKey[1];
+            whKeyId   usageKeyId     = WH_KEYID_ERASED;
+            int       usageInited    = 0;
+            int       usageKeyCached = 0;
+            const uint8_t usageLabel[] = "mlkem-dma-nouse";
+
+            ret = wh_Client_MlKemMakeCacheKey(
+                ctx, levels[i], &usageKeyId, WH_NVM_FLAGS_NONE,
+                (uint16_t)strlen((const char*)usageLabel),
+                (uint8_t*)usageLabel);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed ML-KEM DMA cache key without derive "
+                               "level=%d ret=%d\n",
+                               levels[i], ret);
+            }
+            else {
+                usageKeyCached = 1;
+            }
+            if (ret == 0) {
+                ret = wc_MlKemKey_Init(usageKey, levels[i], NULL, devId);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("Failed init ML-KEM DMA usage key "
+                                   "level=%d ret=%d\n",
+                                   levels[i], ret);
+                }
+                else {
+                    usageInited = 1;
+                }
+            }
+            if (ret == 0) {
+                ret = wh_Client_MlKemSetKeyId(usageKey, usageKeyId);
+            }
+            if (ret == 0) {
+                word32 tmpCtLen = sizeof(ct);
+                word32 tmpSsLen = sizeof(ssEnc);
+                ret = wh_Client_MlKemEncapsulateDma(ctx, usageKey, ct,
+                                                     &tmpCtLen, ssEnc,
+                                                     &tmpSsLen);
+                if (ret == WH_ERROR_USAGE) {
+                    ret = 0; /* Expected */
+                }
+                else {
+                    WH_ERROR_PRINT("Expected WH_ERROR_USAGE for ML-KEM DMA "
+                                   "derive policy encaps level=%d got=%d\n",
+                                   levels[i], ret);
+                    ret = WH_ERROR_ABORTED;
+                }
+            }
+            /* Negative test: DMA decapsulate with key lacking derive usage */
+            if (ret == 0) {
+                byte   dummyCt[WC_ML_KEM_MAX_CIPHER_TEXT_SIZE] = {0};
+                word32 dummySsLen = sizeof(ssEnc);
+                ret = wh_Client_MlKemDecapsulateDma(
+                    ctx, usageKey, dummyCt,
+                    sizeof(dummyCt), ssEnc, &dummySsLen);
+                if (ret == WH_ERROR_USAGE) {
+                    ret = 0; /* Expected */
+                }
+                else {
+                    WH_ERROR_PRINT("Expected WH_ERROR_USAGE for ML-KEM DMA "
+                                   "derive policy decaps level=%d got=%d\n",
+                                   levels[i], ret);
+                    ret = WH_ERROR_ABORTED;
+                }
+            }
+            if (usageKeyCached) {
+                int evictRet = wh_Client_KeyEvict(ctx, usageKeyId);
+                if ((evictRet != 0) && (ret == 0)) {
+                    WH_ERROR_PRINT("Failed ML-KEM DMA usage key evict "
+                                   "level=%d ret=%d\n",
+                                   levels[i], evictRet);
+                    ret = evictRet;
+                }
+            }
+            if (usageInited) {
+                wc_MlKemKey_Free(usageKey);
+            }
+        }
+
+        if (keyCached) {
+            int evictRet = wh_Client_KeyEvict(ctx, keyId);
+            if ((evictRet != 0) && (ret == 0)) {
+                WH_ERROR_PRINT("Failed ML-KEM DMA evict cached key level=%d "
+                               "ret=%d\n",
+                               levels[i], evictRet);
+                ret = evictRet;
+            }
+        }
+        if (wrongInited) {
+            wc_MlKemKey_Free(wrongKey);
+        }
+        if (importedInited) {
+            wc_MlKemKey_Free(importedKey);
+        }
+        if (keyInited) {
+            wc_MlKemKey_Free(key);
+        }
+    }
+
+    if (ret == 0) {
+        WH_TEST_PRINT("ML-KEM Client DMA API SUCCESS\n");
+    }
+
+    return ret;
+}
+#endif /* WOLFHSM_CFG_DMA */
+#endif /* !defined(WOLFSSL_MLKEM_NO_MAKE_KEY) &&    \
+          !defined(WOLFSSL_MLKEM_NO_ENCAPSULATE) && \
+          !defined(WOLFSSL_MLKEM_NO_DECAPSULATE) */
+#endif /* WOLFSSL_HAVE_MLKEM */
+
 /* Test key usage policy enforcement for various crypto operations */
 int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
 {
@@ -12148,6 +12856,38 @@ int whTest_CryptoClientConfig(whClientConfig* config)
           defined(WOLFHSM_CFG_DMA) */
 
 #endif /* WOLFSSL_HAVE_MLDSA */
+
+#ifdef WOLFSSL_HAVE_MLKEM
+#if !defined(WOLFSSL_MLKEM_NO_MAKE_KEY) &&    \
+    !defined(WOLFSSL_MLKEM_NO_ENCAPSULATE) && \
+    !defined(WOLFSSL_MLKEM_NO_DECAPSULATE)
+    i = 0;
+    while (ret == WH_ERROR_OK && i < WH_NUM_DEVIDS) {
+#ifdef WOLFHSM_CFG_TEST_CLIENT_LARGE_DATA_DMA_ONLY
+        if (WH_DEV_IDS_ARRAY[i] != WH_DEV_ID_DMA) {
+            i++;
+            continue;
+        }
+#endif /* WOLFHSM_CFG_TEST_CLIENT_LARGE_DATA_DMA_ONLY */
+        ret = whTestCrypto_MlKemWolfCrypt(client, WH_DEV_IDS_ARRAY[i], rng);
+        if (ret == WH_ERROR_OK) {
+            i++;
+        }
+    }
+
+    if (ret == 0) {
+        ret = whTestCrypto_MlKemClient(client, WH_DEV_ID, rng);
+    }
+
+#ifdef WOLFHSM_CFG_DMA
+    if (ret == 0) {
+        ret = whTestCrypto_MlKemDmaClient(client, WH_DEV_ID_DMA, rng);
+    }
+#endif /* WOLFHSM_CFG_DMA */
+#endif /* !defined(WOLFSSL_MLKEM_NO_MAKE_KEY) &&    \
+          !defined(WOLFSSL_MLKEM_NO_ENCAPSULATE) && \
+          !defined(WOLFSSL_MLKEM_NO_DECAPSULATE) */
+#endif /* WOLFSSL_HAVE_MLKEM */
 
 #ifdef WOLFHSM_CFG_DEBUG_VERBOSE
     if (ret == 0) {
