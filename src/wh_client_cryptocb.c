@@ -522,6 +522,26 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
 
                 ret = wh_Client_Sha512(ctx, sha, in, inLen, out);
             } break;
+#if !defined(WOLFSSL_NOSHA512_224)
+            case WC_HASH_TYPE_SHA512_224: {
+                wc_Sha512*     sha   = info->hash.sha512;
+                const uint8_t* in    = info->hash.in;
+                uint32_t       inLen = info->hash.inSz;
+                uint8_t*       out   = info->hash.digest;
+
+                ret = wh_Client_Sha512_224(ctx, sha, in, inLen, out);
+            } break;
+#endif /* !WOLFSSL_NOSHA512_224 */
+#if !defined(WOLFSSL_NOSHA512_256)
+            case WC_HASH_TYPE_SHA512_256: {
+                wc_Sha512*     sha   = info->hash.sha512;
+                const uint8_t* in    = info->hash.in;
+                uint32_t       inLen = info->hash.inSz;
+                uint8_t*       out   = info->hash.digest;
+
+                ret = wh_Client_Sha512_256(ctx, sha, in, inLen, out);
+            } break;
+#endif /* !WOLFSSL_NOSHA512_256 */
 #endif /* WOLFSSL_SHA512 && WOLFSSL_SHA512_HASHTYPE */
             default:
                 ret = CRYPTOCB_UNAVAILABLE;
@@ -847,7 +867,27 @@ int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
 
                 ret = wh_Client_Sha512Dma(ctx, sha, in, inLen, out);
             } break;
-#endif /* WOLFSSL_SHA512 && defined(WOLFSSL_SHA512_HASHTYPE) */
+#if !defined(WOLFSSL_NOSHA512_224)
+            case WC_HASH_TYPE_SHA512_224: {
+                wc_Sha512*     sha   = info->hash.sha512;
+                const uint8_t* in    = info->hash.in;
+                uint32_t       inLen = info->hash.inSz;
+                uint8_t*       out   = info->hash.digest;
+
+                ret = wh_Client_Sha512_224Dma(ctx, sha, in, inLen, out);
+            } break;
+#endif /* !WOLFSSL_NOSHA512_224 */
+#if !defined(WOLFSSL_NOSHA512_256)
+            case WC_HASH_TYPE_SHA512_256: {
+                wc_Sha512*     sha   = info->hash.sha512;
+                const uint8_t* in    = info->hash.in;
+                uint32_t       inLen = info->hash.inSz;
+                uint8_t*       out   = info->hash.digest;
+
+                ret = wh_Client_Sha512_256Dma(ctx, sha, in, inLen, out);
+            } break;
+#endif /* !WOLFSSL_NOSHA512_256 */
+#endif /* WOLFSSL_SHA512 && WOLFSSL_SHA512_HASHTYPE */
             default:
                 ret = CRYPTOCB_UNAVAILABLE;
                 break;

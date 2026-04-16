@@ -5162,7 +5162,8 @@ int wh_Client_Sha384Dma(whClientContext* ctx, wc_Sha384* sha, const uint8_t* in,
 
 static int _xferSha512BlockAndUpdateDigest(whClientContext* ctx,
                                            wc_Sha512*       sha512,
-                                           uint32_t         isLastBlock)
+                                           uint32_t         isLastBlock,
+                                           int              hashType)
 {
     uint16_t                       group   = WH_MESSAGE_GROUP_CRYPTO;
     uint16_t                       action  = WH_MESSAGE_ACTION_NONE;
@@ -5199,10 +5200,13 @@ static int _xferSha512BlockAndUpdateDigest(whClientContext* ctx,
 
     /* Send the hash state - this will be 0 on the first block on a properly
      * initialized sha512 struct */
+    /* Source hashType from the dispatcher (info->hash.type) rather
+     * than sha512->hashType, since some wolfSSL ports do not
+     * populate the struct field. */
     memcpy(req->resumeState.hash, sha512->digest, WC_SHA512_DIGEST_SIZE);
     req->resumeState.hiLen    = sha512->hiLen;
     req->resumeState.loLen    = sha512->loLen;
-    req->resumeState.hashType = sha512->hashType;
+    req->resumeState.hashType = hashType;
     uint32_t req_len =
         sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
 
@@ -5232,7 +5236,7 @@ static int _xferSha512BlockAndUpdateDigest(whClientContext* ctx,
         /* wolfCrypt allows positive error codes on success in some scenarios */
         if (ret >= 0) {
             WH_DEBUG_CLIENT_VERBOSE("Client SHA512 Res recv: ret=%d", ret);
-            WH_DEBUG_CLIENT_VERBOSE("hashType: %d\n", sha512->hashType);
+            WH_DEBUG_CLIENT_VERBOSE("hashType: %d\n", hashType);
             /* Store the received intermediate hash in the sha512
              * context and indicate the field is now valid and
              * should be passed back and forth to the server */
@@ -5248,12 +5252,18 @@ static int _xferSha512BlockAndUpdateDigest(whClientContext* ctx,
     return ret;
 }
 
-int wh_Client_Sha512(whClientContext* ctx, wc_Sha512* sha512, const uint8_t* in,
-                     uint32_t inLen, uint8_t* out)
+/* Shared implementation for SHA-512 and its truncated variants
+ * (SHA-512/224, SHA-512/256). The hashType parameter selects the
+ * output digest size and the variant-appropriate re-init on
+ * finalize. Sourcing hashType from the caller (the dispatcher)
+ * rather than sha512->hashType avoids a dependency on the wolfSSL
+ * port populating that struct field. */
+static int _doSha512(whClientContext* ctx, wc_Sha512* sha512,
+                     const uint8_t* in, uint32_t inLen, uint8_t* out,
+                     int hashType)
 {
     int      ret               = 0;
     uint8_t* sha512BufferBytes = (uint8_t*)sha512->buffer;
-    int      hashType          = WC_HASH_TYPE_SHA512;
 
     /* Caller invoked SHA Update:
      * wc_CryptoCb_Sha512Hash(sha512, data, len, NULL) */
@@ -5268,7 +5278,8 @@ int wh_Client_Sha512(whClientContext* ctx, wc_Sha512* sha512, const uint8_t* in,
                 sha512BufferBytes[sha512->buffLen++] = in[i++];
             }
             if (sha512->buffLen == WC_SHA512_BLOCK_SIZE) {
-                ret = _xferSha512BlockAndUpdateDigest(ctx, sha512, 0);
+                ret = _xferSha512BlockAndUpdateDigest(ctx, sha512, 0,
+                                                      hashType);
                 sha512->buffLen = 0;
             }
         }
@@ -5276,7 +5287,7 @@ int wh_Client_Sha512(whClientContext* ctx, wc_Sha512* sha512, const uint8_t* in,
         /* Process as many full blocks from the input data as we can */
         while (ret == 0 && (inLen - i) >= WC_SHA512_BLOCK_SIZE) {
             memcpy(sha512BufferBytes, in + i, WC_SHA512_BLOCK_SIZE);
-            ret = _xferSha512BlockAndUpdateDigest(ctx, sha512, 0);
+            ret = _xferSha512BlockAndUpdateDigest(ctx, sha512, 0, hashType);
             i += WC_SHA512_BLOCK_SIZE;
         }
 
@@ -5291,17 +5302,33 @@ int wh_Client_Sha512(whClientContext* ctx, wc_Sha512* sha512, const uint8_t* in,
     /* Caller invoked SHA finalize:
      * wc_CryptoCb_Sha512Hash(sha512, NULL, 0, * hash) */
     if (ret == 0 && out != NULL) {
-        ret = _xferSha512BlockAndUpdateDigest(ctx, sha512, 1);
+        word32 digestSz;
+
+        ret = _xferSha512BlockAndUpdateDigest(ctx, sha512, 1, hashType);
+
+        /* Use the hashType from the dispatcher (info->hash.type) to
+         * select the correct output size. This is more reliable than
+         * sha512->hashType which depends on the wolfSSL port setting
+         * it during init. */
+        switch (hashType) {
+            case WC_HASH_TYPE_SHA512_224:
+                digestSz = WC_SHA512_224_DIGEST_SIZE;
+                break;
+            case WC_HASH_TYPE_SHA512_256:
+                digestSz = WC_SHA512_256_DIGEST_SIZE;
+                break;
+            default:
+                digestSz = WC_SHA512_DIGEST_SIZE;
+                break;
+        }
 
         /* Copy out the final hash value */
         if (ret == 0) {
-            memcpy(out, sha512->digest, WC_SHA512_DIGEST_SIZE);
+            memcpy(out, sha512->digest, digestSz);
         }
-        /* keep hashtype before initialization */
-        hashType = sha512->hashType;
-        /* reset the state of the sha context (without blowing away devId and
-         *  hashType)
-         */
+
+        /* Reset the sha context for potential reuse, calling the
+         * variant-appropriate init to preserve devId and hashType */
         switch (hashType) {
             case WC_HASH_TYPE_SHA512_224:
                 (void)wc_InitSha512_224_ex(sha512, NULL, sha512->devId);
@@ -5318,9 +5345,32 @@ int wh_Client_Sha512(whClientContext* ctx, wc_Sha512* sha512, const uint8_t* in,
     return ret;
 }
 
+int wh_Client_Sha512(whClientContext* ctx, wc_Sha512* sha, const uint8_t* in,
+                     uint32_t inLen, uint8_t* out)
+{
+    return _doSha512(ctx, sha, in, inLen, out, WC_HASH_TYPE_SHA512);
+}
+
+#if !defined(WOLFSSL_NOSHA512_224)
+int wh_Client_Sha512_224(whClientContext* ctx, wc_Sha512* sha,
+                         const uint8_t* in, uint32_t inLen, uint8_t* out)
+{
+    return _doSha512(ctx, sha, in, inLen, out, WC_HASH_TYPE_SHA512_224);
+}
+#endif /* !WOLFSSL_NOSHA512_224 */
+
+#if !defined(WOLFSSL_NOSHA512_256)
+int wh_Client_Sha512_256(whClientContext* ctx, wc_Sha512* sha,
+                         const uint8_t* in, uint32_t inLen, uint8_t* out)
+{
+    return _doSha512(ctx, sha, in, inLen, out, WC_HASH_TYPE_SHA512_256);
+}
+#endif /* !WOLFSSL_NOSHA512_256 */
+
 #ifdef WOLFHSM_CFG_DMA
-int wh_Client_Sha512Dma(whClientContext* ctx, wc_Sha512* sha, const uint8_t* in,
-                        uint32_t inLen, uint8_t* out)
+static int _doSha512Dma(whClientContext* ctx, wc_Sha512* sha,
+                        const uint8_t* in, uint32_t inLen, uint8_t* out,
+                        int hashType)
 {
     int                              ret     = WH_ERROR_OK;
     wc_Sha512*                       sha512  = sha;
@@ -5332,6 +5382,31 @@ int wh_Client_Sha512Dma(whClientContext* ctx, wc_Sha512* sha, const uint8_t* in,
     uintptr_t                        inAddr    = 0;
     uintptr_t                        outAddr   = 0;
     uintptr_t                        stateAddr = 0;
+    word32                           digestSz;
+
+    /* Select digest size based on variant */
+    switch (hashType) {
+        case WC_HASH_TYPE_SHA512_224:
+            if (sha->hashType != WC_HASH_TYPE_SHA512_224) {
+                return WH_ERROR_BADARGS;
+            }
+            digestSz = WC_SHA512_224_DIGEST_SIZE;
+            break;
+        case WC_HASH_TYPE_SHA512_256:
+            if (sha->hashType != WC_HASH_TYPE_SHA512_256) {
+                return WH_ERROR_BADARGS;
+            }
+            digestSz = WC_SHA512_256_DIGEST_SIZE;
+            break;
+        default:
+            /* No sha->hashType match required here: many wolfcrypt
+             * ports do not populate the field, and this path uses
+             * the maximum digest size (WC_SHA512_DIGEST_SIZE), so
+             * the server cannot write past the mapped region no
+             * matter which Final variant it dispatches. */
+            digestSz = WC_SHA512_DIGEST_SIZE;
+            break;
+    }
 
     /* Get data pointer from the context to use as request/response storage */
     dataPtr = (uint8_t*)wh_CommClient_GetDataPtr(ctx->comm);
@@ -5339,14 +5414,18 @@ int wh_Client_Sha512Dma(whClientContext* ctx, wc_Sha512* sha, const uint8_t* in,
         return WH_ERROR_BADARGS;
     }
 
-    /* Setup generic header and get pointer to request data */
+    /* Setup generic header and get pointer to request data. The
+     * algorithm-category is always WC_HASH_TYPE_SHA512 at this layer;
+     * the server's top-level dispatcher keys on this to find the
+     * SHA512 handler. The specific variant (512/224/256) is handled
+     * internally via sha512->hashType on the server side. */
     req = (whMessageCrypto_Sha2DmaRequest*)_createCryptoRequest(
         dataPtr, WC_HASH_TYPE_SHA512, ctx->cryptoAffinity);
 
     if (in != NULL || out != NULL) {
         req->state.sz  = sizeof(*sha512);
         req->input.sz  = inLen;
-        req->output.sz = WC_SHA512_DIGEST_SIZE; /* not needed, but YOLO */
+        req->output.sz = digestSz;
 
         /* Perform address translations */
         ret = wh_Client_DmaProcessClientAddress(
@@ -5398,8 +5477,8 @@ int wh_Client_Sha512Dma(whClientContext* ctx, wc_Sha512* sha, const uint8_t* in,
              * rc */
             ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA512,
                                      (uint8_t**)&resp);
-            /* Nothing to do on success, as server will have updated the context
-             * in client memory */
+            /* Nothing to do on success, as server will have updated the
+             * context in client memory */
         }
     }
 
@@ -5429,8 +5508,8 @@ int wh_Client_Sha512Dma(whClientContext* ctx, wc_Sha512* sha, const uint8_t* in,
              * rc */
             ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA512,
                                      (uint8_t**)&resp);
-            /* Nothing to do on success, as server will have updated the output
-             * hash in client memory */
+            /* Nothing to do on success, as server will have updated the
+             * output hash in client memory */
         }
     }
 
@@ -5442,12 +5521,38 @@ int wh_Client_Sha512Dma(whClientContext* ctx, wc_Sha512* sha, const uint8_t* in,
             ctx, (uintptr_t)in, (void**)&inAddr, inLen,
             WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
         (void)wh_Client_DmaProcessClientAddress(
-            ctx, (uintptr_t)out, (void**)&outAddr, WC_SHA512_DIGEST_SIZE,
+            ctx, (uintptr_t)out, (void**)&outAddr, digestSz,
             WH_DMA_OPER_CLIENT_WRITE_POST, (whDmaFlags){0});
     }
     return ret;
 }
-#endif /* WOLFHSM_CFG_DMA  */
+
+int wh_Client_Sha512Dma(whClientContext* ctx, wc_Sha512* sha,
+                        const uint8_t* in, uint32_t inLen, uint8_t* out)
+{
+    return _doSha512Dma(ctx, sha, in, inLen, out, WC_HASH_TYPE_SHA512);
+}
+
+#if !defined(WOLFSSL_NOSHA512_224)
+int wh_Client_Sha512_224Dma(whClientContext* ctx, wc_Sha512* sha,
+                            const uint8_t* in, uint32_t inLen,
+                            uint8_t* out)
+{
+    return _doSha512Dma(ctx, sha, in, inLen, out,
+                        WC_HASH_TYPE_SHA512_224);
+}
+#endif /* !WOLFSSL_NOSHA512_224 */
+
+#if !defined(WOLFSSL_NOSHA512_256)
+int wh_Client_Sha512_256Dma(whClientContext* ctx, wc_Sha512* sha,
+                            const uint8_t* in, uint32_t inLen,
+                            uint8_t* out)
+{
+    return _doSha512Dma(ctx, sha, in, inLen, out,
+                        WC_HASH_TYPE_SHA512_256);
+}
+#endif /* !WOLFSSL_NOSHA512_256 */
+#endif /* WOLFHSM_CFG_DMA */
 #endif /* WOLFSSL_SHA512 */
 
 #ifdef HAVE_DILITHIUM

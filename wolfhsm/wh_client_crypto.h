@@ -998,8 +998,8 @@ int wh_Client_Sha384Dma(whClientContext* ctx, wc_Sha384* sha, const uint8_t* in,
 /**
  * @brief Performs a SHA-512 hash operation on the input data.
  *
- * This function performs a SHA-512 hash operation on the input data and stores
- * the result in the output buffer.
+ * This function performs a SHA-512 hash operation on the input data
+ * and stores the result in the output buffer.
  *
  * @param[in] ctx Pointer to the client context structure.
  * @param[in] sha Pointer to the SHA-512 context structure.
@@ -1010,11 +1010,42 @@ int wh_Client_Sha384Dma(whClientContext* ctx, wc_Sha384* sha, const uint8_t* in,
  */
 int wh_Client_Sha512(whClientContext* ctx, wc_Sha512* sha, const uint8_t* in,
                      uint32_t inLen, uint8_t* out);
+
+#if !defined(WOLFSSL_NOSHA512_224)
+/**
+ * @brief Performs a SHA-512/224 hash operation on the input data.
+ *
+ * @param[in] ctx Pointer to the client context structure.
+ * @param[in] sha Pointer to the SHA-512 context structure.
+ * @param[in] in Pointer to the input data.
+ * @param[in] inLen Length of the input data in bytes.
+ * @param[out] out Pointer to the output buffer (28 bytes).
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_Sha512_224(whClientContext* ctx, wc_Sha512* sha,
+                         const uint8_t* in, uint32_t inLen, uint8_t* out);
+#endif /* !WOLFSSL_NOSHA512_224 */
+
+#if !defined(WOLFSSL_NOSHA512_256)
+/**
+ * @brief Performs a SHA-512/256 hash operation on the input data.
+ *
+ * @param[in] ctx Pointer to the client context structure.
+ * @param[in] sha Pointer to the SHA-512 context structure.
+ * @param[in] in Pointer to the input data.
+ * @param[in] inLen Length of the input data in bytes.
+ * @param[out] out Pointer to the output buffer (32 bytes).
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_Sha512_256(whClientContext* ctx, wc_Sha512* sha,
+                         const uint8_t* in, uint32_t inLen, uint8_t* out);
+#endif /* !WOLFSSL_NOSHA512_256 */
+
 /**
  * @brief Performs a SHA-512 hash operation on the input data using DMA.
  *
- * This function performs a SHA-512 hash operation on the input data and stores
- * the result in the output buffer using DMA.
+ * This function performs a SHA-512 hash operation on the input data
+ * and stores the result in the output buffer using DMA.
  *
  * @param[in] ctx Pointer to the client context structure.
  * @param[in] sha Pointer to the SHA-512 context structure.
@@ -1025,6 +1056,38 @@ int wh_Client_Sha512(whClientContext* ctx, wc_Sha512* sha, const uint8_t* in,
  */
 int wh_Client_Sha512Dma(whClientContext* ctx, wc_Sha512* sha, const uint8_t* in,
                         uint32_t inLen, uint8_t* out);
+
+#if !defined(WOLFSSL_NOSHA512_224)
+/**
+ * @brief Performs a SHA-512/224 hash operation using DMA.
+ *
+ * @param[in] ctx Pointer to the client context structure.
+ * @param[in] sha Pointer to the SHA-512 context structure.
+ * @param[in] in Pointer to the input data.
+ * @param[in] inLen Length of the input data in bytes.
+ * @param[out] out Pointer to the output buffer (28 bytes).
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_Sha512_224Dma(whClientContext* ctx, wc_Sha512* sha,
+                            const uint8_t* in, uint32_t inLen,
+                            uint8_t* out);
+#endif /* !WOLFSSL_NOSHA512_224 */
+
+#if !defined(WOLFSSL_NOSHA512_256)
+/**
+ * @brief Performs a SHA-512/256 hash operation using DMA.
+ *
+ * @param[in] ctx Pointer to the client context structure.
+ * @param[in] sha Pointer to the SHA-512 context structure.
+ * @param[in] in Pointer to the input data.
+ * @param[in] inLen Length of the input data in bytes.
+ * @param[out] out Pointer to the output buffer (32 bytes).
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_Sha512_256Dma(whClientContext* ctx, wc_Sha512* sha,
+                            const uint8_t* in, uint32_t inLen,
+                            uint8_t* out);
+#endif /* !WOLFSSL_NOSHA512_256 */
 #endif /* WOLFSSL_SHA512 */
 
 #ifdef HAVE_DILITHIUM

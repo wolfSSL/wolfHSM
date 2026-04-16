@@ -1950,6 +1950,311 @@ static int whTest_CryptoSha512(whClientContext* ctx, int devId, WC_RNG* rng)
     }
     return ret;
 }
+
+#if !defined(WOLFSSL_NOSHA512_224)
+static int whTest_CryptoSha512_224(whClientContext* ctx, int devId,
+                                   WC_RNG* rng)
+{
+    (void)ctx;
+    (void)rng;
+    int       ret = WH_ERROR_OK;
+    wc_Sha512 sha512[1];
+    /* Buffer sized for the variant, plus canary to detect overwrite */
+    uint8_t   out[WC_SHA512_224_DIGEST_SIZE + 8];
+    const uint8_t canary = 0xA5;
+    int           i;
+    /* Same one-block input vector as the SHA512 test */
+    const char inOne[] =
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const uint8_t expectedOutOne[WC_SHA512_224_DIGEST_SIZE] = {
+        0x26, 0x1b, 0x94, 0xbc, 0xba, 0x55, 0x42, 0x64,
+        0xb3, 0xb7, 0x38, 0xe9, 0xe0, 0x9e, 0x7d, 0xc6,
+        0x8a, 0xc8, 0xe0, 0xb4, 0xc8, 0x51, 0x7f, 0xe9,
+        0xbb, 0x7c, 0x36, 0x17};
+    /* Vector long enough to span a SHA512 block */
+    const char inMulti[] =
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWX"
+        "YZ1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWX"
+        "YZ1234567890abcdefghi";
+    const uint8_t expectedOutMulti[WC_SHA512_224_DIGEST_SIZE] = {
+        0xd2, 0x5b, 0x9a, 0xd1, 0x3e, 0xa4, 0xba, 0xc5,
+        0x7b, 0xdd, 0x0a, 0x9f, 0xbb, 0x97, 0xb8, 0xc5,
+        0x58, 0xdc, 0x13, 0xbc, 0x7a, 0xaa, 0x71, 0xd8,
+        0xb6, 0x21, 0xf5, 0xeb};
+
+    /* Fill canary bytes after the digest area */
+    memset(out, canary, sizeof(out));
+
+    ret = wc_InitSha512_224_ex(sha512, NULL, devId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wc_InitSha512_224 on devId 0x%X: "
+                       "%d\n", devId, ret);
+    }
+    else {
+        ret = wc_Sha512_224Update(sha512, (const byte*)inOne,
+                                  WC_SHA512_BLOCK_SIZE);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wc_Sha512_224Update %d\n", ret);
+        }
+        else {
+            ret = wc_Sha512_224Final(sha512, out);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to wc_Sha512_224Final %d\n",
+                               ret);
+            }
+            else {
+                if (memcmp(out, expectedOutOne,
+                           WC_SHA512_224_DIGEST_SIZE) != 0) {
+                    WH_ERROR_PRINT("SHA512/224 hash mismatch.\n");
+                    ret = -1;
+                }
+                else {
+                    /* Verify canary was not overwritten */
+                    for (i = WC_SHA512_224_DIGEST_SIZE;
+                         i < (int)sizeof(out); i++) {
+                        if (out[i] != canary) {
+                            WH_ERROR_PRINT("SHA512/224 overwrote "
+                                           "buffer at byte %d\n", i);
+                            ret = -1;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        (void)wc_Sha512_224Free(sha512);
+    }
+
+    /* Multiblock test. Splits the input across three Updates to
+     * exercise block-aligned and non-aligned boundaries, which
+     * drive multiple server transactions. */
+    if (ret == 0) {
+        memset(out, canary, sizeof(out));
+        ret = wc_InitSha512_224_ex(sha512, NULL, devId);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wc_InitSha512_224 for devId "
+                           "0x%X: %d\n", devId, ret);
+        }
+        else {
+            /* Update with non-block aligned length (buffered) */
+            ret = wc_Sha512_224Update(sha512, (const byte*)inMulti, 1);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to wc_Sha512_224Update "
+                               "(first) %d\n", ret);
+            }
+            else {
+                /* Full block, triggers server transaction plus a
+                 * buffered byte */
+                ret = wc_Sha512_224Update(sha512,
+                                          (const byte*)inMulti + 1,
+                                          WC_SHA512_BLOCK_SIZE);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("Failed to wc_Sha512_224Update "
+                                   "(mid) %d\n", ret);
+                }
+                else {
+                    ret = wc_Sha512_224Update(
+                        sha512,
+                        (const byte*)inMulti + 1 + WC_SHA512_BLOCK_SIZE,
+                        strlen(inMulti) - 1 - WC_SHA512_BLOCK_SIZE);
+                    if (ret != 0) {
+                        WH_ERROR_PRINT("Failed to wc_Sha512_224Update "
+                                       "(last) %d\n", ret);
+                    }
+                    else {
+                        ret = wc_Sha512_224Final(sha512, out);
+                        if (ret != 0) {
+                            WH_ERROR_PRINT("Failed to "
+                                           "wc_Sha512_224Final %d\n",
+                                           ret);
+                        }
+                        else if (memcmp(out, expectedOutMulti,
+                                        WC_SHA512_224_DIGEST_SIZE)
+                                 != 0) {
+                            WH_ERROR_PRINT("SHA512/224 multi-block "
+                                           "hash mismatch.\n");
+                            ret = -1;
+                        }
+                        else {
+                            /* Canary check */
+                            for (i = WC_SHA512_224_DIGEST_SIZE;
+                                 i < (int)sizeof(out); i++) {
+                                if (out[i] != canary) {
+                                    WH_ERROR_PRINT("SHA512/224 "
+                                                   "overwrote buffer "
+                                                   "at byte %d\n", i);
+                                    ret = -1;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            (void)wc_Sha512_224Free(sha512);
+        }
+    }
+
+    if (ret == 0) {
+        WH_TEST_PRINT("SHA512/224 DEVID=0x%X SUCCESS\n", devId);
+    }
+    return ret;
+}
+#endif /* !WOLFSSL_NOSHA512_224 */
+
+#if !defined(WOLFSSL_NOSHA512_256)
+static int whTest_CryptoSha512_256(whClientContext* ctx, int devId,
+                                   WC_RNG* rng)
+{
+    (void)ctx;
+    (void)rng;
+    int       ret = WH_ERROR_OK;
+    wc_Sha512 sha512[1];
+    /* Buffer sized for the variant, plus canary to detect overwrite */
+    uint8_t   out[WC_SHA512_256_DIGEST_SIZE + 8];
+    const uint8_t canary = 0xA5;
+    int           i;
+    /* Same one-block input vector as the SHA512 test */
+    const char inOne[] =
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const uint8_t expectedOutOne[WC_SHA512_256_DIGEST_SIZE] = {
+        0xb8, 0x8f, 0x97, 0xe2, 0x74, 0xf9, 0xc1, 0xd4,
+        0x9f, 0x18, 0x1c, 0x8c, 0xbd, 0x01, 0xa9, 0xc7,
+        0x49, 0x30, 0xad, 0x05, 0x5a, 0x46, 0xac, 0x44,
+        0x99, 0xa1, 0xd6, 0x01, 0xf1, 0xc8, 0x0b, 0xf2};
+    /* Vector long enough to span a SHA512 block */
+    const char inMulti[] =
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWX"
+        "YZ1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWX"
+        "YZ1234567890abcdefghi";
+    const uint8_t expectedOutMulti[WC_SHA512_256_DIGEST_SIZE] = {
+        0xfc, 0x0d, 0x2a, 0xdc, 0xee, 0x1c, 0x15, 0x55,
+        0x2f, 0x19, 0x0f, 0x19, 0x5e, 0xe2, 0xe6, 0x33,
+        0x8a, 0x56, 0xa6, 0xed, 0x2b, 0x20, 0x22, 0x00,
+        0xfd, 0xfc, 0x8f, 0x77, 0x2a, 0x83, 0x81, 0x6e};
+
+    /* Fill canary bytes after the digest area */
+    memset(out, canary, sizeof(out));
+
+    ret = wc_InitSha512_256_ex(sha512, NULL, devId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wc_InitSha512_256 on devId 0x%X: "
+                       "%d\n", devId, ret);
+    }
+    else {
+        ret = wc_Sha512_256Update(sha512, (const byte*)inOne,
+                                  WC_SHA512_BLOCK_SIZE);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wc_Sha512_256Update %d\n", ret);
+        }
+        else {
+            ret = wc_Sha512_256Final(sha512, out);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to wc_Sha512_256Final %d\n",
+                               ret);
+            }
+            else {
+                if (memcmp(out, expectedOutOne,
+                           WC_SHA512_256_DIGEST_SIZE) != 0) {
+                    WH_ERROR_PRINT("SHA512/256 hash mismatch.\n");
+                    ret = -1;
+                }
+                else {
+                    /* Verify canary was not overwritten */
+                    for (i = WC_SHA512_256_DIGEST_SIZE;
+                         i < (int)sizeof(out); i++) {
+                        if (out[i] != canary) {
+                            WH_ERROR_PRINT("SHA512/256 overwrote "
+                                           "buffer at byte %d\n", i);
+                            ret = -1;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        (void)wc_Sha512_256Free(sha512);
+    }
+
+    /* Multiblock test. Splits the input across three Updates to
+     * exercise block-aligned and non-aligned boundaries, which
+     * drive multiple server transactions. */
+    if (ret == 0) {
+        memset(out, canary, sizeof(out));
+        ret = wc_InitSha512_256_ex(sha512, NULL, devId);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wc_InitSha512_256 for devId "
+                           "0x%X: %d\n", devId, ret);
+        }
+        else {
+            /* Update with non-block aligned length (buffered) */
+            ret = wc_Sha512_256Update(sha512, (const byte*)inMulti, 1);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to wc_Sha512_256Update "
+                               "(first) %d\n", ret);
+            }
+            else {
+                /* Full block, triggers server transaction plus a
+                 * buffered byte */
+                ret = wc_Sha512_256Update(sha512,
+                                          (const byte*)inMulti + 1,
+                                          WC_SHA512_BLOCK_SIZE);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("Failed to wc_Sha512_256Update "
+                                   "(mid) %d\n", ret);
+                }
+                else {
+                    ret = wc_Sha512_256Update(
+                        sha512,
+                        (const byte*)inMulti + 1 + WC_SHA512_BLOCK_SIZE,
+                        strlen(inMulti) - 1 - WC_SHA512_BLOCK_SIZE);
+                    if (ret != 0) {
+                        WH_ERROR_PRINT("Failed to wc_Sha512_256Update "
+                                       "(last) %d\n", ret);
+                    }
+                    else {
+                        ret = wc_Sha512_256Final(sha512, out);
+                        if (ret != 0) {
+                            WH_ERROR_PRINT("Failed to "
+                                           "wc_Sha512_256Final %d\n",
+                                           ret);
+                        }
+                        else if (memcmp(out, expectedOutMulti,
+                                        WC_SHA512_256_DIGEST_SIZE)
+                                 != 0) {
+                            WH_ERROR_PRINT("SHA512/256 multi-block "
+                                           "hash mismatch.\n");
+                            ret = -1;
+                        }
+                        else {
+                            /* Canary check */
+                            for (i = WC_SHA512_256_DIGEST_SIZE;
+                                 i < (int)sizeof(out); i++) {
+                                if (out[i] != canary) {
+                                    WH_ERROR_PRINT("SHA512/256 "
+                                                   "overwrote buffer "
+                                                   "at byte %d\n", i);
+                                    ret = -1;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            (void)wc_Sha512_256Free(sha512);
+        }
+    }
+
+    if (ret == 0) {
+        WH_TEST_PRINT("SHA512/256 DEVID=0x%X SUCCESS\n", devId);
+    }
+    return ret;
+}
+#endif /* !WOLFSSL_NOSHA512_256 */
+
 #endif /* WOLFSSL_SHA512 */
 
 #ifdef HAVE_HKDF
@@ -5915,6 +6220,24 @@ int whTest_CryptoClientConfig(whClientConfig* config)
             i++;
         }
     }
+#if !defined(WOLFSSL_NOSHA512_224)
+    i = 0;
+    while ((ret == WH_ERROR_OK) && (i < WH_NUM_DEVIDS)) {
+        ret = whTest_CryptoSha512_224(client, WH_DEV_IDS_ARRAY[i], rng);
+        if (ret == WH_ERROR_OK) {
+            i++;
+        }
+    }
+#endif /* !WOLFSSL_NOSHA512_224 */
+#if !defined(WOLFSSL_NOSHA512_256)
+    i = 0;
+    while ((ret == WH_ERROR_OK) && (i < WH_NUM_DEVIDS)) {
+        ret = whTest_CryptoSha512_256(client, WH_DEV_IDS_ARRAY[i], rng);
+        if (ret == WH_ERROR_OK) {
+            i++;
+        }
+    }
+#endif /* !WOLFSSL_NOSHA512_256 */
 #endif /* WOLFSSL_SHA512 */
 
 #ifdef HAVE_HKDF
