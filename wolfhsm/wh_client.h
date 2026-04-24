@@ -671,6 +671,62 @@ int wh_Client_KeyExport(whClientContext* c, uint16_t keyId, uint8_t* label,
                         uint16_t labelSz, uint8_t* out, uint16_t* outSz);
 
 /**
+ * @brief Sends a request to export only the public portion of a cached key.
+ *
+ * Unlike wh_Client_KeyExport(), which returns the raw cached DER (potentially
+ * including private material), this function instructs the server to re-emit
+ * only the public half of the cached public-key object. The private key stays
+ * inside the HSM. The algo selector identifies how the cached bytes should
+ * be interpreted (see WH_KEY_ALGO_ENUM in wh_common.h).
+ *
+ * Non-blocking: returns immediately after sending.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] keyId Key ID to export the public key of.
+ * @param[in] algo Algorithm selector (WH_KEY_ALGO_*).
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_KeyExportPublicRequest(whClientContext* c, whKeyId keyId,
+                                     uint16_t algo);
+
+/**
+ * @brief Receives the public-key export response from the server.
+ *
+ * Non-blocking: may return WH_ERROR_NOTREADY; callers should retry in that
+ * case. On success, writes the public DER into out and the associated label
+ * (if any) into label.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[out] label Optional buffer to receive the cached key's label.
+ * @param[in] labelSz Size of label buffer.
+ * @param[out] out Buffer receiving the public-only DER.
+ * @param[in,out] outSz In: size of out. Out: bytes written.
+ * @return int Returns 0 on success, WH_ERROR_NOTREADY if no response is
+ *             available, or a negative error code on failure.
+ */
+int wh_Client_KeyExportPublicResponse(whClientContext* c, uint8_t* label,
+                                      uint16_t labelSz, uint8_t* out,
+                                      uint16_t* outSz);
+
+/**
+ * @brief Sends a public-key export request and receives the response.
+ *
+ * Blocking wrapper around wh_Client_KeyExportPublicRequest/Response.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] keyId Key ID to export the public key of.
+ * @param[in] algo Algorithm selector (WH_KEY_ALGO_*).
+ * @param[out] label Optional buffer to receive the cached key's label.
+ * @param[in] labelSz Size of label buffer.
+ * @param[out] out Buffer receiving the public-only DER.
+ * @param[in,out] outSz In: size of out. Out: bytes written.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_KeyExportPublic(whClientContext* c, whKeyId keyId, uint16_t algo,
+                              uint8_t* label, uint16_t labelSz, uint8_t* out,
+                              uint16_t* outSz);
+
+/**
  * @brief Sends a key commit request to the server.
  *
  * This function prepares and sends a key commit request message to the server.
@@ -896,6 +952,56 @@ int wh_Client_KeyExportDmaResponse(whClientContext* c, uint8_t* label,
 int wh_Client_KeyExportDma(whClientContext* c, uint16_t keyId,
                            const void* keyAddr, uint16_t keySz, uint8_t* label,
                            uint16_t labelSz, uint16_t* outSz);
+
+/**
+ * @brief Sends a public-key export DMA request to the server.
+ *
+ * DMA counterpart to wh_Client_KeyExportPublicRequest. The server decodes
+ * the cached key according to the algo selector, emits the public-only
+ * portion as DER, and DMAs that DER into the client buffer at keyAddr.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] keyId Server key ID whose public key should be exported.
+ * @param[in] algo Algorithm selector (WH_KEY_ALGO_*).
+ * @param[in] keyAddr Client buffer that will receive the public DER.
+ * @param[in] keySz Size of the keyAddr buffer in bytes.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_KeyExportPublicDmaRequest(whClientContext* c, whKeyId keyId,
+                                        uint16_t algo, const void* keyAddr,
+                                        uint16_t keySz);
+
+/**
+ * @brief Receives the public-key export DMA response from the server.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[out] label Optional buffer to receive the cached key's label.
+ * @param[in] labelSz Size of label buffer.
+ * @param[out] outSz Receives the number of public-DER bytes the server
+ *                   wrote into the client buffer.
+ * @return int Returns 0 on success, WH_ERROR_NOTREADY if the response is
+ *             not yet available, or a negative error code on failure.
+ */
+int wh_Client_KeyExportPublicDmaResponse(whClientContext* c, uint8_t* label,
+                                         uint16_t labelSz, uint16_t* outSz);
+
+/**
+ * @brief Blocking wrapper around the public-key export DMA request/response.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] keyId Server key ID whose public key should be exported.
+ * @param[in] algo Algorithm selector (WH_KEY_ALGO_*).
+ * @param[in] keyAddr Client buffer that will receive the public DER.
+ * @param[in] keySz Size of the keyAddr buffer in bytes.
+ * @param[out] label Optional buffer to receive the cached key's label.
+ * @param[in] labelSz Size of label buffer.
+ * @param[out] outSz Receives the number of public-DER bytes written.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_KeyExportPublicDma(whClientContext* c, whKeyId keyId,
+                                 uint16_t algo, const void* keyAddr,
+                                 uint16_t keySz, uint8_t* label,
+                                 uint16_t labelSz, uint16_t* outSz);
 #endif /* WOLFHSM_CFG_DMA */
 
 /**

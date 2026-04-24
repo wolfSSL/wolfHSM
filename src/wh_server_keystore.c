@@ -34,6 +34,7 @@
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/types.h"
 #include "wolfssl/wolfcrypt/error-crypt.h"
+#include "wolfssl/wolfcrypt/asn_public.h"
 
 #include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_error.h"
@@ -48,6 +49,24 @@
 #endif
 
 #include "wolfhsm/wh_server_keystore.h"
+#include "wolfhsm/wh_server_crypto.h"
+#include "wolfhsm/wh_crypto.h"
+
+#ifndef NO_RSA
+#include "wolfssl/wolfcrypt/rsa.h"
+#endif
+#ifdef HAVE_ECC
+#include "wolfssl/wolfcrypt/ecc.h"
+#endif
+#ifdef HAVE_ED25519
+#include "wolfssl/wolfcrypt/ed25519.h"
+#endif
+#ifdef HAVE_CURVE25519
+#include "wolfssl/wolfcrypt/curve25519.h"
+#endif
+#ifdef HAVE_DILITHIUM
+#include "wolfssl/wolfcrypt/dilithium.h"
+#endif
 
 static int _FindInCache(whServerContext* server, whKeyId keyId, int* out_index,
                         int* out_big, uint8_t** out_buffer,
@@ -89,6 +108,9 @@ typedef enum {
     WH_KS_OP_EVICT,
     WH_KS_OP_EXPORT,
     WH_KS_OP_REVOKE,
+    /* Exporting only the public half of a public-key object is considered
+     * non-sensitive and is intentionally not gated by NONEXPORTABLE. */
+    WH_KS_OP_EXPORT_PUBLIC,
 } whKsOp;
 
 static int _KeyIsCommitted(whServerContext* server, whKeyId keyId)
@@ -176,6 +198,11 @@ static int _KeystoreCheckPolicy(whServerContext* server, whKsOp op,
             if (flags & WH_NVM_FLAGS_NONEXPORTABLE) {
                 return WH_ERROR_ACCESS;
             }
+            break;
+
+        case WH_KS_OP_EXPORT_PUBLIC:
+            /* Public material is non-sensitive; NONEXPORTABLE does not
+             * apply. The key still had to exist (checked above). */
             break;
 
         case WH_KS_OP_COMMIT:
@@ -1820,6 +1847,205 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
 
             *out_resp_size = sizeof(resp);
         } break;
+
+        case WH_KEY_EXPORT_PUBLIC_DMA: {
+            whMessageKeystore_ExportPublicDmaRequest  req;
+            whMessageKeystore_ExportPublicDmaResponse resp = {0};
+            whKeyId                                   serverKeyId;
+            uint8_t*                                  cacheBuf  = NULL;
+            whNvmMetadata*                            cacheMeta = NULL;
+            uint8_t*                                  stage;
+            uint16_t                                  stageMax;
+            uint16_t                                  der_len   = 0;
+
+            /* translate request */
+            (void)wh_MessageKeystore_TranslateExportPublicDmaRequest(
+                magic,
+                (whMessageKeystore_ExportPublicDmaRequest*)req_packet, &req);
+
+            /* Reuse the tail of the response comm buffer as a server-local
+             * staging area for the public DER. The DMA response itself fits
+             * in the struct head, so everything after it is scratch. */
+            stage    = (uint8_t*)resp_packet + sizeof(resp);
+            stageMax = (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN - sizeof(resp));
+
+            serverKeyId = wh_KeyId_TranslateFromClient(
+                WH_KEYTYPE_CRYPTO, server->comm->client_id, req.id);
+
+            ret = WH_SERVER_NVM_LOCK(server);
+            if (ret == WH_ERROR_OK) {
+                /* Same policy carve-out as the non-DMA public export. */
+                ret = _KeystoreCheckPolicy(server, WH_KS_OP_EXPORT_PUBLIC,
+                                           serverKeyId);
+                if (ret == WH_ERROR_OK) {
+                    ret = wh_Server_KeystoreFreshenKey(server, serverKeyId,
+                                                       &cacheBuf, &cacheMeta);
+                }
+                (void)cacheBuf;
+                (void)stage;
+                (void)stageMax;
+
+                if (ret == WH_ERROR_OK) {
+                    switch (req.algo) {
+                    #ifndef NO_RSA
+                        case WH_KEY_ALGO_RSA: {
+                            RsaKey rsa[1];
+                            int    pub_ret;
+                            ret = wc_InitRsaKey_ex(rsa, NULL, INVALID_DEVID);
+                            if (ret == 0) {
+                                ret = wh_Server_CacheExportRsaKey(
+                                    server, serverKeyId, rsa);
+                                if (ret == 0) {
+                                    pub_ret = wc_RsaKeyToPublicDer(
+                                        rsa, stage, (word32)stageMax);
+                                    if (pub_ret > 0) {
+                                        der_len = (uint16_t)pub_ret;
+                                    }
+                                    else {
+                                        ret = (pub_ret == 0)
+                                                  ? WH_ERROR_ABORTED
+                                                  : pub_ret;
+                                    }
+                                }
+                                wc_FreeRsaKey(rsa);
+                            }
+                        } break;
+                    #endif /* !NO_RSA */
+                    #ifdef HAVE_ECC
+                        case WH_KEY_ALGO_ECC: {
+                            ecc_key ecc[1];
+                            int     pub_ret;
+                            ret = wc_ecc_init_ex(ecc, NULL, INVALID_DEVID);
+                            if (ret == 0) {
+                                ret = wh_Server_EccKeyCacheExport(
+                                    server, serverKeyId, ecc);
+                                if (ret == 0) {
+                                    pub_ret = wc_EccPublicKeyToDer(
+                                        ecc, stage, (word32)stageMax, 1);
+                                    if (pub_ret > 0) {
+                                        der_len = (uint16_t)pub_ret;
+                                    }
+                                    else {
+                                        ret = (pub_ret == 0)
+                                                  ? WH_ERROR_ABORTED
+                                                  : pub_ret;
+                                    }
+                                }
+                                wc_ecc_free(ecc);
+                            }
+                        } break;
+                    #endif /* HAVE_ECC */
+                    #ifdef HAVE_ED25519
+                        case WH_KEY_ALGO_ED25519: {
+                            ed25519_key ed[1];
+                            int         pub_ret;
+                            ret = wc_ed25519_init_ex(ed, NULL, INVALID_DEVID);
+                            if (ret == 0) {
+                                ret = wh_Server_CacheExportEd25519Key(
+                                    server, serverKeyId, ed);
+                                if (ret == 0) {
+                                    pub_ret = wc_Ed25519PublicKeyToDer(
+                                        ed, stage, (word32)stageMax, 1);
+                                    if (pub_ret > 0) {
+                                        der_len = (uint16_t)pub_ret;
+                                    }
+                                    else {
+                                        ret = (pub_ret == 0)
+                                                  ? WH_ERROR_ABORTED
+                                                  : pub_ret;
+                                    }
+                                }
+                                wc_ed25519_free(ed);
+                            }
+                        } break;
+                    #endif /* HAVE_ED25519 */
+                    #if defined(HAVE_DILITHIUM) && defined(WOLFSSL_DILITHIUM_PUBLIC_KEY)
+                        case WH_KEY_ALGO_MLDSA: {
+                            MlDsaKey mldsa[1];
+                            int      pub_ret;
+                            ret = wc_MlDsaKey_Init(mldsa, NULL, INVALID_DEVID);
+                            if (ret == 0) {
+                                ret = wh_Server_MlDsaKeyCacheExport(
+                                    server, serverKeyId, mldsa);
+                                if (ret == 0) {
+                                    pub_ret = wc_Dilithium_PublicKeyToDer(
+                                        mldsa, stage, (word32)stageMax, 1);
+                                    if (pub_ret > 0) {
+                                        der_len = (uint16_t)pub_ret;
+                                    }
+                                    else {
+                                        ret = (pub_ret == 0)
+                                                  ? WH_ERROR_ABORTED
+                                                  : pub_ret;
+                                    }
+                                }
+                                wc_MlDsaKey_Free(mldsa);
+                            }
+                        } break;
+                    #endif /* HAVE_DILITHIUM && WOLFSSL_DILITHIUM_PUBLIC_KEY */
+                    #ifdef HAVE_CURVE25519
+                        case WH_KEY_ALGO_CURVE25519: {
+                            curve25519_key c25[1];
+                            int            pub_ret;
+                            ret = wc_curve25519_init_ex(c25, NULL,
+                                                        INVALID_DEVID);
+                            if (ret == 0) {
+                                ret = wh_Server_CacheExportCurve25519Key(
+                                    server, serverKeyId, c25);
+                                if (ret == 0) {
+                                    pub_ret = wc_Curve25519PublicKeyToDer(
+                                        c25, stage, (word32)stageMax, 1);
+                                    if (pub_ret > 0) {
+                                        der_len = (uint16_t)pub_ret;
+                                    }
+                                    else {
+                                        ret = (pub_ret == 0)
+                                                  ? WH_ERROR_ABORTED
+                                                  : pub_ret;
+                                    }
+                                }
+                                wc_curve25519_free(c25);
+                            }
+                        } break;
+                    #endif /* HAVE_CURVE25519 */
+                        default:
+                            ret = WH_ERROR_BADARGS;
+                            break;
+                    }
+                }
+
+                /* Confirm client buffer is big enough, then DMA. */
+                if (ret == WH_ERROR_OK) {
+                    if ((uint64_t)der_len > req.key.sz) {
+                        ret = WH_ERROR_NOSPACE;
+                    }
+                    else {
+                        ret = whServerDma_CopyToClient(
+                            server, req.key.addr, stage, der_len,
+                            (whServerDmaFlags){0});
+                        if (ret != WH_ERROR_OK) {
+                            resp.dmaAddrStatus.badAddr.addr = req.key.addr;
+                            resp.dmaAddrStatus.badAddr.sz   = req.key.sz;
+                        }
+                    }
+                }
+
+                if (ret == WH_ERROR_OK && cacheMeta != NULL) {
+                    memcpy(resp.label, cacheMeta->label, WH_NVM_LABEL_LEN);
+                }
+
+                (void)WH_SERVER_NVM_UNLOCK(server);
+            } /* WH_SERVER_NVM_LOCK() */
+
+            resp.len = (ret == WH_ERROR_OK) ? der_len : 0;
+            resp.rc  = ret;
+
+            (void)wh_MessageKeystore_TranslateExportPublicDmaResponse(
+                magic, &resp,
+                (whMessageKeystore_ExportPublicDmaResponse*)resp_packet);
+
+            *out_resp_size = sizeof(resp);
+        } break;
 #endif /* WOLFHSM_CFG_DMA */
 
         case WH_KEY_EVICT: {
@@ -1881,6 +2107,203 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
 
             (void)wh_MessageKeystore_TranslateExportResponse(
                 magic, &resp, (whMessageKeystore_ExportResponse*)resp_packet);
+
+            *out_resp_size = sizeof(resp) + resp.len;
+        } break;
+
+        case WH_KEY_EXPORT_PUBLIC: {
+            whMessageKeystore_ExportPublicRequest  req;
+            whMessageKeystore_ExportPublicResponse resp = {0};
+            whKeyId                                serverKeyId;
+            uint8_t*                               cacheBuf  = NULL;
+            whNvmMetadata*                         cacheMeta = NULL;
+            uint16_t                               der_len   = 0;
+            uint16_t                               max_der;
+
+            /* translate request */
+            (void)wh_MessageKeystore_TranslateExportPublicRequest(
+                magic,
+                (whMessageKeystore_ExportPublicRequest*)req_packet, &req);
+
+            /* out is after fixed size fields */
+            out     = (uint8_t*)resp_packet + sizeof(resp);
+            max_der = (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN - sizeof(resp));
+
+            serverKeyId = wh_KeyId_TranslateFromClient(
+                WH_KEYTYPE_CRYPTO, server->comm->client_id, req.id);
+
+            ret = WH_SERVER_NVM_LOCK(server);
+            if (ret == WH_ERROR_OK) {
+                /* Policy check: existence + the public-export carve-out.
+                 * NONEXPORTABLE does not apply because public material is
+                 * non-sensitive. */
+                ret = _KeystoreCheckPolicy(server, WH_KS_OP_EXPORT_PUBLIC,
+                                           serverKeyId);
+                if (ret == WH_ERROR_OK) {
+                    /* Load the cached key DER so we can deserialize directly
+                     * below. cacheMeta also supplies the label for the
+                     * response. */
+                    ret = wh_Server_KeystoreFreshenKey(server, serverKeyId,
+                                                       &cacheBuf, &cacheMeta);
+                }
+                /* out/max_der may be unused if no PK algos are compiled in */
+                (void)out;
+                (void)max_der;
+
+                if (ret == WH_ERROR_OK) {
+                    switch (req.algo) {
+                    #ifndef NO_RSA
+                        case WH_KEY_ALGO_RSA: {
+                            RsaKey rsa[1];
+                            int    pub_ret;
+                            ret = wc_InitRsaKey_ex(rsa, NULL, INVALID_DEVID);
+                            if (ret == 0) {
+                                ret = wh_Crypto_RsaDeserializeKeyDer(
+                                    cacheMeta->len, cacheBuf, rsa);
+                                if (ret == 0) {
+                                    pub_ret = wc_RsaKeyToPublicDer(
+                                        rsa, out, (word32)max_der);
+                                    if (pub_ret > 0) {
+                                        der_len = (uint16_t)pub_ret;
+                                    }
+                                    else {
+                                        ret = (pub_ret == 0)
+                                                  ? WH_ERROR_ABORTED
+                                                  : pub_ret;
+                                    }
+                                }
+                                wc_FreeRsaKey(rsa);
+                            }
+                        } break;
+                    #endif /* !NO_RSA */
+                    #ifdef HAVE_ECC
+                        case WH_KEY_ALGO_ECC: {
+                            ecc_key ecc[1];
+                            int     pub_ret;
+                            ret = wc_ecc_init_ex(ecc, NULL, INVALID_DEVID);
+                            if (ret == 0) {
+                                ret = wh_Crypto_EccDeserializeKeyDer(
+                                    cacheBuf, cacheMeta->len, ecc);
+                                if (ret == 0) {
+                                    /* Include curve parameters (last arg 1)
+                                     * so the client can deserialize without
+                                     * external context. */
+                                    pub_ret = wc_EccPublicKeyToDer(
+                                        ecc, out, (word32)max_der, 1);
+                                    if (pub_ret > 0) {
+                                        der_len = (uint16_t)pub_ret;
+                                    }
+                                    else {
+                                        ret = (pub_ret == 0)
+                                                  ? WH_ERROR_ABORTED
+                                                  : pub_ret;
+                                    }
+                                }
+                                wc_ecc_free(ecc);
+                            }
+                        } break;
+                    #endif /* HAVE_ECC */
+                    #ifdef HAVE_ED25519
+                        case WH_KEY_ALGO_ED25519: {
+                            ed25519_key ed[1];
+                            int         pub_ret;
+                            ret = wc_ed25519_init_ex(ed, NULL, INVALID_DEVID);
+                            if (ret == 0) {
+                                ret = wh_Crypto_Ed25519DeserializeKeyDer(
+                                    cacheBuf, cacheMeta->len, ed);
+                                if (ret == 0) {
+                                    pub_ret = wc_Ed25519PublicKeyToDer(
+                                        ed, out, (word32)max_der, 1);
+                                    if (pub_ret > 0) {
+                                        der_len = (uint16_t)pub_ret;
+                                    }
+                                    else {
+                                        ret = (pub_ret == 0)
+                                                  ? WH_ERROR_ABORTED
+                                                  : pub_ret;
+                                    }
+                                }
+                                wc_ed25519_free(ed);
+                            }
+                        } break;
+                    #endif /* HAVE_ED25519 */
+                    #if defined(HAVE_DILITHIUM) && defined(WOLFSSL_DILITHIUM_PUBLIC_KEY)
+                        case WH_KEY_ALGO_MLDSA: {
+                            MlDsaKey mldsa[1];
+                            int      pub_ret;
+                            ret = wc_MlDsaKey_Init(mldsa, NULL, INVALID_DEVID);
+                            if (ret == 0) {
+                                ret = wh_Crypto_MlDsaDeserializeKeyDer(
+                                    cacheBuf, cacheMeta->len, mldsa);
+                                if (ret == 0) {
+                                    pub_ret = wc_Dilithium_PublicKeyToDer(
+                                        mldsa, out, (word32)max_der, 1);
+                                    if (pub_ret > 0) {
+                                        der_len = (uint16_t)pub_ret;
+                                    }
+                                    else {
+                                        ret = (pub_ret == 0)
+                                                  ? WH_ERROR_ABORTED
+                                                  : pub_ret;
+                                    }
+                                }
+                                wc_MlDsaKey_Free(mldsa);
+                            }
+                        } break;
+                    #endif /* HAVE_DILITHIUM && WOLFSSL_DILITHIUM_PUBLIC_KEY */
+                    #ifdef HAVE_CURVE25519
+                        case WH_KEY_ALGO_CURVE25519: {
+                            curve25519_key c25[1];
+                            int            pub_ret;
+
+                            ret = wc_curve25519_init_ex(c25, NULL,
+                                                        INVALID_DEVID);
+                            if (ret == 0) {
+                                ret = wh_Crypto_Curve25519DeserializeKey(
+                                    cacheBuf, cacheMeta->len, c25);
+                                if (ret == 0) {
+                                    /* withAlg=1 wraps in SubjectPublicKeyInfo
+                                     * so the client's
+                                     * wh_Crypto_Curve25519DeserializeKey can
+                                     * parse the result. */
+                                    pub_ret = wc_Curve25519PublicKeyToDer(
+                                        c25, out, (word32)max_der, 1);
+                                    if (pub_ret > 0) {
+                                        der_len = (uint16_t)pub_ret;
+                                    }
+                                    else {
+                                        ret = (pub_ret == 0)
+                                                  ? WH_ERROR_ABORTED
+                                                  : pub_ret;
+                                    }
+                                }
+                                wc_curve25519_free(c25);
+                            }
+                        } break;
+                    #endif /* HAVE_CURVE25519 */
+                        default:
+                            ret = WH_ERROR_BADARGS;
+                            break;
+                    }
+                }
+
+                /* Only populate the label on full success. On any failure
+                 * resp.label stays zeroed (from resp = {0}) so clients cannot
+                 * observe partial metadata for a key whose public DER could
+                 * not be produced. */
+                if (ret == WH_ERROR_OK && cacheMeta != NULL) {
+                    memcpy(resp.label, cacheMeta->label, WH_NVM_LABEL_LEN);
+                }
+
+                (void)WH_SERVER_NVM_UNLOCK(server);
+            } /* WH_SERVER_NVM_LOCK() */
+
+            resp.len = der_len;
+            resp.rc  = ret;
+
+            (void)wh_MessageKeystore_TranslateExportPublicResponse(
+                magic, &resp,
+                (whMessageKeystore_ExportPublicResponse*)resp_packet);
 
             *out_resp_size = sizeof(resp) + resp.len;
         } break;

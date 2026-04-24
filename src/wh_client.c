@@ -913,6 +913,94 @@ int wh_Client_KeyExport(whClientContext* c, whKeyId keyId, uint8_t* label,
     return ret;
 }
 
+int wh_Client_KeyExportPublicRequest(whClientContext* c, whKeyId keyId,
+                                     uint16_t algo)
+{
+    whMessageKeystore_ExportPublicRequest* req = NULL;
+
+    if (c == NULL || keyId == WH_KEYID_ERASED) {
+        return WH_ERROR_BADARGS;
+    }
+
+    req = (whMessageKeystore_ExportPublicRequest*)wh_CommClient_GetDataPtr(
+        c->comm);
+    if (req == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    req->id   = keyId;
+    req->algo = algo;
+
+    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_KEY,
+                                 WH_KEY_EXPORT_PUBLIC, sizeof(*req),
+                                 (uint8_t*)req);
+}
+
+int wh_Client_KeyExportPublicResponse(whClientContext* c, uint8_t* label,
+                                      uint16_t labelSz, uint8_t* out,
+                                      uint16_t* outSz)
+{
+    uint16_t                                group;
+    uint16_t                                action;
+    uint16_t                                size;
+    int                                     ret;
+    whMessageKeystore_ExportPublicResponse* resp = NULL;
+    uint8_t*                                packOut;
+
+    if (c == NULL || outSz == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    resp = (whMessageKeystore_ExportPublicResponse*)wh_CommClient_GetDataPtr(
+        c->comm);
+    if (resp == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    packOut = (uint8_t*)(resp + 1);
+
+    ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)resp);
+    if (ret == WH_ERROR_OK) {
+        if (resp->rc != 0) {
+            ret = resp->rc;
+        }
+        else {
+            if (out == NULL) {
+                *outSz = resp->len;
+            }
+            else if (*outSz < resp->len) {
+                ret = WH_ERROR_ABORTED;
+            }
+            else {
+                memcpy(out, packOut, resp->len);
+                *outSz = resp->len;
+            }
+            if ((ret == WH_ERROR_OK) && (label != NULL)) {
+                if (labelSz > sizeof(resp->label)) {
+                    memcpy(label, resp->label, WH_NVM_LABEL_LEN);
+                }
+                else {
+                    memcpy(label, resp->label, labelSz);
+                }
+            }
+        }
+    }
+    return ret;
+}
+
+int wh_Client_KeyExportPublic(whClientContext* c, whKeyId keyId, uint16_t algo,
+                              uint8_t* label, uint16_t labelSz, uint8_t* out,
+                              uint16_t* outSz)
+{
+    int ret;
+    ret = wh_Client_KeyExportPublicRequest(c, keyId, algo);
+    if (ret == 0) {
+        do {
+            ret = wh_Client_KeyExportPublicResponse(c, label, labelSz, out,
+                                                    outSz);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+    return ret;
+}
+
 int wh_Client_KeyCommitRequest(whClientContext* c, whNvmId keyId)
 {
     whMessageKeystore_CommitRequest* req = NULL;
@@ -1521,6 +1609,94 @@ int wh_Client_KeyExportDma(whClientContext* c, uint16_t keyId,
     if (ret == 0) {
         do {
             ret = wh_Client_KeyExportDmaResponse(c, label, labelSz, outSz);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+    return ret;
+}
+
+int wh_Client_KeyExportPublicDmaRequest(whClientContext* c, whKeyId keyId,
+                                        uint16_t algo, const void* keyAddr,
+                                        uint16_t keySz)
+{
+    whMessageKeystore_ExportPublicDmaRequest* req = NULL;
+
+    if (c == NULL || keyId == WH_KEYID_ERASED) {
+        return WH_ERROR_BADARGS;
+    }
+
+    req =
+        (whMessageKeystore_ExportPublicDmaRequest*)wh_CommClient_GetDataPtr(
+            c->comm);
+    if (req == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    req->id       = keyId;
+    req->algo     = algo;
+    req->key.addr = (uint64_t)((uintptr_t)keyAddr);
+    req->key.sz   = keySz;
+
+    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_KEY,
+                                 WH_KEY_EXPORT_PUBLIC_DMA, sizeof(*req),
+                                 (uint8_t*)req);
+}
+
+int wh_Client_KeyExportPublicDmaResponse(whClientContext* c, uint8_t* label,
+                                         uint16_t labelSz, uint16_t* outSz)
+{
+    uint16_t                                   resp_group;
+    uint16_t                                   resp_action;
+    uint16_t                                   resp_size;
+    int                                        rc;
+    whMessageKeystore_ExportPublicDmaResponse* resp = NULL;
+
+    if (c == NULL || outSz == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    resp =
+        (whMessageKeystore_ExportPublicDmaResponse*)wh_CommClient_GetDataPtr(
+            c->comm);
+    if (resp == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    rc = wh_Client_RecvResponse(c, &resp_group, &resp_action, &resp_size,
+                                (uint8_t*)resp);
+    if (rc == 0) {
+        if ((resp_group != WH_MESSAGE_GROUP_KEY) ||
+            (resp_action != WH_KEY_EXPORT_PUBLIC_DMA) ||
+            (resp_size != sizeof(*resp))) {
+            rc = WH_ERROR_ABORTED;
+        }
+        else {
+            if (resp->rc != 0) {
+                rc = resp->rc;
+            }
+            else {
+                *outSz = resp->len;
+                if (label != NULL) {
+                    if (labelSz > WH_NVM_LABEL_LEN) {
+                        labelSz = WH_NVM_LABEL_LEN;
+                    }
+                    memcpy(label, resp->label, labelSz);
+                }
+            }
+        }
+    }
+    return rc;
+}
+
+int wh_Client_KeyExportPublicDma(whClientContext* c, whKeyId keyId,
+                                 uint16_t algo, const void* keyAddr,
+                                 uint16_t keySz, uint8_t* label,
+                                 uint16_t labelSz, uint16_t* outSz)
+{
+    int ret;
+    ret = wh_Client_KeyExportPublicDmaRequest(c, keyId, algo, keyAddr, keySz);
+    if (ret == 0) {
+        do {
+            ret = wh_Client_KeyExportPublicDmaResponse(c, label, labelSz,
+                                                       outSz);
         } while (ret == WH_ERROR_NOTREADY);
     }
     return ret;

@@ -145,4 +145,16 @@ enum WH_CRYPTO_AFFINITY_ENUM {
     WH_CRYPTO_AFFINITY_SW = 1,
 };
 
+/* Public-key algorithm selector used by APIs that must interpret a cached
+ * key's DER contents (e.g. WH_KEY_EXPORT_PUBLIC), since NVM metadata does
+ * not carry an algorithm type. Values are on-wire, append-only. */
+enum WH_KEY_ALGO_ENUM {
+    WH_KEY_ALGO_NONE       = 0,
+    WH_KEY_ALGO_RSA        = 1,
+    WH_KEY_ALGO_ECC        = 2,
+    WH_KEY_ALGO_CURVE25519 = 3,
+    WH_KEY_ALGO_ED25519    = 4,
+    WH_KEY_ALGO_MLDSA      = 5,
+};
+
 #endif /* !WOLFHSM_WH_COMMON_H_ */

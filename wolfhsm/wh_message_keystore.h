@@ -131,6 +131,38 @@ int wh_MessageKeystore_TranslateExportResponse(
     uint16_t magic, const whMessageKeystore_ExportResponse* src,
     whMessageKeystore_ExportResponse* dest);
 
+/* Key Export Public Request
+ *
+ * Requests the server to re-emit only the public portion of a cached
+ * public-key object as DER. The algo field selects how to interpret the
+ * cached bytes (see WH_KEY_ALGO_ENUM in wh_common.h) since NVM metadata
+ * does not record an algorithm type. */
+typedef struct {
+    uint16_t id;
+    uint16_t algo;
+    uint8_t  WH_PAD[4];
+} whMessageKeystore_ExportPublicRequest;
+
+/* Key Export Public Response */
+typedef struct {
+    uint32_t rc;
+    uint32_t len;
+    uint8_t  label[WH_NVM_LABEL_LEN];
+    uint8_t  WH_PAD[4];
+    /* Data follows:
+     * uint8_t out[len]  (public-only DER)
+     */
+} whMessageKeystore_ExportPublicResponse;
+
+/* Key Export Public translation functions */
+int wh_MessageKeystore_TranslateExportPublicRequest(
+    uint16_t magic, const whMessageKeystore_ExportPublicRequest* src,
+    whMessageKeystore_ExportPublicRequest* dest);
+
+int wh_MessageKeystore_TranslateExportPublicResponse(
+    uint16_t magic, const whMessageKeystore_ExportPublicResponse* src,
+    whMessageKeystore_ExportPublicResponse* dest);
+
 /* Key Erase Request */
 typedef struct {
     uint16_t id;
@@ -243,6 +275,36 @@ int wh_MessageKeystore_TranslateExportDmaRequest(
 int wh_MessageKeystore_TranslateExportDmaResponse(
     uint16_t magic, const whMessageKeystore_ExportDmaResponse* src,
     whMessageKeystore_ExportDmaResponse* dest);
+
+/* Key Export Public DMA Request
+ *
+ * DMA counterpart to whMessageKeystore_ExportPublicRequest: re-emits only
+ * the public portion of a cached public-key object and DMAs it into the
+ * client-provided buffer. The algo selector identifies how to decode the
+ * cached bytes (see WH_KEY_ALGO_ENUM in wh_common.h). */
+typedef struct {
+    whMessageKeystore_DmaBuffer key; /* Client DER output buffer */
+    uint16_t id;
+    uint16_t algo;
+    uint8_t  WH_PAD[4]; /* Pad to 8-byte alignment */
+} whMessageKeystore_ExportPublicDmaRequest;
+
+/* Key Export Public DMA Response */
+typedef struct {
+    whMessageKeystore_DmaAddrStatus dmaAddrStatus;
+    uint32_t                        rc;
+    uint32_t                        len;
+    uint8_t                         label[WH_NVM_LABEL_LEN];
+} whMessageKeystore_ExportPublicDmaResponse;
+
+/* Key Export Public DMA translation functions */
+int wh_MessageKeystore_TranslateExportPublicDmaRequest(
+    uint16_t magic, const whMessageKeystore_ExportPublicDmaRequest* src,
+    whMessageKeystore_ExportPublicDmaRequest* dest);
+
+int wh_MessageKeystore_TranslateExportPublicDmaResponse(
+    uint16_t magic, const whMessageKeystore_ExportPublicDmaResponse* src,
+    whMessageKeystore_ExportPublicDmaResponse* dest);
 
 /* Wrap Key Request */
 typedef struct {

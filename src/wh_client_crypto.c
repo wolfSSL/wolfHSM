@@ -1619,6 +1619,26 @@ int wh_Client_EccExportKey(whClientContext* ctx, whKeyId keyId, ecc_key* key,
     return ret;
 }
 
+int wh_Client_EccExportPublicKey(whClientContext* ctx, whKeyId keyId,
+                                 ecc_key* key, uint16_t label_len,
+                                 uint8_t* label)
+{
+    int      ret;
+    byte     buffer[ECC_BUFSIZE] = {0};
+    uint16_t buffer_len          = sizeof(buffer);
+
+    if ((ctx == NULL) || WH_KEYID_ISERASED(keyId) || (key == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_Client_KeyExportPublic(ctx, keyId, WH_KEY_ALGO_ECC, label,
+                                    label_len, buffer, &buffer_len);
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Crypto_EccDeserializeKeyDer(buffer, buffer_len, key);
+    }
+    return ret;
+}
+
 /* Shared async Request half for ECC keygen.  Builds and sends the keygen
  * request packet.  The caller must arrange the matching async Response (or
  * blocking poll) to consume the reply. */
@@ -2562,6 +2582,26 @@ int wh_Client_Curve25519ExportKey(whClientContext* ctx, whKeyId keyId,
     return ret;
 }
 
+int wh_Client_Curve25519ExportPublicKey(whClientContext* ctx, whKeyId keyId,
+                                        curve25519_key* key,
+                                        uint16_t label_len, uint8_t* label)
+{
+    int      ret;
+    byte     buffer[WOLFHSM_CFG_COMM_DATA_LEN] = {0};
+    uint16_t buffer_len                        = sizeof(buffer);
+
+    if ((ctx == NULL) || WH_KEYID_ISERASED(keyId) || (key == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_Client_KeyExportPublic(ctx, keyId, WH_KEY_ALGO_CURVE25519, label,
+                                    label_len, buffer, &buffer_len);
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Crypto_Curve25519DeserializeKey(buffer, buffer_len, key);
+    }
+    return ret;
+}
+
 static int _Curve25519MakeKey(whClientContext* ctx, uint16_t size,
                               whKeyId* inout_key_id, whNvmFlags flags,
                               const uint8_t* label, uint16_t label_len,
@@ -2887,6 +2927,26 @@ int wh_Client_Ed25519ExportKey(whClientContext* ctx, whKeyId keyId,
         }
     }
 
+    return ret;
+}
+
+int wh_Client_Ed25519ExportPublicKey(whClientContext* ctx, whKeyId keyId,
+                                     ed25519_key* key, uint16_t label_len,
+                                     uint8_t* label)
+{
+    int      ret;
+    uint8_t  buffer[128] = {0};
+    uint16_t buffer_len  = sizeof(buffer);
+
+    if ((ctx == NULL) || WH_KEYID_ISERASED(keyId) || (key == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_Client_KeyExportPublic(ctx, keyId, WH_KEY_ALGO_ED25519, label,
+                                    label_len, buffer, &buffer_len);
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Crypto_Ed25519DeserializeKeyDer(buffer, buffer_len, key);
+    }
     return ret;
 }
 
@@ -3625,6 +3685,38 @@ int wh_Client_RsaExportKey(whClientContext* ctx, whKeyId keyId, RsaKey* key,
         ret = wh_Crypto_RsaDeserializeKeyDer(derSize, keyDer, key);
         if (ret == 0) {
             /* Successful parsing of RSA key.  Update the label */
+            if ((label_len > 0) && (label != NULL)) {
+                if (label_len > WH_NVM_LABEL_LEN) {
+                    label_len = WH_NVM_LABEL_LEN;
+                }
+                memcpy(label, keyLabel, label_len);
+            }
+        }
+    }
+
+    return ret;
+}
+
+int wh_Client_RsaExportPublicKey(whClientContext* ctx, whKeyId keyId,
+                                 RsaKey* key, uint32_t label_len,
+                                 uint8_t* label)
+{
+    int      ret;
+    byte     keyDer[WOLFHSM_CFG_COMM_DATA_LEN] = {0};
+    uint16_t derSize                           = sizeof(keyDer);
+    uint8_t  keyLabel[WH_NVM_LABEL_LEN]        = {0};
+
+    if ((ctx == NULL) || (keyId == WH_KEYID_ERASED) || (key == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_Client_KeyExportPublic(ctx, keyId, WH_KEY_ALGO_RSA, keyLabel,
+                                    sizeof(keyLabel), keyDer, &derSize);
+    if (ret == WH_ERROR_OK) {
+        /* wh_Crypto_RsaDeserializeKeyDer falls back to public-key decode
+         * when the blob does not parse as a private key. */
+        ret = wh_Crypto_RsaDeserializeKeyDer(derSize, keyDer, key);
+        if (ret == 0) {
             if ((label_len > 0) && (label != NULL)) {
                 if (label_len > WH_NVM_LABEL_LEN) {
                     label_len = WH_NVM_LABEL_LEN;
@@ -7064,6 +7156,26 @@ int wh_Client_MlDsaExportKey(whClientContext* ctx, whKeyId keyId, MlDsaKey* key,
     return ret;
 }
 
+int wh_Client_MlDsaExportPublicKey(whClientContext* ctx, whKeyId keyId,
+                                   MlDsaKey* key, uint16_t label_len,
+                                   uint8_t* label)
+{
+    int      ret;
+    byte     buffer[DILITHIUM_MAX_BOTH_KEY_DER_SIZE] = {0};
+    uint16_t buffer_len = sizeof(buffer);
+
+    if ((ctx == NULL) || WH_KEYID_ISERASED(keyId) || (key == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_Client_KeyExportPublic(ctx, keyId, WH_KEY_ALGO_MLDSA, label,
+                                    label_len, buffer, &buffer_len);
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Crypto_MlDsaDeserializeKeyDer(buffer, buffer_len, key);
+    }
+    return ret;
+}
+
 static int _MlDsaMakeKey(whClientContext* ctx, int size, int level,
                          whKeyId* inout_key_id, whNvmFlags flags,
                          uint16_t label_len, uint8_t* label, MlDsaKey* key)
@@ -7532,6 +7644,27 @@ int wh_Client_MlDsaExportKeyDma(whClientContext* ctx, whKeyId keyId,
         ret = wh_Crypto_MlDsaDeserializeKeyDer(buffer, buffer_len, key);
     }
 
+    return ret;
+}
+
+int wh_Client_MlDsaExportPublicKeyDma(whClientContext* ctx, whKeyId keyId,
+                                      MlDsaKey* key, uint16_t label_len,
+                                      uint8_t* label)
+{
+    int      ret;
+    byte     buffer[DILITHIUM_MAX_BOTH_KEY_DER_SIZE] = {0};
+    uint16_t buffer_len                              = sizeof(buffer);
+
+    if ((ctx == NULL) || WH_KEYID_ISERASED(keyId) || (key == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_Client_KeyExportPublicDma(ctx, keyId, WH_KEY_ALGO_MLDSA, buffer,
+                                       buffer_len, label, label_len,
+                                       &buffer_len);
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Crypto_MlDsaDeserializeKeyDer(buffer, buffer_len, key);
+    }
     return ret;
 }
 

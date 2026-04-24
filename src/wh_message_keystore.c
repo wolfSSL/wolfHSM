@@ -138,6 +138,36 @@ int wh_MessageKeystore_TranslateExportResponse(
     return 0;
 }
 
+/* Key Export Public Request translation */
+int wh_MessageKeystore_TranslateExportPublicRequest(
+    uint16_t magic, const whMessageKeystore_ExportPublicRequest* src,
+    whMessageKeystore_ExportPublicRequest* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T16(magic, dest, src, id);
+    WH_T16(magic, dest, src, algo);
+    return 0;
+}
+
+/* Key Export Public Response translation */
+int wh_MessageKeystore_TranslateExportPublicResponse(
+    uint16_t magic, const whMessageKeystore_ExportPublicResponse* src,
+    whMessageKeystore_ExportPublicResponse* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, rc);
+    WH_T32(magic, dest, src, len);
+    /* Label is just a byte array, no translation needed */
+    if (src != dest) {
+        memcpy(dest->label, src->label, WH_NVM_LABEL_LEN);
+    }
+    return 0;
+}
+
 /* Key Erase Request translation */
 int wh_MessageKeystore_TranslateEraseRequest(
     uint16_t magic, const whMessageKeystore_EraseRequest* src,
@@ -245,6 +275,40 @@ int wh_MessageKeystore_TranslateExportDmaRequest(
 int wh_MessageKeystore_TranslateExportDmaResponse(
     uint16_t magic, const whMessageKeystore_ExportDmaResponse* src,
     whMessageKeystore_ExportDmaResponse* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, rc);
+    WH_T64(magic, dest, src, dmaAddrStatus.badAddr.addr);
+    WH_T64(magic, dest, src, dmaAddrStatus.badAddr.sz);
+    WH_T32(magic, dest, src, len);
+    /* Label is just a byte array, no translation needed */
+    if (src != dest) {
+        memcpy(dest->label, src->label, WH_NVM_LABEL_LEN);
+    }
+    return 0;
+}
+
+/* Key Export Public DMA Request translation */
+int wh_MessageKeystore_TranslateExportPublicDmaRequest(
+    uint16_t magic, const whMessageKeystore_ExportPublicDmaRequest* src,
+    whMessageKeystore_ExportPublicDmaRequest* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T64(magic, dest, src, key.addr);
+    WH_T64(magic, dest, src, key.sz);
+    WH_T16(magic, dest, src, id);
+    WH_T16(magic, dest, src, algo);
+    return 0;
+}
+
+/* Key Export Public DMA Response translation */
+int wh_MessageKeystore_TranslateExportPublicDmaResponse(
+    uint16_t magic, const whMessageKeystore_ExportPublicDmaResponse* src,
+    whMessageKeystore_ExportPublicDmaResponse* dest)
 {
     if ((src == NULL) || (dest == NULL)) {
         return WH_ERROR_BADARGS;
