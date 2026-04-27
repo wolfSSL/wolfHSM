@@ -416,8 +416,6 @@ int wh_Client_Sha256Dma(whClientContext* ctx, wc_Sha256* sha, const uint8_t* in,
 | **`requestSent` flag** | Adds a parameter to the API, but avoids unnecessary round-trips when input is absorbed entirely into the local buffer |
 | **Snapshot/rollback on send failure** | Small CPU cost to copy the partial buffer, but guarantees SHA state consistency even on transport failures |
 
-
-
 ## RNG: Single-Shot with Caller-Driven Chunking
 
 The RNG generate operation is the second algorithm to receive the async
@@ -540,6 +538,85 @@ int wh_Client_RngGenerate(whClientContext* ctx, uint8_t* out, uint32_t size);
 int wh_Client_RngGenerateDma(whClientContext* ctx, uint8_t* out, uint32_t size);
 ```
 
+## AES: One-Shot with DMA Support
+
+AES modes (CBC, CTR, ECB, GCM) are all **one-shot** operations — every call
+consumes a fixed buffer of input and returns a fixed buffer of output. There
+is no streaming state to accumulate across multiple Request/Response pairs
+the way SHA does, which makes the async split significantly simpler than
+SHA:
+
+- **No partial-block buffering** on the client.  The entire plaintext or
+  ciphertext is handed to one Request and the full result comes back in
+  one Response.
+- **No `requestSent` flag.**  Each call sends exactly one request and
+  expects exactly one response.  If the request's serialised size would
+  exceed `WOLFHSM_CFG_COMM_DATA_LEN`, the inline Request returns
+  `WH_ERROR_BADARGS` up front; DMA variants bypass the cap for payload
+  data.
+- **No snapshot/rollback.**  There is no local buffer to corrupt: the key
+  lives on `aes->devKey` (or as a cached keyId), the IV on `aes->reg`, and
+  these are read-only until the Response arrives.
+
+### Mutable state: IV and counter
+
+For **CBC** and **CTR**, the Response updates mutable state on the `Aes`
+struct so subsequent calls chain correctly:
+
+- **CBC** — `aes->reg` is updated with the last ciphertext block. For
+  decryption, the Request captures the last ciphertext block from the
+  input buffer into `aes->reg` *before* sending, so in-place (input
+  pointer == output pointer) operation still produces the right chaining
+  state after the Response overwrites the plaintext.
+- **CTR** — `aes->reg`, `aes->tmp`, and `aes->left` are updated from the
+  Response so the counter advances correctly for subsequent calls.  CTR
+  is symmetric: callers should use `AES_ENCRYPTION` for the key schedule
+  and pass `enc = 1` in both directions.
+
+**ECB** and **GCM** carry no inter-call state on the `Aes` struct.  For
+GCM, the IV, AAD, and (on decrypt) the expected tag are passed as explicit
+arguments on each call.
+
+### DMA variant contract
+
+The DMA pairs follow the same pattern as SHA DMA:
+
+1. **Fail-fast** on `wh_CommClient_IsRequestPending()` before acquiring
+   any DMA mapping, so a Request cannot be issued while another call is
+   still outstanding and cannot leak a translated address if
+   `wh_Client_SendRequest` later rejects the call.
+2. **PRE-translate** input, output, and (for GCM) AAD buffers.  Non-DMA
+   payload fields (key material, IV, auth tag) stay inline in the
+   request message.
+3. **Stash** the translated addresses in `ctx->dma.asyncCtx.aes` so the
+   matching Response can issue POST cleanup.
+4. **POST cleanup** runs on every non-`WH_ERROR_NOTREADY` return from the
+   Response, so the caller's buffers are safe to read regardless of
+   success or error.
+5. The caller must keep the input, output, and AAD buffers valid until
+   the Response returns something other than `WH_ERROR_NOTREADY`.
+
+### API Reference
+
+Inline (non-DMA) pairs:
+
+- `wh_Client_AesCbcRequest` / `wh_Client_AesCbcResponse`
+- `wh_Client_AesCtrRequest` / `wh_Client_AesCtrResponse`
+- `wh_Client_AesEcbRequest` / `wh_Client_AesEcbResponse`
+- `wh_Client_AesGcmRequest` / `wh_Client_AesGcmResponse`
+
+DMA pairs (require `WOLFHSM_CFG_DMA`):
+
+- `wh_Client_AesCbcDmaRequest` / `wh_Client_AesCbcDmaResponse`
+- `wh_Client_AesCtrDmaRequest` / `wh_Client_AesCtrDmaResponse`
+- `wh_Client_AesEcbDmaRequest` / `wh_Client_AesEcbDmaResponse`
+- `wh_Client_AesGcmDmaRequest` / `wh_Client_AesGcmDmaResponse`
+
+The existing blocking wrappers (`wh_Client_AesCbc`, `wh_Client_AesCtr`,
+`wh_Client_AesEcb`, `wh_Client_AesGcm`, and their `*Dma` variants) are now
+thin shells that call the new async primitives in a poll loop, so blocking
+and async paths share identical wire behaviour.
+
 ## Roadmap: Remaining Algorithms
 
 The async split pattern will be applied algorithm by algorithm to all crypto
@@ -555,15 +632,15 @@ the full set of operations and their planned async status.
 | SHA-384        | Update/Final Request/Response    | Shares SHA-512 wire format |
 | SHA-512        | Update/Final Request/Response    | Non-DMA and DMA variants |
 | RNG Generate   | `wh_Client_RngGenerate{Request,Response}` and DMA variants | Single-shot per call; non-DMA callers chunk against `WH_MESSAGE_CRYPTO_RNG_MAX_INLINE_SZ`, DMA has no per-call cap |
+| AES-CBC        | `wh_Client_AesCbc{,Dma}{Request,Response}` | Non-DMA and DMA variants |
+| AES-CTR        | `wh_Client_AesCtr{,Dma}{Request,Response}` | Non-DMA and DMA variants |
+| AES-ECB        | `wh_Client_AesEcb{,Dma}{Request,Response}` | Non-DMA and DMA variants |
+| AES-GCM        | `wh_Client_AesGcm{,Dma}{Request,Response}` | Non-DMA and DMA variants; AAD supports DMA |
 
 **Planned:**
 
 | Algorithm         | Functions                                  | Complexity | Notes |
 |-------------------|--------------------------------------------|------------|-------|
-| AES-CBC           | `wh_Client_AesCbc{Request,Response}`       | Low        | Single-shot; straightforward split |
-| AES-CTR           | `wh_Client_AesCtr{Request,Response}`       | Low        | Single-shot |
-| AES-ECB           | `wh_Client_AesEcb{Request,Response}`       | Low        | Single-shot |
-| AES-GCM           | `wh_Client_AesGcm{Request,Response}`       | Low        | Single-shot; AAD + ciphertext in one message |
 | RSA Sign/Verify   | `wh_Client_RsaFunction{Request,Response}`  | Low        | Single-shot; may need auto-import removed from Request |
 | RSA Get Size      | `wh_Client_RsaGetSize{Request,Response}`   | Low        | Trivial query |
 | ECDSA Sign        | `wh_Client_EccSign{Request,Response}`      | Low        | Single-shot |
@@ -572,7 +649,7 @@ the full set of operations and their planned async status.
 | Curve25519        | `wh_Client_Curve25519SharedSecret{Request,Response}` | Low | Single-shot |
 | Ed25519 Sign      | `wh_Client_Ed25519Sign{Request,Response}`  | Low        | Single-shot |
 | Ed25519 Verify    | `wh_Client_Ed25519Verify{Request,Response}`| Low        | Single-shot |
-| CMAC              | `wh_Client_Cmac{Request,Response}`         | Low        | Already has partial split pattern |
+| CMAC              | `wh_Client_Cmac{Request,Response}`         | Medium     | Streaming (Init/Update/Final), so follows SHA-style pattern rather than the one-shot AES pattern |
 | ML-DSA Sign       | `wh_Client_MlDsaSign{Request,Response}`    | Low        | Post-quantum; single-shot |
 | ML-DSA Verify     | `wh_Client_MlDsaVerify{Request,Response}`  | Low        | Post-quantum; single-shot |
 

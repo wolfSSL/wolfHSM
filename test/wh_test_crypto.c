@@ -6631,6 +6631,642 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
 #endif /* HAVE_AES_GCM */
     return ret;
 }
+
+/* Direct exercise of the native async AES primitives
+ * (wh_Client_AesXxxRequest / wh_Client_AesXxxResponse).
+ * Covers each mode's round-trip, state continuity, and argument rejection. */
+static int whTest_CryptoAesAsync(whClientContext* ctx, int devId, WC_RNG* rng)
+{
+#define WH_TEST_AES_ASYNC_KEYSZ 16
+#define WH_TEST_AES_ASYNC_BUFSZ 64
+    int     ret = 0;
+    Aes     aes[1];
+    uint8_t key[WH_TEST_AES_ASYNC_KEYSZ];
+    uint8_t iv[AES_BLOCK_SIZE];
+    uint8_t plainIn[WH_TEST_AES_ASYNC_BUFSZ];
+    uint8_t cipher[WH_TEST_AES_ASYNC_BUFSZ];
+    uint8_t plainOut[WH_TEST_AES_ASYNC_BUFSZ];
+
+    memset(plainIn, 0xAA, sizeof(plainIn));
+    memset(cipher, 0, sizeof(cipher));
+    memset(plainOut, 0, sizeof(plainOut));
+
+    if (wc_RNG_GenerateBlock(rng, key, sizeof(key)) != 0 ||
+        wc_RNG_GenerateBlock(rng, iv, sizeof(iv)) != 0) {
+        WH_ERROR_PRINT("AES async: failed to generate key/iv\n");
+        return -1;
+    }
+
+#ifdef HAVE_AES_CBC
+    /* CBC: round-trip via async Request/Response pair */
+    if (ret == 0) {
+        ret = wc_AesInit(aes, NULL, devId);
+        if (ret == 0) {
+            ret = wc_AesSetKey(aes, key, sizeof(key), iv, AES_ENCRYPTION);
+        }
+        if (ret == 0) {
+            ret =
+                wh_Client_AesCbcRequest(ctx, aes, 1, plainIn, sizeof(plainIn));
+        }
+        if (ret == 0) {
+            do {
+                ret = wh_Client_AesCbcResponse(ctx, aes, cipher, NULL);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+        if (ret == 0) {
+            ret = wc_AesSetKey(aes, key, sizeof(key), iv, AES_DECRYPTION);
+        }
+        if (ret == 0) {
+            ret = wh_Client_AesCbcRequest(ctx, aes, 0, cipher, sizeof(cipher));
+        }
+        if (ret == 0) {
+            do {
+                ret = wh_Client_AesCbcResponse(ctx, aes, plainOut, NULL);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+        if (ret == 0 && memcmp(plainIn, plainOut, sizeof(plainIn)) != 0) {
+            WH_ERROR_PRINT("AES-CBC async round-trip mismatch\n");
+            ret = -1;
+        }
+        (void)wc_AesFree(aes);
+        memset(cipher, 0, sizeof(cipher));
+        memset(plainOut, 0, sizeof(plainOut));
+    }
+
+    /* CBC: argument validation */
+    if (ret == 0 && wh_Client_AesCbcRequest(NULL, aes, 1, plainIn, 16) !=
+                        WH_ERROR_BADARGS) {
+        WH_ERROR_PRINT("AES-CBC async: NULL ctx should be BADARGS\n");
+        ret = -1;
+    }
+    if (ret == 0 && wh_Client_AesCbcRequest(ctx, NULL, 1, plainIn, 16) !=
+                        WH_ERROR_BADARGS) {
+        WH_ERROR_PRINT("AES-CBC async: NULL aes should be BADARGS\n");
+        ret = -1;
+    }
+    if (ret == 0 &&
+        wh_Client_AesCbcResponse(ctx, aes, NULL, NULL) != WH_ERROR_BADARGS) {
+        WH_ERROR_PRINT("AES-CBC async: NULL out should be BADARGS\n");
+        ret = -1;
+    }
+    /* CBC: non-block-aligned length rejected */
+    if (ret == 0) {
+        int tmp;
+        ret = wc_AesInit(aes, NULL, devId);
+        if (ret == 0) {
+            ret = wc_AesSetKey(aes, key, sizeof(key), iv, AES_ENCRYPTION);
+        }
+        if (ret == 0) {
+            tmp = wh_Client_AesCbcRequest(ctx, aes, 1, plainIn, 15);
+            if (tmp != WH_ERROR_BADARGS) {
+                WH_ERROR_PRINT(
+                    "AES-CBC async: non-block-aligned should be BADARGS, "
+                    "got %d\n",
+                    tmp);
+                ret = -1;
+            }
+        }
+        (void)wc_AesFree(aes);
+    }
+    if (ret == 0) {
+        WH_TEST_PRINT("AES CBC ASYNC DEVID=0x%X SUCCESS\n", devId);
+    }
+#endif /* HAVE_AES_CBC */
+
+#ifdef WOLFSSL_AES_COUNTER
+    /* CTR: round-trip via async Request/Response pair. CTR is symmetric, so
+     * wolfCrypt's wc_AesCtrEncrypt is used for both directions — the enc
+     * flag and key schedule are always ENCRYPTION even when the caller's
+     * intent is to decrypt. */
+    if (ret == 0) {
+        ret = wc_AesInit(aes, NULL, devId);
+        if (ret == 0) {
+            ret = wc_AesSetKeyDirect(aes, key, sizeof(key), iv, AES_ENCRYPTION);
+        }
+        if (ret == 0) {
+            ret =
+                wh_Client_AesCtrRequest(ctx, aes, 1, plainIn, sizeof(plainIn));
+        }
+        if (ret == 0) {
+            do {
+                ret = wh_Client_AesCtrResponse(ctx, aes, cipher, NULL);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+        if (ret == 0) {
+            ret = wc_AesSetKeyDirect(aes, key, sizeof(key), iv, AES_ENCRYPTION);
+        }
+        if (ret == 0) {
+            ret = wh_Client_AesCtrRequest(ctx, aes, 1, cipher, sizeof(cipher));
+        }
+        if (ret == 0) {
+            do {
+                ret = wh_Client_AesCtrResponse(ctx, aes, plainOut, NULL);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+        if (ret == 0 && memcmp(plainIn, plainOut, sizeof(plainIn)) != 0) {
+            WH_ERROR_PRINT("AES-CTR async round-trip mismatch\n");
+            ret = -1;
+        }
+        (void)wc_AesFree(aes);
+        memset(cipher, 0, sizeof(cipher));
+        memset(plainOut, 0, sizeof(plainOut));
+    }
+
+    /* CTR: state continuity — two halves via async must equal single-shot */
+    if (ret == 0) {
+        uint8_t refCipher[WH_TEST_AES_ASYNC_BUFSZ];
+        uint8_t chunkCipher[WH_TEST_AES_ASYNC_BUFSZ];
+        Aes     aesRef[1];
+        ret = wc_AesInit(aesRef, NULL, devId);
+        if (ret == 0) {
+            ret = wc_AesSetKeyDirect(aesRef, key, sizeof(key), iv,
+                                     AES_ENCRYPTION);
+        }
+        if (ret == 0) {
+            ret = wh_Client_AesCtr(ctx, aesRef, 1, plainIn, sizeof(plainIn),
+                                   refCipher);
+        }
+        (void)wc_AesFree(aesRef);
+
+        if (ret == 0) {
+            ret = wc_AesInit(aes, NULL, devId);
+        }
+        if (ret == 0) {
+            ret = wc_AesSetKeyDirect(aes, key, sizeof(key), iv, AES_ENCRYPTION);
+        }
+        if (ret == 0) {
+            ret = wh_Client_AesCtrRequest(ctx, aes, 1, plainIn,
+                                          sizeof(plainIn) / 2);
+        }
+        if (ret == 0) {
+            do {
+                ret = wh_Client_AesCtrResponse(ctx, aes, chunkCipher, NULL);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+        if (ret == 0) {
+            ret = wh_Client_AesCtrRequest(ctx, aes, 1,
+                                          plainIn + sizeof(plainIn) / 2,
+                                          sizeof(plainIn) / 2);
+        }
+        if (ret == 0) {
+            do {
+                ret = wh_Client_AesCtrResponse(
+                    ctx, aes, chunkCipher + sizeof(plainIn) / 2, NULL);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+        if (ret == 0 &&
+            memcmp(refCipher, chunkCipher, sizeof(refCipher)) != 0) {
+            WH_ERROR_PRINT(
+                "AES-CTR async: split state did not match single-shot\n");
+            ret = -1;
+        }
+        (void)wc_AesFree(aes);
+    }
+    if (ret == 0) {
+        WH_TEST_PRINT("AES CTR ASYNC DEVID=0x%X SUCCESS\n", devId);
+    }
+#endif /* WOLFSSL_AES_COUNTER */
+
+#ifdef HAVE_AES_ECB
+    /* ECB: round-trip via async Request/Response pair */
+    if (ret == 0) {
+        ret = wc_AesInit(aes, NULL, devId);
+        if (ret == 0) {
+            ret = wc_AesSetKey(aes, key, sizeof(key), iv, AES_ENCRYPTION);
+        }
+        if (ret == 0) {
+            ret =
+                wh_Client_AesEcbRequest(ctx, aes, 1, plainIn, sizeof(plainIn));
+        }
+        if (ret == 0) {
+            do {
+                ret = wh_Client_AesEcbResponse(ctx, aes, cipher, NULL);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+        if (ret == 0) {
+            ret = wc_AesSetKey(aes, key, sizeof(key), iv, AES_DECRYPTION);
+        }
+        if (ret == 0) {
+            ret = wh_Client_AesEcbRequest(ctx, aes, 0, cipher, sizeof(cipher));
+        }
+        if (ret == 0) {
+            do {
+                ret = wh_Client_AesEcbResponse(ctx, aes, plainOut, NULL);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+        if (ret == 0 && memcmp(plainIn, plainOut, sizeof(plainIn)) != 0) {
+            WH_ERROR_PRINT("AES-ECB async round-trip mismatch\n");
+            ret = -1;
+        }
+        (void)wc_AesFree(aes);
+        memset(cipher, 0, sizeof(cipher));
+        memset(plainOut, 0, sizeof(plainOut));
+    }
+
+    /* ECB: non-block-aligned length rejected */
+    if (ret == 0) {
+        int tmp;
+        ret = wc_AesInit(aes, NULL, devId);
+        if (ret == 0) {
+            ret = wc_AesSetKey(aes, key, sizeof(key), iv, AES_ENCRYPTION);
+        }
+        if (ret == 0) {
+            tmp = wh_Client_AesEcbRequest(ctx, aes, 1, plainIn, 15);
+            if (tmp != WH_ERROR_BADARGS) {
+                WH_ERROR_PRINT(
+                    "AES-ECB async: non-block-aligned should be BADARGS\n");
+                ret = -1;
+            }
+        }
+        (void)wc_AesFree(aes);
+    }
+    if (ret == 0) {
+        WH_TEST_PRINT("AES ECB ASYNC DEVID=0x%X SUCCESS\n", devId);
+    }
+#endif /* HAVE_AES_ECB */
+
+#ifdef HAVE_AESGCM
+    /* GCM: round-trip via async Request/Response pair */
+    if (ret == 0) {
+        uint8_t authin[16];
+        uint8_t enc_tag[AES_BLOCK_SIZE];
+        uint8_t dec_tag[AES_BLOCK_SIZE];
+
+        memset(authin, 0x5A, sizeof(authin));
+        memset(enc_tag, 0, sizeof(enc_tag));
+
+        ret = wc_AesInit(aes, NULL, devId);
+        if (ret == 0) {
+            ret = wc_AesGcmSetKey(aes, key, sizeof(key));
+        }
+        if (ret == 0) {
+            ret = wh_Client_AesGcmRequest(
+                ctx, aes, 1, plainIn, sizeof(plainIn), iv, AES_BLOCK_SIZE,
+                authin, sizeof(authin), NULL, sizeof(enc_tag));
+        }
+        if (ret == 0) {
+            do {
+                ret = wh_Client_AesGcmResponse(ctx, aes, cipher, sizeof(cipher),
+                                               NULL, enc_tag, sizeof(enc_tag));
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+
+        /* Decrypt with correct tag succeeds */
+        if (ret == 0) {
+            memcpy(dec_tag, enc_tag, sizeof(dec_tag));
+            ret = wh_Client_AesGcmRequest(
+                ctx, aes, 0, cipher, sizeof(cipher), iv, AES_BLOCK_SIZE, authin,
+                sizeof(authin), dec_tag, sizeof(dec_tag));
+        }
+        if (ret == 0) {
+            do {
+                ret = wh_Client_AesGcmResponse(ctx, aes, plainOut,
+                                               sizeof(plainOut), NULL, NULL, 0);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+        if (ret == 0 && memcmp(plainIn, plainOut, sizeof(plainIn)) != 0) {
+            WH_ERROR_PRINT("AES-GCM async round-trip mismatch\n");
+            ret = -1;
+        }
+
+        /* Decrypt with corrupted tag must fail */
+        if (ret == 0) {
+            int tmp;
+            dec_tag[0] ^= 0x01;
+            tmp = wh_Client_AesGcmRequest(
+                ctx, aes, 0, cipher, sizeof(cipher), iv, AES_BLOCK_SIZE, authin,
+                sizeof(authin), dec_tag, sizeof(dec_tag));
+            if (tmp == WH_ERROR_OK) {
+                do {
+                    tmp = wh_Client_AesGcmResponse(
+                        ctx, aes, plainOut, sizeof(plainOut), NULL, NULL, 0);
+                } while (tmp == WH_ERROR_NOTREADY);
+            }
+            if (tmp == 0) {
+                WH_ERROR_PRINT(
+                    "AES-GCM async: decrypt with bad tag unexpectedly OK\n");
+                ret = -1;
+            }
+        }
+        (void)wc_AesFree(aes);
+        memset(cipher, 0, sizeof(cipher));
+        memset(plainOut, 0, sizeof(plainOut));
+    }
+    if (ret == 0) {
+        WH_TEST_PRINT("AES GCM ASYNC DEVID=0x%X SUCCESS\n", devId);
+    }
+#endif /* HAVE_AESGCM */
+
+#ifdef HAVE_AES_CBC
+    /* CBC: stacked async Request must return REQUEST_PENDING, and the second
+     * Request must not mutate aes->reg before fail-fast. */
+    if (ret == 0) {
+        uint8_t ivBefore[AES_BLOCK_SIZE];
+        uint8_t ivAfter[AES_BLOCK_SIZE];
+        int     tmp;
+        ret = wc_AesInit(aes, NULL, devId);
+        if (ret == 0) {
+            ret = wc_AesSetKey(aes, key, sizeof(key), iv, AES_ENCRYPTION);
+        }
+        /* Issue the first Request but do NOT consume the Response. The
+         * transport stays "request pending" until the matching Response is
+         * read. */
+        if (ret == 0) {
+            ret =
+                wh_Client_AesCbcRequest(ctx, aes, 1, plainIn, sizeof(plainIn));
+        }
+        if (ret == 0) {
+            /* Snapshot aes->reg before attempting a stacked decrypt Request */
+            memcpy(ivBefore, (uint8_t*)aes->reg, sizeof(ivBefore));
+            tmp =
+                wh_Client_AesCbcRequest(ctx, aes, 0, plainIn, sizeof(plainIn));
+            if (tmp != WH_ERROR_REQUEST_PENDING) {
+                WH_ERROR_PRINT("AES-CBC async: stacked Request expected "
+                               "REQUEST_PENDING, got %d\n",
+                               tmp);
+                ret = -1;
+            }
+            memcpy(ivAfter, (uint8_t*)aes->reg, sizeof(ivAfter));
+            if (ret == 0 && memcmp(ivBefore, ivAfter, sizeof(ivBefore)) != 0) {
+                WH_ERROR_PRINT(
+                    "AES-CBC async: stacked Request mutated aes->reg\n");
+                ret = -1;
+            }
+        }
+        /* Drain the outstanding response to leave the transport idle */
+        if (ret == 0 || ret == -1) {
+            int drainRet;
+            do {
+                drainRet = wh_Client_AesCbcResponse(ctx, aes, cipher, NULL);
+            } while (drainRet == WH_ERROR_NOTREADY);
+            if (ret == 0 && drainRet != WH_ERROR_OK) {
+                WH_ERROR_PRINT(
+                    "AES-CBC async: failed to drain pending response: %d\n",
+                    drainRet);
+                ret = -1;
+            }
+        }
+        (void)wc_AesFree(aes);
+        memset(cipher, 0, sizeof(cipher));
+    }
+    if (ret == 0) {
+        WH_TEST_PRINT("AES CBC ASYNC FAILURE-PATH DEVID=0x%X SUCCESS\n", devId);
+    }
+#endif /* HAVE_AES_CBC */
+
+#ifdef HAVE_AESGCM
+    /* GCM: out_capacity smaller than the server's reported payload must be
+     * rejected by Response without overflowing out. */
+    if (ret == 0) {
+        uint8_t authin[8];
+        uint8_t enc_tag[AES_BLOCK_SIZE];
+        uint8_t tinyOut[8]; /* deliberately smaller than plainIn */
+        int     tmp;
+
+        memset(authin, 0x37, sizeof(authin));
+        memset(enc_tag, 0, sizeof(enc_tag));
+
+        ret = wc_AesInit(aes, NULL, devId);
+        if (ret == 0) {
+            ret = wc_AesGcmSetKey(aes, key, sizeof(key));
+        }
+        if (ret == 0) {
+            ret = wh_Client_AesGcmRequest(
+                ctx, aes, 1, plainIn, sizeof(plainIn), iv, AES_BLOCK_SIZE,
+                authin, sizeof(authin), NULL, sizeof(enc_tag));
+        }
+        if (ret == 0) {
+            do {
+                tmp =
+                    wh_Client_AesGcmResponse(ctx, aes, tinyOut, sizeof(tinyOut),
+                                             NULL, enc_tag, sizeof(enc_tag));
+            } while (tmp == WH_ERROR_NOTREADY);
+            if (tmp != WH_ERROR_ABORTED) {
+                WH_ERROR_PRINT(
+                    "AES-GCM async: undersized out_capacity expected "
+                    "ABORTED, got %d\n",
+                    tmp);
+                ret = -1;
+            }
+        }
+        (void)wc_AesFree(aes);
+        memset(cipher, 0, sizeof(cipher));
+    }
+    if (ret == 0) {
+        WH_TEST_PRINT("AES GCM ASYNC OUT-CAPACITY DEVID=0x%X SUCCESS\n", devId);
+    }
+#endif /* HAVE_AESGCM */
+
+    return ret;
+#undef WH_TEST_AES_ASYNC_KEYSZ
+#undef WH_TEST_AES_ASYNC_BUFSZ
+}
+
+#ifdef WOLFHSM_CFG_DMA
+/* Direct exercise of the native async DMA AES primitives. */
+static int whTest_CryptoAesDmaAsync(whClientContext* ctx, int devId,
+                                    WC_RNG* rng)
+{
+#define WH_TEST_AES_ASYNC_DMA_KEYSZ 32
+#define WH_TEST_AES_ASYNC_DMA_BUFSZ 128
+    int     ret = 0;
+    Aes     aes[1];
+    uint8_t key[WH_TEST_AES_ASYNC_DMA_KEYSZ];
+    uint8_t iv[AES_BLOCK_SIZE];
+    uint8_t plainIn[WH_TEST_AES_ASYNC_DMA_BUFSZ];
+    uint8_t cipher[WH_TEST_AES_ASYNC_DMA_BUFSZ];
+    uint8_t plainOut[WH_TEST_AES_ASYNC_DMA_BUFSZ];
+
+    memset(plainIn, 0xBB, sizeof(plainIn));
+    memset(cipher, 0, sizeof(cipher));
+    memset(plainOut, 0, sizeof(plainOut));
+
+    if (wc_RNG_GenerateBlock(rng, key, sizeof(key)) != 0 ||
+        wc_RNG_GenerateBlock(rng, iv, sizeof(iv)) != 0) {
+        WH_ERROR_PRINT("AES DMA async: failed to generate key/iv\n");
+        return -1;
+    }
+
+#ifdef HAVE_AES_CBC
+    /* CBC DMA: round-trip via async DMA Request/Response pair */
+    if (ret == 0) {
+        ret = wc_AesInit(aes, NULL, devId);
+        if (ret == 0) {
+            ret = wc_AesSetKey(aes, key, sizeof(key), iv, AES_ENCRYPTION);
+        }
+        if (ret == 0) {
+            ret = wh_Client_AesCbcDmaRequest(ctx, aes, 1, plainIn,
+                                             sizeof(plainIn), cipher);
+        }
+        if (ret == 0) {
+            do {
+                ret = wh_Client_AesCbcDmaResponse(ctx, aes);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+        if (ret == 0) {
+            ret = wc_AesSetKey(aes, key, sizeof(key), iv, AES_DECRYPTION);
+        }
+        if (ret == 0) {
+            ret = wh_Client_AesCbcDmaRequest(ctx, aes, 0, cipher,
+                                             sizeof(cipher), plainOut);
+        }
+        if (ret == 0) {
+            do {
+                ret = wh_Client_AesCbcDmaResponse(ctx, aes);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+        if (ret == 0 && memcmp(plainIn, plainOut, sizeof(plainIn)) != 0) {
+            WH_ERROR_PRINT("AES-CBC DMA async round-trip mismatch\n");
+            ret = -1;
+        }
+        (void)wc_AesFree(aes);
+        memset(cipher, 0, sizeof(cipher));
+        memset(plainOut, 0, sizeof(plainOut));
+    }
+    if (ret == 0) {
+        WH_TEST_PRINT("AES CBC DMA ASYNC DEVID=0x%X SUCCESS\n", devId);
+    }
+#endif /* HAVE_AES_CBC */
+
+#ifdef WOLFSSL_AES_COUNTER
+    /* CTR DMA: round-trip. CTR is symmetric (see non-DMA test comment). */
+    if (ret == 0) {
+        ret = wc_AesInit(aes, NULL, devId);
+        if (ret == 0) {
+            ret = wc_AesSetKeyDirect(aes, key, sizeof(key), iv, AES_ENCRYPTION);
+        }
+        if (ret == 0) {
+            ret = wh_Client_AesCtrDmaRequest(ctx, aes, 1, plainIn,
+                                             sizeof(plainIn), cipher);
+        }
+        if (ret == 0) {
+            do {
+                ret = wh_Client_AesCtrDmaResponse(ctx, aes);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+        if (ret == 0) {
+            ret = wc_AesSetKeyDirect(aes, key, sizeof(key), iv, AES_ENCRYPTION);
+        }
+        if (ret == 0) {
+            ret = wh_Client_AesCtrDmaRequest(ctx, aes, 1, cipher,
+                                             sizeof(cipher), plainOut);
+        }
+        if (ret == 0) {
+            do {
+                ret = wh_Client_AesCtrDmaResponse(ctx, aes);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+        if (ret == 0 && memcmp(plainIn, plainOut, sizeof(plainIn)) != 0) {
+            WH_ERROR_PRINT("AES-CTR DMA async round-trip mismatch\n");
+            ret = -1;
+        }
+        (void)wc_AesFree(aes);
+        memset(cipher, 0, sizeof(cipher));
+        memset(plainOut, 0, sizeof(plainOut));
+    }
+    if (ret == 0) {
+        WH_TEST_PRINT("AES CTR DMA ASYNC DEVID=0x%X SUCCESS\n", devId);
+    }
+#endif /* WOLFSSL_AES_COUNTER */
+
+#ifdef HAVE_AES_ECB
+    /* ECB DMA: round-trip */
+    if (ret == 0) {
+        ret = wc_AesInit(aes, NULL, devId);
+        if (ret == 0) {
+            ret = wc_AesSetKey(aes, key, sizeof(key), iv, AES_ENCRYPTION);
+        }
+        if (ret == 0) {
+            ret = wh_Client_AesEcbDmaRequest(ctx, aes, 1, plainIn,
+                                             sizeof(plainIn), cipher);
+        }
+        if (ret == 0) {
+            do {
+                ret = wh_Client_AesEcbDmaResponse(ctx, aes);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+        if (ret == 0) {
+            ret = wc_AesSetKey(aes, key, sizeof(key), iv, AES_DECRYPTION);
+        }
+        if (ret == 0) {
+            ret = wh_Client_AesEcbDmaRequest(ctx, aes, 0, cipher,
+                                             sizeof(cipher), plainOut);
+        }
+        if (ret == 0) {
+            do {
+                ret = wh_Client_AesEcbDmaResponse(ctx, aes);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+        if (ret == 0 && memcmp(plainIn, plainOut, sizeof(plainIn)) != 0) {
+            WH_ERROR_PRINT("AES-ECB DMA async round-trip mismatch\n");
+            ret = -1;
+        }
+        (void)wc_AesFree(aes);
+        memset(cipher, 0, sizeof(cipher));
+        memset(plainOut, 0, sizeof(plainOut));
+    }
+    if (ret == 0) {
+        WH_TEST_PRINT("AES ECB DMA ASYNC DEVID=0x%X SUCCESS\n", devId);
+    }
+#endif /* HAVE_AES_ECB */
+
+#ifdef HAVE_AESGCM
+    /* GCM DMA: round-trip with AAD via DMA */
+    if (ret == 0) {
+        uint8_t authin[32];
+        uint8_t enc_tag[AES_BLOCK_SIZE];
+        uint8_t dec_tag[AES_BLOCK_SIZE];
+
+        memset(authin, 0x5A, sizeof(authin));
+        memset(enc_tag, 0, sizeof(enc_tag));
+
+        ret = wc_AesInit(aes, NULL, devId);
+        if (ret == 0) {
+            ret = wc_AesGcmSetKey(aes, key, sizeof(key));
+        }
+        if (ret == 0) {
+            ret = wh_Client_AesGcmDmaRequest(
+                ctx, aes, 1, plainIn, sizeof(plainIn), cipher, iv,
+                AES_BLOCK_SIZE, authin, sizeof(authin), NULL, sizeof(enc_tag));
+        }
+        if (ret == 0) {
+            do {
+                ret = wh_Client_AesGcmDmaResponse(ctx, aes, enc_tag,
+                                                  sizeof(enc_tag));
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+
+        if (ret == 0) {
+            memcpy(dec_tag, enc_tag, sizeof(dec_tag));
+            ret = wh_Client_AesGcmDmaRequest(
+                ctx, aes, 0, cipher, sizeof(cipher), plainOut, iv,
+                AES_BLOCK_SIZE, authin, sizeof(authin), dec_tag,
+                sizeof(dec_tag));
+        }
+        if (ret == 0) {
+            do {
+                ret = wh_Client_AesGcmDmaResponse(ctx, aes, NULL, 0);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+        if (ret == 0 && memcmp(plainIn, plainOut, sizeof(plainIn)) != 0) {
+            WH_ERROR_PRINT("AES-GCM DMA async round-trip mismatch\n");
+            ret = -1;
+        }
+        (void)wc_AesFree(aes);
+        memset(cipher, 0, sizeof(cipher));
+        memset(plainOut, 0, sizeof(plainOut));
+    }
+    if (ret == 0) {
+        WH_TEST_PRINT("AES GCM DMA ASYNC DEVID=0x%X SUCCESS\n", devId);
+    }
+#endif /* HAVE_AESGCM */
+
+    return ret;
+#undef WH_TEST_AES_ASYNC_DMA_KEYSZ
+#undef WH_TEST_AES_ASYNC_DMA_BUFSZ
+}
+#endif /* WOLFHSM_CFG_DMA */
+
 #endif /* !NO_AES */
 
 #if defined(WOLFSSL_CMAC) && !defined(NO_AES) && defined(WOLFSSL_AES_DIRECT)
@@ -8605,9 +9241,17 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     while ((ret == WH_ERROR_OK) && (i < WH_NUM_DEVIDS)) {
         ret = whTestCrypto_Aes(client, WH_DEV_IDS_ARRAY[i], rng);
         if (ret == WH_ERROR_OK) {
+            ret = whTest_CryptoAesAsync(client, WH_DEV_IDS_ARRAY[i], rng);
+        }
+        if (ret == WH_ERROR_OK) {
             i++;
         }
     }
+#ifdef WOLFHSM_CFG_DMA
+    if (ret == WH_ERROR_OK) {
+        ret = whTest_CryptoAesDmaAsync(client, WH_DEV_ID_DMA, rng);
+    }
+#endif /* WOLFHSM_CFG_DMA */
 #endif /* !NO_AES */
 
 #if defined(WOLFSSL_CMAC) && !defined(NO_AES) && defined(WOLFSSL_AES_DIRECT)

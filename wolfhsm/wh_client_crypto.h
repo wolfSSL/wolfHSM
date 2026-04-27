@@ -1079,6 +1079,91 @@ int wh_Client_AesCtr(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
  */
 int wh_Client_AesCtrDma(whClientContext* ctx, Aes* aes, int enc,
                         const uint8_t* in, uint32_t len, uint8_t* out);
+
+/**
+ * @brief Send an AES-CTR encrypt/decrypt request to the server (non-blocking)
+ *
+ * Sends a single AES-CTR request to the server. The key material is read from
+ * the Aes struct (set via wc_AesSetKey or wh_Client_AesSetKeyId). The counter
+ * state (IV register and partial-block remainder) is carried on the Aes
+ * struct across the Request/Response boundary; callers must not mutate the
+ * Aes struct between the two halves. Use wh_Client_AesCtrResponse to
+ * retrieve the result.
+ *
+ * Contract: at most one outstanding async request may be in flight per
+ * whClientContext. The caller MUST call wh_Client_AesCtrResponse before
+ * issuing any other async Request on the same ctx.
+ *
+ * @param[in] ctx Pointer to the client context
+ * @param[in] aes Pointer to the AES structure with key and counter state
+ * @param[in] enc 1 for encrypt, 0 for decrypt (ignored by CTR, present for API
+ *                symmetry with the other modes)
+ * @param[in] in  Pointer to the input data (may be NULL only if len == 0)
+ * @param[in] len Length of the input data in bytes
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_AesCtrRequest(whClientContext* ctx, Aes* aes, int enc,
+                            const uint8_t* in, uint32_t len);
+
+/**
+ * @brief Receive the server's AES-CTR response (non-blocking)
+ *
+ * Retrieves the result of a prior wh_Client_AesCtrRequest call. The counter
+ * state (IV register and partial-block remainder) in the Aes struct is
+ * updated from the server response so subsequent CTR calls continue from the
+ * correct counter. Returns WH_ERROR_NOTREADY if the response is not yet
+ * available.
+ *
+ * @param[in]     ctx      Pointer to the client context
+ * @param[in,out] aes      Pointer to the AES structure (counter state updated)
+ * @param[out]    out      Pointer to where the output data is placed. Must
+ *                         not be NULL.
+ * @param[out]    out_size Set to the number of bytes produced. May be NULL.
+ * @return int Returns 0 on success, WH_ERROR_NOTREADY if the response is not
+ *             yet available, or a negative error code on failure.
+ */
+int wh_Client_AesCtrResponse(whClientContext* ctx, Aes* aes, uint8_t* out,
+                             uint32_t* out_size);
+
+/**
+ * @brief Send an AES-CTR encrypt/decrypt DMA request to the server
+ *        (non-blocking)
+ *
+ * Performs PRE address translation for the input and output buffers, stashes
+ * the translated addresses in ctx->dma.asyncCtx.aes for POST cleanup, and
+ * sends the DMA request to the server. Does NOT wait for a reply. Caller
+ * must keep in and out valid until the matching wh_Client_AesCtrDmaResponse
+ * completes.
+ *
+ * Contract: at most one outstanding async request may be in flight per
+ * whClientContext. The caller MUST call wh_Client_AesCtrDmaResponse before
+ * issuing any other async Request on the same ctx.
+ *
+ * @param[in]  ctx Pointer to the client context
+ * @param[in]  aes Pointer to the AES structure with key and counter state
+ * @param[in]  enc 1 for encrypt, 0 for decrypt
+ * @param[in]  in  Pointer to the input data (may be NULL only if len == 0)
+ * @param[in]  len Length of the input data in bytes
+ * @param[out] out Pointer to the output buffer
+ * @return int Returns 0 on success, WH_ERROR_REQUEST_PENDING if the
+ *             transport is still busy with a prior request, or a negative
+ *             error code on failure. On failure any acquired DMA mapping is
+ *             released before returning.
+ */
+int wh_Client_AesCtrDmaRequest(whClientContext* ctx, Aes* aes, int enc,
+                               const uint8_t* in, uint32_t len, uint8_t* out);
+
+/**
+ * @brief Receive the server's AES-CTR DMA response (non-blocking)
+ *
+ * Single-shot RecvResponse; returns WH_ERROR_NOTREADY if the server has not
+ * yet replied. The output data is written by the server directly to the
+ * client buffer passed to wh_Client_AesCtrDmaRequest. POST DMA cleanup for
+ * both input and output buffers is performed on every non-NOTREADY return
+ * so the client buffer is safe to read regardless of error. The counter
+ * state on the Aes struct is updated on success.
+ */
+int wh_Client_AesCtrDmaResponse(whClientContext* ctx, Aes* aes);
 #endif /* WOLFSSL_AES_COUNTER */
 
 #ifdef HAVE_AES_ECB
@@ -1116,6 +1201,76 @@ int wh_Client_AesEcb(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
  */
 int wh_Client_AesEcbDma(whClientContext* ctx, Aes* aes, int enc,
                         const uint8_t* in, uint32_t len, uint8_t* out);
+
+/**
+ * @brief Send an AES-ECB encrypt/decrypt request to the server (non-blocking)
+ *
+ * Sends a single AES-ECB request to the server. The key material is read
+ * from the Aes struct (set via wc_AesSetKey or wh_Client_AesSetKeyId). Use
+ * wh_Client_AesEcbResponse to retrieve the result.
+ *
+ * Contract: at most one outstanding async request may be in flight per
+ * whClientContext. The caller MUST call wh_Client_AesEcbResponse before
+ * issuing any other async Request on the same ctx. As a special case,
+ * len == 0 is a no-op: this function returns WH_ERROR_OK without sending,
+ * and the caller MUST NOT call wh_Client_AesEcbResponse afterwards (no
+ * response will arrive).
+ *
+ * @param[in] ctx Pointer to the client context
+ * @param[in] aes Pointer to the AES structure with key state
+ * @param[in] enc 1 for encrypt, 0 for decrypt
+ * @param[in] in  Pointer to the input data (must be block-aligned)
+ * @param[in] len Length of the input data in bytes (must be a multiple of
+ *                AES_BLOCK_SIZE)
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_AesEcbRequest(whClientContext* ctx, Aes* aes, int enc,
+                            const uint8_t* in, uint32_t len);
+
+/**
+ * @brief Receive the server's AES-ECB response (non-blocking)
+ *
+ * Retrieves the result of a prior wh_Client_AesEcbRequest call. Returns
+ * WH_ERROR_NOTREADY if the response is not yet available.
+ *
+ * @param[in]  ctx      Pointer to the client context
+ * @param[in]  aes      Pointer to the AES structure
+ * @param[out] out      Pointer to where the output data is placed. Must not
+ *                      be NULL.
+ * @param[out] out_size Set to the number of bytes produced. May be NULL.
+ * @return int Returns 0 on success, WH_ERROR_NOTREADY if the response is
+ *             not yet available, or a negative error code on failure.
+ */
+int wh_Client_AesEcbResponse(whClientContext* ctx, Aes* aes, uint8_t* out,
+                             uint32_t* out_size);
+
+/**
+ * @brief Send an AES-ECB DMA request to the server (non-blocking)
+ *
+ * Performs PRE address translation for the input and output buffers, stashes
+ * the translated addresses in ctx->dma.asyncCtx.aes for POST cleanup, and
+ * sends the DMA request to the server. Does NOT wait for a reply. Caller
+ * must keep in and out valid until the matching wh_Client_AesEcbDmaResponse
+ * completes.
+ *
+ * @return int Returns 0 on success, WH_ERROR_REQUEST_PENDING if the
+ *             transport is still busy with a prior request, or a negative
+ *             error code on failure. On failure any acquired DMA mapping is
+ *             released before returning.
+ */
+int wh_Client_AesEcbDmaRequest(whClientContext* ctx, Aes* aes, int enc,
+                               const uint8_t* in, uint32_t len, uint8_t* out);
+
+/**
+ * @brief Receive the server's AES-ECB DMA response (non-blocking)
+ *
+ * Single-shot RecvResponse; returns WH_ERROR_NOTREADY if the server has not
+ * yet replied. The output data is written by the server directly to the
+ * client buffer passed to wh_Client_AesEcbDmaRequest. POST DMA cleanup for
+ * both input and output buffers is performed on every non-NOTREADY return
+ * so the client buffer is safe to read regardless of error.
+ */
+int wh_Client_AesEcbDmaResponse(whClientContext* ctx, Aes* aes);
 #endif /* HAVE_AES_ECB */
 
 #ifdef HAVE_AES_CBC
@@ -1160,10 +1315,16 @@ int wh_Client_AesCbcDma(whClientContext* ctx, Aes* aes, int enc,
  * @brief Send an AES-CBC encrypt/decrypt request to the server (non-blocking)
  *
  * Sends a single AES-CBC request to the server. The key material is read from
- * the Aes struct (set via wc_AesSetKey or wh_Client_AesSetKeyId). For
- * decryption, the IV is updated with the last input ciphertext block before
- * sending to support in-place operation. Use wh_Client_AesCbcResponse to
- * retrieve the result.
+ * the Aes struct (set via wc_AesSetKey or wh_Client_AesSetKeyId). The IV state
+ * on the Aes struct is updated only after the matching wh_Client_AesCbcResponse
+ * succeeds; a failed Request leaves aes->reg unchanged so callers can retry.
+ *
+ * Contract: at most one outstanding async request may be in flight per
+ * whClientContext. The caller MUST call wh_Client_AesCbcResponse before
+ * issuing any other async Request on the same ctx. As a special case,
+ * len == 0 is a no-op: this function returns WH_ERROR_OK without sending,
+ * and the caller MUST NOT call wh_Client_AesCbcResponse afterwards (no
+ * response will arrive).
  *
  * @param[in] ctx Pointer to the client context
  * @param[in] aes Pointer to the AES structure with key and IV state
@@ -1193,6 +1354,40 @@ int wh_Client_AesCbcRequest(whClientContext* ctx, Aes* aes, int enc,
  */
 int wh_Client_AesCbcResponse(whClientContext* ctx, Aes* aes, uint8_t* out,
                              uint32_t* out_size);
+
+/**
+ * @brief Send an AES-CBC DMA request to the server (non-blocking)
+ *
+ * Performs PRE address translation for the input and output buffers, stashes
+ * the translated addresses in ctx->dma.asyncCtx.aes for POST cleanup, and
+ * sends the DMA request to the server. Does NOT wait for a reply. Caller
+ * must keep in and out valid until the matching wh_Client_AesCbcDmaResponse
+ * completes.
+ *
+ * Contract: at most one outstanding async request may be in flight per
+ * whClientContext. The caller MUST call wh_Client_AesCbcDmaResponse before
+ * issuing any other async Request on the same ctx.
+ *
+ * @return int Returns 0 on success, WH_ERROR_REQUEST_PENDING if the
+ *             transport is still busy with a prior request, or a negative
+ *             error code on failure. On failure any acquired DMA mapping is
+ *             released before returning.
+ */
+int wh_Client_AesCbcDmaRequest(whClientContext* ctx, Aes* aes, int enc,
+                               const uint8_t* in, uint32_t len, uint8_t* out);
+
+/**
+ * @brief Receive the server's AES-CBC DMA response (non-blocking)
+ *
+ * Single-shot RecvResponse; returns WH_ERROR_NOTREADY if the server has not
+ * yet replied. The output data is written by the server directly to the
+ * client buffer passed to wh_Client_AesCbcDmaRequest; the updated IV is
+ * returned inline and copied back onto the Aes struct for CBC chaining.
+ * POST DMA cleanup for both input and output buffers is performed on every
+ * non-NOTREADY return so the client buffer is safe to read regardless of
+ * error.
+ */
+int wh_Client_AesCbcDmaResponse(whClientContext* ctx, Aes* aes);
 #endif /* HAVE_AES_CBC */
 
 #ifdef HAVE_AESGCM
@@ -1252,6 +1447,113 @@ int wh_Client_AesGcmDma(whClientContext* ctx, Aes* aes, int enc,
                         uint32_t iv_len, const uint8_t* authin,
                         uint32_t authin_len, const uint8_t* dec_tag,
                         uint8_t* enc_tag, uint32_t tag_len, uint8_t* out);
+
+/**
+ * @brief Send an AES-GCM encrypt/decrypt request to the server (non-blocking)
+ *
+ * Sends a single AES-GCM request to the server. The key material is read
+ * from the Aes struct (set via wc_AesSetKey or wh_Client_AesSetKeyId). The
+ * ciphertext, AAD, and decrypt tag (if any) are inlined in the request. Use
+ * wh_Client_AesGcmResponse to retrieve the output ciphertext/plaintext and
+ * (for encrypt) the auth tag.
+ *
+ * Contract: at most one outstanding async request may be in flight per
+ * whClientContext. The caller MUST call wh_Client_AesGcmResponse before
+ * issuing any other async Request on the same ctx.
+ *
+ * @param[in] ctx        Pointer to the client context
+ * @param[in] aes        Pointer to the AES structure with key state
+ * @param[in] enc        1 for encrypt, 0 for decrypt
+ * @param[in] in         Pointer to the input data (may be NULL only if
+ *                       len == 0)
+ * @param[in] len        Length of the input data in bytes
+ * @param[in] iv         Pointer to the IV (may be NULL only if iv_len == 0)
+ * @param[in] iv_len     Length of the IV in bytes
+ * @param[in] authin     Pointer to the AAD (may be NULL only if
+ *                       authin_len == 0)
+ * @param[in] authin_len Length of the AAD in bytes
+ * @param[in] dec_tag    For decrypt: pointer to the expected auth tag (NULL
+ *                       only if enc == 1). Ignored for encrypt.
+ * @param[in] tag_len    Length of the auth tag in bytes
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_AesGcmRequest(whClientContext* ctx, Aes* aes, int enc,
+                            const uint8_t* in, uint32_t len, const uint8_t* iv,
+                            uint32_t iv_len, const uint8_t* authin,
+                            uint32_t authin_len, const uint8_t* dec_tag,
+                            uint32_t tag_len);
+
+/**
+ * @brief Receive the server's AES-GCM response (non-blocking)
+ *
+ * Retrieves the result of a prior wh_Client_AesGcmRequest call. For encrypt,
+ * the auth tag is copied into enc_tag. Returns WH_ERROR_NOTREADY if the
+ * response is not yet available. For decrypt, a failing tag comparison is
+ * surfaced as a negative error from the server (AES_GCM_AUTH_E).
+ *
+ * @param[in]  ctx          Pointer to the client context
+ * @param[in]  aes          Pointer to the AES structure
+ * @param[out] out          Pointer to where the output data is placed. May be
+ *                          NULL for GMAC (tag-only) operations, in which case
+ *                          out_capacity must be 0.
+ * @param[in]  out_capacity Capacity of the out buffer in bytes. If the server
+ *                          reports a larger payload, the call returns
+ *                          WH_ERROR_ABORTED instead of writing past out.
+ * @param[out] out_size     Set to the number of bytes produced. May be NULL.
+ * @param[out] enc_tag      For encrypt: buffer to receive the auth tag.
+ *                          Ignored for decrypt (may be NULL).
+ * @param[in]  tag_len      Length of the enc_tag buffer in bytes.
+ * @return int Returns 0 on success, WH_ERROR_NOTREADY if the response is
+ *             not yet available, WH_ERROR_ABORTED if the server's reported
+ *             payload size exceeds out_capacity, or a negative error code on
+ *             failure.
+ */
+int wh_Client_AesGcmResponse(whClientContext* ctx, Aes* aes, uint8_t* out,
+                             uint32_t out_capacity, uint32_t* out_size,
+                             uint8_t* enc_tag, uint32_t tag_len);
+
+/**
+ * @brief Send an AES-GCM DMA request to the server (non-blocking)
+ *
+ * Performs PRE address translation for the input, output, and AAD buffers,
+ * stashes the translated addresses in ctx->dma.asyncCtx.aes for POST
+ * cleanup, and sends the DMA request to the server. Does NOT wait for a
+ * reply. The IV, auth tag (for decrypt), and key are passed inline. Caller
+ * must keep in, out, and authin valid until the matching
+ * wh_Client_AesGcmDmaResponse completes.
+ *
+ * Contract: at most one outstanding async request may be in flight per
+ * whClientContext. The caller MUST call wh_Client_AesGcmDmaResponse before
+ * issuing any other async Request on the same ctx.
+ *
+ * @return int Returns 0 on success, WH_ERROR_REQUEST_PENDING if the
+ *             transport is still busy with a prior request, or a negative
+ *             error code on failure. On failure any acquired DMA mapping is
+ *             released before returning.
+ */
+int wh_Client_AesGcmDmaRequest(whClientContext* ctx, Aes* aes, int enc,
+                               const uint8_t* in, uint32_t len, uint8_t* out,
+                               const uint8_t* iv, uint32_t iv_len,
+                               const uint8_t* authin, uint32_t authin_len,
+                               const uint8_t* dec_tag, uint32_t tag_len);
+
+/**
+ * @brief Receive the server's AES-GCM DMA response (non-blocking)
+ *
+ * Single-shot RecvResponse; returns WH_ERROR_NOTREADY if the server has not
+ * yet replied. The output data is written by the server directly to the
+ * client buffer passed to wh_Client_AesGcmDmaRequest; for encrypt the auth
+ * tag is returned inline and copied into enc_tag. POST DMA cleanup for
+ * input, output, and AAD buffers is performed on every non-NOTREADY return.
+ *
+ * @param[in]  ctx     Pointer to the client context
+ * @param[in]  aes     Pointer to the AES structure
+ * @param[out] enc_tag For encrypt: buffer to receive the auth tag. Ignored
+ *                     for decrypt (may be NULL).
+ * @param[in]  tag_len Length of the enc_tag buffer in bytes.
+ */
+int wh_Client_AesGcmDmaResponse(whClientContext* ctx, Aes* aes,
+                                uint8_t* enc_tag, uint32_t tag_len);
 #endif /* HAVE_AESGCM */
 
 #endif /* !NO_AES */
