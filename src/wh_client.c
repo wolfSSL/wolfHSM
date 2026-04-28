@@ -974,12 +974,10 @@ int wh_Client_KeyExportPublicResponse(whClientContext* c, uint8_t* label,
                 *outSz = resp->len;
             }
             if ((ret == WH_ERROR_OK) && (label != NULL)) {
-                if (labelSz > sizeof(resp->label)) {
-                    memcpy(label, resp->label, WH_NVM_LABEL_LEN);
+                if (labelSz > WH_NVM_LABEL_LEN) {
+                    labelSz = WH_NVM_LABEL_LEN;
                 }
-                else {
-                    memcpy(label, resp->label, labelSz);
-                }
+                memcpy(label, resp->label, labelSz);
             }
         }
     }
@@ -1615,7 +1613,7 @@ int wh_Client_KeyExportDma(whClientContext* c, uint16_t keyId,
 }
 
 int wh_Client_KeyExportPublicDmaRequest(whClientContext* c, whKeyId keyId,
-                                        uint16_t algo, const void* keyAddr,
+                                        uint16_t algo, void* keyAddr,
                                         uint16_t keySz)
 {
     whMessageKeystore_ExportPublicDmaRequest* req = NULL;
@@ -1663,9 +1661,7 @@ int wh_Client_KeyExportPublicDmaResponse(whClientContext* c, uint8_t* label,
     rc = wh_Client_RecvResponse(c, &resp_group, &resp_action, &resp_size,
                                 (uint8_t*)resp);
     if (rc == 0) {
-        if ((resp_group != WH_MESSAGE_GROUP_KEY) ||
-            (resp_action != WH_KEY_EXPORT_PUBLIC_DMA) ||
-            (resp_size != sizeof(*resp))) {
+        if (resp_size != sizeof(*resp)) {
             rc = WH_ERROR_ABORTED;
         }
         else {
@@ -1687,7 +1683,7 @@ int wh_Client_KeyExportPublicDmaResponse(whClientContext* c, uint8_t* label,
 }
 
 int wh_Client_KeyExportPublicDma(whClientContext* c, whKeyId keyId,
-                                 uint16_t algo, const void* keyAddr,
+                                 uint16_t algo, void* keyAddr,
                                  uint16_t keySz, uint8_t* label,
                                  uint16_t labelSz, uint16_t* outSz)
 {

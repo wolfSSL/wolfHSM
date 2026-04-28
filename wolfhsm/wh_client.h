@@ -968,7 +968,7 @@ int wh_Client_KeyExportDma(whClientContext* c, uint16_t keyId,
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_Client_KeyExportPublicDmaRequest(whClientContext* c, whKeyId keyId,
-                                        uint16_t algo, const void* keyAddr,
+                                        uint16_t algo, void* keyAddr,
                                         uint16_t keySz);
 
 /**
@@ -999,7 +999,7 @@ int wh_Client_KeyExportPublicDmaResponse(whClientContext* c, uint8_t* label,
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_Client_KeyExportPublicDma(whClientContext* c, whKeyId keyId,
-                                 uint16_t algo, const void* keyAddr,
+                                 uint16_t algo, void* keyAddr,
                                  uint16_t keySz, uint8_t* label,
                                  uint16_t labelSz, uint16_t* outSz);
 #endif /* WOLFHSM_CFG_DMA */

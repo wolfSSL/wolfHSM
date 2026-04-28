@@ -410,6 +410,137 @@ static int _MarkKeyCommitted(whKeyCacheContext* ctx, whKeyId keyId,
     return ret;
 }
 
+#ifndef NO_RSA
+static int _ExportRsaPublicKey(whServerContext* server, whKeyId keyId,
+    uint8_t* out, uint16_t* outSz)
+{
+    int    ret = WH_ERROR_OK;
+    RsaKey key[1];
+    int    pub_ret;
+
+    ret = wc_InitRsaKey_ex(key, NULL, INVALID_DEVID);
+    if (ret == 0) {
+        ret = wh_Server_CacheExportRsaKey(server, keyId, key);
+        if (ret == 0) {
+            pub_ret = wc_RsaKeyToPublicDer(key, out, (word32)*outSz);
+            if (pub_ret > 0) {
+                *outSz = (uint16_t)pub_ret;
+            }
+            else {
+                ret = (pub_ret == 0) ? WH_ERROR_ABORTED : pub_ret;
+            }
+        }
+        wc_FreeRsaKey(key);
+    }
+    return ret;
+}
+#endif
+
+#ifdef HAVE_ECC
+
+static int _ExportEccPublicKey(whServerContext* server, whKeyId keyId,
+    uint8_t* out, uint16_t* outSz)
+{
+    int     ret = WH_ERROR_OK;
+    ecc_key key[1];
+    int     pub_ret;
+
+    ret = wc_ecc_init_ex(key, NULL, INVALID_DEVID);
+    if (ret == 0) {
+        ret = wh_Server_EccKeyCacheExport(server, keyId, key);
+        if (ret == 0) {
+            pub_ret = wc_EccPublicKeyToDer(key, out, (word32)*outSz, 1);
+            if (pub_ret > 0) {
+                *outSz = (uint16_t)pub_ret;
+            }
+            else {
+                ret = (pub_ret == 0) ? WH_ERROR_ABORTED : pub_ret;
+            }
+        }
+        wc_ecc_free(key);
+    }
+    return ret;
+}
+#endif
+
+#ifdef HAVE_ED25519
+static int _ExportEd25519PublicKey(whServerContext* server, whKeyId keyId,
+    uint8_t* out, uint16_t* outSz)
+{
+    int         ret = WH_ERROR_OK;
+    ed25519_key key[1];
+    int         pub_ret;
+
+    ret = wc_ed25519_init_ex(key, NULL, INVALID_DEVID);
+    if (ret == 0) {
+        ret = wh_Server_CacheExportEd25519Key(server, keyId, key);
+        if (ret == 0) {
+            pub_ret = wc_Ed25519PublicKeyToDer(key, out, (word32)*outSz, 1);
+            if (pub_ret > 0) {
+                *outSz = (uint16_t)pub_ret;
+            }
+            else {
+                ret = (pub_ret == 0) ? WH_ERROR_ABORTED : pub_ret;
+            }
+        }
+        wc_ed25519_free(key);
+    }
+    return ret;
+}
+#endif
+
+#if defined(HAVE_DILITHIUM) && defined(WOLFSSL_DILITHIUM_PUBLIC_KEY)
+static int _ExportMldsaPublicKey(whServerContext* server, whKeyId keyId,
+    uint8_t* out, uint16_t* outSz)
+{
+    int      ret = WH_ERROR_OK;
+    MlDsaKey key[1];
+    int      pub_ret;
+
+    ret = wc_MlDsaKey_Init(key, NULL, INVALID_DEVID);
+    if (ret == 0) {
+        ret = wh_Server_MlDsaKeyCacheExport(server, keyId, key);
+        if (ret == 0) {
+            pub_ret = wc_MlDsaKey_PublicKeyToDer(key, out, (word32)*outSz, 1);
+            if (pub_ret > 0) {
+                *outSz = (uint16_t)pub_ret;
+            }
+            else {
+                ret = (pub_ret == 0) ? WH_ERROR_ABORTED : pub_ret;
+            }
+        }
+        wc_MlDsaKey_Free(key);
+    }
+    return ret;
+}
+#endif
+
+#ifdef HAVE_CURVE25519
+static int _ExportCurve25519PublicKey(whServerContext* server, whKeyId keyId,
+    uint8_t* out, uint16_t* outSz)
+{
+    int            ret = WH_ERROR_OK;
+    curve25519_key key[1];
+    int            pub_ret;
+
+    ret = wc_curve25519_init_ex(key, NULL, INVALID_DEVID);
+    if (ret == 0) {
+        ret = wh_Server_CacheExportCurve25519Key(server, keyId, key);
+        if (ret == 0) {
+            pub_ret = wc_Curve25519PublicKeyToDer(key, out, (word32)*outSz, 1);
+            if (pub_ret > 0) {
+                *outSz = (uint16_t)pub_ret;
+            }
+            else {
+                ret = (pub_ret == 0) ? WH_ERROR_ABORTED : pub_ret;
+            }
+        }
+        wc_curve25519_free(key);
+    }
+    return ret;
+}
+#endif
+
 int wh_Server_KeystoreGetUniqueId(whServerContext* server, whNvmId* inout_id)
 {
     int     ret   = WH_ERROR_OK;
@@ -1264,8 +1395,8 @@ static int _HandleKeyWrapRequest(whServerContext*                  server,
     }
 
     /* Translate the server key id passed in from the client */
-    serverKeyId = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO, 
-                                               server->comm->client_id, 
+    serverKeyId = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                               server->comm->client_id,
                                                req->serverKeyId);
 
     /* Store the wrapped key in the response data */
@@ -1331,8 +1462,8 @@ static int _HandleKeyUnwrapAndExportRequest(
     wrappedKey = reqData;
 
     /* Translate the server key id passed in from the client */
-    serverKeyId = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO, 
-                                               server->comm->client_id, 
+    serverKeyId = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                               server->comm->client_id,
                                                req->serverKeyId);
 
     /* Ensure the cipher type in the response matches the request */
@@ -1451,8 +1582,8 @@ static int _HandleKeyUnwrapAndCacheRequest(
     wrappedKey = reqData;
 
     /* Translate the server key id passed in from the client */
-    serverKeyId = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO, 
-                                               server->comm->client_id, 
+    serverKeyId = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                               server->comm->client_id,
                                                req->serverKeyId);
 
     /* Ensure the cipher type in the response matches the request */
@@ -1562,8 +1693,8 @@ static int _HandleDataWrapRequest(whServerContext*                   server,
     memcpy(data, reqData, req->dataSz);
 
     /* Translate the server key id passed in from the client */
-    serverKeyId = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO, 
-                                               server->comm->client_id, 
+    serverKeyId = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                               server->comm->client_id,
                                                req->serverKeyId);
 
     /* Ensure the cipher type in the response matches the request */
@@ -1888,130 +2019,42 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
                 if (ret == WH_ERROR_OK) {
                     switch (req.algo) {
                     #ifndef NO_RSA
-                        case WH_KEY_ALGO_RSA: {
-                            RsaKey rsa[1];
-                            int    pub_ret;
-                            ret = wc_InitRsaKey_ex(rsa, NULL, INVALID_DEVID);
-                            if (ret == 0) {
-                                ret = wh_Server_CacheExportRsaKey(
-                                    server, serverKeyId, rsa);
-                                if (ret == 0) {
-                                    pub_ret = wc_RsaKeyToPublicDer(
-                                        rsa, stage, (word32)stageMax);
-                                    if (pub_ret > 0) {
-                                        der_len = (uint16_t)pub_ret;
-                                    }
-                                    else {
-                                        ret = (pub_ret == 0)
-                                                  ? WH_ERROR_ABORTED
-                                                  : pub_ret;
-                                    }
-                                }
-                                wc_FreeRsaKey(rsa);
-                            }
-                        } break;
+                        case WH_KEY_ALGO_RSA:
+                            ret = _ExportRsaPublicKey(server, serverKeyId,
+                                                      stage, &stageMax);
+                            break;
                     #endif /* !NO_RSA */
                     #ifdef HAVE_ECC
-                        case WH_KEY_ALGO_ECC: {
-                            ecc_key ecc[1];
-                            int     pub_ret;
-                            ret = wc_ecc_init_ex(ecc, NULL, INVALID_DEVID);
-                            if (ret == 0) {
-                                ret = wh_Server_EccKeyCacheExport(
-                                    server, serverKeyId, ecc);
-                                if (ret == 0) {
-                                    pub_ret = wc_EccPublicKeyToDer(
-                                        ecc, stage, (word32)stageMax, 1);
-                                    if (pub_ret > 0) {
-                                        der_len = (uint16_t)pub_ret;
-                                    }
-                                    else {
-                                        ret = (pub_ret == 0)
-                                                  ? WH_ERROR_ABORTED
-                                                  : pub_ret;
-                                    }
-                                }
-                                wc_ecc_free(ecc);
-                            }
-                        } break;
+                        case WH_KEY_ALGO_ECC:
+                            ret = _ExportEccPublicKey(server, serverKeyId,
+                                                      stage, &stageMax);
+                            break;
                     #endif /* HAVE_ECC */
                     #ifdef HAVE_ED25519
-                        case WH_KEY_ALGO_ED25519: {
-                            ed25519_key ed[1];
-                            int         pub_ret;
-                            ret = wc_ed25519_init_ex(ed, NULL, INVALID_DEVID);
-                            if (ret == 0) {
-                                ret = wh_Server_CacheExportEd25519Key(
-                                    server, serverKeyId, ed);
-                                if (ret == 0) {
-                                    pub_ret = wc_Ed25519PublicKeyToDer(
-                                        ed, stage, (word32)stageMax, 1);
-                                    if (pub_ret > 0) {
-                                        der_len = (uint16_t)pub_ret;
-                                    }
-                                    else {
-                                        ret = (pub_ret == 0)
-                                                  ? WH_ERROR_ABORTED
-                                                  : pub_ret;
-                                    }
-                                }
-                                wc_ed25519_free(ed);
-                            }
-                        } break;
+                        case WH_KEY_ALGO_ED25519:
+                            ret = _ExportEd25519PublicKey(server, serverKeyId,
+                                                      stage, &stageMax);
+                            break;
                     #endif /* HAVE_ED25519 */
                     #if defined(HAVE_DILITHIUM) && defined(WOLFSSL_DILITHIUM_PUBLIC_KEY)
-                        case WH_KEY_ALGO_MLDSA: {
-                            MlDsaKey mldsa[1];
-                            int      pub_ret;
-                            ret = wc_MlDsaKey_Init(mldsa, NULL, INVALID_DEVID);
-                            if (ret == 0) {
-                                ret = wh_Server_MlDsaKeyCacheExport(
-                                    server, serverKeyId, mldsa);
-                                if (ret == 0) {
-                                    pub_ret = wc_Dilithium_PublicKeyToDer(
-                                        mldsa, stage, (word32)stageMax, 1);
-                                    if (pub_ret > 0) {
-                                        der_len = (uint16_t)pub_ret;
-                                    }
-                                    else {
-                                        ret = (pub_ret == 0)
-                                                  ? WH_ERROR_ABORTED
-                                                  : pub_ret;
-                                    }
-                                }
-                                wc_MlDsaKey_Free(mldsa);
-                            }
-                        } break;
+                        case WH_KEY_ALGO_MLDSA:
+                            ret = _ExportMldsaPublicKey(server, serverKeyId,
+                                                      stage, &stageMax);
+                            break;
                     #endif /* HAVE_DILITHIUM && WOLFSSL_DILITHIUM_PUBLIC_KEY */
                     #ifdef HAVE_CURVE25519
-                        case WH_KEY_ALGO_CURVE25519: {
-                            curve25519_key c25[1];
-                            int            pub_ret;
-                            ret = wc_curve25519_init_ex(c25, NULL,
-                                                        INVALID_DEVID);
-                            if (ret == 0) {
-                                ret = wh_Server_CacheExportCurve25519Key(
-                                    server, serverKeyId, c25);
-                                if (ret == 0) {
-                                    pub_ret = wc_Curve25519PublicKeyToDer(
-                                        c25, stage, (word32)stageMax, 1);
-                                    if (pub_ret > 0) {
-                                        der_len = (uint16_t)pub_ret;
-                                    }
-                                    else {
-                                        ret = (pub_ret == 0)
-                                                  ? WH_ERROR_ABORTED
-                                                  : pub_ret;
-                                    }
-                                }
-                                wc_curve25519_free(c25);
-                            }
-                        } break;
+                        case WH_KEY_ALGO_CURVE25519:
+                            ret = _ExportCurve25519PublicKey(server, serverKeyId,
+                                                      stage, &stageMax);
+                            break;
                     #endif /* HAVE_CURVE25519 */
                         default:
                             ret = WH_ERROR_BADARGS;
                             break;
                     }
+                }
+                if (ret == WH_ERROR_OK) {
+                    der_len = stageMax;
                 }
 
                 /* Confirm client buffer is big enough, then DMA. */
@@ -2153,138 +2196,43 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
                 if (ret == WH_ERROR_OK) {
                     switch (req.algo) {
                     #ifndef NO_RSA
-                        case WH_KEY_ALGO_RSA: {
-                            RsaKey rsa[1];
-                            int    pub_ret;
-                            ret = wc_InitRsaKey_ex(rsa, NULL, INVALID_DEVID);
-                            if (ret == 0) {
-                                ret = wh_Crypto_RsaDeserializeKeyDer(
-                                    cacheMeta->len, cacheBuf, rsa);
-                                if (ret == 0) {
-                                    pub_ret = wc_RsaKeyToPublicDer(
-                                        rsa, out, (word32)max_der);
-                                    if (pub_ret > 0) {
-                                        der_len = (uint16_t)pub_ret;
-                                    }
-                                    else {
-                                        ret = (pub_ret == 0)
-                                                  ? WH_ERROR_ABORTED
-                                                  : pub_ret;
-                                    }
-                                }
-                                wc_FreeRsaKey(rsa);
-                            }
-                        } break;
+                        case WH_KEY_ALGO_RSA:
+                            ret = _ExportRsaPublicKey(server, serverKeyId,
+                                                      out, &max_der);
+                            break;
                     #endif /* !NO_RSA */
                     #ifdef HAVE_ECC
-                        case WH_KEY_ALGO_ECC: {
-                            ecc_key ecc[1];
-                            int     pub_ret;
-                            ret = wc_ecc_init_ex(ecc, NULL, INVALID_DEVID);
-                            if (ret == 0) {
-                                ret = wh_Crypto_EccDeserializeKeyDer(
-                                    cacheBuf, cacheMeta->len, ecc);
-                                if (ret == 0) {
-                                    /* Include curve parameters (last arg 1)
-                                     * so the client can deserialize without
-                                     * external context. */
-                                    pub_ret = wc_EccPublicKeyToDer(
-                                        ecc, out, (word32)max_der, 1);
-                                    if (pub_ret > 0) {
-                                        der_len = (uint16_t)pub_ret;
-                                    }
-                                    else {
-                                        ret = (pub_ret == 0)
-                                                  ? WH_ERROR_ABORTED
-                                                  : pub_ret;
-                                    }
-                                }
-                                wc_ecc_free(ecc);
-                            }
-                        } break;
+                        case WH_KEY_ALGO_ECC:
+                            ret = _ExportEccPublicKey(server, serverKeyId,
+                                                      out, &max_der);
+                            break;
                     #endif /* HAVE_ECC */
                     #ifdef HAVE_ED25519
-                        case WH_KEY_ALGO_ED25519: {
-                            ed25519_key ed[1];
-                            int         pub_ret;
-                            ret = wc_ed25519_init_ex(ed, NULL, INVALID_DEVID);
-                            if (ret == 0) {
-                                ret = wh_Crypto_Ed25519DeserializeKeyDer(
-                                    cacheBuf, cacheMeta->len, ed);
-                                if (ret == 0) {
-                                    pub_ret = wc_Ed25519PublicKeyToDer(
-                                        ed, out, (word32)max_der, 1);
-                                    if (pub_ret > 0) {
-                                        der_len = (uint16_t)pub_ret;
-                                    }
-                                    else {
-                                        ret = (pub_ret == 0)
-                                                  ? WH_ERROR_ABORTED
-                                                  : pub_ret;
-                                    }
-                                }
-                                wc_ed25519_free(ed);
-                            }
-                        } break;
+                        case WH_KEY_ALGO_ED25519:
+                            ret = _ExportEd25519PublicKey(server, serverKeyId,
+                                                      out, &max_der);
+                            break;
                     #endif /* HAVE_ED25519 */
-                    #if defined(HAVE_DILITHIUM) && defined(WOLFSSL_DILITHIUM_PUBLIC_KEY)
-                        case WH_KEY_ALGO_MLDSA: {
-                            MlDsaKey mldsa[1];
-                            int      pub_ret;
-                            ret = wc_MlDsaKey_Init(mldsa, NULL, INVALID_DEVID);
-                            if (ret == 0) {
-                                ret = wh_Crypto_MlDsaDeserializeKeyDer(
-                                    cacheBuf, cacheMeta->len, mldsa);
-                                if (ret == 0) {
-                                    pub_ret = wc_Dilithium_PublicKeyToDer(
-                                        mldsa, out, (word32)max_der, 1);
-                                    if (pub_ret > 0) {
-                                        der_len = (uint16_t)pub_ret;
-                                    }
-                                    else {
-                                        ret = (pub_ret == 0)
-                                                  ? WH_ERROR_ABORTED
-                                                  : pub_ret;
-                                    }
-                                }
-                                wc_MlDsaKey_Free(mldsa);
-                            }
-                        } break;
+                    #if defined(HAVE_DILITHIUM) && \
+                                           defined(WOLFSSL_DILITHIUM_PUBLIC_KEY)
+                        case WH_KEY_ALGO_MLDSA:
+                            ret = _ExportMldsaPublicKey(server, serverKeyId,
+                                                        out, &max_der);
+                            break;
                     #endif /* HAVE_DILITHIUM && WOLFSSL_DILITHIUM_PUBLIC_KEY */
                     #ifdef HAVE_CURVE25519
-                        case WH_KEY_ALGO_CURVE25519: {
-                            curve25519_key c25[1];
-                            int            pub_ret;
-
-                            ret = wc_curve25519_init_ex(c25, NULL,
-                                                        INVALID_DEVID);
-                            if (ret == 0) {
-                                ret = wh_Crypto_Curve25519DeserializeKey(
-                                    cacheBuf, cacheMeta->len, c25);
-                                if (ret == 0) {
-                                    /* withAlg=1 wraps in SubjectPublicKeyInfo
-                                     * so the client's
-                                     * wh_Crypto_Curve25519DeserializeKey can
-                                     * parse the result. */
-                                    pub_ret = wc_Curve25519PublicKeyToDer(
-                                        c25, out, (word32)max_der, 1);
-                                    if (pub_ret > 0) {
-                                        der_len = (uint16_t)pub_ret;
-                                    }
-                                    else {
-                                        ret = (pub_ret == 0)
-                                                  ? WH_ERROR_ABORTED
-                                                  : pub_ret;
-                                    }
-                                }
-                                wc_curve25519_free(c25);
-                            }
-                        } break;
+                        case WH_KEY_ALGO_CURVE25519:
+                            ret = _ExportCurve25519PublicKey(server,
+                                    serverKeyId, out, &max_der);
+                            break;
                     #endif /* HAVE_CURVE25519 */
                         default:
                             ret = WH_ERROR_BADARGS;
                             break;
                     }
+                }
+                if (ret == WH_ERROR_OK) {
+                    der_len = max_der;
                 }
 
                 /* Only populate the label on full success. On any failure
