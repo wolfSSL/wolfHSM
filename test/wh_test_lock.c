@@ -174,9 +174,12 @@ static int testNvmRamSimWithLock(whLockConfig* lockConfig)
             .config  = flashCfg,
     };
 
-    /* NVM context with lock */
-    whNvmContext nvm = {0};
-    whNvmConfig  nvmCfg;
+    /* NVM context with lock. Zero-init nvmCfg so any conditionally-compiled
+     * fields (e.g. certVerifyCacheLockConfig under
+     * WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE_GLOBAL) start as NULL = no-op
+     * locking, rather than as indeterminate stack garbage. */
+    whNvmContext nvm    = {0};
+    whNvmConfig  nvmCfg = {0};
 
     whNvmMetadata meta;
     uint8_t       testData[] = "Hello, NVM with lock!";

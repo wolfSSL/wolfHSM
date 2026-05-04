@@ -39,6 +39,7 @@ typedef struct whServerContext_t whServerContext;
 #include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_comm.h"
 #include "wolfhsm/wh_keycache.h"
+#include "wolfhsm/wh_server_cert_cache.h"
 #include "wolfhsm/wh_nvm.h"
 #ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
 #include "wolfhsm/wh_auth.h"
@@ -160,6 +161,9 @@ typedef struct whServerConfig_t {
 #ifdef WOLFHSM_CFG_LOGGING
     whLogConfig* logConfig;
 #endif /* WOLFHSM_CFG_LOGGING */
+#if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER) && !defined(WOLFHSM_CFG_NO_CRYPTO)
+    whServerCertConfig* certConfig; /* optional; NULL = no verify callback */
+#endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER && !WOLFHSM_CFG_NO_CRYPTO */
 } whServerConfig;
 
 
@@ -186,6 +190,9 @@ struct whServerContext_t {
 #ifdef WOLFHSM_CFG_LOGGING
     whLogContext log;
 #endif /* WOLFHSM_CFG_LOGGING */
+#if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER) && !defined(WOLFHSM_CFG_NO_CRYPTO)
+    whServerCertContext cert; /* verify callback + verify cache */
+#endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER && !WOLFHSM_CFG_NO_CRYPTO */
 };
 
 

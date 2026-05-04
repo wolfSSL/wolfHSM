@@ -2800,6 +2800,80 @@ int wh_Client_CertVerifyMultiRootAndCacheLeafPubKey(
     const whNvmId* trustedRootNvmIds, uint16_t numRoots,
     whNvmFlags cachedKeyFlags, whKeyId* inout_keyId, int32_t* out_rc);
 
+#ifdef WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE
+/**
+ * @brief Send a request to clear the server's trusted certificate verify cache.
+ *
+ * Subsequent verification of any certificate will re-run the public-key
+ * signature check until that cert is verified again and re-cached.
+ *
+ * @param[in] c Pointer to the client context.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertVerifyCacheClearRequest(whClientContext* c);
+
+/**
+ * @brief Receive the response to a verify-cache clear request.
+ *
+ * @param[in]  c      Pointer to the client context.
+ * @param[out] out_rc Pointer to store the response code from the server.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertVerifyCacheClearResponse(whClientContext* c, int32_t* out_rc);
+
+/**
+ * @brief Synchronous helper to clear the server's trusted certificate verify
+ * cache.
+ *
+ * @param[in]  c      Pointer to the client context.
+ * @param[out] out_rc Pointer to store the response code from the server.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertVerifyCacheClear(whClientContext* c, int32_t* out_rc);
+
+/**
+ * @brief Send a request to enable or disable the server's trusted certificate
+ * verify cache at runtime.
+ *
+ * Disabling clears all existing cache entries and suppresses both subsequent
+ * lookups and inserts until the cache is re-enabled. Enabling resumes normal
+ * caching from an empty state. The cache defaults to enabled at server init
+ * so this call is only needed to opt out (or re-enable after opting out).
+ *
+ * In per-client cache mode the toggle is scoped to this client's server. With
+ * WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE_GLOBAL the toggle is shared across all
+ * clients connected to the same NVM context.
+ *
+ * @param[in] c      Pointer to the client context.
+ * @param[in] enable Non-zero to enable caching, zero to disable.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertVerifyCacheSetEnabledRequest(whClientContext* c,
+                                               uint8_t          enable);
+
+/**
+ * @brief Receive the response to a verify-cache enable/disable request.
+ *
+ * @param[in]  c      Pointer to the client context.
+ * @param[out] out_rc Pointer to store the response code from the server.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertVerifyCacheSetEnabledResponse(whClientContext* c,
+                                                int32_t*         out_rc);
+
+/**
+ * @brief Synchronous helper to enable or disable the server's trusted
+ * certificate verify cache.
+ *
+ * @param[in]  c      Pointer to the client context.
+ * @param[in]  enable Non-zero to enable caching, zero to disable.
+ * @param[out] out_rc Pointer to store the response code from the server.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertVerifyCacheSetEnabled(whClientContext* c, uint8_t enable,
+                                        int32_t* out_rc);
+#endif /* WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE */
+
 
 #ifdef WOLFHSM_CFG_DMA
 

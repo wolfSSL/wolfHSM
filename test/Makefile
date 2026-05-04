@@ -165,6 +165,18 @@ ifeq ($(AUTH),1)
 	DEF += -DWOLFHSM_CFG_ENABLE_AUTHENTICATION
 endif
 
+# Support trusted-cert verify-result cache
+ifeq ($(CERT_VERIFY_CACHE),1)
+	DEF += -DWOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE
+endif
+
+# Use the cross-client (global) variant of the trusted-cert verify cache.
+# Implies CERT_VERIFY_CACHE.
+ifeq ($(CERT_VERIFY_CACHE_GLOBAL),1)
+	DEF += -DWOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE
+	DEF += -DWOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE_GLOBAL
+endif
+
 ## Project defines
 # Option to build wolfcrypt tests
 ifeq ($(TESTWOLFCRYPT),1)
@@ -295,8 +307,13 @@ $(BUILD_DIR)/%.o: %.s
 	@echo "Compiling ASM file: $(notdir $<)"
 	$(CMD_ECHO) $(AS) $(ASFLAGS) $(DEF) $(INC) -c -o $@ $<
 
-# Add additional flag here to avoid pragma
-$(BUILD_DIR)/wh_test_check_struct_padding.o: CFLAGS+=-Wpadded -DWOLFHSM_CFG_NO_CRYPTO
+# Wire-format struct-padding audit. -Wpadded turns spurious padding into a
+# build error. WH_PADDING_CHECK is an internal sentinel honored by
+# wh_settings.h that suppresses external dependencies (wolfSSL etc.) so the
+# audit doesn't drag in third-party source whose layout could perturb the
+# result. Distinct from WOLFHSM_CFG_NO_CRYPTO so it doesn't disable user
+# features (e.g. the cert verify cache).
+$(BUILD_DIR)/wh_test_check_struct_padding.o: CFLAGS+=-Wpadded -DWH_PADDING_CHECK
 
 $(BUILD_DIR)/%.o: %.c
 	@echo "Compiling C file: $(notdir $<)"

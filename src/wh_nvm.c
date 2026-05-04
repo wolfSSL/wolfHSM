@@ -104,13 +104,33 @@ int wh_Nvm_Init(whNvmContext* context, const whNvmConfig* config)
     memset(&context->globalCache, 0, sizeof(context->globalCache));
 #endif
 
+#ifdef WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE_GLOBAL
+    /* Initialize the global cert verify cache. Default to enabled so a fresh
+     * NVM context preserves pre-runtime-toggle behavior; clients can disable
+     * via wh_Client_CertVerifyCacheSetEnabled. */
+    memset(&context->globalCertVerifyCache, 0,
+           sizeof(context->globalCertVerifyCache));
+    context->globalCertVerifyCache.enabled = 1;
+#endif
+
 #ifdef WOLFHSM_CFG_THREADSAFE
     /* Initialize lock (NULL lockConfig = no-op locking) */
     rc = wh_Lock_Init(&context->lock, config->lockConfig);
     if (rc != WH_ERROR_OK) {
         return rc;
     }
+#ifdef WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE_GLOBAL
+    /* Initialize the global cert verify cache lock. Distinct lock from the
+     * NVM lock so cert-cache traffic and NVM I/O don't serialize each other.
+     * NULL config => no-op locking, same as the NVM lock above. */
+    rc = wh_Lock_Init(&context->globalCertVerifyCache.lock,
+                      config->certVerifyCacheLockConfig);
+    if (rc != WH_ERROR_OK) {
+        (void)wh_Lock_Cleanup(&context->lock);
+        return rc;
+    }
 #endif
+#endif /* WOLFHSM_CFG_THREADSAFE */
 
     if (context->cb != NULL && context->cb->Init != NULL) {
         rc = context->cb->Init(context->context, config->config);
@@ -118,6 +138,9 @@ int wh_Nvm_Init(whNvmContext* context, const whNvmConfig* config)
             context->cb = NULL;
             context->context = NULL;
 #ifdef WOLFHSM_CFG_THREADSAFE
+#ifdef WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE_GLOBAL
+            (void)wh_Lock_Cleanup(&context->globalCertVerifyCache.lock);
+#endif
             (void)wh_Lock_Cleanup(&context->lock);
 #endif
         }
@@ -140,6 +163,14 @@ int wh_Nvm_Cleanup(whNvmContext* context)
     memset(&context->globalCache, 0, sizeof(context->globalCache));
 #endif
 
+#ifdef WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE_GLOBAL
+    /* Clear cache slots/writeIdx but keep the embedded lock intact until its
+     * own cleanup below. */
+    memset(context->globalCertVerifyCache.slots, 0,
+           sizeof(context->globalCertVerifyCache.slots));
+    context->globalCertVerifyCache.writeIdx = 0;
+#endif
+
     /* No callback? Return ABORTED */
     if (context->cb->Cleanup == NULL) {
         rc = WH_ERROR_ABORTED;
@@ -149,6 +180,9 @@ int wh_Nvm_Cleanup(whNvmContext* context)
     }
 
 #ifdef WOLFHSM_CFG_THREADSAFE
+#ifdef WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE_GLOBAL
+    (void)wh_Lock_Cleanup(&context->globalCertVerifyCache.lock);
+#endif
     (void)wh_Lock_Cleanup(&context->lock);
 #endif
 

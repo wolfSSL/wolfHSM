@@ -32,7 +32,6 @@
 #include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_comm.h"
 #include "wolfhsm/wh_message.h"
-#include "wolfhsm/wh_nvm.h"
 
 enum WH_MESSAGE_NVM_ACTION_ENUM {
     WH_MESSAGE_NVM_ACTION_INIT           = 0x1,

@@ -33,6 +33,7 @@
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_server.h"
 #include "wolfhsm/wh_server_cert.h"
+#include "wolfhsm/wh_server_cert_cache.h"
 #include "wolfhsm/wh_server_nvm.h"
 #include "wolfhsm/wh_server_keystore.h"
 #include "wolfhsm/wh_message.h"
@@ -41,6 +42,303 @@
 #include "wolfssl/wolfcrypt/types.h"
 #include "wolfssl/ssl.h"
 #include "wolfssl/wolfcrypt/asn.h"
+#include "wolfssl/wolfcrypt/sha256.h"
+
+
+#ifdef WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE
+/* Resolve the verify cache for this server. In per-client mode the cache
+ * lives on the server context; in global mode it lives on the shared NVM
+ * context. Returns NULL if either pointer is missing. */
+static whCertVerifyCacheContext* _GetVerifyCache(whServerContext* server)
+{
+#ifdef WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE_GLOBAL
+    if ((server == NULL) || (server->nvm == NULL)) {
+        return NULL;
+    }
+    return &server->nvm->globalCertVerifyCache;
+#else
+    if (server == NULL) {
+        return NULL;
+    }
+    return &server->cert.cache;
+#endif
+}
+
+/* Lock helpers compile to no-ops when the cache has no embedded lock (i.e.
+ * outside global+threadsafe builds). */
+static int _LockVerifyCache(whCertVerifyCacheContext* cache)
+{
+#if defined(WOLFHSM_CFG_THREADSAFE) && \
+    defined(WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE_GLOBAL)
+    return wh_Lock_Acquire(&cache->lock);
+#else
+    (void)cache;
+    return WH_ERROR_OK;
+#endif
+}
+
+static int _UnlockVerifyCache(whCertVerifyCacheContext* cache)
+{
+#if defined(WOLFHSM_CFG_THREADSAFE) && \
+    defined(WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE_GLOBAL)
+    return wh_Lock_Release(&cache->lock);
+#else
+    (void)cache;
+    return WH_ERROR_OK;
+#endif
+}
+
+/* Returns 1 if every element of `subset` appears in `superset`. The arrays
+ * are unsorted but bounded by WOLFHSM_CFG_CERT_MAX_VERIFY_ROOTS, so the
+ * O(N*M) scan is fine. */
+static int _IsSubsetOf(const whNvmId* subset, uint16_t subsetCount,
+                       const whNvmId* superset, uint16_t supersetCount)
+{
+    uint16_t i, j;
+    int      found;
+    for (i = 0; i < subsetCount; i++) {
+        found = 0;
+        for (j = 0; j < supersetCount; j++) {
+            if (subset[i] == superset[j]) {
+                found = 1;
+                break;
+            }
+        }
+        if (!found) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+/* Internal slot scan, must be called with the cache lock held. Hit if any
+ * committed slot's stored root set is a subset of the supplied root set
+ * AND its hash matches. */
+static int _LookupSubsetUnlocked(const whCertVerifyCacheContext* cache,
+                                 const whNvmId* rootNvmIds, uint16_t numRoots,
+                                 const uint8_t* hash)
+{
+    int i;
+    for (i = 0; i < WOLFHSM_CFG_CERT_VERIFY_CACHE_COUNT; i++) {
+        const whCertVerifyCacheSlot* slot = &cache->slots[i];
+        if (slot->committed &&
+            (memcmp(slot->hash, hash, WH_CERT_VERIFY_CACHE_HASH_LEN) == 0) &&
+            _IsSubsetOf(slot->rootNvmIds, slot->numRoots, rootNvmIds,
+                        numRoots)) {
+            return WH_ERROR_OK;
+        }
+    }
+    return WH_ERROR_NOTFOUND;
+}
+
+/* Internal exact-match scan for insert dedup. Two sets of equal size are
+ * equal iff one is a subset of the other, so reuse _IsSubsetOf with a size
+ * check rather than sorting. */
+static int _HasExactSlotUnlocked(const whCertVerifyCacheContext* cache,
+                                 const whNvmId* rootNvmIds, uint16_t numRoots,
+                                 const uint8_t* hash)
+{
+    int i;
+    for (i = 0; i < WOLFHSM_CFG_CERT_VERIFY_CACHE_COUNT; i++) {
+        const whCertVerifyCacheSlot* slot = &cache->slots[i];
+        if (slot->committed && (slot->numRoots == numRoots) &&
+            (memcmp(slot->hash, hash, WH_CERT_VERIFY_CACHE_HASH_LEN) == 0) &&
+            _IsSubsetOf(slot->rootNvmIds, slot->numRoots, rootNvmIds,
+                        numRoots)) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+int wh_Server_CertVerifyCache_Lookup(whServerContext* server,
+                                     const whNvmId*   rootNvmIds,
+                                     uint16_t numRoots, const uint8_t* hash)
+{
+    whCertVerifyCacheContext* cache;
+    int                       rc;
+    int                       found;
+
+    if ((server == NULL) || (hash == NULL) || (rootNvmIds == NULL) ||
+        (numRoots == 0)) {
+        return WH_ERROR_BADARGS;
+    }
+    cache = _GetVerifyCache(server);
+    if (cache == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    rc = _LockVerifyCache(cache);
+    if (rc != WH_ERROR_OK) {
+        return rc;
+    }
+    if (!cache->enabled) {
+        /* Runtime-disabled cache: always miss, regardless of slot contents.
+         * Slots are cleared at disable time, so the scan would miss anyway,
+         * but short-circuiting keeps disabled-cache verify cost predictable. */
+        found = WH_ERROR_NOTFOUND;
+    }
+    else {
+        found = _LookupSubsetUnlocked(cache, rootNvmIds, numRoots, hash);
+    }
+    (void)_UnlockVerifyCache(cache);
+    return found;
+}
+
+void wh_Server_CertVerifyCache_Insert(whServerContext* server,
+                                      const whNvmId*   rootNvmIds,
+                                      uint16_t numRoots, const uint8_t* hash)
+{
+    whCertVerifyCacheContext* cache;
+    whCertVerifyCacheSlot*    slot;
+    uint16_t                  idx;
+    uint16_t                  k;
+    int                       rc;
+
+    if ((server == NULL) || (hash == NULL) || (rootNvmIds == NULL) ||
+        (numRoots == 0) || (numRoots > WOLFHSM_CFG_CERT_MAX_VERIFY_ROOTS)) {
+        return;
+    }
+    cache = _GetVerifyCache(server);
+    if (cache == NULL) {
+        return;
+    }
+
+    rc = _LockVerifyCache(cache);
+    if (rc != WH_ERROR_OK) {
+        return;
+    }
+    /* Runtime-disabled cache: drop the insert silently. The slot array is
+     * already empty (cleared on disable) and stays that way until re-enable,
+     * so dropping here preserves "no new entries while disabled". */
+    if (!cache->enabled) {
+        (void)_UnlockVerifyCache(cache);
+        return;
+    }
+    /* Dedup on exact (set, hash) match under the lock so concurrent inserts
+     * of the same verify collapse to a single slot */
+    if (!_HasExactSlotUnlocked(cache, rootNvmIds, numRoots, hash)) {
+        idx            = cache->writeIdx;
+        slot           = &cache->slots[idx];
+        slot->numRoots = numRoots;
+        for (k = 0; k < numRoots; k++) {
+            slot->rootNvmIds[k] = rootNvmIds[k];
+        }
+        memcpy(slot->hash, hash, WH_CERT_VERIFY_CACHE_HASH_LEN);
+        slot->committed = 1;
+        cache->writeIdx =
+            (uint16_t)((idx + 1) % WOLFHSM_CFG_CERT_VERIFY_CACHE_COUNT);
+    }
+    (void)_UnlockVerifyCache(cache);
+}
+
+int wh_Server_CertVerifyCache_Clear(whServerContext* server)
+{
+    whCertVerifyCacheContext* cache;
+    int                       rc;
+
+    if (server == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    cache = _GetVerifyCache(server);
+    if (cache == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    rc = _LockVerifyCache(cache);
+    if (rc != WH_ERROR_OK) {
+        return rc;
+    }
+    /* Clear payload only; the embedded lock (when present) must survive a
+     * Clear, otherwise the next operation would acquire an uninitialized
+     * lock. */
+    memset(cache->slots, 0, sizeof(cache->slots));
+    cache->writeIdx = 0;
+    (void)_UnlockVerifyCache(cache);
+    return WH_ERROR_OK;
+}
+
+int wh_Server_CertVerifyCache_SetEnabled(whServerContext* server,
+                                         uint8_t          enable)
+{
+    whCertVerifyCacheContext* cache;
+    int                       rc;
+
+    if (server == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    cache = _GetVerifyCache(server);
+    if (cache == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    rc = _LockVerifyCache(cache);
+    if (rc != WH_ERROR_OK) {
+        return rc;
+    }
+    /* Flush on transition to disabled so a future re-enable starts from a
+     * clean state rather than reviving entries that pre-dated the disable.
+     * Mirrors the payload-only clear done by wh_Server_CertVerifyCache_Clear:
+     * the embedded lock (when present) must survive. */
+    if (!enable) {
+        memset(cache->slots, 0, sizeof(cache->slots));
+        cache->writeIdx = 0;
+    }
+    cache->enabled = enable ? 1 : 0;
+    (void)_UnlockVerifyCache(cache);
+    return WH_ERROR_OK;
+}
+
+int wh_Server_CertVerifyCache_EvictRoot(whServerContext* server,
+                                        whNvmId          rootNvmId)
+{
+    whCertVerifyCacheContext* cache;
+    int                       rc;
+    int                       i;
+
+    if (server == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    cache = _GetVerifyCache(server);
+    if (cache == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    rc = _LockVerifyCache(cache);
+    if (rc != WH_ERROR_OK) {
+        return rc;
+    }
+    /* Drop any slot whose stored root set contains the evicted root. We
+     * cannot safely strip the root from the set and keep the entry: the
+     * original verify may have anchored at the now-departed root, so the
+     * remaining set is no longer a sound claim. writeIdx is left alone:
+     * the FIFO ring is sparse but still well-formed, and pruning here
+     * would otherwise need to compact entries belonging to other roots. */
+    for (i = 0; i < WOLFHSM_CFG_CERT_VERIFY_CACHE_COUNT; i++) {
+        whCertVerifyCacheSlot* slot = &cache->slots[i];
+        if (slot->committed) {
+            uint16_t k;
+            for (k = 0; k < slot->numRoots; k++) {
+                if (slot->rootNvmIds[k] == rootNvmId) {
+                    memset(slot, 0, sizeof(*slot));
+                    break;
+                }
+            }
+        }
+    }
+    (void)_UnlockVerifyCache(cache);
+    return WH_ERROR_OK;
+}
+#endif /* WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE */
+
+int wh_Server_CertSetVerifyCb(whServerContext* server, VerifyCallback cb)
+{
+    if (server == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    server->cert.verifyCb = cb;
+    return WH_ERROR_OK;
+}
 
 
 /* Replicates GetSequence, which is WOLFSSL_LOCAL. */
@@ -61,20 +359,26 @@ static int DerNextSequence(const uint8_t* input, uint32_t maxIdx,
 }
 
 
-static int _verifyChainAgainstCmStore(whServerContext*      server,
-                                      WOLFSSL_CERT_MANAGER* cm,
-                                      const uint8_t* chain, uint32_t chain_len,
-                                      whCertFlags flags,
-                                      whNvmFlags  cachedKeyFlags,
-                                      whKeyId*    inout_keyId)
+static int _verifyChainAgainstCmStore(
+    whServerContext* server, WOLFSSL_CERT_MANAGER* cm, const uint8_t* chain,
+    uint32_t chain_len, const whNvmId* trustedRootNvmIds, uint16_t numRoots,
+    whCertFlags flags, whNvmFlags cachedKeyFlags, whKeyId* inout_keyId)
 {
     int            rc            = 0;
     const uint8_t* cert_ptr      = chain;
     uint32_t       remaining_len = chain_len;
     int            cert_len      = 0;
     word32         idx           = 0;
+#ifdef WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE
+    uint8_t certHash[WH_CERT_VERIFY_CACHE_HASH_LEN];
+    int     hashed = 0;
+#else
+    (void)trustedRootNvmIds;
+    (void)numRoots;
+#endif
 
-    if (cm == NULL || chain == NULL || chain_len == 0) {
+    if (cm == NULL || chain == NULL || chain_len == 0 ||
+        trustedRootNvmIds == NULL || numRoots == 0) {
         return WH_ERROR_BADARGS;
     }
 
@@ -82,6 +386,9 @@ static int _verifyChainAgainstCmStore(whServerContext*      server,
     while (remaining_len > 0) {
         /* Reset index for each certificate */
         idx = 0;
+#ifdef WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE
+        hashed = 0;
+#endif
 
         /* Get the length of the current certificate */
         rc = DerNextSequence(cert_ptr, remaining_len, &idx, &cert_len);
@@ -94,9 +401,58 @@ static int _verifyChainAgainstCmStore(whServerContext*      server,
             return WH_ERROR_ABORTED;
         }
 
-        /* Verify the current certificate */
-        rc = wolfSSL_CertManagerVerifyBuffer(cm, cert_ptr, cert_len + idx,
-                                             WOLFSSL_FILETYPE_ASN1);
+#ifdef WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE
+        {
+            whCertVerifyCacheContext* vcache = _GetVerifyCache(server);
+            /* Snapshot the enable flag under the cache lock to prevent race */
+            int cacheActive = 0;
+            if (vcache != NULL) {
+                int lockRc = _LockVerifyCache(vcache);
+                if (lockRc == WH_ERROR_OK) {
+                    cacheActive = vcache->enabled ? 1 : 0;
+                    (void)_UnlockVerifyCache(vcache);
+                }
+            }
+            if (cacheActive) {
+                /* Hash the DER cert and check the verify cache. A hit
+                 * short-circuits the public-key signature check; the cert is
+                 * otherwise treated as if it had verified normally so the
+                 * rest of the loop (CA decode, store load, leaf pubkey
+                 * extract) continues unchanged. */
+                rc = wc_Sha256Hash_ex(cert_ptr, (word32)(cert_len + idx),
+                                      certHash, NULL, server->devId);
+                if (rc != 0) {
+                    return rc;
+                }
+                hashed = 1;
+                {
+                    int hit = (wh_Server_CertVerifyCache_Lookup(
+                                   server, trustedRootNvmIds, numRoots,
+                                   certHash) == WH_ERROR_OK);
+                    if (hit) {
+                        rc = WOLFSSL_SUCCESS;
+                    }
+                    else {
+                        /* Verify the current certificate */
+                        rc = wolfSSL_CertManagerVerifyBuffer(
+                            cm, cert_ptr, cert_len + idx,
+                            WOLFSSL_FILETYPE_ASN1);
+                    }
+                }
+            }
+            else {
+                /* Cache is disabled: skip hashing and verify normally */
+                rc = wolfSSL_CertManagerVerifyBuffer(
+                    cm, cert_ptr, cert_len + idx, WOLFSSL_FILETYPE_ASN1);
+            }
+        }
+#else
+        {
+            /* Verify the current certificate */
+            rc = wolfSSL_CertManagerVerifyBuffer(cm, cert_ptr, cert_len + idx,
+                                                 WOLFSSL_FILETYPE_ASN1);
+        }
+#endif
 
 
         /* If this is not the leaf certificate and it's trusted, add it to the
@@ -169,6 +525,29 @@ static int _verifyChainAgainstCmStore(whServerContext*      server,
                     return rc;
                 }
             }
+#ifdef WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE
+            /* Insert only CA certs into the verify cache. Leaves are not
+             * cached: a cache hit on a leaf during a future "leaf alone"
+             * verify would short-circuit the wolfSSL signature check that
+             * would otherwise have failed (the leaf's issuer is not in the
+             * cert manager when the leaf is supplied without its
+             * intermediates). CA caching is sound because the chain walk
+             * loads each verified CA into the cert manager before the next
+             * cert is processed.
+             *
+             * The slot's binding is the loaded root set passed in. Under
+             * subset-lookup semantics, a future verify hits this entry
+             * only when its loaded set is a superset, which by X.509
+             * verify monotonicity guarantees the cached chain still
+             * validates. Single-root callers produce one-element entries
+             * (broadest reuse); multi-root callers produce wider entries
+             * that are still useful when later traffic presents at least
+             * the same roots. */
+            if (hashed && dc.isCA) {
+                wh_Server_CertVerifyCache_Insert(server, trustedRootNvmIds,
+                                                 numRoots, certHash);
+            }
+#endif
             wc_FreeDecodedCert(&dc);
         }
         else {
@@ -190,7 +569,21 @@ int wh_Server_CertInit(whServerContext* server)
 #ifdef DEBUG_WOLFSSL
     wolfSSL_Debugging_ON();
 #endif
+#if defined(WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE) && \
+    !defined(WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE_GLOBAL)
+    /* Per-client cache is owned by the server context and zeroed on each
+     * server init. Under _GLOBAL the cache lives in the NVM context and is
+     * initialized exactly once in wh_Nvm_Init — clearing it here would wipe
+     * entries populated by other clients. */
+    if (server != NULL) {
+        int rc = wh_Server_CertVerifyCache_Clear(server);
+        if (rc != WH_ERROR_OK) {
+            return rc;
+        }
+    }
+#else
     (void)server;
+#endif
     return WH_ERROR_OK;
 }
 
@@ -225,6 +618,20 @@ int wh_Server_CertAddTrusted(whServerContext* server, whNvmId id,
 
     rc = wh_Nvm_AddObject(server->nvm, &metadata, cert_len, cert);
 
+#ifdef WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE
+    /* Cache entries are bound to the trusted root by NVM ID. AddObject
+     * supersedes any prior object at this ID, so cached verifies anchored at
+     * the previous root must be evicted lest they short-circuit a verify
+     * under the new (different) root. Evict on success only — a failed add
+     * leaves the prior root in place. If eviction itself fails (e.g. lock
+     * acquire), report it: the NVM add has already succeeded, but the cache
+     * may now contain stale entries that could short-circuit a future verify
+     * under the new root. */
+    if (rc == WH_ERROR_OK) {
+        rc = wh_Server_CertVerifyCache_EvictRoot(server, id);
+    }
+#endif
+
     return rc;
 }
 
@@ -240,6 +647,16 @@ int wh_Server_CertEraseTrusted(whServerContext* server, whNvmId id)
 
     id_list[0] = id;
     rc         = wh_Nvm_DestroyObjects(server->nvm, 1, id_list);
+
+#ifdef WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE
+    /* See AddTrusted: stale cache entries against the now-erased root must
+     * not survive, otherwise a future AddTrusted at the same ID would inherit
+     * a phantom cache hit. Evict on success only; propagate eviction failure
+     * so the caller knows cache state is suspect. */
+    if (rc == WH_ERROR_OK) {
+        rc = wh_Server_CertVerifyCache_EvictRoot(server, id);
+    }
+#endif
 
     return rc;
 }
@@ -286,9 +703,14 @@ int wh_Server_CertVerifyMultiRoot(whServerContext* server, const uint8_t* cert,
     WOLFSSL_CERT_MANAGER* cm = NULL;
     uint8_t               root_cert[WOLFHSM_CFG_MAX_CERT_SIZE];
     uint32_t              root_cert_len;
-    int                   rc            = WH_ERROR_OK;
-    int                   anchorsLoaded = 0;
-    uint16_t              i;
+    int                   rc = WH_ERROR_OK;
+    /* Track only the roots that were actually loaded into the cert manager.
+     * Forwarding the full caller-supplied set into the cache lookup would let
+     * a stale entry under a missing root match a verify whose effective trust
+     * store does not contain that root. */
+    whNvmId  loadedRootNvmIds[WOLFHSM_CFG_CERT_MAX_VERIFY_ROOTS];
+    uint16_t loadedRootCount = 0;
+    uint16_t i;
 
     if ((server == NULL) || (cert == NULL) || (cert_len == 0) ||
         (trustedRootNvmIds == NULL) || (numRoots == 0) ||
@@ -308,9 +730,31 @@ int wh_Server_CertVerifyMultiRoot(whServerContext* server, const uint8_t* cert,
         return WH_ERROR_ABORTED;
     }
 
+    /* Apply the user-supplied verify callback, if registered. wolfSSL invokes
+     * it during wolfSSL_CertManagerVerifyBuffer; cache hits short-circuit that
+     * path and so deliberately do not invoke the callback. */
+    if (server->cert.verifyCb != NULL) {
+        wolfSSL_CertManagerSetVerify(cm, server->cert.verifyCb);
+    }
+
     /* Load each root anchor. Absent roots are silently skipped; any other
-     * read or load failure is fatal and reported. */
+     * read or load failure is fatal and reported. Duplicate IDs in the
+     * caller-supplied array are skipped to keep loadedRootNvmIds a true set:
+     * the cache dedup check relies on equal-size sets being equal, which only
+     * holds for sets without repeats. */
     for (i = 0; i < numRoots; i++) {
+        uint16_t j;
+        int      isDuplicate = 0;
+        for (j = 0; j < loadedRootCount; j++) {
+            if (loadedRootNvmIds[j] == trustedRootNvmIds[i]) {
+                isDuplicate = 1;
+                break;
+            }
+        }
+        if (isDuplicate) {
+            continue;
+        }
+
         root_cert_len = sizeof(root_cert);
         rc = wh_Server_CertReadTrusted(server, trustedRootNvmIds[i], root_cert,
                                        &root_cert_len);
@@ -330,17 +774,20 @@ int wh_Server_CertVerifyMultiRoot(whServerContext* server, const uint8_t* cert,
             (void)wolfSSL_CertManagerFree(cm);
             return WH_ERROR_ABORTED;
         }
-        anchorsLoaded++;
+        loadedRootNvmIds[loadedRootCount++] = trustedRootNvmIds[i];
     }
 
     /* If no anchors were loaded, the trust store is empty */
-    if (anchorsLoaded == 0) {
+    if (loadedRootCount == 0) {
         (void)wolfSSL_CertManagerFree(cm);
         return WH_ERROR_NOTFOUND;
     }
 
-    /* Verify the chain against the populated trust store */
-    rc = _verifyChainAgainstCmStore(server, cm, cert, cert_len, flags,
+    /* Verify the chain against the populated trust store. Pass only the
+     * loaded root set so cache lookups cannot match entries bound to a root
+     * that is not actually in cm. */
+    rc = _verifyChainAgainstCmStore(server, cm, cert, cert_len,
+                                    loadedRootNvmIds, loadedRootCount, flags,
                                     cachedKeyFlags, inout_keyId);
     if (rc != WH_ERROR_OK) {
         rc = WH_ERROR_CERT_VERIFY;
@@ -680,6 +1127,61 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
                 magic, &resp, (whMessageCert_VerifyResponse*)resp_packet);
             *out_resp_size = sizeof(resp);
         }; break;
+
+#ifdef WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE
+        case WH_MESSAGE_CERT_ACTION_VERIFY_CACHE_CLEAR: {
+            whMessageCert_SimpleResponse resp = {0};
+
+#ifndef WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE_GLOBAL
+            /* Per-client cache piggybacks on the NVM lock for serialization.
+             * Under _GLOBAL the cache has its own lock acquired internally by
+             * wh_Server_CertVerifyCache_Clear, so the NVM lock isn't needed
+             * (and acquiring it would needlessly block NVM I/O on cache
+             * clears). */
+            rc = WH_SERVER_NVM_LOCK(server);
+            if (rc == WH_ERROR_OK) {
+                rc = wh_Server_CertVerifyCache_Clear(server);
+                (void)WH_SERVER_NVM_UNLOCK(server);
+            }
+#else
+            rc = wh_Server_CertVerifyCache_Clear(server);
+#endif
+            resp.rc = rc;
+
+            wh_MessageCert_TranslateSimpleResponse(
+                magic, &resp, (whMessageCert_SimpleResponse*)resp_packet);
+            *out_resp_size = sizeof(resp);
+        }; break;
+
+        case WH_MESSAGE_CERT_ACTION_VERIFY_CACHE_SET_ENABLED: {
+            whMessageCert_SetEnabledRequest req  = {0};
+            whMessageCert_SimpleResponse    resp = {0};
+
+            if (req_size != sizeof(req)) {
+                resp.rc = WH_ERROR_ABORTED;
+            }
+            else {
+                wh_MessageCert_TranslateSetEnabledRequest(
+                    magic, (whMessageCert_SetEnabledRequest*)req_packet, &req);
+#ifndef WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE_GLOBAL
+                /* Same locking rationale as VERIFY_CACHE_CLEAR above. */
+                rc = WH_SERVER_NVM_LOCK(server);
+                if (rc == WH_ERROR_OK) {
+                    rc = wh_Server_CertVerifyCache_SetEnabled(server,
+                                                              req.enable);
+                    (void)WH_SERVER_NVM_UNLOCK(server);
+                }
+#else
+                rc = wh_Server_CertVerifyCache_SetEnabled(server, req.enable);
+#endif
+                resp.rc = rc;
+            }
+
+            wh_MessageCert_TranslateSimpleResponse(
+                magic, &resp, (whMessageCert_SimpleResponse*)resp_packet);
+            *out_resp_size = sizeof(resp);
+        }; break;
+#endif /* WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE */
 
 #ifdef WOLFHSM_CFG_DMA
         case WH_MESSAGE_CERT_ACTION_ADDTRUSTED_DMA: {

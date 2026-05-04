@@ -149,14 +149,14 @@ int wh_MessageCrypto_TranslateRngResponse(
 /*
  * AES
  */
-/* AES CTR Request */
+/* AES CTR Request - fields ordered by size to keep padding trailing */
 typedef struct {
     uint32_t enc;       /* 1 for encrypt, 0 for decrypt */
     uint32_t keyLen;    /* Length of key in bytes */
     uint32_t sz;        /* Size of input data */
-    uint16_t keyId;     /* Key ID if using stored key */
     uint32_t left;      /* unused bytes left from last call */
-    uint8_t  WH_PAD[2]; /* Padding for alignment */
+    uint16_t keyId;     /* Key ID if using stored key */
+    uint8_t  WH_PAD[2];
     /* Data follows:
      * uint8_t in[sz]
      * uint8_t key[keyLen]
@@ -1068,13 +1068,16 @@ typedef struct {
     uint32_t                  inSz;
 } whMessageCrypto_Sha512DmaRequest;
 
-/* SHA2 DMA Response - carries updated state or final hash inline */
+/* SHA2 DMA Response - carries updated state or final hash inline.
+ * Fields ordered by size (8-byte-aligned struct first) to keep padding
+ * trailing. */
 typedef struct {
+    whMessageCrypto_DmaAddrStatus
+             dmaAddrStatus; /* 8-byte aligned, place first */
+    uint8_t  hash[64];      /* big enough for all SHA2 variants */
     uint32_t hiLen;
     uint32_t loLen;
-    uint8_t  hash[64]; /* big enough for all SHA2 variants */
     uint32_t hashType;
-    whMessageCrypto_DmaAddrStatus dmaAddrStatus;
     uint8_t  WH_PAD[4];
 } whMessageCrypto_Sha2DmaResponse;
 
@@ -1138,6 +1141,7 @@ typedef struct {
 typedef struct {
     whMessageCrypto_DmaAddrStatus dmaAddrStatus;
     uint32_t                      outSz;
+    uint8_t WH_PAD[4]; /* Round struct to 8-byte alignment */
 } whMessageCrypto_AesEcbDmaResponse;
 
 /* AES-ECB DMA translation functions */
@@ -1168,6 +1172,7 @@ typedef struct {
 typedef struct {
     whMessageCrypto_DmaAddrStatus dmaAddrStatus;
     uint32_t                      outSz;
+    uint8_t WH_PAD[4]; /* Round struct to 8-byte alignment */
     /* Trailing data: uint8_t iv[AES_IV_SIZE] */
 } whMessageCrypto_AesCbcDmaResponse;
 

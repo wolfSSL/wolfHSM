@@ -122,6 +122,20 @@ int wh_Server_Init(whServerContext* server, whServerConfig* config)
     }
 #endif /* WOLFHSM_CFG_DMA */
 
+#if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER) && !defined(WOLFHSM_CFG_NO_CRYPTO)
+    /* Register the user-supplied verify callback, if any. The cache (if
+     * compiled in) is already zero-initialized by the memset above. */
+    if (config->certConfig != NULL) {
+        server->cert.verifyCb = config->certConfig->verifyCb;
+    }
+#if defined(WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE) && \
+    !defined(WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE_GLOBAL)
+    /* Cache defaults to enabled so a fresh server preserves pre-runtime-toggle
+     * behavior. Clients can disable via wh_Client_CertVerifyCacheSetEnabled. */
+    server->cert.cache.enabled = 1;
+#endif
+#endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER && !WOLFHSM_CFG_NO_CRYPTO */
+
     /* Log the server startup */
     WH_LOG(&server->log, WH_LOG_LEVEL_INFO, "Server Initialized");
 

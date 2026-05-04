@@ -669,6 +669,131 @@ int wh_Client_CertVerifyMultiRootAndCacheLeafPubKey(
                                 inout_keyId, out_rc);
 }
 
+#ifdef WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE
+int wh_Client_CertVerifyCacheClearRequest(whClientContext* c)
+{
+    if (c == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_CERT,
+                                 WH_MESSAGE_CERT_ACTION_VERIFY_CACHE_CLEAR, 0,
+                                 NULL);
+}
+
+int wh_Client_CertVerifyCacheClearResponse(whClientContext* c, int32_t* out_rc)
+{
+    int                          rc;
+    uint16_t                     group;
+    uint16_t                     action;
+    uint16_t                     size;
+    whMessageCert_SimpleResponse resp;
+
+    if (c == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    rc = wh_Client_RecvResponse(c, &group, &action, &size, &resp);
+    if (rc == WH_ERROR_OK) {
+        if ((group != WH_MESSAGE_GROUP_CERT) ||
+            (action != WH_MESSAGE_CERT_ACTION_VERIFY_CACHE_CLEAR) ||
+            (size != sizeof(resp))) {
+            rc = WH_ERROR_ABORTED;
+        }
+        else if (out_rc != NULL) {
+            *out_rc = resp.rc;
+        }
+    }
+    return rc;
+}
+
+int wh_Client_CertVerifyCacheClear(whClientContext* c, int32_t* out_rc)
+{
+    int rc = WH_ERROR_OK;
+
+    if (c == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    do {
+        rc = wh_Client_CertVerifyCacheClearRequest(c);
+    } while (rc == WH_ERROR_NOTREADY);
+
+    if (rc == WH_ERROR_OK) {
+        do {
+            rc = wh_Client_CertVerifyCacheClearResponse(c, out_rc);
+        } while (rc == WH_ERROR_NOTREADY);
+    }
+
+    return rc;
+}
+
+int wh_Client_CertVerifyCacheSetEnabledRequest(whClientContext* c,
+                                               uint8_t          enable)
+{
+    whMessageCert_SetEnabledRequest req = {0};
+
+    if (c == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    req.enable = enable ? 1 : 0;
+
+    return wh_Client_SendRequest(
+        c, WH_MESSAGE_GROUP_CERT,
+        WH_MESSAGE_CERT_ACTION_VERIFY_CACHE_SET_ENABLED, sizeof(req),
+        (uint8_t*)&req);
+}
+
+int wh_Client_CertVerifyCacheSetEnabledResponse(whClientContext* c,
+                                                int32_t*         out_rc)
+{
+    int                          rc;
+    uint16_t                     group;
+    uint16_t                     action;
+    uint16_t                     size;
+    whMessageCert_SimpleResponse resp;
+
+    if (c == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    rc = wh_Client_RecvResponse(c, &group, &action, &size, &resp);
+    if (rc == WH_ERROR_OK) {
+        if ((group != WH_MESSAGE_GROUP_CERT) ||
+            (action != WH_MESSAGE_CERT_ACTION_VERIFY_CACHE_SET_ENABLED) ||
+            (size != sizeof(resp))) {
+            rc = WH_ERROR_ABORTED;
+        }
+        else if (out_rc != NULL) {
+            *out_rc = resp.rc;
+        }
+    }
+    return rc;
+}
+
+int wh_Client_CertVerifyCacheSetEnabled(whClientContext* c, uint8_t enable,
+                                        int32_t* out_rc)
+{
+    int rc = WH_ERROR_OK;
+
+    if (c == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    do {
+        rc = wh_Client_CertVerifyCacheSetEnabledRequest(c, enable);
+    } while (rc == WH_ERROR_NOTREADY);
+
+    if (rc == WH_ERROR_OK) {
+        do {
+            rc = wh_Client_CertVerifyCacheSetEnabledResponse(c, out_rc);
+        } while (rc == WH_ERROR_NOTREADY);
+    }
+
+    return rc;
+}
+#endif /* WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE */
+
 #ifdef WOLFHSM_CFG_DMA
 
 int wh_Client_CertAddTrustedDmaRequest(whClientContext* c, whNvmId id,

@@ -169,7 +169,13 @@
 
 #include <stdint.h>
 
-#ifndef WOLFHSM_CFG_NO_CRYPTO
+/* WH_PADDING_CHECK is an internal sentinel set only by the wire-format
+ * struct-padding audit (test/wh_test_check_struct_padding.c). It suppresses
+ * external dependencies (wolfSSL headers, etc.) so that audit can compile
+ * without dragging in third-party source whose layout could perturb -Wpadded.
+ * It is NOT a public configuration flag — do not use it from application
+ * code. */
+#if !defined(WOLFHSM_CFG_NO_CRYPTO) && !defined(WH_PADDING_CHECK)
 #ifdef WOLFSSL_USER_SETTINGS
 #include "user_settings.h"
 #else
@@ -181,7 +187,7 @@
 #if defined(WOLFHSM_CFG_DEBUG) || defined(WOLFHSM_CFG_DEBUG_VERBOSE)
 #define WOLFHSM_CFG_HEXDUMP
 #endif
-#endif /* !WOLFHSM_CFG_NO_CRYPTO */
+#endif /* !WOLFHSM_CFG_NO_CRYPTO && !WH_PADDING_CHECK */
 
 /* Platform system time access */
 #if !defined WOLFHSM_CFG_NO_SYS_TIME && !defined(WOLFHSM_CFG_PORT_GETTIME)
@@ -388,7 +394,9 @@
 #endif
 
 /** Configuration checks */
-#ifndef WOLFHSM_CFG_NO_CRYPTO
+/* Skipped under WH_PADDING_CHECK because the wolfSSL feature macros
+ * referenced below are only defined when wolfssl/options.h is pulled. */
+#if !defined(WOLFHSM_CFG_NO_CRYPTO) && !defined(WH_PADDING_CHECK)
 /* Crypto Cb is mandatory */
 #ifndef WOLF_CRYPTO_CB
 #error "wolfHSM requires wolfCrypt built with WOLF_CRYPTO_CB"
@@ -439,28 +447,56 @@
 #endif /* !WOLFSSL_ACERT || !WOLFSSL_ASN_TEMPLATE */
 #endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT */
 
-#endif /* !WOLFHSM_CFG_NO_CRYPTO */
+#endif /* !WOLFHSM_CFG_NO_CRYPTO && !WH_PADDING_CHECK */
 
 #if defined(WOLFHSM_CFG_NO_CRYPTO) && defined(WOLFHSM_CFG_KEYWRAP)
 #error "WOLFHSM_CFG_KEYWRAP is incompatible with WOLFHSM_CFG_NO_CRYPTO"
 #endif
 
+/* Trusted cert verify cache requires the certificate manager and crypto.
+ * Enforce here so downstream code can gate on
+ * WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE alone instead of repeating the full
+ * dependency chain at every site. */
+#if defined(WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE) && \
+    !defined(WOLFHSM_CFG_CERTIFICATE_MANAGER)
+#error \
+    "WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE requires WOLFHSM_CFG_CERTIFICATE_MANAGER"
+#endif
+
+#if defined(WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE) && \
+    defined(WOLFHSM_CFG_NO_CRYPTO)
+#error \
+    "WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE is incompatible with WOLFHSM_CFG_NO_CRYPTO"
+#endif
+
+/* The global cross-client verify cache is a layered option on top of the
+ * per-client cache. Enforce the dependency so downstream code can gate on
+ * WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE_GLOBAL alone. */
+#if defined(WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE_GLOBAL) && \
+    !defined(WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE)
+#error \
+    "WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE_GLOBAL requires WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE"
+#endif
+
 /** Cache flushing and memory fencing synchronization primitives */
 /* Create a full sequential memory fence to ensure compiler memory ordering */
 #ifndef XMEMFENCE
- #ifndef WOLFHSM_CFG_NO_CRYPTO
-  #include "wolfssl/wolfcrypt/wc_port.h"
-  #define XMEMFENCE() XFENCE()
- #else
-  #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L) && !defined(__STDC_NO_ATOMICS__)
-   #include <stdatomic.h>
-   #define XMEMFENCE() atomic_thread_fence(memory_order_seq_cst)
-  #elif defined(__GNUC__) || defined(__clang__)
-   #define XMEMFENCE() __atomic_thread_fence(__ATOMIC_SEQ_CST)
-  #else
-   /* PPC32: __asm__ volatile ("sync" : : : "memory") */
-   #define XMEMFENCE() do { } while (0)
-   #warning "wolfHSM memory transports should have a functional XMEMFENCE"
+#if !defined(WOLFHSM_CFG_NO_CRYPTO) && !defined(WH_PADDING_CHECK)
+#include "wolfssl/wolfcrypt/wc_port.h"
+#define XMEMFENCE() XFENCE()
+#else
+#if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L) && \
+    !defined(__STDC_NO_ATOMICS__)
+#include <stdatomic.h>
+#define XMEMFENCE() atomic_thread_fence(memory_order_seq_cst)
+#elif defined(__GNUC__) || defined(__clang__)
+#define XMEMFENCE() __atomic_thread_fence(__ATOMIC_SEQ_CST)
+#else
+/* PPC32: __asm__ volatile ("sync" : : : "memory") */
+#define XMEMFENCE() \
+    do {            \
+    } while (0)
+#warning "wolfHSM memory transports should have a functional XMEMFENCE"
   #endif
  #endif
 #endif
