@@ -95,6 +95,42 @@ int wh_Server_CertVerify(whServerContext* server, const uint8_t* cert,
                          whCertFlags flags, whNvmFlags cachedKeyFlags,
                          whKeyId* inout_keyId);
 
+/**
+ * @brief Verify a certificate chain against a set of trusted root anchors.
+ *
+ * Loads each available root identified by trustedRootNvmIds into a freshly
+ * allocated cert manager and verifies the supplied chain once. Succeeds if
+ * the chain anchors to any loaded root. Roots whose NVM objects are absent
+ * are skipped silently; non-absent failures to read or load any root are
+ * reported.
+ *
+ * @param[in]     server             Server context.
+ * @param[in]     cert               Candidate certificate chain (DER).
+ * @param[in]     cert_len           Length of cert in bytes.
+ * @param[in]     trustedRootNvmIds  Array of root NVM IDs to load as anchors.
+ *                                   Order is informational only.
+ * @param[in]     numRoots           Number of entries in trustedRootNvmIds.
+ *                                   Must
+ * be 1..WOLFHSM_CFG_CERT_MAX_VERIFY_ROOTS.
+ * @param[in]     flags              See WH_CERT_FLAGS_*.
+ * @param[in]     cachedKeyFlags     NVM flags applied to the cached leaf key
+ *                                   (only used if
+ * WH_CERT_FLAGS_CACHE_LEAF_PUBKEY).
+ * @param[in,out] inout_keyId        Cached leaf key id (only used if
+ *                                   WH_CERT_FLAGS_CACHE_LEAF_PUBKEY).
+ * @return WH_ERROR_OK on chain trust success.
+ *         WH_ERROR_CERT_VERIFY if no loaded anchor matches the chain.
+ *         WH_ERROR_NOTFOUND if every supplied root id is absent from NVM.
+ *         WH_ERROR_BADARGS / other negative codes on argument or environment
+ *         errors.
+ */
+int wh_Server_CertVerifyMultiRoot(whServerContext* server, const uint8_t* cert,
+                                  uint32_t       cert_len,
+                                  const whNvmId* trustedRootNvmIds,
+                                  uint16_t numRoots, whCertFlags flags,
+                                  whNvmFlags cachedKeyFlags,
+                                  whKeyId*   inout_keyId);
+
 #if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT)
 /**
  * @brief Verifies an attribute certificate against a trusted root certificate

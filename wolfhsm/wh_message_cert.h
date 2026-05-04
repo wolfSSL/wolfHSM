@@ -32,18 +32,21 @@
 #include "wolfhsm/wh_comm.h"
 #include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_nvm.h"
+#include "wolfhsm/wh_utils.h"
 
 enum WH_MESSAGE_CERT_ACTION_ENUM {
-    WH_MESSAGE_CERT_ACTION_INIT             = 0x1,
-    WH_MESSAGE_CERT_ACTION_ADDTRUSTED       = 0x2,
-    WH_MESSAGE_CERT_ACTION_ERASETRUSTED     = 0x3,
-    WH_MESSAGE_CERT_ACTION_READTRUSTED      = 0x4,
-    WH_MESSAGE_CERT_ACTION_VERIFY           = 0x5,
-    WH_MESSAGE_CERT_ACTION_ADDTRUSTED_DMA   = 0x22,
-    WH_MESSAGE_CERT_ACTION_READTRUSTED_DMA  = 0x24,
-    WH_MESSAGE_CERT_ACTION_VERIFY_DMA       = 0x25,
-    WH_MESSAGE_CERT_ACTION_VERIFY_ACERT     = 0x26,
-    WH_MESSAGE_CERT_ACTION_VERIFY_ACERT_DMA = 0x27,
+    WH_MESSAGE_CERT_ACTION_INIT                  = 0x1,
+    WH_MESSAGE_CERT_ACTION_ADDTRUSTED            = 0x2,
+    WH_MESSAGE_CERT_ACTION_ERASETRUSTED          = 0x3,
+    WH_MESSAGE_CERT_ACTION_READTRUSTED           = 0x4,
+    WH_MESSAGE_CERT_ACTION_VERIFY                = 0x5,
+    WH_MESSAGE_CERT_ACTION_VERIFY_MULTI_ROOT     = 0x6,
+    WH_MESSAGE_CERT_ACTION_ADDTRUSTED_DMA        = 0x22,
+    WH_MESSAGE_CERT_ACTION_READTRUSTED_DMA       = 0x24,
+    WH_MESSAGE_CERT_ACTION_VERIFY_DMA            = 0x25,
+    WH_MESSAGE_CERT_ACTION_VERIFY_ACERT          = 0x26,
+    WH_MESSAGE_CERT_ACTION_VERIFY_ACERT_DMA      = 0x27,
+    WH_MESSAGE_CERT_ACTION_VERIFY_MULTI_ROOT_DMA = 0x28,
 };
 
 /* Simple reusable response message */
@@ -137,6 +140,29 @@ int wh_MessageCert_TranslateVerifyResponse(
     uint16_t magic, const whMessageCert_VerifyResponse* src,
     whMessageCert_VerifyResponse* dest);
 
+/* VerifyMultiRoot Request
+ *
+ * Followed inline by:
+ *   whNvmId trustedRootNvmIds[numRoots]   (numRoots * sizeof(whNvmId))
+ *   uint8_t cert[cert_len]                (the candidate chain)
+ *
+ * cert_len + numRoots * sizeof(whNvmId) plus sizeof this struct must not
+ * exceed WOLFHSM_CFG_COMM_DATA_LEN. */
+typedef struct {
+    uint32_t   cert_len;
+    uint16_t   numRoots;
+    uint16_t   flags;
+    whNvmFlags cachedKeyFlags;
+    whKeyId    keyId;
+    uint8_t    WH_PAD[4];
+} whMessageCert_VerifyMultiRootRequest;
+
+int wh_MessageCert_TranslateVerifyMultiRootRequest(
+    uint16_t magic, const whMessageCert_VerifyMultiRootRequest* src,
+    whMessageCert_VerifyMultiRootRequest* dest);
+
+/* VerifyMultiRoot Response: reuse whMessageCert_VerifyResponse */
+
 #ifdef WOLFHSM_CFG_DMA
 
 /* AddTrusted DMA Request */
@@ -191,6 +217,41 @@ int wh_MessageCert_TranslateVerifyDmaRequest(
 int wh_MessageCert_TranslateVerifyDmaResponse(
     uint16_t magic, const whMessageCert_VerifyDmaResponse* src,
     whMessageCert_VerifyDmaResponse* dest);
+
+/* VerifyMultiRoot DMA Request
+ *
+ * The root array is inlined at fixed maximum size to keep the request a flat
+ * POD; only the first numRoots entries are meaningful.
+ *
+ * WH_PAD sized so that, with the default WOLFHSM_CFG_CERT_MAX_VERIFY_ROOTS
+ * (8), the struct total is a multiple of 8. Users overriding the bound to a
+ * non-multiple-of-4 may need to adjust WH_PAD to silence -Wpadded. */
+typedef struct {
+    uint64_t   cert_addr;
+    uint32_t   cert_len;
+    uint16_t   numRoots;
+    uint16_t   flags;
+    whNvmFlags cachedKeyFlags;
+    whKeyId    keyId;
+    uint8_t    WH_PAD[4];
+    whNvmId    trustedRootNvmIds[WOLFHSM_CFG_CERT_MAX_VERIFY_ROOTS];
+} whMessageCert_VerifyMultiRootDmaRequest;
+
+/* The fixed-size DMA request must fit on the wire. If a build overrides
+ * WOLFHSM_CFG_CERT_MAX_VERIFY_ROOTS high enough that this fails, the comm
+ * layer would otherwise reject every multi-root DMA call at runtime with
+ * BADARGS; surface the misconfiguration at compile time instead. */
+WH_UTILS_STATIC_ASSERT(sizeof(whMessageCert_VerifyMultiRootDmaRequest) <=
+                           WOLFHSM_CFG_COMM_DATA_LEN,
+                       "WOLFHSM_CFG_CERT_MAX_VERIFY_ROOTS too large: "
+                       "whMessageCert_VerifyMultiRootDmaRequest exceeds "
+                       "WOLFHSM_CFG_COMM_DATA_LEN");
+
+int wh_MessageCert_TranslateVerifyMultiRootDmaRequest(
+    uint16_t magic, const whMessageCert_VerifyMultiRootDmaRequest* src,
+    whMessageCert_VerifyMultiRootDmaRequest* dest);
+
+/* VerifyMultiRoot DMA Response: reuse whMessageCert_VerifyDmaResponse */
 
 #endif /* WOLFHSM_CFG_DMA */
 
