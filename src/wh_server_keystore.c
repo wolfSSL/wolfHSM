@@ -671,6 +671,8 @@ int wh_Server_KeystoreReadKey(whServerContext* server, whKeyId keyId,
     /* Not in cache, try to read the metadata from NVM */
     ret = wh_Nvm_GetMetadata(server->nvm, keyId, meta);
     if (ret == 0) {
+        if (meta->len > *outSz)
+            return WH_ERROR_NOSPACE;
         /* set outSz */
         *outSz = meta->len;
         /* read meta */

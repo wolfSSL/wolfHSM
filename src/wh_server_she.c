@@ -255,6 +255,9 @@ static int _SecureBootInit(whServerContext* server, uint16_t magic,
                                                         server->comm->client_id,
                                                         WH_SHE_BOOT_MAC_KEY_ID),
                                           NULL, macKey, &keySz);
+        if (ret == 0 && keySz != WH_SHE_KEY_SZ) {
+            ret = WH_SHE_ERC_KEY_INVALID;
+        }
         /* if the key wasn't found */
         if (ret != 0) {
             /* return ERC_NO_SECURE_BOOT */
@@ -1425,6 +1428,9 @@ static int _DecCbc(whServerContext* server, uint16_t magic, uint16_t req_size,
             server, WH_MAKE_KEYID(WH_KEYTYPE_SHE, server->comm->client_id,
                                   req.keyId),
             NULL, tmpKey, &keySz);
+        if (ret == 0 && keySz != WH_SHE_KEY_SZ) {
+            ret = WH_SHE_ERC_KEY_INVALID;
+        }
         if (ret == 0) {
             ret = wc_AesInit(server->she->sheAes, NULL, server->devId);
         }
@@ -1499,6 +1505,9 @@ static int _GenerateMac(whServerContext* server, uint16_t magic,
               WH_MAKE_KEYID(WH_KEYTYPE_SHE, server->comm->client_id,
                             req.keyId),
               NULL, tmpKey, &keySz);
+        if (ret == 0 && keySz != WH_SHE_KEY_SZ) {
+            ret = WH_SHE_ERC_KEY_INVALID;
+        }
         /* hash the message */
         if (ret == 0) {
             ret = wc_AesCmacGenerate_ex(server->she->sheCmac, resp.mac,
@@ -1564,6 +1573,9 @@ static int _VerifyMac(whServerContext* server, uint16_t magic,
               WH_MAKE_KEYID(WH_KEYTYPE_SHE, server->comm->client_id,
                             req.keyId),
               NULL, tmpKey, &keySz);
+        if (ret == 0 && keySz != WH_SHE_KEY_SZ) {
+            ret = WH_SHE_ERC_KEY_INVALID;
+        }
         /* verify the mac */
         if (ret == 0) {
             ret = wc_AesCmacVerify_ex(server->she->sheCmac, mac, req.macLen,
