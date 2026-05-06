@@ -275,20 +275,24 @@ int wh_Server_CertReadTrusted(whServerContext* server, whNvmId id,
     return wh_Nvm_Read(server->nvm, id, 0, meta.len, cert);
 }
 
-/* Verify a certificate against trusted certificates */
-int wh_Server_CertVerify(whServerContext* server, const uint8_t* cert,
-                         uint32_t cert_len, whNvmId trustedRootNvmId,
-                         whCertFlags flags, whNvmFlags cachedKeyFlags,
-                         whKeyId* inout_keyId)
+/* Verify a certificate chain against a set of trusted root anchors */
+int wh_Server_CertVerifyMultiRoot(whServerContext* server, const uint8_t* cert,
+                                  uint32_t       cert_len,
+                                  const whNvmId* trustedRootNvmIds,
+                                  uint16_t numRoots, whCertFlags flags,
+                                  whNvmFlags cachedKeyFlags,
+                                  whKeyId*   inout_keyId)
 {
     WOLFSSL_CERT_MANAGER* cm = NULL;
+    uint8_t               root_cert[WOLFHSM_CFG_MAX_CERT_SIZE];
+    uint32_t              root_cert_len;
+    int                   rc            = WH_ERROR_OK;
+    int                   anchorsLoaded = 0;
+    uint16_t              i;
 
-    /* Stack-based buffer for root certificate */
-    uint8_t  root_cert[WOLFHSM_CFG_MAX_CERT_SIZE];
-    uint32_t root_cert_len = sizeof(root_cert);
-    int      rc;
-
-    if ((server == NULL) || (cert == NULL) || (cert_len == 0)) {
+    if ((server == NULL) || (cert == NULL) || (cert_len == 0) ||
+        (trustedRootNvmIds == NULL) || (numRoots == 0) ||
+        (numRoots > WOLFHSM_CFG_CERT_MAX_VERIFY_ROOTS)) {
         return WH_ERROR_BADARGS;
     }
 
@@ -304,30 +308,58 @@ int wh_Server_CertVerify(whServerContext* server, const uint8_t* cert,
         return WH_ERROR_ABORTED;
     }
 
-    /* Get the trusted root certificate */
-    rc = wh_Server_CertReadTrusted(server, trustedRootNvmId, root_cert,
-                                   &root_cert_len);
-    if (rc == WH_ERROR_OK) {
-        /* Load the trusted root certificate */
+    /* Load each root anchor. Absent roots are silently skipped; any other
+     * read or load failure is fatal and reported. */
+    for (i = 0; i < numRoots; i++) {
+        root_cert_len = sizeof(root_cert);
+        rc = wh_Server_CertReadTrusted(server, trustedRootNvmIds[i], root_cert,
+                                       &root_cert_len);
+        if (rc == WH_ERROR_NOTFOUND) {
+            continue;
+        }
+        if (rc != WH_ERROR_OK) {
+            (void)wolfSSL_CertManagerFree(cm);
+            return rc;
+        }
+
         rc = wolfSSL_CertManagerLoadCABuffer(cm, root_cert, root_cert_len,
                                              WOLFSSL_FILETYPE_ASN1);
-        if (rc == WOLFSSL_SUCCESS) {
-            /* Verify the certificate */
-            rc = _verifyChainAgainstCmStore(server, cm, cert, cert_len, flags,
-                                            cachedKeyFlags, inout_keyId);
-            if (rc != WH_ERROR_OK) {
-                rc = WH_ERROR_CERT_VERIFY;
-            }
+        if (rc != WOLFSSL_SUCCESS) {
+            WH_DEBUG_SERVER_VERBOSE(
+                "Failed to load trusted root certificate: %d\n", rc);
+            (void)wolfSSL_CertManagerFree(cm);
+            return WH_ERROR_ABORTED;
         }
-        else {
-            WH_DEBUG_SERVER_VERBOSE("Failed to load trusted root certificate: %d\n", rc);
-        }
+        anchorsLoaded++;
     }
 
-    /* Clean up */
+    /* If no anchors were loaded, the trust store is empty */
+    if (anchorsLoaded == 0) {
+        (void)wolfSSL_CertManagerFree(cm);
+        return WH_ERROR_NOTFOUND;
+    }
+
+    /* Verify the chain against the populated trust store */
+    rc = _verifyChainAgainstCmStore(server, cm, cert, cert_len, flags,
+                                    cachedKeyFlags, inout_keyId);
+    if (rc != WH_ERROR_OK) {
+        rc = WH_ERROR_CERT_VERIFY;
+    }
+
     (void)wolfSSL_CertManagerFree(cm);
 
     return rc;
+}
+
+/* Verify a certificate against a single trusted root certificate */
+int wh_Server_CertVerify(whServerContext* server, const uint8_t* cert,
+                         uint32_t cert_len, whNvmId trustedRootNvmId,
+                         whCertFlags flags, whNvmFlags cachedKeyFlags,
+                         whKeyId* inout_keyId)
+{
+    return wh_Server_CertVerifyMultiRoot(server, cert, cert_len,
+                                         &trustedRootNvmId, 1, flags,
+                                         cachedKeyFlags, inout_keyId);
 }
 
 #if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT)
@@ -572,6 +604,83 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
             *out_resp_size = sizeof(resp);
         }; break;
 
+        case WH_MESSAGE_CERT_ACTION_VERIFY_MULTI_ROOT: {
+            whMessageCert_VerifyMultiRootRequest req  = {0};
+            whMessageCert_VerifyResponse         resp = {0};
+            const uint8_t*                       payload;
+            const whNvmId*                       root_ids_wire;
+            whNvmId        root_ids[WOLFHSM_CFG_CERT_MAX_VERIFY_ROOTS];
+            const uint8_t* cert_data;
+            uint32_t       roots_bytes;
+            uint16_t       i;
+
+            if (req_size < sizeof(req)) {
+                /* Request is malformed */
+                resp.rc = WH_ERROR_ABORTED;
+            }
+            else {
+                /* Convert request struct */
+                wh_MessageCert_TranslateVerifyMultiRootRequest(
+                    magic, (whMessageCert_VerifyMultiRootRequest*)req_packet,
+                    &req);
+
+                /* Validate numRoots range */
+                if ((req.numRoots == 0) ||
+                    (req.numRoots > WOLFHSM_CFG_CERT_MAX_VERIFY_ROOTS)) {
+                    resp.rc = WH_ERROR_BADARGS;
+                    wh_MessageCert_TranslateVerifyResponse(
+                        magic, &resp,
+                        (whMessageCert_VerifyResponse*)resp_packet);
+                    *out_resp_size = sizeof(resp);
+                    break;
+                }
+
+                roots_bytes = (uint32_t)req.numRoots * sizeof(whNvmId);
+
+                /* Validate that the root array and certificate data fit
+                 * within the request */
+                if ((roots_bytes > req_size - sizeof(req)) ||
+                    (req.cert_len > req_size - sizeof(req) - roots_bytes)) {
+                    resp.rc = WH_ERROR_BADARGS;
+                    wh_MessageCert_TranslateVerifyResponse(
+                        magic, &resp,
+                        (whMessageCert_VerifyResponse*)resp_packet);
+                    *out_resp_size = sizeof(resp);
+                    break;
+                }
+
+                /* Locate and translate the inline root id array */
+                payload       = (const uint8_t*)req_packet + sizeof(req);
+                root_ids_wire = (const whNvmId*)payload;
+                for (i = 0; i < req.numRoots; i++) {
+                    root_ids[i] = wh_Translate16(magic, root_ids_wire[i]);
+                }
+
+                /* Certificate data follows the root id array */
+                cert_data = payload + roots_bytes;
+
+                /* Map client keyId to server keyId space */
+                whKeyId keyId = wh_KeyId_TranslateFromClient(
+                    WH_KEYTYPE_CRYPTO, server->comm->client_id, req.keyId);
+
+                rc = WH_SERVER_NVM_LOCK(server);
+                if (rc == WH_ERROR_OK) {
+                    rc = wh_Server_CertVerifyMultiRoot(
+                        server, cert_data, req.cert_len, root_ids, req.numRoots,
+                        req.flags, req.cachedKeyFlags, &keyId);
+                    resp.keyId = wh_KeyId_TranslateToClient(keyId);
+
+                    (void)WH_SERVER_NVM_UNLOCK(server);
+                } /* WH_SERVER_NVM_LOCK() */
+                resp.rc = rc;
+            }
+
+            /* Convert the response struct */
+            wh_MessageCert_TranslateVerifyResponse(
+                magic, &resp, (whMessageCert_VerifyResponse*)resp_packet);
+            *out_resp_size = sizeof(resp);
+        }; break;
+
 #ifdef WOLFHSM_CFG_DMA
         case WH_MESSAGE_CERT_ACTION_ADDTRUSTED_DMA: {
             whMessageCert_AddTrustedDmaRequest req              = {0};
@@ -720,6 +829,60 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
 
                     /* Propagate the keyId back to the client with flags
                      * preserved */
+                    resp.keyId = wh_KeyId_TranslateToClient(keyId);
+
+                    (void)WH_SERVER_NVM_UNLOCK(server);
+                } /* WH_SERVER_NVM_LOCK() */
+            }
+            /* Always call POST for successful PRE, regardless of operation
+             * result */
+            if (cert_dma_pre_ok) {
+                (void)wh_Server_DmaProcessClientAddress(
+                    server, req.cert_addr, &cert_data, req.cert_len,
+                    WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
+            }
+
+            /* Convert the response struct */
+            wh_MessageCert_TranslateVerifyDmaResponse(
+                magic, &resp, (whMessageCert_VerifyDmaResponse*)resp_packet);
+            *out_resp_size = sizeof(resp);
+        }; break;
+
+        case WH_MESSAGE_CERT_ACTION_VERIFY_MULTI_ROOT_DMA: {
+            whMessageCert_VerifyMultiRootDmaRequest req       = {0};
+            whMessageCert_VerifyDmaResponse         resp      = {0};
+            void*                                   cert_data = NULL;
+            whKeyId                                 keyId     = WH_KEYID_ERASED;
+            int                                     cert_dma_pre_ok = 0;
+
+            if (req_size != sizeof(req)) {
+                /* Request is malformed */
+                resp.rc = WH_ERROR_ABORTED;
+            }
+            if (resp.rc == WH_ERROR_OK) {
+                /* Convert request struct */
+                wh_MessageCert_TranslateVerifyMultiRootDmaRequest(
+                    magic, (whMessageCert_VerifyMultiRootDmaRequest*)req_packet,
+                    &req);
+
+                /* Map client keyId to server keyId space */
+                keyId = wh_KeyId_TranslateFromClient(
+                    WH_KEYTYPE_CRYPTO, server->comm->client_id, req.keyId);
+
+                /* Process client address */
+                resp.rc = wh_Server_DmaProcessClientAddress(
+                    server, req.cert_addr, &cert_data, req.cert_len,
+                    WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
+                if (resp.rc == WH_ERROR_OK) {
+                    cert_dma_pre_ok = 1;
+                }
+            }
+            if (resp.rc == WH_ERROR_OK) {
+                resp.rc = WH_SERVER_NVM_LOCK(server);
+                if (resp.rc == WH_ERROR_OK) {
+                    resp.rc = wh_Server_CertVerifyMultiRoot(
+                        server, cert_data, req.cert_len, req.trustedRootNvmIds,
+                        req.numRoots, req.flags, req.cachedKeyFlags, &keyId);
                     resp.keyId = wh_KeyId_TranslateToClient(keyId);
 
                     (void)WH_SERVER_NVM_UNLOCK(server);

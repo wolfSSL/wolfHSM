@@ -183,12 +183,15 @@ whMessageCert_ReadTrustedRequest  whMessageCert_ReadTrustedRequest_test;
 whMessageCert_ReadTrustedResponse whMessageCert_ReadTrustedResponse_test;
 whMessageCert_VerifyRequest       whMessageCert_VerifyRequest_test;
 whMessageCert_VerifyResponse      whMessageCert_VerifyResponse_test;
+whMessageCert_VerifyMultiRootRequest whMessageCert_VerifyMultiRootRequest_test;
 
 #if defined(WOLFHSM_CFG_DMA)
 whMessageCert_AddTrustedDmaRequest  whMessageCert_AddTrustedDmaRequest_test;
 whMessageCert_ReadTrustedDmaRequest whMessageCert_ReadTrustedDmaRequest_test;
 whMessageCert_VerifyDmaRequest      whMessageCert_VerifyDmaRequest_test;
 whMessageCert_VerifyDmaResponse     whMessageCert_VerifyDmaResponse_test;
+whMessageCert_VerifyMultiRootDmaRequest
+    whMessageCert_VerifyMultiRootDmaRequest_test;
 #endif /* WOLFHSM_CFG_DMA */
 
 #if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT)

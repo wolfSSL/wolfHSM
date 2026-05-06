@@ -122,6 +122,21 @@ int wh_MessageCert_TranslateVerifyResponse(
     return 0;
 }
 
+int wh_MessageCert_TranslateVerifyMultiRootRequest(
+    uint16_t magic, const whMessageCert_VerifyMultiRootRequest* src,
+    whMessageCert_VerifyMultiRootRequest* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, cert_len);
+    WH_T16(magic, dest, src, numRoots);
+    WH_T16(magic, dest, src, flags);
+    WH_T16(magic, dest, src, cachedKeyFlags);
+    WH_T16(magic, dest, src, keyId);
+    return 0;
+}
+
 #ifdef WOLFHSM_CFG_DMA
 
 int wh_MessageCert_TranslateAddTrustedDmaRequest(
@@ -179,6 +194,26 @@ int wh_MessageCert_TranslateVerifyDmaResponse(
     }
     WH_T32(magic, dest, src, rc);
     WH_T16(magic, dest, src, keyId);
+    return 0;
+}
+
+int wh_MessageCert_TranslateVerifyMultiRootDmaRequest(
+    uint16_t magic, const whMessageCert_VerifyMultiRootDmaRequest* src,
+    whMessageCert_VerifyMultiRootDmaRequest* dest)
+{
+    int i;
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T64(magic, dest, src, cert_addr);
+    WH_T32(magic, dest, src, cert_len);
+    WH_T16(magic, dest, src, numRoots);
+    WH_T16(magic, dest, src, flags);
+    WH_T16(magic, dest, src, cachedKeyFlags);
+    WH_T16(magic, dest, src, keyId);
+    for (i = 0; i < WOLFHSM_CFG_CERT_MAX_VERIFY_ROOTS; i++) {
+        WH_T16(magic, dest, src, trustedRootNvmIds[i]);
+    }
     return 0;
 }
 #endif /* WOLFHSM_CFG_DMA */

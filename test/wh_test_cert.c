@@ -134,6 +134,117 @@ int whTest_CertServerCfg(whServerConfig* serverCfg)
                                                WH_CERT_FLAGS_NONE,
                                                WH_NVM_FLAGS_USAGE_ANY, NULL));
 
+    /* ===== Multi-root verification tests ===== */
+    {
+        const whNvmId rootCertC_absent     = 99;
+        whNvmId       roots_AB[2]          = {rootCertA, rootCertB};
+        whNvmId       roots_BA[2]          = {rootCertB, rootCertA};
+        whNvmId       roots_A_absent[2]    = {rootCertA, rootCertC_absent};
+        whNvmId       roots_only_absent[2] = {rootCertC_absent, 100};
+        whNvmId       roots_max[WOLFHSM_CFG_CERT_MAX_VERIFY_ROOTS];
+        uint16_t      i;
+
+        /* (1) Single root via multi-root path */
+        WH_TEST_PRINT("Multi-root: single-element array, chain matches...\n");
+        WH_TEST_RETURN_ON_FAIL(wh_Server_CertVerifyMultiRoot(
+            server, RAW_CERT_CHAIN_A, RAW_CERT_CHAIN_A_len, &rootCertA, 1,
+            WH_CERT_FLAGS_NONE, WH_NVM_FLAGS_USAGE_ANY, NULL));
+
+        WH_TEST_PRINT("Multi-root: single-element array, chain mismatch...\n");
+        WH_TEST_ASSERT_RETURN(
+            WH_ERROR_CERT_VERIFY ==
+            wh_Server_CertVerifyMultiRoot(
+                server, RAW_CERT_CHAIN_A, RAW_CERT_CHAIN_A_len, &rootCertB, 1,
+                WH_CERT_FLAGS_NONE, WH_NVM_FLAGS_USAGE_ANY, NULL));
+
+        /* (2) Two roots, chain matches first */
+        WH_TEST_PRINT("Multi-root: two roots [A,B], chain anchors to A...\n");
+        WH_TEST_RETURN_ON_FAIL(wh_Server_CertVerifyMultiRoot(
+            server, RAW_CERT_CHAIN_A, RAW_CERT_CHAIN_A_len, roots_AB, 2,
+            WH_CERT_FLAGS_NONE, WH_NVM_FLAGS_USAGE_ANY, NULL));
+
+        /* (3) Two roots, chain matches second */
+        WH_TEST_PRINT("Multi-root: two roots [A,B], chain anchors to B...\n");
+        WH_TEST_RETURN_ON_FAIL(wh_Server_CertVerifyMultiRoot(
+            server, RAW_CERT_CHAIN_B, RAW_CERT_CHAIN_B_len, roots_AB, 2,
+            WH_CERT_FLAGS_NONE, WH_NVM_FLAGS_USAGE_ANY, NULL));
+
+        /* (4) Two roots, chain matches neither (incomplete chain: leaf
+         * without its intermediate cannot be anchored to A or B) */
+        WH_TEST_PRINT(
+            "Multi-root: two roots [A,B], chain matches neither...\n");
+        WH_TEST_ASSERT_RETURN(
+            WH_ERROR_CERT_VERIFY ==
+            wh_Server_CertVerifyMultiRoot(server, LEAF_A_CERT, LEAF_A_CERT_len,
+                                          roots_AB, 2, WH_CERT_FLAGS_NONE,
+                                          WH_NVM_FLAGS_USAGE_ANY, NULL));
+
+        /* (5) One present root, one absent root */
+        WH_TEST_PRINT("Multi-root: roots [A, absent], chain anchors to A "
+                      "succeeds...\n");
+        WH_TEST_RETURN_ON_FAIL(wh_Server_CertVerifyMultiRoot(
+            server, RAW_CERT_CHAIN_A, RAW_CERT_CHAIN_A_len, roots_A_absent, 2,
+            WH_CERT_FLAGS_NONE, WH_NVM_FLAGS_USAGE_ANY, NULL));
+
+        WH_TEST_PRINT("Multi-root: roots [A, absent], chain B fails with "
+                      "CERT_VERIFY...\n");
+        WH_TEST_ASSERT_RETURN(
+            WH_ERROR_CERT_VERIFY ==
+            wh_Server_CertVerifyMultiRoot(
+                server, RAW_CERT_CHAIN_B, RAW_CERT_CHAIN_B_len, roots_A_absent,
+                2, WH_CERT_FLAGS_NONE, WH_NVM_FLAGS_USAGE_ANY, NULL));
+
+        /* (6) All supplied roots absent */
+        WH_TEST_PRINT("Multi-root: all supplied roots absent → NOTFOUND...\n");
+        WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND ==
+                              wh_Server_CertVerifyMultiRoot(
+                                  server, RAW_CERT_CHAIN_A,
+                                  RAW_CERT_CHAIN_A_len, roots_only_absent, 2,
+                                  WH_CERT_FLAGS_NONE, WH_NVM_FLAGS_USAGE_ANY,
+                                  NULL));
+
+        /* (7) Boundary on numRoots */
+        WH_TEST_PRINT("Multi-root: numRoots == 0 → BADARGS...\n");
+        WH_TEST_ASSERT_RETURN(
+            WH_ERROR_BADARGS ==
+            wh_Server_CertVerifyMultiRoot(
+                server, RAW_CERT_CHAIN_A, RAW_CERT_CHAIN_A_len, &rootCertA, 0,
+                WH_CERT_FLAGS_NONE, WH_NVM_FLAGS_USAGE_ANY, NULL));
+
+        WH_TEST_PRINT("Multi-root: numRoots > MAX → BADARGS...\n");
+        WH_TEST_ASSERT_RETURN(
+            WH_ERROR_BADARGS ==
+            wh_Server_CertVerifyMultiRoot(
+                server, RAW_CERT_CHAIN_A, RAW_CERT_CHAIN_A_len, roots_max,
+                WOLFHSM_CFG_CERT_MAX_VERIFY_ROOTS + 1, WH_CERT_FLAGS_NONE,
+                WH_NVM_FLAGS_USAGE_ANY, NULL));
+
+        /* numRoots == MAX, mostly absent ids plus rootCertA, succeeds */
+        roots_max[0] = rootCertA;
+        for (i = 1; i < WOLFHSM_CFG_CERT_MAX_VERIFY_ROOTS; i++) {
+            roots_max[i] = (whNvmId)(200 + i); /* nonexistent */
+        }
+        WH_TEST_PRINT(
+            "Multi-root: numRoots == MAX with mostly-absent succeeds...\n");
+        WH_TEST_RETURN_ON_FAIL(wh_Server_CertVerifyMultiRoot(
+            server, RAW_CERT_CHAIN_A, RAW_CERT_CHAIN_A_len, roots_max,
+            WOLFHSM_CFG_CERT_MAX_VERIFY_ROOTS, WH_CERT_FLAGS_NONE,
+            WH_NVM_FLAGS_USAGE_ANY, NULL));
+
+        /* (12) Order independence: [A,B] and [B,A] both succeed for chain B */
+        WH_TEST_PRINT("Multi-root: order independence [B,A] for chain B...\n");
+        WH_TEST_RETURN_ON_FAIL(wh_Server_CertVerifyMultiRoot(
+            server, RAW_CERT_CHAIN_B, RAW_CERT_CHAIN_B_len, roots_BA, 2,
+            WH_CERT_FLAGS_NONE, WH_NVM_FLAGS_USAGE_ANY, NULL));
+
+        /* Equivalence with single-root entry point */
+        WH_TEST_PRINT(
+            "Multi-root: equivalence with single-root entry point...\n");
+        WH_TEST_RETURN_ON_FAIL(wh_Server_CertVerify(
+            server, RAW_CERT_CHAIN_A, RAW_CERT_CHAIN_A_len, rootCertA,
+            WH_CERT_FLAGS_NONE, WH_NVM_FLAGS_USAGE_ANY, NULL));
+    }
+
     /* remove trusted root certificate for chain A */
     WH_TEST_PRINT("Removing trusted root certificates...\n");
     WH_TEST_RETURN_ON_FAIL(wh_Server_CertEraseTrusted(server, rootCertA));
@@ -245,6 +356,133 @@ int whTest_CertClient(whClientContext* client)
     WH_TEST_ASSERT_RETURN(exportedPubKeyLen == LEAF_A_PUBKEY_len);
     WH_TEST_ASSERT_RETURN(
         0 == memcmp(exportedPubKey, LEAF_A_PUBKEY, LEAF_A_PUBKEY_len));
+
+    /* ===== Multi-root client tests ===== */
+    {
+        whNvmId rootC_absent         = 99;
+        whNvmId roots_AB[2]          = {rootCertA_id, rootCertB_id};
+        whNvmId roots_BA[2]          = {rootCertB_id, rootCertA_id};
+        whNvmId roots_A_absent[2]    = {rootCertA_id, rootC_absent};
+        whNvmId roots_only_absent[2] = {rootC_absent, 100};
+        whKeyId mr_keyId             = WH_KEYID_ERASED;
+
+        /* (1) Single-root via multi-root path */
+        WH_TEST_PRINT("Client multi-root: single root, chain matches...\n");
+        WH_TEST_RETURN_ON_FAIL(wh_Client_CertVerifyMultiRoot(
+            client, RAW_CERT_CHAIN_A, RAW_CERT_CHAIN_A_len, &rootCertA_id, 1,
+            &out_rc));
+        WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+
+        WH_TEST_PRINT("Client multi-root: single root, chain mismatch...\n");
+        WH_TEST_RETURN_ON_FAIL(wh_Client_CertVerifyMultiRoot(
+            client, RAW_CERT_CHAIN_A, RAW_CERT_CHAIN_A_len, &rootCertB_id, 1,
+            &out_rc));
+        WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_CERT_VERIFY);
+
+        /* (2-3) Two roots, chain matches first / second */
+        WH_TEST_PRINT("Client multi-root: [A,B] anchors to A...\n");
+        WH_TEST_RETURN_ON_FAIL(wh_Client_CertVerifyMultiRoot(
+            client, RAW_CERT_CHAIN_A, RAW_CERT_CHAIN_A_len, roots_AB, 2,
+            &out_rc));
+        WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+
+        WH_TEST_PRINT("Client multi-root: [A,B] anchors to B...\n");
+        WH_TEST_RETURN_ON_FAIL(wh_Client_CertVerifyMultiRoot(
+            client, RAW_CERT_CHAIN_B, RAW_CERT_CHAIN_B_len, roots_AB, 2,
+            &out_rc));
+        WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+
+        /* (4) Two roots, neither matches (incomplete chain: leaf without
+         * its intermediate cannot be anchored to A or B) */
+        WH_TEST_PRINT("Client multi-root: [A,B] mismatch (leaf without "
+                      "intermediate)...\n");
+        WH_TEST_RETURN_ON_FAIL(wh_Client_CertVerifyMultiRoot(
+            client, LEAF_A_CERT, LEAF_A_CERT_len, roots_AB, 2, &out_rc));
+        WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_CERT_VERIFY);
+
+        /* (5) One present root + absent: success when chain matches present */
+        WH_TEST_PRINT("Client multi-root: [A, absent] chain A succeeds...\n");
+        WH_TEST_RETURN_ON_FAIL(wh_Client_CertVerifyMultiRoot(
+            client, RAW_CERT_CHAIN_A, RAW_CERT_CHAIN_A_len, roots_A_absent, 2,
+            &out_rc));
+        WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+
+        WH_TEST_PRINT(
+            "Client multi-root: [A, absent] chain B → CERT_VERIFY...\n");
+        WH_TEST_RETURN_ON_FAIL(wh_Client_CertVerifyMultiRoot(
+            client, RAW_CERT_CHAIN_B, RAW_CERT_CHAIN_B_len, roots_A_absent, 2,
+            &out_rc));
+        WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_CERT_VERIFY);
+
+        /* (6) All supplied roots absent */
+        WH_TEST_PRINT("Client multi-root: all absent → NOTFOUND...\n");
+        WH_TEST_RETURN_ON_FAIL(wh_Client_CertVerifyMultiRoot(
+            client, RAW_CERT_CHAIN_A, RAW_CERT_CHAIN_A_len, roots_only_absent,
+            2, &out_rc));
+        WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_NOTFOUND);
+
+        /* (7) Boundary numRoots == 0 rejected client-side */
+        WH_TEST_PRINT("Client multi-root: numRoots == 0 → BADARGS...\n");
+        WH_TEST_ASSERT_RETURN(
+            WH_ERROR_BADARGS ==
+            wh_Client_CertVerifyMultiRoot(client, RAW_CERT_CHAIN_A,
+                                          RAW_CERT_CHAIN_A_len, &rootCertA_id,
+                                          0, &out_rc));
+
+        /* (7b) Boundary numRoots > MAX_VERIFY_ROOTS rejected client-side */
+        {
+            whNvmId  oversized[WOLFHSM_CFG_CERT_MAX_VERIFY_ROOTS + 1] = {0};
+            uint16_t over = (uint16_t)(WOLFHSM_CFG_CERT_MAX_VERIFY_ROOTS + 1);
+            WH_TEST_PRINT("Client multi-root: numRoots > MAX → BADARGS...\n");
+            WH_TEST_ASSERT_RETURN(
+                WH_ERROR_BADARGS ==
+                wh_Client_CertVerifyMultiRoot(client, RAW_CERT_CHAIN_A,
+                                              RAW_CERT_CHAIN_A_len, oversized,
+                                              over, &out_rc));
+            WH_TEST_ASSERT_RETURN(
+                WH_ERROR_BADARGS ==
+                wh_Client_CertVerifyMultiRootAndCacheLeafPubKey(
+                    client, RAW_CERT_CHAIN_A, RAW_CERT_CHAIN_A_len, oversized,
+                    over, WH_NVM_FLAGS_USAGE_ANY, &mr_keyId, &out_rc));
+        }
+
+        /* (12) Order independence */
+        WH_TEST_PRINT("Client multi-root: [B,A] for chain B succeeds...\n");
+        WH_TEST_RETURN_ON_FAIL(wh_Client_CertVerifyMultiRoot(
+            client, RAW_CERT_CHAIN_B, RAW_CERT_CHAIN_B_len, roots_BA, 2,
+            &out_rc));
+        WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+
+        /* (11) Async split with case (3) */
+        WH_TEST_PRINT(
+            "Client multi-root: async split, [A,B] chain B succeeds...\n");
+        do {
+            rc = wh_Client_CertVerifyMultiRootRequest(
+                client, RAW_CERT_CHAIN_B, RAW_CERT_CHAIN_B_len, roots_AB, 2);
+        } while (rc == WH_ERROR_NOTREADY);
+        WH_TEST_RETURN_ON_FAIL(rc);
+        do {
+            rc = wh_Client_CertVerifyMultiRootResponse(client, &out_rc);
+        } while (rc == WH_ERROR_NOTREADY);
+        WH_TEST_RETURN_ON_FAIL(rc);
+        WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+
+        /* (9) Leaf key caching variant: succeed on chain A and pull pubkey */
+        WH_TEST_PRINT(
+            "Client multi-root: leaf cache [A,B] chain A succeeds...\n");
+        WH_TEST_RETURN_ON_FAIL(wh_Client_CertVerifyMultiRootAndCacheLeafPubKey(
+            client, RAW_CERT_CHAIN_A, RAW_CERT_CHAIN_A_len, roots_AB, 2,
+            WH_NVM_FLAGS_USAGE_ANY, &mr_keyId, &out_rc));
+        WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+        exportedPubKeyLen = sizeof(exportedPubKey);
+        rc = wh_Client_KeyExport(client, mr_keyId, NULL, 0, exportedPubKey,
+                                 &exportedPubKeyLen);
+        WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvict(client, mr_keyId));
+        WH_TEST_ASSERT(rc == WH_ERROR_OK);
+        WH_TEST_ASSERT_RETURN(exportedPubKeyLen == LEAF_A_PUBKEY_len);
+        WH_TEST_ASSERT_RETURN(
+            0 == memcmp(exportedPubKey, LEAF_A_PUBKEY, LEAF_A_PUBKEY_len));
+    }
 
     /* Clean up - delete the root certificates */
     WH_TEST_PRINT("Deleting root certificates...\n");
@@ -431,6 +669,115 @@ int whTest_CertClientDma_ClientServerTestInternal(whClientContext* client)
     WH_TEST_ASSERT_RETURN(exportedPubKeyLen == LEAF_A_PUBKEY_len);
     WH_TEST_ASSERT_RETURN(
         0 == memcmp(exportedPubKey, LEAF_A_PUBKEY, LEAF_A_PUBKEY_len));
+
+    /* ===== Multi-root DMA client tests ===== */
+    {
+        whNvmId rootC_absent         = 99;
+        whNvmId roots_AB[2]          = {rootCertA_id, rootCertB_id};
+        whNvmId roots_BA[2]          = {rootCertB_id, rootCertA_id};
+        whNvmId roots_A_absent[2]    = {rootCertA_id, rootC_absent};
+        whNvmId roots_only_absent[2] = {rootC_absent, 100};
+        whKeyId mr_keyId             = WH_KEYID_ERASED;
+
+        /* (1) Single root via multi-root DMA path */
+        WH_TEST_PRINT("Client multi-root DMA: single root, matches...\n");
+        WH_TEST_RETURN_ON_FAIL(wh_Client_CertVerifyMultiRootDma(
+            client, RAW_CERT_CHAIN_A, RAW_CERT_CHAIN_A_len, &rootCertA_id, 1,
+            &out_rc));
+        WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+
+        WH_TEST_PRINT("Client multi-root DMA: single root, mismatch...\n");
+        WH_TEST_RETURN_ON_FAIL(wh_Client_CertVerifyMultiRootDma(
+            client, RAW_CERT_CHAIN_A, RAW_CERT_CHAIN_A_len, &rootCertB_id, 1,
+            &out_rc));
+        WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_CERT_VERIFY);
+
+        /* (2-3) Two roots, chain matches first / second */
+        WH_TEST_PRINT("Client multi-root DMA: [A,B] chain A succeeds...\n");
+        WH_TEST_RETURN_ON_FAIL(wh_Client_CertVerifyMultiRootDma(
+            client, RAW_CERT_CHAIN_A, RAW_CERT_CHAIN_A_len, roots_AB, 2,
+            &out_rc));
+        WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+
+        WH_TEST_PRINT("Client multi-root DMA: [A,B] chain B succeeds...\n");
+        WH_TEST_RETURN_ON_FAIL(wh_Client_CertVerifyMultiRootDma(
+            client, RAW_CERT_CHAIN_B, RAW_CERT_CHAIN_B_len, roots_AB, 2,
+            &out_rc));
+        WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+
+        /* (5) Present + absent: success when chain matches present */
+        WH_TEST_PRINT(
+            "Client multi-root DMA: [A, absent] chain A succeeds...\n");
+        WH_TEST_RETURN_ON_FAIL(wh_Client_CertVerifyMultiRootDma(
+            client, RAW_CERT_CHAIN_A, RAW_CERT_CHAIN_A_len, roots_A_absent, 2,
+            &out_rc));
+        WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+
+        WH_TEST_PRINT(
+            "Client multi-root DMA: [A, absent] chain B → CERT_VERIFY...\n");
+        WH_TEST_RETURN_ON_FAIL(wh_Client_CertVerifyMultiRootDma(
+            client, RAW_CERT_CHAIN_B, RAW_CERT_CHAIN_B_len, roots_A_absent, 2,
+            &out_rc));
+        WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_CERT_VERIFY);
+
+        /* (6) All absent → NOTFOUND */
+        WH_TEST_PRINT("Client multi-root DMA: all absent → NOTFOUND...\n");
+        WH_TEST_RETURN_ON_FAIL(wh_Client_CertVerifyMultiRootDma(
+            client, RAW_CERT_CHAIN_A, RAW_CERT_CHAIN_A_len, roots_only_absent,
+            2, &out_rc));
+        WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_NOTFOUND);
+
+        /* (12) Order independence */
+        WH_TEST_PRINT("Client multi-root DMA: [B,A] chain B succeeds...\n");
+        WH_TEST_RETURN_ON_FAIL(wh_Client_CertVerifyMultiRootDma(
+            client, RAW_CERT_CHAIN_B, RAW_CERT_CHAIN_B_len, roots_BA, 2,
+            &out_rc));
+        WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+
+        /* (7) Boundary numRoots == 0 rejected client-side */
+        WH_TEST_PRINT("Client multi-root DMA: numRoots == 0 → BADARGS...\n");
+        WH_TEST_ASSERT_RETURN(
+            WH_ERROR_BADARGS ==
+            wh_Client_CertVerifyMultiRootDma(client, RAW_CERT_CHAIN_A,
+                                             RAW_CERT_CHAIN_A_len,
+                                             &rootCertA_id, 0, &out_rc));
+
+        /* (7b) Boundary numRoots > MAX_VERIFY_ROOTS rejected client-side */
+        {
+            whNvmId  oversized[WOLFHSM_CFG_CERT_MAX_VERIFY_ROOTS + 1] = {0};
+            uint16_t over = (uint16_t)(WOLFHSM_CFG_CERT_MAX_VERIFY_ROOTS + 1);
+            WH_TEST_PRINT(
+                "Client multi-root DMA: numRoots > MAX → BADARGS...\n");
+            WH_TEST_ASSERT_RETURN(
+                WH_ERROR_BADARGS ==
+                wh_Client_CertVerifyMultiRootDma(client, RAW_CERT_CHAIN_A,
+                                                 RAW_CERT_CHAIN_A_len,
+                                                 oversized, over, &out_rc));
+            WH_TEST_ASSERT_RETURN(
+                WH_ERROR_BADARGS ==
+                wh_Client_CertVerifyMultiRootDmaAndCacheLeafPubKey(
+                    client, RAW_CERT_CHAIN_A, RAW_CERT_CHAIN_A_len, oversized,
+                    over, WH_NVM_FLAGS_USAGE_ANY, &mr_keyId, &out_rc));
+        }
+
+        /* (9) Leaf key caching variant: succeed on chain A and pull pubkey */
+        WH_TEST_PRINT(
+            "Client multi-root DMA: leaf cache [A,B] chain A succeeds...\n");
+        WH_TEST_RETURN_ON_FAIL(
+            wh_Client_CertVerifyMultiRootDmaAndCacheLeafPubKey(
+                client, RAW_CERT_CHAIN_A, RAW_CERT_CHAIN_A_len, roots_AB, 2,
+                WH_NVM_FLAGS_USAGE_ANY, &mr_keyId, &out_rc));
+        WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+        exportedPubKeyLen = sizeof(exportedPubKey);
+        rc = wh_Client_KeyExportDma(client, mr_keyId, exportedPubKey,
+                                    sizeof(exportedPubKey), NULL, 0,
+                                    &exportedPubKeyLen);
+        WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvict(client, mr_keyId));
+        WH_TEST_ASSERT(rc == WH_ERROR_OK);
+        WH_TEST_ASSERT_RETURN(exportedPubKeyLen == LEAF_A_PUBKEY_len);
+        WH_TEST_ASSERT_RETURN(
+            0 == memcmp(exportedPubKey, LEAF_A_PUBKEY, LEAF_A_PUBKEY_len));
+    }
 
     /* Clean up - delete the root certificates */
     WH_TEST_PRINT("Deleting root certificates...\n");

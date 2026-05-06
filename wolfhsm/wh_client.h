@@ -2571,6 +2571,110 @@ int wh_Client_CertVerifyAndCacheLeafPubKey(
     int32_t* out_rc);
 
 
+/**
+ * @brief Sends a request to verify a certificate chain against a set of
+ * trusted root anchors.
+ *
+ * Generalizes wh_Client_CertVerifyRequest to accept an ordered list of
+ * trusted root NVM IDs. Verification succeeds if the chain anchors to any
+ * of the supplied roots. This function does not block; it returns
+ * immediately after sending the request.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] cert Pointer to the certificate data to verify.
+ * @param[in] cert_len Length of the certificate data.
+ * @param[in] trustedRootNvmIds Array of NVM IDs of trusted root certificates.
+ * @param[in] numRoots Number of entries in trustedRootNvmIds (1..
+ * WOLFHSM_CFG_CERT_MAX_VERIFY_ROOTS).
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertVerifyMultiRootRequest(whClientContext* c,
+                                         const uint8_t* cert, uint32_t cert_len,
+                                         const whNvmId* trustedRootNvmIds,
+                                         uint16_t       numRoots);
+
+/**
+ * @brief Receives a response from the server after multi-root certificate
+ * verification.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[out] out_rc Pointer to store the response code from the server.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertVerifyMultiRootResponse(whClientContext* c, int32_t* out_rc);
+
+/**
+ * @brief Sends a request and receives a response to verify a certificate
+ * chain against a set of trusted root anchors.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] cert Pointer to the certificate data to verify.
+ * @param[in] cert_len Length of the certificate data.
+ * @param[in] trustedRootNvmIds Array of NVM IDs of trusted root certificates.
+ * @param[in] numRoots Number of entries in trustedRootNvmIds.
+ * @param[out] out_rc Pointer to store the response code from the server.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertVerifyMultiRoot(whClientContext* c, const uint8_t* cert,
+                                  uint32_t       cert_len,
+                                  const whNvmId* trustedRootNvmIds,
+                                  uint16_t numRoots, int32_t* out_rc);
+
+/**
+ * @brief Sends a request to verify a certificate chain against a set of
+ * trusted root anchors and cache the leaf certificate public key.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] cert Pointer to the certificate data to verify.
+ * @param[in] cert_len Length of the certificate data.
+ * @param[in] trustedRootNvmIds Array of NVM IDs of trusted root certificates.
+ * @param[in] numRoots Number of entries in trustedRootNvmIds.
+ * @param[in] cachedKeyFlags NVM usage flags for the cached leaf public key.
+ * @param[in] keyId The keyId to cache the leaf public key in. If set to
+ * WH_KEYID_ERASED, the server will pick a keyId.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertVerifyMultiRootAndCacheLeafPubKeyRequest(
+    whClientContext* c, const uint8_t* cert, uint32_t cert_len,
+    const whNvmId* trustedRootNvmIds, uint16_t numRoots,
+    whNvmFlags cachedKeyFlags, whKeyId keyId);
+
+/**
+ * @brief Receives a response from the server after multi-root certificate
+ * verification with leaf public key caching.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[out] out_keyId Pointer to store the key ID of the cached leaf public
+ * key.
+ * @param[out] out_rc Pointer to store the response code from the server.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertVerifyMultiRootAndCacheLeafPubKeyResponse(whClientContext* c,
+                                                            whKeyId* out_keyId,
+                                                            int32_t* out_rc);
+
+/**
+ * @brief Sends a request and receives a response to verify a certificate
+ * chain against a set of trusted root anchors and cache the leaf
+ * certificate public key.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] cert Pointer to the certificate data to verify.
+ * @param[in] cert_len Length of the certificate data.
+ * @param[in] trustedRootNvmIds Array of NVM IDs of trusted root certificates.
+ * @param[in] numRoots Number of entries in trustedRootNvmIds.
+ * @param[in] cachedKeyFlags NVM usage flags for the cached leaf public key.
+ * @param[in,out] inout_keyId Pointer to the desired key ID (in) / cached key
+ * ID (out).
+ * @param[out] out_rc Pointer to store the response code from the server.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertVerifyMultiRootAndCacheLeafPubKey(
+    whClientContext* c, const uint8_t* cert, uint32_t cert_len,
+    const whNvmId* trustedRootNvmIds, uint16_t numRoots,
+    whNvmFlags cachedKeyFlags, whKeyId* inout_keyId, int32_t* out_rc);
+
+
 #ifdef WOLFHSM_CFG_DMA
 
 /**
@@ -2799,6 +2903,110 @@ int wh_Client_CertVerifyDmaAndCacheLeafPubKey(
     whClientContext* c, const void* cert, uint32_t cert_len,
     whNvmId trustedRootNvmId, whNvmFlags cachedKeyFlags, whKeyId* inout_keyId,
     int32_t* out_rc);
+
+
+/**
+ * @brief Sends a DMA request to verify a certificate chain against a set
+ * of trusted root anchors.
+ *
+ * Generalizes wh_Client_CertVerifyDmaRequest to accept an ordered list of
+ * trusted root NVM IDs. Verification succeeds if the chain anchors to any
+ * of the supplied roots. This function does not block; it returns
+ * immediately after sending the request.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] cert Pointer to the certificate data to verify.
+ * @param[in] cert_len Length of the certificate data.
+ * @param[in] trustedRootNvmIds Array of NVM IDs of trusted root certificates.
+ * @param[in] numRoots Number of entries in trustedRootNvmIds (1..
+ * WOLFHSM_CFG_CERT_MAX_VERIFY_ROOTS).
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertVerifyMultiRootDmaRequest(whClientContext* c,
+                                            const void* cert, uint32_t cert_len,
+                                            const whNvmId* trustedRootNvmIds,
+                                            uint16_t       numRoots);
+
+/**
+ * @brief Receives a response from the server after multi-root DMA
+ * certificate verification.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[out] out_rc Pointer to store the response code from the server.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertVerifyMultiRootDmaResponse(whClientContext* c,
+                                             int32_t*         out_rc);
+
+/**
+ * @brief Sends a request and receives a response to verify a certificate
+ * chain via DMA against a set of trusted root anchors.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] cert Pointer to the certificate data to verify.
+ * @param[in] cert_len Length of the certificate data.
+ * @param[in] trustedRootNvmIds Array of NVM IDs of trusted root certificates.
+ * @param[in] numRoots Number of entries in trustedRootNvmIds.
+ * @param[out] out_rc Pointer to store the response code from the server.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertVerifyMultiRootDma(whClientContext* c, const void* cert,
+                                     uint32_t       cert_len,
+                                     const whNvmId* trustedRootNvmIds,
+                                     uint16_t numRoots, int32_t* out_rc);
+
+/**
+ * @brief Sends a DMA request to verify a certificate chain against a set
+ * of trusted root anchors and cache the leaf certificate public key.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] cert Pointer to the certificate data to verify.
+ * @param[in] cert_len Length of the certificate data.
+ * @param[in] trustedRootNvmIds Array of NVM IDs of trusted root certificates.
+ * @param[in] numRoots Number of entries in trustedRootNvmIds.
+ * @param[in] cachedKeyFlags NVM usage flags for the cached leaf public key.
+ * @param[in] keyId The keyId to cache the leaf public key in. If set to
+ * WH_KEYID_ERASED, the server will pick a keyId.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertVerifyMultiRootDmaAndCacheLeafPubKeyRequest(
+    whClientContext* c, const void* cert, uint32_t cert_len,
+    const whNvmId* trustedRootNvmIds, uint16_t numRoots,
+    whNvmFlags cachedKeyFlags, whKeyId keyId);
+
+/**
+ * @brief Receives a response from the server after multi-root DMA
+ * certificate verification with leaf public key caching.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[out] out_keyId Pointer to store the key ID of the cached leaf public
+ * key.
+ * @param[out] out_rc Pointer to store the response code from the server.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertVerifyMultiRootDmaAndCacheLeafPubKeyResponse(
+    whClientContext* c, whKeyId* out_keyId, int32_t* out_rc);
+
+/**
+ * @brief Sends a request and receives a response to verify a certificate
+ * chain via DMA against a set of trusted root anchors and cache the leaf
+ * certificate public key.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] cert Pointer to the certificate data to verify.
+ * @param[in] cert_len Length of the certificate data.
+ * @param[in] trustedRootNvmIds Array of NVM IDs of trusted root certificates.
+ * @param[in] numRoots Number of entries in trustedRootNvmIds.
+ * @param[in] cachedKeyFlags NVM usage flags for the cached leaf public key.
+ * @param[in,out] inout_keyId Pointer to the desired key ID (in) / cached key
+ * ID (out).
+ * @param[out] out_rc Pointer to store the response code from the server.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_CertVerifyMultiRootDmaAndCacheLeafPubKey(
+    whClientContext* c, const void* cert, uint32_t cert_len,
+    const whNvmId* trustedRootNvmIds, uint16_t numRoots,
+    whNvmFlags cachedKeyFlags, whKeyId* inout_keyId, int32_t* out_rc);
 
 
 #endif /* WOLFHSM_CFG_DMA */

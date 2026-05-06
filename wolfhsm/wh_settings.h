@@ -86,6 +86,13 @@
  * operation in DMA requests.
  *     Default: Not defined
  *
+ *  WOLFHSM_CFG_CERT_MAX_VERIFY_ROOTS - Maximum number of trusted root NVM IDs
+ *  accepted in a single wh_Server_CertVerifyMultiRoot request. Bounded so the
+ *  non-DMA wire request fits within WOLFHSM_CFG_COMM_DATA_LEN alongside the
+ *  candidate chain, and so the inline DMA request struct stays a fixed-size
+ *  POD.
+ *      Default: 8
+ *
  *  WOLFHSM_CFG_IS_TEST_SERVER - If defined, the client-side unit tests assume
  * the server will be running custom server-side test instrumentation meant to
  * test additional edge cases that could otherwise not be triggered when running
@@ -270,6 +277,14 @@
 #else
 #define WOLFHSM_CFG_MAX_CERT_SIZE 4096
 #endif
+#endif
+
+/* Maximum number of trusted root NVM IDs accepted in one multi-root verify
+ * request. Bounded so the request fits within WOLFHSM_CFG_COMM_DATA_LEN
+ * alongside the candidate chain, and so the inline DMA request struct stays
+ * a fixed-size POD. Default 8; overridable at build time. */
+#ifndef WOLFHSM_CFG_CERT_MAX_VERIFY_ROOTS
+#define WOLFHSM_CFG_CERT_MAX_VERIFY_ROOTS 8
 #endif
 
 /*-----------------------------------------------------------------------------

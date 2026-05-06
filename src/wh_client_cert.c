@@ -507,6 +507,168 @@ int wh_Client_CertVerifyAndCacheLeafPubKey(
                        inout_keyId, out_rc);
 }
 
+/* Helper: send a multi-root verify request */
+static int _certVerifyMultiRootRequest(whClientContext* c, const uint8_t* cert,
+                                       uint32_t       cert_len,
+                                       const whNvmId* trustedRootNvmIds,
+                                       uint16_t numRoots, uint16_t verifyFlags,
+                                       whNvmFlags cachedKeyFlags, whKeyId keyId)
+{
+    whMessageCert_VerifyMultiRootRequest req   = {0};
+    uint8_t  buffer[WOLFHSM_CFG_COMM_DATA_LEN] = {0};
+    uint16_t hdr_len                           = sizeof(req);
+    uint32_t roots_bytes = (uint32_t)numRoots * sizeof(whNvmId);
+    uint8_t* roots_dst;
+    uint8_t* cert_dst;
+
+    if ((c == NULL) || (cert == NULL) || (cert_len == 0) ||
+        (trustedRootNvmIds == NULL) || (numRoots == 0) ||
+        (numRoots > WOLFHSM_CFG_CERT_MAX_VERIFY_ROOTS) ||
+        (roots_bytes > sizeof(buffer) - hdr_len) ||
+        (cert_len > sizeof(buffer) - hdr_len - roots_bytes)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Prepare request */
+    req.cert_len       = cert_len;
+    req.numRoots       = numRoots;
+    req.flags          = verifyFlags;
+    req.cachedKeyFlags = cachedKeyFlags;
+    req.keyId          = keyId;
+
+    /* Pack header, root array, then certificate data */
+    memcpy(buffer, &req, hdr_len);
+    roots_dst = buffer + hdr_len;
+    memcpy(roots_dst, trustedRootNvmIds, roots_bytes);
+    cert_dst = roots_dst + roots_bytes;
+    memcpy(cert_dst, cert, cert_len);
+
+    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_CERT,
+                                 WH_MESSAGE_CERT_ACTION_VERIFY_MULTI_ROOT,
+                                 hdr_len + roots_bytes + cert_len, buffer);
+}
+
+/* Helper: receive a multi-root verify response */
+static int _certVerifyMultiRootResponse(whClientContext* c, whKeyId* out_keyId,
+                                        int32_t* out_rc)
+{
+    int                          rc;
+    uint16_t                     group;
+    uint16_t                     action;
+    uint16_t                     size;
+    whMessageCert_VerifyResponse resp;
+
+    if (c == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    rc = wh_Client_RecvResponse(c, &group, &action, &size, &resp);
+    if (rc == 0) {
+        if ((group != WH_MESSAGE_GROUP_CERT) ||
+            (action != WH_MESSAGE_CERT_ACTION_VERIFY_MULTI_ROOT) ||
+            (size != sizeof(resp))) {
+            rc = WH_ERROR_ABORTED;
+        }
+        else {
+            if (out_rc != NULL) {
+                *out_rc = resp.rc;
+            }
+            if (out_keyId != NULL) {
+                *out_keyId = resp.keyId;
+            }
+        }
+    }
+
+    return rc;
+}
+
+/* Helper: blocking multi-root verify */
+static int _certVerifyMultiRoot(whClientContext* c, const uint8_t* cert,
+                                uint32_t       cert_len,
+                                const whNvmId* trustedRootNvmIds,
+                                uint16_t numRoots, uint16_t verifyFlags,
+                                whNvmFlags cachedKeyFlags, whKeyId* inout_keyId,
+                                int32_t* out_rc)
+{
+    int     rc    = 0;
+    whKeyId keyId = WH_KEYID_ERASED;
+
+    if ((c == NULL) || (cert == NULL) || (cert_len == 0) ||
+        (trustedRootNvmIds == NULL) || (numRoots == 0)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    if (inout_keyId != NULL) {
+        keyId = *inout_keyId;
+    }
+
+    do {
+        rc = _certVerifyMultiRootRequest(c, cert, cert_len, trustedRootNvmIds,
+                                         numRoots, verifyFlags, cachedKeyFlags,
+                                         keyId);
+    } while (rc == WH_ERROR_NOTREADY);
+
+    if (rc == 0) {
+        do {
+            rc = _certVerifyMultiRootResponse(c, inout_keyId, out_rc);
+        } while (rc == WH_ERROR_NOTREADY);
+    }
+
+    return rc;
+}
+
+int wh_Client_CertVerifyMultiRootRequest(whClientContext* c,
+                                         const uint8_t* cert, uint32_t cert_len,
+                                         const whNvmId* trustedRootNvmIds,
+                                         uint16_t       numRoots)
+{
+    return _certVerifyMultiRootRequest(c, cert, cert_len, trustedRootNvmIds,
+                                       numRoots, WH_CERT_FLAGS_NONE,
+                                       WH_NVM_FLAGS_USAGE_ANY, WH_KEYID_ERASED);
+}
+
+int wh_Client_CertVerifyMultiRootResponse(whClientContext* c, int32_t* out_rc)
+{
+    return _certVerifyMultiRootResponse(c, NULL, out_rc);
+}
+
+int wh_Client_CertVerifyMultiRoot(whClientContext* c, const uint8_t* cert,
+                                  uint32_t       cert_len,
+                                  const whNvmId* trustedRootNvmIds,
+                                  uint16_t numRoots, int32_t* out_rc)
+{
+    return _certVerifyMultiRoot(c, cert, cert_len, trustedRootNvmIds, numRoots,
+                                WH_CERT_FLAGS_NONE, WH_NVM_FLAGS_USAGE_ANY,
+                                NULL, out_rc);
+}
+
+int wh_Client_CertVerifyMultiRootAndCacheLeafPubKeyRequest(
+    whClientContext* c, const uint8_t* cert, uint32_t cert_len,
+    const whNvmId* trustedRootNvmIds, uint16_t numRoots,
+    whNvmFlags cachedKeyFlags, whKeyId keyId)
+{
+    return _certVerifyMultiRootRequest(
+        c, cert, cert_len, trustedRootNvmIds, numRoots,
+        WH_CERT_FLAGS_CACHE_LEAF_PUBKEY, cachedKeyFlags, keyId);
+}
+
+int wh_Client_CertVerifyMultiRootAndCacheLeafPubKeyResponse(whClientContext* c,
+                                                            whKeyId* out_keyId,
+                                                            int32_t* out_rc)
+{
+    return _certVerifyMultiRootResponse(c, out_keyId, out_rc);
+}
+
+int wh_Client_CertVerifyMultiRootAndCacheLeafPubKey(
+    whClientContext* c, const uint8_t* cert, uint32_t cert_len,
+    const whNvmId* trustedRootNvmIds, uint16_t numRoots,
+    whNvmFlags cachedKeyFlags, whKeyId* inout_keyId, int32_t* out_rc)
+{
+    return _certVerifyMultiRoot(c, cert, cert_len, trustedRootNvmIds, numRoots,
+                                WH_CERT_FLAGS_CACHE_LEAF_PUBKEY, cachedKeyFlags,
+                                inout_keyId, out_rc);
+}
+
 #ifdef WOLFHSM_CFG_DMA
 
 int wh_Client_CertAddTrustedDmaRequest(whClientContext* c, whNvmId id,
@@ -799,6 +961,155 @@ int wh_Client_CertVerifyDmaAndCacheLeafPubKey(
     return _certVerifyDma(c, cert, cert_len, trustedRootNvmId,
                           WH_CERT_FLAGS_CACHE_LEAF_PUBKEY, cachedKeyFlags,
                           inout_keyId, out_rc);
+}
+
+/* Helper: send a multi-root DMA verify request */
+static int _certVerifyMultiRootDmaRequest(
+    whClientContext* c, const void* cert, uint32_t cert_len,
+    const whNvmId* trustedRootNvmIds, uint16_t numRoots, uint16_t verifyFlags,
+    whNvmFlags cachedKeyFlags, whKeyId keyId)
+{
+    whMessageCert_VerifyMultiRootDmaRequest req = {0};
+
+    if ((c == NULL) || (trustedRootNvmIds == NULL) || (numRoots == 0) ||
+        (numRoots > WOLFHSM_CFG_CERT_MAX_VERIFY_ROOTS)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    req.cert_addr      = (uint64_t)(uintptr_t)cert;
+    req.cert_len       = cert_len;
+    req.numRoots       = numRoots;
+    req.flags          = verifyFlags;
+    req.cachedKeyFlags = cachedKeyFlags;
+    req.keyId          = keyId;
+    /* Only the first numRoots entries are meaningful; remaining slots stay
+     * zeroed by the initializer above. */
+    memcpy(req.trustedRootNvmIds, trustedRootNvmIds,
+           (size_t)numRoots * sizeof(whNvmId));
+
+    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_CERT,
+                                 WH_MESSAGE_CERT_ACTION_VERIFY_MULTI_ROOT_DMA,
+                                 sizeof(req), &req);
+}
+
+/* Helper: receive a multi-root DMA verify response */
+static int _certVerifyMultiRootDmaResponse(whClientContext* c,
+                                           whKeyId* out_keyId, int32_t* out_rc)
+{
+    int                             rc;
+    uint16_t                        group;
+    uint16_t                        action;
+    uint16_t                        size;
+    whMessageCert_VerifyDmaResponse resp;
+
+    if (c == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    rc = wh_Client_RecvResponse(c, &group, &action, &size, &resp);
+    if (rc == 0) {
+        if ((group != WH_MESSAGE_GROUP_CERT) ||
+            (action != WH_MESSAGE_CERT_ACTION_VERIFY_MULTI_ROOT_DMA) ||
+            (size != sizeof(resp))) {
+            rc = WH_ERROR_ABORTED;
+        }
+        else {
+            if (out_rc != NULL) {
+                *out_rc = resp.rc;
+            }
+            if (out_keyId != NULL) {
+                *out_keyId = resp.keyId;
+            }
+        }
+    }
+
+    return rc;
+}
+
+/* Helper: blocking multi-root DMA verify */
+static int _certVerifyMultiRootDma(whClientContext* c, const void* cert,
+                                   uint32_t       cert_len,
+                                   const whNvmId* trustedRootNvmIds,
+                                   uint16_t numRoots, uint16_t verifyFlags,
+                                   whNvmFlags cachedKeyFlags,
+                                   whKeyId* inout_keyId, int32_t* out_rc)
+{
+    int     rc    = 0;
+    whKeyId keyId = WH_KEYID_ERASED;
+
+    if (c == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    if (inout_keyId != NULL) {
+        keyId = *inout_keyId;
+    }
+
+    do {
+        rc = _certVerifyMultiRootDmaRequest(c, cert, cert_len,
+                                            trustedRootNvmIds, numRoots,
+                                            verifyFlags, cachedKeyFlags, keyId);
+    } while (rc == WH_ERROR_NOTREADY);
+
+    if (rc == 0) {
+        do {
+            rc = _certVerifyMultiRootDmaResponse(c, inout_keyId, out_rc);
+        } while (rc == WH_ERROR_NOTREADY);
+    }
+
+    return rc;
+}
+
+int wh_Client_CertVerifyMultiRootDmaRequest(whClientContext* c,
+                                            const void* cert, uint32_t cert_len,
+                                            const whNvmId* trustedRootNvmIds,
+                                            uint16_t       numRoots)
+{
+    return _certVerifyMultiRootDmaRequest(
+        c, cert, cert_len, trustedRootNvmIds, numRoots, WH_CERT_FLAGS_NONE,
+        WH_NVM_FLAGS_USAGE_ANY, WH_KEYID_ERASED);
+}
+
+int wh_Client_CertVerifyMultiRootDmaResponse(whClientContext* c,
+                                             int32_t*         out_rc)
+{
+    return _certVerifyMultiRootDmaResponse(c, NULL, out_rc);
+}
+
+int wh_Client_CertVerifyMultiRootDma(whClientContext* c, const void* cert,
+                                     uint32_t       cert_len,
+                                     const whNvmId* trustedRootNvmIds,
+                                     uint16_t numRoots, int32_t* out_rc)
+{
+    return _certVerifyMultiRootDma(c, cert, cert_len, trustedRootNvmIds,
+                                   numRoots, WH_CERT_FLAGS_NONE,
+                                   WH_NVM_FLAGS_USAGE_ANY, NULL, out_rc);
+}
+
+int wh_Client_CertVerifyMultiRootDmaAndCacheLeafPubKeyRequest(
+    whClientContext* c, const void* cert, uint32_t cert_len,
+    const whNvmId* trustedRootNvmIds, uint16_t numRoots,
+    whNvmFlags cachedKeyFlags, whKeyId keyId)
+{
+    return _certVerifyMultiRootDmaRequest(
+        c, cert, cert_len, trustedRootNvmIds, numRoots,
+        WH_CERT_FLAGS_CACHE_LEAF_PUBKEY, cachedKeyFlags, keyId);
+}
+
+int wh_Client_CertVerifyMultiRootDmaAndCacheLeafPubKeyResponse(
+    whClientContext* c, whKeyId* out_keyId, int32_t* out_rc)
+{
+    return _certVerifyMultiRootDmaResponse(c, out_keyId, out_rc);
+}
+
+int wh_Client_CertVerifyMultiRootDmaAndCacheLeafPubKey(
+    whClientContext* c, const void* cert, uint32_t cert_len,
+    const whNvmId* trustedRootNvmIds, uint16_t numRoots,
+    whNvmFlags cachedKeyFlags, whKeyId* inout_keyId, int32_t* out_rc)
+{
+    return _certVerifyMultiRootDma(c, cert, cert_len, trustedRootNvmIds,
+                                   numRoots, WH_CERT_FLAGS_CACHE_LEAF_PUBKEY,
+                                   cachedKeyFlags, inout_keyId, out_rc);
 }
 
 #endif /* WOLFHSM_CFG_DMA */
