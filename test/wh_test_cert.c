@@ -169,14 +169,14 @@ int whTest_CertServerCfg(whServerConfig* serverCfg)
             server, RAW_CERT_CHAIN_B, RAW_CERT_CHAIN_B_len, roots_AB, 2,
             WH_CERT_FLAGS_NONE, WH_NVM_FLAGS_USAGE_ANY, NULL));
 
-        /* (4) Two roots, chain matches neither */
+        /* (4) Two roots, chain matches neither (incomplete chain: leaf
+         * without its intermediate cannot be anchored to A or B) */
         WH_TEST_PRINT(
             "Multi-root: two roots [A,B], chain matches neither...\n");
         WH_TEST_ASSERT_RETURN(
             WH_ERROR_CERT_VERIFY ==
-            wh_Server_CertVerifyMultiRoot(server, INTERMEDIATE_B_CERT,
-                                          INTERMEDIATE_B_CERT_len, &rootCertA,
-                                          1, WH_CERT_FLAGS_NONE,
+            wh_Server_CertVerifyMultiRoot(server, LEAF_A_CERT, LEAF_A_CERT_len,
+                                          roots_AB, 2, WH_CERT_FLAGS_NONE,
                                           WH_NVM_FLAGS_USAGE_ANY, NULL));
 
         /* (5) One present root, one absent root */
@@ -392,12 +392,12 @@ int whTest_CertClient(whClientContext* client)
             &out_rc));
         WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
 
-        /* (4) Two roots, neither matches */
-        WH_TEST_PRINT(
-            "Client multi-root: [A,B] mismatch (intermediate B alone)...\n");
+        /* (4) Two roots, neither matches (incomplete chain: leaf without
+         * its intermediate cannot be anchored to A or B) */
+        WH_TEST_PRINT("Client multi-root: [A,B] mismatch (leaf without "
+                      "intermediate)...\n");
         WH_TEST_RETURN_ON_FAIL(wh_Client_CertVerifyMultiRoot(
-            client, INTERMEDIATE_B_CERT, INTERMEDIATE_B_CERT_len, &rootCertA_id,
-            1, &out_rc));
+            client, LEAF_A_CERT, LEAF_A_CERT_len, roots_AB, 2, &out_rc));
         WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_CERT_VERIFY);
 
         /* (5) One present root + absent: success when chain matches present */
