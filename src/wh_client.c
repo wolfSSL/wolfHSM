@@ -77,6 +77,11 @@ int wh_Client_Init(whClientContext* c, const whClientConfig* config)
 
     memset(c, 0, sizeof(*c));
 
+#ifdef WOLFHSM_CFG_CLIENT_MSG_POLL_CB
+    c->msgPollCb     = config->msgPollCb;
+    c->msgPollCbData = config->msgPollCbData;
+#endif /* WOLFHSM_CFG_CLIENT_MSG_POLL_CB */
+
     rc = wh_CommClient_Init(c->comm, config->comm);
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
@@ -152,6 +157,16 @@ int wh_Client_SendRequest(whClientContext* c,
         c->last_req_kind = kind;
         c->last_req_id   = req_id;
     }
+
+#ifdef WOLFHSM_CFG_CLIENT_MSG_POLL_CB
+    if (rc == WH_ERROR_NOTREADY && c->msgPollCb != NULL) {
+        int cbrc = c->msgPollCb(c->msgPollCbData);
+        if (cbrc != 0) {
+            return cbrc;
+        }
+    }
+#endif /* WOLFHSM_CFG_CLIENT_MSG_POLL_CB */
+
     return rc;
 }
 
@@ -188,6 +203,16 @@ int wh_Client_RecvResponse(whClientContext *c,
             }
         }
     }
+
+#ifdef WOLFHSM_CFG_CLIENT_MSG_POLL_CB
+    if (rc == WH_ERROR_NOTREADY && c->msgPollCb != NULL) {
+        int cbrc = c->msgPollCb(c->msgPollCbData);
+        if (cbrc != 0) {
+            return cbrc;
+        }
+    }
+#endif /* WOLFHSM_CFG_CLIENT_MSG_POLL_CB */
+
     return rc;
 }
 

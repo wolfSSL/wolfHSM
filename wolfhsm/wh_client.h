@@ -135,6 +135,14 @@ typedef struct {
 } whClientDmaContext;
 #endif /* WOLFHSM_CFG_DMA */
 
+#ifdef WOLFHSM_CFG_CLIENT_MSG_POLL_CB
+/* Invoked once each time wh_Client_SendRequest or wh_Client_RecvResponse would
+ * return WH_ERROR_NOTREADY. When the callback returns 0, the caller's retry
+ * loop continues. If the callback returns non-zero, the caller's retry loop is
+ * aborted and the non-zero propagates internally. */
+typedef int (*whClientMsgPollCb)(void* cbData);
+#endif /* WOLFHSM_CFG_CLIENT_MSG_POLL_CB */
+
 /* Client context */
 struct whClientContext_t {
     uint16_t     last_req_id;
@@ -143,6 +151,10 @@ struct whClientContext_t {
 #ifdef WOLFHSM_CFG_DMA
     whClientDmaContext dma;
 #endif /* WOLFHSM_CFG_DMA */
+#ifdef WOLFHSM_CFG_CLIENT_MSG_POLL_CB
+    whClientMsgPollCb msgPollCb;
+    void*             msgPollCbData;
+#endif /* WOLFHSM_CFG_CLIENT_MSG_POLL_CB */
     whCommClient comm[1];
 };
 
@@ -151,6 +163,10 @@ struct whClientConfig_t {
 #ifdef WOLFHSM_CFG_DMA
     whClientDmaConfig* dmaConfig;
 #endif /* WOLFHSM_CFG_DMA */
+#ifdef WOLFHSM_CFG_CLIENT_MSG_POLL_CB
+    whClientMsgPollCb msgPollCb;
+    void*             msgPollCbData;
+#endif /* WOLFHSM_CFG_CLIENT_MSG_POLL_CB */
 };
 typedef struct whClientConfig_t whClientConfig;
 
