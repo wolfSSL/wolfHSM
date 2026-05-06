@@ -2587,8 +2587,8 @@ int wh_Client_Curve25519ExportPublicKey(whClientContext* ctx, whKeyId keyId,
                                         uint16_t label_len, uint8_t* label)
 {
     int      ret;
-    byte     buffer[WOLFHSM_CFG_COMM_DATA_LEN] = {0};
-    uint16_t buffer_len                        = sizeof(buffer);
+    byte     buffer[CURVE25519_MAX_KEY_TO_DER_SZ] = {0};
+    uint16_t buffer_len                           = sizeof(buffer);
 
     if ((ctx == NULL) || WH_KEYID_ISERASED(keyId) || (key == NULL)) {
         return WH_ERROR_BADARGS;
@@ -2935,7 +2935,7 @@ int wh_Client_Ed25519ExportPublicKey(whClientContext* ctx, whKeyId keyId,
                                      uint8_t* label)
 {
     int      ret;
-    uint8_t  buffer[128] = {0};
+    uint8_t  buffer[MAX_PUBLIC_KEY_SZ] = {0};
     uint16_t buffer_len  = sizeof(buffer);
 
     if ((ctx == NULL) || WH_KEYID_ISERASED(keyId) || (key == NULL)) {
@@ -3702,9 +3702,9 @@ int wh_Client_RsaExportPublicKey(whClientContext* ctx, whKeyId keyId,
                                  uint8_t* label)
 {
     int      ret;
-    byte     keyDer[WOLFHSM_CFG_COMM_DATA_LEN] = {0};
-    uint16_t derSize                           = sizeof(keyDer);
-    uint8_t  keyLabel[WH_NVM_LABEL_LEN]        = {0};
+    byte     keyDer[MAX_PUBLIC_KEY_SZ]  = {0};
+    uint16_t derSize                    = sizeof(keyDer);
+    uint8_t  keyLabel[WH_NVM_LABEL_LEN] = {0};
 
     if ((ctx == NULL) || (keyId == WH_KEYID_ERASED) || (key == NULL)) {
         return WH_ERROR_BADARGS;
@@ -7161,7 +7161,7 @@ int wh_Client_MlDsaExportPublicKey(whClientContext* ctx, whKeyId keyId,
                                    uint8_t* label)
 {
     int      ret;
-    byte     buffer[DILITHIUM_MAX_BOTH_KEY_DER_SIZE] = {0};
+    byte     buffer[MAX_PUBLIC_KEY_SZ] = {0};
     uint16_t buffer_len = sizeof(buffer);
 
     if ((ctx == NULL) || WH_KEYID_ISERASED(keyId) || (key == NULL)) {
