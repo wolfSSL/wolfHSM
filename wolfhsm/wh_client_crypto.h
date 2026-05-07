@@ -2769,6 +2769,35 @@ int wh_Client_MlKemExportKey(whClientContext* ctx, whKeyId keyId, MlKemKey* key,
                              uint16_t label_len, uint8_t* label);
 
 /**
+ * @brief Exports only the public part of a cached ML-KEM key.
+ *
+ * Instructs the server to emit only the public portion of a cached ML-KEM
+ * key as raw FIPS 203 wire-format bytes (not DER). The private key stays
+ * inside the HSM. The decoded key will have MLKEM_FLAG_PUB_SET set and
+ * MLKEM_FLAG_PRIV_SET clear.
+ *
+ * The NONEXPORTABLE key flag does NOT block this call because public
+ * material is non-sensitive. The caller is responsible for initializing
+ * key (e.g. wc_MlKemKey_Init).
+ *
+ * @param[in] ctx Pointer to the wolfHSM client context.
+ * @param[in] keyId Server key ID whose public key should be exported. Must
+ *                  not be WH_KEYID_ERASED.
+ * @param[in,out] key Pointer to a caller-initialized MlKemKey. On success,
+ *                    only the public half is populated.
+ * @param[in] label_len Size of the optional label buffer in bytes. Values
+ *                      larger than WH_NVM_LABEL_LEN are truncated. Set to
+ *                      0 if label is not needed.
+ * @param[out] label Optional buffer to receive the key's label. May be NULL.
+ * @return int Returns 0 on success or a negative wolfHSM/wolfCrypt error
+ *             code on failure (e.g. WH_ERROR_NOTFOUND, WH_ERROR_BADARGS,
+ *             WH_ERROR_NOSPACE).
+ */
+int wh_Client_MlKemExportPublicKey(whClientContext* ctx, whKeyId keyId,
+                                   MlKemKey* key, uint16_t label_len,
+                                   uint8_t* label);
+
+/**
  * @brief Generate a ML-KEM key pair and return it as an ephemeral key.
  *
  * The key pair is generated on the server, serialized, and returned to the
@@ -2868,6 +2897,30 @@ int wh_Client_MlKemImportKeyDma(whClientContext* ctx, MlKemKey* key,
 int wh_Client_MlKemExportKeyDma(whClientContext* ctx, whKeyId keyId,
                                 MlKemKey* key, uint16_t label_len,
                                 uint8_t* label);
+
+/**
+ * @brief Exports only the public part of a cached ML-KEM key using DMA.
+ *
+ * DMA counterpart to wh_Client_MlKemExportPublicKey. The server writes the
+ * raw FIPS 203 wire-format public bytes directly into the client-provided
+ * buffer.
+ *
+ * The NONEXPORTABLE key flag does NOT block this call because public
+ * material is non-sensitive.
+ *
+ * @param[in] ctx Pointer to the wolfHSM client context.
+ * @param[in] keyId Server key ID whose public key should be exported. Must
+ *                  not be WH_KEYID_ERASED.
+ * @param[in,out] key Pointer to a caller-initialized MlKemKey. On success,
+ *                    only the public half is populated.
+ * @param[in] label_len Size of the optional label buffer in bytes.
+ * @param[out] label Optional buffer to receive the key's label. May be NULL.
+ * @return int Returns 0 on success or a negative wolfHSM/wolfCrypt error
+ *             code on failure.
+ */
+int wh_Client_MlKemExportPublicKeyDma(whClientContext* ctx, whKeyId keyId,
+                                      MlKemKey* key, uint16_t label_len,
+                                      uint8_t* label);
 
 /**
  * @brief Generate an ephemeral ML-KEM key pair using DMA.

@@ -67,6 +67,9 @@
 #ifdef WOLFSSL_HAVE_MLDSA
 #include "wolfssl/wolfcrypt/wc_mldsa.h"
 #endif
+#ifdef WOLFSSL_HAVE_MLKEM
+#include "wolfssl/wolfcrypt/wc_mlkem.h"
+#endif
 
 static int _FindInCache(whServerContext* server, whKeyId keyId, int* out_index,
                         int* out_big, uint8_t** out_buffer,
@@ -540,6 +543,47 @@ static int _ExportCurve25519PublicKey(whServerContext* server, whKeyId keyId,
     return ret;
 }
 #endif
+
+#ifdef WOLFSSL_HAVE_MLKEM
+static int _ExportMlkemPublicKey(whServerContext* server, whKeyId keyId,
+    uint8_t* out, uint16_t* outSz)
+{
+    int      ret = WH_ERROR_OK;
+    MlKemKey key[1];
+    word32   pubSize;
+    /* Pick the lowest compiled-in level as the initial hint;
+     * wh_Crypto_MlKemDeserializeKey (called via
+     * wh_Server_MlKemKeyCacheExport) probes the remaining enabled levels. */
+#ifndef WOLFSSL_NO_ML_KEM_512
+    const int initLevel = WC_ML_KEM_512;
+#elif !defined(WOLFSSL_NO_ML_KEM_768)
+    const int initLevel = WC_ML_KEM_768;
+#else
+    const int initLevel = WC_ML_KEM_1024;
+#endif
+
+    ret = wc_MlKemKey_Init(key, initLevel, NULL, INVALID_DEVID);
+    if (ret == 0) {
+        ret = wh_Server_MlKemKeyCacheExport(server, keyId, key);
+        if (ret == 0) {
+            ret = wc_MlKemKey_PublicKeySize(key, &pubSize);
+            if (ret == 0) {
+                if ((uint32_t)pubSize > (uint32_t)*outSz) {
+                    ret = WH_ERROR_NOSPACE;
+                }
+                else {
+                    ret = wc_MlKemKey_EncodePublicKey(key, out, pubSize);
+                    if (ret == 0) {
+                        *outSz = (uint16_t)pubSize;
+                    }
+                }
+            }
+        }
+        wc_MlKemKey_Free(key);
+    }
+    return ret;
+}
+#endif /* WOLFSSL_HAVE_MLKEM */
 
 int wh_Server_KeystoreGetUniqueId(whServerContext* server, whNvmId* inout_id)
 {
@@ -2088,6 +2132,12 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
                                                       stage, &stageMax);
                             break;
                     #endif /* HAVE_CURVE25519 */
+                    #ifdef WOLFSSL_HAVE_MLKEM
+                        case WH_KEY_ALGO_MLKEM:
+                            ret = _ExportMlkemPublicKey(server, serverKeyId,
+                                                        stage, &stageMax);
+                            break;
+                    #endif /* WOLFSSL_HAVE_MLKEM */
                         default:
                             ret = WH_ERROR_BADARGS;
                             break;
@@ -2285,6 +2335,12 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
                                     serverKeyId, out, &max_der);
                             break;
                     #endif /* HAVE_CURVE25519 */
+                    #ifdef WOLFSSL_HAVE_MLKEM
+                        case WH_KEY_ALGO_MLKEM:
+                            ret = _ExportMlkemPublicKey(server, serverKeyId,
+                                                        out, &max_der);
+                            break;
+                    #endif /* WOLFSSL_HAVE_MLKEM */
                         default:
                             ret = WH_ERROR_BADARGS;
                             break;

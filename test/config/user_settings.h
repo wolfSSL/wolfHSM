@@ -140,7 +140,6 @@
 
 /* ML-KEM Options */
 #define WOLFSSL_HAVE_MLKEM
-#define WOLFSSL_WC_MLKEM
 
 /* Ed25519 Options */
 #define HAVE_ED25519

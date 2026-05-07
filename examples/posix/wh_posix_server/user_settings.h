@@ -152,7 +152,6 @@ extern "C" {
 
 /* ML-KEM Options */
 #define WOLFSSL_HAVE_MLKEM
-#define WOLFSSL_WC_MLKEM
 
 /** Composite features */
 #define HAVE_HKDF

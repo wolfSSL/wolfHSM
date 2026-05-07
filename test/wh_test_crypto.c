@@ -11525,7 +11525,332 @@ static int whTestCrypto_MlKemClient(whClientContext* ctx, int devId, WC_RNG* rng
     return ret;
 }
 
+static int whTestCrypto_MlKemExportPublic(whClientContext* ctx, int devId,
+                                          WC_RNG* rng)
+{
+    int      ret      = 0;
+    int      levels[3];
+    int      levelCnt = 0;
+    int      i;
+
+    levelCnt = whTestCrypto_MlKemGetLevels(
+        levels, (int)(sizeof(levels) / sizeof(levels[0])));
+
+    for (i = 0; (ret == 0) && (i < levelCnt); i++) {
+        whKeyId  keyId  = WH_KEYID_ERASED;
+        MlKemKey pub[1] = {0};
+        MlKemKey cached[1] = {0};
+        int      pubInited    = 0;
+        int      cachedInited = 0;
+        uint8_t  denyBuf[WC_ML_KEM_MAX_PRIVATE_KEY_SIZE];
+        uint16_t denyLen = sizeof(denyBuf);
+        byte     ct[WC_ML_KEM_MAX_CIPHER_TEXT_SIZE];
+        byte     ssEnc[WC_ML_KEM_SS_SZ];
+        byte     ssDec[WC_ML_KEM_SS_SZ];
+        word32   ctLen    = sizeof(ct);
+        word32   ssEncLen = sizeof(ssEnc);
+        word32   ssDecLen = sizeof(ssDec);
+
+        ret = wh_Client_MlKemMakeCacheKey(
+            ctx, levels[i], &keyId,
+            WH_NVM_FLAGS_USAGE_DERIVE | WH_NVM_FLAGS_NONEXPORTABLE,
+            0, NULL);
+        if (ret != 0) {
+            WH_ERROR_PRINT(
+                "Failed to make NONEXPORTABLE ML-KEM cached key level=%d %d\n",
+                levels[i], ret);
+            break;
+        }
+
+        /* Full export must be denied */
+        {
+            int denyRet = wh_Client_KeyExport(ctx, keyId, NULL, 0, denyBuf,
+                                              &denyLen);
+            if (denyRet != WH_ERROR_ACCESS) {
+                WH_ERROR_PRINT(
+                    "NONEXPORTABLE ML-KEM full export was not denied "
+                    "level=%d: %d\n", levels[i], denyRet);
+                ret = -1;
+            }
+        }
+
+        /* Public export must succeed and yield a public-only key. */
+        if (ret == 0) {
+            ret = wc_MlKemKey_Init(pub, levels[i], NULL, devId);
+            if (ret == 0) {
+                pubInited = 1;
+                ret = wh_Client_MlKemExportPublicKey(ctx, keyId, pub, 0, NULL);
+                if (ret != 0) {
+                    WH_ERROR_PRINT(
+                        "wh_Client_MlKemExportPublicKey failed level=%d %d\n",
+                        levels[i], ret);
+                }
+                else if (((pub->flags & MLKEM_FLAG_PUB_SET) == 0) ||
+                         ((pub->flags & MLKEM_FLAG_PRIV_SET) != 0)) {
+                    WH_ERROR_PRINT(
+                        "Exported ML-KEM key flags wrong level=%d "
+                        "flags=0x%x\n",
+                        levels[i], (unsigned)pub->flags);
+                    ret = -1;
+                }
+            }
+        }
+
+        /* Roundtrip: encapsulate locally with the exported public key,
+         * decapsulate on the server-cached private key. */
+        if (ret == 0) {
+            ret = wc_MlKemKey_CipherTextSize(pub, &ctLen);
+            if (ret == 0) {
+                ret = wc_MlKemKey_SharedSecretSize(pub, &ssEncLen);
+            }
+            if (ret == 0) {
+                ssDecLen = ssEncLen;
+                ret      = wc_MlKemKey_Encapsulate(pub, ct, ssEnc, rng);
+                if (ret != 0) {
+                    WH_ERROR_PRINT(
+                        "Local encapsulate against exported pub failed "
+                        "level=%d %d\n", levels[i], ret);
+                }
+            }
+        }
+        if (ret == 0) {
+            ret = wc_MlKemKey_Init(cached, levels[i], NULL, devId);
+            if (ret == 0) {
+                cachedInited = 1;
+                ret          = wh_Client_MlKemSetKeyId(cached, keyId);
+            }
+        }
+        if (ret == 0) {
+            ret = wh_Client_MlKemDecapsulate(ctx, cached, ct, ctLen, ssDec,
+                                             &ssDecLen);
+            if (ret != 0) {
+                WH_ERROR_PRINT(
+                    "Server decapsulate of locally-encapsulated ct failed "
+                    "level=%d %d\n", levels[i], ret);
+            }
+            else if ((ssEncLen != ssDecLen) ||
+                     (memcmp(ssEnc, ssDec, ssEncLen) != 0)) {
+                WH_ERROR_PRINT(
+                    "ML-KEM export-public roundtrip ss mismatch level=%d\n",
+                    levels[i]);
+                ret = -1;
+            }
+        }
+
+        /* Negative: missing keyId must return NOTFOUND. 0xBADE is well clear
+         * of the auto-assigned IDs the server hands out near IDMAX. */
+        if (ret == 0) {
+            uint8_t  bogusBuf[WC_ML_KEM_MAX_PUBLIC_KEY_SIZE];
+            uint16_t bogusLen = sizeof(bogusBuf);
+            whKeyId  missing  = (whKeyId)0xBADE;
+            int negRet = wh_Client_KeyExportPublic(
+                ctx, missing, WH_KEY_ALGO_MLKEM, NULL, 0, bogusBuf, &bogusLen);
+            if (negRet != WH_ERROR_NOTFOUND) {
+                WH_ERROR_PRINT(
+                    "ExportPublic on missing ML-KEM keyId returned %d, "
+                    "expected WH_ERROR_NOTFOUND (level=%d)\n",
+                    negRet, levels[i]);
+                ret = -1;
+            }
+        }
+
+        if (cachedInited) {
+            wc_MlKemKey_Free(cached);
+        }
+        if (pubInited) {
+            wc_MlKemKey_Free(pub);
+        }
+        if (!WH_KEYID_ISERASED(keyId)) {
+            (void)wh_Client_KeyEvict(ctx, keyId);
+        }
+    }
+
+    if (ret == 0) {
+        WH_TEST_PRINT("ML-KEM EXPORT-PUBLIC SUCCESS\n");
+    }
+    return ret;
+}
+
 #ifdef WOLFHSM_CFG_DMA
+static int whTestCrypto_MlKemExportPublicDma(whClientContext* ctx, int devId,
+                                             WC_RNG* rng)
+{
+    int      ret      = 0;
+    int      levels[3];
+    int      levelCnt = 0;
+    int      i;
+
+    levelCnt = whTestCrypto_MlKemGetLevels(
+        levels, (int)(sizeof(levels) / sizeof(levels[0])));
+
+    for (i = 0; (ret == 0) && (i < levelCnt); i++) {
+        whKeyId  keyId    = WH_KEYID_ERASED;
+        MlKemKey pub[1]   = {0};
+        MlKemKey cached[1] = {0};
+        int      pubInited    = 0;
+        int      cachedInited = 0;
+        byte     ct[WC_ML_KEM_MAX_CIPHER_TEXT_SIZE];
+        byte     ssEnc[WC_ML_KEM_SS_SZ];
+        byte     ssDec[WC_ML_KEM_SS_SZ];
+        word32   ctLen    = sizeof(ct);
+        word32   ssEncLen = sizeof(ssEnc);
+        word32   ssDecLen = sizeof(ssDec);
+
+        ret = wh_Client_MlKemMakeCacheKey(
+            ctx, levels[i], &keyId,
+            WH_NVM_FLAGS_USAGE_DERIVE | WH_NVM_FLAGS_NONEXPORTABLE,
+            0, NULL);
+        if (ret != 0) {
+            WH_ERROR_PRINT(
+                "Failed to make NONEXPORTABLE ML-KEM cached key (DMA) "
+                "level=%d %d\n", levels[i], ret);
+            break;
+        }
+
+        /* Full DMA export must be denied. */
+        {
+            byte     fullBuf[WC_ML_KEM_MAX_PRIVATE_KEY_SIZE];
+            uint16_t fullLen = sizeof(fullBuf);
+            int denyRet = wh_Client_KeyExportDma(ctx, keyId, fullBuf, fullLen,
+                                                 NULL, 0, &fullLen);
+            if (denyRet != WH_ERROR_ACCESS) {
+                WH_ERROR_PRINT(
+                    "NONEXPORTABLE ML-KEM full DMA export was not denied "
+                    "level=%d: %d\n", levels[i], denyRet);
+                ret = -1;
+            }
+        }
+
+        /* Public DMA export must succeed and yield a public-only key. */
+        if (ret == 0) {
+            ret = wc_MlKemKey_Init(pub, levels[i], NULL, devId);
+            if (ret == 0) {
+                pubInited = 1;
+                ret = wh_Client_MlKemExportPublicKeyDma(ctx, keyId, pub,
+                                                        0, NULL);
+                if (ret != 0) {
+                    WH_ERROR_PRINT(
+                        "wh_Client_MlKemExportPublicKeyDma failed level=%d "
+                        "%d\n", levels[i], ret);
+                }
+                else if (((pub->flags & MLKEM_FLAG_PUB_SET) == 0) ||
+                         ((pub->flags & MLKEM_FLAG_PRIV_SET) != 0)) {
+                    WH_ERROR_PRINT(
+                        "Exported ML-KEM key (DMA) flags wrong level=%d "
+                        "flags=0x%x\n",
+                        levels[i], (unsigned)pub->flags);
+                    ret = -1;
+                }
+            }
+        }
+
+        /* Roundtrip: encapsulate locally with the DMA-exported public key,
+         * decapsulate on the server-cached private key. */
+        if (ret == 0) {
+            ret = wc_MlKemKey_CipherTextSize(pub, &ctLen);
+            if (ret == 0) {
+                ret = wc_MlKemKey_SharedSecretSize(pub, &ssEncLen);
+            }
+            if (ret == 0) {
+                ssDecLen = ssEncLen;
+                ret      = wc_MlKemKey_Encapsulate(pub, ct, ssEnc, rng);
+                if (ret != 0) {
+                    WH_ERROR_PRINT(
+                        "Local encapsulate against DMA-exported pub failed "
+                        "level=%d %d\n", levels[i], ret);
+                }
+            }
+        }
+        if (ret == 0) {
+            ret = wc_MlKemKey_Init(cached, levels[i], NULL, devId);
+            if (ret == 0) {
+                cachedInited = 1;
+                ret          = wh_Client_MlKemSetKeyId(cached, keyId);
+            }
+        }
+        if (ret == 0) {
+            ret = wh_Client_MlKemDecapsulate(ctx, cached, ct, ctLen, ssDec,
+                                             &ssDecLen);
+            if (ret != 0) {
+                WH_ERROR_PRINT(
+                    "Server decapsulate of locally-encapsulated ct (DMA) "
+                    "failed level=%d %d\n", levels[i], ret);
+            }
+            else if ((ssEncLen != ssDecLen) ||
+                     (memcmp(ssEnc, ssDec, ssEncLen) != 0)) {
+                WH_ERROR_PRINT(
+                    "ML-KEM DMA export-public roundtrip ss mismatch "
+                    "level=%d\n", levels[i]);
+                ret = -1;
+            }
+        }
+
+        /* Byte-identity check: DMA and non-DMA paths must produce the
+         * same public bytes for the same cached key. */
+        if (ret == 0) {
+            byte     dmaBuf[WC_ML_KEM_MAX_PUBLIC_KEY_SIZE];
+            byte     nonDmaBuf[WC_ML_KEM_MAX_PUBLIC_KEY_SIZE];
+            uint16_t dmaSz    = sizeof(dmaBuf);
+            uint16_t nonDmaSz = sizeof(nonDmaBuf);
+
+            ret = wh_Client_KeyExportPublicDma(ctx, keyId, WH_KEY_ALGO_MLKEM,
+                                               dmaBuf, dmaSz, NULL, 0, &dmaSz);
+            if (ret != 0) {
+                WH_ERROR_PRINT(
+                    "Generic ML-KEM DMA export failed for re-encode check "
+                    "level=%d %d\n", levels[i], ret);
+            }
+            else {
+                ret = wh_Client_KeyExportPublic(ctx, keyId, WH_KEY_ALGO_MLKEM,
+                                                NULL, 0, nonDmaBuf, &nonDmaSz);
+                if (ret != 0) {
+                    WH_ERROR_PRINT(
+                        "Non-DMA ML-KEM export failed for re-encode check "
+                        "level=%d %d\n", levels[i], ret);
+                }
+                else if (dmaSz != nonDmaSz ||
+                         memcmp(dmaBuf, nonDmaBuf, dmaSz) != 0) {
+                    WH_ERROR_PRINT(
+                        "ML-KEM DMA and non-DMA public bytes differ "
+                        "level=%d (dmaSz=%u nonDmaSz=%u)\n",
+                        levels[i], (unsigned)dmaSz, (unsigned)nonDmaSz);
+                    ret = -1;
+                }
+            }
+        }
+
+        /* Negative: a too-small client buffer must yield WH_ERROR_NOSPACE. */
+        if (ret == 0) {
+            byte     tinyBuf[8];
+            uint16_t tinySz = sizeof(tinyBuf);
+            int      negRet = wh_Client_KeyExportPublicDma(
+                ctx, keyId, WH_KEY_ALGO_MLKEM, tinyBuf, tinySz, NULL, 0,
+                &tinySz);
+            if (negRet != WH_ERROR_NOSPACE) {
+                WH_ERROR_PRINT(
+                    "Too-small DMA buffer did not return NOSPACE level=%d: "
+                    "%d\n", levels[i], negRet);
+                ret = -1;
+            }
+        }
+
+        if (cachedInited) {
+            wc_MlKemKey_Free(cached);
+        }
+        if (pubInited) {
+            wc_MlKemKey_Free(pub);
+        }
+        if (!WH_KEYID_ISERASED(keyId)) {
+            (void)wh_Client_KeyEvict(ctx, keyId);
+        }
+    }
+
+    if (ret == 0) {
+        WH_TEST_PRINT("ML-KEM EXPORT-PUBLIC DMA SUCCESS\n");
+    }
+    return ret;
+}
+
 static int whTestCrypto_MlKemDmaClient(whClientContext* ctx, int devId,
                                        WC_RNG* rng)
 {
@@ -12879,9 +13204,22 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         ret = whTestCrypto_MlKemClient(client, WH_DEV_ID, rng);
     }
 
+    if (ret == 0) {
+        ret = whTestCrypto_MlKemExportPublic(client, WH_DEV_ID, rng);
+        if (ret != 0) {
+            WH_ERROR_PRINT("ML-KEM export-public test failed: %d\n", ret);
+        }
+    }
+
 #ifdef WOLFHSM_CFG_DMA
     if (ret == 0) {
         ret = whTestCrypto_MlKemDmaClient(client, WH_DEV_ID_DMA, rng);
+    }
+    if (ret == 0) {
+        ret = whTestCrypto_MlKemExportPublicDma(client, WH_DEV_ID_DMA, rng);
+        if (ret != 0) {
+            WH_ERROR_PRINT("ML-KEM export-public DMA test failed: %d\n", ret);
+        }
     }
 #endif /* WOLFHSM_CFG_DMA */
 #endif /* !defined(WOLFSSL_MLKEM_NO_MAKE_KEY) &&    \

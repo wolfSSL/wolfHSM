@@ -9105,6 +9105,26 @@ int wh_Client_MlKemExportKey(whClientContext* ctx, whKeyId keyId, MlKemKey* key,
     return ret;
 }
 
+int wh_Client_MlKemExportPublicKey(whClientContext* ctx, whKeyId keyId,
+                                   MlKemKey* key, uint16_t label_len,
+                                   uint8_t* label)
+{
+    int      ret;
+    byte     buffer[WC_ML_KEM_MAX_PUBLIC_KEY_SIZE] = {0};
+    uint16_t buffer_len = sizeof(buffer);
+
+    if ((ctx == NULL) || WH_KEYID_ISERASED(keyId) || (key == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_Client_KeyExportPublic(ctx, keyId, WH_KEY_ALGO_MLKEM, label,
+                                    label_len, buffer, &buffer_len);
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Crypto_MlKemDeserializeKey(buffer, buffer_len, key);
+    }
+    return ret;
+}
+
 static int _MlKemMakeKey(whClientContext* ctx, int level,
                          whKeyId* inout_key_id, whNvmFlags flags,
                          uint16_t label_len, uint8_t* label, MlKemKey* key)
@@ -9520,6 +9540,27 @@ int wh_Client_MlKemExportKeyDma(whClientContext* ctx, whKeyId keyId,
                             keyId, ret);
 
     wc_ForceZero(buffer, buffer_len);
+    return ret;
+}
+
+int wh_Client_MlKemExportPublicKeyDma(whClientContext* ctx, whKeyId keyId,
+                                      MlKemKey* key, uint16_t label_len,
+                                      uint8_t* label)
+{
+    int      ret;
+    byte     buffer[WC_ML_KEM_MAX_PUBLIC_KEY_SIZE] = {0};
+    uint16_t buffer_len = sizeof(buffer);
+
+    if ((ctx == NULL) || WH_KEYID_ISERASED(keyId) || (key == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_Client_KeyExportPublicDma(ctx, keyId, WH_KEY_ALGO_MLKEM, buffer,
+                                       buffer_len, label, label_len,
+                                       &buffer_len);
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Crypto_MlKemDeserializeKey(buffer, buffer_len, key);
+    }
     return ret;
 }
 
