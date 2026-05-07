@@ -226,6 +226,32 @@ int wh_Client_Curve25519ExportKey(whClientContext* ctx, whKeyId keyId,
         curve25519_key* key, uint16_t label_len, uint8_t* label);
 
 /**
+ * @brief Exports only the public part of a cached Curve25519 key.
+ *
+ * Instructs the server to emit only the public portion of a cached
+ * Curve25519 key as SubjectPublicKeyInfo DER. The private scalar stays
+ * inside the HSM. The decoded key will have only the public part set.
+ *
+ * The NONEXPORTABLE key flag does NOT block this call because public
+ * material is non-sensitive. The caller is responsible for initializing
+ * key (e.g. wc_curve25519_init_ex) prior to calling this function.
+ *
+ * @param[in] ctx Pointer to the wolfHSM client context.
+ * @param[in] keyId Server key ID whose public key should be exported. Must
+ *                  not be WH_KEYID_ERASED.
+ * @param[in,out] key Pointer to a caller-initialized curve25519_key. On
+ *                    success, the public portion is populated.
+ * @param[in] label_len Size of the optional label buffer in bytes. Values
+ *                      larger than WH_NVM_LABEL_LEN are truncated. Set to
+ *                      0 if label is not needed.
+ * @param[out] label Optional buffer to receive the key's label. May be NULL.
+ * @return int Returns 0 on success or a negative wolfHSM/wolfCrypt error
+ *             code on failure (e.g. WH_ERROR_NOTFOUND, WH_ERROR_BADARGS).
+ */
+int wh_Client_Curve25519ExportPublicKey(whClientContext* ctx, whKeyId keyId,
+        curve25519_key* key, uint16_t label_len, uint8_t* label);
+
+/**
  * @brief Generate a Curve25519 key in the server key cache
  *
  * This function requests the server to generate a new Curve25519 key and insert
@@ -355,6 +381,34 @@ int wh_Client_EccImportKey(whClientContext* ctx, ecc_key* key,
 int wh_Client_EccExportKey(whClientContext* ctx, whKeyId keyId,
         ecc_key* key,
         uint16_t label_len, uint8_t* label);
+
+/**
+ * @brief Exports only the public part of a cached ECC key.
+ *
+ * Instructs the server to emit only the public portion (SubjectPublicKeyInfo
+ * DER with curve parameters) of a cached ECC key. The private scalar stays
+ * inside the HSM. The decoded key is written into the caller-initialized
+ * ecc_key struct and will report type == ECC_PUBLICKEY.
+ *
+ * The NONEXPORTABLE key flag does NOT block this call because public
+ * material is non-sensitive. The caller is responsible for initializing
+ * key (e.g. wc_ecc_init_ex) prior to calling this function.
+ *
+ * @param[in] ctx Pointer to the wolfHSM client context.
+ * @param[in] keyId Server key ID whose public key should be exported. Must
+ *                  not be WH_KEYID_ERASED.
+ * @param[in,out] key Pointer to a caller-initialized ecc_key. On success,
+ *                    the public point is populated and key->type is set
+ *                    to ECC_PUBLICKEY.
+ * @param[in] label_len Size of the optional label buffer in bytes. Values
+ *                      larger than WH_NVM_LABEL_LEN are truncated. Set to
+ *                      0 if label is not needed.
+ * @param[out] label Optional buffer to receive the key's label. May be NULL.
+ * @return int Returns 0 on success or a negative wolfHSM/wolfCrypt error
+ *             code on failure (e.g. WH_ERROR_NOTFOUND, WH_ERROR_BADARGS).
+ */
+ int wh_Client_EccExportPublicKey(whClientContext* ctx, whKeyId keyId,
+        ecc_key* key, uint16_t label_len, uint8_t* label);
 
 /**
  * @brief Generate an ECC key pair on the server and export it to the client.
@@ -750,6 +804,34 @@ int wh_Client_Ed25519ExportKey(whClientContext* ctx, whKeyId keyId,
                                uint8_t* label);
 
 /**
+ * @brief Exports only the public part of a cached Ed25519 key.
+ *
+ * Instructs the server to emit only the public portion of a cached Ed25519
+ * key as SubjectPublicKeyInfo DER. The private seed stays inside the HSM.
+ * The decoded key will have pubKeySet == 1 and privKeySet == 0.
+ *
+ * The NONEXPORTABLE key flag does NOT block this call because public
+ * material is non-sensitive. The caller is responsible for initializing
+ * key (e.g. wc_ed25519_init_ex) prior to calling this function.
+ *
+ * @param[in] ctx Pointer to the wolfHSM client context.
+ * @param[in] keyId Server key ID whose public key should be exported. Must
+ *                  not be WH_KEYID_ERASED.
+ * @param[in,out] key Pointer to a caller-initialized ed25519_key. On
+ *                    success, only the public half is populated
+ *                    (pubKeySet == 1, privKeySet == 0).
+ * @param[in] label_len Size of the optional label buffer in bytes. Values
+ *                      larger than WH_NVM_LABEL_LEN are truncated. Set to
+ *                      0 if label is not needed.
+ * @param[out] label Optional buffer to receive the key's label. May be NULL.
+ * @return int Returns 0 on success or a negative wolfHSM/wolfCrypt error
+ *             code on failure (e.g. WH_ERROR_NOTFOUND, WH_ERROR_BADARGS).
+ */
+int wh_Client_Ed25519ExportPublicKey(whClientContext* ctx, whKeyId keyId,
+                                     ed25519_key* key, uint16_t label_len,
+                                     uint8_t* label);
+
+/**
  * @brief Create a new Ed25519 key on the server and export it without caching.
  */
 int wh_Client_Ed25519MakeExportKey(whClientContext* ctx, ed25519_key* key);
@@ -862,6 +944,37 @@ int wh_Client_RsaImportKey(whClientContext* ctx, const RsaKey* key,
  */
 
 int wh_Client_RsaExportKey(whClientContext* ctx, whKeyId keyId,
+        RsaKey* key, uint32_t label_len, uint8_t* label);
+
+/**
+ * @brief Exports only the public part of a cached RSA key.
+ *
+ * Unlike wh_Client_RsaExportKey(), which returns the full cached key
+ * (including private material), this function instructs the server to emit
+ * only the public portion as a PKCS#1 DER blob. The private key stays
+ * inside the HSM. The decoded key is written into the caller-initialized
+ * RsaKey struct and will report type == RSA_PUBLIC.
+ *
+ * The NONEXPORTABLE key flag does NOT block this call because public
+ * material is non-sensitive.
+ *
+ * The caller is responsible for initializing key (e.g. wc_InitRsaKey_ex)
+ * prior to calling this function.
+ *
+ * @param[in] ctx Pointer to the wolfHSM client context.
+ * @param[in] keyId Server key ID whose public key should be exported. Must
+ *                  not be WH_KEYID_ERASED.
+ * @param[in,out] key Pointer to a caller-initialized RsaKey. On success,
+ *                    the modulus and public exponent are populated and
+ *                    key->type is set to RSA_PUBLIC.
+ * @param[in] label_len Size of the optional label buffer in bytes. Values
+ *                      larger than WH_NVM_LABEL_LEN are truncated. Set to
+ *                      0 if label is not needed.
+ * @param[out] label Optional buffer to receive the key's label. May be NULL.
+ * @return int Returns 0 on success or a negative wolfHSM/wolfCrypt error
+ *             code on failure (e.g. WH_ERROR_NOTFOUND, WH_ERROR_BADARGS).
+ */
+int wh_Client_RsaExportPublicKey(whClientContext* ctx, whKeyId keyId,
         RsaKey* key, uint32_t label_len, uint8_t* label);
 
 /* Generate an RSA key on the server and export it inta an RSA struct */
@@ -1831,6 +1944,35 @@ int wh_Client_MlDsaExportKey(whClientContext* ctx, whKeyId keyId, MlDsaKey* key,
                              uint16_t label_len, uint8_t* label);
 
 /**
+ * @brief Exports only the public part of a cached ML-DSA key.
+ *
+ * Instructs the server to emit only the public portion of a cached ML-DSA
+ * key as SubjectPublicKeyInfo DER. The private key stays inside the HSM.
+ * The decoded key will have pubKeySet == 1 and prvKeySet == 0.
+ *
+ * The NONEXPORTABLE key flag does NOT block this call because public
+ * material is non-sensitive. The caller is responsible for initializing
+ * key (e.g. wc_MlDsaKey_Init) and, if required, setting the ML-DSA
+ * parameter level via wc_MlDsaKey_SetParams prior to calling this function.
+ *
+ * @param[in] ctx Pointer to the wolfHSM client context.
+ * @param[in] keyId Server key ID whose public key should be exported. Must
+ *                  not be WH_KEYID_ERASED.
+ * @param[in,out] key Pointer to a caller-initialized MlDsaKey. On success,
+ *                    only the public half is populated
+ *                    (pubKeySet == 1, prvKeySet == 0).
+ * @param[in] label_len Size of the optional label buffer in bytes. Values
+ *                      larger than WH_NVM_LABEL_LEN are truncated. Set to
+ *                      0 if label is not needed.
+ * @param[out] label Optional buffer to receive the key's label. May be NULL.
+ * @return int Returns 0 on success or a negative wolfHSM/wolfCrypt error
+ *             code on failure (e.g. WH_ERROR_NOTFOUND, WH_ERROR_BADARGS).
+ */
+int wh_Client_MlDsaExportPublicKey(whClientContext* ctx, whKeyId keyId,
+                                   MlDsaKey* key, uint16_t label_len,
+                                   uint8_t* label);
+
+/**
  * @brief Generate a new ML-DSA key pair and export the public key.
  *
  * This function generates a new ML-DSA key pair in the HSM and exports the
@@ -1957,6 +2099,31 @@ int wh_Client_MlDsaImportKeyDma(whClientContext* ctx, MlDsaKey* key,
 int wh_Client_MlDsaExportKeyDma(whClientContext* ctx, whKeyId keyId,
                                 MlDsaKey* key, uint16_t label_len,
                                 uint8_t* label);
+
+/**
+ * @brief Export only the public part of a cached ML-DSA key using DMA.
+ *
+ * DMA counterpart to wh_Client_MlDsaExportPublicKey. The server emits the
+ * public-only DER and DMAs it directly into a client-side staging buffer;
+ * the wrapper then deserializes it into the caller-provided MlDsaKey.
+ *
+ * The NONEXPORTABLE key flag does NOT block this call because public
+ * material is non-sensitive. The caller is responsible for initializing
+ * key (e.g. wc_MlDsaKey_Init + wc_MlDsaKey_SetParams) prior to calling.
+ *
+ * @param[in] ctx Pointer to the wolfHSM client context.
+ * @param[in] keyId Server key ID whose public key should be exported. Must
+ *                  not be WH_KEYID_ERASED.
+ * @param[in,out] key Pointer to a caller-initialized MlDsaKey. On success,
+ *                    only the public half is populated
+ *                    (pubKeySet == 1, prvKeySet == 0).
+ * @param[in] label_len Size of the optional label buffer in bytes.
+ * @param[out] label Optional buffer to receive the key's label. May be NULL.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_MlDsaExportPublicKeyDma(whClientContext* ctx, whKeyId keyId,
+                                      MlDsaKey* key, uint16_t label_len,
+                                      uint8_t* label);
 
 /**
  * @brief Generate a new ML-DSA key pair and export it using DMA.

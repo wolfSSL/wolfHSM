@@ -287,6 +287,96 @@ wh_Client_KeyErase(clientCtx, keyId);
 `wh_Client_KeyExport` will read the key contents out of the HSM back to the client.
 `wh_Client_KeyErase` will remove the indicated key from cache and erase it from NVM.
 
+## Exporting only the public half of a cached key
+
+`wh_Client_KeyExport` returns the raw cached key bytes. For a cached public-key
+keypair this includes the private material, which defeats the security benefit
+of leaving the key inside the HSM when the caller only needs the public half
+(for example, to verify a signature on the client side or to package the key
+into a certificate).
+
+wolfHSM provides a dedicated public-only export path that, given a key ID for
+a cached public-key keypair, re-emits only the public portion on the server
+and deserializes it into a wolfCrypt key object on the client. The private
+key never leaves the HSM.
+
+Per-algorithm helpers wrap the transport layer:
+
+```c
+int wh_Client_RsaExportPublicKey(whClientContext* ctx, whKeyId keyId,
+        RsaKey* key, uint32_t label_len, uint8_t* label);
+int wh_Client_EccExportPublicKey(whClientContext* ctx, whKeyId keyId,
+        ecc_key* key, uint16_t label_len, uint8_t* label);
+int wh_Client_Ed25519ExportPublicKey(whClientContext* ctx, whKeyId keyId,
+        ed25519_key* key, uint16_t label_len, uint8_t* label);
+int wh_Client_Curve25519ExportPublicKey(whClientContext* ctx, whKeyId keyId,
+        curve25519_key* key, uint16_t label_len, uint8_t* label);
+int wh_Client_MlDsaExportPublicKey(whClientContext* ctx, whKeyId keyId,
+        MlDsaKey* key, uint16_t label_len, uint8_t* label);
+```
+
+Example: generate an RSA keypair on the HSM with the private key marked
+`NONEXPORTABLE`, obtain the public key on the client, and verify a signature
+the HSM produced using the cached private key.
+
+```c
+whKeyId keyId = WH_KEYID_ERASED;
+RsaKey  pub;
+
+/* 1. Generate keypair inside the HSM. NONEXPORTABLE blocks full export. */
+wh_Client_RsaMakeCacheKey(&clientCtx, 2048, 0x10001, &keyId,
+        WH_NVM_FLAGS_USAGE_SIGN | WH_NVM_FLAGS_USAGE_VERIFY |
+        WH_NVM_FLAGS_NONEXPORTABLE, 0, NULL);
+
+/* 2. Fetch only the public half. NONEXPORTABLE does NOT block this. */
+wc_InitRsaKey_ex(&pub, NULL, INVALID_DEVID);
+wh_Client_RsaExportPublicKey(&clientCtx, keyId, &pub, 0, NULL);
+/* pub.type == RSA_PUBLIC; usable for client-side verification */
+```
+
+### Interaction with `WH_NVM_FLAGS_NONEXPORTABLE`
+
+`NONEXPORTABLE` blocks `wh_Client_KeyExport` and the per-algorithm full-export
+helpers. It does **not** block the public-only export path, because public key
+material is non-sensitive — preventing it from ever leaving the HSM would make
+the cached key unusable for any external verification or key-transport use
+case. If you want to block even public extraction, do not generate or import
+the key in the first place, or remove it with `wh_Client_KeyErase` after it
+has served its purpose.
+
+### DMA variant
+
+For builds with `WOLFHSM_CFG_DMA` enabled, parallel APIs let the server
+write the public DER directly into a client-provided buffer using the
+existing DMA transport, avoiding the comm-buffer copy. The semantics
+(NONEXPORTABLE carve-out, algo selector, error handling) are identical to
+the non-DMA path.
+
+```c
+int wh_Client_KeyExportPublicDma(whClientContext* c, whKeyId keyId,
+        uint16_t algo, const void* keyAddr, uint16_t keySz,
+        uint8_t* label, uint16_t labelSz, uint16_t* outSz);
+
+int wh_Client_MlDsaExportPublicKeyDma(whClientContext* ctx, whKeyId keyId,
+        MlDsaKey* key, uint16_t label_len, uint8_t* label);
+```
+
+`wh_Client_KeyExportPublicDma` is the generic transport — callers receive
+raw public DER and deserialize it themselves. `wh_Client_MlDsaExportPublicKeyDma`
+mirrors the existing `wh_Client_MlDsaExportKeyDma` per-algorithm helper for
+the case where ML-DSA's large public DER benefits most from skipping the
+comm-buffer staging.
+
+### Wire protocol
+
+The public-only export uses dedicated keystore actions,
+`WH_KEY_EXPORT_PUBLIC` and `WH_KEY_EXPORT_PUBLIC_DMA`, with a per-request
+algorithm selector (`WH_KEY_ALGO_*` in `wolfhsm/wh_common.h`) because
+cached keys are stored as opaque DER bytes and the server needs to know
+how to decode them. Integrators implementing custom transports should
+route these actions the same way they route `WH_KEY_EXPORT` and
+`WH_KEY_EXPORT_DMA`.
+
 ## Key Revocation
 
 Key revocation updates key metadata to prevent further cryptographic use without destroying storage. Revocation clears all `WH_NVM_FLAGS_USAGE_*` bits and sets `WH_NVM_FLAGS_NONMODIFIABLE`. The revoked state is persisted when the key is already committed to NVM.

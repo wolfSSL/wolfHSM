@@ -68,6 +68,8 @@ whMessageKeystore_EvictResponse  keyEvictRes;
 whMessageKeystore_CommitResponse keyCommitRes;
 whMessageKeystore_ExportResponse keyExportRes;
 whMessageKeystore_EraseResponse  keyEraseRes;
+whMessageKeystore_ExportPublicRequest  keyExportPublicReq;
+whMessageKeystore_ExportPublicResponse keyExportPublicRes;
 
 /* Include counter message header for new counter message structures */
 #include "wolfhsm/wh_message_counter.h"
@@ -81,10 +83,12 @@ whMessageCounter_ReadResponse      counterReadRes;
 whMessageCounter_DestroyResponse   counterDestroyRes;
 
 /* DMA keystore messages */
-whMessageKeystore_CacheDmaRequest   keyCacheDmaReq;
-whMessageKeystore_CacheDmaResponse  keyCacheDmaRes;
-whMessageKeystore_ExportDmaRequest  keyExportDmaReq;
-whMessageKeystore_ExportDmaResponse keyExportDmaRes;
+whMessageKeystore_CacheDmaRequest         keyCacheDmaReq;
+whMessageKeystore_CacheDmaResponse        keyCacheDmaRes;
+whMessageKeystore_ExportDmaRequest        keyExportDmaReq;
+whMessageKeystore_ExportDmaResponse       keyExportDmaRes;
+whMessageKeystore_ExportPublicDmaRequest  keyExportPublicDmaReq;
+whMessageKeystore_ExportPublicDmaResponse keyExportPublicDmaRes;
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
 /* Include crypto message header for new crypto message structures */
