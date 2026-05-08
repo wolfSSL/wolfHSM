@@ -1,4 +1,4 @@
-name: Code Coverage
+name: Code Coverage Refactor
 
 on:
   push:
@@ -44,15 +44,15 @@ jobs:
 
       - name: Build, run, and emit tracefile (${{ matrix.name }})
         run: |
-          cd test && make coverage-json \
-            OUT=$GITHUB_WORKSPACE/cov-json/legacy-${{ matrix.name }}.json \
-            WOLFSSL_DIR=../wolfssl ${{ matrix.flags }}
+          cd test-refactor/posix && make coverage-json \
+            OUT=$GITHUB_WORKSPACE/cov-json/refactor-${{ matrix.name }}.json \
+            WOLFSSL_DIR=../../wolfssl ${{ matrix.flags }}
 
       - name: Upload tracefile
         uses: actions/upload-artifact@v4
         with:
-          name: legacy-tracefile-${{ matrix.name }}
-          path: cov-json/legacy-${{ matrix.name }}.json
+          name: refactor-tracefile-${{ matrix.name }}
+          path: cov-json/refactor-${{ matrix.name }}.json
           retention-days: 7
 
   merge:
@@ -66,10 +66,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y gcovr
 
-      - name: Download legacy tracefiles
+      - name: Download refactor tracefiles
         uses: actions/download-artifact@v4
         with:
-          pattern: legacy-tracefile-*
+          pattern: refactor-tracefile-*
           path: cov-json
           merge-multiple: true
 
@@ -78,7 +78,7 @@ jobs:
           # nullglob so an empty match returns 0 files instead of the
           # literal pattern, which would slip past the guard below.
           shopt -s nullglob
-          files=(cov-json/legacy-*.json)
+          files=(cov-json/refactor-*.json)
           if [ ${#files[@]} -eq 0 ]; then
             echo "No tracefiles found to merge" >&2
             exit 1
@@ -88,14 +88,14 @@ jobs:
           for f in "${files[@]}"; do
             args+=(--add-tracefile "$f")
           done
-          mkdir -p coverage-merged
+          mkdir -p coverage-refactor-merged
           gcovr "${args[@]}" \
-            --html-details coverage-merged/index.html \
+            --html-details coverage-refactor-merged/index.html \
             --print-summary
 
       - name: Upload merged coverage report
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-report
-          path: coverage-merged/
+          name: coverage-refactor-report
+          path: coverage-refactor-merged/
           retention-days: 30

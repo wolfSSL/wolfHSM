@@ -21,3 +21,6 @@ tools/static-analysis/reports/
 *.gcno
 coverage/
 scan_out/*
+
+# Test output
+test-suite.log

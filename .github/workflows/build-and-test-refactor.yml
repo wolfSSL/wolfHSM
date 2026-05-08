@@ -1,0 +1,97 @@
+name: Build and Test Refactor
+
+on:
+  push:
+    branches: [ 'master', 'main', 'release/**' ]
+  pull_request:
+    branches: [ '*' ]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    # List host CPU info
+    - name: Host CPU info
+      run: cat /proc/cpuinfo
+
+    # List compiler version
+    - name: List compiler version
+      run: gcc --version
+
+    # pull and build wolfssl
+    - name: Checkout wolfssl
+      uses: actions/checkout@v4
+      with:
+        repository: wolfssl/wolfssl
+        path: wolfssl
+
+    # Build and test standard build
+    - name: Build and test refactor
+      run: cd test-refactor/posix && make clean && make -j WOLFSSL_DIR=../../wolfssl && make run
+
+    # Build and test standard build, with DMA and ASAN enabled
+    - name: Build and test refactor DMA ASAN
+      run: cd test-refactor/posix && make clean && make -j DMA=1 ASAN=1 WOLFSSL_DIR=../../wolfssl && make run
+
+    # Build and test ASAN build, with wolfCrypt tests enabled.
+    - name: Build and test refactor ASAN TESTWOLFCRYPT
+      run: cd test-refactor/posix && make clean && make -j ASAN=1 TESTWOLFCRYPT=1 WOLFSSL_DIR=../../wolfssl && make run
+
+    # Build and test ASAN build, with wolfCrypt tests enabled and using the DMA devId.
+    - name: Build and test refactor ASAN TESTWOLFCRYPT TESTWOLFCRYPT_DMA
+      run: cd test-refactor/posix && make clean && make -j ASAN=1 TESTWOLFCRYPT=1 TESTWOLFCRYPT_DMA=1 DMA=1 WOLFSSL_DIR=../../wolfssl && make run
+
+    # Build and test debug build with ASAN and NOCRYPTO
+    - name: Build and test refactor ASAN DEBUG NOCRYPTO
+      run: cd test-refactor/posix && make clean && make -j DEBUG=1 ASAN=1 NOCRYPTO=1 WOLFSSL_DIR=../../wolfssl && make run
+
+    # Build and test debug build with ASAN and DMA
+    - name: Build and test refactor ASAN DEBUG DMA
+      run: cd test-refactor/posix && make clean && make -j DEBUG=1 ASAN=1 DMA=1 WOLFSSL_DIR=../../wolfssl && make run
+
+    # Build and test with SHE and ASAN
+    - name: Build and test refactor ASAN SHE
+      run: cd test-refactor/posix && make clean && make -j SHE=1 ASAN=1 WOLFSSL_DIR=../../wolfssl && make run
+
+    # Build and test with DEBUG=1
+    - name: Build and test refactor with DEBUG
+      run: cd test-refactor/posix && make clean && make -j DEBUG=1 WOLFSSL_DIR=../../wolfssl && make run
+
+    # Build and test with DEBUG_VERBOSE=1 (includes DEBUG)
+    - name: Build and test refactor with DEBUG_VERBOSE
+      run: cd test-refactor/posix && make clean && make -j DEBUG_VERBOSE=1 WOLFSSL_DIR=../../wolfssl && make run
+
+    # Build and test in multithreaded mode with everything enabled
+    - name: Build and test refactor with THREADSAFE and everything
+      run: cd test-refactor/posix && make clean && make -j THREADSAFE=1 DMA=1 SHE=1 ASAN=1 WOLFSSL_DIR=../../wolfssl && make run
+
+    # Build and test in multithreaded mode with everything enabled and wolfCrypt tests
+    - name: Build and test refactor with THREADSAFE and TESTWOLFCRYPT and everything
+      run: cd test-refactor/posix && make clean && make -j THREADSAFE=1 TESTWOLFCRYPT=1 DMA=1 SHE=1 ASAN=1 WOLFSSL_DIR=../../wolfssl && make run
+
+    # Build and test in multithreaded mode with everything enabled and wolfCrypt tests with dma
+    - name: Build and test refactor with THREADSAFE and TESTWOLFCRYPT with DMA
+      run: cd test-refactor/posix && make clean && make -j THREADSAFE=1 TESTWOLFCRYPT=1 TESTWOLFCRYPT_DMA=1 DMA=1 SHE=1 ASAN=1 WOLFSSL_DIR=../../wolfssl && make run
+
+    # Build and test with AUTH=1
+    - name: Build and test refactor with AUTH
+      run: cd test-refactor/posix && make clean && make -j AUTH=1 WOLFSSL_DIR=../../wolfssl && make run
+
+    # Build and test with AUTH=1 and ASAN
+    - name: Build and test refactor with AUTH ASAN
+      run: cd test-refactor/posix && make clean && make -j AUTH=1 ASAN=1 WOLFSSL_DIR=../../wolfssl && make run
+
+    # Build and test with AUTH=1 and THREADSAFE
+    - name: Build and test refactor with AUTH THREADSAFE ASAN
+      run: cd test-refactor/posix && make clean && make -j AUTH=1 THREADSAFE=1 ASAN=1 WOLFSSL_DIR=../../wolfssl && make run
+
+    # Build and test with AUTH=1 and NOCRYPTO=1 (auth on, crypto off)
+    - name: Build and test refactor with AUTH NOCRYPTO
+      run: cd test-refactor/posix && make clean && make -j AUTH=1 NOCRYPTO=1 WOLFSSL_DIR=../../wolfssl && make run

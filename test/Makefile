@@ -262,7 +262,7 @@ vpath %.s $(dir $(SRC_ASM))
 
 ## Makefile Targets
 
-.PHONY: build_app build_hex build_static clean run coverage
+.PHONY: build_app build_hex build_static clean run coverage coverage-json
 
 build_app: $(BUILD_DIR) $(BUILD_DIR)/$(BIN).elf
 	@echo Build complete.
@@ -362,6 +362,27 @@ coverage:
 		--html-details ../coverage/index.html \
 		--print-summary
 	@echo "Coverage report generated at ../coverage/index.html"
+
+# Coverage tracefile target: build with coverage, run tests, emit JSON tracefile
+# to $(OUT). Designed for CI matrix runs where multiple configs each emit a
+# tracefile and a downstream step merges them with `gcovr --add-tracefile`.
+coverage-json:
+	@if [ -z "$(OUT)" ]; then \
+		echo "Error: must set OUT=path/to/tracefile.json"; \
+		exit 1; \
+	fi
+	@echo "Building with coverage enabled..."
+	$(MAKE) clean
+	$(MAKE) COVERAGE=1 build_app
+	@echo "Running tests..."
+	$(BUILD_DIR)/$(BIN).elf
+	@echo "Generating JSON tracefile at $(OUT)..."
+	mkdir -p $(dir $(OUT)) && gcovr Build \
+		--gcov-ignore-parse-errors=negative_hits.warn_once_per_file \
+		--root .. \
+		--filter '\.\./src/.*' \
+		--filter '\.\./wolfhsm/.*' \
+		--json $(OUT)
 
 # Prevent make from trying to build these as targets
 %:
