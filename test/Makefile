@@ -165,6 +165,13 @@ ifeq ($(AUTH),1)
 	DEF += -DWOLFHSM_CFG_ENABLE_AUTHENTICATION
 endif
 
+# Build wolfSSL without WOLFSSL_SHA512_HASHTYPE to verify the SHA-512 server
+# DMA path compiles when wolfSSL has SHA-512 enabled but does not track the
+# variant on the struct.
+ifeq ($(NO_SHA512_HASHTYPE),1)
+	DEF += -DWHTEST_NO_SHA512_HASHTYPE
+endif
+
 ## Project defines
 # Option to build wolfcrypt tests
 ifeq ($(TESTWOLFCRYPT),1)

@@ -5024,6 +5024,7 @@ static int whTest_CryptoSha512LargeInput(whClientContext* ctx, int devId,
     return ret;
 }
 
+#ifdef WOLFSSL_SHA512_HASHTYPE
 /* Direct exercise of the new async non-DMA SHA512 primitives. */
 static int whTest_CryptoSha512Async(whClientContext* ctx, int devId,
                                     WC_RNG* rng)
@@ -5278,6 +5279,7 @@ static int whTest_CryptoSha512DmaAsync(whClientContext* ctx, int devId,
     return ret;
 }
 #endif /* WOLFHSM_CFG_DMA */
+#endif /* WOLFSSL_SHA512_HASHTYPE */
 
 #endif /* WOLFSSL_SHA512 */
 
@@ -11296,18 +11298,20 @@ int whTest_CryptoClientConfig(whClientConfig* config)
             ret =
                 whTest_CryptoSha512LargeInput(client, WH_DEV_IDS_ARRAY[i], rng);
         }
+#ifdef WOLFSSL_SHA512_HASHTYPE
         if (ret == WH_ERROR_OK) {
             ret = whTest_CryptoSha512Async(client, WH_DEV_IDS_ARRAY[i], rng);
         }
+#endif /* WOLFSSL_SHA512_HASHTYPE */
         if (ret == WH_ERROR_OK) {
             i++;
         }
     }
-#ifdef WOLFHSM_CFG_DMA
+#if defined(WOLFHSM_CFG_DMA) && defined(WOLFSSL_SHA512_HASHTYPE)
     if (ret == WH_ERROR_OK) {
         ret = whTest_CryptoSha512DmaAsync(client, WH_DEV_ID_DMA, rng);
     }
-#endif /* WOLFHSM_CFG_DMA */
+#endif /* WOLFHSM_CFG_DMA && WOLFSSL_SHA512_HASHTYPE */
 #endif /* WOLFSSL_SHA512 */
 
 #ifdef HAVE_HKDF
