@@ -46,6 +46,15 @@ typedef uint16_t whKeyId;
 #define WH_KEYTYPE_MASK 0xF000
 #define WH_KEYTYPE_SHIFT 12
 
+/* Maximum valid client_id. The USER field of whKeyId is 4 bits, so client_id
+ * must fit in [0, WH_CLIENT_ID_MAX]. Values outside this range would be
+ * silently truncated by WH_MAKE_KEYID, breaking per-client key isolation, so
+ * the server rejects them at WH_MESSAGE_COMM_ACTION_INIT. With
+ * WOLFHSM_CFG_GLOBAL_KEYS enabled, value 0 is reserved for the global-keys
+ * namespace and is also rejected. Derived from WH_KEYUSER_MASK so the bound
+ * stays in sync if the USER field is ever widened. */
+#define WH_CLIENT_ID_MAX (WH_KEYUSER_MASK >> WH_KEYUSER_SHIFT)
+
 /*
  * Client-facing key flags (temporary, stripped by server during translation)
  *
@@ -110,7 +119,9 @@ typedef uint16_t whKeyId;
  * @param type Key type to use as the TYPE field. Input value is ignored and
  *  WH_KEYTYPE_WRAPPED is used if the input clientId has the
  *  WH_CLIENT_KEYID_WRAPPED flag set.
- * @param clientId Client identifier to use as USER field
+ * @param clientId Client identifier to use as USER field. Must be in
+ *  [0, WH_CLIENT_ID_MAX]; the server enforces this at INIT so callers may
+ *  assume the value fits in the 4-bit USER field.
  * @param reqId Requested keyId from client (may include flags)
  * @return Server-internal keyId with TYPE, USER, and ID fields properly set.
  */

@@ -629,7 +629,8 @@ static int initClientServerPair(StressTestContext* ctx, int pairIndex)
     pair->clientCommConfig.transport_cb      = &clientTransportCb;
     pair->clientCommConfig.transport_context = &pair->clientTransportCtx;
     pair->clientCommConfig.transport_config  = &pair->tmConfig;
-    pair->clientCommConfig.client_id         = (uint16_t)(100 + pairIndex);
+    /* client_id must fit in WH_CLIENT_ID_MAX (4-bit USER field) */
+    pair->clientCommConfig.client_id = (uint8_t)(1 + pairIndex);
 
     /* Configure client */
     pair->clientConfig.comm = &pair->clientCommConfig;

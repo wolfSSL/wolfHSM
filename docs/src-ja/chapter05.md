@@ -88,7 +88,7 @@ whCommClientConfig commClientCfg[1] = {{
              .transport_cb      = transportMemClientCb,
              .transport_context = (void*)transportMemClientCtx,
              .transport_config  = (void*)transportMemCfg,
-             .client_id         = 123, /* 一意のクライアント識別子 */
+             .client_id         = 1, /* 一意のクライアント識別子。1-15（WOLFHSM_CFG_GLOBAL_KEYSなしでは0-15） */
 }};
 
 /* ステップ3: クライアント設定の割り当てと初期化 */
@@ -150,7 +150,7 @@ whCommClientConfig commClientCfg = {{
              .transport_cb      = posixTransportTcpCb,
              .transport_context = (void*)posixTransportTcpCtx,
              .transport_config  = (void*)posixTransportTcpCfg,
-             .client_id         = 123, /* 一意のクライアント識別子 */
+             .client_id         = 1, /* 一意のクライアント識別子。1-15（WOLFHSM_CFG_GLOBAL_KEYSなしでは0-15） */
 }};
 
 /* 以降のステップは同じ... */

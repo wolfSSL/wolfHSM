@@ -516,6 +516,49 @@ static int _clientServerSequentialTestConnectCb(void*           context,
                                   connected);
 }
 
+/* Drive one INIT cycle on an already-initialized client/server pair to verify
+ * the server enforces the [0, WH_CLIENT_ID_MAX] bound on client_id (so values
+ * that would be silently truncated by the 4-bit USER field of whKeyId — e.g.
+ * 16 aliasing the USER=0 global namespace, 17 aliasing client 1 — are
+ * rejected at INIT instead of breaking per-client key isolation). Mutates
+ * client->comm->client_id; caller is responsible for restoring it.
+ *
+ * Note: boundary coverage is limited to [0, 255] because
+ * client->comm->client_id is uint8_t; values above 255 are truncated by the
+ * host-side comm field before reaching the wire. */
+static int _testInitClientIdBoundary(whClientContext* client,
+                                     whServerContext* server,
+                                     uint32_t client_id, int expect_ok)
+{
+    uint32_t resp_client_id = 0;
+    uint32_t resp_server_id = 0;
+    int      rc;
+    uint8_t  prior_server_client_id = server->comm->client_id;
+
+    client->comm->client_id = (uint8_t)client_id;
+
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CommInitRequest(client));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
+    rc = wh_Client_CommInitResponse(client, &resp_client_id, &resp_server_id);
+
+    if (expect_ok) {
+        WH_TEST_ASSERT_RETURN(rc == WH_ERROR_OK);
+        WH_TEST_ASSERT_RETURN(resp_client_id == client_id);
+    }
+    else {
+        /* Server returns BADARGS with size=0; client decodes that as ABORTED.
+         */
+        WH_TEST_ASSERT_RETURN(rc == WH_ERROR_ABORTED);
+        /* Rejection must not corrupt server-side identity: a regression that
+         * moved the assignment in _wh_Server_HandleCommRequest above the
+         * bound check would still produce ABORTED on the wire but would
+         * leave server->comm->client_id holding the rejected value. */
+        WH_TEST_ASSERT_RETURN(server->comm->client_id ==
+                              prior_server_client_id);
+    }
+    return WH_ERROR_OK;
+}
+
 static int _testOutOfBoundsNvmReads(whClientContext* client,
                                     whServerContext* server, whNvmId id)
 {
@@ -739,6 +782,24 @@ int whTest_ClientServerSequential(whTestNvmBackendType nvmType)
     WH_TEST_RETURN_ON_FAIL(wh_Client_CommInitResponse(client, &client_id, &server_id));
     WH_TEST_ASSERT_RETURN(client_id == client->comm->client_id);
 
+    /* Verify INIT rejects out-of-range client_id values that would otherwise
+     * be silently truncated by the 4-bit USER field of whKeyId. */
+    WH_TEST_RETURN_ON_FAIL(_testInitClientIdBoundary(client, server, 16, 0));
+    WH_TEST_RETURN_ON_FAIL(_testInitClientIdBoundary(client, server, 17, 0));
+    WH_TEST_RETURN_ON_FAIL(_testInitClientIdBoundary(client, server, 32, 0));
+    WH_TEST_RETURN_ON_FAIL(_testInitClientIdBoundary(client, server, 255, 0));
+#ifdef WOLFHSM_CFG_GLOBAL_KEYS
+    /* USER=0 is reserved for global keys */
+    WH_TEST_RETURN_ON_FAIL(_testInitClientIdBoundary(client, server, 0, 0));
+#else
+    WH_TEST_RETURN_ON_FAIL(_testInitClientIdBoundary(client, server, 0, 1));
+#endif
+    WH_TEST_RETURN_ON_FAIL(
+        _testInitClientIdBoundary(client, server, WH_CLIENT_ID_MAX, 1));
+    /* Restore default client_id so the rest of the sequential test runs with
+     * the expected per-client identity on both ends. */
+    WH_TEST_RETURN_ON_FAIL(_testInitClientIdBoundary(
+        client, server, WH_TEST_DEFAULT_CLIENT_ID, 1));
 
     /* Send the comm info message */
     WH_TEST_RETURN_ON_FAIL(wh_Client_CommInfoRequest(client));

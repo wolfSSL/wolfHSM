@@ -204,6 +204,10 @@ static int _wh_Server_HandleCommRequest(whServerContext* server,
         wh_MessageComm_TranslateInitRequest(magic,
                 (whMessageCommInitRequest*)req_packet, &req);
 
+        if (req.client_id > WH_CLIENT_ID_MAX) {
+            *out_resp_size = 0;
+            return WH_ERROR_BADARGS;
+        }
 #ifdef WOLFHSM_CFG_GLOBAL_KEYS
         /* USER=0 is reserved for global keys, client_id must be non-zero */
         if (req.client_id == WH_KEYUSER_GLOBAL) {
