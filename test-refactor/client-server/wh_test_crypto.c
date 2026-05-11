@@ -168,12 +168,19 @@ int whTest_CryptoEcc256(whClientContext* ctx)
     int              ret    = 0;
     WC_RNG           rng[1];
     ecc_key          key[1];
-    uint8_t          hash[32]              = {0};
+    /* Non-zero digest: wolfCrypt rejects all-zero hashes with ECC_BAD_ARG_E
+     * unless WC_ALLOW_ECC_ZERO_HASH is defined. */
+    uint8_t          hash[32];
     uint8_t          sig[ECC_MAX_SIG_SIZE] = {0};
     word32           sigLen                = sizeof(sig);
     int              verify                = 0;
+    word32           i;
 
     (void)ctx;
+
+    for (i = 0; i < sizeof(hash); i++) {
+        hash[i] = (uint8_t)(i + 1);
+    }
 
     /* Minimal P-256 sign/verify round-trip routed through the server via
      * WH_DEV_ID. Key size 32 selects SECP256R1 as wolfCrypt's default. */
