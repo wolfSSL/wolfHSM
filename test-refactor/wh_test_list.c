@@ -33,6 +33,7 @@
 
 /* Test declarations and weak skip implementations. */
 WH_TEST_DECL(whTest_Dma);
+WH_TEST_DECL(whTest_KeyWrapRespSize);
 WH_TEST_DECL(whTest_CertVerify);
 WH_TEST_DECL(whTest_ClientCerts);
 WH_TEST_DECL(whTest_CryptoAes);
@@ -47,6 +48,7 @@ WH_TEST_DECL(whTest_WolfCryptTest);
 
 const whTestCase whTestsMisc[] = {
     { "whTest_Dma", whTest_Dma },
+    { "whTest_KeyWrapRespSize", whTest_KeyWrapRespSize },
 };
 const size_t whTestsMiscCount = sizeof(whTestsMisc) / sizeof(whTestsMisc[0]);
 

@@ -81,7 +81,7 @@ int wh_Client_KeyWrapResponse(whClientContext*   ctx,
     }
 
     if (group != WH_MESSAGE_GROUP_KEY || action != WH_KEY_KEYWRAP ||
-        size < sizeof(*resp) || size > sizeof(*resp) + resp->wrappedKeySz ||
+        size < sizeof(*resp) || size < sizeof(*resp) + resp->wrappedKeySz ||
         resp->cipherType != cipherType) {
         return WH_ERROR_ABORTED;
     }
@@ -201,7 +201,7 @@ int wh_Client_KeyUnwrapAndExportResponse(whClientContext*   ctx,
 
     if (group != WH_MESSAGE_GROUP_KEY || action != WH_KEY_KEYUNWRAPEXPORT ||
         size < sizeof(*resp) ||
-        size > sizeof(*resp) + sizeof(*metadataOut) + resp->keySz ||
+        size < sizeof(*resp) + sizeof(*metadataOut) + resp->keySz ||
         resp->cipherType != cipherType) {
         return WH_ERROR_ABORTED;
     }
@@ -421,7 +421,7 @@ int wh_Client_DataWrapResponse(whClientContext*   ctx,
     }
 
     if (group != WH_MESSAGE_GROUP_KEY || action != WH_KEY_DATAWRAP ||
-        size < sizeof(*resp) || size > sizeof(*resp) + resp->wrappedDataSz ||
+        size < sizeof(*resp) || size < sizeof(*resp) + resp->wrappedDataSz ||
         resp->cipherType != cipherType) {
         return WH_ERROR_ABORTED;
     }
@@ -534,7 +534,7 @@ int wh_Client_DataUnwrapResponse(whClientContext*   ctx,
     }
 
     if (group != WH_MESSAGE_GROUP_KEY || action != WH_KEY_DATAUNWRAP ||
-        size < sizeof(*resp) || size > sizeof(*resp) + resp->dataSz ||
+        size < sizeof(*resp) || size < sizeof(*resp) + resp->dataSz ||
         resp->cipherType != cipherType) {
         return WH_ERROR_ABORTED;
     }
