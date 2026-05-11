@@ -1159,13 +1159,20 @@ static int whTest_CryptoEccExportPublicDma(whClientContext* ctx, int devId,
     int     ret               = 0;
     whKeyId keyId             = WH_KEYID_ERASED;
     ecc_key pubKey[1]         = {0};
-    uint8_t hash[TEST_ECC_KEYSIZE] = {0};
+    /* Non-zero digest: wolfCrypt rejects all-zero hashes with ECC_BAD_ARG_E
+     * unless WC_ALLOW_ECC_ZERO_HASH is defined. */
+    uint8_t hash[TEST_ECC_KEYSIZE];
     uint8_t sig[ECC_MAX_SIG_SIZE]  = {0};
     word32  sigLen            = sizeof(sig);
     int     verified          = 0;
     byte    derBuf[ECC_BUFSIZE];
     uint16_t derSz            = sizeof(derBuf);
+    word32   i;
     (void)devId;
+
+    for (i = 0; i < sizeof(hash); i++) {
+        hash[i] = (uint8_t)(i + 1);
+    }
 
     ret = wh_Client_EccMakeCacheKey(
         ctx, TEST_ECC_KEYSIZE, TEST_ECC_CURVE_ID, &keyId,
@@ -2461,6 +2468,8 @@ static int whTest_Ed25519ImportToServer(whClientContext* ctx, int devId,
         }
     }
 
+    /* Write each out-keyId immediately after its import succeeds so the
+     * caller can evict it if a later step fails. */
     if (ret == 0) {
         ret = wh_Client_Ed25519ImportKey(
             ctx, key, &signKeyId, WH_NVM_FLAGS_USAGE_SIGN, labelLen, label);
@@ -2468,6 +2477,9 @@ static int whTest_Ed25519ImportToServer(whClientContext* ctx, int devId,
             WH_ERROR_PRINT("Failed to import Ed25519 key to server: %d\n", ret);
         }
         else {
+            if (outSignKeyId != NULL) {
+                *outSignKeyId = signKeyId;
+            }
             /* remove key material from local key structure */
             wc_ed25519_free(key);
             ret = wc_ed25519_init_ex(key, NULL, devId);
@@ -2490,6 +2502,9 @@ static int whTest_Ed25519ImportToServer(whClientContext* ctx, int devId,
                 "Failed to import Ed25519 public key to server: %d\n", ret);
         }
         else {
+            if (outVerifyKeyId != NULL) {
+                *outVerifyKeyId = verifyKeyId;
+            }
             /* remove key material from local key structure */
             wc_ed25519_free(pubKey);
             ret = wc_ed25519_init_ex(pubKey, NULL, devId);
@@ -2500,15 +2515,6 @@ static int whTest_Ed25519ImportToServer(whClientContext* ctx, int devId,
             else {
                 wh_Client_Ed25519SetKeyId(pubKey, verifyKeyId);
             }
-        }
-    }
-
-    if (ret == 0) {
-        if (outSignKeyId != NULL) {
-            *outSignKeyId = signKeyId;
-        }
-        if (outVerifyKeyId != NULL) {
-            *outVerifyKeyId = verifyKeyId;
         }
     }
 
@@ -2582,17 +2588,24 @@ static int whTest_CryptoEd25519Inline(whClientContext* ctx, int devId,
     }
 
     if (ret == 0) {
-        /* Corrupt signature to ensure verification fails */
+        /* Corrupt signature to ensure verification fails. wolfCrypt may
+         * signal rejection either as ret==0 with verified==0, or as
+         * ret==SIG_VERIFY_E (path-dependent inside wolfCrypt). Anything
+         * else is a real error. */
         sig[0] ^= 0xFF;
         verified = 0;
         ret = wc_ed25519_verify_msg(sig, sigSz, msg, msgSz, &verified, pubKey);
-        if (ret == 0 && verified == 1) {
+        if (verified != 0) {
             WH_ERROR_PRINT(
                 "Modified Ed25519 signature unexpectedly verified\n");
             ret = -1;
         }
-        else {
+        else if (ret == 0 || ret == SIG_VERIFY_E) {
             ret = 0;
+        }
+        else {
+            WH_ERROR_PRINT(
+                "wc_ed25519_verify_msg of tampered sig errored: %d\n", ret);
         }
     }
 
@@ -2677,18 +2690,23 @@ static int whTest_CryptoEd25519ServerKey(whClientContext* ctx, int devId,
     }
 
     if (ret == 0) {
+        /* Same shape as the inline tampered-sig case above. */
         sig[0] ^= 0xAA;
         verified = 0;
         ret      = wh_Client_Ed25519Verify(ctx, pubKey, sig, sigSz, msg,
                                            (uint32_t)sizeof(msg), (uint8_t)Ed25519,
                                            NULL, 0, &verified);
-        if (ret == 0 && verified == 1) {
+        if (verified != 0) {
             WH_ERROR_PRINT("Modified server Ed25519 signature unexpectedly "
                            "verified\n");
             ret = -1;
         }
-        else {
+        else if (ret == 0 || ret == SIG_VERIFY_E) {
             ret = 0;
+        }
+        else {
+            WH_ERROR_PRINT(
+                "Server Ed25519 verify of tampered sig errored: %d\n", ret);
         }
     }
 

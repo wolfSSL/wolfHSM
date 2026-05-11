@@ -208,6 +208,7 @@ static int whTest_TimeoutAesCbc(void)
     wh_Nvm_Cleanup(nvm);
     wolfCrypt_Cleanup();
 
+    WH_TEST_PRINT("Timeout AES CBC SUCCESS\n");
     return WH_ERROR_OK;
 }
 
@@ -371,6 +372,7 @@ static int whTest_TimeoutAesCbcOverride(void)
     wh_Nvm_Cleanup(nvm);
     wolfCrypt_Cleanup();
 
+    WH_TEST_PRINT("Timeout AES CBC override SUCCESS\n");
     return WH_ERROR_OK;
 }
 
@@ -402,6 +404,7 @@ static int whTest_TimeoutApi(void)
     WH_TEST_ASSERT_RETURN(wh_Timeout_Expired(0) == WH_ERROR_BADARGS);
     WH_TEST_ASSERT_RETURN(wh_Timeout_Cleanup(0) == WH_ERROR_BADARGS);
 
+    WH_TEST_PRINT("Timeout API SUCCESS\n");
     return WH_ERROR_OK;
 }
 
@@ -423,6 +426,7 @@ static int whTest_TimeoutResponse(whClientContext* client)
     } while (rc == WH_ERROR_NOTREADY);
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_TIMEOUT);
 
+    WH_TEST_PRINT("Timeout response SUCCESS\n");
     return WH_ERROR_OK;
 }
 
@@ -446,6 +450,7 @@ int whTest_TimeoutClientConfig(whClientConfig* config)
     WH_TEST_RETURN_ON_FAIL(whTest_TimeoutAesCbcOverride());
 #endif
 
+    WH_TEST_PRINT("Timeout client config SUCCESS\n");
     return WH_ERROR_OK;
 }
 
@@ -483,7 +488,9 @@ int whTest_TimeoutPosix(void)
                       .comm = ccConf,
     }};
 
-    return whTest_TimeoutClientConfig(cConf);
+    WH_TEST_RETURN_ON_FAIL(whTest_TimeoutClientConfig(cConf));
+    WH_TEST_PRINT("Timeout (POSIX) SUCCESS\n");
+    return WH_ERROR_OK;
 }
 #endif /* WOLFHSM_CFG_TEST_POSIX */
 
