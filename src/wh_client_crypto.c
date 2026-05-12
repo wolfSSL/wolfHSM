@@ -2832,23 +2832,20 @@ int wh_Client_Curve25519SharedSecret(whClientContext* ctx,
                             sizeof(*res);
                         /* Defensive bound: res->sz must fit within the actual
                          * received frame */
-                        if (res_len < hdr_sz ||
-                            res->sz > (res_len - hdr_sz)) {
+                        if (res_len < hdr_sz || res->sz > (res_len - hdr_sz)) {
                             ret = WH_ERROR_ABORTED;
                         }
-                        else if ((out != NULL) && (out_size != NULL) &&
-                                 (res->sz > *out_size)) {
-                            /* Output buffer too small. Report required size and
-                             * fail rather than silently truncating X25519 key
-                             * material. */
-                            *out_size = res->sz;
-                            ret      = WH_ERROR_BUFFER_SIZE;
-                        }
-                        else {
-                            if (out_size != NULL) {
-                                *out_size = res->sz;
+                        if (out_size != NULL) {
+                            if ((ret >= 0) && 
+                                (out != NULL) && (res->sz > *out_size)) {
+                                /* Output buffer too small. Report required size
+                                * and fail rather than silently truncating
+                                * X25519 key material. */
+                                ret = WH_ERROR_BUFFER_SIZE;
                             }
-                            if ((out != NULL) && (res->sz > 0)) {
+                            /* Give caller the required size, even on failure */
+                            *out_size = res->sz;
+                            if ((ret >= 0) && (out != NULL) && (res->sz > 0)) {
                                 memcpy(out, res_out, res->sz);
                                 WH_DEBUG_VERBOSE_HEXDUMP("[client] X25519:",
                                                          res_out, res->sz);
