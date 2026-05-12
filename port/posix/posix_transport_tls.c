@@ -57,9 +57,12 @@ static int NonBlockingError(int err)
            (err == WOLFSSL_ERROR_WANT_WRITE);
 }
 
-/* Load certificates and keys from config structure into SSL context */
+/* Load certificates and keys from config structure into SSL context.
+ * is_server indicates the SSL context is for a server endpoint, which
+ * affects how peer verification is enforced. */
 static int LoadTlsCertificates(WOLFSSL_CTX*                   ssl_ctx,
-                               const posixTransportTlsConfig* cfg)
+                               const posixTransportTlsConfig* cfg,
+                               int                            is_server)
 {
     int rc;
 
@@ -94,9 +97,18 @@ static int LoadTlsCertificates(WOLFSSL_CTX*                   ssl_ctx,
         }
     }
 
-    /* Set verification mode */
+    /* Set verification mode. For a server, WOLFSSL_VERIFY_PEER alone causes
+     * wolfSSL to request a client certificate but still accept the handshake
+     * if the client presents none, so OR in WOLFSSL_VERIFY_FAIL_IF_NO_PEER_CERT
+     * to require mutual authentication when peer verification is enabled. */
     if (cfg->disable_peer_verification) {
         wolfSSL_CTX_set_verify(ssl_ctx, WOLFSSL_VERIFY_NONE, NULL);
+    }
+    else if (is_server) {
+        wolfSSL_CTX_set_verify(ssl_ctx,
+                               WOLFSSL_VERIFY_PEER |
+                                   WOLFSSL_VERIFY_FAIL_IF_NO_PEER_CERT,
+                               NULL);
     }
     else {
         wolfSSL_CTX_set_verify(ssl_ctx, WOLFSSL_VERIFY_PEER, NULL);
@@ -144,7 +156,7 @@ int posixTransportTls_InitConnect(void* context, const void* config,
     wolfSSL_CTX_SetDevId(ctx->ssl_ctx, INVALID_DEVID);
 
     /* Load certificates from config structure */
-    rc = LoadTlsCertificates(ctx->ssl_ctx, cfg);
+    rc = LoadTlsCertificates(ctx->ssl_ctx, cfg, 0 /* is_server */);
     if (rc != WH_ERROR_OK) {
         wolfSSL_CTX_free(ctx->ssl_ctx);
         ctx->ssl_ctx = NULL;
@@ -412,7 +424,7 @@ int posixTransportTls_InitListen(void* context, const void* config,
     wolfSSL_CTX_SetDevId(ctx->ssl_ctx, INVALID_DEVID);
 
     /* Load certificates from config structure */
-    rc = LoadTlsCertificates(ctx->ssl_ctx, cfg);
+    rc = LoadTlsCertificates(ctx->ssl_ctx, cfg, 1 /* is_server */);
     if (rc != WH_ERROR_OK) {
         wolfSSL_CTX_free(ctx->ssl_ctx);
         ctx->ssl_ctx = NULL;
