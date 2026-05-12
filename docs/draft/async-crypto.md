@@ -541,10 +541,13 @@ int wh_Client_RngGenerateDma(whClientContext* ctx, uint8_t* out, uint32_t size);
 ## AES: One-Shot with DMA Support
 
 AES modes (CBC, CTR, ECB, GCM) are all **one-shot** operations — every call
-consumes a fixed buffer of input and returns a fixed buffer of output. There
-is no streaming state to accumulate across multiple Request/Response pairs
-the way SHA does, which makes the async split significantly simpler than
-SHA:
+consumes a fixed buffer of input and returns a fixed buffer of output in a
+single round-trip. There is no client-side partial-block accumulation across
+Request/Response pairs the way SHA's `Update` family has, which makes the
+async split significantly simpler than SHA. (CBC and CTR still carry
+inter-call IV / counter state on the `Aes` struct — see *Mutable state*
+below — but that state is updated atomically by the Response, not buffered
+across calls.)
 
 - **No partial-block buffering** on the client.  The entire plaintext or
   ciphertext is handed to one Request and the full result comes back in

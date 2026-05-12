@@ -469,6 +469,10 @@ int wh_Client_AesCtrRequest(whClientContext* ctx, Aes* aes, int enc,
     memcpy(req_iv, (uint8_t*)aes->reg, AES_IV_SIZE);
     memcpy(req_tmp, (uint8_t*)aes->tmp, AES_BLOCK_SIZE);
 
+    WH_DEBUG_CLIENT_VERBOSE("AesCtr req: enc=%d keylen=%u insz=%u reqsz=%u\n",
+                            enc, (unsigned int)key_len, (unsigned int)len,
+                            (unsigned int)req_len);
+
     return wh_Client_SendRequest(ctx, WH_MESSAGE_GROUP_CRYPTO,
                                  WC_ALGO_TYPE_CIPHER, req_len, dataPtr);
 }
@@ -507,6 +511,9 @@ int wh_Client_AesCtrResponse(whClientContext* ctx, Aes* aes, uint8_t* out,
             if (out_size != NULL) {
                 *out_size = res->sz;
             }
+            WH_DEBUG_CLIENT_VERBOSE("AesCtr res: outsz=%u left=%u\n",
+                                    (unsigned int)res->sz,
+                                    (unsigned int)res->left);
         }
     }
     return ret;
@@ -624,6 +631,10 @@ int wh_Client_AesCtrDmaRequest(whClientContext* ctx, Aes* aes, int enc,
         ctx->dma.asyncCtx.aes.outSz         = outAcq ? len : 0;
         ctx->dma.asyncCtx.aes.aadSz         = 0;
 
+        WH_DEBUG_CLIENT_VERBOSE(
+            "AesCtr DMA req: enc=%d keysz=%u insz=%u reqsz=%u\n", enc,
+            (unsigned int)req->keySz, (unsigned int)len, (unsigned int)req_len);
+
         ret = wh_Client_SendRequest(ctx, WH_MESSAGE_GROUP_CRYPTO_DMA,
                                     WC_ALGO_TYPE_CIPHER, req_len, dataPtr);
     }
@@ -667,14 +678,15 @@ int wh_Client_AesCtrDmaResponse(whClientContext* ctx, Aes* aes)
 
     if (ret == WH_ERROR_OK) {
         ret = _getCryptoResponse(dataPtr, WC_CIPHER_AES_CTR, (uint8_t**)&res);
-        if (ret >= WH_ERROR_OK) {
+        if (ret == WH_ERROR_OK) {
             uint8_t* res_iv =
                 (uint8_t*)res + sizeof(whMessageCrypto_AesCtrDmaResponse);
             uint8_t* res_tmp = res_iv + AES_IV_SIZE;
             aes->left        = res->left;
             memcpy((uint8_t*)aes->reg, res_iv, AES_IV_SIZE);
             memcpy((uint8_t*)aes->tmp, res_tmp, AES_BLOCK_SIZE);
-            ret = WH_ERROR_OK;
+            WH_DEBUG_CLIENT_VERBOSE("AesCtr DMA res: left=%u\n",
+                                    (unsigned int)res->left);
         }
     }
 
@@ -775,6 +787,11 @@ int wh_Client_AesEcbRequest(whClientContext* ctx, Aes* aes, int enc,
         memcpy(req_key, (const uint8_t*)(aes->devKey), key_len);
     }
 
+    WH_DEBUG_CLIENT_VERBOSE(
+        "AesEcb req: enc=%d keylen=%u insz=%u blocks=%u reqsz=%u\n", enc,
+        (unsigned int)key_len, (unsigned int)len, (unsigned int)blocks,
+        (unsigned int)req_len);
+
     return wh_Client_SendRequest(ctx, WH_MESSAGE_GROUP_CRYPTO,
                                  WC_ALGO_TYPE_CIPHER, req_len, dataPtr);
 }
@@ -809,6 +826,8 @@ int wh_Client_AesEcbResponse(whClientContext* ctx, Aes* aes, uint8_t* out,
             if (out_size != NULL) {
                 *out_size = res->sz;
             }
+            WH_DEBUG_CLIENT_VERBOSE("AesEcb res: outsz=%u\n",
+                                    (unsigned int)res->sz);
         }
     }
     return ret;
@@ -920,6 +939,10 @@ int wh_Client_AesEcbDmaRequest(whClientContext* ctx, Aes* aes, int enc,
         ctx->dma.asyncCtx.aes.outSz         = outAcq ? len : 0;
         ctx->dma.asyncCtx.aes.aadSz         = 0;
 
+        WH_DEBUG_CLIENT_VERBOSE(
+            "AesEcb DMA req: enc=%d keysz=%u insz=%u reqsz=%u\n", enc,
+            (unsigned int)req->keySz, (unsigned int)len, (unsigned int)req_len);
+
         ret = wh_Client_SendRequest(ctx, WH_MESSAGE_GROUP_CRYPTO_DMA,
                                     WC_ALGO_TYPE_CIPHER, req_len, dataPtr);
     }
@@ -965,8 +988,8 @@ int wh_Client_AesEcbDmaResponse(whClientContext* ctx, Aes* aes)
 
     if (ret == WH_ERROR_OK) {
         ret = _getCryptoResponse(dataPtr, WC_CIPHER_AES_ECB, (uint8_t**)&res);
-        if (ret >= 0) {
-            ret = WH_ERROR_OK;
+        if (ret == WH_ERROR_OK) {
+            WH_DEBUG_CLIENT_VERBOSE("AesEcb DMA res: ok\n");
         }
     }
 
@@ -1083,6 +1106,11 @@ int wh_Client_AesCbcRequest(whClientContext* ctx, Aes* aes, int enc,
         memcpy(req_iv, iv, iv_len);
     }
 
+    WH_DEBUG_CLIENT_VERBOSE(
+        "AesCbc req: enc=%d keylen=%u ivsz=%u insz=%u reqsz=%u\n", enc,
+        (unsigned int)key_len, (unsigned int)iv_len, (unsigned int)len,
+        (unsigned int)req_len);
+
     return wh_Client_SendRequest(ctx, WH_MESSAGE_GROUP_CRYPTO,
                                  WC_ALGO_TYPE_CIPHER, req_len, dataPtr);
 }
@@ -1119,6 +1147,8 @@ int wh_Client_AesCbcResponse(whClientContext* ctx, Aes* aes, uint8_t* out,
             if (out_size != NULL) {
                 *out_size = res->sz;
             }
+            WH_DEBUG_CLIENT_VERBOSE("AesCbc res: outsz=%u\n",
+                                    (unsigned int)res->sz);
         }
     }
 
@@ -1237,6 +1267,10 @@ int wh_Client_AesCbcDmaRequest(whClientContext* ctx, Aes* aes, int enc,
         ctx->dma.asyncCtx.aes.outSz         = outAcq ? len : 0;
         ctx->dma.asyncCtx.aes.aadSz         = 0;
 
+        WH_DEBUG_CLIENT_VERBOSE(
+            "AesCbc DMA req: enc=%d keysz=%u insz=%u reqsz=%u\n", enc,
+            (unsigned int)req->keySz, (unsigned int)len, (unsigned int)req_len);
+
         ret = wh_Client_SendRequest(ctx, WH_MESSAGE_GROUP_CRYPTO_DMA,
                                     WC_ALGO_TYPE_CIPHER, req_len, dataPtr);
     }
@@ -1280,11 +1314,11 @@ int wh_Client_AesCbcDmaResponse(whClientContext* ctx, Aes* aes)
 
     if (ret == WH_ERROR_OK) {
         ret = _getCryptoResponse(dataPtr, WC_CIPHER_AES_CBC, (uint8_t**)&res);
-        if (ret >= WH_ERROR_OK) {
+        if (ret == WH_ERROR_OK) {
             uint8_t* res_iv =
                 (uint8_t*)res + sizeof(whMessageCrypto_AesCbcDmaResponse);
             memcpy((uint8_t*)aes->reg, res_iv, AES_IV_SIZE);
-            ret = WH_ERROR_OK;
+            WH_DEBUG_CLIENT_VERBOSE("AesCbc DMA res: ok\n");
         }
     }
 
@@ -1409,6 +1443,12 @@ int wh_Client_AesGcmRequest(whClientContext* ctx, Aes* aes, int enc,
         memcpy(req_tag, dec_tag, tag_len);
     }
 
+    WH_DEBUG_CLIENT_VERBOSE(
+        "AesGcm req: enc=%d keylen=%u ivsz=%u insz=%u authinsz=%u tagsz=%u "
+        "reqsz=%u\n",
+        enc, (unsigned int)key_len, (unsigned int)iv_len, (unsigned int)len,
+        (unsigned int)authin_len, (unsigned int)tag_len, (unsigned int)req_len);
+
     return wh_Client_SendRequest(ctx, WH_MESSAGE_GROUP_CRYPTO,
                                  WC_ALGO_TYPE_CIPHER, req_len, dataPtr);
 }
@@ -1426,10 +1466,12 @@ int wh_Client_AesGcmResponse(whClientContext* ctx, Aes* aes, uint8_t* out,
 
     (void)aes;
 
-    /* out may be NULL (e.g. GMAC: tag-only, no plaintext). If provided the
-     * response payload is copied to it after validating that the server's
-     * reported size fits within out_capacity. */
-    if (ctx == NULL || (out == NULL && out_capacity > 0)) {
+    /* out may be NULL (e.g. GMAC: tag-only, no plaintext). The downstream
+     * copy guards on `out != NULL && res->sz > 0`, so out_capacity is
+     * checked only when out is actually used. Rejecting `out == NULL &&
+     * out_capacity > 0` here would leave a stale response in the comm
+     * queue after Request already sent. */
+    if (ctx == NULL) {
         return WH_ERROR_BADARGS;
     }
 
@@ -1441,7 +1483,7 @@ int wh_Client_AesGcmResponse(whClientContext* ctx, Aes* aes, uint8_t* out,
     ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
     if (ret == WH_ERROR_OK) {
         ret = _getCryptoResponse(dataPtr, WC_CIPHER_AES_GCM, (uint8_t**)&res);
-        if (ret >= WH_ERROR_OK) {
+        if (ret == WH_ERROR_OK) {
             uint8_t* res_out = (uint8_t*)(res + 1);
             uint8_t* res_tag = res_out + res->sz;
 
@@ -1454,11 +1496,15 @@ int wh_Client_AesGcmResponse(whClientContext* ctx, Aes* aes, uint8_t* out,
             if (out_size != NULL) {
                 *out_size = res->sz;
             }
-            if (enc_tag != NULL && res->authTagSz > 0 &&
-                res->authTagSz <= tag_len) {
+            if (enc_tag != NULL && res->authTagSz > 0) {
+                if (res->authTagSz > tag_len) {
+                    return WH_ERROR_ABORTED;
+                }
                 memcpy(enc_tag, res_tag, res->authTagSz);
             }
-            ret = WH_ERROR_OK;
+            WH_DEBUG_CLIENT_VERBOSE("AesGcm res: outsz=%u tagsz=%u\n",
+                                    (unsigned int)res->sz,
+                                    (unsigned int)res->authTagSz);
         }
     }
     return ret;
@@ -1600,6 +1646,13 @@ int wh_Client_AesGcmDmaRequest(whClientContext* ctx, Aes* aes, int enc,
         ctx->dma.asyncCtx.aes.aadClientAddr = (uintptr_t)authin;
         ctx->dma.asyncCtx.aes.aadSz         = aadAcq ? authin_len : 0;
 
+        WH_DEBUG_CLIENT_VERBOSE(
+            "AesGcm DMA req: enc=%d keysz=%u ivsz=%u insz=%u authinsz=%u "
+            "tagsz=%u reqsz=%u\n",
+            enc, (unsigned int)req->keySz, (unsigned int)iv_len,
+            (unsigned int)len, (unsigned int)authin_len, (unsigned int)tag_len,
+            (unsigned int)req_len);
+
         ret = wh_Client_SendRequest(ctx, WH_MESSAGE_GROUP_CRYPTO_DMA,
                                     WC_ALGO_TYPE_CIPHER, req_len, dataPtr);
     }
@@ -1651,14 +1704,20 @@ int wh_Client_AesGcmDmaResponse(whClientContext* ctx, Aes* aes,
 
     if (ret == WH_ERROR_OK) {
         ret = _getCryptoResponse(dataPtr, WC_CIPHER_AES_GCM, (uint8_t**)&res);
-        if (ret >= WH_ERROR_OK) {
-            if (enc_tag != NULL && res->authTagSz > 0 &&
-                res->authTagSz <= tag_len) {
-                uint8_t* res_tag =
-                    (uint8_t*)res + sizeof(whMessageCrypto_AesGcmDmaResponse);
-                memcpy(enc_tag, res_tag, res->authTagSz);
+        if (ret == WH_ERROR_OK) {
+            if (enc_tag != NULL && res->authTagSz > 0) {
+                if (res->authTagSz > tag_len) {
+                    ret = WH_ERROR_ABORTED;
+                }
+                else {
+                    uint8_t* res_tag =
+                        (uint8_t*)res +
+                        sizeof(whMessageCrypto_AesGcmDmaResponse);
+                    memcpy(enc_tag, res_tag, res->authTagSz);
+                }
             }
-            ret = WH_ERROR_OK;
+            WH_DEBUG_CLIENT_VERBOSE("AesGcm DMA res: tagsz=%u\n",
+                                    (unsigned int)res->authTagSz);
         }
     }
 

@@ -7014,6 +7014,84 @@ static int whTest_CryptoAesAsync(whClientContext* ctx, int devId, WC_RNG* rng)
     }
 #endif /* HAVE_AES_CBC */
 
+#ifdef WOLFSSL_AES_COUNTER
+    /* CTR: stacked async Request must return REQUEST_PENDING, and the second
+     * Request must not mutate aes->reg, aes->tmp, or aes->left before the
+     * fail-fast check. */
+    if (ret == 0) {
+        uint8_t regBefore[AES_BLOCK_SIZE];
+        uint8_t regAfter[AES_BLOCK_SIZE];
+        uint8_t tmpBefore[AES_BLOCK_SIZE];
+        uint8_t tmpAfter[AES_BLOCK_SIZE];
+        word32  leftBefore = 0;
+        word32  leftAfter  = 0;
+        int     tmp;
+        ret = wc_AesInit(aes, NULL, devId);
+        if (ret == 0) {
+            ret = wc_AesSetKeyDirect(aes, key, sizeof(key), iv, AES_ENCRYPTION);
+        }
+        /* Issue the first Request but do NOT consume the Response. The
+         * transport stays "request pending" until the matching Response is
+         * read. */
+        if (ret == 0) {
+            ret =
+                wh_Client_AesCtrRequest(ctx, aes, 1, plainIn, sizeof(plainIn));
+        }
+        if (ret == 0) {
+            /* Snapshot per-call state before attempting a stacked Request */
+            memcpy(regBefore, (uint8_t*)aes->reg, sizeof(regBefore));
+            memcpy(tmpBefore, (uint8_t*)aes->tmp, sizeof(tmpBefore));
+            leftBefore = aes->left;
+            tmp =
+                wh_Client_AesCtrRequest(ctx, aes, 1, plainIn, sizeof(plainIn));
+            if (tmp != WH_ERROR_REQUEST_PENDING) {
+                WH_ERROR_PRINT("AES-CTR async: stacked Request expected "
+                               "REQUEST_PENDING, got %d\n",
+                               tmp);
+                ret = -1;
+            }
+            memcpy(regAfter, (uint8_t*)aes->reg, sizeof(regAfter));
+            memcpy(tmpAfter, (uint8_t*)aes->tmp, sizeof(tmpAfter));
+            leftAfter = aes->left;
+            if (ret == 0 &&
+                memcmp(regBefore, regAfter, sizeof(regBefore)) != 0) {
+                WH_ERROR_PRINT(
+                    "AES-CTR async: stacked Request mutated aes->reg\n");
+                ret = -1;
+            }
+            if (ret == 0 &&
+                memcmp(tmpBefore, tmpAfter, sizeof(tmpBefore)) != 0) {
+                WH_ERROR_PRINT(
+                    "AES-CTR async: stacked Request mutated aes->tmp\n");
+                ret = -1;
+            }
+            if (ret == 0 && leftBefore != leftAfter) {
+                WH_ERROR_PRINT(
+                    "AES-CTR async: stacked Request mutated aes->left\n");
+                ret = -1;
+            }
+        }
+        /* Drain the outstanding response to leave the transport idle */
+        if (ret == 0 || ret == -1) {
+            int drainRet;
+            do {
+                drainRet = wh_Client_AesCtrResponse(ctx, aes, cipher, NULL);
+            } while (drainRet == WH_ERROR_NOTREADY);
+            if (ret == 0 && drainRet != WH_ERROR_OK) {
+                WH_ERROR_PRINT(
+                    "AES-CTR async: failed to drain pending response: %d\n",
+                    drainRet);
+                ret = -1;
+            }
+        }
+        (void)wc_AesFree(aes);
+        memset(cipher, 0, sizeof(cipher));
+    }
+    if (ret == 0) {
+        WH_TEST_PRINT("AES CTR ASYNC FAILURE-PATH DEVID=0x%X SUCCESS\n", devId);
+    }
+#endif /* WOLFSSL_AES_COUNTER */
+
 #ifdef HAVE_AESGCM
     /* GCM: out_capacity smaller than the server's reported payload must be
      * rejected by Response without overflowing out. */
@@ -7054,6 +7132,101 @@ static int whTest_CryptoAesAsync(whClientContext* ctx, int devId, WC_RNG* rng)
     }
     if (ret == 0) {
         WH_TEST_PRINT("AES GCM ASYNC OUT-CAPACITY DEVID=0x%X SUCCESS\n", devId);
+    }
+
+    /* GCM: undersized tag_len with non-NULL enc_tag must be rejected. The
+     * previous implementation skipped the memcpy silently and still
+     * returned WH_ERROR_OK, leaving enc_tag stale while telling the caller
+     * the operation succeeded. */
+    if (ret == 0) {
+        uint8_t authin[8];
+        uint8_t enc_tag[AES_BLOCK_SIZE];
+        uint8_t tinyTag[4]; /* deliberately smaller than the GCM tag */
+        int     tmp;
+
+        memset(authin, 0x37, sizeof(authin));
+        memset(enc_tag, 0, sizeof(enc_tag));
+        memset(tinyTag, 0, sizeof(tinyTag));
+
+        ret = wc_AesInit(aes, NULL, devId);
+        if (ret == 0) {
+            ret = wc_AesGcmSetKey(aes, key, sizeof(key));
+        }
+        if (ret == 0) {
+            ret = wh_Client_AesGcmRequest(
+                ctx, aes, 1, plainIn, sizeof(plainIn), iv, AES_BLOCK_SIZE,
+                authin, sizeof(authin), NULL, sizeof(enc_tag));
+        }
+        if (ret == 0) {
+            do {
+                tmp = wh_Client_AesGcmResponse(ctx, aes, cipher, sizeof(cipher),
+                                               NULL, tinyTag, sizeof(tinyTag));
+            } while (tmp == WH_ERROR_NOTREADY);
+            if (tmp != WH_ERROR_ABORTED) {
+                WH_ERROR_PRINT("AES-GCM async: undersized tag_len expected "
+                               "ABORTED, got %d\n",
+                               tmp);
+                ret = -1;
+            }
+        }
+        (void)wc_AesFree(aes);
+        memset(cipher, 0, sizeof(cipher));
+    }
+    if (ret == 0) {
+        WH_TEST_PRINT("AES GCM ASYNC TAG-CAPACITY DEVID=0x%X SUCCESS\n", devId);
+    }
+
+    /* GCM: out=NULL with out_capacity>0 must not wedge the transport. The
+     * previous implementation rejected the combination with BADARGS after
+     * the Request had already been sent, leaving a stale response in the
+     * comm queue that blocked subsequent calls with REQUEST_PENDING. */
+    if (ret == 0) {
+        uint8_t authin[8];
+        uint8_t enc_tag[AES_BLOCK_SIZE];
+        int     tmp;
+
+        memset(authin, 0x37, sizeof(authin));
+        memset(enc_tag, 0, sizeof(enc_tag));
+
+        ret = wc_AesInit(aes, NULL, devId);
+        if (ret == 0) {
+            ret = wc_AesGcmSetKey(aes, key, sizeof(key));
+        }
+        if (ret == 0) {
+            ret = wh_Client_AesGcmRequest(
+                ctx, aes, 1, plainIn, sizeof(plainIn), iv, AES_BLOCK_SIZE,
+                authin, sizeof(authin), NULL, sizeof(enc_tag));
+        }
+        if (ret == 0) {
+            /* Pass out=NULL with a non-zero out_capacity (= plainIn size).
+             * Must accept the call and drain the response; tag still comes
+             * back via enc_tag. */
+            do {
+                tmp = wh_Client_AesGcmResponse(ctx, aes, NULL, sizeof(plainIn),
+                                               NULL, enc_tag, sizeof(enc_tag));
+            } while (tmp == WH_ERROR_NOTREADY);
+            if (tmp != WH_ERROR_OK) {
+                WH_ERROR_PRINT(
+                    "AES-GCM async: out=NULL with out_capacity>0 should "
+                    "succeed (GMAC-style), got %d\n",
+                    tmp);
+                ret = -1;
+            }
+        }
+        /* Confirm the comm queue is idle — a subsequent Request must not
+         * be blocked by a stale pending response. */
+        if (ret == 0) {
+            if (wh_CommClient_IsRequestPending(ctx->comm) != 0) {
+                WH_ERROR_PRINT(
+                    "AES-GCM async: comm queue wedged after out=NULL "
+                    "Response\n");
+                ret = -1;
+            }
+        }
+        (void)wc_AesFree(aes);
+    }
+    if (ret == 0) {
+        WH_TEST_PRINT("AES GCM ASYNC OUT-NULL DEVID=0x%X SUCCESS\n", devId);
     }
 #endif /* HAVE_AESGCM */
 
