@@ -1658,6 +1658,39 @@ int wh_Client_CounterDestroyResponse(whClientContext* c);
  */
 int wh_Client_CounterDestroy(whClientContext* c, whNvmId counterId);
 
+/**
+ * @section client_nvm_id_namespace Client NVM id semantics
+ *
+ * The `id` parameter passed to these NVM functions is a client-facing
+ * identifier in the same encoding used for keys (`wolfhsm/wh_keyid.h`):
+ *
+ *   - Bits 0..7  (`WH_KEYID_MASK`)        : numeric id, 1..255. Zero is
+ *                                           reserved as the erased sentinel
+ *                                           and is rejected by AddObject.
+ *   - Bit  8     (`WH_KEYID_CLIENT_GLOBAL_FLAG`): when set, the request
+ *                                           targets the shared global NVM
+ *                                           namespace. When clear, it targets
+ *                                           the calling client's own
+ *                                           namespace.
+ *   - Bit  9     (`WH_KEYID_CLIENT_WRAPPED_FLAG`): reserved; NVM AddObject
+ *                                           rejects ids with this flag set.
+ *
+ * The server translates each request id into a TYPE/USER/ID server-internal
+ * encoding via `wh_KeyId_TranslateFromClient(WH_KEYTYPE_NVM, client_id, id)`
+ * before reaching the underlying NVM layer. This gives every client a private
+ * 1..255 namespace plus a shared 1..255 global namespace and prevents the
+ * client NVM API from being used to reach keys, counters, SHE objects, or
+ * other clients' data.
+ *
+ * `wh_Client_NvmList` honors the GLOBAL flag on `startId` as a namespace
+ * selector: pass 0 to iterate the calling client's own objects, or
+ * `WH_KEYID_CLIENT_GLOBAL_FLAG` to iterate the global namespace. Returned ids
+ * carry the appropriate flag so the caller can chain calls.
+ *
+ * Define `WOLFHSM_CFG_LEGACY_CLIENT_NVM` to disable translation entirely and
+ * fall back to the legacy global-flat 16-bit id space.
+ */
+
 /** NVM functions */
 /**
  * @brief Sends a non-volatile memory (NVM) initialization request to the

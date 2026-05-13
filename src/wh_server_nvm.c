@@ -36,6 +36,7 @@
 #include "wolfhsm/wh_comm.h"
 
 #include "wolfhsm/wh_nvm.h"
+#include "wolfhsm/wh_keyid.h"
 
 #include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_message_nvm.h"
@@ -46,6 +47,48 @@
 #if !defined(WOLFHSM_CFG_NO_CRYPTO) && \
     (defined(WOLFSSL_HAVE_LMS) || defined(WOLFSSL_HAVE_XMSS))
 #include "wolfhsm/wh_crypto.h"
+#endif
+
+/* Translate a client-supplied NVM id to the server-internal TYPE/USER/ID
+ * encoding. When WOLFHSM_CFG_LEGACY_CLIENT_NVM is defined, the id is passed
+ * through verbatim (legacy global-flat behavior). */
+static whNvmId _NvmTranslateFromClient(whServerContext* server,
+                                       whNvmId          clientId)
+{
+#ifdef WOLFHSM_CFG_LEGACY_CLIENT_NVM
+    (void)server;
+    return clientId;
+#else
+    return wh_KeyId_TranslateFromClient(WH_KEYTYPE_NVM, server->comm->client_id,
+                                        clientId);
+#endif
+}
+
+static whNvmId _NvmTranslateToClient(whNvmId serverId)
+{
+#ifdef WOLFHSM_CFG_LEGACY_CLIENT_NVM
+    return serverId;
+#else
+    return wh_KeyId_TranslateToClient(serverId);
+#endif
+}
+
+#ifndef WOLFHSM_CFG_LEGACY_CLIENT_NVM
+/* Reject ids that are invalid in the translated scheme: the bare id portion
+ * must be non-zero (id=0 is the erased sentinel; auto-generation is not
+ * supported here) and the WRAPPED and HW flags are not valid for NVM
+ * objects. */
+static int _NvmValidateClientId(whNvmId clientId)
+{
+    if ((clientId & WH_KEYID_MASK) == WH_KEYID_ERASED) {
+        return WH_ERROR_BADARGS;
+    }
+    if ((clientId &
+         (WH_KEYID_CLIENT_WRAPPED_FLAG | WH_KEYID_CLIENT_HW_FLAG)) != 0) {
+        return WH_ERROR_BADARGS;
+    }
+    return WH_ERROR_OK;
+}
 #endif
 
 /* Handle NVM read, do access checking and clamping */
@@ -160,9 +203,58 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
 
             rc = WH_SERVER_NVM_LOCK(server);
             if (rc == WH_ERROR_OK) {
+#ifndef WOLFHSM_CFG_LEGACY_CLIENT_NVM
+                /* The GLOBAL flag on startId selects which namespace to
+                 * iterate: set => global (USER=0), clear => this client's own
+                 * objects (USER=client_id). The flag rides through both
+                 * translation helpers, so iterating with the previously
+                 * returned id stays in the same namespace. */
+                const uint16_t target_user =
+                    ((req.startId & WH_KEYID_CLIENT_GLOBAL_FLAG) != 0)
+                        ? WH_KEYUSER_GLOBAL
+                        : server->comm->client_id;
+                /* startId id-portion of 0 is the start-from-beginning
+                 * sentinel; pass it through unchanged. Otherwise translate to
+                 * the server-internal id so wh_Nvm_List resumes after it. */
+                whNvmId cur =
+                    ((req.startId & WH_KEYID_MASK) == 0)
+                        ? 0
+                        : _NvmTranslateFromClient(server, req.startId);
+                whNvmId hit_id = 0;
+                whNvmId total  = 0;
+
+                rc = WH_ERROR_OK;
+                for (;;) {
+                    whNvmId next_id   = 0;
+                    whNvmId remaining = 0;
+                    rc = wh_Nvm_List(server->nvm, req.access, req.flags, cur,
+                                     &remaining, &next_id);
+                    if (rc != WH_ERROR_OK || remaining == 0) {
+                        break;
+                    }
+
+                    if (WH_KEYID_TYPE(next_id) == WH_KEYTYPE_NVM &&
+                        WH_KEYID_USER(next_id) == target_user) {
+                        if (hit_id == 0) {
+                            hit_id = next_id;
+                        }
+                        total++;
+                    }
+                    cur = next_id;
+                    if (remaining == 1) {
+                        break;
+                    }
+                }
+
+                if (rc == WH_ERROR_OK) {
+                    resp.id = (hit_id != 0) ? _NvmTranslateToClient(hit_id) : 0;
+                    resp.count = total;
+                }
+#else
                 /* Process the list action */
                 rc = wh_Nvm_List(server->nvm, req.access, req.flags,
                                  req.startId, &resp.count, &resp.id);
+#endif
 
                 (void)WH_SERVER_NVM_UNLOCK(server);
             } /* WH_SERVER_NVM_LOCK() */
@@ -217,13 +309,15 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
             rc = WH_SERVER_NVM_LOCK(server);
             if (rc == WH_ERROR_OK) {
                 /* Process the getmetadata action */
-                rc = wh_Nvm_GetMetadata(server->nvm, req.id, &meta);
+                rc = wh_Nvm_GetMetadata(server->nvm,
+                                        _NvmTranslateFromClient(server, req.id),
+                                        &meta);
 
                 (void)WH_SERVER_NVM_UNLOCK(server);
             } /* WH_SERVER_NVM_LOCK() */
 
             if (rc == WH_ERROR_OK) {
-                resp.id     = meta.id;
+                resp.id     = _NvmTranslateToClient(meta.id);
                 resp.access = meta.access;
                 resp.flags  = meta.flags;
                 resp.len    = meta.len;
@@ -253,32 +347,42 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
             wh_MessageNvm_TranslateAddObjectRequest(magic,
                     (whMessageNvm_AddObjectRequest*)req_packet, &req);
             if(req_size == (hdr_len + req.len)) {
-                /* Process the AddObject action */
-                meta.id = req.id;
-                meta.access = req.access;
-                meta.flags = req.flags;
-                meta.len = req.len;
-                memcpy(meta.label, req.label, sizeof(meta.label));
+#ifndef WOLFHSM_CFG_LEGACY_CLIENT_NVM
+                int validate_rc = _NvmValidateClientId(req.id);
+                if (validate_rc != WH_ERROR_OK) {
+                    resp.rc = validate_rc;
+                }
+                else
+#endif
+                {
+                    /* Process the AddObject action */
+                    meta.id     = _NvmTranslateFromClient(server, req.id);
+                    meta.access = req.access;
+                    meta.flags  = req.flags;
+                    meta.len    = req.len;
+                    memcpy(meta.label, req.label, sizeof(meta.label));
 
-                rc = WH_ERROR_OK;
+                    rc = WH_ERROR_OK;
 #if !defined(WOLFHSM_CFG_NO_CRYPTO) && \
     (defined(WOLFSSL_HAVE_LMS) || defined(WOLFSSL_HAVE_XMSS))
-                /* Block direct NVM import of stateful (LMS/XMSS) private key
-                 * state; only on-HSM keygen may create such objects. */
-                if (wh_Crypto_IsStatefulSigPrivBlob(data, (uint16_t)req.len)) {
-                    rc = WH_ERROR_ACCESS;
-                }
+                    /* Block direct NVM import of stateful (LMS/XMSS) private
+                     * key state; only on-HSM keygen may create such objects. */
+                    if (wh_Crypto_IsStatefulSigPrivBlob(data,
+                                                        (uint16_t)req.len)) {
+                        rc = WH_ERROR_ACCESS;
+                    }
 #endif
-                if (rc == WH_ERROR_OK) {
-                    rc = WH_SERVER_NVM_LOCK(server);
                     if (rc == WH_ERROR_OK) {
-                        rc = wh_Nvm_AddObjectChecked(server->nvm, &meta,
-                                                     req.len, data);
+                        rc = WH_SERVER_NVM_LOCK(server);
+                        if (rc == WH_ERROR_OK) {
+                            rc = wh_Nvm_AddObjectChecked(server->nvm, &meta,
+                                                         req.len, data);
 
-                        (void)WH_SERVER_NVM_UNLOCK(server);
-                    } /* WH_SERVER_NVM_LOCK() */
+                            (void)WH_SERVER_NVM_UNLOCK(server);
+                        } /* WH_SERVER_NVM_LOCK() */
+                    }
+                    resp.rc = rc;
                 }
-                resp.rc = rc;
             }
         }
         /* Convert the response struct */
@@ -301,11 +405,19 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
                     (whMessageNvm_DestroyObjectsRequest*)req_packet, &req);
 
             if (req.list_count <= WH_MESSAGE_NVM_MAX_DESTROY_OBJECTS_COUNT) {
+                whNvmId
+                    translated_ids[WH_MESSAGE_NVM_MAX_DESTROY_OBJECTS_COUNT];
+                whNvmId i;
+                for (i = 0; i < req.list_count; i++) {
+                    translated_ids[i] =
+                        _NvmTranslateFromClient(server, req.list[i]);
+                }
+
                 rc = WH_SERVER_NVM_LOCK(server);
                 if (rc == WH_ERROR_OK) {
                     /* Process the DestroyObjects action */
-                    rc = wh_Nvm_DestroyObjectsChecked(server->nvm,
-                                                      req.list_count, req.list);
+                    rc = wh_Nvm_DestroyObjectsChecked(
+                        server->nvm, req.list_count, translated_ids);
 
                     (void)WH_SERVER_NVM_UNLOCK(server);
                 } /* WH_SERVER_NVM_LOCK() */
@@ -342,7 +454,8 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
             rc = WH_SERVER_NVM_LOCK(server);
             if (rc == WH_ERROR_OK) {
                 rc = _HandleNvmRead(server, data, req.offset, req.data_len,
-                                    &req.data_len, req.id);
+                                    &req.data_len,
+                                    _NvmTranslateFromClient(server, req.id));
                 if (rc == WH_ERROR_OK) {
                     data_len = req.data_len;
                 }
@@ -394,23 +507,31 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
             }
         }
         if (resp.rc == 0) {
+            /* Take a local copy of the metadata so we can rewrite the id
+             * field without touching host memory. */
+            whNvmMetadata local_meta = *(const whNvmMetadata*)metadata;
+#ifndef WOLFHSM_CFG_LEGACY_CLIENT_NVM
+            resp.rc = _NvmValidateClientId(local_meta.id);
+#endif
 #if !defined(WOLFHSM_CFG_NO_CRYPTO) && \
     (defined(WOLFSSL_HAVE_LMS) || defined(WOLFSSL_HAVE_XMSS))
             /* Block direct NVM import of stateful (LMS/XMSS) private key state;
              * only on-HSM keygen may create such objects. */
-            if (wh_Crypto_IsStatefulSigPrivBlob((const uint8_t*)data,
-                                            (uint16_t)req.data_len)) {
+            if ((resp.rc == WH_ERROR_OK) &&
+                wh_Crypto_IsStatefulSigPrivBlob((const uint8_t*)data,
+                                                (uint16_t)req.data_len)) {
                 resp.rc = WH_ERROR_ACCESS;
             }
-            else
 #endif
-            {
+            if (resp.rc == WH_ERROR_OK) {
+                local_meta.id = _NvmTranslateFromClient(server, local_meta.id);
+
                 rc = WH_SERVER_NVM_LOCK(server);
                 if (rc == WH_ERROR_OK) {
                     /* Process the AddObject action */
-                    rc = wh_Nvm_AddObjectChecked(
-                        server->nvm, (whNvmMetadata*)metadata, req.data_len,
-                        (const uint8_t*)data);
+                    rc = wh_Nvm_AddObjectChecked(server->nvm, &local_meta,
+                                                 req.data_len,
+                                                 (const uint8_t*)data);
 
                     (void)WH_SERVER_NVM_UNLOCK(server);
                 } /* WH_SERVER_NVM_LOCK() */
@@ -455,7 +576,8 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
 
             rc = WH_SERVER_NVM_LOCK(server);
             if (rc == WH_ERROR_OK) {
-                rc = wh_Nvm_GetMetadata(server->nvm, req.id, &meta);
+                whNvmId server_id = _NvmTranslateFromClient(server, req.id);
+                rc = wh_Nvm_GetMetadata(server->nvm, server_id, &meta);
 
                 if (rc == 0) {
                     if (req.offset >= meta.len) {
@@ -485,7 +607,7 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
                 }
                 if (rc == 0) {
                     /* Process the Read action */
-                    rc = wh_Nvm_ReadChecked(server->nvm, req.id, req.offset,
+                    rc = wh_Nvm_ReadChecked(server->nvm, server_id, req.offset,
                                             read_len, (uint8_t*)data);
                 }
                 /* Always call POST for successful PRE, regardless of read

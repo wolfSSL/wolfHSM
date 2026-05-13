@@ -1412,6 +1412,314 @@ static int _runGlobalKeysTests(whClientContext* client1,
 
 #endif /* WOLFHSM_CFG_GLOBAL_KEYS */
 
+#ifndef WOLFHSM_CFG_LEGACY_CLIENT_NVM
+/* ============================================================================
+ * CLIENT NVM ID-TRANSLATION TEST SUITE
+ *
+ * These tests assert the per-client NVM id namespace: each client sees its own
+ * 1..255 id range plus a shared 1..255 global range. Cross-client raw access
+ * via the NVM api is impossible.
+ *
+ * Only meaningful when client NVM id translation is enabled (default).
+ * ========================================================================== */
+
+static const uint8_t NVM_ISOLATION_PAYLOAD_A[] = "client-A-secret-NVM-payload";
+static const uint8_t NVM_ISOLATION_PAYLOAD_B[] = "client-B-different-payload";
+
+/*
+ * Helper: add an NVM object via the explicit Request/Handle/Response
+ * pattern so that the matching server can be driven manually (multiclient
+ * sequential setup has no automatic dispatch).
+ */
+static int _nvmAddViaServer(whClientContext* client, whServerContext* server,
+                            whNvmId id, whNvmSize len, const uint8_t* data,
+                            int32_t* out_rc)
+{
+    WH_TEST_RETURN_ON_FAIL(wh_Client_NvmAddObjectRequest(
+        client, id, WH_NVM_ACCESS_ANY, WH_NVM_FLAGS_NONE, 0, NULL, len, data));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_NvmAddObjectResponse(client, out_rc));
+    return WH_ERROR_OK;
+}
+
+static int _nvmReadViaServer(whClientContext* client, whServerContext* server,
+                             whNvmId id, whNvmSize len, int32_t* out_rc,
+                             whNvmSize* out_len, uint8_t* buf)
+{
+    WH_TEST_RETURN_ON_FAIL(wh_Client_NvmReadRequest(client, id, 0, len));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Client_NvmReadResponse(client, out_rc, out_len, buf));
+    return WH_ERROR_OK;
+}
+
+static int _nvmDestroyViaServer(whClientContext* client,
+                                whServerContext* server, whNvmId id,
+                                int32_t* out_rc)
+{
+    WH_TEST_RETURN_ON_FAIL(wh_Client_NvmDestroyObjectsRequest(client, 1, &id));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_NvmDestroyObjectsResponse(client, out_rc));
+    return WH_ERROR_OK;
+}
+
+static int _nvmListViaServer(whClientContext* client, whServerContext* server,
+                             whNvmId startId, int32_t* out_rc,
+                             whNvmId* out_count, whNvmId* out_id)
+{
+    WH_TEST_RETURN_ON_FAIL(wh_Client_NvmListRequest(
+        client, WH_NVM_ACCESS_ANY, WH_NVM_FLAGS_NONE, startId));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Client_NvmListResponse(client, out_rc, out_count, out_id));
+    return WH_ERROR_OK;
+}
+
+/*
+ * Client A adds NVM id 5 with secret payload. Client B reading id 5 must NOT
+ * see A's bytes (either NOTFOUND, or B's own value if B has one).
+ */
+static int _testNvmClientIsolation(whClientContext* client1,
+                                   whServerContext* server1,
+                                   whClientContext* client2,
+                                   whServerContext* server2)
+{
+    const whNvmId shared_id = 5;
+    int32_t       out_rc    = 0;
+    uint8_t       buf[64]   = {0};
+    whNvmSize     out_len   = 0;
+
+    WH_TEST_PRINT("Testing NVM client isolation...\n");
+
+    /* Client A adds a secret object at id=5 */
+    WH_TEST_RETURN_ON_FAIL(_nvmAddViaServer(client1, server1, shared_id,
+                                            sizeof(NVM_ISOLATION_PAYLOAD_A),
+                                            NVM_ISOLATION_PAYLOAD_A, &out_rc));
+    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+
+    /* Client A confirms it can read its own bytes back */
+    out_len = 0;
+    memset(buf, 0, sizeof(buf));
+    WH_TEST_RETURN_ON_FAIL(_nvmReadViaServer(
+        client1, server1, shared_id, sizeof(buf), &out_rc, &out_len, buf));
+    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(out_len == sizeof(NVM_ISOLATION_PAYLOAD_A));
+    WH_TEST_ASSERT_RETURN(memcmp(buf, NVM_ISOLATION_PAYLOAD_A,
+                                 sizeof(NVM_ISOLATION_PAYLOAD_A)) == 0);
+
+    /* Client B reads id=5: must NOT find A's bytes */
+    out_len = 0;
+    memset(buf, 0, sizeof(buf));
+    WH_TEST_RETURN_ON_FAIL(_nvmReadViaServer(
+        client2, server2, shared_id, sizeof(buf), &out_rc, &out_len, buf));
+    /* Either NOTFOUND or read returned different bytes; never A's plaintext. */
+    if (out_rc == WH_ERROR_OK) {
+        WH_TEST_ASSERT_RETURN(memcmp(buf, NVM_ISOLATION_PAYLOAD_A,
+                                     sizeof(NVM_ISOLATION_PAYLOAD_A)) != 0);
+    }
+
+    /* Client B adds its own object at the same client-facing id=5 */
+    out_rc = 0;
+    WH_TEST_RETURN_ON_FAIL(_nvmAddViaServer(client2, server2, shared_id,
+                                            sizeof(NVM_ISOLATION_PAYLOAD_B),
+                                            NVM_ISOLATION_PAYLOAD_B, &out_rc));
+    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+
+    /* Client B reads id=5: gets ITS OWN value */
+    out_len = 0;
+    memset(buf, 0, sizeof(buf));
+    WH_TEST_RETURN_ON_FAIL(_nvmReadViaServer(
+        client2, server2, shared_id, sizeof(buf), &out_rc, &out_len, buf));
+    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(out_len == sizeof(NVM_ISOLATION_PAYLOAD_B));
+    WH_TEST_ASSERT_RETURN(memcmp(buf, NVM_ISOLATION_PAYLOAD_B,
+                                 sizeof(NVM_ISOLATION_PAYLOAD_B)) == 0);
+
+    /* Client A still sees ITS OWN value, not B's */
+    out_len = 0;
+    memset(buf, 0, sizeof(buf));
+    WH_TEST_RETURN_ON_FAIL(_nvmReadViaServer(
+        client1, server1, shared_id, sizeof(buf), &out_rc, &out_len, buf));
+    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(out_len == sizeof(NVM_ISOLATION_PAYLOAD_A));
+    WH_TEST_ASSERT_RETURN(memcmp(buf, NVM_ISOLATION_PAYLOAD_A,
+                                 sizeof(NVM_ISOLATION_PAYLOAD_A)) == 0);
+
+    /* Cleanup: each client destroys its own */
+    WH_TEST_RETURN_ON_FAIL(
+        _nvmDestroyViaServer(client1, server1, shared_id, &out_rc));
+    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+    WH_TEST_RETURN_ON_FAIL(
+        _nvmDestroyViaServer(client2, server2, shared_id, &out_rc));
+    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+
+    WH_TEST_PRINT("  NVM client isolation: PASS\n");
+    return WH_ERROR_OK;
+}
+
+/*
+ * List has two namespaces:
+ *  - own       : startId without GLOBAL flag
+ *  - global    : startId with WH_KEYID_CLIENT_GLOBAL_FLAG set
+ *
+ * Client A populates 2 own ids and 2 global ids. Each scan must visit only
+ * the corresponding namespace.
+ */
+static int _testNvmGlobalNamespaceList(whClientContext* client1,
+                                       whServerContext* server1,
+                                       whClientContext* client2,
+                                       whServerContext* server2)
+{
+    int32_t       out_rc           = 0;
+    whNvmId       count            = 0;
+    whNvmId       cur              = 0;
+    int           seen_own[256]    = {0};
+    int           seen_global[256] = {0};
+    int           i;
+    int           iters;
+    const whNvmId own_ids[2]    = {3, 7};
+    const whNvmId global_ids[2] = {2, 4};
+    (void)server2;
+    (void)client2;
+
+    WH_TEST_PRINT("Testing NVM list with global namespace...\n");
+
+    /* Populate own ids */
+    for (i = 0; i < 2; i++) {
+        WH_TEST_RETURN_ON_FAIL(_nvmAddViaServer(
+            client1, server1, own_ids[i], sizeof(NVM_ISOLATION_PAYLOAD_A),
+            NVM_ISOLATION_PAYLOAD_A, &out_rc));
+        WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+    }
+
+    /* Populate global ids */
+    for (i = 0; i < 2; i++) {
+        WH_TEST_RETURN_ON_FAIL(_nvmAddViaServer(
+            client1, server1, global_ids[i] | WH_KEYID_CLIENT_GLOBAL_FLAG,
+            sizeof(NVM_ISOLATION_PAYLOAD_B), NVM_ISOLATION_PAYLOAD_B, &out_rc));
+        WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+    }
+
+    /* Iterate own namespace (no flag on startId). Expect ids in own_ids.
+     * Cap iterations to defend against an unintentional infinite loop. */
+    cur = 0;
+    for (iters = 0; iters < 16; iters++) {
+        WH_TEST_RETURN_ON_FAIL(
+            _nvmListViaServer(client1, server1, cur, &out_rc, &count, &cur));
+        WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+        if (count == 0) {
+            break;
+        }
+        /* Must not carry the GLOBAL flag */
+        WH_TEST_ASSERT_RETURN((cur & WH_KEYID_CLIENT_GLOBAL_FLAG) == 0);
+        WH_TEST_ASSERT_RETURN((cur & WH_KEYID_MASK) <= WH_KEYID_IDMAX);
+        seen_own[cur & WH_KEYID_MASK] = 1;
+        if (count == 1) {
+            break;
+        }
+    }
+    WH_TEST_ASSERT_RETURN(iters < 16);
+
+    /* Iterate global namespace (GLOBAL flag on startId). Expect ids in
+     * global_ids, all returned with GLOBAL flag set. */
+    cur = WH_KEYID_CLIENT_GLOBAL_FLAG;
+    for (iters = 0; iters < 16; iters++) {
+        WH_TEST_RETURN_ON_FAIL(
+            _nvmListViaServer(client1, server1, cur, &out_rc, &count, &cur));
+        WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+        if (count == 0) {
+            break;
+        }
+        WH_TEST_ASSERT_RETURN((cur & WH_KEYID_CLIENT_GLOBAL_FLAG) != 0);
+        seen_global[cur & WH_KEYID_MASK] = 1;
+        if (count == 1) {
+            break;
+        }
+    }
+    WH_TEST_ASSERT_RETURN(iters < 16);
+
+    for (i = 0; i < 2; i++) {
+        WH_TEST_ASSERT_RETURN(seen_own[own_ids[i]] == 1);
+        WH_TEST_ASSERT_RETURN(seen_global[global_ids[i]] == 1);
+    }
+    /* Crosscheck: globals never appear in the own scan and vice-versa */
+    WH_TEST_ASSERT_RETURN(seen_own[global_ids[0]] == 0);
+    WH_TEST_ASSERT_RETURN(seen_own[global_ids[1]] == 0);
+    WH_TEST_ASSERT_RETURN(seen_global[own_ids[0]] == 0);
+    WH_TEST_ASSERT_RETURN(seen_global[own_ids[1]] == 0);
+
+    /* Cleanup */
+    for (i = 0; i < 2; i++) {
+        WH_TEST_RETURN_ON_FAIL(
+            _nvmDestroyViaServer(client1, server1, own_ids[i], &out_rc));
+        WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+        WH_TEST_RETURN_ON_FAIL(_nvmDestroyViaServer(
+            client1, server1, global_ids[i] | WH_KEYID_CLIENT_GLOBAL_FLAG,
+            &out_rc));
+        WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+    }
+
+    WH_TEST_PRINT("  NVM global namespace list: PASS\n");
+    return WH_ERROR_OK;
+}
+
+/*
+ * Reject malformed AddObject requests:
+ *  - id portion == 0 (erased sentinel)
+ *  - wrapped flag set
+ */
+static int _testNvmAddObjectRejections(whClientContext* client1,
+                                       whServerContext* server1,
+                                       whClientContext* client2,
+                                       whServerContext* server2)
+{
+    int32_t out_rc = 0;
+    (void)server2;
+    (void)client2;
+
+    WH_TEST_PRINT("Testing NVM AddObject bad-id rejections...\n");
+
+    /* id=0 with own scope */
+    WH_TEST_RETURN_ON_FAIL(_nvmAddViaServer(client1, server1, 0, 4,
+                                            (const uint8_t*)"data", &out_rc));
+    WH_TEST_ASSERT_RETURN(out_rc != WH_ERROR_OK);
+
+    /* id=0 with global scope */
+    out_rc = 0;
+    WH_TEST_RETURN_ON_FAIL(_nvmAddViaServer(client1, server1,
+                                            WH_KEYID_CLIENT_GLOBAL_FLAG, 4,
+                                            (const uint8_t*)"data", &out_rc));
+    WH_TEST_ASSERT_RETURN(out_rc != WH_ERROR_OK);
+
+    /* wrapped flag set */
+    out_rc = 0;
+    WH_TEST_RETURN_ON_FAIL(_nvmAddViaServer(client1, server1,
+                                            5 | WH_KEYID_CLIENT_WRAPPED_FLAG, 4,
+                                            (const uint8_t*)"data", &out_rc));
+    WH_TEST_ASSERT_RETURN(out_rc != WH_ERROR_OK);
+
+    WH_TEST_PRINT("  NVM AddObject rejections: PASS\n");
+    return WH_ERROR_OK;
+}
+
+static int _runNvmIdTranslationTests(whClientContext* client1,
+                                     whServerContext* server1,
+                                     whClientContext* client2,
+                                     whServerContext* server2)
+{
+    WH_TEST_PRINT("=== NVM Id Translation Tests Begin ===\n");
+    WH_TEST_RETURN_ON_FAIL(
+        _testNvmClientIsolation(client1, server1, client2, server2));
+    WH_TEST_RETURN_ON_FAIL(
+        _testNvmGlobalNamespaceList(client1, server1, client2, server2));
+    WH_TEST_RETURN_ON_FAIL(
+        _testNvmAddObjectRejections(client1, server1, client2, server2));
+    WH_TEST_PRINT("All NVM Id Translation Tests PASSED ===\n");
+    return WH_ERROR_OK;
+}
+
+#endif /* !WOLFHSM_CFG_LEGACY_CLIENT_NVM */
+
 /* ============================================================================
  * MULTI-CLIENT SEQUENTIAL TEST FRAMEWORK
  * ========================================================================== */
@@ -1634,6 +1942,11 @@ static int whTest_MultiClientSequential(void)
 #ifdef WOLFHSM_CFG_GLOBAL_KEYS
     WH_TEST_RETURN_ON_FAIL(
         _runGlobalKeysTests(client1, server1, client2, server2));
+#endif
+
+#ifndef WOLFHSM_CFG_LEGACY_CLIENT_NVM
+    WH_TEST_RETURN_ON_FAIL(
+        _runNvmIdTranslationTests(client1, server1, client2, server2));
 #endif
 
     /* Future test suites here */
