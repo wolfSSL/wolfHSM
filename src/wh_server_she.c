@@ -125,12 +125,14 @@ static int _GenerateMac(whServerContext* server, uint16_t magic,
 static int _VerifyMac(whServerContext* server, uint16_t magic,
                       uint16_t req_size, const void* req_packet,
                       uint16_t* out_resp_size, void* resp_packet);
+#ifdef WOLFHSM_CFG_SHE_ENABLE_TEST_KEY_MGMT
 static int      _PreProgramKey(whServerContext* server, uint16_t magic,
                                uint16_t req_size, const void* req_packet,
                                uint16_t* out_resp_size, void* resp_packet);
 static int      _DestroyKey(whServerContext* server, uint16_t magic,
                             uint16_t req_size, const void* req_packet,
                             uint16_t* out_resp_size, void* resp_packet);
+#endif /* WOLFHSM_CFG_SHE_ENABLE_TEST_KEY_MGMT */
 static int _TranslateSheReturnCode(int ret);
 static int _ReportInvalidSheState(whServerContext* server, uint16_t magic,
                                   uint16_t action, uint16_t req_size,
@@ -1647,6 +1649,7 @@ static int _VerifyMac(whServerContext* server, uint16_t magic,
  * Replaces the historical client-side use of wh_Client_NvmAddObject with a
  * hand-constructed SHE-typed id, which is incompatible with the new client-id
  * translation on the NVM message path. */
+#ifdef WOLFHSM_CFG_SHE_ENABLE_TEST_KEY_MGMT
 static int _PreProgramKey(whServerContext* server, uint16_t magic,
                           uint16_t req_size, const void* req_packet,
                           uint16_t* out_resp_size, void* resp_packet)
@@ -1723,6 +1726,7 @@ static int _DestroyKey(whServerContext* server, uint16_t magic,
     *out_resp_size = sizeof(resp);
     return ret;
 }
+#endif /* WOLFHSM_CFG_SHE_ENABLE_TEST_KEY_MGMT */
 
 
 /* TODO: This is terrible, but without implementing a SHE sub-protocol like we
@@ -2054,6 +2058,7 @@ int wh_Server_HandleSheRequest(whServerContext* server, uint16_t magic,
                 (void)WH_SERVER_NVM_UNLOCK(server);
             } /* WH_SERVER_NVM_LOCK() */
             break;
+#ifdef WOLFHSM_CFG_SHE_ENABLE_TEST_KEY_MGMT
         case WH_SHE_PRE_PROGRAM_KEY:
             ret = _PreProgramKey(server, magic, req_size, req_packet,
                                  out_resp_size, resp_packet);
@@ -2062,6 +2067,7 @@ int wh_Server_HandleSheRequest(whServerContext* server, uint16_t magic,
             ret = _DestroyKey(server, magic, req_size, req_packet,
                               out_resp_size, resp_packet);
             break;
+#endif /* WOLFHSM_CFG_SHE_ENABLE_TEST_KEY_MGMT */
         default:
             ret = WH_ERROR_BADARGS;
             break;

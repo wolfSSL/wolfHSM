@@ -429,6 +429,7 @@ int wh_MessageShe_TranslateVerifyMacResponse(
     return 0;
 }
 
+#ifdef WOLFHSM_CFG_SHE_ENABLE_TEST_KEY_MGMT
 int wh_MessageShe_TranslatePreProgramKeyRequest(
     uint16_t magic, const whMessageShe_PreProgramKeyRequest* src,
     whMessageShe_PreProgramKeyRequest* dest)
@@ -474,5 +475,6 @@ int wh_MessageShe_TranslateDestroyKeyResponse(
     WH_T32(magic, dest, src, rc);
     return 0;
 }
+#endif /* WOLFHSM_CFG_SHE_ENABLE_TEST_KEY_MGMT */
 
 #endif /* WOLFHSM_CFG_SHE_EXTENSION */

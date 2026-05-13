@@ -69,6 +69,12 @@
 
 /** SHE provisioning and identity functions */
 
+#ifdef WOLFHSM_CFG_SHE_ENABLE_TEST_KEY_MGMT
+/* Test/provisioning-only key management. These bypass the SHE M1-M5
+ * authenticated key update and debug-authorization protocols and must NOT be
+ * exposed in production builds. Gated by WOLFHSM_CFG_SHE_ENABLE_TEST_KEY_MGMT.
+ */
+
 /**
  * @brief Pre-programs a SHE key directly into NVM, bypassing the key update
  * protocol.
@@ -106,6 +112,7 @@ int wh_Client_ShePreProgramKey(whClientContext* c, whNvmId keyId,
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_Client_SheDestroyKey(whClientContext* c, whNvmId keyId);
+#endif /* WOLFHSM_CFG_SHE_ENABLE_TEST_KEY_MGMT */
 
 /**
  * @brief Sends a request to set the ECU UID (wolfHSM-specific).

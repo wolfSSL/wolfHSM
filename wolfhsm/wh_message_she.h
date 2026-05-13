@@ -389,9 +389,14 @@ int wh_MessageShe_TranslateVerifyMacResponse(
     uint16_t magic, const whMessageShe_VerifyMacResponse* src,
     whMessageShe_VerifyMacResponse* dest);
 
+#ifdef WOLFHSM_CFG_SHE_ENABLE_TEST_KEY_MGMT
 /* Pre-program Key Request. Persists a SHE-typed NVM entry under the calling
  * client's USER namespace.  Carried on the SHE message group so that NVM
- * client-id translation does not need to special-case typed adds. */
+ * client-id translation does not need to special-case typed adds.
+ *
+ * NOTE: Bypasses the SHE M1-M5 authenticated key-update protocol. Not part of
+ * the SHE specification; gated behind WOLFHSM_CFG_SHE_ENABLE_TEST_KEY_MGMT for
+ * test/provisioning use only. */
 typedef struct {
     uint32_t keyId;
     uint32_t flags;
@@ -416,7 +421,10 @@ int wh_MessageShe_TranslatePreProgramKeyResponse(
     whMessageShe_PreProgramKeyResponse* dest);
 
 /* Destroy Key Request. Removes a SHE-typed NVM entry from the calling
- * client's USER namespace. */
+ * client's USER namespace.
+ *
+ * NOTE: Bypasses the SHE debug-authorization protocol. Test/provisioning use
+ * only; see WOLFHSM_CFG_SHE_ENABLE_TEST_KEY_MGMT. */
 typedef struct {
     uint32_t keyId;
     uint8_t  WH_PAD[4];
@@ -434,6 +442,7 @@ int wh_MessageShe_TranslateDestroyKeyRequest(
 int wh_MessageShe_TranslateDestroyKeyResponse(
     uint16_t magic, const whMessageShe_DestroyKeyResponse* src,
     whMessageShe_DestroyKeyResponse* dest);
+#endif /* WOLFHSM_CFG_SHE_ENABLE_TEST_KEY_MGMT */
 
 #endif /* WOLFHSM_CFG_SHE_EXTENSION */
 

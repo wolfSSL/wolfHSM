@@ -52,6 +52,11 @@
 #define WOLFHSM_CFG_HWKEYSTORE
 #endif
 
+/* Enable SHE preprogram/destroy test-only key-management APIs. These bypass
+ * the authenticated SHE key-update protocol and are not part of the SHE
+ * specification, so they must never be enabled in production builds. */
+#define WOLFHSM_CFG_SHE_ENABLE_TEST_KEY_MGMT
+
 /* Test log-based NVM flash backend */
 #define WOLFHSM_CFG_SERVER_NVM_FLASH_LOG
 
