@@ -62,7 +62,7 @@ static int NonBlockingError(int err)
  * affects how peer verification is enforced. */
 static int LoadTlsCertificates(WOLFSSL_CTX*                   ssl_ctx,
                                const posixTransportTlsConfig* cfg,
-                               int                            is_server)
+                               bool                           is_server)
 {
     int rc;
 
@@ -156,7 +156,7 @@ int posixTransportTls_InitConnect(void* context, const void* config,
     wolfSSL_CTX_SetDevId(ctx->ssl_ctx, INVALID_DEVID);
 
     /* Load certificates from config structure */
-    rc = LoadTlsCertificates(ctx->ssl_ctx, cfg, 0 /* is_server */);
+    rc = LoadTlsCertificates(ctx->ssl_ctx, cfg, false /* is_server */);
     if (rc != WH_ERROR_OK) {
         wolfSSL_CTX_free(ctx->ssl_ctx);
         ctx->ssl_ctx = NULL;
@@ -424,7 +424,7 @@ int posixTransportTls_InitListen(void* context, const void* config,
     wolfSSL_CTX_SetDevId(ctx->ssl_ctx, INVALID_DEVID);
 
     /* Load certificates from config structure */
-    rc = LoadTlsCertificates(ctx->ssl_ctx, cfg, 1 /* is_server */);
+    rc = LoadTlsCertificates(ctx->ssl_ctx, cfg, true /* is_server */);
     if (rc != WH_ERROR_OK) {
         wolfSSL_CTX_free(ctx->ssl_ctx);
         ctx->ssl_ctx = NULL;
