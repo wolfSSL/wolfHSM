@@ -182,14 +182,7 @@ int whTest_CertNvmPolicy(whServerContext* ctx)
     return 0;
 }
 
-/*
- * Keys and certs share the NVM id space, so a client that passes a
- * trusted KEK's id to a cert read handler must be refused. The KEK
- * flag alone (no NONEXPORTABLE) must be enough: the dispatcher is
- * the only gate, since wh_Server_CertReadTrusted() does an unchecked
- * NVM read. Driven through wh_Server_HandleCertRequest() because the
- * check lives in the dispatcher, not the server cert API.
- */
+/* Verify cert read handler rejects non-cert IDs and SERVER_ONLY objects. */
 int whTest_CertReadRejectsServerOnly(whServerContext* ctx)
 {
     whServerContext* server  = (whServerContext*)ctx;
@@ -205,9 +198,7 @@ int whTest_CertReadRejectsServerOnly(whServerContext* ctx)
 
     WH_TEST_RETURN_ON_FAIL(wh_Server_CertInit(server));
 
-    /* Provision a trusted KEK the way whnvmtool would, deliberately
-     * WITHOUT NONEXPORTABLE, to prove the trusted flag alone gates the
-     * read. */
+    /* Provision a trusted KEK at a crypto-typed ID. */
     meta.id     = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, 0, 0x5A);
     meta.access = WH_NVM_ACCESS_ANY;
     meta.flags  = WH_NVM_FLAGS_TRUSTED | WH_NVM_FLAGS_USAGE_WRAP;
@@ -215,9 +206,6 @@ int whTest_CertReadRejectsServerOnly(whServerContext* ctx)
     WH_TEST_RETURN_ON_FAIL(
         wh_Nvm_AddObject(server->nvm, &meta, sizeof(kek), kek));
 
-    /* READTRUSTED must refuse the KEK id and return no cert bytes.
-     * The handler formats resp.rc and also returns it; resp.rc is the
-     * client-visible signal, so assert on that. */
     {
         whMessageCert_ReadTrustedRequest  req  = {0};
         whMessageCert_ReadTrustedResponse resp = {0};
@@ -225,21 +213,58 @@ int whTest_CertReadRejectsServerOnly(whServerContext* ctx)
         req.id = meta.id;
         wh_MessageCert_TranslateReadTrustedRequest(
             magic, &req, (whMessageCert_ReadTrustedRequest*)req_packet);
-
         (void)wh_Server_HandleCertRequest(
             server, magic, WH_MESSAGE_CERT_ACTION_READTRUSTED, 0, sizeof(req),
             req_packet, &resp_size, resp_packet);
-
         wh_MessageCert_TranslateReadTrustedResponse(
             magic, (whMessageCert_ReadTrustedResponse*)resp_packet, &resp);
+        WH_TEST_ASSERT_RETURN(resp.rc == WH_ERROR_BADARGS);
+        WH_TEST_ASSERT_RETURN(resp.cert_len == 0);
+        WH_TEST_ASSERT_RETURN(resp_size == sizeof(resp));
 
-        WH_TEST_ASSERT_RETURN(resp.rc == WH_ERROR_ACCESS);
+        memset(&resp, 0, sizeof(resp));
+        req.id = WH_KEYID_ID(meta.id);
+        wh_MessageCert_TranslateReadTrustedRequest(
+            magic, &req, (whMessageCert_ReadTrustedRequest*)req_packet);
+        (void)wh_Server_HandleCertRequest(
+            server, magic, WH_MESSAGE_CERT_ACTION_READTRUSTED, 0, sizeof(req),
+            req_packet, &resp_size, resp_packet);
+        wh_MessageCert_TranslateReadTrustedResponse(
+            magic, (whMessageCert_ReadTrustedResponse*)resp_packet, &resp);
+        WH_TEST_ASSERT_RETURN(resp.rc == WH_ERROR_NOTFOUND);
         WH_TEST_ASSERT_RETURN(resp.cert_len == 0);
         WH_TEST_ASSERT_RETURN(resp_size == sizeof(resp));
     }
 
+    /* Verify SERVER_ONLY object in cert namespace cannot be read. */
+    {
+        whMessageCert_ReadTrustedRequest  req  = {0};
+        whMessageCert_ReadTrustedResponse resp = {0};
+        whNvmMetadata                     srv  = {0};
+
+        srv.id = WH_MAKE_KEYID(WH_KEYTYPE_CERT, server->comm->client_id, 0x5B);
+        srv.access = WH_NVM_ACCESS_ANY;
+        srv.flags  = WH_NVM_FLAGS_SERVER_ONLY;
+        srv.len    = sizeof(kek);
+        WH_TEST_RETURN_ON_FAIL(
+            wh_Nvm_AddObject(server->nvm, &srv, sizeof(kek), kek));
+
+        req.id = 0x5B;
+        wh_MessageCert_TranslateReadTrustedRequest(
+            magic, &req, (whMessageCert_ReadTrustedRequest*)req_packet);
+        (void)wh_Server_HandleCertRequest(
+            server, magic, WH_MESSAGE_CERT_ACTION_READTRUSTED, 0, sizeof(req),
+            req_packet, &resp_size, resp_packet);
+        wh_MessageCert_TranslateReadTrustedResponse(
+            magic, (whMessageCert_ReadTrustedResponse*)resp_packet, &resp);
+        WH_TEST_ASSERT_RETURN(resp.rc == WH_ERROR_ACCESS);
+        WH_TEST_ASSERT_RETURN(resp.cert_len == 0);
+        WH_TEST_ASSERT_RETURN(resp_size == sizeof(resp));
+
+        WH_TEST_RETURN_ON_FAIL(wh_Nvm_DestroyObjects(server->nvm, 1, &srv.id));
+    }
+
 #ifdef WOLFHSM_CFG_DMA
-    /* READTRUSTED_DMA must refuse it too and write nothing. */
     {
         whMessageCert_ReadTrustedDmaRequest req  = {0};
         whMessageCert_SimpleResponse        resp = {0};
@@ -247,7 +272,7 @@ int whTest_CertReadRejectsServerOnly(whServerContext* ctx)
         size_t                              i;
 
         memset(out_buf, 0, sizeof(out_buf));
-        req.id        = meta.id;
+        req.id        = WH_KEYID_ID(meta.id);
         req.cert_addr = (uint64_t)(uintptr_t)out_buf;
         req.cert_len  = sizeof(out_buf);
         wh_MessageCert_TranslateReadTrustedDmaRequest(
@@ -261,15 +286,146 @@ int whTest_CertReadRejectsServerOnly(whServerContext* ctx)
         wh_MessageCert_TranslateSimpleResponse(
             magic, (whMessageCert_SimpleResponse*)resp_packet, &resp);
 
-        WH_TEST_ASSERT_RETURN(resp.rc == WH_ERROR_ACCESS);
+        WH_TEST_ASSERT_RETURN(resp.rc == WH_ERROR_NOTFOUND);
         for (i = 0; i < sizeof(out_buf); i++) {
             WH_TEST_ASSERT_RETURN(out_buf[i] == 0);
         }
     }
 #endif /* WOLFHSM_CFG_DMA */
 
-    /* Server-internal unchecked destroy still works; clean up. */
     WH_TEST_RETURN_ON_FAIL(wh_Nvm_DestroyObjects(server->nvm, 1, &meta.id));
+
+    return 0;
+}
+
+/* Verify EraseTrusted cannot destroy non-certificate objects. */
+int whTest_CertEraseCannotReachNonCert(whServerContext* ctx)
+{
+    whServerContext* server  = (whServerContext*)ctx;
+    whNvmMetadata    meta    = {0};
+    whNvmMetadata    check   = {0};
+    const uint8_t  secret[8] = {0xDE, 0xAD, 0xBE, 0xEF, 0x01, 0x02, 0x03, 0x04};
+    const uint16_t magic     = WH_COMM_MAGIC_NATIVE;
+    uint8_t        req_packet[WOLFHSM_CFG_COMM_DATA_LEN]  = {0};
+    uint8_t        resp_packet[WOLFHSM_CFG_COMM_DATA_LEN] = {0};
+    uint16_t       resp_size                              = 0;
+    /* Protected ID that no client translation can produce */
+    const whNvmId protectedId = WH_MAKE_KEYID(0xF, 0xE, 0x00);
+
+    WH_TEST_RETURN_ON_FAIL(wh_Server_CertInit(server));
+
+    meta.id     = protectedId;
+    meta.access = WH_NVM_ACCESS_ANY;
+    meta.flags  = WH_NVM_FLAGS_NONMODIFIABLE;
+    meta.len    = sizeof(secret);
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Nvm_AddObject(server->nvm, &meta, sizeof(secret), secret));
+
+    {
+        whMessageCert_EraseTrustedRequest req  = {0};
+        whMessageCert_SimpleResponse      resp = {0};
+
+        req.id = protectedId;
+        wh_MessageCert_TranslateEraseTrustedRequest(
+            magic, &req, (whMessageCert_EraseTrustedRequest*)req_packet);
+
+        (void)wh_Server_HandleCertRequest(
+            server, magic, WH_MESSAGE_CERT_ACTION_ERASETRUSTED, 0, sizeof(req),
+            req_packet, &resp_size, resp_packet);
+
+        wh_MessageCert_TranslateSimpleResponse(
+            magic, (whMessageCert_SimpleResponse*)resp_packet, &resp);
+        WH_TEST_ASSERT_RETURN(resp.rc == WH_ERROR_BADARGS);
+        WH_TEST_ASSERT_RETURN(resp_size == sizeof(resp));
+    }
+
+    WH_TEST_ASSERT_RETURN(
+        wh_Nvm_GetMetadata(server->nvm, protectedId, &check) == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(check.len == sizeof(secret));
+
+    WH_TEST_RETURN_ON_FAIL(wh_Nvm_DestroyObjects(server->nvm, 1, &protectedId));
+
+    return 0;
+}
+
+/* Issue a client READTRUSTED request for `id` and return the response rc. */
+static int32_t _certReadRc(whServerContext* server, uint16_t magic, whNvmId id,
+                           uint8_t* req_packet, uint8_t* resp_packet)
+{
+    whMessageCert_ReadTrustedRequest  req       = {0};
+    whMessageCert_ReadTrustedResponse resp      = {0};
+    uint16_t                          resp_size = 0;
+
+    req.id = id;
+    wh_MessageCert_TranslateReadTrustedRequest(
+        magic, &req, (whMessageCert_ReadTrustedRequest*)req_packet);
+    (void)wh_Server_HandleCertRequest(
+        server, magic, WH_MESSAGE_CERT_ACTION_READTRUSTED, 0, sizeof(req),
+        req_packet, &resp_size, resp_packet);
+    wh_MessageCert_TranslateReadTrustedResponse(
+        magic, (whMessageCert_ReadTrustedResponse*)resp_packet, &resp);
+    return resp.rc;
+}
+
+/* Verify certificate ID isolation between clients and shared global access. */
+int whTest_CertPerClientIsolation(whServerContext* ctx)
+{
+    whServerContext* server = (whServerContext*)ctx;
+    whNvmMetadata    meta   = {0};
+    const uint16_t   magic  = WH_COMM_MAGIC_NATIVE;
+    uint8_t          req_packet[WOLFHSM_CFG_COMM_DATA_LEN]  = {0};
+    uint8_t          resp_packet[WOLFHSM_CFG_COMM_DATA_LEN] = {0};
+    const whNvmId    client1Cert = WH_MAKE_KEYID(WH_KEYTYPE_CERT, 1, 5);
+
+    WH_TEST_RETURN_ON_FAIL(wh_Server_CertInit(server));
+
+    /* Add cert to client 1 namespace */
+    meta.id     = client1Cert;
+    meta.access = WH_NVM_ACCESS_ANY;
+    meta.flags  = WH_NVM_FLAGS_NONE;
+    meta.len    = ROOT_A_CERT_len;
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Nvm_AddObject(server->nvm, &meta, ROOT_A_CERT_len, ROOT_A_CERT));
+
+    /* Client 2 cannot see client 1 cert */
+    server->comm->client_id = 2;
+    WH_TEST_ASSERT_RETURN(_certReadRc(server, magic, 5, req_packet,
+                                      resp_packet) == WH_ERROR_NOTFOUND);
+
+    /* Client 1 can read its own cert */
+    server->comm->client_id = 1;
+    WH_TEST_ASSERT_RETURN(
+        _certReadRc(server, magic, 5, req_packet, resp_packet) == WH_ERROR_OK);
+
+#ifdef WOLFHSM_CFG_GLOBAL_KEYS
+    /* Verify global cert access */
+    memset(&meta, 0, sizeof(meta));
+    meta.id     = WH_MAKE_KEYID(WH_KEYTYPE_CERT, WH_KEYUSER_GLOBAL, 6);
+    meta.access = WH_NVM_ACCESS_ANY;
+    meta.flags  = WH_NVM_FLAGS_NONE;
+    meta.len    = ROOT_B_CERT_len;
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Nvm_AddObject(server->nvm, &meta, ROOT_B_CERT_len, ROOT_B_CERT));
+
+    server->comm->client_id = 2;
+    WH_TEST_ASSERT_RETURN(_certReadRc(server, magic,
+                                      6 | WH_KEYID_CLIENT_GLOBAL_FLAG,
+                                      req_packet, resp_packet) == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(_certReadRc(server, magic, 6, req_packet,
+                                      resp_packet) == WH_ERROR_NOTFOUND);
+
+    {
+        whNvmId g = WH_MAKE_KEYID(WH_KEYTYPE_CERT, WH_KEYUSER_GLOBAL, 6);
+        WH_TEST_RETURN_ON_FAIL(wh_Nvm_DestroyObjects(server->nvm, 1, &g));
+    }
+#endif
+
+    /* Clean up and restore client ID */
+    {
+        whNvmId c1 = client1Cert;
+        WH_TEST_RETURN_ON_FAIL(wh_Nvm_DestroyObjects(server->nvm, 1, &c1));
+    }
+    server->comm->client_id = 0;
 
     return 0;
 }

@@ -244,7 +244,7 @@ Passing `INVALID_DEVID` makes the server perform crypto in software. To offload 
 
 `whServerConfig` aggregates the three pieces configured above — the comm config (`.comm_config`), the initialized NVM context (`.nvm`), and the crypto context (`.crypto`) — into a single configuration. `wh_Server_Init()` wires them into the `whServerContext`, which from then on serves as the handle for all server operations.
 
-After initialization, the server must be told when the underlying transport is actually ready for communication by calling `wh_Server_SetConnected(server, WH_COMM_CONNECTED)`. Until the server is connected, `wh_Server_HandleRequestMessage()` returns `WH_ERROR_NOTREADY`. On the client side, the corresponding steps are simply `wh_Client_Init()` followed by `wh_Client_CommInit()`.
+After initialization, the server must be told when the underlying transport is actually ready for communication by calling `wh_Server_SetConnected(server, WH_COMM_CONNECTED)`. Until the server is connected, `wh_Server_HandleRequestMessage()` returns `WH_ERROR_NOTREADY`. On the client side, the corresponding steps are simply `wh_Client_Init()` followed by `wh_Client_CommInit()`. COMM INIT establishes the client ID used to namespace keys and objects. The server rejects other requests until COMM INIT completes.
 
 ### Processing Requests
 

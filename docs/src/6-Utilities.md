@@ -20,6 +20,8 @@ The NVM provisioning tool (`tools/whnvmtool/`) is a host-side utility that build
 
 Because the on-flash layout depends on build-time configuration, the tool must be compiled against the same wolfHSM version as the target server and with a matching `WOLFHSM_CFG_NVM_OBJECT_COUNT` and `WOLFHSM_CFG_NVM_FLASH_CRC16` setting, and the `--size` argument must match the server's `whNvmFlash` partition size. For the full configuration file schema, command-line options, Intel HEX output details, and test workflow, see [`tools/whnvmtool/README.md`](https://github.com/wolfSSL/wolfHSM/blob/main/tools/whnvmtool/README.md).
 
+Configuration files use server-internal IDs written directly into the image. Because the client NVM API uses per-client namespaces (see [Client NVM Access and Per-Client Namespaces](5-Features.md#client-nvm-access-and-per-client-namespaces)), an `obj` entry with an ID up to 255 resides in the global namespace, accessed by setting `WH_KEYID_CLIENT_GLOBAL_FLAG`. To provision an object for a specific client, encode the client ID into bits 8 to 11 of the object ID. Typed objects also require the type nibble in bits 12 to 15. For example, trusted root certificates use TYPE `WH_KEYTYPE_CERT` (`0x6`), where `obj 0x6005` provisions global root 5 and `obj 0x6105` provisions root 5 for client 1 (see [Trusted Root Storage](5-Features.md#trusted-root-storage)). Counters use TYPE `WH_KEYTYPE_COUNTER` (`0x3`). If `WOLFHSM_CFG_LEGACY_CLIENT_NVM` is enabled on the server, client NVM translation is disabled and clients use verbatim IDs.
+
 ## Benchmark Suite
 
 ### Benchmark Suite Overview

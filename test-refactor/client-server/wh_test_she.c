@@ -63,16 +63,7 @@
  * SHE keys are supposed to be fixed hardware keys. */
 static int _destroySheKey(whClientContext* client, whNvmId clientSheKeyId)
 {
-    int     rc       = 0;
-    int32_t serverRc = 0;
-    whNvmId id = WH_SHE_MAKE_KEYID(client->comm->client_id, clientSheKeyId);
-
-    rc = wh_Client_NvmDestroyObjects(client, 1, &id, &serverRc);
-    if (rc == WH_ERROR_OK) {
-        rc = serverRc;
-    }
-
-    return rc;
+    return wh_Client_SheDestroyKey(client, clientSheKeyId);
 }
 
 
@@ -157,8 +148,6 @@ int whTest_She(whClientContext* client)
     const uint32_t SHE_TEST_VECTOR_KEY_ID = 4;
     const uint32_t SHE_WP_KEY_ID          = 6;
     const uint32_t SHE_SIZE_CHECK_KEY_ID  = 7;
-    const uint32_t SHE_OVERSIZE_AUTH_ID   = 8;
-    const uint32_t SHE_OVERSIZE_TARGET_ID = 9;
 
     if (client == NULL) {
         return WH_ERROR_BADARGS;
@@ -232,12 +221,12 @@ int whTest_She(whClientContext* client)
         goto exit;
     }
     /* store the boot MAC key and digest */
-    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_BOOT_MAC_KEY_ID, 0,
+    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_BOOT_MAC_KEY_ID, 0, 0,
                                           key, sizeof(key))) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_ShePreProgramKey %d\n", ret);
         goto exit;
     }
-    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_BOOT_MAC, 0,
+    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_BOOT_MAC, 0, 0,
                                           bootMacDigest,
                                           sizeof(bootMacDigest))) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_ShePreProgramKey %d\n", ret);
@@ -270,12 +259,12 @@ int whTest_She(whClientContext* client)
     /* === Loadable keys and test vectors === */
 
     /* load the secret key and prng seed using pre program */
-    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_SECRET_KEY_ID, 0,
+    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_SECRET_KEY_ID, 0, 0,
                                           secretKey, sizeof(secretKey))) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_ShePreProgramKey %d\n", ret);
         goto exit;
     }
-    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_PRNG_SEED_ID, 0,
+    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_PRNG_SEED_ID, 0, 0,
                                           prngSeed, sizeof(prngSeed))) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_ShePreProgramKey %d\n", ret);
         goto exit;
@@ -419,9 +408,9 @@ int whTest_She(whClientContext* client)
          * to the M2 layout overlap between flags and count). Then
          * re-load the slot with an all-zero UID; the server must
          * accept it because the stored flags contain WILDCARD. */
-        if ((ret = wh_Client_ShePreProgramKey(client, SHE_WILDCARD_KEY_ID,
-                WH_SHE_FLAG_WILDCARD, vectorRawKey, sizeof(vectorRawKey)))
-                != 0) {
+        if ((ret = wh_Client_ShePreProgramKey(
+                 client, SHE_WILDCARD_KEY_ID, 0, WH_SHE_FLAG_WILDCARD,
+                 vectorRawKey, sizeof(vectorRawKey))) != 0) {
             WH_ERROR_PRINT("Failed to preload wildcard key %d\n", ret);
             goto exit;
         }
@@ -741,10 +730,9 @@ int whTest_She(whClientContext* client)
      * overwritten via SHE LoadKey; the server must return
      * WH_SHE_ERC_WRITE_PROTECTED. Reuses the secret key (auth) and the
      * secure boot established above; uses a clean slot of its own. */
-    if ((ret = wh_Client_ShePreProgramKey(client, SHE_WP_KEY_ID,
-                                          WH_SHE_FLAG_WRITE_PROTECT,
-                                          vectorRawKey,
-                                          sizeof(vectorRawKey))) != 0) {
+    if ((ret = wh_Client_ShePreProgramKey(
+             client, SHE_WP_KEY_ID, 0, WH_SHE_FLAG_WRITE_PROTECT, vectorRawKey,
+             sizeof(vectorRawKey))) != 0) {
         WH_ERROR_PRINT("Failed to pre-program write-protected key %d\n", ret);
         goto exit;
     }
@@ -769,7 +757,7 @@ int whTest_She(whClientContext* client)
     /* A SHE slot holds exactly one AES-128 key. The server appends a 16
      * byte constant after the slot contents when deriving key update keys,
      * so an oversized slot would overrun its kdf input buffer. */
-    ret = wh_Client_ShePreProgramKey(client, SHE_SIZE_CHECK_KEY_ID, 0,
+    ret = wh_Client_ShePreProgramKey(client, SHE_SIZE_CHECK_KEY_ID, 0, 0,
                                      oversizeKey, sizeof(oversizeKey));
     if (ret != WH_ERROR_BADARGS) {
         WH_ERROR_PRINT("Oversized SHE pre-program: expected WH_ERROR_BADARGS, "
@@ -777,7 +765,7 @@ int whTest_She(whClientContext* client)
         ret = WH_ERROR_ABORTED;
         goto exit;
     }
-    ret = wh_Client_ShePreProgramKey(client, SHE_SIZE_CHECK_KEY_ID, 0,
+    ret = wh_Client_ShePreProgramKey(client, SHE_SIZE_CHECK_KEY_ID, 0, 0,
                                      oversizeKey, WH_SHE_KEY_SZ / 2);
     if (ret != WH_ERROR_BADARGS) {
         WH_ERROR_PRINT("Short SHE pre-program: expected WH_ERROR_BADARGS, "
@@ -785,7 +773,9 @@ int whTest_She(whClientContext* client)
         ret = WH_ERROR_ABORTED;
         goto exit;
     }
-    /* neither attempt may leave anything behind in the slot */
+#ifdef WOLFHSM_CFG_LEGACY_CLIENT_NVM
+    /* Verify failed attempts left no object in NVM */
+    (void)oversizeLabel;
     if ((ret = wh_Client_NvmGetMetadata(
              client,
              WH_SHE_MAKE_KEYID(client->comm->client_id, SHE_SIZE_CHECK_KEY_ID),
@@ -799,89 +789,34 @@ int whTest_She(whClientContext* client)
         ret = WH_ERROR_ABORTED;
         goto exit;
     }
+#endif /* WOLFHSM_CFG_LEGACY_CLIENT_NVM */
     WH_TEST_PRINT("SHE pre-program key size SUCCESS\n");
 
-    /* === Oversized auth key slot === */
+#ifndef WOLFHSM_CFG_LEGACY_CLIENT_NVM
+    /* Verify SHE slots cannot be accessed through raw client NVM IDs */
+    {
+        const uint32_t SHE_OVERSIZE_AUTH_ID = 8;
 
-    /* The SHE and NVM id spaces overlap, so a client can plant an oversized
-     * object straight into a SHE slot. LoadKey must reject such a slot as an
-     * auth key instead of reading it into its fixed kdf input buffer. */
-    wh_She_Meta2Label(0, 0, oversizeLabel);
-    if ((ret = wh_Client_NvmAddObject(
-             client,
-             WH_SHE_MAKE_KEYID(client->comm->client_id, SHE_OVERSIZE_AUTH_ID),
-             0, 0, sizeof(oversizeLabel), oversizeLabel, sizeof(oversizeKey),
-             oversizeKey, &sheMetaRc)) != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_NvmAddObject %d\n", ret);
-        goto exit;
+        wh_She_Meta2Label(0, 0, oversizeLabel);
+        if ((ret = wh_Client_NvmAddObject(
+                 client,
+                 WH_SHE_MAKE_KEYID(client->comm->client_id,
+                                   SHE_OVERSIZE_AUTH_ID),
+                 0, 0, sizeof(oversizeLabel), oversizeLabel,
+                 sizeof(oversizeKey), oversizeKey, &sheMetaRc)) != 0) {
+            WH_ERROR_PRINT("Failed to wh_Client_NvmAddObject %d\n", ret);
+            goto exit;
+        }
+        if (sheMetaRc != WH_ERROR_BADARGS) {
+            WH_ERROR_PRINT("Planting into a SHE slot: expected "
+                           "WH_ERROR_BADARGS, got %d\n",
+                           (int)sheMetaRc);
+            ret = WH_ERROR_ABORTED;
+            goto exit;
+        }
+        WH_TEST_PRINT("SHE slot unreachable via raw NVM id SUCCESS\n");
     }
-    if (sheMetaRc != 0) {
-        WH_ERROR_PRINT("Failed to plant oversized SHE slot, got %d\n",
-                       (int)sheMetaRc);
-        ret = WH_ERROR_ABORTED;
-        goto exit;
-    }
-    if ((ret = wh_She_GenerateLoadableKey(
-             SHE_OVERSIZE_AUTH_ID, SHE_OVERSIZE_AUTH_ID, 1, 0, sheUid,
-             vectorRawKey, vectorRawKey, messageOne, messageTwo, messageThree,
-             messageFour, messageFive)) != 0) {
-        WH_ERROR_PRINT("Failed to generate loadable key %d\n", ret);
-        goto exit;
-    }
-    ret = wh_Client_SheLoadKey(client, messageOne, messageTwo, messageThree,
-                               messageFour, messageFive);
-    if (ret != WH_SHE_ERC_KEY_INVALID) {
-        WH_ERROR_PRINT("Oversized SHE auth key: expected "
-                       "WH_SHE_ERC_KEY_INVALID, got %d\n", ret);
-        ret = WH_ERROR_ABORTED;
-        goto exit;
-    }
-    if ((ret = _destroySheKey(client, SHE_OVERSIZE_AUTH_ID)) != 0) {
-        WH_ERROR_PRINT("Failed to _destroySheKey, ret=%d\n", ret);
-        goto exit;
-    }
-    WH_TEST_PRINT("SHE oversized auth key SUCCESS\n");
-
-    /* === Oversized target key === */
-
-    /* Same overlap, but with the oversized object planted at the target
-     * slot. Reading it leaves the metadata unset, so an unchecked read sees
-     * a zeroed label and overwrites a write-protected slot. */
-    wh_She_Meta2Label(0, WH_SHE_FLAG_WRITE_PROTECT, oversizeLabel);
-    if ((ret = wh_Client_NvmAddObject(
-             client,
-             WH_SHE_MAKE_KEYID(client->comm->client_id, SHE_OVERSIZE_TARGET_ID),
-             0, 0, sizeof(oversizeLabel), oversizeLabel, sizeof(oversizeKey),
-             oversizeKey, &sheMetaRc)) != 0) {
-        WH_ERROR_PRINT("Failed to wh_Client_NvmAddObject %d\n", ret);
-        goto exit;
-    }
-    if (sheMetaRc != 0) {
-        WH_ERROR_PRINT("Failed to plant oversized SHE target slot, got %d\n",
-                       (int)sheMetaRc);
-        ret = WH_ERROR_ABORTED;
-        goto exit;
-    }
-    if ((ret = wh_She_GenerateLoadableKey(
-             SHE_OVERSIZE_TARGET_ID, WH_SHE_SECRET_KEY_ID, 1, 0, sheUid,
-             vectorRawKey, secretKey, messageOne, messageTwo, messageThree,
-             messageFour, messageFive)) != 0) {
-        WH_ERROR_PRINT("Failed to generate loadable key %d\n", ret);
-        goto exit;
-    }
-    ret = wh_Client_SheLoadKey(client, messageOne, messageTwo, messageThree,
-                               messageFour, messageFive);
-    if (ret != WH_SHE_ERC_KEY_INVALID) {
-        WH_ERROR_PRINT("Oversized SHE target key: expected "
-                       "WH_SHE_ERC_KEY_INVALID, got %d\n", ret);
-        ret = WH_ERROR_ABORTED;
-        goto exit;
-    }
-    if ((ret = _destroySheKey(client, SHE_OVERSIZE_TARGET_ID)) != 0) {
-        WH_ERROR_PRINT("Failed to _destroySheKey, ret=%d\n", ret);
-        goto exit;
-    }
-    WH_TEST_PRINT("SHE oversized target key SUCCESS\n");
+#endif /* !WOLFHSM_CFG_LEGACY_CLIENT_NVM */
 
     /* === Cleanup: destroy provisioned keys so we don't leak NVM === */
 

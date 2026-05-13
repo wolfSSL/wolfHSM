@@ -349,21 +349,13 @@ static int whTest_CertServerTrustedRespectsNvmPolicy(whServerConfig* serverCfg)
     return rc;
 }
 
-/* Keys and certs share the NVM id space, so a client that passes a trusted
- * KEK's id to a cert read handler must be refused. The trusted flag alone (no
- * NONEXPORTABLE) must be enough: the dispatcher is the only gate, since
- * wh_Server_CertReadTrusted() does an unchecked NVM read. Provision a
- * KEK-flagged object without NONEXPORTABLE and confirm both READTRUSTED and
- * READTRUSTED_DMA return WH_ERROR_ACCESS and leak no bytes. Driven through
- * wh_Server_HandleCertRequest() because the check lives in the dispatcher,
- * not in the server cert API. */
+/* Verify cert read handler rejects non-cert IDs and SERVER_ONLY objects. */
 static int
 whTest_CertServerReadTrustedRejectsServerOnly(whServerConfig* serverCfg)
 {
     int             rc        = WH_ERROR_OK;
     whServerContext server[1] = {0};
     whNvmMetadata   meta      = {0};
-    /* Recognizable KEK bytes so any leak into the response is obvious. */
     const uint8_t  kek[32] = {0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x00, 0x11,
                               0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99,
                               0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x00, 0x11,
@@ -376,10 +368,9 @@ whTest_CertServerReadTrustedRejectsServerOnly(whServerConfig* serverCfg)
     WH_TEST_RETURN_ON_FAIL(wh_Server_Init(server, serverCfg));
     WH_TEST_RETURN_ON_FAIL(wh_Server_CertInit(server));
 
-    WH_TEST_PRINT("Cert ReadTrusted rejects server-only KEK...\n");
+    WH_TEST_PRINT("Cert ReadTrusted cannot reach a server-only KEK...\n");
 
-    /* Provision a trusted KEK the way whnvmtool would, deliberately WITHOUT
-     * NONEXPORTABLE, to prove the trusted flag alone gates the read. */
+    /* Provision a trusted KEK at a crypto-typed ID. */
     meta.id     = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, 0, 0x5A);
     meta.access = WH_NVM_ACCESS_ANY;
     meta.flags  = WH_NVM_FLAGS_TRUSTED | WH_NVM_FLAGS_USAGE_WRAP;
@@ -387,7 +378,6 @@ whTest_CertServerReadTrustedRejectsServerOnly(whServerConfig* serverCfg)
     WH_TEST_RETURN_ON_FAIL(
         wh_Nvm_AddObject(server->nvm, &meta, sizeof(kek), kek));
 
-    /* READTRUSTED must refuse the KEK id and return no cert bytes. */
     {
         whMessageCert_ReadTrustedRequest  req  = {0};
         whMessageCert_ReadTrustedResponse resp = {0};
@@ -395,23 +385,58 @@ whTest_CertServerReadTrustedRejectsServerOnly(whServerConfig* serverCfg)
         req.id = meta.id;
         wh_MessageCert_TranslateReadTrustedRequest(
             magic, &req, (whMessageCert_ReadTrustedRequest*)req_packet);
-
-        /* The handler formats resp.rc and also returns it; resp.rc is the
-         * client-visible signal, so assert on that rather than the return. */
         (void)wh_Server_HandleCertRequest(
             server, magic, WH_MESSAGE_CERT_ACTION_READTRUSTED, /*seq=*/0,
             sizeof(req), req_packet, &resp_size, resp_packet);
-
         wh_MessageCert_TranslateReadTrustedResponse(
             magic, (whMessageCert_ReadTrustedResponse*)resp_packet, &resp);
+        WH_TEST_ASSERT_RETURN(resp.rc == WH_ERROR_BADARGS);
+        WH_TEST_ASSERT_RETURN(resp.cert_len == 0);
+        WH_TEST_ASSERT_RETURN(resp_size == sizeof(resp));
 
-        WH_TEST_ASSERT_RETURN(resp.rc == WH_ERROR_ACCESS);
+        memset(&resp, 0, sizeof(resp));
+        req.id = WH_KEYID_ID(meta.id);
+        wh_MessageCert_TranslateReadTrustedRequest(
+            magic, &req, (whMessageCert_ReadTrustedRequest*)req_packet);
+        (void)wh_Server_HandleCertRequest(
+            server, magic, WH_MESSAGE_CERT_ACTION_READTRUSTED, /*seq=*/0,
+            sizeof(req), req_packet, &resp_size, resp_packet);
+        wh_MessageCert_TranslateReadTrustedResponse(
+            magic, (whMessageCert_ReadTrustedResponse*)resp_packet, &resp);
+        WH_TEST_ASSERT_RETURN(resp.rc == WH_ERROR_NOTFOUND);
         WH_TEST_ASSERT_RETURN(resp.cert_len == 0);
         WH_TEST_ASSERT_RETURN(resp_size == sizeof(resp));
     }
 
+    /* Verify SERVER_ONLY object in cert namespace cannot be read. */
+    {
+        whMessageCert_ReadTrustedRequest  req  = {0};
+        whMessageCert_ReadTrustedResponse resp = {0};
+        whNvmMetadata                     srv  = {0};
+
+        srv.id = WH_MAKE_KEYID(WH_KEYTYPE_CERT, server->comm->client_id, 0x5B);
+        srv.access = WH_NVM_ACCESS_ANY;
+        srv.flags  = WH_NVM_FLAGS_SERVER_ONLY;
+        srv.len    = sizeof(kek);
+        WH_TEST_RETURN_ON_FAIL(
+            wh_Nvm_AddObject(server->nvm, &srv, sizeof(kek), kek));
+
+        req.id = 0x5B;
+        wh_MessageCert_TranslateReadTrustedRequest(
+            magic, &req, (whMessageCert_ReadTrustedRequest*)req_packet);
+        (void)wh_Server_HandleCertRequest(
+            server, magic, WH_MESSAGE_CERT_ACTION_READTRUSTED, /*seq=*/0,
+            sizeof(req), req_packet, &resp_size, resp_packet);
+        wh_MessageCert_TranslateReadTrustedResponse(
+            magic, (whMessageCert_ReadTrustedResponse*)resp_packet, &resp);
+        WH_TEST_ASSERT_RETURN(resp.rc == WH_ERROR_ACCESS);
+        WH_TEST_ASSERT_RETURN(resp.cert_len == 0);
+        WH_TEST_ASSERT_RETURN(resp_size == sizeof(resp));
+
+        WH_TEST_RETURN_ON_FAIL(wh_Nvm_DestroyObjects(server->nvm, 1, &srv.id));
+    }
+
 #ifdef WOLFHSM_CFG_DMA
-    /* READTRUSTED_DMA must refuse it too and write nothing to the buffer. */
     {
         whMessageCert_ReadTrustedDmaRequest req  = {0};
         whMessageCert_SimpleResponse        resp = {0};
@@ -419,7 +444,7 @@ whTest_CertServerReadTrustedRejectsServerOnly(whServerConfig* serverCfg)
         size_t                              i;
 
         memset(out_buf, 0, sizeof(out_buf));
-        req.id        = meta.id;
+        req.id        = WH_KEYID_ID(meta.id);
         req.cert_addr = (uint64_t)(uintptr_t)out_buf;
         req.cert_len  = sizeof(out_buf);
         wh_MessageCert_TranslateReadTrustedDmaRequest(
@@ -433,17 +458,160 @@ whTest_CertServerReadTrustedRejectsServerOnly(whServerConfig* serverCfg)
         wh_MessageCert_TranslateSimpleResponse(
             magic, (whMessageCert_SimpleResponse*)resp_packet, &resp);
 
-        WH_TEST_ASSERT_RETURN(resp.rc == WH_ERROR_ACCESS);
+        WH_TEST_ASSERT_RETURN(resp.rc == WH_ERROR_NOTFOUND);
         for (i = 0; i < sizeof(out_buf); i++) {
             WH_TEST_ASSERT_RETURN(out_buf[i] == 0);
         }
     }
 #endif /* WOLFHSM_CFG_DMA */
 
-    /* Server-internal unchecked destroy still works; clean up with it. */
     WH_TEST_RETURN_ON_FAIL(wh_Nvm_DestroyObjects(server->nvm, 1, &meta.id));
 
-    WH_TEST_PRINT("Cert ReadTrusted server-only rejection PASSED\n");
+    WH_TEST_PRINT("Cert ReadTrusted server-only unreachable PASSED\n");
+    return rc;
+}
+
+/* Verify EraseTrusted cannot destroy non-certificate objects. */
+static int whTest_CertEraseCannotReachNonCertObject(whServerConfig* serverCfg)
+{
+    int             rc        = WH_ERROR_OK;
+    whServerContext server[1] = {0};
+    whNvmMetadata   meta      = {0};
+    whNvmMetadata   check     = {0};
+    const uint8_t  secret[8] = {0xDE, 0xAD, 0xBE, 0xEF, 0x01, 0x02, 0x03, 0x04};
+    const uint16_t magic     = WH_COMM_MAGIC_NATIVE;
+    uint8_t        req_packet[WOLFHSM_CFG_COMM_DATA_LEN]  = {0};
+    uint8_t        resp_packet[WOLFHSM_CFG_COMM_DATA_LEN] = {0};
+    uint16_t       resp_size                              = 0;
+    /* Protected ID that no client translation can produce */
+    const whNvmId protectedId = WH_MAKE_KEYID(0xF, 0xE, 0x00);
+
+    WH_TEST_RETURN_ON_FAIL(wh_Server_Init(server, serverCfg));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_CertInit(server));
+
+    WH_TEST_PRINT("Cert EraseTrusted cannot reach a non-cert object...\n");
+
+    meta.id     = protectedId;
+    meta.access = WH_NVM_ACCESS_ANY;
+    meta.flags  = WH_NVM_FLAGS_NONMODIFIABLE;
+    meta.len    = sizeof(secret);
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Nvm_AddObject(server->nvm, &meta, sizeof(secret), secret));
+
+    {
+        whMessageCert_EraseTrustedRequest req  = {0};
+        whMessageCert_SimpleResponse      resp = {0};
+
+        req.id = protectedId;
+        wh_MessageCert_TranslateEraseTrustedRequest(
+            magic, &req, (whMessageCert_EraseTrustedRequest*)req_packet);
+
+        (void)wh_Server_HandleCertRequest(
+            server, magic, WH_MESSAGE_CERT_ACTION_ERASETRUSTED, /*seq=*/0,
+            sizeof(req), req_packet, &resp_size, resp_packet);
+
+        wh_MessageCert_TranslateSimpleResponse(
+            magic, (whMessageCert_SimpleResponse*)resp_packet, &resp);
+        WH_TEST_ASSERT_RETURN(resp.rc == WH_ERROR_BADARGS);
+        WH_TEST_ASSERT_RETURN(resp_size == sizeof(resp));
+    }
+
+    WH_TEST_ASSERT_RETURN(
+        wh_Nvm_GetMetadata(server->nvm, protectedId, &check) == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(check.len == sizeof(secret));
+
+    WH_TEST_RETURN_ON_FAIL(wh_Nvm_DestroyObjects(server->nvm, 1, &protectedId));
+
+    WH_TEST_PRINT("Cert EraseTrusted non-cert confinement PASSED\n");
+    return rc;
+}
+
+/* Issue a client READTRUSTED request for `id` and return the response rc. */
+static int32_t _certReadRc(whServerContext* server, uint16_t magic, whNvmId id,
+                           uint8_t* req_packet, uint8_t* resp_packet)
+{
+    whMessageCert_ReadTrustedRequest  req       = {0};
+    whMessageCert_ReadTrustedResponse resp      = {0};
+    uint16_t                          resp_size = 0;
+
+    req.id = id;
+    wh_MessageCert_TranslateReadTrustedRequest(
+        magic, &req, (whMessageCert_ReadTrustedRequest*)req_packet);
+    (void)wh_Server_HandleCertRequest(
+        server, magic, WH_MESSAGE_CERT_ACTION_READTRUSTED, 0, sizeof(req),
+        req_packet, &resp_size, resp_packet);
+    wh_MessageCert_TranslateReadTrustedResponse(
+        magic, (whMessageCert_ReadTrustedResponse*)resp_packet, &resp);
+    return resp.rc;
+}
+
+/* Verify certificate ID isolation between clients and shared global access. */
+static int whTest_CertPerClientIsolation(whServerConfig* serverCfg)
+{
+    int             rc        = WH_ERROR_OK;
+    whServerContext server[1] = {0};
+    whNvmMetadata   meta      = {0};
+    const uint16_t  magic     = WH_COMM_MAGIC_NATIVE;
+    uint8_t         req_packet[WOLFHSM_CFG_COMM_DATA_LEN]  = {0};
+    uint8_t         resp_packet[WOLFHSM_CFG_COMM_DATA_LEN] = {0};
+    const whNvmId   client1Cert = WH_MAKE_KEYID(WH_KEYTYPE_CERT, 1, 5);
+
+    WH_TEST_RETURN_ON_FAIL(wh_Server_Init(server, serverCfg));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_CertInit(server));
+
+    WH_TEST_PRINT("Cert per-client isolation...\n");
+
+    /* Add cert to client 1 namespace */
+    meta.id     = client1Cert;
+    meta.access = WH_NVM_ACCESS_ANY;
+    meta.flags  = WH_NVM_FLAGS_NONE;
+    meta.len    = ROOT_A_CERT_len;
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Nvm_AddObject(server->nvm, &meta, ROOT_A_CERT_len, ROOT_A_CERT));
+
+    /* Client 2 cannot see client 1 cert */
+    server->comm->client_id = 2;
+    WH_TEST_ASSERT_RETURN(_certReadRc(server, magic, 5, req_packet,
+                                      resp_packet) == WH_ERROR_NOTFOUND);
+
+    /* Client 1 can read its own cert */
+    server->comm->client_id = 1;
+    WH_TEST_ASSERT_RETURN(
+        _certReadRc(server, magic, 5, req_packet, resp_packet) == WH_ERROR_OK);
+
+#ifdef WOLFHSM_CFG_GLOBAL_KEYS
+    /* Verify global cert access */
+    memset(&meta, 0, sizeof(meta));
+    meta.id     = WH_MAKE_KEYID(WH_KEYTYPE_CERT, WH_KEYUSER_GLOBAL, 6);
+    meta.access = WH_NVM_ACCESS_ANY;
+    meta.flags  = WH_NVM_FLAGS_NONE;
+    meta.len    = ROOT_B_CERT_len;
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Nvm_AddObject(server->nvm, &meta, ROOT_B_CERT_len, ROOT_B_CERT));
+
+    server->comm->client_id = 2;
+    WH_TEST_ASSERT_RETURN(_certReadRc(server, magic,
+                                      6 | WH_KEYID_CLIENT_GLOBAL_FLAG,
+                                      req_packet, resp_packet) == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(_certReadRc(server, magic, 6, req_packet,
+                                      resp_packet) == WH_ERROR_NOTFOUND);
+
+    {
+        whNvmId globalCert =
+            WH_MAKE_KEYID(WH_KEYTYPE_CERT, WH_KEYUSER_GLOBAL, 6);
+        WH_TEST_RETURN_ON_FAIL(
+            wh_Nvm_DestroyObjects(server->nvm, 1, &globalCert));
+    }
+#endif
+
+    /* Clean up and restore client ID */
+    {
+        whNvmId c1 = client1Cert;
+        WH_TEST_RETURN_ON_FAIL(wh_Nvm_DestroyObjects(server->nvm, 1, &c1));
+    }
+    server->comm->client_id = 0;
+
+    WH_TEST_PRINT("Cert per-client isolation PASSED\n");
     return rc;
 }
 
@@ -2024,6 +2192,22 @@ int whTest_CertRamSim(whTestNvmBackendType nvmType)
             WH_ERROR_PRINT("Cert ReadTrusted server-only rejection test "
                            "failed: %d\n",
                            rc);
+        }
+    }
+
+    if (rc == WH_ERROR_OK) {
+        rc = whTest_CertEraseCannotReachNonCertObject(s_conf);
+        if (rc != WH_ERROR_OK) {
+            WH_ERROR_PRINT("Cert EraseTrusted non-cert confinement test "
+                           "failed: %d\n",
+                           rc);
+        }
+    }
+
+    if (rc == WH_ERROR_OK) {
+        rc = whTest_CertPerClientIsolation(s_conf);
+        if (rc != WH_ERROR_OK) {
+            WH_ERROR_PRINT("Cert per-client isolation test failed: %d\n", rc);
         }
     }
 

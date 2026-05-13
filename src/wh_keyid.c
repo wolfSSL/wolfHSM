@@ -23,6 +23,7 @@
  */
 
 #include "wolfhsm/wh_keyid.h"
+#include "wolfhsm/wh_error.h"
 
 whKeyId wh_KeyId_TranslateFromClient(uint16_t type, uint16_t clientId,
                                      whKeyId reqId)
@@ -53,6 +54,45 @@ whKeyId wh_KeyId_TranslateFromClient(uint16_t type, uint16_t clientId,
 #endif
 
     return WH_MAKE_KEYID(type, user, id);
+}
+
+whKeyId wh_KeyId_TranslateObjectIdFromClient(uint16_t type, uint16_t clientId,
+                                             whKeyId reqId)
+{
+    /* Strip wrapped and hardware flags so fixed types are preserved. */
+    reqId &=
+        (whKeyId) ~(WH_KEYID_CLIENT_WRAPPED_FLAG | WH_KEYID_CLIENT_HW_FLAG);
+    return wh_KeyId_TranslateFromClient(type, clientId, reqId);
+}
+
+int wh_KeyId_CheckClientObjectId(whKeyId reqId)
+{
+    /* Reject bits outside valid ID and flag ranges */
+    if ((reqId & (whKeyId) ~(WH_KEYID_MASK | WH_CLIENT_KEYID_FLAGS_MASK)) !=
+        0) {
+        return WH_ERROR_BADARGS;
+    }
+    /* Wrapped and hardware flags are not valid for fixed-type objects */
+    if ((reqId & (WH_KEYID_CLIENT_WRAPPED_FLAG | WH_KEYID_CLIENT_HW_FLAG)) !=
+        0) {
+        return WH_ERROR_BADARGS;
+    }
+    return WH_ERROR_OK;
+}
+
+int wh_KeyId_CheckClientObjectIdForCreate(whKeyId reqId)
+{
+    /* ID 0 is invalid for object creation */
+    if (WH_KEYID_ISERASED(reqId)) {
+        return WH_ERROR_BADARGS;
+    }
+#ifndef WOLFHSM_CFG_GLOBAL_KEYS
+    /* Reject global flag when global keys are disabled */
+    if ((reqId & WH_KEYID_CLIENT_GLOBAL_FLAG) != 0) {
+        return WH_ERROR_BADARGS;
+    }
+#endif
+    return wh_KeyId_CheckClientObjectId(reqId);
 }
 
 whKeyId wh_KeyId_TranslateToClient(whKeyId serverId)

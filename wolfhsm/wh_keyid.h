@@ -47,14 +47,10 @@ typedef uint16_t whKeyId;
 #define WH_KEYTYPE_SHIFT 12
 
 /* Maximum valid client_id. The USER field of whKeyId is 4 bits, so client_id
- * must fit in [1, WH_CLIENT_ID_MAX]: value 0 is reserved for the global-keys
- * namespace (WH_KEYUSER_GLOBAL), and larger values would be silently
- * truncated by WH_MAKE_KEYID, breaking per-client key isolation.
- * wh_Client_Init() rejects out-of-range ids (including 0) before any
- * communication; the server rejects ids above the maximum at
- * WH_MESSAGE_COMM_ACTION_INIT and, with WOLFHSM_CFG_GLOBAL_KEYS, also rejects
- * 0. Derived from WH_KEYUSER_MASK so the bound stays in sync if the USER
- * field is ever widened. */
+ * must be between 1 and WH_CLIENT_ID_MAX. Value 0 is reserved for the global
+ * namespace (WH_KEYUSER_GLOBAL). wh_Client_Init() rejects out-of-range IDs
+ * before communication, and the server rejects 0 and IDs above the maximum at
+ * WH_MESSAGE_COMM_ACTION_INIT. */
 #define WH_CLIENT_ID_MAX (WH_KEYUSER_MASK >> WH_KEYUSER_SHIFT)
 
 /*
@@ -116,6 +112,7 @@ typedef uint16_t whKeyId;
 #define WH_KEYTYPE_COUNTER 0x3 /* Monotonic counter */
 #define WH_KEYTYPE_WRAPPED 0x4 /* Wrapped key metadata */
 #define WH_KEYTYPE_HW 0x5 /* HW-only key. Port-specific */
+#define WH_KEYTYPE_CERT 0x6 /* Trusted certificate object */
 
 /* True when a key id carries no explicit identifier (ID field == 0) and so must
  * not be accepted as one - it would collide with the "assign me one" sentinel
@@ -151,6 +148,46 @@ typedef uint16_t whKeyId;
  */
 whKeyId wh_KeyId_TranslateFromClient(uint16_t type, uint16_t clientId,
                                      whKeyId reqId);
+
+/**
+ * @brief Translate a client keyId for a fixed-type NVM-backed object.
+ *
+ * Translates reqId into server encoding using the provided TYPE. The wrapped
+ * and hardware flags are stripped, ensuring the object stays in the supplied
+ * TYPE namespace. The global flag sets the USER field to WH_KEYUSER_GLOBAL
+ * when WOLFHSM_CFG_GLOBAL_KEYS is enabled, or to clientId otherwise. Used
+ * by NVM objects, counters, and certificates.
+ *
+ * @param type     Fixed object TYPE to set (such as WH_KEYTYPE_COUNTER).
+ * @param clientId Connection client ID for the USER field.
+ * @param reqId    Requested ID from the client.
+ * @return Server-internal keyId with fixed TYPE, USER, and ID fields.
+ */
+whKeyId wh_KeyId_TranslateObjectIdFromClient(uint16_t type, uint16_t clientId,
+                                             whKeyId reqId);
+
+/**
+ * @brief Check a client-supplied fixed-type object ID before translating it.
+ *
+ * Validates object IDs for NVM objects, counters, and certificates. Rejects
+ * bits above valid ID and flag ranges, as well as wrapped and hardware flags.
+ * The global flag and ID 0 are permitted.
+ *
+ * @param reqId Requested ID from the client.
+ * @return WH_ERROR_OK if valid, or WH_ERROR_BADARGS otherwise.
+ */
+int wh_KeyId_CheckClientObjectId(whKeyId reqId);
+
+/**
+ * @brief Check a client-supplied ID for creating a fixed-type object.
+ *
+ * Validates client object ID for creation by requiring a non-zero ID and
+ * rejecting the global flag when WOLFHSM_CFG_GLOBAL_KEYS is disabled.
+ *
+ * @param reqId Requested ID from the client.
+ * @return WH_ERROR_OK if valid for creation, or WH_ERROR_BADARGS otherwise.
+ */
+int wh_KeyId_CheckClientObjectIdForCreate(whKeyId reqId);
 
 /**
  * @brief Translate server keyId to client keyId format (with flags)

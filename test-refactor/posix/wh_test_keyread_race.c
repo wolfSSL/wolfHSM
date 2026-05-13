@@ -568,6 +568,16 @@ int whTest_KeyReadRace(void* ctx_arg)
         goto stop_servers;
     }
 
+    /* Initialize communication for each client pair. */
+    for (i = 0; i < KR_NUM_CLIENTS; i++) {
+        rc = wh_Client_CommInit(&ctx->pairs[i].client, NULL, NULL);
+        if (rc != WH_ERROR_OK) {
+            WH_ERROR_PRINT("client %d comm init failed: %d\n", i, rc);
+            result = WH_ERROR_ABORTED;
+            goto stop_servers;
+        }
+    }
+
     for (i = 0; i < KR_NUM_CLIENTS; i++) {
         rc = pthread_create(&ctx->pairs[i].clientThread, NULL, krClientThread,
                             &ctx->pairs[i]);
