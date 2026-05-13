@@ -200,6 +200,8 @@ cat > "$HEADER_FILE" << 'HEADER_TOP'
 #include <stdint.h>
 #include <stddef.h>
 
+#include "wolfssl/wolfcrypt/types.h" /* for XALIGNED */
+
 HEADER_TOP
 
 # Helper function to convert binary to C array
@@ -209,8 +211,7 @@ bin_to_c_array() {
     local description=$3
 
     echo "/* $description */" >> "$HEADER_FILE"
-    echo "static const uint8_t ${varname}[] __attribute__((aligned(4))) = {" \
-        >> "$HEADER_FILE"
+    echo "XALIGNED(4) static const uint8_t ${varname}[] = {" >> "$HEADER_FILE"
     xxd -i < "$infile" >> "$HEADER_FILE"
     echo "};" >> "$HEADER_FILE"
     echo "" >> "$HEADER_FILE"
