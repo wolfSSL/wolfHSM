@@ -125,6 +125,12 @@ static int _GenerateMac(whServerContext* server, uint16_t magic,
 static int _VerifyMac(whServerContext* server, uint16_t magic,
                       uint16_t req_size, const void* req_packet,
                       uint16_t* out_resp_size, void* resp_packet);
+static int      _PreProgramKey(whServerContext* server, uint16_t magic,
+                               uint16_t req_size, const void* req_packet,
+                               uint16_t* out_resp_size, void* resp_packet);
+static int      _DestroyKey(whServerContext* server, uint16_t magic,
+                            uint16_t req_size, const void* req_packet,
+                            uint16_t* out_resp_size, void* resp_packet);
 static int _TranslateSheReturnCode(int ret);
 static int _ReportInvalidSheState(whServerContext* server, uint16_t magic,
                                   uint16_t action, uint16_t req_size,
@@ -1637,6 +1643,87 @@ static int _VerifyMac(whServerContext* server, uint16_t magic,
     return ret;
 }
 
+/* Pre-program a SHE-typed NVM entry under the calling client's USER namespace.
+ * Replaces the historical client-side use of wh_Client_NvmAddObject with a
+ * hand-constructed SHE-typed id, which is incompatible with the new client-id
+ * translation on the NVM message path. */
+static int _PreProgramKey(whServerContext* server, uint16_t magic,
+                          uint16_t req_size, const void* req_packet,
+                          uint16_t* out_resp_size, void* resp_packet)
+{
+    int                                ret  = 0;
+    whMessageShe_PreProgramKeyRequest  req  = {0};
+    whMessageShe_PreProgramKeyResponse resp = {0};
+    whNvmMetadata                      meta = {0};
+    const uint8_t*                     key_data;
+    const uint16_t                     hdr_len = sizeof(req);
+
+    if (req_size < hdr_len) {
+        ret = WH_ERROR_BUFFER_SIZE;
+    }
+    if (ret == 0) {
+        ret = wh_MessageShe_TranslatePreProgramKeyRequest(magic, req_packet,
+                                                          &req);
+    }
+    if (ret == 0 && (req.keySz == 0 || req_size != hdr_len + req.keySz)) {
+        ret = WH_ERROR_BADARGS;
+    }
+    if (ret == 0) {
+        key_data = (const uint8_t*)req_packet + hdr_len;
+
+        meta.id     = WH_MAKE_KEYID(WH_KEYTYPE_SHE, server->comm->client_id,
+                                    (whNvmId)req.keyId);
+        meta.access = 0;
+        meta.flags  = 0;
+        meta.len    = (whNvmSize)req.keySz;
+        wh_She_Meta2Label(0, req.flags, meta.label);
+
+        ret = WH_SERVER_NVM_LOCK(server);
+        if (ret == WH_ERROR_OK) {
+            ret = wh_Nvm_AddObjectChecked(server->nvm, &meta,
+                                          (whNvmSize)req.keySz, key_data);
+            (void)WH_SERVER_NVM_UNLOCK(server);
+        }
+    }
+
+    resp.rc = ret;
+    (void)wh_MessageShe_TranslatePreProgramKeyResponse(magic, &resp,
+                                                       resp_packet);
+    *out_resp_size = sizeof(resp);
+    return ret;
+}
+
+static int _DestroyKey(whServerContext* server, uint16_t magic,
+                       uint16_t req_size, const void* req_packet,
+                       uint16_t* out_resp_size, void* resp_packet)
+{
+    int                             ret  = 0;
+    whMessageShe_DestroyKeyRequest  req  = {0};
+    whMessageShe_DestroyKeyResponse resp = {0};
+    whNvmId                         id;
+
+    if (req_size < sizeof(req)) {
+        ret = WH_ERROR_BUFFER_SIZE;
+    }
+    if (ret == 0) {
+        ret = wh_MessageShe_TranslateDestroyKeyRequest(magic, req_packet, &req);
+    }
+    if (ret == 0) {
+        id  = WH_MAKE_KEYID(WH_KEYTYPE_SHE, server->comm->client_id,
+                            (whNvmId)req.keyId);
+        ret = WH_SERVER_NVM_LOCK(server);
+        if (ret == WH_ERROR_OK) {
+            ret = wh_Nvm_DestroyObjectsChecked(server->nvm, 1, &id);
+            (void)WH_SERVER_NVM_UNLOCK(server);
+        }
+    }
+
+    resp.rc = ret;
+    (void)wh_MessageShe_TranslateDestroyKeyResponse(magic, &resp, resp_packet);
+    *out_resp_size = sizeof(resp);
+    return ret;
+}
+
 
 /* TODO: This is terrible, but without implementing a SHE sub-protocol like we
  * do for crypto layer, there is no way to return non-request specific error
@@ -1651,7 +1738,7 @@ static int _ReportInvalidSheState(whServerContext* server, uint16_t magic,
     (void)req_size;
 
     if (action == WH_SHE_GET_STATUS) {
-        /* Status read is always permitted per AUTOSAR spec, even before boot 
+        /* Status read is always permitted per AUTOSAR spec, even before boot
          *or UID setup. */
     }
     else if (action == WH_SHE_SET_UID) {
@@ -1659,6 +1746,10 @@ static int _ReportInvalidSheState(whServerContext* server, uint16_t magic,
         if (server->she->uidSet != 0) {
             ret = WH_SHE_ERC_SEQUENCE_ERROR;
         }
+    }
+    else if (action == WH_SHE_PRE_PROGRAM_KEY || action == WH_SHE_DESTROY_KEY) {
+        /* Key pre-programming and destruction are provisioning-time
+         * operations: allowed before UID setup and secure boot. */
     }
     else if (server->she->uidSet == 0) {
         /* Every remaining command needs a provisioned UID. */
@@ -1962,6 +2053,14 @@ int wh_Server_HandleSheRequest(whServerContext* server, uint16_t magic,
                                  out_resp_size, resp_packet);
                 (void)WH_SERVER_NVM_UNLOCK(server);
             } /* WH_SERVER_NVM_LOCK() */
+            break;
+        case WH_SHE_PRE_PROGRAM_KEY:
+            ret = _PreProgramKey(server, magic, req_size, req_packet,
+                                 out_resp_size, resp_packet);
+            break;
+        case WH_SHE_DESTROY_KEY:
+            ret = _DestroyKey(server, magic, req_size, req_packet,
+                              out_resp_size, resp_packet);
             break;
         default:
             ret = WH_ERROR_BADARGS;

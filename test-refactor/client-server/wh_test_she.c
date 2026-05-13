@@ -63,17 +63,7 @@
  * SHE keys are supposed to be fixed hardware keys. */
 static int _destroySheKey(whClientContext* client, whNvmId clientSheKeyId)
 {
-    int     rc       = 0;
-    int32_t serverRc = 0;
-    whNvmId id        = WH_MAKE_KEYID(WH_KEYTYPE_SHE, client->comm->client_id,
-                                      clientSheKeyId);
-
-    rc = wh_Client_NvmDestroyObjects(client, 1, &id, &serverRc);
-    if (rc == WH_ERROR_OK) {
-        rc = serverRc;
-    }
-
-    return rc;
+    return wh_Client_SheDestroyKey(client, clientSheKeyId);
 }
 
 

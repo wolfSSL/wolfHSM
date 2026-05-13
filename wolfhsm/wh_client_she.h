@@ -94,6 +94,20 @@ int wh_Client_ShePreProgramKey(whClientContext* c, whNvmId keyId,
     whNvmFlags flags, uint8_t* key, whNvmSize keySz);
 
 /**
+ * @brief Destroys a pre-programmed SHE key (wolfHSM-specific).
+ *
+ * Removes the SHE key in slot @p keyId from the calling client's NVM
+ * namespace. Like wh_Client_ShePreProgramKey(), this is a provisioning helper
+ * with no AUTOSAR SHE equivalent, since the spec treats SHE keys as fixed
+ * hardware slots.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] keyId SHE key slot to destroy (0-15).
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_SheDestroyKey(whClientContext* c, whNvmId keyId);
+
+/**
  * @brief Sends a request to set the ECU UID (wolfHSM-specific).
  *
  * Sends a request carrying the 15-byte unique identifier. This

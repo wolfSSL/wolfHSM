@@ -389,6 +389,52 @@ int wh_MessageShe_TranslateVerifyMacResponse(
     uint16_t magic, const whMessageShe_VerifyMacResponse* src,
     whMessageShe_VerifyMacResponse* dest);
 
+/* Pre-program Key Request. Persists a SHE-typed NVM entry under the calling
+ * client's USER namespace.  Carried on the SHE message group so that NVM
+ * client-id translation does not need to special-case typed adds. */
+typedef struct {
+    uint32_t keyId;
+    uint32_t flags;
+    uint32_t keySz;
+    uint8_t  WH_PAD[4];
+    /* Data follows:
+     * uint8_t key[keySz]
+     */
+} whMessageShe_PreProgramKeyRequest;
+
+typedef struct {
+    int32_t rc;
+    uint8_t WH_PAD[4];
+} whMessageShe_PreProgramKeyResponse;
+
+int wh_MessageShe_TranslatePreProgramKeyRequest(
+    uint16_t magic, const whMessageShe_PreProgramKeyRequest* src,
+    whMessageShe_PreProgramKeyRequest* dest);
+
+int wh_MessageShe_TranslatePreProgramKeyResponse(
+    uint16_t magic, const whMessageShe_PreProgramKeyResponse* src,
+    whMessageShe_PreProgramKeyResponse* dest);
+
+/* Destroy Key Request. Removes a SHE-typed NVM entry from the calling
+ * client's USER namespace. */
+typedef struct {
+    uint32_t keyId;
+    uint8_t  WH_PAD[4];
+} whMessageShe_DestroyKeyRequest;
+
+typedef struct {
+    int32_t rc;
+    uint8_t WH_PAD[4];
+} whMessageShe_DestroyKeyResponse;
+
+int wh_MessageShe_TranslateDestroyKeyRequest(
+    uint16_t magic, const whMessageShe_DestroyKeyRequest* src,
+    whMessageShe_DestroyKeyRequest* dest);
+
+int wh_MessageShe_TranslateDestroyKeyResponse(
+    uint16_t magic, const whMessageShe_DestroyKeyResponse* src,
+    whMessageShe_DestroyKeyResponse* dest);
+
 #endif /* WOLFHSM_CFG_SHE_EXTENSION */
 
 #endif /* !WOLFHSM_WH_MESSAGE_SHE_H_ */

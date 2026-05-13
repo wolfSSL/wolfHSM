@@ -50,17 +50,72 @@
 int wh_Client_ShePreProgramKey(whClientContext* c, whNvmId keyId,
     whNvmFlags flags, uint8_t* key, whNvmSize keySz)
 {
-    int ret;
-    int32_t outRc;
-    uint8_t label[WH_NVM_LABEL_LEN] = { 0 };
+    int                                ret;
+    uint16_t                           group;
+    uint16_t                           action;
+    uint16_t                           dataSz;
+    whMessageShe_PreProgramKeyRequest* req;
+    whMessageShe_PreProgramKeyResponse resp = {0};
+    uint8_t*                           reqBuf;
+    uint8_t*                           key_data;
 
-    /* Create a key with 0 counter */
-    wh_She_Meta2Label(0, flags, label);
-    ret = wh_Client_NvmAddObject(c,
-            WH_MAKE_KEYID(WH_KEYTYPE_SHE, c->comm->client_id, keyId),
-            0, 0, sizeof(label), label, keySz, key, (int32_t*)&outRc);
-    if (ret == 0)
-        ret = outRc;
+    if (c == NULL || key == NULL || keySz == 0) {
+        return WH_ERROR_BADARGS;
+    }
+    if (sizeof(*req) + keySz > WOLFHSM_CFG_COMM_DATA_LEN) {
+        return WH_ERROR_BADARGS;
+    }
+
+    reqBuf   = (uint8_t*)wh_CommClient_GetDataPtr(c->comm);
+    req      = (whMessageShe_PreProgramKeyRequest*)reqBuf;
+    key_data = reqBuf + sizeof(*req);
+
+    req->keyId = keyId;
+    req->flags = flags;
+    req->keySz = keySz;
+    memcpy(key_data, key, keySz);
+
+    ret = wh_Client_SendRequest(c, WH_MESSAGE_GROUP_SHE, WH_SHE_PRE_PROGRAM_KEY,
+                                sizeof(*req) + keySz, reqBuf);
+    if (ret == 0) {
+        do {
+            ret = wh_Client_RecvResponse(c, &group, &action, &dataSz,
+                                         (uint8_t*)&resp);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+    if (ret == 0) {
+        ret = resp.rc;
+    }
+    return ret;
+}
+
+int wh_Client_SheDestroyKey(whClientContext* c, whNvmId keyId)
+{
+    int                             ret;
+    uint16_t                        group;
+    uint16_t                        action;
+    uint16_t                        dataSz;
+    whMessageShe_DestroyKeyRequest* req;
+    whMessageShe_DestroyKeyResponse resp = {0};
+
+    if (c == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    req = (whMessageShe_DestroyKeyRequest*)wh_CommClient_GetDataPtr(c->comm);
+    req->keyId = keyId;
+
+    ret = wh_Client_SendRequest(c, WH_MESSAGE_GROUP_SHE, WH_SHE_DESTROY_KEY,
+                                sizeof(*req), (uint8_t*)req);
+    if (ret == 0) {
+        do {
+            ret = wh_Client_RecvResponse(c, &group, &action, &dataSz,
+                                         (uint8_t*)&resp);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+    if (ret == 0) {
+        ret = resp.rc;
+    }
     return ret;
 }
 
