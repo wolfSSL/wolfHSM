@@ -209,7 +209,8 @@ bin_to_c_array() {
     local description=$3
 
     echo "/* $description */" >> "$HEADER_FILE"
-    echo "static const uint8_t ${varname}[] = {" >> "$HEADER_FILE"
+    echo "static const uint8_t ${varname}[] __attribute__((aligned(4))) = {" \
+        >> "$HEADER_FILE"
     xxd -i < "$infile" >> "$HEADER_FILE"
     echo "};" >> "$HEADER_FILE"
     echo "" >> "$HEADER_FILE"
