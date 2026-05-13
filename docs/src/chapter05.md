@@ -90,7 +90,7 @@ whCommClientConfig commClientCfg[1] = {{
              .transport_cb      = transportMemClientCb,
              .transport_context = (void*)transportMemClientCtx,
              .transport_config  = (void*)transportMemCfg,
-             .client_id         = 123, /* unique client identifier */
+             .client_id         = 1, /* unique client identifier, 1-15 (or 0-15 without WOLFHSM_CFG_GLOBAL_KEYS) */
 }};
 
 /* Step 3: Allocate and initialize the client configuration */
@@ -149,7 +149,7 @@ whCommClientConfig commClientCfg = {{
              .transport_cb      = posixTransportTcpCb,
              .transport_context = (void*)posixTransportTcpCtx,
              .transport_config  = (void*)posixTransportTcpCfg,
-             .client_id         = 123, /* unique client identifier */
+             .client_id         = 1, /* unique client identifier, 1-15 (or 0-15 without WOLFHSM_CFG_GLOBAL_KEYS) */
 }};
 
 /* Subsequent steps remain the same... */
