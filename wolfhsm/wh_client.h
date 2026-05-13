@@ -119,12 +119,32 @@ typedef struct {
     uint64_t  outSz;
 } whClientDmaAsyncRng;
 
+/* Per-operation async DMA context for AES modes (ECB/CBC/CTR/GCM): stores
+ * translated DMA addresses for the input, output, and optional AAD buffers
+ * so the matching *Response can run POST cleanup.
+ *
+ * For non-GCM modes only input and output are used; aadSz stays 0 and aad
+ * cleanup is skipped. A sz of 0 means "no mapping held" and the Response
+ * will skip POST cleanup for that buffer. */
+typedef struct {
+    uintptr_t inAddr; /* translated input DMA address   (READ) */
+    uintptr_t inClientAddr;
+    uint64_t  inSz;
+    uintptr_t outAddr; /* translated output DMA address  (WRITE) */
+    uintptr_t outClientAddr;
+    uint64_t  outSz;
+    uintptr_t aadAddr; /* GCM AAD DMA address            (READ) */
+    uintptr_t aadClientAddr;
+    uint64_t  aadSz;
+} whClientDmaAsyncAes;
+
 /* Async DMA context union. Only one DMA request can be in flight at a time
  * per client context, so a single union suffices. Each Response function
  * knows which member to access based on its own operation type. */
 typedef union {
     whClientDmaAsyncSha sha;
     whClientDmaAsyncRng rng;
+    whClientDmaAsyncAes aes;
 } whClientDmaAsyncCtx;
 
 typedef struct {

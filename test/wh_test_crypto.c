@@ -7184,6 +7184,1765 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
 #endif /* HAVE_AES_GCM */
     return ret;
 }
+
+/* Direct exercise of the native async AES primitives
+ * (wh_Client_AesXxxRequest / wh_Client_AesXxxResponse).
+ * Covers each mode's round-trip, state continuity, and argument rejection. */
+static int whTest_CryptoAesAsync(whClientContext* ctx, int devId, WC_RNG* rng)
+{
+#define WH_TEST_AES_ASYNC_KEYSZ 16
+#define WH_TEST_AES_ASYNC_BUFSZ 64
+    int     ret = 0;
+    Aes     aes[1];
+    uint8_t key[WH_TEST_AES_ASYNC_KEYSZ];
+    uint8_t iv[AES_BLOCK_SIZE];
+    uint8_t plainIn[WH_TEST_AES_ASYNC_BUFSZ];
+    uint8_t cipher[WH_TEST_AES_ASYNC_BUFSZ];
+    uint8_t plainOut[WH_TEST_AES_ASYNC_BUFSZ];
+
+    memset(plainIn, 0xAA, sizeof(plainIn));
+    memset(cipher, 0, sizeof(cipher));
+    memset(plainOut, 0, sizeof(plainOut));
+
+    if (wc_RNG_GenerateBlock(rng, key, sizeof(key)) != 0 ||
+        wc_RNG_GenerateBlock(rng, iv, sizeof(iv)) != 0) {
+        WH_ERROR_PRINT("AES async: failed to generate key/iv\n");
+        return -1;
+    }
+
+#ifdef HAVE_AES_CBC
+    /* CBC: round-trip via async Request/Response pair */
+    if (ret == 0) {
+        ret = wc_AesInit(aes, NULL, devId);
+        if (ret == 0) {
+            ret = wc_AesSetKey(aes, key, sizeof(key), iv, AES_ENCRYPTION);
+        }
+        if (ret == 0) {
+            ret =
+                wh_Client_AesCbcRequest(ctx, aes, 1, plainIn, sizeof(plainIn));
+        }
+        if (ret == 0) {
+            do {
+                ret = wh_Client_AesCbcResponse(ctx, aes, cipher, NULL);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+        if (ret == 0) {
+            ret = wc_AesSetKey(aes, key, sizeof(key), iv, AES_DECRYPTION);
+        }
+        if (ret == 0) {
+            ret = wh_Client_AesCbcRequest(ctx, aes, 0, cipher, sizeof(cipher));
+        }
+        if (ret == 0) {
+            do {
+                ret = wh_Client_AesCbcResponse(ctx, aes, plainOut, NULL);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+        if (ret == 0 && memcmp(plainIn, plainOut, sizeof(plainIn)) != 0) {
+            WH_ERROR_PRINT("AES-CBC async round-trip mismatch\n");
+            ret = -1;
+        }
+        (void)wc_AesFree(aes);
+        memset(cipher, 0, sizeof(cipher));
+        memset(plainOut, 0, sizeof(plainOut));
+    }
+
+    /* CBC: argument validation */
+    if (ret == 0 && wh_Client_AesCbcRequest(NULL, aes, 1, plainIn, 16) !=
+                        WH_ERROR_BADARGS) {
+        WH_ERROR_PRINT("AES-CBC async: NULL ctx should be BADARGS\n");
+        ret = -1;
+    }
+    if (ret == 0 && wh_Client_AesCbcRequest(ctx, NULL, 1, plainIn, 16) !=
+                        WH_ERROR_BADARGS) {
+        WH_ERROR_PRINT("AES-CBC async: NULL aes should be BADARGS\n");
+        ret = -1;
+    }
+    if (ret == 0 &&
+        wh_Client_AesCbcResponse(ctx, aes, NULL, NULL) != WH_ERROR_BADARGS) {
+        WH_ERROR_PRINT("AES-CBC async: NULL out should be BADARGS\n");
+        ret = -1;
+    }
+    /* CBC: non-block-aligned length rejected */
+    if (ret == 0) {
+        int tmp;
+        ret = wc_AesInit(aes, NULL, devId);
+        if (ret == 0) {
+            ret = wc_AesSetKey(aes, key, sizeof(key), iv, AES_ENCRYPTION);
+        }
+        if (ret == 0) {
+            tmp = wh_Client_AesCbcRequest(ctx, aes, 1, plainIn, 15);
+            if (tmp != WH_ERROR_BADARGS) {
+                WH_ERROR_PRINT(
+                    "AES-CBC async: non-block-aligned should be BADARGS, "
+                    "got %d\n",
+                    tmp);
+                ret = -1;
+            }
+        }
+        (void)wc_AesFree(aes);
+    }
+    if (ret == 0) {
+        WH_TEST_PRINT("AES CBC ASYNC DEVID=0x%X SUCCESS\n", devId);
+    }
+#endif /* HAVE_AES_CBC */
+
+#ifdef WOLFSSL_AES_COUNTER
+    /* CTR: round-trip via async Request/Response pair. CTR is symmetric, so
+     * wolfCrypt's wc_AesCtrEncrypt is used for both directions — the enc
+     * flag and key schedule are always ENCRYPTION even when the caller's
+     * intent is to decrypt. */
+    if (ret == 0) {
+        ret = wc_AesInit(aes, NULL, devId);
+        if (ret == 0) {
+            ret = wc_AesSetKeyDirect(aes, key, sizeof(key), iv, AES_ENCRYPTION);
+        }
+        if (ret == 0) {
+            ret =
+                wh_Client_AesCtrRequest(ctx, aes, 1, plainIn, sizeof(plainIn));
+        }
+        if (ret == 0) {
+            do {
+                ret = wh_Client_AesCtrResponse(ctx, aes, cipher, NULL);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+        if (ret == 0) {
+            ret = wc_AesSetKeyDirect(aes, key, sizeof(key), iv, AES_ENCRYPTION);
+        }
+        if (ret == 0) {
+            ret = wh_Client_AesCtrRequest(ctx, aes, 1, cipher, sizeof(cipher));
+        }
+        if (ret == 0) {
+            do {
+                ret = wh_Client_AesCtrResponse(ctx, aes, plainOut, NULL);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+        if (ret == 0 && memcmp(plainIn, plainOut, sizeof(plainIn)) != 0) {
+            WH_ERROR_PRINT("AES-CTR async round-trip mismatch\n");
+            ret = -1;
+        }
+        (void)wc_AesFree(aes);
+        memset(cipher, 0, sizeof(cipher));
+        memset(plainOut, 0, sizeof(plainOut));
+    }
+
+    /* CTR: state continuity — two halves via async must equal single-shot */
+    if (ret == 0) {
+        uint8_t refCipher[WH_TEST_AES_ASYNC_BUFSZ];
+        uint8_t chunkCipher[WH_TEST_AES_ASYNC_BUFSZ];
+        Aes     aesRef[1];
+        ret = wc_AesInit(aesRef, NULL, devId);
+        if (ret == 0) {
+            ret = wc_AesSetKeyDirect(aesRef, key, sizeof(key), iv,
+                                     AES_ENCRYPTION);
+        }
+        if (ret == 0) {
+            ret = wh_Client_AesCtr(ctx, aesRef, 1, plainIn, sizeof(plainIn),
+                                   refCipher);
+        }
+        (void)wc_AesFree(aesRef);
+
+        if (ret == 0) {
+            ret = wc_AesInit(aes, NULL, devId);
+        }
+        if (ret == 0) {
+            ret = wc_AesSetKeyDirect(aes, key, sizeof(key), iv, AES_ENCRYPTION);
+        }
+        if (ret == 0) {
+            ret = wh_Client_AesCtrRequest(ctx, aes, 1, plainIn,
+                                          sizeof(plainIn) / 2);
+        }
+        if (ret == 0) {
+            do {
+                ret = wh_Client_AesCtrResponse(ctx, aes, chunkCipher, NULL);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+        if (ret == 0) {
+            ret = wh_Client_AesCtrRequest(ctx, aes, 1,
+                                          plainIn + sizeof(plainIn) / 2,
+                                          sizeof(plainIn) / 2);
+        }
+        if (ret == 0) {
+            do {
+                ret = wh_Client_AesCtrResponse(
+                    ctx, aes, chunkCipher + sizeof(plainIn) / 2, NULL);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+        if (ret == 0 &&
+            memcmp(refCipher, chunkCipher, sizeof(refCipher)) != 0) {
+            WH_ERROR_PRINT(
+                "AES-CTR async: split state did not match single-shot\n");
+            ret = -1;
+        }
+        (void)wc_AesFree(aes);
+    }
+    if (ret == 0) {
+        WH_TEST_PRINT("AES CTR ASYNC DEVID=0x%X SUCCESS\n", devId);
+    }
+#endif /* WOLFSSL_AES_COUNTER */
+
+#ifdef HAVE_AES_ECB
+    /* ECB: round-trip via async Request/Response pair */
+    if (ret == 0) {
+        ret = wc_AesInit(aes, NULL, devId);
+        if (ret == 0) {
+            ret = wc_AesSetKey(aes, key, sizeof(key), iv, AES_ENCRYPTION);
+        }
+        if (ret == 0) {
+            ret =
+                wh_Client_AesEcbRequest(ctx, aes, 1, plainIn, sizeof(plainIn));
+        }
+        if (ret == 0) {
+            do {
+                ret = wh_Client_AesEcbResponse(ctx, aes, cipher, NULL);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+        if (ret == 0) {
+            ret = wc_AesSetKey(aes, key, sizeof(key), iv, AES_DECRYPTION);
+        }
+        if (ret == 0) {
+            ret = wh_Client_AesEcbRequest(ctx, aes, 0, cipher, sizeof(cipher));
+        }
+        if (ret == 0) {
+            do {
+                ret = wh_Client_AesEcbResponse(ctx, aes, plainOut, NULL);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+        if (ret == 0 && memcmp(plainIn, plainOut, sizeof(plainIn)) != 0) {
+            WH_ERROR_PRINT("AES-ECB async round-trip mismatch\n");
+            ret = -1;
+        }
+        (void)wc_AesFree(aes);
+        memset(cipher, 0, sizeof(cipher));
+        memset(plainOut, 0, sizeof(plainOut));
+    }
+
+    /* ECB: non-block-aligned length rejected */
+    if (ret == 0) {
+        int tmp;
+        ret = wc_AesInit(aes, NULL, devId);
+        if (ret == 0) {
+            ret = wc_AesSetKey(aes, key, sizeof(key), iv, AES_ENCRYPTION);
+        }
+        if (ret == 0) {
+            tmp = wh_Client_AesEcbRequest(ctx, aes, 1, plainIn, 15);
+            if (tmp != WH_ERROR_BADARGS) {
+                WH_ERROR_PRINT(
+                    "AES-ECB async: non-block-aligned should be BADARGS\n");
+                ret = -1;
+            }
+        }
+        (void)wc_AesFree(aes);
+    }
+    if (ret == 0) {
+        WH_TEST_PRINT("AES ECB ASYNC DEVID=0x%X SUCCESS\n", devId);
+    }
+#endif /* HAVE_AES_ECB */
+
+#ifdef HAVE_AESGCM
+    /* GCM: round-trip via async Request/Response pair */
+    if (ret == 0) {
+        uint8_t authin[16];
+        uint8_t enc_tag[AES_BLOCK_SIZE];
+        uint8_t dec_tag[AES_BLOCK_SIZE];
+
+        memset(authin, 0x5A, sizeof(authin));
+        memset(enc_tag, 0, sizeof(enc_tag));
+
+        ret = wc_AesInit(aes, NULL, devId);
+        if (ret == 0) {
+            ret = wc_AesGcmSetKey(aes, key, sizeof(key));
+        }
+        if (ret == 0) {
+            ret = wh_Client_AesGcmRequest(
+                ctx, aes, 1, plainIn, sizeof(plainIn), iv, AES_BLOCK_SIZE,
+                authin, sizeof(authin), NULL, sizeof(enc_tag));
+        }
+        if (ret == 0) {
+            do {
+                ret = wh_Client_AesGcmResponse(ctx, aes, cipher, sizeof(cipher),
+                                               NULL, enc_tag, sizeof(enc_tag));
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+
+        /* Decrypt with correct tag succeeds */
+        if (ret == 0) {
+            memcpy(dec_tag, enc_tag, sizeof(dec_tag));
+            ret = wh_Client_AesGcmRequest(
+                ctx, aes, 0, cipher, sizeof(cipher), iv, AES_BLOCK_SIZE, authin,
+                sizeof(authin), dec_tag, sizeof(dec_tag));
+        }
+        if (ret == 0) {
+            do {
+                ret = wh_Client_AesGcmResponse(ctx, aes, plainOut,
+                                               sizeof(plainOut), NULL, NULL, 0);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+        if (ret == 0 && memcmp(plainIn, plainOut, sizeof(plainIn)) != 0) {
+            WH_ERROR_PRINT("AES-GCM async round-trip mismatch\n");
+            ret = -1;
+        }
+
+        /* Decrypt with corrupted tag must fail */
+        if (ret == 0) {
+            int tmp;
+            dec_tag[0] ^= 0x01;
+            tmp = wh_Client_AesGcmRequest(
+                ctx, aes, 0, cipher, sizeof(cipher), iv, AES_BLOCK_SIZE, authin,
+                sizeof(authin), dec_tag, sizeof(dec_tag));
+            if (tmp == WH_ERROR_OK) {
+                do {
+                    tmp = wh_Client_AesGcmResponse(
+                        ctx, aes, plainOut, sizeof(plainOut), NULL, NULL, 0);
+                } while (tmp == WH_ERROR_NOTREADY);
+            }
+            if (tmp == 0) {
+                WH_ERROR_PRINT(
+                    "AES-GCM async: decrypt with bad tag unexpectedly OK\n");
+                ret = -1;
+            }
+        }
+        (void)wc_AesFree(aes);
+        memset(cipher, 0, sizeof(cipher));
+        memset(plainOut, 0, sizeof(plainOut));
+    }
+    if (ret == 0) {
+        WH_TEST_PRINT("AES GCM ASYNC DEVID=0x%X SUCCESS\n", devId);
+    }
+#endif /* HAVE_AESGCM */
+
+#ifdef HAVE_AES_CBC
+    /* CBC: stacked async Request must return REQUEST_PENDING, and the second
+     * Request must not mutate aes->reg before fail-fast. */
+    if (ret == 0) {
+        uint8_t ivBefore[AES_BLOCK_SIZE];
+        uint8_t ivAfter[AES_BLOCK_SIZE];
+        int     tmp;
+        ret = wc_AesInit(aes, NULL, devId);
+        if (ret == 0) {
+            ret = wc_AesSetKey(aes, key, sizeof(key), iv, AES_ENCRYPTION);
+        }
+        /* Issue the first Request but do NOT consume the Response. The
+         * transport stays "request pending" until the matching Response is
+         * read. */
+        if (ret == 0) {
+            ret =
+                wh_Client_AesCbcRequest(ctx, aes, 1, plainIn, sizeof(plainIn));
+        }
+        if (ret == 0) {
+            /* Snapshot aes->reg before attempting a stacked decrypt Request */
+            memcpy(ivBefore, (uint8_t*)aes->reg, sizeof(ivBefore));
+            tmp =
+                wh_Client_AesCbcRequest(ctx, aes, 0, plainIn, sizeof(plainIn));
+            if (tmp != WH_ERROR_REQUEST_PENDING) {
+                WH_ERROR_PRINT("AES-CBC async: stacked Request expected "
+                               "REQUEST_PENDING, got %d\n",
+                               tmp);
+                ret = -1;
+            }
+            memcpy(ivAfter, (uint8_t*)aes->reg, sizeof(ivAfter));
+            if (ret == 0 && memcmp(ivBefore, ivAfter, sizeof(ivBefore)) != 0) {
+                WH_ERROR_PRINT(
+                    "AES-CBC async: stacked Request mutated aes->reg\n");
+                ret = -1;
+            }
+        }
+        /* Drain the outstanding response to leave the transport idle */
+        if (ret == 0 || ret == -1) {
+            int drainRet;
+            do {
+                drainRet = wh_Client_AesCbcResponse(ctx, aes, cipher, NULL);
+            } while (drainRet == WH_ERROR_NOTREADY);
+            if (ret == 0 && drainRet != WH_ERROR_OK) {
+                WH_ERROR_PRINT(
+                    "AES-CBC async: failed to drain pending response: %d\n",
+                    drainRet);
+                ret = -1;
+            }
+        }
+        (void)wc_AesFree(aes);
+        memset(cipher, 0, sizeof(cipher));
+    }
+    if (ret == 0) {
+        WH_TEST_PRINT("AES CBC ASYNC FAILURE-PATH DEVID=0x%X SUCCESS\n", devId);
+    }
+#endif /* HAVE_AES_CBC */
+
+#ifdef WOLFSSL_AES_COUNTER
+    /* CTR: stacked async Request must return REQUEST_PENDING, and the second
+     * Request must not mutate aes->reg, aes->tmp, or aes->left before the
+     * fail-fast check. */
+    if (ret == 0) {
+        uint8_t regBefore[AES_BLOCK_SIZE];
+        uint8_t regAfter[AES_BLOCK_SIZE];
+        uint8_t tmpBefore[AES_BLOCK_SIZE];
+        uint8_t tmpAfter[AES_BLOCK_SIZE];
+        word32  leftBefore = 0;
+        word32  leftAfter  = 0;
+        int     tmp;
+        ret = wc_AesInit(aes, NULL, devId);
+        if (ret == 0) {
+            ret = wc_AesSetKeyDirect(aes, key, sizeof(key), iv, AES_ENCRYPTION);
+        }
+        /* Issue the first Request but do NOT consume the Response. The
+         * transport stays "request pending" until the matching Response is
+         * read. */
+        if (ret == 0) {
+            ret =
+                wh_Client_AesCtrRequest(ctx, aes, 1, plainIn, sizeof(plainIn));
+        }
+        if (ret == 0) {
+            /* Snapshot per-call state before attempting a stacked Request */
+            memcpy(regBefore, (uint8_t*)aes->reg, sizeof(regBefore));
+            memcpy(tmpBefore, (uint8_t*)aes->tmp, sizeof(tmpBefore));
+            leftBefore = aes->left;
+            tmp =
+                wh_Client_AesCtrRequest(ctx, aes, 1, plainIn, sizeof(plainIn));
+            if (tmp != WH_ERROR_REQUEST_PENDING) {
+                WH_ERROR_PRINT("AES-CTR async: stacked Request expected "
+                               "REQUEST_PENDING, got %d\n",
+                               tmp);
+                ret = -1;
+            }
+            memcpy(regAfter, (uint8_t*)aes->reg, sizeof(regAfter));
+            memcpy(tmpAfter, (uint8_t*)aes->tmp, sizeof(tmpAfter));
+            leftAfter = aes->left;
+            if (ret == 0 &&
+                memcmp(regBefore, regAfter, sizeof(regBefore)) != 0) {
+                WH_ERROR_PRINT(
+                    "AES-CTR async: stacked Request mutated aes->reg\n");
+                ret = -1;
+            }
+            if (ret == 0 &&
+                memcmp(tmpBefore, tmpAfter, sizeof(tmpBefore)) != 0) {
+                WH_ERROR_PRINT(
+                    "AES-CTR async: stacked Request mutated aes->tmp\n");
+                ret = -1;
+            }
+            if (ret == 0 && leftBefore != leftAfter) {
+                WH_ERROR_PRINT(
+                    "AES-CTR async: stacked Request mutated aes->left\n");
+                ret = -1;
+            }
+        }
+        /* Drain the outstanding response to leave the transport idle */
+        if (ret == 0 || ret == -1) {
+            int drainRet;
+            do {
+                drainRet = wh_Client_AesCtrResponse(ctx, aes, cipher, NULL);
+            } while (drainRet == WH_ERROR_NOTREADY);
+            if (ret == 0 && drainRet != WH_ERROR_OK) {
+                WH_ERROR_PRINT(
+                    "AES-CTR async: failed to drain pending response: %d\n",
+                    drainRet);
+                ret = -1;
+            }
+        }
+        (void)wc_AesFree(aes);
+        memset(cipher, 0, sizeof(cipher));
+    }
+    if (ret == 0) {
+        WH_TEST_PRINT("AES CTR ASYNC FAILURE-PATH DEVID=0x%X SUCCESS\n", devId);
+    }
+#endif /* WOLFSSL_AES_COUNTER */
+
+#ifdef HAVE_AESGCM
+    /* GCM: out_capacity smaller than the server's reported payload must be
+     * rejected by Response without overflowing out. */
+    if (ret == 0) {
+        uint8_t authin[8];
+        uint8_t enc_tag[AES_BLOCK_SIZE];
+        uint8_t tinyOut[8]; /* deliberately smaller than plainIn */
+        int     tmp;
+
+        memset(authin, 0x37, sizeof(authin));
+        memset(enc_tag, 0, sizeof(enc_tag));
+
+        ret = wc_AesInit(aes, NULL, devId);
+        if (ret == 0) {
+            ret = wc_AesGcmSetKey(aes, key, sizeof(key));
+        }
+        if (ret == 0) {
+            ret = wh_Client_AesGcmRequest(
+                ctx, aes, 1, plainIn, sizeof(plainIn), iv, AES_BLOCK_SIZE,
+                authin, sizeof(authin), NULL, sizeof(enc_tag));
+        }
+        if (ret == 0) {
+            do {
+                tmp =
+                    wh_Client_AesGcmResponse(ctx, aes, tinyOut, sizeof(tinyOut),
+                                             NULL, enc_tag, sizeof(enc_tag));
+            } while (tmp == WH_ERROR_NOTREADY);
+            if (tmp != WH_ERROR_ABORTED) {
+                WH_ERROR_PRINT(
+                    "AES-GCM async: undersized out_capacity expected "
+                    "ABORTED, got %d\n",
+                    tmp);
+                ret = -1;
+            }
+        }
+        (void)wc_AesFree(aes);
+        memset(cipher, 0, sizeof(cipher));
+    }
+    if (ret == 0) {
+        WH_TEST_PRINT("AES GCM ASYNC OUT-CAPACITY DEVID=0x%X SUCCESS\n", devId);
+    }
+
+    /* GCM: undersized tag_len with non-NULL enc_tag must be rejected. The
+     * previous implementation skipped the memcpy silently and still
+     * returned WH_ERROR_OK, leaving enc_tag stale while telling the caller
+     * the operation succeeded. */
+    if (ret == 0) {
+        uint8_t authin[8];
+        uint8_t enc_tag[AES_BLOCK_SIZE];
+        uint8_t tinyTag[4]; /* deliberately smaller than the GCM tag */
+        int     tmp;
+
+        memset(authin, 0x37, sizeof(authin));
+        memset(enc_tag, 0, sizeof(enc_tag));
+        memset(tinyTag, 0, sizeof(tinyTag));
+
+        ret = wc_AesInit(aes, NULL, devId);
+        if (ret == 0) {
+            ret = wc_AesGcmSetKey(aes, key, sizeof(key));
+        }
+        if (ret == 0) {
+            ret = wh_Client_AesGcmRequest(
+                ctx, aes, 1, plainIn, sizeof(plainIn), iv, AES_BLOCK_SIZE,
+                authin, sizeof(authin), NULL, sizeof(enc_tag));
+        }
+        if (ret == 0) {
+            do {
+                tmp = wh_Client_AesGcmResponse(ctx, aes, cipher, sizeof(cipher),
+                                               NULL, tinyTag, sizeof(tinyTag));
+            } while (tmp == WH_ERROR_NOTREADY);
+            if (tmp != WH_ERROR_ABORTED) {
+                WH_ERROR_PRINT("AES-GCM async: undersized tag_len expected "
+                               "ABORTED, got %d\n",
+                               tmp);
+                ret = -1;
+            }
+        }
+        (void)wc_AesFree(aes);
+        memset(cipher, 0, sizeof(cipher));
+    }
+    if (ret == 0) {
+        WH_TEST_PRINT("AES GCM ASYNC TAG-CAPACITY DEVID=0x%X SUCCESS\n", devId);
+    }
+
+    /* GCM: out=NULL with out_capacity>0 must not wedge the transport. The
+     * previous implementation rejected the combination with BADARGS after
+     * the Request had already been sent, leaving a stale response in the
+     * comm queue that blocked subsequent calls with REQUEST_PENDING. */
+    if (ret == 0) {
+        uint8_t authin[8];
+        uint8_t enc_tag[AES_BLOCK_SIZE];
+        int     tmp;
+
+        memset(authin, 0x37, sizeof(authin));
+        memset(enc_tag, 0, sizeof(enc_tag));
+
+        ret = wc_AesInit(aes, NULL, devId);
+        if (ret == 0) {
+            ret = wc_AesGcmSetKey(aes, key, sizeof(key));
+        }
+        if (ret == 0) {
+            ret = wh_Client_AesGcmRequest(
+                ctx, aes, 1, plainIn, sizeof(plainIn), iv, AES_BLOCK_SIZE,
+                authin, sizeof(authin), NULL, sizeof(enc_tag));
+        }
+        if (ret == 0) {
+            /* Pass out=NULL with a non-zero out_capacity (= plainIn size).
+             * Must accept the call and drain the response; tag still comes
+             * back via enc_tag. */
+            do {
+                tmp = wh_Client_AesGcmResponse(ctx, aes, NULL, sizeof(plainIn),
+                                               NULL, enc_tag, sizeof(enc_tag));
+            } while (tmp == WH_ERROR_NOTREADY);
+            if (tmp != WH_ERROR_OK) {
+                WH_ERROR_PRINT(
+                    "AES-GCM async: out=NULL with out_capacity>0 should "
+                    "succeed (GMAC-style), got %d\n",
+                    tmp);
+                ret = -1;
+            }
+        }
+        /* Confirm the comm queue is idle — a subsequent Request must not
+         * be blocked by a stale pending response. */
+        if (ret == 0) {
+            if (wh_CommClient_IsRequestPending(ctx->comm) != 0) {
+                WH_ERROR_PRINT(
+                    "AES-GCM async: comm queue wedged after out=NULL "
+                    "Response\n");
+                ret = -1;
+            }
+        }
+        (void)wc_AesFree(aes);
+    }
+    if (ret == 0) {
+        WH_TEST_PRINT("AES GCM ASYNC OUT-NULL DEVID=0x%X SUCCESS\n", devId);
+    }
+#endif /* HAVE_AESGCM */
+
+    return ret;
+#undef WH_TEST_AES_ASYNC_KEYSZ
+#undef WH_TEST_AES_ASYNC_BUFSZ
+}
+
+/* Known-answer tests for the async AES primitives. Vectors are taken from
+ * wolfCrypt's test.c (NIST SP 800-38A for CBC/CTR/ECB; NIST SP 800-38D /
+ * GCM spec test cases for GCM) and are run through the async
+ * Request/Response APIs to verify async-ification did not change output. */
+static int whTest_CryptoAesAsyncKat(whClientContext* ctx, int devId)
+{
+    int     ret = 0;
+    Aes     aes[1];
+    uint8_t outBuf[64];
+
+#ifdef HAVE_AES_CBC
+    /* AES-CBC KATs from wolfCrypt test.c aes_cbc_test / aes192_test /
+     * aes256_test. Each vector encrypts one AES block, decrypts it back,
+     * and compares against the published ciphertext. */
+    {
+        /* AES-128-CBC: from aes_cbc_test */
+        const uint8_t k128[16] = {
+            '0','1','2','3','4','5','6','7',
+            '8','9','a','b','c','d','e','f'
+        };
+        const uint8_t iv128[16] = {
+            '1','2','3','4','5','6','7','8',
+            '9','0','a','b','c','d','e','f'
+        };
+        const uint8_t p128[16] = {
+            0x6e,0x6f,0x77,0x20,0x69,0x73,0x20,0x74,
+            0x68,0x65,0x20,0x74,0x69,0x6d,0x65,0x20
+        };
+        const uint8_t c128[16] = {
+            0x95,0x94,0x92,0x57,0x5f,0x42,0x81,0x53,
+            0x2c,0xcc,0x9d,0x46,0x77,0xa2,0x33,0xcb
+        };
+        /* AES-192-CBC: NIST SP 800-38A F.2.3 */
+        const uint8_t k192[24] = {
+            0x8e,0x73,0xb0,0xf7,0xda,0x0e,0x64,0x52,
+            0xc8,0x10,0xf3,0x2b,0x80,0x90,0x79,0xe5,
+            0x62,0xf8,0xea,0xd2,0x52,0x2c,0x6b,0x7b
+        };
+        const uint8_t iv_nist[16] = {
+            0x00,0x01,0x02,0x03,0x04,0x05,0x06,0x07,
+            0x08,0x09,0x0A,0x0B,0x0C,0x0D,0x0E,0x0F
+        };
+        const uint8_t p_nist[16] = {
+            0x6b,0xc1,0xbe,0xe2,0x2e,0x40,0x9f,0x96,
+            0xe9,0x3d,0x7e,0x11,0x73,0x93,0x17,0x2a
+        };
+        const uint8_t c192[16] = {
+            0x4f,0x02,0x1d,0xb2,0x43,0xbc,0x63,0x3d,
+            0x71,0x78,0x18,0x3a,0x9f,0xa0,0x71,0xe8
+        };
+        /* AES-256-CBC: NIST SP 800-38A F.2.5 */
+        const uint8_t k256[32] = {
+            0x60,0x3d,0xeb,0x10,0x15,0xca,0x71,0xbe,
+            0x2b,0x73,0xae,0xf0,0x85,0x7d,0x77,0x81,
+            0x1f,0x35,0x2c,0x07,0x3b,0x61,0x08,0xd7,
+            0x2d,0x98,0x10,0xa3,0x09,0x14,0xdf,0xf4
+        };
+        const uint8_t c256[16] = {
+            0xf5,0x8c,0x4c,0x04,0xd6,0xe5,0xf1,0xba,
+            0x77,0x9e,0xab,0xfb,0x5f,0x7b,0xfb,0xd6
+        };
+
+        struct {
+            const uint8_t* k;
+            int            kSz;
+            const uint8_t* iv;
+            const uint8_t* p;
+            const uint8_t* c;
+        } v[] = {
+            {k128, 16, iv128,   p128,   c128},
+            {k192, 24, iv_nist, p_nist, c192},
+            {k256, 32, iv_nist, p_nist, c256},
+        };
+        size_t i;
+        for (i = 0; i < sizeof(v) / sizeof(v[0]) && ret == 0; i++) {
+            memset(outBuf, 0, sizeof(outBuf));
+            ret = wc_AesInit(aes, NULL, devId);
+            if (ret == 0) {
+                ret = wc_AesSetKey(aes, v[i].k, v[i].kSz, v[i].iv,
+                                   AES_ENCRYPTION);
+            }
+            if (ret == 0) {
+                ret = wh_Client_AesCbcRequest(ctx, aes, 1, v[i].p,
+                                              AES_BLOCK_SIZE);
+            }
+            if (ret == 0) {
+                do {
+                    ret = wh_Client_AesCbcResponse(ctx, aes, outBuf, NULL);
+                } while (ret == WH_ERROR_NOTREADY);
+            }
+            if (ret == 0 && memcmp(outBuf, v[i].c, AES_BLOCK_SIZE) != 0) {
+                WH_ERROR_PRINT("AES-%d-CBC async KAT enc mismatch\n",
+                               v[i].kSz * 8);
+                ret = -1;
+            }
+            if (ret == 0) {
+                ret = wc_AesSetKey(aes, v[i].k, v[i].kSz, v[i].iv,
+                                   AES_DECRYPTION);
+            }
+            if (ret == 0) {
+                memset(outBuf, 0, sizeof(outBuf));
+                ret = wh_Client_AesCbcRequest(ctx, aes, 0, v[i].c,
+                                              AES_BLOCK_SIZE);
+            }
+            if (ret == 0) {
+                do {
+                    ret = wh_Client_AesCbcResponse(ctx, aes, outBuf, NULL);
+                } while (ret == WH_ERROR_NOTREADY);
+            }
+            if (ret == 0 && memcmp(outBuf, v[i].p, AES_BLOCK_SIZE) != 0) {
+                WH_ERROR_PRINT("AES-%d-CBC async KAT dec mismatch\n",
+                               v[i].kSz * 8);
+                ret = -1;
+            }
+            (void)wc_AesFree(aes);
+        }
+    }
+    if (ret == 0) {
+        WH_TEST_PRINT("AES CBC ASYNC KAT DEVID=0x%X SUCCESS\n", devId);
+    }
+#endif /* HAVE_AES_CBC */
+
+#ifdef WOLFSSL_AES_COUNTER
+    /* AES-CTR KATs from wolfCrypt test.c aes_ctr_test (NIST SP 800-38A
+     * F.5). 64-byte plaintext, single ciphertext per key size. */
+    {
+        const uint8_t ctrIv[16] = {
+            0xf0,0xf1,0xf2,0xf3,0xf4,0xf5,0xf6,0xf7,
+            0xf8,0xf9,0xfa,0xfb,0xfc,0xfd,0xfe,0xff
+        };
+        const uint8_t ctrPlain[64] = {
+            0x6b,0xc1,0xbe,0xe2,0x2e,0x40,0x9f,0x96,
+            0xe9,0x3d,0x7e,0x11,0x73,0x93,0x17,0x2a,
+            0xae,0x2d,0x8a,0x57,0x1e,0x03,0xac,0x9c,
+            0x9e,0xb7,0x6f,0xac,0x45,0xaf,0x8e,0x51,
+            0x30,0xc8,0x1c,0x46,0xa3,0x5c,0xe4,0x11,
+            0xe5,0xfb,0xc1,0x19,0x1a,0x0a,0x52,0xef,
+            0xf6,0x9f,0x24,0x45,0xdf,0x4f,0x9b,0x17,
+            0xad,0x2b,0x41,0x7b,0xe6,0x6c,0x37,0x10
+        };
+        const uint8_t ctr128Key[16] = {
+            0x2b,0x7e,0x15,0x16,0x28,0xae,0xd2,0xa6,
+            0xab,0xf7,0x15,0x88,0x09,0xcf,0x4f,0x3c
+        };
+        const uint8_t ctr128Cipher[64] = {
+            0x87,0x4d,0x61,0x91,0xb6,0x20,0xe3,0x26,
+            0x1b,0xef,0x68,0x64,0x99,0x0d,0xb6,0xce,
+            0x98,0x06,0xf6,0x6b,0x79,0x70,0xfd,0xff,
+            0x86,0x17,0x18,0x7b,0xb9,0xff,0xfd,0xff,
+            0x5a,0xe4,0xdf,0x3e,0xdb,0xd5,0xd3,0x5e,
+            0x5b,0x4f,0x09,0x02,0x0d,0xb0,0x3e,0xab,
+            0x1e,0x03,0x1d,0xda,0x2f,0xbe,0x03,0xd1,
+            0x79,0x21,0x70,0xa0,0xf3,0x00,0x9c,0xee
+        };
+        const uint8_t ctr192Key[24] = {
+            0x8e,0x73,0xb0,0xf7,0xda,0x0e,0x64,0x52,
+            0xc8,0x10,0xf3,0x2b,0x80,0x90,0x79,0xe5,
+            0x62,0xf8,0xea,0xd2,0x52,0x2c,0x6b,0x7b
+        };
+        const uint8_t ctr192Cipher[64] = {
+            0x1a,0xbc,0x93,0x24,0x17,0x52,0x1c,0xa2,
+            0x4f,0x2b,0x04,0x59,0xfe,0x7e,0x6e,0x0b,
+            0x09,0x03,0x39,0xec,0x0a,0xa6,0xfa,0xef,
+            0xd5,0xcc,0xc2,0xc6,0xf4,0xce,0x8e,0x94,
+            0x1e,0x36,0xb2,0x6b,0xd1,0xeb,0xc6,0x70,
+            0xd1,0xbd,0x1d,0x66,0x56,0x20,0xab,0xf7,
+            0x4f,0x78,0xa7,0xf6,0xd2,0x98,0x09,0x58,
+            0x5a,0x97,0xda,0xec,0x58,0xc6,0xb0,0x50
+        };
+        const uint8_t ctr256Key[32] = {
+            0x60,0x3d,0xeb,0x10,0x15,0xca,0x71,0xbe,
+            0x2b,0x73,0xae,0xf0,0x85,0x7d,0x77,0x81,
+            0x1f,0x35,0x2c,0x07,0x3b,0x61,0x08,0xd7,
+            0x2d,0x98,0x10,0xa3,0x09,0x14,0xdf,0xf4
+        };
+        const uint8_t ctr256Cipher[64] = {
+            0x60,0x1e,0xc3,0x13,0x77,0x57,0x89,0xa5,
+            0xb7,0xa7,0xf5,0x04,0xbb,0xf3,0xd2,0x28,
+            0xf4,0x43,0xe3,0xca,0x4d,0x62,0xb5,0x9a,
+            0xca,0x84,0xe9,0x90,0xca,0xca,0xf5,0xc5,
+            0x2b,0x09,0x30,0xda,0xa2,0x3d,0xe9,0x4c,
+            0xe8,0x70,0x17,0xba,0x2d,0x84,0x98,0x8d,
+            0xdf,0xc9,0xc5,0x8d,0xb6,0x7a,0xad,0xa6,
+            0x13,0xc2,0xdd,0x08,0x45,0x79,0x41,0xa6
+        };
+
+        struct {
+            const uint8_t* k;
+            int            kSz;
+            const uint8_t* c;
+        } v[] = {
+            {ctr128Key, 16, ctr128Cipher},
+            {ctr192Key, 24, ctr192Cipher},
+            {ctr256Key, 32, ctr256Cipher},
+        };
+        size_t i;
+        for (i = 0; i < sizeof(v) / sizeof(v[0]) && ret == 0; i++) {
+            memset(outBuf, 0, sizeof(outBuf));
+            ret = wc_AesInit(aes, NULL, devId);
+            if (ret == 0) {
+                ret = wc_AesSetKeyDirect(aes, v[i].k, v[i].kSz, ctrIv,
+                                         AES_ENCRYPTION);
+            }
+            if (ret == 0) {
+                ret = wh_Client_AesCtrRequest(ctx, aes, 1, ctrPlain,
+                                              sizeof(ctrPlain));
+            }
+            if (ret == 0) {
+                do {
+                    ret = wh_Client_AesCtrResponse(ctx, aes, outBuf, NULL);
+                } while (ret == WH_ERROR_NOTREADY);
+            }
+            if (ret == 0 &&
+                memcmp(outBuf, v[i].c, sizeof(ctrPlain)) != 0) {
+                WH_ERROR_PRINT("AES-%d-CTR async KAT enc mismatch\n",
+                               v[i].kSz * 8);
+                ret = -1;
+            }
+            /* CTR is symmetric: applying the same op to ciphertext
+             * recovers plaintext */
+            if (ret == 0) {
+                ret = wc_AesSetKeyDirect(aes, v[i].k, v[i].kSz, ctrIv,
+                                         AES_ENCRYPTION);
+            }
+            if (ret == 0) {
+                memset(outBuf, 0, sizeof(outBuf));
+                ret = wh_Client_AesCtrRequest(ctx, aes, 1, v[i].c,
+                                              sizeof(ctrPlain));
+            }
+            if (ret == 0) {
+                do {
+                    ret = wh_Client_AesCtrResponse(ctx, aes, outBuf, NULL);
+                } while (ret == WH_ERROR_NOTREADY);
+            }
+            if (ret == 0 &&
+                memcmp(outBuf, ctrPlain, sizeof(ctrPlain)) != 0) {
+                WH_ERROR_PRINT("AES-%d-CTR async KAT dec mismatch\n",
+                               v[i].kSz * 8);
+                ret = -1;
+            }
+            (void)wc_AesFree(aes);
+        }
+    }
+    if (ret == 0) {
+        WH_TEST_PRINT("AES CTR ASYNC KAT DEVID=0x%X SUCCESS\n", devId);
+    }
+#endif /* WOLFSSL_AES_COUNTER */
+
+#ifdef HAVE_AES_ECB
+    /* AES-ECB KATs from wolfCrypt test.c aes_ecb_test. */
+    {
+        const uint8_t ecbIv[16] = {
+            '1','2','3','4','5','6','7','8',
+            '9','0','a','b','c','d','e','f'
+        };
+        const uint8_t ecbMsg[16] = {
+            0x6e,0x6f,0x77,0x20,0x69,0x73,0x20,0x74,
+            0x68,0x65,0x20,0x74,0x69,0x6d,0x65,0x20
+        };
+        const uint8_t ecbK128[16] = {
+            '0','1','2','3','4','5','6','7',
+            '8','9','a','b','c','d','e','f'
+        };
+        const uint8_t ecbC128[16] = {
+            0xd0,0xc9,0xd9,0xc9,0x40,0xe8,0x97,0xb6,
+            0xc8,0x8c,0x33,0x3b,0xb5,0x8f,0x85,0xd1
+        };
+        const uint8_t ecbK192[24] = {
+            '0','1','2','3','4','5','6','7',
+            '8','9','a','b','c','d','e','f',
+            '0','1','2','3','4','5','6','7'
+        };
+        const uint8_t ecbC192[16] = {
+            0x06,0x57,0xee,0x78,0x3f,0x96,0x00,0xb1,
+            0xec,0x76,0x94,0x30,0x29,0xbe,0x15,0xab
+        };
+        const uint8_t ecbK256[32] = {
+            '0','1','2','3','4','5','6','7',
+            '8','9','a','b','c','d','e','f',
+            '0','1','2','3','4','5','6','7',
+            '8','9','a','b','c','d','e','f'
+        };
+        const uint8_t ecbC256[16] = {
+            0xcd,0xf2,0x81,0x3e,0x73,0x3e,0xf7,0x33,
+            0x3d,0x18,0xfd,0x41,0x85,0x37,0x04,0x82
+        };
+
+        struct {
+            const uint8_t* k;
+            int            kSz;
+            const uint8_t* c;
+        } v[] = {
+            {ecbK128, 16, ecbC128},
+            {ecbK192, 24, ecbC192},
+            {ecbK256, 32, ecbC256},
+        };
+        size_t i;
+        for (i = 0; i < sizeof(v) / sizeof(v[0]) && ret == 0; i++) {
+            memset(outBuf, 0, sizeof(outBuf));
+            ret = wc_AesInit(aes, NULL, devId);
+            if (ret == 0) {
+                ret = wc_AesSetKey(aes, v[i].k, v[i].kSz, ecbIv,
+                                   AES_ENCRYPTION);
+            }
+            if (ret == 0) {
+                ret = wh_Client_AesEcbRequest(ctx, aes, 1, ecbMsg,
+                                              AES_BLOCK_SIZE);
+            }
+            if (ret == 0) {
+                do {
+                    ret = wh_Client_AesEcbResponse(ctx, aes, outBuf, NULL);
+                } while (ret == WH_ERROR_NOTREADY);
+            }
+            if (ret == 0 && memcmp(outBuf, v[i].c, AES_BLOCK_SIZE) != 0) {
+                WH_ERROR_PRINT("AES-%d-ECB async KAT enc mismatch\n",
+                               v[i].kSz * 8);
+                ret = -1;
+            }
+            if (ret == 0) {
+                ret = wc_AesSetKey(aes, v[i].k, v[i].kSz, ecbIv,
+                                   AES_DECRYPTION);
+            }
+            if (ret == 0) {
+                memset(outBuf, 0, sizeof(outBuf));
+                ret = wh_Client_AesEcbRequest(ctx, aes, 0, v[i].c,
+                                              AES_BLOCK_SIZE);
+            }
+            if (ret == 0) {
+                do {
+                    ret = wh_Client_AesEcbResponse(ctx, aes, outBuf, NULL);
+                } while (ret == WH_ERROR_NOTREADY);
+            }
+            if (ret == 0 && memcmp(outBuf, ecbMsg, AES_BLOCK_SIZE) != 0) {
+                WH_ERROR_PRINT("AES-%d-ECB async KAT dec mismatch\n",
+                               v[i].kSz * 8);
+                ret = -1;
+            }
+            (void)wc_AesFree(aes);
+        }
+    }
+    if (ret == 0) {
+        WH_TEST_PRINT("AES ECB ASYNC KAT DEVID=0x%X SUCCESS\n", devId);
+    }
+#endif /* HAVE_AES_ECB */
+
+#ifdef HAVE_AESGCM
+    /* AES-GCM KATs from wolfCrypt test.c aesgcm_test (GCM spec test
+     * cases). Verifies ciphertext, tag, and decrypt round-trip. */
+    {
+        /* AES-128-GCM: k3/p3/c3_3/t3_3, IV iv1, no AAD */
+        const uint8_t gcmIv[12] = {
+            0xca,0xfe,0xba,0xbe,0xfa,0xce,0xdb,0xad,
+            0xde,0xca,0xf8,0x88
+        };
+        const uint8_t gcm128Key[16] = {
+            0xbb,0x01,0xd7,0x03,0x81,0x1c,0x10,0x1a,
+            0x35,0xe0,0xff,0xd2,0x91,0xba,0xf2,0x4b
+        };
+        const uint8_t gcm128Plain[16] = {
+            0x57,0xce,0x45,0x1f,0xa5,0xe2,0x35,0xa5,
+            0x8e,0x1a,0xa2,0x3b,0x77,0xcb,0xaf,0xe2
+        };
+        const uint8_t gcm128Cipher[16] = {
+            0x79,0xa7,0x08,0xd4,0xad,0x1f,0x3b,0xac,
+            0x70,0x16,0x64,0x40,0xde,0x03,0xed,0xea
+        };
+        const uint8_t gcm128Tag[16] = {
+            0x39,0xb1,0x1e,0x73,0x18,0xda,0x04,0x75,
+            0xa1,0xed,0x52,0xb9,0x0d,0x5c,0xe7,0x28
+        };
+        /* AES-256-GCM: GCM Test Case 16 (k1/p/c1/t1) with AAD a */
+        const uint8_t gcm256Key[32] = {
+            0xfe,0xff,0xe9,0x92,0x86,0x65,0x73,0x1c,
+            0x6d,0x6a,0x8f,0x94,0x67,0x30,0x83,0x08,
+            0xfe,0xff,0xe9,0x92,0x86,0x65,0x73,0x1c,
+            0x6d,0x6a,0x8f,0x94,0x67,0x30,0x83,0x08
+        };
+        const uint8_t gcm256Plain[60] = {
+            0xd9,0x31,0x32,0x25,0xf8,0x84,0x06,0xe5,
+            0xa5,0x59,0x09,0xc5,0xaf,0xf5,0x26,0x9a,
+            0x86,0xa7,0xa9,0x53,0x15,0x34,0xf7,0xda,
+            0x2e,0x4c,0x30,0x3d,0x8a,0x31,0x8a,0x72,
+            0x1c,0x3c,0x0c,0x95,0x95,0x68,0x09,0x53,
+            0x2f,0xcf,0x0e,0x24,0x49,0xa6,0xb5,0x25,
+            0xb1,0x6a,0xed,0xf5,0xaa,0x0d,0xe6,0x57,
+            0xba,0x63,0x7b,0x39
+        };
+        const uint8_t gcm256Aad[20] = {
+            0xfe,0xed,0xfa,0xce,0xde,0xad,0xbe,0xef,
+            0xfe,0xed,0xfa,0xce,0xde,0xad,0xbe,0xef,
+            0xab,0xad,0xda,0xd2
+        };
+        const uint8_t gcm256Cipher[60] = {
+            0x52,0x2d,0xc1,0xf0,0x99,0x56,0x7d,0x07,
+            0xf4,0x7f,0x37,0xa3,0x2a,0x84,0x42,0x7d,
+            0x64,0x3a,0x8c,0xdc,0xbf,0xe5,0xc0,0xc9,
+            0x75,0x98,0xa2,0xbd,0x25,0x55,0xd1,0xaa,
+            0x8c,0xb0,0x8e,0x48,0x59,0x0d,0xbb,0x3d,
+            0xa7,0xb0,0x8b,0x10,0x56,0x82,0x88,0x38,
+            0xc5,0xf6,0x1e,0x63,0x93,0xba,0x7a,0x0a,
+            0xbc,0xc9,0xf6,0x62
+        };
+        const uint8_t gcm256Tag[16] = {
+            0x76,0xfc,0x6e,0xce,0x0f,0x4e,0x17,0x68,
+            0xcd,0xdf,0x88,0x53,0xbb,0x2d,0x55,0x1b
+        };
+
+        struct {
+            const uint8_t* k;
+            int            kSz;
+            const uint8_t* p;
+            int            pSz;
+            const uint8_t* aad;
+            int            aadSz;
+            const uint8_t* c;
+            const uint8_t* t;
+        } v[] = {
+            {gcm128Key, 16, gcm128Plain, sizeof(gcm128Plain),
+             NULL,        0, gcm128Cipher, gcm128Tag},
+            {gcm256Key, 32, gcm256Plain, sizeof(gcm256Plain),
+             gcm256Aad, sizeof(gcm256Aad), gcm256Cipher, gcm256Tag},
+        };
+        uint8_t cipherBuf[64];
+        uint8_t plainBuf[64];
+        uint8_t tagBuf[AES_BLOCK_SIZE];
+        size_t  i;
+        for (i = 0; i < sizeof(v) / sizeof(v[0]) && ret == 0; i++) {
+            memset(cipherBuf, 0, sizeof(cipherBuf));
+            memset(plainBuf, 0, sizeof(plainBuf));
+            memset(tagBuf, 0, sizeof(tagBuf));
+            ret = wc_AesInit(aes, NULL, devId);
+            if (ret == 0) {
+                ret = wc_AesGcmSetKey(aes, v[i].k, v[i].kSz);
+            }
+            if (ret == 0) {
+                ret = wh_Client_AesGcmRequest(
+                    ctx, aes, 1, v[i].p, v[i].pSz, gcmIv, sizeof(gcmIv),
+                    v[i].aad, v[i].aadSz, NULL, sizeof(tagBuf));
+            }
+            if (ret == 0) {
+                do {
+                    ret = wh_Client_AesGcmResponse(ctx, aes, cipherBuf,
+                                                   sizeof(cipherBuf), NULL,
+                                                   tagBuf, sizeof(tagBuf));
+                } while (ret == WH_ERROR_NOTREADY);
+            }
+            if (ret == 0 && memcmp(cipherBuf, v[i].c, v[i].pSz) != 0) {
+                WH_ERROR_PRINT("AES-%d-GCM async KAT cipher mismatch\n",
+                               v[i].kSz * 8);
+                ret = -1;
+            }
+            if (ret == 0 && memcmp(tagBuf, v[i].t, sizeof(tagBuf)) != 0) {
+                WH_ERROR_PRINT("AES-%d-GCM async KAT tag mismatch\n",
+                               v[i].kSz * 8);
+                ret = -1;
+            }
+            if (ret == 0) {
+                ret = wh_Client_AesGcmRequest(
+                    ctx, aes, 0, v[i].c, v[i].pSz, gcmIv, sizeof(gcmIv),
+                    v[i].aad, v[i].aadSz, v[i].t, sizeof(tagBuf));
+            }
+            if (ret == 0) {
+                do {
+                    ret = wh_Client_AesGcmResponse(ctx, aes, plainBuf,
+                                                   sizeof(plainBuf), NULL,
+                                                   NULL, 0);
+                } while (ret == WH_ERROR_NOTREADY);
+            }
+            if (ret == 0 && memcmp(plainBuf, v[i].p, v[i].pSz) != 0) {
+                WH_ERROR_PRINT("AES-%d-GCM async KAT plain mismatch\n",
+                               v[i].kSz * 8);
+                ret = -1;
+            }
+            (void)wc_AesFree(aes);
+        }
+    }
+    if (ret == 0) {
+        WH_TEST_PRINT("AES GCM ASYNC KAT DEVID=0x%X SUCCESS\n", devId);
+    }
+#endif /* HAVE_AESGCM */
+
+    return ret;
+}
+
+#ifdef WOLFHSM_CFG_DMA
+/* Direct exercise of the native async DMA AES primitives. */
+static int whTest_CryptoAesDmaAsync(whClientContext* ctx, int devId,
+                                    WC_RNG* rng)
+{
+#define WH_TEST_AES_ASYNC_DMA_KEYSZ 32
+#define WH_TEST_AES_ASYNC_DMA_BUFSZ 128
+    int     ret = 0;
+    Aes     aes[1];
+    uint8_t key[WH_TEST_AES_ASYNC_DMA_KEYSZ];
+    uint8_t iv[AES_BLOCK_SIZE];
+    uint8_t plainIn[WH_TEST_AES_ASYNC_DMA_BUFSZ];
+    uint8_t cipher[WH_TEST_AES_ASYNC_DMA_BUFSZ];
+    uint8_t plainOut[WH_TEST_AES_ASYNC_DMA_BUFSZ];
+
+    memset(plainIn, 0xBB, sizeof(plainIn));
+    memset(cipher, 0, sizeof(cipher));
+    memset(plainOut, 0, sizeof(plainOut));
+
+    if (wc_RNG_GenerateBlock(rng, key, sizeof(key)) != 0 ||
+        wc_RNG_GenerateBlock(rng, iv, sizeof(iv)) != 0) {
+        WH_ERROR_PRINT("AES DMA async: failed to generate key/iv\n");
+        return -1;
+    }
+
+#ifdef HAVE_AES_CBC
+    /* CBC DMA: round-trip via async DMA Request/Response pair */
+    if (ret == 0) {
+        ret = wc_AesInit(aes, NULL, devId);
+        if (ret == 0) {
+            ret = wc_AesSetKey(aes, key, sizeof(key), iv, AES_ENCRYPTION);
+        }
+        if (ret == 0) {
+            ret = wh_Client_AesCbcDmaRequest(ctx, aes, 1, plainIn,
+                                             sizeof(plainIn), cipher);
+        }
+        if (ret == 0) {
+            do {
+                ret = wh_Client_AesCbcDmaResponse(ctx, aes);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+        if (ret == 0) {
+            ret = wc_AesSetKey(aes, key, sizeof(key), iv, AES_DECRYPTION);
+        }
+        if (ret == 0) {
+            ret = wh_Client_AesCbcDmaRequest(ctx, aes, 0, cipher,
+                                             sizeof(cipher), plainOut);
+        }
+        if (ret == 0) {
+            do {
+                ret = wh_Client_AesCbcDmaResponse(ctx, aes);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+        if (ret == 0 && memcmp(plainIn, plainOut, sizeof(plainIn)) != 0) {
+            WH_ERROR_PRINT("AES-CBC DMA async round-trip mismatch\n");
+            ret = -1;
+        }
+        (void)wc_AesFree(aes);
+        memset(cipher, 0, sizeof(cipher));
+        memset(plainOut, 0, sizeof(plainOut));
+    }
+    if (ret == 0) {
+        WH_TEST_PRINT("AES CBC DMA ASYNC DEVID=0x%X SUCCESS\n", devId);
+    }
+#endif /* HAVE_AES_CBC */
+
+#ifdef WOLFSSL_AES_COUNTER
+    /* CTR DMA: round-trip. CTR is symmetric (see non-DMA test comment). */
+    if (ret == 0) {
+        ret = wc_AesInit(aes, NULL, devId);
+        if (ret == 0) {
+            ret = wc_AesSetKeyDirect(aes, key, sizeof(key), iv, AES_ENCRYPTION);
+        }
+        if (ret == 0) {
+            ret = wh_Client_AesCtrDmaRequest(ctx, aes, 1, plainIn,
+                                             sizeof(plainIn), cipher);
+        }
+        if (ret == 0) {
+            do {
+                ret = wh_Client_AesCtrDmaResponse(ctx, aes);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+        if (ret == 0) {
+            ret = wc_AesSetKeyDirect(aes, key, sizeof(key), iv, AES_ENCRYPTION);
+        }
+        if (ret == 0) {
+            ret = wh_Client_AesCtrDmaRequest(ctx, aes, 1, cipher,
+                                             sizeof(cipher), plainOut);
+        }
+        if (ret == 0) {
+            do {
+                ret = wh_Client_AesCtrDmaResponse(ctx, aes);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+        if (ret == 0 && memcmp(plainIn, plainOut, sizeof(plainIn)) != 0) {
+            WH_ERROR_PRINT("AES-CTR DMA async round-trip mismatch\n");
+            ret = -1;
+        }
+        (void)wc_AesFree(aes);
+        memset(cipher, 0, sizeof(cipher));
+        memset(plainOut, 0, sizeof(plainOut));
+    }
+    if (ret == 0) {
+        WH_TEST_PRINT("AES CTR DMA ASYNC DEVID=0x%X SUCCESS\n", devId);
+    }
+#endif /* WOLFSSL_AES_COUNTER */
+
+#ifdef HAVE_AES_ECB
+    /* ECB DMA: round-trip */
+    if (ret == 0) {
+        ret = wc_AesInit(aes, NULL, devId);
+        if (ret == 0) {
+            ret = wc_AesSetKey(aes, key, sizeof(key), iv, AES_ENCRYPTION);
+        }
+        if (ret == 0) {
+            ret = wh_Client_AesEcbDmaRequest(ctx, aes, 1, plainIn,
+                                             sizeof(plainIn), cipher);
+        }
+        if (ret == 0) {
+            do {
+                ret = wh_Client_AesEcbDmaResponse(ctx, aes);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+        if (ret == 0) {
+            ret = wc_AesSetKey(aes, key, sizeof(key), iv, AES_DECRYPTION);
+        }
+        if (ret == 0) {
+            ret = wh_Client_AesEcbDmaRequest(ctx, aes, 0, cipher,
+                                             sizeof(cipher), plainOut);
+        }
+        if (ret == 0) {
+            do {
+                ret = wh_Client_AesEcbDmaResponse(ctx, aes);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+        if (ret == 0 && memcmp(plainIn, plainOut, sizeof(plainIn)) != 0) {
+            WH_ERROR_PRINT("AES-ECB DMA async round-trip mismatch\n");
+            ret = -1;
+        }
+        (void)wc_AesFree(aes);
+        memset(cipher, 0, sizeof(cipher));
+        memset(plainOut, 0, sizeof(plainOut));
+    }
+    if (ret == 0) {
+        WH_TEST_PRINT("AES ECB DMA ASYNC DEVID=0x%X SUCCESS\n", devId);
+    }
+#endif /* HAVE_AES_ECB */
+
+#ifdef HAVE_AESGCM
+    /* GCM DMA: round-trip with AAD via DMA */
+    if (ret == 0) {
+        uint8_t authin[32];
+        uint8_t enc_tag[AES_BLOCK_SIZE];
+        uint8_t dec_tag[AES_BLOCK_SIZE];
+
+        memset(authin, 0x5A, sizeof(authin));
+        memset(enc_tag, 0, sizeof(enc_tag));
+
+        ret = wc_AesInit(aes, NULL, devId);
+        if (ret == 0) {
+            ret = wc_AesGcmSetKey(aes, key, sizeof(key));
+        }
+        if (ret == 0) {
+            ret = wh_Client_AesGcmDmaRequest(
+                ctx, aes, 1, plainIn, sizeof(plainIn), cipher, iv,
+                AES_BLOCK_SIZE, authin, sizeof(authin), NULL, sizeof(enc_tag));
+        }
+        if (ret == 0) {
+            do {
+                ret = wh_Client_AesGcmDmaResponse(ctx, aes, enc_tag,
+                                                  sizeof(enc_tag));
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+
+        if (ret == 0) {
+            memcpy(dec_tag, enc_tag, sizeof(dec_tag));
+            ret = wh_Client_AesGcmDmaRequest(
+                ctx, aes, 0, cipher, sizeof(cipher), plainOut, iv,
+                AES_BLOCK_SIZE, authin, sizeof(authin), dec_tag,
+                sizeof(dec_tag));
+        }
+        if (ret == 0) {
+            do {
+                ret = wh_Client_AesGcmDmaResponse(ctx, aes, NULL, 0);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+        if (ret == 0 && memcmp(plainIn, plainOut, sizeof(plainIn)) != 0) {
+            WH_ERROR_PRINT("AES-GCM DMA async round-trip mismatch\n");
+            ret = -1;
+        }
+        (void)wc_AesFree(aes);
+        memset(cipher, 0, sizeof(cipher));
+        memset(plainOut, 0, sizeof(plainOut));
+    }
+    if (ret == 0) {
+        WH_TEST_PRINT("AES GCM DMA ASYNC DEVID=0x%X SUCCESS\n", devId);
+    }
+#endif /* HAVE_AESGCM */
+
+    return ret;
+#undef WH_TEST_AES_ASYNC_DMA_KEYSZ
+#undef WH_TEST_AES_ASYNC_DMA_BUFSZ
+}
+
+/* Known-answer tests for the DMA async AES primitives. Same vectors as
+ * whTest_CryptoAesAsyncKat run through the DMA Request/Response APIs. */
+static int whTest_CryptoAesDmaAsyncKat(whClientContext* ctx, int devId)
+{
+    int     ret = 0;
+    Aes     aes[1];
+    uint8_t outBuf[64];
+
+#ifdef HAVE_AES_CBC
+    {
+        const uint8_t k128[16] = {
+            '0','1','2','3','4','5','6','7',
+            '8','9','a','b','c','d','e','f'
+        };
+        const uint8_t iv128[16] = {
+            '1','2','3','4','5','6','7','8',
+            '9','0','a','b','c','d','e','f'
+        };
+        const uint8_t p128[16] = {
+            0x6e,0x6f,0x77,0x20,0x69,0x73,0x20,0x74,
+            0x68,0x65,0x20,0x74,0x69,0x6d,0x65,0x20
+        };
+        const uint8_t c128[16] = {
+            0x95,0x94,0x92,0x57,0x5f,0x42,0x81,0x53,
+            0x2c,0xcc,0x9d,0x46,0x77,0xa2,0x33,0xcb
+        };
+        const uint8_t k192[24] = {
+            0x8e,0x73,0xb0,0xf7,0xda,0x0e,0x64,0x52,
+            0xc8,0x10,0xf3,0x2b,0x80,0x90,0x79,0xe5,
+            0x62,0xf8,0xea,0xd2,0x52,0x2c,0x6b,0x7b
+        };
+        const uint8_t iv_nist[16] = {
+            0x00,0x01,0x02,0x03,0x04,0x05,0x06,0x07,
+            0x08,0x09,0x0A,0x0B,0x0C,0x0D,0x0E,0x0F
+        };
+        const uint8_t p_nist[16] = {
+            0x6b,0xc1,0xbe,0xe2,0x2e,0x40,0x9f,0x96,
+            0xe9,0x3d,0x7e,0x11,0x73,0x93,0x17,0x2a
+        };
+        const uint8_t c192[16] = {
+            0x4f,0x02,0x1d,0xb2,0x43,0xbc,0x63,0x3d,
+            0x71,0x78,0x18,0x3a,0x9f,0xa0,0x71,0xe8
+        };
+        const uint8_t k256[32] = {
+            0x60,0x3d,0xeb,0x10,0x15,0xca,0x71,0xbe,
+            0x2b,0x73,0xae,0xf0,0x85,0x7d,0x77,0x81,
+            0x1f,0x35,0x2c,0x07,0x3b,0x61,0x08,0xd7,
+            0x2d,0x98,0x10,0xa3,0x09,0x14,0xdf,0xf4
+        };
+        const uint8_t c256[16] = {
+            0xf5,0x8c,0x4c,0x04,0xd6,0xe5,0xf1,0xba,
+            0x77,0x9e,0xab,0xfb,0x5f,0x7b,0xfb,0xd6
+        };
+
+        struct {
+            const uint8_t* k;
+            int            kSz;
+            const uint8_t* iv;
+            const uint8_t* p;
+            const uint8_t* c;
+        } v[] = {
+            {k128, 16, iv128,   p128,   c128},
+            {k192, 24, iv_nist, p_nist, c192},
+            {k256, 32, iv_nist, p_nist, c256},
+        };
+        size_t i;
+        for (i = 0; i < sizeof(v) / sizeof(v[0]) && ret == 0; i++) {
+            memset(outBuf, 0, sizeof(outBuf));
+            ret = wc_AesInit(aes, NULL, devId);
+            if (ret == 0) {
+                ret = wc_AesSetKey(aes, v[i].k, v[i].kSz, v[i].iv,
+                                   AES_ENCRYPTION);
+            }
+            if (ret == 0) {
+                ret = wh_Client_AesCbcDmaRequest(ctx, aes, 1, v[i].p,
+                                                 AES_BLOCK_SIZE, outBuf);
+            }
+            if (ret == 0) {
+                do {
+                    ret = wh_Client_AesCbcDmaResponse(ctx, aes);
+                } while (ret == WH_ERROR_NOTREADY);
+            }
+            if (ret == 0 && memcmp(outBuf, v[i].c, AES_BLOCK_SIZE) != 0) {
+                WH_ERROR_PRINT("AES-%d-CBC DMA async KAT enc mismatch\n",
+                               v[i].kSz * 8);
+                ret = -1;
+            }
+            if (ret == 0) {
+                ret = wc_AesSetKey(aes, v[i].k, v[i].kSz, v[i].iv,
+                                   AES_DECRYPTION);
+            }
+            if (ret == 0) {
+                memset(outBuf, 0, sizeof(outBuf));
+                ret = wh_Client_AesCbcDmaRequest(ctx, aes, 0, v[i].c,
+                                                 AES_BLOCK_SIZE, outBuf);
+            }
+            if (ret == 0) {
+                do {
+                    ret = wh_Client_AesCbcDmaResponse(ctx, aes);
+                } while (ret == WH_ERROR_NOTREADY);
+            }
+            if (ret == 0 && memcmp(outBuf, v[i].p, AES_BLOCK_SIZE) != 0) {
+                WH_ERROR_PRINT("AES-%d-CBC DMA async KAT dec mismatch\n",
+                               v[i].kSz * 8);
+                ret = -1;
+            }
+            (void)wc_AesFree(aes);
+        }
+    }
+    if (ret == 0) {
+        WH_TEST_PRINT("AES CBC DMA ASYNC KAT DEVID=0x%X SUCCESS\n", devId);
+    }
+#endif /* HAVE_AES_CBC */
+
+#ifdef WOLFSSL_AES_COUNTER
+    {
+        const uint8_t ctrIv[16] = {
+            0xf0,0xf1,0xf2,0xf3,0xf4,0xf5,0xf6,0xf7,
+            0xf8,0xf9,0xfa,0xfb,0xfc,0xfd,0xfe,0xff
+        };
+        const uint8_t ctrPlain[64] = {
+            0x6b,0xc1,0xbe,0xe2,0x2e,0x40,0x9f,0x96,
+            0xe9,0x3d,0x7e,0x11,0x73,0x93,0x17,0x2a,
+            0xae,0x2d,0x8a,0x57,0x1e,0x03,0xac,0x9c,
+            0x9e,0xb7,0x6f,0xac,0x45,0xaf,0x8e,0x51,
+            0x30,0xc8,0x1c,0x46,0xa3,0x5c,0xe4,0x11,
+            0xe5,0xfb,0xc1,0x19,0x1a,0x0a,0x52,0xef,
+            0xf6,0x9f,0x24,0x45,0xdf,0x4f,0x9b,0x17,
+            0xad,0x2b,0x41,0x7b,0xe6,0x6c,0x37,0x10
+        };
+        const uint8_t ctr128Key[16] = {
+            0x2b,0x7e,0x15,0x16,0x28,0xae,0xd2,0xa6,
+            0xab,0xf7,0x15,0x88,0x09,0xcf,0x4f,0x3c
+        };
+        const uint8_t ctr128Cipher[64] = {
+            0x87,0x4d,0x61,0x91,0xb6,0x20,0xe3,0x26,
+            0x1b,0xef,0x68,0x64,0x99,0x0d,0xb6,0xce,
+            0x98,0x06,0xf6,0x6b,0x79,0x70,0xfd,0xff,
+            0x86,0x17,0x18,0x7b,0xb9,0xff,0xfd,0xff,
+            0x5a,0xe4,0xdf,0x3e,0xdb,0xd5,0xd3,0x5e,
+            0x5b,0x4f,0x09,0x02,0x0d,0xb0,0x3e,0xab,
+            0x1e,0x03,0x1d,0xda,0x2f,0xbe,0x03,0xd1,
+            0x79,0x21,0x70,0xa0,0xf3,0x00,0x9c,0xee
+        };
+        const uint8_t ctr192Key[24] = {
+            0x8e,0x73,0xb0,0xf7,0xda,0x0e,0x64,0x52,
+            0xc8,0x10,0xf3,0x2b,0x80,0x90,0x79,0xe5,
+            0x62,0xf8,0xea,0xd2,0x52,0x2c,0x6b,0x7b
+        };
+        const uint8_t ctr192Cipher[64] = {
+            0x1a,0xbc,0x93,0x24,0x17,0x52,0x1c,0xa2,
+            0x4f,0x2b,0x04,0x59,0xfe,0x7e,0x6e,0x0b,
+            0x09,0x03,0x39,0xec,0x0a,0xa6,0xfa,0xef,
+            0xd5,0xcc,0xc2,0xc6,0xf4,0xce,0x8e,0x94,
+            0x1e,0x36,0xb2,0x6b,0xd1,0xeb,0xc6,0x70,
+            0xd1,0xbd,0x1d,0x66,0x56,0x20,0xab,0xf7,
+            0x4f,0x78,0xa7,0xf6,0xd2,0x98,0x09,0x58,
+            0x5a,0x97,0xda,0xec,0x58,0xc6,0xb0,0x50
+        };
+        const uint8_t ctr256Key[32] = {
+            0x60,0x3d,0xeb,0x10,0x15,0xca,0x71,0xbe,
+            0x2b,0x73,0xae,0xf0,0x85,0x7d,0x77,0x81,
+            0x1f,0x35,0x2c,0x07,0x3b,0x61,0x08,0xd7,
+            0x2d,0x98,0x10,0xa3,0x09,0x14,0xdf,0xf4
+        };
+        const uint8_t ctr256Cipher[64] = {
+            0x60,0x1e,0xc3,0x13,0x77,0x57,0x89,0xa5,
+            0xb7,0xa7,0xf5,0x04,0xbb,0xf3,0xd2,0x28,
+            0xf4,0x43,0xe3,0xca,0x4d,0x62,0xb5,0x9a,
+            0xca,0x84,0xe9,0x90,0xca,0xca,0xf5,0xc5,
+            0x2b,0x09,0x30,0xda,0xa2,0x3d,0xe9,0x4c,
+            0xe8,0x70,0x17,0xba,0x2d,0x84,0x98,0x8d,
+            0xdf,0xc9,0xc5,0x8d,0xb6,0x7a,0xad,0xa6,
+            0x13,0xc2,0xdd,0x08,0x45,0x79,0x41,0xa6
+        };
+
+        struct {
+            const uint8_t* k;
+            int            kSz;
+            const uint8_t* c;
+        } v[] = {
+            {ctr128Key, 16, ctr128Cipher},
+            {ctr192Key, 24, ctr192Cipher},
+            {ctr256Key, 32, ctr256Cipher},
+        };
+        size_t i;
+        for (i = 0; i < sizeof(v) / sizeof(v[0]) && ret == 0; i++) {
+            memset(outBuf, 0, sizeof(outBuf));
+            ret = wc_AesInit(aes, NULL, devId);
+            if (ret == 0) {
+                ret = wc_AesSetKeyDirect(aes, v[i].k, v[i].kSz, ctrIv,
+                                         AES_ENCRYPTION);
+            }
+            if (ret == 0) {
+                ret = wh_Client_AesCtrDmaRequest(ctx, aes, 1, ctrPlain,
+                                                 sizeof(ctrPlain), outBuf);
+            }
+            if (ret == 0) {
+                do {
+                    ret = wh_Client_AesCtrDmaResponse(ctx, aes);
+                } while (ret == WH_ERROR_NOTREADY);
+            }
+            if (ret == 0 &&
+                memcmp(outBuf, v[i].c, sizeof(ctrPlain)) != 0) {
+                WH_ERROR_PRINT("AES-%d-CTR DMA async KAT enc mismatch\n",
+                               v[i].kSz * 8);
+                ret = -1;
+            }
+            if (ret == 0) {
+                ret = wc_AesSetKeyDirect(aes, v[i].k, v[i].kSz, ctrIv,
+                                         AES_ENCRYPTION);
+            }
+            if (ret == 0) {
+                memset(outBuf, 0, sizeof(outBuf));
+                ret = wh_Client_AesCtrDmaRequest(ctx, aes, 1, v[i].c,
+                                                 sizeof(ctrPlain), outBuf);
+            }
+            if (ret == 0) {
+                do {
+                    ret = wh_Client_AesCtrDmaResponse(ctx, aes);
+                } while (ret == WH_ERROR_NOTREADY);
+            }
+            if (ret == 0 &&
+                memcmp(outBuf, ctrPlain, sizeof(ctrPlain)) != 0) {
+                WH_ERROR_PRINT("AES-%d-CTR DMA async KAT dec mismatch\n",
+                               v[i].kSz * 8);
+                ret = -1;
+            }
+            (void)wc_AesFree(aes);
+        }
+    }
+    if (ret == 0) {
+        WH_TEST_PRINT("AES CTR DMA ASYNC KAT DEVID=0x%X SUCCESS\n", devId);
+    }
+#endif /* WOLFSSL_AES_COUNTER */
+
+#ifdef HAVE_AES_ECB
+    {
+        const uint8_t ecbIv[16] = {
+            '1','2','3','4','5','6','7','8',
+            '9','0','a','b','c','d','e','f'
+        };
+        const uint8_t ecbMsg[16] = {
+            0x6e,0x6f,0x77,0x20,0x69,0x73,0x20,0x74,
+            0x68,0x65,0x20,0x74,0x69,0x6d,0x65,0x20
+        };
+        const uint8_t ecbK128[16] = {
+            '0','1','2','3','4','5','6','7',
+            '8','9','a','b','c','d','e','f'
+        };
+        const uint8_t ecbC128[16] = {
+            0xd0,0xc9,0xd9,0xc9,0x40,0xe8,0x97,0xb6,
+            0xc8,0x8c,0x33,0x3b,0xb5,0x8f,0x85,0xd1
+        };
+        const uint8_t ecbK192[24] = {
+            '0','1','2','3','4','5','6','7',
+            '8','9','a','b','c','d','e','f',
+            '0','1','2','3','4','5','6','7'
+        };
+        const uint8_t ecbC192[16] = {
+            0x06,0x57,0xee,0x78,0x3f,0x96,0x00,0xb1,
+            0xec,0x76,0x94,0x30,0x29,0xbe,0x15,0xab
+        };
+        const uint8_t ecbK256[32] = {
+            '0','1','2','3','4','5','6','7',
+            '8','9','a','b','c','d','e','f',
+            '0','1','2','3','4','5','6','7',
+            '8','9','a','b','c','d','e','f'
+        };
+        const uint8_t ecbC256[16] = {
+            0xcd,0xf2,0x81,0x3e,0x73,0x3e,0xf7,0x33,
+            0x3d,0x18,0xfd,0x41,0x85,0x37,0x04,0x82
+        };
+
+        struct {
+            const uint8_t* k;
+            int            kSz;
+            const uint8_t* c;
+        } v[] = {
+            {ecbK128, 16, ecbC128},
+            {ecbK192, 24, ecbC192},
+            {ecbK256, 32, ecbC256},
+        };
+        size_t i;
+        for (i = 0; i < sizeof(v) / sizeof(v[0]) && ret == 0; i++) {
+            memset(outBuf, 0, sizeof(outBuf));
+            ret = wc_AesInit(aes, NULL, devId);
+            if (ret == 0) {
+                ret = wc_AesSetKey(aes, v[i].k, v[i].kSz, ecbIv,
+                                   AES_ENCRYPTION);
+            }
+            if (ret == 0) {
+                ret = wh_Client_AesEcbDmaRequest(ctx, aes, 1, ecbMsg,
+                                                 AES_BLOCK_SIZE, outBuf);
+            }
+            if (ret == 0) {
+                do {
+                    ret = wh_Client_AesEcbDmaResponse(ctx, aes);
+                } while (ret == WH_ERROR_NOTREADY);
+            }
+            if (ret == 0 && memcmp(outBuf, v[i].c, AES_BLOCK_SIZE) != 0) {
+                WH_ERROR_PRINT("AES-%d-ECB DMA async KAT enc mismatch\n",
+                               v[i].kSz * 8);
+                ret = -1;
+            }
+            if (ret == 0) {
+                ret = wc_AesSetKey(aes, v[i].k, v[i].kSz, ecbIv,
+                                   AES_DECRYPTION);
+            }
+            if (ret == 0) {
+                memset(outBuf, 0, sizeof(outBuf));
+                ret = wh_Client_AesEcbDmaRequest(ctx, aes, 0, v[i].c,
+                                                 AES_BLOCK_SIZE, outBuf);
+            }
+            if (ret == 0) {
+                do {
+                    ret = wh_Client_AesEcbDmaResponse(ctx, aes);
+                } while (ret == WH_ERROR_NOTREADY);
+            }
+            if (ret == 0 && memcmp(outBuf, ecbMsg, AES_BLOCK_SIZE) != 0) {
+                WH_ERROR_PRINT("AES-%d-ECB DMA async KAT dec mismatch\n",
+                               v[i].kSz * 8);
+                ret = -1;
+            }
+            (void)wc_AesFree(aes);
+        }
+    }
+    if (ret == 0) {
+        WH_TEST_PRINT("AES ECB DMA ASYNC KAT DEVID=0x%X SUCCESS\n", devId);
+    }
+#endif /* HAVE_AES_ECB */
+
+#ifdef HAVE_AESGCM
+    {
+        const uint8_t gcmIv[12] = {
+            0xca,0xfe,0xba,0xbe,0xfa,0xce,0xdb,0xad,
+            0xde,0xca,0xf8,0x88
+        };
+        const uint8_t gcm128Key[16] = {
+            0xbb,0x01,0xd7,0x03,0x81,0x1c,0x10,0x1a,
+            0x35,0xe0,0xff,0xd2,0x91,0xba,0xf2,0x4b
+        };
+        const uint8_t gcm128Plain[16] = {
+            0x57,0xce,0x45,0x1f,0xa5,0xe2,0x35,0xa5,
+            0x8e,0x1a,0xa2,0x3b,0x77,0xcb,0xaf,0xe2
+        };
+        const uint8_t gcm128Cipher[16] = {
+            0x79,0xa7,0x08,0xd4,0xad,0x1f,0x3b,0xac,
+            0x70,0x16,0x64,0x40,0xde,0x03,0xed,0xea
+        };
+        const uint8_t gcm128Tag[16] = {
+            0x39,0xb1,0x1e,0x73,0x18,0xda,0x04,0x75,
+            0xa1,0xed,0x52,0xb9,0x0d,0x5c,0xe7,0x28
+        };
+        const uint8_t gcm256Key[32] = {
+            0xfe,0xff,0xe9,0x92,0x86,0x65,0x73,0x1c,
+            0x6d,0x6a,0x8f,0x94,0x67,0x30,0x83,0x08,
+            0xfe,0xff,0xe9,0x92,0x86,0x65,0x73,0x1c,
+            0x6d,0x6a,0x8f,0x94,0x67,0x30,0x83,0x08
+        };
+        const uint8_t gcm256Plain[60] = {
+            0xd9,0x31,0x32,0x25,0xf8,0x84,0x06,0xe5,
+            0xa5,0x59,0x09,0xc5,0xaf,0xf5,0x26,0x9a,
+            0x86,0xa7,0xa9,0x53,0x15,0x34,0xf7,0xda,
+            0x2e,0x4c,0x30,0x3d,0x8a,0x31,0x8a,0x72,
+            0x1c,0x3c,0x0c,0x95,0x95,0x68,0x09,0x53,
+            0x2f,0xcf,0x0e,0x24,0x49,0xa6,0xb5,0x25,
+            0xb1,0x6a,0xed,0xf5,0xaa,0x0d,0xe6,0x57,
+            0xba,0x63,0x7b,0x39
+        };
+        const uint8_t gcm256Aad[20] = {
+            0xfe,0xed,0xfa,0xce,0xde,0xad,0xbe,0xef,
+            0xfe,0xed,0xfa,0xce,0xde,0xad,0xbe,0xef,
+            0xab,0xad,0xda,0xd2
+        };
+        const uint8_t gcm256Cipher[60] = {
+            0x52,0x2d,0xc1,0xf0,0x99,0x56,0x7d,0x07,
+            0xf4,0x7f,0x37,0xa3,0x2a,0x84,0x42,0x7d,
+            0x64,0x3a,0x8c,0xdc,0xbf,0xe5,0xc0,0xc9,
+            0x75,0x98,0xa2,0xbd,0x25,0x55,0xd1,0xaa,
+            0x8c,0xb0,0x8e,0x48,0x59,0x0d,0xbb,0x3d,
+            0xa7,0xb0,0x8b,0x10,0x56,0x82,0x88,0x38,
+            0xc5,0xf6,0x1e,0x63,0x93,0xba,0x7a,0x0a,
+            0xbc,0xc9,0xf6,0x62
+        };
+        const uint8_t gcm256Tag[16] = {
+            0x76,0xfc,0x6e,0xce,0x0f,0x4e,0x17,0x68,
+            0xcd,0xdf,0x88,0x53,0xbb,0x2d,0x55,0x1b
+        };
+
+        struct {
+            const uint8_t* k;
+            int            kSz;
+            const uint8_t* p;
+            int            pSz;
+            const uint8_t* aad;
+            int            aadSz;
+            const uint8_t* c;
+            const uint8_t* t;
+        } v[] = {
+            {gcm128Key, 16, gcm128Plain, sizeof(gcm128Plain),
+             NULL,        0, gcm128Cipher, gcm128Tag},
+            {gcm256Key, 32, gcm256Plain, sizeof(gcm256Plain),
+             gcm256Aad, sizeof(gcm256Aad), gcm256Cipher, gcm256Tag},
+        };
+        uint8_t cipherBuf[64];
+        uint8_t plainBuf[64];
+        uint8_t tagBuf[AES_BLOCK_SIZE];
+        size_t  i;
+        for (i = 0; i < sizeof(v) / sizeof(v[0]) && ret == 0; i++) {
+            memset(cipherBuf, 0, sizeof(cipherBuf));
+            memset(plainBuf, 0, sizeof(plainBuf));
+            memset(tagBuf, 0, sizeof(tagBuf));
+            ret = wc_AesInit(aes, NULL, devId);
+            if (ret == 0) {
+                ret = wc_AesGcmSetKey(aes, v[i].k, v[i].kSz);
+            }
+            if (ret == 0) {
+                ret = wh_Client_AesGcmDmaRequest(
+                    ctx, aes, 1, v[i].p, v[i].pSz, cipherBuf, gcmIv,
+                    sizeof(gcmIv), v[i].aad, v[i].aadSz, NULL,
+                    sizeof(tagBuf));
+            }
+            if (ret == 0) {
+                do {
+                    ret = wh_Client_AesGcmDmaResponse(ctx, aes, tagBuf,
+                                                      sizeof(tagBuf));
+                } while (ret == WH_ERROR_NOTREADY);
+            }
+            if (ret == 0 && memcmp(cipherBuf, v[i].c, v[i].pSz) != 0) {
+                WH_ERROR_PRINT("AES-%d-GCM DMA async KAT cipher mismatch\n",
+                               v[i].kSz * 8);
+                ret = -1;
+            }
+            if (ret == 0 && memcmp(tagBuf, v[i].t, sizeof(tagBuf)) != 0) {
+                WH_ERROR_PRINT("AES-%d-GCM DMA async KAT tag mismatch\n",
+                               v[i].kSz * 8);
+                ret = -1;
+            }
+            if (ret == 0) {
+                ret = wh_Client_AesGcmDmaRequest(
+                    ctx, aes, 0, v[i].c, v[i].pSz, plainBuf, gcmIv,
+                    sizeof(gcmIv), v[i].aad, v[i].aadSz, v[i].t,
+                    sizeof(tagBuf));
+            }
+            if (ret == 0) {
+                do {
+                    ret = wh_Client_AesGcmDmaResponse(ctx, aes, NULL, 0);
+                } while (ret == WH_ERROR_NOTREADY);
+            }
+            if (ret == 0 && memcmp(plainBuf, v[i].p, v[i].pSz) != 0) {
+                WH_ERROR_PRINT("AES-%d-GCM DMA async KAT plain mismatch\n",
+                               v[i].kSz * 8);
+                ret = -1;
+            }
+            (void)wc_AesFree(aes);
+        }
+    }
+    if (ret == 0) {
+        WH_TEST_PRINT("AES GCM DMA ASYNC KAT DEVID=0x%X SUCCESS\n", devId);
+    }
+#endif /* HAVE_AESGCM */
+
+    return ret;
+}
+#endif /* WOLFHSM_CFG_DMA */
+
 #endif /* !NO_AES */
 
 #if defined(WOLFSSL_CMAC) && !defined(NO_AES) && defined(WOLFSSL_AES_DIRECT)
@@ -9355,9 +11114,23 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     while ((ret == WH_ERROR_OK) && (i < WH_NUM_DEVIDS)) {
         ret = whTestCrypto_Aes(client, WH_DEV_IDS_ARRAY[i], rng);
         if (ret == WH_ERROR_OK) {
+            ret = whTest_CryptoAesAsync(client, WH_DEV_IDS_ARRAY[i], rng);
+        }
+        if (ret == WH_ERROR_OK) {
+            ret = whTest_CryptoAesAsyncKat(client, WH_DEV_IDS_ARRAY[i]);
+        }
+        if (ret == WH_ERROR_OK) {
             i++;
         }
     }
+#ifdef WOLFHSM_CFG_DMA
+    if (ret == WH_ERROR_OK) {
+        ret = whTest_CryptoAesDmaAsync(client, WH_DEV_ID_DMA, rng);
+    }
+    if (ret == WH_ERROR_OK) {
+        ret = whTest_CryptoAesDmaAsyncKat(client, WH_DEV_ID_DMA);
+    }
+#endif /* WOLFHSM_CFG_DMA */
 #endif /* !NO_AES */
 
 #if defined(WOLFSSL_CMAC) && !defined(NO_AES) && defined(WOLFSSL_AES_DIRECT)
