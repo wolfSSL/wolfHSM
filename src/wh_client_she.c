@@ -47,6 +47,7 @@
 
 #include "wolfhsm/wh_client_she.h"
 
+#ifdef WOLFHSM_CFG_SHE_ENABLE_TEST_KEY_MGMT
 int wh_Client_ShePreProgramKey(whClientContext* c, whNvmId keyId,
     whNvmFlags flags, uint8_t* key, whNvmSize keySz)
 {
@@ -118,6 +119,7 @@ int wh_Client_SheDestroyKey(whClientContext* c, whNvmId keyId)
     }
     return ret;
 }
+#endif /* WOLFHSM_CFG_SHE_ENABLE_TEST_KEY_MGMT */
 
 int wh_Client_SheSetUidRequest(whClientContext* c, uint8_t* uid, uint32_t uidSz)
 {
