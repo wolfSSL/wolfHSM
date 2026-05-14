@@ -17,7 +17,7 @@
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
 /*
- * test-refactor/wh_test_cert_client.c
+ * test-refactor/wh_test_client_certs.c
  *
  * Client-side certificate test suite. Exercises the cert
  * manager through the client request/response API.
@@ -45,7 +45,7 @@ extern const size_t        ROOT_A_CERT_len;
  * and updates the cert_len out-param when the caller buffer is too
  * small to hold the returned certificate.
  */
-int whTest_CertReadTrustedSmallBuffer(whClientContext* ctx)
+static int _whTest_CertReadTrustedSmallBuffer(whClientContext* ctx)
 {
     int32_t       out_rc          = 0;
     const whNvmId cert_id         = 103;
@@ -79,7 +79,15 @@ int whTest_CertReadTrustedSmallBuffer(whClientContext* ctx)
         wh_Client_CertEraseTrusted(ctx, cert_id, &out_rc));
     WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
 
-    return 0;
+    return WH_ERROR_OK;
+}
+
+
+int whTest_ClientCerts(whClientContext* ctx)
+{
+    WH_TEST_RETURN_ON_FAIL(_whTest_CertReadTrustedSmallBuffer(ctx));
+
+    return WH_ERROR_OK;
 }
 
 #endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER && !WOLFHSM_CFG_NO_CRYPTO */

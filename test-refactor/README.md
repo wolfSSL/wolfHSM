@@ -48,9 +48,15 @@ For running the more substantial client tests only, no server modifications are 
 4. Optionally call `whTestGroup_Misc()`
 
 ## Adding a multi-port test
-1. Create a new function which returns `int` (0 for success) with a context argument (`whClientContext*` for client tests, `whServerContext*` for server tests, or none for misc tests).
-2. In wh_test_list.c, add a line with `WH_TEST_DECL(<function>)`
-3. In wh_test_list.c, add the function to the appropriate `whTestCase` array. 
+Tests are organized as a single registered parent function per source file, which dispatches to one or more `static` sub-tests within that file.
+
+If adding a new test file and/or a new group of tests:
+1. Create a function which returns `int` (0 for success) with a context argument (`whClientContext*` for client tests, `whServerContext*` for server tests, or none for misc tests). Inside it, call each sub-test with `WH_TEST_RETURN_ON_FAIL`.
+2. In `wh_test_list.c`, add a `WH_TEST_DECL(<entry-point>)` line.
+3. In `wh_test_list.c`, add the entry-point to the appropriate `whTestCase` array.
+
+To add an individual test to an existing group:
+1. Add sub-tests as `static` functions in the same file. Name them with a leading underscore (e.g. `_whTest_<Group><Case>`).
 
 **Note**: if the test is specific to a platform, do not add it to the common list as shown above. Port-specific tests live within the port (not this directory), and are called from the port-specific code.
 
