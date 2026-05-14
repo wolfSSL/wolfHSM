@@ -12,14 +12,19 @@ permissions:
 jobs:
   build:
 
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    runs-on: ${{ matrix.os }}
 
     steps:
     - uses: actions/checkout@v4
 
-    # List host CPU info
-    - name: Host CPU info
-      run: cat /proc/cpuinfo
+    # List host info
+    - name: Host info
+      run: uname -a
 
     # List compiler version
     - name: List compiler version

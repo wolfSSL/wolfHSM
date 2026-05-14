@@ -55,7 +55,8 @@
  * meaningful (or portable) on bare-metal client targets. */
 #if defined(WOLFHSM_CFG_THREADSAFE) \
     && defined(WOLFHSM_CFG_GLOBAL_KEYS) \
-    && !defined(WOLFHSM_CFG_NO_CRYPTO)
+    && !defined(WOLFHSM_CFG_NO_CRYPTO) \
+    && !defined(__APPLE__) /* pthread_barrier_t unavailable on macOS */
 #include "wh_test_posix_threadsafe_stress.h"
 #endif
 
@@ -204,7 +205,8 @@ static void* _clientThread(void* arg)
 
 #if defined(WOLFHSM_CFG_THREADSAFE) \
     && defined(WOLFHSM_CFG_GLOBAL_KEYS) \
-    && !defined(WOLFHSM_CFG_NO_CRYPTO)
+    && !defined(WOLFHSM_CFG_NO_CRYPTO) \
+    && !defined(__APPLE__) /* pthread_barrier_t unavailable on macOS */
     /* Run the POSIX-only stress test after the portable client
      * group so a failure there doesn't mask earlier results. */
     if (_clientRc == 0) {
