@@ -3418,15 +3418,16 @@ int wh_Client_Ed25519Sign(whClientContext* ctx, ed25519_key* key,
                 }
                 if (ret >= 0) {
                     uint8_t* res_sig = (uint8_t*)(res + 1);
-                    uint32_t sig_len = res->sigSz;
-                    if (inout_sig_len != NULL) {
-                        if (sig_len > *inout_sig_len) {
-                            sig_len = *inout_sig_len;
+                    if (sig != NULL) {
+                        if (res->sigSz > *inout_sig_len) {
+                            ret = WH_ERROR_BUFFER_SIZE;
                         }
-                        *inout_sig_len = sig_len;
+                        else {
+                            memcpy(sig, res_sig, res->sigSz);
+                        }
                     }
-                    if ((sig != NULL) && (sig_len > 0)) {
-                        memcpy(sig, res_sig, sig_len);
+                    if (inout_sig_len != NULL) {
+                        *inout_sig_len = res->sigSz;
                     }
                 }
             }
@@ -4214,19 +4215,17 @@ int wh_Client_RsaFunction(whClientContext* ctx, RsaKey* key, int rsa_type,
                     /* wolfCrypt allows positive error codes on success in some
                      * scenarios */
                     if (ret >= 0) {
-                        /* Get response output pointer */
                         uint8_t* res_out = (uint8_t*)(res + 1);
-                        uint16_t out_len = res->outLen;
-                        /* check inoutlen and read out */
+                        if (out != NULL) {
+                            if (res->outLen > *inout_out_len) {
+                                ret = WH_ERROR_BUFFER_SIZE;
+                            }
+                            else {
+                                memcpy(out, res_out, res->outLen);
+                            }
+                        }
                         if (inout_out_len != NULL) {
-                            if (out_len > *inout_out_len) {
-                                /* Silently truncate the response */
-                                out_len = *inout_out_len;
-                            }
-                            *inout_out_len = out_len;
-                            if ((out != NULL) && (out_len > 0)) {
-                                memcpy(out, res_out, out_len);
-                            }
+                            *inout_out_len = res->outLen;
                         }
                     }
                 }
@@ -7667,18 +7666,13 @@ int wh_Client_MlDsaSign(whClientContext* ctx, const byte* in, word32 in_len,
                      * scenarios */
                     if (ret >= 0) {
                         uint8_t* res_sig = (uint8_t*)(res + 1);
-                        uint16_t sig_len = res->sz;
-                        /* check inoutlen and read out */
-                        if (inout_len != NULL) {
-                            if (sig_len > *inout_len) {
-                                /* Silently truncate the signature */
-                                sig_len = *inout_len;
-                            }
-                            *inout_len = sig_len;
-                            if ((out != NULL) && (sig_len > 0)) {
-                                memcpy(out, res_sig, sig_len);
-                            }
+                        if (res->sz > *inout_len) {
+                            ret = WH_ERROR_BUFFER_SIZE;
                         }
+                        else {
+                            memcpy(out, res_sig, res->sz);
+                        }
+                        *inout_len = res->sz;
                     }
                 }
             }
