@@ -130,9 +130,7 @@
 #define WOLFSSL_SHA224
 #define WOLFSSL_SHA384
 #define WOLFSSL_SHA512
-#ifndef WHTEST_NO_SHA512_HASHTYPE
 #define WOLFSSL_SHA512_HASHTYPE
-#endif
 
 /* Dilithium Options */
 #define HAVE_DILITHIUM
