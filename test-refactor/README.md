@@ -81,7 +81,7 @@ Translated tests:
 | `wh_test_comm.c::whTest_Comm` | `misc/wh_test_comm.c::whTest_Comm` | Misc | Sequential mem variant only; pthread mem/tcp/shmem variants remain in the legacy harness |
 | `wh_test_keystore_reqsize.c::whTest_KeystoreReqSize` | `misc/wh_test_keystore_reqsize.c::whTest_KeystoreReqSize` | Misc | |
 | `wh_test_cert.c::whTest_CertRamSim` | `server/wh_test_cert.c::whTest_CertVerify` | Server | remove ramsim coupling and migrate to server group |
-| `wh_test_crypto.c::whTest_Crypto` | `client-server/wh_test_crypto.c::{whTest_CryptoSha256, whTest_CryptoAes, whTest_CryptoEcc256}` | Client | Subset only; remaining cases listed below |
+| `wh_test_crypto.c::whTest_Crypto` | `client-server/wh_test_crypto_{aes,cmac,curve25519,ecc,ed25519,kdf,keypolicy,mldsa,rng,rsa,sha}.c::whTest_Crypto_*` | Client | Split into per-algorithm suites; key revocation is gated by `WOLFHSM_CFG_TEST_ALLOW_PERSISTENT_NVM_ARTIFACTS` |
 | `wh_test_clientserver.c` (echo and server-info paths) | `client-server/wh_test_echo.c::whTest_Echo`, `client-server/wh_test_server_info.c::whTest_ServerInfo` | Client | pthread test ported, sequential test dropped |
 | `wh_test_wolfcrypt_test.c::whTest_WolfCryptTest` | `client-server/wh_test_wolfcrypt.c::whTest_WolfCryptTest` | Client | |
 | `wh_test_flash_ramsim.c::whTest_Flash_RamSim` | `posix/wh_test_flash_ramsim.c::{whTest_FlashWriteLock, whTest_FlashEraseProgramVerify, whTest_FlashUnitOps}` | POSIX port-specific (`whTestGroup_RunOne`) | remove ramsim coupling and migrate to server group |
@@ -94,7 +94,7 @@ Not yet migrated (still live in `wolfHSM/test/`):
 |---|---|
 | `wh_test_comm.c::whTest_Comm` | Pthread mem/tcp/shmem variants only; sequential mem variant has been ported |
 | `wh_test_clientserver.c::whTest_ClientServer` | Pthread variant: remaining client-side coverage (NVM ops, etc.) still needs to be split out as new tests. The sequential test is dropped |
-| `wh_test_crypto.c::whTest_Crypto` | RNG, key cache, key-cache enforcement, RSA, CMAC, Curve25519, ML-DSA, key usage policies, key revocation |
+| `wh_test_crypto.c::whTest_Crypto` | Remaining crypto coverage not yet split out, including AES async/KAT paths and any legacy key cache cases not covered by the per-algorithm suites |
 | `wh_test_crypto_affinity.c::whTest_CryptoAffinity` | |
 | `wh_test_keywrap.c::whTest_KeyWrapClientConfig` | |
 | `wh_test_multiclient.c::whTest_MultiClient` | |
