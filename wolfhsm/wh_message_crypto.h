@@ -505,12 +505,19 @@ typedef struct {
 #define WH_MESSAGE_CRYPTO_ECDH_OPTIONS_EVICTPRV (1 << 1)
     uint32_t privateKeyId;
     uint32_t publicKeyId;
+    uint32_t flags; /* whNvmFlags. EPHEMERAL -> return secret to client.
+                       Otherwise cache on server. */
+    uint32_t keyId; /* Requested cache slot, or WH_KEYID_ERASED to
+                       have the server allocate one. Only used on the
+                       cache path. */
+    uint8_t label[WH_NVM_LABEL_LEN];
 } whMessageCrypto_EcdhRequest;
 
 /* ECDH Response */
 typedef struct {
-    uint32_t sz;
-    /* Data follows:
+    uint32_t sz;    /* >0: secret bytes follow.  0: secret was cached. */
+    uint32_t keyId; /* Assigned cache id when sz==0; 0 otherwise. */
+    /* Data follows when sz > 0:
      * uint8_t out[sz];
      */
 } whMessageCrypto_EcdhResponse;
@@ -638,13 +645,17 @@ typedef struct {
     uint32_t privateKeyId;
     uint32_t publicKeyId;
     uint32_t endian;
+    uint32_t flags; /* whNvmFlags. EPHEMERAL -> return secret to client.
+                       Otherwise cache on server. */
+    uint32_t keyId; /* Requested cache slot, or WH_KEYID_ERASED. */
+    uint8_t  label[WH_NVM_LABEL_LEN];
 } whMessageCrypto_Curve25519Request;
 
 /* Curve25519 Response */
 typedef struct {
-    uint32_t sz;
-    uint8_t  WH_PAD[4];
-    /* Data follows:
+    uint32_t sz;    /* >0: secret bytes follow.  0: secret was cached. */
+    uint32_t keyId; /* Assigned cache id when sz==0; 0 otherwise. */
+    /* Data follows when sz > 0:
      * uint8_t out[sz];
      */
 } whMessageCrypto_Curve25519Response;
