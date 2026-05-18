@@ -332,6 +332,12 @@ int wh_Client_CertReadTrustedResponse(whClientContext* c, uint8_t* cert,
                     memcpy(cert, payload, resp->cert_len);
                     *cert_len = resp->cert_len;
                 }
+                else {
+                    *cert_len = resp->cert_len;
+                    if (out_rc != NULL) {
+                        *out_rc = WH_ERROR_BUFFER_SIZE;
+                    }
+                }
             }
         }
     }

@@ -34,6 +34,7 @@
 /* Test declarations and weak skip implementations. */
 WH_TEST_DECL(whTest_Dma);
 WH_TEST_DECL(whTest_CertVerify);
+WH_TEST_DECL(whTest_ClientCerts);
 WH_TEST_DECL(whTest_CryptoAes);
 WH_TEST_DECL(whTest_CryptoEcc256);
 WH_TEST_DECL(whTest_CryptoSha256);
@@ -52,6 +53,7 @@ const whTestCase whTestsServer[] = {
 const size_t whTestsServerCount = sizeof(whTestsServer) / sizeof(whTestsServer[0]);
 
 const whTestCase whTestsClient[] = {
+    { "whTest_ClientCerts", whTest_ClientCerts },
     { "whTest_CryptoAes", whTest_CryptoAes },
     { "whTest_CryptoEcc256", whTest_CryptoEcc256 },
     { "whTest_CryptoSha256", whTest_CryptoSha256 },
