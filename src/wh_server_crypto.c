@@ -1069,6 +1069,17 @@ static int _HandleEccSharedSecret(whServerContext* ctx, uint16_t magic,
         /* Scrub the secret from the response buffer regardless of import
          * success/failure. */
         memset(res_out, 0, res_len);
+        /* If the cached output id collides with an auto-imported input id,
+         * suppress the matching eviction so cleanup does not delete the
+         * just-cached secret. */
+        if (ret == WH_ERROR_OK) {
+            if (evict_pub && (out_key_id == pub_key_id)) {
+                evict_pub = 0;
+            }
+            if (evict_prv && (out_key_id == prv_key_id)) {
+                evict_prv = 0;
+            }
+        }
     }
 cleanup:
     if (evict_pub) {
@@ -1906,6 +1917,17 @@ static int _HandleCurve25519SharedSecret(whServerContext* ctx, uint16_t magic,
         /* Scrub the secret from the response buffer regardless of import
          * success/failure. */
         memset(res_out, 0, res_len);
+        /* If the cached output id collides with an auto-imported input id,
+         * suppress the matching eviction so cleanup does not delete the
+         * just-cached secret. */
+        if (ret == WH_ERROR_OK) {
+            if (evict_pub && (out_key_id == pub_key_id)) {
+                evict_pub = 0;
+            }
+            if (evict_prv && (out_key_id == prv_key_id)) {
+                evict_prv = 0;
+            }
+        }
     }
 cleanup:
     if (evict_pub) {
