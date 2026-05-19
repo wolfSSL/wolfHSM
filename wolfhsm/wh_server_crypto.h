@@ -93,15 +93,15 @@ int wh_Server_CacheExportCurve25519Key(whServerContext* server, whKeyId keyId,
         curve25519_key* key);
 #endif /* HAVE_CURVE25519 */
 
-#ifdef HAVE_DILITHIUM
-/* Store a MlDsaKey into a server key cache with optional metadata */
-int wh_Server_MlDsaKeyCacheImport(whServerContext* ctx, MlDsaKey* key,
+#ifdef WOLFSSL_HAVE_MLDSA
+/* Store a wc_MlDsaKey into a server key cache with optional metadata */
+int wh_Server_MlDsaKeyCacheImport(whServerContext* ctx, wc_MlDsaKey* key,
                                   whKeyId keyId, whNvmFlags flags,
                                   uint16_t label_len, uint8_t* label);
-/* Restore a MlDsaKey from a server key cache */
+/* Restore a wc_MlDsaKey from a server key cache */
 int wh_Server_MlDsaKeyCacheExport(whServerContext* ctx, whKeyId keyId,
-                                  MlDsaKey* key);
-#endif /* HAVE_DILITHIUM */
+                                  wc_MlDsaKey* key);
+#endif /* WOLFSSL_HAVE_MLDSA */
 
 #ifdef HAVE_HKDF
 /* Store HKDF output into a server key cache with optional metadata */

@@ -9265,11 +9265,11 @@ static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
 }
 #endif /* WOLFSSL_CMAC && !NO_AES && WOLFSSL_AES_DIRECT */
 
-#ifdef HAVE_DILITHIUM
+#ifdef WOLFSSL_HAVE_MLDSA
 
-#if !defined(WOLFSSL_DILITHIUM_NO_VERIFY) && \
-    !defined(WOLFSSL_DILITHIUM_NO_SIGN) &&   \
-    !defined(WOLFSSL_DILITHIUM_NO_MAKE_KEY) && !defined(WOLFSSL_NO_ML_DSA_44)
+#if !defined(WOLFSSL_MLDSA_NO_VERIFY) && \
+    !defined(WOLFSSL_MLDSA_NO_SIGN) &&   \
+    !defined(WOLFSSL_MLDSA_NO_MAKE_KEY) && !defined(WOLFSSL_NO_ML_DSA_44)
 static int whTestCrypto_MlDsaWolfCrypt(whClientContext* ctx, int devId,
                                        WC_RNG* rng)
 {
@@ -9279,10 +9279,10 @@ static int whTestCrypto_MlDsaWolfCrypt(whClientContext* ctx, int devId,
     int verified = 0;
 
     /* Test ML DSA key generation, signing and verification */
-    MlDsaKey key;
-    byte     msg[] = "Test message for ML DSA signing";
-    byte     sig[DILITHIUM_ML_DSA_44_SIG_SIZE];
-    word32   sigSz = sizeof(sig);
+    wc_MlDsaKey key;
+    byte        msg[] = "Test message for ML DSA signing";
+    byte        sig[WC_MLDSA_44_SIG_SIZE];
+    word32      sigSz = sizeof(sig);
 
     /* Initialize key */
     ret = wc_MlDsaKey_Init(&key, NULL, devId);
@@ -9367,8 +9367,8 @@ static int whTestCrypto_MlDsaClient(whClientContext* ctx, int devId,
     (void)devId;
     (void)rng;
 
-    int      ret = 0;
-    MlDsaKey key[1];
+    int         ret = 0;
+    wc_MlDsaKey key[1];
 
     /* Initialize key */
     ret = wc_MlDsaKey_Init(key, NULL, devId);
@@ -9388,7 +9388,7 @@ static int whTestCrypto_MlDsaClient(whClientContext* ctx, int devId,
     /* Test basic sign/verify using the public API (no context) */
     if (ret == 0) {
         byte   msg[] = "Test message for non-DMA ML-DSA";
-        byte   sig[DILITHIUM_MAX_SIG_SIZE];
+        byte   sig[MLDSA_MAX_SIG_SIZE];
         word32 sigLen   = sizeof(sig);
         int    verified = 0;
 
@@ -9430,7 +9430,7 @@ static int whTestCrypto_MlDsaClient(whClientContext* ctx, int devId,
     /* Test sign/verify with FIPS 204 context string */
     if (ret == 0) {
         byte       msg[] = "Context test message non-DMA";
-        byte       sig[DILITHIUM_MAX_SIG_SIZE];
+        byte       sig[MLDSA_MAX_SIG_SIZE];
         word32     sigLen   = sizeof(sig);
         int        verified = 0;
         const byte ctx_str[] = "test-context";
@@ -9483,20 +9483,20 @@ static int whTestCrypto_MlDsaClient(whClientContext* ctx, int devId,
     return ret;
 }
 
-#if defined(WOLFSSL_DILITHIUM_PUBLIC_KEY) && \
-    !defined(WOLFSSL_DILITHIUM_NO_MAKE_KEY) && !defined(WOLFSSL_NO_ML_DSA_44)
+#if defined(WOLFSSL_MLDSA_PUBLIC_KEY) && \
+    !defined(WOLFSSL_MLDSA_NO_MAKE_KEY) && !defined(WOLFSSL_NO_ML_DSA_44)
 static int whTestCrypto_MlDsaExportPublic(whClientContext* ctx, int devId,
                                           WC_RNG* rng)
 {
     (void)rng;
 
-    int      ret    = 0;
-    whKeyId  keyId  = WH_KEYID_ERASED;
-    MlDsaKey pub[1] = {0};
+    int         ret    = 0;
+    whKeyId     keyId  = WH_KEYID_ERASED;
+    wc_MlDsaKey pub[1] = {0};
     /* Large enough to hold an ML-DSA key DER so the access-control assertion
      * doesn't get masked by a buffer-too-small failure. */
-    uint8_t  denyBuf[DILITHIUM_MAX_BOTH_KEY_DER_SIZE];
-    uint16_t denyLen = sizeof(denyBuf);
+    uint8_t     denyBuf[MLDSA_MAX_BOTH_KEY_DER_SIZE];
+    uint16_t    denyLen = sizeof(denyBuf);
     (void)devId;
 
     /* MakeCacheKey at the smallest supported level, with NONEXPORTABLE. */
@@ -9555,7 +9555,7 @@ static int whTestCrypto_MlDsaExportPublic(whClientContext* ctx, int devId,
     }
     return ret;
 }
-#endif /* WOLFSSL_DILITHIUM_PUBLIC_KEY && ML_DSA_44 available */
+#endif /* WOLFSSL_MLDSA_PUBLIC_KEY && ML_DSA_44 available */
 
 #ifdef WOLFHSM_CFG_DMA
 static int whTestCrypto_MlDsaDmaClient(whClientContext* ctx, int devId,
@@ -9563,16 +9563,16 @@ static int whTestCrypto_MlDsaDmaClient(whClientContext* ctx, int devId,
 {
     (void)rng;
 
-    int      ret = 0;
-    MlDsaKey key[1];
-    MlDsaKey imported_key[1];
-    whKeyId  keyId       = WH_KEYID_ERASED;
-    uint8_t  label[]     = "ML-DSA Test Key";
-    int      keyImported = 0;
+    int         ret = 0;
+    wc_MlDsaKey key[1];
+    wc_MlDsaKey imported_key[1];
+    whKeyId     keyId       = WH_KEYID_ERASED;
+    uint8_t     label[]     = "ML-DSA Test Key";
+    int         keyImported = 0;
 
     /* Buffers for comparing serialized keys */
-    byte   key_der1[DILITHIUM_MAX_PRV_KEY_SIZE];
-    byte   key_der2[DILITHIUM_MAX_PRV_KEY_SIZE];
+    byte   key_der1[MLDSA_MAX_PRV_KEY_SIZE];
+    byte   key_der2[MLDSA_MAX_PRV_KEY_SIZE];
     word32 key_der1_len = sizeof(key_der1);
     word32 key_der2_len = sizeof(key_der2);
 
@@ -9601,7 +9601,7 @@ static int whTestCrypto_MlDsaDmaClient(whClientContext* ctx, int devId,
 
     /* Serialize the generated key for comparison */
     if (ret == 0) {
-        ret = wc_Dilithium_PrivateKeyToDer(key, key_der1, key_der1_len);
+        ret = wc_MlDsaKey_PrivateKeyToDer(key, key_der1, key_der1_len);
         if (ret < 0) {
             WH_ERROR_PRINT("Failed to serialize generated key: %d\n", ret);
         }
@@ -9633,7 +9633,7 @@ static int whTestCrypto_MlDsaDmaClient(whClientContext* ctx, int devId,
     /* Serialize the exported key for comparison */
     if (ret == 0) {
         ret =
-            wc_Dilithium_PrivateKeyToDer(imported_key, key_der2, key_der2_len);
+            wc_MlDsaKey_PrivateKeyToDer(imported_key, key_der2, key_der2_len);
         if (ret < 0) {
             WH_ERROR_PRINT("Failed to serialize exported key: %d\n", ret);
         }
@@ -9654,7 +9654,7 @@ static int whTestCrypto_MlDsaDmaClient(whClientContext* ctx, int devId,
     /* Test signing and verification */
     if (ret == 0) {
         byte   msg[] = "Test message to sign";
-        byte   sig[DILITHIUM_MAX_SIG_SIZE];
+        byte   sig[MLDSA_MAX_SIG_SIZE];
         word32 sigLen   = sizeof(sig);
         int    verified = 0;
 
@@ -9705,7 +9705,7 @@ static int whTestCrypto_MlDsaDmaClient(whClientContext* ctx, int devId,
     /* Test signing and verification with a FIPS 204 context string */
     if (ret == 0) {
         byte   msg[] = "Context test message";
-        byte   sig[DILITHIUM_MAX_SIG_SIZE];
+        byte   sig[MLDSA_MAX_SIG_SIZE];
         word32 sigLen   = sizeof(sig);
         int    verified = 0;
         const byte ctx_str[] = "test-context";
@@ -9775,18 +9775,18 @@ static int whTestCrypto_MlDsaDmaClient(whClientContext* ctx, int devId,
     return ret;
 }
 
-#ifdef WOLFSSL_DILITHIUM_PUBLIC_KEY
+#ifdef WOLFSSL_MLDSA_PUBLIC_KEY
 static int whTestCrypto_MlDsaExportPublicDma(whClientContext* ctx, int devId,
                                              WC_RNG* rng)
 {
     (void)rng;
     (void)devId;
 
-    int      ret    = 0;
-    whKeyId  keyId  = WH_KEYID_ERASED;
-    MlDsaKey pub[1] = {0};
-    uint8_t  denyBuf[1];
-    uint16_t denyLen = sizeof(denyBuf);
+    int         ret    = 0;
+    whKeyId     keyId  = WH_KEYID_ERASED;
+    wc_MlDsaKey pub[1] = {0};
+    uint8_t     denyBuf[1];
+    uint16_t    denyLen = sizeof(denyBuf);
 
     /* Cache an ML-DSA-44 keypair NONEXPORTABLE on the HSM. */
     ret = wh_Client_MlDsaMakeCacheKey(
@@ -9803,7 +9803,7 @@ static int whTestCrypto_MlDsaExportPublicDma(whClientContext* ctx, int devId,
 
     /* Full DMA export must be denied */
     {
-        byte fullBuf[DILITHIUM_MAX_BOTH_KEY_DER_SIZE];
+        byte fullBuf[MLDSA_MAX_BOTH_KEY_DER_SIZE];
         uint16_t fullLen = sizeof(fullBuf);
         int denyRet = wh_Client_KeyExportDma(ctx, keyId, fullBuf, fullLen,
                                              NULL, 0, &denyLen);
@@ -9842,8 +9842,8 @@ static int whTestCrypto_MlDsaExportPublicDma(whClientContext* ctx, int devId,
      * key. This cross-validates that the DMA path isn't producing
      * subtly different output. */
     if (ret == 0) {
-        byte     dmaDer[DILITHIUM_MAX_PUB_KEY_DER_SIZE];
-        byte     nonDmaDer[DILITHIUM_MAX_PUB_KEY_DER_SIZE];
+        byte     dmaDer[MLDSA_MAX_PUB_KEY_DER_SIZE];
+        byte     nonDmaDer[MLDSA_MAX_PUB_KEY_DER_SIZE];
         uint16_t dmaSz    = sizeof(dmaDer);
         uint16_t nonDmaSz = sizeof(nonDmaDer);
 
@@ -9895,15 +9895,15 @@ static int whTestCrypto_MlDsaExportPublicDma(whClientContext* ctx, int devId,
     }
     return ret;
 }
-#endif /* WOLFSSL_DILITHIUM_PUBLIC_KEY */
+#endif /* WOLFSSL_MLDSA_PUBLIC_KEY */
 
 #endif /* WOLFHSM_CFG_DMA */
-#endif /* !defined(WOLFSSL_DILITHIUM_NO_VERIFY) &&   \
-          !defined(WOLFSSL_DILITHIUM_NO_SIGN) &&     \
-          !defined(WOLFSSL_DILITHIUM_NO_MAKE_KEY) && \
+#endif /* !defined(WOLFSSL_MLDSA_NO_VERIFY) &&   \
+          !defined(WOLFSSL_MLDSA_NO_SIGN) &&     \
+          !defined(WOLFSSL_MLDSA_NO_MAKE_KEY) && \
           !defined(WOLFSSL_NO_ML_DSA_44) */
 
-#if !defined(WOLFSSL_DILITHIUM_NO_VERIFY) && \
+#if !defined(WOLFSSL_MLDSA_NO_VERIFY) && \
     !defined(WOLFSSL_NO_ML_DSA_44) && \
     defined(WOLFHSM_CFG_DMA)
 int whTestCrypto_MlDsaVerifyOnlyDma(whClientContext* ctx, int devId,
@@ -10271,10 +10271,10 @@ int whTestCrypto_MlDsaVerifyOnlyDma(whClientContext* ctx, int devId,
         0xec, 0xed, 0xee, 0xef, 0xf0, 0xf1, 0xf2, 0xf3, 0xf4, 0xf5, 0xf6, 0xf7,
         0xf8, 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe, 0xff};
 
-    int      ret;
-    MlDsaKey key[1];
-    whNvmId  keyId    = WH_KEYID_ERASED;
-    int      evictKey = 0;
+    int         ret;
+    wc_MlDsaKey key[1];
+    whNvmId     keyId    = WH_KEYID_ERASED;
+    int         evictKey = 0;
 
     /* Initialize keys */
     ret = wc_MlDsaKey_Init(key, NULL, devId);
@@ -10283,7 +10283,7 @@ int whTestCrypto_MlDsaVerifyOnlyDma(whClientContext* ctx, int devId,
         return ret;
     }
     else {
-        ret = wc_dilithium_set_level(key, WC_ML_DSA_44);
+        ret = wc_MlDsaKey_SetParams(key, WC_ML_DSA_44);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed to set ML-DSA level: %d\n", ret);
         }
@@ -10351,12 +10351,12 @@ int whTestCrypto_MlDsaVerifyOnlyDma(whClientContext* ctx, int devId,
 
     return ret;
 }
-#endif /* !defined(WOLFSSL_DILITHIUM_NO_VERIFY) && \
+#endif /* !defined(WOLFSSL_MLDSA_NO_VERIFY) && \
           !defined(WOLFSSL_NO_ML_DSA_44) && \
           defined(WOLFHSM_CFG_DMA) */
 
 
-#endif /* HAVE_DILITHIUM */
+#endif /* WOLFSSL_HAVE_MLDSA */
 
 /* Test key usage policy enforcement for various crypto operations */
 int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
@@ -11322,11 +11322,11 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     }
 #endif /* HAVE_CMAC_KDF */
 
-#ifdef HAVE_DILITHIUM
+#ifdef WOLFSSL_HAVE_MLDSA
 
-#if !defined(WOLFSSL_DILITHIUM_NO_VERIFY) && \
-    !defined(WOLFSSL_DILITHIUM_NO_SIGN) && \
-    !defined(WOLFSSL_DILITHIUM_NO_MAKE_KEY) && \
+#if !defined(WOLFSSL_MLDSA_NO_VERIFY) && \
+    !defined(WOLFSSL_MLDSA_NO_SIGN) && \
+    !defined(WOLFSSL_MLDSA_NO_MAKE_KEY) && \
     !defined(WOLFSSL_NO_ML_DSA_44)
 
     i = 0;
@@ -11347,7 +11347,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         ret = whTestCrypto_MlDsaClient(client, WH_DEV_ID, rng);
     }
 
-#ifdef WOLFSSL_DILITHIUM_PUBLIC_KEY
+#ifdef WOLFSSL_MLDSA_PUBLIC_KEY
     if (ret == 0) {
         ret = whTestCrypto_MlDsaExportPublic(client, WH_DEV_ID, rng);
         if (ret != 0) {
@@ -11360,7 +11360,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     if (ret == 0) {
         ret = whTestCrypto_MlDsaDmaClient(client, WH_DEV_ID_DMA, rng);
     }
-#ifdef WOLFSSL_DILITHIUM_PUBLIC_KEY
+#ifdef WOLFSSL_MLDSA_PUBLIC_KEY
     if (ret == 0) {
         ret = whTestCrypto_MlDsaExportPublicDma(client, WH_DEV_ID_DMA, rng);
         if (ret != 0) {
@@ -11370,22 +11370,22 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     }
 #endif
 #endif /* WOLFHSM_CFG_DMA*/
-#endif /* !defined(WOLFSSL_DILITHIUM_NO_VERIFY) && \
-          !defined(WOLFSSL_DILITHIUM_NO_SIGN) && \
-          !defined(WOLFSSL_DILITHIUM_NO_MAKE_KEY) && \
+#endif /* !defined(WOLFSSL_MLDSA_NO_VERIFY) && \
+          !defined(WOLFSSL_MLDSA_NO_SIGN) && \
+          !defined(WOLFSSL_MLDSA_NO_MAKE_KEY) && \
           !defined(WOLFSSL_NO_ML_DSA_44) */
 
-#if !defined(WOLFSSL_DILITHIUM_NO_VERIFY) && \
+#if !defined(WOLFSSL_MLDSA_NO_VERIFY) && \
     !defined(WOLFSSL_NO_ML_DSA_44) && \
     defined(WOLFHSM_CFG_DMA)
     if (ret == 0) {
         ret = whTestCrypto_MlDsaVerifyOnlyDma(client, WH_DEV_ID_DMA, rng);
     }
-#endif /* !defined(WOLFSSL_DILITHIUM_NO_VERIFY) && \
+#endif /* !defined(WOLFSSL_MLDSA_NO_VERIFY) && \
           !defined(WOLFSSL_NO_ML_DSA_44) && \
           defined(WOLFHSM_CFG_DMA) */
 
-#endif /* HAVE_DILITHIUM */
+#endif /* WOLFSSL_HAVE_MLDSA */
 
 #ifdef WOLFHSM_CFG_DEBUG_VERBOSE
     if (ret == 0) {

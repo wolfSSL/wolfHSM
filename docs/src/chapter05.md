@@ -312,7 +312,7 @@ int wh_Client_Ed25519ExportPublicKey(whClientContext* ctx, whKeyId keyId,
 int wh_Client_Curve25519ExportPublicKey(whClientContext* ctx, whKeyId keyId,
         curve25519_key* key, uint16_t label_len, uint8_t* label);
 int wh_Client_MlDsaExportPublicKey(whClientContext* ctx, whKeyId keyId,
-        MlDsaKey* key, uint16_t label_len, uint8_t* label);
+        wc_MlDsaKey* key, uint16_t label_len, uint8_t* label);
 ```
 
 Example: generate an RSA keypair on the HSM with the private key marked
@@ -358,7 +358,7 @@ int wh_Client_KeyExportPublicDma(whClientContext* c, whKeyId keyId,
         uint8_t* label, uint16_t labelSz, uint16_t* outSz);
 
 int wh_Client_MlDsaExportPublicKeyDma(whClientContext* ctx, whKeyId keyId,
-        MlDsaKey* key, uint16_t label_len, uint8_t* label);
+        wc_MlDsaKey* key, uint16_t label_len, uint8_t* label);
 ```
 
 `wh_Client_KeyExportPublicDma` is the generic transport — callers receive

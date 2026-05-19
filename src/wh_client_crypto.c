@@ -54,7 +54,7 @@
 #include "wolfssl/wolfcrypt/ecc.h"
 #include "wolfssl/wolfcrypt/curve25519.h"
 #include "wolfssl/wolfcrypt/ed25519.h"
-#include "wolfssl/wolfcrypt/dilithium.h"
+#include "wolfssl/wolfcrypt/wc_mldsa.h"
 #include "wolfssl/wolfcrypt/sha256.h"
 #include "wolfssl/wolfcrypt/sha512.h"
 #endif
@@ -114,18 +114,18 @@ static int _CmacKdfMakeKey(whClientContext* ctx, whKeyId saltKeyId,
                            uint8_t* out, uint32_t outSz);
 #endif
 
-#ifdef HAVE_DILITHIUM
+#ifdef WOLFSSL_HAVE_MLDSA
 /* Make a ML-DSA key on the server based on the flags */
 static int _MlDsaMakeKey(whClientContext* ctx, int size, int level,
                          whKeyId* inout_key_id, whNvmFlags flags,
-                         uint16_t label_len, uint8_t* label, MlDsaKey* key);
+                         uint16_t label_len, uint8_t* label, wc_MlDsaKey* key);
 
 #ifdef WOLFHSM_CFG_DMA
 static int _MlDsaMakeKeyDma(whClientContext* ctx, int level,
                             whKeyId* inout_key_id, whNvmFlags flags,
-                            uint16_t label_len, uint8_t* label, MlDsaKey* key);
+                            uint16_t label_len, uint8_t* label, wc_MlDsaKey* key);
 #endif /* WOLFHSM_CFG_DMA */
-#endif /* HAVE_DILITHIUM */
+#endif /* WOLFSSL_HAVE_MLDSA */
 
 static uint8_t* _createCryptoRequest(uint8_t* reqBuf, uint16_t type,
                                      uint32_t affinity);
@@ -3069,7 +3069,7 @@ int wh_Client_Curve25519SharedSecret(whClientContext* ctx,
                             ret = WH_ERROR_ABORTED;
                         }
                         if (out_size != NULL) {
-                            if ((ret >= 0) && 
+                            if ((ret >= 0) &&
                                 (out != NULL) && (res->sz > *out_size)) {
                                 /* Output buffer too small. Report required size
                                 * and fail rather than silently truncating
@@ -7318,9 +7318,9 @@ int wh_Client_Sha512Dma(whClientContext* ctx, wc_Sha512* sha, const uint8_t* in,
 #endif /* WOLFHSM_CFG_DMA  */
 #endif /* WOLFSSL_SHA512 */
 
-#ifdef HAVE_DILITHIUM
+#ifdef WOLFSSL_HAVE_MLDSA
 
-int wh_Client_MlDsaSetKeyId(MlDsaKey* key, whKeyId keyId)
+int wh_Client_MlDsaSetKeyId(wc_MlDsaKey* key, whKeyId keyId)
 {
     if (key == NULL) {
         return WH_ERROR_BADARGS;
@@ -7331,7 +7331,7 @@ int wh_Client_MlDsaSetKeyId(MlDsaKey* key, whKeyId keyId)
     return WH_ERROR_OK;
 }
 
-int wh_Client_MlDsaGetKeyId(MlDsaKey* key, whKeyId* outId)
+int wh_Client_MlDsaGetKeyId(wc_MlDsaKey* key, whKeyId* outId)
 {
     if (key == NULL || outId == NULL) {
         return WH_ERROR_BADARGS;
@@ -7342,13 +7342,13 @@ int wh_Client_MlDsaGetKeyId(MlDsaKey* key, whKeyId* outId)
     return WH_ERROR_OK;
 }
 
-int wh_Client_MlDsaImportKey(whClientContext* ctx, MlDsaKey* key,
+int wh_Client_MlDsaImportKey(whClientContext* ctx, wc_MlDsaKey* key,
                              whKeyId* inout_keyId, whNvmFlags flags,
                              uint16_t label_len, uint8_t* label)
 {
     int      ret    = WH_ERROR_OK;
     whKeyId  key_id = WH_KEYID_ERASED;
-    byte     buffer[DILITHIUM_MAX_BOTH_KEY_DER_SIZE];
+    byte     buffer[MLDSA_MAX_BOTH_KEY_DER_SIZE];
     uint16_t buffer_len = 0;
 
     if ((ctx == NULL) || (key == NULL) ||
@@ -7380,12 +7380,12 @@ int wh_Client_MlDsaImportKey(whClientContext* ctx, MlDsaKey* key,
     return ret;
 }
 
-int wh_Client_MlDsaExportKey(whClientContext* ctx, whKeyId keyId, MlDsaKey* key,
+int wh_Client_MlDsaExportKey(whClientContext* ctx, whKeyId keyId, wc_MlDsaKey* key,
                              uint16_t label_len, uint8_t* label)
 {
     int ret = WH_ERROR_OK;
     /* buffer cannot be larger than MTU */
-    byte     buffer[DILITHIUM_MAX_BOTH_KEY_DER_SIZE];
+    byte     buffer[MLDSA_MAX_BOTH_KEY_DER_SIZE];
     uint16_t buffer_len = sizeof(buffer);
 
     if ((ctx == NULL) || WH_KEYID_ISERASED(keyId) || (key == NULL)) {
@@ -7406,7 +7406,7 @@ int wh_Client_MlDsaExportKey(whClientContext* ctx, whKeyId keyId, MlDsaKey* key,
 }
 
 int wh_Client_MlDsaExportPublicKey(whClientContext* ctx, whKeyId keyId,
-                                   MlDsaKey* key, uint16_t label_len,
+                                   wc_MlDsaKey* key, uint16_t label_len,
                                    uint8_t* label)
 {
     int      ret;
@@ -7427,7 +7427,7 @@ int wh_Client_MlDsaExportPublicKey(whClientContext* ctx, whKeyId keyId,
 
 static int _MlDsaMakeKey(whClientContext* ctx, int size, int level,
                          whKeyId* inout_key_id, whNvmFlags flags,
-                         uint16_t label_len, uint8_t* label, MlDsaKey* key)
+                         uint16_t label_len, uint8_t* label, wc_MlDsaKey* key)
 {
     int                                  ret     = WH_ERROR_OK;
     whKeyId                              key_id  = WH_KEYID_ERASED;
@@ -7447,7 +7447,7 @@ static int _MlDsaMakeKey(whClientContext* ctx, int size, int level,
 
     /* Setup generic header and get pointer to request data */
     req = (whMessageCrypto_MlDsaKeyGenRequest*)_createCryptoRequestWithSubtype(
-        dataPtr, WC_PK_TYPE_PQC_SIG_KEYGEN, WC_PQC_SIG_TYPE_DILITHIUM,
+        dataPtr, WC_PK_TYPE_PQC_SIG_KEYGEN, WC_PQC_SIG_TYPE_MLDSA,
         ctx->cryptoAffinity);
 
     /* Use the supplied key id if provided */
@@ -7548,7 +7548,7 @@ int wh_Client_MlDsaMakeCacheKey(whClientContext* ctx, int size, int level,
 }
 
 int wh_Client_MlDsaMakeExportKey(whClientContext* ctx, int level, int size,
-                                 MlDsaKey* key)
+                                 wc_MlDsaKey* key)
 {
     if (key == NULL) {
         return WH_ERROR_BADARGS;
@@ -7560,7 +7560,7 @@ int wh_Client_MlDsaMakeExportKey(whClientContext* ctx, int level, int size,
 
 
 int wh_Client_MlDsaSign(whClientContext* ctx, const byte* in, word32 in_len,
-                      byte* out, word32* inout_len, MlDsaKey* key,
+                      byte* out, word32* inout_len, wc_MlDsaKey* key,
                       const byte* context, byte contextLen,
                       word32 preHashType)
 {
@@ -7618,7 +7618,7 @@ int wh_Client_MlDsaSign(whClientContext* ctx, const byte* in, word32 in_len,
         /* Setup generic header and get pointer to request data */
         req =
             (whMessageCrypto_MlDsaSignRequest*)_createCryptoRequestWithSubtype(
-                dataPtr, WC_PK_TYPE_PQC_SIG_SIGN, WC_PQC_SIG_TYPE_DILITHIUM,
+                dataPtr, WC_PK_TYPE_PQC_SIG_SIGN, WC_PQC_SIG_TYPE_MLDSA,
                 ctx->cryptoAffinity);
 
         if (total_len <= WOLFHSM_CFG_COMM_DATA_LEN) {
@@ -7697,7 +7697,7 @@ int wh_Client_MlDsaSign(whClientContext* ctx, const byte* in, word32 in_len,
 
 int wh_Client_MlDsaVerify(whClientContext* ctx, const byte* sig, word32 sig_len,
                          const byte* msg, word32 msg_len, int* out_res,
-                         MlDsaKey* key, const byte* context, byte contextLen,
+                         wc_MlDsaKey* key, const byte* context, byte contextLen,
                          word32 preHashType)
 {
     int                                  ret     = WH_ERROR_OK;
@@ -7754,7 +7754,7 @@ int wh_Client_MlDsaVerify(whClientContext* ctx, const byte* sig, word32 sig_len,
         /* Setup generic header and get pointer to request data */
         req = (whMessageCrypto_MlDsaVerifyRequest*)
             _createCryptoRequestWithSubtype(dataPtr, WC_PK_TYPE_PQC_SIG_VERIFY,
-                                            WC_PQC_SIG_TYPE_DILITHIUM,
+                                            WC_PQC_SIG_TYPE_MLDSA,
                                             ctx->cryptoAffinity);
 
         if (total_len <= WOLFHSM_CFG_COMM_DATA_LEN) {
@@ -7826,7 +7826,7 @@ int wh_Client_MlDsaVerify(whClientContext* ctx, const byte* sig, word32 sig_len,
     return ret;
 }
 
-int wh_Client_MlDsaCheckPrivKey(whClientContext* ctx, MlDsaKey* key,
+int wh_Client_MlDsaCheckPrivKey(whClientContext* ctx, wc_MlDsaKey* key,
                                 const byte* pubKey, word32 pubKeySz)
 {
     /* TODO */
@@ -7840,13 +7840,13 @@ int wh_Client_MlDsaCheckPrivKey(whClientContext* ctx, MlDsaKey* key,
 
 #ifdef WOLFHSM_CFG_DMA
 
-int wh_Client_MlDsaImportKeyDma(whClientContext* ctx, MlDsaKey* key,
+int wh_Client_MlDsaImportKeyDma(whClientContext* ctx, wc_MlDsaKey* key,
                                 whKeyId* inout_keyId, whNvmFlags flags,
                                 uint16_t label_len, uint8_t* label)
 {
     int      ret    = WH_ERROR_OK;
     whKeyId  key_id = WH_KEYID_ERASED;
-    byte     buffer[DILITHIUM_MAX_BOTH_KEY_DER_SIZE];
+    byte     buffer[MLDSA_MAX_BOTH_KEY_DER_SIZE];
     uint16_t buffer_len = 0;
 
     if ((ctx == NULL) || (key == NULL) ||
@@ -7874,11 +7874,11 @@ int wh_Client_MlDsaImportKeyDma(whClientContext* ctx, MlDsaKey* key,
 }
 
 int wh_Client_MlDsaExportKeyDma(whClientContext* ctx, whKeyId keyId,
-                                MlDsaKey* key, uint16_t label_len,
+                                wc_MlDsaKey* key, uint16_t label_len,
                                 uint8_t* label)
 {
     int      ret                                = WH_ERROR_OK;
-    byte     buffer[DILITHIUM_MAX_BOTH_KEY_DER_SIZE] = {0};
+    byte     buffer[MLDSA_MAX_BOTH_KEY_DER_SIZE] = {0};
     uint16_t buffer_len                         = sizeof(buffer);
 
     if ((ctx == NULL) || WH_KEYID_ISERASED(keyId) || (key == NULL)) {
@@ -7897,11 +7897,11 @@ int wh_Client_MlDsaExportKeyDma(whClientContext* ctx, whKeyId keyId,
 }
 
 int wh_Client_MlDsaExportPublicKeyDma(whClientContext* ctx, whKeyId keyId,
-                                      MlDsaKey* key, uint16_t label_len,
+                                      wc_MlDsaKey* key, uint16_t label_len,
                                       uint8_t* label)
 {
     int      ret;
-    byte     buffer[DILITHIUM_MAX_BOTH_KEY_DER_SIZE] = {0};
+    byte     buffer[MLDSA_MAX_BOTH_KEY_DER_SIZE] = {0};
     uint16_t buffer_len                              = sizeof(buffer);
 
     if ((ctx == NULL) || WH_KEYID_ISERASED(keyId) || (key == NULL)) {
@@ -7919,11 +7919,11 @@ int wh_Client_MlDsaExportPublicKeyDma(whClientContext* ctx, whKeyId keyId,
 
 static int _MlDsaMakeKeyDma(whClientContext* ctx, int level,
                             whKeyId* inout_key_id, whNvmFlags flags,
-                            uint16_t label_len, uint8_t* label, MlDsaKey* key)
+                            uint16_t label_len, uint8_t* label, wc_MlDsaKey* key)
 {
     int                                     ret    = WH_ERROR_OK;
     whKeyId                                 key_id = WH_KEYID_ERASED;
-    byte                                    buffer[DILITHIUM_MAX_BOTH_KEY_DER_SIZE];
+    byte                                    buffer[MLDSA_MAX_BOTH_KEY_DER_SIZE];
     uint8_t*                                dataPtr = NULL;
     whMessageCrypto_MlDsaKeyGenDmaRequest*  req     = NULL;
     whMessageCrypto_MlDsaKeyGenDmaResponse* res     = NULL;
@@ -7943,7 +7943,7 @@ static int _MlDsaMakeKeyDma(whClientContext* ctx, int level,
     /* Setup generic header and get pointer to request data */
     req =
         (whMessageCrypto_MlDsaKeyGenDmaRequest*)_createCryptoRequestWithSubtype(
-            dataPtr, WC_PK_TYPE_PQC_SIG_KEYGEN, WC_PQC_SIG_TYPE_DILITHIUM,
+            dataPtr, WC_PK_TYPE_PQC_SIG_KEYGEN, WC_PQC_SIG_TYPE_MLDSA,
             ctx->cryptoAffinity);
 
     /* Use the supplied key id if provided */
@@ -8034,7 +8034,7 @@ static int _MlDsaMakeKeyDma(whClientContext* ctx, int level,
 
 
 int wh_Client_MlDsaMakeExportKeyDma(whClientContext* ctx, int level,
-                                    MlDsaKey* key)
+                                    wc_MlDsaKey* key)
 {
     if (key == NULL) {
         return WH_ERROR_BADARGS;
@@ -8046,7 +8046,7 @@ int wh_Client_MlDsaMakeExportKeyDma(whClientContext* ctx, int level,
 
 
 int wh_Client_MlDsaSignDma(whClientContext* ctx, const byte* in, word32 in_len,
-                         byte* out, word32* out_len, MlDsaKey* key,
+                         byte* out, word32* out_len, wc_MlDsaKey* key,
                          const byte* context, byte contextLen,
                          word32 preHashType)
 {
@@ -8104,7 +8104,7 @@ int wh_Client_MlDsaSignDma(whClientContext* ctx, const byte* in, word32 in_len,
         /* Setup generic header and get pointer to request data */
         req = (whMessageCrypto_MlDsaSignDmaRequest*)
             _createCryptoRequestWithSubtype(dataPtr, WC_PK_TYPE_PQC_SIG_SIGN,
-                                            WC_PQC_SIG_TYPE_DILITHIUM,
+                                            WC_PQC_SIG_TYPE_MLDSA,
                                             ctx->cryptoAffinity);
 
         if (req_len <= WOLFHSM_CFG_COMM_DATA_LEN) {
@@ -8194,7 +8194,7 @@ int wh_Client_MlDsaSignDma(whClientContext* ctx, const byte* in, word32 in_len,
 
 int wh_Client_MlDsaVerifyDma(whClientContext* ctx, const byte* sig,
                             word32 sig_len, const byte* msg, word32 msg_len,
-                            int* out_res, MlDsaKey* key, const byte* context,
+                            int* out_res, wc_MlDsaKey* key, const byte* context,
                             byte contextLen, word32 preHashType)
 {
     int                                     ret     = 0;
@@ -8248,7 +8248,7 @@ int wh_Client_MlDsaVerifyDma(whClientContext* ctx, const byte* sig,
         /* Setup generic header and get pointer to request data */
         req = (whMessageCrypto_MlDsaVerifyDmaRequest*)
             _createCryptoRequestWithSubtype(dataPtr, WC_PK_TYPE_PQC_SIG_VERIFY,
-                                            WC_PQC_SIG_TYPE_DILITHIUM,
+                                            WC_PQC_SIG_TYPE_MLDSA,
                                             ctx->cryptoAffinity);
 
         if (req_len <= WOLFHSM_CFG_COMM_DATA_LEN) {
@@ -8337,7 +8337,7 @@ int wh_Client_MlDsaVerifyDma(whClientContext* ctx, const byte* sig,
 }
 
 
-int wh_Client_MlDsaCheckPrivKeyDma(whClientContext* ctx, MlDsaKey* key,
+int wh_Client_MlDsaCheckPrivKeyDma(whClientContext* ctx, wc_MlDsaKey* key,
                                    const byte* pubKey, word32 pubKeySz)
 {
     /* TODO */
@@ -8350,6 +8350,6 @@ int wh_Client_MlDsaCheckPrivKeyDma(whClientContext* ctx, MlDsaKey* key,
 
 
 #endif /* WOLFHSM_CFG_DMA */
-#endif /* HAVE_DILITHIUM */
+#endif /* WOLFSSL_HAVE_MLDSA */
 
 #endif /* !WOLFHSM_CFG_NO_CRYPTO && WOLFHSM_CFG_ENABLE_CLIENT */

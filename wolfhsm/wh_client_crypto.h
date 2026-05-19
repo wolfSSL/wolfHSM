@@ -50,7 +50,7 @@
 #include "wolfssl/wolfcrypt/rsa.h"
 #include "wolfssl/wolfcrypt/ecc.h"
 #include "wolfssl/wolfcrypt/ed25519.h"
-#include "wolfssl/wolfcrypt/dilithium.h"
+#include "wolfssl/wolfcrypt/wc_mldsa.h"
 #include "wolfssl/wolfcrypt/hmac.h"
 
 /**
@@ -2190,7 +2190,7 @@ int wh_Client_Sha512DmaFinalResponse(whClientContext* ctx, wc_Sha512* sha,
 
 #endif /* WOLFSSL_SHA512 */
 
-#ifdef HAVE_DILITHIUM
+#ifdef WOLFSSL_HAVE_MLDSA
 
 /**
  * @brief Associates a ML-DSA key with a specific key ID.
@@ -2203,7 +2203,7 @@ int wh_Client_Sha512DmaFinalResponse(whClientContext* ctx, wc_Sha512* sha,
  * @param[in] keyId Key ID to be associated with the ML-DSA key.
  * @return int Returns 0 on success or a negative error code on failure.
  */
-int wh_Client_MlDsaSetKeyId(MlDsaKey* key, whKeyId keyId);
+int wh_Client_MlDsaSetKeyId(wc_MlDsaKey* key, whKeyId keyId);
 
 /**
  * @brief Gets the wolfHSM keyId being used by the wolfCrypt struct.
@@ -2215,7 +2215,7 @@ int wh_Client_MlDsaSetKeyId(MlDsaKey* key, whKeyId keyId);
  * @param[out] outId Pointer to the key ID to return.
  * @return int Returns 0 on success or a negative error code on failure.
  */
-int wh_Client_MlDsaGetKeyId(MlDsaKey* key, whKeyId* outId);
+int wh_Client_MlDsaGetKeyId(wc_MlDsaKey* key, whKeyId* outId);
 
 /**
  * @brief Import a ML-DSA key to the server key cache.
@@ -2228,7 +2228,7 @@ int wh_Client_MlDsaGetKeyId(MlDsaKey* key, whKeyId* outId);
  * @param[in] label Optional label to associate with key
  * @return int Returns 0 on success or a negative error code on failure.
  */
-int wh_Client_MlDsaImportKey(whClientContext* ctx, MlDsaKey* key,
+int wh_Client_MlDsaImportKey(whClientContext* ctx, wc_MlDsaKey* key,
                              whKeyId* inout_keyId, whNvmFlags flags,
                              uint16_t label_len, uint8_t* label);
 
@@ -2242,7 +2242,7 @@ int wh_Client_MlDsaImportKey(whClientContext* ctx, MlDsaKey* key,
  * @param[in] label Optional buffer to receive key label
  * @return int Returns 0 on success or a negative error code on failure.
  */
-int wh_Client_MlDsaExportKey(whClientContext* ctx, whKeyId keyId, MlDsaKey* key,
+int wh_Client_MlDsaExportKey(whClientContext* ctx, whKeyId keyId, wc_MlDsaKey* key,
                              uint16_t label_len, uint8_t* label);
 
 /**
@@ -2260,7 +2260,7 @@ int wh_Client_MlDsaExportKey(whClientContext* ctx, whKeyId keyId, MlDsaKey* key,
  * @param[in] ctx Pointer to the wolfHSM client context.
  * @param[in] keyId Server key ID whose public key should be exported. Must
  *                  not be WH_KEYID_ERASED.
- * @param[in,out] key Pointer to a caller-initialized MlDsaKey. On success,
+ * @param[in,out] key Pointer to a caller-initialized wc_MlDsaKey. On success,
  *                    only the public half is populated
  *                    (pubKeySet == 1, prvKeySet == 0).
  * @param[in] label_len Size of the optional label buffer in bytes. Values
@@ -2271,7 +2271,7 @@ int wh_Client_MlDsaExportKey(whClientContext* ctx, whKeyId keyId, MlDsaKey* key,
  *             code on failure (e.g. WH_ERROR_NOTFOUND, WH_ERROR_BADARGS).
  */
 int wh_Client_MlDsaExportPublicKey(whClientContext* ctx, whKeyId keyId,
-                                   MlDsaKey* key, uint16_t label_len,
+                                   wc_MlDsaKey* key, uint16_t label_len,
                                    uint8_t* label);
 
 /**
@@ -2287,7 +2287,7 @@ int wh_Client_MlDsaExportPublicKey(whClientContext* ctx, whKeyId keyId,
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_Client_MlDsaMakeExportKey(whClientContext* ctx, int level, int size,
-                                 MlDsaKey* key);
+                                 wc_MlDsaKey* key);
 /**
  * @brief Create and cache a new ML-DSA key on the server.
  *
@@ -2324,7 +2324,7 @@ int wh_Client_MlDsaMakeCacheKey(whClientContext* ctx, int size, int level,
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_Client_MlDsaSign(whClientContext* ctx, const byte* in, word32 in_len,
-                            byte* out, word32* out_len, MlDsaKey* key,
+                            byte* out, word32* out_len, wc_MlDsaKey* key,
                             const byte* context, byte contextLen,
                             word32 preHashType);
 /**
@@ -2348,7 +2348,7 @@ int wh_Client_MlDsaSign(whClientContext* ctx, const byte* in, word32 in_len,
  */
 int wh_Client_MlDsaVerify(whClientContext* ctx, const byte* sig,
                               word32 sig_len, const byte* msg, word32 msg_len,
-                              int* res, MlDsaKey* key, const byte* context,
+                              int* res, wc_MlDsaKey* key, const byte* context,
                               byte contextLen, word32 preHashType);
 
 /**
@@ -2363,7 +2363,7 @@ int wh_Client_MlDsaVerify(whClientContext* ctx, const byte* sig,
  * @param[in] pubKeySz Size of the public key in bytes.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
-int wh_Client_MlDsaCheckPrivKey(whClientContext* ctx, MlDsaKey* key,
+int wh_Client_MlDsaCheckPrivKey(whClientContext* ctx, wc_MlDsaKey* key,
                                 const byte* pubKey, word32 pubKeySz);
 
 
@@ -2382,7 +2382,7 @@ int wh_Client_MlDsaCheckPrivKey(whClientContext* ctx, MlDsaKey* key,
  * @param[in] label Pointer to the key label.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
-int wh_Client_MlDsaImportKeyDma(whClientContext* ctx, MlDsaKey* key,
+int wh_Client_MlDsaImportKeyDma(whClientContext* ctx, wc_MlDsaKey* key,
                                 whKeyId* inout_keyId, whNvmFlags flags,
                                 uint16_t label_len, uint8_t* label);
 
@@ -2399,7 +2399,7 @@ int wh_Client_MlDsaImportKeyDma(whClientContext* ctx, MlDsaKey* key,
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_Client_MlDsaExportKeyDma(whClientContext* ctx, whKeyId keyId,
-                                MlDsaKey* key, uint16_t label_len,
+                                wc_MlDsaKey* key, uint16_t label_len,
                                 uint8_t* label);
 
 /**
@@ -2407,7 +2407,7 @@ int wh_Client_MlDsaExportKeyDma(whClientContext* ctx, whKeyId keyId,
  *
  * DMA counterpart to wh_Client_MlDsaExportPublicKey. The server emits the
  * public-only DER and DMAs it directly into a client-side staging buffer;
- * the wrapper then deserializes it into the caller-provided MlDsaKey.
+ * the wrapper then deserializes it into the caller-provided wc_MlDsaKey.
  *
  * The NONEXPORTABLE key flag does NOT block this call because public
  * material is non-sensitive. The caller is responsible for initializing
@@ -2416,7 +2416,7 @@ int wh_Client_MlDsaExportKeyDma(whClientContext* ctx, whKeyId keyId,
  * @param[in] ctx Pointer to the wolfHSM client context.
  * @param[in] keyId Server key ID whose public key should be exported. Must
  *                  not be WH_KEYID_ERASED.
- * @param[in,out] key Pointer to a caller-initialized MlDsaKey. On success,
+ * @param[in,out] key Pointer to a caller-initialized wc_MlDsaKey. On success,
  *                    only the public half is populated
  *                    (pubKeySet == 1, prvKeySet == 0).
  * @param[in] label_len Size of the optional label buffer in bytes.
@@ -2424,7 +2424,7 @@ int wh_Client_MlDsaExportKeyDma(whClientContext* ctx, whKeyId keyId,
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_Client_MlDsaExportPublicKeyDma(whClientContext* ctx, whKeyId keyId,
-                                      MlDsaKey* key, uint16_t label_len,
+                                      wc_MlDsaKey* key, uint16_t label_len,
                                       uint8_t* label);
 
 /**
@@ -2439,7 +2439,7 @@ int wh_Client_MlDsaExportPublicKeyDma(whClientContext* ctx, whKeyId keyId,
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_Client_MlDsaMakeExportKeyDma(whClientContext* ctx, int level,
-                                    MlDsaKey* key);
+                                    wc_MlDsaKey* key);
 
 
 /**
@@ -2463,7 +2463,7 @@ int wh_Client_MlDsaMakeExportKeyDma(whClientContext* ctx, int level,
  */
 int wh_Client_MlDsaSignDma(whClientContext* ctx, const byte* in,
                                word32 in_len, byte* out, word32* out_len,
-                               MlDsaKey* key, const byte* context,
+                               wc_MlDsaKey* key, const byte* context,
                                byte contextLen, word32 preHashType);
 
 /**
@@ -2487,7 +2487,7 @@ int wh_Client_MlDsaSignDma(whClientContext* ctx, const byte* in,
  */
 int wh_Client_MlDsaVerifyDma(whClientContext* ctx, const byte* sig,
                                  word32 sig_len, const byte* msg,
-                                 word32 msg_len, int* res, MlDsaKey* key,
+                                 word32 msg_len, int* res, wc_MlDsaKey* key,
                                  const byte* context, byte contextLen,
                                  word32 preHashType);
 
@@ -2502,12 +2502,12 @@ int wh_Client_MlDsaVerifyDma(whClientContext* ctx, const byte* sig,
  * @param[in] pubKeySz Size of the public key in bytes.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
-int wh_Client_MlDsaCheckPrivKeyDma(whClientContext* ctx, MlDsaKey* key,
+int wh_Client_MlDsaCheckPrivKeyDma(whClientContext* ctx, wc_MlDsaKey* key,
                                    const byte* pubKey, word32 pubKeySz);
 
 #endif /* WOLFHSM_CFG_DMA */
 
-#endif /* HAVE_DILITHIUM */
+#endif /* WOLFSSL_HAVE_MLDSA */
 
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
 #endif /* !WOLFHSM_WH_CLIENT_CRYPTO_H_ */
