@@ -37,6 +37,9 @@ WH_TEST_DECL(whTest_CertVerify);
 WH_TEST_DECL(whTest_ClientCerts);
 WH_TEST_DECL(whTest_CryptoAes);
 WH_TEST_DECL(whTest_CryptoEcc256);
+WH_TEST_DECL(whTest_CryptoEd25519BufferTooSmall);
+WH_TEST_DECL(whTest_CryptoMlDsaBufferTooSmall);
+WH_TEST_DECL(whTest_CryptoRsaBufferTooSmall);
 WH_TEST_DECL(whTest_CryptoSha256);
 WH_TEST_DECL(whTest_Echo);
 WH_TEST_DECL(whTest_ServerInfo);
@@ -56,6 +59,10 @@ const whTestCase whTestsClient[] = {
     { "whTest_ClientCerts", whTest_ClientCerts },
     { "whTest_CryptoAes", whTest_CryptoAes },
     { "whTest_CryptoEcc256", whTest_CryptoEcc256 },
+    { "whTest_CryptoEd25519BufferTooSmall",
+      whTest_CryptoEd25519BufferTooSmall },
+    { "whTest_CryptoMlDsaBufferTooSmall", whTest_CryptoMlDsaBufferTooSmall },
+    { "whTest_CryptoRsaBufferTooSmall", whTest_CryptoRsaBufferTooSmall },
     { "whTest_CryptoSha256", whTest_CryptoSha256 },
     { "whTest_Echo", whTest_Echo },
     { "whTest_ServerInfo", whTest_ServerInfo },

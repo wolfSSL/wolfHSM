@@ -34,11 +34,17 @@
 #include "wolfssl/wolfcrypt/types.h"
 #include "wolfssl/wolfcrypt/aes.h"
 #include "wolfssl/wolfcrypt/ecc.h"
+#include "wolfssl/wolfcrypt/ed25519.h"
 #include "wolfssl/wolfcrypt/random.h"
+#include "wolfssl/wolfcrypt/rsa.h"
 #include "wolfssl/wolfcrypt/sha256.h"
+#ifdef HAVE_DILITHIUM
+#include "wolfssl/wolfcrypt/dilithium.h"
+#endif
 
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_client.h"
+#include "wolfhsm/wh_client_crypto.h"
 
 #include "wh_test_common.h"
 #include "wh_test_list.h"
@@ -223,5 +229,212 @@ int whTest_CryptoEcc256(whClientContext* ctx)
     return ret;
 }
 #endif /* HAVE_ECC && HAVE_ECC_SIGN && HAVE_ECC_VERIFY */
+
+
+#ifdef HAVE_ED25519
+/* Exercises wh_Client_Ed25519Sign with an undersized output buffer. The
+ * client must return WH_ERROR_BUFFER_SIZE and report the required size
+ * in *inout_sig_len rather than silently truncating the signature. */
+int whTest_CryptoEd25519BufferTooSmall(whClientContext* ctx)
+{
+    int          devId = WH_DEV_ID;
+    int          ret;
+    WC_RNG       rng[1];
+    ed25519_key  key[1];
+    const byte   msg[]                          = "ed25519 buf size test";
+    uint8_t      small_sig[ED25519_SIG_SIZE - 1] = {0};
+    uint8_t      full_sig[ED25519_SIG_SIZE]      = {0};
+    uint32_t     sig_len;
+
+    ret = wc_InitRng_ex(rng, NULL, devId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wc_InitRng_ex %d\n", ret);
+        return ret;
+    }
+
+    ret = wc_ed25519_init_ex(key, NULL, devId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wc_ed25519_init_ex %d\n", ret);
+        (void)wc_FreeRng(rng);
+        return ret;
+    }
+
+    ret = wc_ed25519_make_key(rng, ED25519_KEY_SIZE, key);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wc_ed25519_make_key %d\n", ret);
+        goto done;
+    }
+
+    sig_len = (uint32_t)sizeof(small_sig);
+    ret     = wh_Client_Ed25519Sign(ctx, key, msg, (uint32_t)sizeof(msg),
+                                    (uint8_t)Ed25519, NULL, 0, small_sig,
+                                    &sig_len);
+    if (ret != WH_ERROR_BUFFER_SIZE) {
+        WH_ERROR_PRINT(
+            "Ed25519Sign small buf expected WH_ERROR_BUFFER_SIZE, got %d\n",
+            ret);
+        ret = WH_TEST_FAIL;
+        goto done;
+    }
+    if (sig_len != ED25519_SIG_SIZE) {
+        WH_ERROR_PRINT(
+            "Ed25519Sign small buf reported size %u, expected %u\n",
+            (unsigned)sig_len, (unsigned)ED25519_SIG_SIZE);
+        ret = WH_TEST_FAIL;
+        goto done;
+    }
+
+    sig_len = (uint32_t)sizeof(full_sig);
+    ret     = wh_Client_Ed25519Sign(ctx, key, msg, (uint32_t)sizeof(msg),
+                                    (uint8_t)Ed25519, NULL, 0, full_sig,
+                                    &sig_len);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Ed25519Sign full buf failed: %d\n", ret);
+        goto done;
+    }
+    if (sig_len != ED25519_SIG_SIZE) {
+        WH_ERROR_PRINT("Ed25519Sign full buf size %u, expected %u\n",
+                       (unsigned)sig_len, (unsigned)ED25519_SIG_SIZE);
+        ret = WH_TEST_FAIL;
+        goto done;
+    }
+
+    WH_TEST_PRINT("Ed25519 buffer-size DEVID=0x%X SUCCESS\n", devId);
+    ret = 0;
+
+done:
+    (void)wc_ed25519_free(key);
+    (void)wc_FreeRng(rng);
+    return ret;
+}
+#endif /* HAVE_ED25519 */
+
+
+#ifndef NO_RSA
+/* Exercises wh_Client_RsaFunction with an undersized output buffer. */
+int whTest_CryptoRsaBufferTooSmall(whClientContext* ctx)
+{
+    const int  devId         = WH_DEV_ID;
+    const int  rsa_key_bits  = 2048;
+    const int  rsa_key_bytes = rsa_key_bits / 8;
+    int        ret;
+    RsaKey     rsa[1];
+    const byte plain[]                   = "rsa buf size test";
+    uint8_t    small_out[16]             = {0};
+    uint8_t    full_out[256 /* RSA-2048 modulus */] = {0};
+    uint16_t   out_len;
+
+    ret = wc_InitRsaKey_ex(rsa, NULL, devId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wc_InitRsaKey_ex %d\n", ret);
+        return ret;
+    }
+
+    ret = wh_Client_RsaMakeExportKey(ctx, rsa_key_bits, WC_RSA_EXPONENT, rsa);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_RsaMakeExportKey %d\n", ret);
+        goto done;
+    }
+
+    out_len = (uint16_t)sizeof(small_out);
+    ret     = wh_Client_RsaFunction(ctx, rsa, RSA_PUBLIC_ENCRYPT, plain,
+                                    (uint16_t)sizeof(plain), small_out,
+                                    &out_len);
+    /* Server's wc_RsaFunction pre-checks the buffer and returns 
+       RSA_BUFFER_E. */
+    if (ret != WH_ERROR_BUFFER_SIZE && ret != RSA_BUFFER_E) {
+        WH_ERROR_PRINT(
+            "RsaFunction small buf expected WH_ERROR_BUFFER_SIZE or "
+            "RSA_BUFFER_E, got %d\n",
+            ret);
+        ret = WH_TEST_FAIL;
+        goto done;
+    }
+
+    out_len = (uint16_t)sizeof(full_out);
+    ret     = wh_Client_RsaFunction(ctx, rsa, RSA_PUBLIC_ENCRYPT, plain,
+                                    (uint16_t)sizeof(plain), full_out,
+                                    &out_len);
+    if (ret != 0) {
+        WH_ERROR_PRINT("RsaFunction full buf failed: %d\n", ret);
+        goto done;
+    }
+    if (out_len != (uint16_t)rsa_key_bytes) {
+        WH_ERROR_PRINT("RsaFunction full buf size %u, expected %d\n",
+                       (unsigned)out_len, rsa_key_bytes);
+        ret = WH_TEST_FAIL;
+        goto done;
+    }
+
+    WH_TEST_PRINT("RSA buffer-size DEVID=0x%X SUCCESS\n", devId);
+    ret = 0;
+
+done:
+    (void)wc_FreeRsaKey(rsa);
+    return ret;
+}
+#endif /* !NO_RSA */
+
+
+#if defined(HAVE_DILITHIUM) &&                                              \
+    !defined(WOLFSSL_DILITHIUM_NO_SIGN) &&                                  \
+    !defined(WOLFSSL_DILITHIUM_NO_MAKE_KEY) && !defined(WOLFSSL_NO_ML_DSA_44)
+/* Exercises wh_Client_MlDsaSign with an undersized output buffer. */
+int whTest_CryptoMlDsaBufferTooSmall(whClientContext* ctx)
+{
+    int        devId = WH_DEV_ID;
+    int        ret;
+    MlDsaKey   key[1];
+    const byte msg[]         = "ml-dsa buf size test";
+    uint8_t    small_sig[16] = {0};
+    uint8_t    full_sig[DILITHIUM_MAX_SIG_SIZE] = {0};
+    word32     small_buf_sz = (word32)sizeof(small_sig);
+    word32     sig_len;
+
+    ret = wc_MlDsaKey_Init(key, NULL, devId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wc_MlDsaKey_Init %d\n", ret);
+        return ret;
+    }
+
+    ret = wh_Client_MlDsaMakeExportKey(ctx, WC_ML_DSA_44, 0, key);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_MlDsaMakeExportKey %d\n", ret);
+        goto done;
+    }
+
+    sig_len = small_buf_sz;
+    ret     = wh_Client_MlDsaSign(ctx, msg, (word32)sizeof(msg), small_sig,
+                                  &sig_len, key, NULL, 0, WC_HASH_TYPE_NONE);
+    if (ret != WH_ERROR_BUFFER_SIZE) {
+        WH_ERROR_PRINT(
+            "MlDsaSign small buf expected WH_ERROR_BUFFER_SIZE, got %d\n", ret);
+        ret = WH_TEST_FAIL;
+        goto done;
+    }
+    if (sig_len <= small_buf_sz) {
+        WH_ERROR_PRINT(
+            "MlDsaSign small buf reported size %u not greater than %u\n",
+            (unsigned)sig_len, (unsigned)small_buf_sz);
+        ret = WH_TEST_FAIL;
+        goto done;
+    }
+
+    sig_len = (word32)sizeof(full_sig);
+    ret     = wh_Client_MlDsaSign(ctx, msg, (word32)sizeof(msg), full_sig,
+                                  &sig_len, key, NULL, 0, WC_HASH_TYPE_NONE);
+    if (ret != 0) {
+        WH_ERROR_PRINT("MlDsaSign full buf failed: %d\n", ret);
+        goto done;
+    }
+
+    WH_TEST_PRINT("ML-DSA buffer-size DEVID=0x%X SUCCESS\n", devId);
+    ret = 0;
+
+done:
+    wc_MlDsaKey_Free(key);
+    return ret;
+}
+#endif /* HAVE_DILITHIUM && ML-DSA-44 enabled */
 
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
