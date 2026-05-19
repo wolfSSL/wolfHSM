@@ -214,8 +214,10 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
                     rsa, rsa_type, in, in_len,
                     out, &len);
 
-            if (    (ret == WH_ERROR_OK) &&
-                    (out_len != NULL) ) {
+            /* Propagate updated length on BUFFER_SIZE so callers can re-call
+             * with a sufficiently large output buffer. */
+            if (((ret == WH_ERROR_OK) || (ret == WH_ERROR_BUFFER_SIZE)) &&
+                (out_len != NULL)) {
                 *out_len = len;
             }
         } break;
@@ -356,8 +358,10 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
                                             priv_key, pub_key,
                                             endian,
                                             out, &len);
-            if (    (ret == WH_ERROR_OK) &&
-                    (out_len != NULL) ){
+            /* Propagate updated length on BUFFER_SIZE so callers can re-call
+             * with a sufficiently large output buffer. */
+            if (((ret == WH_ERROR_OK) || (ret == WH_ERROR_BUFFER_SIZE)) &&
+                (out_len != NULL)) {
                 *out_len = len;
             }
         } break;
@@ -388,10 +392,13 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
             ret = wh_Client_Ed25519Sign(
                 ctx, key, in, inLen, type, info->pk.ed25519sign.context,
                 info->pk.ed25519sign.contextLen, out, &len);
-            if (ret == WH_ERROR_OK && outLen != NULL) {
+            /* Propagate updated length on BUFFER_SIZE so callers can re-call
+             * with a sufficiently large output buffer. */
+            if (((ret == WH_ERROR_OK) || (ret == WH_ERROR_BUFFER_SIZE)) &&
+                (outLen != NULL)) {
                 *outLen = len;
             }
-            else if (ret == WH_ERROR_BADARGS) {
+            if (ret == WH_ERROR_BADARGS) {
                 ret = BAD_FUNC_ARG;
             }
             else if (ret == WH_ERROR_NOTIMPL) {
