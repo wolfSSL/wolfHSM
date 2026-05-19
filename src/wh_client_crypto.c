@@ -3409,10 +3409,10 @@ int wh_Client_Ed25519Sign(whClientContext* ctx, ed25519_key* key,
                 ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_ED25519_SIGN,
                                          (uint8_t**)&res);
                 if (ret >= 0) {
-                    uint32_t res_total =
+                    const uint32_t hdr_sz =
                         sizeof(whMessageCrypto_GenericResponseHeader) +
-                        sizeof(*res) + res->sigSz;
-                    if (res_total > res_len) {
+                        sizeof(*res);
+                    if (res_len < hdr_sz || res->sigSz > (res_len - hdr_sz)) {
                         ret = WH_ERROR_ABORTED;
                     }
                 }
@@ -3548,14 +3548,18 @@ int wh_Client_Ed25519Verify(whClientContext* ctx, ed25519_key* key,
             if (ret == WH_ERROR_OK) {
                 ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_ED25519_VERIFY,
                                          (uint8_t**)&res);
-                if (ret >= 0 && res != NULL) {
-                    uint32_t res_total =
+                if (ret >= 0) {
+                    const uint32_t hdr_sz =
                         sizeof(whMessageCrypto_GenericResponseHeader) +
                         sizeof(*res);
-                    if (res_total > res_len) {
+                    /* Note whMessageCrypto_Ed25519VerifyResponse has no 
+                     * size field */
+                    if (res_len < hdr_sz) {
                         ret = WH_ERROR_ABORTED;
                     }
-                    *out_res = res->res;
+                    else {
+                        *out_res = res->res;
+                    }
                 }
             }
         }
@@ -7709,7 +7713,7 @@ int wh_Client_MlDsaVerify(whClientContext* ctx, const byte* sig, word32 sig_len,
            ctx, key, sig, sig_len, msg, msg_len, out_res);
 
     if ((ctx == NULL) || (key == NULL) || ((sig == NULL) && (sig_len > 0)) ||
-        ((msg == NULL) && (msg_len > 0))) {
+        (out_res == NULL) || ((msg == NULL) && (msg_len > 0))) {
         return WH_ERROR_BADARGS;
     }
 
@@ -7802,7 +7806,17 @@ int wh_Client_MlDsaVerify(whClientContext* ctx, const byte* sig, word32 sig_len,
                     /* wolfCrypt allows positive error codes on success in some
                      * scenarios */
                     if (ret >= 0) {
-                        *out_res = res->res;
+                        const uint32_t hdr_sz =
+                            sizeof(whMessageCrypto_GenericResponseHeader) +
+                            sizeof(*res);
+                        /* Note whMessageCrypto_MlDsaVerifyResponse has no 
+                         * size field */
+                        if (res_len < hdr_sz) {
+                            ret = WH_ERROR_ABORTED;
+                        }
+                        else {
+                            *out_res = res->res;
+                        }
                     }
                 }
             }
