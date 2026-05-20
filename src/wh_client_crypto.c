@@ -3689,16 +3689,16 @@ int wh_Client_Ed25519SignDma(whClientContext* ctx, ed25519_key* key,
             if (ret == WH_ERROR_OK) {
                 ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_ED25519_SIGN,
                                          (uint8_t**)&res);
-                if (ret >= 0 && res != NULL) {
-                    uint32_t res_total =
+                if (ret >= 0) {
+                    const uint32_t hdr_sz =
                         sizeof(whMessageCrypto_GenericResponseHeader) +
                         sizeof(*res);
-                    if (res_total > res_len) {
+                    /* DMA mode: signature was written to the caller's
+                     * buffer; only sigSz is returned inline */
+                    if (res_len < hdr_sz) {
                         ret = WH_ERROR_ABORTED;
                     }
-                }
-                if (ret >= 0) {
-                    if (inout_sig_len != NULL) {
+                    else if (inout_sig_len != NULL) {
                         *inout_sig_len = res->sigSz;
                     }
                 }
@@ -3836,16 +3836,18 @@ int wh_Client_Ed25519VerifyDma(whClientContext* ctx, ed25519_key* key,
             if (ret == WH_ERROR_OK) {
                 ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_ED25519_VERIFY,
                                          (uint8_t**)&res);
-                if (ret >= 0 && res != NULL) {
-                    uint32_t res_total =
+                if (ret >= 0) {
+                    const uint32_t hdr_sz =
                         sizeof(whMessageCrypto_GenericResponseHeader) +
                         sizeof(*res);
-                    if (res_total > res_len) {
+                    /* Note whMessageCrypto_Ed25519VerifyDmaResponse has no
+                     * size field */
+                    if (res_len < hdr_sz) {
                         ret = WH_ERROR_ABORTED;
                     }
-                }
-                if (ret >= 0) {
-                    *out_res = res->verifyResult;
+                    else {
+                        *out_res = res->verifyResult;
+                    }
                 }
             }
         }
@@ -8321,14 +8323,23 @@ int wh_Client_MlDsaSign(whClientContext* ctx, const byte* in, word32 in_len,
                     /* wolfCrypt allows positive error codes on success in some
                      * scenarios */
                     if (ret >= 0) {
-                        uint8_t* res_sig = (uint8_t*)(res + 1);
-                        if (res->sz > *inout_len) {
-                            ret = WH_ERROR_BUFFER_SIZE;
+                        const uint32_t hdr_sz =
+                            sizeof(whMessageCrypto_GenericResponseHeader) +
+                            sizeof(*res);
+                        if (res_len < hdr_sz ||
+                            res->sz > (res_len - hdr_sz)) {
+                            ret = WH_ERROR_ABORTED;
                         }
                         else {
-                            memcpy(out, res_sig, res->sz);
+                            uint8_t* res_sig = (uint8_t*)(res + 1);
+                            if (res->sz > *inout_len) {
+                                ret = WH_ERROR_BUFFER_SIZE;
+                            }
+                            else {
+                                memcpy(out, res_sig, res->sz);
+                            }
+                            *inout_len = res->sz;
                         }
-                        *inout_len = res->sz;
                     }
                 }
             }
@@ -8640,12 +8651,12 @@ static int _MlDsaMakeKeyDma(whClientContext* ctx, int level,
             req->labelSize = label_len;
         }
 
+        uint16_t res_len = 0;
         if (ret == WH_ERROR_OK) {
             ret = wh_Client_SendRequest(ctx, group, action, req_len,
                                         (uint8_t*)dataPtr);
         }
         if (ret == WH_ERROR_OK) {
-            uint16_t res_len;
             do {
                 ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
                                              (uint8_t*)dataPtr);
@@ -8664,6 +8675,16 @@ static int _MlDsaMakeKeyDma(whClientContext* ctx, int level,
             /* wolfCrypt allows positive error codes on success in some
              * scenarios */
             if (ret >= 0) {
+                const uint32_t hdr_sz =
+                    sizeof(whMessageCrypto_GenericResponseHeader) +
+                    sizeof(*res);
+                /* Note whMessageCrypto_MlDsaKeyGenDmaResponse has no
+                 * trailing payload; keySize bounds the DMA buffer write */
+                if (res_len < hdr_sz) {
+                    ret = WH_ERROR_ABORTED;
+                }
+            }
+            if (ret >= 0) {
                 /* Key is cached on server or is ephemeral */
                 key_id = (whKeyId)(res->keyId);
 
@@ -8678,9 +8699,16 @@ static int _MlDsaMakeKeyDma(whClientContext* ctx, int level,
                     wh_Client_MlDsaSetKeyId(key, key_id);
 
                     if (flags & WH_NVM_FLAGS_EPHEMERAL) {
-                        /* Response has the exported key */
-                        ret = wh_Crypto_MlDsaDeserializeKeyDer(
-                            buffer, res->keySize, key);
+                        /* Bound the server-reported key size to the DMA
+                         * buffer capacity before deserializing */
+                        if (res->keySize > sizeof(buffer)) {
+                            ret = WH_ERROR_ABORTED;
+                        }
+                        else {
+                            /* Response has the exported key */
+                            ret = wh_Crypto_MlDsaDeserializeKeyDer(
+                                buffer, res->keySize, key);
+                        }
                     }
                 }
             }
@@ -8970,8 +8998,18 @@ int wh_Client_MlDsaVerifyDma(whClientContext* ctx, const byte* sig,
                     /* wolfCrypt allows positive error codes on success in some
                      * scenarios */
                     if (ret >= 0) {
-                        /* Set verification result */
-                        *out_res = res->verifyResult;
+                        const uint32_t hdr_sz =
+                            sizeof(whMessageCrypto_GenericResponseHeader) +
+                            sizeof(*res);
+                        /* Note whMessageCrypto_MlDsaVerifyDmaResponse has no
+                         * size field */
+                        if (res_len < hdr_sz) {
+                            ret = WH_ERROR_ABORTED;
+                        }
+                        else {
+                            /* Set verification result */
+                            *out_res = res->verifyResult;
+                        }
                     }
                 }
             }
