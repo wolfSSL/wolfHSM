@@ -5778,6 +5778,10 @@ int wh_Client_Sha256UpdateResponse(whClientContext* ctx, wc_Sha256* sha)
 
     ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA256, (uint8_t**)&res);
     if (ret >= 0) {
+        if (dataSz < sizeof(whMessageCrypto_GenericResponseHeader) +
+                         sizeof(*res)) {
+            return WH_ERROR_ABORTED;
+        }
         if (res->hashType != WC_HASH_TYPE_SHA256) {
             return WH_ERROR_ABORTED;
         }
@@ -5854,6 +5858,10 @@ int wh_Client_Sha256FinalResponse(whClientContext* ctx, wc_Sha256* sha,
 
     ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA256, (uint8_t**)&res);
     if (ret >= 0) {
+        if (dataSz < sizeof(whMessageCrypto_GenericResponseHeader) +
+                         sizeof(*res)) {
+            return WH_ERROR_ABORTED;
+        }
         if (res->hashType != WC_HASH_TYPE_SHA256) {
             return WH_ERROR_ABORTED;
         }
@@ -6070,7 +6078,11 @@ int wh_Client_Sha256DmaUpdateResponse(whClientContext* ctx, wc_Sha256* sha)
         ret =
             _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA256, (uint8_t**)&resp);
         if (ret >= 0) {
-            if (resp->hashType != WC_HASH_TYPE_SHA256) {
+            if (respSz < sizeof(whMessageCrypto_GenericResponseHeader) +
+                             sizeof(*resp)) {
+                ret = WH_ERROR_ABORTED;
+            }
+            else if (resp->hashType != WC_HASH_TYPE_SHA256) {
                 ret = WH_ERROR_ABORTED;
             }
             else {
@@ -6170,6 +6182,10 @@ int wh_Client_Sha256DmaFinalResponse(whClientContext* ctx, wc_Sha256* sha,
         ret =
             _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA256, (uint8_t**)&resp);
         if (ret >= 0) {
+            if (respSz < sizeof(whMessageCrypto_GenericResponseHeader) +
+                             sizeof(*resp)) {
+                return WH_ERROR_ABORTED;
+            }
             if (resp->hashType != WC_HASH_TYPE_SHA256) {
                 return WH_ERROR_ABORTED;
             }
@@ -6359,6 +6375,10 @@ int wh_Client_Sha224UpdateResponse(whClientContext* ctx, wc_Sha224* sha)
 
     ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA224, (uint8_t**)&res);
     if (ret >= 0) {
+        if (dataSz < sizeof(whMessageCrypto_GenericResponseHeader) +
+                         sizeof(*res)) {
+            return WH_ERROR_ABORTED;
+        }
         if (res->hashType != WC_HASH_TYPE_SHA224) {
             return WH_ERROR_ABORTED;
         }
@@ -6436,6 +6456,10 @@ int wh_Client_Sha224FinalResponse(whClientContext* ctx, wc_Sha224* sha,
 
     ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA224, (uint8_t**)&res);
     if (ret >= 0) {
+        if (dataSz < sizeof(whMessageCrypto_GenericResponseHeader) +
+                         sizeof(*res)) {
+            return WH_ERROR_ABORTED;
+        }
         if (res->hashType != WC_HASH_TYPE_SHA224) {
             return WH_ERROR_ABORTED;
         }
@@ -6640,7 +6664,11 @@ int wh_Client_Sha224DmaUpdateResponse(whClientContext* ctx, wc_Sha224* sha)
         ret =
             _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA224, (uint8_t**)&resp);
         if (ret >= 0) {
-            if (resp->hashType != WC_HASH_TYPE_SHA224) {
+            if (respSz < sizeof(whMessageCrypto_GenericResponseHeader) +
+                             sizeof(*resp)) {
+                ret = WH_ERROR_ABORTED;
+            }
+            else if (resp->hashType != WC_HASH_TYPE_SHA224) {
                 ret = WH_ERROR_ABORTED;
             }
             else {
@@ -6736,6 +6764,10 @@ int wh_Client_Sha224DmaFinalResponse(whClientContext* ctx, wc_Sha224* sha,
         ret =
             _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA224, (uint8_t**)&resp);
         if (ret >= 0) {
+            if (respSz < sizeof(whMessageCrypto_GenericResponseHeader) +
+                             sizeof(*resp)) {
+                return WH_ERROR_ABORTED;
+            }
             if (resp->hashType != WC_HASH_TYPE_SHA224) {
                 return WH_ERROR_ABORTED;
             }
@@ -6925,6 +6957,10 @@ int wh_Client_Sha384UpdateResponse(whClientContext* ctx, wc_Sha384* sha)
 
     ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA384, (uint8_t**)&res);
     if (ret >= 0) {
+        if (dataSz < sizeof(whMessageCrypto_GenericResponseHeader) +
+                         sizeof(*res)) {
+            return WH_ERROR_ABORTED;
+        }
         if (res->hashType != WC_HASH_TYPE_SHA384) {
             return WH_ERROR_ABORTED;
         }
@@ -7003,6 +7039,10 @@ int wh_Client_Sha384FinalResponse(whClientContext* ctx, wc_Sha384* sha,
 
     ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA384, (uint8_t**)&res);
     if (ret >= 0) {
+        if (dataSz < sizeof(whMessageCrypto_GenericResponseHeader) +
+                         sizeof(*res)) {
+            return WH_ERROR_ABORTED;
+        }
         if (res->hashType != WC_HASH_TYPE_SHA384) {
             return WH_ERROR_ABORTED;
         }
@@ -7208,7 +7248,11 @@ int wh_Client_Sha384DmaUpdateResponse(whClientContext* ctx, wc_Sha384* sha)
         ret =
             _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA384, (uint8_t**)&resp);
         if (ret >= 0) {
-            if (resp->hashType != WC_HASH_TYPE_SHA384) {
+            if (respSz < sizeof(whMessageCrypto_GenericResponseHeader) +
+                             sizeof(*resp)) {
+                ret = WH_ERROR_ABORTED;
+            }
+            else if (resp->hashType != WC_HASH_TYPE_SHA384) {
                 ret = WH_ERROR_ABORTED;
             }
             else {
@@ -7305,6 +7349,10 @@ int wh_Client_Sha384DmaFinalResponse(whClientContext* ctx, wc_Sha384* sha,
         ret =
             _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA384, (uint8_t**)&resp);
         if (ret >= 0) {
+            if (respSz < sizeof(whMessageCrypto_GenericResponseHeader) +
+                             sizeof(*resp)) {
+                return WH_ERROR_ABORTED;
+            }
             if (resp->hashType != WC_HASH_TYPE_SHA384) {
                 return WH_ERROR_ABORTED;
             }
@@ -7493,6 +7541,10 @@ int wh_Client_Sha512UpdateResponse(whClientContext* ctx, wc_Sha512* sha)
 
     ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA512, (uint8_t**)&res);
     if (ret >= 0) {
+        if (dataSz < sizeof(whMessageCrypto_GenericResponseHeader) +
+                         sizeof(*res)) {
+            return WH_ERROR_ABORTED;
+        }
         /* Family check, not variant match: SHA-512/t shares block size and
          * compression with SHA-512, and the client supplies the variant IV
          * in resumeState.hash — so a server missing SHA-512/t support still
@@ -7577,6 +7629,10 @@ int wh_Client_Sha512FinalResponse(whClientContext* ctx, wc_Sha512* sha,
 
     ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA512, (uint8_t**)&res);
     if (ret >= 0) {
+        if (dataSz < sizeof(whMessageCrypto_GenericResponseHeader) +
+                         sizeof(*res)) {
+            return WH_ERROR_ABORTED;
+        }
         /* keep hashtype before initialization */
         hashType = sha->hashType;
         /* Family check, not variant match: SHA-512/t shares block size and
@@ -7805,13 +7861,17 @@ int wh_Client_Sha512DmaUpdateResponse(whClientContext* ctx, wc_Sha512* sha)
         ret =
             _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA512, (uint8_t**)&resp);
         if (ret >= 0) {
+            if (respSz < sizeof(whMessageCrypto_GenericResponseHeader) +
+                             sizeof(*resp)) {
+                ret = WH_ERROR_ABORTED;
+            }
             /* Family check, not variant match: SHA-512/t shares block size and
              * compression with SHA-512, and the client supplies the variant IV
              * in resumeState.hash — so a server missing SHA-512/t support still
              * returns a correct intermediate state. */
-            if (resp->hashType != WC_HASH_TYPE_SHA512 &&
-                resp->hashType != WC_HASH_TYPE_SHA512_224 &&
-                resp->hashType != WC_HASH_TYPE_SHA512_256) {
+            else if (resp->hashType != WC_HASH_TYPE_SHA512 &&
+                     resp->hashType != WC_HASH_TYPE_SHA512_224 &&
+                     resp->hashType != WC_HASH_TYPE_SHA512_256) {
                 ret = WH_ERROR_ABORTED;
             }
             else {
@@ -7908,6 +7968,10 @@ int wh_Client_Sha512DmaFinalResponse(whClientContext* ctx, wc_Sha512* sha,
         ret =
             _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA512, (uint8_t**)&resp);
         if (ret >= 0) {
+            if (respSz < sizeof(whMessageCrypto_GenericResponseHeader) +
+                             sizeof(*resp)) {
+                return WH_ERROR_ABORTED;
+            }
             /* keep hashtype before initialization */
             hashType = sha->hashType;
             /* Family check, not variant match: SHA-512/t shares block size and
