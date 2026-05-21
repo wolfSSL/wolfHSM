@@ -7375,6 +7375,31 @@ static int whTest_CryptoAesAsync(whClientContext* ctx, int devId, WC_RNG* rng)
         }
         (void)wc_AesFree(aes);
     }
+
+    /* CTR: server must reject left > AES_BLOCK_SIZE.
+     * wc_AesCtrEncrypt indexes aes->tmp via AES_BLOCK_SIZE - aes->left;
+     * an oversized client-supplied value would cause an out-of-bounds read
+     * disclosing server-side memory across the HSM trust boundary. */
+    if (ret == 0) {
+        int tmp;
+        ret = wc_AesInit(aes, NULL, devId);
+        if (ret == 0) {
+            ret = wc_AesSetKeyDirect(aes, key, sizeof(key), iv, AES_ENCRYPTION);
+        }
+        if (ret == 0) {
+            aes->left = AES_BLOCK_SIZE + 1;
+            tmp = wh_Client_AesCtr(ctx, aes, 1, plainIn, sizeof(plainIn),
+                                   cipher);
+            if (tmp != WH_ERROR_BADARGS) {
+                WH_ERROR_PRINT(
+                    "AES-CTR async: left > AES_BLOCK_SIZE should be "
+                    "BADARGS, got %d\n",
+                    tmp);
+                ret = -1;
+            }
+        }
+        (void)wc_AesFree(aes);
+    }
     if (ret == 0) {
         WH_TEST_PRINT("AES CTR ASYNC DEVID=0x%X SUCCESS\n", devId);
     }
@@ -8373,6 +8398,28 @@ static int whTest_CryptoAesDmaAsync(whClientContext* ctx, int devId,
         (void)wc_AesFree(aes);
         memset(cipher, 0, sizeof(cipher));
         memset(plainOut, 0, sizeof(plainOut));
+    }
+
+    /* CTR DMA: same left > AES_BLOCK_SIZE rejection as the non-DMA path. */
+    if (ret == 0) {
+        int tmp;
+        ret = wc_AesInit(aes, NULL, devId);
+        if (ret == 0) {
+            ret = wc_AesSetKeyDirect(aes, key, sizeof(key), iv, AES_ENCRYPTION);
+        }
+        if (ret == 0) {
+            aes->left = AES_BLOCK_SIZE + 1;
+            tmp = wh_Client_AesCtrDma(ctx, aes, 1, plainIn, sizeof(plainIn),
+                                      cipher);
+            if (tmp != WH_ERROR_BADARGS) {
+                WH_ERROR_PRINT(
+                    "AES-CTR DMA async: left > AES_BLOCK_SIZE should be "
+                    "BADARGS, got %d\n",
+                    tmp);
+                ret = -1;
+            }
+        }
+        (void)wc_AesFree(aes);
     }
     if (ret == 0) {
         WH_TEST_PRINT("AES CTR DMA ASYNC DEVID=0x%X SUCCESS\n", devId);
