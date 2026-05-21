@@ -620,6 +620,105 @@ The existing blocking wrappers (`wh_Client_AesCbc`, `wh_Client_AesCtr`,
 thin shells that call the new async primitives in a poll loop, so blocking
 and async paths share identical wire behaviour.
 
+## CMAC
+
+CMAC is the latest algorithm to receive native async support. Unlike SHA, the
+existing blocking `wh_Client_Cmac` was already a single oneshot wire round
+trip when called with a complete message + key + output. To preserve that
+1-RTT behavior while also exposing streaming Update/Final pairs, CMAC ships
+with **three** async pairs (six functions total per non-DMA / DMA variant):
+
+```c
+/* Oneshot: full message + key + output in a single round trip */
+int wh_Client_CmacGenerateRequest (whClientContext*, Cmac*, CmacType,
+                                   const uint8_t* key, uint32_t keyLen,
+                                   const uint8_t* in,  uint32_t inLen,
+                                   uint32_t outMacLen);
+int wh_Client_CmacGenerateResponse(whClientContext*, Cmac*,
+                                   uint8_t* outMac, uint32_t* outMacLen);
+
+/* Streaming: separate Update and Final phases, possibly multiple Updates */
+int wh_Client_CmacUpdateRequest   (whClientContext*, Cmac*, CmacType,
+                                   const uint8_t* key, uint32_t keyLen,
+                                   const uint8_t* in,  uint32_t inLen,
+                                   bool* requestSent);
+int wh_Client_CmacUpdateResponse  (whClientContext*, Cmac*);
+
+int wh_Client_CmacFinalRequest    (whClientContext*, Cmac*);
+int wh_Client_CmacFinalResponse   (whClientContext*, Cmac*,
+                                   uint8_t* outMac, uint32_t* outMacLen);
+```
+
+Each function has a DMA counterpart that transfers the input via DMA. The
+output MAC is always returned inline (16 bytes max). Note the slight naming
+asymmetry: the oneshot is `wh_Client_CmacGenerateDmaRequest`/`Response`,
+while streaming uses `wh_Client_CmacDmaUpdate{Request,Response}` and
+`wh_Client_CmacDmaFinal{Request,Response}`.
+
+### Why three pairs
+
+- **Generate** is a true oneshot. The server dispatches to
+  `wc_AesCmacGenerate_ex`, which performs init / update / final in one
+  call. This preserves the 1-RTT performance of the existing blocking API
+  for callers that have the full message in hand at once.
+- **Update / Final** form the streaming pair. Each Update sends the
+  current input chunk plus the full CMAC state (`buffer`, `bufferSz`,
+  `digest`, `totalSz`); each Response carries back the updated state.
+  Final sends an empty input with `outSz = AES_BLOCK_SIZE`, telling the
+  server to finalize and return the MAC.
+
+### Why no client-side partial-block buffering
+
+SHA does client-side partial-block buffering because `wc_Sha256Update`
+processes complete blocks immediately and leaves bufferSz = 0 after
+absorbing whole blocks. CMAC is different: `wc_CmacUpdate` deliberately
+withholds the *last* whole block in its partial buffer until the next
+Update arrives (or Final is called), because the last block has special
+key-derived XOR handling. As a result, after a server-side Update the
+CMAC buffer can hold any value from 0..AES_BLOCK_SIZE bytes. Imposing a
+"bufferSz must be 0 on the wire" invariant (as SHA does) would break
+correctness, so CMAC instead round-trips the entire CMAC state on every
+Update Request/Response pair.
+
+### Blocking-wrapper dispatch
+
+`wh_Client_Cmac` and `wh_Client_CmacDma` retain their existing signatures
+and now auto-detect the oneshot case at the top of the function. The
+wrapper delegates to `CmacGenerate*` for a single round trip when all of
+the following hold:
+
+- a complete message is supplied (`in`/`inLen` non-NULL/non-zero);
+- an output buffer is supplied (`outMac`/`outMacLen` non-NULL, `*outMacLen > 0`);
+- for non-DMA, `inLen` fits the inline cap
+  `WH_MESSAGE_CRYPTO_CMAC_MAX_INLINE_GENERATE_SZ` (DMA has no per-call cap);
+- *and* either an explicit key is provided (`key`/`keyLen`), which matches
+  `wc_AesCmacGenerate_ex` semantics — prior cmac state is irrelevant and may
+  even be uninitialized — *or* the cmac struct is in fresh state
+  (`bufferSz == 0 && totalSz == 0`) so an HSM-cached keyId can be used
+  without losing in-progress data.
+
+Otherwise (incremental usage, mid-stream state, Final-only call, or
+oversize input on non-DMA), the wrapper falls back to the streaming
+`CmacUpdate*` + `CmacFinal*` pair.
+
+### Per-request key
+
+CMAC's server is stateless: every Request must carry the key. HSM-cached
+keys are referenced by `keyId` (set on the cmac via
+`wh_Client_CmacSetKeyId`). For inline keys, the bytes are stashed into
+`cmac->aes.devKey` on the first Request and replayed on subsequent
+Update/Final Requests automatically.
+
+### DMA wire format
+
+The CMAC DMA request struct (`whMessageCrypto_CmacAesDmaRequest`) gained
+a new `inlineInSz` field carrying inline trailing input (for an
+assembled first block, when client-side buffering is desired by some
+caller). The current async clients always pass `inlineInSz = 0` and
+route input either via DMA (for Update/Generate) or omit input
+(Final). The field is reserved for future client-side buffering use
+without another wire-format change.
+
 ## Roadmap: Remaining Algorithms
 
 The async split pattern will be applied algorithm by algorithm to all crypto
@@ -639,6 +738,7 @@ the full set of operations and their planned async status.
 | AES-CTR        | `wh_Client_AesCtr{,Dma}{Request,Response}` | Non-DMA and DMA variants |
 | AES-ECB        | `wh_Client_AesEcb{,Dma}{Request,Response}` | Non-DMA and DMA variants |
 | AES-GCM        | `wh_Client_AesGcm{,Dma}{Request,Response}` | Non-DMA and DMA variants; AAD supports DMA |
+| CMAC           | Generate / Update / Final Request/Response | Three async pairs: oneshot Generate (1-RTT) plus streaming Update/Final. Non-DMA and DMA variants. Blocking wrapper auto-dispatches to oneshot when conditions allow. |
 
 **Planned:**
 
@@ -652,7 +752,6 @@ the full set of operations and their planned async status.
 | Curve25519        | `wh_Client_Curve25519SharedSecret{Request,Response}` | Low | Single-shot |
 | Ed25519 Sign      | `wh_Client_Ed25519Sign{Request,Response}`  | Low        | Single-shot |
 | Ed25519 Verify    | `wh_Client_Ed25519Verify{Request,Response}`| Low        | Single-shot |
-| CMAC              | `wh_Client_Cmac{Request,Response}`         | Medium     | Streaming (Init/Update/Final), so follows SHA-style pattern rather than the one-shot AES pattern |
 | ML-DSA Sign       | `wh_Client_MlDsaSign{Request,Response}`    | Low        | Post-quantum; single-shot |
 | ML-DSA Verify     | `wh_Client_MlDsaVerify{Request,Response}`  | Low        | Post-quantum; single-shot |
 

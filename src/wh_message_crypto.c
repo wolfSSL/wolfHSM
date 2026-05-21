@@ -958,6 +958,7 @@ int wh_MessageCrypto_TranslateCmacAesDmaRequest(
 
     WH_T32(magic, dest, src, outSz);
     WH_T32(magic, dest, src, keySz);
+    WH_T32(magic, dest, src, inlineInSz);
     WH_T16(magic, dest, src, keyId);
 
     ret = wh_MessageCrypto_TranslateCmacAesState(magic, &src->resumeState,

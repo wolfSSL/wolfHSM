@@ -5757,8 +5757,15 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, int devId,
         return ret;
     }
 
-    /* Validate variable-length fields fit within inSize */
+    /* Validate variable-length fields fit within inSize. Trailing layout:
+     *   uint8_t in[inlineInSz]
+     *   uint8_t key[keySz]
+     */
     uint32_t available = inSize - sizeof(whMessageCrypto_CmacAesDmaRequest);
+    if (req.inlineInSz > available) {
+        return WH_ERROR_BADARGS;
+    }
+    available -= req.inlineInSz;
     if (req.keySz > available) {
         return WH_ERROR_BADARGS;
     }
@@ -5769,8 +5776,9 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, int devId,
     word32 len;
 
     /* Pointers to inline trailing data */
-    uint8_t* key =
+    uint8_t* inlineIn =
         (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_CmacAesDmaRequest);
+    uint8_t* key = inlineIn + req.inlineInSz;
     uint8_t* out =
         (uint8_t*)(cryptoDataOut) + sizeof(whMessageCrypto_CmacAesDmaResponse);
 
@@ -5783,8 +5791,10 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, int devId,
     uint32_t tmpKeyLen = sizeof(tmpKey);
     Cmac    cmac[1];
 
-    /* Attempt oneshot if input and output are both present */
-    if (req.input.sz != 0 && req.outSz != 0) {
+    /* Oneshot fast path: DMA input only (no inline), output requested. The
+     * streaming protocol never produces outSz>0 with DMA input (Final is
+     * inline-only), so this branch is only taken by CmacGenerateDma. */
+    if (req.inlineInSz == 0 && req.input.sz != 0 && req.outSz != 0) {
         len = req.outSz;
 
         /* Translate DMA address for input */
@@ -5828,9 +5838,14 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, int devId,
         }
     }
     else {
+        /* Streaming update/final with optional client-side assembled first
+         * block (inline) plus DMA whole blocks. Final carries partial tail
+         * inline only. */
         WH_DEBUG_SERVER_VERBOSE(
-            "dma cmac begin keySz:%d inSz:%d outSz:%d keyId:%x\n",
-            (int)req.keySz, (int)req.input.sz, (int)req.outSz, req.keyId);
+            "dma cmac begin keySz:%d inlineInSz:%d dmaInSz:%d outSz:%d "
+            "keyId:%x\n",
+            (int)req.keySz, (int)req.inlineInSz, (int)req.input.sz,
+            (int)req.outSz, req.keyId);
 
         /* Resolve key */
         ret =
@@ -5849,7 +5864,15 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, int devId,
             ret = wh_Crypto_CmacAesRestoreStateFromMsg(cmac, &req.resumeState);
         }
 
-        /* Handle CMAC update with DMA input */
+        /* Feed inline input first (assembled first block on Update, or
+         * partial tail on Final). */
+        if (ret == 0 && req.inlineInSz != 0) {
+            ret = wc_CmacUpdate(cmac, inlineIn, req.inlineInSz);
+            WH_DEBUG_SERVER_VERBOSE("dma cmac inline update done. ret:%d\n",
+                                    ret);
+        }
+
+        /* Feed DMA input (whole blocks on Update; never present on Final). */
         if (ret == 0 && req.input.sz != 0) {
             ret = wh_Server_DmaProcessClientAddress(
                 ctx, req.input.addr, &inAddr, req.input.sz,
@@ -5859,7 +5882,8 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, int devId,
             }
             if (ret == WH_ERROR_OK) {
                 ret = wc_CmacUpdate(cmac, inAddr, req.input.sz);
-                WH_DEBUG_SERVER_VERBOSE("dma cmac update done. ret:%d\n", ret);
+                WH_DEBUG_SERVER_VERBOSE("dma cmac dma update done. ret:%d\n",
+                                        ret);
             }
         }
 

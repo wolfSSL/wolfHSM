@@ -903,6 +903,15 @@ typedef struct {
      */
 } whMessageCrypto_CmacAesResponse;
 
+/* Maximum number of input bytes that wh_Client_CmacGenerateRequest can carry
+ * inline in one message. Oneshot CMAC accepts arbitrary input length, so
+ * this is NOT block-aligned. Conservatively reserves AES_256_KEY_SIZE (32)
+ * bytes for the key. */
+#define WH_MESSAGE_CRYPTO_CMAC_MAX_INLINE_GENERATE_SZ         \
+    (WOLFHSM_CFG_COMM_DATA_LEN -                              \
+     (uint32_t)sizeof(whMessageCrypto_GenericRequestHeader) - \
+     (uint32_t)sizeof(whMessageCrypto_CmacAesRequest) - 32u)
+
 int wh_MessageCrypto_TranslateCmacAesState(
     uint16_t magic, const whMessageCrypto_CmacAesState* src,
     whMessageCrypto_CmacAesState* dest);
@@ -1091,16 +1100,31 @@ int wh_MessageCrypto_TranslateSha2DmaResponse(
     uint16_t magic, const whMessageCrypto_Sha2DmaResponse* src,
     whMessageCrypto_Sha2DmaResponse* dest);
 
-/* CMAC-AES DMA Request - only input data goes via DMA; state, key, and output
- * are passed inline in the message for cross-architecture safety */
+/* CMAC-AES DMA Request - state, key, and output are passed inline in the
+ * message for cross-architecture safety. Input may be carried via DMA
+ * (input.sz bytes, whole-block aligned) AND/OR inline (inlineInSz bytes) —
+ * when both are present the inline portion is logically processed BEFORE the
+ * DMA portion. The assembled first block from the client's partial-block
+ * buffer goes inline; the bulk of whole-block input goes via DMA. On Final
+ * the tail (0..AES_BLOCK_SIZE-1 bytes) goes inline with input.sz = 0.
+ *
+ * Wire layout in the comm buffer:
+ *   whMessageCrypto_GenericRequestHeader
+ *   whMessageCrypto_CmacAesDmaRequest
+ *   uint8_t in[inlineInSz]
+ *   uint8_t key[keySz]
+ */
 typedef struct {
     whMessageCrypto_CmacAesState resumeState; /* portable CMAC state */
-    whMessageCrypto_DmaBuffer    input;       /* Input data via DMA */
-    uint32_t outSz; /* output MAC size (0 = not finalizing) */
-    uint32_t keySz; /* inline key size (0 = use keyId) */
-    uint16_t keyId; /* HSM key ID */
-    uint8_t  WH_PAD[6];
-    /* Trailing data: uint8_t key[keySz] */
+    whMessageCrypto_DmaBuffer    input;       /* Whole-block DMA input */
+    uint32_t outSz;      /* output MAC size (0 = not finalizing) */
+    uint32_t keySz;      /* inline key size (0 = use keyId) */
+    uint32_t inlineInSz; /* inline trailing input size (assembled first
+                          * block on Update, partial tail on Final, 0 on
+                          * oneshot Generate) */
+    uint16_t keyId;      /* HSM key ID */
+    uint8_t  WH_PAD[2];
+    /* Trailing data: uint8_t in[inlineInSz]; uint8_t key[keySz]; */
 } whMessageCrypto_CmacAesDmaRequest;
 
 /* CMAC-AES DMA Response - state and output MAC returned inline */

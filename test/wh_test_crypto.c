@@ -9263,6 +9263,760 @@ static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
     }
     return ret;
 }
+
+/* Direct exercise of the new async non-DMA CMAC primitives. */
+static int whTestCrypto_CmacAsync(whClientContext* ctx, int devId, WC_RNG* rng)
+{
+    int      ret = WH_ERROR_OK;
+    Cmac     cmac[1];
+    uint8_t  tag[AES_BLOCK_SIZE] = {0};
+    uint32_t tagSz;
+    whKeyId  keyId;
+    uint8_t  labelIn[WH_NVM_LABEL_LEN] = "CMAC Async Label";
+
+    (void)rng;
+
+#ifdef WOLFSSL_AES_128
+    /* NIST SP 800-38B AES-128 vectors. m_long covers the 0/40/64-byte test
+     * messages by prefix; the tags below are the canonical NIST outputs. */
+    const byte k128[] = {0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6,
+                         0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c};
+    const byte m128[] = {0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f, 0x96,
+                         0xe9, 0x3d, 0x7e, 0x11, 0x73, 0x93, 0x17, 0x2a};
+    const byte m_long[64] = {
+        0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f, 0x96, 0xe9, 0x3d, 0x7e,
+        0x11, 0x73, 0x93, 0x17, 0x2a, 0xae, 0x2d, 0x8a, 0x57, 0x1e, 0x03,
+        0xac, 0x9c, 0x9e, 0xb7, 0x6f, 0xac, 0x45, 0xaf, 0x8e, 0x51, 0x30,
+        0xc8, 0x1c, 0x46, 0xa3, 0x5c, 0xe4, 0x11, 0xe5, 0xfb, 0xc1, 0x19,
+        0x1a, 0x0a, 0x52, 0xef, 0xf6, 0x9f, 0x24, 0x45, 0xdf, 0x4f, 0x9b,
+        0x17, 0xad, 0x2b, 0x41, 0x7b, 0xe6, 0x6c, 0x37, 0x10};
+    const byte t128[]     = {0x07, 0x0a, 0x16, 0xb4, 0x6b, 0x4d, 0x41, 0x44,
+                             0xf7, 0x9b, 0xdd, 0x9d, 0xd0, 0x4a, 0x28, 0x7c};
+    const byte t128_0[]   = {0xbb, 0x1d, 0x69, 0x29, 0xe9, 0x59, 0x37, 0x28,
+                             0x7f, 0xa3, 0x7d, 0x12, 0x9b, 0x75, 0x67, 0x46};
+    const byte t128_320[] = {0xdf, 0xa6, 0x67, 0x47, 0xde, 0x9a, 0xe6, 0x30,
+                             0x30, 0xca, 0x32, 0x61, 0x14, 0x97, 0xc8, 0x27};
+    const byte t128_512[] = {0x51, 0xf0, 0xbe, 0xbf, 0x7e, 0x3b, 0x9d, 0x92,
+                             0xfc, 0x49, 0x74, 0x17, 0x79, 0x36, 0x3c, 0xfe};
+
+    /* Case A: oneshot Generate via the async pair, with a cached HSM key. */
+    if (ret == 0) {
+        keyId = WH_KEYID_ERASED;
+        ret   = wh_Client_KeyCache(ctx, WH_NVM_FLAGS_USAGE_SIGN, labelIn,
+                                   sizeof(labelIn), (uint8_t*)k128, sizeof(k128),
+                                   &keyId);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Async CMAC: KeyCache(A) failed %d\n", ret);
+        }
+    }
+    if (ret == 0) {
+        ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, NULL, devId);
+        if (ret == 0) {
+            ret = wh_Client_CmacSetKeyId(cmac, keyId);
+        }
+    }
+    if (ret == 0) {
+        ret = wh_Client_CmacGenerateRequest(ctx, cmac, WC_CMAC_AES, NULL, 0,
+                                            m128, sizeof(m128), AES_BLOCK_SIZE);
+    }
+    if (ret == 0) {
+        memset(tag, 0, sizeof(tag));
+        tagSz = sizeof(tag);
+        do {
+            ret = wh_Client_CmacGenerateResponse(ctx, cmac, tag, &tagSz);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+    if (ret == 0 && memcmp(tag, t128, AES_BLOCK_SIZE) != 0) {
+        WH_ERROR_PRINT("Async CMAC: Generate MAC mismatch (case A)\n");
+        ret = -1;
+    }
+    if (keyId != WH_KEYID_ERASED) {
+        (void)wh_Client_KeyEvict(ctx, keyId);
+    }
+
+    /* Case B: streaming Update + Final via the async pair. */
+    if (ret == 0) {
+        keyId = WH_KEYID_ERASED;
+        ret   = wh_Client_KeyCache(ctx, WH_NVM_FLAGS_USAGE_SIGN, labelIn,
+                                   sizeof(labelIn), (uint8_t*)k128, sizeof(k128),
+                                   &keyId);
+    }
+    if (ret == 0) {
+        ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, NULL, devId);
+        if (ret == 0) {
+            ret = wh_Client_CmacSetKeyId(cmac, keyId);
+        }
+    }
+    if (ret == 0) {
+        bool sent = false;
+        ret = wh_Client_CmacUpdateRequest(ctx, cmac, WC_CMAC_AES, NULL, 0, m128,
+                                          sizeof(m128), &sent);
+        if (ret == 0 && sent) {
+            do {
+                ret = wh_Client_CmacUpdateResponse(ctx, cmac);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+    }
+    if (ret == 0) {
+        ret = wh_Client_CmacFinalRequest(ctx, cmac);
+    }
+    if (ret == 0) {
+        memset(tag, 0, sizeof(tag));
+        tagSz = sizeof(tag);
+        do {
+            ret = wh_Client_CmacFinalResponse(ctx, cmac, tag, &tagSz);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+    if (ret == 0 && memcmp(tag, t128, AES_BLOCK_SIZE) != 0) {
+        WH_ERROR_PRINT("Async CMAC: streaming MAC mismatch (case B)\n");
+        ret = -1;
+    }
+    if (keyId != WH_KEYID_ERASED) {
+        (void)wh_Client_KeyEvict(ctx, keyId);
+    }
+
+    /* Case C: oneshot Generate with inline key bytes (no HSM keyId). */
+    if (ret == 0) {
+        ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, NULL, devId);
+    }
+    if (ret == 0) {
+        ret = wh_Client_CmacGenerateRequest(ctx, cmac, WC_CMAC_AES, k128,
+                                            sizeof(k128), m128, sizeof(m128),
+                                            AES_BLOCK_SIZE);
+    }
+    if (ret == 0) {
+        memset(tag, 0, sizeof(tag));
+        tagSz = sizeof(tag);
+        do {
+            ret = wh_Client_CmacGenerateResponse(ctx, cmac, tag, &tagSz);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+    if (ret == 0 && memcmp(tag, t128, AES_BLOCK_SIZE) != 0) {
+        WH_ERROR_PRINT("Async CMAC: inline-key MAC mismatch (case C)\n");
+        ret = -1;
+    }
+
+    /* Case D: empty-message streaming (Final with no preceding Update).
+     * Exercises the zero-input round-trip of the resumeState. */
+    if (ret == 0) {
+        keyId = WH_KEYID_ERASED;
+        ret   = wh_Client_KeyCache(ctx, WH_NVM_FLAGS_USAGE_SIGN, labelIn,
+                                   sizeof(labelIn), (uint8_t*)k128, sizeof(k128),
+                                   &keyId);
+    }
+    if (ret == 0) {
+        ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, NULL, devId);
+        if (ret == 0) {
+            ret = wh_Client_CmacSetKeyId(cmac, keyId);
+        }
+    }
+    if (ret == 0) {
+        ret = wh_Client_CmacFinalRequest(ctx, cmac);
+    }
+    if (ret == 0) {
+        memset(tag, 0, sizeof(tag));
+        tagSz = sizeof(tag);
+        do {
+            ret = wh_Client_CmacFinalResponse(ctx, cmac, tag, &tagSz);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+    if (ret == 0 && memcmp(tag, t128_0, AES_BLOCK_SIZE) != 0) {
+        WH_ERROR_PRINT("Async CMAC: empty MAC mismatch (case D)\n");
+        ret = -1;
+    }
+    if (keyId != WH_KEYID_ERASED) {
+        (void)wh_Client_KeyEvict(ctx, keyId);
+    }
+
+    /* Case E: non-block-aligned single Update (40 bytes = 2 full blocks +
+     * 8-byte tail). Confirms the server holds the tail in its buffer and
+     * round-trips it back through resumeState. */
+    if (ret == 0) {
+        keyId = WH_KEYID_ERASED;
+        ret   = wh_Client_KeyCache(ctx, WH_NVM_FLAGS_USAGE_SIGN, labelIn,
+                                   sizeof(labelIn), (uint8_t*)k128, sizeof(k128),
+                                   &keyId);
+    }
+    if (ret == 0) {
+        ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, NULL, devId);
+        if (ret == 0) {
+            ret = wh_Client_CmacSetKeyId(cmac, keyId);
+        }
+    }
+    if (ret == 0) {
+        bool sent = false;
+        ret       = wh_Client_CmacUpdateRequest(ctx, cmac, WC_CMAC_AES, NULL, 0,
+                                                m_long, 40, &sent);
+        if (ret == 0 && sent) {
+            do {
+                ret = wh_Client_CmacUpdateResponse(ctx, cmac);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+    }
+    if (ret == 0) {
+        ret = wh_Client_CmacFinalRequest(ctx, cmac);
+    }
+    if (ret == 0) {
+        memset(tag, 0, sizeof(tag));
+        tagSz = sizeof(tag);
+        do {
+            ret = wh_Client_CmacFinalResponse(ctx, cmac, tag, &tagSz);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+    if (ret == 0 && memcmp(tag, t128_320, AES_BLOCK_SIZE) != 0) {
+        WH_ERROR_PRINT("Async CMAC: 40-byte MAC mismatch (case E)\n");
+        ret = -1;
+    }
+    if (keyId != WH_KEYID_ERASED) {
+        (void)wh_Client_KeyEvict(ctx, keyId);
+    }
+
+    /* Case F: multi-Update streaming, split at non-block boundary
+     * (27 + 37 = 64 bytes). This is the canonical regression test for
+     * partial-block state round-tripping between calls. */
+    if (ret == 0) {
+        keyId = WH_KEYID_ERASED;
+        ret   = wh_Client_KeyCache(ctx, WH_NVM_FLAGS_USAGE_SIGN, labelIn,
+                                   sizeof(labelIn), (uint8_t*)k128, sizeof(k128),
+                                   &keyId);
+    }
+    if (ret == 0) {
+        ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, NULL, devId);
+        if (ret == 0) {
+            ret = wh_Client_CmacSetKeyId(cmac, keyId);
+        }
+    }
+    if (ret == 0) {
+        bool sent = false;
+        ret       = wh_Client_CmacUpdateRequest(ctx, cmac, WC_CMAC_AES, NULL, 0,
+                                                m_long, 27, &sent);
+        if (ret == 0 && sent) {
+            do {
+                ret = wh_Client_CmacUpdateResponse(ctx, cmac);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+    }
+    if (ret == 0) {
+        bool sent = false;
+        ret       = wh_Client_CmacUpdateRequest(ctx, cmac, WC_CMAC_AES, NULL, 0,
+                                                m_long + 27, 37, &sent);
+        if (ret == 0 && sent) {
+            do {
+                ret = wh_Client_CmacUpdateResponse(ctx, cmac);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+    }
+    if (ret == 0) {
+        ret = wh_Client_CmacFinalRequest(ctx, cmac);
+    }
+    if (ret == 0) {
+        memset(tag, 0, sizeof(tag));
+        tagSz = sizeof(tag);
+        do {
+            ret = wh_Client_CmacFinalResponse(ctx, cmac, tag, &tagSz);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+    if (ret == 0 && memcmp(tag, t128_512, AES_BLOCK_SIZE) != 0) {
+        WH_ERROR_PRINT("Async CMAC: split-update MAC mismatch (case F)\n");
+        ret = -1;
+    }
+    if (keyId != WH_KEYID_ERASED) {
+        (void)wh_Client_KeyEvict(ctx, keyId);
+    }
+
+    /* Case G: reject inline keys longer than AES_256_KEY_SIZE in both
+     * Generate and Update request paths (defends against the devKey
+     * overflow). */
+    if (ret == 0) {
+        uint8_t bigKey[AES_256_KEY_SIZE + 1] = {0};
+        bool    sent                         = true;
+        ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, NULL, devId);
+        if (ret == 0 &&
+            wh_Client_CmacGenerateRequest(ctx, cmac, WC_CMAC_AES, bigKey,
+                                          sizeof(bigKey), m128, sizeof(m128),
+                                          AES_BLOCK_SIZE) != WH_ERROR_BADARGS) {
+            WH_ERROR_PRINT(
+                "Async CMAC: oversize keyLen not BADARGS (Generate)\n");
+            ret = -1;
+        }
+        if (ret == 0 && wh_Client_CmacUpdateRequest(
+                            ctx, cmac, WC_CMAC_AES, bigKey, sizeof(bigKey),
+                            m128, sizeof(m128), &sent) != WH_ERROR_BADARGS) {
+            WH_ERROR_PRINT(
+                "Async CMAC: oversize keyLen not BADARGS (Update)\n");
+            ret = -1;
+        }
+    }
+
+    /* Case H: argument validation. NULL ctx / cmac / requestSent must
+     * yield BADARGS without sending anything. */
+    if (ret == 0) {
+        bool sent = true;
+        if (wh_Client_CmacGenerateRequest(NULL, cmac, WC_CMAC_AES, NULL, 0,
+                                          m128, 1,
+                                          AES_BLOCK_SIZE) != WH_ERROR_BADARGS) {
+            WH_ERROR_PRINT("Async CMAC: NULL ctx not BADARGS (Generate)\n");
+            ret = -1;
+        }
+        if (ret == 0 &&
+            wh_Client_CmacUpdateRequest(NULL, cmac, WC_CMAC_AES, NULL, 0, m128,
+                                        1, &sent) != WH_ERROR_BADARGS) {
+            WH_ERROR_PRINT("Async CMAC: NULL ctx not BADARGS (Update)\n");
+            ret = -1;
+        }
+        if (ret == 0 &&
+            wh_Client_CmacFinalRequest(NULL, cmac) != WH_ERROR_BADARGS) {
+            WH_ERROR_PRINT("Async CMAC: NULL ctx not BADARGS (Final)\n");
+            ret = -1;
+        }
+    }
+
+    /* Case I: NULL key with nonzero keyLen must BADARGS in both Request
+     * paths (defends against a NULL deref in the inline-key memcpy). */
+    if (ret == 0) {
+        bool sent = true;
+        ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, NULL, devId);
+        if (ret == 0 &&
+            wh_Client_CmacGenerateRequest(ctx, cmac, WC_CMAC_AES, NULL,
+                                          AES_128_KEY_SIZE, m128, sizeof(m128),
+                                          AES_BLOCK_SIZE) != WH_ERROR_BADARGS) {
+            WH_ERROR_PRINT(
+                "Async CMAC: NULL key + nonzero keyLen not BADARGS (Gen)\n");
+            ret = -1;
+        }
+        if (ret == 0 && wh_Client_CmacUpdateRequest(
+                            ctx, cmac, WC_CMAC_AES, NULL, AES_128_KEY_SIZE,
+                            m128, sizeof(m128), &sent) != WH_ERROR_BADARGS) {
+            WH_ERROR_PRINT(
+                "Async CMAC: NULL key + nonzero keyLen not BADARGS (Upd)\n");
+            ret = -1;
+        }
+    }
+
+    /* Case J: wh_Client_Cmac must reject caller tag lengths outside
+     * [WC_CMAC_TAG_MIN_SZ, WC_CMAC_TAG_MAX_SZ] with WH_ERROR_BUFFER_SIZE,
+     * matching wolfCrypt's wc_CmacFinal contract. Streaming Final hardcodes
+     * outSz=AES_BLOCK_SIZE on the wire, so without this validation a
+     * sub-min or over-max caller buffer would silently receive a truncated
+     * tag. */
+    if (ret == 0) {
+        uint8_t  smallTag[3];
+        uint32_t smallSz = sizeof(smallTag);
+        uint8_t  bigTag[AES_BLOCK_SIZE + 1];
+        uint32_t bigSz = sizeof(bigTag);
+        if (wh_Client_Cmac(ctx, cmac, WC_CMAC_AES, k128, sizeof(k128), m128,
+                           sizeof(m128), smallTag,
+                           &smallSz) != WH_ERROR_BUFFER_SIZE) {
+            WH_ERROR_PRINT(
+                "Async CMAC: sub-min outMacLen not WH_ERROR_BUFFER_SIZE\n");
+            ret = -1;
+        }
+        if (ret == 0 && wh_Client_Cmac(ctx, cmac, WC_CMAC_AES, k128,
+                                       sizeof(k128), m128, sizeof(m128), bigTag,
+                                       &bigSz) != WH_ERROR_BUFFER_SIZE) {
+            WH_ERROR_PRINT(
+                "Async CMAC: over-max outMacLen not WH_ERROR_BUFFER_SIZE\n");
+            ret = -1;
+        }
+    }
+
+    /* Case K: wh_Client_CmacFinalResponse must also reject bad tag lengths
+     * (defense-in-depth for direct users of the async Final pair). Drive a
+     * full Update via the async pair, then call FinalRequest and finally
+     * FinalResponse with a sub-min outMacLen. */
+    if (ret == 0) {
+        keyId = WH_KEYID_ERASED;
+        ret   = wh_Client_KeyCache(ctx, WH_NVM_FLAGS_USAGE_SIGN, labelIn,
+                                   sizeof(labelIn), (uint8_t*)k128, sizeof(k128),
+                                   &keyId);
+    }
+    if (ret == 0) {
+        ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, NULL, devId);
+        if (ret == 0) {
+            ret = wh_Client_CmacSetKeyId(cmac, keyId);
+        }
+    }
+    if (ret == 0) {
+        bool sent = false;
+        ret = wh_Client_CmacUpdateRequest(ctx, cmac, WC_CMAC_AES, NULL, 0, m128,
+                                          sizeof(m128), &sent);
+        if (ret == 0 && sent) {
+            do {
+                ret = wh_Client_CmacUpdateResponse(ctx, cmac);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+    }
+    if (ret == 0) {
+        ret = wh_Client_CmacFinalRequest(ctx, cmac);
+    }
+    if (ret == 0) {
+        uint8_t  smallTag[3] = {0};
+        uint32_t smallSz     = sizeof(smallTag);
+        int      finalRet;
+        do {
+            finalRet =
+                wh_Client_CmacFinalResponse(ctx, cmac, smallTag, &smallSz);
+        } while (finalRet == WH_ERROR_NOTREADY);
+        if (finalRet != WH_ERROR_BUFFER_SIZE) {
+            WH_ERROR_PRINT("Async CMAC: FinalResponse sub-min outMacLen not "
+                           "WH_ERROR_BUFFER_SIZE\n");
+            ret = -1;
+        }
+    }
+    if (keyId != WH_KEYID_ERASED) {
+        (void)wh_Client_KeyEvict(ctx, keyId);
+    }
+#endif /* WOLFSSL_AES_128 */
+
+    if (ret == 0) {
+        WH_TEST_PRINT("CMAC ASYNC DEVID=0x%X SUCCESS\n", devId);
+    }
+    return ret;
+}
+
+#ifdef WOLFHSM_CFG_DMA
+/* Direct exercise of the new async DMA CMAC primitives. */
+static int whTestCrypto_CmacDmaAsync(whClientContext* ctx, int devId,
+                                     WC_RNG* rng)
+{
+    int      ret = WH_ERROR_OK;
+    Cmac     cmac[1];
+    uint8_t  tag[AES_BLOCK_SIZE] = {0};
+    uint32_t tagSz;
+    whKeyId  keyId;
+    uint8_t  labelIn[WH_NVM_LABEL_LEN] = "CMAC DMA Async Label";
+
+    (void)rng;
+
+#ifdef WOLFSSL_AES_128
+    const byte k128[] = {0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6,
+                         0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c};
+    const byte m128[] = {0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f, 0x96,
+                         0xe9, 0x3d, 0x7e, 0x11, 0x73, 0x93, 0x17, 0x2a};
+    const byte m_long[64] = {
+        0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f, 0x96, 0xe9, 0x3d, 0x7e,
+        0x11, 0x73, 0x93, 0x17, 0x2a, 0xae, 0x2d, 0x8a, 0x57, 0x1e, 0x03,
+        0xac, 0x9c, 0x9e, 0xb7, 0x6f, 0xac, 0x45, 0xaf, 0x8e, 0x51, 0x30,
+        0xc8, 0x1c, 0x46, 0xa3, 0x5c, 0xe4, 0x11, 0xe5, 0xfb, 0xc1, 0x19,
+        0x1a, 0x0a, 0x52, 0xef, 0xf6, 0x9f, 0x24, 0x45, 0xdf, 0x4f, 0x9b,
+        0x17, 0xad, 0x2b, 0x41, 0x7b, 0xe6, 0x6c, 0x37, 0x10};
+    const byte t128[]     = {0x07, 0x0a, 0x16, 0xb4, 0x6b, 0x4d, 0x41, 0x44,
+                             0xf7, 0x9b, 0xdd, 0x9d, 0xd0, 0x4a, 0x28, 0x7c};
+    const byte t128_320[] = {0xdf, 0xa6, 0x67, 0x47, 0xde, 0x9a, 0xe6, 0x30,
+                             0x30, 0xca, 0x32, 0x61, 0x14, 0x97, 0xc8, 0x27};
+    const byte t128_512[] = {0x51, 0xf0, 0xbe, 0xbf, 0x7e, 0x3b, 0x9d, 0x92,
+                             0xfc, 0x49, 0x74, 0x17, 0x79, 0x36, 0x3c, 0xfe};
+
+    /* Case A: DMA oneshot Generate. */
+    if (ret == 0) {
+        keyId = WH_KEYID_ERASED;
+        ret   = wh_Client_KeyCache(ctx, WH_NVM_FLAGS_USAGE_SIGN, labelIn,
+                                   sizeof(labelIn), (uint8_t*)k128, sizeof(k128),
+                                   &keyId);
+    }
+    if (ret == 0) {
+        ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, NULL, devId);
+        if (ret == 0) {
+            ret = wh_Client_CmacSetKeyId(cmac, keyId);
+        }
+    }
+    if (ret == 0) {
+        ret = wh_Client_CmacGenerateDmaRequest(ctx, cmac, WC_CMAC_AES, NULL, 0,
+                                               m128, sizeof(m128),
+                                               AES_BLOCK_SIZE);
+    }
+    if (ret == 0) {
+        memset(tag, 0, sizeof(tag));
+        tagSz = sizeof(tag);
+        do {
+            ret = wh_Client_CmacGenerateDmaResponse(ctx, cmac, tag, &tagSz);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+    if (ret == 0 && memcmp(tag, t128, AES_BLOCK_SIZE) != 0) {
+        WH_ERROR_PRINT("Async DMA CMAC: Generate mismatch (case A)\n");
+        ret = -1;
+    }
+    if (keyId != WH_KEYID_ERASED) {
+        (void)wh_Client_KeyEvict(ctx, keyId);
+    }
+
+    /* Case B: DMA streaming Update + Final. */
+    if (ret == 0) {
+        keyId = WH_KEYID_ERASED;
+        ret   = wh_Client_KeyCache(ctx, WH_NVM_FLAGS_USAGE_SIGN, labelIn,
+                                   sizeof(labelIn), (uint8_t*)k128, sizeof(k128),
+                                   &keyId);
+    }
+    if (ret == 0) {
+        ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, NULL, devId);
+        if (ret == 0) {
+            ret = wh_Client_CmacSetKeyId(cmac, keyId);
+        }
+    }
+    if (ret == 0) {
+        bool sent = false;
+        ret = wh_Client_CmacDmaUpdateRequest(ctx, cmac, WC_CMAC_AES, NULL, 0,
+                                             m128, sizeof(m128), &sent);
+        if (ret == 0 && sent) {
+            do {
+                ret = wh_Client_CmacDmaUpdateResponse(ctx, cmac);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+    }
+    if (ret == 0) {
+        ret = wh_Client_CmacDmaFinalRequest(ctx, cmac);
+    }
+    if (ret == 0) {
+        memset(tag, 0, sizeof(tag));
+        tagSz = sizeof(tag);
+        do {
+            ret = wh_Client_CmacDmaFinalResponse(ctx, cmac, tag, &tagSz);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+    if (ret == 0 && memcmp(tag, t128, AES_BLOCK_SIZE) != 0) {
+        WH_ERROR_PRINT("Async DMA CMAC: streaming mismatch (case B)\n");
+        ret = -1;
+    }
+    if (keyId != WH_KEYID_ERASED) {
+        (void)wh_Client_KeyEvict(ctx, keyId);
+    }
+
+    /* Case C: DMA streaming with a 40-byte non-block-aligned message. */
+    if (ret == 0) {
+        keyId = WH_KEYID_ERASED;
+        ret   = wh_Client_KeyCache(ctx, WH_NVM_FLAGS_USAGE_SIGN, labelIn,
+                                   sizeof(labelIn), (uint8_t*)k128, sizeof(k128),
+                                   &keyId);
+    }
+    if (ret == 0) {
+        ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, NULL, devId);
+        if (ret == 0) {
+            ret = wh_Client_CmacSetKeyId(cmac, keyId);
+        }
+    }
+    if (ret == 0) {
+        bool sent = false;
+        ret = wh_Client_CmacDmaUpdateRequest(ctx, cmac, WC_CMAC_AES, NULL, 0,
+                                             m_long, 40, &sent);
+        if (ret == 0 && sent) {
+            do {
+                ret = wh_Client_CmacDmaUpdateResponse(ctx, cmac);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+    }
+    if (ret == 0) {
+        ret = wh_Client_CmacDmaFinalRequest(ctx, cmac);
+    }
+    if (ret == 0) {
+        memset(tag, 0, sizeof(tag));
+        tagSz = sizeof(tag);
+        do {
+            ret = wh_Client_CmacDmaFinalResponse(ctx, cmac, tag, &tagSz);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+    if (ret == 0 && memcmp(tag, t128_320, AES_BLOCK_SIZE) != 0) {
+        WH_ERROR_PRINT("Async DMA CMAC: 40-byte MAC mismatch (case C)\n");
+        ret = -1;
+    }
+    if (keyId != WH_KEYID_ERASED) {
+        (void)wh_Client_KeyEvict(ctx, keyId);
+    }
+
+    /* Case D: DMA multi-Update streaming, split at non-block boundary
+     * (27 + 37 = 64 bytes). Regression test for state round-tripping. */
+    if (ret == 0) {
+        keyId = WH_KEYID_ERASED;
+        ret   = wh_Client_KeyCache(ctx, WH_NVM_FLAGS_USAGE_SIGN, labelIn,
+                                   sizeof(labelIn), (uint8_t*)k128, sizeof(k128),
+                                   &keyId);
+    }
+    if (ret == 0) {
+        ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, NULL, devId);
+        if (ret == 0) {
+            ret = wh_Client_CmacSetKeyId(cmac, keyId);
+        }
+    }
+    if (ret == 0) {
+        bool sent = false;
+        ret = wh_Client_CmacDmaUpdateRequest(ctx, cmac, WC_CMAC_AES, NULL, 0,
+                                             m_long, 27, &sent);
+        if (ret == 0 && sent) {
+            do {
+                ret = wh_Client_CmacDmaUpdateResponse(ctx, cmac);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+    }
+    if (ret == 0) {
+        bool sent = false;
+        ret = wh_Client_CmacDmaUpdateRequest(ctx, cmac, WC_CMAC_AES, NULL, 0,
+                                             m_long + 27, 37, &sent);
+        if (ret == 0 && sent) {
+            do {
+                ret = wh_Client_CmacDmaUpdateResponse(ctx, cmac);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+    }
+    if (ret == 0) {
+        ret = wh_Client_CmacDmaFinalRequest(ctx, cmac);
+    }
+    if (ret == 0) {
+        memset(tag, 0, sizeof(tag));
+        tagSz = sizeof(tag);
+        do {
+            ret = wh_Client_CmacDmaFinalResponse(ctx, cmac, tag, &tagSz);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+    if (ret == 0 && memcmp(tag, t128_512, AES_BLOCK_SIZE) != 0) {
+        WH_ERROR_PRINT("Async DMA CMAC: split-update MAC mismatch (case D)\n");
+        ret = -1;
+    }
+    if (keyId != WH_KEYID_ERASED) {
+        (void)wh_Client_KeyEvict(ctx, keyId);
+    }
+
+    /* Case E: reject inline keys longer than AES_256_KEY_SIZE in both DMA
+     * Generate and Update request paths. */
+    if (ret == 0) {
+        uint8_t bigKey[AES_256_KEY_SIZE + 1] = {0};
+        bool    sent                         = true;
+        ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, NULL, devId);
+        if (ret == 0 &&
+            wh_Client_CmacGenerateDmaRequest(
+                ctx, cmac, WC_CMAC_AES, bigKey, sizeof(bigKey), m128,
+                sizeof(m128), AES_BLOCK_SIZE) != WH_ERROR_BADARGS) {
+            WH_ERROR_PRINT(
+                "Async DMA CMAC: oversize keyLen not BADARGS (Gen)\n");
+            ret = -1;
+        }
+        if (ret == 0 && wh_Client_CmacDmaUpdateRequest(
+                            ctx, cmac, WC_CMAC_AES, bigKey, sizeof(bigKey),
+                            m128, sizeof(m128), &sent) != WH_ERROR_BADARGS) {
+            WH_ERROR_PRINT(
+                "Async DMA CMAC: oversize keyLen not BADARGS (Upd)\n");
+            ret = -1;
+        }
+    }
+
+    /* Case F: argument validation. */
+    if (ret == 0) {
+        bool sent = true;
+        if (wh_Client_CmacGenerateDmaRequest(NULL, cmac, WC_CMAC_AES, NULL, 0,
+                                             m128, 1, AES_BLOCK_SIZE) !=
+            WH_ERROR_BADARGS) {
+            WH_ERROR_PRINT("Async DMA CMAC: NULL ctx not BADARGS (Gen)\n");
+            ret = -1;
+        }
+        if (ret == 0 && wh_Client_CmacDmaUpdateRequest(
+                            NULL, cmac, WC_CMAC_AES, NULL, 0, m128, 1, &sent) !=
+                            WH_ERROR_BADARGS) {
+            WH_ERROR_PRINT("Async DMA CMAC: NULL ctx not BADARGS (Upd)\n");
+            ret = -1;
+        }
+        if (ret == 0 &&
+            wh_Client_CmacDmaFinalRequest(NULL, cmac) != WH_ERROR_BADARGS) {
+            WH_ERROR_PRINT("Async DMA CMAC: NULL ctx not BADARGS (Fin)\n");
+            ret = -1;
+        }
+    }
+
+    /* Case G: NULL key with nonzero keyLen must BADARGS in both DMA Request
+     * paths (defends against a NULL deref in the inline-key memcpy). */
+    if (ret == 0) {
+        bool sent = true;
+        ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, NULL, devId);
+        if (ret == 0 &&
+            wh_Client_CmacGenerateDmaRequest(
+                ctx, cmac, WC_CMAC_AES, NULL, AES_128_KEY_SIZE, m128,
+                sizeof(m128), AES_BLOCK_SIZE) != WH_ERROR_BADARGS) {
+            WH_ERROR_PRINT("Async DMA CMAC: NULL key + nonzero keyLen not "
+                           "BADARGS (Gen)\n");
+            ret = -1;
+        }
+        if (ret == 0 && wh_Client_CmacDmaUpdateRequest(
+                            ctx, cmac, WC_CMAC_AES, NULL, AES_128_KEY_SIZE,
+                            m128, sizeof(m128), &sent) != WH_ERROR_BADARGS) {
+            WH_ERROR_PRINT("Async DMA CMAC: NULL key + nonzero keyLen not "
+                           "BADARGS (Upd)\n");
+            ret = -1;
+        }
+    }
+
+    /* Case H: wh_Client_CmacDma must reject caller tag lengths outside
+     * [WC_CMAC_TAG_MIN_SZ, WC_CMAC_TAG_MAX_SZ] with WH_ERROR_BUFFER_SIZE,
+     * and so must wh_Client_CmacDmaFinalResponse for direct users of the
+     * async pair. */
+    if (ret == 0) {
+        uint8_t  smallTag[3];
+        uint32_t smallSz = sizeof(smallTag);
+        uint8_t  bigTag[AES_BLOCK_SIZE + 1];
+        uint32_t bigSz = sizeof(bigTag);
+        if (wh_Client_CmacDma(ctx, cmac, WC_CMAC_AES, k128, sizeof(k128), m128,
+                              sizeof(m128), smallTag,
+                              &smallSz) != WH_ERROR_BUFFER_SIZE) {
+            WH_ERROR_PRINT(
+                "Async DMA CMAC: sub-min outMacLen not WH_ERROR_BUFFER_SIZE\n");
+            ret = -1;
+        }
+        if (ret == 0 &&
+            wh_Client_CmacDma(ctx, cmac, WC_CMAC_AES, k128, sizeof(k128), m128,
+                              sizeof(m128), bigTag,
+                              &bigSz) != WH_ERROR_BUFFER_SIZE) {
+            WH_ERROR_PRINT("Async DMA CMAC: over-max outMacLen not "
+                           "WH_ERROR_BUFFER_SIZE\n");
+            ret = -1;
+        }
+    }
+    if (ret == 0) {
+        keyId = WH_KEYID_ERASED;
+        ret   = wh_Client_KeyCache(ctx, WH_NVM_FLAGS_USAGE_SIGN, labelIn,
+                                   sizeof(labelIn), (uint8_t*)k128, sizeof(k128),
+                                   &keyId);
+    }
+    if (ret == 0) {
+        ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, NULL, devId);
+        if (ret == 0) {
+            ret = wh_Client_CmacSetKeyId(cmac, keyId);
+        }
+    }
+    if (ret == 0) {
+        bool sent = false;
+        ret = wh_Client_CmacDmaUpdateRequest(ctx, cmac, WC_CMAC_AES, NULL, 0,
+                                             m128, sizeof(m128), &sent);
+        if (ret == 0 && sent) {
+            do {
+                ret = wh_Client_CmacDmaUpdateResponse(ctx, cmac);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+    }
+    if (ret == 0) {
+        ret = wh_Client_CmacDmaFinalRequest(ctx, cmac);
+    }
+    if (ret == 0) {
+        uint8_t  smallTag[3] = {0};
+        uint32_t smallSz     = sizeof(smallTag);
+        int      finalRet;
+        do {
+            finalRet =
+                wh_Client_CmacDmaFinalResponse(ctx, cmac, smallTag, &smallSz);
+        } while (finalRet == WH_ERROR_NOTREADY);
+        if (finalRet != WH_ERROR_BUFFER_SIZE) {
+            WH_ERROR_PRINT("Async DMA CMAC: FinalResponse sub-min outMacLen "
+                           "not WH_ERROR_BUFFER_SIZE\n");
+            ret = -1;
+        }
+    }
+    if (keyId != WH_KEYID_ERASED) {
+        (void)wh_Client_KeyEvict(ctx, keyId);
+    }
+#endif /* WOLFSSL_AES_128 */
+
+    if (ret == 0) {
+        WH_TEST_PRINT("CMAC DMA ASYNC DEVID=0x%X SUCCESS\n", devId);
+    }
+    return ret;
+}
+#endif /* WOLFHSM_CFG_DMA */
+
 #endif /* WOLFSSL_CMAC && !NO_AES && WOLFSSL_AES_DIRECT */
 
 #ifdef HAVE_DILITHIUM
@@ -11138,9 +11892,17 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     while ((ret == WH_ERROR_OK) && (i < WH_NUM_DEVIDS)) {
         ret = whTestCrypto_Cmac(client, WH_DEV_IDS_ARRAY[i], rng);
         if (ret == WH_ERROR_OK) {
+            ret = whTestCrypto_CmacAsync(client, WH_DEV_IDS_ARRAY[i], rng);
+        }
+        if (ret == WH_ERROR_OK) {
             i++;
         }
     }
+#ifdef WOLFHSM_CFG_DMA
+    if (ret == WH_ERROR_OK) {
+        ret = whTestCrypto_CmacDmaAsync(client, WH_DEV_ID_DMA, rng);
+    }
+#endif /* WOLFHSM_CFG_DMA */
 #endif /* WOLFSSL_CMAC && !NO_AES && WOLFSSL_AES_DIRECT */
 
 #ifndef NO_RSA

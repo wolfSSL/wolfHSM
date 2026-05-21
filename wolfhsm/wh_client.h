@@ -138,13 +138,23 @@ typedef struct {
     uint64_t  aadSz;
 } whClientDmaAsyncAes;
 
+/* Per-operation async DMA context for CMAC: same shape as SHA since CMAC
+ * DMA only transfers the input buffer. Stashed across Request/Response for
+ * POST cleanup. inSz == 0 means "nothing to clean up". */
+typedef struct {
+    uintptr_t inAddr;
+    uintptr_t clientAddr;
+    uint64_t  inSz;
+} whClientDmaAsyncCmac;
+
 /* Async DMA context union. Only one DMA request can be in flight at a time
  * per client context, so a single union suffices. Each Response function
  * knows which member to access based on its own operation type. */
 typedef union {
-    whClientDmaAsyncSha sha;
-    whClientDmaAsyncRng rng;
-    whClientDmaAsyncAes aes;
+    whClientDmaAsyncSha  sha;
+    whClientDmaAsyncRng  rng;
+    whClientDmaAsyncAes  aes;
+    whClientDmaAsyncCmac cmac;
 } whClientDmaAsyncCtx;
 
 typedef struct {

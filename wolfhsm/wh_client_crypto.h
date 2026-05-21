@@ -1699,6 +1699,124 @@ int wh_Client_Cmac(whClientContext* ctx, Cmac* cmac, CmacType type,
                    const uint8_t* key, uint32_t keyLen, const uint8_t* in,
                    uint32_t inLen, uint8_t* outMac, uint32_t* outMacLen);
 
+/**
+ * @brief Async request half of a non-DMA CMAC oneshot generate.
+ *
+ * Serializes and sends a single request that performs init + update + final
+ * on the server in one round trip. The server returns the MAC in the matching
+ * Response. Does NOT wait for a reply.
+ *
+ * Contract: at most one outstanding async request may be in flight per
+ * whClientContext. The caller MUST call wh_Client_CmacGenerateResponse before
+ * issuing any other async Request on the same ctx. Any existing streaming
+ * state in the cmac struct is silently reset — this is a oneshot, equivalent
+ * to wc_AesCmacGenerate_ex.
+ *
+ * @param[in] ctx       Client context.
+ * @param[in,out] cmac  CMAC context (type and non-HSM key bytes are cached on
+ *                      success).
+ * @param[in] type      CMAC type (e.g., WC_CMAC_AES).
+ * @param[in] key       Inline key bytes, or NULL if using a cached/HSM key.
+ * @param[in] keyLen    Key length in bytes (0 if using a cached/HSM key).
+ * @param[in] in        Input data. Must not be NULL.
+ * @param[in] inLen     Input length. Must be > 0 and must not exceed
+ *                      WH_MESSAGE_CRYPTO_CMAC_MAX_INLINE_GENERATE_SZ.
+ * @param[in] outMacLen Requested MAC length in bytes. Must be > 0.
+ * @return WH_ERROR_OK on success, WH_ERROR_BADARGS for invalid args or
+ *         oversize input, or a negative error from the transport. On any
+ *         error the cmac struct is left unchanged.
+ */
+int wh_Client_CmacGenerateRequest(whClientContext* ctx, Cmac* cmac,
+                                  CmacType type, const uint8_t* key,
+                                  uint32_t keyLen, const uint8_t* in,
+                                  uint32_t inLen, uint32_t outMacLen);
+
+/**
+ * @brief Async response half of a non-DMA CMAC oneshot generate.
+ *
+ * Single-shot RecvResponse; returns WH_ERROR_NOTREADY if the server has not
+ * yet replied. On success, restores state from the response, copies the MAC
+ * into outMac (truncated to *outMacLen) and updates *outMacLen to the actual
+ * number of bytes written.
+ */
+int wh_Client_CmacGenerateResponse(whClientContext* ctx, Cmac* cmac,
+                                   uint8_t* outMac, uint32_t* outMacLen);
+
+/**
+ * @brief Async request half of a non-DMA CMAC streaming Update.
+ *
+ * Serializes and sends an Update request carrying inLen bytes of inline
+ * input plus the full CMAC state (digest + buffer + bookkeeping) via
+ * resumeState. The server runs wc_CmacUpdate against the round-tripped
+ * state, so all partial-block accounting happens server-side and the
+ * post-Update state is returned in the matching Response. Does NOT wait
+ * for a reply.
+ *
+ * Contract: at most one outstanding async request may be in flight per
+ * whClientContext (enforced by the comm layer). If *requestSent is true, the
+ * caller MUST call wh_Client_CmacUpdateResponse before issuing any other
+ * async Request on the same ctx.
+ *
+ * Key handling: if key/keyLen are provided, the bytes are cached client-side
+ * so subsequent Update/Final calls can replay them. If using an HSM-cached
+ * key, set it via wh_Client_CmacSetKeyId before the first Update and pass
+ * NULL / 0 for key/keyLen.
+ *
+ * @param[in] ctx          Client context.
+ * @param[in,out] cmac     CMAC context (full state round-tripped on success,
+ *                         type and cached key bytes updated on SendRequest
+ *                         success).
+ * @param[in] type         CMAC type (written to cmac->type on success).
+ * @param[in] key          Optional inline key bytes (NULL for cached/HSM key).
+ * @param[in] keyLen       Key length in bytes (must not exceed
+ *                         AES_256_KEY_SIZE; 0 for cached/HSM key).
+ * @param[in] in           Input data (may be NULL only if inLen == 0).
+ * @param[in] inLen        Input length. Must fit in the comm buffer alongside
+ *                         the request header and key bytes.
+ * @param[out] requestSent Set to true if a server request was sent and a
+ *                         matching Response call is required; false only
+ *                         when inLen == 0 and keyLen == 0 (no-op).
+ * @return WH_ERROR_OK on success, WH_ERROR_BADARGS on invalid arguments or
+ *         when inLen exceeds the per-call capacity.
+ */
+int wh_Client_CmacUpdateRequest(whClientContext* ctx, Cmac* cmac, CmacType type,
+                                const uint8_t* key, uint32_t keyLen,
+                                const uint8_t* in, uint32_t inLen,
+                                bool* requestSent);
+
+/**
+ * @brief Async response half of a non-DMA CMAC streaming Update.
+ *
+ * Single-shot RecvResponse; returns WH_ERROR_NOTREADY if the server has not
+ * yet replied. On success, restores the full CMAC state (buffer, bufferSz,
+ * digest, totalSz) from the response — the server may leave a partial or
+ * whole block in its buffer after wc_CmacUpdate (CMAC's last block has
+ * special handling), so that bookkeeping is round-tripped back to the
+ * client. MUST only be called if the matching Request returned
+ * requestSent == true.
+ */
+int wh_Client_CmacUpdateResponse(whClientContext* ctx, Cmac* cmac);
+
+/**
+ * @brief Async request half of a non-DMA CMAC streaming Final.
+ *
+ * Sends a Final request with no inline input — the round-tripped
+ * resumeState carries the current cmac->buffer (0..AES_BLOCK_SIZE-1 bytes)
+ * as the trailing partial block for the server to finalize. Key material
+ * travels with the request when available.
+ */
+int wh_Client_CmacFinalRequest(whClientContext* ctx, Cmac* cmac);
+
+/**
+ * @brief Async response half of a non-DMA CMAC streaming Final.
+ *
+ * Single-shot RecvResponse. Restores final state from the response, then
+ * copies the MAC into outMac (truncated to *outMacLen) and updates
+ * *outMacLen.
+ */
+int wh_Client_CmacFinalResponse(whClientContext* ctx, Cmac* cmac,
+                                uint8_t* outMac, uint32_t* outMacLen);
+
 
 /**
  * @brief Associates a CMAC key with a specific key ID.
@@ -1748,6 +1866,95 @@ int wh_Client_CmacGetKeyId(Cmac* key, whNvmId* outId);
 int wh_Client_CmacDma(whClientContext* ctx, Cmac* cmac, CmacType type,
                       const uint8_t* key, uint32_t keyLen, const uint8_t* in,
                       uint32_t inLen, uint8_t* outMac, uint32_t* outMacLen);
+
+/**
+ * @brief Async request half of a DMA CMAC oneshot generate.
+ *
+ * Performs PRE address translation for the input buffer, sends the DMA
+ * request, and stashes the translated address for POST cleanup in the
+ * matching Response. Does NOT wait for a reply. The server processes the
+ * oneshot in a single round trip via wc_AesCmacGenerate_ex.
+ *
+ * Contract: at most one outstanding async request may be in flight per
+ * whClientContext. The caller MUST call wh_Client_CmacGenerateDmaResponse
+ * before issuing any other async Request on the same ctx, and must keep in
+ * valid until the Response completes. Any existing streaming state in the
+ * cmac struct is silently reset — this is a oneshot, equivalent to
+ * wc_AesCmacGenerate_ex.
+ */
+int wh_Client_CmacGenerateDmaRequest(whClientContext* ctx, Cmac* cmac,
+                                     CmacType type, const uint8_t* key,
+                                     uint32_t keyLen, const uint8_t* in,
+                                     uint32_t inLen, uint32_t outMacLen);
+
+/**
+ * @brief Async response half of a DMA CMAC oneshot generate.
+ *
+ * Single-shot RecvResponse; returns WH_ERROR_NOTREADY if the server has not
+ * yet replied. On any non-NOTREADY exit, performs POST DMA cleanup on the
+ * input buffer. On success, copies the MAC into outMac (truncated to
+ * *outMacLen), updates *outMacLen, and restores the post-finalization CMAC
+ * state (buffer, bufferSz, digest, totalSz) from the response. The AES
+ * round key and CMAC subkey material in cmac are NOT reset — callers
+ * recycling the cmac struct must reinitialize it via wc_InitCmac_ex.
+ */
+int wh_Client_CmacGenerateDmaResponse(whClientContext* ctx, Cmac* cmac,
+                                      uint8_t* outMac, uint32_t* outMacLen);
+
+/**
+ * @brief Async request half of a DMA CMAC streaming Update.
+ *
+ * Performs PRE address translation for the input buffer, round-trips the
+ * full CMAC state to the server via resumeState, and sends every byte of
+ * the input via DMA. No client-side partial-block buffering and no inline
+ * trailing data — the server runs wc_CmacUpdate against the round-tripped
+ * state. Stashes the translated input address for POST cleanup in the
+ * matching Response. Does NOT wait for a reply.
+ *
+ * Contract: at most one outstanding async request may be in flight per
+ * whClientContext. If *requestSent is true, the caller MUST keep in valid
+ * and call wh_Client_CmacDmaUpdateResponse before issuing any other async
+ * Request. *requestSent is false only when inLen == 0 and keyLen == 0
+ * (no-op).
+ */
+int wh_Client_CmacDmaUpdateRequest(whClientContext* ctx, Cmac* cmac,
+                                   CmacType type, const uint8_t* key,
+                                   uint32_t keyLen, const uint8_t* in,
+                                   uint32_t inLen, bool* requestSent);
+
+/**
+ * @brief Async response half of a DMA CMAC streaming Update.
+ *
+ * Single-shot RecvResponse; returns WH_ERROR_NOTREADY if the server has
+ * not yet replied. On any non-NOTREADY exit, performs POST DMA cleanup
+ * for the input buffer. On success, restores the full CMAC state (buffer,
+ * bufferSz, digest, totalSz) from the response — including any
+ * partial/whole block left in the server's wc_CmacUpdate buffer.
+ */
+int wh_Client_CmacDmaUpdateResponse(whClientContext* ctx, Cmac* cmac);
+
+/**
+ * @brief Async request half of a DMA CMAC streaming Final.
+ *
+ * Sends a Final request with no DMA addresses and no inline input — the
+ * round-tripped resumeState carries the partial-block tail
+ * (0..AES_BLOCK_SIZE-1 bytes) for the server to finalize. Key material
+ * travels with the request when available.
+ */
+int wh_Client_CmacDmaFinalRequest(whClientContext* ctx, Cmac* cmac);
+
+/**
+ * @brief Async response half of a DMA CMAC streaming Final.
+ *
+ * Single-shot RecvResponse. Copies the MAC into outMac (truncated to
+ * *outMacLen), updates *outMacLen, and restores the post-finalization
+ * CMAC state (buffer, bufferSz, digest, totalSz) from the response. The
+ * AES round key and CMAC subkey material in cmac are NOT reset — callers
+ * recycling the cmac struct must reinitialize it via wc_InitCmac_ex. No
+ * DMA cleanup is needed (Final doesn't use DMA addresses).
+ */
+int wh_Client_CmacDmaFinalResponse(whClientContext* ctx, Cmac* cmac,
+                                   uint8_t* outMac, uint32_t* outMacLen);
 #endif /* WOLFHSM_CFG_DMA */
 
 #endif /* WOLFSSL_CMAC */
