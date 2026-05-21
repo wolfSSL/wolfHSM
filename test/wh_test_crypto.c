@@ -13315,7 +13315,9 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
             if (ret == 0) {
                 ret = wh_Client_AesSetKeyId(aes, keyId);
                 if (ret == 0) {
-                    (void)wc_AesSetIV(aes, iv);
+                    ret = wc_AesSetIV(aes, iv);
+                }
+                if (ret == 0) {
                     ret = wh_Client_AesCtr(client, aes, 1, plaintext,
                                            sizeof(plaintext), ctrCipher);
                     if (ret == WH_ERROR_USAGE) {
@@ -13352,7 +13354,9 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
             if (ret == 0) {
                 ret = wh_Client_AesSetKeyId(aes, keyId);
                 if (ret == 0) {
-                    (void)wc_AesSetIV(aes, iv);
+                    ret = wc_AesSetIV(aes, iv);
+                }
+                if (ret == 0) {
                     ret = wh_Client_AesCtr(client, aes, 0, ciphertext,
                                            sizeof(ciphertext), ctrOut);
                     if (ret == WH_ERROR_USAGE) {
@@ -13544,7 +13548,9 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
             if (ret == 0) {
                 ret = wh_Client_AesSetKeyId(aes, keyId);
                 if (ret == 0) {
-                    (void)wc_AesSetIV(aes, iv);
+                    ret = wc_AesSetIV(aes, iv);
+                }
+                if (ret == 0) {
                     ret = wh_Client_AesCtrDma(client, aes, 1, plaintext,
                                               sizeof(plaintext), ctrCipher);
                     if (ret == WH_ERROR_USAGE) {
@@ -13581,7 +13587,9 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
             if (ret == 0) {
                 ret = wh_Client_AesSetKeyId(aes, keyId);
                 if (ret == 0) {
-                    (void)wc_AesSetIV(aes, iv);
+                    ret = wc_AesSetIV(aes, iv);
+                }
+                if (ret == 0) {
                     ret = wh_Client_AesCtrDma(client, aes, 0, ciphertext,
                                               sizeof(ciphertext), ctrOut);
                     if (ret == WH_ERROR_USAGE) {
@@ -13692,7 +13700,9 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
             if (ret == 0) {
                 ret = wh_Client_AesSetKeyId(aes, keyId);
                 if (ret == 0) {
-                    (void)wc_AesSetIV(aes, iv);
+                    ret = wc_AesSetIV(aes, iv);
+                }
+                if (ret == 0) {
                     ret = wh_Client_AesCbcDma(client, aes, 1, plaintext,
                                               sizeof(plaintext), cbcCipher);
                     if (ret == WH_ERROR_USAGE) {
@@ -13729,7 +13739,9 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
             if (ret == 0) {
                 ret = wh_Client_AesSetKeyId(aes, keyId);
                 if (ret == 0) {
-                    (void)wc_AesSetIV(aes, iv);
+                    ret = wc_AesSetIV(aes, iv);
+                }
+                if (ret == 0) {
                     ret = wh_Client_AesCbcDma(client, aes, 0, ciphertext,
                                               sizeof(ciphertext), cbcOut);
                     if (ret == WH_ERROR_USAGE) {
