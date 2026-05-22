@@ -228,7 +228,7 @@ typedef enum BenchModuleIdx {
 #endif /* HAVE_CURVE25519 */
 
 /* ML-DSA */
-#if defined(HAVE_DILITHIUM)
+#if defined(WOLFSSL_HAVE_MLDSA)
 #if !defined(WOLFSSL_NO_ML_DSA_44)
     BENCH_MODULE_IDX_ML_DSA_44_SIGN,
     BENCH_MODULE_IDX_ML_DSA_44_SIGN_DMA,
@@ -253,7 +253,7 @@ typedef enum BenchModuleIdx {
     BENCH_MODULE_IDX_ML_DSA_87_KEY_GEN,
     BENCH_MODULE_IDX_ML_DSA_87_KEY_GEN_DMA,
 #endif /* !(WOLFSSL_NO_ML_DSA_87) */
-#endif /* HAVE_DILITHIUM */
+#endif /* WOLFSSL_HAVE_MLDSA */
 #endif /* !(WOLFHSM_CFG_NO_CRYPTO) */
     /* number of modules. This must be the last entry and will be used as the
      * size of the global modules array */
@@ -414,7 +414,7 @@ static BenchModule g_benchModules[] = {
 #endif /* HAVE_CURVE25519 */
 
     /* ML-DSA */
-#if defined(HAVE_DILITHIUM)
+#if defined(WOLFSSL_HAVE_MLDSA)
 #if !defined(WOLFSSL_NO_ML_DSA_44)
     [BENCH_MODULE_IDX_ML_DSA_44_SIGN]          = {"ML-DSA-44-SIGN",               wh_Bench_Mod_MlDsa44Sign,             BENCH_THROUGHPUT_OPS, 0, NULL},
     [BENCH_MODULE_IDX_ML_DSA_44_SIGN_DMA]      = {"ML-DSA-44-SIGN-DMA",           wh_Bench_Mod_MlDsa44SignDma,          BENCH_THROUGHPUT_OPS, 0, NULL},
@@ -439,7 +439,7 @@ static BenchModule g_benchModules[] = {
     [BENCH_MODULE_IDX_ML_DSA_87_KEY_GEN]       = {"ML-DSA-87-KEY-GEN",            wh_Bench_Mod_MlDsa87KeyGen,           BENCH_THROUGHPUT_OPS, 0, NULL},
     [BENCH_MODULE_IDX_ML_DSA_87_KEY_GEN_DMA]   = {"ML-DSA-87-KEY-GEN-DMA",        wh_Bench_Mod_MlDsa87KeyGenDma,        BENCH_THROUGHPUT_OPS, 0, NULL},
 #endif /* !(WOLFSSL_NO_ML_DSA_87) */
-#endif /* HAVE_DILITHIUM */
+#endif /* WOLFSSL_HAVE_MLDSA */
 #endif /* !(WOLFHSM_CFG_NO_CRYPTO) */
 };
 /* clang-format on */

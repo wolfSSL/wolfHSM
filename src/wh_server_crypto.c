@@ -43,7 +43,7 @@
 #include "wolfssl/wolfcrypt/sha256.h"
 #include "wolfssl/wolfcrypt/sha512.h"
 #include "wolfssl/wolfcrypt/cmac.h"
-#include "wolfssl/wolfcrypt/dilithium.h"
+#include "wolfssl/wolfcrypt/wc_mldsa.h"
 #include "wolfssl/wolfcrypt/hmac.h"
 #include "wolfssl/wolfcrypt/kdf.h"
 
@@ -173,26 +173,26 @@ static int _HandleEd25519VerifyDma(whServerContext* ctx, uint16_t magic,
 #endif /* WOLFHSM_CFG_DMA */
 #endif /* HAVE_ED25519 */
 
-#ifdef HAVE_DILITHIUM
-/* Process a Dilithium KeyGen request packet and produce a response packet */
+#ifdef WOLFSSL_HAVE_MLDSA
+/* Process an ML-DSA KeyGen request packet and produce a response packet */
 static int _HandleMlDsaKeyGen(whServerContext* ctx, uint16_t magic, int devId,
                               const void* cryptoDataIn, uint16_t inSize,
                               void* cryptoDataOut, uint16_t* outSize);
-/* Process a Dilithium Sign request packet and produce a response packet */
+/* Process an ML-DSA Sign request packet and produce a response packet */
 static int _HandleMlDsaSign(whServerContext* ctx, uint16_t magic, int devId,
                             const void* cryptoDataIn, uint16_t inSize,
                             void* cryptoDataOut, uint16_t* outSize);
-/* Process a Dilithium Verify request packet and produce a response packet */
+/* Process an ML-DSA Verify request packet and produce a response packet */
 static int _HandleMlDsaVerify(whServerContext* ctx, uint16_t magic, int devId,
                               const void* cryptoDataIn, uint16_t inSize,
                               void* cryptoDataOut, uint16_t* outSize);
-/* Process a Dilithium Check PrivKey request packet and produce a response
+/* Process an ML-DSA Check PrivKey request packet and produce a response
  * packet */
 static int _HandleMlDsaCheckPrivKey(whServerContext* ctx, uint16_t magic,
                                     int devId, const void* cryptoDataIn,
                                     uint16_t inSize, void* cryptoDataOut,
                                     uint16_t* outSize);
-#endif /* HAVE_DILITHIUM */
+#endif /* WOLFSSL_HAVE_MLDSA */
 
 /** Public server crypto functions */
 
@@ -731,8 +731,8 @@ int wh_Server_CacheExportCurve25519Key(whServerContext* server, whKeyId keyId,
 }
 #endif /* HAVE_CURVE25519 */
 
-#ifdef HAVE_DILITHIUM
-int wh_Server_MlDsaKeyCacheImport(whServerContext* ctx, MlDsaKey* key,
+#ifdef WOLFSSL_HAVE_MLDSA
+int wh_Server_MlDsaKeyCacheImport(whServerContext* ctx, wc_MlDsaKey* key,
                                   whKeyId keyId, whNvmFlags flags,
                                   uint16_t label_len, uint8_t* label)
 {
@@ -743,11 +743,11 @@ int wh_Server_MlDsaKeyCacheImport(whServerContext* ctx, MlDsaKey* key,
 
     const uint16_t MAX_MLDSA_DER_SIZE =
 #if !defined(WOLFSSL_NO_ML_DSA_87)
-        ML_DSA_LEVEL5_PRV_KEY_DER_SIZE;
+        WC_MLDSA_87_PRV_KEY_DER_SIZE;
 #elif !defined(WOLFSSL_NO_ML_DSA_65)
-        ML_DSA_LEVEL3_PRV_KEY_DER_SIZE;
+        WC_MLDSA_65_PRV_KEY_DER_SIZE;
 #else
-        ML_DSA_LEVEL2_PRV_KEY_DER_SIZE;
+        WC_MLDSA_44_PRV_KEY_DER_SIZE;
 #endif
 
     if ((ctx == NULL) || (key == NULL) || (WH_KEYID_ISERASED(keyId)) ||
@@ -778,7 +778,7 @@ int wh_Server_MlDsaKeyCacheImport(whServerContext* ctx, MlDsaKey* key,
 }
 
 int wh_Server_MlDsaKeyCacheExport(whServerContext* ctx, whKeyId keyId,
-                                  MlDsaKey* key)
+                                  wc_MlDsaKey* key)
 {
     uint8_t*       cacheBuf;
     whNvmMetadata* cacheMeta;
@@ -796,7 +796,7 @@ int wh_Server_MlDsaKeyCacheExport(whServerContext* ctx, whKeyId keyId,
     }
     return ret;
 }
-#endif /* HAVE_DILITHIUM */
+#endif /* WOLFSSL_HAVE_MLDSA */
 
 
 /** Request/Response Handling functions */
@@ -4066,9 +4066,9 @@ static int _HandleSha512(whServerContext* ctx, uint16_t magic, int devId,
     return ret;
 }
 #endif /* WOLFSSL_SHA512 */
-#ifdef HAVE_DILITHIUM
+#ifdef WOLFSSL_HAVE_MLDSA
 
-#ifndef WOLFSSL_DILITHIUM_NO_MAKE_KEY
+#ifndef WOLFSSL_MLDSA_NO_MAKE_KEY
 /* Check if the ML-DSA security level is supported
  * returns 1 if supported, 0 otherwise */
 static int _IsMlDsaLevelSupported(int level)
@@ -4098,13 +4098,13 @@ static int _IsMlDsaLevelSupported(int level)
 
     return ret;
 }
-#endif /* WOLFSSL_DILITHIUM_NO_MAKE_KEY */
+#endif /* WOLFSSL_MLDSA_NO_MAKE_KEY */
 
 static int _HandleMlDsaKeyGen(whServerContext* ctx, uint16_t magic, int devId,
                               const void* cryptoDataIn, uint16_t inSize,
                               void* cryptoDataOut, uint16_t* outSize)
 {
-#ifdef WOLFSSL_DILITHIUM_NO_MAKE_KEY
+#ifdef WOLFSSL_MLDSA_NO_MAKE_KEY
     (void)ctx;
     (void)magic;
     (void)cryptoDataIn;
@@ -4116,7 +4116,7 @@ static int _HandleMlDsaKeyGen(whServerContext* ctx, uint16_t magic, int devId,
     (void)inSize;
 
     int                                 ret = WH_ERROR_OK;
-    MlDsaKey                            key[1];
+    wc_MlDsaKey                         key[1];
     whMessageCrypto_MlDsaKeyGenRequest  req;
     whMessageCrypto_MlDsaKeyGenResponse res;
 
@@ -4207,14 +4207,14 @@ static int _HandleMlDsaKeyGen(whServerContext* ctx, uint16_t magic, int devId,
         }
     }
     return ret;
-#endif /* WOLFSSL_DILITHIUM_NO_MAKE_KEY */
+#endif /* WOLFSSL_MLDSA_NO_MAKE_KEY */
 }
 
 static int _HandleMlDsaSign(whServerContext* ctx, uint16_t magic, int devId,
                             const void* cryptoDataIn, uint16_t inSize,
                             void* cryptoDataOut, uint16_t* outSize)
 {
-#ifdef WOLFSSL_DILITHIUM_NO_SIGN
+#ifdef WOLFSSL_MLDSA_NO_SIGN
     (void)ctx;
     (void)magic;
     (void)cryptoDataIn;
@@ -4226,7 +4226,7 @@ static int _HandleMlDsaSign(whServerContext* ctx, uint16_t magic, int devId,
     (void)inSize;
 
     int                                 ret;
-    MlDsaKey                            key[1];
+    wc_MlDsaKey                         key[1];
     whMessageCrypto_MlDsaSignRequest    req;
     whMessageCrypto_MlDsaSignResponse   res;
 
@@ -4314,14 +4314,14 @@ cleanup:
         *outSize = sizeof(whMessageCrypto_MlDsaSignResponse) + res_len;
     }
     return ret;
-#endif /* WOLFSSL_DILITHIUM_NO_SIGN */
+#endif /* WOLFSSL_MLDSA_NO_SIGN */
 }
 
 static int _HandleMlDsaVerify(whServerContext* ctx, uint16_t magic, int devId,
                               const void* cryptoDataIn, uint16_t inSize,
                               void* cryptoDataOut, uint16_t* outSize)
 {
-#ifdef WOLFSSL_DILITHIUM_NO_VERIFY
+#ifdef WOLFSSL_MLDSA_NO_VERIFY
     (void)ctx;
     (void)magic;
     (void)cryptoDataIn;
@@ -4331,7 +4331,7 @@ static int _HandleMlDsaVerify(whServerContext* ctx, uint16_t magic, int devId,
     return WH_ERROR_NOHANDLER;
 #else
     int                                 ret;
-    MlDsaKey                            key[1];
+    wc_MlDsaKey                         key[1];
     whMessageCrypto_MlDsaVerifyRequest  req;
     whMessageCrypto_MlDsaVerifyResponse res;
 
@@ -4419,7 +4419,7 @@ cleanup:
         *outSize = sizeof(whMessageCrypto_MlDsaVerifyResponse);
     }
     return ret;
-#endif /* WOLFSSL_DILITHIUM_NO_VERIFY */
+#endif /* WOLFSSL_MLDSA_NO_VERIFY */
 }
 
 static int _HandleMlDsaCheckPrivKey(whServerContext* ctx, uint16_t magic,
@@ -4436,9 +4436,9 @@ static int _HandleMlDsaCheckPrivKey(whServerContext* ctx, uint16_t magic,
     (void)outSize;
     return WH_ERROR_NOHANDLER;
 }
-#endif /* HAVE_DILITHIUM */
+#endif /* WOLFSSL_HAVE_MLDSA */
 
-#if defined(HAVE_DILITHIUM) || defined(HAVE_FALCON)
+#if defined(WOLFSSL_HAVE_MLDSA) || defined(HAVE_FALCON)
 static int _HandlePqcSigAlgorithm(whServerContext* ctx, uint16_t magic,
                                   int devId, const void* cryptoDataIn,
                                   uint16_t cryptoInSize, void* cryptoDataOut,
@@ -4450,8 +4450,8 @@ static int _HandlePqcSigAlgorithm(whServerContext* ctx, uint16_t magic,
     /* Dispatch the appropriate algorithm handler based on the requested PK type
      * and the algorithm type. */
     switch (pqAlgoType) {
-#ifdef HAVE_DILITHIUM
-        case WC_PQC_SIG_TYPE_DILITHIUM: {
+#ifdef WOLFSSL_HAVE_MLDSA
+        case WC_PQC_SIG_TYPE_MLDSA: {
             switch (pkAlgoType) {
                 case WC_PK_TYPE_PQC_SIG_KEYGEN:
                     ret = _HandleMlDsaKeyGen(ctx, magic, devId, cryptoDataIn,
@@ -4478,7 +4478,7 @@ static int _HandlePqcSigAlgorithm(whServerContext* ctx, uint16_t magic,
                     break;
             }
         } break;
-#endif /* HAVE_DILITHIUM */
+#endif /* WOLFSSL_HAVE_MLDSA */
         default:
             ret = WH_ERROR_NOHANDLER;
             break;
@@ -4672,7 +4672,7 @@ int wh_Server_HandleCryptoRequest(whServerContext* ctx, uint16_t magic,
                     break;
 #endif /* HAVE_ED25519 */
 
-#if defined(HAVE_DILITHIUM) || defined(HAVE_FALCON)
+#if defined(WOLFSSL_HAVE_MLDSA) || defined(HAVE_FALCON)
                 case WC_PK_TYPE_PQC_SIG_KEYGEN:
                 case WC_PK_TYPE_PQC_SIG_SIGN:
                 case WC_PK_TYPE_PQC_SIG_VERIFY:
@@ -5279,14 +5279,14 @@ static int _HandleSha512Dma(whServerContext* ctx, uint16_t magic, int devId,
 }
 #endif /* WOLFSSL_SHA512 */
 
-#if defined(HAVE_DILITHIUM)
+#if defined(WOLFSSL_HAVE_MLDSA)
 
 static int _HandleMlDsaKeyGenDma(whServerContext* ctx, uint16_t magic,
                                  int devId, const void* cryptoDataIn,
                                  uint16_t inSize, void* cryptoDataOut,
                                  uint16_t* outSize)
 {
-#ifdef WOLFSSL_DILITHIUM_NO_MAKE_KEY
+#ifdef WOLFSSL_MLDSA_NO_MAKE_KEY
     (void)ctx;
     (void)magic;
     (void)cryptoDataIn;
@@ -5295,10 +5295,10 @@ static int _HandleMlDsaKeyGenDma(whServerContext* ctx, uint16_t magic,
     (void)outSize;
     return WH_ERROR_NOHANDLER;
 #else
-    int      ret = WH_ERROR_OK;
-    MlDsaKey key[1];
-    void*    clientOutAddr = NULL;
-    uint16_t keySize       = 0;
+    int         ret = WH_ERROR_OK;
+    wc_MlDsaKey key[1];
+    void*       clientOutAddr = NULL;
+    uint16_t    keySize       = 0;
 
     whMessageCrypto_MlDsaKeyGenDmaRequest req;
     whMessageCrypto_MlDsaKeyGenDmaResponse res;
@@ -5400,14 +5400,14 @@ static int _HandleMlDsaKeyGenDma(whServerContext* ctx, uint16_t magic,
     *outSize = sizeof(res);
 
     return ret;
-#endif /* WOLFSSL_DILITHIUM_NO_MAKE_KEY */
+#endif /* WOLFSSL_MLDSA_NO_MAKE_KEY */
 }
 
 static int _HandleMlDsaSignDma(whServerContext* ctx, uint16_t magic, int devId,
                                const void* cryptoDataIn, uint16_t inSize,
                                void* cryptoDataOut, uint16_t* outSize)
 {
-#ifdef WOLFSSL_DILITHIUM_NO_SIGN
+#ifdef WOLFSSL_MLDSA_NO_SIGN
     (void)ctx;
     (void)magic;
     (void)cryptoDataIn;
@@ -5416,11 +5416,11 @@ static int _HandleMlDsaSignDma(whServerContext* ctx, uint16_t magic, int devId,
     (void)outSize;
     return WH_ERROR_NOHANDLER;
 #else
-    int      ret = 0;
-    MlDsaKey key[1];
-    void*    msgAddr = NULL;
-    void*    sigAddr = NULL;
-    word32   sigLen   = 0;
+    int         ret = 0;
+    wc_MlDsaKey key[1];
+    void*       msgAddr = NULL;
+    void*       sigAddr = NULL;
+    word32      sigLen   = 0;
 
     whMessageCrypto_MlDsaSignDmaRequest req;
     whMessageCrypto_MlDsaSignDmaResponse res;
@@ -5533,7 +5533,7 @@ static int _HandleMlDsaSignDma(whServerContext* ctx, uint16_t magic, int devId,
     }
 
     return ret;
-#endif /* WOLFSSL_DILITHIUM_NO_SIGN */
+#endif /* WOLFSSL_MLDSA_NO_SIGN */
 }
 
 static int _HandleMlDsaVerifyDma(whServerContext* ctx, uint16_t magic,
@@ -5541,7 +5541,7 @@ static int _HandleMlDsaVerifyDma(whServerContext* ctx, uint16_t magic,
                                  uint16_t inSize, void* cryptoDataOut,
                                  uint16_t* outSize)
 {
-#ifdef WOLFSSL_DILITHIUM_NO_VERIFY
+#ifdef WOLFSSL_MLDSA_NO_VERIFY
     (void)ctx;
     (void)magic;
     (void)cryptoDataIn;
@@ -5550,11 +5550,11 @@ static int _HandleMlDsaVerifyDma(whServerContext* ctx, uint16_t magic,
     (void)outSize;
     return WH_ERROR_NOHANDLER;
 #else
-    int      ret = 0;
-    MlDsaKey key[1];
-    void*    msgAddr  = NULL;
-    void*    sigAddr  = NULL;
-    int      verified = 0;
+    int         ret = 0;
+    wc_MlDsaKey key[1];
+    void*       msgAddr  = NULL;
+    void*       sigAddr  = NULL;
+    int         verified = 0;
 
     whMessageCrypto_MlDsaVerifyDmaRequest req;
     whMessageCrypto_MlDsaVerifyDmaResponse res;
@@ -5665,7 +5665,7 @@ static int _HandleMlDsaVerifyDma(whServerContext* ctx, uint16_t magic,
 
     wc_MlDsaKey_Free(key);
     return ret;
-#endif /* WOLFSSL_DILITHIUM_NO_VERIFY */
+#endif /* WOLFSSL_MLDSA_NO_VERIFY */
 }
 
 static int _HandleMlDsaCheckPrivKeyDma(whServerContext* ctx, uint16_t magic,
@@ -5682,9 +5682,9 @@ static int _HandleMlDsaCheckPrivKeyDma(whServerContext* ctx, uint16_t magic,
     (void)outSize;
     return WH_ERROR_NOHANDLER;
 }
-#endif /* HAVE_DILITHIUM */
+#endif /* WOLFSSL_HAVE_MLDSA */
 
-#if defined(HAVE_DILITHIUM) || defined(HAVE_FALCON)
+#if defined(WOLFSSL_HAVE_MLDSA) || defined(HAVE_FALCON)
 static int _HandlePqcSigAlgorithmDma(whServerContext* ctx, uint16_t magic,
                                      int devId, const void* cryptoDataIn,
                                      uint16_t cryptoInSize, void* cryptoDataOut,
@@ -5696,8 +5696,8 @@ static int _HandlePqcSigAlgorithmDma(whServerContext* ctx, uint16_t magic,
     /* Dispatch the appropriate algorithm handler based on the requested PK type
      * and the algorithm type. */
     switch (pqAlgoType) {
-#ifdef HAVE_DILITHIUM
-        case WC_PQC_SIG_TYPE_DILITHIUM: {
+#ifdef WOLFSSL_HAVE_MLDSA
+        case WC_PQC_SIG_TYPE_MLDSA: {
             switch (pkAlgoType) {
                 case WC_PK_TYPE_PQC_SIG_KEYGEN:
                     ret = _HandleMlDsaKeyGenDma(ctx, magic, devId, cryptoDataIn,
@@ -5724,7 +5724,7 @@ static int _HandlePqcSigAlgorithmDma(whServerContext* ctx, uint16_t magic,
                     break;
             }
         } break;
-#endif /* HAVE_DILITHIUM */
+#endif /* WOLFSSL_HAVE_MLDSA */
         default:
             ret = WH_ERROR_NOHANDLER;
             break;
@@ -5732,7 +5732,7 @@ static int _HandlePqcSigAlgorithmDma(whServerContext* ctx, uint16_t magic,
 
     return ret;
 }
-#endif /* HAVE_DILITHIUM || HAVE_FALCON */
+#endif /* WOLFSSL_HAVE_MLDSA || HAVE_FALCON */
 
 #if defined(WOLFSSL_CMAC) && !defined(NO_AES) && defined(WOLFSSL_AES_DIRECT)
 static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, int devId,
@@ -6118,7 +6118,7 @@ int wh_Server_HandleCryptoDmaRequest(whServerContext* ctx, uint16_t magic,
 
         case WC_ALGO_TYPE_PK:
             switch (rqstHeader.algoType) {
-#if defined(HAVE_DILITHIUM) || defined(HAVE_FALCON)
+#if defined(WOLFSSL_HAVE_MLDSA) || defined(HAVE_FALCON)
                 case WC_PK_TYPE_PQC_SIG_KEYGEN:
                 case WC_PK_TYPE_PQC_SIG_SIGN:
                 case WC_PK_TYPE_PQC_SIG_VERIFY:
@@ -6128,7 +6128,7 @@ int wh_Server_HandleCryptoDmaRequest(whServerContext* ctx, uint16_t magic,
                         cryptoDataOut, &cryptoOutSize, rqstHeader.algoType,
                         rqstHeader.algoSubType);
                     break;
-#endif /* HAVE_DILITHIUM || HAVE_FALCON */
+#endif /* WOLFSSL_HAVE_MLDSA || HAVE_FALCON */
 #ifdef HAVE_ED25519
                 case WC_PK_TYPE_ED25519_SIGN:
                     ret = _HandleEd25519SignDma(ctx, magic, devId, cryptoDataIn,

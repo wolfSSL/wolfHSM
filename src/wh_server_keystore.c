@@ -64,8 +64,8 @@
 #ifdef HAVE_CURVE25519
 #include "wolfssl/wolfcrypt/curve25519.h"
 #endif
-#ifdef HAVE_DILITHIUM
-#include "wolfssl/wolfcrypt/dilithium.h"
+#ifdef WOLFSSL_HAVE_MLDSA
+#include "wolfssl/wolfcrypt/wc_mldsa.h"
 #endif
 
 static int _FindInCache(whServerContext* server, whKeyId keyId, int* out_index,
@@ -489,13 +489,13 @@ static int _ExportEd25519PublicKey(whServerContext* server, whKeyId keyId,
 }
 #endif
 
-#if defined(HAVE_DILITHIUM) && defined(WOLFSSL_DILITHIUM_PUBLIC_KEY)
+#if defined(WOLFSSL_HAVE_MLDSA) && defined(WOLFSSL_MLDSA_PUBLIC_KEY)
 static int _ExportMldsaPublicKey(whServerContext* server, whKeyId keyId,
     uint8_t* out, uint16_t* outSz)
 {
-    int      ret = WH_ERROR_OK;
-    MlDsaKey key[1];
-    int      pub_ret;
+    int         ret = WH_ERROR_OK;
+    wc_MlDsaKey key[1];
+    int         pub_ret;
 
     ret = wc_MlDsaKey_Init(key, NULL, INVALID_DEVID);
     if (ret == 0) {
@@ -2076,12 +2076,12 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
                                                       stage, &stageMax);
                             break;
                     #endif /* HAVE_ED25519 */
-                    #if defined(HAVE_DILITHIUM) && defined(WOLFSSL_DILITHIUM_PUBLIC_KEY)
+                    #if defined(WOLFSSL_HAVE_MLDSA) && defined(WOLFSSL_MLDSA_PUBLIC_KEY)
                         case WH_KEY_ALGO_MLDSA:
                             ret = _ExportMldsaPublicKey(server, serverKeyId,
                                                       stage, &stageMax);
                             break;
-                    #endif /* HAVE_DILITHIUM && WOLFSSL_DILITHIUM_PUBLIC_KEY */
+                    #endif /* WOLFSSL_HAVE_MLDSA && WOLFSSL_MLDSA_PUBLIC_KEY */
                     #ifdef HAVE_CURVE25519
                         case WH_KEY_ALGO_CURVE25519:
                             ret = _ExportCurve25519PublicKey(server, serverKeyId,
@@ -2272,13 +2272,13 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
                                                       out, &max_der);
                             break;
                     #endif /* HAVE_ED25519 */
-                    #if defined(HAVE_DILITHIUM) && \
-                                           defined(WOLFSSL_DILITHIUM_PUBLIC_KEY)
+                    #if defined(WOLFSSL_HAVE_MLDSA) && \
+                                           defined(WOLFSSL_MLDSA_PUBLIC_KEY)
                         case WH_KEY_ALGO_MLDSA:
                             ret = _ExportMldsaPublicKey(server, serverKeyId,
                                                         out, &max_der);
                             break;
-                    #endif /* HAVE_DILITHIUM && WOLFSSL_DILITHIUM_PUBLIC_KEY */
+                    #endif /* WOLFSSL_HAVE_MLDSA && WOLFSSL_MLDSA_PUBLIC_KEY */
                     #ifdef HAVE_CURVE25519
                         case WH_KEY_ALGO_CURVE25519:
                             ret = _ExportCurve25519PublicKey(server,
@@ -2413,7 +2413,7 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
 
             (void)wh_MessageKeystore_TranslateRevokeResponse(
                 magic, &resp, (whMessageKeystore_RevokeResponse*)resp_packet);
-            
+
             *out_resp_size = sizeof(resp);
         } break;
 

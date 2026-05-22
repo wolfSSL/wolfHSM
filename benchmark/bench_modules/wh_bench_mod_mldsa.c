@@ -23,15 +23,15 @@
 
 
 #if !defined(WOLFHSM_CFG_NO_CRYPTO) && defined(WOLFHSM_CFG_BENCH_ENABLE)
-#include "wolfssl/wolfcrypt/dilithium.h"
+#include "wolfssl/wolfcrypt/wc_mldsa.h"
 #include "wolfssl/wolfcrypt/random.h"
 
-#if defined(HAVE_DILITHIUM)
+#if defined(WOLFSSL_HAVE_MLDSA)
 
-#if !defined(WOLFSSL_DILITHIUM_NO_SIGN)
+#if !defined(WOLFSSL_MLDSA_NO_SIGN)
 /* raw private key without ASN1 syntax from
  * ./certs/dilithium/bench_dilithium_level2_key.der */
-static const unsigned char bench_dilithium_level2_key[] = {
+static const unsigned char bench_mldsa_44_key[] = {
     0xea, 0x05, 0x24, 0x0d, 0x80, 0x72, 0x25, 0x55, 0xf4, 0x5b, 0xc2, 0x13,
     0x8b, 0x87, 0x5d, 0x31, 0x99, 0x2f, 0x1d, 0xa9, 0x41, 0x09, 0x05, 0x76,
     0xa7, 0xb7, 0x5e, 0x8c, 0x44, 0xe2, 0x64, 0x79, 0xd8, 0x79, 0x4c, 0xee,
@@ -247,9 +247,9 @@ static const unsigned char bench_dilithium_level2_key[] = {
     0x37, 0xa0, 0x11, 0xff, 0xb2, 0xa4, 0xc3, 0x61, 0xf2, 0xa3, 0x49, 0xbe,
     0xe7, 0xb6, 0x96, 0x2f,
 };
-#endif /* !WOLFSSL_DILITHIUM_NO_SIGN */
+#endif /* !WOLFSSL_MLDSA_NO_SIGN */
 
-#if !defined(WOLFSSL_DILITHIUM_NO_VERIFY)
+#if !defined(WOLFSSL_MLDSA_NO_VERIFY)
 const byte ml_dsa_44_pub_key[] = {
     0xd8, 0xac, 0xaf, 0xd8, 0x2e, 0x14, 0x23, 0x78, 0xf7, 0x0d, 0x9a, 0x04,
     0x2b, 0x92, 0x48, 0x67, 0x60, 0x55, 0x34, 0xd9, 0xac, 0x0b, 0xc4, 0x1f,
@@ -610,24 +610,24 @@ static byte test_msg[512] = {
     0xf8, 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe, 0xff};
 /* raw public key without ASN1 syntax from
  * ./certs/dilithium/bench_dilithium_level2_key.der */
-#endif /* !(WOLFSSL_DILITHIUM_NO_VERIFY) */
+#endif /* !(WOLFSSL_MLDSA_NO_VERIFY) */
 
-#if !defined(WOLFSSL_DILITHIUM_NO_SIGN)
+#if !defined(WOLFSSL_MLDSA_NO_SIGN)
 /* Helper function for ML-DSA sign benchmark */
 static int _benchMlDsaSign(whClientContext* client, whBenchOpContext* ctx,
-                           int id, int securityLevel, int devId)
+                           int id, int paramSet, int devId)
 {
-    int      ret = 0;
-    MlDsaKey key;
-    WC_RNG   rng[1] = {0};
-    byte     msg[]  = "Test message for ML DSA signing";
-    byte*    sig    = NULL;
-    word32   sigSz  = 0;
-    int      i;
-    int      initialized_rng = 0;
-    int      initialized_key = 0;
-    whKeyId  keyId           = WH_KEYID_ERASED;
-    char     keyLabel[]      = "bench-mldsa-key";
+    int         ret = 0;
+    wc_MlDsaKey key;
+    WC_RNG      rng[1] = {0};
+    byte        msg[]  = "Test message for ML DSA signing";
+    byte*       sig    = NULL;
+    word32      sigSz  = 0;
+    int         i;
+    int         initialized_rng = 0;
+    int         initialized_key = 0;
+    whKeyId     keyId           = WH_KEYID_ERASED;
+    char        keyLabel[]      = "bench-mldsa-key";
 
     /* Initialize the RNG */
     ret = wc_InitRng_ex(rng, NULL, devId);
@@ -645,8 +645,8 @@ static int _benchMlDsaSign(whClientContext* client, whBenchOpContext* ctx,
     }
     initialized_key = 1;
 
-    /* Set security level */
-    ret = wc_MlDsaKey_SetParams(&key, securityLevel);
+    /* Set ML-DSA parameter set */
+    ret = wc_MlDsaKey_SetParams(&key, paramSet);
     if (ret != 0) {
         WH_BENCH_PRINTF("Failed to wc_MlDsaKey_SetParams %d\n", ret);
         goto exit;
@@ -654,8 +654,8 @@ static int _benchMlDsaSign(whClientContext* client, whBenchOpContext* ctx,
 
     /* Import the raw public key into the wolfCrypt structure */
     if (ret == 0) {
-        ret = wc_MlDsaKey_ImportPrivRaw(&key, bench_dilithium_level2_key,
-                                        sizeof(bench_dilithium_level2_key));
+        ret = wc_MlDsaKey_ImportPrivRaw(&key, bench_mldsa_44_key,
+                                        sizeof(bench_mldsa_44_key));
         if (ret != 0) {
             WH_BENCH_PRINTF("Failed to import ML-DSA public key: %d\n", ret);
         }
@@ -761,24 +761,23 @@ exit:
 
     return ret;
 }
-#endif /* !defined(WOLFSSL_DILITHIUM_NO_SIGN) */
+#endif /* !defined(WOLFSSL_MLDSA_NO_SIGN) */
 
-#if !defined(WOLFSSL_DILITHIUM_NO_VERIFY)
+#if !defined(WOLFSSL_MLDSA_NO_VERIFY)
 /* Helper function for ML-DSA verify benchmark */
 static int _benchMlDsaVerify(whClientContext* client, whBenchOpContext* ctx,
-                             int id, int securityLevel, int devId)
+                             int id, int paramSet, int devId)
 {
-    int      ret = 0;
-    MlDsaKey key;
-    WC_RNG   rng[1] = {0};
-    byte*    sig    = NULL;
-    /*word32   sigSz  = 0; */
-    int     i;
-    int     verified        = 0;
-    int     initialized_rng = 0;
-    int     initialized_key = 0;
-    whKeyId keyId           = WH_KEYID_ERASED;
-    char    keyLabel[]      = "bench-mldsa-key";
+    int         ret = 0;
+    wc_MlDsaKey key;
+    WC_RNG      rng[1] = {0};
+    byte*       sig    = NULL;
+    int         i;
+    int         verified        = 0;
+    int         initialized_rng = 0;
+    int         initialized_key = 0;
+    whKeyId     keyId           = WH_KEYID_ERASED;
+    char        keyLabel[]      = "bench-mldsa-key";
 
     /* Initialize the RNG */
     ret = wc_InitRng_ex(rng, NULL, devId);
@@ -796,8 +795,8 @@ static int _benchMlDsaVerify(whClientContext* client, whBenchOpContext* ctx,
     }
     initialized_key = 1;
 
-    /* Set security level */
-    ret = wc_MlDsaKey_SetParams(&key, securityLevel);
+    /* Set ML-DSA parameter set */
+    ret = wc_MlDsaKey_SetParams(&key, paramSet);
     if (ret != 0) {
         WH_BENCH_PRINTF("Failed to wc_MlDsaKey_SetParams %d\n", ret);
         goto exit;
@@ -893,21 +892,21 @@ exit:
 
     return ret;
 }
-#endif /* !defined(WOLFSSL_DILITHIUM_NO_VERIFY) */
+#endif /* !defined(WOLFSSL_MLDSA_NO_VERIFY) */
 
-#if !defined(WOLFSSL_DILITHIUM_NO_MAKE_KEY)
+#if !defined(WOLFSSL_MLDSA_NO_MAKE_KEY)
 /* Helper function for ML-DSA key generation benchmark */
 static int _benchMlDsaKeyGen(whClientContext* client, whBenchOpContext* ctx,
-                             int id, int securityLevel, int devId)
+                             int id, int paramSet, int devId)
 {
     (void)client;
 
-    int      ret = 0;
-    MlDsaKey key;
-    WC_RNG   rng[1] = {0};
-    int      i;
-    int      initialized_rng = 0;
-    int      initialized_key = 0;
+    int         ret = 0;
+    wc_MlDsaKey key;
+    WC_RNG      rng[1] = {0};
+    int         i;
+    int         initialized_rng = 0;
+    int         initialized_key = 0;
 
     /* Initialize the RNG */
     ret = wc_InitRng_ex(rng, NULL, devId);
@@ -930,8 +929,8 @@ static int _benchMlDsaKeyGen(whClientContext* client, whBenchOpContext* ctx,
         }
         initialized_key = 1;
 
-        /* Set security level */
-        ret = wc_MlDsaKey_SetParams(&key, securityLevel);
+        /* Set ML-DSA parameter set */
+        ret = wc_MlDsaKey_SetParams(&key, paramSet);
         if (ret != 0) {
             WH_BENCH_PRINTF("Failed to wc_MlDsaKey_SetParams %d\n", ret);
             break;
@@ -973,14 +972,14 @@ static int _benchMlDsaKeyGen(whClientContext* client, whBenchOpContext* ctx,
 
     return ret;
 }
-#endif /* !defined(WOLFSSL_DILITHIUM_NO_MAKE_KEY) */
+#endif /* !defined(WOLFSSL_MLDSA_NO_MAKE_KEY) */
 
-/* Benchmark functions for ML-DSA with security level 44 */
+/* Benchmark functions for ML-DSA 44 */
 #if !defined(WOLFSSL_NO_ML_DSA_44)
 int wh_Bench_Mod_MlDsa44Sign(whClientContext* client, whBenchOpContext* ctx,
                              int id, void* params)
 {
-#if !defined(WOLFSSL_DILITHIUM_NO_SIGN) && \
+#if !defined(WOLFSSL_MLDSA_NO_SIGN) && \
     !defined(WOLFHSM_CFG_TEST_CLIENT_LARGE_DATA_DMA_ONLY)
     (void)params;
     return _benchMlDsaSign(client, ctx, id, WC_ML_DSA_44, WH_DEV_ID);
@@ -996,7 +995,7 @@ int wh_Bench_Mod_MlDsa44Sign(whClientContext* client, whBenchOpContext* ctx,
 int wh_Bench_Mod_MlDsa44SignDma(whClientContext* client, whBenchOpContext* ctx,
                                 int id, void* params)
 {
-#if defined(WOLFHSM_CFG_DMA) && !defined(WOLFSSL_DILITHIUM_NO_SIGN)
+#if defined(WOLFHSM_CFG_DMA) && !defined(WOLFSSL_MLDSA_NO_SIGN)
     (void)params;
     return _benchMlDsaSign(client, ctx, id, WC_ML_DSA_44, WH_DEV_ID_DMA);
 #else
@@ -1011,7 +1010,7 @@ int wh_Bench_Mod_MlDsa44SignDma(whClientContext* client, whBenchOpContext* ctx,
 int wh_Bench_Mod_MlDsa44Verify(whClientContext* client, whBenchOpContext* ctx,
                                int id, void* params)
 {
-#if !defined(WOLFSSL_DILITHIUM_NO_VERIFY) && \
+#if !defined(WOLFSSL_MLDSA_NO_VERIFY) && \
     !defined(WOLFHSM_CFG_TEST_CLIENT_LARGE_DATA_DMA_ONLY)
     (void)params;
     return _benchMlDsaVerify(client, ctx, id, WC_ML_DSA_44, WH_DEV_ID);
@@ -1027,7 +1026,7 @@ int wh_Bench_Mod_MlDsa44Verify(whClientContext* client, whBenchOpContext* ctx,
 int wh_Bench_Mod_MlDsa44VerifyDma(whClientContext*  client,
                                   whBenchOpContext* ctx, int id, void* params)
 {
-#if defined(WOLFHSM_CFG_DMA) && !defined(WOLFSSL_DILITHIUM_NO_VERIFY)
+#if defined(WOLFHSM_CFG_DMA) && !defined(WOLFSSL_MLDSA_NO_VERIFY)
     (void)params;
     return _benchMlDsaVerify(client, ctx, id, WC_ML_DSA_44, WH_DEV_ID_DMA);
 #else
@@ -1042,7 +1041,7 @@ int wh_Bench_Mod_MlDsa44VerifyDma(whClientContext*  client,
 int wh_Bench_Mod_MlDsa44KeyGen(whClientContext* client, whBenchOpContext* ctx,
                                int id, void* params)
 {
-#if !defined(WOLFSSL_DILITHIUM_NO_MAKE_KEY) && \
+#if !defined(WOLFSSL_MLDSA_NO_MAKE_KEY) && \
     !defined(WOLFHSM_CFG_TEST_CLIENT_LARGE_DATA_DMA_ONLY)
     (void)params;
     return _benchMlDsaKeyGen(client, ctx, id, WC_ML_DSA_44, WH_DEV_ID);
@@ -1058,7 +1057,7 @@ int wh_Bench_Mod_MlDsa44KeyGen(whClientContext* client, whBenchOpContext* ctx,
 int wh_Bench_Mod_MlDsa44KeyGenDma(whClientContext*  client,
                                   whBenchOpContext* ctx, int id, void* params)
 {
-#if defined(WOLFHSM_CFG_DMA) && !defined(WOLFSSL_DILITHIUM_NO_MAKE_KEY)
+#if defined(WOLFHSM_CFG_DMA) && !defined(WOLFSSL_MLDSA_NO_MAKE_KEY)
     (void)params;
     return _benchMlDsaKeyGen(client, ctx, id, WC_ML_DSA_44, WH_DEV_ID_DMA);
 #else
@@ -1071,7 +1070,7 @@ int wh_Bench_Mod_MlDsa44KeyGenDma(whClientContext*  client,
 }
 #endif /* !defined(WOLFSSL_NO_ML_DSA_44) */
 
-/* Benchmark functions for ML-DSA with security level 65 */
+/* Benchmark functions for ML-DSA 65 */
 #if !defined(WOLFSSL_NO_ML_DSA_65)
 int wh_Bench_Mod_MlDsa65Sign(whClientContext* client, whBenchOpContext* ctx,
                              int id, void* params)
@@ -1134,8 +1133,8 @@ int wh_Bench_Mod_MlDsa65KeyGenDma(whClientContext*  client,
 }
 #endif /* !defined(WOLFSSL_NO_ML_DSA_65) */
 
-/* Benchmark functions for ML-DSA with security level 87 */
-#if !defined(WOLFSSL_DILITHIUM_NO_SIGN)
+/* Benchmark functions for ML-DSA 87 */
+#if !defined(WOLFSSL_MLDSA_NO_SIGN)
 int wh_Bench_Mod_MlDsa87Sign(whClientContext* client, whBenchOpContext* ctx,
                              int id, void* params)
 {
@@ -1197,6 +1196,6 @@ int wh_Bench_Mod_MlDsa87KeyGenDma(whClientContext*  client,
 }
 #endif /* !defined(WOLFSSL_NO_ML_DSA_87) */
 
-#endif /* HAVE_DILITHIUM */
+#endif /* WOLFSSL_HAVE_MLDSA */
 
 #endif /* !WOLFHSM_CFG_NO_CRYPTO && WOLFHSM_CFG_BENCH_ENABLE */

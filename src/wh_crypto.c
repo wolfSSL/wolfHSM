@@ -43,7 +43,7 @@
 #include "wolfssl/wolfcrypt/curve25519.h"
 #include "wolfssl/wolfcrypt/ecc.h"
 #include "wolfssl/wolfcrypt/ed25519.h"
-#include "wolfssl/wolfcrypt/dilithium.h"
+#include "wolfssl/wolfcrypt/wc_mldsa.h"
 
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_utils.h"
@@ -300,8 +300,8 @@ int wh_Crypto_Ed25519DeserializeKeyDer(const uint8_t* buffer, uint16_t size,
 }
 #endif /* HAVE_ED25519 */
 
-#ifdef HAVE_DILITHIUM
-int wh_Crypto_MlDsaSerializeKeyDer(MlDsaKey* key, uint16_t max_size,
+#ifdef WOLFSSL_HAVE_MLDSA
+int wh_Crypto_MlDsaSerializeKeyDer(wc_MlDsaKey* key, uint16_t max_size,
                                    uint8_t* buffer, uint16_t* out_size)
 {
     int ret = 0;
@@ -312,26 +312,26 @@ int wh_Crypto_MlDsaSerializeKeyDer(MlDsaKey* key, uint16_t max_size,
 
     /* Choose appropriate serialization based on key flags */
     if (key->prvKeySet && key->pubKeySet) {
-#if defined(WOLFSSL_DILITHIUM_PRIVATE_KEY) && \
-    defined(WOLFSSL_DILITHIUM_PUBLIC_KEY)
+#if defined(WOLFSSL_MLDSA_PRIVATE_KEY) && \
+    defined(WOLFSSL_MLDSA_PUBLIC_KEY)
         /* Full keypair - use KeyToDer */
-        ret = wc_Dilithium_KeyToDer(key, buffer, max_size);
+        ret = wc_MlDsaKey_KeyToDer(key, buffer, max_size);
 #else
         ret = WH_ERROR_BADARGS;
 #endif
     }
     else if (key->pubKeySet) {
-#ifdef WOLFSSL_DILITHIUM_PUBLIC_KEY
+#ifdef WOLFSSL_MLDSA_PUBLIC_KEY
         /* Public key only - use PublicKeyToDer with SPKI format */
-        ret = wc_Dilithium_PublicKeyToDer(key, buffer, max_size, 1);
+        ret = wc_MlDsaKey_PublicKeyToDer(key, buffer, max_size, 1);
 #else
         ret = WH_ERROR_BADARGS;
 #endif
     }
     else if (key->prvKeySet) {
-#ifdef WOLFSSL_DILITHIUM_PRIVATE_KEY
+#ifdef WOLFSSL_MLDSA_PRIVATE_KEY
         /* Private key only */
-        ret = wc_Dilithium_PrivateKeyToDer(key, buffer, max_size);
+        ret = wc_MlDsaKey_PrivateKeyToDer(key, buffer, max_size);
 #else
         ret = WH_ERROR_BADARGS;
 #endif
@@ -350,7 +350,7 @@ int wh_Crypto_MlDsaSerializeKeyDer(MlDsaKey* key, uint16_t max_size,
 }
 
 int wh_Crypto_MlDsaDeserializeKeyDer(const uint8_t* buffer, uint16_t size,
-        MlDsaKey* key)
+        wc_MlDsaKey* key)
 {
     word32 idx = 0;
     int ret;
@@ -359,25 +359,25 @@ int wh_Crypto_MlDsaDeserializeKeyDer(const uint8_t* buffer, uint16_t size,
         return WH_ERROR_BADARGS;
     }
 
-#if defined(WOLFSSL_DILITHIUM_PRIVATE_KEY) && \
-    defined(WOLFSSL_DILITHIUM_PUBLIC_KEY)
+#if defined(WOLFSSL_MLDSA_PRIVATE_KEY) && \
+    defined(WOLFSSL_MLDSA_PUBLIC_KEY)
     /* Try private key first, if that fails try public key */
-    ret = wc_Dilithium_PrivateKeyDecode(buffer, &idx, key, size);
+    ret = wc_MlDsaKey_PrivateKeyDecode(key, buffer, size, &idx);
     if (ret != 0) {
         /* Reset index before trying public key */
         idx = 0;
-        ret = wc_Dilithium_PublicKeyDecode(buffer, &idx, key, size);
+        ret = wc_MlDsaKey_PublicKeyDecode(key, buffer, size, &idx);
     }
-#elif defined(WOLFSSL_DILITHIUM_PUBLIC_KEY)
-    ret = wc_Dilithium_PublicKeyDecode(buffer, &idx, key, size);
-#elif defined(WOLFSSL_DILITHIUM_PRIVATE_KEY)
-    ret = wc_Dilithium_PrivateKeyDecode(buffer, &idx, key, size);
+#elif defined(WOLFSSL_MLDSA_PUBLIC_KEY)
+    ret = wc_MlDsaKey_PublicKeyDecode(key, buffer, size, &idx);
+#elif defined(WOLFSSL_MLDSA_PRIVATE_KEY)
+    ret = wc_MlDsaKey_PrivateKeyDecode(key, buffer, size, &idx);
 #else
     ret = WH_ERROR_BADARGS;
 #endif
     return ret;
 }
-#endif /* HAVE_DILITHIUM */
+#endif /* WOLFSSL_HAVE_MLDSA */
 
 #ifdef WOLFSSL_CMAC
 void wh_Crypto_CmacAesSaveStateToMsg(whMessageCrypto_CmacAesState* state,

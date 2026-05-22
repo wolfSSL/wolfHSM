@@ -42,7 +42,7 @@
 #include "wolfssl/wolfcrypt/curve25519.h"
 #include "wolfssl/wolfcrypt/ecc.h"
 #include "wolfssl/wolfcrypt/ed25519.h"
-#include "wolfssl/wolfcrypt/dilithium.h"
+#include "wolfssl/wolfcrypt/wc_mldsa.h"
 
 #include "wolfhsm/wh_message_crypto.h"
 
@@ -108,15 +108,15 @@ int wh_Crypto_Ed25519DeserializeKeyDer(const uint8_t* buffer, uint16_t size,
                                        ed25519_key* key);
 #endif /* HAVE_ED25519 */
 
-#ifdef HAVE_DILITHIUM
+#ifdef WOLFSSL_HAVE_MLDSA
 #define WH_CRYPTO_MLDSA_MAX_CTX_LEN (255U)
-/* Store a MlDsaKey to a byte sequence */
-int wh_Crypto_MlDsaSerializeKeyDer(MlDsaKey* key, uint16_t max_size,
+/* Store a wc_MlDsaKey to a byte sequence */
+int wh_Crypto_MlDsaSerializeKeyDer(wc_MlDsaKey* key, uint16_t max_size,
                                    uint8_t* buffer, uint16_t* out_size);
-/* Restore a MlDsaKey from a byte sequence */
+/* Restore a wc_MlDsaKey from a byte sequence */
 int wh_Crypto_MlDsaDeserializeKeyDer(const uint8_t* buffer, uint16_t size,
-                                     MlDsaKey* key);
-#endif /* HAVE_DILITHIUM */
+                                     wc_MlDsaKey* key);
+#endif /* WOLFSSL_HAVE_MLDSA */
 
 #endif  /* !WOLFHSM_CFG_NO_CRYPTO */
 
