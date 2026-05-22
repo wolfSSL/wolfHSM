@@ -88,10 +88,12 @@ static int _Curve25519MakeKey(whClientContext* ctx, uint16_t size,
 #endif /* HAVE_CURVE25519 */
 
 #ifndef NO_RSA
-/* Make an RSA key on the server based on the flags */
-static int _RsaMakeKey(whClientContext* ctx, uint32_t size, uint32_t e,
-                       whNvmFlags flags, uint32_t label_len, uint8_t* label,
-                       whKeyId* inout_key_id, RsaKey* rsa);
+/* Shared async halves used by the RsaMakeCacheKey/RsaMakeExportKey wrappers. */
+static int _RsaMakeKeyRequest(whClientContext* ctx, uint32_t size, uint32_t e,
+                              whKeyId key_id, whNvmFlags flags,
+                              uint32_t label_len, uint8_t* label);
+static int _RsaMakeKeyResponse(whClientContext* ctx, whKeyId* out_key_id,
+                               RsaKey* out_rsa);
 #endif
 
 #ifdef HAVE_HKDF
@@ -3983,141 +3985,289 @@ int wh_Client_RsaExportPublicKey(whClientContext* ctx, whKeyId keyId,
     return ret;
 }
 
-static int _RsaMakeKey(whClientContext* ctx, uint32_t size, uint32_t e,
-                       whNvmFlags flags, uint32_t label_len, uint8_t* label,
-                       whKeyId* inout_key_id, RsaKey* rsa)
+static int _RsaMakeKeyRequest(whClientContext* ctx, uint32_t size, uint32_t e,
+                              whKeyId key_id, whNvmFlags flags,
+                              uint32_t label_len, uint8_t* label)
 {
-    int                                ret     = WH_ERROR_OK;
-    uint8_t*                           dataPtr = NULL;
-    whMessageCrypto_RsaKeyGenRequest*  req     = NULL;
-    whMessageCrypto_RsaKeyGenResponse* res     = NULL;
-    uint16_t                           group   = WH_MESSAGE_GROUP_CRYPTO;
-    uint16_t                           action  = WC_ALGO_TYPE_PK;
-    whKeyId                            key_id  = WH_KEYID_ERASED;
+    whMessageCrypto_RsaKeyGenRequest* req     = NULL;
+    uint8_t*                          dataPtr = NULL;
+    uint16_t                          req_len;
 
     if (ctx == NULL) {
         return WH_ERROR_BADARGS;
     }
 
-    /* Get data pointer from the context to use as request/response storage */
+    req_len = sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
+    if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
+        return WH_ERROR_BADARGS;
+    }
+
     dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
     if (dataPtr == NULL) {
         return WH_ERROR_BADARGS;
     }
 
-    /* Setup generic header and get pointer to request data */
     req = (whMessageCrypto_RsaKeyGenRequest*)_createCryptoRequest(
         dataPtr, WC_PK_TYPE_RSA_KEYGEN, ctx->cryptoAffinity);
 
-    uint16_t req_len =
-        sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
-
-    /* Use the supplied key id if provided */
-    if (inout_key_id != NULL) {
-        key_id = *inout_key_id;
-    }
-
-    /* Populate request body directly */
+    memset(req, 0, sizeof(*req));
     req->size  = size;
     req->e     = e;
     req->flags = flags;
-    req->keyId = key_id; /* Use key_id from inout_key_id or ERASED */
+    req->keyId = key_id;
     if ((label != NULL) && (label_len > 0)) {
         if (label_len > WH_NVM_LABEL_LEN) {
             label_len = WH_NVM_LABEL_LEN;
         }
         memcpy(req->label, label, label_len);
-        /* Ensure null termination if space allows, though protocol doesn't
-         * require */
-        if (label_len < WH_NVM_LABEL_LEN) {
-            req->label[label_len] = '\0';
-        }
-    }
-    else {
-        memset(req->label, 0, WH_NVM_LABEL_LEN);
     }
 
-    /* Send Request */
-    ret = wh_Client_SendRequest(ctx, group, action, req_len, dataPtr);
-    WH_DEBUG_CLIENT_VERBOSE("RSA KeyGen Req sent:size:%u, e:%u, ret:%d\n",
-           (unsigned int)req->size, (unsigned int)req->e, ret);
-    if (ret == 0) {
-        uint16_t res_len = 0;
-        do {
-            ret =
-                wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
-        } while (ret == WH_ERROR_NOTREADY);
+    WH_DEBUG_CLIENT_VERBOSE("RSA KeyGen Req: size:%u, e:%u\n", (unsigned)size,
+                            (unsigned)e);
 
-        WH_DEBUG_CLIENT_VERBOSE("RSA KeyGen Res recv: ret:%d, res_len: %u\n", ret,
-               (unsigned int)res_len);
+    return wh_Client_SendRequest(ctx, WH_MESSAGE_GROUP_CRYPTO, WC_ALGO_TYPE_PK,
+                                 req_len, dataPtr);
+}
 
-        if (ret == WH_ERROR_OK) {
-            /* Get response structure pointer, validates generic header rc */
-            ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_RSA_KEYGEN,
-                                     (uint8_t**)&res);
+/* Receives a keygen reply: deserializes DER into out_rsa for export,
+ * or writes the assigned keyId to *out_key_id for cache. */
+static int _RsaMakeKeyResponse(whClientContext* ctx, whKeyId* out_key_id,
+                               RsaKey* out_rsa)
+{
+    int                                ret;
+    uint16_t                           group;
+    uint16_t                           action;
+    uint16_t                           res_len = 0;
+    uint8_t*                           dataPtr = NULL;
+    whMessageCrypto_RsaKeyGenResponse* res     = NULL;
+
+    if (ctx == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
+    if (dataPtr == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_RSA_KEYGEN, (uint8_t**)&res);
+    /* wolfCrypt allows positive return codes on success */
+    if (ret >= 0) {
+        const size_t hdr_sz =
+            sizeof(whMessageCrypto_GenericResponseHeader) + sizeof(*res);
+        whKeyId key_id;
+
+        if (res_len < hdr_sz || res->len > (res_len - hdr_sz)) {
+            return WH_ERROR_ABORTED;
         }
 
-        if (ret == WH_ERROR_OK) {
-            /* Key is cached on server or is ephemeral */
-            key_id = (whKeyId)(res->keyId);
+        key_id = (whKeyId)(res->keyId);
+        WH_DEBUG_CLIENT_VERBOSE("RSA KeyGen Res: keyid:%x len:%u\n", key_id,
+                                (unsigned)res->len);
 
-            /* Update output variable if requested */
-            if (inout_key_id != NULL) {
-                *inout_key_id = key_id;
+        if (out_key_id != NULL) {
+            *out_key_id = key_id;
+        }
+
+        /* Export path: server must return a DER blob. Reject empty bodies
+         * and stamp ERASED rather than trust the server-reported keyId. */
+        if (out_rsa != NULL) {
+            if (res->len == 0) {
+                return WH_ERROR_ABORTED;
             }
-
-            /* Update the RSA context if provided */
-            if (rsa != NULL) {
-                word32   der_size = (word32)(res->len);
-                uint8_t* rsa_der  = (uint8_t*)(res + 1);
-
-                /* Set the rsa key_id.  Should be ERASED if EPHEMERAL */
-                wh_Client_RsaSetKeyId(rsa, key_id);
-
-                WH_DEBUG_CLIENT_VERBOSE("Set key_id:%x with flags:%x\n",
-                       key_id, flags);
-                if (flags & WH_NVM_FLAGS_EPHEMERAL) {
-                    /* Response has the exported key */
-                    ret =
-                        wh_Crypto_RsaDeserializeKeyDer(der_size, rsa_der, rsa);
-                }
-            }
+            uint8_t* rsa_der  = (uint8_t*)(res + 1);
+            word32   der_size = (word32)(res->len);
+            wh_Client_RsaSetKeyId(out_rsa, WH_KEYID_ERASED);
+            ret = wh_Crypto_RsaDeserializeKeyDer(der_size, rsa_der, out_rsa);
         }
     }
     return ret;
+}
+
+int wh_Client_RsaMakeCacheKeyRequest(whClientContext* ctx, uint32_t size,
+                                     uint32_t e, whKeyId key_id,
+                                     whNvmFlags flags, uint32_t label_len,
+                                     uint8_t* label)
+{
+    /* Ephemeral keygen belongs to the export pair, not the cache pair. */
+    if (flags & WH_NVM_FLAGS_EPHEMERAL) {
+        return WH_ERROR_BADARGS;
+    }
+    return _RsaMakeKeyRequest(ctx, size, e, key_id, flags, label_len, label);
+}
+
+int wh_Client_RsaMakeCacheKeyResponse(whClientContext* ctx, whKeyId* out_key_id)
+{
+    if (out_key_id == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    return _RsaMakeKeyResponse(ctx, out_key_id, NULL);
+}
+
+int wh_Client_RsaMakeExportKeyRequest(whClientContext* ctx, uint32_t size,
+                                      uint32_t e)
+{
+    return _RsaMakeKeyRequest(ctx, size, e, WH_KEYID_ERASED,
+                              WH_NVM_FLAGS_EPHEMERAL, 0, NULL);
+}
+
+int wh_Client_RsaMakeExportKeyResponse(whClientContext* ctx, RsaKey* rsa)
+{
+    if (rsa == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    return _RsaMakeKeyResponse(ctx, NULL, rsa);
 }
 
 int wh_Client_RsaMakeCacheKey(whClientContext* ctx, uint32_t size, uint32_t e,
                               whKeyId* inout_key_id, whNvmFlags flags,
                               uint32_t label_len, uint8_t* label)
 {
+    int     ret;
+    whKeyId key_id = WH_KEYID_ERASED;
+
     if ((ctx == NULL) || (inout_key_id == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
-    return _RsaMakeKey(ctx, size, e, flags, label_len, label, inout_key_id,
-                       NULL);
+    ret = wh_Client_RsaMakeCacheKeyRequest(ctx, size, e, *inout_key_id, flags,
+                                           label_len, label);
+    if (ret == WH_ERROR_OK) {
+        do {
+            ret = wh_Client_RsaMakeCacheKeyResponse(ctx, &key_id);
+        } while (ret == WH_ERROR_NOTREADY);
+        if (ret >= 0) {
+            *inout_key_id = key_id;
+        }
+    }
+    return ret;
 }
 
 int wh_Client_RsaMakeExportKey(whClientContext* ctx, uint32_t size, uint32_t e,
                                RsaKey* rsa)
 {
+    int ret;
+
     if ((ctx == NULL) || (rsa == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
-    return _RsaMakeKey(ctx, size, e, WH_NVM_FLAGS_EPHEMERAL, 0, NULL, NULL,
-                       rsa);
+    ret = wh_Client_RsaMakeExportKeyRequest(ctx, size, e);
+    if (ret == WH_ERROR_OK) {
+        do {
+            ret = wh_Client_RsaMakeExportKeyResponse(ctx, rsa);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+    return ret;
+}
+
+int wh_Client_RsaFunctionRequest(whClientContext* ctx, whKeyId keyId,
+                                 int rsa_type, const uint8_t* in,
+                                 uint16_t in_len, uint16_t out_capacity)
+{
+    whMessageCrypto_RsaRequest* req     = NULL;
+    uint8_t*                    dataPtr = NULL;
+    size_t                      total_len;
+    uint16_t                    req_len;
+
+    if ((ctx == NULL) || ((in == NULL) && (in_len > 0))) {
+        return WH_ERROR_BADARGS;
+    }
+    if (WH_KEYID_ISERASED(keyId)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    total_len =
+        sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req) + in_len;
+    if (total_len > WOLFHSM_CFG_COMM_DATA_LEN) {
+        return WH_ERROR_BADARGS;
+    }
+    req_len = (uint16_t)total_len;
+
+    dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
+    if (dataPtr == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    req = (whMessageCrypto_RsaRequest*)_createCryptoRequest(
+        dataPtr, WC_PK_TYPE_RSA, ctx->cryptoAffinity);
+
+    memset(req, 0, sizeof(*req));
+    req->opType  = rsa_type;
+    req->options = 0;
+    req->keyId   = keyId;
+    req->inLen   = in_len;
+    req->outLen  = out_capacity;
+    if ((in != NULL) && (in_len > 0)) {
+        memcpy((uint8_t*)(req + 1), in, in_len);
+    }
+
+    return wh_Client_SendRequest(ctx, WH_MESSAGE_GROUP_CRYPTO, WC_ALGO_TYPE_PK,
+                                 req_len, dataPtr);
+}
+
+int wh_Client_RsaFunctionResponse(whClientContext* ctx, uint8_t* out,
+                                  uint16_t* inout_out_len)
+{
+    int                          ret;
+    uint16_t                     group;
+    uint16_t                     action;
+    uint16_t                     res_len = 0;
+    uint8_t*                     dataPtr;
+    whMessageCrypto_RsaResponse* res = NULL;
+
+    if ((ctx == NULL) || ((out != NULL) && (inout_out_len == NULL))) {
+        return WH_ERROR_BADARGS;
+    }
+
+    dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
+    if (dataPtr == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_RSA, (uint8_t**)&res);
+    if (ret >= 0) {
+        const size_t hdr_sz =
+            sizeof(whMessageCrypto_GenericResponseHeader) + sizeof(*res);
+        uint8_t* res_out;
+
+        if (res_len < hdr_sz || res->outLen > (res_len - hdr_sz)) {
+            return WH_ERROR_ABORTED;
+        }
+
+        res_out = (uint8_t*)(res + 1);
+        if (inout_out_len != NULL) {
+            if ((out != NULL) && (res->outLen > *inout_out_len)) {
+                /* Report required size; never silently truncate. */
+                *inout_out_len = (uint16_t)res->outLen;
+                return WH_ERROR_BUFFER_SIZE;
+            }
+            *inout_out_len = (uint16_t)res->outLen;
+            if ((out != NULL) && (res->outLen > 0)) {
+                memcpy(out, res_out, res->outLen);
+            }
+        }
+    }
+    return ret;
 }
 
 int wh_Client_RsaFunction(whClientContext* ctx, RsaKey* key, int rsa_type,
                           const uint8_t* in, uint16_t in_len, uint8_t* out,
                           uint16_t* inout_out_len)
 {
-    int                          ret     = WH_ERROR_OK;
-    whMessageCrypto_RsaRequest*  req     = NULL;
-    whMessageCrypto_RsaResponse* res     = NULL;
-    uint8_t*                     dataPtr = NULL;
+    int                         ret     = WH_ERROR_OK;
+    whMessageCrypto_RsaRequest* req     = NULL;
+    uint8_t*                    dataPtr = NULL;
 
     /* Transaction state */
     whKeyId key_id;
@@ -4165,7 +4315,12 @@ int wh_Client_RsaFunction(whClientContext* ctx, RsaKey* key, int rsa_type,
     }
 
     if (ret == WH_ERROR_OK) {
-        /* Get data pointer */
+        uint16_t group     = WH_MESSAGE_GROUP_CRYPTO;
+        uint16_t action    = WC_ALGO_TYPE_PK;
+        size_t   total_len = sizeof(whMessageCrypto_GenericRequestHeader) +
+                           sizeof(*req) + in_len;
+        uint32_t options = 0;
+
         dataPtr = (uint8_t*)wh_CommClient_GetDataPtr(ctx->comm);
         if (dataPtr == NULL) {
             return WH_ERROR_BADARGS;
@@ -4174,15 +4329,10 @@ int wh_Client_RsaFunction(whClientContext* ctx, RsaKey* key, int rsa_type,
         req = (whMessageCrypto_RsaRequest*)_createCryptoRequest(
             dataPtr, WC_PK_TYPE_RSA, ctx->cryptoAffinity);
 
-        uint16_t group  = WH_MESSAGE_GROUP_CRYPTO;
-        uint16_t action = WC_ALGO_TYPE_PK;
+        if (total_len <= WOLFHSM_CFG_COMM_DATA_LEN) {
+            uint16_t req_len = (uint16_t)total_len;
+            uint8_t* req_in  = (uint8_t*)(req + 1);
 
-        uint8_t* req_in  = (uint8_t*)(req + 1);
-        uint16_t req_len = sizeof(whMessageCrypto_GenericRequestHeader) +
-                           sizeof(*req) + in_len;
-        uint32_t options = 0;
-
-        if (req_len <= WOLFHSM_CFG_COMM_DATA_LEN) {
             if (evict != 0) {
                 options |= WH_MESSAGE_CRYPTO_RSA_OPTIONS_EVICT;
             }
@@ -4198,41 +4348,16 @@ int wh_Client_RsaFunction(whClientContext* ctx, RsaKey* key, int rsa_type,
             /* Set output length only when provided to avoid NULL dereference */
             req->outLen = (inout_out_len != NULL) ? *inout_out_len : 0;
 
-            /* Send Request */
             ret = wh_Client_SendRequest(ctx, group, action, req_len,
                                         (uint8_t*)dataPtr);
             if (ret == WH_ERROR_OK) {
                 /* Server will evict at this point. Reset evict */
-                evict            = 0;
-                uint16_t res_len = 0;
+                evict = 0;
 
-                /* Recv Response */
                 do {
-                    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
-                                                 (uint8_t*)dataPtr);
+                    ret =
+                        wh_Client_RsaFunctionResponse(ctx, out, inout_out_len);
                 } while (ret == WH_ERROR_NOTREADY);
-
-                if (ret == WH_ERROR_OK) {
-                    /* Get response */
-                    ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_RSA,
-                                             (uint8_t**)&res);
-                    /* wolfCrypt allows positive error codes on success in some
-                     * scenarios */
-                    if (ret >= 0) {
-                        uint8_t* res_out = (uint8_t*)(res + 1);
-                        if (out != NULL) {
-                            if (res->outLen > *inout_out_len) {
-                                ret = WH_ERROR_BUFFER_SIZE;
-                            }
-                            else {
-                                memcpy(out, res_out, res->outLen);
-                            }
-                        }
-                        if (inout_out_len != NULL) {
-                            *inout_out_len = res->outLen;
-                        }
-                    }
-                }
             }
         }
         else {
@@ -4248,9 +4373,80 @@ int wh_Client_RsaFunction(whClientContext* ctx, RsaKey* key, int rsa_type,
     return ret;
 }
 
+int wh_Client_RsaGetSizeRequest(whClientContext* ctx, whKeyId keyId)
+{
+    whMessageCrypto_RsaGetSizeRequest* req     = NULL;
+    uint8_t*                           dataPtr = NULL;
+    uint16_t                           req_len;
+
+    if (ctx == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    if (WH_KEYID_ISERASED(keyId)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    req_len = sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
+    if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
+        return WH_ERROR_BADARGS;
+    }
+
+    dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
+    if (dataPtr == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    req = (whMessageCrypto_RsaGetSizeRequest*)_createCryptoRequest(
+        dataPtr, WC_PK_TYPE_RSA_GET_SIZE, ctx->cryptoAffinity);
+
+    memset(req, 0, sizeof(*req));
+    req->options = 0;
+    req->keyId   = keyId;
+
+    return wh_Client_SendRequest(ctx, WH_MESSAGE_GROUP_CRYPTO, WC_ALGO_TYPE_PK,
+                                 req_len, dataPtr);
+}
+
+int wh_Client_RsaGetSizeResponse(whClientContext* ctx, int* out_size)
+{
+    int                                 ret;
+    uint16_t                            group;
+    uint16_t                            action;
+    uint16_t                            res_len = 0;
+    uint8_t*                            dataPtr;
+    whMessageCrypto_RsaGetSizeResponse* res = NULL;
+
+    if ((ctx == NULL) || (out_size == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
+    if (dataPtr == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_RSA_GET_SIZE, (uint8_t**)&res);
+    if (ret >= 0) {
+        const size_t hdr_sz =
+            sizeof(whMessageCrypto_GenericResponseHeader) + sizeof(*res);
+        if (res_len < hdr_sz) {
+            return WH_ERROR_ABORTED;
+        }
+        *out_size = (int)res->keySize;
+    }
+    return ret;
+}
+
 int wh_Client_RsaGetSize(whClientContext* ctx, const RsaKey* key, int* out_size)
 {
-    int ret = WH_ERROR_OK;
+    int                                ret     = WH_ERROR_OK;
+    whMessageCrypto_RsaGetSizeRequest* req     = NULL;
+    uint8_t*                           dataPtr = NULL;
 
     /* Transaction state */
     whKeyId key_id;
@@ -4280,17 +4476,12 @@ int wh_Client_RsaGetSize(whClientContext* ctx, const RsaKey* key, int* out_size)
     }
 
     if (ret == WH_ERROR_OK) {
-        uint8_t*                            dataPtr = NULL;
-        whMessageCrypto_RsaGetSizeRequest*  req     = NULL;
-        whMessageCrypto_RsaGetSizeResponse* res     = NULL;
-        uint16_t                            group   = WH_MESSAGE_GROUP_CRYPTO;
-        uint16_t                            action  = WC_ALGO_TYPE_PK;
-
+        uint16_t group  = WH_MESSAGE_GROUP_CRYPTO;
+        uint16_t action = WC_ALGO_TYPE_PK;
         uint16_t req_len =
             sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
         uint32_t options = 0;
 
-        /* Get data pointer */
         dataPtr = (uint8_t*)wh_CommClient_GetDataPtr(ctx->comm);
         if (dataPtr == NULL) {
             return WH_ERROR_BADARGS;
@@ -4308,34 +4499,18 @@ int wh_Client_RsaGetSize(whClientContext* ctx, const RsaKey* key, int* out_size)
             req->options = options;
             req->keyId   = key_id;
 
-            /* Send Request */
             ret = wh_Client_SendRequest(ctx, group, action, req_len,
                                         (uint8_t*)dataPtr);
             if (ret == WH_ERROR_OK) {
                 /* Server will evict at this point. Reset evict */
-                evict            = 0;
-                uint16_t res_len = 0;
+                evict = 0;
 
-                /* Recv Response */
                 do {
-                    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
-                                                 (uint8_t*)dataPtr);
+                    ret = wh_Client_RsaGetSizeResponse(ctx, out_size);
                 } while (ret == WH_ERROR_NOTREADY);
-
-                if (ret == WH_ERROR_OK) {
-                    /* Get response */
-                    ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_RSA_GET_SIZE,
-                                             (uint8_t**)&res);
-                    /* wolfCrypt allows positive error codes on success in some
-                     * scenarios */
-                    if (ret >= 0) {
-                        *out_size = res->keySize;
-                    }
-                }
             }
         }
         else {
-            /* Request length is too long */
             ret = WH_ERROR_BADARGS;
         }
     }

@@ -997,6 +997,154 @@ int wh_Client_RsaFunction(whClientContext* ctx,
 int wh_Client_RsaGetSize(whClientContext* ctx,
         const RsaKey* key, int* out_size);
 
+/**
+ * @brief Send an async RSA encrypt/decrypt/sign/verify request.
+ *
+ * The key must already be cached on the server; auto-import is only available
+ * via the blocking wrapper wh_Client_RsaFunction. Server-side eviction in the
+ * same round trip is also only available via the blocking wrapper — async
+ * callers that want the key evicted must pair this with wh_Client_KeyEvict.
+ * Only one async request may be in flight per ctx — caller must pair this
+ * with a matching Response call before issuing another async request.
+ *
+ * @param[in] ctx           Client context.
+ * @param[in] keyId         Cached RSA key ID. Must not be erased.
+ * @param[in] rsa_type      RSA_PUBLIC_ENCRYPT, RSA_PRIVATE_ENCRYPT,
+ *                          RSA_PUBLIC_DECRYPT, or RSA_PRIVATE_DECRYPT.
+ * @param[in] in            Input bytes (may be NULL only if in_len == 0).
+ * @param[in] in_len        Length of in.
+ * @param[in] out_capacity  Maximum number of output bytes the server is
+ *                          allowed to produce for this operation (forwarded
+ *                          as the wc_RsaFunction outLen cap). Typically the
+ *                          RSA modulus size in bytes. This is independent of
+ *                          the client-side response buffer passed to
+ *                          wh_Client_RsaFunctionResponse.
+ * @return WH_ERROR_OK on success, WH_ERROR_BADARGS for invalid args or erased
+ *         keyId, or a negative error from the transport.
+ */
+int wh_Client_RsaFunctionRequest(whClientContext* ctx, whKeyId keyId,
+                                 int rsa_type, const uint8_t* in,
+                                 uint16_t in_len, uint16_t out_capacity);
+
+/**
+ * @brief Receive the reply to an async RSA operation.
+ *
+ * Single-shot receive: returns WH_ERROR_NOTREADY if no reply yet. On success,
+ * copies the output into out and writes the byte count to *inout_out_len. If
+ * the output is larger than *inout_out_len, returns WH_ERROR_BUFFER_SIZE with
+ * the required size written and out left untouched.
+ *
+ * @param[in]     ctx           Client context.
+ * @param[out]    out           Buffer for the output. May be NULL to discard
+ *                              the bytes (the server has already done the
+ *                              work — this is not a pre-flight size query).
+ *                              If non-NULL, inout_out_len must be non-NULL.
+ * @param[in,out] inout_out_len In: capacity of out (when out is non-NULL).
+ *                              Out: bytes written, or required size on
+ *                              WH_ERROR_BUFFER_SIZE. May be NULL when out is
+ *                              NULL to discard the count.
+ * @return WH_ERROR_OK on success, WH_ERROR_NOTREADY if no reply yet,
+ *         WH_ERROR_BUFFER_SIZE if out is too small, WH_ERROR_BADARGS for
+ *         invalid args, or a negative error from the transport.
+ */
+int wh_Client_RsaFunctionResponse(whClientContext* ctx, uint8_t* out,
+                                  uint16_t* inout_out_len);
+
+/**
+ * @brief Send an async RSA key-size query.
+ *
+ * The key must already be cached on the server; auto-import is only available
+ * via the blocking wrapper wh_Client_RsaGetSize.
+ *
+ * @param[in] ctx   Client context.
+ * @param[in] keyId Cached RSA key ID. Must not be erased.
+ * @return WH_ERROR_OK on success, WH_ERROR_BADARGS for invalid args or erased
+ *         keyId, or a negative error from the transport.
+ */
+int wh_Client_RsaGetSizeRequest(whClientContext* ctx, whKeyId keyId);
+
+/**
+ * @brief Receive the reply to an async RSA key-size query.
+ *
+ * Single-shot receive: returns WH_ERROR_NOTREADY if no reply yet. On success,
+ * writes the key size in bytes to *out_size.
+ *
+ * @param[in]  ctx      Client context.
+ * @param[out] out_size Receives the key size in bytes.
+ * @return WH_ERROR_OK on success, WH_ERROR_NOTREADY if no reply yet,
+ *         WH_ERROR_BADARGS for invalid args, or a negative error from the
+ *         transport.
+ */
+int wh_Client_RsaGetSizeResponse(whClientContext* ctx, int* out_size);
+
+/**
+ * @brief Ask the server to generate an RSA key and cache it.
+ *
+ * Rejects WH_NVM_FLAGS_EPHEMERAL — ephemeral keygen belongs to the export
+ * pair (wh_Client_RsaMakeExportKey{Request,Response}). Only one async request
+ * may be in flight per ctx — caller must pair this with a matching Response
+ * call before issuing another.
+ *
+ * @param[in] ctx       Client context.
+ * @param[in] size      RSA modulus size in bits (e.g. 2048).
+ * @param[in] e         RSA public exponent (e.g. WC_RSA_EXPONENT).
+ * @param[in] key_id    Suggested keyId for the new key, or WH_KEYID_ERASED
+ *                      to let the server choose.
+ * @param[in] flags     NVM flags (must NOT include WH_NVM_FLAGS_EPHEMERAL).
+ * @param[in] label_len Length of the optional label, 0..WH_NVM_LABEL_LEN.
+ * @param[in] label     Optional label bytes. May be NULL when label_len == 0.
+ * @return WH_ERROR_OK on success, WH_ERROR_BADARGS for invalid args or
+ *         EPHEMERAL flag set, or a negative error from the transport.
+ */
+int wh_Client_RsaMakeCacheKeyRequest(whClientContext* ctx, uint32_t size,
+                                     uint32_t e, whKeyId key_id,
+                                     whNvmFlags flags, uint32_t label_len,
+                                     uint8_t* label);
+
+/**
+ * @brief Receive the reply to an async cache-keygen request.
+ *
+ * Single-shot receive: returns WH_ERROR_NOTREADY if no reply yet. On success,
+ * writes the server-assigned key ID to *out_key_id.
+ *
+ * @param[in]  ctx        Client context.
+ * @param[out] out_key_id Receives the assigned key ID.
+ * @return WH_ERROR_OK on success, WH_ERROR_NOTREADY if no reply yet,
+ *         WH_ERROR_BADARGS for invalid args, or a negative error from the
+ *         transport.
+ */
+int wh_Client_RsaMakeCacheKeyResponse(whClientContext* ctx,
+                                      whKeyId*         out_key_id);
+
+/**
+ * @brief Ask the server to generate an RSA key and return it as DER.
+ *
+ * The server does NOT cache the key — it emits it back as a DER blob.
+ *
+ * @param[in] ctx  Client context.
+ * @param[in] size RSA modulus size in bits (e.g. 2048).
+ * @param[in] e    RSA public exponent (e.g. WC_RSA_EXPONENT).
+ * @return WH_ERROR_OK on success, WH_ERROR_BADARGS for invalid args, or a
+ *         negative error from the transport.
+ */
+int wh_Client_RsaMakeExportKeyRequest(whClientContext* ctx, uint32_t size,
+                                      uint32_t e);
+
+/**
+ * @brief Receive the reply to an async export-keygen request.
+ *
+ * Single-shot receive: returns WH_ERROR_NOTREADY if no reply yet. On success,
+ * deserializes the returned PKCS#1 DER blob into rsa.
+ *
+ * @param[in]     ctx Client context.
+ * @param[in,out] rsa Caller-initialized RsaKey. Populated with the
+ *                    server-generated key material on success.
+ * @return WH_ERROR_OK on success, WH_ERROR_NOTREADY if no reply yet,
+ *         WH_ERROR_BADARGS for invalid args, or a negative error from the
+ *         transport.
+ */
+int wh_Client_RsaMakeExportKeyResponse(whClientContext* ctx, RsaKey* rsa);
+
 
 #endif /* !NO_RSA */
 
