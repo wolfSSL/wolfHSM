@@ -156,6 +156,14 @@ whMessageCrypto_MlKemEncapsDmaRequest  pkMlkemEncapsDmaReq;
 whMessageCrypto_MlKemEncapsDmaResponse pkMlkemEncapsDmaRes;
 whMessageCrypto_MlKemDecapsDmaRequest  pkMlkemDecapsDmaReq;
 whMessageCrypto_MlKemDecapsDmaResponse pkMlkemDecapsDmaRes;
+whMessageCrypto_PqcStatefulSigKeyGenDmaRequest    pqStatefulSigKeygenDmaReq;
+whMessageCrypto_PqcStatefulSigKeyGenDmaResponse   pqStatefulSigKeygenDmaRes;
+whMessageCrypto_PqcStatefulSigSignDmaRequest      pqStatefulSigSignDmaReq;
+whMessageCrypto_PqcStatefulSigSignDmaResponse     pqStatefulSigSignDmaRes;
+whMessageCrypto_PqcStatefulSigVerifyDmaRequest    pqStatefulSigVerifyDmaReq;
+whMessageCrypto_PqcStatefulSigVerifyDmaResponse   pqStatefulSigVerifyDmaRes;
+whMessageCrypto_PqcStatefulSigSigsLeftDmaRequest  pqStatefulSigSigsLeftDmaReq;
+whMessageCrypto_PqcStatefulSigSigsLeftDmaResponse pqStatefulSigSigsLeftDmaRes;
 #endif /* WOLFHSM_CFG_DMA */
 
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */

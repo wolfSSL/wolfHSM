@@ -246,6 +246,7 @@ static int wh_ClientServer_MemThreadTest(void)
         .comm_config = cs_conf,
         .nvm         = nvm,
         .crypto      = crypto,
+        .devId       = INVALID_DEVID,
     }};
 
     WH_TEST_RETURN_ON_FAIL(wh_Nvm_Init(nvm, n_conf));
