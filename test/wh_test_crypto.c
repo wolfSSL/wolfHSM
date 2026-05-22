@@ -718,6 +718,327 @@ static int whTest_CryptoRsa(whClientContext* ctx, int devId, WC_RNG* rng)
     }
     return ret;
 }
+
+static int whTest_CryptoRsaAsync(whClientContext* ctx, WC_RNG* rng)
+{
+    int     ret = WH_ERROR_OK;
+    RsaKey  rsa[1];
+    int     rsaInit                      = 0;
+    whKeyId keyId                        = WH_KEYID_ERASED;
+    int     keyCached                    = 0;
+    char    plainText[sizeof(PLAINTEXT)] = PLAINTEXT;
+    /* Leading zeros ensure msg < N, so the raw RSA primitives
+     * (sign/verify without padding) round-trip exactly. */
+    uint8_t  msgBuf[RSA_KEY_BYTES];
+    uint8_t  cipherText[RSA_KEY_BYTES];
+    uint8_t  finalText[RSA_KEY_BYTES];
+    uint16_t cipherLen;
+    uint16_t finalLen;
+    int      reportedSize = 0;
+
+    memset(msgBuf, 0, sizeof(msgBuf));
+    memcpy(msgBuf + sizeof(msgBuf) - sizeof(plainText), plainText,
+           sizeof(plainText));
+
+    WH_TEST_PRINT("Testing RSA async API...\n");
+
+    /* 1) RsaMakeCacheKey async: generate a key into the server cache */
+    ret = wh_Client_RsaMakeCacheKeyRequest(
+        ctx, RSA_KEY_BITS, RSA_EXPONENT, WH_KEYID_ERASED,
+        WH_NVM_FLAGS_USAGE_ENCRYPT | WH_NVM_FLAGS_USAGE_DECRYPT, 0, NULL);
+    if (ret != WH_ERROR_OK) {
+        WH_ERROR_PRINT("RsaMakeCacheKeyRequest failed: %d\n", ret);
+    }
+    if (ret == WH_ERROR_OK) {
+        do {
+            ret = wh_Client_RsaMakeCacheKeyResponse(ctx, &keyId);
+        } while (ret == WH_ERROR_NOTREADY);
+        if (ret != WH_ERROR_OK) {
+            WH_ERROR_PRINT("RsaMakeCacheKeyResponse failed: %d\n", ret);
+        }
+        else if (WH_KEYID_ISERASED(keyId)) {
+            WH_ERROR_PRINT("RsaMakeCacheKey returned erased keyId\n");
+            ret = -1;
+        }
+        else {
+            keyCached = 1;
+        }
+    }
+
+    /* 2) RsaMakeCacheKeyRequest rejects EPHEMERAL */
+    if (ret == WH_ERROR_OK) {
+        int badret = wh_Client_RsaMakeCacheKeyRequest(
+            ctx, RSA_KEY_BITS, RSA_EXPONENT, WH_KEYID_ERASED,
+            WH_NVM_FLAGS_EPHEMERAL, 0, NULL);
+        if (badret != WH_ERROR_BADARGS) {
+            WH_ERROR_PRINT("RsaMakeCacheKeyRequest with EPHEMERAL returned %d "
+                           "(want BADARGS)\n",
+                           badret);
+            ret = -1;
+        }
+    }
+
+    /* 3) RsaGetSize async */
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Client_RsaGetSizeRequest(ctx, keyId);
+        if (ret != WH_ERROR_OK) {
+            WH_ERROR_PRINT("RsaGetSizeRequest failed: %d\n", ret);
+        }
+    }
+    if (ret == WH_ERROR_OK) {
+        do {
+            ret = wh_Client_RsaGetSizeResponse(ctx, &reportedSize);
+        } while (ret == WH_ERROR_NOTREADY);
+        if (ret != WH_ERROR_OK) {
+            WH_ERROR_PRINT("RsaGetSizeResponse failed: %d\n", ret);
+        }
+        else if (reportedSize != RSA_KEY_BYTES) {
+            WH_ERROR_PRINT("RsaGetSize returned %d, want %d\n", reportedSize,
+                           RSA_KEY_BYTES);
+            ret = -1;
+        }
+    }
+
+    /* 4) Erased keyId must be rejected by Request halves */
+    if (ret == WH_ERROR_OK) {
+        int badret = wh_Client_RsaGetSizeRequest(ctx, WH_KEYID_ERASED);
+        if (badret != WH_ERROR_BADARGS) {
+            WH_ERROR_PRINT("RsaGetSizeRequest with erased keyId returned %d "
+                           "(want BADARGS)\n",
+                           badret);
+            ret = -1;
+        }
+        badret = wh_Client_RsaFunctionRequest(
+            ctx, WH_KEYID_ERASED, RSA_PUBLIC_ENCRYPT, (uint8_t*)plainText,
+            sizeof(plainText), sizeof(cipherText));
+        if (badret != WH_ERROR_BADARGS) {
+            WH_ERROR_PRINT("RsaFunctionRequest with erased keyId returned %d "
+                           "(want BADARGS)\n",
+                           badret);
+            ret = -1;
+        }
+    }
+
+    /* 5) NULL ctx must be rejected by Request halves */
+    if (ret == WH_ERROR_OK) {
+        int badret = wh_Client_RsaGetSizeRequest(NULL, keyId);
+        if (badret != WH_ERROR_BADARGS) {
+            WH_ERROR_PRINT("RsaGetSizeRequest with NULL ctx returned %d "
+                           "(want BADARGS)\n",
+                           badret);
+            ret = -1;
+        }
+    }
+
+    /* 5b) Response halves reject NULL args before any transport activity,
+     * so these checks are safe to run with no outstanding request. */
+    if (ret == WH_ERROR_OK) {
+        whKeyId dummyKeyId = WH_KEYID_ERASED;
+        int     dummySize  = 0;
+        uint8_t dummyBuf[8];
+        int     badret;
+
+        badret = wh_Client_RsaGetSizeResponse(NULL, &dummySize);
+        if (badret != WH_ERROR_BADARGS) {
+            WH_ERROR_PRINT("RsaGetSizeResponse with NULL ctx returned %d "
+                           "(want BADARGS)\n",
+                           badret);
+            ret = -1;
+        }
+        badret = wh_Client_RsaGetSizeResponse(ctx, NULL);
+        if (badret != WH_ERROR_BADARGS) {
+            WH_ERROR_PRINT("RsaGetSizeResponse with NULL out_size returned %d "
+                           "(want BADARGS)\n",
+                           badret);
+            ret = -1;
+        }
+        badret = wh_Client_RsaFunctionResponse(ctx, dummyBuf, NULL);
+        if (badret != WH_ERROR_BADARGS) {
+            WH_ERROR_PRINT("RsaFunctionResponse with out non-NULL and "
+                           "inout_out_len NULL returned %d (want BADARGS)\n",
+                           badret);
+            ret = -1;
+        }
+        badret = wh_Client_RsaMakeCacheKeyResponse(NULL, &dummyKeyId);
+        if (badret != WH_ERROR_BADARGS) {
+            WH_ERROR_PRINT("RsaMakeCacheKeyResponse with NULL ctx returned %d "
+                           "(want BADARGS)\n",
+                           badret);
+            ret = -1;
+        }
+        badret = wh_Client_RsaMakeCacheKeyResponse(ctx, NULL);
+        if (badret != WH_ERROR_BADARGS) {
+            WH_ERROR_PRINT(
+                "RsaMakeCacheKeyResponse with NULL out_key_id returned %d "
+                "(want BADARGS)\n",
+                badret);
+            ret = -1;
+        }
+        badret = wh_Client_RsaMakeExportKeyResponse(ctx, NULL);
+        if (badret != WH_ERROR_BADARGS) {
+            WH_ERROR_PRINT("RsaMakeExportKeyResponse with NULL rsa returned %d "
+                           "(want BADARGS)\n",
+                           badret);
+            ret = -1;
+        }
+    }
+
+    /* 6) RsaFunction async: private encrypt (raw sign). */
+    if (ret == WH_ERROR_OK) {
+        memset(cipherText, 0, sizeof(cipherText));
+        cipherLen = sizeof(cipherText);
+        ret = wh_Client_RsaFunctionRequest(ctx, keyId, RSA_PRIVATE_ENCRYPT,
+                                           msgBuf, sizeof(msgBuf), cipherLen);
+        if (ret != WH_ERROR_OK) {
+            WH_ERROR_PRINT("RsaFunctionRequest (sign) failed: %d\n", ret);
+        }
+    }
+    if (ret == WH_ERROR_OK) {
+        do {
+            ret = wh_Client_RsaFunctionResponse(ctx, cipherText, &cipherLen);
+        } while (ret == WH_ERROR_NOTREADY);
+        if (ret != WH_ERROR_OK) {
+            WH_ERROR_PRINT("RsaFunctionResponse (sign) failed: %d\n", ret);
+        }
+        else if (cipherLen != RSA_KEY_BYTES) {
+            WH_ERROR_PRINT("Sign produced %u bytes, want %d\n",
+                           (unsigned)cipherLen, RSA_KEY_BYTES);
+            ret = -1;
+        }
+    }
+
+    /* 7) Undersized output buffer must return WH_ERROR_BUFFER_SIZE with
+     * the required size reported and the caller's buffer untouched. */
+    if (ret == WH_ERROR_OK) {
+        uint8_t  smallBuf[8];
+        uint8_t  sentinel[sizeof(smallBuf)];
+        uint16_t smallLen = sizeof(smallBuf);
+        int      bsret;
+
+        memset(smallBuf, 0xAA, sizeof(smallBuf));
+        memset(sentinel, 0xAA, sizeof(sentinel));
+
+        bsret = wh_Client_RsaFunctionRequest(ctx, keyId, RSA_PRIVATE_ENCRYPT,
+                                             msgBuf, sizeof(msgBuf),
+                                             sizeof(cipherText));
+        if (bsret == WH_ERROR_OK) {
+            do {
+                bsret = wh_Client_RsaFunctionResponse(ctx, smallBuf, &smallLen);
+            } while (bsret == WH_ERROR_NOTREADY);
+        }
+        if (bsret != WH_ERROR_BUFFER_SIZE) {
+            WH_ERROR_PRINT("RsaFunctionResponse with small buffer returned %d "
+                           "(want WH_ERROR_BUFFER_SIZE)\n",
+                           bsret);
+            ret = -1;
+        }
+        else if (smallLen != RSA_KEY_BYTES) {
+            WH_ERROR_PRINT(
+                "BUFFER_SIZE path did not report required size: got %u "
+                "want %d\n",
+                (unsigned)smallLen, RSA_KEY_BYTES);
+            ret = -1;
+        }
+        else if (memcmp(smallBuf, sentinel, sizeof(smallBuf)) != 0) {
+            WH_ERROR_PRINT(
+                "BUFFER_SIZE path wrote into caller's output buffer\n");
+            ret = -1;
+        }
+    }
+
+    /* 8) RsaFunction async: public decrypt (raw verify) recovers msgBuf. */
+    if (ret == WH_ERROR_OK) {
+        memset(finalText, 0, sizeof(finalText));
+        finalLen = sizeof(finalText);
+        ret      = wh_Client_RsaFunctionRequest(ctx, keyId, RSA_PUBLIC_DECRYPT,
+                                                cipherText, cipherLen, finalLen);
+        if (ret != WH_ERROR_OK) {
+            WH_ERROR_PRINT("RsaFunctionRequest (verify) failed: %d\n", ret);
+        }
+    }
+    if (ret == WH_ERROR_OK) {
+        do {
+            ret = wh_Client_RsaFunctionResponse(ctx, finalText, &finalLen);
+        } while (ret == WH_ERROR_NOTREADY);
+        if (ret != WH_ERROR_OK) {
+            WH_ERROR_PRINT("RsaFunctionResponse (verify) failed: %d\n", ret);
+        }
+        else if (finalLen != sizeof(msgBuf) ||
+                 memcmp(msgBuf, finalText, sizeof(msgBuf)) != 0) {
+            WH_ERROR_PRINT(
+                "Sign/verify round-trip mismatch: finalLen=%u msgLen=%u\n",
+                (unsigned)finalLen, (unsigned)sizeof(msgBuf));
+            ret = -1;
+        }
+    }
+
+    /* 9) RsaMakeExportKey async: server generates ephemeral key, returns DER.
+     */
+    if (ret == WH_ERROR_OK) {
+        ret = wc_InitRsaKey_ex(rsa, NULL, WH_DEV_ID);
+        if (ret != 0) {
+            WH_ERROR_PRINT("wc_InitRsaKey_ex failed: %d\n", ret);
+        }
+        else {
+            rsaInit = 1;
+        }
+    }
+    if (ret == WH_ERROR_OK) {
+        ret =
+            wh_Client_RsaMakeExportKeyRequest(ctx, RSA_KEY_BITS, RSA_EXPONENT);
+        if (ret != WH_ERROR_OK) {
+            WH_ERROR_PRINT("RsaMakeExportKeyRequest failed: %d\n", ret);
+        }
+    }
+    if (ret == WH_ERROR_OK) {
+        do {
+            ret = wh_Client_RsaMakeExportKeyResponse(ctx, rsa);
+        } while (ret == WH_ERROR_NOTREADY);
+        if (ret != WH_ERROR_OK) {
+            WH_ERROR_PRINT("RsaMakeExportKeyResponse failed: %d\n", ret);
+        }
+    }
+
+    /* 10) Round trip the exported key for an RSA operation */
+    if (ret == WH_ERROR_OK) {
+        int encLen;
+        int decLen;
+
+        memset(cipherText, 0, sizeof(cipherText));
+        memset(finalText, 0, sizeof(finalText));
+        encLen = wc_RsaPublicEncrypt((byte*)plainText, sizeof(plainText),
+                                     cipherText, sizeof(cipherText), rsa, rng);
+        if (encLen < 0) {
+            WH_ERROR_PRINT("PublicEncrypt failed: %d\n", encLen);
+            ret = encLen;
+        }
+        else {
+            decLen = wc_RsaPrivateDecrypt(cipherText, encLen, finalText,
+                                          sizeof(finalText), rsa);
+            if (decLen < 0) {
+                WH_ERROR_PRINT("PrivateDecrypt failed: %d\n", decLen);
+                ret = decLen;
+            }
+            else if ((size_t)decLen != sizeof(plainText) ||
+                     memcmp(plainText, finalText, sizeof(plainText)) != 0) {
+                WH_ERROR_PRINT("exported-key round-trip mismatch\n");
+                ret = -1;
+            }
+        }
+    }
+
+    if (rsaInit) {
+        (void)wc_FreeRsaKey(rsa);
+    }
+    if (keyCached) {
+        (void)wh_Client_KeyEvict(ctx, keyId);
+    }
+
+    if (ret == WH_ERROR_OK) {
+        WH_TEST_PRINT("RSA async API SUCCESS\n");
+    }
+    return ret;
+}
 #endif /* !NO_RSA */
 
 #ifdef HAVE_ECC
@@ -12941,6 +13262,9 @@ int whTest_CryptoClientConfig(whClientConfig* config)
 #ifndef NO_RSA
     if (ret == 0) {
         ret = whTest_CryptoRsa(client, WH_DEV_ID, rng);
+    }
+    if (ret == 0) {
+        ret = whTest_CryptoRsaAsync(client, rng);
     }
 #endif /* NO_RSA */
 
