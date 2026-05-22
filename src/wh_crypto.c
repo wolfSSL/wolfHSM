@@ -385,8 +385,8 @@ int wh_Crypto_MlDsaDeserializeKeyDer(const uint8_t* buffer, uint16_t size,
 int wh_Crypto_MlKemSerializeKey(MlKemKey* key, uint16_t max_size,
                                 uint8_t* buffer, uint16_t* out_size)
 {
-    int    ret = WH_ERROR_OK;
-    word32 keySize;
+    int    ret     = WH_ERROR_OK;
+    word32 keySize = 0;
 
     if ((key == NULL) || (buffer == NULL) || (out_size == NULL)) {
         return WH_ERROR_BADARGS;
@@ -427,10 +427,10 @@ int wh_Crypto_MlKemSerializeKey(MlKemKey* key, uint16_t max_size,
 int wh_Crypto_MlKemDeserializeKey(const uint8_t* buffer, uint16_t size,
                                   MlKemKey* key)
 {
-    static const int levels[] = {
+    static const uint8_t levels[] = {
         WC_ML_KEM_512,
         WC_ML_KEM_768,
-        WC_ML_KEM_1024
+        WC_ML_KEM_1024,
     };
     int    ret;
     int    origLevel;
@@ -442,7 +442,10 @@ int wh_Crypto_MlKemDeserializeKey(const uint8_t* buffer, uint16_t size,
         return WH_ERROR_BADARGS;
     }
 
-    /* Save original key properties so we can restore on failure */
+    /* Save original key properties so we can restore on failure. The key's
+     * level (type) may be updated below if a different ML-KEM parameter set
+     * matches the encoded buffer. Callers that depend on the configured level
+     * should read key->type after a successful return. */
     origLevel = key->type;
     origDevId = key->devId;
     origHeap  = key->heap;
@@ -458,12 +461,12 @@ int wh_Crypto_MlKemDeserializeKey(const uint8_t* buffer, uint16_t size,
     }
 
     /* Current level didn't work, try other levels in place */
-    for (i = 0; i < (word32)(sizeof(levels) / sizeof(levels[0])); i++) {
-        if (levels[i] == origLevel) {
+    for (i = 0; i < XELEM_CNT(levels); i++) {
+        if ((int)levels[i] == origLevel) {
             continue;
         }
         wc_MlKemKey_Free(key);
-        ret = wc_MlKemKey_Init(key, levels[i], origHeap, origDevId);
+        ret = wc_MlKemKey_Init(key, (int)levels[i], origHeap, origDevId);
         if (ret != WH_ERROR_OK) {
             continue;
         }

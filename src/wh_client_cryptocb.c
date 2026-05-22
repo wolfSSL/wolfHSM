@@ -645,7 +645,7 @@ static int _handlePqcKemKeyGen(whClientContext* ctx, wc_CryptoInfo* info,
 
 #ifndef WOLFHSM_CFG_DMA
     if (useDma) {
-        /* TODO: proper error code? */
+        /* DMA support not available - user passed wrong devId */
         return WC_HW_E;
     }
 #endif
@@ -696,7 +696,7 @@ static int _handlePqcEncaps(whClientContext* ctx, wc_CryptoInfo* info,
 
 #ifndef WOLFHSM_CFG_DMA
     if (useDma) {
-        /* TODO: proper error code? */
+        /* DMA support not available - user passed wrong devId */
         return WC_HW_E;
     }
 #endif
@@ -752,7 +752,7 @@ static int _handlePqcDecaps(whClientContext* ctx, wc_CryptoInfo* info,
 
 #ifndef WOLFHSM_CFG_DMA
     if (useDma) {
-        /* TODO: proper error code? */
+        /* DMA support not available - user passed wrong devId */
         return WC_HW_E;
     }
 #endif
@@ -806,7 +806,7 @@ static int _handlePqcSigKeyGen(whClientContext* ctx, wc_CryptoInfo* info,
 
 #ifndef WOLFHSM_CFG_DMA
     if (useDma) {
-        /* TODO: proper error code? */
+        /* DMA support not available - user passed wrong devId */
         return WC_HW_E;
     }
 #endif
@@ -854,7 +854,7 @@ static int _handlePqcSign(whClientContext* ctx, wc_CryptoInfo* info, int useDma)
 
 #ifndef WOLFHSM_CFG_DMA
     if (useDma) {
-        /* TODO: proper error code? */
+        /* DMA support not available - user passed wrong devId */
         return WC_HW_E;
     }
 #endif
@@ -906,7 +906,7 @@ static int _handlePqcVerify(whClientContext* ctx, wc_CryptoInfo* info,
 
 #ifndef WOLFHSM_CFG_DMA
     if (useDma) {
-        /* TODO: proper error code? */
+        /* DMA support not available - user passed wrong devId */
         return WC_HW_E;
     }
 #endif
@@ -953,7 +953,7 @@ static int _handlePqcSigCheckPrivKey(whClientContext* ctx, wc_CryptoInfo* info,
 
 #ifndef WOLFHSM_CFG_DMA
     if (useDma) {
-        /* TODO: proper error code? */
+        /* DMA support not available - user passed wrong devId */
         return WC_HW_E;
     }
 #endif

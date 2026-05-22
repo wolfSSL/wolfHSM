@@ -2844,8 +2844,8 @@ int wh_Client_MlKemMakeCacheKey(whClientContext* ctx, int level,
  * @return int Returns 0 on success or a negative error code on failure.
  */
 int wh_Client_MlKemEncapsulate(whClientContext* ctx, MlKemKey* key,
-                               byte* ct, word32* inout_ct_len,
-                               byte* ss, word32* inout_ss_len);
+                               uint8_t* ct, uint32_t* inout_ct_len,
+                               uint8_t* ss, uint32_t* inout_ss_len);
 
 /**
  * @brief Perform ML-KEM decapsulation using a server-cached private key.
@@ -2864,8 +2864,8 @@ int wh_Client_MlKemEncapsulate(whClientContext* ctx, MlKemKey* key,
  * @return int Returns 0 on success or a negative error code on failure.
  */
 int wh_Client_MlKemDecapsulate(whClientContext* ctx, MlKemKey* key,
-                               const byte* ct, word32 ct_len, byte* ss,
-                               word32* inout_ss_len);
+                               const uint8_t* ct, uint32_t ct_len, uint8_t* ss,
+                               uint32_t* inout_ss_len);
 
 #ifdef WOLFHSM_CFG_DMA
 
@@ -2947,8 +2947,8 @@ int wh_Client_MlKemMakeExportKeyDma(whClientContext* ctx, int level,
  * @return int Returns 0 on success or a negative error code on failure.
  */
 int wh_Client_MlKemEncapsulateDma(whClientContext* ctx, MlKemKey* key,
-                                  byte* ct, word32* inout_ct_len, byte* ss,
-                                  word32* inout_ss_len);
+                                  uint8_t* ct, uint32_t* inout_ct_len,
+                                  uint8_t* ss, uint32_t* inout_ss_len);
 
 /**
  * @brief Perform ML-KEM decapsulation using DMA.
@@ -2963,8 +2963,8 @@ int wh_Client_MlKemEncapsulateDma(whClientContext* ctx, MlKemKey* key,
  * @return int Returns 0 on success or a negative error code on failure.
  */
 int wh_Client_MlKemDecapsulateDma(whClientContext* ctx, MlKemKey* key,
-                                  const byte* ct, word32 ct_len, byte* ss,
-                                  word32* inout_ss_len);
+                                  const uint8_t* ct, uint32_t ct_len,
+                                  uint8_t* ss, uint32_t* inout_ss_len);
 #endif /* WOLFHSM_CFG_DMA */
 
 #endif /* WOLFSSL_HAVE_MLKEM */
