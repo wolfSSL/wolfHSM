@@ -500,20 +500,30 @@ int wh_Client_AesCtrResponse(whClientContext* ctx, Aes* aes, uint8_t* out,
     if (ret == WH_ERROR_OK) {
         ret = _getCryptoResponse(dataPtr, WC_CIPHER_AES_CTR, (uint8_t**)&res);
         if (ret == WH_ERROR_OK) {
-            uint8_t* res_out = (uint8_t*)(res + 1);
-            uint8_t* res_reg = res_out + res->sz;
-            uint8_t* res_tmp = res_reg + AES_BLOCK_SIZE;
-
-            memcpy(out, res_out, res->sz);
-            aes->left = res->left;
-            memcpy((uint8_t*)aes->reg, res_reg, AES_BLOCK_SIZE);
-            memcpy((uint8_t*)aes->tmp, res_tmp, AES_BLOCK_SIZE);
-            if (out_size != NULL) {
-                *out_size = res->sz;
+            const uint32_t hdr_sz =
+                sizeof(whMessageCrypto_GenericResponseHeader) + sizeof(*res) +
+                (2 * AES_BLOCK_SIZE);
+            /* Trailing payload is: output (res->sz) + reg (AES_BLOCK_SIZE)
+             * + tmp (AES_BLOCK_SIZE) */
+            if (res_len < hdr_sz || res->sz > (res_len - hdr_sz)) {
+                ret = WH_ERROR_ABORTED;
             }
-            WH_DEBUG_CLIENT_VERBOSE("AesCtr res: outsz=%u left=%u\n",
-                                    (unsigned int)res->sz,
-                                    (unsigned int)res->left);
+            else {
+                uint8_t* res_out = (uint8_t*)(res + 1);
+                uint8_t* res_reg = res_out + res->sz;
+                uint8_t* res_tmp = res_reg + AES_BLOCK_SIZE;
+
+                memcpy(out, res_out, res->sz);
+                aes->left = res->left;
+                memcpy((uint8_t*)aes->reg, res_reg, AES_BLOCK_SIZE);
+                memcpy((uint8_t*)aes->tmp, res_tmp, AES_BLOCK_SIZE);
+                if (out_size != NULL) {
+                    *out_size = res->sz;
+                }
+                WH_DEBUG_CLIENT_VERBOSE("AesCtr res: outsz=%u left=%u\n",
+                                        (unsigned int)res->sz,
+                                        (unsigned int)res->left);
+            }
         }
     }
     return ret;
@@ -821,13 +831,20 @@ int wh_Client_AesEcbResponse(whClientContext* ctx, Aes* aes, uint8_t* out,
     if (ret == WH_ERROR_OK) {
         ret = _getCryptoResponse(dataPtr, WC_CIPHER_AES_ECB, (uint8_t**)&res);
         if (ret == WH_ERROR_OK) {
-            uint8_t* res_out = (uint8_t*)(res + 1);
-            memcpy(out, res_out, res->sz);
-            if (out_size != NULL) {
-                *out_size = res->sz;
+            const uint32_t hdr_sz =
+                sizeof(whMessageCrypto_GenericResponseHeader) + sizeof(*res);
+            if (res_len < hdr_sz || res->sz > (res_len - hdr_sz)) {
+                ret = WH_ERROR_ABORTED;
             }
-            WH_DEBUG_CLIENT_VERBOSE("AesEcb res: outsz=%u\n",
-                                    (unsigned int)res->sz);
+            else {
+                uint8_t* res_out = (uint8_t*)(res + 1);
+                memcpy(out, res_out, res->sz);
+                if (out_size != NULL) {
+                    *out_size = res->sz;
+                }
+                WH_DEBUG_CLIENT_VERBOSE("AesEcb res: outsz=%u\n",
+                                        (unsigned int)res->sz);
+            }
         }
     }
     return ret;
@@ -1138,17 +1155,27 @@ int wh_Client_AesCbcResponse(whClientContext* ctx, Aes* aes, uint8_t* out,
     if (ret == WH_ERROR_OK) {
         ret = _getCryptoResponse(dataPtr, WC_CIPHER_AES_CBC, (uint8_t**)&res);
         if (ret == WH_ERROR_OK) {
-            uint8_t* res_out = (uint8_t*)(res + 1);
-            uint8_t* res_iv  = res_out + res->sz;
-            memcpy(out, res_out, res->sz);
-            /* Update the IV from the server response for CBC chaining.
-             * The server provides the updated IV after the output data. */
-            memcpy((uint8_t*)aes->reg, res_iv, AES_IV_SIZE);
-            if (out_size != NULL) {
-                *out_size = res->sz;
+            const uint32_t hdr_sz =
+                sizeof(whMessageCrypto_GenericResponseHeader) + sizeof(*res) +
+                AES_IV_SIZE;
+            /* Trailing payload is: output (res->sz) + updated IV
+             * (AES_IV_SIZE) */
+            if (res_len < hdr_sz || res->sz > (res_len - hdr_sz)) {
+                ret = WH_ERROR_ABORTED;
             }
-            WH_DEBUG_CLIENT_VERBOSE("AesCbc res: outsz=%u\n",
-                                    (unsigned int)res->sz);
+            else {
+                uint8_t* res_out = (uint8_t*)(res + 1);
+                uint8_t* res_iv  = res_out + res->sz;
+                memcpy(out, res_out, res->sz);
+                /* Update the IV from the server response for CBC chaining.
+                 * The server provides the updated IV after the output data. */
+                memcpy((uint8_t*)aes->reg, res_iv, AES_IV_SIZE);
+                if (out_size != NULL) {
+                    *out_size = res->sz;
+                }
+                WH_DEBUG_CLIENT_VERBOSE("AesCbc res: outsz=%u\n",
+                                        (unsigned int)res->sz);
+            }
         }
     }
 
@@ -1484,8 +1511,15 @@ int wh_Client_AesGcmResponse(whClientContext* ctx, Aes* aes, uint8_t* out,
     if (ret == WH_ERROR_OK) {
         ret = _getCryptoResponse(dataPtr, WC_CIPHER_AES_GCM, (uint8_t**)&res);
         if (ret == WH_ERROR_OK) {
+            const uint32_t hdr_sz =
+                sizeof(whMessageCrypto_GenericResponseHeader) + sizeof(*res);
             uint8_t* res_out = (uint8_t*)(res + 1);
             uint8_t* res_tag = res_out + res->sz;
+            uint32_t trailing = (uint32_t)res->sz + (uint32_t)res->authTagSz;
+            if (res_len < hdr_sz || trailing < res->sz ||
+                trailing > (res_len - hdr_sz)) {
+                return WH_ERROR_ABORTED;
+            }
 
             if (out != NULL && res->sz > 0) {
                 if (res->sz > out_capacity) {
