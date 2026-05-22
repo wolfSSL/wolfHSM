@@ -129,6 +129,49 @@ int wh_Crypto_MlKemDeserializeKey(const uint8_t* buffer, uint16_t size,
                                   MlKemKey* key);
 #endif /* WOLFSSL_HAVE_MLKEM */
 
+#if defined(WOLFSSL_HAVE_LMS) || defined(WOLFSSL_HAVE_XMSS)
+/* Size of the fixed header at the start of a stateful-sig (LMS/XMSS) slot blob:
+ * magic(4) + pubLen(2) + privLen(2) + paramLen(2) + reserved(2). Shared so the
+ * server bridge can locate the variable-length sections that follow it. The
+ * full blob layout is documented in wh_crypto.c. */
+#define WH_CRYPTO_STATEFUL_SIG_HEADER_SZ 12
+#endif /* WOLFSSL_HAVE_LMS || WOLFSSL_HAVE_XMSS */
+
+#ifdef WOLFSSL_HAVE_LMS
+/* Store an LmsKey (parameter set + public key + priv_raw) into a byte
+ * sequence.
+ *
+ * @param [in]      key       LmsKey to serialize.
+ * @param [in]      max_size  Capacity of buffer in bytes.
+ * @param [out]     buffer    Destination buffer.
+ * @param [in,out]  out_size  On success, total blob size.
+ * @return WH_ERROR_OK on success, WH_ERROR_BUFFER_SIZE if max_size is too
+ *         small, WH_ERROR_BADARGS otherwise. */
+int wh_Crypto_LmsSerializeKey(LmsKey* key, uint16_t max_size, uint8_t* buffer,
+                              uint16_t* out_size);
+
+/* Restore an LmsKey from a byte sequence.
+ *
+ * @param [in]      buffer  Source blob.
+ * @param [in]      size    Blob size in bytes.
+ * @param [in,out]  key     Initialized LmsKey to populate.
+ * @return WH_ERROR_OK on success, WH_ERROR_BADARGS on malformed blob. */
+int wh_Crypto_LmsDeserializeKey(const uint8_t* buffer, uint16_t size,
+                                LmsKey* key);
+#endif /* WOLFSSL_HAVE_LMS */
+
+#ifdef WOLFSSL_HAVE_XMSS
+/* Store an XmssKey (param string + public key + secret state) into a byte
+ * sequence. */
+int wh_Crypto_XmssSerializeKey(XmssKey* key, const char* paramStr,
+                               uint16_t max_size, uint8_t* buffer,
+                               uint16_t* out_size);
+
+/* Restore an XmssKey from a byte sequence */
+int wh_Crypto_XmssDeserializeKey(const uint8_t* buffer, uint16_t size,
+                                 XmssKey* key);
+#endif /* WOLFSSL_HAVE_XMSS */
+
 #endif  /* !WOLFHSM_CFG_NO_CRYPTO */
 
 #endif /* WOLFHSM_WH_CRYPTO_H_ */

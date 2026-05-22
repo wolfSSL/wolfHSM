@@ -48,6 +48,12 @@
 #include "wolfssl/wolfcrypt/sha256.h"
 #include "wolfssl/wolfcrypt/sha512.h"
 #include "wolfssl/wolfcrypt/wc_mlkem.h"
+#if defined(WOLFSSL_HAVE_LMS)
+#include "wolfssl/wolfcrypt/wc_lms.h"
+#endif
+#if defined(WOLFSSL_HAVE_XMSS)
+#include "wolfssl/wolfcrypt/wc_xmss.h"
+#endif
 
 #include "wolfhsm/wh_crypto.h"
 #include "wolfhsm/wh_client_crypto.h"
@@ -63,6 +69,17 @@ static int _handlePqcEncaps(whClientContext* ctx, wc_CryptoInfo* info,
 static int _handlePqcDecaps(whClientContext* ctx, wc_CryptoInfo* info,
                             int useDma);
 #endif /* WOLFSSL_HAVE_MLKEM */
+#if defined(WOLFSSL_HAVE_LMS) || defined(WOLFSSL_HAVE_XMSS)
+static int _handlePqcStatefulSigKeyGen(whClientContext* ctx,
+                                       wc_CryptoInfo* info, int useDma);
+static int _handlePqcStatefulSigSign(whClientContext* ctx, wc_CryptoInfo* info,
+                                     int useDma);
+static int _handlePqcStatefulSigVerify(whClientContext* ctx,
+                                       wc_CryptoInfo* info, int useDma);
+static int _handlePqcStatefulSigSigsLeft(whClientContext* ctx,
+                                         wc_CryptoInfo* info, int useDma);
+#endif /* WOLFSSL_HAVE_LMS || WOLFSSL_HAVE_XMSS */
+
 
 #if defined(WOLFSSL_HAVE_MLDSA) || defined(HAVE_FALCON)
 static int _handlePqcSigKeyGen(whClientContext* ctx, wc_CryptoInfo* info,
@@ -487,6 +504,24 @@ int wh_Client_CryptoCbStd(int devId, wc_CryptoInfo* info, void* inCtx)
             break;
 
 #endif /* WOLFSSL_HAVE_MLKEM */
+#if defined(WOLFSSL_HAVE_LMS) || defined(WOLFSSL_HAVE_XMSS)
+        case WC_PK_TYPE_PQC_STATEFUL_SIG_KEYGEN:
+            ret = _handlePqcStatefulSigKeyGen(ctx, info, 0);
+            break;
+
+        case WC_PK_TYPE_PQC_STATEFUL_SIG_SIGN:
+            ret = _handlePqcStatefulSigSign(ctx, info, 0);
+            break;
+
+        case WC_PK_TYPE_PQC_STATEFUL_SIG_VERIFY:
+            ret = _handlePqcStatefulSigVerify(ctx, info, 0);
+            break;
+
+        case WC_PK_TYPE_PQC_STATEFUL_SIG_SIGS_LEFT:
+            ret = _handlePqcStatefulSigSigsLeft(ctx, info, 0);
+            break;
+
+#endif /* WOLFSSL_HAVE_LMS || WOLFSSL_HAVE_XMSS */
 
 #if defined(WOLFSSL_HAVE_MLDSA) || defined(HAVE_FALCON)
         case WC_PK_TYPE_PQC_SIG_KEYGEN:
@@ -827,6 +862,268 @@ static int _handlePqcDecaps(whClientContext* ctx, wc_CryptoInfo* info,
 }
 #endif /* WOLFSSL_HAVE_MLKEM */
 
+#if defined(WOLFSSL_HAVE_LMS) || defined(WOLFSSL_HAVE_XMSS)
+static int _handlePqcStatefulSigKeyGen(whClientContext* ctx,
+                                       wc_CryptoInfo* info, int useDma)
+{
+    int ret = CRYPTOCB_UNAVAILABLE;
+    int type = info->pk.pqc_stateful_sig_kg.type;
+
+#ifndef WOLFHSM_CFG_DMA
+    (void)ctx;
+    if (useDma) {
+        return WC_HW_E;
+    }
+#endif
+
+    switch (type) {
+#if defined(WOLFSSL_HAVE_LMS) && !defined(WOLFSSL_LMS_VERIFY_ONLY)
+        case WC_PQC_STATEFUL_SIG_TYPE_LMS:
+#ifdef WOLFHSM_CFG_DMA
+            if (useDma) {
+                ret = wh_Client_LmsMakeExportKeyDma(
+                    ctx, (LmsKey*)info->pk.pqc_stateful_sig_kg.key);
+            }
+            else
+#endif /* WOLFHSM_CFG_DMA */
+            {
+                /* Non-DMA transport not supported in v1; signatures exceed the
+                 * default WOLFHSM_CFG_COMM_DATA_LEN. */
+                ret = CRYPTOCB_UNAVAILABLE;
+            }
+            break;
+#endif /* WOLFSSL_HAVE_LMS && !WOLFSSL_LMS_VERIFY_ONLY */
+#if defined(WOLFSSL_HAVE_XMSS) && !defined(WOLFSSL_XMSS_VERIFY_ONLY)
+        case WC_PQC_STATEFUL_SIG_TYPE_XMSS:
+#ifdef WOLFHSM_CFG_DMA
+            if (useDma) {
+                ret = wh_Client_XmssMakeExportKeyDma(
+                    ctx, (XmssKey*)info->pk.pqc_stateful_sig_kg.key);
+            }
+            else
+#endif /* WOLFHSM_CFG_DMA */
+            {
+                ret = CRYPTOCB_UNAVAILABLE;
+            }
+            break;
+#endif /* WOLFSSL_HAVE_XMSS && !WOLFSSL_XMSS_VERIFY_ONLY */
+
+        default:
+            ret = CRYPTOCB_UNAVAILABLE;
+            break;
+    }
+
+    if (ret == WH_ERROR_BADARGS) {
+        ret = BAD_FUNC_ARG;
+    }
+    else if (ret == WH_ERROR_NOTIMPL) {
+        ret = CRYPTOCB_UNAVAILABLE;
+    }
+
+    return ret;
+}
+
+static int _handlePqcStatefulSigSign(whClientContext* ctx, wc_CryptoInfo* info,
+                                     int useDma)
+{
+    int ret  = CRYPTOCB_UNAVAILABLE;
+    int type = info->pk.pqc_stateful_sig_sign.type;
+
+#ifndef WOLFHSM_CFG_DMA
+    (void)ctx;
+    if (useDma) {
+        return WC_HW_E;
+    }
+#endif
+
+    switch (type) {
+#if defined(WOLFSSL_HAVE_LMS) && !defined(WOLFSSL_LMS_VERIFY_ONLY)
+        case WC_PQC_STATEFUL_SIG_TYPE_LMS:
+#ifdef WOLFHSM_CFG_DMA
+            if (useDma) {
+                ret = wh_Client_LmsSignDma(
+                    ctx,
+                    info->pk.pqc_stateful_sig_sign.msg,
+                    info->pk.pqc_stateful_sig_sign.msgSz,
+                    info->pk.pqc_stateful_sig_sign.out,
+                    info->pk.pqc_stateful_sig_sign.outSz,
+                    (LmsKey*)info->pk.pqc_stateful_sig_sign.key);
+            }
+            else
+#endif /* WOLFHSM_CFG_DMA */
+            {
+                ret = CRYPTOCB_UNAVAILABLE;
+            }
+            break;
+#endif /* WOLFSSL_HAVE_LMS && !WOLFSSL_LMS_VERIFY_ONLY */
+#if defined(WOLFSSL_HAVE_XMSS) && !defined(WOLFSSL_XMSS_VERIFY_ONLY)
+        case WC_PQC_STATEFUL_SIG_TYPE_XMSS:
+#ifdef WOLFHSM_CFG_DMA
+            if (useDma) {
+                ret = wh_Client_XmssSignDma(
+                    ctx,
+                    info->pk.pqc_stateful_sig_sign.msg,
+                    info->pk.pqc_stateful_sig_sign.msgSz,
+                    info->pk.pqc_stateful_sig_sign.out,
+                    info->pk.pqc_stateful_sig_sign.outSz,
+                    (XmssKey*)info->pk.pqc_stateful_sig_sign.key);
+            }
+            else
+#endif /* WOLFHSM_CFG_DMA */
+            {
+                ret = CRYPTOCB_UNAVAILABLE;
+            }
+            break;
+#endif /* WOLFSSL_HAVE_XMSS && !WOLFSSL_XMSS_VERIFY_ONLY */
+
+        default:
+            ret = CRYPTOCB_UNAVAILABLE;
+            break;
+    }
+
+    if (ret == WH_ERROR_BADARGS) {
+        ret = BAD_FUNC_ARG;
+    }
+    else if (ret == WH_ERROR_NOTIMPL) {
+        ret = CRYPTOCB_UNAVAILABLE;
+    }
+
+    return ret;
+}
+
+static int _handlePqcStatefulSigVerify(whClientContext* ctx,
+                                       wc_CryptoInfo* info, int useDma)
+{
+    int ret  = CRYPTOCB_UNAVAILABLE;
+    int type = info->pk.pqc_stateful_sig_verify.type;
+
+#ifndef WOLFHSM_CFG_DMA
+    (void)ctx;
+    if (useDma) {
+        return WC_HW_E;
+    }
+#endif
+
+    switch (type) {
+#ifdef WOLFSSL_HAVE_LMS
+        case WC_PQC_STATEFUL_SIG_TYPE_LMS:
+#ifdef WOLFHSM_CFG_DMA
+            if (useDma) {
+                ret = wh_Client_LmsVerifyDma(
+                    ctx,
+                    info->pk.pqc_stateful_sig_verify.sig,
+                    info->pk.pqc_stateful_sig_verify.sigSz,
+                    info->pk.pqc_stateful_sig_verify.msg,
+                    info->pk.pqc_stateful_sig_verify.msgSz,
+                    info->pk.pqc_stateful_sig_verify.res,
+                    (LmsKey*)info->pk.pqc_stateful_sig_verify.key);
+            }
+            else
+#endif /* WOLFHSM_CFG_DMA */
+            {
+                ret = CRYPTOCB_UNAVAILABLE;
+            }
+            break;
+#endif /* WOLFSSL_HAVE_LMS */
+#ifdef WOLFSSL_HAVE_XMSS
+        case WC_PQC_STATEFUL_SIG_TYPE_XMSS:
+#ifdef WOLFHSM_CFG_DMA
+            if (useDma) {
+                ret = wh_Client_XmssVerifyDma(
+                    ctx,
+                    info->pk.pqc_stateful_sig_verify.sig,
+                    info->pk.pqc_stateful_sig_verify.sigSz,
+                    info->pk.pqc_stateful_sig_verify.msg,
+                    info->pk.pqc_stateful_sig_verify.msgSz,
+                    info->pk.pqc_stateful_sig_verify.res,
+                    (XmssKey*)info->pk.pqc_stateful_sig_verify.key);
+            }
+            else
+#endif /* WOLFHSM_CFG_DMA */
+            {
+                ret = CRYPTOCB_UNAVAILABLE;
+            }
+            break;
+#endif /* WOLFSSL_HAVE_XMSS */
+
+        default:
+            ret = CRYPTOCB_UNAVAILABLE;
+            break;
+    }
+
+    if (ret == WH_ERROR_BADARGS) {
+        ret = BAD_FUNC_ARG;
+    }
+    else if (ret == WH_ERROR_NOTIMPL) {
+        ret = CRYPTOCB_UNAVAILABLE;
+    }
+
+    return ret;
+}
+
+static int _handlePqcStatefulSigSigsLeft(whClientContext* ctx,
+                                         wc_CryptoInfo* info, int useDma)
+{
+    int ret  = CRYPTOCB_UNAVAILABLE;
+    int type = info->pk.pqc_stateful_sig_sigs_left.type;
+
+#ifndef WOLFHSM_CFG_DMA
+    (void)ctx;
+    if (useDma) {
+        return WC_HW_E;
+    }
+#endif
+
+    switch (type) {
+#if defined(WOLFSSL_HAVE_LMS) && !defined(WOLFSSL_LMS_VERIFY_ONLY)
+        case WC_PQC_STATEFUL_SIG_TYPE_LMS:
+#ifdef WOLFHSM_CFG_DMA
+            if (useDma) {
+                ret = wh_Client_LmsSigsLeftDma(
+                    ctx,
+                    (LmsKey*)info->pk.pqc_stateful_sig_sigs_left.key,
+                    info->pk.pqc_stateful_sig_sigs_left.sigsLeft);
+            }
+            else
+#endif /* WOLFHSM_CFG_DMA */
+            {
+                ret = CRYPTOCB_UNAVAILABLE;
+            }
+            break;
+#endif /* WOLFSSL_HAVE_LMS && !WOLFSSL_LMS_VERIFY_ONLY */
+#if defined(WOLFSSL_HAVE_XMSS) && !defined(WOLFSSL_XMSS_VERIFY_ONLY)
+        case WC_PQC_STATEFUL_SIG_TYPE_XMSS:
+#ifdef WOLFHSM_CFG_DMA
+            if (useDma) {
+                ret = wh_Client_XmssSigsLeftDma(
+                    ctx,
+                    (XmssKey*)info->pk.pqc_stateful_sig_sigs_left.key,
+                    info->pk.pqc_stateful_sig_sigs_left.sigsLeft);
+            }
+            else
+#endif /* WOLFHSM_CFG_DMA */
+            {
+                ret = CRYPTOCB_UNAVAILABLE;
+            }
+            break;
+#endif /* WOLFSSL_HAVE_XMSS && !WOLFSSL_XMSS_VERIFY_ONLY */
+
+        default:
+            ret = CRYPTOCB_UNAVAILABLE;
+            break;
+    }
+
+    if (ret == WH_ERROR_BADARGS) {
+        ret = BAD_FUNC_ARG;
+    }
+    else if (ret == WH_ERROR_NOTIMPL) {
+        ret = CRYPTOCB_UNAVAILABLE;
+    }
+
+    return ret;
+}
+#endif /* WOLFSSL_HAVE_LMS || WOLFSSL_HAVE_XMSS */
+
 #if defined(HAVE_FALCON) || defined(WOLFSSL_HAVE_MLDSA)
 static int _handlePqcSigKeyGen(whClientContext* ctx, wc_CryptoInfo* info,
                                int useDma)
@@ -1102,6 +1399,20 @@ int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
                 ret = _handlePqcDecaps(ctx, info, 1);
                 break;
 #endif /* WOLFSSL_HAVE_MLKEM */
+#if defined(WOLFSSL_HAVE_LMS) || defined(WOLFSSL_HAVE_XMSS)
+            case WC_PK_TYPE_PQC_STATEFUL_SIG_KEYGEN:
+                ret = _handlePqcStatefulSigKeyGen(ctx, info, 1);
+                break;
+            case WC_PK_TYPE_PQC_STATEFUL_SIG_SIGN:
+                ret = _handlePqcStatefulSigSign(ctx, info, 1);
+                break;
+            case WC_PK_TYPE_PQC_STATEFUL_SIG_VERIFY:
+                ret = _handlePqcStatefulSigVerify(ctx, info, 1);
+                break;
+            case WC_PK_TYPE_PQC_STATEFUL_SIG_SIGS_LEFT:
+                ret = _handlePqcStatefulSigSigsLeft(ctx, info, 1);
+                break;
+#endif /* WOLFSSL_HAVE_LMS || WOLFSSL_HAVE_XMSS */
 #if defined(WOLFSSL_HAVE_MLDSA) || defined(HAVE_FALCON)
             case WC_PK_TYPE_PQC_SIG_KEYGEN:
                 ret = _handlePqcSigKeyGen(ctx, info, 1);

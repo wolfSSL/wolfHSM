@@ -1550,6 +1550,123 @@ int wh_MessageCrypto_TranslateMlKemDecapsDmaResponse(
     uint16_t magic, const whMessageCrypto_MlKemDecapsDmaResponse* src,
     whMessageCrypto_MlKemDecapsDmaResponse* dest);
 
+/* Stateful hash-based signature (LMS / XMSS) DMA messages.
+ *
+ * The discriminator (LMS vs XMSS) rides on the generic request header's
+ * algoSubType field, set to WC_PQC_STATEFUL_SIG_TYPE_LMS or _XMSS by the
+ * client. Parameter selection on keygen uses lmsLevels/lmsHeight/lmsWinternitz
+ * when algoSubType == LMS, or xmssParamStr when algoSubType == XMSS.
+ * xmssParamStr is sized to fit the longest XMSS^MT name (e.g.
+ * "XMSSMT-SHAKE256_60/12_256") plus NUL.
+ */
+
+/* Stateful sig DMA Key Generation Request */
+typedef struct {
+    whMessageCrypto_DmaBuffer pub;        /* Server writes pub key here */
+    uint32_t                  flags;
+    uint32_t                  keyId;
+    uint32_t                  access;
+    uint32_t                  labelSize;
+    uint32_t                  lmsLevels;
+    uint32_t                  lmsHeight;
+    uint32_t                  lmsWinternitz;
+    uint8_t                   label[WH_NVM_LABEL_LEN];
+    char                      xmssParamStr[32];
+    uint8_t                   WH_PAD[4]; /* Pad to 8-byte alignment */
+} whMessageCrypto_PqcStatefulSigKeyGenDmaRequest;
+
+/* Stateful sig DMA Key Generation Response */
+typedef struct {
+    whMessageCrypto_DmaAddrStatus dmaAddrStatus;
+    uint32_t                      keyId;
+    uint32_t                      pubSize;
+} whMessageCrypto_PqcStatefulSigKeyGenDmaResponse;
+
+/* Stateful sig DMA Sign Request */
+typedef struct {
+    whMessageCrypto_DmaBuffer msg;        /* Message to sign */
+    whMessageCrypto_DmaBuffer sig;        /* Server writes signature here */
+    uint32_t                  options;
+#define WH_MESSAGE_CRYPTO_STATEFUL_SIG_OPTIONS_EVICT (1 << 0)
+    uint32_t                  keyId;
+} whMessageCrypto_PqcStatefulSigSignDmaRequest;
+
+/* Stateful sig DMA Sign Response */
+typedef struct {
+    whMessageCrypto_DmaAddrStatus dmaAddrStatus;
+    uint32_t                      sigLen;
+    uint8_t                       WH_PAD[4];
+} whMessageCrypto_PqcStatefulSigSignDmaResponse;
+
+/* Stateful sig DMA Verify Request */
+typedef struct {
+    whMessageCrypto_DmaBuffer sig;        /* Signature to verify */
+    whMessageCrypto_DmaBuffer msg;        /* Message that was signed */
+    uint32_t                  options;
+    uint32_t                  keyId;
+} whMessageCrypto_PqcStatefulSigVerifyDmaRequest;
+
+/* Stateful sig DMA Verify Response */
+typedef struct {
+    whMessageCrypto_DmaAddrStatus dmaAddrStatus;
+    uint32_t                      res;    /* 1 if signature valid, 0 otherwise */
+    uint8_t                       WH_PAD[4];
+} whMessageCrypto_PqcStatefulSigVerifyDmaResponse;
+
+/* Stateful sig DMA Signatures-Left Request.
+ *
+ * No DMA buffers are required for this query; the request is named with the
+ * Dma suffix purely for naming consistency with the rest of the family. */
+typedef struct {
+    uint32_t keyId;
+} whMessageCrypto_PqcStatefulSigSigsLeftDmaRequest;
+
+/* Stateful sig DMA Signatures-Left Response. */
+typedef struct {
+    uint32_t  sigsLeft;
+} whMessageCrypto_PqcStatefulSigSigsLeftDmaResponse;
+
+/* Stateful sig DMA translation functions */
+int wh_MessageCrypto_TranslatePqcStatefulSigKeyGenDmaRequest(
+    uint16_t magic,
+    const whMessageCrypto_PqcStatefulSigKeyGenDmaRequest* src,
+    whMessageCrypto_PqcStatefulSigKeyGenDmaRequest* dest);
+
+int wh_MessageCrypto_TranslatePqcStatefulSigKeyGenDmaResponse(
+    uint16_t magic,
+    const whMessageCrypto_PqcStatefulSigKeyGenDmaResponse* src,
+    whMessageCrypto_PqcStatefulSigKeyGenDmaResponse* dest);
+
+int wh_MessageCrypto_TranslatePqcStatefulSigSignDmaRequest(
+    uint16_t magic,
+    const whMessageCrypto_PqcStatefulSigSignDmaRequest* src,
+    whMessageCrypto_PqcStatefulSigSignDmaRequest* dest);
+
+int wh_MessageCrypto_TranslatePqcStatefulSigSignDmaResponse(
+    uint16_t magic,
+    const whMessageCrypto_PqcStatefulSigSignDmaResponse* src,
+    whMessageCrypto_PqcStatefulSigSignDmaResponse* dest);
+
+int wh_MessageCrypto_TranslatePqcStatefulSigVerifyDmaRequest(
+    uint16_t magic,
+    const whMessageCrypto_PqcStatefulSigVerifyDmaRequest* src,
+    whMessageCrypto_PqcStatefulSigVerifyDmaRequest* dest);
+
+int wh_MessageCrypto_TranslatePqcStatefulSigVerifyDmaResponse(
+    uint16_t magic,
+    const whMessageCrypto_PqcStatefulSigVerifyDmaResponse* src,
+    whMessageCrypto_PqcStatefulSigVerifyDmaResponse* dest);
+
+int wh_MessageCrypto_TranslatePqcStatefulSigSigsLeftDmaRequest(
+    uint16_t magic,
+    const whMessageCrypto_PqcStatefulSigSigsLeftDmaRequest* src,
+    whMessageCrypto_PqcStatefulSigSigsLeftDmaRequest* dest);
+
+int wh_MessageCrypto_TranslatePqcStatefulSigSigsLeftDmaResponse(
+    uint16_t magic,
+    const whMessageCrypto_PqcStatefulSigSigsLeftDmaResponse* src,
+    whMessageCrypto_PqcStatefulSigSigsLeftDmaResponse* dest);
+
 /* Ed25519 DMA Sign Request */
 typedef struct {
     whMessageCrypto_DmaBuffer msg; /* Message buffer */
