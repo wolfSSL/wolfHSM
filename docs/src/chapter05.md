@@ -313,7 +313,15 @@ int wh_Client_Curve25519ExportPublicKey(whClientContext* ctx, whKeyId keyId,
         curve25519_key* key, uint16_t label_len, uint8_t* label);
 int wh_Client_MlDsaExportPublicKey(whClientContext* ctx, whKeyId keyId,
         wc_MlDsaKey* key, uint16_t label_len, uint8_t* label);
+int wh_Client_MlKemExportPublicKey(whClientContext* ctx, whKeyId keyId,
+        MlKemKey* key, uint16_t label_len, uint8_t* label);
 ```
+
+Unlike the DER-based helpers, ML-KEM emits the raw wire-format public key
+bytes (sized by `WC_ML_KEM_MAX_PUBLIC_KEY_SIZE`); the client deserializer
+probes the supported levels. `WH_KEY_ALGO_MLKEM` is the matching algo
+selector when calling the generic `wh_Client_KeyExportPublic[Dma]` API
+directly.
 
 Example: generate an RSA keypair on the HSM with the private key marked
 `NONEXPORTABLE`, obtain the public key on the client, and verify a signature
@@ -359,6 +367,8 @@ int wh_Client_KeyExportPublicDma(whClientContext* c, whKeyId keyId,
 
 int wh_Client_MlDsaExportPublicKeyDma(whClientContext* ctx, whKeyId keyId,
         wc_MlDsaKey* key, uint16_t label_len, uint8_t* label);
+int wh_Client_MlKemExportPublicKeyDma(whClientContext* ctx, whKeyId keyId,
+        MlKemKey* key, uint16_t label_len, uint8_t* label);
 ```
 
 `wh_Client_KeyExportPublicDma` is the generic transport — callers receive

@@ -10,7 +10,7 @@ The wolfHSM benchmarks provide a framework for testing and measuring the perform
 - Hash functions (SHA-2, SHA-3)
 - Message Authentication Codes (HMAC, CMAC)
 - Public Key Cryptography (RSA, ECC, Curve25519)
-- Post-Quantum Cryptography (ML-DSA)
+- Post-Quantum Cryptography (ML-DSA, ML-KEM)
 - Basic communication (Echo)
 
 The benchmark system measures the runtime of registered operations, as well as reports the throughput in either operations per second or bytes per second depending on the algorithm.

@@ -44,6 +44,7 @@
 #include "wolfssl/wolfcrypt/sha512.h"
 #include "wolfssl/wolfcrypt/cmac.h"
 #include "wolfssl/wolfcrypt/wc_mldsa.h"
+#include "wolfssl/wolfcrypt/wc_mlkem.h"
 #include "wolfssl/wolfcrypt/hmac.h"
 #include "wolfssl/wolfcrypt/kdf.h"
 
@@ -193,6 +194,32 @@ static int _HandleMlDsaCheckPrivKey(whServerContext* ctx, uint16_t magic,
                                     uint16_t inSize, void* cryptoDataOut,
                                     uint16_t* outSize);
 #endif /* WOLFSSL_HAVE_MLDSA */
+
+#ifdef WOLFSSL_HAVE_MLKEM
+static int _HandleMlKemKeyGen(whServerContext* ctx, uint16_t magic, int devId,
+                              const void* cryptoDataIn, uint16_t inSize,
+                              void* cryptoDataOut, uint16_t* outSize);
+static int _HandleMlKemEncaps(whServerContext* ctx, uint16_t magic, int devId,
+                              const void* cryptoDataIn, uint16_t inSize,
+                              void* cryptoDataOut, uint16_t* outSize);
+static int _HandleMlKemDecaps(whServerContext* ctx, uint16_t magic, int devId,
+                              const void* cryptoDataIn, uint16_t inSize,
+                              void* cryptoDataOut, uint16_t* outSize);
+#ifdef WOLFHSM_CFG_DMA
+static int _HandleMlKemKeyGenDma(whServerContext* ctx, uint16_t magic,
+                                 int devId, const void* cryptoDataIn,
+                                 uint16_t inSize, void* cryptoDataOut,
+                                 uint16_t* outSize);
+static int _HandleMlKemEncapsDma(whServerContext* ctx, uint16_t magic,
+                                 int devId, const void* cryptoDataIn,
+                                 uint16_t inSize, void* cryptoDataOut,
+                                 uint16_t* outSize);
+static int _HandleMlKemDecapsDma(whServerContext* ctx, uint16_t magic,
+                                 int devId, const void* cryptoDataIn,
+                                 uint16_t inSize, void* cryptoDataOut,
+                                 uint16_t* outSize);
+#endif /* WOLFHSM_CFG_DMA */
+#endif /* WOLFSSL_HAVE_MLKEM */
 
 /** Public server crypto functions */
 
@@ -797,6 +824,60 @@ int wh_Server_MlDsaKeyCacheExport(whServerContext* ctx, whKeyId keyId,
     return ret;
 }
 #endif /* WOLFSSL_HAVE_MLDSA */
+
+#ifdef WOLFSSL_HAVE_MLKEM
+int wh_Server_MlKemKeyCacheImport(whServerContext* ctx, MlKemKey* key,
+                                  whKeyId keyId, whNvmFlags flags,
+                                  uint16_t label_len, uint8_t* label)
+{
+    int            ret = WH_ERROR_OK;
+    uint8_t*       cacheBuf;
+    whNvmMetadata* cacheMeta;
+    uint16_t       keySize = WC_ML_KEM_MAX_PRIVATE_KEY_SIZE;
+
+    if ((ctx == NULL) || (key == NULL) || (WH_KEYID_ISERASED(keyId)) ||
+        ((label != NULL) && (label_len > sizeof(cacheMeta->label)))) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_Server_KeystoreGetCacheSlotChecked(ctx, keyId, keySize, &cacheBuf,
+                                                &cacheMeta);
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Crypto_MlKemSerializeKey(key, keySize, cacheBuf, &keySize);
+    }
+
+    if (ret == WH_ERROR_OK) {
+        cacheMeta->id     = keyId;
+        cacheMeta->len    = keySize;
+        cacheMeta->flags  = flags;
+        cacheMeta->access = WH_NVM_ACCESS_ANY;
+        if ((label != NULL) && (label_len > 0)) {
+            memcpy(cacheMeta->label, label, label_len);
+        }
+    }
+
+    return ret;
+}
+
+int wh_Server_MlKemKeyCacheExport(whServerContext* ctx, whKeyId keyId,
+                                  MlKemKey* key)
+{
+    uint8_t*       cacheBuf;
+    whNvmMetadata* cacheMeta;
+    int            ret = WH_ERROR_OK;
+
+    if ((ctx == NULL) || (key == NULL) || (WH_KEYID_ISERASED(keyId))) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_Server_KeystoreFreshenKey(ctx, keyId, &cacheBuf, &cacheMeta);
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Crypto_MlKemDeserializeKey(cacheBuf, cacheMeta->len, key);
+        WH_DEBUG_SERVER_VERBOSE("keyId:%u, ret:%d\n", keyId, ret);
+    }
+    return ret;
+}
+#endif /* WOLFSSL_HAVE_MLKEM */
 
 
 /** Request/Response Handling functions */
@@ -4438,6 +4519,333 @@ static int _HandleMlDsaCheckPrivKey(whServerContext* ctx, uint16_t magic,
 }
 #endif /* WOLFSSL_HAVE_MLDSA */
 
+#ifdef WOLFSSL_HAVE_MLKEM
+static int _IsMlKemLevelSupported(int level)
+{
+    int ret = 0;
+
+    switch (level) {
+#ifndef WOLFSSL_NO_ML_KEM_512
+        case WC_ML_KEM_512:
+            ret = 1;
+            break;
+#endif
+#ifndef WOLFSSL_NO_ML_KEM_768
+        case WC_ML_KEM_768:
+            ret = 1;
+            break;
+#endif
+#ifndef WOLFSSL_NO_ML_KEM_1024
+        case WC_ML_KEM_1024:
+            ret = 1;
+            break;
+#endif
+        default:
+            ret = 0;
+            break;
+    }
+
+    return ret;
+}
+
+static int _HandleMlKemKeyGen(whServerContext* ctx, uint16_t magic, int devId,
+                              const void* cryptoDataIn, uint16_t inSize,
+                              void* cryptoDataOut, uint16_t* outSize)
+{
+#ifdef WOLFSSL_MLKEM_NO_MAKE_KEY
+    (void)ctx;
+    (void)magic;
+    (void)devId;
+    (void)cryptoDataIn;
+    (void)inSize;
+    (void)cryptoDataOut;
+    (void)outSize;
+    return WH_ERROR_NOHANDLER;
+#else
+    int                                 ret = WH_ERROR_OK;
+    MlKemKey                            key[1];
+    whMessageCrypto_MlKemKeyGenRequest  req;
+    whMessageCrypto_MlKemKeyGenResponse res;
+    uint16_t                            res_size = 0;
+    uint8_t*                            res_out;
+    uint16_t                            max_size;
+    whKeyId                             key_id;
+    uint16_t                            label_size = WH_NVM_LABEL_LEN;
+
+    if (inSize < sizeof(whMessageCrypto_MlKemKeyGenRequest)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateMlKemKeyGenRequest(
+        magic, (whMessageCrypto_MlKemKeyGenRequest*)cryptoDataIn, &req);
+    if (ret != 0) {
+        return ret;
+    }
+
+    key_id = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO, ctx->comm->client_id,
+                                          req.keyId);
+    res_out = (uint8_t*)cryptoDataOut + sizeof(whMessageCrypto_MlKemKeyGenResponse);
+    max_size = (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN -
+                          (res_out - (uint8_t*)cryptoDataOut));
+
+    if (!_IsMlKemLevelSupported((int)req.level)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wc_MlKemKey_Init(key, (int)req.level, NULL, devId);
+    if (ret == 0) {
+        ret = wc_MlKemKey_MakeKey(key, ctx->crypto->rng);
+        if (ret == 0) {
+            if ((req.flags & WH_NVM_FLAGS_EPHEMERAL) != 0) {
+                key_id = WH_KEYID_ERASED;
+                ret = wh_Crypto_MlKemSerializeKey(key, max_size, res_out,
+                                                  &res_size);
+            }
+            else {
+                if (WH_KEYID_ISERASED(key_id)) {
+                    ret = wh_Server_KeystoreGetUniqueId(ctx, &key_id);
+                }
+                if (ret == WH_ERROR_OK) {
+                    ret = wh_Server_MlKemKeyCacheImport(ctx, key, key_id,
+                                                        req.flags, label_size,
+                                                        req.label);
+                }
+            }
+        }
+        wc_MlKemKey_Free(key);
+    }
+
+    if (ret == WH_ERROR_OK) {
+        res.keyId = wh_KeyId_TranslateToClient(key_id);
+        res.len   = res_size;
+        (void)wh_MessageCrypto_TranslateMlKemKeyGenResponse(
+            magic, &res, (whMessageCrypto_MlKemKeyGenResponse*)cryptoDataOut);
+        *outSize = sizeof(whMessageCrypto_MlKemKeyGenResponse) + res_size;
+    }
+
+    return ret;
+#endif /* WOLFSSL_MLKEM_NO_MAKE_KEY */
+}
+
+static int _HandleMlKemEncaps(whServerContext* ctx, uint16_t magic, int devId,
+                              const void* cryptoDataIn, uint16_t inSize,
+                              void* cryptoDataOut, uint16_t* outSize)
+{
+#ifdef WOLFSSL_MLKEM_NO_ENCAPSULATE
+    (void)ctx;
+    (void)magic;
+    (void)devId;
+    (void)cryptoDataIn;
+    (void)inSize;
+    (void)cryptoDataOut;
+    (void)outSize;
+    return WH_ERROR_NOHANDLER;
+#else
+    int                                  ret = WH_ERROR_OK;
+    MlKemKey                             key[1];
+    whMessageCrypto_MlKemEncapsRequest   req;
+    whMessageCrypto_MlKemEncapsResponse  res;
+    whKeyId                              key_id;
+    uint8_t*                             res_ct;
+    uint8_t*                             res_ss;
+    word32                               ct_len;
+    word32                               ss_len;
+    word32                               max_out;
+    int                                  evict = 0;
+    int                                  keyInited = 0;
+
+    if (inSize < sizeof(whMessageCrypto_MlKemEncapsRequest)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateMlKemEncapsRequest(
+        magic, (whMessageCrypto_MlKemEncapsRequest*)cryptoDataIn, &req);
+    if (ret != 0) {
+        return ret;
+    }
+
+    key_id = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO, ctx->comm->client_id,
+                                          req.keyId);
+    evict = !!(req.options & WH_MESSAGE_CRYPTO_MLKEM_ENCAPS_OPTIONS_EVICT);
+
+    if (!WH_KEYID_ISERASED(key_id)) {
+        ret = wh_Server_KeystoreFindEnforceKeyUsage(ctx, key_id,
+                                                    WH_NVM_FLAGS_USAGE_DERIVE);
+        if (ret != WH_ERROR_OK) {
+            goto cleanup;
+        }
+    }
+
+    if (!_IsMlKemLevelSupported((int)req.level)) {
+        ret = WH_ERROR_BADARGS;
+        goto cleanup;
+    }
+
+    ret = wc_MlKemKey_Init(key, (int)req.level, NULL, devId);
+    if (ret == 0) {
+        keyInited = 1;
+        ret = wh_Server_MlKemKeyCacheExport(ctx, key_id, key);
+    }
+
+    /* Verify the exported key matches the requested level */
+    if (ret == WH_ERROR_OK && key->type != (int)req.level) {
+        ret = WH_ERROR_BADARGS;
+    }
+
+    if (ret == WH_ERROR_OK) {
+        ret = wc_MlKemKey_CipherTextSize(key, &ct_len);
+        if (ret == WH_ERROR_OK) {
+            ret = wc_MlKemKey_SharedSecretSize(key, &ss_len);
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        res_ct = (uint8_t*)cryptoDataOut + sizeof(whMessageCrypto_MlKemEncapsResponse);
+        res_ss = res_ct + ct_len;
+        max_out = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
+            ((uint8_t*)res_ct - (uint8_t*)cryptoDataOut));
+        if (ct_len + ss_len > max_out) {
+            ret = WH_ERROR_BADARGS;
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        ret = wc_MlKemKey_Encapsulate(key, res_ct, res_ss, ctx->crypto->rng);
+        if (ret == WH_ERROR_OK) {
+            res.ctSz = ct_len;
+            res.ssSz = ss_len;
+            (void)wh_MessageCrypto_TranslateMlKemEncapsResponse(
+                magic, &res, (whMessageCrypto_MlKemEncapsResponse*)cryptoDataOut);
+            *outSize = sizeof(whMessageCrypto_MlKemEncapsResponse) + ct_len + ss_len;
+        }
+        else {
+            /* Zero sensitive data on failure */
+            wc_ForceZero(res_ss, ss_len);
+        }
+    }
+
+    if (keyInited) {
+        wc_MlKemKey_Free(key);
+    }
+cleanup:
+    if (evict != 0) {
+        (void)wh_Server_KeystoreEvictKey(ctx, key_id);
+    }
+    return ret;
+#endif /* WOLFSSL_MLKEM_NO_ENCAPSULATE */
+}
+
+static int _HandleMlKemDecaps(whServerContext* ctx, uint16_t magic, int devId,
+                              const void* cryptoDataIn, uint16_t inSize,
+                              void* cryptoDataOut, uint16_t* outSize)
+{
+#ifdef WOLFSSL_MLKEM_NO_DECAPSULATE
+    (void)ctx;
+    (void)magic;
+    (void)devId;
+    (void)cryptoDataIn;
+    (void)inSize;
+    (void)cryptoDataOut;
+    (void)outSize;
+    return WH_ERROR_NOHANDLER;
+#else
+    int                                 ret = WH_ERROR_OK;
+    MlKemKey                            key[1];
+    whMessageCrypto_MlKemDecapsRequest  req;
+    whMessageCrypto_MlKemDecapsResponse res;
+    whKeyId                             key_id;
+    byte*                               req_ct;
+    byte*                               res_ss;
+    uint32_t                            available;
+    word32                              ss_len;
+    word32                              max_out;
+    int                                 evict = 0;
+    int                                 keyInited = 0;
+
+    if (inSize < sizeof(whMessageCrypto_MlKemDecapsRequest)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateMlKemDecapsRequest(
+        magic, (whMessageCrypto_MlKemDecapsRequest*)cryptoDataIn, &req);
+    if (ret != 0) {
+        return ret;
+    }
+
+    key_id = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO, ctx->comm->client_id,
+                                          req.keyId);
+    evict = !!(req.options & WH_MESSAGE_CRYPTO_MLKEM_DECAPS_OPTIONS_EVICT);
+
+    if (!WH_KEYID_ISERASED(key_id)) {
+        ret = wh_Server_KeystoreFindEnforceKeyUsage(ctx, key_id,
+                                                    WH_NVM_FLAGS_USAGE_DERIVE);
+        if (ret != WH_ERROR_OK) {
+            goto cleanup;
+        }
+    }
+
+    if (!_IsMlKemLevelSupported((int)req.level)) {
+        ret = WH_ERROR_BADARGS;
+        goto cleanup;
+    }
+
+    available = inSize - sizeof(whMessageCrypto_MlKemDecapsRequest);
+    if (req.ctSz > available) {
+        ret = WH_ERROR_BADARGS;
+        goto cleanup;
+    }
+    req_ct = (byte*)cryptoDataIn + sizeof(whMessageCrypto_MlKemDecapsRequest);
+
+    ret = wc_MlKemKey_Init(key, (int)req.level, NULL, devId);
+    if (ret == WH_ERROR_OK) {
+        keyInited = 1;
+        ret = wh_Server_MlKemKeyCacheExport(ctx, key_id, key);
+    }
+
+    /* Verify the exported key matches the requested level */
+    if (ret == WH_ERROR_OK && key->type != (int)req.level) {
+        ret = WH_ERROR_BADARGS;
+    }
+
+    if (ret == WH_ERROR_OK) {
+        ret = wc_MlKemKey_SharedSecretSize(key, &ss_len);
+    }
+
+    if (ret == WH_ERROR_OK) {
+        res_ss = (byte*)cryptoDataOut + sizeof(whMessageCrypto_MlKemDecapsResponse);
+        max_out = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
+            ((uint8_t*)res_ss - (uint8_t*)cryptoDataOut));
+        if (ss_len > max_out) {
+            ret = WH_ERROR_BADARGS;
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        ret = wc_MlKemKey_Decapsulate(key, res_ss, req_ct, req.ctSz);
+        if (ret == WH_ERROR_OK) {
+            res.ssSz = ss_len;
+            (void)wh_MessageCrypto_TranslateMlKemDecapsResponse(
+                magic, &res, (whMessageCrypto_MlKemDecapsResponse*)cryptoDataOut);
+            *outSize = sizeof(whMessageCrypto_MlKemDecapsResponse) + ss_len;
+        }
+        else {
+            /* Zero sensitive data on failure */
+            wc_ForceZero(res_ss, ss_len);
+        }
+    }
+
+    if (keyInited) {
+        wc_MlKemKey_Free(key);
+    }
+cleanup:
+    if (evict != 0) {
+        (void)wh_Server_KeystoreEvictKey(ctx, key_id);
+    }
+    return ret;
+#endif /* WOLFSSL_MLKEM_NO_DECAPSULATE */
+}
+#endif /* WOLFSSL_HAVE_MLKEM */
+
 #if defined(WOLFSSL_HAVE_MLDSA) || defined(HAVE_FALCON)
 static int _HandlePqcSigAlgorithm(whServerContext* ctx, uint16_t magic,
                                   int devId, const void* cryptoDataIn,
@@ -4488,21 +4896,44 @@ static int _HandlePqcSigAlgorithm(whServerContext* ctx, uint16_t magic,
 }
 #endif
 
-#if defined(HAVE_KYBER)
+#if defined(WOLFSSL_HAVE_MLKEM)
 static int _HandlePqcKemAlgorithm(whServerContext* ctx, uint16_t magic,
                                   int devId, const void* cryptoDataIn,
-                                  uint16_t inSize, void* cryptoDataOut,
-                                  uint16_t* outSize)
+                                  uint16_t cryptoInSize, void* cryptoDataOut,
+                                  uint16_t* cryptoOutSize, uint32_t pkAlgoType,
+                                  uint32_t pqAlgoType)
 {
-    (void)ctx;
-    (void)magic;
-    (void)devId;
-    (void)cryptoDataIn;
-    (void)inSize;
-    (void)cryptoDataOut;
-    (void)outSize;
-    /* Placeholder for KEM algorithm handling */
-    return WH_ERROR_NOHANDLER;
+    int ret = WH_ERROR_NOHANDLER;
+
+    switch (pqAlgoType) {
+        case WC_PQC_KEM_TYPE_KYBER: {
+            switch (pkAlgoType) {
+                case WC_PK_TYPE_PQC_KEM_KEYGEN:
+                    ret = _HandleMlKemKeyGen(ctx, magic, devId, cryptoDataIn,
+                                             cryptoInSize, cryptoDataOut,
+                                             cryptoOutSize);
+                    break;
+                case WC_PK_TYPE_PQC_KEM_ENCAPS:
+                    ret = _HandleMlKemEncaps(ctx, magic, devId, cryptoDataIn,
+                                             cryptoInSize, cryptoDataOut,
+                                             cryptoOutSize);
+                    break;
+                case WC_PK_TYPE_PQC_KEM_DECAPS:
+                    ret = _HandleMlKemDecaps(ctx, magic, devId, cryptoDataIn,
+                                             cryptoInSize, cryptoDataOut,
+                                             cryptoOutSize);
+                    break;
+                default:
+                    ret = WH_ERROR_NOHANDLER;
+                    break;
+            }
+        } break;
+        default:
+            ret = WH_ERROR_NOHANDLER;
+            break;
+    }
+
+    return ret;
 }
 #endif
 
@@ -4684,13 +5115,15 @@ int wh_Server_HandleCryptoRequest(whServerContext* ctx, uint16_t magic,
                     break;
 #endif
 
-#if defined(HAVE_KYBER)
+#if defined(WOLFSSL_HAVE_MLKEM)
                 case WC_PK_TYPE_PQC_KEM_KEYGEN:
                 case WC_PK_TYPE_PQC_KEM_ENCAPS:
                 case WC_PK_TYPE_PQC_KEM_DECAPS:
                     ret = _HandlePqcKemAlgorithm(ctx, magic, devId,
                                                  cryptoDataIn, cryptoInSize,
-                                                 cryptoDataOut, &cryptoOutSize);
+                                                 cryptoDataOut, &cryptoOutSize,
+                                                 rqstHeader.algoType,
+                                                 rqstHeader.algoSubType);
                     break;
 #endif
 
@@ -5734,6 +6167,407 @@ static int _HandlePqcSigAlgorithmDma(whServerContext* ctx, uint16_t magic,
 }
 #endif /* WOLFSSL_HAVE_MLDSA || HAVE_FALCON */
 
+#if defined(WOLFSSL_HAVE_MLKEM)
+static int _HandleMlKemKeyGenDma(whServerContext* ctx, uint16_t magic,
+                                 int devId, const void* cryptoDataIn,
+                                 uint16_t inSize, void* cryptoDataOut,
+                                 uint16_t* outSize)
+{
+#ifdef WOLFSSL_MLKEM_NO_MAKE_KEY
+    (void)ctx;
+    (void)magic;
+    (void)devId;
+    (void)cryptoDataIn;
+    (void)inSize;
+    (void)cryptoDataOut;
+    (void)outSize;
+    return WH_ERROR_NOHANDLER;
+#else
+    int                                  ret = WH_ERROR_OK;
+    MlKemKey                             key[1];
+    void*                                clientOutAddr = NULL;
+    uint16_t                             keySize = 0;
+    whMessageCrypto_MlKemKeyGenDmaRequest req;
+    whMessageCrypto_MlKemKeyGenDmaResponse res;
+
+    memset(&res, 0, sizeof(res));
+
+    if (inSize < sizeof(whMessageCrypto_MlKemKeyGenDmaRequest)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateMlKemKeyGenDmaRequest(
+        magic, (whMessageCrypto_MlKemKeyGenDmaRequest*)cryptoDataIn, &req);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    if (!_IsMlKemLevelSupported((int)req.level)) {
+        ret = WH_ERROR_BADARGS;
+    }
+    else {
+        ret = wc_MlKemKey_Init(key, (int)req.level, NULL, devId);
+        if (ret == WH_ERROR_OK) {
+            ret = wc_MlKemKey_MakeKey(key, ctx->crypto->rng);
+            if (ret == WH_ERROR_OK) {
+                if ((req.flags & WH_NVM_FLAGS_EPHEMERAL) != 0) {
+                    ret = wh_Server_DmaProcessClientAddress(
+                        ctx, req.key.addr, &clientOutAddr, req.key.sz,
+                        WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
+                    if (ret == WH_ERROR_OK) {
+                        ret = wh_Crypto_MlKemSerializeKey(
+                            key, req.key.sz, (uint8_t*)clientOutAddr, &keySize);
+                        if (ret == WH_ERROR_OK) {
+                            res.keyId   = WH_KEYID_ERASED;
+                            res.keySize = keySize;
+                        }
+                    }
+                    if (ret == WH_ERROR_OK) {
+                        ret = wh_Server_DmaProcessClientAddress(
+                            ctx, req.key.addr, &clientOutAddr, keySize,
+                            WH_DMA_OPER_CLIENT_WRITE_POST,
+                            (whServerDmaFlags){0});
+                    }
+                }
+                else {
+                    whKeyId keyId = wh_KeyId_TranslateFromClient(
+                        WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+
+                    if (WH_KEYID_ISERASED(keyId)) {
+                        ret = wh_Server_KeystoreGetUniqueId(ctx, &keyId);
+                    }
+                    if (ret == WH_ERROR_OK) {
+                        ret = wh_Server_MlKemKeyCacheImport(
+                            ctx, key, keyId, req.flags, req.labelSize,
+                            req.label);
+                        if (ret == WH_ERROR_OK) {
+                            res.keyId   = wh_KeyId_TranslateToClient(keyId);
+                            res.keySize = keySize;
+                        }
+                    }
+                }
+            }
+            wc_MlKemKey_Free(key);
+        }
+    }
+
+    if (ret == WH_ERROR_ACCESS) {
+        res.dmaAddrStatus.badAddr = req.key;
+    }
+
+    (void)wh_MessageCrypto_TranslateMlKemKeyGenDmaResponse(
+        magic, &res, (whMessageCrypto_MlKemKeyGenDmaResponse*)cryptoDataOut);
+    *outSize = sizeof(res);
+    return ret;
+#endif
+}
+
+static int _HandleMlKemEncapsDma(whServerContext* ctx, uint16_t magic,
+                                 int devId, const void* cryptoDataIn,
+                                 uint16_t inSize, void* cryptoDataOut,
+                                 uint16_t* outSize)
+{
+#ifdef WOLFSSL_MLKEM_NO_ENCAPSULATE
+    (void)ctx;
+    (void)magic;
+    (void)devId;
+    (void)cryptoDataIn;
+    (void)inSize;
+    (void)cryptoDataOut;
+    (void)outSize;
+    return WH_ERROR_NOHANDLER;
+#else
+    int                                   ret = WH_ERROR_OK;
+    MlKemKey                              key[1];
+    void*                                 ctAddr = NULL;
+    word32                                ctLen = 0;
+    word32                                ssLen = 0;
+    whKeyId                               key_id;
+    int                                   evict = 0;
+    int                                   keyInited = 0;
+    uint8_t*                              res_ss;
+    word32                                max_ss;
+    whMessageCrypto_MlKemEncapsDmaRequest req;
+    whMessageCrypto_MlKemEncapsDmaResponse res;
+
+    memset(&res, 0, sizeof(res));
+
+    if (inSize < sizeof(whMessageCrypto_MlKemEncapsDmaRequest)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateMlKemEncapsDmaRequest(
+        magic, (whMessageCrypto_MlKemEncapsDmaRequest*)cryptoDataIn, &req);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    key_id = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                          ctx->comm->client_id, req.keyId);
+    evict  = !!(req.options & WH_MESSAGE_CRYPTO_MLKEM_ENCAPS_OPTIONS_EVICT);
+
+    if (!WH_KEYID_ISERASED(key_id)) {
+        ret = wh_Server_KeystoreFindEnforceKeyUsage(ctx, key_id,
+                                                    WH_NVM_FLAGS_USAGE_DERIVE);
+        if (ret != WH_ERROR_OK) {
+            goto cleanup;
+        }
+    }
+
+    if (!_IsMlKemLevelSupported((int)req.level)) {
+        ret = WH_ERROR_BADARGS;
+        goto cleanup;
+    }
+
+    ret = wc_MlKemKey_Init(key, (int)req.level, NULL, devId);
+    if (ret == WH_ERROR_OK) {
+        keyInited = 1;
+        ret = wh_Server_MlKemKeyCacheExport(ctx, key_id, key);
+    }
+
+    /* Verify the exported key matches the requested level */
+    if (ret == WH_ERROR_OK && key->type != (int)req.level) {
+        ret = WH_ERROR_BADARGS;
+    }
+
+    if (ret == WH_ERROR_OK) {
+        ret = wc_MlKemKey_CipherTextSize(key, &ctLen);
+    }
+    if (ret == WH_ERROR_OK && ctLen > req.ct.sz) {
+        ret = WH_ERROR_BADARGS;
+        goto cleanup_key;
+    }
+    if (ret == WH_ERROR_OK) {
+        ret = wc_MlKemKey_SharedSecretSize(key, &ssLen);
+    }
+
+    /* Validate that the inline shared secret fits in the comm buffer */
+    if (ret == WH_ERROR_OK) {
+        res_ss = (uint8_t*)cryptoDataOut +
+                 sizeof(whMessageCrypto_MlKemEncapsDmaResponse);
+        max_ss = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
+            ((uint8_t*)res_ss - (uint8_t*)cryptoDataOut));
+        if (ssLen > max_ss) {
+            ret = WH_ERROR_BADARGS;
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Server_DmaProcessClientAddress(
+            ctx, (uintptr_t)req.ct.addr, &ctAddr, ctLen,
+            WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
+        if (ret == WH_ERROR_ACCESS) {
+            res.dmaAddrStatus.badAddr = req.ct;
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        /* Shared secret goes inline in response, not via DMA */
+        res_ss = (uint8_t*)cryptoDataOut +
+                 sizeof(whMessageCrypto_MlKemEncapsDmaResponse);
+        ret = wc_MlKemKey_Encapsulate(key, (byte*)ctAddr, res_ss,
+                                      ctx->crypto->rng);
+        if (ret != WH_ERROR_OK) {
+            /* Zero sensitive data on failure */
+            wc_ForceZero(res_ss, ssLen);
+        }
+    }
+
+    if (ctAddr != NULL) {
+        (void)wh_Server_DmaProcessClientAddress(
+            ctx, (uintptr_t)req.ct.addr, &ctAddr, ctLen,
+            WH_DMA_OPER_CLIENT_WRITE_POST, (whServerDmaFlags){0});
+    }
+
+    if (ret == WH_ERROR_OK) {
+        res.ctLen = ctLen;
+        res.ssLen = ssLen;
+    }
+
+cleanup_key:
+    if (keyInited) {
+        wc_MlKemKey_Free(key);
+    }
+cleanup:
+    if (evict != 0) {
+        (void)wh_Server_KeystoreEvictKey(ctx, key_id);
+    }
+
+    (void)wh_MessageCrypto_TranslateMlKemEncapsDmaResponse(
+        magic, &res, (whMessageCrypto_MlKemEncapsDmaResponse*)cryptoDataOut);
+    *outSize = sizeof(res) + ssLen;
+    return ret;
+#endif
+}
+
+static int _HandleMlKemDecapsDma(whServerContext* ctx, uint16_t magic,
+                                 int devId, const void* cryptoDataIn,
+                                 uint16_t inSize, void* cryptoDataOut,
+                                 uint16_t* outSize)
+{
+#ifdef WOLFSSL_MLKEM_NO_DECAPSULATE
+    (void)ctx;
+    (void)magic;
+    (void)devId;
+    (void)cryptoDataIn;
+    (void)inSize;
+    (void)cryptoDataOut;
+    (void)outSize;
+    return WH_ERROR_NOHANDLER;
+#else
+    int                                   ret = WH_ERROR_OK;
+    MlKemKey                              key[1];
+    void*                                 ctAddr = NULL;
+    word32                                ssLen = 0;
+    whKeyId                               key_id;
+    int                                   evict = 0;
+    int                                   keyInited = 0;
+    uint8_t*                              res_ss;
+    word32                                max_ss;
+    whMessageCrypto_MlKemDecapsDmaRequest req;
+    whMessageCrypto_MlKemDecapsDmaResponse res;
+
+    memset(&res, 0, sizeof(res));
+
+    if (inSize < sizeof(whMessageCrypto_MlKemDecapsDmaRequest)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateMlKemDecapsDmaRequest(
+        magic, (whMessageCrypto_MlKemDecapsDmaRequest*)cryptoDataIn, &req);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    key_id = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                          ctx->comm->client_id, req.keyId);
+    evict  = !!(req.options & WH_MESSAGE_CRYPTO_MLKEM_DECAPS_OPTIONS_EVICT);
+
+    if (!WH_KEYID_ISERASED(key_id)) {
+        ret = wh_Server_KeystoreFindEnforceKeyUsage(ctx, key_id,
+                                                    WH_NVM_FLAGS_USAGE_DERIVE);
+        if (ret != WH_ERROR_OK) {
+            goto cleanup;
+        }
+    }
+
+    if (!_IsMlKemLevelSupported((int)req.level)) {
+        ret = WH_ERROR_BADARGS;
+        goto cleanup;
+    }
+
+    ret = wc_MlKemKey_Init(key, (int)req.level, NULL, devId);
+    if (ret == WH_ERROR_OK) {
+        keyInited = 1;
+        ret = wh_Server_MlKemKeyCacheExport(ctx, key_id, key);
+    }
+
+    /* Verify the exported key matches the requested level */
+    if (ret == WH_ERROR_OK && key->type != (int)req.level) {
+        ret = WH_ERROR_BADARGS;
+    }
+
+    if (ret == WH_ERROR_OK) {
+        ret = wc_MlKemKey_SharedSecretSize(key, &ssLen);
+    }
+
+    /* Validate that the inline shared secret fits in the comm buffer */
+    if (ret == WH_ERROR_OK) {
+        res_ss = (uint8_t*)cryptoDataOut +
+                 sizeof(whMessageCrypto_MlKemDecapsDmaResponse);
+        max_ss = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
+            ((uint8_t*)res_ss - (uint8_t*)cryptoDataOut));
+        if (ssLen > max_ss) {
+            ret = WH_ERROR_BADARGS;
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Server_DmaProcessClientAddress(
+            ctx, (uintptr_t)req.ct.addr, &ctAddr, req.ct.sz,
+            WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
+        if (ret == WH_ERROR_ACCESS) {
+            res.dmaAddrStatus.badAddr = req.ct;
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        /* Shared secret goes inline in response, not via DMA */
+        res_ss = (uint8_t*)cryptoDataOut +
+                 sizeof(whMessageCrypto_MlKemDecapsDmaResponse);
+        ret = wc_MlKemKey_Decapsulate(key, res_ss, (const byte*)ctAddr,
+                                      (word32)req.ct.sz);
+        if (ret != WH_ERROR_OK) {
+            /* Zero sensitive data on failure */
+            wc_ForceZero(res_ss, ssLen);
+        }
+    }
+
+    if (ctAddr != NULL) {
+        (void)wh_Server_DmaProcessClientAddress(
+            ctx, (uintptr_t)req.ct.addr, &ctAddr, req.ct.sz,
+            WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
+    }
+
+    if (ret == WH_ERROR_OK) {
+        res.ssLen = ssLen;
+    }
+
+    if (keyInited) {
+        wc_MlKemKey_Free(key);
+    }
+cleanup:
+    if (evict != 0) {
+        (void)wh_Server_KeystoreEvictKey(ctx, key_id);
+    }
+
+    (void)wh_MessageCrypto_TranslateMlKemDecapsDmaResponse(
+        magic, &res, (whMessageCrypto_MlKemDecapsDmaResponse*)cryptoDataOut);
+    *outSize = sizeof(res) + ssLen;
+    return ret;
+#endif
+}
+
+static int _HandlePqcKemAlgorithmDma(whServerContext* ctx, uint16_t magic,
+                                     int devId, const void* cryptoDataIn,
+                                     uint16_t cryptoInSize, void* cryptoDataOut,
+                                     uint16_t* cryptoOutSize,
+                                     uint32_t pkAlgoType, uint32_t pqAlgoType)
+{
+    int ret = WH_ERROR_NOHANDLER;
+
+    switch (pqAlgoType) {
+        case WC_PQC_KEM_TYPE_KYBER: {
+            switch (pkAlgoType) {
+                case WC_PK_TYPE_PQC_KEM_KEYGEN:
+                    ret = _HandleMlKemKeyGenDma(ctx, magic, devId, cryptoDataIn,
+                                                cryptoInSize, cryptoDataOut,
+                                                cryptoOutSize);
+                    break;
+                case WC_PK_TYPE_PQC_KEM_ENCAPS:
+                    ret = _HandleMlKemEncapsDma(ctx, magic, devId, cryptoDataIn,
+                                                cryptoInSize, cryptoDataOut,
+                                                cryptoOutSize);
+                    break;
+                case WC_PK_TYPE_PQC_KEM_DECAPS:
+                    ret = _HandleMlKemDecapsDma(ctx, magic, devId, cryptoDataIn,
+                                                cryptoInSize, cryptoDataOut,
+                                                cryptoOutSize);
+                    break;
+                default:
+                    ret = WH_ERROR_NOHANDLER;
+                    break;
+            }
+        } break;
+        default:
+            ret = WH_ERROR_NOHANDLER;
+            break;
+    }
+
+    return ret;
+}
+#endif /* WOLFSSL_HAVE_MLKEM */
+
 #if defined(WOLFSSL_CMAC) && !defined(NO_AES) && defined(WOLFSSL_AES_DIRECT)
 static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, int devId,
                           uint16_t seq, const void* cryptoDataIn,
@@ -6129,6 +6963,16 @@ int wh_Server_HandleCryptoDmaRequest(whServerContext* ctx, uint16_t magic,
                         rqstHeader.algoSubType);
                     break;
 #endif /* WOLFSSL_HAVE_MLDSA || HAVE_FALCON */
+#if defined(WOLFSSL_HAVE_MLKEM)
+                case WC_PK_TYPE_PQC_KEM_KEYGEN:
+                case WC_PK_TYPE_PQC_KEM_ENCAPS:
+                case WC_PK_TYPE_PQC_KEM_DECAPS:
+                    ret = _HandlePqcKemAlgorithmDma(
+                        ctx, magic, devId, cryptoDataIn, cryptoInSize,
+                        cryptoDataOut, &cryptoOutSize, rqstHeader.algoType,
+                        rqstHeader.algoSubType);
+                    break;
+#endif /* WOLFSSL_HAVE_MLKEM */
 #ifdef HAVE_ED25519
                 case WC_PK_TYPE_ED25519_SIGN:
                     ret = _HandleEd25519SignDma(ctx, magic, devId, cryptoDataIn,

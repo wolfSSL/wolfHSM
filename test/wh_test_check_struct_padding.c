@@ -124,6 +124,18 @@ whMessageCrypto_Sha512Request         hashSha512Req;
 whMessageCrypto_Sha2Response          hashSha2Res;
 whMessageCrypto_HkdfRequest           hkdfReq;
 whMessageCrypto_HkdfResponse          hkdfRes;
+whMessageCrypto_MlDsaKeyGenRequest    pkMldsaKeygenReq;
+whMessageCrypto_MlDsaKeyGenResponse   pkMldsaKeygenRes;
+whMessageCrypto_MlDsaSignRequest      pkMldsaSignReq;
+whMessageCrypto_MlDsaSignResponse     pkMldsaSignRes;
+whMessageCrypto_MlDsaVerifyRequest    pkMldsaVerifyReq;
+whMessageCrypto_MlDsaVerifyResponse   pkMldsaVerifyRes;
+whMessageCrypto_MlKemKeyGenRequest    pkMlkemKeygenReq;
+whMessageCrypto_MlKemKeyGenResponse   pkMlkemKeygenRes;
+whMessageCrypto_MlKemEncapsRequest    pkMlkemEncapsReq;
+whMessageCrypto_MlKemEncapsResponse   pkMlkemEncapsRes;
+whMessageCrypto_MlKemDecapsRequest    pkMlkemDecapsReq;
+whMessageCrypto_MlKemDecapsResponse   pkMlkemDecapsRes;
 
 /* DMA crypto messages */
 #if defined(WOLFHSM_CFG_DMA)
@@ -138,6 +150,12 @@ whMessageCrypto_MlDsaVerifyDmaRequest  pqMldsaVerifyDmaReq;
 whMessageCrypto_MlDsaVerifyDmaResponse pqMldsaVerifyDmaRes;
 whMessageCrypto_CmacAesDmaRequest      cmacDmaReq;
 whMessageCrypto_CmacAesDmaResponse     cmacDmaRes;
+whMessageCrypto_MlKemKeyGenDmaRequest  pkMlkemKeygenDmaReq;
+whMessageCrypto_MlKemKeyGenDmaResponse pkMlkemKeygenDmaRes;
+whMessageCrypto_MlKemEncapsDmaRequest  pkMlkemEncapsDmaReq;
+whMessageCrypto_MlKemEncapsDmaResponse pkMlkemEncapsDmaRes;
+whMessageCrypto_MlKemDecapsDmaRequest  pkMlkemDecapsDmaReq;
+whMessageCrypto_MlKemDecapsDmaResponse pkMlkemDecapsDmaRes;
 #endif /* WOLFHSM_CFG_DMA */
 
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */

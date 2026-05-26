@@ -154,6 +154,9 @@ extern "C" {
 #define WOLFSSL_MLDSA_NO_MAKE_KEY
 #endif
 
+/* ML-KEM Options */
+#define WOLFSSL_HAVE_MLKEM
+
 /** Composite features */
 #define HAVE_HKDF
 #define HAVE_CMAC_KDF

@@ -1021,6 +1021,92 @@ int wh_MessageCrypto_TranslateMlDsaVerifyResponse(
     uint16_t magic, const whMessageCrypto_MlDsaVerifyResponse* src,
     whMessageCrypto_MlDsaVerifyResponse* dest);
 
+/*
+ * ML-KEM
+ */
+
+/* ML-KEM Key Generation Request */
+typedef struct {
+    uint32_t level;
+    uint32_t keyId;
+    uint32_t flags;
+    uint32_t access;
+    uint8_t  label[WH_NVM_LABEL_LEN];
+} whMessageCrypto_MlKemKeyGenRequest;
+
+/* ML-KEM Key Generation Response */
+typedef struct {
+    uint32_t keyId;
+    uint32_t len;
+    /* Data follows:
+     * uint8_t out[len];
+     */
+} whMessageCrypto_MlKemKeyGenResponse;
+
+int wh_MessageCrypto_TranslateMlKemKeyGenRequest(
+    uint16_t magic, const whMessageCrypto_MlKemKeyGenRequest* src,
+    whMessageCrypto_MlKemKeyGenRequest* dest);
+
+int wh_MessageCrypto_TranslateMlKemKeyGenResponse(
+    uint16_t magic, const whMessageCrypto_MlKemKeyGenResponse* src,
+    whMessageCrypto_MlKemKeyGenResponse* dest);
+
+/* ML-KEM Encapsulation Request */
+typedef struct {
+    uint32_t options;
+#define WH_MESSAGE_CRYPTO_MLKEM_ENCAPS_OPTIONS_EVICT (1 << 0)
+    uint32_t level;
+    uint32_t keyId;
+    uint8_t  WH_PAD[4];
+} whMessageCrypto_MlKemEncapsRequest;
+
+/* ML-KEM Encapsulation Response */
+typedef struct {
+    uint32_t ctSz;
+    uint32_t ssSz;
+    /* Data follows:
+     * uint8_t ct[ctSz];
+     * uint8_t ss[ssSz];
+     */
+} whMessageCrypto_MlKemEncapsResponse;
+
+int wh_MessageCrypto_TranslateMlKemEncapsRequest(
+    uint16_t magic, const whMessageCrypto_MlKemEncapsRequest* src,
+    whMessageCrypto_MlKemEncapsRequest* dest);
+
+int wh_MessageCrypto_TranslateMlKemEncapsResponse(
+    uint16_t magic, const whMessageCrypto_MlKemEncapsResponse* src,
+    whMessageCrypto_MlKemEncapsResponse* dest);
+
+/* ML-KEM Decapsulation Request */
+typedef struct {
+    uint32_t options;
+#define WH_MESSAGE_CRYPTO_MLKEM_DECAPS_OPTIONS_EVICT (1 << 0)
+    uint32_t level;
+    uint32_t keyId;
+    uint32_t ctSz;
+    /* Data follows:
+     * uint8_t ct[ctSz];
+     */
+} whMessageCrypto_MlKemDecapsRequest;
+
+/* ML-KEM Decapsulation Response */
+typedef struct {
+    uint32_t ssSz;
+    uint8_t  WH_PAD[4];
+    /* Data follows:
+     * uint8_t ss[ssSz];
+     */
+} whMessageCrypto_MlKemDecapsResponse;
+
+int wh_MessageCrypto_TranslateMlKemDecapsRequest(
+    uint16_t magic, const whMessageCrypto_MlKemDecapsRequest* src,
+    whMessageCrypto_MlKemDecapsRequest* dest);
+
+int wh_MessageCrypto_TranslateMlKemDecapsResponse(
+    uint16_t magic, const whMessageCrypto_MlKemDecapsResponse* src,
+    whMessageCrypto_MlKemDecapsResponse* dest);
+
 
 /*
  * DMA-based crypto messages
@@ -1365,6 +1451,93 @@ int wh_MessageCrypto_TranslateMlDsaVerifyDmaRequest(
 int wh_MessageCrypto_TranslateMlDsaVerifyDmaResponse(
     uint16_t magic, const whMessageCrypto_MlDsaVerifyDmaResponse* src,
     whMessageCrypto_MlDsaVerifyDmaResponse* dest);
+
+/* ML-KEM DMA Key Generation Request */
+typedef struct {
+    whMessageCrypto_DmaBuffer key;
+    uint32_t                  level;
+    uint32_t                  flags;
+    uint32_t                  keyId;
+    uint32_t                  access; /* Key access permissions */
+    uint32_t                  labelSize;
+    uint8_t                   label[WH_NVM_LABEL_LEN];
+    uint8_t                   WH_PAD2[4]; /* Pad to 8-byte alignment */
+} whMessageCrypto_MlKemKeyGenDmaRequest;
+
+/* ML-KEM DMA Key Generation Response */
+typedef struct {
+    whMessageCrypto_DmaAddrStatus dmaAddrStatus;
+    uint32_t                      keyId;
+    uint32_t                      keySize;
+} whMessageCrypto_MlKemKeyGenDmaResponse;
+
+/* ML-KEM DMA Encapsulation Request
+ * Note: The shared secret is transferred inline in the response (not via DMA)
+ * since it is always WC_ML_KEM_SS_SZ (32) bytes, similar to AES key handling.
+ */
+typedef struct {
+    whMessageCrypto_DmaBuffer ct;
+    uint32_t                  options;
+    uint32_t                  level;
+    uint32_t                  keyId;
+    uint8_t                   WH_PAD[4]; /* Pad to 8-byte alignment */
+} whMessageCrypto_MlKemEncapsDmaRequest;
+
+/* ML-KEM DMA Encapsulation Response */
+typedef struct {
+    whMessageCrypto_DmaAddrStatus dmaAddrStatus;
+    uint32_t                      ctLen;
+    uint32_t                      ssLen;
+    /* Data follows:
+     * uint8_t ss[ssLen];
+     */
+} whMessageCrypto_MlKemEncapsDmaResponse;
+
+/* ML-KEM DMA Decapsulation Request
+ * Note: The shared secret is transferred inline in the response (not via DMA).
+ */
+typedef struct {
+    whMessageCrypto_DmaBuffer ct;
+    uint32_t                  options;
+    uint32_t                  level;
+    uint32_t                  keyId;
+    uint8_t                   WH_PAD[4]; /* Pad to 8-byte alignment */
+} whMessageCrypto_MlKemDecapsDmaRequest;
+
+/* ML-KEM DMA Decapsulation Response */
+typedef struct {
+    whMessageCrypto_DmaAddrStatus dmaAddrStatus;
+    uint32_t                      ssLen;
+    uint8_t                       WH_PAD[4]; /* Pad to 8-byte alignment */
+    /* Data follows:
+     * uint8_t ss[ssLen];
+     */
+} whMessageCrypto_MlKemDecapsDmaResponse;
+
+/* ML-KEM DMA translation functions */
+int wh_MessageCrypto_TranslateMlKemKeyGenDmaRequest(
+    uint16_t magic, const whMessageCrypto_MlKemKeyGenDmaRequest* src,
+    whMessageCrypto_MlKemKeyGenDmaRequest* dest);
+
+int wh_MessageCrypto_TranslateMlKemKeyGenDmaResponse(
+    uint16_t magic, const whMessageCrypto_MlKemKeyGenDmaResponse* src,
+    whMessageCrypto_MlKemKeyGenDmaResponse* dest);
+
+int wh_MessageCrypto_TranslateMlKemEncapsDmaRequest(
+    uint16_t magic, const whMessageCrypto_MlKemEncapsDmaRequest* src,
+    whMessageCrypto_MlKemEncapsDmaRequest* dest);
+
+int wh_MessageCrypto_TranslateMlKemEncapsDmaResponse(
+    uint16_t magic, const whMessageCrypto_MlKemEncapsDmaResponse* src,
+    whMessageCrypto_MlKemEncapsDmaResponse* dest);
+
+int wh_MessageCrypto_TranslateMlKemDecapsDmaRequest(
+    uint16_t magic, const whMessageCrypto_MlKemDecapsDmaRequest* src,
+    whMessageCrypto_MlKemDecapsDmaRequest* dest);
+
+int wh_MessageCrypto_TranslateMlKemDecapsDmaResponse(
+    uint16_t magic, const whMessageCrypto_MlKemDecapsDmaResponse* src,
+    whMessageCrypto_MlKemDecapsDmaResponse* dest);
 
 /* Ed25519 DMA Sign Request */
 typedef struct {
