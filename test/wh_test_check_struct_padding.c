@@ -181,6 +181,7 @@ whMessageShe_VerifyMacResponse        sheVerifyMacRes;
  * message structures */
 #include "wolfhsm/wh_message_cert.h"
 whMessageCert_SimpleResponse      whMessageCert_SimpleResponse_test;
+whMessageCert_SetEnabledRequest      whMessageCert_SetEnabledRequest_test;
 whMessageCert_AddTrustedRequest   whMessageCert_AddTrustedRequest_test;
 whMessageCert_EraseTrustedRequest whMessageCert_EraseTrustedRequest_test;
 whMessageCert_ReadTrustedRequest  whMessageCert_ReadTrustedRequest_test;

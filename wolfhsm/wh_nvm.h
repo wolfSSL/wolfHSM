@@ -60,6 +60,9 @@
 #include "wolfhsm/wh_common.h"       /* For whNvm types */
 #include "wolfhsm/wh_keycache.h"     /* For whKeyCacheContext */
 #include "wolfhsm/wh_lock.h"
+#ifdef WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE_GLOBAL
+#include "wolfhsm/wh_server_cert_cache.h" /* For whCertVerifyCacheContext */
+#endif
 
 /**
  * @brief NVM backend callback table.
@@ -137,6 +140,12 @@ typedef struct whNvmContext_t {
 #if !defined(WOLFHSM_CFG_NO_CRYPTO) && defined(WOLFHSM_CFG_GLOBAL_KEYS)
     whKeyCacheContext globalCache; /**< Global key cache (shared keys) */
 #endif
+#ifdef WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE_GLOBAL
+    whCertVerifyCacheContext globalCertVerifyCache; /**< Global cross-client
+                                                     * trusted cert verify
+                                                     * cache. Carries its own
+                                                     * dedicated lock. */
+#endif
 #ifdef WOLFHSM_CFG_THREADSAFE
     whLock lock; /**< Lock for serializing NVM and global cache operations */
 #endif
@@ -154,6 +163,16 @@ typedef struct whNvmConfig_t {
 #ifdef WOLFHSM_CFG_THREADSAFE
     whLockConfig*
         lockConfig; /**< Lock configuration (NULL for no-op locking) */
+#ifdef WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE_GLOBAL
+    whLockConfig* certVerifyCacheLockConfig; /**< Lock config for the global
+                                              * cert verify cache. Independent
+                                              * from lockConfig — pass a
+                                              * separate platform context (e.g.
+                                              * a distinct posixLockContext) so
+                                              * the two locks back distinct
+                                              * mutexes. NULL for no-op
+                                              * locking. */
+#endif
 #endif
 } whNvmConfig;
 

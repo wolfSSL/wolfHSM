@@ -45,6 +45,18 @@ int wh_MessageCert_TranslateSimpleResponse(
     return 0;
 }
 
+int wh_MessageCert_TranslateSetEnabledRequest(
+    uint16_t magic, const whMessageCert_SetEnabledRequest* src,
+    whMessageCert_SetEnabledRequest* dest)
+{
+    (void)magic;
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    dest->enable = src->enable;
+    return 0;
+}
+
 int wh_MessageCert_TranslateAddTrustedRequest(
     uint16_t magic, const whMessageCert_AddTrustedRequest* src,
     whMessageCert_AddTrustedRequest* dest)

@@ -31,22 +31,23 @@
 #include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_comm.h"
 #include "wolfhsm/wh_message.h"
-#include "wolfhsm/wh_nvm.h"
 #include "wolfhsm/wh_utils.h"
 
 enum WH_MESSAGE_CERT_ACTION_ENUM {
-    WH_MESSAGE_CERT_ACTION_INIT                  = 0x1,
-    WH_MESSAGE_CERT_ACTION_ADDTRUSTED            = 0x2,
-    WH_MESSAGE_CERT_ACTION_ERASETRUSTED          = 0x3,
-    WH_MESSAGE_CERT_ACTION_READTRUSTED           = 0x4,
-    WH_MESSAGE_CERT_ACTION_VERIFY                = 0x5,
-    WH_MESSAGE_CERT_ACTION_VERIFY_MULTI_ROOT     = 0x6,
-    WH_MESSAGE_CERT_ACTION_ADDTRUSTED_DMA        = 0x22,
-    WH_MESSAGE_CERT_ACTION_READTRUSTED_DMA       = 0x24,
-    WH_MESSAGE_CERT_ACTION_VERIFY_DMA            = 0x25,
-    WH_MESSAGE_CERT_ACTION_VERIFY_ACERT          = 0x26,
-    WH_MESSAGE_CERT_ACTION_VERIFY_ACERT_DMA      = 0x27,
-    WH_MESSAGE_CERT_ACTION_VERIFY_MULTI_ROOT_DMA = 0x28,
+    WH_MESSAGE_CERT_ACTION_INIT                     = 0x1,
+    WH_MESSAGE_CERT_ACTION_ADDTRUSTED               = 0x2,
+    WH_MESSAGE_CERT_ACTION_ERASETRUSTED             = 0x3,
+    WH_MESSAGE_CERT_ACTION_READTRUSTED              = 0x4,
+    WH_MESSAGE_CERT_ACTION_VERIFY                   = 0x5,
+    WH_MESSAGE_CERT_ACTION_VERIFY_MULTI_ROOT        = 0x6,
+    WH_MESSAGE_CERT_ACTION_VERIFY_CACHE_CLEAR       = 0x7,
+    WH_MESSAGE_CERT_ACTION_VERIFY_CACHE_SET_ENABLED = 0x8,
+    WH_MESSAGE_CERT_ACTION_ADDTRUSTED_DMA           = 0x22,
+    WH_MESSAGE_CERT_ACTION_READTRUSTED_DMA          = 0x24,
+    WH_MESSAGE_CERT_ACTION_VERIFY_DMA               = 0x25,
+    WH_MESSAGE_CERT_ACTION_VERIFY_ACERT             = 0x26,
+    WH_MESSAGE_CERT_ACTION_VERIFY_ACERT_DMA         = 0x27,
+    WH_MESSAGE_CERT_ACTION_VERIFY_MULTI_ROOT_DMA    = 0x28,
 };
 
 /* Simple reusable response message */
@@ -58,6 +59,19 @@ typedef struct {
 int wh_MessageCert_TranslateSimpleResponse(
     uint16_t magic, const whMessageCert_SimpleResponse* src,
     whMessageCert_SimpleResponse* dest);
+
+/* VerifyCacheSetEnabled Request */
+typedef struct {
+    uint8_t enable; /* 1 = enable, 0 = disable */
+    uint8_t WH_PAD[7];
+} whMessageCert_SetEnabledRequest;
+
+int wh_MessageCert_TranslateSetEnabledRequest(
+    uint16_t magic, const whMessageCert_SetEnabledRequest* src,
+    whMessageCert_SetEnabledRequest* dest);
+
+/* VerifyCacheSetEnabled Response */
+/* Use SimpleResponse */
 
 /* Init Request/Response */
 /* Empty request message */
