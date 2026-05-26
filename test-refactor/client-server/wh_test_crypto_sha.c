@@ -617,7 +617,7 @@ static int _whTest_CryptoSha256Async(whClientContext* ctx)
 #ifdef WOLFHSM_CFG_DMA
 static int _whTest_CryptoSha256DmaAsync(whClientContext* ctx)
 {
-    int    devId = WH_DEV_ID;
+    int    devId = WH_DEV_ID_DMA;
     int    ret;
     WC_RNG rng[1];
 
@@ -1200,7 +1200,7 @@ static int _whTest_CryptoSha224Async(whClientContext* ctx)
 #ifdef WOLFHSM_CFG_DMA
 static int _whTest_CryptoSha224DmaAsync(whClientContext* ctx)
 {
-    int    devId = WH_DEV_ID;
+    int    devId = WH_DEV_ID_DMA;
     int    ret;
     WC_RNG rng[1];
 
@@ -1788,7 +1788,7 @@ static int _whTest_CryptoSha384Async(whClientContext* ctx)
 #ifdef WOLFHSM_CFG_DMA
 static int _whTest_CryptoSha384DmaAsync(whClientContext* ctx)
 {
-    int    devId = WH_DEV_ID;
+    int    devId = WH_DEV_ID_DMA;
     int    ret;
     WC_RNG rng[1];
 
@@ -2380,7 +2380,7 @@ static int _whTest_CryptoSha512Async(whClientContext* ctx)
 #ifdef WOLFHSM_CFG_DMA
 static int _whTest_CryptoSha512DmaAsync(whClientContext* ctx)
 {
-    int    devId = WH_DEV_ID;
+    int    devId = WH_DEV_ID_DMA;
     int    ret;
     WC_RNG rng[1];
 
