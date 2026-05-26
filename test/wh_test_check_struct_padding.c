@@ -122,6 +122,11 @@ whMessageCrypto_CmacAesResponse       cmacRes;
 whMessageCrypto_Sha256Request         hashSha256Req;
 whMessageCrypto_Sha512Request         hashSha512Req;
 whMessageCrypto_Sha2Response          hashSha2Res;
+#if defined(WOLFSSL_SHA3)
+whMessageCrypto_Sha3State    hashSha3State;
+whMessageCrypto_Sha3Request  hashSha3Req;
+whMessageCrypto_Sha3Response hashSha3Res;
+#endif
 whMessageCrypto_HkdfRequest           hkdfReq;
 whMessageCrypto_HkdfResponse          hkdfRes;
 
@@ -130,6 +135,10 @@ whMessageCrypto_HkdfResponse          hkdfRes;
 whMessageCrypto_Sha256DmaRequest       hashSha256DmaReq;
 whMessageCrypto_Sha512DmaRequest       hashSha512DmaReq;
 whMessageCrypto_Sha2DmaResponse        hashSha2DmaRes;
+#if defined(WOLFSSL_SHA3)
+whMessageCrypto_Sha3DmaRequest  hashSha3DmaReq;
+whMessageCrypto_Sha3DmaResponse hashSha3DmaRes;
+#endif
 whMessageCrypto_MlDsaKeyGenDmaRequest  pqMldsaKeygenDmaReq;
 whMessageCrypto_MlDsaKeyGenDmaResponse pqMldsaKeygenDmaRes;
 whMessageCrypto_MlDsaSignDmaRequest    pqMldsaSignDmaReq;

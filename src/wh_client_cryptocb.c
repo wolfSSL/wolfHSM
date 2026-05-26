@@ -534,6 +534,53 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
                 ret = wh_Client_Sha512(ctx, sha, in, inLen, out);
             } break;
 #endif /* WOLFSSL_SHA512 && WOLFSSL_SHA512_HASHTYPE */
+#if defined(WOLFSSL_SHA3)
+            case WC_HASH_TYPE_SHA3_224:
+            case WC_HASH_TYPE_SHA3_256:
+            case WC_HASH_TYPE_SHA3_384:
+            case WC_HASH_TYPE_SHA3_512: {
+                wc_Sha3* sha = info->hash.sha3;
+#ifdef WOLFSSL_HASH_FLAGS
+                /* Keccak-mode SHA3 (legacy 0x01-padding variant) is a software-
+                 * only mode; fall through to wolfCrypt's software path. */
+                if (sha != NULL &&
+                    (sha->flags & WC_HASH_SHA3_KECCAK256) != 0u) {
+                    ret = CRYPTOCB_UNAVAILABLE;
+                    break;
+                }
+#endif
+                switch (info->hash.type) {
+#ifndef WOLFSSL_NOSHA3_224
+                    case WC_HASH_TYPE_SHA3_224:
+                        ret = wh_Client_Sha3_224(ctx, sha, info->hash.in,
+                                                 info->hash.inSz,
+                                                 info->hash.digest);
+                        break;
+#endif
+#ifndef WOLFSSL_NOSHA3_256
+                    case WC_HASH_TYPE_SHA3_256:
+                        ret = wh_Client_Sha3_256(ctx, sha, info->hash.in,
+                                                 info->hash.inSz,
+                                                 info->hash.digest);
+                        break;
+#endif
+#ifndef WOLFSSL_NOSHA3_384
+                    case WC_HASH_TYPE_SHA3_384:
+                        ret = wh_Client_Sha3_384(ctx, sha, info->hash.in,
+                                                 info->hash.inSz,
+                                                 info->hash.digest);
+                        break;
+#endif
+#ifndef WOLFSSL_NOSHA3_512
+                    case WC_HASH_TYPE_SHA3_512:
+                        ret = wh_Client_Sha3_512(ctx, sha, info->hash.in,
+                                                 info->hash.inSz,
+                                                 info->hash.digest);
+                        break;
+#endif
+                }
+            } break;
+#endif /* WOLFSSL_SHA3 */
             default:
                 ret = CRYPTOCB_UNAVAILABLE;
                 break;
@@ -862,6 +909,51 @@ int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
                 ret = wh_Client_Sha512Dma(ctx, sha, in, inLen, out);
             } break;
 #endif /* WOLFSSL_SHA512 && defined(WOLFSSL_SHA512_HASHTYPE) */
+#if defined(WOLFSSL_SHA3)
+            case WC_HASH_TYPE_SHA3_224:
+            case WC_HASH_TYPE_SHA3_256:
+            case WC_HASH_TYPE_SHA3_384:
+            case WC_HASH_TYPE_SHA3_512: {
+                wc_Sha3* sha = info->hash.sha3;
+#ifdef WOLFSSL_HASH_FLAGS
+                if (sha != NULL &&
+                    (sha->flags & WC_HASH_SHA3_KECCAK256) != 0u) {
+                    ret = CRYPTOCB_UNAVAILABLE;
+                    break;
+                }
+#endif
+                switch (info->hash.type) {
+#ifndef WOLFSSL_NOSHA3_224
+                    case WC_HASH_TYPE_SHA3_224:
+                        ret = wh_Client_Sha3_224Dma(ctx, sha, info->hash.in,
+                                                    info->hash.inSz,
+                                                    info->hash.digest);
+                        break;
+#endif
+#ifndef WOLFSSL_NOSHA3_256
+                    case WC_HASH_TYPE_SHA3_256:
+                        ret = wh_Client_Sha3_256Dma(ctx, sha, info->hash.in,
+                                                    info->hash.inSz,
+                                                    info->hash.digest);
+                        break;
+#endif
+#ifndef WOLFSSL_NOSHA3_384
+                    case WC_HASH_TYPE_SHA3_384:
+                        ret = wh_Client_Sha3_384Dma(ctx, sha, info->hash.in,
+                                                    info->hash.inSz,
+                                                    info->hash.digest);
+                        break;
+#endif
+#ifndef WOLFSSL_NOSHA3_512
+                    case WC_HASH_TYPE_SHA3_512:
+                        ret = wh_Client_Sha3_512Dma(ctx, sha, info->hash.in,
+                                                    info->hash.inSz,
+                                                    info->hash.digest);
+                        break;
+#endif
+                }
+            } break;
+#endif /* WOLFSSL_SHA3 */
             default:
                 ret = CRYPTOCB_UNAVAILABLE;
                 break;
