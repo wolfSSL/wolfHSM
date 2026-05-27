@@ -561,6 +561,80 @@ static int _whTest_CryptoEd25519ExportPublicKey(whClientContext* ctx)
 }
 
 
+/* Exercises wh_Client_Ed25519Sign with an undersized output buffer: must
+ * return WH_ERROR_BUFFER_SIZE and report the required signature length. */
+static int _whTest_CryptoEd25519BufferTooSmall(whClientContext* ctx)
+{
+    int          devId = WH_DEV_ID;
+    int          ret;
+    WC_RNG       rng[1];
+    ed25519_key  key[1];
+    const byte   msg[]                           = "ed25519 buf size test";
+    uint8_t      small_sig[ED25519_SIG_SIZE - 1] = {0};
+    uint8_t      full_sig[ED25519_SIG_SIZE]      = {0};
+    uint32_t     sig_len;
+
+    ret = wc_InitRng_ex(rng, NULL, devId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wc_InitRng_ex %d\n", ret);
+        return ret;
+    }
+
+    ret = wc_ed25519_init_ex(key, NULL, devId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wc_ed25519_init_ex %d\n", ret);
+        (void)wc_FreeRng(rng);
+        return ret;
+    }
+
+    ret = wc_ed25519_make_key(rng, ED25519_KEY_SIZE, key);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wc_ed25519_make_key %d\n", ret);
+        goto done;
+    }
+
+    sig_len = (uint32_t)sizeof(small_sig);
+    ret     = wh_Client_Ed25519Sign(ctx, key, msg, (uint32_t)sizeof(msg),
+                                    (uint8_t)Ed25519, NULL, 0, small_sig,
+                                    &sig_len);
+    if (ret != WH_ERROR_BUFFER_SIZE) {
+        WH_ERROR_PRINT(
+            "Ed25519Sign small buf expected WH_ERROR_BUFFER_SIZE, got %d\n",
+            ret);
+        ret = WH_TEST_FAIL;
+        goto done;
+    }
+    if (sig_len != ED25519_SIG_SIZE) {
+        WH_ERROR_PRINT("Ed25519Sign small buf reported size %u, expected %u\n",
+                       (unsigned)sig_len, (unsigned)ED25519_SIG_SIZE);
+        ret = WH_TEST_FAIL;
+        goto done;
+    }
+
+    sig_len = (uint32_t)sizeof(full_sig);
+    ret     = wh_Client_Ed25519Sign(ctx, key, msg, (uint32_t)sizeof(msg),
+                                    (uint8_t)Ed25519, NULL, 0, full_sig,
+                                    &sig_len);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Ed25519Sign full buf failed: %d\n", ret);
+        goto done;
+    }
+    if (sig_len != ED25519_SIG_SIZE) {
+        WH_ERROR_PRINT("Ed25519Sign full buf size %u, expected %u\n",
+                       (unsigned)sig_len, (unsigned)ED25519_SIG_SIZE);
+        ret = WH_TEST_FAIL;
+        goto done;
+    }
+
+    WH_TEST_PRINT("Ed25519 buffer-size DEVID=0x%X SUCCESS\n", devId);
+    ret = 0;
+
+done:
+    (void)wc_ed25519_free(key);
+    (void)wc_FreeRng(rng);
+    return ret;
+}
+
 int whTest_Crypto_Ed25519(whClientContext* ctx)
 {
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEd25519Inline(ctx));
@@ -569,6 +643,7 @@ int whTest_Crypto_Ed25519(whClientContext* ctx)
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEd25519Dma(ctx));
 #endif
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEd25519ExportPublicKey(ctx));
+    WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEd25519BufferTooSmall(ctx));
     return 0;
 }
 #endif /* HAVE_ED25519 */

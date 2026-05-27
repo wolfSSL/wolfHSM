@@ -1060,6 +1060,64 @@ static int whTest_CryptoMlDsaWolfCryptImpl(whClientContext* ctx, int devId)
     (void)wc_FreeRng(rng);
     return ret;
 }
+
+/* Exercises wh_Client_MlDsaSign with an undersized output buffer: must return
+ * WH_ERROR_BUFFER_SIZE and report a required length greater than the buffer. */
+static int _whTest_CryptoMlDsaBufferTooSmall(whClientContext* ctx)
+{
+    int        devId = WH_DEV_ID;
+    int        ret;
+    MlDsaKey   key[1];
+    const byte msg[]                            = "ml-dsa buf size test";
+    uint8_t    small_sig[16]                    = {0};
+    uint8_t    full_sig[DILITHIUM_MAX_SIG_SIZE] = {0};
+    word32     small_buf_sz                     = (word32)sizeof(small_sig);
+    word32     sig_len;
+
+    ret = wc_MlDsaKey_Init(key, NULL, devId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wc_MlDsaKey_Init %d\n", ret);
+        return ret;
+    }
+
+    ret = wh_Client_MlDsaMakeExportKey(ctx, WC_ML_DSA_44, 0, key);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_MlDsaMakeExportKey %d\n", ret);
+        goto done;
+    }
+
+    sig_len = small_buf_sz;
+    ret     = wh_Client_MlDsaSign(ctx, msg, (word32)sizeof(msg), small_sig,
+                                  &sig_len, key, NULL, 0, WC_HASH_TYPE_NONE);
+    if (ret != WH_ERROR_BUFFER_SIZE) {
+        WH_ERROR_PRINT(
+            "MlDsaSign small buf expected WH_ERROR_BUFFER_SIZE, got %d\n", ret);
+        ret = WH_TEST_FAIL;
+        goto done;
+    }
+    if (sig_len <= small_buf_sz) {
+        WH_ERROR_PRINT(
+            "MlDsaSign small buf reported size %u not greater than %u\n",
+            (unsigned)sig_len, (unsigned)small_buf_sz);
+        ret = WH_TEST_FAIL;
+        goto done;
+    }
+
+    sig_len = (word32)sizeof(full_sig);
+    ret     = wh_Client_MlDsaSign(ctx, msg, (word32)sizeof(msg), full_sig,
+                                  &sig_len, key, NULL, 0, WC_HASH_TYPE_NONE);
+    if (ret != 0) {
+        WH_ERROR_PRINT("MlDsaSign full buf failed: %d\n", ret);
+        goto done;
+    }
+
+    WH_TEST_PRINT("ML-DSA buffer-size DEVID=0x%X SUCCESS\n", devId);
+    ret = 0;
+
+done:
+    wc_MlDsaKey_Free(key);
+    return ret;
+}
 #endif /* make/sign/verify && ML_DSA_44 */
 
 int whTest_Crypto_MlDsa(whClientContext* ctx)
@@ -1077,6 +1135,7 @@ int whTest_Crypto_MlDsa(whClientContext* ctx)
     }
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoMlDsaClient(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoMlDsaExportPublicKey(ctx));
+    WH_TEST_RETURN_ON_FAIL(_whTest_CryptoMlDsaBufferTooSmall(ctx));
 #ifdef WOLFHSM_CFG_DMA
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoMlDsaDmaClient(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoMlDsaExportPublicKeyDma(ctx));

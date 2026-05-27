@@ -321,10 +321,74 @@ static int _whTest_CryptoRsaExportPublicKey(whClientContext* ctx)
     return ret;
 }
 
+/* Exercises wh_Client_RsaFunction with an undersized output buffer. */
+static int _whTest_CryptoRsaBufferTooSmall(whClientContext* ctx)
+{
+    const int  devId         = WH_DEV_ID;
+    const int  rsa_key_bits  = 2048;
+    const int  rsa_key_bytes = rsa_key_bits / 8;
+    int        ret;
+    RsaKey     rsa[1];
+    const byte plain[]                              = "rsa buf size test";
+    uint8_t    small_out[16]                        = {0};
+    uint8_t    full_out[256 /* RSA-2048 modulus */] = {0};
+    uint16_t   out_len;
+
+    ret = wc_InitRsaKey_ex(rsa, NULL, devId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wc_InitRsaKey_ex %d\n", ret);
+        return ret;
+    }
+
+    ret = wh_Client_RsaMakeExportKey(ctx, rsa_key_bits, WC_RSA_EXPONENT, rsa);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_RsaMakeExportKey %d\n", ret);
+        goto done;
+    }
+
+    out_len = (uint16_t)sizeof(small_out);
+    ret     = wh_Client_RsaFunction(ctx, rsa, RSA_PUBLIC_ENCRYPT, plain,
+                                    (uint16_t)sizeof(plain), small_out,
+                                    &out_len);
+    /* Server's wc_RsaFunction pre-checks the buffer and returns
+       RSA_BUFFER_E. */
+    if (ret != WH_ERROR_BUFFER_SIZE && ret != RSA_BUFFER_E) {
+        WH_ERROR_PRINT(
+            "RsaFunction small buf expected WH_ERROR_BUFFER_SIZE or "
+            "RSA_BUFFER_E, got %d\n",
+            ret);
+        ret = WH_TEST_FAIL;
+        goto done;
+    }
+
+    out_len = (uint16_t)sizeof(full_out);
+    ret     = wh_Client_RsaFunction(ctx, rsa, RSA_PUBLIC_ENCRYPT, plain,
+                                    (uint16_t)sizeof(plain), full_out,
+                                    &out_len);
+    if (ret != 0) {
+        WH_ERROR_PRINT("RsaFunction full buf failed: %d\n", ret);
+        goto done;
+    }
+    if (out_len != (uint16_t)rsa_key_bytes) {
+        WH_ERROR_PRINT("RsaFunction full buf size %u, expected %d\n",
+                       (unsigned)out_len, rsa_key_bytes);
+        ret = WH_TEST_FAIL;
+        goto done;
+    }
+
+    WH_TEST_PRINT("RSA buffer-size DEVID=0x%X SUCCESS\n", devId);
+    ret = 0;
+
+done:
+    (void)wc_FreeRsaKey(rsa);
+    return ret;
+}
+
 int whTest_Crypto_Rsa(whClientContext* ctx)
 {
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoRsa(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoRsaExportPublicKey(ctx));
+    WH_TEST_RETURN_ON_FAIL(_whTest_CryptoRsaBufferTooSmall(ctx));
     return 0;
 }
 
