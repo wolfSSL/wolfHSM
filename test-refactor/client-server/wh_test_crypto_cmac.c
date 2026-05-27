@@ -46,9 +46,8 @@
 #include "wh_test_list.h"
 
 #if defined(WOLFSSL_CMAC) && !defined(NO_AES) && defined(WOLFSSL_AES_DIRECT)
-static int _whTest_CryptoCmac(whClientContext* ctx)
+static int whTest_CryptoCmacImpl(whClientContext* ctx, int devId)
 {
-    int     devId = WH_DEV_ID;
     int     ret   = 0;
     Cmac    cmac[1];
     uint8_t tag[AES_BLOCK_SIZE]       = {0};
@@ -365,7 +364,13 @@ static int _whTest_CryptoCmac(whClientContext* ctx)
 
 int whTest_Crypto_Cmac(whClientContext* ctx)
 {
-    WH_TEST_RETURN_ON_FAIL(_whTest_CryptoCmac(ctx));
+    int i, devId;
+
+    /* CMAC dispatches through the cryptocb, so run on every devId to cover both
+     * the normal and DMA server transports. */
+    WH_TEST_FOREACH_DEVID(i, devId) {
+        WH_TEST_RETURN_ON_FAIL(whTest_CryptoCmacImpl(ctx, devId));
+    }
     return 0;
 }
 #endif /* WOLFSSL_CMAC && !NO_AES && WOLFSSL_AES_DIRECT */

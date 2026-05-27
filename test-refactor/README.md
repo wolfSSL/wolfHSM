@@ -94,7 +94,8 @@ Not yet migrated (still live in `wolfHSM/test/`):
 |---|---|
 | `wh_test_comm.c::whTest_Comm` | Pthread mem/tcp/shmem variants only; sequential mem variant has been ported |
 | `wh_test_clientserver.c::whTest_ClientServer` | Pthread variant: remaining client-side coverage (NVM ops, etc.) still needs to be split out as new tests. The sequential test is dropped |
-| `wh_test_crypto.c::whTest_Crypto` | Remaining crypto coverage not yet split out, including AES async/KAT paths and any legacy key cache cases not covered by the per-algorithm suites |
+| `wh_test_crypto.c::whTest_Crypto` | Remaining crypto coverage not yet split out: the AES async family (comm-buffer `whTest_CryptoAesAsync`/`AesAsyncKat` + DMA `whTest_CryptoAesDmaAsync`/`AesDmaAsyncKat`, round-trip & KAT). ECC DMA export-public and the ML-DSA wolfCrypt-API path are now migrated. |
+| `wh_test_crypto.c::whTest_KeyCache`, `whTest_NonExportableKeystore` | Keystore tests (key-cache lifecycle and non-exportable-flag enforcement) dispatched from the legacy `whTest_Crypto`. The per-algorithm suites use `wh_Client_KeyCache`, but these dedicated keystore tests are not yet split out. |
 | `wh_test_crypto_affinity.c::whTest_CryptoAffinity` | |
 | `wh_test_keywrap.c::whTest_KeyWrapClientConfig` | |
 | `wh_test_multiclient.c::whTest_MultiClient` | |

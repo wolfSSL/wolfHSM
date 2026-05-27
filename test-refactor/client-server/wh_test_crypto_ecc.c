@@ -43,6 +43,7 @@
 #include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_client.h"
 #include "wolfhsm/wh_client_crypto.h"
+#include "wolfhsm/wh_crypto.h"
 
 #include "wh_test_common.h"
 #include "wh_test_list.h"
@@ -1627,6 +1628,114 @@ static int _whTest_CryptoEccAsync(whClientContext* ctx)
 
 #endif /* !WOLF_CRYPTO_CB_ONLY_ECC */
 
+#ifdef WOLFHSM_CFG_DMA
+/*
+ * ECC public-key export over the generic DMA transport
+ * (wh_Client_KeyExportPublicDma). ECC has no DMA cryptocb path, so this
+ * exercises the explicit DMA key-export API directly and runs once rather than
+ * looping over devIds. Mirrors _whTest_CryptoEccExportPublicKey but pulls the
+ * public half out via DMA, then verifies a server-made signature client-side.
+ */
+static int _whTest_CryptoEccExportPublicKeyDma(whClientContext* ctx)
+{
+    int      ret    = 0;
+    WC_RNG   rng[1];
+    whKeyId  keyId  = WH_KEYID_ERASED;
+    ecc_key  pubKey[1];
+    /* Non-zero hash: wolfCrypt rejects all-zero hashes for ECDSA. */
+    uint8_t  hash[TEST_ECC_KEYSIZE] = {
+        0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
+        0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10,
+        0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18,
+        0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f, 0x20};
+    uint8_t  sig[ECC_MAX_SIG_SIZE];
+    word32   sigLen = sizeof(sig);
+    int      verify = 0;
+    uint8_t  derBuf[256];
+    uint16_t derSz  = sizeof(derBuf);
+
+    ret = wc_InitRng_ex(rng, NULL, WH_DEV_ID);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wc_InitRng_ex %d\n", ret);
+        return ret;
+    }
+
+    ret = wh_Client_EccMakeCacheKey(
+        ctx, TEST_ECC_KEYSIZE, TEST_ECC_CURVE_ID, &keyId,
+        WH_NVM_FLAGS_USAGE_SIGN | WH_NVM_FLAGS_USAGE_VERIFY |
+            WH_NVM_FLAGS_NONEXPORTABLE,
+        0, NULL);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to make NONEXPORTABLE cached ECC key (DMA) %d\n",
+                       ret);
+        (void)wc_FreeRng(rng);
+        return ret;
+    }
+
+    /* Sign on the server with the cached private key. */
+    if (ret == 0) {
+        ecc_key hsmKey[1];
+        ret = wc_ecc_init_ex(hsmKey, NULL, WH_DEV_ID);
+        if (ret == 0) {
+            ret = wh_Client_EccSetKeyId(hsmKey, keyId);
+        }
+        if (ret == 0) {
+            ret = wc_ecc_sign_hash(hash, sizeof(hash), sig, &sigLen, rng,
+                                   hsmKey);
+            if (ret != 0) {
+                WH_ERROR_PRINT("HSM ECC sign failed (DMA) %d\n", ret);
+            }
+        }
+        wc_ecc_free(hsmKey);
+    }
+
+    /* Pull the public half out of the HSM via the generic DMA transport. */
+    if (ret == 0) {
+        ret = wh_Client_KeyExportPublicDma(ctx, keyId, WH_KEY_ALGO_ECC, derBuf,
+                                           derSz, NULL, 0, &derSz);
+        if (ret != 0) {
+            WH_ERROR_PRINT("wh_Client_KeyExportPublicDma(ECC) failed %d\n", ret);
+        }
+    }
+
+    if (ret == 0) {
+        ret = wc_ecc_init_ex(pubKey, NULL, INVALID_DEVID);
+        if (ret == 0) {
+            ret = wh_Crypto_EccDeserializeKeyDer(derBuf, derSz, pubKey);
+        }
+        if (ret == 0 && pubKey->type != ECC_PUBLICKEY) {
+            WH_ERROR_PRINT(
+                "Exported ECC key (DMA) is not public-only (type=%d)\n",
+                pubKey->type);
+            ret = -1;
+        }
+        if (ret == 0) {
+            ret = wc_ecc_verify_hash(sig, sigLen, hash, sizeof(hash), &verify,
+                                     pubKey);
+            if (ret != 0 || verify != 1) {
+                WH_ERROR_PRINT(
+                    "Client-side ECC verify (DMA) failed ret=%d verify=%d\n",
+                    ret, verify);
+                if (ret == 0) {
+                    ret = -1;
+                }
+            }
+        }
+        wc_ecc_free(pubKey);
+    }
+
+    if (!WH_KEYID_ISERASED(keyId)) {
+        (void)wh_Client_KeyEvict(ctx, keyId);
+    }
+    (void)wc_FreeRng(rng);
+
+    if (ret == 0) {
+        WH_TEST_PRINT("ECC EXPORT-PUBLIC DMA SUCCESS\n");
+    }
+    return ret;
+}
+#endif /* WOLFHSM_CFG_DMA */
+
 int whTest_Crypto_Ecc(whClientContext* ctx)
 {
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEcc(ctx));
@@ -1635,6 +1744,9 @@ int whTest_Crypto_Ecc(whClientContext* ctx)
 #if !defined(WOLF_CRYPTO_CB_ONLY_ECC)
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEccCrossVerify(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEccAsync(ctx));
+#endif
+#ifdef WOLFHSM_CFG_DMA
+    WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEccExportPublicKeyDma(ctx));
 #endif
     return 0;
 }

@@ -240,7 +240,7 @@ static int _whTest_CryptoMlDsaExportPublicKey(whClientContext* ctx)
 #ifdef WOLFHSM_CFG_DMA
 static int _whTest_CryptoMlDsaDmaClient(whClientContext* ctx)
 {
-    int      devId = WH_DEV_ID;
+    int      devId = WH_DEV_ID_DMA;
     int      ret   = 0;
     MlDsaKey key[1];
     MlDsaKey imported_key[1];
@@ -962,11 +962,119 @@ static int _whTest_CryptoMlDsaVerifyOnlyDma(whClientContext* ctx)
           !defined(WOLFSSL_NO_ML_DSA_44) && \
           defined(WOLFHSM_CFG_DMA) */
 
+#if !defined(WOLFSSL_DILITHIUM_NO_VERIFY) && \
+    !defined(WOLFSSL_DILITHIUM_NO_SIGN) &&   \
+    !defined(WOLFSSL_DILITHIUM_NO_MAKE_KEY) && !defined(WOLFSSL_NO_ML_DSA_44)
+/*
+ * ML-DSA exercised through the plain wolfCrypt API (wc_MlDsaKey_MakeKey /
+ * SignCtx / VerifyCtx), which dispatches through the cryptocb. PQC keygen/
+ * sign/verify is handled by both the normal and DMA cryptocbs, so the entry
+ * point loops this over every devId. Complements the wh_Client_MlDsa*
+ * direct-API tests above.
+ */
+static int whTest_CryptoMlDsaWolfCryptImpl(whClientContext* ctx, int devId)
+{
+    int      ret       = 0;
+    int      verified  = 0;
+    int      sigLenInt = 0;
+    MlDsaKey key[1];
+    WC_RNG   rng[1];
+    byte     msg[] = "Test message for ML-DSA signing";
+    byte     sig[DILITHIUM_MAX_SIG_SIZE];
+    word32   sigSz = sizeof(sig);
+
+    (void)ctx;
+
+    ret = wc_InitRng_ex(rng, NULL, WH_DEV_ID);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wc_InitRng_ex %d\n", ret);
+        return ret;
+    }
+
+    ret = wc_MlDsaKey_Init(key, NULL, devId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to initialize ML-DSA key: %d\n", ret);
+        (void)wc_FreeRng(rng);
+        return ret;
+    }
+
+    if (ret == 0) {
+        ret = wc_MlDsaKey_SetParams(key, WC_ML_DSA_44);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to set ML-DSA params: %d\n", ret);
+        }
+    }
+    if (ret == 0) {
+        ret = wc_MlDsaKey_MakeKey(key, rng);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to generate ML-DSA key: %d\n", ret);
+        }
+    }
+    if (ret == 0) {
+        ret = wc_MlDsaKey_GetSigLen(key, &sigLenInt);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to get ML-DSA signature length: %d\n", ret);
+        }
+        else {
+            sigSz = (word32)sigLenInt;
+        }
+    }
+    if (ret == 0) {
+        ret = wc_MlDsaKey_SignCtx(key, NULL, 0, sig, &sigSz, msg, sizeof(msg),
+                                  rng);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to sign with ML-DSA: %d\n", ret);
+        }
+    }
+    if (ret == 0) {
+        ret = wc_MlDsaKey_VerifyCtx(key, sig, sigSz, NULL, 0, msg, sizeof(msg),
+                                    &verified);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to verify ML-DSA signature: %d\n", ret);
+        }
+        else if (!verified) {
+            WH_ERROR_PRINT("ML-DSA signature verification failed\n");
+            ret = -1;
+        }
+    }
+    /* Tamper check: a corrupted signature must not verify. */
+    if (ret == 0) {
+        sig[0] ^= 1;
+        ret = wc_MlDsaKey_VerifyCtx(key, sig, sigSz, NULL, 0, msg, sizeof(msg),
+                                    &verified);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to verify modified ML-DSA signature: %d\n",
+                           ret);
+        }
+        else if (verified) {
+            WH_ERROR_PRINT("ML-DSA verified a tampered signature\n");
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        WH_TEST_PRINT("ML-DSA WOLFCRYPT DEVID=0x%X SUCCESS\n", devId);
+    }
+
+    wc_MlDsaKey_Free(key);
+    (void)wc_FreeRng(rng);
+    return ret;
+}
+#endif /* make/sign/verify && ML_DSA_44 */
+
 int whTest_Crypto_MlDsa(whClientContext* ctx)
 {
 #if !defined(WOLFSSL_DILITHIUM_NO_VERIFY) && \
     !defined(WOLFSSL_DILITHIUM_NO_SIGN) &&   \
     !defined(WOLFSSL_DILITHIUM_NO_MAKE_KEY) && !defined(WOLFSSL_NO_ML_DSA_44)
+    int i, devId;
+
+    /* Plain wolfCrypt-API ML-DSA dispatches through the cryptocb; PQC is
+     * handled by both the normal and DMA cryptocbs, so loop over every devId.
+     * The wh_Client_MlDsa* direct-API tests below run on their own devIds. */
+    WH_TEST_FOREACH_DEVID(i, devId) {
+        WH_TEST_RETURN_ON_FAIL(whTest_CryptoMlDsaWolfCryptImpl(ctx, devId));
+    }
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoMlDsaClient(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoMlDsaExportPublicKey(ctx));
 #ifdef WOLFHSM_CFG_DMA

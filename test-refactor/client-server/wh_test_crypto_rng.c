@@ -58,9 +58,8 @@ static int whTest_RngBufNonZero(const uint8_t* buf, uint32_t len)
     return -1;
 }
 
-static int _whTest_CryptoRng(whClientContext* ctx)
+static int whTest_CryptoRngImpl(whClientContext* ctx, int devId)
 {
-    int     devId = WH_DEV_ID;
     int     ret;
     WC_RNG  rng[1];
     uint8_t lil[WH_TEST_RNG_LIL];
@@ -363,7 +362,15 @@ static int _whTest_CryptoRngDmaAsync(whClientContext* ctx)
 
 int whTest_Crypto_Rng(whClientContext* ctx)
 {
-    WH_TEST_RETURN_ON_FAIL(_whTest_CryptoRng(ctx));
+    int i, devId;
+
+    /* Synchronous wolfCrypt RNG dispatches through the cryptocb, so run it on
+     * every devId to cover both the normal and DMA server transports. */
+    WH_TEST_FOREACH_DEVID(i, devId) {
+        WH_TEST_RETURN_ON_FAIL(whTest_CryptoRngImpl(ctx, devId));
+    }
+    /* The explicit request/response primitives are transport-specific
+     * (comm-buffer vs DMA), not devId-routed -- run each once. */
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoRngAsync(ctx));
 #ifdef WOLFHSM_CFG_DMA
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoRngDmaAsync(ctx));

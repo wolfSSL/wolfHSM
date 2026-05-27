@@ -47,9 +47,8 @@
 #if !defined(NO_AES) &&                                                        \
     (defined(HAVE_AES_CBC) || defined(WOLFSSL_AES_COUNTER) ||                  \
      defined(HAVE_AES_ECB) || defined(HAVE_AESGCM))
-static int _whTest_CryptoAes(whClientContext* ctx)
+static int whTest_CryptoAesImpl(whClientContext* ctx, int devId)
 {
-    int     devId = WH_DEV_ID;
     int     ret   = 0;
     Aes     aes[1];
     whKeyId keyId                     = WH_KEYID_ERASED;
@@ -140,72 +139,6 @@ static int _whTest_CryptoAes(whClientContext* ctx)
     }
     if (ret == 0) {
         WH_TEST_PRINT("AES CBC DEVID=0x%X SUCCESS\n", devId);
-    }
-
-    /* CBC streaming via the explicit request/response API. Drives the server
-     * directly with INVALID_DEVID so the cryptocb is not invoked; covers
-     * wh_Client_AesCbcRequest / wh_Client_AesCbcResponse and IV chaining
-     * across two halves. */
-    if (ret == 0) {
-        const uint32_t halfSize = sizeof(plainIn) / 2;
-        uint32_t       outSize  = 0;
-
-        memset(cipher, 0, sizeof(cipher));
-        memset(plainOut, 0, sizeof(plainOut));
-
-        ret = wc_AesInit(aes, NULL, INVALID_DEVID);
-        if (ret == 0) {
-            ret = wc_AesSetKey(aes, key, sizeof(key), iv, AES_ENCRYPTION);
-        }
-        if (ret == 0) {
-            ret = wh_Client_AesCbcRequest(ctx, aes, 1, plainIn, halfSize);
-        }
-        if (ret == 0) {
-            do {
-                ret = wh_Client_AesCbcResponse(ctx, aes, cipher, &outSize);
-            } while (ret == WH_ERROR_NOTREADY);
-        }
-        if (ret == 0) {
-            ret = wh_Client_AesCbcRequest(ctx, aes, 1, plainIn + halfSize,
-                                          halfSize);
-        }
-        if (ret == 0) {
-            do {
-                ret = wh_Client_AesCbcResponse(ctx, aes, cipher + halfSize,
-                                               &outSize);
-            } while (ret == WH_ERROR_NOTREADY);
-        }
-
-        if (ret == 0) {
-            ret = wc_AesSetKey(aes, key, sizeof(key), iv, AES_DECRYPTION);
-        }
-        if (ret == 0) {
-            ret = wh_Client_AesCbcRequest(ctx, aes, 0, cipher, halfSize);
-        }
-        if (ret == 0) {
-            do {
-                ret = wh_Client_AesCbcResponse(ctx, aes, plainOut, &outSize);
-            } while (ret == WH_ERROR_NOTREADY);
-        }
-        if (ret == 0) {
-            ret = wh_Client_AesCbcRequest(ctx, aes, 0, cipher + halfSize,
-                                          halfSize);
-        }
-        if (ret == 0) {
-            do {
-                ret = wh_Client_AesCbcResponse(ctx, aes, plainOut + halfSize,
-                                               &outSize);
-            } while (ret == WH_ERROR_NOTREADY);
-        }
-        if (ret == 0 && memcmp(plainIn, plainOut, sizeof(plainIn)) != 0) {
-            WH_ERROR_PRINT("AES-CBC streaming failed to match\n");
-            ret = -1;
-        }
-        (void)wc_AesFree(aes);
-        if (ret == 0) {
-            WH_TEST_PRINT("AES CBC ASYNC STREAMING DEVID=0x%X SUCCESS\n",
-                          devId);
-        }
     }
 #endif /* HAVE_AES_CBC */
 
@@ -421,9 +354,109 @@ static int _whTest_CryptoAes(whClientContext* ctx)
     return ret;
 }
 
+#ifdef HAVE_AES_CBC
+/*
+ * AES-CBC streaming via the explicit request/response API. Drives the server
+ * directly with INVALID_DEVID so the cryptocb is not invoked, covering
+ * wh_Client_AesCbcRequest / wh_Client_AesCbcResponse and IV chaining across two
+ * halves. Not devId-routed, so this runs once rather than per devId.
+ */
+static int whTest_CryptoAesCbcStreaming(whClientContext* ctx)
+{
+    int            ret = 0;
+    Aes            aes[1];
+    const uint8_t  key[]             = {0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae,
+                                        0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88,
+                                        0x09, 0xcf, 0x4f, 0x3c};
+    const uint8_t  iv[AES_BLOCK_SIZE] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05,
+                                         0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b,
+                                         0x0c, 0x0d, 0x0e, 0x0f};
+    const uint8_t  plainIn[64]       = {
+               0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f, 0x96, 0xe9, 0x3d, 0x7e,
+               0x11, 0x73, 0x93, 0x17, 0x2a, 0xae, 0x2d, 0x8a, 0x57, 0x1e, 0x03,
+               0xac, 0x9c, 0x9e, 0xb7, 0x6f, 0xac, 0x45, 0xaf, 0x8e, 0x51, 0x30,
+               0xc8, 0x1c, 0x46, 0xa3, 0x5c, 0xe4, 0x11, 0xe5, 0xfb, 0xc1, 0x19,
+               0x1a, 0x0a, 0x52, 0xef, 0xf6, 0x9f, 0x24, 0x45, 0xdf, 0x4f, 0x9b,
+               0x17, 0xad, 0x2b, 0x41, 0x7b, 0xe6, 0x6c, 0x37, 0x10};
+    uint8_t        cipher[sizeof(plainIn)];
+    uint8_t        plainOut[sizeof(plainIn)];
+    const uint32_t halfSize = sizeof(plainIn) / 2;
+    uint32_t       outSize  = 0;
+
+    memset(cipher, 0, sizeof(cipher));
+    memset(plainOut, 0, sizeof(plainOut));
+
+    ret = wc_AesInit(aes, NULL, INVALID_DEVID);
+    if (ret == 0) {
+        ret = wc_AesSetKey(aes, key, sizeof(key), iv, AES_ENCRYPTION);
+    }
+    if (ret == 0) {
+        ret = wh_Client_AesCbcRequest(ctx, aes, 1, plainIn, halfSize);
+    }
+    if (ret == 0) {
+        do {
+            ret = wh_Client_AesCbcResponse(ctx, aes, cipher, &outSize);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+    if (ret == 0) {
+        ret = wh_Client_AesCbcRequest(ctx, aes, 1, plainIn + halfSize,
+                                      halfSize);
+    }
+    if (ret == 0) {
+        do {
+            ret = wh_Client_AesCbcResponse(ctx, aes, cipher + halfSize,
+                                           &outSize);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+
+    if (ret == 0) {
+        ret = wc_AesSetKey(aes, key, sizeof(key), iv, AES_DECRYPTION);
+    }
+    if (ret == 0) {
+        ret = wh_Client_AesCbcRequest(ctx, aes, 0, cipher, halfSize);
+    }
+    if (ret == 0) {
+        do {
+            ret = wh_Client_AesCbcResponse(ctx, aes, plainOut, &outSize);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+    if (ret == 0) {
+        ret = wh_Client_AesCbcRequest(ctx, aes, 0, cipher + halfSize,
+                                      halfSize);
+    }
+    if (ret == 0) {
+        do {
+            ret = wh_Client_AesCbcResponse(ctx, aes, plainOut + halfSize,
+                                           &outSize);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+    if (ret == 0 && memcmp(plainIn, plainOut, sizeof(plainIn)) != 0) {
+        WH_ERROR_PRINT("AES-CBC streaming failed to match\n");
+        ret = -1;
+    }
+    (void)wc_AesFree(aes);
+    if (ret == 0) {
+        WH_TEST_PRINT("AES CBC ASYNC STREAMING SUCCESS\n");
+    }
+    return ret;
+}
+#endif /* HAVE_AES_CBC */
+
 int whTest_Crypto_Aes(whClientContext* ctx)
 {
-    WH_TEST_RETURN_ON_FAIL(_whTest_CryptoAes(ctx));
+    int i, devId;
+
+    /* AES round-trips dispatch through the cryptocb, so run on every devId to
+     * cover both the normal and DMA server transports. */
+    WH_TEST_FOREACH_DEVID(i, devId) {
+        WH_TEST_RETURN_ON_FAIL(whTest_CryptoAesImpl(ctx, devId));
+    }
+#ifdef HAVE_AES_CBC
+    /* CBC streaming drives the request/response API directly (INVALID_DEVID),
+     * so it is not devId-routed -- run it once. */
+    WH_TEST_RETURN_ON_FAIL(whTest_CryptoAesCbcStreaming(ctx));
+#endif
+    /* TODO: port legacy AES async + DMA-async coverage (comm-buffer & DMA, round-trip & KAT) -- the only remaining legacy crypto parity gap; deferred to follow-up PR. */
     return 0;
 }
 #endif /* !NO_AES && (HAVE_AES_CBC || WOLFSSL_AES_COUNTER || HAVE_AES_ECB || \
