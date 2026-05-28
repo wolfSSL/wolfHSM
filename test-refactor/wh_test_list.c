@@ -37,6 +37,7 @@ WH_TEST_DECL(whTest_Dma);
 WH_TEST_DECL(whTest_KeystoreReqSize);
 WH_TEST_DECL(whTest_CertVerify);
 WH_TEST_DECL(whTest_ClientCerts);
+WH_TEST_DECL(whTest_Counter);
 WH_TEST_DECL(whTest_CryptoAes);
 WH_TEST_DECL(whTest_CryptoEcc256);
 WH_TEST_DECL(whTest_CryptoEd25519BufferTooSmall);
@@ -44,6 +45,8 @@ WH_TEST_DECL(whTest_CryptoMlDsaBufferTooSmall);
 WH_TEST_DECL(whTest_CryptoRsaBufferTooSmall);
 WH_TEST_DECL(whTest_CryptoSha256);
 WH_TEST_DECL(whTest_Echo);
+WH_TEST_DECL(whTest_NvmDma);
+WH_TEST_DECL(whTest_NvmOps);
 WH_TEST_DECL(whTest_ServerInfo);
 WH_TEST_DECL(whTest_WolfCryptTest);
 
@@ -61,6 +64,7 @@ const size_t whTestsServerCount = sizeof(whTestsServer) / sizeof(whTestsServer[0
 
 const whTestCase whTestsClient[] = {
     { "whTest_ClientCerts", whTest_ClientCerts },
+    { "whTest_Counter", whTest_Counter },
     { "whTest_CryptoAes", whTest_CryptoAes },
     { "whTest_CryptoEcc256", whTest_CryptoEcc256 },
     { "whTest_CryptoEd25519BufferTooSmall",
@@ -69,6 +73,8 @@ const whTestCase whTestsClient[] = {
     { "whTest_CryptoRsaBufferTooSmall", whTest_CryptoRsaBufferTooSmall },
     { "whTest_CryptoSha256", whTest_CryptoSha256 },
     { "whTest_Echo", whTest_Echo },
+    { "whTest_NvmDma", whTest_NvmDma },
+    { "whTest_NvmOps", whTest_NvmOps },
     { "whTest_ServerInfo", whTest_ServerInfo },
     { "whTest_WolfCryptTest", whTest_WolfCryptTest },
 };

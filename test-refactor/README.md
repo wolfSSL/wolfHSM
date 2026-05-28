@@ -83,6 +83,9 @@ Translated tests:
 | `wh_test_cert.c::whTest_CertRamSim` | `server/wh_test_cert.c::whTest_CertVerify` | Server | remove ramsim coupling and migrate to server group |
 | `wh_test_crypto.c::whTest_Crypto` | `client-server/wh_test_crypto.c::{whTest_CryptoSha256, whTest_CryptoAes, whTest_CryptoEcc256}` | Client | Subset only; remaining cases listed below |
 | `wh_test_clientserver.c` (echo and server-info paths) | `client-server/wh_test_echo.c::whTest_Echo`, `client-server/wh_test_server_info.c::whTest_ServerInfo` | Client | pthread test ported, sequential test dropped |
+| `wh_test_clientserver.c` (NVM CRUD + OOB read clamping paths) | `client-server/wh_test_nvm_ops.c::{whTest_NvmCrud, whTest_NvmReadOob}` | Client | each test cleans up its own slots; OOB test covers UINT16_MAX overflow regression |
+| `wh_test_clientserver.c` (NVM DMA CRUD path) | `client-server/wh_test_nvm_dma.c::whTest_NvmCrudDma` | Client | gated on `WOLFHSM_CFG_DMA` |
+| `wh_test_clientserver.c::_testClientCounter` | `client-server/wh_test_counter.c::whTest_Counter` | Client | exercises saturate-on-overflow and slot-leak detection |
 | `wh_test_wolfcrypt_test.c::whTest_WolfCryptTest` | `client-server/wh_test_wolfcrypt.c::whTest_WolfCryptTest` | Client | |
 | `wh_test_flash_ramsim.c::whTest_Flash_RamSim` | `posix/wh_test_flash_ramsim.c::{whTest_FlashWriteLock, whTest_FlashEraseProgramVerify, whTest_FlashUnitOps}` | POSIX port-specific (`whTestGroup_RunOne`) | remove ramsim coupling and migrate to server group |
 | `wh_test_nvm_flash.c::whTest_NvmFlash` | `posix/wh_test_nvm_flash.c::whTest_NvmAddOverwriteDestroy` | POSIX port-specific (`whTestGroup_RunOne`) | remove ramsim coupling and migrate to server group |
@@ -93,7 +96,7 @@ Not yet migrated (still live in `wolfHSM/test/`):
 | Legacy (`wolfHSM/test/`) | Notes |
 |---|---|
 | `wh_test_comm.c::whTest_Comm` | Pthread mem/tcp/shmem variants only; sequential mem variant has been ported |
-| `wh_test_clientserver.c::whTest_ClientServer` | Pthread variant: remaining client-side coverage (NVM ops, etc.) still needs to be split out as new tests. The sequential test is dropped |
+| `wh_test_clientserver.c::whTest_ClientServer` | Pthread variant: remaining coverage is the custom-callback round-trip (`_testCallbacks`) and the server-side DMA register/copy/allowlist exercise (`_testDma`). The sequential test is dropped, as is the FLASH_LOG NVM matrix variant. |
 | `wh_test_crypto.c::whTest_Crypto` | RNG, key cache, key-cache enforcement, RSA, CMAC, Curve25519, ML-DSA, key usage policies, key revocation |
 | `wh_test_crypto_affinity.c::whTest_CryptoAffinity` | |
 | `wh_test_keywrap.c::whTest_KeyWrapClientConfig` | |
