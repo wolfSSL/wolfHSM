@@ -84,6 +84,21 @@
 
 
 /*
+ * Helper macro to run a test on each devId.
+ * Only applicable to tests which use the cryptocb and use the devID arg.
+ * "Call" should be of the form "whTest_Func(ctx, devId)". Second arg must
+ * be named "devId".
+ */
+#define WH_TEST_FOREACH_DEVID(call)                          \
+    do {                                                     \
+        int idx;                                             \
+        for (idx = 0; idx < WH_NUM_DEVIDS; idx++) {          \
+            int devId = WH_DEV_IDS_ARRAY[idx];               \
+            WH_TEST_RETURN_ON_FAIL(call);                    \
+        }                                                    \
+    } while (0)
+
+/*
  * Helper macro for test error propagation
  * Mimics "assert" semantics by evaluating the "statement" argument, and if not
  * true, displays the stringified argument along with caller source file info
