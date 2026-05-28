@@ -87,6 +87,17 @@ int wh_Server_Init(whServerContext* server, whServerConfig* config)
     server->nvm = config->nvm;
 #ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
     server->auth = config->auth;
+    /* auth context is externally owned; clear any stale session left over from
+     * a prior connection (Logout first so backend callback runs). */
+    if (server->auth != NULL &&
+        server->auth->user.user_id != WH_USER_ID_INVALID) {
+        whUserId stale_id  = server->auth->user.user_id;
+        int      logout_rc = wh_Auth_Logout(server->auth, stale_id);
+        if (logout_rc != WH_ERROR_OK ||
+            server->auth->user.user_id != WH_USER_ID_INVALID) {
+            memset(&server->auth->user, 0, sizeof(server->auth->user));
+        }
+    }
 #endif /* WOLFHSM_CFG_ENABLE_AUTHENTICATION */
 #ifdef WOLFHSM_CFG_HWKEYSTORE
     server->hwKeystore = config->hwKeystore;
@@ -179,6 +190,27 @@ int wh_Server_SetConnected(whServerContext *server, whCommConnected connected)
     if (server == NULL) {
         return WH_ERROR_BADARGS;
     }
+
+#ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
+    /* Log out any active user on disconnect, including abrupt drops where
+     * COMM_CLOSE never arrives. */
+    if (connected == WH_COMM_DISCONNECTED &&
+        server->connected != WH_COMM_DISCONNECTED &&
+        server->auth != NULL &&
+        server->auth->user.user_id != WH_USER_ID_INVALID) {
+        whUserId user_id   = server->auth->user.user_id;
+        int      logout_rc = wh_Auth_Logout(server->auth, user_id);
+
+        /* wh_Auth_Logout only clears the session when the backend callback
+         * returns WH_ERROR_OK. Force-clear if it failed or left the user set,
+         * so a stale identity can never carry over to the next connection
+         * (mirrors the defensive clear in wh_Server_Init). */
+        if (logout_rc != WH_ERROR_OK ||
+            server->auth->user.user_id != WH_USER_ID_INVALID) {
+            memset(&server->auth->user, 0, sizeof(server->auth->user));
+        }
+    }
+#endif /* WOLFHSM_CFG_ENABLE_AUTHENTICATION */
 
     server->connected = connected;
     return WH_ERROR_OK;
@@ -288,15 +320,9 @@ static int _wh_Server_HandleCommRequest(whServerContext* server,
         /* No message */
         /* Process the close action */
 
-#ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
-        /* Log out the current user when communication channel closes */
-        if (server->auth != NULL &&
-            server->auth->user.user_id != WH_USER_ID_INVALID) {
-            whUserId user_id = server->auth->user.user_id;
-            (void)wh_Auth_Logout(server->auth, user_id);
-        }
-#endif /* WOLFHSM_CFG_ENABLE_AUTHENTICATION */
-
+        /* wh_Server_SetConnected logs out any active user on the transition to
+         * the disconnected state, so the graceful-close and abrupt-disconnect
+         * paths share a single authoritative logout. */
         wh_Server_SetConnected(server, WH_COMM_DISCONNECTED);
         *out_resp_size = 0;
 
