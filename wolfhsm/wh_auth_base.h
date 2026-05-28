@@ -140,7 +140,12 @@ int wh_Auth_BaseUserGet(void* context, const char* username,
 /**
  * @brief Set user credentials (PIN, etc.).
  *
+ * A non-admin caller may only set its own credentials; an admin caller may set
+ * credentials for any user.
+ *
  * @param[in] context Pointer to the auth base context.
+ * @param[in] current_user_id The user ID of the caller performing the
+ * operation.
  * @param[in] user_id The user ID to set credentials for.
  * @param[in] method The authentication method.
  * @param[in] current_credentials Pointer to the current credentials data.
@@ -149,8 +154,8 @@ int wh_Auth_BaseUserGet(void* context, const char* username,
  * @param[in] new_credentials_len Length of the new credentials data.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
-int wh_Auth_BaseUserSetCredentials(void* context, uint16_t user_id,
-                                   whAuthMethod method,
+int wh_Auth_BaseUserSetCredentials(void* context, uint16_t current_user_id,
+                                   uint16_t user_id, whAuthMethod method,
                                    const void*  current_credentials,
                                    uint16_t     current_credentials_len,
                                    const void*  new_credentials,
