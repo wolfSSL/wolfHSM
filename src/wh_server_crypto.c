@@ -2429,22 +2429,33 @@ static int _HandleAesCtr(whServerContext* ctx, uint16_t magic, int devId,
         ret = wc_AesSetKeyDirect(aes, (byte*)key, (word32)key_len, (byte*)iv,
                                  enc != 0 ? AES_ENCRYPTION : AES_DECRYPTION);
         if (ret == WH_ERROR_OK) {
-            /* do the crypto operation; also restore previous left */
-            aes->left = left;
-            memcpy(aes->tmp, tmp, sizeof(aes->tmp));
-            if (enc != 0) {
-                ret = wc_AesCtrEncrypt(aes, (byte*)out, (byte*)in, (word32)len);
-                if (ret == WH_ERROR_OK) {
-                    WH_DEBUG_VERBOSE_HEXDUMP("[AesCtr] Encrypted output",
-                                             out, len);
-                }
+            /* Reject client-supplied left values outside the valid range.
+             * wc_AesCtrEncrypt indexes aes->tmp via AES_BLOCK_SIZE - aes->left;
+             * an out-of-range value causes an out-of-bounds read that could
+             * disclose server-side memory across the HSM trust boundary. */
+            if (left > AES_BLOCK_SIZE) {
+                ret = WH_ERROR_BADARGS;
             }
             else {
-                /* CTR uses the same function for encrypt and decrypt */
-                ret = wc_AesCtrEncrypt(aes, (byte*)out, (byte*)in, (word32)len);
-                if (ret == WH_ERROR_OK) {
-                    WH_DEBUG_VERBOSE_HEXDUMP("[AesCtr] Decrypted output",
-                                             out, len);
+                /* Restore streaming CTR context from the previous call. */
+                aes->left = left;
+                memcpy(aes->tmp, tmp, sizeof(aes->tmp));
+                if (enc != 0) {
+                    ret = wc_AesCtrEncrypt(aes, (byte*)out, (byte*)in,
+                                           (word32)len);
+                    if (ret == WH_ERROR_OK) {
+                        WH_DEBUG_VERBOSE_HEXDUMP("[AesCtr] Encrypted output",
+                                                 out, len);
+                    }
+                }
+                else {
+                    /* CTR uses the same function for encrypt and decrypt */
+                    ret = wc_AesCtrEncrypt(aes, (byte*)out, (byte*)in,
+                                           (word32)len);
+                    if (ret == WH_ERROR_OK) {
+                        WH_DEBUG_VERBOSE_HEXDUMP("[AesCtr] Decrypted output",
+                                                 out, len);
+                    }
                 }
             }
         }
@@ -2590,32 +2601,40 @@ static int _HandleAesCtrDma(whServerContext* ctx, uint16_t magic, int devId,
         ret = wc_AesSetKeyDirect(aes, (byte*)key, (word32)keyLen, (byte*)iv,
                                  enc != 0 ? AES_ENCRYPTION : AES_DECRYPTION);
         if (ret == WH_ERROR_OK) {
-            /* do the crypto operation */
-            /* restore previous left */
-            aes->left = left;
-            memcpy(aes->tmp, tmp, sizeof(aes->tmp));
-            if (enc != 0) {
-                ret = wc_AesCtrEncrypt(aes, (byte*)outAddr, (byte*)inAddr,
-                                       (word32)len);
-                if (ret == WH_ERROR_OK) {
-                    WH_DEBUG_VERBOSE_HEXDUMP("[AesCtr] Encrypted output",
-                                             outAddr, len);
-                }
+            /* Reject client-supplied left values outside the valid range.
+             * wc_AesCtrEncrypt indexes aes->tmp via AES_BLOCK_SIZE - aes->left;
+             * an out-of-range value causes an out-of-bounds read that could
+             * disclose server-side memory across the HSM trust boundary. */
+            if (left > AES_BLOCK_SIZE) {
+                ret = WH_ERROR_BADARGS;
             }
             else {
-                /* CTR uses the same function for encrypt and decrypt */
-                ret = wc_AesCtrEncrypt(aes, (byte*)outAddr, (byte*)inAddr,
-                                       (word32)len);
-                if (ret == WH_ERROR_OK) {
-                    WH_DEBUG_VERBOSE_HEXDUMP("[AesCtr] Decrypted output",
-                                             outAddr, len);
+                /* Restore streaming CTR context from the previous call. */
+                aes->left = left;
+                memcpy(aes->tmp, tmp, sizeof(aes->tmp));
+                if (enc != 0) {
+                    ret = wc_AesCtrEncrypt(aes, (byte*)outAddr, (byte*)inAddr,
+                                           (word32)len);
+                    if (ret == WH_ERROR_OK) {
+                        WH_DEBUG_VERBOSE_HEXDUMP("[AesCtr] Encrypted output",
+                                                 outAddr, len);
+                    }
                 }
-            }
-            if (ret == WH_ERROR_OK) {
-                left = aes->left;
-                outSz = len;
-                memcpy(out_tmp, aes->tmp, AES_BLOCK_SIZE);
-                memcpy(out_iv, aes->reg, AES_IV_SIZE);
+                else {
+                    /* CTR uses the same function for encrypt and decrypt */
+                    ret = wc_AesCtrEncrypt(aes, (byte*)outAddr, (byte*)inAddr,
+                                           (word32)len);
+                    if (ret == WH_ERROR_OK) {
+                        WH_DEBUG_VERBOSE_HEXDUMP("[AesCtr] Decrypted output",
+                                                 outAddr, len);
+                    }
+                }
+                if (ret == WH_ERROR_OK) {
+                    left = aes->left;
+                    outSz = len;
+                    memcpy(out_tmp, aes->tmp, AES_BLOCK_SIZE);
+                    memcpy(out_iv, aes->reg, AES_IV_SIZE);
+                }
             }
         }
     }
