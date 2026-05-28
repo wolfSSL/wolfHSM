@@ -32,9 +32,10 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install gcovr
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcovr
+        # Pin a modern gcovr via pipx; the apt-shipped 7.0 on ubuntu-noble
+        # cannot parse gcc 13's gcov output with block IDs >= 10000 (fixed
+        # upstream in gcovr 7.1, see gcovr PR #883).
+        run: pipx install 'gcovr==8.6'
 
       - name: Checkout wolfssl
         uses: actions/checkout@v4
@@ -62,9 +63,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install gcovr
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcovr
+        run: pipx install 'gcovr==8.6'
 
       - name: Download legacy tracefiles
         uses: actions/download-artifact@v4
