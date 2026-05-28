@@ -444,13 +444,9 @@ static int whTest_CryptoAesCbcStreaming(whClientContext* ctx)
 
 int whTest_Crypto_Aes(whClientContext* ctx)
 {
-    int i, devId;
-
     /* AES round-trips dispatch through the cryptocb, so run on every devId to
      * cover both the normal and DMA server transports. */
-    WH_TEST_FOREACH_DEVID(i, devId) {
-        WH_TEST_RETURN_ON_FAIL(whTest_CryptoAesImpl(ctx, devId));
-    }
+    WH_TEST_FOREACH_DEVID(whTest_CryptoAesImpl(ctx, devId));
 #ifdef HAVE_AES_CBC
     /* CBC streaming drives the request/response API directly (INVALID_DEVID),
      * so it is not devId-routed -- run it once. */

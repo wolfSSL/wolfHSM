@@ -1125,14 +1125,10 @@ int whTest_Crypto_MlDsa(whClientContext* ctx)
 #if !defined(WOLFSSL_DILITHIUM_NO_VERIFY) && \
     !defined(WOLFSSL_DILITHIUM_NO_SIGN) &&   \
     !defined(WOLFSSL_DILITHIUM_NO_MAKE_KEY) && !defined(WOLFSSL_NO_ML_DSA_44)
-    int i, devId;
-
     /* Plain wolfCrypt-API ML-DSA dispatches through the cryptocb; PQC is
      * handled by both the normal and DMA cryptocbs, so loop over every devId.
      * The wh_Client_MlDsa* direct-API tests below run on their own devIds. */
-    WH_TEST_FOREACH_DEVID(i, devId) {
-        WH_TEST_RETURN_ON_FAIL(whTest_CryptoMlDsaWolfCryptImpl(ctx, devId));
-    }
+    WH_TEST_FOREACH_DEVID(whTest_CryptoMlDsaWolfCryptImpl(ctx, devId));
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoMlDsaClient(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoMlDsaExportPublicKey(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoMlDsaBufferTooSmall(ctx));

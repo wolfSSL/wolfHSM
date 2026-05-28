@@ -2391,55 +2391,43 @@ static int _whTest_CryptoSha512DmaAsync(whClientContext* ctx)
 
 int whTest_Crypto_Sha(whClientContext* ctx)
 {
-    int i, devId;
-
     /* Synchronous hashing (plain + large input) dispatches through the
      * cryptocb, so run it on every devId to cover the normal and DMA server
      * transports. The explicit request/response suites are transport-specific
      * (comm-buffer Async vs DmaAsync), not devId-routed -- run each once. */
 #ifdef WOLFSSL_SHA224
-    WH_TEST_FOREACH_DEVID(i, devId) {
-        WH_TEST_RETURN_ON_FAIL(_whTest_CryptoSha224(ctx, devId));
-        WH_TEST_RETURN_ON_FAIL(_whTest_CryptoSha224LargeInput(ctx, devId));
-    }
+    WH_TEST_FOREACH_DEVID(_whTest_CryptoSha224(ctx, devId));
+    WH_TEST_FOREACH_DEVID(_whTest_CryptoSha224LargeInput(ctx, devId));
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoSha224Async(ctx));
 #ifdef WOLFHSM_CFG_DMA
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoSha224DmaAsync(ctx));
 #endif
 #endif
 #ifndef NO_SHA256
-    WH_TEST_FOREACH_DEVID(i, devId) {
-        WH_TEST_RETURN_ON_FAIL(_whTest_CryptoSha256(ctx, devId));
-        WH_TEST_RETURN_ON_FAIL(_whTest_CryptoSha256LargeInput(ctx, devId));
-    }
+    WH_TEST_FOREACH_DEVID(_whTest_CryptoSha256(ctx, devId));
+    WH_TEST_FOREACH_DEVID(_whTest_CryptoSha256LargeInput(ctx, devId));
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoSha256Async(ctx));
 #ifdef WOLFHSM_CFG_DMA
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoSha256DmaAsync(ctx));
 #endif
 #endif
 #ifdef WOLFSSL_SHA384
-    WH_TEST_FOREACH_DEVID(i, devId) {
-        WH_TEST_RETURN_ON_FAIL(_whTest_CryptoSha384(ctx, devId));
-        WH_TEST_RETURN_ON_FAIL(_whTest_CryptoSha384LargeInput(ctx, devId));
-    }
+    WH_TEST_FOREACH_DEVID(_whTest_CryptoSha384(ctx, devId));
+    WH_TEST_FOREACH_DEVID(_whTest_CryptoSha384LargeInput(ctx, devId));
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoSha384Async(ctx));
 #ifdef WOLFHSM_CFG_DMA
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoSha384DmaAsync(ctx));
 #endif
 #endif
 #ifdef WOLFSSL_SHA512
-    WH_TEST_FOREACH_DEVID(i, devId) {
-        WH_TEST_RETURN_ON_FAIL(_whTest_CryptoSha512(ctx, devId));
-        WH_TEST_RETURN_ON_FAIL(_whTest_CryptoSha512LargeInput(ctx, devId));
-    }
+    WH_TEST_FOREACH_DEVID(_whTest_CryptoSha512(ctx, devId));
+    WH_TEST_FOREACH_DEVID(_whTest_CryptoSha512LargeInput(ctx, devId));
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoSha512Async(ctx));
 #ifdef WOLFHSM_CFG_DMA
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoSha512DmaAsync(ctx));
 #endif
 #endif
     (void)ctx;
-    (void)i;
-    (void)devId;
     return 0;
 }
 
