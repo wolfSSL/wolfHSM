@@ -957,7 +957,8 @@ int whTest_AuthAddUser(whClientContext* client)
         _whTest_Auth_UserAddOp(client, "subset_child_drop", perms,
                                WH_AUTH_METHOD_PIN, "pin", 3, &server_rc,
                                &user_id2);
-        WH_TEST_ASSERT_RETURN(server_rc != WH_AUTH_PERMISSION_ERROR);
+        WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+        WH_TEST_ASSERT_RETURN(user_id2 != WH_USER_ID_INVALID);
 
         /* Restore admin context for cleanup */
         _whTest_Auth_LogoutOp(client, subset_login, &server_rc);
@@ -984,7 +985,8 @@ int whTest_AuthAddUser(whClientContext* client)
         _whTest_Auth_UserAddOp(client, "admin_nocred", admin_child_perms,
                                WH_AUTH_METHOD_NONE, NULL, 0, &server_rc,
                                &admin_child_id);
-        WH_TEST_ASSERT_RETURN(server_rc != WH_AUTH_PERMISSION_ERROR);
+        WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+        WH_TEST_ASSERT_RETURN(admin_child_id != WH_USER_ID_INVALID);
         _whTest_Auth_DeleteUserByName(client, "admin_nocred");
     }
 
@@ -1526,7 +1528,10 @@ int whTest_AuthRequestAuthorization(whClientContext* client)
 
 
 /* Verify the server rejects user creation past WH_AUTH_BASE_MAX_USERS with
- * WH_ERROR_BUFFER_SIZE. Runs in isolation so it owns the user table. */
+ * WH_ERROR_BUFFER_SIZE. This does not clear the table first; it assumes prior
+ * tests have cleaned up their users (so there is room to add more) and only
+ * requires that adding users eventually saturates the table. It removes every
+ * user it creates before returning. */
 int whTest_AuthMaxUsers(whClientContext* client)
 {
     int32_t           server_rc;

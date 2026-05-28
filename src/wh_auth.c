@@ -315,9 +315,9 @@ int wh_Auth_CheckKeyAuthorization(whAuthContext* context, uint32_t key_id,
 /*
  * By default:
  * 1) Only an admin user can add another admin user.
- * 2) A non admin user can only pass on the same or a subset of it's own
- *    permissions to a user created.
- * 3) A non admin can not create a user with null credentials.
+ * 2) A non-admin user can only grant the same or a subset of its own
+ *    permissions to a user it creates.
+ * 3) A non-admin user cannot create a user with null credentials.
  * 4) No duplicate user names are allowed.
  *
  * This function adds a new user and returns WH_ERROR_OK on success.
