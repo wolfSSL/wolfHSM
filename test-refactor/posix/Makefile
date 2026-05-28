@@ -12,6 +12,7 @@ BIN = wh_test_refactor
 PROJECT_DIR      ?= .
 REFACTOR_DIR     ?= $(PROJECT_DIR)/..
 CONFIG_DIR       ?= $(REFACTOR_DIR)/../test/config
+REFACTOR_CFG_DIR ?= $(REFACTOR_DIR)/config
 WOLFSSL_DIR      ?= ../../../wolfssl
 WOLFHSM_DIR      ?= $(REFACTOR_DIR)/..
 WOLFHSM_PORT_DIR ?= $(WOLFHSM_DIR)/port/posix
@@ -25,6 +26,7 @@ INC =   -I$(PROJECT_DIR) \
         -I$(REFACTOR_DIR)/server \
         -I$(REFACTOR_DIR)/client-server \
         -I$(REFACTOR_DIR)/misc \
+        -I$(REFACTOR_CFG_DIR) \
         -I$(CONFIG_DIR) \
         -I$(TEST_DIR) \
         -I$(WOLFSSL_DIR) \

@@ -32,7 +32,9 @@
 #include "wh_test_list.h"
 
 /* Test declarations and weak skip implementations. */
+WH_TEST_DECL(whTest_Comm);
 WH_TEST_DECL(whTest_Dma);
+WH_TEST_DECL(whTest_KeystoreReqSize);
 WH_TEST_DECL(whTest_CertVerify);
 WH_TEST_DECL(whTest_ClientCerts);
 WH_TEST_DECL(whTest_CryptoAes);
@@ -46,7 +48,9 @@ WH_TEST_DECL(whTest_ServerInfo);
 WH_TEST_DECL(whTest_WolfCryptTest);
 
 const whTestCase whTestsMisc[] = {
-    { "whTest_Dma", whTest_Dma },
+    { "whTest_Comm",             whTest_Comm },
+    { "whTest_Dma",              whTest_Dma },
+    { "whTest_KeystoreReqSize",  whTest_KeystoreReqSize },
 };
 const size_t whTestsMiscCount = sizeof(whTestsMisc) / sizeof(whTestsMisc[0]);
 
