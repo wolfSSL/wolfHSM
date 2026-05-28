@@ -374,6 +374,7 @@ coverage:
 		--root .. \
 		--gcov-executable gcov \
 		--gcov-ignore-parse-errors=negative_hits.warn_once_per_file \
+		--gcov-ignore-parse-errors=suspicious_hits.warn_once_per_file \
 		--filter '\.\./src/.*' \
 		--filter '\.\./wolfhsm/.*' \
 		--html-details ../coverage/index.html \
@@ -396,6 +397,7 @@ coverage-json:
 	@echo "Generating JSON tracefile at $(OUT)..."
 	mkdir -p $(dir $(OUT)) && gcovr Build \
 		--gcov-ignore-parse-errors=negative_hits.warn_once_per_file \
+		--gcov-ignore-parse-errors=suspicious_hits.warn_once_per_file \
 		--root .. \
 		--filter '\.\./src/.*' \
 		--filter '\.\./wolfhsm/.*' \
