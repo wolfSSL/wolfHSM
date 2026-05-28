@@ -12611,6 +12611,556 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
     if (ret != 0)
         return ret;
 #endif /* HAVE_AES_CBC */
+
+#ifdef WOLFSSL_AES_COUNTER
+    /* AES-CTR: encrypt without ENCRYPT flag */
+    WH_TEST_PRINT("  Testing AES CTR encrypt without ENCRYPT flag...\n");
+    {
+        Aes     aes[1];
+        uint8_t iv[AES_BLOCK_SIZE] = {0};
+        uint8_t ctrCipher[16]      = {0};
+
+        keyId = WH_KEYID_ERASED;
+        ret   = wh_Client_KeyCache(client, WH_NVM_FLAGS_NONE,
+                                   (uint8_t*)"ctr-no-enc", strlen("ctr-no-enc"),
+                                   key, keyLen, &keyId);
+        if (ret == 0) {
+            ret = wc_AesInit(aes, NULL, WH_DEV_ID);
+            if (ret == 0) {
+                ret = wh_Client_AesSetKeyId(aes, keyId);
+                if (ret == 0) {
+                    ret = wc_AesSetIV(aes, iv);
+                }
+                if (ret == 0) {
+                    ret = wh_Client_AesCtr(client, aes, 1, plaintext,
+                                           sizeof(plaintext), ctrCipher);
+                    if (ret == WH_ERROR_USAGE) {
+                        WH_TEST_PRINT("    PASS: Correctly denied encryption\n");
+                        ret = 0;
+                    }
+                    else {
+                        WH_ERROR_PRINT(
+                            "    FAIL: Expected WH_ERROR_USAGE, got %d\n", ret);
+                        ret = WH_ERROR_ABORTED;
+                    }
+                }
+                wc_AesFree(aes);
+            }
+            wh_Client_KeyEvict(client, keyId);
+        }
+    }
+    if (ret != 0)
+        return ret;
+
+    /* AES-CTR: decrypt without DECRYPT flag */
+    WH_TEST_PRINT("  Testing AES CTR decrypt without DECRYPT flag...\n");
+    {
+        Aes     aes[1];
+        uint8_t iv[AES_BLOCK_SIZE] = {0};
+        uint8_t ctrOut[16]         = {0};
+
+        keyId = WH_KEYID_ERASED;
+        ret   = wh_Client_KeyCache(client, WH_NVM_FLAGS_USAGE_ENCRYPT,
+                                   (uint8_t*)"ctr-no-dec", strlen("ctr-no-dec"),
+                                   key, keyLen, &keyId);
+        if (ret == 0) {
+            ret = wc_AesInit(aes, NULL, WH_DEV_ID);
+            if (ret == 0) {
+                ret = wh_Client_AesSetKeyId(aes, keyId);
+                if (ret == 0) {
+                    ret = wc_AesSetIV(aes, iv);
+                }
+                if (ret == 0) {
+                    ret = wh_Client_AesCtr(client, aes, 0, ciphertext,
+                                           sizeof(ciphertext), ctrOut);
+                    if (ret == WH_ERROR_USAGE) {
+                        WH_TEST_PRINT("    PASS: Correctly denied decryption\n");
+                        ret = 0;
+                    }
+                    else {
+                        WH_ERROR_PRINT(
+                            "    FAIL: Expected WH_ERROR_USAGE, got %d\n", ret);
+                        ret = WH_ERROR_ABORTED;
+                    }
+                }
+                wc_AesFree(aes);
+            }
+            wh_Client_KeyEvict(client, keyId);
+        }
+    }
+    if (ret != 0)
+        return ret;
+#endif /* WOLFSSL_AES_COUNTER */
+
+#ifdef HAVE_AES_ECB
+    /* AES-ECB: encrypt without ENCRYPT flag */
+    WH_TEST_PRINT("  Testing AES ECB encrypt without ENCRYPT flag...\n");
+    {
+        Aes     aes[1];
+        uint8_t ecbCipher[16] = {0};
+
+        keyId = WH_KEYID_ERASED;
+        ret   = wh_Client_KeyCache(client, WH_NVM_FLAGS_NONE,
+                                   (uint8_t*)"ecb-no-enc", strlen("ecb-no-enc"),
+                                   key, keyLen, &keyId);
+        if (ret == 0) {
+            ret = wc_AesInit(aes, NULL, WH_DEV_ID);
+            if (ret == 0) {
+                ret = wh_Client_AesSetKeyId(aes, keyId);
+                if (ret == 0) {
+                    ret = wc_AesEcbEncrypt(aes, ecbCipher, plaintext,
+                                           sizeof(plaintext));
+                    if (ret == WH_ERROR_USAGE) {
+                        WH_TEST_PRINT("    PASS: Correctly denied encryption\n");
+                        ret = 0;
+                    }
+                    else {
+                        WH_ERROR_PRINT(
+                            "    FAIL: Expected WH_ERROR_USAGE, got %d\n", ret);
+                        ret = WH_ERROR_ABORTED;
+                    }
+                }
+                wc_AesFree(aes);
+            }
+            wh_Client_KeyEvict(client, keyId);
+        }
+    }
+    if (ret != 0)
+        return ret;
+
+    /* AES-ECB: decrypt without DECRYPT flag */
+    WH_TEST_PRINT("  Testing AES ECB decrypt without DECRYPT flag...\n");
+    {
+        Aes     aes[1];
+        uint8_t ecbOut[16] = {0};
+
+        keyId = WH_KEYID_ERASED;
+        ret   = wh_Client_KeyCache(client, WH_NVM_FLAGS_USAGE_ENCRYPT,
+                                   (uint8_t*)"ecb-no-dec", strlen("ecb-no-dec"),
+                                   key, keyLen, &keyId);
+        if (ret == 0) {
+            ret = wc_AesInit(aes, NULL, WH_DEV_ID);
+            if (ret == 0) {
+                ret = wh_Client_AesSetKeyId(aes, keyId);
+                if (ret == 0) {
+                    ret = wc_AesEcbDecrypt(aes, ecbOut, ciphertext,
+                                           sizeof(ciphertext));
+                    if (ret == WH_ERROR_USAGE) {
+                        WH_TEST_PRINT("    PASS: Correctly denied decryption\n");
+                        ret = 0;
+                    }
+                    else {
+                        WH_ERROR_PRINT(
+                            "    FAIL: Expected WH_ERROR_USAGE, got %d\n", ret);
+                        ret = WH_ERROR_ABORTED;
+                    }
+                }
+                wc_AesFree(aes);
+            }
+            wh_Client_KeyEvict(client, keyId);
+        }
+    }
+    if (ret != 0)
+        return ret;
+#endif /* HAVE_AES_ECB */
+
+#ifdef HAVE_AESGCM
+    /* AES-GCM: encrypt without ENCRYPT flag */
+    WH_TEST_PRINT("  Testing AES GCM encrypt without ENCRYPT flag...\n");
+    {
+        Aes     aes[1];
+        uint8_t gcmIv[12]     = {0};
+        uint8_t gcmCipher[16] = {0};
+        uint8_t gcmTag[16]    = {0};
+
+        keyId = WH_KEYID_ERASED;
+        ret   = wh_Client_KeyCache(client, WH_NVM_FLAGS_NONE,
+                                   (uint8_t*)"gcm-no-enc", strlen("gcm-no-enc"),
+                                   key, keyLen, &keyId);
+        if (ret == 0) {
+            ret = wc_AesInit(aes, NULL, WH_DEV_ID);
+            if (ret == 0) {
+                ret = wh_Client_AesSetKeyId(aes, keyId);
+                if (ret == 0) {
+                    ret = wc_AesGcmEncrypt(aes, gcmCipher, plaintext,
+                                           sizeof(plaintext), gcmIv,
+                                           sizeof(gcmIv), gcmTag, sizeof(gcmTag),
+                                           NULL, 0);
+                    if (ret == WH_ERROR_USAGE) {
+                        WH_TEST_PRINT("    PASS: Correctly denied encryption\n");
+                        ret = 0;
+                    }
+                    else {
+                        WH_ERROR_PRINT(
+                            "    FAIL: Expected WH_ERROR_USAGE, got %d\n", ret);
+                        ret = WH_ERROR_ABORTED;
+                    }
+                }
+                wc_AesFree(aes);
+            }
+            wh_Client_KeyEvict(client, keyId);
+        }
+    }
+    if (ret != 0)
+        return ret;
+
+    /* AES-GCM: decrypt without DECRYPT flag */
+    WH_TEST_PRINT("  Testing AES GCM decrypt without DECRYPT flag...\n");
+    {
+        Aes     aes[1];
+        uint8_t gcmIv[12]  = {0};
+        uint8_t gcmOut[16] = {0};
+        uint8_t gcmTag[16] = {0};
+
+        keyId = WH_KEYID_ERASED;
+        ret   = wh_Client_KeyCache(client, WH_NVM_FLAGS_USAGE_ENCRYPT,
+                                   (uint8_t*)"gcm-no-dec", strlen("gcm-no-dec"),
+                                   key, keyLen, &keyId);
+        if (ret == 0) {
+            ret = wc_AesInit(aes, NULL, WH_DEV_ID);
+            if (ret == 0) {
+                ret = wh_Client_AesSetKeyId(aes, keyId);
+                if (ret == 0) {
+                    ret = wc_AesGcmDecrypt(aes, gcmOut, ciphertext,
+                                           sizeof(ciphertext), gcmIv,
+                                           sizeof(gcmIv), gcmTag, sizeof(gcmTag),
+                                           NULL, 0);
+                    if (ret == WH_ERROR_USAGE) {
+                        WH_TEST_PRINT("    PASS: Correctly denied decryption\n");
+                        ret = 0;
+                    }
+                    else {
+                        WH_ERROR_PRINT(
+                            "    FAIL: Expected WH_ERROR_USAGE, got %d\n", ret);
+                        ret = WH_ERROR_ABORTED;
+                    }
+                }
+                wc_AesFree(aes);
+            }
+            wh_Client_KeyEvict(client, keyId);
+        }
+    }
+    if (ret != 0)
+        return ret;
+#endif /* HAVE_AESGCM */
+
+#ifdef WOLFHSM_CFG_DMA
+#ifdef WOLFSSL_AES_COUNTER
+    /* AES-CTR DMA: encrypt without ENCRYPT flag */
+    WH_TEST_PRINT("  Testing AES CTR DMA encrypt without ENCRYPT flag...\n");
+    {
+        Aes     aes[1];
+        uint8_t iv[AES_BLOCK_SIZE] = {0};
+        uint8_t ctrCipher[16]      = {0};
+
+        keyId = WH_KEYID_ERASED;
+        ret   = wh_Client_KeyCache(client, WH_NVM_FLAGS_NONE,
+                                   (uint8_t*)"dctr-no-enc",
+                                   strlen("dctr-no-enc"), key, keyLen, &keyId);
+        if (ret == 0) {
+            ret = wc_AesInit(aes, NULL, WH_DEV_ID_DMA);
+            if (ret == 0) {
+                ret = wh_Client_AesSetKeyId(aes, keyId);
+                if (ret == 0) {
+                    ret = wc_AesSetIV(aes, iv);
+                }
+                if (ret == 0) {
+                    ret = wh_Client_AesCtrDma(client, aes, 1, plaintext,
+                                              sizeof(plaintext), ctrCipher);
+                    if (ret == WH_ERROR_USAGE) {
+                        WH_TEST_PRINT("    PASS: Correctly denied encryption\n");
+                        ret = 0;
+                    }
+                    else {
+                        WH_ERROR_PRINT(
+                            "    FAIL: Expected WH_ERROR_USAGE, got %d\n", ret);
+                        ret = WH_ERROR_ABORTED;
+                    }
+                }
+                wc_AesFree(aes);
+            }
+            wh_Client_KeyEvict(client, keyId);
+        }
+    }
+    if (ret != 0)
+        return ret;
+
+    /* AES-CTR DMA: decrypt without DECRYPT flag */
+    WH_TEST_PRINT("  Testing AES CTR DMA decrypt without DECRYPT flag...\n");
+    {
+        Aes     aes[1];
+        uint8_t iv[AES_BLOCK_SIZE] = {0};
+        uint8_t ctrOut[16]         = {0};
+
+        keyId = WH_KEYID_ERASED;
+        ret   = wh_Client_KeyCache(client, WH_NVM_FLAGS_USAGE_ENCRYPT,
+                                   (uint8_t*)"dctr-no-dec",
+                                   strlen("dctr-no-dec"), key, keyLen, &keyId);
+        if (ret == 0) {
+            ret = wc_AesInit(aes, NULL, WH_DEV_ID_DMA);
+            if (ret == 0) {
+                ret = wh_Client_AesSetKeyId(aes, keyId);
+                if (ret == 0) {
+                    ret = wc_AesSetIV(aes, iv);
+                }
+                if (ret == 0) {
+                    ret = wh_Client_AesCtrDma(client, aes, 0, ciphertext,
+                                              sizeof(ciphertext), ctrOut);
+                    if (ret == WH_ERROR_USAGE) {
+                        WH_TEST_PRINT("    PASS: Correctly denied decryption\n");
+                        ret = 0;
+                    }
+                    else {
+                        WH_ERROR_PRINT(
+                            "    FAIL: Expected WH_ERROR_USAGE, got %d\n", ret);
+                        ret = WH_ERROR_ABORTED;
+                    }
+                }
+                wc_AesFree(aes);
+            }
+            wh_Client_KeyEvict(client, keyId);
+        }
+    }
+    if (ret != 0)
+        return ret;
+#endif /* WOLFSSL_AES_COUNTER */
+
+#ifdef HAVE_AES_ECB
+    /* AES-ECB DMA: encrypt without ENCRYPT flag */
+    WH_TEST_PRINT("  Testing AES ECB DMA encrypt without ENCRYPT flag...\n");
+    {
+        Aes     aes[1];
+        uint8_t ecbCipher[16] = {0};
+
+        keyId = WH_KEYID_ERASED;
+        ret   = wh_Client_KeyCache(client, WH_NVM_FLAGS_NONE,
+                                   (uint8_t*)"decb-no-enc",
+                                   strlen("decb-no-enc"), key, keyLen, &keyId);
+        if (ret == 0) {
+            ret = wc_AesInit(aes, NULL, WH_DEV_ID_DMA);
+            if (ret == 0) {
+                ret = wh_Client_AesSetKeyId(aes, keyId);
+                if (ret == 0) {
+                    ret = wh_Client_AesEcbDma(client, aes, 1, plaintext,
+                                              sizeof(plaintext), ecbCipher);
+                    if (ret == WH_ERROR_USAGE) {
+                        WH_TEST_PRINT("    PASS: Correctly denied encryption\n");
+                        ret = 0;
+                    }
+                    else {
+                        WH_ERROR_PRINT(
+                            "    FAIL: Expected WH_ERROR_USAGE, got %d\n", ret);
+                        ret = WH_ERROR_ABORTED;
+                    }
+                }
+                wc_AesFree(aes);
+            }
+            wh_Client_KeyEvict(client, keyId);
+        }
+    }
+    if (ret != 0)
+        return ret;
+
+    /* AES-ECB DMA: decrypt without DECRYPT flag */
+    WH_TEST_PRINT("  Testing AES ECB DMA decrypt without DECRYPT flag...\n");
+    {
+        Aes     aes[1];
+        uint8_t ecbOut[16] = {0};
+
+        keyId = WH_KEYID_ERASED;
+        ret   = wh_Client_KeyCache(client, WH_NVM_FLAGS_USAGE_ENCRYPT,
+                                   (uint8_t*)"decb-no-dec",
+                                   strlen("decb-no-dec"), key, keyLen, &keyId);
+        if (ret == 0) {
+            ret = wc_AesInit(aes, NULL, WH_DEV_ID_DMA);
+            if (ret == 0) {
+                ret = wh_Client_AesSetKeyId(aes, keyId);
+                if (ret == 0) {
+                    ret = wh_Client_AesEcbDma(client, aes, 0, ciphertext,
+                                              sizeof(ciphertext), ecbOut);
+                    if (ret == WH_ERROR_USAGE) {
+                        WH_TEST_PRINT("    PASS: Correctly denied decryption\n");
+                        ret = 0;
+                    }
+                    else {
+                        WH_ERROR_PRINT(
+                            "    FAIL: Expected WH_ERROR_USAGE, got %d\n", ret);
+                        ret = WH_ERROR_ABORTED;
+                    }
+                }
+                wc_AesFree(aes);
+            }
+            wh_Client_KeyEvict(client, keyId);
+        }
+    }
+    if (ret != 0)
+        return ret;
+#endif /* HAVE_AES_ECB */
+
+#ifdef HAVE_AES_CBC
+    /* AES-CBC DMA: encrypt without ENCRYPT flag */
+    WH_TEST_PRINT("  Testing AES CBC DMA encrypt without ENCRYPT flag...\n");
+    {
+        Aes     aes[1];
+        uint8_t iv[AES_BLOCK_SIZE] = {0};
+        uint8_t cbcCipher[16]      = {0};
+
+        keyId = WH_KEYID_ERASED;
+        ret   = wh_Client_KeyCache(client, WH_NVM_FLAGS_NONE,
+                                   (uint8_t*)"dcbc-no-enc",
+                                   strlen("dcbc-no-enc"), key, keyLen, &keyId);
+        if (ret == 0) {
+            ret = wc_AesInit(aes, NULL, WH_DEV_ID_DMA);
+            if (ret == 0) {
+                ret = wh_Client_AesSetKeyId(aes, keyId);
+                if (ret == 0) {
+                    ret = wc_AesSetIV(aes, iv);
+                }
+                if (ret == 0) {
+                    ret = wh_Client_AesCbcDma(client, aes, 1, plaintext,
+                                              sizeof(plaintext), cbcCipher);
+                    if (ret == WH_ERROR_USAGE) {
+                        WH_TEST_PRINT("    PASS: Correctly denied encryption\n");
+                        ret = 0;
+                    }
+                    else {
+                        WH_ERROR_PRINT(
+                            "    FAIL: Expected WH_ERROR_USAGE, got %d\n", ret);
+                        ret = WH_ERROR_ABORTED;
+                    }
+                }
+                wc_AesFree(aes);
+            }
+            wh_Client_KeyEvict(client, keyId);
+        }
+    }
+    if (ret != 0)
+        return ret;
+
+    /* AES-CBC DMA: decrypt without DECRYPT flag */
+    WH_TEST_PRINT("  Testing AES CBC DMA decrypt without DECRYPT flag...\n");
+    {
+        Aes     aes[1];
+        uint8_t iv[AES_BLOCK_SIZE] = {0};
+        uint8_t cbcOut[16]         = {0};
+
+        keyId = WH_KEYID_ERASED;
+        ret   = wh_Client_KeyCache(client, WH_NVM_FLAGS_USAGE_ENCRYPT,
+                                   (uint8_t*)"dcbc-no-dec",
+                                   strlen("dcbc-no-dec"), key, keyLen, &keyId);
+        if (ret == 0) {
+            ret = wc_AesInit(aes, NULL, WH_DEV_ID_DMA);
+            if (ret == 0) {
+                ret = wh_Client_AesSetKeyId(aes, keyId);
+                if (ret == 0) {
+                    ret = wc_AesSetIV(aes, iv);
+                }
+                if (ret == 0) {
+                    ret = wh_Client_AesCbcDma(client, aes, 0, ciphertext,
+                                              sizeof(ciphertext), cbcOut);
+                    if (ret == WH_ERROR_USAGE) {
+                        WH_TEST_PRINT("    PASS: Correctly denied decryption\n");
+                        ret = 0;
+                    }
+                    else {
+                        WH_ERROR_PRINT(
+                            "    FAIL: Expected WH_ERROR_USAGE, got %d\n", ret);
+                        ret = WH_ERROR_ABORTED;
+                    }
+                }
+                wc_AesFree(aes);
+            }
+            wh_Client_KeyEvict(client, keyId);
+        }
+    }
+    if (ret != 0)
+        return ret;
+#endif /* HAVE_AES_CBC */
+
+#ifdef HAVE_AESGCM
+    /* AES-GCM DMA: encrypt without ENCRYPT flag */
+    WH_TEST_PRINT("  Testing AES GCM DMA encrypt without ENCRYPT flag...\n");
+    {
+        Aes     aes[1];
+        uint8_t gcmIv[12]     = {0};
+        uint8_t gcmCipher[16] = {0};
+        uint8_t gcmTag[16]    = {0};
+
+        keyId = WH_KEYID_ERASED;
+        ret   = wh_Client_KeyCache(client, WH_NVM_FLAGS_NONE,
+                                   (uint8_t*)"dgcm-no-enc",
+                                   strlen("dgcm-no-enc"), key, keyLen, &keyId);
+        if (ret == 0) {
+            ret = wc_AesInit(aes, NULL, WH_DEV_ID_DMA);
+            if (ret == 0) {
+                ret = wh_Client_AesSetKeyId(aes, keyId);
+                if (ret == 0) {
+                    ret = wh_Client_AesGcmDma(client, aes, 1, plaintext,
+                                              sizeof(plaintext), gcmIv,
+                                              sizeof(gcmIv), NULL, 0,
+                                              NULL, gcmTag, sizeof(gcmTag),
+                                              gcmCipher);
+                    if (ret == WH_ERROR_USAGE) {
+                        WH_TEST_PRINT("    PASS: Correctly denied encryption\n");
+                        ret = 0;
+                    }
+                    else {
+                        WH_ERROR_PRINT(
+                            "    FAIL: Expected WH_ERROR_USAGE, got %d\n", ret);
+                        ret = WH_ERROR_ABORTED;
+                    }
+                }
+                wc_AesFree(aes);
+            }
+            wh_Client_KeyEvict(client, keyId);
+        }
+    }
+    if (ret != 0)
+        return ret;
+
+    /* AES-GCM DMA: decrypt without DECRYPT flag */
+    WH_TEST_PRINT("  Testing AES GCM DMA decrypt without DECRYPT flag...\n");
+    {
+        Aes     aes[1];
+        uint8_t gcmIv[12]  = {0};
+        uint8_t gcmOut[16] = {0};
+        uint8_t gcmTag[16] = {0};
+
+        keyId = WH_KEYID_ERASED;
+        ret   = wh_Client_KeyCache(client, WH_NVM_FLAGS_USAGE_ENCRYPT,
+                                   (uint8_t*)"dgcm-no-dec",
+                                   strlen("dgcm-no-dec"), key, keyLen, &keyId);
+        if (ret == 0) {
+            ret = wc_AesInit(aes, NULL, WH_DEV_ID_DMA);
+            if (ret == 0) {
+                ret = wh_Client_AesSetKeyId(aes, keyId);
+                if (ret == 0) {
+                    /* dec_tag must be non-NULL for decrypt direction */
+                    ret = wh_Client_AesGcmDma(client, aes, 0, ciphertext,
+                                              sizeof(ciphertext), gcmIv,
+                                              sizeof(gcmIv), NULL, 0,
+                                              gcmTag, NULL, sizeof(gcmTag),
+                                              gcmOut);
+                    if (ret == WH_ERROR_USAGE) {
+                        WH_TEST_PRINT("    PASS: Correctly denied decryption\n");
+                        ret = 0;
+                    }
+                    else {
+                        WH_ERROR_PRINT(
+                            "    FAIL: Expected WH_ERROR_USAGE, got %d\n", ret);
+                        ret = WH_ERROR_ABORTED;
+                    }
+                }
+                wc_AesFree(aes);
+            }
+            wh_Client_KeyEvict(client, keyId);
+        }
+    }
+    if (ret != 0)
+        return ret;
+#endif /* HAVE_AESGCM */
+#endif /* WOLFHSM_CFG_DMA */
+
 #endif /* !NO_AES */
 
 #ifdef HAVE_ECC
