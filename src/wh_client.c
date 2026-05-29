@@ -157,12 +157,11 @@ int wh_Client_SendRequest(whClientContext* c,
 
 int wh_Client_RecvResponse(whClientContext *c,
         uint16_t *out_group, uint16_t *out_action,
-        uint16_t *out_size, void* data)
+        uint16_t *out_size, uint16_t data_size, void* data)
 {
     int      rc        = 0;
     uint16_t resp_kind = 0;
     uint16_t resp_id   = 0;
-    uint16_t resp_size = 0;
 
     if (c == NULL) {
         return WH_ERROR_BADARGS;
@@ -170,7 +169,7 @@ int wh_Client_RecvResponse(whClientContext *c,
 
     /* Comm layer performs magic and sequence validation */
     rc = wh_CommClient_RecvResponse(c->comm, NULL, &resp_kind, &resp_id,
-                                    &resp_size, data);
+                                    out_size, data_size, data);
     if (rc == 0) {
         if ((resp_kind != c->last_req_kind) || (resp_id != c->last_req_id)) {
             /* Response kind/id doesn't match outstanding request. */
@@ -182,9 +181,6 @@ int wh_Client_RecvResponse(whClientContext *c,
             }
             if (out_action != NULL) {
                 *out_action = WH_MESSAGE_ACTION(resp_kind);
-            }
-            if (out_size != NULL) {
-                *out_size = resp_size;
             }
         }
     }
@@ -231,7 +227,7 @@ int wh_Client_CommInitResponse(whClientContext* c,
 
     rc = wh_Client_RecvResponse(c,
             &resp_group, &resp_action,
-            &resp_size, &msg);
+            &resp_size, sizeof(msg), &msg);
     if (rc == 0) {
         /* Validate response */
         if (    (resp_group != WH_MESSAGE_GROUP_COMM) ||
@@ -311,7 +307,7 @@ int wh_Client_CommInfoResponse(whClientContext* c,
 
     rc = wh_Client_RecvResponse(c,
             &resp_group, &resp_action,
-            &resp_size, &msg);
+            &resp_size, sizeof(msg), &msg);
     if (rc == 0) {
         /* Validate response */
         if (    (resp_group != WH_MESSAGE_GROUP_COMM) ||
@@ -461,7 +457,7 @@ int wh_Client_CommCloseResponse(whClientContext* c)
 
     rc = wh_Client_RecvResponse(c,
             &resp_group, &resp_action,
-            &resp_size, NULL);
+            &resp_size, 0, NULL);
     if (rc == 0) {
         /* Validate response */
         if (    (resp_group != WH_MESSAGE_GROUP_COMM) ||
@@ -534,7 +530,7 @@ int wh_Client_EchoResponse(whClientContext* c, uint16_t *out_size, void* data)
 
     rc = wh_Client_RecvResponse(c,
          &resp_group, &resp_action,
-         &resp_size, msg);
+         &resp_size, WOLFHSM_CFG_COMM_DATA_LEN, msg);
     if (rc == 0) {
         /* Validate response */
         if (    (resp_group != WH_MESSAGE_GROUP_COMM) ||
@@ -596,7 +592,8 @@ int wh_Client_CustomCbResponse(whClientContext*          c,
     }
 
     rc =
-        wh_Client_RecvResponse(c, &resp_group, &resp_action, &resp_size, &resp);
+        wh_Client_RecvResponse(c, &resp_group, &resp_action, &resp_size,
+                               sizeof(resp), &resp);
     if (rc != WH_ERROR_OK) {
         return rc;
     }
@@ -746,7 +743,7 @@ int wh_Client_KeyCacheResponse(whClientContext* c, uint16_t* keyId)
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)resp);
+    ret = wh_Client_RecvResponse(c, &group, &action, &size, WOLFHSM_CFG_COMM_DATA_LEN, (uint8_t*)resp);
     if (ret == WH_ERROR_OK) {
         if (resp->rc != 0) {
             ret = resp->rc;
@@ -809,7 +806,8 @@ int wh_Client_KeyEvictResponse(whClientContext* c)
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)&resp);
+    ret = wh_Client_RecvResponse(c, &group, &action, &size, sizeof(resp),
+                                 (uint8_t*)&resp);
 
     if (ret == 0) {
         if (resp.rc != 0) {
@@ -872,7 +870,7 @@ int wh_Client_KeyExportResponse(whClientContext* c, uint8_t* label,
     }
     packOut = (uint8_t*)(resp + 1);
 
-    ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)resp);
+    ret = wh_Client_RecvResponse(c, &group, &action, &size, WOLFHSM_CFG_COMM_DATA_LEN, (uint8_t*)resp);
     if (ret == WH_ERROR_OK) {
         if (resp->rc != 0) {
             ret = resp->rc;
@@ -957,7 +955,7 @@ int wh_Client_KeyExportPublicResponse(whClientContext* c, uint8_t* label,
     }
     packOut = (uint8_t*)(resp + 1);
 
-    ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)resp);
+    ret = wh_Client_RecvResponse(c, &group, &action, &size, WOLFHSM_CFG_COMM_DATA_LEN, (uint8_t*)resp);
     if (ret == WH_ERROR_OK) {
         if (resp->rc != 0) {
             ret = resp->rc;
@@ -1034,7 +1032,7 @@ int wh_Client_KeyCommitResponse(whClientContext* c)
         return WH_ERROR_BADARGS;
     }
 
-    ret  = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)resp);
+    ret  = wh_Client_RecvResponse(c, &group, &action, &size, WOLFHSM_CFG_COMM_DATA_LEN, (uint8_t*)resp);
     if (ret == WH_ERROR_OK) {
         if (resp->rc != 0) {
             ret = resp->rc;
@@ -1090,7 +1088,7 @@ int wh_Client_KeyEraseResponse(whClientContext* c)
         return WH_ERROR_BADARGS;
     }
 
-    ret  = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)resp);
+    ret  = wh_Client_RecvResponse(c, &group, &action, &size, WOLFHSM_CFG_COMM_DATA_LEN, (uint8_t*)resp);
     if (ret == 0) {
         if (resp->rc != 0) {
             ret = resp->rc;
@@ -1146,7 +1144,7 @@ int wh_Client_KeyRevokeResponse(whClientContext* c)
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)resp);
+    ret = wh_Client_RecvResponse(c, &group, &action, &size, WOLFHSM_CFG_COMM_DATA_LEN, (uint8_t*)resp);
     if (ret == 0) {
         if (resp->rc != 0) {
             ret = resp->rc;
@@ -1204,7 +1202,7 @@ int wh_Client_CounterInitResponse(whClientContext* c, uint32_t* counter)
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)resp);
+    ret = wh_Client_RecvResponse(c, &group, &action, &size, WOLFHSM_CFG_COMM_DATA_LEN, (uint8_t*)resp);
     if (ret == WH_ERROR_OK) {
         if (resp->rc != 0) {
             ret = resp->rc;
@@ -1282,7 +1280,7 @@ int wh_Client_CounterIncrementResponse(whClientContext* c, uint32_t* counter)
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)resp);
+    ret = wh_Client_RecvResponse(c, &group, &action, &size, WOLFHSM_CFG_COMM_DATA_LEN, (uint8_t*)resp);
     if (ret == WH_ERROR_OK) {
         if (resp->rc != 0) {
             ret = resp->rc;
@@ -1342,7 +1340,7 @@ int wh_Client_CounterReadResponse(whClientContext* c, uint32_t* counter)
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)resp);
+    ret = wh_Client_RecvResponse(c, &group, &action, &size, WOLFHSM_CFG_COMM_DATA_LEN, (uint8_t*)resp);
     if (ret == WH_ERROR_OK) {
         if (resp->rc != 0) {
             ret = resp->rc;
@@ -1402,7 +1400,7 @@ int wh_Client_CounterDestroyResponse(whClientContext* c)
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)resp);
+    ret = wh_Client_RecvResponse(c, &group, &action, &size, WOLFHSM_CFG_COMM_DATA_LEN, (uint8_t*)resp);
     if (ret == WH_ERROR_OK) {
         if (resp->rc != 0) {
             ret = resp->rc;
@@ -1491,7 +1489,7 @@ int wh_Client_KeyCacheDmaResponse(whClientContext* c, uint16_t* keyId)
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)resp);
+    ret = wh_Client_RecvResponse(c, &group, &action, &size, WOLFHSM_CFG_COMM_DATA_LEN, (uint8_t*)resp);
 
     if (ret == 0) {
         /* Validate response */
@@ -1570,7 +1568,7 @@ int wh_Client_KeyExportDmaResponse(whClientContext* c, uint8_t* label,
     }
 
     rc = wh_Client_RecvResponse(c, &resp_group, &resp_action, &resp_size,
-                                (uint8_t*)resp);
+                                WOLFHSM_CFG_COMM_DATA_LEN, (uint8_t*)resp);
     if (rc == 0) {
         /* Validate response */
         if ((resp_group != WH_MESSAGE_GROUP_KEY) ||
@@ -1659,7 +1657,7 @@ int wh_Client_KeyExportPublicDmaResponse(whClientContext* c, uint8_t* label,
     }
 
     rc = wh_Client_RecvResponse(c, &resp_group, &resp_action, &resp_size,
-                                (uint8_t*)resp);
+                                WOLFHSM_CFG_COMM_DATA_LEN, (uint8_t*)resp);
     if (rc == 0) {
         if (resp_size != sizeof(*resp)) {
             rc = WH_ERROR_ABORTED;
