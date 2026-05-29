@@ -137,6 +137,9 @@
 #define WOLFSSL_SHA3
 #define WOLFSSL_SHAKE128
 #define WOLFSSL_SHAKE256
+/* Enables wc_Sha3_SetFlags so the SHA3 Keccak-mode reject/fallback paths are
+ * compiled and exercised by the test suite. */
+#define WOLFSSL_HASH_FLAGS
 
 /* ML-KEM Options */
 #define WOLFSSL_HAVE_MLKEM

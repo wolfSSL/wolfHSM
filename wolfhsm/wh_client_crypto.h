@@ -53,6 +53,9 @@
 #include "wolfssl/wolfcrypt/wc_mldsa.h"
 #include "wolfssl/wolfcrypt/wc_mlkem.h"
 #include "wolfssl/wolfcrypt/hmac.h"
+#ifdef WOLFSSL_SHA3
+#include "wolfssl/wolfcrypt/sha3.h"
+#endif
 
 /**
  * @brief Generate random bytes
@@ -2545,6 +2548,131 @@ int wh_Client_Sha512DmaFinalResponse(whClientContext* ctx, wc_Sha512* sha,
 #endif /* WOLFHSM_CFG_DMA */
 
 #endif /* WOLFSSL_SHA512 */
+
+#if defined(WOLFSSL_SHA3)
+/* SHA3 client API.
+ *
+ * SHA3 has 4 fixed-output variants (224/256/384/512), all backed by the
+ * single wolfCrypt wc_Sha3 struct. The client API mirrors the wolfCrypt
+ * surface (wc_Sha3_<V>_Update/Final), with per-variant public functions
+ * sharing internal helpers parameterized by hash type and block size.
+ *
+ * Block sizes:  144 / 136 / 104 / 72  for 224 / 256 / 384 / 512
+ * Digest sizes:  28 /  32 /  48 / 64
+ *
+ * State buffering: the client uses sha3->t[0..i-1] and sha3->i as the
+ * partial-block buffer (analogous to sha256->buffer/buffLen). Non-final
+ * Update requests carry whole blocks only; Final carries any partial
+ * tail inline.
+ *
+ * Async contract (per-variant): at most one outstanding async request
+ * may be in flight per whClientContext. If UpdateRequest returns
+ * *requestSent == true, the caller MUST call the matching UpdateResponse
+ * before issuing any other async request on the same ctx.
+ *
+ * Keccak-mode contexts (sha->flags & WC_HASH_SHA3_KECCAK256) are rejected
+ * with WH_ERROR_BADARGS: the server applies the standard SHA-3 0x06
+ * padding and has no Keccak fallback. Use the cryptocb path, which routes
+ * Keccak to software.
+ */
+
+#ifndef WOLFSSL_NOSHA3_224
+/* SHA3-224 */
+int wh_Client_Sha3_224(whClientContext* ctx, wc_Sha3* sha, const uint8_t* in,
+                       uint32_t inLen, uint8_t* out);
+int wh_Client_Sha3_224UpdateRequest(whClientContext* ctx, wc_Sha3* sha,
+                                    const uint8_t* in, uint32_t inLen,
+                                    bool* requestSent);
+int wh_Client_Sha3_224UpdateResponse(whClientContext* ctx, wc_Sha3* sha);
+int wh_Client_Sha3_224FinalRequest(whClientContext* ctx, wc_Sha3* sha);
+int wh_Client_Sha3_224FinalResponse(whClientContext* ctx, wc_Sha3* sha,
+                                    uint8_t* out);
+#ifdef WOLFHSM_CFG_DMA
+int wh_Client_Sha3_224Dma(whClientContext* ctx, wc_Sha3* sha, const uint8_t* in,
+                          uint32_t inLen, uint8_t* out);
+int wh_Client_Sha3_224DmaUpdateRequest(whClientContext* ctx, wc_Sha3* sha,
+                                       const uint8_t* in, uint32_t inLen,
+                                       bool* requestSent);
+int wh_Client_Sha3_224DmaUpdateResponse(whClientContext* ctx, wc_Sha3* sha);
+int wh_Client_Sha3_224DmaFinalRequest(whClientContext* ctx, wc_Sha3* sha);
+int wh_Client_Sha3_224DmaFinalResponse(whClientContext* ctx, wc_Sha3* sha,
+                                       uint8_t* out);
+#endif /* WOLFHSM_CFG_DMA */
+#endif /* !WOLFSSL_NOSHA3_224 */
+
+#ifndef WOLFSSL_NOSHA3_256
+/* SHA3-256 */
+int wh_Client_Sha3_256(whClientContext* ctx, wc_Sha3* sha, const uint8_t* in,
+                       uint32_t inLen, uint8_t* out);
+int wh_Client_Sha3_256UpdateRequest(whClientContext* ctx, wc_Sha3* sha,
+                                    const uint8_t* in, uint32_t inLen,
+                                    bool* requestSent);
+int wh_Client_Sha3_256UpdateResponse(whClientContext* ctx, wc_Sha3* sha);
+int wh_Client_Sha3_256FinalRequest(whClientContext* ctx, wc_Sha3* sha);
+int wh_Client_Sha3_256FinalResponse(whClientContext* ctx, wc_Sha3* sha,
+                                    uint8_t* out);
+#ifdef WOLFHSM_CFG_DMA
+int wh_Client_Sha3_256Dma(whClientContext* ctx, wc_Sha3* sha, const uint8_t* in,
+                          uint32_t inLen, uint8_t* out);
+int wh_Client_Sha3_256DmaUpdateRequest(whClientContext* ctx, wc_Sha3* sha,
+                                       const uint8_t* in, uint32_t inLen,
+                                       bool* requestSent);
+int wh_Client_Sha3_256DmaUpdateResponse(whClientContext* ctx, wc_Sha3* sha);
+int wh_Client_Sha3_256DmaFinalRequest(whClientContext* ctx, wc_Sha3* sha);
+int wh_Client_Sha3_256DmaFinalResponse(whClientContext* ctx, wc_Sha3* sha,
+                                       uint8_t* out);
+#endif /* WOLFHSM_CFG_DMA */
+#endif /* !WOLFSSL_NOSHA3_256 */
+
+#ifndef WOLFSSL_NOSHA3_384
+/* SHA3-384 */
+int wh_Client_Sha3_384(whClientContext* ctx, wc_Sha3* sha, const uint8_t* in,
+                       uint32_t inLen, uint8_t* out);
+int wh_Client_Sha3_384UpdateRequest(whClientContext* ctx, wc_Sha3* sha,
+                                    const uint8_t* in, uint32_t inLen,
+                                    bool* requestSent);
+int wh_Client_Sha3_384UpdateResponse(whClientContext* ctx, wc_Sha3* sha);
+int wh_Client_Sha3_384FinalRequest(whClientContext* ctx, wc_Sha3* sha);
+int wh_Client_Sha3_384FinalResponse(whClientContext* ctx, wc_Sha3* sha,
+                                    uint8_t* out);
+#ifdef WOLFHSM_CFG_DMA
+int wh_Client_Sha3_384Dma(whClientContext* ctx, wc_Sha3* sha, const uint8_t* in,
+                          uint32_t inLen, uint8_t* out);
+int wh_Client_Sha3_384DmaUpdateRequest(whClientContext* ctx, wc_Sha3* sha,
+                                       const uint8_t* in, uint32_t inLen,
+                                       bool* requestSent);
+int wh_Client_Sha3_384DmaUpdateResponse(whClientContext* ctx, wc_Sha3* sha);
+int wh_Client_Sha3_384DmaFinalRequest(whClientContext* ctx, wc_Sha3* sha);
+int wh_Client_Sha3_384DmaFinalResponse(whClientContext* ctx, wc_Sha3* sha,
+                                       uint8_t* out);
+#endif /* WOLFHSM_CFG_DMA */
+#endif /* !WOLFSSL_NOSHA3_384 */
+
+#ifndef WOLFSSL_NOSHA3_512
+/* SHA3-512 */
+int wh_Client_Sha3_512(whClientContext* ctx, wc_Sha3* sha, const uint8_t* in,
+                       uint32_t inLen, uint8_t* out);
+int wh_Client_Sha3_512UpdateRequest(whClientContext* ctx, wc_Sha3* sha,
+                                    const uint8_t* in, uint32_t inLen,
+                                    bool* requestSent);
+int wh_Client_Sha3_512UpdateResponse(whClientContext* ctx, wc_Sha3* sha);
+int wh_Client_Sha3_512FinalRequest(whClientContext* ctx, wc_Sha3* sha);
+int wh_Client_Sha3_512FinalResponse(whClientContext* ctx, wc_Sha3* sha,
+                                    uint8_t* out);
+#ifdef WOLFHSM_CFG_DMA
+int wh_Client_Sha3_512Dma(whClientContext* ctx, wc_Sha3* sha, const uint8_t* in,
+                          uint32_t inLen, uint8_t* out);
+int wh_Client_Sha3_512DmaUpdateRequest(whClientContext* ctx, wc_Sha3* sha,
+                                       const uint8_t* in, uint32_t inLen,
+                                       bool* requestSent);
+int wh_Client_Sha3_512DmaUpdateResponse(whClientContext* ctx, wc_Sha3* sha);
+int wh_Client_Sha3_512DmaFinalRequest(whClientContext* ctx, wc_Sha3* sha);
+int wh_Client_Sha3_512DmaFinalResponse(whClientContext* ctx, wc_Sha3* sha,
+                                       uint8_t* out);
+#endif /* WOLFHSM_CFG_DMA */
+#endif /* !WOLFSSL_NOSHA3_512 */
+
+#endif /* WOLFSSL_SHA3 */
 
 #ifdef WOLFSSL_HAVE_MLDSA
 
