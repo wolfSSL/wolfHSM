@@ -141,7 +141,7 @@ typedef struct {
 
 typedef struct whServerConfig_t {
     whCommServerConfig* comm_config;
-    whNvmContext*       nvm;
+    whNvmContext*       nvm; /* optional; NULL = no NVM backing */
 #ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
     whAuthContext* auth;
 #endif /* WOLFHSM_CFG_ENABLE_AUTHENTICATION */
@@ -199,15 +199,25 @@ struct whServerContext_t {
 /** Public server context functions */
 
 /* Initialize the comms and crypto cache components.
- * Note: NVM and Crypto components must be initialized prior to Server Init
+ * Note: Crypto components must be initialized prior to Server Init. NVM, if
+ * provided, must also be initialized first; NVM is optional (see below).
  */
 
 /**
  * @brief Initializes the server context with the provided configuration.
  *
  * This function must be called before any other server functions are used on
- * the supplied context. Note that the NVM and Crypto components of the config
- * structure MUST be initialized before calling this function.
+ * the supplied context. If a Crypto component is configured it MUST be
+ * initialized before calling this function.
+ *
+ * The NVM component is OPTIONAL: config->nvm may be NULL. With no NVM backing
+ * the server still runs and crypto works through the key cache when keys are
+ * primed (cached directly or via wrapped keys). Keystore lookups that miss the
+ * cache return WH_ERROR_NOTFOUND (as if the key were absent from NVM), and
+ * operations that inherently require persistence (the NVM request API,
+ * certificate-chain verification against stored roots, counters, key commit,
+ * SHE key/seed persistence, image-signature loading) fail at runtime rather
+ * than crashing. If config->nvm is provided, behavior is unchanged.
  *
  * @param[in] server Pointer to the server context.
  * @param[in] config Pointer to the server configuration.
