@@ -40,7 +40,7 @@ of any platform while still supporting standardized interfaces and protocols suc
 * Extensible server behavior via user-defined callbacks for runtime functionality and message handling
 * Non-volatile monotonic counters
 * AUTOSAR Secure Hardware Extension (SHE) interface support
-* Support for user authentication with full roll-based access control
+* Support for user authentication with full role-based access control
 
 ## Supported Platforms
 

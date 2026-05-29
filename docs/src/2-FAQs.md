@@ -3,7 +3,7 @@
 ## What is wolfHSM?
 
 wolfHSM is a portable, open-source client-server framework for cryptography,
-non-volatile memory (NVM), and isolated secure processing. A server application runs in a trusted environment (physical HSM core, trust zone secure wordl, remote server, etc.) while client applications use a library API that can offload cryptographic and storage operations to the server. The core library exposes a client and server API to help developers stitch together their own HSM applications using a curated set of ready-to-use and secure
+non-volatile memory (NVM), and isolated secure processing. A server application runs in a trusted environment (physical HSM core, trust zone secure world, remote server, etc.) while client applications use a library API that can offload cryptographic and storage operations to the server. The core library exposes a client and server API to help developers stitch together their own HSM applications using a curated set of ready-to-use and secure
 components.
 
 ## Why would I need wolfHSM?
@@ -52,7 +52,7 @@ Due to wolfHSM’s modular design, reference platform code can be easily replace
 
 ## Does wolfHSM require dynamic memory allocation?
 
-No. wolfHSM is designed to avoid dynamic memory allocation. The library itself does not ever allocate from the heap. wolfCrypt, a dependency of wolfHSM, **does** require allocation for *some* functionality, however this can be configured to use statically allocated fixed-size memory pools, eliminating the nead for a runtime heap. See [chapter04](https://www.wolfssl.com/documentation/manuals/wolfssl/chapter04.html#static-buffer-allocation-option) of the wolfSSL manual for more details on wolfCrypt static memory. When wolfCrypt is configured to use the static memory feature, wolfHSM applications are guaranteed to never allocate from the heap.
+No. wolfHSM is designed to avoid dynamic memory allocation. The library itself does not ever allocate from the heap. wolfCrypt, a dependency of wolfHSM, **does** require allocation for *some* functionality, however this can be configured to use statically allocated fixed-size memory pools, eliminating the need for a runtime heap. See [chapter04](https://www.wolfssl.com/documentation/manuals/wolfssl/chapter04.html#static-buffer-allocation-option) of the wolfSSL manual for more details on wolfCrypt static memory. When wolfCrypt is configured to use the static memory feature, wolfHSM applications are guaranteed to never allocate from the heap.
 
 ## What is a wolfHSM "port"?
 
@@ -81,7 +81,7 @@ wolfHSM (and wolfCrypt) is written in portable C and is designed to build with a
 
 ## Does wolfHSM support device/platform X?
 
-In general, yes. Reference ports currently exist for the listed [supported platforms](1-Overview.md#supported-platforms). Most platform ports are NDA-restricted by the silicon vendor and must distributed separately as their own bundle. If a port does not exist for your platform, adding support  can typically be accomplished by in a matter of weeks, depending on the complexity of the device and desired use case. wolfSSL also routinely adds ports to new devices on request as part of a consulting engagment.
+In general, yes. Reference ports currently exist for the listed [supported platforms](1-Overview.md#supported-platforms). Most platform ports are NDA-restricted by the silicon vendor and must be distributed separately as their own bundle. If a port does not exist for your platform, adding support can typically be accomplished in a matter of weeks, depending on the complexity of the device and desired use case. wolfSSL also routinely adds ports to new devices on request as part of a consulting engagement.
 
 If you are interested in obtaining a restricted port for a platform, or want to see a new device supported, contact facts@wolfssl.com.
 

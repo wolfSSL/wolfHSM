@@ -18,7 +18,7 @@ This chapter describes the auxiliary tools that ship alongside the wolfHSM clien
 
 The NVM provisioning tool (`tools/whnvmtool/`) is a host-side utility that builds a pre-populated wolfHSM NVM image from a configuration file. It is intended for device provisioning: rather than having the server populate its NVM at runtime, the integrator describes the desired initial contents — a set of NVM objects and keys, each with its metadata ID, access permissions, flags, label, and a path to the binary payload — and the tool produces a single image file that can be programmed into the device's flash at manufacture or used in place to back a `whNvmFlash` provider in simulation. Currently the tool targets the `whNvmFlash` provider; the generated image is binary, and can be converted to Intel HEX with the standard `objcopy` workflow for use with automated programmers.
 
-Because the on-flash layout depends on build-time configuration, the tool must be compiled against the same wolfHSM version as the target server and with a matching `WOLFHSM_CFG_NVM_OBJECT_COUNT`, and the `--size` argument must match the server's `whNvmFlash` partition size. For the full configuration file schema, command-line options, hex conversion recipe, and test workflow, see [`tools/whnvmtool/README.md`](../tools/whnvmtool/README.md).
+Because the on-flash layout depends on build-time configuration, the tool must be compiled against the same wolfHSM version as the target server and with a matching `WOLFHSM_CFG_NVM_OBJECT_COUNT`, and the `--size` argument must match the server's `whNvmFlash` partition size. For the full configuration file schema, command-line options, hex conversion recipe, and test workflow, see [`tools/whnvmtool/README.md`](https://github.com/wolfSSL/wolfHSM/blob/main/tools/whnvmtool/README.md).
 
 ## Benchmark Suite
 
@@ -30,7 +30,7 @@ The benchmark app consists of individual modules that each measure the various c
 
 The same client application builds and runs against any supported port: on POSIX the client and server run in separate threads of the host process, and on embedded targets the application links into the port's runtime alongside a board-specific timer and `printf`. Iteration counts, data buffer sizes, DMA buffers, and timing/printing hooks are all overridable through `WOLFHSM_CFG_BENCH_*` macros so the suite can be tuned to the constraints of the target.
 
-For the full list of configuration macros, the module interface, instructions for adding a new benchmark, and the internal layout of the framework, see [`benchmark/README.md`](../benchmark/README.md).
+For the full list of configuration macros, the module interface, instructions for adding a new benchmark, and the internal layout of the framework, see [`benchmark/README.md`](https://github.com/wolfSSL/wolfHSM/blob/main/benchmark/README.md).
 
 ### Running Benchmarks on POSIX
 
@@ -70,7 +70,7 @@ The test suite (`test/`) is a standalone wolfHSM application that exercises the 
 
 The same test sources build for POSIX hosts and for embedded targets. Tests that depend on POSIX facilities (sockets, pthreads, file-backed flash) are compiled in only when `WOLFHSM_CFG_TEST_POSIX` is defined, so an embedded port pulls in just the portable subset and selects whichever modules its configuration supports. Output goes through `WOLFHSM_CFG_PRINTF` and assertions go through `WOLFHSM_CFG_TEST_ASSERT_FUNC`, so both can be redirected to port-supplied implementations.
 
-For the full list of test modules, supported build options, and code coverage workflow, see [`test/README.md`](../test/README.md).
+For the full list of test modules, supported build options, and code coverage workflow, see [`test/README.md`](https://github.com/wolfSSL/wolfHSM/blob/main/test/README.md).
 
 ### Running Tests on POSIX
 

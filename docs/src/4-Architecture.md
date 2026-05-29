@@ -152,7 +152,7 @@ rc = wh_Component_DoSomething(comp_context, 1, 2, 3);
 rc = wh_Component_CleanUp(comp_context);
 ```
 
-Modules in wolHSM that are currently implemented in this way are:
+Modules in wolfHSM that are currently implemented in this way are:
 
 - Transports: define how bytes move between client and server. The core library only cares about send/receive semantics and state management.
 - NVM: define how persistent storage on the server is formatted and accessed.
