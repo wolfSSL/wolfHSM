@@ -1058,14 +1058,20 @@ static int _HandleEccSharedSecret(whServerContext* ctx, uint16_t magic,
     if ((ret == WH_ERROR_OK) && cache) {
         out_key_id = wh_KeyId_TranslateFromClient(
             WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
-        if (WH_KEYID_ISERASED(out_key_id)) {
-            ret = wh_Server_KeystoreGetUniqueId(ctx, &out_key_id);
-        }
+        /* Hold the NVM lock so id allocation and cache import are atomic
+         * with respect to other server contexts under THREADSAFE. */
+        ret = WH_SERVER_NVM_LOCK(ctx);
         if (ret == WH_ERROR_OK) {
-            ret =
-                wh_Server_KeyCacheImportRaw(ctx, res_out, res_len, out_key_id,
-                                            flags, WH_NVM_LABEL_LEN, req.label);
-        }
+            if (WH_KEYID_ISERASED(out_key_id)) {
+                ret = wh_Server_KeystoreGetUniqueId(ctx, &out_key_id);
+            }
+            if (ret == WH_ERROR_OK) {
+                ret = wh_Server_KeyCacheImportRaw(ctx, res_out, res_len,
+                                                  out_key_id, flags,
+                                                  WH_NVM_LABEL_LEN, req.label);
+            }
+            (void)WH_SERVER_NVM_UNLOCK(ctx);
+        } /* WH_SERVER_NVM_LOCK() */
         /* Scrub the secret from the response buffer regardless of import
          * success/failure. */
         memset(res_out, 0, res_len);
@@ -1906,14 +1912,20 @@ static int _HandleCurve25519SharedSecret(whServerContext* ctx, uint16_t magic,
     if ((ret == WH_ERROR_OK) && cache) {
         out_key_id = wh_KeyId_TranslateFromClient(
             WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
-        if (WH_KEYID_ISERASED(out_key_id)) {
-            ret = wh_Server_KeystoreGetUniqueId(ctx, &out_key_id);
-        }
+        /* Hold the NVM lock so id allocation and cache import are atomic
+         * with respect to other server contexts under THREADSAFE. */
+        ret = WH_SERVER_NVM_LOCK(ctx);
         if (ret == WH_ERROR_OK) {
-            ret =
-                wh_Server_KeyCacheImportRaw(ctx, res_out, res_len, out_key_id,
-                                            flags, WH_NVM_LABEL_LEN, req.label);
-        }
+            if (WH_KEYID_ISERASED(out_key_id)) {
+                ret = wh_Server_KeystoreGetUniqueId(ctx, &out_key_id);
+            }
+            if (ret == WH_ERROR_OK) {
+                ret = wh_Server_KeyCacheImportRaw(ctx, res_out, res_len,
+                                                  out_key_id, flags,
+                                                  WH_NVM_LABEL_LEN, req.label);
+            }
+            (void)WH_SERVER_NVM_UNLOCK(ctx);
+        } /* WH_SERVER_NVM_LOCK() */
         /* Scrub the secret from the response buffer regardless of import
          * success/failure. */
         memset(res_out, 0, res_len);
