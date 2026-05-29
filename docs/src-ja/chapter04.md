@@ -145,7 +145,7 @@ rc = wh_CommClient_SendRequest(context, req_magic, req_type, &request_id,
 uint16_t resp_magic, resp_type, resp_id, resp_size;
 char response_data[20];
 while((rc = wh_CommClient_RecvResponse(context,&resp_magic, &resp_type, &resp_id,
-                    &resp_size, resp_data)) == WH_ERROR_NOTREADY) {
+                    &resp_size, sizeof(response_data), response_data)) == WH_ERROR_NOTREADY) {
         /* 他のタスクを実行 or yield */
 }
 ```

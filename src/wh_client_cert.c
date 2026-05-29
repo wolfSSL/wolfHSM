@@ -78,7 +78,7 @@ int wh_Client_CertInitResponse(whClientContext* c, int32_t* out_rc)
     }
 
     /* Receive and validate response */
-    rc = wh_Client_RecvResponse(c, &group, &action, &size, &resp);
+    rc = wh_Client_RecvResponse(c, &group, &action, &size, sizeof(resp), &resp);
     if (rc == 0) {
         if ((group != WH_MESSAGE_GROUP_CERT) ||
             (action != WH_MESSAGE_CERT_ACTION_INIT) || (size != sizeof(resp))) {
@@ -166,7 +166,7 @@ int wh_Client_CertAddTrustedResponse(whClientContext* c, int32_t* out_rc)
     }
 
     /* Receive and validate response */
-    rc = wh_Client_RecvResponse(c, &group, &action, &size, &resp);
+    rc = wh_Client_RecvResponse(c, &group, &action, &size, sizeof(resp), &resp);
     if (rc == 0) {
         if ((group != WH_MESSAGE_GROUP_CERT) ||
             (action != WH_MESSAGE_CERT_ACTION_ADDTRUSTED) ||
@@ -237,7 +237,7 @@ int wh_Client_CertEraseTrustedResponse(whClientContext* c, int32_t* out_rc)
     }
 
     /* Receive and validate response */
-    rc = wh_Client_RecvResponse(c, &group, &action, &size, &resp);
+    rc = wh_Client_RecvResponse(c, &group, &action, &size, sizeof(resp), &resp);
     if (rc == 0) {
         if ((group != WH_MESSAGE_GROUP_CERT) ||
             (action != WH_MESSAGE_CERT_ACTION_ERASETRUSTED) ||
@@ -310,7 +310,8 @@ int wh_Client_CertReadTrustedResponse(whClientContext* c, uint8_t* cert,
     }
 
     /* Receive and validate response */
-    rc = wh_Client_RecvResponse(c, &group, &action, &size, buffer);
+    rc = wh_Client_RecvResponse(c, &group, &action, &size, sizeof(buffer),
+                                buffer);
     if (rc == 0) {
         if ((group != WH_MESSAGE_GROUP_CERT) ||
             (action != WH_MESSAGE_CERT_ACTION_READTRUSTED) ||
@@ -415,7 +416,7 @@ static int _certVerifyResponse(whClientContext* c, whKeyId* out_keyId,
     }
 
     /* Receive and validate response */
-    rc = wh_Client_RecvResponse(c, &group, &action, &size, &resp);
+    rc = wh_Client_RecvResponse(c, &group, &action, &size, sizeof(resp), &resp);
     if (rc == 0) {
         if ((group != WH_MESSAGE_GROUP_CERT) ||
             (action != WH_MESSAGE_CERT_ACTION_VERIFY) ||
@@ -568,7 +569,7 @@ static int _certVerifyMultiRootResponse(whClientContext* c, whKeyId* out_keyId,
         return WH_ERROR_BADARGS;
     }
 
-    rc = wh_Client_RecvResponse(c, &group, &action, &size, &resp);
+    rc = wh_Client_RecvResponse(c, &group, &action, &size, sizeof(resp), &resp);
     if (rc == 0) {
         if ((group != WH_MESSAGE_GROUP_CERT) ||
             (action != WH_MESSAGE_CERT_ACTION_VERIFY_MULTI_ROOT) ||
@@ -698,7 +699,7 @@ int wh_Client_CertVerifyCacheClearResponse(whClientContext* c, int32_t* out_rc)
         return WH_ERROR_BADARGS;
     }
 
-    rc = wh_Client_RecvResponse(c, &group, &action, &size, &resp);
+    rc = wh_Client_RecvResponse(c, &group, &action, &size, sizeof(resp), &resp);
     if (rc == WH_ERROR_OK) {
         if ((group != WH_MESSAGE_GROUP_CERT) ||
             (action != WH_MESSAGE_CERT_ACTION_VERIFY_CACHE_CLEAR) ||
@@ -763,7 +764,7 @@ int wh_Client_CertVerifyCacheSetEnabledResponse(whClientContext* c,
         return WH_ERROR_BADARGS;
     }
 
-    rc = wh_Client_RecvResponse(c, &group, &action, &size, &resp);
+    rc = wh_Client_RecvResponse(c, &group, &action, &size, sizeof(resp), &resp);
     if (rc == WH_ERROR_OK) {
         if ((group != WH_MESSAGE_GROUP_CERT) ||
             (action != WH_MESSAGE_CERT_ACTION_VERIFY_CACHE_SET_ENABLED) ||
@@ -843,7 +844,7 @@ int wh_Client_CertAddTrustedDmaResponse(whClientContext* c, int32_t* out_rc)
     }
 
     /* Receive and validate response */
-    rc = wh_Client_RecvResponse(c, &group, &action, &size, &resp);
+    rc = wh_Client_RecvResponse(c, &group, &action, &size, sizeof(resp), &resp);
     if (rc == 0) {
         if ((group != WH_MESSAGE_GROUP_CERT) ||
             (action != WH_MESSAGE_CERT_ACTION_ADDTRUSTED_DMA) ||
@@ -917,7 +918,7 @@ int wh_Client_CertReadTrustedDmaResponse(whClientContext* c, int32_t* out_rc)
     }
 
     /* Receive and validate response */
-    rc = wh_Client_RecvResponse(c, &group, &action, &size, &resp);
+    rc = wh_Client_RecvResponse(c, &group, &action, &size, sizeof(resp), &resp);
     if (rc == 0) {
         if ((group != WH_MESSAGE_GROUP_CERT) ||
             (action != WH_MESSAGE_CERT_ACTION_READTRUSTED_DMA) ||
@@ -993,7 +994,7 @@ static int _certVerifyDmaResponse(whClientContext* c, whKeyId* out_keyId,
     }
 
     /* Receive and validate response */
-    rc = wh_Client_RecvResponse(c, &group, &action, &size, &resp);
+    rc = wh_Client_RecvResponse(c, &group, &action, &size, sizeof(resp), &resp);
     if (rc == 0) {
         if ((group != WH_MESSAGE_GROUP_CERT) ||
             (action != WH_MESSAGE_CERT_ACTION_VERIFY_DMA) ||
@@ -1137,7 +1138,7 @@ static int _certVerifyMultiRootDmaResponse(whClientContext* c,
         return WH_ERROR_BADARGS;
     }
 
-    rc = wh_Client_RecvResponse(c, &group, &action, &size, &resp);
+    rc = wh_Client_RecvResponse(c, &group, &action, &size, sizeof(resp), &resp);
     if (rc == 0) {
         if ((group != WH_MESSAGE_GROUP_CERT) ||
             (action != WH_MESSAGE_CERT_ACTION_VERIFY_MULTI_ROOT_DMA) ||
@@ -1283,7 +1284,7 @@ int wh_Client_CertVerifyAcertResponse(whClientContext* c, int32_t* out_rc)
     uint16_t                     size;
     whMessageCert_SimpleResponse resp;
 
-    rc = wh_Client_RecvResponse(c, &group, &action, &size, &resp);
+    rc = wh_Client_RecvResponse(c, &group, &action, &size, sizeof(resp), &resp);
     if (rc == 0) {
         if ((group != WH_MESSAGE_GROUP_CERT) ||
             (action != WH_MESSAGE_CERT_ACTION_VERIFY_ACERT) ||
@@ -1356,7 +1357,7 @@ int wh_Client_CertVerifyAcertDmaResponse(whClientContext* c, int32_t* out_rc)
         return WH_ERROR_BADARGS;
     }
 
-    rc = wh_Client_RecvResponse(c, &group, &action, &size, &resp);
+    rc = wh_Client_RecvResponse(c, &group, &action, &size, sizeof(resp), &resp);
     if (rc == 0) {
         if ((group != WH_MESSAGE_GROUP_CERT) ||
             (action != WH_MESSAGE_CERT_ACTION_VERIFY_ACERT_DMA) ||
