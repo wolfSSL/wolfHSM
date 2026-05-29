@@ -143,7 +143,8 @@ int whTest_CommMem(void)
     WH_TEST_ASSERT_RETURN(WH_ERROR_NOTREADY ==
                           wh_CommServer_RecvRequest(server, &rx_req_flags,
                                                     &rx_req_type, &rx_req_seq,
-                                                    &rx_req_len, rx_req));
+                                                    &rx_req_len,
+                                                    sizeof(rx_req), rx_req));
 
     /* RecvResponse with no outstanding request short-circuits to NOTREADY
      * without touching the transport. */
@@ -176,7 +177,8 @@ int whTest_CommMem(void)
 
         WH_TEST_RETURN_ON_FAIL(
             wh_CommServer_RecvRequest(server, &rx_req_flags, &rx_req_type,
-                                      &rx_req_seq, &rx_req_len, rx_req));
+                                      &rx_req_seq, &rx_req_len,
+                                      sizeof(rx_req), rx_req));
 
         WH_TEST_DEBUG_PRINT("Server RecvRequest:%d, flags %x, type:%x, seq:%d, len:%d, %s\n",
                ret, rx_req_flags, rx_req_type, rx_req_seq, rx_req_len, rx_req);
@@ -225,7 +227,8 @@ int whTest_CommMem(void)
 
     /* Server completes the exchange */
     WH_TEST_RETURN_ON_FAIL(wh_CommServer_RecvRequest(
-        server, &rx_req_flags, &rx_req_type, &rx_req_seq, &rx_req_len, rx_req));
+        server, &rx_req_flags, &rx_req_type, &rx_req_seq, &rx_req_len,
+        sizeof(rx_req), rx_req));
     (void)snprintf((char*)tx_resp, sizeof(tx_resp), "Resp");
     tx_resp_len = (uint16_t)strlen((char*)tx_resp);
     WH_TEST_RETURN_ON_FAIL(wh_CommServer_SendResponse(
@@ -255,7 +258,8 @@ int whTest_CommMem(void)
     /* Drain the abandoned exchange on the server side so the transport state
      * doesn't linger across tests. */
     WH_TEST_RETURN_ON_FAIL(wh_CommServer_RecvRequest(
-        server, &rx_req_flags, &rx_req_type, &rx_req_seq, &rx_req_len, rx_req));
+        server, &rx_req_flags, &rx_req_type, &rx_req_seq, &rx_req_len,
+        sizeof(rx_req), rx_req));
     WH_TEST_RETURN_ON_FAIL(wh_CommServer_SendResponse(
         server, rx_req_flags, rx_req_type, rx_req_seq, tx_resp_len, tx_resp));
 
@@ -379,7 +383,7 @@ static void* _whCommServerTask(void* cf)
         do {
             ret = wh_CommServer_RecvRequest(server, &rx_req_flags, &rx_req_type,
                                             &rx_req_seq, &rx_req_len,
-                                            rx_req);
+                                            sizeof(rx_req), rx_req);
 
             WH_TEST_ASSERT_MSG((ret == WH_ERROR_NOTREADY) || (0 == ret),
                                "Server RecvRequest: ret=%d", ret);

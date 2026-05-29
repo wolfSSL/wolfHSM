@@ -533,7 +533,7 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
     }
 
     int rc = wh_CommServer_RecvRequest(server->comm, &magic, &kind, &seq,
-            &size, data);
+            &size, WOLFHSM_CFG_COMM_DATA_LEN, data);
     /* Got a packet? */
     if (rc == WH_ERROR_OK) {
         group = WH_MESSAGE_GROUP(kind);
