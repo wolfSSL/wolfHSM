@@ -1,6 +1,6 @@
 # Features
 
-This chapter provides a detailed overview of the high level features that wolfHSM provides. Each section is intended to convey *what* a given feature does, what functionality it exposes, and what a developer can build with it. Concrete API usage and signatures are deferred to the client and server API references in [9-API-docs-client.md](9-API-docs-client.md) and [10-API-docs-server.md](10-API-docs-server.md).
+This chapter provides a detailed overview of the high level features that wolfHSM provides. Each section is intended to convey *what* a given feature does, what functionality it exposes, and what a developer can build with it. Concrete API usage and signatures are deferred to the client and server API references in [10-API-docs-client.md](10-API-docs-client.md) and [11-API-docs-server.md](11-API-docs-server.md).
 
 ## Table of Contents
 
@@ -131,13 +131,13 @@ Clients control whether a given crypto request should prefer hardware or softwar
 
 Affinity is stored on the client and sent in the header of every crypto request, so a change takes effect on the next operation with no extra round-trip.
 
-The affinity is set and queried using `wh_Client_SetCryptoAffinity` and `wh_Client_GetCryptoAffinity`. See the [client API reference](9-API-docs-client.md) for the precise signatures.
+The affinity is set and queried using `wh_Client_SetCryptoAffinity` and `wh_Client_GetCryptoAffinity`. See the [client API reference](10-API-docs-client.md) for the precise signatures.
 
 ### Blocking and Non-Blocking Interfaces
 
 Operations invoked through the standard wolfCrypt API are **blocking**: the call does not return until the server responds (or the transport fails). This matches what applications already expect from wolfCrypt and is the simplest way to port existing code to wolfHSM.
 
-For non-blocking, split-transaction behavior, wolfHSM also exposes native client crypto APIs in `wolfhsm/wh_client_crypto.h` that follow the same send-request / receive-response pattern as the rest of the client API. These come as paired `wh_Client_<Algorithm>Request` and `wh_Client_<Algorithm>Response` calls, so a caller can issue a request, do other work, and poll for the result later. They cover a subset of algorithms (see the [client API reference](9-API-docs-client.md)), and blocking and non-blocking calls must not be interleaved on the same `whClientContext` while a request is outstanding.
+For non-blocking, split-transaction behavior, wolfHSM also exposes native client crypto APIs in `wolfhsm/wh_client_crypto.h` that follow the same send-request / receive-response pattern as the rest of the client API. These come as paired `wh_Client_<Algorithm>Request` and `wh_Client_<Algorithm>Response` calls, so a caller can issue a request, do other work, and poll for the result later. They cover a subset of algorithms (see the [client API reference](10-API-docs-client.md)), and blocking and non-blocking calls must not be interleaved on the same `whClientContext` while a request is outstanding.
 
 > **Note**: Because the standard wolfCrypt API is blocking on the client side, applications that need to overlap crypto work with other activity should either use the native non-blocking client API, or run their wolfCrypt calls from a dedicated thread with its own `whClientContext`. See [Concurrency Support](#concurrency-support) for guidance on multi-threaded usage.
 
@@ -496,7 +496,7 @@ The motivating use cases all involve payloads that are either too large or too i
 
 For wolfCrypt-mediated operations, opt-in to DMA is a single change at the call site: instead of passing `WH_DEV_ID` as the device identifier, the client passes `WH_DEV_ID_DMA`. Both device IDs route to the wolfHSM client crypto callback, but the DMA device tells the callback to construct a DMA-flavored request whose payload carries pointers and lengths into the client's address space rather than inline data. The server-side dispatcher recognizes the DMA request kind and, for each referenced buffer, hands the pointer to the server's DMA address-processing path (described below) before invoking the underlying wolfCrypt primitive. The set of algorithms that have a DMA path mirrors the most performance-sensitive subset of the supported algorithms; algorithms without a DMA path return an unsupported error if invoked with `WH_DEV_ID_DMA`, and the application can fall back to the standard `WH_DEV_ID` for those.
 
-For the non-crypto subsystems (NVM, certificate manager, image manager, key cache/export, and the data-wrap API) the DMA-aware request kinds are exposed as `*Dma` variants of the corresponding client API functions — `wh_Client_NvmAddObjectDma`, `wh_Client_KeyCacheDma`, `wh_Client_KeyExportDma`, `wh_Client_CertVerifyDma`, and so on. See the [client API reference](9-API-docs-client.md) for the full set.
+For the non-crypto subsystems (NVM, certificate manager, image manager, key cache/export, and the data-wrap API) the DMA-aware request kinds are exposed as `*Dma` variants of the corresponding client API functions — `wh_Client_NvmAddObjectDma`, `wh_Client_KeyCacheDma`, `wh_Client_KeyExportDma`, `wh_Client_CertVerifyDma`, and so on. See the [client API reference](10-API-docs-client.md) for the full set.
 
 ### Pre-Access and Post-Access Callbacks
 

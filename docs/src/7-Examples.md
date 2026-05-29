@@ -40,7 +40,7 @@ To exercise the demo client library against the running server, pass `--test` to
 ./wh_posix_client.elf --test
 ```
 
-The full set of supported build options for the example applications is documented in [11-Configuration.md](11-Configuration.md); the same `DMA=1`, `SHE=1`, `AUTH=1`, `TLS=1` knobs that gate features in the test and benchmark suites apply here.
+The full set of supported build options for the example applications is documented in [9-Configuration.md](9-Configuration.md); the same `DMA=1`, `SHE=1`, `AUTH=1`, `TLS=1` knobs that gate features in the test and benchmark suites apply here.
 
 ### Transport Selection
 

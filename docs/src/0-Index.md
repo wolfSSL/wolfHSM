@@ -62,11 +62,11 @@ Reference applications demonstrating wolfHSM usage.
 ### [8. Integration](8-Integration.md)
 Guides for integrating wolfHSM with the wider wolfSSL ecosystem.
 
-### [9. Client API Reference](9-API-docs-client.md)
+### [9. Configuration](9-Configuration.md)
+Build-time and runtime configuration options for wolfHSM.
+
+### [10. Client API Reference](10-API-docs-client.md)
 Reference documentation for the wolfHSM client-side API.
 
-### [10. Server API Reference](10-API-docs-server.md)
+### [11. Server API Reference](11-API-docs-server.md)
 Reference documentation for the wolfHSM server-side API.
-
-### [11. Configuration](11-Configuration.md)
-Build-time and runtime configuration options for wolfHSM.

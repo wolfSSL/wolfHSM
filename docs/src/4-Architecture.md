@@ -109,7 +109,7 @@ Once these steps are completed, wolfHSM will use the user-defined configuration 
 
 Note that the default base configuration and global library settings are defined in `wolfhsm/wh_settings.h`. Every wolfHSM source file includes this header first to establish the configuration environment. When `WOLFHSM_CFG` is defined, `wh_settings.h` conditionally includes `wolfhsm_cfg.h`, ensuring that user-supplied overrides are applied before any internal defaults are used.
 
-For an exhaustive list of all wolfHSM config macros, see [11-Configuration.md](11-Configuration.md).
+For an exhaustive list of all wolfHSM config macros, see [9-Configuration.md](9-Configuration.md).
 
 ## Internals Deep Dive: Modular Architecture
 
