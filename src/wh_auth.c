@@ -421,8 +421,9 @@ int wh_Auth_UserSetCredentials(whAuthContext* context, whUserId user_id,
     rc = WH_AUTH_LOCK(context);
     if (rc == WH_ERROR_OK) {
         rc = context->cb->UserSetCredentials(
-            context->context, user_id, method, current_credentials,
-            current_credentials_len, new_credentials, new_credentials_len);
+            context->context, context->user.user_id, user_id, method,
+            current_credentials, current_credentials_len, new_credentials,
+            new_credentials_len);
 
         (void)WH_AUTH_UNLOCK(context);
     } /* LOCK() */
