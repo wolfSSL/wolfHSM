@@ -110,3 +110,4 @@ Not yet migrated (still live in `wolfHSM/test/`):
 
 ### Other improvements
 - Add callback from `wh_Server_HandleRequestMessage` to allow sleep and avoid a busy loop
+- Add client-only harness to feed invalid server inputs from the test bench with the goal of expanding coverage.
