@@ -714,16 +714,19 @@ int wh_Client_SheEncEcbResponse(whClientContext* c, uint8_t* out, uint32_t sz)
     if (ret == 0) {
         if (group != WH_MESSAGE_GROUP_SHE ||
             action != WH_SHE_ENC_ECB ||
-            dataSz < sizeof(*resp) ||
-            dataSz < sizeof(*resp) + resp->sz) {
+            dataSz < sizeof(*resp)) {
             ret = WH_ERROR_ABORTED;
         }
     }
     if (ret == 0) {
         ret = resp->rc;
     }
+    /* payload is only present on success, so validate its size before copy */
     if (ret == 0) {
-        if (sz < resp->sz) {
+        if (dataSz < sizeof(*resp) + resp->sz) {
+            ret = WH_ERROR_ABORTED;
+        }
+        else if (sz < resp->sz) {
             ret = WH_ERROR_BUFFER_SIZE;
         }
         else {
@@ -794,16 +797,19 @@ int wh_Client_SheEncCbcResponse(whClientContext* c, uint8_t* out, uint32_t sz)
     if (ret == 0) {
         if (group != WH_MESSAGE_GROUP_SHE ||
             action != WH_SHE_ENC_CBC ||
-            dataSz < sizeof(*resp) ||
-            dataSz < sizeof(*resp) + resp->sz) {
+            dataSz < sizeof(*resp)) {
             ret = WH_ERROR_ABORTED;
         }
     }
     if (ret == 0) {
         ret = resp->rc;
     }
+    /* payload is only present on success, so validate its size before copy */
     if (ret == 0) {
-        if (sz < resp->sz) {
+        if (dataSz < sizeof(*resp) + resp->sz) {
+            ret = WH_ERROR_ABORTED;
+        }
+        else if (sz < resp->sz) {
             ret = WH_ERROR_BUFFER_SIZE;
         }
         else {
@@ -870,16 +876,19 @@ int wh_Client_SheDecEcbResponse(whClientContext* c, uint8_t* out, uint32_t sz)
     if (ret == 0) {
         if (group != WH_MESSAGE_GROUP_SHE ||
             action != WH_SHE_DEC_ECB ||
-            dataSz < sizeof(*resp) ||
-            dataSz < sizeof(*resp) + resp->sz) {
+            dataSz < sizeof(*resp)) {
             ret = WH_ERROR_ABORTED;
         }
     }
     if (ret == 0) {
         ret = resp->rc;
     }
+    /* payload is only present on success, so validate its size before copy */
     if (ret == 0) {
-        if (sz < resp->sz) {
+        if (dataSz < sizeof(*resp) + resp->sz) {
+            ret = WH_ERROR_ABORTED;
+        }
+        else if (sz < resp->sz) {
             ret = WH_ERROR_BUFFER_SIZE;
         }
         else {
@@ -950,16 +959,19 @@ int wh_Client_SheDecCbcResponse(whClientContext* c, uint8_t* out, uint32_t sz)
     if (ret == 0) {
         if (group != WH_MESSAGE_GROUP_SHE ||
             action != WH_SHE_DEC_CBC ||
-            dataSz < sizeof(*resp) ||
-            dataSz < sizeof(*resp) + resp->sz) {
+            dataSz < sizeof(*resp)) {
             ret = WH_ERROR_ABORTED;
         }
     }
     if (ret == 0) {
         ret = resp->rc;
     }
+    /* payload is only present on success, so validate its size before copy */
     if (ret == 0) {
-        if (sz < resp->sz) {
+        if (dataSz < sizeof(*resp) + resp->sz) {
+            ret = WH_ERROR_ABORTED;
+        }
+        else if (sz < resp->sz) {
             ret = WH_ERROR_BUFFER_SIZE;
         }
         else {
