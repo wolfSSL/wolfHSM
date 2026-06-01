@@ -80,6 +80,7 @@ Translated tests:
 | `wh_test_dma.c::whTest_Dma` | `misc/wh_test_dma.c::whTest_Dma` | Misc | |
 | `wh_test_comm.c::whTest_Comm` | `misc/wh_test_comm.c::whTest_Comm` | Misc | Sequential mem variant only; pthread mem/tcp/shmem variants remain in the legacy harness |
 | `wh_test_keystore_reqsize.c::whTest_KeystoreReqSize` | `misc/wh_test_keystore_reqsize.c::whTest_KeystoreReqSize` | Misc | |
+| `wh_test_multiclient.c::whTest_MultiClient` | `misc/wh_test_multiclient.c::whTest_MultiClient` | Misc | Sequential variant only (no legacy pthread variant exists); body is a no-op when `WOLFHSM_CFG_GLOBAL_KEYS` is off |
 | `wh_test_cert.c::whTest_CertRamSim` | `server/wh_test_cert.c::whTest_CertVerify` | Server | remove ramsim coupling and migrate to server group |
 | `wh_test_crypto.c::whTest_Crypto` | `client-server/wh_test_crypto.c::{whTest_CryptoSha256, whTest_CryptoAes, whTest_CryptoEcc256}` | Client | Subset only; remaining cases listed below |
 | `wh_test_clientserver.c` (echo and server-info paths) | `client-server/wh_test_echo.c::whTest_Echo`, `client-server/wh_test_server_info.c::whTest_ServerInfo` | Client | pthread test ported, sequential test dropped |
@@ -97,7 +98,6 @@ Not yet migrated (still live in `wolfHSM/test/`):
 | `wh_test_crypto.c::whTest_Crypto` | RNG, key cache, key-cache enforcement, RSA, CMAC, Curve25519, ML-DSA, key usage policies, key revocation |
 | `wh_test_crypto_affinity.c::whTest_CryptoAffinity` | |
 | `wh_test_keywrap.c::whTest_KeyWrapClientConfig` | |
-| `wh_test_multiclient.c::whTest_MultiClient` | |
 | `wh_test_lock.c::whTest_LockConfig`, `whTest_LockPosix` | `whTest_LockConfig` to be reworked to fit the Misc group, likely with a context param. |
 | `wh_test_log.c::whTest_Log`, `whTest_LogBackend_RunAll` | `whTest_LogBackend_RunAll` to be reworked to fit the Misc group, likely with a context param. |
 | `wh_test_she.c::whTest_She` | |
