@@ -3117,5 +3117,76 @@ int wh_Client_MlKemDecapsulateDma(whClientContext* ctx, MlKemKey* key,
 
 #endif /* WOLFSSL_HAVE_MLKEM */
 
+#if defined(WOLFSSL_HAVE_LMS) || defined(WOLFSSL_HAVE_XMSS)
+#ifdef WOLFHSM_CFG_DMA
+
+#ifdef WOLFSSL_HAVE_LMS
+
+/* Bind / read the wolfHSM key id stored in key->devCtx. */
+int wh_Client_LmsSetKeyId(LmsKey* key, whKeyId keyId);
+int wh_Client_LmsGetKeyId(LmsKey* key, whKeyId* outId);
+
+/* Generate an LMS key on the server. The key's parameter set
+ * (levels/height/winternitz) must be bound on the in-memory key before this
+ * call (e.g. via wc_LmsKey_SetParameters). On success the key's devCtx
+ * carries the server-side keyId.
+ *
+ * If flags include WH_NVM_FLAGS_EPHEMERAL, the server returns the public key
+ * via DMA and the caller can sign with it as long as it remains cached on
+ * the server. Otherwise the key is committed to the keystore. */
+int wh_Client_LmsMakeKeyDma(whClientContext* ctx, LmsKey* key,
+                            whKeyId* inout_key_id, whNvmFlags flags,
+                            uint16_t label_len, uint8_t* label);
+
+/* Convenience wrapper: WH_NVM_FLAGS_EPHEMERAL keygen, returns pub via DMA. */
+int wh_Client_LmsMakeExportKeyDma(whClientContext* ctx, LmsKey* key);
+
+/* Sign msg with an HSM-resident LMS key (key->devCtx carries the keyId).
+ * The new private state is committed atomically to NVM by the server before
+ * the signature is returned. */
+int wh_Client_LmsSignDma(whClientContext* ctx, const byte* msg, word32 msgSz,
+                         byte* sig, word32* sigSz, LmsKey* key);
+
+/* Verify sig against msg using an HSM-resident LMS key. *res is set to 1 on
+ * success, 0 on signature mismatch. */
+int wh_Client_LmsVerifyDma(whClientContext* ctx, const byte* sig, word32 sigSz,
+                           const byte* msg, word32 msgSz, int* res,
+                           LmsKey* key);
+
+/* Query remaining signatures on an HSM-resident LMS key. */
+int wh_Client_LmsSigsLeftDma(whClientContext* ctx, LmsKey* key,
+                             word32* sigsLeft);
+
+#endif /* WOLFSSL_HAVE_LMS */
+
+#ifdef WOLFSSL_HAVE_XMSS
+
+int wh_Client_XmssSetKeyId(XmssKey* key, whKeyId keyId);
+int wh_Client_XmssGetKeyId(XmssKey* key, whKeyId* outId);
+
+/* Generate an XMSS / XMSS^MT key on the server. The parameter string must be
+ * bound on the in-memory key (via wc_XmssKey_SetParamStr) before this call.
+ */
+int wh_Client_XmssMakeKeyDma(whClientContext* ctx, XmssKey* key,
+                             whKeyId* inout_key_id, whNvmFlags flags,
+                             uint16_t label_len, uint8_t* label);
+
+int wh_Client_XmssMakeExportKeyDma(whClientContext* ctx, XmssKey* key);
+
+int wh_Client_XmssSignDma(whClientContext* ctx, const byte* msg, word32 msgSz,
+                          byte* sig, word32* sigSz, XmssKey* key);
+
+int wh_Client_XmssVerifyDma(whClientContext* ctx, const byte* sig,
+                            word32 sigSz, const byte* msg, word32 msgSz,
+                            int* res, XmssKey* key);
+
+int wh_Client_XmssSigsLeftDma(whClientContext* ctx, XmssKey* key,
+                              word32* sigsLeft);
+
+#endif /* WOLFSSL_HAVE_XMSS */
+
+#endif /* WOLFHSM_CFG_DMA */
+#endif /* WOLFSSL_HAVE_LMS || WOLFSSL_HAVE_XMSS */
+
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
 #endif /* !WOLFHSM_WH_CLIENT_CRYPTO_H_ */
