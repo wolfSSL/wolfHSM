@@ -182,6 +182,11 @@ SRC_C += $(wildcard $(PROJECT_DIR)/*.c)
 # an empty TU when the gate isn't satisfied.
 SRC_C += $(TEST_DIR)/wh_test_posix_threadsafe_stress.c
 
+# Shared NVM backend selector pulled from test/; provides
+# whTest_NvmCfgBackend for tests that exercise multiple NVM
+# backends (flash and flash-log).
+SRC_C += $(TEST_DIR)/wh_test_common.c
+
 
 ## Build rules
 

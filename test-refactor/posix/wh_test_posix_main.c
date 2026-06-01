@@ -64,13 +64,17 @@
  * RAM-based flash simulator, which is a host-sim component;
  * the nvm_flash test wires the NVM stack to that simulator
  * with a 1 MB buffer that's not realistic on embedded targets.
- * Both run from the POSIX port directly until the NVM test is
- * reworked to take a port-supplied flash fixture (then it can
+ * The recovery test layers a fault-injection wrapper over the
+ * same simulator to abort a write mid-object and check cleanup.
+ * All run from the POSIX port directly until the NVM tests are
+ * reworked to take a port-supplied flash fixture (then they can
  * lift back into whTestGroup_Server). */
 int whTest_FlashWriteLock(void* ctx);
 int whTest_FlashEraseProgramVerify(void* ctx);
 int whTest_FlashUnitOps(void* ctx);
 int whTest_NvmAddOverwriteDestroy(void* ctx);
+int whTest_NvmFlashLog(void* ctx);
+int whTest_NvmRecovery(void* ctx);
 
 /*
  * Port-owned contexts. The thread functions fill these in and
@@ -261,6 +265,16 @@ int main(void)
         }
         rc = whTestGroup_RunOne("whTest_NvmAddOverwriteDestroy",
             whTest_NvmAddOverwriteDestroy, NULL);
+        if (rc != 0 && rc != WH_TEST_SKIPPED && miscRc == 0) {
+            miscRc = rc;
+        }
+        rc = whTestGroup_RunOne("whTest_NvmFlashLog",
+            whTest_NvmFlashLog, NULL);
+        if (rc != 0 && rc != WH_TEST_SKIPPED && miscRc == 0) {
+            miscRc = rc;
+        }
+        rc = whTestGroup_RunOne("whTest_NvmRecovery",
+            whTest_NvmRecovery, NULL);
         if (rc != 0 && rc != WH_TEST_SKIPPED && miscRc == 0) {
             miscRc = rc;
         }

@@ -80,12 +80,13 @@ Translated tests:
 | `wh_test_dma.c::whTest_Dma` | `misc/wh_test_dma.c::whTest_Dma` | Misc | |
 | `wh_test_comm.c::whTest_Comm` | `misc/wh_test_comm.c::whTest_Comm` | Misc | Sequential mem variant only; pthread mem/tcp/shmem variants remain in the legacy harness |
 | `wh_test_keystore_reqsize.c::whTest_KeystoreReqSize` | `misc/wh_test_keystore_reqsize.c::whTest_KeystoreReqSize` | Misc | |
-| `wh_test_cert.c::whTest_CertRamSim` | `server/wh_test_cert.c::whTest_CertVerify` | Server | remove ramsim coupling and migrate to server group |
-| `wh_test_crypto.c::whTest_Crypto` | `client-server/wh_test_crypto.c::{whTest_CryptoSha256, whTest_CryptoAes, whTest_CryptoEcc256}` | Client | Subset only; remaining cases listed below |
+| `wh_test_cert.c::whTest_CertRamSim` | `server/wh_test_cert.c::whTest_CertVerify` | Server | remove ramsim coupling and migrate to server group. Legacy ran FLASH and FLASH_LOG backends; the port runs the plain flash backend only -- FLASH_LOG re-run pending (see Known coverage gaps) |
+| `wh_test_crypto.c::whTest_Crypto` | `client-server/wh_test_crypto.c::{whTest_CryptoSha256, whTest_CryptoAes, whTest_CryptoEcc256}` | Client | Subset only; remaining cases listed below. Legacy ran FLASH and FLASH_LOG backends; the port runs the plain flash backend only -- FLASH_LOG re-run pending (see Known coverage gaps) |
 | `wh_test_clientserver.c` (echo and server-info paths) | `client-server/wh_test_echo.c::whTest_Echo`, `client-server/wh_test_server_info.c::whTest_ServerInfo` | Client | pthread test ported, sequential test dropped |
 | `wh_test_wolfcrypt_test.c::whTest_WolfCryptTest` | `client-server/wh_test_wolfcrypt.c::whTest_WolfCryptTest` | Client | |
 | `wh_test_flash_ramsim.c::whTest_Flash_RamSim` | `posix/wh_test_flash_ramsim.c::{whTest_FlashWriteLock, whTest_FlashEraseProgramVerify, whTest_FlashUnitOps}` | POSIX port-specific (`whTestGroup_RunOne`) | remove ramsim coupling and migrate to server group |
-| `wh_test_nvm_flash.c::whTest_NvmFlash` | `posix/wh_test_nvm_flash.c::whTest_NvmAddOverwriteDestroy` | POSIX port-specific (`whTestGroup_RunOne`) | remove ramsim coupling and migrate to server group |
+| `wh_test_nvm_flash.c::{whTest_NvmFlash, whTest_NvmFlash_Recovery}` | `posix/wh_test_nvm_flash.c::{whTest_NvmAddOverwriteDestroy, whTest_NvmFlashLog, whTest_NvmRecovery}` | POSIX port-specific (`whTestGroup_RunOne`) | remove ramsim coupling and migrate to server group; flash-log backend exercised by `whTest_NvmFlashLog` (skipped unless `WOLFHSM_CFG_SERVER_NVM_FLASH_LOG`) |
+| `wh_test_flash_fault_inject.c` | `posix/wh_test_flash_fault_inject.c` | helper (no test) | fault-injection flash wrapper used by the recovery test |
 | `wh_test_posix_threadsafe_stress.c::whTest_ThreadSafeStress` | called directly from `posix/wh_test_posix_main.c` | POSIX port-specific (direct call) | |
 
 Not yet migrated (still live in `wolfHSM/test/`):
@@ -105,8 +106,13 @@ Not yet migrated (still live in `wolfHSM/test/`):
 | `wh_test_auth.c::whTest_AuthMEM`, `whTest_AuthTCP` | |
 | `wh_test_server_img_mgr.c::whTest_ServerImgMgr` | |
 | `wh_test_nvmflags.c::whTest_NvmFlags` | |
-| `wh_test_flash_fault_inject.c` | |
 | `wh_test_check_struct_padding.c` | |
+
+### Shared helpers pulled from `test/`
+- `wh_test_common.c::whTest_NvmCfgBackend` is compiled into the POSIX port build to select an NVM backend (flash or flash-log) over a ramsim flash. Used by `whTest_NvmFlashLog` today; the not-yet-migrated cert, image-manager, auth, and log tests rely on it too, so it is wired in ahead of those migrations.
+
+### Known coverage gaps
+- FLASH_LOG backend for server/client-group tests. In `test/`, cert (`whTest_CertRamSim`), crypto (`wh_ClientServer_MemThreadTest`), image-manager (`whTest_ServerImgMgr`), and client/server were each run against both the plain flash and flash-log NVM backends. The refactored server/client-group tests consume a single server context (`wh_test_posix_server.c` hard-codes `WH_NVM_FLASH_CB`), so only the plain flash backend is exercised. Restoring parity means selecting the server backend via `whTest_NvmCfgBackend` and running the server + client groups once per backend (flash, then flash-log) from `wh_test_posix_main.c`. Tracked as a follow-up; the port-specific `whTest_NvmFlashLog` already covers the flash-log NVM object lifecycle directly.
 
 ### Other improvements
 - Add callback from `wh_Server_HandleRequestMessage` to allow sleep and avoid a busy loop
