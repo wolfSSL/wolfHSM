@@ -56,9 +56,9 @@ typedef struct {
     whFlashRamsimCfg flashCfg;
     whFlashCb        flashCb;
 
-    whNvmFlashContext nvmFlashCtx;
-    whNvmFlashConfig  nvmFlashCfg;
-    whNvmCb           nvmCb;
+    /* NVM backend selected per-test by whTest_NvmCfgBackend */
+    whTestNvmBackendUnion nvmSetup;
+    whNvmConfig           nvmCfg;
 } whTestNvmFlashCtx;
 
 static whTestNvmFlashCtx _ctx;
@@ -72,7 +72,6 @@ static void _setup(void)
 {
     whTestNvmFlashCtx* c              = &_ctx;
     const whFlashCb    initFlashCb[1] = {WH_FLASH_RAMSIM_CB};
-    whNvmCb            initNvmCb[1]   = {WH_NVM_FLASH_CB};
 
     memset(c, 0, sizeof(*c));
 
@@ -82,12 +81,19 @@ static void _setup(void)
     c->flashCfg.pageSize   = NVM_FLASH_PAGE_SZ;
     c->flashCfg.erasedByte = 0;
     c->flashCfg.memory     = c->memory;
+}
 
-    c->nvmFlashCfg.cb      = &c->flashCb;
-    c->nvmFlashCfg.context = &c->flashCtx;
-    c->nvmFlashCfg.config  = &c->flashCfg;
 
-    c->nvmCb = initNvmCb[0];
+/*
+ * Wire the requested NVM backend over the ramsim flash configured
+ * by _setup, leaving _ctx.nvmCfg ready to Init. Delegates to the
+ * shared backend selector so flash and flash-log tests stay in
+ * sync with the rest of the suite.
+ */
+static int _selectNvm(whTestNvmBackendType type)
+{
+    return whTest_NvmCfgBackend(type, &_ctx.nvmSetup, &_ctx.nvmCfg,
+        &_ctx.flashCfg, &_ctx.flashCtx, &_ctx.flashCb);
 }
 
 
@@ -222,16 +228,14 @@ static int _addAndCheck(const whNvmCb* cb, void* context,
 
 
 /*
- * Add objects, overwrite, reclaim, destroy, verify
- * data integrity throughout.
+ * Backend-agnostic object lifecycle: init the NVM backend from
+ * cfg, add three objects, overwrite, reclaim, destroy, and verify
+ * data integrity throughout, then clean up. Shared by the plain
+ * flash and flash-log backend tests.
  */
-int whTest_NvmAddOverwriteDestroy(void* ctx)
+static int _addOverwriteDestroy(const whNvmCb* cb, void* context,
+    const void* cfg)
 {
-    whTestNvmFlashCtx* c  = &_ctx;
-    const whNvmCb*     cb = &c->nvmCb;
-
-    (void)ctx;
-    _setup();
     uint8_t data1[]   = "Data1";
     uint8_t data2[]   = "Data2";
     uint8_t data3[]   = "Data3";
@@ -247,59 +251,79 @@ int whTest_NvmAddOverwriteDestroy(void* ctx)
     uint8_t       readBuf[256];
     size_t        i;
 
-    WH_TEST_RETURN_ON_FAIL(
-        cb->Init(&c->nvmFlashCtx, &c->nvmFlashCfg));
+    WH_TEST_RETURN_ON_FAIL(cb->Init(context, cfg));
 
     /* Add 3 objects */
     WH_TEST_RETURN_ON_FAIL(
-        _addAndCheck(cb, &c->nvmFlashCtx,
-            &meta1, sizeof(data1), data1));
+        _addAndCheck(cb, context, &meta1, sizeof(data1), data1));
     WH_TEST_RETURN_ON_FAIL(
-        _addAndCheck(cb, &c->nvmFlashCtx,
-            &meta2, sizeof(data2), data2));
+        _addAndCheck(cb, context, &meta2, sizeof(data2), data2));
     WH_TEST_RETURN_ON_FAIL(
-        _addAndCheck(cb, &c->nvmFlashCtx,
-            &meta3, sizeof(data3), data3));
+        _addAndCheck(cb, context, &meta3, sizeof(data3), data3));
 
     /* Overwrite objects */
     WH_TEST_RETURN_ON_FAIL(
-        _addAndCheck(cb, &c->nvmFlashCtx,
-            &meta1, sizeof(update1), update1));
+        _addAndCheck(cb, context, &meta1, sizeof(update1), update1));
     WH_TEST_RETURN_ON_FAIL(
-        _addAndCheck(cb, &c->nvmFlashCtx,
-            &meta2, sizeof(update2), update2));
+        _addAndCheck(cb, context, &meta2, sizeof(update2), update2));
 
     /* Reclaim space */
-    WH_TEST_RETURN_ON_FAIL(
-        cb->DestroyObjects(&c->nvmFlashCtx, 0, NULL));
+    WH_TEST_RETURN_ON_FAIL(cb->DestroyObjects(context, 0, NULL));
 
     /* Verify all objects survived reclaim */
     for (i = 0; i < sizeof(ids) / sizeof(ids[0]); i++) {
         memset(&readMeta, 0, sizeof(readMeta));
-        WH_TEST_RETURN_ON_FAIL(cb->GetMetadata(
-            &c->nvmFlashCtx, ids[i], &readMeta));
-        WH_TEST_RETURN_ON_FAIL(cb->Read(
-            &c->nvmFlashCtx, ids[i], 0,
-            readMeta.len, readBuf));
+        WH_TEST_RETURN_ON_FAIL(
+            cb->GetMetadata(context, ids[i], &readMeta));
+        WH_TEST_RETURN_ON_FAIL(
+            cb->Read(context, ids[i], 0, readMeta.len, readBuf));
     }
 
     /* Destroy first object, verify it's gone */
-    WH_TEST_RETURN_ON_FAIL(
-        cb->DestroyObjects(&c->nvmFlashCtx, 1, ids));
+    WH_TEST_RETURN_ON_FAIL(cb->DestroyObjects(context, 1, ids));
     WH_TEST_ASSERT_RETURN(
-        WH_ERROR_NOTFOUND == cb->Read(
-            &c->nvmFlashCtx, ids[0], 0,
+        WH_ERROR_NOTFOUND == cb->Read(context, ids[0], 0,
             sizeof(readBuf), readBuf));
 
     /* Destroy remaining */
-    WH_TEST_RETURN_ON_FAIL(
-        cb->DestroyObjects(&c->nvmFlashCtx,
-            sizeof(ids) / sizeof(ids[0]), ids));
+    WH_TEST_RETURN_ON_FAIL(cb->DestroyObjects(context,
+        sizeof(ids) / sizeof(ids[0]), ids));
 
-    WH_TEST_RETURN_ON_FAIL(
-        cb->Cleanup(&c->nvmFlashCtx));
+    WH_TEST_RETURN_ON_FAIL(cb->Cleanup(context));
 
     return 0;
+}
+
+
+/*
+ * Object lifecycle against the plain NVM flash backend.
+ */
+int whTest_NvmAddOverwriteDestroy(void* ctx)
+{
+    (void)ctx;
+    _setup();
+    WH_TEST_RETURN_ON_FAIL(_selectNvm(WH_NVM_TEST_BACKEND_FLASH));
+    return _addOverwriteDestroy(_ctx.nvmCfg.cb, _ctx.nvmCfg.context,
+        _ctx.nvmCfg.config);
+}
+
+
+/*
+ * Same lifecycle against the NVM flash-log backend, which layers a
+ * journaled log over the same ramsim flash. Skipped when the log
+ * backend isn't built.
+ */
+int whTest_NvmFlashLog(void* ctx)
+{
+    (void)ctx;
+#if defined(WOLFHSM_CFG_SERVER_NVM_FLASH_LOG)
+    _setup();
+    WH_TEST_RETURN_ON_FAIL(_selectNvm(WH_NVM_TEST_BACKEND_FLASH_LOG));
+    return _addOverwriteDestroy(_ctx.nvmCfg.cb, _ctx.nvmCfg.context,
+        _ctx.nvmCfg.config);
+#else
+    return WH_TEST_SKIPPED;
+#endif
 }
 
 
