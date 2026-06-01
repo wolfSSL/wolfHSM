@@ -32,13 +32,13 @@
 #include "wolfssl/wolfcrypt/types.h"
 #include "wolfssl/wolfcrypt/kdf.h"
 #include "wolfssl/wolfcrypt/ed25519.h"
-#include "wolfssl/wolfcrypt/wc_mlkem.h"
 #if defined(WOLFSSL_HAVE_LMS)
 #include "wolfssl/wolfcrypt/wc_lms.h"
 #endif
 #if defined(WOLFSSL_HAVE_XMSS)
 #include "wolfssl/wolfcrypt/wc_xmss.h"
 #endif
+#include "wolfssl/wolfcrypt/wc_mlkem.h"
 
 #include "wolfhsm/wh_error.h"
 
@@ -12192,306 +12192,6 @@ int whTestCrypto_MlDsaVerifyOnlyDma(whClientContext* ctx, int devId,
     !defined(WOLFSSL_MLKEM_NO_ENCAPSULATE) && \
     !defined(WOLFSSL_MLKEM_NO_DECAPSULATE)
 static int whTestCrypto_MlKemGetLevels(int* levels, int maxLevels)
-#if defined(WOLFHSM_CFG_DMA) && \
-    defined(WOLFSSL_HAVE_LMS) && !defined(WOLFSSL_LMS_VERIFY_ONLY)
-/* L=1, H=5, W=8 keeps the signature ~1.3 KB and gives 2^5 = 32 signatures. */
-#define WH_TEST_LMS_LEVELS     (1)
-#define WH_TEST_LMS_HEIGHT     (5)
-#define WH_TEST_LMS_WINTERNITZ (8)
-/* Generous buffer that fits L1_H5_W8 (~1328) and any W<8 variant of the same
- * height (W=1 ~8688). Keeps off the stack so ASAN builds stay happy. */
-static byte whTest_LmsSigBuf[8800];
-
-static int whTestCrypto_LmsCryptoCb(whClientContext* ctx, int devId,
-                                    WC_RNG* rng)
-{
-    int        ret           = 0;
-    LmsKey     key[1];
-    int        keyInited     = 0;
-    word32     sigLen        = 0;
-    word32     sigCap        = 0;
-    const byte msg[]         = "wolfHSM LMS cryptocb test";
-    word32     msgSz         = (word32)sizeof(msg) - 1;
-
-    (void)rng;
-
-    memset(whTest_LmsSigBuf, 0, sizeof(whTest_LmsSigBuf));
-
-    ret = wc_LmsKey_Init(key, NULL, devId);
-    if (ret != 0) {
-        WH_ERROR_PRINT("Failed wc_LmsKey_Init devId=0x%X ret=%d\n", devId, ret);
-        return ret;
-    }
-    keyInited = 1;
-
-    if (ret == 0) {
-        ret = wc_LmsKey_SetParameters(key, WH_TEST_LMS_LEVELS,
-                                      WH_TEST_LMS_HEIGHT,
-                                      WH_TEST_LMS_WINTERNITZ);
-        if (ret != 0) {
-            WH_ERROR_PRINT("Failed LMS SetParameters ret=%d\n", ret);
-        }
-    }
-
-    if (ret == 0) {
-        ret = wc_LmsKey_GetSigLen(key, &sigCap);
-        if (ret != 0) {
-            WH_ERROR_PRINT("Failed LMS GetSigLen ret=%d\n", ret);
-        }
-        else if (sigCap > sizeof(whTest_LmsSigBuf)) {
-            WH_ERROR_PRINT("LMS sig buffer too small: need=%u have=%u\n",
-                           (unsigned)sigCap,
-                           (unsigned)sizeof(whTest_LmsSigBuf));
-            ret = BUFFER_E;
-        }
-    }
-
-    /* MakeKey via cryptocb: server caches private key (ephemeral) and
-     * returns the public key over DMA. */
-    if (ret == 0) {
-        ret = wc_LmsKey_MakeKey(key, rng);
-        if (ret != 0) {
-            WH_ERROR_PRINT("Failed LMS MakeKey ret=%d\n", ret);
-        }
-    }
-
-    /* wc_LmsKey_SigsLeft returns a boolean: nonzero = signatures available,
-     * 0 = exhausted. Fresh key should report nonzero. */
-    if (ret == 0) {
-        if (wc_LmsKey_SigsLeft(key) == 0) {
-            WH_ERROR_PRINT("LMS reported exhausted on fresh key\n");
-            ret = -1;
-        }
-    }
-
-    /* Sign via cryptocb. */
-    if (ret == 0) {
-        sigLen = sigCap;
-        ret = wc_LmsKey_Sign(key, whTest_LmsSigBuf, &sigLen, msg, (int)msgSz);
-        if (ret != 0) {
-            WH_ERROR_PRINT("Failed LMS Sign ret=%d\n", ret);
-        }
-        else if (sigLen != sigCap) {
-            WH_ERROR_PRINT("LMS Sign produced unexpected length=%u expected=%u\n",
-                           (unsigned)sigLen, (unsigned)sigCap);
-            ret = -1;
-        }
-    }
-
-    /* Verify the signature via cryptocb. */
-    if (ret == 0) {
-        ret = wc_LmsKey_Verify(key, whTest_LmsSigBuf, sigLen, msg, (int)msgSz);
-        if (ret != 0) {
-            WH_ERROR_PRINT("Failed LMS Verify ret=%d\n", ret);
-        }
-    }
-
-    /* Tampered signature must fail to verify. */
-    if (ret == 0) {
-        whTest_LmsSigBuf[0] ^= 0xFF;
-        ret = wc_LmsKey_Verify(key, whTest_LmsSigBuf, sigLen, msg, (int)msgSz);
-        whTest_LmsSigBuf[0] ^= 0xFF;
-        if (ret == 0) {
-            WH_ERROR_PRINT("LMS Verify unexpectedly accepted tampered sig\n");
-            ret = -1;
-        }
-        else {
-            ret = 0;
-        }
-    }
-
-    /* Wrong message must also fail to verify. */
-    if (ret == 0) {
-        const byte wrongMsg[] = "wolfHSM LMS cryptocb wrong";
-        ret = wc_LmsKey_Verify(key, whTest_LmsSigBuf, sigLen, wrongMsg,
-                               (int)(sizeof(wrongMsg) - 1));
-        if (ret == 0) {
-            WH_ERROR_PRINT("LMS Verify unexpectedly accepted wrong message\n");
-            ret = -1;
-        }
-        else {
-            ret = 0;
-        }
-    }
-
-    /* H=5 means 32 sigs total; after one sign, the key is still not
-     * exhausted. */
-    if (ret == 0) {
-        if (wc_LmsKey_SigsLeft(key) == 0) {
-            WH_ERROR_PRINT("LMS reported exhausted after one sign\n");
-            ret = -1;
-        }
-    }
-
-    if (keyInited) {
-        whKeyId evictId = WH_KEYID_ERASED;
-        if ((wh_Client_LmsGetKeyId(key, &evictId) == 0) &&
-            !WH_KEYID_ISERASED(evictId)) {
-            int evictRet = wh_Client_KeyEvict(ctx, evictId);
-            if ((evictRet != 0) && (ret == 0)) {
-                WH_ERROR_PRINT("Failed LMS evict keyId=0x%X ret=%d\n",
-                               (unsigned)evictId, evictRet);
-                ret = evictRet;
-            }
-        }
-        wc_LmsKey_Free(key);
-    }
-
-    if (ret == 0) {
-        WH_TEST_PRINT("LMS CryptoCb DEVID=0x%X SUCCESS\n", devId);
-    }
-
-    return ret;
-}
-#endif /* WOLFHSM_CFG_DMA && WOLFSSL_HAVE_LMS && !WOLFSSL_LMS_VERIFY_ONLY */
-
-#if defined(WOLFHSM_CFG_DMA) && \
-    defined(WOLFSSL_HAVE_XMSS) && !defined(WOLFSSL_XMSS_VERIFY_ONLY)
-/* "XMSS-SHA2_10_256" is the smallest standardized XMSS parameter set
- * (height 10, 1024 signatures). pubLen=68, sigLen=2500. */
-#define WH_TEST_XMSS_PARAM_STR "XMSS-SHA2_10_256"
-static byte whTest_XmssSigBuf[2500];
-
-static int whTestCrypto_XmssCryptoCb(whClientContext* ctx, int devId,
-                                     WC_RNG* rng)
-{
-    int        ret           = 0;
-    XmssKey    key[1];
-    int        keyInited     = 0;
-    word32     sigLen        = 0;
-    word32     sigCap        = 0;
-    const byte msg[]         = "wolfHSM XMSS cryptocb test";
-    word32     msgSz         = (word32)sizeof(msg) - 1;
-
-    (void)rng;
-
-    memset(whTest_XmssSigBuf, 0, sizeof(whTest_XmssSigBuf));
-
-    ret = wc_XmssKey_Init(key, NULL, devId);
-    if (ret != 0) {
-        WH_ERROR_PRINT("Failed wc_XmssKey_Init devId=0x%X ret=%d\n", devId, ret);
-        return ret;
-    }
-    keyInited = 1;
-
-    if (ret == 0) {
-        ret = wc_XmssKey_SetParamStr(key, WH_TEST_XMSS_PARAM_STR);
-        if (ret != 0) {
-            WH_ERROR_PRINT("Failed XMSS SetParamStr=\"%s\" ret=%d\n",
-                           WH_TEST_XMSS_PARAM_STR, ret);
-        }
-    }
-
-    if (ret == 0) {
-        ret = wc_XmssKey_GetSigLen(key, &sigCap);
-        if (ret != 0) {
-            WH_ERROR_PRINT("Failed XMSS GetSigLen ret=%d\n", ret);
-        }
-        else if (sigCap > sizeof(whTest_XmssSigBuf)) {
-            WH_ERROR_PRINT("XMSS sig buffer too small: need=%u have=%u\n",
-                           (unsigned)sigCap,
-                           (unsigned)sizeof(whTest_XmssSigBuf));
-            ret = BUFFER_E;
-        }
-    }
-
-    /* MakeKey via cryptocb: server caches private key (ephemeral) and
-     * returns the public key over DMA. */
-    if (ret == 0) {
-        ret = wc_XmssKey_MakeKey(key, rng);
-        if (ret != 0) {
-            WH_ERROR_PRINT("Failed XMSS MakeKey ret=%d\n", ret);
-        }
-    }
-
-    /* wc_XmssKey_SigsLeft returns a boolean: nonzero = signatures available,
-     * 0 = exhausted. */
-    if (ret == 0) {
-        if (wc_XmssKey_SigsLeft(key) == 0) {
-            WH_ERROR_PRINT("XMSS reported exhausted on fresh key\n");
-            ret = -1;
-        }
-    }
-
-    if (ret == 0) {
-        sigLen = sigCap;
-        ret = wc_XmssKey_Sign(key, whTest_XmssSigBuf, &sigLen, msg, (int)msgSz);
-        if (ret != 0) {
-            WH_ERROR_PRINT("Failed XMSS Sign ret=%d\n", ret);
-        }
-        else if (sigLen != sigCap) {
-            WH_ERROR_PRINT("XMSS Sign produced unexpected length=%u expected=%u\n",
-                           (unsigned)sigLen, (unsigned)sigCap);
-            ret = -1;
-        }
-    }
-
-    if (ret == 0) {
-        ret = wc_XmssKey_Verify(key, whTest_XmssSigBuf, sigLen, msg, (int)msgSz);
-        if (ret != 0) {
-            WH_ERROR_PRINT("Failed XMSS Verify ret=%d\n", ret);
-        }
-    }
-
-    if (ret == 0) {
-        whTest_XmssSigBuf[0] ^= 0xFF;
-        ret = wc_XmssKey_Verify(key, whTest_XmssSigBuf, sigLen, msg, (int)msgSz);
-        whTest_XmssSigBuf[0] ^= 0xFF;
-        if (ret == 0) {
-            WH_ERROR_PRINT("XMSS Verify unexpectedly accepted tampered sig\n");
-            ret = -1;
-        }
-        else {
-            ret = 0;
-        }
-    }
-
-    if (ret == 0) {
-        const byte wrongMsg[] = "wolfHSM XMSS cryptocb wrong";
-        ret = wc_XmssKey_Verify(key, whTest_XmssSigBuf, sigLen, wrongMsg,
-                                (int)(sizeof(wrongMsg) - 1));
-        if (ret == 0) {
-            WH_ERROR_PRINT("XMSS Verify unexpectedly accepted wrong message\n");
-            ret = -1;
-        }
-        else {
-            ret = 0;
-        }
-    }
-
-    /* H=10 means 1024 sigs total; after one sign, the key is still not
-     * exhausted. */
-    if (ret == 0) {
-        if (wc_XmssKey_SigsLeft(key) == 0) {
-            WH_ERROR_PRINT("XMSS reported exhausted after one sign\n");
-            ret = -1;
-        }
-    }
-
-    if (keyInited) {
-        whKeyId evictId = WH_KEYID_ERASED;
-        if ((wh_Client_XmssGetKeyId(key, &evictId) == 0) &&
-            !WH_KEYID_ISERASED(evictId)) {
-            int evictRet = wh_Client_KeyEvict(ctx, evictId);
-            if ((evictRet != 0) && (ret == 0)) {
-                WH_ERROR_PRINT("Failed XMSS evict keyId=0x%X ret=%d\n",
-                               (unsigned)evictId, evictRet);
-                ret = evictRet;
-            }
-        }
-        wc_XmssKey_Free(key);
-    }
-
-    if (ret == 0) {
-        WH_TEST_PRINT("XMSS CryptoCb DEVID=0x%X SUCCESS\n", devId);
-    }
-
-    return ret;
-}
-#endif /* WOLFHSM_CFG_DMA && WOLFSSL_HAVE_XMSS && !WOLFSSL_XMSS_VERIFY_ONLY */
-
-/* Test key usage policy enforcement for various crypto operations */
-int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
 {
     int count = 0;
 
@@ -13517,6 +13217,304 @@ static int whTestCrypto_MlKemDmaClient(whClientContext* ctx, int devId,
           !defined(WOLFSSL_MLKEM_NO_ENCAPSULATE) && \
           !defined(WOLFSSL_MLKEM_NO_DECAPSULATE) */
 #endif /* WOLFSSL_HAVE_MLKEM */
+
+#if defined(WOLFHSM_CFG_DMA) && \
+    defined(WOLFSSL_HAVE_LMS) && !defined(WOLFSSL_LMS_VERIFY_ONLY)
+/* L=1, H=5, W=8 keeps the signature ~1.3 KB and gives 2^5 = 32 signatures. */
+#define WH_TEST_LMS_LEVELS     (1)
+#define WH_TEST_LMS_HEIGHT     (5)
+#define WH_TEST_LMS_WINTERNITZ (8)
+/* Generous buffer that fits L1_H5_W8 (~1328) and any W<8 variant of the same
+ * height (W=1 ~8688). Keeps off the stack so ASAN builds stay happy. */
+static byte whTest_LmsSigBuf[8800];
+
+static int whTestCrypto_LmsCryptoCb(whClientContext* ctx, int devId,
+                                    WC_RNG* rng)
+{
+    int        ret           = 0;
+    LmsKey     key[1];
+    int        keyInited     = 0;
+    word32     sigLen        = 0;
+    word32     sigCap        = 0;
+    const byte msg[]         = "wolfHSM LMS cryptocb test";
+    word32     msgSz         = (word32)sizeof(msg) - 1;
+
+    (void)rng;
+
+    memset(whTest_LmsSigBuf, 0, sizeof(whTest_LmsSigBuf));
+
+    ret = wc_LmsKey_Init(key, NULL, devId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed wc_LmsKey_Init devId=0x%X ret=%d\n", devId, ret);
+        return ret;
+    }
+    keyInited = 1;
+
+    if (ret == 0) {
+        ret = wc_LmsKey_SetParameters(key, WH_TEST_LMS_LEVELS,
+                                      WH_TEST_LMS_HEIGHT,
+                                      WH_TEST_LMS_WINTERNITZ);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed LMS SetParameters ret=%d\n", ret);
+        }
+    }
+
+    if (ret == 0) {
+        ret = wc_LmsKey_GetSigLen(key, &sigCap);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed LMS GetSigLen ret=%d\n", ret);
+        }
+        else if (sigCap > sizeof(whTest_LmsSigBuf)) {
+            WH_ERROR_PRINT("LMS sig buffer too small: need=%u have=%u\n",
+                           (unsigned)sigCap,
+                           (unsigned)sizeof(whTest_LmsSigBuf));
+            ret = BUFFER_E;
+        }
+    }
+
+    /* MakeKey via cryptocb: server caches private key (ephemeral) and
+     * returns the public key over DMA. */
+    if (ret == 0) {
+        ret = wc_LmsKey_MakeKey(key, rng);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed LMS MakeKey ret=%d\n", ret);
+        }
+    }
+
+    /* wc_LmsKey_SigsLeft returns a boolean: nonzero = signatures available,
+     * 0 = exhausted. Fresh key should report nonzero. */
+    if (ret == 0) {
+        if (wc_LmsKey_SigsLeft(key) == 0) {
+            WH_ERROR_PRINT("LMS reported exhausted on fresh key\n");
+            ret = -1;
+        }
+    }
+
+    /* Sign via cryptocb. */
+    if (ret == 0) {
+        sigLen = sigCap;
+        ret = wc_LmsKey_Sign(key, whTest_LmsSigBuf, &sigLen, msg, (int)msgSz);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed LMS Sign ret=%d\n", ret);
+        }
+        else if (sigLen != sigCap) {
+            WH_ERROR_PRINT("LMS Sign produced unexpected length=%u expected=%u\n",
+                           (unsigned)sigLen, (unsigned)sigCap);
+            ret = -1;
+        }
+    }
+
+    /* Verify the signature via cryptocb. */
+    if (ret == 0) {
+        ret = wc_LmsKey_Verify(key, whTest_LmsSigBuf, sigLen, msg, (int)msgSz);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed LMS Verify ret=%d\n", ret);
+        }
+    }
+
+    /* Tampered signature must fail to verify. */
+    if (ret == 0) {
+        whTest_LmsSigBuf[0] ^= 0xFF;
+        ret = wc_LmsKey_Verify(key, whTest_LmsSigBuf, sigLen, msg, (int)msgSz);
+        whTest_LmsSigBuf[0] ^= 0xFF;
+        if (ret == 0) {
+            WH_ERROR_PRINT("LMS Verify unexpectedly accepted tampered sig\n");
+            ret = -1;
+        }
+        else {
+            ret = 0;
+        }
+    }
+
+    /* Wrong message must also fail to verify. */
+    if (ret == 0) {
+        const byte wrongMsg[] = "wolfHSM LMS cryptocb wrong";
+        ret = wc_LmsKey_Verify(key, whTest_LmsSigBuf, sigLen, wrongMsg,
+                               (int)(sizeof(wrongMsg) - 1));
+        if (ret == 0) {
+            WH_ERROR_PRINT("LMS Verify unexpectedly accepted wrong message\n");
+            ret = -1;
+        }
+        else {
+            ret = 0;
+        }
+    }
+
+    /* H=5 means 32 sigs total; after one sign, the key is still not
+     * exhausted. */
+    if (ret == 0) {
+        if (wc_LmsKey_SigsLeft(key) == 0) {
+            WH_ERROR_PRINT("LMS reported exhausted after one sign\n");
+            ret = -1;
+        }
+    }
+
+    if (keyInited) {
+        whKeyId evictId = WH_KEYID_ERASED;
+        if ((wh_Client_LmsGetKeyId(key, &evictId) == 0) &&
+            !WH_KEYID_ISERASED(evictId)) {
+            int evictRet = wh_Client_KeyEvict(ctx, evictId);
+            if ((evictRet != 0) && (ret == 0)) {
+                WH_ERROR_PRINT("Failed LMS evict keyId=0x%X ret=%d\n",
+                               (unsigned)evictId, evictRet);
+                ret = evictRet;
+            }
+        }
+        wc_LmsKey_Free(key);
+    }
+
+    if (ret == 0) {
+        WH_TEST_PRINT("LMS CryptoCb DEVID=0x%X SUCCESS\n", devId);
+    }
+
+    return ret;
+}
+#endif /* WOLFHSM_CFG_DMA && WOLFSSL_HAVE_LMS && !WOLFSSL_LMS_VERIFY_ONLY */
+
+#if defined(WOLFHSM_CFG_DMA) && \
+    defined(WOLFSSL_HAVE_XMSS) && !defined(WOLFSSL_XMSS_VERIFY_ONLY)
+/* "XMSS-SHA2_10_256" is the smallest standardized XMSS parameter set
+ * (height 10, 1024 signatures). pubLen=68, sigLen=2500. */
+#define WH_TEST_XMSS_PARAM_STR "XMSS-SHA2_10_256"
+static byte whTest_XmssSigBuf[2500];
+
+static int whTestCrypto_XmssCryptoCb(whClientContext* ctx, int devId,
+                                     WC_RNG* rng)
+{
+    int        ret           = 0;
+    XmssKey    key[1];
+    int        keyInited     = 0;
+    word32     sigLen        = 0;
+    word32     sigCap        = 0;
+    const byte msg[]         = "wolfHSM XMSS cryptocb test";
+    word32     msgSz         = (word32)sizeof(msg) - 1;
+
+    (void)rng;
+
+    memset(whTest_XmssSigBuf, 0, sizeof(whTest_XmssSigBuf));
+
+    ret = wc_XmssKey_Init(key, NULL, devId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed wc_XmssKey_Init devId=0x%X ret=%d\n", devId, ret);
+        return ret;
+    }
+    keyInited = 1;
+
+    if (ret == 0) {
+        ret = wc_XmssKey_SetParamStr(key, WH_TEST_XMSS_PARAM_STR);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed XMSS SetParamStr=\"%s\" ret=%d\n",
+                           WH_TEST_XMSS_PARAM_STR, ret);
+        }
+    }
+
+    if (ret == 0) {
+        ret = wc_XmssKey_GetSigLen(key, &sigCap);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed XMSS GetSigLen ret=%d\n", ret);
+        }
+        else if (sigCap > sizeof(whTest_XmssSigBuf)) {
+            WH_ERROR_PRINT("XMSS sig buffer too small: need=%u have=%u\n",
+                           (unsigned)sigCap,
+                           (unsigned)sizeof(whTest_XmssSigBuf));
+            ret = BUFFER_E;
+        }
+    }
+
+    /* MakeKey via cryptocb: server caches private key (ephemeral) and
+     * returns the public key over DMA. */
+    if (ret == 0) {
+        ret = wc_XmssKey_MakeKey(key, rng);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed XMSS MakeKey ret=%d\n", ret);
+        }
+    }
+
+    /* wc_XmssKey_SigsLeft returns a boolean: nonzero = signatures available,
+     * 0 = exhausted. */
+    if (ret == 0) {
+        if (wc_XmssKey_SigsLeft(key) == 0) {
+            WH_ERROR_PRINT("XMSS reported exhausted on fresh key\n");
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        sigLen = sigCap;
+        ret = wc_XmssKey_Sign(key, whTest_XmssSigBuf, &sigLen, msg, (int)msgSz);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed XMSS Sign ret=%d\n", ret);
+        }
+        else if (sigLen != sigCap) {
+            WH_ERROR_PRINT("XMSS Sign produced unexpected length=%u expected=%u\n",
+                           (unsigned)sigLen, (unsigned)sigCap);
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        ret = wc_XmssKey_Verify(key, whTest_XmssSigBuf, sigLen, msg, (int)msgSz);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed XMSS Verify ret=%d\n", ret);
+        }
+    }
+
+    if (ret == 0) {
+        whTest_XmssSigBuf[0] ^= 0xFF;
+        ret = wc_XmssKey_Verify(key, whTest_XmssSigBuf, sigLen, msg, (int)msgSz);
+        whTest_XmssSigBuf[0] ^= 0xFF;
+        if (ret == 0) {
+            WH_ERROR_PRINT("XMSS Verify unexpectedly accepted tampered sig\n");
+            ret = -1;
+        }
+        else {
+            ret = 0;
+        }
+    }
+
+    if (ret == 0) {
+        const byte wrongMsg[] = "wolfHSM XMSS cryptocb wrong";
+        ret = wc_XmssKey_Verify(key, whTest_XmssSigBuf, sigLen, wrongMsg,
+                                (int)(sizeof(wrongMsg) - 1));
+        if (ret == 0) {
+            WH_ERROR_PRINT("XMSS Verify unexpectedly accepted wrong message\n");
+            ret = -1;
+        }
+        else {
+            ret = 0;
+        }
+    }
+
+    /* H=10 means 1024 sigs total; after one sign, the key is still not
+     * exhausted. */
+    if (ret == 0) {
+        if (wc_XmssKey_SigsLeft(key) == 0) {
+            WH_ERROR_PRINT("XMSS reported exhausted after one sign\n");
+            ret = -1;
+        }
+    }
+
+    if (keyInited) {
+        whKeyId evictId = WH_KEYID_ERASED;
+        if ((wh_Client_XmssGetKeyId(key, &evictId) == 0) &&
+            !WH_KEYID_ISERASED(evictId)) {
+            int evictRet = wh_Client_KeyEvict(ctx, evictId);
+            if ((evictRet != 0) && (ret == 0)) {
+                WH_ERROR_PRINT("Failed XMSS evict keyId=0x%X ret=%d\n",
+                               (unsigned)evictId, evictRet);
+                ret = evictRet;
+            }
+        }
+        wc_XmssKey_Free(key);
+    }
+
+    if (ret == 0) {
+        WH_TEST_PRINT("XMSS CryptoCb DEVID=0x%X SUCCESS\n", devId);
+    }
+
+    return ret;
+}
+#endif /* WOLFHSM_CFG_DMA && WOLFSSL_HAVE_XMSS && !WOLFSSL_XMSS_VERIFY_ONLY */
 
 /* Test key usage policy enforcement for various crypto operations */
 int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
@@ -15274,6 +15272,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
           !defined(WOLFSSL_MLKEM_NO_ENCAPSULATE) && \
           !defined(WOLFSSL_MLKEM_NO_DECAPSULATE) */
 #endif /* WOLFSSL_HAVE_MLKEM */
+
 #if defined(WOLFHSM_CFG_DMA) && \
     defined(WOLFSSL_HAVE_LMS) && !defined(WOLFSSL_LMS_VERIFY_ONLY)
     if (ret == 0) {
