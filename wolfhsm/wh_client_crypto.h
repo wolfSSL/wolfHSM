@@ -313,6 +313,61 @@ int wh_Client_Curve25519SharedSecret(whClientContext* ctx,
         curve25519_key* priv_key, curve25519_key* pub_key,
         int endian, uint8_t* out, uint16_t *out_size);
 
+/**
+ * @brief Send a request to compute an X25519 shared secret that will be
+ *        returned to the client.
+ *
+ * The matching response is retrieved with
+ * wh_Client_Curve25519SharedSecretResponse. Both input keys must already be
+ * cached on the server.
+ */
+int wh_Client_Curve25519SharedSecretRequest(whClientContext* ctx,
+                                            whKeyId          prv_key_id,
+                                            whKeyId pub_key_id, int endian);
+
+/**
+ * @brief Retrieve the response to a wh_Client_Curve25519SharedSecretRequest.
+ */
+int wh_Client_Curve25519SharedSecretResponse(whClientContext* ctx, uint8_t* out,
+                                             uint16_t* out_size);
+
+/**
+ * @brief Compute an X25519 shared secret and cache it on the server.
+ *
+ * On return, *inout_key_id holds the keyId the secret is stored under (the
+ * server allocates one when *inout_key_id is WH_KEYID_ERASED on entry).
+ * `flags` must not include WH_NVM_FLAGS_EPHEMERAL.
+ *
+ * @param[in] ctx           Pointer to the client context
+ * @param[in] priv_key      Private key (cached on the server or local)
+ * @param[in] pub_key       Public key (cached on the server or local)
+ * @param[in] endian        EC25519_BIG_ENDIAN or EC25519_LITTLE_ENDIAN
+ * @param[in,out] inout_key_id  Cache slot id (in) / assigned id (out)
+ * @param[in] flags         whNvmFlags applied to the cached secret
+ * @param[in] label         Optional label for the cached secret
+ * @param[in] label_len     Length of `label`, up to WH_NVM_LABEL_LEN
+ */
+int wh_Client_Curve25519SharedSecretCacheKey(
+    whClientContext* ctx, curve25519_key* priv_key, curve25519_key* pub_key,
+    int endian, whKeyId* inout_key_id, whNvmFlags flags, const uint8_t* label,
+    uint16_t label_len);
+
+/**
+ * @brief Async variant: send the request half of SharedSecretCacheKey.
+ *        Both input keys must already be cached.
+ */
+int wh_Client_Curve25519SharedSecretCacheKeyRequest(
+    whClientContext* ctx, whKeyId prv_key_id, whKeyId pub_key_id, int endian,
+    whKeyId out_key_id, whNvmFlags flags, const uint8_t* label,
+    uint16_t label_len);
+
+/**
+ * @brief Async variant: retrieve the response of SharedSecretCacheKeyRequest.
+ *        On success, *out_key_id receives the assigned cache id.
+ */
+int wh_Client_Curve25519SharedSecretCacheKeyResponse(whClientContext* ctx,
+                                                     whKeyId* out_key_id);
+
 #endif /* HAVE_CURVE25519 */
 
 #ifdef HAVE_ECC
@@ -694,6 +749,42 @@ int wh_Client_EccSharedSecretRequest(whClientContext* ctx, whKeyId prv_key_id,
  */
 int wh_Client_EccSharedSecretResponse(whClientContext* ctx, uint8_t* out,
                                       uint16_t* inout_size);
+
+/**
+ * @brief Compute an ECDH shared secret and cache it on the server.
+ *
+ * On return, *inout_key_id holds the keyId the secret is stored under (the
+ * server allocates one when *inout_key_id is WH_KEYID_ERASED on entry).
+ * `flags` must not include WH_NVM_FLAGS_EPHEMERAL.
+ *
+ * @param[in] ctx           Client context
+ * @param[in] priv_key      Private ECC key (cached on the server or local)
+ * @param[in] pub_key       Public ECC key (cached on the server or local)
+ * @param[in,out] inout_key_id  Cache slot id (in) / assigned id (out)
+ * @param[in] flags         whNvmFlags applied to the cached secret
+ * @param[in] label         Optional label for the cached secret
+ * @param[in] label_len     Length of `label`, up to WH_NVM_LABEL_LEN
+ */
+int wh_Client_EccSharedSecretCacheKey(whClientContext* ctx, ecc_key* priv_key,
+                                      ecc_key* pub_key, whKeyId* inout_key_id,
+                                      whNvmFlags flags, const uint8_t* label,
+                                      uint16_t label_len);
+
+/**
+ * @brief Async variant: send the request half of SharedSecretCacheKey.
+ *        Both input keys must already be cached on the server.
+ */
+int wh_Client_EccSharedSecretCacheKeyRequest(
+    whClientContext* ctx, whKeyId prv_key_id, whKeyId pub_key_id,
+    whKeyId out_key_id, whNvmFlags flags, const uint8_t* label,
+    uint16_t label_len);
+
+/**
+ * @brief Async variant: retrieve the response of SharedSecretCacheKeyRequest.
+ *        On success, *out_key_id receives the assigned cache id.
+ */
+int wh_Client_EccSharedSecretCacheKeyResponse(whClientContext* ctx,
+                                              whKeyId*         out_key_id);
 
 /**
  * @brief Async request half of an ECC server-side keygen that caches the new

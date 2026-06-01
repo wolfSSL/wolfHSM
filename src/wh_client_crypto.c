@@ -2117,8 +2117,15 @@ int wh_Client_EccMakeExportKey(whClientContext* ctx, int size, int curveId,
     return ret;
 }
 
-int wh_Client_EccSharedSecretRequest(whClientContext* ctx, whKeyId prv_key_id,
-                                     whKeyId pub_key_id)
+/* Build and send an ECDH shared-secret request.
+ *
+ * flags & WH_NVM_FLAGS_EPHEMERAL selects the export mode (secret returned to
+ * the client). Otherwise the secret is cached on the server with `flags`
+ * and `label`, stored at `out_key_id` (WH_KEYID_ERASED -> server allocates). */
+static int _EccSharedSecretRequest(whClientContext* ctx, whKeyId prv_key_id,
+                                   whKeyId pub_key_id, uint32_t options,
+                                   whNvmFlags flags, whKeyId out_key_id,
+                                   const uint8_t* label, uint16_t label_len)
 {
     whMessageCrypto_EcdhRequest* req     = NULL;
     uint8_t*                     dataPtr = NULL;
@@ -2129,6 +2136,12 @@ int wh_Client_EccSharedSecretRequest(whClientContext* ctx, whKeyId prv_key_id,
     }
     if (WH_KEYID_ISERASED(prv_key_id) || WH_KEYID_ISERASED(pub_key_id)) {
         return WH_ERROR_BADARGS;
+    }
+    if ((label_len > 0) && (label == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    if (label_len > WH_NVM_LABEL_LEN) {
+        label_len = WH_NVM_LABEL_LEN;
     }
 
     req_len = sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
@@ -2145,16 +2158,26 @@ int wh_Client_EccSharedSecretRequest(whClientContext* ctx, whKeyId prv_key_id,
         dataPtr, WC_PK_TYPE_ECDH, ctx->cryptoAffinity);
 
     memset(req, 0, sizeof(*req));
-    req->options      = 0;
+    req->options      = options;
     req->privateKeyId = prv_key_id;
     req->publicKeyId  = pub_key_id;
+    req->flags        = flags;
+    req->keyId        = out_key_id;
+    if ((label != NULL) && (label_len > 0)) {
+        memcpy(req->label, label, label_len);
+    }
 
     return wh_Client_SendRequest(ctx, WH_MESSAGE_GROUP_CRYPTO, WC_ALGO_TYPE_PK,
                                  req_len, dataPtr);
 }
 
-int wh_Client_EccSharedSecretResponse(whClientContext* ctx, uint8_t* out,
-                                      uint16_t* inout_size)
+/* Receive and parse an ECDH shared-secret response.
+ *
+ * If `out` is non-NULL the response is treated as export mode: the secret is
+ * copied to `out` and `*inout_size` is updated. If `out_key_id` is non-NULL
+ * the response is treated as cache mode: the assigned keyId is returned. */
+static int _EccSharedSecretResponse(whClientContext* ctx, uint8_t* out,
+                                    uint16_t* inout_size, whKeyId* out_key_id)
 {
     int                           ret;
     uint16_t                      group;
@@ -2186,6 +2209,9 @@ int wh_Client_EccSharedSecretResponse(whClientContext* ctx, uint8_t* out,
         if (res_len < hdr_sz || res->sz > (res_len - hdr_sz)) {
             return WH_ERROR_ABORTED;
         }
+        if (out_key_id != NULL) {
+            *out_key_id = (whKeyId)res->keyId;
+        }
         if (inout_size != NULL) {
             if ((out != NULL) && (res->sz > *inout_size)) {
                 /* Output buffer too small. Report required size and fail
@@ -2202,34 +2228,64 @@ int wh_Client_EccSharedSecretResponse(whClientContext* ctx, uint8_t* out,
     return ret;
 }
 
-int wh_Client_EccSharedSecret(whClientContext* ctx, ecc_key* priv_key,
-                              ecc_key* pub_key, uint8_t* out,
-                              uint16_t* inout_size)
+int wh_Client_EccSharedSecretRequest(whClientContext* ctx, whKeyId prv_key_id,
+                                     whKeyId pub_key_id)
 {
-    int                          ret     = WH_ERROR_OK;
-    uint8_t*                     dataPtr = NULL;
-    whMessageCrypto_EcdhRequest* req     = NULL;
+    return _EccSharedSecretRequest(ctx, prv_key_id, pub_key_id, 0,
+                                   WH_NVM_FLAGS_EPHEMERAL, WH_KEYID_ERASED,
+                                   NULL, 0);
+}
 
-    /* Transaction state */
-    whKeyId prv_key_id;
-    int     prv_evict = 0;
-    whKeyId pub_key_id;
-    int     pub_evict = 0;
+int wh_Client_EccSharedSecretResponse(whClientContext* ctx, uint8_t* out,
+                                      uint16_t* inout_size)
+{
+    return _EccSharedSecretResponse(ctx, out, inout_size, NULL);
+}
 
-    /* Validate response-side args upfront so we never send a request that the
-     * matching *Response would then reject without consuming the reply. */
-    if ((ctx == NULL) || (pub_key == NULL) || (priv_key == NULL) ||
-        ((out != NULL) && (inout_size == NULL))) {
+int wh_Client_EccSharedSecretCacheKeyRequest(
+    whClientContext* ctx, whKeyId prv_key_id, whKeyId pub_key_id,
+    whKeyId out_key_id, whNvmFlags flags, const uint8_t* label,
+    uint16_t label_len)
+{
+    if (flags & WH_NVM_FLAGS_EPHEMERAL) {
         return WH_ERROR_BADARGS;
     }
+    return _EccSharedSecretRequest(ctx, prv_key_id, pub_key_id, 0, flags,
+                                   out_key_id, label, label_len);
+}
+
+int wh_Client_EccSharedSecretCacheKeyResponse(whClientContext* ctx,
+                                              whKeyId*         out_key_id)
+{
+    if ((ctx == NULL) || (out_key_id == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    return _EccSharedSecretResponse(ctx, NULL, NULL, out_key_id);
+}
+
+/* Common path for blocking ECDH shared-secret APIs.
+ *
+ * Handles auto-importing client-local input keys to the server cache (with
+ * EVICT* options on the request so the server cleans them up), sending the
+ * request, polling the response, and tearing down on error. */
+static int _EccSharedSecretBlocking(whClientContext* ctx, ecc_key* priv_key,
+                                    ecc_key* pub_key, whNvmFlags flags,
+                                    uint8_t* out, uint16_t* inout_size,
+                                    whKeyId* inout_key_id, const uint8_t* label,
+                                    uint16_t label_len)
+{
+    int     ret        = WH_ERROR_OK;
+    whKeyId prv_key_id = WH_KEYID_ERASED;
+    whKeyId pub_key_id = WH_KEYID_ERASED;
+    int     prv_evict  = 0;
+    int     pub_evict  = 0;
 
     pub_key_id = WH_DEVCTX_TO_KEYID(pub_key->devCtx);
-    if ((ret == WH_ERROR_OK) && WH_KEYID_ISERASED(pub_key_id)) {
-        /* Must import the key to the server and evict it afterwards */
+    if (WH_KEYID_ISERASED(pub_key_id)) {
         uint8_t    keyLabel[] = "TempEccDh-pub";
-        whNvmFlags flags      = WH_NVM_FLAGS_USAGE_DERIVE;
+        whNvmFlags imp_flags  = WH_NVM_FLAGS_USAGE_DERIVE;
 
-        ret = wh_Client_EccImportKey(ctx, pub_key, &pub_key_id, flags,
+        ret = wh_Client_EccImportKey(ctx, pub_key, &pub_key_id, imp_flags,
                                      sizeof(keyLabel), keyLabel);
         if (ret == WH_ERROR_OK) {
             pub_evict = 1;
@@ -2238,11 +2294,10 @@ int wh_Client_EccSharedSecret(whClientContext* ctx, ecc_key* priv_key,
 
     prv_key_id = WH_DEVCTX_TO_KEYID(priv_key->devCtx);
     if ((ret == WH_ERROR_OK) && WH_KEYID_ISERASED(prv_key_id)) {
-        /* Must import the key to the server and evict it afterwards */
         uint8_t    keyLabel[] = "TempEccDh-prv";
-        whNvmFlags flags      = WH_NVM_FLAGS_USAGE_DERIVE;
+        whNvmFlags imp_flags  = WH_NVM_FLAGS_USAGE_DERIVE;
 
-        ret = wh_Client_EccImportKey(ctx, priv_key, &prv_key_id, flags,
+        ret = wh_Client_EccImportKey(ctx, priv_key, &prv_key_id, imp_flags,
                                      sizeof(keyLabel), keyLabel);
         if (ret == WH_ERROR_OK) {
             prv_evict = 1;
@@ -2250,57 +2305,27 @@ int wh_Client_EccSharedSecret(whClientContext* ctx, ecc_key* priv_key,
     }
 
     if (ret == WH_ERROR_OK) {
-        /* Request Message*/
-        uint16_t group  = WH_MESSAGE_GROUP_CRYPTO;
-        uint16_t action = WC_ALGO_TYPE_PK;
-        uint16_t req_len =
-            sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
         uint32_t options = 0;
+        whKeyId  out_key_id =
+            (inout_key_id != NULL) ? *inout_key_id : WH_KEYID_ERASED;
 
-        /* Get data pointer from the context to use as request/response storage
-         */
-        dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
-        if (dataPtr == NULL) {
-            return WH_ERROR_BADARGS;
+        if (pub_evict != 0) {
+            options |= WH_MESSAGE_CRYPTO_ECDH_OPTIONS_EVICTPUB;
+        }
+        if (prv_evict != 0) {
+            options |= WH_MESSAGE_CRYPTO_ECDH_OPTIONS_EVICTPRV;
         }
 
-        /* Setup generic header and get pointer to request data */
-        req = (whMessageCrypto_EcdhRequest*)_createCryptoRequest(
-            dataPtr, WC_PK_TYPE_ECDH, ctx->cryptoAffinity);
+        ret = _EccSharedSecretRequest(ctx, prv_key_id, pub_key_id, options,
+                                      flags, out_key_id, label, label_len);
+        if (ret == WH_ERROR_OK) {
+            /* Server will evict the temp-imported input keys */
+            pub_evict = prv_evict = 0;
 
-        if (req_len <= WOLFHSM_CFG_COMM_DATA_LEN) {
-            if (pub_evict != 0) {
-                options |= WH_MESSAGE_CRYPTO_ECDH_OPTIONS_EVICTPUB;
-            }
-            if (prv_evict != 0) {
-                options |= WH_MESSAGE_CRYPTO_ECDH_OPTIONS_EVICTPRV;
-            }
-
-            memset(req, 0, sizeof(*req));
-            req->options      = options;
-            req->privateKeyId = prv_key_id;
-            req->publicKeyId  = pub_key_id;
-
-            /* Send Request */
-            ret = wh_Client_SendRequest(ctx, group, action, req_len,
-                                        (uint8_t*)dataPtr);
-            WH_DEBUG_CLIENT_VERBOSE("req sent. priv:%u pub:%u\n",
-                   (unsigned int)req->privateKeyId,
-                   (unsigned int)req->publicKeyId);
-            if (ret == WH_ERROR_OK) {
-                /* Server will evict.  Reset our flags */
-                pub_evict = prv_evict = 0;
-
-                /* Poll shared Response */
-                do {
-                    ret =
-                        wh_Client_EccSharedSecretResponse(ctx, out, inout_size);
-                } while (ret == WH_ERROR_NOTREADY);
-                WH_DEBUG_CLIENT_VERBOSE("resp packet recv. ret:%d\n", ret);
-            }
-        }
-        else {
-            ret = WH_ERROR_BADARGS;
+            do {
+                ret = _EccSharedSecretResponse(ctx, out, inout_size,
+                                               inout_key_id);
+            } while (ret == WH_ERROR_NOTREADY);
         }
     }
 
@@ -2311,8 +2336,38 @@ int wh_Client_EccSharedSecret(whClientContext* ctx, ecc_key* priv_key,
     if (prv_evict != 0) {
         (void)wh_Client_KeyEvict(ctx, prv_key_id);
     }
-    WH_DEBUG_CLIENT_VERBOSE("ret:%d\n", ret);
     return ret;
+}
+
+int wh_Client_EccSharedSecret(whClientContext* ctx, ecc_key* priv_key,
+                              ecc_key* pub_key, uint8_t* out,
+                              uint16_t* inout_size)
+{
+    if ((ctx == NULL) || (pub_key == NULL) || (priv_key == NULL) ||
+        ((out != NULL) && (inout_size == NULL))) {
+        return WH_ERROR_BADARGS;
+    }
+
+    return _EccSharedSecretBlocking(ctx, priv_key, pub_key,
+                                    WH_NVM_FLAGS_EPHEMERAL, out, inout_size,
+                                    NULL, NULL, 0);
+}
+
+int wh_Client_EccSharedSecretCacheKey(whClientContext* ctx, ecc_key* priv_key,
+                                      ecc_key* pub_key, whKeyId* inout_key_id,
+                                      whNvmFlags flags, const uint8_t* label,
+                                      uint16_t label_len)
+{
+    if ((ctx == NULL) || (pub_key == NULL) || (priv_key == NULL) ||
+        (inout_key_id == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    if (flags & WH_NVM_FLAGS_EPHEMERAL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    return _EccSharedSecretBlocking(ctx, priv_key, pub_key, flags, NULL, NULL,
+                                    inout_key_id, label, label_len);
 }
 
 
@@ -3001,31 +3056,168 @@ int wh_Client_Curve25519MakeExportKey(whClientContext* ctx, uint16_t size,
                               key);
 }
 
-int wh_Client_Curve25519SharedSecret(whClientContext* ctx,
-                                     curve25519_key*  priv_key,
-                                     curve25519_key* pub_key, int endian,
-                                     uint8_t* out, uint16_t* out_size)
+/* Build and send a Curve25519 shared-secret request. See
+ * _EccSharedSecretRequest for flags/keyId/label semantics — identical contract.
+ */
+static int
+_Curve25519SharedSecretRequest(whClientContext* ctx, whKeyId prv_key_id,
+                               whKeyId pub_key_id, int endian, uint32_t options,
+                               whNvmFlags flags, whKeyId out_key_id,
+                               const uint8_t* label, uint16_t label_len)
 {
-    int ret = WH_ERROR_OK;
+    whMessageCrypto_Curve25519Request* req     = NULL;
+    uint8_t*                           dataPtr = NULL;
+    uint16_t                           req_len;
 
-    /* Transaction state */
-    whKeyId prv_key_id;
-    int     prv_evict = 0;
-    whKeyId pub_key_id;
-    int     pub_evict = 0;
+    if (ctx == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    if (WH_KEYID_ISERASED(prv_key_id) || WH_KEYID_ISERASED(pub_key_id)) {
+        return WH_ERROR_BADARGS;
+    }
+    if ((label_len > 0) && (label == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    if (label_len > WH_NVM_LABEL_LEN) {
+        label_len = WH_NVM_LABEL_LEN;
+    }
 
-    if ((ctx == NULL) || (pub_key == NULL) || (priv_key == NULL)) {
+    req_len = sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
+    if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
         return WH_ERROR_BADARGS;
     }
 
-    pub_key_id = WH_DEVCTX_TO_KEYID(pub_key->devCtx);
-    if ((ret == WH_ERROR_OK) && WH_KEYID_ISERASED(pub_key_id)) {
-        /* Must import the key to the server and evict it afterwards */
-        uint8_t    keyLabel[] = "TempX25519-pub";
-        whNvmFlags flags      = WH_NVM_FLAGS_USAGE_DERIVE;
+    dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
+    if (dataPtr == NULL) {
+        return WH_ERROR_BADARGS;
+    }
 
-        ret = wh_Client_Curve25519ImportKey(ctx, pub_key, &pub_key_id, flags,
-                                            sizeof(keyLabel), keyLabel);
+    req = (whMessageCrypto_Curve25519Request*)_createCryptoRequest(
+        dataPtr, WC_PK_TYPE_CURVE25519, ctx->cryptoAffinity);
+
+    memset(req, 0, sizeof(*req));
+    req->options      = options;
+    req->privateKeyId = prv_key_id;
+    req->publicKeyId  = pub_key_id;
+    req->endian       = endian;
+    req->flags        = flags;
+    req->keyId        = out_key_id;
+    if ((label != NULL) && (label_len > 0)) {
+        memcpy(req->label, label, label_len);
+    }
+
+    return wh_Client_SendRequest(ctx, WH_MESSAGE_GROUP_CRYPTO, WC_ALGO_TYPE_PK,
+                                 req_len, dataPtr);
+}
+
+/* Receive and parse a Curve25519 shared-secret response. See
+ * _EccSharedSecretResponse for out/out_key_id semantics. */
+static int _Curve25519SharedSecretResponse(whClientContext* ctx, uint8_t* out,
+                                           uint16_t* inout_size,
+                                           whKeyId*  out_key_id)
+{
+    int                                 ret;
+    uint16_t                            group;
+    uint16_t                            action;
+    uint16_t                            res_len = 0;
+    uint8_t*                            dataPtr;
+    whMessageCrypto_Curve25519Response* res = NULL;
+
+    if ((ctx == NULL) || ((out != NULL) && (inout_size == NULL))) {
+        return WH_ERROR_BADARGS;
+    }
+
+    dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
+    if (dataPtr == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_CURVE25519, (uint8_t**)&res);
+    if (ret >= 0) {
+        uint8_t*     res_out = (uint8_t*)(res + 1);
+        const size_t hdr_sz =
+            sizeof(whMessageCrypto_GenericResponseHeader) + sizeof(*res);
+        if (res_len < hdr_sz || res->sz > (res_len - hdr_sz)) {
+            return WH_ERROR_ABORTED;
+        }
+        if (out_key_id != NULL) {
+            *out_key_id = (whKeyId)res->keyId;
+        }
+        if (inout_size != NULL) {
+            if ((out != NULL) && (res->sz > *inout_size)) {
+                *inout_size = res->sz;
+                return WH_ERROR_BUFFER_SIZE;
+            }
+            *inout_size = res->sz;
+            if ((out != NULL) && (res->sz > 0)) {
+                memcpy(out, res_out, res->sz);
+                WH_DEBUG_VERBOSE_HEXDUMP("[client] X25519:", res_out, res->sz);
+            }
+        }
+    }
+    return ret;
+}
+
+int wh_Client_Curve25519SharedSecretRequest(whClientContext* ctx,
+                                            whKeyId          prv_key_id,
+                                            whKeyId pub_key_id, int endian)
+{
+    return _Curve25519SharedSecretRequest(ctx, prv_key_id, pub_key_id, endian,
+                                          0, WH_NVM_FLAGS_EPHEMERAL,
+                                          WH_KEYID_ERASED, NULL, 0);
+}
+
+int wh_Client_Curve25519SharedSecretResponse(whClientContext* ctx, uint8_t* out,
+                                             uint16_t* out_size)
+{
+    return _Curve25519SharedSecretResponse(ctx, out, out_size, NULL);
+}
+
+int wh_Client_Curve25519SharedSecretCacheKeyRequest(
+    whClientContext* ctx, whKeyId prv_key_id, whKeyId pub_key_id, int endian,
+    whKeyId out_key_id, whNvmFlags flags, const uint8_t* label,
+    uint16_t label_len)
+{
+    if (flags & WH_NVM_FLAGS_EPHEMERAL) {
+        return WH_ERROR_BADARGS;
+    }
+    return _Curve25519SharedSecretRequest(ctx, prv_key_id, pub_key_id, endian,
+                                          0, flags, out_key_id, label,
+                                          label_len);
+}
+
+int wh_Client_Curve25519SharedSecretCacheKeyResponse(whClientContext* ctx,
+                                                     whKeyId* out_key_id)
+{
+    if ((ctx == NULL) || (out_key_id == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    return _Curve25519SharedSecretResponse(ctx, NULL, NULL, out_key_id);
+}
+
+static int _Curve25519SharedSecretBlocking(
+    whClientContext* ctx, curve25519_key* priv_key, curve25519_key* pub_key,
+    int endian, whNvmFlags flags, uint8_t* out, uint16_t* out_size,
+    whKeyId* inout_key_id, const uint8_t* label, uint16_t label_len)
+{
+    int     ret        = WH_ERROR_OK;
+    whKeyId prv_key_id = WH_KEYID_ERASED;
+    whKeyId pub_key_id = WH_KEYID_ERASED;
+    int     prv_evict  = 0;
+    int     pub_evict  = 0;
+
+    pub_key_id = WH_DEVCTX_TO_KEYID(pub_key->devCtx);
+    if (WH_KEYID_ISERASED(pub_key_id)) {
+        uint8_t    keyLabel[] = "TempX25519-pub";
+        whNvmFlags imp_flags  = WH_NVM_FLAGS_USAGE_DERIVE;
+
+        ret = wh_Client_Curve25519ImportKey(
+            ctx, pub_key, &pub_key_id, imp_flags, sizeof(keyLabel), keyLabel);
         if (ret == WH_ERROR_OK) {
             pub_evict = 1;
         }
@@ -3033,123 +3225,81 @@ int wh_Client_Curve25519SharedSecret(whClientContext* ctx,
 
     prv_key_id = WH_DEVCTX_TO_KEYID(priv_key->devCtx);
     if ((ret == WH_ERROR_OK) && WH_KEYID_ISERASED(prv_key_id)) {
-        /* Must import the key to the server and evict it afterwards */
         uint8_t    keyLabel[] = "TempX25519-prv";
-        whNvmFlags flags      = WH_NVM_FLAGS_USAGE_DERIVE;
+        whNvmFlags imp_flags  = WH_NVM_FLAGS_USAGE_DERIVE;
 
-        ret = wh_Client_Curve25519ImportKey(ctx, priv_key, &prv_key_id, flags,
-                                            sizeof(keyLabel), keyLabel);
+        ret = wh_Client_Curve25519ImportKey(
+            ctx, priv_key, &prv_key_id, imp_flags, sizeof(keyLabel), keyLabel);
         if (ret == WH_ERROR_OK) {
             prv_evict = 1;
         }
     }
 
     if (ret == WH_ERROR_OK) {
-        whMessageCrypto_Curve25519Request* req     = NULL;
-        uint8_t*                           dataPtr = NULL;
-        uint16_t                           group   = WH_MESSAGE_GROUP_CRYPTO;
-        uint16_t                           action  = WC_ALGO_TYPE_PK;
-        uint32_t                           options = 0;
+        uint32_t options = 0;
+        whKeyId  out_key_id =
+            (inout_key_id != NULL) ? *inout_key_id : WH_KEYID_ERASED;
 
-        uint16_t req_len =
-            sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
-
-        /* Get data pointer from the context to use as request/response storage
-         */
-        dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
-        if (dataPtr == NULL) {
-            return WH_ERROR_BADARGS;
+        if (pub_evict != 0) {
+            options |= WH_MESSAGE_CRYPTO_CURVE25519_OPTIONS_EVICTPUB;
         }
-        memset((uint8_t*)dataPtr, 0, WOLFHSM_CFG_COMM_DATA_LEN);
-
-        /* Setup generic header and get pointer to request data */
-        req = (whMessageCrypto_Curve25519Request*)_createCryptoRequest(
-            dataPtr, WC_PK_TYPE_CURVE25519, ctx->cryptoAffinity);
-
-        if (req_len <= WOLFHSM_CFG_COMM_DATA_LEN) {
-            if (pub_evict != 0) {
-                options |= WH_MESSAGE_CRYPTO_CURVE25519_OPTIONS_EVICTPUB;
-            }
-            if (prv_evict != 0) {
-                options |= WH_MESSAGE_CRYPTO_CURVE25519_OPTIONS_EVICTPRV;
-            }
-
-            memset(req, 0, sizeof(*req));
-            req->options      = options;
-            req->privateKeyId = prv_key_id;
-            req->publicKeyId  = pub_key_id;
-            req->endian       = endian;
-
-            /* Send Request */
-            ret = wh_Client_SendRequest(ctx, group, action, req_len,
-                                        (uint8_t*)dataPtr);
-            WH_DEBUG_CLIENT_VERBOSE("req sent. priv:%u pub:%u\n",
-                   (unsigned int)req->privateKeyId,
-                   (unsigned int)req->publicKeyId);
-            if (ret == WH_ERROR_OK) {
-                whMessageCrypto_Curve25519Response* res = NULL;
-                uint16_t                            res_len;
-                /* Server will evict.  Reset our flags */
-                pub_evict = prv_evict = 0;
-
-                /* Recv Response */
-                do {
-                    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
-                                                 (uint8_t*)dataPtr);
-                } while (ret == WH_ERROR_NOTREADY);
-                WH_DEBUG_CLIENT_VERBOSE("resp packet recv. ret:%d\n",
-                       ret);
-                if (ret == WH_ERROR_OK) {
-                    /* Get response structure pointer, validates generic header
-                     * rc */
-                    ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_CURVE25519,
-                                             (uint8_t**)&res);
-                    /* wolfCrypt allows positive error codes on success in some
-                     * scenarios */
-                    if (ret >= 0) {
-                        uint8_t*     res_out = (uint8_t*)(res + 1);
-                        const size_t hdr_sz =
-                            sizeof(whMessageCrypto_GenericResponseHeader) +
-                            sizeof(*res);
-                        /* Defensive bound: res->sz must fit within the actual
-                         * received frame */
-                        if (res_len < hdr_sz || res->sz > (res_len - hdr_sz)) {
-                            ret = WH_ERROR_ABORTED;
-                        }
-                        if (out_size != NULL) {
-                            if ((ret >= 0) &&
-                                (out != NULL) && (res->sz > *out_size)) {
-                                /* Output buffer too small. Report required size
-                                * and fail rather than silently truncating
-                                * X25519 key material. */
-                                ret = WH_ERROR_BUFFER_SIZE;
-                            }
-                            /* Give caller the required size, even on failure */
-                            *out_size = res->sz;
-                            if ((ret >= 0) && (out != NULL) && (res->sz > 0)) {
-                                memcpy(out, res_out, res->sz);
-                                WH_DEBUG_VERBOSE_HEXDUMP("[client] X25519:",
-                                                         res_out, res->sz);
-                            }
-                        }
-                    }
-                }
-            }
+        if (prv_evict != 0) {
+            options |= WH_MESSAGE_CRYPTO_CURVE25519_OPTIONS_EVICTPRV;
         }
-        else {
-            ret = WH_ERROR_BADARGS;
+
+        ret = _Curve25519SharedSecretRequest(ctx, prv_key_id, pub_key_id,
+                                             endian, options, flags, out_key_id,
+                                             label, label_len);
+        if (ret == WH_ERROR_OK) {
+            pub_evict = prv_evict = 0;
+
+            do {
+                ret = _Curve25519SharedSecretResponse(ctx, out, out_size,
+                                                      inout_key_id);
+            } while (ret == WH_ERROR_NOTREADY);
         }
     }
 
-    /* Evict the keys manually on error */
     if (pub_evict != 0) {
         (void)wh_Client_KeyEvict(ctx, pub_key_id);
     }
     if (prv_evict != 0) {
         (void)wh_Client_KeyEvict(ctx, prv_key_id);
     }
-    WH_DEBUG_CLIENT_VERBOSE("ret:%d\n", ret);
     return ret;
+}
+
+int wh_Client_Curve25519SharedSecret(whClientContext* ctx,
+                                     curve25519_key*  priv_key,
+                                     curve25519_key* pub_key, int endian,
+                                     uint8_t* out, uint16_t* out_size)
+{
+    if ((ctx == NULL) || (pub_key == NULL) || (priv_key == NULL) ||
+        ((out != NULL) && (out_size == NULL))) {
+        return WH_ERROR_BADARGS;
+    }
+
+    return _Curve25519SharedSecretBlocking(ctx, priv_key, pub_key, endian,
+                                           WH_NVM_FLAGS_EPHEMERAL, out,
+                                           out_size, NULL, NULL, 0);
+}
+
+int wh_Client_Curve25519SharedSecretCacheKey(
+    whClientContext* ctx, curve25519_key* priv_key, curve25519_key* pub_key,
+    int endian, whKeyId* inout_key_id, whNvmFlags flags, const uint8_t* label,
+    uint16_t label_len)
+{
+    if ((ctx == NULL) || (pub_key == NULL) || (priv_key == NULL) ||
+        (inout_key_id == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    if (flags & WH_NVM_FLAGS_EPHEMERAL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    return _Curve25519SharedSecretBlocking(ctx, priv_key, pub_key, endian,
+                                           flags, NULL, NULL, inout_key_id,
+                                           label, label_len);
 }
 #endif /* HAVE_CURVE25519 */
 

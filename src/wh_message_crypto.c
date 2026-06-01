@@ -388,6 +388,11 @@ int wh_MessageCrypto_TranslateEcdhRequest(
     WH_T32(magic, dest, src, options);
     WH_T32(magic, dest, src, privateKeyId);
     WH_T32(magic, dest, src, publicKeyId);
+    WH_T32(magic, dest, src, flags);
+    WH_T32(magic, dest, src, keyId);
+    if (src != dest) {
+        memcpy(dest->label, src->label, sizeof(src->label));
+    }
     return 0;
 }
 
@@ -400,6 +405,7 @@ int wh_MessageCrypto_TranslateEcdhResponse(
         return WH_ERROR_BADARGS;
     }
     WH_T32(magic, dest, src, sz);
+    WH_T32(magic, dest, src, keyId);
     return 0;
 }
 
@@ -525,6 +531,11 @@ int wh_MessageCrypto_TranslateCurve25519Request(
     WH_T32(magic, dest, src, privateKeyId);
     WH_T32(magic, dest, src, publicKeyId);
     WH_T32(magic, dest, src, endian);
+    WH_T32(magic, dest, src, flags);
+    WH_T32(magic, dest, src, keyId);
+    if (src != dest) {
+        memcpy(dest->label, src->label, sizeof(src->label));
+    }
     return 0;
 }
 
@@ -537,6 +548,7 @@ int wh_MessageCrypto_TranslateCurve25519Response(
         return WH_ERROR_BADARGS;
     }
     WH_T32(magic, dest, src, sz);
+    WH_T32(magic, dest, src, keyId);
     return 0;
 }
 

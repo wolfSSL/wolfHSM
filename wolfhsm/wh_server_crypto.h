@@ -114,6 +114,14 @@ int wh_Server_MlKemKeyCacheExport(whServerContext* ctx, whKeyId keyId,
                                   MlKemKey* key);
 #endif /* WOLFSSL_HAVE_MLKEM */
 
+/* Store raw key bytes into a server key cache slot with optional metadata.
+ * Used by KDF outputs (HKDF, CMAC-KDF) and key-agreement outputs
+ * (ECDH, X25519) when the caller asked for server-resident storage. */
+int wh_Server_KeyCacheImportRaw(whServerContext* ctx, const uint8_t* keyData,
+                                uint32_t keySize, whKeyId keyId,
+                                whNvmFlags flags, uint16_t label_len,
+                                uint8_t* label);
+
 #ifdef HAVE_HKDF
 /* Store HKDF output into a server key cache with optional metadata */
 int wh_Server_HkdfKeyCacheImport(whServerContext* ctx, const uint8_t* keyData,

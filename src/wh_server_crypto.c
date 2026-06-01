@@ -984,12 +984,15 @@ static int _HandleEccSharedSecret(whServerContext* ctx, uint16_t magic,
                                   uint16_t inSize, void* cryptoDataOut,
                                   uint16_t* outSize)
 {
-    (void)inSize;
-
     int                         ret = WH_ERROR_OK;
     ecc_key                     pub_key[1];
     ecc_key                     prv_key[1];
     whMessageCrypto_EcdhRequest req;
+    whKeyId                     out_key_id = WH_KEYID_ERASED;
+
+    if (inSize < sizeof(whMessageCrypto_EcdhRequest)) {
+        return WH_ERROR_BADARGS;
+    }
 
     /* Translate request */
     ret = wh_MessageCrypto_TranslateEcdhRequest(
@@ -1006,6 +1009,8 @@ static int _HandleEccSharedSecret(whServerContext* ctx, uint16_t magic,
          WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.publicKeyId);
     whKeyId prv_key_id = wh_KeyId_TranslateFromClient(
         WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.privateKeyId);
+    whNvmFlags flags = (whNvmFlags)req.flags;
+    int        cache = !(flags & WH_NVM_FLAGS_EPHEMERAL);
 
     /* Validate key usage policy for key derivation (private key) */
     if (!WH_KEYID_ISERASED(prv_key_id)) {
@@ -1047,6 +1052,41 @@ static int _HandleEccSharedSecret(whServerContext* ctx, uint16_t magic,
         }
         wc_ecc_free(pub_key);
     }
+
+    /* If caching, move the secret out of the response buffer into a cache
+     * slot and return only its keyId. */
+    if ((ret == WH_ERROR_OK) && cache) {
+        out_key_id = wh_KeyId_TranslateFromClient(
+            WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+        /* Hold the NVM lock so id allocation and cache import are atomic
+         * with respect to other server contexts under THREADSAFE. */
+        ret = WH_SERVER_NVM_LOCK(ctx);
+        if (ret == WH_ERROR_OK) {
+            if (WH_KEYID_ISERASED(out_key_id)) {
+                ret = wh_Server_KeystoreGetUniqueId(ctx, &out_key_id);
+            }
+            if (ret == WH_ERROR_OK) {
+                ret = wh_Server_KeyCacheImportRaw(ctx, res_out, res_len,
+                                                  out_key_id, flags,
+                                                  WH_NVM_LABEL_LEN, req.label);
+            }
+            (void)WH_SERVER_NVM_UNLOCK(ctx);
+        } /* WH_SERVER_NVM_LOCK() */
+        /* Scrub the secret from the response buffer regardless of import
+         * success/failure. */
+        memset(res_out, 0, res_len);
+        /* If the cached output id collides with an auto-imported input id,
+         * suppress the matching eviction so cleanup does not delete the
+         * just-cached secret. */
+        if (ret == WH_ERROR_OK) {
+            if (evict_pub && (out_key_id == pub_key_id)) {
+                evict_pub = 0;
+            }
+            if (evict_prv && (out_key_id == prv_key_id)) {
+                evict_prv = 0;
+            }
+        }
+    }
 cleanup:
     if (evict_pub) {
         /* User requested to evict from cache, even if the call failed */
@@ -1058,12 +1098,22 @@ cleanup:
     }
     if (ret == 0) {
         whMessageCrypto_EcdhResponse res;
-        res.sz = res_len;
+        uint16_t                     payload_len;
+        if (cache) {
+            res.sz      = 0;
+            res.keyId   = wh_KeyId_TranslateToClient(out_key_id);
+            payload_len = 0;
+        }
+        else {
+            res.sz      = res_len;
+            res.keyId   = 0;
+            payload_len = (uint16_t)res_len;
+        }
 
         wh_MessageCrypto_TranslateEcdhResponse(
             magic, &res, (whMessageCrypto_EcdhResponse*)cryptoDataOut);
 
-        *outSize = sizeof(whMessageCrypto_EcdhResponse) + res_len;
+        *outSize = sizeof(whMessageCrypto_EcdhResponse) + payload_len;
     }
     return ret;
 }
@@ -1321,11 +1371,10 @@ static int _HandleRng(whServerContext* ctx, uint16_t magic, int devId,
 }
 #endif /* WC_NO_RNG */
 
-#ifdef HAVE_HKDF
-int wh_Server_HkdfKeyCacheImport(whServerContext* ctx, const uint8_t* keyData,
-                                 uint32_t keySize, whKeyId keyId,
-                                 whNvmFlags flags, uint16_t label_len,
-                                 uint8_t* label)
+int wh_Server_KeyCacheImportRaw(whServerContext* ctx, const uint8_t* keyData,
+                                uint32_t keySize, whKeyId keyId,
+                                whNvmFlags flags, uint16_t label_len,
+                                uint8_t* label)
 {
     int            ret = WH_ERROR_OK;
     uint8_t*       cacheBuf;
@@ -1340,12 +1389,8 @@ int wh_Server_HkdfKeyCacheImport(whServerContext* ctx, const uint8_t* keyData,
     ret = wh_Server_KeystoreGetCacheSlotChecked(ctx, keyId, keySize, &cacheBuf,
                                                 &cacheMeta);
     if (ret == WH_ERROR_OK) {
-        /* Copy the key data to cache buffer */
         memcpy(cacheBuf, keyData, keySize);
-    }
 
-    if (ret == WH_ERROR_OK) {
-        /* Set metadata */
         cacheMeta->id     = keyId;
         cacheMeta->len    = keySize;
         cacheMeta->flags  = flags;
@@ -1357,6 +1402,16 @@ int wh_Server_HkdfKeyCacheImport(whServerContext* ctx, const uint8_t* keyData,
     }
 
     return ret;
+}
+
+#ifdef HAVE_HKDF
+int wh_Server_HkdfKeyCacheImport(whServerContext* ctx, const uint8_t* keyData,
+                                 uint32_t keySize, whKeyId keyId,
+                                 whNvmFlags flags, uint16_t label_len,
+                                 uint8_t* label)
+{
+    return wh_Server_KeyCacheImportRaw(ctx, keyData, keySize, keyId, flags,
+                                       label_len, label);
 }
 
 #endif /* HAVE_HKDF */
@@ -1778,14 +1833,17 @@ static int _HandleCurve25519SharedSecret(whServerContext* ctx, uint16_t magic,
                                          uint16_t inSize, void* cryptoDataOut,
                                          uint16_t* outSize)
 {
-    (void)inSize;
-
     int ret;
     curve25519_key priv[1] = {0};
     curve25519_key pub[1] = {0};
 
     whMessageCrypto_Curve25519Request  req;
     whMessageCrypto_Curve25519Response res;
+    whKeyId                            out_key_id = WH_KEYID_ERASED;
+
+    if (inSize < sizeof(whMessageCrypto_Curve25519Request)) {
+        return WH_ERROR_BADARGS;
+    }
 
     /* Translate request */
     ret = wh_MessageCrypto_TranslateCurve25519Request(
@@ -1803,6 +1861,8 @@ static int _HandleCurve25519SharedSecret(whServerContext* ctx, uint16_t magic,
     whKeyId prv_key_id = wh_KeyId_TranslateFromClient(
         WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.privateKeyId);
     int endian          = req.endian;
+    whNvmFlags flags           = (whNvmFlags)req.flags;
+    int        cache           = !(flags & WH_NVM_FLAGS_EPHEMERAL);
 
     /* Validate key usage policy for key derivation (private key) */
     if (!WH_KEYID_ISERASED(prv_key_id)) {
@@ -1846,6 +1906,41 @@ static int _HandleCurve25519SharedSecret(whServerContext* ctx, uint16_t magic,
         }
         wc_curve25519_free(priv);
     }
+
+    /* If caching, move the secret out of the response buffer into a cache
+     * slot and return only its keyId. */
+    if ((ret == WH_ERROR_OK) && cache) {
+        out_key_id = wh_KeyId_TranslateFromClient(
+            WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+        /* Hold the NVM lock so id allocation and cache import are atomic
+         * with respect to other server contexts under THREADSAFE. */
+        ret = WH_SERVER_NVM_LOCK(ctx);
+        if (ret == WH_ERROR_OK) {
+            if (WH_KEYID_ISERASED(out_key_id)) {
+                ret = wh_Server_KeystoreGetUniqueId(ctx, &out_key_id);
+            }
+            if (ret == WH_ERROR_OK) {
+                ret = wh_Server_KeyCacheImportRaw(ctx, res_out, res_len,
+                                                  out_key_id, flags,
+                                                  WH_NVM_LABEL_LEN, req.label);
+            }
+            (void)WH_SERVER_NVM_UNLOCK(ctx);
+        } /* WH_SERVER_NVM_LOCK() */
+        /* Scrub the secret from the response buffer regardless of import
+         * success/failure. */
+        memset(res_out, 0, res_len);
+        /* If the cached output id collides with an auto-imported input id,
+         * suppress the matching eviction so cleanup does not delete the
+         * just-cached secret. */
+        if (ret == WH_ERROR_OK) {
+            if (evict_pub && (out_key_id == pub_key_id)) {
+                evict_pub = 0;
+            }
+            if (evict_prv && (out_key_id == prv_key_id)) {
+                evict_prv = 0;
+            }
+        }
+    }
 cleanup:
     if (evict_pub) {
         /* User requested to evict from cache, even if the call failed */
@@ -1856,13 +1951,23 @@ cleanup:
         (void)wh_Server_KeystoreEvictKey(ctx, prv_key_id);
     }
     if (ret == 0) {
-        res.sz = res_len;
+        uint16_t payload_len;
+        if (cache) {
+            res.sz      = 0;
+            res.keyId   = wh_KeyId_TranslateToClient(out_key_id);
+            payload_len = 0;
+        }
+        else {
+            res.sz      = res_len;
+            res.keyId   = 0;
+            payload_len = (uint16_t)res_len;
+        }
 
         wh_MessageCrypto_TranslateCurve25519Response(
             magic, &res,
             (whMessageCrypto_Curve25519Response*)cryptoDataOut);
 
-        *outSize = sizeof(whMessageCrypto_Curve25519Response) + res_len;
+        *outSize = sizeof(whMessageCrypto_Curve25519Response) + payload_len;
     }
     return ret;
 }
