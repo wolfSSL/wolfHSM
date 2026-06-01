@@ -86,7 +86,8 @@ Translated tests:
 | `wh_test_clientserver.c` (echo and server-info paths) | `client-server/wh_test_echo.c::whTest_Echo`, `client-server/wh_test_server_info.c::whTest_ServerInfo` | Client | pthread test ported, sequential test dropped |
 | `wh_test_wolfcrypt_test.c::whTest_WolfCryptTest` | `client-server/wh_test_wolfcrypt.c::whTest_WolfCryptTest` | Client | |
 | `wh_test_flash_ramsim.c::whTest_Flash_RamSim` | `posix/wh_test_flash_ramsim.c::{whTest_FlashWriteLock, whTest_FlashEraseProgramVerify, whTest_FlashUnitOps}` | POSIX port-specific (`whTestGroup_RunOne`) | remove ramsim coupling and migrate to server group |
-| `wh_test_nvm_flash.c::whTest_NvmFlash` | `posix/wh_test_nvm_flash.c::whTest_NvmAddOverwriteDestroy` | POSIX port-specific (`whTestGroup_RunOne`) | remove ramsim coupling and migrate to server group |
+| `wh_test_nvm_flash.c::{whTest_NvmFlash, whTest_NvmFlash_Recovery}` | `posix/wh_test_nvm_flash.c::{whTest_NvmAddOverwriteDestroy, whTest_NvmRecovery}` | POSIX port-specific (`whTestGroup_RunOne`) | remove ramsim coupling and migrate to server group |
+| `wh_test_flash_fault_inject.c` | `posix/wh_test_flash_fault_inject.c` | helper (no test) | fault-injection flash wrapper used by the recovery test |
 | `wh_test_posix_threadsafe_stress.c::whTest_ThreadSafeStress` | called directly from `posix/wh_test_posix_main.c` | POSIX port-specific (direct call) | |
 | `wh_test_check_struct_padding.c` | `misc/wh_test_check_struct_padding.c` | Build-time (compile-only) | Wire-format `-Wpadded` audit; the POSIX Makefile compiles it with `-Wpadded -DWH_PADDING_CHECK`. Not a runtime test, so not registered in `wh_test_list.c` |
 
@@ -109,6 +110,7 @@ Not yet migrated (still live in `wolfHSM/test/`):
 | `wh_test_server_img_mgr.c::whTest_ServerImgMgr` | |
 | `wh_test_nvmflags.c::whTest_NvmFlags` | |
 | `wh_test_flash_fault_inject.c` | |
+| `wh_test_check_struct_padding.c` | |
 
 ### Other improvements
 - Add callback from `wh_Server_HandleRequestMessage` to allow sleep and avoid a busy loop

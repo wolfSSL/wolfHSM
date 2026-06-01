@@ -38,6 +38,7 @@
 
 #include "wh_test_common.h"
 #include "wh_test_list.h"
+#include "wh_test_flash_fault_inject.h"
 
 #define NVM_FLASH_SIZE       (1024 * 1024)
 #define NVM_FLASH_SECTOR_SZ  (4096)
@@ -297,6 +298,135 @@ int whTest_NvmAddOverwriteDestroy(void* ctx)
 
     WH_TEST_RETURN_ON_FAIL(
         cb->Cleanup(&c->nvmFlashCtx));
+
+    return 0;
+}
+
+
+/* ---- NVM recovery ---- */
+
+/*
+ * Two flash images for the recovery test: one live backing store
+ * and one snapshot replayed as init data to model a reboot over a
+ * dirty flash. File-static to keep 2 MB off the stack.
+ */
+static uint8_t _recoveryMemory[NVM_FLASH_SIZE];
+static uint8_t _recoveryBackup[NVM_FLASH_SIZE];
+
+
+/*
+ * Simulate a failure (eg power loss) during AddObject(), then reinit
+ * and confirm the half-written object is not found.
+ */
+static int _simulateFailureAndRecover(
+    int failAfter, int* dataSize, uint32_t* bytesAvalBefore,
+    whNvmId* objsAvailBefore, uint32_t* bytesReclBefore, whNvmId* objsReclBefore,
+    uint32_t* bytesAvalAfter, whNvmId* objsAvailAfter, uint32_t* bytesReclAfter,
+    whNvmId* objsReclAfter)
+{
+    unsigned char         data[]      = "This is test data for recovery test";
+    whNvmMetadata         meta        = {.id = 42, .label = "RecoveryTest"};
+    const whFlashCb       flashCb[1]  = {WH_FLASH_RAMSIM_CB};
+    whFlashRamsimCtx      flashCtx[1] = {0};
+    whFlashRamsimCfg      flashCfg[1] = {{
+              .size       = NVM_FLASH_SIZE,
+              .sectorSize = NVM_FLASH_SECTOR_SZ,
+              .pageSize   = NVM_FLASH_PAGE_SZ,
+              .erasedByte = (uint8_t)0,
+              .memory     = _recoveryMemory,
+    }};
+    const whFlashCb       flashFaultInjCb[1] = {WH_FLASH_FAULTINJECT_CB};
+    whFlashFaultInjectCtx faultInjCtx[1]     = {0};
+    whFlashFaultInjectCfg faultInjCfg[1]     = {{
+            .realCb  = flashCb,
+            .realCtx = flashCtx,
+            .realCfg = flashCfg,
+    }};
+    const whNvmCb         cb[1]      = {WH_NVM_FLASH_CB};
+    whNvmFlashContext     context[1] = {0};
+    whNvmFlashConfig      cfg        = {
+             .cb      = flashFaultInjCb,
+             .context = faultInjCtx,
+             .config  = faultInjCfg,
+    };
+    whNvmMetadata checkMeta = {0};
+    int           ret       = 0;
+
+    WH_TEST_RETURN_ON_FAIL(cb->Init(context, &cfg));
+    WH_TEST_RETURN_ON_FAIL(cb->GetAvailable(context, bytesAvalBefore,
+                                            objsAvailBefore, bytesReclBefore,
+                                            objsReclBefore));
+    faultInjCtx->failAfterPrograms = failAfter;
+    ret = cb->AddObject(context, (whNvmMetadata*)&meta, (whNvmSize)sizeof(data),
+                        data);
+    WH_TEST_ASSERT_RETURN(ret == WH_ERROR_ABORTED);
+
+    /* Save the memory state for recovery testing */
+    memcpy(_recoveryBackup, _recoveryMemory, NVM_FLASH_SIZE);
+
+    WH_TEST_RETURN_ON_FAIL(cb->Cleanup(context));
+    /* clean-up the memory */
+    memset(_recoveryMemory, 0, NVM_FLASH_SIZE);
+
+    /* Reinit the NVM stack with the backup data from the failure */
+    flashCfg->initData = _recoveryBackup;
+    WH_TEST_RETURN_ON_FAIL(cb->Init(context, &cfg));
+    WH_TEST_ASSERT_RETURN(cb->GetMetadata(context, meta.id, &checkMeta) ==
+                          WH_ERROR_NOTFOUND);
+
+    /* Return available and reclaimable stats after recovery */
+    WH_TEST_RETURN_ON_FAIL(cb->GetAvailable(context, bytesAvalAfter,
+                                            objsAvailAfter, bytesReclAfter,
+                                            objsReclAfter));
+    WH_TEST_RETURN_ON_FAIL(cb->Cleanup(context));
+    *dataSize = sizeof(data);
+    return 0;
+}
+
+
+/*
+ * Recover from a program failure at two points: writing the object
+ * start (the metadata/start record only) and writing the object
+ * count (after the data is on flash). Each scenario checks the
+ * partial object is reclaimed and the live counts are consistent.
+ */
+int whTest_NvmRecovery(void* ctx)
+{
+    int      test_data_len;
+    uint32_t bytesBefore, bytesAfter;
+    whNvmId  objsBefore, objsAfter;
+    uint32_t bytesReclBefore, bytesReclAfter;
+    whNvmId  objsReclBefore, objsReclAfter;
+
+    (void)ctx;
+
+    WH_TEST_PRINT("--simulate failure when writing object start\n");
+    WH_TEST_RETURN_ON_FAIL(_simulateFailureAndRecover(
+        2 /* program epoch, metadata and fail */, &test_data_len, &bytesBefore,
+        &objsBefore, &bytesReclBefore, &objsReclBefore, &bytesAfter, &objsAfter,
+        &bytesReclAfter, &objsReclAfter));
+    /* object should be marked as reclaimable */
+    WH_TEST_ASSERT_RETURN(objsReclAfter == objsReclBefore + 1);
+    /* data should not be marked as reclaimable */
+    WH_TEST_ASSERT_RETURN(bytesAfter == bytesBefore);
+    WH_TEST_ASSERT_RETURN(bytesReclAfter == bytesReclBefore);
+    /* available object should be decremented */
+    WH_TEST_ASSERT_RETURN(objsAfter == objsBefore - 1);
+
+    WH_TEST_PRINT("--simulate failure when writing object count\n");
+    WH_TEST_RETURN_ON_FAIL(_simulateFailureAndRecover(
+        4 /* program epoch, metadata, start, data and fail */, &test_data_len,
+        &bytesBefore, &objsBefore, &bytesReclBefore, &objsReclBefore,
+        &bytesAfter, &objsAfter, &bytesReclAfter, &objsReclAfter));
+    /* object should be marked as reclaimable */
+    WH_TEST_ASSERT_RETURN(objsReclAfter == objsReclBefore + 1);
+    /* data should be marked as reclaimable by test_data_len rounded up to
+     * WHFU_BYTES_PER_UNIT */
+    WH_TEST_ASSERT_RETURN(bytesAfter <= bytesBefore - test_data_len);
+    WH_TEST_ASSERT_RETURN(bytesReclAfter >= bytesReclBefore);
+    WH_TEST_ASSERT_RETURN(bytesReclAfter == bytesBefore - bytesAfter);
+    /* available object should be decremented */
+    WH_TEST_ASSERT_RETURN(objsAfter == objsBefore - 1);
 
     return 0;
 }
