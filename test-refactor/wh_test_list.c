@@ -36,6 +36,7 @@ WH_TEST_DECL(whTest_Comm);
 WH_TEST_DECL(whTest_Dma);
 WH_TEST_DECL(whTest_KeystoreReqSize);
 WH_TEST_DECL(whTest_CertVerify);
+WH_TEST_DECL(whTest_NvmOptional);
 WH_TEST_DECL(whTest_ClientCerts);
 WH_TEST_DECL(whTest_CryptoAes);
 WH_TEST_DECL(whTest_CryptoEcc256);
@@ -55,7 +56,8 @@ const whTestCase whTestsMisc[] = {
 const size_t whTestsMiscCount = sizeof(whTestsMisc) / sizeof(whTestsMisc[0]);
 
 const whTestCase whTestsServer[] = {
-    { "whTest_CertVerify", whTest_CertVerify },
+    {"whTest_CertVerify", whTest_CertVerify},
+    {"whTest_NvmOptional", whTest_NvmOptional},
 };
 const size_t whTestsServerCount = sizeof(whTestsServer) / sizeof(whTestsServer[0]);
 

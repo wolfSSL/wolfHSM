@@ -91,12 +91,15 @@ static int _IsGlobalKey(whKeyId keyId)
  * When WOLFHSM_CFG_GLOBAL_KEYS is enabled, routes to global cache if keyId
  * has USER == 0, otherwise routes to local cache. When disabled, always
  * routes to local cache.
+ *
+ * The global cache lives in the NVM context, which is optional. With no NVM
+ * there is no global cache, so global keys fall back to the local cache.
  */
 static whKeyCacheContext* _GetCacheContext(whServerContext* server,
                                            whKeyId          keyId)
 {
 #ifdef WOLFHSM_CFG_GLOBAL_KEYS
-    if (_IsGlobalKey(keyId)) {
+    if (_IsGlobalKey(keyId) && (server->nvm != NULL)) {
         return &server->nvm->globalCache;
     }
 #else
@@ -160,8 +163,8 @@ static int _KeystoreCheckPolicy(whServerContext* server, whKsOp op,
         return ret;
     }
 
-    /* Check NVM if not in cache */
-    if (!foundInCache) {
+    /* Check NVM if not in cache. No NVM means the key can't be there. */
+    if (!foundInCache && (server->nvm != NULL)) {
         ret = wh_Nvm_GetMetadata(server->nvm, keyId, &nvmMeta);
         if (ret == WH_ERROR_OK) {
             foundInNvm = 1;
@@ -619,7 +622,12 @@ int wh_Server_KeystoreGetUniqueId(whServerContext* server, whNvmId* inout_id)
             return ret;
         }
 
-        /* Check if keyId exists in NVM */
+        /* Check if keyId exists in NVM. With no NVM, not being in the cache
+         * is enough to make this ID unique. */
+        if (server->nvm == NULL) {
+            found = 1;
+            break;
+        }
         ret = wh_Nvm_GetMetadata(server->nvm, buildId, NULL);
         if (ret == WH_ERROR_NOTFOUND) {
             /* key doesn't exist in NVM, we found a candidate ID */
@@ -806,6 +814,11 @@ int wh_Server_KeystoreFreshenKey(whServerContext* server, whKeyId keyId,
         return WH_ERROR_NOTFOUND;
     }
 
+    /* No NVM to check, so a cache miss means not found. */
+    if (server->nvm == NULL) {
+        return WH_ERROR_NOTFOUND;
+    }
+
     /* Not in cache. Check if it is in NVM */
     ret = wh_Nvm_GetMetadata(server->nvm, keyId, tmpMeta);
     if (ret == WH_ERROR_OK) {
@@ -870,8 +883,14 @@ int wh_Server_KeystoreReadKey(whServerContext* server, whKeyId keyId,
         return WH_ERROR_NOTFOUND;
     }
 
-    /* Not in cache, try to read the metadata from NVM */
-    ret = wh_Nvm_GetMetadata(server->nvm, keyId, meta);
+    /* Not in cache, try to read the metadata from NVM. With no NVM the key is
+     * not found, but the SHE master-ecu fallback below still applies. */
+    if (server->nvm != NULL) {
+        ret = wh_Nvm_GetMetadata(server->nvm, keyId, meta);
+    }
+    else {
+        ret = WH_ERROR_NOTFOUND;
+    }
     if (ret == 0) {
         if (meta->len > *outSz)
             return WH_ERROR_NOSPACE;
@@ -978,6 +997,8 @@ int wh_Server_KeystoreCommitKey(whServerContext* server, whNvmId keyId)
     ret = _FindInKeyCache(ctx, keyId, NULL, NULL, &slotBuf, &slotMeta);
     if (ret == WH_ERROR_OK) {
         size = slotMeta->len;
+        /* Committing writes the cached key to NVM. With no NVM there is
+         * nowhere to persist it, so wh_Nvm_* returns an error. */
         ret = wh_Nvm_AddObjectWithReclaim(server->nvm, slotMeta, size, slotBuf);
         if (ret == 0) {
             /* Mark key as committed using unified function */
@@ -1011,12 +1032,20 @@ int wh_Server_KeystoreEraseKey(whServerContext* server, whNvmId keyId)
     /* remove the key from the cache if present */
     (void)wh_Server_KeystoreEvictKey(server, keyId);
 
+    /* No NVM means there is nothing to destroy, same as erasing a key that
+     * was never there. */
+    if (server->nvm == NULL) {
+        return WH_ERROR_OK;
+    }
+
     /* destroy the object */
     return wh_Nvm_DestroyObjects(server->nvm, 1, &keyId);
 }
 
 int wh_Server_KeystoreEraseKeyChecked(whServerContext* server, whNvmId keyId)
 {
+    int ret;
+
     if ((server == NULL) || (WH_KEYID_ISERASED(keyId))) {
         return WH_ERROR_BADARGS;
     }
@@ -1025,8 +1054,14 @@ int wh_Server_KeystoreEraseKeyChecked(whServerContext* server, whNvmId keyId)
         return WH_ERROR_ABORTED;
     }
 
-    /* remove the key from the cache if present */
-    (void)wh_Server_KeystoreEvictKeyChecked(server, keyId);
+    /* remove the key from the cache if present, enforcing policy */
+    ret = wh_Server_KeystoreEvictKeyChecked(server, keyId);
+
+    /* With no NVM, the cache eviction above is the whole erase; return its
+     * result so policy and not-found errors still propagate. */
+    if (server->nvm == NULL) {
+        return ret;
+    }
 
     /* destroy the object */
     return wh_Nvm_DestroyObjectsChecked(server->nvm, 1, &keyId);
@@ -1066,12 +1101,15 @@ int wh_Server_KeystoreRevokeKey(whServerContext* server, whNvmId keyId)
         return ret;
     }
 
-    ret = wh_Nvm_GetMetadata(server->nvm, keyId, NULL);
-    if (ret == WH_ERROR_OK) {
-        isInNvm = 1;
-    }
-    else if (ret != WH_ERROR_NOTFOUND) {
-        return ret;
+    /* No NVM means the key can't be in NVM. */
+    if (server->nvm != NULL) {
+        ret = wh_Nvm_GetMetadata(server->nvm, keyId, NULL);
+        if (ret == WH_ERROR_OK) {
+            isInNvm = 1;
+        }
+        else if (ret != WH_ERROR_NOTFOUND) {
+            return ret;
+        }
     }
 
     /* be sure to have the key in the cache */
