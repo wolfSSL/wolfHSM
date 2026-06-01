@@ -73,6 +73,7 @@ int whTest_FlashWriteLock(void* ctx);
 int whTest_FlashEraseProgramVerify(void* ctx);
 int whTest_FlashUnitOps(void* ctx);
 int whTest_NvmAddOverwriteDestroy(void* ctx);
+int whTest_NvmFlashLog(void* ctx);
 int whTest_NvmRecovery(void* ctx);
 
 /*
@@ -264,6 +265,11 @@ int main(void)
         }
         rc = whTestGroup_RunOne("whTest_NvmAddOverwriteDestroy",
             whTest_NvmAddOverwriteDestroy, NULL);
+        if (rc != 0 && rc != WH_TEST_SKIPPED && miscRc == 0) {
+            miscRc = rc;
+        }
+        rc = whTestGroup_RunOne("whTest_NvmFlashLog",
+            whTest_NvmFlashLog, NULL);
         if (rc != 0 && rc != WH_TEST_SKIPPED && miscRc == 0) {
             miscRc = rc;
         }
