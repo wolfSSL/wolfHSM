@@ -202,6 +202,9 @@ $(BUILD_DIR):
 $(BUILD_DIR)/internal.o: CFLAGS += -Wno-error=implicit-function-declaration
 $(BUILD_DIR)/wh_client_crypto.o: CFLAGS += -Wno-error=sign-compare
 
+# Special case: compile-only struct padding check using -Wpadded
+$(BUILD_DIR)/wh_test_check_struct_padding.o: CFLAGS += -Wpadded -DWH_PADDING_CHECK
+
 $(BUILD_DIR)/%.o: %.c
 	@echo "Compiling: $(notdir $<)"
 	$(CC) $(CFLAGS) $(DEF) $(INC) -c -o $@ $<
