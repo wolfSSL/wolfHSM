@@ -35,6 +35,10 @@
 
 #include "wh_test_list.h"
 
+#ifndef ARRAY_SIZE
+#define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
+#endif
+
 /* Test declarations and weak skip implementations. */
 WH_TEST_DECL(whTest_ClientDevId);
 WH_TEST_DECL(whTest_Comm);
@@ -55,6 +59,14 @@ WH_TEST_DECL(whTest_Crypto_MlDsa);
 WH_TEST_DECL(whTest_Crypto_Rng);
 WH_TEST_DECL(whTest_Crypto_Rsa);
 WH_TEST_DECL(whTest_Crypto_Sha);
+WH_TEST_DECL(whTest_CryptoEcc256);
+WH_TEST_DECL(whTest_CryptoEd25519BufferTooSmall);
+WH_TEST_DECL(whTest_CryptoMlDsaBufferTooSmall);
+WH_TEST_DECL(whTest_CryptoRsaBufferTooSmall);
+WH_TEST_DECL(whTest_CryptoSha256);
+WH_TEST_DECL(whTest_She);
+WH_TEST_DECL(whTest_SheMasterEcuKeyFallback);
+WH_TEST_DECL(whTest_SheReqSizeChecking);
 WH_TEST_DECL(whTest_Echo);
 WH_TEST_DECL(whTest_ServerInfo);
 WH_TEST_DECL(whTest_WolfCryptTest);
@@ -73,13 +85,16 @@ const whTestCase whTestsMisc[] = {
     {"whTest_Dma", whTest_Dma},
     {"whTest_KeystoreReqSize", whTest_KeystoreReqSize},
 };
-const size_t whTestsMiscCount = sizeof(whTestsMisc) / sizeof(whTestsMisc[0]);
+const size_t whTestsMiscCount = ARRAY_SIZE(whTestsMisc);
 
 const whTestCase whTestsServer[] = {
     {"whTest_CertVerify", whTest_CertVerify},
     {"whTest_NvmOptional", whTest_NvmOptional},
+    { "whTest_CertVerify", whTest_CertVerify },
+    { "whTest_SheMasterEcuKeyFallback", whTest_SheMasterEcuKeyFallback },
+    { "whTest_SheReqSizeChecking", whTest_SheReqSizeChecking },
 };
-const size_t whTestsServerCount = sizeof(whTestsServer) / sizeof(whTestsServer[0]);
+const size_t whTestsServerCount = ARRAY_SIZE(whTestsServer);
 
 const whTestCase whTestsClient[] = {
     { "whTest_ClientCerts", whTest_ClientCerts },
@@ -95,6 +110,14 @@ const whTestCase whTestsClient[] = {
     { "whTest_Crypto_Rng", whTest_Crypto_Rng },
     { "whTest_Crypto_Rsa", whTest_Crypto_Rsa },
     { "whTest_Crypto_Sha", whTest_Crypto_Sha },
+    { "whTest_Crypto_Aes", whTest_Crypto_Aes },
+    { "whTest_CryptoEcc256", whTest_CryptoEcc256 },
+    { "whTest_CryptoEd25519BufferTooSmall",
+         whTest_CryptoEd25519BufferTooSmall },
+    { "whTest_CryptoMlDsaBufferTooSmall", whTest_CryptoMlDsaBufferTooSmall },
+    { "whTest_CryptoRsaBufferTooSmall", whTest_CryptoRsaBufferTooSmall },
+    { "whTest_CryptoSha256", whTest_CryptoSha256 },
+    { "whTest_She", whTest_She },
     { "whTest_Echo", whTest_Echo },
     { "whTest_ServerInfo", whTest_ServerInfo },
     { "whTest_WolfCryptTest", whTest_WolfCryptTest },
@@ -107,4 +130,4 @@ const whTestCase whTestsClient[] = {
     { "whTest_AuthSetCredentials", whTest_AuthSetCredentials },
     { "whTest_AuthRequestAuthorization", whTest_AuthRequestAuthorization },
 };
-const size_t whTestsClientCount = sizeof(whTestsClient) / sizeof(whTestsClient[0]);
+const size_t whTestsClientCount = ARRAY_SIZE(whTestsClient);

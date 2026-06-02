@@ -91,6 +91,8 @@ Translated tests:
 | `wh_test_posix_threadsafe_stress.c::whTest_ThreadSafeStress` | called directly from `posix/wh_test_posix_main.c` | POSIX port-specific (direct call) | |
 | `wh_test_check_struct_padding.c` | `misc/wh_test_check_struct_padding.c` | Build-time (compile-only) | Wire-format `-Wpadded` audit; the POSIX Makefile compiles it with `-Wpadded -DWH_PADDING_CHECK`. Not a runtime test, so not registered in `wh_test_list.c` |
 | `wh_test_auth.c` (`whTest_AuthMEM` / `whTest_AuthTest` sub-tests) | `client-server/wh_test_auth.c::{whTest_AuthBadArgs, whTest_AuthLogin, whTest_AuthLogout, whTest_AuthAddUser, whTest_AuthDeleteUser, whTest_AuthSetPermissions, whTest_AuthSetCredentials, whTest_AuthRequestAuthorization}` | Client | Under `WOLFHSM_CFG_ENABLE_AUTHENTICATION` the POSIX server installs an auth context + admin user and the client logs in as admin at connect, so the ordinary client tests run authorized; each auth test brackets its own session (logout to start clean, restore admin on exit). Uses the blocking client API; the legacy own-server setup and single-thread manual-pump are dropped. Build with `make AUTH=1`. The TCP/client-only variant (`whTest_AuthTCP`) is not ported |
+| `wh_test_she.c` (`whTest_SheMasterEcuKeyFallback`, `whTest_SheReqSizeChecking`) | `server/wh_test_she_server.c::{whTest_SheMasterEcuKeyFallback, whTest_SheReqSizeChecking}` | Server | server-internal checks reworked to use the shared server context; the POSIX server config gains a `whServerSheContext` under `WOLFHSM_CFG_SHE_EXTENSION` |
+| `wh_test_she.c::whTest_She` (client flows) | `client-server/wh_test_she.c::whTest_She` | Client | SHE UID/secure-boot state is one-shot per server lifetime, so the three legacy client flows are folded into one test that does `SetUid` plus a single comm-boundary-sized secure boot, then the load-key vectors, UID handling, RND, ECB/CBC/MAC, and write-protect rejection -- all of which only need UID set and secure boot complete. Build with `make SHE=1` |
 
 Not yet migrated (still live in `wolfHSM/test/`):
 
@@ -105,7 +107,6 @@ Not yet migrated (still live in `wolfHSM/test/`):
 | `wh_test_multiclient.c::whTest_MultiClient` | |
 | `wh_test_lock.c::whTest_LockConfig`, `whTest_LockPosix` | `whTest_LockConfig` to be reworked to fit the Misc group, likely with a context param. |
 | `wh_test_log.c::whTest_Log`, `whTest_LogBackend_RunAll` | `whTest_LogBackend_RunAll` to be reworked to fit the Misc group, likely with a context param. |
-| `wh_test_she.c::whTest_She` | |
 | `wh_test_timeout.c::whTest_TimeoutPosix` | |
 | `wh_test_server_img_mgr.c::whTest_ServerImgMgr` | |
 | `wh_test_nvmflags.c::whTest_NvmFlags` | |
