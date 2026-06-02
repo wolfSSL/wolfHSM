@@ -501,8 +501,9 @@ int whTest_CryptoAesKeyUsagePolicies(whClientContext* ctx)
             wh_Client_KeyEvict(ctx, keyId);
         }
     }
-    if (ret != 0)
+    if (ret != 0) {
         goto done;
+    }
 
     /* AES-CTR: decrypt without DECRYPT flag */
     {
@@ -538,8 +539,9 @@ int whTest_CryptoAesKeyUsagePolicies(whClientContext* ctx)
             wh_Client_KeyEvict(ctx, keyId);
         }
     }
-    if (ret != 0)
+    if (ret != 0) {
         goto done;
+    }
 #endif /* WOLFSSL_AES_COUNTER */
 
 #ifdef HAVE_AES_ECB
@@ -574,8 +576,9 @@ int whTest_CryptoAesKeyUsagePolicies(whClientContext* ctx)
             wh_Client_KeyEvict(ctx, keyId);
         }
     }
-    if (ret != 0)
+    if (ret != 0) {
         goto done;
+    }
 
     /* AES-ECB: decrypt without DECRYPT flag */
     {
@@ -608,8 +611,9 @@ int whTest_CryptoAesKeyUsagePolicies(whClientContext* ctx)
             wh_Client_KeyEvict(ctx, keyId);
         }
     }
-    if (ret != 0)
+    if (ret != 0) {
         goto done;
+    }
 #endif /* HAVE_AES_ECB */
 
 #ifdef HAVE_AESGCM
@@ -648,8 +652,9 @@ int whTest_CryptoAesKeyUsagePolicies(whClientContext* ctx)
             wh_Client_KeyEvict(ctx, keyId);
         }
     }
-    if (ret != 0)
+    if (ret != 0) {
         goto done;
+    }
 
     /* AES-GCM: decrypt without DECRYPT flag */
     {
@@ -686,8 +691,9 @@ int whTest_CryptoAesKeyUsagePolicies(whClientContext* ctx)
             wh_Client_KeyEvict(ctx, keyId);
         }
     }
-    if (ret != 0)
+    if (ret != 0) {
         goto done;
+    }
 #endif /* HAVE_AESGCM */
 
 #ifdef WOLFHSM_CFG_DMA
@@ -726,8 +732,9 @@ int whTest_CryptoAesKeyUsagePolicies(whClientContext* ctx)
             wh_Client_KeyEvict(ctx, keyId);
         }
     }
-    if (ret != 0)
+    if (ret != 0) {
         goto done;
+    }
 
     /* AES-CTR DMA: decrypt without DECRYPT flag */
     {
@@ -763,8 +770,9 @@ int whTest_CryptoAesKeyUsagePolicies(whClientContext* ctx)
             wh_Client_KeyEvict(ctx, keyId);
         }
     }
-    if (ret != 0)
+    if (ret != 0) {
         goto done;
+    }
 #endif /* WOLFSSL_AES_COUNTER */
 
 #ifdef HAVE_AES_ECB
@@ -799,8 +807,9 @@ int whTest_CryptoAesKeyUsagePolicies(whClientContext* ctx)
             wh_Client_KeyEvict(ctx, keyId);
         }
     }
-    if (ret != 0)
+    if (ret != 0) {
         goto done;
+    }
 
     /* AES-ECB DMA: decrypt without DECRYPT flag */
     {
@@ -833,8 +842,9 @@ int whTest_CryptoAesKeyUsagePolicies(whClientContext* ctx)
             wh_Client_KeyEvict(ctx, keyId);
         }
     }
-    if (ret != 0)
+    if (ret != 0) {
         goto done;
+    }
 #endif /* HAVE_AES_ECB */
 
 #ifdef HAVE_AES_CBC
@@ -872,8 +882,9 @@ int whTest_CryptoAesKeyUsagePolicies(whClientContext* ctx)
             wh_Client_KeyEvict(ctx, keyId);
         }
     }
-    if (ret != 0)
+    if (ret != 0) {
         goto done;
+    }
 
     /* AES-CBC DMA: decrypt without DECRYPT flag */
     {
@@ -909,8 +920,9 @@ int whTest_CryptoAesKeyUsagePolicies(whClientContext* ctx)
             wh_Client_KeyEvict(ctx, keyId);
         }
     }
-    if (ret != 0)
+    if (ret != 0) {
         goto done;
+    }
 #endif /* HAVE_AES_CBC */
 
 #ifdef HAVE_AESGCM
@@ -950,8 +962,9 @@ int whTest_CryptoAesKeyUsagePolicies(whClientContext* ctx)
             wh_Client_KeyEvict(ctx, keyId);
         }
     }
-    if (ret != 0)
+    if (ret != 0) {
         goto done;
+    }
 
     /* AES-GCM DMA: decrypt without DECRYPT flag */
     {
@@ -989,8 +1002,9 @@ int whTest_CryptoAesKeyUsagePolicies(whClientContext* ctx)
             wh_Client_KeyEvict(ctx, keyId);
         }
     }
-    if (ret != 0)
+    if (ret != 0) {
         goto done;
+    }
 #endif /* HAVE_AESGCM */
 #endif /* WOLFHSM_CFG_DMA */
 

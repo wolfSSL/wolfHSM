@@ -13220,8 +13220,9 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
             wh_Client_KeyEvict(client, keyId);
         }
     }
-    if (ret != 0)
+    if (ret != 0) {
         return ret;
+    }
 
     /* AES decrypt without DECRYPT flag */
     WH_TEST_PRINT("  Testing AES CBC decrypt without DECRYPT flag...\n");
@@ -13294,8 +13295,9 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
             }
         }
     }
-    if (ret != 0)
+    if (ret != 0) {
         return ret;
+    }
 #endif /* HAVE_AES_CBC */
 
 #ifdef WOLFSSL_AES_COUNTER
@@ -13335,8 +13337,9 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
             wh_Client_KeyEvict(client, keyId);
         }
     }
-    if (ret != 0)
+    if (ret != 0) {
         return ret;
+    }
 
     /* AES-CTR: decrypt without DECRYPT flag */
     WH_TEST_PRINT("  Testing AES CTR decrypt without DECRYPT flag...\n");
@@ -13374,8 +13377,9 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
             wh_Client_KeyEvict(client, keyId);
         }
     }
-    if (ret != 0)
+    if (ret != 0) {
         return ret;
+    }
 #endif /* WOLFSSL_AES_COUNTER */
 
 #ifdef HAVE_AES_ECB
@@ -13411,8 +13415,9 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
             wh_Client_KeyEvict(client, keyId);
         }
     }
-    if (ret != 0)
+    if (ret != 0) {
         return ret;
+    }
 
     /* AES-ECB: decrypt without DECRYPT flag */
     WH_TEST_PRINT("  Testing AES ECB decrypt without DECRYPT flag...\n");
@@ -13446,8 +13451,9 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
             wh_Client_KeyEvict(client, keyId);
         }
     }
-    if (ret != 0)
+    if (ret != 0) {
         return ret;
+    }
 #endif /* HAVE_AES_ECB */
 
 #ifdef HAVE_AESGCM
@@ -13487,8 +13493,9 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
             wh_Client_KeyEvict(client, keyId);
         }
     }
-    if (ret != 0)
+    if (ret != 0) {
         return ret;
+    }
 
     /* AES-GCM: decrypt without DECRYPT flag */
     WH_TEST_PRINT("  Testing AES GCM decrypt without DECRYPT flag...\n");
@@ -13526,8 +13533,9 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
             wh_Client_KeyEvict(client, keyId);
         }
     }
-    if (ret != 0)
+    if (ret != 0) {
         return ret;
+    }
 #endif /* HAVE_AESGCM */
 
 #ifdef WOLFHSM_CFG_DMA
@@ -13568,8 +13576,9 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
             wh_Client_KeyEvict(client, keyId);
         }
     }
-    if (ret != 0)
+    if (ret != 0) {
         return ret;
+    }
 
     /* AES-CTR DMA: decrypt without DECRYPT flag */
     WH_TEST_PRINT("  Testing AES CTR DMA decrypt without DECRYPT flag...\n");
@@ -13607,8 +13616,9 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
             wh_Client_KeyEvict(client, keyId);
         }
     }
-    if (ret != 0)
+    if (ret != 0) {
         return ret;
+    }
 #endif /* WOLFSSL_AES_COUNTER */
 
 #ifdef HAVE_AES_ECB
@@ -13644,8 +13654,9 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
             wh_Client_KeyEvict(client, keyId);
         }
     }
-    if (ret != 0)
+    if (ret != 0) {
         return ret;
+    }
 
     /* AES-ECB DMA: decrypt without DECRYPT flag */
     WH_TEST_PRINT("  Testing AES ECB DMA decrypt without DECRYPT flag...\n");
@@ -13679,8 +13690,9 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
             wh_Client_KeyEvict(client, keyId);
         }
     }
-    if (ret != 0)
+    if (ret != 0) {
         return ret;
+    }
 #endif /* HAVE_AES_ECB */
 
 #ifdef HAVE_AES_CBC
@@ -13720,8 +13732,9 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
             wh_Client_KeyEvict(client, keyId);
         }
     }
-    if (ret != 0)
+    if (ret != 0) {
         return ret;
+    }
 
     /* AES-CBC DMA: decrypt without DECRYPT flag */
     WH_TEST_PRINT("  Testing AES CBC DMA decrypt without DECRYPT flag...\n");
@@ -13759,8 +13772,9 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
             wh_Client_KeyEvict(client, keyId);
         }
     }
-    if (ret != 0)
+    if (ret != 0) {
         return ret;
+    }
 #endif /* HAVE_AES_CBC */
 
 #ifdef HAVE_AESGCM
@@ -13801,8 +13815,9 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
             wh_Client_KeyEvict(client, keyId);
         }
     }
-    if (ret != 0)
+    if (ret != 0) {
         return ret;
+    }
 
     /* AES-GCM DMA: decrypt without DECRYPT flag */
     WH_TEST_PRINT("  Testing AES GCM DMA decrypt without DECRYPT flag...\n");
@@ -13842,8 +13857,9 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
             wh_Client_KeyEvict(client, keyId);
         }
     }
-    if (ret != 0)
+    if (ret != 0) {
         return ret;
+    }
 #endif /* HAVE_AESGCM */
 #endif /* WOLFHSM_CFG_DMA */
 
@@ -13897,8 +13913,9 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
             wh_Client_KeyEvict(client, keyId);
         }
     }
-    if (ret != 0)
+    if (ret != 0) {
         return ret;
+    }
 #endif /* HAVE_ECC_SIGN */
 
 #ifdef HAVE_ECC_DHE
@@ -13968,8 +13985,9 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
             wh_Client_KeyEvict(client, keyId);
         }
     }
-    if (ret != 0)
+    if (ret != 0) {
         return ret;
+    }
 #endif /* HAVE_ECC_DHE */
 #endif /* HAVE_ECC */
 
@@ -14012,8 +14030,9 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
             }
         }
     }
-    if (ret != 0)
+    if (ret != 0) {
         return ret;
+    }
 #endif /* HAVE_HKDF */
 
 #if defined(WOLFSSL_CMAC) && !defined(NO_AES) && defined(WOLFSSL_AES_DIRECT)
@@ -14062,8 +14081,9 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
             wh_Client_KeyEvict(client, keyId);
         }
     }
-    if (ret != 0)
+    if (ret != 0) {
         return ret;
+    }
 
     /* CMAC Verify without VERIFY flag */
     WH_TEST_PRINT("  Testing CMAC verify without VERIFY flag...\n");
@@ -14114,8 +14134,9 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
             wh_Client_KeyEvict(client, keyId);
         }
     }
-    if (ret != 0)
+    if (ret != 0) {
         return ret;
+    }
 #endif /* WOLFSSL_CMAC && !NO_AES && WOLFSSL_AES_DIRECT */
 
 #ifdef WOLFHSM_CFG_KEYWRAP
@@ -14164,8 +14185,9 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
             }
         }
     }
-    if (ret != 0)
+    if (ret != 0) {
         return ret;
+    }
 #endif /* WOLFHSM_CFG_KEYWRAP */
 
     WH_TEST_PRINT("Key Usage Policy Tests PASSED\n");
