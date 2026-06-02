@@ -442,6 +442,91 @@ static int whTest_CryptoAesCbcStreaming(whClientContext* ctx)
 }
 #endif /* HAVE_AES_CBC */
 
+#ifdef WOLFSSL_AES_COUNTER
+/* Verifies that wh_Client_AesCtr (and wh_Client_AesCtrDma when DMA is
+ * enabled) reject aes->left > AES_BLOCK_SIZE with WH_ERROR_BADARGS.
+ * wc_AesCtrEncrypt indexes aes->tmp via AES_BLOCK_SIZE - aes->left; an
+ * oversized value would cause an out-of-bounds read disclosing server-side
+ * memory across the HSM trust boundary. */
+int whTest_CryptoAesCtrLeftOob(whClientContext* ctx)
+{
+    int           devId = WH_DEV_ID;
+    int           ret   = 0;
+    int           tmp;
+    Aes           aes[1];
+    uint8_t       cipher[AES_BLOCK_SIZE]  = {0};
+    const uint8_t key[]                   = {0x2b, 0x7e, 0x15, 0x16,
+                                              0x28, 0xae, 0xd2, 0xa6,
+                                              0xab, 0xf7, 0x15, 0x88,
+                                              0x09, 0xcf, 0x4f, 0x3c};
+    const uint8_t iv[AES_BLOCK_SIZE]      = {0x00, 0x01, 0x02, 0x03,
+                                             0x04, 0x05, 0x06, 0x07,
+                                             0x08, 0x09, 0x0a, 0x0b,
+                                             0x0c, 0x0d, 0x0e, 0x0f};
+    const uint8_t plainIn[AES_BLOCK_SIZE] = {0x6b, 0xc1, 0xbe, 0xe2,
+                                             0x2e, 0x40, 0x9f, 0x96,
+                                             0xe9, 0x3d, 0x7e, 0x11,
+                                             0x73, 0x93, 0x17, 0x2a};
+
+    ret = wc_AesInit(aes, NULL, devId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wc_AesInit %d\n", ret);
+    }
+    else {
+        ret = wc_AesSetKeyDirect(aes, key, sizeof(key), iv, AES_ENCRYPTION);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wc_AesSetKeyDirect %d\n", ret);
+        }
+        else {
+            aes->left = AES_BLOCK_SIZE + 1;
+            tmp = wh_Client_AesCtr(ctx, aes, 1, plainIn, sizeof(plainIn),
+                                   cipher);
+            if (tmp != WH_ERROR_BADARGS) {
+                WH_ERROR_PRINT(
+                    "AES-CTR: left > AES_BLOCK_SIZE should be BADARGS, "
+                    "got %d\n",
+                    tmp);
+                ret = -1;
+            }
+        }
+        (void)wc_AesFree(aes);
+    }
+
+#ifdef WOLFHSM_CFG_DMA
+    if (ret == 0) {
+        ret = wc_AesInit(aes, NULL, devId);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wc_AesInit %d\n", ret);
+        }
+        else {
+            ret = wc_AesSetKeyDirect(aes, key, sizeof(key), iv, AES_ENCRYPTION);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to wc_AesSetKeyDirect %d\n", ret);
+            }
+            else {
+                aes->left = AES_BLOCK_SIZE + 1;
+                tmp = wh_Client_AesCtrDma(ctx, aes, 1, plainIn,
+                                          sizeof(plainIn), cipher);
+                if (tmp != WH_ERROR_BADARGS) {
+                    WH_ERROR_PRINT(
+                        "AES-CTR DMA: left > AES_BLOCK_SIZE should be "
+                        "BADARGS, got %d\n",
+                        tmp);
+                    ret = -1;
+                }
+            }
+            (void)wc_AesFree(aes);
+        }
+    }
+#endif /* WOLFHSM_CFG_DMA */
+
+    if (ret == 0) {
+        WH_TEST_PRINT("AES CTR left OOB DEVID=0x%X SUCCESS\n", devId);
+    }
+    return ret;
+}
+#endif /* WOLFSSL_AES_COUNTER */
+
 int whTest_CryptoAesKeyUsagePolicies(whClientContext* ctx)
 {
     int      ret        = 0;

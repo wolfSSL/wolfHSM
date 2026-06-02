@@ -43,6 +43,7 @@ WH_TEST_DECL(whTest_CertVerify);
 WH_TEST_DECL(whTest_NvmOptional);
 WH_TEST_DECL(whTest_ClientCerts);
 WH_TEST_DECL(whTest_Crypto_Aes);
+WH_TEST_DECL(whTest_CryptoAesCtrLeftOob);
 WH_TEST_DECL(whTest_CryptoAesKeyUsagePolicies);
 WH_TEST_DECL(whTest_Crypto_Cmac);
 WH_TEST_DECL(whTest_Crypto_Curve25519);
@@ -74,6 +75,7 @@ const size_t whTestsServerCount = sizeof(whTestsServer) / sizeof(whTestsServer[0
 const whTestCase whTestsClient[] = {
     { "whTest_ClientCerts", whTest_ClientCerts },
     { "whTest_Crypto_Aes", whTest_Crypto_Aes },
+    { "whTest_CryptoAesCtrLeftOob", whTest_CryptoAesCtrLeftOob },
     { "whTest_CryptoAesKeyUsagePolicies", whTest_CryptoAesKeyUsagePolicies },
     { "whTest_Crypto_Cmac", whTest_Crypto_Cmac },
     { "whTest_Crypto_Curve25519", whTest_Crypto_Curve25519 },
