@@ -11023,7 +11023,7 @@ static int whTestCrypto_CmacDmaAsync(whClientContext* ctx, int devId,
     !defined(WOLFSSL_MLDSA_NO_SIGN) &&   \
     !defined(WOLFSSL_MLDSA_NO_MAKE_KEY) && !defined(WOLFSSL_NO_ML_DSA_44)
 static int whTestCrypto_MlDsaWolfCrypt(whClientContext* ctx, int devId,
-                                       WC_RNG* rng)
+                                       WC_RNG* rng, int level)
 {
     (void)ctx;
 
@@ -11033,7 +11033,7 @@ static int whTestCrypto_MlDsaWolfCrypt(whClientContext* ctx, int devId,
     /* Test ML DSA key generation, signing and verification */
     wc_MlDsaKey key;
     byte        msg[] = "Test message for ML DSA signing";
-    byte        sig[WC_MLDSA_44_SIG_SIZE];
+    byte        sig[MLDSA_MAX_SIG_SIZE];
     word32      sigSz = sizeof(sig);
 
     /* Initialize key */
@@ -11043,8 +11043,8 @@ static int whTestCrypto_MlDsaWolfCrypt(whClientContext* ctx, int devId,
         return ret;
     }
 
-    /* Set security level to 44-bit */
-    ret = wc_MlDsaKey_SetParams(&key, WC_ML_DSA_44);
+    /* Set the requested ML-DSA security level */
+    ret = wc_MlDsaKey_SetParams(&key, level);
     if (ret != 0) {
         WH_ERROR_PRINT("Failed to set ML DSA params: %d\n", ret);
         wc_MlDsaKey_Free(&key);
@@ -11114,7 +11114,7 @@ static int whTestCrypto_MlDsaWolfCrypt(whClientContext* ctx, int devId,
 }
 
 static int whTestCrypto_MlDsaClient(whClientContext* ctx, int devId,
-                                    WC_RNG* rng)
+                                    WC_RNG* rng, int level)
 {
     (void)devId;
     (void)rng;
@@ -11131,7 +11131,7 @@ static int whTestCrypto_MlDsaClient(whClientContext* ctx, int devId,
 
     /* Generate ephemeral key using non-DMA client API */
     if (ret == 0) {
-        ret = wh_Client_MlDsaMakeExportKey(ctx, WC_ML_DSA_44, 0, key);
+        ret = wh_Client_MlDsaMakeExportKey(ctx, level, 0, key);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed to generate ML-DSA key: %d\n", ret);
         }
@@ -11238,7 +11238,7 @@ static int whTestCrypto_MlDsaClient(whClientContext* ctx, int devId,
 #if defined(WOLFSSL_MLDSA_PUBLIC_KEY) && \
     !defined(WOLFSSL_MLDSA_NO_MAKE_KEY) && !defined(WOLFSSL_NO_ML_DSA_44)
 static int whTestCrypto_MlDsaExportPublic(whClientContext* ctx, int devId,
-                                          WC_RNG* rng)
+                                          WC_RNG* rng, int level)
 {
     (void)rng;
 
@@ -11251,9 +11251,9 @@ static int whTestCrypto_MlDsaExportPublic(whClientContext* ctx, int devId,
     uint16_t    denyLen = sizeof(denyBuf);
     (void)devId;
 
-    /* MakeCacheKey at the smallest supported level, with NONEXPORTABLE. */
+    /* MakeCacheKey at the requested security level, with NONEXPORTABLE. */
     ret = wh_Client_MlDsaMakeCacheKey(
-        ctx, 0, WC_ML_DSA_44, &keyId,
+        ctx, 0, level, &keyId,
         WH_NVM_FLAGS_USAGE_SIGN | WH_NVM_FLAGS_USAGE_VERIFY |
             WH_NVM_FLAGS_NONEXPORTABLE,
         0, NULL);
@@ -11280,7 +11280,7 @@ static int whTestCrypto_MlDsaExportPublic(whClientContext* ctx, int devId,
         ret = wc_MlDsaKey_Init(pub, NULL, INVALID_DEVID);
         if (ret == 0) {
             /* Must set params before the decoder can populate the key. */
-            ret = wc_MlDsaKey_SetParams(pub, WC_ML_DSA_44);
+            ret = wc_MlDsaKey_SetParams(pub, level);
         }
         if (ret == 0) {
             ret = wh_Client_MlDsaExportPublicKey(ctx, keyId, pub, 0, NULL);
@@ -11311,7 +11311,7 @@ static int whTestCrypto_MlDsaExportPublic(whClientContext* ctx, int devId,
 
 #ifdef WOLFHSM_CFG_DMA
 static int whTestCrypto_MlDsaDmaClient(whClientContext* ctx, int devId,
-                                       WC_RNG* rng)
+                                       WC_RNG* rng, int level)
 {
     (void)rng;
 
@@ -11344,7 +11344,7 @@ static int whTestCrypto_MlDsaDmaClient(whClientContext* ctx, int devId,
 
     /* Generate ephemeral key using DMA */
     if (ret == 0) {
-        ret = wh_Client_MlDsaMakeExportKeyDma(ctx, WC_ML_DSA_44, key);
+        ret = wh_Client_MlDsaMakeExportKeyDma(ctx, level, key);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed to generate ML-DSA key using DMA: %d\n",
                            ret);
@@ -11529,7 +11529,7 @@ static int whTestCrypto_MlDsaDmaClient(whClientContext* ctx, int devId,
 
 #ifdef WOLFSSL_MLDSA_PUBLIC_KEY
 static int whTestCrypto_MlDsaExportPublicDma(whClientContext* ctx, int devId,
-                                             WC_RNG* rng)
+                                             WC_RNG* rng, int level)
 {
     (void)rng;
     (void)devId;
@@ -11540,9 +11540,9 @@ static int whTestCrypto_MlDsaExportPublicDma(whClientContext* ctx, int devId,
     uint8_t     denyBuf[1];
     uint16_t    denyLen = sizeof(denyBuf);
 
-    /* Cache an ML-DSA-44 keypair NONEXPORTABLE on the HSM. */
+    /* Cache an ML-DSA keypair NONEXPORTABLE on the HSM at the given level. */
     ret = wh_Client_MlDsaMakeCacheKey(
-        ctx, 0, WC_ML_DSA_44, &keyId,
+        ctx, 0, level, &keyId,
         WH_NVM_FLAGS_USAGE_SIGN | WH_NVM_FLAGS_USAGE_VERIFY |
             WH_NVM_FLAGS_NONEXPORTABLE,
         0, NULL);
@@ -11571,7 +11571,7 @@ static int whTestCrypto_MlDsaExportPublicDma(whClientContext* ctx, int devId,
     if (ret == 0) {
         ret = wc_MlDsaKey_Init(pub, NULL, INVALID_DEVID);
         if (ret == 0) {
-            ret = wc_MlDsaKey_SetParams(pub, WC_ML_DSA_44);
+            ret = wc_MlDsaKey_SetParams(pub, level);
         }
         if (ret == 0) {
             ret = wh_Client_MlDsaExportPublicKeyDma(ctx, keyId, pub, 0, NULL);
@@ -14131,47 +14131,77 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     !defined(WOLFSSL_MLDSA_NO_MAKE_KEY) && \
     !defined(WOLFSSL_NO_ML_DSA_44)
 
-    i = 0;
-    while (ret == WH_ERROR_OK && i < WH_NUM_DEVIDS) {
-#ifdef WOLFHSM_CFG_TEST_CLIENT_LARGE_DATA_DMA_ONLY
-        if (WH_DEV_IDS_ARRAY[i] != WH_DEV_ID_DMA) {
-            i++;
-            continue;
-        }
-#endif /* WOLFHSM_CFG_TEST_CLIENT_LARGE_DATA_DMA_ONLY */
-        ret = whTestCrypto_MlDsaWolfCrypt(client, WH_DEV_IDS_ARRAY[i], rng);
-        if (ret == WH_ERROR_OK) {
-            i++;
-        }
-    }
+    /* Exercise the ML-DSA client/server tests at every enabled security
+     * level (44/65/87). */
+    {
+        int mldsaLevels[3];
+        int mldsaLevelCnt = 0;
+        int li;
 
-    if (ret == 0) {
-        ret = whTestCrypto_MlDsaClient(client, WH_DEV_ID, rng);
-    }
+#ifndef WOLFSSL_NO_ML_DSA_44
+        mldsaLevels[mldsaLevelCnt++] = WC_ML_DSA_44;
+#endif
+#ifndef WOLFSSL_NO_ML_DSA_65
+        mldsaLevels[mldsaLevelCnt++] = WC_ML_DSA_65;
+#endif
+#ifndef WOLFSSL_NO_ML_DSA_87
+        mldsaLevels[mldsaLevelCnt++] = WC_ML_DSA_87;
+#endif
+
+        for (li = 0; (ret == 0) && (li < mldsaLevelCnt); li++) {
+            int level = mldsaLevels[li];
+
+            i = 0;
+            while (ret == WH_ERROR_OK && i < WH_NUM_DEVIDS) {
+#ifdef WOLFHSM_CFG_TEST_CLIENT_LARGE_DATA_DMA_ONLY
+                if (WH_DEV_IDS_ARRAY[i] != WH_DEV_ID_DMA) {
+                    i++;
+                    continue;
+                }
+#endif /* WOLFHSM_CFG_TEST_CLIENT_LARGE_DATA_DMA_ONLY */
+                ret = whTestCrypto_MlDsaWolfCrypt(client, WH_DEV_IDS_ARRAY[i],
+                                                  rng, level);
+                if (ret == WH_ERROR_OK) {
+                    i++;
+                }
+            }
+
+            if (ret == 0) {
+                ret = whTestCrypto_MlDsaClient(client, WH_DEV_ID, rng, level);
+            }
 
 #ifdef WOLFSSL_MLDSA_PUBLIC_KEY
-    if (ret == 0) {
-        ret = whTestCrypto_MlDsaExportPublic(client, WH_DEV_ID, rng);
-        if (ret != 0) {
-            WH_ERROR_PRINT("ML-DSA export-public test failed: %d\n", ret);
-        }
-    }
+            if (ret == 0) {
+                ret = whTestCrypto_MlDsaExportPublic(client, WH_DEV_ID, rng,
+                                                     level);
+                if (ret != 0) {
+                    WH_ERROR_PRINT(
+                        "ML-DSA export-public test failed (level %d): %d\n",
+                        level, ret);
+                }
+            }
 #endif
 
 #ifdef WOLFHSM_CFG_DMA
-    if (ret == 0) {
-        ret = whTestCrypto_MlDsaDmaClient(client, WH_DEV_ID_DMA, rng);
-    }
+            if (ret == 0) {
+                ret = whTestCrypto_MlDsaDmaClient(client, WH_DEV_ID_DMA, rng,
+                                                  level);
+            }
 #ifdef WOLFSSL_MLDSA_PUBLIC_KEY
-    if (ret == 0) {
-        ret = whTestCrypto_MlDsaExportPublicDma(client, WH_DEV_ID_DMA, rng);
-        if (ret != 0) {
-            WH_ERROR_PRINT(
-                "ML-DSA export-public DMA test failed: %d\n", ret);
-        }
-    }
+            if (ret == 0) {
+                ret = whTestCrypto_MlDsaExportPublicDma(client, WH_DEV_ID_DMA,
+                                                        rng, level);
+                if (ret != 0) {
+                    WH_ERROR_PRINT(
+                        "ML-DSA export-public DMA test failed (level %d): "
+                        "%d\n",
+                        level, ret);
+                }
+            }
 #endif
 #endif /* WOLFHSM_CFG_DMA*/
+        }
+    }
 #endif /* !defined(WOLFSSL_MLDSA_NO_VERIFY) && \
           !defined(WOLFSSL_MLDSA_NO_SIGN) && \
           !defined(WOLFSSL_MLDSA_NO_MAKE_KEY) && \

@@ -768,25 +768,19 @@ int wh_Server_MlDsaKeyCacheImport(whServerContext* ctx, wc_MlDsaKey* key,
     whNvmMetadata* cacheMeta;
     uint16_t       der_size;
 
-    const uint16_t MAX_MLDSA_DER_SIZE =
-#if !defined(WOLFSSL_NO_ML_DSA_87)
-        WC_MLDSA_87_PRV_KEY_DER_SIZE;
-#elif !defined(WOLFSSL_NO_ML_DSA_65)
-        WC_MLDSA_65_PRV_KEY_DER_SIZE;
-#else
-        WC_MLDSA_44_PRV_KEY_DER_SIZE;
-#endif
-
     if ((ctx == NULL) || (key == NULL) || (WH_KEYID_ISERASED(keyId)) ||
         ((label != NULL) && (label_len > sizeof(cacheMeta->label)))) {
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Server_KeystoreGetCacheSlotChecked(ctx, keyId, MAX_MLDSA_DER_SIZE,
-                                                &cacheBuf, &cacheMeta);
+    /* The key may hold a full keypair, in which case
+     * wh_Crypto_MlDsaSerializeKeyDer() encodes both the public and private key
+     * (wc_MlDsaKey_KeyToDer()), so size for both keys, not just the private key. */
+    ret = wh_Server_KeystoreGetCacheSlotChecked(
+        ctx, keyId, MLDSA_MAX_BOTH_KEY_DER_SIZE, &cacheBuf, &cacheMeta);
     if (ret == WH_ERROR_OK) {
-        ret = wh_Crypto_MlDsaSerializeKeyDer(key, MAX_MLDSA_DER_SIZE, cacheBuf,
-                                             &der_size);
+        ret = wh_Crypto_MlDsaSerializeKeyDer(key, MLDSA_MAX_BOTH_KEY_DER_SIZE,
+                                             cacheBuf, &der_size);
         WH_DEBUG_SERVER_VERBOSE("keyId:%u, ret:%d\n", keyId, ret);
     }
 
