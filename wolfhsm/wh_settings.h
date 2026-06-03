@@ -225,12 +225,17 @@
 
 /* Number of RAM keys */
 #ifndef WOLFHSM_CFG_SERVER_KEYCACHE_COUNT
+#if defined(WOLFHSM_CFG_SHE_EXTENSION)
+/* Default to large enough cache to hold all SHE keys */
+#define WOLFHSM_CFG_SERVER_KEYCACHE_COUNT 16
+#else
 #define WOLFHSM_CFG_SERVER_KEYCACHE_COUNT  8
+#endif
 #endif
 
 /* Number of big RAM keys */
 #ifndef WOLFHSM_CFG_SERVER_KEYCACHE_BIG_COUNT
-#define WOLFHSM_CFG_SERVER_KEYCACHE_BIG_COUNT  1
+#define WOLFHSM_CFG_SERVER_KEYCACHE_BIG_COUNT 3
 #endif
 
 /* Size in bytes of each key cache buffer  */
