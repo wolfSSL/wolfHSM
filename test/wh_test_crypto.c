@@ -972,6 +972,17 @@ static int whTest_CryptoRsaAsync(whClientContext* ctx, WC_RNG* rng)
         }
     }
 
+    /* Evict keys now that we are done with them to free up cache space */
+    if (ret == WH_ERROR_OK && keyCached) {
+        ret = wh_Client_KeyEvict(ctx, keyId);
+        if (ret != WH_ERROR_OK) {
+            WH_ERROR_PRINT("KeyEvict after sign/verify failed: %d\n", ret);
+        }
+        else {
+            keyCached = 0;
+        }
+    }
+
     /* 9) RsaMakeExportKey async: server generates ephemeral key, returns DER.
      */
     if (ret == WH_ERROR_OK) {
