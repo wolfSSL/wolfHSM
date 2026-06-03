@@ -33,9 +33,22 @@
 #include "wolfhsm/wh_comm.h"
 #include "wolfhsm/wh_client.h"
 
+#ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
+#include "wolfhsm/wh_auth.h"
+#endif
+
 #include "wh_test_common.h"
 #include "wh_test_posix_server.h"
 #include "wh_test_posix_client.h"
+
+#ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
+#ifndef TEST_ADMIN_USERNAME
+#define TEST_ADMIN_USERNAME "admin"
+#endif
+#ifndef TEST_ADMIN_PIN
+#define TEST_ADMIN_PIN "1234"
+#endif
+#endif
 
 
 /* Client-side transport state (buffers are shared with the
@@ -79,6 +92,22 @@ int whTestPosix_Client_Init(whClientContext* client)
     WH_TEST_RETURN_ON_FAIL(wh_Client_Init(client, &cCfg));
     WH_TEST_RETURN_ON_FAIL(
         wh_Client_CommInit(client, &clientId, &serverId));
+
+#ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
+    /* The server enforces auth, so log in as admin once at connect. This
+     * is the session baseline every client test inherits; the auth tests
+     * temporarily change it and restore it. */
+    {
+        int32_t  server_rc = 0;
+        whUserId user_id   = WH_USER_ID_INVALID;
+        WH_TEST_RETURN_ON_FAIL(wh_Client_AuthLogin(
+            client, WH_AUTH_METHOD_PIN, TEST_ADMIN_USERNAME, TEST_ADMIN_PIN,
+            (uint16_t)strlen(TEST_ADMIN_PIN), &server_rc, &user_id));
+        if (server_rc != WH_ERROR_OK) {
+            return server_rc;
+        }
+    }
+#endif
 
     return 0;
 }

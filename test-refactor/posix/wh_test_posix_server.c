@@ -37,6 +37,11 @@
 #include "wolfhsm/wh_comm.h"
 #include "wolfhsm/wh_server.h"
 
+#ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
+#include "wolfhsm/wh_auth.h"
+#include "wolfhsm/wh_auth_base.h"
+#endif
+
 #ifndef WOLFHSM_CFG_NO_CRYPTO
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/random.h"
@@ -68,6 +73,31 @@ static whNvmContext      _nvm;
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
 static whServerCryptoContext _crypto;
+#endif
+
+#ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
+#ifndef TEST_ADMIN_USERNAME
+#define TEST_ADMIN_USERNAME "admin"
+#endif
+#ifndef TEST_ADMIN_PIN
+#define TEST_ADMIN_PIN "1234"
+#endif
+/* Auth manager backed by the in-memory base backend. The server
+ * provisions a single admin user with full permissions so the client
+ * suite can authenticate; the client logs in as admin at connect (see
+ * whTestPosix_Client_Init). */
+static whAuthCb _authCb = {
+    .Init               = wh_Auth_BaseInit,
+    .Cleanup            = wh_Auth_BaseCleanup,
+    .Login              = wh_Auth_BaseLogin,
+    .Logout             = wh_Auth_BaseLogout,
+    .UserAdd            = wh_Auth_BaseUserAdd,
+    .UserDelete         = wh_Auth_BaseUserDelete,
+    .UserSetPermissions = wh_Auth_BaseUserSetPermissions,
+    .UserGet            = wh_Auth_BaseUserGet,
+    .UserSetCredentials = wh_Auth_BaseUserSetCredentials,
+};
+static whAuthContext _auth;
 #endif
 
 /* Mem transport -- buffers and server-side state.
@@ -139,6 +169,30 @@ int whTestPosix_Server_Init(whServerContext* server)
     sCfg.devId      = INVALID_DEVID;
 #endif
 
+#ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
+    {
+        whAuthConfig      authCfg = {0};
+        whAuthPermissions perms;
+        whUserId          adminId = WH_USER_ID_INVALID;
+        int               i;
+
+        authCfg.cb = &_authCb;
+        WH_TEST_RETURN_ON_FAIL(wh_Auth_Init(&_auth, &authCfg));
+
+        /* Admin user: full permissions, no key-id restrictions. */
+        memset(&perms, 0xFF, sizeof(perms));
+        perms.keyIdCount = 0;
+        for (i = 0; i < WH_AUTH_MAX_KEY_IDS; i++) {
+            perms.keyIds[i] = 0;
+        }
+        WH_TEST_RETURN_ON_FAIL(wh_Auth_BaseUserAdd(
+            &_auth, TEST_ADMIN_USERNAME, &adminId, perms, WH_AUTH_METHOD_PIN,
+            TEST_ADMIN_PIN, (uint16_t)strlen(TEST_ADMIN_PIN)));
+
+        sCfg.auth = &_auth;
+    }
+#endif
+
     return wh_Server_Init(server, &sCfg);
 }
 
@@ -150,6 +204,9 @@ int whTestPosix_Server_Cleanup(whServerContext* server)
     }
 
     wh_Server_Cleanup(server);
+#ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
+    wh_Auth_Cleanup(&_auth);
+#endif
     wh_Nvm_Cleanup(&_nvm);
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
