@@ -14134,36 +14134,32 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     /* Exercise the ML-DSA client/server tests at every enabled security
      * level (44/65/87). */
     {
-        int mldsaLevels[3];
-        int mldsaLevelCnt = 0;
-        int li;
-
+        const int mldsaLevels[] = {
 #ifndef WOLFSSL_NO_ML_DSA_44
-        mldsaLevels[mldsaLevelCnt++] = WC_ML_DSA_44;
+            WC_ML_DSA_44,
 #endif
 #ifndef WOLFSSL_NO_ML_DSA_65
-        mldsaLevels[mldsaLevelCnt++] = WC_ML_DSA_65;
+            WC_ML_DSA_65,
 #endif
 #ifndef WOLFSSL_NO_ML_DSA_87
-        mldsaLevels[mldsaLevelCnt++] = WC_ML_DSA_87;
+            WC_ML_DSA_87,
 #endif
+        };
+        const int mldsaLevelCnt =
+            (int)(sizeof(mldsaLevels) / sizeof(mldsaLevels[0]));
+        int li;
 
         for (li = 0; (ret == 0) && (li < mldsaLevelCnt); li++) {
             int level = mldsaLevels[li];
 
-            i = 0;
-            while (ret == WH_ERROR_OK && i < WH_NUM_DEVIDS) {
+            for (i = 0; (ret == WH_ERROR_OK) && (i < WH_NUM_DEVIDS); i++) {
 #ifdef WOLFHSM_CFG_TEST_CLIENT_LARGE_DATA_DMA_ONLY
                 if (WH_DEV_IDS_ARRAY[i] != WH_DEV_ID_DMA) {
-                    i++;
                     continue;
                 }
 #endif /* WOLFHSM_CFG_TEST_CLIENT_LARGE_DATA_DMA_ONLY */
                 ret = whTestCrypto_MlDsaWolfCrypt(client, WH_DEV_IDS_ARRAY[i],
                                                   rng, level);
-                if (ret == WH_ERROR_OK) {
-                    i++;
-                }
             }
 
             if (ret == 0) {

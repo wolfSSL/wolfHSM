@@ -759,6 +759,12 @@ int wh_Server_CacheExportCurve25519Key(whServerContext* server, whKeyId keyId,
 #endif /* HAVE_CURVE25519 */
 
 #ifdef WOLFSSL_HAVE_MLDSA
+/* The big key cache buffer must be able to hold a full ML-DSA keypair DER,
+ * otherwise wh_Server_MlDsaKeyCacheImport() can never succeed. */
+WH_UTILS_STATIC_ASSERT(
+    WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE >= MLDSA_MAX_BOTH_KEY_DER_SIZE,
+    "WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE too small for ML-DSA keypair DER");
+
 int wh_Server_MlDsaKeyCacheImport(whServerContext* ctx, wc_MlDsaKey* key,
                                   whKeyId keyId, whNvmFlags flags,
                                   uint16_t label_len, uint8_t* label)
