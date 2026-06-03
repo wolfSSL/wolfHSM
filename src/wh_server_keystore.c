@@ -886,7 +886,11 @@ int wh_Server_KeystoreReadKey(whServerContext* server, whKeyId keyId,
     }
     /* cache key if free slot, will only kick out other committed keys */
     if (ret == 0 && out != NULL) {
-        (void)wh_Server_KeystoreCacheKey(server, meta, out);
+        if (wh_Server_KeystoreCacheKey(server, meta, out) == WH_ERROR_OK) {
+            /* Cached key found in NVM. Mark it committed so it can be
+               evicted later. */
+            _MarkKeyCommitted(_GetCacheContext(server, keyId), keyId, 1);
+        }
     }
 #ifdef WOLFHSM_CFG_SHE_EXTENSION
     /* use empty key of zeros if we couldn't find the master ecu key */
