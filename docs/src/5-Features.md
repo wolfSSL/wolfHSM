@@ -16,6 +16,7 @@ This chapter provides a detailed overview of the high level features that wolfHS
     - [Object Metadata and Access Attributes](#object-metadata-and-access-attributes)
     - [NVM Backends](#nvm-backends)
     - [Flash Abstraction](#flash-abstraction)
+    - [Optional NVM Backing](#optional-nvm-backing)
 - [Keystore](#keystore)
     - [Key Cache, Key IDs, and NVM Backing Store](#key-cache-key-ids-and-nvm-backing-store)
     - [Global Keys](#global-keys)
@@ -235,6 +236,31 @@ wolfHSM ships with two reference flash drivers usable on host platforms and in t
 - **RAM-backed flash simulator** (`wolfhsm/wh_flash_ramsim.h`): emulates flash semantics (erase-then-program, partition alignment, configurable erased-byte value) entirely in RAM, used by the test suite and useful when bringing up a new port
 
 Vendor-supplied flash drivers ship with the platform ports under `port/<vendor>/`. New platforms are integrated into wolfHSM by implementing the `whFlashCb` callback set against the device's flash controller; nothing in the NVM library above this layer needs to change.
+
+### Optional NVM Backing
+
+The NVM subsystem described above is **optional**. A server can be initialized with `whServerConfig.nvm == NULL`, in which case it runs with no persistent object store at all. This suits clients and cores that only need cached-key cryptography and have no flash available for an NVM partition — at the cost of a reduced feature set, since everything that depends on persistent storage becomes unavailable.
+
+With no NVM, the [keystore](#keystore) is effectively cache-only. A key is served from the RAM [key cache](#key-cache-key-ids-and-nvm-backing-store) when present; a cache miss would normally fall back to NVM, but with no NVM configured it simply reports `WH_ERROR_NOTFOUND` — the same result as if the key were absent from the store. Keys are made available by *priming* the cache out of band: either by caching key material directly on the server, or by having the client supply [wrapped keys](#wrapped-keys) that are unwrapped directly into the cache.
+
+What works with no NVM:
+
+- Cryptographic operations against keys that are primed in the cache.
+- Key caching, eviction, and (cache-only) erase.
+- SHE encrypt/decrypt/CMAC and secure boot against keys primed in the cache.
+- Key wrap/unwrap and unwrap-and-cache, provided the wrapping key (KEK) is primed in the cache.
+
+What requires NVM, and so fails gracefully at runtime when it is absent (returning an error rather than crashing):
+
+- The NVM object request API (list/read/add/destroy).
+- [Certificate-chain verification](#certificate-management) against trusted roots stored in NVM.
+- [Monotonic counters](#non-volatile-monotonic-counters).
+- Committing a cached key to persistent storage (`wh_Server_KeystoreCommitKey`).
+- [SHE](#autosar-she-subsystem) key persistence and the SHE PRNG seed (`LOAD_KEY` of non-RAM keys, `INIT_RND`, `EXTEND_SEED`), and image-signature loading.
+
+> **Note**: When [global keys](#global-keys) (`WOLFHSM_CFG_GLOBAL_KEYS`) are enabled, the shared global key cache normally lives inside the NVM context. With no NVM there is no shared store, so global keys (USER `0`) are served from the per-context local cache instead. They remain usable when primed, but are not shared across server contexts as they would be with NVM present.
+
+When NVM **is** configured, all of the above behavior is unchanged.
 
 ## Keystore
 

@@ -47,8 +47,7 @@ int wh_Server_HandleCounter(whServerContext* server, uint16_t magic,
     whNvmMetadata meta[1]   = {{0}};
     uint32_t*     counter   = (uint32_t*)(&meta->label);
 
-    if (server == NULL || server->nvm == NULL || req_packet == NULL ||
-        out_resp_size == NULL) {
+    if (server == NULL || req_packet == NULL || out_resp_size == NULL) {
         return WH_ERROR_BADARGS;
     }
 

@@ -712,16 +712,24 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
 #ifdef WOLFHSM_CFG_THREADSAFE
 int wh_Server_NvmLock(whServerContext* server)
 {
-    if (server == NULL || server->nvm == NULL) {
+    if (server == NULL) {
         return WH_ERROR_BADARGS;
+    }
+    /* NVM is optional. With no NVM there's no shared state to protect, so the
+     * lock is a no-op and cache-only operations can still run. */
+    if (server->nvm == NULL) {
+        return WH_ERROR_OK;
     }
     return wh_Lock_Acquire(&server->nvm->lock);
 }
 
 int wh_Server_NvmUnlock(whServerContext* server)
 {
-    if (server == NULL || server->nvm == NULL) {
+    if (server == NULL) {
         return WH_ERROR_BADARGS;
+    }
+    if (server->nvm == NULL) {
+        return WH_ERROR_OK;
     }
     return wh_Lock_Release(&server->nvm->lock);
 }
