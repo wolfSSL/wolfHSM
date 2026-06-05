@@ -36,10 +36,12 @@
 int wh_Client_DmaRegisterAllowList(whClientContext*          client,
                                    const whDmaAddrAllowList* allowlist)
 {
-    if (NULL == client || NULL == allowlist) {
+    if (NULL == client) {
         return WH_ERROR_BADARGS;
     }
 
+    /* A NULL allowlist clears any previously registered list (no enforcement),
+     * symmetric with wh_Client_DmaRegisterCb(NULL). */
     client->dma.dmaAddrAllowList = allowlist;
 
     return WH_ERROR_OK;
@@ -92,6 +94,25 @@ int wh_Client_DmaProcessClientAddress(whClientContext* client,
         rc = wh_Dma_CheckMemOperAgainstAllowList(client->dma.dmaAddrAllowList,
                                                  oper, *xformedCliAddr, len);
     }
+    return rc;
+}
+
+int wh_Client_DmaAsyncPost(whClientContext* client, whClientDmaAsyncBuf* buf)
+{
+    int       rc;
+    uintptr_t addr;
+
+    if (client == NULL || buf == NULL || buf->sz == 0) {
+        return WH_ERROR_OK;
+    }
+
+    addr = buf->xformedAddr;
+    rc   = wh_Client_DmaProcessClientAddress(client, buf->clientAddr,
+                                             (void**)&addr, (size_t)buf->sz,
+                                             buf->postOper, (whDmaFlags){0});
+    /* Clear the slot even on failure so a later Response cannot re-run the
+     * POST; the failure is returned to the caller. */
+    buf->sz = 0;
     return rc;
 }
 #endif /* WOLFHSM_CFG_DMA */

@@ -695,19 +695,67 @@ int wh_Client_NvmAddObjectDmaRequest(whClientContext* c,
                                      whNvmMetadata*   metadata,
                                      whNvmSize data_len, const uint8_t* data)
 {
-    whMessageNvm_AddObjectDmaRequest msg = {0};
+    whMessageNvm_AddObjectDmaRequest msg         = {0};
+    uintptr_t                        metaAddrPtr = 0;
+    uintptr_t                        dataAddrPtr = 0;
+    int                              ret         = WH_ERROR_OK;
 
     if (c == NULL) {
         return WH_ERROR_BADARGS;
     }
+    /* Fail fast if busy: don't acquire a mapping a rejected send would leak. */
+    if (wh_CommClient_IsRequestPending(c->comm) == 1) {
+        return WH_ERROR_REQUEST_PENDING;
+    }
 
-    msg.metadata_hostaddr = (uint64_t)(uintptr_t)metadata;
-    msg.data_hostaddr     = (uint64_t)(uintptr_t)data;
-    msg.data_len          = data_len;
+    /* Clear both slots up front: a metadata-only object leaves the data slot
+     * unset, and the Response must not POST a stale (shared-union) size. */
+    c->dma.asyncCtx.nvmAdd.meta.sz = 0;
+    c->dma.asyncCtx.nvmAdd.data.sz = 0;
 
-    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_NVM,
-                                 WH_MESSAGE_NVM_ACTION_ADDOBJECTDMA,
-                                 sizeof(msg), &msg);
+    /* PRE-translate the metadata struct (fixed size) and the optional data
+     * buffer; the matching Response POST releases them. */
+    ret = wh_Client_DmaProcessClientAddress(
+        c, (uintptr_t)metadata, (void**)&metaAddrPtr, sizeof(whNvmMetadata),
+        WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
+    if (ret == WH_ERROR_OK) {
+        c->dma.asyncCtx.nvmAdd.meta.xformedAddr = metaAddrPtr;
+        c->dma.asyncCtx.nvmAdd.meta.clientAddr  = (uintptr_t)metadata;
+        c->dma.asyncCtx.nvmAdd.meta.sz          = sizeof(whNvmMetadata);
+        c->dma.asyncCtx.nvmAdd.meta.postOper    = WH_DMA_OPER_CLIENT_READ_POST;
+    }
+
+    if (ret == WH_ERROR_OK && data != NULL && data_len > 0) {
+        ret = wh_Client_DmaProcessClientAddress(
+            c, (uintptr_t)data, (void**)&dataAddrPtr, data_len,
+            WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
+        if (ret == WH_ERROR_OK) {
+            c->dma.asyncCtx.nvmAdd.data.xformedAddr = dataAddrPtr;
+            c->dma.asyncCtx.nvmAdd.data.clientAddr  = (uintptr_t)data;
+            c->dma.asyncCtx.nvmAdd.data.sz          = data_len;
+            c->dma.asyncCtx.nvmAdd.data.postOper    = WH_DMA_OPER_CLIENT_READ_POST;
+        }
+    }
+
+    msg.metadata_hostaddr = (uint64_t)metaAddrPtr;
+    /* 0 when there is no data buffer to DMA (dataAddrPtr is set only by the
+     * data PRE); never forward a raw, untranslated client pointer. */
+    msg.data_hostaddr = (uint64_t)dataAddrPtr;
+    msg.data_len      = data_len;
+
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Client_SendRequest(c, WH_MESSAGE_GROUP_NVM,
+                                    WH_MESSAGE_NVM_ACTION_ADDOBJECTDMA,
+                                    sizeof(msg), &msg);
+    }
+
+    if (ret != WH_ERROR_OK) {
+        /* Send/PRE failed: release whatever was acquired (helper no-ops on the
+         * unset slot), in reverse order. */
+        (void)wh_Client_DmaAsyncPost(c, &c->dma.asyncCtx.nvmAdd.data);
+        (void)wh_Client_DmaAsyncPost(c, &c->dma.asyncCtx.nvmAdd.meta);
+    }
+    return ret;
 }
 
 int wh_Client_NvmAddObjectDmaResponse(whClientContext* c, int32_t* out_rc)
@@ -723,6 +771,9 @@ int wh_Client_NvmAddObjectDmaResponse(whClientContext* c, int32_t* out_rc)
     }
 
     rc = wh_Client_RecvResponse(c, &resp_group, &resp_action, &resp_size, &msg);
+    if (rc == WH_ERROR_NOTREADY) {
+        return rc;
+    }
     if (rc == 0) {
         /* Validate response */
         if ((resp_group != WH_MESSAGE_GROUP_NVM) ||
@@ -736,6 +787,16 @@ int wh_Client_NvmAddObjectDmaResponse(whClientContext* c, int32_t* out_rc)
             if (out_rc != NULL) {
                 *out_rc = msg.rc;
             }
+        }
+    }
+
+    /* POST cleanup for both slots, reverse acquisition order; surface a POST
+     * failure if the operation otherwise succeeded. */
+    {
+        int postData = wh_Client_DmaAsyncPost(c, &c->dma.asyncCtx.nvmAdd.data);
+        int postMeta = wh_Client_DmaAsyncPost(c, &c->dma.asyncCtx.nvmAdd.meta);
+        if (rc == WH_ERROR_OK) {
+            rc = (postData != WH_ERROR_OK) ? postData : postMeta;
         }
     }
     return rc;
@@ -766,19 +827,53 @@ int wh_Client_NvmReadDmaRequest(whClientContext* c, whNvmId id,
                                 whNvmSize offset, whNvmSize data_len,
                                 uint8_t* data)
 {
-    whMessageNvm_ReadDmaRequest msg = {0};
+    whMessageNvm_ReadDmaRequest msg              = {0};
+    uintptr_t                   dataAddrPtr      = 0;
+    int                         ret              = WH_ERROR_OK;
+    int                         dataAddrAcquired = 0;
 
     if (c == NULL) {
         return WH_ERROR_BADARGS;
+    }
+    /* Fail fast if busy: don't acquire a mapping a rejected send would leak. */
+    if (wh_CommClient_IsRequestPending(c->comm) == 1) {
+        return WH_ERROR_REQUEST_PENDING;
+    }
+
+    /* Clear the slot up front so a skipped PRE leaves nothing for POST. */
+    c->dma.asyncCtx.buf.sz = 0;
+
+    /* PRE-translate the output data buffer (only when there is one); the server
+     * writes the NVM contents and the Response POST copies them back. Skipping
+     * the empty case keeps a raw, untranslated pointer out of the message. */
+    if (data != NULL && data_len > 0) {
+        ret = wh_Client_DmaProcessClientAddress(
+            c, (uintptr_t)data, (void**)&dataAddrPtr, data_len,
+            WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
+        if (ret == WH_ERROR_OK) {
+            dataAddrAcquired                = 1;
+            c->dma.asyncCtx.buf.xformedAddr = dataAddrPtr;
+            c->dma.asyncCtx.buf.clientAddr  = (uintptr_t)data;
+            c->dma.asyncCtx.buf.sz          = data_len;
+            c->dma.asyncCtx.buf.postOper    = WH_DMA_OPER_CLIENT_WRITE_POST;
+        }
     }
 
     msg.id            = id;
     msg.offset        = offset;
     msg.data_len      = data_len;
-    msg.data_hostaddr = (uint64_t)(uintptr_t)data;
-    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_NVM,
-                                 WH_MESSAGE_NVM_ACTION_READDMA, sizeof(msg),
-                                 &msg);
+    msg.data_hostaddr = (uint64_t)dataAddrPtr;
+
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Client_SendRequest(c, WH_MESSAGE_GROUP_NVM,
+                                    WH_MESSAGE_NVM_ACTION_READDMA, sizeof(msg),
+                                    &msg);
+    }
+
+    if (ret != WH_ERROR_OK && dataAddrAcquired) {
+        (void)wh_Client_DmaAsyncPost(c, &c->dma.asyncCtx.buf);
+    }
+    return ret;
 }
 
 int wh_Client_NvmReadDmaResponse(whClientContext* c, int32_t* out_rc)
@@ -794,6 +889,9 @@ int wh_Client_NvmReadDmaResponse(whClientContext* c, int32_t* out_rc)
     }
 
     rc = wh_Client_RecvResponse(c, &resp_group, &resp_action, &resp_size, &msg);
+    if (rc == WH_ERROR_NOTREADY) {
+        return rc;
+    }
     if (rc == 0) {
         /* Validate response */
         if ((resp_group != WH_MESSAGE_GROUP_NVM) ||
@@ -807,6 +905,15 @@ int wh_Client_NvmReadDmaResponse(whClientContext* c, int32_t* out_rc)
             if (out_rc != NULL) {
                 *out_rc = msg.rc;
             }
+        }
+    }
+
+    /* POST cleanup: copy the server's writes back and release the mapping;
+     * surface a POST failure if the operation otherwise succeeded. */
+    {
+        int postRc = wh_Client_DmaAsyncPost(c, &c->dma.asyncCtx.buf);
+        if (rc == WH_ERROR_OK) {
+            rc = postRc;
         }
     }
     return rc;

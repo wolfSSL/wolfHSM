@@ -147,14 +147,35 @@ typedef struct {
     uint64_t  inSz;
 } whClientDmaAsyncCmac;
 
-/* Async DMA context union. Only one DMA request can be in flight at a time
- * per client context, so a single union suffices. Each Response function
- * knows which member to access based on its own operation type. */
+/* One client buffer mapped across a DMA Request/Response boundary. The Request
+ * stashes the translated address, original client address, length, and POST
+ * direction; the Response runs wh_Client_DmaAsyncPost(). sz == 0 means nothing
+ * to clean up. postOper keeps the POST direction-correct when this shared union
+ * member is used by different ops; it does not make a mispaired Request/Response
+ * safe (the one-in-flight, self-paired invariant still applies). */
+typedef struct {
+    uintptr_t xformedAddr;
+    uintptr_t clientAddr;
+    uint64_t  sz;
+    whDmaOper postOper;
+} whClientDmaAsyncBuf;
+
+/* Two buffers mapped together for NvmAddObjectDma (metadata + optional data). */
+typedef struct {
+    whClientDmaAsyncBuf meta;
+    whClientDmaAsyncBuf data;
+} whClientDmaAsyncNvmAdd;
+
+/* Async DMA context union; only one DMA request is in flight at a time. The
+ * crypto members (sha/rng/cmac/aes) are bespoke and predate the generic holder.
+ * Key/NVM ops use `buf` (single-buffer) and `nvmAdd` (two-buffer). */
 typedef union {
-    whClientDmaAsyncSha  sha;
-    whClientDmaAsyncRng  rng;
-    whClientDmaAsyncAes  aes;
-    whClientDmaAsyncCmac cmac;
+    whClientDmaAsyncSha    sha;
+    whClientDmaAsyncRng    rng;
+    whClientDmaAsyncAes    aes;
+    whClientDmaAsyncCmac   cmac;
+    whClientDmaAsyncBuf    buf;
+    whClientDmaAsyncNvmAdd nvmAdd;
 } whClientDmaAsyncCtx;
 
 typedef struct {
@@ -3360,6 +3381,24 @@ int wh_Client_DmaProcessClientAddress(struct whClientContext_t* client,
                                       uintptr_t clientAddr, void** serverPtr,
                                       size_t len, whDmaOper oper,
                                       whDmaFlags flags);
+
+
+/**
+ * @brief Runs the POST half of a stashed DMA buffer mapping (INTERNAL).
+ *
+ * Shared between the client *Dma source files; not port-facing. Releases (and,
+ * for a server-write buffer, copies back) a mapping stashed by the matching
+ * Request, using buf->postOper for the direction. No-op when buf is NULL or
+ * buf->sz is 0; clears buf->sz (even on failure) so a later Response cannot
+ * re-run it.
+ *
+ * @param[in] client Pointer to the client context.
+ * @param[in,out] buf The stashed single-buffer mapping to clean up.
+ * @return WH_ERROR_OK, or the port POST callback's error (e.g. a failed unmap
+ *         or copy-back); WH_ERROR_OK when there is nothing to clean up.
+ */
+int wh_Client_DmaAsyncPost(struct whClientContext_t* client,
+                           whClientDmaAsyncBuf*       buf);
 
 
 /**
