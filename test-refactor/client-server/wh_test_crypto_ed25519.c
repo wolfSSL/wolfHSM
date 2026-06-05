@@ -19,7 +19,8 @@
 /*
  * test-refactor/client-server/wh_test_crypto_ed25519.c
  *
- * Ed25519 sign/verify routed through the server via WH_DEV_ID:
+ * Ed25519 sign/verify routed through the server via the per-client devId
+ * (WH_CLIENT_DEVID):
  *   _whTest_CryptoEd25519Inline    - pure wolfCrypt (sign+verify locally,
  *                                    plus negative case for tampered sig)
  *   _whTest_CryptoEd25519ServerKey - server-cached sign and verify keyIds
@@ -131,7 +132,7 @@ static int whTest_Ed25519ImportToServer(whClientContext* ctx, int devId,
 
 static int _whTest_CryptoEd25519Inline(whClientContext* ctx)
 {
-    int          devId    = WH_DEV_ID;
+    int          devId    = WH_CLIENT_DEVID(ctx);
     int          ret      = 0;
     WC_RNG       rng[1];
     ed25519_key  key[1]    = {0};
@@ -238,7 +239,7 @@ static int _whTest_CryptoEd25519Inline(whClientContext* ctx)
 
 static int _whTest_CryptoEd25519ServerKey(whClientContext* ctx)
 {
-    int         devId       = WH_DEV_ID;
+    int         devId       = WH_CLIENT_DEVID(ctx);
     int         ret         = 0;
     WC_RNG      rng[1];
     ed25519_key key[1]      = {0};
@@ -362,7 +363,7 @@ static int _whTest_CryptoEd25519ServerKey(whClientContext* ctx)
 #ifdef WOLFHSM_CFG_DMA
 static int _whTest_CryptoEd25519Dma(whClientContext* ctx)
 {
-    int         devId       = WH_DEV_ID;
+    int         devId       = WH_CLIENT_DEVID(ctx);
     int         ret         = 0;
     WC_RNG      rng[1];
     ed25519_key key[1]      = {0};
@@ -467,7 +468,7 @@ static int _whTest_CryptoEd25519Dma(whClientContext* ctx)
  * verify the signature client-side. */
 static int _whTest_CryptoEd25519ExportPublicKey(whClientContext* ctx)
 {
-    int         devId    = WH_DEV_ID;
+    int         devId    = WH_CLIENT_DEVID(ctx);
     int         ret      = 0;
     ed25519_key hsmKey[1] = {0};
     ed25519_key pubKey[1] = {0};
@@ -565,7 +566,7 @@ static int _whTest_CryptoEd25519ExportPublicKey(whClientContext* ctx)
  * return WH_ERROR_BUFFER_SIZE and report the required signature length. */
 static int _whTest_CryptoEd25519BufferTooSmall(whClientContext* ctx)
 {
-    int          devId = WH_DEV_ID;
+    int          devId = WH_CLIENT_DEVID(ctx);
     int          ret;
     WC_RNG       rng[1];
     ed25519_key  key[1];

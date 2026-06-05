@@ -77,6 +77,40 @@ static int _handlePqcSigCheckPrivKey(whClientContext* ctx, wc_CryptoInfo* info,
 
 int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
 {
+    int ret;
+
+    if ((devId == INVALID_DEVID) || (info == NULL) || (inCtx == NULL)) {
+        return BAD_FUNC_ARG;
+    }
+
+#ifdef WOLFHSM_CFG_DMA
+    /* If the client prefers DMA operations, dispatch to the DMA callback first
+     * and fall back to the standard (non-DMA) callback if the algorithm is not
+     * supported by the DMA callback. */
+    if (((whClientContext*)inCtx)->dma.preferDma) {
+        ret = wh_Client_CryptoCbDma(devId, info, inCtx);
+        if (ret == CRYPTOCB_UNAVAILABLE) {
+            ret = wh_Client_CryptoCbStd(devId, info, inCtx);
+        }
+    }
+    else
+#endif /* WOLFHSM_CFG_DMA */
+    {
+        /* DMA not preferred (or not compiled in); use the standard callback */
+        ret = wh_Client_CryptoCbStd(devId, info, inCtx);
+    }
+
+    /* Propagate the error unchanged so if the algo is unsupported
+     * (CRYPTOCB_UNAVAILABLE), wolfCrypt can fall back to its default
+     * (software) implementation for operations wolfHSM does not offload.
+     * Eventually we want this to be a hard error, but there are edge cases
+     * around compound operations that need to be carefully handled and may
+     * require changes to wolfCrypt to successfully facilitate. */
+    return ret;
+}
+
+int wh_Client_CryptoCbStd(int devId, wc_CryptoInfo* info, void* inCtx)
+{
     /* III When possible, return wolfCrypt-enumerated errors */
     int ret = CRYPTOCB_UNAVAILABLE;
     whClientContext* ctx = inCtx;

@@ -29,17 +29,20 @@
 #if defined(WOLFSSL_HAVE_MLKEM)
 
 static int _benchMlKemKeyGen(whClientContext* client, whBenchOpContext* ctx,
-                             int id, int securityLevel, int devId)
+                             int id, int securityLevel, int useDma)
 {
     int ret = WH_ERROR_OK;
     int i;
+
+    (void)wh_Client_SetDmaMode(client, useDma);
 
     for (i = 0; i < WOLFHSM_CFG_BENCH_KG_ITERS && ret == WH_ERROR_OK; i++) {
         MlKemKey key[1];
         int      benchStartRet;
         int      benchStopRet;
 
-        ret = wc_MlKemKey_Init(key, securityLevel, NULL, devId);
+        ret =
+            wc_MlKemKey_Init(key, securityLevel, NULL, WH_CLIENT_DEVID(client));
         if (ret != WH_ERROR_OK) {
             WH_BENCH_PRINTF("Failed to wc_MlKemKey_Init %d\n", ret);
             break;
@@ -47,7 +50,7 @@ static int _benchMlKemKeyGen(whClientContext* client, whBenchOpContext* ctx,
 
         benchStartRet = wh_Bench_StartOp(ctx, id);
 #ifdef WOLFHSM_CFG_DMA
-        if (devId == WH_DEV_ID_DMA) {
+        if (useDma) {
             ret = wh_Client_MlKemMakeExportKeyDma(client, securityLevel, key);
         }
         else
@@ -76,7 +79,7 @@ static int _benchMlKemKeyGen(whClientContext* client, whBenchOpContext* ctx,
 }
 
 static int _benchMlKemEncaps(whClientContext* client, whBenchOpContext* ctx,
-                             int id, int securityLevel, int devId)
+                             int id, int securityLevel, int useDma)
 {
     int      ret = WH_ERROR_OK;
     int      i;
@@ -84,14 +87,16 @@ static int _benchMlKemEncaps(whClientContext* client, whBenchOpContext* ctx,
     byte     ct[WC_ML_KEM_MAX_CIPHER_TEXT_SIZE];
     byte     ss[WC_ML_KEM_SS_SZ];
 
-    ret = wc_MlKemKey_Init(key, securityLevel, NULL, devId);
+    (void)wh_Client_SetDmaMode(client, useDma);
+
+    ret = wc_MlKemKey_Init(key, securityLevel, NULL, WH_CLIENT_DEVID(client));
     if (ret != WH_ERROR_OK) {
         WH_BENCH_PRINTF("Failed to wc_MlKemKey_Init %d\n", ret);
         return ret;
     }
 
 #ifdef WOLFHSM_CFG_DMA
-    if (devId == WH_DEV_ID_DMA) {
+    if (useDma) {
         ret = wh_Client_MlKemMakeExportKeyDma(client, securityLevel, key);
     }
     else
@@ -116,7 +121,7 @@ static int _benchMlKemEncaps(whClientContext* client, whBenchOpContext* ctx,
 
         benchStartRet = wh_Bench_StartOp(ctx, id);
 #ifdef WOLFHSM_CFG_DMA
-        if (devId == WH_DEV_ID_DMA) {
+        if (useDma) {
             ret = wh_Client_MlKemEncapsulateDma(client, key, ct, &ctLen, ss,
                                                 &ssLen);
         }
@@ -145,7 +150,7 @@ static int _benchMlKemEncaps(whClientContext* client, whBenchOpContext* ctx,
 }
 
 static int _benchMlKemDecaps(whClientContext* client, whBenchOpContext* ctx,
-                             int id, int securityLevel, int devId)
+                             int id, int securityLevel, int useDma)
 {
     int      ret = WH_ERROR_OK;
     int      i;
@@ -156,14 +161,16 @@ static int _benchMlKemDecaps(whClientContext* client, whBenchOpContext* ctx,
     word32   ctLen = sizeof(ct);
     word32   ssEncLen = sizeof(ssEnc);
 
-    ret = wc_MlKemKey_Init(key, securityLevel, NULL, devId);
+    (void)wh_Client_SetDmaMode(client, useDma);
+
+    ret = wc_MlKemKey_Init(key, securityLevel, NULL, WH_CLIENT_DEVID(client));
     if (ret != WH_ERROR_OK) {
         WH_BENCH_PRINTF("Failed to wc_MlKemKey_Init %d\n", ret);
         return ret;
     }
 
 #ifdef WOLFHSM_CFG_DMA
-    if (devId == WH_DEV_ID_DMA) {
+    if (useDma) {
         ret = wh_Client_MlKemMakeExportKeyDma(client, securityLevel, key);
     }
     else
@@ -178,7 +185,7 @@ static int _benchMlKemDecaps(whClientContext* client, whBenchOpContext* ctx,
     }
 
 #ifdef WOLFHSM_CFG_DMA
-    if (devId == WH_DEV_ID_DMA) {
+    if (useDma) {
         ret = wh_Client_MlKemEncapsulateDma(client, key, ct, &ctLen, ssEnc,
                                             &ssEncLen);
     }
@@ -203,7 +210,7 @@ static int _benchMlKemDecaps(whClientContext* client, whBenchOpContext* ctx,
 
         benchStartRet = wh_Bench_StartOp(ctx, id);
 #ifdef WOLFHSM_CFG_DMA
-        if (devId == WH_DEV_ID_DMA) {
+        if (useDma) {
             ret = wh_Client_MlKemDecapsulateDma(client, key, ct, ctLen, ssDec,
                                                 &ssDecLen);
         }
@@ -237,56 +244,50 @@ static int _benchMlKemDecaps(whClientContext* client, whBenchOpContext* ctx,
     return ret;
 }
 
-#define WH_DEFINE_MLKEM_BENCH_NON_DMA_FNS(_Suffix, _Level)                        \
-int wh_Bench_Mod_MlKem##_Suffix##KeyGen(whClientContext* client,                  \
-                                        whBenchOpContext* ctx, int id,            \
-                                        void* params)                              \
-{                                                                                  \
-    (void)params;                                                                  \
-    return _benchMlKemKeyGen(client, ctx, id, _Level, WH_DEV_ID);                 \
-}                                                                                  \
-                                                                                   \
-int wh_Bench_Mod_MlKem##_Suffix##Encaps(whClientContext* client,                  \
-                                        whBenchOpContext* ctx, int id,            \
-                                        void* params)                              \
-{                                                                                  \
-    (void)params;                                                                  \
-    return _benchMlKemEncaps(client, ctx, id, _Level, WH_DEV_ID);                 \
-}                                                                                  \
-                                                                                   \
-int wh_Bench_Mod_MlKem##_Suffix##Decaps(whClientContext* client,                  \
-                                        whBenchOpContext* ctx, int id,            \
-                                        void* params)                              \
-{                                                                                  \
-    (void)params;                                                                  \
-    return _benchMlKemDecaps(client, ctx, id, _Level, WH_DEV_ID);                 \
-}
+#define WH_DEFINE_MLKEM_BENCH_NON_DMA_FNS(_Suffix, _Level)                    \
+    int wh_Bench_Mod_MlKem##_Suffix##KeyGen(                                  \
+        whClientContext* client, whBenchOpContext* ctx, int id, void* params) \
+    {                                                                         \
+        (void)params;                                                         \
+        return _benchMlKemKeyGen(client, ctx, id, _Level, 0);                 \
+    }                                                                         \
+                                                                              \
+    int wh_Bench_Mod_MlKem##_Suffix##Encaps(                                  \
+        whClientContext* client, whBenchOpContext* ctx, int id, void* params) \
+    {                                                                         \
+        (void)params;                                                         \
+        return _benchMlKemEncaps(client, ctx, id, _Level, 0);                 \
+    }                                                                         \
+                                                                              \
+    int wh_Bench_Mod_MlKem##_Suffix##Decaps(                                  \
+        whClientContext* client, whBenchOpContext* ctx, int id, void* params) \
+    {                                                                         \
+        (void)params;                                                         \
+        return _benchMlKemDecaps(client, ctx, id, _Level, 0);                 \
+    }
 
 #ifdef WOLFHSM_CFG_DMA
-#define WH_DEFINE_MLKEM_BENCH_DMA_FNS(_Suffix, _Level)                            \
-int wh_Bench_Mod_MlKem##_Suffix##KeyGenDma(whClientContext* client,               \
-                                           whBenchOpContext* ctx, int id,         \
-                                           void* params)                           \
-{                                                                                  \
-    (void)params;                                                                  \
-    return _benchMlKemKeyGen(client, ctx, id, _Level, WH_DEV_ID_DMA);             \
-}                                                                                  \
-                                                                                   \
-int wh_Bench_Mod_MlKem##_Suffix##EncapsDma(whClientContext* client,               \
-                                           whBenchOpContext* ctx, int id,         \
-                                           void* params)                           \
-{                                                                                  \
-    (void)params;                                                                  \
-    return _benchMlKemEncaps(client, ctx, id, _Level, WH_DEV_ID_DMA);             \
-}                                                                                  \
-                                                                                   \
-int wh_Bench_Mod_MlKem##_Suffix##DecapsDma(whClientContext* client,               \
-                                           whBenchOpContext* ctx, int id,         \
-                                           void* params)                           \
-{                                                                                  \
-    (void)params;                                                                  \
-    return _benchMlKemDecaps(client, ctx, id, _Level, WH_DEV_ID_DMA);             \
-}
+#define WH_DEFINE_MLKEM_BENCH_DMA_FNS(_Suffix, _Level)                        \
+    int wh_Bench_Mod_MlKem##_Suffix##KeyGenDma(                               \
+        whClientContext* client, whBenchOpContext* ctx, int id, void* params) \
+    {                                                                         \
+        (void)params;                                                         \
+        return _benchMlKemKeyGen(client, ctx, id, _Level, 1);                 \
+    }                                                                         \
+                                                                              \
+    int wh_Bench_Mod_MlKem##_Suffix##EncapsDma(                               \
+        whClientContext* client, whBenchOpContext* ctx, int id, void* params) \
+    {                                                                         \
+        (void)params;                                                         \
+        return _benchMlKemEncaps(client, ctx, id, _Level, 1);                 \
+    }                                                                         \
+                                                                              \
+    int wh_Bench_Mod_MlKem##_Suffix##DecapsDma(                               \
+        whClientContext* client, whBenchOpContext* ctx, int id, void* params) \
+    {                                                                         \
+        (void)params;                                                         \
+        return _benchMlKemDecaps(client, ctx, id, _Level, 1);                 \
+    }
 #else
 #define WH_DEFINE_MLKEM_BENCH_DMA_FNS(_Suffix, _Level)                            \
 int wh_Bench_Mod_MlKem##_Suffix##KeyGenDma(whClientContext* client,               \

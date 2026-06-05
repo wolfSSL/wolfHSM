@@ -19,7 +19,8 @@
 /*
  * test-refactor/client-server/wh_test_crypto_ecc.c
  *
- * ECC tests routed through the server via WH_DEV_ID:
+ * ECC tests routed through the server via the per-client devId
+ * (WH_CLIENT_DEVID):
  *   _whTest_CryptoEcc             - ECDH + ECDSA across ephemeral / export /
  *                                  cache key paths
  *   _whTest_CryptoEccCacheDuplicate - cache slot replacement semantics
@@ -51,7 +52,7 @@
 #if defined(HAVE_ECC) && defined(HAVE_ECC_SIGN) && defined(HAVE_ECC_VERIFY)
 
 /* Full coverage of ECDH + ECDSA across the three key-management paths:
- *   - ephemeral wolfCrypt keys with WH_DEV_ID
+ *   - ephemeral wolfCrypt keys with the per-client devId
  *   - server-generated keys exported back to the client
  *   - server-cached keys referenced via keyId */
 #define TEST_ECC_KEYSIZE  32
@@ -59,7 +60,7 @@
 
 static int _whTest_CryptoEcc(whClientContext* ctx)
 {
-    int     devId = WH_DEV_ID;
+    int     devId = WH_CLIENT_DEVID(ctx);
     int     ret   = WH_ERROR_OK;
     WC_RNG  rng[1];
     ecc_key bobKey[1];
@@ -166,12 +167,12 @@ static int _whTest_CryptoEcc(whClientContext* ctx)
         memset(shared_ba, 0, sizeof(shared_ba));
         memset(sig, 0, sizeof(sig));
 
-        ret = wc_ecc_init_ex(bobKey, NULL, WH_DEV_ID);
+        ret = wc_ecc_init_ex(bobKey, NULL, WH_CLIENT_DEVID(ctx));
         if (ret != 0) {
             WH_ERROR_PRINT("Failed to wc_ecc_init_ex for export key %d\n", ret);
         }
         else {
-            ret = wc_ecc_init_ex(aliceKey, NULL, WH_DEV_ID);
+            ret = wc_ecc_init_ex(aliceKey, NULL, WH_CLIENT_DEVID(ctx));
             if (ret != 0) {
                 WH_ERROR_PRINT("Failed to wc_ecc_init_ex for export key %d\n",
                                ret);
@@ -269,7 +270,7 @@ static int _whTest_CryptoEcc(whClientContext* ctx)
             WH_ERROR_PRINT("Failed to wh_Client_EccMakeCacheKey %d\n", ret);
         }
         if (ret == 0) {
-            ret = wc_ecc_init_ex(bobKey, NULL, WH_DEV_ID);
+            ret = wc_ecc_init_ex(bobKey, NULL, WH_CLIENT_DEVID(ctx));
             if (ret != 0) {
                 WH_ERROR_PRINT("Failed to wc_ecc_init_ex for cache key %d\n",
                                ret);
@@ -301,7 +302,7 @@ static int _whTest_CryptoEcc(whClientContext* ctx)
                     }
                 }
                 if (ret == 0) {
-                    ret = wc_ecc_init_ex(aliceKey, NULL, WH_DEV_ID);
+                    ret = wc_ecc_init_ex(aliceKey, NULL, WH_CLIENT_DEVID(ctx));
                     if (ret != 0) {
                         WH_ERROR_PRINT(
                             "Failed to wc_ecc_init_ex for peer key %d\n", ret);
@@ -442,7 +443,7 @@ static int _whTest_CryptoEccCacheDuplicate(whClientContext* ctx)
  * verify the signature client-side. */
 static int _whTest_CryptoEccExportPublicKey(whClientContext* ctx)
 {
-    int      devId   = WH_DEV_ID;
+    int      devId   = WH_CLIENT_DEVID(ctx);
     int      ret     = 0;
     WC_RNG   rng[1];
     ecc_key  hsmKey[1];
@@ -588,7 +589,7 @@ static int whTest_CryptoEccCrossVerify_OneCurve(whClientContext* ctx,
     pubYLen = keySize;
 
     /* Test 1: HSM sign + Software verify */
-    ret = wc_ecc_init_ex(hsmKey, NULL, WH_DEV_ID);
+    ret = wc_ecc_init_ex(hsmKey, NULL, WH_CLIENT_DEVID(ctx));
     if (ret != 0) {
         WH_ERROR_PRINT("%s: Failed to init HSM key: %d\n", name, ret);
     }
@@ -697,7 +698,7 @@ static int whTest_CryptoEccCrossVerify_OneCurve(whClientContext* ctx,
         }
     }
     if (ret == 0) {
-        ret = wc_ecc_init_ex(hsmKey, NULL, WH_DEV_ID);
+        ret = wc_ecc_init_ex(hsmKey, NULL, WH_CLIENT_DEVID(ctx));
         if (ret != 0) {
             WH_ERROR_PRINT("%s: Failed to init HSM key: %d\n", name, ret);
         }
@@ -742,7 +743,7 @@ static int whTest_CryptoEccCrossVerify_OneCurve(whClientContext* ctx,
 
 static int _whTest_CryptoEccCrossVerify(whClientContext* ctx)
 {
-    int    devId = WH_DEV_ID;
+    int    devId = WH_CLIENT_DEVID(ctx);
     int    ret   = WH_ERROR_OK;
     WC_RNG rng[1];
 
@@ -818,7 +819,7 @@ static int whTest_CryptoEccSignVerifyAsync_OneCurve(whClientContext* ctx,
     pubXLen = keySize;
     pubYLen = keySize;
 
-    ret = wc_ecc_init_ex(hsmKey, NULL, WH_DEV_ID);
+    ret = wc_ecc_init_ex(hsmKey, NULL, WH_CLIENT_DEVID(ctx));
     if (ret == 0) {
         hsmKeyInit = 1;
         ret        = wc_ecc_make_key(rng, keySize, hsmKey);
@@ -1076,7 +1077,7 @@ static int whTest_CryptoEccSharedSecretAsync_OneCurve(whClientContext* ctx,
 
     pubAxLen = pubAyLen = pubBxLen = pubByLen = keySize;
 
-    ret = wc_ecc_init_ex(keyA, NULL, WH_DEV_ID);
+    ret = wc_ecc_init_ex(keyA, NULL, WH_CLIENT_DEVID(ctx));
     if (ret == 0) {
         keyAInit = 1;
         ret      = wc_ecc_make_key(rng, keySize, keyA);
@@ -1089,7 +1090,7 @@ static int whTest_CryptoEccSharedSecretAsync_OneCurve(whClientContext* ctx,
             sizeof(privLabelA), privLabelA);
     }
     if (ret == 0) {
-        ret = wc_ecc_init_ex(keyB, NULL, WH_DEV_ID);
+        ret = wc_ecc_init_ex(keyB, NULL, WH_CLIENT_DEVID(ctx));
     }
     if (ret == 0) {
         keyBInit = 1;
@@ -1555,7 +1556,7 @@ static int whTest_CryptoEccMakeKeyAsync_OneCurve(whClientContext* ctx,
 
 static int _whTest_CryptoEccAsync(whClientContext* ctx)
 {
-    int    devId = WH_DEV_ID;
+    int    devId = WH_CLIENT_DEVID(ctx);
     int    ret   = WH_ERROR_OK;
     WC_RNG rng[1];
 
@@ -1654,7 +1655,7 @@ static int _whTest_CryptoEccExportPublicKeyDma(whClientContext* ctx)
     uint8_t  derBuf[256];
     uint16_t derSz  = sizeof(derBuf);
 
-    ret = wc_InitRng_ex(rng, NULL, WH_DEV_ID);
+    ret = wc_InitRng_ex(rng, NULL, WH_CLIENT_DEVID(ctx));
     if (ret != 0) {
         WH_ERROR_PRINT("Failed to wc_InitRng_ex %d\n", ret);
         return ret;
@@ -1675,7 +1676,7 @@ static int _whTest_CryptoEccExportPublicKeyDma(whClientContext* ctx)
     /* Sign on the server with the cached private key. */
     if (ret == 0) {
         ecc_key hsmKey[1];
-        ret = wc_ecc_init_ex(hsmKey, NULL, WH_DEV_ID);
+        ret = wc_ecc_init_ex(hsmKey, NULL, WH_CLIENT_DEVID(ctx));
         if (ret == 0) {
             ret = wh_Client_EccSetKeyId(hsmKey, keyId);
         }

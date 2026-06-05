@@ -238,7 +238,7 @@ This is the same callback-driven layering used throughout wolfHSM, so the NVM fl
 
 The server performs cryptographic operations with wolfCrypt, so `wolfCrypt_Init()` must be called before `wh_Server_Init()`. The server's `whServerCryptoContext` owns a wolfCrypt random number generator that must be seeded with `wc_InitRng_ex()`.
 
-Passing `INVALID_DEVID` makes the server perform crypto in software. To offload to a hardware accelerator instead, register a wolfCrypt crypto callback and pass its device ID both to `wc_InitRng_ex()` and to the `.devId` field of the server configuration. Note that the client does *not* initialize wolfCrypt for offloaded operations: it transparently routes wolfCrypt API calls to the server by using the `WH_DEV_ID` device ID. See [Cryptography and wolfCrypt Integration](5-Features.md#cryptography-and-wolfcrypt-integration).
+Passing `INVALID_DEVID` makes the server perform crypto in software. To offload to a hardware accelerator instead, register a wolfCrypt crypto callback and pass its device ID both to `wc_InitRng_ex()` and to the `.devId` field of the server configuration. Note that the client does *not* initialize wolfCrypt for offloaded operations: it transparently routes wolfCrypt API calls to the server by using its device ID — set in the client config's `.devId` field, or the default `WH_DEV_ID` when left `0` — read with `WH_CLIENT_DEVID(client)` after `wh_Client_Init()`. See [Cryptography and wolfCrypt Integration](5-Features.md#cryptography-and-wolfcrypt-integration).
 
 ### Initializing the Server Context
 

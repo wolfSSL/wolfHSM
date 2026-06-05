@@ -138,7 +138,7 @@ static int _AesGcm_TestKeyWrap(whClientContext* client, WC_RNG* rng)
     }
 
     /* Initialize AES context */
-    ret = wc_AesInit(aes, NULL, WH_DEV_ID);
+    ret = wc_AesInit(aes, NULL, WH_CLIENT_DEVID(client));
     if (ret != 0) {
         WH_ERROR_PRINT("Failed to wc_AesInit %d\n", ret);
         return ret;
@@ -355,7 +355,7 @@ int whTest_Client_KeyWrap(whClientContext* client)
         return ret;
     }
 
-    ret = wc_InitRng_ex(rng, NULL, WH_DEV_ID);
+    ret = wc_InitRng_ex(rng, NULL, WH_CLIENT_DEVID(client));
     if (ret != 0) {
         WH_ERROR_PRINT("Failed to wc_InitRng_ex %d\n", ret);
         return ret;

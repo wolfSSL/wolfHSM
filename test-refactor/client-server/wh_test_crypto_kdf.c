@@ -55,7 +55,7 @@
 
 static int _whTest_CryptoHkdf(whClientContext* ctx)
 {
-    int     devId = WH_DEV_ID;
+    int     devId = WH_CLIENT_DEVID(ctx);
     int     ret   = WH_ERROR_OK;
     whKeyId keyId = WH_KEYID_ERASED;
 
@@ -219,7 +219,7 @@ static int _whTest_CryptoHkdf(whClientContext* ctx)
 
 static int _whTest_CryptoCmacKdf(whClientContext* ctx)
 {
-    int     devId = WH_DEV_ID;
+    int     devId = WH_CLIENT_DEVID(ctx);
     int     ret   = WH_ERROR_OK;
     whKeyId keyId = WH_KEYID_ERASED;
 

@@ -32,10 +32,8 @@ static const uint8_t key[] =
 static const size_t keyLen = sizeof(key) - 1; /* -1 for null terminator */
 
 int _benchHmacSha256(whClientContext* client, whBenchOpContext* ctx, int id,
-                     int devId)
+                     int useDma)
 {
-    (void)client;
-
     int            ret = 0;
     Hmac           hmac[1];
     uint8_t        out[WC_SHA256_DIGEST_SIZE];
@@ -44,8 +42,10 @@ int _benchHmacSha256(whClientContext* client, whBenchOpContext* ctx, int id,
     const uint8_t* in;
     size_t         inLen;
 
+    (void)wh_Client_SetDmaMode(client, useDma);
+
 #if defined(WOLFHSM_CFG_DMA)
-    if (devId == WH_DEV_ID_DMA) {
+    if (useDma) {
         in    = WH_BENCH_DMA_BUFFER;
         inLen = WOLFHSM_CFG_BENCH_DMA_BUFFER_SIZE;
     }
@@ -75,7 +75,7 @@ int _benchHmacSha256(whClientContext* client, whBenchOpContext* ctx, int id,
 
         /* Defer error checking until after all operations are complete */
         benchStartRet = wh_Bench_StartOp(ctx, id);
-        initRet       = wc_HmacInit(hmac, NULL, devId);
+        initRet       = wc_HmacInit(hmac, NULL, WH_CLIENT_DEVID(client));
         setKeyRet     = wc_HmacSetKey(hmac, WC_SHA256, key, (word32)keyLen);
         updateRet     = wc_HmacUpdate(hmac, in, inLen);
         finalRet      = wc_HmacFinal(hmac, out);
@@ -129,7 +129,7 @@ int wh_Bench_Mod_HmacSha256(whClientContext* client, whBenchOpContext* ctx,
                             int id, void* params)
 {
     (void)params;
-    return _benchHmacSha256(client, ctx, id, WH_DEV_ID);
+    return _benchHmacSha256(client, ctx, id, 0);
 }
 
 int wh_Bench_Mod_HmacSha256Dma(whClientContext* client, whBenchOpContext* ctx,
@@ -137,7 +137,7 @@ int wh_Bench_Mod_HmacSha256Dma(whClientContext* client, whBenchOpContext* ctx,
 {
 #if defined(WOLFHSM_CFG_DMA)
     (void)params;
-    return _benchHmacSha256(client, ctx, id, WH_DEV_ID_DMA);
+    return _benchHmacSha256(client, ctx, id, 1);
 #else
     (void)client;
     (void)ctx;

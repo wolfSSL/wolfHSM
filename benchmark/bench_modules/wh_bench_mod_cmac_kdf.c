@@ -32,7 +32,7 @@
 #define WH_BENCH_CMAC_KDF_OUT_SIZE 40
 
 static int _benchCmacKdf(whClientContext* client, whBenchOpContext* ctx, int id,
-                         int devId)
+                         int useDma)
 {
     /* Derivation inputs mirror the unit test vectors to provide realistic
      * message sizes while keeping the benchmark deterministic. */
@@ -55,7 +55,7 @@ static int _benchCmacKdf(whClientContext* client, whBenchOpContext* ctx, int id,
     whKeyId keyId;
     int     i;
 
-    (void)devId;
+    (void)wh_Client_SetDmaMode(client, useDma);
 
     for (i = 0; i < WOLFHSM_CFG_BENCH_KG_ITERS && ret == 0; i++) {
         int benchStartRet;
@@ -103,7 +103,7 @@ int wh_Bench_Mod_CmacKdf(whClientContext* client, whBenchOpContext* ctx, int id,
                          void* params)
 {
     (void)params;
-    return _benchCmacKdf(client, ctx, id, WH_DEV_ID);
+    return _benchCmacKdf(client, ctx, id, 0);
 }
 
 #endif /* HAVE_CMAC_KDF && WOLFSSL_CMAC */

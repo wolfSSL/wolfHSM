@@ -82,21 +82,20 @@
         }                                                    \
     } while (0)
 
-
-/*
- * Helper macro to run a test on each devId.
- * Only applicable to tests which use the cryptocb and use the devID arg.
- * "Call" should be of the form "whTest_Func(ctx, devId)". Second arg must
- * be named "devId".
- */
-#define WH_TEST_FOREACH_DEVID(call)                          \
-    do {                                                     \
-        int idx;                                             \
-        for (idx = 0; idx < WH_NUM_DEVIDS; idx++) {          \
-            int devId = WH_DEV_IDS_ARRAY[idx];               \
-            WH_TEST_RETURN_ON_FAIL(call);                    \
-        }                                                    \
-    } while (0)
+/* Number of cryptoCb dispatch modes the test suites exercise on the client
+ * devId. With DMA compiled in we run the relevant tests twice -- once with
+ * the standard (non-DMA) path (preferDma=0) and once with DMA preferred
+ * (preferDma=1) -- toggling the client context via wh_Client_SetDmaMode().
+ * Without DMA there is only the std path. The test configs leave
+ * whClientConfig.devId 0, so WH_CLIENT_DEVID resolves to the default global
+ * WH_DEV_ID. The DMA-only WH_DEV_ID_DMA is exercised by running the
+ * wolfCrypt test suite against it (TESTWOLFCRYPT=1 defaults WC_USE_DEVID to
+ * WH_DEV_ID; TESTWOLFCRYPT_DMA=1 uses WH_DEV_ID_DMA). */
+#ifdef WOLFHSM_CFG_DMA
+#define WH_TEST_DMA_MODE_CNT 2
+#else
+#define WH_TEST_DMA_MODE_CNT 1
+#endif
 
 /*
  * Helper macro for test error propagation

@@ -34,7 +34,7 @@
 #define WH_BENCH_HKDF_OKM_SIZE 42
 
 static int _benchHkdf(whClientContext* client, whBenchOpContext* ctx, int id,
-                      int devId)
+                      int useDma)
 {
     /* Simple fixed inputs for HKDF to measure performance. The data mirrors
      * sizes from RFC 5869 test case 1 but we only care about timing here. */
@@ -52,7 +52,7 @@ static int _benchHkdf(whClientContext* client, whBenchOpContext* ctx, int id,
     whKeyId keyId;
     int     i;
 
-    (void)devId;
+    (void)wh_Client_SetDmaMode(client, useDma);
 
     for (i = 0; i < WOLFHSM_CFG_BENCH_KG_ITERS && ret == 0; i++) {
         int benchStartRet;
@@ -98,7 +98,7 @@ int wh_Bench_Mod_HkdfSha256(whClientContext* client, whBenchOpContext* ctx,
                             int id, void* params)
 {
     (void)params;
-    return _benchHkdf(client, ctx, id, WH_DEV_ID);
+    return _benchHkdf(client, ctx, id, 0);
 }
 
 #endif /* defined(HAVE_HKDF) */

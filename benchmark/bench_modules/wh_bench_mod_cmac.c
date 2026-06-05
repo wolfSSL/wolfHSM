@@ -41,7 +41,7 @@ static const uint8_t key256[] = {
 
 
 int _benchCmacAes(whClientContext* client, whBenchOpContext* ctx, int id,
-                  const uint8_t* key, size_t keyLen, int devId)
+                  const uint8_t* key, size_t keyLen, int useDma)
 {
     int      ret = 0;
     word32   outLen;
@@ -54,6 +54,8 @@ int _benchCmacAes(whClientContext* client, whBenchOpContext* ctx, int id,
     size_t   inLen;
     uint8_t* out = NULL;
 
+    (void)wh_Client_SetDmaMode(client, useDma);
+
     /* cache the key on the HSM */
     ret = wh_Client_KeyCache(client, WH_NVM_FLAGS_USAGE_ANY, (uint8_t*)keyLabel,
                              sizeof(keyLabel), (uint8_t*)key, keyLen, &keyId);
@@ -64,7 +66,7 @@ int _benchCmacAes(whClientContext* client, whBenchOpContext* ctx, int id,
 
     out = tag; /* default to using tag buffer on the stack */
 #if defined(WOLFHSM_CFG_DMA)
-    if (devId == WH_DEV_ID_DMA) {
+    if (useDma) {
         inLen = WOLFHSM_CFG_BENCH_DMA_BUFFER_SIZE;
 #if defined(WOLFHSM_CFG_TEST_POSIX)
         if (ctx->transportType == WH_BENCH_TRANSPORT_POSIX_DMA) {
@@ -111,7 +113,8 @@ int _benchCmacAes(whClientContext* client, whBenchOpContext* ctx, int id,
         int benchStopRet;
 
         /* initialize the cmac struct */
-        ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, NULL, devId);
+        ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, NULL,
+                             WH_CLIENT_DEVID(client));
         if (ret != 0) {
             WH_BENCH_PRINTF("Failed to wc_InitCmac_ex %d\n", ret);
             goto exit;
@@ -129,7 +132,7 @@ int _benchCmacAes(whClientContext* client, whBenchOpContext* ctx, int id,
         /* Oneshot CMAC through wolfCrypt API will always be most performant
          * implementation */
         ret = wc_AesCmacGenerate_ex(cmac, out, &outLen, in, inLen, key, keyLen,
-                                    NULL, devId);
+                                    NULL, WH_CLIENT_DEVID(client));
         benchStopRet = wh_Bench_StopOp(ctx, id);
 
         if (benchStartRet != 0) {
@@ -160,8 +163,7 @@ exit:
     }
 #if defined(WOLFHSM_CFG_DMA)
 #if defined(WOLFHSM_CFG_TEST_POSIX)
-    if (devId == WH_DEV_ID_DMA &&
-        ctx->transportType == WH_BENCH_TRANSPORT_POSIX_DMA) {
+    if (useDma && ctx->transportType == WH_BENCH_TRANSPORT_POSIX_DMA) {
         /* if static memory was used with DMA then use XFREE */
         void* heap =
             posixTransportShm_GetDmaHeap(client->comm->transport_context);
@@ -178,7 +180,7 @@ int wh_Bench_Mod_CmacAes128(whClientContext* client, whBenchOpContext* ctx,
                             int id, void* params)
 {
     (void)params;
-    return _benchCmacAes(client, ctx, id, key128, sizeof(key128), WH_DEV_ID);
+    return _benchCmacAes(client, ctx, id, key128, sizeof(key128), 0);
 }
 
 int wh_Bench_Mod_CmacAes128Dma(whClientContext* client, whBenchOpContext* ctx,
@@ -186,8 +188,7 @@ int wh_Bench_Mod_CmacAes128Dma(whClientContext* client, whBenchOpContext* ctx,
 {
 #if defined(WOLFHSM_CFG_DMA)
     (void)params;
-    return _benchCmacAes(client, ctx, id, key128, sizeof(key128),
-                         WH_DEV_ID_DMA);
+    return _benchCmacAes(client, ctx, id, key128, sizeof(key128), 1);
 #else
     (void)client;
     (void)ctx;
@@ -201,7 +202,7 @@ int wh_Bench_Mod_CmacAes256(whClientContext* client, whBenchOpContext* ctx,
                             int id, void* params)
 {
     (void)params;
-    return _benchCmacAes(client, ctx, id, key256, sizeof(key256), WH_DEV_ID);
+    return _benchCmacAes(client, ctx, id, key256, sizeof(key256), 0);
 }
 
 int wh_Bench_Mod_CmacAes256Dma(whClientContext* client, whBenchOpContext* ctx,
@@ -209,8 +210,7 @@ int wh_Bench_Mod_CmacAes256Dma(whClientContext* client, whBenchOpContext* ctx,
 {
 #if defined(WOLFHSM_CFG_DMA)
     (void)params;
-    return _benchCmacAes(client, ctx, id, key256, sizeof(key256),
-                         WH_DEV_ID_DMA);
+    return _benchCmacAes(client, ctx, id, key256, sizeof(key256), 1);
 #else
     (void)client;
     (void)ctx;

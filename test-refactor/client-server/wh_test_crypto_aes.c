@@ -19,7 +19,8 @@
 /*
  * test-refactor/client-server/wh_test_crypto_aes.c
  *
- * AES round-trips routed through the server via WH_DEV_ID. Covers CBC, CTR,
+ * AES round-trips routed through the server via the per-client devId
+ * (WH_CLIENT_DEVID). Covers CBC, CTR,
  * ECB, and GCM in both client-side-key and HSM-cached-key forms, plus the
  * AES-CBC streaming request/response API. Under a WOLFHSM_CFG_DMA build the
  * wc_Aes* calls dispatch to the *Dma wrappers via the cryptocb.
@@ -1018,9 +1019,18 @@ done:
 
 int whTest_Crypto_Aes(whClientContext* ctx)
 {
-    /* AES round-trips dispatch through the cryptocb, so run on every devId to
-     * cover both the normal and DMA server transports. */
-    WH_TEST_FOREACH_DEVID(whTest_CryptoAesImpl(ctx, devId));
+    int i;
+
+    /* AES round-trips dispatch through the cryptocb, so run once per dispatch
+     * mode on the per-client devId to cover both the normal and DMA server
+     * paths. */
+    for (i = 0; i < WH_TEST_DMA_MODE_CNT; i++) {
+        (void)wh_Client_SetDmaMode(ctx, i);
+        WH_TEST_RETURN_ON_FAIL(
+            whTest_CryptoAesImpl(ctx, WH_CLIENT_DEVID(ctx)));
+    }
+    (void)wh_Client_SetDmaMode(ctx, 0);
+
 #ifdef HAVE_AES_CBC
     /* CBC streaming drives the request/response API directly (INVALID_DEVID),
      * so it is not devId-routed -- run it once. */

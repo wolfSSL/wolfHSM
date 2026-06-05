@@ -152,6 +152,9 @@ ifeq ($(TESTWOLFCRYPT),1)
 
     TESTWOLFCRYPT_DEVID ?= $(TESTWOLFCRYPT_DEFAULT_DEVID)
 
+    # The wolfCrypt test suite drives the HSM through the always-registered
+    # global devIds (TESTWOLFCRYPT_DEVID defaults to WH_DEV_ID;
+    # TESTWOLFCRYPT_DMA uses WH_DEV_ID_DMA).
     DEF += -DWC_USE_DEVID=$(TESTWOLFCRYPT_DEVID)
 
     # wolfCrypt test source files

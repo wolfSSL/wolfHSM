@@ -364,9 +364,16 @@ static int whTest_CryptoCmacImpl(whClientContext* ctx, int devId)
 
 int whTest_Crypto_Cmac(whClientContext* ctx)
 {
-    /* CMAC dispatches through the cryptocb, so run on every devId to cover both
-     * the normal and DMA server transports. */
-    WH_TEST_FOREACH_DEVID(whTest_CryptoCmacImpl(ctx, devId));
+    int i;
+
+    /* CMAC dispatches through the cryptocb, so run once per dispatch mode on
+     * the per-client devId to cover both the normal and DMA server paths. */
+    for (i = 0; i < WH_TEST_DMA_MODE_CNT; i++) {
+        (void)wh_Client_SetDmaMode(ctx, i);
+        WH_TEST_RETURN_ON_FAIL(
+            whTest_CryptoCmacImpl(ctx, WH_CLIENT_DEVID(ctx)));
+    }
+    (void)wh_Client_SetDmaMode(ctx, 0);
     return 0;
 }
 #endif /* WOLFSSL_CMAC && !NO_AES && WOLFSSL_AES_DIRECT */

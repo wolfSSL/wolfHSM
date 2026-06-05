@@ -144,7 +144,7 @@ static int wh_ClientTask(void* cf, const char* type, int test)
 
     /* Context 2: Client Remote Crypto */
     memset(buffer, 0, sizeof(buffer));
-    wc_InitRng_ex(rng, NULL, WH_DEV_ID);
+    wc_InitRng_ex(rng, NULL, WH_CLIENT_DEVID(client));
     wc_RNG_GenerateBlock(rng, buffer, sizeof(buffer));
     wc_FreeRng(rng);
     wh_Utils_Hexdump("Context 2: Client Remote RNG:\n", buffer, sizeof(buffer));

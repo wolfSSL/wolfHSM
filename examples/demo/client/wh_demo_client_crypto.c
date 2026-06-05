@@ -71,14 +71,14 @@ int wh_DemoClient_CryptoRsa(whClientContext* clientContext)
     plainText[sizeof(plainText)-1] = '\0';
 
     /* initialize rng to make the rsa key */
-    ret = wc_InitRng_ex(rng, NULL, WH_DEV_ID);
+    ret = wc_InitRng_ex(rng, NULL, WH_CLIENT_DEVID(clientContext));
     if (ret != 0) {
         WOLFHSM_CFG_PRINTF("Failed to wc_InitRng_ex %d\n", ret);
         goto exit;
     }
 
     /* initialize the rsa key */
-    ret = wc_InitRsaKey_ex(rsa, NULL, WH_DEV_ID);
+    ret = wc_InitRsaKey_ex(rsa, NULL, WH_CLIENT_DEVID(clientContext));
     if (ret != 0) {
         WOLFHSM_CFG_PRINTF("Failed to wc_InitRsaKey_ex %d\n", ret);
         goto exit;
@@ -149,7 +149,7 @@ int wh_DemoClient_CryptoRsaImport(whClientContext* clientContext)
     plainText[sizeof(plainText)-1] = '\0';
 
     /* initialize rng to encrypt with the rsa key */
-    ret = wc_InitRng_ex(rng, NULL, WH_DEV_ID);
+    ret = wc_InitRng_ex(rng, NULL, WH_CLIENT_DEVID(clientContext));
     if (ret != 0) {
         WOLFHSM_CFG_PRINTF("Failed to wc_InitRng_ex %d\n", ret);
         goto exit;
@@ -182,7 +182,7 @@ int wh_DemoClient_CryptoRsaImport(whClientContext* clientContext)
     needEvict = 1;
 
     /* initialize the rsa key */
-    ret = wc_InitRsaKey_ex(rsa, NULL, WH_DEV_ID);
+    ret = wc_InitRsaKey_ex(rsa, NULL, WH_CLIENT_DEVID(clientContext));
     if (ret != 0) {
         WOLFHSM_CFG_PRINTF("Failed to wc_InitRsaKey_ex %d\n", ret);
         goto exit;
@@ -257,20 +257,22 @@ int wh_DemoClient_CryptoCurve25519(whClientContext* clientContext)
     WC_RNG         rng[1];
 
     /* initialize rng to make the curve25519 keys */
-    ret = wc_InitRng_ex(rng, NULL, WH_DEV_ID);
+    ret = wc_InitRng_ex(rng, NULL, WH_CLIENT_DEVID(clientContext));
     if (ret != 0) {
         WOLFHSM_CFG_PRINTF("Failed to wc_InitRng_ex %d\n", ret);
         goto exit;
     }
 
     /* initialize the keys */
-    ret = wc_curve25519_init_ex(curve25519PrivateKey, NULL, WH_DEV_ID);
+    ret = wc_curve25519_init_ex(curve25519PrivateKey, NULL,
+                                WH_CLIENT_DEVID(clientContext));
     if (ret != 0) {
         WOLFHSM_CFG_PRINTF("Failed to wc_curve25519_init_ex %d\n", ret);
         goto exit;
     }
 
-    ret = wc_curve25519_init_ex(curve25519PublicKey, NULL, WH_DEV_ID);
+    ret = wc_curve25519_init_ex(curve25519PublicKey, NULL,
+                                WH_CLIENT_DEVID(clientContext));
     if (ret != 0) {
         WOLFHSM_CFG_PRINTF("Failed to wc_curve25519_init_ex %d\n", ret);
         goto exit;
@@ -371,7 +373,7 @@ int wh_DemoClient_CryptoCurve25519Import(whClientContext* clientContext)
     }
 
     /* initialize the wolfCrypt struct to use the cached key */
-    ret = wc_curve25519_init_ex(bobKey, NULL, WH_DEV_ID);
+    ret = wc_curve25519_init_ex(bobKey, NULL, WH_CLIENT_DEVID(clientContext));
     if (ret != 0) {
         WOLFHSM_CFG_PRINTF("Failed to wc_curve25519_init_ex %d\n", ret);
         goto exit;
@@ -407,7 +409,7 @@ int wh_DemoClient_CryptoCurve25519Import(whClientContext* clientContext)
     }
 
     /* Initialize the wolfCrypt struct to use the cached key */
-    ret = wc_curve25519_init_ex(aliceKey, NULL, WH_DEV_ID);
+    ret = wc_curve25519_init_ex(aliceKey, NULL, WH_CLIENT_DEVID(clientContext));
     if (ret != 0) {
         WOLFHSM_CFG_PRINTF("Failed to wc_curve25519_init_ex %d\n", ret);
         goto exit;
@@ -505,19 +507,19 @@ int wh_DemoClient_CryptoEcc(whClientContext* clientContext)
     byte       signature[128];
 
     /* Initialize the rng to make the ecc keys */
-    ret = wc_InitRng_ex(rng, NULL, WH_DEV_ID);
+    ret = wc_InitRng_ex(rng, NULL, WH_CLIENT_DEVID(clientContext));
     if (ret != 0) {
         WOLFHSM_CFG_PRINTF("Failed to wc_InitRng_ex %d\n", ret);
         goto exit;
     }
 
     /* Initialize the local wolfCrypt structs */
-    ret = wc_ecc_init_ex(aliceKey, NULL, WH_DEV_ID);
+    ret = wc_ecc_init_ex(aliceKey, NULL, WH_CLIENT_DEVID(clientContext));
     if (ret != 0) {
         WOLFHSM_CFG_PRINTF("Failed to wc_ecc_init_ex %d\n", ret);
         goto exit;
     }
-    ret = wc_ecc_init_ex(bobKey, NULL, WH_DEV_ID);
+    ret = wc_ecc_init_ex(bobKey, NULL, WH_CLIENT_DEVID(clientContext));
     if (ret != 0) {
         WOLFHSM_CFG_PRINTF("Failed to wc_ecc_init_ex %d\n", ret);
         goto exit;
@@ -638,7 +640,7 @@ int wh_DemoClient_CryptoEccImport(whClientContext* clientContext)
     uint8_t    keyBuf[256];
 
     /* Initialize the rng for signature signing */
-    ret = wc_InitRng_ex(rng, NULL, WH_DEV_ID);
+    ret = wc_InitRng_ex(rng, NULL, WH_CLIENT_DEVID(clientContext));
     if (ret != 0) {
         WOLFHSM_CFG_PRINTF("Failed to wc_InitRng_ex %d\n", ret);
         goto exit;
@@ -674,7 +676,7 @@ int wh_DemoClient_CryptoEccImport(whClientContext* clientContext)
 
     /* Initialize the local wolfCrypt struct, and configure it to use the cached
      * key */
-    ret = wc_ecc_init_ex(aliceKey, NULL, WH_DEV_ID);
+    ret = wc_ecc_init_ex(aliceKey, NULL, WH_CLIENT_DEVID(clientContext));
     if (ret != 0) {
         WOLFHSM_CFG_PRINTF("Failed to wc_ecc_init_ex %d\n", ret);
         goto exit;
@@ -720,7 +722,7 @@ int wh_DemoClient_CryptoEccImport(whClientContext* clientContext)
 
     /* Initialize the local wolfCrypt struct, and configure it to use the cached
      * key */
-    ret = wc_ecc_init_ex(bobKey, NULL, WH_DEV_ID);
+    ret = wc_ecc_init_ex(bobKey, NULL, WH_CLIENT_DEVID(clientContext));
     if (ret != 0) {
         WOLFHSM_CFG_PRINTF("Failed to wc_ecc_init_ex %d\n", ret);
         goto exit;
@@ -841,7 +843,7 @@ int wh_DemoClient_CryptoAesCbc(whClientContext* clientContext)
     byte finalText[16];
 
     /* Initialize the aes struct */
-    ret = wc_AesInit(aes, NULL, WH_DEV_ID);
+    ret = wc_AesInit(aes, NULL, WH_CLIENT_DEVID(clientContext));
     if (ret != 0) {
         WOLFHSM_CFG_PRINTF("Failed to wc_AesInit %d\n", ret);
     }
@@ -912,7 +914,7 @@ int wh_DemoClient_CryptoAesCbcImport(whClientContext* clientContext)
     byte finalText[16];
 
     /* Initialize the aes struct */
-    ret = wc_AesInit(aes, NULL, WH_DEV_ID);
+    ret = wc_AesInit(aes, NULL, WH_CLIENT_DEVID(clientContext));
     if (ret != 0) {
         WOLFHSM_CFG_PRINTF("Failed to wc_AesInit %d\n", ret);
         goto exit;
@@ -998,7 +1000,7 @@ int wh_DemoClient_CryptoAesGcm(whClientContext* clientContext)
     byte finalText[16];
 
     /* initialize the aes struct */
-    ret = wc_AesInit(aes, NULL, WH_DEV_ID);
+    ret = wc_AesInit(aes, NULL, WH_CLIENT_DEVID(clientContext));
     if (ret != 0) {
         WOLFHSM_CFG_PRINTF("Failed to wc_AesInit %d\n", ret);
         goto exit;
@@ -1061,7 +1063,7 @@ int wh_DemoClient_CryptoAesGcmImport(whClientContext* clientContext)
     byte finalText[16];
 
     /* initialize the aes struct */
-    ret = wc_AesInit(aes, NULL, WH_DEV_ID);
+    ret = wc_AesInit(aes, NULL, WH_CLIENT_DEVID(clientContext));
     if (ret != 0) {
         WOLFHSM_CFG_PRINTF("Failed to wc_AesInit %d\n", ret);
         goto exit;
@@ -1152,7 +1154,7 @@ int wh_DemoClient_CryptoCmac(whClientContext* clientContext)
 
     /* initialize the cmac struct and set the key */
     ret = wc_InitCmac_ex(cmac, key, sizeof(key), WC_CMAC_AES, NULL, NULL,
-                         WH_DEV_ID);
+                         WH_CLIENT_DEVID(clientContext));
     if (ret != 0) {
         WOLFHSM_CFG_PRINTF("Failed to wc_InitCmac_ex %d\n", ret);
         goto exit;
@@ -1174,9 +1176,9 @@ int wh_DemoClient_CryptoCmac(whClientContext* clientContext)
     }
 
     /* verify the tag */
-    ret =
-        wc_AesCmacVerify_ex(cmac, tag, sizeof(tag), (byte*)message,
-                            strlen(message), key, sizeof(key), NULL, WH_DEV_ID);
+    ret = wc_AesCmacVerify_ex(cmac, tag, sizeof(tag), (byte*)message,
+                              strlen(message), key, sizeof(key), NULL,
+                              WH_CLIENT_DEVID(clientContext));
     if (ret != 0) {
         WOLFHSM_CFG_PRINTF("CMAC hash and verify failed %d\n", ret);
         goto exit;
@@ -1205,7 +1207,8 @@ int wh_DemoClient_CryptoCmacImport(whClientContext* clientContext)
     byte    tag[16];
 
     /* initialize the cmac struct */
-    ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, NULL, WH_DEV_ID);
+    ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, NULL,
+                         WH_CLIENT_DEVID(clientContext));
     if (ret != 0) {
         WOLFHSM_CFG_PRINTF("Failed to wc_InitCmac_ex %d\n", ret);
         goto exit;
@@ -1247,7 +1250,8 @@ int wh_DemoClient_CryptoCmacImport(whClientContext* clientContext)
      */
 
     /* initialize the cmac struct */
-    ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, NULL, WH_DEV_ID);
+    ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, NULL,
+                         WH_CLIENT_DEVID(clientContext));
     if (ret != 0) {
         WOLFHSM_CFG_PRINTF("Failed to wc_InitCmac_ex %d\n", ret);
         goto exit;
@@ -1274,7 +1278,8 @@ int wh_DemoClient_CryptoCmacImport(whClientContext* clientContext)
      * the best one-shot performance. No need to pass a key since the key is
      * cached on the HSM and the keyId is associated with the CMAC struct */
     ret = wc_AesCmacVerify_ex(cmac, tag, sizeof(tag), (byte*)message,
-                              sizeof(message), NULL, 0, NULL, WH_DEV_ID);
+                              sizeof(message), NULL, 0, NULL,
+                              WH_CLIENT_DEVID(clientContext));
     if (ret != 0) {
         WOLFHSM_CFG_PRINTF("CMAC hash and verify failed with imported key %d\n", ret);
         goto exit;
@@ -1303,7 +1308,8 @@ int wh_DemoClient_CryptoCmacOneshotImport(whClientContext* clientContext)
     byte    tag[16];
 
     /* initialize the cmac struct */
-    ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, NULL, WH_DEV_ID);
+    ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, NULL,
+                         WH_CLIENT_DEVID(clientContext));
     if (ret != 0) {
         WOLFHSM_CFG_PRINTF("Failed to wc_InitCmac_ex %d\n", ret);
         goto exit;
@@ -1330,7 +1336,8 @@ int wh_DemoClient_CryptoCmacOneshotImport(whClientContext* clientContext)
      * cached on the HSM and the keyId is associated with the CMAC struct */
     outLen = sizeof(tag);
     ret    = wc_AesCmacGenerate_ex(cmac, tag, &outLen, (byte*)message,
-                                   sizeof(message), NULL, 0, NULL, WH_DEV_ID);
+                                   sizeof(message), NULL, 0, NULL,
+                                   WH_CLIENT_DEVID(clientContext));
     if (ret != 0) {
         WOLFHSM_CFG_PRINTF("Failed to wh_Client_AesCmacGenerate %d\n", ret);
         goto exit;
@@ -1341,7 +1348,8 @@ int wh_DemoClient_CryptoCmacOneshotImport(whClientContext* clientContext)
      * operation is finalized */
 
     /* initialize the cmac struct */
-    ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, NULL, WH_DEV_ID);
+    ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, NULL,
+                         WH_CLIENT_DEVID(clientContext));
     if (ret != 0) {
         WOLFHSM_CFG_PRINTF("Failed to wc_InitCmac_ex %d\n", ret);
         goto exit;
@@ -1368,7 +1376,8 @@ int wh_DemoClient_CryptoCmacOneshotImport(whClientContext* clientContext)
      * the best one-shot performance. No need to pass a key since the key is
      * cached on the HSM and the keyId is associated with the CMAC struct */
     ret = wc_AesCmacVerify_ex(cmac, tag, sizeof(tag), (byte*)message,
-                              sizeof(message), NULL, 0, NULL, WH_DEV_ID);
+                              sizeof(message), NULL, 0, NULL,
+                              WH_CLIENT_DEVID(clientContext));
     if (ret != 0) {
         WOLFHSM_CFG_PRINTF("CMAC hash and verify oneshot failed with imported key %d\n",
                ret);
@@ -1395,7 +1404,7 @@ exit:
 int wh_DemoClient_CryptoHkdfExport(whClientContext* clientContext)
 {
     int ret   = 0;
-    int devId = WH_DEV_ID;
+    int devId = WH_CLIENT_DEVID(clientContext);
 
     /* Example inputs for HKDF. Data is from RFC 5869 test case 1 */
     const byte ikm[]  = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
@@ -1569,7 +1578,7 @@ int wh_DemoClient_CryptoCmacKdfExport(whClientContext* clientContext)
         demoCmacKdfSalt, (word32)sizeof(demoCmacKdfSalt), demoCmacKdfZ,
         (word32)sizeof(demoCmacKdfZ), demoCmacKdfFixedInfo,
         (word32)sizeof(demoCmacKdfFixedInfo), derived, (word32)sizeof(derived),
-        NULL, WH_DEV_ID);
+        NULL, WH_CLIENT_DEVID(clientContext));
     if (ret != 0) {
         WOLFHSM_CFG_PRINTF("Failed to wc_KDA_KDF_twostep_cmac %d\n", ret);
     }

@@ -57,7 +57,7 @@
 
 static int _whTest_CryptoMlDsaClient(whClientContext* ctx)
 {
-    int      devId = WH_DEV_ID;
+    int      devId = WH_CLIENT_DEVID(ctx);
     int      ret   = 0;
     MlDsaKey key[1];
 
@@ -175,7 +175,7 @@ static int _whTest_CryptoMlDsaClient(whClientContext* ctx)
  * wh_Client_MlDsaExportPublicKey returns a public-only key struct. */
 static int _whTest_CryptoMlDsaExportPublicKey(whClientContext* ctx)
 {
-    int      devId = WH_DEV_ID;
+    int      devId = WH_CLIENT_DEVID(ctx);
     int      ret   = 0;
     MlDsaKey pub[1] = {0};
     whKeyId  keyId  = WH_KEYID_ERASED;
@@ -240,7 +240,7 @@ static int _whTest_CryptoMlDsaExportPublicKey(whClientContext* ctx)
 #ifdef WOLFHSM_CFG_DMA
 static int _whTest_CryptoMlDsaDmaClient(whClientContext* ctx)
 {
-    int      devId = WH_DEV_ID_DMA;
+    int      devId = WH_CLIENT_DEVID(ctx);
     int      ret   = 0;
     MlDsaKey key[1];
     MlDsaKey imported_key[1];
@@ -443,7 +443,7 @@ static int _whTest_CryptoMlDsaDmaClient(whClientContext* ctx)
  * public-only key. */
 static int _whTest_CryptoMlDsaExportPublicKeyDma(whClientContext* ctx)
 {
-    int      devId = WH_DEV_ID;
+    int      devId = WH_CLIENT_DEVID(ctx);
     int      ret   = 0;
     MlDsaKey pub[1] = {0};
     whKeyId  keyId  = WH_KEYID_ERASED;
@@ -516,7 +516,7 @@ static int _whTest_CryptoMlDsaExportPublicKeyDma(whClientContext* ctx)
     defined(WOLFHSM_CFG_DMA)
 static int _whTest_CryptoMlDsaVerifyOnlyDma(whClientContext* ctx)
 {
-    int devId = WH_DEV_ID_DMA;
+    int devId = WH_CLIENT_DEVID(ctx);
 
     /* Vectors from wolfCrypt test vectors, but decoupled for isolated usage */
     const byte ml_dsa_44_pub_key[] = {
@@ -883,10 +883,15 @@ static int _whTest_CryptoMlDsaVerifyOnlyDma(whClientContext* ctx)
     whNvmId  keyId    = WH_KEYID_ERASED;
     int      evictKey = 0;
 
+    /* DMA-only test: prefer DMA dispatch so the wolfCrypt verify below routes
+     * through the DMA path. */
+    (void)wh_Client_SetDmaMode(ctx, 1);
+
     /* Initialize keys */
     ret = wc_MlDsaKey_Init(key, NULL, devId);
     if (ret != 0) {
         WH_ERROR_PRINT("Failed to initialize ML-DSA key: %d\n", ret);
+        (void)wh_Client_SetDmaMode(ctx, 0);
         return ret;
     }
     else {
@@ -910,14 +915,10 @@ static int _whTest_CryptoMlDsaVerifyOnlyDma(whClientContext* ctx)
             WH_ERROR_PRINT("Failed to import ML-DSA public key: %d\n", ret);
         }
     }
-    /* Import the key into wolfHSM via the wolfCrypt structure */
+    /* Import the key into wolfHSM via the wolfCrypt structure. This is the
+     * DMA-only verify test, so always import via the DMA path. */
     if (ret == 0) {
-        if (devId == WH_DEV_ID_DMA) {
-            ret = wh_Client_MlDsaImportKeyDma(ctx, key, &keyId, 0, 0, NULL);
-        }
-        else {
-            ret = wh_Client_MlDsaImportKey(ctx, key, &keyId, 0, 0, NULL);
-        }
+        ret = wh_Client_MlDsaImportKeyDma(ctx, key, &keyId, 0, 0, NULL);
         if (ret == WH_ERROR_OK) {
             evictKey = 1;
         }
@@ -956,6 +957,8 @@ static int _whTest_CryptoMlDsaVerifyOnlyDma(whClientContext* ctx)
         WH_TEST_PRINT("ML-DSA VERIFY ONLY: SUCCESS\n");
     }
 
+    /* Restore the standard (non-DMA) dispatch mode */
+    (void)wh_Client_SetDmaMode(ctx, 0);
     return ret;
 }
 #endif /* !defined(WOLFSSL_DILITHIUM_NO_VERIFY) && \
@@ -968,9 +971,9 @@ static int _whTest_CryptoMlDsaVerifyOnlyDma(whClientContext* ctx)
 /*
  * ML-DSA exercised through the plain wolfCrypt API (wc_MlDsaKey_MakeKey /
  * SignCtx / VerifyCtx), which dispatches through the cryptocb. PQC keygen/
- * sign/verify is handled by both the normal and DMA cryptocbs, so the entry
- * point loops this over every devId. Complements the wh_Client_MlDsa*
- * direct-API tests above.
+ * sign/verify is handled by both the standard and DMA dispatch paths, so the
+ * entry point loops this over every dispatch mode. Complements the
+ * wh_Client_MlDsa* direct-API tests above.
  */
 static int whTest_CryptoMlDsaWolfCryptImpl(whClientContext* ctx, int devId)
 {
@@ -983,9 +986,7 @@ static int whTest_CryptoMlDsaWolfCryptImpl(whClientContext* ctx, int devId)
     byte     sig[DILITHIUM_MAX_SIG_SIZE];
     word32   sigSz = sizeof(sig);
 
-    (void)ctx;
-
-    ret = wc_InitRng_ex(rng, NULL, WH_DEV_ID);
+    ret = wc_InitRng_ex(rng, NULL, WH_CLIENT_DEVID(ctx));
     if (ret != 0) {
         WH_ERROR_PRINT("Failed to wc_InitRng_ex %d\n", ret);
         return ret;
@@ -1065,7 +1066,7 @@ static int whTest_CryptoMlDsaWolfCryptImpl(whClientContext* ctx, int devId)
  * WH_ERROR_BUFFER_SIZE and report a required length greater than the buffer. */
 static int _whTest_CryptoMlDsaBufferTooSmall(whClientContext* ctx)
 {
-    int        devId = WH_DEV_ID;
+    int        devId = WH_CLIENT_DEVID(ctx);
     int        ret;
     MlDsaKey   key[1];
     const byte msg[]                            = "ml-dsa buf size test";
@@ -1125,10 +1126,19 @@ int whTest_Crypto_MlDsa(whClientContext* ctx)
 #if !defined(WOLFSSL_DILITHIUM_NO_VERIFY) && \
     !defined(WOLFSSL_DILITHIUM_NO_SIGN) &&   \
     !defined(WOLFSSL_DILITHIUM_NO_MAKE_KEY) && !defined(WOLFSSL_NO_ML_DSA_44)
+    int i;
+
     /* Plain wolfCrypt-API ML-DSA dispatches through the cryptocb; PQC is
-     * handled by both the normal and DMA cryptocbs, so loop over every devId.
-     * The wh_Client_MlDsa* direct-API tests below run on their own devIds. */
-    WH_TEST_FOREACH_DEVID(whTest_CryptoMlDsaWolfCryptImpl(ctx, devId));
+     * handled by both the standard and DMA dispatch paths, so loop over every
+     * dispatch mode. The wh_Client_MlDsa* direct-API tests below manage the
+     * dispatch mode themselves. */
+    for (i = 0; i < WH_TEST_DMA_MODE_CNT; i++) {
+        (void)wh_Client_SetDmaMode(ctx, i);
+        WH_TEST_RETURN_ON_FAIL(
+            whTest_CryptoMlDsaWolfCryptImpl(ctx, WH_CLIENT_DEVID(ctx)));
+    }
+    (void)wh_Client_SetDmaMode(ctx, 0);
+
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoMlDsaClient(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoMlDsaExportPublicKey(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoMlDsaBufferTooSmall(ctx));

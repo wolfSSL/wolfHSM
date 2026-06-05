@@ -615,7 +615,7 @@ static byte test_msg[512] = {
 #if !defined(WOLFSSL_MLDSA_NO_SIGN)
 /* Helper function for ML-DSA sign benchmark */
 static int _benchMlDsaSign(whClientContext* client, whBenchOpContext* ctx,
-                           int id, int paramSet, int devId)
+                           int id, int paramSet, int useDma)
 {
     int         ret = 0;
     wc_MlDsaKey key;
@@ -629,8 +629,10 @@ static int _benchMlDsaSign(whClientContext* client, whBenchOpContext* ctx,
     whKeyId     keyId           = WH_KEYID_ERASED;
     char        keyLabel[]      = "bench-mldsa-key";
 
+    (void)wh_Client_SetDmaMode(client, useDma);
+
     /* Initialize the RNG */
-    ret = wc_InitRng_ex(rng, NULL, devId);
+    ret = wc_InitRng_ex(rng, NULL, WH_CLIENT_DEVID(client));
     if (ret != 0) {
         WH_BENCH_PRINTF("Failed to wc_InitRng_ex %d\n", ret);
         goto exit;
@@ -638,7 +640,7 @@ static int _benchMlDsaSign(whClientContext* client, whBenchOpContext* ctx,
     initialized_rng = 1;
 
     /* Initialize the ML-DSA key */
-    ret = wc_MlDsaKey_Init(&key, NULL, devId);
+    ret = wc_MlDsaKey_Init(&key, NULL, WH_CLIENT_DEVID(client));
     if (ret != 0) {
         WH_BENCH_PRINTF("Failed to wc_MlDsaKey_Init %d\n", ret);
         goto exit;
@@ -663,7 +665,7 @@ static int _benchMlDsaSign(whClientContext* client, whBenchOpContext* ctx,
 
     /* Import key to the HSM */
 #if defined(WOLFHSM_CFG_DMA)
-    if (devId == WH_DEV_ID_DMA) {
+    if (useDma) {
         ret = wh_Client_MlDsaImportKeyDma(client, &key, &keyId,
                                           WH_NVM_FLAGS_USAGE_ANY,
                                           strlen(keyLabel), (uint8_t*)keyLabel);
@@ -766,7 +768,7 @@ exit:
 #if !defined(WOLFSSL_MLDSA_NO_VERIFY)
 /* Helper function for ML-DSA verify benchmark */
 static int _benchMlDsaVerify(whClientContext* client, whBenchOpContext* ctx,
-                             int id, int paramSet, int devId)
+                             int id, int paramSet, int useDma)
 {
     int         ret = 0;
     wc_MlDsaKey key;
@@ -779,8 +781,10 @@ static int _benchMlDsaVerify(whClientContext* client, whBenchOpContext* ctx,
     whKeyId     keyId           = WH_KEYID_ERASED;
     char        keyLabel[]      = "bench-mldsa-key";
 
+    (void)wh_Client_SetDmaMode(client, useDma);
+
     /* Initialize the RNG */
-    ret = wc_InitRng_ex(rng, NULL, devId);
+    ret = wc_InitRng_ex(rng, NULL, WH_CLIENT_DEVID(client));
     if (ret != 0) {
         WH_BENCH_PRINTF("Failed to wc_InitRng_ex %d\n", ret);
         goto exit;
@@ -788,7 +792,7 @@ static int _benchMlDsaVerify(whClientContext* client, whBenchOpContext* ctx,
     initialized_rng = 1;
 
     /* Initialize the ML-DSA key */
-    ret = wc_MlDsaKey_Init(&key, NULL, devId);
+    ret = wc_MlDsaKey_Init(&key, NULL, WH_CLIENT_DEVID(client));
     if (ret != 0) {
         WH_BENCH_PRINTF("Failed to wc_MlDsaKey_Init %d\n", ret);
         goto exit;
@@ -813,7 +817,7 @@ static int _benchMlDsaVerify(whClientContext* client, whBenchOpContext* ctx,
 
 /* Import key to the HSM */
 #if defined(WOLFHSM_CFG_DMA)
-    if (devId == WH_DEV_ID_DMA) {
+    if (useDma) {
         ret = wh_Client_MlDsaImportKeyDma(client, &key, &keyId,
                                           WH_NVM_FLAGS_USAGE_ANY,
                                           strlen(keyLabel), (uint8_t*)keyLabel);
@@ -897,10 +901,8 @@ exit:
 #if !defined(WOLFSSL_MLDSA_NO_MAKE_KEY)
 /* Helper function for ML-DSA key generation benchmark */
 static int _benchMlDsaKeyGen(whClientContext* client, whBenchOpContext* ctx,
-                             int id, int paramSet, int devId)
+                             int id, int paramSet, int useDma)
 {
-    (void)client;
-
     int         ret = 0;
     wc_MlDsaKey key;
     WC_RNG      rng[1] = {0};
@@ -908,8 +910,10 @@ static int _benchMlDsaKeyGen(whClientContext* client, whBenchOpContext* ctx,
     int         initialized_rng = 0;
     int         initialized_key = 0;
 
+    (void)wh_Client_SetDmaMode(client, useDma);
+
     /* Initialize the RNG */
-    ret = wc_InitRng_ex(rng, NULL, devId);
+    ret = wc_InitRng_ex(rng, NULL, WH_CLIENT_DEVID(client));
     if (ret != 0) {
         WH_BENCH_PRINTF("Failed to wc_InitRng_ex %d\n", ret);
         return ret;
@@ -922,7 +926,7 @@ static int _benchMlDsaKeyGen(whClientContext* client, whBenchOpContext* ctx,
         int benchStopRet;
 
         /* Initialize the ML-DSA key before each iteration */
-        ret = wc_MlDsaKey_Init(&key, NULL, devId);
+        ret = wc_MlDsaKey_Init(&key, NULL, WH_CLIENT_DEVID(client));
         if (ret != 0) {
             WH_BENCH_PRINTF("Failed to wc_MlDsaKey_Init %d\n", ret);
             break;
@@ -982,7 +986,7 @@ int wh_Bench_Mod_MlDsa44Sign(whClientContext* client, whBenchOpContext* ctx,
 #if !defined(WOLFSSL_MLDSA_NO_SIGN) && \
     !defined(WOLFHSM_CFG_TEST_CLIENT_LARGE_DATA_DMA_ONLY)
     (void)params;
-    return _benchMlDsaSign(client, ctx, id, WC_ML_DSA_44, WH_DEV_ID);
+    return _benchMlDsaSign(client, ctx, id, WC_ML_DSA_44, 0);
 #else
     (void)client;
     (void)ctx;
@@ -997,7 +1001,7 @@ int wh_Bench_Mod_MlDsa44SignDma(whClientContext* client, whBenchOpContext* ctx,
 {
 #if defined(WOLFHSM_CFG_DMA) && !defined(WOLFSSL_MLDSA_NO_SIGN)
     (void)params;
-    return _benchMlDsaSign(client, ctx, id, WC_ML_DSA_44, WH_DEV_ID_DMA);
+    return _benchMlDsaSign(client, ctx, id, WC_ML_DSA_44, 1);
 #else
     (void)client;
     (void)ctx;
@@ -1013,7 +1017,7 @@ int wh_Bench_Mod_MlDsa44Verify(whClientContext* client, whBenchOpContext* ctx,
 #if !defined(WOLFSSL_MLDSA_NO_VERIFY) && \
     !defined(WOLFHSM_CFG_TEST_CLIENT_LARGE_DATA_DMA_ONLY)
     (void)params;
-    return _benchMlDsaVerify(client, ctx, id, WC_ML_DSA_44, WH_DEV_ID);
+    return _benchMlDsaVerify(client, ctx, id, WC_ML_DSA_44, 0);
 #else
     (void)client;
     (void)ctx;
@@ -1028,7 +1032,7 @@ int wh_Bench_Mod_MlDsa44VerifyDma(whClientContext*  client,
 {
 #if defined(WOLFHSM_CFG_DMA) && !defined(WOLFSSL_MLDSA_NO_VERIFY)
     (void)params;
-    return _benchMlDsaVerify(client, ctx, id, WC_ML_DSA_44, WH_DEV_ID_DMA);
+    return _benchMlDsaVerify(client, ctx, id, WC_ML_DSA_44, 1);
 #else
     (void)client;
     (void)ctx;
@@ -1044,7 +1048,7 @@ int wh_Bench_Mod_MlDsa44KeyGen(whClientContext* client, whBenchOpContext* ctx,
 #if !defined(WOLFSSL_MLDSA_NO_MAKE_KEY) && \
     !defined(WOLFHSM_CFG_TEST_CLIENT_LARGE_DATA_DMA_ONLY)
     (void)params;
-    return _benchMlDsaKeyGen(client, ctx, id, WC_ML_DSA_44, WH_DEV_ID);
+    return _benchMlDsaKeyGen(client, ctx, id, WC_ML_DSA_44, 0);
 #else
     (void)client;
     (void)ctx;
@@ -1059,7 +1063,7 @@ int wh_Bench_Mod_MlDsa44KeyGenDma(whClientContext*  client,
 {
 #if defined(WOLFHSM_CFG_DMA) && !defined(WOLFSSL_MLDSA_NO_MAKE_KEY)
     (void)params;
-    return _benchMlDsaKeyGen(client, ctx, id, WC_ML_DSA_44, WH_DEV_ID_DMA);
+    return _benchMlDsaKeyGen(client, ctx, id, WC_ML_DSA_44, 1);
 #else
     (void)client;
     (void)ctx;

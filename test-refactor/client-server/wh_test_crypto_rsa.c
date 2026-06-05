@@ -19,7 +19,8 @@
 /*
  * test-refactor/client-server/wh_test_crypto_rsa.c
  *
- * RSA encrypt/decrypt round-trips routed through the server via WH_DEV_ID:
+ * RSA encrypt/decrypt round-trips routed through the server via the
+ * per-client devId (WH_CLIENT_DEVID):
  * ephemeral key, server-exported key, and server-cached key paths.
  */
 
@@ -52,7 +53,7 @@
 
 static int _whTest_CryptoRsa(whClientContext* ctx)
 {
-    int     devId = WH_DEV_ID;
+    int     devId = WH_CLIENT_DEVID(ctx);
     int     ret   = WH_ERROR_OK;
     WC_RNG  rng[1];
     RsaKey  rsa[1];
@@ -109,7 +110,7 @@ static int _whTest_CryptoRsa(whClientContext* ctx)
         /* Using client export key */
         memset(cipherText, 0, sizeof(cipherText));
         memset(finalText, 0, sizeof(finalText));
-        ret = wc_InitRsaKey_ex(rsa, NULL, WH_DEV_ID);
+        ret = wc_InitRsaKey_ex(rsa, NULL, WH_CLIENT_DEVID(ctx));
         if (ret != 0) {
             WH_ERROR_PRINT("Failed to wc_InitRsaKey_ex %d\n", ret);
         }
@@ -158,7 +159,7 @@ static int _whTest_CryptoRsa(whClientContext* ctx)
             WH_ERROR_PRINT("Failed to make cached key %d\n", ret);
         }
         else {
-            ret = wc_InitRsaKey_ex(rsa, NULL, WH_DEV_ID);
+            ret = wc_InitRsaKey_ex(rsa, NULL, WH_CLIENT_DEVID(ctx));
             if (ret != 0) {
                 WH_ERROR_PRINT("Failed to wc_InitRsaKey_ex %d\n", ret);
             }
@@ -217,7 +218,7 @@ static int _whTest_CryptoRsa(whClientContext* ctx)
  * trip proves the exported public key matches the cached private. */
 static int _whTest_CryptoRsaExportPublicKey(whClientContext* ctx)
 {
-    int      devId = WH_DEV_ID;
+    int      devId = WH_CLIENT_DEVID(ctx);
     int      ret   = WH_ERROR_OK;
     WC_RNG   rng[1];
     RsaKey   rsaPub[1];
@@ -324,7 +325,7 @@ static int _whTest_CryptoRsaExportPublicKey(whClientContext* ctx)
 /* Exercises wh_Client_RsaFunction with an undersized output buffer. */
 static int _whTest_CryptoRsaBufferTooSmall(whClientContext* ctx)
 {
-    const int  devId         = WH_DEV_ID;
+    const int  devId         = WH_CLIENT_DEVID(ctx);
     const int  rsa_key_bits  = 2048;
     const int  rsa_key_bytes = rsa_key_bits / 8;
     int        ret;

@@ -52,7 +52,6 @@ uint8_t key2_der[] = {
 int wh_Bench_Mod_Curve25519KeyGen(whClientContext*  client,
                                   whBenchOpContext* ctx, int id, void* params)
 {
-    (void)client;
     (void)params;
 
     int            ret    = 0;
@@ -62,8 +61,10 @@ int wh_Bench_Mod_Curve25519KeyGen(whClientContext*  client,
     int            initialized_rng = 0;
     int            initialized_key = 0;
 
+    (void)wh_Client_SetDmaMode(client, 0);
+
     /* Initialize the RNG for key generation */
-    ret = wc_InitRng_ex(rng, NULL, WH_DEV_ID);
+    ret = wc_InitRng_ex(rng, NULL, WH_CLIENT_DEVID(client));
     if (ret != 0) {
         WH_BENCH_PRINTF("Failed to wc_InitRng_ex %d\n", ret);
         return ret;
@@ -76,7 +77,7 @@ int wh_Bench_Mod_Curve25519KeyGen(whClientContext*  client,
         int benchStopRet;
 
         /* Initialize the Curve25519 key before each iteration */
-        ret = wc_curve25519_init_ex(key, NULL, WH_DEV_ID);
+        ret = wc_curve25519_init_ex(key, NULL, WH_CLIENT_DEVID(client));
         if (ret != 0) {
             WH_BENCH_PRINTF("Failed to wc_curve25519_init_ex %d\n", ret);
             break;
@@ -140,6 +141,8 @@ int wh_Bench_Mod_Curve25519SharedSecret(whClientContext*  client,
     whKeyId        keyIdBob          = WH_KEYID_ERASED;
     char           keyLabel[]        = "bench-key";
 
+    (void)wh_Client_SetDmaMode(client, 0);
+
     /* Cache Alice's key in the HSM */
     ret = wh_Client_KeyCache(client, WH_NVM_FLAGS_USAGE_ANY, (uint8_t*)keyLabel,
                              strlen(keyLabel), key1_der, sizeof(key1_der),
@@ -160,7 +163,7 @@ int wh_Bench_Mod_Curve25519SharedSecret(whClientContext*  client,
     }
 
     /* Initialize Alice's key structure */
-    ret = wc_curve25519_init_ex(keyAlice, NULL, WH_DEV_ID);
+    ret = wc_curve25519_init_ex(keyAlice, NULL, WH_CLIENT_DEVID(client));
     if (ret != 0) {
         WH_BENCH_PRINTF("Failed to initialize Alice's key %d\n", ret);
         wh_Client_KeyEvict(client, keyIdAlice);
@@ -177,7 +180,7 @@ int wh_Bench_Mod_Curve25519SharedSecret(whClientContext*  client,
     }
 
     /* Initialize Bob's key structure */
-    ret = wc_curve25519_init_ex(keyBob, NULL, WH_DEV_ID);
+    ret = wc_curve25519_init_ex(keyBob, NULL, WH_CLIENT_DEVID(client));
     if (ret != 0) {
         WH_BENCH_PRINTF("Failed to initialize Bob's key %d\n", ret);
         goto exit;

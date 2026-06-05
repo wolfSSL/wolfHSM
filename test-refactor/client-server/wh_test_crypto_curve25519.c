@@ -19,7 +19,8 @@
 /*
  * test-refactor/client-server/wh_test_crypto_curve25519.c
  *
- * Curve25519 ECDH round-trips routed through the server via WH_DEV_ID,
+ * Curve25519 ECDH round-trips routed through the server via the per-client
+ * devId (WH_CLIENT_DEVID),
  * across ephemeral / server-export / server-cache key paths.
  */
 
@@ -46,7 +47,7 @@
 #ifdef HAVE_CURVE25519
 static int _whTest_CryptoCurve25519(whClientContext* ctx)
 {
-    int            devId    = WH_DEV_ID;
+    int            devId    = WH_CLIENT_DEVID(ctx);
     int            ret      = 0;
     WC_RNG         rng[1];
     curve25519_key key_a[1] = {0};
@@ -67,7 +68,7 @@ static int _whTest_CryptoCurve25519(whClientContext* ctx)
         return ret;
     }
 
-    /* Test 1: ephemeral wolfCrypt keys via WH_DEV_ID */
+    /* Test 1: ephemeral wolfCrypt keys via the per-client devId */
     ret = wc_curve25519_init_ex(key_a, NULL, devId);
     if (ret != 0) {
         WH_ERROR_PRINT("Failed to wc_curve25519_init_ex %d\n", ret);
@@ -247,7 +248,7 @@ static int _whTest_CryptoCurve25519(whClientContext* ctx)
  * wh_Client_Curve25519ExportPublicKey). */
 static int _whTest_CryptoCurve25519ExportPublicKey(whClientContext* ctx)
 {
-    int            devId      = WH_DEV_ID;
+    int            devId      = WH_CLIENT_DEVID(ctx);
     int            ret        = 0;
     WC_RNG         rng[1];
     curve25519_key hsmPub[1]   = {0};
