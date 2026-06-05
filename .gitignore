@@ -24,3 +24,7 @@ scan_out/*
 
 # Test output
 test-suite.log
+port/autosar/adaptive/examples/*/build/
+
+# Local wolfssl checkout for CI-style smoke builds
+/wolfssl/
