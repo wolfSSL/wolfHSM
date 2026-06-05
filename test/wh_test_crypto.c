@@ -63,6 +63,7 @@
 #include "wolfhsm/wh_crypto.h"
 
 #include "wh_test_common.h"
+#include "wh_test_dma.h"
 
 #if defined(WOLFHSM_CFG_TEST_POSIX)
 #include <unistd.h> /* For sleep */
@@ -14500,7 +14501,13 @@ static int wh_ClientServer_MemThreadTest(whTestNvmBackendType nvmType)
     }};
 
 #ifdef WOLFHSM_CFG_DMA
-    whClientDmaConfig clientDmaConfig = {0};
+    /* Run every crypto/cert *Dma op through the bounce-pool callback so a
+     * missing translation is rejected (see test/wh_test_dma.c). Catches missing
+     * translation; the use-after-free class is covered by the single-thread
+     * harness. */
+    whClientDmaConfig clientDmaConfig = {
+        .cb = whTestDma_BounceClientCb,
+    };
 #endif
     whClientConfig c_conf[1] = {{
         .comm = cc_conf,
@@ -14541,15 +14548,29 @@ static int wh_ClientServer_MemThreadTest(whTestNvmBackendType nvmType)
     /* Crypto context */
     whServerCryptoContext crypto[1] = {0};
 
+#ifdef WOLFHSM_CFG_DMA
+    /* Server may only touch the bounce pool; this callback rejects an
+     * untranslated client pointer. */
+    whServerDmaConfig serverDmaConfig = {
+        .cb = whTestDma_BounceServerCb,
+    };
+#endif
 
     whServerConfig s_conf[1] = {{
         .comm_config = cs_conf,
         .nvm         = nvm,
         .crypto      = crypto,
         .devId       = INVALID_DEVID,
+#ifdef WOLFHSM_CFG_DMA
+        .dmaConfig   = &serverDmaConfig,
+#endif
     }};
 
     WH_TEST_RETURN_ON_FAIL(wh_Nvm_Init(nvm, n_conf));
+
+#ifdef WOLFHSM_CFG_DMA
+    whTestDma_BounceReset();
+#endif
 
     ret = wolfCrypt_Init();
     if (ret == 0) {
@@ -14559,6 +14580,22 @@ static int wh_ClientServer_MemThreadTest(whTestNvmBackendType nvmType)
         }
         else {
             _whClientServerThreadTest(c_conf, s_conf);
+#ifdef WOLFHSM_CFG_DMA
+            /* After the client thread joins, no mapping may be outstanding and
+             * no POST may have hit a stale/unknown slot. */
+            if (whTestDma_BounceOutstanding() != 0) {
+                WH_ERROR_PRINT("wh_test bounce: %d DMA mapping(s) leaked "
+                               "across the crypto suite\n",
+                               whTestDma_BounceOutstanding());
+                ret = WH_ERROR_ABORTED;
+            }
+            if (whTestDma_BounceStrayPosts() != 0) {
+                WH_ERROR_PRINT("wh_test bounce: %d stray/double DMA POST(s) "
+                               "across the crypto suite\n",
+                               whTestDma_BounceStrayPosts());
+                ret = WH_ERROR_ABORTED;
+            }
+#endif
         }
     }
     else {
@@ -14569,7 +14606,9 @@ static int wh_ClientServer_MemThreadTest(whTestNvmBackendType nvmType)
     wc_FreeRng(crypto->rng);
     wolfCrypt_Cleanup();
 
-    return WH_ERROR_OK;
+    /* Propagate ret (was hard-coded WH_ERROR_OK): surfaces an init failure and
+     * the DMA bounce leak check instead of silently passing. */
+    return ret;
 }
 #endif /* WOLFHSM_CFG_TEST_POSIX */
 
