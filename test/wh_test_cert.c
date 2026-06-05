@@ -32,6 +32,7 @@
 #ifdef WOLFHSM_CFG_ENABLE_SERVER
 #include "wolfhsm/wh_server.h"
 #include "wolfhsm/wh_server_cert.h"
+#include "wolfhsm/wh_message_cert.h"
 #include "wolfhsm/wh_flash_ramsim.h"
 #include "wolfhsm/wh_nvm_flash.h"
 #endif
@@ -256,6 +257,196 @@ int whTest_CertServerCfg(whServerConfig* serverCfg)
     return rc;
 }
 
+/* AddTrusted is a client-driven path, so it must strip server-only flags.
+ * Confirm the trusted flag is dropped while a normal client-settable flag
+ * survives. */
+static int
+whTest_CertServerAddTrustedStripsServerFlags(whServerConfig* serverCfg)
+{
+    int             rc        = WH_ERROR_OK;
+    whServerContext server[1] = {0};
+    const whNvmId   kekCertId = 0x55;
+    whNvmMetadata   meta      = {0};
+
+    WH_TEST_RETURN_ON_FAIL(wh_Server_Init(server, serverCfg));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_CertInit(server));
+
+    WH_TEST_PRINT("Cert AddTrusted strips server-only flags...\n");
+
+    /* Ask for the server-only trusted flag plus a normal usage flag. */
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Server_CertAddTrusted(server, kekCertId, WH_NVM_ACCESS_ANY,
+                                 WH_NVM_FLAGS_TRUSTED | WH_NVM_FLAGS_USAGE_WRAP,
+                                 NULL, 0, ROOT_A_CERT, ROOT_A_CERT_len));
+
+    /* Read back what was actually stored. */
+    WH_TEST_RETURN_ON_FAIL(wh_Nvm_GetMetadata(server->nvm, kekCertId, &meta));
+
+    /* Trusted flag must be gone; the normal flag must remain. */
+    WH_TEST_ASSERT_RETURN((meta.flags & WH_NVM_FLAGS_TRUSTED) == 0);
+    WH_TEST_ASSERT_RETURN((meta.flags & WH_NVM_FLAGS_USAGE_WRAP) != 0);
+
+    WH_TEST_RETURN_ON_FAIL(wh_Server_CertEraseTrusted(server, kekCertId));
+
+    WH_TEST_PRINT("Cert AddTrusted server-only flag strip PASSED\n");
+    return rc;
+}
+
+/* Keys and certs share the NVM id space, and AddTrusted/EraseTrusted are
+ * client-driven, so both must respect NVM flag policy: a client must not be
+ * able to overwrite or destroy a protected object (e.g. a trusted KEK)
+ * through the cert API. */
+static int whTest_CertServerTrustedRespectsNvmPolicy(whServerConfig* serverCfg)
+{
+    int             rc        = WH_ERROR_OK;
+    whServerContext server[1] = {0};
+    whNvmMetadata   meta      = {0};
+    whNvmMetadata   check     = {0};
+    const uint8_t   kek[16]   = {0xA5};
+
+    WH_TEST_RETURN_ON_FAIL(wh_Server_Init(server, serverCfg));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_CertInit(server));
+
+    WH_TEST_PRINT("Cert AddTrusted/EraseTrusted respect NVM policy...\n");
+
+    /* Provision a KEK-flagged key directly, as trusted provisioning would. */
+    meta.id     = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, 0, 0x57);
+    meta.access = WH_NVM_ACCESS_ANY;
+    meta.flags  = WH_NVM_FLAGS_TRUSTED | WH_NVM_FLAGS_NONEXPORTABLE;
+    meta.len    = sizeof(kek);
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Nvm_AddObject(server->nvm, &meta, sizeof(kek), kek));
+
+    /* Cert erase must not destroy it. */
+    WH_TEST_ASSERT_RETURN(wh_Server_CertEraseTrusted(server, meta.id) ==
+                          WH_ERROR_ACCESS);
+
+    /* Cert add must not overwrite it. */
+    WH_TEST_ASSERT_RETURN(
+        wh_Server_CertAddTrusted(server, meta.id, WH_NVM_ACCESS_ANY,
+                                 WH_NVM_FLAGS_NONE, NULL, 0, ROOT_A_CERT,
+                                 ROOT_A_CERT_len) == WH_ERROR_ACCESS);
+
+    /* The KEK must be untouched. */
+    WH_TEST_RETURN_ON_FAIL(wh_Nvm_GetMetadata(server->nvm, meta.id, &check));
+    WH_TEST_ASSERT_RETURN((check.flags & WH_NVM_FLAGS_TRUSTED) != 0);
+    WH_TEST_ASSERT_RETURN(check.len == sizeof(kek));
+
+    /* Server-internal unchecked destroy still works; clean up with it. */
+    WH_TEST_RETURN_ON_FAIL(wh_Nvm_DestroyObjects(server->nvm, 1, &meta.id));
+
+    /* A NONDESTROYABLE cert must also survive cert erase. */
+    WH_TEST_RETURN_ON_FAIL(wh_Server_CertAddTrusted(
+        server, 0x58, WH_NVM_ACCESS_ANY, WH_NVM_FLAGS_NONDESTROYABLE, NULL, 0,
+        ROOT_A_CERT, ROOT_A_CERT_len));
+    WH_TEST_ASSERT_RETURN(wh_Server_CertEraseTrusted(server, 0x58) ==
+                          WH_ERROR_ACCESS);
+    WH_TEST_RETURN_ON_FAIL(wh_Nvm_GetMetadata(server->nvm, 0x58, &check));
+    meta.id = 0x58;
+    WH_TEST_RETURN_ON_FAIL(wh_Nvm_DestroyObjects(server->nvm, 1, &meta.id));
+
+    WH_TEST_PRINT("Cert NVM policy test PASSED\n");
+    return rc;
+}
+
+/* Keys and certs share the NVM id space, so a client that passes a trusted
+ * KEK's id to a cert read handler must be refused. The trusted flag alone (no
+ * NONEXPORTABLE) must be enough: the dispatcher is the only gate, since
+ * wh_Server_CertReadTrusted() does an unchecked NVM read. Provision a
+ * KEK-flagged object without NONEXPORTABLE and confirm both READTRUSTED and
+ * READTRUSTED_DMA return WH_ERROR_ACCESS and leak no bytes. Driven through
+ * wh_Server_HandleCertRequest() because the check lives in the dispatcher,
+ * not in the server cert API. */
+static int
+whTest_CertServerReadTrustedRejectsServerOnly(whServerConfig* serverCfg)
+{
+    int             rc        = WH_ERROR_OK;
+    whServerContext server[1] = {0};
+    whNvmMetadata   meta      = {0};
+    /* Recognizable KEK bytes so any leak into the response is obvious. */
+    const uint8_t  kek[32] = {0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x00, 0x11,
+                              0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99,
+                              0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x00, 0x11,
+                              0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99};
+    const uint16_t magic   = WH_COMM_MAGIC_NATIVE;
+    uint8_t        req_packet[WOLFHSM_CFG_COMM_DATA_LEN]  = {0};
+    uint8_t        resp_packet[WOLFHSM_CFG_COMM_DATA_LEN] = {0};
+    uint16_t       resp_size                              = 0;
+
+    WH_TEST_RETURN_ON_FAIL(wh_Server_Init(server, serverCfg));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_CertInit(server));
+
+    WH_TEST_PRINT("Cert ReadTrusted rejects server-only KEK...\n");
+
+    /* Provision a trusted KEK the way whnvmtool would, deliberately WITHOUT
+     * NONEXPORTABLE, to prove the trusted flag alone gates the read. */
+    meta.id     = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, 0, 0x5A);
+    meta.access = WH_NVM_ACCESS_ANY;
+    meta.flags  = WH_NVM_FLAGS_TRUSTED | WH_NVM_FLAGS_USAGE_WRAP;
+    meta.len    = sizeof(kek);
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Nvm_AddObject(server->nvm, &meta, sizeof(kek), kek));
+
+    /* READTRUSTED must refuse the KEK id and return no cert bytes. */
+    {
+        whMessageCert_ReadTrustedRequest  req  = {0};
+        whMessageCert_ReadTrustedResponse resp = {0};
+
+        req.id = meta.id;
+        wh_MessageCert_TranslateReadTrustedRequest(
+            magic, &req, (whMessageCert_ReadTrustedRequest*)req_packet);
+
+        /* The handler formats resp.rc and also returns it; resp.rc is the
+         * client-visible signal, so assert on that rather than the return. */
+        (void)wh_Server_HandleCertRequest(
+            server, magic, WH_MESSAGE_CERT_ACTION_READTRUSTED, /*seq=*/0,
+            sizeof(req), req_packet, &resp_size, resp_packet);
+
+        wh_MessageCert_TranslateReadTrustedResponse(
+            magic, (whMessageCert_ReadTrustedResponse*)resp_packet, &resp);
+
+        WH_TEST_ASSERT_RETURN(resp.rc == WH_ERROR_ACCESS);
+        WH_TEST_ASSERT_RETURN(resp.cert_len == 0);
+        WH_TEST_ASSERT_RETURN(resp_size == sizeof(resp));
+    }
+
+#ifdef WOLFHSM_CFG_DMA
+    /* READTRUSTED_DMA must refuse it too and write nothing to the buffer. */
+    {
+        whMessageCert_ReadTrustedDmaRequest req  = {0};
+        whMessageCert_SimpleResponse        resp = {0};
+        uint8_t                             out_buf[64];
+        size_t                              i;
+
+        memset(out_buf, 0, sizeof(out_buf));
+        req.id        = meta.id;
+        req.cert_addr = (uint64_t)(uintptr_t)out_buf;
+        req.cert_len  = sizeof(out_buf);
+        wh_MessageCert_TranslateReadTrustedDmaRequest(
+            magic, &req, (whMessageCert_ReadTrustedDmaRequest*)req_packet);
+
+        resp_size = 0;
+        (void)wh_Server_HandleCertRequest(
+            server, magic, WH_MESSAGE_CERT_ACTION_READTRUSTED_DMA, /*seq=*/0,
+            sizeof(req), req_packet, &resp_size, resp_packet);
+
+        wh_MessageCert_TranslateSimpleResponse(
+            magic, (whMessageCert_SimpleResponse*)resp_packet, &resp);
+
+        WH_TEST_ASSERT_RETURN(resp.rc == WH_ERROR_ACCESS);
+        for (i = 0; i < sizeof(out_buf); i++) {
+            WH_TEST_ASSERT_RETURN(out_buf[i] == 0);
+        }
+    }
+#endif /* WOLFHSM_CFG_DMA */
+
+    /* Server-internal unchecked destroy still works; clean up with it. */
+    WH_TEST_RETURN_ON_FAIL(wh_Nvm_DestroyObjects(server->nvm, 1, &meta.id));
+
+    WH_TEST_PRINT("Cert ReadTrusted server-only rejection PASSED\n");
+    return rc;
+}
+
 #ifdef WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE
 /* Exercises the trusted-cert verify cache directly through the server API:
  *  - repeat-verify of the same chain under the same root stays successful
@@ -357,10 +548,8 @@ static int whTest_CertServerVerifyCacheEvictOnReAdd(whServerConfig* serverCfg)
     WH_TEST_RETURN_ON_FAIL(wh_Server_CertInit(server));
 
     /* Add root A at the target id. Use NONE (not NONMODIFIABLE) so the re-add
-     * below exercises the success path that fires EvictRoot. AddTrusted goes
-     * through the unchecked NVM path so NONMODIFIABLE would not actually
-     * block the re-add, but matching the policy to the intent keeps the test
-     * insulated from any future tightening. */
+     * below passes the NVM add policy check and exercises the success path
+     * that fires EvictRoot. */
     WH_TEST_RETURN_ON_FAIL(wh_Server_CertAddTrusted(
         server, rootId, WH_NVM_ACCESS_ANY, WH_NVM_FLAGS_NONE, NULL, 0,
         ROOT_A_CERT, ROOT_A_CERT_len));
@@ -1812,6 +2001,30 @@ int whTest_CertRamSim(whTestNvmBackendType nvmType)
     rc = whTest_CertServerCfg(s_conf);
     if (rc != WH_ERROR_OK) {
         WH_ERROR_PRINT("Certificate server config tests failed: %d\n", rc);
+    }
+
+    if (rc == WH_ERROR_OK) {
+        rc = whTest_CertServerAddTrustedStripsServerFlags(s_conf);
+        if (rc != WH_ERROR_OK) {
+            WH_ERROR_PRINT(
+                "Cert AddTrusted server-only flag strip test failed: %d\n", rc);
+        }
+    }
+
+    if (rc == WH_ERROR_OK) {
+        rc = whTest_CertServerTrustedRespectsNvmPolicy(s_conf);
+        if (rc != WH_ERROR_OK) {
+            WH_ERROR_PRINT("Cert NVM policy test failed: %d\n", rc);
+        }
+    }
+
+    if (rc == WH_ERROR_OK) {
+        rc = whTest_CertServerReadTrustedRejectsServerOnly(s_conf);
+        if (rc != WH_ERROR_OK) {
+            WH_ERROR_PRINT("Cert ReadTrusted server-only rejection test "
+                           "failed: %d\n",
+                           rc);
+        }
     }
 
 #ifdef WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE

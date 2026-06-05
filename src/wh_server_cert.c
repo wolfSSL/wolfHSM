@@ -509,7 +509,10 @@ static int _verifyChainAgainstCmStore(
                         if (rc == 0) {
                             const char label[] = "cert_pubkey";
                             cacheMeta->len     = (whNvmSize)cacheBufSize;
-                            cacheMeta->flags   = cachedKeyFlags;
+                            /* clients can't set server-only flags (e.g. trusted
+                             * KEK) */
+                            cacheMeta->flags =
+                                cachedKeyFlags & ~WH_NVM_FLAGS_SERVER_ONLY;
                             cacheMeta->access  = WH_NVM_ACCESS_ANY;
                             cacheMeta->id      = *inout_keyId;
                             memset(cacheMeta->label, 0,
@@ -616,7 +619,9 @@ int wh_Server_CertAddTrusted(whServerContext* server, whNvmId id,
         memcpy(metadata.label, "trusted_cert", sizeof("trusted_cert"));
     }
 
-    rc = wh_Nvm_AddObject(server->nvm, &metadata, cert_len, cert);
+    /* Client-driven path: checked add strips server-only flags and refuses
+     * to overwrite a policy-protected object (e.g. a trusted KEK). */
+    rc = wh_Nvm_AddObjectChecked(server->nvm, &metadata, cert_len, cert);
 
 #ifdef WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE
     /* Cache entries are bound to the trusted root by NVM ID. AddObject
@@ -638,11 +643,28 @@ int wh_Server_CertAddTrusted(whServerContext* server, whNvmId id,
 /* Delete a trusted certificate from NVM storage */
 int wh_Server_CertEraseTrusted(whServerContext* server, whNvmId id)
 {
-    int     rc;
-    whNvmId id_list[1];
+    int           rc;
+    whNvmId       id_list[1];
+    whNvmMetadata meta;
 
     if (server == NULL) {
         return WH_ERROR_BADARGS;
+    }
+
+    /* Client-driven path: never destroy a server-only object (e.g. a trusted
+     * KEK) or one marked NONDESTROYABLE. Keys and certs share the NVM id
+     * space, so without this check a client could erase a protected key by
+     * passing its id here. NONMODIFIABLE certs stay erasable so trusted
+     * roots can be removed and replaced through this API. */
+    rc = wh_Nvm_GetMetadata(server->nvm, id, &meta);
+    if (rc == WH_ERROR_OK) {
+        if (meta.flags &
+            (WH_NVM_FLAGS_SERVER_ONLY | WH_NVM_FLAGS_NONDESTROYABLE)) {
+            return WH_ERROR_ACCESS;
+        }
+    }
+    else if (rc != WH_ERROR_NOTFOUND) {
+        return rc;
     }
 
     id_list[0] = id;
@@ -970,15 +992,16 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
                             ? max_transport_cert_len
                             : WOLFHSM_CFG_MAX_CERT_SIZE;
 
-            /* Check metadata to check if the certificate is non-exportable.
-             * This is unfortunately redundant since metadata is checked in
-             * wh_Server_CertReadTrusted(). */
+            /* Deny reading non-exportable or server-only (trusted KEK)
+             * objects. Keys and certs share the NVM id space, so a client
+             * could pass a protected key's id here. This is the only gate:
+             * wh_Server_CertReadTrusted() does an unchecked NVM read. */
             rc = WH_SERVER_NVM_LOCK(server);
             if (rc == WH_ERROR_OK) {
                 rc = wh_Nvm_GetMetadata(server->nvm, req.id, &meta);
                 if (rc == WH_ERROR_OK) {
-                    /* Check if the certificate is non-exportable */
-                    if (meta.flags & WH_NVM_FLAGS_NONEXPORTABLE) {
+                    if (meta.flags & (WH_NVM_FLAGS_NONEXPORTABLE |
+                                      WH_NVM_FLAGS_SERVER_ONLY)) {
                         rc = WH_ERROR_ACCESS;
                     }
                     else {
@@ -1260,12 +1283,14 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
                 }
             }
             if (resp.rc == WH_ERROR_OK) {
-                /* Check metadata to see if the certificate is non-exportable */
+                /* Deny reading non-exportable or server-only (trusted KEK)
+                 * objects; see the non-DMA path above. */
                 resp.rc = WH_SERVER_NVM_LOCK(server);
                 if (resp.rc == WH_ERROR_OK) {
                     resp.rc = wh_Nvm_GetMetadata(server->nvm, req.id, &meta);
                     if (resp.rc == WH_ERROR_OK) {
-                        if ((meta.flags & WH_NVM_FLAGS_NONEXPORTABLE) != 0) {
+                        if ((meta.flags & (WH_NVM_FLAGS_NONEXPORTABLE |
+                                           WH_NVM_FLAGS_SERVER_ONLY)) != 0) {
                             resp.rc = WH_ERROR_ACCESS;
                         }
                         else {

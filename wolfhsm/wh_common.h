@@ -80,6 +80,13 @@ typedef uint16_t whNvmFlags;
 #define WH_NVM_FLAGS_EPHEMERAL      ((whNvmFlags)1 << 4)
 /* Cannot be destroyed (but can be modified) */
 #define WH_NVM_FLAGS_NONDESTROYABLE ((whNvmFlags)1 << 11)
+/* Trusted key. Server-only: set exclusively by trusted provisioning
+ * (whnvmtool image or server-internal code). Required for a software
+ * key to act as a KEK */
+#define WH_NVM_FLAGS_TRUSTED ((whNvmFlags)1 << 12)
+
+/* Flags a client may never set; stripped from all client-supplied metadata. */
+#define WH_NVM_FLAGS_SERVER_ONLY (WH_NVM_FLAGS_TRUSTED)
 
 /* Key usage policy flags
  *
@@ -139,6 +146,18 @@ typedef uint16_t whCertFlags;
 #define WH_KEYWRAP_AES_GCM_IV_SIZE 12
 #define WH_KEYWRAP_AES_GCM_HEADER_SIZE \
     (WH_KEYWRAP_AES_GCM_IV_SIZE + WH_KEYWRAP_AES_GCM_TAG_SIZE)
+
+/* AES-GCM AAD domain separation for wrapped blobs.
+ *
+ * WARNING: Changing these strings will invalidate actively stored wrapped
+ * blobs */
+#define WH_KEYWRAP_AAD_KEY_STR "wolfHSM.keywrap.v1"
+#define WH_KEYWRAP_AAD_DATA_STR "wolfHSM.datawrap.v1"
+
+/* Tag lengths in bytes (no NULL terminator), for use as the AAD length in
+ * AES-GCM keywrap calls. */
+#define WH_KEYWRAP_AAD_KEY_LEN (sizeof(WH_KEYWRAP_AAD_KEY_STR) - 1)
+#define WH_KEYWRAP_AAD_DATA_LEN (sizeof(WH_KEYWRAP_AAD_DATA_STR) - 1)
 
 enum WH_CRYPTO_AFFINITY_ENUM {
     WH_CRYPTO_AFFINITY_HW = 0,

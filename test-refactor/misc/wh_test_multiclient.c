@@ -53,6 +53,7 @@
 #include "wolfhsm/wh_flash_ramsim.h"
 
 #include "wh_test_common.h"
+#include "wh_test_keywrap_util.h"
 #include "wh_test_list.h"
 
 /* Test configuration */
@@ -78,6 +79,15 @@ static const uint8_t TEST_KEY_DATA_3[] = "TestGlobalKey3DataLonger";
 
 #define DUMMY_KEYID_1 1
 #define DUMMY_KEYID_2 2
+
+#ifdef WOLFHSM_CFG_KEYWRAP
+/* Trusted KEK for unwrap-and-cache (bytes: whTest_KeywrapKek). The test setup
+ * provisions it in the shared NVM with WH_NVM_FLAGS_TRUSTED (the way whnvmtool
+ * would), since unwrap-and-cache requires a trusted KEK a client can never
+ * upload. Distinct global id, so it does not collide with the DUMMY_KEYID_*
+ * keys the other tests use. */
+#define WH_TEST_MC_WRAP_KEK_ID 0x30
+#endif /* WOLFHSM_CFG_KEYWRAP */
 
 /* ============================================================================
  * MULTI-CLIENT TEST FRAMEWORK INFRASTRUCTURE
@@ -599,9 +609,8 @@ static int _testGlobalKeyUnwrapCache(whClientContext* client1,
                                      whServerContext* server2)
 {
     int     ret;
-    whKeyId serverKeyId = WH_CLIENT_KEYID_MAKE_GLOBAL(DUMMY_KEYID_1);
-    whKeyId cachedKeyId                = 0;
-    uint8_t wrapKey[AES_256_KEY_SIZE]  = "GlobalUnwrapKey123456789012!";
+    whKeyId serverKeyId = WH_CLIENT_KEYID_MAKE_GLOBAL(WH_TEST_MC_WRAP_KEK_ID);
+    whKeyId cachedKeyId = 0;
     uint8_t plainKey[AES_256_KEY_SIZE] = "KeyToCacheViaUnwrap123456!!";
 #define WRAPPED_KEY_SIZE (12 + 16 + AES_256_KEY_SIZE + sizeof(whNvmMetadata))
     uint8_t       wrappedKey[WRAPPED_KEY_SIZE] = {0};
@@ -614,15 +623,9 @@ static int _testGlobalKeyUnwrapCache(whClientContext* client1,
 
     WH_TEST_PRINT("Test: Key unwrap and cache with global server key\n");
 
-    /* Client 1 caches a global wrapping key */
-    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyCacheRequest_ex(
-        client1, WH_NVM_FLAGS_USAGE_WRAP, (uint8_t*)"UnwrapKey50",
-        sizeof("UnwrapKey50"), wrapKey, sizeof(wrapKey), serverKeyId));
-    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
-    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyCacheResponse(client1, &serverKeyId));
-
-    /* Client 1 wraps a global key */
-    serverKeyId = WH_CLIENT_KEYID_MAKE_GLOBAL(DUMMY_KEYID_1);
+    /* The trusted KEK is provisioned in NVM by the test setup; client 1 wraps a
+     * global key under it. */
+    serverKeyId = WH_CLIENT_KEYID_MAKE_GLOBAL(WH_TEST_MC_WRAP_KEK_ID);
     meta.id =
         WH_CLIENT_KEYID_MAKE_WRAPPED_META(WH_KEYUSER_GLOBAL, DUMMY_KEYID_2);
     meta.len    = sizeof(plainKey);
@@ -634,8 +637,8 @@ static int _testGlobalKeyUnwrapCache(whClientContext* client1,
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyWrapResponse(
         client1, WC_CIPHER_AES_GCM, wrappedKey, &wrappedKeySz));
 
-    /* Client 2 unwraps and caches the key using the global server key */
-    serverKeyId = WH_CLIENT_KEYID_MAKE_GLOBAL(DUMMY_KEYID_1);
+    /* Client 2 unwraps and caches the key using the trusted KEK */
+    serverKeyId = WH_CLIENT_KEYID_MAKE_GLOBAL(WH_TEST_MC_WRAP_KEK_ID);
     ret         = wh_Client_KeyUnwrapAndCacheRequest(client2, WC_CIPHER_AES_GCM,
                                                      serverKeyId, wrappedKey,
                                                      sizeof(wrappedKey));
@@ -664,10 +667,8 @@ static int _testGlobalKeyUnwrapCache(whClientContext* client1,
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server2));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvictResponse(client2));
 
-    serverKeyId = WH_CLIENT_KEYID_MAKE_GLOBAL(DUMMY_KEYID_1);
-    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvictRequest(client1, serverKeyId));
-    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
-    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvictResponse(client1));
+    /* The KEK is server-owned in NVM (carries WH_NVM_FLAGS_TRUSTED) and is not
+     * client-evictable, so there is nothing to clean up for it here. */
 
     WH_TEST_PRINT("  PASS: Key unwrap and cache with global server key\n");
 
@@ -1035,8 +1036,7 @@ static int _testWrappedKey_LocalWrap_GlobalKey_AnyCacheGlobal(
     whClientContext* client2, whServerContext* server2)
 {
     int     ret;
-    whKeyId serverKeyId                = DUMMY_KEYID_1; /* Local wrapping key */
-    uint8_t wrapKey[AES_256_KEY_SIZE]  = "LocalWrapKey2Test10aXXXXXXXXX!";
+    whKeyId serverKeyId = WH_CLIENT_KEYID_MAKE_GLOBAL(WH_TEST_MC_WRAP_KEK_ID);
     uint8_t plainKey[AES_256_KEY_SIZE] = "GlobalPlainKey2Test10aXXXXXXX!";
 #define WRAPPED_KEY_SIZE (12 + 16 + AES_256_KEY_SIZE + sizeof(whNvmMetadata))
     uint8_t       wrappedKey[WRAPPED_KEY_SIZE]  = {0};
@@ -1050,15 +1050,9 @@ static int _testWrappedKey_LocalWrap_GlobalKey_AnyCacheGlobal(
 
     WH_TEST_DEBUG_PRINT("Test 10a: Local wrap key + Global wrapped key (Cache global)\n");
 
-    /* Client 1 caches a LOCAL wrapping key */
-    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyCacheRequest_ex(
-        client1, WH_NVM_FLAGS_USAGE_WRAP, (uint8_t*)"WrapKey_10a",
-        sizeof("WrapKey_10a"), wrapKey, sizeof(wrapKey), serverKeyId));
-    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
-    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyCacheResponse(client1, &serverKeyId));
-
-    /* Client 1 wraps a GLOBAL key (USER=0) */
-    serverKeyId = DUMMY_KEYID_1; /* Use local wrapping key */
+    /* The trusted KEK is provisioned in NVM by the test setup; client 1 wraps a
+     * GLOBAL key (USER=0) under it. */
+    serverKeyId = WH_CLIENT_KEYID_MAKE_GLOBAL(WH_TEST_MC_WRAP_KEK_ID);
     meta.id =
         WH_CLIENT_KEYID_MAKE_WRAPPED_META(WH_KEYUSER_GLOBAL, DUMMY_KEYID_2);
     meta.len = sizeof(plainKey);
@@ -1092,11 +1086,6 @@ static int _testWrappedKey_LocalWrap_GlobalKey_AnyCacheGlobal(
         client2, WH_CLIENT_KEYID_MAKE_WRAPPED_GLOBAL(cachedKeyId)));
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server2));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvictResponse(client2));
-
-    serverKeyId = DUMMY_KEYID_1;
-    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvictRequest(client1, serverKeyId));
-    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
-    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvictResponse(client1));
 
     WH_TEST_PRINT("  PASS: Local wrap key + Global wrapped key (Cache global)\n");
 
@@ -1493,6 +1482,25 @@ static int _whTest_MultiClient(void)
     ret = wh_Nvm_Init(nvm, n_conf);
     if (ret != 0)
         return ret;
+
+#ifdef WOLFHSM_CFG_KEYWRAP
+    /* Provision the trusted KEK into the shared NVM before any client runs, the
+     * way whnvmtool would. WH_NVM_FLAGS_TRUSTED makes it the trusted KEK that
+     * unwrap-and-cache requires; both servers freshen it from this NVM. */
+    {
+        whNvmMetadata kekMeta = {0};
+        kekMeta.id     = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, WH_KEYUSER_GLOBAL,
+                                       WH_TEST_MC_WRAP_KEK_ID);
+        kekMeta.access = WH_NVM_ACCESS_ANY;
+        kekMeta.flags  = WH_NVM_FLAGS_TRUSTED | WH_NVM_FLAGS_USAGE_WRAP |
+                        WH_NVM_FLAGS_NONEXPORTABLE | WH_NVM_FLAGS_NONMODIFIABLE;
+        kekMeta.len = (whNvmSize)sizeof(whTest_KeywrapKek);
+        memcpy(kekMeta.label, "MC wrap KEK", sizeof("MC wrap KEK"));
+        ret = wh_Nvm_AddObject(nvm, &kekMeta, kekMeta.len, whTest_KeywrapKek);
+        if (ret != 0)
+            return ret;
+    }
+#endif /* WOLFHSM_CFG_KEYWRAP */
 
 #if !defined(WOLFHSM_CFG_NO_CRYPTO)
     /* Initialize RNGs */

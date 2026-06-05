@@ -37,29 +37,6 @@
 
 #ifdef WOLFHSM_CFG_KEYWRAP
 
-#define WH_DEMO_KEYWRAP_KEKID 1
-static int _InitServerKek(whClientContext* ctx)
-{
-    /* IMPORTANT NOTE: Server KEK is typically intrinsic or set during
-     * provisioning. Uploading the KEK via the client is for testing purposes
-     * only and not intended as a recommendation */
-    whKeyId    serverKeyId             = WH_DEMO_KEYWRAP_KEKID;
-    whNvmFlags flags = WH_NVM_FLAGS_NONEXPORTABLE | WH_NVM_FLAGS_USAGE_WRAP;
-    uint8_t    label[WH_NVM_LABEL_LEN] = "Server KEK key";
-    uint8_t    kek[] = {0x03, 0x03, 0x0d, 0xd9, 0xeb, 0x18, 0x17, 0x2e,
-                        0x06, 0x6e, 0x19, 0xce, 0x98, 0x44, 0x54, 0x0d,
-                        0x78, 0xa0, 0xbe, 0xe7, 0x35, 0x43, 0x40, 0xa4,
-                        0x22, 0x8a, 0xd1, 0x0e, 0xa3, 0x63, 0x1c, 0x0b};
-
-    return wh_Client_KeyCache(ctx, flags, label, sizeof(label), kek,
-                              sizeof(kek), &serverKeyId);
-}
-
-static int _CleanupServerKek(whClientContext* ctx)
-{
-    return wh_Client_KeyErase(ctx, WH_DEMO_KEYWRAP_KEKID);
-}
-
 #ifndef NO_AES
 #ifdef HAVE_AESGCM
 
@@ -102,18 +79,11 @@ int wh_DemoClient_AesGcmKeyWrap(whClientContext* client)
                            0xef, 0xfe, 0xed, 0xfa, 0xce, 0xde, 0xad,
                            0xbe, 0xef, 0xab, 0xad, 0xda, 0xd2};
 
-    /* Initialize the server KEK */
-
-    /* The key wrap feature requires the server to have a Key Encryption Key
-     * (I.E. KEK) available for the client to use. In the case of this demo we
-     * have the client initializing the KEK which is not recommended. Typically
-     * the KEK ID would be a hard coded value that the client and server share
-     * and the KEK would be provisioned on the server prior to runtime */
-    ret = _InitServerKek(client);
-    if (ret != WH_ERROR_OK) {
-        WOLFHSM_CFG_PRINTF("Failed to _InitServerKek %d\n", ret);
-        return ret;
-    }
+    /* The keywrap feature requires the server to hold a trusted Key Encryption
+     * Key (KEK) that the client references by a shared id
+     * (WH_DEMO_KEYWRAP_KEK_ID). The server must provision it before this demo
+     * runs (the POSIX example server does so at startup when built with
+     * DEMO_KEK=1); a client cannot create a trusted KEK itself. */
 
     /* Generating and wrapping a key */
 
@@ -121,7 +91,7 @@ int wh_DemoClient_AesGcmKeyWrap(whClientContext* client)
     ret = wc_InitRng_ex(rng, NULL, WH_CLIENT_DEVID(client));
     if (ret != 0) {
         WOLFHSM_CFG_PRINTF("Failed to wc_InitRng_ex %d\n", ret);
-        goto cleanup_kek;
+        return ret;
     }
 
     /* Now we generate the AES GCM key using the RNG */
@@ -133,9 +103,9 @@ int wh_DemoClient_AesGcmKeyWrap(whClientContext* client)
 
     /* Now we request the server to wrap the key using the KEK we
      * establish above in the first step. */
-    ret =
-        wh_Client_KeyWrap(client, WC_CIPHER_AES_GCM, WH_DEMO_KEYWRAP_KEKID, key,
-                          sizeof(key), &metadata, wrappedKey, &wrappedKeySz);
+    ret = wh_Client_KeyWrap(client, WC_CIPHER_AES_GCM, WH_DEMO_KEYWRAP_KEK_ID,
+                            key, sizeof(key), &metadata, wrappedKey,
+                            &wrappedKeySz);
     if (ret != 0) {
         WOLFHSM_CFG_PRINTF("Failed to wh_Client_KeyWrap %d\n", ret);
         goto cleanup_rng;
@@ -151,7 +121,7 @@ int wh_DemoClient_AesGcmKeyWrap(whClientContext* client)
      * This will provide us back a key ID that the client can use to do crypto
      * operations */
     ret = wh_Client_KeyUnwrapAndCache(client, WC_CIPHER_AES_GCM,
-                                      WH_DEMO_KEYWRAP_KEKID, wrappedKey,
+                                      WH_DEMO_KEYWRAP_KEK_ID, wrappedKey,
                                       sizeof(wrappedKey), &wrappedKeyId);
     if (ret != 0) {
         WOLFHSM_CFG_PRINTF("Failed to wh_Client_KeyUnwrapAndCache %d\n", ret);
@@ -215,7 +185,7 @@ int wh_DemoClient_AesGcmKeyWrap(whClientContext* client)
 
     /* Request the server to unwrap and export the wrapped key we created */
     ret = wh_Client_KeyUnwrapAndExport(
-        client, WC_CIPHER_AES_GCM, WH_DEMO_KEYWRAP_KEKID, wrappedKey,
+        client, WC_CIPHER_AES_GCM, WH_DEMO_KEYWRAP_KEK_ID, wrappedKey,
         sizeof(wrappedKey), &exportedMetadata, exportedKey, &exportedKeySz);
     if (ret != 0) {
         WOLFHSM_CFG_PRINTF("Failed to wh_Client_KeyUnwrapAndCache %d\n", ret);
@@ -242,8 +212,6 @@ cleanup_cached_key:
     wh_Client_KeyErase(client, wrappedKeyId);
 cleanup_rng:
     wc_FreeRng(rng);
-cleanup_kek:
-    _CleanupServerKek(client);
 
     return ret;
 }

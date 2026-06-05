@@ -1260,6 +1260,64 @@ int wh_Client_KeyWrapResponse(whClientContext*   ctx,
                               void* wrappedKeyOut, uint16_t* wrappedKeyInOutSz);
 
 /**
+ * @brief Wraps a key the server already holds (by id) and exports the blob.
+ *
+ * Unlike wh_Client_KeyWrap, the client never presents plaintext key material:
+ * it names an existing keystore key by id (and type) and the server reads it,
+ * enforces export permissions (NONEXPORTABLE), wraps it with the KEK, and
+ * returns the wrapped blob. SHE keys are wrapped as TYPE=SHE; other keys are
+ * normalized to the wrapped-key namespace so the blob round-trips through
+ * wh_Client_KeyUnwrapAndCache. Blocks until the operation completes.
+ *
+ * @param[in] ctx Pointer to the client context.
+ * @param[in] cipherType Cipher used to wrap the key.
+ * @param[in] keyId Client-facing id (with optional GLOBAL/WRAPPED flags) of the
+ *                  keystore key to wrap.
+ * @param[in] keyType WH_KEYTYPE_* of the target key (e.g. WH_KEYTYPE_CRYPTO or
+ *                    WH_KEYTYPE_SHE).
+ * @param[in] serverKeyId Key ID of the key encryption key on the server.
+ * @param[out] wrappedKeyOut Pointer to store the wrapped key.
+ * @param[in,out] wrappedKeyInOutSz IN: size of wrappedKeyOut; OUT: size of the
+ *                    wrapped key object returned by the server.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_KeyWrapExport(whClientContext* ctx, enum wc_CipherType cipherType,
+                            uint16_t keyId, uint16_t keyType,
+                            uint16_t serverKeyId, void* wrappedKeyOut,
+                            uint16_t* wrappedKeyInOutSz);
+
+/**
+ * @brief Sends a wrap-and-export (by id) request to the server. Non-blocking.
+ *
+ * @param[in] ctx Pointer to the client context.
+ * @param[in] cipherType Cipher used to wrap the key.
+ * @param[in] keyId Client-facing id of the keystore key to wrap.
+ * @param[in] keyType WH_KEYTYPE_* of the target key.
+ * @param[in] serverKeyId Key ID of the key encryption key on the server.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_KeyWrapExportRequest(whClientContext*   ctx,
+                                   enum wc_CipherType cipherType,
+                                   uint16_t keyId, uint16_t keyType,
+                                   uint16_t serverKeyId);
+
+/**
+ * @brief Receives a wrap-and-export response from the server. Returns
+ * WH_ERROR_NOTREADY if a response has not been received.
+ *
+ * @param[in] ctx Pointer to the client context.
+ * @param[in] cipherType Cipher used to wrap the key.
+ * @param[out] wrappedKeyOut Pointer to store the wrapped key.
+ * @param[in,out] wrappedKeyInOutSz IN: size of wrappedKeyOut; OUT: size of the
+ *                    wrapped key object.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_KeyWrapExportResponse(whClientContext*   ctx,
+                                    enum wc_CipherType cipherType,
+                                    void*              wrappedKeyOut,
+                                    uint16_t*          wrappedKeyInOutSz);
+
+/**
  * @brief Requests the server to unwrap and export a wrapped key and receives
  * the response
  *

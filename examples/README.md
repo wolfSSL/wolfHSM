@@ -25,6 +25,15 @@ Set the `WOLFHSM_DIR` and `WOLFSSL_DIR` variables to point to your local install
 ### Building POSIX server example wh_posix_server
 `cd` into `examples/posix/wh_posix_server` and run `make`. Once completed, the output server executable `wh_posix_server.elf` will be located in the `Build` directory.
 
+#### Keywrap demo: DEMO_KEK=1
+The client demo suite includes a keywrap demo (enabled by default via `WOLFHSM_CFG_KEYWRAP` in the example configs). It requires the server to hold a trusted Key Encryption Key (KEK), which a client can never create itself. Build the server with `DEMO_KEK=1` to have it provision this KEK (`WH_DEMO_KEYWRAP_KEK_ID`, shared with the server through the demo client header) in its NVM at startup:
+
+```
+make DEMO_KEK=1
+```
+
+Without it, the keywrap demo fails at `wh_Client_KeyWrap` with `WH_ERROR_NOTFOUND` (-2104) because the KEK it names does not exist on the server.
+
 ### Building POSIX client example wh_posix_client
 `cd` into `examples/posix/wh_posix_client` and run `make`. Once completed, the output server executable `wh_posix_client.elf` will be located in the `Build` directory.
 

@@ -31,6 +31,13 @@
  *                                  with a hardware-only KEK; wrapped+hwonly
  *                                  flag precedence; unserved-id and wrong-KEK
  *                                  negative paths
+ *   _whTest_HwKeystoreWrappedKeyNoNvm - an unwrapped key is cache-only, so
+ *                                  commit and erase must reject a wrapped key
+ *                                  id while eviction still works
+ *   _whTest_HwKeystoreKeyWrapExport - wrap-export a server-held key by id
+ *                                  (never presenting plaintext) under the
+ *                                  hardware KEK, round-trip it, and enforce
+ *                                  NONEXPORTABLE
  *   _whTest_HwKeystoreDataWrap   - data wrap/unwrap roundtrip with a
  *                                  hardware-only KEK
  *   _whTest_HwKeystoreRejections - keystore operations on a hardware-only id
@@ -80,6 +87,8 @@
 
 #define WH_TEST_AES_KEYSIZE 32
 #define WH_TEST_WRAPPED_KEYID 20
+#define WH_TEST_WRAPEXPORT_KEYID 21
+#define WH_TEST_WRAPEXPORT_NE_KEYID 22
 #define WH_TEST_WRAPPED_KEYSIZE                             \
     (WH_KEYWRAP_AES_GCM_HEADER_SIZE + WH_TEST_AES_KEYSIZE + \
      sizeof(whNvmMetadata))
@@ -297,6 +306,17 @@ static int _KeyUnwrapAndCache(TestCtx* t, whKeyId kekId, uint8_t* wrappedIn,
                                                keyIdOut);
 }
 
+static int _KeyWrapExport(TestCtx* t, whKeyId keyId, uint16_t keyType,
+                          whKeyId kekId, uint8_t* wrappedOut,
+                          uint16_t* wrappedSz)
+{
+    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyWrapExportRequest(
+        t->client, WC_CIPHER_AES_GCM, keyId, keyType, kekId));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(t->server));
+    return wh_Client_KeyWrapExportResponse(t->client, WC_CIPHER_AES_GCM,
+                                           wrappedOut, wrappedSz);
+}
+
 static int _DataWrap(TestCtx* t, whKeyId kekId, uint8_t* dataIn,
                      uint32_t dataSz, uint8_t* wrappedOut, uint32_t* wrappedSz)
 {
@@ -475,6 +495,168 @@ static int _whTest_HwKeystoreKeyWrap(TestCtx* t)
     return WH_ERROR_OK;
 }
 
+/* An unwrapped key is cache-only and must never reach NVM, so that it cannot
+ * shadow a protected NVM entry. Commit and erase must reject a wrapped key id
+ * while eviction still works. Uses the hardware KEK, since unwrap-and-cache
+ * requires a trusted KEK. */
+static int _whTest_HwKeystoreWrappedKeyNoNvm(TestCtx* t)
+{
+    int           ret;
+    whKeyId       hwKekId = WH_CLIENT_KEYID_MAKE_HW(WH_TEST_HWKEK_ID);
+    uint8_t       plainKey[WH_TEST_AES_KEYSIZE];
+    uint8_t       wrappedKey[WH_TEST_WRAPPED_KEYSIZE];
+    uint16_t      wrappedKeySz = sizeof(wrappedKey);
+    uint16_t      cachedKeyId  = WH_KEYID_ERASED;
+    whNvmMetadata metadata     = {0};
+    size_t        i;
+
+    metadata.id  = WH_CLIENT_KEYID_MAKE_WRAPPED_META(t->client->comm->client_id,
+                                                     WH_TEST_WRAPPED_KEYID);
+    metadata.len = WH_TEST_AES_KEYSIZE;
+    metadata.flags = WH_NVM_FLAGS_USAGE_ANY;
+    memcpy(metadata.label, "NoNvm wrapped key", sizeof("NoNvm wrapped key"));
+
+    for (i = 0; i < sizeof(plainKey); i++) {
+        plainKey[i] = (uint8_t)(0x3B ^ i);
+    }
+
+    WH_TEST_RETURN_ON_FAIL(_KeyWrap(t, hwKekId, plainKey, sizeof(plainKey),
+                                    &metadata, wrappedKey, &wrappedKeySz));
+
+    WH_TEST_RETURN_ON_FAIL(
+        _KeyUnwrapAndCache(t, hwKekId, wrappedKey, wrappedKeySz, &cachedKeyId));
+
+    /* Commit must refuse to persist a wrapped key to NVM */
+    ret = _KeyCommit(t, WH_CLIENT_KEYID_MAKE_WRAPPED(cachedKeyId));
+    if (ret != WH_ERROR_ABORTED) {
+        WH_ERROR_PRINT("KeyCommit of wrapped key expected ABORTED, got %d\n",
+                       ret);
+        (void)_KeyEvict(t, WH_CLIENT_KEYID_MAKE_WRAPPED(cachedKeyId));
+        return WH_ERROR_ABORTED;
+    }
+
+    /* Erase must likewise refuse a wrapped key */
+    ret = _KeyErase(t, WH_CLIENT_KEYID_MAKE_WRAPPED(cachedKeyId));
+    if (ret != WH_ERROR_ABORTED) {
+        WH_ERROR_PRINT("KeyErase of wrapped key expected ABORTED, got %d\n",
+                       ret);
+        (void)_KeyEvict(t, WH_CLIENT_KEYID_MAKE_WRAPPED(cachedKeyId));
+        return WH_ERROR_ABORTED;
+    }
+
+    /* Cache-only eviction must still succeed */
+    WH_TEST_RETURN_ON_FAIL(
+        _KeyEvict(t, WH_CLIENT_KEYID_MAKE_WRAPPED(cachedKeyId)));
+
+    return WH_ERROR_OK;
+}
+
+/* Exercises wh_Client_KeyWrapExport: wrap a key the server already holds (by
+ * id, never presenting plaintext), round-trip it through unwrap-and-cache,
+ * confirm the cached and exported material match the source, and confirm
+ * NONEXPORTABLE is honored. Wrap-export requires a trusted KEK; the hardware
+ * KEK qualifies. */
+static int _whTest_HwKeystoreKeyWrapExport(TestCtx* t)
+{
+    int           ret;
+    whKeyId       hwKekId = WH_CLIENT_KEYID_MAKE_HW(WH_TEST_HWKEK_ID);
+    uint8_t       srcKey[WH_TEST_AES_KEYSIZE];
+    uint16_t      srcKeyId                = WH_TEST_WRAPEXPORT_KEYID;
+    uint8_t       label[WH_NVM_LABEL_LEN] = "WrapExport Src";
+    uint8_t       wrappedKey[WH_TEST_WRAPPED_KEYSIZE];
+    uint16_t      wrappedKeySz = sizeof(wrappedKey);
+    uint16_t      wrappedKeyId = WH_KEYID_ERASED;
+    uint8_t       tmpKey[WH_TEST_AES_KEYSIZE];
+    uint16_t      tmpKeySz = sizeof(tmpKey);
+    uint8_t       tmpLabel[WH_NVM_LABEL_LEN];
+    whNvmMetadata tmpMeta = {0};
+    size_t        i;
+
+    /* Cache a source crypto key (exportable, full usage); distinct pattern */
+    for (i = 0; i < sizeof(srcKey); i++) {
+        srcKey[i] = (uint8_t)(0x3D ^ i);
+    }
+    WH_TEST_RETURN_ON_FAIL(_KeyCache(t, WH_NVM_FLAGS_USAGE_ANY, label,
+                                     sizeof(label), srcKey, sizeof(srcKey),
+                                     &srcKeyId));
+
+    /* Wrap-and-export the cached key by id; the client never sees plaintext */
+    ret = _KeyWrapExport(t, srcKeyId, WH_KEYTYPE_CRYPTO, hwKekId, wrappedKey,
+                         &wrappedKeySz);
+    if (ret != WH_ERROR_OK) {
+        WH_ERROR_PRINT("Failed to KeyWrapExport with HW KEK %d\n", ret);
+        return ret;
+    }
+
+    /* Round-trip: unwrap-and-cache the blob (comes back as a wrapped key) */
+    ret =
+        _KeyUnwrapAndCache(t, hwKekId, wrappedKey, wrappedKeySz, &wrappedKeyId);
+    if (ret != WH_ERROR_OK) {
+        WH_ERROR_PRINT("Failed to unwrap-and-cache wrap-exported key %d\n",
+                       ret);
+        return ret;
+    }
+
+    /* The cached round-tripped key must hold the source material */
+    ret = _KeyExport(t, WH_CLIENT_KEYID_MAKE_WRAPPED(wrappedKeyId), tmpLabel,
+                     sizeof(tmpLabel), tmpKey, &tmpKeySz);
+    if (ret != WH_ERROR_OK) {
+        WH_ERROR_PRINT("Failed to export round-tripped key %d\n", ret);
+        return ret;
+    }
+    if (tmpKeySz != sizeof(srcKey) ||
+        memcmp(tmpKey, srcKey, sizeof(srcKey)) != 0) {
+        WH_ERROR_PRINT("wrap-export round-trip material mismatch\n");
+        return WH_ERROR_ABORTED;
+    }
+
+    /* The exported material must match the original, and the embedded id must
+     * have been normalized to the wrapped-key namespace */
+    tmpKeySz = sizeof(tmpKey);
+    ret = _KeyUnwrapAndExport(t, hwKekId, wrappedKey, wrappedKeySz, &tmpMeta,
+                              tmpKey, &tmpKeySz);
+    if (ret != WH_ERROR_OK) {
+        WH_ERROR_PRINT("Failed to unwrap-and-export wrap-exported key %d\n",
+                       ret);
+        return ret;
+    }
+    if (tmpKeySz != sizeof(srcKey) ||
+        memcmp(tmpKey, srcKey, sizeof(srcKey)) != 0) {
+        WH_ERROR_PRINT("wrap-export key material mismatch\n");
+        return WH_ERROR_ABORTED;
+    }
+    if (WH_KEYID_TYPE(tmpMeta.id) != WH_KEYTYPE_WRAPPED) {
+        WH_ERROR_PRINT("wrap-export did not normalize to wrapped type\n");
+        return WH_ERROR_ABORTED;
+    }
+
+    WH_TEST_RETURN_ON_FAIL(
+        _KeyEvict(t, WH_CLIENT_KEYID_MAKE_WRAPPED(wrappedKeyId)));
+    WH_TEST_RETURN_ON_FAIL(_KeyEvict(t, srcKeyId));
+
+    /* A NONEXPORTABLE key must be refused by wrap-export */
+    {
+        uint16_t neKeyId                   = WH_TEST_WRAPEXPORT_NE_KEYID;
+        uint8_t  neLabel[WH_NVM_LABEL_LEN] = "WrapExport NoExp";
+        uint16_t neWrappedSz               = sizeof(wrappedKey);
+
+        WH_TEST_RETURN_ON_FAIL(_KeyCache(
+            t, WH_NVM_FLAGS_USAGE_ANY | WH_NVM_FLAGS_NONEXPORTABLE, neLabel,
+            sizeof(neLabel), srcKey, sizeof(srcKey), &neKeyId));
+        ret = _KeyWrapExport(t, neKeyId, WH_KEYTYPE_CRYPTO, hwKekId, wrappedKey,
+                             &neWrappedSz);
+        WH_TEST_RETURN_ON_FAIL(_KeyEvict(t, neKeyId));
+        if (ret != WH_ERROR_ACCESS) {
+            WH_ERROR_PRINT(
+                "wrap-export of nonexportable key expected ACCESS, got %d\n",
+                ret);
+            return WH_ERROR_ABORTED;
+        }
+    }
+
+    return WH_ERROR_OK;
+}
+
 static int _whTest_HwKeystoreDataWrap(TestCtx* t)
 {
     int      ret;
@@ -644,6 +826,12 @@ int whTest_HwKeystore(void* ctx)
     WH_TEST_RETURN_ON_FAIL(_SetupClientServer(t));
 
     ret = _whTest_HwKeystoreKeyWrap(t);
+    if (ret == WH_ERROR_OK) {
+        ret = _whTest_HwKeystoreWrappedKeyNoNvm(t);
+    }
+    if (ret == WH_ERROR_OK) {
+        ret = _whTest_HwKeystoreKeyWrapExport(t);
+    }
     if (ret == WH_ERROR_OK) {
         ret = _whTest_HwKeystoreDataWrap(t);
     }

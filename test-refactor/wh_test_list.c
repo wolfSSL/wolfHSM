@@ -48,6 +48,8 @@ WH_TEST_DECL(whTest_KeystoreReqSize);
 WH_TEST_DECL(whTest_MultiClient);
 WH_TEST_DECL(whTest_Lock);
 WH_TEST_DECL(whTest_CertVerify);
+WH_TEST_DECL(whTest_CertNvmPolicy);
+WH_TEST_DECL(whTest_CertReadRejectsServerOnly);
 WH_TEST_DECL(whTest_HwKeystoreServer);
 WH_TEST_DECL(whTest_ServerImgMgr);
 WH_TEST_DECL(whTest_NvmOptional);
@@ -74,8 +76,11 @@ WH_TEST_DECL(whTest_CryptoEd25519BufferTooSmall);
 WH_TEST_DECL(whTest_CryptoMlDsaBufferTooSmall);
 WH_TEST_DECL(whTest_CryptoRsaBufferTooSmall);
 WH_TEST_DECL(whTest_CryptoSha256);
+WH_TEST_DECL(whTest_KeyWrap);
 WH_TEST_DECL(whTest_She);
+WH_TEST_DECL(whTest_SheKeywrapInterop);
 WH_TEST_DECL(whTest_SheMasterEcuKeyFallback);
+WH_TEST_DECL(whTest_SheNoNvm);
 WH_TEST_DECL(whTest_SheReqSizeChecking);
 WH_TEST_DECL(whTest_SheStateGate);
 WH_TEST_DECL(whTest_Echo);
@@ -100,11 +105,15 @@ const whTestCase whTestsMisc[] = {
     { "whTest_MultiClient",      whTest_MultiClient },
     { "whTest_HwKeystore",       whTest_HwKeystore },
     { "whTest_Lock",             whTest_Lock },
+    { "whTest_SheKeywrapInterop", whTest_SheKeywrapInterop },
+    { "whTest_SheNoNvm",         whTest_SheNoNvm },
 };
 const size_t whTestsMiscCount = ARRAY_SIZE(whTestsMisc);
 
 const whTestCase whTestsServer[] = {
     { "whTest_CertVerify", whTest_CertVerify },
+    { "whTest_CertNvmPolicy", whTest_CertNvmPolicy },
+    { "whTest_CertReadRejectsServerOnly", whTest_CertReadRejectsServerOnly },
     { "whTest_ServerImgMgr", whTest_ServerImgMgr },
     { "whTest_NvmOptional", whTest_NvmOptional },
     { "whTest_SheMasterEcuKeyFallback", whTest_SheMasterEcuKeyFallback },
@@ -138,6 +147,7 @@ const whTestCase whTestsClient[] = {
     {"whTest_CryptoMlDsaBufferTooSmall", whTest_CryptoMlDsaBufferTooSmall},
     {"whTest_CryptoRsaBufferTooSmall", whTest_CryptoRsaBufferTooSmall},
     {"whTest_CryptoSha256", whTest_CryptoSha256},
+    {"whTest_KeyWrap", whTest_KeyWrap},
     {"whTest_She", whTest_She},
     {"whTest_Echo", whTest_Echo},
     {"whTest_NvmDma", whTest_NvmDma},

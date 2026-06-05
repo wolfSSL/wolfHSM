@@ -611,15 +611,31 @@ static int _LoadKey(whServerContext* server, uint16_t magic, uint16_t req_size,
         /* Update the meta label with new values */
         wh_She_Meta2Label(she_meta_count, she_meta_flags, meta->label);
         meta->len = WH_SHE_KEY_SZ;
-        /* cache if ram key, overwrite otherwise */
-        if (WH_KEYID_ID(meta->id) == WH_SHE_RAM_KEY_ID) {
+        /* Cache the key when it is the RAM key, or when there is no NVM to
+         * persist to (e.g. a key primed via unwrap-and-cache on a no-NVM
+         * platform). In both cases the cache is the source of truth and there
+         * is no NVM slot to update; wh_Server_KeystoreCacheKey evicts any
+         * existing entry for this id first, so reads stay fresh without an
+         * explicit evict. Otherwise persist to NVM as before so the SHE key and
+         * its monotonic counter survive cache eviction and reboot; a
+         * cache-resident copy from the read above must not divert the update
+         * away from NVM. */
+        if (WH_KEYID_ID(meta->id) == WH_SHE_RAM_KEY_ID || server->nvm == NULL) {
             ret = wh_Server_KeystoreCacheKey(server, meta,
                                              req.messageTwo + WH_SHE_KEY_SZ);
         }
         else {
             ret = wh_Nvm_AddObject(server->nvm, meta, meta->len,
                                    req.messageTwo + WH_SHE_KEY_SZ);
-            /* read the evicted back from nvm */
+            /* Evict any cached copy so the cache-first read below returns
+             * the key just written, not a stale entry. */
+            if (ret == 0) {
+                ret = wh_Server_KeystoreEvictKey(server, meta->id);
+                if (ret == WH_ERROR_NOTFOUND) {
+                    ret = 0;
+                }
+            }
+            /* read the updated key back from nvm */
             if (ret == 0) {
                 keySz = WH_SHE_KEY_SZ;
                 ret   = wh_Server_KeystoreReadKey(server, meta->id, meta,
@@ -987,7 +1003,15 @@ static int _InitRnd(whServerContext* server, uint16_t magic, uint16_t req_size,
         meta->id  = WH_MAKE_KEYID(WH_KEYTYPE_SHE, server->comm->client_id,
                                   WH_SHE_PRNG_SEED_ID);
         meta->len = WH_SHE_KEY_SZ;
-        ret       = wh_Nvm_AddObject(server->nvm, meta, meta->len, cmacOutput);
+        /* Persist the PRNG seed to NVM, or cache it when there is no NVM to
+         * persist to. wh_Server_KeystoreCacheKey evicts any existing entry for
+         * this id first. */
+        if (server->nvm == NULL) {
+            ret = wh_Server_KeystoreCacheKey(server, meta, cmacOutput);
+        }
+        else {
+            ret = wh_Nvm_AddObject(server->nvm, meta, meta->len, cmacOutput);
+        }
         if (ret != 0) {
             ret = WH_SHE_ERC_KEY_UPDATE_ERROR;
         }
@@ -1124,7 +1148,14 @@ static int _ExtendSeed(whServerContext* server, uint16_t magic,
         meta->id  = WH_MAKE_KEYID(WH_KEYTYPE_SHE, server->comm->client_id,
                                   WH_SHE_PRNG_SEED_ID);
         meta->len = WH_SHE_KEY_SZ;
-        ret       = wh_Nvm_AddObject(server->nvm, meta, meta->len, kdfInput);
+        /* Persist to NVM, or cache when there is no NVM.
+         * wh_Server_KeystoreCacheKey evicts any existing entry for this id. */
+        if (server->nvm == NULL) {
+            ret = wh_Server_KeystoreCacheKey(server, meta, kdfInput);
+        }
+        else {
+            ret = wh_Nvm_AddObject(server->nvm, meta, meta->len, kdfInput);
+        }
         if (ret != 0) {
             ret = WH_SHE_ERC_KEY_UPDATE_ERROR;
         }

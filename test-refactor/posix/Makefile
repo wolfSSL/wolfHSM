@@ -200,6 +200,10 @@ SRC_C += $(TEST_DIR)/wh_test_posix_threadsafe_stress.c
 # backends (flash and flash-log).
 SRC_C += $(TEST_DIR)/wh_test_common.c
 
+# Shared keywrap test helpers pulled from test/; provides the
+# trusted-KEK test bytes and the SHE wrapped-blob builder.
+SRC_C += $(TEST_DIR)/wh_test_keywrap_util.c
+
 
 ## Build rules
 

@@ -11,9 +11,16 @@
 
 #include "wolfhsm/wh_server.h"
 #include "wolfhsm/wh_error.h"
+#include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_nvm.h"
 #include "wolfhsm/wh_nvm_flash.h"
 #include "wolfhsm/wh_flash_ramsim.h"
+
+#if defined(WOLFHSM_CFG_KEYWRAP) && defined(WH_POSIX_PROVISION_DEMO_KEK)
+/* For the keywrap demo KEK id and key bytes */
+#include "wh_demo_client_keywrap.h"
+#include "wh_demo_keywrap_kek.h"
+#endif
 #ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
 #include "wolfhsm/wh_auth.h"
 #include "wolfhsm/wh_auth_base.h"
@@ -640,6 +647,33 @@ int wh_PosixServer_ExampleNvmConfig(void* conf, const char* nvmInitFilePath)
         WOLFHSM_CFG_PRINTF("Failed to initialize NVM: %d\n", rc);
         return rc;
     }
+
+#if defined(WOLFHSM_CFG_KEYWRAP) && defined(WH_POSIX_PROVISION_DEMO_KEK)
+    /* Provision the trusted keywrap KEK the demo uses (built with DEMO_KEK=1).
+     * A client can never create a trusted KEK (it cannot set
+     * WH_NVM_FLAGS_TRUSTED), so it is provisioned here the way whnvmtool or
+     * secure boot would on a real device. Gated by a build flag so it stays
+     * off for the client-only test suite, which asserts the server NVM
+     * starts empty. */
+    {
+        whNvmMetadata kekMeta = {0};
+
+        kekMeta.id     = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, WH_POSIX_CLIENT_ID,
+                                       WH_DEMO_KEYWRAP_KEK_ID);
+        kekMeta.access = WH_NVM_ACCESS_ANY;
+        kekMeta.flags  = WH_NVM_FLAGS_TRUSTED | WH_NVM_FLAGS_USAGE_WRAP |
+                        WH_NVM_FLAGS_NONEXPORTABLE | WH_NVM_FLAGS_NONMODIFIABLE;
+        kekMeta.len = (whNvmSize)sizeof(whDemoKeywrapKek);
+        memcpy(kekMeta.label, "keywrap demo KEK", sizeof("keywrap demo KEK"));
+
+        rc = wh_Nvm_AddObject(nvm, &kekMeta, kekMeta.len, whDemoKeywrapKek);
+        if (rc != 0) {
+            WOLFHSM_CFG_PRINTF("Failed to provision keywrap demo KEK: %d\n",
+                               rc);
+            return rc;
+        }
+    }
+#endif /* WOLFHSM_CFG_KEYWRAP && WH_POSIX_PROVISION_DEMO_KEK */
 
     /* Initialize NVM with contents from the NVM init file if provided */
     if (nvmInitFilePath != NULL) {
