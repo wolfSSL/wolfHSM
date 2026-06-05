@@ -117,6 +117,14 @@ typedef uint16_t whKeyId;
 #define WH_KEYTYPE_WRAPPED 0x4 /* Wrapped key metadata */
 #define WH_KEYTYPE_HW 0x5 /* HW-only key. Port-specific */
 
+/* True when a key id carries no explicit identifier (ID field == 0) and so must
+ * not be accepted as one - it would collide with the "assign me one" sentinel
+ * used for dynamic id assignment. SHE keys are exempt: their ids are fixed by
+ * the SHE slot map, where slot 0 (SECRET_KEY) is a legitimate explicit id, not
+ * a request for dynamic assignment. */
+#define WH_KEYID_IS_UNASSIGNED(_kid) \
+    (WH_KEYID_ISERASED(_kid) && (WH_KEYID_TYPE(_kid) != WH_KEYTYPE_SHE))
+
 /* Convert a keyId to a pointer to be stored in wolfcrypt devctx */
 #define WH_KEYID_TO_DEVCTX(_k) ((void*)((intptr_t)(_k)))
 #define WH_DEVCTX_TO_KEYID(_d) ((whKeyId)((intptr_t)(_d)))

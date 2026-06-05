@@ -66,6 +66,7 @@
 #include "wolfssl/wolfcrypt/cmac.h"
 
 #include "wh_test_common.h"
+#include "wh_test_she_no_nvm.h"
 
 #if defined(WOLFHSM_CFG_TEST_POSIX)
 #include <unistd.h> /* For sleep */
@@ -92,6 +93,21 @@ enum {
 #define TEST_ADMIN_PIN "1234"
 #endif
 
+#if defined(WOLFHSM_CFG_KEYWRAP) && defined(HAVE_AESGCM) && \
+    !defined(WOLFHSM_CFG_TEST_CLIENT_ONLY)
+/* The SHE<->keywrap interop tests use a single trusted KEK that the server
+ * provisions in NVM with WH_NVM_FLAGS_KEK (see _ProvisionSheServerKek), the way
+ * whnvmtool would on an NVM-backed device. A client can never set that flag, so
+ * the KEK cannot be uploaded from the client: the client only names it by id,
+ * and where it builds blobs itself it wraps under the same known bytes. Defined
+ * outside WOLFHSM_CFG_ENABLE_CLIENT so the server task can provision it too. */
+#define WH_SHE_INTEROP_KEK_ID 0x20
+static const uint8_t s_sheKek[32] = {
+    0x03, 0x03, 0x0d, 0xd9, 0xeb, 0x18, 0x17, 0x2e, 0x06, 0x6e, 0x19,
+    0xce, 0x98, 0x44, 0x54, 0x0d, 0x78, 0xa0, 0xbe, 0xe7, 0x35, 0x43,
+    0x40, 0xa4, 0x22, 0x8a, 0xd1, 0x0e, 0xa3, 0x63, 0x1c, 0x0b};
+#endif /* WOLFHSM_CFG_KEYWRAP && HAVE_AESGCM && !TEST_CLIENT_ONLY */
+
 #ifdef WOLFHSM_CFG_ENABLE_CLIENT
 /* Helper function to destroy a SHE key so the unit tests don't
  * leak NVM objects across invocations. Necessary, as SHE doesn't expose a
@@ -110,6 +126,62 @@ static int _destroySheKey(whClientContext* client, whNvmId clientSheKeyId)
 
     return rc;
 }
+
+#if defined(WOLFHSM_CFG_KEYWRAP) && defined(HAVE_AESGCM) && \
+    !defined(WOLFHSM_CFG_TEST_CLIENT_ONLY)
+/* Build an AES-GCM wrapped-key blob for a SHE key the same way the server's KEK
+ * would, so a test can drive unwrap-and-cache without first having to cache the
+ * target slot. Uses software AES with the known KEK bytes. Blob layout matches
+ * the server: [IV(12) || authTag(16) || GCM(metadata || key)]. */
+static int _BuildSheKeyBlob(const uint8_t* kek, word32 kekSz, whKeyId sheKeyId,
+                            uint32_t counter, uint32_t sheFlags,
+                            const uint8_t* keyBytes, uint8_t* blobOut,
+                            uint16_t* blobInOutSz)
+{
+    int           ret;
+    Aes           aes[1];
+    whNvmMetadata meta;
+    uint8_t       plain[sizeof(whNvmMetadata) + WH_SHE_KEY_SZ];
+    uint8_t       iv[WH_KEYWRAP_AES_GCM_IV_SIZE];
+    uint8_t       tag[WH_KEYWRAP_AES_GCM_TAG_SIZE];
+    uint16_t need = (uint16_t)(WH_KEYWRAP_AES_GCM_HEADER_SIZE + sizeof(meta) +
+                               WH_SHE_KEY_SZ);
+
+    if (*blobInOutSz < need) {
+        return WH_ERROR_BUFFER_SIZE;
+    }
+
+    memset(&meta, 0, sizeof(meta));
+    meta.id  = sheKeyId;
+    meta.len = WH_SHE_KEY_SZ;
+    wh_She_Meta2Label(counter, sheFlags, meta.label);
+
+    memcpy(plain, &meta, sizeof(meta));
+    memcpy(plain + sizeof(meta), keyBytes, WH_SHE_KEY_SZ);
+
+    memset(iv, 0x24, sizeof(iv)); /* a fixed IV is fine for a test blob */
+
+    ret = wc_AesInit(aes, NULL, INVALID_DEVID);
+    if (ret != 0) {
+        return ret;
+    }
+    ret = wc_AesGcmSetKey(aes, kek, kekSz);
+    if (ret == 0) {
+        ret = wc_AesGcmEncrypt(aes, blobOut + WH_KEYWRAP_AES_GCM_HEADER_SIZE,
+                               plain, sizeof(plain), iv, sizeof(iv), tag,
+                               sizeof(tag), NULL, 0);
+    }
+    wc_AesFree(aes);
+    if (ret != 0) {
+        return ret;
+    }
+
+    memcpy(blobOut, iv, sizeof(iv));
+    memcpy(blobOut + sizeof(iv), tag, sizeof(tag));
+    *blobInOutSz = need;
+    return 0;
+}
+#endif /* WOLFHSM_CFG_KEYWRAP && HAVE_AESGCM && !TEST_CLIENT_ONLY */
 
 int whTest_SheClientConfig(whClientConfig* config)
 {
@@ -471,6 +543,178 @@ int whTest_SheClientConfig(whClientConfig* config)
         WH_ERROR_PRINT("SHE CMAC FAILED TO VERIFY\n");
         goto exit;
     }
+
+    /* This interop needs the trusted KEK the server task provisions in NVM
+     * (_ProvisionSheServerKek). A client-only test build has no server task and
+     * the standalone example server does not provision it, so run this only in
+     * the in-process (client+server) build; the code paths are identical. */
+#if defined(WOLFHSM_CFG_KEYWRAP) && defined(HAVE_AESGCM) && \
+    !defined(WOLFHSM_CFG_TEST_CLIENT_ONLY)
+    /* SHE <-> keywrap interop: wrap-export a SHE key, prime an unused SHE slot
+     * via unwrap-and-cache and use it, and verify the SHE counter rollback
+     * guard on unwrap-and-cache. */
+    {
+        /* The KEK is the trusted, server-resident WH_NVM_FLAGS_KEK key the
+         * server task provisioned in NVM; the client only names it by id. */
+        whKeyId       kekId = WH_SHE_INTEROP_KEK_ID;
+        uint8_t       blob[128];
+        uint16_t      blobSz;
+        uint16_t      expSz = (uint16_t)(WH_KEYWRAP_AES_GCM_HEADER_SIZE +
+                                    sizeof(whNvmMetadata) + WH_SHE_KEY_SZ);
+        const whNvmId SHE_PRIME_SLOT = 6;
+        const whNvmId SHE_CTR_SLOT   = 7;
+        uint8_t       sheKey[WH_SHE_KEY_SZ];
+        uint8_t       ecbIn[WH_SHE_KEY_SZ];
+        uint8_t       ecbOut[WH_SHE_KEY_SZ];
+        uint8_t       ecbBack[WH_SHE_KEY_SZ];
+        uint16_t      outId    = 0;
+        int32_t       serverRc = 0;
+        uint8_t       ctrLabel[WH_NVM_LABEL_LEN];
+
+        /* The server freshens the NVM-resident KEK on demand into an evictable
+         * cache slot, so it does not pin a slot the way a client-cached KEK
+         * would -- no KeyCommit workaround is needed for the second
+         * unwrap-and-cache below. */
+
+        /* (1) Wrap-and-export the cached RAM key (slot 14) by id; the blob must
+         * keep TYPE=SHE and be the expected size. */
+        blobSz = sizeof(blob);
+        ret    = wh_Client_KeyWrapExport(client, WC_CIPHER_AES_GCM,
+                                         WH_SHE_RAM_KEY_ID, WH_KEYTYPE_SHE, kekId,
+                                         blob, &blobSz);
+        if (ret != 0 || blobSz != expSz) {
+            WH_ERROR_PRINT("SHE wrap-export failed ret=%d sz=%u exp=%u\n", ret,
+                           blobSz, expSz);
+            ret = (ret != 0) ? ret : WH_ERROR_ABORTED;
+            goto exit;
+        }
+
+        /* (1b) Regression for the slot-0 wrap-export gate: WH_SHE_SECRET_KEY_ID
+         * has ID field == 0, which the keystore policy gate
+         * (_KeystoreCheckPolicy) previously rejected as an unassigned id, so a
+         * SHE SECRET_KEY could be primed and used but never wrap-exported. The
+         * pre-programmed SECRET_KEY (slot 0, loaded earlier in this test) must
+         * wrap-export like any other SHE slot. */
+        blobSz = sizeof(blob);
+        ret    = wh_Client_KeyWrapExport(client, WC_CIPHER_AES_GCM,
+                                         WH_SHE_SECRET_KEY_ID, WH_KEYTYPE_SHE,
+                                         kekId, blob, &blobSz);
+        if (ret != 0 || blobSz != expSz) {
+            WH_ERROR_PRINT(
+                "SHE slot-0 wrap-export failed ret=%d sz=%u exp=%u\n", ret,
+                blobSz, expSz);
+            ret = (ret != 0) ? ret : WH_ERROR_ABORTED;
+            goto exit;
+        }
+
+        /* (2) Prime an unused SHE slot via unwrap-and-cache, then use it. */
+        memset(sheKey, 0x5a, sizeof(sheKey));
+        blobSz = sizeof(blob);
+        ret    = _BuildSheKeyBlob(s_sheKek, sizeof(s_sheKek),
+                                  WH_MAKE_KEYID(WH_KEYTYPE_SHE,
+                                                client->comm->client_id,
+                                                SHE_PRIME_SLOT),
+                                  1, 0, sheKey, blob, &blobSz);
+        if (ret != 0) {
+            WH_ERROR_PRINT("SHE interop: build prime blob failed %d\n", ret);
+            goto exit;
+        }
+        ret = wh_Client_KeyUnwrapAndCache(client, WC_CIPHER_AES_GCM, kekId,
+                                          blob, blobSz, &outId);
+        if (ret != 0) {
+            WH_ERROR_PRINT("SHE unwrap-and-cache failed %d\n", ret);
+            goto exit;
+        }
+        memset(ecbIn, 0x11, sizeof(ecbIn));
+        ret = wh_Client_SheEncEcb(client, SHE_PRIME_SLOT, ecbIn, ecbOut,
+                                  sizeof(ecbIn));
+        if (ret == 0) {
+            ret = wh_Client_SheDecEcb(client, SHE_PRIME_SLOT, ecbOut, ecbBack,
+                                      sizeof(ecbOut));
+        }
+        if (ret != 0 || memcmp(ecbIn, ecbBack, sizeof(ecbIn)) != 0) {
+            WH_ERROR_PRINT("SHE primed-key ECB round trip failed %d\n", ret);
+            ret = (ret != 0) ? ret : WH_ERROR_ABORTED;
+            goto exit;
+        }
+
+        /* (3) Counter guard (anti-rollback) on the SHE unwrap-and-cache path
+         * (_HandleKeyUnwrapAndCacheRequest): seed an NVM SHE slot with
+         * counter=5, then exercise both branches of the guard:
+         *   - a lower-counter (3) prime is rejected with WH_ERROR_ACCESS;
+         *   - an equal-counter (5) prime is accepted (the guard is
+         * allow-equal). The baseline prime in (2) targets an empty slot, so its
+         * counter comparison is skipped (no stored counter in NVM) rather than
+         * taking the accept branch. */
+        wh_She_Meta2Label(5, 0, ctrLabel);
+        ret = wh_Client_NvmAddObject(client,
+                                     WH_MAKE_KEYID(WH_KEYTYPE_SHE,
+                                                   client->comm->client_id,
+                                                   SHE_CTR_SLOT),
+                                     0, 0, sizeof(ctrLabel), ctrLabel,
+                                     sizeof(sheKey), sheKey, &serverRc);
+        if (ret == 0) {
+            ret = serverRc;
+        }
+        if (ret != 0) {
+            WH_ERROR_PRINT("SHE interop: seed counter slot failed %d\n", ret);
+            goto exit;
+        }
+        /* lower counter -> rejected */
+        blobSz = sizeof(blob);
+        ret    = _BuildSheKeyBlob(s_sheKek, sizeof(s_sheKek),
+                                  WH_MAKE_KEYID(WH_KEYTYPE_SHE,
+                                                client->comm->client_id,
+                                                SHE_CTR_SLOT),
+                                  3, 0, sheKey, blob, &blobSz);
+        if (ret != 0) {
+            goto exit;
+        }
+        ret = wh_Client_KeyUnwrapAndCache(client, WC_CIPHER_AES_GCM, kekId,
+                                          blob, blobSz, &outId);
+        if (ret != WH_ERROR_ACCESS) {
+            WH_ERROR_PRINT("SHE counter rollback expected ACCESS, got %d\n",
+                           ret);
+            ret = WH_ERROR_ABORTED;
+            goto exit;
+        }
+
+        /* equal counter (== stored 5) -> accepted (allow-equal). This is the
+         * accept branch the baseline prime in (2) never reached, because
+         * SHE_CTR_SLOT already has a committed counter of 5 in NVM. */
+        blobSz = sizeof(blob);
+        ret    = _BuildSheKeyBlob(s_sheKek, sizeof(s_sheKek),
+                                  WH_MAKE_KEYID(WH_KEYTYPE_SHE,
+                                                client->comm->client_id,
+                                                SHE_CTR_SLOT),
+                                  5, 0, sheKey, blob, &blobSz);
+        if (ret != 0) {
+            goto exit;
+        }
+        ret = wh_Client_KeyUnwrapAndCache(client, WC_CIPHER_AES_GCM, kekId,
+                                          blob, blobSz, &outId);
+        if (ret != WH_ERROR_OK) {
+            WH_ERROR_PRINT("SHE counter equal expected OK, got %d\n", ret);
+            ret = (ret != 0) ? ret : WH_ERROR_ABORTED;
+            goto exit;
+        }
+
+        /* cleanup: destroy the NVM counter slot. The KEK is server-owned; the
+         * client must not be able to evict it (it carries WH_NVM_FLAGS_KEK),
+         * which doubles as an immutability check. */
+        (void)_destroySheKey(client, SHE_CTR_SLOT);
+        ret = wh_Client_KeyEvict(client, kekId);
+        if (ret != WH_ERROR_ACCESS) {
+            WH_ERROR_PRINT("SHE interop: KEK evict expected ACCESS, got %d\n",
+                           ret);
+            ret = (ret == 0) ? WH_ERROR_ABORTED : ret;
+            goto exit;
+        }
+        ret = 0;
+
+        WH_TEST_PRINT("SHE <-> keywrap interop SUCCESS\n");
+    }
+#endif /* WOLFHSM_CFG_KEYWRAP && HAVE_AESGCM && !TEST_CLIENT_ONLY */
 
     /* destroy "pre-programmed" keys so we don't leak NVM */
     if ((ret = _destroySheKey(client, WH_SHE_BOOT_MAC_KEY_ID)) != 0) {
@@ -900,6 +1144,29 @@ exit_wp:
 #endif /* WOLFHSM_CFG_ENABLE_CLIENT */
 
 #ifdef WOLFHSM_CFG_ENABLE_SERVER
+#if defined(WOLFHSM_CFG_KEYWRAP) && defined(HAVE_AESGCM)
+/* Provision the trusted keywrap KEK in NVM with WH_NVM_FLAGS_KEK, the way
+ * whnvmtool would on an NVM-backed device. The flag (which clients can never
+ * set) makes it the trusted KEK that wrap-export and unwrap-and-cache require.
+ * Provisioning it in NVM (not the cache) means it is freshened on demand and
+ * does not pin a cache slot. The id matches what clients name: plain
+ * WH_SHE_INTEROP_KEK_ID translated against WH_TEST_DEFAULT_CLIENT_ID. */
+static int _ProvisionSheServerKek(whServerContext* server)
+{
+    whNvmMetadata meta = {0};
+
+    meta.id     = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, WH_TEST_DEFAULT_CLIENT_ID,
+                                WH_SHE_INTEROP_KEK_ID);
+    meta.access = WH_NVM_ACCESS_ANY;
+    meta.flags  = WH_NVM_FLAGS_KEK | WH_NVM_FLAGS_USAGE_WRAP |
+                 WH_NVM_FLAGS_NONEXPORTABLE | WH_NVM_FLAGS_NONMODIFIABLE;
+    meta.len = (whNvmSize)sizeof(s_sheKek);
+    memcpy(meta.label, "SHE interop KEK", sizeof("SHE interop KEK"));
+
+    return wh_Nvm_AddObject(server->nvm, &meta, meta.len, s_sheKek);
+}
+#endif /* WOLFHSM_CFG_KEYWRAP && HAVE_AESGCM */
+
 int whTest_SheServerConfig(whServerConfig* config)
 {
     whServerContext server[1] = {0};
@@ -911,6 +1178,10 @@ int whTest_SheServerConfig(whServerConfig* config)
     }
 
     WH_TEST_RETURN_ON_FAIL(wh_Server_Init(server, config));
+#if defined(WOLFHSM_CFG_KEYWRAP) && defined(HAVE_AESGCM)
+    /* Trusted keywrap KEK is provisioned before the server accepts requests. */
+    WH_TEST_RETURN_ON_FAIL(_ProvisionSheServerKek(server));
+#endif
     WH_TEST_RETURN_ON_FAIL(wh_Server_SetConnected(server, am_connected));
 
     while(am_connected == WH_COMM_CONNECTED) {
@@ -1649,6 +1920,275 @@ static int wh_She_TestReqSizeChecking(void)
 
 #if defined(WOLFHSM_CFG_TEST_POSIX) && defined(WOLFHSM_CFG_ENABLE_CLIENT) && \
     defined(WOLFHSM_CFG_ENABLE_SERVER)
+
+#if defined(WOLFHSM_CFG_KEYWRAP) && defined(HAVE_AESGCM)
+/*
+ * End-to-end SHE <-> keywrap reboot interop, run across two server sessions to
+ * model a real power cycle: each wh_ClientServer_MemThreadTest() call builds a
+ * fresh server (empty cache) and fresh RAM-NVM. The client carries only the
+ * wrapped blob across the "reset" (the no-NVM premise).
+ *
+ *   Session 1 (provision): secure boot -> offline M1/M2/M3 -> SheLoadKey a
+ *     target key -> SheEncEcb (capture ciphertext) -> KeyWrapExport the key by
+ *     id -> save the blob.
+ *   <reset: server + NVM torn down and recreated>
+ *   Session 2 (restore): secure boot -> KeyUnwrapAndCache the saved blob (NVM
+ *     has no target key, so it is restored purely from the client's blob) ->
+ *     SheEncEcb -> must match session 1.
+ *
+ * The KEK itself is the trusted WH_NVM_FLAGS_KEK key the server task provisions
+ * in NVM in both sessions (s_sheKek); the client never uploads it.
+ */
+
+/* Shared inputs that must match across the two sessions. */
+static uint8_t s_interopUid[WH_SHE_UID_SZ]   = {0x00, 0x00, 0x00, 0x00, 0x00,
+                                                0x00, 0x00, 0x00, 0x00, 0x00,
+                                                0x00, 0x00, 0x00, 0x00, 0x01};
+static uint8_t s_interopPlain[WH_SHE_KEY_SZ] = {
+    0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88,
+    0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x00};
+/* Carried from the provision session to the restore session. */
+static uint8_t  s_interopBlob[256];
+static uint16_t s_interopBlobSz;
+static uint8_t  s_interopCipher[WH_SHE_KEY_SZ];
+
+#define WH_SHE_INTEROP_TARGET_SLOT 4
+
+/* Establish secure-boot state so SHE key operations are permitted. Both
+ * sessions must do this (a fresh server starts un-booted). */
+static int _SheInteropSecureBoot(whClientContext* client)
+{
+    int      ret;
+    Cmac     cmac[1];
+    uint8_t  bootMacKey[WH_SHE_KEY_SZ] = {0xa1, 0xb2, 0xc3, 0xd4, 0xe5, 0xf6,
+                                          0x07, 0x18, 0x29, 0x3a, 0x4b, 0x5c,
+                                          0x6d, 0x7e, 0x8f, 0x90};
+    uint8_t  bootloader[64];
+    uint32_t bootloaderSz                      = sizeof(bootloader);
+    uint8_t  zeros[WH_SHE_BOOT_MAC_PREFIX_LEN] = {0};
+    uint8_t  digest[WH_SHE_KEY_SZ]             = {0};
+    uint32_t digestSz                          = sizeof(digest);
+    uint8_t  sreg                              = 0;
+
+    memset(bootloader, 0xB7, sizeof(bootloader));
+
+    /* boot MAC digest = CMAC_bootMacKey(zeros || size || bootloader) */
+    if ((ret = wc_InitCmac(cmac, bootMacKey, sizeof(bootMacKey), WC_CMAC_AES,
+                           NULL)) != 0) {
+        return ret;
+    }
+    if ((ret = wc_CmacUpdate(cmac, zeros, sizeof(zeros))) != 0) {
+        return ret;
+    }
+    if ((ret = wc_CmacUpdate(cmac, (uint8_t*)&bootloaderSz,
+                             sizeof(bootloaderSz))) != 0) {
+        return ret;
+    }
+    if ((ret = wc_CmacUpdate(cmac, bootloader, sizeof(bootloader))) != 0) {
+        return ret;
+    }
+    digestSz = AES_BLOCK_SIZE;
+    if ((ret = wc_CmacFinal(cmac, digest, (word32*)&digestSz)) != 0) {
+        return ret;
+    }
+
+    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_BOOT_MAC_KEY_ID, 0,
+                                          bootMacKey, sizeof(bootMacKey))) !=
+        0) {
+        return ret;
+    }
+    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_BOOT_MAC, 0, digest,
+                                          sizeof(digest))) != 0) {
+        return ret;
+    }
+    if ((ret = wh_Client_SheSetUid(client, s_interopUid,
+                                   sizeof(s_interopUid))) != 0) {
+        return ret;
+    }
+    if ((ret = wh_Client_SheSecureBoot(client, bootloader, bootloaderSz)) !=
+        0) {
+        return ret;
+    }
+    if ((ret = wh_Client_SheGetStatus(client, &sreg)) != 0) {
+        return ret;
+    }
+    if ((sreg & WH_SHE_SREG_BOOT_OK) == 0 ||
+        (sreg & WH_SHE_SREG_BOOT_FINISHED) == 0 ||
+        (sreg & WH_SHE_SREG_SECURE_BOOT) == 0) {
+        return WH_ERROR_ABORTED;
+    }
+    return 0;
+}
+
+static int _SheInteropProvision(whClientConfig* config)
+{
+    int             ret;
+    whClientContext client[1]            = {0};
+    uint32_t        outClientId          = 0;
+    uint32_t        outServerId          = 0;
+    uint8_t  secretKey[WH_SHE_KEY_SZ]    = {0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae,
+                                            0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88,
+                                            0x09, 0xcf, 0x4f, 0x3c};
+    uint8_t  masterEcuKey[WH_SHE_KEY_SZ] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05,
+                                            0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b,
+                                            0x0c, 0x0d, 0x0e, 0x0f};
+    uint8_t  targetKey[WH_SHE_KEY_SZ] = {0xde, 0xad, 0xbe, 0xef, 0x01, 0x23,
+                                         0x45, 0x67, 0x89, 0xab, 0xcd, 0xef,
+                                         0xfe, 0xdc, 0xba, 0x98};
+    uint8_t  m1[WH_SHE_M1_SZ];
+    uint8_t  m2[WH_SHE_M2_SZ];
+    uint8_t  m3[WH_SHE_M3_SZ];
+    uint8_t  m4[WH_SHE_M4_SZ];
+    uint8_t  m5[WH_SHE_M5_SZ];
+    uint8_t  o4[WH_SHE_M4_SZ];
+    uint8_t  o5[WH_SHE_M5_SZ];
+    uint16_t blobSz = sizeof(s_interopBlob);
+
+    WH_TEST_RETURN_ON_FAIL(wh_Client_Init(client, config));
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Client_CommInit(client, &outClientId, &outServerId));
+#ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
+    WH_TEST_RETURN_ON_FAIL(wh_Client_AuthLogin(
+        client, WH_AUTH_METHOD_PIN, TEST_ADMIN_USERNAME, TEST_ADMIN_PIN,
+        strlen(TEST_ADMIN_PIN), &ret, NULL));
+#endif
+
+    ret = _SheInteropSecureBoot(client);
+    if (ret != 0) {
+        WH_ERROR_PRINT("interop provision: secure boot failed %d\n", ret);
+        goto exit;
+    }
+
+    /* Provision the secret key, then load the master ECU key (auth=secret) and
+     * the target key (auth=master ECU) using offline-generated M1/M2/M3. */
+    ret = wh_Client_ShePreProgramKey(client, WH_SHE_SECRET_KEY_ID, 0, secretKey,
+                                     sizeof(secretKey));
+    if (ret != 0) {
+        goto exit;
+    }
+    ret = wh_She_GenerateLoadableKey(
+        WH_SHE_MASTER_ECU_KEY_ID, WH_SHE_SECRET_KEY_ID, 1, 0, s_interopUid,
+        masterEcuKey, secretKey, m1, m2, m3, m4, m5);
+    if (ret != 0) {
+        goto exit;
+    }
+    ret = wh_Client_SheLoadKey(client, m1, m2, m3, o4, o5);
+    if (ret != 0) {
+        WH_ERROR_PRINT("interop provision: load master ECU failed %d\n", ret);
+        goto exit;
+    }
+    ret = wh_She_GenerateLoadableKey(
+        WH_SHE_INTEROP_TARGET_SLOT, WH_SHE_MASTER_ECU_KEY_ID, 1, 0,
+        s_interopUid, targetKey, masterEcuKey, m1, m2, m3, m4, m5);
+    if (ret != 0) {
+        goto exit;
+    }
+    ret = wh_Client_SheLoadKey(client, m1, m2, m3, o4, o5);
+    if (ret != 0) {
+        WH_ERROR_PRINT(
+            "interop provision: load target via M1/M2/M3 failed %d\n", ret);
+        goto exit;
+    }
+
+    /* Capture the target key's ECB output for cross-session comparison. */
+    ret =
+        wh_Client_SheEncEcb(client, WH_SHE_INTEROP_TARGET_SLOT, s_interopPlain,
+                            s_interopCipher, sizeof(s_interopPlain));
+    if (ret != 0) {
+        goto exit;
+    }
+
+    /* Wrap-export the target key by id under the server's trusted KEK. */
+    ret = wh_Client_KeyWrapExport(
+        client, WC_CIPHER_AES_GCM, WH_SHE_INTEROP_TARGET_SLOT, WH_KEYTYPE_SHE,
+        WH_SHE_INTEROP_KEK_ID, s_interopBlob, &blobSz);
+    if (ret != 0) {
+        WH_ERROR_PRINT("interop provision: wrap-export failed %d\n", ret);
+        goto exit;
+    }
+    s_interopBlobSz = blobSz;
+
+exit:
+    (void)wh_Client_CommClose(client);
+    (void)wh_Client_Cleanup(client);
+    return ret;
+}
+
+static int _SheInteropRestore(whClientConfig* config)
+{
+    int             ret;
+    whClientContext client[1]                  = {0};
+    uint32_t        outClientId                = 0;
+    uint32_t        outServerId                = 0;
+    uint8_t         cipher[WH_SHE_KEY_SZ]      = {0};
+    uint16_t        outId                      = 0;
+
+    WH_TEST_RETURN_ON_FAIL(wh_Client_Init(client, config));
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Client_CommInit(client, &outClientId, &outServerId));
+#ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
+    WH_TEST_RETURN_ON_FAIL(wh_Client_AuthLogin(
+        client, WH_AUTH_METHOD_PIN, TEST_ADMIN_USERNAME, TEST_ADMIN_PIN,
+        strlen(TEST_ADMIN_PIN), &ret, NULL));
+#endif
+
+    /* Fresh boot: re-establish secure-boot state. The target SHE key is NOT in
+     * NVM (this server's NVM is empty); the trusted KEK was provisioned in NVM
+     * by the server task, so the client just names it. */
+    ret = _SheInteropSecureBoot(client);
+    if (ret != 0) {
+        WH_ERROR_PRINT("interop restore: secure boot failed %d\n", ret);
+        goto exit;
+    }
+
+    /* Prime the SHE key purely from the client-held wrapped blob. */
+    ret = wh_Client_KeyUnwrapAndCache(client, WC_CIPHER_AES_GCM,
+                                      WH_SHE_INTEROP_KEK_ID, s_interopBlob,
+                                      s_interopBlobSz, &outId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("interop restore: unwrap-and-cache failed %d\n", ret);
+        goto exit;
+    }
+
+    /* Use the restored key via the SHE API; it must reproduce the provision
+     * session's ciphertext, proving the exact key round-tripped. */
+    ret = wh_Client_SheEncEcb(client, WH_SHE_INTEROP_TARGET_SLOT,
+                              s_interopPlain, cipher, sizeof(s_interopPlain));
+    if (ret != 0) {
+        WH_ERROR_PRINT("interop restore: SheEncEcb failed %d\n", ret);
+        goto exit;
+    }
+    if (memcmp(cipher, s_interopCipher, sizeof(cipher)) != 0) {
+        WH_ERROR_PRINT("interop restore: restored key does not match\n");
+        ret = WH_ERROR_ABORTED;
+        goto exit;
+    }
+    WH_TEST_PRINT("SHE wrapped-key reboot interop SUCCESS\n");
+
+exit:
+    (void)wh_Client_CommClose(client);
+    (void)wh_Client_Cleanup(client);
+    return ret;
+}
+
+/* Drive the two sessions back-to-back. Each MemThreadTest call uses a fresh
+ * server + NVM, modeling the power cycle between provision and restore. */
+static int wh_She_TestWrappedInterop(void)
+{
+    int ret;
+
+    s_interopBlobSz = 0;
+    memset(s_interopBlob, 0, sizeof(s_interopBlob));
+    memset(s_interopCipher, 0, sizeof(s_interopCipher));
+
+    ret = wh_ClientServer_MemThreadTest(_SheInteropProvision);
+    if (ret != 0) {
+        return ret;
+    }
+    return wh_ClientServer_MemThreadTest(_SheInteropRestore);
+}
+#endif /* WOLFHSM_CFG_KEYWRAP && HAVE_AESGCM */
+
 int whTest_She(void)
 {
     WH_TEST_PRINT("Testing SHE: master ECU key fallback...\n");
@@ -1665,6 +2205,12 @@ int whTest_She(void)
     WH_TEST_PRINT("Testing SHE: (pthread) mem write protect...\n");
     WH_TEST_RETURN_ON_FAIL(
         wh_ClientServer_MemThreadTest(whTest_SheWriteProtect));
+#if defined(WOLFHSM_CFG_KEYWRAP) && defined(HAVE_AESGCM)
+    WH_TEST_PRINT("Testing SHE: (pthread) wrapped-key reboot interop...\n");
+    WH_TEST_RETURN_ON_FAIL(wh_She_TestWrappedInterop());
+    WH_TEST_PRINT("Testing SHE: (pthread) NVM-less wrapped-key flow...\n");
+    WH_TEST_RETURN_ON_FAIL(whTest_SheNoNvm());
+#endif
     return 0;
 }
 #endif

@@ -80,6 +80,16 @@ typedef uint16_t whNvmFlags;
 #define WH_NVM_FLAGS_EPHEMERAL      ((whNvmFlags)1 << 4)
 /* Cannot be destroyed (but can be modified) */
 #define WH_NVM_FLAGS_NONDESTROYABLE ((whNvmFlags)1 << 11)
+/* Trusted key-encryption key. Server-only: set exclusively by trusted
+ * provisioning (whnvmtool image or server-internal boot code); the server
+ * strips it from every client-supplied metadata path. A key carrying this flag
+ * is unreadable, immutable, non-evictable and non-exportable through the client
+ * API, and is the only kind of cache/NVM key permitted to act as a KEK for
+ * KeyWrapExport / KeyUnwrapAndCache. */
+#define WH_NVM_FLAGS_KEK ((whNvmFlags)1 << 12)
+
+/* Flags a client may never set; stripped from all client-supplied metadata. */
+#define WH_NVM_FLAGS_SERVER_ONLY (WH_NVM_FLAGS_KEK)
 
 /* Key usage policy flags
  *

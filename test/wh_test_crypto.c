@@ -13366,6 +13366,44 @@ static int whTestCrypto_LmsCryptoCb(whClientContext* ctx, int devId,
         }
     }
 
+    /* Test that a client must not be able to set the server-only trusted-KEK
+     * flag on its own stateful key */
+    if (ret == 0) {
+        LmsKey  kekKey[1];
+        int     kekInited = 0;
+        whKeyId kekId     = WH_KEYID_ERASED;
+
+        ret = wc_LmsKey_Init(kekKey, NULL, devId);
+        if (ret == 0) {
+            kekInited = 1;
+            ret       = wc_LmsKey_SetParameters(kekKey, WH_TEST_LMS_LEVELS,
+                                                WH_TEST_LMS_HEIGHT,
+                                                WH_TEST_LMS_WINTERNITZ);
+        }
+        if (ret == 0) {
+            ret = wh_Client_LmsMakeKeyDma(
+                ctx, kekKey, &kekId, WH_NVM_FLAGS_KEK | WH_NVM_FLAGS_USAGE_WRAP,
+                0, NULL);
+            if (ret != 0) {
+                WH_ERROR_PRINT("LMS KEK-flag keygen failed: ret=%d\n", ret);
+            }
+        }
+        /* A surviving WH_NVM_FLAGS_KEK would make this evict WH_ERROR_ACCESS.
+         */
+        if ((ret == 0) && !WH_KEYID_ISERASED(kekId)) {
+            ret = wh_Client_KeyEvict(ctx, kekId);
+            if (ret != 0) {
+                WH_ERROR_PRINT("LMS server-only KEK flag not stripped "
+                               "(evict ret=%d)\n",
+                               ret);
+            }
+            (void)wh_Client_KeyErase(ctx, kekId);
+        }
+        if (kekInited) {
+            wc_LmsKey_Free(kekKey);
+        }
+    }
+
     /* Sign via cryptocb. */
     if (ret == 0) {
         sigLen = sigCap;
@@ -13739,6 +13777,41 @@ static int whTestCrypto_XmssCryptoCb(whClientContext* ctx, int devId,
         }
         if (lblInited) {
             wc_XmssKey_Free(lblKey);
+        }
+    }
+
+    /* Test that keygen must strip a client-supplied server-only flags */
+    if (ret == 0) {
+        XmssKey kekKey[1];
+        int     kekInited = 0;
+        whKeyId kekId     = WH_KEYID_ERASED;
+
+        ret = wc_XmssKey_Init(kekKey, NULL, devId);
+        if (ret == 0) {
+            kekInited = 1;
+            ret       = wc_XmssKey_SetParamStr(kekKey, WH_TEST_XMSS_PARAM_STR);
+        }
+        if (ret == 0) {
+            ret = wh_Client_XmssMakeKeyDma(
+                ctx, kekKey, &kekId, WH_NVM_FLAGS_KEK | WH_NVM_FLAGS_USAGE_WRAP,
+                0, NULL);
+            if (ret != 0) {
+                WH_ERROR_PRINT("XMSS KEK-flag keygen failed: ret=%d\n", ret);
+            }
+        }
+        /* A surviving WH_NVM_FLAGS_KEK would make this evict WH_ERROR_ACCESS.
+         */
+        if ((ret == 0) && !WH_KEYID_ISERASED(kekId)) {
+            ret = wh_Client_KeyEvict(ctx, kekId);
+            if (ret != 0) {
+                WH_ERROR_PRINT("XMSS server-only KEK flag not stripped "
+                               "(evict ret=%d)\n",
+                               ret);
+            }
+            (void)wh_Client_KeyErase(ctx, kekId);
+        }
+        if (kekInited) {
+            wc_XmssKey_Free(kekKey);
         }
     }
 

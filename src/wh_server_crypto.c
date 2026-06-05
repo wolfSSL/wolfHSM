@@ -266,7 +266,8 @@ int wh_Server_CacheImportRsaKey(whServerContext* ctx, RsaKey* key,
         /* set meta */
         cacheMeta->id = keyId;
         cacheMeta->len = der_size;
-        cacheMeta->flags = flags;
+        /* clients can't set server-only flags (e.g. trusted KEK) */
+        cacheMeta->flags  = flags & ~WH_NVM_FLAGS_SERVER_ONLY;
         cacheMeta->access = WH_NVM_ACCESS_ANY;
 
         if (    (label != NULL) &&
@@ -610,7 +611,8 @@ int wh_Server_EccKeyCacheImport(whServerContext* ctx, ecc_key* key,
         /* set meta */
         cacheMeta->id = keyId;
         cacheMeta->len = der_size;
-        cacheMeta->flags = flags;
+        /* clients can't set server-only flags (e.g. trusted KEK) */
+        cacheMeta->flags  = flags & ~WH_NVM_FLAGS_SERVER_ONLY;
         cacheMeta->access = WH_NVM_ACCESS_ANY;
 
         if (    (label != NULL) &&
@@ -670,7 +672,8 @@ int wh_Server_CacheImportEd25519Key(whServerContext* ctx, ed25519_key* key,
     if (ret == WH_ERROR_OK) {
         cacheMeta->id     = keyId;
         cacheMeta->len    = der_size;
-        cacheMeta->flags  = flags;
+        /* clients can't set server-only flags (e.g. trusted KEK) */
+        cacheMeta->flags  = flags & ~WH_NVM_FLAGS_SERVER_ONLY;
         cacheMeta->access = WH_NVM_ACCESS_ANY;
 
         if ((label != NULL) && (label_len > 0)) {
@@ -729,7 +732,8 @@ int wh_Server_CacheImportCurve25519Key(whServerContext* server,
             /* Update metadata to cache the key */
             cacheMeta->id     = keyId;
             cacheMeta->len    = keySz;
-            cacheMeta->flags  = flags;
+            /* clients can't set server-only flags (e.g. trusted KEK) */
+            cacheMeta->flags  = flags & ~WH_NVM_FLAGS_SERVER_ONLY;
             cacheMeta->access = WH_NVM_ACCESS_ANY;
             if ((label != NULL) && (label_len > 0)) {
                 memcpy(cacheMeta->label, label, label_len);
@@ -799,7 +803,8 @@ int wh_Server_MlDsaKeyCacheImport(whServerContext* ctx, wc_MlDsaKey* key,
     if (ret == WH_ERROR_OK) {
         cacheMeta->id     = keyId;
         cacheMeta->len    = der_size;
-        cacheMeta->flags  = flags;
+        /* clients can't set server-only flags (e.g. trusted KEK) */
+        cacheMeta->flags  = flags & ~WH_NVM_FLAGS_SERVER_ONLY;
         cacheMeta->access = WH_NVM_ACCESS_ANY;
 
         if ((label != NULL) && (label_len > 0)) {
@@ -855,7 +860,8 @@ int wh_Server_MlKemKeyCacheImport(whServerContext* ctx, MlKemKey* key,
     if (ret == WH_ERROR_OK) {
         cacheMeta->id     = keyId;
         cacheMeta->len    = keySize;
-        cacheMeta->flags  = flags;
+        /* clients can't set server-only flags (e.g. trusted KEK) */
+        cacheMeta->flags  = flags & ~WH_NVM_FLAGS_SERVER_ONLY;
         cacheMeta->access = WH_NVM_ACCESS_ANY;
         if ((label != NULL) && (label_len > 0)) {
             memcpy(cacheMeta->label, label, label_len);
@@ -1056,8 +1062,10 @@ int wh_Server_LmsKeyCacheImport(whServerContext* ctx, LmsKey* key,
         cacheMeta->id  = keyId;
         cacheMeta->len = blobSize;
         /* Stateful private key state must never leave the HSM; reuse of a
-         * one-time signature index breaks the scheme. Force non-exportable. */
-        cacheMeta->flags  = flags | WH_NVM_FLAGS_NONEXPORTABLE;
+         * one-time signature index breaks the scheme. Force non-exportable.
+         * Strip server-only flags a client may never set (e.g. trusted KEK). */
+        cacheMeta->flags =
+            (flags & ~WH_NVM_FLAGS_SERVER_ONLY) | WH_NVM_FLAGS_NONEXPORTABLE;
         cacheMeta->access = WH_NVM_ACCESS_ANY;
         if ((label != NULL) && (label_len > 0)) {
             memcpy(cacheMeta->label, label, label_len);
@@ -1117,8 +1125,10 @@ int wh_Server_XmssKeyCacheImport(whServerContext* ctx, XmssKey* key,
         cacheMeta->id  = keyId;
         cacheMeta->len = blobSize;
         /* Stateful private key state must never leave the HSM; reuse of a
-         * one-time signature index breaks the scheme. Force non-exportable. */
-        cacheMeta->flags  = flags | WH_NVM_FLAGS_NONEXPORTABLE;
+         * one-time signature index breaks the scheme. Force non-exportable.
+         * Strip server-only flags a client may never set (e.g. trusted KEK). */
+        cacheMeta->flags =
+            (flags & ~WH_NVM_FLAGS_SERVER_ONLY) | WH_NVM_FLAGS_NONEXPORTABLE;
         cacheMeta->access = WH_NVM_ACCESS_ANY;
         if ((label != NULL) && (label_len > 0)) {
             memcpy(cacheMeta->label, label, label_len);
@@ -1662,7 +1672,8 @@ int wh_Server_KeyCacheImportRaw(whServerContext* ctx, const uint8_t* keyData,
 
         cacheMeta->id     = keyId;
         cacheMeta->len    = keySize;
-        cacheMeta->flags  = flags;
+        /* clients can't set server-only flags (e.g. trusted KEK) */
+        cacheMeta->flags  = flags & ~WH_NVM_FLAGS_SERVER_ONLY;
         cacheMeta->access = WH_NVM_ACCESS_ANY;
 
         if ((label != NULL) && (label_len > 0)) {
@@ -1709,7 +1720,8 @@ int wh_Server_CmacKdfKeyCacheImport(whServerContext* ctx,
     if (ret == WH_ERROR_OK) {
         cacheMeta->id     = keyId;
         cacheMeta->len    = keySize;
-        cacheMeta->flags  = flags;
+        /* clients can't set server-only flags (e.g. trusted KEK) */
+        cacheMeta->flags  = flags & ~WH_NVM_FLAGS_SERVER_ONLY;
         cacheMeta->access = WH_NVM_ACCESS_ANY;
 
         if ((label != NULL) && (label_len > 0)) {
@@ -7139,8 +7151,10 @@ static int _HandleLmsKeyGenDma(whServerContext* ctx, uint16_t magic, int devId,
         cacheMeta->id  = keyId;
         cacheMeta->len = blobSize;
         /* Stateful private key state must never leave the HSM; reuse of a
-         * one-time signature index breaks the scheme. Force non-exportable. */
-        cacheMeta->flags  = req.flags | WH_NVM_FLAGS_NONEXPORTABLE;
+         * one-time signature index breaks the scheme. Force non-exportable.
+         * Strip server-only flags a client may never set (e.g. trusted KEK). */
+        cacheMeta->flags = (req.flags & ~WH_NVM_FLAGS_SERVER_ONLY) |
+                           WH_NVM_FLAGS_NONEXPORTABLE;
         cacheMeta->access = WH_NVM_ACCESS_ANY;
         if (req.labelSize > 0) {
             memcpy(cacheMeta->label, req.label, req.labelSize);
@@ -7642,8 +7656,10 @@ static int _HandleXmssKeyGenDma(whServerContext* ctx, uint16_t magic,
         cacheMeta->id  = keyId;
         cacheMeta->len = blobSize;
         /* Stateful private key state must never leave the HSM; reuse of a
-         * one-time signature index breaks the scheme. Force non-exportable. */
-        cacheMeta->flags  = req.flags | WH_NVM_FLAGS_NONEXPORTABLE;
+         * one-time signature index breaks the scheme. Force non-exportable.
+         * Strip server-only flags a client may never set (e.g. trusted KEK). */
+        cacheMeta->flags = (req.flags & ~WH_NVM_FLAGS_SERVER_ONLY) |
+                           WH_NVM_FLAGS_NONEXPORTABLE;
         cacheMeta->access = WH_NVM_ACCESS_ANY;
         if (req.labelSize > 0) {
             memcpy(cacheMeta->label, req.label, req.labelSize);

@@ -26,6 +26,7 @@
 #if !defined(WOLFHSM_CFG_NO_CRYPTO)
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/types.h"
+#include "wolfssl/wolfcrypt/kdf.h" /* for HKDF and WC_SHA256 in trusted-KEK test */
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
 #include "wolfhsm/wh_error.h"
@@ -86,6 +87,8 @@ int whTest_HwKeystoreGetKeyCb(void* context, whKeyId keyId, uint8_t* out,
 
 #define WH_TEST_AESGCM_KEY_OFFSET 0x1000
 #define WH_TEST_AESGCM_KEYID 20
+#define WH_TEST_WRAPEXPORT_KEYID 21
+#define WH_TEST_WRAPEXPORT_NE_KEYID 22
 #define WH_TEST_AES_KEYSIZE 32
 #define WH_TEST_AES_TEXTSIZE 16
 #define WH_TEST_AES_WRAPPED_KEYSIZE                         \
@@ -125,7 +128,17 @@ static int _CleanupServerKek(whClientContext* client)
 
 #ifdef HAVE_AESGCM
 
-static int _AesGcm_TestKeyWrap(whClientContext* client, WC_RNG* rng)
+/* The wrap-export and unwrap-and-cache round trips below require a trusted KEK
+ * (HW or WH_NVM_FLAGS_KEK). They use the hardware KEK fixture, which is bound
+ * only by the in-process test server, so compile them only when the server is
+ * in this binary. */
+#if defined(WOLFHSM_CFG_HWKEYSTORE) && defined(WOLFHSM_CFG_ENABLE_SERVER)
+
+/* kekId names the KEK used for every wrap/unwrap step. The unwrap-and-cache
+ * step requires a trusted KEK (HW or WH_NVM_FLAGS_KEK), so callers pass the
+ * hardware KEK fixture id here. */
+static int _AesGcm_TestKeyWrap(whClientContext* client, WC_RNG* rng,
+                               whKeyId kekId)
 {
 
     int           ret = 0;
@@ -162,7 +175,7 @@ static int _AesGcm_TestKeyWrap(whClientContext* client, WC_RNG* rng)
         return ret;
     }
 
-    ret = wh_Client_KeyWrap(client, WC_CIPHER_AES_GCM, WH_TEST_KEKID, plainKey,
+    ret = wh_Client_KeyWrap(client, WC_CIPHER_AES_GCM, kekId, plainKey,
                             sizeof(plainKey), &metadata, wrappedKey,
                             &wrappedKeySz);
     if (ret != 0) {
@@ -170,7 +183,7 @@ static int _AesGcm_TestKeyWrap(whClientContext* client, WC_RNG* rng)
         return ret;
     }
 
-    ret = wh_Client_KeyUnwrapAndCache(client, WC_CIPHER_AES_GCM, WH_TEST_KEKID,
+    ret = wh_Client_KeyUnwrapAndCache(client, WC_CIPHER_AES_GCM, kekId,
                                       wrappedKey, wrappedKeySz, &wrappedKeyId);
     if (ret != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_AesGcmKeyWrapCache %d\n", ret);
@@ -226,7 +239,7 @@ static int _AesGcm_TestKeyWrap(whClientContext* client, WC_RNG* rng)
         return -1;
     }
 
-    ret = wh_Client_KeyUnwrapAndExport(client, WC_CIPHER_AES_GCM, WH_TEST_KEKID,
+    ret = wh_Client_KeyUnwrapAndExport(client, WC_CIPHER_AES_GCM, kekId,
                                        wrappedKey, wrappedKeySz, &tmpMetadata,
                                        tmpPlainKey, &tmpPlainKeySz);
     if (ret != 0) {
@@ -270,6 +283,390 @@ static int _AesGcm_TestKeyWrap(whClientContext* client, WC_RNG* rng)
     wc_AesFree(aes);
 
     return ret;
+}
+
+/* Exercises wh_Client_KeyWrapExport: wrap a key the server already holds (by
+ * id, never presenting plaintext), round-trip it through unwrap-and-cache, use
+ * it, confirm the exported material matches, and confirm NONEXPORTABLE is
+ * honored. */
+static int _AesGcm_TestKeyWrapExport(whClientContext* client, WC_RNG* rng,
+                                     whKeyId kekId)
+{
+    int           ret;
+    uint8_t       srcKey[WH_TEST_AES_KEYSIZE];
+    whKeyId       srcKeyId                = WH_TEST_WRAPEXPORT_KEYID;
+    uint8_t       label[WH_NVM_LABEL_LEN] = "WrapExport Src";
+    uint8_t       wrappedKey[WH_TEST_AES_WRAPPED_KEYSIZE];
+    uint16_t      wrappedKeySz = sizeof(wrappedKey);
+    uint16_t      wrappedKeyId = WH_KEYID_ERASED;
+    uint8_t       tmpKey[WH_TEST_AES_KEYSIZE];
+    uint16_t      tmpKeySz = sizeof(tmpKey);
+    whNvmMetadata tmpMeta  = {0};
+
+    Aes           aes[1];
+    const uint8_t plaintext[] = "wrap-export by id!";
+    uint8_t       ciphertext[sizeof(plaintext)];
+    uint8_t       decrypted[sizeof(plaintext)];
+    uint8_t       tag[WH_KEYWRAP_AES_GCM_TAG_SIZE];
+    uint8_t       iv[WH_KEYWRAP_AES_GCM_IV_SIZE];
+
+    /* 1. Generate and cache a source crypto key (exportable, full usage). */
+    ret = wc_RNG_GenerateBlock(rng, srcKey, sizeof(srcKey));
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to generate src key %d\n", ret);
+        return ret;
+    }
+    ret = wh_Client_KeyCache(client, WH_NVM_FLAGS_USAGE_ANY, label,
+                             (uint16_t)sizeof(label), srcKey, sizeof(srcKey),
+                             &srcKeyId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to cache src key %d\n", ret);
+        return ret;
+    }
+
+    /* 2. Wrap-and-export the cached key by id; the client never sees plaintext.
+     */
+    ret = wh_Client_KeyWrapExport(client, WC_CIPHER_AES_GCM, srcKeyId,
+                                  WH_KEYTYPE_CRYPTO, kekId, wrappedKey,
+                                  &wrappedKeySz);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyWrapExport %d\n", ret);
+        return ret;
+    }
+
+    /* 3. Round-trip: unwrap-and-cache the blob (comes back as a wrapped key).
+     */
+    ret = wh_Client_KeyUnwrapAndCache(client, WC_CIPHER_AES_GCM, kekId,
+                                      wrappedKey, wrappedKeySz, &wrappedKeyId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to unwrap-and-cache wrap-exported key %d\n",
+                       ret);
+        return ret;
+    }
+
+    /* 4. Use the round-tripped key for AES-GCM via its wrapped key id. */
+    ret = wc_AesInit(aes, NULL, WH_DEV_ID);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wc_AesInit %d\n", ret);
+        return ret;
+    }
+    ret =
+        wh_Client_AesSetKeyId(aes, WH_CLIENT_KEYID_MAKE_WRAPPED(wrappedKeyId));
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_AesSetKeyId %d\n", ret);
+        wc_AesFree(aes);
+        return ret;
+    }
+    ret = wc_RNG_GenerateBlock(rng, iv, sizeof(iv));
+    if (ret != 0) {
+        wc_AesFree(aes);
+        return ret;
+    }
+    ret = wc_AesGcmEncrypt(aes, ciphertext, plaintext, sizeof(plaintext), iv,
+                           sizeof(iv), tag, sizeof(tag), NULL, 0);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wc_AesGcmEncrypt %d\n", ret);
+        wc_AesFree(aes);
+        return ret;
+    }
+    ret = wc_AesGcmDecrypt(aes, decrypted, ciphertext, sizeof(ciphertext), iv,
+                           sizeof(iv), tag, sizeof(tag), NULL, 0);
+    wc_AesFree(aes);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wc_AesGcmDecrypt %d\n", ret);
+        return ret;
+    }
+    if (memcmp(decrypted, plaintext, sizeof(plaintext)) != 0) {
+        WH_ERROR_PRINT("wrap-export round-trip decrypt mismatch\n");
+        return WH_ERROR_ABORTED;
+    }
+
+    /* 5. The exported material must match the original, and the embedded id
+     *    must have been normalized to the wrapped-key namespace. */
+    ret = wh_Client_KeyUnwrapAndExport(client, WC_CIPHER_AES_GCM, kekId,
+                                       wrappedKey, wrappedKeySz, &tmpMeta,
+                                       tmpKey, &tmpKeySz);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to unwrap-and-export wrap-exported key %d\n",
+                       ret);
+        return ret;
+    }
+    if (tmpKeySz != sizeof(srcKey) ||
+        memcmp(tmpKey, srcKey, sizeof(srcKey)) != 0) {
+        WH_ERROR_PRINT("wrap-export key material mismatch\n");
+        return WH_ERROR_ABORTED;
+    }
+    if (WH_KEYID_TYPE(tmpMeta.id) != WH_KEYTYPE_WRAPPED) {
+        WH_ERROR_PRINT("wrap-export did not normalize to wrapped type\n");
+        return WH_ERROR_ABORTED;
+    }
+
+    (void)wh_Client_KeyEvict(client,
+                             WH_CLIENT_KEYID_MAKE_WRAPPED(wrappedKeyId));
+    (void)wh_Client_KeyEvict(client, srcKeyId);
+
+    /* 6. A NONEXPORTABLE key must be refused by wrap-export. */
+    {
+        whKeyId  neKeyId                   = WH_TEST_WRAPEXPORT_NE_KEYID;
+        uint8_t  neLabel[WH_NVM_LABEL_LEN] = "WrapExport NoExp";
+        uint16_t neWrappedSz               = sizeof(wrappedKey);
+
+        ret = wh_Client_KeyCache(
+            client, WH_NVM_FLAGS_USAGE_ANY | WH_NVM_FLAGS_NONEXPORTABLE,
+            neLabel, (uint16_t)sizeof(neLabel), srcKey, sizeof(srcKey),
+            &neKeyId);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to cache nonexportable key %d\n", ret);
+            return ret;
+        }
+        ret = wh_Client_KeyWrapExport(client, WC_CIPHER_AES_GCM, neKeyId,
+                                      WH_KEYTYPE_CRYPTO, kekId, wrappedKey,
+                                      &neWrappedSz);
+        (void)wh_Client_KeyEvict(client, neKeyId);
+        if (ret != WH_ERROR_ACCESS) {
+            WH_ERROR_PRINT(
+                "wrap-export of nonexportable key expected ACCESS, got %d\n",
+                ret);
+            return WH_ERROR_ABORTED;
+        }
+    }
+
+    return WH_ERROR_OK;
+}
+
+#endif /* WOLFHSM_CFG_HWKEYSTORE && WOLFHSM_CFG_ENABLE_SERVER */
+
+/* Positive software-KEK round trip; needs no trusted KEK, so it runs in every
+ * build. Wrap a plaintext key under the plain software KEK (WH_TEST_KEKID from
+ * _InitServerKek), unwrap-and-export the blob, and confirm the key material and
+ * metadata come back unchanged. Only the unwrap-and-cache path (covered by the
+ * hardware-KEK tests) requires a trusted KEK. */
+static int _AesGcm_TestSwKekWrapExport(whClientContext* client, WC_RNG* rng)
+{
+    int           ret;
+    uint8_t       plainKey[WH_TEST_AES_KEYSIZE];
+    uint8_t       tmpPlainKey[WH_TEST_AES_KEYSIZE];
+    uint16_t      tmpPlainKeySz = sizeof(tmpPlainKey);
+    uint8_t       wrappedKey[WH_TEST_AES_WRAPPED_KEYSIZE];
+    uint16_t      wrappedKeySz = sizeof(wrappedKey);
+    whNvmMetadata metadata     = {
+            .id    = WH_CLIENT_KEYID_MAKE_WRAPPED_META(client->comm->client_id,
+                                                       WH_TEST_AESGCM_KEYID),
+            .label = "SwKek Key Label",
+            .len   = WH_TEST_AES_KEYSIZE,
+            .flags = WH_NVM_FLAGS_USAGE_ANY,
+    };
+    whNvmMetadata tmpMetadata = {0};
+
+    ret = wc_RNG_GenerateBlock(rng, plainKey, sizeof(plainKey));
+    if (ret != 0) {
+        WH_ERROR_PRINT("sw-kek: RNG generate failed %d\n", ret);
+        return ret;
+    }
+
+    /* Wrap the plaintext key under the plain software KEK. */
+    ret = wh_Client_KeyWrap(client, WC_CIPHER_AES_GCM, WH_TEST_KEKID, plainKey,
+                            sizeof(plainKey), &metadata, wrappedKey,
+                            &wrappedKeySz);
+    if (ret != 0) {
+        WH_ERROR_PRINT("sw-kek: KeyWrap failed %d\n", ret);
+        return ret;
+    }
+
+    /* Unwrap-and-export the blob and confirm the material round-trips. */
+    ret = wh_Client_KeyUnwrapAndExport(client, WC_CIPHER_AES_GCM, WH_TEST_KEKID,
+                                       wrappedKey, wrappedKeySz, &tmpMetadata,
+                                       tmpPlainKey, &tmpPlainKeySz);
+    if (ret != 0) {
+        WH_ERROR_PRINT("sw-kek: KeyUnwrapAndExport failed %d\n", ret);
+        return ret;
+    }
+
+    if (tmpPlainKeySz != sizeof(plainKey) ||
+        memcmp(plainKey, tmpPlainKey, sizeof(plainKey)) != 0) {
+        WH_ERROR_PRINT("sw-kek: unwrapped key material mismatch\n");
+        return WH_TEST_FAIL;
+    }
+
+    if (memcmp(&metadata, &tmpMetadata, sizeof(metadata)) != 0) {
+        WH_ERROR_PRINT("sw-kek: unwrapped metadata mismatch\n");
+        return WH_TEST_FAIL;
+    }
+
+    return WH_ERROR_OK;
+}
+
+/* The wrap-export and unwrap-and-cache operations require a trusted KEK. Prove
+ * that (a) a plain client-cached USAGE_WRAP key (WH_TEST_KEKID, provisioned by
+ * _InitServerKek) is refused as their KEK, and (b) a client cannot forge a
+ * trusted KEK by setting WH_NVM_FLAGS_KEK itself -- the server strips the flag,
+ * so the key is still refused. Needs no hardware keystore, so it runs against
+ * any server. */
+static int _AesGcm_TestTrustedKekPolicy(whClientContext* client, WC_RNG* rng)
+{
+    int           ret;
+    uint8_t       srcKey[WH_TEST_AES_KEYSIZE];
+    whKeyId       srcKeyId                = WH_TEST_WRAPEXPORT_KEYID;
+    whKeyId       forgeId                 = WH_TEST_KEKID + 1;
+    uint8_t       label[WH_NVM_LABEL_LEN] = "TrustedKek key";
+    uint8_t       wrappedKey[WH_TEST_AES_WRAPPED_KEYSIZE];
+    uint16_t      wrappedKeySz = sizeof(wrappedKey);
+    whKeyId       wrappedKeyId = WH_KEYID_ERASED;
+    whNvmMetadata wrapMeta     = {
+            .id    = WH_CLIENT_KEYID_MAKE_WRAPPED_META(client->comm->client_id,
+                                                       WH_TEST_AESGCM_KEYID),
+            .label = "TrustedKek blob",
+            .len   = WH_TEST_AES_KEYSIZE,
+            .flags = WH_NVM_FLAGS_USAGE_ANY,
+    };
+
+    ret = wc_RNG_GenerateBlock(rng, srcKey, sizeof(srcKey));
+    if (ret != 0) {
+        return ret;
+    }
+
+    /* Cache an ordinary, exportable source key to try to wrap-export. */
+    ret = wh_Client_KeyCache(client, WH_NVM_FLAGS_USAGE_ANY, label,
+                             (uint16_t)sizeof(label), srcKey, sizeof(srcKey),
+                             &srcKeyId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("trusted-kek: cache src failed %d\n", ret);
+        return ret;
+    }
+
+    /* (a) wrap-export under a plain client KEK must be refused. */
+    ret = wh_Client_KeyWrapExport(client, WC_CIPHER_AES_GCM, srcKeyId,
+                                  WH_KEYTYPE_CRYPTO, WH_TEST_KEKID, wrappedKey,
+                                  &wrappedKeySz);
+    if (ret != WH_ERROR_ACCESS) {
+        WH_ERROR_PRINT("trusted-kek: wrap-export with plain KEK expected "
+                       "ACCESS, got %d\n",
+                       ret);
+        (void)wh_Client_KeyEvict(client, srcKeyId);
+        return WH_TEST_FAIL;
+    }
+
+    /* (a) unwrap-and-cache under a plain client KEK must be refused. Build a
+     * correctly sized blob under the same plain KEK (KeyWrap itself does not
+     * require a trusted KEK); the trusted-KEK check rejects the cache attempt
+     * before authentication. */
+    wrappedKeySz = sizeof(wrappedKey);
+    ret =
+        wh_Client_KeyWrap(client, WC_CIPHER_AES_GCM, WH_TEST_KEKID, srcKey,
+                          sizeof(srcKey), &wrapMeta, wrappedKey, &wrappedKeySz);
+    if (ret != 0) {
+        WH_ERROR_PRINT("trusted-kek: KeyWrap (plain KEK) failed %d\n", ret);
+        (void)wh_Client_KeyEvict(client, srcKeyId);
+        return ret;
+    }
+    ret = wh_Client_KeyUnwrapAndCache(client, WC_CIPHER_AES_GCM, WH_TEST_KEKID,
+                                      wrappedKey, wrappedKeySz, &wrappedKeyId);
+    if (ret != WH_ERROR_ACCESS) {
+        WH_ERROR_PRINT("trusted-kek: unwrap-and-cache with plain KEK expected "
+                       "ACCESS, got %d\n",
+                       ret);
+        (void)wh_Client_KeyEvict(client, srcKeyId);
+        return WH_TEST_FAIL;
+    }
+
+    /* (b) A client that provisions an NVM object carrying WH_NVM_FLAGS_KEK at a
+     * crypto-key id (keys and NVM objects share the id space) must not obtain a
+     * trusted KEK either: the checked NVM add path strips the flag. */
+    {
+        whKeyId nvmForgeId = WH_TEST_KEKID + 2;
+        whNvmId nvmObjId   = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
+                                           client->comm->client_id, nvmForgeId);
+        int32_t nvmRc      = 0;
+
+        ret = wh_Client_NvmAddObject(client, nvmObjId, WH_NVM_ACCESS_ANY,
+                                     WH_NVM_FLAGS_KEK | WH_NVM_FLAGS_USAGE_WRAP,
+                                     sizeof(label), label, sizeof(srcKey),
+                                     srcKey, &nvmRc);
+        if (ret != 0 || nvmRc != 0) {
+            WH_ERROR_PRINT("trusted-kek: NvmAddObject failed ret=%d rc=%d\n",
+                           ret, (int)nvmRc);
+            (void)wh_Client_KeyEvict(client, srcKeyId);
+            return (ret != 0) ? ret : (int)nvmRc;
+        }
+        wrappedKeySz = sizeof(wrappedKey);
+        ret = wh_Client_KeyWrapExport(client, WC_CIPHER_AES_GCM, srcKeyId,
+                                      WH_KEYTYPE_CRYPTO, nvmForgeId, wrappedKey,
+                                      &wrappedKeySz);
+        {
+            int32_t destroyRc = 0;
+            (void)wh_Client_NvmDestroyObjects(client, 1, &nvmObjId, &destroyRc);
+        }
+        if (ret != WH_ERROR_ACCESS) {
+            WH_ERROR_PRINT("trusted-kek: wrap-export with NVM-forged KEK "
+                           "expected ACCESS, got %d\n",
+                           ret);
+            (void)wh_Client_KeyEvict(client, srcKeyId);
+            return WH_TEST_FAIL;
+        }
+    }
+
+#ifdef HAVE_HKDF
+    /* (c) A client that derives a key with HKDF and asks for it to be cached
+     * carrying WH_NVM_FLAGS_KEK must not obtain a trusted KEK: the crypto
+     * cache-import path strips the flag too. HKDF is deterministic over the
+     * client-supplied inputs, so the client knows the derived bytes; without
+     * the strip it could wrap-export a server secret under a KEK it can
+     * reproduce locally. */
+    {
+        whKeyId       hkdfKekId                   = WH_KEYID_ERASED;
+        const uint8_t hkdfIkm[]                   = "trusted-kek hkdf ikm";
+        uint8_t       hkdfLabel[WH_NVM_LABEL_LEN] = "TrustedKek hkdf";
+
+        ret = wh_Client_HkdfMakeCacheKey(
+            client, WC_SHA256, WH_KEYID_ERASED, hkdfIkm,
+            (uint32_t)sizeof(hkdfIkm), NULL, 0, NULL, 0, &hkdfKekId,
+            WH_NVM_FLAGS_KEK | WH_NVM_FLAGS_USAGE_WRAP, hkdfLabel,
+            (uint32_t)sizeof(hkdfLabel), WH_TEST_AES_KEYSIZE);
+        if (ret != 0) {
+            WH_ERROR_PRINT("trusted-kek: HKDF cache-key make failed %d\n", ret);
+            (void)wh_Client_KeyEvict(client, srcKeyId);
+            return ret;
+        }
+        wrappedKeySz = sizeof(wrappedKey);
+        ret = wh_Client_KeyWrapExport(client, WC_CIPHER_AES_GCM, srcKeyId,
+                                      WH_KEYTYPE_CRYPTO, hkdfKekId, wrappedKey,
+                                      &wrappedKeySz);
+        (void)wh_Client_KeyEvict(client, hkdfKekId);
+        if (ret != WH_ERROR_ACCESS) {
+            WH_ERROR_PRINT("trusted-kek: wrap-export with HKDF-derived KEK "
+                           "expected ACCESS, got %d\n",
+                           ret);
+            (void)wh_Client_KeyEvict(client, srcKeyId);
+            return WH_TEST_FAIL;
+        }
+    }
+#endif /* HAVE_HKDF */
+
+    /* (d) A client that sets WH_NVM_FLAGS_KEK in its own cache request must not
+     * obtain a trusted KEK: the server strips the flag, so using the key as a
+     * KEK for wrap-export is still refused. */
+    ret = wh_Client_KeyCache(client, WH_NVM_FLAGS_KEK | WH_NVM_FLAGS_USAGE_WRAP,
+                             label, (uint16_t)sizeof(label), srcKey,
+                             sizeof(srcKey), &forgeId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("trusted-kek: cache forged KEK failed %d\n", ret);
+        (void)wh_Client_KeyEvict(client, srcKeyId);
+        return ret;
+    }
+    wrappedKeySz = sizeof(wrappedKey);
+    ret          = wh_Client_KeyWrapExport(client, WC_CIPHER_AES_GCM, srcKeyId,
+                                           WH_KEYTYPE_CRYPTO, forgeId, wrappedKey,
+                                           &wrappedKeySz);
+    (void)wh_Client_KeyEvict(client, forgeId);
+    (void)wh_Client_KeyEvict(client, srcKeyId);
+    if (ret != WH_ERROR_ACCESS) {
+        WH_ERROR_PRINT("trusted-kek: wrap-export with client-flagged KEK "
+                       "expected ACCESS, got %d\n",
+                       ret);
+        return WH_TEST_FAIL;
+    }
+
+    return WH_ERROR_OK;
 }
 
 static int _AesGcm_TestDataWrap(whClientContext* client)
@@ -639,9 +1036,32 @@ int whTest_Client_KeyWrap(whClientContext* client)
     }
 
 #ifdef HAVE_AESGCM
-    ret = _AesGcm_TestKeyWrap(client, rng);
-    if (ret != WH_ERROR_OK) {
-        WH_ERROR_PRINT("Failed to _AesGcm_TestKeyWrap %d\n", ret);
+#if defined(WOLFHSM_CFG_HWKEYSTORE) && defined(WOLFHSM_CFG_ENABLE_SERVER)
+    /* Wrap-export and unwrap-and-cache need a trusted KEK; use the hardware KEK
+     * fixture bound by the in-process test server. */
+    {
+        whKeyId trustedKek = WH_CLIENT_KEYID_MAKE_HW(WH_TEST_HWKEK_ID);
+
+        ret = _AesGcm_TestKeyWrap(client, rng, trustedKek);
+        if (ret != WH_ERROR_OK) {
+            WH_ERROR_PRINT("Failed to _AesGcm_TestKeyWrap %d\n", ret);
+        }
+
+        if (ret == WH_ERROR_OK) {
+            ret = _AesGcm_TestKeyWrapExport(client, rng, trustedKek);
+            if (ret != WH_ERROR_OK) {
+                WH_ERROR_PRINT("Failed to _AesGcm_TestKeyWrapExport %d\n", ret);
+            }
+        }
+    }
+#endif /* WOLFHSM_CFG_HWKEYSTORE && WOLFHSM_CFG_ENABLE_SERVER */
+
+    /* Positive software-KEK round trip, runs in every build. */
+    if (ret == WH_ERROR_OK) {
+        ret = _AesGcm_TestSwKekWrapExport(client, rng);
+        if (ret != WH_ERROR_OK) {
+            WH_ERROR_PRINT("Failed to _AesGcm_TestSwKekWrapExport %d\n", ret);
+        }
     }
 
     if (ret == WH_ERROR_OK) {
@@ -649,6 +1069,13 @@ int whTest_Client_KeyWrap(whClientContext* client)
         if (ret != WH_ERROR_OK) {
             WH_ERROR_PRINT("Failed to _AesGcm_TestKeyUnwrapUnderflow %d\n",
                            ret);
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        ret = _AesGcm_TestTrustedKekPolicy(client, rng);
+        if (ret != WH_ERROR_OK) {
+            WH_ERROR_PRINT("Failed to _AesGcm_TestTrustedKekPolicy %d\n", ret);
         }
     }
 #endif

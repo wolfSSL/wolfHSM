@@ -12,6 +12,10 @@
 #define WH_POSIX_SERVER_ID 57
 #define WH_POSIX_MAX_CLIENT_ID 255
 
+/* Id of the trusted key-encryption key (KEK) the example server provisions in
+ * NVM for the keywrap demo. A client can never create a trusted KEK */
+#define WH_POSIX_DEMO_KEK_ID 1
+
 /* TCP Communication */
 #define WH_POSIX_SERVER_TCP_PORT 23456
 #define WH_POSIX_SERVER_TCP_IPSTRING "127.0.0.1"

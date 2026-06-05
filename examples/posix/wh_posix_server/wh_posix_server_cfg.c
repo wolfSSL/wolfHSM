@@ -11,6 +11,7 @@
 
 #include "wolfhsm/wh_server.h"
 #include "wolfhsm/wh_error.h"
+#include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_nvm.h"
 #include "wolfhsm/wh_nvm_flash.h"
 #include "wolfhsm/wh_flash_ramsim.h"
@@ -640,6 +641,38 @@ int wh_PosixServer_ExampleNvmConfig(void* conf, const char* nvmInitFilePath)
         WOLFHSM_CFG_PRINTF("Failed to initialize NVM: %d\n", rc);
         return rc;
     }
+
+#if defined(WOLFHSM_CFG_KEYWRAP) && defined(WH_POSIX_PROVISION_DEMO_KEK)
+    /* Provision the trusted keywrap KEK the demo uses (built with DEMO_KEK=1).
+     * A client can never create a trusted KEK (it cannot set WH_NVM_FLAGS_KEK),
+     * so it is provisioned here the way whnvmtool or secure boot would on a
+     * real device. Gated by a build flag so it stays off for the client-only
+     * test suite, which asserts the server NVM starts empty. The bytes are
+     * fixed but arbitrary: the server wraps and unwraps under this KEK, so the
+     * client never needs them -- it only names the id. */
+    {
+        static const uint8_t demoKek[32] = {
+            0x03, 0x03, 0x0d, 0xd9, 0xeb, 0x18, 0x17, 0x2e, 0x06, 0x6e, 0x19,
+            0xce, 0x98, 0x44, 0x54, 0x0d, 0x78, 0xa0, 0xbe, 0xe7, 0x35, 0x43,
+            0x40, 0xa4, 0x22, 0x8a, 0xd1, 0x0e, 0xa3, 0x63, 0x1c, 0x0b};
+        whNvmMetadata kekMeta = {0};
+
+        kekMeta.id     = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, WH_POSIX_CLIENT_ID,
+                                       WH_POSIX_DEMO_KEK_ID);
+        kekMeta.access = WH_NVM_ACCESS_ANY;
+        kekMeta.flags  = WH_NVM_FLAGS_KEK | WH_NVM_FLAGS_USAGE_WRAP |
+                        WH_NVM_FLAGS_NONEXPORTABLE | WH_NVM_FLAGS_NONMODIFIABLE;
+        kekMeta.len = (whNvmSize)sizeof(demoKek);
+        memcpy(kekMeta.label, "keywrap demo KEK", sizeof("keywrap demo KEK"));
+
+        rc = wh_Nvm_AddObject(nvm, &kekMeta, kekMeta.len, demoKek);
+        if (rc != 0) {
+            WOLFHSM_CFG_PRINTF("Failed to provision keywrap demo KEK: %d\n",
+                               rc);
+            return rc;
+        }
+    }
+#endif /* WOLFHSM_CFG_KEYWRAP && WH_POSIX_PROVISION_DEMO_KEK */
 
     /* Initialize NVM with contents from the NVM init file if provided */
     if (nvmInitFilePath != NULL) {

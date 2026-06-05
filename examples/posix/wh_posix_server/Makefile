@@ -113,6 +113,12 @@ ifeq ($(DMA),1)
 CFLAGS += -DWOLFHSM_CFG_DMA
 endif
 
+# Provision the keywrap demo's trusted KEK in NVM. Off by default so the
+# client-only test suite sees an empty NVM; enable to run the keywrap demo.
+ifeq ($(DEMO_KEK),1)
+CFLAGS += -DWH_POSIX_PROVISION_DEMO_KEK
+endif
+
 ## Source files
 # Assembly source files
 SRC_ASM +=
