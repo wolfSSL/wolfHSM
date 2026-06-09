@@ -1101,6 +1101,8 @@ The helper macros `WH_AUTH_SET_ALLOWED_GROUP`, `WH_AUTH_SET_ALLOWED_ACTION`, `WH
 
 `whAuthPermissions` also carries a small per-user `keyIds` allowlist and the data model includes a `CheckKeyAuthorization` callback intended to constrain which keys a user may exercise. Per-key authorization is a placeholder in the current implementation — the callback is defined but no crypto or key handler invokes it yet.
 
+Holding an action bit lets a session issue a request, but the backend still enforces per-target authorization on top of it. In the default base backend, `USER_SET_CREDENTIALS` lets a non-admin update its **own** credentials only (a cross-user credential change additionally requires admin and otherwise fails with `WH_ERROR_ACCESS`), while `USER_DELETE` and `USER_SET_PERMISSIONS` remain admin-only regardless of the action bit. The caller's `whUserId` is passed to the backend as `current_user_id` so it can distinguish a self-service change from a cross-user one. A custom auth backend may implement a different per-target policy.
+
 ### Pluggable Backend
 
 The authentication manager does not own the user database itself. All operations that read or modify user state — login, user add/delete, permission updates, credential updates — are dispatched through a `whAuthCb` callback table that the application supplies at server initialization. The storage backend is therefore a port-time decision: an in-memory table for development, an NVM-backed store for production, or a connector to an external identity service.

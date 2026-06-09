@@ -193,8 +193,8 @@ typedef struct {
                    whAuthPermissions* out_permissions);
 
     /* Set user credentials (PIN, etc.) */
-    int (*UserSetCredentials)(void* context, whUserId user_id,
-                              whAuthMethod method,
+    int (*UserSetCredentials)(void* context, whUserId current_user_id,
+                              whUserId user_id, whAuthMethod method,
                               const void*  current_credentials,
                               uint16_t     current_credentials_len,
                               const void*  new_credentials,

@@ -1131,6 +1131,78 @@ int whTest_AuthSetCredentials(whClientContext* client)
     /* Should succeed - admin can set credentials for other users */
     WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
 
+    /* non-admin caller may set its OWN credentials but must not be able to set
+     * another user's credentials. */
+    WH_TEST_PRINT("  Test: Non-admin set-credentials authorization\n");
+    {
+        whUserId          self_id      = WH_USER_ID_INVALID;
+        whUserId          victim_id    = WH_USER_ID_INVALID;
+        whUserId          victim_login = WH_USER_ID_INVALID;
+        whAuthPermissions nonadmin_perms;
+
+        memset(&nonadmin_perms, 0, sizeof(nonadmin_perms));
+        WH_AUTH_SET_ALLOWED_GROUP(nonadmin_perms, WH_MESSAGE_GROUP_AUTH);
+        WH_AUTH_SET_IS_ADMIN(nonadmin_perms, 0);
+
+        server_rc = 0;
+        WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserAddOp(
+            client, "selfcreduser", nonadmin_perms, WH_AUTH_METHOD_PIN,
+            "selfpin", 7, &server_rc, &self_id));
+        WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+
+        memset(&perms, 0, sizeof(perms));
+        server_rc = 0;
+        WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserAddOp(
+            client, "victimcreduser", perms, WH_AUTH_METHOD_PIN, "victimpin", 9,
+            &server_rc, &victim_id));
+        WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+
+        /* Logout admin and login as the non-admin caller */
+        server_rc = 0;
+        _whTest_Auth_LogoutOp(client, admin_id, &server_rc);
+        server_rc = 0;
+        WH_TEST_RETURN_ON_FAIL(
+            _whTest_Auth_LoginOp(client, WH_AUTH_METHOD_PIN, "selfcreduser",
+                                 "selfpin", 7, &server_rc, &self_id));
+        WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+
+        /* Allowed: non-admin sets its own credentials */
+        server_rc = 0;
+        WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserSetCredsOp(
+            client, self_id, WH_AUTH_METHOD_PIN, "selfpin", 7, "selfpin2", 8,
+            &server_rc));
+        WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+        WH_TEST_PRINT("    Non-admin self set-credentials allowed\n");
+
+        /* Denied: non-admin sets ANOTHER user's credentials. */
+        server_rc = 0;
+        WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserSetCredsOp(
+            client, victim_id, WH_AUTH_METHOD_PIN, "victimpin", 9, "pwned", 5,
+            &server_rc));
+        WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_ACCESS);
+        WH_TEST_PRINT("    Non-admin cross-user set-credentials denied\n");
+
+        /* The denied call must not have altered credentials */
+        server_rc = 0;
+        _whTest_Auth_LogoutOp(client, self_id, &server_rc);
+        server_rc = 0;
+        WH_TEST_RETURN_ON_FAIL(
+            _whTest_Auth_LoginOp(client, WH_AUTH_METHOD_PIN, "victimcreduser",
+                                 "victimpin", 9, &server_rc, &victim_login));
+        WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+        server_rc = 0;
+        _whTest_Auth_LogoutOp(client, victim_login, &server_rc);
+
+        /* Re-login as admin and clean up the test users */
+        server_rc = 0;
+        WH_TEST_RETURN_ON_FAIL(_whTest_Auth_LoginOp(client, WH_AUTH_METHOD_PIN,
+                                                    "admin", "1234", 4,
+                                                    &server_rc, &admin_id));
+        WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+        _whTest_Auth_DeleteUserByName(client, "selfcreduser");
+        _whTest_Auth_DeleteUserByName(client, "victimcreduser");
+    }
+
     /* Verify new credentials work */
     _whTest_Auth_LogoutOp(client, admin_id, &server_rc);
     memset(&admin_perms, 0, sizeof(admin_perms));

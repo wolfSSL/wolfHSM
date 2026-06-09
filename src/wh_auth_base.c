@@ -452,8 +452,8 @@ int wh_Auth_BaseUserGet(void* context, const char* username,
 }
 
 
-int wh_Auth_BaseUserSetCredentials(void* context, uint16_t user_id,
-                                   whAuthMethod method,
+int wh_Auth_BaseUserSetCredentials(void* context, uint16_t current_user_id,
+                                   uint16_t user_id, whAuthMethod method,
                                    const void*  current_credentials,
                                    uint16_t     current_credentials_len,
                                    const void*  new_credentials,
@@ -465,6 +465,18 @@ int wh_Auth_BaseUserSetCredentials(void* context, uint16_t user_id,
 
     if (user_id == WH_USER_ID_INVALID || user_id > WH_AUTH_BASE_MAX_USERS) {
         return WH_ERROR_BADARGS;
+    }
+
+    if (current_user_id == WH_USER_ID_INVALID ||
+        current_user_id > WH_AUTH_BASE_MAX_USERS) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* A non-admin caller may only set its own credentials; an admin caller may
+     * set credentials for any user. */
+    if (current_user_id != user_id &&
+        !WH_AUTH_IS_ADMIN(users[current_user_id - 1].user.permissions)) {
+        return WH_ERROR_ACCESS;
     }
 
     /* Validate method is supported */
