@@ -7304,6 +7304,68 @@ static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
     }
 #endif /* WOLFHSM_CFG_DMA */
 
+    /* Ensure cache entries read from NVM are evictable.
+     * Max out the cache with NVM-backed keys, then try caching a new key. */
+    if (ret == 0) {
+        const int nvmKeyCount = WOLFHSM_CFG_SERVER_KEYCACHE_COUNT;
+        /* {0} == WH_KEYID_ERASED, so unused entries are skipped on cleanup
+         * and each cache call requests a server-assigned id. */
+        uint16_t  nvmKeyIds[WOLFHSM_CFG_SERVER_KEYCACHE_COUNT] = {0};
+        uint16_t  extraKeyId = WH_KEYID_ERASED;
+
+        /* Commit each key to NVM then evict it, so the keys live only in
+         * the backing store and not in the cache. */
+        for (i = 0; (i < nvmKeyCount) && (ret == 0); i++) {
+            ret = wh_Client_KeyCache(ctx, 0, labelIn, sizeof(labelIn), key,
+                                     sizeof(key), &nvmKeyIds[i]);
+            if (ret == 0) {
+                ret = wh_Client_KeyCommit(ctx, nvmKeyIds[i]);
+            }
+            if (ret == 0) {
+                ret = wh_Client_KeyEvict(ctx, nvmKeyIds[i]);
+            }
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to stage NVM key %d: %d\n", i, ret);
+            }
+        }
+
+        /* Read each key back, which caches it from NVM and fills the
+         * cache with NVM-backed entries. */
+        for (i = 0; (i < nvmKeyCount) && (ret == 0); i++) {
+            outLen = sizeof(keyOut);
+            ret = wh_Client_KeyExport(ctx, nvmKeyIds[i], labelOut,
+                                      sizeof(labelOut), keyOut, &outLen);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to read back NVM key %d: %d\n", i, ret);
+            }
+        }
+
+        /* With the cache full of NVM-backed keys, caching a new key must
+         * still succeed by evicting one of them. */
+        if (ret == 0) {
+            ret = wh_Client_KeyCache(ctx, 0, labelIn, sizeof(labelIn), key,
+                                     sizeof(key), &extraKeyId);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to cache key with NVM-backed cache "
+                               "full: %d\n", ret);
+            }
+        }
+
+        /* Restore state regardless of the outcome above. */
+        if (extraKeyId != WH_KEYID_ERASED) {
+            (void)wh_Client_KeyEvict(ctx, extraKeyId);
+        }
+        for (i = 0; i < nvmKeyCount; i++) {
+            if (nvmKeyIds[i] != WH_KEYID_ERASED) {
+                (void)wh_Client_KeyErase(ctx, nvmKeyIds[i]);
+            }
+        }
+
+        if (ret == 0) {
+            WH_TEST_PRINT("KEY CACHE NVM-BACKED EVICTION SUCCESS\n");
+        }
+    }
+
     return ret;
 }
 
