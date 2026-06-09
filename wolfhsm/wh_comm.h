@@ -309,11 +309,14 @@ int wh_CommServer_Init(whCommServer* context, const whCommServerConfig* config,
                 whCommSetConnectedCb connectcb, void* connectcb_arg);
 
 /* If a request packet has been buffered, get the header and copy the data out
- * of the buffer.
+ * of the buffer. data_size is the capacity of the caller-supplied data buffer;
+ * if the received payload exceeds it, returns WH_ERROR_BUFFER_SIZE with
+ * *out_size set to the required size. On success *out_size holds the actual
+ * payload size.
  */
 int wh_CommServer_RecvRequest(whCommServer* context,
         uint16_t* out_magic, uint16_t* out_kind, uint16_t* out_seq,
-        uint16_t* out_size, void* data);
+        uint16_t* out_size, uint16_t data_size, void* data);
 
 /* Upon completion of the request, send the response packet using the same seq
  * as the incoming request.  Note that overriding the seq number should only be
