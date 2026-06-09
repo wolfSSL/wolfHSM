@@ -790,15 +790,12 @@ int wh_Client_NvmAddObjectDmaResponse(whClientContext* c, int32_t* out_rc)
         }
     }
 
-    /* POST cleanup for both slots, reverse acquisition order; surface a POST
-     * failure if the operation otherwise succeeded. */
-    {
-        int postData = wh_Client_DmaAsyncPost(c, &c->dma.asyncCtx.nvmAdd.data);
-        int postMeta = wh_Client_DmaAsyncPost(c, &c->dma.asyncCtx.nvmAdd.meta);
-        if (rc == WH_ERROR_OK) {
-            rc = (postData != WH_ERROR_OK) ? postData : postMeta;
-        }
-    }
+    /* POST cleanup for both slots, reverse acquisition order. These are
+     * READ inputs the server has already consumed and the object is stored
+     * server-side, so releasing the client-side mappings is cleanup; a release
+     * failure must not override an otherwise-successful result. */
+    (void)wh_Client_DmaAsyncPost(c, &c->dma.asyncCtx.nvmAdd.data);
+    (void)wh_Client_DmaAsyncPost(c, &c->dma.asyncCtx.nvmAdd.meta);
     return rc;
 }
 
@@ -827,10 +824,9 @@ int wh_Client_NvmReadDmaRequest(whClientContext* c, whNvmId id,
                                 whNvmSize offset, whNvmSize data_len,
                                 uint8_t* data)
 {
-    whMessageNvm_ReadDmaRequest msg              = {0};
-    uintptr_t                   dataAddrPtr      = 0;
-    int                         ret              = WH_ERROR_OK;
-    int                         dataAddrAcquired = 0;
+    whMessageNvm_ReadDmaRequest msg         = {0};
+    uintptr_t                   dataAddrPtr = 0;
+    int                         ret         = WH_ERROR_OK;
 
     if (c == NULL) {
         return WH_ERROR_BADARGS;
@@ -851,7 +847,6 @@ int wh_Client_NvmReadDmaRequest(whClientContext* c, whNvmId id,
             c, (uintptr_t)data, (void**)&dataAddrPtr, data_len,
             WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
         if (ret == WH_ERROR_OK) {
-            dataAddrAcquired                = 1;
             c->dma.asyncCtx.buf.xformedAddr = dataAddrPtr;
             c->dma.asyncCtx.buf.clientAddr  = (uintptr_t)data;
             c->dma.asyncCtx.buf.sz          = data_len;
@@ -859,18 +854,19 @@ int wh_Client_NvmReadDmaRequest(whClientContext* c, whNvmId id,
         }
     }
 
-    msg.id            = id;
-    msg.offset        = offset;
-    msg.data_len      = data_len;
-    msg.data_hostaddr = (uint64_t)dataAddrPtr;
-
     if (ret == WH_ERROR_OK) {
+        msg.id            = id;
+        msg.offset        = offset;
+        msg.data_len      = data_len;
+        msg.data_hostaddr = (uint64_t)dataAddrPtr;
+
         ret = wh_Client_SendRequest(c, WH_MESSAGE_GROUP_NVM,
                                     WH_MESSAGE_NVM_ACTION_READDMA, sizeof(msg),
                                     &msg);
     }
 
-    if (ret != WH_ERROR_OK && dataAddrAcquired) {
+    /* On any failure release the mapping; POST no-ops on the unset slot. */
+    if (ret != WH_ERROR_OK) {
         (void)wh_Client_DmaAsyncPost(c, &c->dma.asyncCtx.buf);
     }
     return ret;
@@ -908,8 +904,10 @@ int wh_Client_NvmReadDmaResponse(whClientContext* c, int32_t* out_rc)
         }
     }
 
-    /* POST cleanup: copy the server's writes back and release the mapping;
-     * surface a POST failure if the operation otherwise succeeded. */
+    /* POST cleanup: copy the server's writes back into the caller's buffer and
+     * release the mapping. This is a WRITE-back: if it fails the caller has no
+     * valid data, so surface the POST failure over an otherwise-successful
+     * result. */
     {
         int postRc = wh_Client_DmaAsyncPost(c, &c->dma.asyncCtx.buf);
         if (rc == WH_ERROR_OK) {

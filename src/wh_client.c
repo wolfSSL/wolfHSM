@@ -1430,11 +1430,10 @@ int wh_Client_KeyCacheDmaRequest(whClientContext* c, uint32_t flags,
                                  const void* keyAddr, uint16_t keySz,
                                  uint16_t keyId)
 {
-    int                                ret             = WH_ERROR_OK;
-    whMessageKeystore_CacheDmaRequest* req             = NULL;
-    uintptr_t                          keyAddrPtr      = 0;
-    uint16_t                           capSz           = 0;
-    int                                keyAddrAcquired = 0;
+    int                                ret        = WH_ERROR_OK;
+    whMessageKeystore_CacheDmaRequest* req        = NULL;
+    uintptr_t                          keyAddrPtr = 0;
+    uint16_t                           capSz      = 0;
 
     if (c == NULL || (labelSz > 0 && label == NULL)) {
         return WH_ERROR_BADARGS;
@@ -1449,11 +1448,6 @@ int wh_Client_KeyCacheDmaRequest(whClientContext* c, uint32_t flags,
         return WH_ERROR_BADARGS;
     }
     memset(req, 0, sizeof(*req));
-    req->id       = keyId;
-    req->flags    = flags;
-    req->labelSz  = 0;
-    req->key.sz   = keySz;
-    req->key.addr = 0;
 
     /* Clear the slot up front so a skipped PRE leaves nothing for POST. */
     c->dma.asyncCtx.buf.sz = 0;
@@ -1465,28 +1459,29 @@ int wh_Client_KeyCacheDmaRequest(whClientContext* c, uint32_t flags,
         c, (uintptr_t)keyAddr, (void**)&keyAddrPtr, keySz,
         WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
     if (ret == WH_ERROR_OK) {
-        keyAddrAcquired                 = 1;
-        req->key.addr                   = (uint64_t)keyAddrPtr;
         c->dma.asyncCtx.buf.xformedAddr = keyAddrPtr;
         c->dma.asyncCtx.buf.clientAddr  = (uintptr_t)keyAddr;
         c->dma.asyncCtx.buf.sz          = keySz;
         c->dma.asyncCtx.buf.postOper    = WH_DMA_OPER_CLIENT_READ_POST;
-    }
 
-    /* Copy label if provided, truncate if necessary */
-    if (labelSz > 0 && label != NULL) {
-        capSz = (labelSz > WH_NVM_LABEL_LEN) ? WH_NVM_LABEL_LEN : labelSz;
-        req->labelSz = capSz;
-        memcpy(req->label, label, capSz);
-    }
+        /* Build and send the request now that the buffer is mapped. */
+        req->id       = keyId;
+        req->flags    = flags;
+        req->key.addr = (uint64_t)keyAddrPtr;
+        req->key.sz   = keySz;
+        if (labelSz > 0 && label != NULL) {
+            capSz = (labelSz > WH_NVM_LABEL_LEN) ? WH_NVM_LABEL_LEN : labelSz;
+            req->labelSz = capSz;
+            memcpy(req->label, label, capSz);
+        }
 
-    if (ret == WH_ERROR_OK) {
         ret = wh_Client_SendRequest(c, WH_MESSAGE_GROUP_KEY, WH_KEY_CACHE_DMA,
                                     sizeof(*req), (uint8_t*)req);
     }
 
-    if (ret != WH_ERROR_OK && keyAddrAcquired) {
-        /* SendRequest failed: the Response will not run, so POST now. */
+    /* On any failure release the mapping; POST no-ops on the unset slot, so a
+     * failed PRE needs no separate guard. */
+    if (ret != WH_ERROR_OK) {
         (void)wh_Client_DmaAsyncPost(c, &c->dma.asyncCtx.buf);
     }
     return ret;
@@ -1533,14 +1528,11 @@ int wh_Client_KeyCacheDmaResponse(whClientContext* c, uint16_t* keyId)
         }
     }
 
-    /* POST cleanup: release the mapping once the server has read it. Surface a
-     * POST failure if the operation otherwise succeeded. */
-    {
-        int postRc = wh_Client_DmaAsyncPost(c, &c->dma.asyncCtx.buf);
-        if (ret == WH_ERROR_OK) {
-            ret = postRc;
-        }
-    }
+    /* POST cleanup: release the input mapping the server has finished reading.
+     * The key is already cached server-side, so failing to release the
+     * client-side scratch is a cleanup issue, not an operation failure; don't
+     * override a successful result with it. */
+    (void)wh_Client_DmaAsyncPost(c, &c->dma.asyncCtx.buf);
     return ret;
 }
 
@@ -1562,10 +1554,9 @@ int wh_Client_KeyCacheDma(whClientContext* c, uint32_t flags, uint8_t* label,
 int wh_Client_KeyExportDmaRequest(whClientContext* c, uint16_t keyId,
                                   const void* keyAddr, uint16_t keySz)
 {
-    whMessageKeystore_ExportDmaRequest* req             = NULL;
-    uintptr_t                           keyAddrPtr      = 0;
-    int                                 ret             = WH_ERROR_OK;
-    int                                 keyAddrAcquired = 0;
+    whMessageKeystore_ExportDmaRequest* req        = NULL;
+    uintptr_t                           keyAddrPtr = 0;
+    int                                 ret        = WH_ERROR_OK;
 
     if (c == NULL || keyId == WH_KEYID_ERASED) {
         return WH_ERROR_BADARGS;
@@ -1581,10 +1572,6 @@ int wh_Client_KeyExportDmaRequest(whClientContext* c, uint16_t keyId,
         return WH_ERROR_BADARGS;
     }
 
-    req->id       = keyId;
-    req->key.addr = 0;
-    req->key.sz   = keySz;
-
     /* Clear the slot up front so a skipped PRE leaves nothing for POST. */
     c->dma.asyncCtx.buf.sz = 0;
 
@@ -1594,21 +1581,22 @@ int wh_Client_KeyExportDmaRequest(whClientContext* c, uint16_t keyId,
         c, (uintptr_t)keyAddr, (void**)&keyAddrPtr, keySz,
         WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
     if (ret == WH_ERROR_OK) {
-        keyAddrAcquired                 = 1;
-        req->key.addr                   = (uint64_t)keyAddrPtr;
         c->dma.asyncCtx.buf.xformedAddr = keyAddrPtr;
         c->dma.asyncCtx.buf.clientAddr  = (uintptr_t)keyAddr;
         c->dma.asyncCtx.buf.sz          = keySz;
         c->dma.asyncCtx.buf.postOper    = WH_DMA_OPER_CLIENT_WRITE_POST;
-    }
 
-    if (ret == WH_ERROR_OK) {
+        /* Build and send the request now that the buffer is mapped. */
+        req->id       = keyId;
+        req->key.addr = (uint64_t)keyAddrPtr;
+        req->key.sz   = keySz;
+
         ret = wh_Client_SendRequest(c, WH_MESSAGE_GROUP_KEY, WH_KEY_EXPORT_DMA,
                                     sizeof(*req), (uint8_t*)req);
     }
 
-    if (ret != WH_ERROR_OK && keyAddrAcquired) {
-        /* SendRequest failed: the Response will not run, so POST now. */
+    /* On any failure release the mapping; POST no-ops on the unset slot. */
+    if (ret != WH_ERROR_OK) {
         (void)wh_Client_DmaAsyncPost(c, &c->dma.asyncCtx.buf);
     }
     return ret;
@@ -1663,8 +1651,10 @@ int wh_Client_KeyExportDmaResponse(whClientContext* c, uint8_t* label,
         }
     }
 
-    /* POST cleanup: copy results back and release the mapping; surface a POST
-     * failure if the operation otherwise succeeded. */
+    /* POST cleanup: copy the exported key back into the caller's buffer and
+     * release the mapping. This is a WRITE-back: if it fails the caller has no
+     * valid data, so surface the POST failure over an otherwise-successful
+     * result. */
     {
         int postRc = wh_Client_DmaAsyncPost(c, &c->dma.asyncCtx.buf);
         if (rc == WH_ERROR_OK) {
@@ -1692,10 +1682,9 @@ int wh_Client_KeyExportPublicDmaRequest(whClientContext* c, whKeyId keyId,
                                         uint16_t algo, void* keyAddr,
                                         uint16_t keySz)
 {
-    whMessageKeystore_ExportPublicDmaRequest* req             = NULL;
-    uintptr_t                                 keyAddrPtr      = 0;
-    int                                       ret             = WH_ERROR_OK;
-    int                                       keyAddrAcquired = 0;
+    whMessageKeystore_ExportPublicDmaRequest* req        = NULL;
+    uintptr_t                                 keyAddrPtr = 0;
+    int                                       ret        = WH_ERROR_OK;
 
     if (c == NULL || keyId == WH_KEYID_ERASED) {
         return WH_ERROR_BADARGS;
@@ -1712,11 +1701,6 @@ int wh_Client_KeyExportPublicDmaRequest(whClientContext* c, whKeyId keyId,
         return WH_ERROR_BADARGS;
     }
 
-    req->id       = keyId;
-    req->algo     = algo;
-    req->key.addr = 0;
-    req->key.sz   = keySz;
-
     /* Clear the slot up front so a skipped PRE leaves nothing for POST. */
     c->dma.asyncCtx.buf.sz = 0;
 
@@ -1725,21 +1709,24 @@ int wh_Client_KeyExportPublicDmaRequest(whClientContext* c, whKeyId keyId,
         c, (uintptr_t)keyAddr, (void**)&keyAddrPtr, keySz,
         WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
     if (ret == WH_ERROR_OK) {
-        keyAddrAcquired                 = 1;
-        req->key.addr                   = (uint64_t)keyAddrPtr;
         c->dma.asyncCtx.buf.xformedAddr = keyAddrPtr;
         c->dma.asyncCtx.buf.clientAddr  = (uintptr_t)keyAddr;
         c->dma.asyncCtx.buf.sz          = keySz;
         c->dma.asyncCtx.buf.postOper    = WH_DMA_OPER_CLIENT_WRITE_POST;
-    }
 
-    if (ret == WH_ERROR_OK) {
+        /* Build and send the request now that the buffer is mapped. */
+        req->id       = keyId;
+        req->algo     = algo;
+        req->key.addr = (uint64_t)keyAddrPtr;
+        req->key.sz   = keySz;
+
         ret = wh_Client_SendRequest(c, WH_MESSAGE_GROUP_KEY,
                                     WH_KEY_EXPORT_PUBLIC_DMA, sizeof(*req),
                                     (uint8_t*)req);
     }
 
-    if (ret != WH_ERROR_OK && keyAddrAcquired) {
+    /* On any failure release the mapping; POST no-ops on the unset slot. */
+    if (ret != WH_ERROR_OK) {
         (void)wh_Client_DmaAsyncPost(c, &c->dma.asyncCtx.buf);
     }
     return ret;
@@ -1790,7 +1777,8 @@ int wh_Client_KeyExportPublicDmaResponse(whClientContext* c, uint8_t* label,
         }
     }
 
-    /* POST cleanup; see KeyExportDmaResponse. */
+    /* POST cleanup, a WRITE-back; see KeyExportDmaResponse for why a POST
+     * failure is surfaced over an otherwise-successful result. */
     {
         int postRc = wh_Client_DmaAsyncPost(c, &c->dma.asyncCtx.buf);
         if (rc == WH_ERROR_OK) {
