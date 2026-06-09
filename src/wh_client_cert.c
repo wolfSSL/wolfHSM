@@ -327,16 +327,20 @@ int wh_Client_CertReadTrustedResponse(whClientContext* c, uint8_t* cert,
             }
 
             if (resp->rc == WH_ERROR_OK) {
-                /* Copy certificate data if buffer is large enough */
-                if (*cert_len >= resp->cert_len) {
-                    memcpy(cert, payload, resp->cert_len);
-                    *cert_len = resp->cert_len;
+                /* Check that cert_len does not exceed the received data size */
+                if (resp->cert_len > size - sizeof(*resp)) {
+                    rc = WH_ERROR_ABORTED;
                 }
-                else {
+                /* Check that caller buffer is large enough for the cert */
+                else if (*cert_len < resp->cert_len) {
                     *cert_len = resp->cert_len;
                     if (out_rc != NULL) {
                         *out_rc = WH_ERROR_BUFFER_SIZE;
                     }
+                }
+                else {
+                    memcpy(cert, payload, resp->cert_len);
+                    *cert_len = resp->cert_len;
                 }
             }
         }
