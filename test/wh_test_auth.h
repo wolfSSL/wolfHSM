@@ -39,6 +39,7 @@ int whTest_AuthTCP(whClientConfig* clientCfg);
 int whTest_AuthLogin(whClientContext* client);
 int whTest_AuthLogout(whClientContext* client);
 int whTest_AuthAddUser(whClientContext* client);
+int whTest_AuthMaxUsers(whClientContext* client);
 int whTest_AuthDeleteUser(whClientContext* client);
 int whTest_AuthSetPermissions(whClientContext* client);
 int whTest_AuthSetCredentials(whClientContext* client);

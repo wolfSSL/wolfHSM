@@ -724,6 +724,8 @@ int whTest_AuthAddUser(whClientContext* client)
     if (server_rc == WH_ERROR_OK) {
         /* If it succeeds, keyIdCount should be clamped */
         WH_TEST_ASSERT_RETURN(user_id != WH_USER_ID_INVALID);
+        /* Free the slot so the user table doesn't fill up */
+        _whTest_Auth_UserDeleteOp(client, user_id, &server_rc);
     }
 
     /* Test 3: Add user if already exists */
@@ -743,6 +745,10 @@ int whTest_AuthAddUser(whClientContext* client)
                            "test", 4, &server_rc, &user_id2);
     WH_TEST_ASSERT_RETURN(server_rc != WH_ERROR_OK);
     WH_TEST_ASSERT_RETURN(user_id2 == WH_USER_ID_INVALID);
+
+    /* Done with testuser2, free the slot so subsequent tests stay within
+     * the user table limit */
+    _whTest_Auth_UserDeleteOp(client, user_id, &server_rc);
 
     /* Test 4: Non-admin cannot add admin user */
     WH_TEST_PRINT("  Test: Non-admin cannot add admin user\n");
@@ -788,12 +794,201 @@ int whTest_AuthAddUser(whClientContext* client)
                                &user_id2);
         WH_TEST_ASSERT_RETURN(server_rc == WH_AUTH_PERMISSION_ERROR);
         WH_TEST_ASSERT_RETURN(user_id2 == WH_USER_ID_INVALID);
+
+        /* Non-admin can only pass on current or subset of own actions. */
+        WH_TEST_PRINT(
+            "  Test: Non-admin cannot grant action it lacks\n");
+        memset(&perms, 0, sizeof(perms));
+        WH_AUTH_SET_ALLOWED_ACTION(perms, WH_MESSAGE_GROUP_AUTH,
+                                   WH_MESSAGE_AUTH_ACTION_USER_DELETE);
+        WH_AUTH_SET_IS_ADMIN(perms, 0);
+        server_rc = 0;
+        user_id2  = WH_USER_ID_INVALID;
+        _whTest_Auth_UserAddOp(client, "subset_fail_act", perms,
+                               WH_AUTH_METHOD_PIN, "pin", 3, &server_rc,
+                               &user_id2);
+        WH_TEST_ASSERT_RETURN(server_rc == WH_AUTH_PERMISSION_ERROR);
+        WH_TEST_ASSERT_RETURN(user_id2 == WH_USER_ID_INVALID);
+
+        /* Non-admin can only pass on current or subset of own groups. */
+        WH_TEST_PRINT(
+            "  Test: Non-admin cannot grant group it lacks\n");
+        memset(&perms, 0, sizeof(perms));
+        WH_AUTH_SET_ALLOWED_GROUP(perms, WH_MESSAGE_GROUP_CRYPTO);
+        WH_AUTH_SET_IS_ADMIN(perms, 0);
+        server_rc = 0;
+        user_id2  = WH_USER_ID_INVALID;
+        _whTest_Auth_UserAddOp(client, "subset_fail_grp", perms,
+                               WH_AUTH_METHOD_PIN, "pin", 3, &server_rc,
+                               &user_id2);
+        WH_TEST_ASSERT_RETURN(server_rc == WH_AUTH_PERMISSION_ERROR);
+        WH_TEST_ASSERT_RETURN(user_id2 == WH_USER_ID_INVALID);
+
+        /* Non-admin can not set actions outside of own group. */
+        WH_TEST_PRINT(
+            "  Test: Non-admin cannot grant action without group flag\n");
+        memset(&perms, 0, sizeof(perms));
+        {
+            int      _g = (WH_MESSAGE_GROUP_CRYPTO >> 8) & 0xFF;
+            uint32_t _w, _b;
+            WH_AUTH_ACTION_TO_WORD_AND_BITMASK(0u, _w, _b);
+            perms.actionPermissions[_g][_w] = _b;
+        }
+        WH_AUTH_SET_IS_ADMIN(perms, 0);
+        server_rc = 0;
+        user_id2  = WH_USER_ID_INVALID;
+        _whTest_Auth_UserAddOp(client, "subset_fail_actbit", perms,
+                               WH_AUTH_METHOD_PIN, "pin", 3, &server_rc,
+                               &user_id2);
+        WH_TEST_ASSERT_RETURN(server_rc == WH_AUTH_PERMISSION_ERROR);
+        WH_TEST_ASSERT_RETURN(user_id2 == WH_USER_ID_INVALID);
+
+        /* Non-admin cannot create a user with empty credentials. */
+        WH_TEST_PRINT(
+            "  Test: Non-admin cannot create user with empty credentials\n");
+        memset(&perms, 0, sizeof(perms));
+        WH_AUTH_SET_IS_ADMIN(perms, 0);
+        server_rc = 0;
+        user_id2  = WH_USER_ID_INVALID;
+        _whTest_Auth_UserAddOp(client, "subset_fail_cred", perms,
+                               WH_AUTH_METHOD_PIN, NULL, 0, &server_rc,
+                               &user_id2);
+        WH_TEST_ASSERT_RETURN(server_rc == WH_AUTH_PERMISSION_ERROR);
+        WH_TEST_ASSERT_RETURN(user_id2 == WH_USER_ID_INVALID);
+
+        /* Non-admin clone of permissions. */
+        WH_TEST_PRINT(
+            "  Test: Non-admin can grant identical permissions\n");
+        memset(&perms, 0, sizeof(perms));
+        WH_AUTH_SET_ALLOWED_ACTION(perms, WH_MESSAGE_GROUP_AUTH,
+                                   WH_MESSAGE_AUTH_ACTION_USER_ADD);
+        WH_AUTH_SET_IS_ADMIN(perms, 0);
+        server_rc = 0;
+        user_id2  = WH_USER_ID_INVALID;
+        _whTest_Auth_UserAddOp(client, "subset_ok_same", perms,
+                               WH_AUTH_METHOD_PIN, "pin", 3, &server_rc,
+                               &user_id2);
+        WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+        WH_TEST_ASSERT_RETURN(user_id2 != WH_USER_ID_INVALID);
     }
 
     _whTest_Auth_LogoutOp(client, user_id, &server_rc);
     WH_TEST_RETURN_ON_FAIL(
         _whTest_Auth_LoginOp(client, WH_AUTH_METHOD_PIN, TEST_ADMIN_USERNAME,
                              TEST_ADMIN_PIN, 4, &server_rc, &admin_id));
+
+    /* Free user slots so the keyId subset block has room to add a fresh
+     * non-admin creator and its child. */
+    _whTest_Auth_DeleteUserByName(client, "testuser1");
+    _whTest_Auth_DeleteUserByName(client, "testuser2");
+    _whTest_Auth_DeleteUserByName(client, "other_nonadmin");
+    _whTest_Auth_DeleteUserByName(client, "addadmin_testuser");
+    _whTest_Auth_DeleteUserByName(client, "subset_ok_same");
+
+    /* Non-admin can only grant key IDs that appear in its own keyIds list. */
+    WH_TEST_PRINT("  Test: Non-admin keyId subset restrictions\n");
+    {
+        whAuthPermissions creator_perms;
+        whUserId          creator_id    = WH_USER_ID_INVALID;
+        whUserId          subset_login  = WH_USER_ID_INVALID;
+        whUserId          child_id      = WH_USER_ID_INVALID;
+
+        memset(&creator_perms, 0, sizeof(creator_perms));
+        WH_AUTH_SET_ALLOWED_ACTION(creator_perms, WH_MESSAGE_GROUP_AUTH,
+                                   WH_MESSAGE_AUTH_ACTION_USER_ADD);
+        creator_perms.keyIdCount = 1;
+        creator_perms.keyIds[0]  = 0x5555;
+        WH_AUTH_SET_IS_ADMIN(creator_perms, 0);
+
+        server_rc = 0;
+        WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserAddOp(
+            client, "subset_creator", creator_perms, WH_AUTH_METHOD_PIN,
+            "pin", 3, &server_rc, &creator_id));
+        WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+        WH_TEST_ASSERT_RETURN(creator_id != WH_USER_ID_INVALID);
+
+        /* Switch context to subset_creator */
+        _whTest_Auth_LogoutOp(client, admin_id, &server_rc);
+        server_rc = 0;
+        WH_TEST_RETURN_ON_FAIL(_whTest_Auth_LoginOp(
+            client, WH_AUTH_METHOD_PIN, "subset_creator", "pin", 3,
+            &server_rc, &subset_login));
+        WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+        WH_TEST_ASSERT_RETURN(subset_login != WH_USER_ID_INVALID);
+
+        /* Test keyId not in caller's keyIds list */
+        WH_TEST_PRINT("  Test: Non-admin cannot grant keyId it lacks\n");
+        memset(&perms, 0, sizeof(perms));
+        WH_AUTH_SET_ALLOWED_ACTION(perms, WH_MESSAGE_GROUP_AUTH,
+                                   WH_MESSAGE_AUTH_ACTION_USER_ADD);
+        perms.keyIdCount = 1;
+        perms.keyIds[0]  = 0x9999;
+        WH_AUTH_SET_IS_ADMIN(perms, 0);
+        server_rc = 0;
+        user_id2  = WH_USER_ID_INVALID;
+        _whTest_Auth_UserAddOp(client, "subset_fail_key", perms,
+                               WH_AUTH_METHOD_PIN, "pin", 3, &server_rc,
+                               &user_id2);
+        WH_TEST_ASSERT_RETURN(server_rc == WH_AUTH_PERMISSION_ERROR);
+        WH_TEST_ASSERT_RETURN(user_id2 == WH_USER_ID_INVALID);
+
+        /* Test granting the same keyId the caller holds. */
+        WH_TEST_PRINT("  Test: Non-admin can grant same keyId\n");
+        memset(&perms, 0, sizeof(perms));
+        WH_AUTH_SET_ALLOWED_ACTION(perms, WH_MESSAGE_GROUP_AUTH,
+                                   WH_MESSAGE_AUTH_ACTION_USER_ADD);
+        perms.keyIdCount = 1;
+        perms.keyIds[0]  = 0x5555;
+        WH_AUTH_SET_IS_ADMIN(perms, 0);
+        server_rc = 0;
+        child_id  = WH_USER_ID_INVALID;
+        WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserAddOp(
+            client, "subset_child", perms, WH_AUTH_METHOD_PIN, "pin", 3,
+            &server_rc, &child_id));
+        WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+        WH_TEST_ASSERT_RETURN(child_id != WH_USER_ID_INVALID);
+
+        /* Test granting strict subset (drop the keyId entirely) */
+        WH_TEST_PRINT("  Test: Non-admin can drop keyId on grant\n");
+        memset(&perms, 0, sizeof(perms));
+        WH_AUTH_SET_IS_ADMIN(perms, 0);
+        server_rc = 0;
+        user_id2  = WH_USER_ID_INVALID;
+        _whTest_Auth_UserAddOp(client, "subset_child_drop", perms,
+                               WH_AUTH_METHOD_PIN, "pin", 3, &server_rc,
+                               &user_id2);
+        WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+        WH_TEST_ASSERT_RETURN(user_id2 != WH_USER_ID_INVALID);
+
+        /* Restore admin context for cleanup */
+        _whTest_Auth_LogoutOp(client, subset_login, &server_rc);
+        server_rc = 0;
+        WH_TEST_RETURN_ON_FAIL(_whTest_Auth_LoginOp(
+            client, WH_AUTH_METHOD_PIN, TEST_ADMIN_USERNAME, TEST_ADMIN_PIN,
+            4, &server_rc, &admin_id));
+
+        _whTest_Auth_DeleteUserByName(client, "subset_child_drop");
+        _whTest_Auth_DeleteUserByName(client, "subset_child");
+        _whTest_Auth_DeleteUserByName(client, "subset_creator");
+    }
+
+    /* Test Admin is exempt from the empty-credential restriction. */
+    WH_TEST_PRINT(
+        "  Test: Admin can create user with empty credentials\n");
+    {
+        whAuthPermissions admin_child_perms;
+        whUserId          admin_child_id = WH_USER_ID_INVALID;
+
+        memset(&admin_child_perms, 0, sizeof(admin_child_perms));
+        WH_AUTH_SET_IS_ADMIN(admin_child_perms, 0);
+        server_rc = 0;
+        _whTest_Auth_UserAddOp(client, "admin_nocred", admin_child_perms,
+                               WH_AUTH_METHOD_NONE, NULL, 0, &server_rc,
+                               &admin_child_id);
+        WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+        WH_TEST_ASSERT_RETURN(admin_child_id != WH_USER_ID_INVALID);
+        _whTest_Auth_DeleteUserByName(client, "admin_nocred");
+    }
 
     /* Cleanup */
     server_rc = 0;
@@ -1404,6 +1599,70 @@ int whTest_AuthRequestAuthorization(whClientContext* client)
 }
 
 
+/* Verify the server rejects user creation past WH_AUTH_BASE_MAX_USERS with
+ * WH_ERROR_BUFFER_SIZE. This does not clear the table first; it assumes prior
+ * tests have cleaned up their users (so there is room to add more) and only
+ * requires that adding users eventually saturates the table. It removes every
+ * user it creates before returning. */
+int whTest_AuthMaxUsers(whClientContext* client)
+{
+    int32_t           server_rc;
+    whUserId          admin_id = WH_USER_ID_INVALID;
+    whAuthPermissions perms;
+    whUserId          created_ids[16];
+    char              name[16];
+    int               created_count = 0;
+    int               i;
+
+    if (client == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    memset(created_ids, 0, sizeof(created_ids));
+
+    server_rc = 0;
+    WH_TEST_RETURN_ON_FAIL(
+        _whTest_Auth_LoginOp(client, WH_AUTH_METHOD_PIN, TEST_ADMIN_USERNAME,
+                             TEST_ADMIN_PIN, 4, &server_rc, &admin_id));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+
+    /* Add users until the server returns WH_ERROR_BUFFER_SIZE. The admin
+     * already occupies one slot, so this should saturate after a finite
+     * number of additions. */
+    WH_TEST_PRINT("  Test: User table fills with WH_ERROR_BUFFER_SIZE\n");
+    for (i = 0; i < (int)(sizeof(created_ids) / sizeof(created_ids[0])); i++) {
+        whUserId new_id = WH_USER_ID_INVALID;
+
+        memset(&perms, 0, sizeof(perms));
+        snprintf(name, sizeof(name), "maxuser%d", i);
+        server_rc = 0;
+        _whTest_Auth_UserAddOp(client, name, perms, WH_AUTH_METHOD_PIN, "pin",
+                               3, &server_rc, &new_id);
+        if (server_rc == WH_ERROR_BUFFER_SIZE) {
+            break;
+        }
+        WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+        WH_TEST_ASSERT_RETURN(new_id != WH_USER_ID_INVALID);
+        created_ids[created_count++] = new_id;
+    }
+
+    /* Must have hit the table-full limit and created at least one user. */
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_BUFFER_SIZE);
+    WH_TEST_ASSERT_RETURN(created_count > 0);
+
+    /* Cleanup all the users we added */
+    for (i = 0; i < created_count; i++) {
+        server_rc = 0;
+        _whTest_Auth_UserDeleteOp(client, created_ids[i], &server_rc);
+    }
+
+    server_rc = 0;
+    _whTest_Auth_LogoutOp(client, admin_id, &server_rc);
+
+    return WH_TEST_SUCCESS;
+}
+
+
 static int CheckServerSupportsAuth(whClientContext* client_ctx)
 {
     int32_t  server_rc;
@@ -1449,6 +1708,9 @@ int whTest_AuthTest(whClientContext* client_ctx)
 
     WH_TEST_PRINT("Running add user tests...\n");
     WH_TEST_RETURN_ON_FAIL(whTest_AuthAddUser(client_ctx));
+
+    WH_TEST_PRINT("Running max users tests...\n");
+    WH_TEST_RETURN_ON_FAIL(whTest_AuthMaxUsers(client_ctx));
 
     WH_TEST_PRINT("Running delete user tests...\n");
     WH_TEST_RETURN_ON_FAIL(whTest_AuthDeleteUser(client_ctx));
