@@ -184,6 +184,25 @@ int wh_Auth_Logout(whAuthContext* context, whUserId user_id)
 }
 
 
+/* returns result of locking, clears context user regardless of lock success. */
+int wh_Auth_Reset(whAuthContext* context)
+{
+    int rc;
+
+    if (context == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Best-effort lock, but clear the session regardless */
+    rc = WH_AUTH_LOCK(context);
+    memset(&context->user, 0, sizeof(whAuthUser));
+    if (rc == WH_ERROR_OK) {
+        (void)WH_AUTH_UNLOCK(context);
+    }
+    return rc;
+}
+
+
 /* Check on request authorization and action permissions for current user
  * logged in */
 int wh_Auth_CheckRequestAuthorization(whAuthContext* context, uint16_t group,

@@ -93,10 +93,12 @@ int wh_Server_Init(whServerContext* server, whServerConfig* config)
         server->auth->user.user_id != WH_USER_ID_INVALID) {
         whUserId stale_id  = server->auth->user.user_id;
         int      logout_rc = wh_Auth_Logout(server->auth, stale_id);
-        if (logout_rc != WH_ERROR_OK ||
-            server->auth->user.user_id != WH_USER_ID_INVALID) {
-            memset(&server->auth->user, 0, sizeof(server->auth->user));
+        if (logout_rc != WH_ERROR_OK) {
+            WH_LOG(&server->log, WH_LOG_LEVEL_SECEVENT,
+                   "Stale auth session force-cleared during server init after "
+                   "logout failure");
         }
+        (void)wh_Auth_Reset(server->auth);
     }
 #endif /* WOLFHSM_CFG_ENABLE_AUTHENTICATION */
 #ifdef WOLFHSM_CFG_HWKEYSTORE
@@ -201,14 +203,14 @@ int wh_Server_SetConnected(whServerContext *server, whCommConnected connected)
         whUserId user_id   = server->auth->user.user_id;
         int      logout_rc = wh_Auth_Logout(server->auth, user_id);
 
-        /* wh_Auth_Logout only clears the session when the backend callback
-         * returns WH_ERROR_OK. Force-clear if it failed or left the user set,
-         * so a stale identity can never carry over to the next connection
-         * (mirrors the defensive clear in wh_Server_Init). */
-        if (logout_rc != WH_ERROR_OK ||
-            server->auth->user.user_id != WH_USER_ID_INVALID) {
-            memset(&server->auth->user, 0, sizeof(server->auth->user));
+        if (logout_rc != WH_ERROR_OK) {
+            WH_LOG(&server->log, WH_LOG_LEVEL_SECEVENT,
+                   "Auth session force-cleared on disconnect after logout "
+                   "failure");
         }
+        /* Always reset so a stale identity can never carry over to the next
+         * connection, even if the backend logout failed. */
+        (void)wh_Auth_Reset(server->auth);
     }
 #endif /* WOLFHSM_CFG_ENABLE_AUTHENTICATION */
 

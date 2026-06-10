@@ -1771,7 +1771,7 @@ int whTest_AuthTCP(whClientConfig* clientCfg)
 
 #if !defined(WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP) && \
     defined(WOLFHSM_CFG_ENABLE_SERVER)
-static int _whTest_Auth_AbruptDisconnect(whClientContext* client_ctx)
+static int AuthAbruptDisconnect(whClientContext* client_ctx)
 {
     int32_t  server_rc      = 0;
     whUserId user_id        = WH_USER_ID_INVALID;
@@ -1813,7 +1813,7 @@ int whTest_AuthMEM(void)
     /* Memory transport mode */
     WH_TEST_RETURN_ON_FAIL(_whTest_Auth_SetupMemory(&client_ctx));
     WH_TEST_RETURN_ON_FAIL(whTest_AuthTest(client_ctx));
-    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_AbruptDisconnect(client_ctx));
+    WH_TEST_RETURN_ON_FAIL(AuthAbruptDisconnect(client_ctx));
 
     /* Verify that authorization callbacks were invoked during tests */
     WH_TEST_PRINT(
